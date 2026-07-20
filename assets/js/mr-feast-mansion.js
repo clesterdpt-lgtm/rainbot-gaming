@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260720-pool-water-fix-1";
+  const MANSION_RUNTIME_VERSION = "20260720-storm-run-scare-polish-2";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2041,7 +2041,7 @@
     briefingSpeechSeconds: 10.8,
     countdownSeconds: 3,
     callLine: "Contestants, report to the back door. Storm Run is next.",
-    briefingLine: "Welcome to Storm Run. Hit twelve blue checkpoints in order. Find the next glowing marker and keep moving. Beat Mara. Last place is eliminated.",
+    briefingLine: "Welcome to Storm Run. Hit twelve blue checkpoints in order. Find the next glowing marker and keep moving. Last place is eliminated.",
     countdownLines: Object.freeze({ 3: "Three.", 2: "Two.", 1: "One." }),
     startLine: "Run!",
     startSpeechSeconds: 1.15,
@@ -2069,6 +2069,20 @@
     scareThunderDelaySeconds: 0.02,
     scareThunderVolumeMultiplier: 1.7,
     scareThunderCloseStrike: true,
+    scareFacingMinimumDot: 0.9,
+    scareFacingScreenMargin: 0.86,
+    scareRevealFillIntensity: 140,
+    scareCheckpointFlashOpacity: Object.freeze({ ring: 0.38, beacon: 0.07, guide: 0.3 }),
+    checkpointOpacity: Object.freeze({ ring: 0.9, beacon: 0.18, guide: 0.94 }),
+    scareThunderCrackPeakGain: 0.72,
+    scareThunderRainDuckGain: 0.22,
+    scareThunderRainDuckSeconds: 0.95,
+    scareThunderRollOffsets: Object.freeze({
+      "../Sounds/mr-feast/thunder-01.ogg": 0.55,
+      "../Sounds/mr-feast/thunder-02.ogg": 0.23,
+      "../Sounds/mr-feast/thunder-03.ogg": 0.4,
+      "../Sounds/mr-feast/thunder-04.ogg": 0.32,
+    }),
     playerMaximumSprintSpeed: PLAYER.sprintSpeed,
     contestantMaximumSpeed: Math.min(3, PLAYER.sprintSpeed - 0.5),
     contestantSpeeds: Object.freeze({
@@ -2090,21 +2104,38 @@
       Object.freeze({ id: "garden-front-junction", label: "Garden Front Junction", region: "GARDEN FRONT JUNCTION", x: -25, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
       Object.freeze({ id: "front-carriage", label: "Front Carriage Turn", region: "FRONT DRIVE", x: 0, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
       Object.freeze({ id: "front-drive", label: "Front Drive", region: "FRONT DRIVE", x: 0, y: YARD_LAYOUT.groundY, z: 29, insideMaze: false }),
-      Object.freeze({ id: "east-front-lawn", label: "East Front Lawn", region: "EAST FRONT LAWN", x: 17.35, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false,
-        scareTrigger: Object.freeze({
-          zones: Object.freeze([
-            Object.freeze({ id: "direct-lawn", x: 7.3, z: 23.65, radius: 4.4, viewYaw: -0.94 }),
-            Object.freeze({ id: "carriage-path", x: 7.2, z: 16.3, radius: 3.4, viewYaw: -Math.PI / 2 }),
-          ]),
-        }),
-        reveal: Object.freeze({ x: 16.2, y: YARD_LAYOUT.groundY, z: 20, yaw: -1.96, darkSpot: true }) }),
+      Object.freeze({ id: "east-front-lawn", label: "East Front Lawn", region: "EAST FRONT LAWN", x: 17.35, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
       Object.freeze({ id: "maze-promenade", label: "Maze Promenade", region: "MAZE PROMENADE", x: 17.35, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
       Object.freeze({ id: "maze-north-entrance", label: "Maze North Entrance", region: "MAZE ENTRANCE", x: 20.5, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
-      Object.freeze({ id: "hedge-maze", label: "Hedge Maze", region: "HEDGE MAZE", x: 26.5, y: YARD_LAYOUT.groundY, z: 2.75, insideMaze: true,
-        scareTrigger: Object.freeze({ x: 28, z: 8.75, radius: 1.75, viewYaw: 0 }),
-        reveal: Object.freeze({ x: 28, y: YARD_LAYOUT.groundY, z: 4.25, yaw: 0, darkSpot: true }) }),
+      Object.freeze({ id: "hedge-maze", label: "Hedge Maze", region: "HEDGE MAZE", x: 26.5, y: YARD_LAYOUT.groundY, z: 2.75, insideMaze: true }),
       Object.freeze({ id: "east-rear-lawn", label: "East Rear Lawn", region: "EAST LAWN", x: 13.5, y: YARD_LAYOUT.groundY, z: -15.6, insideMaze: false }),
       Object.freeze({ id: "pool-terrace", label: "Pool Terrace", region: "POOL TERRACE", x: -12.8, y: YARD_LAYOUT.groundY, z: -18.85, insideMaze: false }),
+    ]),
+    scares: Object.freeze([
+      Object.freeze({
+        id: "northwest-tree-line",
+        order: 1,
+        completedCheckpointMinimum: 1,
+        completedCheckpointMaximum: 2,
+        trigger: Object.freeze({ id: "garden-cross", x: -17.2, z: -2.2, radius: 3 }),
+        reveal: Object.freeze({ x: -24.25, y: YARD_LAYOUT.groundY, z: 29, yaw: 2.919, scale: 3.2, darkSpot: true }),
+      }),
+      Object.freeze({
+        id: "northeast-tree-line",
+        order: 2,
+        completedCheckpointMinimum: 4,
+        completedCheckpointMaximum: 5,
+        trigger: Object.freeze({ id: "front-carriage-crossing", x: -12, z: 16.3, radius: 3.2 }),
+        reveal: Object.freeze({ x: 26.5, y: YARD_LAYOUT.groundY, z: 26, yaw: -1.818, scale: 3.8, darkSpot: true }),
+      }),
+      Object.freeze({
+        id: "maze-turn",
+        order: 3,
+        completedCheckpointMinimum: 10,
+        completedCheckpointMaximum: 10,
+        trigger: Object.freeze({ id: "maze-south-turn", x: 25, z: 2.75, radius: 1.35 }),
+        reveal: Object.freeze({ x: 25, y: YARD_LAYOUT.groundY, z: -0.25, yaw: 0, scale: 1, darkSpot: true }),
+      }),
     ]),
     contestantRoute: Object.freeze([
       Object.freeze({ x: 0, z: -15.6 }),
@@ -2431,9 +2462,15 @@
       eliminatedContestantId: null,
       staged: false,
       completionCardRemaining: 0,
-      scareCheckpointIndex: -1,
+      scareIndex: -1,
+      scareId: null,
       scareTriggerZoneId: null,
-      scareTriggeredCheckpointIds: [],
+      scareTriggeredIds: [],
+      scareCandidateId: null,
+      scareCandidateZoneId: null,
+      scareFacingDot: -1,
+      scareOnScreen: false,
+      scareLineOfSight: false,
       scareRevealRemaining: 0,
       scareBaselineLightExposure: 1,
       scareProfile: null,
@@ -2668,6 +2705,7 @@
     reportRoot: null,
     reportHitbox: null,
     checkpoints: [],
+    revealLight: null,
   };
   const estateStatueScene = {
     settled: false,
@@ -6297,12 +6335,14 @@
         this.challengeSnapshot = {
           position: this.root.position.clone(),
           rotationY: this.root.rotation.y,
+          scale: this.root.scale.clone(),
         };
       }
       this.suspendHousekeepingForCompetition();
       this.recoverAfterLoad();
       this.root.position.set(placement.x, placement.y, placement.z);
       this.root.rotation.y = placement.yaw;
+      this.root.scale.setScalar(Number(placement.scale) > 0 ? Number(placement.scale) : 1);
       this.currentRouteZone = options.zone || "BALLROOM";
       this.currentRouteLevel = options.level || MR_FEAST_LEVEL.MAIN;
       this.responseCurrentNodeId = options.responseNodeId || "main-ballroom-south";
@@ -6340,6 +6380,7 @@
       } else {
         this.root.position.set(placement.x, placement.y, placement.z);
         this.root.rotation.y = placement.yaw;
+        this.root.scale.setScalar(Number(placement.scale) > 0 ? Number(placement.scale) : 1);
       }
       this.root.visible = Boolean(visible);
       for (const mesh of this.meshes) mesh.visible = Boolean(visible);
@@ -6366,6 +6407,9 @@
       if (snapshot) {
         this.root.position.copy(snapshot.position);
         this.root.rotation.y = snapshot.rotationY;
+        this.root.scale.copy(snapshot.scale || new THREE.Vector3(1, 1, 1));
+      } else {
+        this.root.scale.setScalar(1);
       }
       this.root.visible = true;
       this.setChallengeColliderEnabled(true);
@@ -14176,9 +14220,15 @@
       this.show.raceElapsed = 0;
       this.show.completedCheckpoints = 0;
       this.show.visitedCheckpointIds = [];
-      this.show.scareCheckpointIndex = -1;
+      this.show.scareIndex = -1;
+      this.show.scareId = null;
       this.show.scareTriggerZoneId = null;
-      this.show.scareTriggeredCheckpointIds = [];
+      this.show.scareTriggeredIds = [];
+      this.show.scareCandidateId = null;
+      this.show.scareCandidateZoneId = null;
+      this.show.scareFacingDot = -1;
+      this.show.scareOnScreen = false;
+      this.show.scareLineOfSight = false;
       this.show.scareRevealRemaining = 0;
       this.show.scareBaselineLightExposure = 1;
       this.show.scareProfile = null;
@@ -14344,37 +14394,148 @@
       return result;
     }
 
-    scareTriggerZones(checkpoint) {
-      const trigger = checkpoint?.scareTrigger;
+    scareTriggerZones(scare) {
+      const trigger = scare?.trigger;
       if (!trigger) return [];
       return Array.isArray(trigger.zones) && trigger.zones.length ? trigger.zones : [trigger];
     }
 
-    triggerScare(index = this.show.completedCheckpoints, triggerZone = null) {
-      const checkpointIndex = Math.floor(Number(index));
-      const checkpoint = STORM_RUN.checkpoints[checkpointIndex];
+    scareProgressEligible(scare) {
+      if (!scare) return false;
+      return this.show.completedCheckpoints >= scare.completedCheckpointMinimum
+        && this.show.completedCheckpoints <= scare.completedCheckpointMaximum;
+    }
+
+    clearScareCandidate(resetLook = true) {
+      this.show.scareCandidateId = null;
+      this.show.scareCandidateZoneId = null;
+      if (!resetLook) return;
+      this.show.scareFacingDot = -1;
+      this.show.scareOnScreen = false;
+      this.show.scareLineOfSight = false;
+    }
+
+    armScareCandidate(index, triggerZone) {
+      const scare = STORM_RUN.scares[Math.floor(Number(index))];
+      if (!scare || !triggerZone) return false;
+      this.show.scareCandidateId = scare.id;
+      this.show.scareCandidateZoneId = triggerZone.id || null;
+      return true;
+    }
+
+    scareLookState(scare, triggerZone, player = physics?.playerPosition()) {
+      if (!scare?.reveal || !triggerZone || !player) return null;
+      const eyeOffset = (state.movement.eyeHeight || PLAYER.eye)
+        - (PLAYER.halfHeight + PLAYER.radius)
+        + 0.17;
+      const origin = new THREE.Vector3(player.x, player.y + eyeOffset, player.z);
+      const revealScale = Number(scare.reveal.scale) > 0 ? Number(scare.reveal.scale) : 1;
+      const target = new THREE.Vector3(scare.reveal.x, scare.reveal.y + 1.25 * revealScale, scare.reveal.z);
+      const targetDirection = target.clone().sub(origin);
+      const sightDistance = Math.max(0.001, targetDirection.length());
+      targetDirection.normalize();
+      const dx = target.x - origin.x;
+      const dz = target.z - origin.z;
+      const horizontalDistance = Math.max(0.001, Math.hypot(dx, dz));
+      const pitchCosine = Math.cos(state.pitch);
+      const cameraForward = new THREE.Vector3(
+        -Math.sin(state.yaw) * pitchCosine,
+        Math.sin(state.pitch),
+        -Math.cos(state.yaw) * pitchCosine,
+      );
+      const facingDot = cameraForward.dot(targetDirection);
+      const targetYaw = Math.atan2(-dx, -dz);
+      const targetPitch = Math.atan2(target.y - origin.y, horizontalDistance);
+      const yawDelta = Math.abs(Math.atan2(
+        Math.sin(targetYaw - state.yaw),
+        Math.cos(targetYaw - state.yaw),
+      ));
+      const pitchDelta = Math.abs(targetPitch - state.pitch);
+      const verticalHalfFov = THREE.MathUtils.degToRad(camera.fov * 0.5);
+      const horizontalHalfFov = Math.atan(Math.tan(verticalHalfFov) * Math.max(0.1, camera.aspect));
+      const onScreen = yawDelta <= horizontalHalfFov * STORM_RUN.scareFacingScreenMargin
+        && pitchDelta <= verticalHalfFov * STORM_RUN.scareFacingScreenMargin;
+      const sightRay = new THREE.Raycaster(origin, targetDirection, 0, Math.max(0.05, sightDistance - 0.15));
+      const sightBlocker = sightRay.intersectObjects(occluderMeshes, false)[0] || null;
+      return {
+        facingDot,
+        facing: facingDot >= STORM_RUN.scareFacingMinimumDot && onScreen,
+        onScreen,
+        lineOfSight: !sightBlocker,
+        blocker: sightBlocker?.object?.name || null,
+        distance: horizontalDistance,
+        targetYaw,
+        targetPitch,
+        yawDelta,
+        pitchDelta,
+      };
+    }
+
+    positionScareRevealLight(scare, player = physics?.playerPosition()) {
+      const light = stormRunScene.revealLight;
+      if (!light || !scare?.reveal || !player) return false;
+      const revealScale = Number(scare.reveal.scale) > 0 ? Number(scare.reveal.scale) : 1;
+      const towardPlayer = new THREE.Vector3(
+        player.x - scare.reveal.x,
+        0,
+        player.z - scare.reveal.z,
+      );
+      if (towardPlayer.lengthSq() < 0.0001) towardPlayer.set(0, 0, 1);
+      towardPlayer.normalize();
+      const forwardOffset = 2.4 + Math.min(1.4, revealScale * 0.35);
+      light.position.set(
+        scare.reveal.x + towardPlayer.x * forwardOffset,
+        scare.reveal.y + Math.max(1.7, revealScale * 1.05),
+        scare.reveal.z + towardPlayer.z * forwardOffset,
+      );
+      light.distance = 8 + Math.min(8, revealScale * 2);
+      light.userData.revealScale = revealScale;
+      light.userData.scareId = scare.id;
+      light.intensity = 0;
+      light.visible = false;
+      return true;
+    }
+
+    syncScareRevealLight() {
+      const light = stormRunScene.revealLight;
+      if (!light) return;
+      const active = Boolean(this.show.hostVisible && this.show.phase === STORM_RUN_PHASE.RUNNING);
+      const revealScale = Number(light.userData.revealScale) || 1;
+      const lightning = Math.pow(Math.max(0, stormSystem?.flash || 0), 2);
+      light.visible = active;
+      light.intensity = active
+        ? STORM_RUN.scareRevealFillIntensity * revealScale * lightning
+        : 0;
+    }
+
+    triggerScare(index = 0, triggerZone = null) {
+      const scareIndex = Math.floor(Number(index));
+      const scare = STORM_RUN.scares[scareIndex];
       if (this.show.phase !== STORM_RUN_PHASE.RUNNING) return { triggered: false, reason: "not-running" };
-      if (!checkpoint?.reveal) return { triggered: false, reason: "not-authored" };
-      if (this.show.scareTriggeredCheckpointIds.includes(checkpoint.id)) return { triggered: false, reason: "already-triggered" };
-      this.show.scareTriggeredCheckpointIds.push(checkpoint.id);
-      this.show.scareCheckpointIndex = checkpointIndex;
+      if (!scare?.reveal) return { triggered: false, reason: "not-authored" };
+      if (this.show.scareTriggeredIds.includes(scare.id)) return { triggered: false, reason: "already-triggered" };
+      this.show.scareTriggeredIds.push(scare.id);
+      this.show.scareIndex = scareIndex;
+      this.show.scareId = scare.id;
       this.show.scareTriggerZoneId = triggerZone?.id || null;
+      this.clearScareCandidate(false);
       this.show.scareRevealRemaining = STORM_RUN.hostRevealMaximumSeconds;
       this.show.scareBaselineLightExposure = sampleStealthLightExposure({
-        x: checkpoint.reveal.x,
-        y: checkpoint.reveal.y + 1.1,
-        z: checkpoint.reveal.z,
+        x: scare.reveal.x,
+        y: scare.reveal.y + 1.1,
+        z: scare.reveal.z,
       }, { ignoreOverride: true });
       this.show.scareProfile = "storm-run";
       this.show.hostVisible = false;
-      mrFeastNpc?.setStormRunReveal(checkpoint.reveal, false);
+      mrFeastNpc?.setStormRunReveal(scare.reveal, false);
+      this.positionScareRevealLight(scare);
       audioSystem?.stormScare();
       stormSystem?.trigger({ profile: "storm-run" });
       this.syncCastVisibility();
       return {
         triggered: true,
-        checkpointId: checkpoint.id,
-        index: checkpointIndex,
+        scareId: scare.id,
+        index: scareIndex,
         baselineLightExposure: Number(this.show.scareBaselineLightExposure.toFixed(3)),
       };
     }
@@ -14389,6 +14550,7 @@
         && (stormSystem?.flash || 0) > STORM_RUN.hostRevealFlashThreshold
       );
       this.show.hostVisible = visible;
+      this.syncScareRevealLight();
       this.syncCastVisibility();
     }
 
@@ -14399,16 +14561,45 @@
       const checkpoint = this.expectedCheckpoint();
       if (!checkpoint) return;
       const distance = Math.hypot(player.x - checkpoint.x, player.z - checkpoint.z);
-      const scareTriggerZones = this.scareTriggerZones(checkpoint);
-      const matchedScareZone = scareTriggerZones.find((zone) => (
-        Math.hypot(player.x - zone.x, player.z - zone.z)
-          <= (zone.radius || STORM_RUN.checkpointApproachRadius)
-      ));
+      let scareIndex = STORM_RUN.scares.findIndex((scare) => scare.id === this.show.scareCandidateId);
+      let scare = STORM_RUN.scares[scareIndex];
       if (
-        checkpoint.reveal
-        && matchedScareZone
-        && !this.show.scareTriggeredCheckpointIds.includes(checkpoint.id)
-      ) this.triggerScare(this.show.completedCheckpoints, matchedScareZone);
+        scareIndex >= 0
+        && (!this.scareProgressEligible(scare) || this.show.scareTriggeredIds.includes(scare.id))
+      ) {
+        this.clearScareCandidate();
+        scareIndex = -1;
+        scare = null;
+      }
+      if (scareIndex < 0) {
+        scareIndex = STORM_RUN.scares.findIndex((entry) => {
+          if (!this.scareProgressEligible(entry) || this.show.scareTriggeredIds.includes(entry.id)) return false;
+          return this.scareTriggerZones(entry).some((zone) => (
+            Math.hypot(player.x - zone.x, player.z - zone.z)
+              <= (zone.radius || STORM_RUN.checkpointApproachRadius)
+          ));
+        });
+        scare = STORM_RUN.scares[scareIndex];
+        if (scare) {
+          const matchedZone = this.scareTriggerZones(scare).find((zone) => (
+            Math.hypot(player.x - zone.x, player.z - zone.z)
+              <= (zone.radius || STORM_RUN.checkpointApproachRadius)
+          ));
+          this.armScareCandidate(scareIndex, matchedZone);
+        }
+      }
+      if (scareIndex >= 0 && scare) {
+        const triggerZone = this.scareTriggerZones(scare).find(
+          (zone) => zone.id === this.show.scareCandidateZoneId,
+        ) || this.scareTriggerZones(scare)[0];
+        const look = this.scareLookState(scare, triggerZone, player);
+        this.show.scareFacingDot = look?.facingDot ?? -1;
+        this.show.scareOnScreen = Boolean(look?.onScreen);
+        this.show.scareLineOfSight = Boolean(look?.lineOfSight);
+        if (look?.facing && look.lineOfSight) this.triggerScare(scareIndex, triggerZone);
+      } else if (!this.show.scareCandidateId) {
+        this.clearScareCandidate();
+      }
       if (distance <= STORM_RUN.checkpointRadius) this.collectCheckpoint(this.show.completedCheckpoints, "proximity");
     }
 
@@ -14424,12 +14615,14 @@
       }
       this.show.hostVisible = false;
       this.show.scareRevealRemaining = 0;
+      this.clearScareCandidate();
+      this.syncScareRevealLight();
       if (winner === "player") {
         this.show.completedCheckpoints = STORM_RUN.checkpoints.length;
         this.show.visitedCheckpointIds = STORM_RUN.checkpoints.map((checkpoint) => checkpoint.id);
         this.show.eliminatedContestantId = "mara-voss";
         this.show.completionCardRemaining = STORM_RUN.completionCardSeconds;
-        this.transition(STORM_RUN_PHASE.COMPLETED, "player-beat-mara");
+        this.transition(STORM_RUN_PHASE.COMPLETED, "player-finished-first");
         speechSystem?.say(
           "storm-run-result-player",
           STORM_RUN.resultLines.player,
@@ -14534,7 +14727,14 @@
       stormRunScene.root.visible = productionVisible;
       if (stormRunScene.reportRoot) stormRunScene.reportRoot.visible = this.show.phase === STORM_RUN_PHASE.CALLED;
       stormRunScene.checkpoints.forEach((entry, index) => {
-        entry.root.visible = this.show.phase === STORM_RUN_PHASE.RUNNING && index === this.show.completedCheckpoints;
+        entry.root.visible = this.show.phase === STORM_RUN_PHASE.RUNNING
+          && index === this.show.completedCheckpoints;
+        const opacity = this.show.hostVisible
+          ? STORM_RUN.scareCheckpointFlashOpacity
+          : STORM_RUN.checkpointOpacity;
+        entry.ring.material.opacity = opacity.ring;
+        entry.beacon.material.opacity = opacity.beacon;
+        entry.guide.material.opacity = opacity.guide;
       });
       this.setStationInteractive(this.show.phase === STORM_RUN_PHASE.CALLED);
     }
@@ -14543,6 +14743,7 @@
       mansionContestants?.syncStormRunCastVisibility();
       if (this.show.phase === STORM_RUN_PHASE.BRIEFING) mrFeastNpc?.syncStormRunVisibility(true);
       else if (this.show.phase === STORM_RUN_PHASE.RUNNING) mrFeastNpc?.syncStormRunVisibility(this.show.hostVisible);
+      this.syncScareRevealLight();
     }
 
     formatClock(seconds) {
@@ -14633,6 +14834,8 @@
       this.show.scareRevealRemaining = 0;
       this.show.scareBaselineLightExposure = 1;
       this.show.scareProfile = null;
+      this.clearScareCandidate();
+      this.syncScareRevealLight();
     }
 
     restoreSnapshot(snapshot = null, questSnapshot = {}) {
@@ -14671,9 +14874,15 @@
         ? (source.eliminatedContestantId || "mara-voss")
         : null;
       this.show.completionCardRemaining = 0;
-      this.show.scareCheckpointIndex = -1;
+      this.show.scareIndex = -1;
+      this.show.scareId = null;
       this.show.scareTriggerZoneId = null;
-      this.show.scareTriggeredCheckpointIds = [];
+      this.show.scareTriggeredIds = [];
+      this.show.scareCandidateId = null;
+      this.show.scareCandidateZoneId = null;
+      this.show.scareFacingDot = -1;
+      this.show.scareOnScreen = false;
+      this.show.scareLineOfSight = false;
       this.show.scareRevealRemaining = 0;
       this.show.scareBaselineLightExposure = 1;
       this.show.scareProfile = null;
@@ -14720,22 +14929,10 @@
     }
 
     scareViewpoint(index) {
-      const checkpoint = STORM_RUN.checkpoints[index];
-      if (!checkpoint?.reveal) return null;
-      const scareTrigger = this.scareTriggerZones(checkpoint)[0];
-      if (scareTrigger) {
-        return { x: scareTrigger.x, y: checkpoint.y, z: scareTrigger.z };
-      }
-      const previous = this.checkpointPreviousPosition(index);
-      const dx = checkpoint.x - previous.x;
-      const dz = checkpoint.z - previous.z;
-      const distance = Math.max(0.001, Math.hypot(dx, dz));
-      const approachDistance = Math.min(STORM_RUN.checkpointApproachRadius - 0.25, distance * 0.45);
-      return {
-        x: checkpoint.x - dx / distance * approachDistance,
-        y: checkpoint.y,
-        z: checkpoint.z - dz / distance * approachDistance,
-      };
+      const scare = STORM_RUN.scares[index];
+      const trigger = this.scareTriggerZones(scare)[0];
+      if (!scare?.reveal || !trigger) return null;
+      return { x: trigger.x, y: YARD_LAYOUT.groundY, z: trigger.z };
     }
 
     checkpointGuidance(index) {
@@ -14814,37 +15011,35 @@
 
     previewScareForQA(index) {
       if (!state.qa || !physics) return { active: false, reason: "qa-only" };
-      const checkpointIndex = Math.floor(Number(index));
-      const checkpoint = STORM_RUN.checkpoints[checkpointIndex];
-      const viewpoint = this.scareViewpoint(checkpointIndex);
-      if (!checkpoint?.reveal || !viewpoint) return { active: false, reason: "not-authored" };
+      const scareIndex = Math.floor(Number(index));
+      const scare = STORM_RUN.scares[scareIndex];
+      const viewpoint = this.scareViewpoint(scareIndex);
+      if (!scare?.reveal || !viewpoint) return { active: false, reason: "not-authored" };
+      const revealScale = Number(scare.reveal.scale) > 0 ? Number(scare.reveal.scale) : 1;
       teleport(viewpoint.x, viewpoint.y, viewpoint.z, 0, 0);
       syncCamera();
       const revealCenter = new THREE.Vector3(
-        checkpoint.reveal.x,
-        checkpoint.reveal.y + 1.25,
-        checkpoint.reveal.z,
+        scare.reveal.x,
+        scare.reveal.y + 1.25 * revealScale,
+        scare.reveal.z,
       );
-      const previous = this.checkpointPreviousPosition(checkpointIndex);
-      const incomingDx = checkpoint.x - previous.x;
-      const incomingDz = checkpoint.z - previous.z;
-      const scareTrigger = this.scareTriggerZones(checkpoint)[0];
-      state.yaw = Number.isFinite(scareTrigger?.viewYaw)
-        ? scareTrigger.viewYaw
-        : Math.atan2(-incomingDx, -incomingDz);
-      state.pitch = 0;
+      const dx = scare.reveal.x - viewpoint.x;
+      const dz = scare.reveal.z - viewpoint.z;
+      const horizontal = Math.max(0.001, Math.hypot(dx, dz));
+      state.yaw = Math.atan2(-dx, -dz);
+      state.pitch = Math.atan2(revealCenter.y - camera.position.y, horizontal);
       syncCamera();
       camera.updateMatrixWorld(true);
       const projected = revealCenter.clone().project(camera);
       const projectedFeet = new THREE.Vector3(
-        checkpoint.reveal.x,
-        checkpoint.reveal.y + 0.08,
-        checkpoint.reveal.z,
+        scare.reveal.x,
+        scare.reveal.y + 0.08 * revealScale,
+        scare.reveal.z,
       ).project(camera);
       const projectedHead = new THREE.Vector3(
-        checkpoint.reveal.x,
-        checkpoint.reveal.y + 2.08,
-        checkpoint.reveal.z,
+        scare.reveal.x,
+        scare.reveal.y + 2.08 * revealScale,
+        scare.reveal.z,
       ).project(camera);
       const sightDirection = revealCenter.clone().sub(camera.position);
       const sightDistance = sightDirection.length();
@@ -14863,15 +15058,19 @@
       );
       updateLocation();
       updateInteractionPrompt();
+      const look = this.scareLookState(scare, this.scareTriggerZones(scare)[0], physics.playerPosition());
       return {
-        active: this.show.phase === STORM_RUN_PHASE.RUNNING && checkpointIndex === this.show.completedCheckpoints,
-        index: checkpointIndex,
-        id: checkpoint.id,
+        active: this.show.phase === STORM_RUN_PHASE.RUNNING && this.scareProgressEligible(scare),
+        index: scareIndex,
+        id: scare.id,
         onScreen,
         lineOfSight: !sightBlocker,
         occluder: sightBlocker?.object?.name || null,
         naturalYaw: Number(state.yaw.toFixed(4)),
-        distance: Number(Math.hypot(checkpoint.reveal.x - viewpoint.x, checkpoint.reveal.z - viewpoint.z).toFixed(3)),
+        revealScale,
+        facingDot: Number((look?.facingDot ?? -1).toFixed(4)),
+        facingMinimumDot: STORM_RUN.scareFacingMinimumDot,
+        distance: Number(Math.hypot(scare.reveal.x - viewpoint.x, scare.reveal.z - viewpoint.z).toFixed(3)),
         viewpoint: { x: Number(viewpoint.x.toFixed(3)), y: viewpoint.y, z: Number(viewpoint.z.toFixed(3)) },
         projected: {
           x: Number(projected.x.toFixed(4)),
@@ -15031,13 +15230,24 @@
           visited: this.show.visitedCheckpointIds.includes(checkpoint.id),
           active: this.show.phase === STORM_RUN_PHASE.RUNNING && index === this.show.completedCheckpoints,
           position: { x: checkpoint.x, y: checkpoint.y, z: checkpoint.z },
-          scareTrigger: checkpoint.scareTrigger ? { ...checkpoint.scareTrigger } : null,
-          scareReveal: checkpoint.reveal ? {
-            position: { x: checkpoint.reveal.x, y: checkpoint.reveal.y, z: checkpoint.reveal.z },
-            darkSpot: Boolean(checkpoint.reveal.darkSpot),
-            maximumLightExposure: STORM_RUN.scareMaximumLightExposure,
-          } : null,
           guidance: this.checkpointGuidance(index),
+        })),
+        scares: STORM_RUN.scares.map((scare, index) => ({
+          id: scare.id,
+          index,
+          order: scare.order,
+          completedCheckpointMinimum: scare.completedCheckpointMinimum,
+          completedCheckpointMaximum: scare.completedCheckpointMaximum,
+          eligible: this.scareProgressEligible(scare),
+          triggered: this.show.scareTriggeredIds.includes(scare.id),
+          trigger: { ...scare.trigger },
+          reveal: {
+            position: { x: scare.reveal.x, y: scare.reveal.y, z: scare.reveal.z },
+            yaw: scare.reveal.yaw,
+            scale: Number(scare.reveal.scale) > 0 ? Number(scare.reveal.scale) : 1,
+            darkSpot: Boolean(scare.reveal.darkSpot),
+            maximumLightExposure: STORM_RUN.scareMaximumLightExposure,
+          },
         })),
         courseRoute: this.courseRouteDiagnostics(),
         player: {
@@ -15048,9 +15258,32 @@
         },
         contestants: this.contestantDiagnostics(),
         scare: {
-          checkpointIndex: this.show.scareCheckpointIndex,
+          index: this.show.scareIndex,
+          id: this.show.scareId,
           triggerZoneId: this.show.scareTriggerZoneId,
-          triggeredCheckpointIds: [...this.show.scareTriggeredCheckpointIds],
+          triggeredIds: [...this.show.scareTriggeredIds],
+          candidateId: this.show.scareCandidateId,
+          candidateZoneId: this.show.scareCandidateZoneId,
+          armed: Boolean(this.show.scareCandidateId),
+          facingDot: Number(this.show.scareFacingDot.toFixed(4)),
+          facingMinimumDot: STORM_RUN.scareFacingMinimumDot,
+          onScreen: Boolean(this.show.scareOnScreen),
+          waitingForFacing: Boolean(
+            this.show.scareCandidateId
+            && (
+              this.show.scareFacingDot < STORM_RUN.scareFacingMinimumDot
+              || !this.show.scareOnScreen
+            )
+          ),
+          lineOfSight: this.show.scareLineOfSight,
+          revealFillActive: Boolean(stormRunScene.revealLight?.visible),
+          revealFillIntensity: Number((stormRunScene.revealLight?.intensity || 0).toFixed(2)),
+          checkpointSubdued: Boolean(
+            this.show.hostVisible
+            && stormRunScene.checkpoints[this.show.completedCheckpoints]?.root?.visible
+            && stormRunScene.checkpoints[this.show.completedCheckpoints]?.guide?.material?.opacity
+              <= STORM_RUN.scareCheckpointFlashOpacity.guide
+          ),
           revealRemaining: Number(this.show.scareRevealRemaining.toFixed(3)),
           hostVisible: Boolean(this.show.hostVisible),
           lightning: Number((stormSystem?.flash || 0).toFixed(3)),
@@ -20478,6 +20711,16 @@
       stormRunScene.checkpoints.push({ root: checkpointRoot, ring, beacon, guide, checkpoint });
     });
 
+    // A short-range lightning fill sits just in front of the apparition. It
+    // makes the distant silhouette readable without hiding runners or moving
+    // Mr. Feast away from the three positions marked on the property map.
+    const revealLight = new THREE.PointLight(0xd9efff, 0, 12, 2);
+    revealLight.name = "storm-run-apparition-lightning-fill";
+    revealLight.visible = false;
+    revealLight.userData.baseIntensity = STORM_RUN.scareRevealFillIntensity;
+    root.add(revealLight);
+    stormRunScene.revealLight = revealLight;
+
     const reportRoot = new THREE.Group();
     reportRoot.name = "storm-run-report-station";
     reportRoot.position.set(STORM_RUN.reportMark.x, STORM_RUN.reportMark.y, STORM_RUN.reportMark.z);
@@ -23236,6 +23479,7 @@
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       this.ctx = AudioContext ? new AudioContext() : null;
       this.master = null;
+      this.closeThunderBus = null;
       this.rain = null;
       this.waterLoops = new Map();
       this.assetPaths = Array.from(new Set(Object.values(MANSION_AUDIO_ASSETS).flat()));
@@ -23246,6 +23490,7 @@
       this.lastVariant = new Map();
       this.cueCounts = Object.create(null);
       this.activeVoices = 0;
+      this.pendingCloseThunder = [];
       this.thunderState = {
         playCount: 0,
         closeStrikeCount: 0,
@@ -23253,6 +23498,14 @@
         lastVolumeMultiplier: 1,
         lastProfile: "ambient",
         lastCloseStrike: false,
+        lastContextStateAtPlayback: "unavailable",
+        lastScheduledAt: -1,
+        lastRollOffset: 0,
+        closeStrikeLayerCount: 0,
+        rainDuckCount: 0,
+        lastRainDuckUntil: -1,
+        queuedCloseStrikeCount: 0,
+        resumedCloseStrikeCount: 0,
       };
       this.footsteps = {
         lastPosition: null,
@@ -23267,6 +23520,7 @@
       // deliberately enables the full mix.
       this.master.gain.value = 0.0001;
       this.master.connect(this.ctx.destination);
+      this.closeThunderBus = this.createCloseThunderBus(this.ctx, this.master);
       this.makeRain();
       this.preloadPromise = null;
     }
@@ -23276,6 +23530,7 @@
       if (this.ctx.state !== "running") await this.ctx.resume();
       state.audioEnabled = true;
       this.master.gain.setTargetAtTime(0.58, this.ctx.currentTime, 0.06);
+      this.flushPendingCloseThunder();
       this.resetFootsteps();
       updateAudioButton();
       if (!this.preloadPromise) {
@@ -23285,6 +23540,47 @@
         this.preloadPromise = this.preloadSfx();
         void this.loadRecordedRain();
       }
+    }
+
+    async resumeIfInterrupted() {
+      if (!this.ctx || !state.audioEnabled) return this.ctx?.state || "unavailable";
+      if (this.ctx.state !== "running") {
+        try {
+          await this.ctx.resume();
+        } catch (_) {
+          // A browser may reject a non-activating gesture. The next trusted
+          // key or pointer press retries without changing the player's mute choice.
+        }
+      }
+      if (this.ctx.state === "running") this.flushPendingCloseThunder();
+      return this.ctx.state;
+    }
+
+    queueCloseThunder(delay, options) {
+      if (!this.ctx || !state.audioEnabled) return false;
+      this.pendingCloseThunder.push({
+        delay: Math.min(0.05, Math.max(0, Number(delay) || 0)),
+        options: { ...options, profile: "storm-run", closeStrike: true },
+      });
+      this.thunderState.queuedCloseStrikeCount += 1;
+      return true;
+    }
+
+    flushPendingCloseThunder() {
+      if (!this.ctx || this.ctx.state !== "running" || !state.audioEnabled) return 0;
+      const queued = this.pendingCloseThunder.splice(0);
+      let played = 0;
+      for (const entry of queued) {
+        if (this.thunder(entry.delay, entry.options)) played += 1;
+      }
+      this.thunderState.resumedCloseStrikeCount += played;
+      return played;
+    }
+
+    async suspendForQA() {
+      if (!state.qa || !this.ctx) return this.ctx?.state || "unavailable";
+      if (this.ctx.state === "running") await this.ctx.suspend();
+      return this.ctx.state;
     }
 
     decodeAudioBuffer(encoded) {
@@ -23380,12 +23676,19 @@
         tail.connect(panner);
         tail = panner;
       }
-      tail.connect(gain).connect(this.master);
+      const destination = options.bus === "close-thunder" && this.closeThunderBus
+        ? this.closeThunderBus
+        : this.master;
+      tail.connect(gain).connect(destination);
       const when = this.ctx.currentTime + Math.max(0, Number(options.delay) || 0);
+      const offsetByPath = options.offsetByPath && typeof options.offsetByPath === "object"
+        ? options.offsetByPath[path]
+        : null;
+      const offset = Math.max(0, Number.isFinite(Number(offsetByPath)) ? Number(offsetByPath) : Number(options.offset) || 0);
       this.activeVoices += 1;
       source.onended = () => { this.activeVoices = Math.max(0, this.activeVoices - 1); };
       try {
-        source.start(when, Math.max(0, Number(options.offset) || 0));
+        source.start(when, offset);
         return true;
       } catch (_) {
         this.activeVoices = Math.max(0, this.activeVoices - 1);
@@ -23410,6 +23713,25 @@
       return buffer;
     }
 
+    makeWhiteNoiseBuffer(seconds, context = this.ctx) {
+      const length = Math.floor(context.sampleRate * seconds);
+      const buffer = context.createBuffer(1, length, context.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < length; i += 1) data[i] = Math.random() * 2 - 1;
+      return buffer;
+    }
+
+    createCloseThunderBus(context, destination) {
+      const limiter = context.createDynamicsCompressor();
+      limiter.threshold.value = -8;
+      limiter.knee.value = 2;
+      limiter.ratio.value = 12;
+      limiter.attack.value = 0.002;
+      limiter.release.value = 0.16;
+      limiter.connect(destination);
+      return limiter;
+    }
+
     makeRain() {
       // Rain bus: exposure gain (how much shell opening is nearby) into a
       // muffle lowpass (walls and glass swallow the hiss first) into master.
@@ -23421,8 +23743,10 @@
       const muffle = this.ctx.createBiquadFilter();
       muffle.type = "lowpass";
       muffle.frequency.value = 8200;
-      gain.connect(muffle).connect(this.master);
-      this.rain = { gain, muffle, source: null, mode: "pending", level: 0.5, exposure: 1, layers: 0 };
+      const duck = this.ctx.createGain();
+      duck.gain.value = 1;
+      gain.connect(muffle).connect(duck).connect(this.master);
+      this.rain = { gain, muffle, duck, source: null, mode: "pending", level: 0.5, exposure: 1, layers: 0 };
       this.startProceduralRain();
     }
 
@@ -23553,6 +23877,10 @@
         layers: this.rain.layers,
         exposure: Number(this.rain.exposure.toFixed(3)),
         gain: Number(this.rain.gain.gain.value.toFixed(4)),
+        duckGain: Number(this.rain.duck.gain.value.toFixed(4)),
+        duckTargetGain: STORM_RUN.scareThunderRainDuckGain,
+        duckActive: this.ctx.currentTime < this.thunderState.lastRainDuckUntil,
+        duckCount: this.thunderState.rainDuckCount,
         muffleHz: Math.round(this.rain.muffle.frequency.value),
         baseReady: this.availableAssets("rainBase").length > 0,
         detailReady: this.availableAssets("rainDetail").length > 0,
@@ -23566,18 +23894,22 @@
       updateAudioButton();
     }
 
+    scheduleTone(context, destination, frequency, duration, gainValue, type, when = context.currentTime) {
+      const osc = context.createOscillator();
+      const gain = context.createGain();
+      osc.type = type || "sine";
+      osc.frequency.setValueAtTime(frequency, when);
+      gain.gain.setValueAtTime(Math.max(0.0001, gainValue), when);
+      gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+      osc.connect(gain).connect(destination);
+      osc.start(when);
+      osc.stop(when + duration + 0.02);
+      return true;
+    }
+
     ping(frequency, duration, gainValue, type) {
       if (!this.ctx || !state.audioEnabled) return false;
-      const now = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = type || "sine";
-      osc.frequency.setValueAtTime(frequency, now);
-      gain.gain.setValueAtTime(gainValue, now);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-      osc.connect(gain).connect(this.master);
-      osc.start(now);
-      osc.stop(now + duration + 0.02);
+      this.scheduleTone(this.ctx, this.master, frequency, duration, gainValue, type);
       return true;
     }
 
@@ -23800,6 +24132,103 @@
       }, 240);
     }
 
+    duckRainForCloseStrike(when = this.ctx?.currentTime || 0) {
+      if (!this.ctx || !this.rain?.duck) return false;
+      const now = this.ctx.currentTime;
+      const duckStart = Math.max(now, Number(when) || now);
+      const duckEnd = duckStart + STORM_RUN.scareThunderRainDuckSeconds;
+      const gain = this.rain.duck.gain;
+      gain.cancelScheduledValues(now);
+      gain.setValueAtTime(Math.max(0.0001, gain.value), now);
+      gain.linearRampToValueAtTime(STORM_RUN.scareThunderRainDuckGain, duckStart + 0.008);
+      gain.setValueAtTime(STORM_RUN.scareThunderRainDuckGain, duckStart + 0.55);
+      gain.exponentialRampToValueAtTime(1, duckEnd);
+      this.thunderState.rainDuckCount += 1;
+      this.thunderState.lastRainDuckUntil = duckEnd;
+      return true;
+    }
+
+    scheduleCloseThunderCrack(context, destination, when, volumeMultiplier = 1) {
+      const multiplier = clamp(Number(volumeMultiplier) || 1, 0.5, 1.75);
+      const noise = context.createBufferSource();
+      noise.buffer = this.makeWhiteNoiseBuffer(0.48, context);
+
+      const snapHigh = context.createBiquadFilter();
+      snapHigh.type = "highpass";
+      snapHigh.frequency.setValueAtTime(520, when);
+      const snapLow = context.createBiquadFilter();
+      snapLow.type = "lowpass";
+      snapLow.frequency.setValueAtTime(7600, when);
+      const snapGain = context.createGain();
+      snapGain.gain.setValueAtTime(0.0001, when);
+      snapGain.gain.exponentialRampToValueAtTime(
+        STORM_RUN.scareThunderCrackPeakGain * multiplier,
+        when + 0.005,
+      );
+      snapGain.gain.exponentialRampToValueAtTime(0.16 * multiplier, when + 0.065);
+      snapGain.gain.exponentialRampToValueAtTime(0.0001, when + 0.3);
+      noise.connect(snapHigh).connect(snapLow).connect(snapGain).connect(destination);
+
+      const bodyHigh = context.createBiquadFilter();
+      bodyHigh.type = "highpass";
+      bodyHigh.frequency.setValueAtTime(125, when);
+      const bodyLow = context.createBiquadFilter();
+      bodyLow.type = "lowpass";
+      bodyLow.frequency.setValueAtTime(1900, when);
+      const bodyGain = context.createGain();
+      bodyGain.gain.setValueAtTime(0.0001, when);
+      bodyGain.gain.exponentialRampToValueAtTime(0.42 * multiplier, when + 0.012);
+      bodyGain.gain.exponentialRampToValueAtTime(0.0001, when + 0.46);
+      noise.connect(bodyHigh).connect(bodyLow).connect(bodyGain).connect(destination);
+
+      this.scheduleTone(context, destination, 185, 0.36, 0.2 * multiplier, "triangle", when);
+      noise.start(when);
+      noise.stop(when + 0.48);
+      return { layerCount: 3, noiseProfile: "white", peakGain: STORM_RUN.scareThunderCrackPeakGain * multiplier };
+    }
+
+    async measureCloseThunderForQA() {
+      const OfflineAudioContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      if (!OfflineAudioContext) return { available: false, reason: "offline-audio-unavailable" };
+      const sampleRate = 44100;
+      const durationSeconds = 0.7;
+      const context = new OfflineAudioContext(1, Math.ceil(sampleRate * durationSeconds), sampleRate);
+      const master = context.createGain();
+      master.gain.value = 0.58;
+      master.connect(context.destination);
+      const bus = this.createCloseThunderBus(context, master);
+      const startSeconds = STORM_RUN.scareThunderDelaySeconds;
+      const graph = this.scheduleCloseThunderCrack(
+        context,
+        bus,
+        startSeconds,
+        STORM_RUN.scareThunderVolumeMultiplier,
+      );
+      const rendered = await context.startRendering();
+      const data = rendered.getChannelData(0);
+      let peak = 0;
+      let first100Energy = 0;
+      let onsetSample = -1;
+      const first100Samples = Math.min(data.length, Math.floor(sampleRate * 0.1));
+      for (let index = 0; index < data.length; index += 1) {
+        const value = Math.abs(data[index]);
+        peak = Math.max(peak, value);
+        if (index < first100Samples) first100Energy += data[index] * data[index];
+        if (onsetSample < 0 && value >= 0.01) onsetSample = index;
+      }
+      const first100Rms = Math.sqrt(first100Energy / Math.max(1, first100Samples));
+      const toDb = (value) => value > 0 ? 20 * Math.log10(value) : -120;
+      return {
+        available: true,
+        onsetMs: Number(((Math.max(0, onsetSample) / sampleRate) * 1000).toFixed(2)),
+        peakDbfs: Number(toDb(peak).toFixed(2)),
+        first100RmsDbfs: Number(toDb(first100Rms).toFixed(2)),
+        rainDuckDb: Number(toDb(STORM_RUN.scareThunderRainDuckGain).toFixed(2)),
+        layerCount: graph.layerCount,
+        noiseProfile: graph.noiseProfile,
+      };
+    }
+
     thunder(delay = 0, options = {}) {
       const safeDelay = Math.max(0, Number(delay) || 0);
       const volumeMultiplier = clamp(Number(options.volumeMultiplier) || 1, 0.5, 1.75);
@@ -23809,72 +24238,81 @@
       this.thunderState.lastVolumeMultiplier = volumeMultiplier;
       this.thunderState.lastProfile = profile;
       this.thunderState.lastCloseStrike = closeStrike;
+      this.thunderState.lastContextStateAtPlayback = this.ctx?.state || "unavailable";
       if (!this.ctx || !state.audioEnabled) return false;
-      setTimeout(() => {
-        if (!this.ctx || !state.audioEnabled) return;
-        // Evaluate location when the strike actually plays so a delayed roll
-        // still muffles if the player has already gone underground.
-        const inBasement = state.currentFloor === "BASEMENT";
-        if (closeStrike) {
-          // The apparition cue needs the dry, almost simultaneous snap of a
-          // nearby bolt before the longer field recording blooms. Keep this
-          // layer exclusive to Storm Run so ordinary ambient thunder remains
-          // distant and non-fatiguing.
-          const now = this.ctx.currentTime;
-          const crack = this.ctx.createBufferSource();
-          crack.buffer = this.makeNoiseBuffer(0.34);
-          const high = this.ctx.createBiquadFilter();
-          high.type = "highpass";
-          high.frequency.setValueAtTime(720, now);
-          const low = this.ctx.createBiquadFilter();
-          low.type = "lowpass";
-          low.frequency.setValueAtTime(6200, now);
-          const crackGain = this.ctx.createGain();
-          crackGain.gain.setValueAtTime(0.0001, now);
-          crackGain.gain.exponentialRampToValueAtTime(0.28 * volumeMultiplier, now + 0.006);
-          crackGain.gain.exponentialRampToValueAtTime(0.085 * volumeMultiplier, now + 0.055);
-          crackGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.31);
-          crack.connect(high).connect(low).connect(crackGain).connect(this.master);
-          crack.start(now);
-          crack.stop(now + 0.34);
-          this.ping(86, 0.42, 0.075 * volumeMultiplier, "square");
-          this.thunderState.closeStrikeCount += 1;
-          this.markCue("thunderClose");
-        }
-        const recorded = this.playSample("thunder", {
-          volume: (inBasement ? 0.045 : 0.31) * volumeMultiplier,
-          rate: inBasement ? 0.86 : closeStrike ? 1.04 : 0.98,
-          rateVariance: closeStrike ? 0.015 : 0.055,
-          pan: closeStrike ? 0 : (Math.random() * 2 - 1) * (inBasement ? 0.06 : 0.32),
-          // Deep basement: very low cutoff so only a distant, felt rumble remains.
-          lowpass: inBasement
-            ? (safeDelay > 1 ? 280 : 450)
-            : closeStrike ? 6800 : (safeDelay > 1 ? 2100 : 4200),
+      if (this.ctx.state !== "running") {
+        if (closeStrike) this.queueCloseThunder(safeDelay, {
+          ...options,
+          profile,
+          volumeMultiplier,
+          closeStrike: true,
         });
-        if (recorded) {
-          // A very quiet sub tail lends weight on laptop speakers without
-          // masking the transient and long roll in the field recording.
-          this.ping(42, 2.4, (inBasement ? 0.006 : 0.045) * volumeMultiplier, "sine");
-        } else {
-          const now = this.ctx.currentTime;
-          const noise = this.ctx.createBufferSource();
-          noise.buffer = this.makeNoiseBuffer(2.6);
-          const low = this.ctx.createBiquadFilter();
-          low.type = "lowpass";
-          low.frequency.setValueAtTime(inBasement ? 120 : 580, now);
-          low.frequency.exponentialRampToValueAtTime(inBasement ? 40 : 85, now + 2.5);
-          const gain = this.ctx.createGain();
-          gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.exponentialRampToValueAtTime((inBasement ? 0.045 : 0.34) * volumeMultiplier, now + 0.06);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.5);
-          noise.connect(low).connect(gain).connect(this.master);
-          noise.start(now);
-          noise.stop(now + 2.55);
-          this.ping(46, 2.2, (inBasement ? 0.014 : 0.12) * volumeMultiplier, "sine");
-        }
-        this.thunderState.playCount += 1;
-        this.markCue("thunder");
-      }, safeDelay * 1000);
+        return false;
+      }
+      const strikeTime = this.ctx.currentTime + safeDelay;
+      const inBasement = state.currentFloor === "BASEMENT";
+      const outputBus = closeStrike && this.closeThunderBus ? this.closeThunderBus : this.master;
+      this.thunderState.lastScheduledAt = strikeTime;
+      if (closeStrike) {
+        const graph = this.scheduleCloseThunderCrack(this.ctx, outputBus, strikeTime, volumeMultiplier);
+        this.duckRainForCloseStrike(strikeTime);
+        this.thunderState.closeStrikeLayerCount = graph.layerCount;
+        this.thunderState.closeStrikeCount += 1;
+        this.markCue("thunderClose");
+      }
+      const recorded = this.playSample("thunder", {
+        volume: (inBasement ? 0.045 : 0.31) * volumeMultiplier,
+        rate: inBasement ? 0.86 : closeStrike ? 1.04 : 0.98,
+        rateVariance: closeStrike ? 0.015 : 0.055,
+        pan: closeStrike ? 0 : (Math.random() * 2 - 1) * (inBasement ? 0.06 : 0.32),
+        lowpass: inBasement
+          ? (safeDelay > 1 ? 280 : 450)
+          : closeStrike ? 6800 : (safeDelay > 1 ? 2100 : 4200),
+        delay: safeDelay,
+        offsetByPath: closeStrike ? STORM_RUN.scareThunderRollOffsets : null,
+        bus: closeStrike ? "close-thunder" : "master",
+      });
+      if (recorded) {
+        const recordedPath = this.lastVariant.get("thunder");
+        this.thunderState.lastRollOffset = closeStrike
+          ? Number(STORM_RUN.scareThunderRollOffsets[recordedPath]) || 0
+          : 0;
+        this.scheduleTone(
+          this.ctx,
+          outputBus,
+          closeStrike ? 82 : 42,
+          closeStrike ? 0.7 : 2.4,
+          (inBasement ? 0.006 : closeStrike ? 0.09 : 0.045) * volumeMultiplier,
+          "sine",
+          strikeTime,
+        );
+      } else {
+        this.thunderState.lastRollOffset = 0;
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this.makeNoiseBuffer(2.6);
+        const low = this.ctx.createBiquadFilter();
+        low.type = "lowpass";
+        low.frequency.setValueAtTime(inBasement ? 120 : 580, strikeTime);
+        low.frequency.exponentialRampToValueAtTime(inBasement ? 40 : 85, strikeTime + 2.5);
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, strikeTime);
+        gain.gain.exponentialRampToValueAtTime((inBasement ? 0.045 : 0.34) * volumeMultiplier, strikeTime + 0.06);
+        gain.gain.exponentialRampToValueAtTime(0.0001, strikeTime + 2.5);
+        noise.connect(low).connect(gain).connect(outputBus);
+        noise.start(strikeTime);
+        noise.stop(strikeTime + 2.55);
+        this.scheduleTone(
+          this.ctx,
+          outputBus,
+          closeStrike ? 92 : 46,
+          closeStrike ? 0.72 : 2.2,
+          (inBasement ? 0.014 : closeStrike ? 0.13 : 0.12) * volumeMultiplier,
+          "sine",
+          strikeTime,
+        );
+      }
+      this.thunderState.playCount += 1;
+      this.markCue("thunder");
       return true;
     }
 
@@ -23972,6 +24410,17 @@
         lastVolumeMultiplier: this.thunderState.lastVolumeMultiplier,
         lastProfile: this.thunderState.lastProfile,
         lastCloseStrike: this.thunderState.lastCloseStrike,
+        lastContextStateAtPlayback: this.thunderState.lastContextStateAtPlayback,
+        lastScheduledAt: Number(this.thunderState.lastScheduledAt.toFixed(4)),
+        lastRollOffset: this.thunderState.lastRollOffset,
+        closeStrikeLayerCount: this.thunderState.closeStrikeLayerCount,
+        rainDuckCount: this.thunderState.rainDuckCount,
+        pendingCloseStrikeCount: this.pendingCloseThunder.length,
+        queuedCloseStrikeCount: this.thunderState.queuedCloseStrikeCount,
+        resumedCloseStrikeCount: this.thunderState.resumedCloseStrikeCount,
+        crackNoiseProfile: "white",
+        crackPeakGain: STORM_RUN.scareThunderCrackPeakGain,
+        rainDuckGain: STORM_RUN.scareThunderRainDuckGain,
       };
     }
 
@@ -24759,7 +25208,11 @@
   }
 
   function bindInput() {
+    window.addEventListener("pointerdown", () => {
+      if (audioSystem) void audioSystem.resumeIfInterrupted();
+    }, true);
     window.addEventListener("keydown", (event) => {
+      if (audioSystem) void audioSystem.resumeIfInterrupted();
       if (state.gameOver) {
         // The fail overlay owns the page: only its focusable buttons react.
         if (event.code === "Escape") event.preventDefault();
@@ -26297,6 +26750,16 @@
     });
     window.MrFeastFresh.getDiagnostics = getDiagnostics;
     window.MrFeastFresh.getAudioStateForQA = () => audioSystem ? audioSystem.getDiagnostics() : null;
+    window.MrFeastFresh.measureCloseThunderForQA = () => (
+      state.qa && audioSystem
+        ? audioSystem.measureCloseThunderForQA()
+        : Promise.resolve({ available: false, reason: "qa-only" })
+    );
+    window.MrFeastFresh.suspendAudioForQA = () => (
+      state.qa && audioSystem
+        ? audioSystem.suspendForQA()
+        : Promise.resolve("qa-only")
+    );
     window.MrFeastFresh.playAudioCueForQA = (cue) => {
       if (!state.qa || !audioSystem) return null;
       if (cue === "thunder") audioSystem.thunder(0);
@@ -26549,7 +27012,7 @@
     window.MrFeastFresh.triggerStormRunScareForQA = (index) => (
       state.qa && stormRunSystem ? stormRunSystem.triggerScare(index) : { triggered: false, reason: "qa-only" }
     );
-    window.MrFeastFresh.placePlayerAlongStormLegForQA = (index, progress = 0.42) => {
+    window.MrFeastFresh.placePlayerAlongStormLegForQA = (index, progress = 0.42, options = {}) => {
       if (!state.qa || !stormRunSystem || !physics) return null;
       const checkpointIndex = Math.floor(Number(index));
       const checkpoint = STORM_RUN.checkpoints[checkpointIndex];
@@ -26559,19 +27022,28 @@
       const x = previous.x + (checkpoint.x - previous.x) * routeProgress;
       const z = previous.z + (checkpoint.z - previous.z) * routeProgress;
       const yaw = Math.atan2(-(checkpoint.x - x), -(checkpoint.z - z));
-      teleport(x, checkpoint.y, z, yaw, -0.08);
+      const pitch = Number.isFinite(Number(options?.pitch))
+        ? clamp(Number(options.pitch), -1.3, 1.3)
+        : -0.08;
+      teleport(x, checkpoint.y, z, yaw, pitch);
+      syncCamera();
+      camera.updateMatrixWorld(true);
       updateLocation();
       updateInteractionPrompt();
-      const zones = stormRunSystem.scareTriggerZones(checkpoint);
-      const closestZone = zones.reduce((closest, zone) => {
-        const distance = Math.hypot(x - zone.x, z - zone.z);
-        return !closest || distance < closest.distance ? { zone, distance } : closest;
+      const closestZone = STORM_RUN.scares.flatMap((scare) => (
+        stormRunSystem.scareTriggerZones(scare).map((zone) => ({ scare, zone }))
+      )).reduce((closest, entry) => {
+        const distance = Math.hypot(x - entry.zone.x, z - entry.zone.z);
+        return !closest || distance < closest.distance ? { ...entry, distance } : closest;
       }, null);
       return {
         index: checkpointIndex,
         progress: Number(routeProgress.toFixed(3)),
         onAuthoredLeg: true,
         position: { x: Number(x.toFixed(3)), y: checkpoint.y, z: Number(z.toFixed(3)) },
+        yaw: Number(yaw.toFixed(4)),
+        pitch: Number(pitch.toFixed(4)),
+        scareId: closestZone?.scare?.id || null,
         triggerZoneId: closestZone?.zone?.id || null,
         triggerZoneDistance: Number((closestZone?.distance ?? Infinity).toFixed(3)),
         triggerRadius: Number((closestZone?.zone?.radius || 0).toFixed(3)),
@@ -26616,7 +27088,7 @@
       const distance = clamp(Number(approachDistance) || 4, STORM_RUN.checkpointRadius + 0.5, STORM_RUN.checkpointApproachRadius - 0.25);
       const x = checkpoint.x;
       const z = checkpoint.z - distance;
-      const lookTarget = checkpoint.reveal || checkpoint;
+      const lookTarget = checkpoint;
       const yaw = Math.atan2(-(lookTarget.x - x), -(lookTarget.z - z));
       teleport(x, checkpoint.y, z, yaw, -0.08);
       updateLocation();
@@ -26627,21 +27099,50 @@
         position: { x, y: checkpoint.y, z },
       };
     };
-    window.MrFeastFresh.placePlayerAtStormScareTriggerForQA = (index) => {
+    window.MrFeastFresh.placePlayerAtStormScareTriggerForQA = (index, facingReveal = true, options = {}) => {
       if (!state.qa || !stormRunSystem || !physics) return null;
-      const checkpoint = STORM_RUN.checkpoints[Math.floor(Number(index))];
-      if (!checkpoint?.scareTrigger) return null;
-      const trigger = stormRunSystem.scareTriggerZones(checkpoint)[0];
+      const scareIndex = Math.floor(Number(index));
+      const scare = STORM_RUN.scares[scareIndex];
+      if (!scare?.trigger || !scare.reveal) return null;
+      const trigger = stormRunSystem.scareTriggerZones(scare)[0];
       if (!trigger) return null;
-      const lookTarget = checkpoint.reveal || checkpoint;
-      const yaw = Math.atan2(-(lookTarget.x - trigger.x), -(lookTarget.z - trigger.z));
-      teleport(trigger.x, checkpoint.y, trigger.z, yaw, -0.08);
+      const offsetX = Number(options?.offsetX) || 0;
+      const offsetZ = Number(options?.offsetZ) || 0;
+      const x = trigger.x + offsetX;
+      const z = trigger.z + offsetZ;
+      const targetYaw = Math.atan2(-(scare.reveal.x - x), -(scare.reveal.z - z));
+      const yaw = targetYaw + (facingReveal ? 0 : Math.PI);
+      const revealScale = Number(scare.reveal.scale) > 0 ? Number(scare.reveal.scale) : 1;
+      const eyeY = YARD_LAYOUT.groundY + (state.movement.eyeHeight || PLAYER.eye) + 0.17;
+      const targetY = scare.reveal.y + 1.25 * revealScale;
+      const targetPitch = Math.atan2(
+        targetY - eyeY,
+        Math.max(0.001, Math.hypot(scare.reveal.x - x, scare.reveal.z - z)),
+      );
+      const pitch = Number.isFinite(Number(options?.pitch))
+        ? clamp(Number(options.pitch), -1.3, 1.3)
+        : targetPitch;
+      teleport(x, YARD_LAYOUT.groundY, z, yaw, pitch);
+      syncCamera();
+      camera.updateMatrixWorld(true);
       updateLocation();
       updateInteractionPrompt();
+      const look = stormRunSystem.scareLookState(scare, trigger, physics.playerPosition());
       return {
-        index: Math.floor(Number(index)),
-        position: { x: trigger.x, y: checkpoint.y, z: trigger.z },
+        index: scareIndex,
+        id: scare.id,
+        position: { x, y: YARD_LAYOUT.groundY, z },
+        triggerDistance: Number(Math.hypot(x - trigger.x, z - trigger.z).toFixed(3)),
         radius: trigger.radius,
+        yaw: Number(state.yaw.toFixed(4)),
+        pitch: Number(state.pitch.toFixed(4)),
+        targetYaw: Number(targetYaw.toFixed(4)),
+        targetPitch: Number(targetPitch.toFixed(4)),
+        facingDot: Number((look?.facingDot ?? -1).toFixed(4)),
+        facingMinimumDot: STORM_RUN.scareFacingMinimumDot,
+        onScreen: Boolean(look?.onScreen),
+        lineOfSight: Boolean(look?.lineOfSight),
+        blocker: look?.blocker || null,
       };
     };
     window.MrFeastFresh.completeStormRunForQA = (outcome = "player") => (

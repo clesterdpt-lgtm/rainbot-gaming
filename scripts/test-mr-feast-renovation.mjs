@@ -6,16 +6,19 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(scriptDir, "..");
 const mansionPath = path.join(root, "assets/js/mr-feast-mansion.js");
 const pagePath = path.join(root, "games/mr-feast-mansion.html");
+const statePath = path.join(root, "docs/STATE.md");
 const localLauncherPath = path.join(root, "Open Mr Feast Mansion.command");
 const mrFeastAssetRoot = path.join(root, "assets/models/mr-feast");
 const mrFeastManifestPath = path.join(mrFeastAssetRoot, "mr-feast-asset-manifest.json");
 const mrFeastTuningReportPath = path.join(mrFeastAssetRoot, "animations/mr-feast-tuning-report.json");
 const mrFeastTuningScriptPath = path.join(root, "scripts/tune-mr-feast-animations.mjs");
 const mrFeastFacialReportPath = path.join(mrFeastAssetRoot, "processed/mr-feast-facial-report.json");
+const mrFeastRetopologyModelPath = path.join(mrFeastAssetRoot, "processed/mr-feast-game-retopo-face-v1.glb");
 const mrFeastRetopologyReportPath = path.join(mrFeastAssetRoot, "processed/mr-feast-retopology-report.json");
 const estateStatueManifestPath = path.join(mrFeastAssetRoot, "statues/manifest.json");
 const mansion = fs.readFileSync(mansionPath, "utf8");
 const page = fs.readFileSync(pagePath, "utf8");
+const projectState = fs.readFileSync(statePath, "utf8");
 const localLauncher = fs.existsSync(localLauncherPath) ? fs.readFileSync(localLauncherPath, "utf8") : "";
 const mrFeastManifest = JSON.parse(fs.readFileSync(mrFeastManifestPath, "utf8"));
 const mrFeastTuningReport = JSON.parse(fs.readFileSync(mrFeastTuningReportPath, "utf8"));
@@ -1295,6 +1298,37 @@ const expectedMrFeastAssets = [
   mrFeastManifest.animations?.run?.file,
 ];
 check("43 Mr Feast manifest", mrFeastManifest.heightMeters === 2.01 && mrFeastManifest.sourceHeightMeters === 1.92 && mrFeastManifest.forwardAxis === "+Z" && mrFeastManifest.animations?.stalk?.playbackRate === 0.37 && expectedMrFeastAssets.every(Boolean), "runtime manifest is missing the eye-level fit, forward axis, stride-calibrated stalk rate, or motion assets");
+const faceRetopologyPaused = /\*\*33 — Mr\. Feast Face Retopology\*\* is paused/.test(projectState);
+check(
+  "43 Mr Feast face release gate",
+  !faceRetopologyPaused || (
+    mrFeastManifest.version === 1
+    && mrFeastManifest.model === "processed/mr-feast-game-rigged.glb"
+    && !mrFeastManifest.face
+    && /assetVersion:\s*"20260721-stable-face-1"/.test(mansion)
+    && /mr-feast-mansion\.js\?v=20260721-stable-face-1/.test(page)
+  ),
+  "the paused and visually rejected retopology is still selected by the public manifest or an old cache key",
+);
+check(
+  "46 active Mr Feast retopology quality gate",
+  faceRetopologyPaused || (
+    mrFeastManifest.version >= 3
+    && mrFeastManifest.model !== "processed/mr-feast-game-rigged.glb"
+    && mrFeastRetopologyReport?.surface?.maxNeighborDepthDeltaMillimeters <= 10
+    && mrFeastRetopologyReport?.surface?.p99NeighborDepthDeltaMillimeters <= 5
+    && mrFeastRetopologyReport?.surface?.edgesAbove10Millimeters === 0
+    && mrFeastRetopologyReport?.eyeFit?.left?.cornealProtrusionMillimeters <= 3
+    && mrFeastRetopologyReport?.eyeFit?.right?.cornealProtrusionMillimeters <= 3
+    && mrFeastRetopologyReport?.faceJoin?.nearCoplanarSamples === 0
+    && mrFeastRetopologyReport?.faceJoin?.depthOrderFlips === 0
+    && mrFeastRetopologyReport?.faceJoin?.uncoveredSkinRays === 0
+    && mrFeastRetopologyReport?.topology?.boundaryLoops === 4
+    && mrFeastRetopologyReport?.topology?.looseVertices === 0
+    && mrFeastRetopologyReport?.topology?.nonManifoldEdges === 0
+  ),
+  "an active retopology must replace the rejected appliance with measured surface continuity, recessed eyes, clean joins, and valid boundary topology",
+);
 for (const asset of expectedMrFeastAssets) {
   const assetPath = path.join(mrFeastAssetRoot, asset);
   check("43 Mr Feast runtime assets", fs.existsSync(assetPath), `missing runtime character asset ${asset}`);
@@ -1313,34 +1347,36 @@ for (const asset of expectedMrFeastAssets.slice(1)) {
 }
 const mrFeastModelPath = path.join(mrFeastAssetRoot, mrFeastManifest.model);
 const mrFeastModelJson = glbJson(mrFeastModelPath);
-const mrFeastFaceNode = (mrFeastModelJson?.nodes || []).find((node) => node.name === "MrFeast_RetopoFace");
+const mrFeastRetopologyModelJson = glbJson(mrFeastRetopologyModelPath);
+const mrFeastFaceNode = (mrFeastRetopologyModelJson?.nodes || []).find((node) => node.name === "MrFeast_RetopoFace");
 const mrFeastModelMesh = Number.isInteger(mrFeastFaceNode?.mesh)
-  ? mrFeastModelJson?.meshes?.[mrFeastFaceNode.mesh]
-  : (mrFeastModelJson?.meshes || []).find((mesh) => mesh.name === "MrFeast_RetopoFace");
+  ? mrFeastRetopologyModelJson?.meshes?.[mrFeastFaceNode.mesh]
+  : (mrFeastRetopologyModelJson?.meshes || []).find((mesh) => mesh.name === "MrFeast_RetopoFace");
 const mrFeastModelPrimitives = mrFeastModelMesh?.primitives || [];
 const mrFeastModelTargets = mrFeastModelPrimitives.flatMap((primitive) => primitive.targets || []);
 const mrFeastFacialTargetNames = mrFeastModelMesh?.extras?.targetNames || [];
-const mrFeastFacialMappings = Object.values(mrFeastManifest.face?.morphTargets || {});
-const mrFeastRetopologyNodeNames = (mrFeastModelJson?.nodes || []).map((node) => node.name).filter(Boolean);
-const mrFeastRetopologyMeshNames = (mrFeastModelJson?.meshes || []).map((mesh) => mesh.name).filter(Boolean);
-const mrFeastSceneRootNodes = new Set(mrFeastModelJson?.scenes?.[mrFeastModelJson?.scene || 0]?.nodes || []);
+const mrFeastRetopologyNodeNames = (mrFeastRetopologyModelJson?.nodes || []).map((node) => node.name).filter(Boolean);
+const mrFeastRetopologyMeshNames = (mrFeastRetopologyModelJson?.meshes || []).map((mesh) => mesh.name).filter(Boolean);
+const mrFeastSceneRootNodes = new Set(mrFeastRetopologyModelJson?.scenes?.[mrFeastRetopologyModelJson?.scene || 0]?.nodes || []);
 const mrFeastRetopologyNodeIndexes = requiredMrFeastRetopologyObjects.map((name) =>
-  (mrFeastModelJson?.nodes || []).findIndex((node) => node.name === name),
+  (mrFeastRetopologyModelJson?.nodes || []).findIndex((node) => node.name === name),
 );
-const mrFeastFacePositionAccessor = mrFeastModelJson?.accessors?.[
+const mrFeastFacePositionAccessor = mrFeastRetopologyModelJson?.accessors?.[
   mrFeastModelPrimitives[0]?.attributes?.POSITION
 ];
 const mrFeastFaceAccessorSize = mrFeastFacePositionAccessor?.min?.map(
   (minimum, index) => mrFeastFacePositionAccessor.max[index] - minimum,
 ) || [];
-check("45 Mr Feast facial asset", mrFeastModelJson?.meshes?.length >= 7 && mrFeastModelJson?.skins?.length === 1 && mrFeastModelJson.skins[0].joints?.length === 24, "retopologized model must expose its modular face parts while retaining one shared skin and the 24-bone body rig");
-check("45 Mr Feast facial asset", mrFeastModelTargets.length === requiredMrFeastFacialTargets.length && mrFeastModelTargets.every((target) => Number.isInteger(target.POSITION) && Object.keys(target).length === 1), "facialized model must contain ten POSITION-only morph targets without morph normals or tangents");
-check("45 Mr Feast facial asset", requiredMrFeastFacialTargets.every((name) => mrFeastFacialTargetNames.includes(name)), `facialized model is missing approved targets: ${requiredMrFeastFacialTargets.filter((name) => !mrFeastFacialTargetNames.includes(name)).join(", ")}`);
-check("46 Mr Feast retopology transforms", mrFeastRetopologyNodeIndexes.every((index) => index >= 0 && mrFeastSceneRootNodes.has(index)) && mrFeastFaceAccessorSize[0] >= 0.14 && mrFeastFaceAccessorSize[1] >= 0.20 && mrFeastFaceAccessorSize[2] >= 0.16, "retopologized face parts are parented beneath the 0.01-scale armature or their exported face bounds collapsed below head scale");
-check("45 Mr Feast facial manifest", mrFeastManifest.version === 3 && mrFeastManifest.face?.rigVersion === 3 && mrFeastManifest.face?.presetVersion === 3 && requiredMrFeastFacialTargets.every((name) => mrFeastFacialMappings.includes(name)) && new Set(mrFeastFacialMappings).size === requiredMrFeastFacialTargets.length, "manifest does not expose the version-three retopologized facial contract");
-check("45 Mr Feast facial size", fs.statSync(mrFeastModelPath).size <= 15 * 1024 * 1024, "retopologized runtime GLB exceeds the 15 MiB mobile budget");
+check("43 Mr Feast stable face asset", mrFeastModelJson?.meshes?.length === 1 && mrFeastModelJson?.skins?.length === 1 && mrFeastModelJson.skins[0].joints?.length === 24, "the active release must use the intact single-mesh, 24-bone character while retopology is paused");
+check("43 Mr Feast stable face manifest", mrFeastManifest.version === 1 && mrFeastManifest.model === "processed/mr-feast-game-rigged.glb" && !mrFeastManifest.face, "the active manifest still exposes the rejected retopology contract");
+check("43 Mr Feast stable face size", fs.statSync(mrFeastModelPath).size <= 15 * 1024 * 1024, "the stable runtime GLB exceeds the 15 MiB mobile budget");
+check("46 experimental Mr Feast facial asset", mrFeastRetopologyModelJson?.meshes?.length >= 7 && mrFeastRetopologyModelJson?.skins?.length === 1 && mrFeastRetopologyModelJson.skins[0].joints?.length === 24, "the preserved experimental model lost its modular face parts, shared skin, or 24-bone body rig");
+check("46 experimental Mr Feast facial asset", mrFeastModelTargets.length === requiredMrFeastFacialTargets.length && mrFeastModelTargets.every((target) => Number.isInteger(target.POSITION) && Object.keys(target).length === 1), "the preserved experimental model must contain ten POSITION-only morph targets without morph normals or tangents");
+check("46 experimental Mr Feast facial asset", requiredMrFeastFacialTargets.every((name) => mrFeastFacialTargetNames.includes(name)), `the preserved experimental model is missing targets: ${requiredMrFeastFacialTargets.filter((name) => !mrFeastFacialTargetNames.includes(name)).join(", ")}`);
+check("46 experimental Mr Feast retopology transforms", mrFeastRetopologyNodeIndexes.every((index) => index >= 0 && mrFeastSceneRootNodes.has(index)) && mrFeastFaceAccessorSize[0] >= 0.14 && mrFeastFaceAccessorSize[1] >= 0.20 && mrFeastFaceAccessorSize[2] >= 0.16, "the preserved experimental face parts are parented beneath the 0.01-scale armature or their exported bounds collapsed below head scale");
+check("46 experimental Mr Feast facial size", fs.statSync(mrFeastRetopologyModelPath).size <= 15 * 1024 * 1024, "the preserved experimental GLB exceeds the 15 MiB mobile budget");
 check("45 Mr Feast facial report", mrFeastFacialReport.trianglesBefore === 65000 && mrFeastFacialReport.trianglesAfter === 65000 && mrFeastFacialReport.vertexCountBefore === mrFeastFacialReport.vertexCountAfter && requiredMrFeastFacialTargets.every((name) => mrFeastFacialReport.targets?.includes(name) && mrFeastFacialReport.targetStats?.[name]?.changedVertices > 0), "facial authoring report does not prove stable topology and non-empty sparse targets");
-check("46 Mr Feast retopology structure", Boolean(mrFeastRetopologyReport) && mrFeastRetopologyReport?.pipelineVersion === 1 && mrFeastRetopologyReport?.face?.components === 1 && mrFeastRetopologyReport?.face?.vertices >= 2000 && mrFeastRetopologyReport?.morphMeshes === 4 && mrFeastRetopologyReport?.morphBindings === 18 && mrFeastRetopologyReport?.albedoBake?.completed === true && requiredMrFeastRetopologyObjects.every((name) => mrFeastRetopologyNodeNames.includes(name) || mrFeastRetopologyMeshNames.includes(name)), "runtime asset does not contain the one-piece textured face, separate eyes, eyelids, oral cavity, teeth, and smooth textured lip-rim binding contract");
+check("46 experimental Mr Feast retopology structure", Boolean(mrFeastRetopologyReport) && mrFeastRetopologyReport?.pipelineVersion === 1 && mrFeastRetopologyReport?.face?.components === 1 && mrFeastRetopologyReport?.face?.vertices >= 2000 && mrFeastRetopologyReport?.morphMeshes === 4 && mrFeastRetopologyReport?.morphBindings === 18 && mrFeastRetopologyReport?.albedoBake?.completed === true && requiredMrFeastRetopologyObjects.every((name) => mrFeastRetopologyNodeNames.includes(name) || mrFeastRetopologyMeshNames.includes(name)), "the preserved experiment lost the one-piece textured face, separate eyes, eyelids, oral cavity, teeth, or textured lip-rim binding contract");
 check("46 Mr Feast retopology budget", Boolean(mrFeastRetopologyReport) && mrFeastRetopologyReport?.rig?.bones === 24 && mrFeastRetopologyReport?.rig?.skinnedMeshes >= 2 && mrFeastRetopologyReport?.asset?.triangles <= 90000 && mrFeastRetopologyReport?.asset?.sizeBytes <= 15 * 1024 * 1024, "retopologized character exceeds the browser budget or no longer preserves the 24-bone body rig");
 check("46 Mr Feast retopology deformation", Boolean(mrFeastRetopologyReport) && requiredMrFeastFacialTargets.every((name) => mrFeastRetopologyReport?.targets?.includes(name) && mrFeastRetopologyReport?.targetStats?.[name]?.changedVertices > 0) && mrFeastRetopologyReport?.morphNormalExported === false && mrFeastRetopologyReport?.blinkClosureGapMillimeters?.left <= 1 && mrFeastRetopologyReport?.blinkClosureGapMillimeters?.right <= 1 && mrFeastRetopologyReport?.mouthOpenGapMillimeters >= 8, "retopology report does not prove ten non-empty POSITION-only targets, true independent eyelid closure, and a visible mouth opening");
 const readableFacialDisplacementMillimeters = {
@@ -1382,7 +1418,7 @@ check("45 Mr Feast facial controller", /updateFace\(/.test(mrFeastWanderer) && /
 check("45 Mr Feast facial material readability", /tuneCharacterMaterial\(/.test(mrFeastWanderer) && /material\.emissiveIntensity\s*=\s*0\.08/.test(mrFeastWanderer) && /material\.roughness\s*=\s*Math\.max\(Number\(material\.roughness\) \|\| 0, 0\.68\)/.test(mrFeastWanderer), "Meshy material can still self-illuminate the face strongly enough to erase expression contours");
 check("45 Mr Feast facial diagnostics", /face:\s*this\.getFaceDiagnostics\(\)/.test(mrFeastWanderer) && /targetWeights:/.test(mrFeastWanderer) && /phase:\s*blinkPhase/.test(mrFeastWanderer) && /attention:/.test(mrFeastWanderer) && /setMrFeastFaceForQA/.test(qaHooks) && /triggerMrFeastBlinkForQA/.test(qaHooks) && /advanceMrFeastFaceForQA/.test(qaHooks), "facial weights, blink phase, attention diagnostics, or deterministic QA controls are missing");
 check("45 Mr Feast facial interaction order", /qaExpressionCycle:\s*Object\.freeze\(\["neutral",\s*"friendly",\s*"watching",\s*"close",\s*"threatened"\]\)/.test(mrFeastNpcConfig) && /cycleFaceExpressionForQA\(/.test(mrFeastWanderer), "QA interaction does not cycle the five facial presets in the approved inspection order");
-check("45 Mr Feast QA-only interaction", /if \(state\.qa\) this\.registerFaceQaInteraction\(model\)/.test(mrFeastWanderer) && /addInteractionTarget\(model, this\.faceQaInteraction\)/.test(mrFeastWanderer) && /Cycle expression/.test(mrFeastWanderer), "loaded Mr. Feast model does not expose a QA-only look-at interaction and expression prompt");
+check("45 Mr Feast gated QA-only interaction", /if \(state\.qa && this\.getFaceDiagnostics\(\)\.supported\) this\.registerFaceQaInteraction\(model\)/.test(mrFeastWanderer) && /addInteractionTarget\(model, this\.faceQaInteraction\)/.test(mrFeastWanderer) && /Cycle expression/.test(mrFeastWanderer), "the experimental expression prompt is missing or can appear when the active model has no supported facial rig");
 check("43 Mr Feast deterministic framing", /mrFeastSideProfile:\s*\[-3\.2,\s*FLOOR\.MAIN,\s*-9\.0,\s*-Math\.PI \/ 2,\s*0\]/.test(qaRoomViews) && /mrFeastGaitSide:/.test(qaRoomViews) && /mrFeastGaitTurnSide:/.test(qaRoomViews) && /clipDurations:/.test(mrFeastWanderer), "side-profile gait framing or clip duration diagnostics are missing");
 check("45 Mr Feast facial framing", /mrFeastFaceClose:\s*\[0,\s*FLOOR\.MAIN,\s*-8\.45,\s*0,\s*-0\.02\]/.test(qaRoomViews), "close facial QA framing is missing");
 check("51 Mr Feast bounded camera response", !/attack|damage/i.test(mrFeastWanderer), "camera investigation must not silently expand into attack or damage behavior");

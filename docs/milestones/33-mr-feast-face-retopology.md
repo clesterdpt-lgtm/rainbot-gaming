@@ -2,7 +2,7 @@
 
 ## Status
 
-in-progress
+paused — the July 2026 parametric face-appliance result was rejected and removed from the active runtime
 
 ## Objective
 
@@ -30,10 +30,10 @@ Replace the disconnected Meshy facial surface with an animation-ready face-only 
 
 ## Acceptance criteria
 
-- [x] A repeatable Blender pass outputs one connected retopologized facial surface, separate left/right eyes, eyelid-capable eye openings, an oral cavity, and teeth while retaining the existing character body — test: `scripts/test-mr-feast-renovation.mjs::Mr Feast retopology structure`
-- [x] The runtime GLB retains the 24-bone body rig, stable 2.01m fit, no animation-scale tracks, at most 90,000 triangles, and at most 15MiB — test: `scripts/test-mr-feast-renovation.mjs::Mr Feast retopology budget`
-- [x] The retopology report proves a single facial component, ten named non-empty POSITION-only morph targets, independent blink closure gaps of at most 1mm, and an opened-lip gap of at least 8mm — test: `scripts/test-mr-feast-renovation.mjs::Mr Feast retopology deformation`
-- [x] Three.js diagnostics bind every facial target across the replacement meshes, cycle all five presets, and complete independent/paired blinks without changing model height, hip scale, limb length, or body animation — test: `scripts/test-mr-feast-contestant-13.mjs::retopologized facial controller`
+- [x] The visually rejected appliance is absent from the active manifest and live scene while this milestone is paused; the intact 65,000-triangle, one-mesh, 24-bone model remains authoritative and cache-busted — test: `scripts/test-mr-feast-renovation.mjs::Mr Feast face release gate` and `scripts/test-mr-feast-contestant-13.mjs::stable release face`
+- [x] A repeatable Blender experiment outputs one connected retopologized facial surface, separate left/right eyes, eyelid-capable eye openings, an oral cavity, and teeth while retaining the existing character body — offline diagnostic test: `scripts/test-mr-feast-renovation.mjs::experimental Mr Feast retopology structure`
+- [x] The preserved experimental GLB retains the 24-bone body rig, stays below 90,000 triangles and 15MiB, and exposes ten non-empty POSITION-only targets — offline diagnostic test: `scripts/test-mr-feast-renovation.mjs::experimental Mr Feast facial asset`
+- [ ] A replacement retopology proves bounded adjacent depth changes, seam-free joined boundaries, transferred boundary skin weights, recessed eyes, measured blink/mouth gaps, and approved neutral/three-quarter browser renders before activation
 - [ ] Neutral likeness, closed eyelids, mouth interior, controlled host smile, watching expression, close sneer, and threatened grin read cleanly without visible face seams or holes in mansion lighting — verified by user playtest
 
 ## Exit condition
@@ -54,3 +54,5 @@ User approaches Mr. Feast in the QA mansion and cycles the facial test → obser
 - Facial pieces remain scene-root skinned meshes using the existing Head/neck groups. They must not be parented beneath the rig's `0.01` armature transform, which would apply the asset normalization twice in Three.js.
 - The original Meshy texture is the appearance source. Reprojection/baking must not introduce a paid runtime dependency.
 - Three.js r128 renders the eight strongest POSITION morph influences per mesh. Presets must therefore use no more than six expression targets so paired blinking remains within the eight-target runtime limit; morph normals and tangents stay disabled.
+- Rejection evidence from the shipped experiment: the face spans about `193.9mm` in depth, adjacent grid edges jump as much as `120.8mm`, 926 edges exceed `10mm`, and the corneal surface sits several millimetres beyond the aperture plane. The separate lip rim repeats the same unsafe projection and intersects the retained head. These failures exist in the neutral Blender preview, before runtime lighting or animation.
+- The release fix restores `processed/mr-feast-game-rigged.glb`, removes the unsupported face QA prompt, and changes both the page/runtime key and NPC asset key to `20260721-stable-face-1` so cached clients cannot retain the rejected model selection.

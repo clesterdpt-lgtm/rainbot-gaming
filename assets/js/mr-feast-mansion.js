@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260721-competition-staging-1";
+  const MANSION_RUNTIME_VERSION = "20260721-stable-face-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1145,7 +1145,7 @@
 
   const MR_FEAST_NPC = Object.freeze({
     manifestPath: "../models/mr-feast/mr-feast-asset-manifest.json",
-    assetVersion: "20260716-readable-books-1",
+    assetVersion: "20260721-stable-face-1",
     heightMeters: 2.01,
     speed: 0.62,
     turnSpeed: 4,
@@ -4481,7 +4481,7 @@
         this.bindHipsScale = this.hipsBone ? this.hipsBone.scale.clone() : null;
         this.cacheFaceMorphBindings();
         this.registerTalkInteraction(model);
-        if (state.qa) this.registerFaceQaInteraction(model);
+        if (state.qa && this.getFaceDiagnostics().supported) this.registerFaceQaInteraction(model);
         this.contactShadow = new THREE.Mesh(
           new THREE.CircleGeometry(1, 24),
           new THREE.MeshBasicMaterial({

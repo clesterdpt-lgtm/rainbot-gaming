@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260720-storm-run-scare-polish-2";
+  const MANSION_RUNTIME_VERSION = "20260720-storm-run-aftermath-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2049,7 +2049,32 @@
       player: "Course complete. Mara is last. Mara, you are eliminated.",
       mara: "Mara has finished. You are last. You are eliminated.",
     }),
+    resultSpeechSeconds: 5.2,
     completionCardSeconds: 6,
+    aftermath: Object.freeze({
+      maraLine: "I kept count of everyone who didn’t come back. I never thought you’d have to count me.",
+      maraLineSeconds: 5.4,
+      returnSpeed: 1.15,
+      arrivalRadius: 0.08,
+      farGroundsDistance: 16,
+      finishAnchor: Object.freeze({ x: -12.8, y: YARD_LAYOUT.groundY, z: -18.85 }),
+      playerView: Object.freeze({ x: -13.8, y: YARD_LAYOUT.groundY, z: -18.85, yaw: -Math.PI / 2, pitch: -0.03 }),
+      hostMark: Object.freeze({ x: -6.8, y: YARD_LAYOUT.groundY, z: -18.85, yaw: -Math.PI / 2, scale: 1 }),
+      stageMarks: Object.freeze({
+        "mara-voss": Object.freeze({ x: -11.1, y: YARD_LAYOUT.groundY, z: -18.85, yaw: -Math.PI / 2 }),
+        "juniper-cross": Object.freeze({ x: -11.7, y: YARD_LAYOUT.groundY, z: -17.15, yaw: 0 }),
+      }),
+      returnRoutes: Object.freeze({
+        "juniper-cross": Object.freeze([
+          Object.freeze({ x: -11.7, y: YARD_LAYOUT.groundY, z: -15.6 }),
+          Object.freeze({ x: 0.66, y: YARD_LAYOUT.groundY, z: -15.6 }),
+          Object.freeze({ x: 0.66, y: FLOOR.MAIN, z: -12.2, door: "right terrace door" }),
+          Object.freeze({ x: 0.66, y: FLOOR.MAIN, z: -10.55 }),
+          Object.freeze({ x: 3.2, y: FLOOR.MAIN, z: -9.2 }),
+          ...FEAST_SAYS.aftermath.returnRoutes["juniper-cross"].map((point) => Object.freeze({ ...point })),
+        ]),
+      }),
+    }),
     checkpointRadius: 1.25,
     checkpointApproachRadius: 6,
     maximumBreadcrumbDistance: 32,
@@ -2462,6 +2487,10 @@
       eliminatedContestantId: null,
       staged: false,
       completionCardRemaining: 0,
+      aftermathActive: false,
+      aftermathStage: "inactive",
+      aftermathElapsed: 0,
+      aftermathCleanupReason: null,
       scareIndex: -1,
       scareId: null,
       scareTriggerZoneId: null,
@@ -7452,6 +7481,8 @@
       this.challengeSnapshots = new Map();
       this.aftermathDoorCache = new Map();
       this.aftermathOpenedDoors = new Set();
+      this.aftermathEliminatedId = null;
+      this.aftermathConfig = null;
       this.eliminatedIds = new Set();
       this.entries = MANSION_CONTESTANTS.placements.map((placement) => {
         const root = new THREE.Group();
@@ -9599,7 +9630,7 @@
         for (const entry of this.entries) {
           if (entry.status !== "ready" || !entry.root.visible) continue;
           if (this.challengeMode === "storm-run") this.updateStormRunEntry(entry, dt);
-          else if (this.challengeMode === "feast-says-aftermath") this.updateFeastSaysAftermathEntry(entry, dt);
+          else if (["feast-says-aftermath", "storm-run-aftermath"].includes(this.challengeMode)) this.updateCompetitionAftermathEntry(entry, dt);
           else this.updateChallengeEntry(entry, dt);
         }
         this.syncStormRunCastVisibility();
@@ -9712,6 +9743,8 @@
       entry.challengeResponse = null;
       entry.challengeResponseProgress = 0;
       entry.aftermathReturn = null;
+      entry.race = null;
+      entry.raceFinished = false;
       this.resetChallengeMotion(entry);
       entry.activity = CONTESTANT_ACTIVITY.IDLE;
       this.fadeToAction(entry, "idle", 0.14);
@@ -9721,17 +9754,35 @@
       this.setEliminated(entry.id, this.eliminatedIds.has(entry.id));
     }
 
-    beginFeastSaysAftermath(eliminatedId = "kip-solano") {
-      if (!this.challengeActive || this.challengeMode !== "feast-says") {
-        return { started: false, reason: "feast-says-cast-not-staged" };
+    beginCompetitionAftermath({
+      sourceMode,
+      aftermathMode,
+      eliminatedId,
+      config,
+      stageMarks = {},
+    }) {
+      if (!this.challengeActive || this.challengeMode !== sourceMode) {
+        return { started: false, reason: `${sourceMode}-cast-not-staged` };
       }
-      this.challengeMode = "feast-says-aftermath";
+      this.challengeMode = aftermathMode;
+      this.aftermathEliminatedId = eliminatedId;
+      this.aftermathConfig = config;
       for (const entry of this.entries) {
         if (entry.status !== "ready" || !entry.challengeMark) continue;
+        if (entry.race) entry.race.active = false;
         entry.challengeResponse = null;
         entry.challengeResponseProgress = 0;
         entry.aftermathReturn = null;
         this.resetChallengeMotion(entry);
+        const stageMark = stageMarks[entry.id];
+        if (stageMark) {
+          entry.root.position.set(stageMark.x, stageMark.y, stageMark.z);
+          entry.root.rotation.y = stageMark.yaw;
+          entry.challengeMark = { ...stageMark };
+        }
+        entry.root.visible = !this.eliminatedIds.has(entry.id);
+        for (const mesh of entry.modelMeshes) mesh.visible = entry.root.visible;
+        if (entry.contactShadow) entry.contactShadow.visible = entry.root.visible;
         if (entry.id === eliminatedId) {
           entry.challengeResponse = {
             action: "upset",
@@ -9749,6 +9800,7 @@
           entry.challengeMotionKind = "upset";
           entry.activity = CONTESTANT_ACTIVITY.IDLE;
           this.fadeToAction(entry, "idle", 0.12);
+          this.applyChallengeResponsePose(entry);
           if (entry.interactionRegistered) {
             removeInteractionTarget(entry.interactionTarget);
             entry.interactionRegistered = false;
@@ -9756,7 +9808,7 @@
           continue;
         }
         const snapshot = this.challengeSnapshots.get(entry.id);
-        const authoredRoute = FEAST_SAYS.aftermath.returnRoutes[entry.id] || [];
+        const authoredRoute = config.returnRoutes[entry.id] || [];
         const destination = snapshot?.position || entry.root.position;
         entry.aftermathReturn = {
           active: true,
@@ -9773,15 +9825,35 @@
       }
       return {
         started: true,
+        mode: aftermathMode,
         eliminatedId,
         returningIds: this.entries.filter((entry) => entry.aftermathReturn?.active).map((entry) => entry.id),
       };
     }
 
-    updateFeastSaysAftermathEntry(entry, dt) {
+    beginFeastSaysAftermath(eliminatedId = "kip-solano") {
+      return this.beginCompetitionAftermath({
+        sourceMode: "feast-says",
+        aftermathMode: "feast-says-aftermath",
+        eliminatedId,
+        config: FEAST_SAYS.aftermath,
+      });
+    }
+
+    beginStormRunAftermath(eliminatedId = "mara-voss") {
+      return this.beginCompetitionAftermath({
+        sourceMode: "storm-run",
+        aftermathMode: "storm-run-aftermath",
+        eliminatedId,
+        config: STORM_RUN.aftermath,
+        stageMarks: STORM_RUN.aftermath.stageMarks,
+      });
+    }
+
+    updateCompetitionAftermathEntry(entry, dt) {
       const stepDt = Math.max(0, Number(dt) || 0);
       entry.lastDt = stepDt;
-      if (entry.id === "kip-solano") {
+      if (entry.id === this.aftermathEliminatedId) {
         entry.activity = CONTESTANT_ACTIVITY.IDLE;
         this.fadeToAction(entry, "idle");
         entry.challengeMotionKind = "upset";
@@ -9800,7 +9872,7 @@
           target.y - entry.root.position.y,
           target.z - entry.root.position.z,
         );
-        if (distance > FEAST_SAYS.aftermath.arrivalRadius) break;
+        if (distance > this.aftermathConfig.arrivalRadius) break;
         returning.routeIndex += 1;
         target = returning.route[returning.routeIndex];
       }
@@ -9821,7 +9893,7 @@
       const dz = target.z - entry.root.position.z;
       const distance = Math.max(0.000001, Math.hypot(dx, dy, dz));
       this.facePoint(entry, target, stepDt);
-      const distanceStep = Math.min(distance, FEAST_SAYS.aftermath.returnSpeed * stepDt);
+      const distanceStep = Math.min(distance, this.aftermathConfig.returnSpeed * stepDt);
       entry.root.position.x += dx / distance * distanceStep;
       entry.root.position.y += dy / distance * distanceStep;
       entry.root.position.z += dz / distance * distanceStep;
@@ -9834,7 +9906,11 @@
       this.stepAnimation(entry, stepDt);
     }
 
-    finishFeastSaysAftermath({ eliminatedId = "kip-solano" } = {}) {
+    updateFeastSaysAftermathEntry(entry, dt) {
+      return this.updateCompetitionAftermathEntry(entry, dt);
+    }
+
+    finishCompetitionAftermath({ eliminatedId = this.aftermathEliminatedId } = {}) {
       const releasedMode = this.challengeMode;
       for (const entry of this.entries) {
         if (entry.status !== "ready") continue;
@@ -9849,7 +9925,18 @@
       this.challengeSnapshots.clear();
       this.challengeActive = false;
       this.challengeMode = null;
+      this.aftermathEliminatedId = null;
+      this.aftermathConfig = null;
+      if (releasedMode === "storm-run-aftermath" && physics) updateExteriorDetailCulling();
       return { active: false, eliminatedId, mode: releasedMode };
+    }
+
+    finishFeastSaysAftermath({ eliminatedId = "kip-solano" } = {}) {
+      return this.finishCompetitionAftermath({ eliminatedId });
+    }
+
+    finishStormRunAftermath({ eliminatedId = "mara-voss" } = {}) {
+      return this.finishCompetitionAftermath({ eliminatedId });
     }
 
     startStormRunRace() {
@@ -9914,7 +10001,7 @@
     }
 
     syncStormRunCastVisibility() {
-      if (!this.challengeActive || this.challengeMode !== "storm-run") return;
+      if (!this.challengeActive || !["storm-run", "storm-run-aftermath"].includes(this.challengeMode)) return;
       for (const entry of this.entries) {
         if (!entry.challengeMark || this.eliminatedIds.has(entry.id) || entry.status !== "ready") continue;
         entry.root.visible = true;
@@ -10244,14 +10331,15 @@
 
     advanceChallengeForQA(seconds = 0) {
       if (!state.qa || !this.challengeActive) return this.getDiagnostics();
-      const duration = clamp(Number(seconds) || 0, 0, this.challengeMode === "feast-says-aftermath" ? 90 : 5);
-      const fixedStep = this.challengeMode === "feast-says-aftermath" ? 1 / 30 : 1 / 60;
+      const aftermathActive = ["feast-says-aftermath", "storm-run-aftermath"].includes(this.challengeMode);
+      const duration = clamp(Number(seconds) || 0, 0, aftermathActive ? 90 : 5);
+      const fixedStep = aftermathActive ? 1 / 30 : 1 / 60;
       let elapsed = 0;
       while (elapsed < duration) {
         const step = Math.min(fixedStep, duration - elapsed);
         for (const entry of this.entries) {
           if (entry.status !== "ready" || !entry.root.visible) continue;
-          if (this.challengeMode === "feast-says-aftermath") this.updateFeastSaysAftermathEntry(entry, step);
+          if (aftermathActive) this.updateCompetitionAftermathEntry(entry, step);
           else this.updateChallengeEntry(entry, step);
         }
         elapsed += step;
@@ -10302,6 +10390,7 @@
         entry.challengeMark = null;
         entry.challengeResponse = null;
         entry.challengeResponseProgress = 0;
+        entry.aftermathReturn = null;
         entry.race = null;
         entry.raceFinished = false;
         this.resetChallengeMotion(entry);
@@ -10312,8 +10401,14 @@
         entry.root.updateMatrixWorld(true);
         this.setEliminated(entry.id, this.eliminatedIds.has(entry.id) || entry.id === eliminatedId);
       }
+      for (const door of this.aftermathOpenedDoors) {
+        if (door.open && !door.playerInSwingPath()) door.setOpen(false);
+      }
+      this.aftermathOpenedDoors.clear();
       this.challengeSnapshots.clear();
-      if (releasedMode === "storm-run" && physics) updateExteriorDetailCulling();
+      this.aftermathEliminatedId = null;
+      this.aftermathConfig = null;
+      if (["storm-run", "storm-run-aftermath"].includes(releasedMode) && physics) updateExteriorDetailCulling();
       return { active: false, eliminatedId, mode: releasedMode };
     }
 
@@ -14609,6 +14704,119 @@
       return { accepted: true, survived: null, finisher: id };
     }
 
+    beginAftermath() {
+      const staged = mansionContestants?.beginStormRunAftermath("mara-voss");
+      if (!staged?.started) {
+        mansionContestants?.setEliminated("mara-voss", true);
+        this.releaseProduction("mara-voss");
+        this.show.aftermathActive = false;
+        this.show.aftermathStage = "resolved";
+        this.show.aftermathCleanupReason = "cast-unavailable";
+        return staged || { started: false, reason: "cast-unavailable" };
+      }
+      this.show.aftermathActive = true;
+      this.show.aftermathStage = "result-speaking";
+      this.show.aftermathElapsed = 0;
+      this.show.aftermathCleanupReason = null;
+      mrFeastNpc?.setStormRunReveal(STORM_RUN.aftermath.hostMark, true);
+      speechSystem?.say(
+        "storm-run-result-player",
+        STORM_RUN.resultLines.player,
+        speechSystem.announcerSpeaker(),
+        { durationSeconds: STORM_RUN.resultSpeechSeconds },
+      );
+      return staged;
+    }
+
+    aftermathSceneOnScreen() {
+      const mara = mansionContestants?.entryById("mara-voss");
+      if (!mara?.root?.visible || !camera) return false;
+      mara.root.updateMatrixWorld(true);
+      const target = new THREE.Vector3(
+        mara.root.position.x,
+        mara.root.position.y + 1.25,
+        mara.root.position.z,
+      );
+      const projected = target.clone().project(camera);
+      const onScreen = projected.z >= -1 && projected.z <= 1
+        && Math.abs(projected.x) <= 1.05
+        && Math.abs(projected.y) <= 1.05;
+      if (!onScreen) return false;
+      const sightDirection = target.sub(camera.position);
+      const sightDistance = sightDirection.length();
+      if (sightDistance < 0.0001) return true;
+      sightDirection.divideScalar(sightDistance);
+      const sightRay = new THREE.Raycaster(
+        camera.position,
+        sightDirection,
+        0,
+        Math.max(0.05, sightDistance - 0.15),
+      );
+      return sightRay.intersectObjects(occluderMeshes, false).length === 0;
+    }
+
+    playerHasLeftAftermath() {
+      if (!physics) return false;
+      if (["SECOND FLOOR", "BASEMENT"].includes(state.currentFloor)) return true;
+      const sceneOnScreen = this.aftermathSceneOnScreen();
+      if (!outdoorRoomNames.has(state.currentRoom)) return !sceneOnScreen;
+      const player = physics.playerPosition();
+      const anchor = STORM_RUN.aftermath.finishAnchor;
+      const distance = Math.hypot(player.x - anchor.x, player.z - anchor.z);
+      return distance >= STORM_RUN.aftermath.farGroundsDistance && !sceneOnScreen;
+    }
+
+    updateAftermath(dt) {
+      if (!this.show.aftermathActive) return;
+      this.show.aftermathElapsed += Math.max(0, Number(dt) || 0);
+      if (
+        this.show.aftermathStage === "result-speaking"
+        && this.show.aftermathElapsed >= STORM_RUN.resultSpeechSeconds
+      ) {
+        this.show.aftermathStage = "mara-speaking";
+        this.show.aftermathElapsed = 0;
+        const mara = mansionContestants?.entryById("mara-voss");
+        speechSystem?.sayForSpeaker(
+          mara?.speaker,
+          "storm-run-aftermath-mara",
+          STORM_RUN.aftermath.maraLine,
+          { durationSeconds: STORM_RUN.aftermath.maraLineSeconds },
+        );
+      } else if (
+        this.show.aftermathStage === "mara-speaking"
+        && this.show.aftermathElapsed >= STORM_RUN.aftermath.maraLineSeconds
+      ) {
+        this.show.aftermathStage = "waiting-for-player-exit";
+        this.show.aftermathElapsed = 0;
+      }
+      if (this.show.aftermathStage === "waiting-for-player-exit" && this.playerHasLeftAftermath()) {
+        this.resolveAftermath(`player-left:${state.currentFloor}:${state.currentRoom}`);
+      }
+    }
+
+    resolveAftermath(reason = "player-left") {
+      if (!this.show.aftermathActive) return { resolved: false, reason: "inactive" };
+      this.show.aftermathActive = false;
+      this.show.aftermathStage = "resolved";
+      this.show.aftermathElapsed = 0;
+      this.show.aftermathCleanupReason = reason;
+      this.show.staged = false;
+      this.show.hostVisible = false;
+      mansionContestants?.finishStormRunAftermath({ eliminatedId: "mara-voss" });
+      mrFeastNpc?.releaseChallenge();
+      clearMovementInput();
+      state.movement.crouched = false;
+      state.movement.sprinting = false;
+      updateMovementHud();
+      contestant13Quest?.showDiscovery(
+        "MARA VOSS — ELIMINATED",
+        "You cleared all twelve checkpoints before Mara. Production has reopened the mansion.",
+        9200,
+      );
+      this.syncPresentation();
+      return { resolved: true, reason };
+    }
+
     finishCompetition(winner = "player") {
       if (this.show.phase !== STORM_RUN_PHASE.RUNNING) {
         return { survived: this.show.phase === STORM_RUN_PHASE.COMPLETED, eliminatedContestantId: this.show.eliminatedContestantId };
@@ -14623,21 +14831,9 @@
         this.show.eliminatedContestantId = "mara-voss";
         this.show.completionCardRemaining = STORM_RUN.completionCardSeconds;
         this.transition(STORM_RUN_PHASE.COMPLETED, "player-finished-first");
-        speechSystem?.say(
-          "storm-run-result-player",
-          STORM_RUN.resultLines.player,
-          speechSystem.announcerSpeaker(),
-          { durationSeconds: 5.2 },
-        );
-        mansionContestants?.setEliminated("mara-voss", true);
-        this.releaseProduction("mara-voss");
-        contestant13Quest?.showDiscovery(
-          "MARA VOSS — ELIMINATED",
-          "You cleared all twelve checkpoints before Mara. Production has reopened the mansion.",
-          9200,
-        );
+        this.beginAftermath();
         this.syncPresentation();
-        return { survived: true, eliminatedContestantId: "mara-voss" };
+        return { survived: true, eliminatedContestantId: "mara-voss", aftermathActive: this.show.aftermathActive };
       }
       this.show.eliminatedContestantId = "player";
       this.transition(STORM_RUN_PHASE.FAILED, "mara-finished-first");
@@ -14682,6 +14878,7 @@
       }
       if (this.show.phase === STORM_RUN_PHASE.COMPLETED) {
         this.show.completionCardRemaining = Math.max(0, this.show.completionCardRemaining - step);
+        this.updateAftermath(step);
         this.syncPresentation();
         return;
       }
@@ -14827,9 +15024,14 @@
     }
 
     cancelStaging() {
-      const stormCastActive = mansionContestants?.challengeMode === "storm-run" || mrFeastNpc?.challengeMode === "storm-run";
+      const stormCastActive = ["storm-run", "storm-run-aftermath"].includes(mansionContestants?.challengeMode)
+        || mrFeastNpc?.challengeMode === "storm-run";
       if (this.show.staged || stormCastActive) this.releaseProduction(null);
       this.show.staged = false;
+      this.show.aftermathActive = false;
+      this.show.aftermathStage = "inactive";
+      this.show.aftermathElapsed = 0;
+      this.show.aftermathCleanupReason = null;
       this.show.hostVisible = false;
       this.show.scareRevealRemaining = 0;
       this.show.scareBaselineLightExposure = 1;
@@ -14874,6 +15076,10 @@
         ? (source.eliminatedContestantId || "mara-voss")
         : null;
       this.show.completionCardRemaining = 0;
+      this.show.aftermathActive = false;
+      this.show.aftermathStage = "inactive";
+      this.show.aftermathElapsed = 0;
+      this.show.aftermathCleanupReason = null;
       this.show.scareIndex = -1;
       this.show.scareId = null;
       this.show.scareTriggerZoneId = null;
@@ -14897,7 +15103,10 @@
       const duration = clamp(Number(seconds) || 0, 0, 900);
       this.qaManualClock = true;
       this.qaStepping = true;
-      if ([STORM_RUN_PHASE.DORMANT, STORM_RUN_PHASE.CALLED, STORM_RUN_PHASE.COMPLETED].includes(this.show.phase)) {
+      if (
+        [STORM_RUN_PHASE.DORMANT, STORM_RUN_PHASE.CALLED].includes(this.show.phase)
+        || (this.show.phase === STORM_RUN_PHASE.COMPLETED && !this.show.aftermathActive)
+      ) {
         if (!state.menuOpen && !state.workroom.keypadOpen && !state.gameOver) this.update(duration);
         this.qaStepping = false;
         return { elapsed: Number(duration.toFixed(3)), state: this.getDiagnostics() };
@@ -14916,12 +15125,14 @@
       return { elapsed: Number(elapsed.toFixed(3)), state: this.getDiagnostics() };
     }
 
-    completeForQA(outcome = "player") {
+    completeForQA(outcome = "player", resolveAftermath = true) {
       if (!state.qa) return null;
       if (this.show.phase === STORM_RUN_PHASE.DORMANT) this.call("qa");
       if (this.show.phase === STORM_RUN_PHASE.CALLED && this.castReady()) this.reportToStart();
       if (this.show.phase === STORM_RUN_PHASE.BRIEFING) this.beginRace();
-      return this.finishCompetition(outcome === "mara" ? "mara" : "player");
+      const result = this.finishCompetition(outcome === "mara" ? "mara" : "player");
+      if (result.survived && resolveAftermath) this.resolveAftermath("qa-completion");
+      return { ...result, aftermathActive: this.show.aftermathActive };
     }
 
     checkpointPreviousPosition(index) {
@@ -15162,8 +15373,9 @@
     getDiagnostics() {
       const contestantEntries = mansionContestants?.entries || [];
       const hostPosition = mrFeastNpc?.root?.position || null;
+      const stormCastMode = ["storm-run", "storm-run-aftermath"].includes(mansionContestants?.challengeMode);
       const staged = (id) => Boolean(
-        mansionContestants?.challengeMode === "storm-run"
+        stormCastMode
         && contestantEntries.find((entry) => entry.id === id)?.challengeMark
       );
       return {
@@ -15257,6 +15469,16 @@
             && !state.movement.exhausted,
         },
         contestants: this.contestantDiagnostics(),
+        aftermath: {
+          active: this.show.aftermathActive,
+          stage: this.show.aftermathStage,
+          elapsed: Number(this.show.aftermathElapsed.toFixed(3)),
+          cleanupReason: this.show.aftermathCleanupReason,
+          playerHasLeft: this.show.aftermathActive ? this.playerHasLeftAftermath() : null,
+          sceneOnScreen: this.show.aftermathActive ? this.aftermathSceneOnScreen() : null,
+          finishAnchor: { ...STORM_RUN.aftermath.finishAnchor },
+          maraLine: STORM_RUN.aftermath.maraLine,
+        },
         scare: {
           index: this.show.scareIndex,
           id: this.show.scareId,
@@ -26986,6 +27208,9 @@
     window.MrFeastFresh.advanceStormRunForQA = (seconds) => (
       state.qa && stormRunSystem ? stormRunSystem.advanceForQA(seconds) : null
     );
+    window.MrFeastFresh.advanceStormRunCastForQA = (seconds) => (
+      state.qa && mansionContestants ? mansionContestants.advanceChallengeForQA(seconds) : null
+    );
     window.MrFeastFresh.callStormRunForQA = (reason = "timer") => {
       if (!state.qa || !stormRunSystem) return { started: false, reason: "qa-only" };
       const result = stormRunSystem.call(reason);
@@ -27029,6 +27254,7 @@
       syncCamera();
       camera.updateMatrixWorld(true);
       updateLocation();
+      stormRunSystem.syncPresentation();
       updateInteractionPrompt();
       const closestZone = STORM_RUN.scares.flatMap((scare) => (
         stormRunSystem.scareTriggerZones(scare).map((zone) => ({ scare, zone }))
@@ -27148,6 +27374,22 @@
     window.MrFeastFresh.completeStormRunForQA = (outcome = "player") => (
       state.qa && stormRunSystem ? stormRunSystem.completeForQA(outcome) : null
     );
+    window.MrFeastFresh.completeStormRunWithAftermathForQA = (outcome = "player") => (
+      state.qa && stormRunSystem ? stormRunSystem.completeForQA(outcome, false) : null
+    );
+    window.MrFeastFresh.resolveStormRunAftermathForQA = (reason = "qa-player-left") => (
+      state.qa && stormRunSystem ? stormRunSystem.resolveAftermath(reason) : null
+    );
+    window.MrFeastFresh.previewStormRunAftermathForQA = () => {
+      if (!state.qa || !stormRunSystem || !physics) return null;
+      const view = STORM_RUN.aftermath.playerView;
+      teleport(view.x, view.y, view.z, view.yaw, view.pitch);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      updateInteractionPrompt();
+      return stormRunSystem.getDiagnostics();
+    };
     window.MrFeastFresh.triggerStormRunClueForQA = (kind = "shovel") => {
       if (!state.qa || !contestant13Quest || !stormRunSystem) return null;
       if (kind === "shovel") contestant13Quest.takeShovel();

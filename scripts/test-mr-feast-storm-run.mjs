@@ -45,6 +45,7 @@ async function assertSourceContract() {
   assert(source.includes("previewStormMazeNorthForQA"), "the phone-dark north maze route needs a focused lighting QA view");
   assert(source.includes("MAZE_NORTH_VISIBILITY"), "north-maze readability tuning must live in one named constant table");
   assert(source.includes("scareThunderVolumeMultiplier"), "Storm Run must own a louder thunder profile instead of changing ambient lightning globally");
+  assert(source.includes("scareThunderMaximumVolumeMultiplier"), "the louder close bolt must keep an explicit safe multiplier ceiling");
   assert(source.includes("scareThunderCloseStrike"), "Storm Run must own a sharp close-bolt layer instead of relying on an ordinary distant roll");
   assert(source.includes("scareFacingMinimumDot"), "Storm Run apparitions must wait until the player faces their authored direction");
   assert(source.includes("scareFacingScreenMargin"), "Storm Run apparitions must be inside the actual camera view, not merely on the same compass heading");
@@ -63,6 +64,7 @@ async function assertSourceContract() {
   assert(source.includes("placePlayerAtStormScareTriggerForQA"), "authored scare positions need a focused proximity QA hook");
   assert(source.includes("completeStormRunForQA"), "Storm Run outcomes must be deterministic in QA");
   assert(source.includes("beginStormRunAftermath"), "a player victory must stage Mara's witnessed Storm Run aftermath before removing her");
+  assert(source.includes('eliminatedAction: "cover-face"'), "Storm Run must author Mara's hands-over-face loss separately from Kip's Feast Says pose");
   assert(source.includes('"storm-run-aftermath"'), "Storm Run must keep Mara and Juniper staged during the finish aftermath");
   assert(source.includes("completeStormRunWithAftermathForQA"), "Storm Run must expose a focused QA path that preserves its witnessed aftermath");
   assert(source.includes("suspendThreatsForCompetition"), "a live-event call must suspend an active pursuit or alarm");
@@ -387,7 +389,8 @@ async function run() {
     const expectedScareIds = ["northwest-tree-line", "northeast-tree-line", "maze-turn"];
     assert(JSON.stringify(scares.map((entry) => entry.id)) === JSON.stringify(expectedScareIds), `Storm Run must use the three numbered garden, front-drive, and maze apparitions from the property map: ${JSON.stringify(scares)}`);
     assert(scares.every((entry) => entry.reveal.darkSpot), `every apparition must be authored as a measured dark spot: ${JSON.stringify(scares)}`);
-    assert(scares[0].reveal.scale >= 1.8 && scares[1].reveal.scale >= 2.2 && scares[2].reveal.scale === 1, `the two distant mapped silhouettes must be optically enlarged while the close maze reveal stays life-size: ${JSON.stringify(scares.map((entry) => entry.reveal.scale))}`);
+    assert(scares.every((entry) => entry.reveal.scale >= 0.95 && entry.reveal.scale <= 1.15), `all three apparitions must remain believable human scale: ${JSON.stringify(scares.map((entry) => entry.reveal.scale))}`);
+    assert(scares[0].reveal.fillScale >= 2.5 && scares[1].reveal.fillScale >= 2.5 && scares[2].reveal.fillScale === 1, `the two distant silhouettes must gain readability from lightning fill rather than giant models: ${JSON.stringify(scares.map((entry) => entry.reveal.fillScale))}`);
     assert(scares.every((entry) => entry.trigger.radius >= 1.3 && entry.completedCheckpointMinimum <= entry.completedCheckpointMaximum), `each apparition needs a real route trigger and bounded progress window: ${JSON.stringify(scares)}`);
     assert(Math.max(...checkpoints.map((entry) => entry.position.x)) - Math.min(...checkpoints.map((entry) => entry.position.x)) >= 35, "Storm checkpoints must span the yard's east/west axis");
     assert(Math.max(...checkpoints.map((entry) => entry.position.z)) - Math.min(...checkpoints.map((entry) => entry.position.z)) >= 35, "Storm checkpoints must span the yard's front/rear axis");
@@ -421,7 +424,7 @@ async function run() {
 
     const firstComposition = await timerPage.evaluate(() => window.MrFeastFresh.previewStormScareForQA(0));
     assert(firstComposition?.onScreen && firstComposition.lineOfSight && Math.abs(firstComposition.projected.x) <= 0.06, `the northwest apparition must stand unobstructed between the marked trees: ${JSON.stringify(firstComposition)}`);
-    assert(firstComposition.distance >= 30 && firstComposition.distance <= 34 && firstComposition.projectedHeight >= 0.13, `the distant northwest silhouette must remain unmistakable at its mapped position: ${JSON.stringify(firstComposition)}`);
+    assert(firstComposition.distance >= 30 && firstComposition.distance <= 34 && firstComposition.projectedHeight >= 0.075 && firstComposition.projectedHeight <= 0.11, `the distant northwest silhouette must read as a human-sized figure at its mapped position: ${JSON.stringify(firstComposition)}`);
     const firstScare = await triggerScareThroughFacingGate(timerPage, 0, expectedScareIds[0]);
     const scareVisible = firstScare.visible;
     assert(scareVisible.scare.lightning >= 1.15 && scareVisible.scare.lightIntensityMultiplier >= 1.4, `the close bolt must light enough of the surrounding grounds to make Mr. Feast unmistakable: ${JSON.stringify(scareVisible.scare)}`);
@@ -429,7 +432,7 @@ async function run() {
     assert(scareVisible.scare.flashStrengthMultiplier >= 1.1, `the apparition flash must be visibly stronger than ambient lightning: ${JSON.stringify(scareVisible.scare)}`);
     assert(scareVisible.scare.revealFillActive && scareVisible.scare.revealFillIntensity >= 250, `the close bolt must add a short local fill so the mapped silhouette reads against the trees: ${JSON.stringify(scareVisible.scare)}`);
     assert(scareVisible.scare.checkpointSubdued, `the active route marker must stay present but yield visual emphasis to Mr. Feast during the bolt: ${JSON.stringify(scareVisible.scare)}`);
-    assert(scareVisible.scare.thunderVolumeMultiplier >= 1.6 && scareVisible.scare.thunderDelaySeconds <= 0.05 && scareVisible.scare.thunderCloseStrike, `the race scare must use a loud, immediate close-bolt crack: ${JSON.stringify(scareVisible.scare)}`);
+    assert(scareVisible.scare.thunderVolumeMultiplier >= 2 && scareVisible.scare.thunderDelaySeconds <= 0.05 && scareVisible.scare.thunderCloseStrike, `the race scare must use a louder, immediate close-bolt crack: ${JSON.stringify(scareVisible.scare)}`);
     assert(scareVisible.scare.baselineLightExposure <= scareVisible.scare.maximumLightExposure, `the northwest Mr. Feast must wait in a very dark tree-line position: ${JSON.stringify(scareVisible.scare)}`);
     assert(scareVisible.hazard.enabled === false && scareVisible.hazard.penaltySeconds === 0, `lightning must not be a hazard: ${JSON.stringify(scareVisible.hazard)}`);
     await timerPage.screenshot({ path: path.join(artifactDir, "mr-feast-northwest-tree-line-lightning-desktop.png") });
@@ -451,7 +454,7 @@ async function run() {
     await timerPage.screenshot({ path: path.join(artifactDir, "storm-run-visible-checkpoint-chain-desktop.png") });
     const secondComposition = await timerPage.evaluate(() => window.MrFeastFresh.previewStormScareForQA(1));
     assert(secondComposition?.onScreen && secondComposition.lineOfSight && Math.abs(secondComposition.projected.x) <= 0.06, `the northeast apparition must stand unobstructed in the marked front tree line: ${JSON.stringify(secondComposition)}`);
-    assert(secondComposition.distance >= 38 && secondComposition.distance <= 42 && secondComposition.projectedHeight >= 0.13, `the distant northeast silhouette must remain unmistakable at its mapped position: ${JSON.stringify(secondComposition)}`);
+    assert(secondComposition.distance >= 38 && secondComposition.distance <= 42 && secondComposition.projectedHeight >= 0.06 && secondComposition.projectedHeight <= 0.09, `the distant northeast silhouette must read as a human-sized figure at its mapped position: ${JSON.stringify(secondComposition)}`);
     const secondScare = await triggerScareThroughFacingGate(timerPage, 1, expectedScareIds[1]);
     assert(secondScare.visible.scare.baselineLightExposure <= secondScare.visible.scare.maximumLightExposure, `the northeast Mr. Feast must begin in deep shadow: ${JSON.stringify(secondScare.visible.scare)}`);
     await timerPage.screenshot({ path: path.join(artifactDir, "mr-feast-northeast-tree-line-lightning-desktop.png") });
@@ -528,7 +531,7 @@ async function run() {
     const closeThunderMeasure = await audioPage.evaluate(() => window.MrFeastFresh.measureCloseThunderForQA());
     assert(closeThunderMeasure.available && closeThunderMeasure.noiseProfile === "white" && closeThunderMeasure.layerCount >= 3, `the QA probe must render the same broadband multilayer close crack used live: ${JSON.stringify(closeThunderMeasure)}`);
     assert(closeThunderMeasure.onsetMs <= 30 && closeThunderMeasure.peakDbfs >= -10 && closeThunderMeasure.first100RmsDbfs >= -24, `the close crack must be immediate and materially louder than the outdoor rain bed: ${JSON.stringify(closeThunderMeasure)}`);
-    assert(closeThunderMeasure.rainDuckDb <= -10, `the close bolt must create at least 10 dB of rain separation: ${JSON.stringify(closeThunderMeasure)}`);
+    assert(closeThunderMeasure.rainDuckDb <= -15, `the louder close bolt must create at least 15 dB of rain separation: ${JSON.stringify(closeThunderMeasure)}`);
     const scareAudioBefore = audioAfter;
     await audioPage.evaluate(() => window.MrFeastFresh.placePlayerAtStormScareTriggerForQA(0, false));
     await audioPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.05));
@@ -559,11 +562,11 @@ async function run() {
     assert((audioAfter.cueCounts.thunderClose || 0) - (scareAudioBefore.cueCounts.thunderClose || 0) === 1, `the apparition must emit the close-bolt crack layer: ${JSON.stringify(audioAfter.cueCounts)}`);
     assert((audioAfter.cueCounts.thunder || 0) - (scareAudioBefore.cueCounts.thunder || 0) === 1, `the apparition must also emit the recorded thunder layer: ${JSON.stringify(audioAfter.cueCounts)}`);
     assert(audioAfter.thunder.playCount === scareAudioBefore.thunder.playCount + 1 && audioAfter.thunder.closeStrikeCount === scareAudioBefore.thunder.closeStrikeCount + 1, `the unmuted browser must actually schedule both apparition thunder layers: before=${JSON.stringify(scareAudioBefore.thunder)} after=${JSON.stringify(audioAfter.thunder)}`);
-    assert(audioAfter.thunder.lastProfile === "storm-run" && audioAfter.thunder.lastVolumeMultiplier >= 1.6 && audioAfter.thunder.lastDelay <= 0.05, `the apparition must use the loud immediate Storm Run mix: ${JSON.stringify(audioAfter.thunder)}`);
+    assert(audioAfter.thunder.lastProfile === "storm-run" && audioAfter.thunder.lastVolumeMultiplier >= 2 && audioAfter.thunder.lastDelay <= 0.05, `the apparition must use the louder immediate Storm Run mix: ${JSON.stringify(audioAfter.thunder)}`);
     assert(audioAfter.thunder.lastContextStateAtPlayback === "running" && audioAfter.thunder.closeStrikeLayerCount >= 3 && audioAfter.thunder.crackNoiseProfile === "white", `the live scare must create the broadband crack graph in a running context: ${JSON.stringify(audioAfter.thunder)}`);
     assert(audioAfter.thunder.queuedCloseStrikeCount === scareAudioBefore.thunder.queuedCloseStrikeCount + 1 && audioAfter.thunder.resumedCloseStrikeCount === scareAudioBefore.thunder.resumedCloseStrikeCount + 1, `the interrupted close bolt must replay exactly once after the next trusted gesture: ${JSON.stringify(audioAfter.thunder)}`);
     assert(audioAfter.thunder.rainDuckCount === scareAudioBefore.thunder.rainDuckCount + 1 && audioAfter.rain.duckCount === audioAfter.thunder.rainDuckCount, `the close crack must duck the masking rain exactly once: ${JSON.stringify({ thunder: audioAfter.thunder, rain: audioAfter.rain })}`);
-    assert(audioAfter.rain.duckActive && audioAfter.rain.duckTargetGain <= 0.22 && audioAfter.rain.duckGain < 0.75, `the rain bus must be in its authored deep-duck window during the close crack: ${JSON.stringify(audioAfter.rain)}`);
+    assert(audioAfter.rain.duckActive && audioAfter.rain.duckTargetGain <= 0.18 && audioAfter.rain.duckGain < 0.75, `the rain bus must be in its authored deeper-duck window during the louder close crack: ${JSON.stringify(audioAfter.rain)}`);
     if (audioAfter.thunder.variantsReady > 0) assert(audioAfter.thunder.lastRollOffset >= 0.2, `the recorded roll must skip its quiet leading pad: ${JSON.stringify(audioAfter.thunder)}`);
     assert(audioErrors.length === 0, `unmuted Storm Run audio page produced console errors: ${JSON.stringify(audioErrors)}`);
     await audioContext.close();
@@ -607,13 +610,16 @@ async function run() {
     assert(won.survived === true && won.eliminatedContestantId === "mara-voss", `player victory must eliminate Mara: ${JSON.stringify(won)}`);
     let wonState = await stormState(winPage);
     assert(wonState.phase === "completed" && !wonState.clueProgressLocked, `winning must reopen investigation: ${JSON.stringify(wonState)}`);
-    assert(wonState.aftermath.active && wonState.aftermath.stage === "result-speaking", `winning must begin the witnessed pool-terrace aftermath: ${JSON.stringify(wonState.aftermath)}`);
+    assert(wonState.aftermath.active && wonState.aftermath.stage === "result-speaking", `winning must begin the witnessed back-door aftermath: ${JSON.stringify(wonState.aftermath)}`);
+    assert(Math.abs(wonState.aftermath.finishAnchor.x) <= 1 && wonState.aftermath.finishAnchor.z >= -15 && wonState.aftermath.finishAnchor.z <= -13, `the ending must be staged on the rear terrace at the back door: ${JSON.stringify(wonState.aftermath.finishAnchor)}`);
     let castAfterWin = await winPage.evaluate(() => window.MrFeastFresh.getContestantState());
     let maraAfterWin = castAfterWin.entries.find((entry) => entry.id === "mara-voss");
     let juniperAfterWin = castAfterWin.entries.find((entry) => entry.id === "juniper-cross");
     assert(castAfterWin.challengeMode === "storm-run-aftermath", `the finish cast must remain staged during Mara's loss: ${JSON.stringify(castAfterWin.challengeMode)}`);
     assert(!maraAfterWin.eliminated && maraAfterWin.modelVisible && !maraAfterWin.colliderEnabled && !maraAfterWin.interactionRegistered, `Mara must remain visible but unavailable during her scripted loss: ${JSON.stringify(maraAfterWin)}`);
-    assert(maraAfterWin.challengeResponse?.motion?.kind === "upset" && maraAfterWin.challengeResponse.motion.upperBodyMaximumAngleDegrees >= 8, `Mara needs a visibly slumped upset pose: ${JSON.stringify(maraAfterWin.challengeResponse)}`);
+    assert(maraAfterWin.challengeResponse?.action === "cover-face" && maraAfterWin.challengeResponse.motion?.kind === "cover-face", `Mara needs a dedicated hands-over-face loss pose: ${JSON.stringify(maraAfterWin.challengeResponse)}`);
+    assert(maraAfterWin.challengeResponse.motion.upperBodyMaximumAngleDegrees >= 25, `Mara's grief pose must visibly raise and fold both arms: ${JSON.stringify(maraAfterWin.challengeResponse.motion)}`);
+    assert(maraAfterWin.challengeResponse.motion.faceCoverHandDistances?.left <= 0.34 && maraAfterWin.challengeResponse.motion.faceCoverHandDistances?.right <= 0.34, `both of Mara's hands must reach her face: ${JSON.stringify(maraAfterWin.challengeResponse.motion.faceCoverHandDistances)}`);
     assert(!juniperAfterWin.eliminated && juniperAfterWin.modelVisible && juniperAfterWin.aftermathReturn?.active, `Juniper must survive Game 2 and start walking home: ${JSON.stringify(juniperAfterWin)}`);
     let aftermathDiagnostics = await diagnostics(winPage);
     assert(aftermathDiagnostics.speech?.speakerId === "mr-feast" && /Mara is last/i.test(aftermathDiagnostics.speech.text || ""), `Mr. Feast must announce the result before Mara answers: ${JSON.stringify(aftermathDiagnostics.speech)}`);
@@ -622,18 +628,18 @@ async function run() {
     await winPage.waitForTimeout(180);
     wonState = await stormState(winPage);
     assert(wonState.aftermath.sceneOnScreen, `the authored finish view must clearly frame Mara: ${JSON.stringify(wonState.aftermath)}`);
-    await winPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mara-elimination-aftermath.png") });
+    await winPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mara-back-door-elimination.png") });
 
     await winPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(5.3));
     aftermathDiagnostics = await diagnostics(winPage);
     assert(aftermathDiagnostics.stormRun.aftermath.stage === "mara-speaking" && aftermathDiagnostics.speech?.speakerId === "mara-voss", `Mara must answer after the result announcement: ${JSON.stringify({ aftermath: aftermathDiagnostics.stormRun.aftermath, speech: aftermathDiagnostics.speech })}`);
     assert(/count of everyone|count me/i.test(aftermathDiagnostics.speech.text || ""), `Mara's last line must sound sad and imply she knows what happened to prior losers: ${JSON.stringify(aftermathDiagnostics.speech?.text)}`);
-    await winPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mara-sad-aftermath.png") });
+    await winPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mara-back-door-cover-face.png") });
     await winPage.setViewportSize({ width: 390, height: 844 });
     await winPage.waitForTimeout(120);
     wonState = await stormState(winPage);
     assert(wonState.aftermath.sceneOnScreen, `the Mara aftermath must remain framed on a portrait phone: ${JSON.stringify(wonState.aftermath)}`);
-    await winPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mara-sad-aftermath-mobile.png") });
+    await winPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mara-back-door-cover-face-mobile.png") });
     await winPage.setViewportSize({ width: 1280, height: 820 });
     await winPage.waitForTimeout(120);
 
@@ -644,11 +650,11 @@ async function run() {
     assert(!returnedJuniper?.aftermathReturn && !returnedJuniper?.challengeStaged && returnedJuniper?.position.y >= 4.4 && returnedJuniper?.position.x > 5, `Juniper must physically return to her Reading Room routine: ${JSON.stringify(returnedJuniper)}`);
     assert(aftermathDiagnostics.stormRun.aftermath.active && aftermathDiagnostics.stormRun.aftermath.stage === "waiting-for-player-exit", `Mara must remain while the player stays beside the finish: ${JSON.stringify(aftermathDiagnostics.stormRun.aftermath)}`);
 
-    await winPage.evaluate(() => window.MrFeastFresh.teleport("ballroom"));
+    await winPage.evaluate(() => window.MrFeastFresh.teleport("readingRoom"));
     await winPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.2));
     aftermathDiagnostics = await diagnostics(winPage);
     maraAfterWin = aftermathDiagnostics.contestants.entries.find((entry) => entry.id === "mara-voss");
-    assert(!aftermathDiagnostics.stormRun.aftermath.active && /player-left:MAIN LEVEL:BALLROOM/.test(aftermathDiagnostics.stormRun.aftermath.cleanupReason || ""), `entering the mansion through the rear wall must resolve the offscreen pool aftermath: ${JSON.stringify(aftermathDiagnostics.stormRun.aftermath)}`);
+    assert(!aftermathDiagnostics.stormRun.aftermath.active && /player-left:SECOND FLOOR:READING ROOM/.test(aftermathDiagnostics.stormRun.aftermath.cleanupReason || ""), `moving far upstairs must resolve the offscreen back-door aftermath: ${JSON.stringify(aftermathDiagnostics.stormRun.aftermath)}`);
     assert(maraAfterWin.eliminated && !maraAfterWin.modelVisible && !maraAfterWin.colliderEnabled && !maraAfterWin.interactionRegistered, `Mara must disappear only after the player leaves the witnessed scene: ${JSON.stringify(maraAfterWin)}`);
     assert(!aftermathDiagnostics.stormRun.staging.host && !aftermathDiagnostics.contestants.challengeActive, `Mr. Feast must resume normal pathing after the offscreen cleanup: ${JSON.stringify({ staging: aftermathDiagnostics.stormRun.staging, challengeMode: aftermathDiagnostics.contestants.challengeMode })}`);
     assert(await winPage.evaluate(() => window.MrFeastFresh.saveGameForQA()) === true, "completed Storm Run should save");
@@ -693,7 +699,7 @@ async function run() {
     const phoneFirstCheckpoint = await collectCheckpoint(phonePage, 0);
     assert(phoneFirstCheckpoint.accepted === true, `phone scare setup checkpoint one should collect in order: ${JSON.stringify(phoneFirstCheckpoint)}`);
     const phoneNorthwestComposition = await phonePage.evaluate(() => window.MrFeastFresh.previewStormScareForQA(0));
-    assert(phoneNorthwestComposition?.onScreen && phoneNorthwestComposition.lineOfSight && phoneNorthwestComposition.projectedHeight >= 0.13, `the northwest tree-line apparition must remain unmistakable in the phone camera: ${JSON.stringify(phoneNorthwestComposition)}`);
+    assert(phoneNorthwestComposition?.onScreen && phoneNorthwestComposition.lineOfSight && phoneNorthwestComposition.projectedHeight >= 0.045 && phoneNorthwestComposition.projectedHeight <= 0.075, `the northwest tree-line apparition must remain human-sized in the phone camera: ${JSON.stringify(phoneNorthwestComposition)}`);
     await triggerScareThroughFacingGate(phonePage, 0, "northwest-tree-line");
     await phonePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-northwest-tree-line-lightning-mobile.png") });
     await phonePage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(1.25));
@@ -702,7 +708,7 @@ async function run() {
       assert(collected.accepted === true, `phone second-scare setup checkpoint ${index + 1} should collect in order: ${JSON.stringify(collected)}`);
     }
     const phoneNortheastComposition = await phonePage.evaluate(() => window.MrFeastFresh.previewStormScareForQA(1));
-    assert(phoneNortheastComposition?.onScreen && phoneNortheastComposition.lineOfSight && phoneNortheastComposition.projectedHeight >= 0.13, `the northeast tree-line apparition must remain unmistakable in the phone camera: ${JSON.stringify(phoneNortheastComposition)}`);
+    assert(phoneNortheastComposition?.onScreen && phoneNortheastComposition.lineOfSight && phoneNortheastComposition.projectedHeight >= 0.035 && phoneNortheastComposition.projectedHeight <= 0.065, `the northeast tree-line apparition must remain human-sized in the phone camera: ${JSON.stringify(phoneNortheastComposition)}`);
     await triggerScareThroughFacingGate(phonePage, 1, "northeast-tree-line");
     await phonePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-northeast-tree-line-lightning-mobile.png") });
     await phonePage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(1.25));
@@ -741,6 +747,6 @@ async function run() {
 run()
   .then(() => console.log("Mr. Feast Storm Run event checks passed."))
   .catch((error) => {
-    console.error(`Mr. Feast Storm Run event checks failed: ${error.message}`);
+    console.error(`Mr. Feast Storm Run event checks failed: ${error.stack || error.message}`);
     process.exitCode = 1;
   });

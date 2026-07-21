@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260720-storm-run-aftermath-1";
+  const MANSION_RUNTIME_VERSION = "20260720-storm-run-scare-ending-polish-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1791,6 +1791,15 @@
     upsetNeckRadians: 0.2,
     upsetShoulderRadians: 0.18,
     upsetArmRadians: 0.14,
+    coverFaceSpineRadians: 0.18,
+    coverFaceNeckRadians: 0.16,
+    coverFaceForwardMeters: 0.11,
+    coverFaceSideMeters: 0.085,
+    coverFaceDownMeters: 0.07,
+    coverFaceElbowOutwardWeight: 0.88,
+    coverFaceElbowForwardWeight: -0.18,
+    coverFaceElbowDownwardWeight: 0.72,
+    coverFaceReachEpsilonMeters: 0.012,
   });
 
   const CLUE_ANNOTATION_SLOTS = Object.freeze(["left-margin", "right-margin", "lower-page"]);
@@ -2054,20 +2063,20 @@
     aftermath: Object.freeze({
       maraLine: "I kept count of everyone who didn’t come back. I never thought you’d have to count me.",
       maraLineSeconds: 5.4,
+      eliminatedAction: "cover-face",
       returnSpeed: 1.15,
       arrivalRadius: 0.08,
       farGroundsDistance: 16,
-      finishAnchor: Object.freeze({ x: -12.8, y: YARD_LAYOUT.groundY, z: -18.85 }),
-      playerView: Object.freeze({ x: -13.8, y: YARD_LAYOUT.groundY, z: -18.85, yaw: -Math.PI / 2, pitch: -0.03 }),
-      hostMark: Object.freeze({ x: -6.8, y: YARD_LAYOUT.groundY, z: -18.85, yaw: -Math.PI / 2, scale: 1 }),
+      finishAnchor: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -14.15 }),
+      playerView: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -16.7, yaw: Math.PI, pitch: -0.03 }),
+      hostMark: Object.freeze({ x: -1.55, y: YARD_LAYOUT.groundY, z: -13.55, yaw: Math.PI, scale: 1 }),
       stageMarks: Object.freeze({
-        "mara-voss": Object.freeze({ x: -11.1, y: YARD_LAYOUT.groundY, z: -18.85, yaw: -Math.PI / 2 }),
-        "juniper-cross": Object.freeze({ x: -11.7, y: YARD_LAYOUT.groundY, z: -17.15, yaw: 0 }),
+        "mara-voss": Object.freeze({ x: 0.25, y: YARD_LAYOUT.groundY, z: -13.7, yaw: Math.PI }),
+        "juniper-cross": Object.freeze({ x: 1.55, y: YARD_LAYOUT.groundY, z: -14.75, yaw: 0 }),
       }),
       returnRoutes: Object.freeze({
         "juniper-cross": Object.freeze([
-          Object.freeze({ x: -11.7, y: YARD_LAYOUT.groundY, z: -15.6 }),
-          Object.freeze({ x: 0.66, y: YARD_LAYOUT.groundY, z: -15.6 }),
+          Object.freeze({ x: 1.55, y: YARD_LAYOUT.groundY, z: -13.25 }),
           Object.freeze({ x: 0.66, y: FLOOR.MAIN, z: -12.2, door: "right terrace door" }),
           Object.freeze({ x: 0.66, y: FLOOR.MAIN, z: -10.55 }),
           Object.freeze({ x: 3.2, y: FLOOR.MAIN, z: -9.2 }),
@@ -2092,16 +2101,17 @@
       Object.freeze({ delay: 0.52, strength: 0.95 }),
     ]),
     scareThunderDelaySeconds: 0.02,
-    scareThunderVolumeMultiplier: 1.7,
+    scareThunderVolumeMultiplier: 2.1,
+    scareThunderMaximumVolumeMultiplier: 2.25,
     scareThunderCloseStrike: true,
     scareFacingMinimumDot: 0.9,
     scareFacingScreenMargin: 0.86,
     scareRevealFillIntensity: 140,
     scareCheckpointFlashOpacity: Object.freeze({ ring: 0.38, beacon: 0.07, guide: 0.3 }),
     checkpointOpacity: Object.freeze({ ring: 0.9, beacon: 0.18, guide: 0.94 }),
-    scareThunderCrackPeakGain: 0.72,
-    scareThunderRainDuckGain: 0.22,
-    scareThunderRainDuckSeconds: 0.95,
+    scareThunderCrackPeakGain: 0.78,
+    scareThunderRainDuckGain: 0.16,
+    scareThunderRainDuckSeconds: 1.05,
     scareThunderRollOffsets: Object.freeze({
       "../Sounds/mr-feast/thunder-01.ogg": 0.55,
       "../Sounds/mr-feast/thunder-02.ogg": 0.23,
@@ -2143,7 +2153,7 @@
         completedCheckpointMinimum: 1,
         completedCheckpointMaximum: 2,
         trigger: Object.freeze({ id: "garden-cross", x: -17.2, z: -2.2, radius: 3 }),
-        reveal: Object.freeze({ x: -24.25, y: YARD_LAYOUT.groundY, z: 29, yaw: 2.919, scale: 3.2, darkSpot: true }),
+        reveal: Object.freeze({ x: -24.25, y: YARD_LAYOUT.groundY, z: 29, yaw: 2.919, scale: 1.05, fillScale: 3.2, darkSpot: true }),
       }),
       Object.freeze({
         id: "northeast-tree-line",
@@ -2151,7 +2161,7 @@
         completedCheckpointMinimum: 4,
         completedCheckpointMaximum: 5,
         trigger: Object.freeze({ id: "front-carriage-crossing", x: -12, z: 16.3, radius: 3.2 }),
-        reveal: Object.freeze({ x: 26.5, y: YARD_LAYOUT.groundY, z: 26, yaw: -1.818, scale: 3.8, darkSpot: true }),
+        reveal: Object.freeze({ x: 26.5, y: YARD_LAYOUT.groundY, z: 26, yaw: -1.818, scale: 1.05, fillScale: 3.8, darkSpot: true }),
       }),
       Object.freeze({
         id: "maze-turn",
@@ -2159,7 +2169,7 @@
         completedCheckpointMinimum: 10,
         completedCheckpointMaximum: 10,
         trigger: Object.freeze({ id: "maze-south-turn", x: 25, z: 2.75, radius: 1.35 }),
-        reveal: Object.freeze({ x: 25, y: YARD_LAYOUT.groundY, z: -0.25, yaw: 0, scale: 1, darkSpot: true }),
+        reveal: Object.freeze({ x: 25, y: YARD_LAYOUT.groundY, z: -0.25, yaw: 0, scale: 1, fillScale: 1, darkSpot: true }),
       }),
     ]),
     contestantRoute: Object.freeze([
@@ -9784,8 +9794,9 @@
         for (const mesh of entry.modelMeshes) mesh.visible = entry.root.visible;
         if (entry.contactShadow) entry.contactShadow.visible = entry.root.visible;
         if (entry.id === eliminatedId) {
+          const eliminatedAction = config.eliminatedAction || "upset";
           entry.challengeResponse = {
-            action: "upset",
+            action: eliminatedAction,
             targetId: null,
             elapsed: 1,
             delay: 0,
@@ -9796,8 +9807,8 @@
             reverseInitialized: false,
           };
           entry.challengeResponseProgress = 1;
-          this.applyChallengeResponse(entry, "upset", 1);
-          entry.challengeMotionKind = "upset";
+          this.applyChallengeResponse(entry, eliminatedAction, 1);
+          entry.challengeMotionKind = eliminatedAction;
           entry.activity = CONTESTANT_ACTIVITY.IDLE;
           this.fadeToAction(entry, "idle", 0.12);
           this.applyChallengeResponsePose(entry);
@@ -9856,7 +9867,7 @@
       if (entry.id === this.aftermathEliminatedId) {
         entry.activity = CONTESTANT_ACTIVITY.IDLE;
         this.fadeToAction(entry, "idle");
-        entry.challengeMotionKind = "upset";
+        entry.challengeMotionKind = entry.challengeResponse?.action || "upset";
         this.stepAnimation(entry, stepDt);
         return;
       }
@@ -10172,6 +10183,128 @@
       this.applyChallengeBoneEuler(entry, "RightArm", CONTESTANT_FEAST_SAYS_MOTION.upsetArmRadians, 0, CONTESTANT_FEAST_SAYS_MOTION.upsetArmRadians, weight, true);
     }
 
+    applyChallengeCoverFacePose(entry, weight) {
+      const amount = clamp(Number(weight) || 0, 0, 1);
+      if (amount <= 0 || !entry.headBone) return;
+      const smoothAmount = amount * amount * (3 - 2 * amount);
+      this.applyChallengeBoneEuler(entry, "Spine", CONTESTANT_FEAST_SAYS_MOTION.coverFaceSpineRadians, 0, 0, amount, true);
+      this.applyChallengeBoneEuler(entry, "Spine01", CONTESTANT_FEAST_SAYS_MOTION.coverFaceSpineRadians * 0.5, 0, 0, amount, true);
+      this.applyChallengeBoneEuler(entry, "Neck", CONTESTANT_FEAST_SAYS_MOTION.coverFaceNeckRadians, 0, 0, amount, true);
+      entry.root.updateMatrixWorld(true);
+      entry.headBone.getWorldPosition(this.seatedArmTorso);
+      this.seatedArmForward.set(
+        Math.sin(entry.root.rotation.y),
+        0,
+        Math.cos(entry.root.rotation.y),
+      ).normalize();
+      for (const sideName of ["Left", "Right"]) {
+        const upperArm = entry.restPoseByName[`${sideName}Arm`]?.bone;
+        const forearm = entry.restPoseByName[`${sideName}ForeArm`]?.bone;
+        const hand = entry.restPoseByName[`${sideName}Hand`]?.bone;
+        if (!upperArm || !forearm || !hand) continue;
+        entry.root.updateMatrixWorld(true);
+        upperArm.getWorldPosition(this.seatedArmShoulder);
+        forearm.getWorldPosition(this.seatedArmElbow);
+        hand.getWorldPosition(this.seatedArmWrist);
+        const upperLength = this.seatedArmShoulder.distanceTo(this.seatedArmElbow);
+        const forearmLength = this.seatedArmElbow.distanceTo(this.seatedArmWrist);
+        if (upperLength < 0.0001 || forearmLength < 0.0001) continue;
+        this.seatedArmOutward.copy(this.seatedArmShoulder).sub(this.seatedArmTorso);
+        this.seatedArmOutward.y = 0;
+        if (this.seatedArmOutward.lengthSq() < 0.00000001) {
+          const side = sideName === "Left" ? 1 : -1;
+          this.seatedArmOutward.set(
+            Math.cos(entry.root.rotation.y) * side,
+            0,
+            -Math.sin(entry.root.rotation.y) * side,
+          );
+        } else {
+          this.seatedArmOutward.normalize();
+        }
+        this.seatedArmTarget
+          .copy(this.seatedArmTorso)
+          .addScaledVector(this.seatedArmForward, CONTESTANT_FEAST_SAYS_MOTION.coverFaceForwardMeters)
+          .addScaledVector(this.seatedArmOutward, CONTESTANT_FEAST_SAYS_MOTION.coverFaceSideMeters);
+        this.seatedArmTarget.y -= CONTESTANT_FEAST_SAYS_MOTION.coverFaceDownMeters;
+        this.seatedArmTarget.lerp(this.seatedArmWrist, 1 - smoothAmount);
+        this.seatedArmDirection.copy(this.seatedArmTarget).sub(this.seatedArmShoulder);
+        const requestedDistance = this.seatedArmDirection.length();
+        if (requestedDistance < 0.0001) continue;
+        const minimumReach = Math.abs(upperLength - forearmLength)
+          + CONTESTANT_FEAST_SAYS_MOTION.coverFaceReachEpsilonMeters;
+        const maximumReach = upperLength + forearmLength
+          - CONTESTANT_FEAST_SAYS_MOTION.coverFaceReachEpsilonMeters;
+        const reach = clamp(requestedDistance, minimumReach, maximumReach);
+        this.seatedArmDirection.normalize();
+        this.seatedArmTarget.copy(this.seatedArmShoulder).addScaledVector(this.seatedArmDirection, reach);
+        const elbowAlongReach = (
+          upperLength * upperLength
+          - forearmLength * forearmLength
+          + reach * reach
+        ) / (2 * reach);
+        const elbowOffAxis = Math.sqrt(Math.max(
+          0,
+          upperLength * upperLength - elbowAlongReach * elbowAlongReach,
+        ));
+        this.seatedArmBend
+          .copy(this.seatedArmOutward)
+          .multiplyScalar(CONTESTANT_FEAST_SAYS_MOTION.coverFaceElbowOutwardWeight)
+          .addScaledVector(this.seatedArmForward, CONTESTANT_FEAST_SAYS_MOTION.coverFaceElbowForwardWeight);
+        this.seatedArmBend.y -= CONTESTANT_FEAST_SAYS_MOTION.coverFaceElbowDownwardWeight;
+        this.seatedArmBend.addScaledVector(
+          this.seatedArmDirection,
+          -this.seatedArmBend.dot(this.seatedArmDirection),
+        );
+        if (this.seatedArmBend.lengthSq() < 0.00000001) this.seatedArmBend.copy(this.seatedArmOutward);
+        this.seatedArmBend.normalize();
+        this.seatedArmSolvedElbow
+          .copy(this.seatedArmShoulder)
+          .addScaledVector(this.seatedArmDirection, elbowAlongReach)
+          .addScaledVector(this.seatedArmBend, elbowOffAxis);
+        this.seatedArmElbow.lerp(this.seatedArmSolvedElbow, smoothAmount);
+        this.challengePoseStartQuaternion.copy(upperArm.quaternion);
+        this.pointBoneToward(entry, upperArm, forearm, this.seatedArmElbow);
+        entry.challengeUpperBodyMaximumAngle = Math.max(
+          entry.challengeUpperBodyMaximumAngle,
+          2 * Math.acos(clamp(Math.abs(this.challengePoseStartQuaternion.dot(upperArm.quaternion)), 0, 1)),
+        );
+        this.challengePoseStartQuaternion.copy(forearm.quaternion);
+        this.pointBoneToward(entry, forearm, hand, this.seatedArmTarget);
+        entry.challengeUpperBodyMaximumAngle = Math.max(
+          entry.challengeUpperBodyMaximumAngle,
+          2 * Math.acos(clamp(Math.abs(this.challengePoseStartQuaternion.dot(forearm.quaternion)), 0, 1)),
+        );
+        hand.getWorldPosition(this.handOrientationWrist);
+        this.handOrientationDesiredPalm.copy(this.seatedArmTorso).sub(this.handOrientationWrist).normalize();
+        this.handOrientationDesiredFinger.set(0, 1, 0);
+        this.handOrientationDesiredFinger.addScaledVector(
+          this.handOrientationDesiredPalm,
+          -this.handOrientationDesiredFinger.dot(this.handOrientationDesiredPalm),
+        ).normalize();
+        this.orientHandAxes(
+          hand,
+          CONTESTANT_HAND_GEOMETRY_AXES[entry.id]?.[sideName.toLowerCase()],
+          this.handOrientationDesiredPalm,
+          this.handOrientationDesiredFinger,
+          smoothAmount,
+        );
+      }
+    }
+
+    measureChallengeFaceCover(entry) {
+      if (!entry?.headBone) return null;
+      entry.root.updateMatrixWorld(true);
+      entry.headBone.getWorldPosition(this.seatedArmTorso);
+      const distances = {};
+      for (const sideName of ["Left", "Right"]) {
+        const hand = entry.restPoseByName[`${sideName}Hand`]?.bone;
+        if (!hand) continue;
+        hand.getWorldPosition(this.seatedArmWrist);
+        distances[sideName.toLowerCase()] = Number(this.seatedArmWrist.distanceTo(this.seatedArmTorso).toFixed(3));
+      }
+      return Object.keys(distances).length === 2 ? distances : null;
+    }
+
     applyChallengePointPose(entry, targetId, weight) {
       const target = this.entryById(targetId);
       const targetMark = targetId === "player" ? FEAST_SAYS.playerMark : FEAST_SAYS.contestantMarks[targetId];
@@ -10244,6 +10377,9 @@
       } else if (response.action === "upset") {
         entry.challengeMotionKind = "upset";
         this.applyChallengeUpsetPose(entry, weight);
+      } else if (response.action === "cover-face") {
+        entry.challengeMotionKind = "cover-face";
+        this.applyChallengeCoverFacePose(entry, weight);
       } else if (response.action === "left" || response.action === "right") {
         const direction = response.action === "left" ? -1 : 1;
         const leadingSide = direction < 0 ? "Left" : "Right";
@@ -10943,6 +11079,9 @@
               modelDrop: Number(Math.max(0, entry.modelBaseY - (entry.model?.position.y ?? entry.modelBaseY)).toFixed(3)),
               playbackRate: Number(entry.challengePlaybackRate.toFixed(3)),
               torsoTiltDegrees: Number(THREE.MathUtils.radToDeg(this.measureChallengeTorsoTilt(entry)).toFixed(2)),
+              faceCoverHandDistances: entry.challengeMotionKind === "cover-face"
+                ? this.measureChallengeFaceCover(entry)
+                : null,
               markOffsetDistance: Number(Math.hypot(
                 entry.root.position.x - entry.challengeMark.x,
                 entry.root.position.z - entry.challengeMark.z,
@@ -14570,6 +14709,7 @@
       const light = stormRunScene.revealLight;
       if (!light || !scare?.reveal || !player) return false;
       const revealScale = Number(scare.reveal.scale) > 0 ? Number(scare.reveal.scale) : 1;
+      const fillScale = Number(scare.reveal.fillScale) > 0 ? Number(scare.reveal.fillScale) : revealScale;
       const towardPlayer = new THREE.Vector3(
         player.x - scare.reveal.x,
         0,
@@ -14577,14 +14717,15 @@
       );
       if (towardPlayer.lengthSq() < 0.0001) towardPlayer.set(0, 0, 1);
       towardPlayer.normalize();
-      const forwardOffset = 2.4 + Math.min(1.4, revealScale * 0.35);
+      const forwardOffset = 2.4 + Math.min(1.4, fillScale * 0.35);
       light.position.set(
         scare.reveal.x + towardPlayer.x * forwardOffset,
         scare.reveal.y + Math.max(1.7, revealScale * 1.05),
         scare.reveal.z + towardPlayer.z * forwardOffset,
       );
-      light.distance = 8 + Math.min(8, revealScale * 2);
+      light.distance = 8 + Math.min(8, fillScale * 2);
       light.userData.revealScale = revealScale;
+      light.userData.fillScale = fillScale;
       light.userData.scareId = scare.id;
       light.intensity = 0;
       light.visible = false;
@@ -14595,11 +14736,11 @@
       const light = stormRunScene.revealLight;
       if (!light) return;
       const active = Boolean(this.show.hostVisible && this.show.phase === STORM_RUN_PHASE.RUNNING);
-      const revealScale = Number(light.userData.revealScale) || 1;
+      const fillScale = Number(light.userData.fillScale) || 1;
       const lightning = Math.pow(Math.max(0, stormSystem?.flash || 0), 2);
       light.visible = active;
       light.intensity = active
-        ? STORM_RUN.scareRevealFillIntensity * revealScale * lightning
+        ? STORM_RUN.scareRevealFillIntensity * fillScale * lightning
         : 0;
     }
 
@@ -15227,6 +15368,7 @@
       const viewpoint = this.scareViewpoint(scareIndex);
       if (!scare?.reveal || !viewpoint) return { active: false, reason: "not-authored" };
       const revealScale = Number(scare.reveal.scale) > 0 ? Number(scare.reveal.scale) : 1;
+      const fillScale = Number(scare.reveal.fillScale) > 0 ? Number(scare.reveal.fillScale) : revealScale;
       teleport(viewpoint.x, viewpoint.y, viewpoint.z, 0, 0);
       syncCamera();
       const revealCenter = new THREE.Vector3(
@@ -15279,6 +15421,7 @@
         occluder: sightBlocker?.object?.name || null,
         naturalYaw: Number(state.yaw.toFixed(4)),
         revealScale,
+        fillScale,
         facingDot: Number((look?.facingDot ?? -1).toFixed(4)),
         facingMinimumDot: STORM_RUN.scareFacingMinimumDot,
         distance: Number(Math.hypot(scare.reveal.x - viewpoint.x, scare.reveal.z - viewpoint.z).toFixed(3)),
@@ -15457,6 +15600,9 @@
             position: { x: scare.reveal.x, y: scare.reveal.y, z: scare.reveal.z },
             yaw: scare.reveal.yaw,
             scale: Number(scare.reveal.scale) > 0 ? Number(scare.reveal.scale) : 1,
+            fillScale: Number(scare.reveal.fillScale) > 0
+              ? Number(scare.reveal.fillScale)
+              : (Number(scare.reveal.scale) > 0 ? Number(scare.reveal.scale) : 1),
             darkSpot: Boolean(scare.reveal.darkSpot),
             maximumLightExposure: STORM_RUN.scareMaximumLightExposure,
           },
@@ -24371,7 +24517,11 @@
     }
 
     scheduleCloseThunderCrack(context, destination, when, volumeMultiplier = 1) {
-      const multiplier = clamp(Number(volumeMultiplier) || 1, 0.5, 1.75);
+      const multiplier = clamp(
+        Number(volumeMultiplier) || 1,
+        0.5,
+        STORM_RUN.scareThunderMaximumVolumeMultiplier,
+      );
       const noise = context.createBufferSource();
       noise.buffer = this.makeWhiteNoiseBuffer(0.48, context);
 
@@ -24453,7 +24603,11 @@
 
     thunder(delay = 0, options = {}) {
       const safeDelay = Math.max(0, Number(delay) || 0);
-      const volumeMultiplier = clamp(Number(options.volumeMultiplier) || 1, 0.5, 1.75);
+      const volumeMultiplier = clamp(
+        Number(options.volumeMultiplier) || 1,
+        0.5,
+        STORM_RUN.scareThunderMaximumVolumeMultiplier,
+      );
       const profile = options.profile === "storm-run" ? "storm-run" : "ambient";
       const closeStrike = Boolean(profile === "storm-run" && options.closeStrike);
       this.thunderState.lastDelay = safeDelay;

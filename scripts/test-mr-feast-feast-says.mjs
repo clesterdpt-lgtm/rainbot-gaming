@@ -25,6 +25,10 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function angleDistance(a, b) {
+  return Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+}
+
 async function serverResponds() {
   try {
     return (await fetch(`${baseUrl}/games/mr-feast-mansion.html`, { cache: "no-store" })).ok;
@@ -55,6 +59,59 @@ async function diagnostics(page) {
 
 async function feastState(page) {
   return page.evaluate(() => window.MrFeastFresh.getFeastSaysState());
+}
+
+function assertLiveProductionCamera(state, label, lockedFilmSet = null) {
+  const filmSet = state.feastSays?.filmSet;
+  const camera = filmSet?.camera;
+  const lights = filmSet?.lights;
+  const floorMarkers = state.feastSays?.floorMarkers;
+  assert(
+    floorMarkers?.lineupRingCount === 0 && floorMarkers?.actionPadCount === 0,
+    `${label} must keep the authored lineup positions logic-only, without colored floor circles or action pads; got ${JSON.stringify(floorMarkers)}`,
+  );
+  assert(filmSet?.visible && camera?.visible, `${label} must keep the production camera visible while Feast Says is live; got ${JSON.stringify(filmSet)}`);
+  assert(camera?.model === "long-lens-cinema-pedestal" && camera?.profile === "long-lens-cinema", `${label} must use the long-lens cinema broadcast silhouette; got ${JSON.stringify(camera)}`);
+  assert(
+    Array.isArray(camera?.components)
+      && ["body", "matte-box", "lens-rails", "rear-battery", "viewfinder", "monitor", "pan-handle", "pedestal"].every((component) => camera.components.includes(component)),
+    `${label} must expose the readable long-lens cinema camera components; got ${JSON.stringify(camera)}`,
+  );
+  assert(camera.dimensions?.bodyDepth >= camera.dimensions?.bodyWidth * 1.3, `${label} must use a narrow, visibly longer camera body; got ${JSON.stringify(camera.dimensions)}`);
+  assert(camera.dimensions?.lensProjection >= 0.75 && camera.dimensions?.overallLength >= 2.3, `${label} must expose a clearly long lens and overall cinema-rig profile; got ${JSON.stringify(camera.dimensions)}`);
+  assert(camera.horizontalDistanceToTarget >= 2.75, `${label} must keep the Feast Says camera about two feet back from the player lineup; got ${JSON.stringify(camera)}`);
+  assert(camera.subject === "player-contestant-lineup" && camera.locked === true, `${label} must keep the camera locked on the player/contestant lineup; got ${JSON.stringify(camera)}`);
+  assert(camera.facingTargetDot >= 0.94, `${label} must actually point its lens toward the player/contestant lineup; got ${JSON.stringify(camera)}`);
+  assert(lights?.subject === "player-contestant-lineup" && lights?.locked === true, `${label} must lock its studio-light aim to the player/contestant lineup; got ${JSON.stringify(lights)}`);
+  assert(
+    Array.isArray(lights?.fixtures)
+      && lights.fixtures.length === 2
+      && lights.fixtures.every((fixture) => fixture.visible && fixture.facingTargetDot >= 0.94),
+    `${label} must keep both physical studio lights facing the player lineup; got ${JSON.stringify(lights)}`,
+  );
+  if (lockedFilmSet) {
+    const lockedCamera = lockedFilmSet.camera;
+    const positionDrift = Math.hypot(
+      camera.position.x - lockedCamera.position.x,
+      camera.position.y - lockedCamera.position.y,
+      camera.position.z - lockedCamera.position.z,
+    );
+    assert(positionDrift <= 0.001 && angleDistance(camera.yaw, lockedCamera.yaw) <= 0.001, `${label} must preserve the camera's locked pose; before=${JSON.stringify(lockedCamera)} after=${JSON.stringify(camera)}`);
+    const lockedFixtures = lockedFilmSet.lights?.fixtures || [];
+    for (const [index, fixture] of lights.fixtures.entries()) {
+      const lockedFixture = lockedFixtures[index];
+      const positionDrift = lockedFixture ? Math.hypot(
+        fixture.position.x - lockedFixture.position.x,
+        fixture.position.y - lockedFixture.position.y,
+        fixture.position.z - lockedFixture.position.z,
+      ) : Infinity;
+      assert(
+        positionDrift <= 0.001 && angleDistance(fixture.yaw, lockedFixture.yaw) <= 0.001,
+        `${label} must preserve studio-light ${index + 1}'s locked player-facing pose; before=${JSON.stringify(lockedFixture)} after=${JSON.stringify(fixture)}`,
+      );
+    }
+  }
+  return { camera, lights };
 }
 
 async function waitForPaintFrames(page, count = 2) {
@@ -189,6 +246,7 @@ async function startBallroomRound(page, useTouch = false) {
   );
   assert(!/kip|beat\s+\w+/i.test(briefing.speech.text || ""), `the briefing must not spoil the authored loser or tell the player whom to beat; got ${JSON.stringify(briefing.speech.text)}`);
   assert(briefing.feastSays.instructionDelivery === "speech" && briefing.feastSays.ui?.minimal && briefing.feastSays.ui?.command === null, `the briefing HUD must defer completely to Mr. Feast's speech; got ${JSON.stringify(briefing.feastSays.ui)}`);
+  const briefingCamera = assertLiveProductionCamera(briefing, "Feast Says briefing");
   if (!useTouch) {
     const beforeBriefingMove = await diagnostics(page);
     await page.keyboard.down("w");
@@ -213,6 +271,7 @@ async function startBallroomRound(page, useTouch = false) {
   assert(state.room === "BALLROOM", `Feast Says must begin in the Ballroom; got room=${state.room}`);
   assert(state.feastSays.staging?.contestantsReady === true, `all contestants should be staged before play; got ${JSON.stringify(state.feastSays.staging)}`);
   assert(state.speech?.speakerId === "mr-feast" && state.speech?.text === state.feastSays.command.spokenText, `Mr. Feast should visibly deliver the complete live command; got ${JSON.stringify(state.speech)}`);
+  assertLiveProductionCamera(state, "Feast Says opening command", briefingCamera);
   const responseStart = state.contestants.entries.map((entry) => entry.challengeResponse?.progress).filter(Number.isFinite);
   assert(responseStart.length === 3 && responseStart.every((progress) => progress >= 0 && progress < 0.35), `contestants should begin each eased response near their marks; got ${JSON.stringify(responseStart)}`);
   await page.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(0.18));
@@ -385,6 +444,7 @@ async function assertVisibleResultSpeech(page, speakerId, text, label) {
 async function finishReadableResult(page, command, { captureProof = false } = {}) {
   let state = await diagnostics(page);
   assert(state.feastSays.phase === "result", `round ${command.index + 1} should enter a judged result hold; got ${JSON.stringify(state.feastSays)}`);
+  const resultCamera = assertLiveProductionCamera(state, `Feast Says result ${command.index + 1}`);
   const initialRemaining = state.feastSays.phaseRemaining;
   assert(initialRemaining >= 3.9, `round ${command.index + 1} should leave at least four readable seconds for animation and dialogue; remaining=${initialRemaining}`);
   assert(
@@ -425,6 +485,7 @@ async function finishReadableResult(page, command, { captureProof = false } = {}
   await page.evaluate(() => window.MrFeastFresh.advanceFeastSaysCastForQA(0.8));
   state = await diagnostics(page);
   assert(state.feastSays.phase === "result", `finishing the cast animation must not skip the readable result hold; got ${JSON.stringify(state.feastSays)}`);
+  assertLiveProductionCamera(state, `Feast Says settled result ${command.index + 1}`, resultCamera);
   assertContestantResponsesReturned(state);
 
   let warningSeen = false;
@@ -841,6 +902,17 @@ async function run() {
   for (const prop of ["broadcast-camera", "studio-key-light", "boom-microphone"]) {
     assert(runtimeSource.includes(prop), `the competition production set is missing its ${prop} dressing`);
   }
+  assert(runtimeSource.includes('model: "long-lens-cinema-pedestal"'), "the production camera must use a named long-lens cinema profile");
+  assert(runtimeSource.includes('profile: "long-lens-cinema"'), "the production camera must expose a named long-lens silhouette profile");
+  for (const prop of ["camera-matte-box", "camera-lens-rail", "camera-rear-battery", "camera-viewfinder", "camera-monitor", "camera-pan-handle", "camera-pedestal-base"]) {
+    assert(runtimeSource.includes(prop), `the rebuilt long-lens camera is missing its ${prop} component`);
+  }
+  assert(runtimeSource.includes('subject: "player-contestant-lineup"'), "Feast Says needs an explicit player/contestant camera framing target");
+  assert(runtimeSource.includes("cameraPlacement"), "Feast Says must keep its player-lineup setback separate from the shared Storm Run camera placement");
+  assert(runtimeSource.includes("getLightDiagnostics"), "the production rig needs focused player-facing studio-light diagnostics");
+  assert(runtimeSource.includes("floorMarkers"), "Feast Says needs diagnostics that prove its authored lineup positions have no floor-marker geometry");
+  assert(!runtimeSource.includes("feast-says-player-mark") && !runtimeSource.includes("feast-says-contestant-mark-") && !runtimeSource.includes("feast-says-action-pad-"), "Feast Says must not construct colored floor rings or circular action pads");
+  assert(/reportRoot\.visible\s*=\s*productionVisible/.test(runtimeSource), "the Feast Says production rig must remain visible through briefing, command, and result");
   assert(!runtimeSource.includes("feast-says-live-display") && !runtimeSource.includes("feast-says-report-plinth"), "Feast Says must remove the old sign/plinth trigger");
   assert(runtimeSource.includes('reason: "feast-says-no-show"'), "missing the Feast Says report deadline must eliminate the player");
   assert(runtimeSource.includes('instructionDelivery: "speech"'), "Feast Says must declare Mr. Feast speech as its authoritative instruction channel");
@@ -1151,6 +1223,7 @@ async function run() {
     assert(desktopHud.panel.height <= 58 && desktopHud.commandDisplay === "none" && desktopHud.hintDisplay === "none", `desktop Feast Says must use only a shallow, non-instructional status strip: ${JSON.stringify(desktopHud)}`);
     assert(!desktopHud.speechHidden && desktopHud.speechDisplay !== "none", `desktop Feast Says must keep Mr. Feast's speech visible: ${JSON.stringify(desktopHud)}`);
     await winPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "six-command-round-desktop.png") });
+    await winPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "feast-says-long-lens-player-lights-desktop.png") });
 
     const won = await playSixCommandRound(winPage, "win");
     state = won.state;
@@ -1327,6 +1400,7 @@ async function run() {
     assert(mobileDormantHud.panelHidden && mobileDormantHud.phase === "dormant", `portrait-phone next-game countdown must stay hidden while dormant; got ${JSON.stringify(mobileDormantHud)}`);
     await mobile.evaluate(() => window.MrFeastFresh.callFeastSaysForQA("timer"));
     await startBallroomRound(mobile, true);
+    await mobile.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "feast-says-long-lens-player-lights-mobile.png") });
 
     // Resolve the first three physical calls, including the right-step fake-out,
     // then prove a touch player can also hold through the crouch fake-out.

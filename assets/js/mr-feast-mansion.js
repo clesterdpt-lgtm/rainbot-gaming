@@ -215,6 +215,7 @@
     hemisphereIntensity: 0.085,
     moonIntensity: 0.28,
     exposure: 0.76,
+    moonPosition: Object.freeze({ x: -20, y: 28, z: 18 }),
   });
   // These are uniform-only lifts on lights the scene already owns. They do
   // not add a shader light, a shadow map, or a draw call; they simply keep the
@@ -1688,6 +1689,22 @@
     playerMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: -5.75, yaw: 0 }),
     hostMark: Object.freeze({ x: 0.65, y: FLOOR.MAIN, z: -10.9, yaw: 0 }),
     reportMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: -4.05, yaw: Math.PI }),
+    productionCamera: Object.freeze({
+      // Local to the host-rooted production rig: this is the stable centroid
+      // of the player plus the three contestant marks, not a tracked target.
+      subject: "player-contestant-lineup",
+      target: Object.freeze({ x: -0.7, y: 1.28, z: 3.28 }),
+      locked: true,
+      // The long camera's lens stays about 0.75m farther from the lineup than
+      // the shared Storm Run pose, while the root keeps the host-clearance
+      // contract. This is intentionally event-local: Storm Run preserves its
+      // roomier exterior staging.
+      placement: Object.freeze({ x: -3.1, audienceZ: 1.4 }),
+      // Keep a three-quarter body profile from the player's mark while the
+      // lens remains within the lineup's aim tolerance. A dead-on lens view
+      // makes any broadcast camera read like a squat still camera.
+      yawOffset: 0.3,
+    }),
     contestantMarks: Object.freeze({
       "mara-voss": Object.freeze({ x: -1.45, y: FLOOR.MAIN, z: -8.15, yaw: Math.PI }),
       "kip-solano": Object.freeze({ x: -0.2, y: FLOOR.MAIN, z: -8.45, yaw: Math.PI }),
@@ -2135,6 +2152,20 @@
     startMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -17, yaw: Math.PI / 2 }),
     reportMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -15.2, yaw: 0 }),
     hostStartMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -15.2, yaw: 0 }),
+    briefingHostMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -15.2, yaw: Math.PI }),
+    // Reuses the global moon, hemisphere, and exposure uniforms while the
+    // host explains the rules. It creates no local-light/shadow slot and is
+    // disabled exactly when the race releases into its storm-dark baseline.
+    briefingLighting: Object.freeze({
+      profile: "briefing-only-uniform-lift",
+      topology: "uniform-only",
+      hemisphereIntensity: 0.72,
+      moonIntensity: 1.2,
+      exposure: 1.18,
+      // The existing moon becomes a player-side key while Mr. Feast speaks.
+      // It is restored to the storm's rear-side night position at "Run!".
+      moonPosition: Object.freeze({ x: -4, y: 18, z: -28 }),
+    }),
     contestantMarks: Object.freeze({
       "mara-voss": Object.freeze({ x: -1.2, y: YARD_LAYOUT.groundY, z: -17.7, yaw: Math.PI }),
       "juniper-cross": Object.freeze({ x: 1.2, y: YARD_LAYOUT.groundY, z: -17.7, yaw: Math.PI }),
@@ -2218,9 +2249,56 @@
   });
   const COMPETITION_FILM_SET = Object.freeze({
     camera: Object.freeze({
+      model: "long-lens-cinema-pedestal",
+      profile: "long-lens-cinema",
       scale: 0.72,
       x: -2.05,
-      audienceZ: 0.95,
+      // Keep the shared camera in the player-side foreground, clear of the
+      // contestant silhouettes, while retaining the host-clearance contract.
+      audienceZ: 1.55,
+      defaultFraming: Object.freeze({
+        subject: "host",
+        target: Object.freeze({ x: 0, y: 1.32, z: 0 }),
+        locked: true,
+      }),
+      pedestal: Object.freeze({
+        baseRadius: 0.36,
+        baseHeight: 0.12,
+        columnRadius: 0.115,
+        columnHeight: 1.12,
+        headRadius: 0.14,
+        headHeight: 0.14,
+      }),
+      // The body deliberately carries its mass rearward (+Z). The lens still
+      // faces local -Z, so the body gets visibly cinematic without pushing
+      // the actual glass back toward the player lineup.
+      body: Object.freeze({ width: 0.86, height: 0.56, depth: 1.46, y: 1.7, z: 0.42 }),
+      lens: Object.freeze({
+        hoodWidth: 0.82,
+        hoodHeight: 0.62,
+        hoodDepth: 0.3,
+        y: 1.7,
+        hoodZ: -0.48,
+        barrelRadius: 0.19,
+        barrelDepth: 0.54,
+        barrelZ: -0.8,
+        glassRadius: 0.15,
+        glassDepth: 0.045,
+        glassZ: -1.06,
+      }),
+      matteBox: Object.freeze({ width: 0.94, height: 0.72, depth: 0.16, y: 1.7, z: -0.61 }),
+      rearBattery: Object.freeze({ width: 0.68, height: 0.42, depth: 0.42, y: 1.73, z: 1.18 }),
+      lensRails: Object.freeze({ xOffsets: Object.freeze([-0.24, 0.24]), y: 1.45, startZ: -0.92, endZ: 0.5 }),
+      viewfinder: Object.freeze({ width: 0.3, height: 0.21, depth: 0.36, x: 0.22, y: 2.07, z: 1.02 }),
+      monitor: Object.freeze({ width: 0.055, height: 0.4, depth: 0.48, x: -0.48, y: 1.84, z: 0.56 }),
+      panHandle: Object.freeze({
+        start: Object.freeze({ x: -0.08, y: 1.34, z: 0.66 }),
+        end: Object.freeze({ x: -0.62, y: 1.08, z: 1.12 }),
+      }),
+      topHandle: Object.freeze({
+        start: Object.freeze({ x: -0.14, y: 2.03, z: -0.2 }),
+        end: Object.freeze({ x: -0.14, y: 2.03, z: 0.82 }),
+      }),
       tripodFeet: Object.freeze([
         Object.freeze([-0.6, 0.42]),
         Object.freeze([0.6, 0.42]),
@@ -2772,8 +2850,6 @@
     reportRoot: null,
     reportHitbox: null,
     filmSet: null,
-    marks: [],
-    actionPads: [],
   };
   const stormRunScene = {
     root: null,
@@ -2850,6 +2926,7 @@
   let optionalCharacterLoadsStarted = false;
   let hemisphereLight = null;
   let moonLight = null;
+  let moonLightingPose = "night";
   // Every opening in the mansion shell the storm can be heard through:
   // exterior windows (fixed glass attenuation) plus the exterior doors,
   // whose openness follows the actual door swing.
@@ -14100,10 +14177,7 @@
         FEAST_SAYS_PHASE.RESULT,
       ].includes(this.show.phase);
       feastSaysScene.root.visible = productionVisible;
-      if (feastSaysScene.reportRoot) feastSaysScene.reportRoot.visible = this.show.phase === FEAST_SAYS_PHASE.CALLED;
-      feastSaysScene.actionPads.forEach((pad) => {
-        pad.visible = this.show.phase === FEAST_SAYS_PHASE.COMMAND;
-      });
+      if (feastSaysScene.reportRoot) feastSaysScene.reportRoot.visible = productionVisible;
       if (this.show.phase === FEAST_SAYS_PHASE.CALLED) this.stageHostForCall();
       this.setStationInteractive(this.show.phase === FEAST_SAYS_PHASE.CALLED);
     }
@@ -14448,9 +14522,15 @@
           cameraCount: feastSaysScene.filmSet?.cameraCount || 0,
           cameraScale: feastSaysScene.filmSet?.cameraScale || 0,
           cameraDistanceFromHost: feastSaysScene.filmSet?.cameraDistanceFromHost || 0,
+          camera: feastSaysScene.filmSet?.getCameraDiagnostics?.() || null,
           lightCount: feastSaysScene.filmSet?.lightCount || 0,
+          lights: feastSaysScene.filmSet?.getLightDiagnostics?.() || null,
           boomMicCount: feastSaysScene.filmSet?.boomMicCount || 0,
           hasSign: Boolean(feastSaysScene.filmSet?.hasSign),
+        },
+        floorMarkers: {
+          lineupRingCount: 0,
+          actionPadCount: 0,
         },
         round: this.show.roundIndex + 1,
         totalRounds: FEAST_SAYS.commands.length,
@@ -14629,6 +14709,22 @@
       return Boolean(mrFeastNpc.challengeStaged && mrFeastNpc.challengeMode === "storm-run");
     }
 
+    stageHostForBriefing() {
+      if (this.show.phase !== STORM_RUN_PHASE.BRIEFING || !mrFeastNpc) return false;
+      if (!mrFeastNpc.challengeStaged || mrFeastNpc.challengeMode !== "storm-run") return false;
+      const placement = STORM_RUN.briefingHostMark;
+      mrFeastNpc.root.position.set(placement.x, placement.y, placement.z);
+      mrFeastNpc.root.rotation.y = placement.yaw;
+      mrFeastNpc.root.scale.setScalar(Number(placement.scale) > 0 ? Number(placement.scale) : 1);
+      mrFeastNpc.root.visible = true;
+      for (const mesh of mrFeastNpc.meshes) mesh.visible = true;
+      if (mrFeastNpc.contactShadow) mrFeastNpc.contactShadow.visible = true;
+      mrFeastNpc.setChallengeColliderEnabled(false);
+      mrFeastNpc.setChallengeInteractionsEnabled(false);
+      mrFeastNpc.root.updateMatrixWorld(true);
+      return true;
+    }
+
     canCountReportDeadline() {
       return Boolean(
         state.started
@@ -14743,7 +14839,7 @@
       clearMovementInput();
       state.movement.crouched = false;
       state.movement.sprinting = false;
-      mrFeastNpc.stageChallenge(STORM_RUN.hostStartMark, {
+      mrFeastNpc.stageChallenge(STORM_RUN.briefingHostMark, {
         mode: "storm-run",
         zone: "REAR LAWN",
         level: MR_FEAST_LEVEL.GROUNDS,
@@ -15318,7 +15414,7 @@
     syncCastVisibility() {
       mansionContestants?.syncStormRunCastVisibility();
       if (this.show.phase === STORM_RUN_PHASE.CALLED) this.stageHostForCall();
-      else if (this.show.phase === STORM_RUN_PHASE.BRIEFING) mrFeastNpc?.syncStormRunVisibility(true);
+      else if (this.show.phase === STORM_RUN_PHASE.BRIEFING) this.stageHostForBriefing();
       else if (this.show.phase === STORM_RUN_PHASE.RUNNING) mrFeastNpc?.syncStormRunVisibility(this.show.hostVisible);
       else if (this.show.phase === STORM_RUN_PHASE.COMPLETED && this.show.aftermathActive) {
         mrFeastNpc?.syncStormRunAftermathVisibility(STORM_RUN.aftermath.hostMark);
@@ -15844,7 +15940,7 @@
           countdownSequence: [...this.show.countdownSequence],
           playerMark: { ...STORM_RUN.briefingMark },
           raceFacingYaw: STORM_RUN.startMark.yaw,
-          hostMark: { ...STORM_RUN.hostStartMark },
+          hostMark: { ...STORM_RUN.briefingHostMark },
           hostAtBackDoor: Boolean(
             hostPosition
             && Math.hypot(hostPosition.x - STORM_RUN.hostStartMark.x, hostPosition.z - STORM_RUN.hostStartMark.z) <= 0.2
@@ -15855,6 +15951,26 @@
           hostDistanceFromBackDoor: hostDistanceFromBackDoor == null
             ? null
             : Number(hostDistanceFromBackDoor.toFixed(3)),
+          lighting: {
+            profile: STORM_RUN.briefingLighting.profile,
+            topology: STORM_RUN.briefingLighting.topology,
+            active: this.show.phase === STORM_RUN_PHASE.BRIEFING,
+            moonPose: this.show.phase === STORM_RUN_PHASE.BRIEFING ? "storm-run-briefing" : "night",
+            moonPosition: {
+              ...(this.show.phase === STORM_RUN_PHASE.BRIEFING
+                ? STORM_RUN.briefingLighting.moonPosition
+                : NIGHT_LIGHTING.moonPosition),
+            },
+            hemisphereTarget: this.show.phase === STORM_RUN_PHASE.BRIEFING
+              ? STORM_RUN.briefingLighting.hemisphereIntensity
+              : GROUNDS_HEMISPHERE_INTENSITY,
+            moonTarget: this.show.phase === STORM_RUN_PHASE.BRIEFING
+              ? STORM_RUN.briefingLighting.moonIntensity
+              : GROUNDS_MOON_INTENSITY,
+            exposureTarget: this.show.phase === STORM_RUN_PHASE.BRIEFING
+              ? STORM_RUN.briefingLighting.exposure
+              : GROUNDS_EXPOSURE,
+          },
         },
         raceElapsed: Number(this.show.raceElapsed.toFixed(3)),
         completedCheckpoints: this.show.completedCheckpoints,
@@ -21190,7 +21306,14 @@
     };
   }
 
-  function addCompetitionFilmSet(parent, { id, audienceSide = 1, accentColor = 0xffc866 } = {}) {
+  function addCompetitionFilmSet(parent, {
+    id,
+    audienceSide = 1,
+    accentColor = 0xffc866,
+    cameraFraming = COMPETITION_FILM_SET.camera.defaultFraming,
+    cameraPlacement = null,
+    lightFraming = cameraFraming,
+  } = {}) {
     const setRoot = new THREE.Group();
     setRoot.name = `${id}-film-set`;
     parent.add(setRoot);
@@ -21216,6 +21339,13 @@
       metalness: 0.68,
       emissive: 0x092946,
       emissiveIntensity: 0.55,
+    });
+    const monitorMaterial = new THREE.MeshStandardMaterial({
+      color: 0x0b141d,
+      roughness: 0.16,
+      metalness: 0.52,
+      emissive: 0x153856,
+      emissiveIntensity: 0.34,
     });
     const microphoneMaterial = new THREE.MeshStandardMaterial({
       color: 0x17191d,
@@ -21245,29 +21375,84 @@
       return pole;
     };
 
+    const cameraConfig = COMPETITION_FILM_SET.camera;
+    const framingTarget = cameraFraming?.target || cameraConfig.defaultFraming.target;
+    const cameraTarget = new THREE.Vector3(
+      Number.isFinite(Number(framingTarget.x)) ? Number(framingTarget.x) : cameraConfig.defaultFraming.target.x,
+      Number.isFinite(Number(framingTarget.y)) ? Number(framingTarget.y) : cameraConfig.defaultFraming.target.y,
+      Number.isFinite(Number(framingTarget.z)) ? Number(framingTarget.z) : cameraConfig.defaultFraming.target.z,
+    );
+    const cameraSubject = cameraFraming?.subject || cameraConfig.defaultFraming.subject;
+    const cameraLocked = cameraFraming?.locked !== false;
+    const cameraYawOffset = Number.isFinite(Number(cameraFraming?.yawOffset))
+      ? Number(cameraFraming.yawOffset)
+      : 0;
+    const resolvedCameraPlacement = cameraPlacement || cameraConfig;
+    const cameraPlacementX = Number.isFinite(Number(resolvedCameraPlacement.x))
+      ? Number(resolvedCameraPlacement.x)
+      : cameraConfig.x;
+    const cameraPlacementAudienceZ = Number.isFinite(Number(resolvedCameraPlacement.audienceZ))
+      ? Number(resolvedCameraPlacement.audienceZ)
+      : cameraConfig.audienceZ;
+    const lightTargetFraming = lightFraming || cameraFraming || cameraConfig.defaultFraming;
+    const lightTargetSource = lightTargetFraming?.target || framingTarget;
+    const lightTarget = new THREE.Vector3(
+      Number.isFinite(Number(lightTargetSource.x)) ? Number(lightTargetSource.x) : cameraTarget.x,
+      Number.isFinite(Number(lightTargetSource.y)) ? Number(lightTargetSource.y) : cameraTarget.y,
+      Number.isFinite(Number(lightTargetSource.z)) ? Number(lightTargetSource.z) : cameraTarget.z,
+    );
+    const lightSubject = lightTargetFraming?.subject || cameraSubject;
+    const lightLocked = lightTargetFraming?.locked !== false;
+    const cameraComponents = Object.freeze(["body", "matte-box", "lens-rails", "rear-battery", "viewfinder", "monitor", "pan-handle", "pedestal"]);
     const cameraRoot = new THREE.Group();
     cameraRoot.name = `${id}-broadcast-camera`;
     cameraRoot.position.set(
-      COMPETITION_FILM_SET.camera.x,
+      cameraPlacementX,
       0,
-      audienceSide * COMPETITION_FILM_SET.camera.audienceZ,
+      audienceSide * cameraPlacementAudienceZ,
     );
-    const cameraDx = -cameraRoot.position.x;
-    const cameraDz = -cameraRoot.position.z;
-    cameraRoot.rotation.y = Math.atan2(-cameraDx, -cameraDz);
-    cameraRoot.scale.setScalar(COMPETITION_FILM_SET.camera.scale);
+    const cameraDx = cameraTarget.x - cameraRoot.position.x;
+    const cameraDz = cameraTarget.z - cameraRoot.position.z;
+    cameraRoot.rotation.y = Math.atan2(-cameraDx, -cameraDz) + cameraYawOffset;
+    cameraRoot.scale.setScalar(cameraConfig.scale);
     setRoot.add(cameraRoot);
-    box({ name: `${id}-camera-body`, w: 1.05, h: 0.64, d: 0.82, y: 1.72, material: cameraMaterial, parent: cameraRoot });
-    box({ name: `${id}-camera-shoulder`, w: 0.82, h: 0.16, d: 0.94, y: 1.36, z: 0.05, material: hardwareMaterial, parent: cameraRoot });
-    cylinder({ name: `${id}-camera-lens`, radiusTop: 0.23, radiusBottom: 0.32, height: 0.62, segments: 20, y: 1.72, z: -0.7, rotationX: Math.PI / 2, material: lensMaterial, parent: cameraRoot });
-    cylinder({ name: `${id}-camera-reel-left`, radius: 0.28, height: 0.12, segments: 18, x: -0.27, y: 2.16, rotationZ: Math.PI / 2, material: cameraMaterial, parent: cameraRoot });
-    cylinder({ name: `${id}-camera-reel-right`, radius: 0.28, height: 0.12, segments: 18, x: 0.27, y: 2.16, rotationZ: Math.PI / 2, material: cameraMaterial, parent: cameraRoot });
-    box({ name: `${id}-camera-tally`, w: 0.18, h: 0.09, d: 0.04, x: 0.35, y: 2.02, z: -0.42, material: tallyMaterial, parent: cameraRoot, cast: false });
-    addPoleBetween(`${id}-camera-tripod-column`, new THREE.Vector3(0, 0.45, 0), new THREE.Vector3(0, 1.4, 0), 0.07, hardwareMaterial, cameraRoot);
-    for (const [index, foot] of COMPETITION_FILM_SET.camera.tripodFeet.entries()) {
+    const pedestal = cameraConfig.pedestal;
+    const body = cameraConfig.body;
+    const lens = cameraConfig.lens;
+    const matteBox = cameraConfig.matteBox;
+    const rearBattery = cameraConfig.rearBattery;
+    const lensRails = cameraConfig.lensRails;
+    const viewfinder = cameraConfig.viewfinder;
+    const monitor = cameraConfig.monitor;
+    cylinder({ name: `${id}-camera-pedestal-base`, radius: pedestal.baseRadius, height: pedestal.baseHeight, segments: 20, y: pedestal.baseHeight / 2, material: hardwareMaterial, parent: cameraRoot });
+    cylinder({ name: `${id}-camera-pedestal-column`, radius: pedestal.columnRadius, height: pedestal.columnHeight, segments: 14, y: pedestal.baseHeight + pedestal.columnHeight / 2, material: hardwareMaterial, parent: cameraRoot });
+    cylinder({ name: `${id}-camera-pedestal-head`, radius: pedestal.headRadius, height: pedestal.headHeight, segments: 14, y: pedestal.baseHeight + pedestal.columnHeight + pedestal.headHeight / 2, material: cameraMaterial, parent: cameraRoot });
+    box({ name: `${id}-camera-body`, w: body.width, h: body.height, d: body.depth, y: body.y, z: body.z, material: cameraMaterial, parent: cameraRoot });
+    box({ name: `${id}-camera-rear-battery`, w: rearBattery.width, h: rearBattery.height, d: rearBattery.depth, y: rearBattery.y, z: rearBattery.z, material: hardwareMaterial, parent: cameraRoot });
+    box({ name: `${id}-camera-matte-box`, w: matteBox.width, h: matteBox.height, d: matteBox.depth, y: matteBox.y, z: matteBox.z, material: structureMaterial, parent: cameraRoot });
+    box({ name: `${id}-camera-lens-hood`, w: lens.hoodWidth, h: lens.hoodHeight, d: lens.hoodDepth, y: lens.y, z: lens.hoodZ, material: hardwareMaterial, parent: cameraRoot });
+    cylinder({ name: `${id}-camera-lens-barrel`, radius: lens.barrelRadius, height: lens.barrelDepth, segments: 24, y: lens.y, z: lens.barrelZ, rotationX: Math.PI / 2, material: hardwareMaterial, parent: cameraRoot });
+    cylinder({ name: `${id}-camera-lens-glass`, radius: lens.glassRadius, height: lens.glassDepth, segments: 24, y: lens.y, z: lens.glassZ, rotationX: Math.PI / 2, material: lensMaterial, parent: cameraRoot, cast: false });
+    for (const [index, x] of lensRails.xOffsets.entries()) {
+      addPoleBetween(
+        `${id}-camera-lens-rail-${index + 1}`,
+        new THREE.Vector3(x, lensRails.y, lensRails.startZ),
+        new THREE.Vector3(x, lensRails.y, lensRails.endZ),
+        0.026,
+        hardwareMaterial,
+        cameraRoot,
+      );
+    }
+    box({ name: `${id}-camera-viewfinder`, w: viewfinder.width, h: viewfinder.height, d: viewfinder.depth, x: viewfinder.x, y: viewfinder.y, z: viewfinder.z, material: hardwareMaterial, parent: cameraRoot });
+    box({ name: `${id}-camera-viewfinder-screen`, w: viewfinder.width * 0.74, h: viewfinder.height * 0.68, d: 0.018, x: viewfinder.x, y: viewfinder.y, z: viewfinder.z - viewfinder.depth / 2 - 0.011, material: monitorMaterial, parent: cameraRoot, cast: false });
+    box({ name: `${id}-camera-monitor`, w: monitor.width, h: monitor.height, d: monitor.depth, x: monitor.x, y: monitor.y, z: monitor.z, material: monitorMaterial, parent: cameraRoot, cast: false });
+    addPoleBetween(`${id}-camera-top-handle`, new THREE.Vector3(cameraConfig.topHandle.start.x, cameraConfig.topHandle.start.y, cameraConfig.topHandle.start.z), new THREE.Vector3(cameraConfig.topHandle.end.x, cameraConfig.topHandle.end.y, cameraConfig.topHandle.end.z), 0.035, hardwareMaterial, cameraRoot);
+    addPoleBetween(`${id}-camera-pan-handle`, new THREE.Vector3(cameraConfig.panHandle.start.x, cameraConfig.panHandle.start.y, cameraConfig.panHandle.start.z), new THREE.Vector3(cameraConfig.panHandle.end.x, cameraConfig.panHandle.end.y, cameraConfig.panHandle.end.z), 0.035, hardwareMaterial, cameraRoot);
+    box({ name: `${id}-camera-tally`, w: 0.18, h: 0.09, d: 0.04, x: 0.35, y: 1.98, z: -0.48, material: tallyMaterial, parent: cameraRoot, cast: false });
+    for (const [index, foot] of cameraConfig.tripodFeet.entries()) {
       addPoleBetween(
         `${id}-camera-tripod-leg-${index + 1}`,
-        new THREE.Vector3(0, 0.78, 0),
+        new THREE.Vector3(0, 0.48, 0),
         new THREE.Vector3(foot[0], 0.06, foot[1]),
         0.045,
         hardwareMaterial,
@@ -21275,6 +21460,7 @@
       );
     }
 
+    const lightRoots = [];
     const lightPositions = COMPETITION_FILM_SET.lights.xOffsets.map((x) => ({
       x,
       z: audienceSide * COMPETITION_FILM_SET.lights.audienceZ,
@@ -21283,8 +21469,11 @@
       const lightRoot = new THREE.Group();
       lightRoot.name = `${id}-studio-key-light-${index + 1}`;
       lightRoot.position.set(position.x, 0, position.z);
-      lightRoot.rotation.y = Math.atan2(position.x, position.z);
+      const lightDx = lightTarget.x - position.x;
+      const lightDz = lightTarget.z - position.z;
+      lightRoot.rotation.y = Math.atan2(-lightDx, -lightDz);
       setRoot.add(lightRoot);
+      lightRoots.push(lightRoot);
       cylinder({ name: `${id}-light-stand-${index + 1}`, radius: 0.045, height: 2.05, y: 1.03, material: hardwareMaterial, parent: lightRoot });
       addPoleBetween(`${id}-light-leg-a-${index + 1}`, new THREE.Vector3(0, 0.48, 0), new THREE.Vector3(-0.48, 0.04, 0.32), 0.027, hardwareMaterial, lightRoot);
       addPoleBetween(`${id}-light-leg-b-${index + 1}`, new THREE.Vector3(0, 0.48, 0), new THREE.Vector3(0.48, 0.04, 0.32), 0.027, hardwareMaterial, lightRoot);
@@ -21349,15 +21538,124 @@
     hostHitbox.position.set(0, COMPETITION_FILM_SET.hostHitbox.height / 2, 0);
     setRoot.add(hostHitbox);
 
+    const cameraWorldPosition = new THREE.Vector3();
+    const cameraWorldTarget = new THREE.Vector3();
+    const cameraWorldQuaternion = new THREE.Quaternion();
+    const cameraForward = new THREE.Vector3();
+    const cameraToTarget = new THREE.Vector3();
+    const cameraFrontExtent = Math.min(
+      lens.glassZ - lens.glassDepth / 2,
+      matteBox.z - matteBox.depth / 2,
+      lens.hoodZ - lens.hoodDepth / 2,
+    );
+    const cameraRearExtent = Math.max(
+      body.z + body.depth / 2,
+      rearBattery.z + rearBattery.depth / 2,
+      viewfinder.z + viewfinder.depth / 2,
+    );
+    const cameraBodyFront = body.z - body.depth / 2;
+    const cameraDiagnostics = () => {
+      cameraRoot.updateWorldMatrix(true, false);
+      cameraRoot.getWorldPosition(cameraWorldPosition);
+      cameraRoot.getWorldQuaternion(cameraWorldQuaternion);
+      setRoot.localToWorld(cameraWorldTarget.copy(cameraTarget));
+      cameraForward.set(0, 0, -1).applyQuaternion(cameraWorldQuaternion);
+      cameraForward.y = 0;
+      cameraForward.normalize();
+      cameraToTarget.subVectors(cameraWorldTarget, cameraWorldPosition);
+      cameraToTarget.y = 0;
+      const targetDistance = cameraToTarget.length();
+      const facingTargetDot = targetDistance > 0.0001
+        ? cameraForward.dot(cameraToTarget.multiplyScalar(1 / targetDistance))
+        : 1;
+      let visible = true;
+      for (let node = cameraRoot; node; node = node.parent) visible = visible && node.visible;
+      return {
+        model: cameraConfig.model,
+        profile: cameraConfig.profile,
+        components: [...cameraComponents],
+        subject: cameraSubject,
+        locked: cameraLocked,
+        visible,
+        position: {
+          x: Number(cameraWorldPosition.x.toFixed(3)),
+          y: Number(cameraWorldPosition.y.toFixed(3)),
+          z: Number(cameraWorldPosition.z.toFixed(3)),
+        },
+        target: {
+          x: Number(cameraWorldTarget.x.toFixed(3)),
+          y: Number(cameraWorldTarget.y.toFixed(3)),
+          z: Number(cameraWorldTarget.z.toFixed(3)),
+        },
+        yaw: Number(cameraRoot.rotation.y.toFixed(5)),
+        facingTargetDot: Number(facingTargetDot.toFixed(5)),
+        horizontalDistanceToTarget: Number(targetDistance.toFixed(3)),
+        dimensions: {
+          bodyWidth: body.width,
+          bodyDepth: body.depth,
+          lensProjection: Number((cameraBodyFront - cameraFrontExtent).toFixed(3)),
+          overallLength: Number((cameraRearExtent - cameraFrontExtent).toFixed(3)),
+        },
+      };
+    };
+    const lightWorldPosition = new THREE.Vector3();
+    const lightWorldTarget = new THREE.Vector3();
+    const lightWorldQuaternion = new THREE.Quaternion();
+    const lightForward = new THREE.Vector3();
+    const lightToTarget = new THREE.Vector3();
+    const isHierarchyVisible = (node) => {
+      let visible = true;
+      for (let parentNode = node; parentNode; parentNode = parentNode.parent) visible = visible && parentNode.visible;
+      return visible;
+    };
+    const lightDiagnostics = () => {
+      setRoot.localToWorld(lightWorldTarget.copy(lightTarget));
+      return {
+        subject: lightSubject,
+        locked: lightLocked,
+        target: {
+          x: Number(lightWorldTarget.x.toFixed(3)),
+          y: Number(lightWorldTarget.y.toFixed(3)),
+          z: Number(lightWorldTarget.z.toFixed(3)),
+        },
+        fixtures: lightRoots.map((lightRoot) => {
+          lightRoot.updateWorldMatrix(true, false);
+          lightRoot.getWorldPosition(lightWorldPosition);
+          lightRoot.getWorldQuaternion(lightWorldQuaternion);
+          lightForward.set(0, 0, -1).applyQuaternion(lightWorldQuaternion);
+          lightForward.y = 0;
+          lightForward.normalize();
+          lightToTarget.subVectors(lightWorldTarget, lightWorldPosition);
+          lightToTarget.y = 0;
+          const targetDistance = lightToTarget.length();
+          const facingTargetDot = targetDistance > 0.0001
+            ? lightForward.dot(lightToTarget.multiplyScalar(1 / targetDistance))
+            : 1;
+          return {
+            visible: isHierarchyVisible(lightRoot),
+            position: {
+              x: Number(lightWorldPosition.x.toFixed(3)),
+              y: Number(lightWorldPosition.y.toFixed(3)),
+              z: Number(lightWorldPosition.z.toFixed(3)),
+            },
+            yaw: Number(lightRoot.rotation.y.toFixed(5)),
+            facingTargetDot: Number(facingTargetDot.toFixed(5)),
+          };
+        }),
+      };
+    };
+
     return Object.freeze({
       root: setRoot,
       hostHitbox,
       cameraCount: 1,
-      cameraScale: COMPETITION_FILM_SET.camera.scale,
+      cameraScale: cameraConfig.scale,
       cameraDistanceFromHost: Number(Math.hypot(
-        COMPETITION_FILM_SET.camera.x,
-        COMPETITION_FILM_SET.camera.audienceZ,
+        cameraPlacementX,
+        cameraPlacementAudienceZ,
       ).toFixed(3)),
+      getCameraDiagnostics: cameraDiagnostics,
+      getLightDiagnostics: lightDiagnostics,
       lightCount: 2,
       boomMicCount: 1,
       hasSign: false,
@@ -21371,53 +21669,6 @@
     scene.add(root);
     feastSaysScene.root = root;
 
-    const markGeometry = new THREE.RingGeometry(0.48, 0.61, 40);
-    const markColors = [0x5fd8ff, 0xffcf5a, 0xff5c78, 0xb987ff];
-    const marks = [FEAST_SAYS.playerMark, ...Object.values(FEAST_SAYS.contestantMarks)];
-    marks.forEach((mark, index) => {
-      const material = new THREE.MeshBasicMaterial({
-        color: markColors[index],
-        transparent: true,
-        opacity: index === 0 ? 0.92 : 0.72,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      });
-      const ring = new THREE.Mesh(markGeometry, material);
-      ring.name = index === 0 ? "feast-says-player-mark" : `feast-says-contestant-mark-${index}`;
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.set(mark.x, FLOOR.MAIN + 0.055, mark.z);
-      root.add(ring);
-      feastSaysScene.marks.push(ring);
-    });
-
-    const actionMaterial = new THREE.MeshBasicMaterial({
-      color: 0x5fd8ff,
-      transparent: true,
-      opacity: 0.28,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    const actionOffsets = [
-      { id: "forward", x: 0, z: -0.72 },
-      { id: "left", x: -0.72, z: 0 },
-      { id: "right", x: 0.72, z: 0 },
-      { id: "back", x: 0, z: 0.72 },
-    ];
-    for (const offset of actionOffsets) {
-      const pad = new THREE.Mesh(new THREE.CircleGeometry(0.25, 28), actionMaterial.clone());
-      pad.name = `feast-says-action-pad-${offset.id}`;
-      pad.userData.feastSaysAction = offset.id;
-      pad.rotation.x = -Math.PI / 2;
-      pad.position.set(
-        FEAST_SAYS.playerMark.x + offset.x,
-        FLOOR.MAIN + 0.052,
-        FEAST_SAYS.playerMark.z + offset.z,
-      );
-      pad.visible = false;
-      root.add(pad);
-      feastSaysScene.actionPads.push(pad);
-    }
-
     const reportRoot = new THREE.Group();
     reportRoot.name = "feast-says-production-call-set";
     reportRoot.position.set(FEAST_SAYS.hostMark.x, FLOOR.MAIN, FEAST_SAYS.hostMark.z);
@@ -21427,6 +21678,9 @@
       id: "feast-says",
       audienceSide: 1,
       accentColor: 0xffcf75,
+      cameraFraming: FEAST_SAYS.productionCamera,
+      cameraPlacement: FEAST_SAYS.productionCamera.placement,
+      lightFraming: FEAST_SAYS.productionCamera,
     });
     feastSaysScene.reportHitbox = feastSaysScene.filmSet.hostHitbox;
   }
@@ -24201,7 +24455,12 @@
       // restrained exposure/fog pulse reads through the windows without a
       // directional light passing through every wall and closed door.
       this.light.intensity = outdoors ? lightning * 11 * this.lightIntensityMultiplier : 0;
-      const baseExposure = state.mazeLightingContext
+      const stormRunBriefingLighting = outdoors && stormRunSystem?.show?.phase === STORM_RUN_PHASE.BRIEFING
+        ? STORM_RUN.briefingLighting
+        : null;
+      const baseExposure = stormRunBriefingLighting
+        ? stormRunBriefingLighting.exposure
+        : state.mazeLightingContext
         ? MAZE_EXPOSURE
         : outdoors ? GROUNDS_EXPOSURE : NIGHT_LIGHTING.exposure;
       const exposureMultiplier = this.activeProfile === "storm-run" ? 1.28 : 1;
@@ -26415,17 +26674,32 @@
     return !isExteriorCircuit && rendersOnFloor;
   }
 
+  function getStormRunBriefingLighting() {
+    const renderContext = getLightRenderContext();
+    return renderContext === "grounds"
+      && stormRunSystem?.show?.phase === STORM_RUN_PHASE.BRIEFING
+      ? STORM_RUN.briefingLighting
+      : null;
+  }
+
   function getContextLightingTargets() {
     const renderContext = getLightRenderContext();
     const openVolume = OPEN_VOLUME_LIGHT_ROOMS.has(state.currentRoom);
     const mazeContext = state.mazeLightingContext;
+    const stormRunBriefingLighting = getStormRunBriefingLighting();
     return {
-      hemisphere: renderContext === "grounds"
+      hemisphere: stormRunBriefingLighting
+        ? stormRunBriefingLighting.hemisphereIntensity
+        : renderContext === "grounds"
         ? mazeContext ? MAZE_HEMISPHERE_INTENSITY : GROUNDS_HEMISPHERE_INTENSITY
         : openVolume ? OPEN_VOLUME_HEMISPHERE_INTENSITY : NIGHT_LIGHTING.hemisphereIntensity,
-      moon: renderContext === "grounds"
+      moon: stormRunBriefingLighting
+        ? stormRunBriefingLighting.moonIntensity
+        : renderContext === "grounds"
         ? mazeContext ? MAZE_MOON_INTENSITY : GROUNDS_MOON_INTENSITY
         : NIGHT_LIGHTING.moonIntensity,
+      moonPosition: stormRunBriefingLighting?.moonPosition || NIGHT_LIGHTING.moonPosition,
+      moonPose: stormRunBriefingLighting ? "storm-run-briefing" : "night",
     };
   }
 
@@ -26435,6 +26709,11 @@
     const blend = 1 - Math.exp(-CONTEXT_LIGHTING_RESPONSE * dt);
     hemisphereLight.intensity += (targets.hemisphere - hemisphereLight.intensity) * blend;
     moonLight.intensity += (targets.moon - moonLight.intensity) * blend;
+    if (moonLightingPose !== targets.moonPose) {
+      moonLight.position.set(targets.moonPosition.x, targets.moonPosition.y, targets.moonPosition.z);
+      moonLightingPose = targets.moonPose;
+      if (renderer.shadowMap.enabled) renderer.shadowMap.needsUpdate = true;
+    }
   }
 
   function selectBudgetedCircuitLights(floors, renderContext) {
@@ -28622,7 +28901,11 @@
       hemisphereLight = new THREE.HemisphereLight(0x7589a6, 0x15110f, NIGHT_LIGHTING.hemisphereIntensity);
       scene.add(hemisphereLight);
       moonLight = new THREE.DirectionalLight(0x8fb7dc, NIGHT_LIGHTING.moonIntensity);
-      moonLight.position.set(-20, 28, 18);
+      moonLight.position.set(
+        NIGHT_LIGHTING.moonPosition.x,
+        NIGHT_LIGHTING.moonPosition.y,
+        NIGHT_LIGHTING.moonPosition.z,
+      );
       moonLight.castShadow = renderer.shadowMap.enabled;
       moonLight.shadow.mapSize.set(1024, 1024);
       moonLight.shadow.camera.left = -25;

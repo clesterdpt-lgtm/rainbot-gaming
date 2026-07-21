@@ -70,6 +70,11 @@ async function assertSourceContract() {
   assert(source.includes("scareLightIntensityMultiplier"), "Storm Run apparitions must illuminate the surrounding grounds more strongly than ambient lightning");
   assert(source.includes("scareMaximumLightExposure"), "Storm Run apparitions must be authored in measured dark positions");
   assert(source.includes("briefingMark"), "Storm Run must distinguish the rear-door briefing view from the race-facing start orientation");
+  assert(source.includes("briefingHostMark"), "Storm Run must define a host-facing-player briefing mark separate from the waiting pose");
+  assert(source.includes("stageHostForBriefing"), "Storm Run must continuously reapply its face-to-face briefing pose until race release");
+  assert(source.includes("briefingLighting"), "Storm Run needs named temporary lighting for the initial face-to-face intro");
+  assert(source.includes('profile: "briefing-only-uniform-lift"'), "Storm Run intro lighting must reuse existing uniforms instead of adding a new shader light");
+  assert(source.includes("moonPosition"), "Storm Run intro lighting must aim the existing moon from the player side instead of leaving Mr. Feast backlit");
   assert(source.includes("stormCountdown"), "Storm Run must own an audible three-two-one countdown cue");
   assert(source.includes("stormCheckpoint"), "Storm Run checkpoints must use a dedicated audible progress cue");
   assert(source.includes("stormScare"), "Mr. Feast apparitions must use a dedicated sting in addition to thunder");
@@ -124,6 +129,31 @@ async function diagnostics(page) {
 
 async function stormState(page) {
   return page.evaluate(() => window.MrFeastFresh.getStormRunState());
+}
+
+async function briefingFacing(page) {
+  return page.evaluate(() => {
+    const game = JSON.parse(window.render_game_to_text());
+    const host = window.MrFeastFresh.getMrFeastState();
+    const dx = game.player.x - host.position.x;
+    const dz = game.player.z - host.position.z;
+    const distance = Math.hypot(dx, dz);
+    const hostForwardDot = distance > 0.0001
+      ? (Math.sin(host.yaw) * dx + Math.cos(host.yaw) * dz) / distance
+      : 1;
+    const playerToHostX = -dx;
+    const playerToHostZ = -dz;
+    const playerForwardDot = distance > 0.0001
+      ? ((-Math.sin(game.player.yaw)) * playerToHostX + (-Math.cos(game.player.yaw)) * playerToHostZ) / distance
+      : 1;
+    return {
+      distance,
+      hostForwardDot,
+      playerForwardDot,
+      hostYaw: host.yaw,
+      playerYaw: game.player.yaw,
+    };
+  });
 }
 
 async function bootPage(page) {
@@ -305,6 +335,7 @@ async function run() {
     assert(storm.filmSet?.visible && storm.filmSet?.cameraCount === 1 && storm.filmSet?.lightCount === 2 && storm.filmSet?.boomMicCount === 1 && !storm.filmSet?.hasSign, `the Storm Run trigger must be a camera/light/boom set rather than a sign: ${JSON.stringify(storm.filmSet)}`);
     assert(storm.filmSet.cameraScale <= 0.8 && storm.filmSet.cameraDistanceFromHost >= 2.25, `the Storm Run camera must stay smaller and farther from Mr. Feast: ${JSON.stringify(storm.filmSet)}`);
     assert(storm.briefing.hostFacingBackDoor && storm.briefing.hostDistanceFromBackDoor >= 2.5, `Mr. Feast must wait away from and facing the back door: ${JSON.stringify(storm.briefing)}`);
+    assert(storm.briefing?.lighting?.active === false, `the Storm Run lighting lift must stay off while the player is still reporting: ${JSON.stringify(storm.briefing?.lighting)}`);
     const calledPause = await timerPage.evaluate(() => {
       const before = window.MrFeastFresh.getStormRunState().reportRemaining;
       window.MrFeastFresh.setMenuOpenForQA(true);
@@ -377,6 +408,9 @@ async function run() {
     assert(station.station.interactive && station.hostWaiting && /start storm run with mr\. feast/i.test(stationDiagnostics.prompt || ""), `called Storm Run must start by interacting with Mr. Feast on the rear film set: ${JSON.stringify({ station: station.station, prompt: stationDiagnostics.prompt })}`);
     await timerPage.keyboard.press("e");
     await timerPage.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.phase === "briefing", null, { timeout: 8000 });
+    // Freeze the real-time clock before taking screenshots or running the
+    // deterministic countdown probe; renderer work must not consume briefing.
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0));
     const briefingMoveBefore = (await diagnostics(timerPage)).player;
     await timerPage.keyboard.down("w");
     await timerPage.waitForTimeout(240);
@@ -387,11 +421,24 @@ async function run() {
     const briefingDiagnostics = await diagnostics(timerPage);
     assert(briefingStorm.briefing?.hostAtBackDoor && briefingStorm.briefing?.rulesExplained, `Mr. Feast must visibly explain the complete race from the back door: ${JSON.stringify(briefingStorm.briefing)}`);
     assert(!/beat mara/i.test(briefingStorm.briefing?.line || ""), `the briefing must state the elimination rule without a Beat Mara objective: ${JSON.stringify(briefingStorm.briefing)}`);
+    const introLighting = briefingStorm.briefing?.lighting;
+    assert(introLighting?.active && introLighting?.profile === "briefing-only-uniform-lift", `Storm Run must activate its named temporary intro lighting during the rules: ${JSON.stringify(introLighting)}`);
+    assert(introLighting.hemisphereTarget > 0.34 && introLighting.moonTarget > 0.52 && introLighting.exposureTarget > 0.94, `Storm Run intro lighting must materially raise the existing grounds targets: ${JSON.stringify(introLighting)}`);
+    assert(introLighting.moonPose === "storm-run-briefing" && introLighting.moonPosition?.z < -20, `Storm Run must swing the existing moon to a player-side key while Mr. Feast explains the rules: ${JSON.stringify(introLighting)}`);
+    assert(briefingDiagnostics.lighting.hemisphereTarget === introLighting.hemisphereTarget && briefingDiagnostics.lighting.moonTarget === introLighting.moonTarget, `the live lighting targets must match the Storm Run briefing profile: ${JSON.stringify({ briefing: introLighting, lighting: briefingDiagnostics.lighting })}`);
     assert(angleDistance(briefingDiagnostics.player.yaw, Math.PI) <= 0.05, `the briefing camera must face Mr. Feast at the back door: ${JSON.stringify(briefingDiagnostics.player)}`);
+    let faceToFace = await briefingFacing(timerPage);
+    assert(faceToFace.distance >= 1.2 && faceToFace.hostForwardDot >= 0.96 && faceToFace.playerForwardDot >= 0.96, `Storm Run must stage Mr. Feast face-to-face with the held player during his briefing: ${JSON.stringify(faceToFace)}`);
     await timerPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "storm-run-rear-door-briefing-desktop.png") });
+    await timerPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "storm-run-bright-intro-desktop.png") });
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(5));
+    faceToFace = await briefingFacing(timerPage);
+    assert(faceToFace.hostForwardDot >= 0.96 && faceToFace.playerForwardDot >= 0.96, `Mr. Feast must hold the face-to-face briefing pose through the countdown: ${JSON.stringify(faceToFace)}`);
     await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(16));
     storm = await stormState(timerPage);
     assert(storm.phase === "running" && storm.staging.mara && storm.staging.juniper && !storm.staging.kip, `race staging must include only surviving opponents: ${JSON.stringify(storm.staging)}`);
+    assert(storm.briefing?.lighting?.active === false, `Storm Run intro lighting must return to the ordinary storm baseline at race release: ${JSON.stringify(storm.briefing?.lighting)}`);
+    assert(storm.briefing?.lighting?.moonPose === "night" && storm.briefing?.lighting?.moonPosition?.z > 0, `Storm Run must restore the storm moon direction at race release: ${JSON.stringify(storm.briefing?.lighting)}`);
     assert(storm.player.sprintAvailable === true, `normal sprint must remain available during the race: ${JSON.stringify(storm.player)}`);
     assert(JSON.stringify(storm.briefing?.countdownSequence) === JSON.stringify([3, 2, 1, 0]), `the race must emit a complete three-two-one-start countdown: ${JSON.stringify(storm.briefing)}`);
     assert(angleDistance((await diagnostics(timerPage)).player.yaw, Math.PI / 2) <= 0.05, "the released player must face west toward checkpoint one instead of south");
@@ -759,6 +806,14 @@ async function run() {
     assert(phoneCalled?.started === true, `the phone Storm Run call should start: ${JSON.stringify(phoneCalled)}`);
     const phoneStarted = await phonePage.evaluate(() => window.MrFeastFresh.startStormRunForQA());
     assert(phoneStarted?.started === true, `the phone Storm Run should stage: ${JSON.stringify(phoneStarted)}`);
+    await phonePage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0));
+    const phoneFaceToFace = await briefingFacing(phonePage);
+    assert(phoneFaceToFace.distance >= 1.2 && phoneFaceToFace.hostForwardDot >= 0.96 && phoneFaceToFace.playerForwardDot >= 0.96, `the phone rear-door briefing must keep Mr. Feast face-to-face with the held player: ${JSON.stringify(phoneFaceToFace)}`);
+    const phoneBriefing = await stormState(phonePage);
+    assert(phoneBriefing.briefing?.lighting?.active, `the phone must receive the same temporary Storm Run intro-lighting lift: ${JSON.stringify(phoneBriefing.briefing?.lighting)}`);
+    assert(phoneBriefing.briefing?.lighting?.moonPose === "storm-run-briefing", `the phone briefing must keep the player-side moon key: ${JSON.stringify(phoneBriefing.briefing?.lighting)}`);
+    await phonePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "storm-run-rear-door-briefing-mobile.png") });
+    await phonePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "storm-run-bright-intro-mobile.png") });
     await phonePage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(16));
     await phonePage.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.phase === "running", null, { timeout: 8000 });
     await assertHudFits(phonePage, true);

@@ -55,6 +55,7 @@ async function assertSourceContract() {
   assert(source.includes("measureCloseThunderForQA"), "the close thunder mix needs an offline loudness probe rather than counter-only QA");
   assert(source.includes("queueCloseThunder"), "a temporarily interrupted mobile audio context must queue the close bolt for the next trusted gesture");
   assert(source.includes("scareFlashStrengthMultiplier"), "Storm Run apparitions must use a stronger flash than ambient lightning");
+  assert(source.includes('scareRevealLightTopology: "stable"'), "the apparition fill must stay shader-resident instead of recompiling yard materials on the first bolt");
   assert(source.includes("scareLightIntensityMultiplier"), "Storm Run apparitions must illuminate the surrounding grounds more strongly than ambient lightning");
   assert(source.includes("scareMaximumLightExposure"), "Storm Run apparitions must be authored in measured dark positions");
   assert(source.includes("briefingMark"), "Storm Run must distinguish the rear-door briefing view from the race-facing start orientation");
@@ -155,14 +156,17 @@ async function triggerScareThroughFacingGate(page, index, expectedId) {
   assert(awayPlacement?.id === expectedId && awayPlacement.lineOfSight, `scare ${index + 1} away-facing setup must stand in the authored clear view: ${JSON.stringify(awayPlacement)}`);
   assert(awayPlacement.facingDot < awayPlacement.facingMinimumDot, `scare ${index + 1} away-facing setup must fail the view gate: ${JSON.stringify(awayPlacement)}`);
   await page.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.05));
+  await page.waitForTimeout(120);
   const waiting = await stormState(page);
   assert(!waiting.scare.triggeredIds.includes(expectedId), `scare ${index + 1} must not fire while the player faces away: ${JSON.stringify(waiting.scare)}`);
   assert(waiting.scare.candidateId === expectedId && waiting.scare.waitingForFacing, `scare ${index + 1} should wait inside its trigger instead of consuming the one-shot: ${JSON.stringify(waiting.scare)}`);
   assert(!waiting.scare.hostVisible && waiting.scare.lightning === 0, `facing away must emit neither Mr. Feast nor lightning: ${JSON.stringify(waiting.scare)}`);
+  assert(waiting.scare.revealFillShaderResident && !waiting.scare.revealFillActive, `the zero-intensity fill must already reside in the light topology before the bolt: ${JSON.stringify(waiting.scare)}`);
+  const rendererBefore = (await diagnostics(page)).renderer;
 
   let facingOptions = {};
   if (index === 0) {
-    const crossed = await page.evaluate(() => window.MrFeastFresh.placePlayerAlongStormLegForQA(2, 0.32, { pitch: -1.25 }));
+    const crossed = await page.evaluate(() => window.MrFeastFresh.placePlayerAlongStormLegForQA(3, 0.32, { pitch: -1.25 }));
     assert(crossed?.onAuthoredLeg && crossed.triggerZoneDistance > crossed.triggerRadius, `the player must naturally leave the small garden trigger while looking down: ${JSON.stringify(crossed)}`);
     await page.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.05));
     const armedAfterCrossing = await stormState(page);
@@ -186,9 +190,12 @@ async function triggerScareThroughFacingGate(page, index, expectedId) {
   );
   assert(facingPlacement?.facingDot >= facingPlacement?.facingMinimumDot && facingPlacement.onScreen && facingPlacement.lineOfSight, `scare ${index + 1} must have a clear in-view trigger pose: ${JSON.stringify(facingPlacement)}`);
   await page.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.05));
+  await page.waitForTimeout(120);
   const visible = await stormState(page);
   assert(visible.scare.triggeredIds.includes(expectedId) && visible.scare.hostVisible && visible.scare.lightning > 0, `scare ${index + 1} must fire as soon as the player faces Mr. Feast: ${JSON.stringify(visible.scare)}`);
-  return { awayPlacement, facingPlacement, waiting, visible };
+  const rendererAfter = (await diagnostics(page)).renderer;
+  assert(rendererAfter.programs <= rendererBefore.programs, `scare ${index + 1} must not compile a new yard-light shader variant on the lightning frame: before=${JSON.stringify(rendererBefore)} after=${JSON.stringify(rendererAfter)}`);
+  return { awayPlacement, facingPlacement, waiting, visible, rendererBefore, rendererAfter };
 }
 
 async function canvasLuminance(page) {
@@ -391,6 +398,8 @@ async function run() {
     assert(scares.every((entry) => entry.reveal.darkSpot), `every apparition must be authored as a measured dark spot: ${JSON.stringify(scares)}`);
     assert(scares.every((entry) => entry.reveal.scale >= 0.95 && entry.reveal.scale <= 1.15), `all three apparitions must remain believable human scale: ${JSON.stringify(scares.map((entry) => entry.reveal.scale))}`);
     assert(scares[0].reveal.fillScale >= 2.5 && scares[1].reveal.fillScale >= 2.5 && scares[2].reveal.fillScale === 1, `the two distant silhouettes must gain readability from lightning fill rather than giant models: ${JSON.stringify(scares.map((entry) => entry.reveal.fillScale))}`);
+    assert(scares[0].trigger.id === "garden-front-approach" && scares[0].trigger.z >= 8 && scares[0].completedCheckpointMinimum === 2, `the first apparition must wait until the player reaches the north garden/front-yard approach: ${JSON.stringify(scares[0])}`);
+    assert(scares[1].trigger.id === "front-door-crossing" && Math.abs(scares[1].trigger.x) <= 3 && scares[1].trigger.z >= 14 && scares[1].trigger.z <= 17, `the second apparition must wait until the player passes close to the front door: ${JSON.stringify(scares[1])}`);
     assert(scares.every((entry) => entry.trigger.radius >= 1.3 && entry.completedCheckpointMinimum <= entry.completedCheckpointMaximum), `each apparition needs a real route trigger and bounded progress window: ${JSON.stringify(scares)}`);
     assert(Math.max(...checkpoints.map((entry) => entry.position.x)) - Math.min(...checkpoints.map((entry) => entry.position.x)) >= 35, "Storm checkpoints must span the yard's east/west axis");
     assert(Math.max(...checkpoints.map((entry) => entry.position.z)) - Math.min(...checkpoints.map((entry) => entry.position.z)) >= 35, "Storm checkpoints must span the yard's front/rear axis");
@@ -422,11 +431,15 @@ async function run() {
       assert(after.teleports === 0, `${id} must not teleport between visible race points: ${JSON.stringify(after)}`);
     }
 
+    const secondCheckpoint = await collectCheckpoint(timerPage, 1);
+    assert(secondCheckpoint.accepted === true && secondCheckpoint.completed === 2, `the first scare must wait until checkpoint two is complete: ${JSON.stringify(secondCheckpoint)}`);
+
     const firstComposition = await timerPage.evaluate(() => window.MrFeastFresh.previewStormScareForQA(0));
     assert(firstComposition?.onScreen && firstComposition.lineOfSight && Math.abs(firstComposition.projected.x) <= 0.06, `the northwest apparition must stand unobstructed between the marked trees: ${JSON.stringify(firstComposition)}`);
-    assert(firstComposition.distance >= 30 && firstComposition.distance <= 34 && firstComposition.projectedHeight >= 0.075 && firstComposition.projectedHeight <= 0.11, `the distant northwest silhouette must read as a human-sized figure at its mapped position: ${JSON.stringify(firstComposition)}`);
+    assert(firstComposition.distance >= 19 && firstComposition.distance <= 22 && firstComposition.projectedHeight >= 0.13 && firstComposition.projectedHeight <= 0.17, `the northwest silhouette must read at human scale from the later front-yard approach: ${JSON.stringify(firstComposition)}`);
     const firstScare = await triggerScareThroughFacingGate(timerPage, 0, expectedScareIds[0]);
     const scareVisible = firstScare.visible;
+    assert(scareVisible.completedCheckpoints === 3 && scareVisible.visitedCheckpointIds.includes("garden-front-turn"), `the later first scare should coincide naturally with collecting checkpoint three: ${JSON.stringify(scareVisible)}`);
     assert(scareVisible.scare.lightning >= 1.15 && scareVisible.scare.lightIntensityMultiplier >= 1.4, `the close bolt must light enough of the surrounding grounds to make Mr. Feast unmistakable: ${JSON.stringify(scareVisible.scare)}`);
     assert(scareVisible.scare.profile === "storm-run" && scareVisible.scare.flashDecayPerSecond < scareVisible.scare.normalFlashDecayPerSecond, `the race scare flash must last slightly longer than ambient lightning: ${JSON.stringify(scareVisible.scare)}`);
     assert(scareVisible.scare.flashStrengthMultiplier >= 1.1, `the apparition flash must be visibly stronger than ambient lightning: ${JSON.stringify(scareVisible.scare)}`);
@@ -444,8 +457,9 @@ async function run() {
     await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.42));
     assert(!(await stormState(timerPage)).scare.hostVisible, "the first Mr. Feast silhouette must vanish with darkness");
     assert(!(await stormState(timerPage)).scare.revealFillActive, "the local silhouette fill must extinguish with the lightning");
+    assert((await stormState(timerPage)).scare.revealFillShaderResident, "the extinguished fill must remain shader-resident for later bolts");
 
-    for (let index = 2; index <= 3; index += 1) {
+    for (let index = 3; index <= 3; index += 1) {
       const preview = await previewCheckpoint(timerPage, index);
       assert(preview?.active && preview.onScreen && preview.guideVisible && preview.alwaysVisible, `checkpoint ${index + 1} must be visible from checkpoint ${index}: ${JSON.stringify(preview)}`);
       const collected = await collectCheckpoint(timerPage, index);
@@ -454,7 +468,7 @@ async function run() {
     await timerPage.screenshot({ path: path.join(artifactDir, "storm-run-visible-checkpoint-chain-desktop.png") });
     const secondComposition = await timerPage.evaluate(() => window.MrFeastFresh.previewStormScareForQA(1));
     assert(secondComposition?.onScreen && secondComposition.lineOfSight && Math.abs(secondComposition.projected.x) <= 0.06, `the northeast apparition must stand unobstructed in the marked front tree line: ${JSON.stringify(secondComposition)}`);
-    assert(secondComposition.distance >= 38 && secondComposition.distance <= 42 && secondComposition.projectedHeight >= 0.06 && secondComposition.projectedHeight <= 0.09, `the distant northeast silhouette must read as a human-sized figure at its mapped position: ${JSON.stringify(secondComposition)}`);
+    assert(secondComposition.distance >= 29 && secondComposition.distance <= 31.5 && secondComposition.projectedHeight >= 0.09 && secondComposition.projectedHeight <= 0.13, `the northeast silhouette must read at human scale from the front-door crossing: ${JSON.stringify(secondComposition)}`);
     const secondScare = await triggerScareThroughFacingGate(timerPage, 1, expectedScareIds[1]);
     assert(secondScare.visible.scare.baselineLightExposure <= secondScare.visible.scare.maximumLightExposure, `the northeast Mr. Feast must begin in deep shadow: ${JSON.stringify(secondScare.visible.scare)}`);
     await timerPage.screenshot({ path: path.join(artifactDir, "mr-feast-northeast-tree-line-lightning-desktop.png") });
@@ -526,8 +540,10 @@ async function run() {
     const checkpointCueBefore = audioAfter.cueCounts.stormCheckpoint || 0;
     const audioFirstCheckpoint = await collectCheckpoint(audioPage, 0);
     assert(audioFirstCheckpoint.accepted === true, `audio probe checkpoint one should collect in order: ${JSON.stringify(audioFirstCheckpoint)}`);
+    const audioSecondCheckpoint = await collectCheckpoint(audioPage, 1);
+    assert(audioSecondCheckpoint.accepted === true, `audio probe checkpoint two should unlock the later first scare: ${JSON.stringify(audioSecondCheckpoint)}`);
     audioAfter = await audioPage.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
-    assert((audioAfter.cueCounts.stormCheckpoint || 0) - checkpointCueBefore === 1, `the collected checkpoint must emit its audible progress chime: ${JSON.stringify(audioAfter.cueCounts)}`);
+    assert((audioAfter.cueCounts.stormCheckpoint || 0) - checkpointCueBefore === 2, `both collected setup checkpoints must emit their audible progress chimes: ${JSON.stringify(audioAfter.cueCounts)}`);
     const closeThunderMeasure = await audioPage.evaluate(() => window.MrFeastFresh.measureCloseThunderForQA());
     assert(closeThunderMeasure.available && closeThunderMeasure.noiseProfile === "white" && closeThunderMeasure.layerCount >= 3, `the QA probe must render the same broadband multilayer close crack used live: ${JSON.stringify(closeThunderMeasure)}`);
     assert(closeThunderMeasure.onsetMs <= 30 && closeThunderMeasure.peakDbfs >= -10 && closeThunderMeasure.first100RmsDbfs >= -24, `the close crack must be immediate and materially louder than the outdoor rain bed: ${JSON.stringify(closeThunderMeasure)}`);
@@ -698,17 +714,19 @@ async function run() {
     await phonePage.screenshot({ path: path.join(artifactDir, "storm-run-mobile.png") });
     const phoneFirstCheckpoint = await collectCheckpoint(phonePage, 0);
     assert(phoneFirstCheckpoint.accepted === true, `phone scare setup checkpoint one should collect in order: ${JSON.stringify(phoneFirstCheckpoint)}`);
+    const phoneSecondCheckpoint = await collectCheckpoint(phonePage, 1);
+    assert(phoneSecondCheckpoint.accepted === true, `phone scare setup checkpoint two should unlock the later first scare: ${JSON.stringify(phoneSecondCheckpoint)}`);
     const phoneNorthwestComposition = await phonePage.evaluate(() => window.MrFeastFresh.previewStormScareForQA(0));
-    assert(phoneNorthwestComposition?.onScreen && phoneNorthwestComposition.lineOfSight && phoneNorthwestComposition.projectedHeight >= 0.045 && phoneNorthwestComposition.projectedHeight <= 0.075, `the northwest tree-line apparition must remain human-sized in the phone camera: ${JSON.stringify(phoneNorthwestComposition)}`);
+    assert(phoneNorthwestComposition?.onScreen && phoneNorthwestComposition.lineOfSight && phoneNorthwestComposition.projectedHeight >= 0.075 && phoneNorthwestComposition.projectedHeight <= 0.11, `the northwest tree-line apparition must remain human-sized in the phone camera from the later approach: ${JSON.stringify(phoneNorthwestComposition)}`);
     await triggerScareThroughFacingGate(phonePage, 0, "northwest-tree-line");
     await phonePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-northwest-tree-line-lightning-mobile.png") });
     await phonePage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(1.25));
-    for (let index = 2; index <= 3; index += 1) {
+    for (let index = 3; index <= 3; index += 1) {
       const collected = await collectCheckpoint(phonePage, index);
       assert(collected.accepted === true, `phone second-scare setup checkpoint ${index + 1} should collect in order: ${JSON.stringify(collected)}`);
     }
     const phoneNortheastComposition = await phonePage.evaluate(() => window.MrFeastFresh.previewStormScareForQA(1));
-    assert(phoneNortheastComposition?.onScreen && phoneNortheastComposition.lineOfSight && phoneNortheastComposition.projectedHeight >= 0.035 && phoneNortheastComposition.projectedHeight <= 0.065, `the northeast tree-line apparition must remain human-sized in the phone camera: ${JSON.stringify(phoneNortheastComposition)}`);
+    assert(phoneNortheastComposition?.onScreen && phoneNortheastComposition.lineOfSight && phoneNortheastComposition.projectedHeight >= 0.055 && phoneNortheastComposition.projectedHeight <= 0.085, `the northeast tree-line apparition must remain human-sized in the phone camera from the front door: ${JSON.stringify(phoneNortheastComposition)}`);
     await triggerScareThroughFacingGate(phonePage, 1, "northeast-tree-line");
     await phonePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-northeast-tree-line-lightning-mobile.png") });
     await phonePage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(1.25));

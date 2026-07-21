@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260720-storm-run-scare-ending-polish-1";
+  const MANSION_RUNTIME_VERSION = "20260720-storm-run-scare-timing-performance-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2107,6 +2107,7 @@
     scareFacingMinimumDot: 0.9,
     scareFacingScreenMargin: 0.86,
     scareRevealFillIntensity: 140,
+    scareRevealLightTopology: "stable",
     scareCheckpointFlashOpacity: Object.freeze({ ring: 0.38, beacon: 0.07, guide: 0.3 }),
     checkpointOpacity: Object.freeze({ ring: 0.9, beacon: 0.18, guide: 0.94 }),
     scareThunderCrackPeakGain: 0.78,
@@ -2150,9 +2151,9 @@
       Object.freeze({
         id: "northwest-tree-line",
         order: 1,
-        completedCheckpointMinimum: 1,
-        completedCheckpointMaximum: 2,
-        trigger: Object.freeze({ id: "garden-cross", x: -17.2, z: -2.2, radius: 3 }),
+        completedCheckpointMinimum: 2,
+        completedCheckpointMaximum: 3,
+        trigger: Object.freeze({ id: "garden-front-approach", x: -17.2, z: 9.5, radius: 2.4 }),
         reveal: Object.freeze({ x: -24.25, y: YARD_LAYOUT.groundY, z: 29, yaw: 2.919, scale: 1.05, fillScale: 3.2, darkSpot: true }),
       }),
       Object.freeze({
@@ -2160,7 +2161,7 @@
         order: 2,
         completedCheckpointMinimum: 4,
         completedCheckpointMaximum: 5,
-        trigger: Object.freeze({ id: "front-carriage-crossing", x: -12, z: 16.3, radius: 3.2 }),
+        trigger: Object.freeze({ id: "front-door-crossing", x: -2, z: 16.3, radius: 2.6 }),
         reveal: Object.freeze({ x: 26.5, y: YARD_LAYOUT.groundY, z: 26, yaw: -1.818, scale: 1.05, fillScale: 3.8, darkSpot: true }),
       }),
       Object.freeze({
@@ -14728,7 +14729,7 @@
       light.userData.fillScale = fillScale;
       light.userData.scareId = scare.id;
       light.intensity = 0;
-      light.visible = false;
+      light.visible = true;
       return true;
     }
 
@@ -14738,7 +14739,11 @@
       const active = Boolean(this.show.hostVisible && this.show.phase === STORM_RUN_PHASE.RUNNING);
       const fillScale = Number(light.userData.fillScale) || 1;
       const lightning = Math.pow(Math.max(0, stormSystem?.flash || 0), 2);
-      light.visible = active;
+      // Keep the point light in Three's active-light topology for the whole
+      // Storm Run production. Toggling visibility on the first bolt changes
+      // NUM_POINT_LIGHTS and recompiles every nearby lit material on the scare
+      // frame; a zero intensity preserves darkness without that shader spike.
+      light.visible = Boolean(stormRunScene.root?.visible);
       light.intensity = active
         ? STORM_RUN.scareRevealFillIntensity * fillScale * lightning
         : 0;
@@ -15644,7 +15649,15 @@
             )
           ),
           lineOfSight: this.show.scareLineOfSight,
-          revealFillActive: Boolean(stormRunScene.revealLight?.visible),
+          revealFillActive: Boolean(
+            stormRunScene.revealLight?.visible
+            && (stormRunScene.revealLight?.intensity || 0) > 0.01
+          ),
+          revealFillShaderResident: Boolean(
+            stormRunScene.root?.visible
+            && stormRunScene.revealLight?.visible
+            && STORM_RUN.scareRevealLightTopology === "stable"
+          ),
           revealFillIntensity: Number((stormRunScene.revealLight?.intensity || 0).toFixed(2)),
           checkpointSubdued: Boolean(
             this.show.hostVisible
@@ -27084,6 +27097,7 @@
         triangles: info.render.triangles,
         geometries: info.memory.geometries,
         textures: info.memory.textures,
+        programs: Array.isArray(info.programs) ? info.programs.length : 0,
         pixelRatio: renderer.getPixelRatio(),
         renderQuality: state.renderQuality,
         frameSchedule: getFrameSchedule(),

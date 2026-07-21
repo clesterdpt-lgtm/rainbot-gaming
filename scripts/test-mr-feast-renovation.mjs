@@ -1279,6 +1279,7 @@ check("48 escape menu", /function toggleGameAudio\(/.test(mansion) && /dom\.menu
 check("48 resume reclaims look", /function reclaimLookControl\(/.test(mansion) && /armLookReclaimFollowUps/.test(mansion) && /armFollowUps:\s*true/.test(mansion) && /pointerdown/.test(mansion), "closing the Escape menu does not re-request pointer lock for camera look");
 check("48 book keeps cursor hidden", /keepCanvasInteractive/.test(mansion) && /is-book-open/.test(mansion) && /mr-feast-book-open/.test(mansion) && /cursor:\s*none/.test(page) && /do NOT inert the canvas/.test(mansion), "opening a book still inerts the canvas or shows the system cursor");
 check("48 true fullscreen", /requestFullscreen/.test(mansion) && /Exit fullscreen/.test(mansion) && /syncFullscreenStateFromDocument/.test(mansion) && /navigationUI:\s*"hide"/.test(mansion), "Maximize still uses CSS-only browser chrome instead of the Fullscreen API");
+check("48 escape keeps maximize", /intentionalMaximizeExitUntil/.test(mansion) && /Browsers always leave the Fullscreen API on Escape/.test(mansion) && /applyMaximizedChrome\(true\)/.test(mansion) && /setMenuOpen\(true\)/.test(mansion), "Escape while maximized still demaxes instead of only opening the pause menu");
 check("48 save contract", /RBGameSaves\?\.create\("mr-feast-mansion",\s*\{ version:\s*1 \}\)/.test(mansion) && /serializeMansionSave/.test(mansion) && /restoreMansionSave/.test(mansion) && /playerPosition/.test(mansion), "mansion progress and player transform are not versioned through RBGameSaves");
 check("48 reversible dev mode", /devModeSnapshot/.test(mansion) && /setDevMode\(enabled/.test(mansion) && /recordingPlayed\s*=\s*true/.test(mansion) && /relaySabotaged\s*=\s*false/.test(mansion) && /restoreQuestSnapshot/.test(mansion), "Dev Mode does not grant the current trail while preserving a reversible pre-dev snapshot and unfinished sabotage");
 
@@ -1299,6 +1300,8 @@ const expectedMrFeastAssets = [
 ];
 check("43 Mr Feast manifest", mrFeastManifest.heightMeters === 2.01 && mrFeastManifest.sourceHeightMeters === 1.92 && mrFeastManifest.forwardAxis === "+Z" && mrFeastManifest.animations?.stalk?.playbackRate === 0.37 && expectedMrFeastAssets.every(Boolean), "runtime manifest is missing the eye-level fit, forward axis, stride-calibrated stalk rate, or motion assets");
 const faceRetopologyPaused = /\*\*33 — Mr\. Feast Face Retopology\*\* is paused/.test(projectState);
+const pageCacheKey = page.match(/mr-feast-mansion\.js\?v=([^"']+)/)?.[1] || "";
+const mansionRuntimeVersion = mansion.match(/const MANSION_RUNTIME_VERSION\s*=\s*"([^"]+)"/)?.[1] || "";
 check(
   "43 Mr Feast face release gate",
   !faceRetopologyPaused || (
@@ -1306,7 +1309,8 @@ check(
     && mrFeastManifest.model === "processed/mr-feast-game-rigged.glb"
     && !mrFeastManifest.face
     && /assetVersion:\s*"20260721-stable-face-1"/.test(mansion)
-    && /mr-feast-mansion\.js\?v=20260721-stable-face-1/.test(page)
+    && Boolean(pageCacheKey)
+    && pageCacheKey === mansionRuntimeVersion
   ),
   "the paused and visually rejected retopology is still selected by the public manifest or an old cache key",
 );

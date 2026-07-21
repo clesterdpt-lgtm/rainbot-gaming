@@ -170,6 +170,21 @@ async function run() {
     assert(state.menus.maximized, "Maximize should expand the mansion stage");
     assert(await page.locator("#mansion-stage").evaluate((element) => getComputedStyle(element).position === "fixed"), "Maximize should pin the stage over the viewport");
 
+    // Escape while maximized must open the pause menu without collapsing the stage.
+    // Native Fullscreen may consume Escape; the page then keeps CSS maximize and opens the menu.
+    await page.locator("#mansion-menu-resume").click();
+    await page.waitForTimeout(80);
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => {
+      const menus = JSON.parse(window.render_game_to_text()).menus;
+      return menus.escapeOpen && menus.maximized;
+    }, null, { timeout: 3000 });
+    state = await diagnostics(page);
+    assert(state.menus.escapeOpen && state.menus.maximized, "Escape while maximized should open the menu and keep maximized layout");
+    assert(await page.locator("#mansion-stage").evaluate((element) => (
+      element.classList.contains("is-maxed") && getComputedStyle(element).position === "fixed"
+    )), "Escape while maximized should keep the stage pinned full-viewport");
+
     await page.evaluate(() => window.MrFeastFresh.teleport("foyer"));
     const savePosition = (await diagnostics(page)).player;
     await page.locator("#mansion-menu-save").click();

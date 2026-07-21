@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260721-stable-face-1";
+  const MANSION_RUNTIME_VERSION = "20260721-escape-keeps-max-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2071,6 +2071,7 @@
     briefingSeconds: 14,
     briefingSpeechSeconds: 10.8,
     countdownSeconds: 3,
+    hostIdlePoseTimeSeconds: 0,
     callLine: "Contestants, report to the back-door set. You have five minutes to check in with Mr. Feast.",
     briefingLine: "Welcome to Storm Run. Hit twelve blue checkpoints in order. Find the next glowing marker and keep moving. Last place is eliminated.",
     countdownLines: Object.freeze({ 3: "Three.", 2: "Two.", 1: "One." }),
@@ -4038,6 +4039,7 @@
       this.challengeMode = null;
       this.challengeInteractionSnapshots = [];
       this.challengeSnapshot = null;
+      this.challengeIdlePoseTime = null;
       this.moving = false;
       this.loadStatus = "idle";
       this.loadingProgress = 0;
@@ -5257,6 +5259,7 @@
       const nextAction = this.actions[name] || this.actions.idle;
       if (!nextAction) return;
       const spec = this.manifest?.animations?.[name] || this.manifest?.animations?.idle;
+      nextAction.paused = false;
       nextAction.setEffectiveTimeScale(Number.isFinite(rateOverride)
         ? Math.max(0, rateOverride)
         : Number(spec?.playbackRate) || 1);
@@ -5270,6 +5273,18 @@
       nextAction.play();
       this.activeAction = nextAction;
       this.currentAnimation = name in this.actions ? name : "idle";
+    }
+
+    holdChallengeIdlePose(dt = 0) {
+      if (!Number.isFinite(this.challengeIdlePoseTime) || this.loadStatus !== "ready") return false;
+      this.fadeToAction("idle");
+      if (!this.activeAction) return false;
+      const duration = Math.max(0.0001, this.activeAction.getClip()?.duration || 0.0001);
+      this.activeAction.time = ((this.challengeIdlePoseTime % duration) + duration) % duration;
+      this.activeAction.paused = true;
+      this.mixer?.update(0);
+      this.stepAnimationAndFace(Math.max(0, Number(dt) || 0), false);
+      return true;
     }
 
     routeDoor(name) {
@@ -6511,13 +6526,18 @@
       this.wanderingEnabled = false;
       this.challengeStaged = true;
       this.challengeMode = options.mode || "feast-says";
+      this.challengeIdlePoseTime = Number.isFinite(options.idlePoseTime)
+        ? Number(options.idlePoseTime)
+        : null;
       this.root.visible = options.visible !== false;
       this.setChallengeColliderEnabled(options.colliderEnabled !== false);
       if (options.interactionsEnabled === false) this.setChallengeInteractionsEnabled(false);
       for (const mesh of this.meshes) mesh.visible = this.root.visible;
       if (this.loadStatus === "ready") {
-        this.fadeToAction("idle");
-        this.stepAnimationAndFace(0, true, true);
+        if (!this.holdChallengeIdlePose(0)) {
+          this.fadeToAction("idle");
+          this.stepAnimationAndFace(0, true, true);
+        }
       }
       this.root.updateMatrixWorld(true);
       return this.getDiagnostics();
@@ -6575,6 +6595,7 @@
       this.challengeStaged = false;
       this.challengeMode = null;
       this.challengeSnapshot = null;
+      this.challengeIdlePoseTime = null;
       if (snapshot) {
         this.root.position.copy(snapshot.position);
         this.root.rotation.y = snapshot.rotationY;
@@ -6597,6 +6618,7 @@
       if (state.qa && this.qaAnimationFrozen) return;
       this.updateConversationFocus(this.lastDt);
       if (!state.started || !this.wanderingEnabled) {
+        if (this.holdChallengeIdlePose(this.lastDt)) return;
         this.fadeToAction("idle");
         this.stepAnimationAndFace(this.lastDt);
         return;
@@ -7197,6 +7219,7 @@
         conversationFocusRemaining: Number(this.conversationFocusRemaining.toFixed(3)),
         wanderingEnabled: this.wanderingEnabled,
         challengeStaged: this.challengeStaged,
+        challengeIdlePoseTime: this.challengeIdlePoseTime,
         moving: this.moving,
         distanceTravelled: Number(this.distanceTravelled.toFixed(3)),
         collision: {
@@ -14694,6 +14717,7 @@
           colliderEnabled: true,
           interactionsEnabled: false,
           visible: true,
+          idlePoseTime: STORM_RUN.hostIdlePoseTimeSeconds,
         });
       } else {
         mrFeastNpc.root.position.set(STORM_RUN.hostStartMark.x, STORM_RUN.hostStartMark.y, STORM_RUN.hostStartMark.z);
@@ -14846,6 +14870,7 @@
         responseNodeId: "response-rear-terrace",
         colliderEnabled: false,
         visible: true,
+        idlePoseTime: STORM_RUN.hostIdlePoseTimeSeconds,
       });
       const staged = mansionContestants.stageChallenge(STORM_RUN.contestantMarks, { mode: "storm-run" });
       if (!staged.staged) {
@@ -25381,6 +25406,10 @@
   // can open the menu on the same gesture instead of requiring a second press.
   let intentionalPointerUnlockUntil = 0;
   let ignoreEscapeMenuToggleUntil = 0;
+  // Marks a deliberate Fullscreen / Exit fullscreen control path so a later
+  // fullscreenchange can demax. Browser Escape exits native fullscreen without
+  // this flag and must keep CSS maximized chrome + open the pause menu.
+  let intentionalMaximizeExitUntil = 0;
   let lookReclaimFollowUpUntil = 0;
   let lookReclaimFollowUpHandler = null;
   let rendererCssWidth = 0;
@@ -26035,6 +26064,10 @@
       return applyMaximizedChrome(true);
     }
 
+    // Only the menu Fullscreen control (or an explicit setMaximized(false)
+    // caller) should collapse maximized layout. Keep the flag long enough for
+    // async webkit fullscreenchange handlers.
+    intentionalMaximizeExitUntil = performance.now() + 500;
     try {
       if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
       else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
@@ -26052,20 +26085,36 @@
       applyMaximizedChrome(true);
       return;
     }
-    // Exiting native fullscreen (often via Escape) should leave maximized mode.
-    // Suppress the same Escape from also opening the pause menu.
-    if (state.maximized && !dom.stage?.classList.contains("is-maxed")) {
-      ignoreEscapeMenuToggleUntil = performance.now() + 450;
-      intentionalPointerUnlockUntil = performance.now() + 450;
-    }
-    if (state.maximized && !document.fullscreenElement && !document.webkitFullscreenElement) {
-      // If we were in native FS and it closed, clear. Keep CSS-only max if it
-      // was applied as a fallback without ever entering native FS: detect via
-      // class still set while no native element — clear that too when user
-      // asked for real fullscreen as the primary path.
-      ignoreEscapeMenuToggleUntil = Math.max(ignoreEscapeMenuToggleUntil, performance.now() + 450);
+
+    // Intentional Exit fullscreen from the menu: drop maximized chrome.
+    if (performance.now() < intentionalMaximizeExitUntil) {
       applyMaximizedChrome(false);
+      return;
     }
+
+    // Browsers always leave the Fullscreen API on Escape and that gesture is
+    // not cancelable. Keep the CSS maximized stage so Escape only opens the
+    // pause menu (or closes an open modal) instead of collapsing the viewport.
+    if (state.maximized || dom.stage?.classList.contains("is-maxed")) {
+      applyMaximizedChrome(true);
+      if (
+        state.started
+        && !state.gameOver
+        && !state.menuOpen
+        && !state.readableBooks.open
+        && !state.workroom.keypadOpen
+        && !state.journalOpen
+      ) {
+        // Native FS often consumes Escape before keydown. Open the menu here
+        // and ignore a same-gesture keydown so it cannot immediately re-close.
+        intentionalPointerUnlockUntil = performance.now() + 450;
+        ignoreEscapeMenuToggleUntil = performance.now() + 450;
+        setMenuOpen(true);
+      }
+      return;
+    }
+
+    applyMaximizedChrome(false);
   }
 
   let menuReturnFocus = null;

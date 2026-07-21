@@ -131,6 +131,33 @@ async function stormState(page) {
   return page.evaluate(() => window.MrFeastFresh.getStormRunState());
 }
 
+async function hostFootPose(page) {
+  return page.evaluate(() => {
+    const host = window.MrFeastFresh.getMrFeastState();
+    return {
+      animation: host.currentAnimation,
+      moving: host.moving,
+      challengeIdlePoseTime: host.challengeIdlePoseTime,
+      qaAnimationFrozen: host.qaAnimationFrozen,
+      mixerTime: host.mixerTime,
+      leftFoot: host.liveBones?.leftFoot || null,
+      rightFoot: host.liveBones?.rightFoot || null,
+    };
+  });
+}
+
+function footPoseDistance(before, after) {
+  const distance = (left, right) => Math.hypot(
+    (right?.x || 0) - (left?.x || 0),
+    (right?.y || 0) - (left?.y || 0),
+    (right?.z || 0) - (left?.z || 0),
+  );
+  return Math.max(
+    distance(before.leftFoot, after.leftFoot),
+    distance(before.rightFoot, after.rightFoot),
+  );
+}
+
 async function briefingFacing(page) {
   return page.evaluate(() => {
     const game = JSON.parse(window.render_game_to_text());
@@ -336,6 +363,18 @@ async function run() {
     assert(storm.filmSet.cameraScale <= 0.8 && storm.filmSet.cameraDistanceFromHost >= 2.25, `the Storm Run camera must stay smaller and farther from Mr. Feast: ${JSON.stringify(storm.filmSet)}`);
     assert(storm.briefing.hostFacingBackDoor && storm.briefing.hostDistanceFromBackDoor >= 2.5, `Mr. Feast must wait away from and facing the back door: ${JSON.stringify(storm.briefing)}`);
     assert(storm.briefing?.lighting?.active === false, `the Storm Run lighting lift must stay off while the player is still reporting: ${JSON.stringify(storm.briefing?.lighting)}`);
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0));
+    const waitingPoseBefore = await hostFootPose(timerPage);
+    await timerPage.waitForTimeout(650);
+    const waitingPoseAfter = await hostFootPose(timerPage);
+    assert(
+      waitingPoseBefore.animation === "idle"
+        && waitingPoseAfter.animation === "idle"
+        && !waitingPoseBefore.moving
+        && !waitingPoseAfter.moving
+        && footPoseDistance(waitingPoseBefore, waitingPoseAfter) <= 0.002,
+      `Mr. Feast must plant both feet instead of walking in place while waiting at the back door: ${JSON.stringify({ waitingPoseBefore, waitingPoseAfter, footTravel: footPoseDistance(waitingPoseBefore, waitingPoseAfter) })}`,
+    );
     const calledPause = await timerPage.evaluate(() => {
       const before = window.MrFeastFresh.getStormRunState().reportRemaining;
       window.MrFeastFresh.setMenuOpenForQA(true);
@@ -429,6 +468,17 @@ async function run() {
     assert(angleDistance(briefingDiagnostics.player.yaw, Math.PI) <= 0.05, `the briefing camera must face Mr. Feast at the back door: ${JSON.stringify(briefingDiagnostics.player)}`);
     let faceToFace = await briefingFacing(timerPage);
     assert(faceToFace.distance >= 1.2 && faceToFace.hostForwardDot >= 0.96 && faceToFace.playerForwardDot >= 0.96, `Storm Run must stage Mr. Feast face-to-face with the held player during his briefing: ${JSON.stringify(faceToFace)}`);
+    const briefingPoseBefore = await hostFootPose(timerPage);
+    await timerPage.waitForTimeout(650);
+    const briefingPoseAfter = await hostFootPose(timerPage);
+    assert(
+      briefingPoseBefore.animation === "idle"
+        && briefingPoseAfter.animation === "idle"
+        && !briefingPoseBefore.moving
+        && !briefingPoseAfter.moving
+        && footPoseDistance(briefingPoseBefore, briefingPoseAfter) <= 0.002,
+      `Mr. Feast must keep both feet planted throughout the Storm Run rules: ${JSON.stringify({ briefingPoseBefore, briefingPoseAfter, footTravel: footPoseDistance(briefingPoseBefore, briefingPoseAfter) })}`,
+    );
     await timerPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "storm-run-rear-door-briefing-desktop.png") });
     await timerPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "storm-run-bright-intro-desktop.png") });
     await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(5));

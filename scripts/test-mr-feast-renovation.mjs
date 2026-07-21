@@ -813,8 +813,8 @@ check("20 continuous exterior facade", /const interstoryHeight\s*=\s*FLOOR\.UPPE
 check("20 continuous exterior facade", count(exteriorWalls, /w:\s*30\.34,\s*h:\s*interstoryHeight/g) === 2 && count(exteriorWalls, /h:\s*interstoryHeight,\s*d:\s*24\.34/g) === 2, "facade infill does not span both full-width and full-depth elevations");
 check("20 exterior re-entry rendering", /distanceFromHouse/.test(exteriorCulling) && /nearHouse/.test(exteriorCulling), "exterior culling does not restore the interior before a player reaches the house");
 check("20 exterior re-entry diagnostics", /interiorDetailsHidden:\s*Boolean\(interiorDetailsHidden\)/.test(diagnostics), "diagnostics cannot prove whether the interior render set is restored");
-check("20 rear re-entry thresholds", /ballroom-rear-threshold/.test(exteriorBuild) && !/kitchen-service-threshold/.test(exteriorBuild) && count(exteriorBuild, /physics\.addFixedRamp\(threshold\.x/g) === 0, "sealed kitchen wall still owns an exterior threshold or ramp");
-check("20 outer entry ramps", /front-portico-outer-entry-ramp/.test(exteriorBuild) && /ballroom-rear-outer-entry-ramp/.test(exteriorBuild) && count(exteriorBuild, /addExteriorEntryRamp\(/g) === 2, "front and rear slab edges do not both have visible walkable approach ramps");
+check("20 rear re-entry doorstep", /ballroom-rear-doorstep/.test(exteriorBuild) && !/kitchen-service-threshold/.test(exteriorBuild) && !/ballroom-raised-terrace-landing/.test(exteriorBuild), "the sealed kitchen wall still owns an exterior threshold, or the rear entry lacks its single limestone doorstep");
+check("20 rear entry has no ramp or stoop", !/ballroom-rear-outer-entry-ramp/.test(exteriorBuild) && count(exteriorBuild, /addExteriorEntryRamp\(/g) === 1 && /front-portico-outer-entry-ramp/.test(exteriorBuild), "the rear ballroom entry must be a plain step-up (front portico keeps its single approach ramp)");
 for (const route of ["frontDoorRoundTrip", "terraceDoorRoundTrip"]) {
   check("20 exterior re-entry routes", qaHooks.includes(`${route}:`), `missing exterior round-trip route ${route}`);
 }

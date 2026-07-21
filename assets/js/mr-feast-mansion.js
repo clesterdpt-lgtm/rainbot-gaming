@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260720-welcome-host-lighting-1";
+  const MANSION_RUNTIME_VERSION = "20260721-rear-entry-step-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2070,6 +2070,7 @@
       returnSpeed: 1.15,
       arrivalRadius: 0.08,
       farGroundsDistance: 16,
+      aftermathExitRequiresDistanceAndOcclusion: true,
       finishAnchor: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -14.15 }),
       playerView: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -16.7, yaw: Math.PI, pitch: -0.03 }),
       hostMark: Object.freeze({ x: -1.55, y: YARD_LAYOUT.groundY, z: -13.55, yaw: Math.PI, scale: 1 }),
@@ -2113,7 +2114,6 @@
     scareRevealLightTopology: "stable",
     scareCheckpointFlashOpacity: Object.freeze({ ring: 0.38, beacon: 0.07, guide: 0.3 }),
     checkpointOpacity: Object.freeze({ ring: 0.9, beacon: 0.18, guide: 0.94 }),
-    scareThunderCrackPeakGain: 0.78,
     scareThunderRainDuckGain: 0.16,
     scareThunderRainDuckSeconds: 1.05,
     scareThunderRollOffsets: Object.freeze({
@@ -6439,6 +6439,19 @@
       for (const mesh of this.meshes) mesh.visible = Boolean(visible);
       if (this.contactShadow) this.contactShadow.visible = Boolean(visible);
       this.setChallengeColliderEnabled(false);
+      return this.root.visible;
+    }
+
+    syncStormRunAftermathVisibility(placement) {
+      if (!placement || !this.challengeStaged || this.challengeMode !== "storm-run") return false;
+      this.root.position.set(placement.x, placement.y, placement.z);
+      this.root.rotation.y = placement.yaw;
+      this.root.scale.setScalar(Number(placement.scale) > 0 ? Number(placement.scale) : 1);
+      this.root.visible = true;
+      for (const mesh of this.meshes) mesh.visible = true;
+      if (this.contactShadow) this.contactShadow.visible = true;
+      this.setChallengeColliderEnabled(false);
+      this.root.updateMatrixWorld(true);
       return this.root.visible;
     }
 
@@ -14904,15 +14917,20 @@
       return sightRay.intersectObjects(occluderMeshes, false).length === 0;
     }
 
-    playerHasLeftAftermath() {
+    aftermathExitRequiresDistanceAndOcclusion() {
       if (!physics) return false;
-      if (["SECOND FLOOR", "BASEMENT"].includes(state.currentFloor)) return true;
-      const sceneOnScreen = this.aftermathSceneOnScreen();
-      if (!outdoorRoomNames.has(state.currentRoom)) return !sceneOnScreen;
       const player = physics.playerPosition();
       const anchor = STORM_RUN.aftermath.finishAnchor;
       const distance = Math.hypot(player.x - anchor.x, player.z - anchor.z);
-      return distance >= STORM_RUN.aftermath.farGroundsDistance && !sceneOnScreen;
+      return Boolean(
+        STORM_RUN.aftermath.aftermathExitRequiresDistanceAndOcclusion
+        && distance >= STORM_RUN.aftermath.farGroundsDistance
+        && !this.aftermathSceneOnScreen()
+      );
+    }
+
+    playerHasLeftAftermath() {
+      return this.aftermathExitRequiresDistanceAndOcclusion();
     }
 
     updateAftermath(dt) {
@@ -15089,6 +15107,9 @@
       mansionContestants?.syncStormRunCastVisibility();
       if (this.show.phase === STORM_RUN_PHASE.BRIEFING) mrFeastNpc?.syncStormRunVisibility(true);
       else if (this.show.phase === STORM_RUN_PHASE.RUNNING) mrFeastNpc?.syncStormRunVisibility(this.show.hostVisible);
+      else if (this.show.phase === STORM_RUN_PHASE.COMPLETED && this.show.aftermathActive) {
+        mrFeastNpc?.syncStormRunAftermathVisibility(STORM_RUN.aftermath.hostMark);
+      }
       this.syncScareRevealLight();
     }
 
@@ -20537,7 +20558,11 @@
     // character controller even when their visible floors line up perfectly.
     physics.addFixedBox(0, FLOOR.MAIN - 0.12, 8.9, 2.6, 0.24, 12.2, 0);
     box({ name: "main-floor-rear-center", w: 2.6, h: 0.24, d: 9.8, x: 0, y: FLOOR.MAIN - 0.12, z: -7.1, material: M.oakFloor, collider: false, cast: true, receive: true });
-    physics.addFixedBox(0, FLOOR.MAIN - 0.12, -8.65, 2.6, 0.24, 13.3, 0);
+    // The center collision deck ends at the rear wall (z=-12); the ballroom
+    // doorstep bridges the last few centimetres out to the terrace so there is
+    // no invisible floor floating over the pavers now that the raised landing
+    // and ramp are gone.
+    physics.addFixedBox(0, FLOOR.MAIN - 0.12, -7.0, 2.6, 0.24, 10.0, 0);
     floorSlab("main-floor-under-grand-stair", 0, 0.3, 2.6, 5.0, FLOOR.MAIN, M.oakFloor);
     floorSlab("main-floor-east-edge", 14.4, 0, 1.2, 24, FLOOR.MAIN, M.oakFloor);
     floorSlab("main-floor-service-front", 12.55, 7.35, 2.5, 9.3, FLOOR.MAIN, M.oakFloor);
@@ -21441,6 +21466,9 @@
   }
 
   function addFoyerConsoleDecor() {
+    // The consoles are rotated, so their 0.55m depth becomes the narrow
+    // world-x span. This inset leaves the card tray visibly inside that top.
+    const cardTrayInsetX = 0.14;
     for (const side of [-1, 1]) {
       const x = side * 3.9;
       const topY = FLOOR.MAIN + 0.852;
@@ -21449,7 +21477,7 @@
         cylinder({ name: "foyer-vase-stem", radius: 0.006, height: 0.2, segments: 6, x: x + yardJitter(i + side, 64) * 0.04, y: topY + 0.3, z: 9.32 + yardJitter(i, 65) * 0.03, rotationZ: yardJitter(i, 66) * 0.3, material: M.hedge, cast: false });
         sphere({ name: "foyer-vase-bloom", radius: 0.028, x: x + yardJitter(i + side, 64) * 0.07, y: topY + 0.4, z: 9.32 + yardJitter(i, 65) * 0.05, material: i % 2 ? M.roseIvory : M.roseRed, cast: false });
       }
-      box({ name: "foyer-console-card-tray", w: 0.2, h: 0.018, d: 0.14, x: x - side * 0.35, y: topY + 0.009, z: 9.28, rotationY: side * 0.2, material: M.brass, cast: false });
+      box({ name: "foyer-console-card-tray", w: 0.2, h: 0.018, d: 0.14, x: x - side * cardTrayInsetX, y: topY + 0.009, z: 9.28, rotationY: side * 0.2, material: M.brass, cast: false });
     }
   }
 
@@ -23680,17 +23708,18 @@
       box({ name, w, h: 0.35, d, x, y: -0.38, z, material: groundsMaterial, collider: false, cast: false, receive: true });
       physics.addFixedBox(x, -0.38, z, w, 0.35, d, 0);
     }
-    // Rear grade sits 0.205m below the finished main floor. The ballroom is now
-    // the sole rear exit, so the former kitchen sill and ramp disappear with
-    // the sealed service-door bay.
-    const rearThresholds = [
-      { name: "ballroom-rear-threshold", x: 0, width: 2.46, ramp: false },
-    ];
-    box({ name: "ballroom-raised-terrace-landing", w: 2.46, h: 0.2, d: 3.3, x: 0, y: -0.1, z: -13.65, material: M.limestone, cast: false, receive: true });
-    addExteriorEntryRamp("ballroom-rear-outer-entry-ramp", 0, -16.1, 2.46, 1.6, 1);
-    for (const threshold of rearThresholds) {
-      box({ name: threshold.name, w: threshold.width, h: 0.2, d: 1.0, x: threshold.x, y: -0.1, z: -12.15, material: M.limestone, cast: false, receive: true });
-    }
+    // Rear grade sits 0.205m below the finished main floor. The ballroom door
+    // opens onto the terrace over a single limestone doorstep — no raised
+    // landing or approach ramp. The player steps the ~0.2m up directly (well
+    // within the 0.35m character autostep) and the host descends via its
+    // authored node-height ramp segment, so neither needs the old ramp.
+    box({ name: "ballroom-rear-doorstep", w: 2.6, h: 0.2, d: 0.4, x: 0, y: -0.1, z: -12.1, material: M.limestone, cast: false, receive: true });
+    // No visible ramp or stoop: a short buried ramp carries the ~0.2m rise
+    // from the terrace to the door so the capsule player walks straight up
+    // (bare autostep does not reliably lift a rounded capsule over a step
+    // that butts the ground plane). Mr. Feast descends via his authored
+    // node-height ramp segment and does not rely on this proxy.
+    physics.addFixedRamp(0, -12.5, YARD_LAYOUT.groundY, FLOOR.MAIN, 1.0, 2.6, 1);
     // Meet the foyer oak at the front-wall datum (z=12) without extending a
     // coplanar stone face beneath it. The previous half-meter overlap caused
     // visible z-fighting between the two floor textures at the open doors.
@@ -24094,14 +24123,6 @@
         last = last * 0.965 + white * 0.035;
         data[i] = last * 2.8;
       }
-      return buffer;
-    }
-
-    makeWhiteNoiseBuffer(seconds, context = this.ctx) {
-      const length = Math.floor(context.sampleRate * seconds);
-      const buffer = context.createBuffer(1, length, context.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < length; i += 1) data[i] = Math.random() * 2 - 1;
       return buffer;
     }
 
@@ -24532,91 +24553,6 @@
       return true;
     }
 
-    scheduleCloseThunderCrack(context, destination, when, volumeMultiplier = 1) {
-      const multiplier = clamp(
-        Number(volumeMultiplier) || 1,
-        0.5,
-        STORM_RUN.scareThunderMaximumVolumeMultiplier,
-      );
-      const noise = context.createBufferSource();
-      noise.buffer = this.makeWhiteNoiseBuffer(0.48, context);
-
-      const snapHigh = context.createBiquadFilter();
-      snapHigh.type = "highpass";
-      snapHigh.frequency.setValueAtTime(520, when);
-      const snapLow = context.createBiquadFilter();
-      snapLow.type = "lowpass";
-      snapLow.frequency.setValueAtTime(7600, when);
-      const snapGain = context.createGain();
-      snapGain.gain.setValueAtTime(0.0001, when);
-      snapGain.gain.exponentialRampToValueAtTime(
-        STORM_RUN.scareThunderCrackPeakGain * multiplier,
-        when + 0.005,
-      );
-      snapGain.gain.exponentialRampToValueAtTime(0.16 * multiplier, when + 0.065);
-      snapGain.gain.exponentialRampToValueAtTime(0.0001, when + 0.3);
-      noise.connect(snapHigh).connect(snapLow).connect(snapGain).connect(destination);
-
-      const bodyHigh = context.createBiquadFilter();
-      bodyHigh.type = "highpass";
-      bodyHigh.frequency.setValueAtTime(125, when);
-      const bodyLow = context.createBiquadFilter();
-      bodyLow.type = "lowpass";
-      bodyLow.frequency.setValueAtTime(1900, when);
-      const bodyGain = context.createGain();
-      bodyGain.gain.setValueAtTime(0.0001, when);
-      bodyGain.gain.exponentialRampToValueAtTime(0.42 * multiplier, when + 0.012);
-      bodyGain.gain.exponentialRampToValueAtTime(0.0001, when + 0.46);
-      noise.connect(bodyHigh).connect(bodyLow).connect(bodyGain).connect(destination);
-
-      this.scheduleTone(context, destination, 185, 0.36, 0.2 * multiplier, "triangle", when);
-      noise.start(when);
-      noise.stop(when + 0.48);
-      return { layerCount: 3, noiseProfile: "white", peakGain: STORM_RUN.scareThunderCrackPeakGain * multiplier };
-    }
-
-    async measureCloseThunderForQA() {
-      const OfflineAudioContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-      if (!OfflineAudioContext) return { available: false, reason: "offline-audio-unavailable" };
-      const sampleRate = 44100;
-      const durationSeconds = 0.7;
-      const context = new OfflineAudioContext(1, Math.ceil(sampleRate * durationSeconds), sampleRate);
-      const master = context.createGain();
-      master.gain.value = 0.58;
-      master.connect(context.destination);
-      const bus = this.createCloseThunderBus(context, master);
-      const startSeconds = STORM_RUN.scareThunderDelaySeconds;
-      const graph = this.scheduleCloseThunderCrack(
-        context,
-        bus,
-        startSeconds,
-        STORM_RUN.scareThunderVolumeMultiplier,
-      );
-      const rendered = await context.startRendering();
-      const data = rendered.getChannelData(0);
-      let peak = 0;
-      let first100Energy = 0;
-      let onsetSample = -1;
-      const first100Samples = Math.min(data.length, Math.floor(sampleRate * 0.1));
-      for (let index = 0; index < data.length; index += 1) {
-        const value = Math.abs(data[index]);
-        peak = Math.max(peak, value);
-        if (index < first100Samples) first100Energy += data[index] * data[index];
-        if (onsetSample < 0 && value >= 0.01) onsetSample = index;
-      }
-      const first100Rms = Math.sqrt(first100Energy / Math.max(1, first100Samples));
-      const toDb = (value) => value > 0 ? 20 * Math.log10(value) : -120;
-      return {
-        available: true,
-        onsetMs: Number(((Math.max(0, onsetSample) / sampleRate) * 1000).toFixed(2)),
-        peakDbfs: Number(toDb(peak).toFixed(2)),
-        first100RmsDbfs: Number(toDb(first100Rms).toFixed(2)),
-        rainDuckDb: Number(toDb(STORM_RUN.scareThunderRainDuckGain).toFixed(2)),
-        layerCount: graph.layerCount,
-        noiseProfile: graph.noiseProfile,
-      };
-    }
-
     thunder(delay = 0, options = {}) {
       const safeDelay = Math.max(0, Number(delay) || 0);
       const volumeMultiplier = clamp(
@@ -24646,9 +24582,11 @@
       const outputBus = closeStrike && this.closeThunderBus ? this.closeThunderBus : this.master;
       this.thunderState.lastScheduledAt = strikeTime;
       if (closeStrike) {
-        const graph = this.scheduleCloseThunderCrack(this.ctx, outputBus, strikeTime, volumeMultiplier);
+        // The recorded roll already has the right close-bolt character at the
+        // authored level. Keep the rain separation, but do not precede it
+        // with the white-noise crack that read as static on device speakers.
         this.duckRainForCloseStrike(strikeTime);
-        this.thunderState.closeStrikeLayerCount = graph.layerCount;
+        this.thunderState.closeStrikeLayerCount = 0;
         this.thunderState.closeStrikeCount += 1;
         this.markCue("thunderClose");
       }
@@ -24810,8 +24748,7 @@
         pendingCloseStrikeCount: this.pendingCloseThunder.length,
         queuedCloseStrikeCount: this.thunderState.queuedCloseStrikeCount,
         resumedCloseStrikeCount: this.thunderState.resumedCloseStrikeCount,
-        crackNoiseProfile: "white",
-        crackPeakGain: STORM_RUN.scareThunderCrackPeakGain,
+        crackNoiseProfile: "recorded-only",
         rainDuckGain: STORM_RUN.scareThunderRainDuckGain,
       };
     }
@@ -27143,11 +27080,6 @@
     });
     window.MrFeastFresh.getDiagnostics = getDiagnostics;
     window.MrFeastFresh.getAudioStateForQA = () => audioSystem ? audioSystem.getDiagnostics() : null;
-    window.MrFeastFresh.measureCloseThunderForQA = () => (
-      state.qa && audioSystem
-        ? audioSystem.measureCloseThunderForQA()
-        : Promise.resolve({ available: false, reason: "qa-only" })
-    );
     window.MrFeastFresh.suspendAudioForQA = () => (
       state.qa && audioSystem
         ? audioSystem.suspendForQA()

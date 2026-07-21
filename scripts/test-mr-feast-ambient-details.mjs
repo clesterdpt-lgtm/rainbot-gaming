@@ -135,7 +135,12 @@ check("10 uniform basement fixtures", /const utilityLook = style === "basement" 
 check("10 uniform basement fixtures", /if \(utilityLook\) \{/.test(fixtureBuilder) && /ring\.castShadow\s*=\s*style\s*===\s*"atrium"/.test(fixtureBuilder), "the utility look must swap only the visible geometry, leaving ring shadows and emitters authored");
 check("10 mantel decor", count(mainFurnishings + upperFurnishings, /addMantelDecor\(/g) >= 3, "all three fireplaces should carry mantel decor");
 check("10 vanity sets", count(mansion, /addVanityCounterSet\(/g) >= 3, "both bathroom vanities need counter sets");
-check("10 foyer consoles", /addFoyerConsoleDecor\(\);/.test(mainFurnishings) && /foyer-console-vase/.test(section("function addFoyerConsoleDecor()", "\n  function ")), "the foyer console tables are still bare");
+const foyerConsoleBuilder = section("function addFoyerConsoleDecor()", "\n  function ");
+check("10 foyer consoles", /addFoyerConsoleDecor\(\);/.test(mainFurnishings) && /foyer-console-vase/.test(foyerConsoleBuilder), "the foyer console tables are still bare");
+const foyerConsoleVase = foyerConsoleBuilder.match(/cylinder\(\{ name: "foyer-console-vase",[^}]+\}\);/s)?.[0] || "";
+check("10 foyer console vase placement", /const x = side \* 3\.9;/.test(foyerConsoleBuilder) && /\bx,\s*y:\s*topY \+ 0\.12/.test(foyerConsoleVase), "each foyer vase must use its console table's left/right x coordinate and rest on the tabletop");
+const foyerConsoleCardTray = foyerConsoleBuilder.match(/box\(\{ name: "foyer-console-card-tray",[^}]+\}\);/s)?.[0] || "";
+check("10 foyer console card trays stay on top", /const cardTrayInsetX = 0\.14;/.test(foyerConsoleBuilder) && /x: x - side \* cardTrayInsetX/.test(foyerConsoleCardTray) && /y: topY \+ 0\.009/.test(foyerConsoleCardTray), "each foyer card tray must stay inside the rotated 0.55m-deep console top, with a visible tabletop margin");
 const pipeBuilder = section("function addRearCorridorServicePipes()", "\n  function ");
 check("10 rear corridor pipes", /addRearCorridorServicePipes\(\);/.test(basementFurnishings) && /rear-corridor-pipe-bracket/.test(pipeBuilder) && !/physics\.addFixedBox/.test(pipeBuilder), "the rear cross-corridor ceiling line is missing or blocks the chase lane");
 check("10 rear terrace urns", /rear-terrace-planter-urn/.test(plantingBuilder) && /portico-entry-mat/.test(plantingBuilder), "the rear terrace urns or portico entry mat are missing (names must keep culling-safe prefixes)");

@@ -50,9 +50,9 @@ async function assertSourceContract() {
   assert(source.includes("scareFacingMinimumDot"), "Storm Run apparitions must wait until the player faces their authored direction");
   assert(source.includes("scareFacingScreenMargin"), "Storm Run apparitions must be inside the actual camera view, not merely on the same compass heading");
   assert(source.includes("scareCandidateZoneId"), "crossing an apparition trigger must arm it until the player turns during the authored route window");
-  assert(source.includes("makeWhiteNoiseBuffer"), "the close thunder crack must use broadband white noise instead of the rain's smoothed brown noise");
+  assert(!source.includes("makeWhiteNoiseBuffer"), "the Storm Run bolt must not add a static-like white-noise crack ahead of the recorded thunder");
   assert(source.includes("duckRainForCloseStrike"), "the close thunder crack must briefly duck the outdoor rain so it remains audible on phones");
-  assert(source.includes("measureCloseThunderForQA"), "the close thunder mix needs an offline loudness probe rather than counter-only QA");
+  assert(!source.includes("scheduleCloseThunderCrack"), "the Storm Run bolt must use the recorded thunder alone, without a procedural static layer");
   assert(source.includes("queueCloseThunder"), "a temporarily interrupted mobile audio context must queue the close bolt for the next trusted gesture");
   assert(source.includes("scareFlashStrengthMultiplier"), "Storm Run apparitions must use a stronger flash than ambient lightning");
   assert(source.includes('scareRevealLightTopology: "stable"'), "the apparition fill must stay shader-resident instead of recompiling yard materials on the first bolt");
@@ -68,6 +68,8 @@ async function assertSourceContract() {
   assert(source.includes('eliminatedAction: "cover-face"'), "Storm Run must author Mara's hands-over-face loss separately from Kip's Feast Says pose");
   assert(source.includes('"storm-run-aftermath"'), "Storm Run must keep Mara and Juniper staged during the finish aftermath");
   assert(source.includes("completeStormRunWithAftermathForQA"), "Storm Run must expose a focused QA path that preserves its witnessed aftermath");
+  assert(source.includes("syncStormRunAftermathVisibility"), "the witnessed Storm Run ending must continuously keep Mr. Feast visible at the back door");
+  assert(source.includes("aftermathExitRequiresDistanceAndOcclusion"), "the Storm Run ending must require both distance and an occluded view before reset");
   assert(source.includes("suspendThreatsForCompetition"), "a live-event call must suspend an active pursuit or alarm");
   assert(html.includes('id="mansion-storm-run"'), "Storm Run must have a dedicated HUD region");
   assert(html.includes('id="mansion-storm-run" role="region" aria-label="Storm Run minimal status" aria-live="polite" aria-atomic="true" data-guidance="speech"'), "Storm Run must ship a speech-led minimal status strip");
@@ -544,10 +546,6 @@ async function run() {
     assert(audioSecondCheckpoint.accepted === true, `audio probe checkpoint two should unlock the later first scare: ${JSON.stringify(audioSecondCheckpoint)}`);
     audioAfter = await audioPage.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
     assert((audioAfter.cueCounts.stormCheckpoint || 0) - checkpointCueBefore === 2, `both collected setup checkpoints must emit their audible progress chimes: ${JSON.stringify(audioAfter.cueCounts)}`);
-    const closeThunderMeasure = await audioPage.evaluate(() => window.MrFeastFresh.measureCloseThunderForQA());
-    assert(closeThunderMeasure.available && closeThunderMeasure.noiseProfile === "white" && closeThunderMeasure.layerCount >= 3, `the QA probe must render the same broadband multilayer close crack used live: ${JSON.stringify(closeThunderMeasure)}`);
-    assert(closeThunderMeasure.onsetMs <= 30 && closeThunderMeasure.peakDbfs >= -10 && closeThunderMeasure.first100RmsDbfs >= -24, `the close crack must be immediate and materially louder than the outdoor rain bed: ${JSON.stringify(closeThunderMeasure)}`);
-    assert(closeThunderMeasure.rainDuckDb <= -15, `the louder close bolt must create at least 15 dB of rain separation: ${JSON.stringify(closeThunderMeasure)}`);
     const scareAudioBefore = audioAfter;
     await audioPage.evaluate(() => window.MrFeastFresh.placePlayerAtStormScareTriggerForQA(0, false));
     await audioPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.05));
@@ -575,11 +573,11 @@ async function run() {
     await audioPage.waitForTimeout(80);
     audioAfter = await audioPage.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
     assert((audioAfter.cueCounts.stormScare || 0) - (scareAudioBefore.cueCounts.stormScare || 0) === 1, `the tree-line apparition must retain its dedicated scare sting across an audio interruption: ${JSON.stringify(audioAfter.cueCounts)}`);
-    assert((audioAfter.cueCounts.thunderClose || 0) - (scareAudioBefore.cueCounts.thunderClose || 0) === 1, `the apparition must emit the close-bolt crack layer: ${JSON.stringify(audioAfter.cueCounts)}`);
+    assert((audioAfter.cueCounts.thunderClose || 0) - (scareAudioBefore.cueCounts.thunderClose || 0) === 1, `the apparition must emit the close-bolt recorded profile: ${JSON.stringify(audioAfter.cueCounts)}`);
     assert((audioAfter.cueCounts.thunder || 0) - (scareAudioBefore.cueCounts.thunder || 0) === 1, `the apparition must also emit the recorded thunder layer: ${JSON.stringify(audioAfter.cueCounts)}`);
-    assert(audioAfter.thunder.playCount === scareAudioBefore.thunder.playCount + 1 && audioAfter.thunder.closeStrikeCount === scareAudioBefore.thunder.closeStrikeCount + 1, `the unmuted browser must actually schedule both apparition thunder layers: before=${JSON.stringify(scareAudioBefore.thunder)} after=${JSON.stringify(audioAfter.thunder)}`);
+    assert(audioAfter.thunder.playCount === scareAudioBefore.thunder.playCount + 1 && audioAfter.thunder.closeStrikeCount === scareAudioBefore.thunder.closeStrikeCount + 1, `the unmuted browser must schedule the apparition's recorded close-thunder profile: before=${JSON.stringify(scareAudioBefore.thunder)} after=${JSON.stringify(audioAfter.thunder)}`);
     assert(audioAfter.thunder.lastProfile === "storm-run" && audioAfter.thunder.lastVolumeMultiplier >= 2 && audioAfter.thunder.lastDelay <= 0.05, `the apparition must use the louder immediate Storm Run mix: ${JSON.stringify(audioAfter.thunder)}`);
-    assert(audioAfter.thunder.lastContextStateAtPlayback === "running" && audioAfter.thunder.closeStrikeLayerCount >= 3 && audioAfter.thunder.crackNoiseProfile === "white", `the live scare must create the broadband crack graph in a running context: ${JSON.stringify(audioAfter.thunder)}`);
+    assert(audioAfter.thunder.lastContextStateAtPlayback === "running" && audioAfter.thunder.closeStrikeLayerCount === 0 && audioAfter.thunder.crackNoiseProfile === "recorded-only", `the live scare must preserve the loud recorded thunder without adding a static-like procedural crack: ${JSON.stringify(audioAfter.thunder)}`);
     assert(audioAfter.thunder.queuedCloseStrikeCount === scareAudioBefore.thunder.queuedCloseStrikeCount + 1 && audioAfter.thunder.resumedCloseStrikeCount === scareAudioBefore.thunder.resumedCloseStrikeCount + 1, `the interrupted close bolt must replay exactly once after the next trusted gesture: ${JSON.stringify(audioAfter.thunder)}`);
     assert(audioAfter.thunder.rainDuckCount === scareAudioBefore.thunder.rainDuckCount + 1 && audioAfter.rain.duckCount === audioAfter.thunder.rainDuckCount, `the close crack must duck the masking rain exactly once: ${JSON.stringify({ thunder: audioAfter.thunder, rain: audioAfter.rain })}`);
     assert(audioAfter.rain.duckActive && audioAfter.rain.duckTargetGain <= 0.18 && audioAfter.rain.duckGain < 0.75, `the rain bus must be in its authored deeper-duck window during the louder close crack: ${JSON.stringify(audioAfter.rain)}`);
@@ -665,6 +663,13 @@ async function run() {
     const returnedJuniper = aftermathDiagnostics.contestants.entries.find((entry) => entry.id === "juniper-cross");
     assert(!returnedJuniper?.aftermathReturn && !returnedJuniper?.challengeStaged && returnedJuniper?.position.y >= 4.4 && returnedJuniper?.position.x > 5, `Juniper must physically return to her Reading Room routine: ${JSON.stringify(returnedJuniper)}`);
     assert(aftermathDiagnostics.stormRun.aftermath.active && aftermathDiagnostics.stormRun.aftermath.stage === "waiting-for-player-exit", `Mara must remain while the player stays beside the finish: ${JSON.stringify(aftermathDiagnostics.stormRun.aftermath)}`);
+
+    await winPage.evaluate(() => window.MrFeastFresh.teleport("rearLounge"));
+    await winPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.2));
+    aftermathDiagnostics = await diagnostics(winPage);
+    const hostJustInsideBackDoor = await winPage.evaluate(() => window.MrFeastFresh.getMrFeastState());
+    assert(aftermathDiagnostics.stormRun.aftermath.active && !aftermathDiagnostics.stormRun.aftermath.playerHasLeft, `walking just inside the back door must not dismiss the witnessed ending: ${JSON.stringify(aftermathDiagnostics.stormRun.aftermath)}`);
+    assert(hostJustInsideBackDoor.challengeStaged && hostJustInsideBackDoor.modelVisible, `Mr. Feast must stay visibly staged at the back door while the nearby player is indoors: ${JSON.stringify(hostJustInsideBackDoor)}`);
 
     await winPage.evaluate(() => window.MrFeastFresh.teleport("readingRoom"));
     await winPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.2));

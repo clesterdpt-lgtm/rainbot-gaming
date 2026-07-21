@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260720-storm-run-scare-timing-performance-1";
+  const MANSION_RUNTIME_VERSION = "20260720-welcome-host-lighting-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1562,7 +1562,10 @@
   });
   const MR_FEAST_OPENING_WELCOME = Object.freeze({
     playerPosition: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 10.2, yaw: 0, pitch: 0 }),
-    hostPosition: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 8.15, yaw: 0 }),
+    // Moved back (further from the storm-dark front door, toward the foyer
+    // grand chandelier's downlight centered at x=0,z=7.7) so his face reads
+    // in warm interior light instead of near the dim doorway threshold.
+    hostPosition: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 7.9, yaw: 0 }),
     frontDoorZ: 12,
     resumeWaypointId: "main-foyer-west",
     initialDelaySeconds: 1.15,

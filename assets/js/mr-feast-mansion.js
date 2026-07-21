@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260721-rear-entry-step-1";
+  const MANSION_RUNTIME_VERSION = "20260721-storm-tree-lurk-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1608,6 +1608,7 @@
   const FEAST_SAYS = Object.freeze({
     instructionDelivery: "speech",
     intermissionSeconds: 10 * 60,
+    reportDeadlineSeconds: 5 * 60,
     maximumTimerStepSeconds: 0.5,
     briefingSeconds: 11,
     responseSeconds: 7.5,
@@ -1627,7 +1628,7 @@
     npcResponseDistance: 0.52,
     npcCrouchDepth: 0.085,
     npcResponseSeconds: 0.62,
-    callLine: "Contestants, report to the Ballroom. Feast Says begins now.",
+    callLine: "Contestants, report to the Ballroom set. You have five minutes to check in with Mr. Feast.",
     briefingLine: "Listen carefully. Only follow an instruction if it begins with ‘Feast says.’ Move or crouch when ordered. If I ask you to point, look at your choice and press E. The contestant with the lowest score is eliminated.",
     verdictLines: Object.freeze({
       correct: "Correct.",
@@ -2048,11 +2049,12 @@
   const STORM_RUN = Object.freeze({
     instructionDelivery: "visual-checkpoints",
     intermissionSeconds: 10 * 60,
+    reportDeadlineSeconds: 5 * 60,
     maximumTimerStepSeconds: 0.5,
     briefingSeconds: 14,
     briefingSpeechSeconds: 10.8,
     countdownSeconds: 3,
-    callLine: "Contestants, report to the back door. Storm Run is next.",
+    callLine: "Contestants, report to the back-door set. You have five minutes to check in with Mr. Feast.",
     briefingLine: "Welcome to Storm Run. Hit twelve blue checkpoints in order. Find the next glowing marker and keep moving. Last place is eliminated.",
     countdownLines: Object.freeze({ 3: "Three.", 2: "Two.", 1: "One." }),
     startLine: "Run!",
@@ -2157,7 +2159,7 @@
         completedCheckpointMinimum: 2,
         completedCheckpointMaximum: 3,
         trigger: Object.freeze({ id: "garden-front-approach", x: -17.2, z: 9.5, radius: 2.4 }),
-        reveal: Object.freeze({ x: -24.25, y: YARD_LAYOUT.groundY, z: 29, yaw: 2.919, scale: 1.05, fillScale: 3.2, darkSpot: true }),
+        reveal: Object.freeze({ x: -19.1, y: YARD_LAYOUT.groundY, z: 29.35, yaw: 3.046, scale: 1.05, fillScale: 3.2, darkSpot: true }),
       }),
       Object.freeze({
         id: "northeast-tree-line",
@@ -2165,7 +2167,7 @@
         completedCheckpointMinimum: 4,
         completedCheckpointMaximum: 5,
         trigger: Object.freeze({ id: "front-door-crossing", x: -2, z: 16.3, radius: 2.6 }),
-        reveal: Object.freeze({ x: 26.5, y: YARD_LAYOUT.groundY, z: 26, yaw: -1.818, scale: 1.05, fillScale: 3.8, darkSpot: true }),
+        reveal: Object.freeze({ x: 25.85, y: YARD_LAYOUT.groundY, z: 27.95, yaw: -1.967, scale: 1.05, fillScale: 3.8, darkSpot: true }),
       }),
       Object.freeze({
         id: "maze-turn",
@@ -2212,6 +2214,31 @@
       Object.freeze({ x: -14.5, z: -18.85 }),
       Object.freeze({ x: -12.8, z: -18.85, checkpointIndex: 11 }),
     ]),
+  });
+  const COMPETITION_FILM_SET = Object.freeze({
+    camera: Object.freeze({
+      x: -1.35,
+      audienceZ: 0.4,
+      tripodFeet: Object.freeze([
+        Object.freeze([-0.6, 0.42]),
+        Object.freeze([0.6, 0.42]),
+        Object.freeze([0, -0.62]),
+      ]),
+    }),
+    lights: Object.freeze({
+      xOffsets: Object.freeze([-1.75, 1.75]),
+      audienceZ: 0.15,
+    }),
+    boom: Object.freeze({
+      start: Object.freeze({ x: 2.15, y: 2.28, audienceZ: 1.45 }),
+      end: Object.freeze({ x: 0.25, y: 2.72, audienceZ: 0.05 }),
+      microphone: Object.freeze({ x: 0.18, y: 2.48, oppositeAudienceZ: 0.12 }),
+    }),
+    cable: Object.freeze({
+      start: Object.freeze({ x: -1.7, audienceZ: 1 }),
+      end: Object.freeze({ x: 2.1, audienceZ: 1.2 }),
+    }),
+    hostHitbox: Object.freeze({ width: 1.08, height: 2.18, depth: 1.08 }),
   });
   // Six evenly distributed pools replace the facade spots only while the
   // player is in the maze or on its west approach. This preserves the exact
@@ -2414,7 +2441,7 @@
     yardMazeSouthGoal: [28, YARD_LAYOUT.groundY, -30.25, 0],
     yardMazeSouthWallExterior: [26.5, YARD_LAYOUT.groundY, -33.0, Math.PI, -0.18],
     yardRearCirculationA: [0, YARD_LAYOUT.groundY, -15.6, Math.PI],
-    stormRunStaging: [0, YARD_LAYOUT.groundY, -12.9, 0, -0.26],
+    stormRunStaging: [0, YARD_LAYOUT.groundY, -12.9, 0, -0.18],
     yardRearCirculationB: [14.0, YARD_LAYOUT.groundY, HEDGE_MAZE_REAR_ENTRANCE.z, Math.PI],
     yardGardenApproach: [-17.0, YARD_LAYOUT.groundY, YARD_LAYOUT.garden.rearJunctionZ, Math.PI / 2],
     yardExteriorSwitch: [1.72, YARD_LAYOUT.groundY, 13.65, 0, -0.26],
@@ -2466,6 +2493,7 @@
       triggerClueId: null,
       callCount: 0,
       intermissionElapsed: 0,
+      reportRemaining: 0,
       roundIndex: -1,
       phaseRemaining: 0,
       playerScore: 0,
@@ -2492,6 +2520,7 @@
       triggerClueId: null,
       callCount: 0,
       intermissionElapsed: 0,
+      reportRemaining: 0,
       briefingRemaining: 0,
       countdownLastSecond: null,
       countdownSequence: [],
@@ -2740,6 +2769,7 @@
     root: null,
     reportRoot: null,
     reportHitbox: null,
+    filmSet: null,
     marks: [],
     actionPads: [],
   };
@@ -2747,6 +2777,7 @@
     root: null,
     reportRoot: null,
     reportHitbox: null,
+    filmSet: null,
     checkpoints: [],
     revealLight: null,
   };
@@ -4089,9 +4120,14 @@
     setChallengeInteractionsEnabled(enabled) {
       const targets = [this.talkHitbox, this.model].filter(Boolean);
       if (!enabled) {
-        this.challengeInteractionSnapshots = targets
-          .map((target) => ({ target, interaction: target.userData?.interaction || null }))
-          .filter((entry) => entry.interaction);
+        const snapshottedTargets = new Set(this.challengeInteractionSnapshots.map((entry) => entry.target));
+        for (const target of targets) {
+          const interaction = target.userData?.interaction || null;
+          if (interaction && !snapshottedTargets.has(target)) {
+            this.challengeInteractionSnapshots.push({ target, interaction });
+            snapshottedTargets.add(target);
+          }
+        }
         for (const target of targets) {
           let index = interactableMeshes.indexOf(target);
           while (index >= 0) {
@@ -13280,6 +13316,17 @@
     }
   }
 
+  function competitionReportClockBlocked() {
+    return Boolean(
+      state.menuOpen
+      || state.journalOpen
+      || state.workroom.keypadOpen
+      || state.readableBooks.open
+      || state.contestant13.actionInProgress
+      || state.gameOver
+    );
+  }
+
   class FeastSaysSystem {
     constructor() {
       this.show = state.feastSays;
@@ -13294,7 +13341,7 @@
       this.pointRaycaster.far = FEAST_SAYS.pointTargetRange;
       this.transitionTable = Object.freeze({
         [FEAST_SAYS_PHASE.DORMANT]: Object.freeze([FEAST_SAYS_PHASE.CALLED, FEAST_SAYS_PHASE.COMPLETED]),
-        [FEAST_SAYS_PHASE.CALLED]: Object.freeze([FEAST_SAYS_PHASE.BRIEFING, FEAST_SAYS_PHASE.DORMANT, FEAST_SAYS_PHASE.COMPLETED]),
+        [FEAST_SAYS_PHASE.CALLED]: Object.freeze([FEAST_SAYS_PHASE.BRIEFING, FEAST_SAYS_PHASE.FAILED, FEAST_SAYS_PHASE.DORMANT, FEAST_SAYS_PHASE.COMPLETED]),
         [FEAST_SAYS_PHASE.BRIEFING]: Object.freeze([FEAST_SAYS_PHASE.COMMAND, FEAST_SAYS_PHASE.CALLED]),
         [FEAST_SAYS_PHASE.COMMAND]: Object.freeze([FEAST_SAYS_PHASE.RESULT, FEAST_SAYS_PHASE.CALLED]),
         [FEAST_SAYS_PHASE.RESULT]: Object.freeze([FEAST_SAYS_PHASE.COMMAND, FEAST_SAYS_PHASE.COMPLETED, FEAST_SAYS_PHASE.FAILED, FEAST_SAYS_PHASE.CALLED]),
@@ -13302,9 +13349,9 @@
         [FEAST_SAYS_PHASE.FAILED]: Object.freeze([FEAST_SAYS_PHASE.CALLED, FEAST_SAYS_PHASE.DORMANT]),
       });
       this.reportInteraction = {
-        type: "feast-says-report",
-        id: "feast-says-report-station",
-        getLabel: () => this.castReady() ? "Report for Feast Says" : "Wait for the contestants",
+        type: "feast-says-host-start",
+        id: "feast-says-host-start",
+        getLabel: () => this.castReady() ? "Start Feast Says with Mr. Feast" : "Wait with Mr. Feast for the contestants",
         activate: () => this.reportToBallroom(),
       };
       this.pointInteraction = {
@@ -13390,6 +13437,52 @@
       );
     }
 
+    stageHostForCall() {
+      if (this.show.phase !== FEAST_SAYS_PHASE.CALLED || !mrFeastNpc) return false;
+      if (!mrFeastNpc.challengeStaged || mrFeastNpc.challengeMode !== "feast-says") {
+        mrFeastNpc.stageChallenge(FEAST_SAYS.hostMark, {
+          mode: "feast-says",
+          zone: "BALLROOM",
+          level: MR_FEAST_LEVEL.MAIN,
+          responseNodeId: "main-ballroom-south",
+          colliderEnabled: true,
+          interactionsEnabled: false,
+          visible: true,
+        });
+      } else {
+        mrFeastNpc.root.position.set(FEAST_SAYS.hostMark.x, FEAST_SAYS.hostMark.y, FEAST_SAYS.hostMark.z);
+        mrFeastNpc.root.rotation.y = FEAST_SAYS.hostMark.yaw;
+        mrFeastNpc.root.scale.setScalar(Number(FEAST_SAYS.hostMark.scale) > 0 ? Number(FEAST_SAYS.hostMark.scale) : 1);
+        mrFeastNpc.root.visible = true;
+        for (const mesh of mrFeastNpc.meshes) mesh.visible = true;
+        if (mrFeastNpc.contactShadow) mrFeastNpc.contactShadow.visible = true;
+        mrFeastNpc.setChallengeColliderEnabled(true);
+        mrFeastNpc.setChallengeInteractionsEnabled(false);
+        mrFeastNpc.root.updateMatrixWorld(true);
+      }
+      return Boolean(mrFeastNpc.challengeStaged && mrFeastNpc.challengeMode === "feast-says");
+    }
+
+    canCountReportDeadline() {
+      return Boolean(
+        state.started
+        && this.show.phase === FEAST_SAYS_PHASE.CALLED
+        && this.castReady()
+        && !competitionReportClockBlocked()
+      );
+    }
+
+    failReportDeadline() {
+      if (this.show.phase !== FEAST_SAYS_PHASE.CALLED) return false;
+      this.show.reportRemaining = 0;
+      this.show.eliminatedContestantId = "player";
+      this.transition(FEAST_SAYS_PHASE.FAILED, "five-minute-report-deadline-expired");
+      this.releaseProduction(null);
+      triggerMansionGameOver({ reason: "feast-says-no-show", kind: "feast-says" });
+      this.syncPresentation();
+      return true;
+    }
+
     call(reason = "timer", clueId = null) {
       if (this.show.phase !== FEAST_SAYS_PHASE.DORMANT) {
         return { called: false, reason: "already-called", phase: this.show.phase };
@@ -13398,6 +13491,7 @@
       this.show.triggerClueId = clueId;
       this.show.callCount += 1;
       this.show.phaseRemaining = 0;
+      this.show.reportRemaining = FEAST_SAYS.reportDeadlineSeconds;
       this.show.commandResult = null;
       this.transition(FEAST_SAYS_PHASE.CALLED, `call:${this.show.triggerReason}`);
       mrFeastNpc?.suspendThreatsForCompetition();
@@ -13421,7 +13515,12 @@
       );
       audioSystem?.ping(392, 0.35, 0.055, "square");
       audioSystem?.ping(587, 0.46, 0.04, "sine");
-      return { called: true, reason: this.show.triggerReason, clueId };
+      return {
+        called: true,
+        reason: this.show.triggerReason,
+        clueId,
+        reportRemaining: this.show.reportRemaining,
+      };
     }
 
     noteClueDiscovered(clueId) {
@@ -13455,6 +13554,7 @@
       if (state.readableBooks.open) readableBookSystem?.close({ restoreFocus: false });
       contestant13Quest?.hideDiscovery();
       cameraSecurity?.suspendForCompetition();
+      this.show.reportRemaining = 0;
       clearMovementInput();
       state.movement.crouched = false;
       state.movement.sprinting = false;
@@ -13949,6 +14049,18 @@
         this.syncPresentation();
         return;
       }
+      if (this.show.phase === FEAST_SAYS_PHASE.CALLED) {
+        if (this.canCountReportDeadline()) {
+          const deadlineStep = this.qaStepping ? step : Math.min(step, FEAST_SAYS.maximumTimerStepSeconds);
+          this.show.reportRemaining = Math.max(0, this.show.reportRemaining - deadlineStep);
+          if (this.show.reportRemaining <= 0) {
+            this.failReportDeadline();
+            return;
+          }
+        }
+        this.syncPresentation();
+        return;
+      }
       if (![FEAST_SAYS_PHASE.BRIEFING, FEAST_SAYS_PHASE.COMMAND, FEAST_SAYS_PHASE.RESULT].includes(this.show.phase)) {
         this.syncHud();
         return;
@@ -13986,9 +14098,11 @@
         FEAST_SAYS_PHASE.RESULT,
       ].includes(this.show.phase);
       feastSaysScene.root.visible = productionVisible;
+      if (feastSaysScene.reportRoot) feastSaysScene.reportRoot.visible = this.show.phase === FEAST_SAYS_PHASE.CALLED;
       feastSaysScene.actionPads.forEach((pad) => {
         pad.visible = this.show.phase === FEAST_SAYS_PHASE.COMMAND;
       });
+      if (this.show.phase === FEAST_SAYS_PHASE.CALLED) this.stageHostForCall();
       this.setStationInteractive(this.show.phase === FEAST_SAYS_PHASE.CALLED);
     }
 
@@ -14059,7 +14173,7 @@
         setText(dom.feastEyebrow, "Feast Says");
         setText(dom.feastRound, this.castReady() ? "Called" : "Holding for cast");
         setText(dom.feastCommand, "");
-        setText(dom.feastTimer, "LIVE");
+        setText(dom.feastTimer, this.formatClock(this.show.reportRemaining));
       } else if (phase === FEAST_SAYS_PHASE.BRIEFING) {
         setText(dom.feastEyebrow, "Feast Says");
         setText(dom.feastRound, "Rules");
@@ -14107,6 +14221,11 @@
         callCount: this.show.callCount,
         callAfterSeconds: FEAST_SAYS.intermissionSeconds,
         intermissionElapsed: this.show.intermissionElapsed,
+        reportRemaining: transient
+          ? FEAST_SAYS.reportDeadlineSeconds
+          : this.show.phase === FEAST_SAYS_PHASE.CALLED
+            ? this.show.reportRemaining
+            : 0,
         playerScore: transient ? 0 : this.show.playerScore,
         strikes: transient ? 0 : this.show.strikes,
         eliminatedContestantId: this.show.eliminatedContestantId,
@@ -14164,6 +14283,14 @@
       this.show.triggerClueId = source.triggerClueId || null;
       this.show.callCount = clamp(Number(source.callCount) || (restoredPhase === FEAST_SAYS_PHASE.DORMANT ? 0 : 1), 0, 1);
       this.show.intermissionElapsed = clamp(Number(source.intermissionElapsed) || 0, 0, FEAST_SAYS.intermissionSeconds);
+      const restoredReportRemaining = Number(source.reportRemaining);
+      this.show.reportRemaining = restoredPhase === FEAST_SAYS_PHASE.CALLED
+        ? requestedPhase === FEAST_SAYS_PHASE.CALLED
+          && Number.isFinite(restoredReportRemaining)
+          && restoredReportRemaining > 0
+          ? clamp(restoredReportRemaining, 0, FEAST_SAYS.reportDeadlineSeconds)
+          : FEAST_SAYS.reportDeadlineSeconds
+        : 0;
       this.show.roundIndex = -1;
       this.show.phaseRemaining = 0;
       this.show.playerScore = restoredPhase === FEAST_SAYS_PHASE.CALLED
@@ -14286,6 +14413,14 @@
         callAfterSeconds: FEAST_SAYS.intermissionSeconds,
         intermissionElapsed: Number(this.show.intermissionElapsed.toFixed(3)),
         secondsUntilCall: Number(Math.max(0, FEAST_SAYS.intermissionSeconds - this.show.intermissionElapsed).toFixed(3)),
+        reportDeadlineSeconds: FEAST_SAYS.reportDeadlineSeconds,
+        reportRemaining: Number(this.show.reportRemaining.toFixed(3)),
+        hostWaiting: Boolean(
+          this.show.phase === FEAST_SAYS_PHASE.CALLED
+          && mrFeastNpc?.challengeStaged
+          && mrFeastNpc.challengeMode === "feast-says"
+          && mrFeastNpc.root?.visible
+        ),
         clueProgressLocked: this.blocksInvestigation(),
         saveAllowed: this.show.phase !== FEAST_SAYS_PHASE.FAILED,
         staged: this.show.staged,
@@ -14305,6 +14440,13 @@
             y: Number(feastSaysScene.reportRoot.position.y.toFixed(3)),
             z: Number(feastSaysScene.reportRoot.position.z.toFixed(3)),
           } : null,
+        },
+        filmSet: {
+          visible: Boolean(feastSaysScene.root?.visible && feastSaysScene.reportRoot?.visible),
+          cameraCount: feastSaysScene.filmSet?.cameraCount || 0,
+          lightCount: feastSaysScene.filmSet?.lightCount || 0,
+          boomMicCount: feastSaysScene.filmSet?.boomMicCount || 0,
+          hasSign: Boolean(feastSaysScene.filmSet?.hasSign),
         },
         round: this.show.roundIndex + 1,
         totalRounds: FEAST_SAYS.commands.length,
@@ -14390,16 +14532,16 @@
       this.qaStepping = false;
       this.transitionTable = Object.freeze({
         [STORM_RUN_PHASE.DORMANT]: Object.freeze([STORM_RUN_PHASE.CALLED, STORM_RUN_PHASE.COMPLETED]),
-        [STORM_RUN_PHASE.CALLED]: Object.freeze([STORM_RUN_PHASE.BRIEFING, STORM_RUN_PHASE.DORMANT, STORM_RUN_PHASE.COMPLETED]),
+        [STORM_RUN_PHASE.CALLED]: Object.freeze([STORM_RUN_PHASE.BRIEFING, STORM_RUN_PHASE.FAILED, STORM_RUN_PHASE.DORMANT, STORM_RUN_PHASE.COMPLETED]),
         [STORM_RUN_PHASE.BRIEFING]: Object.freeze([STORM_RUN_PHASE.RUNNING, STORM_RUN_PHASE.CALLED]),
         [STORM_RUN_PHASE.RUNNING]: Object.freeze([STORM_RUN_PHASE.COMPLETED, STORM_RUN_PHASE.FAILED, STORM_RUN_PHASE.CALLED]),
         [STORM_RUN_PHASE.COMPLETED]: Object.freeze([]),
         [STORM_RUN_PHASE.FAILED]: Object.freeze([STORM_RUN_PHASE.CALLED, STORM_RUN_PHASE.DORMANT]),
       });
       this.reportInteraction = {
-        type: "storm-run-report",
-        id: "storm-run-report-station",
-        getLabel: () => this.castReady() ? "Report for Storm Run" : "Wait for the contestants",
+        type: "storm-run-host-start",
+        id: "storm-run-host-start",
+        getLabel: () => this.castReady() ? "Start Storm Run with Mr. Feast" : "Wait with Mr. Feast for the contestants",
         activate: () => this.reportToStart(),
       };
       this.syncPresentation();
@@ -14457,6 +14599,52 @@
       );
     }
 
+    stageHostForCall() {
+      if (this.show.phase !== STORM_RUN_PHASE.CALLED || !mrFeastNpc) return false;
+      if (!mrFeastNpc.challengeStaged || mrFeastNpc.challengeMode !== "storm-run") {
+        mrFeastNpc.stageChallenge(STORM_RUN.hostStartMark, {
+          mode: "storm-run",
+          zone: "REAR LAWN",
+          level: MR_FEAST_LEVEL.GROUNDS,
+          responseNodeId: "response-rear-terrace",
+          colliderEnabled: true,
+          interactionsEnabled: false,
+          visible: true,
+        });
+      } else {
+        mrFeastNpc.root.position.set(STORM_RUN.hostStartMark.x, STORM_RUN.hostStartMark.y, STORM_RUN.hostStartMark.z);
+        mrFeastNpc.root.rotation.y = STORM_RUN.hostStartMark.yaw;
+        mrFeastNpc.root.scale.setScalar(Number(STORM_RUN.hostStartMark.scale) > 0 ? Number(STORM_RUN.hostStartMark.scale) : 1);
+        mrFeastNpc.root.visible = true;
+        for (const mesh of mrFeastNpc.meshes) mesh.visible = true;
+        if (mrFeastNpc.contactShadow) mrFeastNpc.contactShadow.visible = true;
+        mrFeastNpc.setChallengeColliderEnabled(true);
+        mrFeastNpc.setChallengeInteractionsEnabled(false);
+        mrFeastNpc.root.updateMatrixWorld(true);
+      }
+      return Boolean(mrFeastNpc.challengeStaged && mrFeastNpc.challengeMode === "storm-run");
+    }
+
+    canCountReportDeadline() {
+      return Boolean(
+        state.started
+        && this.show.phase === STORM_RUN_PHASE.CALLED
+        && this.castReady()
+        && !competitionReportClockBlocked()
+      );
+    }
+
+    failReportDeadline() {
+      if (this.show.phase !== STORM_RUN_PHASE.CALLED) return false;
+      this.show.reportRemaining = 0;
+      this.show.eliminatedContestantId = "player";
+      this.transition(STORM_RUN_PHASE.FAILED, "five-minute-report-deadline-expired");
+      this.releaseProduction(null);
+      triggerMansionGameOver({ reason: "storm-run-no-show", kind: "storm-run" });
+      this.syncPresentation();
+      return true;
+    }
+
     call(reason = "timer", clueId = null) {
       if (!this.eligible()) return { called: false, reason: "game-one-incomplete", phase: this.show.phase };
       if (this.show.phase !== STORM_RUN_PHASE.DORMANT) {
@@ -14465,6 +14653,7 @@
       this.show.triggerReason = reason === "clue" ? "clue" : reason === "qa" ? "qa" : "timer";
       this.show.triggerClueId = clueId;
       this.show.callCount += 1;
+      this.show.reportRemaining = STORM_RUN.reportDeadlineSeconds;
       this.show.briefingRemaining = 0;
       this.show.countdownLastSecond = null;
       this.show.countdownSequence = [];
@@ -14506,7 +14695,12 @@
       );
       audioSystem?.ping(330, 0.24, 0.05, "square");
       audioSystem?.ping(659, 0.38, 0.04, "triangle");
-      return { called: true, reason: this.show.triggerReason, clueId };
+      return {
+        called: true,
+        reason: this.show.triggerReason,
+        clueId,
+        reportRemaining: this.show.reportRemaining,
+      };
     }
 
     noteClueDiscovered(clueId) {
@@ -14541,6 +14735,7 @@
       if (state.readableBooks.open) readableBookSystem?.close({ restoreFocus: false });
       contestant13Quest?.hideDiscovery();
       cameraSecurity?.suspendForCompetition();
+      this.show.reportRemaining = 0;
       clearMovementInput();
       state.movement.crouched = false;
       state.movement.sprinting = false;
@@ -14550,7 +14745,6 @@
         level: MR_FEAST_LEVEL.GROUNDS,
         responseNodeId: "response-rear-terrace",
         colliderEnabled: false,
-        interactionsEnabled: false,
         visible: true,
       });
       const staged = mansionContestants.stageChallenge(STORM_RUN.contestantMarks, { mode: "storm-run" });
@@ -15049,6 +15243,18 @@
         this.syncPresentation();
         return;
       }
+      if (this.show.phase === STORM_RUN_PHASE.CALLED) {
+        if (this.canCountReportDeadline()) {
+          const deadlineStep = this.qaStepping ? step : Math.min(step, STORM_RUN.maximumTimerStepSeconds);
+          this.show.reportRemaining = Math.max(0, this.show.reportRemaining - deadlineStep);
+          if (this.show.reportRemaining <= 0) {
+            this.failReportDeadline();
+            return;
+          }
+        }
+        this.syncPresentation();
+        return;
+      }
       if (this.show.phase === STORM_RUN_PHASE.BRIEFING) {
         this.show.briefingRemaining = Math.max(0, this.show.briefingRemaining - step);
         if (this.show.briefingRemaining > 0 && this.show.briefingRemaining <= STORM_RUN.countdownSeconds) {
@@ -15089,7 +15295,9 @@
       if (!stormRunScene.root) return;
       const productionVisible = [STORM_RUN_PHASE.CALLED, STORM_RUN_PHASE.BRIEFING, STORM_RUN_PHASE.RUNNING].includes(this.show.phase);
       stormRunScene.root.visible = productionVisible;
-      if (stormRunScene.reportRoot) stormRunScene.reportRoot.visible = this.show.phase === STORM_RUN_PHASE.CALLED;
+      if (stormRunScene.reportRoot) {
+        stormRunScene.reportRoot.visible = [STORM_RUN_PHASE.CALLED, STORM_RUN_PHASE.BRIEFING].includes(this.show.phase);
+      }
       stormRunScene.checkpoints.forEach((entry, index) => {
         entry.root.visible = this.show.phase === STORM_RUN_PHASE.RUNNING
           && index === this.show.completedCheckpoints;
@@ -15105,7 +15313,8 @@
 
     syncCastVisibility() {
       mansionContestants?.syncStormRunCastVisibility();
-      if (this.show.phase === STORM_RUN_PHASE.BRIEFING) mrFeastNpc?.syncStormRunVisibility(true);
+      if (this.show.phase === STORM_RUN_PHASE.CALLED) this.stageHostForCall();
+      else if (this.show.phase === STORM_RUN_PHASE.BRIEFING) mrFeastNpc?.syncStormRunVisibility(true);
       else if (this.show.phase === STORM_RUN_PHASE.RUNNING) mrFeastNpc?.syncStormRunVisibility(this.show.hostVisible);
       else if (this.show.phase === STORM_RUN_PHASE.COMPLETED && this.show.aftermathActive) {
         mrFeastNpc?.syncStormRunAftermathVisibility(STORM_RUN.aftermath.hostMark);
@@ -15146,7 +15355,7 @@
       } else if (phase === STORM_RUN_PHASE.CALLED) {
         setText(dom.stormRunEyebrow, this.castReady() ? "Storm Run · Called" : "Storm Run · Holding for cast");
         setText(dom.stormRunTitle, "");
-        setText(dom.stormRunTimer, "LIVE");
+        setText(dom.stormRunTimer, this.formatClock(this.show.reportRemaining));
         setText(dom.stormRunCheckpoint, "");
       } else if (phase === STORM_RUN_PHASE.BRIEFING) {
         const inCountdown = this.show.briefingRemaining <= STORM_RUN.countdownSeconds;
@@ -15188,6 +15397,11 @@
         callCount: this.show.callCount,
         callAfterSeconds: STORM_RUN.intermissionSeconds,
         intermissionElapsed: this.show.intermissionElapsed,
+        reportRemaining: transient
+          ? STORM_RUN.reportDeadlineSeconds
+          : this.show.phase === STORM_RUN_PHASE.CALLED
+            ? this.show.reportRemaining
+            : 0,
         completedCheckpoints: transient ? 0 : this.show.completedCheckpoints,
         eliminatedContestantId: this.show.eliminatedContestantId,
       };
@@ -15232,6 +15446,14 @@
       this.show.triggerClueId = source.triggerClueId || null;
       this.show.callCount = clamp(Number(source.callCount) || (restoredPhase === STORM_RUN_PHASE.DORMANT ? 0 : 1), 0, 1);
       this.show.intermissionElapsed = clamp(Number(source.intermissionElapsed) || 0, 0, STORM_RUN.intermissionSeconds);
+      const restoredReportRemaining = Number(source.reportRemaining);
+      this.show.reportRemaining = restoredPhase === STORM_RUN_PHASE.CALLED
+        ? requestedPhase === STORM_RUN_PHASE.CALLED
+          && Number.isFinite(restoredReportRemaining)
+          && restoredReportRemaining > 0
+          ? clamp(restoredReportRemaining, 0, STORM_RUN.reportDeadlineSeconds)
+          : STORM_RUN.reportDeadlineSeconds
+        : 0;
       this.show.briefingRemaining = 0;
       this.show.countdownLastSecond = null;
       this.show.countdownSequence = [];
@@ -15560,6 +15782,15 @@
         callAfterSeconds: STORM_RUN.intermissionSeconds,
         intermissionElapsed: Number(this.show.intermissionElapsed.toFixed(3)),
         secondsUntilCall: Number(Math.max(0, STORM_RUN.intermissionSeconds - this.show.intermissionElapsed).toFixed(3)),
+        reportDeadlineSeconds: STORM_RUN.reportDeadlineSeconds,
+        reportRemaining: Number(this.show.reportRemaining.toFixed(3)),
+        hostWaiting: Boolean(
+          this.show.phase === STORM_RUN_PHASE.CALLED
+          && mrFeastNpc?.challengeStaged
+          && mrFeastNpc.challengeMode === "storm-run"
+          && mrFeastNpc.root?.visible
+        ),
+        hostStaged: Boolean(mrFeastNpc?.challengeStaged && mrFeastNpc.challengeMode === "storm-run"),
         clueProgressLocked: this.blocksInvestigation(),
         saveAllowed: this.show.phase !== STORM_RUN_PHASE.FAILED,
         staged: this.show.staged,
@@ -15579,6 +15810,13 @@
             y: Number(stormRunScene.reportRoot.position.y.toFixed(3)),
             z: Number(stormRunScene.reportRoot.position.z.toFixed(3)),
           } : null,
+        },
+        filmSet: {
+          visible: Boolean(stormRunScene.root?.visible && stormRunScene.reportRoot?.visible),
+          cameraCount: stormRunScene.filmSet?.cameraCount || 0,
+          lightCount: stormRunScene.filmSet?.lightCount || 0,
+          boomMicCount: stormRunScene.filmSet?.boomMicCount || 0,
+          hasSign: Boolean(stormRunScene.filmSet?.hasSign),
         },
         briefingRemaining: Number(this.show.briefingRemaining.toFixed(3)),
         briefing: {
@@ -16280,11 +16518,15 @@
       room: state.currentRoom,
     };
     releasePointerLock();
-    const feastSaysElimination = state.gameOver.reason === "feast-says-eliminated";
-    const stormRunElimination = state.gameOver.reason === "storm-run-eliminated";
+    const feastSaysElimination = ["feast-says-eliminated", "feast-says-no-show"].includes(state.gameOver.reason);
+    const stormRunElimination = ["storm-run-eliminated", "storm-run-no-show"].includes(state.gameOver.reason);
     if (dom.gameOverTitle) dom.gameOverTitle.textContent = feastSaysElimination || stormRunElimination ? "Eliminated" : "Caught";
     if (dom.gameOverCopy) {
-      dom.gameOverCopy.textContent = stormRunElimination
+      dom.gameOverCopy.textContent = state.gameOver.reason === "storm-run-no-show"
+        ? "You did not check in with Mr. Feast before the five-minute Storm Run call expired."
+        : state.gameOver.reason === "feast-says-no-show"
+        ? "You did not check in with Mr. Feast before the five-minute Feast Says call expired."
+        : stormRunElimination
         ? "Mara finished Storm Run first. Last place leaves the competition."
         : feastSaysElimination
         ? "Your Feast Says score put you in last place. Last place leaves the competition."
@@ -20927,6 +21169,174 @@
     };
   }
 
+  function addCompetitionFilmSet(parent, { id, audienceSide = 1, accentColor = 0xffc866 } = {}) {
+    const setRoot = new THREE.Group();
+    setRoot.name = `${id}-film-set`;
+    parent.add(setRoot);
+
+    const structureMaterial = new THREE.MeshStandardMaterial({
+      color: 0x11151b,
+      roughness: 0.38,
+      metalness: 0.72,
+    });
+    const hardwareMaterial = new THREE.MeshStandardMaterial({
+      color: 0x3b4149,
+      roughness: 0.3,
+      metalness: 0.82,
+    });
+    const cameraMaterial = new THREE.MeshStandardMaterial({
+      color: 0x171b21,
+      roughness: 0.22,
+      metalness: 0.76,
+    });
+    const lensMaterial = new THREE.MeshStandardMaterial({
+      color: 0x07101a,
+      roughness: 0.08,
+      metalness: 0.68,
+      emissive: 0x092946,
+      emissiveIntensity: 0.55,
+    });
+    const microphoneMaterial = new THREE.MeshStandardMaterial({
+      color: 0x17191d,
+      roughness: 0.88,
+      metalness: 0.08,
+    });
+    const lampFaceMaterial = new THREE.MeshBasicMaterial({
+      color: accentColor,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+    });
+    const tallyMaterial = new THREE.MeshBasicMaterial({ color: 0xff3048, toneMapped: false });
+    const poleAxis = new THREE.Vector3(0, 1, 0);
+    const addPoleBetween = (name, start, end, radius, material, targetParent = setRoot) => {
+      const direction = new THREE.Vector3().subVectors(end, start);
+      const length = direction.length();
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(radius, radius, length, 10),
+        material,
+      );
+      pole.name = name;
+      pole.position.copy(start).add(end).multiplyScalar(0.5);
+      pole.quaternion.setFromUnitVectors(poleAxis, direction.normalize());
+      pole.castShadow = true;
+      pole.receiveShadow = true;
+      targetParent.add(pole);
+      return pole;
+    };
+
+    const cameraRoot = new THREE.Group();
+    cameraRoot.name = `${id}-broadcast-camera`;
+    cameraRoot.position.set(
+      COMPETITION_FILM_SET.camera.x,
+      0,
+      audienceSide * COMPETITION_FILM_SET.camera.audienceZ,
+    );
+    const cameraDx = -cameraRoot.position.x;
+    const cameraDz = -cameraRoot.position.z;
+    cameraRoot.rotation.y = Math.atan2(-cameraDx, -cameraDz);
+    setRoot.add(cameraRoot);
+    box({ name: `${id}-camera-body`, w: 1.05, h: 0.64, d: 0.82, y: 1.72, material: cameraMaterial, parent: cameraRoot });
+    box({ name: `${id}-camera-shoulder`, w: 0.82, h: 0.16, d: 0.94, y: 1.36, z: 0.05, material: hardwareMaterial, parent: cameraRoot });
+    cylinder({ name: `${id}-camera-lens`, radiusTop: 0.23, radiusBottom: 0.32, height: 0.62, segments: 20, y: 1.72, z: -0.7, rotationX: Math.PI / 2, material: lensMaterial, parent: cameraRoot });
+    cylinder({ name: `${id}-camera-reel-left`, radius: 0.28, height: 0.12, segments: 18, x: -0.27, y: 2.16, rotationZ: Math.PI / 2, material: cameraMaterial, parent: cameraRoot });
+    cylinder({ name: `${id}-camera-reel-right`, radius: 0.28, height: 0.12, segments: 18, x: 0.27, y: 2.16, rotationZ: Math.PI / 2, material: cameraMaterial, parent: cameraRoot });
+    box({ name: `${id}-camera-tally`, w: 0.18, h: 0.09, d: 0.04, x: 0.35, y: 2.02, z: -0.42, material: tallyMaterial, parent: cameraRoot, cast: false });
+    addPoleBetween(`${id}-camera-tripod-column`, new THREE.Vector3(0, 0.45, 0), new THREE.Vector3(0, 1.4, 0), 0.07, hardwareMaterial, cameraRoot);
+    for (const [index, foot] of COMPETITION_FILM_SET.camera.tripodFeet.entries()) {
+      addPoleBetween(
+        `${id}-camera-tripod-leg-${index + 1}`,
+        new THREE.Vector3(0, 0.78, 0),
+        new THREE.Vector3(foot[0], 0.06, foot[1]),
+        0.045,
+        hardwareMaterial,
+        cameraRoot,
+      );
+    }
+
+    const lightPositions = COMPETITION_FILM_SET.lights.xOffsets.map((x) => ({
+      x,
+      z: audienceSide * COMPETITION_FILM_SET.lights.audienceZ,
+    }));
+    lightPositions.forEach((position, index) => {
+      const lightRoot = new THREE.Group();
+      lightRoot.name = `${id}-studio-key-light-${index + 1}`;
+      lightRoot.position.set(position.x, 0, position.z);
+      lightRoot.rotation.y = Math.atan2(position.x, position.z);
+      setRoot.add(lightRoot);
+      cylinder({ name: `${id}-light-stand-${index + 1}`, radius: 0.045, height: 2.05, y: 1.03, material: hardwareMaterial, parent: lightRoot });
+      addPoleBetween(`${id}-light-leg-a-${index + 1}`, new THREE.Vector3(0, 0.48, 0), new THREE.Vector3(-0.48, 0.04, 0.32), 0.027, hardwareMaterial, lightRoot);
+      addPoleBetween(`${id}-light-leg-b-${index + 1}`, new THREE.Vector3(0, 0.48, 0), new THREE.Vector3(0.48, 0.04, 0.32), 0.027, hardwareMaterial, lightRoot);
+      addPoleBetween(`${id}-light-leg-c-${index + 1}`, new THREE.Vector3(0, 0.48, 0), new THREE.Vector3(0, 0.04, -0.5), 0.027, hardwareMaterial, lightRoot);
+      box({ name: `${id}-light-housing-${index + 1}`, w: 0.92, h: 0.7, d: 0.24, y: 2.2, material: structureMaterial, parent: lightRoot });
+      box({ name: `${id}-light-face-${index + 1}`, w: 0.72, h: 0.5, d: 0.025, y: 2.2, z: -0.14, material: lampFaceMaterial, parent: lightRoot, cast: false, receive: false });
+      box({ name: `${id}-light-barn-door-top-${index + 1}`, w: 0.9, h: 0.18, d: 0.08, y: 2.63, z: -0.12, rotationX: -0.42, material: structureMaterial, parent: lightRoot });
+      box({ name: `${id}-light-barn-door-bottom-${index + 1}`, w: 0.9, h: 0.18, d: 0.08, y: 1.77, z: -0.12, rotationX: 0.42, material: structureMaterial, parent: lightRoot });
+    });
+
+    const boomStart = new THREE.Vector3(
+      COMPETITION_FILM_SET.boom.start.x,
+      COMPETITION_FILM_SET.boom.start.y,
+      audienceSide * COMPETITION_FILM_SET.boom.start.audienceZ,
+    );
+    const boomEnd = new THREE.Vector3(
+      COMPETITION_FILM_SET.boom.end.x,
+      COMPETITION_FILM_SET.boom.end.y,
+      audienceSide * COMPETITION_FILM_SET.boom.end.audienceZ,
+    );
+    addPoleBetween(`${id}-boom-stand`, new THREE.Vector3(boomStart.x, 0.05, boomStart.z), new THREE.Vector3(boomStart.x, boomStart.y, boomStart.z), 0.045, hardwareMaterial);
+    addPoleBetween(`${id}-boom-arm`, boomStart, boomEnd, 0.035, hardwareMaterial);
+    addPoleBetween(
+      `${id}-boom-microphone`,
+      boomEnd,
+      new THREE.Vector3(
+        COMPETITION_FILM_SET.boom.microphone.x,
+        COMPETITION_FILM_SET.boom.microphone.y,
+        -audienceSide * COMPETITION_FILM_SET.boom.microphone.oppositeAudienceZ,
+      ),
+      0.09,
+      microphoneMaterial,
+    );
+    addPoleBetween(`${id}-boom-leg-a`, new THREE.Vector3(boomStart.x, 0.45, boomStart.z), new THREE.Vector3(boomStart.x - 0.5, 0.04, boomStart.z + 0.32), 0.027, hardwareMaterial);
+    addPoleBetween(`${id}-boom-leg-b`, new THREE.Vector3(boomStart.x, 0.45, boomStart.z), new THREE.Vector3(boomStart.x + 0.5, 0.04, boomStart.z + 0.32), 0.027, hardwareMaterial);
+    addPoleBetween(`${id}-boom-leg-c`, new THREE.Vector3(boomStart.x, 0.45, boomStart.z), new THREE.Vector3(boomStart.x, 0.04, boomStart.z - 0.5), 0.027, hardwareMaterial);
+    addPoleBetween(
+      `${id}-floor-cable`,
+      new THREE.Vector3(
+        COMPETITION_FILM_SET.cable.start.x,
+        0.025,
+        audienceSide * COMPETITION_FILM_SET.cable.start.audienceZ,
+      ),
+      new THREE.Vector3(
+        COMPETITION_FILM_SET.cable.end.x,
+        0.025,
+        audienceSide * COMPETITION_FILM_SET.cable.end.audienceZ,
+      ),
+      0.018,
+      structureMaterial,
+    );
+
+    const hostHitbox = new THREE.Mesh(
+      new THREE.BoxGeometry(
+        COMPETITION_FILM_SET.hostHitbox.width,
+        COMPETITION_FILM_SET.hostHitbox.height,
+        COMPETITION_FILM_SET.hostHitbox.depth,
+      ),
+      new THREE.MeshBasicMaterial({ visible: false, depthWrite: false, colorWrite: false }),
+    );
+    hostHitbox.name = `${id}-host-start-hitbox`;
+    hostHitbox.position.set(0, COMPETITION_FILM_SET.hostHitbox.height / 2, 0);
+    setRoot.add(hostHitbox);
+
+    return Object.freeze({
+      root: setRoot,
+      hostHitbox,
+      cameraCount: 1,
+      lightCount: 2,
+      boomMicCount: 1,
+      hasSign: false,
+    });
+  }
+
   function addFeastSaysBallroomSet() {
     const root = new THREE.Group();
     root.name = "feast-says-ballroom-set";
@@ -20982,74 +21392,16 @@
     }
 
     const reportRoot = new THREE.Group();
-    reportRoot.name = "feast-says-report-station";
-    reportRoot.position.set(FEAST_SAYS.reportMark.x, FLOOR.MAIN, FEAST_SAYS.reportMark.z);
+    reportRoot.name = "feast-says-production-call-set";
+    reportRoot.position.set(FEAST_SAYS.hostMark.x, FLOOR.MAIN, FEAST_SAYS.hostMark.z);
     root.add(reportRoot);
     feastSaysScene.reportRoot = reportRoot;
-
-    const shellMaterial = new THREE.MeshStandardMaterial({
-      color: 0x111827,
-      roughness: 0.28,
-      metalness: 0.62,
-      emissive: 0x07111f,
-      emissiveIntensity: 0.6,
+    feastSaysScene.filmSet = addCompetitionFilmSet(reportRoot, {
+      id: "feast-says",
+      audienceSide: 1,
+      accentColor: 0xffcf75,
     });
-    const trimMaterial = new THREE.MeshStandardMaterial({
-      color: 0xd7ad55,
-      roughness: 0.22,
-      metalness: 0.85,
-      emissive: 0x7d3c09,
-      emissiveIntensity: 0.35,
-    });
-    const plinth = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.16, 0.48), shellMaterial);
-    plinth.name = "feast-says-report-plinth";
-    plinth.position.y = 0.08;
-    reportRoot.add(plinth);
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(1.68, 0.045, 0.56), trimMaterial);
-    trim.name = "feast-says-report-trim";
-    trim.position.y = 0.18;
-    reportRoot.add(trim);
-
-    const canvas = document.createElement("canvas");
-    canvas.width = 512;
-    canvas.height = 192;
-    const context = canvas.getContext("2d");
-    if (context) {
-      const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
-      gradient.addColorStop(0, "#081222");
-      gradient.addColorStop(1, "#241017");
-      context.fillStyle = gradient;
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.strokeStyle = "#ffcc5c";
-      context.lineWidth = 10;
-      context.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
-      context.fillStyle = "#ff4b5f";
-      context.font = "700 38px system-ui, sans-serif";
-      context.textAlign = "center";
-      context.fillText("● LIVE", canvas.width / 2, 65);
-      context.fillStyle = "#ffffff";
-      context.font = "900 54px system-ui, sans-serif";
-      context.fillText("FEAST SAYS", canvas.width / 2, 137);
-    }
-    const displayTexture = new THREE.CanvasTexture(canvas);
-    displayTexture.encoding = THREE.sRGBEncoding;
-    const display = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.6, 0.6),
-      new THREE.MeshBasicMaterial({ map: displayTexture, toneMapped: false }),
-    );
-    display.name = "feast-says-live-display";
-    display.position.set(0, 0.72, -0.02);
-    display.rotation.x = -0.08;
-    reportRoot.add(display);
-
-    const hitbox = new THREE.Mesh(
-      new THREE.BoxGeometry(1.85, 2.05, 0.75),
-      new THREE.MeshBasicMaterial({ visible: false, depthWrite: false, colorWrite: false }),
-    );
-    hitbox.name = "feast-says-report-hitbox";
-    hitbox.position.set(0, 1.0, 0);
-    reportRoot.add(hitbox);
-    feastSaysScene.reportHitbox = hitbox;
+    feastSaysScene.reportHitbox = feastSaysScene.filmSet.hostHitbox;
   }
 
   function addStormRunCourseSet() {
@@ -21131,68 +21483,16 @@
     stormRunScene.revealLight = revealLight;
 
     const reportRoot = new THREE.Group();
-    reportRoot.name = "storm-run-report-station";
-    reportRoot.position.set(STORM_RUN.reportMark.x, STORM_RUN.reportMark.y, STORM_RUN.reportMark.z);
+    reportRoot.name = "storm-run-production-call-set";
+    reportRoot.position.set(STORM_RUN.hostStartMark.x, STORM_RUN.hostStartMark.y, STORM_RUN.hostStartMark.z);
     root.add(reportRoot);
     stormRunScene.reportRoot = reportRoot;
-
-    const shellMaterial = new THREE.MeshStandardMaterial({
-      color: 0x0b1720,
-      roughness: 0.32,
-      metalness: 0.58,
-      emissive: 0x082d42,
-      emissiveIntensity: 0.72,
+    stormRunScene.filmSet = addCompetitionFilmSet(reportRoot, {
+      id: "storm-run",
+      audienceSide: -1,
+      accentColor: 0x92deff,
     });
-    const trimMaterial = new THREE.MeshBasicMaterial({ color: 0x72d8ff, toneMapped: false });
-    const plinth = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.16, 0.55), shellMaterial);
-    plinth.name = "storm-run-report-plinth";
-    plinth.position.y = 0.08;
-    reportRoot.add(plinth);
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.04, 0.63), trimMaterial);
-    trim.name = "storm-run-report-trim";
-    trim.position.y = 0.18;
-    reportRoot.add(trim);
-
-    const canvas = document.createElement("canvas");
-    canvas.width = 512;
-    canvas.height = 192;
-    const context = canvas.getContext("2d");
-    if (context) {
-      const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
-      gradient.addColorStop(0, "#07121c");
-      gradient.addColorStop(1, "#10354a");
-      context.fillStyle = gradient;
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.strokeStyle = "#79dcff";
-      context.lineWidth = 10;
-      context.strokeRect(8, 8, canvas.width - 16, canvas.height - 16);
-      context.fillStyle = "#ff5368";
-      context.font = "700 38px system-ui, sans-serif";
-      context.textAlign = "center";
-      context.fillText("● LIVE", canvas.width / 2, 64);
-      context.fillStyle = "#ffffff";
-      context.font = "900 52px system-ui, sans-serif";
-      context.fillText("STORM RUN", canvas.width / 2, 137);
-    }
-    const displayTexture = new THREE.CanvasTexture(canvas);
-    displayTexture.encoding = THREE.sRGBEncoding;
-    const display = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.7, 0.64),
-      new THREE.MeshBasicMaterial({ map: displayTexture, toneMapped: false }),
-    );
-    display.name = "storm-run-live-display";
-    display.position.set(0, 0.76, -0.04);
-    display.rotation.x = -0.08;
-    reportRoot.add(display);
-
-    const hitbox = new THREE.Mesh(
-      new THREE.BoxGeometry(2.05, 2.1, 0.85),
-      new THREE.MeshBasicMaterial({ visible: false, depthWrite: false, colorWrite: false }),
-    );
-    hitbox.name = "storm-run-report-hitbox";
-    hitbox.position.set(0, 1.02, 0);
-    reportRoot.add(hitbox);
-    stormRunScene.reportHitbox = hitbox;
+    stormRunScene.reportHitbox = stormRunScene.filmSet.hostHitbox;
   }
 
   // --- Milestone 53: ambient detail vignettes -------------------------------
@@ -27713,7 +28013,7 @@
         dining: [-9.7, FLOOR.MAIN, -8.4, 0],
         kitchen: [6.3, FLOOR.MAIN, -6.1, -0.8],
         ballroom: [0, FLOOR.MAIN, -6.0, 0],
-        feastSaysStaging: [FEAST_SAYS.reportMark.x, FLOOR.MAIN, FEAST_SAYS.reportMark.z + 1.35, 0, -0.26],
+        feastSaysStaging: [FEAST_SAYS.hostMark.x, FLOOR.MAIN, FEAST_SAYS.hostMark.z + 2.15, 0, -0.15],
         openRearWest: [-9.7, FLOOR.MAIN, -4.05, Math.PI / 2],
         openRearEast: [8.2, FLOOR.MAIN, -4.05, -Math.PI / 2],
         upper: [0, FLOOR.UPPER, -3.8, Math.PI],

@@ -28,6 +28,10 @@ async function assertSourceContract() {
   ]);
   assert(source.includes("const STORM_RUN_PHASE"), "Storm Run must define an explicit phase enum");
   assert(source.includes("const STORM_RUN"), "Storm Run must keep tuning in a named constant table");
+  assert((source.match(/reportDeadlineSeconds:\s*5\s*\*\s*60/g) || []).length >= 2, "both competition calls must share a five-minute Mr. Feast check-in deadline");
+  assert(source.includes("addCompetitionFilmSet"), "Storm Run must use the shared film-set staging instead of a sign");
+  assert(!source.includes("storm-run-live-display") && !source.includes("storm-run-report-plinth"), "Storm Run must remove the old live sign/plinth trigger");
+  assert(source.includes('reason: "storm-run-no-show"'), "missing the Storm Run report deadline must eliminate the player");
   assert(source.includes('instructionDelivery: "visual-checkpoints"'), "Storm Run must declare its glowing checkpoints as the authoritative direction channel");
   assert(!source.includes("checkpointCallout"), "Storm Run must not retain a spoken checkpoint-announcement path");
   assert(!/beat[ -]mara/i.test(source), "Storm Run must not retain a Beat Mara objective or internal outcome label");
@@ -290,8 +294,31 @@ async function run() {
     await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.2));
     storm = await stormState(timerPage);
     assert(storm.phase === "called" && storm.callCount === 1 && storm.triggerReason === "timer", `Storm Run must call once at ten active minutes: ${JSON.stringify(storm)}`);
+    assert(storm.reportDeadlineSeconds === 300 && storm.reportRemaining === 300 && storm.hostWaiting, `Storm Run must give five minutes while Mr. Feast waits at the back-door set: ${JSON.stringify(storm)}`);
+    assert(storm.filmSet?.visible && storm.filmSet?.cameraCount === 1 && storm.filmSet?.lightCount === 2 && storm.filmSet?.boomMicCount === 1 && !storm.filmSet?.hasSign, `the Storm Run trigger must be a camera/light/boom set rather than a sign: ${JSON.stringify(storm.filmSet)}`);
+    const calledPause = await timerPage.evaluate(() => {
+      const before = window.MrFeastFresh.getStormRunState().reportRemaining;
+      window.MrFeastFresh.setMenuOpenForQA(true);
+      window.MrFeastFresh.advanceStormRunForQA(30);
+      const during = window.MrFeastFresh.getStormRunState().reportRemaining;
+      window.MrFeastFresh.setMenuOpenForQA(false);
+      return { before, during };
+    });
+    assert(calledPause.before === calledPause.during, `blocking UI must pause the Storm Run check-in deadline: ${JSON.stringify(calledPause)}`);
     await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(30));
-    assert((await stormState(timerPage)).callCount === 1, "Storm Run timer must not duplicate its call");
+    storm = await stormState(timerPage);
+    assert(storm.callCount === 1 && storm.reportRemaining === 270, `Storm Run must count down without duplicating its call: ${JSON.stringify(storm)}`);
+    assert(await timerPage.evaluate(() => window.MrFeastFresh.saveGameForQA()) === true, "saving during the Storm Run report window should succeed");
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(12));
+    assert(await timerPage.evaluate(() => window.MrFeastFresh.loadGameForQA()) === true, "loading a called Storm Run state should succeed");
+    storm = await stormState(timerPage);
+    assert(storm.phase === "called" && storm.reportRemaining === 270 && storm.hostWaiting, `called saves must preserve the exact Storm Run deadline and waiting host: ${JSON.stringify(storm)}`);
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(269.9));
+    storm = await stormState(timerPage);
+    assert(storm.phase === "called" && storm.reportRemaining > 0 && storm.reportRemaining <= 0.11, `Storm Run must remain available immediately before the deadline: ${JSON.stringify(storm)}`);
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.2));
+    const missedCall = await diagnostics(timerPage);
+    assert(missedCall.stormRun.phase === "failed" && missedCall.gameOver?.reason === "storm-run-no-show", `missing the Storm Run call must eliminate the player: ${JSON.stringify({ stormRun: missedCall.stormRun, gameOver: missedCall.gameOver })}`);
 
     await timerPage.reload({ waitUntil: "domcontentloaded" });
     await bootPage(timerPage);
@@ -338,7 +365,7 @@ async function run() {
     await timerPage.waitForTimeout(120);
     const station = await stormState(timerPage);
     const stationDiagnostics = await diagnostics(timerPage);
-    assert(station.station.interactive && /report for storm run/i.test(stationDiagnostics.prompt || ""), `called Storm Run must expose a physical rear-terrace report station: ${JSON.stringify({ station: station.station, prompt: stationDiagnostics.prompt })}`);
+    assert(station.station.interactive && station.hostWaiting && /start storm run with mr\. feast/i.test(stationDiagnostics.prompt || ""), `called Storm Run must start by interacting with Mr. Feast on the rear film set: ${JSON.stringify({ station: station.station, prompt: stationDiagnostics.prompt })}`);
     await timerPage.keyboard.press("e");
     await timerPage.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.phase === "briefing", null, { timeout: 8000 });
     const briefingMoveBefore = (await diagnostics(timerPage)).player;
@@ -400,6 +427,16 @@ async function run() {
     assert(scares.every((entry) => entry.reveal.darkSpot), `every apparition must be authored as a measured dark spot: ${JSON.stringify(scares)}`);
     assert(scares.every((entry) => entry.reveal.scale >= 0.95 && entry.reveal.scale <= 1.15), `all three apparitions must remain believable human scale: ${JSON.stringify(scares.map((entry) => entry.reveal.scale))}`);
     assert(scares[0].reveal.fillScale >= 2.5 && scares[1].reveal.fillScale >= 2.5 && scares[2].reveal.fillScale === 1, `the two distant silhouettes must gain readability from lightning fill rather than giant models: ${JSON.stringify(scares.map((entry) => entry.reveal.fillScale))}`);
+    const frontTreeAnchors = [
+      { id: "northwest-east-trunk", x: -17.5, z: 30 },
+      { id: "northeast-north-trunk", x: 24.5, z: 29 },
+    ];
+    for (let index = 0; index < frontTreeAnchors.length; index += 1) {
+      const anchor = frontTreeAnchors[index];
+      const reveal = scares[index].reveal.position;
+      const trunkDistance = Math.hypot(reveal.x - anchor.x, reveal.z - anchor.z);
+      assert(trunkDistance >= 1.3 && trunkDistance <= 2, `apparition ${index + 1} must lurk beside ${anchor.id} without intersecting its trunk: ${JSON.stringify({ reveal, anchor, trunkDistance })}`);
+    }
     assert(scares[0].trigger.id === "garden-front-approach" && scares[0].trigger.z >= 8 && scares[0].completedCheckpointMinimum === 2, `the first apparition must wait until the player reaches the north garden/front-yard approach: ${JSON.stringify(scares[0])}`);
     assert(scares[1].trigger.id === "front-door-crossing" && Math.abs(scares[1].trigger.x) <= 3 && scares[1].trigger.z >= 14 && scares[1].trigger.z <= 17, `the second apparition must wait until the player passes close to the front door: ${JSON.stringify(scares[1])}`);
     assert(scares.every((entry) => entry.trigger.radius >= 1.3 && entry.completedCheckpointMinimum <= entry.completedCheckpointMaximum), `each apparition needs a real route trigger and bounded progress window: ${JSON.stringify(scares)}`);
@@ -617,7 +654,7 @@ async function run() {
     assert(await winPage.evaluate(() => window.MrFeastFresh.saveGameForQA()) === true, "saving during Storm Run should succeed");
     assert(await winPage.evaluate(() => window.MrFeastFresh.loadGameForQA()) === true, "loading a live Storm Run save should succeed");
     let restored = await stormState(winPage);
-    assert(restored.phase === "called" && restored.completedCheckpoints === 0 && restored.raceElapsed === 0 && !restored.scare.hostVisible, `live saves must normalize to a clean call: ${JSON.stringify(restored)}`);
+    assert(restored.phase === "called" && restored.reportRemaining === 300 && restored.hostWaiting && restored.completedCheckpoints === 0 && restored.raceElapsed === 0 && !restored.scare.hostVisible, `live saves must normalize to a clean five-minute production call: ${JSON.stringify(restored)}`);
     await winPage.evaluate(() => window.MrFeastFresh.startStormRunForQA());
     await winPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(16));
     const won = await winPage.evaluate(() => window.MrFeastFresh.completeStormRunWithAftermathForQA("player"));

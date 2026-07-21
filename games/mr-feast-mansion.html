@@ -2266,7 +2266,18 @@
     @media (hover: none), (pointer: coarse) {
       .mansion-tools { display: flex; }
       #mansion-touch { display: block; }
-      #mansion-prompt { bottom: max(104px, calc(env(safe-area-inset-bottom) + 96px)); }
+      #mansion-prompt {
+        bottom: max(158px, calc(env(safe-area-inset-bottom) + 144px));
+        width: min(340px, calc(100% - 24px));
+        justify-content: center;
+      }
+      #mansion-prompt-text { min-width: 0; }
+      #mansion-stage:has(#mansion-prompt:not([hidden])) #mansion-discovery:not([hidden]) {
+        bottom: max(218px, calc(env(safe-area-inset-bottom) + 200px));
+      }
+      #mansion-stage:has(#mansion-prompt:not([hidden])) #mansion-action:not([hidden]) {
+        bottom: max(208px, calc(env(safe-area-inset-bottom) + 190px));
+      }
       #mansion-crosshair { display: none; }
       #mansion-feast-crouch { display: inline-grid; }
       .mansion-controls span:nth-child(-n + 3) { display: none; }
@@ -3131,6 +3142,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260712-uiux" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260721-rear-entry-step-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260721-storm-tree-lurk-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

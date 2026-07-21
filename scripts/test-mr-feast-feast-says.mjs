@@ -836,6 +836,13 @@ async function run() {
   // Red-first contracts: fail here before Chromium starts until the event is
   // represented as a named, persistable system with focused diagnostics.
   assert(/const FEAST_SAYS\s*=\s*Object\.freeze/.test(runtimeSource), "runtime is missing the named FEAST_SAYS tuning and command contract");
+  assert((runtimeSource.match(/reportDeadlineSeconds:\s*5\s*\*\s*60/g) || []).length >= 2, "both competitions must allow exactly five active minutes to interact with Mr. Feast");
+  assert(runtimeSource.includes("addCompetitionFilmSet"), "competition calls must replace the report sign with a reusable production set");
+  for (const prop of ["broadcast-camera", "studio-key-light", "boom-microphone"]) {
+    assert(runtimeSource.includes(prop), `the competition production set is missing its ${prop} dressing`);
+  }
+  assert(!runtimeSource.includes("feast-says-live-display") && !runtimeSource.includes("feast-says-report-plinth"), "Feast Says must remove the old sign/plinth trigger");
+  assert(runtimeSource.includes('reason: "feast-says-no-show"'), "missing the Feast Says report deadline must eliminate the player");
   assert(runtimeSource.includes('instructionDelivery: "speech"'), "Feast Says must declare Mr. Feast speech as its authoritative instruction channel");
   assert(runtimeSource.includes("feast-says-verdict"), "Mr. Feast must verbally judge each Feast Says response instead of relying on result-card text");
   assert(/const CONTESTANT_FEAST_SAYS_MOTION\s*=\s*Object\.freeze/.test(runtimeSource), "runtime is missing named contestant response-animation tuning");
@@ -952,7 +959,38 @@ async function run() {
     feast = await feastState(timerPage);
     assert(feast.phase === "called" && feast.triggerReason === "timer" && feast.callCount === 1, `600 exploration seconds should call Feast Says exactly once; got ${JSON.stringify(feast)}`);
     assert(feast.clueProgressLocked, "the timer call should lock clue progress until the competition ends");
+    assert(feast.reportDeadlineSeconds === 300 && feast.reportRemaining === 300, `the live call must begin a five-minute report deadline: ${JSON.stringify(feast)}`);
+    assert(feast.hostWaiting && feast.hostStaged, `Mr. Feast must already be visibly waiting on the Ballroom set when the call begins: ${JSON.stringify(feast)}`);
+    assert(feast.filmSet?.visible && feast.filmSet?.cameraCount === 1 && feast.filmSet?.lightCount === 2 && feast.filmSet?.boomMicCount === 1 && !feast.filmSet?.hasSign, `the Ballroom trigger must read as a camera/light/boom set rather than a sign: ${JSON.stringify(feast.filmSet)}`);
+    const calledPauseProbe = await timerPage.evaluate(() => {
+      const before = window.MrFeastFresh.getFeastSaysState().reportRemaining;
+      window.MrFeastFresh.setMenuOpenForQA(true);
+      window.MrFeastFresh.advanceFeastSaysForQA(30);
+      const during = window.MrFeastFresh.getFeastSaysState().reportRemaining;
+      window.MrFeastFresh.setMenuOpenForQA(false);
+      return { before, during };
+    });
+    assert(calledPauseProbe.before === calledPauseProbe.during, `the Escape menu must pause the five-minute check-in deadline: ${JSON.stringify(calledPauseProbe)}`);
+    await timerPage.evaluate(() => window.MrFeastFresh.teleport("feastSaysStaging"));
+    await timerPage.waitForTimeout(120);
+    let calledDiagnostics = await diagnostics(timerPage);
+    assert(/start feast says with mr\. feast/i.test(calledDiagnostics.prompt || ""), `the player must start Feast Says by aiming at and interacting with Mr. Feast: ${JSON.stringify({ prompt: calledDiagnostics.prompt, ray: calledDiagnostics.interactionRay })}`);
+    assert(calledDiagnostics.feastSays.ui?.timer === "05:00", `the called-phase HUD must show the five-minute deadline: ${JSON.stringify(calledDiagnostics.feastSays.ui)}`);
     await timerPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "timer-call-desktop.png") });
+
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceFeastSaysForQA(47.5));
+    assert(await timerPage.evaluate(() => window.MrFeastFresh.saveGameForQA()) === true, "saving during the Feast Says report window should succeed");
+    const savedReportRemaining = (await feastState(timerPage)).reportRemaining;
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceFeastSaysForQA(10));
+    assert(await timerPage.evaluate(() => window.MrFeastFresh.loadGameForQA()) === true, "loading a called Feast Says state should succeed");
+    feast = await feastState(timerPage);
+    assert(Math.abs(feast.reportRemaining - savedReportRemaining) <= 0.01 && feast.hostWaiting, `save/load must preserve the deadline and restage Mr. Feast: ${JSON.stringify({ savedReportRemaining, feast })}`);
+    await timerPage.evaluate((seconds) => window.MrFeastFresh.advanceFeastSaysForQA(seconds), feast.reportRemaining - 0.1);
+    feast = await feastState(timerPage);
+    assert(feast.phase === "called" && feast.reportRemaining > 0 && feast.reportRemaining <= 0.11, `the player must remain alive just before the five-minute deadline: ${JSON.stringify(feast)}`);
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceFeastSaysForQA(0.2));
+    calledDiagnostics = await diagnostics(timerPage);
+    assert(calledDiagnostics.feastSays.phase === "failed" && calledDiagnostics.gameOver?.reason === "feast-says-no-show", `failing to interact with Mr. Feast in five minutes must eliminate the player: ${JSON.stringify({ feastSays: calledDiagnostics.feastSays, gameOver: calledDiagnostics.gameOver })}`);
     assert(timerErrors.length === 0, `timer-page console errors: ${timerErrors.join(" | ")}`);
     await timerPage.close();
 
@@ -1099,9 +1137,9 @@ async function run() {
     const afterTamper = state.tamper.entries.find((entry) => entry.artId === "five-doors");
     assert(!beforeCarrier.revealed && !beforeCarrier.discovered && !afterCarrier.revealed && !afterCarrier.discovered, `a tamper-portrait carrier must not reveal its scratch while called; before=${JSON.stringify(beforeCarrier)} after=${JSON.stringify(afterCarrier)}`);
     assert(!beforeTamper.tampered && !afterTamper.tampered, `the blocked carrier must not tilt; before=${JSON.stringify(beforeTamper)} after=${JSON.stringify(afterTamper)}`);
-    await winPage.evaluate(() => window.MrFeastFresh.advanceFeastSaysForQA(600));
+    await winPage.evaluate(() => window.MrFeastFresh.advanceFeastSaysForQA(120));
     feast = await feastState(winPage);
-    assert(feast.phase === "called" && feast.callCount === 1 && feast.triggerReason === "clue", `timer and blocked clues must not queue a duplicate call; got ${JSON.stringify(feast)}`);
+    assert(feast.phase === "called" && feast.callCount === 1 && feast.triggerReason === "clue" && feast.reportRemaining === 180, `timer and blocked clues must not queue a duplicate call; got ${JSON.stringify(feast)}`);
 
     // --- A perfect round leaves a witnessed aftermath before Kip disappears
     state = await startBallroomRound(winPage);

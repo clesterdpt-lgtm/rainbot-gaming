@@ -30,6 +30,13 @@ async function assertSourceContract() {
   assert(source.includes("const STORM_RUN"), "Storm Run must keep tuning in a named constant table");
   assert((source.match(/reportDeadlineSeconds:\s*5\s*\*\s*60/g) || []).length >= 2, "both competition calls must share a five-minute Mr. Feast check-in deadline");
   assert(source.includes("addCompetitionFilmSet"), "Storm Run must use the shared film-set staging instead of a sign");
+  const filmCameraTuning = source.match(/camera:\s*Object\.freeze\(\{([\s\S]*?)\}\),\s*lights:/)?.[1] || "";
+  const filmCameraScale = Number(filmCameraTuning.match(/scale:\s*([\d.]+)/)?.[1]);
+  const filmCameraX = Number(filmCameraTuning.match(/x:\s*(-?[\d.]+)/)?.[1]);
+  const filmCameraAudienceZ = Number(filmCameraTuning.match(/audienceZ:\s*([\d.]+)/)?.[1]);
+  assert(Number.isFinite(filmCameraScale) && filmCameraScale <= 0.8, `the shared production camera must be reduced below human scale: ${JSON.stringify({ filmCameraScale })}`);
+  assert(Math.hypot(filmCameraX, filmCameraAudienceZ) >= 2.25, `the shared production camera must be pulled away from Mr. Feast: ${JSON.stringify({ filmCameraX, filmCameraAudienceZ })}`);
+  assert(source.includes("backDoorZ"), "Storm Run staging must measure Mr. Feast against the actual back-door plane");
   assert(!source.includes("storm-run-live-display") && !source.includes("storm-run-report-plinth"), "Storm Run must remove the old live sign/plinth trigger");
   assert(source.includes('reason: "storm-run-no-show"'), "missing the Storm Run report deadline must eliminate the player");
   assert(source.includes('instructionDelivery: "visual-checkpoints"'), "Storm Run must declare its glowing checkpoints as the authoritative direction channel");
@@ -296,6 +303,8 @@ async function run() {
     assert(storm.phase === "called" && storm.callCount === 1 && storm.triggerReason === "timer", `Storm Run must call once at ten active minutes: ${JSON.stringify(storm)}`);
     assert(storm.reportDeadlineSeconds === 300 && storm.reportRemaining === 300 && storm.hostWaiting, `Storm Run must give five minutes while Mr. Feast waits at the back-door set: ${JSON.stringify(storm)}`);
     assert(storm.filmSet?.visible && storm.filmSet?.cameraCount === 1 && storm.filmSet?.lightCount === 2 && storm.filmSet?.boomMicCount === 1 && !storm.filmSet?.hasSign, `the Storm Run trigger must be a camera/light/boom set rather than a sign: ${JSON.stringify(storm.filmSet)}`);
+    assert(storm.filmSet.cameraScale <= 0.8 && storm.filmSet.cameraDistanceFromHost >= 2.25, `the Storm Run camera must stay smaller and farther from Mr. Feast: ${JSON.stringify(storm.filmSet)}`);
+    assert(storm.briefing.hostFacingBackDoor && storm.briefing.hostDistanceFromBackDoor >= 2.5, `Mr. Feast must wait away from and facing the back door: ${JSON.stringify(storm.briefing)}`);
     const calledPause = await timerPage.evaluate(() => {
       const before = window.MrFeastFresh.getStormRunState().reportRemaining;
       window.MrFeastFresh.setMenuOpenForQA(true);

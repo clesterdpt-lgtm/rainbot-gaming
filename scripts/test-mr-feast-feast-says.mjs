@@ -962,6 +962,7 @@ async function run() {
     assert(feast.reportDeadlineSeconds === 300 && feast.reportRemaining === 300, `the live call must begin a five-minute report deadline: ${JSON.stringify(feast)}`);
     assert(feast.hostWaiting && feast.hostStaged, `Mr. Feast must already be visibly waiting on the Ballroom set when the call begins: ${JSON.stringify(feast)}`);
     assert(feast.filmSet?.visible && feast.filmSet?.cameraCount === 1 && feast.filmSet?.lightCount === 2 && feast.filmSet?.boomMicCount === 1 && !feast.filmSet?.hasSign, `the Ballroom trigger must read as a camera/light/boom set rather than a sign: ${JSON.stringify(feast.filmSet)}`);
+    assert(feast.filmSet.cameraScale <= 0.8 && feast.filmSet.cameraDistanceFromHost >= 2.25, `the Ballroom camera must stay smaller and farther from Mr. Feast: ${JSON.stringify(feast.filmSet)}`);
     const calledPauseProbe = await timerPage.evaluate(() => {
       const before = window.MrFeastFresh.getFeastSaysState().reportRemaining;
       window.MrFeastFresh.setMenuOpenForQA(true);

@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260721-storm-tree-lurk-1";
+  const MANSION_RUNTIME_VERSION = "20260721-competition-staging-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2130,10 +2130,11 @@
       "mara-voss": 2.4,
       "juniper-cross": 2.5,
     }),
+    backDoorZ: -12.2,
     briefingMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -17, yaw: Math.PI }),
     startMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -17, yaw: Math.PI / 2 }),
-    reportMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -14.15, yaw: Math.PI }),
-    hostStartMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -14.05, yaw: Math.PI }),
+    reportMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -15.2, yaw: 0 }),
+    hostStartMark: Object.freeze({ x: 0, y: YARD_LAYOUT.groundY, z: -15.2, yaw: 0 }),
     contestantMarks: Object.freeze({
       "mara-voss": Object.freeze({ x: -1.2, y: YARD_LAYOUT.groundY, z: -17.7, yaw: Math.PI }),
       "juniper-cross": Object.freeze({ x: 1.2, y: YARD_LAYOUT.groundY, z: -17.7, yaw: Math.PI }),
@@ -2217,8 +2218,9 @@
   });
   const COMPETITION_FILM_SET = Object.freeze({
     camera: Object.freeze({
-      x: -1.35,
-      audienceZ: 0.4,
+      scale: 0.72,
+      x: -2.05,
+      audienceZ: 0.95,
       tripodFeet: Object.freeze([
         Object.freeze([-0.6, 0.42]),
         Object.freeze([0.6, 0.42]),
@@ -14444,6 +14446,8 @@
         filmSet: {
           visible: Boolean(feastSaysScene.root?.visible && feastSaysScene.reportRoot?.visible),
           cameraCount: feastSaysScene.filmSet?.cameraCount || 0,
+          cameraScale: feastSaysScene.filmSet?.cameraScale || 0,
+          cameraDistanceFromHost: feastSaysScene.filmSet?.cameraDistanceFromHost || 0,
           lightCount: feastSaysScene.filmSet?.lightCount || 0,
           boomMicCount: feastSaysScene.filmSet?.boomMicCount || 0,
           hasSign: Boolean(feastSaysScene.filmSet?.hasSign),
@@ -15767,6 +15771,16 @@
     getDiagnostics() {
       const contestantEntries = mansionContestants?.entries || [];
       const hostPosition = mrFeastNpc?.root?.position || null;
+      const hostYaw = Number(mrFeastNpc?.root?.rotation?.y);
+      const hostDistanceFromBackDoor = hostPosition
+        ? Math.hypot(hostPosition.x, hostPosition.z - STORM_RUN.backDoorZ)
+        : null;
+      const backDoorYaw = hostPosition
+        ? Math.atan2(-hostPosition.x, STORM_RUN.backDoorZ - hostPosition.z)
+        : null;
+      const hostFacingBackDoor = Number.isFinite(hostYaw) && Number.isFinite(backDoorYaw)
+        ? Math.abs(Math.atan2(Math.sin(hostYaw - backDoorYaw), Math.cos(hostYaw - backDoorYaw))) <= 0.05
+        : false;
       const stormCastMode = ["storm-run", "storm-run-aftermath"].includes(mansionContestants?.challengeMode);
       const staged = (id) => Boolean(
         stormCastMode
@@ -15814,6 +15828,8 @@
         filmSet: {
           visible: Boolean(stormRunScene.root?.visible && stormRunScene.reportRoot?.visible),
           cameraCount: stormRunScene.filmSet?.cameraCount || 0,
+          cameraScale: stormRunScene.filmSet?.cameraScale || 0,
+          cameraDistanceFromHost: stormRunScene.filmSet?.cameraDistanceFromHost || 0,
           lightCount: stormRunScene.filmSet?.lightCount || 0,
           boomMicCount: stormRunScene.filmSet?.boomMicCount || 0,
           hasSign: Boolean(stormRunScene.filmSet?.hasSign),
@@ -15832,8 +15848,13 @@
           hostAtBackDoor: Boolean(
             hostPosition
             && Math.hypot(hostPosition.x - STORM_RUN.hostStartMark.x, hostPosition.z - STORM_RUN.hostStartMark.z) <= 0.2
-            && Math.hypot(STORM_RUN.hostStartMark.x - STORM_RUN.reportMark.x, STORM_RUN.hostStartMark.z - STORM_RUN.reportMark.z) <= 0.35
+            && hostDistanceFromBackDoor >= 2.5
+            && hostDistanceFromBackDoor <= 3.5
           ),
+          hostFacingBackDoor,
+          hostDistanceFromBackDoor: hostDistanceFromBackDoor == null
+            ? null
+            : Number(hostDistanceFromBackDoor.toFixed(3)),
         },
         raceElapsed: Number(this.show.raceElapsed.toFixed(3)),
         completedCheckpoints: this.show.completedCheckpoints,
@@ -21234,6 +21255,7 @@
     const cameraDx = -cameraRoot.position.x;
     const cameraDz = -cameraRoot.position.z;
     cameraRoot.rotation.y = Math.atan2(-cameraDx, -cameraDz);
+    cameraRoot.scale.setScalar(COMPETITION_FILM_SET.camera.scale);
     setRoot.add(cameraRoot);
     box({ name: `${id}-camera-body`, w: 1.05, h: 0.64, d: 0.82, y: 1.72, material: cameraMaterial, parent: cameraRoot });
     box({ name: `${id}-camera-shoulder`, w: 0.82, h: 0.16, d: 0.94, y: 1.36, z: 0.05, material: hardwareMaterial, parent: cameraRoot });
@@ -21331,6 +21353,11 @@
       root: setRoot,
       hostHitbox,
       cameraCount: 1,
+      cameraScale: COMPETITION_FILM_SET.camera.scale,
+      cameraDistanceFromHost: Number(Math.hypot(
+        COMPETITION_FILM_SET.camera.x,
+        COMPETITION_FILM_SET.camera.audienceZ,
+      ).toFixed(3)),
       lightCount: 2,
       boomMicCount: 1,
       hasSign: false,

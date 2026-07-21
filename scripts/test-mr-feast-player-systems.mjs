@@ -170,10 +170,11 @@ async function run() {
     assert(state.menus.maximized, "Maximize should expand the mansion stage");
     assert(await page.locator("#mansion-stage").evaluate((element) => getComputedStyle(element).position === "fixed"), "Maximize should pin the stage over the viewport");
 
-    // Escape while maximized must open the pause menu without collapsing the stage.
-    // Native Fullscreen may consume Escape; the page then keeps CSS maximize and opens the menu.
+    // Escape while CSS-maximized must open the pause menu without collapsing the stage.
+    // Maximize is CSS-only so Escape cannot be consumed by the native Fullscreen API.
     await page.locator("#mansion-menu-resume").click();
     await page.waitForTimeout(80);
+    assert(!(await page.evaluate(() => Boolean(document.fullscreenElement || document.webkitFullscreenElement))), "Maximize must not enter native fullscreen (Escape would force-exit it)");
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => {
       const menus = JSON.parse(window.render_game_to_text()).menus;
@@ -182,8 +183,12 @@ async function run() {
     state = await diagnostics(page);
     assert(state.menus.escapeOpen && state.menus.maximized, "Escape while maximized should open the menu and keep maximized layout");
     assert(await page.locator("#mansion-stage").evaluate((element) => (
-      element.classList.contains("is-maxed") && getComputedStyle(element).position === "fixed"
-    )), "Escape while maximized should keep the stage pinned full-viewport");
+      element.classList.contains("is-maxed")
+      && document.body.classList.contains("rb-game-maxed")
+      && getComputedStyle(element).position === "fixed"
+      && !document.fullscreenElement
+      && !document.webkitFullscreenElement
+    )), "Escape while maximized should keep the stage pinned full-viewport without native fullscreen");
 
     await page.evaluate(() => window.MrFeastFresh.teleport("foyer"));
     const savePosition = (await diagnostics(page)).player;

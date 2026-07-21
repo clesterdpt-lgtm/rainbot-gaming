@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260721-escape-keeps-max-1";
+  const MANSION_RUNTIME_VERSION = "20260721-escape-keeps-max-2";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -26044,29 +26044,14 @@
   async function setMaximized(active) {
     const want = Boolean(active);
     if (want) {
-      // Prefer true OS/browser fullscreen over CSS "max inside the browser".
-      try {
-        if (dom.stage?.requestFullscreen) {
-          try {
-            await dom.stage.requestFullscreen({ navigationUI: "hide" });
-          } catch (_) {
-            await dom.stage.requestFullscreen();
-          }
-          return applyMaximizedChrome(true);
-        }
-        if (dom.stage?.webkitRequestFullscreen) {
-          dom.stage.webkitRequestFullscreen();
-          return applyMaximizedChrome(true);
-        }
-      } catch (_) {
-        // Fall through to CSS maximize when the Fullscreen API is blocked.
-      }
+      // CSS maximize only. The Fullscreen API is intentionally not used: the
+      // browser always exits native fullscreen on Escape, which fights the
+      // pause-menu contract. .is-maxed fills the viewport without that trap.
+      // If a prior session left native FS active, leave it; do not re-enter.
       return applyMaximizedChrome(true);
     }
 
-    // Only the menu Fullscreen control (or an explicit setMaximized(false)
-    // caller) should collapse maximized layout. Keep the flag long enough for
-    // async webkit fullscreenchange handlers.
+    // Only the menu Exit fullscreen control collapses maximized layout.
     intentionalMaximizeExitUntil = performance.now() + 500;
     try {
       if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
@@ -26082,6 +26067,8 @@
   function syncFullscreenStateFromDocument() {
     const native = isNativeFullscreen();
     if (native) {
+      // Something else entered native FS; mirror maximized chrome so layout
+      // stays consistent, but Escape menu handling never depends on native FS.
       applyMaximizedChrome(true);
       return;
     }
@@ -26092,25 +26079,10 @@
       return;
     }
 
-    // Browsers always leave the Fullscreen API on Escape and that gesture is
-    // not cancelable. Keep the CSS maximized stage so Escape only opens the
-    // pause menu (or closes an open modal) instead of collapsing the viewport.
+    // If native FS ends for any other reason while we were maximized, keep the
+    // CSS stage maxed so Escape only opens/closes the pause menu.
     if (state.maximized || dom.stage?.classList.contains("is-maxed")) {
       applyMaximizedChrome(true);
-      if (
-        state.started
-        && !state.gameOver
-        && !state.menuOpen
-        && !state.readableBooks.open
-        && !state.workroom.keypadOpen
-        && !state.journalOpen
-      ) {
-        // Native FS often consumes Escape before keydown. Open the menu here
-        // and ignore a same-gesture keydown so it cannot immediately re-close.
-        intentionalPointerUnlockUntil = performance.now() + 450;
-        ignoreEscapeMenuToggleUntil = performance.now() + 450;
-        setMenuOpen(true);
-      }
       return;
     }
 

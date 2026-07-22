@@ -1039,6 +1039,8 @@
       transition: color 140ms ease, border-color 140ms ease, background 140ms ease, transform 140ms ease;
     }
 
+    .mansion-tool[hidden] { display: none; }
+
     .mansion-tool:hover,
     .mansion-tool:focus-visible {
       border-color: var(--mansion-brass-bright);
@@ -1049,6 +1051,13 @@
     }
 
     .mansion-tool:active { transform: translateY(1px); }
+
+    #mansion-flashlight-button.is-active {
+      border-color: rgba(255, 218, 158, 0.82);
+      color: #fff0ca;
+      background: rgba(86, 60, 27, 0.82);
+      box-shadow: 0 0 16px rgba(255, 193, 96, 0.24), 0 5px 18px rgba(0, 0, 0, 0.34);
+    }
 
     .mansion-tool--label {
       width: auto;
@@ -2905,6 +2914,7 @@
         </section>
 
         <div class="mansion-tools" aria-label="View controls">
+          <button id="mansion-flashlight-button" class="mansion-tool mansion-tool--label" type="button" aria-label="Switch flashlight on" aria-pressed="false" title="Flashlight" hidden>Light</button>
           <button id="mansion-journal-button" class="mansion-tool mansion-tool--label" type="button" aria-label="Open bag, inventory, and clues" aria-expanded="false" title="Bag · Inventory &amp; Clues">Bag</button>
           <button id="touch-menu" class="mansion-tool mansion-tool--label" type="button" aria-label="Open mansion menu">Menu</button>
         </div>
@@ -2922,6 +2932,7 @@
               <span><kbd>C</kbd> crouch</span>
               <span><kbd>Mouse</kbd> look</span>
               <span><kbd>E</kbd> interact</span>
+              <span><kbd>F</kbd> flashlight (once found)</span>
               <span><kbd>Tab</kbd> inventory</span>
               <span><kbd>Esc</kbd> menu</span>
             </div>
@@ -3183,6 +3194,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260712-uiux" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260722-storm-gate-dialogue-skip-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260722-basement-flashlight-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

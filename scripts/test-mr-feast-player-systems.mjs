@@ -39,6 +39,16 @@ async function diagnostics(page) {
   return page.evaluate(() => JSON.parse(window.render_game_to_text()));
 }
 
+async function screenshotStage(page, fileName) {
+  const clip = await page.locator("#mansion-stage").boundingBox();
+  assert(clip?.width > 0 && clip?.height > 0, `cannot capture ${fileName}: mansion stage has no bounds`);
+  return page.screenshot({
+    path: path.join(artifactDir, fileName),
+    clip,
+    animations: "disabled",
+  });
+}
+
 async function holdMove(page, { sprint = false, milliseconds = 600 } = {}) {
   if (sprint) await page.keyboard.down("Shift");
   await page.keyboard.down("w");
@@ -110,7 +120,7 @@ async function run() {
         * Math.max(0, Math.min(energy.bottom, scores.bottom) - Math.max(energy.top, scores.top));
     });
     assert(hudOverlap === 0, "energy HUD should not overlap the standalone Scores control");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "sprint-energy-hud-desktop.png") });
+    await screenshotStage(page, "sprint-energy-hud-desktop.png");
 
     await page.evaluate(() => window.MrFeastFresh.setPlayerEnergyForQA(6));
     const exhaustedSprint = await holdMove(page, { sprint: true, milliseconds: 700 });
@@ -162,7 +172,7 @@ async function run() {
     for (const id of ["mansion-menu-maximize", "mansion-menu-save", "mansion-menu-load", "mansion-menu-dev"]) {
       assert(await page.locator(`#${id}`).count() === 1, `Escape menu is missing ${id}`);
     }
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "escape-menu-desktop.png") });
+    await screenshotStage(page, "escape-menu-desktop.png");
 
     await page.locator("#mansion-menu-maximize").click();
     await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.maximized, null, { timeout: 3000 });
@@ -195,7 +205,7 @@ async function run() {
 
     await page.locator("#mansion-menu-dev").click();
     state = await diagnostics(page);
-    const expectedItems = ["garden-shovel", "basement-key-b13", "contestant-13-badge", "contestant-13-tape"];
+    const expectedItems = ["garden-shovel", "basement-key-b13", "contestant-13-badge", "contestant-13-tape", "basement-flashlight"];
     const expectedClues = ["contestant-13-book", "faceless-fountain-shovel", "maze-cache-b13", "basement-threshold-b13", "patron-feed-transcript"];
     assert(state.devMode.enabled, "Dev Mode button should enable the testing grant");
     assert(expectedItems.every((id) => state.inventory.items.includes(id)), "Dev Mode should grant every current quest object");
@@ -336,7 +346,7 @@ async function run() {
     await mobilePage.locator("#touch-crouch").click();
     await mobilePage.evaluate(() => window.MrFeastFresh.advancePlayerForQA(0.45));
     assert(!(await diagnostics(mobilePage)).player.movement.crouched, "pressing mobile Crouch again should restore standing stance");
-    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mobile-touch-controls.png") });
+    await screenshotStage(mobilePage, "mobile-touch-controls.png");
 
     await mobilePage.locator("#touch-menu").click();
     await mobilePage.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.escapeOpen);
@@ -373,7 +383,7 @@ async function run() {
     });
     assert(mobileDossierLayout.titleTop >= mobileDossierLayout.stageTop && mobileDossierLayout.closeTop >= mobileDossierLayout.stageTop, `mobile dossier title or close control begins outside the stage; layout=${JSON.stringify(mobileDossierLayout)}`);
     assert(mobileDossierLayout.panelScrollWidth <= mobileDossierLayout.panelClientWidth, "mobile dossier should not scroll horizontally");
-    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "inventory-and-clues-dev-mobile.png") });
+    await screenshotStage(mobilePage, "inventory-and-clues-dev-mobile.png");
     await mobileContext.close();
 
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);

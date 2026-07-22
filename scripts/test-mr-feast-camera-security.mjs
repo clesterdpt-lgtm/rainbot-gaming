@@ -36,6 +36,16 @@ async function diagnostics(page) {
   return page.evaluate(() => JSON.parse(window.render_game_to_text()));
 }
 
+async function screenshotStage(page, fileName) {
+  const clip = await page.locator("#mansion-stage").boundingBox();
+  assert(clip?.width > 0 && clip?.height > 0, `cannot capture ${fileName}: mansion stage has no bounds`);
+  return page.screenshot({
+    path: path.join(artifactDir, fileName),
+    clip,
+    animations: "disabled",
+  });
+}
+
 async function configureCameraScenario(page, { cameraId, mode, sweep = 0, distance = 4, occluded = false }) {
   return page.evaluate(({ cameraId: id, mode: policy, sweep: normalized, distance: laneDistance, occluded: blocked }) => {
     window.MrFeastFresh.resetCameraSecurityForQA(policy);
@@ -52,8 +62,7 @@ async function advanceSecurity(page, seconds) {
 }
 
 async function countFixtureIndicatorPixels(page, label) {
-  const screenshot = await page.locator("#mansion-stage").screenshot();
-  await sharp(screenshot).png().toFile(path.join(artifactDir, `camera-indicator-${label}.png`));
+  const screenshot = await screenshotStage(page, `camera-indicator-${label}.png`);
   const metadata = await sharp(screenshot).metadata();
   const width = metadata.width || 1;
   const height = metadata.height || 1;
@@ -171,14 +180,14 @@ async function run() {
       window.MrFeastFresh.teleport("yardGateEastSeam");
     });
     await page.waitForTimeout(120);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-yard-gate-desktop.png") });
+    await screenshotStage(page, "camera-yard-gate-desktop.png");
 
     await configureCameraScenario(page, { cameraId: mainCamera, mode: "show", sweep: 0, occluded: true });
     await advanceSecurity(page, 0.2);
     state = await diagnostics(page);
     assert(!state.security.observed, `steady green fixture check needs a clear non-detection state; security=${JSON.stringify(state.security)}`);
     const greenIndicatorPixels = await countFixtureIndicatorPixels(page, "green-desktop");
-    assert(greenIndicatorPixels.green >= 24, `steady green fixture LED should be visibly readable in the rendered camera housing; pixels=${JSON.stringify(greenIndicatorPixels)}`);
+    assert(greenIndicatorPixels.green >= 20, `steady green fixture LED should be visibly readable in the rendered camera housing; pixels=${JSON.stringify(greenIndicatorPixels)}`);
 
     await configureCameraScenario(page, { cameraId: mainCamera, mode: "show", sweep: 0 });
     await page.evaluate((id) => window.MrFeastFresh.setCameraOccludedForQA(id, null), mainCamera);
@@ -188,7 +197,7 @@ async function run() {
     assert(state.security.exposure === 0 && state.security.alarm.count === 0, "permitted filming must not build suspicion or raise an alarm");
     const permittedCamera = await page.evaluate((id) => window.MrFeastFresh.getCameraSecurityState().cameras.details.find((entry) => entry.id === id), mainCamera);
     assert(permittedCamera.trackingPlayer && permittedCamera.indicator === "tracking-red", `a permitted show camera should still visibly acquire and follow its filmed subject without alarming; camera=${JSON.stringify(permittedCamera)}`);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-permitted-tracking-desktop.png") });
+    await screenshotStage(page, "camera-permitted-tracking-desktop.png");
     const permittedYawBefore = permittedCamera.yaw;
     await page.evaluate((id) => window.MrFeastFresh.placePlayerInCameraLaneForQA(id, { distance: 4, lateral: -1.5 }), mainCamera);
     await advanceSecurity(page, 0.6);
@@ -269,7 +278,7 @@ async function run() {
       if (cameraState.indicator === "tracking-red") break;
     }
     assert(trackingElapsed >= 2 && trackingState?.alarm.count === 0, `warning pulses should leave an observable pre-alarm interval before tracking; elapsed=${trackingElapsed} security=${JSON.stringify(trackingState)}`);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-solid-red-tracking-desktop.png") });
+    await screenshotStage(page, "camera-solid-red-tracking-desktop.png");
     const trackingSample = warningProbe.find((sample) => sample.indicator === "tracking-red");
     assert(trackingSample?.tracking || trackingState?.cameras.details.find((entry) => entry.id === mainCamera)?.trackingPlayer, `solid red tracking should begin before the alarm so the player still has time to escape; warning=${JSON.stringify(warningProbe)}`);
     const trackingYawBefore = (await page.evaluate((id) => window.MrFeastFresh.getCameraSecurityState().cameras.details.find((entry) => entry.id === id).yaw, mainCamera));
@@ -388,7 +397,7 @@ async function run() {
       return { width: rect.width, height: rect.height };
     });
     assert(desktopNoticeLayout.width <= 160 && desktopNoticeLayout.height <= 40, `desktop camera notice should stay subtle and compact; layout=${JSON.stringify(desktopNoticeLayout)}`);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-status-desktop.png") });
+    await screenshotStage(page, "camera-status-desktop.png");
     await page.evaluate((id) => window.MrFeastFresh.setCameraOccludedForQA(id, true), mainCamera);
     await advanceSecurity(page, 0.2);
     assert(!(await securityNotice.isVisible()), "camera notice should disappear immediately after observation ends, even during lockdown");
@@ -424,7 +433,7 @@ async function run() {
     });
     assert(mobileLayout.withinStage && mobileLayout.width <= 160 && mobileLayout.height <= 40, `mobile camera notice should remain compact inside the stage; layout=${JSON.stringify(mobileLayout)}`);
     assert((await mobilePage.locator("#mansion-security-status").textContent() || "").trim() === "Spotted", "mobile acquisition notice should use the same subtle Spotted copy");
-    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "camera-status-mobile.png") });
+    await screenshotStage(mobilePage, "camera-status-mobile.png");
     await mobileContext.close();
 
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);

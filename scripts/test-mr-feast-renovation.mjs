@@ -1520,6 +1520,25 @@ check("55 stealth sight gating", /effectiveSightRangeMeters\(\)/.test(section("c
 check("55 stealth camera consumption", /state\.stealth\.effectiveVisibility/.test(cameraSecuritySystem), "camera acquisition does not consume the stealth effective visibility");
 check("55 stealth diagnostics", /meter:/.test(section("stealth: {", "}", diagnostics)) && /getStealth/.test(mansion) && /setStealthLightOverrideForQA/.test(mansion), "stealth diagnostics or QA controls are missing");
 
+// 56. The basement flashlight is a discoverable carried tool with one
+// shader-resident, shadow-free beam; turning it on trades concealment for a
+// recoverable camera/Mr. Feast investigation without omniscient pursuit.
+const flashlightConfig = section("const FLASHLIGHT = Object.freeze({", "const CAMERA_SECURITY_MODE");
+const flashlightSystem = section("class FlashlightSystem", "class CameraSecuritySystem");
+const flashlightUpdate = section("    update(dt) {", "    placePlayerNearForQA()", flashlightSystem);
+const flashlightInput = section("function bindInput()", "function bindTouchControls()");
+const flashlightStealth = section("function updateStealth(", "function syncCamera()");
+check("56 flashlight tuning", /pickup:/.test(flashlightConfig) && /beam:/.test(flashlightConfig) && /stealthExposureFloor:/.test(flashlightConfig) && /alertCooldownSeconds:/.test(flashlightConfig), "flashlight lacks named placement, beam, stealth, or alert tuning");
+check("56 flashlight pickup", /Take flashlight/.test(flashlightSystem) && /basement-flashlight/.test(flashlightSystem) && /addInteractionTarget/.test(flashlightSystem) && /removeInteractionTarget/.test(flashlightSystem), "flashlight is not a one-time physical E/touch pickup");
+check("56 flashlight input", /code === "KeyF"/.test(flashlightInput) && /event\.repeat/.test(flashlightInput) && /flashlightSystem\?\.toggle/.test(flashlightInput) && /mansion-flashlight-button/.test(page), "flashlight does not share one non-repeating F/touch toggle path");
+check("56 flashlight hidden control", /\.mansion-tool\[hidden\]\s*\{\s*display:\s*none/.test(page), "the coarse-pointer toolbar overrides the fresh run's hidden Light control");
+check("56 flashlight beam", /new THREE\.SpotLight/.test(flashlightSystem) && /castShadow = false/.test(flashlightSystem) && /intensity = this\.state\.on/.test(flashlightSystem), "flashlight beam is not a shadow-free, energy-toggled spotlight");
+check("56 flashlight inactive cost", /if \(!this\.state\.on\) \{[\s\S]*this\.beam\.intensity = 0;[\s\S]*return;[\s\S]*\}[\s\S]*this\.syncPose\(\)/.test(flashlightUpdate), "the inactive flashlight still updates its camera pose or raycasts against the mansion");
+check("56 flashlight stealth cost", /FLASHLIGHT\.stealthExposureFloor/.test(flashlightStealth) && /state\.flashlight\.on/.test(flashlightStealth), "active flashlight does not explicitly lower crouched concealment");
+check("56 flashlight bounded alert", /reportFlashlightUse/.test(cameraSecuritySystem) && /respondToCameraAlarm/.test(cameraSecuritySystem) && /flashlight-use/.test(cameraSecuritySystem) && !/beginPursuit/.test(flashlightSystem), "flashlight must route a bounded camera response without direct pursuit");
+check("56 flashlight persistence", /basement-flashlight/.test(contestant13Quest) && /flashlightSystem\?\.restoreFromInventory/.test(mansion), "flashlight possession is not restored from Bag inventory with transient state reset");
+check("56 flashlight diagnostics", /flashlight:/.test(diagnostics) && /getFlashlightState/.test(qaHooks) && /collectFlashlightForQA/.test(qaHooks) && /setFlashlightForQA/.test(qaHooks) && /placePlayerNearFlashlightForQA/.test(qaHooks), "flashlight diagnostics and focused QA controls are incomplete");
+
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const grandStairBuild = section("function buildGrandStaircase()", "function buildRearUpperWalkwayGuard()");

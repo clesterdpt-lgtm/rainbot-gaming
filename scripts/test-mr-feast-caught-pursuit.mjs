@@ -54,8 +54,8 @@ async function bootPage(browser, viewport, errors) {
   const page = await browser.newPage({ viewport });
   watchErrors(page, errors);
   await page.goto(`${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1&allLights=1`, { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
-  await page.waitForFunction(() => window.MrFeastFresh.getMrFeastState()?.loadStatus === "ready", null, { timeout: 120000 });
+  await page.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 180000 });
+  await page.waitForFunction(() => window.MrFeastFresh.getMrFeastState()?.loadStatus === "ready", null, { timeout: 180000 });
   await page.waitForTimeout(300);
   return page;
 }

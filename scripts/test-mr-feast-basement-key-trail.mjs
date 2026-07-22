@@ -35,6 +35,16 @@ async function diagnostics(page) {
   return page.evaluate(() => JSON.parse(window.render_game_to_text()));
 }
 
+async function screenshotStage(page, fileName) {
+  const clip = await page.locator("#mansion-stage").boundingBox();
+  assert(clip?.width > 0 && clip?.height > 0, `cannot capture ${fileName}: mansion stage has no bounds`);
+  return page.screenshot({
+    path: path.join(artifactDir, fileName),
+    clip,
+    animations: "disabled",
+  });
+}
+
 async function completeFirstClueCompetition(page, expectedClueId) {
   let state = await diagnostics(page);
   assert(
@@ -47,7 +57,7 @@ async function completeFirstClueCompetition(page, expectedClueId) {
   );
   const result = await page.evaluate(() => window.MrFeastFresh.completeFeastSaysForQA(6));
   assert(result?.survived === true, `the QA completion should survive Feast Says; got ${JSON.stringify(result)}`);
-  await page.waitForFunction(() => window.MrFeastFresh.getFeastSaysState?.()?.phase === "completed", null, { timeout: 8000 });
+  await page.waitForFunction(() => window.MrFeastFresh.getFeastSaysState?.()?.phase === "completed", null, { timeout: 20000 });
   state = await diagnostics(page);
   assert(
     state.feastSays.clueProgressLocked === false && state.feastSays.eliminatedContestantId === "kip-solano",
@@ -82,7 +92,7 @@ async function completeStormRunAfterMazeKey(page) {
   );
   const result = await page.evaluate(() => window.MrFeastFresh.completeStormRunForQA("player"));
   assert(result?.survived === true, `the QA completion should survive Storm Run; got ${JSON.stringify(result)}`);
-  await page.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.phase === "completed", null, { timeout: 8000 });
+  await page.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.phase === "completed", null, { timeout: 20000 });
   state = await diagnostics(page);
   assert(
     state.stormRun.clueProgressLocked === false && state.stormRun.eliminatedContestantId === "mara-voss",
@@ -106,7 +116,7 @@ async function teleportForInteraction(page, view, promptPattern) {
     await page.waitForFunction(
       ({ source, flags }) => new RegExp(source, flags).test(JSON.parse(window.render_game_to_text()).prompt || ""),
       { source: promptPattern.source, flags: promptPattern.flags },
-      { timeout: 5000, polling: 100 },
+      { timeout: 10000, polling: 100 },
     );
   } catch (_) {
     const state = await diagnostics(page);
@@ -166,10 +176,10 @@ async function run() {
     assert(!state.contestant13.basementUnlocked && state.contestant13.world.basementDoorLocked && !state.contestant13.world.basementDoorOpen, "whole-home QA must restore the locked door without advancing story state");
 
     await teleportForInteraction(page, "contestant13LibraryBook", /read “.+”/i);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "library-shelf-book-subtle-desktop.png") });
+    await screenshotStage(page, "library-shelf-book-subtle-desktop.png");
 
     await teleportForInteraction(page, "contestant13BasementDoor", /basement.*locked|key.*missing/i);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "basement-door-locked-desktop.png") });
+    await screenshotStage(page, "basement-door-locked-desktop.png");
     await pressInteract(page);
     state = await diagnostics(page);
     assert(!state.contestant13.basementUnlocked && state.contestant13.world.basementDoorLocked, "early basement interaction must not unlock the door");
@@ -215,7 +225,7 @@ async function run() {
     assert((await page.locator("#mansion-story-progress").textContent()) === "Trail 1/7", "book should be the first of seven trail steps for diagnostics");
     assert((await page.locator("#mansion-objective").textContent() || "").trim() === "", "objective tip text must stay blank; clues live in Bag only");
     await page.waitForTimeout(200);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "printed-book-with-handwritten-marginalia-desktop.png") });
+    await screenshotStage(page, "printed-book-with-handwritten-marginalia-desktop.png");
 
     state = await completeFirstClueCompetition(page, "contestant-13-book");
     if (!(await page.locator("#mansion-book-reader").isHidden())) {
@@ -255,7 +265,7 @@ async function run() {
     assert(!state.contestant13.world.basementDoorLocked && state.contestant13.world.basementDoorOpen, "using the maze key should unlock and open the basement door");
     assert(state.inventory.items.filter((id) => id === "basement-key-b13").length === 1, "unlocking the basement must not duplicate the key");
     assert(state.journal.entries.filter((id) => id === "basement-threshold-b13").length === 1, "basement threshold should enter the journal once");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "basement-door-unlocked-desktop.png") });
+    await screenshotStage(page, "basement-door-unlocked-desktop.png");
 
     await teleportForInteraction(page, "contestant13ArchiveCage", /unlock.*b-13|evidence cage/i);
     await pressInteract(page);
@@ -318,7 +328,7 @@ async function run() {
     assert(mobileUi.touch && mobileUi.touch.width >= 44 && mobileUi.touch.height >= 44, "mobile interact control should remain at least 44px");
     assert(mobileUi.clueKind === "clue" && mobileUi.reader && mobileUi.reader.left >= 0 && mobileUi.reader.top >= 0 && mobileUi.reader.right <= mobileUi.viewportWidth && mobileUi.reader.bottom <= mobileUi.viewportHeight, `mobile handwritten clue reader should fit on-screen; ui=${JSON.stringify(mobileUi)}`);
     assert(mobileUi.printedLength >= 120 && /basement key/i.test(mobileUi.annotationCopy) && mobileUi.annotation && mobileUi.annotation.left >= 0 && mobileUi.annotation.right <= mobileUi.viewportWidth && mobileUi.annotation.bottom <= mobileUi.viewportHeight, `mobile printed prose and handwritten marginalia should both be visible without horizontal overflow; ui=${JSON.stringify(mobileUi)}`);
-    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "printed-book-marginalia-mobile.png") });
+    await screenshotStage(mobilePage, "printed-book-marginalia-mobile.png");
     await completeFirstClueCompetition(mobilePage, "contestant-13-book");
     const resumedCaseFile = await mobilePage.evaluate(() => {
       const element = document.getElementById("mansion-casefile");

@@ -35,6 +35,16 @@ async function diagnostics(page) {
   return page.evaluate(() => JSON.parse(window.render_game_to_text()));
 }
 
+async function screenshotStage(page, fileName) {
+  const clip = await page.locator("#mansion-stage").boundingBox();
+  assert(clip?.width > 0 && clip?.height > 0, `cannot capture ${fileName}: mansion stage has no bounds`);
+  return page.screenshot({
+    path: path.join(artifactDir, fileName),
+    clip,
+    animations: "disabled",
+  });
+}
+
 async function stealthState(page) {
   return page.evaluate(() => window.MrFeastFresh.getStealth());
 }
@@ -120,7 +130,7 @@ async function run() {
     assert(recoveredStealth.meter > movingStealth.meter + 5, `standing still should recover the stealth meter; moving=${movingStealth.meter} recovered=${recoveredStealth.meter}`);
     const litFill = await page.locator("#mansion-stealth-fill").evaluate((fill) => fill.style.width);
     assert(/%$/.test(litFill), "stealth HUD fill should track the meter percentage");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "stealth-meter-crouch-lit-desktop.png") });
+    await screenshotStage(page, "stealth-meter-crouch-lit-desktop.png");
 
     // 4. Darkness raises the meter and lowers effective visibility through the
     // real light circuits.
@@ -138,7 +148,7 @@ async function run() {
     assert(darkStealth.effectiveVisibility < recoveredStealth.effectiveVisibility, "darkness should lower crouched effective visibility");
     assert(darkStealth.mrFeastSightRangeMeters < 4.6, `a dark motionless crouch should strangle Mr. Feast's sight range; range=${darkStealth.mrFeastSightRangeMeters}`);
     assert(darkStealth.mrFeastSightRangeMeters >= 2, "the scaled sight range must keep a close-quarters fairness floor");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "stealth-meter-crouch-dark-desktop.png") });
+    await screenshotStage(page, "stealth-meter-crouch-dark-desktop.png");
 
     // 5. Moving in darkness still costs concealment on the meter.
     const darkMoving = await crouchMeterWhileMoving(page, 1.2);
@@ -256,7 +266,7 @@ async function run() {
       return stage.scrollWidth - stage.clientWidth;
     });
     assert(mobileOverflow <= 0, "the stealth HUD must not add horizontal overflow to the phone layout");
-    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "stealth-hud-mobile.png") });
+    await screenshotStage(mobilePage, "stealth-hud-mobile.png");
     await mobileContext.close();
 
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);

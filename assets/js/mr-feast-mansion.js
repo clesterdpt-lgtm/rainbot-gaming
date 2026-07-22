@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260722-storm-gate-dialogue-skip-1";
+  const MANSION_RUNTIME_VERSION = "20260722-basement-flashlight-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -88,6 +88,7 @@
     inventory: $("mansion-inventory"),
     inventoryDialogItems: $("mansion-inventory-dialog-items"),
     journalButton: $("mansion-journal-button"),
+    flashlightButton: $("mansion-flashlight-button"),
     journal: $("mansion-journal"),
     journalClose: $("mansion-journal-close"),
     journalEntries: $("mansion-journal-entries"),
@@ -665,6 +666,37 @@
   // correction preserves the inward palm read without candy-wrapper twisting.
   const CONTESTANT_STANDING_HAND_ORIENTATION_BLEND = Object.freeze({
     "kip-solano": 0.4,
+  });
+  const FLASHLIGHT = Object.freeze({
+    itemId: "basement-flashlight",
+    pickup: Object.freeze({
+      x: 14.68,
+      y: FLOOR.BASEMENT + 1.08,
+      z: 3.82,
+      yaw: -Math.PI / 2,
+      serviceStairBottom: Object.freeze({ x: 12.55, z: 2.72 }),
+      interactionWidth: 0.58,
+      interactionHeight: 0.72,
+      interactionDepth: 0.68,
+    }),
+    beam: Object.freeze({
+      color: 0xffe3bd,
+      intensity: 68,
+      distance: 8.2,
+      angle: 0.38,
+      penumbra: 0.78,
+      decay: 2,
+      poseSampleSeconds: 0.09,
+      wallClearanceMeters: 0.22,
+      minimumDistance: 0.9,
+      originOffset: Object.freeze({ x: 0.16, y: -0.13, z: -0.08 }),
+      aimOffset: Object.freeze({ x: 0.02, y: -0.08, z: -8.2 }),
+      heldOffset: Object.freeze({ x: 0.27, y: -0.24, z: -0.5 }),
+      activationFlutterSeconds: 0.18,
+    }),
+    stealthExposureFloor: 0.72,
+    alertCooldownSeconds: 1.4,
+    warningSeconds: 2.4,
   });
   const CAMERA_SECURITY_MODE = Object.freeze({
     SHOW: "show",
@@ -1882,18 +1914,21 @@
       "basement-key-b13": "Basement key",
       "contestant-13-badge": "Badge 13",
       "contestant-13-tape": "Tape reel",
+      "basement-flashlight": "Basement flashlight",
     }),
     itemIcons: Object.freeze({
       "garden-shovel": "shovel",
       "basement-key-b13": "key",
       "contestant-13-badge": "badge",
       "contestant-13-tape": "tape",
+      "basement-flashlight": "flashlight",
     }),
     itemDetails: Object.freeze({
       "garden-shovel": "Garden tool",
       "basement-key-b13": "B-13 service key",
       "contestant-13-badge": "Contestant credential",
       "contestant-13-tape": "Sealed recording",
+      "basement-flashlight": "Camera-visible hand light",
     }),
     world: Object.freeze({
       book: Object.freeze({
@@ -1938,6 +1973,15 @@
         <circle cx="60" cy="44" r="9" stroke="currentColor" stroke-width="4"/>
         <path d="M42 44h12M28 66h40l-5-8H33z" fill="#211b16" opacity=".9"/>
         <circle cx="31" cy="67" r="2" fill="currentColor"/><circle cx="65" cy="67" r="2" fill="currentColor"/>
+      `,
+      flashlight: `
+        <g transform="rotate(-18 48 48)">
+          <rect x="36" y="28" width="24" height="47" rx="8" fill="currentColor" opacity=".92"/>
+          <path d="M31 30h34l-5-14H36z" fill="currentColor"/>
+          <ellipse cx="48" cy="16" rx="12" ry="5" fill="#fff4d1" opacity=".86"/>
+          <path d="M40 39h16M40 47h16M40 55h16" stroke="#211b16" stroke-width="3" opacity=".55"/>
+          <path d="M40 72h16" stroke="#fff4d1" stroke-width="2" opacity=".34"/>
+        </g>
       `,
     };
     return `<svg viewBox="0 0 96 96" focusable="false" aria-hidden="true">${paths[iconName] || paths.badge}</svg>`;
@@ -2503,6 +2547,8 @@
     serviceStairTopOblique: [10.95, FLOOR.MAIN, -2.05, -2.55, -0.5],
     serviceStairBottomLight: [12.55, FLOOR.BASEMENT, 2.9, Math.PI, 0.5],
     serviceStairBottomSwitch: [13.1, FLOOR.BASEMENT, 3.6, -0.87, -0.27],
+    flashlightPickup: [13.12, FLOOR.BASEMENT, FLASHLIGHT.pickup.z, -Math.PI / 2, -0.36],
+    flashlightBeam: [13.45, FLOOR.BASEMENT, 7.2, Math.PI / 2, -0.05],
     rearCrossCorridorA: [-13.2, FLOOR.BASEMENT, -4.05, -Math.PI / 2],
     rearCrossCorridorB: [13.2, FLOOR.BASEMENT, -4.05, Math.PI / 2],
     boilerRoomA: [-13.5, FLOOR.BASEMENT, -5.8, -0.9],
@@ -2673,6 +2719,7 @@
       meter: 0,
       meterVisible: false,
       lightExposure: 1,
+      appliedLightExposure: 1,
       sampledLight: 1,
       sampleRemaining: 0,
       motionActivity: 0,
@@ -2693,6 +2740,17 @@
       lastAlarm: null,
       alarmCooldown: 0,
       alarmLatchCameraId: null,
+      flashlightAlertCount: 0,
+      lastFlashlightAlert: null,
+      flashlightWarningRemaining: 0,
+    },
+    flashlight: {
+      collected: false,
+      on: false,
+      activationCount: 0,
+      alertCount: 0,
+      alertCooldown: 0,
+      lastAlert: null,
     },
     workroom: {
       unlocked: false,
@@ -2914,6 +2972,7 @@
   let mansionContestants = null;
   let seatingSystem = null;
   let cameraSecurity = null;
+  let flashlightSystem = null;
   let monitorWallSystem = null;
   let tamperSystem = null;
   let speechSystem = null;
@@ -11953,6 +12012,7 @@
 
     enter() {
       if (state.activeHideSpot) return;
+      flashlightSystem?.setOn(false, { silent: true, force: true });
       state.activeHideSpot = this;
       state.isHidden = true;
       input.forward = false;
@@ -12150,6 +12210,7 @@
         }
       }
       if (dom.journalButton) dom.journalButton.setAttribute("aria-expanded", String(state.journalOpen));
+      flashlightSystem?.syncUi();
     }
 
     showDiscovery(title, body, durationMs = 7600) {
@@ -12510,6 +12571,7 @@
       if (contestant13Scene.relayBlackCables) contestant13Scene.relayBlackCables.visible = !this.story.relaySabotaged;
       if (contestant13Scene.relayOnlineBulb) contestant13Scene.relayOnlineBulb.visible = !this.story.relaySabotaged;
       if (contestant13Scene.relayAlarmBulb) contestant13Scene.relayAlarmBulb.visible = this.story.relaySabotaged;
+      flashlightSystem?.restoreFromInventory();
     }
 
     setDevMode(enabled) {
@@ -12556,6 +12618,7 @@
       return {
         items: this.story.inventory.slice(),
         bulkyItem: this.hasItem("garden-shovel") ? "garden-shovel" : null,
+        flashlight: this.hasItem("basement-flashlight"),
       };
     }
 
@@ -17127,6 +17190,366 @@
     return result;
   }
 
+  class FlashlightSystem {
+    constructor() {
+      this.state = state.flashlight;
+      this.pickupRegistered = false;
+      this.flutterRemaining = 0;
+      this.raySampleRemaining = 0;
+      this.currentDistance = FLASHLIGHT.beam.distance;
+      this.raycaster = new THREE.Raycaster();
+      this.origin = new THREE.Vector3();
+      this.aim = new THREE.Vector3();
+      this.direction = new THREE.Vector3();
+      this.offset = new THREE.Vector3();
+      this.cameraQuaternion = new THREE.Quaternion();
+      this.buildPickup();
+      this.buildCarriedRig();
+      this.restoreFromInventory({ clearTransient: true });
+    }
+
+    buildPickup() {
+      const root = new THREE.Group();
+      root.name = "basement-flashlight-pickup";
+      root.position.set(FLASHLIGHT.pickup.x, FLASHLIGHT.pickup.y, FLASHLIGHT.pickup.z);
+      root.rotation.y = FLASHLIGHT.pickup.yaw;
+      scene.add(root);
+      const pickupMetalMaterial = new THREE.MeshBasicMaterial({ color: 0x303337, toneMapped: false });
+      const pickupTrimMaterial = new THREE.MeshBasicMaterial({ color: 0x8c7449, toneMapped: false });
+      const pickupReflectiveMaterial = new THREE.MeshBasicMaterial({ color: 0xd6bb83, toneMapped: false });
+      roundedBox({ name: "basement-flashlight-brass-cradle", w: 0.38, h: 0.52, d: 0.07, radius: 0.035, z: 0.015, material: pickupTrimMaterial, parent: root, cast: false });
+      roundedBox({ name: "basement-flashlight-cradle-inset", w: 0.29, h: 0.43, d: 0.025, radius: 0.025, z: 0.065, material: M.soot, parent: root, cast: false });
+      cylinder({ name: "basement-flashlight-body", radius: 0.056, height: 0.34, segments: 16, y: -0.015, z: 0.13, material: pickupMetalMaterial, parent: root, cast: false });
+      cylinder({ name: "basement-flashlight-grip-ring-a", radius: 0.064, height: 0.025, segments: 16, y: -0.1, z: 0.13, material: pickupTrimMaterial, parent: root, cast: false });
+      cylinder({ name: "basement-flashlight-grip-ring-b", radius: 0.064, height: 0.025, segments: 16, y: 0.035, z: 0.13, material: pickupTrimMaterial, parent: root, cast: false });
+      cylinder({ name: "basement-flashlight-head", radius: 0.086, radiusTop: 0.086, radiusBottom: 0.06, height: 0.12, segments: 18, y: 0.2, z: 0.13, material: pickupMetalMaterial, parent: root, cast: false });
+      roundedBox({ name: "basement-flashlight-reflective-strip", w: 0.035, h: 0.2, d: 0.018, radius: 0.012, y: -0.03, z: 0.191, material: pickupReflectiveMaterial, parent: root, cast: false });
+      const lensMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffe2b8,
+        emissive: 0xffb65c,
+        emissiveIntensity: 0.72,
+        metalness: 0.05,
+        roughness: 0.22,
+      });
+      cylinder({ name: "basement-flashlight-lens", radius: 0.055, height: 0.014, segments: 20, y: 0.2, z: 0.222, rotationX: Math.PI / 2, material: lensMaterial, parent: root, cast: false });
+      for (const y of [-0.18, 0.18]) {
+        roundedBox({ name: "basement-flashlight-cradle-clip", w: 0.21, h: 0.055, d: 0.13, radius: 0.02, y, z: 0.12, material: pickupTrimMaterial, parent: root, cast: false });
+      }
+      const hitboxMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
+      const hitbox = new THREE.Mesh(new THREE.BoxGeometry(
+        FLASHLIGHT.pickup.interactionWidth,
+        FLASHLIGHT.pickup.interactionHeight,
+        FLASHLIGHT.pickup.interactionDepth,
+      ), hitboxMaterial);
+      hitbox.name = "basement-flashlight-interaction";
+      hitbox.position.z = 0.25;
+      root.add(hitbox);
+      this.pickupRoot = root;
+      this.pickupHitbox = hitbox;
+      this.pickupInteraction = {
+        type: "flashlight",
+        id: FLASHLIGHT.itemId,
+        getLabel: () => "Take flashlight",
+        activate: () => this.collect(),
+      };
+    }
+
+    buildCarriedRig() {
+      const held = new THREE.Group();
+      held.name = "carried-basement-flashlight";
+      held.visible = false;
+      held.scale.setScalar(0.64);
+      const heldBodyMaterial = new THREE.MeshBasicMaterial({ color: 0x17191b, toneMapped: false });
+      const heldTrimMaterial = new THREE.MeshBasicMaterial({ color: 0x75603b, toneMapped: false });
+      const heldLensMaterial = new THREE.MeshBasicMaterial({ color: 0xd5ad70, toneMapped: false });
+      cylinder({ name: "carried-flashlight-body", radius: 0.032, height: 0.17, segments: 14, z: -0.01, rotationX: Math.PI / 2, material: heldBodyMaterial, parent: held, cast: false });
+      cylinder({ name: "carried-flashlight-head", radius: 0.046, radiusTop: 0.046, radiusBottom: 0.034, height: 0.062, segments: 16, z: -0.115, rotationX: Math.PI / 2, material: heldTrimMaterial, parent: held, cast: false });
+      cylinder({ name: "carried-flashlight-lens", radius: 0.038, height: 0.01, segments: 16, z: -0.151, rotationX: Math.PI / 2, material: heldLensMaterial, parent: held, cast: false });
+      scene.add(held);
+      this.heldRoot = held;
+
+      const beam = new THREE.SpotLight(
+        FLASHLIGHT.beam.color,
+        0,
+        FLASHLIGHT.beam.distance,
+        FLASHLIGHT.beam.angle,
+        FLASHLIGHT.beam.penumbra,
+        FLASHLIGHT.beam.decay,
+      );
+      beam.name = "carried-flashlight-beam";
+      beam.target.name = "carried-flashlight-beam-target";
+      beam.castShadow = false;
+      beam.visible = true;
+      beam.userData.portableFlashlight = true;
+      beam.userData.baseIntensity = FLASHLIGHT.beam.intensity;
+      scene.add(beam, beam.target);
+      this.beam = beam;
+      this.syncPose(true);
+      this.syncPresentation();
+    }
+
+    collected() {
+      return Boolean(this.state.collected && contestant13Quest?.hasItem(FLASHLIGHT.itemId));
+    }
+
+    canToggle() {
+      return Boolean(
+        state.started
+        && this.collected()
+        && !state.menuOpen
+        && !state.journalOpen
+        && !state.workroom.keypadOpen
+        && !state.readableBooks.open
+        && !state.gameOver
+        && !openingWelcomeSystem?.active
+        && !state.activeSeat
+        && !state.isHidden
+        && !state.contestant13.actionInProgress
+        && !competitionBlocksInvestigation()
+      );
+    }
+
+    syncPickupVisibility() {
+      const visible = !this.collected();
+      if (this.pickupRoot) this.pickupRoot.visible = visible;
+      if (visible && !this.pickupRegistered) {
+        addInteractionTarget(this.pickupHitbox, this.pickupInteraction);
+        this.pickupRegistered = true;
+      } else if (!visible && this.pickupRegistered) {
+        removeInteractionTarget(this.pickupHitbox);
+        this.pickupRegistered = false;
+      }
+    }
+
+    syncUi() {
+      if (!dom.flashlightButton) return;
+      const collected = this.collected();
+      dom.flashlightButton.hidden = !collected;
+      dom.flashlightButton.textContent = this.state.on ? "Light off" : "Light";
+      dom.flashlightButton.setAttribute("aria-label", this.state.on ? "Switch flashlight off" : "Switch flashlight on");
+      dom.flashlightButton.setAttribute("aria-pressed", String(this.state.on));
+      dom.flashlightButton.classList.toggle("is-active", this.state.on);
+    }
+
+    syncPresentation() {
+      const active = this.collected() && this.state.on;
+      if (this.heldRoot) this.heldRoot.visible = active;
+      if (this.beam) {
+        // Keep the real SpotLight shader-resident. Only its energy changes.
+        this.beam.visible = true;
+        this.beam.intensity = this.state.on ? FLASHLIGHT.beam.intensity : 0;
+      }
+      this.syncPickupVisibility();
+      this.syncUi();
+    }
+
+    collect() {
+      if (this.collected()) return false;
+      if (competitionBlocksInvestigation()) {
+        notifyCompetitionHold();
+        return false;
+      }
+      if (!contestant13Quest?.addItem(FLASHLIGHT.itemId)) return false;
+      this.state.collected = true;
+      this.state.on = false;
+      this.syncPresentation();
+      contestant13Quest.showDiscovery(
+        "Basement flashlight",
+        "Press F to switch it on. The beam is useful, but the cameras will notice it.",
+        9000,
+      );
+      audioSystem?.pickup("object");
+      contestant13Quest.updateUI();
+      updateInteractionPrompt();
+      return true;
+    }
+
+    setOn(on, options = {}) {
+      const next = Boolean(on);
+      if (next && !this.collected()) return false;
+      if (next && !options.force && !this.canToggle()) return false;
+      if (this.state.on === next) {
+        this.syncPresentation();
+        return this.state.on;
+      }
+      this.state.on = next;
+      state.stealth.sampleRemaining = 0;
+      if (next) {
+        this.state.activationCount += 1;
+        this.flutterRemaining = FLASHLIGHT.beam.activationFlutterSeconds;
+        this.raySampleRemaining = 0;
+        this.syncPose(true);
+        if (!options.silent && this.state.alertCooldown <= 0) {
+          const alert = cameraSecurity?.reportFlashlightUse() || null;
+          if (alert) this.state.alertCooldown = FLASHLIGHT.alertCooldownSeconds;
+        }
+      } else {
+        this.flutterRemaining = 0;
+      }
+      this.syncPresentation();
+      if (!options.silent) audioSystem?.light(next);
+      return this.state.on;
+    }
+
+    toggle(source = "keyboard") {
+      void source;
+      return this.setOn(!this.state.on);
+    }
+
+    resetAlerts() {
+      this.state.alertCount = 0;
+      this.state.alertCooldown = 0;
+      this.state.lastAlert = null;
+      state.security.flashlightAlertCount = 0;
+      state.security.lastFlashlightAlert = null;
+      state.security.flashlightWarningRemaining = 0;
+      for (const cameraState of cameraSecurity?.cameras || []) cameraState.flashlightWarningRemaining = 0;
+    }
+
+    restoreFromInventory({ clearTransient = false } = {}) {
+      this.state.collected = Boolean(contestant13Quest?.hasItem(FLASHLIGHT.itemId));
+      if (clearTransient) {
+        this.state.on = false;
+        this.state.activationCount = 0;
+        this.resetAlerts();
+      } else if (!this.state.collected) {
+        this.state.on = false;
+      }
+      this.syncPresentation();
+      return this.getDiagnostics();
+    }
+
+    syncPose(forceRaycast = false) {
+      if (!this.beam || !this.heldRoot) return;
+      camera.updateMatrixWorld(true);
+      this.cameraQuaternion.copy(camera.quaternion);
+      this.origin.set(
+        FLASHLIGHT.beam.originOffset.x,
+        FLASHLIGHT.beam.originOffset.y,
+        FLASHLIGHT.beam.originOffset.z,
+      ).applyQuaternion(this.cameraQuaternion).add(camera.position);
+      this.aim.set(
+        FLASHLIGHT.beam.aimOffset.x,
+        FLASHLIGHT.beam.aimOffset.y,
+        FLASHLIGHT.beam.aimOffset.z,
+      ).applyQuaternion(this.cameraQuaternion).add(camera.position);
+      this.beam.position.copy(this.origin);
+      this.beam.target.position.copy(this.aim);
+      this.beam.target.updateMatrixWorld(true);
+      this.offset.set(
+        FLASHLIGHT.beam.heldOffset.x,
+        FLASHLIGHT.beam.heldOffset.y,
+        FLASHLIGHT.beam.heldOffset.z,
+      ).applyQuaternion(this.cameraQuaternion).add(camera.position);
+      this.heldRoot.position.copy(this.offset);
+      this.heldRoot.quaternion.copy(this.cameraQuaternion);
+      if (forceRaycast || this.raySampleRemaining <= 0) {
+        this.direction.copy(this.aim).sub(this.origin).normalize();
+        this.raycaster.set(this.origin, this.direction);
+        this.raycaster.near = 0.16;
+        this.raycaster.far = FLASHLIGHT.beam.distance;
+        const blocker = this.raycaster.intersectObjects(occluderMeshes, false).find((hit) => {
+          const object = hit.object;
+          if (!object?.visible || hit.distance < 0.18) return false;
+          const name = String(object.name || "").toLowerCase();
+          if (/security-camera|rain|lightning|water-surface|glow|bulb|interaction/.test(name)) return false;
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          return !materials.some((material) => material?.transparent && material.opacity < 0.35);
+        });
+        this.currentDistance = clamp(
+          blocker ? blocker.distance + FLASHLIGHT.beam.wallClearanceMeters : FLASHLIGHT.beam.distance,
+          FLASHLIGHT.beam.minimumDistance,
+          FLASHLIGHT.beam.distance,
+        );
+        this.beam.distance = this.currentDistance;
+        this.raySampleRemaining = FLASHLIGHT.beam.poseSampleSeconds;
+      }
+    }
+
+    update(dt) {
+      const safeDt = Math.max(0, Number(dt) || 0);
+      this.state.alertCooldown = Math.max(0, this.state.alertCooldown - safeDt);
+      this.raySampleRemaining = Math.max(0, this.raySampleRemaining - safeDt);
+      if (this.state.on && !this.canToggle()) this.setOn(false, { silent: true, force: true });
+      if (!this.state.on) {
+        this.beam.intensity = 0;
+        return;
+      }
+      this.syncPose();
+      if (this.flutterRemaining > 0 && this.state.on) {
+        this.flutterRemaining = Math.max(0, this.flutterRemaining - safeDt);
+        const phase = 1 - this.flutterRemaining / FLASHLIGHT.beam.activationFlutterSeconds;
+        const flutter = 0.86 + 0.14 * Math.abs(Math.sin(phase * Math.PI * 4));
+        this.beam.intensity = FLASHLIGHT.beam.intensity * flutter;
+      } else {
+        this.beam.intensity = this.state.on ? FLASHLIGHT.beam.intensity : 0;
+      }
+    }
+
+    placePlayerNearForQA() {
+      if (!state.qa || !physics) return null;
+      teleport(13.12, FLOOR.BASEMENT, FLASHLIGHT.pickup.z, -Math.PI / 2, -0.36);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      updateInteractionPrompt();
+      return {
+        position: { x: FLASHLIGHT.pickup.x, y: FLASHLIGHT.pickup.y, z: FLASHLIGHT.pickup.z },
+        distanceToServiceStairBottom: Number(Math.hypot(
+          FLASHLIGHT.pickup.x - FLASHLIGHT.pickup.serviceStairBottom.x,
+          FLASHLIGHT.pickup.z - FLASHLIGHT.pickup.serviceStairBottom.z,
+        ).toFixed(3)),
+        prompt: state.currentInteraction ? state.currentInteraction.getLabel() : null,
+      };
+    }
+
+    frameBeamForQA() {
+      if (!state.qa || !physics) return null;
+      teleport(13.45, FLOOR.BASEMENT, 7.2, Math.PI / 2, -0.05);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      this.syncPose(true);
+      updateInteractionPrompt();
+      return this.getDiagnostics();
+    }
+
+    getDiagnostics() {
+      return {
+        collected: this.collected(),
+        on: Boolean(this.state.on),
+        pickupVisible: Boolean(this.pickupRoot?.visible),
+        pickupRegistered: this.pickupRegistered,
+        pickup: {
+          x: FLASHLIGHT.pickup.x,
+          y: FLASHLIGHT.pickup.y,
+          z: FLASHLIGHT.pickup.z,
+          distanceToServiceStairBottom: Number(Math.hypot(
+            FLASHLIGHT.pickup.x - FLASHLIGHT.pickup.serviceStairBottom.x,
+            FLASHLIGHT.pickup.z - FLASHLIGHT.pickup.serviceStairBottom.z,
+          ).toFixed(3)),
+        },
+        beam: {
+          color: `#${FLASHLIGHT.beam.color.toString(16).padStart(6, "0")}`,
+          intensity: Number((this.beam?.intensity || 0).toFixed(2)),
+          authoredIntensity: FLASHLIGHT.beam.intensity,
+          distance: FLASHLIGHT.beam.distance,
+          currentDistance: Number(this.currentDistance.toFixed(2)),
+          angle: FLASHLIGHT.beam.angle,
+          penumbra: FLASHLIGHT.beam.penumbra,
+          decay: FLASHLIGHT.beam.decay,
+          castShadow: Boolean(this.beam?.castShadow),
+          shaderResident: Boolean(this.beam?.visible),
+        },
+        stealthExposureFloor: FLASHLIGHT.stealthExposureFloor,
+        activationCount: this.state.activationCount,
+        alertCount: this.state.alertCount,
+        alertCooldown: Number(this.state.alertCooldown.toFixed(3)),
+        lastAlert: this.state.lastAlert ? { ...this.state.lastAlert } : null,
+      };
+    }
+  }
+
   class CameraSecuritySystem {
     constructor() {
       this.root = new THREE.Group();
@@ -17143,6 +17566,7 @@
         trackingPlayer: false,
         indicator: "scanning-green",
         warningPulseIndex: 0,
+        flashlightWarningRemaining: 0,
         lightColor: CAMERA_SECURITY.scanningLightColor,
         playerInCone: false,
         hasLineOfSight: false,
@@ -17244,6 +17668,13 @@
     }
 
     statusIndicator(cameraState) {
+      if (cameraState.flashlightWarningRemaining > 0) {
+        const elapsed = FLASHLIGHT.warningSeconds - cameraState.flashlightWarningRemaining;
+        const pulsePosition = elapsed / FLASHLIGHT.warningSeconds * CAMERA_SECURITY.warningPulseCount;
+        const pulse = Math.min(CAMERA_SECURITY.warningPulseCount, Math.floor(pulsePosition) + 1);
+        const red = pulsePosition - Math.floor(pulsePosition) < CAMERA_SECURITY.warningPulseDutyCycle;
+        return { name: red ? "flashlight-warning-red" : "flashlight-warning-green", color: red ? CAMERA_SECURITY.warningLightColor : CAMERA_SECURITY.scanningLightColor, pulse };
+      }
       const isActive = state.security.activeCameraId === cameraState.id
         && cameraState.playerInCone
         && cameraState.hasLineOfSight;
@@ -17520,6 +17951,70 @@
       return point ? { id: point.id, x: lastSeen.x, y: point.y, z: lastSeen.z } : null;
     }
 
+    reportFlashlightUse() {
+      if (
+        !state.started
+        || !state.flashlight.on
+        || state.isHidden
+        || state.gameOver
+        || competitionBlocksInvestigation()
+        || !physics
+      ) return null;
+      const playerPosition = physics.playerPosition();
+      const playerEye = new THREE.Vector3(camera.position.x, camera.position.y, camera.position.z);
+      const candidates = [];
+      for (const cameraState of this.cameras) {
+        if (!this.isCameraRelevant(cameraState, playerPosition)) continue;
+        const direction = playerEye.clone().sub(cameraState.lensOrigin);
+        const distance = direction.length();
+        if (distance <= 0.05 || distance > cameraState.range) continue;
+        direction.multiplyScalar(1 / distance);
+        if (!this.lineOfSight(cameraState, playerEye, direction, distance)) continue;
+        candidates.push({
+          cameraState,
+          distance,
+          sameRoom: cameraState.room === state.currentRoom,
+        });
+      }
+      candidates.sort((a, b) => Number(b.sameRoom) - Number(a.sameRoom) || a.distance - b.distance);
+      const selected = candidates[0];
+      if (!selected) return null;
+      const feetY = playerPosition.y - (PLAYER.halfHeight + PLAYER.radius);
+      const lastSeen = {
+        x: Number(playerPosition.x.toFixed(3)),
+        y: Number(feetY.toFixed(3)),
+        z: Number(playerPosition.z.toFixed(3)),
+      };
+      const response = this.responseAnchor(selected.cameraState, lastSeen);
+      state.security.flashlightAlertCount += 1;
+      state.flashlight.alertCount += 1;
+      const alert = {
+        count: state.security.flashlightAlertCount,
+        cameraId: selected.cameraState.id,
+        room: selected.cameraState.room,
+        reason: "flashlight-use",
+        lastSeen,
+        responseNodeId: response?.id || null,
+        responsePosition: response ? { x: response.x, y: response.y, z: response.z } : null,
+      };
+      state.security.lastFlashlightAlert = alert;
+      state.flashlight.lastAlert = alert;
+      state.security.flashlightWarningRemaining = FLASHLIGHT.warningSeconds;
+      state.security.observed = true;
+      state.security.permitted = false;
+      state.security.activeCameraId = selected.cameraState.id;
+      selected.cameraState.flashlightWarningRemaining = FLASHLIGHT.warningSeconds;
+      selected.cameraState.acquisition = Math.max(selected.cameraState.acquisition, CAMERA_SECURITY.trackingThreshold);
+      if (audioSystem) {
+        audioSystem.ping(610, 0.16, 0.052, "square");
+        audioSystem.ping(305, 0.28, 0.045, "sawtooth");
+      }
+      mrFeastNpc?.respondToCameraAlarm(alert);
+      this.updatePresentation();
+      this.updateHud();
+      return alert;
+    }
+
     raiseAlarm(cameraState, reason = "lockdown-sighting", options = {}) {
       if (!cameraState || (!options.force && (
         state.security.alarmCooldown > 0
@@ -17599,10 +18094,11 @@
       if (!dom.security) return;
       const activeCamera = this.cameraById.get(state.security.activeCameraId);
       const beingRecorded = Boolean(activeCamera && (activeCamera.trackingPlayer || activeCamera.acquisition >= 1));
-      const showHud = state.started && !state.isHidden && state.security.observed;
+      const flashlightSpotted = state.security.flashlightWarningRemaining > 0;
+      const showHud = state.started && !state.isHidden && (state.security.observed || flashlightSpotted);
       dom.security.hidden = !showHud;
       dom.security.dataset.state = beingRecorded ? "recording" : "spotted";
-      if (dom.securityStatus) dom.securityStatus.textContent = beingRecorded ? "Being recorded" : "Spotted";
+      if (dom.securityStatus) dom.securityStatus.textContent = beingRecorded ? "Being recorded" : flashlightSpotted ? "Flashlight spotted" : "Spotted";
     }
 
     suspendForCompetition() {
@@ -17615,12 +18111,14 @@
       state.security.occludedBy = null;
       state.security.alarmCooldown = 0;
       state.security.alarmLatchCameraId = null;
+      state.security.flashlightWarningRemaining = 0;
       for (const cameraState of this.cameras) {
         cameraState.playerInCone = false;
         cameraState.hasLineOfSight = false;
         cameraState.blocker = null;
         cameraState.acquisition = 0;
         cameraState.trackingPlayer = false;
+        cameraState.flashlightWarningRemaining = 0;
       }
       this.updatePresentation();
       this.updateHud();
@@ -17643,7 +18141,11 @@
         return;
       }
       state.security.alarmCooldown = Math.max(0, state.security.alarmCooldown - safeDt);
-      for (const cameraState of this.cameras) this.updateScan(cameraState, safeDt);
+      state.security.flashlightWarningRemaining = Math.max(0, state.security.flashlightWarningRemaining - safeDt);
+      for (const cameraState of this.cameras) {
+        cameraState.flashlightWarningRemaining = Math.max(0, cameraState.flashlightWarningRemaining - safeDt);
+        this.updateScan(cameraState, safeDt);
+      }
       this.detectionAccumulator += safeDt;
       while (this.detectionAccumulator >= CAMERA_SECURITY.checkInterval) {
         this.evaluatePlayer(CAMERA_SECURITY.checkInterval);
@@ -17694,6 +18196,7 @@
         trackingPlayer: cameraState.trackingPlayer,
         indicator: cameraState.indicator,
         warningPulseIndex: cameraState.warningPulseIndex,
+        flashlightWarningRemaining: Number(cameraState.flashlightWarningRemaining.toFixed(3)),
         lightColor: `#${cameraState.lightColor.toString(16).padStart(6, "0")}`,
         playerInCone: cameraState.playerInCone,
         hasLineOfSight: cameraState.hasLineOfSight,
@@ -17724,6 +18227,11 @@
           count: state.security.alarmCount,
           latchedCameraId: state.security.alarmLatchCameraId,
           last: state.security.lastAlarm ? { ...state.security.lastAlarm } : null,
+        },
+        flashlightAlert: {
+          count: state.security.flashlightAlertCount,
+          warningRemaining: Number(state.security.flashlightWarningRemaining.toFixed(3)),
+          last: state.security.lastFlashlightAlert ? { ...state.security.lastFlashlightAlert } : null,
         },
         cameras: {
           total: this.cameras.length,
@@ -17773,6 +18281,7 @@
       state.security.lastAlarm = null;
       state.security.alarmCooldown = 0;
       state.security.alarmLatchCameraId = null;
+      flashlightSystem?.resetAlerts();
       state.isHidden = false;
       state.activeHideSpot = null;
       for (const cameraState of this.cameras) {
@@ -17783,6 +18292,7 @@
         cameraState.blocker = null;
         cameraState.acquisition = 0;
         cameraState.trackingPlayer = false;
+        cameraState.flashlightWarningRemaining = 0;
       }
       this.syncPolicy();
       this.updatePresentation();
@@ -26164,6 +26674,7 @@
     state.devMode = false;
     state.devModeSnapshot = null;
     contestant13Quest.restoreQuestSnapshot(data.contestant13);
+    flashlightSystem?.restoreFromInventory({ clearTransient: true });
     feastSaysSystem?.restoreSnapshot(data.feastSays, data.contestant13);
     stormRunSystem?.restoreSnapshot(data.stormRun, data.contestant13);
     physics.verticalVelocity = 0;
@@ -26554,6 +27065,11 @@
         togglePlayerCrouch();
         return;
       }
+      if (event.code === "KeyF" && !event.repeat) {
+        event.preventDefault();
+        flashlightSystem?.toggle("keyboard");
+        return;
+      }
       if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"].includes(event.code)) {
         event.preventDefault();
         if (feastSaysSystem?.isPlaying() && feastSaysSystem.show.phase !== FEAST_SAYS_PHASE.COMMAND) return;
@@ -26633,6 +27149,10 @@
     if (dom.touchMenu) dom.touchMenu.addEventListener("click", (event) => {
       event.preventDefault();
       if (state.started && !state.gameOver) setMenuOpen(true);
+    });
+    if (dom.flashlightButton) dom.flashlightButton.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      flashlightSystem?.toggle("touch");
     });
     if (dom.journalClose) dom.journalClose.addEventListener("click", () => contestant13Quest && contestant13Quest.setJournalOpen(false));
     if (dom.journal) dom.journal.addEventListener("click", (event) => {
@@ -27065,9 +27585,13 @@
     // Cabinet spots are useful indoors, but on the grounds they would reserve
     // two shader entries while contributing no energy. Padding still restores
     // the exact 6/11 program shape after exterior emitters are selected.
-    const auxiliarySpotReserve = renderContext === "grounds"
+    const cabinetSpotReserve = renderContext === "grounds"
       ? 0
       : auxiliaryInteriorLights.filter((light) => light.isSpotLight).length;
+    // The carried flashlight stays in the graph at zero energy while off.
+    // Reserve its one slot in every context so F never compiles a new shader.
+    const portableSpotReserve = flashlightSystem?.beam?.visible ? 1 : 0;
+    const auxiliarySpotReserve = cabinetSpotReserve + portableSpotReserve;
     const spotLimit = Math.max(0, MOBILE_SHADER_SPOT_BUDGET - auxiliarySpotReserve);
     const pointLimit = MOBILE_SHADER_POINT_BUDGET;
     let selectedSpots = 0;
@@ -27272,7 +27796,8 @@
     // exact same shader program instead of compiling at the staircase.
     ensureMobileShaderPadding();
     const visibleSpotLights = circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isSpotLight).length, 0)
-      + auxiliaryInteriorLights.filter((light) => light.visible && light.isSpotLight).length;
+      + auxiliaryInteriorLights.filter((light) => light.visible && light.isSpotLight).length
+      + (flashlightSystem?.beam?.visible ? 1 : 0);
     const visiblePointLights = circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isPointLight).length, 0)
       + auxiliaryInteriorLights.filter((light) => light.visible && light.isPointLight).length;
     const requiredSpots = Math.max(0, MOBILE_SHADER_SPOT_BUDGET - visibleSpotLights);
@@ -27501,6 +28026,10 @@
       stealth.sampledLight = sampleStealthLightExposure();
     }
     stealth.lightExposure += (stealth.sampledLight - stealth.lightExposure) * Math.min(1, fixedDt * STEALTH.lightSmoothingRate);
+    const appliedLightExposure = state.flashlight.on
+      ? Math.max(stealth.lightExposure, FLASHLIGHT.stealthExposureFloor)
+      : stealth.lightExposure;
+    stealth.appliedLightExposure = appliedLightExposure;
     // Motion activity follows actual travel: it rises toward the stance's own
     // full pace while moving and settles back to stillness after stopping, so
     // a crouch-step costs concealment for a beat even after the keys release.
@@ -27514,7 +28043,7 @@
     const crouchConcealed = movement.crouched && !state.isHidden && !state.activeSeat;
     let effectiveVisibility = 1;
     if (crouchConcealed) {
-      const darknessFactor = 1 - STEALTH.darknessVisibilityBonus * (1 - stealth.lightExposure);
+      const darknessFactor = 1 - STEALTH.darknessVisibilityBonus * (1 - appliedLightExposure);
       const stillnessFactor = 1 - STEALTH.stillnessVisibilityBonus * (1 - stealth.motionActivity);
       effectiveVisibility = Math.max(
         STEALTH.minVisibility,
@@ -27534,7 +28063,7 @@
       const stanceExposure = crouchConcealed ? STEALTH.meterCrouchExposure : STEALTH.meterStandingExposure;
       const exposure = clamp(
         stanceExposure
-          + STEALTH.meterLightWeight * stealth.lightExposure
+          + STEALTH.meterLightWeight * appliedLightExposure
           + STEALTH.meterMotionWeight * stealth.motionActivity,
         0,
         1,
@@ -27562,7 +28091,7 @@
     if (dom.stealthFill) dom.stealthFill.style.width = `${clamp(stealth.meter, 0, 100)}%`;
     if (dom.stealthValue) dom.stealthValue.textContent = String(rounded);
     if (dom.stealthMode) {
-      dom.stealthMode.textContent = stealth.lightExposure < 0.25 ? "Stealth · dark" : "Stealth · lit";
+      dom.stealthMode.textContent = state.flashlight.on ? "Stealth · flashlight" : stealth.lightExposure < 0.25 ? "Stealth · dark" : "Stealth · lit";
     }
   }
 
@@ -27668,6 +28197,7 @@
       accumulator = 0;
     }
     syncCamera();
+    flashlightSystem?.update(dt);
 
     interactionTimer -= dt;
     diagnosticsTimer -= dt;
@@ -27773,6 +28303,7 @@
       contestants: mansionContestants?.getDiagnostics() || null,
       seating: seatingSystem?.getDiagnostics() || null,
       security: cameraSecurity?.getDiagnostics() || null,
+      flashlight: flashlightSystem?.getDiagnostics() || null,
       tamper: tamperSystem?.getDiagnostics() || null,
       workroomCode: workroomCodeClue?.getDiagnostics() || null,
       speech: speechSystem?.getDiagnostics() || null,
@@ -27903,9 +28434,11 @@
         allOn: circuits.every((circuit) => circuit.on),
         activeLocalLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0).length, 0),
         activeAuxiliaryLights: auxiliaryInteriorLights.filter((light) => light.visible && light.intensity > 0).length,
+        activePortableLights: flashlightSystem?.beam?.visible && flashlightSystem.beam.intensity > 0 ? 1 : 0,
         activeShadowLights: renderer.shadowMap.enabled ? circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.castShadow).length, 0) : 0,
         activeSceneShadowLights: renderer.shadowMap.enabled ? 1 + circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.castShadow).length, 0) : 0,
-        activeSpotLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.isSpotLight).length, 0),
+        activeSpotLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.isSpotLight).length, 0)
+          + (flashlightSystem?.beam?.visible && flashlightSystem.beam.intensity > 0 ? 1 : 0),
         activePointLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.isPointLight).length, 0),
         activeFixtureEmitters: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.intensity > 0 && light.userData.visibleFixtureEmitter).length, 0),
         activeLightPools: circuits.reduce((total, circuit) => total + circuit.glowMaterials.filter((material) => material.userData.renderLit).length, 0),
@@ -27922,11 +28455,13 @@
         mobileUpperAmbientScale: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR" ? MOBILE_UPPER_AMBIENT_SCALE : 1,
         boundedLightProfile: true,
         shaderLocalLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible).length, 0)
+          + (flashlightSystem?.beam?.visible ? 1 : 0)
           + mobileShaderPaddingLights.spots.filter((light) => light.visible).length
           + mobileShaderPaddingLights.points.filter((light) => light.visible).length,
         shaderAuxiliaryLights: auxiliaryInteriorLights.filter((light) => light.visible).length,
         shaderSpotLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isSpotLight).length, 0)
           + auxiliaryInteriorLights.filter((light) => light.visible && light.isSpotLight).length
+          + (flashlightSystem?.beam?.visible ? 1 : 0)
           + mobileShaderPaddingLights.spots.filter((light) => light.visible).length,
         shaderPointLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isPointLight).length, 0)
           + auxiliaryInteriorLights.filter((light) => light.visible && light.isPointLight).length
@@ -27934,7 +28469,8 @@
         shaderPaddingLights: mobileShaderPaddingLights.spots.filter((light) => light.visible).length
           + mobileShaderPaddingLights.points.filter((light) => light.visible).length,
         shaderRealSpotLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isSpotLight).length, 0)
-          + auxiliaryInteriorLights.filter((light) => light.visible && light.isSpotLight).length,
+          + auxiliaryInteriorLights.filter((light) => light.visible && light.isSpotLight).length
+          + (flashlightSystem?.beam?.visible ? 1 : 0),
         shaderRealPointLights: circuits.reduce((total, circuit) => total + circuit.lights.filter((light) => light.visible && light.isPointLight).length, 0)
           + auxiliaryInteriorLights.filter((light) => light.visible && light.isPointLight).length,
         shaderPaddingSpotLights: mobileShaderPaddingLights.spots.filter((light) => light.visible).length,
@@ -28080,6 +28616,7 @@
       meter: Number(state.stealth.meter.toFixed(1)),
       meterVisible: state.stealth.meterVisible,
       lightExposure: Number(state.stealth.lightExposure.toFixed(3)),
+      appliedLightExposure: Number(state.stealth.appliedLightExposure.toFixed(3)),
       motionActivity: Number(state.stealth.motionActivity.toFixed(3)),
       effectiveVisibility: Number(state.stealth.effectiveVisibility.toFixed(3)),
       stanceVisibilityMultiplier: state.movement.stealthVisibilityMultiplier,
@@ -28093,6 +28630,23 @@
       state.stealth.sampleRemaining = 0;
       return { lightOverride: state.stealth.lightOverride };
     };
+    window.MrFeastFresh.getFlashlightState = () => flashlightSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.collectFlashlightForQA = () => {
+      if (!state.qa || !flashlightSystem) return null;
+      flashlightSystem.collect();
+      return flashlightSystem.getDiagnostics();
+    };
+    window.MrFeastFresh.setFlashlightForQA = (on, options = {}) => {
+      if (!state.qa || !flashlightSystem) return null;
+      flashlightSystem.setOn(Boolean(on), { ...options, force: true });
+      return flashlightSystem.getDiagnostics();
+    };
+    window.MrFeastFresh.placePlayerNearFlashlightForQA = () => (
+      state.qa && flashlightSystem ? flashlightSystem.placePlayerNearForQA() : null
+    );
+    window.MrFeastFresh.frameFlashlightBeamForQA = () => (
+      state.qa && flashlightSystem ? flashlightSystem.frameBeamForQA() : null
+    );
     window.MrFeastFresh.saveGameForQA = () => state.qa ? saveMansionGame() : false;
     window.MrFeastFresh.loadGameForQA = () => state.qa ? loadMansionGame() : false;
     window.MrFeastFresh.setMenuOpenForQA = (open) => {
@@ -29281,6 +29835,7 @@
       scene.add(moonLight);
 
       buildMansion();
+      flashlightSystem = new FlashlightSystem();
       readableBookSystem.finalizeSpineTitles();
       setLoading("Unveiling the estate statues", 68);
       await loadEstateStatues();

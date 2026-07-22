@@ -17,7 +17,6 @@
     /* Echo Loop 3D is a WebGL game; only page-local bits live here. */
     .echo3d-page .canvas-wrap { background: #080810; }
     .echo3d-page .canvas-wrap canvas { width: 100%; height: 100%; display: block; }
-
     /* First-person overlays inside the canvas frame */
     .el3d-crosshair {
       position: absolute;
@@ -86,6 +85,46 @@
     }
     @keyframes el3d-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 
+    .el3d-fast {
+      position: absolute;
+      left: 50%; top: 14px;
+      transform: translate(-50%, -8px) scale(0.94);
+      padding: 5px 12px;
+      border: 2px solid var(--accent-3, #ffd43b);
+      border-radius: 8px;
+      background: rgba(8, 8, 16, 0.88);
+      box-shadow: 0 0 18px rgba(255, 212, 59, 0.42), inset 0 0 12px rgba(255, 212, 59, 0.1);
+      color: var(--accent-3, #ffd43b);
+      font-family: var(--font-display);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      opacity: 0;
+      transition: opacity 90ms linear, transform 90ms ease-out;
+      z-index: 3;
+      pointer-events: none;
+    }
+    .el3d-fast.is-active { opacity: 1; transform: translate(-50%, 0) scale(1); }
+
+    .el3d-security {
+      position: absolute;
+      left: 14px; top: 14px;
+      padding: 5px 9px;
+      border: 1px solid rgba(255, 79, 104, 0.72);
+      border-radius: 6px;
+      background: rgba(8, 8, 16, 0.82);
+      box-shadow: 0 0 14px rgba(255, 79, 104, 0.22);
+      color: var(--bad, #ff4f68);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      opacity: 0;
+      transition: opacity 120ms linear;
+      z-index: 3;
+      pointer-events: none;
+    }
+    .el3d-security.is-active { opacity: 1; }
+
     /* Legend chips */
     .echo-legend { display: grid; gap: 8px; }
     .echo-legend__row {
@@ -153,7 +192,7 @@
     }
   </style>
 </head>
-<body class="echo3d-page">
+<body class="echo3d-page" data-rb-restart-label="Restart Level">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
   <main class="game-page">
@@ -181,6 +220,8 @@
           <div class="el3d-timerwrap"><div class="el3d-timerbar" id="el3d-timerbar"></div></div>
           <div class="el3d-crosshair" id="el3d-crosshair" aria-hidden="true"></div>
           <div class="el3d-rec" aria-hidden="true">REC</div>
+          <div class="el3d-fast" id="el3d-fast" aria-hidden="true">» ECHOES 5×</div>
+          <div class="el3d-security" id="el3d-security" aria-hidden="true">⚠ SECURITY ACTIVE</div>
           <div class="el3d-flash" id="el3d-flash" aria-hidden="true"></div>
 
           <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
@@ -189,12 +230,15 @@
             <h2 class="overlay__title" id="overlay-title">⭯ ECHO LOOP 3D</h2>
             <p class="overlay__sub" id="overlay-sub">
               The looping room, from the inside. <strong>WASD</strong> moves, <strong>mouse</strong> looks, <strong>Space</strong> jumps.
-              <strong>R</strong> closes the loop — a translucent <strong>echo</strong> replays your last run forever.
+              <strong>R</strong> closes the loop — a translucent <strong>echo</strong> replays your last run forever. Hold <strong>Shift</strong> to fast-forward only your echoes.
               Climb your own shoulders. Leave yourself holding the door.
             </p>
             <div class="overlay__score" id="overlay-score"></div>
             <button class="btn btn--primary" id="btn-primary">Start looping</button>
           </div>
+
+          <button id="btn-main-menu" type="button" hidden tabindex="-1">Main menu</button>
+          <button id="btn-pause" type="button" hidden tabindex="-1">Pause</button>
         </div>
 
         <div class="el-touch" aria-hidden="true">
@@ -207,8 +251,8 @@
         </div>
 
         <p class="merge-hint">
-          <strong>Click the room to capture the mouse.</strong> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move, <kbd>Space</kbd> jumps,
-          <kbd>R</kbd> closes the loop (records an echo), <kbd>Z</kbd> retries the current loop, <kbd>U</kbd> undoes an echo, <kbd>P</kbd> pauses, <kbd>Esc</kbd> releases the mouse.
+          <strong>Enter the loop captures the mouse.</strong> <kbd>Esc</kbd> or <kbd>P</kbd> opens the game menu; Resume re-captures it. <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move, <kbd>Space</kbd> jumps,
+          <kbd>R</kbd> closes the loop (records an echo), hold <kbd>Shift</kbd> to fast-forward echoes 5×, <kbd>Z</kbd> retries the current loop, and <kbd>U</kbd> undoes an echo.
         </p>
       </div>
 
@@ -225,10 +269,10 @@
           </div>
           <div class="controls-row" style="margin-top:8px;">
             <button class="btn btn--ghost" id="btn-undo" type="button" style="font-size:13px;padding:8px 12px;">⎌ Undo echo</button>
-            <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Restart level</button>
+            <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Restart Level</button>
           </div>
           <div class="controls-row" style="margin-top:8px;">
-            <button class="btn btn--ghost" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-pause-menu" type="button" style="font-size:13px;padding:8px 12px;">Menu</button>
             <button class="btn btn--ghost" id="btn-sound" type="button" aria-pressed="true" style="font-size:13px;padding:8px 12px;">Sound On</button>
           </div>
         </div>
@@ -240,6 +284,8 @@
             <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--echo">👻</span><span><strong>Echo</strong> — glowing cyan ghost of a past run. Land on its head, ride it, climb it.</span></div>
             <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--crate">📦</span><span><strong>Crate</strong> — pushable, presses plates. Rewinds each loop, but your echo re-pushes it.</span></div>
             <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--echo">▬</span><span><strong>Plate &amp; door</strong> — matching numbers and colors. Door stays open only while the plate is held.</span></div>
+            <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--bad">◉</span><span><strong>Watcher</strong> — a red security eye that locks onto the first live or echo body it sees. Jump, take cover, or send a decoy.</span></div>
+            <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--bad">━</span><span><strong>Sweeper</strong> — a low moving light bar with a real hit volume. Jump it or rewind the current run.</span></div>
             <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--bad">▼</span><span><strong>The void</strong> — falling is a paradox. Loop rewinds, echoes survive.</span></div>
           </div>
         </div>
@@ -255,6 +301,8 @@
             <li><strong style="color:var(--ink);">Echoes do chores.</strong> An echo on a pressure plate holds its door open. An echo that pushed a crate re-pushes it every loop, at the same moment.</li>
             <li><strong style="color:var(--ink);">Loop budget.</strong> Each room caps simultaneous selves (2–5). Fewer loops and faster clears score more. <kbd>Z</kbd> retries without spending a slot.</li>
             <li><strong style="color:var(--ink);">The timer is the loop.</strong> Zero means rewind — commit with <kbd>R</kbd> before it dies (the moonlight turns red as a warning).</li>
+            <li><strong style="color:var(--ink);">Skip the waiting.</strong> Hold <kbd>Shift</kbd> to advance only your past echoes at 5× speed. You and the loop timer stay at normal speed.</li>
+            <li><strong style="color:var(--ink);">Security begins on level 5.</strong> Watchers can be baited by echoes; low Sweepers must be jumped. A hit rewinds the live run but never deletes prior echoes.</li>
             <li><strong style="color:var(--ink);">Chrono Shards.</strong> Shared with 2D Echo Loop: each level cleared earns one free echo undo; a quick ad mints more (Pro loopers undo free).</li>
           </ul>
           <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
@@ -276,8 +324,8 @@
 
   <script src="../assets/vendor/three/three-r128.min.js"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/main.js?v=20260712-uiux"></script>
-  <script src="../assets/js/echo-loop-3d.js?v=20260706-echo3d-9"></script>
+  <script src="../assets/js/main.js?v=20260722-echo-menu-3"></script>
+  <script src="../assets/js/echo-loop-3d.js?v=20260722-unified-menu-10"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

@@ -16,6 +16,8 @@
   <style>
     /* Echo Loop is a canvas game; only page-local bits live here. */
     .echo-page .canvas-wrap { background: #080810; }
+    .el-overlay-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+    .el-overlay-actions .btn { min-width: 132px; }
 
     /* Legend chips in the side panel */
     .echo-legend { display: grid; gap: 8px; }
@@ -76,7 +78,7 @@
     }
   </style>
 </head>
-<body class="echo-page">
+<body class="echo-page" data-rb-restart-label="Restart Level">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
   <main class="game-page">
@@ -108,10 +110,13 @@
             <p class="overlay__sub" id="overlay-sub">
               Press <strong>R</strong> to close a loop: the room rewinds and a translucent
               <strong>echo</strong> replays your last run forever. Stand on your echoes,
-              make them hold doors, let them push crates. A few past selves, one puzzle.
+              make them hold doors, let them push crates. Hold <strong>Shift</strong> to fast-forward only your echoes.
             </p>
             <div class="overlay__score" id="overlay-score"></div>
-            <button class="btn btn--primary" id="btn-primary">Start looping</button>
+            <div class="el-overlay-actions">
+              <button class="btn btn--primary" id="btn-primary">Start looping</button>
+              <button class="btn btn--ghost" id="btn-main-menu" type="button" hidden>Main menu</button>
+            </div>
           </div>
         </div>
 
@@ -129,7 +134,7 @@
 
         <p class="merge-hint">
           <strong>Move</strong> with <kbd>A</kbd>/<kbd>D</kbd> or arrows, <kbd>Space</kbd> jumps.
-          <kbd>R</kbd> closes the loop (records an echo), <kbd>Z</kbd> retries the current loop, <kbd>U</kbd> undoes an echo, <kbd>P</kbd> pauses.
+          <kbd>R</kbd> closes the loop (records an echo), hold <kbd>Shift</kbd> to fast-forward echoes 5×, <kbd>Z</kbd> retries the current loop, <kbd>U</kbd> undoes an echo, <kbd>P</kbd> pauses.
         </p>
       </div>
 
@@ -146,7 +151,7 @@
           </div>
           <div class="controls-row" style="margin-top:8px;">
             <button class="btn btn--ghost" id="btn-undo" type="button" style="font-size:13px;padding:8px 12px;">⎌ Undo echo</button>
-            <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Restart level</button>
+            <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Restart Level</button>
           </div>
           <div class="controls-row" style="margin-top:8px;">
             <button class="btn btn--ghost" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause</button>
@@ -161,7 +166,9 @@
             <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--echo">👻</span><span><strong>Echo</strong> — cyan ghost of a past run. Stand on it. Ride it. It replays exactly, every loop.</span></div>
             <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--crate">📦</span><span><strong>Crate</strong> — pushable, presses plates. Rewinds each loop, but your echo re-pushes it.</span></div>
             <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--echo">▬</span><span><strong>Plate &amp; door</strong> — matching numbers. Door stays open only while the plate is held.</span></div>
-            <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--crate">⏱</span><span><strong>Timed gate</strong> — yellow bars on the loop's own schedule. Open only during its window, every loop. Waiting is a move.</span></div>
+            <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--crate">⇥</span><span><strong>Echo relay</strong> — one echo can hold a plate and serve as your next stepping stone. Late rooms demand both jobs at once.</span></div>
+            <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--bad">◉</span><span><strong>Watcher</strong> — locks onto the first live or echo body in its red sightline. Jump, use crate cover, or send an echo first.</span></div>
+            <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--bad">━</span><span><strong>Sweeper</strong> — a low moving security beam. Jump it; touching it rewinds only your current live run.</span></div>
             <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--echo">┄</span><span><strong>One-way deck</strong> — jump up through it, land on top of it.</span></div>
             <div class="echo-legend__row"><span class="echo-legend__chip echo-legend__chip--bad">▲</span><span><strong>Spikes</strong> — a paradox. Loop rewinds, echoes survive.</span></div>
           </div>
@@ -178,6 +185,8 @@
             <li><strong style="color:var(--ink);">Echoes do chores.</strong> An echo standing on a pressure plate holds its door open. An echo that pushed a crate re-pushes it every loop, at the same moment.</li>
             <li><strong style="color:var(--ink);">Loop budget.</strong> Each room caps how many simultaneous selves you get (2–5). Fewer loops and faster clears score more. <kbd>Z</kbd> retries the current run without spending a slot.</li>
             <li><strong style="color:var(--ink);">The timer is the loop.</strong> When it hits zero the room rewinds and your uncommitted run is lost — close the loop before then if you want to keep it.</li>
+            <li><strong style="color:var(--ink);">Skip the waiting.</strong> Hold <kbd>Shift</kbd> to advance only your past echoes at 5× speed. You and the loop timer stay at normal speed.</li>
+            <li><strong style="color:var(--ink);">Security begins on level 5.</strong> Watchers can be baited by echoes; low Sweepers must be jumped. A hit rewinds the live run but never deletes prior echoes.</li>
             <li><strong style="color:var(--ink);">Chrono Shards.</strong> Each level cleared earns a shard: one free echo undo. Out of shards? A quick ad mints a new one (Pro loopers undo free).</li>
           </ul>
         </details>
@@ -195,8 +204,8 @@
   </footer>
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/main.js?v=20260712-uiux"></script>
-  <script src="../assets/js/echo-loop.js?v=20260706-echo-8"></script>
+  <script src="../assets/js/main.js?v=20260722-echo-menu-3"></script>
+  <script src="../assets/js/echo-loop.js?v=20260722-pause-menu-11"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

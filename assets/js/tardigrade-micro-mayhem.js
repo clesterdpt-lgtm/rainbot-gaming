@@ -558,7 +558,7 @@
       id: "zones",
       stage: 5,
       title: "Tour the space station",
-      text: "Visit four orbital research zones while wearing a camera smaller than the grant budget.",
+      text: "Visit four orbital research zones on a budget that would make a grant officer cry.",
       target: GOAL_TARGETS.stationZones,
       progress: () => state.zonesVisited.size,
       hint: "Use the radar to map the airlock grid, lab bench, vent maze, and observation window.",
@@ -568,10 +568,10 @@
       id: "scans",
       stage: 5,
       title: "Transmit research scans",
-      text: "Use the tiny camera to scan four station landmarks for extremely serious science.",
+      text: "Scan four station landmarks for extremely serious science.",
       target: GOAL_TARGETS.stationScans,
       progress: () => state.stageResearchScans,
-      hint: "Find station landmarks. The attached camera scans each one automatically.",
+      hint: "Find station landmarks. Research scans trigger automatically.",
       mobileHint: "Find four station scan landmarks.",
     },
     {
@@ -1197,9 +1197,6 @@
       const socket = world.heroSockets[attachment.userData.slot];
       if (socket) mountObjectToSocketPreservingPlacement(attachment, socket);
     });
-    if (world.researchCamera && world.heroSockets.camera) {
-      mountObjectToSocketPreservingPlacement(world.researchCamera, world.heroSockets.camera);
-    }
   }
 
   function applyAuthoredHeroSkin() {
@@ -4709,11 +4706,7 @@
     cosmeticRoot.userData.kind = "cosmetics";
     group.add(cosmeticRoot);
     world.cosmeticRoot = cosmeticRoot;
-
-    const researchCamera = makeResearchCameraAttachment();
-    researchCamera.visible = false;
-    group.add(researchCamera);
-    world.researchCamera = researchCamera;
+    world.researchCamera = null;
 
     group.traverse((child) => {
       if (child.isMesh) child.castShadow = false;
@@ -4722,35 +4715,6 @@
     registerModelInstance("hero-tardigrade", group, fallbackInfo);
     applyStoreCosmetics();
     return group;
-  }
-
-  function makeResearchCameraAttachment() {
-    const THREE = window.THREE;
-    const mount = new THREE.Group();
-    mount.userData.kind = "research-camera";
-    mount.position.set(0.42, 2.36, 0.92);
-    mount.rotation.set(-0.12, -0.08, -0.18);
-
-    const strap = new THREE.Mesh(new THREE.TorusGeometry(0.58, 0.035, 5, 18), world.materials.cameraBody);
-    strap.position.set(-0.08, -0.08, 0);
-    strap.rotation.x = Math.PI / 2;
-    strap.scale.set(1.22, 0.72, 1);
-    mount.add(strap);
-
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.42, 0.5), world.materials.cameraBody);
-    body.castShadow = false;
-    mount.add(body);
-
-    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.18, 12), world.materials.cameraLens);
-    lens.position.z = -0.34;
-    lens.rotation.x = Math.PI / 2;
-    mount.add(lens);
-
-    const light = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), world.materials.cameraLens);
-    light.position.set(0.22, 0.12, -0.28);
-    mount.add(light);
-    mount.userData.light = light;
-    return mount;
   }
 
   // What the locals have to say when the tardigrade wanders past.
@@ -7910,14 +7874,6 @@
     world.feelers.forEach((feeler, index) => {
       feeler.rotation.z = (index ? 0.22 : -0.22) + Math.sin(state.clock * 4 + index) * 0.16;
     });
-
-    if (world.researchCamera) {
-      world.researchCamera.visible = state.researchCameraUnlocked || state.stage >= 3;
-      world.researchCamera.rotation.z = -0.18 + Math.sin(state.clock * 3.2) * 0.035;
-      if (world.researchCamera.userData.light) {
-        world.researchCamera.userData.light.scale.setScalar(0.9 + Math.sin(state.clock * 6.8) * 0.16);
-      }
-    }
 
     updateStoreCosmeticMotion(dt, speed);
   }

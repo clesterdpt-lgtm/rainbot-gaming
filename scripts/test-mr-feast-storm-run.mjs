@@ -484,7 +484,10 @@ async function run() {
     let faceToFace = await briefingFacing(timerPage);
     assert(faceToFace.distance >= 1.2 && faceToFace.hostForwardDot >= 0.96 && faceToFace.playerForwardDot >= 0.96, `Storm Run must stage Mr. Feast face-to-face with the held player during his briefing: ${JSON.stringify(faceToFace)}`);
     const briefingPoseBefore = await hostFootPose(timerPage);
-    await timerPage.waitForTimeout(650);
+    await timerPage.waitForFunction((startingMixerTime) => {
+      const mixerTime = window.MrFeastFresh.getMrFeastState?.()?.mixerTime;
+      return Number.isFinite(mixerTime) && mixerTime - startingMixerTime >= 0.25;
+    }, briefingPoseBefore.mixerTime, { timeout: 10000 });
     const briefingPoseAfter = await hostFootPose(timerPage);
     const briefingBodyTravel = footPoseDistance(briefingPoseBefore, briefingPoseAfter);
     assert(

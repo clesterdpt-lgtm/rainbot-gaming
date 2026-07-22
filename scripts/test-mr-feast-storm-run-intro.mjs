@@ -11,7 +11,8 @@ const baseUrl = `http://127.0.0.1:${port}`;
 const gameUrl = `${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1&allLights=1`;
 const artifactPath = path.join(root, "output", "playwright", "mr-feast-storm-run", "storm-run-animated-briefing-desktop.png");
 const waitingArtifactPath = path.join(root, "output", "playwright", "mr-feast-storm-run", "storm-run-planted-wait-desktop.png");
-const runtimeCacheKey = "20260721-storm-run-wait-pose-1";
+const restoredWaitingArtifactPath = path.join(root, "output", "playwright", "mr-feast-storm-run", "storm-run-restored-planted-wait-desktop.png");
+const runtimeCacheKey = "20260721-storm-run-restored-wait-1-final-straight-1";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -133,6 +134,26 @@ async function run() {
     console.log(`Storm Run intro: waiting samples planted at ${waitingFootTravel.toFixed(6)}m`);
     await captureViewport(page, waitingArtifactPath);
     console.log("Storm Run intro: waiting proof captured");
+
+    const restored = await page.evaluate(() => {
+      const saved = window.MrFeastFresh.saveGameForQA();
+      const loaded = window.MrFeastFresh.loadGameForQA();
+      return { saved, loaded };
+    });
+    assert(restored.saved && restored.loaded, `Storm Run called-state save/load failed: ${JSON.stringify(restored)}`);
+    await page.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0));
+    const restoredWaitingSamples = await sampleHostPoseTrack(page, [73, 101, 137, 89, 151, 113]);
+    const restoredWaitingFootTravel = maximumFootTravel(restoredWaitingSamples);
+    assert(
+      restoredWaitingSamples.every((sample) => sample.animation === "idle"
+        && sample.moving === false
+        && sample.challengeIdlePoseTime === 0)
+        && restoredWaitingFootTravel <= 0.002,
+      `restored waiting host must remain planted across the complete interval: ${JSON.stringify({ restoredWaitingSamples, restoredWaitingFootTravel })}`,
+    );
+    console.log(`Storm Run intro: restored waiting samples planted at ${restoredWaitingFootTravel.toFixed(6)}m`);
+    await captureViewport(page, restoredWaitingArtifactPath);
+    console.log("Storm Run intro: restored waiting proof captured");
 
     const started = await page.evaluate(() => window.MrFeastFresh.startStormRunForQA());
     assert(started?.started, `Storm Run briefing failed to start: ${JSON.stringify(started)}`);

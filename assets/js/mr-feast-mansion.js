@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260721-storm-run-wait-pose-1-final-straight-1";
+  const MANSION_RUNTIME_VERSION = "20260721-storm-run-restored-wait-1-final-straight-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -6153,8 +6153,20 @@
       this.currentRouteLevel = MR_FEAST_NPC.waypoints[nearestIndex].level;
       this.pauseRemaining = 0;
       this.moving = false;
-      this.wanderingEnabled = true;
       this.qaAnimationFrozen = false;
+      // Competition snapshots restore their authored staging before the
+      // general load cleanup runs. Do not let that cleanup restart patrol and
+      // overwrite a called competition's planted host pose with the stalk
+      // cycle; the competition system remains the owner until it releases him.
+      if (this.challengeStaged) {
+        this.wanderingEnabled = false;
+        if (this.loadStatus === "ready" && !this.holdChallengeIdlePose(0)) {
+          this.fadeToAction("idle");
+          this.stepAnimationAndFace(0, true, true);
+        }
+        return this.getDiagnostics();
+      }
+      this.wanderingEnabled = true;
       if (this.loadStatus === "ready") {
         this.fadeToAction("stalk", MR_FEAST_NPC.fadeSeconds, false, this.stalkPlaybackRateForSpeed(MR_FEAST_NPC.speed));
       }

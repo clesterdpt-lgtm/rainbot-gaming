@@ -1,0 +1,360 @@
+{
+  "generatedAt": "2026-07-22T02:31:45.900857+00:00",
+  "pipeline": "Meshy textured low-poly master -> Blender 4.5 cleanup, custom rig/animation, and standard GLB",
+  "blenderVersion": "4.5.11 LTS",
+  "asset": "creature-rotifer",
+  "profile": "rotifer",
+  "source": {
+    "file": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/source/creature-rotifer-master.glb",
+    "sha256": "d8df466e116c5e79ad38df4f5f54be732e7a7941f2d444533dc820c8c0abf9ab",
+    "fileBytes": 5621772,
+    "counts": {
+      "objects": 1,
+      "meshes": 1,
+      "materials": 1
+    },
+    "triangles": 9716,
+    "bounds": {
+      "min": [
+        -0.244618,
+        -0.949119,
+        -0.479452
+      ],
+      "max": [
+        0.244618,
+        0.953033,
+        0.479452
+      ]
+    }
+  },
+  "output": {
+    "file": "creature-rotifer.glb",
+    "path": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/creature-rotifer.glb",
+    "report": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/creature-rotifer.report.json",
+    "workingBlend": null,
+    "targetTriangles": 10000,
+    "textureMaxSize": 512,
+    "blenderBounds": {
+      "min": [
+        -0.462962,
+        -1.8,
+        -0.0
+      ],
+      "max": [
+        0.462962,
+        1.8,
+        1.814815
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.462962,
+        -0.0,
+        -1.8
+      ],
+      "max": [
+        0.462962,
+        1.814815,
+        1.8
+      ]
+    },
+    "triangles": 9716,
+    "materials": 1,
+    "textures": 3,
+    "skins": 1,
+    "clips": [
+      "idle",
+      "locomotion",
+      "startled"
+    ],
+    "fileBytes": 1089548,
+    "sha256": "487f3991814e4248b874d44b7f9c8f5f7613687526a68c3416e934f6f28ab6f2"
+  },
+  "geometry": {
+    "repair": {
+      "verticesBeforeWeld": 6204,
+      "verticesAfterWeld": 4860,
+      "facesBefore": 9716,
+      "facesAfter": 9716,
+      "weldDistance": 1e-06,
+      "flatShaded": false
+    },
+    "budget": {
+      "sourceTriangles": 9716,
+      "finalTriangles": 9716,
+      "passes": []
+    }
+  },
+  "normalization": {
+    "sourceBounds": {
+      "min": [
+        -0.244618,
+        -0.949119,
+        -0.479452
+      ],
+      "max": [
+        0.244618,
+        0.953033,
+        0.479452
+      ]
+    },
+    "orientedBounds": {
+      "min": [
+        -0.244618,
+        -0.953033,
+        -0.479452
+      ],
+      "max": [
+        0.244618,
+        0.949119,
+        0.479452
+      ]
+    },
+    "blenderBounds": {
+      "min": [
+        -0.462962,
+        -1.8,
+        0.0
+      ],
+      "max": [
+        0.462962,
+        1.8,
+        1.814815
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.462962,
+        0.0,
+        -1.8
+      ],
+      "max": [
+        0.462962,
+        1.814815,
+        1.8
+      ]
+    },
+    "orientationStrategy": "-Y to Blender +Y / glTF -Z",
+    "sourceFrontAxis": "-Y",
+    "forward": "-Z",
+    "up": "+Y",
+    "fitDimension": "length",
+    "targetDimension": 3.6,
+    "uniformScale": 1.8925932887021495,
+    "grounded": true,
+    "centeredXZ": true
+  },
+  "materials": {
+    "names": [
+      "creature-rotifer_Material_01"
+    ],
+    "count": 1,
+    "removedTextureNodes": [],
+    "semanticFaceCounts": {}
+  },
+  "images": [
+    {
+      "name": "Image_0",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_1",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_2",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_3",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    }
+  ],
+  "rig": {
+    "armatures": 1,
+    "skins": 1,
+    "bones": 9,
+    "deformBones": [
+      "Body_01",
+      "Body_02",
+      "Body_03",
+      "Head",
+      "Fin_L2",
+      "Fin_R2",
+      "Fin_L1",
+      "Fin_R1"
+    ],
+    "bodyBones": [
+      "Body_01",
+      "Body_02",
+      "Body_03",
+      "Head"
+    ],
+    "appendageBones": [
+      "Fin_L1",
+      "Fin_R1",
+      "Fin_L2",
+      "Fin_R2"
+    ],
+    "sockets": [],
+    "weights": {
+      "vertices": 4860,
+      "influencedVertices": 4860,
+      "maximumInfluences": 3,
+      "groups": [
+        "Body_01",
+        "Body_02",
+        "Body_03",
+        "Fin_L1",
+        "Fin_L2",
+        "Fin_R1",
+        "Fin_R2",
+        "Head"
+      ]
+    },
+    "worldRootTranslation": false
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "frameStart": 1,
+      "frameEnd": 25,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 1.0,
+      "channels": 8,
+      "periodic": true,
+      "loopEndpointsExact": true,
+      "worldRootTranslation": false
+    },
+    {
+      "name": "locomotion",
+      "frameStart": 1,
+      "frameEnd": 25,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 1.0,
+      "channels": 8,
+      "periodic": true,
+      "loopEndpointsExact": true,
+      "worldRootTranslation": false
+    },
+    {
+      "name": "startled",
+      "frameStart": 1,
+      "frameEnd": 17,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 0.666667,
+      "channels": 8,
+      "periodic": false,
+      "loopEndpointsExact": false,
+      "worldRootTranslation": false
+    }
+  ],
+  "features": {
+    "animated": true,
+    "skin": true,
+    "worldRootTranslation": false,
+    "forward": "-Z",
+    "up": "+Y",
+    "draco": false,
+    "meshopt": false,
+    "ktx2": false,
+    "webpTextures": false,
+    "validatedFor": "Three.js r128 GLTFLoader"
+  },
+  "validation": {
+    "format": "GLB 2.0",
+    "fileBytes": 1089548,
+    "sha256": "487f3991814e4248b874d44b7f9c8f5f7613687526a68c3416e934f6f28ab6f2",
+    "meshes": 1,
+    "triangles": 9716,
+    "materials": 1,
+    "materialNames": [
+      "creature-rotifer_Material_01"
+    ],
+    "textures": 3,
+    "imageDimensions": [
+      {
+        "name": "Image_2",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      },
+      {
+        "name": "Image_0",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      },
+      {
+        "name": "Image_1",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      }
+    ],
+    "periodicAnimationEndpoints": {
+      "idle": {
+        "samples": 5,
+        "startSeconds": 0.041667,
+        "endSeconds": 1.041667,
+        "endpointValueMaxDelta": 0.0,
+        "endpointTangentMaxDelta": 0.0
+      },
+      "locomotion": {
+        "samples": 5,
+        "startSeconds": 0.041667,
+        "endSeconds": 1.041667,
+        "endpointValueMaxDelta": 0.0,
+        "endpointTangentMaxDelta": 0.0
+      }
+    },
+    "skins": 1,
+    "animations": [
+      "idle",
+      "locomotion",
+      "startled"
+    ],
+    "nodes": 11,
+    "extensionsUsed": [],
+    "compression": "none",
+    "rootTranslationChannels": [],
+    "requiredSockets": [
+      "Head"
+    ]
+  }
+}

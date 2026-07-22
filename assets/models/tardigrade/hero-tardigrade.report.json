@@ -1,0 +1,444 @@
+{
+  "generatedAt": "2026-07-22T02:31:25.785467+00:00",
+  "pipeline": "Meshy textured low-poly master -> Blender 4.5 cleanup, custom rig/animation, and standard GLB",
+  "blenderVersion": "4.5.11 LTS",
+  "asset": "hero-tardigrade",
+  "profile": "hero",
+  "source": {
+    "file": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/source/hero-tardigrade-v2-master.glb",
+    "sha256": "f9616290f7dadabb207ba2ac5be9abaf4069cbd6e2c799fd987a842a765a9897",
+    "fileBytes": 5666856,
+    "counts": {
+      "objects": 1,
+      "meshes": 1,
+      "materials": 1
+    },
+    "triangles": 16698,
+    "bounds": {
+      "min": [
+        -0.459883,
+        -0.953033,
+        -0.432485
+      ],
+      "max": [
+        0.459883,
+        0.953033,
+        0.436399
+      ]
+    }
+  },
+  "output": {
+    "file": "hero-tardigrade.glb",
+    "path": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/hero-tardigrade.glb",
+    "report": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/hero-tardigrade.report.json",
+    "workingBlend": null,
+    "targetTriangles": 14000,
+    "textureMaxSize": 512,
+    "blenderBounds": {
+      "min": [
+        -1.592404,
+        -3.3,
+        0.0
+      ],
+      "max": [
+        1.592404,
+        3.3,
+        3.010641
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -1.592404,
+        0.0,
+        -3.3
+      ],
+      "max": [
+        1.592404,
+        3.010641,
+        3.3
+      ]
+    },
+    "triangles": 13790,
+    "materials": 1,
+    "textures": 3,
+    "skins": 1,
+    "clips": [
+      "airborne",
+      "curl",
+      "dash",
+      "idle",
+      "scuttle"
+    ],
+    "fileBytes": 1279204,
+    "sha256": "f53fd6561d408097e6b1d45a00181ac8f10e8463fba4bb1faeb4811183f353fc"
+  },
+  "geometry": {
+    "repair": {
+      "verticesBeforeWeld": 9881,
+      "verticesAfterWeld": 8354,
+      "facesBefore": 16698,
+      "facesAfter": 16698,
+      "weldDistance": 1e-06,
+      "flatShaded": false
+    },
+    "budget": {
+      "sourceTriangles": 16698,
+      "finalTriangles": 13790,
+      "passes": [
+        {
+          "pass": 1,
+          "ratio": 0.8258474068750749,
+          "before": 16698,
+          "after": 13790
+        }
+      ]
+    }
+  },
+  "normalization": {
+    "sourceBounds": {
+      "min": [
+        -0.459883,
+        -0.953033,
+        -0.432916
+      ],
+      "max": [
+        0.459883,
+        0.953033,
+        0.436551
+      ]
+    },
+    "orientedBounds": {
+      "min": [
+        -0.459883,
+        -0.953033,
+        -0.432916
+      ],
+      "max": [
+        0.459883,
+        0.953033,
+        0.436551
+      ]
+    },
+    "blenderBounds": {
+      "min": [
+        -1.592404,
+        -3.3,
+        0.0
+      ],
+      "max": [
+        1.592404,
+        3.3,
+        3.010641
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -1.592404,
+        0.0,
+        -3.3
+      ],
+      "max": [
+        1.592404,
+        3.010641,
+        3.3
+      ]
+    },
+    "orientationStrategy": "-Y to Blender +Y / glTF -Z",
+    "sourceFrontAxis": "-Y",
+    "forward": "-Z",
+    "up": "+Y",
+    "fitDimension": "length",
+    "targetDimension": 6.6,
+    "uniformScale": 3.462629418283796,
+    "grounded": true,
+    "centeredXZ": true
+  },
+  "materials": {
+    "names": [
+      "SkinPrimary"
+    ],
+    "count": 1,
+    "removedTextureNodes": [],
+    "semanticFaceCounts": {
+      "SkinPrimary": 13790
+    }
+  },
+  "images": [
+    {
+      "name": "Image_0",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_1",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_2",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_3",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    }
+  ],
+  "rig": {
+    "armatures": 1,
+    "skins": 1,
+    "bones": 25,
+    "deformBones": [
+      "Body_01",
+      "Body_02",
+      "Body_03",
+      "Body_04",
+      "Head",
+      "Leg_L4_Upper",
+      "Leg_L4_Lower",
+      "Leg_R4_Upper",
+      "Leg_R4_Lower",
+      "Leg_L3_Upper",
+      "Leg_L3_Lower",
+      "Leg_R3_Upper",
+      "Leg_R3_Lower",
+      "Leg_L2_Upper",
+      "Leg_L2_Lower",
+      "Leg_R2_Upper",
+      "Leg_R2_Lower",
+      "Leg_L1_Upper",
+      "Leg_L1_Lower",
+      "Leg_R1_Upper",
+      "Leg_R1_Lower"
+    ],
+    "bodyBones": [
+      "Body_01",
+      "Body_02",
+      "Body_03",
+      "Body_04",
+      "Head"
+    ],
+    "appendageBones": [
+      "Leg_L1_Upper",
+      "Leg_L1_Lower",
+      "Leg_R1_Upper",
+      "Leg_R1_Lower",
+      "Leg_L2_Upper",
+      "Leg_L2_Lower",
+      "Leg_R2_Upper",
+      "Leg_R2_Lower",
+      "Leg_L3_Upper",
+      "Leg_L3_Lower",
+      "Leg_R3_Upper",
+      "Leg_R3_Lower",
+      "Leg_L4_Upper",
+      "Leg_L4_Lower",
+      "Leg_R4_Upper",
+      "Leg_R4_Lower"
+    ],
+    "sockets": [
+      "Head",
+      "Face",
+      "Back",
+      "Camera"
+    ],
+    "weights": {
+      "vertices": 6900,
+      "influencedVertices": 6900,
+      "maximumInfluences": 4,
+      "groups": [
+        "Body_01",
+        "Body_02",
+        "Body_03",
+        "Body_04",
+        "Head",
+        "Leg_L1_Lower",
+        "Leg_L1_Upper",
+        "Leg_L2_Lower",
+        "Leg_L2_Upper",
+        "Leg_L3_Lower",
+        "Leg_L3_Upper",
+        "Leg_L4_Lower",
+        "Leg_L4_Upper",
+        "Leg_R1_Lower",
+        "Leg_R1_Upper",
+        "Leg_R2_Lower",
+        "Leg_R2_Upper",
+        "Leg_R3_Lower",
+        "Leg_R3_Upper",
+        "Leg_R4_Lower",
+        "Leg_R4_Upper"
+      ]
+    },
+    "worldRootTranslation": false
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "frameStart": 1,
+      "frameEnd": 25,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 1.0,
+      "channels": 21,
+      "periodic": true,
+      "loopEndpointsExact": true,
+      "worldRootTranslation": false
+    },
+    {
+      "name": "scuttle",
+      "frameStart": 1,
+      "frameEnd": 25,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 1.0,
+      "channels": 21,
+      "periodic": true,
+      "loopEndpointsExact": true,
+      "worldRootTranslation": false
+    },
+    {
+      "name": "dash",
+      "frameStart": 1,
+      "frameEnd": 17,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 0.666667,
+      "channels": 21,
+      "periodic": false,
+      "loopEndpointsExact": false,
+      "worldRootTranslation": false
+    },
+    {
+      "name": "curl",
+      "frameStart": 1,
+      "frameEnd": 25,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 1.0,
+      "channels": 21,
+      "periodic": false,
+      "loopEndpointsExact": false,
+      "worldRootTranslation": false
+    },
+    {
+      "name": "airborne",
+      "frameStart": 1,
+      "frameEnd": 25,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 1.0,
+      "channels": 21,
+      "periodic": false,
+      "loopEndpointsExact": false,
+      "worldRootTranslation": false
+    }
+  ],
+  "features": {
+    "animated": true,
+    "skin": true,
+    "worldRootTranslation": false,
+    "forward": "-Z",
+    "up": "+Y",
+    "draco": false,
+    "meshopt": false,
+    "ktx2": false,
+    "webpTextures": false,
+    "validatedFor": "Three.js r128 GLTFLoader"
+  },
+  "validation": {
+    "format": "GLB 2.0",
+    "fileBytes": 1279204,
+    "sha256": "f53fd6561d408097e6b1d45a00181ac8f10e8463fba4bb1faeb4811183f353fc",
+    "meshes": 1,
+    "triangles": 13790,
+    "materials": 1,
+    "materialNames": [
+      "SkinPrimary"
+    ],
+    "textures": 3,
+    "imageDimensions": [
+      {
+        "name": "Image_2",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      },
+      {
+        "name": "Image_0",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      },
+      {
+        "name": "Image_1",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      }
+    ],
+    "periodicAnimationEndpoints": {
+      "idle": {
+        "samples": 5,
+        "startSeconds": 0.041667,
+        "endSeconds": 1.041667,
+        "endpointValueMaxDelta": 0.0,
+        "endpointTangentMaxDelta": 0.0
+      },
+      "scuttle": {
+        "samples": 5,
+        "startSeconds": 0.041667,
+        "endSeconds": 1.041667,
+        "endpointValueMaxDelta": 0.0,
+        "endpointTangentMaxDelta": 0.0
+      }
+    },
+    "skins": 1,
+    "animations": [
+      "airborne",
+      "curl",
+      "dash",
+      "idle",
+      "scuttle"
+    ],
+    "nodes": 27,
+    "extensionsUsed": [],
+    "compression": "none",
+    "rootTranslationChannels": [],
+    "requiredSockets": [
+      "Head",
+      "Face",
+      "Back",
+      "Camera"
+    ]
+  }
+}

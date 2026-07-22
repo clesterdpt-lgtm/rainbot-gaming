@@ -25,6 +25,11 @@
 
 ## Polish & juice
 
+- [ ] Extend the Meshy/Blender Tardigrade asset pass to stage-specific joke creatures and traversal props after the core roster is visually approved.
+  - Source: 2026-07-21 Tardigrade creature and prop asset upgrade scope triage
+  - Rough size: L · Rough value: M
+  - Notes: Milestone 55 covers the hero, recurring rotifer/ciliate/waterbearling trio, and the four Petri tutorial interactions. A follow-up may replace the spore ray, duck, gut worm, crouton, ember skimmer, lava surfer, lab drone, roomba, germfluencer, terrain dressing, and traversal toys without bundling them into the first coherent release.
+
 - [ ] Dialogue visemes and lip synchronization — add a restrained 8–12-viseme speech set after voiced dialogue is authored.
   - Source: 2026-07-15 facial-animation discussion
   - Rough size: L · Rough value: M

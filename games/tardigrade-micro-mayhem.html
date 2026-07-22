@@ -1728,7 +1728,7 @@
       }
 
       .micro-touch-actions .btn:nth-child(3) {
-        min-height: 36px;
+        min-height: 44px;
       }
 
       body.micro-play-active .micro-radar {
@@ -1992,7 +1992,7 @@
       }
 
       .micro-touch-actions .btn:nth-child(3) {
-        min-height: 40px;
+        min-height: 44px;
       }
 
       body.micro-play-active .micro-radar em {
@@ -2451,7 +2451,55 @@
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260717-max-ui"></script>
-  <script src="../assets/js/tardigrade-micro-mayhem.js?v=20260717-max-ui"></script>
+  <script>
+    (() => {
+      const threeSources = [
+        "../assets/vendor/three/three-r128.min.js",
+        "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js",
+        "https://unpkg.com/three@0.128.0/build/three.min.js",
+        "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js",
+      ];
+      const loaderSources = [
+        "../assets/vendor/three/GLTFLoader-r128.js",
+        "https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js",
+        "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js",
+      ];
+      const skeletonSources = [
+        "../assets/vendor/three/SkeletonUtils-r128.js",
+        "https://unpkg.com/three@0.128.0/examples/js/utils/SkeletonUtils.js",
+        "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/SkeletonUtils.js",
+      ];
+      const runtimeSource = "../assets/js/tardigrade-micro-mayhem.js?v=20260721-meshy-blender-assets-2";
+
+      const loadFirstAvailable = (sources, isReady, complete, index = 0) => {
+        if (isReady() || index >= sources.length) {
+          complete();
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = sources[index];
+        script.async = true;
+        script.onload = () => (isReady() ? complete() : loadFirstAvailable(sources, isReady, complete, index + 1));
+        script.onerror = () => loadFirstAvailable(sources, isReady, complete, index + 1);
+        document.head.appendChild(script);
+      };
+      const loadRuntime = () => {
+        const script = document.createElement("script");
+        script.src = runtimeSource;
+        script.async = true;
+        document.body.appendChild(script);
+      };
+      loadFirstAvailable(threeSources, () => Boolean(window.THREE), () => {
+        if (!window.THREE) {
+          loadRuntime();
+          return;
+        }
+        loadFirstAvailable(loaderSources, () => Boolean(window.THREE && window.THREE.GLTFLoader), () => {
+          loadFirstAvailable(skeletonSources, () => Boolean(window.THREE && window.THREE.SkeletonUtils), loadRuntime);
+        });
+      });
+    })();
+  </script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

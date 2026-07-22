@@ -1,0 +1,262 @@
+{
+  "generatedAt": "2026-07-22T02:32:53.008767+00:00",
+  "pipeline": "Meshy textured low-poly master -> Blender 4.5 cleanup, custom rig/animation, and standard GLB",
+  "blenderVersion": "4.5.11 LTS",
+  "asset": "prop-bacteria",
+  "profile": "prop",
+  "source": {
+    "file": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/source/prop-bacteria-master.glb",
+    "sha256": "effd399de46e019dc99a8a8c1adaeba7cc819772193d561ed0a5640eb719c0c8",
+    "fileBytes": 6263464,
+    "counts": {
+      "objects": 1,
+      "meshes": 1,
+      "materials": 1
+    },
+    "triangles": 13905,
+    "bounds": {
+      "min": [
+        -0.757339,
+        -0.953033,
+        -0.385519
+      ],
+      "max": [
+        0.757339,
+        0.953033,
+        0.389432
+      ]
+    }
+  },
+  "output": {
+    "file": "prop-bacteria.glb",
+    "path": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/prop-bacteria.glb",
+    "report": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/prop-bacteria.report.json",
+    "workingBlend": null,
+    "targetTriangles": 5000,
+    "textureMaxSize": 512,
+    "blenderBounds": {
+      "min": [
+        -0.933654,
+        -1.175,
+        0.0
+      ],
+      "max": [
+        0.933654,
+        1.175,
+        0.956476
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.933654,
+        0.0,
+        -1.175
+      ],
+      "max": [
+        0.933654,
+        0.956476,
+        1.175
+      ]
+    },
+    "triangles": 4925,
+    "materials": 1,
+    "textures": 3,
+    "skins": 0,
+    "clips": [],
+    "fileBytes": 1144140,
+    "sha256": "24d1c0bd500fdf5018aa27150421fd66f6fdbaca61504d5c9b5a2bda3358dc6a"
+  },
+  "geometry": {
+    "repair": {
+      "verticesBeforeWeld": 8436,
+      "verticesAfterWeld": 6960,
+      "facesBefore": 13905,
+      "facesAfter": 13905,
+      "weldDistance": 1e-06,
+      "flatShaded": true
+    },
+    "budget": {
+      "sourceTriangles": 13905,
+      "finalTriangles": 4925,
+      "passes": [
+        {
+          "pass": 1,
+          "ratio": 0.3541891405969076,
+          "before": 13905,
+          "after": 4925
+        }
+      ]
+    }
+  },
+  "normalization": {
+    "sourceBounds": {
+      "min": [
+        -0.757339,
+        -0.953264,
+        -0.385854
+      ],
+      "max": [
+        0.757655,
+        0.953351,
+        0.390159
+      ]
+    },
+    "orientedBounds": {
+      "min": [
+        -0.757339,
+        -0.953264,
+        -0.385854
+      ],
+      "max": [
+        0.757655,
+        0.953351,
+        0.390159
+      ]
+    },
+    "blenderBounds": {
+      "min": [
+        -0.933654,
+        -1.175,
+        0.0
+      ],
+      "max": [
+        0.933654,
+        1.175,
+        0.956476
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.933654,
+        0.0,
+        -1.175
+      ],
+      "max": [
+        0.933654,
+        0.956476,
+        1.175
+      ]
+    },
+    "orientationStrategy": "unchanged",
+    "sourceFrontAxis": null,
+    "forward": "-Z",
+    "up": "+Y",
+    "fitDimension": "maximumDimension",
+    "targetDimension": 2.35,
+    "uniformScale": 1.2325509469424019,
+    "grounded": true,
+    "centeredXZ": true
+  },
+  "materials": {
+    "names": [
+      "prop-bacteria_Material_01"
+    ],
+    "count": 1,
+    "removedTextureNodes": [],
+    "semanticFaceCounts": {}
+  },
+  "images": [
+    {
+      "name": "Image_0",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_1",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_2",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_3",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    }
+  ],
+  "rig": null,
+  "clips": [],
+  "features": {
+    "animated": false,
+    "skin": false,
+    "worldRootTranslation": false,
+    "forward": "-Z",
+    "up": "+Y",
+    "draco": false,
+    "meshopt": false,
+    "ktx2": false,
+    "webpTextures": false,
+    "validatedFor": "Three.js r128 GLTFLoader"
+  },
+  "validation": {
+    "format": "GLB 2.0",
+    "fileBytes": 1144140,
+    "sha256": "24d1c0bd500fdf5018aa27150421fd66f6fdbaca61504d5c9b5a2bda3358dc6a",
+    "meshes": 1,
+    "triangles": 4925,
+    "materials": 1,
+    "materialNames": [
+      "prop-bacteria_Material_01"
+    ],
+    "textures": 3,
+    "imageDimensions": [
+      {
+        "name": "Image_2",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      },
+      {
+        "name": "Image_0",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      },
+      {
+        "name": "Image_1",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      }
+    ],
+    "periodicAnimationEndpoints": {},
+    "skins": 0,
+    "animations": [],
+    "nodes": 1,
+    "extensionsUsed": [],
+    "compression": "none",
+    "rootTranslationChannels": [],
+    "requiredSockets": []
+  }
+}

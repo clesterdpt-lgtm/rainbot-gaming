@@ -1,0 +1,360 @@
+{
+  "generatedAt": "2026-07-22T02:31:53.478945+00:00",
+  "pipeline": "Meshy textured low-poly master -> Blender 4.5 cleanup, custom rig/animation, and standard GLB",
+  "blenderVersion": "4.5.11 LTS",
+  "asset": "creature-ciliate",
+  "profile": "ciliate",
+  "source": {
+    "file": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/source/creature-ciliate-master.glb",
+    "sha256": "98618d49caa2870d7199948751428cb59fe54aa569ea04109a8020fadfd495f3",
+    "fileBytes": 7264324,
+    "counts": {
+      "objects": 1,
+      "meshes": 1,
+      "materials": 1
+    },
+    "triangles": 9137,
+    "bounds": {
+      "min": [
+        -0.209393,
+        -0.953033,
+        -0.189824
+      ],
+      "max": [
+        0.209393,
+        0.953033,
+        0.189824
+      ]
+    }
+  },
+  "output": {
+    "file": "creature-ciliate.glb",
+    "path": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/creature-ciliate.glb",
+    "report": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/creature-ciliate.report.json",
+    "workingBlend": null,
+    "targetTriangles": 10000,
+    "textureMaxSize": 512,
+    "blenderBounds": {
+      "min": [
+        -0.373511,
+        -1.7,
+        0.0
+      ],
+      "max": [
+        0.373511,
+        1.7,
+        0.677208
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.373511,
+        0.0,
+        -1.7
+      ],
+      "max": [
+        0.373511,
+        0.677208,
+        1.7
+      ]
+    },
+    "triangles": 9137,
+    "materials": 1,
+    "textures": 3,
+    "skins": 1,
+    "clips": [
+      "idle",
+      "locomotion",
+      "startled"
+    ],
+    "fileBytes": 1151540,
+    "sha256": "d35b9dc55bb1e40838aee37ce8b8a5eca76c2a25f165afaed8929c92de325951"
+  },
+  "geometry": {
+    "repair": {
+      "verticesBeforeWeld": 5816,
+      "verticesAfterWeld": 4576,
+      "facesBefore": 9137,
+      "facesAfter": 9137,
+      "weldDistance": 1e-06,
+      "flatShaded": false
+    },
+    "budget": {
+      "sourceTriangles": 9137,
+      "finalTriangles": 9137,
+      "passes": []
+    }
+  },
+  "normalization": {
+    "sourceBounds": {
+      "min": [
+        -0.209393,
+        -0.953033,
+        -0.189824
+      ],
+      "max": [
+        0.209393,
+        0.953033,
+        0.189824
+      ]
+    },
+    "orientedBounds": {
+      "min": [
+        -0.209393,
+        -0.953033,
+        -0.189824
+      ],
+      "max": [
+        0.209393,
+        0.953033,
+        0.189824
+      ]
+    },
+    "blenderBounds": {
+      "min": [
+        -0.373511,
+        -1.7,
+        0.0
+      ],
+      "max": [
+        0.373511,
+        1.7,
+        0.677208
+      ]
+    },
+    "runtimeBounds": {
+      "min": [
+        -0.373511,
+        0.0,
+        -1.7
+      ],
+      "max": [
+        0.373511,
+        0.677208,
+        1.7
+      ]
+    },
+    "orientationStrategy": "-Y to Blender +Y / glTF -Z",
+    "sourceFrontAxis": "-Y",
+    "forward": "-Z",
+    "up": "+Y",
+    "fitDimension": "length",
+    "targetDimension": 3.4,
+    "uniformScale": 1.7837787912371068,
+    "grounded": true,
+    "centeredXZ": true
+  },
+  "materials": {
+    "names": [
+      "creature-ciliate_Material_01"
+    ],
+    "count": 1,
+    "removedTextureNodes": [],
+    "semanticFaceCounts": {}
+  },
+  "images": [
+    {
+      "name": "Image_0",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_1",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_2",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    },
+    {
+      "name": "Image_3",
+      "sourceSize": [
+        2048,
+        2048
+      ],
+      "runtimeSize": [
+        512,
+        512
+      ],
+      "packed": true
+    }
+  ],
+  "rig": {
+    "armatures": 1,
+    "skins": 1,
+    "bones": 9,
+    "deformBones": [
+      "Body_01",
+      "Body_02",
+      "Body_03",
+      "Head",
+      "Fin_L2",
+      "Fin_R2",
+      "Fin_L1",
+      "Fin_R1"
+    ],
+    "bodyBones": [
+      "Body_01",
+      "Body_02",
+      "Body_03",
+      "Head"
+    ],
+    "appendageBones": [
+      "Fin_L1",
+      "Fin_R1",
+      "Fin_L2",
+      "Fin_R2"
+    ],
+    "sockets": [],
+    "weights": {
+      "vertices": 4576,
+      "influencedVertices": 4576,
+      "maximumInfluences": 3,
+      "groups": [
+        "Body_01",
+        "Body_02",
+        "Body_03",
+        "Fin_L1",
+        "Fin_L2",
+        "Fin_R1",
+        "Fin_R2",
+        "Head"
+      ]
+    },
+    "worldRootTranslation": false
+  },
+  "clips": [
+    {
+      "name": "idle",
+      "frameStart": 1,
+      "frameEnd": 25,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 1.0,
+      "channels": 8,
+      "periodic": true,
+      "loopEndpointsExact": true,
+      "worldRootTranslation": false
+    },
+    {
+      "name": "locomotion",
+      "frameStart": 1,
+      "frameEnd": 25,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 1.0,
+      "channels": 8,
+      "periodic": true,
+      "loopEndpointsExact": true,
+      "worldRootTranslation": false
+    },
+    {
+      "name": "startled",
+      "frameStart": 1,
+      "frameEnd": 17,
+      "frames": 5,
+      "fps": 24,
+      "durationSeconds": 0.666667,
+      "channels": 8,
+      "periodic": false,
+      "loopEndpointsExact": false,
+      "worldRootTranslation": false
+    }
+  ],
+  "features": {
+    "animated": true,
+    "skin": true,
+    "worldRootTranslation": false,
+    "forward": "-Z",
+    "up": "+Y",
+    "draco": false,
+    "meshopt": false,
+    "ktx2": false,
+    "webpTextures": false,
+    "validatedFor": "Three.js r128 GLTFLoader"
+  },
+  "validation": {
+    "format": "GLB 2.0",
+    "fileBytes": 1151540,
+    "sha256": "d35b9dc55bb1e40838aee37ce8b8a5eca76c2a25f165afaed8929c92de325951",
+    "meshes": 1,
+    "triangles": 9137,
+    "materials": 1,
+    "materialNames": [
+      "creature-ciliate_Material_01"
+    ],
+    "textures": 3,
+    "imageDimensions": [
+      {
+        "name": "Image_2",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      },
+      {
+        "name": "Image_0",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      },
+      {
+        "name": "Image_1",
+        "mimeType": "image/png",
+        "width": 512,
+        "height": 512
+      }
+    ],
+    "periodicAnimationEndpoints": {
+      "idle": {
+        "samples": 5,
+        "startSeconds": 0.041667,
+        "endSeconds": 1.041667,
+        "endpointValueMaxDelta": 0.0,
+        "endpointTangentMaxDelta": 0.0
+      },
+      "locomotion": {
+        "samples": 5,
+        "startSeconds": 0.041667,
+        "endSeconds": 1.041667,
+        "endpointValueMaxDelta": 0.0,
+        "endpointTangentMaxDelta": 0.0
+      }
+    },
+    "skins": 1,
+    "animations": [
+      "idle",
+      "locomotion",
+      "startled"
+    ],
+    "nodes": 11,
+    "extensionsUsed": [],
+    "compression": "none",
+    "rootTranslationChannels": [],
+    "requiredSockets": [
+      "Head"
+    ]
+  }
+}

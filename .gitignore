@@ -42,3 +42,7 @@ assets/models/mr-feast/processed/mr-feast-working.blend*
 assets/models/super-slop-brothers/source/
 assets/models/super-slop-brothers/animations/
 assets/models/super-slop-brothers/processed/*-working.blend*
+
+# Tardigrade raw Meshy outputs and editable Blender working files
+assets/models/tardigrade/source/
+assets/models/tardigrade/*-working.blend*

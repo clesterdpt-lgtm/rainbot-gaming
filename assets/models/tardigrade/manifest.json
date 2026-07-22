@@ -1,0 +1,167 @@
+{
+  "version": "2026-07-21-meshy-blender-1",
+  "pipeline": "Meshy AI text-to-3D masters, polished, rigged, animated, and exported with Blender 4.5 LTS",
+  "blenderScript": "scripts/blender/prepare-tardigrade-assets.py",
+  "runtimeContract": {
+    "engine": "Three.js r128 GLTFLoader",
+    "compression": "none",
+    "forward": "-Z",
+    "up": "+Y",
+    "worldTranslation": "JavaScript gameplay proxy owns all world translation",
+    "totalByteBudget": 16777216
+  },
+  "generation": {
+    "finalAssetCredits": 240,
+    "rejectedExplorationCredits": 30,
+    "totalCreditsConsumed": 270,
+    "rejectedSources": [
+      {
+        "id": "hero-tardigrade-v1",
+        "reason": "Rejected after visual review because the silhouette read as armored and beetle-like rather than a soft water bear.",
+        "sourceFile": "source/hero-tardigrade-master.glb",
+        "previewTaskId": "019f878b-e525-77da-b7b4-e1f5aeafd86f",
+        "refineTaskId": "019f878f-937b-789a-8d91-474b67a761fd",
+        "consumedCredits": 30
+      }
+    ]
+  },
+  "assets": [
+    {
+      "id": "hero-tardigrade",
+      "role": "hero",
+      "runtimeFile": "hero-tardigrade.glb",
+      "blenderReport": "hero-tardigrade.report.json",
+      "sha256": "f53fd6561d408097e6b1d45a00181ac8f10e8463fba4bb1faeb4811183f353fc",
+      "clips": ["idle", "scuttle", "dash", "curl", "airborne"],
+      "sockets": ["Head", "Face", "Back", "Camera"],
+      "meshy": {
+        "previewTaskId": "019f8792-516b-78fc-b2c8-faa044b87c87",
+        "refineTaskId": "019f8794-74bd-73be-b29d-f1078c7e936c",
+        "consumedCredits": 30,
+        "sourceFile": "source/hero-tardigrade-v2-master.glb",
+        "sourceSha256": "f9616290f7dadabb207ba2ac5be9abaf4069cbd6e2c799fd987a842a765a9897",
+        "prompt": "single recognizable tardigrade water bear game character, soft plump elongated barrel body with five rounded ring segments, exactly four pairs of short stubby lobopod legs evenly spaced underneath, each foot with two thick hook claws, tiny circular oral tube centered on the front, two glossy black side eyes, no antennae, no wings, no shell, no carapace, no beetle, no spider, no crab, horizontal neutral walking pose, broad readable silhouette, animation-friendly low-poly topology, isolated, no base, no background, no props, no text",
+        "texturePrompt": "warm sandy beige soft skin, caramel segment bands, cream belly and muzzle, ivory claws, glossy black eyes with cyan highlights, matte slightly moist hand-painted low-poly arcade PBR, bold clean color blocks, no metallic armor, no gore"
+      }
+    },
+    {
+      "id": "creature-rotifer",
+      "role": "creature",
+      "runtimeFile": "creature-rotifer.glb",
+      "blenderReport": "creature-rotifer.report.json",
+      "sha256": "487f3991814e4248b874d44b7f9c8f5f7613687526a68c3416e934f6f28ab6f2",
+      "clips": ["idle", "locomotion", "startled"],
+      "meshy": {
+        "previewTaskId": "019f878b-e561-7373-92a9-5c4378f79fb1",
+        "refineTaskId": "019f878d-7940-7281-882b-3e5bd5a35098",
+        "consumedCredits": 30,
+        "sourceFile": "source/creature-rotifer-master.glb",
+        "sourceSha256": "d8df466e116c5e79ad38df4f5f54be732e7a7941f2d444533dc820c8c0abf9ab",
+        "prompt": "single stylized low-poly rotifer micro-creature, elongated soft body with tapered articulated foot, two-lobed feeding crown made from twelve thick paddle-shaped cilia in clear riggable clumps, compact friendly face, strong front and side silhouette, faceted game-ready topology, no hair-thin strands, isolated single creature, neutral swimming pose, no base, no background, no text",
+        "texturePrompt": "peach and cream body, mint-white cilia tips, subtle coral bands, soft wet PBR roughness, hand-painted low-poly arcade shading, bold clean color blocks, opaque materials only, no gore"
+      }
+    },
+    {
+      "id": "creature-ciliate",
+      "role": "creature",
+      "runtimeFile": "creature-ciliate.glb",
+      "blenderReport": "creature-ciliate.report.json",
+      "sha256": "d35b9dc55bb1e40838aee37ce8b8a5eca76c2a25f165afaed8929c92de325951",
+      "clips": ["idle", "locomotion", "startled"],
+      "meshy": {
+        "previewTaskId": "019f878b-e52b-7372-a183-c85bd6e24e74",
+        "refineTaskId": "019f878d-64e5-799a-a2d7-6e40bf7b66ec",
+        "consumedCredits": 30,
+        "sourceFile": "source/creature-ciliate-master.glb",
+        "sourceSha256": "98618d49caa2870d7199948751428cb59fe54aa569ea04109a8020fadfd495f3",
+        "prompt": "single stylized low-poly ciliate inspired by a paramecium, long teal bean-shaped body with blunt head and tapered tail, eight broad paired ciliary paddles instead of tiny hairs, one lavender dorsal band, strong mobile-readable silhouette, symmetrical neutral swimming pose, clean deformable topology, isolated single creature, no base, no background, no text",
+        "texturePrompt": "saturated teal body, violet dorsal stripe, pearly off-white paddles, subtle cyan edge accents, matte wet hand-painted low-poly arcade PBR, bold clean color blocks, no transparency, no gore"
+      }
+    },
+    {
+      "id": "creature-waterbearling",
+      "role": "creature",
+      "runtimeFile": "creature-waterbearling.glb",
+      "blenderReport": "creature-waterbearling.report.json",
+      "sha256": "4b6305f67933867e47ecf99e22e457c23b179577fec03ed967e7362982a9700a",
+      "clips": ["idle", "locomotion", "startled"],
+      "meshy": {
+        "previewTaskId": "019f878b-e525-723a-96df-9c4c1fb87550",
+        "refineTaskId": "019f878e-9872-7870-a564-8e8299790e8b",
+        "consumedCredits": 30,
+        "sourceFile": "source/creature-waterbearling-master.glb",
+        "sourceSha256": "8e0900922f2e38e0d03240588289f2e8b9337276f6073d5917c62eae01a18ba0",
+        "prompt": "single baby tardigrade waterbearling, stylized low-poly micro-creature, short plump segmented body, exactly four clearly separated pairs of stubby legs with oversized two-hook claws, tiny oral tube, one pair of large black bead eyes, neutral horizontal walking pose, cute curious expression, broad readable mobile game silhouette, clean animation-friendly topology, isolated single creature, no base, no background, no props, no text",
+        "texturePrompt": "soft honey beige body, warm amber segment shading, creamy belly, ivory claws, glossy black eyes with cyan highlights, matte slightly moist hand-painted low-poly arcade PBR, bold clean color blocks, no gore"
+      }
+    },
+    {
+      "id": "prop-algae",
+      "role": "prop",
+      "runtimeFile": "prop-algae.glb",
+      "blenderReport": "prop-algae.report.json",
+      "sha256": "363ba2e1eeb39f3f073007c0f2e7bc3543a36f7f5e13c458d25babba589bf581",
+      "clips": [],
+      "meshy": {
+        "previewTaskId": "019f878d-1689-798b-9282-fd8050c8a1e4",
+        "refineTaskId": "019f8790-5ccc-7458-a1b1-8f0ee774a3b1",
+        "consumedCredits": 30,
+        "sourceFile": "source/prop-algae-master.glb",
+        "sourceSha256": "ffa17ab89afe55b6bd98668cedcc8de0e4e693625e75219f1a30decf2085b8ce",
+        "prompt": "single chunky low-poly algae nutrient collectible, compact asymmetrical cluster of three fused faceted cells with two broad leaf-like fronds, rounded collision-friendly footprint, readable at small mobile size, isolated game prop, no particles, no base, no background, no text",
+        "texturePrompt": "bright lime green cells, darker moss creases, yellow-green tips, matte waxy hand-painted low-poly arcade PBR, bold clean color blocks, no transparency"
+      }
+    },
+    {
+      "id": "prop-bacteria",
+      "role": "prop",
+      "runtimeFile": "prop-bacteria.glb",
+      "blenderReport": "prop-bacteria.report.json",
+      "sha256": "24d1c0bd500fdf5018aa27150421fd66f6fdbaca61504d5c9b5a2bda3358dc6a",
+      "clips": [],
+      "meshy": {
+        "previewTaskId": "019f878d-1692-798c-bb71-42a913fb2466",
+        "refineTaskId": "019f878f-4e98-7412-a515-62a84c123aeb",
+        "consumedCredits": 30,
+        "sourceFile": "source/prop-bacteria-master.glb",
+        "sourceSha256": "effd399de46e019dc99a8a8c1adaeba7cc819772193d561ed0a5640eb719c0c8",
+        "prompt": "single stylized low-poly rod-shaped bacterium game target, plump orange capsule body with three thick segmented ridges, six short chunky flagella and two expressive dark eyes, broad collision-friendly silhouette, readable at small mobile size, isolated single microbe, no particles, no base, no background, no text",
+        "texturePrompt": "warm orange and coral body, dark rust ridges, cream flagella tips, glossy black eyes, matte wet hand-painted low-poly arcade PBR, bold clean color blocks, no gore"
+      }
+    },
+    {
+      "id": "prop-droplet",
+      "role": "prop",
+      "runtimeFile": "prop-droplet.glb",
+      "blenderReport": "prop-droplet.report.json",
+      "sha256": "b2a2296a64d559e7e3afc63a39b2deaae2c68280b7d1717d2747fdc877fe5a54",
+      "clips": [],
+      "meshy": {
+        "previewTaskId": "019f878d-1664-73b3-a951-7869e3d1e4a0",
+        "refineTaskId": "019f878d-aeee-73d6-82ef-76628c4fa021",
+        "consumedCredits": 30,
+        "sourceFile": "source/prop-droplet-master.glb",
+        "sourceSha256": "fc4797126a315e0c17cdbbc87e5cb20f5e015cabe4fd2d4075310e892f54f8f6",
+        "prompt": "single chunky low-poly water droplet game prop, rounded teardrop shape resting on a broad stable base, one large faceted body with two small splash lobes, collision-friendly and readable at small mobile size, isolated single object, no particles, no ground plane, no background, no text",
+        "texturePrompt": "clear cyan-blue water appearance with pale aqua facets and bright white highlights painted into the material, glossy hand-painted low-poly arcade PBR, bold clean color blocks, no separate floating pieces"
+      }
+    },
+    {
+      "id": "prop-pollen",
+      "role": "prop",
+      "runtimeFile": "prop-pollen.glb",
+      "blenderReport": "prop-pollen.report.json",
+      "sha256": "38230484fc65df700dbcf00904b6429c0a0beb1a88010e250e202a76d64cc5af",
+      "clips": [],
+      "meshy": {
+        "previewTaskId": "019f878d-1713-798d-9316-5be405aa0e4b",
+        "refineTaskId": "019f878f-7828-79f1-8061-9d6234fa08d1",
+        "consumedCredits": 30,
+        "sourceFile": "source/prop-pollen-master.glb",
+        "sourceSha256": "1f64ab842a6a49687f2f08b108304537e7229e11fa0c32cfc399ae4d1ff49b17",
+        "prompt": "single chunky low-poly pollen grain game prop, faceted golden spherical core with twelve thick evenly spaced rounded spikes, near-spherical collision-friendly silhouette, durable toy-like form readable at small mobile size, isolated single object, no particles, no background, no text",
+        "texturePrompt": "sunny yellow and warm orange, darker amber recesses, dry powdery hand-painted low-poly arcade PBR, bold clean color blocks, no transparency"
+      }
+    }
+  ]
+}

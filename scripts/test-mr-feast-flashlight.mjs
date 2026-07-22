@@ -13,6 +13,7 @@ const port = Number(process.env.MR_FEAST_FLASHLIGHT_TEST_PORT || (44000 + (proce
 const baseUrl = `http://127.0.0.1:${port}`;
 const gameUrl = `${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1&allLights=1`;
 const artifactDir = path.join(root, "output", "playwright", "mr-feast-flashlight");
+const useHardwareBrowser = process.env.MR_FEAST_HARDWARE_BROWSER === "1";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -97,6 +98,8 @@ async function run() {
   assert(/reportFlashlightUse/.test(runtime) && /flashlight-use/.test(runtime), "flashlight use must report a camera-security event");
   assert(/getFlashlightState/.test(runtime) && /setFlashlightForQA/.test(runtime), "focused flashlight diagnostics and QA controls are missing");
   assert(/id="mansion-flashlight-button"/.test(html), "touch Light control is missing");
+  assert(/intensity:\s*74\b/.test(runtime), "flashlight beam should use the slightly brighter 74 intensity tuning");
+  assert(!/carried-flashlight-(?:body|head|lens)/.test(runtime), "active flashlight should show only its light, not a carried model");
 
   let server = null;
   let browser = null;
@@ -107,13 +110,16 @@ async function run() {
   try {
     await waitForServer();
     await mkdir(artifactDir, { recursive: true });
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch(useHardwareBrowser
+      ? { channel: "chrome", headless: false }
+      : { headless: true });
     const context = await browser.newContext({ viewport: { width: 1280, height: 820 } });
     const page = await context.newPage();
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("console", (message) => {
-      if (message.type() === "error" && !/favicon\.ico/i.test(message.text())) errors.push(message.text());
+      const sourceUrl = message.location().url || "";
+      if (message.type() === "error" && !/favicon\.ico/i.test(`${message.text()} ${sourceUrl}`)) errors.push(message.text());
     });
     await page.addInitScript(() => localStorage.removeItem("rainbot_game_save:mr-feast-mansion"));
     await page.goto(gameUrl, { waitUntil: "domcontentloaded" });
@@ -153,6 +159,7 @@ async function run() {
     light = await flashlight(page);
     const layoutOn = (await diagnostics(page)).lighting;
     assert(light.beam.intensity > 0 && !light.beam.castShadow, "active flashlight should expose a real shadow-free beam");
+    assert(light.beam.authoredIntensity === 74, `beam should use the slightly brighter authored intensity; beam=${JSON.stringify(light.beam)}`);
     assert(light.beam.distance >= 7.5 && light.beam.distance <= 9, `beam reach should stay useful but bounded; distance=${light.beam.distance}`);
     assert(light.beam.angle >= 0.30 && light.beam.angle <= 0.58 && light.beam.penumbra >= 0.7, `beam cone should stay focused and soft; beam=${JSON.stringify(light.beam)}`);
     assert(layoutOff.shaderSpotLights === layoutOn.shaderSpotLights && layoutOn.shaderSpotLights === layoutOn.shaderSpotBudget, `F must not change spot-light topology; off=${layoutOff.shaderSpotLights} on=${layoutOn.shaderSpotLights} budget=${layoutOn.shaderSpotBudget}`);
@@ -260,7 +267,8 @@ async function run() {
     const mobilePage = await mobileContext.newPage();
     mobilePage.on("pageerror", (error) => errors.push(`mobile: ${error.message}`));
     mobilePage.on("console", (message) => {
-      if (message.type() === "error" && !/favicon\.ico/i.test(message.text())) errors.push(`mobile: ${message.text()}`);
+      const sourceUrl = message.location().url || "";
+      if (message.type() === "error" && !/favicon\.ico/i.test(`${message.text()} ${sourceUrl}`)) errors.push(`mobile: ${message.text()}`);
     });
     await mobilePage.addInitScript(() => localStorage.removeItem("rainbot_game_save:mr-feast-mansion"));
     await mobilePage.goto(gameUrl, { waitUntil: "domcontentloaded" });

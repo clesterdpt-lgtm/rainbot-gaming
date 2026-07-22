@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260722-basement-flashlight-1";
+  const MANSION_RUNTIME_VERSION = "20260722-basement-flashlight-2";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -681,7 +681,7 @@
     }),
     beam: Object.freeze({
       color: 0xffe3bd,
-      intensity: 68,
+      intensity: 74,
       distance: 8.2,
       angle: 0.38,
       penumbra: 0.78,
@@ -691,7 +691,6 @@
       minimumDistance: 0.9,
       originOffset: Object.freeze({ x: 0.16, y: -0.13, z: -0.08 }),
       aimOffset: Object.freeze({ x: 0.02, y: -0.08, z: -8.2 }),
-      heldOffset: Object.freeze({ x: 0.27, y: -0.24, z: -0.5 }),
       activationFlutterSeconds: 0.18,
     }),
     stealthExposureFloor: 0.72,
@@ -17201,10 +17200,9 @@
       this.origin = new THREE.Vector3();
       this.aim = new THREE.Vector3();
       this.direction = new THREE.Vector3();
-      this.offset = new THREE.Vector3();
       this.cameraQuaternion = new THREE.Quaternion();
       this.buildPickup();
-      this.buildCarriedRig();
+      this.buildBeam();
       this.restoreFromInventory({ clearTransient: true });
     }
 
@@ -17254,20 +17252,7 @@
       };
     }
 
-    buildCarriedRig() {
-      const held = new THREE.Group();
-      held.name = "carried-basement-flashlight";
-      held.visible = false;
-      held.scale.setScalar(0.64);
-      const heldBodyMaterial = new THREE.MeshBasicMaterial({ color: 0x17191b, toneMapped: false });
-      const heldTrimMaterial = new THREE.MeshBasicMaterial({ color: 0x75603b, toneMapped: false });
-      const heldLensMaterial = new THREE.MeshBasicMaterial({ color: 0xd5ad70, toneMapped: false });
-      cylinder({ name: "carried-flashlight-body", radius: 0.032, height: 0.17, segments: 14, z: -0.01, rotationX: Math.PI / 2, material: heldBodyMaterial, parent: held, cast: false });
-      cylinder({ name: "carried-flashlight-head", radius: 0.046, radiusTop: 0.046, radiusBottom: 0.034, height: 0.062, segments: 16, z: -0.115, rotationX: Math.PI / 2, material: heldTrimMaterial, parent: held, cast: false });
-      cylinder({ name: "carried-flashlight-lens", radius: 0.038, height: 0.01, segments: 16, z: -0.151, rotationX: Math.PI / 2, material: heldLensMaterial, parent: held, cast: false });
-      scene.add(held);
-      this.heldRoot = held;
-
+    buildBeam() {
       const beam = new THREE.SpotLight(
         FLASHLIGHT.beam.color,
         0,
@@ -17332,8 +17317,6 @@
     }
 
     syncPresentation() {
-      const active = this.collected() && this.state.on;
-      if (this.heldRoot) this.heldRoot.visible = active;
       if (this.beam) {
         // Keep the real SpotLight shader-resident. Only its energy changes.
         this.beam.visible = true;
@@ -17420,7 +17403,7 @@
     }
 
     syncPose(forceRaycast = false) {
-      if (!this.beam || !this.heldRoot) return;
+      if (!this.beam) return;
       camera.updateMatrixWorld(true);
       this.cameraQuaternion.copy(camera.quaternion);
       this.origin.set(
@@ -17436,13 +17419,6 @@
       this.beam.position.copy(this.origin);
       this.beam.target.position.copy(this.aim);
       this.beam.target.updateMatrixWorld(true);
-      this.offset.set(
-        FLASHLIGHT.beam.heldOffset.x,
-        FLASHLIGHT.beam.heldOffset.y,
-        FLASHLIGHT.beam.heldOffset.z,
-      ).applyQuaternion(this.cameraQuaternion).add(camera.position);
-      this.heldRoot.position.copy(this.offset);
-      this.heldRoot.quaternion.copy(this.cameraQuaternion);
       if (forceRaycast || this.raySampleRemaining <= 0) {
         this.direction.copy(this.aim).sub(this.origin).normalize();
         this.raycaster.set(this.origin, this.direction);

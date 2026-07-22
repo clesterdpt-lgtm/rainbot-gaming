@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260721-os-fs-escape-lock-1";
+  const MANSION_RUNTIME_VERSION = "20260721-storm-run-wait-pose-1-final-straight-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2040,6 +2040,8 @@
   ]);
   const HEDGE_MAZE_REAR_PORTAL = HEDGE_MAZE_PORTALS.find((portal) => portal.id === "rear");
   const HEDGE_MAZE_REAR_ENTRANCE = Object.freeze(mazeCellCenter(HEDGE_MAZE_REAR_PORTAL.row, HEDGE_MAZE_REAR_PORTAL.col));
+  const HEDGE_MAZE_FINAL_STRAIGHT_TURN = Object.freeze(mazeCellCenter(9, 1));
+  const HEDGE_MAZE_FINAL_STRAIGHT_END = Object.freeze(mazeCellCenter(18, 1));
   const MAZE_NORTH_VISIBILITY = Object.freeze({
     fixture: "maze-wayfinding-lamp-3",
     intensity: 380,
@@ -2215,12 +2217,17 @@
         order: 3,
         completedCheckpointMinimum: 10,
         completedCheckpointMaximum: 10,
-        trigger: Object.freeze({ id: "maze-final-corridor-turn", x: 22, z: -13.75, radius: 1.1 }),
+        trigger: Object.freeze({
+          id: "maze-final-corridor-turn",
+          x: HEDGE_MAZE_FINAL_STRAIGHT_TURN.x,
+          z: HEDGE_MAZE_FINAL_STRAIGHT_TURN.z,
+          radius: 1.1,
+        }),
         reveal: Object.freeze({
-          x: HEDGE_MAZE_REAR_ENTRANCE.x,
+          x: HEDGE_MAZE_FINAL_STRAIGHT_END.x,
           y: YARD_LAYOUT.groundY,
-          z: HEDGE_MAZE_REAR_ENTRANCE.z,
-          yaw: Math.PI / 2,
+          z: HEDGE_MAZE_FINAL_STRAIGHT_END.z,
+          yaw: 0,
           scale: 1,
           fillScale: 1,
           darkSpot: true,

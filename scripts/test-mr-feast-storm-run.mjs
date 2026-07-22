@@ -195,9 +195,14 @@ async function briefingFacing(page) {
 }
 
 async function bootPage(page) {
+  page.setDefaultTimeout(120000);
   await page.addInitScript(() => localStorage.clear());
   await page.goto(gameUrl, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
+  assert(
+    await page.evaluate(() => window.MrFeastFresh.startOptionalCharacterLoadsForQA?.()),
+    "Storm Run QA must start optional host/cast loading deterministically after the core estate is ready",
+  );
   await page.waitForFunction(() => window.MrFeastFresh.getMrFeastState?.()?.loadStatus === "ready", null, { timeout: 120000 });
   await page.waitForFunction(() => window.MrFeastFresh.getContestantState?.()?.settled, null, { timeout: 120000 });
   await page.waitForTimeout(180);
@@ -410,7 +415,6 @@ async function run() {
     const missedCall = await diagnostics(timerPage);
     assert(missedCall.stormRun.phase === "failed" && missedCall.gameOver?.reason === "storm-run-no-show", `missing the Storm Run call must eliminate the player: ${JSON.stringify({ stormRun: missedCall.stormRun, gameOver: missedCall.gameOver })}`);
 
-    await timerPage.reload({ waitUntil: "domcontentloaded" });
     await bootPage(timerPage);
     const firstClueCall = await timerPage.evaluate(() => window.MrFeastFresh.triggerFeastSaysClueForQA("book"));
     assert(firstClueCall?.phase === "called", `the setup book should call Feast Says: ${JSON.stringify(firstClueCall)}`);
@@ -641,15 +645,54 @@ async function run() {
       const collected = await collectCheckpoint(timerPage, index);
       assert(collected.accepted === true && collected.completed === index + 1, `maze-approach checkpoint ${index + 1} must advance in order: ${JSON.stringify(collected)}`);
     }
+    let mazeExitState = await stormState(timerPage);
+    const mazeExitScare = mazeExitState.scares[2];
+    assert(
+      mazeExitScare.trigger.id === "maze-final-corridor-turn"
+        && mazeExitScare.trigger.x === 22
+        && mazeExitScare.trigger.z === -0.25,
+      `the final scare must arm as the player turns into the long last straight: ${JSON.stringify(mazeExitScare.trigger)}`,
+    );
+    assert(
+      mazeExitScare.reveal.position.x === 22
+        && mazeExitScare.reveal.position.z === -13.75
+        && angleDistance(mazeExitScare.reveal.yaw, 0) <= 0.001,
+      `Mr. Feast must wait at the far end before the westward exit turn facing north toward the player: ${JSON.stringify(mazeExitScare.reveal)}`,
+    );
+    assert(
+      mazeExitState.mazeExitLighting?.dark
+        && !mazeExitState.mazeExitLighting.restoredAfterScare
+        && mazeExitState.mazeExitLighting.energizedFixtureCount === 0
+        && mazeExitState.mazeExitLighting.shaderResidentFixtureCount >= 1,
+      `the maze rear exit must be dark before the final bolt without removing its fixed light slot: ${JSON.stringify(mazeExitState.mazeExitLighting)}`,
+    );
     const thirdComposition = await timerPage.evaluate(() => window.MrFeastFresh.previewStormScareForQA(2));
-    assert(thirdComposition?.onScreen && thirdComposition.lineOfSight && Math.abs(thirdComposition.projected.x) <= 0.06, `the maze apparition must fill the player's unobstructed south-turn view: ${JSON.stringify(thirdComposition)}`);
-    assert(thirdComposition.distance >= 2.5 && thirdComposition.distance <= 4 && thirdComposition.projectedHeight >= 0.3, `the final maze apparition must escalate into a close readable silhouette: ${JSON.stringify(thirdComposition)}`);
+    assert(thirdComposition?.onScreen && thirdComposition.lineOfSight && Math.abs(thirdComposition.projected.x) <= 0.06, `the maze apparition must center in the player's unobstructed final-straight view: ${JSON.stringify(thirdComposition)}`);
+    assert(
+      thirdComposition.distance >= 13.4
+        && thirdComposition.distance <= 13.6
+        && thirdComposition.projectedHeight >= 0.1
+        && thirdComposition.hostFacingPlayerDot >= 0.99,
+      `the final apparition must read life-size at the far end while facing north toward the approaching player: ${JSON.stringify(thirdComposition)}`,
+    );
     const thirdScare = await triggerScareThroughFacingGate(timerPage, 2, expectedScareIds[2]);
     assert(thirdScare.visible.scare.baselineLightExposure <= thirdScare.visible.scare.maximumLightExposure, `the hedge-maze apparition must begin in deep shadow: ${JSON.stringify(thirdScare.visible.scare)}`);
-    await timerPage.screenshot({ path: path.join(artifactDir, "mr-feast-maze-turn-lightning-desktop.png") });
+    assert(
+      thirdScare.visible.mazeExitLighting?.dark
+        && !thirdScare.visible.mazeExitLighting.restoredAfterScare
+        && thirdScare.visible.mazeExitLighting.energizedFixtureCount === 0,
+      `the rear-exit practical must stay dark throughout Mr. Feast's lightning reveal: ${JSON.stringify(thirdScare.visible.mazeExitLighting)}`,
+    );
+    await timerPage.screenshot({ path: path.join(artifactDir, "mr-feast-final-straight-lightning-desktop.png") });
     await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(1.25));
     const mazeScareGone = await stormState(timerPage);
     assert(!mazeScareGone.scare.hostVisible && mazeScareGone.scare.lightning === 0, `the final apparition must vanish with the close bolt: ${JSON.stringify(mazeScareGone.scare)}`);
+    assert(
+      !mazeScareGone.mazeExitLighting?.dark
+        && mazeScareGone.mazeExitLighting.restoredAfterScare
+        && mazeScareGone.mazeExitLighting.energizedFixtureCount >= 1,
+      `the rear-exit practical must relight only after Mr. Feast has disappeared: ${JSON.stringify(mazeScareGone.mazeExitLighting)}`,
+    );
 
     for (let index = 10; index < checkpoints.length; index += 1) {
       const preview = await previewCheckpoint(timerPage, index);
@@ -916,9 +959,9 @@ async function run() {
     const phoneMazeCheckpoint = await collectCheckpoint(phonePage, 9);
     assert(phoneMazeCheckpoint.accepted === true && phoneMazeCheckpoint.completed === 10, `the phone maze checkpoint must arm the final mapped scare: ${JSON.stringify(phoneMazeCheckpoint)}`);
     const phoneMazeComposition = await phonePage.evaluate(() => window.MrFeastFresh.previewStormScareForQA(2));
-    assert(phoneMazeComposition?.onScreen && phoneMazeComposition.lineOfSight && phoneMazeComposition.projectedHeight >= 0.3, `the close maze apparition must dominate the phone camera: ${JSON.stringify(phoneMazeComposition)}`);
+    assert(phoneMazeComposition?.onScreen && phoneMazeComposition.lineOfSight && phoneMazeComposition.projectedHeight >= 0.1, `the final-straight apparition must remain readable at the far end on a phone: ${JSON.stringify(phoneMazeComposition)}`);
     await triggerScareThroughFacingGate(phonePage, 2, "maze-turn");
-    await phonePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-maze-turn-lightning-mobile.png") });
+    await phonePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-final-straight-lightning-mobile.png") });
     await phonePage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(1.25));
     const lost = await phonePage.evaluate(() => window.MrFeastFresh.completeStormRunForQA("mara"));
     assert(lost.survived === false && lost.eliminatedContestantId === "player" && !lost.aftermathActive, `Mara finishing first must eliminate the player without starting a survivor aftermath: ${JSON.stringify(lost)}`);

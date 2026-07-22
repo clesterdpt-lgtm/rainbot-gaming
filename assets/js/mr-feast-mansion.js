@@ -14934,7 +14934,6 @@
         responseNodeId: "response-rear-terrace",
         colliderEnabled: false,
         visible: true,
-        idlePoseTime: STORM_RUN.hostIdlePoseTimeSeconds,
       });
       const staged = mansionContestants.stageChallenge(STORM_RUN.contestantMarks, { mode: "storm-run" });
       if (!staged.staged) {

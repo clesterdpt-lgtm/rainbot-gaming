@@ -72,6 +72,8 @@ async function assertSourceContract() {
   assert(source.includes("briefingMark"), "Storm Run must distinguish the rear-door briefing view from the race-facing start orientation");
   assert(source.includes("briefingHostMark"), "Storm Run must define a host-facing-player briefing mark separate from the waiting pose");
   assert(source.includes("stageHostForBriefing"), "Storm Run must continuously reapply its face-to-face briefing pose until race release");
+  const reportToStartSource = source.match(/reportToStart\(\) \{([\s\S]*?)\n    \}\n\n    beginRace\(\)/)?.[1] || "";
+  assert(reportToStartSource && !reportToStartSource.includes("idlePoseTime"), "Storm Run must release the waiting-only frozen body pose when the player starts the spoken briefing");
   assert(source.includes("briefingLighting"), "Storm Run needs named temporary lighting for the initial face-to-face intro");
   assert(source.includes('profile: "briefing-only-uniform-lift"'), "Storm Run intro lighting must reuse existing uniforms instead of adding a new shader light");
   assert(source.includes("moonPosition"), "Storm Run intro lighting must aim the existing moon from the player side instead of leaving Mr. Feast backlit");
@@ -140,6 +142,7 @@ async function hostFootPose(page) {
       challengeIdlePoseTime: host.challengeIdlePoseTime,
       qaAnimationFrozen: host.qaAnimationFrozen,
       mixerTime: host.mixerTime,
+      position: host.position,
       leftFoot: host.liveBones?.leftFoot || null,
       rightFoot: host.liveBones?.rightFoot || null,
     };
@@ -155,6 +158,14 @@ function footPoseDistance(before, after) {
   return Math.max(
     distance(before.leftFoot, after.leftFoot),
     distance(before.rightFoot, after.rightFoot),
+  );
+}
+
+function rootPoseDistance(before, after) {
+  return Math.hypot(
+    (after.position?.x || 0) - (before.position?.x || 0),
+    (after.position?.y || 0) - (before.position?.y || 0),
+    (after.position?.z || 0) - (before.position?.z || 0),
   );
 }
 
@@ -471,13 +482,18 @@ async function run() {
     const briefingPoseBefore = await hostFootPose(timerPage);
     await timerPage.waitForTimeout(650);
     const briefingPoseAfter = await hostFootPose(timerPage);
+    const briefingBodyTravel = footPoseDistance(briefingPoseBefore, briefingPoseAfter);
     assert(
       briefingPoseBefore.animation === "idle"
         && briefingPoseAfter.animation === "idle"
         && !briefingPoseBefore.moving
         && !briefingPoseAfter.moving
-        && footPoseDistance(briefingPoseBefore, briefingPoseAfter) <= 0.002,
-      `Mr. Feast must keep both feet planted throughout the Storm Run rules: ${JSON.stringify({ briefingPoseBefore, briefingPoseAfter, footTravel: footPoseDistance(briefingPoseBefore, briefingPoseAfter) })}`,
+        && briefingPoseBefore.challengeIdlePoseTime === null
+        && briefingPoseAfter.challengeIdlePoseTime === null
+        && briefingBodyTravel >= 0.005
+        && briefingBodyTravel <= 0.25
+        && rootPoseDistance(briefingPoseBefore, briefingPoseAfter) <= 0.002,
+      `Mr. Feast must return to his living idle animation while holding position for the Storm Run rules: ${JSON.stringify({ briefingPoseBefore, briefingPoseAfter, bodyTravel: briefingBodyTravel, rootTravel: rootPoseDistance(briefingPoseBefore, briefingPoseAfter) })}`,
     );
     await timerPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "storm-run-rear-door-briefing-desktop.png") });
     await timerPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "storm-run-bright-intro-desktop.png") });

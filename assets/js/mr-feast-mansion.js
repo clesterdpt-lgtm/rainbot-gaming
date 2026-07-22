@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260721-escape-keeps-max-2";
+  const MANSION_RUNTIME_VERSION = "20260721-os-fs-escape-lock-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2171,6 +2171,14 @@
       "mara-voss": Object.freeze({ x: -1.2, y: YARD_LAYOUT.groundY, z: -17.7, yaw: Math.PI }),
       "juniper-cross": Object.freeze({ x: 1.2, y: YARD_LAYOUT.groundY, z: -17.7, yaw: Math.PI }),
     }),
+    mazeExitLighting: Object.freeze({
+      finalScareId: "maze-turn",
+      darkEnergyScale: 0,
+      fixtures: Object.freeze([
+        "maze-rear-entrance-lamp-north",
+        "maze-rear-entrance-lamp-south",
+      ]),
+    }),
     checkpoints: Object.freeze([
       Object.freeze({ id: "formal-garden", label: "Formal Garden Rear", region: "FORMAL GARDEN", x: -17.2, y: YARD_LAYOUT.groundY, z: -11.5, insideMaze: false }),
       Object.freeze({ id: "garden-cross-east", label: "Garden Cross", region: "FORMAL GARDEN", x: -17.2, y: YARD_LAYOUT.groundY, z: -2.2, insideMaze: false }),
@@ -2207,8 +2215,16 @@
         order: 3,
         completedCheckpointMinimum: 10,
         completedCheckpointMaximum: 10,
-        trigger: Object.freeze({ id: "maze-south-turn", x: 25, z: 2.75, radius: 1.35 }),
-        reveal: Object.freeze({ x: 25, y: YARD_LAYOUT.groundY, z: -0.25, yaw: 0, scale: 1, fillScale: 1, darkSpot: true }),
+        trigger: Object.freeze({ id: "maze-final-corridor-turn", x: 22, z: -13.75, radius: 1.1 }),
+        reveal: Object.freeze({
+          x: HEDGE_MAZE_REAR_ENTRANCE.x,
+          y: YARD_LAYOUT.groundY,
+          z: HEDGE_MAZE_REAR_ENTRANCE.z,
+          yaw: Math.PI / 2,
+          scale: 1,
+          fillScale: 1,
+          darkSpot: true,
+        }),
       }),
     ]),
     contestantRoute: Object.freeze([
@@ -14706,6 +14722,54 @@
       );
     }
 
+    mazeExitLights() {
+      const fixtures = STORM_RUN.mazeExitLighting.fixtures;
+      return yardState.circuit?.lights.filter((light) => (
+        fixtures.includes(light.userData.mazeSource?.fixture)
+      )) || [];
+    }
+
+    mazeExitLightingShouldBeDark() {
+      if (this.show.phase !== STORM_RUN_PHASE.RUNNING) return false;
+      const finalTriggered = this.show.scareTriggeredIds.includes(STORM_RUN.mazeExitLighting.finalScareId);
+      return !finalTriggered || this.show.scareRevealRemaining > 0;
+    }
+
+    syncMazeExitLighting() {
+      const dark = this.mazeExitLightingShouldBeDark();
+      const eventIntensityScale = dark ? STORM_RUN.mazeExitLighting.darkEnergyScale : 1;
+      for (const light of this.mazeExitLights()) {
+        light.userData.eventIntensityScale = eventIntensityScale;
+        light.intensity = renderedLightIntensity(light);
+      }
+      return !dark;
+    }
+
+    mazeExitLightingDiagnostics() {
+      const lights = this.mazeExitLights();
+      const dark = this.mazeExitLightingShouldBeDark();
+      const finalTriggered = this.show.scareTriggeredIds.includes(STORM_RUN.mazeExitLighting.finalScareId);
+      return {
+        fixtures: STORM_RUN.mazeExitLighting.fixtures.map((fixture) => {
+          const light = lights.find((entry) => entry.userData.mazeSource?.fixture === fixture) || null;
+          return {
+            fixture,
+            present: Boolean(light),
+            visible: Boolean(light?.visible),
+            renderPlaced: Boolean(light?.userData.renderPlaced),
+            intensity: Number((light?.intensity || 0).toFixed(3)),
+            eventIntensityScale: Number((light?.userData.eventIntensityScale ?? 1).toFixed(3)),
+          };
+        }),
+        dark,
+        finalScareTriggered: finalTriggered,
+        restoredAfterScare: Boolean(finalTriggered && this.show.scareRevealRemaining <= 0),
+        energizedFixtureCount: lights.filter((light) => light.visible && light.intensity > 0.01).length,
+        shaderResidentFixtureCount: lights.filter((light) => light.visible).length,
+        topology: "fixed-zero-energy",
+      };
+    }
+
     stageHostForCall() {
       if (this.show.phase !== STORM_RUN_PHASE.CALLED || !mrFeastNpc) return false;
       if (!mrFeastNpc.challengeStaged || mrFeastNpc.challengeMode !== "storm-run") {
@@ -15508,6 +15572,7 @@
 
     syncPresentation() {
       this.syncScene();
+      this.syncMazeExitLighting();
       this.syncCastVisibility();
       this.syncHud();
       updateInteractionPrompt();
@@ -15770,6 +15835,14 @@
         scare.reveal.y + 2.08 * revealScale,
         scare.reveal.z,
       ).project(camera);
+      const hostToPlayer = new THREE.Vector2(
+        viewpoint.x - scare.reveal.x,
+        viewpoint.z - scare.reveal.z,
+      ).normalize();
+      const hostFacingPlayerDot = hostToPlayer.dot(new THREE.Vector2(
+        Math.sin(scare.reveal.yaw),
+        Math.cos(scare.reveal.yaw),
+      ));
       const sightDirection = revealCenter.clone().sub(camera.position);
       const sightDistance = sightDirection.length();
       sightDirection.normalize();
@@ -15798,6 +15871,7 @@
         naturalYaw: Number(state.yaw.toFixed(4)),
         revealScale,
         fillScale,
+        hostFacingPlayerDot: Number(hostFacingPlayerDot.toFixed(4)),
         facingDot: Number((look?.facingDot ?? -1).toFixed(4)),
         facingMinimumDot: STORM_RUN.scareFacingMinimumDot,
         distance: Number(Math.hypot(scare.reveal.x - viewpoint.x, scare.reveal.z - viewpoint.z).toFixed(3)),
@@ -16054,6 +16128,7 @@
           finishAnchor: { ...STORM_RUN.aftermath.finishAnchor },
           maraLine: STORM_RUN.aftermath.maraLine,
         },
+        mazeExitLighting: this.mazeExitLightingDiagnostics(),
         scare: {
           index: this.show.scareIndex,
           id: this.show.scareId,
@@ -25408,8 +25483,12 @@
   let ignoreEscapeMenuToggleUntil = 0;
   // Marks a deliberate Fullscreen / Exit fullscreen control path so a later
   // fullscreenchange can demax. Browser Escape exits native fullscreen without
-  // this flag and must keep CSS maximized chrome + open the pause menu.
+  // this flag unless Keyboard Lock captures Escape (Chromium).
   let intentionalMaximizeExitUntil = 0;
+  // User wants full-monitor fullscreen while maximized. Survives transient
+  // Escape exits so the next user gesture can re-enter native Fullscreen.
+  let wantNativeFullscreen = false;
+  let keyboardEscapeLocked = false;
   let lookReclaimFollowUpUntil = 0;
   let lookReclaimFollowUpHandler = null;
   let rendererCssWidth = 0;
@@ -25520,8 +25599,11 @@
         return;
       }
       if (state.menuOpen || state.journalOpen || state.workroom.keypadOpen || state.gameOver || !state.started) return;
+      void restoreNativeFullscreenIfWanted();
       requestPointerLock();
-      if (document.pointerLockElement === dom.canvas) clearLookReclaimFollowUps();
+      if (document.pointerLockElement === dom.canvas && (!wantNativeFullscreen || isNativeFullscreen())) {
+        clearLookReclaimFollowUps();
+      }
     };
     window.addEventListener("pointerdown", lookReclaimFollowUpHandler, true);
     window.addEventListener("pointerup", lookReclaimFollowUpHandler, true);
@@ -25534,6 +25616,9 @@
       dom.canvas.inert = false;
       try { dom.canvas.focus({ preventScroll: true }); } catch (_) { /* focus is best-effort */ }
     }
+    // Resume / look reclaim is a user gesture: restore OS fullscreen if Escape
+    // temporarily knocked the stage out of the Fullscreen API.
+    void restoreNativeFullscreenIfWanted();
     const requested = requestPointerLock();
     if (armFollowUps || document.pointerLockElement !== dom.canvas) armLookReclaimFollowUps();
     return requested;
@@ -26041,18 +26126,83 @@
     return state.maximized;
   }
 
+  function unlockEscapeKeyboard() {
+    if (!keyboardEscapeLocked) return;
+    try {
+      if (navigator.keyboard && typeof navigator.keyboard.unlock === "function") {
+        navigator.keyboard.unlock();
+      }
+    } catch (_) { /* unlock is best-effort */ }
+    keyboardEscapeLocked = false;
+  }
+
+  async function lockEscapeInFullscreen() {
+    if (!isNativeFullscreen()) return false;
+    const keyboard = navigator.keyboard;
+    if (!keyboard || typeof keyboard.lock !== "function") return false;
+    try {
+      // Chromium: capture Escape so OS/browser fullscreen is not torn down
+      // when the player opens the pause menu.
+      await keyboard.lock(["Escape"]);
+      keyboardEscapeLocked = true;
+      return true;
+    } catch (_) {
+      keyboardEscapeLocked = false;
+      return false;
+    }
+  }
+
+  async function enterNativeFullscreen() {
+    if (!dom.stage) return false;
+    if (isNativeFullscreen()) {
+      await lockEscapeInFullscreen();
+      return true;
+    }
+    try {
+      if (dom.stage.requestFullscreen) {
+        try {
+          await dom.stage.requestFullscreen({ navigationUI: "hide" });
+        } catch (_) {
+          await dom.stage.requestFullscreen();
+        }
+      } else if (dom.stage.webkitRequestFullscreen) {
+        dom.stage.webkitRequestFullscreen();
+      } else {
+        return false;
+      }
+    } catch (_) {
+      return false;
+    }
+    if (!isNativeFullscreen()) return false;
+    await lockEscapeInFullscreen();
+    return true;
+  }
+
+  async function restoreNativeFullscreenIfWanted() {
+    if (!wantNativeFullscreen || !state.maximized) return false;
+    if (isNativeFullscreen()) {
+      await lockEscapeInFullscreen();
+      return true;
+    }
+    return enterNativeFullscreen();
+  }
+
   async function setMaximized(active) {
     const want = Boolean(active);
     if (want) {
-      // CSS maximize only. The Fullscreen API is intentionally not used: the
-      // browser always exits native fullscreen on Escape, which fights the
-      // pause-menu contract. .is-maxed fills the viewport without that trap.
-      // If a prior session left native FS active, leave it; do not re-enter.
-      return applyMaximizedChrome(true);
+      // Full-monitor Fullscreen API is the product path. CSS .is-maxed is a
+      // layout safety net while entering, and while Escape temporarily knocks
+      // Chromium-less browsers out of native FS until the next user gesture.
+      wantNativeFullscreen = true;
+      applyMaximizedChrome(true);
+      await enterNativeFullscreen();
+      return state.maximized;
     }
 
     // Only the menu Exit fullscreen control collapses maximized layout.
+    wantNativeFullscreen = false;
     intentionalMaximizeExitUntil = performance.now() + 500;
+    unlockEscapeKeyboard();
     try {
       if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
       else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
@@ -26067,22 +26217,39 @@
   function syncFullscreenStateFromDocument() {
     const native = isNativeFullscreen();
     if (native) {
-      // Something else entered native FS; mirror maximized chrome so layout
-      // stays consistent, but Escape menu handling never depends on native FS.
       applyMaximizedChrome(true);
+      wantNativeFullscreen = true;
+      void lockEscapeInFullscreen();
       return;
     }
 
+    unlockEscapeKeyboard();
+
     // Intentional Exit fullscreen from the menu: drop maximized chrome.
     if (performance.now() < intentionalMaximizeExitUntil) {
+      wantNativeFullscreen = false;
       applyMaximizedChrome(false);
       return;
     }
 
-    // If native FS ends for any other reason while we were maximized, keep the
-    // CSS stage maxed so Escape only opens/closes the pause menu.
-    if (state.maximized || dom.stage?.classList.contains("is-maxed")) {
+    // Escape (or another system gesture) left native FS. Keep full-viewport
+    // CSS chrome and the maximized intent so Resume / next click re-enters
+    // true monitor fullscreen. Open the pause menu if Escape was the cause.
+    if (wantNativeFullscreen || state.maximized || dom.stage?.classList.contains("is-maxed")) {
       applyMaximizedChrome(true);
+      wantNativeFullscreen = true;
+      if (
+        state.started
+        && !state.gameOver
+        && !state.menuOpen
+        && !state.readableBooks.open
+        && !state.workroom.keypadOpen
+        && !state.journalOpen
+      ) {
+        intentionalPointerUnlockUntil = performance.now() + 450;
+        ignoreEscapeMenuToggleUntil = performance.now() + 450;
+        setMenuOpen(true);
+      }
       return;
     }
 
@@ -26607,6 +26774,17 @@
   // second, while still reading as a fade rather than a switch.
   const LIGHT_FADE_OUT_RATE = 1.35;
 
+  function renderedLightIntensity(light) {
+    const data = light?.userData || {};
+    const renderFactor = data.renderFactor == null
+      ? (data.renderPlaced === false ? 0 : 1)
+      : data.renderFactor;
+    return (data.baseIntensity || 0)
+      * renderFactor
+      * (data.renderIntensityScale || 1)
+      * (data.eventIntensityScale ?? 1);
+  }
+
   function applyLightRenderState(light, placed, energized, snap) {
     const data = light.userData;
     if (data.renderFactor == null) data.renderFactor = light.intensity > 0 ? 1 : 0;
@@ -26623,7 +26801,7 @@
     // wall switch never restructures the shader light loop; a retired fixture
     // leaves the set only once its fade has fully settled.
     light.visible = placed || data.renderFactor > 0.004;
-    light.intensity = data.baseIntensity * data.renderFactor * (data.renderIntensityScale || 1);
+    light.intensity = renderedLightIntensity(light);
     return light.visible !== wasVisible && Boolean(light.castShadow);
   }
 
@@ -26656,7 +26834,7 @@
       const settled = stepRenderFactor(data, dt);
       const wasVisible = light.visible;
       light.visible = data.renderPlaced || data.renderFactor > 0.004;
-      light.intensity = data.baseIntensity * data.renderFactor * (data.renderIntensityScale || 1);
+      light.intensity = renderedLightIntensity(light);
       if (light.visible !== wasVisible && light.castShadow) shadowTopologyChanged = true;
       if (settled) fadingLights.delete(light);
     }
@@ -27893,6 +28071,11 @@
     window.MrFeastFresh.startOpeningWelcomeForQA = () => (
       state.qa && openingWelcomeSystem ? openingWelcomeSystem.start() : { started: false, reason: "qa-only" }
     );
+    window.MrFeastFresh.startOptionalCharacterLoadsForQA = () => {
+      if (!state.qa) return false;
+      startOptionalCharacterLoads();
+      return optionalCharacterLoadsStarted;
+    };
     window.MrFeastFresh.getFeastSaysState = () => feastSaysSystem?.getDiagnostics() || null;
     window.MrFeastFresh.advanceFeastSaysForQA = (seconds) => (
       state.qa && feastSaysSystem ? feastSaysSystem.advanceForQA(seconds) : null

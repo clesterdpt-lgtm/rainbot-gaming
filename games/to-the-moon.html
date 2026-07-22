@@ -7,7 +7,7 @@
 <meta name="description" content="A crypto-mining survival game. Drill the blockchain for memecoins during the bull market, defend your rocket from a virus swarm in the bear market, and build enough to launch to the moon. A Motherload x tower-defense roguelite." />
 <meta name="theme-color" content="#05060f" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305060f'/%3E%3Ccircle cx='58' cy='40' r='22' fill='%23e9c24a'/%3E%3Ccircle cx='50' cy='34' r='6' fill='%23c79a2e'/%3E%3Cpath d='M50 88 L34 50 L50 60 L66 50 Z' fill='%235fdf6a'/%3E%3C/svg%3E" />
-<link rel="stylesheet" href="../assets/css/styles.css?v=20260717-max-ui" />
+<link rel="stylesheet" href="../assets/css/styles.css?v=20260708-nav-mobile-1" />
 <style>
   /* ============================================================
      TO THE MOON — single-file crypto-mining / tower-defense survival
@@ -58,7 +58,7 @@
   .ore .dot{ width:13px; height:13px; border-radius:50%; box-shadow:0 0 9px currentColor; }
   .ore b{ font-size:15px; font-weight:800; }
   .ore.iron{ color:#e9b84a } .ore.copper{ color:#ff7a33 }
-  .ore.plasma{ color:#5fdf6a } .ore.dark{ color:#c06cff }
+  .ore.plasma{ color:#5fdf6a } .ore.dark{ color:#c06cff } .ore.moon{ color:#83f7ff }
 
   /* minimap / radar (top-right, under the bank) */
   #minimap-panel{ top:96px; right:12px; padding:6px; }
@@ -80,6 +80,7 @@
   .bar .mono-label{ font-size:8.5px; }
   #depth-chip{ display:flex; justify-content:space-between; font-size:10px; color:var(--dim); margin-top:1px; }
   #depth-chip b{ color:var(--cyan); font-weight:700; }
+  #biome-name{ max-width:174px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
   /* top-center buttons */
   #hud-actions{ top:12px; left:50%; transform:translateX(-50%); display:flex; gap:8px; pointer-events:auto; }
@@ -114,7 +115,8 @@
   .mtoast.good{ border-color:var(--green) } .mtoast.bad{ border-color:var(--red) } .mtoast.warn{ border-color:var(--yellow) }
 
   /* ---------- Build palette (non-modal, left) ---------- */
-  #build-panel{ left:12px; top:84px; width:236px; padding:12px; display:none; pointer-events:auto; }
+  #build-panel{ left:12px; top:84px; width:236px; max-height:calc(100% - 96px); overflow-y:auto; box-sizing:border-box; padding:12px; display:none; pointer-events:auto;
+    scrollbar-width:thin; scrollbar-color:rgba(46,224,255,.5) rgba(5,8,20,.45); }
   #build-panel.open{ display:block; }
   #build-panel h3{ font-family:var(--disp); font-size:14px; color:var(--cyan); letter-spacing:.04em; margin-bottom:3px; }
   #build-panel .blurb{ font-size:10px; color:var(--dim); line-height:1.4; margin-bottom:10px; }
@@ -131,10 +133,14 @@
   .build-foot{ font-size:9.5px; color:var(--dim); margin-top:4px; line-height:1.5; }
 
   /* ---------- Modal overlays (boot / ship / pause / over / win) ---------- */
-  .scr{ position:absolute; inset:0; z-index:30; display:none; align-items:center; justify-content:center; padding:18px;
+  .scr{ position:absolute; inset:0; z-index:30; display:none; align-items:center; justify-content:center; padding:18px; box-sizing:border-box; overflow:hidden;
     background:radial-gradient(120% 90% at 50% 0%, rgba(20,12,48,.6), rgba(2,3,10,.92)); backdrop-filter:blur(3px); }
   .scr.show{ display:flex; }
-  .scr-card{ width:min(640px,96vw); max-height:94vh; overflow:auto; padding:26px; text-align:center; }
+  .scr-card{ width:min(640px,96vw); max-height:100%; box-sizing:border-box; overflow:auto; padding:26px; text-align:center; overscroll-behavior:contain;
+    scrollbar-width:thin; scrollbar-color:rgba(46,224,255,.55) rgba(5,8,20,.5); }
+  .scr-card::-webkit-scrollbar{ width:8px; }
+  .scr-card::-webkit-scrollbar-track{ background:rgba(5,8,20,.5); border-radius:8px; }
+  .scr-card::-webkit-scrollbar-thumb{ background:linear-gradient(180deg,var(--cyan),var(--purple)); border-radius:8px; }
   .scr h1{ font-family:var(--disp); font-size:clamp(34px,8vw,62px); line-height:.92; letter-spacing:.02em;
     background:linear-gradient(90deg,var(--cyan),var(--pink) 60%,var(--yellow)); -webkit-background-clip:text;
     background-clip:text; color:transparent; filter:drop-shadow(0 3px 18px rgba(46,224,255,.25)); }
@@ -164,7 +170,9 @@
   .ship-wallet .wlt span{ font-size:9px; color:var(--dim); letter-spacing:.1em; text-transform:uppercase; }
   .sec-h{ font-family:var(--disp); font-size:13px; letter-spacing:.06em; color:var(--yellow); margin:16px 0 9px; display:flex; align-items:center; gap:8px; }
   .sec-h::after{ content:""; flex:1; height:1px; background:linear-gradient(90deg,rgba(255,212,59,.4),transparent); }
+  .sec-note{ color:var(--dim); font-size:9.5px; margin:-4px 0 9px; line-height:1.4; }
   .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+  .grid3{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
   .card{ border:1px solid rgba(255,255,255,.1); border-radius:10px; padding:11px; background:rgba(255,255,255,.025); }
   .card .top{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
   .card .nm{ font-size:12.5px; font-weight:800; }
@@ -179,6 +187,13 @@
   .buy.max{ background:var(--yellow); }
   .part-done{ background:rgba(107,255,125,.12); border-color:rgba(107,255,125,.4); }
   .part-done .buy{ background:transparent; color:var(--green); border:1px solid rgba(107,255,125,.5); cursor:default; }
+  .module-owned{ border-color:rgba(46,224,255,.45); background:rgba(46,224,255,.08); }
+  .module-locked{ opacity:.52; }
+  .protocol-card{ text-align:left; border-color:rgba(176,108,255,.35); min-height:164px; display:flex; flex-direction:column; }
+  .protocol-card .proto-icon{ font-size:28px; margin-bottom:8px; }
+  .protocol-card .ef{ flex:1; }
+  .protocol-card .buy{ background:linear-gradient(180deg,#c58cff,#8954dc); }
+  #protocol-owned{ margin-top:12px; text-align:center; color:var(--dim); font-size:10px; }
   #ship-progress{ text-align:center; font-size:11px; color:var(--dim); margin-top:14px; }
   #ship-progress b{ color:var(--green); }
 
@@ -204,6 +219,7 @@
     #hud-stats{ width:188px; } #hud-bank{ gap:9px; padding:7px 9px; } .ore{ min-width:26px; }
     #build-panel{ width:200px; top:74px; }
     #hud-actions .k{ display:none; }
+    .grid3{ grid-template-columns:1fr; }
   }
 </style>
 </head>
@@ -222,7 +238,7 @@
   <div class="game-layout">
     <div class="game-stage rb-standalone-stage">
       <div class="canvas-wrap rb-standalone-surface rb-standalone-surface--moon">
-        <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
+        <button class="fs-btn" id="btn-fullscreen" type="button" data-rb-fullscreen-style="echo" aria-label="Max screen" title="Max screen">⛶</button>
 
         <div id="game">
   <canvas id="c"></canvas>
@@ -251,6 +267,7 @@
     <div class="ore copper"><span class="dot" style="background:#ff7a33"></span><b id="bk-copper">0</b><span class="mono-label">Shib</span></div>
     <div class="ore plasma"><span class="dot" style="background:#5fdf6a"></span><b id="bk-plasma">0</b><span class="mono-label">Pepe</span></div>
     <div class="ore dark"><span class="dot" style="background:#c06cff"></span><b id="bk-dark">0</b><span class="mono-label">Bonk</span></div>
+    <div class="ore moon"><span class="dot" style="background:#83f7ff"></span><b id="bk-moon">0</b><span class="mono-label">Moon</span></div>
   </div>
 
   <div class="mhud panel" id="hud-stats">
@@ -266,9 +283,9 @@
   <!-- Build palette -->
   <div class="mhud panel" id="build-panel">
     <h3>Construct</h3>
-    <div class="blurb">Pick a structure, then click a glowing surface cell to place it. Defenses win the night for you.</div>
+    <div class="blurb">Pick a structure, then click a glowing cell to place it. Defenses stay topside; compact Hash Lamps can also be installed on solid tunnel floors underground.</div>
     <div id="build-list"></div>
-    <div class="build-foot">Tip: walls funnel the horde, turrets do the killing, repair bays keep both alive. [B] to close.</div>
+    <div class="build-foot">Tip: Hash Lamps mark valid tunnel floors in amber. Platforms rebuild support for surface defenses. [B] to close.</div>
   </div>
 
   <!-- floating HUD bits -->
@@ -293,7 +310,7 @@
     <div class="scr-card panel">
       <div class="tag">Rainbot Gaming · Degen Protocol</div>
       <h1>TO THE MOON</h1>
-      <p class="lore">Your trading rig crash-landed deep in the blockchain. During the <b style="color:var(--green)">bull market</b> the viruses sleep — drill the digital crust for <b style="color:var(--cyan)">$DOGE, $SHIB, $PEPE &amp; $BONK</b>, top up your gas, and build automated cyber-defenses. When the <b style="color:var(--red)">bear market</b> hits, a swarm of viruses erupts and rushes your rocket. You can't out-click them by hand — your <b>firewalls and turrets</b> must hold. Mine enough to assemble the <b style="color:var(--green)">Liquidity Engine, Moon Nav &amp; Diamond Hull</b>, and launch 🚀 <b>to the moon</b>.</p>
+      <p class="lore">Your trading rig crash-landed deep in a procedurally generated blockchain. During the <b style="color:var(--green)">bull market</b> the viruses sleep — explore caverns and data-biomes for <b style="color:var(--cyan)">$DOGE, $SHIB, $PEPE, $BONK &amp; rare $MOON shards</b>, crack vaults for permanent protocols, and build automated cyber-defenses. Every <b style="color:var(--red)">bear market</b> brings a different modifier and a specialized virus swarm. Choose exclusive rig modules, assemble all four rocket systems, then HODL through launch 🚀 <b>to the moon</b>.</p>
       <div class="keys">
         <span><kbd>A</kbd><kbd>D</kbd> drive</span>
         <span><kbd>W</kbd> fly / thrust</span>
@@ -304,7 +321,7 @@
       </div>
       <div class="row"><button class="cta" id="btn-start">APE IN 🚀</button></div>
       <div class="boot-best" id="boot-best"></div>
-      <p class="lore" style="font-size:11px;margin-top:16px;color:#5b6688;">Dock at the rocket to auto–cash out coins &amp; refuel gas. The grid wraps — keep driving one way and you'll loop right back to the rocket. Mining during a bear market wakes aggressive worms; surface and defend instead.</p>
+      <p class="lore" style="font-size:11px;margin-top:16px;color:#5b6688;">Dock at the rocket to auto–cash out coins &amp; refuel gas. The grid wraps — keep driving one way and you'll loop right back to the rocket. Sunlight follows shafts, while your Blocklight and buildable Hash Lamps reveal enclosed tunnels. Pink glitch brackets expose infected Coin Mimics: face one and hold the drill to hash-lock it for a SHIB bounty. Landmark blocks have unique silhouettes; vaults offer protocol choices, relays boost defenses, and the Quantum Ledger hides the $MOON shards needed for escape.</p>
     </div>
   </div>
 
@@ -318,6 +335,10 @@
       <div class="sec-h">Rig Upgrades</div>
       <div class="grid2" id="upgrade-grid"></div>
 
+      <div class="sec-h">Branch Modules</div>
+      <div class="sec-note">Pick one module from each pair. Installing it permanently locks its alternate path for this run.</div>
+      <div class="grid2" id="module-grid"></div>
+
       <div class="sec-h">Rocket Assembly</div>
       <div class="grid2" id="parts-grid"></div>
       <div id="ship-progress"></div>
@@ -329,6 +350,17 @@
     </div>
   </div>
 
+  <!-- PROTOCOL CHIP CHOICE -->
+  <div class="scr" id="scr-protocol">
+    <div class="scr-card panel" style="width:min(760px,96vw)">
+      <div class="tag">Validator Technology Recovered</div>
+      <h1 style="font-size:42px">CHOOSE A PROTOCOL</h1>
+      <p class="lore">Install one permanent run modifier. Protocol choices cannot be undone.</p>
+      <div class="grid3" id="protocol-grid"></div>
+      <div id="protocol-owned"></div>
+    </div>
+  </div>
+
   <!-- PAUSE -->
   <div class="scr" id="scr-pause">
     <div class="scr-card panel">
@@ -336,7 +368,8 @@
       <h1 style="font-size:46px">PAUSED</h1>
       <div class="row" style="margin-top:20px">
         <button class="cta" id="btn-resume">▸ Resume</button>
-        <button class="cta alt" id="btn-restart-p">↻ Restart</button>
+        <button class="cta alt" id="btn-restart">↻ Restart</button>
+        <button class="cta alt" id="btn-main-menu">⌂ Main Menu</button>
       </div>
     </div>
   </div>
@@ -368,7 +401,7 @@
 
     <aside class="game-side">
       <div class="game-side__panel">
-        <img class="game-side__poster game-side__poster--wide" src="../assets/img/to-the-moon/card-to-the-moon-hq.jpg?v=20260712-jpg" alt="To The Moon cover art with a rocket launching toward a glowing moon over a digital mining world" />
+        <img class="game-side__poster game-side__poster--wide" src="../assets/img/to-the-moon/card-to-the-moon-hq.png?v=20260701-ttm-hq-1" alt="To The Moon cover art with a rocket launching toward a glowing moon over a digital mining world" />
       </div>
 
       <div class="game-side__panel">
@@ -383,9 +416,10 @@
       <div class="game-side__panel">
         <h3 class="game-side__title">RUN PLAN</h3>
         <ul style="margin:0;padding-left:18px;color:var(--ink-dim);font-size:13px;line-height:1.5;">
-          <li>Mine during bull markets and cash out at the rocket.</li>
-          <li>Build surface defenses before the bear-market swarm hits.</li>
-          <li>Craft all rocket parts, then launch.</li>
+          <li>Explore randomized caverns, sub-biomes, vaults, and ore veins.</li>
+          <li>Map dark tunnels, upgrade Blocklight, and install Hash Lamps underground.</li>
+          <li>Choose branch modules and counter each bear-market modifier.</li>
+          <li>Reach the Quantum Ledger, mine $MOON, and craft all four rocket parts.</li>
         </ul>
       </div>
 
@@ -397,7 +431,7 @@
         <ul>
           <li>Use B to open the build menu and E at the rocket terminal.</li>
           <li>Use P to pause and M to toggle sound.</li>
-          <li>Use Max only when you want the full-screen mining view.</li>
+          <li>Use the ⛶ button when you want the full-screen mining view.</li>
         </ul>
       </details>
     </aside>
@@ -422,43 +456,96 @@
 
   // ---------------- Config ----------------
   const CFG = {
-    TILE:40, COLS:72, ROWS:102, GROUND:12,
+    TILE:40, COLS:72, ROWS:134, GROUND:12,
     DAY:120, NIGHT:60,
     GRAV:1150, THRUST:2250, MOVE_ACC:1500, MAX_VX:235, MAX_VY_DOWN:760, MAX_VY_UP:430,
     FUEL_BURN:23, FUEL_REFUEL:62, FALL_DMG_SPEED:560, FALL_DMG_K:0.10,
     SHIP_COL:36, SHIP_HULL:300,
   };
   const BIOMES = [
-    { name:"Cache Layer",  from:12, to:41 },
-    { name:"The Mempool",  from:42, to:71 },
-    { name:"Mainnet Core", from:72, to:101 },
+    { name:"Cache Layer",     from:12,  to:41,  color:"#2ee0ff" },
+    { name:"The Mempool",     from:42,  to:71,  color:"#b06cff" },
+    { name:"Mainnet Core",    from:72,  to:101, color:"#ff5c5c" },
+    { name:"Quantum Ledger",  from:102, to:133, color:"#83f7ff" },
+  ];
+  const SUBBIOMES = [
+    [
+      {id:"mining_pool",name:"Mining Pool",color:"#2ee0ff"},
+      {id:"meme_graveyard",name:"Meme Graveyard",color:"#d9b85f"},
+      {id:"gas_fields",name:"Gas Fields",color:"#ff9d4d"},
+    ],[
+      {id:"botnet_hive",name:"Botnet Hive",color:"#6bff7d"},
+      {id:"whale_vault",name:"Whale Vault",color:"#ffd43b"},
+      {id:"slippage",name:"Slippage Channels",color:"#b06cff"},
+    ],[
+      {id:"liquidation",name:"Liquidation Zone",color:"#ff5c5c"},
+      {id:"dark_pool",name:"Dark Pool",color:"#8d5cff"},
+      {id:"validator_ruins",name:"Validator Ruins",color:"#6bff7d"},
+    ],[
+      {id:"cold_wallet",name:"Cold Wallet",color:"#83f7ff"},
+      {id:"zero_day",name:"Zero-Day Expanse",color:"#ff2e88"},
+      {id:"forked_reality",name:"Forked Reality",color:"#c06cff"},
+    ],
   ];
   // tile ids
-  const T = { EMPTY:0, DIRT1:1, DIRT2:2, DIRT3:3, BEDROCK:4, IRON:5, COPPER:6, PLASMA:7, DARK:8, LAVA:9 };
-  const ORE_OF = { [T.IRON]:"iron", [T.COPPER]:"copper", [T.PLASMA]:"plasma", [T.DARK]:"darkmatter" };
-  const HARDNESS = { [T.DIRT1]:0.34,[T.DIRT2]:0.62,[T.DIRT3]:0.98,[T.IRON]:0.52,[T.COPPER]:0.74,[T.PLASMA]:1.08,[T.DARK]:1.55 };
+  const T = { EMPTY:0, DIRT1:1, DIRT2:2, DIRT3:3, BEDROCK:4, IRON:5, COPPER:6, PLASMA:7, DARK:8, LAVA:9,
+    DIRT4:10, MOON:11, GAS:12, HIVE:13, VAULT:14, RELAY:15, GLITCH:16, PLATFORM:17 };
+  const ORE_OF = { [T.IRON]:"iron", [T.COPPER]:"copper", [T.PLASMA]:"plasma", [T.DARK]:"darkmatter", [T.MOON]:"moon" };
+  const HARDNESS = { [T.DIRT1]:0.34,[T.DIRT2]:0.62,[T.DIRT3]:0.98,[T.DIRT4]:1.2,[T.IRON]:0.52,[T.COPPER]:0.74,
+    [T.PLASMA]:1.08,[T.DARK]:1.55,[T.MOON]:1.9,[T.GAS]:0.25,[T.HIVE]:0.8,[T.VAULT]:1.45,[T.RELAY]:1.05,[T.GLITCH]:0.75,[T.PLATFORM]:0.72 };
 
   // upgrade tables (index by level-1)
   const DRILL_SPD = [1.0, 1.5, 2.1, 3.0];
   const MAX_FUEL  = [100, 140, 190, 250];
   const CARGO_CAP = [18, 28, 40, 56];
   const MAX_HULL  = [100, 145, 195, 260];
+  const LAMP_RADIUS = [5.2, 6.4, 7.6, 9.0];
+  const LAMP_BEAM   = [8.0, 9.5, 11.0, 13.0];
   const UPGRADES = {
     drill: { name:"Hash Rate",   icon:"⛏", ef:["Slow hash","Faster","Rapid","ASIC rig"], costs:[{iron:8},{iron:14,copper:6},{copper:14,plasma:3}] },
     fuel:  { name:"Gas Tank",    icon:"⛽", ef:["100 gas","140 gas","190 gas","250 gas"], costs:[{iron:6},{iron:10,copper:5},{copper:10,plasma:2}] },
     cargo: { name:"Cold Wallet", icon:"🧊", ef:["18 coins","28 coins","40 coins","56 coins"], costs:[{iron:7},{iron:12,copper:6},{copper:12,plasma:3}] },
     armor: { name:"Rig Armor",   icon:"🛡", ef:["100 HP","145 HP","195 HP","260 HP"], costs:[{iron:10},{iron:16,copper:8},{copper:14,plasma:4}] },
+    lamp:  { name:"Blocklight",  icon:"◉", ef:["5-cell halo","6-cell halo","8-cell halo","9-cell halo"], costs:[{iron:5,copper:3},{copper:9,plasma:2},{copper:12,plasma:4,darkmatter:1}] },
   };
   const PARTS = {
     engine: { name:"Liquidity Engine", icon:"🔧", cost:{copper:8,  plasma:3} },
     nav:    { name:"Moon Nav",          icon:"🛰", cost:{plasma:5,  darkmatter:2} },
     hull:   { name:"Diamond Hull",      icon:"💎", cost:{iron:12, plasma:4, darkmatter:1} },
+    core:   { name:"Quantum Drive",     icon:"⚛", cost:{darkmatter:4, moon:3} },
   };
+  const MODULES = {
+    drill_chain:{group:"drill",name:"Chain Hash",icon:"⛓",desc:"Ore breaks one neighboring block.",cost:{iron:10,copper:6}},
+    drill_asic:{group:"drill",name:"ASIC Burst",icon:"⚙",desc:"Drill speed +35%.",cost:{iron:8,copper:8}},
+    armor_heat:{group:"armor",name:"Heat Sink",icon:"❄",desc:"Lava damage reduced by 65%.",cost:{copper:8,plasma:3}},
+    armor_thorns:{group:"armor",name:"Counterhack",icon:"✴",desc:"Contact viruses take damage.",cost:{iron:10,plasma:2}},
+    turret_rapid:{group:"turret",name:"Rapid Antivirus",icon:"⌁",desc:"Turrets fire faster with lighter shots.",cost:{copper:10,plasma:2}},
+    turret_rail:{group:"turret",name:"Rail Antivirus",icon:"➤",desc:"Slower piercing turret rounds.",cost:{copper:8,plasma:4}},
+    support_shield:{group:"support",name:"Backup Shield",icon:"⬡",desc:"Repair servers reduce rocket damage.",cost:{plasma:5,darkmatter:1}},
+    support_emp:{group:"support",name:"Chain EMP",icon:"ϟ",desc:"EMP range and damage increased.",cost:{plasma:4,darkmatter:2}},
+  };
+  const PROTOCOLS = {
+    diamond:{name:"Diamond Hands",icon:"💎",desc:"Firewalls reflect 35% of received damage."},
+    proof:{name:"Proof of Work",icon:"⛏",desc:"Drill 30% faster; bear markets spawn 20% more viruses."},
+    airdrop:{name:"Airdrop",icon:"🪂",desc:"Viruses are much more likely to drop scrap."},
+    gasless:{name:"Gasless",icon:"⛽",desc:"Thrust consumes 40% less gas."},
+    hodl:{name:"HODL Mode",icon:"🛡",desc:"The rocket repairs 30 hull at every dawn."},
+    oracle:{name:"Oracle Feed",icon:"👁",desc:"Reveals Zero-Day viruses and improves radar."},
+  };
+  const NIGHT_MODS = [
+    {id:"red_candle",name:"RED CANDLE",desc:"Viruses move 25% faster",color:"var(--red)"},
+    {id:"fork_storm",name:"FORK STORM",desc:"Destroyed viruses may split",color:"var(--purple)"},
+    {id:"gas_spike",name:"GAS SPIKE",desc:"Turrets cycle 30% slower",color:"var(--yellow)"},
+    {id:"whale_migration",name:"WHALE MIGRATION",desc:"Whales join the swarm",color:"var(--cyan)"},
+    {id:"short_squeeze",name:"SHORT SQUEEZE",desc:"A shorter, denser wave",color:"var(--green)"},
+  ];
   const STRUCTS = {
+    platform:{ name:"Hash Platform",  icon:"▰",  cost:{iron:2},          color:"#2ee0ff", terrain:true },
     wall:   { name:"Firewall",      icon:"🧱", cost:{iron:3},          hp:130, color:"#7c8aa8" },
     turret: { name:"Antivirus",     icon:"🔫", cost:{iron:5,copper:3}, hp:65,  color:"#2ee0ff", range:5.6, cd:0.42, dmg:7.5, pspd:640 },
     tesla:  { name:"EMP Node",      icon:"⚡", cost:{iron:6,copper:5}, hp:50,  color:"#b06cff", range:3.2, cd:1.05, dmg:8 },
     repair: { name:"Backup Server", icon:"💾", cost:{iron:4,copper:4}, hp:55,  color:"#6bff7d", radius:2.7, rate:7 },
+    floodlight:{ name:"Hash Lamp", icon:"✦", cost:{iron:1}, hp:48, color:"#ffd76b", range:7.2 },
   };
 
   // ---------------- Utility ----------------
@@ -477,6 +564,7 @@
   const mmCanvas=$("minimap"), mmCtx=mmCanvas?mmCanvas.getContext("2d"):null;
   const wrap=$("game");
   let lightCanvas=document.createElement("canvas"), lctx=lightCanvas.getContext("2d");
+  let glowCanvas=document.createElement("canvas"), gctx=glowCanvas.getContext("2d");
   let VIEW_W=0, VIEW_H=0, dpr=1;
 
   function resize(){
@@ -485,6 +573,7 @@
     canvas.width=Math.round(VIEW_W*dpr); canvas.height=Math.round(VIEW_H*dpr);
     canvas.style.width=VIEW_W+"px"; canvas.style.height=VIEW_H+"px";
     lightCanvas.width=Math.max(2,Math.round(VIEW_W/2)); lightCanvas.height=Math.max(2,Math.round(VIEW_H/2));
+    glowCanvas.width=lightCanvas.width; glowCanvas.height=lightCanvas.height;
   }
   window.addEventListener("resize", resize);
 
@@ -497,50 +586,248 @@
   let tiles=new Uint8Array(COLS*ROWS);
   let lavaLvl=new Uint8Array(COLS*ROWS);   // flow "pressure" per lava tile (spread distance)
   let lavaActive=new Set(), lavaAccum=0; const LAVA_MAX=4;
+  let sunlight=new Float32Array(COLS*ROWS), lightTarget=new Float32Array(COLS*ROWS), lightNow=new Float32Array(COLS*ROWS);
+  let tintRTarget=new Float32Array(COLS*ROWS), tintGTarget=new Float32Array(COLS*ROWS), tintBTarget=new Float32Array(COLS*ROWS);
+  let tintRNow=new Float32Array(COLS*ROWS), tintGNow=new Float32Array(COLS*ROWS), tintBNow=new Float32Array(COLS*ROWS);
+  let explored=new Uint8Array(COLS*ROWS), sunlightDirty=true;
   const idx=(c,r)=>r*COLS+c;
   function tileAt(c,r){
     if(r<0) return T.EMPTY;                    // sky
     if(r>=ROWS) return T.BEDROCK;              // floor
     return tiles[idx(mod(c,COLS),r)];          // X wraps — no walls
   }
-  function setTile(c,r,v){ if(r<0||r>=ROWS) return; tiles[idx(mod(c,COLS),r)]=v; }
+  function setTile(c,r,v){ if(r<0||r>=ROWS) return; tiles[idx(mod(c,COLS),r)]=v; sunlightDirty=true; }
   const isSolid=t=>t!==T.EMPTY&&t!==T.LAVA;
   const solidAt=(c,r)=>isSolid(tileAt(c,r));
-  function biomeAt(r){ if(r<GROUND) return -1; for(let i=0;i<BIOMES.length;i++) if(r<=BIOMES[i].to) return i; return 2; }
+  function biomeAt(r){ if(r<GROUND) return -1; for(let i=0;i<BIOMES.length;i++) if(r<=BIOMES[i].to) return i; return BIOMES.length-1; }
+  let subBiomeMap=new Uint8Array(COLS*ROWS), landmarks=[];
+  function subBiomeAt(c,r){ const b=biomeAt(r); return b<0?null:SUBBIOMES[b][subBiomeMap[idx(mod(c,COLS),clamp(r,0,ROWS-1))]||0]; }
+
+  // Unified tile lighting: procedural sunlight, occluded local sources, and
+  // persistent exploration all feed the same visibility field.
+  const lightPasses=t=>t===T.EMPTY||t===T.LAVA;
+  const smooth01=v=>{v=clamp(v,0,1);return v*v*(3-2*v);};
+
+  function resetLightingGrid(){
+    sunlight.fill(0);lightTarget.fill(0);lightNow.fill(0);explored.fill(0);
+    tintRTarget.fill(0);tintGTarget.fill(0);tintBTarget.fill(0);
+    tintRNow.fill(0);tintGNow.fill(0);tintBNow.fill(0);
+    sunlightDirty=true;
+  }
+
+  // Sunlight is a real flood through empty cells. It reaches several cells down
+  // an open shaft, spills a shorter distance sideways, and lights solid walls
+  // without transmitting through them. Intact crust therefore hides depth.
+  function rebuildSunlight(){
+    sunlight.fill(0);
+    const qc=[],qr=[];let head=0;
+    const offer=(c,r,v)=>{
+      if(r<0||r>=ROWS||v<.025)return;
+      c=mod(c,COLS);const i=idx(c,r);
+      if(v<=sunlight[i]+.008)return;
+      sunlight[i]=v;qc.push(c);qr.push(r);
+    };
+    for(let c=0;c<COLS;c++){
+      for(let r=0;r<GROUND;r++)sunlight[idx(c,r)]=1;
+      if(lightPasses(tileAt(c,GROUND)))offer(c,GROUND,1);
+      else sunlight[idx(c,GROUND)]=.92;
+      // A little readable crust from the surface, never enough to expose deep ore.
+      for(let d=1;d<=2;d++)if(!lightPasses(tileAt(c,GROUND+d)))sunlight[idx(c,GROUND+d)]=d===1?.22:.055;
+    }
+    const dirs=[[0,1,.105],[1,0,.12],[-1,0,.12],[0,-1,.12]];
+    while(head<qc.length){
+      const c=qc[head],r=qr[head++],v=sunlight[idx(c,r)];
+      for(const [dc,dr,loss] of dirs){
+        const nc=mod(c+dc,COLS),nr=r+dr;if(nr<GROUND||nr>=ROWS)continue;
+        const nv=v-loss;if(nv<.025)continue;const ni=idx(nc,nr),tt=tiles[ni];
+        if(lightPasses(tt))offer(nc,nr,nv);
+        else sunlight[ni]=Math.max(sunlight[ni],nv-.055);
+      }
+    }
+    sunlightDirty=false;
+  }
+
+  function blocksLocalLight(c,r){
+    if(r<0||r>=ROWS)return true;
+    if(solidAt(c,r))return true;
+    return !!(G&&buildMap.get(mod(c,COLS)+","+r));
+  }
+  function lightLineClear(sc,sr,tc,tr){
+    const dc=tc-sc,dr=tr-sr,steps=Math.max(Math.abs(dc),Math.abs(dr));
+    if(steps<=1)return true;
+    let pc=sc,pr=sr;
+    for(let s=1;s<steps;s++){
+      const c=Math.round(sc+dc*s/steps),r=Math.round(sr+dr*s/steps);
+      if(blocksLocalLight(c,r))return false;
+      if(c!==pc&&r!==pr&&blocksLocalLight(c,pr)&&blocksLocalLight(pc,r))return false;
+      pc=c;pr=r;
+    }
+    return true;
+  }
+  function putLight(c,r,value,color){
+    if(r<0||r>=ROWS||value<=.01)return;c=mod(c,COLS);const i=idx(c,r);
+    lightTarget[i]=Math.max(lightTarget[i],clamp(value,0,1));
+    if(color){
+      tintRTarget[i]=Math.max(tintRTarget[i],value*color[0]);
+      tintGTarget[i]=Math.max(tintGTarget[i],value*color[1]);
+      tintBTarget[i]=Math.max(tintBTarget[i],value*color[2]);
+    }
+  }
+  function addLocalLight(sc,sr,radius,intensity,color){
+    const R=Math.ceil(radius);
+    for(let dr=-R;dr<=R;dr++)for(let dc=-R;dc<=R;dc++){
+      const d=Math.hypot(dc,dr);if(d>radius||!lightLineClear(sc,sr,sc+dc,sr+dr))continue;
+      const fall=Math.pow(Math.max(0,1-d/radius),.72);
+      putLight(sc+dc,sr+dr,intensity*fall,color);
+    }
+  }
+  function addConeLight(sc,sr,dx,dy,length,spread,intensity,color){
+    const R=Math.ceil(length);
+    for(let dr=-R;dr<=R;dr++)for(let dc=-R;dc<=R;dc++){
+      const forward=dc*dx+dr*dy;if(forward<=0||forward>length)continue;
+      const side=Math.abs(dc*dy-dr*dx),limit=spread+forward*.28;
+      if(side>limit||!lightLineClear(sc,sr,sc+dc,sr+dr))continue;
+      const edge=1-side/(limit+.001),fall=Math.pow(1-forward/length,.42)*smooth01(edge);
+      putLight(sc+dc,sr+dr,intensity*fall,color);
+    }
+  }
+  function recomputeLightTarget(){
+    if(!G)return;if(sunlightDirty)rebuildSunlight();
+    const sunScale=G.phase==="night"?.16:1;
+    for(let i=0;i<lightTarget.length;i++){
+      lightTarget[i]=sunlight[i]*sunScale;
+      tintRTarget[i]=tintGTarget[i]=tintBTarget[i]=0;
+    }
+    const rc=mod(Math.floor((rover.x+rover.w*.5)/TILE),COLS),rr=clamp(Math.floor((rover.y+rover.h*.5)/TILE),0,ROWS-1);
+    const lamp=clamp((G.up.lamp||1)-1,0,LAMP_RADIUS.length-1);
+    addLocalLight(rc,rr,LAMP_RADIUS[lamp],.98,[.20,.82,1]);
+    let dx=rover.face,dy=0,side=rover.drillEnemy?rover.drillSide:rover.drillTarget&&rover.drillTarget.side;
+    if(side==="d"){dx=0;dy=1;}else if(side==="l"){dx=-1;dy=0;}else if(side==="r"){dx=1;dy=0;}
+    addConeLight(rc,rr,dx,dy,LAMP_BEAM[lamp],2.1,.92,[.35,.90,1]);
+    addLocalLight(Math.floor(SHIP.cx/TILE),GROUND-2,5.4,.94,[.12,.76,1]);
+    for(const b of builds){
+      if(b.offline>0)continue;const bc=mod(b.c,COLS),br=b.r;
+      if(b.type==="floodlight")addLocalLight(bc,br,STRUCTS.floodlight.range,1,[1,.72,.24]);
+      else if(b.type==="turret")addLocalLight(bc,br,b.fire>0?3.4:2.2,b.fire>0?.9:.45,[.15,.82,1]);
+      else if(b.type==="tesla")addLocalLight(bc,br,b.fire>0?3.3:2.1,b.fire>0?.9:.48,[.65,.28,1]);
+      else if(b.type==="repair")addLocalLight(bc,br,2.2,.46,[.22,1,.48]);
+    }
+    const c0=Math.floor(cam.x/TILE)-4,c1=Math.floor((cam.x+VIEW_W)/TILE)+4;
+    const r0=Math.max(GROUND,Math.floor(cam.y/TILE)-4),r1=Math.min(ROWS-1,Math.floor((cam.y+VIEW_H)/TILE)+4);
+    for(let r=r0;r<=r1;r++)for(let wc=c0;wc<=c1;wc++){
+      const c=mod(wc,COLS),tt=tiles[idx(c,r)];
+      if(tt===T.LAVA)addLocalLight(c,r,2.6,.78,[1,.19,.06]);
+      else if(tt===T.RELAY)addLocalLight(c,r,3.0,.62,[.15,1,.52]);
+      else if(tt===T.GLITCH)addLocalLight(c,r,2.5,.55,[1,.12,.78]);
+      else if(tt===T.HIVE)addLocalLight(c,r,2.0,.42,[.18,1,.36]);
+      else if(tt===T.VAULT)addLocalLight(c,r,1.9,.44,[1,.72,.12]);
+      else if(tt===T.MOON)addLocalLight(c,r,1.45,.3,[.22,.86,1]);
+    }
+    for(const p of projectiles)addLocalLight(Math.floor(p.x/TILE),Math.floor(p.y/TILE),1.35,.75,[1,.72,.16]);
+    for(const e of enemies){
+      if(e.stealth&&!G.protocols.oracle&&Math.hypot(wrapDX(e.x,rover.x),e.y-rover.y)>TILE*3)continue;
+      addLocalLight(Math.floor(e.x/TILE),Math.floor(e.y/TILE),e.boss?2.8:1.25,e.boss?.55:.26,[1,.12,.38]);
+    }
+    let changed=false;
+    for(let i=0;i<lightTarget.length;i++)if(lightTarget[i]>.14&&!explored[i]){explored[i]=1;changed=true;}
+    if(changed)mmTick=0;
+  }
+  function updateLighting(dt){
+    if(!G)return;G.lightTick=(G.lightTick||0)-dt;
+    if(sunlightDirty||G.lightTick<=0){recomputeLightTarget();G.lightTick=.085;}
+    const upK=1-Math.pow(.00002,dt),downK=1-Math.pow(.018,dt),colorK=1-Math.pow(.002,dt);
+    for(let i=0;i<lightNow.length;i++){
+      const k=lightTarget[i]>lightNow[i]?upK:downK;
+      lightNow[i]+=(lightTarget[i]-lightNow[i])*k;
+      tintRNow[i]+=(tintRTarget[i]-tintRNow[i])*colorK;
+      tintGNow[i]+=(tintGTarget[i]-tintGNow[i])*colorK;
+      tintBNow[i]+=(tintBTarget[i]-tintBNow[i])*colorK;
+    }
+  }
+  function initializeLighting(){
+    resetLightingGrid();
+    for(let r=0;r<=Math.min(ROWS-1,GROUND+2);r++)for(let c=0;c<COLS;c++)explored[idx(c,r)]=1;
+    rebuildSunlight();recomputeLightTarget();lightNow.set(lightTarget);
+    tintRNow.set(tintRTarget);tintGNow.set(tintGTarget);tintBNow.set(tintBTarget);
+  }
 
   function genWorld(){
     worldSeed=(Math.random()*4294967295)>>>0;
     tiles=new Uint8Array(COLS*ROWS);
+    subBiomeMap=new Uint8Array(COLS*ROWS); landmarks=[];
     lavaLvl=new Uint8Array(COLS*ROWS); lavaActive=new Set(); lavaAccum=0;
     for(let r=0;r<ROWS;r++){
       if(r<GROUND){ for(let c=0;c<COLS;c++) tiles[idx(c,r)]=T.EMPTY; continue; }
       const b=biomeAt(r);
-      const baseDirt=[T.DIRT1,T.DIRT2,T.DIRT3][b]||T.DIRT1;
+      const baseDirt=[T.DIRT1,T.DIRT2,T.DIRT3,T.DIRT4][b]||T.DIRT4;
       const depthInBiome=(r-BIOMES[b].from)/(BIOMES[b].to-BIOMES[b].from+1); // 0..1
       for(let c=0;c<COLS;c++){
         let t=baseDirt;
-        const n=hash(c,r);
-        // ore distribution by biome
+        const regionX=Math.floor((c+Math.sin(r*.19)*4)/9),regionY=Math.floor((r-BIOMES[b].from)/7);
+        const variant=Math.min(2,(hash(regionX+b*97,regionY+b*181)*3)|0),sid=SUBBIOMES[b][variant].id;
+        subBiomeMap[idx(c,r)]=variant;
+        const n=hash(c,r),haz=hash(c*5+17,r*7+29);
+        // Ore and hazard distributions are biased by the local sub-biome.
         if(b===0){
-          if(n<0.085) t=T.IRON; else if(n<0.115) t=T.COPPER;
+          const boost=sid==="mining_pool"?.075:0;
+          if(n<0.08+boost) t=T.IRON; else if(n<0.115+boost) t=T.COPPER;
+          if(sid==="gas_fields"&&haz<.045) t=T.GAS;
         }else if(b===1){
           if(n<0.04) t=T.IRON; else if(n<0.13) t=T.COPPER;
-          else if(n<0.13+ (0.02+0.04*depthInBiome)) t=T.PLASMA;
-        }else{
+          else if(n<0.13+(sid==="whale_vault"?.055:.025)+0.04*depthInBiome) t=T.PLASMA;
+          if(sid==="botnet_hive"&&haz<.026) t=T.HIVE;
+          else if(sid==="whale_vault"&&haz<.009) t=T.VAULT;
+        }else if(b===2){
           if(n<0.04) t=T.COPPER;
           else if(n<0.10+0.04*depthInBiome) t=T.PLASMA;
-          else if(n<0.10+0.04*depthInBiome+ (0.012+0.03*depthInBiome)) t=T.DARK;
-          else if(hash(c*3+1,r*3+7) < 0.05+0.04*depthInBiome) t=T.LAVA;
+          else if(n<0.12+0.04*depthInBiome+(sid==="dark_pool"?.055:.018)) t=T.DARK;
+          else if(haz<(sid==="liquidation"?.13:.045)+.035*depthInBiome) t=T.LAVA;
+          if(sid==="validator_ruins"&&hash(c*11,r*13)<.008) t=T.RELAY;
+        }else{
+          if(n<.065) t=T.DARK;
+          else if(n<.105+.05*depthInBiome+(sid==="cold_wallet"?.02:0)) t=T.MOON;
+          else if(haz<(sid==="forked_reality"?.09:.035)) t=T.GLITCH;
+          if(sid==="zero_day"&&hash(c*13+7,r*17+3)<.016) t=T.HIVE;
         }
         // occasional bedrock veins deeper down (not in topmost rows)
-        if(r>GROUND+3 && hash(c*7+3,r*5+11) < 0.025+0.03*(r/ROWS)) t=T.BEDROCK;
+        if(r>GROUND+3 && ![T.HIVE,T.VAULT,T.RELAY,T.GLITCH].includes(t) && hash(c*7+3,r*5+11)<0.022+0.026*(r/ROWS)) t=T.BEDROCK;
         tiles[idx(c,r)]=t;
         if(t===T.LAVA) lavaLvl[idx(c,r)]=LAVA_MAX;   // worldgen pockets are full-pressure sources
       }
     }
-    // keep the crust surface row clean & easy; clear a small launch pad under the ship is NOT needed
-    for(let c=0;c<COLS;c++){ if(tileAt(c,GROUND)===T.BEDROCK) tiles[idx(c,GROUND)]=T.DIRT1; }
-    tiles[idx(0,ROWS-1)]=T.BEDROCK;
+
+    const clearCell=(c,r)=>{if(r>GROUND+2&&r<ROWS-1){setTile(c,r,T.EMPTY);lavaLvl[idx(mod(c,COLS),r)]=0;}};
+    // Large caverns make every layer traversable and visually distinct from the block field.
+    for(let b=0;b<BIOMES.length;b++) for(let k=0;k<6;k++){
+      const cx=(hash(b*41+k,101)*COLS)|0,cy=BIOMES[b].from+4+((hash(b*53+k,211)*(BIOMES[b].to-BIOMES[b].from-8))|0);
+      const rx=2+((hash(b*67+k,307)*4)|0),ry=2+((hash(b*71+k,401)*3)|0);
+      for(let y=cy-ry;y<=cy+ry;y++)for(let x=cx-rx;x<=cx+rx;x++)if(((x-cx)/rx)**2+((y-cy)/ry)**2<1)clearCell(x,y);
+    }
+    // Winding transaction tunnels cross the caverns and create natural routes.
+    for(let b=0;b<BIOMES.length;b++)for(let k=0;k<2;k++){
+      let c=(hash(b*83+k,503)*COLS)|0,r=BIOMES[b].from+4+((hash(b*89+k,601)*20)|0);
+      for(let s=0;s<24;s++){
+        clearCell(c,r);clearCell(c+1,r);if(s%3===0)clearCell(c,r+1);
+        c=mod(c+(hash(s+k*31,b*17)>.22?1:-1),COLS);r=clamp(r+(hash(s+b*43,k*19)>.72?1:hash(s+b*43,k*19)<.24?-1:0),BIOMES[b].from+3,BIOMES[b].to-3);
+      }
+    }
+    // Clustered veins replace isolated noise with recognizable mining targets.
+    const veinOres=[[T.IRON,T.IRON,T.COPPER],[T.COPPER,T.PLASMA],[T.PLASMA,T.DARK],[T.DARK,T.MOON]];
+    for(let b=0;b<BIOMES.length;b++)for(let k=0;k<10;k++){
+      let c=(hash(b*107+k,701)*COLS)|0,r=BIOMES[b].from+2+((hash(b*109+k,809)*(BIOMES[b].to-BIOMES[b].from-4))|0);
+      const ore=veinOres[b][(hash(k+b*23,907)*veinOres[b].length)|0],len=3+((hash(k,b+991)*5)|0);
+      for(let s=0;s<len;s++){const at=tileAt(c,r);if([T.DIRT1,T.DIRT2,T.DIRT3,T.DIRT4].includes(at))setTile(c,r,ore);if(s%2===0&&[T.DIRT1,T.DIRT2,T.DIRT3,T.DIRT4].includes(tileAt(c,r+1)))setTile(c,r+1,ore);c+=hash(s,k+b)>.35?1:-1;r+=hash(k,s+b)>.68?1:0;}
+    }
+    // Landmark rooms: guarded caches, botnet cores, validators, and quantum gates.
+    const landmarkTypes=[[T.VAULT,T.GAS,T.VAULT],[T.HIVE,T.VAULT,T.HIVE],[T.RELAY,T.VAULT,T.RELAY],[T.GLITCH,T.VAULT,T.RELAY]];
+    for(let b=0;b<BIOMES.length;b++)for(let k=0;k<3;k++){
+      const c=(hash(b*127+k,1103)*COLS)|0,r=BIOMES[b].from+6+((hash(b*131+k,1201)*(BIOMES[b].to-BIOMES[b].from-12))|0),kind=landmarkTypes[b][k];
+      for(let y=r-2;y<=r+2;y++)for(let x=c-3;x<=c+3;x++)if(Math.abs(x-c)<3&&Math.abs(y-r)<2)clearCell(x,y);
+      setTile(c,r,kind);landmarks.push({c:mod(c,COLS),r,type:kind,claimed:false});
+    }
+    // Keep the launch crust safe and seal the bottom of the ledger.
+    for(let c=0;c<COLS;c++){if(tileAt(c,GROUND)===T.BEDROCK||tileAt(c,GROUND)>=T.GAS)setTile(c,GROUND,T.DIRT1);setTile(c,ROWS-1,T.BEDROCK);}
+    resetLightingGrid();
   }
 
   // ---------------- Game state ----------------
@@ -549,9 +836,9 @@
     left:(CFG.SHIP_COL-1)*TILE, right:(CFG.SHIP_COL+2)*TILE,
     hull:CFG.SHIP_HULL, maxHull:CFG.SHIP_HULL,
   };
-  let state="boot";            // boot | play | menu | pause | launch | over | win
+  let state="boot";            // boot | play | menu | protocol | pause | launch | over | win
   let G=null;                  // mutable run state
-  const rover={x:0,y:0,w:32,h:28,vx:0,vy:0,onGround:false,face:1,drillT:0,drillTarget:null,drillAnim:0,hull:100,maxHull:100,hurt:0};
+  const rover={x:0,y:0,w:32,h:28,vx:0,vy:0,onGround:false,face:1,drillT:0,drillTarget:null,drillEnemy:null,drillSide:"d",drillHitCd:0,drillAnim:0,hull:100,maxHull:100,hurt:0};
   const enemies=[], projectiles=[], particles=[], scraps=[], builds=[]; const buildMap=new Map();
   let cam={x:0,y:0};
 
@@ -561,26 +848,27 @@
     enemies.length=projectiles.length=particles.length=scraps.length=builds.length=0;
     buildMap.clear();
     G={
-      day:1, phase:"day", t:CFG.DAY, nightCount:0,
-      bank:{iron:8, copper:4, plasma:0, darkmatter:0},
-      cargo:{iron:0,copper:0,plasma:0,darkmatter:0}, cargoTotal:0,
+      day:1, phase:"day", t:CFG.DAY, phaseDuration:CFG.DAY, nightCount:0,
+      bank:{iron:8, copper:4, plasma:0, darkmatter:0, moon:0},
+      cargo:{iron:0,copper:0,plasma:0,darkmatter:0,moon:0}, cargoTotal:0,
       fuel:100, maxFuel:100,
-      up:{drill:1,fuel:1,cargo:1,armor:1},
+      up:{drill:1,fuel:1,cargo:1,armor:1,lamp:1},
       cargoCap:CARGO_CAP[0], drillSpd:DRILL_SPD[0],
-      parts:{engine:false,nav:false,hull:false},
+      parts:{engine:false,nav:false,hull:false,core:false}, modules:{}, protocols:{},
       build:{open:false, sel:null, hoverC:-1, hoverR:-1, valid:false},
-      shake:0, ambient:0, launchT:0,
+      shake:0, lightTick:0, launchT:0,
       minedOre:0, kills:0, elapsed:0, undergroundSpawnT:2,
-      nightSpawnT:0, nightToSpawn:0, nightSpawned:0, bossT:-1,
+      nightSpawnT:0, nightToSpawn:0, nightSpawned:0, bossT:-1, nightMod:null,
       pump:null, pumpT:rand(12,45), crashT:-1, finalDefense:false, strandedT:0,
-      flash:0,
+      flash:0, shipHit:0, lastBiome:-1, biomeSeen:{}, subBiomeSeen:{}, relayBoost:0, vaults:0, mimicWarned:false,
     };
     rover.x=(CFG.SHIP_COL-3)*TILE; rover.y=GROUND*TILE-rover.h-0.5;
-    rover.vx=rover.vy=0; rover.face=1; rover.drillT=0; rover.drillTarget=null;
+    rover.vx=rover.vy=0; rover.face=1; rover.drillT=0; rover.drillTarget=null;rover.drillEnemy=null;rover.drillSide="d";rover.drillHitCd=0;
     rover.maxHull=MAX_HULL[0]; rover.hull=rover.maxHull; rover.hurt=0;
     G.fuel=G.maxFuel=MAX_FUEL[0];
     cam.x=wrapX(rover.x+rover.w/2-VIEW_W/2);
     cam.y=clamp(rover.y-VIEW_H/2,0,Math.max(0,WORLD_H-VIEW_H));
+    initializeLighting();
     refreshBuildList(); refreshShipMenu();
   }
 
@@ -673,7 +961,7 @@
   function canAfford(cost){ for(const k in cost) if((G.bank[k]||0)<cost[k]) return false; return true; }
   function pay(cost){ for(const k in cost) G.bank[k]-=cost[k]; }
   function costStr(cost){
-    const map={iron:"DOGE",copper:"SHIB",plasma:"PEPE",darkmatter:"BONK"};
+    const map={iron:"DOGE",copper:"SHIB",plasma:"PEPE",darkmatter:"BONK",moon:"MOON"};
     return Object.keys(cost).map(k=>`<span>${cost[k]}</span> ${map[k]}`).join("  ");
   }
 
@@ -701,6 +989,13 @@
   }
   function canPlace(c,r,key){
     if(!key) return false;
+    if(key==="platform") return r===GROUND && tileAt(c,r)===T.EMPTY && canAfford(STRUCTS.platform.cost);
+    if(key==="floodlight"){
+      if(r<GROUND-1||r>=ROWS-1) return false;
+      if(r===GROUND-1&&c>=CFG.SHIP_COL-1&&c<=CFG.SHIP_COL+1) return false;
+      if(tileAt(c,r)!==T.EMPTY||!solidAt(c,r+1)||buildMap.has(c+","+r)) return false;
+      return canAfford(STRUCTS.floodlight.cost);
+    }
     if(r!==GROUND-1) return false;                       // single defensive row on the surface
     if(c>=CFG.SHIP_COL-1 && c<=CFG.SHIP_COL+1) return false; // not on the ship
     if(tileAt(c,r)!==T.EMPTY) return false;
@@ -710,15 +1005,31 @@
   }
   function placeAtHover(){
     const {hoverC:c,hoverR:r,sel}=G.build;
-    if(!canPlace(c,r,sel)){ SFX.err(); flashHint(canAfford(STRUCTS[sel].cost)?"Can't build there — surface only":"Not enough coins"); return; }
+    if(!canPlace(c,r,sel)){
+      SFX.err();
+      const msg=!canAfford(STRUCTS[sel].cost)?"Not enough coins":sel==="platform"?"Place platforms inside mined surface gaps":sel==="floodlight"?"Hash Lamps need an empty tunnel cell with solid floor beneath":"Needs an empty surface cell with ground or a platform below";
+      flashHint(msg);return;
+    }
     const s=STRUCTS[sel]; pay(s.cost);
+    if(sel==="platform"){
+      setTile(c,r,T.PLATFORM);lavaLvl[idx(mod(c,COLS),r)]=0;
+      SFX.build();puff(c*TILE+TILE/2,r*TILE+TILE/2,s.color,12);addFloater(c*TILE+TILE/2,r*TILE,"SUPPORT ONLINE",s.color);
+      refreshBuildList();syncBank();mmTick=0;return;
+    }
     const b={c,r,type:sel,hp:s.hp,maxHp:s.hp,cd:0,x:c*TILE+TILE/2,y:r*TILE+TILE/2,fire:0};
     builds.push(b); buildMap.set(c+","+r,b);
+    G.lightTick=0;
     SFX.build(); puff(b.x,b.y,s.color,10); refreshBuildList(); syncBank();
   }
   function removeBuild(b){
     const i=builds.indexOf(b); if(i>=0) builds.splice(i,1);
     buildMap.delete(b.c+","+b.r);
+    if(G)G.lightTick=0;
+  }
+  function collapseUnsupportedAt(c,supportR=GROUND){
+    c=mod(c,COLS);if(supportR<0||supportR>=ROWS||solidAt(c,supportR))return;
+    const b=buildMap.get(c+","+(supportR-1));if(!b)return;
+    removeBuild(b);puff(b.x,b.y,STRUCTS[b.type].color,16);SFX.boom();toast(`${STRUCTS[b.type].name} collapsed — support removed!`,"bad");refreshBuildList();
   }
 
   // ---------------- Ship menu ----------------
@@ -729,7 +1040,7 @@
   function tryOpenShip(){
     if(state!=="play") return;
     if(!dockedNearShip()){ flashHint("Return to the rocket to open the terminal"); SFX.err(); return; }
-    state="menu"; refreshShipMenu(); $("scr-ship").classList.add("show");
+    state="menu"; refreshShipMenu(); $("ship-card").scrollTop=0; $("scr-ship").classList.add("show");
   }
   function closeShip(){ if(state!=="menu") return; $("scr-ship").classList.remove("show"); state="play"; }
 
@@ -748,6 +1059,16 @@
       ug.appendChild(card);
     }
     ug.querySelectorAll("[data-up]").forEach(b=>b.addEventListener("click",()=>buyUpgrade(b.dataset.up)));
+    // Exclusive branch modules: one choice per equipment group.
+    const mg=$("module-grid"); mg.innerHTML="";
+    for(const key in MODULES){
+      const m=MODULES[key],owned=!!G.modules[key],groupChoice=Object.keys(G.modules).find(k=>G.modules[k]&&MODULES[k].group===m.group),locked=!!groupChoice&&!owned,aff=canAfford(m.cost);
+      const card=document.createElement("div");card.className="card "+(owned?"module-owned":locked?"module-locked":"");
+      card.innerHTML=`<div class="top"><span class="nm">${m.icon} ${m.name}</span><span class="lv">${m.group}</span></div><div class="ef">${m.desc}</div>
+        <div class="cost">${owned?"INSTALLED ✓":locked?"BRANCH LOCKED":costStr(m.cost)}</div><button class="buy" ${owned||locked||!aff?'disabled':''} data-module="${key}">${owned?"✓ Installed":locked?"Locked":"Install"}</button>`;
+      mg.appendChild(card);
+    }
+    mg.querySelectorAll("[data-module]").forEach(b=>b.addEventListener("click",()=>buyModule(b.dataset.module)));
     // parts
     const pg=$("parts-grid"); pg.innerHTML="";
     for(const key in PARTS){
@@ -760,9 +1081,10 @@
     }
     pg.querySelectorAll("[data-part]").forEach(b=>b.addEventListener("click",()=>craftPart(b.dataset.part)));
     const made=Object.values(G.parts).filter(Boolean).length;
-    $("ship-progress").innerHTML=`Rocket parts: <b>${made}/3</b> assembled — build all three to launch to the moon.`;
+    const partTotal=Object.keys(PARTS).length;
+    $("ship-progress").innerHTML=`Rocket parts: <b>${made}/${partTotal}</b> assembled — the Quantum Drive requires MOON shards from the final layer.`;
     // current minerals on hand
-    $("ship-wallet").innerHTML=[["iron","#e9b84a","Doge"],["copper","#ff7a33","Shib"],["plasma","#5fdf6a","Pepe"],["darkmatter","#c06cff","Bonk"]]
+    $("ship-wallet").innerHTML=[["iron","#e9b84a","Doge"],["copper","#ff7a33","Shib"],["plasma","#5fdf6a","Pepe"],["darkmatter","#c06cff","Bonk"],["moon","#83f7ff","Moon"]]
       .map(([k,col,lab])=>`<span class="wlt" style="color:${col}"><i style="background:${col}"></i><b>${G.bank[k]||0}</b><span>${lab}</span></span>`).join("");
   }
   function buyUpgrade(key){
@@ -773,9 +1095,26 @@
     if(key==="fuel"){ const old=G.maxFuel; G.maxFuel=MAX_FUEL[G.up.fuel-1]; G.fuel+=G.maxFuel-old; }
     if(key==="cargo") G.cargoCap=CARGO_CAP[G.up.cargo-1];
     if(key==="armor"){ const old=rover.maxHull; rover.maxHull=MAX_HULL[G.up.armor-1]; rover.hull+=rover.maxHull-old; }
+    if(key==="lamp") G.lightTick=0;
     SFX.craft(); toast(`${UPGRADES[key].name} → Lv ${G.up[key]}`,"good");
     refreshShipMenu(); refreshBuildList(); syncBank();
   }
+  function buyModule(key){
+    const m=MODULES[key];if(!m||G.modules[key])return;
+    if(Object.keys(G.modules).some(k=>G.modules[k]&&MODULES[k].group===m.group)){SFX.err();return;}
+    if(!canAfford(m.cost)){SFX.err();return;}pay(m.cost);G.modules[key]=true;SFX.craft();toast(`${m.name} installed — ${m.group} branch locked` ,"good");
+    refreshShipMenu();refreshBuildList();syncBank();
+  }
+  function offerProtocol(){
+    const available=Object.keys(PROTOCOLS).filter(k=>!G.protocols[k]);
+    if(!available.length){G.bank.moon++;toast("Protocol library complete — +1 MOON","good");syncBank();return;}
+    available.sort(()=>Math.random()-.5);const picks=available.slice(0,Math.min(3,available.length)),grid=$("protocol-grid");grid.innerHTML="";
+    for(const key of picks){const p=PROTOCOLS[key],card=document.createElement("div");card.className="card protocol-card";card.innerHTML=`<div class="proto-icon">${p.icon}</div><div class="nm">${p.name}</div><div class="ef">${p.desc}</div><button class="buy" data-protocol="${key}">Install</button>`;grid.appendChild(card);}
+    grid.querySelectorAll("[data-protocol]").forEach(b=>b.addEventListener("click",()=>chooseProtocol(b.dataset.protocol)));
+    $("protocol-owned").textContent=Object.keys(G.protocols).filter(k=>G.protocols[k]).map(k=>PROTOCOLS[k].name).join(" · ")||"No protocols installed yet";
+    state="protocol";$("scr-protocol").classList.add("show");SFX.craft();
+  }
+  function chooseProtocol(key){if(!PROTOCOLS[key]||G.protocols[key])return;G.protocols[key]=true;$("scr-protocol").classList.remove("show");state="play";toast(`${PROTOCOLS[key].name} protocol online`,"good");}
   function craftPart(key){
     if(G.parts[key]) return; const p=PARTS[key];
     if(!canAfford(p.cost)){ SFX.err(); return; }
@@ -787,34 +1126,38 @@
   // ---------------- Phase / day-night ----------------
   function setPhase(phase){
     G.phase=phase;
+    G.lightTick=0;
     if(phase==="night"){
       G.nightCount++; SFX.night();
       const n=G.nightCount;
-      G.nightToSpawn = 7 + n*4;     // total enemies this night
+      G.nightMod=choice(NIGHT_MODS);G.phaseDuration=G.nightMod.id==="short_squeeze"?45:CFG.NIGHT;
+      G.nightToSpawn = Math.round((7+n*4)*(G.nightMod.id==="short_squeeze"?1.35:1)*(G.protocols.proof?1.2:1));
       G.nightSpawned=0; G.nightSpawnT=0.6;
       G.bossT = (n%3===0) ? 6 : -1; // Black Swan boss every 3rd bear market
       G.pump=null;                             // pumps end when the bear arrives
       G.crashT = n>=2 ? rand(10,35) : -1;      // flash crash from bear #2 on
-      bigMessage("BEAR MARKET", "bear #"+n+" · FUD incoming", "var(--red)");
-      toast("Defenses online — HODL through the dip","warn");
+      bigMessage(G.nightMod.name,`bear #${n} · ${G.nightMod.desc}`,G.nightMod.color);
+      toast(`Bear modifier: ${G.nightMod.name} — ${G.nightMod.desc}`,"warn");
     }else{
       SFX.day();
       // dawn: surviving surface enemies flee/despawn, underground burrowers gone
       for(const e of enemies) puff(e.x,e.y,"#3a2030",6);
       enemies.length=0;
-      G.pumpT=rand(10,45); G.crashT=-1;
+      if(G.protocols.hodl&&SHIP.hull<SHIP.maxHull){SHIP.hull=Math.min(SHIP.maxHull,SHIP.hull+30);toast("HODL Mode repaired 30 rocket hull","good");}
+      G.pumpT=rand(10,45); G.crashT=-1;G.nightMod=null;G.phaseDuration=CFG.DAY;
       bigMessage("BULL MARKET", "day "+G.day+" · stack & build", "var(--green)");
     }
   }
   function updatePhase(dt){
     G.t-=dt;
+    if(G.shipHit>0) G.shipHit=Math.max(0,G.shipHit-dt);
     if(G.t<=0){
       if(G.finalDefense){                      // survived the launch defense → liftoff
         for(const e of enemies) puff(e.x,e.y,"#3a2030",6);
         enemies.length=0;
         startLaunch(); return;
       }
-      if(G.phase==="day"){ setPhase("night"); G.t=CFG.NIGHT; }
+      if(G.phase==="day"){ setPhase("night"); G.t=G.phaseDuration; }
       else { G.day++; setPhase("day"); G.t=CFG.DAY; }
     }
     // 5-second night warning
@@ -832,34 +1175,40 @@
     } else if(G.phase==="night" && G.crashT>0){
       G.crashT-=dt; if(G.crashT<=0) flashCrash();
     }
-    // ambient darkness target — day surface is fully lit; it darkens with depth & at night
-    let amb=0;
-    const belowSurface = rover.y > GROUND*TILE - 6;
-    if(belowSurface){ const dk=clamp((rover.y-GROUND*TILE)/(26*TILE),0,1); amb=lerp(0.16,0.86,dk); }
-    if(G.phase==="night") amb=Math.max(amb, belowSurface?0.90:0.76);
-    G.ambient=lerp(G.ambient,amb,1-Math.pow(0.001,dt));
   }
 
   // ---------------- Spawning ----------------
+  const ENEMY_BASES={
+    crawler:{hp:20,spd:40,dmg:7,w:40,h:38,c:"#5fe07a"},runner:{hp:11,spd:78,dmg:4,w:32,h:28,c:"#ffb03a"},
+    brute:{hp:62,spd:25,dmg:15,w:60,h:54,c:"#ff3a5a"},flyer:{hp:15,spd:58,dmg:7,w:40,h:32,c:"#4fd6ff",flying:true},
+    packet:{hp:6,spd:102,dmg:2,w:18,h:16,c:"#83f7ff"},fork:{hp:24,spd:48,dmg:7,w:38,h:34,c:"#c06cff",fork:true},
+    exploit:{hp:22,spd:62,dmg:3,w:38,h:30,c:"#ff2e88",flying:true,exploit:true},
+    leech:{hp:28,spd:50,dmg:3,w:42,h:34,c:"#e9b84a",leech:true},rugworm:{hp:38,spd:66,dmg:11,w:46,h:30,c:"#8aff9c",phaseWall:true},
+    whale:{hp:135,spd:19,dmg:24,w:82,h:64,c:"#52bfff",whale:true},zero:{hp:30,spd:64,dmg:9,w:42,h:34,c:"#ff55b8",flying:true,stealth:true},
+    mimic:{hp:24,spd:72,dmg:9,w:34,h:30,c:"#ffd43b",flying:true,targetRover:true},
+  };
+  const MIMIC_CHASE_TIME=18, MIMIC_DRILL_DPS=24;
+  function pushSurfaceEnemy(type,x,yOffset=0){
+    const base=ENEMY_BASES[type]||ENEMY_BASES.crawler,n=G.nightCount,hpScale=1+(n-1)*.14,speedMod=G.nightMod?.id==="red_candle"?1.25:1;
+    const e={type,x,y:0,vx:0,w:base.w,h:base.h,hp:base.hp*hpScale,maxHp:base.hp*hpScale,spd:base.spd*(1+(n-1)*.03)*speedMod,dmg:base.dmg,c:base.c,
+      dir:Math.sign(wrapDX(SHIP.cx,x))||1,flying:!!base.flying,ground:!base.flying,atkT:0,wob:Math.random()*6,hit:0,spawn:.72,spawnMax:.72,
+      fork:!!base.fork,exploit:!!base.exploit,leech:!!base.leech,phaseWall:!!base.phaseWall,whale:!!base.whale,stealth:!!base.stealth,stolen:0};
+    e.y=e.flying?(GROUND-1)*TILE-rand(40,120)+yOffset:GROUND*TILE-e.h;enemies.push(e);return e;
+  }
   function spawnSurfaceEnemy(){
     const n=G.nightCount;
     const side=Math.random()<0.5?-1:1;
     const x=wrapX(SHIP.cx + side*rand(8,14)*TILE);   // approach the ship from across the surface
-    let type=choice(["crawler","crawler","runner","brute","flyer"]);
-    if(n>=3 && Math.random()<0.25) type="brute";
-    if(Math.random()<0.22) type="flyer";
-    const hpScale=1+(n-1)*0.14, base={
-      crawler:{hp:20,spd:40,dmg:7,w:40,h:38,c:"#5fe07a"},   // green trojan
-      runner:{hp:11,spd:78,dmg:4,w:32,h:28,c:"#ffb03a"},    // amber bot
-      brute:{hp:62,spd:25,dmg:15,w:60,h:54,c:"#ff3a5a"},    // red ransomware
-      flyer:{hp:15,spd:58,dmg:7,w:40,h:32,c:"#4fd6ff"},     // cyan spyware
-    }[type];
-    const e={ type, x, y:0, vx:0, w:base.w, h:base.h, hp:base.hp*hpScale, maxHp:base.hp*hpScale,
-      spd:base.spd*(1+(n-1)*0.03), dmg:base.dmg, c:base.c, dir:0, flying:type==="flyer",
-      atkT:0, wob:Math.random()*6, ground:!(type==="flyer") };
-    e.dir=Math.sign(wrapDX(SHIP.cx,e.x))||1;
-    e.y = e.flying ? (GROUND-1)*TILE - rand(40,120) : GROUND*TILE - e.h;
-    enemies.push(e);
+    let pool=["crawler","crawler","runner","brute","flyer","packet","fork"];
+    if(n>=2)pool.push("exploit","leech","rugworm");if(n>=3)pool.push("whale");if(G.biomeSeen[3]||n>=4)pool.push("zero");
+    let type=choice(pool);if(G.nightMod?.id==="whale_migration"&&G.nightSpawned%4===0)type="whale";
+    if(type==="packet"){for(let i=0;i<3;i++)pushSurfaceEnemy(type,wrapX(x+rand(-25,25)));}else pushSurfaceEnemy(type,x);
+  }
+  function spawnMimic(x,y,type="mimic",opts={}){
+    const base=ENEMY_BASES[type]||ENEMY_BASES.mimic,e={type,x:wrapX(x),y,vx:0,vy:0,w:base.w,h:base.h,hp:base.hp,maxHp:base.hp,spd:base.spd,dmg:base.dmg,c:base.c,
+      dir:1,flying:true,ground:false,targetRover:true,underground:true,atkT:0,wob:Math.random()*6,hit:0,stun:0,spawn:.45,spawnMax:.45,fork:!!base.fork,stealth:!!base.stealth};
+    if(type==="mimic"){e.chaseT=MIMIC_CHASE_TIME;e.rewardKind="copper";e.rewardAmount=2;}
+    Object.assign(e,opts);enemies.push(e);return e;
   }
   function spawnBurrower(){
     // underground night threat: spawns in nearby dug/empty space, phases through rock toward rover
@@ -868,13 +1217,13 @@
     const y=clamp(rover.y+Math.sin(ang)*d, (GROUND+1)*TILE, WORLD_H-TILE);
     const segs=[]; for(let i=0;i<8;i++) segs.push({x,y});   // trailing worm body
     enemies.push({ type:"burrower", x,y,vx:0,vy:0,w:30,h:28, hp:30,maxHp:30, spd:90, dmg:10, c:"#7dff9a",
-      flying:true, ground:false, burrow:true, atkT:0, wob:Math.random()*6, dir:1, segs });
+      flying:true, ground:false, burrow:true, atkT:0, wob:Math.random()*6, dir:1, segs,hit:0 });
   }
   function spawnBoss(n){
     // "Black Swan" — a massive flying crash-event boss; turrets must focus it
     const side=Math.random()<0.5?-1:1, x=wrapX(SHIP.cx + side*rand(10,14)*TILE), hp=240+n*55;
     enemies.push({ type:"boss", x, y:(GROUND-1)*TILE-90, vx:0, w:84, h:72, hp, maxHp:hp, spd:34, dmg:22, c:"#ff2e5a",
-      dir:Math.sign(wrapDX(SHIP.cx,x))||1, flying:true, ground:false, atkT:0, wob:Math.random()*6, boss:true });
+      dir:Math.sign(wrapDX(SHIP.cx,x))||1, flying:true, ground:false, atkT:0, wob:Math.random()*6, boss:true, hit:0, spawn:1.15, spawnMax:1.15 });
     bigMessage("⚫ BLACK SWAN", "the crash event approaches", "var(--red)"); SFX.night(); G.shake=Math.max(G.shake,7);
     toast("⚫ Black Swan incoming — focus fire!","bad");
   }
@@ -910,6 +1259,33 @@
     return block;
   }
 
+  function findDrillCombatTarget(side){
+    if(!side)return null;
+    const rx=rover.x+rover.w/2,ry=rover.y+rover.h/2;let best=null,bestForward=Infinity;
+    for(const e of enemies){
+      if(!e.targetRover||e.burrow||e.spawn>0||e.hp<=0)continue;
+      const dx=wrapDX(e.x,rx),dy=e.y-ry;
+      const forward=side==="r"?dx:side==="l"?-dx:dy;
+      const lateral=side==="d"?Math.abs(dx):Math.abs(dy);
+      const reach=side==="d"?rover.h/2+e.h/2+TILE*.52:rover.w/2+e.w/2+TILE*.52;
+      const width=side==="d"?(rover.w+e.w)*.43:(rover.h+e.h)*.5;
+      if(forward>-6&&forward<reach&&lateral<width&&forward<bestForward){best=e;bestForward=forward;}
+    }
+    return best;
+  }
+  function drillCombatEnemy(e,side,dt){
+    const speedScale=Math.sqrt(Math.max(1,G.drillSpd)),moduleScale=G.modules.drill_asic?1.25:1,proofScale=G.protocols.proof?1.18:1;
+    e.hp-=MIMIC_DRILL_DPS*speedScale*moduleScale*proofScale*dt;
+    e.stun=Math.max(e.stun||0,.2);e.hit=Math.max(e.hit||0,.14);rover.drillAnim+=dt*25;
+    if(side==="d")e.y+=18*dt;else e.x=wrapX(e.x+(side==="r"?1:-1)*18*dt);
+    rover.drillHitCd=Math.max(0,(rover.drillHitCd||0)-dt);
+    if(rover.drillHitCd<=0){
+      rover.drillHitCd=.1;SFX.hit();G.shake=Math.max(G.shake,1.6);
+      const hx=rover.x+wrapDX(e.x,rover.x)*.62,hy=rover.y+(e.y-rover.y)*.62;
+      for(let i=0;i<3;i++)addParticle(hx+rand(-5,5),hy+rand(-5,5),rand(-70,70),rand(-70,30),.28,choice(["#ffd43b","#2ee0ff","#fff4b0"]),rand(2,3.5));
+    }
+  }
+
   function updateRover(dt){
     const mining = G.phase==="day" || rover.y < (GROUND)*TILE; // info only
     // horizontal
@@ -919,7 +1295,7 @@
     rover.vx=clamp(rover.vx,-CFG.MAX_VX,CFG.MAX_VX);
     // thrust
     let thrusting=false;
-    if(keys.up && G.fuel>0){ rover.vy-=CFG.THRUST*dt; G.fuel-=CFG.FUEL_BURN*dt; thrusting=true;
+    if(keys.up && G.fuel>0){ rover.vy-=CFG.THRUST*dt; G.fuel-=CFG.FUEL_BURN*(G.protocols.gasless?.6:1)*dt; thrusting=true;
       if(Math.random()<0.6) addParticle(rover.x+rover.w/2+rand(-6,6), rover.y+rover.h, rand(-30,30), rand(60,150), rand(0.2,0.4), choice(["#ffd43b","#ff9d4d","#ff5c5c"]), rand(2,4)); }
     G.fuel=clamp(G.fuel,0,G.maxFuel);
     // gravity
@@ -933,18 +1309,24 @@
 
     // ---- drilling (adjacency-based: robust at tile boundaries) ----
     let target=null;
+    const drillSide=keys.down?"d":keys.right?"r":keys.left?"l":null;
     const midRow=Math.floor((rover.y+rover.h/2)/TILE), midCol=Math.floor((rover.x+rover.w/2)/TILE);
     const drillable=(c,r)=>{ const t=tileAt(c,r); return t!==T.EMPTY&&t!==T.LAVA&&t!==T.BEDROCK; };
     if(keys.down){ const r=Math.floor((rover.y+rover.h+1)/TILE); if(drillable(midCol,r)) target={c:mod(midCol,COLS),r,side:"d"}; }
     else if(keys.right){ const c=Math.floor((rover.x+rover.w+1)/TILE); if(drillable(c,midRow)) target={c:mod(c,COLS),r:midRow,side:"r"}; }
     else if(keys.left){ const c=Math.floor((rover.x-1)/TILE); if(drillable(c,midRow)) target={c:mod(c,COLS),r:midRow,side:"l"}; }
-    if(target){
+    const combatTarget=findDrillCombatTarget(drillSide);
+    if(combatTarget){
+      rover.drillEnemy=combatTarget;rover.drillSide=drillSide;rover.drillTarget=null;rover.drillT=0;
+      drillCombatEnemy(combatTarget,drillSide,dt);
+    }else if(target){
+      rover.drillEnemy=null;rover.drillSide=target.side;
       const tt=tileAt(target.c,target.r);
       if(tt===T.BEDROCK || tt===T.EMPTY){ rover.drillTarget=null; rover.drillT=0; }
       else{
         if(!rover.drillTarget||rover.drillTarget.c!==target.c||rover.drillTarget.r!==target.r){ rover.drillTarget=target; rover.drillT=0; }
         const need=HARDNESS[tt]||1;
-        rover.drillT+=G.drillSpd*dt; rover.drillAnim+=dt*16;
+        rover.drillT+=G.drillSpd*(G.protocols.proof?1.3:1)*(G.modules.drill_asic?1.35:1)*dt; rover.drillAnim+=dt*16;
         // drill-assist: while digging down, slide onto the dig column so the rover
         // drops into its own hole instead of straddling the edge and getting stuck
         if(target.side==="d"){
@@ -958,7 +1340,7 @@
         if(rover.drillT>=need){ mineTile(target.c,target.r,tt); rover.drillTarget=null; rover.drillT=0; }
       }
     } else {
-      rover.drillTarget=null; rover.drillT=0;
+      rover.drillTarget=null;rover.drillEnemy=null;rover.drillT=0;rover.drillHitCd=Math.max(0,(rover.drillHitCd||0)-dt);
       // fall-assist: pressing down over an already-open hole slides the rover into it
       if(keys.down && rover.onGround){
         const hr=Math.floor((rover.y+rover.h+1)/TILE);
@@ -971,8 +1353,30 @@
 
     // ---- hazards: lava ----
     const cc=Math.floor((rover.x+rover.w/2)/TILE), cr=Math.floor((rover.y+rover.h/2)/TILE);
-    if(tileAt(cc,cr)===T.LAVA){ damageRover(34*dt); rover.hurt=Math.max(rover.hurt,.4);
+    if(tileAt(cc,cr)===T.LAVA){ damageRover(34*(G.modules.armor_heat?.35:1)*dt); rover.hurt=Math.max(rover.hurt,.4);
       if(Math.random()<0.5) addParticle(rover.x+rand(0,rover.w),rover.y+rover.h,rand(-20,20),rand(-60,-20),0.4,choice(["#ff9d4d","#ff5c5c"]),3); }
+    const localBiome=subBiomeAt(cc,cr);
+    if(localBiome?.id==="slippage"){const push=hash(cr,Math.floor(G.elapsed/2))>.5?1:-1;rover.vx=clamp(rover.vx+push*95*dt,-CFG.MAX_VX,CFG.MAX_VX);}
+
+    // First descent into each biome gets a strong, one-time progression beat.
+    const probeRow=Math.floor((rover.y+rover.h*.7)/TILE), currentBiome=probeRow<GROUND?-1:biomeAt(probeRow);
+    if(currentBiome!==G.lastBiome){
+      G.lastBiome=currentBiome;
+      if(currentBiome>=0 && !G.biomeSeen[currentBiome]){
+        G.biomeSeen[currentBiome]=true;
+        const b=BIOMES[currentBiome], notes=["DOGE + SHIB layer · hash rate stable","PEPE signals detected · armor advised","BONK liquidity · corruption active","MOON shards detected · reality unstable"];
+        bigMessage(b.name.toUpperCase(),notes[currentBiome],b.color);
+        toast(`Depth unlocked: ${b.name}`,currentBiome>=2?"bad":"good");
+        G.flash=Math.max(G.flash,.1); SFX.craft();
+      }
+    }
+    if(localBiome&&!G.subBiomeSeen[localBiome.id]){
+      G.subBiomeSeen[localBiome.id]=true;
+      if(localBiome.id==="meme_graveyard"){
+        toast("Entered Meme Graveyard — pink-bracketed coins may be Mimics","bad");
+        flashHint("Glitch brackets mark infected coins · face a Mimic and hold the drill");
+      }else toast(`Entered ${localBiome.name}`,"warn");
+    }
 
     // ---- dock: unload + refuel + slow repair ----
     if(dockedNearShip()){
@@ -999,35 +1403,73 @@
 
     // contact damage from surface/burrower enemies
     for(const e of enemies){
-      if(Math.abs(wrapDX(e.x,rover.x+rover.w/2))<(e.w/2+rover.w/2) && Math.abs((e.y)-(rover.y+rover.h/2))<(e.h/2+rover.h/2)){
+      if(e.hp>0&&!(e.stun>0)&&Math.abs(wrapDX(e.x,rover.x+rover.w/2))<(e.w/2+rover.w/2) && Math.abs((e.y)-(rover.y+rover.h/2))<(e.h/2+rover.h/2)){
         damageRover(e.dmg*dt*1.1); rover.hurt=Math.max(rover.hurt,.3);
+        if(G.modules.armor_thorns)e.hp-=16*dt;
+        if(e.whale&&!(e.bumpCd>0)){rover.vx=-e.dir*280;rover.vy=-210;e.bumpCd=.8;G.shake=Math.max(G.shake,6);}
       }
+      if(e.bumpCd>0)e.bumpCd-=dt;
     }
     if(rover.hurt>0) rover.hurt-=dt;
   }
 
   function mineTile(c,r,tt){
     const ore=ORE_OF[tt];
+    const infected=isInfectedOre(c,r,tt);
     if(ore){
       if(G.cargoTotal>=G.cargoCap){ flashHint("Wallet full — cash out at the rocket"); return; } // leave coin in place
       const gain=Math.min((G.pump&&G.pump.coin===ore)?2:1, G.cargoCap-G.cargoTotal);  // pumping coins mine ×2
       G.cargo[ore]+=gain; G.cargoTotal+=gain; G.minedOre+=gain; SFX.ore();
       addFloater(c*TILE+TILE/2, r*TILE, "+"+(gain>1?gain+" ":"")+oreShort(ore), oreColor(ore));
+      if(infected){
+        spawnMimic(c*TILE+TILE/2,r*TILE+TILE/2,"mimic",{sourceOre:ore});
+        addFloater(c*TILE+TILE/2,r*TILE,"INFECTED COIN!","#ff2e88");SFX.err();
+        if(!G.mimicWarned){
+          G.mimicWarned=true;
+          toast("COIN MIMIC — face it and hold A, D, or S to hash-lock it with the drill","bad");
+          flashHint("Hold the drill toward the Mimic · stunned Mimics cannot bite");
+        }
+      }
     } else SFX.hit();
     setTile(c,r,T.EMPTY); lavaLvl[idx(mod(c,COLS),r)]=0;
+    collapseUnsupportedAt(c,r);
+    if([T.GAS,T.HIVE,T.VAULT,T.RELAY,T.GLITCH].includes(tt)){const lm=landmarks.find(v=>v.c===mod(c,COLS)&&v.r===r);if(lm)lm.claimed=true;}
     activateLavaAround(c,r);                      // breaching dirt lets nearby lava flow in
     puff(c*TILE+TILE/2,r*TILE+TILE/2,tileColor(tt,c,r),ore?9:5);
     G.shake=Math.max(G.shake,ore?3:1.4);
+    if(tt===T.GAS){
+      for(let yy=r-1;yy<=r+1;yy++)for(let xx=c-1;xx<=c+1;xx++){const at=tileAt(xx,yy);if(at!==T.BEDROCK&&at!==T.VAULT&&at!==T.RELAY){setTile(xx,yy,T.EMPTY);activateLavaAround(xx,yy);collapseUnsupportedAt(xx,yy);}}
+      damageRover(8);puff(c*TILE+TILE/2,r*TILE+TILE/2,"#ff9d4d",28);G.shake=Math.max(G.shake,10);SFX.boom();addFloater(c*TILE+TILE/2,r*TILE,"GAS POCKET!","#ff9d4d");
+    }else if(tt===T.HIVE){
+      for(let i=0;i<3;i++)spawnMimic(c*TILE+TILE/2+rand(-20,20),r*TILE+TILE/2+rand(-10,10),"packet");
+      toast("Botnet hive breached — packets released!","bad");SFX.err();
+    }else if(tt===T.VAULT){
+      const reward={iron:randInt(3,6),copper:randInt(2,4),plasma:randInt(1,3),darkmatter:randInt(0,1)};for(const k in reward)G.bank[k]+=reward[k];G.vaults++;
+      addFloater(c*TILE+TILE/2,r*TILE,"WHALE CACHE", "#ffd43b");toast("Whale Vault cracked — protocol chip recovered","good");syncBank();offerProtocol();
+    }else if(tt===T.RELAY){
+      G.relayBoost=Math.min(.4,G.relayBoost+.08);addFloater(c*TILE+TILE/2,r*TILE,"+8% DEFENSE", "#6bff7d");toast("Validator relay linked to surface defenses","good");
+    }else if(tt===T.GLITCH){
+      rover.x=wrapX(rover.x+choice([-1,1])*rand(2,5)*TILE);rover.vx*=.2;G.flash=.25;addFloater(rover.x,rover.y,"FORKED!","#c06cff");SFX.craft();
+    }
+    if(ore&&G.modules.drill_chain){
+      const candidates=[[1,0],[-1,0],[0,1],[0,-1]].filter(([dx,dy])=>[T.DIRT1,T.DIRT2,T.DIRT3,T.DIRT4].includes(tileAt(c+dx,r+dy)));
+      if(candidates.length){const [dx,dy]=choice(candidates),ct=tileAt(c+dx,r+dy);setTile(c+dx,r+dy,T.EMPTY);puff((c+dx)*TILE+TILE/2,(r+dy)*TILE+TILE/2,tileColor(ct,c+dx,r+dy),4);activateLavaAround(c+dx,r+dy);collapseUnsupportedAt(c+dx,r+dy);}
+    }
   }
-  const oreShort=o=>({iron:"DOGE",copper:"SHIB",plasma:"PEPE",darkmatter:"BONK"}[o]);
-  const oreColor=o=>({iron:"#e9b84a",copper:"#ff7a33",plasma:"#5fdf6a",darkmatter:"#c06cff"}[o]);
+  const oreShort=o=>({iron:"DOGE",copper:"SHIB",plasma:"PEPE",darkmatter:"BONK",moon:"MOON"}[o]);
+  const oreColor=o=>({iron:"#e9b84a",copper:"#ff7a33",plasma:"#5fdf6a",darkmatter:"#c06cff",moon:"#83f7ff"}[o]);
+  function isInfectedOre(c,r,tt=tileAt(c,r)){
+    return !!ORE_OF[tt]&&subBiomeAt(c,r)?.id==="meme_graveyard"&&hash(mod(c,COLS)*19,r*23)<.2;
+  }
 
   function damageRover(d){
     rover.hull-=d;
     if(rover.hull<=0){ rover.hull=0; endGame(false,"Your rig got rekt. The bears feast. ngmi."); }
   }
   function damageShip(d){
+    if(G.modules.support_shield&&builds.some(b=>b.type==="repair"&&!(b.offline>0)&&Math.abs(wrapDX(SHIP.cx,b.x))<=STRUCTS.repair.radius*TILE*1.5))d*=.72;
     SHIP.hull-=d;
+    G.shipHit=Math.max(G.shipHit,.24); G.shake=Math.max(G.shake,Math.min(5,1+d*.08));
     if(SHIP.hull<=0){ SHIP.hull=0; endGame(false,"The bears tore your rocket apart. Rugged for good."); }
   }
 
@@ -1036,7 +1478,18 @@
   function updateEnemies(dt){
     for(let i=enemies.length-1;i>=0;i--){
       const e=enemies[i];
-      if(e.burrow){
+      if(e.hit>0) e.hit=Math.max(0,e.hit-dt);
+      if(e.spawn>0){ e.spawn=Math.max(0,e.spawn-dt); e.wob+=dt*10; continue; }
+      if(e.type==="mimic"&&e.chaseT!=null){
+        e.chaseT-=dt;
+        if(e.chaseT<=0){puff(e.x,e.y,"#725f28",10);addFloater(e.x,e.y,"MIMIC SIGNAL LOST","#8b93b8");enemies.splice(i,1);continue;}
+      }
+      if(e.stun>0){
+        e.stun=Math.max(0,e.stun-dt);e.wob+=dt*18;
+      }else if(e.targetRover){
+        const dx=wrapDX(rover.x+rover.w/2,e.x),dy=(rover.y+rover.h/2)-e.y,L=Math.hypot(dx,dy)||1;e.dir=Math.sign(dx)||e.dir;
+        e.x=wrapX(e.x+dx/L*e.spd*dt);e.y+=dy/L*e.spd*dt;e.wob+=dt*7;
+      }else if(e.burrow){
         // chase rover the short way around, phasing through rock
         const dx=wrapDX(rover.x+rover.w/2,e.x), dy=(rover.y+rover.h/2)-e.y, L=Math.hypot(dx,dy)||1;
         e.x=wrapX(e.x+dx/L*e.spd*dt); e.y+=dy/L*e.spd*dt; e.wob+=dt*8;
@@ -1047,6 +1500,10 @@
           if(sd>10){ sg.x=wrapX(sg.x+sdx*(1-10/sd)); sg.y+=sdy*(1-10/sd); }
           px=sg.x; py=sg.y; }
         if(G.phase==="day"){ puff(e.x,e.y,"#3a2030",4); enemies.splice(i,1); continue; }
+      } else if(e.exploit&&builds.some(b=>b.type!=="wall"&&!(b.offline>0))){
+        let target=null,bd=Infinity;for(const b of builds){if(b.type==="wall"||b.offline>0)continue;const d=Math.hypot(wrapDX(b.x,e.x),b.y-e.y);if(d<bd){bd=d;target=b;}}
+        if(target){const dx=wrapDX(target.x,e.x),dy=target.y-e.y,L=Math.hypot(dx,dy)||1;e.dir=Math.sign(dx)||e.dir;e.x=wrapX(e.x+dx/L*e.spd*dt);e.y+=dy/L*e.spd*dt;
+          if(L<25){target.offline=Math.max(target.offline||0,6);e.exploit=false;puff(target.x,target.y,"#ff2e88",12);toast(`${STRUCTS[target.type].name} exploited — offline 6s`,"bad");SFX.err();}}
       } else if(e.flying){
         e.wob+=dt*4;
         const d=wrapDX(SHIP.cx,e.x);
@@ -1058,12 +1515,15 @@
         e.y=GROUND*TILE-e.h;
         e.dir=Math.sign(wrapDX(SHIP.cx,e.x))||e.dir;
         if(Math.abs(wrapDX(e.x,SHIP.cx)) < (SHIP.right-SHIP.left)/2 + 6){
-          e.atkT-=dt; if(e.atkT<=0){ damageShip(e.dmg); e.atkT=0.6; puff(SHIP.cx,SHIP.bottom-20,"#ff2e88",4);}
+          e.atkT-=dt; if(e.atkT<=0){
+            if(e.leech){const keys=Object.keys(G.bank).filter(k=>G.bank[k]>0);if(keys.length){const k=choice(keys);G.bank[k]--;e.stolen=(e.stolen||0)+1;addFloater(SHIP.cx,SHIP.top,"-1 "+oreShort(k),"#ff5c5c");syncBank();}else damageShip(e.dmg);}
+            else damageShip(e.dmg);e.atkT=0.6;puff(SHIP.cx,SHIP.bottom-20,"#ff2e88",4);}
         } else {
           const lead=e.x + e.dir*(e.w/2+3);
-          const st=structAtCol(mod(Math.floor(lead/TILE),COLS));
+          const st=e.phaseWall?null:structAtCol(mod(Math.floor(lead/TILE),COLS));
           if(st){
-            e.atkT-=dt; if(e.atkT<=0){ st.hp-=e.dmg; e.atkT=0.5; puff(st.x,st.y,STRUCTS[st.type].color,4);
+            e.atkT-=dt; if(e.atkT<=0){ st.hp-=e.dmg; st.hit=.16; e.atkT=0.5; puff(st.x,st.y,STRUCTS[st.type].color,4);
+              if(G.protocols.diamond&&st.type==="wall")e.hp-=e.dmg*.35;
               if(st.hp<=0){ removeBuild(st); puff(st.x,st.y,STRUCTS[st.type].color,16); SFX.boom(); refreshBuildList(); } }
           } else {
             e.x=wrapX(e.x+e.dir*e.spd*dt);
@@ -1077,7 +1537,15 @@
           for(let k=0;k<12;k++) scraps.push({x:e.x+rand(-30,30),y:e.y,vy:-rand(60,150),vx:rand(-90,90),t:0,kind:Math.random()<0.4?"copper":"iron"});
           bigMessage("BLACK SWAN SURVIVED","+8 DOGE +5 SHIB +3 PEPE +1 BONK","var(--green)");
           toast("Black Swan crushed — bags secured 💎","good"); syncBank(); refreshBuildList(); refreshShipMenu();
-        } else if(Math.random()<0.7) scraps.push({x:e.x,y:e.y,vy:-rand(40,90),vx:rand(-40,40),t:0,kind:Math.random()<0.25?"copper":"iron"});
+        } else if(e.type==="mimic"){
+          scraps.push({x:e.x,y:e.y,vy:-85,vx:rand(-35,35),t:0,kind:e.rewardKind||"copper",amount:e.rewardAmount||2,premium:true});
+          if(G.protocols.airdrop)scraps.push({x:e.x+rand(-8,8),y:e.y,vy:-65,vx:rand(-30,30),t:0,kind:"iron",amount:1});
+          addFloater(e.x,e.y-10,"MIMIC BOUNTY","#ffd43b");toast(`Coin Mimic cracked — ${e.rewardAmount||2} SHIB bounty dropped`,"good");
+        } else {
+          const dropChance=G.protocols.airdrop ? .92 : .7;if(Math.random()<dropChance) scraps.push({x:e.x,y:e.y,vy:-rand(40,90),vx:rand(-40,40),t:0,kind:e.whale?"plasma":Math.random()<0.25?"copper":"iron"});
+          if(e.stolen)for(let s=0;s<e.stolen;s++)scraps.push({x:e.x+rand(-12,12),y:e.y,vy:-rand(35,80),vx:rand(-35,35),t:0,kind:"iron"});
+          if((e.fork||G.nightMod?.id==="fork_storm"&&Math.random()<.28)&&e.type!=="packet")for(let s=0;s<2;s++)pushSurfaceEnemy("packet",wrapX(e.x+rand(-12,12)));
+        }
         enemies.splice(i,1);
       }
     }
@@ -1086,12 +1554,12 @@
       // surface horde
       if(G.nightSpawned<G.nightToSpawn){
         G.nightSpawnT-=dt;
-        if(G.nightSpawnT<=0){ spawnSurfaceEnemy(); G.nightSpawned++; G.nightSpawnT=Math.max(0.35, 1.5-G.nightCount*0.08); }
+        if(G.nightSpawnT<=0){ spawnSurfaceEnemy(); G.nightSpawned++; const dense=G.nightMod?.id==="short_squeeze" ? .7 : 1;G.nightSpawnT=Math.max(0.28,(1.5-G.nightCount*0.08)*dense); }
       }
       // underground burrowers if the player insists on mining at night
       if(rover.y>(GROUND+2)*TILE){
         G.undergroundSpawnT-=dt;
-        if(G.undergroundSpawnT<=0){ spawnBurrower(); G.undergroundSpawnT=rand(2.2,3.6); }
+        if(G.undergroundSpawnT<=0){ if(biomeAt(Math.floor(rover.y/TILE))===3&&Math.random()<.45)spawnMimic(rover.x+rand(-4,4)*TILE,rover.y+rand(-2,2)*TILE,"zero");else spawnBurrower();G.undergroundSpawnT=rand(2.2,3.6); }
       }
       // Black Swan boss (scheduled at bear-market start on every 3rd night)
       if(G.bossT>0){ G.bossT-=dt; if(G.bossT<=0){ G.bossT=-1; spawnBoss(G.nightCount); } }
@@ -1102,6 +1570,7 @@
   function updateStructures(dt){
     for(const b of builds){
       const s=STRUCTS[b.type];
+      if(b.hit>0) b.hit=Math.max(0,b.hit-dt);
       if(b.offline>0){ b.offline-=dt;   // flash-crashed: sparks, no function
         if(Math.random()<0.12) addParticle(b.x+rand(-10,10),b.y+rand(-12,4),rand(-30,30),rand(-50,-10),0.3,"#ff5c5c",2);
         continue; }
@@ -1109,12 +1578,13 @@
         b.cd-=dt; if(b.fire>0) b.fire-=dt;
         if(b.cd<=0){
           // nearest enemy in range (short way around the world)
-          let best=null,bd=s.range*TILE, bdx=0,bdy=0;
-          for(const e of enemies){ if(e.burrow) continue; const dx=wrapDX(e.x,b.x), dy=e.y-b.y, d=Math.hypot(dx,dy); if(d<bd){bd=d;best=e;bdx=dx;bdy=dy;} }
+          let best=null,bd=s.range*(1+G.relayBoost)*TILE, bdx=0,bdy=0;
+          for(const e of enemies){ if(e.burrow||(e.targetRover&&e.y>(GROUND+1.25)*TILE)) continue; const dx=wrapDX(e.x,b.x), dy=e.y-b.y, d=Math.hypot(dx,dy);if(e.stealth&&!G.protocols.oracle&&Math.hypot(wrapDX(e.x,rover.x),e.y-rover.y)>TILE*3)continue;if(d<bd){bd=d;best=e;bdx=dx;bdy=dy;} }
           if(best){
             const L=Math.hypot(bdx,bdy)||1;
-            projectiles.push({x:b.x,y:b.y-6,vx:bdx/L*s.pspd,vy:bdy/L*s.pspd,dmg:s.dmg,life:1.2});
-            b.cd=s.cd; b.fire=0.08; b.aim=Math.atan2(bdy,bdx); SFX.shoot();
+            const rapid=G.modules.turret_rapid,rail=G.modules.turret_rail,dmg=s.dmg*(1+G.relayBoost)*(rapid?.78:rail?2.35:1),cycle=s.cd*(rapid?.65:rail?1.65:1)*(G.nightMod?.id==="gas_spike"?1.3:1);
+            projectiles.push({x:b.x,y:b.y-6,vx:bdx/L*s.pspd,vy:bdy/L*s.pspd,dmg,life:rail?1.55:1.2,pierce:rail?2:1});
+            b.cd=cycle; b.fire=0.08; b.aim=Math.atan2(bdy,bdx); SFX.shoot();
             addParticle(b.x+Math.cos(b.aim)*16,b.y-6+Math.sin(b.aim)*16,Math.cos(b.aim)*120,Math.sin(b.aim)*120,0.12,"#ffd43b",3);
           }
         }
@@ -1122,18 +1592,18 @@
         b.cd-=dt; if(b.fire>0) b.fire-=dt;
         if(b.cd<=0){
           // AoE pulse — zap every (non-burrowing) enemy in range at once
-          const R=s.range*TILE, arcs=[];
+          const R=s.range*(1+G.relayBoost+(G.modules.support_emp?.35:0))*TILE, arcs=[],empDmg=s.dmg*(1+G.relayBoost)*(G.modules.support_emp?1.45:1);
           for(const e of enemies){ if(e.burrow) continue; const dx=wrapDX(e.x,b.x), dy=e.y-b.y;
-            if(Math.hypot(dx,dy)<=R){ e.hp-=s.dmg; arcs.push({x:b.x+dx,y:e.y}); puff(b.x+dx,e.y,"#b06cff",3); } }
-          if(arcs.length){ b.cd=s.cd; b.fire=0.14; b.arcs=arcs; SFX.shoot(); G.shake=Math.max(G.shake,2); }
+            if(Math.hypot(dx,dy)<=R){ e.hp-=empDmg; e.hit=Math.max(e.hit||0,.16); arcs.push({x:b.x+dx,y:e.y}); puff(b.x+dx,e.y,"#b06cff",3); } }
+          if(arcs.length){ b.cd=s.cd*(G.nightMod?.id==="gas_spike"?1.3:1); b.fire=0.14; b.arcs=arcs; SFX.shoot(); G.shake=Math.max(G.shake,2); }
           else b.cd=0.2;   // recheck sooner when nothing's in range
         }
       } else if(b.type==="repair"){
         b.cd-=dt;
         if(b.cd<=0){ b.cd=0.5;
           for(const o of builds){ if(o===b||o.hp>=o.maxHp) continue;
-            if(Math.abs(wrapDX(o.x,b.x))<=s.radius*TILE && Math.abs(o.y-b.y)<=s.radius*TILE){ o.hp=Math.min(o.maxHp,o.hp+s.rate*0.5); if(Math.random()<0.4) addParticle(o.x,o.y,0,-40,0.4,"#6bff7d",2);} }
-          if(Math.abs(wrapDX(SHIP.cx,b.x))<=s.radius*TILE*1.4 && SHIP.hull<SHIP.maxHull){ SHIP.hull=Math.min(SHIP.maxHull,SHIP.hull+s.rate*0.5*0.8); addParticle(b.x,b.y-10,rand(-10,10),-40,0.5,"#6bff7d",2);} }
+            if(Math.abs(wrapDX(o.x,b.x))<=s.radius*TILE && Math.abs(o.y-b.y)<=s.radius*TILE){ o.hp=Math.min(o.maxHp,o.hp+s.rate*0.5*(1+G.relayBoost)); if(Math.random()<0.4) addParticle(o.x,o.y,0,-40,0.4,"#6bff7d",2);} }
+          if(Math.abs(wrapDX(SHIP.cx,b.x))<=s.radius*TILE*1.4 && SHIP.hull<SHIP.maxHull){ SHIP.hull=Math.min(SHIP.maxHull,SHIP.hull+s.rate*0.5*0.8*(1+G.relayBoost)); addParticle(b.x,b.y-10,rand(-10,10),-40,0.5,"#6bff7d",2);} }
       }
     }
   }
@@ -1142,20 +1612,22 @@
       const p=projectiles[i]; p.x=wrapX(p.x+p.vx*dt); p.y+=p.vy*dt; p.life-=dt;
       let hit=false;
       for(const e of enemies){ if(e.burrow) continue;
-        if(Math.abs(wrapDX(e.x,p.x))<e.w/2+4 && Math.abs(e.y-p.y)<e.h/2+4){ e.hp-=p.dmg; SFX.hit(); puff(p.x,p.y,"#ffd43b",4); hit=true; break; } }
+        if(Math.abs(wrapDX(e.x,p.x))<e.w/2+4 && Math.abs(e.y-p.y)<e.h/2+4&&!p.hitIds?.includes(e)){ e.hp-=p.dmg; e.hit=Math.max(e.hit||0,.13);p.hitIds=(p.hitIds||[]);p.hitIds.push(e);p.pierce=(p.pierce||1)-1;SFX.hit(); puff(p.x,p.y,"#ffd43b",4); hit=p.pierce<=0;if(hit)break; } }
       if(hit||p.life<=0||p.y<0||p.y>WORLD_H) projectiles.splice(i,1);
     }
   }
   function updateScrap(dt){
     for(let i=scraps.length-1;i>=0;i--){
       const s=scraps[i]; s.t+=dt; s.vy+=CFG.GRAV*0.5*dt; s.x=wrapX(s.x+s.vx*dt); s.y+=s.vy*dt;
-      const gy=GROUND*TILE-8; if(s.y>gy){ s.y=gy; s.vy=0; s.vx*=0.8; }
+      const pad=s.premium?8:6,sc=mod(Math.floor(s.x/TILE),COLS),floorR=Math.floor((s.y+pad)/TILE);
+      if(s.vy>0&&solidAt(sc,floorR)){s.y=floorR*TILE-pad;s.vy=0;s.vx*=0.8;}
       // attract to rover when close, collect on touch
       const dx=wrapDX(rover.x+rover.w/2,s.x), dy=(rover.y+rover.h/2)-s.y, d=Math.hypot(dx,dy)||1;
-      if(d<TILE*2.4){ s.x=wrapX(s.x+dx/d*180*dt); s.y+=dy/d*180*dt; }
-      if(d<22){ const amt=s.kind==="copper"?1:randInt(1,2); G.bank[s.kind]+=amt; SFX.ore();
+      const magnet=s.premium?TILE*3.4:TILE*2.4;
+      if(d<magnet){ s.x=wrapX(s.x+dx/d*180*dt); s.y+=dy/d*180*dt; }
+      if(d<22){ const amt=s.amount??(s.kind==="copper"?1:randInt(1,2)); G.bank[s.kind]+=amt; SFX.ore();
         addFloater(s.x,s.y,"+"+amt+" "+oreShort(s.kind),oreColor(s.kind)); scraps.splice(i,1); syncBank(); refreshBuildList(); refreshShipMenu(); continue; }
-      if(s.t>18) scraps.splice(i,1);
+      if(s.t>(s.premium?28:18)) scraps.splice(i,1);
     }
   }
 
@@ -1195,8 +1667,9 @@
 
   // ---------------- Camera ----------------
   function updateCamera(dt){
-    const tx=rover.x+rover.w/2-VIEW_W/2;
-    const ty=clamp(rover.y+rover.h/2-VIEW_H/2, 0, Math.max(0,WORLD_H-VIEW_H));
+    const leadX=clamp(rover.vx*.28,-VIEW_W*.11,VIEW_W*.11),leadY=clamp(rover.vy*.12,-VIEW_H*.07,VIEW_H*.1);
+    const tx=rover.x+rover.w/2+leadX-VIEW_W/2;
+    const ty=clamp(rover.y+rover.h/2+leadY-VIEW_H/2, 0, Math.max(0,WORLD_H-VIEW_H));
     const k=1-Math.pow(0.0006,dt);
     cam.x=wrapX(cam.x + wrapDX(tx,cam.x)*k);   // follow the short way across the seam
     cam.y=lerp(cam.y,ty,k);
@@ -1212,11 +1685,19 @@
       case T.DIRT1: b=[26,42,66]; break;    // Cache Layer — blue data block
       case T.DIRT2: b=[42,30,66]; break;    // The Mempool — violet data block
       case T.DIRT3: b=[58,24,36]; break;    // Mainnet Core — red data block
+      case T.DIRT4: b=[25,28,62]; break;    // Quantum Ledger — cold indigo data block
       case T.BEDROCK: b=[92,100,120]; break;  // immutable / encrypted block — bright steel so it reads "un-drillable"
       case T.IRON: b=[60,52,32]; break;     // coin-bearing blocks (coin drawn on top)
       case T.COPPER: b=[64,42,26]; break;
       case T.PLASMA: b=[28,54,38]; break;
       case T.DARK: b=[48,34,64]; break;
+      case T.MOON: b=[24,54,68]; break;
+      case T.GAS: b=[76,45,20]; break;
+      case T.HIVE: b=[20,62,43]; break;
+      case T.VAULT: b=[66,53,20]; break;
+      case T.RELAY: b=[20,60,52]; break;
+      case T.GLITCH: b=[52,22,72]; break;
+      case T.PLATFORM: b=[25,78,92]; break;
       case T.LAVA: b=[170,46,30]; break;    // data corruption
       default: b=[16,18,28];
     }
@@ -1234,6 +1715,7 @@
     ctx.translate(-Math.round(cam.x)+shx,-Math.round(cam.y)+shy);
 
     drawWorld();
+    if(G && rover.drillTarget) drawDrillFracture();
     drawShip();
     drawStructures();
     drawScrap();
@@ -1245,83 +1727,138 @@
 
     ctx.restore();
 
-    if(G) drawLighting();
+    if(G)drawUnifiedLighting();
+    if(G && state!=="boot") drawNavigationBeacon();
+    drawScreenFX();
     if(G && G.flash>0){ ctx.fillStyle=`rgba(255,255,255,${G.flash})`; ctx.fillRect(0,0,VIEW_W,VIEW_H); G.flash-=0.04; }
     if(G){ if(mmTick<=0){ drawMinimap(); mmTick=5; } mmTick--; }   // throttled radar redraw
+  }
+
+  function drawScreenFX(){
+    // Subtle CRT/data-terminal finish: scanlines, cool edge tint and a soft vignette.
+    // Kept deliberately light so enemies and ore remain readable underground.
+    ctx.save();
+    ctx.globalCompositeOperation="screen";
+    ctx.fillStyle=G&&G.phase==="night"?"rgba(255,42,92,.025)":"rgba(46,224,255,.022)";
+    for(let y=1;y<VIEW_H;y+=4) ctx.fillRect(0,y,VIEW_W,1);
+    ctx.globalCompositeOperation="source-over";
+    const vg=ctx.createRadialGradient(VIEW_W*.5,VIEW_H*.46,VIEW_H*.12,VIEW_W*.5,VIEW_H*.5,Math.max(VIEW_W,VIEW_H)*.72);
+    vg.addColorStop(0,"rgba(0,0,0,0)");
+    vg.addColorStop(.72,"rgba(1,4,12,.04)");
+    vg.addColorStop(1,"rgba(0,2,10,.38)");
+    ctx.fillStyle=vg; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+    ctx.restore();
   }
 
   let mmTick=0;
   function drawMinimap(){
     if(!mmCtx||!G) return;
-    const W=mmCanvas.width, H=mmCanvas.height, MR=18, cell=W/(MR*2+1);
+    const W=mmCanvas.width, H=mmCanvas.height, MR=G.protocols.oracle?24:18, cell=W/(MR*2+1);
     const rcx=rover.x+rover.w/2, rcy=rover.y+rover.h/2, pc=Math.floor(rcx/TILE), pr=Math.floor(rcy/TILE);
-    mmCtx.fillStyle="#04060e"; mmCtx.fillRect(0,0,W,H);
+    const mb=mmCtx.createRadialGradient(W/2,H/2,4,W/2,H/2,W*.7);mb.addColorStop(0,"#071724");mb.addColorStop(1,"#02040a");mmCtx.fillStyle=mb;mmCtx.fillRect(0,0,W,H);
     for(let dy=-MR;dy<=MR;dy++){
       const r=pr+dy; if(r<0||r>=ROWS) continue;
       for(let dx=-MR;dx<=MR;dx++){
-        const tt=tiles[idx(mod(pc+dx,COLS),r)]; if(tt===T.EMPTY) continue;
+        const c=mod(pc+dx,COLS),i=idx(c,r);if(!explored[i])continue;
+        const tt=tiles[i],detail=lightNow[i]>.2;
         let col;
-        if(tt===T.LAVA) col="#ff5a2a";
-        else if(tt===T.BEDROCK) col="#9aa3b8";
+        if(!detail){
+          if(tt===T.EMPTY)col="#07131d";
+          else if(tt===T.BEDROCK)col="#596170";
+          else if(tt===T.PLATFORM)col="#174b58";
+          else col=["#15283a","#281d3b","#351722","#171c3a"][biomeAt(r)]||"#142133";
+        }else if(tt===T.EMPTY) col="#0b1b27";
+        else if(tt===T.LAVA) col="#ff5a2a";
+        else if(tt===T.BEDROCK) col="#c7cfdf";
+        else if(isInfectedOre(c,r,tt)) col="#ff2e88";
         else if(ORE_OF[tt]) col=oreColor(ORE_OF[tt]);
-        else col = r<=BIOMES[0].to?"#5a4636":(r<=BIOMES[1].to?"#37452a":"#4a2622");
+        else if(tt===T.GAS) col="#ff9d4d";
+        else if(tt===T.HIVE) col="#54ff9a";
+        else if(tt===T.VAULT) col="#ffd43b";
+        else if(tt===T.RELAY) col="#6bff7d";
+        else if(tt===T.GLITCH) col="#ff55d5";
+        else if(tt===T.PLATFORM) col="#2ee0ff";
+        else col = ["#294a67","#473567","#652c3d","#283660"][biomeAt(r)]||"#26354d";
         mmCtx.fillStyle=col; mmCtx.fillRect((dx+MR)*cell,(dy+MR)*cell,Math.ceil(cell),Math.ceil(cell));
       }
     }
     const cx=W/2, cy=H/2;
+    if(G.protocols.oracle){
+      const pulse=.45+.35*Math.sin(performance.now()/180);mmCtx.strokeStyle=`rgba(131,247,255,${pulse})`;mmCtx.lineWidth=1;
+      for(const l of landmarks){if(l.claimed)continue;const lx=wrapDX(l.c*TILE+TILE/2,rcx)/TILE,ly=(l.r*TILE+TILE/2-rcy)/TILE;if(Math.abs(lx)<=MR&&Math.abs(ly)<=MR){const x=cx+lx*cell,y=cy+ly*cell;mmCtx.strokeRect(x-3,y-3,6,6);}}
+    }
     mmCtx.fillStyle="#ff5c5c";                                    // enemies
     for(const e of enemies){ const ex=wrapDX(e.x,rcx)/TILE, ey=(e.y-rcy)/TILE;
-      if(Math.abs(ex)<=MR&&Math.abs(ey)<=MR) mmCtx.fillRect(cx+ex*cell-1.5,cy+ey*cell-1.5,3,3); }
+      const ec=mod(Math.floor(e.x/TILE),COLS),er=clamp(Math.floor(e.y/TILE),0,ROWS-1),visible=G.protocols.oracle||(explored[idx(ec,er)]&&lightNow[idx(ec,er)]>.18);
+      if(visible&&Math.abs(ex)<=MR&&Math.abs(ey)<=MR) mmCtx.fillRect(cx+ex*cell-1.5,cy+ey*cell-1.5,3,3); }
     const sdx=wrapDX(SHIP.cx,rcx)/TILE, sdy=(SHIP.bottom-rcy)/TILE;   // ship marker / off-radar arrow
     if(Math.abs(sdx)<=MR&&Math.abs(sdy)<=MR){ mmCtx.fillStyle="#2ee0ff"; mmCtx.fillRect(cx+sdx*cell-3,cy+sdy*cell-3,6,6); }
     else { const ang=Math.atan2(sdy,sdx), ax=cx+Math.cos(ang)*(W/2-7), ay=cy+Math.sin(ang)*(H/2-7);
       mmCtx.save(); mmCtx.translate(ax,ay); mmCtx.rotate(ang); mmCtx.fillStyle="#2ee0ff";
       mmCtx.beginPath(); mmCtx.moveTo(6,0); mmCtx.lineTo(-4,-4); mmCtx.lineTo(-4,4); mmCtx.closePath(); mmCtx.fill(); mmCtx.restore(); }
     mmCtx.fillStyle="#ffd43b"; mmCtx.fillRect(cx-2.5,cy-2.5,5,5);  // rover at center
+    mmCtx.strokeStyle="rgba(46,224,255,.18)";mmCtx.lineWidth=1;
+    mmCtx.beginPath();mmCtx.arc(cx,cy,W*.22,0,7);mmCtx.arc(cx,cy,W*.42,0,7);mmCtx.stroke();
     mmCtx.strokeStyle="rgba(46,224,255,0.14)"; mmCtx.lineWidth=1;
     mmCtx.beginPath(); mmCtx.moveTo(cx,0); mmCtx.lineTo(cx,H); mmCtx.moveTo(0,cy); mmCtx.lineTo(W,cy); mmCtx.stroke();
+    mmCtx.strokeStyle="rgba(46,224,255,.48)";mmCtx.strokeRect(.5,.5,W-1,H-1);
+    mmCtx.fillStyle="rgba(5,9,18,.82)";mmCtx.fillRect(5,5,54,12);mmCtx.fillStyle="#79f5ff";mmCtx.font="bold 8px ui-monospace,monospace";mmCtx.fillText((Math.max(0,pr-GROUND)*2)+`m // ${G.protocols.oracle?"RAD+":"RAD"}`,8,14);
   }
 
   function drawSky(){
     const night = G ? (G.phase==="night") : false;
-    const surfaceScreenY = GROUND*TILE - cam.y;             // screen y of the ground line
+    const now=performance.now()/1000;
+    const surfaceScreenY = GROUND*TILE - cam.y;
     const skyH = clamp(surfaceScreenY,0,VIEW_H);
-    // digital sky — bull = cyber-teal, bear = red
     if(skyH>0){
       const g=ctx.createLinearGradient(0,0,0,Math.max(2,surfaceScreenY));
-      if(night){ g.addColorStop(0,"#0a0307"); g.addColorStop(0.55,"#1a0810"); g.addColorStop(1,"#2a0c16"); }
-      else { g.addColorStop(0,"#04070f"); g.addColorStop(0.55,"#06161a"); g.addColorStop(1,"#0a2a26"); }
+      if(night){ g.addColorStop(0,"#050207"); g.addColorStop(.5,"#150612"); g.addColorStop(.82,"#2b0a1f"); g.addColorStop(1,"#50142e"); }
+      else { g.addColorStop(0,"#020610"); g.addColorStop(.5,"#04151d"); g.addColorStop(.82,"#073330"); g.addColorStop(1,"#0b5a48"); }
       ctx.fillStyle=g; ctx.fillRect(0,0,VIEW_W,skyH);
+      const hz=ctx.createLinearGradient(0,Math.max(0,skyH-90),0,skyH);
+      hz.addColorStop(0,"rgba(0,0,0,0)"); hz.addColorStop(1,night?"rgba(255,46,100,.16)":"rgba(46,255,205,.18)");
+      ctx.fillStyle=hz; ctx.fillRect(0,Math.max(0,skyH-90),VIEW_W,90);
     }
     // underground digital void — biome-tinted, with a faint cyber grid showing through tunnels
     if(surfaceScreenY<VIEW_H){
       const top=Math.max(0,surfaceScreenY);
       const camBiome=biomeAt(Math.floor((cam.y+VIEW_H*0.5)/TILE));
-      const caveTop = camBiome===2?[30,8,16] : camBiome===1?[22,12,34] : [10,20,34];
+      const caveTop = [[7,22,38],[24,10,42],[36,7,20],[7,15,43]][camBiome]||[7,22,38];
       const cg=ctx.createLinearGradient(0,top,0,VIEW_H);
       cg.addColorStop(0,`rgb(${caveTop[0]},${caveTop[1]},${caveTop[2]})`); cg.addColorStop(1,"#04050a");
       ctx.fillStyle=cg; ctx.fillRect(0,top,VIEW_W,VIEW_H-top);
-      ctx.strokeStyle="rgba(80,180,255,0.05)"; ctx.lineWidth=1; ctx.beginPath();
+      ctx.strokeStyle=["rgba(70,210,255,.055)","rgba(184,100,255,.05)","rgba(255,70,100,.055)","rgba(90,180,255,.065)"][camBiome]||"rgba(70,210,255,.055)"; ctx.lineWidth=1; ctx.beginPath();
       for(let gx=-(cam.x%TILE); gx<VIEW_W; gx+=TILE){ ctx.moveTo(gx,top); ctx.lineTo(gx,VIEW_H); }
       for(let gy=-(cam.y%TILE); gy<VIEW_H; gy+=TILE){ if(gy>=top){ ctx.moveTo(0,gy); ctx.lineTo(VIEW_W,gy); } }
       ctx.stroke();
     }
-    // sky band: cyber-grid horizon, data motes, and THE MOON (the goal)
     if(skyH>4){
       ctx.save(); ctx.beginPath(); ctx.rect(0,0,VIEW_W,skyH); ctx.clip();
-      ctx.strokeStyle=night?"rgba(255,90,120,0.06)":"rgba(80,220,200,0.07)"; ctx.lineWidth=1; ctx.beginPath();
-      for(let gx=-((cam.x*0.5)%TILE); gx<VIEW_W; gx+=TILE){ ctx.moveTo(gx,0); ctx.lineTo(gx,skyH); } ctx.stroke();
-      ctx.fillStyle=night?"#ff9aa6":"#9affd0";
-      for(let i=0;i<70;i++){ const sx=(i*97.3)%VIEW_W, sy=(i*53.7)%Math.max(40,skyH); ctx.globalAlpha=hash(i,3)*0.5+0.15; ctx.fillRect(sx,sy,1.6,1.6); }
+      ctx.strokeStyle=night?"rgba(255,90,130,.07)":"rgba(80,240,220,.08)"; ctx.lineWidth=1; ctx.beginPath();
+      for(let gx=-((cam.x*.35)%80);gx<VIEW_W;gx+=80){ctx.moveTo(gx,0);ctx.lineTo(gx,skyH);} ctx.stroke();
+      for(let i=0;i<58;i++){
+        const sx=mod(i*173-cam.x*(.01+(i%4)*.006),VIEW_W), sy=mod(i*67+now*(5+i%3),Math.max(36,skyH));
+        ctx.globalAlpha=.18+hash(i,19)*.48; ctx.fillStyle=i%7===0?(night?"#ff5c8a":"#ffd43b"):(night?"#ff9fb6":"#a5fff0");
+        ctx.fillRect(sx,sy,i%5===0?2:1,i%5===0?5:2);
+      }
       ctx.globalAlpha=1;
-      // the moon
-      const mx=VIEW_W*0.8-cam.x*0.03, my=Math.min(surfaceScreenY*0.42, VIEW_H*0.28);
-      const mg=ctx.createRadialGradient(mx-10,my-10,6,mx,my,46);
-      mg.addColorStop(0,"#fdf6e3"); mg.addColorStop(0.7,"#e9dcc2"); mg.addColorStop(1,"#b9a98a");
-      ctx.save(); ctx.shadowColor="rgba(240,230,200,0.6)"; ctx.shadowBlur=40;
-      ctx.fillStyle=mg; ctx.beginPath(); ctx.arc(mx,my,44,0,7); ctx.fill(); ctx.restore();
-      ctx.fillStyle="rgba(150,135,108,0.5)";
-      ctx.beginPath(); ctx.arc(mx-14,my-8,7,0,7); ctx.arc(mx+12,my+10,9,0,7); ctx.arc(mx+7,my-17,4,0,7); ctx.fill();
+      for(let i=0;i<Math.ceil(VIEW_W/34)+2;i++){
+        const x=i*34-mod(cam.x*.12,34),v=hash(i+Math.floor(cam.x/280),77),up=v>.43,bh=8+v*38,by=skyH-bh-5;
+        ctx.globalAlpha=.14;ctx.strokeStyle=up?"#5fffa2":"#ff4d7e";ctx.fillStyle=ctx.strokeStyle;
+        ctx.fillRect(x+10,by+7,8,Math.max(3,bh-14));ctx.beginPath();ctx.moveTo(x+14,by);ctx.lineTo(x+14,skyH-2);ctx.stroke();
+      }
+      ctx.globalAlpha=1;
+      const mx=VIEW_W*.79-cam.x*.025,my=Math.min(surfaceScreenY*.38,VIEW_H*.25),mr=48;
+      ctx.save();ctx.shadowColor="rgba(255,238,190,.68)";ctx.shadowBlur=45;
+      const mg=ctx.createRadialGradient(mx-14,my-16,5,mx,my,mr);
+      mg.addColorStop(0,"#fffbed");mg.addColorStop(.58,"#eadfbf");mg.addColorStop(1,"#8f8068");
+      ctx.fillStyle=mg;ctx.beginPath();ctx.arc(mx,my,mr,0,7);ctx.fill();ctx.restore();
+      ctx.fillStyle="rgba(92,78,63,.28)";ctx.beginPath();ctx.arc(mx-16,my-10,8,0,7);ctx.arc(mx+13,my+12,10,0,7);ctx.arc(mx+8,my-19,5,0,7);ctx.arc(mx-19,my+19,4,0,7);ctx.fill();
+      ctx.strokeStyle=night?"rgba(255,92,120,.35)":"rgba(46,224,255,.34)";ctx.lineWidth=1;
+      ctx.beginPath();ctx.arc(mx,my,mr+9,0,7);ctx.stroke();
+      const br=mr+14;ctx.beginPath();
+      ctx.moveTo(mx-br,my-8);ctx.lineTo(mx-br,my-18);ctx.lineTo(mx-br+10,my-18);ctx.moveTo(mx+br,my-8);ctx.lineTo(mx+br,my-18);ctx.lineTo(mx+br-10,my-18);
+      ctx.moveTo(mx-br,my+8);ctx.lineTo(mx-br,my+18);ctx.lineTo(mx-br+10,my+18);ctx.moveTo(mx+br,my+8);ctx.lineTo(mx+br,my+18);ctx.lineTo(mx+br-10,my+18);ctx.stroke();
       ctx.restore();
     }
   }
@@ -1333,30 +1870,81 @@
     const t=performance.now()/1000;
     for(let r=r0;r<=r1;r++){
       for(let wc=c0;wc<=c1;wc++){
-        const c=mod(wc,COLS), tt=tiles[idx(c,r)];
+        const c=mod(wc,COLS), i=idx(c,r), tt=tiles[i];
         if(tt===T.EMPTY) continue;
-        drawTile(tt,c,r,wc*TILE,r*TILE,t);
+        const shown=G&&explored[i]&&lightNow[i]<.18?memoryTileType(tt,r):tt;
+        drawTile(shown,c,r,wc*TILE,r*TILE,t);
       }
     }
+    // Subtle exchange-layer dividers make deep progression legible in open tunnels.
+    ctx.save();ctx.setLineDash([8,10]);ctx.lineWidth=1;
+    for(let i=1;i<BIOMES.length;i++){
+      const y=BIOMES[i].from*TILE;
+      if(y<cam.y-24||y>cam.y+VIEW_H+24) continue;
+      const col=BIOMES[i].color, label=`L${i+1} // ${BIOMES[i].name.toUpperCase()}`;
+      ctx.globalAlpha=.4;ctx.strokeStyle=col;ctx.beginPath();ctx.moveTo(cam.x,y);ctx.lineTo(cam.x+VIEW_W,y);ctx.stroke();ctx.globalAlpha=1;
+      ctx.setLineDash([]);ctx.fillStyle="rgba(3,6,14,.8)";ctx.fillRect(cam.x+14,y+7,196,18);ctx.strokeStyle=col;ctx.globalAlpha=.65;ctx.strokeRect(cam.x+14.5,y+7.5,195,17);ctx.globalAlpha=1;
+      ctx.fillStyle=col;ctx.font="bold 9px ui-monospace,monospace";ctx.fillText(label,cam.x+23,y+19);ctx.setLineDash([8,10]);
+    }
+    ctx.restore();
+  }
+  function memoryTileType(tt,r){
+    if(tt===T.EMPTY||tt===T.BEDROCK||tt===T.PLATFORM)return tt;
+    return [T.DIRT1,T.DIRT2,T.DIRT3,T.DIRT4][Math.max(0,biomeAt(r))]||T.DIRT4;
   }
   const isEmpty=v=>v===T.EMPTY;
   function drawTile(tt,c,r,x,y,t){
+    if(tt===T.PLATFORM){
+      const pulse=.55+.45*Math.sin(t*4+c*.8);ctx.save();
+      ctx.fillStyle="rgba(5,17,28,.42)";ctx.fillRect(x+3,y+7,TILE-6,TILE-10);
+      ctx.fillStyle="#162b3d";ctx.strokeStyle="#2ee0ff";ctx.lineWidth=1.5;ctx.shadowColor="#2ee0ff";ctx.shadowBlur=7+pulse*4;
+      ctx.fillRect(x+1,y+1,TILE-2,8);ctx.strokeRect(x+1.5,y+1.5,TILE-3,7);
+      ctx.shadowBlur=0;ctx.fillStyle="#526c80";ctx.fillRect(x+4,y+31,TILE-8,5);ctx.fillRect(x+5,y+8,4,25);ctx.fillRect(x+TILE-9,y+8,4,25);
+      ctx.strokeStyle="rgba(131,247,255,.58)";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+8,y+10);ctx.lineTo(x+TILE-8,y+31);ctx.moveTo(x+TILE-8,y+10);ctx.lineTo(x+8,y+31);ctx.stroke();
+      ctx.fillStyle="#d7fbff";for(const px of [6,TILE-7]){ctx.beginPath();ctx.arc(x+px,y+5,1.6,0,7);ctx.fill();}
+      ctx.fillStyle=pulse>.55?"#6bff7d":"#285c47";ctx.fillRect(x+TILE/2-3,y+4,6,2);ctx.restore();return;
+    }
     if(tt===T.LAVA){
       const fl=0.5+0.5*Math.sin(t*3+c*0.7+r*0.5);
-      ctx.fillStyle=`rgb(${165+fl*75|0},${46+fl*48|0},18)`; ctx.fillRect(x,y,TILE,TILE);
-      ctx.fillStyle="rgba(255,214,96,0.55)"; ctx.fillRect(x,y+TILE*0.12*fl+2,TILE,3);
+      const lg=ctx.createLinearGradient(x,y,x,y+TILE);
+      lg.addColorStop(0,`rgb(${225+fl*30|0},${66+fl*45|0},45)`);lg.addColorStop(.5,"#c21f3b");lg.addColorStop(1,"#4a061c");
+      ctx.fillStyle=lg;ctx.fillRect(x,y,TILE,TILE);
+      ctx.fillStyle="rgba(255,225,125,.72)";ctx.beginPath();ctx.moveTo(x,y+5+fl*3);
+      for(let q=0;q<=TILE;q+=8)ctx.lineTo(x+q,y+5+Math.sin(t*4+q*.3+c)*3);ctx.lineTo(x+TILE,y+10);ctx.lineTo(x,y+10);ctx.fill();
+      ctx.fillStyle="rgba(255,55,100,.22)";for(let q=0;q<3;q++)ctx.fillRect(x+5+q*13,y+17+mod(c*7+r*11+q*9,17),5,2);
       if(isEmpty(tileAt(c,r-1)) && Math.random()<0.05) addParticle(x+rand(2,TILE-2),y+3,rand(-10,10),rand(-46,-14),0.7,"#ffb24d",2);
       return;
     }
     const b=tileColorRGB(tt,c,r);
-    ctx.fillStyle=`rgb(${b[0]},${b[1]},${b[2]})`; ctx.fillRect(x,y,TILE,TILE);
-    ctx.fillStyle="rgba(0,0,0,0.20)"; ctx.fillRect(x,y+TILE*0.56,TILE,TILE*0.44);   // cheap depth shade
-    // deterministic speckle texture
+    const tg=ctx.createLinearGradient(x,y,x,y+TILE);
+    tg.addColorStop(0,`rgb(${Math.min(255,b[0]+9)},${Math.min(255,b[1]+11)},${Math.min(255,b[2]+15)})`);
+    tg.addColorStop(.58,`rgb(${b[0]},${b[1]},${b[2]})`);tg.addColorStop(1,`rgb(${b[0]*.62|0},${b[1]*.62|0},${b[2]*.68|0})`);
+    ctx.fillStyle=tg;ctx.fillRect(x,y,TILE,TILE);
     const s1=hash(c*2+7,r*2+3), s2=hash(c*5+1,r*3+9);
-    ctx.fillStyle="rgba(0,0,0,0.16)"; ctx.fillRect(x+2+s1*(TILE-8), y+4+s2*(TILE-10), 4,4);
-    ctx.fillStyle="rgba(90,210,255,0.10)"; ctx.fillRect(x+2+s2*(TILE-6), y+3+s1*(TILE-8), 3,3);   // cyan data bit
+    const sb=subBiomeAt(c,r), isDirt=[T.DIRT1,T.DIRT2,T.DIRT3,T.DIRT4].includes(tt);
+    const trace=isDirt&&sb ? sb.color+"38" : tt===T.DIRT3?"rgba(255,72,110,.22)":tt===T.DIRT2?"rgba(190,110,255,.2)":tt===T.DIRT4?"rgba(120,190,255,.22)":"rgba(74,220,255,.2)";
+    ctx.strokeStyle=trace;ctx.lineWidth=1;ctx.beginPath();
+    const tx=x+5+Math.floor(s1*3)*9,ty=y+7+Math.floor(s2*3)*9;
+    ctx.moveTo(x+3,ty);ctx.lineTo(tx,ty);ctx.lineTo(tx,ty+10);ctx.lineTo(x+TILE-3,ty+10);ctx.stroke();
+    ctx.fillStyle=trace;ctx.fillRect(tx-2,ty-2,4,4);ctx.fillRect(x+TILE-6,ty+8,3,3);
+    ctx.fillStyle="rgba(255,255,255,.035)";ctx.fillRect(x+3,y+3,TILE-6,1);
+    ctx.strokeStyle="rgba(0,0,0,.22)";ctx.lineWidth=1;ctx.strokeRect(x+.5,y+.5,TILE-1,TILE-1);
+    // Sub-biomes carry a quiet secondary motif so region changes remain visible
+    // without competing with ore, hazards, or the rover's drill target.
+    if(isDirt&&sb){
+      ctx.save();ctx.globalAlpha=.16;ctx.strokeStyle=sb.color;ctx.fillStyle=sb.color;ctx.lineWidth=1;
+      if(["gas_fields","liquidation"].includes(sb.id)){ctx.beginPath();ctx.moveTo(x+7,y+29);ctx.lineTo(x+13,y+23);ctx.lineTo(x+19,y+29);ctx.lineTo(x+25,y+23);ctx.stroke();}
+      else if(["botnet_hive","zero_day"].includes(sb.id)){for(let q=0;q<3;q++){ctx.beginPath();ctx.arc(x+9+q*9,y+27-(q%2)*5,2,0,7);ctx.fill();}}
+      else if(["whale_vault","cold_wallet"].includes(sb.id)){ctx.strokeRect(x+7,y+23,12,8);ctx.fillRect(x+22,y+25,5,2);}
+      else if(["slippage","forked_reality"].includes(sb.id)){ctx.beginPath();ctx.moveTo(x+6,y+30);ctx.lineTo(x+29,y+21);ctx.moveTo(x+12,y+32);ctx.lineTo(x+35,y+23);ctx.stroke();}
+      else if(["meme_graveyard","dark_pool"].includes(sb.id)){ctx.font="7px ui-monospace,monospace";ctx.fillText(hash(c,r)>.5?"01":"10",x+22,y+30);}
+      else {ctx.beginPath();ctx.moveTo(x+19,y+21);ctx.lineTo(x+19,y+31);ctx.moveTo(x+14,y+26);ctx.lineTo(x+24,y+26);ctx.stroke();}
+      ctx.restore();
+    }
     // encrypted block plate: dark hazard hatching + rivets — unmistakably un-drillable
     if(tt===T.BEDROCK){
+      const pg=ctx.createLinearGradient(x,y,x+TILE,y+TILE);pg.addColorStop(0,"rgba(235,244,255,.16)");pg.addColorStop(.5,"rgba(40,48,68,.03)");pg.addColorStop(1,"rgba(0,0,0,.22)");
+      ctx.fillStyle=pg;ctx.fillRect(x,y,TILE,TILE);
       ctx.strokeStyle="rgba(8,10,18,0.6)"; ctx.lineWidth=5; ctx.beginPath();
       ctx.moveTo(x,y+TILE*0.72); ctx.lineTo(x+TILE*0.72,y);
       ctx.moveTo(x+TILE*0.28,y+TILE); ctx.lineTo(x+TILE,y+TILE*0.28);
@@ -1371,77 +1959,158 @@
     if(isEmpty(tileAt(c,r+1))){ ctx.fillStyle="rgba(0,0,0,0.34)"; ctx.fillRect(x,y+TILE-3,TILE,3); }
     if(isEmpty(tileAt(c-1,r))){ ctx.fillStyle="rgba(255,255,255,0.08)"; ctx.fillRect(x,y,3,TILE); }
     if(isEmpty(tileAt(c+1,r))){ ctx.fillStyle="rgba(0,0,0,0.24)"; ctx.fillRect(x+TILE-3,y,3,TILE); }
-    // neon data-surface on the very top row
-    if(r===GROUND && tt===T.DIRT1){ ctx.fillStyle="#147a8a"; ctx.fillRect(x,y,TILE,5); ctx.fillStyle="#3fe0ff"; ctx.fillRect(x,y,TILE,2);
-      for(let k=0;k<3;k++) ctx.fillRect(x+6+k*12,y-3,2,3); }
+    // Interactive landmark and hazard blocks use unique silhouettes, not just hues.
+    if([T.GAS,T.HIVE,T.VAULT,T.RELAY,T.GLITCH].includes(tt)){
+      const cx=x+TILE/2,cy=y+TILE/2,pulse=.5+.5*Math.sin(t*4+c*.7+r*.4);
+      ctx.save();
+      if(tt===T.GAS){
+        ctx.shadowColor="#ff9d4d";ctx.shadowBlur=12+pulse*7;ctx.fillStyle="#ff9d4d";ctx.strokeStyle="#ffe1a6";ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.moveTo(cx,cy-12);ctx.lineTo(cx+12,cy+10);ctx.lineTo(cx-12,cy+10);ctx.closePath();ctx.fill();ctx.stroke();ctx.fillStyle="#241006";ctx.font="900 14px ui-monospace,monospace";ctx.textAlign="center";ctx.fillText("!",cx,cy+6);
+      }else if(tt===T.HIVE){
+        ctx.shadowColor="#54ff9a";ctx.shadowBlur=14+pulse*8;ctx.fillStyle="#0c2b20";ctx.strokeStyle="#54ff9a";ctx.lineWidth=2;
+        for(let q=0;q<3;q++){const ox=(q-1)*9,oy=q%2?5:-3;ctx.beginPath();for(let k=0;k<6;k++){const a=k*Math.PI/3,px=cx+ox+Math.cos(a)*7,py=cy+oy+Math.sin(a)*7;k?ctx.lineTo(px,py):ctx.moveTo(px,py);}ctx.closePath();ctx.fill();ctx.stroke();}ctx.fillStyle="#d9ffe7";ctx.beginPath();ctx.arc(cx,cy,3+pulse*2,0,7);ctx.fill();
+      }else if(tt===T.VAULT){
+        ctx.shadowColor="#ffd43b";ctx.shadowBlur=10;ctx.fillStyle="#312609";ctx.strokeStyle="#ffd43b";ctx.lineWidth=2;ctx.fillRect(cx-13,cy-10,26,21);ctx.strokeRect(cx-13,cy-10,26,21);ctx.strokeRect(cx-8,cy-15,16,8);ctx.fillStyle="#ffeaa0";ctx.fillRect(cx-2,cy-2,4,8);ctx.beginPath();ctx.arc(cx,cy-3,4,0,7);ctx.fill();
+      }else if(tt===T.RELAY){
+        ctx.shadowColor="#6bff7d";ctx.shadowBlur=12+pulse*8;ctx.strokeStyle="#a8ffb2";ctx.fillStyle="#163c2a";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx,cy-13);ctx.lineTo(cx+11,cy);ctx.lineTo(cx,cy+13);ctx.lineTo(cx-11,cy);ctx.closePath();ctx.fill();ctx.stroke();ctx.beginPath();ctx.arc(cx,cy,4+pulse*2,0,7);ctx.stroke();ctx.fillStyle="#dffff0";ctx.fillRect(cx-1,cy-1,2,2);
+      }else{
+        ctx.shadowColor="#ff55d5";ctx.shadowBlur=12;ctx.fillStyle="#061c31";ctx.fillRect(cx-12,cy-11,12,22);ctx.fillStyle="#71145f";ctx.fillRect(cx,cy-11,12,22);ctx.fillStyle=pulse>.5?"#83f7ff":"#ff55d5";for(let q=0;q<4;q++)ctx.fillRect(cx-14+mod(q*11+c,25),cy-10+q*6,10,2);ctx.strokeStyle="#d4b2ff";ctx.strokeRect(cx-12.5,cy-11.5,25,23);
+      }
+      ctx.shadowBlur=0;ctx.textAlign="left";ctx.restore();
+    }
+    // Neon exchange-floor surface: layered bus lines and blinking relay pins.
+    if(r===GROUND && tt===T.DIRT1){
+      ctx.fillStyle="#073f54";ctx.fillRect(x,y,TILE,7);ctx.fillStyle="#35e8ff";ctx.shadowColor="#2ee0ff";ctx.shadowBlur=8;ctx.fillRect(x,y,TILE,2);ctx.shadowBlur=0;
+      ctx.fillStyle="#86fff3";for(let k=0;k<3;k++){ctx.fillRect(x+5+k*13,y-3,2,5);ctx.fillRect(x+3+k*13,y+4,6,1);}
+    }
     // memecoin deposit (drawn as a glowing coin with its ticker glyph)
     if(ORE_OF[tt]){
-      const ore=ORE_OF[tt], col=oreColor(ore), cx=x+TILE/2, cy=y+TILE/2, glowy=(tt===T.PLASMA||tt===T.DARK);
-      const R=glowy?9:8, glow=glowy?(0.55+0.45*Math.sin(t*3+c+r)):0.5;
+      const ore=ORE_OF[tt], col=oreColor(ore), cx=x+TILE/2, cy=y+TILE/2, glowy=(tt===T.PLASMA||tt===T.DARK||tt===T.MOON);
+      const R=glowy?10:9, glow=glowy?(0.55+0.45*Math.sin(t*3+c+r)):0.5;
       ctx.save();
-      ctx.shadowColor=col; ctx.shadowBlur=glowy?15*glow:7;
-      ctx.fillStyle=col; ctx.beginPath(); ctx.arc(cx,cy,R,0,7); ctx.fill();
+      ctx.shadowColor=col;ctx.shadowBlur=glowy?20*glow:10;
+      const cg=ctx.createRadialGradient(cx-R*.35,cy-R*.4,1,cx,cy,R);
+      cg.addColorStop(0,"#fff8d8");cg.addColorStop(.22,col);cg.addColorStop(1,"rgba(25,18,30,.9)");
+      ctx.fillStyle=cg;ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.fill();
       ctx.shadowBlur=0;
-      ctx.strokeStyle="rgba(0,0,0,0.35)"; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(cx,cy,R,0,7); ctx.stroke();
-      ctx.fillStyle="rgba(255,255,255,0.35)"; ctx.beginPath(); ctx.arc(cx-R*0.32,cy-R*0.32,R*0.34,0,7); ctx.fill();
-      ctx.fillStyle="rgba(8,8,14,0.82)"; ctx.font="bold "+Math.round(R*1.05)+"px ui-monospace,monospace";
+      ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.stroke();
+      ctx.strokeStyle="rgba(255,255,255,.35)";ctx.lineWidth=1;ctx.beginPath();ctx.arc(cx,cy,R-3,0,7);ctx.stroke();
+      ctx.fillStyle="rgba(5,8,16,.9)";ctx.font="900 "+Math.round(R*1.05)+"px ui-monospace,monospace";
       ctx.textAlign="center"; ctx.textBaseline="middle";
-      ctx.fillText(({iron:"Ð",copper:"S",plasma:"P",darkmatter:"B"})[ore],cx,cy+0.5);
+      ctx.fillText(({iron:"D",copper:"S",plasma:"P",darkmatter:"B",moon:"M"})[ore],cx,cy+0.5);
+      if(isInfectedOre(c,r,tt)){
+        const warn=.55+.45*Math.sin(t*9+c*.7+r),B=15,L=6;
+        ctx.globalCompositeOperation="screen";ctx.strokeStyle=warn>.72?"#ff2e88":"#ffd43b";ctx.fillStyle="#fff3a8";ctx.lineWidth=1.7;
+        ctx.shadowColor="#ff2e88";ctx.shadowBlur=8+warn*8;ctx.beginPath();
+        ctx.moveTo(cx-B+L,cy-B);ctx.lineTo(cx-B,cy-B);ctx.lineTo(cx-B,cy-B+L);
+        ctx.moveTo(cx+B-L,cy-B);ctx.lineTo(cx+B,cy-B);ctx.lineTo(cx+B,cy-B+L);
+        ctx.moveTo(cx-B,cy+B-L);ctx.lineTo(cx-B,cy+B);ctx.lineTo(cx-B+L,cy+B);
+        ctx.moveTo(cx+B,cy+B-L);ctx.lineTo(cx+B,cy+B);ctx.lineTo(cx+B-L,cy+B);ctx.stroke();
+        ctx.setLineDash([2,3]);ctx.beginPath();ctx.arc(cx,cy,R+4,-t,t+Math.PI*.7);ctx.stroke();ctx.setLineDash([]);
+        ctx.shadowBlur=0;ctx.font="900 8px ui-monospace,monospace";ctx.fillText("!",cx+11,cy-11);
+        ctx.fillStyle=`rgba(255,46,136,${.18+.2*warn})`;ctx.fillRect(cx-R-2,cy-2,R*2+4,2);
+      }
       ctx.textAlign="left"; ctx.textBaseline="alphabetic";
       ctx.restore();
     }
   }
 
+  function drawDrillFracture(){
+    const d=rover.drillTarget, tt=tileAt(d.c,d.r), need=HARDNESS[tt]||1, pct=clamp(rover.drillT/need,0,1);
+    const cx=drawX(d.c*TILE+TILE/2),cy=d.r*TILE+TILE/2,pulse=.65+.35*Math.sin(performance.now()/55);
+    ctx.save();ctx.beginPath();ctx.rect(cx-TILE/2+1,cy-TILE/2+1,TILE-2,TILE-2);ctx.clip();
+    const rg=ctx.createRadialGradient(cx,cy,2,cx,cy,TILE*.55);rg.addColorStop(0,`rgba(255,240,160,${.1+pct*.2})`);rg.addColorStop(1,"rgba(255,212,59,0)");ctx.fillStyle=rg;ctx.fillRect(cx-TILE/2,cy-TILE/2,TILE,TILE);
+    ctx.strokeStyle=`rgba(255,244,205,${.34+pct*.6})`;ctx.lineWidth=1+pct*1.3;ctx.shadowColor="#ffd43b";ctx.shadowBlur=5*pulse;ctx.beginPath();
+    const rays=4+Math.floor(pct*6);
+    for(let i=0;i<rays;i++){
+      const a=i/rays*Math.PI*2+hash(d.c+i,d.r)*.55, len=TILE*(.12+pct*(.18+hash(d.c*3+i,d.r*7)*.22));
+      const mx=cx+Math.cos(a)*len*.48,my=cy+Math.sin(a)*len*.48;
+      ctx.moveTo(cx,cy);ctx.lineTo(mx,my);ctx.lineTo(cx+Math.cos(a+.18)*len,cy+Math.sin(a+.18)*len);
+    }
+    ctx.stroke();ctx.shadowBlur=0;ctx.restore();
+    ctx.save();ctx.strokeStyle=`rgba(255,212,59,${.42+pct*.5})`;ctx.lineWidth=1.5;const q=7,g=TILE/2-2;
+    ctx.beginPath();ctx.moveTo(cx-g,cy-g+q);ctx.lineTo(cx-g,cy-g);ctx.lineTo(cx-g+q,cy-g);ctx.moveTo(cx+g-q,cy-g);ctx.lineTo(cx+g,cy-g);ctx.lineTo(cx+g,cy-g+q);
+    ctx.moveTo(cx-g,cy+g-q);ctx.lineTo(cx-g,cy+g);ctx.lineTo(cx-g+q,cy+g);ctx.moveTo(cx+g-q,cy+g);ctx.lineTo(cx+g,cy+g);ctx.lineTo(cx+g,cy+g-q);ctx.stroke();ctx.restore();
+  }
+
   function drawShip(){
-    // Rebuild state: starts as a crashed wreck and is restored as each part is crafted.
-    const sx=drawX(SHIP.cx), liftY=(state==="launch")?-Math.pow(G.launchT,2)*120:0;
-    const P=G?G.parts:{}, rep=(P.engine?1:0)+(P.nav?1:0)+(P.hull?1:0), wrecked=state!=="launch"&&rep<3;
-    // smoke + sparks while still a wreck (more the more broken it is)
-    if(G&&wrecked&&Math.random()<(3-rep)*0.05+0.01) addParticle(SHIP.cx+rand(-14,14),SHIP.top+rand(0,26),rand(-10,10),rand(-34,-14),rand(0.9,1.6),rep===0?"#42454f":"#787f8c",rand(3,6));
-    if(G&&wrecked&&Math.random()<0.05) addParticle(SHIP.cx+rand(-16,16),SHIP.bottom-rand(4,28),rand(-26,26),rand(-46,-10),0.4,choice(["#ff9d4d","#ffd43b"]),2);
-    const tilt=(state==="launch")?0:(3-rep)*0.045;       // leans when wrecked, upright once rebuilt
-    ctx.save(); ctx.translate(sx,SHIP.bottom+liftY); ctx.rotate(tilt);
-    // body (brightens as it's rebuilt) — local coords, base at origin, up is negative
-    const bl=1-(3-rep)*0.12;
-    ctx.fillStyle=`rgb(${(207*bl)|0},${(214*bl)|0},${(230*bl)|0})`; ctx.strokeStyle="#3a4358"; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(0,-178); ctx.lineTo(22,-150); ctx.lineTo(22,-6); ctx.lineTo(-22,-6); ctx.lineTo(-22,-150); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle="rgba(0,0,0,0.18)"; ctx.fillRect(-22,-150,8,144);
-    // ENGINE → fins + nozzle (else broken fin + blown engine)
+    const sx=drawX(SHIP.cx),liftY=(state==="launch")?-Math.pow(G.launchT,2)*120:0;
+    const P=G?G.parts:{},rep=(P.engine?1:0)+(P.nav?1:0)+(P.hull?1:0)+(P.core?1:0),missing=4-rep,wrecked=state!=="launch"&&rep<4;
+    const tilt=state==="launch"?0:missing*.045, now=performance.now()/1000;
+    if(G&&wrecked&&Math.random()<missing*.04+.01) addParticle(SHIP.cx+rand(-17,17),SHIP.top+rand(20,150),rand(-12,12),rand(-42,-18),rand(.9,1.7),rep===0?"#303746":"#6a7387",rand(3,7));
+    if(G&&wrecked&&Math.random()<.045) addParticle(SHIP.cx+rand(-20,20),SHIP.bottom-rand(4,55),rand(-28,28),rand(-55,-15),.42,choice(["#ff7a33","#ffd43b","#ff2e88"]),2);
+    ctx.save();ctx.translate(sx,SHIP.bottom+liftY);ctx.rotate(tilt);
+    // Ground contact and launch exhaust sit behind the hull.
+    ctx.fillStyle="rgba(0,0,0,.42)";ctx.beginPath();ctx.ellipse(0,1,42,8,0,0,7);ctx.fill();
+    if(state==="launch"){
+      const eg=ctx.createLinearGradient(0,-4,0,80);eg.addColorStop(0,"#fff");eg.addColorStop(.16,"#74f4ff");eg.addColorStop(.5,"#ffcf48");eg.addColorStop(1,"rgba(255,46,136,0)");
+      ctx.fillStyle=eg;ctx.shadowColor="#2ee0ff";ctx.shadowBlur=24;ctx.beginPath();ctx.moveTo(-12,-4);ctx.lineTo(12,-4);ctx.lineTo(5,72+Math.sin(now*22)*8);ctx.lineTo(0,58);ctx.lineTo(-6,76-Math.sin(now*18)*7);ctx.closePath();ctx.fill();ctx.shadowBlur=0;
+      for(let i=0;i<3;i++)addParticle(SHIP.cx+rand(-10,10),SHIP.bottom-5,rand(-34,34),rand(145,285),.42,choice(["#fff","#2ee0ff","#ffd43b","#ff2e88"]),rand(3,7));
+    }
+    // Fins / landing hardware.
     if(P.engine||state==="launch"){
-      ctx.fillStyle="#ff2e88";
-      ctx.beginPath(); ctx.moveTo(-22,-22); ctx.lineTo(-34,-4); ctx.lineTo(-22,-4); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(22,-22); ctx.lineTo(34,-4); ctx.lineTo(22,-4); ctx.fill();
-      ctx.fillStyle="#9aa3bb"; ctx.fillRect(-9,-6,18,6);
-      if(state==="launch"){ for(let i=0;i<3;i++) addParticle(SHIP.cx+rand(-10,10),SHIP.bottom-6,rand(-30,30),rand(120,260),0.4,choice(["#ffd43b","#ff9d4d","#fff"]),rand(3,6)); }
-    } else {
-      ctx.fillStyle="#7a3a52"; ctx.beginPath(); ctx.moveTo(-22,-20); ctx.lineTo(-30,-8); ctx.lineTo(-22,-6); ctx.fill();  // bent stub fin
-      ctx.fillStyle="rgba(0,0,0,0.5)"; ctx.beginPath(); ctx.arc(7,-6,9,0,7); ctx.fill();                                  // blown engine scorch
+      const fg=ctx.createLinearGradient(0,-38,0,0);fg.addColorStop(0,"#ff2e88");fg.addColorStop(1,"#65143f");ctx.fillStyle=fg;ctx.strokeStyle="#27091d";ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(-21,-48);ctx.lineTo(-43,-6);ctx.lineTo(-19,-12);ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.beginPath();ctx.moveTo(21,-48);ctx.lineTo(43,-6);ctx.lineTo(19,-12);ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.fillStyle="#151d30";ctx.fillRect(-12,-9,24,9);ctx.fillStyle="#4b5872";ctx.fillRect(-9,-7,18,3);
+    }else{
+      ctx.fillStyle="#692b42";ctx.beginPath();ctx.moveTo(-20,-40);ctx.lineTo(-35,-8);ctx.lineTo(-20,-14);ctx.closePath();ctx.fill();
+      ctx.strokeStyle="#a8465d";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(20,-34);ctx.lineTo(31,-22);ctx.lineTo(23,-12);ctx.stroke();
+      ctx.fillStyle="rgba(0,0,0,.62)";ctx.beginPath();ctx.ellipse(7,-7,12,7,0,0,7);ctx.fill();
     }
-    // HULL → sealed (else jagged breaches)
-    if(!P.hull && state!=="launch"){
-      ctx.fillStyle="#191c27";
-      ctx.beginPath(); ctx.moveTo(-14,-112); ctx.lineTo(-2,-98); ctx.lineTo(-16,-86); ctx.lineTo(-20,-102); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(10,-72); ctx.lineTo(20,-60); ctx.lineTo(8,-50); ctx.lineTo(4,-66); ctx.closePath(); ctx.fill();
-    } else {
-      ctx.fillStyle="rgba(255,255,255,0.10)"; ctx.fillRect(-18,-150,4,144);
+    // Proper tapered rocket body with a curved nose, layered alloy and panel seams.
+    const hull=ctx.createLinearGradient(-24,0,25,0);
+    const dim=1-missing*.075;
+    hull.addColorStop(0,`rgb(${72*dim|0},${82*dim|0},${108*dim|0})`);
+    hull.addColorStop(.22,`rgb(${177*dim|0},${193*dim|0},${220*dim|0})`);
+    hull.addColorStop(.55,`rgb(${225*dim|0},${235*dim|0},${248*dim|0})`);
+    hull.addColorStop(1,`rgb(${70*dim|0},${82*dim|0},${112*dim|0})`);
+    ctx.fillStyle=hull;ctx.strokeStyle="#202940";ctx.lineWidth=2.5;ctx.beginPath();
+    ctx.moveTo(-21,-15);ctx.lineTo(-19,-130);ctx.bezierCurveTo(-17,-159,-8,-181,0,-190);ctx.bezierCurveTo(8,-181,17,-159,19,-130);ctx.lineTo(21,-15);ctx.closePath();ctx.fill();ctx.stroke();
+    // Nose cap and market stripe.
+    ctx.fillStyle=rep===4||state==="launch"?"#2ee0ff":"#ff2e88";ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=10;
+    ctx.beginPath();ctx.moveTo(-13,-157);ctx.quadraticCurveTo(0,-190,13,-157);ctx.lineTo(10,-147);ctx.quadraticCurveTo(0,-154,-10,-147);ctx.closePath();ctx.fill();ctx.shadowBlur=0;
+    ctx.fillStyle="#11182a";ctx.fillRect(-18,-62,36,9);ctx.fillStyle=rep===4?"#6bff7d":"#ff2e88";ctx.fillRect(-18,-61,36,2);
+    // Alloy panel geometry, bolts and center bus.
+    ctx.strokeStyle="rgba(20,30,52,.5)";ctx.lineWidth=1;
+    for(const yy of [-132,-103,-61,-34]){ctx.beginPath();ctx.moveTo(-18,yy);ctx.lineTo(18,yy);ctx.stroke();}
+    ctx.fillStyle="rgba(255,255,255,.18)";ctx.fillRect(-13,-144,3,72);
+    ctx.fillStyle="#55637e";for(const yy of [-124,-92,-43]){ctx.beginPath();ctx.arc(-14,yy,1.5,0,7);ctx.arc(14,yy,1.5,0,7);ctx.fill();}
+    // The late-game Quantum Drive becomes a visible energy ring around the rebuilt hull.
+    if(P.core||state==="launch"){
+      const qp=.55+.45*Math.sin(now*5);ctx.save();ctx.shadowColor="#83f7ff";ctx.shadowBlur=16+qp*12;ctx.strokeStyle="#83f7ff";ctx.lineWidth=2;
+      ctx.beginPath();ctx.ellipse(0,-42,29,9,now*.45,0,7);ctx.stroke();ctx.strokeStyle="rgba(192,108,255,.8)";ctx.beginPath();ctx.ellipse(0,-42,23,6,-now*.7,0,7);ctx.stroke();
+      ctx.fillStyle="#eaffff";ctx.beginPath();ctx.arc(0,-42,3+qp*2,0,7);ctx.fill();ctx.restore();
+    }else{
+      ctx.strokeStyle="#303b54";ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(0,-42,23,6,0,0,7);ctx.stroke();
     }
-    // NAV → glowing window + antenna light (else dark cracked window + bent antenna)
+    // Navigation window reads as the visual focal point.
     if(P.nav||state==="launch"){
-      ctx.fillStyle="#2ee0ff"; ctx.shadowColor="#2ee0ff"; ctx.shadowBlur=10; ctx.beginPath(); ctx.arc(0,-146,8,0,7); ctx.fill(); ctx.shadowBlur=0;
-      ctx.fillStyle="rgba(255,255,255,.6)"; ctx.beginPath(); ctx.arc(-2,-149,2.5,0,7); ctx.fill();
-      ctx.strokeStyle="#9aa3bb"; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0,-178); ctx.lineTo(6,-196); ctx.stroke();
-      ctx.fillStyle=(Math.sin(performance.now()/220)>0)?"#6bff7d":"#1a3a1a"; ctx.beginPath(); ctx.arc(6,-197,2.4,0,7); ctx.fill();
-    } else {
-      ctx.fillStyle="#243049"; ctx.beginPath(); ctx.arc(0,-146,8,0,7); ctx.fill();
-      ctx.strokeStyle="#0c1020"; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(-5,-149); ctx.lineTo(4,-143); ctx.moveTo(2,-150); ctx.lineTo(-1,-141); ctx.stroke();
-      ctx.strokeStyle="#6b7280"; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0,-178); ctx.lineTo(5,-189); ctx.lineTo(-2,-193); ctx.stroke();
+      ctx.fillStyle="#071725";ctx.strokeStyle="#2ee0ff";ctx.lineWidth=2;ctx.shadowColor="#2ee0ff";ctx.shadowBlur=14;ctx.beginPath();ctx.arc(0,-126,11,0,7);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+      const wg=ctx.createRadialGradient(-4,-131,1,0,-126,9);wg.addColorStop(0,"#fff");wg.addColorStop(.18,"#9ffff3");wg.addColorStop(1,"#08708d");ctx.fillStyle=wg;ctx.beginPath();ctx.arc(0,-126,8,0,7);ctx.fill();
+      ctx.strokeStyle="#9aa8bf";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,-188);ctx.lineTo(8,-202);ctx.stroke();ctx.fillStyle=Math.sin(now*5)>0?"#6bff7d":"#174d2b";ctx.beginPath();ctx.arc(8,-203,3,0,7);ctx.fill();
+    }else{
+      ctx.fillStyle="#11192b";ctx.strokeStyle="#394762";ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,-126,10,0,7);ctx.fill();ctx.stroke();
+      ctx.strokeStyle="#03050a";ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-7,-131);ctx.lineTo(6,-121);ctx.moveTo(3,-134);ctx.lineTo(-2,-118);ctx.stroke();
+      ctx.strokeStyle="#68738b";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,-188);ctx.lineTo(7,-198);ctx.lineTo(-3,-202);ctx.stroke();
     }
-    // battle-damage tint (from hull HP lost to the horde)
-    const dmg=1-(SHIP.hull/SHIP.maxHull);
-    if(dmg>0){ ctx.fillStyle=`rgba(70,12,12,${dmg*0.5})`; ctx.fillRect(-22,-178,44,172); }
-    // hull bar (rides above the nose)
-    ctx.fillStyle="rgba(0,0,0,.5)"; ctx.fillRect(-27,-206,54,5);
-    ctx.fillStyle="#ff2e88"; ctx.fillRect(-27,-206,54*(SHIP.hull/SHIP.maxHull),5);
+    // Damage remains readable but no longer turns the whole ship into a flat tint.
+    if(!P.hull&&state!=="launch"){
+      ctx.fillStyle="#080b12";ctx.beginPath();ctx.moveTo(-19,-105);ctx.lineTo(-7,-96);ctx.lineTo(-16,-83);ctx.lineTo(-20,-91);ctx.closePath();ctx.fill();
+      ctx.beginPath();ctx.moveTo(11,-87);ctx.lineTo(19,-78);ctx.lineTo(10,-68);ctx.lineTo(5,-82);ctx.closePath();ctx.fill();
+      ctx.strokeStyle="#ff7a33";ctx.globalAlpha=.55;ctx.beginPath();ctx.moveTo(-13,-96);ctx.lineTo(-2,-88);ctx.moveTo(12,-79);ctx.lineTo(2,-72);ctx.stroke();ctx.globalAlpha=1;
+    }else{
+      ctx.strokeStyle="rgba(107,255,125,.35)";ctx.beginPath();ctx.moveTo(-12,-96);ctx.lineTo(12,-96);ctx.stroke();
+    }
+    const dmg=1-SHIP.hull/SHIP.maxHull;
+    if(dmg>.05){ctx.strokeStyle=`rgba(255,72,92,${.35+dmg*.5})`;ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(15,-54);ctx.lineTo(6,-47);ctx.lineTo(14,-39);ctx.moveTo(-13,-144);ctx.lineTo(-6,-136);ctx.stroke();}
+    if(G&&G.shipHit>0){
+      const hp=clamp(G.shipHit/.24,0,1);ctx.strokeStyle=`rgba(255,105,125,${hp*.85})`;ctx.shadowColor="#ff2e5a";ctx.shadowBlur=18;ctx.lineWidth=2.5;
+      ctx.beginPath();ctx.ellipse(0,-96,30+8*(1-hp),105+10*(1-hp),0,0,7);ctx.stroke();ctx.shadowBlur=0;
+    }
+    // Compact floating health readout.
+    ctx.fillStyle="rgba(3,6,14,.72)";ctx.fillRect(-31,-215,62,7);ctx.strokeStyle="rgba(255,255,255,.16)";ctx.strokeRect(-30.5,-214.5,61,6);
+    const hg=ctx.createLinearGradient(-30,0,30,0);hg.addColorStop(0,"#ff2e88");hg.addColorStop(1,"#2ee0ff");ctx.fillStyle=hg;ctx.fillRect(-29,-213,58*clamp(SHIP.hull/SHIP.maxHull,0,1),3);
     ctx.restore();
   }
 
@@ -1449,25 +2118,28 @@
     for(const b of builds){
       const s=STRUCTS[b.type], x=drawX(b.x), y=b.y, t=performance.now()/1000;
       ctx.save();
+      const compact=b.type==="floodlight";
+      ctx.fillStyle="rgba(0,0,0,.34)";ctx.beginPath();ctx.ellipse(x,y+TILE*.45,compact?TILE*.23:TILE*.43,compact?2.5:4,0,0,7);ctx.fill();
       if(b.type==="wall"){
-        ctx.fillStyle="#6b7791"; ctx.fillRect(x-TILE/2+3,y-TILE/2+2,TILE-6,TILE-2);
-        ctx.fillStyle="#525c74"; for(let i=0;i<3;i++) ctx.fillRect(x-TILE/2+3,y-TILE/2+4+i*12,TILE-6,2);
-        ctx.fillStyle="#8b97b1"; ctx.fillRect(x-TILE/2+3,y-TILE/2+2,TILE-6,3);
+        const wg=ctx.createLinearGradient(x-TILE/2,y,x+TILE/2,y);wg.addColorStop(0,"#26344d");wg.addColorStop(.45,"#8797b3");wg.addColorStop(1,"#35425c");
+        ctx.fillStyle=wg;ctx.strokeStyle="#11192b";ctx.lineWidth=2;ctx.fillRect(x-17,y-18,34,37);ctx.strokeRect(x-17,y-18,34,37);
+        ctx.fillStyle="#18243a";for(let i=0;i<3;i++){ctx.fillRect(x-14,y-14+i*12,28,7);ctx.fillStyle=i===1?"#313f59":"#18243a";}
+        ctx.strokeStyle="#2ee0ff";ctx.globalAlpha=.48;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x-12,y-10);ctx.lineTo(x,y-10);ctx.lineTo(x,y+2);ctx.lineTo(x+12,y+2);ctx.stroke();ctx.globalAlpha=1;
+        ctx.fillStyle="#b9c7dd";for(const px of [-12,12])for(const py of [-13,13]){ctx.beginPath();ctx.arc(x+px,y+py,1.7,0,7);ctx.fill();}
       } else if(b.type==="turret"){
-        ctx.fillStyle="#1a2340"; ctx.beginPath(); ctx.arc(x,y+6,12,0,7); ctx.fill();
-        ctx.strokeStyle="#2ee0ff"; ctx.lineWidth=2; ctx.stroke();
         const aim=b.aim||0;
-        ctx.strokeStyle=b.fire>0?"#fff":"#2ee0ff"; ctx.lineWidth=4; ctx.beginPath();
-        ctx.moveTo(x,y+2); ctx.lineTo(x+Math.cos(aim)*16,y+2+Math.sin(aim)*16); ctx.stroke();
-        ctx.fillStyle="#2ee0ff"; ctx.shadowColor="#2ee0ff"; ctx.shadowBlur=10; ctx.beginPath(); ctx.arc(x,y+2,4,0,7); ctx.fill();
+        ctx.fillStyle="#141d31";ctx.strokeStyle="#41516e";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-14,y+15);ctx.lineTo(x-10,y+3);ctx.lineTo(x+10,y+3);ctx.lineTo(x+14,y+15);ctx.closePath();ctx.fill();ctx.stroke();
+        ctx.fillStyle="#202d48";ctx.strokeStyle="#2ee0ff";ctx.beginPath();ctx.arc(x,y,10,0,7);ctx.fill();ctx.stroke();
+        ctx.save();ctx.translate(x,y);ctx.rotate(aim);ctx.fillStyle=b.fire>0?"#eaffff":"#7cefff";ctx.shadowColor="#2ee0ff";ctx.shadowBlur=b.fire>0?18:8;
+        ctx.fillRect(0,-3,20,6);ctx.fillStyle="#17354a";ctx.fillRect(4,-1,13,2);
+        if(b.fire>0){ctx.fillStyle="#fff";ctx.beginPath();ctx.moveTo(20,-6);ctx.lineTo(29,0);ctx.lineTo(20,6);ctx.closePath();ctx.fill();}ctx.restore();ctx.shadowBlur=0;
+        ctx.fillStyle="#2ee0ff";ctx.beginPath();ctx.arc(x,y,3.5,0,7);ctx.fill();
       } else if(b.type==="tesla"){
-        ctx.fillStyle="#241a40"; ctx.fillRect(x-7,y-2,14,12);
-        ctx.fillStyle="#3a2a5a"; ctx.fillRect(x-9,y+8,18,4);
-        ctx.strokeStyle="#7a5ab0"; ctx.lineWidth=2;        // coil rings
-        for(let i=0;i<3;i++){ ctx.beginPath(); ctx.ellipse(x,y-4-i*4,7-i*1.6,2.4,0,0,7); ctx.stroke(); }
-        const pz=0.5+0.5*Math.sin(t*6);                    // pulsing orb
-        ctx.fillStyle="#d9b0ff"; ctx.shadowColor="#b06cff"; ctx.shadowBlur=12+10*pz;
-        ctx.beginPath(); ctx.arc(x,y-16,5,0,7); ctx.fill(); ctx.shadowBlur=0;
+        const pz=.5+.5*Math.sin(t*6);
+        ctx.fillStyle="#17132a";ctx.strokeStyle="#554478";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-12,y+15);ctx.lineTo(x-8,y+2);ctx.lineTo(x+8,y+2);ctx.lineTo(x+12,y+15);ctx.closePath();ctx.fill();ctx.stroke();
+        ctx.strokeStyle="#a67aff";ctx.lineWidth=2;for(let i=0;i<4;i++){ctx.beginPath();ctx.ellipse(x,y-2-i*4,9-i*1.5,3,0,0,7);ctx.stroke();}
+        ctx.fillStyle="#f0d8ff";ctx.shadowColor="#b06cff";ctx.shadowBlur=14+12*pz;ctx.beginPath();ctx.arc(x,y-19,6,0,7);ctx.fill();
+        ctx.strokeStyle=`rgba(224,190,255,${.3+pz*.5})`;ctx.lineWidth=1;ctx.beginPath();ctx.arc(x,y-19,10+pz*4,0,7);ctx.stroke();ctx.shadowBlur=0;
         if(b.fire>0 && b.arcs){                            // jagged lightning to each hit
           ctx.strokeStyle="#e6c8ff"; ctx.lineWidth=2; ctx.shadowColor="#b06cff"; ctx.shadowBlur=8;
           for(const h of b.arcs){ const hx=drawX(h.x), hy=h.y;
@@ -1475,14 +2147,32 @@
             ctx.lineTo((x+hx)/2+rand(-7,7),(y-16+hy)/2+rand(-7,7)); ctx.lineTo(hx,hy); ctx.stroke(); }
           ctx.shadowBlur=0;
         }
+      } else if(b.type==="floodlight"){
+        const pulse=.72+.28*Math.sin(t*5+b.c);
+        const gy=y-4,floorY=y+17;
+        ctx.save();ctx.globalCompositeOperation="screen";
+        const halo=ctx.createRadialGradient(x,gy,1,x,gy,17);halo.addColorStop(0,`rgba(255,239,174,${.24+.14*pulse})`);halo.addColorStop(1,"rgba(255,215,107,0)");
+        ctx.fillStyle=halo;ctx.beginPath();ctx.arc(x,gy,17,0,7);ctx.fill();ctx.restore();
+        ctx.fillStyle="#151b27";ctx.strokeStyle="#596378";ctx.lineWidth=1.5;ctx.fillRect(x-8,floorY-4,16,4);ctx.strokeRect(x-8,floorY-4,16,4);
+        ctx.fillStyle="#8793a8";ctx.fillRect(x-2,y+2,4,11);ctx.fillStyle="#30394a";ctx.fillRect(x-1,y+3,2,9);
+        ctx.fillStyle="#202735";ctx.strokeStyle="#ffd76b";ctx.shadowColor="#ffd76b";ctx.shadowBlur=8+7*pulse;
+        ctx.beginPath();ctx.moveTo(x,gy-7);ctx.lineTo(x+7,gy-3);ctx.lineTo(x+6,gy+5);ctx.lineTo(x,gy+8);ctx.lineTo(x-6,gy+5);ctx.lineTo(x-7,gy-3);ctx.closePath();ctx.fill();ctx.stroke();
+        ctx.fillStyle=`rgba(255,240,181,${.76+.2*pulse})`;ctx.beginPath();ctx.arc(x,gy,3.3,0,7);ctx.fill();ctx.shadowBlur=0;
+        ctx.strokeStyle="#fff1b8";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x-3,gy);ctx.lineTo(x+3,gy);ctx.moveTo(x,gy-3);ctx.lineTo(x,gy+3);ctx.stroke();
+        ctx.fillStyle=pulse>.75?"#ffd76b":"#725f28";ctx.fillRect(x+5,floorY-2,2,1.5);
       } else {
-        ctx.fillStyle="#10301a"; ctx.fillRect(x-12,y-8,24,20);
-        ctx.strokeStyle="#6bff7d"; ctx.lineWidth=2; ctx.strokeRect(x-12,y-8,24,20);
-        const pulse=0.5+0.5*Math.sin(t*3);
-        ctx.fillStyle="#6bff7d"; ctx.shadowColor="#6bff7d"; ctx.shadowBlur=8*pulse;
-        ctx.fillRect(x-3,y-3,6,2); ctx.fillRect(x-1,y-5,2,6);
+        const pulse=.5+.5*Math.sin(t*3);
+        ctx.fillStyle="#0b241b";ctx.strokeStyle="#54e881";ctx.lineWidth=2;ctx.fillRect(x-14,y-10,28,27);ctx.strokeRect(x-14,y-10,28,27);
+        ctx.fillStyle="#162f2a";ctx.fillRect(x-10,y-6,20,13);ctx.strokeStyle="rgba(107,255,125,.35)";
+        for(let yy=-3;yy<=3;yy+=3){ctx.beginPath();ctx.moveTo(x-8,y+yy);ctx.lineTo(x+8,y+yy);ctx.stroke();}
+        ctx.fillStyle="#6bff7d";ctx.shadowColor="#6bff7d";ctx.shadowBlur=9+pulse*8;ctx.fillRect(x-3,y-5,6,2);ctx.fillRect(x-1,y-7,2,6);ctx.shadowBlur=0;
+        ctx.fillStyle=pulse>.5?"#ffd43b":"#315d43";ctx.beginPath();ctx.arc(x+9,y+13,1.8,0,7);ctx.fill();
       }
       ctx.restore();
+      if(b.hit>0){
+        const a=clamp(b.hit/.16,0,1);ctx.save();ctx.globalCompositeOperation="screen";ctx.fillStyle=`rgba(255,255,255,${a*.48})`;ctx.fillRect(x-TILE/2+3,y-TILE/2+1,TILE-6,TILE-2);
+        ctx.strokeStyle=`rgba(255,92,92,${a})`;ctx.lineWidth=2;ctx.strokeRect(x-TILE/2+2,y-TILE/2,TILE-4,TILE);ctx.restore();
+      }
       // flash-crashed: dim + flashing warning glyph
       if(b.offline>0){ ctx.fillStyle="rgba(6,8,14,0.55)"; ctx.fillRect(x-TILE/2+2,y-TILE/2,TILE-4,TILE);
         if(Math.sin(performance.now()/90)>0){ ctx.fillStyle="#ff5c5c"; ctx.font="bold 15px monospace";
@@ -1496,10 +2186,11 @@
   function drawScrap(){
     const t=performance.now()/1000;
     for(const s of scraps){
-      const x=drawX(s.x), col=oreColor(s.kind), bob=Math.sin(t*5+s.t*3)*2;
+      const x=drawX(s.x), col=oreColor(s.kind), bob=Math.sin(t*5+s.t*3)*2,rad=s.premium?7:5;
       ctx.save(); ctx.shadowColor=col; ctx.shadowBlur=10; ctx.fillStyle=col;
-      ctx.beginPath(); ctx.arc(x,s.y+bob,5,0,7); ctx.fill();
+      ctx.beginPath(); ctx.arc(x,s.y+bob,rad,0,7); ctx.fill();
       ctx.shadowBlur=0; ctx.fillStyle="rgba(255,255,255,0.75)"; ctx.beginPath(); ctx.arc(x-1.5,s.y+bob-1.5,1.7,0,7); ctx.fill();
+      if(s.premium){ctx.strokeStyle="#ffd43b";ctx.lineWidth=1.5;ctx.shadowColor="#ffd43b";ctx.shadowBlur=8;ctx.beginPath();ctx.ellipse(x,s.y+bob,12,5,t*.8,0,7);ctx.stroke();ctx.shadowBlur=0;}
       ctx.restore();
     }
   }
@@ -1507,19 +2198,24 @@
   function drawWorm(e){
     const pts=[{x:e.x,y:e.y}]; for(const s of e.segs) pts.push(s);
     const n=pts.length;
-    ctx.save(); ctx.shadowColor=e.c; ctx.shadowBlur=10;
+    ctx.save();ctx.shadowColor=e.c;ctx.shadowBlur=12;
+    // A luminous data-spine binds the physics segments into one readable worm.
+    ctx.strokeStyle="rgba(8,24,18,.92)";ctx.lineWidth=e.w*.55;ctx.lineCap="round";ctx.lineJoin="round";ctx.beginPath();
+    for(let i=n-1;i>=0;i--){const px=drawX(pts[i].x),py=pts[i].y;if(i===n-1)ctx.moveTo(px,py);else ctx.lineTo(px,py);}ctx.stroke();
+    ctx.strokeStyle=e.c;ctx.globalAlpha=.48;ctx.lineWidth=e.w*.25;ctx.stroke();ctx.globalAlpha=1;
     for(let i=n-1;i>=0;i--){                        // tail → head so the head sits on top
       const x=drawX(pts[i].x), y=pts[i].y;
       const rad=i===0? e.w*0.46 : Math.max(2.5, e.w*0.42*(1-i/(n+1)));
-      ctx.fillStyle=e.c; ctx.beginPath(); ctx.arc(x,y,rad,0,7); ctx.fill();
-      ctx.fillStyle="rgba(6,32,15,0.4)"; ctx.beginPath(); ctx.arc(x,y+rad*0.35,rad*0.55,0,7); ctx.fill();
+      const sg=ctx.createRadialGradient(x-rad*.3,y-rad*.35,1,x,y,rad);sg.addColorStop(0,"#eaffef");sg.addColorStop(.22,e.c);sg.addColorStop(1,"#0a2b1a");
+      ctx.fillStyle=sg;ctx.strokeStyle="rgba(4,16,10,.8)";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x,y,rad,0,7);ctx.fill();ctx.stroke();
+      ctx.strokeStyle="rgba(160,255,190,.32)";ctx.lineWidth=1;ctx.beginPath();ctx.arc(x,y,rad*.64,0,7);ctx.stroke();
     }
     ctx.shadowBlur=0;
     const hx=drawX(e.x), hy=e.y, dir=Math.sign(wrapDX(rover.x+rover.w/2,e.x))||1;
     ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(hx+dir*4,hy-4,2.6,0,7); ctx.arc(hx+dir*4,hy+4,2.6,0,7); ctx.fill();
     ctx.fillStyle="#06200f"; ctx.beginPath(); ctx.arc(hx+dir*5,hy-4,1.3,0,7); ctx.arc(hx+dir*5,hy+4,1.3,0,7); ctx.fill();
-    ctx.strokeStyle=e.c; ctx.lineWidth=2.5;   // mandibles
-    ctx.beginPath(); ctx.moveTo(hx+dir*8,hy-6); ctx.lineTo(hx+dir*13,hy-10); ctx.moveTo(hx+dir*8,hy+6); ctx.lineTo(hx+dir*13,hy+10); ctx.stroke();
+    ctx.strokeStyle=e.c;ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(hx+dir*8,hy-6);ctx.lineTo(hx+dir*15,hy-11);ctx.lineTo(hx+dir*18,hy-7);ctx.moveTo(hx+dir*8,hy+6);ctx.lineTo(hx+dir*15,hy+11);ctx.lineTo(hx+dir*18,hy+7);ctx.stroke();
     ctx.restore();
     if(e.hp<e.maxHp){ const bw=Math.max(22,e.w), x=drawX(e.x); ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(x-bw/2,e.y-e.w*0.5-9,bw,4);
       ctx.fillStyle=e.hp/e.maxHp>0.4?"#6bff7d":"#ff5c5c"; ctx.fillRect(x-bw/2,e.y-e.w*0.5-9,bw*(e.hp/e.maxHp),4); }
@@ -1528,6 +2224,9 @@
   function drawBoss(e){
     const x=drawX(e.x), y=e.y, t=performance.now()/1000, w=e.w, h=e.h, fl=Math.sin(t*8+e.wob);
     ctx.save(); ctx.translate(x,y);
+    ctx.strokeStyle=`rgba(255,46,90,${.2+.18*Math.sin(t*4)})`;ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(0,0,w*.7,h*.68,t*.35,0,7);ctx.stroke();
+    ctx.strokeStyle="rgba(176,108,255,.28)";ctx.beginPath();ctx.ellipse(0,0,w*.82,h*.56,-t*.22,0,7);ctx.stroke();
+    ctx.fillStyle="#ff2e5a";for(let i=0;i<8;i++){const a=i*.79+t*(i%2?.4:-.35),rr=w*(.56+(i%3)*.09);ctx.globalAlpha=.28+(i%3)*.12;ctx.fillRect(Math.cos(a)*rr-2,Math.sin(a)*h*.55-2,4+i%2*3,3);}ctx.globalAlpha=1;
     ctx.shadowColor="#ff2e5a"; ctx.shadowBlur=26;
     ctx.fillStyle="rgba(255,46,90,0.32)";                       // glitch wings
     ctx.beginPath(); ctx.ellipse(-w*0.46,fl*9,w*0.5,15,0.4,0,7); ctx.fill();
@@ -1541,42 +2240,96 @@
     ctx.fillStyle="#1a0510"; for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.arc(i*13+e.dir*1.6,-5,2.2,0,7); ctx.fill(); }
     ctx.strokeStyle="#ff2e5a"; ctx.lineWidth=3;                 // spikes
     for(let i=-2;i<=2;i++){ ctx.beginPath(); ctx.moveTo(i*15,h*0.34); ctx.lineTo(i*15,h*0.5); ctx.stroke(); }
+    ctx.fillStyle="rgba(255,255,255,.16)";ctx.font="bold 9px ui-monospace,monospace";ctx.textAlign="center";ctx.fillText("0xDEAD",0,h*.12);ctx.textAlign="left";
     ctx.restore();
+  }
+  function drawSpawnPortal(e){
+    const x=drawX(e.x),y=e.y,p=1-clamp(e.spawn/(e.spawnMax||1),0,1),r=(e.boss?46:24)*(1-p*.34),t=performance.now()/1000;
+    ctx.save();ctx.translate(x,y);ctx.globalAlpha=.45+.5*Math.sin(p*Math.PI);
+    ctx.strokeStyle=e.c;ctx.shadowColor=e.c;ctx.shadowBlur=e.boss?24:16;ctx.lineWidth=e.boss?3:2;
+    ctx.beginPath();ctx.ellipse(0,0,r,r*(e.flying||e.boss ? .72 : .34),t*(e.boss?1.4:2.4),0,7);ctx.stroke();
+    ctx.globalAlpha=.22+.35*p;ctx.beginPath();ctx.ellipse(0,0,r*.68,r*(e.flying||e.boss ? .48 : .2),-t*2,0,7);ctx.stroke();
+    ctx.globalAlpha=.75;ctx.fillStyle=e.c;
+    for(let i=0;i<(e.boss?12:7);i++){const a=i*2.399+t*(i%2?.6:-.5),rr=r*(.35+.65*hash(i,31));ctx.fillRect(Math.cos(a)*rr-1,Math.sin(a)*rr*.55-4,2,8);}
+    ctx.globalAlpha=.5*p;ctx.fillStyle=e.c;ctx.beginPath();ctx.ellipse(0,0,e.w*.22*p,e.h*.34*p,0,0,7);ctx.fill();ctx.restore();
+  }
+  function drawEnemyHit(e){
+    if(!(e.hit>0)) return;
+    const x=drawX(e.x),a=clamp(e.hit/.16,0,1),r=Math.max(e.w,e.h)*(.52+(1-a)*.18);
+    ctx.save();ctx.globalCompositeOperation="screen";ctx.strokeStyle=`rgba(255,255,255,${a})`;ctx.shadowColor=e.c;ctx.shadowBlur=18;ctx.lineWidth=2+a*2;
+    ctx.beginPath();ctx.arc(x,e.y,r,0,7);ctx.stroke();ctx.fillStyle=`rgba(255,255,255,${a*.18})`;ctx.beginPath();ctx.ellipse(x,e.y,e.w*.46,e.h*.44,0,0,7);ctx.fill();ctx.restore();
+  }
+  function drawEnemyStatus(e){
+    if(e.type!=="mimic"&&!(e.stun>0))return;
+    const x=drawX(e.x),radius=Math.max(e.w,e.h)*.62,t=performance.now()/1000;
+    ctx.save();
+    if(e.type==="mimic"&&e.chaseT!=null){
+      const p=clamp(e.chaseT/MIMIC_CHASE_TIME,0,1);ctx.strokeStyle=p>.3?"rgba(255,212,59,.72)":"rgba(255,92,92,.9)";ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(x,e.y,radius,-Math.PI/2,-Math.PI/2+Math.PI*2*p);ctx.stroke();
+      ctx.fillStyle="rgba(3,6,14,.76)";ctx.fillRect(x-13,e.y+e.h*.58,26,10);ctx.fillStyle=p>.3?"#ffe98a":"#ff8b9b";ctx.font="800 7px ui-monospace,monospace";ctx.textAlign="center";ctx.fillText(Math.ceil(e.chaseT)+"s",x,e.y+e.h*.58+8);
+    }
+    if(e.stun>0){
+      const pulse=.55+.45*Math.sin(t*24);ctx.strokeStyle=`rgba(46,224,255,${.55+.4*pulse})`;ctx.shadowColor="#2ee0ff";ctx.shadowBlur=10;ctx.lineWidth=2;
+      ctx.beginPath();ctx.ellipse(x,e.y,radius+3,(radius+3)*.42,t*2.5,0,7);ctx.stroke();ctx.shadowBlur=0;
+      ctx.fillStyle="#bff9ff";ctx.font="900 7px ui-monospace,monospace";ctx.textAlign="center";ctx.fillText("HASH LOCK",x,e.y-e.h*.62-5);
+    }
+    ctx.textAlign="left";ctx.restore();
   }
   function drawEnemies(){
     const t=performance.now()/1000;
     for(const e of enemies){
-      if(e.type==="burrower" && e.segs){ drawWorm(e); continue; }
-      if(e.type==="boss"){ drawBoss(e); continue; }
+      if(e.spawn>0){ drawSpawnPortal(e); continue; }
+      if(e.type==="burrower" && e.segs){ drawWorm(e); drawEnemyHit(e); continue; }
+      if(e.type==="boss"){ drawBoss(e); drawEnemyHit(e); continue; }
       const ex=drawX(e.x), w=e.w, h=e.h;
       ctx.save(); ctx.translate(ex,e.y);
+      if(e.stealth&&!G.protocols.oracle&&Math.hypot(wrapDX(e.x,rover.x),e.y-rover.y)>TILE*3)ctx.globalAlpha=.12+.08*Math.sin(t*8+e.wob);
       ctx.shadowColor=e.c; ctx.shadowBlur=12;             // glow so they read against terrain & dark
-      if(e.type==="flyer"){
+      if(e.flying){
         const fl=Math.sin(t*18+e.wob);
-        ctx.fillStyle="rgba(255,79,160,.45)";
-        ctx.beginPath(); ctx.ellipse(-w*0.4,fl*5,w*0.5,6,0.5,0,7); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(w*0.4,-fl*5,w*0.5,6,-0.5,0,7); ctx.fill();
-        ctx.fillStyle=e.c; ctx.strokeStyle="#1a0510"; ctx.lineWidth=2.5;
-        ctx.beginPath(); ctx.ellipse(0,0,w*0.42,h*0.4,0,0,7); ctx.fill(); ctx.stroke();
-        ctx.shadowBlur=0; ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(e.dir>=0?5:-5,-2,2.6,0,7); ctx.fill();
-        ctx.fillStyle="#1a0510"; ctx.beginPath(); ctx.arc((e.dir>=0?5:-5)+e.dir,-2,1.2,0,7); ctx.fill();
+        ctx.fillStyle="rgba(255,46,136,.28)";ctx.strokeStyle="rgba(255,120,190,.72)";ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.moveTo(-5,-2);ctx.lineTo(-w*.7,-12+fl*4);ctx.lineTo(-w*.45,5+fl*2);ctx.closePath();ctx.fill();ctx.stroke();
+        ctx.beginPath();ctx.moveTo(5,-2);ctx.lineTo(w*.7,-12-fl*4);ctx.lineTo(w*.45,5-fl*2);ctx.closePath();ctx.fill();ctx.stroke();
+        const vg=ctx.createRadialGradient(-4,-5,1,0,0,w*.45);vg.addColorStop(0,"#fff");vg.addColorStop(.18,e.c);vg.addColorStop(1,"#0b1020");ctx.fillStyle=vg;ctx.strokeStyle=e.c;ctx.lineWidth=2.5;
+        ctx.beginPath();ctx.moveTo(0,-h*.46);ctx.lineTo(w*.42,-4);ctx.lineTo(w*.28,h*.38);ctx.lineTo(-w*.28,h*.38);ctx.lineTo(-w*.42,-4);ctx.closePath();ctx.fill();ctx.stroke();
+        ctx.shadowBlur=0;ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(e.dir*6,-3,3,0,7);ctx.fill();ctx.fillStyle="#101020";ctx.beginPath();ctx.arc(e.dir*7,-3,1.4,0,7);ctx.fill();
+        ctx.strokeStyle="rgba(46,224,255,.45)";ctx.lineWidth=1;ctx.beginPath();ctx.arc(0,0,w*.55,0,7);ctx.stroke();
       } else {
-        // ground crawler/runner/brute — legs + carapace + outline + eyes
         const legs=Math.sin(t*12+e.wob)*3;
-        ctx.shadowBlur=0; ctx.strokeStyle=e.c; ctx.lineWidth=2.5;
-        for(let s=-1;s<=1;s+=2) for(let l=0;l<3;l++){ ctx.beginPath(); ctx.moveTo(s*w*0.2,h*0.18); ctx.lineTo(s*w*0.52,h*0.5+(l-1)*5+legs*s); ctx.stroke(); }
-        ctx.shadowColor=e.c; ctx.shadowBlur=12;
-        ctx.fillStyle=e.c; ctx.strokeStyle="#180a14"; ctx.lineWidth=2.5;
-        ctx.beginPath(); ctx.ellipse(0,0,w*0.44,h*0.4,0,0,7); ctx.fill(); ctx.stroke();
-        ctx.shadowBlur=0; ctx.fillStyle="rgba(0,0,0,.28)"; ctx.beginPath(); ctx.ellipse(0,-2,w*0.3,h*0.22,0,0,7); ctx.fill();
+        ctx.shadowBlur=0;ctx.strokeStyle=e.c;ctx.lineWidth=e.type==="brute"?3:2.3;
+        for(let s=-1;s<=1;s+=2)for(let l=0;l<3;l++){ctx.beginPath();ctx.moveTo(s*w*.2,h*.16);ctx.lineTo(s*w*(.46+l*.04),h*.42+(l-1)*6+legs*s);ctx.lineTo(s*w*(.56+l*.03),h*.54+(l-1)*5);ctx.stroke();}
+        ctx.shadowColor=e.c;ctx.shadowBlur=14;ctx.fillStyle=e.c;ctx.strokeStyle="#120713";ctx.lineWidth=2.5;ctx.beginPath();
+        if(e.type==="packet"){
+          ctx.moveTo(0,-h*.5);ctx.lineTo(w*.5,0);ctx.lineTo(0,h*.5);ctx.lineTo(-w*.5,0);ctx.closePath();
+        }else if(e.type==="fork"){
+          ctx.moveTo(0,-h*.45);ctx.lineTo(w*.46,-h*.22);ctx.lineTo(w*.15,0);ctx.lineTo(w*.45,h*.38);ctx.lineTo(0,h*.22);ctx.lineTo(-w*.45,h*.38);ctx.lineTo(-w*.15,0);ctx.lineTo(-w*.46,-h*.22);ctx.closePath();
+        }else if(e.type==="whale"){
+          ctx.moveTo(-w*.5,0);ctx.bezierCurveTo(-w*.25,-h*.5,w*.32,-h*.46,w*.5,-h*.08);ctx.lineTo(w*.62,-h*.3);ctx.lineTo(w*.57,.05);ctx.lineTo(w*.65,h*.28);ctx.lineTo(w*.38,h*.12);ctx.bezierCurveTo(w*.1,h*.5,-w*.35,h*.42,-w*.5,0);ctx.closePath();
+        }else if(e.type==="rugworm"){
+          ctx.moveTo(-w*.52,0);ctx.bezierCurveTo(-w*.3,-h*.42,w*.28,-h*.42,w*.52,0);ctx.bezierCurveTo(w*.28,h*.35,-w*.3,h*.35,-w*.52,0);ctx.closePath();
+        }else if(e.type==="leech"){
+          ctx.ellipse(0,0,w*.45,h*.42,0,0,7);
+        }else if(e.type==="runner"){
+          ctx.moveTo(e.dir*w*.5,0);ctx.lineTo(e.dir*w*.16,-h*.42);ctx.lineTo(-e.dir*w*.42,-h*.22);ctx.lineTo(-e.dir*w*.35,h*.3);ctx.lineTo(e.dir*w*.2,h*.38);ctx.closePath();
+        }else if(e.type==="brute"){
+          ctx.moveTo(-w*.36,-h*.26);ctx.lineTo(-w*.12,-h*.48);ctx.lineTo(w*.28,-h*.42);ctx.lineTo(w*.48,-h*.08);ctx.lineTo(w*.34,h*.38);ctx.lineTo(-w*.34,h*.38);ctx.lineTo(-w*.48,-h*.08);ctx.closePath();
+        }else{
+          ctx.moveTo(0,-h*.46);ctx.bezierCurveTo(w*.48,-h*.35,w*.5,h*.28,0,h*.4);ctx.bezierCurveTo(-w*.5,h*.28,-w*.48,-h*.35,0,-h*.46);ctx.closePath();
+        }
+        ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+        ctx.fillStyle="rgba(4,8,16,.34)";ctx.beginPath();ctx.ellipse(0,-2,w*.28,h*.19,0,0,7);ctx.fill();
+        // Animated malware checksum / segmentation marks.
+        ctx.strokeStyle="rgba(255,255,255,.18)";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-w*.2,-h*.24);ctx.lineTo(w*.18,h*.2);ctx.moveTo(w*.2,-h*.24);ctx.lineTo(-w*.12,h*.25);ctx.stroke();
         ctx.fillStyle=e.type==="brute"?"#ffd43b":"#fff";
         ctx.beginPath(); ctx.arc(e.dir*w*0.22-3.2,-3,2.7,0,7); ctx.arc(e.dir*w*0.22+3.2,-3,2.7,0,7); ctx.fill();
         ctx.fillStyle="#180a14"; ctx.beginPath(); ctx.arc(e.dir*w*0.22-3.2+e.dir,-3,1.3,0,7); ctx.arc(e.dir*w*0.22+3.2+e.dir,-3,1.3,0,7); ctx.fill();
-        if(e.type==="brute"){ ctx.fillStyle=e.c;
-          ctx.beginPath(); ctx.moveTo(-w*0.3,-h*0.36); ctx.lineTo(-w*0.44,-h*0.62); ctx.lineTo(-w*0.16,-h*0.4); ctx.fill();
-          ctx.beginPath(); ctx.moveTo(w*0.3,-h*0.36); ctx.lineTo(w*0.44,-h*0.62); ctx.lineTo(w*0.16,-h*0.4); ctx.fill(); }
+        if(e.type==="brute"){ctx.fillStyle="#2b0c16";ctx.strokeStyle=e.c;ctx.lineWidth=2;
+          ctx.beginPath();ctx.moveTo(-w*.28,-h*.35);ctx.lineTo(-w*.48,-h*.62);ctx.lineTo(-w*.08,-h*.45);ctx.fill();ctx.stroke();
+          ctx.beginPath();ctx.moveTo(w*.28,-h*.35);ctx.lineTo(w*.48,-h*.62);ctx.lineTo(w*.08,-h*.45);ctx.fill();ctx.stroke();}
       }
       ctx.restore();
+      drawEnemyHit(e);
+      drawEnemyStatus(e);
       // hp bar
       if(e.hp<e.maxHp){ const bw=Math.max(20,e.w*0.9); ctx.fillStyle="rgba(0,0,0,.55)"; ctx.fillRect(ex-bw/2,e.y-e.h*0.5-8,bw,4);
         ctx.fillStyle=e.hp/e.maxHp>0.4?"#ffd43b":"#ff5c5c"; ctx.fillRect(ex-bw/2,e.y-e.h*0.5-8,bw*(e.hp/e.maxHp),4); }
@@ -1591,43 +2344,38 @@
   }
 
   function drawRover(){
-    const w=rover.w, h=rover.h, cx=drawX(rover.x+w/2), cy=rover.y+h/2;
-    ctx.save(); ctx.translate(cx,cy);
-    if(rover.hurt>0){ ctx.globalAlpha=0.55+0.45*Math.sin(performance.now()/40); }
-    // contact shadow
-    ctx.fillStyle="rgba(0,0,0,0.3)"; ctx.beginPath(); ctx.ellipse(0,h/2+2,w*0.5,4,0,0,7); ctx.fill();
-    // thrust flame (behind body)
-    if(keys.up && G.fuel>0){ ctx.fillStyle="rgba(255,170,60,0.85)"; ctx.beginPath(); ctx.moveTo(-7,h/2-2); ctx.lineTo(7,h/2-2); ctx.lineTo(0,h/2+12+Math.random()*7); ctx.closePath(); ctx.fill(); }
-    // treads
-    ctx.fillStyle="#161b2e"; ctx.fillRect(-w/2-2,h/2-7,w+4,8);
-    ctx.fillStyle="#0b0f1e"; for(let i=0;i<4;i++) ctx.fillRect(-w/2+2+i*(w/4),h/2-6,3,6);
-    // body (bright + outline + glow)
-    ctx.shadowColor="#ffd43b"; ctx.shadowBlur=16;
-    ctx.fillStyle= rover.hurt>0?"#ff9a9a":"#ffd43b"; ctx.strokeStyle="#1a1206"; ctx.lineWidth=2.5;
-    ctx.beginPath(); ctx.moveTo(-w/2,h/2-4); ctx.lineTo(-w/2+4,-h/2); ctx.lineTo(w/2-4,-h/2); ctx.lineTo(w/2,h/2-4); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.shadowBlur=0;
-    ctx.fillStyle="#e0a800"; ctx.fillRect(-w/2+3,-2,w-6,5);
-    // cockpit
-    ctx.fillStyle="#2ee0ff"; ctx.shadowColor="#2ee0ff"; ctx.shadowBlur=10;
-    ctx.beginPath(); ctx.arc(rover.face*3,-4,7,0,7); ctx.fill(); ctx.shadowBlur=0;
-    ctx.strokeStyle="#0a3a44"; ctx.lineWidth=1.5; ctx.stroke();
-    ctx.fillStyle="rgba(255,255,255,.75)"; ctx.beginPath(); ctx.arc(rover.face*3-2,-6,2.2,0,7); ctx.fill();
-    // drill bit (spins while drilling)
-    ctx.save();
-    let dx=0,dy=h/2,ang=Math.PI/2;
-    if(rover.drillTarget){ if(rover.drillTarget.side==="r"){dx=w/2;dy=0;ang=0;} else if(rover.drillTarget.side==="l"){dx=-w/2;dy=0;ang=Math.PI;} }
-    ctx.translate(dx,dy); ctx.rotate(ang-Math.PI/2);
-    ctx.fillStyle="#aab4c8"; ctx.beginPath(); ctx.moveTo(-6,0); ctx.lineTo(6,0); ctx.lineTo(0,12+(rover.drillTarget?Math.sin(rover.drillAnim)*2:0)); ctx.closePath(); ctx.fill();
-    if(rover.drillTarget){ ctx.strokeStyle="#fff"; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(-5,3+(rover.drillAnim%4)); ctx.lineTo(5,3+(rover.drillAnim%4)); ctx.stroke(); }
-    ctx.restore();
-    ctx.restore();
-    // drill progress ring — positioned relative to the rover (wrap-safe)
+    const w=rover.w,h=rover.h,cx=drawX(rover.x+w/2),cy=rover.y+h/2,now=performance.now()/1000;
+    ctx.save();ctx.translate(cx,cy);ctx.scale(1.12,1.12);
+    if(rover.hurt>0)ctx.globalAlpha=.55+.45*Math.sin(performance.now()/40);
+    ctx.fillStyle="rgba(0,0,0,.42)";ctx.beginPath();ctx.ellipse(0,h/2+3,w*.62,4,0,0,7);ctx.fill();
+    if(keys.up&&G.fuel>0){
+      for(const j of [-8,8]){const fl=10+Math.random()*8,fg=ctx.createLinearGradient(j,h/2-2,j,h/2+fl);fg.addColorStop(0,"#fff");fg.addColorStop(.25,"#2ee0ff");fg.addColorStop(.7,"#ffd43b");fg.addColorStop(1,"rgba(255,46,136,0)");ctx.fillStyle=fg;ctx.beginPath();ctx.moveTo(j-3,h/2-3);ctx.lineTo(j+3,h/2-3);ctx.lineTo(j,h/2+fl);ctx.closePath();ctx.fill();}
+    }
+    // Heavy tracked mining chassis.
+    ctx.fillStyle="#080c16";ctx.strokeStyle="#33405a";ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(-w/2-3,h/2-8,w+6,10,5);ctx.fill();ctx.stroke();
+    ctx.fillStyle="#71809b";for(let i=0;i<4;i++){ctx.beginPath();ctx.arc(-w/2+3+i*(w-6)/3,h/2-3,2.6,0,7);ctx.fill();}
+    const bg=ctx.createLinearGradient(-w/2,0,w/2,0);bg.addColorStop(0,"#805b06");bg.addColorStop(.35,rover.hurt>0?"#ff8f8f":"#ffd43b");bg.addColorStop(.72,"#fff09a");bg.addColorStop(1,"#8c6407");
+    ctx.fillStyle=bg;ctx.strokeStyle="#281c04";ctx.lineWidth=2.2;ctx.beginPath();ctx.moveTo(-w/2-1,h/2-7);ctx.lineTo(-w/2+3,-h/2+3);ctx.lineTo(-5,-h/2-2);ctx.lineTo(w/2-3,-h/2+3);ctx.lineTo(w/2+1,h/2-7);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillStyle="#1d2332";ctx.fillRect(-w/2+3,2,w-6,5);ctx.fillStyle="#2ee0ff";ctx.fillRect(-w/2+5,3,7,2);ctx.fillStyle="#6bff7d";ctx.fillRect(-w/2+14,3,4,2);
+    // Glass canopy and tiny terminal reflection.
+    const glass=ctx.createRadialGradient(rover.face*2-3,-7,1,rover.face*2,-5,8);glass.addColorStop(0,"#eaffff");glass.addColorStop(.22,"#57eaff");glass.addColorStop(1,"#075069");
+    ctx.fillStyle=glass;ctx.strokeStyle="#0b3144";ctx.lineWidth=1.5;ctx.shadowColor="#2ee0ff";ctx.shadowBlur=11;ctx.beginPath();ctx.arc(rover.face*2,-5,7.5,Math.PI,0);ctx.lineTo(rover.face*2+7.5,-4);ctx.lineTo(rover.face*2-7.5,-4);ctx.closePath();ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+    ctx.fillStyle="rgba(255,255,255,.8)";ctx.fillRect(rover.face*2-4,-9,3,2);
+    // Hash-rate antenna.
+    ctx.strokeStyle="#aebbd0";ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(-8,-h/2+1);ctx.lineTo(-11,-h/2-7);ctx.stroke();ctx.fillStyle=Math.sin(now*6)>0?"#6bff7d":"#244a31";ctx.beginPath();ctx.arc(-11,-h/2-8,2,0,7);ctx.fill();
+    // Articulated drill housing follows the active drill direction.
+    ctx.save();let dx=0,dy=h/2-1,ang=Math.PI/2,activeDrillSide=rover.drillEnemy?rover.drillSide:rover.drillTarget&&rover.drillTarget.side;
+    if(activeDrillSide==="r"){dx=w/2;dy=2;ang=0;}else if(activeDrillSide==="l"){dx=-w/2;dy=2;ang=Math.PI;}
+    ctx.translate(dx,dy);ctx.rotate(ang-Math.PI/2);
+    ctx.fillStyle="#263149";ctx.strokeStyle="#9aa8bd";ctx.lineWidth=1.5;ctx.fillRect(-7,-2,14,7);ctx.strokeRect(-7,-2,14,7);
+    const bit=12+((rover.drillTarget||rover.drillEnemy)?Math.sin(rover.drillAnim)*2:0);const dg=ctx.createLinearGradient(-6,0,6,bit);dg.addColorStop(0,"#e8f1ff");dg.addColorStop(.45,"#73829c");dg.addColorStop(1,"#313b50");ctx.fillStyle=dg;ctx.beginPath();ctx.moveTo(-6,4);ctx.lineTo(6,4);ctx.lineTo(0,bit);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.strokeStyle="#eef7ff";ctx.lineWidth=1;for(let yy=6;yy<bit;yy+=4){ctx.beginPath();ctx.moveTo(-4+yy*.12,yy);ctx.lineTo(4-yy*.12,yy);ctx.stroke();}
+    ctx.restore();ctx.restore();
     if(rover.drillTarget){
-      const tt=tileAt(rover.drillTarget.c,rover.drillTarget.r), need=HARDNESS[tt]||1, side=rover.drillTarget.side;
-      const rx=cx + (side==="r"?w/2+TILE/2 : side==="l"?-(w/2+TILE/2) : 0);
-      const ry=cy + (side==="d"?h/2+TILE/2 : 0);
-      ctx.strokeStyle="rgba(255,212,59,.9)"; ctx.lineWidth=3; ctx.beginPath();
-      ctx.arc(rx,ry,TILE*0.30,-Math.PI/2,-Math.PI/2+Math.PI*2*clamp(rover.drillT/need,0,1)); ctx.stroke();
+      const tt=tileAt(rover.drillTarget.c,rover.drillTarget.r),need=HARDNESS[tt]||1,side=rover.drillTarget.side;
+      const rx=cx+(side==="r"?w/2+TILE/2:side==="l"?-(w/2+TILE/2):0),ry=cy+(side==="d"?h/2+TILE/2:0),pct=clamp(rover.drillT/need,0,1);
+      ctx.fillStyle="rgba(3,6,14,.68)";ctx.beginPath();ctx.arc(rx,ry,TILE*.32,0,7);ctx.fill();ctx.strokeStyle="#23314b";ctx.lineWidth=4;ctx.stroke();
+      ctx.strokeStyle="#ffd43b";ctx.shadowColor="#ffd43b";ctx.shadowBlur=8;ctx.lineWidth=3;ctx.beginPath();ctx.arc(rx,ry,TILE*.32,-Math.PI/2,-Math.PI/2+Math.PI*2*pct);ctx.stroke();ctx.shadowBlur=0;
     }
   }
 
@@ -1641,14 +2389,22 @@
   }
 
   function drawBuildGhost(){
-    // glowing placement grid across the visible surface (X wraps)
-    const c0=Math.floor(cam.x/TILE)-1, c1=Math.floor((cam.x+VIEW_W)/TILE)+1, r=GROUND-1;
+    // Surface defenses use the defensive row; Hash Lamps advertise valid floors throughout visible tunnels.
+    const c0=Math.floor(cam.x/TILE)-1,c1=Math.floor((cam.x+VIEW_W)/TILE)+1,platform=G.build.sel==="platform",lamp=G.build.sel==="floodlight",r=platform?GROUND:GROUND-1;
     ctx.lineWidth=1;
-    for(let wc=c0;wc<=c1;wc++){
-      const c=mod(wc,COLS);
-      if(c>=CFG.SHIP_COL-1&&c<=CFG.SHIP_COL+1) continue;
-      if(buildMap.has(c+","+r)) continue;
-      ctx.strokeStyle="rgba(46,224,255,0.16)"; ctx.strokeRect(wc*TILE+1,r*TILE+1,TILE-2,TILE-2);
+    if(lamp){
+      const r0=Math.max(GROUND-1,Math.floor(cam.y/TILE)-1),r1=Math.min(ROWS-2,Math.floor((cam.y+VIEW_H)/TILE)+1),aff=canAfford(STRUCTS.floodlight.cost);
+      for(let rr=r0;rr<=r1;rr++)for(let wc=c0;wc<=c1;wc++){
+        const c=mod(wc,COLS);if(tileAt(c,rr)!==T.EMPTY||!solidAt(c,rr+1)||buildMap.has(c+","+rr))continue;
+        if(rr===GROUND-1&&c>=CFG.SHIP_COL-1&&c<=CFG.SHIP_COL+1)continue;
+        const px=wc*TILE,py=rr*TILE+TILE-5;ctx.strokeStyle=aff?"rgba(255,215,107,.42)":"rgba(255,92,92,.18)";
+        ctx.beginPath();ctx.moveTo(px+TILE*.28,py);ctx.lineTo(px+TILE*.72,py);ctx.moveTo(px+TILE*.5,py);ctx.lineTo(px+TILE*.5,py-5);ctx.stroke();
+      }
+    }else for(let wc=c0;wc<=c1;wc++){
+        const c=mod(wc,COLS);
+        if(platform){if(tileAt(c,r)!==T.EMPTY)continue;ctx.strokeStyle="rgba(46,224,255,.3)";}
+        else{if(c>=CFG.SHIP_COL-1&&c<=CFG.SHIP_COL+1)continue;if(buildMap.has(c+","+r))continue;ctx.strokeStyle=solidAt(c,GROUND)?"rgba(46,224,255,.16)":"rgba(255,92,92,.12)";}
+        ctx.strokeRect(wc*TILE+1,r*TILE+1,TILE-2,TILE-2);
     }
     const {hoverC:c,hoverR:rr,sel,valid}=G.build;
     if(c>=0&&sel){
@@ -1661,34 +2417,45 @@
     }
   }
 
-  function drawLighting(){
-    if(G.ambient<0.02) return;
-    const W=lightCanvas.width, H=lightCanvas.height, sx=W/VIEW_W, sy=H/VIEW_H;
-    lctx.setTransform(1,0,0,1,0,0);
-    // base darkness (slightly red in magma)
-    const magma = rover.y>BIOMES[2].from*TILE;
-    lctx.fillStyle= magma? `rgba(30,4,4,${G.ambient})` : `rgba(3,5,16,${G.ambient})`;
-    lctx.fillRect(0,0,W,H);
-    lctx.globalCompositeOperation="destination-out";
-    const light=(wx,wy,rad,strength=1)=>{
-      const x=(drawX(wx)-cam.x)*sx, y=(wy-cam.y)*sy, R=rad*sx;
-      if(x<-R||x>W+R||y<-R||y>H+R) return;        // cull off-screen lights
-      const g=lctx.createRadialGradient(x,y,0,x,y,R);
-      g.addColorStop(0,`rgba(0,0,0,${strength})`); g.addColorStop(0.6,`rgba(0,0,0,${strength*0.6})`); g.addColorStop(1,"rgba(0,0,0,0)");
-      lctx.fillStyle=g; lctx.beginPath(); lctx.arc(x,y,R,0,7); lctx.fill();
-    };
-    light(rover.x+rover.w/2,rover.y+rover.h/2, TILE*6, 1);    // rover headlight
-    light(SHIP.cx,SHIP.bottom-20,TILE*5,0.95);                 // ship glow
-    for(const b of builds){ if(b.type==="turret") light(b.x,b.y,TILE*(b.fire>0?3.6:2.6),0.9);
-      else if(b.type==="tesla") light(b.x,b.y-12,TILE*(b.fire>0?3.6:2.2),0.85);
-      else if(b.type==="repair") light(b.x,b.y,TILE*2.4,0.8); else light(b.x,b.y,TILE*1.3,0.5); }
-    for(const e of enemies) light(e.x,e.y,TILE*(e.boss?4:e.type==="brute"?2.2:1.7), e.boss?0.95:0.85);  // every enemy carries a glow
-    for(const p of projectiles) light(p.x,p.y,TILE*0.9,0.7);
+  function drawUnifiedLighting(){
+    const W=lightCanvas.width,H=lightCanvas.height,sx=W/VIEW_W,sy=H/VIEW_H;
     const c0=Math.floor(cam.x/TILE)-1,c1=Math.floor((cam.x+VIEW_W)/TILE)+1;
     const r0=Math.max(0,Math.floor(cam.y/TILE)-1),r1=Math.min(ROWS-1,Math.floor((cam.y+VIEW_H)/TILE)+1);
-    for(let r=r0;r<=r1;r++) for(let wc=c0;wc<=c1;wc++) if(tiles[idx(mod(wc,COLS),r)]===T.LAVA) light(wc*TILE+TILE/2,r*TILE+TILE/2,TILE*1.6,0.7);
-    lctx.globalCompositeOperation="source-over";
-    ctx.drawImage(lightCanvas,0,0,VIEW_W,VIEW_H);
+    lctx.setTransform(1,0,0,1,0,0);lctx.clearRect(0,0,W,H);
+    for(let r=r0;r<=r1;r++)for(let wc=c0;wc<=c1;wc++){
+      const c=mod(wc,COLS),i=idx(c,r),lv=clamp(lightNow[i],0,1),lit=smooth01((lv-.025)/.78);
+      let alpha;
+      if(r<GROUND)alpha=G.phase==="night"?clamp(.78-.7*lit,.055,.78):.025*(1-lit);
+      else alpha=explored[i]?clamp(.86-.82*lit,.035,.86):.988;
+      const bi=biomeAt(r),fog=bi===1?[9,4,22]:bi===2?[23,3,9]:bi===3?[3,5,24]:r<GROUND?(G.phase==="night"?[10,2,12]:[2,8,14]):[2,7,16];
+      const x0=Math.floor((wc*TILE-cam.x)*sx),x1=Math.floor(((wc+1)*TILE-cam.x)*sx);
+      const y0=Math.floor((r*TILE-cam.y)*sy),y1=Math.floor(((r+1)*TILE-cam.y)*sy);
+      lctx.fillStyle=`rgba(${fog[0]},${fog[1]},${fog[2]},${alpha})`;lctx.fillRect(x0,y0,Math.max(1,x1-x0),Math.max(1,y1-y0));
+    }
+    ctx.save();ctx.filter="blur(4px)";ctx.drawImage(lightCanvas,0,0,VIEW_W,VIEW_H);ctx.restore();
+
+    // Colored emission uses the same occluded tile field, so glow never leaks through walls.
+    gctx.setTransform(1,0,0,1,0,0);gctx.clearRect(0,0,W,H);
+    for(let r=r0;r<=r1;r++)for(let wc=c0;wc<=c1;wc++){
+      const c=mod(wc,COLS),i=idx(c,r),mx=Math.max(tintRNow[i],tintGNow[i],tintBNow[i]);if(mx<.035)continue;
+      const x0=Math.floor((wc*TILE-cam.x)*sx),x1=Math.floor(((wc+1)*TILE-cam.x)*sx);
+      const y0=Math.floor((r*TILE-cam.y)*sy),y1=Math.floor(((r+1)*TILE-cam.y)*sy);
+      const rr=Math.round(255*tintRNow[i]/mx),gg=Math.round(255*tintGNow[i]/mx),bb=Math.round(255*tintBNow[i]/mx);
+      gctx.fillStyle=`rgba(${rr},${gg},${bb},${Math.min(.15,mx*.14)})`;gctx.fillRect(x0,y0,Math.max(1,x1-x0),Math.max(1,y1-y0));
+    }
+    ctx.save();ctx.globalCompositeOperation="screen";ctx.filter="blur(10px)";ctx.drawImage(glowCanvas,0,0,VIEW_W,VIEW_H);ctx.restore();
+  }
+
+  function drawNavigationBeacon(){
+    const sx=drawX(SHIP.cx)-cam.x,sy=SHIP.bottom-cam.y;
+    if(sx>48&&sx<VIEW_W-48&&sy>58&&sy<VIEW_H-48) return;
+    const dx=wrapDX(SHIP.cx,rover.x+rover.w/2),dy=SHIP.bottom-(rover.y+rover.h/2),ang=Math.atan2(dy,dx);
+    const rx=Math.max(90,VIEW_W*.34),ry=Math.max(72,VIEW_H*.31),edge=Math.min(rx/Math.max(.001,Math.abs(Math.cos(ang))),ry/Math.max(.001,Math.abs(Math.sin(ang))));
+    const x=VIEW_W/2+Math.cos(ang)*edge,y=VIEW_H/2+Math.sin(ang)*edge,pulse=.65+.35*Math.sin(performance.now()/180),dist=Math.round(Math.hypot(dx,dy)/TILE*2);
+    ctx.save();ctx.translate(x,y);ctx.rotate(ang);ctx.shadowColor="#2ee0ff";ctx.shadowBlur=12+pulse*8;ctx.fillStyle=`rgba(46,224,255,${.7+pulse*.25})`;
+    ctx.beginPath();ctx.moveTo(13,0);ctx.lineTo(-8,-8);ctx.lineTo(-3,0);ctx.lineTo(-8,8);ctx.closePath();ctx.fill();ctx.shadowBlur=0;ctx.rotate(-ang);
+    ctx.font="800 9px ui-monospace,monospace";ctx.textAlign="center";ctx.fillStyle="rgba(3,7,16,.82)";ctx.fillRect(-42,-27,84,15);ctx.strokeStyle="rgba(46,224,255,.45)";ctx.strokeRect(-41.5,-26.5,83,14);
+    ctx.fillStyle="#a9f8ff";ctx.fillText(`ROCKET // ${dist}m`,0,-16);ctx.textAlign="left";ctx.restore();
   }
 
   // ---------------- HUD update ----------------
@@ -1697,6 +2464,7 @@
     if(!G) return;
     $("bk-iron").textContent=G.bank.iron; $("bk-copper").textContent=G.bank.copper;
     $("bk-plasma").textContent=G.bank.plasma; $("bk-dark").textContent=G.bank.darkmatter;
+    $("bk-moon").textContent=G.bank.moon;
   }
   function updateHUD(){
     if(!G) return;
@@ -1707,8 +2475,8 @@
     if(G.finalDefense){ pn.textContent="FINAL DEFENSE"; pn.className="night"; $("phase-sub").textContent=`LAUNCH IN ${Math.ceil(Math.max(0,G.t))}s · HODL`; }
     else if(G.phase==="day"){ pn.textContent="BULL MARKET"; pn.className="day";
       $("phase-sub").textContent=G.pump?`🔥 $${oreShort(G.pump.coin)} ×2 · ${Math.ceil(G.pump.t)}s`:"Mine · refuel · build"; }
-    else { pn.textContent="BEAR MARKET"; pn.className="night"; $("phase-sub").textContent=`Swarm ${enemies.filter(e=>!e.burrow).length} · HODL`; }
-    const total=G.finalDefense?60:(G.phase==="day"?CFG.DAY:CFG.NIGHT);
+    else { pn.textContent="BEAR MARKET"; pn.className="night"; $("phase-sub").textContent=`${G.nightMod?.name||"SWARM"} · ${enemies.filter(e=>!e.burrow).length} viruses`; }
+    const total=G.phaseDuration||(G.finalDefense?60:(G.phase==="day"?CFG.DAY:CFG.NIGHT));
     const bar=$("phase-bar").firstElementChild; bar.style.width=(G.t/total*100)+"%";
     bar.style.background=G.finalDefense?"var(--yellow)":(G.phase==="day"?"var(--green)":"var(--red)");
     // bars
@@ -1719,8 +2487,8 @@
     // depth & biome
     const depth=Math.max(0,Math.round((rover.y-(GROUND-1)*TILE)/TILE*2));
     $("depth-val").textContent=depth+" m";
-    const br=Math.floor((rover.y+rover.h)/TILE); const b=biomeAt(br);
-    $("biome-name").textContent= rover.y<(GROUND-1)*TILE ? "Surface" : (BIOMES[b]?BIOMES[b].name:"Surface");
+    const br=Math.floor((rover.y+rover.h)/TILE),bc=mod(Math.floor((rover.x+rover.w/2)/TILE),COLS),b=biomeAt(br),sb=subBiomeAt(bc,br);
+    $("biome-name").textContent=br<GROUND?"Surface":`${BIOMES[b]?.name||"Ledger"} // ${sb?.name||"Unknown Region"}`;
     // ship button enabled when docked
     $("btn-ship").disabled = !dockedNearShip() || state!=="play";
     // Black Swan boss bar
@@ -1742,11 +2510,11 @@
 
   // ---------------- End states ----------------
   function startFinalDefense(){
-    // all 3 parts built → the rocket fuels for 60s while the biggest swarm of the run attacks
+    // all four parts built → the rocket fuels for 60s while the biggest swarm of the run attacks
     if(G.finalDefense||state==="launch"||state==="win") return;
     closeShip(); G.finalDefense=true;
     const n=Math.max(G.nightCount,1);
-    G.phase="night"; G.t=60;
+    G.phase="night"; G.t=60; G.phaseDuration=60;G.nightMod={id:"launch",name:"LAUNCH PANIC",desc:"Everything attacks",color:"var(--yellow)"};
     G.nightToSpawn=18+n*5; G.nightSpawned=0; G.nightSpawnT=0.5;
     G.bossT=20;                                 // a Black Swan crashes the launch party
     G.pump=null; G.crashT=rand(15,40);
@@ -1798,7 +2566,7 @@
   function statBlock(){
     return `<div class="stat-line">HODLed: <b>${G.nightCount} bear market${G.nightCount!==1?"s":""}</b> · Reached day <b>${G.day}</b></div>
       <div class="stat-line">Viruses purged: <b>${G.kills}</b> · Coins mined: <b>${G.minedOre}</b></div>
-      <div class="stat-line">Rocket parts built: <b>${Object.values(G.parts).filter(Boolean).length}/3</b></div>`;
+      <div class="stat-line">Rocket parts built: <b>${Object.values(G.parts).filter(Boolean).length}/${Object.keys(PARTS).length}</b> · Protocols: <b>${Object.values(G.protocols).filter(Boolean).length}</b></div>`;
   }
   // ---- best-run persistence (localStorage) ----
   const BEST_KEY="tothemoon_best_v1";
@@ -1812,6 +2580,19 @@
   // ---------------- Pause / sound ----------------
   function doPause(){ if(state!=="play")return; state="pause"; $("scr-pause").classList.add("show"); }
   function resumeGame(){ if(state!=="pause")return; $("scr-pause").classList.remove("show"); state="play"; }
+  function returnToMainMenu(){
+    if(state!=="pause")return;
+    keys.left=keys.right=keys.up=keys.down=false;
+    document.querySelectorAll(".tbtn.held").forEach(btn=>btn.classList.remove("held"));
+    document.querySelectorAll(".scr").forEach(scr=>scr.classList.remove("show"));
+    $("build-panel").classList.remove("open"); $("btn-build").classList.remove("on");
+    $("btn-bridge").hidden=true; $("boss-bar").style.display="none";
+    enemies.length=projectiles.length=particles.length=scraps.length=builds.length=0; buildMap.clear();
+    SHIP.hull=SHIP.maxHull; G=null; state="boot"; genWorld();
+    cam.x=wrapX((CFG.SHIP_COL-6)*TILE); cam.y=Math.max(0,(GROUND-3)*TILE);
+    $("boot-best").textContent=bestLine(loadBest());
+    $("scr-boot").classList.add("show");
+  }
   function toggleSound(){ muted=!muted; $("btn-sound").textContent=muted?"🔇":"🔊"; $("btn-sound").classList.toggle("on",!muted); }
 
   // ---------------- Loop ----------------
@@ -1826,7 +2607,7 @@
     if(state==="play"){
       G.elapsed+=dt;
       updatePhase(dt); updateRover(dt); updateEnemies(dt); updateProjectiles(dt);
-      updateStructures(dt); updateScrap(dt); updateLava(dt); updateParticles(dt); updateCamera(dt);
+      updateStructures(dt); updateScrap(dt); updateLava(dt); updateParticles(dt); updateCamera(dt); updateLighting(dt);
       updateHUD();
       if(hintT>0){ hintT-=dt; if(hintT<=0) $("hint").classList.remove("show"); }
     } else if(state==="launch"){
@@ -1844,13 +2625,14 @@
   $("btn-start").addEventListener("click",startGame);
   $("btn-retry").addEventListener("click",startGame);
   $("btn-again").addEventListener("click",startGame);
-  $("btn-restart-p").addEventListener("click",startGame);
+  $("btn-restart").addEventListener("click",startGame);
   $("btn-build").addEventListener("click",toggleBuild);
   $("btn-ship").addEventListener("click",tryOpenShip);
   $("btn-close-ship").addEventListener("click",closeShip);
   $("btn-skip-day").addEventListener("click",()=>{ if(G&&G.phase==="day"){ closeShip(); G.t=0.01; } });
   $("btn-pause").addEventListener("click",()=>{ state==="pause"?resumeGame():doPause(); });
   $("btn-resume").addEventListener("click",resumeGame);
+  $("btn-main-menu").addEventListener("click",returnToMainMenu);
   $("btn-sound").addEventListener("click",toggleSound);
   $("btn-bridge").addEventListener("click",emergencyBridge);
   $("boot-best").textContent=bestLine(loadBest());   // show best run on the title screen
@@ -1871,12 +2653,16 @@
 
   // debug hook
   function __step(dt){ if(state!=="play") return; dt=dt||1/60;
-    updatePhase(dt); updateRover(dt); updateEnemies(dt); updateProjectiles(dt); updateStructures(dt); updateScrap(dt); updateLava(dt); updateParticles(dt); updateCamera(dt); }
-  window.__MOON={ get G(){return G;}, get state(){return state;}, rover, enemies, builds, projectiles, scraps, particles, SHIP, CFG, T, get tiles(){return tiles;}, get lavaActive(){return lavaActive;}, mineTile, startGame, step:__step, render, emergencyBridge, startFinalDefense, flashCrash };
+    updatePhase(dt); updateRover(dt); updateEnemies(dt); updateProjectiles(dt); updateStructures(dt); updateScrap(dt); updateLava(dt); updateParticles(dt); updateCamera(dt); updateLighting(dt); }
+  window.__MOON={
+    get G(){return G;},get state(){return state;},get worldSeed(){return worldSeed;},get tiles(){return tiles;},get subBiomeMap(){return subBiomeMap;},get landmarks(){return landmarks;},get lavaActive(){return lavaActive;},get sunlight(){return sunlight;},get lightNow(){return lightNow;},get explored(){return explored;},
+    rover,enemies,builds,projectiles,scraps,particles,SHIP,CFG,T,BIOMES,SUBBIOMES,PARTS,MODULES,PROTOCOLS,NIGHT_MODS,
+    biomeAt,subBiomeAt,isInfectedOre,genWorld,setTile,mineTile,findDrillCombatTarget,drillCombatEnemy,canPlace,placeAtHover,collapseUnsupportedAt,startGame,step:__step,render,rebuildSunlight,recomputeLightTarget,drawUnifiedLighting,emergencyBridge,startFinalDefense,flashCrash,setPhase,spawnSurfaceEnemy,spawnMimic,buyModule,chooseProtocol
+  };
 })();
 </script>
 <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/main.js?v=20260717-max-ui"></script>
+  <script src="../assets/js/main.js?v=20260722-echo-menu-2"></script>
 <script>
   renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
   renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

@@ -4493,6 +4493,7 @@ function initGameEscapeMenu() {
       <div class="rb-escape-menu__actions">
         <button class="btn btn--primary" type="button" data-rb-escape-action="resume">Resume</button>
         <button class="btn btn--secondary" type="button" data-rb-escape-action="restart">Restart</button>
+        <button class="btn btn--secondary" type="button" data-rb-escape-action="main-menu">Main menu</button>
         <button class="btn btn--secondary" type="button" data-rb-escape-action="exit-max">Exit max screen</button>
         <button class="btn btn--secondary" type="button" data-rb-escape-action="sound" aria-pressed="true">Sound on</button>
         <button class="btn btn--ghost" type="button" data-rb-escape-action="games">All games</button>
@@ -4503,9 +4504,13 @@ function initGameEscapeMenu() {
 
   const resumeButton = backdrop.querySelector('[data-rb-escape-action="resume"]');
   const restartButton = backdrop.querySelector('[data-rb-escape-action="restart"]');
+  const mainMenuAction = backdrop.querySelector('[data-rb-escape-action="main-menu"]');
   const exitMaxButton = backdrop.querySelector('[data-rb-escape-action="exit-max"]');
   const soundButton = backdrop.querySelector('[data-rb-escape-action="sound"]');
   const extrasRoot = backdrop.querySelector("#rb-escape-extras");
+  if (restartButton && document.body.dataset.rbRestartLabel) {
+    restartButton.textContent = document.body.dataset.rbRestartLabel;
+  }
 
   const findPauseButton = () => (
     document.getElementById("btn-pause") ||
@@ -4514,10 +4519,12 @@ function initGameEscapeMenu() {
     document.getElementById("storm-mobile-pause")
   );
   const findRestartButton = () => (
+    document.getElementById("btn-pause-restart") ||
     document.getElementById("btn-restart") ||
     document.getElementById("btn-new") ||
     document.getElementById("btn-drive-restart")
   );
+  const findMainMenuButton = () => document.getElementById("btn-main-menu");
   const findMaxButton = () => document.getElementById("btn-fullscreen") || document.querySelector(".fullscreen-btn");
   const textIncludes = (element, needle) => element && element.textContent.toLowerCase().includes(needle);
   const isMaxed = () => Boolean(
@@ -4540,6 +4547,7 @@ function initGameEscapeMenu() {
   };
   const refreshActions = () => {
     if (restartButton) restartButton.hidden = !findRestartButton();
+    if (mainMenuAction) mainMenuAction.hidden = !findMainMenuButton();
     if (exitMaxButton) exitMaxButton.hidden = !isMaxed();
     if (soundButton && window.RBSfx) {
       const muted = window.RBSfx.isMuted();
@@ -4624,6 +4632,11 @@ function initGameEscapeMenu() {
       closeMenu();
       if (restartButton && !restartButton.disabled) restartButton.click();
     }
+    if (action === "main-menu") {
+      const mainMenuButton = findMainMenuButton();
+      closeMenu();
+      if (mainMenuButton && !mainMenuButton.disabled) mainMenuButton.click();
+    }
     if (action === "exit-max") {
       exitMaxScreen();
       refreshActions();
@@ -4666,6 +4679,7 @@ function bindMaxScreenButton(fsButton, surface) {
     fsButton.textContent = active ? "✕" : "⛶";
     fsButton.setAttribute("aria-label", active ? "Exit max screen" : "Max screen");
     fsButton.setAttribute("title", active ? "Exit max screen" : "Max screen");
+    fsButton.setAttribute("aria-pressed", String(active));
   };
   const setMaxed = (active) => {
     surface.classList.toggle("is-maxed", active);

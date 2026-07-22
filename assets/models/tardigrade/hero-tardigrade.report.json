@@ -1,29 +1,29 @@
 {
-  "generatedAt": "2026-07-22T02:31:25.785467+00:00",
+  "generatedAt": "2026-07-22T05:04:01.649623+00:00",
   "pipeline": "Meshy textured low-poly master -> Blender 4.5 cleanup, custom rig/animation, and standard GLB",
   "blenderVersion": "4.5.11 LTS",
   "asset": "hero-tardigrade",
   "profile": "hero",
   "source": {
-    "file": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/source/hero-tardigrade-v2-master.glb",
-    "sha256": "f9616290f7dadabb207ba2ac5be9abaf4069cbd6e2c799fd987a842a765a9897",
-    "fileBytes": 5666856,
+    "file": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/source/hero-tardigrade-v4-master.glb",
+    "sha256": "3d011b6892362f5805a4c4e066d1b94ec78ab57e6878ffddaa239737ff183698",
+    "fileBytes": 8917140,
     "counts": {
       "objects": 1,
       "meshes": 1,
       "materials": 1
     },
-    "triangles": 16698,
+    "triangles": 20568,
     "bounds": {
       "min": [
-        -0.459883,
-        -0.953033,
-        -0.432485
+        -0.480489,
+        -0.948458,
+        -0.416517
       ],
       "max": [
-        0.459883,
-        0.953033,
-        0.436399
+        0.478551,
+        0.950144,
+        0.413145
       ]
     }
   },
@@ -31,35 +31,35 @@
     "file": "hero-tardigrade.glb",
     "path": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/hero-tardigrade.glb",
     "report": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/hero-tardigrade.report.json",
-    "workingBlend": null,
+    "workingBlend": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/tardigrade/source/hero-tardigrade-v4-working.blend",
     "targetTriangles": 14000,
     "textureMaxSize": 512,
     "blenderBounds": {
       "min": [
-        -1.592404,
+        -1.667044,
         -3.3,
         0.0
       ],
       "max": [
-        1.592404,
-        3.3,
-        3.010641
+        1.667044,
+        3.34752,
+        2.884762
       ]
     },
     "runtimeBounds": {
       "min": [
-        -1.592404,
+        -1.667044,
         0.0,
-        -3.3
+        -3.34752
       ],
       "max": [
-        1.592404,
-        3.010641,
+        1.667044,
+        2.884762,
         3.3
       ]
     },
-    "triangles": 13790,
-    "materials": 1,
+    "triangles": 13881,
+    "materials": 2,
     "textures": 3,
     "skins": 1,
     "clips": [
@@ -69,77 +69,95 @@
       "idle",
       "scuttle"
     ],
-    "fileBytes": 1279204,
-    "sha256": "f53fd6561d408097e6b1d45a00181ac8f10e8463fba4bb1faeb4811183f353fc"
+    "fileBytes": 1678428,
+    "sha256": "2a477180bfc6b8ee6d3284e6245980e100fea77b4c64615590d4d53ba6cf04ce"
   },
   "geometry": {
     "repair": {
-      "verticesBeforeWeld": 9881,
-      "verticesAfterWeld": 8354,
-      "facesBefore": 16698,
-      "facesAfter": 16698,
+      "verticesBeforeWeld": 18193,
+      "verticesAfterWeld": 10289,
+      "facesBefore": 20568,
+      "facesAfter": 20568,
       "weldDistance": 1e-06,
       "flatShaded": false
     },
     "budget": {
-      "sourceTriangles": 16698,
+      "sourceTriangles": 20568,
       "finalTriangles": 13790,
       "passes": [
         {
           "pass": 1,
-          "ratio": 0.8258474068750749,
-          "before": 16698,
+          "ratio": 0.6704589653831194,
+          "before": 20568,
           "after": 13790
         }
       ]
+    },
+    "anatomy": {
+      "method": "source-already-has-four-planted-rows",
+      "legRowsBefore": [
+        -0.572693,
+        -0.177151,
+        0.178837,
+        0.613933
+      ],
+      "legRowsAfter": [
+        -0.572693,
+        -0.177151,
+        0.178837,
+        0.613933
+      ],
+      "compressedVertices": 0,
+      "crossSectionCompensation": 1.0,
+      "targetLegPairs": 4
     }
   },
   "normalization": {
     "sourceBounds": {
       "min": [
-        -0.459883,
-        -0.953033,
-        -0.432916
+        -0.480489,
+        -0.94855,
+        -0.416395
       ],
       "max": [
-        0.459883,
-        0.953033,
-        0.436551
+        0.478551,
+        0.949919,
+        0.413398
       ]
     },
     "orientedBounds": {
       "min": [
-        -0.459883,
-        -0.953033,
-        -0.432916
+        -0.478551,
+        -0.949919,
+        -0.416395
       ],
       "max": [
-        0.459883,
-        0.953033,
-        0.436551
+        0.480489,
+        0.94855,
+        0.413398
       ]
     },
     "blenderBounds": {
       "min": [
-        -1.592404,
+        -1.667044,
         -3.3,
         0.0
       ],
       "max": [
-        1.592404,
+        1.667044,
         3.3,
-        3.010641
+        2.884762
       ]
     },
     "runtimeBounds": {
       "min": [
-        -1.592404,
+        -1.667044,
         0.0,
         -3.3
       ],
       "max": [
-        1.592404,
-        3.010641,
+        1.667044,
+        2.884762,
         3.3
       ]
     },
@@ -149,18 +167,33 @@
     "up": "+Y",
     "fitDimension": "length",
     "targetDimension": 6.6,
-    "uniformScale": 3.462629418283796,
+    "uniformScale": 3.476485142018022,
     "grounded": true,
-    "centeredXZ": true
+    "centeredXZ": true,
+    "crossSectionCompensation": 1.0
   },
   "materials": {
     "names": [
-      "SkinPrimary"
+      "SkinPrimary",
+      "MouthDark"
     ],
-    "count": 1,
+    "count": 2,
     "removedTextureNodes": [],
     "semanticFaceCounts": {
-      "SkinPrimary": 13790
+      "SkinPrimary": 13789,
+      "MouthDark": 26
+    },
+    "oralInset": {
+      "material": "MouthDark",
+      "radius": 0.24520475387573243,
+      "depth": 0.07919999885559083,
+      "center": [
+        0.0,
+        3.30792,
+        1.384686
+      ],
+      "frontProtrusion": 0.047519999313354495,
+      "triangles": 92
     }
   },
   "images": [
@@ -189,7 +222,7 @@
       "packed": true
     },
     {
-      "name": "Image_2",
+      "name": "Image_3",
       "sourceSize": [
         2048,
         2048
@@ -201,7 +234,7 @@
       "packed": true
     },
     {
-      "name": "Image_3",
+      "name": "normal",
       "sourceSize": [
         2048,
         2048
@@ -272,8 +305,8 @@
       "Camera"
     ],
     "weights": {
-      "vertices": 6900,
-      "influencedVertices": 6900,
+      "vertices": 6948,
+      "influencedVertices": 6948,
       "maximumInfluences": 4,
       "groups": [
         "Body_01",
@@ -377,18 +410,19 @@
   },
   "validation": {
     "format": "GLB 2.0",
-    "fileBytes": 1279204,
-    "sha256": "f53fd6561d408097e6b1d45a00181ac8f10e8463fba4bb1faeb4811183f353fc",
+    "fileBytes": 1678428,
+    "sha256": "2a477180bfc6b8ee6d3284e6245980e100fea77b4c64615590d4d53ba6cf04ce",
     "meshes": 1,
-    "triangles": 13790,
-    "materials": 1,
+    "triangles": 13881,
+    "materials": 2,
     "materialNames": [
-      "SkinPrimary"
+      "SkinPrimary",
+      "MouthDark"
     ],
     "textures": 3,
     "imageDimensions": [
       {
-        "name": "Image_2",
+        "name": "normal",
         "mimeType": "image/png",
         "width": 512,
         "height": 512

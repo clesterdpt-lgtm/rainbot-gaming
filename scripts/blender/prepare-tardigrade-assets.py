@@ -80,6 +80,13 @@ PROFILE_TARGETS = {
     "waterbearling": {"length": 2.45, "byteBudget": 3 * 1024 * 1024},
     "prop": {"length": 2.00, "byteBudget": int(1.5 * 1024 * 1024)},
 }
+HERO_LEG_CLEANUP = {
+    # Meshy v3's raw source has five rows. Source front is -Y, so compressing
+    # the connected high-Y rear span merges its last two rows without cutting
+    # the irregular generated surface or exposing holes.
+    "rearCompressionStartFraction": 0.68,
+    "rearCompressionEndFraction": 0.73,
+}
 PROP_TARGETS = {
     "prop-algae": 1.60,
     "prop-bacteria": 2.35,
@@ -421,6 +428,118 @@ def orient_and_normalize(mesh: bpy.types.Object, profile: str, asset: str) -> di
     }
 
 
+def measure_planted_leg_rows(mesh: bpy.types.Object) -> list[float]:
+    bounds = mesh_bounds(mesh)
+    size = bounds.size
+    bins = 48
+    counts = [0] * bins
+    center_x = bounds.center.x
+    for vertex in mesh.data.vertices:
+        coordinate = vertex.co
+        is_low_appendage = coordinate.z <= bounds.minimum.z + size.z * 0.48
+        is_lateral = abs(coordinate.x - center_x) >= size.x * 0.22
+        if not is_low_appendage or not is_lateral:
+            continue
+        index = min(
+            bins - 1,
+            max(0, int((coordinate.y - bounds.minimum.y) / max(size.y, EPSILON) * bins)),
+        )
+        counts[index] += 1
+    root_counts = [math.sqrt(count) for count in counts]
+    smoothed = [
+        count
+        + (root_counts[index - 1] if index > 0 else 0.0)
+        + (root_counts[index + 1] if index + 1 < bins else 0.0)
+        for index, count in enumerate(root_counts)
+    ]
+    threshold = max(smoothed, default=0) * 0.45
+    candidates = [
+        index
+        for index, value in enumerate(smoothed)
+        if value >= threshold
+        and value >= (smoothed[index - 1] if index > 0 else -1.0)
+        and value >= (smoothed[index + 1] if index + 1 < bins else -1.0)
+    ]
+    selected: list[int] = []
+    for index in sorted(candidates, key=lambda candidate: smoothed[candidate], reverse=True):
+        if all(abs(index - other) >= 5 for other in selected):
+            selected.append(index)
+    selected.sort()
+    return [
+        bounds.minimum.y + size.y * ((index + 0.5) / bins)
+        for index in selected
+    ]
+
+
+def correct_hero_anatomy(mesh: bpy.types.Object, profile: str, asset: str) -> dict[str, object] | None:
+    if profile != "hero" or asset != "hero-tardigrade":
+        return None
+
+    bounds = mesh_bounds(mesh)
+    size = bounds.size
+    before_rows = measure_planted_leg_rows(mesh)
+    if len(before_rows) == 4:
+        return {
+            "method": "source-already-has-four-planted-rows",
+            "legRowsBefore": [round(value, 6) for value in before_rows],
+            "legRowsAfter": [round(value, 6) for value in before_rows],
+            "compressedVertices": 0,
+            "crossSectionCompensation": 1.0,
+            "targetLegPairs": 4,
+        }
+    if len(before_rows) != 5:
+        raise RuntimeError(f"Hero source must expose four or five measurable planted leg rows; found {before_rows}")
+    cleanup = HERO_LEG_CLEANUP
+    compression_start = bounds.minimum.y + size.y * cleanup["rearCompressionStartFraction"]
+    compression_end = bounds.minimum.y + size.y * cleanup["rearCompressionEndFraction"]
+    compression_scale = (compression_end - compression_start) / max(bounds.maximum.y - compression_start, EPSILON)
+    cross_section_compensation = (compression_end - bounds.minimum.y) / max(size.y, EPSILON)
+    compressed_vertices = 0
+
+    edit_mesh = bmesh.new()
+    edit_mesh.from_mesh(mesh.data)
+    for vertex in edit_mesh.verts:
+        if vertex.co.y > compression_start:
+            vertex.co.y = compression_start + (vertex.co.y - compression_start) * compression_scale
+            compressed_vertices += 1
+    edit_mesh.to_mesh(mesh.data)
+    edit_mesh.free()
+    mesh.data.validate(verbose=False)
+    mesh.data.update()
+    after_rows = measure_planted_leg_rows(mesh)
+    if len(after_rows) != 4:
+        raise RuntimeError(
+            "Hero anatomical cleanup must reduce five visible planted leg rows to exactly four; "
+            f"measured {before_rows} before and {after_rows} after while compressing {compressed_vertices} vertices"
+        )
+    return {
+        "method": "compress-extra-rear-row-into-adjacent-pair",
+        "legRowsBefore": [round(value, 6) for value in before_rows],
+        "legRowsAfter": [round(value, 6) for value in after_rows],
+        "compressedVertices": compressed_vertices,
+        "crossSectionCompensation": cross_section_compensation,
+        "targetLegPairs": 4,
+    }
+
+
+def compensate_hero_cross_section(
+    mesh: bpy.types.Object,
+    anatomy_report: dict[str, object] | None,
+    normalization: dict[str, object],
+) -> None:
+    if not anatomy_report:
+        return
+    factor = float(anatomy_report["crossSectionCompensation"])
+    for vertex in mesh.data.vertices:
+        vertex.co.x *= factor
+        vertex.co.z *= factor
+    mesh.data.update()
+    bounds = mesh_bounds(mesh)
+    normalization["blenderBounds"] = bounds.to_json()
+    normalization["runtimeBounds"] = blender_to_gltf_bounds(bounds).to_json()
+    normalization["crossSectionCompensation"] = factor
+
+
 def blender_to_gltf_bounds(bounds: Bounds) -> Bounds:
     # Blender glTF export maps (x, y, z) -> (x, z, -y).
     return Bounds(
@@ -448,9 +567,66 @@ def image_priority(node: bpy.types.ShaderNodeTexImage) -> tuple[int, str]:
     return (3, name)
 
 
+def add_hero_oral_inset(mesh: bpy.types.Object) -> dict[str, object]:
+    """Add a shallow dark cavity that survives the game's bright lab light."""
+    bounds = mesh_bounds(mesh)
+    size = bounds.size
+    radius = min(size.x, size.z) * 0.085
+    depth = size.y * 0.012
+    center_z = bounds.minimum.z + size.z * 0.48
+    center_y = bounds.maximum.y + depth * 0.10
+    front_protrusion = depth * 0.60
+
+    bpy.ops.mesh.primitive_cylinder_add(
+        vertices=24,
+        radius=radius,
+        depth=depth,
+        end_fill_type="NGON",
+        location=(0.0, center_y, center_z),
+        rotation=(math.pi / 2, 0.0, 0.0),
+    )
+    inset = bpy.context.object
+    inset.name = "hero-tardigrade_OralInset"
+    select_only([inset], inset)
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+
+    material = bpy.data.materials.new("MouthDark")
+    material.diffuse_color = (0.055, 0.018, 0.012, 1.0)
+    material.use_nodes = True
+    principled = material.node_tree.nodes.get("Principled BSDF") if material.node_tree else None
+    if principled:
+        base_color = principled.inputs.get("Base Color")
+        roughness = principled.inputs.get("Roughness")
+        metallic = principled.inputs.get("Metallic")
+        if base_color:
+            base_color.default_value = (0.055, 0.018, 0.012, 1.0)
+        if roughness:
+            roughness.default_value = 0.72
+        if metallic:
+            metallic.default_value = 0.0
+    inset.data.materials.append(material)
+    inset_triangles = sum(max(0, len(polygon.vertices) - 2) for polygon in inset.data.polygons)
+
+    # Keep one skinned mesh so the inset follows Head and retains the existing
+    # SkeletonUtils clone/runtime path without a second attachment system.
+    select_only([mesh, inset], mesh)
+    bpy.ops.object.join()
+    mesh.data.validate(verbose=False, clean_customdata=True)
+    mesh.data.update()
+    return {
+        "material": material.name,
+        "radius": radius,
+        "depth": depth,
+        "center": vector_list(Vector((0.0, center_y, center_z))),
+        "frontProtrusion": front_protrusion,
+        "triangles": inset_triangles,
+    }
+
+
 def tune_materials(mesh: bpy.types.Object, asset: str) -> dict[str, object]:
     materials = sorted({material for material in mesh.data.materials if material}, key=lambda item: item.name)
     semantic_face_counts: dict[str, int] = {}
+    oral_inset_report: dict[str, object] | None = None
     if asset == "hero-tardigrade":
         if not materials:
             raise RuntimeError("Hero source has no material to preserve for store skin variants")
@@ -464,8 +640,8 @@ def tune_materials(mesh: bpy.types.Object, asset: str) -> dict[str, object]:
         mesh.data.materials.append(base)
         for polygon in mesh.data.polygons:
             polygon.material_index = 0
-        semantic_face_counts = {HERO_SKIN_MATERIALS[0]: len(mesh.data.polygons)}
-        materials = [base]
+        oral_inset_report = add_hero_oral_inset(mesh)
+        materials = [material for material in mesh.data.materials if material]
     else:
         for index, material in enumerate(materials, start=1):
             material.name = f"{asset}_Material_{index:02d}"
@@ -528,11 +704,17 @@ def tune_materials(mesh: bpy.types.Object, asset: str) -> dict[str, object]:
             polygon.material_index = material_index
 
     final_materials = [material for material in mesh.data.materials if material]
+    if asset == "hero-tardigrade":
+        semantic_face_counts = {
+            material.name: sum(1 for polygon in mesh.data.polygons if polygon.material_index == index)
+            for index, material in enumerate(final_materials)
+        }
     return {
         "names": [material.name for material in final_materials],
         "count": len(final_materials),
         "removedTextureNodes": sorted(set(removed_images)),
         "semanticFaceCounts": semantic_face_counts,
+        "oralInset": oral_inset_report,
     }
 
 
@@ -658,10 +840,15 @@ def create_rig(mesh: bpy.types.Object, profile: str, asset: str) -> RigResult:
     appendage_rows: list[float] = []
     legged = profile in {"hero", "waterbearling"}
     if legged:
-        appendage_rows = [
-            bounds.minimum.y + length * fraction
-            for fraction in (0.20, 0.40, 0.61, 0.79)
-        ]
+        if profile == "hero":
+            appendage_rows = measure_planted_leg_rows(mesh)
+            if len(appendage_rows) != 4:
+                raise RuntimeError(f"Hero rig requires four measured planted leg rows; found {appendage_rows}")
+        else:
+            appendage_rows = [
+                bounds.minimum.y + length * fraction
+                for fraction in (0.20, 0.40, 0.61, 0.79)
+            ]
         for row_index, row_y in enumerate(appendage_rows, start=1):
             body_index = min(
                 range(len(body_objects)),
@@ -843,8 +1030,12 @@ def pose_clip(
             bone.rotation_euler.x = -pulse * (0.18 + index * 0.025)
             bone.rotation_euler.z = math.sin(phase * math.tau) * 0.025
         elif clip == "curl":
-            bone.rotation_euler.x = 0.34 + index * 0.075 + wave * 0.025
-            bone.rotation_euler.z = math.sin(offset) * 0.025
+            # Tuck into a compact tun-like defensive pose without stacking a
+            # large constant bend across the complete body chain. The former
+            # pose accumulated roughly 2.45 radians and stood the creature on
+            # end in a tall U instead of reading as a small curled water bear.
+            bone.rotation_euler.x = pulse * (0.055 + index * 0.006)
+            bone.rotation_euler.z = math.sin(offset) * pulse * 0.012
         elif clip == "airborne":
             bone.rotation_euler.x = 0.12 + math.sin(offset) * 0.035
             bone.rotation_euler.z = math.cos(offset) * 0.025
@@ -864,7 +1055,10 @@ def pose_clip(
         elif clip == "dash":
             bone.rotation_euler.x = alternating * pulse * 0.32
             bone.rotation_euler.z = alternating * pulse * 0.24
-        elif clip in {"curl", "airborne"}:
+        elif clip == "curl":
+            bone.rotation_euler.x = alternating * pulse * 0.28
+            bone.rotation_euler.z = alternating * pulse * 0.24
+        elif clip == "airborne":
             bone.rotation_euler.x = alternating * (0.62 + wave * 0.05)
             bone.rotation_euler.z = alternating * 0.38
         elif clip == "startled":
@@ -1290,9 +1484,11 @@ def main() -> None:
     mesh, source_counts = import_and_join_mesh(input_path, args.asset)
     source_bounds = mesh_bounds(mesh)
     source_triangles = triangle_count([mesh])
+    anatomy_report = correct_hero_anatomy(mesh, args.profile, args.asset)
     geometry_repair = repair_geometry(mesh, args.profile, args.asset)
     geometry_budget = decimate_and_triangulate(mesh, args.target_triangles)
     normalization = orient_and_normalize(mesh, args.profile, args.asset)
+    compensate_hero_cross_section(mesh, anatomy_report, normalization)
     material_report = tune_materials(mesh, args.asset)
     image_report = resize_and_pack_images(mesh, args.texture_size)
 
@@ -1366,6 +1562,7 @@ def main() -> None:
         "geometry": {
             "repair": geometry_repair,
             "budget": geometry_budget,
+            "anatomy": anatomy_report,
         },
         "normalization": normalization,
         "materials": material_report,

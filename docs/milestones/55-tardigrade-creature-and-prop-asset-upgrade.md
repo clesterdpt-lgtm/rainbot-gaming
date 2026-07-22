@@ -1,6 +1,6 @@
 # Milestone 55 — Tardigrade Creature and Prop Asset Upgrade
 
-Status: implementation and automated acceptance complete; final model appeal and animation feel await user playtest.
+Status: reference-driven hero revision implemented and regression-covered; final model appeal and animation feel await user playtest.
 
 ## Goal
 
@@ -11,7 +11,7 @@ Game definition: `docs/tardigrade-micro-mayhem-plan.md`.
 ## Art direction
 
 - Preserve the game's bright microscope-to-space comedy: chunky faceted silhouettes, clean warm/cool color blocking, slightly translucent biological surfaces, expressive faces, and no realistic body horror.
-- The hero remains an unmistakable eight-legged tardigrade with a segmented body, short claws, dark eyes, and a readable oral tube. It should feel charming, resilient, and a little mischievous rather than plush or humanoid.
+- The hero follows the user-approved reference silhouette: uniform pale peach-pink skin, at least five deep overlapping rounded body folds, a prominent circular oral tube at the front, exactly four pairs of short planted lobopod legs, and fine readable ivory claws. It must not use painted stripes or bands, a shell/carapace, oversized side eyes, or the elongated grub/croissant silhouette of the retired hero.
 - Rotifers, ciliates, and waterbearlings should read as related microscopic life without sharing the same silhouette. Algae, bacteria, droplets, and pollen should remain legible at tutorial scale and retain their current gameplay color language.
 - Meshy supplies textured low-poly masters. Blender is authoritative for cleanup, orientation, scale, material limits, named sockets, non-humanoid rigging, animation, and browser-safe export.
 
@@ -23,9 +23,9 @@ Game definition: `docs/tardigrade-micro-mayhem-plan.md`.
 
 ## Acceptance criteria
 
-- Meshy creates eight distinct textured low-poly masters from single-object prompts. Preview/refine task IDs, prompts, consumed credits, downloaded source filenames, hashes, and runtime destinations are retained in `assets/models/tardigrade/manifest.json`; raw downloads remain ignored.
+- Meshy creates eight distinct textured low-poly masters. The revised hero is regenerated through image-to-3D from an isolated reference derived from the supplied screenshot; the exact user-reference hash, isolated-input hash, image task ID, consumed credits, downloaded source filename/hash, and runtime destination are retained in `assets/models/tardigrade/manifest.json`. The other seven assets retain their text-to-3D preview/refine provenance; raw inputs and downloads remain ignored.
 - Blender imports every master, removes scene baggage, fixes normals, constrains materials and embedded textures, reduces geometry where needed, applies transforms, normalizes forward direction and gameplay-relative bounds, centers each footprint, and exports an uncompressed Three.js r128-compatible GLB.
-- Blender authors the hero and three recurring creatures as non-humanoid animated assets. The hero exposes `idle`, `scuttle`, `dash`, `curl`, and `airborne`; each recurring creature exposes `idle`, `locomotion`, and `startled`. World translation remains owned by the existing JavaScript state and route groups.
+- Blender authors the hero and three recurring creatures as non-humanoid animated assets. The revised hero retains an exact four-pair leg rig, polishes the oral tube, folds, claws, grounding, and uniform peach material, and exposes `idle`, `scuttle`, `dash`, `curl`, and `airborne`; each recurring creature exposes `idle`, `locomotion`, and `startled`. World translation remains owned by the existing JavaScript state and route groups.
 - The hero export retains named `Head`, `Face`, `Back`, and `Camera` attachment sockets. Existing store skins, head/face/back cosmetics, research camera unlock, and trail behavior remain functional with the authored model.
 - Runtime budgets are enforced: hero at most 14,000 triangles and 4 MiB; each recurring creature at most 10,000 triangles and 3 MiB; each prop at most 5,000 triangles and 1.5 MiB; no model uses more than four textures; the eight-model runtime set stays at or below 16 MiB.
 - Runtime loading uses the vendored Three.js r128 GLTFLoader and SkeletonUtils, caches one source per archetype, clones animated instances safely, derives scale/orientation/grounding from measured GLB bounds, and never requires Draco or meshopt decoding.
@@ -33,7 +33,7 @@ Game definition: `docs/tardigrade-micro-mayhem-plan.md`.
 - The new visual layer does not change `PLAYER_RADIUS`, prop radii/mass/restitution, creature routes, bonk distance, scoring, goals, saves, store ownership, or five-level progression.
 - `window.render_game_to_text()`, `window.advanceTime(ms)`, and focused `window.__MICRO_MAYHEM_DEBUG` controls expose asset settlement, source, bounds, triangle/material/texture cost, active/fallback instances, clip/action state, and deterministic asset framing.
 - A focused red-first browser regression validates manifest/provenance and GLB structure, animation clips and progression, budgets, attachment sockets, recurring-instance cloning, gameplay-proxy preservation, deliberate network-failure fallback, desktop and phone rendering, and zero unexpected local asset, console, or page errors.
-- Desktop and 390×844 captures prove the hero, recurring creatures, and four tutorial props are grounded, correctly oriented, recognizable at play distance, and visually coherent. Final model appeal and animation feel are verified by user playtest.
+- Side/three-quarter Blender captures plus desktop and 390×844 browser captures prove the revised hero's oral tube, deep folds, uniform peach skin, four planted leg pairs, and fine claws remain readable both close-up and at play distance. The recurring creatures and four tutorial props remain grounded, correctly oriented, and visually coherent. Final model appeal and animation feel are verified by user playtest.
 
 ## Out of scope
 
@@ -43,12 +43,12 @@ Game definition: `docs/tardigrade-micro-mayhem-plan.md`.
 
 ## Implementation notes
 
-- Meshy generated eight accepted textured masters plus one rejected first-pass hero. The final roster consumed 240 generation credits; the rejected beetle-like hero exploration consumed 30 more. Exact task IDs, prompts, credits, source/runtime hashes, and destinations are recorded in `assets/models/tardigrade/manifest.json`.
-- Blender 4.5 LTS cleaned and normalized every source, embedded three 512×512 PNG textures per asset, constrained the complete roster to 7.967 MiB, and exported browser-safe uncompressed GLBs. The four animated assets use non-humanoid rigs with zero world-root translation; periodic clip endpoint values and tangents match exactly.
+- Meshy generated the final eight-asset roster plus three retired hero explorations. The accepted assets consumed 240 generation credits; the rejected beetle-like first hero, striped/grub-like second hero, and five-row third hero consumed 90 more. Hero v4 came from Meshy image-to-3D only after its isolated input visibly showed exactly four near-side legs; both image hashes, the image task ID, credits, source/runtime hashes, and destinations are recorded in `assets/models/tardigrade/manifest.json`.
+- Blender 4.5 LTS cleaned and normalized every source, embedded at most three 512×512 PNG textures per asset, constrained the complete roster to 8.348 MiB, and exported browser-safe uncompressed GLBs. Hero v4 is a 13,881-triangle, 1.60 MiB skinned GLB with four measured planted rows, `SkinPrimary`, and a non-tintable `MouthDark` inset placed far enough forward to avoid WebGL depth fighting. The four animated assets use non-humanoid rigs with zero world-root translation; periodic clip endpoint values and tangents match exactly.
 - The corrected signed-orientation pass maps the accepted sources' `-Y` front to authored glTF `-Z`. Re-import checks place the hero's `Head` and `Face` sockets at the facial end, and Blender evaluated 301,623 deformed vertices across every clip without a non-finite result.
 - The runtime loads the manifest once, caches one source per archetype, clones animated skeletons safely, fits authored visuals to the existing procedural bounds, and preserves every original gameplay root and collider. A failed ciliate download restores the visible procedural ciliate without interrupting play.
-- The hero maps movement to `idle`, `scuttle`, `dash`, `curl`, and `airborne`; recurring creatures map to independent `idle`, `locomotion`, and `startled` mixers. Pause/title states freeze authored animation, legal air dashes retain their dash clip, non-classic store skins tint `SkinPrimary`, and head/face/back cosmetics mount to the Blender-authored sockets.
-- Deterministic close views for every accepted asset and the hero action/store probes are under `output/iterate/tardigrade-meshy-blender-assets/`. Full desktop, 390×844 phone, and forced-ciliate-fallback captures are under `output/playwright/tardigrade-meshy-blender-assets/`.
+- The hero maps movement to `idle`, `scuttle`, `dash`, `curl`, and `airborne`; its revised curl tucks the legs and uses a shallow body arc instead of the old upright U-pose. Recurring creatures map to independent `idle`, `locomotion`, and `startled` mixers. Pause/title states freeze authored animation, legal air dashes retain their dash clip, non-classic store skins tint only `SkinPrimary`, and head/face/back cosmetics mount to the Blender-authored sockets.
+- The accepted reference-v4 Blender side/three-quarter captures are under `output/iterate/tardigrade-hero-reference-v4/`; the rejected v3 experiments remain under the adjacent reference-v3 folder for audit history. The standard desktop, 390×844 phone, focused hero, and forced-ciliate-fallback captures are under `output/playwright/tardigrade-meshy-blender-assets/`; the earlier complete roster/action/store probes remain under `output/iterate/tardigrade-meshy-blender-assets/`.
 
 ## Verification
 

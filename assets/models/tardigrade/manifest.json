@@ -1,6 +1,6 @@
 {
-  "version": "2026-07-21-meshy-blender-1",
-  "pipeline": "Meshy AI text-to-3D masters, polished, rigged, animated, and exported with Blender 4.5 LTS",
+  "version": "2026-07-21-meshy-blender-3",
+  "pipeline": "Meshy AI text-to-3D and reference-driven image-to-3D masters, polished, rigged, animated, and exported with Blender 4.5 LTS",
   "blenderScript": "scripts/blender/prepare-tardigrade-assets.py",
   "runtimeContract": {
     "engine": "Three.js r128 GLTFLoader",
@@ -12,8 +12,8 @@
   },
   "generation": {
     "finalAssetCredits": 240,
-    "rejectedExplorationCredits": 30,
-    "totalCreditsConsumed": 270,
+    "rejectedExplorationCredits": 90,
+    "totalCreditsConsumed": 330,
     "rejectedSources": [
       {
         "id": "hero-tardigrade-v1",
@@ -21,6 +21,25 @@
         "sourceFile": "source/hero-tardigrade-master.glb",
         "previewTaskId": "019f878b-e525-77da-b7b4-e1f5aeafd86f",
         "refineTaskId": "019f878f-937b-789a-8d91-474b67a761fd",
+        "consumedCredits": 30
+      },
+      {
+        "id": "hero-tardigrade-v2",
+        "reason": "Retired after user reference review because the caramel segment bands and elongated body read as a striped grub rather than the pale folded water bear target.",
+        "sourceFile": "source/hero-tardigrade-v2-master.glb",
+        "sourceSha256": "f9616290f7dadabb207ba2ac5be9abaf4069cbd6e2c799fd987a842a765a9897",
+        "runtimeSha256": "f53fd6561d408097e6b1d45a00181ac8f10e8463fba4bb1faeb4811183f353fc",
+        "previewTaskId": "019f8792-516b-78fc-b2c8-faa044b87c87",
+        "refineTaskId": "019f8794-74bd-73be-b29d-f1078c7e936c",
+        "consumedCredits": 30
+      },
+      {
+        "id": "hero-tardigrade-v3",
+        "reason": "Retired after the final anatomy audit found five visible planted leg rows despite the four-pair rig and manifest target.",
+        "sourceFile": "source/hero-tardigrade-v3-master.glb",
+        "sourceSha256": "f11be68ba8400d84f41aaa06b7e610b97a10494502ac0856c55ac0a87b032d35",
+        "runtimeSha256": "a8d05b6267e7c80c43a25c76fa4015d1ce9a96b91353b2b0489db2a7c7434127",
+        "taskId": "019f87d7-a180-78db-a566-0786214bfa01",
         "consumedCredits": 30
       }
     ]
@@ -31,17 +50,32 @@
       "role": "hero",
       "runtimeFile": "hero-tardigrade.glb",
       "blenderReport": "hero-tardigrade.report.json",
-      "sha256": "f53fd6561d408097e6b1d45a00181ac8f10e8463fba4bb1faeb4811183f353fc",
+      "sha256": "2a477180bfc6b8ee6d3284e6245980e100fea77b4c64615590d4d53ba6cf04ce",
       "clips": ["idle", "scuttle", "dash", "curl", "airborne"],
       "sockets": ["Head", "Face", "Back", "Camera"],
+      "artDirection": {
+        "palette": "uniform-peach",
+        "deepBodyFolds": true,
+        "bodyFoldsMin": 5,
+        "legPairs": 4,
+        "oralTube": "circular-front",
+        "stripes": false
+      },
       "meshy": {
-        "previewTaskId": "019f8792-516b-78fc-b2c8-faa044b87c87",
-        "refineTaskId": "019f8794-74bd-73be-b29d-f1078c7e936c",
+        "generationMode": "image-to-3d",
+        "taskId": "019f882e-00e8-788d-b04f-a4ed8548f7e8",
         "consumedCredits": 30,
-        "sourceFile": "source/hero-tardigrade-v2-master.glb",
-        "sourceSha256": "f9616290f7dadabb207ba2ac5be9abaf4069cbd6e2c799fd987a842a765a9897",
-        "prompt": "single recognizable tardigrade water bear game character, soft plump elongated barrel body with five rounded ring segments, exactly four pairs of short stubby lobopod legs evenly spaced underneath, each foot with two thick hook claws, tiny circular oral tube centered on the front, two glossy black side eyes, no antennae, no wings, no shell, no carapace, no beetle, no spider, no crab, horizontal neutral walking pose, broad readable silhouette, animation-friendly low-poly topology, isolated, no base, no background, no props, no text",
-        "texturePrompt": "warm sandy beige soft skin, caramel segment bands, cream belly and muzzle, ivory claws, glossy black eyes with cyan highlights, matte slightly moist hand-painted low-poly arcade PBR, bold clean color blocks, no metallic armor, no gore"
+        "sourceFile": "source/hero-tardigrade-v4-master.glb",
+        "sourceSha256": "3d011b6892362f5805a4c4e066d1b94ec78ab57e6878ffddaa239737ff183698",
+        "metadataFile": "source/hero-tardigrade-v4.meta.json",
+        "reference": {
+          "userSourceFile": "source/hero-tardigrade-user-reference.png",
+          "userSourceSha256": "ea4b38d8e15184f21121c822b80f26f4a1243337f2c86a177f6c9424ccc1d1dc",
+          "meshyInputFile": "source/hero-tardigrade-v4-input.png",
+          "meshyInputSha256": "acdf19f39ea1f9d2bc0a6f31f37abeee4d0c0db616f461b9ebb64e3abef1c7ef"
+        },
+        "referencePrompt": "Clean single-character three-quarter side view derived from the supplied screenshot: uniform pale peach-pink skin, five or more deep overlapping rounded folds, a circular front oral tube, exactly four bilateral pairs of planted lobopod legs, fine ivory claws, and no stripes, shell, UI, scenery, or extra creatures.",
+        "texturePrompt": "uniform pale peach-pink skin with subtle darker peach only inside deep fold creases, dark recessed circular oral tube, warm ivory claws, matte softly moist low-poly arcade surface, no stripes, no bands, no caramel markings, no shell, no armor, no metallic material, no gore"
       }
     },
     {

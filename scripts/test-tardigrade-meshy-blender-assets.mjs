@@ -18,6 +18,12 @@ const MIB = 1024 * 1024;
 const TOTAL_BYTE_BUDGET = 16 * MIB;
 const TASK_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SHA256 = /^[0-9a-f]{64}$/;
+const HERO_USER_REFERENCE_SHA256 = "ea4b38d8e15184f21121c822b80f26f4a1243337f2c86a177f6c9424ccc1d1dc";
+const HERO_MESHY_INPUT_SHA256 = "acdf19f39ea1f9d2bc0a6f31f37abeee4d0c0db616f461b9ebb64e3abef1c7ef";
+const RETIRED_STRIPED_HERO_SOURCE_SHA256 = "f9616290f7dadabb207ba2ac5be9abaf4069cbd6e2c799fd987a842a765a9897";
+const RETIRED_STRIPED_HERO_RUNTIME_SHA256 = "f53fd6561d408097e6b1d45a00181ac8f10e8463fba4bb1faeb4811183f353fc";
+const RETIRED_FIVE_ROW_HERO_SOURCE_SHA256 = "f11be68ba8400d84f41aaa06b7e610b97a10494502ac0856c55ac0a87b032d35";
+const RETIRED_FIVE_ROW_HERO_RUNTIME_SHA256 = "a8d05b6267e7c80c43a25c76fa4015d1ce9a96b91353b2b0489db2a7c7434127";
 const EXPECTED_ASSETS = [
   {
     id: "hero-tardigrade",
@@ -181,6 +187,7 @@ function readAccessor(json, binary, accessorIndex, label) {
       values.push(reader.read(view, elementOffset + component * reader.bytes));
     }
   }
+  assert(values.every(Number.isFinite), `${label} contains a non-finite accessor value`);
   return { accessor, components, values };
 }
 
@@ -232,12 +239,15 @@ function parseGlb(filePath) {
   assert(binary, `${relativePath} has no embedded binary chunk`);
 
   let triangles = 0;
-  for (const mesh of json.meshes || []) {
-    for (const primitive of mesh.primitives || []) {
+  for (const [meshIndex, mesh] of (json.meshes || []).entries()) {
+    for (const [primitiveIndex, primitive] of (mesh.primitives || []).entries()) {
       if ((primitive.mode ?? 4) !== 4) continue;
       const accessorIndex = primitive.indices ?? primitive.attributes?.POSITION;
       const count = json.accessors?.[accessorIndex]?.count;
       triangles += Math.floor((Number(count) || 0) / 3);
+      for (const [semantic, attributeAccessor] of Object.entries(primitive.attributes || {})) {
+        readAccessor(json, binary, attributeAccessor, `${relativePath} mesh ${meshIndex} primitive ${primitiveIndex} ${semantic}`);
+      }
     }
   }
 
@@ -286,6 +296,7 @@ function parseGlb(filePath) {
   });
   return {
     bytes: bytes.length,
+    binary,
     json,
     triangles,
     meshes: json.meshes?.length || 0,
@@ -301,6 +312,60 @@ function parseGlb(filePath) {
       || serialized.includes("KHR_draco_mesh_compression")
       || serialized.includes("EXT_meshopt_compression"),
   };
+}
+
+function measureHeroLegRows(glb) {
+  const positions = [];
+  for (const mesh of glb.json.meshes || []) {
+    for (const primitive of mesh.primitives || []) {
+      const materialName = glb.json.materials?.[primitive.material]?.name || "";
+      if (materialName !== "SkinPrimary" || !Number.isInteger(primitive.attributes?.POSITION)) continue;
+      const accessor = readAccessor(glb.json, glb.binary, primitive.attributes.POSITION, "hero SkinPrimary POSITION");
+      for (let offset = 0; offset < accessor.values.length; offset += accessor.components) {
+        positions.push(accessor.values.slice(offset, offset + 3));
+      }
+    }
+  }
+  assert(positions.length > 0, "hero GLB has no measurable SkinPrimary positions");
+
+  const bounds = [0, 1, 2].map((axis) => ({
+    min: Math.min(...positions.map((position) => position[axis])),
+    max: Math.max(...positions.map((position) => position[axis])),
+  }));
+  const width = bounds[0].max - bounds[0].min;
+  const height = bounds[1].max - bounds[1].min;
+  const length = bounds[2].max - bounds[2].min;
+  const centerX = (bounds[0].min + bounds[0].max) * 0.5;
+  const bins = 48;
+  const counts = Array.from({ length: bins }, () => 0);
+  for (const [x, y, z] of positions) {
+    const isLowAppendage = y <= bounds[1].min + height * 0.48;
+    const isLateral = Math.abs(x - centerX) >= width * 0.22;
+    if (!isLowAppendage || !isLateral) continue;
+    const index = Math.max(0, Math.min(bins - 1, Math.floor((z - bounds[2].min) / length * bins)));
+    counts[index] += 1;
+  }
+  const rootCounts = counts.map(Math.sqrt);
+  const smoothed = rootCounts.map((count, index) => (
+    count + (rootCounts[index - 1] || 0) + (rootCounts[index + 1] || 0)
+  ));
+  const threshold = Math.max(...smoothed) * 0.45;
+  const candidates = smoothed
+    .map((value, index) => ({ value, index }))
+    .filter(({ value, index }) => (
+      value >= threshold
+      && value >= (smoothed[index - 1] ?? -1)
+      && value >= (smoothed[index + 1] ?? -1)
+    ))
+    .sort((a, b) => b.value - a.value);
+  const selected = [];
+  for (const candidate of candidates) {
+    if (selected.every((index) => Math.abs(index - candidate.index) >= 5)) selected.push(candidate.index);
+  }
+  selected.sort((a, b) => a - b);
+  return selected.map((index) => (
+    bounds[2].min + length * ((index + 0.5) / bins)
+  ));
 }
 
 function manifestAssets(manifest) {
@@ -373,11 +438,16 @@ function validateStaticAssets() {
 
     const provenance = entry.meshy;
     assert(provenance && typeof provenance === "object", `${expected.id} is missing its Meshy provenance object`);
-    assert(TASK_ID.test(provenance.previewTaskId || ""), `${expected.id} has no valid Meshy previewTaskId`);
-    assert(TASK_ID.test(provenance.refineTaskId || ""), `${expected.id} has no valid Meshy refineTaskId`);
-    assert(provenance.previewTaskId !== provenance.refineTaskId, `${expected.id} preview/refine Meshy task IDs must be distinct`);
+    const generationMode = provenance.generationMode || "text-to-3d";
+    if (generationMode === "image-to-3d") {
+      assert(TASK_ID.test(provenance.taskId || ""), `${expected.id} has no valid Meshy image-to-3D taskId`);
+    } else {
+      assert(TASK_ID.test(provenance.previewTaskId || ""), `${expected.id} has no valid Meshy previewTaskId`);
+      assert(TASK_ID.test(provenance.refineTaskId || ""), `${expected.id} has no valid Meshy refineTaskId`);
+      assert(provenance.previewTaskId !== provenance.refineTaskId, `${expected.id} preview/refine Meshy task IDs must be distinct`);
+      assert(typeof provenance.prompt === "string" && provenance.prompt.trim().length >= 40, `${expected.id} must preserve its full Meshy prompt`);
+    }
     assert(Number(provenance.consumedCredits) > 0, `${expected.id} must record positive consumedCredits`);
-    assert(typeof provenance.prompt === "string" && provenance.prompt.trim().length >= 40, `${expected.id} must preserve its full Meshy prompt`);
     assert(typeof provenance.texturePrompt === "string" && provenance.texturePrompt.trim().length >= 30, `${expected.id} must preserve its Meshy texturePrompt`);
     assert(typeof provenance.sourceFile === "string" && provenance.sourceFile.startsWith("source/") && provenance.sourceFile.endsWith(".glb"), `${expected.id} has an invalid Meshy sourceFile`);
     assert(SHA256.test(provenance.sourceSha256 || ""), `${expected.id} has an invalid sourceSha256`);
@@ -436,6 +506,52 @@ function validateStaticAssets() {
     }
 
     if (expected.role === "hero") {
+      assert(provenance.generationMode === "image-to-3d", "hero must be regenerated through Meshy image-to-3D from the approved reference");
+      assert(provenance.sourceSha256 !== RETIRED_STRIPED_HERO_SOURCE_SHA256, "hero still points at the retired striped Meshy source");
+      assert(entry.sha256 !== RETIRED_STRIPED_HERO_RUNTIME_SHA256, "hero runtime GLB was not regenerated");
+      assert(provenance.sourceSha256 !== RETIRED_FIVE_ROW_HERO_SOURCE_SHA256, "hero still points at the retired five-row Meshy source");
+      assert(entry.sha256 !== RETIRED_FIVE_ROW_HERO_RUNTIME_SHA256, "hero runtime still points at the retired five-row Blender export");
+
+      const reference = provenance.reference;
+      assert(reference?.userSourceSha256 === HERO_USER_REFERENCE_SHA256, "hero provenance does not pin the supplied user reference");
+      assert(reference?.meshyInputSha256 === HERO_MESHY_INPUT_SHA256, "hero provenance does not pin the approved isolated Meshy input");
+      for (const [fileKey, hashKey] of [["userSourceFile", "userSourceSha256"], ["meshyInputFile", "meshyInputSha256"]]) {
+        const referencePath = resolveAssetRelative(reference?.[fileKey]);
+        assert(referencePath && fs.existsSync(referencePath), `hero ${fileKey} is missing`);
+        assert(sha256File(referencePath) === reference[hashKey], `hero ${hashKey} does not match ${reference[fileKey]}`);
+      }
+      const metadataPath = resolveAssetRelative(provenance.metadataFile);
+      assert(metadataPath && fs.existsSync(metadataPath), "hero Meshy image-to-3D metadata is missing");
+      const metadata = readJson(metadataPath, "hero Meshy image-to-3D metadata");
+      assert(metadata.id === provenance.taskId, "hero manifest taskId does not match Meshy metadata");
+      assert(path.resolve(root, metadata.sourceImage) === resolveAssetRelative(reference.meshyInputFile), "Meshy metadata does not identify the declared hero input image");
+
+      const direction = entry.artDirection;
+      assert(direction?.palette === "uniform-peach", "hero palette must be uniform peach");
+      assert(direction?.deepBodyFolds === true && direction.bodyFoldsMin >= 5, "hero must target at least five deep body folds");
+      assert(direction?.legPairs === 4, "hero must target exactly four leg pairs");
+      assert(direction?.oralTube === "circular-front", "hero must target a circular front oral tube");
+      assert(direction?.stripes === false, "hero must explicitly forbid stripes");
+      const measuredLegRows = measureHeroLegRows(glb);
+      assert(
+        measuredLegRows.length === 4,
+        `hero mesh must visibly contain exactly four planted leg rows; measured ${measuredLegRows.length} near ${measuredLegRows.map((value) => value.toFixed(2)).join(", ")}`,
+      );
+      assert(report.geometry?.anatomy?.method === "source-already-has-four-planted-rows", "accepted hero must originate from a Meshy source with four planted rows before Blender rigging");
+      assert(report.geometry.anatomy.targetLegPairs === 4, "hero anatomy report must target four bilateral leg pairs");
+      assert(report.geometry.anatomy.legRowsBefore?.length === 4 && report.geometry.anatomy.legRowsAfter?.length === 4, "hero Blender report must measure four leg rows before and after cleanup");
+      assert(/uniform.{0,30}peach|peach.{0,30}uniform/i.test(provenance.texturePrompt), "hero texture prompt must request uniform peach skin");
+      assert(/no (?:stripes|bands)|without (?:stripes|bands)/i.test(provenance.texturePrompt), "hero texture prompt must explicitly forbid stripes or bands");
+      const heroMaterialNames = (glb.json.materials || []).map((material) => material.name || "");
+      assert(heroMaterialNames.includes("SkinPrimary"), "hero GLB must retain the tintable SkinPrimary material");
+      assert(heroMaterialNames.includes("MouthDark"), "hero GLB must retain a non-tintable dark oral inset for gameplay readability");
+      assert(
+        report.materials?.oralInset?.radius > 0
+          && report.materials?.oralInset?.triangles > 0
+          && report.materials?.oralInset?.frontProtrusion >= 0.03,
+        "hero Blender report must describe an oral inset placed far enough forward to avoid browser depth fighting",
+      );
+
       const requiredSockets = ["Head", "Face", "Back", "Camera"];
       assert(Array.isArray(entry.sockets) && requiredSockets.every((name) => entry.sockets.includes(name)), "hero manifest must declare Head, Face, Back, and Camera sockets");
       assert(Array.isArray(report.rig?.sockets) && requiredSockets.every((name) => report.rig.sockets.includes(name)), "hero Blender report must preserve Head, Face, Back, and Camera sockets");
@@ -446,6 +562,15 @@ function validateStaticAssets() {
       const indexOf = (name) => nodes.findIndex((node) => node.name === name);
       assert(nodes[indexOf("Head")]?.children?.includes(indexOf("Face")), "hero Face socket must be parented beneath Head");
       assert(nodes[indexOf("Back")]?.children?.includes(indexOf("Camera")), "hero Camera socket must be parented beneath Back");
+      const expectedLegBones = [];
+      for (let pair = 1; pair <= 4; pair += 1) {
+        for (const side of ["L", "R"]) expectedLegBones.push(`Leg_${side}${pair}_Upper`, `Leg_${side}${pair}_Lower`);
+      }
+      const actualLegBones = report.rig.deformBones.filter((name) => /^Leg_[LR]\d+_(?:Upper|Lower)$/.test(name));
+      assert(
+        actualLegBones.length === expectedLegBones.length && expectedLegBones.every((name) => actualLegBones.includes(name)),
+        "hero rig must contain exactly four left/right leg pairs",
+      );
     }
   }
   assert(totalBytes <= TOTAL_BYTE_BUDGET, `Tardigrade GLB roster exceeds 16 MiB (${(totalBytes / MIB).toFixed(2)} MiB)`);
@@ -620,6 +745,31 @@ async function advance(page, ms) {
   await page.evaluate((duration) => window.advanceTime(duration), ms);
 }
 
+async function captureCanvas(page, filename) {
+  const box = await page.locator("#gameCanvas").boundingBox();
+  assert(box && box.width > 0 && box.height > 0, "gameCanvas has no capturable browser bounds");
+  await page.screenshot({
+    path: path.join(artifactDir, filename),
+    clip: {
+      x: Math.max(0, box.x),
+      y: Math.max(0, box.y),
+      width: box.width,
+      height: box.height,
+    },
+  });
+}
+
+async function frameHeroForProof(page) {
+  await page.evaluate(() => {
+    const debug = window.__MICRO_MAYHEM_DEBUG;
+    debug.state.calloutTimer = 0;
+    document.getElementById("micro-callout")?.classList.remove("micro-callout--show");
+    document.getElementById("micro-prompt")?.classList.remove("micro-prompt--show");
+    debug.world.tardigrade.rotation.y = Math.PI;
+    debug.frameHero();
+  });
+}
+
 async function startFromOverlay(page) {
   // A trusted headless pointer event also primes the site's shared Web Audio
   // context and can spend tens of seconds waiting on the CI audio backend.
@@ -669,6 +819,10 @@ async function runBrowserRegression() {
     await startFromOverlay(desktopPage);
     await advance(desktopPage, 80);
     await expectHeroClip(desktopPage, "idle", async () => {});
+    await frameHeroForProof(desktopPage);
+    await captureCanvas(desktopPage, "hero-reference-idle.png");
+    await desktopPage.evaluate(() => window.__MICRO_MAYHEM_DEBUG.clearModelFrame());
+    await advance(desktopPage, 20);
 
     const beforeMove = await desktopPage.evaluate(() => ({ ...window.__MICRO_MAYHEM_DEBUG.state.player }));
     await desktopPage.keyboard.down("w");
@@ -811,7 +965,7 @@ async function runBrowserRegression() {
       `render_game_to_text must report finite player coordinates: ${JSON.stringify(textState.player)}`,
     );
     await advance(desktopPage, 900);
-    await desktopPage.locator("#gameCanvas").screenshot({ path: path.join(artifactDir, "desktop-stage-one.png") });
+    await captureCanvas(desktopPage, "desktop-stage-one.png");
     await desktop.close();
 
     const mobile = await browser.newContext({
@@ -848,7 +1002,7 @@ async function runBrowserRegression() {
     assert(mobileLayout.canvas.width >= 350 && mobileLayout.canvas.width <= 390, `mobile canvas width is invalid: ${JSON.stringify(mobileLayout)}`);
     assert(mobileLayout.scrollWidth <= mobileLayout.innerWidth + 1, `mobile page overflows horizontally: ${JSON.stringify(mobileLayout)}`);
     assert(mobileLayout.controls.every((control) => control.visible && control.width >= 44 && control.height >= 44), `mobile controls are obscured or too small: ${JSON.stringify(mobileLayout.controls)}`);
-    await mobilePage.locator("#gameCanvas").screenshot({ path: path.join(artifactDir, "mobile-stage-one.png") });
+    await captureCanvas(mobilePage, "mobile-stage-one.png");
     await mobile.close();
 
     const fallbackIssues = [];
@@ -914,7 +1068,7 @@ async function runBrowserRegression() {
         )),
       `ciliate fallback is hidden, empty, detached, or mixed with an authored model: ${JSON.stringify(fallbackState.details)}`,
     );
-    await fallbackPage.locator("#gameCanvas").screenshot({ path: path.join(artifactDir, "fallback-ciliate.png") });
+    await captureCanvas(fallbackPage, "fallback-ciliate.png");
     assert(fallbackIssues.length === 0, `unexpected fallback errors:\n${fallbackIssues.join("\n")}`);
     await fallback.close();
 

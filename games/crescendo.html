@@ -12,10 +12,388 @@
   <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/crescendo/card-crescendo-ai-v1.jpg?v=20260712-jpg" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" />
   <link rel="stylesheet" href="../assets/css/styles.css?v=20260712-uiux" />
+  <link rel="preload" as="image" href="../assets/img/crescendo/fullscreen-proscenium.png?v=20260722-proscenium-1" media="(min-aspect-ratio: 5/4)" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Cpath d='M20 72 Q35 20 50 50 T80 28' fill='none' stroke='%232ee0ff' stroke-width='7' stroke-linecap='round'/%3E%3Ccircle cx='80' cy='28' r='9' fill='%23ff2e88'/%3E%3C/svg%3E" />
   <style>
     /* Crescendo is a canvas game; only page-local bits live here. */
-    .cres-page .canvas-wrap { background: #05060d; }
+    .cres-page .canvas-wrap {
+      --cres-ship-color: #2ee0ff;
+      --cres-ship-accent: #ff2e88;
+      --cres-play-width: min(100%, calc(100dvh * 0.78125));
+      background: #05060d;
+      border-color: rgba(46, 224, 255, 0.32);
+      box-shadow: inset 0 0 36px rgba(46, 224, 255, 0.05), 0 0 44px rgba(255, 46, 136, 0.06);
+      isolation: isolate;
+    }
+    .cres-page .canvas-wrap.is-maxed,
+    .cres-page .canvas-wrap:fullscreen,
+    .cres-page .canvas-wrap:-webkit-full-screen {
+      max-height: none !important;
+    }
+    .cres-page #gameCanvas {
+      image-rendering: auto;
+      position: relative;
+      z-index: 2;
+    }
+
+    /* Widescreen proscenium — only revealed by max/native fullscreen. */
+    .cres-fullscreen-art {
+      display: none;
+      position: absolute;
+      inset-block: 0;
+      width: max(0px, calc((100% - var(--cres-play-width)) / 2));
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 1;
+      color: var(--cres-ship-color);
+      background:
+        radial-gradient(circle at 100% 36%, color-mix(in srgb, var(--cres-ship-color) 13%, transparent), transparent 42%),
+        linear-gradient(90deg, rgba(2,3,10,0.34), transparent 66%);
+    }
+    .cres-fullscreen-art--left { left: 0; }
+    .cres-fullscreen-art--right {
+      right: 0;
+      background:
+        radial-gradient(circle at 0 36%, color-mix(in srgb, var(--cres-ship-color) 13%, transparent), transparent 42%),
+        linear-gradient(270deg, rgba(2,3,10,0.34), transparent 66%);
+    }
+    .cres-fullscreen-art::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      opacity: 0.16;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 88%, transparent);
+    }
+    .cres-fullscreen-art::after {
+      content: "";
+      position: absolute;
+      inset-block: 0;
+      right: 0;
+      width: 2px;
+      z-index: 4;
+      background: linear-gradient(180deg, transparent 3%, var(--cres-ship-color) 22%, var(--cres-ship-accent) 78%, transparent 97%);
+      box-shadow: 0 0 18px var(--cres-ship-color), 0 0 42px color-mix(in srgb, var(--cres-ship-color) 35%, transparent);
+      opacity: 0.72;
+    }
+    .cres-fullscreen-art--right::after { right: auto; left: 0; }
+    .cres-fullscreen-art__readout {
+      position: absolute;
+      top: clamp(54px, 8vh, 92px);
+      right: clamp(16px, 2vw, 36px);
+      z-index: 5;
+      min-width: min(210px, calc(100% - 32px));
+      padding: 10px 12px 9px;
+      border: 1px solid color-mix(in srgb, var(--cres-ship-color) 35%, transparent);
+      border-right: 3px solid var(--cres-ship-color);
+      background: linear-gradient(90deg, rgba(4,5,14,0.18), rgba(4,5,14,0.84));
+      box-shadow: 0 0 28px rgba(0,0,0,0.4);
+      backdrop-filter: blur(9px) saturate(1.15);
+      -webkit-backdrop-filter: blur(9px) saturate(1.15);
+      text-align: right;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+    }
+    .cres-fullscreen-art--right .cres-fullscreen-art__readout {
+      right: auto;
+      left: clamp(16px, 2vw, 36px);
+      border-right-width: 1px;
+      border-left: 3px solid var(--cres-ship-color);
+      background: linear-gradient(90deg, rgba(4,5,14,0.84), rgba(4,5,14,0.18));
+      text-align: left;
+    }
+    .cres-fullscreen-art__readout span {
+      display: block;
+      color: rgba(225,235,248,0.48);
+      font-size: clamp(7px, 0.65vw, 10px);
+      letter-spacing: 0.22em;
+    }
+    .cres-fullscreen-art__readout strong {
+      display: block;
+      margin-top: 3px;
+      color: #f4f7ff;
+      font-family: var(--font-display);
+      font-size: clamp(14px, 1.35vw, 23px);
+      letter-spacing: 0.08em;
+      text-shadow: 0 0 12px var(--cres-ship-color);
+    }
+    .cres-fullscreen-art__readout b {
+      display: block;
+      margin-top: 4px;
+      color: var(--cres-ship-color);
+      font-size: clamp(7px, 0.6vw, 9px);
+      letter-spacing: 0.12em;
+    }
+    .cres-fullscreen-art__index {
+      position: absolute;
+      left: clamp(12px, 1.4vw, 28px);
+      bottom: clamp(30px, 5vh, 64px);
+      z-index: 5;
+      color: color-mix(in srgb, var(--cres-ship-color) 60%, #f4f7ff);
+      font: 700 clamp(7px, 0.55vw, 9px)/1 var(--font-mono);
+      letter-spacing: 0.32em;
+      writing-mode: vertical-rl;
+      opacity: 0.58;
+    }
+    .cres-fullscreen-art--right .cres-fullscreen-art__index { left: auto; right: clamp(12px, 1.4vw, 28px); }
+    .cres-fullscreen-art__meter {
+      position: absolute;
+      right: clamp(16px, 2vw, 36px);
+      bottom: clamp(28px, 5vh, 58px);
+      z-index: 5;
+      display: flex;
+      align-items: flex-end;
+      gap: 5px;
+      height: 32px;
+    }
+    .cres-fullscreen-art--right .cres-fullscreen-art__meter { right: auto; left: clamp(16px, 2vw, 36px); }
+    .cres-fullscreen-art__meter i {
+      display: block;
+      width: 3px;
+      height: 30%;
+      background: var(--cres-ship-color);
+      box-shadow: 0 0 7px var(--cres-ship-color);
+      animation: cres-side-meter 1.15s ease-in-out infinite alternate;
+    }
+    .cres-fullscreen-art__meter i:nth-child(2) { height: 58%; animation-delay: -0.6s; }
+    .cres-fullscreen-art__meter i:nth-child(3) { height: 100%; animation-delay: -0.2s; }
+    .cres-fullscreen-art__meter i:nth-child(4) { height: 74%; animation-delay: -0.85s; }
+    .cres-fullscreen-art__meter i:nth-child(5) { height: 42%; animation-delay: -0.4s; }
+    .cres-fullscreen-art__meter i:nth-child(6) { height: 86%; animation-delay: -0.95s; }
+    .cres-fullscreen-art__meter i:nth-child(7) { height: 52%; animation-delay: -0.1s; }
+    .cres-fullscreen-art__meter i:nth-child(8) { height: 28%; animation-delay: -0.72s; }
+    @keyframes cres-side-meter { to { transform: scaleY(0.38); opacity: 0.46; } }
+
+    @media (min-aspect-ratio: 5 / 4) {
+      .cres-page .canvas-wrap.is-maxed,
+      .cres-page .canvas-wrap:fullscreen,
+      .cres-page .canvas-wrap:-webkit-full-screen {
+        background:
+          linear-gradient(90deg,
+            color-mix(in srgb, var(--cres-ship-color) 8%, transparent),
+            transparent 22%, transparent 78%,
+            color-mix(in srgb, var(--cres-ship-accent) 7%, transparent)),
+          url("../assets/img/crescendo/fullscreen-proscenium.png?v=20260722-proscenium-1") center / cover no-repeat,
+          #02030a !important;
+      }
+
+      .cres-page .canvas-wrap.is-maxed .cres-fullscreen-art,
+      .cres-page .canvas-wrap:fullscreen .cres-fullscreen-art,
+      .cres-page .canvas-wrap:-webkit-full-screen .cres-fullscreen-art { display: block; }
+
+      .cres-page .canvas-wrap.is-maxed #gameCanvas,
+      .cres-page .canvas-wrap:fullscreen #gameCanvas,
+      .cres-page .canvas-wrap:-webkit-full-screen #gameCanvas {
+        box-shadow:
+          -18px 0 55px color-mix(in srgb, var(--cres-ship-color) 14%, transparent),
+          18px 0 55px color-mix(in srgb, var(--cres-ship-accent) 12%, transparent),
+          0 0 0 1px rgba(255,255,255,0.08) !important;
+      }
+
+      .cres-page .canvas-wrap.is-maxed .overlay,
+      .cres-page .canvas-wrap:fullscreen .overlay,
+      .cres-page .canvas-wrap:-webkit-full-screen .overlay {
+        left: 50%;
+        right: auto;
+        width: var(--cres-play-width);
+        transform: translateX(-50%);
+        border-inline: 1px solid rgba(255,255,255,0.06);
+        border-radius: 0;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .cres-fullscreen-art__meter i { animation: none; }
+    }
+    .cres-page .overlay {
+      background:
+        radial-gradient(circle at 50% 38%, rgba(46, 224, 255, 0.11), transparent 32%),
+        linear-gradient(180deg, rgba(4, 5, 15, 0.82), rgba(4, 5, 14, 0.93));
+      backdrop-filter: blur(2px);
+      justify-content: flex-start;
+      overflow-y: auto;
+      padding: 10px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(46, 224, 255, 0.45) transparent;
+    }
+    .cres-page .overlay::before,
+    .cres-page .overlay::after {
+      content: "";
+      width: min(330px, 72%);
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(46, 224, 255, 0.65), rgba(255, 46, 136, 0.65), transparent);
+      margin: 1px 0 6px;
+    }
+    .cres-page .overlay::after { margin: 6px 0 1px; }
+    .cres-page .overlay__title {
+      color: #f4f7ff;
+      text-shadow: 0 0 12px rgba(46, 224, 255, 0.45), 0 0 28px rgba(255, 46, 136, 0.24);
+      letter-spacing: 1px;
+      flex: 0 0 auto;
+      font-size: 22px;
+      margin-bottom: 3px;
+    }
+    .cres-page .overlay__sub { max-width: 460px; margin-bottom: 7px; flex: 0 0 auto; font-size: 10px; line-height: 1.35; }
+    .cres-page .overlay__score { margin-bottom: 7px; font-size: 10px; flex: 0 0 auto; }
+    .cres-page .hud {
+      background: linear-gradient(180deg, rgba(9, 11, 27, 0.96), rgba(5, 7, 18, 0.96));
+      border-bottom-color: rgba(46, 224, 255, 0.18);
+    }
+
+    .cres-hangar {
+      width: min(470px, 100%);
+      margin: 0 auto 8px;
+      padding: 7px;
+      border: 1px solid rgba(46, 224, 255, 0.18);
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(5, 8, 20, 0.88), rgba(7, 9, 20, 0.7));
+      box-shadow: inset 0 0 28px rgba(46, 224, 255, 0.035);
+      flex: 0 0 auto;
+    }
+    .cres-hangar__head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 5px;
+      font-family: var(--font-mono);
+      text-align: left;
+    }
+    .cres-hangar__head strong { color: var(--ink); font-size: 10px; letter-spacing: 1.8px; }
+    .cres-hangar__head span { color: var(--ink-dim); font-size: 8px; letter-spacing: 0.5px; }
+    .cres-hangar__cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .cres-ship-card {
+      position: relative;
+      min-width: 0;
+      min-height: 62px;
+      padding: 4px 3px 5px;
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 9px;
+      background: rgba(9, 12, 27, 0.88);
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+    .cres-ship-card:hover { transform: translateY(-2px); border-color: var(--ship-color, #2ee0ff); }
+    .cres-ship-card:focus-visible { outline: 2px solid var(--ship-color, #2ee0ff); outline-offset: 2px; }
+    .cres-ship-card.is-selected {
+      color: var(--ink);
+      border-color: var(--ship-color, #2ee0ff);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--ship-color, #2ee0ff) 16%, #090c1b), rgba(9, 12, 27, 0.96));
+      box-shadow: 0 0 16px color-mix(in srgb, var(--ship-color, #2ee0ff) 22%, transparent);
+    }
+    .cres-ship-card.is-locked { opacity: 0.5; filter: saturate(0.45); }
+    .cres-ship-card__icon { display: block; height: 30px; margin: 0 auto 1px; }
+    .cres-ship-card__icon svg { width: 34px; height: 30px; overflow: visible; }
+    .cres-ship-card__name { display: block; overflow: hidden; text-overflow: ellipsis; font-size: 8px; font-weight: 800; letter-spacing: 0.5px; white-space: nowrap; }
+    .cres-ship-card__state { display: block; margin-top: 2px; font-size: 7px; color: var(--ship-color, #2ee0ff); letter-spacing: 0.6px; }
+    .cres-hangar__detail {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 3px 10px;
+      margin-top: 5px;
+      padding: 5px 6px 0;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      font-family: var(--font-mono);
+      font-size: 8px;
+      line-height: 1.35;
+      text-align: left;
+      color: var(--ink-dim);
+    }
+    .cres-hangar__detail strong { color: var(--ink); letter-spacing: 0.5px; }
+    .cres-hangar__detail b { color: var(--ship-color, #2ee0ff); font-weight: 800; text-align: right; }
+    .cres-hangar__detail p { grid-column: 1 / -1; margin: 2px 0 0; color: rgba(225,235,248,0.66); }
+
+    .cres-achievement-toast {
+      position: absolute;
+      z-index: 14;
+      top: 58px;
+      left: 50%;
+      width: min(390px, calc(100% - 34px));
+      padding: 11px 14px 11px 48px;
+      border: 1px solid rgba(255, 212, 59, 0.7);
+      border-radius: 10px;
+      background: linear-gradient(100deg, rgba(17,14,8,0.97), rgba(9,11,24,0.97));
+      box-shadow: 0 0 28px rgba(255,212,59,0.2), 0 8px 26px rgba(0,0,0,0.45);
+      font-family: var(--font-mono);
+      text-align: left;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -18px);
+      transition: opacity 180ms ease, transform 260ms cubic-bezier(.2,.8,.2,1);
+    }
+    .cres-achievement-toast::before {
+      content: "★";
+      position: absolute;
+      left: 15px;
+      top: 50%;
+      color: #ffd43b;
+      font-size: 22px;
+      transform: translateY(-50%);
+      text-shadow: 0 0 14px rgba(255,212,59,0.75);
+    }
+    .cres-achievement-toast.is-show { opacity: 1; transform: translate(-50%, 0); }
+    .cres-achievement-toast__eyebrow { display: block; color: #ffd43b; font-size: 8px; font-weight: 800; letter-spacing: 1.6px; }
+    .cres-achievement-toast__title { display: block; color: #f4f7ff; font-size: 12px; font-weight: 800; margin-top: 2px; }
+    .cres-achievement-toast__reward { display: block; color: rgba(225,235,248,0.65); font-size: 8px; margin-top: 2px; }
+
+    .cres-achievements__summary {
+      margin: -2px 0 10px;
+      color: var(--ink-dim);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      line-height: 1.45;
+    }
+    .cres-achievements { display: grid; gap: 7px; }
+    .cres-achievement {
+      --achievement-color: rgba(255,255,255,0.22);
+      position: relative;
+      overflow: hidden;
+      padding: 9px 10px 9px 38px;
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 9px;
+      background: rgba(5,7,16,0.66);
+      font-family: var(--font-mono);
+    }
+    .cres-achievement::before {
+      content: "◇";
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      color: var(--achievement-color);
+      font-size: 15px;
+    }
+    .cres-achievement.is-earned {
+      --achievement-color: #ffd43b;
+      border-color: rgba(255,212,59,0.28);
+      background: linear-gradient(100deg, rgba(255,212,59,0.08), rgba(5,7,16,0.7));
+    }
+    .cres-achievement.is-earned::before { content: "◆"; text-shadow: 0 0 10px rgba(255,212,59,0.65); }
+    .cres-achievement__title { color: var(--ink); font-size: 10px; font-weight: 800; letter-spacing: 0.3px; }
+    .cres-achievement__desc { margin-top: 2px; color: var(--ink-dim); font-size: 9px; line-height: 1.35; }
+    .cres-achievement__reward { margin-top: 3px; color: #2ee0ff; font-size: 8px; font-weight: 800; letter-spacing: 0.5px; }
+    .cres-achievement__track { height: 3px; margin-top: 6px; border-radius: 3px; background: rgba(255,255,255,0.08); }
+    .cres-achievement__fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2ee0ff, #ffd43b); }
+    .cres-achievement__progress { margin-top: 3px; color: rgba(225,235,248,0.48); font-size: 8px; text-align: right; }
+
+    @media (max-width: 560px) {
+      .cres-page .overlay { padding: 12px 10px; }
+      .cres-page .overlay::before, .cres-page .overlay::after { margin-bottom: 8px; }
+      .cres-page .overlay::after { margin-top: 8px; }
+      .cres-page .overlay__title { font-size: 22px; margin-bottom: 4px; }
+      .cres-page .overlay__sub { font-size: 10px; line-height: 1.3; margin-bottom: 8px; }
+      .cres-hangar { padding: 7px; margin-bottom: 8px; }
+      .cres-hangar__cards { gap: 4px; }
+      .cres-ship-card { min-height: 58px; padding-inline: 2px; }
+      .cres-ship-card__icon { height: 28px; }
+      .cres-ship-card__icon svg { width: 31px; height: 28px; }
+      .cres-hangar__detail { font-size: 7px; }
+    }
 
     .cres-legend { display: grid; gap: 8px; }
     .cres-legend__row {
@@ -77,7 +455,7 @@
     }
   </style>
 </head>
-<body class="cres-page">
+<body class="cres-page" data-rb-restart-label="Restart Level">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
   <main class="game-page">
@@ -100,22 +478,53 @@
         </div>
 
         <div class="canvas-wrap canvas-wrap--ar-500-640" style="--game-aspect:0.78125; --game-aspect-ratio:25 / 32;">
+          <aside class="cres-fullscreen-art cres-fullscreen-art--left" aria-hidden="true">
+            <div class="cres-fullscreen-art__readout">
+              <span>Requiem craft</span>
+              <strong data-cres-side-ship>ARIA</strong>
+              <b data-cres-side-weapon>HARMONIC ARRAY</b>
+            </div>
+            <div class="cres-fullscreen-art__index">SILENCED ORCHESTRA // PORT</div>
+            <div class="cres-fullscreen-art__meter"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </aside>
+
+          <aside class="cres-fullscreen-art cres-fullscreen-art--right" aria-hidden="true">
+            <div class="cres-fullscreen-art__readout">
+              <span>Rhythm telemetry</span>
+              <strong data-cres-side-movement>MOVEMENT I</strong>
+              <b data-cres-side-tempo>112 BPM // RHYTHM LOCK</b>
+              <b data-cres-side-render>HI-RES // 1000×1280</b>
+            </div>
+            <div class="cres-fullscreen-art__index">RAINBOT PERFORMANCE SYSTEM // STARBOARD</div>
+            <div class="cres-fullscreen-art__meter"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </aside>
+
           <canvas id="gameCanvas" width="500" height="640" tabindex="0" aria-label="Crescendo playfield"></canvas>
 
           <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
+          <button id="btn-main-menu" type="button" hidden aria-hidden="true" tabindex="-1">Main menu</button>
 
           <div class="overlay overlay--show" id="overlay">
             <h2 class="overlay__title" id="overlay-title">𝄞 CRESCENDO</h2>
             <p class="overlay__sub" id="overlay-sub">
-              The Conductor raised his baton and the world went silent. You are the
-              <strong>Last Note</strong>, flying up the sheet music. Move with <strong>WASD</strong> —
-              firing is automatic. Tap <strong>Space</strong> (or click) <em>on the beat</em> to
-              crescendo your weapon up the power ladder; go quiet or miss the beat and the
-              orchestra thins out. Headphones on. Play loud.
+              The Conductor stole the world's music. Choose a Requiem craft, move with
+              <strong>WASD</strong>, and auto-fire upward. Tap <strong>Space</strong> (or click)
+              <em>on the beat</em> to raise its weapon. Headphones on. Play loud.
             </p>
             <div class="overlay__score" id="overlay-score"></div>
+            <section class="cres-hangar" id="cres-hangar" aria-label="Ship hangar">
+              <div class="cres-hangar__head"><strong>REQUIEM HANGAR</strong><span>CHOOSE YOUR INSTRUMENT</span></div>
+              <div class="cres-hangar__cards" id="cres-hangar-cards"></div>
+              <div class="cres-hangar__detail" id="cres-hangar-detail"></div>
+            </section>
             <button class="btn btn--primary" id="btn-primary">Begin the requiem</button>
             <button class="btn btn--secondary" id="btn-encore" style="display:none;margin-top:10px;">🎬 Encore</button>
+          </div>
+
+          <div class="cres-achievement-toast" id="cres-achievement-toast" role="status" aria-live="polite">
+            <span class="cres-achievement-toast__eyebrow">ACHIEVEMENT UNLOCKED</span>
+            <span class="cres-achievement-toast__title" id="cres-achievement-toast-title"></span>
+            <span class="cres-achievement-toast__reward" id="cres-achievement-toast-reward"></span>
           </div>
         </div>
 
@@ -129,7 +538,8 @@
           <strong>Move</strong> with <kbd>WASD</kbd>/arrows — firing is automatic ·
           tap <kbd>Space</kbd> or <kbd>click</kbd> <strong>on the beat</strong> (watch the metronome bar at the bottom)
           to power up your weapon; off-beat taps and silence make it decay ·
-          <kbd>B</kbd>/<kbd>Shift</kbd> drops a Fermata bomb · <kbd>P</kbd> pauses.
+          <kbd>B</kbd>/<kbd>Shift</kbd> drops a Fermata bomb · <kbd>P</kbd> pauses ·
+          gamepad: left stick/D-pad + <kbd>A</kbd> tap + <kbd>B</kbd>/<kbd>RB</kbd> bomb.
         </p>
       </div>
 
@@ -142,7 +552,7 @@
           <h3 class="game-side__title">CONDUCTING</h3>
           <div class="controls-row">
             <button class="btn btn--ghost" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause (P)</button>
-            <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Restart run</button>
+            <button class="btn btn--ghost" id="btn-restart" type="button" style="font-size:13px;padding:8px 12px;">Restart Level</button>
           </div>
           <div class="controls-row" style="margin-top:8px;">
             <button class="btn btn--ghost" id="btn-sound" type="button" aria-pressed="true" style="font-size:13px;padding:8px 12px;">Sound On</button>
@@ -150,14 +560,23 @@
         </div>
 
         <div class="game-side__panel">
+          <h3 class="game-side__title">OVATIONS</h3>
+          <p class="cres-achievements__summary" id="cres-achievements-summary">Your achievements and unlocked ships are saved on this device.</p>
+          <div class="cres-achievements" id="cres-achievements"></div>
+        </div>
+
+        <div class="game-side__panel">
           <h3 class="game-side__title">FIELD GUIDE</h3>
           <div class="cres-legend">
-            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--you">▲</span><span><strong>The Last Note</strong> — your ship. Auto-fires straight up; the white dot is your true hitbox.</span></div>
+            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--you">▲</span><span><strong>Requiem craft</strong> — four unlockable ships, each with its own hull, score, tempo, and weapon. The white dot is your true hitbox.</span></div>
             <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--beat">◇</span><span><strong>Metronome bar</strong> — bottom center. Ticks converge on the beat; tap when they meet to crescendo.</span></div>
-            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--you">▮</span><span><strong>Groove meter</strong> — left edge, SOLO up to TUTTI FORTISSIMO. It drains while you're quiet; keep tapping on beat.</span></div>
+            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--you">▮</span><span><strong>Groove meter</strong> — left edge, nine stages of the selected ship's signature weapon. It drains while you're quiet; keep tapping on beat.</span></div>
+            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--beat">✦</span><span><strong>Cadenza</strong> — land 4 PERFECT taps in a row for four beats of faster, harder fire and a local bullet clear.</span></div>
+            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--you">◎</span><span><strong>Graze</strong> — skim enemy bullets with your ship's wings for bonus score and a little more time before your Groove decays.</span></div>
             <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--muted">⬡</span><span><strong>The Muted</strong> — silenced squadrons. They only fire on the beat; hear the rhythm, read the bullets.</span></div>
-            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--beat">𝄐</span><span><strong>Fermata</strong> — a screen-clearing bomb, earned with an 8-tap perfect streak. Spend it with <kbd>B</kbd>.</span></div>
+            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--beat">𝄐</span><span><strong>Fermata</strong> — a screen-clearing bomb, earned with an 8-tap on-beat streak. Spend it with <kbd>B</kbd>.</span></div>
             <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--boss">♛</span><span><strong>Section leaders</strong> — a boss ends each movement. Silence all four and the world sings again.</span></div>
+            <div class="cres-legend__row"><span class="cres-legend__chip cres-legend__chip--you">A</span><span><strong>Gamepad</strong> — left stick or D-pad moves, A taps, B/RB drops a Fermata, and Start pauses.</span></div>
           </div>
         </div>
 
@@ -168,11 +587,16 @@
           <summary>How to play</summary>
           <ul>
             <li><strong style="color:var(--ink);">The soundtrack is the game.</strong> Every drum, bassline and arp is synthesized live, and it grows a layer each movement. Enemies fire on the beat — if you can hear it, you can dodge it.</li>
-            <li><strong style="color:var(--ink);">Tap on the beat to power up.</strong> Each on-beat tap climbs the weapon ladder: SOLO → DUET → TRIO … all the way to <em>TUTTI FORTISSIMO</em> (seven-way spread, homing missiles, piercing center beam). Off-beat taps knock you down a rung.</li>
+            <li><strong style="color:var(--ink);">Choose your instrument.</strong> Aria's Harmonic Array fills the field, Vesper's Prism Lance pierces a narrow lane, Counterpoint's Canon Drones weave together, and Virtuoso's Baton Rail accents every beat. Their tempos and live arrangements are different too.</li>
+            <li><strong style="color:var(--ink);">Tap on the beat to power up.</strong> Each on-beat tap climbs the selected ship's nine-stage weapon ladder. Off-beat taps knock you down a rung; every craft develops in a different way.</li>
+            <li><strong style="color:var(--ink);">Play the center of the beat.</strong> The cyan zone is good; the narrow gold zone is PERFECT. Chain four PERFECT taps to trigger a four-beat <em>Cadenza</em>: faster fire, extra damage, and a close-range bullet clear.</li>
+            <li><strong style="color:var(--ink);">Graze the danger.</strong> Your white center dot is the true hitbox. Let bullets pass through the wings to earn graze score and delay Groove decay.</li>
             <li><strong style="color:var(--ink);">Silence is decay.</strong> The groove meter drains a level every few seconds you don't tap. Great players play the game like a metronome — dodge with one hand, keep time with the other.</li>
-            <li><strong style="color:var(--ink);">Fermata bombs.</strong> An 8-tap perfect streak banks a Fermata (max 2): a screen-clearing hold that erases every bullet, Raiden-style.</li>
+            <li><strong style="color:var(--ink);">Fermata bombs.</strong> An 8-tap on-beat streak banks a Fermata (max 2): a screen-clearing hold that erases every bullet, Raiden-style.</li>
             <li><strong style="color:var(--ink);">Keep the combo singing.</strong> Kills raise your multiplier up to ×5. Taking a hit resets it and drops two weapon levels — the score chase is a no-hit chase.</li>
             <li><strong style="color:var(--ink);">Four movements, four bosses.</strong> The Timpanist, the First Chair, the Metronome… and Him. Each movement is faster, higher, louder.</li>
+            <li><strong style="color:var(--ink);">Earn the ovation.</strong> Every section ends with a D-to-S grade and score bonus based on beat accuracy, PERFECT timing, grazes, and taking no damage.</li>
+            <li><strong style="color:var(--ink);">Controller ready.</strong> Left stick/D-pad moves, A taps, B or RB bombs, and Start pauses. Rhythm actions trigger once per press, never from holding a button.</li>
             <li><strong style="color:var(--ink);">Encore.</strong> Fall once and a quick ad revives you with full health (Pro members take their encore free).</li>
           </ul>
         </details>
@@ -190,8 +614,8 @@
   </footer>
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/main.js?v=20260712-uiux"></script>
-  <script src="../assets/js/crescendo.js?v=20260708-cres-4"></script>
+  <script src="../assets/js/main.js?v=20260722-crescendo-controls-1"></script>
+  <script src="../assets/js/crescendo.js?v=20260722-restart-level-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

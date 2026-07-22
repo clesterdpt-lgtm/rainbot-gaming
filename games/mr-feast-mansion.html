@@ -850,6 +850,10 @@
       left: 0;
       top: 0;
       z-index: 12;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      column-gap: 9px;
+      align-items: center;
       width: max-content;
       max-width: min(340px, 74%);
       padding: 9px 13px 10px;
@@ -880,11 +884,14 @@
     }
 
     #mansion-speech[data-clamped="true"] { border-style: dashed; }
+    #mansion-speech[data-skippable="true"] { pointer-events: auto; }
     #mansion-speech[data-clamped="true"]::after { display: none; }
     #mansion-speech[hidden] { display: none; }
 
     #mansion-speech-speaker {
       display: block;
+      grid-column: 1;
+      grid-row: 1;
       max-width: 100%;
       margin-bottom: 3px;
       overflow: hidden;
@@ -902,10 +909,43 @@
 
     #mansion-speech-text {
       display: block;
+      grid-column: 1;
+      grid-row: 2;
       font-style: italic;
       letter-spacing: 0.01em;
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
     }
+
+    #mansion-speech-skip {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      align-self: center;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0 10px;
+      border: 1px solid rgba(216, 182, 127, 0.5);
+      border-radius: 10px;
+      color: #f4e4ca;
+      background: rgba(74, 43, 36, 0.78);
+      font: inherit;
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      line-height: 1.1;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    #mansion-speech-skip:hover,
+    #mansion-speech-skip:focus-visible {
+      border-color: rgba(244, 218, 169, 0.85);
+      background: rgba(104, 59, 45, 0.94);
+      outline: 2px solid rgba(244, 218, 169, 0.34);
+      outline-offset: 2px;
+    }
+
+    #mansion-speech-skip[hidden] { display: none; }
 
     #mansion-gameover {
       position: absolute;
@@ -2829,6 +2869,7 @@
         <div id="mansion-speech" role="status" aria-live="polite" aria-atomic="true" data-clamped="false" hidden>
           <span id="mansion-speech-speaker"></span>
           <span id="mansion-speech-text"></span>
+          <button id="mansion-speech-skip" type="button" hidden>Skip</button>
         </div>
 
         <section id="mansion-feast-says" role="region" aria-label="Feast Says minimal status" data-guidance="speech" data-result="waiting" hidden>
@@ -3142,6 +3183,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260712-uiux" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260721-storm-run-restored-wait-1-final-straight-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260722-storm-gate-dialogue-skip-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

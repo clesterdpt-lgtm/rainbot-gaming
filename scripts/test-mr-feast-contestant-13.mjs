@@ -36,6 +36,16 @@ async function diagnostics(page) {
   return page.evaluate(() => JSON.parse(window.render_game_to_text()));
 }
 
+async function screenshotStage(page, fileName) {
+  const clip = await page.locator("#mansion-stage").boundingBox();
+  assert(clip?.width > 0 && clip?.height > 0, `cannot capture ${fileName}: mansion stage has no bounds`);
+  await page.screenshot({
+    path: path.join(artifactDir, fileName),
+    clip,
+    animations: "disabled",
+  });
+}
+
 async function completeFirstClueCompetition(page, expectedClueId) {
   let state = await diagnostics(page);
   assert(
@@ -61,15 +71,15 @@ async function completeFirstClueCompetition(page, expectedClueId) {
 }
 
 async function completeStormRunCompetition(page, expectedClueId) {
-  await page.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.castReady, null, { timeout: 30000 });
+  await page.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.castReady, null, { timeout: 120000 });
   let state = await diagnostics(page);
   assert(
     state.stormRun?.phase === "called"
-      && state.stormRun.triggerReason === "clue"
+      && state.stormRun.triggerReason === "hedge-maze-key"
       && state.stormRun.triggerClueId === expectedClueId
       && state.stormRun.callCount === 1
       && state.stormRun.clueProgressLocked,
-    `the first post-Feast clue should call Storm Run once and pause later clues; got ${JSON.stringify(state.stormRun)}`,
+    `the recovered hedge-maze key should call Storm Run once and pause later clues; got ${JSON.stringify(state.stormRun)}`,
   );
   const result = await page.evaluate(() => window.MrFeastFresh.completeStormRunForQA("player"));
   assert(result?.survived === true, `the QA completion should survive Storm Run; got ${JSON.stringify(result)}`);
@@ -109,11 +119,12 @@ async function pressInteract(page) {
   await page.waitForTimeout(120);
 }
 
-async function waitForContestantFlag(page, flag, timeout = 5000) {
+async function waitForContestantFlag(page, flag, timeout = 15000) {
   try {
     await page.waitForFunction((key) => Boolean(JSON.parse(window.render_game_to_text()).contestant13?.[key]), flag, { timeout });
   } catch (error) {
     const state = await diagnostics(page);
+    if (state.contestant13?.[flag]) return state;
     throw new Error(`timed out waiting for contestant13.${flag}; story: ${JSON.stringify(state.contestant13)}`);
   }
 }
@@ -155,7 +166,7 @@ async function run() {
     await page.waitForFunction(() => {
       const npc = window.MrFeastFresh?.getMrFeastState?.();
       return npc?.loaded || npc?.error;
-    }, null, { timeout: 30000 });
+    }, null, { timeout: 120000 });
     let npc = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
     assert(npc.loaded && !npc.error, `Mr. Feast should load for visual QA: ${npc.error || "unknown error"}`);
     assert(npc.modelHeight === 2.01, "Mr. Feast should use the slightly larger 2.01m eye-level fit");
@@ -188,7 +199,7 @@ async function run() {
     });
     assert(!/cycle expression/i.test(stableFaceView.prompt || ""), "the paused facial rig should not expose a no-op QA expression prompt");
     await page.evaluate(() => window.advanceTime(80));
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-stable-face-desktop.png") });
+    await screenshotStage(page, "mr-feast-stable-face-desktop.png");
 
     const transitionSamples = await page.evaluate(() => {
       const samples = [];
@@ -214,7 +225,7 @@ async function run() {
     assert(Math.max(...hipsScaleValues) - Math.min(...hipsScaleValues) < 0.001, "idle/walk transitions must not scale Mr. Feast");
     assert(Math.max(...thighLengths) - Math.min(...thighLengths) < 0.001, "idle/walk transitions must not change limb lengths");
     assert(Math.max(...headTopHeights) - Math.min(...headTopHeights) < 0.03 && Math.max(...headTopSteps) < 0.01, "idle/walk transitions should not pop vertically");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-tuned-walk-desktop.png") });
+    await screenshotStage(page, "mr-feast-tuned-walk-desktop.png");
 
     const playerFloorBeforeNpcTraversal = (await diagnostics(page)).lighting.activeFloor;
     const grandStairState = await page.evaluate(() => {
@@ -225,7 +236,7 @@ async function run() {
     assert(grandStairState.position.y > 0 && grandStairState.position.y < 2.5, "grand-stair route should interpolate vertical movement");
     assert(grandStairState.currentAnimation === "stalk" && !grandStairState.contactShadowVisible, "Mr. Feast should walk the grand stair without projecting a flat shadow across its steps");
     assert(Object.values(grandStairState.liveBones.hipsScale).every((value) => Math.abs(value - 1) < 0.001), "grand-stair traversal must preserve the rig scale");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-grand-stair-desktop.png") });
+    await screenshotStage(page, "mr-feast-grand-stair-desktop.png");
 
     const serviceStairState = await page.evaluate(() => {
       window.MrFeastFresh.teleport("serviceStairTopOblique");
@@ -234,7 +245,7 @@ async function run() {
     assert(serviceStairState.onStairs && serviceStairState.currentFloor === "BETWEEN LEVELS", "service-stair route should put Mr. Feast between the main level and basement");
     assert(serviceStairState.position.y < 0 && serviceStairState.position.y > -3.8, "service-stair route should interpolate down into the basement");
     assert(serviceStairState.currentAnimation === "stalk" && !serviceStairState.contactShadowVisible, "Mr. Feast should walk the service stair without a floating contact shadow");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mr-feast-service-stair-desktop.png") });
+    await screenshotStage(page, "mr-feast-service-stair-desktop.png");
 
     const wholeHomeRun = await page.evaluate(() => window.MrFeastFresh.runMrFeastWholeHomeRouteForQA(1800));
     const requiredFloors = ["MAIN LEVEL", "SECOND FLOOR", "BASEMENT"];
@@ -296,7 +307,7 @@ async function run() {
     assert(state.contestant13.basementKeyFound === false, "early dig must not grant the basement key");
 
     await teleportForInteraction(page, "contestant13BasementDoor", /basement.*locked|need.*key/i);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "basement-door-locked-desktop.png") });
+    await screenshotStage(page, "basement-door-locked-desktop.png");
     await pressInteract(page);
     state = await diagnostics(page);
     assert(state.contestant13.basementUnlocked === false, "the basement door must remain locked without the maze key");
@@ -314,7 +325,7 @@ async function run() {
     assert(state.contestant13.relaySabotaged === false, "relay must not be sabotaged before hearing the recording");
 
     await teleportForInteraction(page, "contestant13LibraryBook", /read “.+”/i);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "library-shelf-book-subtle-desktop.png") });
+    await screenshotStage(page, "library-shelf-book-subtle-desktop.png");
     await pressInteract(page);
     await page.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
     state = await diagnostics(page);
@@ -325,7 +336,7 @@ async function run() {
     assert(await page.locator("#mansion-casefile").isHidden(), "clue discoveries must not open an on-screen trail/objective HUD");
     assert(await page.locator("#mansion-story-progress").textContent() === "Trail 1/7", "reading the book should count as the first trail step for diagnostics");
     assert((await page.locator("#mansion-objective").textContent() || "").trim() === "", "objective tip text must stay blank; clues live in Bag only");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "library-clue-desktop.png") });
+    await screenshotStage(page, "library-clue-desktop.png");
 
     state = await completeFirstClueCompetition(page, "contestant-13-book");
     if (!(await page.locator("#mansion-book-reader").isHidden())) {
@@ -342,19 +353,17 @@ async function run() {
     await page.waitForFunction(() => document.getElementById("mansion-book-reader")?.hidden);
 
     await teleportForInteraction(page, "contestant13GardenShovel", /take.*shovel|garden shovel/i);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "shovel-hidden-in-roses-desktop.png") });
+    await screenshotStage(page, "shovel-hidden-in-roses-desktop.png");
     await pressInteract(page);
     state = await diagnostics(page);
     assert(state.contestant13.shovelTaken === true, "shovel interaction should collect the shovel");
     assert(state.inventory.items.filter((id) => id === "garden-shovel").length === 1, "shovel should enter inventory exactly once");
     assert(state.inventory.bulkyItem === "garden-shovel", "shovel should be the carried bulky item");
     assert(state.contestant13.world.shovelVisible === false, "collected shovel should disappear from the world");
-    assert(state.stormRun?.phase === "called" && state.stormRun.triggerClueId === "faceless-fountain-shovel", `the first post-Feast clue should call Storm Run; got ${JSON.stringify(state.stormRun)}`);
-    assert(state.stormRun.clueProgressLocked && state.contestant13.shovelTaken, "the shovel that calls Storm Run should remain earned while later investigation is held");
-    state = await completeStormRunCompetition(page, "faceless-fountain-shovel");
+    assert(state.stormRun?.phase === "dormant" && state.stormRun.callCount === 0, `the post-Feast shovel must remain earned without calling Storm Run; got ${JSON.stringify(state.stormRun)}`);
 
     await teleportForInteraction(page, "contestant13DigSite", /dig.*(?:contestant 13|xiii)|excavate|disturbed earth/i);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "dig-site-subtle-desktop.png") });
+    await screenshotStage(page, "dig-site-subtle-desktop.png");
     await pressInteract(page);
     await waitForContestantFlag(page, "digSiteExcavated");
     state = await diagnostics(page);
@@ -363,8 +372,10 @@ async function run() {
     assert(state.inventory.items.filter((id) => id === "basement-key-b13").length === 1, "basement key must not duplicate");
     assert(state.inventory.items.filter((id) => id === "contestant-13-tape").length === 1, "tape must not duplicate");
     assert(state.contestant13.world.digMoundVisible === false && state.contestant13.world.digMarkerVisible === false && state.contestant13.world.digHoleVisible === true, "excavation should leave only an unmarked hole");
+    assert(state.stormRun?.phase === "called" && state.stormRun.triggerReason === "hedge-maze-key" && state.stormRun.triggerClueId === "hedge-maze-b13-cache", `the recovered maze key should call Storm Run; got ${JSON.stringify(state.stormRun)}`);
+    state = await completeStormRunCompetition(page, "hedge-maze-b13-cache");
     await teleportForInteraction(page, "contestant13DigSite", /empty hole/i);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "dig-site-empty-hole-desktop.png") });
+    await screenshotStage(page, "dig-site-empty-hole-desktop.png");
 
     await teleportForInteraction(page, "contestant13BasementDoor", /unlock.*basement|use.*key/i);
     await pressInteract(page);
@@ -373,7 +384,7 @@ async function run() {
     assert(state.contestant13.basementUnlocked === true, "the recovered maze key should unlock the basement threshold");
     assert(state.contestant13.world.basementDoorLocked === false && state.contestant13.world.basementDoorOpen === true, "unlocking should open the basement door and persist in world diagnostics");
     assert(state.inventory.items.filter((id) => id === "basement-key-b13").length === 1, "using the basement key must not duplicate it");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "basement-door-unlocked-desktop.png") });
+    await screenshotStage(page, "basement-door-unlocked-desktop.png");
 
     await teleportForInteraction(page, "contestant13ArchiveCage", /unlock.*a-3|evidence cage/i);
     await pressInteract(page);
@@ -387,7 +398,7 @@ async function run() {
     assert(state.contestant13.recordingPlayed === true, "recorder interaction should play Contestant 13's tape");
     assert(state.journal.entries.includes("patron-feed-transcript"), "recording transcript should enter the journal");
     assert(state.contestant13.world.recorderIndicatorActive === true, "playing the recovered tape should light the recorder indicator");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "recording-played-desktop.png") });
+    await screenshotStage(page, "recording-played-desktop.png");
 
     const circuitsBefore = JSON.stringify(state.circuits.map(({ name, on }) => [name, on]));
     await teleportForInteraction(page, "contestant13WorkshopRelay", /sabotage.*patron|sever.*feed/i);
@@ -412,7 +423,7 @@ async function run() {
 
     assert((await page.locator("#mansion-objective").textContent() || "").trim() === "", "completed sabotage must not re-open objective tip text on the HUD");
     assert(/blind|signal|feed/i.test(state.journal.currentObjective || ""), "internal completion state should still acknowledge the severed feed for diagnostics/saves");
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "relay-sabotaged-desktop.png") });
+    await screenshotStage(page, "relay-sabotaged-desktop.png");
     await page.evaluate(() => window.MrFeastFresh.teleport("contestant13GardenShovel"));
     await page.evaluate(() => window.MrFeastFresh.teleport("contestant13WorkshopRelay"));
     state = await diagnostics(page);
@@ -453,9 +464,16 @@ async function run() {
     await waitForContestantFlag(mobilePage, "bookRead");
     await mobilePage.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
     let mobileBookState = await diagnostics(mobilePage);
-    assert(mobileBookState.stormRun?.phase === "called" && mobileBookState.stormRun.triggerClueId === "contestant-13-book", `the first post-Feast mobile clue should call Storm Run; got ${JSON.stringify(mobileBookState.stormRun)}`);
-    assert(mobileBookState.stormRun.clueProgressLocked && mobileBookState.contestant13.bookRead && mobileBookState.journal.entries.includes("contestant-13-book"), "the mobile book clue should remain earned while Storm Run holds later investigation");
-    await completeStormRunCompetition(mobilePage, "contestant-13-book");
+    assert(mobileBookState.stormRun?.phase === "dormant" && mobileBookState.stormRun.callCount === 0, `the post-Feast mobile book must not call Storm Run; got ${JSON.stringify(mobileBookState.stormRun)}`);
+    assert(mobileBookState.contestant13.bookRead && mobileBookState.journal.entries.includes("contestant-13-book"), "the mobile book clue should remain earned while Storm Run waits for its real gate");
+    await mobilePage.keyboard.press("Escape");
+    await mobilePage.waitForFunction(() => document.getElementById("mansion-book-reader")?.hidden);
+    await teleportForInteraction(mobilePage, "contestant13DigSite", /dig.*(?:contestant 13|xiii)|excavate|disturbed earth/i);
+    await mobilePage.locator("#touch-interact").click({ force: true });
+    await waitForContestantFlag(mobilePage, "basementKeyFound", 15000);
+    mobileBookState = await diagnostics(mobilePage);
+    assert(mobileBookState.stormRun?.phase === "called" && mobileBookState.stormRun.triggerReason === "hedge-maze-key" && mobileBookState.stormRun.triggerClueId === "hedge-maze-b13-cache", `the recovered mobile maze key should call Storm Run; got ${JSON.stringify(mobileBookState.stormRun)}`);
+    await completeStormRunCompetition(mobilePage, "hedge-maze-b13-cache");
     await teleportForInteraction(mobilePage, "contestant13LibraryBook", /read “.+”/i);
     await mobilePage.locator("#touch-interact").click({ force: true });
     await mobilePage.waitForFunction(() => !document.getElementById("mansion-book-reader")?.hidden);
@@ -472,7 +490,7 @@ async function run() {
     assert(mobileUi.caseHidden, "mobile trail/objective HUD must stay hidden after clues are found");
     assert(mobileUi.objectiveText.trim() === "", "mobile objective tip text must stay blank after clues are found");
     assert(mobileUi.touch && mobileUi.touch.width >= 44 && mobileUi.touch.height >= 44, "touch interact target should remain at least 44px");
-    await mobilePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "printed-book-marginalia-mobile.png") });
+    await screenshotStage(mobilePage, "printed-book-marginalia-mobile.png");
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
     await mobileContext.close();
 

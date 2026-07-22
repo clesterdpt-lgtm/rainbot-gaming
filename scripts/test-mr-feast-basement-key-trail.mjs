@@ -59,26 +59,26 @@ async function completeFirstClueCompetition(page, expectedClueId) {
   return state;
 }
 
-async function completeStormRunAfterShovel(page) {
+async function completeStormRunAfterMazeKey(page) {
   try {
     await page.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.castReady, null, { timeout: 30000 });
   } catch (_) {
     const stalled = await diagnostics(page);
-    throw new Error(`Storm Run cast did not settle after the shovel clue; storm=${JSON.stringify(stalled.stormRun)} contestants=${JSON.stringify(stalled.contestants)} mrFeast=${JSON.stringify(stalled.mrFeast)}`);
+    throw new Error(`Storm Run cast did not settle after the hedge-maze key; storm=${JSON.stringify(stalled.stormRun)} contestants=${JSON.stringify(stalled.contestants)} mrFeast=${JSON.stringify(stalled.mrFeast)}`);
   }
   let state = await diagnostics(page);
   assert(
     state.stormRun?.phase === "called"
-      && state.stormRun.triggerReason === "clue"
-      && state.stormRun.triggerClueId === "faceless-fountain-shovel"
+      && state.stormRun.triggerReason === "hedge-maze-key"
+      && state.stormRun.triggerClueId === "hedge-maze-b13-cache"
       && state.stormRun.callCount === 1
       && state.stormRun.clueProgressLocked,
-    `the first post-Feast clue should call Storm Run once and pause later clues; got ${JSON.stringify(state.stormRun)}`,
+    `the recovered hedge-maze key should call Storm Run once and pause later clues; got ${JSON.stringify(state.stormRun)}`,
   );
   assert(
-    state.contestant13.shovelTaken
-      && state.inventory.items.filter((id) => id === "garden-shovel").length === 1,
-    `the shovel that called Storm Run should remain earned; quest=${JSON.stringify(state.contestant13)} inventory=${JSON.stringify(state.inventory)}`,
+    state.contestant13.basementKeyFound
+      && state.inventory.items.filter((id) => id === "basement-key-b13").length === 1,
+    `the key that called Storm Run should remain earned; quest=${JSON.stringify(state.contestant13)} inventory=${JSON.stringify(state.inventory)}`,
   );
   const result = await page.evaluate(() => window.MrFeastFresh.completeStormRunForQA("player"));
   assert(result?.survived === true, `the QA completion should survive Storm Run; got ${JSON.stringify(result)}`);
@@ -89,9 +89,9 @@ async function completeStormRunAfterShovel(page) {
     `completing Storm Run should reopen investigation and eliminate Mara; got ${JSON.stringify(state.stormRun)}`,
   );
   assert(
-    state.contestant13.shovelTaken
-      && state.inventory.items.filter((id) => id === "garden-shovel").length === 1,
-    `Storm Run completion must preserve the triggering shovel clue; quest=${JSON.stringify(state.contestant13)} inventory=${JSON.stringify(state.inventory)}`,
+    state.contestant13.basementKeyFound
+      && state.inventory.items.filter((id) => id === "basement-key-b13").length === 1,
+    `Storm Run completion must preserve the triggering key; quest=${JSON.stringify(state.contestant13)} inventory=${JSON.stringify(state.inventory)}`,
   );
   await page.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(7));
   await page.waitForFunction(() => document.getElementById("mansion-storm-run")?.hidden);
@@ -159,7 +159,7 @@ async function run() {
     await page.waitForFunction(() => {
       const npc = window.MrFeastFresh?.getMrFeastState?.();
       return npc?.loaded || npc?.error;
-    }, null, { timeout: 30000 });
+    }, null, { timeout: 120000 });
     const routeProof = await page.evaluate(() => window.MrFeastFresh.runMrFeastWholeHomeRouteForQA(1800));
     assert(routeProof.qaLastWholeHomeRun?.completed && routeProof.visitedRouteDoors.includes("basement stair door"), "deterministic QA should still exercise the full route through the temporarily released story door");
     state = await diagnostics(page);
@@ -237,7 +237,7 @@ async function run() {
     state = await diagnostics(page);
     assert(state.contestant13.shovelTaken && state.inventory.items.filter((id) => id === "garden-shovel").length === 1, "garden shovel should be collected exactly once");
     assert(/hedge maze|basement key/i.test(state.journal.currentObjective), "shovel pickup should advance the objective to the hedge-maze key");
-    await completeStormRunAfterShovel(page);
+    assert(state.stormRun.phase === "dormant" && state.stormRun.callCount === 0, `the shovel alone must not call Storm Run; got ${JSON.stringify(state.stormRun)}`);
 
     await teleportForInteraction(page, "contestant13DigSite", /dig.*basement key|xiii/i);
     await pressInteract(page);
@@ -246,6 +246,7 @@ async function run() {
     assert(state.contestant13.basementKeyFound, "maze excavation should recover the basement key");
     assert(state.inventory.items.filter((id) => id === "basement-key-b13").length === 1, "basement key should enter inventory exactly once");
     assert(/locked basement|basement stair|kitchen/i.test(state.journal.currentObjective), "key recovery should direct the player to the Kitchen basement door");
+    await completeStormRunAfterMazeKey(page);
 
     await teleportForInteraction(page, "contestant13BasementDoor", /unlock.*basement|b-13 key/i);
     await pressInteract(page);

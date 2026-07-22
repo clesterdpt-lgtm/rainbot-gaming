@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260721-storm-run-restored-wait-1-final-straight-1";
+  const MANSION_RUNTIME_VERSION = "20260722-storm-gate-dialogue-skip-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -117,6 +117,7 @@
     speech: $("mansion-speech"),
     speechSpeaker: $("mansion-speech-speaker"),
     speechText: $("mansion-speech-text"),
+    speechSkip: $("mansion-speech-skip"),
     feastSays: $("mansion-feast-says"),
     feastEyebrow: $("mansion-feast-eyebrow"),
     feastCommand: $("mansion-feast-command"),
@@ -2067,7 +2068,7 @@
   });
   const STORM_RUN = Object.freeze({
     instructionDelivery: "visual-checkpoints",
-    intermissionSeconds: 10 * 60,
+    paintingNumbersRequired: WORKROOM_CODE_SCRATCHES.length,
     reportDeadlineSeconds: 5 * 60,
     maximumTimerStepSeconds: 0.5,
     briefingSeconds: 14,
@@ -2080,14 +2081,15 @@
     startLine: "Run!",
     startSpeechSeconds: 1.15,
     resultLines: Object.freeze({
-      player: "Course complete. Mara is last. Mara, you are eliminated.",
+      player: "Twelve checkpoints, three contestants, one vacancy. Mara, all that strategy and you still arrived last. You are eliminated.",
       mara: "Mara has finished. You are last. You are eliminated.",
     }),
-    resultSpeechSeconds: 5.2,
+    resultSpeechSeconds: 6.4,
     completionCardSeconds: 6,
     aftermath: Object.freeze({
-      maraLine: "I kept count of everyone who didn’t come back. I never thought you’d have to count me.",
-      maraLineSeconds: 5.4,
+      maraLine: "I saw him in every lightning flash—behind us, ahead of us, waiting. He wasn't watching the race. He was counting survivors.",
+      maraLineSeconds: 7.2,
+      stormRunPostGameLine: "Mara saw him in the lightning too. Three places, one heartbeat. Whatever wears Mr. Feast's face does not cross the ground between appearances.",
       eliminatedAction: "cover-face",
       returnSpeed: 1.15,
       arrivalRadius: 0.08,
@@ -2651,6 +2653,7 @@
       scareBaselineLightExposure: 1,
       scareProfile: null,
       hostVisible: false,
+      postGameDialoguePendingIds: [],
       invalidTransitions: 0,
       lastInvalidTransition: null,
     },
@@ -11049,11 +11052,15 @@
       const entry = this.entryById(id);
       if (!entry || entry.status !== "ready" || this.eliminatedIds.has(id) || !speechSystem || !entry.speaker) return null;
       const pool = entry.spec.dialogue;
-      const postGameLine = feastSaysSystem?.consumePostGameContestantLine(id) || null;
+      const stormRunPostGameLine = stormRunSystem?.consumePostGameContestantLine(id) || null;
+      const feastSaysPostGameLine = stormRunPostGameLine
+        ? null
+        : feastSaysSystem?.consumePostGameContestantLine(id) || null;
+      const postGameLine = stormRunPostGameLine || feastSaysPostGameLine;
       let index = -1;
       if (postGameLine) {
         entry.lastLine = postGameLine;
-        entry.lastDialogueKind = "feast-says-aftermath";
+        entry.lastDialogueKind = stormRunPostGameLine ? "storm-run-aftermath" : "feast-says-aftermath";
       } else {
         index = Math.floor(Math.random() * pool.length);
         if (pool.length > 1 && index === entry.lastLineIndex) index = (index + 1) % pool.length;
@@ -13013,15 +13020,23 @@
       this.container = dom.speech;
       this.speakerElement = dom.speechSpeaker;
       this.textElement = dom.speechText;
+      this.skipElement = dom.speechSkip;
       this.active = null;
       this.remaining = 0;
       this.lastCategory = null;
       this.lastLineByCategory = new Map();
       this.linesSpoken = 0;
       this.history = [];
+      this.skipCount = 0;
+      this.lastSkip = null;
       this.lastScreen = { x: 0, y: 0, clamped: false };
       this.anchor = new THREE.Vector3();
       this.viewPosition = new THREE.Vector3();
+      this.skipElement?.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.requestSkip("player");
+      });
     }
 
     hostSpeaker() {
@@ -13085,7 +13100,9 @@
           MR_FEAST_SPEECH.minSeconds,
           MR_FEAST_SPEECH.maxSeconds,
         );
-      this.active = { category, text, speaker };
+      const onSkip = typeof options.onSkip === "function" ? options.onSkip : null;
+      const skipLabel = onSkip ? String(options.skipLabel || "Skip") : null;
+      this.active = { category, text, speaker, onSkip, skipLabel };
       this.remaining = duration;
       this.lastCategory = category;
       this.linesSpoken += 1;
@@ -13099,7 +13116,15 @@
       if (this.history.length > 40) this.history.splice(0, this.history.length - 40);
       if (this.speakerElement) this.speakerElement.textContent = speaker.name;
       if (this.textElement) this.textElement.textContent = text;
-      if (this.container) this.container.hidden = false;
+      if (this.skipElement) {
+        this.skipElement.textContent = skipLabel || "Skip";
+        this.skipElement.setAttribute("aria-label", skipLabel || "Skip speech");
+        this.skipElement.hidden = !onSkip;
+      }
+      if (this.container) {
+        this.container.dataset.skippable = onSkip ? "true" : "false";
+        this.container.hidden = false;
+      }
       this.updatePlacement();
       return {
         category,
@@ -13113,7 +13138,21 @@
     dismiss() {
       this.active = null;
       this.remaining = 0;
-      if (this.container) this.container.hidden = true;
+      if (this.skipElement) this.skipElement.hidden = true;
+      if (this.container) {
+        this.container.dataset.skippable = "false";
+        this.container.hidden = true;
+      }
+    }
+
+    requestSkip(source = "player") {
+      if (!this.active?.onSkip) return { accepted: false, reason: "not-skippable" };
+      const { category, skipLabel, onSkip } = this.active;
+      this.skipCount += 1;
+      this.lastSkip = { category, label: skipLabel, source };
+      this.dismiss();
+      const result = onSkip(source);
+      return { accepted: true, reason: null, category, label: skipLabel, source, result: result || null };
     }
 
     update(dt) {
@@ -13123,7 +13162,10 @@
         this.dismiss();
         return;
       }
-      this.updatePlacement();
+      // A skippable line owns an interactive control. Keep its bubble pinned
+      // at the position chosen when it opened so character animation cannot
+      // move the button out from under a mouse or touch before release.
+      if (!this.active.onSkip) this.updatePlacement();
     }
 
     updatePlacement() {
@@ -13194,6 +13236,10 @@
         speakerId: this.active?.speaker?.id || null,
         speakerName: this.active?.speaker?.name || null,
         secondsRemaining: Number(this.remaining.toFixed(2)),
+        skippable: Boolean(this.active?.onSkip),
+        skipLabel: this.active?.skipLabel || null,
+        skipCount: this.skipCount,
+        lastSkip: this.lastSkip ? { ...this.lastSkip } : null,
         lastCategory: this.lastCategory,
         linesSpoken: this.linesSpoken,
         history: this.history.map((entry) => ({ ...entry })),
@@ -13307,7 +13353,11 @@
         `opening-welcome-${index + 1}`,
         text,
         speechSystem.hostSpeaker(),
-        { durationSeconds: this.currentLineDuration },
+        {
+          durationSeconds: this.currentLineDuration,
+          skipLabel: "Skip intro",
+          onSkip: (source) => this.skipOpeningWelcome(source),
+        },
       );
       updateInteractionPrompt();
       return true;
@@ -13324,6 +13374,12 @@
       this.phase = "gap";
       this.phaseRemaining = MR_FEAST_OPENING_WELCOME.lineGapSeconds;
       updateInteractionPrompt();
+    }
+
+    skipOpeningWelcome(source = "player") {
+      if (!this.active) return { skipped: false, reason: "inactive" };
+      this.finish(`${source}-skipped`);
+      return { skipped: true, reason: null };
     }
 
     finish(cancelledReason = null) {
@@ -13728,10 +13784,21 @@
         "feast-says-rules",
         FEAST_SAYS.briefingLine,
         speechSystem.hostSpeaker(),
-        { durationSeconds: FEAST_SAYS.briefingSpeechSeconds },
+        {
+          durationSeconds: FEAST_SAYS.briefingSpeechSeconds,
+          skipLabel: "Skip rules",
+          onSkip: (source) => this.skipFeastSaysBriefing(source),
+        },
       );
       audioSystem?.ping(523, 0.42, 0.045, "triangle");
       return { started: true, staged: true };
+    }
+
+    skipFeastSaysBriefing(source = "player") {
+      if (this.show.phase !== FEAST_SAYS_PHASE.BRIEFING) return { skipped: false, reason: "not-briefing" };
+      this.show.phaseRemaining = 0;
+      this.beginCommand();
+      return { skipped: true, reason: null, source };
     }
 
     resetPlayerToMark() {
@@ -14706,20 +14773,35 @@
       return true;
     }
 
-    eligible() {
+    gameOneComplete() {
       return feastSaysSystem?.show.phase === FEAST_SAYS_PHASE.COMPLETED
         && !feastSaysSystem.show.aftermathActive;
     }
 
-    canCountIntermission() {
-      return Boolean(
-        state.started
-        && this.eligible()
-        && this.show.phase === STORM_RUN_PHASE.DORMANT
-        && !state.menuOpen
-        && !state.workroom.keypadOpen
-        && !state.gameOver
-      );
+    triggerGateState() {
+      const paintingNumbersFound = workroomCodeClue?.discovered?.size || 0;
+      const paintingsComplete = paintingNumbersFound >= STORM_RUN.paintingNumbersRequired;
+      const hedgeMazeKeyFound = Boolean(state.contestant13.basementKeyFound);
+      const discoverySatisfied = paintingsComplete || hedgeMazeKeyFound;
+      const gameOneComplete = this.gameOneComplete();
+      return {
+        gameOneComplete,
+        paintingNumbersFound,
+        paintingNumbersRequired: STORM_RUN.paintingNumbersRequired,
+        paintingsComplete,
+        hedgeMazeKeyFound,
+        discoverySatisfied,
+        satisfied: gameOneComplete && discoverySatisfied,
+        source: hedgeMazeKeyFound ? "hedge-maze-key" : paintingsComplete ? "painting-code" : null,
+      };
+    }
+
+    triggerGateSatisfied() {
+      return this.triggerGateState().satisfied;
+    }
+
+    eligible() {
+      return this.triggerGateSatisfied();
     }
 
     blocksInvestigation() {
@@ -14852,12 +14934,22 @@
       return true;
     }
 
-    call(reason = "timer", clueId = null) {
-      if (!this.eligible()) return { called: false, reason: "game-one-incomplete", phase: this.show.phase };
+    call(reason = "gate", clueId = null) {
+      const qaBypass = state.qa && reason === "qa";
+      if (!qaBypass && !this.gameOneComplete()) {
+        return { called: false, reason: "game-one-incomplete", phase: this.show.phase };
+      }
+      if (!qaBypass && !this.triggerGateSatisfied()) {
+        return { called: false, reason: "trigger-gate-incomplete", phase: this.show.phase };
+      }
       if (this.show.phase !== STORM_RUN_PHASE.DORMANT) {
         return { called: false, reason: "already-called", phase: this.show.phase };
       }
-      this.show.triggerReason = reason === "clue" ? "clue" : reason === "qa" ? "qa" : "timer";
+      this.show.triggerReason = reason === "qa"
+        ? "qa"
+        : reason === "hedge-maze-key"
+          ? "hedge-maze-key"
+          : "painting-code";
       this.show.triggerClueId = clueId;
       this.show.callCount += 1;
       this.show.reportRemaining = STORM_RUN.reportDeadlineSeconds;
@@ -14911,8 +15003,11 @@
     }
 
     noteClueDiscovered(clueId) {
-      if (!this.eligible()) return { called: false, reason: "game-one-incomplete", clueId };
-      return this.call("clue", clueId);
+      if (!this.gameOneComplete()) return { called: false, reason: "game-one-incomplete", clueId };
+      const gate = this.triggerGateState();
+      if (!gate.satisfied) return { called: false, reason: "trigger-gate-incomplete", clueId, triggerGate: gate };
+      const reason = clueId === "hedge-maze-b13-cache" ? "hedge-maze-key" : "painting-code";
+      return this.call(reason, clueId);
     }
 
     notifyInvestigationPaused() {
@@ -14978,10 +15073,22 @@
         "storm-run-rules",
         STORM_RUN.briefingLine,
         speechSystem.hostSpeaker(),
-        { durationSeconds: STORM_RUN.briefingSpeechSeconds },
+        {
+          durationSeconds: STORM_RUN.briefingSpeechSeconds,
+          skipLabel: "Skip rules",
+          onSkip: (source) => this.skipStormRunBriefing(source),
+        },
       );
       this.syncCastVisibility();
       return { started: true, staged: true, entries: staged.entries };
+    }
+
+    skipStormRunBriefing(source = "player") {
+      if (this.show.phase !== STORM_RUN_PHASE.BRIEFING) return { skipped: false, reason: "not-briefing" };
+      this.show.briefingRemaining = Math.min(this.show.briefingRemaining, STORM_RUN.countdownSeconds);
+      this.show.countdownLastSecond = null;
+      this.show.countdownSequence = [];
+      return { skipped: true, reason: null, source };
     }
 
     beginRace() {
@@ -15281,6 +15388,7 @@
       this.show.aftermathStage = "result-speaking";
       this.show.aftermathElapsed = 0;
       this.show.aftermathCleanupReason = null;
+      this.show.postGameDialoguePendingIds = ["juniper-cross"];
       mrFeastNpc?.setStormRunReveal(STORM_RUN.aftermath.hostMark, true);
       speechSystem?.say(
         "storm-run-result-player",
@@ -15289,6 +15397,13 @@
         { durationSeconds: STORM_RUN.resultSpeechSeconds },
       );
       return staged;
+    }
+
+    consumePostGameContestantLine(id) {
+      const index = this.show.postGameDialoguePendingIds.indexOf(id);
+      if (index < 0 || id !== "juniper-cross") return null;
+      this.show.postGameDialoguePendingIds.splice(index, 1);
+      return STORM_RUN.aftermath.stormRunPostGameLine;
     }
 
     aftermathSceneOnScreen() {
@@ -15434,12 +15549,17 @@
         return;
       }
       if (this.show.phase === STORM_RUN_PHASE.DORMANT) {
-        if (this.canCountIntermission() && (!state.qa || !this.qaManualClock || this.qaStepping)) {
-          this.show.intermissionElapsed = Math.min(
-            STORM_RUN.intermissionSeconds,
-            this.show.intermissionElapsed + step,
+        const gate = this.triggerGateState();
+        if (
+          state.started
+          && gate.satisfied
+          && !competitionReportClockBlocked()
+          && (!state.qa || !this.qaManualClock || this.qaStepping)
+        ) {
+          this.call(
+            gate.source,
+            gate.source === "hedge-maze-key" ? "hedge-maze-b13-cache" : "painting-code-complete",
           );
-          if (this.show.intermissionElapsed >= STORM_RUN.intermissionSeconds) this.call("timer");
         }
         this.syncHud();
         return;
@@ -15557,7 +15677,7 @@
       if (phase === STORM_RUN_PHASE.DORMANT) {
         setText(dom.stormRunEyebrow, "Next live event");
         setText(dom.stormRunTitle, "");
-        setText(dom.stormRunTimer, this.formatClock(STORM_RUN.intermissionSeconds - this.show.intermissionElapsed));
+        setText(dom.stormRunTimer, "LOCKED");
         setText(dom.stormRunCheckpoint, "");
       } else if (phase === STORM_RUN_PHASE.CALLED) {
         setText(dom.stormRunEyebrow, this.castReady() ? "Storm Run · Called" : "Storm Run · Holding for cast");
@@ -15603,8 +15723,8 @@
         triggerReason: this.show.triggerReason,
         triggerClueId: this.show.triggerClueId,
         callCount: this.show.callCount,
-        callAfterSeconds: STORM_RUN.intermissionSeconds,
-        intermissionElapsed: this.show.intermissionElapsed,
+        callAfterSeconds: null,
+        intermissionElapsed: 0,
         reportRemaining: transient
           ? STORM_RUN.reportDeadlineSeconds
           : this.show.phase === STORM_RUN_PHASE.CALLED
@@ -15612,6 +15732,7 @@
             : 0,
         completedCheckpoints: transient ? 0 : this.show.completedCheckpoints,
         eliminatedContestantId: this.show.eliminatedContestantId,
+        postGameDialoguePendingIds: [...this.show.postGameDialoguePendingIds],
       };
     }
 
@@ -15653,7 +15774,7 @@
       this.show.triggerReason = source.triggerReason || (restoredPhase === STORM_RUN_PHASE.DORMANT ? null : "saved");
       this.show.triggerClueId = source.triggerClueId || null;
       this.show.callCount = clamp(Number(source.callCount) || (restoredPhase === STORM_RUN_PHASE.DORMANT ? 0 : 1), 0, 1);
-      this.show.intermissionElapsed = clamp(Number(source.intermissionElapsed) || 0, 0, STORM_RUN.intermissionSeconds);
+      this.show.intermissionElapsed = 0;
       const restoredReportRemaining = Number(source.reportRemaining);
       this.show.reportRemaining = restoredPhase === STORM_RUN_PHASE.CALLED
         ? requestedPhase === STORM_RUN_PHASE.CALLED
@@ -15693,6 +15814,9 @@
       this.show.scareBaselineLightExposure = 1;
       this.show.scareProfile = null;
       this.show.hostVisible = false;
+      this.show.postGameDialoguePendingIds = Array.isArray(source.postGameDialoguePendingIds)
+        ? source.postGameDialoguePendingIds.filter((id) => id === "juniper-cross")
+        : [];
       mansionContestants?.setEliminated("mara-voss", this.show.eliminatedContestantId === "mara-voss");
       this.syncPresentation();
       return this.getDiagnostics();
@@ -16006,9 +16130,10 @@
         triggerReason: this.show.triggerReason,
         triggerClueId: this.show.triggerClueId,
         callCount: this.show.callCount,
-        callAfterSeconds: STORM_RUN.intermissionSeconds,
+        callAfterSeconds: null,
         intermissionElapsed: Number(this.show.intermissionElapsed.toFixed(3)),
-        secondsUntilCall: Number(Math.max(0, STORM_RUN.intermissionSeconds - this.show.intermissionElapsed).toFixed(3)),
+        secondsUntilCall: null,
+        triggerGate: this.triggerGateState(),
         reportDeadlineSeconds: STORM_RUN.reportDeadlineSeconds,
         reportRemaining: Number(this.show.reportRemaining.toFixed(3)),
         hostWaiting: Boolean(
@@ -16145,6 +16270,8 @@
           sceneOnScreen: this.show.aftermathActive ? this.aftermathSceneOnScreen() : null,
           finishAnchor: { ...STORM_RUN.aftermath.finishAnchor },
           maraLine: STORM_RUN.aftermath.maraLine,
+          hostLine: STORM_RUN.resultLines.player,
+          postGameDialoguePendingIds: [...this.show.postGameDialoguePendingIds],
         },
         mazeExitLighting: this.mazeExitLightingDiagnostics(),
         scare: {
@@ -28325,7 +28452,21 @@
       if (!state.qa || !contestant13Quest || !stormRunSystem) return null;
       if (kind === "shovel") contestant13Quest.takeShovel();
       else if (kind === "dig") contestant13Quest.digSite();
-      else if (kind === "scratch") workroomCodeClue?.discover(WORKROOM_CODE_SCRATCHES[0].artId);
+      else if (kind === "key" && !competitionBlocksInvestigation()) {
+        contestant13Quest.story.digSiteExcavated = true;
+        contestant13Quest.story.basementKeyFound = true;
+        contestant13Quest.addItem("basement-key-b13");
+        contestant13Quest.syncWorldPresentation();
+        contestant13Quest.updateUI();
+        noteMajorClueDiscovered("hedge-maze-b13-cache");
+      } else if (kind === "scratch" || /^scratch-\d+$/.test(kind)) {
+        if (competitionBlocksInvestigation()) notifyCompetitionHold();
+        else {
+          const requested = Number(String(kind).match(/\d+$/)?.[0]) || 1;
+          const config = WORKROOM_CODE_SCRATCHES[clamp(requested - 1, 0, WORKROOM_CODE_SCRATCHES.length - 1)];
+          workroomCodeClue?.discover(config.artId);
+        }
+      }
       else contestant13Quest.readBook();
       return { ...stormRunSystem.getDiagnostics(), quest: contestant13Quest.getDiagnostics() };
     };

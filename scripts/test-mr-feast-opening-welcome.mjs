@@ -45,9 +45,16 @@ async function diagnostics(page) {
 async function startWelcome(page) {
   await page.goto(gameUrl, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
+  await page.waitForFunction(() => !document.getElementById("mansion-enter")?.disabled, null, { timeout: 120000 });
+  await page.evaluate(() => window.MrFeastFresh.startOptionalCharacterLoadsForQA());
   await page.waitForFunction(() => window.MrFeastFresh.getMrFeastState?.()?.loaded, null, { timeout: 120000 });
-  await page.locator("#mansion-enter").click();
+  await page.evaluate(() => document.getElementById("mansion-enter").click());
   await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).openingWelcome?.active, null, { timeout: 8000 });
+  await page.evaluate(() => window.MrFeastFresh.advanceOpeningWelcomeForQA(2));
+  await page.waitForFunction(() => {
+    const opening = JSON.parse(window.render_game_to_text()).openingWelcome;
+    return opening?.phase === "speaking" && opening.lineIndex === 0;
+  }, null, { timeout: 8000 });
 }
 
 async function advanceToLine(page, targetIndex) {
@@ -101,6 +108,8 @@ async function run() {
   assert(/class MrFeastOpeningWelcome/.test(runtimeSource), "runtime is missing the opening welcome state machine");
   assert(/openingWelcome:\s*openingWelcomeSystem\?\.getDiagnostics/.test(runtimeSource), "render_game_to_text must expose opening welcome progress");
   assert(/advanceOpeningWelcomeForQA/.test(runtimeSource), "runtime is missing deterministic opening welcome timing controls");
+  assert(pageSource.includes('id="mansion-speech-skip"'), "the shared speech bubble is missing its immediate Skip control");
+  assert(/skipOpeningWelcome/.test(runtimeSource), "runtime is missing an explicit full-welcome skip transition");
   assert(!/A previous contestant left a trail somewhere inside the estate\./.test(pageSource), "the entry card still spoils the hidden Contestant 13 trail");
 
   let server = null;
@@ -113,6 +122,28 @@ async function run() {
     await waitForServer();
     await mkdir(artifactDir, { recursive: true });
     browser = await chromium.launch({ headless: true });
+
+    // --- Immediate full-intro skip -----------------------------------------
+    const skipPage = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const skipErrors = [];
+    watchErrors(skipPage, skipErrors);
+    await startWelcome(skipPage);
+    await skipPage.waitForFunction(() => JSON.parse(window.render_game_to_text()).openingWelcome?.phase === "speaking", null, { timeout: 4500 });
+    const skipButton = skipPage.locator("#mansion-speech-skip");
+    assert(await skipButton.isVisible(), "Skip intro must be visible on the first spoken line without a reading delay");
+    assert(/skip intro/i.test(await skipButton.textContent()), `the opening skip control needs a clear label; got ${JSON.stringify(await skipButton.textContent())}`);
+    const skipBounds = await skipButton.boundingBox();
+    assert(skipBounds?.width >= 44 && skipBounds?.height >= 44, `the mobile Skip intro control must be at least 44px; got ${JSON.stringify(skipBounds)}`);
+    const beforeSkip = await diagnostics(skipPage);
+    assert(beforeSkip.speech.skippable && beforeSkip.speech.skipLabel === "Skip intro", `speech diagnostics must expose the immediate full-intro action; got ${JSON.stringify(beforeSkip.speech)}`);
+    await skipPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "opening-skip-mobile.png") });
+    await skipButton.click();
+    const afterSkip = await diagnostics(skipPage);
+    assert(!afterSkip.openingWelcome.active && afterSkip.openingWelcome.completed && afterSkip.openingWelcome.cancelledReason === "player-skipped", `Skip intro must complete and release the welcome immediately; got ${JSON.stringify(afterSkip.openingWelcome)}`);
+    assert(!afterSkip.speech.visible && afterSkip.mrFeast.wanderingEnabled, `Skip intro must dismiss speech and resume Mr. Feast patrol; got ${JSON.stringify({ speech: afterSkip.speech, mrFeast: afterSkip.mrFeast })}`);
+    assert(!afterSkip.contestant13.bookRead && afterSkip.inventory.items.length === 0 && afterSkip.security.alarm.count === 0, `Skip intro must not mutate story, inventory, or security state; got ${JSON.stringify(afterSkip)}`);
+    assert(skipErrors.length === 0, `opening skip page console errors: ${skipErrors.join(" | ")}`);
+    await skipPage.close();
 
     const desktop = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     const desktopErrors = [];

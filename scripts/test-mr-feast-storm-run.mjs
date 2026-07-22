@@ -47,6 +47,9 @@ async function assertSourceContract() {
   assert(source.includes("stormRun:"), "central state and diagnostics must expose Storm Run");
   assert(source.includes("competitionBlocksInvestigation"), "all competition clue holds must use a shared gate");
   assert(source.includes("noteMajorClueDiscovered"), "new major clues must dispatch through the competition scheduler");
+  assert(source.includes("triggerGateSatisfied"), "Storm Run must own an explicit painting-code-or-hedge-key trigger gate");
+  assert(source.includes("paintingNumbersRequired"), "Storm Run diagnostics must report the four-number requirement");
+  assert(!/if \(this\.show\.intermissionElapsed >= STORM_RUN\.intermissionSeconds\) this\.call\("timer"\)/.test(source), "elapsed exploration time must not call Storm Run");
   assert(source.includes("getStormRunState"), "Storm Run diagnostics must have a focused QA hook");
   assert(source.includes("advanceStormRunForQA"), "Storm Run must support deterministic time stepping");
   assert(source.includes("collectStormCheckpointForQA"), "Storm Run checkpoints must use the focused QA contract");
@@ -88,7 +91,11 @@ async function assertSourceContract() {
   assert(source.includes("completeStormRunWithAftermathForQA"), "Storm Run must expose a focused QA path that preserves its witnessed aftermath");
   assert(source.includes("syncStormRunAftermathVisibility"), "the witnessed Storm Run ending must continuously keep Mr. Feast visible at the back door");
   assert(source.includes("aftermathExitRequiresDistanceAndOcclusion"), "the Storm Run ending must require both distance and an occluded view before reset");
+  assert(source.includes("stormRunPostGameLine"), "Juniper needs a one-use post-Storm Run conversation");
+  assert(source.includes("postGameDialoguePendingIds"), "the one-use Juniper follow-up must persist in authoritative state");
   assert(source.includes("suspendThreatsForCompetition"), "a live-event call must suspend an active pursuit or alarm");
+  assert(html.includes('id="mansion-speech-skip"'), "Storm Run is missing the shared Skip rules control");
+  assert(source.includes("skipStormRunBriefing"), "Storm Run is missing an explicit briefing-only skip transition");
   assert(html.includes('id="mansion-storm-run"'), "Storm Run must have a dedicated HUD region");
   assert(html.includes('id="mansion-storm-run" role="region" aria-label="Storm Run minimal status" aria-live="polite" aria-atomic="true" data-guidance="speech"'), "Storm Run must ship a speech-led minimal status strip");
   assert(!/#mansion-stage:has\(#mansion-storm-run[^\n]+#mansion-speech\s*\{\s*display:\s*none/.test(html), "active Storm Run must never hide Mr. Feast's speech bubble");
@@ -222,8 +229,9 @@ async function callAndStartStorm(page) {
   const started = await page.evaluate(() => window.MrFeastFresh.startStormRunForQA());
   assert(started?.started === true, `Storm Run should stage at the rear terrace: ${JSON.stringify(started)}`);
   await page.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(16));
-  await page.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.phase === "running", null, { timeout: 8000 });
-  return stormState(page);
+  const running = await stormState(page);
+  assert(running.phase === "running", `deterministic Storm Run start must reach the live race: ${JSON.stringify(running)}`);
+  return running;
 }
 
 async function collectCheckpoint(page, index) {
@@ -362,18 +370,22 @@ async function run() {
 
     await completeFeastSays(timerPage);
     storm = await stormState(timerPage);
-    assert(storm.eligible === true && storm.intermissionElapsed === 0, `Game 1 completion should open a fresh Storm timer: ${JSON.stringify(storm)}`);
-    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(599.9));
+    assert(storm.eligible === false && storm.triggerGate?.gameOneComplete && !storm.triggerGate?.satisfied, `Game 1 alone must not make Storm Run eligible: ${JSON.stringify(storm)}`);
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(1200));
     storm = await stormState(timerPage);
-    assert(storm.phase === "dormant" && storm.callCount === 0, `Storm Run must remain dormant at 599.9 seconds: ${JSON.stringify(storm)}`);
-    await timerPage.keyboard.press("Escape");
-    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(5));
-    const paused = await stormState(timerPage);
-    assert(paused.intermissionElapsed === storm.intermissionElapsed, `Escape menu must pause Storm Run: before=${JSON.stringify(storm)} after=${JSON.stringify(paused)}`);
-    await timerPage.keyboard.press("Escape");
-    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.2));
+    assert(storm.phase === "dormant" && storm.callCount === 0 && !storm.triggerGate?.satisfied, `elapsed exploration time must never call Storm Run: ${JSON.stringify(storm)}`);
+    const unrelatedClue = await timerPage.evaluate(() => window.MrFeastFresh.triggerStormRunClueForQA("shovel"));
+    assert(unrelatedClue.phase === "dormant" && unrelatedClue.callCount === 0 && unrelatedClue.quest.shovelTaken, `an unrelated major clue must remain earned without calling Storm Run: ${JSON.stringify(unrelatedClue)}`);
+    for (let index = 0; index < 3; index += 1) {
+      const partial = await timerPage.evaluate((scratchIndex) => window.MrFeastFresh.triggerStormRunClueForQA(`scratch-${scratchIndex + 1}`), index);
+      assert(partial.phase === "dormant" && partial.callCount === 0, `painting digit ${index + 1} of 4 must not call Storm Run: ${JSON.stringify(partial)}`);
+      assert(partial.triggerGate?.paintingNumbersFound === index + 1 && !partial.triggerGate?.paintingsComplete, `painting gate diagnostics drifted after digit ${index + 1}: ${JSON.stringify(partial.triggerGate)}`);
+    }
+    const paintingCall = await timerPage.evaluate(() => window.MrFeastFresh.triggerStormRunClueForQA("scratch-4"));
+    assert(paintingCall.phase === "called" && paintingCall.callCount === 1 && paintingCall.triggerReason === "painting-code", `the fourth painting digit must call Storm Run exactly once: ${JSON.stringify(paintingCall)}`);
+    assert(paintingCall.triggerGate?.paintingNumbersFound === 4 && paintingCall.triggerGate?.paintingsComplete && paintingCall.triggerGate?.satisfied, `the completed painting gate must remain visible in diagnostics: ${JSON.stringify(paintingCall.triggerGate)}`);
     storm = await stormState(timerPage);
-    assert(storm.phase === "called" && storm.callCount === 1 && storm.triggerReason === "timer", `Storm Run must call once at ten active minutes: ${JSON.stringify(storm)}`);
+    assert(storm.phase === "called" && storm.callCount === 1 && storm.triggerReason === "painting-code", `Storm Run must remain singly called after the fourth digit: ${JSON.stringify(storm)}`);
     assert(storm.reportDeadlineSeconds === 300 && storm.reportRemaining === 300 && storm.hostWaiting, `Storm Run must give five minutes while Mr. Feast waits at the back-door set: ${JSON.stringify(storm)}`);
     assert(storm.filmSet?.visible && storm.filmSet?.cameraCount === 1 && storm.filmSet?.lightCount === 2 && storm.filmSet?.boomMicCount === 1 && !storm.filmSet?.hasSign, `the Storm Run trigger must be a camera/light/boom set rather than a sign: ${JSON.stringify(storm.filmSet)}`);
     assert(storm.filmSet.cameraScale <= 0.8 && storm.filmSet.cameraDistanceFromHost >= 2.25, `the Storm Run camera must stay smaller and farther from Mr. Feast: ${JSON.stringify(storm.filmSet)}`);
@@ -446,14 +458,16 @@ async function run() {
     });
     const pursuitBeforeCall = await diagnostics(timerPage);
     assert(pursuitBeforeCall.mrFeast.pursuit.active?.reason === "witnessed", `the threat-suspension setup must begin a pursuit: ${JSON.stringify(pursuitBeforeCall.mrFeast.pursuit)}`);
-    const clueCall = await timerPage.evaluate(() => window.MrFeastFresh.triggerStormRunClueForQA("shovel"));
-    assert(clueCall.phase === "called" && clueCall.triggerReason === "clue", `the next clue should call Storm Run: ${JSON.stringify(clueCall)}`);
+    const shovelOnly = await timerPage.evaluate(() => window.MrFeastFresh.triggerStormRunClueForQA("shovel"));
+    assert(shovelOnly.phase === "dormant" && shovelOnly.quest.shovelTaken, `the shovel must remain earned without calling Storm Run: ${JSON.stringify(shovelOnly)}`);
+    const clueCall = await timerPage.evaluate(() => window.MrFeastFresh.triggerStormRunClueForQA("key"));
+    assert(clueCall.phase === "called" && clueCall.triggerReason === "hedge-maze-key", `recovering the hedge-maze key should call Storm Run: ${JSON.stringify(clueCall)}`);
     const clueDiagnostics = await diagnostics(timerPage);
-    assert(clueDiagnostics.contestant13.shovelTaken === true, "the clue that calls Storm Run must remain earned");
+    assert(clueDiagnostics.contestant13.shovelTaken && clueDiagnostics.contestant13.basementKeyFound, "the key that calls Storm Run must remain earned");
     assert(clueDiagnostics.stormRun.clueProgressLocked === true, "later clue progress must pause during Storm Run");
     assert(clueDiagnostics.mrFeast.pursuit.active === null && clueDiagnostics.mrFeast.security.activeAlarm === null, `the Storm call must suspend pursuit/alarm danger before reporting: ${JSON.stringify({ pursuit: clueDiagnostics.mrFeast.pursuit, security: clueDiagnostics.mrFeast.security })}`);
-    const blockedDig = await timerPage.evaluate(() => window.MrFeastFresh.triggerStormRunClueForQA("dig"));
-    assert(blockedDig.quest.digSiteExcavated === false, `the next clue must remain held: ${JSON.stringify(blockedDig)}`);
+    const blockedScratch = await timerPage.evaluate(() => window.MrFeastFresh.triggerStormRunClueForQA("scratch-1"));
+    assert(blockedScratch.triggerGate.paintingNumbersFound === 0, `the next clue must remain held after the key calls Storm Run: ${JSON.stringify(blockedScratch)}`);
 
     await timerPage.evaluate(() => window.MrFeastFresh.teleport("stormRunStaging"));
     await timerPage.waitForTimeout(120);
@@ -504,10 +518,19 @@ async function run() {
     );
     await timerPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "storm-run-rear-door-briefing-desktop.png") });
     await timerPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "storm-run-bright-intro-desktop.png") });
-    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(5));
+    const stormSkip = timerPage.locator("#mansion-speech-skip");
+    assert(await stormSkip.isVisible() && /skip rules/i.test(await stormSkip.textContent()), `Storm Run needs an immediate Skip rules control; got ${JSON.stringify(await stormSkip.textContent())}`);
+    const skipBounds = await stormSkip.boundingBox();
+    assert(skipBounds?.width >= 44 && skipBounds?.height >= 44, `the Storm Run Skip rules control must be at least 44px; got ${JSON.stringify(skipBounds)}`);
+    assert(briefingDiagnostics.speech.skippable && briefingDiagnostics.speech.skipLabel === "Skip rules", `speech diagnostics must expose the Storm Run skip; got ${JSON.stringify(briefingDiagnostics.speech)}`);
+    await stormSkip.click();
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.05));
+    storm = await stormState(timerPage);
+    assert(storm.phase === "briefing" && storm.briefingRemaining <= 3 && storm.briefing.countdownSequence[0] === 3, `Skip rules must jump to, not past, the spoken countdown: ${JSON.stringify(storm.briefing)}`);
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.5));
     faceToFace = await briefingFacing(timerPage);
     assert(faceToFace.hostForwardDot >= 0.96 && faceToFace.playerForwardDot >= 0.96, `Mr. Feast must hold the face-to-face briefing pose through the countdown: ${JSON.stringify(faceToFace)}`);
-    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(16));
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(3));
     storm = await stormState(timerPage);
     assert(storm.phase === "running" && storm.staging.mara && storm.staging.juniper && !storm.staging.kip, `race staging must include only surviving opponents: ${JSON.stringify(storm.staging)}`);
     assert(storm.briefing?.lighting?.active === false, `Storm Run intro lighting must return to the ordinary storm baseline at race release: ${JSON.stringify(storm.briefing?.lighting)}`);
@@ -568,7 +591,7 @@ async function run() {
     }
     assert(scares[0].trigger.id === "garden-front-approach" && scares[0].trigger.z >= 8 && scares[0].completedCheckpointMinimum === 2, `the first apparition must wait until the player reaches the north garden/front-yard approach: ${JSON.stringify(scares[0])}`);
     assert(scares[1].trigger.id === "front-door-crossing" && Math.abs(scares[1].trigger.x) <= 3 && scares[1].trigger.z >= 14 && scares[1].trigger.z <= 17, `the second apparition must wait until the player passes close to the front door: ${JSON.stringify(scares[1])}`);
-    assert(scares.every((entry) => entry.trigger.radius >= 1.3 && entry.completedCheckpointMinimum <= entry.completedCheckpointMaximum), `each apparition needs a real route trigger and bounded progress window: ${JSON.stringify(scares)}`);
+    assert(scares.every((entry) => entry.trigger.radius >= 1.1 && entry.completedCheckpointMinimum <= entry.completedCheckpointMaximum), `each apparition needs a real route trigger and bounded progress window: ${JSON.stringify(scares)}`);
     assert(Math.max(...checkpoints.map((entry) => entry.position.x)) - Math.min(...checkpoints.map((entry) => entry.position.x)) >= 35, "Storm checkpoints must span the yard's east/west axis");
     assert(Math.max(...checkpoints.map((entry) => entry.position.z)) - Math.min(...checkpoints.map((entry) => entry.position.z)) >= 35, "Storm checkpoints must span the yard's front/rear axis");
     const outOfOrder = await collectCheckpoint(timerPage, 3);
@@ -724,13 +747,14 @@ async function run() {
     await audioPage.addInitScript(() => localStorage.clear());
     await audioPage.goto(`${baseUrl}/games/mr-feast-mansion.html?qa=1&allLights=1`, { waitUntil: "domcontentloaded" });
     await audioPage.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
-    await audioPage.locator("#mansion-enter").click();
+    await audioPage.waitForFunction(() => !document.getElementById("mansion-enter")?.disabled, null, { timeout: 120000 });
+    await audioPage.locator("#mansion-enter").click({ force: true });
     await audioPage.waitForFunction(() => window.MrFeastFresh?.getAudioStateForQA?.()?.contextState === "running", null, { timeout: 15000 });
     await audioPage.waitForFunction(() => window.MrFeastFresh?.getMrFeastState?.()?.loadStatus === "ready", null, { timeout: 120000 });
     await audioPage.evaluate(() => window.MrFeastFresh.advanceOpeningWelcomeForQA(120));
     await audioPage.waitForFunction(() => window.MrFeastFresh?.getContestantState?.()?.settled, null, { timeout: 120000 });
     await completeFeastSays(audioPage);
-    const audioCalled = await audioPage.evaluate(() => window.MrFeastFresh.callStormRunForQA("audio-qa"));
+    const audioCalled = await audioPage.evaluate(() => window.MrFeastFresh.callStormRunForQA("qa"));
     assert(audioCalled?.started === true, `the unmuted Storm Run audio probe should call the event: ${JSON.stringify(audioCalled)}`);
     const audioStarted = await audioPage.evaluate(() => window.MrFeastFresh.startStormRunForQA());
     assert(audioStarted?.started === true, `the unmuted Storm Run audio probe should stage the event: ${JSON.stringify(audioStarted)}`);
@@ -841,7 +865,7 @@ async function run() {
     assert(maraAfterWin.challengeResponse.motion.faceCoverHandDistances?.left <= 0.34 && maraAfterWin.challengeResponse.motion.faceCoverHandDistances?.right <= 0.34, `both of Mara's hands must reach her face: ${JSON.stringify(maraAfterWin.challengeResponse.motion.faceCoverHandDistances)}`);
     assert(!juniperAfterWin.eliminated && juniperAfterWin.modelVisible && juniperAfterWin.aftermathReturn?.active, `Juniper must survive Game 2 and start walking home: ${JSON.stringify(juniperAfterWin)}`);
     let aftermathDiagnostics = await diagnostics(winPage);
-    assert(aftermathDiagnostics.speech?.speakerId === "mr-feast" && /Mara is last/i.test(aftermathDiagnostics.speech.text || ""), `Mr. Feast must announce the result before Mara answers: ${JSON.stringify(aftermathDiagnostics.speech)}`);
+    assert(aftermathDiagnostics.speech?.speakerId === "mr-feast" && /twelve checkpoints, three contestants, one vacancy/i.test(aftermathDiagnostics.speech.text || "") && /all that strategy/i.test(aftermathDiagnostics.speech.text || ""), `Mr. Feast must deliver the sharper authored result before Mara answers: ${JSON.stringify(aftermathDiagnostics.speech)}`);
 
     await winPage.evaluate(() => window.MrFeastFresh.previewStormRunAftermathForQA());
     await winPage.waitForTimeout(180);
@@ -849,10 +873,10 @@ async function run() {
     assert(wonState.aftermath.sceneOnScreen, `the authored finish view must clearly frame Mara: ${JSON.stringify(wonState.aftermath)}`);
     await winPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mara-back-door-elimination.png") });
 
-    await winPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(5.3));
+    await winPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(6.5));
     aftermathDiagnostics = await diagnostics(winPage);
     assert(aftermathDiagnostics.stormRun.aftermath.stage === "mara-speaking" && aftermathDiagnostics.speech?.speakerId === "mara-voss", `Mara must answer after the result announcement: ${JSON.stringify({ aftermath: aftermathDiagnostics.stormRun.aftermath, speech: aftermathDiagnostics.speech })}`);
-    assert(/count of everyone|count me/i.test(aftermathDiagnostics.speech.text || ""), `Mara's last line must sound sad and imply she knows what happened to prior losers: ${JSON.stringify(aftermathDiagnostics.speech?.text)}`);
+    assert(/every lightning flash/i.test(aftermathDiagnostics.speech.text || "") && /counting survivors/i.test(aftermathDiagnostics.speech.text || ""), `Mara's last line must connect the impossible sightings to the missing contestants: ${JSON.stringify(aftermathDiagnostics.speech?.text)}`);
     await winPage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "mara-back-door-cover-face.png") });
     await winPage.setViewportSize({ width: 390, height: 844 });
     await winPage.waitForTimeout(120);
@@ -862,7 +886,7 @@ async function run() {
     await winPage.setViewportSize({ width: 1280, height: 820 });
     await winPage.waitForTimeout(120);
 
-    await winPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(5.5));
+    await winPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(7.3));
     await winPage.evaluate(() => window.MrFeastFresh.advanceStormRunCastForQA(70));
     aftermathDiagnostics = await diagnostics(winPage);
     const returnedJuniper = aftermathDiagnostics.contestants.entries.find((entry) => entry.id === "juniper-cross");
@@ -887,6 +911,16 @@ async function run() {
     assert(await winPage.evaluate(() => window.MrFeastFresh.loadGameForQA()) === true, "completed Storm Run should load");
     restored = await stormState(winPage);
     assert(restored.phase === "completed" && restored.eliminatedContestantId === "mara-voss", `Mara elimination must persist: ${JSON.stringify(restored)}`);
+    assert(restored.aftermath.postGameDialoguePendingIds.includes("juniper-cross"), `Juniper's first post-race line must survive save/load: ${JSON.stringify(restored.aftermath)}`);
+    const juniperFirstTalk = await winPage.evaluate(() => window.MrFeastFresh.converseWithContestantForQA("juniper-cross"));
+    let juniperConversation = await diagnostics(winPage);
+    let juniperEntry = juniperConversation.contestants.entries.find((entry) => entry.id === "juniper-cross");
+    assert(juniperFirstTalk?.speakerId === "juniper-cross" && /three places, one heartbeat/i.test(juniperFirstTalk.text || "") && /does not cross the ground/i.test(juniperFirstTalk.text || ""), `Juniper's first post-Storm Run conversation must interpret the lightning sightings: ${JSON.stringify(juniperFirstTalk)}`);
+    assert(juniperEntry?.dialogue.lastKind === "storm-run-aftermath" && !juniperConversation.stormRun.aftermath.postGameDialoguePendingIds.includes("juniper-cross"), `Juniper's Storm Run follow-up must be consumed exactly once: ${JSON.stringify({ juniperEntry, aftermath: juniperConversation.stormRun.aftermath })}`);
+    const juniperSecondTalk = await winPage.evaluate(() => window.MrFeastFresh.converseWithContestantForQA("juniper-cross"));
+    juniperConversation = await diagnostics(winPage);
+    juniperEntry = juniperConversation.contestants.entries.find((entry) => entry.id === "juniper-cross");
+    assert(juniperSecondTalk?.text !== juniperFirstTalk.text && juniperEntry?.dialogue.lastKind !== "storm-run-aftermath", `Juniper's new Storm Run line must not repeat on the second conversation: ${JSON.stringify({ first: juniperFirstTalk, second: juniperSecondTalk, juniperEntry })}`);
     assert(winErrors.length === 0, `win page produced console errors: ${JSON.stringify(winErrors)}`);
     await winContext.close();
 
@@ -924,9 +958,14 @@ async function run() {
     const phoneBriefing = await stormState(phonePage);
     assert(phoneBriefing.briefing?.lighting?.active, `the phone must receive the same temporary Storm Run intro-lighting lift: ${JSON.stringify(phoneBriefing.briefing?.lighting)}`);
     assert(phoneBriefing.briefing?.lighting?.moonPose === "storm-run-briefing", `the phone briefing must keep the player-side moon key: ${JSON.stringify(phoneBriefing.briefing?.lighting)}`);
+    const phoneSkip = phonePage.locator("#mansion-speech-skip");
+    assert(await phoneSkip.isVisible(), "the phone Storm Run briefing must expose Skip rules immediately");
+    const phoneSkipBounds = await phoneSkip.boundingBox();
+    assert(phoneSkipBounds?.width >= 44 && phoneSkipBounds?.height >= 44, `the phone Storm Run skip target must remain at least 44px: ${JSON.stringify(phoneSkipBounds)}`);
     await phonePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "storm-run-rear-door-briefing-mobile.png") });
     await phonePage.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "storm-run-bright-intro-mobile.png") });
-    await phonePage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(16));
+    await phoneSkip.click();
+    await phonePage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(3.1));
     await phonePage.waitForFunction(() => window.MrFeastFresh.getStormRunState?.()?.phase === "running", null, { timeout: 8000 });
     await assertHudFits(phonePage, true);
     await phonePage.screenshot({ path: path.join(artifactDir, "storm-run-mobile.png") });

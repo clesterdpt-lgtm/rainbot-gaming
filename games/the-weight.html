@@ -57,12 +57,11 @@
         transparent 28%, rgba(55,0,0,0.35) 74%, rgba(70,0,0,0.68) 100%);
       opacity: 0; transition: opacity 3s ease; z-index: 5;
     }
-    #fx-flash { background: #fff; opacity: 0; z-index: 6; transition: opacity 120ms ease-out; }
     #fx-fade  { background: #000; opacity: 0; z-index: 7; transition: opacity 1200ms linear; }
 
     /* Eyelids — driven by the blink mechanic */
     #fx-lid-top, #fx-lid-bottom {
-      position: fixed; left: 0; right: 0; height: 53%;
+      position: absolute; left: 0; right: 0; height: 53%;
       background: #000; z-index: 9; pointer-events: none; will-change: transform;
     }
     #fx-lid-top    { top: 0;    transform: translateY(-100%); box-shadow: 0 7px 22px 6px #000; }
@@ -143,12 +142,8 @@
     .scr--show { display: flex; }
     .scr--dim  { background: rgba(0,0,0,0.92); }
 
-    .scr__corner {
-      position: absolute; top: 18px; left: 20px;
-      font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
-      color: #4a463c; text-decoration: none;
-    }
-    .scr__corner:hover { color: var(--bone-dim); }
+    /* Keep the shared three-line game menu above The Weight's custom screens. */
+    .weight-page .rb-escape-btn { z-index: 44; }
 
     .scr__kicker {
       font-family: var(--mono); font-size: 11px; letter-spacing: 0.34em;
@@ -228,7 +223,7 @@
     <div class="game-layout">
       <div class="game-stage rb-standalone-stage">
         <div class="canvas-wrap rb-standalone-surface rb-standalone-surface--afterdark">
-          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
+          <button class="fs-btn" id="btn-fullscreen" type="button" data-rb-fullscreen-style="echo" aria-label="Max screen" title="Max screen">⛶</button>
 
           <!-- Three.js stage (Phase 1 bedroom + Phase 2 astral share one renderer) -->
           <div id="stage"></div>
@@ -237,14 +232,13 @@
   <div    class="fx" id="fx-vignette"></div>
   <canvas class="fx" id="fx-grain"></canvas>
   <div    class="fx" id="fx-blood"></div>
-  <div    class="fx" id="fx-flash"></div>
   <div    class="fx" id="fx-fade"></div>
   <div id="fx-lid-top"></div>
   <div id="fx-lid-bottom"></div>
   <div id="fx-sub"></div>
   <div id="fx-title"></div>
-  <div id="fx-hint-paralysis">you cannot move &nbsp;·&nbsp; mouse — look (barely)</div>
-  <div id="fx-hint-astral">wasd / arrows — move &nbsp;·&nbsp; mouse — look &nbsp;·&nbsp; gather the shards of your soul, then get back to your body</div>
+  <div id="fx-hint-paralysis">you cannot move &nbsp;·&nbsp; mouse — look &nbsp;·&nbsp; space — close your eyes</div>
+  <div id="fx-hint-astral">wasd / arrows — move &nbsp;·&nbsp; mouse — look &nbsp;·&nbsp; listen for what belongs to you &nbsp;·&nbsp; return to the bed</div>
   <div id="obe-hud"><div id="obe-objective"></div></div>
 
   <!-- Touch / mobile controls (inert on desktop) -->
@@ -256,7 +250,6 @@
 
   <!-- TITLE / CLICK-TO-BEGIN SCREEN -->
   <div class="scr scr--show" id="scr-boot">
-    <a class="scr__corner" href="../games.html#after-dark-games">&larr; after dark</a>
     <div class="scr__kicker">rainbot after dark &middot; no. 002</div>
     <h1 class="scr__title">THE WEIGHT</h1>
     <p class="scr__sub">You wake at 3:47 AM.
@@ -268,18 +261,18 @@ Something is at the foot of the bed.</p>
     <div class="scr__warn">
       headphones required &middot; lights off &middot; alone<br />
       positional audio &middot; slow-building dread &middot; sudden loud sounds<br />
-      photosensitivity warning: brief flashing imagery
+      steady-light horror &middot; no strobe or flashing-light effects
     </div>
   </div>
 
   <!-- PAUSE SCREEN -->
   <div class="scr scr--dim" id="scr-pause">
-    <a class="scr__corner" href="../games.html#after-dark-games">&larr; leave</a>
     <div class="scr__kicker">still in the room</div>
     <h2 class="scr__title" style="font-size:36px;letter-spacing:0.2em;animation:none;">paused</h2>
     <div class="scr__row" style="margin-bottom:0;">
       <button class="ebtn" id="btn-resume">close your eyes again</button>
       <button class="ebtn ebtn--sm" id="btn-restart">start over</button>
+      <button class="ebtn ebtn--sm" id="btn-main-menu">main menu</button>
     </div>
     <div class="vol-row">
       <span>volume</span>
@@ -352,18 +345,19 @@ Something is at the foot of the bed.</p>
   </footer>
 
   <script src="../assets/vendor/three/three-r128.min.js"></script>
-  <script src="../assets/js/the-weight/config.js?v=20260708e"></script>
-  <script src="../assets/js/the-weight/audio.js?v=20260708e"></script>
-  <script src="../assets/js/the-weight/controls.js?v=20260708e"></script>
-  <script src="../assets/js/the-weight/bedroom.js?v=20260708e"></script>
-  <script src="../assets/js/the-weight/fx.js?v=20260708e"></script>
-  <script src="../assets/js/the-weight/touch.js?v=20260708e"></script>
-  <script src="../assets/js/the-weight/post.js?v=20260708e"></script>
-  <script src="../assets/js/the-weight/astral.js?v=20260708e"></script>
-  <script src="../assets/js/the-weight/astral-controls.js?v=20260708e"></script>
-  <script src="../assets/js/the-weight/main.js?v=20260717-max-ui"></script>
+  <script src="../assets/js/the-weight/config.js?v=20260722-shadow-1"></script>
+  <script src="../assets/js/the-weight/audio.js?v=20260722-shadow-1"></script>
+  <script src="../assets/js/the-weight/controls.js?v=20260722-shadow-1"></script>
+  <script src="../assets/js/the-weight/entity-shadow.js?v=20260722-shadow-1"></script>
+  <script src="../assets/js/the-weight/bedroom.js?v=20260722-shadow-1"></script>
+  <script src="../assets/js/the-weight/fx.js?v=20260722-shadow-1"></script>
+  <script src="../assets/js/the-weight/touch.js?v=20260722-shadow-1"></script>
+  <script src="../assets/js/the-weight/post.js?v=20260722-shadow-1"></script>
+  <script src="../assets/js/the-weight/astral.js?v=20260722-shadow-1"></script>
+  <script src="../assets/js/the-weight/astral-controls.js?v=20260722-shadow-1"></script>
+  <script src="../assets/js/the-weight/main.js?v=20260722-menu-2"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/main.js?v=20260717-max-ui"></script>
+  <script src="../assets/js/main.js?v=20260722-weight-menu-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

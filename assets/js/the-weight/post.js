@@ -3,8 +3,8 @@
 //
 // Renders the astral scene to an offscreen target, then draws a full-
 // screen quad that grades it: spectral monochrome palette, chromatic
-// aberration, film grain, vignette, and horizontal "static" — the
-// distortion rises with the entity's proximity and IS the threat meter.
+// aberration, static film texture, and vignette. Distortion rises smoothly
+// with proximity; no rapid brightness or scanline effects are used.
 // =============================================================
 
 (function () {
@@ -19,10 +19,8 @@ void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
 const FRAG = `
 precision highp float;
 uniform sampler2D tDiffuse;
-uniform float uTime;
 uniform float uAberration;   // 0..1 proximity
 uniform float uGrain;
-uniform float uStatic;
 uniform vec2  uResolution;
 varying vec2 vUv;
 
@@ -31,10 +29,6 @@ float rand(vec2 c){ return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453
 void main() {
   vec2 uv = vUv;
   vec2 dir = uv - 0.5;
-
-  // horizontal static jitter when something is very close
-  float jitter = uStatic * (rand(vec2(floor(uv.y * 90.0), floor(uTime * 16.0))) - 0.5) * 0.04;
-  uv.x += jitter;
 
   // chromatic aberration — grows toward the edges and with proximity
   float amt = 0.0016 + uAberration * 0.014;
@@ -58,12 +52,8 @@ void main() {
 
   // grain + static applied in DISPLAY space, so dark areas don't blow up
   // into harsh noise under the gamma curve
-  float grain = (rand(uv * uResolution * 0.6 + uTime) - 0.5) * uGrain;
+  float grain = (rand(uv * uResolution * 0.6) - 0.5) * uGrain;
   spectral += grain;
-  if (uStatic > 0.001) {
-    float s = rand(vec2(floor(uv.y * 120.0) + uTime * 10.0, uTime * 2.0));
-    spectral += (s - 0.5) * uStatic * 0.5;
-  }
   gl_FragColor = vec4(spectral, 1.0);
 }
 `;
@@ -84,10 +74,8 @@ TW.Post = class Post {
 
     this.uniforms = {
       tDiffuse:    { value: this.rt.texture },
-      uTime:       { value: 0 },
       uAberration: { value: 0 },
       uGrain:      { value: 0.055 },
-      uStatic:     { value: 0 },
       uResolution: { value: new THREE.Vector2(w, h) },
     };
 
@@ -110,9 +98,7 @@ TW.Post = class Post {
 
   render(scene, camera, dt, prox) {
     const u = this.uniforms;
-    u.uTime.value += dt;
     u.uAberration.value = prox;
-    u.uStatic.value = prox > 0.55 ? (prox - 0.55) * 0.9 : 0;
 
     this.renderer.setRenderTarget(this.rt);
     this.renderer.clear();

@@ -12,120 +12,14 @@
 window.TW = window.TW || {};
 const THREE = window.THREE;
 
-// =====================================================================
-// The wraith — the shared entity model for both phases, matching the
-// cover art: a gaunt, hunched shadow with an elongated skull, slanted
-// amber eyes, tendrils streaming off the head and shoulders, long arms
-// ending in talons, and a lower body that dissolves into ragged tatters.
-// Front of the model is +z. Returns { model, eyeGlow }.
-// =====================================================================
-TW.buildWraith = function () {
-  const g = new THREE.Group();
-  const skin = new THREE.MeshStandardMaterial({ color: 0x060709, roughness: 1, metalness: 0 });
-
-  // hunched spine + shoulder mass rising out of the robe
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.11, 0.8, 10), skin);
-  torso.position.set(0, 1.4, 0.04);
-  torso.rotation.x = 0.3;
-  const shoulders = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), skin);
-  shoulders.scale.set(1.5, 0.75, 1.0);
-  shoulders.position.set(0, 1.78, 0.13);
-  g.add(torso, shoulders);
-
-  // elongated skull jutting forward over the hunch, tapering to a snout
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 12), skin);
-  head.scale.set(0.85, 1.0, 1.55);
-  head.position.set(0, 1.96, 0.22);
-  const snout = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.24, 8), skin);
-  snout.rotation.x = Math.PI / 2;
-  snout.position.set(0, 1.92, 0.42);
-  g.add(head, snout);
-
-  // slanted, burning amber eyes
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffd45a, fog: false });
-  const eyeGeo = new THREE.SphereGeometry(0.03, 8, 8);
-  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-  eyeL.scale.set(1.7, 0.55, 0.7);
-  eyeL.position.set(-0.06, 1.99, 0.33);
-  eyeL.rotation.z = 0.45;
-  const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
-  eyeR.scale.set(1.7, 0.55, 0.7);
-  eyeR.position.set(0.06, 1.99, 0.33);
-  eyeR.rotation.z = -0.45;
-  const eyeGlow = new THREE.PointLight(0xffb030, 0.5, 2.5, 2);
-  eyeGlow.position.set(0, 1.96, 0.35);
-  g.add(eyeL, eyeR, eyeGlow);
-
-  // long tendrils of shadow streaming up and back off the skull / shoulders
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    const len = 0.4 + Math.random() * 0.38;
-    const t = new THREE.Mesh(new THREE.ConeGeometry(0.022 + Math.random() * 0.018, len, 5), skin);
-    const fromShoulder = i % 3 === 0;
-    t.position.set(
-      Math.cos(a) * (fromShoulder ? 0.18 : 0.09),
-      (fromShoulder ? 1.76 : 2.0) + Math.random() * 0.1,
-      (fromShoulder ? 0.06 : 0.12) - 0.14,
-    );
-    t.rotation.x = -(0.7 + Math.random() * 0.9);
-    t.rotation.z = -Math.cos(a) * (0.4 + Math.random() * 0.7);
-    g.add(t);
-  }
-
-  // long arms as jointed chains hanging from the shoulders, ending in talons
-  const mkArm = (s) => {
-    const arm = new THREE.Group();
-    arm.position.set(s * 0.21, 1.76, 0.12);        // shoulder joint
-    const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.032, 0.6, 7), skin);
-    upper.position.y = -0.3;
-    arm.add(upper);
-    const elbow = new THREE.Group();
-    elbow.position.y = -0.58;
-    arm.add(elbow);
-    const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.022, 0.56, 7), skin);
-    fore.position.y = -0.28;
-    elbow.add(fore);
-    for (let i = -1; i <= 1; i++) {
-      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.014, 0.28, 5), skin);
-      claw.position.set(i * 0.035, -0.66, 0.03);
-      claw.rotation.set(Math.PI - 0.28, 0, i * 0.24);
-      elbow.add(claw);
-    }
-    arm.rotation.set(-0.3, 0, s * 0.14);    // hang forward, slightly out
-    elbow.rotation.x = -0.4;                // bent further forward at the elbow
-    return arm;
-  };
-  g.add(mkArm(-1), mkArm(1));
-
-  // the lower body is a tattered robe, ragged strips hanging off the hem,
-  // with only thin shins showing beneath
-  const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.3, 0.85, 9, 1, true), skin);
-  robe.position.y = 0.62;
-  g.add(robe);
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2 + 0.3;
-    const strip = new THREE.Mesh(new THREE.ConeGeometry(0.055 + Math.random() * 0.03, 0.35 + Math.random() * 0.25, 4), skin);
-    strip.position.set(Math.cos(a) * 0.26, 0.16, Math.sin(a) * 0.23);
-    strip.rotation.set(Math.PI + (Math.random() - 0.5) * 0.2, 0, (Math.random() - 0.5) * 0.2);
-    g.add(strip);
-  }
-  [-1, 1].forEach((s) => {
-    const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.42, 7), skin);
-    shin.position.set(s * 0.09, 0.2, -0.02);
-    g.add(shin);
-  });
-
-  g.scale.setScalar(0.95);
-  return { model: g, eyeGlow };
-};
+// The shared entity model is defined by entity-shadow.js.
 
 TW.BedroomScene = class BedroomScene {
   constructor(cfg) {
     this.cfg = cfg;
     this.room = cfg.room;
     this._t = 0;
-    this._colonOn = true;
-    this._colonTimer = 0;
+    this._clockText = '3:47';
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x04050a);
@@ -141,8 +35,7 @@ TW.BedroomScene = class BedroomScene {
     this.blanket = null;
     this.moon = null;
     this.entity = null;
-    this._moonFlicker = 1;
-    this._flickerUntil = 0;
+    this._moonLevel = 1;
 
     this._buildLighting();
     this._buildRoom();
@@ -252,6 +145,7 @@ TW.BedroomScene = class BedroomScene {
     const frame = this._mat(0x140d08, 0.85);
     const sheet = this._mat(0x3a3d44, 0.95);
     const blanketMat = this._mat(0x2a2730, 0.98);
+    blanketMat.side = THREE.DoubleSide;
 
     // bed sits centred-ish, head against the +z wall, foot toward the room
     const bedW = 1.5, bedL = 2.4, baseY = 0.30;
@@ -266,44 +160,77 @@ TW.BedroomScene = class BedroomScene {
     this._box(bedW + 0.12, 0.7, 0.08, frame, 0, 0.62, cz + bedL / 2 - 0.02);
 
     // pillow under the player's head
-    const pillow = this._box(0.7, 0.13, 0.42, sheet, 0.02, 0.62, cz + bedL / 2 - 0.36);
+    // Keep the pillow beneath/behind the viewpoint. Letting its pale front edge
+    // sit ahead of the camera made the body appear abruptly sliced in half.
+    const pillow = this._box(0.7, 0.13, 0.22, sheet, 0.02, 0.62, cz + bedL / 2 - 0.13);
     pillow.rotation.x = -0.06;
 
     // ---- the player's own body under the blanket (lower FOV immersion) ----
     const blanket = new THREE.Group();
 
-    // torso ridge running from chest toward the feet (kept off the lens
-    // and low-profile so it reads as a body, not a wall)
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.20, 1.05), blanketMat);
-    torso.position.set(0.02, 0.585, cz - 0.12);
-    torso.castShadow = true; torso.receiveShadow = true;
-    blanket.add(torso);
+    // One sculpted quilt surface replaces the old pile of intersecting body
+    // primitives. Its chest, hip, knee and foot profiles blend continuously.
+    // Continue the quilt beneath and slightly behind the camera so its head
+    // edge can never enter the downward field of view. Anatomical profiles
+    // still begin at the chest and retain their original proportions.
+    const bodyHeadZ = cz + 0.28;
+    const quiltHeadZ = Math.min(cz + bedL / 2 - 0.03, this.cfg.camera.pos.z + 0.22);
+    const quiltFootZ = cz - 1.14;
+    const quiltLength = quiltHeadZ - quiltFootZ;
+    const nx = 24, nz = 48, verts = [], indices = [];
+    for (let iz = 0; iz <= nz; iz++) {
+      const v = iz / nz;
+      const z = quiltHeadZ - v * quiltLength;
+      const bodyV = Math.max(0, Math.min(1, (bodyHeadZ - z) / (bodyHeadZ - quiltFootZ)));
+      const upperBlend = z > bodyHeadZ
+        ? 0.45 + 0.55 * (quiltHeadZ - z) / (quiltHeadZ - bodyHeadZ)
+        : 1;
+      for (let ix = 0; ix <= nx; ix++) {
+        const u = ix / nx;
+        const x = -0.7 + u * 1.4;
+        const across = (u - 0.5) * 2;
+        const body = Math.exp(-Math.pow(across / 0.73, 4));
+        const drape = Math.pow(Math.max(0, 1 - Math.abs(across)), 0.45);
+        const chest = Math.exp(-Math.pow((bodyV - 0.08) / 0.22, 2)) * 0.14 * upperBlend;
+        const hips = Math.exp(-Math.pow((bodyV - 0.42) / 0.27, 2)) * 0.095;
+        const knees = Math.exp(-Math.pow((bodyV - 0.68) / 0.16, 2)) * 0.1;
+        const feet = Math.exp(-Math.pow((bodyV - 0.94) / 0.1, 2)) * 0.065;
+        const fold = Math.sin(u * Math.PI * 6 + bodyV * 2.5) * 0.006 * drape;
+        verts.push(x, 0.55 + drape * 0.022 + body * (chest + hips + knees + feet) + fold, z);
+      }
+    }
+    for (let iz = 0; iz < nz; iz++) {
+      for (let ix = 0; ix < nx; ix++) {
+        const a = iz * (nx + 1) + ix, b = a + 1, c = a + nx + 1, d = c + 1;
+        indices.push(a, b, c, b, d, c);
+      }
+    }
+    const quiltGeo = new THREE.BufferGeometry();
+    quiltGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    quiltGeo.setIndex(indices); quiltGeo.computeVertexNormals();
+    const quilt = new THREE.Mesh(quiltGeo, blanketMat);
+    quilt.castShadow = true; quilt.receiveShadow = true;
+    blanket.add(quilt);
+    this._quiltMesh = quilt;
+    this._quiltBasePositions = new Float32Array(quiltGeo.attributes.position.array);
+    this._bedDentVisible = false;
 
-    // feet bump near the foot of the bed
-    const feet = new THREE.Mesh(new THREE.SphereGeometry(0.26, 16, 12), blanketMat);
-    feet.scale.set(1.2, 0.58, 0.85);
-    feet.position.set(0.02, 0.55, cz - 0.9);
-    feet.castShadow = true; feet.receiveShadow = true;
-    blanket.add(feet);
-
-    // blanket draped flat over the rest of the mattress
-    const drape = new THREE.Mesh(new THREE.BoxGeometry(bedW - 0.06, 0.05, 1.4), blanketMat);
-    drape.position.set(0, 0.55, cz - 0.5);
-    drape.receiveShadow = true;
-    blanket.add(drape);
-
-    // your own arm resting on top of the covers (visible when you glance
-    // down — it rises and falls with the breath along with the blanket)
-    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.5, 8), this._mat(0x3f4757, 0.9));
-    sleeve.rotation.set(Math.PI / 2 - 0.15, 0, -0.12);
-    sleeve.position.set(0.3, 0.66, cz - 0.05);
-    sleeve.castShadow = true;
-    blanket.add(sleeve);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), this._mat(0x565c6c, 0.85));
-    hand.scale.set(0.9, 0.55, 1.25);
-    hand.position.set(0.33, 0.66, cz - 0.32);
-    hand.castShadow = true;
-    blanket.add(hand);
+    // Close the sculpted top on every edge. Without this drape, looking down
+    // from the pillow exposed the quilt's hollow, one-sided interior.
+    const quiltCenterZ = (quiltHeadZ + quiltFootZ) * 0.5;
+    const addQuiltDrape = (geometry, x, y, z) => {
+      const drape = new THREE.Mesh(geometry, blanketMat);
+      drape.position.set(x, y, z);
+      drape.castShadow = true;
+      drape.receiveShadow = true;
+      blanket.add(drape);
+    };
+    const sideDrapeGeo = new THREE.BoxGeometry(0.035, 0.16, quiltLength);
+    addQuiltDrape(sideDrapeGeo, -0.69, 0.48, quiltCenterZ);
+    addQuiltDrape(sideDrapeGeo, 0.69, 0.48, quiltCenterZ);
+    const endDrapeGeo = new THREE.BoxGeometry(1.4, 0.16, 0.035);
+    addQuiltDrape(endDrapeGeo, 0, 0.48, quiltHeadZ - 0.01);
+    addQuiltDrape(endDrapeGeo, 0, 0.48, quiltFootZ + 0.01);
 
     this.scene.add(blanket);
     this.blanket = blanket;
@@ -371,8 +298,27 @@ TW.BedroomScene = class BedroomScene {
 
     // thin curtains framing the window
     const curtain = this._mat(0x14110f, 1.0);
-    this._box(0.04, wH + 0.5, 0.18, curtain, wx + 0.06, wy + 0.1, wz - wW / 2 - 0.18);
-    this._box(0.04, wH + 0.5, 0.18, curtain, wx + 0.06, wy + 0.1, wz + wW / 2 + 0.18);
+    const curtainL = this._box(0.04, wH + 0.5, 0.18, curtain, wx + 0.06, wy + 0.1, wz - wW / 2 - 0.18);
+    const curtainR = this._box(0.04, wH + 0.5, 0.18, curtain, wx + 0.06, wy + 0.1, wz + wW / 2 + 0.18);
+    this._curtains = [curtainL, curtainR];
+    this._curtainHome = this._curtains.map((c) => c.position.z);
+
+    // A human-ish absence against the pane. It is deliberately featureless:
+    // from the pillow the player sees a head and shoulders, never a model.
+    const watcher = new THREE.Group();
+    const watcherMat = this._mat(0x020306, 1.0);
+    const watcherHead = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), watcherMat);
+    watcherHead.scale.set(0.7, 1.16, 0.58);
+    watcherHead.position.y = 0.31;
+    const watcherNeck = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.095, 0.2, 7), watcherMat);
+    watcherNeck.position.y = 0.08;
+    const watcherBody = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.34, 0.72, 8), watcherMat);
+    watcherBody.position.y = -0.31;
+    watcher.add(watcherHead, watcherNeck, watcherBody);
+    watcher.position.set(wx + 0.09, wy - 0.05, wz + 0.16);
+    watcher.visible = false;
+    this.scene.add(watcher);
+    this._windowWatcher = watcher;
   }
 
   _buildDoor() {
@@ -412,6 +358,21 @@ TW.BedroomScene = class BedroomScene {
     glow.rotation.x = -Math.PI / 2.05;
     this.scene.add(glow);
     this._doorGlow = glow;
+
+    // Four fingers can curl around the jamb before the entity itself is ever
+    // revealed. They remain a flat, nearly black silhouette at bedroom range.
+    const fingers = new THREE.Group();
+    const fingerMat = this._mat(0x010203, 1.0);
+    for (let i = 0; i < 4; i++) {
+      const finger = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.017, 0.3 - i * 0.025, 6), fingerMat);
+      finger.rotation.z = Math.PI / 2;
+      finger.position.set(-i * 0.018, i * 0.065, 0);
+      fingers.add(finger);
+    }
+    fingers.position.set(dx + dW / 2 - 0.1, 1.17, dz + 0.09);
+    fingers.visible = false;
+    this.scene.add(fingers);
+    this._doorFingers = fingers;
   }
 
   _buildFurniture() {
@@ -441,6 +402,28 @@ TW.BedroomScene = class BedroomScene {
     const back = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.5, 0.06), cm);
     back.position.set(0, 0.7, -0.18); back.castShadow = true;
     chair.add(seat, back);
+    // Four grounded legs and low stretchers make the silhouette read as a
+    // real wooden chair even when the clothes pile obscures the seat.
+    const legGeo = new THREE.BoxGeometry(0.055, 0.42, 0.055);
+    for (const x of [-0.16, 0.16]) {
+      for (const z of [-0.16, 0.16]) {
+        const leg = new THREE.Mesh(legGeo, cm);
+        leg.position.set(x, 0.21, z);
+        leg.castShadow = true;
+        chair.add(leg);
+      }
+    }
+    const sideStretcherGeo = new THREE.BoxGeometry(0.04, 0.04, 0.32);
+    for (const x of [-0.16, 0.16]) {
+      const rail = new THREE.Mesh(sideStretcherGeo, cm);
+      rail.position.set(x, 0.22, 0);
+      rail.castShadow = true;
+      chair.add(rail);
+    }
+    const frontStretcher = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.04, 0.04), cm);
+    frontStretcher.position.set(0, 0.22, 0.16);
+    frontStretcher.castShadow = true;
+    chair.add(frontStretcher);
     // a slumped pile of clothes — vaguely person-shaped in the dark
     const pile = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 10), this._mat(0x0b0a0c, 1.0));
     pile.scale.set(0.8, 1.25, 0.7);
@@ -451,6 +434,10 @@ TW.BedroomScene = class BedroomScene {
     chair.rotation.y = 0.5;
     this.scene.add(chair);
     this._chair = chair;
+    this._chairHomePos = chair.position.clone();
+    this._chairHomeRot = chair.rotation.y;
+    this._pileHomeScale = pile.scale.clone();
+    this._pileHomePos = pile.position.clone();
 
     // a pair of pale eyes waiting inside the wardrobe (hidden until sprung)
     const wEyeMat = new THREE.MeshBasicMaterial({ color: 0xcfe8ff, fog: false });
@@ -465,7 +452,7 @@ TW.BedroomScene = class BedroomScene {
     this._wardrobeEyes = wEyes;
 
     // framed picture on the right wall
-    this._box(0.02, 0.5, 0.38, this._mat(0x080a0e, 0.5), w / 2 - 0.02, 1.6, 0.4);
+    this._picture = this._box(0.02, 0.5, 0.38, this._mat(0x080a0e, 0.5), w / 2 - 0.02, 1.6, 0.4);
   }
 
   // ------------------------------------------------------------------
@@ -484,17 +471,25 @@ TW.BedroomScene = class BedroomScene {
     this.entity = outer;
     this._entityInner = inner;
     this._eyeGlow = built.eyeGlow;
+    this._entityRig = built.rig;
 
-    this._eStart = new THREE.Vector3(-0.55, 0, -1.75);
-    this._eSide = new THREE.Vector3(0.86, 0, 0.72);
-    this._eOver = new THREE.Vector3(0.42, 0.18, 1.62);
+    // Its first readable position mirrors the reference: centered beyond the
+    // foot of the bed, so the silhouette is mistaken for part of the room.
+    this._eStart = new THREE.Vector3(0.02, 0, -2.62);
+    this._eSide = new THREE.Vector3(-1.42, 0, -1.18);
+    // The final pose sinks into the floor and folds sharply at the hips. This
+    // puts the face at pillow height without shoving the torso through the
+    // near plane, and makes the approach feel like a predator bending over.
+    this._eOver = new THREE.Vector3(0.18, -0.36, -1.05);
   }
 
   /** progress 0 (far, by the door) .. 1 (looming over the bed) */
   setEntityProgress(p) {
     this._entityP = p;
     const e = this.entity; if (!e) return;
-    e.visible = p > 0.001;
+    // Early progress is heard but not shown. When it finally resolves, it is
+    // still against the darkest wall; the eyes remain dark until very late.
+    e.visible = p > 0.16;
     if (!e.visible) return;
 
     let pos, lean = 0, scale = 1;
@@ -503,14 +498,14 @@ TW.BedroomScene = class BedroomScene {
     } else {
       const k = (p - 0.66) / 0.34;
       pos = this._eSide.clone().lerp(this._eOver, k);
-      lean = k * 0.45;          // tilt forward over the player
-      scale = 1 + k * 0.12;
+      lean = k * 0.74;          // fold until the face reaches pillow height
+      scale = 1 + k * 0.02;
     }
     e.position.copy(pos);
     e.scale.setScalar(scale);
     e.rotation.y = Math.atan2(this.camera.position.x - pos.x, this.camera.position.z - pos.z);
     this._entityInner.rotation.x = lean;
-    if (this._eyeGlow) this._eyeGlow.intensity = 0.15 + p * 0.55;
+    if (this._eyeGlow) this._eyeGlow.intensity = p > 0.72 ? (p - 0.72) * 0.28 : 0;
   }
 
   /** the jumpscare rush into the camera, k 0..1 */
@@ -518,18 +513,60 @@ TW.BedroomScene = class BedroomScene {
     const e = this.entity; if (!e) return;
     e.visible = true;
     const to = this._lungeTo || (this._lungeTo = new THREE.Vector3());
-    to.set(this.camera.position.x, this.camera.position.y - 0.04, this.camera.position.z - 0.34);
+    // Rotate the long upper body into the camera instead of translating its
+    // feet into the camera. The face now drives the scare, not a clipped torso.
+    to.set(this.camera.position.x, -0.46, this.camera.position.z - 2.77);
     e.position.copy(this._eOver).lerp(to, k);
-    e.scale.setScalar(1.12 + k * 0.7);
+    e.scale.setScalar(1.02 + k * 0.04);
     e.rotation.y = Math.atan2(this.camera.position.x - e.position.x, this.camera.position.z - e.position.z);
-    this._entityInner.rotation.x = 0.45 + k * 0.2;
-    if (this._eyeGlow) this._eyeGlow.intensity = 0.7 + k * 1.6;
+    this._entityInner.rotation.x = 0.74 + k * 0.08;
+    if (this._eyeGlow) this._eyeGlow.intensity = 0.12 + k * 0.18;
   }
 
   getEntityPosition() { return this.entity ? this.entity.position.clone() : null; }
 
-  /** flicker the moonlight for `dur` seconds */
-  flicker(dur = 0.5) { this._flickerUntil = this._t + dur; }
+  /** Hold a wrong clock reading without flashing or rapidly changing it. */
+  setClockTime(text = '3:47') {
+    this._clockText = text;
+    if (this._clock) this._clock.draw(true, text === '3:47' ? null : text);
+    if (this._clockGlow) this._clockGlow.intensity = text.trim() ? 0.72 : 0.08;
+  }
+
+  tiltPicture(amount = 0.14) { if (this._picture) this._picture.rotation.x = amount; }
+
+  drawCurtains(amount = 0.32) {
+    if (!this._curtains) return;
+    this._curtains[0].position.z = this._curtainHome[0] + amount;
+    this._curtains[1].position.z = this._curtainHome[1] - amount;
+  }
+
+  slumpPile() {
+    if (!this._chairPile) return;
+    this._chairPile.scale.set(1.05, 0.5, 0.86);
+    this._chairPile.position.y = 0.61;
+  }
+
+  showBedDent(on = true) {
+    const quilt = this._quiltMesh;
+    if (!quilt || !this._quiltBasePositions || this._bedDentVisible === on) return;
+    this._bedDentVisible = on;
+    const attr = quilt.geometry.attributes.position;
+    const arr = attr.array, base = this._quiltBasePositions;
+    for (let i = 0; i < arr.length; i += 3) {
+      arr[i] = base[i]; arr[i + 1] = base[i + 1]; arr[i + 2] = base[i + 2];
+      if (!on) continue;
+      const dx = (base[i] + 0.46) / 0.25;
+      const dz = (base[i + 2] - 0.72) / 0.31;
+      const r = Math.sqrt(dx * dx + dz * dz);
+      const hollow = Math.exp(-r * r * 1.35) * -0.048;
+      const gathered = Math.exp(-Math.pow(r - 1.05, 2) / 0.09) * 0.01;
+      arr[i + 1] += hollow + gathered;
+    }
+    attr.needsUpdate = true;
+    quilt.geometry.computeVertexNormals();
+  }
+  showWindowWatcher(on = true) { if (this._windowWatcher) this._windowWatcher.visible = on; }
+  showDoorFingers(on = true) { if (this._doorFingers) this._doorFingers.visible = on; }
 
   /** a shadow crosses the hallway light under the door — someone walking past */
   shadowFeet(dur = 2.2) { this._feetDur = dur; this._feetUntil = this._t + dur; }
@@ -555,6 +592,35 @@ TW.BedroomScene = class BedroomScene {
   /** the moonlight dies for `dur` seconds — near-total dark */
   moonOut(dur = 3.5) { this._moonOutUntil = this._t + dur; }
 
+  /** Restore an almost-normal room between false awakenings. */
+  resetForFalseWake(level = 1) {
+    this.setEntityProgress(0);
+    this.setDoor(0.06);
+    this.setWardrobe(0);
+    this.setClockTime('3:47');
+    this.showBedDent(false);
+    this.showWindowWatcher(false);
+    this.showDoorFingers(false);
+    if (this._wardrobeEyes) this._wardrobeEyes.visible = false;
+    if (this._picture) this._picture.rotation.x = level === 1 ? 0.16 : 0;
+    if (this._curtains) this._curtains.forEach((c, i) => { c.position.z = this._curtainHome[i]; });
+    if (this._chair) {
+      this._chair.position.copy(this._chairHomePos);
+      this._chair.rotation.y = level === 2
+        ? Math.atan2(-this._chair.position.x, 1.15 - this._chair.position.z)
+        : this._chairHomeRot;
+    }
+    if (this._chairPile) {
+      this._chairPile.visible = true;
+      this._chairPile.scale.copy(this._pileHomeScale);
+      this._chairPile.position.copy(this._pileHomePos);
+      if (level === 2) {
+        this._chairPile.scale.y *= 1.34;
+        this._chairPile.position.y += 0.08;
+      }
+    }
+  }
+
   // ------------------------------------------------------------------
   /** open amount 0 (shut) .. 1 (wide) for the bedroom door */
   setDoor(open) {
@@ -569,24 +635,8 @@ TW.BedroomScene = class BedroomScene {
     this.camera.updateProjectionMatrix();
   }
 
-  update(dt, breathPhase = 0.5) {
+  update(dt, breathPhase = 0.5, entityMotion = false) {
     this._t += dt;
-
-    // blinking colon on the clock (once per second); as the entity closes in
-    // the display corrupts — wrong times, dead segments, stuttering glow
-    this._colonTimer += dt;
-    if (this._colonTimer >= 0.5) {
-      this._colonTimer = 0;
-      this._colonOn = !this._colonOn;
-      let glitch = null;
-      const p = this._entityP || 0;
-      if (p > 0.4 && Math.random() < 0.18 + p * 0.4) {
-        const pool = ['3:48', '3:74', '7:43', '8:88', '0:00', '   7', '3:4 ', ':347'];
-        glitch = pool[(Math.random() * pool.length) | 0];
-      }
-      this._clock.draw(this._colonOn, glitch);
-      if (this._clockGlow) this._clockGlow.intensity = glitch ? 0.25 + Math.random() * 1.3 : 1.0;
-    }
 
     // a shadow crossing the light that leaks under the door (two dips = feet)
     if (this._feetUntil && this._t < this._feetUntil) {
@@ -606,22 +656,23 @@ TW.BedroomScene = class BedroomScene {
       this.blanket.position.y = this._blanketBaseY + (breathPhase - 0.5) * 0.018;
     }
 
-    // moonlight breathes very faintly (passing clouds), stutters mid-anomaly,
-    // or dies entirely while the moon is "out"
+    // The paralysis entity is perfectly still whenever it can be seen. Its
+    // pose changes only behind fully closed eyelids.
+    if (entityMotion && this.entity && this.entity.visible) {
+      TW.animateWraith(this._entityRig, this._t, this._entityP || 0);
+    }
+
+    // Moonlight changes slowly and continuously. No flicker or rapid brightness
+    // modulation is used; darkness arrives like a cloud covering the window.
     if (this.moon) {
       const out = this._t < (this._moonOutUntil || 0);
       if (out !== this._moonWasOut) {
         this._moonWasOut = out;
         if (this._pane) this._pane.material.color.setHex(out ? 0x141c2c : 0x465d90);
       }
-      if (out) {
-        this.moon.intensity = 0.05;
-      } else {
-        this._moonFlicker = this._t < this._flickerUntil
-          ? 0.12 + Math.random() * 0.95
-          : 1;
-        this.moon.intensity = (4.3 + Math.sin(this._t * 0.7) * 0.2) * this._moonFlicker;
-      }
+      const target = out ? 0.025 : 1;
+      this._moonLevel += (target - this._moonLevel) * (1 - Math.exp(-dt * 1.15));
+      this.moon.intensity = (4.3 + Math.sin(this._t * 0.35) * 0.12) * this._moonLevel;
     }
   }
 

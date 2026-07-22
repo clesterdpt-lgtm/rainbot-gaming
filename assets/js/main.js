@@ -4679,6 +4679,7 @@ function bindMaxScreenButton(fsButton, surface) {
     fsButton.textContent = active ? "✕" : "⛶";
     fsButton.setAttribute("aria-label", active ? "Exit max screen" : "Max screen");
     fsButton.setAttribute("title", active ? "Exit max screen" : "Max screen");
+    fsButton.setAttribute("aria-pressed", String(active));
   };
   const setMaxed = (active) => {
     surface.classList.toggle("is-maxed", active);

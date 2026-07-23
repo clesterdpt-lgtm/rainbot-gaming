@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260722-basement-stair-chase-1";
+  const MANSION_RUNTIME_VERSION = "20260722-basement-route-stability-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -6083,8 +6083,10 @@
       return { accepted: true };
     }
 
-    repathPursuit(targetPosition = this.pursuitLastKnownPosition) {
+    repathPursuit(targetPosition = this.pursuitLastKnownPosition, force = false) {
       if (!targetPosition) return;
+      const target = { x: targetPosition.x, y: targetPosition.y, z: targetPosition.z };
+      const targetId = this.nearestResponseTargetId(target, true);
       const nextNode = this.responsePath[0]?.node;
       const verticalRouteInProgress = Boolean(
         this.pursuitTargetNodeId
@@ -6096,17 +6098,22 @@
           || nextNode?.segmentKind === "ramp"
         )
       );
-      if (verticalRouteInProgress) {
-        // Re-anchoring to a nearest floor node while he is between floors can
-        // select the landing he just left, making a live cross-floor chase
-        // oscillate forever at the stair top. Keep the authored vertical leg;
-        // the latest reliable player point is already stored and will be
-        // replanned from the destination floor on the next refresh.
+      const existingRouteStillTargetsClue = Boolean(
+        this.responsePath.length
+        && this.pursuitTargetNodeId
+        && this.pursuitTargetNodeId === targetId
+      );
+      if (!force && (verticalRouteInProgress || existingRouteStillTargetsClue)) {
+        // A camera refresh usually maps to the same graph node. Rebuilding
+        // that still-valid route from the nearest node can select its
+        // directionally duplicated return twin and reverse him every 0.9s.
+        // Retain the route until the clue changes nodes or a real stall forces
+        // a replan. Vertical legs stay stable even if the player changes
+        // basement camera nodes while he is between floors.
+        this.pursuitTargetPlayerPosition = { ...target };
         this.pursuit.repathRemaining = MR_FEAST_PURSUIT.repathSeconds;
         return;
       }
-      const target = { x: targetPosition.x, y: targetPosition.y, z: targetPosition.z };
-      const targetId = this.nearestResponseTargetId(target, true);
       // Approach steering leaves the graph, so re-anchor to the node nearest
       // his actual position before planning the next leg of the chase.
       const startId = this.nearestResponseTargetId(this.root.position, true) || this.responseCurrentNodeId;
@@ -6216,7 +6223,7 @@
             this.pursuitBlockedEdges.set(`${this.responseCurrentNodeId}>${stalledStep}`, 20);
             this.pursuitBlockedEdges.set(`${stalledStep}>${this.responseCurrentNodeId}`, 20);
           }
-          this.repathPursuit();
+          this.repathPursuit(undefined, true);
         }
       } else {
         this.pursuitStallSeconds = 0;

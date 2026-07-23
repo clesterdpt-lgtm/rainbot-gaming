@@ -143,22 +143,23 @@ async function run() {
       `hiding, walls, and floor separation must still block close awareness; result=${JSON.stringify(blockedCloseAwareness)}`,
     );
 
-    // A camera-detected trespass must carry a main-floor host all the way
-    // down the authored service stair. Repath refreshes may update the final
-    // basement target, but must not keep snapping the route back upstairs.
+    // A camera-detected trespass must carry a host from an ordinary distant
+    // patrol point all the way down the authored service stair. Periodic
+    // refreshes must not reverse him between duplicate directional nodes
+    // around the grand stair, Kitchen, or service-stair landings.
     const crossFloorBasementChase = await page.evaluate(() => {
       window.MrFeastFresh.setDevModeForQA(true);
       window.MrFeastFresh.resetCameraSecurityForQA(null);
       window.MrFeastFresh.setCameraStoryStateForQA({ basementUnlocked: true, relaySabotaged: false });
       window.MrFeastFresh.resetMrFeastWandererForQA();
-      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: 12.55, y: 0, z: -5.4, yaw: 0 });
+      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: -6.7, y: 0, z: 10.6, yaw: 0 });
       window.MrFeastFresh.setCameraSoloForQA("cam-basement-boiler");
       window.MrFeastFresh.setCameraSweepForQA("cam-basement-boiler", 0);
       window.MrFeastFresh.placePlayerInCameraLaneForQA("cam-basement-boiler", { distance: 3.5 });
       window.MrFeastFresh.advanceCameraSecurityForQA(3);
       const awareness = window.MrFeastFresh.advanceMrFeastAwarenessForQA(1);
       const before = window.MrFeastFresh.getMrFeastState();
-      const run = window.MrFeastFresh.advanceMrFeastPursuitForQA(10);
+      const run = window.MrFeastFresh.advanceMrFeastPursuitForQA(30);
       const after = window.MrFeastFresh.getMrFeastState();
       return { awareness, before, run, after };
     });
@@ -169,7 +170,7 @@ async function run() {
     );
     assert(
       crossFloorBasementChase.after.position.y <= -3.7,
-      `cross-floor pursuit should descend to the basement instead of oscillating at the stair top; result=${JSON.stringify(crossFloorBasementChase)}`,
+      `distant cross-floor pursuit should reach the basement instead of oscillating between same-floor route nodes; result=${JSON.stringify(crossFloorBasementChase)}`,
     );
     await page.evaluate(() => window.MrFeastFresh.placePlayerNearMrFeastForQA(3));
     await page.waitForTimeout(100);

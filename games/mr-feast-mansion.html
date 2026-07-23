@@ -4,8 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#08090b" />
-  <title>Mr Feast's Mansion - Rainbot Network</title>
-  <meta name="description" content="Follow Contestant 13's trail through an unsettling three-level mansion, recover hidden evidence, and sabotage the private camera feed during a violent midnight storm." />
+  <title>Mr Feast: Last to Leave - Rainbot Network</title>
+  <meta name="description" content="Survive Mr Feast's sinister reality-show competitions, investigate a storm-bound mansion, recover hidden evidence, and sabotage the private production." />
+  <meta property="og:title" content="Mr Feast: Last to Leave" />
+  <meta property="og:description" content="Compete, investigate, and sabotage your way through a storm-bound reality show where leaving may be the only way to win." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mr-feast/card-mr-feast-last-to-leave-ai-v1.jpg" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Mr Feast: Last to Leave" />
+  <meta name="twitter:description" content="Compete, investigate, and sabotage your way through a storm-bound reality show." />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mr-feast/card-mr-feast-last-to-leave-ai-v1.jpg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" />
@@ -34,37 +42,32 @@
         #07080a;
     }
 
-    .mansion-page .game-page {
-      width: min(1780px, calc(100% - 32px));
-      max-width: none;
-      margin-inline: auto;
-    }
+    .mansion-page .game-page { max-width: 1600px; }
 
     .mansion-page .game-page__header {
-      align-items: end;
-      gap: 20px;
-      padding-block: 26px 18px;
+      align-items: center;
+      gap: 14px;
     }
 
     .mansion-page .game-page__title {
       margin: 0;
       color: #f0e8d8;
-      font-family: var(--mansion-serif);
-      font-size: clamp(2.3rem, 5vw, 4.4rem);
-      font-weight: 600;
-      letter-spacing: 0.025em;
-      line-height: 0.9;
-      text-shadow: 0 6px 32px rgba(0, 0, 0, 0.8);
+      font-family: var(--font-display);
+      font-size: clamp(18px, 1.35vw, 24px);
+      font-weight: 700;
+      letter-spacing: 0;
+      line-height: 1.05;
+      text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.4);
     }
 
     .mansion-page .game-page__sub {
-      margin-top: 9px;
-      color: #98968f;
+      margin-top: 3px;
+      color: var(--ink-dim);
       font-family: var(--mansion-sans);
-      font-size: 0.72rem;
-      font-weight: 600;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0;
+      text-transform: none;
     }
 
     .mansion-back {
@@ -76,12 +79,16 @@
       letter-spacing: 0.06em;
     }
 
-    .mansion-layout {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(250px, 330px);
-      gap: 18px;
-      align-items: start;
-      padding-bottom: 28px;
+    .mansion-layout { padding-bottom: 28px; }
+
+    .mansion-stage-shell {
+      align-items: stretch;
+      padding: 10px;
+    }
+
+    .mansion-surface {
+      width: 100%;
+      max-width: none;
     }
 
     #mansion-stage {
@@ -2171,13 +2178,23 @@
     #mansion-debug[hidden] { display: none; }
 
     .mansion-aside {
-      display: grid;
-      gap: 20px;
-      padding: 24px 22px 26px;
-      border-top: 1px solid rgba(217, 192, 148, 0.36);
-      background: linear-gradient(180deg, rgba(19, 19, 20, 0.78), rgba(9, 10, 12, 0.38));
-      box-shadow: inset 0 18px 40px rgba(0, 0, 0, 0.18);
+      display: flex;
+      gap: 8px;
+      padding: 0;
+      border: 0;
+      background: none;
+      box-shadow: none;
       font-family: var(--mansion-sans);
+    }
+
+    .mansion-aside .game-side__panel {
+      border-color: rgba(225, 201, 155, 0.16);
+      background: linear-gradient(180deg, rgba(25, 22, 25, 0.98), rgba(10, 10, 13, 0.98));
+    }
+
+    .mansion-aside .game-side__poster {
+      max-height: none;
+      object-position: center;
     }
 
     .mansion-aside__eyebrow {
@@ -2290,16 +2307,14 @@
     }
 
     @media (max-width: 1080px) {
-      .mansion-layout { grid-template-columns: minmax(0, 1fr) 270px; }
       #mansion-stage { height: min(68vh, 760px, calc(100dvh - 234px)); min-height: 0; }
     }
 
     @media (max-width: 820px) {
       .mansion-page .game-page { width: min(100% - 20px, 760px); }
       .mansion-page .game-page__header { align-items: start; }
-      .mansion-layout { grid-template-columns: 1fr; }
       #mansion-stage { height: min(67dvh, 680px, calc(100dvh - 170px)); min-height: 0; }
-      .mansion-aside { padding: 23px 20px; }
+      .mansion-aside { padding: 0; }
       .mansion-floors { grid-template-columns: repeat(3, 1fr); }
       .mansion-floor-row {
         grid-template-columns: 1fr;
@@ -2338,7 +2353,6 @@
       .mansion-page .game-page__header .mansion-back { width: auto; }
       .mansion-page .game-page__title { font-size: 2.55rem; }
       .mansion-page .game-page__sub { max-width: 34ch; font-size: 0.6rem; line-height: 1.5; }
-      .mansion-layout { gap: 0; }
       #mansion-stage {
         height: clamp(320px, calc(100dvh - 212px), 650px);
         min-height: 0;
@@ -2518,7 +2532,7 @@
       #touch-crouch { bottom: max(94px, calc(env(safe-area-inset-bottom) + 80px)); }
       #touch-sprint { right: max(89px, calc(env(safe-area-inset-right) + 78px)); }
       #touch-crouch { right: max(11px, env(safe-area-inset-right)); }
-      .mansion-aside { padding-inline: 17px; }
+      .mansion-aside { padding-inline: 0; }
       .mansion-floors { grid-template-columns: 1fr; }
       .mansion-floor-row,
       .mansion-floor-row:first-child,
@@ -2562,7 +2576,6 @@
         min-height: 44px;
         padding: 7px 10px !important;
       }
-      .mansion-layout { gap: 0; }
     }
 
     @media (max-height: 600px) and (orientation: landscape) {
@@ -2833,21 +2846,23 @@
     }
   </style>
 </head>
-<body class="mansion-page">
+<body class="rb-standalone-shell mansion-page">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
   <main class="game-page">
     <header class="game-page__header">
       <div>
-        <h1 class="game-page__title">Mr Feast's Mansion</h1>
-        <div class="game-page__sub">An architectural exploration · three floors · midnight storm</div>
+        <h1 class="game-page__title">Mr Feast: Last to Leave</h1>
+        <div class="game-page__sub">Compete for the prize · investigate the mansion · sabotage the show</div>
       </div>
-      <a class="btn btn--ghost mansion-back" href="../games.html">All games</a>
+      <a class="btn btn--ghost mansion-back" href="../games.html">← All games</a>
     </header>
 
-    <div class="mansion-layout">
+    <div class="game-layout mansion-layout">
+      <div class="game-stage rb-standalone-stage mansion-stage-shell">
+        <div class="canvas-wrap rb-standalone-surface mansion-surface">
       <section id="mansion-stage" aria-label="Interactive three-dimensional mansion" aria-busy="true">
-        <canvas id="mansion-canvas" tabindex="0" aria-label="First-person view inside Mr Feast's Mansion"></canvas>
+        <canvas id="mansion-canvas" tabindex="0" aria-label="First-person view in Mr Feast: Last to Leave"></canvas>
 
         <div class="mansion-location" aria-live="polite">
           <span id="mansion-floor">Main level</span>
@@ -3062,45 +3077,63 @@
 
         <pre id="mansion-debug" hidden aria-hidden="true"></pre>
       </section>
+        </div>
+      </div>
 
-      <aside class="mansion-aside" aria-label="About the mansion">
-        <div>
-          <p class="mansion-aside__eyebrow">The estate</p>
-          <h2 class="mansion-aside__title">A house built to be wandered</h2>
-          <p class="mansion-aside__copy">Follow Contestant 13's hidden trail from the Library to the grounds, recover evidence from the Archive, and sabotage the private feed. The rest of the mansion remains open to explore.</p>
+      <aside class="game-side mansion-aside" aria-label="Game information">
+        <div class="game-side__panel">
+          <img class="game-side__poster game-side__poster--wide" src="../assets/img/mr-feast/card-mr-feast-last-to-leave-ai-v1.jpg?v=20260723-1" alt="Mr Feast: Last to Leave cover art with a host, contestants, broadcast cameras, and a stormy mansion" />
         </div>
 
-        <dl class="mansion-floors">
-          <div class="mansion-floor-row">
-            <dt>Grounds</dt>
-            <dd>Locked carriage gate, formal rose garden, storm pool, rear terrace, and a lamp-lit clipped hedge maze running the full east lawn.</dd>
+        <div class="game-side__panel game-side__panel--controls">
+          <h2 class="game-side__title">Controls</h2>
+          <div class="mansion-controls" aria-label="Desktop controls">
+            <span><kbd>WASD</kbd> move</span>
+            <span><kbd>Shift</kbd> sprint</span>
+            <span><kbd>C</kbd> crouch</span>
+            <span><kbd>Mouse</kbd> look</span>
+            <span><kbd>E</kbd> interact</span>
+            <span><kbd>F</kbd> flashlight</span>
+            <span><kbd>Tab</kbd> bag</span>
+            <span><kbd>Esc</kbd> menu</span>
           </div>
-          <div class="mansion-floor-row">
-            <dt>Second</dt>
-            <dd>Gallery landing, open rear lounge, primary and east rear suites, hall bathroom, walk-in closets, library, and upper balcony.</dd>
-          </div>
-          <div class="mansion-floor-row">
-            <dt>Main</dt>
-            <dd>Grand foyer, music room, painting room, dining room, kitchen, main hall bathroom, and a furnished coat closet with a hiding place.</dd>
-          </div>
-          <div class="mansion-floor-row">
-            <dt>Basement</dt>
-            <dd>Wine cellar, pantry stores, furnace room, surveillance Workroom, and service corridor.</dd>
-          </div>
-        </dl>
-
-        <div class="mansion-interactions" aria-label="Interactive objects">
-          <span>Lights<small>Switch</small></span>
-          <span>Doors<small>Open</small></span>
-          <span>Cabinets<small>Search</small></span>
-          <span>Clues<small>Recover</small></span>
-          <span>Systems<small>Sabotage</small></span>
-          <span>Coat closet<small>Hide</small></span>
         </div>
 
-        <hr class="mansion-aside__rule" />
+        <div class="game-side__panel game-side__panel--afterdark">
+          <h2 class="game-side__title">Last to leave wins</h2>
+          <p>Mr Feast promises one million dollars to the final contestant in his mansion. Survive his competitions, watch the cameras, and investigate what happened to Contestant 13.</p>
+          <p>The show is always filming. Sabotage carefully—and do not let the host catch you in a restricted room.</p>
+        </div>
 
-        <p class="mansion-texture-note"><strong>Visual craft:</strong> original AI-authored surface textures enrich the estate's plaster, aged timber, stone, metals, fabrics, and storm-dark glass.</p>
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li>Explore between competitions and follow clues hidden across all three floors and the grounds.</li>
+            <li>Speak with contestants. Their routines and stories change as the show eliminates people.</li>
+            <li>Search cabinets and closets for tools, keys, hiding places, and a flashlight.</li>
+            <li>Use darkness, crouching, and hiding spots to avoid Mr Feast and hostile cameras.</li>
+            <li>Complete Feast Says and Storm Run, then return to investigating and sabotage.</li>
+          </ul>
+
+          <dl class="mansion-floors">
+            <div class="mansion-floor-row">
+              <dt>Grounds</dt>
+              <dd>Storm pool, rear terrace, formal garden, and hedge maze.</dd>
+            </div>
+            <div class="mansion-floor-row">
+              <dt>Second</dt>
+              <dd>Suites, closets, library, lounge, gallery, and balcony.</dd>
+            </div>
+            <div class="mansion-floor-row">
+              <dt>Main</dt>
+              <dd>Foyer, ballroom, painting room, dining room, kitchen, and music room.</dd>
+            </div>
+            <div class="mansion-floor-row">
+              <dt>Basement</dt>
+              <dd>Cellar, pantry, furnace room, Workroom, and service corridor.</dd>
+            </div>
+          </dl>
+        </details>
       </aside>
     </div>
   </main>
@@ -3194,6 +3227,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260712-uiux" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260723-three-flashlights-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260723-archive-skull-flashlight-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

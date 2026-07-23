@@ -6,11 +6,11 @@ In progress with implementation and focused automated acceptance complete. Picku
 
 ## Objective
 
-Make the flashlight easy to discover without granting it by default: three identical loose pickups are staged under the kitchen sink, inside a second-floor walk-in closet, and beside the basement Archive route. Collecting any one uses the ordinary E/touch interaction, removes every remaining world copy, and grants the single carried flashlight. F toggles it on desktop, and every visible use trades safety for orientation by exposing the player to the camera network, drawing Mr. Feast into a bounded investigation, and reducing crouched concealment.
+Make the flashlight easy to discover without granting it by default: three identical loose pickups are staged under the kitchen sink, inside a second-floor walk-in closet, and on the Archive shelf beside the skull. Collecting any one uses the ordinary E/touch interaction, removes every remaining world copy, and grants the single carried flashlight. F toggles it on desktop, and every visible use trades safety for orientation by exposing the player to the camera network, drawing Mr. Feast into a bounded investigation, and reducing crouched concealment.
 
 ## Scope
 
-- Three authored loose flashlight pickups registered through the existing interaction system: under the kitchen sink, inside the east-front second-floor walk-in closet, and on the Archive-side basement service-stair route.
+- Three authored loose flashlight pickups registered through the existing interaction system: under the kitchen sink, inside the east-front second-floor walk-in closet, and on the Archive shelf next to the skull curio.
 - A simple recognizable household flashlight model with no ornate wall cradle; all three world copies disappear after any one is collected.
 - One carried `basement-flashlight` item in the Bag, persisted with the existing Contestant 13 inventory while active light and alert state remain transient across load.
 - A focused flashlight system with a camera-aligned, shadow-free spotlight, no visible carried model after pickup, restrained flicker, and named brightness, distance, cone, penumbra, and concealment tuning.
@@ -34,7 +34,7 @@ Make the flashlight easy to discover without granting it by default: three ident
 
 ## Acceptance criteria
 
-- [x] A fresh run has no owned or equipped flashlight and F/Light does nothing. Three simple loose flashlight props are present under the kitchen sink, inside the east-front second-floor walk-in closet, and beside the basement Archive route. Each exposes a forgiving `Take flashlight` E/touch interaction once its containing cabinet is open. — test: `scripts/test-mr-feast-flashlight.mjs::three-location pickup discovery`
+- [x] A fresh run has no owned or equipped flashlight and F/Light does nothing. Three simple loose flashlight props are present under the kitchen sink, inside the east-front second-floor walk-in closet, and on the Archive shelf beside the skull. Each exposes a forgiving `Take flashlight` E/touch interaction once its containing cabinet is open. — test: `scripts/test-mr-feast-flashlight.mjs::three-location pickup discovery`
 - [x] Taking any one grants exactly one Bag item, removes all three world interactions/props, explains F/Light and the camera risk, and persists possession through an explicit save/load while restoring safely switched off. — test: `scripts/test-mr-feast-flashlight.mjs::any-location inventory and save`
 - [x] F and the touch `Light` button toggle one authoritative active state only after collection. Input is non-repeating and yields to menus, dossier/readers, timed actions, hiding, seating, competitions, the welcome, and game over. — test: `scripts/test-mr-feast-flashlight.mjs::input gating`
 - [x] The active camera-aligned beam uses the tuned `74` intensity, materially brightens a central Archive patch over the off state, falls away much faster at the edge, retains a dark periphery, stays below the overexposure ceiling, casts no shadow, shows no carried flashlight model, and changes light energy rather than shader-light counts. — test: `scripts/test-mr-feast-flashlight.mjs::restrained beam`
@@ -47,7 +47,7 @@ Make the flashlight easy to discover without granting it by default: three ident
 
 ## Exit condition
 
-The user can find a recognizable loose flashlight under the kitchen sink, in the east-front upstairs walk-in closet, or beside the basement Archive route. Taking any one removes the other two and grants one switched-off Bag item; F (or Light on touch) then reveals a constrained path while preserving the existing stealth and security risk.
+The user can find a recognizable loose flashlight under the kitchen sink, in the east-front upstairs walk-in closet, or on the Archive shelf beside the skull. Taking any one removes the other two and grants one switched-off Bag item; F (or Light on touch) then reveals a constrained path while preserving the existing stealth and security risk.
 
 ## Test plan
 

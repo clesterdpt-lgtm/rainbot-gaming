@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260723-three-flashlights-1";
+  const MANSION_RUNTIME_VERSION = "20260723-archive-skull-flashlight-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -693,22 +693,26 @@
         qa: Object.freeze({ x: 12.8, floorY: FLOOR.UPPER, z: 5.35, yaw: 0, pitch: -0.86 }),
       }),
       Object.freeze({
+        // archive-row-2-north holds the skull curio at local (0, ~1.57, 0.255)
+        // with bank origin (7.3, 9.4) and yaw π/2. Sit the flashlight on that
+        // same shelf, offset along the face so it reads beside the skull.
         id: "basement-archive",
-        label: "Basement Archive shelf",
-        x: 14.68,
-        y: FLOOR.BASEMENT + 1.08,
-        z: 3.82,
-        yaw: -Math.PI / 2,
+        label: "Archive shelf beside the skull",
+        x: 7.55,
+        y: FLOOR.BASEMENT + 1.62,
+        z: 8.95,
+        yaw: Math.PI / 2,
         roll: Math.PI / 2,
-        qa: Object.freeze({ x: 13.12, floorY: FLOOR.BASEMENT, z: 3.82, yaw: -Math.PI / 2, pitch: -0.36 }),
+        qa: Object.freeze({ x: 8.55, floorY: FLOOR.BASEMENT, z: 8.95, yaw: Math.PI / 2, pitch: -0.42 }),
       }),
     ]),
     pickup: Object.freeze({
-      x: 14.68,
-      y: FLOOR.BASEMENT + 1.08,
-      z: 3.82,
-      yaw: -Math.PI / 2,
+      x: 7.55,
+      y: FLOOR.BASEMENT + 1.62,
+      z: 8.95,
+      yaw: Math.PI / 2,
       serviceStairBottom: Object.freeze({ x: 12.55, z: 2.72 }),
+      skullShelf: Object.freeze({ x: 7.55, z: 9.4 }),
       interactionWidth: 0.58,
       interactionHeight: 0.72,
       interactionDepth: 0.68,
@@ -2616,7 +2620,7 @@
     serviceStairTopOblique: [10.95, FLOOR.MAIN, -2.05, -2.55, -0.5],
     serviceStairBottomLight: [12.55, FLOOR.BASEMENT, 2.9, Math.PI, 0.5],
     serviceStairBottomSwitch: [13.1, FLOOR.BASEMENT, 3.6, -0.87, -0.27],
-    flashlightPickup: [13.12, FLOOR.BASEMENT, FLASHLIGHT.pickup.z, -Math.PI / 2, -0.36],
+    flashlightPickup: [8.55, FLOOR.BASEMENT, FLASHLIGHT.pickup.z, Math.PI / 2, -0.42],
     flashlightBeam: [13.45, FLOOR.BASEMENT, 7.2, Math.PI / 2, -0.05],
     rearCrossCorridorA: [-13.2, FLOOR.BASEMENT, -4.05, -Math.PI / 2],
     rearCrossCorridorB: [13.2, FLOOR.BASEMENT, -4.05, Math.PI / 2],
@@ -17837,6 +17841,12 @@
           ? Number(Math.hypot(
             location.x - FLASHLIGHT.pickup.serviceStairBottom.x,
             location.z - FLASHLIGHT.pickup.serviceStairBottom.z,
+          ).toFixed(3))
+          : null,
+        distanceToSkullShelf: location.id === "basement-archive"
+          ? Number(Math.hypot(
+            location.x - FLASHLIGHT.pickup.skullShelf.x,
+            location.z - FLASHLIGHT.pickup.skullShelf.z,
           ).toFixed(3))
           : null,
         prompt: state.currentInteraction ? state.currentInteraction.getLabel() : null,

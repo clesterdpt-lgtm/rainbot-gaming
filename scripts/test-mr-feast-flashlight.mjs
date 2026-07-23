@@ -172,11 +172,10 @@ async function run() {
       await pickupPage.close();
     }
 
-    // The basement copy remains close to the service stair and uses the same
-    // real interaction path.
+    // The basement copy sits on the archive shelf next to the skull curio.
     const staging = await page.evaluate(() => window.MrFeastFresh.placePlayerNearFlashlightForQA("basement-archive"));
     assert(staging?.locationId === "basement-archive", `basement QA staging targeted the wrong pickup: ${JSON.stringify(staging)}`);
-    assert(staging?.distanceToServiceStairBottom <= 3.2, `flashlight should be easy to find from the service stairs; distance=${staging?.distanceToServiceStairBottom}`);
+    assert(staging?.distanceToSkullShelf <= 0.6, `flashlight should sit on the skull shelf, not off on the stair wall; distance=${staging?.distanceToSkullShelf}`);
     await page.waitForFunction(() => /take flashlight/i.test(document.getElementById("mansion-prompt-text")?.textContent || ""), null, { timeout: 3000 });
     await page.screenshot({ path: path.join(artifactDir, "flashlight-pickup-desktop.png") });
     await page.keyboard.press("e");

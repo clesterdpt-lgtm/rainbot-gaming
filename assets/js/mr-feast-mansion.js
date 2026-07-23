@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260723-lounge-workroom-props-1";
+  const MANSION_RUNTIME_VERSION = "20260723-pursuit-reacquire-2";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -5863,6 +5863,10 @@
         id: "mr-feast-converse",
         getLabel: () => "Speak with Mr. Feast",
         activate: () => this.converse(),
+        // A stale conversation prompt makes a real pursuit look inert. Keep
+        // ordinary busy dialogue for errands/alarms, but pursuit owns the
+        // interaction surface through its active chase and loss aftermath.
+        resolve: () => this.pursuit.active || this.pursuit.cooldownActive ? null : interaction,
       };
       const material = new THREE.MeshBasicMaterial({ visible: false, depthWrite: false, colorWrite: false });
       // The invisible catch-all stops below the face so the QA-only

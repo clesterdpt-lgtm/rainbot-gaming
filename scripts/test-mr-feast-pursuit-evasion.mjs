@@ -190,7 +190,10 @@ async function run() {
       });
     });
     audio = await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
-    const stalkEvents = audio.mrFeastFootsteps.events.filter((event) => event.sequence > stalkBefore);
+    // A live rAF can land the final cross-floor run contact between the
+    // baseline read and the deterministic stalk probe. Judge the stalk bank
+    // by the action it is explicitly validating.
+    const stalkEvents = audio.mrFeastFootsteps.events.filter((event) => event.sequence > stalkBefore && event.action === "stalk");
     assert(stalkEvents.length >= 4, `walking stalk animation should emit repeated host steps; events=${JSON.stringify(stalkEvents)}`);
     assert(stalkEvents.every((event) => event.action === "stalk" && event.surface === "wood"), `main-floor stalk steps should be wood; events=${JSON.stringify(stalkEvents)}`);
     assert(stalkEvents.every((event) => phaseDistance(event.phase, event.foot === "right" ? 0.025 : 0.542) <= 0.035), `stalk steps should land at sampled grounded phases; events=${JSON.stringify(stalkEvents)}`);
@@ -331,6 +334,13 @@ async function run() {
         && basementReacquisition.final.pursuit.trackingSource === "proximity",
       `point-blank basement awareness must reacquire after a later loss; result=${JSON.stringify(basementReacquisition)}`,
     );
+    await page.waitForTimeout(100);
+    const reacquiredPresentation = await state(page);
+    assert(
+      !/Speak with Mr\. Feast/i.test(reacquiredPresentation.prompt || ""),
+      `active basement pursuit must suppress the contradictory conversation prompt; result=${JSON.stringify(reacquiredPresentation.mrFeast?.pursuit)}`,
+    );
+    await page.screenshot({ path: path.join(artifactDir, "post-loss-basement-reacquired.png") });
 
     assert(errors.length === 0, `browser emitted errors: ${errors.join(" | ")}`);
     console.log(`Mr. Feast pursuit/evasion passed: stalk steps=${stalkEvents.length}, run steps=${runEvents.length}, direct frames=${direct.directSteeringFrames}, hidden outcome=${hidden.run.outcome}, reacquired=${basementReacquisition.second.awareness.active}`);

@@ -246,11 +246,13 @@ async function run() {
     assert(memory.after.giveUpRemaining <= memory.before.giveUpRemaining - 1.1, `unseen timer should drain while he is still moving; memory=${JSON.stringify(memory)}`);
     assert(memory.after.trackingSource === "lost" && memory.after.unseenSeconds >= 1.2, `diagnostics should expose the lost trail; memory=${JSON.stringify(memory)}`);
 
-    const lost = await page.evaluate(() => window.MrFeastFresh.advanceMrFeastPursuitForQA(9));
-    assert(!lost.active && lost.outcome === "lost", `an unseen, unrecorded player should escape inside the authored window; result=${JSON.stringify(lost)}`);
+    const stillSearchingClue = await page.evaluate(() => window.MrFeastFresh.advanceMrFeastPursuitForQA(7));
+    assert(stillSearchingClue.active, `Mr. Feast should keep pursuing the stale clue long enough to search meaningfully; result=${JSON.stringify(stillSearchingClue)}`);
+    const lost = await page.evaluate(() => window.MrFeastFresh.advanceMrFeastPursuitForQA(5.5));
+    assert(!lost.active && lost.outcome === "lost", `an unseen, unrecorded player should still escape inside the authored window; result=${JSON.stringify(lost)}`);
 
-    // 4. A real hiding spot uses the shorter escape window and never catches
-    // or retargets the hidden player.
+    // 4. A real hiding spot uses a shorter-but-meaningful escape window and
+    // never catches or retargets the hidden player.
     const hidden = await page.evaluate(() => {
       window.MrFeastFresh.resetCameraSecurityForQA(null);
       window.MrFeastFresh.resetMrFeastWandererForQA();
@@ -260,17 +262,78 @@ async function run() {
       window.MrFeastFresh.advanceMrFeastPursuitForQA(0.3);
       const lastKnown = window.MrFeastFresh.getMrFeastState().pursuit.lastKnownPosition;
       const hid = window.MrFeastFresh.enterHideSpotForQA("coat");
-      const run = window.MrFeastFresh.advanceMrFeastPursuitForQA(4.5);
+      const early = window.MrFeastFresh.advanceMrFeastPursuitForQA(4.5);
+      const run = window.MrFeastFresh.advanceMrFeastPursuitForQA(3.2);
       const diagnostics = window.MrFeastFresh.getMrFeastState();
-      return { hid, run, diagnostics, lastKnown };
+      return { hid, early, run, diagnostics, lastKnown };
     });
+    assert(hidden.early.active, `hiding should not make Mr. Feast abandon the last-known area almost immediately; result=${JSON.stringify(hidden)}`);
     assert(hidden.hid?.hidden && !hidden.run.active && hidden.run.outcome === "lost", `hiding should reliably end active pursuit; result=${JSON.stringify(hidden)}`);
     assert(hidden.run.catches === 0 && hidden.diagnostics.pursuit.catches === 0, `a hidden player must not be caught; result=${JSON.stringify(hidden)}`);
     assert(positionDistance(hidden.lastKnown, hidden.diagnostics.pursuit.lastKnownPosition) <= 0.01, `hiding must not broadcast the hiding spot; result=${JSON.stringify(hidden)}`);
     await page.screenshot({ path: path.join(artifactDir, "hidden-pursuit-escaped.png") });
 
+    // 5. Reappearing during the bounded post-loss search must immediately
+    // re-arm both hostile cameras and personal basement awareness. The
+    // housekeeping cooldown must never grant the player detection immunity.
+    const basementReacquisition = await page.evaluate(() => {
+      const startCameraPursuit = (cameraId) => {
+        window.MrFeastFresh.setCameraSoloForQA(cameraId);
+        window.MrFeastFresh.setCameraSweepForQA(cameraId, 0);
+        window.MrFeastFresh.placePlayerInCameraLaneForQA(cameraId, { distance: 3.5 });
+        window.MrFeastFresh.advanceCameraSecurityForQA(3);
+        const awareness = window.MrFeastFresh.advanceMrFeastAwarenessForQA(1);
+        return { awareness, diagnostics: window.MrFeastFresh.getMrFeastState() };
+      };
+      const hideUntilLost = () => {
+        window.MrFeastFresh.setCameraPlayerHiddenForQA(true);
+        const run = window.MrFeastFresh.advanceMrFeastPursuitForQA(8);
+        return { run, diagnostics: window.MrFeastFresh.getMrFeastState() };
+      };
+
+      window.MrFeastFresh.leaveHideSpotForQA();
+      window.MrFeastFresh.setDevModeForQA(true);
+      window.MrFeastFresh.resetCameraSecurityForQA(null);
+      window.MrFeastFresh.setCameraStoryStateForQA({ basementUnlocked: true, relaySabotaged: false });
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: -12.8, y: -3.8, z: -5.8, yaw: 0 });
+
+      const first = startCameraPursuit("cam-basement-archive");
+      const firstLoss = hideUntilLost();
+      window.MrFeastFresh.setCameraPlayerHiddenForQA(false);
+      const second = startCameraPursuit("cam-basement-boiler");
+
+      const secondLoss = hideUntilLost();
+      window.MrFeastFresh.resetCameraSecurityForQA(null);
+      window.MrFeastFresh.placePlayerNearMrFeastForQA(1.9, Math.PI);
+      const closeAwareness = window.MrFeastFresh.advanceMrFeastAwarenessForQA(1);
+      const final = window.MrFeastFresh.getMrFeastState();
+      window.MrFeastFresh.setDevModeForQA(false);
+      return { first, firstLoss, second, secondLoss, closeAwareness, final };
+    });
+    assert(
+      basementReacquisition.first.awareness.active
+        && basementReacquisition.first.diagnostics.pursuit.trackingSource === "camera",
+      `first basement camera exposure should start pursuit; result=${JSON.stringify(basementReacquisition)}`,
+    );
+    assert(
+      !basementReacquisition.firstLoss.run.active
+        && basementReacquisition.firstLoss.diagnostics.pursuit.cooldownActive,
+      `hiding should enter the bounded post-loss search; result=${JSON.stringify(basementReacquisition)}`,
+    );
+    assert(
+      basementReacquisition.second.awareness.active
+        && basementReacquisition.second.diagnostics.pursuit.trackingSource === "camera",
+      `a later basement camera exposure must reacquire during the post-loss search; result=${JSON.stringify(basementReacquisition)}`,
+    );
+    assert(
+      basementReacquisition.closeAwareness.active
+        && basementReacquisition.final.pursuit.trackingSource === "proximity",
+      `point-blank basement awareness must reacquire after a later loss; result=${JSON.stringify(basementReacquisition)}`,
+    );
+
     assert(errors.length === 0, `browser emitted errors: ${errors.join(" | ")}`);
-    console.log(`Mr. Feast pursuit/evasion passed: stalk steps=${stalkEvents.length}, run steps=${runEvents.length}, direct frames=${direct.directSteeringFrames}, hidden outcome=${hidden.run.outcome}`);
+    console.log(`Mr. Feast pursuit/evasion passed: stalk steps=${stalkEvents.length}, run steps=${runEvents.length}, direct frames=${direct.directSteeringFrames}, hidden outcome=${hidden.run.outcome}, reacquired=${basementReacquisition.second.awareness.active}`);
   } finally {
     await browser?.close();
     if (server) server.kill("SIGTERM");

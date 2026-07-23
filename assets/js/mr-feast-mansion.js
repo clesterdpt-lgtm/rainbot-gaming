@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260722-briefing-e-skip-1";
+  const MANSION_RUNTIME_VERSION = "20260723-lounge-workroom-props-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1450,8 +1450,8 @@
     catchRadiusMeters: 1.15,
     directSightRadiusMeters: 9,
     repathSeconds: 0.9,
-    unseenGiveUpSeconds: 8,
-    hiddenGiveUpSeconds: 3.4,
+    unseenGiveUpSeconds: 12,
+    hiddenGiveUpSeconds: 6.5,
     warningSeconds: 2.4,
     basementFeetY: -0.45,
     // Inside normal conversation range, a basement trespasser is too close
@@ -6237,7 +6237,10 @@
     updateTrespassWatch(dt) {
       // Being in the basement is itself the offense: personally seen or
       // hostile-recorded presence starts a pursuit with no tamper required.
-      if (state.gameOver || this.pursuit.active || this.pursuit.cooldownActive || state.isHidden || !physics) {
+      // cooldownActive protects the post-chase search from housekeeping
+      // hijacks; it must not make a newly visible basement trespasser immune
+      // to cameras or Mr. Feast's own close-range awareness.
+      if (state.gameOver || this.pursuit.active || state.isHidden || !physics) {
         this.trespassDwell = 0;
         return;
       }
@@ -22951,7 +22954,6 @@
       cylinder({ name: "lounge-tea-saucer", radius: 0.05, height: 0.008, segments: 12, x: 0.1 + side * 0.13, y: trayY + 0.004, z: -8.13, material: M.porcelain, cast: false });
       cylinder({ name: "lounge-tea-cup", radius: 0.031, height: 0.042, segments: 10, x: 0.1 + side * 0.13, y: trayY + 0.029, z: -8.13, material: M.porcelain, cast: false });
     }
-    box({ name: "lounge-folded-throw", w: 0.5, h: 0.06, d: 0.34, x: -1.28, y: FLOOR.UPPER + 0.75, z: -6.5, rotationY: 0.12, material: M.exoticRug, cast: false });
   }
 
   function addLaundryDetails() {
@@ -23370,7 +23372,22 @@
     roundedBox({ name: "workroom-two-way-radio", w: 0.2, h: 0.34, d: 0.11, radius: 0.025, x: 4.6, y: FLOOR.BASEMENT + 0.98, z: -9.2, material: M.iron, cast: false });
     cylinder({ name: "workroom-radio-antenna", radius: 0.012, height: 0.28, segments: 7, x: 4.66, y: FLOOR.BASEMENT + 1.27, z: -9.2, material: M.soot, cast: false });
     cylinder({ name: "workroom-abandoned-coffee-cup", radius: 0.07, radiusTop: 0.065, radiusBottom: 0.055, height: 0.16, segments: 12, x: 0.35, y: FLOOR.BASEMENT + 0.9, z: -9.05, material: M.porcelain, cast: false });
-    for (let index = 0; index < 5; index += 1) box({ name: "workroom-shift-log-paper", w: 0.34, h: 0.012, d: 0.24, x: 0.1 + index * 0.045, y: FLOOR.BASEMENT + 0.9 + index * 0.004, z: -9.25 + index * 0.02, rotationY: -0.18 + index * 0.08, material: M.canvasLinen, cast: false });
+    // Keep the shift-log stack fully on the 4.65×0.92 operator console
+    // (center 2.55,-9.25). Earlier x≈0.1 placements hung off the west edge.
+    for (let index = 0; index < 5; index += 1) {
+      box({
+        name: "workroom-shift-log-paper",
+        w: 0.34,
+        h: 0.012,
+        d: 0.24,
+        x: 1.18 + index * 0.028,
+        y: FLOOR.BASEMENT + 0.9 + index * 0.004,
+        z: -9.32 + index * 0.012,
+        rotationY: -0.1 + index * 0.045,
+        material: M.canvasLinen,
+        cast: false,
+      });
+    }
     for (let index = 0; index < 4; index += 1) roundedBox({ name: "workroom-archive-binder", w: 0.1, h: 0.42, d: 0.3, radius: 0.015, x: -5.55, y: FLOOR.BASEMENT + 0.31, z: -6.15 - index * 0.34, rotationY: Math.PI / 2, material: index % 2 ? M.leather : M.darkWood, cast: false });
     workroomScene.ambience.smallProps += 12;
   }

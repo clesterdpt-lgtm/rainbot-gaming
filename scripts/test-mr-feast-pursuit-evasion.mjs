@@ -56,6 +56,7 @@ async function run() {
   assert(/pursuitLastKnownPosition/.test(runtime) && /pursuitTrackingSource/.test(runtime), "pursuit lacks explicit last-known tracking state");
   assert(/hiddenGiveUpSeconds/.test(runtime) && /unseenGiveUpSeconds/.test(runtime), "pursuit lacks bounded hidden and unseen escape windows");
   assert(/pursuitDirectSight/.test(runtime) && /pursuitDirectSteeringFrames/.test(runtime), "clear-line direct pursuit steering is missing");
+  assert(/basementProximityAwarenessMeters:\s*2\.35/.test(runtime), "basement close-range awareness lacks named conversation-distance tuning");
   assert(/advanceMrFeastPursuitForQA/.test(runtime), "short deterministic pursuit stepping QA hook is missing");
 
   let server = null;
@@ -87,6 +88,60 @@ async function run() {
       const audio = window.MrFeastFresh?.getAudioStateForQA?.();
       return audio?.contextState === "running" && audio.loadedAssets?.length === audio.expectedAssets;
     }, null, { timeout: 45000 });
+    await page.evaluate(() => window.MrFeastFresh.advanceOpeningWelcomeForQA(120));
+
+    // 0. A basement runner who walks right up behind Mr. Feast must not be
+    // ignored merely because they are outside his forward vision cone. Close
+    // awareness still requires the same floor, clear geometry, and no hiding.
+    const closeBasementApproach = await page.evaluate(() => {
+      window.MrFeastFresh.resetCameraSecurityForQA(null);
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: 0, y: -3.8, z: 0, yaw: 0 });
+      const placed = window.MrFeastFresh.placePlayerNearMrFeastForQA(1.9, Math.PI);
+      const awareness = window.MrFeastFresh.advanceMrFeastAwarenessForQA(1);
+      const diagnostics = window.MrFeastFresh.getMrFeastState();
+      return {
+        placed,
+        awareness,
+        pursuit: diagnostics.pursuit,
+        host: diagnostics.position,
+        player: JSON.parse(window.render_game_to_text()).player,
+      };
+    });
+    assert(
+      closeBasementApproach.pursuit.active?.kind === "trespass"
+        && closeBasementApproach.pursuit.trackingSource === "proximity",
+      `point-blank basement approach should trigger close-range trespass awareness; result=${JSON.stringify(closeBasementApproach)}`,
+    );
+    await page.screenshot({ path: path.join(artifactDir, "close-basement-awareness.png") });
+
+    const blockedCloseAwareness = await page.evaluate(() => {
+      window.MrFeastFresh.resetCameraSecurityForQA(null);
+
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: 0, y: -3.8, z: 0, yaw: 0 });
+      window.MrFeastFresh.placePlayerNearMrFeastForQA(1.9, Math.PI);
+      window.MrFeastFresh.setCameraPlayerHiddenForQA(true);
+      const hidden = window.MrFeastFresh.advanceMrFeastAwarenessForQA(1);
+      window.MrFeastFresh.setCameraPlayerHiddenForQA(false);
+
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: 0, y: -3.8, z: 5, yaw: -Math.PI / 2 });
+      const wallPlacement = window.MrFeastFresh.placePlayerNearMrFeastForQA(2, Math.PI);
+      const wall = window.MrFeastFresh.advanceMrFeastAwarenessForQA(1);
+
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: 0, y: -3.8, z: -6, yaw: 0 });
+      window.MrFeastFresh.teleport("ballroom");
+      const otherFloor = window.MrFeastFresh.advanceMrFeastAwarenessForQA(1);
+      return { hidden, wallPlacement, wall, otherFloor };
+    });
+    assert(
+      !blockedCloseAwareness.hidden.active
+        && !blockedCloseAwareness.wall.active
+        && !blockedCloseAwareness.otherFloor.active,
+      `hiding, walls, and floor separation must still block close awareness; result=${JSON.stringify(blockedCloseAwareness)}`,
+    );
 
     // 1. The existing local surface bank follows the planted contacts of the
     // shipped stalk clip. Stationary and muted updates stay silent.

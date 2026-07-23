@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260722-pursuit-evasion-1";
+  const MANSION_RUNTIME_VERSION = "20260722-basement-awareness-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1454,6 +1454,10 @@
     hiddenGiveUpSeconds: 3.4,
     warningSeconds: 2.4,
     basementFeetY: -0.45,
+    // Inside normal conversation range, a basement trespasser is too close
+    // to ignore even beside or behind him. This still uses the ordinary
+    // same-floor, hiding, and wall-occlusion checks.
+    basementProximityAwarenessMeters: 2.35,
     // Presence in the basement is itself the offense: being personally seen
     // or hostile-recorded down there starts a pursuit with no tamper needed.
     trespassDwellSeconds: 0.55,
@@ -5983,15 +5987,18 @@
       return state.stealth ? state.stealth.sightRangeMeters : MR_FEAST_PURSUIT.sightRangeMeters;
     }
 
-    canSeePlayerAct() {
+    canSeePlayerAct(options = {}) {
       if (this.loadStatus !== "ready" || !physics || state.isHidden) return false;
       const p = physics.playerPosition();
       const dx = p.x - this.root.position.x;
       const dz = p.z - this.root.position.z;
       const horizontal = Math.hypot(dx, dz);
-      if (horizontal > this.effectiveSightRangeMeters()) return false;
+      const maxDistance = Number.isFinite(options.maxDistanceMeters)
+        ? Math.max(0, options.maxDistanceMeters)
+        : this.effectiveSightRangeMeters();
+      if (horizontal > maxDistance) return false;
       if (Math.abs(this.playerFeetY(p) - this.root.position.y) > 2.2) return false;
-      if (horizontal > 0.0001) {
+      if (!options.ignoreFacing && horizontal > 0.0001) {
         const facingDot = (Math.sin(this.root.rotation.y) * dx + Math.cos(this.root.rotation.y) * dz) / horizontal;
         if (facingDot < Math.cos(MR_FEAST_PURSUIT.sightHalfAngleRadians)) return false;
       }
@@ -6004,6 +6011,22 @@
       pursuitSight.raycaster.set(pursuitSight.eye, pursuitSight.direction);
       pursuitSight.raycaster.far = Math.max(0.05, distance - 0.1);
       return pursuitSight.raycaster.intersectObjects(occluderMeshes, false).length === 0;
+    }
+
+    canNoticeBasementProximity() {
+      if (!physics) return false;
+      const p = physics.playerPosition();
+      if (this.playerFeetY(p) > MR_FEAST_PURSUIT.basementFeetY) return false;
+      return this.canSeePlayerAct({
+        maxDistanceMeters: MR_FEAST_PURSUIT.basementProximityAwarenessMeters,
+        ignoreFacing: true,
+      });
+    }
+
+    personalDetectionSource() {
+      if (this.canSeePlayerAct()) return "sight";
+      if (this.canNoticeBasementProximity()) return "proximity";
+      return null;
     }
 
     beginPursuit(info = {}) {
@@ -6037,8 +6060,9 @@
         y: this.playerFeetY(player),
         z: player.z,
       } : null;
-      this.pursuitDirectSight = info.reason !== "recorded" && this.canSeePlayerAct();
-      this.pursuitTrackingSource = this.pursuitDirectSight ? "sight" : info.reason === "recorded" ? "camera" : "lost";
+      const personalSource = info.reason !== "recorded" ? this.personalDetectionSource() : null;
+      this.pursuitDirectSight = Boolean(personalSource);
+      this.pursuitTrackingSource = personalSource || (info.reason === "recorded" ? "camera" : "lost");
       this.pursuitUnseenSeconds = 0;
       this.pursuitDirectSteeringFrames = 0;
       this.pursuitSightCheckRemaining = 0;
@@ -6088,13 +6112,15 @@
         this.resolveCatch(p, feetY);
         return;
       }
-      // Only personal line of sight or a hostile live camera may refresh the
-      // last-known point. Movement after both are broken is private: he can
+      // Only personal perception (ordinary sight or clear point-blank
+      // basement awareness) or a hostile live camera may refresh the
+      // last-known point. Movement after all are broken is private: he can
       // search the stale clue, but cannot steer toward the live player.
       this.pursuitSightCheckRemaining = (this.pursuitSightCheckRemaining ?? 0) - dt;
       if (this.pursuitSightCheckRemaining <= 0) {
         this.pursuitSightCheckRemaining = MR_FEAST_PURSUIT.sightRefreshSeconds;
-        const personallySeen = this.canSeePlayerAct();
+        const personalSource = this.personalDetectionSource();
+        const personallySeen = Boolean(personalSource);
         const cameraTracked = !state.isHidden
           && Boolean(cameraSecurity?.isRecordingPlayer())
           && !state.security.permitted;
@@ -6107,7 +6133,7 @@
               nextKnown.z - this.pursuitLastKnownPosition.z,
             ) > MR_FEAST_PURSUIT.retargetMinPlayerMoveMeters;
           this.pursuitLastKnownPosition = nextKnown;
-          this.pursuitTrackingSource = personallySeen ? "sight" : "camera";
+          this.pursuitTrackingSource = personalSource || "camera";
           this.pursuitDirectSight = personallySeen;
           this.pursuitUnseenSeconds = 0;
           this.pursuit.giveUpRemaining = this.pursuitGiveUpSeconds();
@@ -6192,7 +6218,8 @@
       this.trespassCheckRemaining = (this.trespassCheckRemaining ?? 0) - dt;
       if (this.trespassCheckRemaining > 0) return;
       this.trespassCheckRemaining = MR_FEAST_PURSUIT.trespassCheckSeconds;
-      const witnessed = this.canSeePlayerAct();
+      const personalSource = this.personalDetectionSource();
+      const witnessed = Boolean(personalSource);
       const recorded = !witnessed
         && Boolean(cameraSecurity?.isRecordingPlayer())
         && !state.security.permitted;
@@ -6203,7 +6230,10 @@
       this.trespassDwell = (this.trespassDwell ?? 0) + MR_FEAST_PURSUIT.trespassCheckSeconds;
       if (this.trespassDwell < MR_FEAST_PURSUIT.trespassDwellSeconds) return;
       this.trespassDwell = 0;
-      this.beginPursuit({ kind: "trespass", reason: witnessed ? "witnessed" : "recorded" });
+      this.beginPursuit({
+        kind: "trespass",
+        reason: personalSource === "proximity" ? "proximity" : personalSource ? "witnessed" : "recorded",
+      });
     }
 
     updatePursuitApproach(dt) {
@@ -6478,6 +6508,35 @@
         pursuitSpeed: Number(this.pursuitSpeed().toFixed(3)),
         lastKnownPosition: this.pursuitLastKnownPosition ? { ...this.pursuitLastKnownPosition } : null,
         trackingSource: this.pursuitTrackingSource,
+      };
+    }
+
+    advanceAwarenessForQA(seconds = 1) {
+      if (!state.qa || this.loadStatus !== "ready") {
+        return { active: false, outcome: "not-ready", simulatedSeconds: 0 };
+      }
+      const fixedStep = 1 / 60;
+      const limit = clamp(Number(seconds) || 0, 0, 5);
+      state.started = true;
+      this.wanderingEnabled = true;
+      this.qaAnimationFrozen = false;
+      let elapsed = 0;
+      while (elapsed < limit - 0.000001 && !this.pursuit.active && !state.gameOver) {
+        const stepDt = Math.min(fixedStep, limit - elapsed);
+        for (const object of animatedObjects) {
+          if (object instanceof HingedDoor || object instanceof Refrigerator) object.update(stepDt);
+        }
+        tamperSystem?.update(stepDt);
+        this.update(stepDt);
+        elapsed += stepDt;
+      }
+      this.root.updateMatrixWorld(true);
+      return {
+        active: Boolean(this.pursuit.active),
+        outcome: this.pursuit.active ? "active" : state.gameOver ? "game-over" : "inactive",
+        simulatedSeconds: Number(elapsed.toFixed(3)),
+        trackingSource: this.pursuitTrackingSource,
+        trespassDwell: Number((this.trespassDwell || 0).toFixed(2)),
       };
     }
 
@@ -29281,6 +29340,7 @@
     window.MrFeastFresh.converseWithMrFeastForQA = () => state.qa && mrFeastNpc ? mrFeastNpc.converse() : null;
     window.MrFeastFresh.runMrFeastHousekeepingForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runHousekeepingForQA(maxSeconds) : null;
     window.MrFeastFresh.runMrFeastPursuitForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runPursuitForQA(maxSeconds) : null;
+    window.MrFeastFresh.advanceMrFeastAwarenessForQA = (seconds) => mrFeastNpc ? mrFeastNpc.advanceAwarenessForQA(seconds) : null;
     window.MrFeastFresh.advanceMrFeastPursuitForQA = (seconds) => mrFeastNpc ? mrFeastNpc.advancePursuitForQA(seconds) : null;
     window.MrFeastFresh.setPursuitGiveUpForQA = (seconds) => {
       if (!state.qa || !mrFeastNpc) return null;

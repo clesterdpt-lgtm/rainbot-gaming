@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260722-basement-flashlight-2";
+  const MANSION_RUNTIME_VERSION = "20260722-storm-mix-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1607,7 +1607,9 @@
     maximumLineSeconds: 10,
     baseLineSeconds: 4,
     perCharacterSeconds: 0.045,
-    manualAdvanceAfterSeconds: 2.4,
+    // Instant so players can mash E/tap to rush the welcome without a
+    // separate full-intro Skip button on the speech bubble.
+    manualAdvanceAfterSeconds: 0,
     maximumHostWaitSeconds: 20,
     maximumTimerStepSeconds: 0.5,
     lines: Object.freeze([
@@ -2172,8 +2174,8 @@
       Object.freeze({ delay: 0.52, strength: 0.95 }),
     ]),
     scareThunderDelaySeconds: 0.02,
-    scareThunderVolumeMultiplier: 2.1,
-    scareThunderMaximumVolumeMultiplier: 2.25,
+    scareThunderVolumeMultiplier: 2.2,
+    scareThunderMaximumVolumeMultiplier: 2.35,
     scareThunderCloseStrike: true,
     scareFacingMinimumDot: 0.9,
     scareFacingScreenMargin: 0.86,
@@ -13417,8 +13419,6 @@
         speechSystem.hostSpeaker(),
         {
           durationSeconds: this.currentLineDuration,
-          skipLabel: "Skip intro",
-          onSkip: (source) => this.skipOpeningWelcome(source),
         },
       );
       updateInteractionPrompt();
@@ -13436,12 +13436,6 @@
       this.phase = "gap";
       this.phaseRemaining = MR_FEAST_OPENING_WELCOME.lineGapSeconds;
       updateInteractionPrompt();
-    }
-
-    skipOpeningWelcome(source = "player") {
-      if (!this.active) return { skipped: false, reason: "inactive" };
-      this.finish(`${source}-skipped`);
-      return { skipped: true, reason: null };
     }
 
     finish(cancelledReason = null) {
@@ -25487,7 +25481,7 @@
       bodyLow.type = "lowpass";
       bodyLow.frequency.value = 1500;
       const bodyGain = this.ctx.createGain();
-      bodyGain.gain.value = 0.42;
+      bodyGain.gain.value = 0.34;
       body.connect(bodyHigh).connect(bodyLow).connect(bodyGain).connect(this.rain.gain);
       const hiss = this.ctx.createBufferSource();
       hiss.buffer = this.makeNoiseBuffer(2.3);
@@ -25497,12 +25491,12 @@
       hissBand.frequency.value = 4300;
       hissBand.Q.value = 0.65;
       const hissGain = this.ctx.createGain();
-      hissGain.gain.value = 0.12;
+      hissGain.gain.value = 0.1;
       hiss.connect(hissBand).connect(hissGain).connect(this.rain.gain);
       body.start();
       hiss.start();
       this.rain.mode = "procedural";
-      this.rain.level = 0.5;
+      this.rain.level = 0.42;
       this.rain.layers = 2;
       this.rain.source = {
         stop: () => {
@@ -25534,7 +25528,7 @@
       source.loopStart = 0.06;
       source.loopEnd = Math.max(1, baseBuffer.duration - 0.06);
       const baseGain = this.ctx.createGain();
-      baseGain.gain.value = 0.78;
+      baseGain.gain.value = 0.62;
       source.connect(baseGain).connect(this.rain.gain);
       source.start();
       recordedSources.push(source);
@@ -25547,7 +25541,7 @@
       };
       this.rain.source = recordedRain;
       this.rain.mode = "recorded";
-      this.rain.level = 0.82;
+      this.rain.level = 0.68;
       this.rain.layers = 1;
       this.setRainExposure(this.rain.exposure);
 
@@ -25564,11 +25558,11 @@
         detailHigh.type = "highpass";
         detailHigh.frequency.value = 520;
         const detailGain = this.ctx.createGain();
-        detailGain.gain.value = 0.18;
+        detailGain.gain.value = 0.14;
         detail.connect(detailHigh).connect(detailGain).connect(this.rain.gain);
         detail.start(0, Math.min(9.5, Math.max(0, detailBuffer.duration - 0.25)));
         recordedSources.push(detail);
-        this.rain.level = 0.86;
+        this.rain.level = 0.72;
         this.rain.layers = 2;
         this.setRainExposure(this.rain.exposure);
       } catch (_) {
@@ -25908,7 +25902,7 @@
         this.markCue("thunderClose");
       }
       const recorded = this.playSample("thunder", {
-        volume: (inBasement ? 0.045 : 0.31) * volumeMultiplier,
+        volume: (inBasement ? 0.06 : 0.42) * volumeMultiplier,
         rate: inBasement ? 0.86 : closeStrike ? 1.04 : 0.98,
         rateVariance: closeStrike ? 0.015 : 0.055,
         pan: closeStrike ? 0 : (Math.random() * 2 - 1) * (inBasement ? 0.06 : 0.32),
@@ -25929,7 +25923,7 @@
           outputBus,
           closeStrike ? 82 : 42,
           closeStrike ? 0.7 : 2.4,
-          (inBasement ? 0.006 : closeStrike ? 0.09 : 0.045) * volumeMultiplier,
+          (inBasement ? 0.009 : closeStrike ? 0.12 : 0.065) * volumeMultiplier,
           "sine",
           strikeTime,
         );
@@ -25943,7 +25937,7 @@
         low.frequency.exponentialRampToValueAtTime(inBasement ? 40 : 85, strikeTime + 2.5);
         const gain = this.ctx.createGain();
         gain.gain.setValueAtTime(0.0001, strikeTime);
-        gain.gain.exponentialRampToValueAtTime((inBasement ? 0.045 : 0.34) * volumeMultiplier, strikeTime + 0.06);
+        gain.gain.exponentialRampToValueAtTime((inBasement ? 0.06 : 0.45) * volumeMultiplier, strikeTime + 0.06);
         gain.gain.exponentialRampToValueAtTime(0.0001, strikeTime + 2.5);
         noise.connect(low).connect(gain).connect(outputBus);
         noise.start(strikeTime);
@@ -25953,7 +25947,7 @@
           outputBus,
           closeStrike ? 92 : 46,
           closeStrike ? 0.72 : 2.2,
-          (inBasement ? 0.014 : closeStrike ? 0.13 : 0.12) * volumeMultiplier,
+          (inBasement ? 0.018 : closeStrike ? 0.16 : 0.15) * volumeMultiplier,
           "sine",
           strikeTime,
         );
@@ -27372,11 +27366,11 @@
     if (!dom.prompt) return;
     if (openingWelcomeSystem?.active) {
       state.currentInteraction = null;
-      const showContinue = openingWelcomeSystem.canAdvance();
-      dom.prompt.hidden = !showContinue;
-      if (showContinue) {
+      const showSkip = openingWelcomeSystem.canAdvance();
+      dom.prompt.hidden = !showSkip;
+      if (showSkip) {
         if (dom.promptKey) dom.promptKey.textContent = matchMedia("(pointer: coarse)").matches ? "TAP E" : "E";
-        if (dom.promptText) dom.promptText.textContent = "Continue";
+        if (dom.promptText) dom.promptText.textContent = "Skip";
       }
       return;
     }

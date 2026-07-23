@@ -143,6 +143,39 @@ async function run() {
       `hiding, walls, and floor separation must still block close awareness; result=${JSON.stringify(blockedCloseAwareness)}`,
     );
 
+    // A camera-detected trespass must carry a main-floor host all the way
+    // down the authored service stair. Repath refreshes may update the final
+    // basement target, but must not keep snapping the route back upstairs.
+    const crossFloorBasementChase = await page.evaluate(() => {
+      window.MrFeastFresh.setDevModeForQA(true);
+      window.MrFeastFresh.resetCameraSecurityForQA(null);
+      window.MrFeastFresh.setCameraStoryStateForQA({ basementUnlocked: true, relaySabotaged: false });
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: 12.55, y: 0, z: -5.4, yaw: 0 });
+      window.MrFeastFresh.setCameraSoloForQA("cam-basement-boiler");
+      window.MrFeastFresh.setCameraSweepForQA("cam-basement-boiler", 0);
+      window.MrFeastFresh.placePlayerInCameraLaneForQA("cam-basement-boiler", { distance: 3.5 });
+      window.MrFeastFresh.advanceCameraSecurityForQA(3);
+      const awareness = window.MrFeastFresh.advanceMrFeastAwarenessForQA(1);
+      const before = window.MrFeastFresh.getMrFeastState();
+      const run = window.MrFeastFresh.advanceMrFeastPursuitForQA(10);
+      const after = window.MrFeastFresh.getMrFeastState();
+      return { awareness, before, run, after };
+    });
+    assert(
+      crossFloorBasementChase.awareness.active
+        && crossFloorBasementChase.before.pursuit.trackingSource === "camera",
+      `host should receive the hostile basement camera pursuit; result=${JSON.stringify(crossFloorBasementChase)}`,
+    );
+    assert(
+      crossFloorBasementChase.after.position.y <= -3.7,
+      `cross-floor pursuit should descend to the basement instead of oscillating at the stair top; result=${JSON.stringify(crossFloorBasementChase)}`,
+    );
+    await page.evaluate(() => window.MrFeastFresh.placePlayerNearMrFeastForQA(3));
+    await page.waitForTimeout(100);
+    await page.screenshot({ path: path.join(artifactDir, "basement-cross-floor-chase.png") });
+    await page.evaluate(() => window.MrFeastFresh.setDevModeForQA(false));
+
     // 1. The existing local surface bank follows the planted contacts of the
     // shipped stalk clip. Stationary and muted updates stay silent.
     let audio = await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA());

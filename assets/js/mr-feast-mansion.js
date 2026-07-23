@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260722-basement-awareness-1";
+  const MANSION_RUNTIME_VERSION = "20260722-basement-stair-chase-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -6085,6 +6085,26 @@
 
     repathPursuit(targetPosition = this.pursuitLastKnownPosition) {
       if (!targetPosition) return;
+      const nextNode = this.responsePath[0]?.node;
+      const verticalRouteInProgress = Boolean(
+        this.pursuitTargetNodeId
+        && this.responsePath.length
+        && (
+          this.onStairs
+          || this.floorAtCurrentHeight() === MR_FEAST_LEVEL.STAIR
+          || nextNode?.segmentKind === "stairs"
+          || nextNode?.segmentKind === "ramp"
+        )
+      );
+      if (verticalRouteInProgress) {
+        // Re-anchoring to a nearest floor node while he is between floors can
+        // select the landing he just left, making a live cross-floor chase
+        // oscillate forever at the stair top. Keep the authored vertical leg;
+        // the latest reliable player point is already stored and will be
+        // replanned from the destination floor on the next refresh.
+        this.pursuit.repathRemaining = MR_FEAST_PURSUIT.repathSeconds;
+        return;
+      }
       const target = { x: targetPosition.x, y: targetPosition.y, z: targetPosition.z };
       const targetId = this.nearestResponseTargetId(target, true);
       // Approach steering leaves the graph, so re-anchor to the node nearest

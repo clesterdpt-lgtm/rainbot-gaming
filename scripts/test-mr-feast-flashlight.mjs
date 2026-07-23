@@ -97,6 +97,9 @@ async function run() {
   assert(/code === "KeyF"/.test(runtime) && /event\.repeat/.test(runtime), "F must toggle through the central non-repeating input path");
   assert(/reportFlashlightUse/.test(runtime) && /flashlight-use/.test(runtime), "flashlight use must report a camera-security event");
   assert(/getFlashlightState/.test(runtime) && /setFlashlightForQA/.test(runtime), "focused flashlight diagnostics and QA controls are missing");
+  assert(/locations:\s*Object\.freeze\(\[/.test(runtime), "flashlight should declare its three discoverable pickup locations");
+  assert(/kitchen-under-sink/.test(runtime) && /upper-east-front-closet/.test(runtime) && /basement-archive/.test(runtime), "flashlight locations should cover the kitchen sink cabinet, an upper walk-in closet, and the basement");
+  assert(/simple-flashlight-body/.test(runtime) && !/brass-cradle/.test(runtime), "pickup should be a simple household flashlight without the ornate cradle");
   assert(/id="mansion-flashlight-button"/.test(html), "touch Light control is missing");
   assert(/intensity:\s*74\b/.test(runtime), "flashlight beam should use the slightly brighter 74 intensity tuning");
   assert(!/carried-flashlight-(?:body|head|lens)/.test(runtime), "active flashlight should show only its light, not a carried model");
@@ -130,11 +133,49 @@ async function run() {
     // 1. Fresh state and pre-collection input stay inert.
     let light = await flashlight(page);
     assert(light && !light.collected && !light.on && light.pickupVisible, `fresh flashlight state is wrong: ${JSON.stringify(light)}`);
+    assert(light.pickups?.length === 3 && light.pickups.every((pickup) => pickup.visible), `fresh run should show all three flashlight pickups: ${JSON.stringify(light.pickups)}`);
     await page.keyboard.press("f");
     assert(!(await flashlight(page)).on, "F must do nothing before the flashlight is collected");
 
-    // 2. The real landing pickup is close, visible, and collected with E.
-    const staging = await page.evaluate(() => window.MrFeastFresh.placePlayerNearFlashlightForQA());
+    // 2. Each authored location can be reached and collected with the real E
+    // interaction. Each fresh attempt must collapse all three world copies
+    // into exactly one authoritative Bag item.
+    for (const locationId of ["kitchen-under-sink", "upper-east-front-closet"]) {
+      const pickupPage = await context.newPage();
+      pickupPage.on("pageerror", (error) => errors.push(`${locationId}: ${error.message}`));
+      pickupPage.on("console", (message) => {
+        const sourceUrl = message.location().url || "";
+        if (message.type() === "error" && !/favicon\.ico/i.test(`${message.text()} ${sourceUrl}`)) errors.push(`${locationId}: ${message.text()}`);
+      });
+      await pickupPage.addInitScript(() => localStorage.removeItem("rainbot_game_save:mr-feast-mansion"));
+      await pickupPage.goto(gameUrl, { waitUntil: "domcontentloaded" });
+      await pickupPage.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
+      const locationStaging = await pickupPage.evaluate((id) => window.MrFeastFresh.placePlayerNearFlashlightForQA(id), locationId);
+      assert(locationStaging?.locationId === locationId, `QA staging should target ${locationId}; staging=${JSON.stringify(locationStaging)}`);
+      try {
+        await pickupPage.waitForFunction(() => /take flashlight/i.test(document.getElementById("mansion-prompt-text")?.textContent || ""), null, { timeout: 15000 });
+      } catch (_) {
+        const missedPrompt = await pickupPage.evaluate(() => ({
+          prompt: document.getElementById("mansion-prompt-text")?.textContent || "",
+          state: JSON.parse(window.render_game_to_text()),
+          flashlight: window.MrFeastFresh.getFlashlightState(),
+        }));
+        throw new Error(`${locationId} should expose Take flashlight after opening its cabinet: ${JSON.stringify(missedPrompt)}`);
+      }
+      await pickupPage.screenshot({ path: path.join(artifactDir, `flashlight-pickup-${locationId}-desktop.png`) });
+      await pickupPage.keyboard.press("e");
+      await pickupPage.waitForFunction(() => window.MrFeastFresh.getFlashlightState()?.collected === true);
+      const locationLight = await flashlight(pickupPage);
+      const locationState = await diagnostics(pickupPage);
+      assert(locationLight.pickups?.every((pickup) => !pickup.visible && !pickup.registered), `taking ${locationId} should remove every world copy: ${JSON.stringify(locationLight.pickups)}`);
+      assert(locationState.inventory.items.filter((id) => id === "basement-flashlight").length === 1, `taking ${locationId} should grant exactly one Bag item`);
+      await pickupPage.close();
+    }
+
+    // The basement copy remains close to the service stair and uses the same
+    // real interaction path.
+    const staging = await page.evaluate(() => window.MrFeastFresh.placePlayerNearFlashlightForQA("basement-archive"));
+    assert(staging?.locationId === "basement-archive", `basement QA staging targeted the wrong pickup: ${JSON.stringify(staging)}`);
     assert(staging?.distanceToServiceStairBottom <= 3.2, `flashlight should be easy to find from the service stairs; distance=${staging?.distanceToServiceStairBottom}`);
     await page.waitForFunction(() => /take flashlight/i.test(document.getElementById("mansion-prompt-text")?.textContent || ""), null, { timeout: 3000 });
     await page.screenshot({ path: path.join(artifactDir, "flashlight-pickup-desktop.png") });
@@ -142,7 +183,7 @@ async function run() {
     await page.waitForFunction(() => window.MrFeastFresh.getFlashlightState()?.collected === true);
     light = await flashlight(page);
     let state = await diagnostics(page);
-    assert(!light.pickupVisible && state.inventory.items.filter((id) => id === "basement-flashlight").length === 1, "taking the flashlight should hide the prop and grant exactly one Bag item");
+    assert(!light.pickupVisible && light.pickups?.every((pickup) => !pickup.visible) && state.inventory.items.filter((id) => id === "basement-flashlight").length === 1, "taking any flashlight should remove all three props and grant exactly one Bag item");
     assert(/press f/i.test(await page.locator("#mansion-discovery-body").textContent() || ""), "pickup discovery should explain the F control");
     console.log("flashlight qa: pickup collected");
 

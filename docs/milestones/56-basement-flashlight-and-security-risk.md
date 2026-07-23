@@ -6,11 +6,12 @@ In progress with implementation and focused automated acceptance complete. Picku
 
 ## Objective
 
-Add an easy-to-find basement flashlight that gives the player a useful but deliberately narrow pool of light. Collecting it uses the ordinary E/touch interaction, F toggles it on desktop, and every visible use trades safety for orientation by exposing the player to the camera network, drawing Mr. Feast into a bounded investigation, and reducing crouched concealment.
+Make the flashlight easy to discover without granting it by default: three identical loose pickups are staged under the kitchen sink, inside a second-floor walk-in closet, and beside the basement Archive route. Collecting any one uses the ordinary E/touch interaction, removes every remaining world copy, and grants the single carried flashlight. F toggles it on desktop, and every visible use trades safety for orientation by exposing the player to the camera network, drawing Mr. Feast into a bounded investigation, and reducing crouched concealment.
 
 ## Scope
 
-- One authored flashlight pickup on the Archive-side service-stair landing, visible within seconds of entering the basement and registered through the existing interaction system.
+- Three authored loose flashlight pickups registered through the existing interaction system: under the kitchen sink, inside the east-front second-floor walk-in closet, and on the Archive-side basement service-stair route.
+- A simple recognizable household flashlight model with no ornate wall cradle; all three world copies disappear after any one is collected.
 - One carried `basement-flashlight` item in the Bag, persisted with the existing Contestant 13 inventory while active light and alert state remain transient across load.
 - A focused flashlight system with a camera-aligned, shadow-free spotlight, no visible carried model after pickup, restrained flicker, and named brightness, distance, cone, penumbra, and concealment tuning.
 - Desktop F input plus a touch `Light` control, both hidden or inert until the item is collected and blocked by the existing modal, competition, hiding, seated, and game-over states.
@@ -33,8 +34,8 @@ Add an easy-to-find basement flashlight that gives the player a useful but delib
 
 ## Acceptance criteria
 
-- [x] A fresh run has no flashlight and F/Light does nothing. The physical pickup is visibly staged on the Archive-side service-stair landing, within a short clear walk from the bottom step, with a forgiving `Take flashlight` E/touch interaction. — test: `scripts/test-mr-feast-flashlight.mjs::pickup discovery`
-- [x] Taking it grants exactly one Bag item, removes the world interaction/prop, explains F/Light and the camera risk, and persists possession through an explicit save/load while restoring safely switched off. — test: `scripts/test-mr-feast-flashlight.mjs::inventory and save`
+- [x] A fresh run has no owned or equipped flashlight and F/Light does nothing. Three simple loose flashlight props are present under the kitchen sink, inside the east-front second-floor walk-in closet, and beside the basement Archive route. Each exposes a forgiving `Take flashlight` E/touch interaction once its containing cabinet is open. — test: `scripts/test-mr-feast-flashlight.mjs::three-location pickup discovery`
+- [x] Taking any one grants exactly one Bag item, removes all three world interactions/props, explains F/Light and the camera risk, and persists possession through an explicit save/load while restoring safely switched off. — test: `scripts/test-mr-feast-flashlight.mjs::any-location inventory and save`
 - [x] F and the touch `Light` button toggle one authoritative active state only after collection. Input is non-repeating and yields to menus, dossier/readers, timed actions, hiding, seating, competitions, the welcome, and game over. — test: `scripts/test-mr-feast-flashlight.mjs::input gating`
 - [x] The active camera-aligned beam uses the tuned `74` intensity, materially brightens a central Archive patch over the off state, falls away much faster at the edge, retains a dark periphery, stays below the overexposure ceiling, casts no shadow, shows no carried flashlight model, and changes light energy rather than shader-light counts. — test: `scripts/test-mr-feast-flashlight.mjs::restrained beam`
 - [x] In the same dark motionless crouch, switching the light on clearly lowers the concealment meter and raises effective visibility and sight range; switching it off recovers the original baseline. Standing remains exactly visibility `1`. — test: `scripts/test-mr-feast-flashlight.mjs::stealth cost`
@@ -46,7 +47,7 @@ Add an easy-to-find basement flashlight that gives the player a useful but delib
 
 ## Exit condition
 
-The user enters the basement, spots and takes the flashlight without searching obscure shelves, presses F (or Light on touch) to reveal a constrained path through the Archive, sees the stealth meter worsen and a plausible camera react, then evades Mr. Feast's investigation while the surrounding basement remains dark and threatening.
+The user can find a recognizable loose flashlight under the kitchen sink, in the east-front upstairs walk-in closet, or beside the basement Archive route. Taking any one removes the other two and grants one switched-off Bag item; F (or Light on touch) then reveals a constrained path while preserving the existing stealth and security risk.
 
 ## Test plan
 
@@ -60,6 +61,7 @@ Write and run `scripts/test-mr-feast-flashlight.mjs` and the new renovation cont
 - `node scripts/test-mr-feast-flashlight.mjs` passes the real landing pickup, fresh-run F/touch gating, one-item Bag integration, F/menu/repeat behavior, fixed `{ spot: 6, point: 11 }` topology, save/load-safe ownership, and 390×844 touch layout with zero browser errors. Its corrected occlusion case explicitly waits out the activation cooldown before proving no invented camera source.
 - Focused visual/stealth measurements after the light-only/brighter follow-up: the Archive center cone gains `7.1` luminance while the sampled edge remains effectively `0.0`; a dark motionless crouch falls from `96.0` concealment off to `71.5` on while standing remains visibility `1`. Proof is in `output/playwright/mr-feast-flashlight/flashlight-{pickup,beam-off,beam-on}-desktop.png` and `flashlight-touch-mobile.png`.
 - The full `test-mr-feast-contestant-13.mjs`, `test-mr-feast-stealth-meter.mjs`, and `test-mr-feast-camera-security.mjs` browser suites pass after replacing Playwright's unstable animated-element screenshot action with the repository's existing bounding-box plus clipped-page capture pattern. The camera proof retains a clearly visible green fixture core with a 20-pixel floor.
+- 2026-07-23 three-location follow-up: the revised focused source contract failed red on the old upstairs-bathroom location before implementation. It now exercises real E pickup on fresh runs under the opened kitchen sink cabinet, inside the opened east-front upstairs walk-in closet, and beside the basement Archive route. Every path grants exactly one switched-off Bag item and removes/unregisters all three world copies. The loose four-part household model replaces the ornate wall cradle. Runtime/test syntax, renovation, the complete focused flashlight browser suite, full desktop/mobile Contestant 13, cache identity `20260723-three-flashlights-1`, and `git diff --check` pass with zero unexpected browser errors. Visual proof is `flashlight-pickup-{kitchen-under-sink,upper-east-front-closet}-desktop.png` plus the refreshed basement `flashlight-pickup-desktop.png` under `output/playwright/mr-feast-flashlight/`.
 - Three adjacent suites remain open outside the flashlight path: Player Systems advances past its repaired screenshots and then hangs on its documented headless Max/fullscreen click; Caught/Pursuit completes the chase response lifecycle but its later unrelated housekeeping pass reports `fixesCompleted: 0`; Basement Key Trail clears the repaired screenshots, locked-door prompt, and Feast Says boundary, then misses the existing six-second `digSiteExcavated` transition. No browser/server process leaked from any run.
 
 ## Notes

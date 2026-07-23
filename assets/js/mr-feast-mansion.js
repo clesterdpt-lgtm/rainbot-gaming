@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260723-pursuit-reacquire-2";
+  const MANSION_RUNTIME_VERSION = "20260723-three-flashlights-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -669,6 +669,40 @@
   });
   const FLASHLIGHT = Object.freeze({
     itemId: "basement-flashlight",
+    locations: Object.freeze([
+      Object.freeze({
+        id: "kitchen-under-sink",
+        label: "Under the kitchen sink",
+        x: 9.65,
+        y: FLOOR.MAIN + 0.38,
+        z: -11.18,
+        yaw: 0,
+        roll: Math.PI / 2,
+        storageName: "kitchen sink base cabinet",
+        qa: Object.freeze({ x: 9.65, floorY: FLOOR.MAIN, z: -10.1, yaw: 0, pitch: -0.86 }),
+      }),
+      Object.freeze({
+        id: "upper-east-front-closet",
+        label: "East-front walk-in closet",
+        x: 12.8,
+        y: FLOOR.UPPER + 0.09,
+        z: 4.02,
+        yaw: 0,
+        roll: Math.PI / 2,
+        storageName: "east front walk-in closet",
+        qa: Object.freeze({ x: 12.8, floorY: FLOOR.UPPER, z: 5.35, yaw: 0, pitch: -0.86 }),
+      }),
+      Object.freeze({
+        id: "basement-archive",
+        label: "Basement Archive shelf",
+        x: 14.68,
+        y: FLOOR.BASEMENT + 1.08,
+        z: 3.82,
+        yaw: -Math.PI / 2,
+        roll: Math.PI / 2,
+        qa: Object.freeze({ x: 13.12, floorY: FLOOR.BASEMENT, z: 3.82, yaw: -Math.PI / 2, pitch: -0.36 }),
+      }),
+    ]),
     pickup: Object.freeze({
       x: 14.68,
       y: FLOOR.BASEMENT + 1.08,
@@ -17515,21 +17549,23 @@
     }
 
     buildPickup() {
+      this.pickups = FLASHLIGHT.locations.map((location) => this.buildPickupAt(location));
+      // Retain the basement reference for existing focused QA framing helpers.
+      this.pickupRoot = this.pickups.find((pickup) => pickup.location.id === "basement-archive")?.root || null;
+      this.pickupHitbox = this.pickups.find((pickup) => pickup.location.id === "basement-archive")?.hitbox || null;
+    }
+
+    buildPickupAt(location) {
       const root = new THREE.Group();
-      root.name = "basement-flashlight-pickup";
-      root.position.set(FLASHLIGHT.pickup.x, FLASHLIGHT.pickup.y, FLASHLIGHT.pickup.z);
-      root.rotation.y = FLASHLIGHT.pickup.yaw;
+      root.name = `${location.id}-flashlight-pickup`;
+      root.position.set(location.x, location.y, location.z);
+      root.rotation.set(0, location.yaw, location.roll || 0);
       scene.add(root);
       const pickupMetalMaterial = new THREE.MeshBasicMaterial({ color: 0x303337, toneMapped: false });
-      const pickupTrimMaterial = new THREE.MeshBasicMaterial({ color: 0x8c7449, toneMapped: false });
-      const pickupReflectiveMaterial = new THREE.MeshBasicMaterial({ color: 0xd6bb83, toneMapped: false });
-      roundedBox({ name: "basement-flashlight-brass-cradle", w: 0.38, h: 0.52, d: 0.07, radius: 0.035, z: 0.015, material: pickupTrimMaterial, parent: root, cast: false });
-      roundedBox({ name: "basement-flashlight-cradle-inset", w: 0.29, h: 0.43, d: 0.025, radius: 0.025, z: 0.065, material: M.soot, parent: root, cast: false });
-      cylinder({ name: "basement-flashlight-body", radius: 0.056, height: 0.34, segments: 16, y: -0.015, z: 0.13, material: pickupMetalMaterial, parent: root, cast: false });
-      cylinder({ name: "basement-flashlight-grip-ring-a", radius: 0.064, height: 0.025, segments: 16, y: -0.1, z: 0.13, material: pickupTrimMaterial, parent: root, cast: false });
-      cylinder({ name: "basement-flashlight-grip-ring-b", radius: 0.064, height: 0.025, segments: 16, y: 0.035, z: 0.13, material: pickupTrimMaterial, parent: root, cast: false });
-      cylinder({ name: "basement-flashlight-head", radius: 0.086, radiusTop: 0.086, radiusBottom: 0.06, height: 0.12, segments: 18, y: 0.2, z: 0.13, material: pickupMetalMaterial, parent: root, cast: false });
-      roundedBox({ name: "basement-flashlight-reflective-strip", w: 0.035, h: 0.2, d: 0.018, radius: 0.012, y: -0.03, z: 0.191, material: pickupReflectiveMaterial, parent: root, cast: false });
+      const pickupGripMaterial = new THREE.MeshBasicMaterial({ color: 0x16181b, toneMapped: false });
+      cylinder({ name: "simple-flashlight-body", radius: 0.055, height: 0.32, segments: 14, y: -0.02, material: pickupGripMaterial, parent: root, cast: false });
+      cylinder({ name: "simple-flashlight-neck-ring", radius: 0.061, height: 0.028, segments: 14, y: 0.142, material: pickupMetalMaterial, parent: root, cast: false });
+      cylinder({ name: "simple-flashlight-head", radius: 0.079, radiusTop: 0.079, radiusBottom: 0.058, height: 0.09, segments: 14, y: 0.19, material: pickupMetalMaterial, parent: root, cast: false });
       const lensMaterial = new THREE.MeshStandardMaterial({
         color: 0xffe2b8,
         emissive: 0xffb65c,
@@ -17537,26 +17573,28 @@
         metalness: 0.05,
         roughness: 0.22,
       });
-      cylinder({ name: "basement-flashlight-lens", radius: 0.055, height: 0.014, segments: 20, y: 0.2, z: 0.222, rotationX: Math.PI / 2, material: lensMaterial, parent: root, cast: false });
-      for (const y of [-0.18, 0.18]) {
-        roundedBox({ name: "basement-flashlight-cradle-clip", w: 0.21, h: 0.055, d: 0.13, radius: 0.02, y, z: 0.12, material: pickupTrimMaterial, parent: root, cast: false });
-      }
+      cylinder({ name: "simple-flashlight-lens", radius: 0.051, height: 0.014, segments: 16, y: 0.242, material: lensMaterial, parent: root, cast: false });
+      roundedBox({ name: "simple-flashlight-switch", w: 0.022, h: 0.07, d: 0.04, radius: 0.009, x: 0.054, y: -0.035, material: pickupMetalMaterial, parent: root, cast: false });
       const hitboxMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false });
       const hitbox = new THREE.Mesh(new THREE.BoxGeometry(
         FLASHLIGHT.pickup.interactionWidth,
         FLASHLIGHT.pickup.interactionHeight,
         FLASHLIGHT.pickup.interactionDepth,
       ), hitboxMaterial);
-      hitbox.name = "basement-flashlight-interaction";
-      hitbox.position.z = 0.25;
+      hitbox.name = `${location.id}-flashlight-interaction`;
+      hitbox.position.z = 0.15;
       root.add(hitbox);
-      this.pickupRoot = root;
-      this.pickupHitbox = hitbox;
-      this.pickupInteraction = {
+      return {
+        location,
+        root,
+        hitbox,
+        registered: false,
+        interaction: {
         type: "flashlight",
         id: FLASHLIGHT.itemId,
         getLabel: () => "Take flashlight",
         activate: () => this.collect(),
+        },
       };
     }
 
@@ -17604,14 +17642,17 @@
 
     syncPickupVisibility() {
       const visible = !this.collected();
-      if (this.pickupRoot) this.pickupRoot.visible = visible;
-      if (visible && !this.pickupRegistered) {
-        addInteractionTarget(this.pickupHitbox, this.pickupInteraction);
-        this.pickupRegistered = true;
-      } else if (!visible && this.pickupRegistered) {
-        removeInteractionTarget(this.pickupHitbox);
-        this.pickupRegistered = false;
+      for (const pickup of this.pickups || []) {
+        pickup.root.visible = visible;
+        if (visible && !pickup.registered) {
+          addInteractionTarget(pickup.hitbox, pickup.interaction);
+          pickup.registered = true;
+        } else if (!visible && pickup.registered) {
+          removeInteractionTarget(pickup.hitbox);
+          pickup.registered = false;
+        }
       }
+      this.pickupRegistered = (this.pickups || []).some((pickup) => pickup.registered);
     }
 
     syncUi() {
@@ -17645,7 +17686,7 @@
       this.state.on = false;
       this.syncPresentation();
       contestant13Quest.showDiscovery(
-        "Basement flashlight",
+        "Flashlight found",
         "Press F to switch it on. The beam is useful, but the cameras will notice it.",
         9000,
       );
@@ -17770,19 +17811,34 @@
       }
     }
 
-    placePlayerNearForQA() {
+    placePlayerNearForQA(locationId = "basement-archive") {
       if (!state.qa || !physics) return null;
-      teleport(13.12, FLOOR.BASEMENT, FLASHLIGHT.pickup.z, -Math.PI / 2, -0.36);
+      const location = FLASHLIGHT.locations.find((candidate) => candidate.id === locationId);
+      if (!location) return null;
+      const storage = location.storageName
+        ? animatedObjects.find((object) => object instanceof Cabinet && object.name === location.storageName)
+        : null;
+      if (location.storageName && !storage) return null;
+      if (storage) {
+        storage.setOpen(true, true);
+        storage.update(10);
+      }
+      teleport(location.qa.x, location.qa.floorY, location.qa.z, location.qa.yaw, location.qa.pitch);
       syncCamera();
       camera.updateMatrixWorld(true);
       updateLocation();
       updateInteractionPrompt();
       return {
-        position: { x: FLASHLIGHT.pickup.x, y: FLASHLIGHT.pickup.y, z: FLASHLIGHT.pickup.z },
-        distanceToServiceStairBottom: Number(Math.hypot(
-          FLASHLIGHT.pickup.x - FLASHLIGHT.pickup.serviceStairBottom.x,
-          FLASHLIGHT.pickup.z - FLASHLIGHT.pickup.serviceStairBottom.z,
-        ).toFixed(3)),
+        locationId: location.id,
+        label: location.label,
+        position: { x: location.x, y: location.y, z: location.z },
+        storageOpen: storage ? storage.open : null,
+        distanceToServiceStairBottom: location.id === "basement-archive"
+          ? Number(Math.hypot(
+            location.x - FLASHLIGHT.pickup.serviceStairBottom.x,
+            location.z - FLASHLIGHT.pickup.serviceStairBottom.z,
+          ).toFixed(3))
+          : null,
         prompt: state.currentInteraction ? state.currentInteraction.getLabel() : null,
       };
     }
@@ -17804,6 +17860,18 @@
         on: Boolean(this.state.on),
         pickupVisible: Boolean(this.pickupRoot?.visible),
         pickupRegistered: this.pickupRegistered,
+        pickups: (this.pickups || []).map((pickup) => ({
+          id: pickup.location.id,
+          label: pickup.location.label,
+          visible: Boolean(pickup.root.visible),
+          registered: pickup.registered,
+          position: {
+            x: pickup.location.x,
+            y: pickup.location.y,
+            z: pickup.location.z,
+          },
+          storageName: pickup.location.storageName || null,
+        })),
         pickup: {
           x: FLASHLIGHT.pickup.x,
           y: FLASHLIGHT.pickup.y,
@@ -29046,8 +29114,8 @@
       flashlightSystem.setOn(Boolean(on), { ...options, force: true });
       return flashlightSystem.getDiagnostics();
     };
-    window.MrFeastFresh.placePlayerNearFlashlightForQA = () => (
-      state.qa && flashlightSystem ? flashlightSystem.placePlayerNearForQA() : null
+    window.MrFeastFresh.placePlayerNearFlashlightForQA = (locationId) => (
+      state.qa && flashlightSystem ? flashlightSystem.placePlayerNearForQA(locationId) : null
     );
     window.MrFeastFresh.frameFlashlightBeamForQA = () => (
       state.qa && flashlightSystem ? flashlightSystem.frameBeamForQA() : null

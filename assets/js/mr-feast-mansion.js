@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260722-basement-route-stability-1";
+  const MANSION_RUNTIME_VERSION = "20260722-briefing-e-skip-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1676,6 +1676,8 @@
     reportDeadlineSeconds: 5 * 60,
     maximumTimerStepSeconds: 0.5,
     briefingSeconds: 11,
+    // Instant E/tap skip for the rules line — no speech-bubble Skip button.
+    briefingSkipAfterSeconds: 0,
     responseSeconds: 7.5,
     resultSeconds: 7.2,
     completionCardSeconds: 5.5,
@@ -2147,6 +2149,8 @@
     reportDeadlineSeconds: 5 * 60,
     maximumTimerStepSeconds: 0.5,
     briefingSeconds: 14,
+    // Instant E/tap skip during the rules explanation only (not the 3–2–1).
+    briefingSkipAfterSeconds: 0,
     briefingSpeechSeconds: 10.8,
     countdownSeconds: 3,
     hostIdlePoseTimeSeconds: 0,
@@ -14123,18 +14127,26 @@
         speechSystem.hostSpeaker(),
         {
           durationSeconds: FEAST_SAYS.briefingSpeechSeconds,
-          skipLabel: "Skip rules",
-          onSkip: (source) => this.skipFeastSaysBriefing(source),
         },
       );
+      updateInteractionPrompt();
       audioSystem?.ping(523, 0.42, 0.045, "triangle");
       return { started: true, staged: true };
     }
 
+    canSkipBriefing() {
+      if (this.show.phase !== FEAST_SAYS_PHASE.BRIEFING) return false;
+      const elapsed = FEAST_SAYS.briefingSeconds - this.show.phaseRemaining;
+      return elapsed >= FEAST_SAYS.briefingSkipAfterSeconds;
+    }
+
     skipFeastSaysBriefing(source = "player") {
       if (this.show.phase !== FEAST_SAYS_PHASE.BRIEFING) return { skipped: false, reason: "not-briefing" };
+      if (!this.canSkipBriefing()) return { skipped: false, reason: "reading-hold" };
+      speechSystem?.dismiss();
       this.show.phaseRemaining = 0;
       this.beginCommand();
+      updateInteractionPrompt();
       return { skipped: true, reason: null, source };
     }
 
@@ -14997,6 +15009,8 @@
         round: this.show.roundIndex + 1,
         totalRounds: FEAST_SAYS.commands.length,
         phaseRemaining: Number(this.show.phaseRemaining.toFixed(3)),
+        canSkipBriefing: this.canSkipBriefing(),
+        briefingSkipAfterSeconds: FEAST_SAYS.briefingSkipAfterSeconds,
         pacing: {
           briefingSeconds: FEAST_SAYS.briefingSeconds,
           responseSeconds: FEAST_SAYS.responseSeconds,
@@ -15412,19 +15426,29 @@
         speechSystem.hostSpeaker(),
         {
           durationSeconds: STORM_RUN.briefingSpeechSeconds,
-          skipLabel: "Skip rules",
-          onSkip: (source) => this.skipStormRunBriefing(source),
         },
       );
       this.syncCastVisibility();
+      updateInteractionPrompt();
       return { started: true, staged: true, entries: staged.entries };
+    }
+
+    canSkipBriefing() {
+      if (this.show.phase !== STORM_RUN_PHASE.BRIEFING) return false;
+      // Only the rules explanation is skippable; the spoken 3–2–1 must play.
+      if (this.show.briefingRemaining <= STORM_RUN.countdownSeconds) return false;
+      const elapsed = STORM_RUN.briefingSeconds - this.show.briefingRemaining;
+      return elapsed >= STORM_RUN.briefingSkipAfterSeconds;
     }
 
     skipStormRunBriefing(source = "player") {
       if (this.show.phase !== STORM_RUN_PHASE.BRIEFING) return { skipped: false, reason: "not-briefing" };
+      if (!this.canSkipBriefing()) return { skipped: false, reason: "reading-hold" };
+      speechSystem?.dismiss();
       this.show.briefingRemaining = Math.min(this.show.briefingRemaining, STORM_RUN.countdownSeconds);
       this.show.countdownLastSecond = null;
       this.show.countdownSequence = [];
+      updateInteractionPrompt();
       return { skipped: true, reason: null, source };
     }
 
@@ -16510,6 +16534,8 @@
           hasSign: Boolean(stormRunScene.filmSet?.hasSign),
         },
         briefingRemaining: Number(this.show.briefingRemaining.toFixed(3)),
+        canSkipBriefing: this.canSkipBriefing(),
+        briefingSkipAfterSeconds: STORM_RUN.briefingSkipAfterSeconds,
         briefing: {
           line: STORM_RUN.briefingLine,
           rulesExplained: /twelve blue checkpoints/i.test(STORM_RUN.briefingLine)
@@ -27294,11 +27320,20 @@
       return;
     }
     if (feastSaysSystem?.isPlaying()) {
+      if (feastSaysSystem.show.phase === FEAST_SAYS_PHASE.BRIEFING) {
+        feastSaysSystem.skipFeastSaysBriefing("player");
+        updateInteractionPrompt();
+        return;
+      }
       feastSaysSystem.submitPointChoice();
       updateInteractionPrompt();
       return;
     }
-    if (stormRunSystem?.isPlaying()) return;
+    if (stormRunSystem?.isPlaying()) {
+      if (stormRunSystem.canSkipBriefing()) stormRunSystem.skipStormRunBriefing("player");
+      updateInteractionPrompt();
+      return;
+    }
     const interaction = state.activeSeat?.interaction || state.currentInteraction;
     if (!interaction) return;
     interaction.activate();
@@ -27744,6 +27779,15 @@
       return;
     }
     if (feastSaysSystem?.isPlaying() || stormRunSystem?.isPlaying()) {
+      const feastBriefingSkip = Boolean(feastSaysSystem?.canSkipBriefing());
+      const stormBriefingSkip = Boolean(stormRunSystem?.canSkipBriefing());
+      if (feastBriefingSkip || stormBriefingSkip) {
+        state.currentInteraction = null;
+        dom.prompt.hidden = false;
+        if (dom.promptKey) dom.promptKey.textContent = matchMedia("(pointer: coarse)").matches ? "TAP E" : "E";
+        if (dom.promptText) dom.promptText.textContent = "Skip";
+        return;
+      }
       const pointCommand = feastSaysSystem?.show.phase === FEAST_SAYS_PHASE.COMMAND
         && feastSaysSystem.currentCommand()?.action === "point";
       state.currentInteraction = pointCommand ? feastSaysSystem.pointInteraction : null;

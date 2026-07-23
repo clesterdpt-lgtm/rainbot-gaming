@@ -247,12 +247,16 @@ async function startBallroomRound(page, useTouch = false, { skipBriefing = false
   assert(!/kip|beat\s+\w+/i.test(briefing.speech.text || ""), `the briefing must not spoil the authored loser or tell the player whom to beat; got ${JSON.stringify(briefing.speech.text)}`);
   assert(briefing.feastSays.instructionDelivery === "speech" && briefing.feastSays.ui?.minimal && briefing.feastSays.ui?.command === null, `the briefing HUD must defer completely to Mr. Feast's speech; got ${JSON.stringify(briefing.feastSays.ui)}`);
   if (skipBriefing) {
-    const skip = page.locator("#mansion-speech-skip");
-    assert(await skip.isVisible() && /skip rules/i.test(await skip.textContent()), `Feast Says needs an immediate Skip rules control; got ${JSON.stringify(await skip.textContent())}`);
-    const bounds = await skip.boundingBox();
-    assert(bounds?.width >= 44 && bounds?.height >= 44, `the touch Skip rules control must be at least 44px; got ${JSON.stringify(bounds)}`);
-    assert(briefing.speech.skippable && briefing.speech.skipLabel === "Skip rules", `speech diagnostics must identify the Feast Says briefing skip; got ${JSON.stringify(briefing.speech)}`);
-    await skip.click({ force: true });
+    const speechSkip = page.locator("#mansion-speech-skip");
+    assert(!(await speechSkip.isVisible()), "Feast Says rules must not use a speech-bubble Skip button");
+    assert(!briefing.speech.skippable && briefing.speech.skipLabel == null, `Feast Says rules speech must not be bubble-skippable; got ${JSON.stringify(briefing.speech)}`);
+    assert(briefing.feastSays.canSkipBriefing === true, `Feast Says E/tap skip must be available immediately; got ${JSON.stringify(briefing.feastSays)}`);
+    const prompt = page.locator("#mansion-prompt");
+    assert(await prompt.isVisible(), "Feast Says rules must expose an immediate E/tap Skip prompt");
+    const promptText = await page.locator("#mansion-prompt-text").textContent();
+    assert(/skip/i.test(promptText || ""), `Feast Says E prompt should advertise Skip; got ${JSON.stringify(promptText)}`);
+    if (useTouch) await page.locator("#touch-interact").click({ force: true });
+    else await pressInteract(page);
   }
   const briefingCamera = assertLiveProductionCamera(briefing, "Feast Says briefing");
   if (!useTouch) {
@@ -933,8 +937,9 @@ async function run() {
   for (const hook of ["getFeastSaysState", "advanceFeastSaysForQA", "advanceFeastSaysCastForQA", "callFeastSaysForQA", "respondToFeastSaysForQA", "aimFeastSaysTargetForQA", "completeFeastSaysWithAftermathForQA", "resolveFeastSaysAftermathForQA"]) {
     assert(runtimeSource.includes(hook), `runtime is missing the focused ${hook} QA hook`);
   }
-  assert(pageSource.includes('id="mansion-speech-skip"'), "Feast Says is missing the shared Skip rules control");
-  assert(/skipFeastSaysBriefing/.test(runtimeSource), "Feast Says is missing an explicit briefing-only skip transition");
+  assert(/skipFeastSaysBriefing/.test(runtimeSource) && /canSkipBriefing/.test(runtimeSource), "Feast Says is missing an explicit briefing-only E/tap skip transition");
+  assert(/briefingSkipAfterSeconds:\s*0/.test(runtimeSource), "Feast Says briefing skip must be immediate");
+  assert(!/skipLabel:\s*"Skip rules"/.test(runtimeSource), "competition rules must not attach a Skip rules bubble button");
 
   assert(/function competitionBlocksInvestigation\(\)[\s\S]{0,180}activeCompetitionSystem\(\)/.test(runtimeSource), "clue carriers need one centralized active-competition gate");
   assert(/function noteMajorClueDiscovered\(clueId\)[\s\S]{0,420}feastSaysSystem\?\.noteClueDiscovered\(clueId\)[\s\S]{0,420}stormRunSystem\?\.noteClueDiscovered\(clueId\)/.test(runtimeSource), "earned clues must dispatch through Feast Says and then Storm Run");

@@ -108,7 +108,7 @@ async function run() {
   assert(/class MrFeastOpeningWelcome/.test(runtimeSource), "runtime is missing the opening welcome state machine");
   assert(/openingWelcome:\s*openingWelcomeSystem\?\.getDiagnostics/.test(runtimeSource), "render_game_to_text must expose opening welcome progress");
   assert(/advanceOpeningWelcomeForQA/.test(runtimeSource), "runtime is missing deterministic opening welcome timing controls");
-  assert(pageSource.includes('id="mansion-speech-skip"'), "the shared speech bubble is missing its Skip rules control for competitions");
+  assert(pageSource.includes('id="mansion-speech-skip"'), "the shared speech bubble still keeps a skip control slot for non-welcome speech");
   assert(/manualAdvanceAfterSeconds:\s*0/.test(runtimeSource), "opening welcome must expose E/tap skip immediately with no reading hold");
   assert(!/skipLabel:\s*"Skip intro"/.test(runtimeSource), "opening welcome must not attach a full-intro Skip button to the speech bubble");
   assert(!/A previous contestant left a trail somewhere inside the estate\./.test(pageSource), "the entry card still spoils the hidden Contestant 13 trail");

@@ -196,8 +196,13 @@ async function run() {
     await page.evaluate(() => window.MrFeastFresh.leaveHideSpotForQA());
     // He should still come back for it later, as an ordinary, undisturbed
     // housekeeping errand. The dispatch now correctly waits until he is fully
-    // back on patrol, so step the notice deterministically before driving it.
-    await page.evaluate(() => window.MrFeastFresh.advanceTamperForQA(10));
+    // back on patrol. The deterministic pursuit sweep deliberately freezes
+    // the host at its endpoint, so explicitly resume him before stepping the
+    // pending notice and driving the later errand.
+    await page.evaluate(() => {
+      window.MrFeastFresh.resumeMrFeastForQA();
+      window.MrFeastFresh.advanceTamperForQA(10);
+    });
     const lateFixRun = await page.evaluate(() => window.MrFeastFresh.runMrFeastHousekeepingForQA(420));
     assert(lateFixRun.completed === true && lateFixRun.fixesCompleted === 1, `an escaped tamper should still get a normal later fix; got ${JSON.stringify(lateFixRun)}`);
     state = await diagnostics(page);
@@ -318,7 +323,7 @@ async function run() {
       window.MrFeastFresh.setCameraStoryStateForQA({ basementUnlocked: false, relaySabotaged: false });
     });
 
-    // --- Fleeing into the basement mid-pursuit still ends in capture ----------
+    // --- Breaking sight before fleeing downstairs does not broadcast the player
     await page.evaluate(() => {
       window.MrFeastFresh.setDevModeForQA(true);
       window.MrFeastFresh.resetMrFeastWandererForQA();
@@ -334,20 +339,22 @@ async function run() {
     await page.evaluate(() => {
       const entryId = window.MrFeastFresh.getMrFeastState().pursuit.active?.entryId;
       if (entryId) window.MrFeastFresh.tamperForQA(entryId, false);
-      // The scenario proves cross-floor pathing and the basement capture; the
-      // give-up tuning itself is covered by the hidden-player section above.
-      window.MrFeastFresh.setPursuitGiveUpForQA(90);
+      // The player vanishes behind the mansion before changing floors. Mr.
+      // Feast may run to the last-seen Music Room clue, but must not receive
+      // the unseen Archive teleport as a new target.
+      window.MrFeastFresh.setPursuitGiveUpForQA(0);
       window.MrFeastFresh.teleport("archive");
     });
     const fleeRun = await page.evaluate(() => window.MrFeastFresh.runMrFeastPursuitForQA(240));
     const fleeState = await diagnostics(page);
     assert(
-      fleeRun.outcome === "game-over",
-      `with the stair unlocked he should chase into the basement and capture; got ${JSON.stringify({ fleeRun, mrFeast: fleeState.mrFeast })}`,
+      fleeRun.outcome === "lost",
+      `an unobserved floor change should end at the last-known clue, not in an omniscient capture; got ${JSON.stringify({ fleeRun, mrFeast: fleeState.mrFeast })}`,
     );
-    assert(fleeRun.teleports === 0, "the cross-floor chase must not teleport Mr. Feast");
+    assert(fleeRun.teleports === 0, "the lost-player search must not teleport Mr. Feast");
     state = fleeState;
-    assert(state.gameOver && state.gameOver.floor === "BASEMENT", `the flee capture should land in the basement; got ${JSON.stringify(state.gameOver)}`);
+    assert(state.gameOver === null, `an unseen Archive move must not create a basement capture; got ${JSON.stringify(state.gameOver)}`);
+    assert(state.mrFeast.pursuit.trackingSource === "lost" && state.mrFeast.pursuit.lastKnownPosition.z > 7, `pursuit should retain the Music Room clue instead of the live Archive position; got ${JSON.stringify(state.mrFeast.pursuit)}`);
     await page.evaluate(() => {
       window.MrFeastFresh.clearGameOverForQA();
       window.MrFeastFresh.setDevModeForQA(false);

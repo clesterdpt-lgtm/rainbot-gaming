@@ -1540,6 +1540,21 @@ check("56 flashlight bounded alert", /reportFlashlightUse/.test(cameraSecuritySy
 check("56 flashlight persistence", /basement-flashlight/.test(contestant13Quest) && /flashlightSystem\?\.restoreFromInventory/.test(mansion), "flashlight possession is not restored from Bag inventory with transient state reset");
 check("56 flashlight diagnostics", /flashlight:/.test(diagnostics) && /getFlashlightState/.test(qaHooks) && /collectFlashlightForQA/.test(qaHooks) && /setFlashlightForQA/.test(qaHooks) && /placePlayerNearFlashlightForQA/.test(qaHooks), "flashlight diagnostics and focused QA controls are incomplete");
 
+// 57. Mr. Feast's audible gait is planted to his real animation, while a
+// chase remembers only genuinely observed locations and takes the straight
+// collision-aware lane whenever he can still see the runner.
+const mrFeastFootstepConfig = section("const MR_FEAST_FOOTSTEPS = Object.freeze({", "const MR_FEAST_PURSUIT");
+const pursuitUpdate = section("    updatePursuit(dt) {", "    updateTrespassWatch(dt)", mrFeastWanderer);
+const pursuitRepath = section("    repathPursuit(", "    updatePursuit(dt)", mrFeastWanderer);
+const pursuitApproach = section("    updatePursuitApproach(dt)", "    resolveCatch(", mrFeastWanderer);
+check("57 host footstep tuning", /stalk:/.test(mrFeastFootstepConfig) && /run:/.test(mrFeastFootstepConfig) && /phase:\s*0\.025/.test(mrFeastFootstepConfig) && /phase:\s*0\.542/.test(mrFeastFootstepConfig) && /phase:\s*0\.333/.test(mrFeastFootstepConfig) && /phase:\s*0\.817/.test(mrFeastFootstepConfig), "Mr. Feast footstep contacts are not pinned to the sampled stalk/run phases");
+check("57 host footstep animation wiring", /updateMrFeastFootsteps\(dt\)/.test(section("stepAnimationAndFace(dt", "setFaceForQA", mrFeastWanderer)) && /mrFeastFootstep\(/.test(mansionAudio), "host animation contacts are not routed through MansionAudio");
+check("57 host spatial surface mix", /mrFeastFootstepSurface\(/.test(mansionAudio) && /camera\.getWorldDirection/.test(mansionAudio) && /mrFeastFootsteps:/.test(mansionAudio), "Mr. Feast footsteps lack host-owned surface, distance, pan, or diagnostics");
+check("57 last-known pursuit memory", /pursuitLastKnownPosition/.test(mrFeastWanderer) && /pursuitTrackingSource/.test(mrFeastWanderer) && /targetPosition = this\.pursuitLastKnownPosition/.test(pursuitRepath) && !/physics\.playerPosition/.test(pursuitRepath), "pursuit still replans from the unseen live player instead of last-known information");
+check("57 bounded pursuit loss", /unseenGiveUpSeconds:/.test(section("const MR_FEAST_PURSUIT", "const STEALTH")) && /hiddenGiveUpSeconds:/.test(section("const MR_FEAST_PURSUIT", "const STEALTH")) && /this\.pursuit\.giveUpRemaining -= dt/.test(pursuitUpdate) && !/if \(!progressing\)[\s\S]*giveUpRemaining -= dt/.test(pursuitUpdate), "unseen or hidden escape still pauses while Mr. Feast moves");
+check("57 clear-line direct steering", /pursuitDirectSight/.test(pursuitUpdate) && /updatePursuitApproach\(dt\)/.test(pursuitUpdate) && /pursuitDirectSteeringFrames/.test(pursuitApproach) && /moveWithCollision/.test(pursuitApproach), "visible pursuit does not prefer straight collision-aware steering");
+check("57 pursuit diagnostics", /lastKnownPosition:/.test(mrFeastWanderer) && /trackingSource:/.test(mrFeastWanderer) && /unseenSeconds:/.test(mrFeastWanderer) && /directSteeringFrames:/.test(mrFeastWanderer) && /advanceMrFeastPursuitForQA/.test(qaHooks), "pursuit memory/path diagnostics or deterministic short-step QA are missing");
+
 // The page must request a new asset URL or browsers can keep the pre-renovation
 // script despite all source fixes.
 const grandStairBuild = section("function buildGrandStaircase()", "function buildRearUpperWalkwayGuard()");

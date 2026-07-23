@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260722-storm-mix-1";
+  const MANSION_RUNTIME_VERSION = "20260722-pursuit-evasion-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1414,6 +1414,31 @@
     chairPullYawRadians: 0.62,
     chairColliderCenterY: 0.55,
   });
+  const MR_FEAST_FOOTSTEPS = Object.freeze({
+    contacts: Object.freeze({
+      // Sampled from the shipped clips at 120 evenly-spaced phases. Emit at
+      // toe plant, not from distance travelled, so the sound cannot skate
+      // ahead of the visible foot during turns or collision stalls.
+      stalk: Object.freeze([
+        Object.freeze({ foot: "right", phase: 0.025 }),
+        Object.freeze({ foot: "left", phase: 0.542 }),
+      ]),
+      run: Object.freeze([
+        Object.freeze({ foot: "left", phase: 0.333 }),
+        Object.freeze({ foot: "right", phase: 0.817 }),
+      ]),
+    }),
+    maximumDistanceMeters: 19,
+    eventHistory: 24,
+    panLimit: 0.72,
+    stalkVolume: 0.24,
+    runVolume: 0.34,
+    stalkRate: 0.84,
+    runRate: 0.94,
+    stalkLowpassHz: 4600,
+    runLowpassHz: 5600,
+    distantLowpassHz: 1250,
+  });
   const MR_FEAST_PURSUIT = Object.freeze({
     // Hard fairness rule: pursuit must stay below PLAYER.walkSpeed so a
     // walking player always escapes; a crouched player does not.
@@ -1423,9 +1448,10 @@
     sightHalfAngleRadians: 0.95,
     eyeHeightMeters: 1.86,
     catchRadiusMeters: 1.15,
-    approachRadiusMeters: 4.2,
+    directSightRadiusMeters: 9,
     repathSeconds: 0.9,
-    giveUpSeconds: 26,
+    unseenGiveUpSeconds: 8,
+    hiddenGiveUpSeconds: 3.4,
     warningSeconds: 2.4,
     basementFeetY: -0.45,
     // Presence in the basement is itself the offense: being personally seen
@@ -4206,6 +4232,7 @@
       this.actions = {};
       this.activeAction = null;
       this.currentAnimation = null;
+      this.mrFeastFootstepState = { action: null, phase: null };
       this.manifest = null;
       this.modelSize = new THREE.Vector3();
       this.skinnedMeshes = 0;
@@ -4248,6 +4275,11 @@
       this.pursuitWarningFocus = null;
       this.pursuitTargetNodeId = null;
       this.pursuitTargetPlayerPosition = null;
+      this.pursuitLastKnownPosition = null;
+      this.pursuitTrackingSource = "none";
+      this.pursuitDirectSight = false;
+      this.pursuitUnseenSeconds = 0;
+      this.pursuitDirectSteeringFrames = 0;
       this.pursuitSightCheckRemaining = 0;
       this.pursuitStallSeconds = 0;
       this.pursuitApproachSuppressedRemaining = 0;
@@ -4996,9 +5028,45 @@
       this.applyFaceMorphWeights();
     }
 
+    updateMrFeastFootsteps(dt) {
+      const action = this.currentAnimation;
+      const contacts = MR_FEAST_FOOTSTEPS.contacts[action] || null;
+      const clipDuration = Math.max(0.0001, this.activeAction?.getClip()?.duration || 0.0001);
+      const actionTime = Number(this.activeAction?.time) || 0;
+      const phase = ((actionTime / clipDuration) % 1 + 1) % 1;
+      const previousAction = this.mrFeastFootstepState.action;
+      const previousPhase = this.mrFeastFootstepState.phase;
+      this.mrFeastFootstepState.action = action;
+      this.mrFeastFootstepState.phase = phase;
+      if (
+        !contacts
+        || action !== previousAction
+        || previousPhase == null
+        || !this.moving
+        || !state.started
+        || Math.max(0, Number(dt) || 0) <= 0
+      ) return;
+      const wrapped = phase < previousPhase;
+      for (const contact of contacts) {
+        const crossed = wrapped
+          ? contact.phase > previousPhase || contact.phase <= phase
+          : contact.phase > previousPhase && contact.phase <= phase;
+        if (!crossed) continue;
+        audioSystem?.mrFeastFootstep({
+          position: this.root.position,
+          level: this.currentRouteLevel,
+          zone: this.currentRouteZone,
+          action,
+          foot: contact.foot,
+          phase: contact.phase,
+        });
+      }
+    }
+
     stepAnimationAndFace(dt, advanceMixer = true, snapFace = false) {
       this.clearFaceAttentionPose();
       if (advanceMixer && this.mixer) this.mixer.update(Math.max(0, Number(dt) || 0));
+      this.updateMrFeastFootsteps(dt);
       this.updateFace(dt, snapFace);
       this.applyFaceAttentionPose();
     }
@@ -5737,6 +5805,11 @@
       this.pursuitWarningFocus = null;
       this.pursuitTargetNodeId = null;
       this.pursuitTargetPlayerPosition = null;
+      this.pursuitLastKnownPosition = null;
+      this.pursuitTrackingSource = "none";
+      this.pursuitDirectSight = false;
+      this.pursuitUnseenSeconds = 0;
+      this.pursuitDirectSteeringFrames = 0;
       this.pursuitSightCheckRemaining = 0;
       this.pursuitStallSeconds = 0;
       this.pursuitApproachSuppressedRemaining = 0;
@@ -5896,7 +5969,7 @@
 
     pursuitGiveUpSeconds() {
       const override = Number(this.qaPursuitGiveUpOverride);
-      return Number.isFinite(override) && override > 0 ? override : MR_FEAST_PURSUIT.giveUpSeconds;
+      return Number.isFinite(override) && override > 0 ? override : MR_FEAST_PURSUIT.unseenGiveUpSeconds;
     }
 
     playerFeetY(p) {
@@ -5938,6 +6011,7 @@
       this.conversationFocusRemaining = 0;
       if (this.pursuit.active) {
         this.pursuit.giveUpRemaining = this.pursuitGiveUpSeconds();
+        this.pursuitSightCheckRemaining = 0;
         return { accepted: true, refreshed: true };
       }
       if (this.housekeeping.active) this.abandonHousekeepingToAlarm();
@@ -5957,12 +6031,23 @@
       this.pursuit.active = { reason: info.reason || "witnessed", kind: info.kind || null, entryId: info.entryId || null };
       this.pursuit.giveUpRemaining = this.pursuitGiveUpSeconds();
       this.pursuit.repathRemaining = 0;
+      const player = physics?.playerPosition();
+      this.pursuitLastKnownPosition = player ? {
+        x: player.x,
+        y: this.playerFeetY(player),
+        z: player.z,
+      } : null;
+      this.pursuitDirectSight = info.reason !== "recorded" && this.canSeePlayerAct();
+      this.pursuitTrackingSource = this.pursuitDirectSight ? "sight" : info.reason === "recorded" ? "camera" : "lost";
+      this.pursuitUnseenSeconds = 0;
+      this.pursuitDirectSteeringFrames = 0;
+      this.pursuitSightCheckRemaining = 0;
       // Chase pathing starts from wherever he physically stands, not from the
       // patrol bookkeeping, so a witness mid-room runs directly at the player.
       this.responseCurrentNodeId = this.nearestResponseTargetId(this.root.position) || startId;
       this.responseBlockedReason = null;
       this.transitionSecurityResponse("alarm");
-      this.repathPursuit();
+      this.repathPursuit(this.pursuitLastKnownPosition);
       this.pauseRemaining = 0;
       this.wanderingEnabled = true;
       this.qaAnimationFrozen = false;
@@ -5974,18 +6059,17 @@
       return { accepted: true };
     }
 
-    repathPursuit() {
-      if (!physics) return;
-      const p = physics.playerPosition();
-      const playerFeet = { x: p.x, y: this.playerFeetY(p), z: p.z };
-      const targetId = this.nearestResponseTargetId(playerFeet, true);
+    repathPursuit(targetPosition = this.pursuitLastKnownPosition) {
+      if (!targetPosition) return;
+      const target = { x: targetPosition.x, y: targetPosition.y, z: targetPosition.z };
+      const targetId = this.nearestResponseTargetId(target, true);
       // Approach steering leaves the graph, so re-anchor to the node nearest
       // his actual position before planning the next leg of the chase.
       const startId = this.nearestResponseTargetId(this.root.position, true) || this.responseCurrentNodeId;
       if (startId) this.responseCurrentNodeId = startId;
       this.responsePath = startId && targetId ? this.findResponsePath(startId, targetId, true) : [];
       this.pursuitTargetNodeId = targetId;
-      this.pursuitTargetPlayerPosition = playerFeet;
+      this.pursuitTargetPlayerPosition = { ...target };
       this.pursuit.repathRemaining = MR_FEAST_PURSUIT.repathSeconds;
     }
 
@@ -6004,37 +6088,68 @@
         this.resolveCatch(p, feetY);
         return;
       }
-      // The give-up clock measures a lost trail, not elapsed effort: seeing
-      // (or hostile-recording) the runner refreshes it, and frames where he
-      // is actively closing the route hold it steady. It drains only while
-      // he is stalled, blocked, or idling with no idea where you went.
+      // Only personal line of sight or a hostile live camera may refresh the
+      // last-known point. Movement after both are broken is private: he can
+      // search the stale clue, but cannot steer toward the live player.
       this.pursuitSightCheckRemaining = (this.pursuitSightCheckRemaining ?? 0) - dt;
       if (this.pursuitSightCheckRemaining <= 0) {
         this.pursuitSightCheckRemaining = MR_FEAST_PURSUIT.sightRefreshSeconds;
-        const stillSeen = this.canSeePlayerAct()
-          || (Boolean(cameraSecurity?.isRecordingPlayer()) && !state.security.permitted);
-        if (stillSeen) this.pursuit.giveUpRemaining = this.pursuitGiveUpSeconds();
+        const personallySeen = this.canSeePlayerAct();
+        const cameraTracked = !state.isHidden
+          && Boolean(cameraSecurity?.isRecordingPlayer())
+          && !state.security.permitted;
+        if (personallySeen || cameraTracked) {
+          const nextKnown = { x: p.x, y: feetY, z: p.z };
+          const targetMoved = !this.pursuitLastKnownPosition
+            || Math.hypot(
+              nextKnown.x - this.pursuitLastKnownPosition.x,
+              nextKnown.y - this.pursuitLastKnownPosition.y,
+              nextKnown.z - this.pursuitLastKnownPosition.z,
+            ) > MR_FEAST_PURSUIT.retargetMinPlayerMoveMeters;
+          this.pursuitLastKnownPosition = nextKnown;
+          this.pursuitTrackingSource = personallySeen ? "sight" : "camera";
+          this.pursuitDirectSight = personallySeen;
+          this.pursuitUnseenSeconds = 0;
+          this.pursuit.giveUpRemaining = this.pursuitGiveUpSeconds();
+          if (targetMoved) this.repathPursuit(nextKnown);
+        } else {
+          this.pursuitTrackingSource = "lost";
+          this.pursuitDirectSight = false;
+        }
+      }
+      if (this.pursuitTrackingSource === "lost") {
+        this.pursuitUnseenSeconds += dt;
+        if (state.isHidden) {
+          this.pursuit.giveUpRemaining = Math.min(
+            this.pursuit.giveUpRemaining,
+            MR_FEAST_PURSUIT.hiddenGiveUpSeconds,
+          );
+        }
+        this.pursuit.giveUpRemaining -= dt;
+        if (this.pursuit.giveUpRemaining <= 0) {
+          this.givePursuitUp();
+          return;
+        }
       }
       this.pursuit.repathRemaining -= dt;
-      // Mid-path retargeting: when the runner has moved to a different part
-      // of the house, abandon the stale leg instead of finishing a walk to
-      // where they used to be.
+      // Rebuild only toward the recorded clue. This timer never reads the
+      // live player, so an unseen room change cannot leak into graph pathing.
       if (this.pursuit.repathRemaining <= 0) {
-        const moved = this.pursuitTargetPlayerPosition
-          ? Math.hypot(p.x - this.pursuitTargetPlayerPosition.x, p.z - this.pursuitTargetPlayerPosition.z)
-          : Infinity;
-        if (moved > MR_FEAST_PURSUIT.retargetMinPlayerMoveMeters) {
-          const nextTargetId = this.nearestResponseTargetId({ x: p.x, y: feetY, z: p.z }, true);
-          if (nextTargetId && nextTargetId !== this.pursuitTargetNodeId) this.repathPursuit();
-          else this.pursuit.repathRemaining = MR_FEAST_PURSUIT.repathSeconds;
-        } else {
-          this.pursuit.repathRemaining = MR_FEAST_PURSUIT.repathSeconds;
-        }
+        this.repathPursuit(this.pursuitLastKnownPosition);
       }
       this.pursuitApproachSuppressedRemaining = Math.max(0, (this.pursuitApproachSuppressedRemaining ?? 0) - dt);
       const beforeX = this.root.position.x;
       const beforeZ = this.root.position.z;
-      this.updateSecurityPath(dt);
+      const known = this.pursuitLastKnownPosition;
+      const knownHorizontal = known ? Math.hypot(known.x - this.root.position.x, known.z - this.root.position.z) : Infinity;
+      const knownSameFloor = known ? Math.abs(known.y - this.root.position.y) < 1.2 : false;
+      if (
+        this.pursuitDirectSight
+        && knownSameFloor
+        && knownHorizontal <= MR_FEAST_PURSUIT.directSightRadiusMeters
+        && this.pursuitApproachSuppressedRemaining <= 0
+      ) this.updatePursuitApproach(dt);
+      else this.updateSecurityPath(dt);
       // Since he now collides with furniture, a chase leg can physically
       // stall (a desk between him and the runner, a pulled chair in a
       // doorway). Sustained lack of progress while trying to move falls back
@@ -6044,15 +6159,7 @@
         else this.pursuitBlockedEdges.set(edgeKey, remaining - dt);
       }
       const frameMoved = Math.hypot(this.root.position.x - beforeX, this.root.position.z - beforeZ);
-      const progressing = frameMoved >= this.pursuitSpeed() * dt * 0.6;
       if (!this.pursuit.active) return;
-      if (!progressing) {
-        this.pursuit.giveUpRemaining -= dt;
-        if (this.pursuit.giveUpRemaining <= 0) {
-          this.givePursuitUp();
-          return;
-        }
-      }
       if (this.moving && frameMoved < this.pursuitSpeed() * dt * 0.2) {
         this.pursuitStallSeconds = (this.pursuitStallSeconds ?? 0) + dt;
         if (this.pursuitStallSeconds >= 0.7) {
@@ -6100,15 +6207,15 @@
     }
 
     updatePursuitApproach(dt) {
-      const p = physics.playerPosition();
-      const feetY = this.playerFeetY(p);
-      const dx = p.x - this.root.position.x;
-      const dz = p.z - this.root.position.z;
+      const target = this.pursuitLastKnownPosition;
+      if (!target) return;
+      const dx = target.x - this.root.position.x;
+      const dz = target.z - this.root.position.z;
       const horizontal = Math.hypot(dx, dz);
-      const sameFloor = Math.abs(feetY - this.root.position.y) < 1.2;
+      const sameFloor = Math.abs(target.y - this.root.position.y) < 1.2;
       const approachSuppressed = (this.pursuitApproachSuppressedRemaining ?? 0) > 0;
-      if (!approachSuppressed && !state.isHidden && sameFloor && horizontal <= MR_FEAST_PURSUIT.approachRadiusMeters && horizontal > 0.0001) {
-        this.faceTarget({ x: p.x, z: p.z });
+      if (this.pursuitDirectSight && !approachSuppressed && sameFloor && horizontal <= MR_FEAST_PURSUIT.directSightRadiusMeters && horizontal > 0.0001) {
+        this.faceTarget(target);
         const facingAlignment = (Math.sin(this.root.rotation.y) * dx + Math.cos(this.root.rotation.y) * dz) / horizontal;
         if (facingAlignment >= MR_FEAST_NPC.movementAlignment) {
           const step = Math.min(
@@ -6119,9 +6226,10 @@
           // frame as evidence to suppress this straight line and try the
           // graph instead, so report the intent to move even when furniture
           // absorbs the whole step.
-          this.moveWithCollision(dx / horizontal * step, 0, dz / horizontal * step);
-          this.responseDistance += step;
-          this.moving = step > 0.0001;
+          const movedDistance = this.moveWithCollision(dx / horizontal * step, 0, dz / horizontal * step);
+          this.responseDistance += movedDistance;
+          this.moving = movedDistance > 0.0001;
+          if (this.moving) this.pursuitDirectSteeringFrames += 1;
           this.fadeToAction("run", MR_FEAST_NPC.fadeSeconds, false, this.runPlaybackRate());
         } else {
           this.moving = false;
@@ -6130,7 +6238,7 @@
         this.stepAnimationAndFace(dt);
         return;
       }
-      if (this.pursuit.repathRemaining <= 0) this.repathPursuit();
+      if (this.pursuit.repathRemaining <= 0) this.repathPursuit(this.pursuitLastKnownPosition);
       this.moving = false;
       this.fadeToAction("idle");
       this.stepAnimationAndFace(dt);
@@ -6139,6 +6247,8 @@
     resolveCatch(p, feetY) {
       const info = this.pursuit.active;
       this.pursuit.active = null;
+      this.pursuitDirectSight = false;
+      this.pursuitTrackingSource = "none";
       this.pursuit.catches += 1;
       this.faceTarget({ x: p.x, z: p.z }, true);
       this.moving = false;
@@ -6171,6 +6281,8 @@
     givePursuitUp() {
       if (!this.pursuit.active) return;
       this.pursuit.active = null;
+      this.pursuitDirectSight = false;
+      this.pursuitTrackingSource = "lost";
       this.pursuit.lastOutcome = "lost";
       this.pursuit.cooldownActive = true;
       speechSystem?.sayFromPool("pursuit-lost");
@@ -6184,6 +6296,11 @@
 
     recoverAfterLoad() {
       this.pursuit.active = null;
+      this.pursuitLastKnownPosition = null;
+      this.pursuitTrackingSource = "none";
+      this.pursuitDirectSight = false;
+      this.pursuitUnseenSeconds = 0;
+      this.pursuitDirectSteeringFrames = 0;
       this.conversationFocusRemaining = 0;
       this.pursuit.cooldownActive = false;
       this.pursuitWarningFocus = null;
@@ -6300,6 +6417,68 @@
         catches: this.pursuit.catches - catchesBefore,
       };
       return this.qaLastPursuitRun;
+    }
+
+    advancePursuitForQA(seconds = 1) {
+      if (!state.qa || this.loadStatus !== "ready") {
+        return { active: false, outcome: "not-ready", simulatedSeconds: 0 };
+      }
+      const fixedStep = 1 / 60;
+      const limit = clamp(Number(seconds) || 0, 0, 30);
+      const start = this.root.position.clone();
+      const target = this.pursuitLastKnownPosition
+        ? new THREE.Vector3(this.pursuitLastKnownPosition.x, this.pursuitLastKnownPosition.y, this.pursuitLastKnownPosition.z)
+        : start.clone();
+      const lineX = target.x - start.x;
+      const lineZ = target.z - start.z;
+      const lineLength = Math.hypot(lineX, lineZ);
+      const teleportsBefore = this.responseTeleports;
+      const directFramesBefore = this.pursuitDirectSteeringFrames;
+      const catchesBefore = this.pursuit.catches;
+      state.started = true;
+      this.wanderingEnabled = true;
+      this.qaAnimationFrozen = false;
+      let elapsed = 0;
+      let distanceTravelled = 0;
+      let maximumFrameSpeed = 0;
+      let maximumLateralDeviation = 0;
+      let previous = this.root.position.clone();
+      while (elapsed < limit - 0.000001 && this.pursuit.active && !state.gameOver) {
+        const stepDt = Math.min(fixedStep, limit - elapsed);
+        for (const object of animatedObjects) {
+          if (object instanceof HingedDoor || object instanceof Refrigerator) object.update(stepDt);
+        }
+        tamperSystem?.update(stepDt);
+        this.update(stepDt);
+        const frameDistance = this.root.position.distanceTo(previous);
+        distanceTravelled += frameDistance;
+        maximumFrameSpeed = Math.max(maximumFrameSpeed, frameDistance / Math.max(stepDt, 0.0001));
+        if (lineLength > 0.0001) {
+          const relativeX = this.root.position.x - start.x;
+          const relativeZ = this.root.position.z - start.z;
+          maximumLateralDeviation = Math.max(
+            maximumLateralDeviation,
+            Math.abs(relativeX * lineZ - relativeZ * lineX) / lineLength,
+          );
+        }
+        previous.copy(this.root.position);
+        elapsed += stepDt;
+      }
+      this.root.updateMatrixWorld(true);
+      return {
+        active: Boolean(this.pursuit.active),
+        outcome: this.pursuit.active ? "active" : this.pursuit.lastOutcome || (state.gameOver ? "game-over" : "inactive"),
+        simulatedSeconds: Number(elapsed.toFixed(3)),
+        distanceTravelled: Number(distanceTravelled.toFixed(3)),
+        maximumFrameSpeed: Number(maximumFrameSpeed.toFixed(3)),
+        maximumLateralDeviation: Number(maximumLateralDeviation.toFixed(3)),
+        directSteeringFrames: this.pursuitDirectSteeringFrames - directFramesBefore,
+        teleports: this.responseTeleports - teleportsBefore,
+        catches: this.pursuit.catches - catchesBefore,
+        pursuitSpeed: Number(this.pursuitSpeed().toFixed(3)),
+        lastKnownPosition: this.pursuitLastKnownPosition ? { ...this.pursuitLastKnownPosition } : null,
+        trackingSource: this.pursuitTrackingSource,
+      };
     }
 
     beginSecurityReturn() {
@@ -6830,6 +7009,11 @@
       this.pursuitWarningFocus = null;
       this.pursuitTargetNodeId = null;
       this.pursuitTargetPlayerPosition = null;
+      this.pursuitLastKnownPosition = null;
+      this.pursuitTrackingSource = "none";
+      this.pursuitDirectSight = false;
+      this.pursuitUnseenSeconds = 0;
+      this.pursuitDirectSteeringFrames = 0;
       this.pursuitSightCheckRemaining = 0;
       this.pursuitStallSeconds = 0;
       this.pursuitApproachSuppressedRemaining = 0;
@@ -7306,6 +7490,17 @@
           playerWalkSpeed: PLAYER.walkSpeed,
           effectiveSightRangeMeters: Number(this.effectiveSightRangeMeters().toFixed(2)),
           targetNodeId: this.pursuitTargetNodeId,
+          lastKnownPosition: this.pursuitLastKnownPosition ? {
+            x: Number(this.pursuitLastKnownPosition.x.toFixed(3)),
+            y: Number(this.pursuitLastKnownPosition.y.toFixed(3)),
+            z: Number(this.pursuitLastKnownPosition.z.toFixed(3)),
+          } : null,
+          trackingSource: this.pursuitTrackingSource,
+          directSight: this.pursuitDirectSight,
+          unseenSeconds: Number(this.pursuitUnseenSeconds.toFixed(2)),
+          directSteeringFrames: this.pursuitDirectSteeringFrames,
+          unseenGiveUpSeconds: MR_FEAST_PURSUIT.unseenGiveUpSeconds,
+          hiddenGiveUpSeconds: MR_FEAST_PURSUIT.hiddenGiveUpSeconds,
           trespassDwell: Number((this.trespassDwell || 0).toFixed(2)),
           pathShortcuts: {
             built: Boolean(this.pursuitShortcuts),
@@ -25238,6 +25433,15 @@
         lastSurface: null,
         left: false,
       };
+      this.mrFeastFootsteps = {
+        count: 0,
+        lastSurface: null,
+        lastAnimation: null,
+        lastFoot: null,
+        lastPhase: null,
+        lastDistance: null,
+        events: [],
+      };
       if (!this.ctx) return;
       this.master = this.ctx.createGain();
       // Stay silent until the trusted Enter click resumes Web Audio and
@@ -25966,6 +26170,74 @@
       return "wood";
     }
 
+    mrFeastFootstepSurface(position, level, zone) {
+      if (!position) return "wood";
+      if (
+        level === MR_FEAST_LEVEL.BASEMENT
+        || position.y < -1.65
+        || (zone === "SERVICE STAIR" && position.y < -0.4)
+      ) return "stone";
+      if (level === MR_FEAST_LEVEL.GROUNDS || outdoorRoomNames.has(zone)) {
+        return zone === "FRONT DRIVE" || zone === "POOL TERRACE" ? "stone" : "grass";
+      }
+      return "wood";
+    }
+
+    mrFeastFootstep({ position, level, zone, action, foot, phase }) {
+      if (!this.ctx || !state.audioEnabled || !position) return false;
+      const listener = new THREE.Vector3();
+      const forward = new THREE.Vector3();
+      const right = new THREE.Vector3();
+      camera.getWorldPosition(listener);
+      camera.getWorldDirection(forward);
+      const offset = new THREE.Vector3(position.x, position.y + 0.08, position.z).sub(listener);
+      const distance = offset.length();
+      if (distance > MR_FEAST_FOOTSTEPS.maximumDistanceMeters) return false;
+      right.set(-forward.z, 0, forward.x).normalize();
+      const horizontal = Math.hypot(offset.x, offset.z);
+      const pan = horizontal > 0.0001
+        ? clamp((offset.x * right.x + offset.z * right.z) / horizontal, -MR_FEAST_FOOTSTEPS.panLimit, MR_FEAST_FOOTSTEPS.panLimit)
+        : 0;
+      const proximity = 1 - clamp(distance / MR_FEAST_FOOTSTEPS.maximumDistanceMeters, 0, 1);
+      const distanceGain = 0.12 + 0.88 * Math.pow(proximity, 1.35);
+      const run = action === "run";
+      const surface = this.mrFeastFootstepSurface(position, level, zone);
+      const key = surface === "stone" ? "footstepStone" : surface === "grass" ? "footstepGrass" : "footstepWood";
+      const nearLowpass = run ? MR_FEAST_FOOTSTEPS.runLowpassHz : MR_FEAST_FOOTSTEPS.stalkLowpassHz;
+      const lowpass = THREE.MathUtils.lerp(MR_FEAST_FOOTSTEPS.distantLowpassHz, nearLowpass, proximity);
+      const volume = (run ? MR_FEAST_FOOTSTEPS.runVolume : MR_FEAST_FOOTSTEPS.stalkVolume) * distanceGain;
+      const played = this.playSample(key, {
+        volume,
+        rate: run ? MR_FEAST_FOOTSTEPS.runRate : MR_FEAST_FOOTSTEPS.stalkRate,
+        rateVariance: 0.035,
+        pan,
+        lowpass,
+      });
+      if (!played) return false;
+      this.mrFeastFootsteps.count += 1;
+      this.mrFeastFootsteps.lastSurface = surface;
+      this.mrFeastFootsteps.lastAnimation = action;
+      this.mrFeastFootsteps.lastFoot = foot;
+      this.mrFeastFootsteps.lastPhase = phase;
+      this.mrFeastFootsteps.lastDistance = distance;
+      this.mrFeastFootsteps.events.push({
+        sequence: this.mrFeastFootsteps.count,
+        action,
+        foot,
+        phase: Number(phase.toFixed(3)),
+        surface,
+        distance: Number(distance.toFixed(3)),
+        pan: Number(pan.toFixed(3)),
+        volume: Number(volume.toFixed(4)),
+        lowpassHz: Math.round(lowpass),
+      });
+      if (this.mrFeastFootsteps.events.length > MR_FEAST_FOOTSTEPS.eventHistory) {
+        this.mrFeastFootsteps.events.splice(0, this.mrFeastFootsteps.events.length - MR_FEAST_FOOTSTEPS.eventHistory);
+      }
+      this.markCue(`mrFeastFootstep${surface[0].toUpperCase()}${surface.slice(1)}`);
+      return true;
+    }
+
     resetFootsteps() {
       const position = physics?.playerPosition();
       this.footsteps.lastPosition = position ? { x: position.x, z: position.z } : null;
@@ -26080,6 +26352,17 @@
           count: this.footsteps.count,
           lastSurface: this.footsteps.lastSurface,
           strideProgress: Number(this.footsteps.distance.toFixed(3)),
+        },
+        mrFeastFootsteps: {
+          count: this.mrFeastFootsteps.count,
+          lastSurface: this.mrFeastFootsteps.lastSurface,
+          lastAnimation: this.mrFeastFootsteps.lastAnimation,
+          lastFoot: this.mrFeastFootsteps.lastFoot,
+          lastPhase: this.mrFeastFootsteps.lastPhase,
+          lastDistance: Number.isFinite(this.mrFeastFootsteps.lastDistance)
+            ? Number(this.mrFeastFootsteps.lastDistance.toFixed(3))
+            : null,
+          events: this.mrFeastFootsteps.events.map((event) => ({ ...event })),
         },
       };
     }
@@ -28391,6 +28674,7 @@
           rain: null,
           thunder: null,
           footsteps: { count: 0, lastSurface: null, strideProgress: 0 },
+          mrFeastFootsteps: { count: 0, lastSurface: null, lastAnimation: null, lastFoot: null, lastPhase: null, lastDistance: null, events: [] },
         }),
         rain: audioSystem ? audioSystem.rainDiagnostics() : null,
         activeWaterLoops: audioSystem && audioSystem.waterLoops
@@ -28997,11 +29281,12 @@
     window.MrFeastFresh.converseWithMrFeastForQA = () => state.qa && mrFeastNpc ? mrFeastNpc.converse() : null;
     window.MrFeastFresh.runMrFeastHousekeepingForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runHousekeepingForQA(maxSeconds) : null;
     window.MrFeastFresh.runMrFeastPursuitForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runPursuitForQA(maxSeconds) : null;
+    window.MrFeastFresh.advanceMrFeastPursuitForQA = (seconds) => mrFeastNpc ? mrFeastNpc.advancePursuitForQA(seconds) : null;
     window.MrFeastFresh.setPursuitGiveUpForQA = (seconds) => {
       if (!state.qa || !mrFeastNpc) return null;
       mrFeastNpc.qaPursuitGiveUpOverride = Number(seconds) > 0 ? Number(seconds) : null;
       if (mrFeastNpc.pursuit.active) {
-        mrFeastNpc.pursuit.giveUpRemaining = Math.min(mrFeastNpc.pursuit.giveUpRemaining, mrFeastNpc.pursuitGiveUpSeconds());
+        mrFeastNpc.pursuit.giveUpRemaining = mrFeastNpc.pursuitGiveUpSeconds();
       }
       return { giveUpSeconds: mrFeastNpc.pursuitGiveUpSeconds() };
     };

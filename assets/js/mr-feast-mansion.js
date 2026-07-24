@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260723-feast-hunt-1";
+  const MANSION_RUNTIME_VERSION = "20260724-feast-hunt-blackout-rival-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2414,14 +2414,102 @@
     completionCardSeconds: 6,
     directSightDwellSeconds: 0.4,
     callLine: "Contestants, report to the foyer set. Feast Hunt begins in five minutes.",
-    briefingLine: "Find three golden objects hidden throughout the house. Stay out of my cameras, stay out of my sight, and do not get caught.",
+    briefingLine: "The house lights are dead. Each of you has three golden objects hidden inside. Find your set and bring all three back to this foyer before the other contestant. Stay out of my cameras, stay out of my sight, and do not get caught.",
     countdownLines: Object.freeze({ 3: "Three.", 2: "Two.", 1: "One." }),
     startLine: "Hunt.",
-    completionLine: "Three objects. One contestant still standing. Feast Hunt is complete.",
+    completionLine: "Three objects returned. You beat Juniper back to the foyer. Feast Hunt is complete.",
     hostMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 7.25, yaw: Math.PI, scale: 1 }),
     playerMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 9.75, yaw: 0, pitch: -0.08 }),
     contestantMarks: Object.freeze({
       "juniper-cross": Object.freeze({ x: 1.55, y: FLOOR.MAIN, z: 8.45, yaw: Math.PI }),
+    }),
+    returnMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 7.25, yaw: Math.PI }),
+    rival: Object.freeze({
+      id: "juniper-cross",
+      label: "Juniper",
+      speed: 1.55,
+      arrivalRadius: 0.1,
+      searchPauseSeconds: 3.2,
+      route: Object.freeze([
+        "main-stair-center",
+        "main-stair-east",
+        "main-stair-south",
+        "main-ballroom-west",
+        "main-dining-east",
+        Object.freeze({ x: -9.7, y: FLOOR.MAIN, z: -8.4, room: "DINING ROOM", itemId: "golden-bell" }),
+        "main-dining-east",
+        "main-ballroom-west",
+        "main-stair-south",
+        "main-stair-east",
+        "main-stair-center",
+        "grand-lower-bottom",
+        "grand-lower-25",
+        "grand-lower-50",
+        "grand-lower-75",
+        "grand-lower-top",
+        "grand-mid-depth",
+        "grand-mid-east",
+        "grand-east-foot",
+        "grand-east-25",
+        "grand-east-50",
+        "grand-east-75",
+        "grand-east-top",
+        "upper-east-top-landing",
+        "upper-east-balcony",
+        "upper-landing-east",
+        "upper-reading-door",
+        "upper-reading-entry",
+        Object.freeze({ x: 12.5, y: FLOOR.UPPER, z: 2.2, room: "READING ROOM", itemId: "golden-goblet" }),
+        "upper-reading-entry",
+        "upper-reading-door-out",
+        "upper-landing-east",
+        "upper-east-balcony",
+        "upper-east-top-landing",
+        "grand-east-top",
+        "grand-east-75",
+        "grand-east-50",
+        "grand-east-25",
+        "grand-east-foot",
+        "grand-mid-east",
+        "grand-mid-center-return",
+        "grand-lower-top-return",
+        "grand-lower-return-75",
+        "grand-lower-return-50",
+        "grand-lower-return-25",
+        "grand-lower-bottom-return",
+        "main-service-return-east",
+        "main-service-return-south",
+        "main-service-kitchen-entry",
+        "main-service-kitchen-west",
+        "main-service-kitchen-east",
+        "main-service-door-approach",
+        "main-service-door",
+        "service-main-top",
+        "service-down-25",
+        "service-down-50",
+        "service-down-75",
+        "service-basement-bottom",
+        "basement-archive-stair-exit",
+        "basement-archive-east-cross",
+        Object.freeze({ x: 6.88, y: FLOOR.BASEMENT, z: 9.4, room: "ARCHIVE", itemId: "golden-carving-knife" }),
+        "basement-archive-east-return",
+        "basement-service-approach",
+        "service-basement-bottom-return",
+        "service-up-25",
+        "service-up-50",
+        "service-up-75",
+        "service-main-top-return",
+        "main-service-door-return",
+        "main-service-exit",
+        "main-kitchen-service-return",
+        "main-kitchen-east-return",
+        "main-kitchen-west-return",
+        "main-ballroom-east-return",
+        "main-ballroom-north-return",
+        "main-stair-east",
+        "main-stair-north",
+        Object.freeze({ x: 0, y: FLOOR.MAIN, z: 7.25, room: "FRONT FOYER", returned: true }),
+      ]),
     }),
     items: Object.freeze([
       Object.freeze({
@@ -2852,9 +2940,18 @@
       countdownLastSecond: null,
       countdownSequence: [],
       collectedIds: [],
+      readyToReturn: false,
       statueStage: 0,
       statuesMovedWhileUnobserved: false,
       directSightDwell: 0,
+      blackoutActive: false,
+      rivalActive: false,
+      rivalRouteIndex: 0,
+      rivalPauseRemaining: 0,
+      rivalCollectedIds: [],
+      rivalDistanceTravelled: 0,
+      rivalReturned: false,
+      rivalRoom: "FRONT FOYER",
       staged: false,
       outcome: null,
       finalePending: false,
@@ -3109,6 +3206,8 @@
     reportHitbox: null,
     filmSet: null,
     items: [],
+    returnRoot: null,
+    returnHitbox: null,
   };
   const estateStatueScene = {
     settled: false,
@@ -10340,6 +10439,7 @@
         for (const entry of this.entries) {
           if (entry.status !== "ready" || !entry.root.visible) continue;
           if (this.challengeMode === "storm-run") this.updateStormRunEntry(entry, dt);
+          else if (this.challengeMode === "feast-hunt") this.updateFeastHuntEntry(entry, dt);
           else if (["feast-says-aftermath", "storm-run-aftermath"].includes(this.challengeMode)) this.updateCompetitionAftermathEntry(entry, dt);
           else this.updateChallengeEntry(entry, dt);
         }
@@ -10406,6 +10506,7 @@
             STORM_RUN.playerMaximumSprintSpeed,
           ),
         } : null;
+        entry.feastHuntRace = null;
         entry.raceDistanceTravelled = 0;
         entry.raceMaximumObservedSpeed = 0;
         entry.raceTeleports = 0;
@@ -10661,6 +10762,120 @@
       }
       this.syncStormRunCastVisibility();
       return true;
+    }
+
+    feastHuntRoutePoint(index) {
+      const token = FEAST_HUNT.rival.route[index];
+      if (!token) return null;
+      if (typeof token === "string") {
+        return MR_FEAST_PATROL_ROUTE.find((point) => point.id === token) || null;
+      }
+      return token;
+    }
+
+    startFeastHuntRace() {
+      if (!this.challengeActive || this.challengeMode !== "feast-hunt") return false;
+      const entry = this.entryById(FEAST_HUNT.rival.id);
+      if (!entry?.challengeMark || this.eliminatedIds.has(entry.id)) return false;
+      const show = state.feastHunt;
+      show.rivalActive = true;
+      show.rivalRouteIndex = 0;
+      show.rivalPauseRemaining = 0;
+      show.rivalCollectedIds = [];
+      show.rivalDistanceTravelled = 0;
+      show.rivalReturned = false;
+      show.rivalRoom = "FRONT FOYER";
+      entry.feastHuntRace = { active: true };
+      entry.activity = CONTESTANT_ACTIVITY.RUNNING;
+      this.setColliderEnabled(entry, false);
+      if (entry.interactionRegistered) {
+        removeInteractionTarget(entry.interactionTarget);
+        entry.interactionRegistered = false;
+      }
+      const action = this.fadeToAction(entry, "run", 0.08);
+      action?.setEffectiveTimeScale(1);
+      return true;
+    }
+
+    updateFeastHuntEntry(entry, dt) {
+      const stepDt = Math.max(0, Number(dt) || 0);
+      entry.lastDt = stepDt;
+      const show = state.feastHunt;
+      if (
+        entry.id !== FEAST_HUNT.rival.id
+        || !entry.feastHuntRace?.active
+        || !show.rivalActive
+      ) {
+        entry.activity = CONTESTANT_ACTIVITY.IDLE;
+        this.fadeToAction(entry, "idle");
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+      if (show.rivalPauseRemaining > 0) {
+        show.rivalPauseRemaining = Math.max(0, show.rivalPauseRemaining - stepDt);
+        entry.activity = CONTESTANT_ACTIVITY.IDLE;
+        this.fadeToAction(entry, "idle");
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+
+      let target = this.feastHuntRoutePoint(show.rivalRouteIndex);
+      while (target) {
+        const distance = Math.hypot(
+          target.x - entry.root.position.x,
+          target.y - entry.root.position.y,
+          target.z - entry.root.position.z,
+        );
+        if (distance > FEAST_HUNT.rival.arrivalRadius) break;
+        show.rivalRouteIndex += 1;
+        if (target.room) show.rivalRoom = target.room;
+        if (target.itemId && !show.rivalCollectedIds.includes(target.itemId)) {
+          show.rivalCollectedIds.push(target.itemId);
+          show.rivalPauseRemaining = FEAST_HUNT.rival.searchPauseSeconds;
+          feastHuntSystem?.noteRivalItem(target.itemId);
+          entry.activity = CONTESTANT_ACTIVITY.IDLE;
+          this.fadeToAction(entry, "idle");
+          this.stepAnimation(entry, stepDt);
+          return;
+        }
+        if (target.returned) {
+          show.rivalReturned = true;
+          show.rivalActive = false;
+          entry.feastHuntRace.active = false;
+          entry.activity = CONTESTANT_ACTIVITY.IDLE;
+          this.fadeToAction(entry, "idle");
+          this.stepAnimation(entry, stepDt);
+          feastHuntSystem?.handleRivalWin();
+          return;
+        }
+        target = this.feastHuntRoutePoint(show.rivalRouteIndex);
+      }
+      if (!target) {
+        show.rivalActive = false;
+        entry.feastHuntRace.active = false;
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+      if (target.door) {
+        const door = this.aftermathDoor(target.door);
+        if (door && !door.locked && !door.open) door.setOpen(true);
+      }
+      const dx = target.x - entry.root.position.x;
+      const dy = target.y - entry.root.position.y;
+      const dz = target.z - entry.root.position.z;
+      const distance = Math.max(0.000001, Math.hypot(dx, dy, dz));
+      this.facePoint(entry, target, stepDt);
+      const distanceStep = Math.min(distance, FEAST_HUNT.rival.speed * stepDt);
+      entry.root.position.x += dx / distance * distanceStep;
+      entry.root.position.y += dy / distance * distanceStep;
+      entry.root.position.z += dz / distance * distanceStep;
+      show.rivalDistanceTravelled += distanceStep;
+      entry.distanceTravelled += distanceStep;
+      entry.activity = CONTESTANT_ACTIVITY.RUNNING;
+      const action = this.fadeToAction(entry, "run");
+      action?.setEffectiveTimeScale(1);
+      entry.root.updateMatrixWorld(true);
+      this.stepAnimation(entry, stepDt);
     }
 
     updateStormRunEntry(entry, dt) {
@@ -11228,6 +11443,7 @@
         entry.challengeResponseProgress = 0;
         entry.aftermathReturn = null;
         entry.race = null;
+        entry.feastHuntRace = null;
         entry.raceFinished = false;
         this.resetChallengeMotion(entry);
         entry.activity = CONTESTANT_ACTIVITY.IDLE;
@@ -16875,6 +17091,8 @@
     constructor() {
       this.show = state.feastHunt;
       this.stationInteractionRegistered = false;
+      this.returnInteractionRegistered = false;
+      this.blackoutCircuitSnapshot = new Map();
       this.qaManualClock = false;
       this.qaStepping = false;
       this.transitionTable = Object.freeze({
@@ -16892,6 +17110,12 @@
           ? "Start Feast Hunt with Mr. Feast"
           : "Wait with Mr. Feast for Juniper",
         activate: () => this.reportToFoyer(),
+      };
+      this.returnInteraction = {
+        type: "feast-hunt-return",
+        id: "feast-hunt-return",
+        getLabel: () => "Place all three objects on the foyer tray",
+        activate: () => this.returnItemsToFoyer("interaction"),
       };
       this.syncPresentation();
     }
@@ -17013,7 +17237,9 @@
       this.show.briefingRemaining = 0;
       this.show.countdownLastSecond = null;
       this.show.countdownSequence = [];
+      this.show.readyToReturn = this.show.collectedIds.length >= FEAST_HUNT.items.length;
       this.show.directSightDwell = 0;
+      this.resetRivalState();
       this.show.staged = false;
       this.show.outcome = null;
       this.show.finalePending = false;
@@ -17173,6 +17399,92 @@
       updateMovementHud();
     }
 
+    releaseHostForHunt() {
+      this.show.staged = false;
+      if (mrFeastNpc?.challengeMode === "feast-hunt") mrFeastNpc.releaseChallenge();
+      clearMovementInput();
+      state.movement.crouched = false;
+      state.movement.sprinting = false;
+      updateMovementHud();
+    }
+
+    resetRivalState() {
+      this.show.rivalActive = false;
+      this.show.rivalRouteIndex = 0;
+      this.show.rivalPauseRemaining = 0;
+      this.show.rivalCollectedIds = [];
+      this.show.rivalDistanceTravelled = 0;
+      this.show.rivalReturned = false;
+      this.show.rivalRoom = "FRONT FOYER";
+    }
+
+    interiorCircuits() {
+      return circuits.filter((circuit) => circuit.name !== "estate exterior lights");
+    }
+
+    blackoutActive() {
+      return Boolean(this.show.blackoutActive);
+    }
+
+    activateBlackout() {
+      if (this.show.blackoutActive) return this.blackoutDiagnostics();
+      this.blackoutCircuitSnapshot.clear();
+      this.show.blackoutActive = true;
+      for (const circuit of this.interiorCircuits()) {
+        this.blackoutCircuitSnapshot.set(circuit.name, circuit.on);
+        circuit.setState(false, true);
+      }
+      syncLightRendering();
+      return this.blackoutDiagnostics();
+    }
+
+    maintainBlackout() {
+      if (!this.show.blackoutActive) return;
+      let changed = false;
+      for (const circuit of this.interiorCircuits()) {
+        if (!circuit.on) continue;
+        circuit.setState(false, true);
+        changed = true;
+      }
+      if (changed) syncLightRendering();
+    }
+
+    rejectLightRestore() {
+      if (!this.show.blackoutActive) return false;
+      contestant13Quest?.showDiscovery(
+        "No power",
+        "The switch clicks, but the mansion lights stay dead.",
+        2400,
+      );
+      audioSystem?.ping(82, 0.12, 0.025, "square");
+      return true;
+    }
+
+    restoreBlackout() {
+      const wasActive = this.show.blackoutActive;
+      this.show.blackoutActive = false;
+      if (this.blackoutCircuitSnapshot.size) {
+        for (const circuit of this.interiorCircuits()) {
+          if (!this.blackoutCircuitSnapshot.has(circuit.name)) continue;
+          circuit.setState(this.blackoutCircuitSnapshot.get(circuit.name), true);
+        }
+        this.blackoutCircuitSnapshot.clear();
+        syncLightRendering();
+      }
+      return wasActive;
+    }
+
+    blackoutDiagnostics() {
+      const interior = this.interiorCircuits();
+      const offCircuitCount = interior.filter((circuit) => !circuit.on).length;
+      return {
+        active: this.show.blackoutActive,
+        interiorCircuitCount: interior.length,
+        offCircuitCount,
+        allInteriorOff: interior.length > 0 && offCircuitCount === interior.length,
+      };
+    }
+
     beginHunt() {
       if (this.show.phase !== FEAST_HUNT_PHASE.BRIEFING) return false;
       this.show.briefingRemaining = 0;
@@ -17180,7 +17492,9 @@
       this.show.countdownSequence.push(0);
       this.show.directSightDwell = 0;
       this.transition(FEAST_HUNT_PHASE.HUNTING, "countdown-complete");
-      this.releaseProduction();
+      this.releaseHostForHunt();
+      this.activateBlackout();
+      mansionContestants?.startFeastHuntRace();
       cameraSecurity?.suspendForCompetition();
       cameraSecurity?.handlePatronFeedSabotage();
       mrFeastNpc?.recoverAfterLoad();
@@ -17190,6 +17504,11 @@
         FEAST_HUNT.startLine,
         speechSystem.hostSpeaker(),
         { durationSeconds: 1.15 },
+      );
+      contestant13Quest?.showDiscovery(
+        "FEAST HUNT — BLACKOUT",
+        "The house lights are dead. Find all three objects and return them to the foyer before Juniper.",
+        6200,
       );
       this.syncPresentation();
       return true;
@@ -17266,22 +17585,43 @@
         collectedCount: this.show.collectedIds.length,
       };
       if (this.show.collectedIds.length >= FEAST_HUNT.items.length) {
-        return { ...result, ...this.finishCompetition() };
+        this.show.readyToReturn = true;
+        contestant13Quest?.showDiscovery(
+          "ALL THREE RECOVERED",
+          "Bring the objects back to the foyer tray before Juniper returns.",
+          5600,
+        );
+        this.syncPresentation();
+        return { ...result, readyToReturn: true, completed: false };
       }
       this.syncPresentation();
       return result;
     }
 
-    finishCompetition() {
+    returnItemsToFoyer(source = "player") {
+      if (this.show.phase !== FEAST_HUNT_PHASE.HUNTING) {
+        return { completed: this.show.phase === FEAST_HUNT_PHASE.COMPLETED, reason: "not-hunting" };
+      }
+      if (!this.show.readyToReturn || this.show.collectedIds.length < FEAST_HUNT.items.length) {
+        return { completed: false, reason: "items-missing" };
+      }
+      return this.finishCompetition(source);
+    }
+
+    finishCompetition(source = "player") {
       if (this.show.phase !== FEAST_HUNT_PHASE.HUNTING) {
         return { completed: this.show.phase === FEAST_HUNT_PHASE.COMPLETED };
       }
       this.show.collectedIds = FEAST_HUNT.items.map((item) => item.id);
+      this.show.readyToReturn = false;
       this.show.outcome = "player";
       this.show.finalePending = true;
       this.show.completionCardRemaining = FEAST_HUNT.completionCardSeconds;
       this.show.directSightDwell = 0;
-      this.transition(FEAST_HUNT_PHASE.COMPLETED, "three-items-collected");
+      this.show.rivalActive = false;
+      this.transition(FEAST_HUNT_PHASE.COMPLETED, "three-items-returned-to-foyer");
+      this.releaseProduction();
+      this.restoreBlackout();
       mrFeastNpc?.suspendThreatsForCompetition();
       cameraSecurity?.suspendForCompetition();
       speechSystem?.say(
@@ -17292,11 +17632,44 @@
       );
       contestant13Quest?.showDiscovery(
         "FEAST HUNT — COMPLETE",
-        "All three gold objects are yours. The finale remains ahead.",
+        "All three gold objects reached the foyer before Juniper. The finale remains ahead.",
         8200,
       );
       this.syncPresentation();
-      return { completed: true, survived: true, finalePending: true };
+      return { completed: true, survived: true, finalePending: true, source };
+    }
+
+    noteRivalItem(itemId) {
+      if (!this.isHunting()) return false;
+      const item = FEAST_HUNT.items.find((entry) => entry.id === itemId);
+      contestant13Quest?.showDiscovery(
+        `${FEAST_HUNT.rival.label.toUpperCase()} FOUND ${this.show.rivalCollectedIds.length} / ${FEAST_HUNT.items.length}`,
+        item
+          ? `${FEAST_HUNT.rival.label} recovered the ${item.label}. She is still moving.`
+          : `${FEAST_HUNT.rival.label} recovered another object.`,
+        3200,
+      );
+      this.syncHud();
+      return true;
+    }
+
+    handleRivalWin() {
+      if (!this.isHunting()) return { eliminated: false, reason: "not-hunting" };
+      this.show.outcome = "juniper";
+      this.show.finalePending = false;
+      this.show.directSightDwell = 0;
+      this.show.rivalActive = false;
+      this.show.rivalReturned = true;
+      this.transition(FEAST_HUNT_PHASE.FAILED, "juniper-returned-first");
+      this.releaseProduction();
+      this.restoreBlackout();
+      cameraSecurity?.suspendForCompetition();
+      triggerMansionGameOver({
+        reason: "feast-hunt-juniper-won",
+        kind: "feast-hunt",
+      });
+      this.syncPresentation();
+      return { eliminated: true, reason: "feast-hunt-juniper-won" };
     }
 
     handleCatch(details = {}) {
@@ -17307,6 +17680,8 @@
       this.show.finalePending = false;
       this.show.directSightDwell = 0;
       this.transition(FEAST_HUNT_PHASE.FAILED, "caught-by-mr-feast");
+      this.releaseProduction();
+      this.restoreBlackout();
       cameraSecurity?.suspendForCompetition();
       triggerMansionGameOver({
         reason: "feast-hunt-eliminated",
@@ -17394,6 +17769,7 @@
         }
         if (this.show.briefingRemaining <= 0) this.beginHunt();
       } else if (this.show.phase === FEAST_HUNT_PHASE.HUNTING) {
+        this.maintainBlackout();
         this.syncPendingStatueStage();
         this.updateThreats(step);
       }
@@ -17412,6 +17788,18 @@
       }
     }
 
+    setReturnInteractive(interactive) {
+      const hitbox = feastHuntScene.returnHitbox;
+      if (!hitbox) return;
+      if (interactive && !this.returnInteractionRegistered) {
+        addInteractionTarget(hitbox, this.returnInteraction);
+        this.returnInteractionRegistered = true;
+      } else if (!interactive && this.returnInteractionRegistered) {
+        removeInteractionTarget(hitbox);
+        this.returnInteractionRegistered = false;
+      }
+    }
+
     syncScene() {
       if (feastHuntScene.root) {
         feastHuntScene.root.visible = [
@@ -17426,6 +17814,10 @@
         ].includes(this.show.phase);
       }
       this.setStationInteractive(this.show.phase === FEAST_HUNT_PHASE.CALLED);
+      const returnReady = this.show.phase === FEAST_HUNT_PHASE.HUNTING
+        && this.show.readyToReturn;
+      if (feastHuntScene.returnRoot) feastHuntScene.returnRoot.visible = returnReady;
+      this.setReturnInteractive(returnReady);
       for (const entry of feastHuntScene.items) {
         const visible = this.show.phase === FEAST_HUNT_PHASE.HUNTING
           && !this.collected(entry.config.id);
@@ -17469,15 +17861,24 @@
       } else if (phase === FEAST_HUNT_PHASE.HUNTING) {
         setText(dom.feastHuntEyebrow, "Game 3 · Feast Hunt");
         setText(dom.feastHuntTimer, "LIVE");
-        setText(dom.feastHuntStatus, "Find the gold · avoid cameras");
+        const rivalProgress = `${FEAST_HUNT.rival.label} ${this.show.rivalCollectedIds.length}/${FEAST_HUNT.items.length}`;
+        setText(
+          dom.feastHuntStatus,
+          this.show.readyToReturn
+            ? `Return to the foyer · ${rivalProgress}`
+            : `Find the gold · ${rivalProgress}`,
+        );
       } else if (phase === FEAST_HUNT_PHASE.COMPLETED) {
         setText(dom.feastHuntEyebrow, "Game 3 · Complete");
         setText(dom.feastHuntTimer, "SAFE");
-        setText(dom.feastHuntStatus, "All three objects found");
+        setText(dom.feastHuntStatus, "All three objects returned");
       } else if (phase === FEAST_HUNT_PHASE.FAILED) {
         setText(dom.feastHuntEyebrow, "Game 3 · Eliminated");
         setText(dom.feastHuntTimer, "OUT");
-        setText(dom.feastHuntStatus, "Mr. Feast caught you");
+        setText(
+          dom.feastHuntStatus,
+          this.show.outcome === "juniper" ? "Juniper returned first" : "Mr. Feast caught you",
+        );
       }
     }
 
@@ -17503,6 +17904,7 @@
             ? this.show.reportRemaining
             : 0,
         collectedIds: [...this.show.collectedIds],
+        readyToReturn: this.show.readyToReturn,
         statueStage: this.show.statueStage,
         statuesMovedWhileUnobserved: this.show.statuesMovedWhileUnobserved,
         outcome: this.show.outcome,
@@ -17511,6 +17913,7 @@
     }
 
     cancelStaging() {
+      this.restoreBlackout();
       if (
         this.show.staged
         || mrFeastNpc?.challengeMode === "feast-hunt"
@@ -17520,6 +17923,7 @@
       }
       this.show.staged = false;
       this.show.directSightDwell = 0;
+      this.resetRivalState();
     }
 
     restoreSnapshot(snapshot = null) {
@@ -17561,6 +17965,8 @@
       this.show.collectedIds = restoredPhase === FEAST_HUNT_PHASE.COMPLETED
         ? [...validItemIds]
         : collectedIds;
+      this.show.readyToReturn = restoredPhase === FEAST_HUNT_PHASE.CALLED
+        && collectedIds.length >= validItemIds.length;
       this.show.statueStage = 0;
       this.show.statuesMovedWhileUnobserved = Boolean(source.statuesMovedWhileUnobserved);
       this.show.directSightDwell = 0;
@@ -17572,6 +17978,8 @@
         ? true
         : Boolean(source.finalePending);
       this.show.completionCardRemaining = 0;
+      this.show.blackoutActive = false;
+      this.resetRivalState();
       this.show.invalidTransitions = 0;
       this.show.lastInvalidTransition = null;
       this.applyStatueStage(
@@ -17603,6 +18011,9 @@
       let elapsed = 0;
       while (elapsed < duration && !state.menuOpen && !state.gameOver) {
         const step = Math.min(fixedStep, duration - elapsed);
+        if (this.show.phase === FEAST_HUNT_PHASE.HUNTING) {
+          mansionContestants?.update(step);
+        }
         this.update(step);
         elapsed += step;
       }
@@ -17628,6 +18039,26 @@
       return {
         itemId: entry.config.id,
         label: entry.config.label,
+        room: state.currentRoom,
+        prompt: state.currentInteraction?.getLabel() || null,
+      };
+    }
+
+    placePlayerAtReturnForQA() {
+      if (!state.qa || !physics) return null;
+      const mark = FEAST_HUNT.returnMark;
+      const qa = { x: mark.x, y: mark.y, z: mark.z + 1.55 };
+      const yaw = Math.atan2(-(mark.x - qa.x), -(mark.z - qa.z));
+      teleport(qa.x, qa.y, qa.z, yaw, -0.3);
+      syncCamera();
+      const horizontal = Math.max(0.001, Math.hypot(mark.x - camera.position.x, mark.z - camera.position.z));
+      state.pitch = Math.atan2(mark.y + 0.8 - camera.position.y, horizontal);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      updateInteractionPrompt();
+      return {
+        readyToReturn: this.show.readyToReturn,
         room: state.currentRoom,
         prompt: state.currentInteraction?.getLabel() || null,
       };
@@ -17777,6 +18208,35 @@
         },
         collectedCount: this.show.collectedIds.length,
         collectedIds: [...this.show.collectedIds],
+        readyToReturn: this.show.readyToReturn,
+        returnStation: {
+          visible: Boolean(feastHuntScene.returnRoot?.visible),
+          registered: this.returnInteractionRegistered,
+          position: { ...FEAST_HUNT.returnMark },
+        },
+        blackout: this.blackoutDiagnostics(),
+        rival: (() => {
+          const entry = mansionContestants?.entryById(FEAST_HUNT.rival.id);
+          return {
+            id: FEAST_HUNT.rival.id,
+            label: FEAST_HUNT.rival.label,
+            active: this.show.rivalActive,
+            returned: this.show.rivalReturned,
+            collectedCount: this.show.rivalCollectedIds.length,
+            collectedIds: [...this.show.rivalCollectedIds],
+            routeIndex: this.show.rivalRouteIndex,
+            routeLength: FEAST_HUNT.rival.route.length,
+            room: this.show.rivalRoom,
+            pauseRemaining: Number(this.show.rivalPauseRemaining.toFixed(3)),
+            distanceTravelled: Number(this.show.rivalDistanceTravelled.toFixed(3)),
+            challengeMode: mansionContestants?.challengeMode || null,
+            position: entry ? {
+              x: Number(entry.root.position.x.toFixed(3)),
+              y: Number(entry.root.position.y.toFixed(3)),
+              z: Number(entry.root.position.z.toFixed(3)),
+            } : null,
+          };
+        })(),
         items: feastHuntScene.items.map((entry) => ({
           id: entry.config.id,
           label: entry.config.label,
@@ -18361,7 +18821,7 @@
     releasePointerLock();
     const feastSaysElimination = ["feast-says-eliminated", "feast-says-no-show"].includes(state.gameOver.reason);
     const stormRunElimination = ["storm-run-eliminated", "storm-run-no-show"].includes(state.gameOver.reason);
-    const feastHuntElimination = ["feast-hunt-eliminated", "feast-hunt-no-show"].includes(state.gameOver.reason);
+    const feastHuntElimination = ["feast-hunt-eliminated", "feast-hunt-no-show", "feast-hunt-juniper-won"].includes(state.gameOver.reason);
     if (dom.gameOverTitle) {
       dom.gameOverTitle.textContent = feastSaysElimination || stormRunElimination || feastHuntElimination
         ? "Eliminated"
@@ -18370,6 +18830,8 @@
     if (dom.gameOverCopy) {
       dom.gameOverCopy.textContent = state.gameOver.reason === "feast-hunt-no-show"
         ? "You did not check in with Mr. Feast before the five-minute Feast Hunt call expired."
+        : state.gameOver.reason === "feast-hunt-juniper-won"
+          ? "Juniper found her three objects and returned to the foyer first. Feast Hunt is over."
         : state.gameOver.reason === "feast-hunt-eliminated"
           ? "Mr. Feast caught you during Feast Hunt. Caught contestants leave the competition."
           : state.gameOver.reason === "storm-run-no-show"
@@ -21008,6 +21470,14 @@
 
     setState(on, silent) {
       const next = Boolean(on);
+      if (
+        next
+        && this.name !== "estate exterior lights"
+        && feastHuntSystem?.blackoutActive()
+      ) {
+        if (!silent) feastHuntSystem.rejectLightRestore();
+        return false;
+      }
       if (this.on === next) return;
       this.on = next;
       // Light, bulb, and decorative-glow output is owned by the same switch.
@@ -21017,6 +21487,7 @@
       this.setGlowRenderState(this.on);
       if (!silent && audioSystem) audioSystem.light(this.on);
       if (!silent) syncLightRendering();
+      return true;
     }
 
     toggle() {
@@ -23991,6 +24462,47 @@
       depthWrite: false,
       colorWrite: false,
     });
+
+    const returnRoot = new THREE.Group();
+    returnRoot.name = "feast-hunt-foyer-return-stand";
+    returnRoot.position.set(
+      FEAST_HUNT.returnMark.x,
+      FEAST_HUNT.returnMark.y,
+      FEAST_HUNT.returnMark.z,
+    );
+    returnRoot.rotation.y = FEAST_HUNT.returnMark.yaw;
+    returnRoot.visible = false;
+    scene.add(returnRoot);
+    cylinder({
+      name: "feast-hunt-return-pedestal",
+      radiusTop: 0.34,
+      radiusBottom: 0.42,
+      height: 0.86,
+      segments: 24,
+      y: 0.43,
+      material: darkGold,
+      parent: returnRoot,
+    });
+    cylinder({
+      name: "feast-hunt-return-tray",
+      radius: 0.48,
+      height: 0.055,
+      segments: 28,
+      y: 0.9,
+      material: gold,
+      parent: returnRoot,
+    });
+    const returnRing = new THREE.Mesh(new THREE.TorusGeometry(0.39, 0.022, 8, 28), gold);
+    returnRing.name = "feast-hunt-return-tray-ring";
+    returnRing.position.y = 0.94;
+    returnRing.rotation.x = Math.PI / 2;
+    returnRoot.add(returnRing);
+    const returnHitbox = new THREE.Mesh(new THREE.BoxGeometry(1.25, 1.5, 1.25), hitboxMaterial);
+    returnHitbox.name = "feast-hunt-return-interaction";
+    returnHitbox.position.y = 0.72;
+    returnRoot.add(returnHitbox);
+    feastHuntScene.returnRoot = returnRoot;
+    feastHuntScene.returnHitbox = returnHitbox;
 
     for (const config of FEAST_HUNT.items) {
       const itemRoot = new THREE.Group();
@@ -30713,6 +31225,9 @@
     );
     window.MrFeastFresh.placePlayerNearFeastHuntItemForQA = (id) => (
       state.qa && feastHuntSystem ? feastHuntSystem.placePlayerNearItemForQA(id) : null
+    );
+    window.MrFeastFresh.placePlayerAtFeastHuntReturnForQA = () => (
+      state.qa && feastHuntSystem ? feastHuntSystem.placePlayerAtReturnForQA() : null
     );
     window.MrFeastFresh.collectFeastHuntItemForQA = (id) => (
       state.qa && feastHuntSystem

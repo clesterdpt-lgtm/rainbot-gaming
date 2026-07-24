@@ -62,7 +62,7 @@ of the shipped welcome says exactly that.
 |---|------|---------|-----|
 | 03 | Mara Voss | The Strategist | Day-one contestant; has watched nine people "go home" and strategized herself into denial. Eliminated after Game 2. |
 | 07 | Kip Solano | The Wild Card | Treats everything as content. While he's alive the game is allowed to be funny. Eliminated after Game 1. |
-| 10 | Juniper Cross | The Folklorist | Applied on purpose — she has been researching this estate for years. The player's ally and lore engine. Lost at Game 3. |
+| 10 | Juniper Cross | The Folklorist | Applied on purpose — she has been researching this estate for years. The player's ally and lore engine. Actively races the player in Game 3; her final story result is deferred. |
 | 13 | *(prior)* | — | The previous Contestant 13: investigated, hid the badge/tape/key trail, "became our most-watched episode." Ghost guide and co-protagonist of the true ending. |
 | 13 | **The player** | The Replacement | The season opened with twelve. Nine seats were already cleared before you arrived. Your number is reissued. |
 
@@ -174,9 +174,14 @@ rises with it, and the finale is a scheduled arrival.
   purpose.
 - **Game 3 — FEAST HUNT.** After Storm Run and the patron-feed sabotage, production
   calls the remaining contestants to the foyer. Three unmistakable gold show props
-  are hidden across all three mansion levels. Cameras report the player's reliable
-  position, Mr. Feast personally hunts whoever is seen, and a catch on any floor
-  eliminates. Crouching, darkness, cover, and hiding remain the fair counters.
+  are hidden across all three mansion levels. At release, all interior fixture
+  circuits die and stay unresponsive for the duration of the game. Juniper follows
+  an authored mansion-wide search route, recovers her own three props, and can win
+  by reaching the foyer first. The player must collect all three and physically use
+  the foyer return tray; the third pickup alone is not a win. Cameras report the
+  player's reliable position, Mr. Feast personally hunts whoever is seen, and a
+  catch on any floor eliminates. Crouching, darkness, cover, hiding, and a recovered
+  flashlight remain the fair counters.
 - Each recovered prop advances the house horror without creating another combat AI:
   the Listening Host and Veiled Waltz turn only while unobserved, camera LEDs go dark
   while tracking remains active, and Mr. Feast's cheerful announcements thin into
@@ -327,8 +332,10 @@ idea that fits a lane is automatically coherent; anything that fits none gets cu
    a damaging weather-hazard system.
 6. **Phase dressing pass** — painting scoreboard, audio sweetener/detune swaps,
    line-pool swaps, statue notches, the reverse-jingle motif.
-7. **Game 3 core: Feast Hunt** — three mansion-wide props, live cameras, pursuit,
-   hiding, and the first unobserved foyer-statue turns. Juniper's result is deferred.
+7. **Game 3 core: Feast Hunt** — full-house blackout, three mansion-wide props,
+   live cameras, pursuit, hiding, a physical foyer hand-in, Juniper's competing
+   search route, and the first unobserved foyer-statue turns. Her final story result
+   is deferred.
 8. **Winner's Dinner + three endings** — the shipped welcome replay is the bad
    ending's whole script; the shipped Workroom sabotage is the true ending's first
    half.

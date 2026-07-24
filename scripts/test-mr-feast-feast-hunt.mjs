@@ -94,9 +94,12 @@ async function assertSourceContract() {
   assert(/Golden Bell/.test(runtime) && /Golden Goblet/.test(runtime) && /Golden Carving Knife/.test(runtime), "the three authored gold props are missing");
   assert(/main-level/.test(runtime) && /second-floor/.test(runtime) && /basement-level/.test(runtime), "Feast Hunt props must span all three mansion levels");
   assert(/allowsSecuritySystems/.test(runtime), "Feast Hunt must distinguish clue hold from active camera/security ownership");
-  assert(/feast-hunt-eliminated/.test(runtime) && /feast-hunt-no-show/.test(runtime), "Feast Hunt catch and no-show losses need explicit recoverable outcomes");
+  assert(/feast-hunt-eliminated/.test(runtime) && /feast-hunt-no-show/.test(runtime) && /feast-hunt-juniper-won/.test(runtime), "Feast Hunt catch, no-show, and rival-win losses need explicit recoverable outcomes");
   assert(/getFeastHuntState/.test(runtime) && /advanceFeastHuntForQA/.test(runtime), "focused Feast Hunt diagnostics and deterministic clock are missing");
   assert(/collectFeastHuntItemForQA/.test(runtime) && /placePlayerNearFeastHuntItemForQA/.test(runtime), "Feast Hunt item QA controls are missing");
+  assert(/placePlayerAtFeastHuntReturnForQA/.test(runtime), "Feast Hunt needs a real foyer return QA control");
+  assert(/startFeastHuntRace/.test(runtime) && /updateFeastHuntEntry/.test(runtime), "Juniper needs an authored active Feast Hunt route");
+  assert(/activateBlackout/.test(runtime) && /restoreBlackout/.test(runtime), "Feast Hunt needs competition-owned full-house blackout lifecycle");
   assert(/setFeastHuntGateForQA/.test(runtime) && /triggerFeastHuntPursuitForQA/.test(runtime), "Feast Hunt gate/pursuit QA controls are missing");
   assert(/id="mansion-feast-hunt"/.test(html), "the game page is missing the Feast Hunt HUD region");
   assert(/id="mansion-feast-hunt-progress"/.test(html), "the Feast Hunt HUD must expose three-item progress");
@@ -185,6 +188,28 @@ async function run() {
     );
     assert(hunt.items.length === 3 && hunt.items.every((item) => item.visible && item.registered), `all three props should appear at release: ${JSON.stringify(hunt.items)}`);
     assert(new Set(hunt.items.map((item) => item.level)).size === 3, `props must span three levels: ${JSON.stringify(hunt.items)}`);
+    assert(
+      hunt.blackout.active
+        && hunt.blackout.interiorCircuitCount > 20
+        && hunt.blackout.offCircuitCount === hunt.blackout.interiorCircuitCount
+        && hunt.blackout.allInteriorOff,
+      `the hunt must release into a full mansion blackout: ${JSON.stringify(hunt.blackout)}`,
+    );
+    assert(
+      hunt.rival.active
+        && hunt.rival.id === "juniper-cross"
+        && hunt.rival.collectedCount === 0
+        && hunt.rival.challengeMode === "feast-hunt",
+      `Juniper must begin an active competing route instead of returning to the Reading Room: ${JSON.stringify(hunt.rival)}`,
+    );
+    const juniperStart = hunt.rival.position;
+    await playPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(4));
+    hunt = await huntState(playPage);
+    assert(
+      hunt.rival.active
+        && Math.hypot(hunt.rival.position.x - juniperStart.x, hunt.rival.position.z - juniperStart.z) > 0.75,
+      `Juniper must visibly leave her foyer mark when the hunt starts: ${JSON.stringify({ start: juniperStart, rival: hunt.rival })}`,
+    );
 
     const bellStaging = await playPage.evaluate(() => window.MrFeastFresh.placePlayerNearFeastHuntItemForQA("golden-bell"));
     assert(bellStaging?.itemId === "golden-bell", `QA staging must target the Golden Bell: ${JSON.stringify(bellStaging)}`);
@@ -234,7 +259,9 @@ async function run() {
       hunt.phase === "called"
         && hunt.collectedIds.join(",") === "golden-bell"
         && diagnostics.mrFeast.pursuit.active === null
-        && hunt.reportRemaining === 300,
+        && hunt.reportRemaining === 300
+        && !hunt.blackout.active
+        && hunt.rival.collectedCount === 0,
       `live saves must normalize to a fresh call while preserving collected props: ${JSON.stringify({ hunt, pursuit: diagnostics.mrFeast.pursuit })}`,
     );
     await playPage.close();
@@ -248,12 +275,29 @@ async function run() {
     assert(
       diagnostics.gameOver?.reason === "feast-hunt-eliminated"
         && diagnostics.feastHunt.phase === "failed"
+        && !diagnostics.feastHunt.blackout.active
         && diagnostics.gameOver.floor !== "BASEMENT",
       `Game 3 catch should override the ordinary upstairs warning: ${JSON.stringify({ gameOver: diagnostics.gameOver, hunt: diagnostics.feastHunt })}`,
     );
     await catchPage.close();
 
-    // --- Three-item completion leaves finale resolution pending --------------
+    // --- Juniper can independently search, collect, return, and win -----------
+    const rivalPage = await bootPage(browser, { width: 1280, height: 820 }, errors);
+    await beginHunt(rivalPage);
+    await rivalPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(240));
+    diagnostics = await rivalPage.evaluate(() => JSON.parse(window.render_game_to_text()));
+    assert(
+      diagnostics.gameOver?.reason === "feast-hunt-juniper-won"
+        && diagnostics.feastHunt.phase === "failed"
+        && diagnostics.feastHunt.outcome === "juniper"
+        && diagnostics.feastHunt.rival.collectedCount === 3
+        && diagnostics.feastHunt.rival.returned
+        && !diagnostics.feastHunt.blackout.active,
+      `Juniper must be able to finish her own route and beat the player back to the foyer: ${JSON.stringify({ gameOver: diagnostics.gameOver, hunt: diagnostics.feastHunt })}`,
+    );
+    await rivalPage.close();
+
+    // --- Three items must be physically returned to the foyer to finish -------
     const winPage = await bootPage(browser, { width: 1280, height: 820 }, errors);
     await beginHunt(winPage);
     for (const id of ["golden-bell", "golden-goblet", "golden-carving-knife"]) {
@@ -262,13 +306,29 @@ async function run() {
     }
     hunt = await huntState(winPage);
     assert(
-      hunt.phase === "completed"
+      hunt.phase === "hunting"
         && hunt.collectedCount === 3
         && hunt.items.every((item) => !item.visible && !item.registered)
+        && hunt.readyToReturn
+        && hunt.returnStation.visible
+        && hunt.returnStation.registered
+        && /return/i.test(hunt.ui.status),
+      `collecting all three props must require a physical foyer return: ${JSON.stringify(hunt)}`,
+    );
+    const returnStaging = await winPage.evaluate(() => window.MrFeastFresh.placePlayerAtFeastHuntReturnForQA());
+    assert(returnStaging?.readyToReturn, `QA must stage the player at the live foyer hand-in: ${JSON.stringify(returnStaging)}`);
+    await winPage.waitForFunction(() => /return|place/i.test(JSON.parse(window.render_game_to_text()).prompt || ""), null, { timeout: 10000 });
+    await winPage.keyboard.press("e");
+    await winPage.waitForFunction(() => window.MrFeastFresh.getFeastHuntState()?.phase === "completed");
+    hunt = await huntState(winPage);
+    assert(
+      hunt.phase === "completed"
         && hunt.outcome === "player"
         && hunt.finalePending
+        && !hunt.blackout.active
+        && !hunt.returnStation.registered
         && !hunt.juniperSacrifice,
-      `three props should complete only the Game 3 core: ${JSON.stringify(hunt)}`,
+      `the real foyer hand-in should complete Game 3 and restore mansion lighting: ${JSON.stringify(hunt)}`,
     );
     const visibleHud = await winPage.locator("#mansion-feast-hunt").isVisible();
     assert(visibleHud, "the completion card should remain briefly visible");
@@ -367,7 +427,7 @@ async function run() {
     );
 
     assert(errors.length === 0, `Feast Hunt browser run emitted errors: ${errors.join(" | ")}`);
-    console.log("Mr. Feast Feast Hunt browser test: gate, stealth pursuit, props, statues, persistence, catch, completion, and mobile passed");
+    console.log("Mr. Feast Feast Hunt browser test: gate, blackout, active Juniper rival, stealth pursuit, foyer return, persistence, catch, and mobile passed");
   } finally {
     if (browser) await browser.close();
     if (server) {

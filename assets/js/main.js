@@ -116,6 +116,7 @@ const RB_GAME_META = {
   "gen-z-driving-simulator": { title: "Gen Z Driving Simulator", scoreIds: ["gen-z-driving-simulator"] },
   "karen-merger": { title: "Complaint Chain", scoreIds: ["karen-merger"] },
   "looksmaxxing-grindset": { title: "Looksmaxxing Grindset", scoreIds: ["looksmax"] },
+  "mr-feast-mansion": { title: "Mr Feast: Last to Leave", scoreIds: ["mr-feast-mansion"] },
   "recursive-reward-labyrinth": { title: "Recursive Reward Labyrinth", scoreIds: ["recursive-reward-labyrinth"] },
   "rizz-craft": { title: "Rizz-Craft", scoreIds: ["rizz-craft"] },
   "scrap-circuit": { title: "Scrap Circuit: Last Chassis Standing", scoreIds: ["scrap-circuit", "scrap-circuit-full"] },
@@ -171,7 +172,11 @@ const RB_GAME_VISUALS = {
   "gen-z-driving-simulator": { image: "assets/img/mockup/card-gen-z-driving-simulator.jpg?v=20260712-jpg", kind: "3D Driving" },
   "karen-merger": { image: "assets/img/mockup/card-karen-merger.jpg?v=20260712-jpg", kind: "Bubble Merge" },
   "looksmaxxing-grindset": { image: "assets/img/mockup/card-looksmaxxing.png?v=20260611-7", kind: "Sim / Idle" },
-  "mr-feast-mansion": { image: "assets/img/mockup/card-mr-feast.png?v=20260611-7", kind: "Horror" },
+  "mr-feast-mansion": {
+    image: "assets/img/mr-feast/card-mr-feast-last-to-leave-ai-v1.jpg?v=20260723-2",
+    kind: "Stealth Horror",
+    alt: "Mr Feast: Last to Leave cover art with the uncanny host, surveillance cameras, and a stormy mansion",
+  },
   "recursive-reward-labyrinth": { image: "assets/img/agent-games/recursive-reward-labyrinth.jpg?v=20260712-jpg", kind: "Agent Protocol" },
   "rizz-craft": { image: "assets/img/mockup/card-rizz-craft.jpg?v=20260712-jpg", kind: "Sandbox" },
   "scrap-circuit": { image: "assets/img/scrap-circuit/card-scrap-circuit.png?v=20260703-scrap-cover-1", kind: "Retro Car Combat" },
@@ -228,7 +233,7 @@ const RB_GAME_SEARCH_TEXT = {
   "tardigrade-micro-mayhem": "Tardigrade Micro Mayhem 3D sandbox low poly microscopic tardigrade",
   "doorcrash-no-tip-nitro": "DoorCrash No Tip Nitro 3D delivery runner food car obstacles",
   "strait-of-hormuz": "Escape the Straight action tanker mines drones",
-  "mr-feast-mansion": "Mr Feast Last to Leave the Mansion horror challenge",
+  "mr-feast-mansion": "Mr Feast Last to Leave reality show competition stealth horror mansion investigation sabotage cameras",
   "looksmaxxing-grindset": "Looksmaxxing Grindset idle sim gym mewing water",
   "boomer-monopoly": "Boomer Monopoly housing board game parody",
   "apop-demon-hunters": "Apop Demon Moggers side-scroller platformer pop action boyz ii hell",
@@ -4455,6 +4460,7 @@ const RBSfx = (() => {
 window.RBSfx = RBSfx;
 
 function initGameEscapeMenu() {
+  if (document.body?.dataset.rbNativeEscapeMenu === "true") return;
   const isGamePage = location.pathname.includes("/games/") && document.querySelector(".game-stage");
   if (!isGamePage || document.getElementById("rb-escape-menu")) return;
 

@@ -81,14 +81,26 @@
 
     .mansion-layout { padding-bottom: 28px; }
 
+    /* Shared Rainbot shells (.game-stage + .rb-standalone-surface) each paint a
+       frame. Collapse them so the minimized viewport has a single clean edge. */
     .mansion-stage-shell {
       align-items: stretch;
-      padding: 10px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
     }
 
     .mansion-surface {
       width: 100%;
       max-width: none;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+      background: transparent;
+      min-height: 0;
+      aspect-ratio: auto;
     }
 
     #mansion-stage {
@@ -99,14 +111,12 @@
       min-height: 0;
       padding: 0;
       overflow: hidden;
-      border: 1px solid rgba(198, 181, 150, 0.24);
-      border-radius: 7px;
+      border: 0;
+      border-radius: 0;
       background:
         radial-gradient(circle at 70% 16%, rgba(102, 120, 152, 0.18), transparent 24%),
         linear-gradient(180deg, #10141a, #08090b 62%, #050506);
-      box-shadow:
-        0 30px 90px rgba(0, 0, 0, 0.58),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+      box-shadow: none;
       font-family: var(--mansion-sans);
       user-select: none;
     }

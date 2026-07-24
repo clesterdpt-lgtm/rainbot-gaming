@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260724-feast-hunt-blackout-rival-1";
+  const MANSION_RUNTIME_VERSION = "20260724-window-curtain-hiding-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -208,6 +208,32 @@
     guardHeight: 0.98,
     guardSpan: 6.84,
     patrolZ: 11.15,
+  });
+  const WINDOW_CURTAINS = Object.freeze({
+    insetFromWall: 0.58,
+    hideInsetFromWall: 0.34,
+    exitInsetFromWall: 1.18,
+    interactionDistance: 1.02,
+    crackWidth: 0.15,
+    crackOffset: 0.16,
+    gatheredWidthRatio: 0.23,
+    foldsPerPanel: 10,
+    closeSpeed: 5.8,
+    panelBottomLift: 0.055,
+    rodLift: 0.17,
+    excludedKinds: Object.freeze(["kitchen", "basement", "headboard", "bookcase", "fireplace", "gallery"]),
+    installations: Object.freeze([
+      Object.freeze({ id: "library-front-west", wall: "main-front-wall", center: -11.5, room: "LIBRARY", crackSide: "left" }),
+      Object.freeze({ id: "library-front-center", wall: "main-front-wall", center: -8.2, room: "LIBRARY", crackSide: "right" }),
+      Object.freeze({ id: "music-front-center", wall: "main-front-wall", center: 8.2, room: "MUSIC ROOM", crackSide: "left" }),
+      Object.freeze({ id: "music-front-east", wall: "main-front-wall", center: 11.5, room: "MUSIC ROOM", crackSide: "right" }),
+      Object.freeze({ id: "dining-rear-center", wall: "main-rear-wall", center: -9.3, room: "DINING ROOM", crackSide: "left" }),
+      Object.freeze({ id: "dining-west-window", wall: "main-west-wall", center: -9.4, room: "DINING ROOM", crackSide: "right" }),
+      Object.freeze({ id: "ballroom-rear-west", wall: "main-rear-wall", center: -3.3, room: "BALLROOM", crackSide: "left" }),
+      Object.freeze({ id: "ballroom-rear-east", wall: "main-rear-wall", center: 3.3, room: "BALLROOM", crackSide: "right", visualOffset: 0.18, exitOffset: 0.58 }),
+      Object.freeze({ id: "upper-lounge-rear-west", wall: "upper-rear-wall", center: -2.3, room: "REAR LOUNGE", crackSide: "left", visualOffset: 0.34 }),
+      Object.freeze({ id: "upper-lounge-rear-east", wall: "upper-rear-wall", center: 2.3, room: "REAR LOUNGE", crackSide: "right" }),
+    ]),
   });
   const ESTATE_GROUND_Y = -0.205;
   const MOBILE_RENDER_WIDTH = 720;
@@ -739,6 +765,41 @@
     stealthExposureFloor: 0.72,
     alertCooldownSeconds: 1.4,
     warningSeconds: 2.4,
+  });
+  const BULK_STORAGE_SECRET = Object.freeze({
+    room: "BULK STORAGE",
+    moveSpeed: 1.08,
+    boxClearance: 0.1,
+    maximumGrabDistance: 2.55,
+    bounds: Object.freeze({
+      minX: 8.25,
+      maxX: 14.2,
+      minZ: -11.25,
+      maxZ: -5.65,
+    }),
+    boxes: Object.freeze([
+      Object.freeze({ id: "bulk-box-a", x: 9.4, z: -8.0, width: 1.12, height: 0.82, depth: 1.02, yaw: 0.07, qaYaw: 0 }),
+      Object.freeze({ id: "bulk-box-b", x: 11.2, z: -8.3, width: 1.18, height: 0.76, depth: 1.08, yaw: -0.05, qaYaw: 0 }),
+      Object.freeze({ id: "bulk-box-c", x: 13.0, z: -8.0, width: 1.08, height: 0.88, depth: 1.0, yaw: 0.04, qaYaw: 0 }),
+      Object.freeze({ id: "bulk-box-d", x: 11.2, z: -10.2, width: 1.22, height: 0.72, depth: 1.12, yaw: -0.08, qaYaw: -Math.PI / 2 }),
+    ]),
+    symbols: Object.freeze([
+      Object.freeze({ id: "goat-star", x: 9.4, z: -8.0, radius: 0.42, rotation: Math.PI }),
+      Object.freeze({ id: "broken-halo", x: 11.2, z: -8.3, radius: 0.44, rotation: 0.34 }),
+      Object.freeze({ id: "thorn-eye", x: 13.0, z: -8.0, radius: 0.4, rotation: -0.48 }),
+    ]),
+    clothing: Object.freeze({
+      x: 13.92,
+      z: -10.9,
+      yaw: -0.46,
+      journal: Object.freeze({
+        id: "kip-clothing",
+        title: "Clothes in Bulk Storage",
+        body: "A dark green jacket and leather-trimmed shirt left in the basement look like what Kip was wearing.",
+      }),
+      observation: "This dark green jacket and leather-trimmed shirt look like what Kip was wearing.",
+      qa: Object.freeze({ x: 12.78, z: -10.02, pitch: -0.72 }),
+    }),
   });
   const CAMERA_SECURITY_MODE = Object.freeze({
     SHOW: "show",
@@ -1457,6 +1518,18 @@
     chairPullYawRadians: 0.62,
     chairColliderCenterY: 0.55,
   });
+  const MANSION_DISTRACTIONS = Object.freeze({
+    noticeSeconds: 2.4,
+    maximumDistanceMeters: 22,
+    panLimit: 0.78,
+    pianoPulseSeconds: 0.54,
+    laundryPulseSeconds: 0.4,
+    serviceBellPulseSeconds: 1.12,
+    pianoKeyTravel: 0.027,
+    laundryShakeMeters: 0.018,
+    laundryWheelSpeed: 8.5,
+    serviceBellSwingRadians: 0.24,
+  });
   const MR_FEAST_FOOTSTEPS = Object.freeze({
     contacts: Object.freeze({
       // Sampled from the shipped clips at 120 evenly-spaced phases. Emit at
@@ -1603,6 +1676,36 @@
         "Closed. What is inside must stay patient.",
         "The chill is safe again. As are you. For now.",
         "Shut. A refrigerator is a promise about later.",
+      ]),
+      "noticed-piano": Object.freeze([
+        "The piano is playing without hands again. It knows better.",
+        "That song was retired with its last pianist.",
+        "Someone has woken the player piano. I will put it back to sleep.",
+      ]),
+      "fixed-piano": Object.freeze([
+        "Silence. The room may keep the final note.",
+        "The keys are still. Whatever played them is not.",
+        "Quiet again. I prefer an audience that listens.",
+      ]),
+      "noticed-laundry": Object.freeze([
+        "The wringer is chewing on an empty sleeve.",
+        "That machine was unplugged for a reason.",
+        "The laundry room is rattling its teeth. Excuse me.",
+      ]),
+      "fixed-laundry": Object.freeze([
+        "Stopped. Nothing left to press.",
+        "The wringer can wait for a fuller load.",
+        "Still again. Mind your fingers.",
+      ]),
+      "noticed-service-bell": Object.freeze([
+        "The service bell is calling for someone who no longer works here.",
+        "One ring is a request. Repeating is an invitation.",
+        "No one summons the house without being answered.",
+      ]),
+      "fixed-service-bell": Object.freeze([
+        "Answered. There was nobody there.",
+        "The bell is quiet. The caller is not forgotten.",
+        "Service concluded.",
       ]),
       talk: Object.freeze([
         "Every guest arrives twice. Once through the door, once through the menu.",
@@ -2413,12 +2516,14 @@
     briefingSpeechSeconds: 8.8,
     completionCardSeconds: 6,
     directSightDwellSeconds: 0.4,
+    qaStepSeconds: 1 / 30,
     callLine: "Contestants, report to the foyer set. Feast Hunt begins in five minutes.",
-    briefingLine: "The house lights are dead. Each of you has three golden objects hidden inside. Find your set and bring all three back to this foyer before the other contestant. Stay out of my cameras, stay out of my sight, and do not get caught.",
+    briefingLine: "The house lights are dead. Each of you has three golden objects hidden inside. Carry one at a time and bring each object back to this foyer before searching for the next. Stay out of my cameras, stay out of my sight, and do not get caught.",
     countdownLines: Object.freeze({ 3: "Three.", 2: "Two.", 1: "One." }),
     startLine: "Hunt.",
-    completionLine: "Three objects returned. You beat Juniper back to the foyer. Feast Hunt is complete.",
+    completionLine: "Three objects returned, one trip at a time. You beat Juniper back to the foyer. Feast Hunt is complete.",
     hostMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 7.25, yaw: Math.PI, scale: 1 }),
+    briefingHostMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 7.25, yaw: 0, scale: 1 }),
     playerMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 9.75, yaw: 0, pitch: -0.08 }),
     contestantMarks: Object.freeze({
       "juniper-cross": Object.freeze({ x: 1.55, y: FLOOR.MAIN, z: 8.45, yaw: Math.PI }),
@@ -2427,9 +2532,9 @@
     rival: Object.freeze({
       id: "juniper-cross",
       label: "Juniper",
-      speed: 1.55,
+      speed: 1.1,
       arrivalRadius: 0.1,
-      searchPauseSeconds: 3.2,
+      searchPauseSeconds: 30,
       route: Object.freeze([
         "main-stair-center",
         "main-stair-east",
@@ -2517,32 +2622,51 @@
         label: "Golden Bell",
         level: "main-level",
         room: "DINING ROOM",
-        position: Object.freeze({ x: -9.7, y: FLOOR.MAIN + 0.96, z: -8.4 }),
+        position: Object.freeze({ x: -14.28, y: FLOOR.MAIN + 1.37, z: -11.42 }),
         yaw: 0,
-        qa: Object.freeze({ x: -9.7, y: FLOOR.MAIN, z: -6.78 }),
+        qa: Object.freeze({ x: -12.72, y: FLOOR.MAIN, z: -10.18 }),
+        visualScale: 0.62,
+        interactionSize: 0.58,
+        hidingContext: "dining-sideboard-back-corner",
       }),
       Object.freeze({
         id: "golden-goblet",
         label: "Golden Goblet",
         level: "second-floor",
         room: "READING ROOM",
-        position: Object.freeze({ x: 13.92, y: FLOOR.UPPER + 1.34, z: 0 }),
+        position: Object.freeze({ x: 14.16, y: FLOOR.UPPER + 0.74, z: 2.68 }),
         yaw: Math.PI / 2,
-        qa: Object.freeze({ x: 12.25, y: FLOOR.UPPER, z: 0 }),
+        qa: Object.freeze({ x: 12.62, y: FLOOR.UPPER, z: 2.68 }),
+        visualScale: 0.65,
+        interactionSize: 0.56,
+        hidingContext: "reading-room-low-bookcase",
       }),
       Object.freeze({
         id: "golden-carving-knife",
         label: "Golden Carving Knife",
-        level: "basement-level",
-        room: "ARCHIVE",
-        position: Object.freeze({ x: 6.88, y: FLOOR.BASEMENT + 1.34, z: 9.4 }),
-        yaw: Math.PI / 2,
-        qa: Object.freeze({ x: 5.3, y: FLOOR.BASEMENT, z: 9.4 }),
+        level: "main-level",
+        room: "KITCHEN",
+        position: Object.freeze({ x: 6.56, y: FLOOR.MAIN + 0.985, z: -11.35 }),
+        yaw: 0,
+        qa: Object.freeze({ x: 6.56, y: FLOOR.MAIN, z: -9.94 }),
+        visualScale: 0.78,
+        interactionSize: 0.54,
+        hidingContext: "kitchen-bread-board",
       }),
     ]),
     statueTurns: Object.freeze([
-      Object.freeze({ id: "foyer-listening-host", stageOne: 0.62, stageTwo: 1.05 }),
-      Object.freeze({ id: "foyer-veiled-waltz", stageOne: -0.62, stageTwo: -1.05 }),
+      Object.freeze({
+        id: "foyer-listening-host",
+        stageOne: Object.freeze({ rotationY: 0.18, x: 0, z: 0 }),
+        stageTwo: Object.freeze({ rotationY: 0.55, x: 0.22, z: -0.16 }),
+        stageThree: Object.freeze({ rotationY: 1.25, x: 2.35, z: -2.0 }),
+      }),
+      Object.freeze({
+        id: "foyer-veiled-waltz",
+        stageOne: Object.freeze({ rotationY: -0.18, x: 0, z: 0 }),
+        stageTwo: Object.freeze({ rotationY: -0.55, x: -0.2, z: -0.19 }),
+        stageThree: Object.freeze({ rotationY: -1.25, x: -2.15, z: -2.55 }),
+      }),
     ]),
   });
   const COMPETITION_FILM_SET = Object.freeze({
@@ -2940,6 +3064,8 @@
       countdownLastSecond: null,
       countdownSequence: [],
       collectedIds: [],
+      returnedIds: [],
+      carriedItemId: null,
       readyToReturn: false,
       statueStage: 0,
       statuesMovedWhileUnobserved: false,
@@ -2948,6 +3074,7 @@
       rivalActive: false,
       rivalRouteIndex: 0,
       rivalPauseRemaining: 0,
+      rivalPendingItemId: null,
       rivalCollectedIds: [],
       rivalDistanceTravelled: 0,
       rivalReturned: false,
@@ -3008,6 +3135,13 @@
       alertCooldown: 0,
       lastAlert: null,
     },
+    bulkStorageSecret: {
+      moveCount: 0,
+      pushDistance: 0,
+      pullDistance: 0,
+      lastMoveMode: null,
+      lastMovedBoxId: null,
+    },
     workroom: {
       unlocked: false,
       keypadOpen: false,
@@ -3037,6 +3171,7 @@
       actionInProgress: null,
       inventory: [],
       journalEntries: [],
+      kipClothingFound: false,
     },
     lastMove: { dx: 0, dz: 0 },
     qaRoute: null,
@@ -3061,6 +3196,7 @@
     left: false,
     right: false,
     sprint: false,
+    interactHeld: false,
     touchLookId: null,
     touchLookX: 0,
     touchLookY: 0,
@@ -3143,6 +3279,7 @@
   const refrigerators = [];
   const kitchenTaskBulbs = [];
   const hidingSpots = [];
+  const windowCurtains = [];
   const roomZones = [];
   const lightningMaterials = [];
   const yardWaterSystems = [];
@@ -3238,6 +3375,7 @@
   let seatingSystem = null;
   let cameraSecurity = null;
   let flashlightSystem = null;
+  let bulkStorageSecretSystem = null;
   let monitorWallSystem = null;
   let tamperSystem = null;
   let speechSystem = null;
@@ -3443,6 +3581,80 @@
     texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
     texture.magFilter = THREE.LinearFilter;
     texture.minFilter = THREE.LinearMipMapLinearFilter;
+    return texture;
+  }
+
+  function makeCurtainDamaskTexture(size = 512) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    const base = ctx.createLinearGradient(0, 0, size, 0);
+    base.addColorStop(0, "#4a0b19");
+    base.addColorStop(0.18, "#861c31");
+    base.addColorStop(0.5, "#a52c46");
+    base.addColorStop(0.82, "#76172b");
+    base.addColorStop(1, "#3e0a17");
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, size, size);
+
+    // Fine warp and weft catch the estate lights without reading as plastic.
+    ctx.globalAlpha = 0.22;
+    ctx.lineWidth = 1;
+    for (let x = 0; x < size; x += 3) {
+      ctx.strokeStyle = x % 12 === 0 ? "#d59a7e" : "#8e4350";
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, 0);
+      ctx.lineTo(x + 0.5, size);
+      ctx.stroke();
+    }
+    for (let y = 0; y < size; y += 4) {
+      ctx.strokeStyle = y % 16 === 0 ? "#160309" : "#9e5360";
+      ctx.beginPath();
+      ctx.moveTo(0, y + 0.5);
+      ctx.lineTo(size, y + 0.5);
+      ctx.stroke();
+    }
+
+    // A restrained mirrored pomegranate-and-leaf damask repeats cleanly. It
+    // remains visible at conversational distance but recedes in the wide room.
+    const motif = 128;
+    ctx.globalAlpha = 0.28;
+    ctx.strokeStyle = "#d39a77";
+    ctx.fillStyle = "#8e3144";
+    ctx.lineWidth = 3;
+    for (let y = -motif / 2; y < size + motif; y += motif) {
+      for (let x = -motif / 2; x < size + motif; x += motif) {
+        const cx = x + motif / 2;
+        const cy = y + motif / 2;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 33);
+        ctx.bezierCurveTo(cx + 25, cy - 22, cx + 28, cy + 16, cx, cy + 34);
+        ctx.bezierCurveTo(cx - 28, cy + 16, cx - 25, cy - 22, cx, cy - 33);
+        ctx.fill();
+        ctx.stroke();
+        for (const side of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - 12);
+          ctx.bezierCurveTo(cx + side * 24, cy - 28, cx + side * 38, cy - 3, cx + side * 24, cy + 12);
+          ctx.bezierCurveTo(cx + side * 15, cy + 3, cx + side * 8, cy - 2, cx, cy - 12);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(cx, cy + 20);
+          ctx.bezierCurveTo(cx + side * 20, cy + 10, cx + side * 34, cy + 31, cx + side * 14, cy + 42);
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.name = "window-curtain-woven-damask";
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(1.35, 3.1);
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipMapLinearFilter;
+    texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    texture.encoding = THREE.sRGBEncoding;
     return texture;
   }
 
@@ -4131,6 +4343,7 @@
     const libraryRugMap = makeSalonRugTexture(512, "library");
     const musicRugMap = makeSalonRugTexture(512, "music");
     const fireFlameMap = makeFireFlameTexture(128);
+    const curtainDamaskMap = makeCurtainDamaskTexture(512);
     leafMap.repeat.set(5, 5);
     soilMap.repeat.set(7, 7);
     paverMap.repeat.set(8, 12);
@@ -4157,6 +4370,20 @@
       iron: new THREE.MeshStandardMaterial({ color: 0x14171a, metalness: 0.62, roughness: 0.48 }),
       copper: new THREE.MeshStandardMaterial({ color: 0x6c3927, metalness: 0.67, roughness: 0.42 }),
       velvet: new THREE.MeshStandardMaterial({ color: 0x241017, roughness: 0.94 }),
+      curtainDamask: new THREE.MeshStandardMaterial({
+        map: curtainDamaskMap,
+        bumpMap: curtainDamaskMap,
+        bumpScale: 0.018,
+        color: 0xf4c2cb,
+        emissiveMap: curtainDamaskMap,
+        emissive: 0x7a2235,
+        emissiveIntensity: 0.48,
+        roughness: 0.88,
+        metalness: 0,
+        side: THREE.DoubleSide,
+      }),
+      curtainLining: new THREE.MeshStandardMaterial({ color: 0x38232a, roughness: 0.96, metalness: 0, side: THREE.DoubleSide }),
+      curtainInteraction: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }),
       leather: new THREE.MeshStandardMaterial({ color: 0x33221a, roughness: 0.78 }),
       fabric: new THREE.MeshStandardMaterial({ color: 0x4a5358, roughness: 0.96 }),
       porcelain: new THREE.MeshPhysicalMaterial({ color: 0xc9c6b9, roughness: 0.18, clearcoat: 0.72 }),
@@ -10781,6 +11008,7 @@
       show.rivalActive = true;
       show.rivalRouteIndex = 0;
       show.rivalPauseRemaining = 0;
+      show.rivalPendingItemId = null;
       show.rivalCollectedIds = [];
       show.rivalDistanceTravelled = 0;
       show.rivalReturned = false;
@@ -10816,6 +11044,14 @@
         entry.activity = CONTESTANT_ACTIVITY.IDLE;
         this.fadeToAction(entry, "idle");
         this.stepAnimation(entry, stepDt);
+        if (show.rivalPauseRemaining <= 0 && show.rivalPendingItemId) {
+          const itemId = show.rivalPendingItemId;
+          show.rivalPendingItemId = null;
+          if (!show.rivalCollectedIds.includes(itemId)) {
+            show.rivalCollectedIds.push(itemId);
+            feastHuntSystem?.noteRivalItem(itemId);
+          }
+        }
         return;
       }
 
@@ -10830,9 +11066,8 @@
         show.rivalRouteIndex += 1;
         if (target.room) show.rivalRoom = target.room;
         if (target.itemId && !show.rivalCollectedIds.includes(target.itemId)) {
-          show.rivalCollectedIds.push(target.itemId);
+          show.rivalPendingItemId = target.itemId;
           show.rivalPauseRemaining = FEAST_HUNT.rival.searchPauseSeconds;
-          feastHuntSystem?.noteRivalItem(target.itemId);
           entry.activity = CONTESTANT_ACTIVITY.IDLE;
           this.fadeToAction(entry, "idle");
           this.stepAnimation(entry, stepDt);
@@ -12658,16 +12893,72 @@
     }
   }
 
+  function createCurtainPanelGeometry(folds) {
+    const columns = Math.max(16, folds * 4);
+    const rows = 7;
+    const positions = [];
+    const normals = [];
+    const uvs = [];
+    const indices = [];
+    for (let row = 0; row <= rows; row += 1) {
+      const v = row / rows;
+      for (let column = 0; column <= columns; column += 1) {
+        const u = column / columns;
+        const taper = 0.93 + v * 0.07;
+        const x = (u - 0.5) * taper;
+        const foldPhase = u * folds * Math.PI * 2;
+        const lowerWeight = 0.82 + v * 0.18;
+        const z = (Math.sin(foldPhase) * 0.044 + Math.sin(foldPhase * 0.5 + 0.7) * 0.008) * lowerWeight;
+        positions.push(x, v - 0.5, z);
+        const dzdx = Math.cos(foldPhase) * folds * Math.PI * 2 * 0.044;
+        const normal = new THREE.Vector3(-dzdx, 0, 1).normalize();
+        normals.push(normal.x, normal.y, normal.z);
+        uvs.push(u, v);
+      }
+    }
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const a = row * (columns + 1) + column;
+        const b = a + 1;
+        const c = a + columns + 1;
+        const d = c + 1;
+        indices.push(a, c, b, b, c, d);
+      }
+    }
+    const panel = new THREE.BufferGeometry();
+    panel.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    panel.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+    panel.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+    panel.setIndex(indices);
+    panel.computeBoundingBox();
+    panel.computeBoundingSphere();
+    return panel;
+  }
+
   class HidingSpot {
     constructor(options) {
-      const { name, targets, floorY, hidePosition, exitPosition } = options;
+      const {
+        name, targets, floorY, hidePosition, exitPosition,
+        enterLabel = `Hide in ${name}`,
+        leaveLabel = `Leave ${name}`,
+        hiddenLabel = "Hidden among the coats",
+        viewClasses = [],
+        onEnter = null,
+        onExit = null,
+      } = options;
       this.name = name;
       this.floorY = floorY;
       this.hidePosition = hidePosition;
       this.exitPosition = exitPosition;
+      this.enterLabel = enterLabel;
+      this.leaveLabel = leaveLabel;
+      this.hiddenLabel = hiddenLabel;
+      this.viewClasses = [...viewClasses];
+      this.onEnter = onEnter;
+      this.onExit = onExit;
       this.interaction = {
         type: "hide",
-        getLabel: () => state.activeHideSpot === this ? `Leave ${name}` : `Hide in ${name}`,
+        getLabel: () => state.activeHideSpot === this ? this.leaveLabel : this.enterLabel,
         activate: () => state.activeHideSpot === this ? this.exit() : this.enter(),
       };
       for (const target of targets) addInteractionTarget(target, this.interaction);
@@ -12675,7 +12966,7 @@
     }
 
     enter() {
-      if (state.activeHideSpot) return;
+      if (state.activeHideSpot) return false;
       flashlightSystem?.setOn(false, { silent: true, force: true });
       state.activeHideSpot = this;
       state.isHidden = true;
@@ -12683,28 +12974,306 @@
       input.back = false;
       input.left = false;
       input.right = false;
+      if (typeof this.onEnter === "function") this.onEnter();
       teleport(this.hidePosition.x, this.floorY, this.hidePosition.z, this.hidePosition.yaw, 0);
       if (audioSystem) audioSystem.hide("enter");
-      if (dom.stage) dom.stage.classList.add("is-hiding");
+      if (dom.stage) {
+        dom.stage.classList.add("is-hiding");
+        for (const className of this.viewClasses) dom.stage.classList.add(className);
+      }
       if (dom.hiddenStatus) {
         dom.hiddenStatus.hidden = false;
-        dom.hiddenStatus.textContent = "Hidden among the coats";
+        dom.hiddenStatus.textContent = this.hiddenLabel;
       }
       state.currentInteraction = this.interaction;
       updateInteractionPrompt();
+      return true;
     }
 
     exit() {
-      if (state.activeHideSpot !== this) return;
+      if (state.activeHideSpot !== this) return false;
       state.activeHideSpot = null;
       state.isHidden = false;
       teleport(this.exitPosition.x, this.floorY, this.exitPosition.z, this.exitPosition.yaw, 0);
       if (audioSystem) audioSystem.hide("exit");
-      if (dom.stage) dom.stage.classList.remove("is-hiding");
+      if (dom.stage) {
+        dom.stage.classList.remove("is-hiding");
+        for (const className of this.viewClasses) dom.stage.classList.remove(className);
+      }
       if (dom.hiddenStatus) dom.hiddenStatus.hidden = true;
+      if (typeof this.onExit === "function") this.onExit();
       state.currentInteraction = null;
       updateLocation();
       updateInteractionPrompt();
+      return true;
+    }
+  }
+
+  class WindowCurtain {
+    constructor({ config, axis, fixed, floorY, opening }) {
+      this.id = config.id;
+      this.wall = config.wall;
+      this.room = config.room;
+      this.crackSide = config.crackSide;
+      this.axis = axis;
+      this.fixed = fixed;
+      this.windowCenter = opening.center;
+      this.center = opening.center + (Number(config.visualOffset) || 0);
+      this.exitOffset = Number(config.exitOffset) || 0;
+      this.floorY = floorY;
+      this.windowBottom = opening.bottom == null ? 0.82 : opening.bottom;
+      this.windowTop = opening.top == null ? 3.05 : opening.top;
+      this.width = opening.width + 0.28;
+      this.height = this.windowTop - this.windowBottom + 0.22;
+      this.inwardSign = fixed > 0 ? -1 : 1;
+      this.inwardYaw = axis === "x"
+        ? (this.inwardSign < 0 ? 0 : Math.PI)
+        : (this.inwardSign < 0 ? Math.PI / 2 : -Math.PI / 2);
+      this.openness = 1;
+      this.targetOpenness = 1;
+      this.clearance = { visualOverlaps: [], egressOverlaps: [] };
+      this.root = new THREE.Group();
+      this.root.name = `window-curtain-${this.id}`;
+      if (axis === "x") {
+        this.root.position.set(this.center, floorY, fixed + this.inwardSign * WINDOW_CURTAINS.insetFromWall);
+      } else {
+        this.root.position.set(fixed + this.inwardSign * WINDOW_CURTAINS.insetFromWall, floorY, this.center);
+        this.root.rotation.y = Math.PI / 2;
+      }
+      scene.add(this.root);
+
+      const panelGeometry = geometry(
+        `windowCurtainPanel-${WINDOW_CURTAINS.foldsPerPanel}`,
+        () => createCurtainPanelGeometry(WINDOW_CURTAINS.foldsPerPanel),
+      );
+      this.leftPanel = new THREE.Mesh(panelGeometry, M.curtainDamask);
+      this.leftPanel.name = `${this.id}-curtain-left-panel`;
+      this.leftPanel.castShadow = false;
+      this.leftPanel.receiveShadow = true;
+      this.root.add(this.leftPanel);
+      this.rightPanel = new THREE.Mesh(panelGeometry, M.curtainDamask);
+      this.rightPanel.name = `${this.id}-curtain-right-panel`;
+      this.rightPanel.castShadow = false;
+      this.rightPanel.receiveShadow = true;
+      this.root.add(this.rightPanel);
+      this.leftLining = new THREE.Mesh(panelGeometry, M.curtainLining);
+      this.leftLining.name = `${this.id}-curtain-left-lining`;
+      this.leftLining.castShadow = false;
+      this.leftLining.receiveShadow = false;
+      this.leftLining.position.z = -0.018;
+      this.root.add(this.leftLining);
+      this.rightLining = new THREE.Mesh(panelGeometry, M.curtainLining);
+      this.rightLining.name = `${this.id}-curtain-right-lining`;
+      this.rightLining.castShadow = false;
+      this.rightLining.receiveShadow = false;
+      this.rightLining.position.z = -0.018;
+      this.root.add(this.rightLining);
+
+      const rodY = this.windowTop + WINDOW_CURTAINS.rodLift;
+      cylinder({
+        name: `${this.id}-curtain-brass-rod`,
+        radius: 0.035,
+        height: this.width + 0.54,
+        y: rodY,
+        rotationZ: Math.PI / 2,
+        material: M.brass,
+        parent: this.root,
+        cast: false,
+      });
+      for (const side of [-1, 1]) {
+        sphere({
+          name: `${this.id}-curtain-finial`,
+          radius: 0.085,
+          x: side * (this.width / 2 + 0.31),
+          y: rodY,
+          material: M.brass,
+          parent: this.root,
+          cast: false,
+        });
+      }
+      this.ringCount = 10;
+      const ringGeometry = geometry("windowCurtainRing", () => new THREE.TorusGeometry(0.055, 0.012, 7, 14));
+      for (let index = 0; index < this.ringCount; index += 1) {
+        const ring = new THREE.Mesh(ringGeometry, M.brass);
+        ring.name = `${this.id}-curtain-ring`;
+        ring.position.set(-this.width / 2 + (index / (this.ringCount - 1)) * this.width, rodY - 0.065, 0);
+        ring.castShadow = false;
+        this.root.add(ring);
+      }
+      for (const side of [-1, 1]) {
+        const tieback = new THREE.Mesh(
+          geometry("windowCurtainTieback", () => new THREE.TorusGeometry(0.105, 0.026, 7, 16)),
+          M.brass,
+        );
+        tieback.name = `${this.id}-curtain-tieback`;
+        tieback.position.set(side * (this.width / 2 - 0.12), this.windowBottom + this.height * 0.42, 0.03);
+        tieback.scale.x = 0.7;
+        tieback.castShadow = false;
+        this.root.add(tieback);
+      }
+      roundedBox({
+        name: `${this.id}-curtain-pleated-valance`,
+        w: this.width + 0.1,
+        h: 0.22,
+        d: 0.1,
+        radius: 0.045,
+        y: this.windowTop + 0.02,
+        material: M.curtainDamask,
+        parent: this.root,
+        cast: false,
+      });
+      this.interactionHitbox = box({
+        name: `${this.id}-curtain-interaction`,
+        w: Math.max(0.9, this.width * 0.74),
+        h: Math.min(1.72, this.height * 0.72),
+        d: 0.045,
+        y: this.windowBottom + this.height * 0.52,
+        material: M.curtainInteraction,
+        parent: this.root,
+        cast: false,
+        receive: false,
+      });
+
+      this.applyPanelLayout();
+      this.root.traverse((object) => {
+        object.userData.windowCurtainId = this.id;
+      });
+
+      const hidePosition = this.worldPositionAtInset(WINDOW_CURTAINS.hideInsetFromWall);
+      const exitPosition = this.worldPositionAtInset(WINDOW_CURTAINS.exitInsetFromWall, this.exitOffset);
+      const roomTitle = this.room.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+      this.hidingSpot = new HidingSpot({
+        name: `${roomTitle} curtains`,
+        targets: [this.leftPanel, this.rightPanel, this.interactionHitbox],
+        floorY,
+        hidePosition: { ...hidePosition, yaw: this.inwardYaw },
+        exitPosition: { ...exitPosition, yaw: this.inwardYaw },
+        enterLabel: `Hide behind ${roomTitle} curtains`,
+        leaveLabel: `Leave ${roomTitle} curtains`,
+        hiddenLabel: `Hidden behind the ${roomTitle} curtains`,
+        viewClasses: ["is-curtain-hiding", `curtain-crack-${this.crackSide}`],
+        onEnter: () => { this.targetOpenness = 0; },
+        onExit: () => { this.targetOpenness = 1; },
+      });
+      this.hidingSpot.curtainId = this.id;
+      windowCurtains.push(this);
+      animatedObjects.push(this);
+    }
+
+    worldPositionAtInset(inset, alongOffset = 0) {
+      if (this.axis === "x") {
+        return { x: this.center + alongOffset, z: this.fixed + this.inwardSign * inset };
+      }
+      return { x: this.fixed + this.inwardSign * inset, z: this.center + alongOffset };
+    }
+
+    approachPosition() {
+      const position = this.worldPositionAtInset(
+        WINDOW_CURTAINS.insetFromWall + WINDOW_CURTAINS.interactionDistance,
+        this.exitOffset,
+      );
+      return { ...position, yaw: this.inwardYaw + Math.PI };
+    }
+
+    applyPanelLayout() {
+      const half = this.width / 2;
+      const gathered = this.width * WINDOW_CURTAINS.gatheredWidthRatio;
+      const crackCenter = (this.crackSide === "left" ? -1 : 1) * Math.min(WINDOW_CURTAINS.crackOffset, this.width * 0.12);
+      const closedLeftEnd = crackCenter - WINDOW_CURTAINS.crackWidth / 2;
+      const closedRightStart = crackCenter + WINDOW_CURTAINS.crackWidth / 2;
+      const openLeftWidth = gathered;
+      const openRightWidth = gathered;
+      const closedLeftWidth = closedLeftEnd + half;
+      const closedRightWidth = half - closedRightStart;
+      const leftWidth = THREE.MathUtils.lerp(closedLeftWidth, openLeftWidth, this.openness);
+      const rightWidth = THREE.MathUtils.lerp(closedRightWidth, openRightWidth, this.openness);
+      const leftCenter = THREE.MathUtils.lerp((-half + closedLeftEnd) / 2, -half + gathered / 2, this.openness);
+      const rightCenter = THREE.MathUtils.lerp((closedRightStart + half) / 2, half - gathered / 2, this.openness);
+      const panelY = this.windowBottom - 0.05 + this.height / 2 + WINDOW_CURTAINS.panelBottomLift;
+      for (const panel of [this.leftPanel, this.leftLining]) {
+        panel.position.x = leftCenter;
+        panel.position.y = panelY;
+        panel.scale.set(leftWidth, this.height, 1);
+      }
+      for (const panel of [this.rightPanel, this.rightLining]) {
+        panel.position.x = rightCenter;
+        panel.position.y = panelY;
+        panel.scale.set(rightWidth, this.height, 1);
+      }
+      this.leftLining.position.z = -0.018;
+      this.rightLining.position.z = -0.018;
+      this.root.updateMatrixWorld(true);
+    }
+
+    update(dt) {
+      const previous = this.openness;
+      this.openness = ease(this.openness, this.targetOpenness, WINDOW_CURTAINS.closeSpeed, dt);
+      if (Math.abs(this.openness - this.targetOpenness) < 0.0015) this.openness = this.targetOpenness;
+      if (Math.abs(previous - this.openness) > 0.0001) {
+        this.applyPanelLayout();
+        renderer.shadowMap.needsUpdate = true;
+      }
+    }
+
+    visualBounds() {
+      const along = this.width + 0.7;
+      const minY = this.floorY + this.windowBottom - 0.08;
+      const maxY = this.floorY + this.windowTop + 0.32;
+      const plane = this.axis === "x"
+        ? { minX: this.center - along / 2, maxX: this.center + along / 2, minZ: this.root.position.z - 0.12, maxZ: this.root.position.z + 0.12 }
+        : { minX: this.root.position.x - 0.12, maxX: this.root.position.x + 0.12, minZ: this.center - along / 2, maxZ: this.center + along / 2 };
+      return new THREE.Box3(
+        new THREE.Vector3(plane.minX, minY, plane.minZ),
+        new THREE.Vector3(plane.maxX, maxY, plane.maxZ),
+      );
+    }
+
+    egressBounds() {
+      const inner = this.worldPositionAtInset(WINDOW_CURTAINS.insetFromWall + 0.08);
+      const outer = this.worldPositionAtInset(WINDOW_CURTAINS.exitInsetFromWall + 0.24, this.exitOffset);
+      return new THREE.Box3(
+        new THREE.Vector3(
+          Math.min(inner.x, outer.x) - (this.axis === "x" ? 0.38 : 0.12),
+          this.floorY + 0.12,
+          Math.min(inner.z, outer.z) - (this.axis === "z" ? 0.38 : 0.12),
+        ),
+        new THREE.Vector3(
+          Math.max(inner.x, outer.x) + (this.axis === "x" ? 0.38 : 0.12),
+          this.floorY + 2.0,
+          Math.max(inner.z, outer.z) + (this.axis === "z" ? 0.38 : 0.12),
+        ),
+      );
+    }
+
+    getDiagnostics() {
+      return {
+        id: this.id,
+        wall: this.wall,
+        room: this.room,
+        floor: this.floorY === FLOOR.UPPER ? "SECOND FLOOR" : "MAIN LEVEL",
+        active: state.activeHideSpot === this.hidingSpot,
+        openness: Number(this.openness.toFixed(3)),
+        crackSide: this.crackSide,
+        crackWidth: WINDOW_CURTAINS.crackWidth,
+        position: {
+          x: Number(this.root.position.x.toFixed(3)),
+          y: Number(this.root.position.y.toFixed(3)),
+          z: Number(this.root.position.z.toFixed(3)),
+        },
+        geometry: {
+          folds: WINDOW_CURTAINS.foldsPerPanel,
+          panels: 2,
+          liningPanels: 2,
+          rings: this.ringCount,
+          finials: 2,
+          tiebacks: 2,
+        },
+        clearance: {
+          visualOverlaps: [...this.clearance.visualOverlaps],
+          egressOverlaps: [...this.clearance.egressOverlaps],
+        },
+        prompt: this.hidingSpot.interaction.getLabel(),
+      };
     }
   }
 
@@ -13180,6 +13749,7 @@
         recordingPlayed: Boolean(this.story.recordingPlayed),
         relaySabotaged: Boolean(this.story.relaySabotaged),
         threatEscalated: Boolean(this.story.threatEscalated),
+        kipClothingFound: Boolean(this.story.kipClothingFound),
         workroomUnlocked: Boolean(state.workroom.unlocked),
         workroomScratches: workroomCodeClue ? workroomCodeClue.getSnapshot() : [],
         inventory: this.story.inventory.slice(),
@@ -13191,6 +13761,7 @@
       const booleanFields = [
         "bookRead", "shovelTaken", "digSiteExcavated", "basementKeyFound", "basementUnlocked",
         "badgeFound", "tapeFound", "archiveCageUnlocked", "recordingPlayed", "relaySabotaged", "threatEscalated",
+        "kipClothingFound",
       ];
       for (const field of booleanFields) this.story[field] = Boolean(snapshot[field]);
       state.workroom.unlocked = Boolean(snapshot.workroomUnlocked);
@@ -13200,7 +13771,10 @@
       cameraSecurity?.endIllegalAction();
       const allowedItems = new Set(Object.keys(CONTESTANT_13.itemLabels));
       this.story.inventory = Array.from(new Set(Array.isArray(snapshot.inventory) ? snapshot.inventory.filter((id) => allowedItems.has(id)) : []));
-      const allowedEntries = new Map(Object.values(CONTESTANT_13.journal).map((entry) => [entry.id, entry]));
+      const allowedEntries = new Map(
+        [...Object.values(CONTESTANT_13.journal), BULK_STORAGE_SECRET.clothing.journal]
+          .map((entry) => [entry.id, entry]),
+      );
       this.story.journalEntries = Array.from(new Set(Array.isArray(snapshot.journalEntries) ? snapshot.journalEntries.map((entry) => entry?.id).filter((id) => allowedEntries.has(id)) : []))
         .map((id) => ({ ...allowedEntries.get(id) }));
       // The scratch-hunt entry is regenerated from the restored discovery
@@ -17114,7 +17688,12 @@
       this.returnInteraction = {
         type: "feast-hunt-return",
         id: "feast-hunt-return",
-        getLabel: () => "Place all three objects on the foyer tray",
+        getLabel: () => {
+          const carried = FEAST_HUNT.items.find((item) => item.id === this.show.carriedItemId);
+          return carried
+            ? `Return ${carried.label} to the foyer tray`
+            : "Return the golden object to the foyer tray";
+        },
         activate: () => this.returnItemsToFoyer("interaction"),
       };
       this.syncPresentation();
@@ -17220,6 +17799,22 @@
       return Boolean(mrFeastNpc.challengeStaged && mrFeastNpc.challengeMode === "feast-hunt");
     }
 
+    stageHostForBriefing() {
+      if (this.show.phase !== FEAST_HUNT_PHASE.BRIEFING || !mrFeastNpc) return false;
+      if (!mrFeastNpc.challengeStaged || mrFeastNpc.challengeMode !== "feast-hunt") return false;
+      const placement = FEAST_HUNT.briefingHostMark;
+      mrFeastNpc.root.position.set(placement.x, placement.y, placement.z);
+      mrFeastNpc.root.rotation.y = placement.yaw;
+      mrFeastNpc.root.scale.setScalar(Number(placement.scale) > 0 ? Number(placement.scale) : 1);
+      mrFeastNpc.root.visible = true;
+      for (const mesh of mrFeastNpc.meshes) mesh.visible = true;
+      if (mrFeastNpc.contactShadow) mrFeastNpc.contactShadow.visible = true;
+      mrFeastNpc.setChallengeColliderEnabled(false);
+      mrFeastNpc.setChallengeInteractionsEnabled(false);
+      mrFeastNpc.root.updateMatrixWorld(true);
+      return true;
+    }
+
     call(reason = "gate") {
       if (this.show.phase !== FEAST_HUNT_PHASE.DORMANT) {
         return { called: false, reason: "already-called", phase: this.show.phase };
@@ -17237,7 +17832,7 @@
       this.show.briefingRemaining = 0;
       this.show.countdownLastSecond = null;
       this.show.countdownSequence = [];
-      this.show.readyToReturn = this.show.collectedIds.length >= FEAST_HUNT.items.length;
+      this.show.readyToReturn = Boolean(this.show.carriedItemId);
       this.show.directSightDwell = 0;
       this.resetRivalState();
       this.show.staged = false;
@@ -17322,7 +17917,7 @@
       clearMovementInput();
       state.movement.crouched = false;
       state.movement.sprinting = false;
-      mrFeastNpc.stageChallenge(FEAST_HUNT.hostMark, {
+      mrFeastNpc.stageChallenge(FEAST_HUNT.briefingHostMark, {
         mode: "feast-hunt",
         zone: "FRONT FOYER",
         level: MR_FEAST_LEVEL.MAIN,
@@ -17412,6 +18007,7 @@
       this.show.rivalActive = false;
       this.show.rivalRouteIndex = 0;
       this.show.rivalPauseRemaining = 0;
+      this.show.rivalPendingItemId = null;
       this.show.rivalCollectedIds = [];
       this.show.rivalDistanceTravelled = 0;
       this.show.rivalReturned = false;
@@ -17507,7 +18103,7 @@
       );
       contestant13Quest?.showDiscovery(
         "FEAST HUNT — BLACKOUT",
-        "The house lights are dead. Find all three objects and return them to the foyer before Juniper.",
+        "The house lights are dead. Find one golden object, bring it back to the foyer, then search for the next.",
         6200,
       );
       this.syncPresentation();
@@ -17522,6 +18118,14 @@
       return this.show.collectedIds.includes(id);
     }
 
+    returned(id) {
+      return this.show.returnedIds.includes(id);
+    }
+
+    carriedItem() {
+      return FEAST_HUNT.items.find((item) => item.id === this.show.carriedItemId) || null;
+    }
+
     setItemInteractive(entry, interactive) {
       if (!entry?.hitbox) return;
       if (interactive && !entry.registered) {
@@ -17534,7 +18138,7 @@
     }
 
     applyStatueStage(stage, { requireUnobserved = false } = {}) {
-      const targetStage = clamp(Math.floor(Number(stage) || 0), 0, 2);
+      const targetStage = clamp(Math.floor(Number(stage) || 0), 0, 3);
       if (targetStage > 0 && requireUnobserved && state.currentRoom === "FRONT FOYER") {
         return false;
       }
@@ -17542,9 +18146,38 @@
       for (const turn of FEAST_HUNT.statueTurns) {
         const entry = estateStatueScene.statues.find((statue) => statue.id === turn.id);
         if (!entry?.root) continue;
-        const offset = targetStage <= 0 ? 0 : targetStage === 1 ? turn.stageOne : turn.stageTwo;
-        entry.root.rotation.y = entry.placement.rotationY + offset;
+        const pose = targetStage <= 0
+          ? { rotationY: 0, x: 0, z: 0 }
+          : targetStage === 1
+            ? turn.stageOne
+            : targetStage === 2
+              ? turn.stageTwo
+              : turn.stageThree;
+        entry.root.position.set(
+          entry.placement.position.x + pose.x,
+          entry.placement.position.y,
+          entry.placement.position.z + pose.z,
+        );
+        entry.root.rotation.y = entry.placement.rotationY + pose.rotationY;
         entry.root.updateMatrixWorld(true);
+        if (entry.colliderBody) {
+          const center = {
+            x: entry.root.position.x,
+            y: entry.root.position.y + entry.placement.collider.height / 2,
+            z: entry.root.position.z,
+          };
+          const rotation = new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(0, entry.root.rotation.y, 0),
+          );
+          entry.colliderBody.setTranslation(center, false);
+          entry.colliderBody.setRotation(rotation, false);
+          if (entry.colliderFixedBox) {
+            entry.colliderFixedBox.x = center.x;
+            entry.colliderFixedBox.y = center.y;
+            entry.colliderFixedBox.z = center.z;
+            entry.colliderFixedBox.rotationY = entry.root.rotation.y;
+          }
+        }
       }
       if (targetStage > 0 && requireUnobserved) {
         this.show.statuesMovedWhileUnobserved = true;
@@ -17553,7 +18186,7 @@
     }
 
     syncPendingStatueStage() {
-      const desiredStage = clamp(this.show.collectedIds.length, 0, 2);
+      const desiredStage = clamp(this.show.collectedIds.length, 0, 3);
       if (desiredStage > this.show.statueStage) {
         this.applyStatueStage(desiredStage, { requireUnobserved: true });
       }
@@ -17568,13 +18201,31 @@
       if (this.show.phase !== FEAST_HUNT_PHASE.HUNTING) {
         return { accepted: false, reason: "not-hunting", itemId: id };
       }
+      if (this.show.carriedItemId || this.show.readyToReturn) {
+        const carried = this.carriedItem();
+        contestant13Quest?.showDiscovery(
+          "RETURN TO THE FOYER",
+          carried
+            ? `Place the ${carried.label} on the foyer tray before taking another object.`
+            : "Return the golden object to the foyer before taking another.",
+          4200,
+        );
+        return {
+          accepted: false,
+          reason: "return-current-first",
+          itemId: id,
+          carriedItemId: this.show.carriedItemId,
+        };
+      }
       this.show.collectedIds.push(id);
+      this.show.carriedItemId = id;
+      this.show.readyToReturn = true;
       this.syncPendingStatueStage();
       this.syncScene();
       audioSystem?.pickup("object");
       contestant13Quest?.showDiscovery(
         entry.config.label,
-        `${this.show.collectedIds.length} of ${FEAST_HUNT.items.length} Feast Hunt objects recovered.`,
+        `Carry it back to the foyer tray. ${this.show.returnedIds.length} of ${FEAST_HUNT.items.length} objects have been returned.`,
         3600,
       );
       const result = {
@@ -17583,17 +18234,9 @@
         source,
         itemId: id,
         collectedCount: this.show.collectedIds.length,
+        carriedItemId: id,
+        readyToReturn: true,
       };
-      if (this.show.collectedIds.length >= FEAST_HUNT.items.length) {
-        this.show.readyToReturn = true;
-        contestant13Quest?.showDiscovery(
-          "ALL THREE RECOVERED",
-          "Bring the objects back to the foyer tray before Juniper returns.",
-          5600,
-        );
-        this.syncPresentation();
-        return { ...result, readyToReturn: true, completed: false };
-      }
       this.syncPresentation();
       return result;
     }
@@ -17602,10 +18245,30 @@
       if (this.show.phase !== FEAST_HUNT_PHASE.HUNTING) {
         return { completed: this.show.phase === FEAST_HUNT_PHASE.COMPLETED, reason: "not-hunting" };
       }
-      if (!this.show.readyToReturn || this.show.collectedIds.length < FEAST_HUNT.items.length) {
+      const carried = this.carriedItem();
+      if (!this.show.readyToReturn || !carried) {
         return { completed: false, reason: "items-missing" };
       }
-      return this.finishCompetition(source);
+      if (!this.returned(carried.id)) this.show.returnedIds.push(carried.id);
+      this.show.carriedItemId = null;
+      this.show.readyToReturn = false;
+      if (this.show.returnedIds.length >= FEAST_HUNT.items.length) {
+        return this.finishCompetition(source);
+      }
+      audioSystem?.pickup("object");
+      contestant13Quest?.showDiscovery(
+        `${carried.label.toUpperCase()} RETURNED`,
+        `${this.show.returnedIds.length} of ${FEAST_HUNT.items.length} objects are on the foyer tray. Find another before Juniper returns.`,
+        5200,
+      );
+      this.syncPresentation();
+      return {
+        completed: false,
+        reason: null,
+        source,
+        itemId: carried.id,
+        returnedCount: this.show.returnedIds.length,
+      };
     }
 
     finishCompetition(source = "player") {
@@ -17613,6 +18276,8 @@
         return { completed: this.show.phase === FEAST_HUNT_PHASE.COMPLETED };
       }
       this.show.collectedIds = FEAST_HUNT.items.map((item) => item.id);
+      this.show.returnedIds = FEAST_HUNT.items.map((item) => item.id);
+      this.show.carriedItemId = null;
       this.show.readyToReturn = false;
       this.show.outcome = "player";
       this.show.finalePending = true;
@@ -17749,6 +18414,7 @@
           }
         }
       } else if (this.show.phase === FEAST_HUNT_PHASE.BRIEFING) {
+        this.stageHostForBriefing();
         this.show.briefingRemaining = Math.max(0, this.show.briefingRemaining - step);
         if (
           this.show.briefingRemaining > 0
@@ -17828,6 +18494,7 @@
 
     syncCast() {
       if (this.show.phase === FEAST_HUNT_PHASE.CALLED) this.stageHostForCall();
+      else if (this.show.phase === FEAST_HUNT_PHASE.BRIEFING) this.stageHostForBriefing();
     }
 
     formatClock(seconds) {
@@ -17848,7 +18515,7 @@
         && (phase !== FEAST_HUNT_PHASE.COMPLETED || showCompletion);
       dom.feastHunt.hidden = !visible;
       dom.feastHunt.dataset.phase = phase;
-      setText(dom.feastHuntProgress, `${this.show.collectedIds.length} / ${FEAST_HUNT.items.length}`);
+      setText(dom.feastHuntProgress, `${this.show.returnedIds.length} / ${FEAST_HUNT.items.length}`);
       if (phase === FEAST_HUNT_PHASE.CALLED) {
         setText(dom.feastHuntEyebrow, "Game 3 · Report to foyer");
         setText(dom.feastHuntTimer, this.formatClock(this.show.reportRemaining));
@@ -17862,10 +18529,11 @@
         setText(dom.feastHuntEyebrow, "Game 3 · Feast Hunt");
         setText(dom.feastHuntTimer, "LIVE");
         const rivalProgress = `${FEAST_HUNT.rival.label} ${this.show.rivalCollectedIds.length}/${FEAST_HUNT.items.length}`;
+        const carried = this.carriedItem();
         setText(
           dom.feastHuntStatus,
           this.show.readyToReturn
-            ? `Return to the foyer · ${rivalProgress}`
+            ? `Return ${carried?.label || "the object"} to the foyer · ${rivalProgress}`
             : `Find the gold · ${rivalProgress}`,
         );
       } else if (phase === FEAST_HUNT_PHASE.COMPLETED) {
@@ -17904,6 +18572,8 @@
             ? this.show.reportRemaining
             : 0,
         collectedIds: [...this.show.collectedIds],
+        returnedIds: [...this.show.returnedIds],
+        carriedItemId: this.show.carriedItemId,
         readyToReturn: this.show.readyToReturn,
         statueStage: this.show.statueStage,
         statuesMovedWhileUnobserved: this.show.statuesMovedWhileUnobserved,
@@ -17943,6 +18613,23 @@
       const collectedIds = Array.isArray(source.collectedIds)
         ? source.collectedIds.filter((id, index, ids) => validItemIds.includes(id) && ids.indexOf(id) === index)
         : [];
+      const hasReturnedIds = Array.isArray(source.returnedIds);
+      const returnedIds = hasReturnedIds
+        ? source.returnedIds.filter(
+          (id, index, ids) => collectedIds.includes(id) && ids.indexOf(id) === index,
+        )
+        : collectedIds.slice(0, Math.max(0, collectedIds.length - 1));
+      const hasCarriedItemId = Object.prototype.hasOwnProperty.call(source, "carriedItemId");
+      const inferredCarriedItemId = collectedIds.find((id) => !returnedIds.includes(id)) || null;
+      const carriedItemId = hasCarriedItemId
+        ? (
+          validItemIds.includes(source.carriedItemId)
+          && collectedIds.includes(source.carriedItemId)
+          && !returnedIds.includes(source.carriedItemId)
+            ? source.carriedItemId
+            : null
+        )
+        : inferredCarriedItemId;
       this.show.phase = restoredPhase;
       this.show.triggerReason = source.triggerReason || (restoredPhase === FEAST_HUNT_PHASE.DORMANT ? null : "saved");
       this.show.callCount = clamp(
@@ -17965,8 +18652,14 @@
       this.show.collectedIds = restoredPhase === FEAST_HUNT_PHASE.COMPLETED
         ? [...validItemIds]
         : collectedIds;
+      this.show.returnedIds = restoredPhase === FEAST_HUNT_PHASE.COMPLETED
+        ? [...validItemIds]
+        : returnedIds;
+      this.show.carriedItemId = restoredPhase === FEAST_HUNT_PHASE.COMPLETED
+        ? null
+        : carriedItemId;
       this.show.readyToReturn = restoredPhase === FEAST_HUNT_PHASE.CALLED
-        && collectedIds.length >= validItemIds.length;
+        && Boolean(this.show.carriedItemId);
       this.show.statueStage = 0;
       this.show.statuesMovedWhileUnobserved = Boolean(source.statuesMovedWhileUnobserved);
       this.show.directSightDwell = 0;
@@ -17984,9 +18677,9 @@
       this.show.lastInvalidTransition = null;
       this.applyStatueStage(
         clamp(
-          Number(source.statueStage) || Math.min(this.show.collectedIds.length, 2),
+          Number(source.statueStage) || Math.min(this.show.collectedIds.length, 3),
           0,
-          2,
+          3,
         ),
       );
       this.syncPresentation();
@@ -18007,7 +18700,7 @@
         this.qaStepping = false;
         return { elapsed: Number(duration.toFixed(3)), state: this.getDiagnostics() };
       }
-      const fixedStep = 1 / 60;
+      const fixedStep = FEAST_HUNT.qaStepSeconds;
       let elapsed = 0;
       while (elapsed < duration && !state.menuOpen && !state.gameOver) {
         const step = Math.min(fixedStep, duration - elapsed);
@@ -18059,6 +18752,8 @@
       updateInteractionPrompt();
       return {
         readyToReturn: this.show.readyToReturn,
+        carriedItemId: this.show.carriedItemId,
+        returnedCount: this.show.returnedIds.length,
         room: state.currentRoom,
         prompt: state.currentInteraction?.getLabel() || null,
       };
@@ -18141,15 +18836,28 @@
         const entry = estateStatueScene.statues.find((statue) => statue.id === turn.id);
         const root = entry?.root || null;
         const placement = entry?.placement || null;
-        const positionUnchanged = Boolean(
-          root
-          && placement
-          && Math.hypot(
+        const positionDelta = root && placement
+          ? Math.hypot(
             root.position.x - placement.position.x,
             root.position.y - placement.position.y,
             root.position.z - placement.position.z,
-          ) <= 0.001
+          )
+          : null;
+        const positionUnchanged = Boolean(
+          positionDelta != null
+          && positionDelta <= 0.001
         );
+        const colliderPosition = entry?.colliderBody?.translation?.() || null;
+        const expectedColliderY = root && placement
+          ? root.position.y + placement.collider.height / 2
+          : null;
+        const colliderOffset = colliderPosition && root && expectedColliderY != null
+          ? Math.hypot(
+            colliderPosition.x - root.position.x,
+            colliderPosition.y - expectedColliderY,
+            colliderPosition.z - root.position.z,
+          )
+          : null;
         const rotationChanged = Boolean(
           root
           && placement
@@ -18158,9 +18866,18 @@
         return {
           id: turn.id,
           positionUnchanged,
+          positionDelta: positionDelta == null ? null : Number(positionDelta.toFixed(4)),
+          position: root ? {
+            x: Number(root.position.x.toFixed(4)),
+            y: Number(root.position.y.toFixed(4)),
+            z: Number(root.position.z.toFixed(4)),
+          } : null,
+          basePosition: placement ? { ...placement.position } : null,
           rotationChanged,
           rotationY: root ? Number(root.rotation.y.toFixed(4)) : null,
           baseRotationY: placement ? Number(placement.rotationY.toFixed(4)) : null,
+          colliderAligned: colliderOffset != null && colliderOffset <= 0.001,
+          colliderOffset: colliderOffset == null ? null : Number(colliderOffset.toFixed(4)),
         };
       });
       return {
@@ -18204,10 +18921,13 @@
           countdownLastSecond: this.show.countdownLastSecond,
           countdownSequence: [...this.show.countdownSequence],
           playerMark: { ...FEAST_HUNT.playerMark },
-          hostMark: { ...FEAST_HUNT.hostMark },
+          hostMark: { ...FEAST_HUNT.briefingHostMark },
         },
         collectedCount: this.show.collectedIds.length,
         collectedIds: [...this.show.collectedIds],
+        returnedCount: this.show.returnedIds.length,
+        returnedIds: [...this.show.returnedIds],
+        carriedItemId: this.show.carriedItemId,
         readyToReturn: this.show.readyToReturn,
         returnStation: {
           visible: Boolean(feastHuntScene.returnRoot?.visible),
@@ -18228,6 +18948,8 @@
             routeLength: FEAST_HUNT.rival.route.length,
             room: this.show.rivalRoom,
             pauseRemaining: Number(this.show.rivalPauseRemaining.toFixed(3)),
+            pendingItemId: this.show.rivalPendingItemId,
+            searchPauseSeconds: FEAST_HUNT.rival.searchPauseSeconds,
             distanceTravelled: Number(this.show.rivalDistanceTravelled.toFixed(3)),
             challengeMode: mansionContestants?.challengeMode || null,
             position: entry ? {
@@ -18242,9 +18964,15 @@
           label: entry.config.label,
           level: entry.config.level,
           room: entry.config.room,
+          hidingContext: entry.config.hidingContext || null,
           visible: Boolean(entry.root.visible),
           registered: entry.registered,
           position: { ...entry.config.position },
+          visualScale: entry.config.visualScale || 1,
+          interactionSize: entry.config.interactionSize || 0.78,
+          visualSize: Object.fromEntries(
+            Object.entries(entry.visualSize || {}).map(([key, value]) => [key, Number(value.toFixed(4))]),
+          ),
         })),
         statues: this.statueDiagnostics(),
         directSightDwell: Number(this.show.directSightDwell.toFixed(3)),
@@ -18409,8 +19137,9 @@
     }
 
     createEntry(kind, options) {
+      const kindCount = this.counts[kind] || 0;
       const entry = {
-        id: `tamper-${kind}-${this.counts[kind] + 1}`,
+        id: `tamper-${kind}-${kindCount + 1}`,
         kind,
         label: options.label,
         title: options.title || null,
@@ -18426,10 +19155,18 @@
         isTampered: options.isTampered || null,
         visualOffset: options.visualOffset || (() => 0),
         colliderOffset: options.colliderOffset || (() => 0),
+        distraction: false,
+        room: null,
+        pulseSeconds: 0,
+        pulseRemaining: 0,
+        pulseCount: 0,
+        animationPhase: 0,
+        updateVisual: null,
+        qa: null,
       };
       this.entries.push(entry);
       this.byId.set(entry.id, entry);
-      this.counts[kind] += 1;
+      this.counts[kind] = kindCount + 1;
       return entry;
     }
 
@@ -18549,6 +19286,24 @@
       return entry;
     }
 
+    registerDistraction({
+      kind, label, room, position, hit, apply, updateVisual, visualOffset, pulseSeconds, labels, qa,
+    }) {
+      const entry = this.createEntry(kind, {
+        label,
+        position,
+        apply,
+        visualOffset,
+      });
+      entry.distraction = true;
+      entry.room = room;
+      entry.pulseSeconds = pulseSeconds;
+      entry.updateVisual = updateVisual;
+      entry.qa = qa;
+      addInteractionTarget(hit, this.createToggleInteraction(entry, labels));
+      return entry;
+    }
+
     createToggleInteraction(entry, labels) {
       return {
         type: `tamper-${entry.kind}`,
@@ -18578,6 +19333,11 @@
 
     setTampered(entry, tampered, cause) {
       if (entry.isTampered || entry.tampered === tampered) return false;
+      if (tampered && entry.distraction && competitionBlocksInvestigation()) {
+        entry.blockedReason = "live competition production hold";
+        notifyCompetitionHold();
+        return false;
+      }
       if (
         tampered
         && entry.kind === "portrait"
@@ -18599,7 +19359,9 @@
       entry.tampered = tampered;
       entry.apply(tampered);
       if (tampered) {
-        entry.noticeRemaining = MANSION_TAMPER.noticeSeconds + Math.max(0, entry.cooldownRemaining);
+        entry.noticeRemaining = (entry.distraction ? MANSION_DISTRACTIONS.noticeSeconds : MANSION_TAMPER.noticeSeconds)
+          + Math.max(0, entry.cooldownRemaining);
+        if (entry.distraction) entry.pulseRemaining = 0;
         // Deliberate mischief can be caught in the act; straightening never
         // counts, and ordinary fridge use stays innocent until left open.
         if (cause === "player" && entry.kind !== "fridge") reportPlayerInfraction(entry.kind, entry.id);
@@ -18622,7 +19384,12 @@
 
     update(dt, dispatchCollector = null) {
       if (!state.started) return;
-      if (competitionBlocksInvestigation()) return;
+      if (competitionBlocksInvestigation()) {
+        for (const entry of this.entries) {
+          if (entry.distraction && entry.tampered) this.setTampered(entry, false, "competition");
+        }
+        return;
+      }
       for (const entry of this.entries) {
         if (entry.cooldownRemaining > 0) entry.cooldownRemaining = Math.max(0, entry.cooldownRemaining - dt);
         if (entry.isTampered) {
@@ -18631,6 +19398,20 @@
             entry.tampered = derived;
             if (derived) entry.noticeRemaining = MANSION_TAMPER.noticeSeconds + Math.max(0, entry.cooldownRemaining);
             else this.handleRestored(entry, "player");
+          }
+        }
+        if (entry.distraction) {
+          if (entry.tampered) {
+            entry.animationPhase += dt;
+            entry.updateVisual?.(dt, true, entry.animationPhase);
+            entry.pulseRemaining -= dt;
+            if (entry.pulseRemaining <= 0) {
+              entry.pulseRemaining += entry.pulseSeconds;
+              entry.pulseCount += 1;
+              audioSystem?.houseDistraction(entry.kind, entry.position);
+            }
+          } else {
+            entry.updateVisual?.(dt, false, 0);
           }
         }
         if (!entry.tampered || entry.dispatched) continue;
@@ -18679,6 +19460,8 @@
       entry.dispatched = false;
       entry.noticeRemaining = 0;
       entry.cooldownRemaining = MANSION_TAMPER.retamperCooldownSeconds;
+      entry.animationPhase = 0;
+      entry.updateVisual?.(0, false, 0);
       this.fixesCompleted += 1;
       speechSystem?.sayFromPool(`fixed-${entry.kind}`, { title: entry.title });
       return true;
@@ -18706,6 +19489,9 @@
         entry.noticeRemaining = 0;
         entry.cooldownRemaining = 0;
         entry.blockedReason = null;
+        entry.pulseRemaining = 0;
+        entry.animationPhase = 0;
+        entry.updateVisual?.(0, false, 0);
       }
     }
 
@@ -18752,7 +19538,20 @@
           tiltRadians: entry.kind === "portrait" ? entry.tiltRadians : null,
           visualOffset: Number(entry.visualOffset().toFixed(3)),
           colliderOffset: Number(entry.colliderOffset().toFixed(3)),
+          distraction: entry.distraction,
+          room: entry.room,
+          active: entry.distraction ? entry.tampered : null,
+          pulseCount: entry.distraction ? entry.pulseCount : null,
+          animationPhase: entry.distraction ? Number(entry.animationPhase.toFixed(3)) : null,
         })),
+      };
+    }
+
+    getDistractionDiagnostics() {
+      const diagnostics = this.getDiagnostics();
+      return {
+        activeCount: diagnostics.entries.filter((entry) => entry.distraction && entry.active).length,
+        entries: diagnostics.entries.filter((entry) => entry.distraction),
       };
     }
 
@@ -18774,6 +19573,30 @@
       const diagnostics = this.getDiagnostics();
       const updated = diagnostics.entries.find((candidate) => candidate.id === id) || null;
       return updated ? { ...updated, state: diagnostics } : null;
+    }
+
+    placePlayerNearDistractionForQA(kind) {
+      if (!state.qa || !physics) return null;
+      const entry = this.entries.find((candidate) => candidate.distraction && candidate.kind === kind);
+      if (!entry?.qa) return null;
+      const target = entry.position;
+      const qa = entry.qa;
+      const yaw = Math.atan2(qa.x - target.x, qa.z - target.z);
+      teleport(qa.x, qa.floorY, qa.z, yaw, qa.pitch || -0.18);
+      syncCamera();
+      const horizontal = Math.max(0.001, Math.hypot(target.x - camera.position.x, target.z - camera.position.z));
+      state.pitch = Math.atan2((target.y || qa.floorY + 1) - camera.position.y, horizontal);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      updateInteractionPrompt();
+      return { placed: true, kind, room: state.currentRoom, id: entry.id };
+    }
+
+    resetDistractionsForQA() {
+      if (!state.qa) return null;
+      this.resetAllForLoad();
+      return this.getDistractionDiagnostics();
     }
 
     advanceForQA(seconds) {
@@ -19430,6 +20253,617 @@
         alertCount: this.state.alertCount,
         alertCooldown: Number(this.state.alertCooldown.toFixed(3)),
         lastAlert: this.state.lastAlert ? { ...this.state.lastAlert } : null,
+      };
+    }
+  }
+
+  class BulkStorageSecretSystem {
+    constructor() {
+      this.state = state.bulkStorageSecret;
+      this.boxes = [];
+      this.symbols = [];
+      this.grabbed = null;
+      this.clothingRoot = null;
+      this.clothingInteraction = null;
+      this.clothingRegistered = false;
+      this.symbolMaterial = new THREE.LineBasicMaterial({
+        color: 0x6e1117,
+        transparent: true,
+        opacity: 0.82,
+        depthTest: true,
+        depthWrite: false,
+      });
+      this.buildSymbols();
+      this.buildBoxes();
+      this.buildKipClothing();
+    }
+
+    buildSymbols() {
+      for (const spec of BULK_STORAGE_SECRET.symbols) {
+        const root = new THREE.Group();
+        root.name = `bulk-secret-demonic-symbol-${spec.id}`;
+        root.position.set(spec.x, FLOOR.BASEMENT + 0.018, spec.z);
+        root.rotation.y = spec.rotation;
+        scene.add(root);
+
+        const circlePoints = [];
+        for (let index = 0; index < 36; index += 1) {
+          const angle = (index / 36) * Math.PI * 2;
+          circlePoints.push(new THREE.Vector3(
+            Math.cos(angle) * spec.radius,
+            0,
+            Math.sin(angle) * spec.radius,
+          ));
+        }
+        const circle = new THREE.LineLoop(
+          new THREE.BufferGeometry().setFromPoints(circlePoints),
+          this.symbolMaterial,
+        );
+        circle.name = `bulk-secret-demonic-symbol-${spec.id}-ring`;
+        circle.renderOrder = 4;
+        root.add(circle);
+
+        const starPoints = [];
+        const outer = spec.radius * 0.76;
+        const starOrder = [0, 2, 4, 1, 3, 0];
+        for (const index of starOrder) {
+          const angle = -Math.PI / 2 + (index / 5) * Math.PI * 2;
+          starPoints.push(new THREE.Vector3(
+            Math.cos(angle) * outer,
+            0.001,
+            Math.sin(angle) * outer,
+          ));
+        }
+        const star = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints(starPoints),
+          this.symbolMaterial,
+        );
+        star.name = `bulk-secret-demonic-symbol-${spec.id}-star`;
+        star.renderOrder = 4;
+        root.add(star);
+
+        const thornPoints = [];
+        for (let index = 0; index < 5; index += 1) {
+          const angle = -Math.PI / 2 + (index / 5) * Math.PI * 2;
+          const inner = spec.radius * 0.82;
+          const tip = spec.radius * (index % 2 ? 1.18 : 1.08);
+          thornPoints.push(
+            new THREE.Vector3(Math.cos(angle) * inner, 0.002, Math.sin(angle) * inner),
+            new THREE.Vector3(Math.cos(angle) * tip, 0.002, Math.sin(angle) * tip),
+          );
+        }
+        const thorns = new THREE.LineSegments(
+          new THREE.BufferGeometry().setFromPoints(thornPoints),
+          this.symbolMaterial,
+        );
+        thorns.name = `bulk-secret-demonic-symbol-${spec.id}-thorns`;
+        thorns.renderOrder = 4;
+        root.add(thorns);
+        this.symbols.push({ spec, root, visibilityToggles: 0 });
+      }
+    }
+
+    buildBoxes() {
+      const hitMaterial = new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        colorWrite: false,
+      });
+      for (const spec of BULK_STORAGE_SECRET.boxes) {
+        const root = new THREE.Group();
+        root.name = `${spec.id}-root`;
+        root.position.set(spec.x, FLOOR.BASEMENT, spec.z);
+        root.rotation.y = spec.yaw;
+        scene.add(root);
+        const body = box({
+          name: `${spec.id}-bulk-secret-movable-box`,
+          w: spec.width,
+          h: spec.height,
+          d: spec.depth,
+          y: spec.height / 2,
+          material: M.foodBox,
+          parent: root,
+          cast: true,
+        });
+        for (const side of [-1, 1]) {
+          box({
+            name: `${spec.id}-crate-side-band`,
+            w: 0.075,
+            h: spec.height + 0.015,
+            d: spec.depth + 0.025,
+            x: side * (spec.width * 0.36),
+            y: spec.height / 2,
+            material: M.darkWood,
+            parent: root,
+            cast: false,
+          });
+        }
+        for (const z of [-1, 1]) {
+          box({
+            name: `${spec.id}-crate-top-slat`,
+            w: spec.width + 0.025,
+            h: 0.045,
+            d: 0.095,
+            y: spec.height + 0.022,
+            z: z * spec.depth * 0.31,
+            material: M.darkWood,
+            parent: root,
+            cast: false,
+          });
+        }
+        const hitbox = box({
+          name: `${spec.id}-interaction`,
+          w: spec.width + 0.16,
+          h: spec.height + 0.2,
+          d: spec.depth + 0.16,
+          y: spec.height / 2,
+          material: hitMaterial,
+          parent: root,
+          cast: false,
+          receive: false,
+        });
+        hitbox.visible = false;
+        const physical = physics.addKinematicBox(
+          spec.x,
+          FLOOR.BASEMENT + spec.height / 2,
+          spec.z,
+          spec.width,
+          spec.height,
+          spec.depth,
+        );
+        const colliderRotation = new THREE.Quaternion().setFromEuler(
+          new THREE.Euler(0, spec.yaw, 0),
+        );
+        physical.body.setRotation(colliderRotation, true);
+        physical.body.setNextKinematicRotation(colliderRotation);
+        const occupancy = {
+          x: spec.x,
+          y: FLOOR.BASEMENT + spec.height / 2,
+          z: spec.z,
+          w: spec.width,
+          h: spec.height,
+          d: spec.depth,
+          rotationY: spec.yaw,
+          rotationX: 0,
+          rotationZ: 0,
+        };
+        // Mr. Feast and contestants use the lightweight fixed-box occupancy
+        // list for avoidance, while the player collides with the real Rapier
+        // kinematic body. Updating both keeps every actor aligned with the box.
+        physics.fixedBoxes.push(occupancy);
+        const entry = {
+          spec,
+          root,
+          body,
+          hitbox,
+          physical,
+          colliderRotation,
+          occupancy,
+          home: { x: spec.x, z: spec.z },
+          interaction: null,
+        };
+        const interaction = {
+          type: "bulk-storage-box",
+          id: spec.id,
+          getLabel: () => this.grabbed === entry
+            ? "Move box · W/S push or pull"
+            : "Hold to move box · W/S push or pull",
+          activate: () => false,
+          beginHold: () => this.beginHold(entry),
+          endHold: () => this.endHold("interaction-release"),
+          resolve: () => (
+            !competitionBlocksInvestigation()
+            && (!this.grabbed || this.grabbed === entry)
+              ? interaction
+              : null
+          ),
+        };
+        entry.interaction = interaction;
+        addInteractionTarget(hitbox, interaction);
+        this.boxes.push(entry);
+      }
+    }
+
+    buildKipClothing() {
+      const config = BULK_STORAGE_SECRET.clothing;
+      const root = new THREE.Group();
+      root.name = "kip-clothing-bulk-storage";
+      root.position.set(config.x, FLOOR.BASEMENT + 0.025, config.z);
+      root.rotation.y = config.yaw;
+      scene.add(root);
+      const jacketMaterial = new THREE.MeshStandardMaterial({ color: 0x17362f, roughness: 0.94 });
+      const shirtMaterial = new THREE.MeshStandardMaterial({ color: 0x243f38, roughness: 0.92 });
+      const leatherMaterial = new THREE.MeshStandardMaterial({ color: 0x342019, roughness: 0.82 });
+      roundedBox({ name: "kip-clothing-dark-green-jacket", w: 0.76, h: 0.09, d: 0.54, radius: 0.07, y: 0.095, rotationY: 0.08, material: jacketMaterial, parent: root, cast: false });
+      roundedBox({ name: "kip-clothing-leather-trimmed-shirt", w: 0.58, h: 0.075, d: 0.42, radius: 0.055, x: -0.05, y: 0.17, z: 0.02, rotationY: -0.12, material: shirtMaterial, parent: root, cast: false });
+      for (const side of [-1, 1]) {
+        roundedBox({
+          name: "kip-clothing-jacket-sleeve",
+          w: 0.21,
+          h: 0.065,
+          d: 0.55,
+          radius: 0.045,
+          x: side * 0.36,
+          y: 0.105 + (side > 0 ? 0.015 : 0),
+          z: 0.08,
+          rotationY: side * 0.42,
+          material: jacketMaterial,
+          parent: root,
+          cast: false,
+        });
+        box({
+          name: "kip-clothing-leather-cross-trim",
+          w: 0.055,
+          h: 0.018,
+          d: 0.45,
+          x: side * 0.13,
+          y: 0.214,
+          z: 0.01,
+          rotationY: side * 0.56,
+          material: leatherMaterial,
+          parent: root,
+          cast: false,
+        });
+      }
+      roundedBox({ name: "kip-clothing-dark-trousers", w: 0.68, h: 0.075, d: 0.3, radius: 0.045, x: 0.08, y: 0.055, z: -0.26, rotationY: 0.18, material: M.soot, parent: root, cast: false });
+      const collar = cylinder({ name: "kip-clothing-high-collar", radius: 0.12, height: 0.04, segments: 14, x: -0.08, y: 0.22, z: -0.16, material: leatherMaterial, parent: root, cast: false });
+      collar.scale.z = 0.55;
+
+      const hitMaterial = new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        colorWrite: false,
+      });
+      const hitbox = box({
+        name: "kip-clothing-interaction",
+        w: 1.05,
+        h: 0.72,
+        d: 0.95,
+        y: 0.34,
+        material: hitMaterial,
+        parent: root,
+        cast: false,
+        receive: false,
+      });
+      hitbox.visible = false;
+      const interaction = {
+        type: "story",
+        id: "kip-clothing",
+        getLabel: () => state.contestant13.kipClothingFound ? "Reinspect Kip's clothing" : "Inspect Kip's clothing",
+        activate: () => this.inspectClothing(),
+        resolve: () => competitionBlocksInvestigation() ? null : interaction,
+      };
+      addInteractionTarget(hitbox, interaction);
+      this.clothingRoot = root;
+      this.clothingInteraction = interaction;
+      this.clothingRegistered = true;
+    }
+
+    beginHold(entry) {
+      if (
+        !entry
+        || !state.started
+        || competitionBlocksInvestigation()
+        || state.journalOpen
+        || state.menuOpen
+        || state.workroom.keypadOpen
+        || state.readableBooks.open
+        || state.contestant13.actionInProgress
+        || state.gameOver
+      ) return false;
+      this.grabbed = entry;
+      state.movement.sprinting = false;
+      input.sprint = false;
+      updateInteractionPrompt();
+      return true;
+    }
+
+    endHold(reason = "released") {
+      if (!this.grabbed) return false;
+      this.grabbed = null;
+      this.lastReleaseReason = reason;
+      updateInteractionPrompt();
+      return true;
+    }
+
+    isHolding() {
+      return Boolean(this.grabbed && input.interactHeld);
+    }
+
+    candidateInsideRoom(entry, x, z) {
+      const bounds = BULK_STORAGE_SECRET.bounds;
+      return (
+        x - entry.spec.width / 2 >= bounds.minX
+        && x + entry.spec.width / 2 <= bounds.maxX
+        && z - entry.spec.depth / 2 >= bounds.minZ
+        && z + entry.spec.depth / 2 <= bounds.maxZ
+      );
+    }
+
+    boxesOverlap(entry, x, z, other, otherX = other.root.position.x, otherZ = other.root.position.z) {
+      const clearance = BULK_STORAGE_SECRET.boxClearance;
+      return (
+        Math.abs(x - otherX) < (entry.spec.width + other.spec.width) / 2 + clearance
+        && Math.abs(z - otherZ) < (entry.spec.depth + other.spec.depth) / 2 + clearance
+      );
+    }
+
+    canPlace(entry, x, z, positions = null) {
+      if (!this.candidateInsideRoom(entry, x, z)) return false;
+      return this.boxes.every((other) => {
+        if (other === entry) return true;
+        const candidate = positions?.get(other.spec.id);
+        return !this.boxesOverlap(entry, x, z, other, candidate?.x, candidate?.z);
+      });
+    }
+
+    setBoxPosition(entry, x, z) {
+      entry.root.position.x = x;
+      entry.root.position.z = z;
+      const center = { x, y: FLOOR.BASEMENT + entry.spec.height / 2, z };
+      entry.physical.body.setTranslation(center, true);
+      entry.physical.body.setNextKinematicTranslation(center);
+      entry.occupancy.x = x;
+      entry.occupancy.z = z;
+      entry.occupancy.y = center.y;
+    }
+
+    applyHeldMovement(dx, dz) {
+      const entry = this.grabbed;
+      if (!entry || !input.interactHeld || (!dx && !dz)) return false;
+      const player = physics.playerPosition();
+      const towardX = entry.root.position.x - player.x;
+      const towardZ = entry.root.position.z - player.z;
+      const dot = dx * towardX + dz * towardZ;
+      const mode = dot >= 0 ? "push" : "pull";
+      const nextX = entry.root.position.x + dx;
+      const nextZ = entry.root.position.z + dz;
+      if (!this.canPlace(entry, nextX, nextZ)) {
+        this.state.lastMoveMode = "blocked";
+        return false;
+      }
+      this.setBoxPosition(entry, nextX, nextZ);
+      const distance = Math.hypot(dx, dz);
+      this.state.moveCount += 1;
+      this.state.lastMoveMode = mode;
+      this.state.lastMovedBoxId = entry.spec.id;
+      if (mode === "push") this.state.pushDistance += distance;
+      else this.state.pullDistance += distance;
+      const playerDistance = Math.hypot(nextX - player.x, nextZ - player.z);
+      if (playerDistance > BULK_STORAGE_SECRET.maximumGrabDistance) this.endHold("out-of-range");
+      return true;
+    }
+
+    symbolCoverage(symbol) {
+      return this.boxes
+        .filter((entry) => (
+          Math.abs(entry.root.position.x - symbol.spec.x) <= entry.spec.width / 2 + symbol.spec.radius * 0.38
+          && Math.abs(entry.root.position.z - symbol.spec.z) <= entry.spec.depth / 2 + symbol.spec.radius * 0.38
+        ))
+        .map((entry) => entry.spec.id);
+    }
+
+    inspectClothing() {
+      if (competitionBlocksInvestigation()) {
+        notifyCompetitionHold();
+        return false;
+      }
+      const newlyDiscovered = !state.contestant13.kipClothingFound;
+      state.contestant13.kipClothingFound = true;
+      contestant13Quest?.addJournalEntry(BULK_STORAGE_SECRET.clothing.journal);
+      contestant13Quest?.updateUI();
+      contestant13Quest?.showDiscovery("Kip's clothes", BULK_STORAGE_SECRET.clothing.observation, 9000);
+      if (newlyDiscovered && audioSystem) audioSystem.ping(104, 0.34, 0.022, "sine");
+      return true;
+    }
+
+    getSnapshot() {
+      return {
+        boxes: this.boxes.map((entry) => ({
+          id: entry.spec.id,
+          x: Number(entry.root.position.x.toFixed(4)),
+          z: Number(entry.root.position.z.toFixed(4)),
+        })),
+      };
+    }
+
+    validSnapshotPositions(snapshot = {}) {
+      const saved = new Map(
+        Array.isArray(snapshot.boxes)
+          ? snapshot.boxes.map((entry) => [entry?.id, entry])
+          : [],
+      );
+      const positions = new Map();
+      for (const entry of this.boxes) {
+        const candidate = saved.get(entry.spec.id);
+        const x = Number(candidate?.x);
+        const z = Number(candidate?.z);
+        positions.set(entry.spec.id, Number.isFinite(x) && Number.isFinite(z)
+          ? { x, z }
+          : { ...entry.home });
+      }
+      for (const entry of this.boxes) {
+        const candidate = positions.get(entry.spec.id);
+        if (!this.canPlace(entry, candidate.x, candidate.z, positions)) return null;
+      }
+      return positions;
+    }
+
+    restoreSnapshot(snapshot = {}) {
+      input.interactHeld = false;
+      this.endHold("load");
+      const positions = this.validSnapshotPositions(snapshot)
+        || new Map(this.boxes.map((entry) => [entry.spec.id, { ...entry.home }]));
+      for (const entry of this.boxes) {
+        const position = positions.get(entry.spec.id);
+        this.setBoxPosition(entry, position.x, position.z);
+      }
+      this.state.moveCount = 0;
+      this.state.pushDistance = 0;
+      this.state.pullDistance = 0;
+      this.state.lastMoveMode = null;
+      this.state.lastMovedBoxId = null;
+      return this.getDiagnostics();
+    }
+
+    reset(options = {}) {
+      input.interactHeld = false;
+      this.endHold("reset");
+      for (const entry of this.boxes) this.setBoxPosition(entry, entry.home.x, entry.home.z);
+      this.state.moveCount = 0;
+      this.state.pushDistance = 0;
+      this.state.pullDistance = 0;
+      this.state.lastMoveMode = null;
+      this.state.lastMovedBoxId = null;
+      if (options.clearClue) {
+        state.contestant13.kipClothingFound = false;
+        state.contestant13.journalEntries = state.contestant13.journalEntries
+          .filter((entry) => entry.id !== BULK_STORAGE_SECRET.clothing.journal.id);
+        contestant13Quest?.updateUI();
+      }
+      updateInteractionPrompt();
+      return this.getDiagnostics();
+    }
+
+    frameForQA() {
+      if (!state.qa || !physics) return null;
+      this.endHold("qa-frame");
+      input.interactHeld = false;
+      teleport(11.2, FLOOR.BASEMENT, -5.72, 0, -0.36);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      updateInteractionPrompt();
+      return this.getDiagnostics();
+    }
+
+    placePlayerNearBoxForQA(id, mode = "push") {
+      if (!state.qa || !physics) return null;
+      const entry = this.boxes.find((candidate) => candidate.spec.id === id);
+      if (!entry) return null;
+      this.endHold("qa-place");
+      input.interactHeld = false;
+      const yaw = entry.spec.qaYaw;
+      const forwardX = -Math.sin(yaw);
+      const forwardZ = -Math.cos(yaw);
+      const gap = 1.47;
+      teleport(
+        entry.root.position.x - forwardX * gap,
+        FLOOR.BASEMENT,
+        entry.root.position.z - forwardZ * gap,
+        yaw,
+        -0.48,
+      );
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      updateInteractionPrompt();
+      return {
+        boxId: entry.spec.id,
+        mode,
+        prompt: state.currentInteraction?.getLabel() || null,
+        position: {
+          x: Number(entry.root.position.x.toFixed(3)),
+          z: Number(entry.root.position.z.toFixed(3)),
+        },
+      };
+    }
+
+    placePlayerNearClothingForQA() {
+      if (!state.qa || !physics || !this.clothingRoot) return null;
+      this.endHold("qa-clothing");
+      input.interactHeld = false;
+      const qa = BULK_STORAGE_SECRET.clothing.qa;
+      const dx = BULK_STORAGE_SECRET.clothing.x - qa.x;
+      const dz = BULK_STORAGE_SECRET.clothing.z - qa.z;
+      const yaw = Math.atan2(-dx, -dz);
+      teleport(qa.x, FLOOR.BASEMENT, qa.z, yaw, qa.pitch);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      updateInteractionPrompt();
+      return {
+        visible: Boolean(this.clothingRoot.visible),
+        prompt: state.currentInteraction?.getLabel() || null,
+      };
+    }
+
+    getDiagnostics() {
+      const symbolStates = this.symbols.map((symbol) => {
+        const coveredByBoxIds = this.symbolCoverage(symbol);
+        return {
+          id: symbol.spec.id,
+          position: { x: symbol.spec.x, y: FLOOR.BASEMENT + 0.018, z: symbol.spec.z },
+          visible: Boolean(symbol.root.visible),
+          covered: coveredByBoxIds.length > 0,
+          coveredByBoxIds,
+          visibilityToggles: symbol.visibilityToggles,
+        };
+      });
+      const journalEntryCount = state.contestant13.journalEntries
+        .filter((entry) => entry.id === BULK_STORAGE_SECRET.clothing.journal.id).length;
+      return {
+        room: BULK_STORAGE_SECRET.room,
+        interactionHeld: Boolean(input.interactHeld),
+        grabbedBoxId: this.grabbed?.spec.id || null,
+        moveCount: this.state.moveCount,
+        pushDistance: Number(this.state.pushDistance.toFixed(3)),
+        pullDistance: Number(this.state.pullDistance.toFixed(3)),
+        lastMoveMode: this.state.lastMoveMode,
+        lastMovedBoxId: this.state.lastMovedBoxId,
+        boxes: this.boxes.map((entry) => {
+          const body = entry.physical.body.translation();
+          const bodyRotation = entry.physical.body.rotation();
+          const rotationDot = Math.abs(
+            bodyRotation.x * entry.colliderRotation.x
+            + bodyRotation.y * entry.colliderRotation.y
+            + bodyRotation.z * entry.colliderRotation.z
+            + bodyRotation.w * entry.colliderRotation.w
+          );
+          const distanceFromHome = Math.hypot(
+            entry.root.position.x - entry.home.x,
+            entry.root.position.z - entry.home.z,
+          );
+          return {
+            id: entry.spec.id,
+            position: {
+              x: Number(entry.root.position.x.toFixed(3)),
+              y: FLOOR.BASEMENT,
+              z: Number(entry.root.position.z.toFixed(3)),
+            },
+            home: { ...entry.home },
+            size: {
+              width: entry.spec.width,
+              height: entry.spec.height,
+              depth: entry.spec.depth,
+            },
+            distanceFromHome: Number(distanceFromHome.toFixed(3)),
+            colliderAligned: Math.hypot(
+              body.x - entry.root.position.x,
+              body.z - entry.root.position.z,
+            ) <= 0.015 && rotationDot >= 0.999,
+            insideRoom: this.candidateInsideRoom(entry, entry.root.position.x, entry.root.position.z),
+            prompt: entry.interaction.getLabel(),
+          };
+        }),
+        symbols: symbolStates,
+        revealedCount: symbolStates.filter((symbol) => !symbol.covered).length,
+        allRevealed: symbolStates.every((symbol) => !symbol.covered),
+        clothing: {
+          visible: Boolean(this.clothingRoot?.visible),
+          registered: this.clothingRegistered,
+          discovered: Boolean(state.contestant13.kipClothingFound),
+          journalEntryCount,
+          observation: BULK_STORAGE_SECRET.clothing.observation,
+          prompt: this.clothingInteraction?.getLabel() || null,
+          position: {
+            x: BULK_STORAGE_SECRET.clothing.x,
+            y: FLOOR.BASEMENT,
+            z: BULK_STORAGE_SECRET.clothing.z,
+          },
+        },
       };
     }
   }
@@ -20167,6 +21601,7 @@
       state.security.alarmCooldown = 0;
       state.security.alarmLatchCameraId = null;
       flashlightSystem?.resetAlerts();
+      if (state.activeHideSpot) state.activeHideSpot.exit();
       state.isHidden = false;
       state.activeHideSpot = null;
       for (const cameraState of this.cameras) {
@@ -21702,7 +23137,14 @@
     });
   }
 
-  function addWindow(axis, fixed, center, floorY, opening, exterior) {
+  function curtainConfigForWindow(wall, center) {
+    if (!wall) return null;
+    return WINDOW_CURTAINS.installations.find((entry) => (
+      entry.wall === wall && Math.abs(entry.center - center) < 0.001
+    )) || null;
+  }
+
+  function addWindow(axis, fixed, center, floorY, opening, exterior, wallName) {
     const bottom = opening.bottom == null ? 0.82 : opening.bottom;
     const top = opening.top == null ? 3.05 : opening.top;
     if (exterior) {
@@ -21729,6 +23171,8 @@
       for (const sy of [bottom, (bottom + top) / 2, top]) box({ name: "window-frame", w: depth, h: 0.075, d: width + 0.12, x: fixed, y: floorY + sy, z: center, material: M.blackWood, cast: false });
       if (exterior) box({ name: "stone-window-sill", w: 0.42, h: 0.11, d: width + 0.34, x: fixed, y: floorY + bottom - 0.055, z: center, material: M.limestone, cast: false });
     }
+    const curtainConfig = exterior ? curtainConfigForWindow(wallName, center) : null;
+    if (curtainConfig) new WindowCurtain({ config: curtainConfig, axis, fixed, floorY, opening });
   }
 
   function addDoorFrame(axis, fixed, center, floorY, width, height) {
@@ -21781,7 +23225,7 @@
           if (axis === "x") box({ name: `${name}-window-high`, w: opening.width, h: upperH, d: 0.28, x: opening.center, y: upperCenter, z: fixed, material, collider: true, occluder: true });
           else box({ name: `${name}-window-high`, w: 0.28, h: upperH, d: opening.width, x: fixed, y: upperCenter, z: opening.center, material, collider: true, occluder: true });
         }
-        addWindow(axis, fixed, opening.center, floorY, opening, exterior);
+        addWindow(axis, fixed, opening.center, floorY, opening, exterior, name);
       } else {
         const doorH = opening.height || 2.55;
         const headerH = height - doorH;
@@ -23039,10 +24483,46 @@
     lid.castShadow = true;
     group.add(lid);
     box({ name: "piano-key-bed", w: 1.7, h: 0.18, d: 0.62, x: -0.35, y: 0.84, z: -0.74, material: M.blackWood, parent: group });
-    for (let i = 0; i < 18; i += 1) box({ name: "piano-key", w: 0.078, h: 0.035, d: 0.42, x: -1.13 + i * 0.082, y: 0.95, z: -0.84, material: i % 3 === 1 ? M.iron : M.porcelain, parent: group, cast: false });
+    const keys = [];
+    for (let i = 0; i < 18; i += 1) {
+      const key = box({ name: "piano-key", w: 0.078, h: 0.035, d: 0.42, x: -1.13 + i * 0.082, y: 0.95, z: -0.84, material: i % 3 === 1 ? M.iron : M.porcelain, parent: group, cast: false });
+      key.userData.homeY = key.position.y;
+      keys.push(key);
+    }
     for (const p of [[-0.95, -0.38], [0.78, -0.35], [0.32, 0.6]]) cylinder({ name: "piano-leg", radius: 0.07, radiusBottom: 0.1, height: 0.86, segments: 12, x: p[0], y: 0.43, z: p[1], material: M.blackWood, parent: group });
     physics.addFixedBox(x, floorY + 0.65, z, 2.6, 1.3, 1.8, rotationY || 0);
     group.userData.roomRole = "music-room-piano";
+    const hit = box({
+      name: "player-piano-interaction",
+      w: 1.9, h: 0.48, d: 0.76,
+      x: -0.35, y: 0.99, z: -0.84,
+      material: tamperSystem.hitMaterial, parent: group, cast: false, receive: false,
+    });
+    group.updateMatrixWorld(true);
+    const target = new THREE.Vector3(-0.35, 1.0, -0.84);
+    group.localToWorld(target);
+    tamperSystem.registerDistraction({
+      kind: "piano",
+      label: "player piano",
+      room: "MUSIC ROOM",
+      position: { x: target.x, y: target.y, z: target.z },
+      hit,
+      pulseSeconds: MANSION_DISTRACTIONS.pianoPulseSeconds,
+      labels: { tamperLabel: "Start the player piano", restoreLabel: "Stop the player piano" },
+      qa: { x: 11.98, z: 3.9, floorY, pitch: -0.2 },
+      apply: (active) => {
+        if (!active) {
+          for (const key of keys) key.position.y = key.userData.homeY;
+        }
+      },
+      updateVisual: (_dt, active, phase) => {
+        for (let index = 0; index < keys.length; index += 1) {
+          const pressed = active && Math.sin(phase * 10.8 + index * 1.7) > 0.68;
+          keys[index].position.y = keys[index].userData.homeY - (pressed ? MANSION_DISTRACTIONS.pianoKeyTravel : 0);
+        }
+      },
+      visualOffset: () => Math.max(...keys.map((key) => key.userData.homeY - key.position.y)),
+    });
     return group;
   }
 
@@ -23864,7 +25344,7 @@
     const size = worldBounds.getSize(new THREE.Vector3());
     const center = worldBounds.getCenter(new THREE.Vector3());
     const collider = placement.collider;
-    physics.addFixedBox(
+    const colliderBody = physics.addFixedBox(
       placement.position.x,
       placement.position.y + collider.height / 2,
       placement.position.z,
@@ -23884,6 +25364,8 @@
     entry.center = { x: center.x, y: center.y, z: center.z };
     entry.grounded = Math.abs(worldBounds.min.y - placement.position.y) < 0.025;
     entry.colliderEnabled = true;
+    entry.colliderBody = colliderBody;
+    entry.colliderFixedBox = physics.fixedBoxes[physics.fixedBoxes.length - 1] || null;
     estateStatueScene.colliders += 1;
   }
 
@@ -24511,6 +25993,10 @@
       itemRoot.rotation.y = config.yaw;
       itemRoot.visible = false;
       scene.add(itemRoot);
+      const visualRoot = new THREE.Group();
+      visualRoot.name = `feast-hunt-${config.id}-visual`;
+      visualRoot.scale.setScalar(config.visualScale || 1);
+      itemRoot.add(visualRoot);
 
       if (config.id === "golden-bell") {
         cylinder({
@@ -24521,18 +26007,18 @@
           segments: 20,
           y: 0.18,
           material: gold,
-          parent: itemRoot,
+          parent: visualRoot,
         });
         const bellRim = new THREE.Mesh(new THREE.TorusGeometry(0.205, 0.027, 8, 22), darkGold);
         bellRim.name = "feast-hunt-golden-bell-rim";
         bellRim.position.y = 0.03;
         bellRim.rotation.x = Math.PI / 2;
-        itemRoot.add(bellRim);
+        visualRoot.add(bellRim);
         const bellHandle = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.024, 8, 18), gold);
         bellHandle.name = "feast-hunt-golden-bell-handle";
         bellHandle.position.y = 0.39;
-        itemRoot.add(bellHandle);
-        sphere({ name: "feast-hunt-golden-bell-clapper", radius: 0.045, y: 0.005, material: darkGold, parent: itemRoot });
+        visualRoot.add(bellHandle);
+        sphere({ name: "feast-hunt-golden-bell-clapper", radius: 0.045, y: 0.005, material: darkGold, parent: visualRoot });
       } else if (config.id === "golden-goblet") {
         cylinder({
           name: "feast-hunt-golden-goblet-cup",
@@ -24542,42 +26028,85 @@
           segments: 20,
           y: 0.34,
           material: gold,
-          parent: itemRoot,
+          parent: visualRoot,
         });
-        cylinder({ name: "feast-hunt-golden-goblet-stem", radius: 0.035, height: 0.24, segments: 12, y: 0.12, material: darkGold, parent: itemRoot });
-        cylinder({ name: "feast-hunt-golden-goblet-base", radius: 0.15, height: 0.035, segments: 20, y: 0.015, material: gold, parent: itemRoot });
+        cylinder({ name: "feast-hunt-golden-goblet-stem", radius: 0.035, height: 0.24, segments: 12, y: 0.12, material: darkGold, parent: visualRoot });
+        cylinder({ name: "feast-hunt-golden-goblet-base", radius: 0.15, height: 0.035, segments: 20, y: 0.015, material: gold, parent: visualRoot });
       } else {
-        roundedBox({
-          name: "feast-hunt-golden-carving-knife-blade",
-          w: 0.58,
-          h: 0.055,
-          d: 0.12,
-          radius: 0.025,
-          x: 0.13,
-          y: 0.09,
-          material: gold,
-          parent: itemRoot,
+        const bladeShape = new THREE.Shape();
+        bladeShape.moveTo(-0.035, -0.028);
+        bladeShape.lineTo(0.14, -0.028);
+        bladeShape.lineTo(0.18, 0);
+        bladeShape.lineTo(0.12, 0.026);
+        bladeShape.lineTo(-0.035, 0.035);
+        bladeShape.closePath();
+        const bladeGeometry = new THREE.ExtrudeGeometry(bladeShape, {
+          depth: 0.012,
+          bevelEnabled: true,
+          bevelSegments: 1,
+          bevelSize: 0.003,
+          bevelThickness: 0.003,
         });
+        bladeGeometry.rotateX(-Math.PI / 2);
+        const blade = new THREE.Mesh(bladeGeometry, gold);
+        blade.name = "feast-hunt-golden-carving-knife-blade";
+        blade.position.y = 0.018;
+        blade.castShadow = true;
+        blade.receiveShadow = true;
+        visualRoot.add(blade);
         roundedBox({
           name: "feast-hunt-golden-carving-knife-handle",
-          w: 0.28,
-          h: 0.11,
-          d: 0.16,
-          radius: 0.035,
-          x: -0.3,
-          y: 0.09,
-          material: darkGold,
-          parent: itemRoot,
+          w: 0.16,
+          h: 0.035,
+          d: 0.055,
+          radius: 0.016,
+          x: -0.115,
+          y: 0.022,
+          material: M.darkWood,
+          parent: visualRoot,
         });
+        roundedBox({
+          name: "feast-hunt-golden-carving-knife-bolster",
+          w: 0.03,
+          h: 0.045,
+          d: 0.064,
+          radius: 0.008,
+          x: -0.025,
+          y: 0.024,
+          material: darkGold,
+          parent: visualRoot,
+        });
+        for (const x of [-0.15, -0.095]) {
+          cylinder({
+            name: "feast-hunt-golden-carving-knife-rivet",
+            radius: 0.008,
+            height: 0.039,
+            segments: 10,
+            x,
+            y: 0.023,
+            material: gold,
+            parent: visualRoot,
+          });
+        }
       }
 
-      const hitbox = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.9, 0.78), hitboxMaterial);
+      const interactionSize = config.interactionSize || 0.78;
+      const hitbox = new THREE.Mesh(
+        new THREE.BoxGeometry(interactionSize, Math.max(0.68, interactionSize * 1.35), interactionSize),
+        hitboxMaterial,
+      );
       hitbox.name = `feast-hunt-${config.id}-interaction`;
       hitbox.position.y = 0.22;
       itemRoot.add(hitbox);
+      visualRoot.updateMatrixWorld(true);
+      const visualSize = new THREE.Box3()
+        .setFromObject(visualRoot)
+        .getSize(new THREE.Vector3());
       feastHuntScene.items.push({
         config,
         root: itemRoot,
+        visualRoot,
+        visualSize: { x: visualSize.x, y: visualSize.y, z: visualSize.z },
         hitbox,
         registered: false,
         interaction: {
@@ -24608,6 +26137,54 @@
     Object.freeze([-12.32, -8.4, -Math.PI / 2]),
     Object.freeze([-7.08, -8.4, Math.PI / 2]),
   ]);
+
+  function addDiningServiceBell() {
+    const x = -14.76;
+    const z = -5.75;
+    const floorY = FLOOR.MAIN;
+    const root = new THREE.Group();
+    root.name = "dining-room-service-bell";
+    root.position.set(x, floorY, z);
+    scene.add(root);
+    box({ name: "service-bell-wall-plate", w: 0.09, h: 0.62, d: 0.46, x: 0, y: 1.31, z: 0, material: M.darkWood, parent: root });
+    cylinder({ name: "service-bell-wall-medallion", radius: 0.22, height: 0.035, segments: 20, x: 0.06, y: 1.42, z: 0, rotationZ: Math.PI / 2, material: M.brass, parent: root, cast: false });
+    box({ name: "service-bell-bracket", w: 0.32, h: 0.055, d: 0.075, x: 0.18, y: 1.59, z: 0, material: M.iron, parent: root, cast: false });
+    const bellPivot = new THREE.Group();
+    bellPivot.name = "service-bell-swing";
+    bellPivot.position.set(0.25, 1.43, 0);
+    root.add(bellPivot);
+    cylinder({ name: "service-bell-brass-body", radius: 0.16, radiusTop: 0.09, radiusBottom: 0.17, height: 0.18, segments: 20, x: 0, y: 0, z: 0, rotationZ: Math.PI / 2, material: M.brass, parent: bellPivot });
+    sphere({ name: "service-bell-center-boss", radius: 0.045, x: 0.115, y: 0, z: 0, material: M.iron, parent: bellPivot, cast: false });
+    cylinder({ name: "service-bell-pull", radius: 0.012, height: 0.48, segments: 8, x: 0.14, y: 1.0, z: 0.12, material: M.canvasLinen, parent: root, cast: false });
+    sphere({ name: "service-bell-pull-handle", radius: 0.06, x: 0.14, y: 0.73, z: 0.12, material: M.darkWood, parent: root, cast: false });
+    const hit = box({
+      name: "service-bell-interaction",
+      w: 0.72, h: 1.2, d: 0.7,
+      x: 0.3, y: 1.08, z: 0,
+      material: tamperSystem.hitMaterial, parent: root, cast: false, receive: false,
+    });
+    physics.addFixedBox(x + 0.04, floorY + 1.3, z, 0.18, 0.65, 0.46, 0);
+    tamperSystem.registerDistraction({
+      kind: "service-bell",
+      label: "service bell",
+      room: "DINING ROOM",
+      position: { x: x + 0.25, y: floorY + 1.4, z },
+      hit,
+      pulseSeconds: MANSION_DISTRACTIONS.serviceBellPulseSeconds,
+      labels: { tamperLabel: "Pull the service bell", restoreLabel: "Silence the service bell" },
+      qa: { x: -13.35, z, floorY, pitch: -0.16 },
+      apply: (active) => {
+        if (!active) bellPivot.rotation.z = 0;
+      },
+      updateVisual: (_dt, active, phase) => {
+        bellPivot.rotation.z = active
+          ? Math.sin(phase * 12) * MANSION_DISTRACTIONS.serviceBellSwingRadians
+          : 0;
+      },
+      visualOffset: () => bellPivot.rotation.z,
+    });
+    return root;
+  }
 
   function addDiningTableService() {
     const group = new THREE.Group();
@@ -24737,6 +26314,66 @@
 
   function addLaundryDetails() {
     const floorY = FLOOR.BASEMENT;
+    // A freestanding 1930s wringer washer gives the room a loud, readable
+    // mechanical distraction without relying on a modern appliance silhouette.
+    const washerX = -5.35;
+    const washerZ = -1.48;
+    const washer = new THREE.Group();
+    washer.name = "laundry-vintage-wringer";
+    washer.position.set(washerX, floorY, washerZ);
+    scene.add(washer);
+    const shaker = new THREE.Group();
+    shaker.name = "laundry-wringer-shaker";
+    washer.add(shaker);
+    cylinder({ name: "laundry-wringer-tub", radius: 0.48, radiusTop: 0.5, radiusBottom: 0.42, height: 0.7, segments: 20, x: 0, y: 0.48, z: 0, material: M.porcelain, parent: shaker });
+    cylinder({ name: "laundry-wringer-tub-rim", radius: 0.5, height: 0.055, segments: 20, x: 0, y: 0.83, z: 0, material: M.iron, parent: shaker, cast: false });
+    for (const side of [-1, 1]) {
+      box({ name: "laundry-wringer-upright", w: 0.07, h: 0.72, d: 0.08, x: side * 0.35, y: 1.16, z: 0, material: M.iron, parent: shaker });
+    }
+    box({ name: "laundry-wringer-crossbar", w: 0.88, h: 0.09, d: 0.14, x: 0, y: 1.49, z: 0, material: M.iron, parent: shaker });
+    const rollers = new THREE.Group();
+    rollers.name = "laundry-wringer-rollers";
+    rollers.position.set(0, 1.34, 0);
+    shaker.add(rollers);
+    for (const zOffset of [-0.1, 0.1]) {
+      cylinder({ name: "laundry-wringer-roller", radius: 0.095, height: 0.7, segments: 14, x: 0, y: 0, z: zOffset, rotationZ: Math.PI / 2, material: M.canvasLinen, parent: rollers });
+    }
+    cylinder({ name: "laundry-wringer-flywheel", radius: 0.22, height: 0.055, segments: 18, x: 0.48, y: 1.34, z: 0, rotationZ: Math.PI / 2, material: M.brass, parent: shaker });
+    box({ name: "laundry-wringer-crank", w: 0.38, h: 0.035, d: 0.035, x: 0.62, y: 1.42, z: 0, rotationZ: 0.48, material: M.iron, parent: shaker, cast: false });
+    const hit = box({
+      name: "laundry-wringer-interaction",
+      w: 1.15, h: 1.72, d: 1.05,
+      x: 0, y: 0.87, z: 0,
+      material: tamperSystem.hitMaterial, parent: washer, cast: false, receive: false,
+    });
+    physics.addFixedBox(washerX, floorY + 0.62, washerZ, 1.05, 1.24, 1.0, 0);
+    tamperSystem.registerDistraction({
+      kind: "laundry",
+      label: "laundry wringer",
+      room: "LAUNDRY & LINEN",
+      position: { x: washerX, y: floorY + 1.1, z: washerZ },
+      hit,
+      pulseSeconds: MANSION_DISTRACTIONS.laundryPulseSeconds,
+      labels: { tamperLabel: "Start the laundry wringer", restoreLabel: "Stop the laundry wringer" },
+      qa: { x: washerX + 0.9, z: washerZ - 1.37, floorY, pitch: -0.18 },
+      apply: (active) => {
+        if (!active) {
+          shaker.position.x = 0;
+          shaker.rotation.z = 0;
+        }
+      },
+      updateVisual: (dt, active, phase) => {
+        if (!active) {
+          shaker.position.x = 0;
+          shaker.rotation.z = 0;
+          return;
+        }
+        shaker.position.x = Math.sin(phase * 22) * MANSION_DISTRACTIONS.laundryShakeMeters;
+        shaker.rotation.z = Math.sin(phase * 17) * 0.012;
+        rollers.rotation.x += dt * MANSION_DISTRACTIONS.laundryWheelSpeed;
+      },
+      visualOffset: () => shaker.position.x || shaker.rotation.z,
+    });
     // Two strung drying lines with staggered hanging linens.
     const linens = [];
     for (const [lineIndex, lineZ] of [1.45, 2.3].entries()) {
@@ -24800,10 +26437,11 @@
 
   function addBulkStorageDetails() {
     const floorY = FLOOR.BASEMENT;
-    // Second-tier crates stagger on two of the existing floor crates.
-    for (const [x, baseH, yaw] of [[9.0, 1.0, 0.14], [13.2, 1.0, -0.1]]) {
-      box({ name: "storage-crate-stacked", w: 0.82, h: 0.72, d: 0.78, x: x + 0.08, y: floorY + baseH + 0.36, z: -8.14, rotationY: yaw, material: M.darkWood, cast: true });
-    }
+    // Keep one static perimeter stack for the room vignette. The center-floor
+    // boxes are owned by BulkStorageSecretSystem so their visible geometry,
+    // interaction targets, and kinematic colliders can travel together.
+    box({ name: "storage-crate-perimeter-base", w: 0.9, h: 0.82, d: 0.86, x: 8.45, y: floorY + 0.41, z: -6.05, rotationY: -0.08, material: M.darkWood, collider: true });
+    box({ name: "storage-crate-stacked", w: 0.78, h: 0.66, d: 0.74, x: 8.5, y: floorY + 1.15, z: -6.08, rotationY: 0.12, material: M.darkWood, collider: true });
     for (const z of [-5.75, -6.85]) {
       cylinder({ name: "storage-barrel", radius: 0.33, radiusTop: 0.29, radiusBottom: 0.29, height: 0.78, segments: 14, x: 14.25, y: floorY + 0.39, z, material: M.darkWood });
       cylinder({ name: "storage-barrel-hoop", radius: 0.315, height: 0.032, segments: 14, x: 14.25, y: floorY + 0.6, z, material: M.iron, cast: false });
@@ -24955,6 +26593,7 @@
     addChair(-6.7, -8.4, FLOOR.MAIN, Math.PI / 2, M.darkWood);
     new Cabinet({ name: "dining sideboard", x: -14.0, z: -11.55, floorY: FLOOR.MAIN, width: 1.6, height: 1.35, rotationY: 0, stockKind: "sideboard", interiorLight: false });
     addDiningTableService();
+    addDiningServiceBell();
     // Ballroom — keep the marble dance floor open; Kip's sideline chair sits
     // against the north wall beyond both the dance and host patrol lanes.
     const ballroomSidelineChair = addChair(-3.9, -4.2, FLOOR.MAIN, 0, M.darkWood, {
@@ -25249,7 +26888,6 @@
     addWorkroomSecurityHub();
     addBoilerRoomDetails();
     addRearCorridorServicePipes();
-    for (const x of [9.0, 11.1, 13.2]) box({ name: "storage-crate", w: 1.25, h: 1.0 + ((x * 10) % 2) * 0.35, d: 1.15, x, y: FLOOR.BASEMENT + 0.5, z: -8.2, material: M.darkWood, collider: true });
     addBulkStorageDetails();
   }
 
@@ -27148,6 +28786,56 @@
     buildEstateYard();
   }
 
+  const CURTAIN_CLEARANCE_STRUCTURAL = Object.freeze([
+    /^rain-darkened-glass$/,
+    /^window-(?:mullion|frame)$/,
+    /^stone-window-sill$/,
+    /-window-(?:low|high)$/,
+    /-segment-(?:\d+|end)$/,
+    /-(?:baseboard-\d+|crown)-[ab]$/,
+    /^(?:main|upper)-floor-/,
+    /^upper-ceiling$/,
+    /^facade-/,
+  ]);
+
+  function curtainClearanceIgnores(object) {
+    if (!object?.isMesh || object.userData.windowCurtainId) return true;
+    return CURTAIN_CLEARANCE_STRUCTURAL.some((pattern) => pattern.test(object.name || ""));
+  }
+
+  function curtainBoundsOverlap(clearanceBounds, objectBounds) {
+    const minX = Math.max(clearanceBounds.min.x, objectBounds.min.x);
+    const minY = Math.max(clearanceBounds.min.y, objectBounds.min.y);
+    const minZ = Math.max(clearanceBounds.min.z, objectBounds.min.z);
+    const maxX = Math.min(clearanceBounds.max.x, objectBounds.max.x);
+    const maxY = Math.min(clearanceBounds.max.y, objectBounds.max.y);
+    const maxZ = Math.min(clearanceBounds.max.z, objectBounds.max.z);
+    return maxX - minX > 0.018 && maxY - minY > 0.025 && maxZ - minZ > 0.018;
+  }
+
+  function auditWindowCurtainClearance() {
+    scene.updateMatrixWorld(true);
+    const candidates = [];
+    scene.traverse((object) => {
+      if (curtainClearanceIgnores(object) || !object.visible) return;
+      const bounds = new THREE.Box3().setFromObject(object);
+      if (bounds.isEmpty()) return;
+      candidates.push({ name: object.name || object.type, bounds });
+    });
+    for (const curtain of windowCurtains) {
+      const visual = curtain.visualBounds();
+      const egress = curtain.egressBounds();
+      const visualOverlaps = new Set();
+      const egressOverlaps = new Set();
+      for (const candidate of candidates) {
+        if (curtainBoundsOverlap(visual, candidate.bounds)) visualOverlaps.add(candidate.name);
+        if (curtainBoundsOverlap(egress, candidate.bounds)) egressOverlaps.add(candidate.name);
+      }
+      curtain.clearance.visualOverlaps = [...visualOverlaps].sort();
+      curtain.clearance.egressOverlaps = [...egressOverlaps].sort();
+    }
+  }
+
   function buildMansion() {
     buildExteriorScene();
     buildSlabsAndCeilings();
@@ -27165,6 +28853,7 @@
     furnishBasement();
     buildContestantThirteenQuest();
     buildLighting();
+    auditWindowCurtainClearance();
     registerRoomZones();
   }
 
@@ -27739,6 +29428,53 @@
     ping(frequency, duration, gainValue, type) {
       if (!this.ctx || !state.audioEnabled) return false;
       this.scheduleTone(this.ctx, this.master, frequency, duration, gainValue, type);
+      return true;
+    }
+
+    houseDistraction(kind, position) {
+      const cueName = kind === "service-bell"
+        ? "houseDistractionServiceBell"
+        : kind === "laundry"
+          ? "houseDistractionLaundry"
+          : "houseDistractionPiano";
+      this.markCue(cueName);
+      if (!this.ctx || !state.audioEnabled || !position) return false;
+      const listener = new THREE.Vector3();
+      const forward = new THREE.Vector3();
+      camera.getWorldPosition(listener);
+      camera.getWorldDirection(forward);
+      const offset = new THREE.Vector3(position.x, position.y, position.z).sub(listener);
+      const distance = offset.length();
+      if (distance > MANSION_DISTRACTIONS.maximumDistanceMeters) return false;
+      const right = new THREE.Vector3(-forward.z, 0, forward.x).normalize();
+      const horizontal = Math.max(0.001, Math.hypot(offset.x, offset.z));
+      const pan = clamp(
+        (offset.x * right.x + offset.z * right.z) / horizontal,
+        -MANSION_DISTRACTIONS.panLimit,
+        MANSION_DISTRACTIONS.panLimit,
+      );
+      const proximity = 1 - clamp(distance / MANSION_DISTRACTIONS.maximumDistanceMeters, 0, 1);
+      const distanceGain = 0.08 + 0.92 * Math.pow(proximity, 1.45);
+      let destination = this.master;
+      if (this.ctx.createStereoPanner) {
+        const panner = this.ctx.createStereoPanner();
+        panner.pan.value = pan;
+        panner.connect(this.master);
+        destination = panner;
+      }
+      const now = this.ctx.currentTime;
+      if (kind === "piano") {
+        const notes = [146.83, 174.61, 207.65];
+        notes.forEach((frequency, index) => {
+          this.scheduleTone(this.ctx, destination, frequency, 0.42, 0.035 * distanceGain, "triangle", now + index * 0.045);
+        });
+      } else if (kind === "laundry") {
+        this.scheduleTone(this.ctx, destination, 72, 0.12, 0.055 * distanceGain, "square", now);
+        this.scheduleTone(this.ctx, destination, 118, 0.08, 0.028 * distanceGain, "sawtooth", now + 0.055);
+      } else {
+        this.scheduleTone(this.ctx, destination, 1180, 0.48, 0.055 * distanceGain, "sine", now);
+        this.scheduleTone(this.ctx, destination, 1530, 0.36, 0.025 * distanceGain, "sine", now + 0.06);
+      }
       return true;
     }
 
@@ -28761,6 +30497,8 @@
     input.left = false;
     input.right = false;
     input.sprint = false;
+    input.interactHeld = false;
+    bulkStorageSecretSystem?.endHold("input-cleared");
     if (dom.touchSprint) {
       dom.touchSprint.classList.remove("is-held");
       dom.touchSprint.setAttribute("aria-pressed", "false");
@@ -28805,11 +30543,20 @@
   function serializeMansionSave() {
     if (!physics || !contestant13Quest || state.devMode) return null;
     const seatedSave = seatingSystem?.playerSaveSnapshot();
-    const playerPosition = seatedSave?.position || physics.playerPosition();
+    const hiddenSave = state.activeHideSpot ? {
+      position: {
+        x: state.activeHideSpot.exitPosition.x,
+        y: state.activeHideSpot.floorY + PLAYER.halfHeight + PLAYER.radius + 0.03,
+        z: state.activeHideSpot.exitPosition.z,
+      },
+      yaw: state.activeHideSpot.exitPosition.yaw,
+      pitch: 0,
+    } : null;
+    const playerPosition = seatedSave?.position || hiddenSave?.position || physics.playerPosition();
     return {
       playerPosition: { x: playerPosition.x, y: playerPosition.y, z: playerPosition.z },
-      yaw: seatedSave?.yaw ?? state.yaw,
-      pitch: seatedSave?.pitch ?? state.pitch,
+      yaw: seatedSave?.yaw ?? hiddenSave?.yaw ?? state.yaw,
+      pitch: seatedSave?.pitch ?? hiddenSave?.pitch ?? state.pitch,
       movement: {
         energy: state.movement.energy,
         crouched: state.movement.crouched,
@@ -28818,6 +30565,7 @@
       feastSays: feastSaysSystem?.getSnapshot() || null,
       stormRun: stormRunSystem?.getSnapshot() || null,
       feastHunt: feastHuntSystem?.getSnapshot() || null,
+      bulkStorageSecret: bulkStorageSecretSystem?.getSnapshot() || null,
     };
   }
 
@@ -28831,6 +30579,12 @@
     // Validate the complete required transform before touching quest/world
     // presentation so a malformed save can never half-restore a fresh game.
     if (![x, y, z].every(Number.isFinite)) return false;
+    if (state.activeHideSpot) state.activeHideSpot.exit();
+    for (const curtain of windowCurtains) {
+      curtain.targetOpenness = 1;
+      curtain.openness = 1;
+      curtain.applyPanelLayout();
+    }
     feastHuntSystem?.cancelStaging();
     stormRunSystem?.cancelStaging();
     feastSaysSystem?.cancelStaging();
@@ -28839,6 +30593,7 @@
     state.devMode = false;
     state.devModeSnapshot = null;
     contestant13Quest.restoreQuestSnapshot(data.contestant13);
+    bulkStorageSecretSystem?.restoreSnapshot(data.bulkStorageSecret);
     flashlightSystem?.restoreFromInventory({ clearTransient: true });
     feastSaysSystem?.restoreSnapshot(data.feastSays, data.contestant13);
     stormRunSystem?.restoreSnapshot(data.stormRun, data.contestant13);
@@ -29146,6 +30901,35 @@
     updateInteractionPrompt();
   }
 
+  function beginCurrentInteractionHold() {
+    if (
+      state.journalOpen
+      || state.menuOpen
+      || state.workroom.keypadOpen
+      || state.readableBooks.open
+      || state.contestant13.actionInProgress
+      || state.gameOver
+    ) return false;
+    const interaction = state.activeSeat?.interaction || state.currentInteraction;
+    if (interaction && typeof interaction.beginHold === "function") {
+      input.interactHeld = true;
+      const started = Boolean(interaction.beginHold());
+      if (!started) input.interactHeld = false;
+      updateInteractionPrompt();
+      return started;
+    }
+    activateCurrentInteraction();
+    return false;
+  }
+
+  function endCurrentInteractionHold(reason = "released") {
+    const wasHeld = input.interactHeld;
+    input.interactHeld = false;
+    const released = bulkStorageSecretSystem?.endHold(reason) || false;
+    updateInteractionPrompt();
+    return wasHeld || released;
+  }
+
   function bindInput() {
     window.addEventListener("pointerdown", () => {
       if (audioSystem) void audioSystem.resumeIfInterrupted();
@@ -29260,13 +31044,19 @@
         if (feastHuntSystem?.locksPlayerMovement()) return;
         setMoveIntent(event.code, true);
       }
-      if (event.code === "KeyE" && !event.repeat) activateCurrentInteraction();
+      if (event.code === "KeyE" && !event.repeat) {
+        event.preventDefault();
+        beginCurrentInteractionHold();
+      }
       if (event.code === "KeyM" && !event.repeat && audioSystem) {
         event.preventDefault();
         void toggleGameAudio().catch(() => {});
       }
     });
-    window.addEventListener("keyup", (event) => setMoveIntent(event.code, false));
+    window.addEventListener("keyup", (event) => {
+      setMoveIntent(event.code, false);
+      if (event.code === "KeyE") endCurrentInteractionHold("keyboard-release");
+    });
     window.addEventListener("blur", clearMovementInput);
     document.addEventListener("pointerlockchange", () => {
       const wasLocked = state.pointerLocked;
@@ -29404,7 +31194,14 @@
       };
       button.addEventListener("pointerdown", (event) => {
         event.preventDefault();
-        button.setPointerCapture(event.pointerId);
+        // Synthetic PointerEvents used by deterministic mobile QA are not in
+        // the browser's active-pointer registry, so capture throws even
+        // though the press itself is valid. Real touch pointers still capture.
+        try {
+          button.setPointerCapture(event.pointerId);
+        } catch {
+          // Keep the held control active for this dispatched pointer.
+        }
         input[property] = true;
         button.classList.add("is-held");
       });
@@ -29413,7 +31210,26 @@
       button.addEventListener("lostpointercapture", release);
     }
     const touchInteract = $("touch-interact");
-    if (touchInteract) touchInteract.addEventListener("pointerdown", (event) => { event.preventDefault(); activateCurrentInteraction(); });
+    if (touchInteract) {
+      const releaseInteraction = (event) => {
+        if (event) event.preventDefault();
+        touchInteract.classList.remove("is-held");
+        endCurrentInteractionHold("touch-release");
+      };
+      touchInteract.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        try {
+          touchInteract.setPointerCapture(event.pointerId);
+        } catch {
+          // Deterministic QA dispatches an otherwise valid synthetic pointer.
+        }
+        touchInteract.classList.add("is-held");
+        beginCurrentInteractionHold();
+      });
+      touchInteract.addEventListener("pointerup", releaseInteraction);
+      touchInteract.addEventListener("pointercancel", releaseInteraction);
+      touchInteract.addEventListener("lostpointercapture", releaseInteraction);
+    }
     if (dom.touchCrouch) dom.touchCrouch.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       togglePlayerCrouch();
@@ -30113,7 +31929,8 @@
       strafe /= length;
     }
     const moving = length > 0;
-    const canSprint = !feastSaysSystem?.isPlaying() && input.sprint && moving && !movement.crouched && !movement.exhausted && movement.energy > 0;
+    const handlingBulkBox = Boolean(bulkStorageSecretSystem?.isHolding());
+    const canSprint = !handlingBulkBox && !feastSaysSystem?.isPlaying() && input.sprint && moving && !movement.crouched && !movement.exhausted && movement.energy > 0;
     movement.sprinting = canSprint;
     if (canSprint) {
       movement.energy = Math.max(0, movement.energy - PLAYER.energyDrainPerSecond * fixedDt);
@@ -30132,16 +31949,19 @@
     }
     movement.stealthVisibilityMultiplier = movement.crouched ? PLAYER.crouchVisibilityMultiplier : 1;
     movement.stealthNoiseMultiplier = movement.crouched ? PLAYER.crouchNoiseMultiplier : 1;
-    const speed = movement.crouched
-      ? PLAYER.crouchSpeed
-      : movement.sprinting ? PLAYER.sprintSpeed : PLAYER.walkSpeed;
+    const speed = handlingBulkBox
+      ? BULK_STORAGE_SECRET.moveSpeed
+      : movement.crouched
+        ? PLAYER.crouchSpeed
+        : movement.sprinting ? PLAYER.sprintSpeed : PLAYER.walkSpeed;
     movement.speed = moving ? speed : 0;
-    movement.mode = movement.crouched ? "crouch" : movement.sprinting ? "sprint" : moving ? "walk" : "idle";
+    movement.mode = handlingBulkBox ? "handling" : movement.crouched ? "crouch" : movement.sprinting ? "sprint" : moving ? "walk" : "idle";
     const sin = Math.sin(state.yaw);
     const cos = Math.cos(state.yaw);
     const dx = (strafe * cos - forward * sin) * speed * fixedDt;
     const dz = (-strafe * sin - forward * cos) * speed * fixedDt;
     if (dx || dz) state.lastMove = { dx, dz };
+    bulkStorageSecretSystem?.applyHeldMovement(dx, dz);
     physics.movePlayer(dx, dz);
     physics.step();
     physics.updateSafety();
@@ -30448,6 +32268,31 @@
     };
   }
 
+  function getWindowCurtainDiagnostics() {
+    const textureNames = new Set();
+    if (M?.curtainDamask?.map) textureNames.add(M.curtainDamask.map.name || M.curtainDamask.map.uuid);
+    return {
+      count: windowCurtains.length,
+      excludedKinds: [...WINDOW_CURTAINS.excludedKinds],
+      activeId: windowCurtains.find((curtain) => state.activeHideSpot === curtain.hidingSpot)?.id || null,
+      material: {
+        textureName: M?.curtainDamask?.map?.name || null,
+        sharedTextureCount: textureNames.size,
+        doubleSided: M?.curtainDamask?.side === THREE.DoubleSide,
+        lined: windowCurtains.every((curtain) => Boolean(curtain.leftLining && curtain.rightLining)),
+        castsShadow: windowCurtains.some((curtain) => curtain.leftPanel.castShadow || curtain.rightPanel.castShadow),
+        shaderLightsAdded: 0,
+      },
+      installations: windowCurtains.map((curtain) => curtain.getDiagnostics()),
+      stageTreatment: {
+        active: Boolean(dom.stage?.classList.contains("is-curtain-hiding")),
+        crackSide: dom.stage?.classList.contains("curtain-crack-left")
+          ? "left"
+          : dom.stage?.classList.contains("curtain-crack-right") ? "right" : null,
+      },
+    };
+  }
+
   function getDiagnostics() {
     const p = physics ? physics.playerPosition() : { x: 0, y: 0, z: 0 };
     const feetY = p.y - (PLAYER.halfHeight + PLAYER.radius);
@@ -30515,7 +32360,9 @@
       seating: seatingSystem?.getDiagnostics() || null,
       security: cameraSecurity?.getDiagnostics() || null,
       flashlight: flashlightSystem?.getDiagnostics() || null,
+      bulkStorageSecret: bulkStorageSecretSystem?.getDiagnostics() || null,
       tamper: tamperSystem?.getDiagnostics() || null,
+      houseDistractions: tamperSystem?.getDistractionDiagnostics() || null,
       workroomCode: workroomCodeClue?.getDiagnostics() || null,
       speech: speechSystem?.getDiagnostics() || null,
       openingWelcome: openingWelcomeSystem?.getDiagnostics() || null,
@@ -30526,6 +32373,7 @@
       workroom: getWorkroomDiagnostics(),
       estateStatues: getEstateStatueDiagnostics(),
       upperWindowGallery: getUpperWindowGalleryDiagnostics(),
+      windowCurtains: getWindowCurtainDiagnostics(),
       player: {
         x: Number(p.x.toFixed(2)),
         y: Number(p.y.toFixed(2)),
@@ -30778,6 +32626,55 @@
       requestAnimationFrame(step);
     });
     window.MrFeastFresh.getDiagnostics = getDiagnostics;
+    window.MrFeastFresh.getWindowCurtainState = getWindowCurtainDiagnostics;
+    window.MrFeastFresh.placePlayerNearWindowCurtainForQA = (id) => {
+      if (!state.qa || !physics) return null;
+      if (state.activeHideSpot) state.activeHideSpot.exit();
+      const query = String(id || "").toLowerCase();
+      const curtain = windowCurtains.find((entry) => entry.id.toLowerCase() === query);
+      if (!curtain) return null;
+      curtain.targetOpenness = 1;
+      curtain.openness = 1;
+      curtain.applyPanelLayout();
+      const approach = curtain.approachPosition();
+      teleport(approach.x, curtain.floorY, approach.z, approach.yaw, 0);
+      updateLocation();
+      updateInteractionPrompt();
+      const player = physics.playerPosition();
+      return {
+        id: curtain.id,
+        room: curtain.room,
+        prompt: state.currentInteraction?.getLabel() || null,
+        distance: Number(Math.hypot(player.x - curtain.root.position.x, player.z - curtain.root.position.z).toFixed(3)),
+        clearance: {
+          visualOverlaps: curtain.clearance.visualOverlaps.length,
+          egressOverlaps: curtain.clearance.egressOverlaps.length,
+        },
+      };
+    };
+    window.MrFeastFresh.frameWindowCurtainForQA = (id, distance = 2.75) => {
+      if (!state.qa || !physics) return null;
+      if (state.activeHideSpot) state.activeHideSpot.exit();
+      const curtain = windowCurtains.find((entry) => entry.id === String(id || ""));
+      if (!curtain) return null;
+      curtain.targetOpenness = 1;
+      curtain.openness = 1;
+      curtain.applyPanelLayout();
+      const framing = curtain.worldPositionAtInset(
+        WINDOW_CURTAINS.insetFromWall + Math.max(1.7, Number(distance) || 2.75),
+        curtain.exitOffset,
+      );
+      teleport(framing.x, curtain.floorY, framing.z, curtain.inwardYaw + Math.PI, -0.12);
+      updateLocation();
+      updateInteractionPrompt();
+      return curtain.getDiagnostics();
+    };
+    window.MrFeastFresh.advanceWindowCurtainsForQA = (seconds) => {
+      if (!state.qa) return null;
+      const dt = Math.max(0, Number(seconds) || 0);
+      for (const curtain of windowCurtains) curtain.update(dt);
+      return getWindowCurtainDiagnostics();
+    };
     window.MrFeastFresh.getAudioStateForQA = () => audioSystem ? audioSystem.getDiagnostics() : null;
     window.MrFeastFresh.suspendAudioForQA = () => (
       state.qa && audioSystem
@@ -30859,6 +32756,27 @@
     );
     window.MrFeastFresh.frameFlashlightBeamForQA = () => (
       state.qa && flashlightSystem ? flashlightSystem.frameBeamForQA() : null
+    );
+    window.MrFeastFresh.getBulkStorageSecretState = () => (
+      bulkStorageSecretSystem?.getDiagnostics() || null
+    );
+    window.MrFeastFresh.frameBulkStorageSecretForQA = () => (
+      state.qa && bulkStorageSecretSystem ? bulkStorageSecretSystem.frameForQA() : null
+    );
+    window.MrFeastFresh.placePlayerNearBulkStorageBoxForQA = (id, mode = "push") => (
+      state.qa && bulkStorageSecretSystem
+        ? bulkStorageSecretSystem.placePlayerNearBoxForQA(id, mode)
+        : null
+    );
+    window.MrFeastFresh.placePlayerNearKipClothingForQA = () => (
+      state.qa && bulkStorageSecretSystem
+        ? bulkStorageSecretSystem.placePlayerNearClothingForQA()
+        : null
+    );
+    window.MrFeastFresh.resetBulkStorageSecretForQA = (options = {}) => (
+      state.qa && bulkStorageSecretSystem
+        ? bulkStorageSecretSystem.reset(options)
+        : null
     );
     window.MrFeastFresh.saveGameForQA = () => state.qa ? saveMansionGame() : false;
     window.MrFeastFresh.loadGameForQA = () => state.qa ? loadMansionGame() : false;
@@ -30972,7 +32890,29 @@
     window.MrFeastFresh.getTamperState = () => tamperSystem?.getDiagnostics() || null;
     window.MrFeastFresh.tamperForQA = (id, tampered = true) => tamperSystem ? tamperSystem.setTamperedForQA(id, tampered) : null;
     window.MrFeastFresh.advanceTamperForQA = (seconds) => tamperSystem ? tamperSystem.advanceForQA(seconds) : null;
+    window.MrFeastFresh.getHouseDistractions = () => tamperSystem?.getDistractionDiagnostics() || null;
+    window.MrFeastFresh.placePlayerNearHouseDistractionForQA = (kind) => (
+      tamperSystem ? tamperSystem.placePlayerNearDistractionForQA(kind) : null
+    );
+    window.MrFeastFresh.activateHouseDistractionForQA = (kind, active = true) => {
+      if (!state.qa || !tamperSystem) return null;
+      const entry = tamperSystem.entries.find((candidate) => candidate.distraction && candidate.kind === kind);
+      if (!entry) return null;
+      tamperSystem.setTampered(entry, Boolean(active), "qa");
+      return tamperSystem.getDistractionDiagnostics().entries.find((candidate) => candidate.id === entry.id) || null;
+    };
+    window.MrFeastFresh.advanceHouseDistractionsForQA = (seconds) => (
+      tamperSystem ? tamperSystem.advanceForQA(seconds) : null
+    );
+    window.MrFeastFresh.resetHouseDistractionsForQA = () => (
+      tamperSystem ? tamperSystem.resetDistractionsForQA() : null
+    );
     window.MrFeastFresh.getSpeechState = () => speechSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.dismissSpeechForQA = () => {
+      if (!state.qa || !speechSystem) return null;
+      speechSystem.dismiss();
+      return speechSystem.getDiagnostics();
+    };
     window.MrFeastFresh.getOpeningWelcomeState = () => openingWelcomeSystem?.getDiagnostics() || null;
     window.MrFeastFresh.advanceOpeningWelcomeForQA = (seconds) => (
       state.qa && openingWelcomeSystem ? openingWelcomeSystem.advanceForQA(seconds) : null
@@ -32090,6 +34030,7 @@
       scene.add(moonLight);
 
       buildMansion();
+      bulkStorageSecretSystem = new BulkStorageSecretSystem();
       flashlightSystem = new FlashlightSystem();
       readableBookSystem.finalizeSpineTitles();
       setLoading("Unveiling the estate statues", 68);

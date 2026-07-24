@@ -23,6 +23,11 @@
   - Rough size: L · Rough value: L
   - Notes: Deliberately deferred from Milestone 34; the current Workshop remains accessible so the existing patron-feed vertical slice can still be completed until the keypad clue chain is designed. The keypad-code-from-in-world-evidence portion landed in `docs/milestones/49-workroom-keycode-scratches.md` (the Painting Room scratch hunt); the broader document/sabotage network remains deferred here.
 
+- [ ] Extend meaningful room interactions beyond the first house-distraction set — give underused suites, utility rooms, and grounds authored evidence, a small number of useful tools, additional route/hiding leverage, and phase-reactive changes without turning the mansion into a collectible checklist.
+  - Source: 2026-07-24 mansion-wide interaction brainstorm
+  - Rough size: L · Rough value: L
+  - Notes: The user promoted the Music Room piano, basement Laundry machine, and Dining Room service bell into `docs/milestones/60-house-distractions.md`, then promoted the curtain-based route/hiding leverage slice into `docs/milestones/62-window-curtain-hiding.md`. Deferred candidates still include contestant luggage and confessional media upstairs; service keys, fuses, bolt cutters, manifests, and utility interactions below grade; and evolving post-competition evidence throughout the estate.
+
 ## Polish & juice
 
 - [ ] Extend the Meshy/Blender Tardigrade asset pass to stage-specific joke creatures and traversal props after the core roster is visually approved.

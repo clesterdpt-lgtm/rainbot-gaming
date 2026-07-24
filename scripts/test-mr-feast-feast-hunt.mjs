@@ -15,6 +15,10 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function angularDelta(a, b) {
+  return Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+}
+
 async function serverResponds() {
   try {
     return (await fetch(`${baseUrl}/games/mr-feast-mansion.html`, { cache: "no-store" })).ok;
@@ -58,6 +62,33 @@ async function huntState(page) {
   return page.evaluate(() => window.MrFeastFresh.getFeastHuntState());
 }
 
+async function feastHuntBriefingFacing(page) {
+  return page.evaluate(() => {
+    const game = JSON.parse(window.render_game_to_text());
+    const host = window.MrFeastFresh.getMrFeastState();
+    const dx = game.player.x - host.position.x;
+    const dz = game.player.z - host.position.z;
+    const distance = Math.hypot(dx, dz);
+    const hostForwardDot = distance > 0.0001
+      ? (Math.sin(host.yaw) * dx + Math.cos(host.yaw) * dz) / distance
+      : 1;
+    const playerToHostX = -dx;
+    const playerToHostZ = -dz;
+    const playerForwardDot = distance > 0.0001
+      ? ((-Math.sin(game.player.yaw)) * playerToHostX + (-Math.cos(game.player.yaw)) * playerToHostZ) / distance
+      : 1;
+    return {
+      distance,
+      hostForwardDot,
+      playerForwardDot,
+      hostYaw: host.yaw,
+      playerYaw: game.player.yaw,
+      hostPosition: host.position,
+      playerPosition: game.player,
+    };
+  });
+}
+
 async function prepareCalledHunt(page) {
   return page.evaluate(() => {
     window.MrFeastFresh.setFeastHuntGateForQA({ stormCompleted: true, relaySabotaged: true });
@@ -65,11 +96,27 @@ async function prepareCalledHunt(page) {
   });
 }
 
-async function beginHunt(page) {
+async function beginHunt(page, { verifyBriefingFacing = false } = {}) {
   const called = await prepareCalledHunt(page);
   assert(called?.started, `Feast Hunt should call after both gates: ${JSON.stringify(called)}`);
   const started = await page.evaluate(() => window.MrFeastFresh.startFeastHuntForQA());
   assert(started?.started, `Feast Hunt should stage the foyer briefing: ${JSON.stringify(started)}`);
+  if (verifyBriefingFacing) {
+    let facing = await feastHuntBriefingFacing(page);
+    assert(
+      facing.distance >= 2
+        && facing.hostForwardDot >= 0.96
+        && facing.playerForwardDot >= 0.96,
+      `Mr. Feast must face the held player while explaining Game 3: ${JSON.stringify(facing)}`,
+    );
+    await page.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(0.75));
+    facing = await feastHuntBriefingFacing(page);
+    assert(
+      facing.hostForwardDot >= 0.96 && facing.playerForwardDot >= 0.96,
+      `Mr. Feast must retain the face-to-face Game 3 pose throughout the explanation: ${JSON.stringify(facing)}`,
+    );
+    await page.screenshot({ path: path.join(artifactDir, "feast-hunt-briefing-facing-player.png") });
+  }
   await page.keyboard.press("e");
   let hunt = await huntState(page);
   assert(hunt.phase === "briefing" && hunt.briefing.canSkip === false, `E should skip only the rules and retain the countdown: ${JSON.stringify(hunt.briefing)}`);
@@ -92,13 +139,30 @@ async function assertSourceContract() {
   assert(/feastHunt:\s*\{/.test(runtime), "authoritative mansion state must own Feast Hunt");
   assert(/reportDeadlineSeconds:\s*5\s*\*\s*60/.test(runtime), "Feast Hunt needs the five-minute production-call deadline");
   assert(/Golden Bell/.test(runtime) && /Golden Goblet/.test(runtime) && /Golden Carving Knife/.test(runtime), "the three authored gold props are missing");
-  assert(/main-level/.test(runtime) && /second-floor/.test(runtime) && /basement-level/.test(runtime), "Feast Hunt props must span all three mansion levels");
+  assert(
+    /id:\s*"golden-carving-knife"[\s\S]{0,260}?level:\s*"main-level"[\s\S]{0,160}?room:\s*"KITCHEN"/.test(runtime),
+    "the player carving knife must be relocated from the basement to the Kitchen",
+  );
+  assert(
+    /golden-carving-knife-blade/.test(runtime)
+      && /golden-carving-knife-bolster/.test(runtime)
+      && /golden-carving-knife-rivet/.test(runtime),
+    "the smaller carving knife needs a pointed blade, bolster, handle, and rivets",
+  );
+  assert(
+    /visualScale:/.test(runtime) && /hidingContext:/.test(runtime) && /interactionSize:/.test(runtime),
+    "Feast Hunt props need authored smaller scales, dressed hiding contexts, and tighter interaction volumes",
+  );
   assert(/allowsSecuritySystems/.test(runtime), "Feast Hunt must distinguish clue hold from active camera/security ownership");
   assert(/feast-hunt-eliminated/.test(runtime) && /feast-hunt-no-show/.test(runtime) && /feast-hunt-juniper-won/.test(runtime), "Feast Hunt catch, no-show, and rival-win losses need explicit recoverable outcomes");
   assert(/getFeastHuntState/.test(runtime) && /advanceFeastHuntForQA/.test(runtime), "focused Feast Hunt diagnostics and deterministic clock are missing");
+  assert(/briefingHostMark/.test(runtime) && /stageHostForBriefing/.test(runtime), "Feast Hunt must own a face-to-face host pose throughout the Game 3 explanation");
   assert(/collectFeastHuntItemForQA/.test(runtime) && /placePlayerNearFeastHuntItemForQA/.test(runtime), "Feast Hunt item QA controls are missing");
   assert(/placePlayerAtFeastHuntReturnForQA/.test(runtime), "Feast Hunt needs a real foyer return QA control");
   assert(/startFeastHuntRace/.test(runtime) && /updateFeastHuntEntry/.test(runtime), "Juniper needs an authored active Feast Hunt route");
+  assert(/rivalPendingItemId/.test(runtime) && /searchPauseSeconds:\s*(?:[3-9]\d|[1-9]\d{2,})/.test(runtime), "Juniper needs a substantial pre-find search delay");
+  assert(/returnedIds:\s*\[\]/.test(runtime) && /carriedItemId:\s*null/.test(runtime), "Feast Hunt must track individual foyer hand-ins and one carried item");
+  assert(/stageThree:/.test(runtime) && /colliderBody/.test(runtime), "the foyer statues need a dramatic third relocation with aligned physical colliders");
   assert(/activateBlackout/.test(runtime) && /restoreBlackout/.test(runtime), "Feast Hunt needs competition-owned full-house blackout lifecycle");
   assert(/setFeastHuntGateForQA/.test(runtime) && /triggerFeastHuntPursuitForQA/.test(runtime), "Feast Hunt gate/pursuit QA controls are missing");
   assert(/id="mansion-feast-hunt"/.test(html), "the game page is missing the Feast Hunt HUD region");
@@ -179,7 +243,7 @@ async function run() {
 
     // --- Foyer briefing, immediate skip, and real item collection -----------
     const playPage = await bootPage(browser, { width: 1280, height: 820 }, errors);
-    hunt = await beginHunt(playPage);
+    hunt = await beginHunt(playPage, { verifyBriefingFacing: true });
     assert(
       hunt.briefing.countdownSequence.join(",") === "3,2,1,0"
         && hunt.briefing.rulesLine.includes("three")
@@ -187,7 +251,11 @@ async function run() {
       `Feast Hunt needs a complete spoken countdown and explicit rules: ${JSON.stringify(hunt.briefing)}`,
     );
     assert(hunt.items.length === 3 && hunt.items.every((item) => item.visible && item.registered), `all three props should appear at release: ${JSON.stringify(hunt.items)}`);
-    assert(new Set(hunt.items.map((item) => item.level)).size === 3, `props must span three levels: ${JSON.stringify(hunt.items)}`);
+    assert(
+      hunt.items.every((item) => item.level !== "basement-level")
+        && new Set(hunt.items.map((item) => item.level)).size === 2,
+      `the player's props should remain above grade after relocating the knife: ${JSON.stringify(hunt.items)}`,
+    );
     assert(
       hunt.blackout.active
         && hunt.blackout.interiorCircuitCount > 20
@@ -232,6 +300,37 @@ async function run() {
         && statuesAfterBell.entries.every((entry) => entry.positionUnchanged && entry.rotationChanged),
       `first pickup should turn both fixed foyer statues only while unobserved: ${JSON.stringify(statuesAfterBell)}`,
     );
+    assert(
+      hunt.readyToReturn
+        && hunt.carriedItemId === "golden-bell"
+        && hunt.returnedCount === 0
+        && hunt.returnStation.visible
+        && hunt.returnStation.registered
+        && /return.*golden bell/i.test(hunt.ui.status),
+      `the Bell must be carried back before another object can be taken: ${JSON.stringify(hunt)}`,
+    );
+    const blockedGoblet = await playPage.evaluate(() => window.MrFeastFresh.collectFeastHuntItemForQA("golden-goblet"));
+    assert(
+      !blockedGoblet.accepted
+        && blockedGoblet.reason === "return-current-first"
+        && blockedGoblet.carriedItemId === "golden-bell",
+      `a second pickup must be blocked until the Bell is handed in: ${JSON.stringify(blockedGoblet)}`,
+    );
+    await playPage.evaluate(() => window.MrFeastFresh.placePlayerAtFeastHuntReturnForQA());
+    await playPage.waitForFunction(() => /return|place/i.test(JSON.parse(window.render_game_to_text()).prompt || ""), null, { timeout: 10000 });
+    await playPage.keyboard.press("e");
+    await playPage.waitForFunction(() => window.MrFeastFresh.getFeastHuntState()?.returnedCount === 1);
+    hunt = await huntState(playPage);
+    assert(
+      hunt.phase === "hunting"
+        && hunt.returnedIds.join(",") === "golden-bell"
+        && hunt.carriedItemId === null
+        && !hunt.readyToReturn
+        && !hunt.returnStation.visible
+        && !hunt.returnStation.registered
+        && /find/i.test(hunt.ui.status),
+      `the first foyer hand-in should reopen the hunt without completing it: ${JSON.stringify(hunt)}`,
+    );
 
     // --- Camera/personal sight retains stealth and pursuit ownership ----------
     const cameraStart = await playPage.evaluate(() => window.MrFeastFresh.triggerFeastHuntPursuitForQA("camera"));
@@ -258,6 +357,9 @@ async function run() {
     assert(
       hunt.phase === "called"
         && hunt.collectedIds.join(",") === "golden-bell"
+        && hunt.returnedIds.join(",") === "golden-bell"
+        && hunt.carriedItemId === null
+        && !hunt.readyToReturn
         && diagnostics.mrFeast.pursuit.active === null
         && hunt.reportRemaining === 300
         && !hunt.blackout.active
@@ -281,10 +383,35 @@ async function run() {
     );
     await catchPage.close();
 
-    // --- Juniper can independently search, collect, return, and win -----------
+    // --- Juniper searches deliberately, then can still return and win --------
     const rivalPage = await bootPage(browser, { width: 1280, height: 820 }, errors);
     await beginHunt(rivalPage);
-    await rivalPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(240));
+    await rivalPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(20));
+    let rivalHunt = await huntState(rivalPage);
+    assert(
+      rivalHunt.phase === "hunting"
+        && rivalHunt.rival.collectedCount === 0
+        && rivalHunt.rival.active
+        && rivalHunt.rival.distanceTravelled > 20,
+      `Juniper should still be traveling toward the first hiding place at 20 seconds: ${JSON.stringify(rivalHunt.rival)}`,
+    );
+    await rivalPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(10));
+    rivalHunt = await huntState(rivalPage);
+    assert(
+      rivalHunt.rival.collectedCount === 0
+        && rivalHunt.rival.pendingItemId === "golden-bell"
+        && rivalHunt.rival.pauseRemaining > 0,
+      `Juniper should spend real time searching after reaching the first object: ${JSON.stringify(rivalHunt.rival)}`,
+    );
+    await rivalPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(210));
+    diagnostics = await rivalPage.evaluate(() => JSON.parse(window.render_game_to_text()));
+    assert(
+      !diagnostics.gameOver
+        && diagnostics.feastHunt.phase === "hunting"
+        && !diagnostics.feastHunt.rival.returned,
+      `Juniper should take substantially longer than the former 240-second finish: ${JSON.stringify(diagnostics.feastHunt.rival)}`,
+    );
+    await rivalPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(180));
     diagnostics = await rivalPage.evaluate(() => JSON.parse(window.render_game_to_text()));
     assert(
       diagnostics.gameOver?.reason === "feast-hunt-juniper-won"
@@ -297,28 +424,138 @@ async function run() {
     );
     await rivalPage.close();
 
-    // --- Three items must be physically returned to the foyer to finish -------
+    // --- Every item must be individually returned to the foyer ----------------
     const winPage = await bootPage(browser, { width: 1280, height: 820 }, errors);
     await beginHunt(winPage);
-    for (const id of ["golden-bell", "golden-goblet", "golden-carving-knife"]) {
+    hunt = await huntState(winPage);
+    const hiddenBell = hunt.items.find((entry) => entry.id === "golden-bell");
+    const hiddenGoblet = hunt.items.find((entry) => entry.id === "golden-goblet");
+    const kitchenKnife = hunt.items.find((entry) => entry.id === "golden-carving-knife");
+    assert(
+      hiddenBell?.hidingContext === "dining-sideboard-back-corner"
+        && hiddenBell.position.x <= -13.5
+        && hiddenBell.position.z <= -11
+        && hiddenBell.visualSize.y <= 0.35
+        && hiddenBell.interactionSize <= 0.62,
+      `the smaller bell should be tucked into the Dining Room sideboard dressing: ${JSON.stringify(hiddenBell)}`,
+    );
+    assert(
+      hiddenGoblet?.hidingContext === "reading-room-low-bookcase"
+        && hiddenGoblet.position.x >= 14
+        && hiddenGoblet.position.z >= 2.4
+        && hiddenGoblet.position.y <= 5.4
+        && hiddenGoblet.visualSize.y <= 0.31
+        && hiddenGoblet.interactionSize <= 0.62,
+      `the smaller goblet should be tucked onto a low Reading Room bookcase shelf: ${JSON.stringify(hiddenGoblet)}`,
+    );
+    assert(
+      kitchenKnife?.level === "main-level"
+        && kitchenKnife.room === "KITCHEN"
+        && kitchenKnife.hidingContext === "kitchen-bread-board"
+        && kitchenKnife.position.x >= 6.3
+        && kitchenKnife.position.x <= 6.8
+        && kitchenKnife.position.z <= -11.2
+        && kitchenKnife.position.y >= 0.95
+        && kitchenKnife.position.y <= 1.1
+        && Math.max(kitchenKnife.visualSize.x, kitchenKnife.visualSize.z) <= 0.31
+        && Math.max(kitchenKnife.visualSize.x, kitchenKnife.visualSize.z)
+          >= Math.min(kitchenKnife.visualSize.x, kitchenKnife.visualSize.z) * 4
+        && kitchenKnife.interactionSize <= 0.62,
+      `the smaller carving knife should remain recognizable while partly hidden on the Kitchen bread board: ${JSON.stringify(kitchenKnife)}`,
+    );
+    const itemIds = ["golden-bell", "golden-goblet", "golden-carving-knife"];
+    const statueDeltas = [];
+    const statuePositionDeltas = [];
+    for (let index = 0; index < itemIds.length; index += 1) {
+      const id = itemIds[index];
+      const itemStaging = await winPage.evaluate(
+        (itemId) => window.MrFeastFresh.placePlayerNearFeastHuntItemForQA(itemId),
+        id,
+      );
+      assert(itemStaging?.itemId === id, `QA should stage the player outside the foyer for ${id}: ${JSON.stringify(itemStaging)}`);
+      await winPage.waitForFunction(
+        (label) => (JSON.parse(window.render_game_to_text()).prompt || "").toLowerCase().includes(label),
+        id.replace(/^golden-/, "").replaceAll("-", " "),
+        { timeout: 10000 },
+      );
+      await winPage.locator("#mansion-stage").screenshot({
+        path: path.join(artifactDir, `feast-hunt-hidden-${id}.png`),
+      });
+      if (id === "golden-carving-knife") {
+        await winPage.screenshot({ path: path.join(artifactDir, "feast-hunt-kitchen-knife.png") });
+      }
       const result = await winPage.evaluate((itemId) => window.MrFeastFresh.collectFeastHuntItemForQA(itemId), id);
       assert(result?.accepted, `QA should collect ${id}: ${JSON.stringify(result)}`);
+      hunt = await huntState(winPage);
+      assert(
+        hunt.phase === "hunting"
+          && hunt.collectedCount === index + 1
+          && hunt.returnedCount === index
+          && hunt.carriedItemId === id
+          && hunt.readyToReturn
+          && hunt.returnStation.visible
+          && hunt.returnStation.registered,
+        `pickup ${index + 1} must require its own foyer return: ${JSON.stringify(hunt)}`,
+      );
+      const deltas = hunt.statues.entries.map((entry) => angularDelta(entry.rotationY, entry.baseRotationY));
+      const positionDeltas = hunt.statues.entries.map((entry) => entry.positionDelta);
+      statueDeltas.push(deltas);
+      statuePositionDeltas.push(positionDeltas);
+      assert(
+        hunt.statues.stage === index + 1
+          && hunt.statues.entries.every((entry) => entry.rotationChanged && entry.colliderAligned),
+        `pickup ${index + 1} should advance the physical statues to stage ${index + 1}: ${JSON.stringify(hunt.statues)}`,
+      );
+      if (index === 0) {
+        assert(deltas.every((delta) => delta >= 0.12 && delta <= 0.32), `stage one should be slight: ${JSON.stringify(deltas)}`);
+        assert(positionDeltas.every((delta) => delta <= 0.01), `stage one should turn without relocating: ${JSON.stringify(positionDeltas)}`);
+      } else if (index === 1) {
+        assert(
+          positionDeltas.every((delta) => delta >= 0.2 && delta <= 0.45),
+          `stage two should shift each statue slightly: ${JSON.stringify(positionDeltas)}`,
+        );
+        assert(
+          deltas.every((delta, entryIndex) => delta >= statueDeltas[index - 1][entryIndex] * 1.55),
+          `statue rotation should escalate strongly at stage ${index + 1}: ${JSON.stringify(statueDeltas)}`,
+        );
+      } else {
+        assert(
+          deltas.every((delta, entryIndex) => delta >= statueDeltas[index - 1][entryIndex] * 1.55),
+          `statue rotation should escalate strongly at stage ${index + 1}: ${JSON.stringify(statueDeltas)}`,
+        );
+        assert(
+          positionDeltas.every((delta, entryIndex) => (
+            delta >= 2
+            && delta >= statuePositionDeltas[index - 1][entryIndex] * 5
+          )),
+          `stage three should relocate each statue drastically: ${JSON.stringify(statuePositionDeltas)}`,
+        );
+      }
+
+      const returnStaging = await winPage.evaluate(() => window.MrFeastFresh.placePlayerAtFeastHuntReturnForQA());
+      assert(
+        returnStaging?.readyToReturn && returnStaging.carriedItemId === id,
+        `QA must stage the player for the ${id} hand-in: ${JSON.stringify(returnStaging)}`,
+      );
+      await winPage.waitForFunction(() => /return|place/i.test(JSON.parse(window.render_game_to_text()).prompt || ""), null, { timeout: 10000 });
+      await winPage.screenshot({ path: path.join(artifactDir, `feast-hunt-statues-stage-${index + 1}.png`) });
+      await winPage.keyboard.press("e");
+      if (index < itemIds.length - 1) {
+        await winPage.waitForFunction((count) => {
+          const state = window.MrFeastFresh.getFeastHuntState();
+          return state?.returnedCount === count && !state.readyToReturn;
+        }, index + 1);
+        hunt = await huntState(winPage);
+        assert(
+          hunt.phase === "hunting"
+            && hunt.returnedCount === index + 1
+            && hunt.carriedItemId === null
+            && !hunt.returnStation.visible
+            && !hunt.returnStation.registered,
+          `hand-in ${index + 1} should resume the hunt: ${JSON.stringify(hunt)}`,
+        );
+      }
     }
-    hunt = await huntState(winPage);
-    assert(
-      hunt.phase === "hunting"
-        && hunt.collectedCount === 3
-        && hunt.items.every((item) => !item.visible && !item.registered)
-        && hunt.readyToReturn
-        && hunt.returnStation.visible
-        && hunt.returnStation.registered
-        && /return/i.test(hunt.ui.status),
-      `collecting all three props must require a physical foyer return: ${JSON.stringify(hunt)}`,
-    );
-    const returnStaging = await winPage.evaluate(() => window.MrFeastFresh.placePlayerAtFeastHuntReturnForQA());
-    assert(returnStaging?.readyToReturn, `QA must stage the player at the live foyer hand-in: ${JSON.stringify(returnStaging)}`);
-    await winPage.waitForFunction(() => /return|place/i.test(JSON.parse(window.render_game_to_text()).prompt || ""), null, { timeout: 10000 });
-    await winPage.keyboard.press("e");
     await winPage.waitForFunction(() => window.MrFeastFresh.getFeastHuntState()?.phase === "completed");
     hunt = await huntState(winPage);
     assert(

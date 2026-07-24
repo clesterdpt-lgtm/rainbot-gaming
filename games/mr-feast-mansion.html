@@ -139,6 +139,38 @@
         radial-gradient(ellipse at center, transparent 28%, rgba(0, 0, 0, 0.64));
     }
 
+    #mansion-stage.is-hiding.is-curtain-hiding::after {
+      transition: background 320ms ease;
+    }
+
+    #mansion-stage.is-hiding.is-curtain-hiding.curtain-crack-left::after {
+      background:
+        linear-gradient(90deg,
+          rgba(29, 5, 12, 0.97) 0%,
+          rgba(74, 13, 27, 0.95) 24%,
+          rgba(27, 4, 10, 0.78) 28%,
+          transparent 30.5%,
+          transparent 36.5%,
+          rgba(30, 4, 11, 0.82) 39%,
+          rgba(69, 12, 26, 0.96) 66%,
+          rgba(24, 4, 10, 0.98) 100%),
+        repeating-linear-gradient(90deg, rgba(217, 154, 119, 0.09) 0 2px, rgba(20, 2, 8, 0.12) 2px 8px);
+    }
+
+    #mansion-stage.is-hiding.is-curtain-hiding.curtain-crack-right::after {
+      background:
+        linear-gradient(90deg,
+          rgba(24, 4, 10, 0.98) 0%,
+          rgba(69, 12, 26, 0.96) 34%,
+          rgba(30, 4, 11, 0.82) 61%,
+          transparent 63.5%,
+          transparent 69.5%,
+          rgba(27, 4, 10, 0.78) 72%,
+          rgba(74, 13, 27, 0.95) 76%,
+          rgba(29, 5, 12, 0.97) 100%),
+        repeating-linear-gradient(90deg, rgba(217, 154, 119, 0.09) 0 2px, rgba(20, 2, 8, 0.12) 2px 8px);
+    }
+
     #mansion-canvas {
       position: absolute;
       inset: 0;
@@ -3419,6 +3451,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260723-mr-feast-rebrand-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260724-feast-hunt-blackout-rival-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260724-window-curtain-hiding-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

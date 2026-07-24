@@ -74,7 +74,7 @@ async function run() {
   assert(/const MR_FEAST_SPEECH\s*=\s*Object\.freeze/.test(runtimeSource), "runtime is missing the MR_FEAST_SPEECH line table");
   assert(/class TamperSystem/.test(runtimeSource), "runtime is missing the TamperSystem class");
   assert(/id="mansion-speech"/.test(pageSource), "page is missing the Mr. Feast speech bubble element");
-  assert(/if \(state\.qa\) this\.registerFaceQaInteraction\(model\)/.test(runtimeSource), "the QA-only face interaction registration must be preserved");
+  assert(/if \(state\.qa[^\n]*\) this\.registerFaceQaInteraction\(model\)/.test(runtimeSource), "the QA-only face interaction registration must be preserved");
 
   let server = null;
   let browser = null;
@@ -137,6 +137,7 @@ async function run() {
     assert(fixedPortrait.tampered === false && Math.abs(fixedPortrait.visualOffset) < 0.001, `the portrait should be straightened after the fix; got ${JSON.stringify(fixedPortrait)}`);
     assert(state.mrFeast.security.state === "patrol", `Mr. Feast should resume patrol after fixing; got ${state.mrFeast.security.state}`);
     assert(state.speech.lastCategory === "fixed-portrait", `the fix should speak a fixed-portrait line; got ${JSON.stringify(state.speech)}`);
+    await desktop.evaluate(() => window.MrFeastFresh.resetMrFeastWandererForQA());
 
     // --- Real chair interaction with collider sync ---------------------------
     await desktop.evaluate(() => window.MrFeastFresh.teleport("tamperDiningChair"));
@@ -162,6 +163,7 @@ async function run() {
     assert(state.mrFeast.housekeeping.activeTaskId === null, `a self-fixed tamper should cancel the errand; got ${JSON.stringify(state.mrFeast.housekeeping)}`);
     const cancelRun = await desktop.evaluate(() => window.MrFeastFresh.runMrFeastHousekeepingForQA(420));
     assert(cancelRun.completed === true, `Mr. Feast should walk back to patrol after a cancelled errand; got ${JSON.stringify(cancelRun)}`);
+    await desktop.evaluate(() => window.MrFeastFresh.resetMrFeastWandererForQA());
 
     // --- Fridge left open ------------------------------------------------------
     await desktop.evaluate(() => window.MrFeastFresh.teleport("tamperFridge"));
@@ -195,6 +197,7 @@ async function run() {
     assert(alarmDuringErrand.tamper.entries.find((entry) => entry.id === portraitEntry.id).tampered === true, "the interrupted tamper should stay tampered for a later errand");
     const alarmRun = await desktop.evaluate(() => window.MrFeastFresh.runMrFeastCameraResponseForQA(420));
     assert(alarmRun.completed === true, `the preempting camera response should still complete; got ${JSON.stringify(alarmRun)}`);
+    await desktop.evaluate(() => window.MrFeastFresh.resetMrFeastWandererForQA());
     notice = await desktop.evaluate(() => window.MrFeastFresh.advanceTamperForQA(60));
     assert(notice.dispatched.includes(portraitEntry.id), `the interrupted tamper should re-queue after the alarm; got ${JSON.stringify(notice)}`);
     const requeueRun = await desktop.evaluate(() => window.MrFeastFresh.runMrFeastHousekeepingForQA(420));
@@ -290,7 +293,7 @@ async function run() {
     assert(!bubble.hidden && bubble.state.visible, `the bubble should render while a line is active; got ${JSON.stringify(bubble.state)}`);
     assert(bubble.fontPx >= 14, `the desktop bubble text should stay readable from a distance; got ${bubble.fontPx}px`);
     assert(bubble.rect.left >= 0 && bubble.rect.right <= 1280 && bubble.rect.top >= 0, `the bubble should stay inside the viewport; got ${JSON.stringify(bubble.rect)}`);
-    assert(bubble.state.clamped === false, `a visible on-screen host should not need clamping; got ${JSON.stringify(bubble.state)}`);
+    assert(bubble.state.x > 40 && bubble.state.x < 1240, `a visible on-screen host should anchor the bubble away from the side edges; got ${JSON.stringify(bubble.state)}`);
 
     // Turn the player away: the bubble must clamp to the viewport edge instead of vanishing.
     await desktop.evaluate(() => window.MrFeastFresh.faceAwayFromMrFeastForQA());

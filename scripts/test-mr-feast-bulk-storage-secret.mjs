@@ -4,6 +4,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import sharp from "sharp";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runtimePath = path.join(root, "assets", "js", "mr-feast-mansion.js");
@@ -12,6 +13,11 @@ const port = Number(process.env.MR_FEAST_BULK_SECRET_TEST_PORT || (47000 + (proc
 const baseUrl = `http://127.0.0.1:${port}`;
 const gameUrl = `${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1&allLights=1`;
 const artifactDir = path.join(root, "output", "playwright", "mr-feast-bulk-storage-secret");
+const generatedSymbolAssets = [
+  "bulk-storage-goat-star-v1-ai.png",
+  "bulk-storage-broken-halo-v1-ai.png",
+  "bulk-storage-thorn-eye-v1-ai.png",
+].map((file) => path.join(root, "assets", "textures", "mr-feast", "generated", "symbols", file));
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -39,6 +45,31 @@ async function secretState(page) {
 
 async function diagnostics(page) {
   return page.evaluate(() => JSON.parse(window.render_game_to_text()));
+}
+
+async function generatedSymbolAssetDiagnostics(file) {
+  try {
+    const metadata = await sharp(file).metadata();
+    const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    let visible = 0;
+    let opaque = 0;
+    for (let offset = 3; offset < data.length; offset += info.channels) {
+      if (data[offset] > 24) visible += 1;
+      if (data[offset] > 220) opaque += 1;
+    }
+    const pixels = info.width * info.height;
+    return {
+      file,
+      width: metadata.width,
+      height: metadata.height,
+      channels: metadata.channels,
+      hasAlpha: metadata.hasAlpha,
+      visibleRatio: visible / pixels,
+      opaqueRatio: opaque / pixels,
+    };
+  } catch (_) {
+    return null;
+  }
 }
 
 async function bootPage(browser, errors, contextOptions = { viewport: { width: 1280, height: 820 } }) {
@@ -95,17 +126,29 @@ async function run() {
   // Red-first source contract. Before implementation this must fail on the
   // missing named system rather than launching a browser against old behavior.
   assert(/const BULK_STORAGE_SECRET = Object\.freeze\(\{/.test(runtime), "missing named BULK_STORAGE_SECRET tuning table");
-  assert(/MANSION_RUNTIME_VERSION = "20260724-bulk-storage-secret-1"/.test(runtime), "runtime cache identity is stale");
-  assert(/mr-feast-mansion\.js\?v=20260724-bulk-storage-secret-1/.test(html), "page and runtime cache identities must agree");
+  const runtimeCacheIdentity = runtime.match(/MANSION_RUNTIME_VERSION = "([^"]+)"/)?.[1];
+  const pageCacheIdentity = html.match(/mr-feast-mansion\.js\?v=([^"&]+)/)?.[1];
+  assert(runtimeCacheIdentity && runtimeCacheIdentity === pageCacheIdentity, `page and runtime cache identities must agree: ${JSON.stringify({ runtimeCacheIdentity, pageCacheIdentity })}`);
   assert(/class BulkStorageSecretSystem/.test(runtime), "missing focused BulkStorageSecretSystem");
   assert(/bulk-secret-movable-box/.test(runtime) && /addKinematicBox/.test(runtime), "center boxes need visible meshes and aligned solid kinematic colliders");
   assert(/bulk-secret-demonic-symbol/.test(runtime) && /THREE\.(?:Line|LineLoop)/.test(runtime), "demonic markings must be real floor geometry");
+  const generatedAssetDiagnostics = await Promise.all(generatedSymbolAssets.map(generatedSymbolAssetDiagnostics));
+  generatedAssetDiagnostics.forEach((asset, index) => {
+    assert(asset, `missing generated decal asset ${generatedSymbolAssets[index]}`);
+    assert(asset.width >= 512 && asset.height >= 512, `generated decal must be at least 512px: ${JSON.stringify(asset)}`);
+    assert(asset.hasAlpha && asset.channels === 4, `generated decal needs a real alpha channel: ${JSON.stringify(asset)}`);
+    assert(asset.visibleRatio >= 0.08 && asset.visibleRatio <= 0.72, `generated decal should preserve transparent floor coverage: ${JSON.stringify(asset)}`);
+    assert(asset.opaqueRatio >= 0.025, `generated decal should contain substantial painted detail: ${JSON.stringify(asset)}`);
+  });
+  assert(/bulk-secret-demonic-symbol-\$\{spec\.id\}-decal/.test(runtime), "generated symbol textures need real floor decal meshes");
+  assert(/textureLoaded:[\s\S]{0,240}fallbackVisible:/.test(runtime), "symbol diagnostics must expose generated texture and fallback state");
+  assert(/const fallbackMeshes = \[circle, star, thorns\][\s\S]{0,120}mesh\.visible = !decal/.test(runtime), "original line symbols must remain as missing-texture fallbacks");
   assert(/beginCurrentInteractionHold/.test(runtime) && /endCurrentInteractionHold/.test(runtime), "central input needs explicit held-interaction lifecycle");
   assert(/event\.code === "KeyE"[\s\S]{0,240}beginCurrentInteractionHold/.test(runtime), "E keydown must start the held interaction");
   assert(/event\.code === "KeyE"[\s\S]{0,180}endCurrentInteractionHold/.test(runtime), "E keyup must release the held interaction");
   assert(/touchInteract[\s\S]{0,900}pointerup/.test(runtime), "the existing touch Interact button must support release as well as press");
   assert(/kip-clothing/.test(runtime) && /what Kip was wearing/i.test(runtime), "Kip's clothing clue and requested observation text are missing");
-  assert(/getBulkStorageSecretState/.test(runtime) && /placePlayerNearBulkStorageBoxForQA/.test(runtime), "focused bulk-storage diagnostics and QA controls are missing");
+  assert(/getBulkStorageSecretState/.test(runtime) && /placePlayerNearBulkStorageBoxForQA/.test(runtime) && /frameBulkStorageSymbolForQA/.test(runtime), "focused bulk-storage diagnostics and QA controls are missing");
   assert(/id="touch-interact"/.test(html), "the existing touch Interact control must remain available");
 
   let server = null;
@@ -128,6 +171,8 @@ async function run() {
     assert(secret?.boxes?.length >= 4, `Bulk Storage needs at least four movable center boxes: ${JSON.stringify(secret?.boxes)}`);
     assert(secret?.symbols?.length >= 3, `Bulk Storage needs several floor symbols: ${JSON.stringify(secret?.symbols)}`);
     assert(secret.symbols.every((symbol) => symbol.visible && symbol.covered), `every marking should exist but begin covered by physical boxes: ${JSON.stringify(secret.symbols)}`);
+    assert(secret.symbols.every((symbol) => symbol.textureLoaded && symbol.decalVisible && !symbol.fallbackVisible), `every generated symbol decal should load while line geometry remains fallback-only: ${JSON.stringify(secret.symbols)}`);
+    assert(secret.symbols.every((symbol) => symbol.textureSize?.width >= 512 && symbol.textureSize?.height >= 512), `runtime decals should preserve high-resolution texture detail: ${JSON.stringify(secret.symbols)}`);
     assert(secret.revealedCount === 0 && !secret.allRevealed, `fresh secret must begin hidden: ${JSON.stringify(secret)}`);
     assert(secret.boxes.every((box) => box.colliderAligned && box.insideRoom), `fresh visible boxes and colliders must align inside the room: ${JSON.stringify(secret.boxes)}`);
     await page.evaluate(() => window.MrFeastFresh.frameBulkStorageSecretForQA());
@@ -153,6 +198,17 @@ async function run() {
     assert(secret.boxes.every((box) => box.colliderAligned && box.insideRoom), `all moved boxes must stay solid, aligned, and inside Bulk Storage: ${JSON.stringify(secret.boxes)}`);
     await page.evaluate(() => window.MrFeastFresh.frameBulkStorageSecretForQA());
     await page.screenshot({ path: path.join(artifactDir, "bulk-storage-secret-revealed-desktop.png") });
+    for (const symbolId of ["goat-star", "broken-halo", "thorn-eye"]) {
+      const framed = await page.evaluate(
+        (id) => window.MrFeastFresh.frameBulkStorageSymbolForQA(id),
+        symbolId,
+      );
+      assert(
+        framed?.id === symbolId && framed.textureLoaded && framed.decalVisible && !framed.fallbackVisible,
+        `close-up QA should frame the generated ${symbolId} decal: ${JSON.stringify(framed)}`,
+      );
+      await page.screenshot({ path: path.join(artifactDir, `bulk-storage-${symbolId}-decal-desktop.png`) });
+    }
 
     // Kip clothing clue: ordinary E remains a one-press interaction.
     const clothingStage = await page.evaluate(() => window.MrFeastFresh.placePlayerNearKipClothingForQA());

@@ -228,7 +228,84 @@ async function run() {
     await page.waitForTimeout(100);
     await page.screenshot({ path: path.join(artifactDir, "direct-ballroom-pursuit.png") });
 
-    // 3. Breaking both personal sight and camera tracking freezes the last
+    // 3. Seeing the player from an upper stair flight must not release Mr.
+    // Feast into level direct steering while his root is between floor
+    // planes. He must retain the authored rising leg and stay on its centre.
+    const stairGrounding = await page.evaluate(() => {
+      window.MrFeastFresh.resetCameraSecurityForQA(null);
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.teleport("westRampTop");
+      window.MrFeastFresh.setMrFeastPoseForQA({
+        action: "idle",
+        x: -2.48,
+        y: 3.5,
+        z: 1.06,
+        yaw: 0,
+      });
+      window.MrFeastFresh.reportInfractionForQA("portrait");
+      const before = window.MrFeastFresh.getMrFeastState();
+      const step = window.MrFeastFresh.advanceMrFeastPursuitForQA(0.5);
+      const after = window.MrFeastFresh.getMrFeastState();
+      const expectedRampY = 2.5 + (after.position.z + 0.98) * (2 / 4.08);
+      return {
+        before,
+        step,
+        after,
+        expectedRampY: Number(expectedRampY.toFixed(3)),
+        rampError: Number(Math.abs(after.position.y - expectedRampY).toFixed(3)),
+      };
+    });
+    assert(
+      stairGrounding.before.pursuit.active
+        && stairGrounding.step.directSteeringFrames === 0
+        && stairGrounding.after.onStairs,
+      `between-floor pursuit should retain stair-route ownership instead of level direct steering; result=${JSON.stringify(stairGrounding)}`,
+    );
+    assert(
+      Math.abs(stairGrounding.after.position.x + 2.48) <= 0.08
+        && stairGrounding.after.position.y > 3.6
+        && stairGrounding.rampError <= 0.08,
+      `upper-flight pursuit should remain centred and grounded on the authored stair rise; result=${JSON.stringify(stairGrounding)}`,
+    );
+
+    // 4. The two upper balcony wings face each other across the open foyer.
+    // Their inner guards are transparent to sight but solid to movement. A
+    // visible player on the opposite wing should make Mr. Feast head north
+    // for the front crosswalk immediately, not push east through both rails
+    // and the open void.
+    const railingDetour = await page.evaluate(() => {
+      window.MrFeastFresh.resetCameraSecurityForQA(null);
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.teleport("eastRail");
+      window.MrFeastFresh.setMrFeastPoseForQA({
+        action: "idle",
+        x: -4.3,
+        y: 4.5,
+        z: 7.2,
+        yaw: Math.PI / 2,
+      });
+      window.MrFeastFresh.reportInfractionForQA("portrait");
+      const before = window.MrFeastFresh.getMrFeastState();
+      const step = window.MrFeastFresh.advanceMrFeastPursuitForQA(0.8);
+      const after = window.MrFeastFresh.getMrFeastState();
+      return { before, step, after };
+    });
+    assert(
+      railingDetour.before.pursuit.active
+        && railingDetour.before.pursuit.directPathClear === false
+        && railingDetour.before.pursuit.detourReason === "obstacle"
+        && railingDetour.before.security.pathRemaining >= 2,
+      `a railing-blocked sight line should create a routed detour at pursuit start; result=${JSON.stringify(railingDetour)}`,
+    );
+    assert(
+      railingDetour.step.directSteeringFrames === 0
+        && railingDetour.step.distanceTravelled >= 0.35
+        && railingDetour.after.position.x < -3.4
+        && railingDetour.after.position.z >= 7.45,
+      `railing detour should turn north toward the crosswalk without direct-steering east into the guard; result=${JSON.stringify(railingDetour)}`,
+    );
+
+    // 5. Breaking both personal sight and camera tracking freezes the last
     // known position. He may pursue that stale clue, but never the live player.
     const memory = await page.evaluate(() => {
       window.MrFeastFresh.resetCameraSecurityForQA(null);
@@ -254,7 +331,7 @@ async function run() {
     const lost = await page.evaluate(() => window.MrFeastFresh.advanceMrFeastPursuitForQA(5.5));
     assert(!lost.active && lost.outcome === "lost", `an unseen, unrecorded player should still escape inside the authored window; result=${JSON.stringify(lost)}`);
 
-    // 4. A real hiding spot uses a shorter-but-meaningful escape window and
+    // 6. A real hiding spot uses a shorter-but-meaningful escape window and
     // never catches or retargets the hidden player.
     const hidden = await page.evaluate(() => {
       window.MrFeastFresh.resetCameraSecurityForQA(null);
@@ -276,7 +353,7 @@ async function run() {
     assert(positionDistance(hidden.lastKnown, hidden.diagnostics.pursuit.lastKnownPosition) <= 0.01, `hiding must not broadcast the hiding spot; result=${JSON.stringify(hidden)}`);
     await page.screenshot({ path: path.join(artifactDir, "hidden-pursuit-escaped.png") });
 
-    // 5. Reappearing during the bounded post-loss search must immediately
+    // 7. Reappearing during the bounded post-loss search must immediately
     // re-arm both hostile cameras and personal basement awareness. The
     // housekeeping cooldown must never grant the player detection immunity.
     const basementReacquisition = await page.evaluate(() => {
@@ -307,7 +384,14 @@ async function run() {
       const second = startCameraPursuit("cam-basement-boiler");
 
       const secondLoss = hideUntilLost();
+      window.MrFeastFresh.setCameraPlayerHiddenForQA(false);
       window.MrFeastFresh.resetCameraSecurityForQA(null);
+      // Keep this cooldown-reacquisition probe independent of whichever
+      // valid response-graph node the previous chase reached before loss.
+      // A wall-adjacent end node can place a naive orbit probe through that
+      // wall even though the proximity rule itself is correct.
+      const cooldownYaw = window.MrFeastFresh.getMrFeastState().yaw;
+      window.MrFeastFresh.setMrFeastPoseForQA({ action: "idle", x: 0, y: -3.8, z: 0, yaw: cooldownYaw });
       window.MrFeastFresh.placePlayerNearMrFeastForQA(1.9, Math.PI);
       const closeAwareness = window.MrFeastFresh.advanceMrFeastAwarenessForQA(1);
       const final = window.MrFeastFresh.getMrFeastState();

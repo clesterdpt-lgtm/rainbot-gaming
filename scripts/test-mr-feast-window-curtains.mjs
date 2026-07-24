@@ -13,7 +13,7 @@ const baseUrl = `http://127.0.0.1:${port}`;
 const gameUrl = `${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1&allLights=1`;
 const artifactDir = path.join(root, "output", "playwright", "mr-feast-window-curtains");
 
-const EXPECTED_IDS = [
+const REPRESENTATIVE_IDS = [
   "library-front-west",
   "library-front-center",
   "music-front-center",
@@ -25,6 +25,26 @@ const EXPECTED_IDS = [
   "upper-lounge-rear-west",
   "upper-lounge-rear-east",
 ];
+const EXPECTED_WALL_COUNTS = Object.freeze({
+  "main-front-wall": 6,
+  "main-rear-wall": 8,
+  "main-west-wall": 4,
+  "main-east-wall": 5,
+  "upper-front-wall": 7,
+  "upper-rear-wall": 8,
+  "upper-west-wall": 5,
+  "upper-east-wall": 5,
+  "basement-front-wall": 6,
+  "basement-rear-wall": 6,
+  "basement-west-wall": 4,
+  "basement-east-wall": 3,
+});
+const EXPECTED_LEVEL_COUNTS = Object.freeze({
+  "MAIN LEVEL": 23,
+  "SECOND FLOOR": 25,
+  "BASEMENT": 19,
+});
+const EXPECTED_WINDOW_COUNT = Object.values(EXPECTED_WALL_COUNTS).reduce((total, count) => total + count, 0);
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -111,10 +131,7 @@ async function run() {
   assert(/function makeCurtainDamaskTexture/.test(runtime), "missing procedural woven-damask curtain texture");
   assert(/getWindowCurtainState/.test(runtime) && /placePlayerNearWindowCurtainForQA/.test(runtime), "missing focused curtain diagnostics and staging controls");
   assert(/is-curtain-hiding/.test(html) && /curtain-crack-left/.test(html) && /curtain-crack-right/.test(html), "missing asymmetric curtain partial-view treatment");
-  assert(/MANSION_RUNTIME_VERSION = "20260724-window-curtain-hiding-1"/.test(runtime), "curtain runtime cache identity is stale");
-  assert(/mr-feast-mansion\.js\?v=20260724-window-curtain-hiding-1/.test(html), "curtain page cache identity is stale");
-  for (const id of EXPECTED_IDS) assert(runtime.includes(`id: "${id}"`), `missing authored curtain ${id}`);
-  assert(!/basement-(?:front|rear|west|east)-wall[^]*?curtain:/i.test(runtime), "basement windows must remain curtain-free");
+  for (const id of REPRESENTATIVE_IDS) assert(runtime.includes(`id: "${id}"`), `missing preserved authored curtain override ${id}`);
 
   let server = null;
   let browser = null;
@@ -130,16 +147,20 @@ async function run() {
     const desktop = await bootPage(browser, errors, { viewport: { width: 1280, height: 820 } });
     const page = desktop.page;
 
-    // Authored placement, exclusions, material, and geometry.
+    // Complete exterior-window coverage, orientation, mounting, material, and geometry.
     let curtains = await curtainState(page);
-    assert(curtains?.count === 10, `expected ten curtain installations: ${JSON.stringify(curtains)}`);
-    assert(JSON.stringify(curtains.installations.map((entry) => entry.id).sort()) === JSON.stringify([...EXPECTED_IDS].sort()), `curtain IDs drifted: ${JSON.stringify(curtains.installations)}`);
-    const roomCounts = Object.fromEntries(["LIBRARY", "MUSIC ROOM", "DINING ROOM", "BALLROOM", "REAR LOUNGE"].map((room) => [
-      room,
-      curtains.installations.filter((entry) => entry.room === room).length,
-    ]));
-    assert(Object.values(roomCounts).every((count) => count === 2), `each authored room needs exactly two curtains: ${JSON.stringify(roomCounts)}`);
-    assert(curtains.excludedKinds.includes("kitchen") && curtains.excludedKinds.includes("basement") && curtains.excludedKinds.includes("headboard") && curtains.excludedKinds.includes("gallery"), `curtain exclusions are incomplete: ${JSON.stringify(curtains.excludedKinds)}`);
+    assert(curtains?.count === EXPECTED_WINDOW_COUNT, `expected curtains on all ${EXPECTED_WINDOW_COUNT} exterior windows: ${JSON.stringify(curtains?.windowInventory || curtains)}`);
+    const runtimeVersion = runtime.match(/MANSION_RUNTIME_VERSION = "([^"]+)"/)?.[1] || "";
+    assert(runtimeVersion.startsWith("20260724-all-window-curtains"), `all-window curtain runtime cache identity is stale: ${runtimeVersion}`);
+    assert(html.includes(`mr-feast-mansion.js?v=${runtimeVersion}`), `curtain page/runtime cache identities differ: ${runtimeVersion}`);
+    assert(curtains.windowInventory?.total === EXPECTED_WINDOW_COUNT, `exterior window inventory should contain ${EXPECTED_WINDOW_COUNT}: ${JSON.stringify(curtains.windowInventory)}`);
+    assert(curtains.windowInventory?.uncoveredIds?.length === 0, `every exterior window needs curtains: ${JSON.stringify(curtains.windowInventory)}`);
+    assert(JSON.stringify(curtains.windowInventory?.byWall) === JSON.stringify(EXPECTED_WALL_COUNTS), `wall coverage drifted: ${JSON.stringify(curtains.windowInventory)}`);
+    assert(JSON.stringify(curtains.windowInventory?.byLevel) === JSON.stringify(EXPECTED_LEVEL_COUNTS), `level coverage drifted: ${JSON.stringify(curtains.windowInventory)}`);
+    assert(new Set(curtains.installations.map((entry) => entry.id)).size === EXPECTED_WINDOW_COUNT, `curtain IDs must be unique: ${JSON.stringify(curtains.installations.map((entry) => entry.id))}`);
+    assert(curtains.installations.every((entry) => entry.roomFacingDot >= 0.99 && entry.liningFacingDot <= -0.99), `every curtain must face damask into its room and lining toward glass: ${JSON.stringify(curtains.installations.map((entry) => ({ id: entry.id, roomFacingDot: entry.roomFacingDot, liningFacingDot: entry.liningFacingDot })))}`);
+    assert(curtains.installations.every((entry) => entry.wallInset <= 0.36 && entry.wallInset >= 0.2), `curtains should sit close to their walls: ${JSON.stringify(curtains.installations.map((entry) => ({ id: entry.id, wallInset: entry.wallInset })))}`);
+    assert(curtains.installations.every((entry) => entry.windowAlignmentError <= 0.001), `curtains must remain centered on their windows: ${JSON.stringify(curtains.installations.map((entry) => ({ id: entry.id, windowAlignmentError: entry.windowAlignmentError })))}`);
     assert(curtains.material.textureName === "window-curtain-woven-damask" && curtains.material.sharedTextureCount === 1, `curtains should share one woven damask texture: ${JSON.stringify(curtains.material)}`);
     assert(curtains.material.doubleSided && curtains.material.lined && !curtains.material.castsShadow, `curtain fabric contract is wrong: ${JSON.stringify(curtains.material)}`);
     assert(curtains.installations.every((entry) => entry.geometry.folds >= 8 && entry.geometry.rings >= 8 && entry.geometry.finials === 2 && entry.geometry.tiebacks === 2), `curtain hardware/folds are incomplete: ${JSON.stringify(curtains.installations)}`);
@@ -148,10 +169,30 @@ async function run() {
     assert(curtains.installations.every((entry) => entry.crackWidth >= 0.12 && entry.crackWidth <= 0.18), `cracks must stay narrow: ${JSON.stringify(curtains.installations)}`);
 
     // Every authored approach must resolve through the real center-look prompt.
-    for (const id of EXPECTED_IDS) {
+    for (const id of curtains.installations.map((entry) => entry.id)) {
       const staged = await stageCurtain(page, id);
       assert(staged.clearance?.visualOverlaps === 0 && staged.clearance?.egressOverlaps === 0, `${id} should stage from a clear pocket: ${JSON.stringify(staged)}`);
-      assert(staged.distance <= 1.35, `${id} staging should remain inside interaction range: ${JSON.stringify(staged)}`);
+      assert(staged.distance <= 2.23, `${id} staging should remain inside the real 2.35m interaction range: ${JSON.stringify(staged)}`);
+    }
+
+    // Preserve direct visual evidence for the corrected east-wall orientation,
+    // the crowded kitchen, the upper gallery, and the elevated basement set.
+    for (const [id, fileName, framingDistance] of [
+      ["main-east-window-pos-6-4", "east-wall-curtain-room-facing-desktop.png"],
+      ["main-rear-window-pos-9-4", "kitchen-curtain-close-mounted-desktop.png"],
+      ["upper-front-window-zero", "upper-gallery-curtain-covered-desktop.png", 3.8],
+      ["basement-front-window-neg-11", "basement-curtain-covered-desktop.png"],
+    ]) {
+      if (framingDistance) {
+        const framed = await page.evaluate(
+          ([curtainId, distance]) => window.MrFeastFresh.frameWindowCurtainForQA(curtainId, distance),
+          [id, framingDistance],
+        );
+        assert(framed?.id === id, `QA should frame ${id}: ${JSON.stringify(framed)}`);
+      } else {
+        await stageCurtain(page, id);
+      }
+      await captureStage(page, fileName);
     }
 
     // Real E enters a left-crack curtain, closes its textured panels, switches
@@ -228,7 +269,7 @@ async function run() {
     await desktop.context.close();
 
     assert(errors.length === 0, `unexpected browser errors: ${errors.join(" | ")}`);
-    console.log("Mr. Feast window curtain acceptance passed: ten clear textured installations, real E/touch hiding, left/right partial views, movement lock, flashlight shutdown, exit, and reuse verified");
+    console.log(`Mr. Feast window curtain acceptance passed: all ${EXPECTED_WINDOW_COUNT} correctly oriented close-mounted installations, real E/touch hiding, left/right partial views, movement lock, flashlight shutdown, exit, and reuse verified`);
   } finally {
     if (browser) await browser.close();
     if (server) server.kill("SIGTERM");

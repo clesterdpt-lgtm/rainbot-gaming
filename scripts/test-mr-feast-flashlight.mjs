@@ -240,8 +240,9 @@ async function run() {
     await page.evaluate(() => window.MrFeastFresh.setStealthLightOverrideForQA(null));
     console.log(`flashlight qa: stealth ${stealthOff.meter.toFixed(1)} off -> ${stealthOn.meter.toFixed(1)} on`);
 
-    // 5. One camera-visible activation produces one recoverable security
-    // event and one bounded Mr. Feast investigation, not lockdown or pursuit.
+    // 5. A camera-visible beam produces one recoverable security event and
+    // one bounded Mr. Feast investigation, whether the camera sees it at
+    // activation or later while it remains on.
     await page.waitForFunction(() => window.MrFeastFresh.getMrFeastState()?.loaded === true, null, { timeout: 120000 });
     console.log("flashlight qa: Mr. Feast loaded");
     const alert = await page.evaluate(() => {
@@ -268,6 +269,34 @@ async function run() {
     await page.evaluate(() => window.MrFeastFresh.advanceCameraSecurityForQA(2));
     assert((await flashlight(page)).alertCount === 1, "leaving the beam on must not spam security alerts");
 
+    // Turning the light on behind an occluder must not make the later visible
+    // beam safe. The camera should report it as soon as the player emerges,
+    // without requiring another off/on toggle.
+    const delayedAlert = await page.evaluate(() => {
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.resetCameraSecurityForQA("restricted");
+      window.MrFeastFresh.setCameraSoloForQA("cam-basement-archive");
+      window.MrFeastFresh.setCameraSweepForQA("cam-basement-archive", 0);
+      window.MrFeastFresh.placePlayerInCameraLaneForQA("cam-basement-archive", { distance: 4 });
+      window.MrFeastFresh.setCameraOccludedForQA("cam-basement-archive", true);
+      window.MrFeastFresh.setFlashlightForQA(false, { silent: true });
+      window.MrFeastFresh.setFlashlightForQA(true);
+      const atActivation = window.MrFeastFresh.getFlashlightState();
+      window.MrFeastFresh.setCameraOccludedForQA("cam-basement-archive", false);
+      window.MrFeastFresh.advanceCameraSecurityForQA(0.25);
+      return {
+        atActivation,
+        afterObservation: window.MrFeastFresh.getFlashlightState(),
+        security: window.MrFeastFresh.getCameraSecurityState(),
+        host: window.MrFeastFresh.getMrFeastState(),
+      };
+    });
+    assert(delayedAlert.atActivation.alertCount === 0, `occluded activation should stay unreported initially; ${JSON.stringify(delayedAlert.atActivation)}`);
+    assert(delayedAlert.afterObservation.alertCount === 1, `a camera must report a flashlight that remains on when it later gains sight; ${JSON.stringify(delayedAlert)}`);
+    assert(delayedAlert.afterObservation.lastAlert?.cameraId === "cam-basement-archive", `delayed flashlight alert should name the observing camera; ${JSON.stringify(delayedAlert.afterObservation)}`);
+    assert(delayedAlert.security.alarm?.count === 0 && delayedAlert.host.security?.state === "responding", `delayed flashlight observation should reuse bounded investigation without lockdown; ${JSON.stringify(delayedAlert)}`);
+    await page.screenshot({ path: path.join(artifactDir, "flashlight-continuous-camera-alert-desktop.png") });
+
     // An occluded camera cannot become an invented source.
     const occluded = await page.evaluate(async () => {
       window.MrFeastFresh.setFlashlightForQA(false, { silent: true });
@@ -277,7 +306,7 @@ async function run() {
       return window.MrFeastFresh.getFlashlightState();
     });
     assert(occluded.alertCount === 1, "occluded flashlight use must not invent another camera alert");
-    console.log("flashlight qa: bounded camera and host alert passed");
+    console.log("flashlight qa: continuous bounded camera and host alert passed");
 
     // 6. Possession saves, but loading always extinguishes the transient beam
     // without manufacturing another alert.

@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260724-window-curtain-hiding-1";
+  const MANSION_RUNTIME_VERSION = "20260724-all-window-curtains-bulk-symbols-3";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -210,7 +210,7 @@
     patrolZ: 11.15,
   });
   const WINDOW_CURTAINS = Object.freeze({
-    insetFromWall: 0.58,
+    insetFromWall: 0.32,
     hideInsetFromWall: 0.34,
     exitInsetFromWall: 1.18,
     interactionDistance: 1.02,
@@ -221,7 +221,7 @@
     closeSpeed: 5.8,
     panelBottomLift: 0.055,
     rodLift: 0.17,
-    excludedKinds: Object.freeze(["kitchen", "basement", "headboard", "bookcase", "fireplace", "gallery"]),
+    excludedKinds: Object.freeze([]),
     installations: Object.freeze([
       Object.freeze({ id: "library-front-west", wall: "main-front-wall", center: -11.5, room: "LIBRARY", crackSide: "left" }),
       Object.freeze({ id: "library-front-center", wall: "main-front-wall", center: -8.2, room: "LIBRARY", crackSide: "right" }),
@@ -230,8 +230,8 @@
       Object.freeze({ id: "dining-rear-center", wall: "main-rear-wall", center: -9.3, room: "DINING ROOM", crackSide: "left" }),
       Object.freeze({ id: "dining-west-window", wall: "main-west-wall", center: -9.4, room: "DINING ROOM", crackSide: "right" }),
       Object.freeze({ id: "ballroom-rear-west", wall: "main-rear-wall", center: -3.3, room: "BALLROOM", crackSide: "left" }),
-      Object.freeze({ id: "ballroom-rear-east", wall: "main-rear-wall", center: 3.3, room: "BALLROOM", crackSide: "right", visualOffset: 0.18, exitOffset: 0.58 }),
-      Object.freeze({ id: "upper-lounge-rear-west", wall: "upper-rear-wall", center: -2.3, room: "REAR LOUNGE", crackSide: "left", visualOffset: 0.34 }),
+      Object.freeze({ id: "ballroom-rear-east", wall: "main-rear-wall", center: 3.3, room: "BALLROOM", crackSide: "right", exitOffset: 0.58 }),
+      Object.freeze({ id: "upper-lounge-rear-west", wall: "upper-rear-wall", center: -2.3, room: "REAR LOUNGE", crackSide: "left" }),
       Object.freeze({ id: "upper-lounge-rear-east", wall: "upper-rear-wall", center: 2.3, room: "REAR LOUNGE", crackSide: "right" }),
     ]),
   });
@@ -784,9 +784,33 @@
       Object.freeze({ id: "bulk-box-d", x: 11.2, z: -10.2, width: 1.22, height: 0.72, depth: 1.12, yaw: -0.08, qaYaw: -Math.PI / 2 }),
     ]),
     symbols: Object.freeze([
-      Object.freeze({ id: "goat-star", x: 9.4, z: -8.0, radius: 0.42, rotation: Math.PI }),
-      Object.freeze({ id: "broken-halo", x: 11.2, z: -8.3, radius: 0.44, rotation: 0.34 }),
-      Object.freeze({ id: "thorn-eye", x: 13.0, z: -8.0, radius: 0.4, rotation: -0.48 }),
+      Object.freeze({
+        id: "goat-star",
+        x: 9.4,
+        z: -8.0,
+        radius: 0.42,
+        decalSize: 1.18,
+        rotation: Math.PI,
+        textureFile: "symbols/bulk-storage-goat-star-v1-ai.png",
+      }),
+      Object.freeze({
+        id: "broken-halo",
+        x: 11.2,
+        z: -8.3,
+        radius: 0.44,
+        decalSize: 1.22,
+        rotation: 0.34,
+        textureFile: "symbols/bulk-storage-broken-halo-v1-ai.png",
+      }),
+      Object.freeze({
+        id: "thorn-eye",
+        x: 13.0,
+        z: -8.0,
+        radius: 0.4,
+        decalSize: 1.14,
+        rotation: -0.48,
+        textureFile: "symbols/bulk-storage-thorn-eye-v1-ai.png",
+      }),
     ]),
     clothing: Object.freeze({
       x: 13.92,
@@ -1589,6 +1613,11 @@
     shortcutRayHeightMeters: 1.35,
     shortcutDoorClearanceMeters: 1.0,
     retargetMinPlayerMoveMeters: 1.2,
+    // Direct chase steering is reserved for a genuinely level,
+    // collider-clear lane. A small extra radius keeps shoulders off thin
+    // railings instead of allowing the root to scrape along their edge.
+    directFloorToleranceMeters: 0.16,
+    directPathClearanceMeters: 0.045,
   });
   const STEALTH = Object.freeze({
     // One concealment model with two consumers. The player-facing meter mixes
@@ -2119,7 +2148,7 @@
     }),
     world: Object.freeze({
       book: Object.freeze({
-        x: -14.5, z: 7.9, shelfY: 1.685,
+        x: -14.35, z: 7.9, shelfY: 1.685,
         shelfIndex: 2, reservedSlot: 5,
         localX: 0.215, localZ: -0.075,
         width: 0.12, height: 0.43, depth: 0.3,
@@ -2960,7 +2989,7 @@
     yardFrontOuterStep: [0, YARD_LAYOUT.groundY, 16.55, 0, -0.08],
     yardRearOuterStep: [0, YARD_LAYOUT.groundY, -16.55, Math.PI, -0.08],
     yardMazeCenterLamp: [25, YARD_LAYOUT.groundY, -10.8, Math.PI, -0.1],
-    contestant13LibraryBook: [-12.75, FLOOR.MAIN, 8.1, Math.PI / 2, -0.08],
+    contestant13LibraryBook: [-12.6, FLOOR.MAIN, 8.1, Math.PI / 2, -0.08],
     contestant13GardenShovel: [-22.28, YARD_LAYOUT.groundY, -4.05, 0, -0.75],
     contestant13DigSite: [25, YARD_LAYOUT.groundY, -13.90, 0, -0.93],
     contestant13BasementDoor: [12.55, FLOOR.MAIN, -4.65, Math.PI, -0.08],
@@ -3133,6 +3162,7 @@
       activationCount: 0,
       alertCount: 0,
       alertCooldown: 0,
+      alertLatchCameraId: null,
       lastAlert: null,
     },
     bulkStorageSecret: {
@@ -3280,6 +3310,7 @@
   const kitchenTaskBulbs = [];
   const hidingSpots = [];
   const windowCurtains = [];
+  const exteriorWindows = [];
   const roomZones = [];
   const lightningMaterials = [];
   const yardWaterSystems = [];
@@ -3433,6 +3464,7 @@
   const rainApertures = [];
   const exteriorRainDoors = [];
   const portraitTextures = new Map();
+  const bulkStorageSymbolTextures = new Map();
   const portraitPlacements = [];
   const interiorDetailMeshes = [];
   const facadeSideMeshes = [];
@@ -4320,17 +4352,46 @@
     });
   }
 
+  function loadSymbolTexture(url, id) {
+    return new Promise((resolve) => {
+      new THREE.TextureLoader().load(
+        url,
+        (texture) => {
+          // The generated RGBA decals are deliberately NPOT. Preserve their
+          // transparent paint gaps on WebGL1 without allocating mip chains.
+          texture.name = `bulk-storage-symbol-${id}-ai-texture`;
+          texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+          texture.magFilter = THREE.LinearFilter;
+          texture.minFilter = THREE.LinearFilter;
+          texture.generateMipmaps = false;
+          texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+          texture.encoding = THREE.sRGBEncoding;
+          resolve(texture);
+        },
+        () => noteStartupActivity(),
+        () => resolve(null),
+      );
+    });
+  }
+
   async function createMaterials() {
     setLoading("Preparing the estate", 8);
-    const [damask, oak, stone, marble, artworkEntries] = await Promise.all([
+    const [damask, oak, stone, marble, artworkEntries, bulkStorageSymbolEntries] = await Promise.all([
       loadTexture(textureUrl("blue-damask-wallpaper-ai.jpg"), 3.2, 2.4, THREE.sRGBEncoding),
       loadTexture(textureUrl("smoked-oak-herringbone-ai.jpg"), 7, 7, THREE.sRGBEncoding),
       loadTexture(textureUrl("damp-limestone-ai.jpg"), 5.5, 3.2, THREE.sRGBEncoding),
       loadTexture(textureUrl("antique-marble-ai.jpg"), 5, 5, THREE.sRGBEncoding),
       Promise.all(Object.entries(PORTRAIT_ARTWORKS).map(async ([artId, artwork]) => [artId, await loadArtworkTexture(textureUrl(artwork.file))])),
+      Promise.all(BULK_STORAGE_SECRET.symbols.map(async (symbol) => [
+        symbol.id,
+        await loadSymbolTexture(textureUrl(symbol.textureFile), symbol.id),
+      ])),
     ]);
     for (const [artId, texture] of artworkEntries) {
       if (texture) portraitTextures.set(artId, texture);
+    }
+    for (const [symbolId, texture] of bulkStorageSymbolEntries) {
+      if (texture) bulkStorageSymbolTextures.set(symbolId, texture);
     }
 
     const fallbackDark = makeNoiseTexture(128, [[39, 34, 33], [48, 40, 36], [32, 29, 30]], 91);
@@ -4383,7 +4444,7 @@
         side: THREE.DoubleSide,
       }),
       curtainLining: new THREE.MeshStandardMaterial({ color: 0x38232a, roughness: 0.96, metalness: 0, side: THREE.DoubleSide }),
-      curtainInteraction: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }),
+      curtainInteraction: new THREE.MeshBasicMaterial({ visible: false, transparent: true, opacity: 0, depthWrite: false, colorWrite: false }),
       leather: new THREE.MeshStandardMaterial({ color: 0x33221a, roughness: 0.78 }),
       fabric: new THREE.MeshStandardMaterial({ color: 0x4a5358, roughness: 0.96 }),
       porcelain: new THREE.MeshPhysicalMaterial({ color: 0xc9c6b9, roughness: 0.18, clearcoat: 0.72 }),
@@ -4754,6 +4815,8 @@
       this.pursuitLastKnownPosition = null;
       this.pursuitTrackingSource = "none";
       this.pursuitDirectSight = false;
+      this.pursuitDirectPathClear = false;
+      this.pursuitDetourReason = null;
       this.pursuitUnseenSeconds = 0;
       this.pursuitDirectSteeringFrames = 0;
       this.pursuitSightCheckRemaining = 0;
@@ -5990,6 +6053,7 @@
         const extra = shortcuts?.get(current) || [];
         for (const edge of extra.length ? [...authored, ...extra] : authored) {
           if (!unvisited.has(edge.to) || !this.responseDoorAvailable(edge.door)) continue;
+          if (edge.shortcut && !this.pursuitResponseEdgeClear(current, edge.to, edge.door)) continue;
           // Chase planning avoids segments that recently stalled against
           // furniture, forcing a genuine reroute (e.g. a room's other door).
           if (useShortcuts && this.pursuitBlockedEdges?.has(`${current}>${edge.to}`)) continue;
@@ -6064,7 +6128,7 @@
       };
       const addShortcut = (fromId, toId, cost) => {
         if (!shortcuts.has(fromId)) shortcuts.set(fromId, []);
-        shortcuts.get(fromId).push({ to: toId, cost, door: null });
+        shortcuts.get(fromId).push({ to: toId, cost, door: null, shortcut: true });
       };
       for (let i = 0; i < nodes.length; i += 1) {
         for (let j = i + 1; j < nodes.length; j += 1) {
@@ -6084,6 +6148,16 @@
             }
           }
           if (blocked) continue;
+          if (
+            physics
+            && !physics.canCharacterTraverse(
+              a,
+              b,
+              Math.max(MR_FEAST_NPC.colliderWidth, MR_FEAST_NPC.colliderDepth) / 2
+                + MR_FEAST_PURSUIT.directPathClearanceMeters,
+              MR_FEAST_NPC.colliderHeight,
+            )
+          ) continue;
           addShortcut(a.id, b.id, distance);
           addShortcut(b.id, a.id, distance);
           edgeCount += 1;
@@ -6135,6 +6209,121 @@
         if (biased) return biased;
       }
       return pick(nodes);
+    }
+
+    pursuitSurfaceY(position) {
+      if (!position) return null;
+      const candidates = [FLOOR.BASEMENT, FLOOR.MAIN, FLOOR.UPPER, ESTATE_GROUND_Y];
+      const nearest = candidates.reduce((best, floorY) => (
+        Math.abs(floorY - position.y) < Math.abs(best - position.y) ? floorY : best
+      ), FLOOR.MAIN);
+      return Math.abs(nearest - position.y) <= MR_FEAST_PURSUIT.directFloorToleranceMeters
+        ? nearest
+        : null;
+    }
+
+    pursuitCharacterRadius() {
+      return Math.max(MR_FEAST_NPC.colliderWidth, MR_FEAST_NPC.colliderDepth) / 2
+        + MR_FEAST_PURSUIT.directPathClearanceMeters;
+    }
+
+    pursuitLevelSegmentClear(start, end) {
+      if (!physics || !start || !end) return false;
+      const startSurface = this.pursuitSurfaceY(start);
+      const endSurface = this.pursuitSurfaceY(end);
+      if (startSurface == null || endSurface == null || Math.abs(startSurface - endSurface) > 0.01) return false;
+      return physics.canCharacterTraverse(
+        start,
+        end,
+        this.pursuitCharacterRadius(),
+        MR_FEAST_NPC.colliderHeight,
+      );
+    }
+
+    pursuitResponseEdgeClear(fromId, toId, door = null) {
+      if (door) return true;
+      const from = this.responseGraph.nodes.get(fromId);
+      const to = this.responseGraph.nodes.get(toId);
+      if (!from || !to) return false;
+      // Authored stairs, ramps, and between-floor landings own their exact
+      // vertical lane and rail clearances. Level edges are additionally
+      // checked against the current furniture/railing collider map.
+      if (
+        from.segmentKind === "stairs"
+        || from.segmentKind === "ramp"
+        || to.segmentKind === "stairs"
+        || to.segmentKind === "ramp"
+        || this.pursuitSurfaceY(from) == null
+        || this.pursuitSurfaceY(to) == null
+      ) return true;
+      return this.pursuitLevelSegmentClear(from, to);
+    }
+
+    nearestPursuitAnchorId(position) {
+      const surfaceY = this.pursuitSurfaceY(position);
+      if (surfaceY == null) return this.nearestResponseTargetId(position);
+      const candidates = [...this.responseGraph.nodes.values()]
+        .filter((node) => (
+          node.segmentKind !== "stairs"
+          && node.segmentKind !== "ramp"
+          && Math.abs(node.y - surfaceY) <= 0.08
+        ))
+        .sort((a, b) => (
+          Math.hypot(a.x - position.x, a.y - position.y, a.z - position.z)
+          - Math.hypot(b.x - position.x, b.y - position.y, b.z - position.z)
+        ));
+      const clear = candidates.find((node) => this.pursuitLevelSegmentClear(position, node));
+      return clear?.id || this.nearestResponseTargetId(position, true);
+    }
+
+    pursuitPathFromActualPosition(startId, targetId) {
+      if (!startId || !targetId) return [];
+      const path = this.findResponsePath(startId, targetId, true);
+      const startNode = this.responseGraph.nodes.get(startId);
+      if (!startNode || this.pursuitSurfaceY(this.root.position) == null) return path;
+      const anchorDistance = Math.hypot(
+        startNode.x - this.root.position.x,
+        startNode.y - this.root.position.y,
+        startNode.z - this.root.position.z,
+      );
+      if (
+        anchorDistance > MR_FEAST_NPC.arrivalRadius
+        && this.pursuitLevelSegmentClear(this.root.position, startNode)
+      ) {
+        path.unshift({ node: startNode, door: null, approachAnchor: true });
+      }
+      return path;
+    }
+
+    evaluatePursuitDirectLane(target = this.pursuitLastKnownPosition) {
+      if (!target || !physics) return { clear: false, reason: "no-target" };
+      if (
+        this.onStairs
+        || this.pursuitSurfaceY(this.root.position) == null
+        || this.pursuitSurfaceY(target) == null
+        || Math.abs(this.pursuitSurfaceY(this.root.position) - this.pursuitSurfaceY(target)) > 0.01
+      ) return { clear: false, reason: "stairs" };
+      const dx = target.x - this.root.position.x;
+      const dz = target.z - this.root.position.z;
+      const horizontal = Math.hypot(dx, dz);
+      if (horizontal <= 0.0001) return { clear: true, reason: null };
+      const stopShort = Math.min(horizontal, MR_FEAST_PURSUIT.catchRadiusMeters * 0.55);
+      const travel = Math.max(0, horizontal - stopShort);
+      const end = {
+        x: this.root.position.x + dx / horizontal * travel,
+        y: this.root.position.y,
+        z: this.root.position.z + dz / horizontal * travel,
+      };
+      return this.pursuitLevelSegmentClear(this.root.position, end)
+        ? { clear: true, reason: null }
+        : { clear: false, reason: "obstacle" };
+    }
+
+    refreshPursuitDirectLane() {
+      const lane = this.evaluatePursuitDirectLane();
+      this.pursuitDirectPathClear = lane.clear;
+      this.pursuitDetourReason = lane.reason;
+      return lane;
     }
 
     transitionSecurityResponse(eventName) {
@@ -6284,6 +6473,8 @@
       this.pursuitLastKnownPosition = null;
       this.pursuitTrackingSource = "none";
       this.pursuitDirectSight = false;
+      this.pursuitDirectPathClear = false;
+      this.pursuitDetourReason = null;
       this.pursuitUnseenSeconds = 0;
       this.pursuitDirectSteeringFrames = 0;
       this.pursuitSightCheckRemaining = 0;
@@ -6542,9 +6733,10 @@
       this.pursuitUnseenSeconds = 0;
       this.pursuitDirectSteeringFrames = 0;
       this.pursuitSightCheckRemaining = 0;
+      this.refreshPursuitDirectLane();
       // Chase pathing starts from wherever he physically stands, not from the
       // patrol bookkeeping, so a witness mid-room runs directly at the player.
-      this.responseCurrentNodeId = this.nearestResponseTargetId(this.root.position) || startId;
+      this.responseCurrentNodeId = this.nearestPursuitAnchorId(this.root.position) || startId;
       this.responseBlockedReason = null;
       this.transitionSecurityResponse("alarm");
       this.repathPursuit(this.pursuitLastKnownPosition);
@@ -6562,7 +6754,7 @@
     repathPursuit(targetPosition = this.pursuitLastKnownPosition, force = false) {
       if (!targetPosition) return;
       const target = { x: targetPosition.x, y: targetPosition.y, z: targetPosition.z };
-      const targetId = this.nearestResponseTargetId(target, true);
+      const targetId = this.nearestPursuitAnchorId(target);
       const nextNode = this.responsePath[0]?.node;
       const verticalRouteInProgress = Boolean(
         this.pursuitTargetNodeId
@@ -6591,10 +6783,13 @@
         return;
       }
       // Approach steering leaves the graph, so re-anchor to the node nearest
-      // his actual position before planning the next leg of the chase.
-      const startId = this.nearestResponseTargetId(this.root.position, true) || this.responseCurrentNodeId;
+      // his actual position before planning the next leg of the chase. The
+      // chosen anchor itself must be reachable from that actual position;
+      // otherwise a nearest node across a railing would make the first graph
+      // leg cut through the same blocker the detour is meant to avoid.
+      const startId = this.nearestPursuitAnchorId(this.root.position) || this.responseCurrentNodeId;
       if (startId) this.responseCurrentNodeId = startId;
-      this.responsePath = startId && targetId ? this.findResponsePath(startId, targetId, true) : [];
+      this.responsePath = startId && targetId ? this.pursuitPathFromActualPosition(startId, targetId) : [];
       this.pursuitTargetNodeId = targetId;
       this.pursuitTargetPlayerPosition = { ...target };
       this.pursuit.repathRemaining = MR_FEAST_PURSUIT.repathSeconds;
@@ -6672,10 +6867,12 @@
       const known = this.pursuitLastKnownPosition;
       const knownHorizontal = known ? Math.hypot(known.x - this.root.position.x, known.z - this.root.position.z) : Infinity;
       const knownSameFloor = known ? Math.abs(known.y - this.root.position.y) < 1.2 : false;
+      const directLane = this.refreshPursuitDirectLane();
       if (
         this.pursuitDirectSight
         && knownSameFloor
         && knownHorizontal <= MR_FEAST_PURSUIT.directSightRadiusMeters
+        && directLane.clear
         && this.pursuitApproachSuppressedRemaining <= 0
       ) this.updatePursuitApproach(dt);
       else this.updateSecurityPath(dt);
@@ -6756,7 +6953,15 @@
       const horizontal = Math.hypot(dx, dz);
       const sameFloor = Math.abs(target.y - this.root.position.y) < 1.2;
       const approachSuppressed = (this.pursuitApproachSuppressedRemaining ?? 0) > 0;
-      if (this.pursuitDirectSight && !approachSuppressed && sameFloor && horizontal <= MR_FEAST_PURSUIT.directSightRadiusMeters && horizontal > 0.0001) {
+      const directLane = this.refreshPursuitDirectLane();
+      if (
+        this.pursuitDirectSight
+        && directLane.clear
+        && !approachSuppressed
+        && sameFloor
+        && horizontal <= MR_FEAST_PURSUIT.directSightRadiusMeters
+        && horizontal > 0.0001
+      ) {
         this.faceTarget(target);
         const facingAlignment = (Math.sin(this.root.rotation.y) * dx + Math.cos(this.root.rotation.y) * dz) / horizontal;
         if (facingAlignment >= MR_FEAST_NPC.movementAlignment) {
@@ -6790,6 +6995,8 @@
       const info = this.pursuit.active;
       this.pursuit.active = null;
       this.pursuitDirectSight = false;
+      this.pursuitDirectPathClear = false;
+      this.pursuitDetourReason = null;
       this.pursuitTrackingSource = "none";
       this.pursuit.catches += 1;
       this.faceTarget({ x: p.x, z: p.z }, true);
@@ -6831,6 +7038,8 @@
       if (!this.pursuit.active) return;
       this.pursuit.active = null;
       this.pursuitDirectSight = false;
+      this.pursuitDirectPathClear = false;
+      this.pursuitDetourReason = null;
       this.pursuitTrackingSource = "lost";
       this.pursuit.lastOutcome = "lost";
       this.pursuit.cooldownActive = true;
@@ -6848,6 +7057,8 @@
       this.pursuitLastKnownPosition = null;
       this.pursuitTrackingSource = "none";
       this.pursuitDirectSight = false;
+      this.pursuitDirectPathClear = false;
+      this.pursuitDetourReason = null;
       this.pursuitUnseenSeconds = 0;
       this.pursuitDirectSteeringFrames = 0;
       this.conversationFocusRemaining = 0;
@@ -7590,6 +7801,8 @@
       this.pursuitLastKnownPosition = null;
       this.pursuitTrackingSource = "none";
       this.pursuitDirectSight = false;
+      this.pursuitDirectPathClear = false;
+      this.pursuitDetourReason = null;
       this.pursuitUnseenSeconds = 0;
       this.pursuitDirectSteeringFrames = 0;
       this.pursuitSightCheckRemaining = 0;
@@ -8075,6 +8288,8 @@
           } : null,
           trackingSource: this.pursuitTrackingSource,
           directSight: this.pursuitDirectSight,
+          directPathClear: this.pursuitDirectPathClear,
+          detourReason: this.pursuitDetourReason,
           unseenSeconds: Number(this.pursuitUnseenSeconds.toFixed(2)),
           directSteeringFrames: this.pursuitDirectSteeringFrames,
           unseenGiveUpSeconds: MR_FEAST_PURSUIT.unseenGiveUpSeconds,
@@ -13018,9 +13233,12 @@
       this.axis = axis;
       this.fixed = fixed;
       this.windowCenter = opening.center;
-      this.center = opening.center + (Number(config.visualOffset) || 0);
+      this.center = opening.center;
       this.exitOffset = Number(config.exitOffset) || 0;
+      this.exitInset = Number(config.exitInset) || WINDOW_CURTAINS.exitInsetFromWall;
+      this.wallInset = Number(config.wallInset) || WINDOW_CURTAINS.insetFromWall;
       this.floorY = floorY;
+      this.floorLabel = windowLevelLabel(floorY);
       this.windowBottom = opening.bottom == null ? 0.82 : opening.bottom;
       this.windowTop = opening.top == null ? 3.05 : opening.top;
       this.width = opening.width + 0.28;
@@ -13035,10 +13253,11 @@
       this.root = new THREE.Group();
       this.root.name = `window-curtain-${this.id}`;
       if (axis === "x") {
-        this.root.position.set(this.center, floorY, fixed + this.inwardSign * WINDOW_CURTAINS.insetFromWall);
+        this.root.position.set(this.center, floorY, fixed + this.inwardSign * this.wallInset);
+        this.root.rotation.y = this.inwardSign < 0 ? Math.PI : 0;
       } else {
-        this.root.position.set(fixed + this.inwardSign * WINDOW_CURTAINS.insetFromWall, floorY, this.center);
-        this.root.rotation.y = Math.PI / 2;
+        this.root.position.set(fixed + this.inwardSign * this.wallInset, floorY, this.center);
+        this.root.rotation.y = this.inwardSign < 0 ? -Math.PI / 2 : Math.PI / 2;
       }
       scene.add(this.root);
 
@@ -13046,28 +13265,25 @@
         `windowCurtainPanel-${WINDOW_CURTAINS.foldsPerPanel}`,
         () => createCurtainPanelGeometry(WINDOW_CURTAINS.foldsPerPanel),
       );
-      this.leftPanel = new THREE.Mesh(panelGeometry, M.curtainDamask);
-      this.leftPanel.name = `${this.id}-curtain-left-panel`;
-      this.leftPanel.castShadow = false;
-      this.leftPanel.receiveShadow = true;
-      this.root.add(this.leftPanel);
-      this.rightPanel = new THREE.Mesh(panelGeometry, M.curtainDamask);
-      this.rightPanel.name = `${this.id}-curtain-right-panel`;
-      this.rightPanel.castShadow = false;
-      this.rightPanel.receiveShadow = true;
-      this.root.add(this.rightPanel);
-      this.leftLining = new THREE.Mesh(panelGeometry, M.curtainLining);
-      this.leftLining.name = `${this.id}-curtain-left-lining`;
-      this.leftLining.castShadow = false;
-      this.leftLining.receiveShadow = false;
-      this.leftLining.position.z = -0.018;
-      this.root.add(this.leftLining);
-      this.rightLining = new THREE.Mesh(panelGeometry, M.curtainLining);
-      this.rightLining.name = `${this.id}-curtain-right-lining`;
-      this.rightLining.castShadow = false;
-      this.rightLining.receiveShadow = false;
-      this.rightLining.position.z = -0.018;
-      this.root.add(this.rightLining);
+      this.damaskPanels = new THREE.InstancedMesh(panelGeometry, M.curtainDamask, 2);
+      this.damaskPanels.name = `${this.id}-curtain-damask-panels`;
+      this.damaskPanels.castShadow = false;
+      this.damaskPanels.receiveShadow = true;
+      this.damaskPanels.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.root.add(this.damaskPanels);
+      this.liningPanels = new THREE.InstancedMesh(panelGeometry, M.curtainLining, 2);
+      this.liningPanels.name = `${this.id}-curtain-lining-panels`;
+      this.liningPanels.castShadow = false;
+      this.liningPanels.receiveShadow = false;
+      this.liningPanels.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      this.root.add(this.liningPanels);
+      // Preserve the focused diagnostics contract while the two sides share
+      // one draw call per material.
+      this.leftPanel = this.damaskPanels;
+      this.rightPanel = this.damaskPanels;
+      this.leftLining = this.liningPanels;
+      this.rightLining = this.liningPanels;
+      this.panelTransform = new THREE.Object3D();
 
       const rodY = this.windowTop + WINDOW_CURTAINS.rodLift;
       cylinder({
@@ -13080,37 +13296,47 @@
         parent: this.root,
         cast: false,
       });
-      for (const side of [-1, 1]) {
-        sphere({
-          name: `${this.id}-curtain-finial`,
-          radius: 0.085,
-          x: side * (this.width / 2 + 0.31),
-          y: rodY,
-          material: M.brass,
-          parent: this.root,
-          cast: false,
-        });
-      }
+      const finialGeometry = geometry("windowCurtainFinial", () => new THREE.SphereGeometry(0.085, 16, 10));
+      const finials = new THREE.InstancedMesh(finialGeometry, M.brass, 2);
+      finials.name = `${this.id}-curtain-finials`;
+      finials.castShadow = false;
+      const hardwareTransform = new THREE.Object3D();
+      [-1, 1].forEach((side, index) => {
+        hardwareTransform.position.set(side * (this.width / 2 + 0.31), rodY, 0);
+        hardwareTransform.rotation.set(0, 0, 0);
+        hardwareTransform.scale.set(1, 1, 1);
+        hardwareTransform.updateMatrix();
+        finials.setMatrixAt(index, hardwareTransform.matrix);
+      });
+      finials.instanceMatrix.needsUpdate = true;
+      this.root.add(finials);
       this.ringCount = 10;
       const ringGeometry = geometry("windowCurtainRing", () => new THREE.TorusGeometry(0.055, 0.012, 7, 14));
+      const rings = new THREE.InstancedMesh(ringGeometry, M.brass, this.ringCount);
+      rings.name = `${this.id}-curtain-rings`;
+      rings.castShadow = false;
       for (let index = 0; index < this.ringCount; index += 1) {
-        const ring = new THREE.Mesh(ringGeometry, M.brass);
-        ring.name = `${this.id}-curtain-ring`;
-        ring.position.set(-this.width / 2 + (index / (this.ringCount - 1)) * this.width, rodY - 0.065, 0);
-        ring.castShadow = false;
-        this.root.add(ring);
+        hardwareTransform.position.set(-this.width / 2 + (index / (this.ringCount - 1)) * this.width, rodY - 0.065, 0);
+        hardwareTransform.rotation.set(0, 0, 0);
+        hardwareTransform.scale.set(1, 1, 1);
+        hardwareTransform.updateMatrix();
+        rings.setMatrixAt(index, hardwareTransform.matrix);
       }
-      for (const side of [-1, 1]) {
-        const tieback = new THREE.Mesh(
-          geometry("windowCurtainTieback", () => new THREE.TorusGeometry(0.105, 0.026, 7, 16)),
-          M.brass,
-        );
-        tieback.name = `${this.id}-curtain-tieback`;
-        tieback.position.set(side * (this.width / 2 - 0.12), this.windowBottom + this.height * 0.42, 0.03);
-        tieback.scale.x = 0.7;
-        tieback.castShadow = false;
-        this.root.add(tieback);
-      }
+      rings.instanceMatrix.needsUpdate = true;
+      this.root.add(rings);
+      const tiebackGeometry = geometry("windowCurtainTieback", () => new THREE.TorusGeometry(0.105, 0.026, 7, 16));
+      const tiebacks = new THREE.InstancedMesh(tiebackGeometry, M.brass, 2);
+      tiebacks.name = `${this.id}-curtain-tiebacks`;
+      tiebacks.castShadow = false;
+      [-1, 1].forEach((side, index) => {
+        hardwareTransform.position.set(side * (this.width / 2 - 0.12), this.windowBottom + this.height * 0.42, 0.03);
+        hardwareTransform.rotation.set(0, 0, 0);
+        hardwareTransform.scale.set(0.7, 1, 1);
+        hardwareTransform.updateMatrix();
+        tiebacks.setMatrixAt(index, hardwareTransform.matrix);
+      });
+      tiebacks.instanceMatrix.needsUpdate = true;
+      this.root.add(tiebacks);
       roundedBox({
         name: `${this.id}-curtain-pleated-valance`,
         w: this.width + 0.1,
@@ -13140,11 +13366,11 @@
       });
 
       const hidePosition = this.worldPositionAtInset(WINDOW_CURTAINS.hideInsetFromWall);
-      const exitPosition = this.worldPositionAtInset(WINDOW_CURTAINS.exitInsetFromWall, this.exitOffset);
+      const exitPosition = this.worldPositionAtInset(this.exitInset, this.exitOffset);
       const roomTitle = this.room.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
       this.hidingSpot = new HidingSpot({
         name: `${roomTitle} curtains`,
-        targets: [this.leftPanel, this.rightPanel, this.interactionHitbox],
+        targets: [this.interactionHitbox],
         floorY,
         hidePosition: { ...hidePosition, yaw: this.inwardYaw },
         exitPosition: { ...exitPosition, yaw: this.inwardYaw },
@@ -13168,11 +13394,24 @@
     }
 
     approachPosition() {
-      const position = this.worldPositionAtInset(
-        WINDOW_CURTAINS.insetFromWall + WINDOW_CURTAINS.interactionDistance,
-        this.exitOffset,
+      const position = this.worldPositionAtInset(this.exitInset, this.exitOffset);
+      const horizontal = Math.max(
+        0.001,
+        Math.hypot(position.x - this.root.position.x, position.z - this.root.position.z),
       );
-      return { ...position, yaw: this.inwardYaw + Math.PI };
+      const targetY = this.floorY + this.windowBottom + this.height * 0.52;
+      return {
+        ...position,
+        yaw: faceTargetYaw(position.x, position.z, this.root.position.x, this.root.position.z),
+        pitch: Math.atan2(targetY - (this.floorY + PLAYER.eye), horizontal),
+      };
+    }
+
+    setResolvedExit(exitInset, exitOffset) {
+      this.exitInset = exitInset;
+      this.exitOffset = exitOffset;
+      const exitPosition = this.worldPositionAtInset(this.exitInset, this.exitOffset);
+      this.hidingSpot.exitPosition = { ...exitPosition, yaw: this.inwardYaw };
     }
 
     applyPanelLayout() {
@@ -13190,18 +13429,19 @@
       const leftCenter = THREE.MathUtils.lerp((-half + closedLeftEnd) / 2, -half + gathered / 2, this.openness);
       const rightCenter = THREE.MathUtils.lerp((closedRightStart + half) / 2, half - gathered / 2, this.openness);
       const panelY = this.windowBottom - 0.05 + this.height / 2 + WINDOW_CURTAINS.panelBottomLift;
-      for (const panel of [this.leftPanel, this.leftLining]) {
-        panel.position.x = leftCenter;
-        panel.position.y = panelY;
-        panel.scale.set(leftWidth, this.height, 1);
-      }
-      for (const panel of [this.rightPanel, this.rightLining]) {
-        panel.position.x = rightCenter;
-        panel.position.y = panelY;
-        panel.scale.set(rightWidth, this.height, 1);
-      }
-      this.leftLining.position.z = -0.018;
-      this.rightLining.position.z = -0.018;
+      const setPanelMatrix = (mesh, index, x, width, z) => {
+        this.panelTransform.position.set(x, panelY, z);
+        this.panelTransform.rotation.set(0, 0, 0);
+        this.panelTransform.scale.set(width, this.height, 1);
+        this.panelTransform.updateMatrix();
+        mesh.setMatrixAt(index, this.panelTransform.matrix);
+      };
+      setPanelMatrix(this.damaskPanels, 0, leftCenter, leftWidth, 0);
+      setPanelMatrix(this.damaskPanels, 1, rightCenter, rightWidth, 0);
+      setPanelMatrix(this.liningPanels, 0, leftCenter, leftWidth, -0.018);
+      setPanelMatrix(this.liningPanels, 1, rightCenter, rightWidth, -0.018);
+      this.damaskPanels.instanceMatrix.needsUpdate = true;
+      this.liningPanels.instanceMatrix.needsUpdate = true;
       this.root.updateMatrixWorld(true);
     }
 
@@ -13220,8 +13460,8 @@
       const minY = this.floorY + this.windowBottom - 0.08;
       const maxY = this.floorY + this.windowTop + 0.32;
       const plane = this.axis === "x"
-        ? { minX: this.center - along / 2, maxX: this.center + along / 2, minZ: this.root.position.z - 0.12, maxZ: this.root.position.z + 0.12 }
-        : { minX: this.root.position.x - 0.12, maxX: this.root.position.x + 0.12, minZ: this.center - along / 2, maxZ: this.center + along / 2 };
+        ? { minX: this.center - along / 2, maxX: this.center + along / 2, minZ: this.root.position.z - 0.075, maxZ: this.root.position.z + 0.075 }
+        : { minX: this.root.position.x - 0.075, maxX: this.root.position.x + 0.075, minZ: this.center - along / 2, maxZ: this.center + along / 2 };
       return new THREE.Box3(
         new THREE.Vector3(plane.minX, minY, plane.minZ),
         new THREE.Vector3(plane.maxX, maxY, plane.maxZ),
@@ -13229,32 +13469,42 @@
     }
 
     egressBounds() {
-      const inner = this.worldPositionAtInset(WINDOW_CURTAINS.insetFromWall + 0.08);
-      const outer = this.worldPositionAtInset(WINDOW_CURTAINS.exitInsetFromWall + 0.24, this.exitOffset);
+      const exit = this.worldPositionAtInset(this.exitInset, this.exitOffset);
       return new THREE.Box3(
         new THREE.Vector3(
-          Math.min(inner.x, outer.x) - (this.axis === "x" ? 0.38 : 0.12),
+          exit.x - 0.36,
           this.floorY + 0.12,
-          Math.min(inner.z, outer.z) - (this.axis === "z" ? 0.38 : 0.12),
+          exit.z - 0.36,
         ),
         new THREE.Vector3(
-          Math.max(inner.x, outer.x) + (this.axis === "x" ? 0.38 : 0.12),
+          exit.x + 0.36,
           this.floorY + 2.0,
-          Math.max(inner.z, outer.z) + (this.axis === "z" ? 0.38 : 0.12),
+          exit.z + 0.36,
         ),
       );
     }
 
     getDiagnostics() {
+      const inward = this.axis === "x"
+        ? new THREE.Vector3(0, 0, this.inwardSign)
+        : new THREE.Vector3(this.inwardSign, 0, 0);
+      const damaskFacing = new THREE.Vector3(0, 0, 1).applyQuaternion(this.root.quaternion).normalize();
+      const roomFacingDot = damaskFacing.dot(inward);
       return {
         id: this.id,
         wall: this.wall,
         room: this.room,
-        floor: this.floorY === FLOOR.UPPER ? "SECOND FLOOR" : "MAIN LEVEL",
+        floor: this.floorLabel,
         active: state.activeHideSpot === this.hidingSpot,
         openness: Number(this.openness.toFixed(3)),
         crackSide: this.crackSide,
         crackWidth: WINDOW_CURTAINS.crackWidth,
+        wallInset: Number(this.wallInset.toFixed(3)),
+        exitInset: Number(this.exitInset.toFixed(3)),
+        exitOffset: Number(this.exitOffset.toFixed(3)),
+        roomFacingDot: Number(roomFacingDot.toFixed(3)),
+        liningFacingDot: Number((-roomFacingDot).toFixed(3)),
+        windowAlignmentError: Number(Math.abs(this.center - this.windowCenter).toFixed(3)),
         position: {
           x: Number(this.root.position.x.toFixed(3)),
           y: Number(this.root.position.y.toFixed(3)),
@@ -13274,6 +13524,13 @@
         },
         prompt: this.hidingSpot.interaction.getLabel(),
       };
+    }
+  }
+
+  function syncWindowCurtainVisibility() {
+    for (const curtain of windowCurtains) {
+      curtain.root.visible = curtain.floorLabel === state.currentFloor
+        || state.activeHideSpot === curtain.hidingSpot;
     }
   }
 
@@ -20057,14 +20314,19 @@
       state.stealth.sampleRemaining = 0;
       if (next) {
         this.state.activationCount += 1;
+        this.state.alertLatchCameraId = null;
         this.flutterRemaining = FLASHLIGHT.beam.activationFlutterSeconds;
         this.raySampleRemaining = 0;
         this.syncPose(true);
         if (!options.silent && this.state.alertCooldown <= 0) {
           const alert = cameraSecurity?.reportFlashlightUse() || null;
-          if (alert) this.state.alertCooldown = FLASHLIGHT.alertCooldownSeconds;
+          if (alert) {
+            this.state.alertCooldown = FLASHLIGHT.alertCooldownSeconds;
+            this.state.alertLatchCameraId = alert.cameraId;
+          }
         }
       } else {
+        this.state.alertLatchCameraId = null;
         this.flutterRemaining = 0;
       }
       this.syncPresentation();
@@ -20080,6 +20342,7 @@
     resetAlerts() {
       this.state.alertCount = 0;
       this.state.alertCooldown = 0;
+      this.state.alertLatchCameraId = null;
       this.state.lastAlert = null;
       state.security.flashlightAlertCount = 0;
       state.security.lastFlashlightAlert = null;
@@ -20098,6 +20361,22 @@
       }
       this.syncPresentation();
       return this.getDiagnostics();
+    }
+
+    observeCamera(cameraState) {
+      if (!this.state.on || !cameraState) {
+        this.state.alertLatchCameraId = null;
+        return null;
+      }
+      if (
+        this.state.alertCooldown > 0
+        || this.state.alertLatchCameraId === cameraState.id
+      ) return null;
+      const alert = cameraSecurity?.reportFlashlightUse(cameraState) || null;
+      if (!alert) return null;
+      this.state.alertCooldown = FLASHLIGHT.alertCooldownSeconds;
+      this.state.alertLatchCameraId = alert.cameraId;
+      return alert;
     }
 
     syncPose(forceRaycast = false) {
@@ -20252,6 +20531,7 @@
         activationCount: this.state.activationCount,
         alertCount: this.state.alertCount,
         alertCooldown: Number(this.state.alertCooldown.toFixed(3)),
+        alertLatchCameraId: this.state.alertLatchCameraId,
         lastAlert: this.state.lastAlert ? { ...this.state.lastAlert } : null,
       };
     }
@@ -20285,6 +20565,34 @@
         root.position.set(spec.x, FLOOR.BASEMENT + 0.018, spec.z);
         root.rotation.y = spec.rotation;
         scene.add(root);
+        const texture = bulkStorageSymbolTextures.get(spec.id) || null;
+        const decalMaterial = texture
+          ? new THREE.MeshBasicMaterial({
+            name: `bulk-secret-demonic-symbol-${spec.id}-decal-material`,
+            map: texture,
+            color: 0xd0b8b0,
+            transparent: true,
+            opacity: 0.82,
+            alphaTest: 0.025,
+            depthTest: true,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          })
+          : null;
+        const decal = decalMaterial
+          ? plane({
+            name: `bulk-secret-demonic-symbol-${spec.id}-decal`,
+            w: spec.decalSize,
+            h: spec.decalSize,
+            y: 0.004,
+            material: decalMaterial,
+            parent: root,
+          })
+          : null;
+        if (decal) {
+          decal.receiveShadow = false;
+          decal.renderOrder = 5;
+        }
 
         const circlePoints = [];
         for (let index = 0; index < 36; index += 1) {
@@ -20339,7 +20647,16 @@
         thorns.name = `bulk-secret-demonic-symbol-${spec.id}-thorns`;
         thorns.renderOrder = 4;
         root.add(thorns);
-        this.symbols.push({ spec, root, visibilityToggles: 0 });
+        const fallbackMeshes = [circle, star, thorns];
+        for (const mesh of fallbackMeshes) mesh.visible = !decal;
+        this.symbols.push({
+          spec,
+          root,
+          decal,
+          texture,
+          fallbackMeshes,
+          visibilityToggles: 0,
+        });
       }
     }
 
@@ -20739,6 +21056,25 @@
       return this.getDiagnostics();
     }
 
+    frameSymbolForQA(id) {
+      if (!state.qa || !physics) return null;
+      const symbol = this.symbols.find((candidate) => candidate.spec.id === id);
+      if (!symbol) return null;
+      this.endHold("qa-symbol-frame");
+      input.interactHeld = false;
+      teleport(symbol.spec.x, FLOOR.BASEMENT, symbol.spec.z + 1.08, 0, -0.98);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      updateInteractionPrompt();
+      return {
+        id: symbol.spec.id,
+        textureLoaded: Boolean(symbol.texture),
+        decalVisible: Boolean(symbol.decal?.visible),
+        fallbackVisible: symbol.fallbackMeshes.some((mesh) => mesh.visible),
+      };
+    }
+
     placePlayerNearBoxForQA(id, mode = "push") {
       if (!state.qa || !physics) return null;
       const entry = this.boxes.find((candidate) => candidate.spec.id === id);
@@ -20797,6 +21133,17 @@
           id: symbol.spec.id,
           position: { x: symbol.spec.x, y: FLOOR.BASEMENT + 0.018, z: symbol.spec.z },
           visible: Boolean(symbol.root.visible),
+          textureFile: symbol.spec.textureFile,
+          textureLoaded: Boolean(symbol.texture),
+          decalVisible: Boolean(symbol.decal?.visible),
+          fallbackVisible: symbol.fallbackMeshes.some((mesh) => mesh.visible),
+          textureSize: symbol.texture?.image
+            ? {
+              width: Number(symbol.texture.image.width) || 0,
+              height: Number(symbol.texture.image.height) || 0,
+            }
+            : null,
+          shaderLightsAdded: 0,
           covered: coveredByBoxIds.length > 0,
           coveredByBoxIds,
           visibilityToggles: symbol.visibilityToggles,
@@ -21227,6 +21574,7 @@
       state.security.permitted = Boolean(selected?.permitted);
       state.security.activeCameraId = selected?.cameraState.id || null;
       state.security.occludedBy = selected ? null : inspections.find((inspection) => inspection.cameraState.blocker)?.cameraState.blocker || null;
+      flashlightSystem?.observeCamera(selected?.cameraState || null);
       if (!selected) {
         state.security.alarmLatchCameraId = null;
         state.security.exposure = Math.max(0, state.security.exposure - CAMERA_SECURITY.exposureDecayPerSecond * dt);
@@ -21270,7 +21618,7 @@
       return point ? { id: point.id, x: lastSeen.x, y: point.y, z: lastSeen.z } : null;
     }
 
-    reportFlashlightUse() {
+    reportFlashlightUse(preferredCameraState = null) {
       if (
         !state.started
         || !state.flashlight.on
@@ -21282,7 +21630,10 @@
       const playerPosition = physics.playerPosition();
       const playerEye = new THREE.Vector3(camera.position.x, camera.position.y, camera.position.z);
       const candidates = [];
-      for (const cameraState of this.cameras) {
+      const candidateCameras = preferredCameraState && this.cameraById.get(preferredCameraState.id) === preferredCameraState
+        ? [preferredCameraState]
+        : this.cameras;
+      for (const cameraState of candidateCameras) {
         if (!this.isCameraRelevant(cameraState, playerPosition)) continue;
         const direction = playerEye.clone().sub(cameraState.lensOrigin);
         const distance = direction.length();
@@ -23137,11 +23488,97 @@
     });
   }
 
-  function curtainConfigForWindow(wall, center) {
+  function windowLevelLabel(floorY) {
+    if (floorY === FLOOR.UPPER) return "SECOND FLOOR";
+    if (floorY === FLOOR.BASEMENT) return "BASEMENT";
+    return "MAIN LEVEL";
+  }
+
+  function exteriorWindowRoom(axis, fixed, center, floorY) {
+    if (floorY === FLOOR.MAIN) {
+      if (axis === "x" && fixed > 0) return center < 0 ? "LIBRARY" : "MUSIC ROOM";
+      if (axis === "x" && fixed < 0) {
+        if (center < -5) return "DINING ROOM";
+        if (center <= 5) return "BALLROOM";
+        return "KITCHEN";
+      }
+      if (axis === "z" && fixed < 0) {
+        if (center < -3.2) return "DINING ROOM";
+        if (center > 3.2) return "LIBRARY";
+        return "MAIN HALL BATHROOM";
+      }
+      if (center < -3.2) return "KITCHEN";
+      if (center > 3.2) return "MUSIC ROOM";
+      return "PAINTING ROOM";
+    }
+    if (floorY === FLOOR.UPPER) {
+      if (axis === "x" && fixed > 0) {
+        if (center < -5) return "WEST FRONT SUITE";
+        if (center > 5) return "EAST FRONT SUITE";
+        return "FOYER BALCONY";
+      }
+      if (axis === "x" && fixed < 0) {
+        if (center < -5) return "PRIMARY SUITE";
+        if (center > 5) return "EAST REAR SUITE";
+        return "REAR LOUNGE";
+      }
+      if (axis === "z" && fixed < 0) {
+        if (center < -3.2) return "PRIMARY SUITE";
+        if (center > 3.2) return "WEST FRONT SUITE";
+        return "UPPER GRAND BATHROOM";
+      }
+      if (center < -3.2) return "EAST REAR SUITE";
+      if (center > 3.2) return "EAST FRONT SUITE";
+      return "READING ROOM";
+    }
+    if (axis === "x" && fixed > 0) return center < 0 ? "WINE CELLAR" : "ARCHIVE";
+    if (axis === "x" && fixed < 0) {
+      if (center < -6) return "BOILER ROOM";
+      if (center < 7.6) return "WORKROOM";
+      return "BULK STORAGE";
+    }
+    if (axis === "z" && fixed < 0) {
+      if (center < -4.9) return "BOILER ROOM";
+      if (center <= 3.2) return "LAUNDRY & LINEN";
+      return "WINE CELLAR";
+    }
+    if (center < -4.9) return "BULK STORAGE";
+    if (center <= 3.2) return "SERVICE STAIR";
+    return "ARCHIVE";
+  }
+
+  function genericCurtainId(wall, center) {
+    const position = Math.abs(center) < 0.001
+      ? "zero"
+      : `${center < 0 ? "neg" : "pos"}-${String(Math.abs(center)).replace(".", "-")}`;
+    return `${wall.replace(/-wall$/, "")}-window-${position}`;
+  }
+
+  function curtainNeedsTightMount(wall, center) {
+    const tightMountWindows = {
+      "main-rear-wall": [-12.2, 9.4],
+      "main-west-wall": [6.4, 9.4],
+      "main-east-wall": [-9.4, -6.7],
+      "upper-east-wall": [0],
+      "basement-rear-wall": [3],
+    };
+    return (tightMountWindows[wall] || []).some((value) => Math.abs(value - center) < 0.001);
+  }
+
+  function curtainConfigForWindow(wall, center, axis, fixed, floorY, ordinal) {
     if (!wall) return null;
-    return WINDOW_CURTAINS.installations.find((entry) => (
+    const authored = WINDOW_CURTAINS.installations.find((entry) => (
       entry.wall === wall && Math.abs(entry.center - center) < 0.001
-    )) || null;
+    ));
+    return {
+      id: authored?.id || genericCurtainId(wall, center),
+      wall,
+      center,
+      room: authored?.room || exteriorWindowRoom(axis, fixed, center, floorY),
+      crackSide: authored?.crackSide || (ordinal % 2 === 0 ? "left" : "right"),
+      exitOffset: Number(authored?.exitOffset) || 0,
+      wallInset: curtainNeedsTightMount(wall, center) ? 0.21 : WINDOW_CURTAINS.insetFromWall,
+    };
   }
 
   function addWindow(axis, fixed, center, floorY, opening, exterior, wallName) {
@@ -23171,8 +23608,32 @@
       for (const sy of [bottom, (bottom + top) / 2, top]) box({ name: "window-frame", w: depth, h: 0.075, d: width + 0.12, x: fixed, y: floorY + sy, z: center, material: M.blackWood, cast: false });
       if (exterior) box({ name: "stone-window-sill", w: 0.42, h: 0.11, d: width + 0.34, x: fixed, y: floorY + bottom - 0.055, z: center, material: M.limestone, cast: false });
     }
-    const curtainConfig = exterior ? curtainConfigForWindow(wallName, center) : null;
-    if (curtainConfig) new WindowCurtain({ config: curtainConfig, axis, fixed, floorY, opening });
+    if (exterior) {
+      const curtainConfig = curtainConfigForWindow(
+        wallName,
+        center,
+        axis,
+        fixed,
+        floorY,
+        exteriorWindows.length,
+      );
+      const windowRecord = {
+        id: curtainConfig.id,
+        wall: wallName,
+        level: windowLevelLabel(floorY),
+        room: curtainConfig.room,
+        axis,
+        fixed,
+        center,
+        width,
+        bottom,
+        top,
+        curtainId: null,
+      };
+      exteriorWindows.push(windowRecord);
+      const curtain = new WindowCurtain({ config: curtainConfig, axis, fixed, floorY, opening });
+      windowRecord.curtainId = curtain.id;
+    }
   }
 
   function addDoorFrame(axis, fixed, center, floorY, width, height) {
@@ -24618,14 +25079,15 @@
       burner.rotation.x = Math.PI / 2;
       group.add(burner);
     }
-    // The hood, flue, and splash panel form one connected vertical composition
-    // between the shorter east-wall windows.
-    box({ name: "kitchen-range-backsplash", w: 1.62, h: 0.74, d: 0.045, x: 0, y: 1.35, z: 0.37, material: M.marble, parent: group, cast: false, receive: true });
-    box({ name: "kitchen-range-hood-canopy", w: 1.68, h: 0.2, d: 0.64, x: 0, y: 1.82, z: 0.08, material: M.iron, parent: group });
-    box({ name: "kitchen-range-hood-flue", w: 0.62, h: 1.48, d: 0.3, x: 0, y: 2.56, z: 0.24, material: M.iron, parent: group });
+    // All east-wall openings now carry drapery. Keep the range splash below
+    // the glass and suspend the hood in front of the curtain plane rather than
+    // letting its old wall-backed canopy pass through both window treatments.
+    box({ name: "kitchen-range-low-backsplash", w: 1.62, h: 0.2, d: 0.045, x: 0, y: 1.11, z: 0.37, material: M.marble, parent: group, cast: false, receive: true });
+    box({ name: "kitchen-range-hood-canopy", w: 1.68, h: 0.2, d: 0.64, x: 0, y: 1.82, z: -0.24, material: M.iron, parent: group });
+    box({ name: "kitchen-range-hood-flue", w: 0.62, h: 1.48, d: 0.3, x: 0, y: 2.56, z: -0.18, material: M.iron, parent: group });
     for (const sx of [-0.42, 0.42]) {
       const taskMaterial = new THREE.MeshStandardMaterial({ color: 0xffe1ae, emissive: 0xffa957, emissiveIntensity: 1.15, roughness: 0.28 });
-      const taskBulb = box({ name: "kitchen-range-hood-task-light", w: 0.34, h: 0.028, d: 0.16, x: sx, y: 1.705, z: -0.08, material: taskMaterial, parent: group, cast: false, receive: false });
+      const taskBulb = box({ name: "kitchen-range-hood-task-light", w: 0.34, h: 0.028, d: 0.16, x: sx, y: 1.705, z: -0.5, material: taskMaterial, parent: group, cast: false, receive: false });
       taskBulb.userData.onEmissiveIntensity = 1.15;
       kitchenTaskBulbs.push(taskBulb);
     }
@@ -24752,17 +25214,17 @@
     roundedBox({ name: "kitchen-sink-basin", w: 1.52, h: 0.58, d: 0.095, radius: 0.1, x: sinkX, y: FLOOR.MAIN + 0.945, z: sinkZ, rotationX: -Math.PI / 2, material: M.porcelain, cast: false });
     roundedBox({ name: "kitchen-sink-basin-well", w: 1.22, h: 0.38, d: 0.024, radius: 0.08, x: sinkX, y: FLOOR.MAIN + 1.004, z: sinkZ + 0.025, rotationX: -Math.PI / 2, material: M.soot, cast: false });
     cylinder({ name: "kitchen-sink-drain", radius: 0.052, height: 0.012, segments: 18, x: sinkX, y: FLOOR.MAIN + 1.019, z: sinkZ + 0.04, material: M.brass, cast: false });
-    cylinder({ name: "kitchen-sink-faucet-deck-collar", radius: 0.078, height: 0.035, segments: 18, x: sinkX, y: FLOOR.MAIN + 1.005, z: -11.69, material: M.brass, cast: false });
-    cylinder({ name: "kitchen-sink-faucet-riser", radius: 0.03, height: 0.3, segments: 16, x: sinkX, y: FLOOR.MAIN + 1.17, z: -11.69, material: M.brass, cast: false });
-    sphere({ name: "kitchen-sink-faucet-elbow", radius: 0.05, x: sinkX, y: FLOOR.MAIN + 1.32, z: -11.69, material: M.brass, cast: false });
-    cylinder({ name: "kitchen-sink-faucet-spout", radius: 0.026, height: 0.38, segments: 14, x: sinkX, y: FLOOR.MAIN + 1.32, z: -11.5, rotationX: Math.PI / 2, material: M.brass, cast: false });
-    new WaterFixture({ name: "kitchen sink", kind: "sink", x: sinkX, y: FLOOR.MAIN + 1.3, z: -11.31, drop: 0.28, handleOffset: { x: 0.27, y: 0.02, z: -0.32 } });
+    cylinder({ name: "kitchen-sink-faucet-deck-collar", radius: 0.078, height: 0.035, segments: 18, x: sinkX, y: FLOOR.MAIN + 1.005, z: -11.61, material: M.brass, cast: false });
+    cylinder({ name: "kitchen-sink-faucet-riser", radius: 0.03, height: 0.3, segments: 16, x: sinkX, y: FLOOR.MAIN + 1.17, z: -11.61, material: M.brass, cast: false });
+    sphere({ name: "kitchen-sink-faucet-elbow", radius: 0.05, x: sinkX, y: FLOOR.MAIN + 1.32, z: -11.61, material: M.brass, cast: false });
+    cylinder({ name: "kitchen-sink-faucet-spout", radius: 0.026, height: 0.38, segments: 14, x: sinkX, y: FLOOR.MAIN + 1.32, z: -11.42, rotationX: Math.PI / 2, material: M.brass, cast: false });
+    new WaterFixture({ name: "kitchen sink", kind: "sink", x: sinkX, y: FLOOR.MAIN + 1.3, z: -11.23, drop: 0.28, handleOffset: { x: 0.27, y: 0.02, z: -0.32 } });
 
     const sinkTaskMaterial = new THREE.MeshStandardMaterial({ color: 0xffdfaa, emissive: 0xffa04a, emissiveIntensity: 1.05, roughness: 0.3 });
-    const sinkTaskBulb = box({ name: "kitchen-sink-task-light", w: 0.92, h: 0.055, d: 0.1, x: sinkX, y: FLOOR.MAIN + 2.82, z: -11.75, material: sinkTaskMaterial, cast: false, receive: false });
+    const sinkTaskBulb = box({ name: "kitchen-sink-task-light", w: 0.92, h: 0.055, d: 0.1, x: sinkX, y: FLOOR.MAIN + 2.82, z: -11.59, material: sinkTaskMaterial, cast: false, receive: false });
     sinkTaskBulb.userData.onEmissiveIntensity = 1.05;
     kitchenTaskBulbs.push(sinkTaskBulb);
-    cylinder({ name: "kitchen-sink-task-light-arm", radius: 0.018, height: 0.22, x: sinkX, y: FLOOR.MAIN + 2.88, z: -11.79, rotationX: Math.PI / 2, material: M.brass, cast: false });
+    cylinder({ name: "kitchen-sink-task-light-arm", radius: 0.018, height: 0.22, x: sinkX, y: FLOOR.MAIN + 2.88, z: -11.5, rotationX: Math.PI / 2, material: M.brass, cast: false });
 
     addKitchenRange(KITCHEN_LAYOUT.rangeX, KITCHEN_LAYOUT.rangeZ, FLOOR.MAIN, Math.PI / 2);
     new Refrigerator({ name: "kitchen refrigerator", x: KITCHEN_LAYOUT.refrigeratorX, z: KITCHEN_LAYOUT.refrigeratorZ, floorY: FLOOR.MAIN, width: 1.25, height: 2.25, depth: 0.82, rotationY: -Math.PI / 2 });
@@ -26139,12 +26601,16 @@
   ]);
 
   function addDiningServiceBell() {
-    const x = -14.76;
-    const z = -5.75;
+    // The complete curtain pass occupies every exterior opening. Move the bell
+    // to the clear north-wall pier between the coat-closet and bathroom doors
+    // so neither device has to float in front of a west window.
+    const x = -11.5;
+    const z = -3.38;
     const floorY = FLOOR.MAIN;
     const root = new THREE.Group();
     root.name = "dining-room-service-bell";
     root.position.set(x, floorY, z);
+    root.rotation.y = Math.PI / 2;
     scene.add(root);
     box({ name: "service-bell-wall-plate", w: 0.09, h: 0.62, d: 0.46, x: 0, y: 1.31, z: 0, material: M.darkWood, parent: root });
     cylinder({ name: "service-bell-wall-medallion", radius: 0.22, height: 0.035, segments: 20, x: 0.06, y: 1.42, z: 0, rotationZ: Math.PI / 2, material: M.brass, parent: root, cast: false });
@@ -26163,16 +26629,19 @@
       x: 0.3, y: 1.08, z: 0,
       material: tamperSystem.hitMaterial, parent: root, cast: false, receive: false,
     });
-    physics.addFixedBox(x + 0.04, floorY + 1.3, z, 0.18, 0.65, 0.46, 0);
+    physics.addFixedBox(x, floorY + 1.3, z - 0.04, 0.46, 0.65, 0.18, 0);
+    root.updateMatrixWorld(true);
+    const bellTarget = new THREE.Vector3(0.25, 1.4, 0);
+    root.localToWorld(bellTarget);
     tamperSystem.registerDistraction({
       kind: "service-bell",
       label: "service bell",
       room: "DINING ROOM",
-      position: { x: x + 0.25, y: floorY + 1.4, z },
+      position: { x: bellTarget.x, y: bellTarget.y, z: bellTarget.z },
       hit,
       pulseSeconds: MANSION_DISTRACTIONS.serviceBellPulseSeconds,
       labels: { tamperLabel: "Pull the service bell", restoreLabel: "Silence the service bell" },
-      qa: { x: -13.35, z, floorY, pitch: -0.16 },
+      qa: { x, z: -4.72, floorY, pitch: -0.16 },
       apply: (active) => {
         if (!active) bellPivot.rotation.z = 0;
       },
@@ -26538,7 +27007,7 @@
       const bookshelfOptions = z === clueBookLayout.z
         ? { collection: "LIBRARY", reservedBookSlots: [{ shelf: clueBookLayout.shelfIndex, slot: clueBookLayout.reservedSlot }] }
         : { collection: "LIBRARY" };
-      addBookshelf(-14.5, z, FLOOR.MAIN, -Math.PI / 2, 1.25, 2.85, bookshelfOptions);
+      addBookshelf(-14.35, z, FLOOR.MAIN, -Math.PI / 2, 1.25, 2.85, bookshelfOptions);
     }
     addFireplace("library fireplace", -5.35, 10.25, FLOOR.MAIN, Math.PI / 2);
     addMantelDecor(-5.35, 10.25, FLOOR.MAIN, Math.PI / 2, "clock");
@@ -26591,7 +27060,7 @@
     addChair(-7.4, -9.55, FLOOR.MAIN, Math.PI, M.darkWood);
     addChair(-12.7, -8.4, FLOOR.MAIN, -Math.PI / 2, M.darkWood);
     addChair(-6.7, -8.4, FLOOR.MAIN, Math.PI / 2, M.darkWood);
-    new Cabinet({ name: "dining sideboard", x: -14.0, z: -11.55, floorY: FLOOR.MAIN, width: 1.6, height: 1.35, rotationY: 0, stockKind: "sideboard", interiorLight: false });
+    new Cabinet({ name: "dining sideboard", x: -14.0, z: -11.22, floorY: FLOOR.MAIN, width: 1.6, height: 1.35, rotationY: 0, stockKind: "sideboard", interiorLight: false });
     addDiningTableService();
     addDiningServiceBell();
     // Ballroom — keep the marble dance floor open; Kip's sideline chair sits
@@ -26647,8 +27116,8 @@
     addTable(0, -8.25, 1.8, 0.78, FLOOR.UPPER, 0, M.marble);
     addChair(-2.35, -9.75, FLOOR.UPPER, Math.PI, M.darkWood);
     addChair(2.35, -9.75, FLOOR.UPPER, Math.PI, M.darkWood);
-    addFireplace("rear lounge fireplace", -4.7, -10.55, FLOOR.UPPER, -Math.PI / 2);
-    addMantelDecor(-4.7, -10.55, FLOOR.UPPER, -Math.PI / 2, "frame");
+    addFireplace("rear lounge fireplace", -4.7, -10.18, FLOOR.UPPER, -Math.PI / 2);
+    addMantelDecor(-4.7, -10.18, FLOOR.UPPER, -Math.PI / 2, "frame");
     addBedroomSuiteDressing(-10.5, -10.1, Math.PI, ["books", "watch"], { rugMaterial: M.exoticRug });
     addRearLoungeTeaService();
     addBed(10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
@@ -26708,7 +27177,7 @@
   function addWorkroomSecurityHub() {
     const root = new THREE.Group();
     root.name = "workroom-live-monitor-wall";
-    root.position.set(0, FLOOR.BASEMENT, -11.7);
+    root.position.set(0, FLOOR.BASEMENT, -11.54);
     scene.add(root);
     const placeholderMaterial = new THREE.MeshBasicMaterial({ color: 0x07171d, toneMapped: false });
     const bezelMaterial = new THREE.MeshStandardMaterial({ color: 0x171a1d, metalness: 0.72, roughness: 0.34 });
@@ -28790,6 +29259,7 @@
     /^rain-darkened-glass$/,
     /^window-(?:mullion|frame)$/,
     /^stone-window-sill$/,
+    /(?:interaction|hitbox|hit-target)$/,
     /-window-(?:low|high)$/,
     /-segment-(?:\d+|end)$/,
     /-(?:baseboard-\d+|crown)-[ab]$/,
@@ -28818,21 +29288,59 @@
     const candidates = [];
     scene.traverse((object) => {
       if (curtainClearanceIgnores(object) || !object.visible) return;
+      if (object.isInstancedMesh) {
+        if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
+        const instanceMatrix = new THREE.Matrix4();
+        const worldMatrix = new THREE.Matrix4();
+        for (let index = 0; index < object.count; index += 1) {
+          object.getMatrixAt(index, instanceMatrix);
+          worldMatrix.multiplyMatrices(object.matrixWorld, instanceMatrix);
+          const bounds = object.geometry.boundingBox.clone().applyMatrix4(worldMatrix);
+          if (!bounds.isEmpty()) candidates.push({ name: `${object.name || object.type}-${index}`, bounds });
+        }
+        return;
+      }
       const bounds = new THREE.Box3().setFromObject(object);
       if (bounds.isEmpty()) return;
       candidates.push({ name: object.name || object.type, bounds });
     });
+    const overlapNames = (bounds) => {
+      const overlaps = new Set();
+      for (const candidate of candidates) {
+        if (curtainBoundsOverlap(bounds, candidate.bounds)) overlaps.add(candidate.name);
+      }
+      return [...overlaps].sort();
+    };
     for (const curtain of windowCurtains) {
       const visual = curtain.visualBounds();
-      const egress = curtain.egressBounds();
-      const visualOverlaps = new Set();
-      const egressOverlaps = new Set();
-      for (const candidate of candidates) {
-        if (curtainBoundsOverlap(visual, candidate.bounds)) visualOverlaps.add(candidate.name);
-        if (curtainBoundsOverlap(egress, candidate.bounds)) egressOverlaps.add(candidate.name);
+      curtain.clearance.visualOverlaps = overlapNames(visual);
+
+      const originalInset = curtain.exitInset;
+      const originalOffset = curtain.exitOffset;
+      const insetCandidates = [originalInset, 1.18, 1.48, 1.72, 2.0];
+      const offsetCandidates = [originalOffset, 0, -0.58, 0.58, -0.95, 0.95, -1.35, 1.35];
+      let resolved = false;
+      for (const exitInset of [...new Set(insetCandidates)]) {
+        for (const exitOffset of [...new Set(offsetCandidates)]) {
+          curtain.setResolvedExit(exitInset, exitOffset);
+          const approach = curtain.approachPosition();
+          const distance = Math.hypot(
+            approach.x - curtain.root.position.x,
+            approach.z - curtain.root.position.z,
+          );
+          if (distance > PLAYER.interactionRange - 0.12) continue;
+          const overlaps = overlapNames(curtain.egressBounds());
+          if (overlaps.length) continue;
+          curtain.clearance.egressOverlaps = [];
+          resolved = true;
+          break;
+        }
+        if (resolved) break;
       }
-      curtain.clearance.visualOverlaps = [...visualOverlaps].sort();
-      curtain.clearance.egressOverlaps = [...egressOverlaps].sort();
+      if (!resolved) {
+        curtain.setResolvedExit(originalInset, originalOffset);
+        curtain.clearance.egressOverlaps = overlapNames(curtain.egressBounds());
+      }
     }
   }
 
@@ -28855,6 +29363,7 @@
     buildLighting();
     auditWindowCurtainClearance();
     registerRoomZones();
+    syncWindowCurtainVisibility();
   }
 
   class RainSystem {
@@ -31340,6 +31849,7 @@
         state.qaRoute.visitedRooms.push(match.roomLabel);
       }
     }
+    syncWindowCurtainVisibility();
     state.mazeLightingContext = isMazeLightingContext(state.currentRoom, p);
     updateExteriorDetailCulling();
     if (audioSystem) audioSystem.setRainExposure(computeRainExposure());
@@ -32271,9 +32781,36 @@
   function getWindowCurtainDiagnostics() {
     const textureNames = new Set();
     if (M?.curtainDamask?.map) textureNames.add(M.curtainDamask.map.name || M.curtainDamask.map.uuid);
+    const byWall = {
+      "main-front-wall": 0,
+      "main-rear-wall": 0,
+      "main-west-wall": 0,
+      "main-east-wall": 0,
+      "upper-front-wall": 0,
+      "upper-rear-wall": 0,
+      "upper-west-wall": 0,
+      "upper-east-wall": 0,
+      "basement-front-wall": 0,
+      "basement-rear-wall": 0,
+      "basement-west-wall": 0,
+      "basement-east-wall": 0,
+    };
+    const byLevel = { "MAIN LEVEL": 0, "SECOND FLOOR": 0, "BASEMENT": 0 };
+    for (const windowRecord of exteriorWindows) {
+      if (Object.hasOwn(byWall, windowRecord.wall)) byWall[windowRecord.wall] += 1;
+      if (Object.hasOwn(byLevel, windowRecord.level)) byLevel[windowRecord.level] += 1;
+    }
     return {
       count: windowCurtains.length,
       excludedKinds: [...WINDOW_CURTAINS.excludedKinds],
+      windowInventory: {
+        total: exteriorWindows.length,
+        byWall,
+        byLevel,
+        uncoveredIds: exteriorWindows
+          .filter((windowRecord) => !windowRecord.curtainId)
+          .map((windowRecord) => windowRecord.id),
+      },
       activeId: windowCurtains.find((curtain) => state.activeHideSpot === curtain.hidingSpot)?.id || null,
       material: {
         textureName: M?.curtainDamask?.map?.name || null,
@@ -32637,7 +33174,7 @@
       curtain.openness = 1;
       curtain.applyPanelLayout();
       const approach = curtain.approachPosition();
-      teleport(approach.x, curtain.floorY, approach.z, approach.yaw, 0);
+      teleport(approach.x, curtain.floorY, approach.z, approach.yaw, approach.pitch);
       updateLocation();
       updateInteractionPrompt();
       const player = physics.playerPosition();
@@ -32660,11 +33197,25 @@
       curtain.targetOpenness = 1;
       curtain.openness = 1;
       curtain.applyPanelLayout();
-      const framing = curtain.worldPositionAtInset(
-        WINDOW_CURTAINS.insetFromWall + Math.max(1.7, Number(distance) || 2.75),
-        curtain.exitOffset,
+      const galleryFraming = curtain.room === "FOYER BALCONY";
+      const framing = galleryFraming
+        ? { x: -4.3, z: 7.2 }
+        : curtain.worldPositionAtInset(
+          WINDOW_CURTAINS.insetFromWall + Math.max(1.7, Number(distance) || 2.75),
+          curtain.exitOffset,
+        );
+      const horizontal = Math.max(
+        0.001,
+        Math.hypot(framing.x - curtain.root.position.x, framing.z - curtain.root.position.z),
       );
-      teleport(framing.x, curtain.floorY, framing.z, curtain.inwardYaw + Math.PI, -0.12);
+      const targetY = curtain.floorY + curtain.windowBottom + curtain.height * 0.52;
+      teleport(
+        framing.x,
+        curtain.floorY,
+        framing.z,
+        faceTargetYaw(framing.x, framing.z, curtain.root.position.x, curtain.root.position.z),
+        Math.atan2(targetY - (curtain.floorY + PLAYER.eye), horizontal),
+      );
       updateLocation();
       updateInteractionPrompt();
       return curtain.getDiagnostics();
@@ -32762,6 +33313,9 @@
     );
     window.MrFeastFresh.frameBulkStorageSecretForQA = () => (
       state.qa && bulkStorageSecretSystem ? bulkStorageSecretSystem.frameForQA() : null
+    );
+    window.MrFeastFresh.frameBulkStorageSymbolForQA = (id) => (
+      state.qa && bulkStorageSecretSystem ? bulkStorageSecretSystem.frameSymbolForQA(id) : null
     );
     window.MrFeastFresh.placePlayerNearBulkStorageBoxForQA = (id, mode = "push") => (
       state.qa && bulkStorageSecretSystem

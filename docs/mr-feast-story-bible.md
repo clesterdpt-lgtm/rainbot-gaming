@@ -172,13 +172,19 @@ rises with it, and the finale is a scheduled arrival.
   13 sits at its center. The maze was never landscaping — every contestant sent in
   is being walked through the circle, and XIII buried the evidence at its heart on
   purpose.
-- **Game 3 — THE MAZE.** A night hedge-maze course "for the million," head-to-head
-  against Juniper, storm overhead. The maze rearranges between lightning strikes
-  (phase-keyed wall segments — never witnessed moving, same trick as the statues).
-- **Juniper's end:** authored so the player *almost* saves her — she shoves the player
-  through the final gap and is collected. If the player found her complete research
-  beforehand, she passes it in that moment ("It was never about winning. Break the
-  table."), gating the true ending on having actually done the investigation.
+- **Game 3 — FEAST HUNT.** After Storm Run and the patron-feed sabotage, production
+  calls the remaining contestants to the foyer. Three unmistakable gold show props
+  are hidden across all three mansion levels. Cameras report the player's reliable
+  position, Mr. Feast personally hunts whoever is seen, and a catch on any floor
+  eliminates. Crouching, darkness, cover, and hiding remain the fair counters.
+- Each recovered prop advances the house horror without creating another combat AI:
+  the Listening Host and Veiled Waltz turn only while unobserved, camera LEDs go dark
+  while tracking remains active, and Mr. Feast's cheerful announcements thin into
+  silence. The statues redirect and frighten but never damage the player.
+- **Juniper's end is deliberately simple and deferred.** Game 3 does not require a
+  sacrifice cinematic. A later finale slice may eliminate or escort her offscreen
+  after an authored warning about the Winner's Dinner, while her research remains
+  the investigation-earned route to the true ending.
 
 ### Finale — THE WINNER'S DINNER
 
@@ -321,7 +327,8 @@ idea that fits a lane is automatically coherent; anything that fits none gets cu
    a damaging weather-hazard system.
 6. **Phase dressing pass** — painting scoreboard, audio sweetener/detune swaps,
    line-pool swaps, statue notches, the reverse-jingle motif.
-7. **Game 3 + Juniper arc + maze night** — includes the monitor-8 sigil aerial.
+7. **Game 3 core: Feast Hunt** — three mansion-wide props, live cameras, pursuit,
+   hiding, and the first unobserved foyer-statue turns. Juniper's result is deferred.
 8. **Winner's Dinner + three endings** — the shipped welcome replay is the bad
    ending's whole script; the shipped Workroom sabotage is the true ending's first
    half.

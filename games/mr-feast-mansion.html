@@ -242,7 +242,8 @@
 
     /* Idle next-game countdown strips stay off-screen; only live calls/races show. */
     #mansion-feast-says[data-phase="dormant"],
-    #mansion-storm-run[data-phase="dormant"] {
+    #mansion-storm-run[data-phase="dormant"],
+    #mansion-feast-hunt[data-phase="dormant"] {
       display: none !important;
     }
 
@@ -838,6 +839,137 @@
       background: transparent;
       box-shadow: none;
       font-size: 0.82rem;
+    }
+
+    #mansion-feast-hunt {
+      position: absolute;
+      top: max(18px, calc(env(safe-area-inset-top) + 10px));
+      left: 50%;
+      z-index: 10;
+      display: grid;
+      box-sizing: border-box;
+      width: min(420px, calc(100% - 260px));
+      min-height: 48px;
+      max-height: 64px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "hunt-header hunt-progress"
+        "hunt-status hunt-progress";
+      gap: 2px 12px;
+      padding: 7px 10px 8px 14px;
+      overflow: hidden;
+      border: 1px solid rgba(207, 180, 120, 0.58);
+      border-radius: 8px;
+      color: #eee7d8;
+      background:
+        linear-gradient(110deg, rgba(41, 34, 23, 0.96), rgba(14, 17, 16, 0.95) 58%, rgba(7, 9, 10, 0.94)),
+        rgba(10, 11, 11, 0.96);
+      box-shadow:
+        0 12px 30px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 239, 205, 0.08);
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+      transform: translateX(-50%);
+    }
+
+    #mansion-feast-hunt::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: linear-gradient(#e2c985, #7f6833 52%, #29342c);
+      box-shadow: 0 0 14px rgba(219, 190, 118, 0.22);
+    }
+
+    #mansion-feast-hunt[hidden] { display: none; }
+
+    .mansion-hunt__header {
+      grid-area: hunt-header;
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #mansion-feast-hunt-eyebrow {
+      display: inline-flex;
+      min-width: 0;
+      align-items: center;
+      gap: 7px;
+      overflow: hidden;
+      color: #dec785;
+      font-size: 0.54rem;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      line-height: 1.2;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    #mansion-feast-hunt-eyebrow::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: #cf4642;
+      box-shadow: 0 0 0 3px rgba(207, 70, 66, 0.12), 0 0 9px rgba(207, 70, 66, 0.54);
+      animation: mansion-feast-live 1.35s ease-in-out infinite;
+    }
+
+    #mansion-feast-hunt-timer {
+      flex: 0 0 auto;
+      color: rgba(234, 220, 188, 0.7);
+      font-size: 0.54rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.08em;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+
+    #mansion-feast-hunt-status {
+      grid-area: hunt-status;
+      min-width: 0;
+      margin: 0;
+      overflow: hidden;
+      color: rgba(235, 230, 217, 0.78);
+      font-size: 0.7rem;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+      line-height: 1.15;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #mansion-feast-hunt-progress {
+      grid-area: hunt-progress;
+      min-width: 54px;
+      place-self: center end;
+      padding: 6px 8px;
+      border: 1px solid rgba(218, 190, 126, 0.34);
+      border-radius: 99px;
+      color: #f1d99b;
+      background: rgba(218, 190, 126, 0.08);
+      font-size: 0.68rem;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.08em;
+      line-height: 1;
+      text-align: center;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    #mansion-feast-hunt[data-phase="completed"] {
+      border-color: rgba(132, 193, 145, 0.72);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), inset 0 0 22px rgba(59, 119, 73, 0.12);
+    }
+
+    #mansion-feast-hunt[data-phase="failed"] {
+      border-color: rgba(202, 80, 73, 0.82);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), inset 0 0 22px rgba(151, 43, 39, 0.14);
     }
 
     #mansion-security {
@@ -2369,6 +2501,10 @@
         border-inline: 0;
         border-radius: 0;
       }
+      /* The shared phone shell can be shorter than the authored viewport when
+         its full title/header is visible. Keep the non-maxed stage inside that
+         definite surface so its top-row touch tools cannot slide under it. */
+      #mansion-stage:not(.is-maxed):not(:fullscreen) { max-height: 100%; }
       .mansion-location { top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left)); max-width: 48%; }
       #mansion-room { font-size: 1.2rem; }
       #mansion-feast-says {
@@ -2460,6 +2596,22 @@
       }
       #mansion-storm-run[data-phase="dormant"] {
         width: min(190px, calc(100% - 128px));
+      }
+      #mansion-feast-hunt {
+        top: max(66px, calc(env(safe-area-inset-top) + 58px));
+        width: calc(100% - 24px);
+        min-height: 46px;
+        max-height: 64px;
+        gap: 1px 8px;
+        padding: 6px 8px 7px 11px;
+      }
+      #mansion-feast-hunt-eyebrow,
+      #mansion-feast-hunt-timer { font-size: 0.48rem; }
+      #mansion-feast-hunt-status { font-size: 0.64rem; }
+      #mansion-feast-hunt-progress {
+        min-width: 50px;
+        padding: 6px 7px;
+        font-size: 0.62rem;
       }
       #mansion-casefile:not([hidden]) ~ #mansion-storm-run[data-phase="dormant"] {
         top: max(178px, calc(env(safe-area-inset-top) + 170px));
@@ -2713,6 +2865,18 @@
         top: max(64px, calc(env(safe-area-inset-top) + 60px));
         width: min(190px, calc(100% - 128px));
       }
+      #mansion-feast-hunt {
+        top: max(2px, env(safe-area-inset-top));
+        width: min(420px, calc(100% - 110px));
+        min-height: 42px;
+        gap: 1px 8px;
+        padding: 4px 7px 5px 10px;
+      }
+      #mansion-stage:has(#mansion-feast-hunt:not([hidden]):not([data-phase="dormant"])) .mansion-location {
+        display: none;
+      }
+      #mansion-feast-hunt-status { font-size: 0.61rem; }
+      #mansion-feast-hunt-progress { padding-block: 5px; }
       #mansion-casefile:not([hidden]) ~ #mansion-storm-run[data-phase="dormant"] { display: none; }
       .mansion-touch__move {
         bottom: max(0px, env(safe-area-inset-bottom));
@@ -2722,8 +2886,8 @@
       }
     }
 
-    /* Both sanctioned competitions are speech-led. These late overrides keep
-       only a small, non-instructional status strip while Mr. Feast's bubble
+    /* All sanctioned competitions are speech-led. These late overrides keep
+       only small, non-instructional status strips while Mr. Feast's bubble
        carries rules, commands, directions, countdown calls, and results. */
     #mansion-feast-says[data-guidance="speech"]:not([hidden]) {
       top: max(8px, calc(env(safe-area-inset-top) + 6px));
@@ -2938,6 +3102,15 @@
           <output id="mansion-storm-run-standings" aria-label="Storm Run contestant standings">Mara · Juniper · You</output>
         </section>
 
+        <section id="mansion-feast-hunt" role="region" aria-label="Feast Hunt status" aria-live="polite" aria-atomic="true" data-guidance="speech" data-phase="dormant" hidden>
+          <div class="mansion-hunt__header">
+            <span id="mansion-feast-hunt-eyebrow">Game 3 · Stealth hunt</span>
+            <output id="mansion-feast-hunt-timer" aria-label="Feast Hunt time remaining" aria-live="off">—</output>
+          </div>
+          <p id="mansion-feast-hunt-status">Report to the Grand Foyer</p>
+          <output id="mansion-feast-hunt-progress" aria-label="Feast Hunt item progress">0 / 3</output>
+        </section>
+
         <div class="mansion-tools" aria-label="View controls">
           <button id="mansion-flashlight-button" class="mansion-tool mansion-tool--label" type="button" aria-label="Switch flashlight on" aria-pressed="false" title="Flashlight" hidden>Light</button>
           <button id="mansion-journal-button" class="mansion-tool mansion-tool--label" type="button" aria-label="Open bag, inventory, and clues" aria-expanded="false" title="Bag · Inventory &amp; Clues">Bag</button>
@@ -3122,7 +3295,7 @@
             <li>Speak with contestants. Their routines and stories change as the show eliminates people.</li>
             <li>Search cabinets and closets for tools, keys, hiding places, and a flashlight.</li>
             <li>Use darkness, crouching, and hiding spots to avoid Mr Feast and hostile cameras.</li>
-            <li>Complete Feast Says and Storm Run, then return to investigating and sabotage.</li>
+            <li>Complete Feast Says, Storm Run, and Feast Hunt while balancing investigation, sabotage, and survival.</li>
           </ul>
 
           <dl class="mansion-floors">
@@ -3246,6 +3419,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260723-mr-feast-rebrand-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260723-archive-skull-flashlight-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260723-feast-hunt-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

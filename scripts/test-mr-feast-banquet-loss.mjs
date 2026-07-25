@@ -10,7 +10,7 @@ const port = Number(process.env.MR_FEAST_BANQUET_TEST_PORT || (59200 + (process.
 const baseUrl = `http://127.0.0.1:${port}`;
 const gameUrl = `${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1`;
 const artifactDir = path.join(root, "output", "playwright", "mr-feast-banquet-loss");
-const closingLine = "Contestant Thirteen—you lost the million, but you still made the final cut. Our patrons call it sacrifice. The Guest calls it supper. I call it a feast.";
+const closingLine = "You lost the million, but you still made the final cut. Our patrons call it sacrifice. The Guest calls it supper. I call it a feast.";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -125,6 +125,11 @@ async function assertSourceContract() {
   );
   assert(/overlayAtSeconds:\s*(?:2[0-9]|[3-9][0-9])/.test(runtime), "the banquet must hold for at least 20 seconds");
   assert(runtime.includes(closingLine), "Mr. Feast's complete authored closing line is missing");
+  assert(!runtime.includes("Contestant Thirteen—you lost the million"), "Mr. Feast must not identify the player as Contestant Thirteen");
+  assert(
+    !/patronArmRest|posePatronArmsAtTable|rotateBoneEndpointToward/.test(runtime),
+    "the banquet Patrons must not use the twisting tabletop arm solver",
+  );
   assert(!/placeCard:\s*"CONTESTANT 13 — MAIN COURSE"/.test(runtime), "the loss scene must remove the Contestant 13 main-course sign");
   assert(/data-banquet-loss/.test(html) && /mansion-banquet-look-hint/.test(html), "the stage needs banquet presentation and look-hint states");
   assert(/user playtest/i.test(milestone), "Milestone 64 must retain visual user playtest acceptance");
@@ -326,7 +331,9 @@ async function run() {
         && banquet.patrons.every((entry) => entry.faceFullyConcealed && entry.hoodVisible)
         && banquet.patrons.every((entry) => entry.maskScale >= 0.68)
         && banquet.patrons.every((entry) => entry.visibleArmCount === 2)
-        && banquet.patrons.every((entry) => entry.armReadability.every((arm) => arm.tabletopReadable))
+        && banquet.patrons.every((entry) => entry.armReadability.every(
+          (arm) => arm.restingAtSide && !arm.tabletopReach && arm.verticalDrop >= 0.035,
+        ))
         && new Set(banquet.patrons.map((entry) => entry.bodyFile)).size === 1
         && new Set(banquet.patrons.map((entry) => entry.maskId)).size === 6
         && new Set(banquet.patrons.map((entry) => entry.maskFile)).size === 6,

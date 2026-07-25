@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-banquet-loss-curtain-light-response-banquet-free-look-centered-ritual-victim-tableau-5";
+  const MANSION_RUNTIME_VERSION = "20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-banquet-loss-curtain-light-response-banquet-free-look-centered-ritual-victim-tableau-6";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2781,7 +2781,7 @@
       victimTorsoFile: "contestant-13-limbless-torso.glb",
       victimLimbsFile: "contestant-13-detached-limbs.glb",
     }),
-    closingLine: "Contestant Thirteen—you lost the million, but you still made the final cut. Our patrons call it sacrifice. The Guest calls it supper. I call it a feast.",
+    closingLine: "You lost the million, but you still made the final cut. Our patrons call it sacrifice. The Guest calls it supper. I call it a feast.",
     revealSeconds: 1.15,
     closingLineAtSeconds: 5,
     closingLineSeconds: 9.5,
@@ -2836,13 +2836,6 @@
       widthScale: 0.9,
       heightScale: 1.12,
       depthScale: 0.68,
-    }),
-    patronArmRest: Object.freeze({
-      tableEdgeInset: 0.08,
-      handSpacing: 0.14,
-      handHeight: FLOOR.MAIN + 0.875,
-      solverPasses: 14,
-      solverStrength: 0.8,
     }),
     victim: Object.freeze({
       torso: Object.freeze({
@@ -15674,57 +15667,6 @@
       return bones;
     }
 
-    rotateBoneEndpointToward(body, bone, endpoint, target) {
-      if (!bone?.parent || !endpoint) return;
-      body.updateMatrixWorld(true);
-      const origin = bone.getWorldPosition(new THREE.Vector3());
-      const current = endpoint.getWorldPosition(new THREE.Vector3()).sub(origin);
-      const desired = target.clone().sub(origin);
-      if (current.lengthSq() < 0.000001 || desired.lengthSq() < 0.000001) return;
-      current.normalize();
-      desired.normalize();
-      const worldDelta = new THREE.Quaternion().setFromUnitVectors(current, desired);
-      const easedWorldDelta = new THREE.Quaternion().identity().slerp(
-        worldDelta,
-        BANQUET_LOSS.patronArmRest.solverStrength,
-      );
-      const parentWorld = bone.parent.getWorldQuaternion(new THREE.Quaternion());
-      const localDelta = parentWorld.clone().invert()
-        .multiply(easedWorldDelta)
-        .multiply(parentWorld);
-      bone.quaternion.premultiply(localDelta).normalize();
-    }
-
-    posePatronArmsAtTable(body, bones, spec) {
-      const rowSide = spec.z >= BANQUET_LOSS.table.centerZ ? 1 : -1;
-      const tableZ = BANQUET_LOSS.table.centerZ + rowSide * (
-        BANQUET_LOSS.table.halfWidth - BANQUET_LOSS.patronArmRest.tableEdgeInset
-      );
-      const targets = new Map([
-        ["Left", new THREE.Vector3(
-          spec.x - BANQUET_LOSS.patronArmRest.handSpacing,
-          BANQUET_LOSS.patronArmRest.handHeight,
-          tableZ,
-        )],
-        ["Right", new THREE.Vector3(
-          spec.x + BANQUET_LOSS.patronArmRest.handSpacing,
-          BANQUET_LOSS.patronArmRest.handHeight,
-          tableZ,
-        )],
-      ]);
-      for (let pass = 0; pass < BANQUET_LOSS.patronArmRest.solverPasses; pass += 1) {
-        for (const side of ["Left", "Right"]) {
-          const arm = bones.get(`${side}Arm`);
-          const forearm = bones.get(`${side}ForeArm`);
-          const hand = bones.get(`${side}Hand`);
-          this.rotateBoneEndpointToward(body, forearm, hand, targets.get(side));
-          this.rotateBoneEndpointToward(body, arm, hand, targets.get(side));
-        }
-      }
-      body.updateMatrixWorld(true);
-      return targets;
-    }
-
     assemblePatrons() {
       for (const patron of this.patrons) {
         this.root.remove(patron.body, patron.hood, patron.mask);
@@ -15744,7 +15686,6 @@
         body.rotation.y = yaw;
         body.scale.setScalar(spec.scale);
         const bones = this.applySeatedPose(body);
-        const handTargets = this.posePatronArmsAtTable(body, bones, spec);
         const torsoBones = ["Spine02", "Spine01", "Spine", "neck", "Head"]
           .map((name) => bones.get(name))
           .filter(Boolean);
@@ -15769,7 +15710,6 @@
           mask,
           yaw,
           bones,
-          handTargets,
           headFront: bones.get("headfront") || bones.get("Head"),
           torsoBones,
           torsoBase,
@@ -16176,23 +16116,39 @@
             && handPosition
             && Math.max(forearmPosition.y, handPosition.y) >= BANQUET_LOSS.table.surfaceY - 0.08
           );
-          const handTarget = patron.handTargets?.get(side) || null;
-          const handTargetDistance = handPosition && handTarget
-            ? handPosition.distanceTo(handTarget)
-            : Infinity;
           const rowSide = patron.spec.z >= BANQUET_LOSS.table.centerZ ? 1 : -1;
           const physicalTableEdgeZ = BANQUET_LOSS.table.centerZ
             + rowSide * BANQUET_LOSS.table.halfWidth;
           const tableEdgeDistance = handPosition
             ? Math.abs(handPosition.z - physicalTableEdgeZ)
             : Infinity;
-          const tabletopReadable = Boolean(
+          const bodySideDistance = handPosition
+            ? Math.hypot(
+              handPosition.x - patron.spec.x,
+              handPosition.z - patron.spec.z,
+            )
+            : Infinity;
+          const verticalDrop = forearmPosition && handPosition
+            ? forearmPosition.y - handPosition.y
+            : -Infinity;
+          const outsideTable = Boolean(
+            handPosition
+            && (
+              rowSide > 0
+                ? handPosition.z > physicalTableEdgeZ
+                : handPosition.z < physicalTableEdgeZ
+            )
+          );
+          const restingAtSide = Boolean(
             forearmPosition
             && handPosition
-            && handPosition.y >= BANQUET_LOSS.table.surfaceY - 0.025
-            && forearmPosition.y >= BANQUET_LOSS.table.surfaceY - 0.14
-            && tableEdgeDistance <= 0.16
+            && outsideTable
+            && bodySideDistance <= 0.34
+            && verticalDrop >= 0.035
+            && handPosition.y <= BANQUET_LOSS.table.surfaceY + 0.18
+            && forearmPosition.y <= BANQUET_LOSS.table.surfaceY + 0.22
           );
+          const tabletopReach = Boolean(handPosition && !outsideTable);
           const inView = Boolean(
             this.root.visible
             && forearm
@@ -16202,9 +16158,10 @@
           return {
             side: side.toLowerCase(),
             clearOfLap,
-            tabletopReadable: tabletopReadable && inView,
+            restingAtSide: restingAtSide && inView,
+            tabletopReach,
             inView,
-            readable: tabletopReadable && inView,
+            readable: restingAtSide && inView,
             forearmPosition: forearmPosition ? {
               x: Number(forearmPosition.x.toFixed(3)),
               y: Number(forearmPosition.y.toFixed(3)),
@@ -16215,11 +16172,14 @@
               y: Number(handPosition.y.toFixed(3)),
               z: Number(handPosition.z.toFixed(3)),
             } : null,
-            handTargetDistance: Number.isFinite(handTargetDistance)
-              ? Number(handTargetDistance.toFixed(3))
-              : null,
             tableEdgeDistance: Number.isFinite(tableEdgeDistance)
               ? Number(tableEdgeDistance.toFixed(3))
+              : null,
+            bodySideDistance: Number.isFinite(bodySideDistance)
+              ? Number(bodySideDistance.toFixed(3))
+              : null,
+            verticalDrop: Number.isFinite(verticalDrop)
+              ? Number(verticalDrop.toFixed(3))
               : null,
           };
         });

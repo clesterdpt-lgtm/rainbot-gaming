@@ -34,7 +34,8 @@ Replace the abrupt overlay used after a physical catch with a complete first-per
 ## Acceptance criteria
 
 - [x] A physical `witnessed`, `recorded`, or `feast-hunt-eliminated` catch starts the banquet tableau before the game-over overlay, while non-catch eliminations retain their immediate overlay. — test: `scripts/test-mr-feast-banquet-loss.mjs::catch routing`
-- [x] The locked first-person camera lies along the Dining Room table, frames Mr. Feast at the far end, suppresses movement/HUD controls, and remains stable through the complete line. — test: `scripts/test-mr-feast-banquet-loss.mjs::table viewpoint`
+- [x] The first-person camera begins face-up toward the Dining Room ceiling from a fixed lying position, then accepts mouse and touch look so the player can inspect both Patron rows and Mr. Feast while movement/HUD controls remain suppressed. — test: `scripts/test-mr-feast-banquet-loss.mjs::lying free-look viewpoint`
+- [x] The banquet remains explorable for at least 20 seconds before the recovery overlay appears, including time before and after Mr. Feast's complete closing line. — test: `scripts/test-mr-feast-banquet-loss.mjs::extended look window`
 - [x] Six visible seated Patrons surround the table, reuse one rigged formal body source, face the player, and each reports a distinct mask id/runtime file. — test: `scripts/test-mr-feast-banquet-loss.mjs::patron tableau`
 - [x] The checked-in banquet manifest records one Meshy body task, rigging provenance, three or fewer Meshy mask source tasks, six Blender-finished unique mask variants, bounds, forward axes, and runtime file budgets. — test: `scripts/test-mr-feast-banquet-loss.mjs::asset provenance`
 - [x] The loss-only table dressing identifies `CONTESTANT 13 — MAIN COURSE` and uses the existing Dining Room/table without changing gameplay colliders or normal visibility. — test: `scripts/test-mr-feast-banquet-loss.mjs::ritual dressing`
@@ -57,6 +58,7 @@ Create `scripts/test-mr-feast-banquet-loss.mjs` before implementation and confir
 - Banquet GLBs stay deferred during ordinary exploration and load only after a physical catch. The focused test proves `assetStatus: "idle"` before capture, then waits for the real loss route to load and reveal the tableau.
 - Runtime/test syntax, renovation invariants, focused banquet loss, caught pursuit, pursuit/evasion, full Feast Hunt, and full desktop/mobile Contestant 13 pass. Focused browser console capture is clean.
 - Inspected visual proof is `output/playwright/mr-feast-banquet-loss/banquet-table-desktop.png`, `banquet-closing-line-desktop.png`, and `banquet-table-phone.png`.
+- The face-up/free-look refinement failed red first with `focused banquet QA controls must include deterministic free look`. The green browser pass starts at a `1.32rad` ceiling pitch, preserves unlimited horizontal mouse look plus bounded touch pitch from `-0.18` to `1.42rad`, proves a real phone drag, captures both Patron rows, and delays recovery until `24s`. New proof is `banquet-ceiling-reveal-desktop.png`, `banquet-look-left-desktop.png`, and `banquet-look-right-desktop.png`.
 
 ## Notes
 

@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-banquet-loss-curtain-light-response-2";
+  const MANSION_RUNTIME_VERSION = "20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-banquet-loss-curtain-light-response-banquet-free-look-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -219,6 +219,7 @@
     gatheredWidthRatio: 0.23,
     foldsPerPanel: 10,
     closeSpeed: 5.8,
+    litFabricResponse: 0.12,
     panelBottomLift: 0.055,
     rodLift: 0.17,
     excludedKinds: Object.freeze([]),
@@ -2781,9 +2782,9 @@
     placeCard: "CONTESTANT 13 — MAIN COURSE",
     closingLine: "Contestant Thirteen—you lost the million, but you still made the final cut. Our patrons call it sacrifice. The Guest calls it supper. I call it a feast.",
     revealSeconds: 1.15,
-    closingLineAtSeconds: 1.35,
-    closingLineSeconds: 7.25,
-    overlayAtSeconds: 9.1,
+    closingLineAtSeconds: 5,
+    closingLineSeconds: 9.5,
+    overlayAtSeconds: 24,
     maximumTimerStepSeconds: 0.25,
     camera: Object.freeze({
       x: -6.98,
@@ -2791,6 +2792,10 @@
       z: -8.4,
       yaw: Math.PI / 2,
       pitch: 0.045,
+      initialYaw: Math.PI / 2,
+      initialPitch: 1.32,
+      minimumPitch: -0.18,
+      maximumPitch: 1.42,
       room: "DINING ROOM",
     }),
     hostMark: Object.freeze({
@@ -13601,7 +13606,17 @@
         `windowCurtainPanel-${WINDOW_CURTAINS.foldsPerPanel}`,
         () => createCurtainPanelGeometry(WINDOW_CURTAINS.foldsPerPanel),
       );
-      this.damaskPanels = new THREE.InstancedMesh(panelGeometry, M.curtainDamask, 2);
+      // Each installation shares the same texture but owns a tiny material
+      // instance so its visibility lift can follow that room's actual circuit.
+      // An unlit room always drives the lift to zero.
+      this.damaskMaterial = M.curtainDamask.clone();
+      this.damaskMaterial.name = `${this.id}-circuit-responsive-damask`;
+      this.damaskMaterial.emissiveMap = M.curtainDamask.map;
+      this.damaskMaterial.emissive.setHex(0x54101d);
+      this.damaskMaterial.emissiveIntensity = 0;
+      this.lightCircuitNames = [...(ROOM_LIGHTING[this.room] || [])];
+      this.fabricLightLift = 0;
+      this.damaskPanels = new THREE.InstancedMesh(panelGeometry, this.damaskMaterial, 2);
       this.damaskPanels.name = `${this.id}-curtain-damask-panels`;
       this.damaskPanels.castShadow = false;
       this.damaskPanels.receiveShadow = true;
@@ -13796,6 +13811,15 @@
       }
     }
 
+    syncFabricLightResponse() {
+      const roomCircuitOn = this.lightCircuitNames.some((circuitName) => (
+        circuits.some((circuit) => circuit.name === circuitName && circuit.on)
+      ));
+      this.fabricLightLift = roomCircuitOn ? WINDOW_CURTAINS.litFabricResponse : 0;
+      this.damaskMaterial.emissiveIntensity = this.fabricLightLift;
+      this.damaskMaterial.needsUpdate = true;
+    }
+
     visualBounds() {
       const along = this.width + 0.7;
       const minY = this.floorY + this.windowBottom - 0.08;
@@ -13836,6 +13860,8 @@
         wall: this.wall,
         room: this.room,
         floor: this.floorLabel,
+        lightCircuits: [...this.lightCircuitNames],
+        fabricLightLift: Number(this.fabricLightLift.toFixed(3)),
         interactive: this.interactive,
         active: Boolean(this.hidingSpot && state.activeHideSpot === this.hidingSpot),
         openness: Number(this.openness.toFixed(3)),
@@ -15176,6 +15202,8 @@
       this.locationSnapshot = null;
       this.contestantVisibilitySnapshot = null;
       this.qaAdvanceSeconds = 0;
+      this.lookYaw = BANQUET_LOSS.camera.initialYaw;
+      this.lookPitch = BANQUET_LOSS.camera.initialPitch;
       this.maskPosition = new THREE.Vector3();
       this.forward = new THREE.Vector3();
       this.projected = new THREE.Vector3();
@@ -15535,8 +15563,11 @@
       };
       state.currentFloor = "MAIN LEVEL";
       state.currentRoom = "DINING ROOM";
+      this.lookYaw = BANQUET_LOSS.camera.initialYaw;
+      this.lookPitch = BANQUET_LOSS.camera.initialPitch;
       state.banquetLoss.triggerReason = details.reason || state.banquetLoss.triggerReason;
       if (dom.stage) dom.stage.dataset.banquetLoss = "active";
+      if (dom.stage) dom.stage.dataset.banquetLook = "active";
       if (dom.gameOver) dom.gameOver.hidden = true;
       speechSystem?.dismiss();
       clearMovementInput();
@@ -15557,11 +15588,43 @@
         BANQUET_LOSS.camera.y,
         BANQUET_LOSS.camera.z,
       );
-      camera.rotation.y = BANQUET_LOSS.camera.yaw;
-      camera.rotation.x = BANQUET_LOSS.camera.pitch;
+      camera.rotation.y = this.lookYaw;
+      camera.rotation.x = this.lookPitch;
       camera.rotation.z = 0;
       camera.updateMatrixWorld(true);
       return true;
+    }
+
+    allowsLook() {
+      return Boolean(
+        this.active()
+        && !this.overlayVisible
+        && dom.gameOver?.hidden,
+      );
+    }
+
+    setLook(yaw, pitch) {
+      if (!this.allowsLook()) return false;
+      if (Number.isFinite(Number(yaw))) {
+        this.lookYaw = Math.atan2(Math.sin(Number(yaw)), Math.cos(Number(yaw)));
+      }
+      if (Number.isFinite(Number(pitch))) {
+        this.lookPitch = clamp(
+          Number(pitch),
+          BANQUET_LOSS.camera.minimumPitch,
+          BANQUET_LOSS.camera.maximumPitch,
+        );
+      }
+      this.applyCameraOverride();
+      this.syncState();
+      return true;
+    }
+
+    adjustLook(deltaYaw, deltaPitch) {
+      return this.setLook(
+        this.lookYaw + (Number(deltaYaw) || 0),
+        this.lookPitch + (Number(deltaPitch) || 0),
+      );
     }
 
     updatePatrons() {
@@ -15601,6 +15664,7 @@
       if (!this.overlayVisible && this.elapsed >= BANQUET_LOSS.overlayAtSeconds) {
         this.phase = "complete";
         this.overlayVisible = true;
+        if (dom.stage) dom.stage.dataset.banquetLook = "inactive";
         presentMansionGameOverOverlay();
       }
       this.syncState();
@@ -15613,6 +15677,7 @@
     restorePresentation() {
       this.root.visible = false;
       if (dom.stage) dom.stage.dataset.banquetLoss = "inactive";
+      if (dom.stage) dom.stage.dataset.banquetLook = "inactive";
       if (mrFeastNpc?.challengeMode === "banquet-loss") mrFeastNpc.releaseChallenge();
       if (this.contestantVisibilitySnapshot) {
         for (const snapshot of this.contestantVisibilitySnapshot) {
@@ -15648,6 +15713,8 @@
       this.pendingDetails = null;
       this.closingSpoken = false;
       this.overlayVisible = false;
+      this.lookYaw = BANQUET_LOSS.camera.initialYaw;
+      this.lookPitch = BANQUET_LOSS.camera.initialPitch;
       Object.assign(state.banquetLoss, {
         phase: "inactive",
         elapsed: 0,
@@ -15671,6 +15738,12 @@
       }
       this.qaAdvanceSeconds += elapsed;
       this.applyCameraOverride();
+      return this.getDiagnostics();
+    }
+
+    setLookForQA(options = {}) {
+      if (!state.qa || !this.allowsLook()) return this.getDiagnostics();
+      this.setLook(options.yaw, options.pitch);
       return this.getDiagnostics();
     }
 
@@ -15744,6 +15817,9 @@
         camera: {
           mode: "first-person-table",
           locked: this.active(),
+          positionLocked: this.active(),
+          lookEnabled: this.allowsLook(),
+          ceilingFacing: this.lookPitch >= 1.2,
           room: BANQUET_LOSS.camera.room,
           movementSuppressed: Boolean(state.gameOver),
           position: {
@@ -15751,8 +15827,10 @@
             y: BANQUET_LOSS.camera.y,
             z: BANQUET_LOSS.camera.z,
           },
-          yaw: BANQUET_LOSS.camera.yaw,
-          pitch: BANQUET_LOSS.camera.pitch,
+          yaw: Number(this.lookYaw.toFixed(4)),
+          pitch: Number(this.lookPitch.toFixed(4)),
+          minimumPitch: BANQUET_LOSS.camera.minimumPitch,
+          maximumPitch: BANQUET_LOSS.camera.maximumPitch,
         },
         host: {
           visible: Boolean(this.root.visible && mrFeastNpc?.root?.visible),
@@ -15785,6 +15863,7 @@
         closingSpoken: this.closingSpoken,
         speech: speechSystem?.getDiagnostics() || null,
         overlayVisible: Boolean(dom.gameOver && !dom.gameOver.hidden),
+        presentationDurationSeconds: BANQUET_LOSS.overlayAtSeconds,
         recovery: {
           loadLabel: dom.gameOverLoad?.textContent || null,
           restartLabel: dom.gameOverRestart?.textContent || null,
@@ -20888,14 +20967,15 @@
       room: state.currentRoom,
       presentation: banquetEligible ? "banquet" : "immediate",
     };
-    releasePointerLock();
     if (banquetEligible && banquetLossSystem?.start(state.gameOver)) return state.gameOver;
+    releasePointerLock();
     presentMansionGameOverOverlay();
     return state.gameOver;
   }
 
   function presentMansionGameOverOverlay() {
     if (!state.gameOver) return null;
+    releasePointerLock();
     const feastSaysElimination = ["feast-says-eliminated", "feast-says-no-show"].includes(state.gameOver.reason);
     const stormRunElimination = ["storm-run-eliminated", "storm-run-no-show"].includes(state.gameOver.reason);
     const feastHuntElimination = ["feast-hunt-eliminated", "feast-hunt-no-show", "feast-hunt-juniper-won"].includes(state.gameOver.reason);
@@ -31652,12 +31732,13 @@
   }
 
   function requestPointerLock() {
+    const banquetLookEnabled = Boolean(state.gameOver && banquetLossSystem?.allowsLook());
     if (
       !state.started
       || state.journalOpen
       || state.menuOpen
       || state.workroom.keypadOpen
-      || state.gameOver
+      || (state.gameOver && !banquetLookEnabled)
       || matchMedia("(pointer: coarse)").matches
     ) return false;
     if (!dom.canvas) return false;
@@ -32632,22 +32713,31 @@
     });
     document.addEventListener("mousemove", (event) => {
       if (!state.pointerLocked) return;
+      const banquetLookEnabled = Boolean(state.gameOver && banquetLossSystem?.allowsLook());
       // Keep the cursor hidden while reading, but freeze look so the page stays readable.
       if (
         state.readableBooks.open
         || state.menuOpen
         || state.journalOpen
         || state.workroom.keypadOpen
-        || state.gameOver
+        || (state.gameOver && !banquetLookEnabled)
         || (feastSaysSystem?.isPlaying() && !feastSaysSystem.allowsLook())
         || stormRunSystem?.locksPlayerMovement()
         || feastHuntSystem?.locksPlayerMovement()
       ) return;
+      if (banquetLookEnabled) {
+        banquetLossSystem.adjustLook(
+          -event.movementX * 0.00205,
+          -event.movementY * 0.00185,
+        );
+        return;
+      }
       state.yaw -= event.movementX * 0.00205;
       state.pitch = clamp(state.pitch - event.movementY * 0.00185, -1.35, 1.35);
     });
     dom.canvas.addEventListener("click", () => {
       if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open) return;
+      if (state.pointerLocked && banquetLossSystem?.allowsLook()) return;
       if (state.pointerLocked) activateCurrentInteraction();
       else requestPointerLock();
     });
@@ -32789,6 +32879,7 @@
       if (
         event.pointerType !== "touch"
         || event.clientX < innerWidth * 0.38
+        || (state.gameOver && !banquetLossSystem?.allowsLook())
         || (feastSaysSystem?.isPlaying() && !feastSaysSystem.allowsLook())
         || stormRunSystem?.locksPlayerMovement()
         || feastHuntSystem?.locksPlayerMovement()
@@ -32796,20 +32887,31 @@
       input.touchLookId = event.pointerId;
       input.touchLookX = event.clientX;
       input.touchLookY = event.clientY;
-      dom.canvas.setPointerCapture(event.pointerId);
+      try {
+        dom.canvas.setPointerCapture(event.pointerId);
+      } catch {
+        // Deterministic QA dispatches can provide a valid synthetic touch id.
+      }
     });
     dom.canvas.addEventListener("pointermove", (event) => {
       if (event.pointerId !== input.touchLookId) return;
       if (
-        (feastSaysSystem?.isPlaying() && !feastSaysSystem.allowsLook())
+        (state.gameOver && !banquetLossSystem?.allowsLook())
+        || (feastSaysSystem?.isPlaying() && !feastSaysSystem.allowsLook())
         || stormRunSystem?.locksPlayerMovement()
         || feastHuntSystem?.locksPlayerMovement()
       ) {
         input.touchLookId = null;
         return;
       }
-      state.yaw -= (event.clientX - input.touchLookX) * 0.005;
-      state.pitch = clamp(state.pitch - (event.clientY - input.touchLookY) * 0.004, -1.3, 1.3);
+      const deltaYaw = -(event.clientX - input.touchLookX) * 0.005;
+      const deltaPitch = -(event.clientY - input.touchLookY) * 0.004;
+      if (banquetLossSystem?.allowsLook()) {
+        banquetLossSystem.adjustLook(deltaYaw, deltaPitch);
+      } else {
+        state.yaw += deltaYaw;
+        state.pitch = clamp(state.pitch + deltaPitch, -1.3, 1.3);
+      }
       input.touchLookX = event.clientX;
       input.touchLookY = event.clientY;
     });
@@ -33362,6 +33464,7 @@
       light.visible = renderContext !== "grounds";
       light.intensity = light.visible && !allCircuitsOff && interactionVisible ? light.userData.baseIntensity : 0;
     }
+    for (const curtain of windowCurtains) curtain.syncFabricLightResponse();
     syncMobileShaderPadding();
     // Shadow caching is static between interactions. A newly visible upper
     // closet or floor-local chandelier therefore requests exactly one refresh
@@ -33965,6 +34068,12 @@
         emissiveIntensity: M?.curtainDamask?.emissiveMap || M?.curtainDamask?.emissive?.getHex()
           ? Number(M?.curtainDamask?.emissiveIntensity || 0)
           : 0,
+        circuitResponsive: windowCurtains.every((curtain) => (
+          curtain.damaskMaterial?.emissiveMap === M?.curtainDamask?.map
+          && curtain.lightCircuitNames.length > 0
+        )),
+        litFabricResponse: WINDOW_CURTAINS.litFabricResponse,
+        activeResponseCount: windowCurtains.filter((curtain) => curtain.fabricLightLift > 0).length,
         shaderLightsAdded: 0,
       },
       installations: windowCurtains.map((curtain) => curtain.getDiagnostics()),
@@ -34664,6 +34773,9 @@
     };
     window.MrFeastFresh.advanceBanquetLossForQA = (seconds) => (
       banquetLossSystem?.advanceForQA(seconds) || null
+    );
+    window.MrFeastFresh.setBanquetLookForQA = (options) => (
+      banquetLossSystem?.setLookForQA(options) || null
     );
     window.MrFeastFresh.clearBanquetLossForQA = () => {
       if (!state.qa) return null;

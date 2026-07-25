@@ -68,9 +68,16 @@ async function assertSourceContract() {
   assert(/banquetLoss:\s*\{/.test(runtime), "authoritative state must own the banquet loss");
   assert(/caughtReasons:[\s\S]{0,220}?witnessed[\s\S]{0,220}?recorded[\s\S]{0,220}?feast-hunt-eliminated/.test(runtime), "physical catch reasons are not explicitly routed");
   assert(/banquetLossSystem\?\.start/.test(runtime), "physical game over does not route into the banquet system");
-  assert(/getBanquetLossState/.test(runtime) && /triggerBanquetLossForQA/.test(runtime) && /advanceBanquetLossForQA/.test(runtime), "focused banquet QA controls are missing");
+  assert(
+    /getBanquetLossState/.test(runtime)
+      && /triggerBanquetLossForQA/.test(runtime)
+      && /advanceBanquetLossForQA/.test(runtime)
+      && /setBanquetLookForQA/.test(runtime),
+    "focused banquet QA controls must include deterministic free look",
+  );
+  assert(/overlayAtSeconds:\s*(?:2[0-9]|[3-9][0-9])/.test(runtime), "the banquet must hold for at least 20 seconds");
   assert(runtime.includes(closingLine), "Mr. Feast's complete authored closing line is missing");
-  assert(/data-banquet-loss/.test(html), "the stage needs a banquet-loss presentation state");
+  assert(/data-banquet-loss/.test(html) && /mansion-banquet-look-hint/.test(html), "the stage needs banquet presentation and look-hint states");
   assert(/user playtest/i.test(milestone), "Milestone 64 must retain visual user playtest acceptance");
 }
 
@@ -127,12 +134,28 @@ async function run() {
     assert(
       banquet.phase === "revealing"
         && banquet.camera.mode === "first-person-table"
-        && banquet.camera.locked
+        && banquet.camera.positionLocked
+        && banquet.camera.lookEnabled
+        && banquet.camera.ceilingFacing
+        && banquet.camera.pitch >= 1.2
         && banquet.camera.room === "DINING ROOM"
         && banquet.camera.movementSuppressed,
-      `catch must lock the table viewpoint before recovery UI: ${JSON.stringify(banquet.camera)}`,
+      `catch must begin lying face-up while preserving free look: ${JSON.stringify(banquet.camera)}`,
     );
+    assert(banquet.presentationDurationSeconds >= 20, `the banquet needs a long look window: ${JSON.stringify(banquet)}`);
     assert(!banquet.overlayVisible, "the game-over overlay must not cover the establishing tableau");
+    await desktop.screenshot({ path: path.join(artifactDir, "banquet-ceiling-reveal-desktop.png") });
+
+    const tableLook = await desktop.evaluate(() => window.MrFeastFresh.setBanquetLookForQA({
+      yaw: Math.PI / 2,
+      pitch: 0.045,
+    }));
+    assert(
+      tableLook?.camera?.pitch < 0.1
+        && tableLook.camera.lookEnabled,
+      `free look must rotate away from the ceiling without moving the player: ${JSON.stringify(tableLook?.camera)}`,
+    );
+    banquet = await readState(desktop);
     assert(
       banquet.patrons.length === 6
         && banquet.patrons.every((entry) => entry.visible && entry.seated && entry.facingPlayer)
@@ -150,7 +173,22 @@ async function run() {
     );
     await desktop.screenshot({ path: path.join(artifactDir, "banquet-table-desktop.png") });
 
-    await desktop.evaluate(() => window.MrFeastFresh.advanceBanquetLossForQA(2));
+    const leftLook = await desktop.evaluate(() => window.MrFeastFresh.setBanquetLookForQA({
+      yaw: Math.PI / 2 - 0.38,
+      pitch: 0.02,
+    }));
+    assert(leftLook.patrons.filter((entry) => entry.inView).length >= 2, `left look should reveal its Patron row: ${JSON.stringify(leftLook.patrons)}`);
+    await desktop.screenshot({ path: path.join(artifactDir, "banquet-look-left-desktop.png") });
+    const rightLook = await desktop.evaluate(() => window.MrFeastFresh.setBanquetLookForQA({
+      yaw: Math.PI / 2 + 0.38,
+      pitch: 0.02,
+    }));
+    assert(rightLook.patrons.filter((entry) => entry.inView).length >= 2, `right look should reveal its Patron row: ${JSON.stringify(rightLook.patrons)}`);
+    await desktop.screenshot({ path: path.join(artifactDir, "banquet-look-right-desktop.png") });
+    await desktop.evaluate(() => {
+      window.MrFeastFresh.setBanquetLookForQA({ yaw: Math.PI / 2, pitch: 0.045 });
+      window.MrFeastFresh.advanceBanquetLossForQA(5);
+    });
     banquet = await readState(desktop);
     assert(
       banquet.phase === "closing-line"
@@ -161,7 +199,7 @@ async function run() {
     );
     await desktop.screenshot({ path: path.join(artifactDir, "banquet-closing-line-desktop.png") });
 
-    await desktop.evaluate(() => window.MrFeastFresh.advanceBanquetLossForQA(9));
+    await desktop.evaluate(() => window.MrFeastFresh.advanceBanquetLossForQA(20));
     banquet = await readState(desktop);
     assert(
       banquet.phase === "complete"
@@ -186,8 +224,40 @@ async function run() {
       null,
       { timeout: 180000 },
     );
-    const phoneState = await readState(phone);
-    assert(phoneState.camera.locked && phoneState.host.visible && phoneState.patrons.filter((entry) => entry.inView).length >= 4, `phone framing must retain the host and at least four masks: ${JSON.stringify(phoneState)}`);
+    let phoneState = await readState(phone);
+    assert(phoneState.camera.ceilingFacing && phoneState.camera.lookEnabled, `phone must begin face-up with touch look enabled: ${JSON.stringify(phoneState.camera)}`);
+    await phone.evaluate(() => {
+      const canvas = document.getElementById("mansion-canvas");
+      canvas.dispatchEvent(new PointerEvent("pointerdown", {
+        bubbles: true,
+        pointerId: 73,
+        pointerType: "touch",
+        clientX: 320,
+        clientY: 220,
+      }));
+      canvas.dispatchEvent(new PointerEvent("pointermove", {
+        bubbles: true,
+        pointerId: 73,
+        pointerType: "touch",
+        clientX: 320,
+        clientY: 540,
+      }));
+      canvas.dispatchEvent(new PointerEvent("pointerup", {
+        bubbles: true,
+        pointerId: 73,
+        pointerType: "touch",
+        clientX: 320,
+        clientY: 540,
+      }));
+    });
+    phoneState = await readState(phone);
+    assert(
+      phoneState.camera.lookEnabled
+        && phoneState.camera.pitch <= 0.08
+        && phoneState.host.visible
+        && phoneState.patrons.filter((entry) => entry.inView).length >= 4,
+      `real phone drag must look down to the host and at least four masks: ${JSON.stringify(phoneState)}`,
+    );
     await phone.screenshot({ path: path.join(artifactDir, "banquet-table-phone.png") });
     await phone.close();
 

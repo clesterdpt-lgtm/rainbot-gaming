@@ -277,7 +277,7 @@ async function run() {
     const frozenAfter = await page.evaluate(() => JSON.parse(window.render_game_to_text()).mrFeast.position);
     assert(frozenBefore.x === frozenAfter.x && frozenBefore.z === frozenAfter.z, `the simulation should freeze during game over; got ${JSON.stringify({ frozenBefore, frozenAfter })}`);
 
-    await page.evaluate(() => window.MrFeastFresh.advanceBanquetLossForQA(10));
+    await page.evaluate(() => window.MrFeastFresh.advanceBanquetLossForQA(25));
     overlay = await page.evaluate(() => {
       const element = document.getElementById("mansion-gameover");
       return { hidden: element.hidden, title: element.querySelector("#mansion-gameover-title")?.textContent || "", loadDisabled: document.getElementById("mansion-gameover-load")?.disabled };
@@ -391,7 +391,7 @@ async function run() {
       null,
       { timeout: 180000 },
     );
-    await mobile.evaluate(() => window.MrFeastFresh.advanceBanquetLossForQA(10));
+    await mobile.evaluate(() => window.MrFeastFresh.advanceBanquetLossForQA(25));
     const mobileOverlay = await mobile.evaluate(() => {
       const element = document.getElementById("mansion-gameover");
       const rect = element.querySelector(".mansion-menu__panel").getBoundingClientRect();

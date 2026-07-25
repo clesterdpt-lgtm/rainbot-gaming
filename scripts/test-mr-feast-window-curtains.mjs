@@ -231,6 +231,8 @@ async function run() {
     assert(curtains.material.textureName === "window-curtain-woven-damask" && curtains.material.sharedTextureCount === 1, `curtains should share one woven damask texture: ${JSON.stringify(curtains.material)}`);
     assert(curtains.material.doubleSided && curtains.material.lined && !curtains.material.castsShadow, `curtain fabric contract is wrong: ${JSON.stringify(curtains.material)}`);
     assert(!curtains.material.emissiveMap && curtains.material.emissiveIntensity === 0, `curtains must receive switched room light without self-illumination: ${JSON.stringify(curtains.material)}`);
+    assert(curtains.material.circuitResponsive && curtains.material.litFabricResponse > 0 && curtains.material.litFabricResponse <= 0.16, `curtain visibility lift must be subtle and owned by each room circuit: ${JSON.stringify(curtains.material)}`);
+    assert(curtains.material.activeResponseCount === EXPECTED_CURTAIN_COUNT, `all lit-room curtain materials should carry the subtle circuit response: ${JSON.stringify(curtains.material)}`);
     assert(curtains.installations.every((entry) => entry.geometry.folds >= 8 && entry.geometry.rings >= 8 && entry.geometry.finials === 2 && entry.geometry.tiebacks === 2), `curtain hardware/folds are incomplete: ${JSON.stringify(curtains.installations)}`);
     assert(curtains.installations.every((entry) => entry.clearance.visualOverlaps.length === 0 && entry.clearance.egressOverlaps.length === 0), `curtains must not overlap props or their exit pockets: ${JSON.stringify(curtains.installations.map((entry) => ({ id: entry.id, clearance: entry.clearance })))}`);
     assert(curtains.installations.some((entry) => entry.crackSide === "left") && curtains.installations.some((entry) => entry.crackSide === "right"), "both left and right viewing cracks must be authored");
@@ -246,7 +248,9 @@ async function run() {
     });
     const darkCurtainLuminance = await captureCurtainLuminance(page, "east-wall-curtain-lights-off-desktop.png");
     const darkLighting = await page.evaluate(() => JSON.parse(window.render_game_to_text()).lighting);
+    const darkCurtains = await curtainState(page);
     assert(darkLighting.allOff && darkLighting.activeLocalLights === 0, `curtain blackout comparison needs every room circuit off: ${JSON.stringify(darkLighting)}`);
+    assert(darkCurtains.material.activeResponseCount === 0 && darkCurtains.installations.every((entry) => entry.fabricLightLift === 0), `every curtain visibility lift must extinguish with its room circuit: ${JSON.stringify(darkCurtains.material)}`);
     assert(darkCurtainLuminance <= litCurtainLuminance * 0.72, `curtains should become materially darker with room lights off: lit=${litCurtainLuminance.toFixed(1)} dark=${darkCurtainLuminance.toFixed(1)}`);
     await page.evaluate(() => {
       window.MrFeastFresh.turnOnAllLights();

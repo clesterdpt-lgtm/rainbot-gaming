@@ -28418,11 +28418,15 @@
     for (const [index, offset] of [0.005, 0.017].entries()) {
       box({ name: "library-letter-stack", w: 0.17, h: 0.008, d: 0.115, x: -10.18, y: tableTop + offset, z: 5.5, rotationY: 0.32 + index * 0.24, material: M.canvasLinen, cast: false });
     }
+    // Keep the bar set centered on the drinks cabinet top (shifted east of the
+    // west-wall bookshelves so open leaves no longer clip the nearest case).
     const cabinetTop = FLOOR.MAIN + 1.73;
-    sphere({ name: "library-decanter-body", radius: 0.085, x: -13.9, y: cabinetTop + 0.085, z: 3.6, material: M.wineRed, cast: false });
-    cylinder({ name: "library-decanter-neck", radius: 0.022, height: 0.11, segments: 10, x: -13.9, y: cabinetTop + 0.2, z: 3.6, material: M.glass, cast: false });
+    const drinksCabinetX = -13.35;
+    const drinksCabinetZ = 3.55;
+    sphere({ name: "library-decanter-body", radius: 0.085, x: drinksCabinetX, y: cabinetTop + 0.085, z: drinksCabinetZ - 0.15, material: M.wineRed, cast: false });
+    cylinder({ name: "library-decanter-neck", radius: 0.022, height: 0.11, segments: 10, x: drinksCabinetX, y: cabinetTop + 0.2, z: drinksCabinetZ - 0.15, material: M.glass, cast: false });
     for (const side of [-1, 1]) {
-      cylinder({ name: "library-tumbler", radius: 0.032, height: 0.075, segments: 10, x: -13.9 + side * 0.22, y: cabinetTop + 0.038, z: 3.85, material: M.glass, cast: false });
+      cylinder({ name: "library-tumbler", radius: 0.032, height: 0.075, segments: 10, x: drinksCabinetX + side * 0.22, y: cabinetTop + 0.038, z: drinksCabinetZ + 0.1, material: M.glass, cast: false });
     }
   }
 
@@ -28719,7 +28723,9 @@
       seatTag: "library-writing-chair",
       exitLocal: { x: 0.95, y: 0, z: 0.2 },
     });
-    new Cabinet({ name: "library drinks cabinet", x: -13.9, z: 3.75, floorY: FLOOR.MAIN, width: 1.5, height: 1.72, rotationY: 0, stockKind: "barware", interiorLight: false });
+    // Nudge east/south of the nearest west-wall bookcase so the open left leaf
+    // clears the case instead of swinging through its south end.
+    new Cabinet({ name: "library drinks cabinet", x: -13.35, z: 3.55, floorY: FLOOR.MAIN, width: 1.5, height: 1.72, rotationY: 0, stockKind: "barware", interiorLight: false });
     addLibraryWritingSet();
 
     // Music room — the sofa is deliberately aimed at the grand piano.

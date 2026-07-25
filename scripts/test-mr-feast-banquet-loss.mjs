@@ -16,6 +16,54 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+async function readGlbJson(filePath) {
+  const buffer = await readFile(filePath);
+  assert(buffer.length >= 20, `${path.basename(filePath)} is too small to contain a GLB header`);
+  assert(buffer.readUInt32LE(0) === 0x46546c67, `${path.basename(filePath)} is not a binary glTF file`);
+  assert(buffer.readUInt32LE(4) === 2, `${path.basename(filePath)} must use glTF 2.0`);
+  assert(buffer.readUInt32LE(8) === buffer.length, `${path.basename(filePath)} has an invalid GLB byte length`);
+  const jsonChunkLength = buffer.readUInt32LE(12);
+  assert(buffer.readUInt32LE(16) === 0x4e4f534a, `${path.basename(filePath)} is missing its leading JSON chunk`);
+  assert(20 + jsonChunkLength <= buffer.length, `${path.basename(filePath)} has a truncated JSON chunk`);
+  return JSON.parse(buffer.subarray(20, 20 + jsonChunkLength).toString("utf8").trimEnd());
+}
+
+function assertExactNames(actualNames, expectedNames, label) {
+  const actual = actualNames.slice().sort();
+  const expected = expectedNames.slice().sort();
+  assert(
+    actual.length === expected.length && actual.every((name, index) => name === expected[index]),
+    `${label} must be exactly ${expected.join(", ")}; found ${actual.join(", ") || "none"}`,
+  );
+}
+
+function assertCenteredHorizontalBounds(label, manifestSize, reportBounds) {
+  const minimum = reportBounds?.min;
+  const maximum = reportBounds?.max;
+  const reportSize = reportBounds?.size;
+  assert(
+    [manifestSize, minimum, maximum, reportSize].every(
+      (values) => Array.isArray(values) && values.length === 3 && values.every(Number.isFinite),
+    ),
+    `${label} needs finite three-axis manifest and report bounds`,
+  );
+  reportSize.forEach((size, axis) => {
+    assert(size > 0, `${label} axis ${axis} must have positive extent`);
+    assert(
+      Math.abs(size - manifestSize[axis]) <= 0.002,
+      `${label} manifest/report bounds disagree on axis ${axis}: ${manifestSize[axis]} vs ${size}`,
+    );
+  });
+  for (const axis of [0, 2]) {
+    const centerOffset = Math.abs((minimum[axis] + maximum[axis]) / 2);
+    const allowedOffset = Math.max(0.01, reportSize[axis] * 0.08);
+    assert(
+      centerOffset <= allowedOffset,
+      `${label} axis ${axis} is offset ${centerOffset.toFixed(3)}m from its runtime mark (allowed ${allowedOffset.toFixed(3)}m): ${JSON.stringify(reportBounds)}`,
+    );
+  }
+}
+
 async function serverResponds() {
   try {
     return (await fetch(`${baseUrl}/games/mr-feast-mansion.html`, { cache: "no-store" })).ok;
@@ -83,6 +131,7 @@ async function assertSourceContract() {
 
 async function assertAssetContract() {
   const manifestPath = path.join(root, "assets", "models", "mr-feast", "banquet", "manifest.json");
+  const manifestDir = path.dirname(manifestPath);
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   assert(manifest.version === 1, `unexpected banquet manifest version: ${manifest.version}`);
   assert(manifest.body?.rigged === true && manifest.body?.meshy?.rigTaskId, `shared body must retain rigging provenance: ${JSON.stringify(manifest.body)}`);
@@ -92,13 +141,115 @@ async function assertAssetContract() {
   assert(new Set(manifest.masks.map((entry) => entry.runtimeFile)).size === 6, "mask runtime files must be unique");
   assert(new Set(manifest.masks.map((entry) => entry.meshy?.sourceTaskId)).size <= 3, "credit budget allows no more than three Meshy mask source tasks");
   assert(manifest.masks.every((entry) => entry.blenderVariant && entry.boundsMeters && entry.forwardAxis), `every mask needs Blender/proportion metadata: ${JSON.stringify(manifest.masks)}`);
+  assert(
+    manifest.victim?.sourceCount === 1
+      && manifest.victim?.riggedSource === true
+      && manifest.victim?.meshy?.generationMode === "image-to-3d"
+      && manifest.victim?.meshy?.generationTaskId
+      && manifest.victim?.meshy?.rigTaskId,
+    `the victim torso and limbs must derive from one selected Meshy image-to-3D and rigged underwear body: ${JSON.stringify(manifest.victim)}`,
+  );
+  assert(
+    manifest.victim?.underwear === true
+      && manifest.victim?.limbCount === 4
+      && manifest.victim?.sealedSurgicalCaps === 4
+      && manifest.victim?.explicitGore === false
+      && manifest.victim?.torso?.runtimeFile
+      && manifest.victim?.limbs?.runtimeFile
+      && manifest.victim?.torso?.boundsMeters
+      && manifest.victim?.limbs?.boundsMeters
+      && manifest.victim?.torso?.blenderReport
+      && manifest.victim?.limbs?.blenderReport
+      && manifest.victim?.torso?.visibleMeshyDerivedCore === true
+      && manifest.victim?.limbs?.visibleMeshyDerivedCore === true,
+    `victim outputs need non-gory Blender separation metadata: ${JSON.stringify(manifest.victim)}`,
+  );
+  assert(
+    manifest.victim.meshy.selectedSourceCredits === 35
+      && manifest.victim.meshy.rejectedAttempt?.consumedCredits === 40
+      && manifest.victim.meshy.consumedCredits === 75
+      && manifest.creditStrategy.victimSelectedSourceCredits === 35
+      && manifest.creditStrategy.victimRejectedAttemptCredits === 40
+      && manifest.creditStrategy.estimatedConsumedCredits <= 200
+      && manifest.victim.torso.runtimeFile !== manifest.victim.limbs.runtimeFile,
+    `the selected one-source victim pipeline and rejected retry must retain truthful Meshy credit provenance: ${JSON.stringify({ victim: manifest.victim, credits: manifest.creditStrategy })}`,
+  );
 
-  const files = [manifest.body.runtimeFile, ...manifest.masks.map((entry) => entry.runtimeFile)];
+  const files = [
+    manifest.body.runtimeFile,
+    ...manifest.masks.map((entry) => entry.runtimeFile),
+    manifest.victim.torso.runtimeFile,
+    manifest.victim.limbs.runtimeFile,
+  ];
   for (const file of files) {
-    const fileStat = await stat(path.join(path.dirname(manifestPath), file));
+    const fileStat = await stat(path.join(manifestDir, file));
     assert(fileStat.size > 1024, `${file} is not a viable GLB`);
     assert(fileStat.size <= 6 * 1024 * 1024, `${file} exceeds the 6 MB runtime budget (${fileStat.size} bytes)`);
   }
+
+  const [torsoGlb, limbsGlb, torsoReport, limbsReport] = await Promise.all([
+    readGlbJson(path.join(manifestDir, manifest.victim.torso.runtimeFile)),
+    readGlbJson(path.join(manifestDir, manifest.victim.limbs.runtimeFile)),
+    readFile(path.join(manifestDir, manifest.victim.torso.blenderReport), "utf8").then(JSON.parse),
+    readFile(path.join(manifestDir, manifest.victim.limbs.blenderReport), "utf8").then(JSON.parse),
+  ]);
+  const torsoNodeNames = (torsoGlb.nodes || []).map((node) => node.name || "");
+  assert(
+    torsoNodeNames.filter((name) => name === "Banquet_Victim_Meshy_Torso_Core").length === 1
+      && (torsoGlb.materials || []).some((material) => /^Banquet_Victim_Source_PBR_/.test(material.name || ""))
+      && (torsoGlb.images || []).length >= 1,
+    `the torso GLB needs one textured Meshy-derived underwear core: ${JSON.stringify({ nodes: torsoNodeNames, materials: torsoGlb.materials })}`,
+  );
+  assertExactNames(
+    torsoNodeNames.filter((name) => name.endsWith("_Bandage_Cap")),
+    [
+      "Banquet_Victim_Left_Shoulder_Bandage_Cap",
+      "Banquet_Victim_Right_Shoulder_Bandage_Cap",
+      "Banquet_Victim_Left_Hip_Bandage_Cap",
+      "Banquet_Victim_Right_Hip_Bandage_Cap",
+    ],
+    "torso bandage-cap nodes",
+  );
+  const forbiddenTorsoNodes = torsoNodeNames.filter(
+    (name) => name.startsWith("Banquet_Victim_")
+      && name.split("_").some((part) => /^(?:head|arm|leg)$/i.test(part)),
+  );
+  assert(
+    forbiddenTorsoNodes.length === 0,
+    `the first-person torso GLB must not retain head or limb nodes: ${JSON.stringify(forbiddenTorsoNodes)}`,
+  );
+
+  const limbNodeNames = (limbsGlb.nodes || []).map((node) => node.name || "");
+  assertExactNames(
+    limbNodeNames.filter((name) => /^Banquet_Victim_Meshy_.*_(?:Arm|Leg)_Core$/.test(name)),
+    [
+      "Banquet_Victim_Meshy_Left_Arm_Core",
+      "Banquet_Victim_Meshy_Right_Arm_Core",
+      "Banquet_Victim_Meshy_Left_Leg_Core",
+      "Banquet_Victim_Meshy_Right_Leg_Core",
+    ],
+    "detached Meshy-derived limb root nodes",
+  );
+  assertExactNames(
+    limbNodeNames.filter((name) => name.endsWith("_Proximal_Bandage")),
+    [
+      "Banquet_Victim_Left_Arm_Proximal_Bandage",
+      "Banquet_Victim_Right_Arm_Proximal_Bandage",
+      "Banquet_Victim_Left_Leg_Proximal_Bandage",
+      "Banquet_Victim_Right_Leg_Proximal_Bandage",
+    ],
+    "detached limb proximal-bandage nodes",
+  );
+  assertCenteredHorizontalBounds(
+    "victim torso",
+    manifest.victim.torso.boundsMeters,
+    torsoReport.boundsMeters,
+  );
+  assertCenteredHorizontalBounds(
+    "detached limb pile",
+    manifest.victim.limbs.boundsMeters,
+    limbsReport.boundsMeters,
+  );
 }
 
 async function run() {
@@ -159,19 +310,70 @@ async function run() {
     assert(
       banquet.patrons.length === 6
         && banquet.patrons.every((entry) => entry.visible && entry.seated && entry.facingPlayer)
+        && banquet.patrons.every((entry) => entry.faceFullyConcealed && entry.hoodVisible)
         && new Set(banquet.patrons.map((entry) => entry.bodyFile)).size === 1
         && new Set(banquet.patrons.map((entry) => entry.maskId)).size === 6
         && new Set(banquet.patrons.map((entry) => entry.maskFile)).size === 6,
-      `the Patron tableau must reuse one body with six unique masks: ${JSON.stringify(banquet.patrons)}`,
+      `the Patron tableau must reuse one body with six unique full-face masks: ${JSON.stringify(banquet.patrons)}`,
     );
     assert(
       banquet.host.visible
         && banquet.host.atFarEnd
         && banquet.host.facingPlayer
+        && banquet.host.inView
+        && banquet.host.unobstructedSightline
+        && banquet.host.screenCenterOffset <= 0.24
+        && banquet.camera.tableCenterlineOffset <= 0.01
+        && banquet.camera.insetFromNearTableEdge >= 0.5
         && banquet.ritualDressing.placeCard === "CONTESTANT 13 — MAIN COURSE",
       `host/table ritual staging is incomplete: ${JSON.stringify({ host: banquet.host, ritual: banquet.ritualDressing })}`,
     );
+    assert(
+      banquet.ritualDressing.tabletopCandlePartCount >= 10
+        && banquet.ritualDressing.tabletopCandlePartsHidden
+        && banquet.ritualDressing.tabletopFlameCount === 0
+        && banquet.ritualDressing.perimeterTallCandleCount >= 10
+        && banquet.ritualDressing.perimeterCandlesVisible
+        && banquet.ritualDressing.gameplayCollidersAdded === 0,
+      `ritual candles must surround the room without blocking the table: ${JSON.stringify(banquet.ritualDressing)}`,
+    );
+    assert(
+      banquet.victim.torsoVisible
+        && banquet.victim.underwearVisible
+        && banquet.victim.missingLimbCount === 4
+        && banquet.victim.sealedSurgicalCaps === 4
+        && banquet.victim.explicitGore === false
+        && banquet.victim.torsoCenteredOnPlatter
+        && banquet.victim.torsoCenterOffset <= 0.025
+        && banquet.victim.gameplayCollidersAdded === 0,
+      `the table victim must be a sealed limbless underwear torso: ${JSON.stringify(banquet.victim)}`,
+    );
+    assert(
+      banquet.victim.limbPlatterVisible
+        && banquet.victim.detachedLimbCount === 4
+        && banquet.victim.limbPlatterInView
+        && banquet.victim.limbPlatterBeforeHost
+        && banquet.victim.limbPlatterInsideTable
+        && banquet.victim.limbPileCenteredOnPlatter
+        && banquet.victim.limbPileCenterOffset <= 0.025
+        && banquet.victim.limbPileBelowHostSightline
+        && banquet.host.unobstructedSightline,
+      `all four limbs must sit on one platter before the visible host: ${JSON.stringify({ victim: banquet.victim, host: banquet.host })}`,
+    );
     await desktop.screenshot({ path: path.join(artifactDir, "banquet-table-desktop.png") });
+
+    const torsoLook = await desktop.evaluate(() => window.MrFeastFresh.setBanquetLookForQA({
+      yaw: Math.PI / 2,
+      pitch: -0.42,
+    }));
+    assert(
+      torsoLook.camera.pitch <= -0.4
+        && torsoLook.victim.torsoInView
+        && torsoLook.victim.torsoVisible
+        && torsoLook.camera.positionLocked,
+      `looking down must reveal the player's fixed torso without moving the camera: ${JSON.stringify(torsoLook)}`,
+    );
+    await desktop.screenshot({ path: path.join(artifactDir, "banquet-victim-torso-desktop.png") });
 
     const leftLook = await desktop.evaluate(() => window.MrFeastFresh.setBanquetLookForQA({
       yaw: Math.PI / 2 - 0.38,
@@ -210,7 +412,14 @@ async function run() {
     );
 
     const cleared = await desktop.evaluate(() => window.MrFeastFresh.clearBanquetLossForQA());
-    assert(cleared?.phase === "inactive" && !cleared.visible, `clearing the loss must remove the tableau: ${JSON.stringify(cleared)}`);
+    assert(
+      cleared?.phase === "inactive"
+        && !cleared.visible
+        && !cleared.ritualDressing.tabletopCandlePartsHidden
+        && !cleared.victim.torsoVisible
+        && !cleared.victim.limbPlatterVisible,
+      `clearing the loss must remove the tableau and restore table service: ${JSON.stringify(cleared)}`,
+    );
     const noShow = await desktop.evaluate(() => window.MrFeastFresh.triggerBanquetLossForQA("feast-says-no-show"));
     banquet = await readState(desktop);
     assert(noShow?.reason === "feast-says-no-show" && banquet.phase === "inactive" && banquet.overlayVisible, `non-catch loss must bypass the banquet: ${JSON.stringify(banquet)}`);
@@ -255,6 +464,11 @@ async function run() {
       phoneState.camera.lookEnabled
         && phoneState.camera.pitch <= 0.08
         && phoneState.host.visible
+        && phoneState.host.inView
+        && phoneState.host.unobstructedSightline
+        && phoneState.victim.limbPlatterInView
+        && phoneState.victim.limbPlatterBeforeHost
+        && phoneState.patrons.every((entry) => entry.faceFullyConcealed)
         && phoneState.patrons.filter((entry) => entry.inView).length >= 4,
       `real phone drag must look down to the host and at least four masks: ${JSON.stringify(phoneState)}`,
     );

@@ -6,7 +6,7 @@ In progress with implementation and automated acceptance complete; final desktop
 
 ## Objective
 
-Replace the abrupt overlay used after a physical catch with a complete first-person loss tableau: the captured player wakes on the Dining Room table as the main course, six masked Patrons wait in formal dress, and Mr. Feast presides over the sacrifice with one final game-show-meets-banquet line before recoverable load/restart controls appear.
+Replace the abrupt overlay used after a physical catch with a complete first-person loss tableau: the captured player wakes on the Dining Room table as the surgically prepared main course, six masked Patrons wait in formal dress, the player's separated limbs rest on a platter before Mr. Feast, and he presides over the sacrifice with one final game-show-meets-banquet line before recoverable load/restart controls appear.
 
 ## Scope
 
@@ -14,13 +14,15 @@ Replace the abrupt overlay used after a physical catch with a complete first-per
 - Lock the camera to a low first-person view along the existing Dining Room table and frame Mr. Feast at its far end.
 - Reuse one Meshy-generated, rigged, Blender-prepared formal Patron body at all six audience seats.
 - Give every seated Patron a unique creepy mask silhouette, derived from a credit-conscious set of Meshy source masks and finished as six runtime variants in Blender.
-- Preserve the existing Dining Room architecture and service while adding loss-only candles, ritual place-card dressing, and a restrained first-person serving-platter frame.
+- Select one Meshy-generated adult underwear body, rig it once, and use Blender to derive a static first-person torso plus one arranged four-limb platter asset from that shared source; retain truthful provenance for one rejected prompt-ignoring attempt without shipping or reusing its geometry.
+- Keep the surgical removal readable through four sealed bandage caps, separated bare limbs, and the player's underwear while avoiding blood, exposed anatomy, or animated injury.
+- Preserve the existing Dining Room architecture and service while temporarily clearing tabletop candelabra from the host sightline, adding a loss-only ring of tall floor candles, ritual place-card dressing, and a restrained first-person serving-platter frame.
 - Deliver Mr. Feast's authored closing line, then reveal the existing load/restart recovery controls.
 - Expose asset provenance, camera/tableau state, patron placement, mask identity, dialogue, timing, and overlay state through `render_game_to_text()` and focused `MrFeastFresh` controls.
 
 ## Out of scope
 
-- Gore, dismemberment, an eating animation, or depicting the Guest/demon directly.
+- Blood, exposed tissue/bone, an eating animation, animated injury, or depicting the Guest/demon directly.
 - The Winner's Dinner choice, escape ending, true sabotage ending, or Juniper's finale.
 - New cultist locomotion, combat AI, or free-roam Patron appearances.
 - Replacing the existing Dining Room furniture or increasing the mansion's normal gameplay light budget.
@@ -37,15 +39,21 @@ Replace the abrupt overlay used after a physical catch with a complete first-per
 - [x] The first-person camera begins face-up toward the Dining Room ceiling from a fixed lying position, then accepts mouse and touch look so the player can inspect both Patron rows and Mr. Feast while movement/HUD controls remain suppressed. — test: `scripts/test-mr-feast-banquet-loss.mjs::lying free-look viewpoint`
 - [x] The banquet remains explorable for at least 20 seconds before the recovery overlay appears, including time before and after Mr. Feast's complete closing line. — test: `scripts/test-mr-feast-banquet-loss.mjs::extended look window`
 - [x] Six visible seated Patrons surround the table, reuse one rigged formal body source, face the player, and each reports a distinct mask id/runtime file. — test: `scripts/test-mr-feast-banquet-loss.mjs::patron tableau`
+- [x] Every Patron's generated mask is staged over an opaque formal hood, enlarged and raised enough to conceal the shared body's complete face without spending more Meshy credits. — test: `scripts/test-mr-feast-banquet-loss.mjs::full face concealment`
 - [x] The checked-in banquet manifest records one Meshy body task, rigging provenance, three or fewer Meshy mask source tasks, six Blender-finished unique mask variants, bounds, forward axes, and runtime file budgets. — test: `scripts/test-mr-feast-banquet-loss.mjs::asset provenance`
 - [x] The loss-only table dressing identifies `CONTESTANT 13 — MAIN COURSE` and uses the existing Dining Room/table without changing gameplay colliders or normal visibility. — test: `scripts/test-mr-feast-banquet-loss.mjs::ritual dressing`
+- [x] The lying camera is centered on the table's width and inset at least half a meter from its near edge; looking down the table keeps Mr. Feast in frame with no tabletop candle or centerpiece crossing the direct host sightline. — test: `scripts/test-mr-feast-banquet-loss.mjs::centered host sightline`
+- [x] At least ten tall, loss-only floor candles form a warm perimeter behind and beyond the seated Patrons, while the existing tabletop candelabra are hidden for the scene and restored afterward. — test: `scripts/test-mr-feast-banquet-loss.mjs::perimeter ritual candles`
+- [x] The manifest records one selected Meshy underwear-body generation and rig task, with Blender deriving both runtime victim files from that single source and reporting bounds, triangle/file budgets, underwear, four limbs, four sealed surgical caps, and zero explicit-gore elements; the rejected first attempt and its credits remain explicit provenance rather than hidden runtime inputs. — test: `scripts/test-mr-feast-banquet-loss.mjs::victim asset provenance`
+- [x] Looking down from the fixed first-person head position reveals the player's supine underwear torso centered on the table with all four limbs absent and sealed; the camera remains fixed and movement stays suppressed. — test: `scripts/test-mr-feast-banquet-loss.mjs::first-person victim torso`
+- [x] Looking toward Mr. Feast reveals all four detached limbs arranged on one platter between the Patron rows directly before him, without blocking his face or adding gameplay colliders. — test: `scripts/test-mr-feast-banquet-loss.mjs::limb platter staging`
 - [x] Mr. Feast says, `Contestant Thirteen—you lost the million, but you still made the final cut. Our patrons call it sacrifice. The Guest calls it supper. I call it a feast.` before the recovery controls appear. — test: `scripts/test-mr-feast-banquet-loss.mjs::closing performance`
 - [x] Load-last-save and Start-over remain reachable after the closing line, and clearing/loading a game removes the loss-only scene and restores ordinary camera/host presentation. — test: `scripts/test-mr-feast-banquet-loss.mjs::recoverable ending`
 - [ ] Desktop and phone captures clearly read as first-person-on-the-table, keep Mr. Feast visible, and show at least four distinct mask silhouettes without clipping through the table, chairs, or one another. — verified by user playtest
 
 ## Exit condition
 
-Mr. Feast physically catches the player → the game cuts to a readable first-person Dining Room sacrifice tableau with six uniquely masked formal Patrons, Mr. Feast delivers the complete final-cut/sacrifice/supper line, and only then do Load last save and Start over appear.
+Mr. Feast physically catches the player → the game cuts to a readable first-person Dining Room sacrifice tableau where the player can see their sealed, limbless underwear torso and all four separated limbs plated before the host, six uniquely masked formal Patrons surround the table, Mr. Feast delivers the complete final-cut/sacrifice/supper line, and only then do Load last save and Start over appear.
 
 ## Test plan
 
@@ -59,9 +67,15 @@ Create `scripts/test-mr-feast-banquet-loss.mjs` before implementation and confir
 - Runtime/test syntax, renovation invariants, focused banquet loss, caught pursuit, pursuit/evasion, full Feast Hunt, and full desktop/mobile Contestant 13 pass. Focused browser console capture is clean.
 - Inspected visual proof is `output/playwright/mr-feast-banquet-loss/banquet-table-desktop.png`, `banquet-closing-line-desktop.png`, and `banquet-table-phone.png`.
 - The face-up/free-look refinement failed red first with `focused banquet QA controls must include deterministic free look`. The green browser pass starts at a `1.32rad` ceiling pitch, preserves unlimited horizontal mouse look plus bounded touch pitch from `-0.18` to `1.42rad`, proves a real phone drag, captures both Patron rows, and delays recovery until `24s`. New proof is `banquet-ceiling-reveal-desktop.png`, `banquet-look-left-desktop.png`, and `banquet-look-right-desktop.png`.
+- The centered ritual refinement failed red first with `the Patron tableau must reuse one body with six unique full-face masks`. The green pass moves the fixed camera `0.57m` farther inside the table edge, hides and later restores all 12 ordinary tabletop candelabrum parts plus the low centerpiece, keeps Mr. Feast projected near the center with a clear sightline, composites each existing generated mask over a tight opaque face backing, and surrounds the cast with 12 animated floor candles without adding gameplay colliders or Meshy tasks.
+- The final focused browser pass plus renovation, caught pursuit, full Feast Hunt, and full desktop/mobile Contestant 13 suites pass. Updated visual proof is `output/playwright/mr-feast-banquet-loss/banquet-table-desktop.png`, `banquet-look-left-desktop.png`, `banquet-look-right-desktop.png`, and `banquet-table-phone.png`.
+- The victim extension failed red first with `the victim torso and limbs must derive from one Meshy-generated and rigged underwear body`, then again on the first export's `0.357m` off-center origin. A controlled reference-led Meshy image-to-3D retry produced the selected clean boxer-brief body (`35` credits including rig); the prompt-ignoring first attempt remains documented as a rejected `40`-credit source, making the truthful banquet total `200` credits rather than silently excluding failed work.
+- Blender 4.5 now hard-separates the selected rig by bone-weight/position planes into one centered torso and one centered four-limb pile. The runtime GLBs preserve the Meshy torso, boxer texture, hands, and feet; use overlapping rounded ivory sleeves at all eight visible cut endpoints; contain no blood, exposed anatomy, skins, animations, cameras, lights, or compressed-extension dependencies; and stay below `0.61MB` each.
+- The updated focused pass proves deferred loading, actual GLB node structure, centered report/world bounds, the camera-aligned neck seam, four absent torso limbs, four distinct plated limbs rotated hands-and-feet-first toward the player, full table containment, a clear host sightline, recovery cleanup, and desktop/phone framing. Inspected proof is `output/playwright/mr-feast-banquet-loss/banquet-victim-torso-desktop.png`, `banquet-table-desktop.png`, and `banquet-table-phone.png`; isolated neutral asset proof is under `output/iterate/banquet-victim-assets/`.
 
 ## Notes
 
 - The source body is generated once and rigged even though the runtime performance is seated; six clones share the same authored seated loop.
 - Three Meshy mask source generations is the credit ceiling for this slice. Blender may mirror, reshape, add authored ornament, retint, and re-export those sources into six visibly distinct runtime masks.
+- The victim extension uses one selected Meshy full-body source and one rig task for both runtime files. Blender owns the non-gory separation, bandage sleeves, supine staging, limb arrangement, and two runtime exports; never spend separate generations on the torso and individual limbs. The rejected first attempt remains provenance only.
 - The sequence promotes only the captured-at-dinner half of the existing combined backlog item. Escape/exposure endings remain deferred.

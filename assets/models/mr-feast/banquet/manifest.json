@@ -1,13 +1,17 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T02:10:33.324504+00:00",
+  "generatedAt": "2026-07-25T14:29:39.494076+00:00",
   "pipeline": "Meshy source assets with deterministic Blender runtime preparation",
   "creditStrategy": {
     "sharedBodyGenerations": 1,
     "maskSourceGenerations": 3,
     "runtimeBodyVariants": 1,
     "runtimeMaskVariants": 6,
-    "estimatedConsumedCredits": 125
+    "estimatedConsumedCredits": 200,
+    "victimSourceGenerations": 2,
+    "victimRuntimeVariants": 2,
+    "victimSelectedSourceCredits": 35,
+    "victimRejectedAttemptCredits": 40
   },
   "body": {
     "id": "cult-patron-body",
@@ -166,5 +170,73 @@
       },
       "blenderReport": "mask-eclipse-oracle.report.json"
     }
-  ]
+  ],
+  "victim": {
+    "id": "contestant-13-victim",
+    "description": "Face-up headless Contestant 13 body proxy in plain opaque underwear, with non-graphic sealed sockets and one platter-ready detached-limb pile.",
+    "sourceCount": 1,
+    "sourceFile": "source/banquet/contestant-13-victim-source-v2-rigged.glb",
+    "static": true,
+    "riggedSource": true,
+    "runtimeSkins": 0,
+    "runtimeAnimations": 0,
+    "underwear": true,
+    "limbCount": 4,
+    "sealedSurgicalCaps": 4,
+    "explicitGore": false,
+    "orientation": {
+      "headAxis": "+X",
+      "faceUpAxis": "+Y",
+      "lateralAxis": "+Z"
+    },
+    "torso": {
+      "runtimeFile": "contestant-13-limbless-torso.glb",
+      "visibleMeshyDerivedCore": true,
+      "boundsMeters": [
+        0.83,
+        0.24,
+        0.41
+      ],
+      "triangles": 8134,
+      "fileBytes": 445568,
+      "torsoSocketBandageCaps": 4,
+      "garmentPolicy": "original Meshy v2 opaque oxblood boxer briefs retained; no added garment shell",
+      "blenderReport": "contestant-13-limbless-torso.report.json"
+    },
+    "limbs": {
+      "runtimeFile": "contestant-13-detached-limbs.glb",
+      "visibleMeshyDerivedCore": true,
+      "boundsMeters": [
+        0.910982,
+        0.28,
+        0.633509
+      ],
+      "triangles": 13443,
+      "fileBytes": 607848,
+      "pieces": [
+        "left-arm",
+        "right-arm",
+        "left-leg",
+        "right-leg"
+      ],
+      "arrangement": "compact non-graphic platter pile",
+      "proximalBandageCaps": 4,
+      "blenderReport": "contestant-13-detached-limbs.report.json"
+    },
+    "meshy": {
+      "generationMode": "image-to-3d",
+      "generationTaskId": "019f9998-69b6-7a9b-8221-daaa8090a157",
+      "rigTaskId": "019f999a-ca0a-7d39-b4d0-307326d456ca",
+      "selectedSourceCredits": 35,
+      "rejectedAttempt": {
+        "generationMode": "text-to-3d",
+        "previewTaskId": "019f9975-22e0-7d18-865a-61bb521c323c",
+        "refineTaskId": "019f9976-5f67-730a-b0fd-4a2efa4438e4",
+        "remeshTaskId": "019f997b-5c4d-7ebb-9fa5-9ad4a93a6767",
+        "rigTaskId": "019f997d-f5a8-7473-af31-d5ab6a3d0904",
+        "consumedCredits": 40
+      },
+      "consumedCredits": 75
+    }
+  }
 }

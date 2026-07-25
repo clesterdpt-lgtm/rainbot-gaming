@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-banquet-loss-curtain-light-response-banquet-free-look-1";
+  const MANSION_RUNTIME_VERSION = "20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-banquet-loss-curtain-light-response-banquet-free-look-centered-ritual-victim-tableau-2";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2778,6 +2778,8 @@
     asset: Object.freeze({
       manifest: "../models/mr-feast/banquet/manifest.json",
       bodyFile: "cult-patron-body.glb",
+      victimTorsoFile: "contestant-13-limbless-torso.glb",
+      victimLimbsFile: "contestant-13-detached-limbs.glb",
     }),
     placeCard: "CONTESTANT 13 — MAIN COURSE",
     closingLine: "Contestant Thirteen—you lost the million, but you still made the final cut. Our patrons call it sacrifice. The Guest calls it supper. I call it a feast.",
@@ -2786,28 +2788,80 @@
     closingLineSeconds: 9.5,
     overlayAtSeconds: 24,
     maximumTimerStepSeconds: 0.25,
+    table: Object.freeze({
+      centerX: -9.7,
+      centerZ: -8.4,
+      nearEdgeX: -6.9,
+      halfLength: 2.8,
+      halfWidth: 0.75,
+      sightlineObjectPrefixes: Object.freeze([
+        "dining-candelabrum-",
+        "dining-centerpiece-",
+      ]),
+    }),
     camera: Object.freeze({
-      x: -6.98,
+      x: -7.55,
       y: FLOOR.MAIN + 1.17,
       z: -8.4,
       yaw: Math.PI / 2,
       pitch: 0.045,
       initialYaw: Math.PI / 2,
       initialPitch: 1.32,
-      minimumPitch: -0.18,
+      minimumPitch: -0.55,
       maximumPitch: 1.42,
       room: "DINING ROOM",
     }),
     hostMark: Object.freeze({
-      x: -13.08,
+      x: -12.82,
       y: FLOOR.MAIN,
       z: -8.4,
       yaw: Math.PI / 2,
-      scale: 1,
+      scale: 1.06,
     }),
     bodyRootDrop: 0.33,
-    maskForwardOffset: 0.055,
-    maskVerticalOffset: -0.035,
+    maskForwardOffset: 0.095,
+    maskVerticalOffset: 0.015,
+    maskHood: Object.freeze({
+      radius: 0.125,
+      backOffset: 0.045,
+      verticalOffset: -0.005,
+      widthScale: 0.9,
+      heightScale: 1.12,
+      depthScale: 0.68,
+    }),
+    victim: Object.freeze({
+      torso: Object.freeze({
+        x: -7.96,
+        y: FLOOR.MAIN + 0.892,
+        z: -8.4,
+      }),
+      limbPile: Object.freeze({
+        x: -11.52,
+        y: FLOOR.MAIN + 0.927,
+        z: -8.4,
+        rotationY: Math.PI,
+        scale: 1.18,
+      }),
+      platter: Object.freeze({
+        x: -11.52,
+        y: FLOOR.MAIN + 0.884,
+        z: -8.4,
+      }),
+    }),
+    perimeterCandles: Object.freeze([
+      Object.freeze({ x: -7.45, z: -6.12, height: 1.42, wax: 0x711622 }),
+      Object.freeze({ x: -8.72, z: -6.08, height: 1.62, wax: 0xd4c4a5 }),
+      Object.freeze({ x: -10.02, z: -6.1, height: 1.48, wax: 0x711622 }),
+      Object.freeze({ x: -11.32, z: -6.08, height: 1.7, wax: 0xd4c4a5 }),
+      Object.freeze({ x: -12.55, z: -6.18, height: 1.52, wax: 0x711622 }),
+      Object.freeze({ x: -7.45, z: -10.68, height: 1.54, wax: 0xd4c4a5 }),
+      Object.freeze({ x: -8.72, z: -10.72, height: 1.7, wax: 0x711622 }),
+      Object.freeze({ x: -10.02, z: -10.7, height: 1.46, wax: 0xd4c4a5 }),
+      Object.freeze({ x: -11.32, z: -10.72, height: 1.64, wax: 0x711622 }),
+      Object.freeze({ x: -12.55, z: -10.62, height: 1.5, wax: 0xd4c4a5 }),
+      Object.freeze({ x: -13.35, z: -7.08, height: 1.72, wax: 0x711622 }),
+      Object.freeze({ x: -13.35, z: -9.72, height: 1.58, wax: 0x711622 }),
+    ]),
     bodyPose: Object.freeze({
       Spine02: Object.freeze([0.021814, 0.000113, 0.000107, 0.999762]),
       Spine01: Object.freeze([0.021814, 0.000113, 0.000107, 0.999762]),
@@ -2826,12 +2880,12 @@
       RightHand: Object.freeze([-0.181763, 0.961743, -0.061838, 0.195421]),
     }),
     patrons: Object.freeze([
-      Object.freeze({ id: "patron-stag", maskId: "stag-crown", x: -8.95, z: -7.25, scale: 0.98, maskScale: 0.62, phase: 0.11, tint: 0xf4e7dc }),
-      Object.freeze({ id: "patron-ram", maskId: "ram-reliquary", x: -10.35, z: -7.25, scale: 1.02, maskScale: 0.46, phase: 0.31, tint: 0xdad0e3 }),
-      Object.freeze({ id: "patron-raven", maskId: "raven-mourning", x: -11.65, z: -7.25, scale: 0.96, maskScale: 0.5, phase: 0.49, tint: 0xcbd4e5 }),
-      Object.freeze({ id: "patron-moth", maskId: "moth-veil", x: -8.95, z: -9.55, scale: 1.01, maskScale: 0.43, phase: 0.68, tint: 0xead1d6 }),
-      Object.freeze({ id: "patron-grin", maskId: "porcelain-grin", x: -10.35, z: -9.55, scale: 0.97, maskScale: 0.58, phase: 0.82, tint: 0xe6dac8 }),
-      Object.freeze({ id: "patron-eclipse", maskId: "eclipse-oracle", x: -11.65, z: -9.55, scale: 1.03, maskScale: 0.4, phase: 0.94, tint: 0xd4c8bd }),
+      Object.freeze({ id: "patron-stag", maskId: "stag-crown", x: -8.95, z: -7.25, scale: 0.98, maskScale: 0.68, phase: 0.11, tint: 0xf4e7dc }),
+      Object.freeze({ id: "patron-ram", maskId: "ram-reliquary", x: -10.35, z: -7.25, scale: 1.02, maskScale: 0.56, phase: 0.31, tint: 0xdad0e3 }),
+      Object.freeze({ id: "patron-raven", maskId: "raven-mourning", x: -11.65, z: -7.25, scale: 0.96, maskScale: 0.58, phase: 0.49, tint: 0xcbd4e5 }),
+      Object.freeze({ id: "patron-moth", maskId: "moth-veil", x: -8.95, z: -9.55, scale: 1.01, maskScale: 0.55, phase: 0.68, tint: 0xead1d6 }),
+      Object.freeze({ id: "patron-grin", maskId: "porcelain-grin", x: -10.35, z: -9.55, scale: 0.97, maskScale: 0.67, phase: 0.82, tint: 0xe6dac8 }),
+      Object.freeze({ id: "patron-eclipse", maskId: "eclipse-oracle", x: -11.65, z: -9.55, scale: 1.03, maskScale: 0.52, phase: 0.94, tint: 0xd4c8bd }),
     ]),
   });
   const COMPETITION_FILM_SET = Object.freeze({
@@ -15184,6 +15238,10 @@
       this.error = null;
       this.manifest = null;
       this.bodyBase = null;
+      this.victimTorsoBase = null;
+      this.victimLimbsBase = null;
+      this.victimTorso = null;
+      this.victimLimbs = null;
       this.maskBases = new Map();
       this.patrons = [];
       this.pendingDetails = null;
@@ -15198,6 +15256,9 @@
       this.ritualRoot.name = "banquet-loss-ritual-dressing";
       this.root.add(this.ritualRoot);
       this.placeCardMesh = null;
+      this.limbPlatterMesh = null;
+      this.perimeterCandles = [];
+      this.tabletopSightlineSnapshot = [];
       this.lightSnapshot = null;
       this.locationSnapshot = null;
       this.contestantVisibilitySnapshot = null;
@@ -15207,9 +15268,22 @@
       this.maskPosition = new THREE.Vector3();
       this.forward = new THREE.Vector3();
       this.projected = new THREE.Vector3();
+      this.hostFocus = new THREE.Vector3();
+      this.hostProjected = new THREE.Vector3();
       this.bodyWorldQuaternion = new THREE.Quaternion();
       this.breathEuler = new THREE.Euler(0, 0, 0, "XYZ");
       this.breathQuaternion = new THREE.Quaternion();
+      this.patronHoodGeometry = new THREE.SphereGeometry(
+        BANQUET_LOSS.maskHood.radius,
+        16,
+        12,
+      );
+      this.patronHoodMaterial = new THREE.MeshStandardMaterial({
+        color: 0x020103,
+        roughness: 0.98,
+        metalness: 0,
+        side: THREE.DoubleSide,
+      });
       this.makeRitualDressing();
       this.syncState();
     }
@@ -15250,22 +15324,33 @@
             || manifest.body?.runtimeFile !== BANQUET_LOSS.asset.bodyFile
             || !Array.isArray(manifest.masks)
             || manifest.masks.length !== BANQUET_LOSS.patrons.length
+            || manifest.victim?.torso?.runtimeFile !== BANQUET_LOSS.asset.victimTorsoFile
+            || manifest.victim?.limbs?.runtimeFile !== BANQUET_LOSS.asset.victimLimbsFile
           ) {
             throw new Error("Banquet manifest contract is invalid");
           }
           const baseUrl = new URL(".", this.manifestUrl());
           const loader = new THREE.GLTFLoader();
-          const [body, ...masks] = await Promise.all([
+          const loaded = await Promise.all([
             this.loadGlb(loader, new URL(manifest.body.runtimeFile, baseUrl)),
             ...manifest.masks.map((entry) => this.loadGlb(loader, new URL(entry.runtimeFile, baseUrl))),
+            this.loadGlb(loader, new URL(manifest.victim.torso.runtimeFile, baseUrl)),
+            this.loadGlb(loader, new URL(manifest.victim.limbs.runtimeFile, baseUrl)),
           ]);
+          const body = loaded[0];
+          const masks = loaded.slice(1, 1 + manifest.masks.length);
+          const victimTorso = loaded[1 + manifest.masks.length];
+          const victimLimbs = loaded[2 + manifest.masks.length];
           this.manifest = manifest;
           this.bodyBase = body.scene;
+          this.victimTorsoBase = victimTorso.scene;
+          this.victimLimbsBase = victimLimbs.scene;
           this.maskBases.clear();
           manifest.masks.forEach((entry, index) => {
             this.maskBases.set(entry.id, masks[index].scene);
           });
           this.assemblePatrons();
+          this.assembleVictim();
           this.assetStatus = "ready";
           this.syncState();
           if (this.pendingDetails) this.reveal(this.pendingDetails);
@@ -15327,13 +15412,20 @@
         silver,
       );
       platter.name = "banquet-loss-player-serving-platter";
-      platter.position.set(-7.55, FLOOR.MAIN + 0.905, -8.4);
+      platter.position.set(
+        BANQUET_LOSS.victim.torso.x,
+        FLOOR.MAIN + 0.905,
+        BANQUET_LOSS.victim.torso.z,
+      );
       platter.rotation.x = Math.PI / 2;
       platter.scale.set(1.65, 1, 0.86);
       platter.castShadow = false;
       platter.receiveShadow = true;
       this.ritualRoot.add(platter);
-      for (const [index, x] of [-7.52, -8.18].entries()) {
+      for (const [index, x] of [
+        BANQUET_LOSS.victim.torso.x + 0.26,
+        BANQUET_LOSS.victim.torso.x - 0.28,
+      ].entries()) {
         roundedBox({
           name: `banquet-loss-player-restraint-${index + 1}`,
           w: 0.13,
@@ -15363,6 +15455,34 @@
           });
         }
       }
+      this.limbPlatterMesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.58, 0.62, 0.035, 36),
+        silver,
+      );
+      this.limbPlatterMesh.name = "banquet-loss-detached-limb-platter";
+      this.limbPlatterMesh.position.set(
+        BANQUET_LOSS.victim.platter.x,
+        BANQUET_LOSS.victim.platter.y,
+        BANQUET_LOSS.victim.platter.z,
+      );
+      this.limbPlatterMesh.scale.set(1, 1, 0.68);
+      this.limbPlatterMesh.castShadow = false;
+      this.limbPlatterMesh.receiveShadow = true;
+      this.ritualRoot.add(this.limbPlatterMesh);
+      const limbPlatterRim = new THREE.Mesh(
+        new THREE.TorusGeometry(0.59, 0.025, 8, 42),
+        silver,
+      );
+      limbPlatterRim.name = "banquet-loss-detached-limb-platter-rim";
+      limbPlatterRim.position.set(
+        BANQUET_LOSS.victim.platter.x,
+        BANQUET_LOSS.victim.platter.y + 0.03,
+        BANQUET_LOSS.victim.platter.z,
+      );
+      limbPlatterRim.rotation.x = Math.PI / 2;
+      limbPlatterRim.scale.set(1, 1, 0.68);
+      limbPlatterRim.castShadow = false;
+      this.ritualRoot.add(limbPlatterRim);
       const placeCardMaterial = new THREE.MeshStandardMaterial({
         map: this.makePlaceCardTexture(),
         roughness: 0.78,
@@ -15370,38 +15490,171 @@
         side: THREE.DoubleSide,
       });
       this.placeCardMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.72, 0.18),
+        new THREE.PlaneGeometry(0.56, 0.14),
         placeCardMaterial,
       );
       this.placeCardMesh.name = "banquet-loss-contestant-13-main-course-card";
-      this.placeCardMesh.position.set(-8.5, FLOOR.MAIN + 1.075, -7.72);
+      this.placeCardMesh.position.set(-8.34, FLOOR.MAIN + 1.045, -7.7);
       this.placeCardMesh.rotation.y = Math.PI / 2;
       this.placeCardMesh.rotation.z = -0.04;
       this.ritualRoot.add(this.placeCardMesh);
-      const flameMaterial = new THREE.MeshStandardMaterial({
-        color: 0xffd08a,
-        emissive: 0xff8c3c,
-        emissiveIntensity: 2.6,
-        roughness: 0.35,
+      const ironMaterial = new THREE.MeshStandardMaterial({
+        color: 0x130c10,
+        roughness: 0.42,
+        metalness: 0.78,
       });
-      for (const x of [-8.35, -11.05]) {
-        for (const dx of [-0.19, 0, 0.19]) {
-          const flame = new THREE.Mesh(
-            new THREE.SphereGeometry(0.025, 8, 6),
-            flameMaterial,
-          );
-          flame.name = "banquet-loss-candle-flame";
-          flame.position.set(x + dx, FLOOR.MAIN + 1.355 + (dx === 0 ? 0.04 : 0), -8.4);
-          flame.scale.y = 1.8;
-          flame.castShadow = false;
-          this.ritualRoot.add(flame);
+      const brassMaterial = new THREE.MeshStandardMaterial({
+        color: 0x6f4823,
+        roughness: 0.38,
+        metalness: 0.72,
+      });
+      const flameMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff6a24,
+      });
+      const waxMaterials = new Map();
+      BANQUET_LOSS.perimeterCandles.forEach((spec, index) => {
+        const candleRoot = new THREE.Group();
+        candleRoot.name = `banquet-loss-perimeter-candle-${index + 1}`;
+        candleRoot.position.set(spec.x, FLOOR.MAIN, spec.z);
+        this.ritualRoot.add(candleRoot);
+        cylinder({
+          name: "banquet-loss-floor-candle-base",
+          radius: 0.13,
+          radiusTop: 0.1,
+          radiusBottom: 0.14,
+          height: 0.04,
+          segments: 16,
+          x: 0,
+          y: 0.02,
+          z: 0,
+          material: ironMaterial,
+          parent: candleRoot,
+          cast: false,
+        });
+        const standTop = spec.height - 0.32;
+        cylinder({
+          name: "banquet-loss-floor-candle-stem",
+          radius: 0.018,
+          radiusTop: 0.014,
+          radiusBottom: 0.024,
+          height: standTop - 0.04,
+          segments: 10,
+          x: 0,
+          y: 0.04 + (standTop - 0.04) / 2,
+          z: 0,
+          material: ironMaterial,
+          parent: candleRoot,
+          cast: false,
+        });
+        cylinder({
+          name: "banquet-loss-floor-candle-drip-tray",
+          radius: 0.085,
+          radiusTop: 0.082,
+          radiusBottom: 0.04,
+          height: 0.035,
+          segments: 14,
+          x: 0,
+          y: standTop,
+          z: 0,
+          material: brassMaterial,
+          parent: candleRoot,
+          cast: false,
+        });
+        if (!waxMaterials.has(spec.wax)) {
+          waxMaterials.set(spec.wax, new THREE.MeshStandardMaterial({
+            color: spec.wax,
+            roughness: 0.86,
+            metalness: 0,
+          }));
         }
-      }
-      const hostKeyLight = new THREE.PointLight(0xffc38c, 0.92, 4.2, 2);
+        cylinder({
+          name: "banquet-loss-tall-candle-wax",
+          radius: 0.032,
+          radiusTop: 0.028,
+          radiusBottom: 0.034,
+          height: 0.32,
+          segments: 12,
+          x: 0,
+          y: standTop + 0.175,
+          z: 0,
+          material: waxMaterials.get(spec.wax),
+          parent: candleRoot,
+          cast: false,
+        });
+        cylinder({
+          name: "banquet-loss-tall-candle-wick",
+          radius: 0.006,
+          height: 0.035,
+          segments: 6,
+          x: 0,
+          y: spec.height + 0.017,
+          z: 0,
+          material: ironMaterial,
+          parent: candleRoot,
+          cast: false,
+        });
+        const flame = new THREE.Mesh(
+          new THREE.SphereGeometry(0.036, 8, 6),
+          flameMaterial,
+        );
+        flame.name = "banquet-loss-perimeter-candle-flame";
+        flame.position.set(0, spec.height + 0.085, 0);
+        flame.scale.set(0.82, 1.9, 0.82);
+        flame.castShadow = false;
+        candleRoot.add(flame);
+        this.perimeterCandles.push({
+          root: candleRoot,
+          flame,
+          phase: index * 0.73,
+        });
+      });
+      const ritualFillLight = new THREE.PointLight(0x9f1d2d, 0.48, 7.2, 2);
+      ritualFillLight.name = "banquet-loss-ritual-fill-light";
+      ritualFillLight.position.set(-10.15, FLOOR.MAIN + 0.72, -8.4);
+      ritualFillLight.castShadow = false;
+      this.ritualRoot.add(ritualFillLight);
+      const hostKeyLight = new THREE.PointLight(0xffb06f, 1.48, 5.2, 2);
       hostKeyLight.name = "banquet-loss-host-key-light";
-      hostKeyLight.position.set(-12.25, FLOOR.MAIN + 2.08, -8.4);
+      hostKeyLight.position.set(-12.25, FLOOR.MAIN + 1.86, -7.72);
       hostKeyLight.castShadow = false;
       this.ritualRoot.add(hostKeyLight);
+    }
+
+    makePatronHood(spec) {
+      const hood = new THREE.Group();
+      hood.name = `${spec.id}-full-face-formal-hood`;
+      const head = new THREE.Mesh(this.patronHoodGeometry, this.patronHoodMaterial);
+      head.name = `${spec.id}-opaque-face-backing`;
+      head.scale.set(
+        BANQUET_LOSS.maskHood.widthScale,
+        BANQUET_LOSS.maskHood.heightScale,
+        BANQUET_LOSS.maskHood.depthScale,
+      );
+      head.castShadow = true;
+      head.receiveShadow = true;
+      hood.add(head);
+      return hood;
+    }
+
+    stageTabletopSightline() {
+      if (this.tabletopSightlineSnapshot.length) return;
+      scene.traverse((object) => {
+        if (!BANQUET_LOSS.table.sightlineObjectPrefixes.some((prefix) => object.name.startsWith(prefix))) {
+          return;
+        }
+        this.tabletopSightlineSnapshot.push({
+          object,
+          visible: object.visible,
+        });
+        object.visible = false;
+      });
+    }
+
+    restoreTabletopSightline() {
+      for (const snapshot of this.tabletopSightlineSnapshot) {
+        snapshot.object.visible = snapshot.visible;
+      }
+      this.tabletopSightlineSnapshot = [];
     }
 
     tintBody(body, tint) {
@@ -15434,7 +15687,7 @@
 
     assemblePatrons() {
       for (const patron of this.patrons) {
-        this.root.remove(patron.body, patron.mask);
+        this.root.remove(patron.body, patron.hood, patron.mask);
       }
       this.patrons = [];
       if (!this.bodyBase || !this.manifest) return;
@@ -15466,10 +15719,12 @@
           object.castShadow = true;
           object.receiveShadow = true;
         });
-        this.root.add(body, mask);
+        const hood = this.makePatronHood(spec);
+        this.root.add(body, hood, mask);
         this.patrons.push({
           spec,
           body,
+          hood,
           mask,
           yaw,
           bones,
@@ -15483,17 +15738,57 @@
       this.syncPatronMasks();
     }
 
+    prepareVictimModel(model, name, mark) {
+      model.name = name;
+      model.position.set(mark.x, mark.y, mark.z);
+      model.rotation.y = mark.rotationY || 0;
+      model.scale.setScalar(mark.scale || 1);
+      model.traverse((object) => {
+        if (!object.isMesh) return;
+        object.castShadow = false;
+        object.receiveShadow = true;
+        object.frustumCulled = false;
+      });
+      this.root.add(model);
+      model.updateMatrixWorld(true);
+      return model;
+    }
+
+    assembleVictim() {
+      if (this.victimTorso) this.root.remove(this.victimTorso);
+      if (this.victimLimbs) this.root.remove(this.victimLimbs);
+      this.victimTorso = null;
+      this.victimLimbs = null;
+      if (!this.victimTorsoBase || !this.victimLimbsBase) return;
+      this.victimTorso = this.prepareVictimModel(
+        this.victimTorsoBase.clone(true),
+        "banquet-loss-contestant-13-limbless-torso",
+        BANQUET_LOSS.victim.torso,
+      );
+      this.victimLimbs = this.prepareVictimModel(
+        this.victimLimbsBase.clone(true),
+        "banquet-loss-contestant-13-detached-limbs",
+        BANQUET_LOSS.victim.limbPile,
+      );
+    }
+
     syncPatronMasks() {
       for (const patron of this.patrons) {
         if (!patron.headFront) continue;
         patron.body.updateMatrixWorld(true);
         patron.headFront.getWorldPosition(this.maskPosition);
         this.forward.set(Math.sin(patron.yaw), 0, Math.cos(patron.yaw));
+        patron.hood.position.copy(this.maskPosition)
+          .addScaledVector(this.forward, -BANQUET_LOSS.maskHood.backOffset);
+        patron.hood.position.y += BANQUET_LOSS.maskHood.verticalOffset;
+        patron.hood.scale.setScalar(patron.spec.scale);
         patron.mask.position.copy(this.maskPosition)
           .addScaledVector(this.forward, BANQUET_LOSS.maskForwardOffset);
         patron.mask.position.y += BANQUET_LOSS.maskVerticalOffset;
         patron.body.getWorldQuaternion(this.bodyWorldQuaternion);
+        patron.hood.quaternion.copy(this.bodyWorldQuaternion);
         patron.mask.quaternion.copy(this.bodyWorldQuaternion);
+        patron.hood.updateMatrixWorld(true);
         patron.mask.updateMatrixWorld(true);
       }
     }
@@ -15574,6 +15869,7 @@
       flashlightSystem?.setEnabled?.(false, { source: "banquet-loss" });
       this.stageLighting();
       this.stageContestants();
+      this.stageTabletopSightline();
       this.stageHost();
       this.applyCameraOverride();
       this.syncPatronMasks();
@@ -15642,6 +15938,18 @@
       this.syncPatronMasks();
     }
 
+    updateRitualCandles() {
+      for (const candle of this.perimeterCandles) {
+        const flicker = Math.sin(this.elapsed * 7.4 + candle.phase) * 0.09
+          + Math.sin(this.elapsed * 13.1 + candle.phase * 1.7) * 0.04;
+        candle.flame.scale.set(
+          0.82 - flicker * 0.18,
+          1.9 + flicker,
+          0.82 - flicker * 0.18,
+        );
+      }
+    }
+
     update(dt) {
       if (!this.active()) return;
       const step = Math.min(
@@ -15650,6 +15958,7 @@
       );
       this.elapsed += step;
       this.updatePatrons();
+      this.updateRitualCandles();
       if (!this.closingSpoken && this.elapsed >= BANQUET_LOSS.closingLineAtSeconds) {
         this.closingSpoken = true;
         this.phase = "closing-line";
@@ -15676,6 +15985,7 @@
 
     restorePresentation() {
       this.root.visible = false;
+      this.restoreTabletopSightline();
       if (dom.stage) dom.stage.dataset.banquetLoss = "inactive";
       if (dom.stage) dom.stage.dataset.banquetLook = "inactive";
       if (mrFeastNpc?.challengeMode === "banquet-loss") mrFeastNpc.releaseChallenge();
@@ -15759,6 +16069,16 @@
       );
     }
 
+    coordinatesInCamera(x, y, z) {
+      this.projected.set(x, y, z).project(camera);
+      return (
+        this.projected.z >= -1
+        && this.projected.z <= 1
+        && Math.abs(this.projected.x) <= 1.12
+        && Math.abs(this.projected.y) <= 1.12
+      );
+    }
+
     facingPoint(yaw, from, target) {
       const dx = target.x - from.x;
       const dz = target.z - from.z;
@@ -15789,6 +16109,13 @@
         maskId: patron.spec.maskId,
         maskFile: patron.maskManifest.runtimeFile,
         visible: Boolean(this.root.visible && patron.body.visible && patron.mask.visible),
+        hoodVisible: Boolean(this.root.visible && patron.hood.visible),
+        faceFullyConcealed: Boolean(
+          this.root.visible
+          && patron.hood.visible
+          && patron.mask.visible
+          && patron.spec.maskScale >= 0.5
+        ),
         seated: true,
         facingPlayer: this.facingPoint(patron.yaw, patron.body.position, cameraTarget),
         inView: Boolean(this.root.visible && this.pointInCamera(patron.mask)),
@@ -15804,6 +16131,111 @@
         },
       }));
       const hostPosition = mrFeastNpc?.root?.position || new THREE.Vector3();
+      this.hostFocus.set(
+        hostPosition.x,
+        hostPosition.y + 1.46,
+        hostPosition.z,
+      );
+      this.hostProjected.copy(this.hostFocus).project(camera);
+      const hostInView = Boolean(
+        this.root.visible
+        && mrFeastNpc?.root?.visible
+        && this.hostProjected.z >= -1
+        && this.hostProjected.z <= 1
+        && Math.abs(this.hostProjected.x) <= 1
+        && Math.abs(this.hostProjected.y) <= 1
+      );
+      const tabletopCandleParts = this.tabletopSightlineSnapshot.filter(
+        (snapshot) => snapshot.object.name.startsWith("dining-candelabrum-"),
+      );
+      const tabletopSightlinePartsHidden = Boolean(
+        this.active()
+        && this.tabletopSightlineSnapshot.length
+        && this.tabletopSightlineSnapshot.every((snapshot) => !snapshot.object.visible)
+      );
+      const victimManifest = this.manifest?.victim || null;
+      const torsoBounds = victimManifest?.torso?.boundsMeters || [0, 0, 0];
+      const limbBounds = victimManifest?.limbs?.boundsMeters || [0, 0, 0];
+      const torsoWorldBox = this.victimTorso
+        ? new THREE.Box3().setFromObject(this.victimTorso)
+        : null;
+      const limbWorldBox = this.victimLimbs
+        ? new THREE.Box3().setFromObject(this.victimLimbs)
+        : null;
+      const torsoWorldCenter = torsoWorldBox && !torsoWorldBox.isEmpty()
+        ? torsoWorldBox.getCenter(new THREE.Vector3())
+        : new THREE.Vector3(
+          BANQUET_LOSS.victim.torso.x,
+          BANQUET_LOSS.victim.torso.y + torsoBounds[1] * 0.5,
+          BANQUET_LOSS.victim.torso.z,
+        );
+      const limbWorldCenter = limbWorldBox && !limbWorldBox.isEmpty()
+        ? limbWorldBox.getCenter(new THREE.Vector3())
+        : new THREE.Vector3(
+          BANQUET_LOSS.victim.limbPile.x,
+          BANQUET_LOSS.victim.limbPile.y + limbBounds[1] * 0.5,
+          BANQUET_LOSS.victim.limbPile.z,
+        );
+      const torsoWorldSize = torsoWorldBox && !torsoWorldBox.isEmpty()
+        ? torsoWorldBox.getSize(new THREE.Vector3())
+        : new THREE.Vector3(...torsoBounds);
+      const limbWorldSize = limbWorldBox && !limbWorldBox.isEmpty()
+        ? limbWorldBox.getSize(new THREE.Vector3())
+        : new THREE.Vector3(...limbBounds);
+      const torsoCenterOffset = Math.hypot(
+        torsoWorldCenter.x - BANQUET_LOSS.victim.torso.x,
+        torsoWorldCenter.z - BANQUET_LOSS.victim.torso.z,
+      );
+      const limbCenterOffset = Math.hypot(
+        limbWorldCenter.x - BANQUET_LOSS.victim.platter.x,
+        limbWorldCenter.z - BANQUET_LOSS.victim.platter.z,
+      );
+      const torsoInView = Boolean(
+        this.root.visible
+        && this.victimTorso?.visible
+        && this.coordinatesInCamera(
+          torsoWorldCenter.x,
+          torsoWorldCenter.y,
+          torsoWorldCenter.z,
+        )
+      );
+      const limbPlatterInView = Boolean(
+        this.root.visible
+        && this.victimLimbs?.visible
+        && this.coordinatesInCamera(
+          limbWorldCenter.x,
+          limbWorldCenter.y,
+          limbWorldCenter.z,
+        )
+      );
+      const limbPlatterBeforeHost = Boolean(
+        limbWorldBox
+        && limbWorldBox.max.x < BANQUET_LOSS.camera.x
+        && limbWorldBox.min.x > BANQUET_LOSS.hostMark.x
+        && Math.abs(limbWorldCenter.z - BANQUET_LOSS.hostMark.z) <= 0.05
+      );
+      const limbPlatterInsideTable = Boolean(
+        limbWorldBox
+        && limbWorldBox.min.x >= BANQUET_LOSS.table.centerX - BANQUET_LOSS.table.halfLength
+        && limbWorldBox.max.x <= BANQUET_LOSS.table.centerX + BANQUET_LOSS.table.halfLength
+        && limbWorldBox.min.z >= BANQUET_LOSS.table.centerZ - BANQUET_LOSS.table.halfWidth
+        && limbWorldBox.max.z <= BANQUET_LOSS.table.centerZ + BANQUET_LOSS.table.halfWidth
+      );
+      const hostSightlineSpan = BANQUET_LOSS.hostMark.x - BANQUET_LOSS.camera.x;
+      const hostSightlineProgress = Math.abs(hostSightlineSpan) < 0.0001
+        ? 0
+        : (
+          limbWorldCenter.x - BANQUET_LOSS.camera.x
+        ) / hostSightlineSpan;
+      const hostSightlineY = BANQUET_LOSS.camera.y
+        + (this.hostFocus.y - BANQUET_LOSS.camera.y) * hostSightlineProgress;
+      const limbPileTopY = limbWorldBox
+        ? limbWorldBox.max.y
+        : BANQUET_LOSS.victim.limbPile.y + limbBounds[1];
+      const limbPileBelowHostSightline = Boolean(
+        limbWorldSize.y > 0
+        && limbPileTopY <= hostSightlineY - 0.04
+      );
       return {
         phase: state.banquetLoss.phase,
         elapsed: Number(this.elapsed.toFixed(3)),
@@ -15831,9 +16263,24 @@
           pitch: Number(this.lookPitch.toFixed(4)),
           minimumPitch: BANQUET_LOSS.camera.minimumPitch,
           maximumPitch: BANQUET_LOSS.camera.maximumPitch,
+          tableCenterlineOffset: Number(
+            Math.abs(BANQUET_LOSS.camera.z - BANQUET_LOSS.table.centerZ).toFixed(3),
+          ),
+          insetFromNearTableEdge: Number(
+            (BANQUET_LOSS.table.nearEdgeX - BANQUET_LOSS.camera.x).toFixed(3),
+          ),
         },
         host: {
           visible: Boolean(this.root.visible && mrFeastNpc?.root?.visible),
+          inView: hostInView,
+          screenCenterOffset: hostInView
+            ? Number(Math.hypot(this.hostProjected.x, this.hostProjected.y).toFixed(3))
+            : 99,
+          unobstructedSightline: Boolean(
+            hostInView
+            && tabletopSightlinePartsHidden
+            && limbPileBelowHostSightline
+          ),
           atFarEnd: Boolean(
             mrFeastNpc
             && Math.hypot(
@@ -15857,6 +16304,62 @@
           servingPlatter: true,
           restraintCount: 2,
           existingDiningTable: true,
+          tabletopCandlePartCount: tabletopCandleParts.length,
+          tabletopCandlePartsHidden: Boolean(
+            tabletopCandleParts.length
+            && tabletopCandleParts.every((snapshot) => !snapshot.object.visible)
+          ),
+          tabletopSightlinePartsHidden,
+          tabletopFlameCount: 0,
+          perimeterTallCandleCount: this.perimeterCandles.length,
+          perimeterCandlesVisible: Boolean(
+            this.root.visible
+            && this.perimeterCandles.length
+            && this.perimeterCandles.every((candle) => candle.root.visible)
+          ),
+          gameplayCollidersAdded: 0,
+        },
+        victim: {
+          torsoFile: victimManifest?.torso?.runtimeFile || BANQUET_LOSS.asset.victimTorsoFile,
+          limbFile: victimManifest?.limbs?.runtimeFile || BANQUET_LOSS.asset.victimLimbsFile,
+          torsoVisible: Boolean(this.root.visible && this.victimTorso?.visible),
+          torsoInView,
+          underwearVisible: Boolean(
+            this.root.visible
+            && this.victimTorso?.visible
+            && victimManifest?.underwear
+          ),
+          missingLimbCount: victimManifest?.limbCount || 0,
+          sealedSurgicalCaps: victimManifest?.sealedSurgicalCaps || 0,
+          explicitGore: Boolean(victimManifest?.explicitGore),
+          limbPlatterVisible: Boolean(
+            this.root.visible
+            && this.victimLimbs?.visible
+            && this.limbPlatterMesh?.visible
+          ),
+          detachedLimbCount: victimManifest?.limbCount || 0,
+          limbPlatterInView,
+          limbPlatterBeforeHost,
+          limbPlatterInsideTable,
+          torsoCenteredOnPlatter: torsoCenterOffset <= 0.025,
+          limbPileCenteredOnPlatter: limbCenterOffset <= 0.025,
+          torsoCenterOffset: Number(torsoCenterOffset.toFixed(3)),
+          limbPileCenterOffset: Number(limbCenterOffset.toFixed(3)),
+          limbPileBelowHostSightline,
+          limbPileTopY: Number(limbPileTopY.toFixed(3)),
+          hostSightlineY: Number(hostSightlineY.toFixed(3)),
+          torsoBoundsMeters: torsoBounds,
+          limbBoundsMeters: limbBounds,
+          torsoWorldBoundsMeters: [
+            Number(torsoWorldSize.x.toFixed(3)),
+            Number(torsoWorldSize.y.toFixed(3)),
+            Number(torsoWorldSize.z.toFixed(3)),
+          ],
+          limbWorldBoundsMeters: [
+            Number(limbWorldSize.x.toFixed(3)),
+            Number(limbWorldSize.y.toFixed(3)),
+            Number(limbWorldSize.z.toFixed(3)),
+          ],
           gameplayCollidersAdded: 0,
         },
         closingLine: BANQUET_LOSS.closingLine,

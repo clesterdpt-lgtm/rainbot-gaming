@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-banquet-loss-curtain-light-response-banquet-free-look-centered-ritual-victim-tableau-3";
+  const MANSION_RUNTIME_VERSION = "20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-banquet-loss-curtain-light-response-banquet-free-look-centered-ritual-victim-tableau-5";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2781,7 +2781,6 @@
       victimTorsoFile: "contestant-13-limbless-torso.glb",
       victimLimbsFile: "contestant-13-detached-limbs.glb",
     }),
-    placeCard: "CONTESTANT 13 — MAIN COURSE",
     closingLine: "Contestant Thirteen—you lost the million, but you still made the final cut. Our patrons call it sacrifice. The Guest calls it supper. I call it a feast.",
     revealSeconds: 1.15,
     closingLineAtSeconds: 5,
@@ -2794,6 +2793,7 @@
       nearEdgeX: -6.9,
       halfLength: 2.8,
       halfWidth: 0.75,
+      surfaceY: FLOOR.MAIN + 0.85,
       sightlineObjectPrefixes: Object.freeze([
         "dining-candelabrum-",
         "dining-centerpiece-",
@@ -2818,7 +2818,7 @@
       yaw: Math.PI / 2,
       scale: 1.06,
     }),
-    bodyRootDrop: 0.33,
+    bodyRootDrop: 0.235,
     lighting: Object.freeze({
       hemisphereIntensity: 0.34,
       moonIntensity: 0.28,
@@ -2837,6 +2837,13 @@
       heightScale: 1.12,
       depthScale: 0.68,
     }),
+    patronArmRest: Object.freeze({
+      tableEdgeInset: 0.08,
+      handSpacing: 0.14,
+      handHeight: FLOOR.MAIN + 0.875,
+      solverPasses: 14,
+      solverStrength: 0.8,
+    }),
     victim: Object.freeze({
       torso: Object.freeze({
         x: -7.96,
@@ -2845,10 +2852,10 @@
       }),
       limbPile: Object.freeze({
         x: -11.52,
-        y: FLOOR.MAIN + 0.927,
+        y: FLOOR.MAIN + 0.919,
         z: -8.4,
-        rotationY: Math.PI,
-        scale: 1.18,
+        rotationY: Math.PI / 2,
+        scale: 1.58,
       }),
       platter: Object.freeze({
         x: -11.52,
@@ -15263,8 +15270,8 @@
       this.ritualRoot = new THREE.Group();
       this.ritualRoot.name = "banquet-loss-ritual-dressing";
       this.root.add(this.ritualRoot);
-      this.placeCardMesh = null;
       this.limbPlatterMesh = null;
+      this.limbPlatterRimMesh = null;
       this.perimeterCandles = [];
       this.patronFillLights = [];
       this.tabletopSightlineSnapshot = [];
@@ -15380,36 +15387,6 @@
       return this.loadPromise;
     }
 
-    makePlaceCardTexture() {
-      const canvas = document.createElement("canvas");
-      canvas.width = 1024;
-      canvas.height = 256;
-      const context = canvas.getContext("2d");
-      context.fillStyle = "#d9c8a5";
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      context.strokeStyle = "#5b1320";
-      context.lineWidth = 18;
-      context.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
-      context.strokeStyle = "#9e772f";
-      context.lineWidth = 5;
-      context.strokeRect(38, 38, canvas.width - 76, canvas.height - 76);
-      context.fillStyle = "#251518";
-      context.textAlign = "center";
-      context.textBaseline = "middle";
-      context.font = "700 76px Georgia";
-      context.fillText("CONTESTANT 13", canvas.width / 2, 92);
-      context.fillStyle = "#711b27";
-      context.font = "700 46px Georgia";
-      context.fillText("MAIN COURSE", canvas.width / 2, 174);
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.name = "banquet-loss-main-course-place-card";
-      texture.encoding = THREE.sRGBEncoding;
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      texture.generateMipmaps = false;
-      return texture;
-    }
-
     makeRitualDressing() {
       const silver = new THREE.MeshStandardMaterial({
         color: 0x9e9484,
@@ -15465,7 +15442,7 @@
         }
       }
       this.limbPlatterMesh = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.58, 0.62, 0.035, 36),
+        new THREE.CylinderGeometry(0.70, 0.72, 0.035, 36),
         silver,
       );
       this.limbPlatterMesh.name = "banquet-loss-detached-limb-platter";
@@ -15474,39 +15451,24 @@
         BANQUET_LOSS.victim.platter.y,
         BANQUET_LOSS.victim.platter.z,
       );
-      this.limbPlatterMesh.scale.set(1, 1, 0.68);
+      this.limbPlatterMesh.scale.set(1, 1, 0.94);
       this.limbPlatterMesh.castShadow = false;
       this.limbPlatterMesh.receiveShadow = true;
       this.ritualRoot.add(this.limbPlatterMesh);
-      const limbPlatterRim = new THREE.Mesh(
-        new THREE.TorusGeometry(0.59, 0.025, 8, 42),
+      this.limbPlatterRimMesh = new THREE.Mesh(
+        new THREE.TorusGeometry(0.71, 0.025, 8, 42),
         silver,
       );
-      limbPlatterRim.name = "banquet-loss-detached-limb-platter-rim";
-      limbPlatterRim.position.set(
+      this.limbPlatterRimMesh.name = "banquet-loss-detached-limb-platter-rim";
+      this.limbPlatterRimMesh.position.set(
         BANQUET_LOSS.victim.platter.x,
         BANQUET_LOSS.victim.platter.y + 0.03,
         BANQUET_LOSS.victim.platter.z,
       );
-      limbPlatterRim.rotation.x = Math.PI / 2;
-      limbPlatterRim.scale.set(1, 1, 0.68);
-      limbPlatterRim.castShadow = false;
-      this.ritualRoot.add(limbPlatterRim);
-      const placeCardMaterial = new THREE.MeshStandardMaterial({
-        map: this.makePlaceCardTexture(),
-        roughness: 0.78,
-        metalness: 0,
-        side: THREE.DoubleSide,
-      });
-      this.placeCardMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.56, 0.14),
-        placeCardMaterial,
-      );
-      this.placeCardMesh.name = "banquet-loss-contestant-13-main-course-card";
-      this.placeCardMesh.position.set(-8.34, FLOOR.MAIN + 1.045, -7.7);
-      this.placeCardMesh.rotation.y = Math.PI / 2;
-      this.placeCardMesh.rotation.z = -0.04;
-      this.ritualRoot.add(this.placeCardMesh);
+      this.limbPlatterRimMesh.rotation.x = Math.PI / 2;
+      this.limbPlatterRimMesh.scale.set(1, 1, 0.94);
+      this.limbPlatterRimMesh.castShadow = false;
+      this.ritualRoot.add(this.limbPlatterRimMesh);
       const ironMaterial = new THREE.MeshStandardMaterial({
         color: 0x130c10,
         roughness: 0.42,
@@ -15712,6 +15674,57 @@
       return bones;
     }
 
+    rotateBoneEndpointToward(body, bone, endpoint, target) {
+      if (!bone?.parent || !endpoint) return;
+      body.updateMatrixWorld(true);
+      const origin = bone.getWorldPosition(new THREE.Vector3());
+      const current = endpoint.getWorldPosition(new THREE.Vector3()).sub(origin);
+      const desired = target.clone().sub(origin);
+      if (current.lengthSq() < 0.000001 || desired.lengthSq() < 0.000001) return;
+      current.normalize();
+      desired.normalize();
+      const worldDelta = new THREE.Quaternion().setFromUnitVectors(current, desired);
+      const easedWorldDelta = new THREE.Quaternion().identity().slerp(
+        worldDelta,
+        BANQUET_LOSS.patronArmRest.solverStrength,
+      );
+      const parentWorld = bone.parent.getWorldQuaternion(new THREE.Quaternion());
+      const localDelta = parentWorld.clone().invert()
+        .multiply(easedWorldDelta)
+        .multiply(parentWorld);
+      bone.quaternion.premultiply(localDelta).normalize();
+    }
+
+    posePatronArmsAtTable(body, bones, spec) {
+      const rowSide = spec.z >= BANQUET_LOSS.table.centerZ ? 1 : -1;
+      const tableZ = BANQUET_LOSS.table.centerZ + rowSide * (
+        BANQUET_LOSS.table.halfWidth - BANQUET_LOSS.patronArmRest.tableEdgeInset
+      );
+      const targets = new Map([
+        ["Left", new THREE.Vector3(
+          spec.x - BANQUET_LOSS.patronArmRest.handSpacing,
+          BANQUET_LOSS.patronArmRest.handHeight,
+          tableZ,
+        )],
+        ["Right", new THREE.Vector3(
+          spec.x + BANQUET_LOSS.patronArmRest.handSpacing,
+          BANQUET_LOSS.patronArmRest.handHeight,
+          tableZ,
+        )],
+      ]);
+      for (let pass = 0; pass < BANQUET_LOSS.patronArmRest.solverPasses; pass += 1) {
+        for (const side of ["Left", "Right"]) {
+          const arm = bones.get(`${side}Arm`);
+          const forearm = bones.get(`${side}ForeArm`);
+          const hand = bones.get(`${side}Hand`);
+          this.rotateBoneEndpointToward(body, forearm, hand, targets.get(side));
+          this.rotateBoneEndpointToward(body, arm, hand, targets.get(side));
+        }
+      }
+      body.updateMatrixWorld(true);
+      return targets;
+    }
+
     assemblePatrons() {
       for (const patron of this.patrons) {
         this.root.remove(patron.body, patron.hood, patron.mask);
@@ -15731,6 +15744,7 @@
         body.rotation.y = yaw;
         body.scale.setScalar(spec.scale);
         const bones = this.applySeatedPose(body);
+        const handTargets = this.posePatronArmsAtTable(body, bones, spec);
         const torsoBones = ["Spine02", "Spine01", "Spine", "neck", "Head"]
           .map((name) => bones.get(name))
           .filter(Boolean);
@@ -15755,6 +15769,7 @@
           mask,
           yaw,
           bones,
+          handTargets,
           headFront: bones.get("headfront") || bones.get("Head"),
           torsoBones,
           torsoBase,
@@ -16159,7 +16174,24 @@
           const clearOfLap = Boolean(
             forearmPosition
             && handPosition
-            && Math.max(forearmPosition.y, handPosition.y) >= FLOOR.MAIN + 0.72
+            && Math.max(forearmPosition.y, handPosition.y) >= BANQUET_LOSS.table.surfaceY - 0.08
+          );
+          const handTarget = patron.handTargets?.get(side) || null;
+          const handTargetDistance = handPosition && handTarget
+            ? handPosition.distanceTo(handTarget)
+            : Infinity;
+          const rowSide = patron.spec.z >= BANQUET_LOSS.table.centerZ ? 1 : -1;
+          const physicalTableEdgeZ = BANQUET_LOSS.table.centerZ
+            + rowSide * BANQUET_LOSS.table.halfWidth;
+          const tableEdgeDistance = handPosition
+            ? Math.abs(handPosition.z - physicalTableEdgeZ)
+            : Infinity;
+          const tabletopReadable = Boolean(
+            forearmPosition
+            && handPosition
+            && handPosition.y >= BANQUET_LOSS.table.surfaceY - 0.025
+            && forearmPosition.y >= BANQUET_LOSS.table.surfaceY - 0.14
+            && tableEdgeDistance <= 0.16
           );
           const inView = Boolean(
             this.root.visible
@@ -16170,13 +16202,25 @@
           return {
             side: side.toLowerCase(),
             clearOfLap,
+            tabletopReadable: tabletopReadable && inView,
             inView,
-            readable: clearOfLap && inView,
+            readable: tabletopReadable && inView,
+            forearmPosition: forearmPosition ? {
+              x: Number(forearmPosition.x.toFixed(3)),
+              y: Number(forearmPosition.y.toFixed(3)),
+              z: Number(forearmPosition.z.toFixed(3)),
+            } : null,
             handPosition: handPosition ? {
               x: Number(handPosition.x.toFixed(3)),
               y: Number(handPosition.y.toFixed(3)),
               z: Number(handPosition.z.toFixed(3)),
             } : null,
+            handTargetDistance: Number.isFinite(handTargetDistance)
+              ? Number(handTargetDistance.toFixed(3))
+              : null,
+            tableEdgeDistance: Number.isFinite(tableEdgeDistance)
+              ? Number(tableEdgeDistance.toFixed(3))
+              : null,
           };
         });
         return {
@@ -16379,8 +16423,10 @@
           },
         },
         ritualDressing: {
-          placeCard: BANQUET_LOSS.placeCard,
-          placeCardVisible: Boolean(this.root.visible && this.placeCardMesh?.visible),
+          placeCardRemoved: true,
+          placeCardVisible: false,
+          limbPlatterCount: this.limbPlatterMesh && this.limbPlatterRimMesh ? 1 : 0,
+          auxiliaryAngledPlateCount: 0,
           servingPlatter: true,
           restraintCount: 2,
           existingDiningTable: true,
@@ -16436,6 +16482,8 @@
             && this.limbPlatterMesh?.visible
           ),
           detachedLimbCount: victimManifest?.limbCount || 0,
+          flatOnPlatter: Boolean(victimManifest?.limbs?.flatOnPlatter),
+          auxiliaryPlateCount: victimManifest?.limbs?.auxiliaryPlateCount ?? 0,
           limbPlatterInView,
           limbPlatterBeforeHost,
           limbPlatterInsideTable,

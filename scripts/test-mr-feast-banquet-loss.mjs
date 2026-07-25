@@ -125,6 +125,7 @@ async function assertSourceContract() {
   );
   assert(/overlayAtSeconds:\s*(?:2[0-9]|[3-9][0-9])/.test(runtime), "the banquet must hold for at least 20 seconds");
   assert(runtime.includes(closingLine), "Mr. Feast's complete authored closing line is missing");
+  assert(!/placeCard:\s*"CONTESTANT 13 — MAIN COURSE"/.test(runtime), "the loss scene must remove the Contestant 13 main-course sign");
   assert(/data-banquet-loss/.test(html) && /mansion-banquet-look-hint/.test(html), "the stage needs banquet presentation and look-hint states");
   assert(/user playtest/i.test(milestone), "Milestone 64 must retain visual user playtest acceptance");
 }
@@ -165,7 +166,12 @@ async function assertAssetContract() {
       && manifest.victim?.torso?.shoulderAttachments === 0
       && manifest.victim?.torso?.splitLegStubs === 0
       && manifest.victim?.torso?.torsoSocketBandageCaps === 0
-      && manifest.victim?.limbs?.visibleMeshyDerivedCore === true,
+      && manifest.victim?.limbs?.visibleMeshyDerivedCore === true
+      && manifest.victim?.limbs?.arrangement === "flat four-limb presentation"
+      && manifest.victim?.limbs?.flatOnPlatter === true
+      && manifest.victim?.limbs?.auxiliaryPlateCount === 0
+      && Array.isArray(manifest.victim?.limbs?.pieceBoundsMeters)
+      && manifest.victim.limbs.pieceBoundsMeters.length === 4,
     `victim outputs need non-gory Blender separation metadata: ${JSON.stringify(manifest.victim)}`,
   );
   assert(
@@ -244,9 +250,18 @@ async function assertAssetContract() {
     torsoReport.boundsMeters,
   );
   assertCenteredHorizontalBounds(
-    "detached limb pile",
+    "detached limb presentation",
     manifest.victim.limbs.boundsMeters,
     limbsReport.boundsMeters,
+  );
+  assert(
+    limbsReport.arrangement === "two proportional arms and two proportional legs in one flat platter layer"
+      && limbsReport.maximumLayerOffsetMeters <= 0.005
+      && limbsReport.auxiliaryPlateCount === 0
+      && limbsReport.boundsMeters.size[1] <= 0.18
+      && limbsReport.pieceBoundsMeters.filter((piece) => piece.kind === "arm").every((piece) => piece.longAxisMeters >= 0.48)
+      && limbsReport.pieceBoundsMeters.filter((piece) => piece.kind === "leg").every((piece) => piece.longAxisMeters >= 0.68),
+    `the detached limbs must be proportional, flat, and separately readable: ${JSON.stringify(limbsReport)}`,
   );
 }
 
@@ -311,6 +326,7 @@ async function run() {
         && banquet.patrons.every((entry) => entry.faceFullyConcealed && entry.hoodVisible)
         && banquet.patrons.every((entry) => entry.maskScale >= 0.68)
         && banquet.patrons.every((entry) => entry.visibleArmCount === 2)
+        && banquet.patrons.every((entry) => entry.armReadability.every((arm) => arm.tabletopReadable))
         && new Set(banquet.patrons.map((entry) => entry.bodyFile)).size === 1
         && new Set(banquet.patrons.map((entry) => entry.maskId)).size === 6
         && new Set(banquet.patrons.map((entry) => entry.maskFile)).size === 6,
@@ -325,7 +341,10 @@ async function run() {
         && banquet.host.screenCenterOffset <= 0.24
         && banquet.camera.tableCenterlineOffset <= 0.01
         && banquet.camera.insetFromNearTableEdge >= 0.5
-        && banquet.ritualDressing.placeCard === "CONTESTANT 13 — MAIN COURSE",
+        && banquet.ritualDressing.placeCardRemoved
+        && !banquet.ritualDressing.placeCardVisible
+        && banquet.ritualDressing.limbPlatterCount === 1
+        && banquet.ritualDressing.auxiliaryAngledPlateCount === 0,
       `host/table ritual staging is incomplete: ${JSON.stringify({ host: banquet.host, ritual: banquet.ritualDressing })}`,
     );
     assert(
@@ -368,6 +387,11 @@ async function run() {
         && banquet.victim.limbPlatterInsideTable
         && banquet.victim.limbPileCenteredOnPlatter
         && banquet.victim.limbPileCenterOffset <= 0.025
+        && banquet.victim.flatOnPlatter
+        && banquet.victim.auxiliaryPlateCount === 0
+        && banquet.victim.limbWorldBoundsMeters[1] <= 0.24
+        && banquet.victim.limbWorldBoundsMeters[0] >= 1.18
+        && banquet.victim.limbWorldBoundsMeters[2] <= 1.32
         && banquet.victim.limbPileBelowHostSightline
         && banquet.host.unobstructedSightline,
       `all four limbs must sit on one platter before the visible host: ${JSON.stringify({ victim: banquet.victim, host: banquet.host })}`,

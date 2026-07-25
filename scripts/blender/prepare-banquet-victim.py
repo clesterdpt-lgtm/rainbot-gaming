@@ -15,7 +15,7 @@ The selected clean Meshy image-to-3D rig is baked into:
 * a compact face-up, head-+X torso retaining the source's underwear and
   bare-torso PBR atlas, with the shoulder endpoints and upper-thigh split
   cropped out of the visible silhouette; and
-* four detached limbs arranged as one compact, platter-ready static pile.
+* four detached limbs arranged separately in one flat, platter-ready layer.
 
 The runtime GLBs deliberately use Blender's standard uncompressed glTF export
 without skins, animations, Draco, Meshopt, cameras, or lights so Three.js r128
@@ -44,7 +44,8 @@ TORSO_HIP_CUT_HEIGHT = 0.94
 LIMB_HIP_CUT_HEIGHT = 0.72
 SHOULDER_CUT_LATERAL = 0.18
 TORSO_MAX_RUNTIME_BOUNDS = Vector((0.95, 0.30, 0.58))
-LIMBS_MAX_RUNTIME_BOUNDS = Vector((1.30, 0.28, 0.76))
+LIMBS_MAX_RUNTIME_BOUNDS = Vector((1.30, 0.15, 0.78))
+LIMB_LAYER_Y = 0.004
 ARM_GROUPS = {
     "LeftShoulder",
     "LeftArm",
@@ -183,6 +184,22 @@ def bounds_payload(objects: list[bpy.types.Object]) -> dict[str, list[float]]:
         "max": vector_list(maximum),
         "size": vector_list(maximum - minimum),
     }
+
+
+def limb_piece_bounds_payload(
+    pieces: tuple[tuple[str, str, list[bpy.types.Object]], ...],
+) -> list[dict]:
+    payload: list[dict] = []
+    for piece_id, kind, objects in pieces:
+        bounds = bounds_payload(objects)
+        size = bounds["size"]
+        payload.append({
+            "id": piece_id,
+            "kind": kind,
+            "boundsMeters": bounds,
+            "longAxisMeters": round(max(size[0], size[2]), 6),
+        })
+    return payload
 
 
 def vertex_weights(source: bpy.types.Object) -> list[dict[str, float]]:
@@ -479,11 +496,11 @@ def add_runtime_rounded_cap(
     depth: float,
     material: bpy.types.Material,
 ) -> bpy.types.Object:
-    """Add a short rounded cloth sleeve ending at ``endpoint``.
+    """Add a shallow rounded cloth seal ending at ``endpoint``.
 
-    ``normal`` points away from the retained body part. The cap's flat outer
-    face is therefore the absolute surgical endpoint, while the rest of its
-    depth overlaps the source mesh and hides the open triangle boundary.
+    ``normal`` points away from the retained body part. A compressed UV sphere
+    overlaps the source boundary and closes it without a circular planar face,
+    so the endpoint reads as soft gauze rather than an auxiliary plate.
     """
 
     normal = normal.normalized()
@@ -491,11 +508,9 @@ def add_runtime_rounded_cap(
     tangent = reference.cross(normal).normalized()
     bitangent = normal.cross(tangent).normalized()
     center = endpoint - normal * depth * 0.5
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=32,
-        radius=radius,
-        depth=depth,
-        end_fill_type="NGON",
+    bpy.ops.mesh.primitive_uv_sphere_add(
+        segments=24,
+        ring_count=12,
         location=(0, 0, 0),
     )
     obj = bpy.context.object
@@ -504,22 +519,15 @@ def add_runtime_rounded_cap(
     for vertex in obj.data.vertices:
         runtime = (
             center
-            + tangent * vertex.co.x
-            + bitangent * vertex.co.y
-            + normal * vertex.co.z
+            + tangent * vertex.co.x * radius
+            + bitangent * vertex.co.y * radius
+            + normal * vertex.co.z * depth * 0.5
         )
         vertex.co = runtime_to_blender(runtime)
     for polygon in obj.data.polygons:
         polygon.use_smooth = True
     obj.data.materials.append(material)
     obj.data.update()
-    bpy.context.view_layer.objects.active = obj
-    obj.select_set(True)
-    bevel = obj.modifiers.new(name="Rounded_Cloth_Edges", type="BEVEL")
-    bevel.width = min(0.008, depth * 0.16)
-    bevel.segments = 3
-    bevel.limit_method = "ANGLE"
-    bpy.ops.object.modifier_apply(modifier=bevel.name)
     return obj
 
 
@@ -777,7 +785,7 @@ def update_manifest(
         "id": "contestant-13-victim",
         "description": (
             "Face-up headless Contestant 13 body proxy in plain opaque underwear, "
-            "as a clean torso-only silhouette and one platter-ready detached-limb pile."
+            "as a clean torso-only silhouette and one flat four-limb platter presentation."
         ),
         "sourceCount": 1,
         "sourceFile": f"source/banquet/{SOURCE_SLUG}-rigged.glb",
@@ -814,7 +822,11 @@ def update_manifest(
             "triangles": limbs_report["triangles"],
             "fileBytes": limbs_report["fileBytes"],
             "pieces": ["left-arm", "right-arm", "left-leg", "right-leg"],
-            "arrangement": "compact non-graphic platter pile",
+            "arrangement": "flat four-limb presentation",
+            "flatOnPlatter": True,
+            "maximumLayerOffsetMeters": LIMB_LAYER_Y,
+            "auxiliaryPlateCount": 0,
+            "pieceBoundsMeters": limbs_report["pieceBoundsMeters"],
             "proximalBandageCaps": 4,
             "blenderReport": Path(limbs_report["report"]).name,
         },
@@ -973,8 +985,8 @@ def main() -> None:
         )
 
     bandage_material = make_material(
-        "Banquet_Victim_Bandage_Ivory",
-        (0.40, 0.35, 0.27, 1.0),
+        "Banquet_Victim_Bandage_Oxblood",
+        (0.04, 0.01, 0.015, 1.0),
         metallic=0.0,
         roughness=0.88,
     )
@@ -989,32 +1001,32 @@ def main() -> None:
             "Banquet_Victim_Left_Arm_Proximal_Bandage",
             Vector((0.68, 0.0, 0.176)),
             Vector((0, 0, -1)),
-            0.088,
-            0.075,
+            0.038,
+            0.026,
             bandage_material,
         ),
         add_runtime_rounded_cap(
             "Banquet_Victim_Right_Arm_Proximal_Bandage",
             Vector((0.68, 0.0, -0.176)),
             Vector((0, 0, 1)),
-            0.088,
-            0.075,
+            0.038,
+            0.026,
             bandage_material,
         ),
         add_runtime_rounded_cap(
             "Banquet_Victim_Left_Leg_Proximal_Bandage",
             Vector((0.009, 0.0, 0.085)),
             Vector((1, 0, 0)),
-            0.115,
-            0.080,
+            0.060,
+            0.034,
             bandage_material,
         ),
         add_runtime_rounded_cap(
             "Banquet_Victim_Right_Leg_Proximal_Bandage",
             Vector((0.009, 0.0, -0.085)),
             Vector((1, 0, 0)),
-            0.115,
-            0.080,
+            0.060,
+            0.034,
             bandage_material,
         ),
     )
@@ -1022,11 +1034,15 @@ def main() -> None:
         [limb_cores[index], limb_caps[index]]
         for index in range(4)
     )
+    # After the source-to-runtime transform, every limb's long axis already
+    # runs head-to-foot. Keep all four parallel in one grounded layer; lateral
+    # lanes make each silhouette readable without stacking or turning the
+    # proximal wraps toward the first-person camera like raised plates.
     limb_arrangement = (
-        (limb_groups[0], -0.82, 0.45, -0.10, 0.145),
-        (limb_groups[1], 0.82, 0.64, 0.10, 0.185),
-        (limb_groups[2], 0.04, 0.55, -0.17, 0.005),
-        (limb_groups[3], -0.04, 0.56, 0.17, 0.035),
+        (limb_groups[0], 0.0, -0.03, -0.29, LIMB_LAYER_Y),
+        (limb_groups[1], 0.0, -0.03, 0.29, LIMB_LAYER_Y),
+        (limb_groups[2], 0.0, 0.07, -0.09, LIMB_LAYER_Y),
+        (limb_groups[3], 0.0, 0.07, 0.09, LIMB_LAYER_Y),
     )
     for group, angle, center_x, center_z, layer_y in limb_arrangement:
         arrange_limb_group(
@@ -1045,6 +1061,13 @@ def main() -> None:
         limb_objects,
         LIMBS_MAX_RUNTIME_BOUNDS,
     )
+    limb_pieces = (
+        ("left-arm", "arm", limb_groups[0]),
+        ("right-arm", "arm", limb_groups[1]),
+        ("left-leg", "leg", limb_groups[2]),
+        ("right-leg", "leg", limb_groups[3]),
+    )
+    limb_piece_bounds = limb_piece_bounds_payload(limb_pieces)
 
     all_runtime_objects = [*torso_objects, *limb_objects]
     material_names = polish_source_materials(all_runtime_objects)
@@ -1154,7 +1177,7 @@ def main() -> None:
         **common,
         "output": limbs_path.name,
         "report": str(limbs_report_path),
-        "arrangement": "two arms and two legs in a compact layered platter pile",
+        "arrangement": "two proportional arms and two proportional legs in one flat platter layer",
         "pieceCount": 4,
         "pieces": [
             "left-arm",
@@ -1163,6 +1186,10 @@ def main() -> None:
             "right-leg",
         ],
         "fitScaleXYZ": vector_list(limbs_fit_scale),
+        "flatOnPlatter": True,
+        "maximumLayerOffsetMeters": LIMB_LAYER_Y,
+        "auxiliaryPlateCount": 0,
+        "pieceBoundsMeters": limb_piece_bounds,
         "boundsMeters": limbs_bounds,
         "triangles": triangle_count(limb_objects),
         "meshCount": len(limb_objects),
@@ -1178,7 +1205,7 @@ def main() -> None:
                 "original Meshy v2 bare arms and hands plus bare legs and feet, "
                 "including UVs and PBR atlas"
             ),
-            "added": "four non-graphic ivory proximal bandage caps only",
+            "added": "four slim non-graphic oxblood gauze wraps at the proximal endpoints only",
         },
         "visibleMeshyDerivedCore": {
             "meshes": [obj.name for obj in limb_cores],

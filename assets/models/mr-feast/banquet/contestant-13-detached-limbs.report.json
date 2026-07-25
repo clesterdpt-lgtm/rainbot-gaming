@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-25T15:12:42.359485+00:00",
+  "generatedAt": "2026-07-25T17:18:59.169101+00:00",
   "pipeline": "one selected Meshy image-to-3D/rig source -> Blender weighted source-face partition and hard planar cuts -> static standard glTF export",
   "blenderVersion": "4.5.11 LTS",
   "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/banquet/contestant-13-victim-source-v2-rigged.glb",
@@ -35,7 +35,7 @@
   "validatedFor": "Three.js r128 standard GLTFLoader",
   "output": "contestant-13-detached-limbs.glb",
   "report": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/banquet/contestant-13-detached-limbs.report.json",
-  "arrangement": "two arms and two legs in a compact layered platter pile",
+  "arrangement": "two proportional arms and two proportional legs in one flat platter layer",
   "pieceCount": 4,
   "pieces": [
     "left-arm",
@@ -45,27 +45,120 @@
   ],
   "fitScaleXYZ": [
     1.0,
-    0.786517,
-    1.0
+    0.962953,
+    0.854514
+  ],
+  "flatOnPlatter": true,
+  "maximumLayerOffsetMeters": 0.004,
+  "auxiliaryPlateCount": 0,
+  "pieceBoundsMeters": [
+    {
+      "id": "left-arm",
+      "kind": "arm",
+      "boundsMeters": {
+        "min": [
+          -0.408708,
+          0.0,
+          -0.39
+        ],
+        "max": [
+          0.297125,
+          0.11145,
+          -0.105618
+        ],
+        "size": [
+          0.705833,
+          0.11145,
+          0.284382
+        ]
+      },
+      "longAxisMeters": 0.705833
+    },
+    {
+      "id": "right-arm",
+      "kind": "arm",
+      "boundsMeters": {
+        "min": [
+          -0.408419,
+          0.0,
+          0.105618
+        ],
+        "max": [
+          0.296835,
+          0.111453,
+          0.39
+        ],
+        "size": [
+          0.705255,
+          0.111453,
+          0.284382
+        ]
+      },
+      "longAxisMeters": 0.705255
+    },
+    {
+      "id": "left-leg",
+      "kind": "leg",
+      "boundsMeters": {
+        "min": [
+          -0.320244,
+          0.0,
+          -0.167171
+        ],
+        "max": [
+          0.40866,
+          0.15,
+          0.013358
+        ],
+        "size": [
+          0.728903,
+          0.15,
+          0.180529
+        ]
+      },
+      "longAxisMeters": 0.728903
+    },
+    {
+      "id": "right-leg",
+      "kind": "leg",
+      "boundsMeters": {
+        "min": [
+          -0.320292,
+          0.0,
+          -0.013639
+        ],
+        "max": [
+          0.408708,
+          0.149922,
+          0.167451
+        ],
+        "size": [
+          0.729,
+          0.149922,
+          0.18109
+        ]
+      },
+      "longAxisMeters": 0.729
+    }
   ],
   "boundsMeters": {
     "min": [
-      -0.455491,
+      -0.408708,
       0.0,
-      -0.316754
+      -0.39
     ],
     "max": [
-      0.455491,
-      0.28,
-      0.316754
+      0.408708,
+      0.15,
+      0.39
     ],
     "size": [
-      0.910982,
-      0.28,
-      0.633509
+      0.817416,
+      0.15,
+      0.78
     ]
   },
-  "triangles": 13443,
+  "triangles": 13523,
   "meshCount": 8,
   "meshes": [
     "Banquet_Victim_Left_Arm_Proximal_Bandage",
@@ -78,19 +171,19 @@
     "Banquet_Victim_Right_Leg_Proximal_Bandage"
   ],
   "materials": [
-    "Banquet_Victim_Bandage_Ivory",
+    "Banquet_Victim_Bandage_Oxblood",
     "Banquet_Victim_Source_PBR_02"
   ],
   "preservedSourceMaterials": [
     "Banquet_Victim_Source_PBR_02"
   ],
-  "fileBytes": 607848,
+  "fileBytes": 607552,
   "garmentCleanup": {
     "removed": [
       "torso and head geometry partitioned into the companion torso prop"
     ],
     "retained": "original Meshy v2 bare arms and hands plus bare legs and feet, including UVs and PBR atlas",
-    "added": "four non-graphic ivory proximal bandage caps only"
+    "added": "four slim non-graphic oxblood gauze wraps at the proximal endpoints only"
   },
   "visibleMeshyDerivedCore": {
     "meshes": [

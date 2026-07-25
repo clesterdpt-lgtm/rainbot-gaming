@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T15:12:42.369047+00:00",
+  "generatedAt": "2026-07-25T17:18:59.176881+00:00",
   "pipeline": "Meshy source assets with deterministic Blender runtime preparation",
   "creditStrategy": {
     "sharedBodyGenerations": 1,
@@ -173,7 +173,7 @@
   ],
   "victim": {
     "id": "contestant-13-victim",
-    "description": "Face-up headless Contestant 13 body proxy in plain opaque underwear, as a clean torso-only silhouette and one platter-ready detached-limb pile.",
+    "description": "Face-up headless Contestant 13 body proxy in plain opaque underwear, as a clean torso-only silhouette and one flat four-limb platter presentation.",
     "sourceCount": 1,
     "sourceFile": "source/banquet/contestant-13-victim-source-v2-rigged.glb",
     "static": true,
@@ -210,19 +210,112 @@
       "runtimeFile": "contestant-13-detached-limbs.glb",
       "visibleMeshyDerivedCore": true,
       "boundsMeters": [
-        0.910982,
-        0.28,
-        0.633509
+        0.817416,
+        0.15,
+        0.78
       ],
-      "triangles": 13443,
-      "fileBytes": 607848,
+      "triangles": 13523,
+      "fileBytes": 607552,
       "pieces": [
         "left-arm",
         "right-arm",
         "left-leg",
         "right-leg"
       ],
-      "arrangement": "compact non-graphic platter pile",
+      "arrangement": "flat four-limb presentation",
+      "flatOnPlatter": true,
+      "maximumLayerOffsetMeters": 0.004,
+      "auxiliaryPlateCount": 0,
+      "pieceBoundsMeters": [
+        {
+          "id": "left-arm",
+          "kind": "arm",
+          "boundsMeters": {
+            "min": [
+              -0.408708,
+              0.0,
+              -0.39
+            ],
+            "max": [
+              0.297125,
+              0.11145,
+              -0.105618
+            ],
+            "size": [
+              0.705833,
+              0.11145,
+              0.284382
+            ]
+          },
+          "longAxisMeters": 0.705833
+        },
+        {
+          "id": "right-arm",
+          "kind": "arm",
+          "boundsMeters": {
+            "min": [
+              -0.408419,
+              0.0,
+              0.105618
+            ],
+            "max": [
+              0.296835,
+              0.111453,
+              0.39
+            ],
+            "size": [
+              0.705255,
+              0.111453,
+              0.284382
+            ]
+          },
+          "longAxisMeters": 0.705255
+        },
+        {
+          "id": "left-leg",
+          "kind": "leg",
+          "boundsMeters": {
+            "min": [
+              -0.320244,
+              0.0,
+              -0.167171
+            ],
+            "max": [
+              0.40866,
+              0.15,
+              0.013358
+            ],
+            "size": [
+              0.728903,
+              0.15,
+              0.180529
+            ]
+          },
+          "longAxisMeters": 0.728903
+        },
+        {
+          "id": "right-leg",
+          "kind": "leg",
+          "boundsMeters": {
+            "min": [
+              -0.320292,
+              0.0,
+              -0.013639
+            ],
+            "max": [
+              0.408708,
+              0.149922,
+              0.167451
+            ],
+            "size": [
+              0.729,
+              0.149922,
+              0.18109
+            ]
+          },
+          "longAxisMeters": 0.729
+        }
+      ],
       "proximalBandageCaps": 4,
       "blenderReport": "contestant-13-detached-limbs.report.json"
     },

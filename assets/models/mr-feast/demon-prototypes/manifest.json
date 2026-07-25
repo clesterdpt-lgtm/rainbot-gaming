@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "assetVersion": "20260725-demon-prototype-1",
+  "pipeline": "Approved ImageGen concept, Meshy 6 image-to-3D and auto-rig, then Blender 4.5 browser preparation",
+  "prototypes": [
+    {
+      "id": "pale-maw",
+      "name": "The Pale Maw",
+      "targetHeight": 2.18,
+      "model": "pale-maw.glb",
+      "preparationReport": "pale-maw.report.json",
+      "visualNotes": "A chalk-pale, eyeless stalking humanoid with a split vertical mouth, raised shoulder blades, elongated arms, reverse-jointed leg read, and black claws.",
+      "reference": {
+        "approvedConcept": "output/imagegen/mr-feast-demon-prototypes/05-pale-maw.png",
+        "meshyInput": "assets/models/mr-feast/source/demon-prototypes/references/pale-maw-approved.png"
+      },
+      "provenance": {
+        "meshy": {
+          "model": "meshy-6",
+          "generationTaskId": "019f9b5d-7d11-7ab0-aa81-b2e86349304b",
+          "rigTaskId": "019f9b60-42ce-7ef1-8f49-b49c0b56efe3",
+          "idleTaskId": "019f9b61-b827-7b3a-b4f0-eeff81415203",
+          "consumedCredits": 38
+        },
+        "blender": {
+          "version": "4.5.11 LTS",
+          "script": "../../../../scripts/blender/prepare-demon-prototype.py",
+          "triangles": 30000,
+          "textureMaxSize": 768,
+          "compression": "none"
+        }
+      },
+      "materialTuning": {
+        "emissiveFromAlbedo": 0.045,
+        "maximumMetalness": 0.08,
+        "minimumRoughness": 0.62
+      },
+      "animations": {
+        "idle": "pale-maw-idle.glb",
+        "walk": "pale-maw-walk.glb",
+        "run": "pale-maw-run.glb"
+      },
+      "animationReports": {
+        "idle": "pale-maw-idle.animation-report.json",
+        "walk": "pale-maw-walk.animation-report.json",
+        "run": "pale-maw-run.animation-report.json"
+      }
+    },
+    {
+      "id": "banquet-saint",
+      "name": "The Banquet Saint",
+      "targetHeight": 2.34,
+      "model": "banquet-saint.glb",
+      "preparationReport": "banquet-saint.report.json",
+      "visualNotes": "A tall ceremonial figure with a blank porcelain mask, narrow black smile, crown-like cage, aged metal breastplate, oxblood brocade, and long skeletal hands.",
+      "reference": {
+        "approvedConcept": "output/imagegen/mr-feast-demon-prototypes/02-banquet-saint.png",
+        "meshyInput": "assets/models/mr-feast/source/demon-prototypes/references/banquet-saint-approved.png"
+      },
+      "provenance": {
+        "meshy": {
+          "model": "meshy-6",
+          "generationTaskId": "019f9b5d-7d27-746a-8d7b-6dca01766c48",
+          "rigTaskId": "019f9b60-42cd-7ef0-b02d-747528bb4c39",
+          "idleTaskId": "019f9b61-b823-7b39-acf5-2649e2958104",
+          "consumedCredits": 38
+        },
+        "blender": {
+          "version": "4.5.11 LTS",
+          "script": "../../../../scripts/blender/prepare-demon-prototype.py",
+          "triangles": 30000,
+          "textureMaxSize": 768,
+          "compression": "none"
+        }
+      },
+      "materialTuning": {
+        "emissiveFromAlbedo": 0.035,
+        "maximumMetalness": 0.42,
+        "minimumRoughness": 0.48
+      },
+      "animations": {
+        "idle": "banquet-saint-idle.glb",
+        "walk": "banquet-saint-walk.glb",
+        "run": "banquet-saint-run.glb"
+      },
+      "animationNotes": {
+        "run": "A faster stately stride derived from the Meshy walk take; the generic high-knee run collapsed the long ceremonial robe and was rejected during browser visual QA."
+      },
+      "animationReports": {
+        "idle": "banquet-saint-idle.animation-report.json",
+        "walk": "banquet-saint-walk.animation-report.json",
+        "run": "banquet-saint-run.animation-report.json"
+      }
+    }
+  ]
+}

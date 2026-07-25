@@ -1487,6 +1487,74 @@
       }),
     ]),
   });
+  const DEMON_PROTOTYPES = Object.freeze({
+    manifestPath: "../models/mr-feast/demon-prototypes/manifest.json",
+    assetVersion: "20260725-demon-prototype-1",
+    arrivalRadius: 0.075,
+    turnSpeed: 2.45,
+    movementAlignment: 0.965,
+    fadeSeconds: 0.24,
+    turnPlaybackRate: 0.42,
+    contactShadowOpacity: 0.26,
+    placements: Object.freeze([
+      Object.freeze({
+        id: "pale-maw",
+        room: "REAR LAWN",
+        floor: "GROUNDS",
+        position: Object.freeze({ x: -5.5, y: ESTATE_GROUND_Y, z: -15.8 }),
+        qaFrame: Object.freeze({ x: 0, y: ESTATE_GROUND_Y, z: -17.2, yaw: Math.PI / 2 }),
+        rotationY: Math.PI / 2,
+        walkSpeed: 0.78,
+        runSpeed: 1.34,
+        runEvery: 3,
+        walkPlaybackRate: 0.76,
+        runPlaybackRate: 0.82,
+        idlePlaybackRate: 0.78,
+        inspectionLight: Object.freeze({
+          color: 0xb9d8e8,
+          intensity: 1.15,
+          distance: 5.5,
+          decay: 2,
+          x: 0.7,
+          y: 1.45,
+          z: 0.9,
+        }),
+        initialPause: 0.8,
+        route: Object.freeze([
+          Object.freeze({ x: -5.5, z: -15.8, pause: 0.8 }),
+          Object.freeze({ x: -2, z: -18, pause: 0.35 }),
+          Object.freeze({ x: 2, z: -18, pause: 0.65 }),
+          Object.freeze({ x: 5.5, z: -15.8, pause: 0.25 }),
+          Object.freeze({ x: 6, z: -21, pause: 0.55 }),
+          Object.freeze({ x: 0, z: -24, pause: 0.4 }),
+          Object.freeze({ x: -6, z: -21, pause: 0.7 }),
+        ]),
+      }),
+      Object.freeze({
+        id: "banquet-saint",
+        room: "FRONT FOYER",
+        floor: "MAIN LEVEL",
+        position: Object.freeze({ x: -2.35, y: FLOOR.MAIN, z: 8.6 }),
+        qaFrame: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 8.25, yaw: Math.PI / 2 }),
+        rotationY: Math.PI / 2,
+        walkSpeed: 0.54,
+        runSpeed: 0.88,
+        runEvery: 0,
+        walkPlaybackRate: 0.68,
+        runPlaybackRate: 0.72,
+        idlePlaybackRate: 0.7,
+        initialPause: 1.2,
+        route: Object.freeze([
+          Object.freeze({ x: -2.35, z: 8.6, pause: 1.2 }),
+          Object.freeze({ x: 0, z: 7.3, pause: 0.8 }),
+          Object.freeze({ x: 2.35, z: 8.6, pause: 1.05 }),
+          Object.freeze({ x: 2.1, z: 6.05, pause: 0.7 }),
+          Object.freeze({ x: 0, z: 6.65, pause: 1.1 }),
+          Object.freeze({ x: -2.1, z: 6.05, pause: 0.75 }),
+        ]),
+      }),
+    ]),
+  });
   function mrFeastResponseNode(id, x, y, z, zone, options = {}) {
     return Object.freeze({
       id,
@@ -3626,6 +3694,7 @@
   let readableBookSystem = null;
   let mrFeastNpc = null;
   let mansionContestants = null;
+  let demonPrototypePatrol = null;
   let seatingSystem = null;
   let cameraSecurity = null;
   let flashlightSystem = null;
@@ -13009,6 +13078,832 @@
     }
   }
 
+  class DemonPrototypePatrolSystem {
+    constructor() {
+      this.enabled = false;
+      this.loadStatus = "idle";
+      this.settled = false;
+      this.error = null;
+      this.loadPromise = null;
+      this.manifest = null;
+      this.fetchCount = 0;
+      this.entries = DEMON_PROTOTYPES.placements.map((placement) => {
+        const root = new THREE.Group();
+        root.name = `demon-prototype-${placement.id}`;
+        root.position.set(placement.position.x, placement.position.y, placement.position.z);
+        root.rotation.y = placement.rotationY;
+        root.visible = false;
+        scene.add(root);
+        return {
+          id: placement.id,
+          placement,
+          root,
+          spec: null,
+          status: "idle",
+          loadStatus: "idle",
+          error: null,
+          model: null,
+          modelMeshes: [],
+          mixer: null,
+          actions: {},
+          action: null,
+          activeClip: null,
+          activeAction: "disabled",
+          animationTracks: {},
+          animationProbeBone: null,
+          animationProbeStart: null,
+          animationPoseChanged: false,
+          animationProbeMaximumDelta: 0,
+          blendCount: 0,
+          bones: 0,
+          skinnedMeshes: 0,
+          triangles: 0,
+          materials: 0,
+          textures: 0,
+          materialEmissiveFromAlbedo: 0,
+          materialMaximumMetalness: 0,
+          materialMinimumRoughness: 1,
+          size: null,
+          center: null,
+          grounded: false,
+          contactShadow: null,
+          inspectionLight: null,
+          routeIndex: placement.route.length > 1 ? 1 : 0,
+          routeCycles: 0,
+          completedLegs: 0,
+          distanceTravelled: 0,
+          maximumObservedSpeed: 0,
+          turnRadians: 0,
+          pauseRemaining: placement.initialPause || 0,
+          activity: "disabled",
+          qaHoldRemaining: 0,
+          qaActionLocked: false,
+        };
+      });
+      animatedObjects.push(this);
+    }
+
+    assetUrl(relativePath, manifestUrl) {
+      const url = new URL(relativePath, manifestUrl);
+      url.searchParams.set("v", DEMON_PROTOTYPES.assetVersion);
+      return url.href;
+    }
+
+    loadGltf(loader, url) {
+      return new Promise((resolve, reject) => {
+        loader.load(url, resolve, undefined, (error) => {
+          reject(new Error(error?.message || `Could not load ${url}`));
+        });
+      });
+    }
+
+    setEnabled(enabled) {
+      const nextEnabled = Boolean(enabled);
+      this.enabled = nextEnabled;
+      document.documentElement.dataset.demonPrototypePatrol = nextEnabled ? "enabled" : "disabled";
+      if (!nextEnabled) {
+        for (const entry of this.entries) {
+          entry.root.visible = false;
+          this.resetEntry(entry, { playIdle: false });
+        }
+        return this.getDiagnostics();
+      }
+      for (const entry of this.entries) {
+        entry.root.visible = entry.status === "ready";
+        if (entry.status === "ready") this.resetEntry(entry, { playIdle: true });
+      }
+      if (this.loadStatus === "idle" || this.loadStatus === "error") void this.load();
+      return this.getDiagnostics();
+    }
+
+    resetEntry(entry, { playIdle = this.enabled } = {}) {
+      entry.root.position.set(
+        entry.placement.position.x,
+        entry.placement.position.y,
+        entry.placement.position.z,
+      );
+      entry.root.rotation.y = entry.placement.rotationY;
+      entry.routeIndex = entry.placement.route.length > 1 ? 1 : 0;
+      entry.routeCycles = 0;
+      entry.completedLegs = 0;
+      entry.distanceTravelled = 0;
+      entry.maximumObservedSpeed = 0;
+      entry.turnRadians = 0;
+      entry.pauseRemaining = entry.placement.initialPause || 0;
+      entry.activity = playIdle ? "idle" : "disabled";
+      entry.qaHoldRemaining = 0;
+      entry.qaActionLocked = false;
+      entry.animationPoseChanged = false;
+      entry.animationProbeMaximumDelta = 0;
+      entry.blendCount = 0;
+      if (!entry.mixer) return;
+      entry.mixer.stopAllAction();
+      entry.action = null;
+      entry.activeClip = null;
+      entry.activeAction = playIdle ? "idle" : "disabled";
+      if (playIdle && entry.actions.idle) {
+        this.playAction(
+          entry,
+          "idle",
+          "idle",
+          entry.placement.idlePlaybackRate,
+          0,
+        );
+        const idlePhase = entry.id === "pale-maw" ? 0.18 : 0.57;
+        entry.action.time = entry.action.getClip().duration * idlePhase;
+        entry.mixer.update(0);
+        entry.animationProbeStart = entry.animationProbeBone?.quaternion.clone() || null;
+      }
+    }
+
+    prepareAction(entry, gltf, name) {
+      const clip = gltf?.animations?.[0]?.clone();
+      if (!clip) throw new Error(`${entry.id} ${name} GLB has no animation clip`);
+      clip.name = name;
+      const rotationTracks = clip.tracks.filter((track) => track.name.endsWith(".quaternion"));
+      const translationTracks = clip.tracks.filter((track) => track.name.endsWith(".position"));
+      const scaleTracks = clip.tracks.filter((track) => track.name.endsWith(".scale"));
+      const boundRotationTracks = rotationTracks.filter((track) => {
+        const splitAt = track.name.lastIndexOf(".");
+        return entry.model.getObjectByName(track.name.slice(0, splitAt));
+      });
+      const dynamicRotationTracks = boundRotationTracks.filter((track) => {
+        const values = track.values || [];
+        for (let offset = 4; offset + 3 < values.length; offset += 4) {
+          if (
+            Math.abs(values[offset] - values[0])
+            + Math.abs(values[offset + 1] - values[1])
+            + Math.abs(values[offset + 2] - values[2])
+            + Math.abs(values[offset + 3] - values[3]) > 0.0001
+          ) return true;
+        }
+        return false;
+      });
+      const diagnostics = {
+        total: clip.tracks.length,
+        rotation: rotationTracks.length,
+        translation: translationTracks.length,
+        scale: scaleTracks.length,
+        boundRotation: boundRotationTracks.length,
+        dynamicRotation: dynamicRotationTracks.length,
+      };
+      if (
+        rotationTracks.length < 20
+        || boundRotationTracks.length !== rotationTracks.length
+        || dynamicRotationTracks.length < 1
+        || translationTracks.length
+        || scaleTracks.length
+      ) {
+        throw new Error(
+          `${entry.id} ${name} clip failed stationary rig binding checks: ${JSON.stringify(diagnostics)}`,
+        );
+      }
+      const action = entry.mixer.clipAction(clip);
+      action.enabled = true;
+      action.setLoop(THREE.LoopRepeat, Infinity);
+      entry.actions[name] = action;
+      entry.animationTracks[name] = diagnostics;
+      if (name === "idle") {
+        const strongest = dynamicRotationTracks.reduce((best, track) => {
+          const values = track.values || [];
+          let maximumDelta = 0;
+          for (let offset = 4; offset + 3 < values.length; offset += 4) {
+            maximumDelta = Math.max(
+              maximumDelta,
+              Math.abs(values[offset] - values[0])
+                + Math.abs(values[offset + 1] - values[1])
+                + Math.abs(values[offset + 2] - values[2])
+                + Math.abs(values[offset + 3] - values[3]),
+            );
+          }
+          return !best || maximumDelta > best.maximumDelta
+            ? { track, maximumDelta }
+            : best;
+        }, null);
+        const probeName = strongest?.track?.name.slice(
+          0,
+          strongest.track.name.lastIndexOf("."),
+        );
+        entry.animationProbeBone = probeName
+          ? entry.model.getObjectByName(probeName)
+          : null;
+      }
+      return action;
+    }
+
+    playAction(
+      entry,
+      clipName,
+      semanticName = clipName,
+      playbackRate = 1,
+      fadeSeconds = DEMON_PROTOTYPES.fadeSeconds,
+    ) {
+      const resolvedClip = entry.actions[clipName] ? clipName : "idle";
+      const next = entry.actions[resolvedClip];
+      if (!next) return null;
+      next.setEffectiveTimeScale(Math.max(0.05, Number(playbackRate) || 1));
+      if (entry.action === next && next.isRunning()) {
+        entry.activeClip = resolvedClip;
+        entry.activeAction = semanticName;
+        return next;
+      }
+      const previous = entry.action;
+      next.enabled = true;
+      next.setEffectiveWeight(1);
+      next.reset();
+      next.play();
+      if (previous && previous !== next) {
+        next.crossFadeFrom(previous, Math.max(0, fadeSeconds), true);
+        entry.blendCount += 1;
+      }
+      entry.action = next;
+      entry.activeClip = resolvedClip;
+      entry.activeAction = semanticName;
+      return next;
+    }
+
+    async loadEntry(loader, entry, manifestUrl) {
+      const spec = entry.spec;
+      if (
+        !spec?.model
+        || !spec?.animations?.idle
+        || !spec?.animations?.walk
+        || !spec?.animations?.run
+      ) throw new Error("Prototype entry is missing its model or animation clips");
+      entry.status = "loading";
+      entry.loadStatus = "loading";
+      const [base, idle, walk, run] = await Promise.all([
+        this.loadGltf(loader, this.assetUrl(spec.model, manifestUrl)),
+        this.loadGltf(loader, this.assetUrl(spec.animations.idle, manifestUrl)),
+        this.loadGltf(loader, this.assetUrl(spec.animations.walk, manifestUrl)),
+        this.loadGltf(loader, this.assetUrl(spec.animations.run, manifestUrl)),
+      ]);
+      const model = THREE.SkeletonUtils.clone(base.scene);
+      model.name = `demon-prototype-${entry.id}-model`;
+      model.updateMatrixWorld(true);
+      const bounds = new THREE.Box3().setFromObject(model);
+      const initialSize = bounds.getSize(new THREE.Vector3());
+      const targetHeight = Number(spec.targetHeight) || 2.2;
+      if (!Number.isFinite(initialSize.y) || initialSize.y <= 0) {
+        throw new Error("Prototype has invalid model bounds");
+      }
+      model.scale.multiplyScalar(targetHeight / initialSize.y);
+      model.updateMatrixWorld(true);
+      bounds.setFromObject(model);
+      const modelCenter = bounds.getCenter(new THREE.Vector3());
+      model.position.x -= modelCenter.x;
+      model.position.y -= bounds.min.y;
+      model.position.z -= modelCenter.z;
+
+      const materials = new Set();
+      const textures = new Set();
+      const materialTuning = spec.materialTuning || {};
+      const emissiveFromAlbedo = clamp(
+        Number(materialTuning.emissiveFromAlbedo) || 0,
+        0,
+        0.2,
+      );
+      const maximumMetalness = clamp(
+        Number.isFinite(Number(materialTuning.maximumMetalness))
+          ? Number(materialTuning.maximumMetalness)
+          : 0.2,
+        0,
+        1,
+      );
+      const minimumRoughness = clamp(
+        Number.isFinite(Number(materialTuning.minimumRoughness))
+          ? Number(materialTuning.minimumRoughness)
+          : 0.5,
+        0,
+        1,
+      );
+      model.traverse((object) => {
+        if (object.isBone) entry.bones += 1;
+        if (!object.isMesh) return;
+        if (object.isSkinnedMesh) entry.skinnedMeshes += 1;
+        const positionCount = object.geometry?.getAttribute("position")?.count || 0;
+        entry.triangles += object.geometry?.index
+          ? object.geometry.index.count / 3
+          : positionCount / 3;
+        object.castShadow = true;
+        object.receiveShadow = true;
+        entry.modelMeshes.push(object);
+        for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+          if (!material) continue;
+          materials.add(material);
+          if ("roughness" in material) {
+            material.roughness = Math.max(Number(material.roughness) || 0, minimumRoughness);
+          }
+          if ("metalness" in material) {
+            material.metalness = Math.min(Number(material.metalness) || 0, maximumMetalness);
+          }
+          if (material.map && material.emissive && "emissiveIntensity" in material) {
+            material.emissive.set(0xffffff);
+            material.emissiveMap = material.map;
+            material.emissiveIntensity = emissiveFromAlbedo;
+          }
+          for (const value of Object.values(material)) {
+            if (value?.isTexture) textures.add(value);
+          }
+          material.needsUpdate = true;
+        }
+      });
+      if (!entry.skinnedMeshes || entry.bones < 20) {
+        throw new Error("Prototype GLB is not a valid humanoid rig");
+      }
+      entry.materials = materials.size;
+      entry.textures = textures.size;
+      entry.materialEmissiveFromAlbedo = emissiveFromAlbedo;
+      entry.materialMaximumMetalness = Math.max(
+        0,
+        ...[...materials].map((material) => Number(material.metalness) || 0),
+      );
+      entry.materialMinimumRoughness = Math.min(
+        1,
+        ...[...materials].map((material) => Number(material.roughness) || 1),
+      );
+      entry.model = model;
+      entry.root.add(model);
+      entry.mixer = new THREE.AnimationMixer(model);
+      this.prepareAction(entry, idle, "idle");
+      this.prepareAction(entry, walk, "walk");
+      this.prepareAction(entry, run, "run");
+
+      entry.root.updateMatrixWorld(true);
+      const worldBounds = new THREE.Box3().setFromObject(model);
+      const size = worldBounds.getSize(new THREE.Vector3());
+      const worldCenter = worldBounds.getCenter(new THREE.Vector3());
+      entry.size = { x: size.x, y: size.y, z: size.z };
+      entry.center = { x: worldCenter.x, y: worldCenter.y, z: worldCenter.z };
+      entry.grounded = Math.abs(worldBounds.min.y - entry.placement.position.y) < 0.03;
+
+      const contactShadow = new THREE.Mesh(
+        new THREE.CircleGeometry(Math.max(0.38, Math.min(0.82, size.x * 0.32)), 24),
+        new THREE.MeshBasicMaterial({
+          color: 0x000000,
+          transparent: true,
+          opacity: DEMON_PROTOTYPES.contactShadowOpacity,
+          depthWrite: false,
+          toneMapped: false,
+        }),
+      );
+      contactShadow.name = `demon-prototype-${entry.id}-contact-shadow`;
+      contactShadow.rotation.x = -Math.PI / 2;
+      contactShadow.position.y = 0.012;
+      contactShadow.scale.y = Math.max(0.55, Math.min(1.25, size.z / Math.max(0.1, size.x)));
+      contactShadow.castShadow = false;
+      contactShadow.receiveShadow = false;
+      entry.root.add(contactShadow);
+      entry.contactShadow = contactShadow;
+      const inspectionLightSpec = entry.placement.inspectionLight;
+      if (inspectionLightSpec) {
+        const inspectionLight = new THREE.PointLight(
+          inspectionLightSpec.color,
+          inspectionLightSpec.intensity,
+          inspectionLightSpec.distance,
+          inspectionLightSpec.decay,
+        );
+        inspectionLight.name = `demon-prototype-${entry.id}-inspection-fill`;
+        inspectionLight.position.set(
+          inspectionLightSpec.x,
+          inspectionLightSpec.y,
+          inspectionLightSpec.z,
+        );
+        inspectionLight.castShadow = false;
+        entry.root.add(inspectionLight);
+        entry.inspectionLight = inspectionLight;
+      }
+
+      entry.status = "ready";
+      entry.loadStatus = "ready";
+      entry.error = null;
+      entry.root.visible = this.enabled;
+      this.resetEntry(entry, { playIdle: this.enabled });
+      console.info(
+        `[Demon prototypes] loaded ${spec.name || entry.id}: `
+        + `${size.x.toFixed(2)} × ${size.y.toFixed(2)} × ${size.z.toFixed(2)}m, `
+        + `${Math.round(entry.triangles).toLocaleString()} triangles, ${entry.bones} bones`,
+      );
+    }
+
+    load() {
+      if (this.loadPromise) return this.loadPromise;
+      if (this.loadStatus === "ready" || this.loadStatus === "partial") {
+        return Promise.resolve(this.getDiagnostics());
+      }
+      this.loadStatus = "loading";
+      this.settled = false;
+      this.error = null;
+      document.documentElement.dataset.demonPrototypeAssets = "loading";
+      this.loadPromise = (async () => {
+        try {
+          if (typeof THREE.GLTFLoader !== "function") {
+            throw new Error("THREE.GLTFLoader is unavailable");
+          }
+          if (!THREE.SkeletonUtils || typeof THREE.SkeletonUtils.clone !== "function") {
+            throw new Error("THREE.SkeletonUtils.clone is unavailable");
+          }
+          const manifestUrl = new URL(DEMON_PROTOTYPES.manifestPath, SCRIPT_URL);
+          manifestUrl.searchParams.set("v", DEMON_PROTOTYPES.assetVersion);
+          this.fetchCount += 1;
+          const response = await fetch(manifestUrl.href, {
+            cache: state.qa ? "no-store" : "default",
+          });
+          if (!response.ok) {
+            throw new Error(`Demon prototype manifest returned HTTP ${response.status}`);
+          }
+          const manifest = await response.json();
+          const expectedIds = this.entries.map((entry) => entry.id).sort();
+          const declaredIds = Array.isArray(manifest?.prototypes)
+            ? manifest.prototypes.map((prototype) => prototype.id).sort()
+            : [];
+          if (
+            declaredIds.length !== expectedIds.length
+            || declaredIds.some((id, index) => id !== expectedIds[index])
+          ) throw new Error("Demon prototype manifest must declare exactly the two approved concepts");
+          this.manifest = manifest;
+          const loader = new THREE.GLTFLoader();
+          await Promise.all(this.entries.map(async (entry) => {
+            entry.spec = manifest.prototypes.find((prototype) => prototype.id === entry.id);
+            try {
+              await this.loadEntry(loader, entry, manifestUrl);
+            } catch (error) {
+              entry.status = "error";
+              entry.loadStatus = "error";
+              entry.error = String(error?.message || error);
+              entry.root.visible = false;
+              console.warn(
+                `[Demon prototypes] ${entry.spec?.name || entry.id} could not load: ${entry.error}`,
+              );
+            }
+          }));
+          const readyCount = this.entries.filter((entry) => entry.status === "ready").length;
+          const failedCount = this.entries.filter((entry) => entry.status === "error").length;
+          this.loadStatus = failedCount === 0
+            ? "ready"
+            : readyCount > 0 ? "partial" : "error";
+        } catch (error) {
+          this.loadStatus = "error";
+          this.error = String(error?.message || error);
+          for (const entry of this.entries) {
+            entry.status = "error";
+            entry.loadStatus = "error";
+            entry.error = this.error;
+            entry.root.visible = false;
+          }
+          console.warn("Demon prototypes could not be loaded", error);
+        } finally {
+          this.settled = true;
+          this.loadPromise = null;
+          document.documentElement.dataset.demonPrototypeAssets = this.loadStatus;
+        }
+        return this.getDiagnostics();
+      })();
+      return this.loadPromise;
+    }
+
+    stepAnimation(entry, dt) {
+      entry.mixer.update(Math.max(0, Number(dt) || 0));
+      if (entry.animationProbeBone && entry.animationProbeStart) {
+        const poseDelta = 1 - Math.abs(
+          entry.animationProbeBone.quaternion.dot(entry.animationProbeStart),
+        );
+        entry.animationProbeMaximumDelta = Math.max(
+          entry.animationProbeMaximumDelta,
+          poseDelta,
+        );
+        if (entry.animationProbeMaximumDelta > 0.00000001) {
+          entry.animationPoseChanged = true;
+        }
+      }
+    }
+
+    facePoint(entry, point, dt) {
+      const dx = point.x - entry.root.position.x;
+      const dz = point.z - entry.root.position.z;
+      if (Math.hypot(dx, dz) < 0.0001) return 1;
+      const desiredYaw = Math.atan2(dx, dz);
+      const yawDelta = Math.atan2(
+        Math.sin(desiredYaw - entry.root.rotation.y),
+        Math.cos(desiredYaw - entry.root.rotation.y),
+      );
+      const yawStep = clamp(
+        yawDelta,
+        -DEMON_PROTOTYPES.turnSpeed * dt,
+        DEMON_PROTOTYPES.turnSpeed * dt,
+      );
+      entry.root.rotation.y = Math.atan2(
+        Math.sin(entry.root.rotation.y + yawStep),
+        Math.cos(entry.root.rotation.y + yawStep),
+      );
+      entry.turnRadians += Math.abs(yawStep);
+      return Math.cos(yawDelta);
+    }
+
+    arriveAtRoutePoint(entry, target) {
+      entry.root.position.x = target.x;
+      entry.root.position.z = target.z;
+      entry.root.position.y = entry.placement.position.y;
+      entry.completedLegs += 1;
+      entry.routeIndex = (entry.routeIndex + 1) % entry.placement.route.length;
+      if (entry.routeIndex === 0) entry.routeCycles += 1;
+      entry.pauseRemaining = Math.max(0, Number(target.pause) || 0);
+      entry.activity = "idle";
+      this.playAction(
+        entry,
+        "idle",
+        "idle",
+        entry.placement.idlePlaybackRate,
+      );
+    }
+
+    updateEntry(entry, dt) {
+      if (
+        entry.status !== "ready"
+        || !entry.mixer
+        || !entry.root.visible
+      ) return;
+      const stepDt = Math.max(0, Number(dt) || 0);
+      if (entry.qaHoldRemaining > 0) {
+        entry.qaHoldRemaining = Math.max(0, entry.qaHoldRemaining - stepDt);
+        entry.activity = entry.qaActionLocked ? "qa-pose" : "qa-frame";
+        if (!entry.qaActionLocked) {
+          this.playAction(
+            entry,
+            "idle",
+            "idle",
+            entry.placement.idlePlaybackRate,
+          );
+        }
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+      entry.qaActionLocked = false;
+      if (entry.pauseRemaining > 0) {
+        entry.pauseRemaining = Math.max(0, entry.pauseRemaining - stepDt);
+        entry.activity = "idle";
+        this.playAction(
+          entry,
+          "idle",
+          "idle",
+          entry.placement.idlePlaybackRate,
+        );
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+      const target = entry.placement.route[entry.routeIndex];
+      if (!target) {
+        entry.activity = "idle";
+        this.playAction(
+          entry,
+          "idle",
+          "idle",
+          entry.placement.idlePlaybackRate,
+        );
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+      const dx = target.x - entry.root.position.x;
+      const dz = target.z - entry.root.position.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance <= DEMON_PROTOTYPES.arrivalRadius) {
+        this.arriveAtRoutePoint(entry, target);
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+      const alignment = this.facePoint(entry, target, stepDt);
+      if (alignment < DEMON_PROTOTYPES.movementAlignment) {
+        entry.activity = "turning";
+        this.playAction(
+          entry,
+          "walk",
+          "turn",
+          DEMON_PROTOTYPES.turnPlaybackRate,
+        );
+        this.stepAnimation(entry, stepDt);
+        return;
+      }
+      const runLeg = entry.placement.runEvery > 0
+        && (entry.completedLegs + 1) % entry.placement.runEvery === 0;
+      const speed = runLeg
+        ? entry.placement.runSpeed
+        : entry.placement.walkSpeed;
+      const distanceStep = Math.min(distance, speed * stepDt);
+      entry.root.position.x += dx / distance * distanceStep;
+      entry.root.position.z += dz / distance * distanceStep;
+      entry.root.position.y = entry.placement.position.y;
+      entry.distanceTravelled += distanceStep;
+      entry.maximumObservedSpeed = Math.max(
+        entry.maximumObservedSpeed,
+        stepDt > 0 ? distanceStep / stepDt : 0,
+      );
+      entry.activity = runLeg ? "running" : "walking";
+      this.playAction(
+        entry,
+        runLeg ? "run" : "walk",
+        runLeg ? "run" : "walk",
+        runLeg
+          ? entry.placement.runPlaybackRate
+          : entry.placement.walkPlaybackRate,
+      );
+      this.stepAnimation(entry, stepDt);
+    }
+
+    update(dt) {
+      if (!state.started || !this.enabled) return;
+      for (const entry of this.entries) this.updateEntry(entry, dt);
+    }
+
+    async awaitForQA() {
+      if (!state.qa || !this.enabled) return this.getDiagnostics();
+      await this.load();
+      return this.getDiagnostics();
+    }
+
+    advanceForQA(seconds) {
+      if (!state.qa || !this.enabled) return this.getDiagnostics();
+      const steps = Math.min(
+        7200,
+        Math.max(0, Math.ceil((Number(seconds) || 0) * 60)),
+      );
+      for (let step = 0; step < steps; step += 1) {
+        for (const entry of this.entries) this.updateEntry(entry, 1 / 60);
+      }
+      return this.getDiagnostics();
+    }
+
+    frameForQA(id) {
+      if (!state.qa || !physics) return null;
+      const entry = this.entries.find((candidate) => candidate.id === id);
+      if (!entry || entry.status !== "ready" || !entry.root.visible) return null;
+      entry.qaHoldRemaining = 5;
+      entry.qaActionLocked = false;
+      this.playAction(
+        entry,
+        "idle",
+        "idle",
+        entry.placement.idlePlaybackRate,
+      );
+      const frameMark = entry.placement.qaFrame || {
+        x: entry.root.position.x,
+        y: entry.root.position.y,
+        z: entry.root.position.z,
+        yaw: entry.root.rotation.y,
+      };
+      entry.root.position.set(frameMark.x, frameMark.y, frameMark.z);
+      entry.root.rotation.y = frameMark.yaw;
+      const distance = entry.id === "pale-maw" ? 3.45 : 3.8;
+      const forwardX = Math.sin(entry.root.rotation.y);
+      const forwardZ = Math.cos(entry.root.rotation.y);
+      const viewX = entry.root.position.x + forwardX * distance;
+      const viewZ = entry.root.position.z + forwardZ * distance;
+      const lookYaw = Math.atan2(
+        viewX - entry.root.position.x,
+        viewZ - entry.root.position.z,
+      );
+      teleport(viewX, entry.placement.position.y, viewZ, lookYaw, -0.08);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      return this.entryDiagnostics(entry);
+    }
+
+    poseForQA(id, actionName = "walk", phase = 0.25) {
+      if (!state.qa) return null;
+      const entry = this.entries.find((candidate) => candidate.id === id);
+      const action = entry?.actions?.[actionName];
+      if (!entry || !action || !entry.root.visible) return null;
+      entry.mixer.stopAllAction();
+      action.enabled = true;
+      action.reset();
+      action.setEffectiveWeight(1);
+      const rate = actionName === "idle"
+        ? entry.placement.idlePlaybackRate
+        : actionName === "run"
+          ? entry.placement.runPlaybackRate
+          : entry.placement.walkPlaybackRate;
+      action.setEffectiveTimeScale(rate);
+      action.play();
+      action.time = action.getClip().duration * clamp(Number(phase) || 0, 0, 0.999);
+      entry.mixer.update(0);
+      entry.action = action;
+      entry.activeClip = actionName;
+      entry.activeAction = `qa-${actionName}`;
+      entry.activity = "qa-pose";
+      entry.qaActionLocked = true;
+      entry.qaHoldRemaining = 5;
+      return this.entryDiagnostics(entry);
+    }
+
+    entryDiagnostics(entry) {
+      return {
+        id: entry.id,
+        name: entry.spec?.name || null,
+        room: entry.placement.room,
+        floor: entry.placement.floor,
+        status: entry.status,
+        loadStatus: entry.loadStatus,
+        error: entry.error,
+        loaded: entry.status === "ready",
+        visible: Boolean(entry.root.visible && entry.model),
+        modelVisible: Boolean(
+          entry.root.visible
+          && entry.modelMeshes.some((mesh) => mesh.visible),
+        ),
+        modelFile: entry.spec?.model || null,
+        position: {
+          x: Number(entry.root.position.x.toFixed(3)),
+          y: Number(entry.root.position.y.toFixed(3)),
+          z: Number(entry.root.position.z.toFixed(3)),
+        },
+        rotationY: Number(entry.root.rotation.y.toFixed(4)),
+        size: entry.size
+          ? Object.fromEntries(
+            Object.entries(entry.size)
+              .map(([key, value]) => [key, Number(value.toFixed(3))]),
+          )
+          : null,
+        center: entry.center
+          ? Object.fromEntries(
+            Object.entries(entry.center)
+              .map(([key, value]) => [key, Number(value.toFixed(3))]),
+          )
+          : null,
+        grounded: entry.grounded,
+        triangles: Math.round(entry.triangles),
+        materials: entry.materials,
+        textures: entry.textures,
+        skinnedMeshes: entry.skinnedMeshes,
+        bones: entry.bones,
+        colliderEnabled: false,
+        interactionRegistered: false,
+        storyEffects: false,
+        inspectionLight: entry.inspectionLight ? {
+          color: entry.inspectionLight.color.getHex(),
+          intensity: Number(entry.inspectionLight.intensity.toFixed(3)),
+          distance: Number(entry.inspectionLight.distance.toFixed(3)),
+          castsShadow: entry.inspectionLight.castShadow,
+        } : null,
+        material: {
+          emissiveFromAlbedo: Number(entry.materialEmissiveFromAlbedo.toFixed(3)),
+          maximumMetalness: Number(entry.materialMaximumMetalness.toFixed(3)),
+          minimumRoughness: Number(entry.materialMinimumRoughness.toFixed(3)),
+        },
+        activity: entry.activity,
+        routeIndex: entry.routeIndex,
+        routeCycles: entry.routeCycles,
+        completedLegs: entry.completedLegs,
+        distanceTravelled: Number(entry.distanceTravelled.toFixed(3)),
+        maximumObservedSpeed: Number(entry.maximumObservedSpeed.toFixed(3)),
+        turnRadians: Number(entry.turnRadians.toFixed(4)),
+        pauseRemaining: Number(entry.pauseRemaining.toFixed(3)),
+        activeAction: entry.activeAction,
+        activeClip: entry.activeClip,
+        boundClips: Object.keys(entry.actions),
+        playing: Boolean(entry.action?.isRunning()),
+        animationTime: Number((entry.action?.time || 0).toFixed(3)),
+        animationDuration: Number(
+          (entry.action?.getClip()?.duration || 0).toFixed(3),
+        ),
+        animationTracks: entry.animationTracks,
+        poseChanged: entry.animationPoseChanged,
+        animationProbeBone: entry.animationProbeBone?.name || null,
+        animationProbeMaximumDelta: Number(
+          entry.animationProbeMaximumDelta.toFixed(8),
+        ),
+        blendCount: entry.blendCount,
+        route: {
+          points: entry.placement.route.length,
+          speed: entry.placement.walkSpeed,
+          runSpeed: entry.placement.runSpeed,
+          runEvery: entry.placement.runEvery,
+        },
+      };
+    }
+
+    getDiagnostics() {
+      return {
+        enabled: this.enabled,
+        loadStatus: this.loadStatus,
+        settled: this.settled,
+        error: this.error,
+        expected: this.entries.length,
+        loaded: this.entries.filter((entry) => entry.status === "ready").length,
+        failed: this.entries.filter((entry) => entry.status === "error").length,
+        visible: this.entries.filter((entry) => (
+          entry.root.visible && entry.status === "ready"
+        )).length,
+        fetchCount: this.fetchCount,
+        assetVersion: DEMON_PROTOTYPES.assetVersion,
+        developmentOnly: true,
+        colliders: 0,
+        interactions: 0,
+        persistence: "none",
+        entries: this.entries.map((entry) => this.entryDiagnostics(entry)),
+      };
+    }
+  }
+
   window.MrFeastFresh = window.MrFeastFresh || {};
   window.MrFeastFresh.state = state;
 
@@ -14551,6 +15446,7 @@
         state.devModeSnapshot = null;
         this.restoreQuestSnapshot(snapshot || {});
       }
+      demonPrototypePatrol?.setEnabled(state.devMode);
       updateMenuControls();
       return state.devMode;
     }
@@ -32890,6 +33786,7 @@
     seatingSystem?.clearTransientOccupancy();
     state.devMode = false;
     state.devModeSnapshot = null;
+    demonPrototypePatrol?.setEnabled(false);
     contestant13Quest.restoreQuestSnapshot(data.contestant13);
     bulkStorageSecretSystem?.restoreSnapshot(data.bulkStorageSecret);
     flashlightSystem?.restoreFromInventory({ clearTransient: true });
@@ -33469,7 +34366,11 @@
     if (dom.menuDev) dom.menuDev.addEventListener("click", () => {
       if (!contestant13Quest) return;
       contestant13Quest.setDevMode(!state.devMode);
-      setMenuStatus(state.devMode ? "Dev Mode granted all current clues and objects." : "Pre-dev quest state restored.");
+      setMenuStatus(
+        state.devMode
+          ? "Dev Mode granted all current clues and objects. Demon prototypes are entering their test patrols."
+          : "Pre-dev quest state restored. Demon prototypes removed.",
+      );
     });
     if (dom.workroomKeypadClose) dom.workroomKeypadClose.addEventListener("click", () => setWorkroomKeypadOpen(false));
     if (dom.workroomKeypad) {
@@ -34834,6 +35735,7 @@
       contestant13: contestant13Quest?.getDiagnostics() || null,
       mrFeast: mrFeastNpc?.getDiagnostics() || null,
       contestants: mansionContestants?.getDiagnostics() || null,
+      demonPrototypes: demonPrototypePatrol?.getDiagnostics() || null,
       seating: seatingSystem?.getDiagnostics() || null,
       security: cameraSecurity?.getDiagnostics() || null,
       flashlight: flashlightSystem?.getDiagnostics() || null,
@@ -35327,6 +36229,29 @@
       return { open: state.menuOpen, feastSays: feastSaysSystem?.getDiagnostics() || null };
     };
     window.MrFeastFresh.setDevModeForQA = (enabled) => state.qa && contestant13Quest ? contestant13Quest.setDevMode(Boolean(enabled)) : null;
+    window.MrFeastFresh.getDemonPrototypeState = () => (
+      demonPrototypePatrol?.getDiagnostics() || null
+    );
+    window.MrFeastFresh.awaitDemonPrototypesForQA = () => (
+      state.qa && demonPrototypePatrol
+        ? demonPrototypePatrol.awaitForQA()
+        : null
+    );
+    window.MrFeastFresh.advanceDemonPrototypesForQA = (seconds) => (
+      state.qa && demonPrototypePatrol
+        ? demonPrototypePatrol.advanceForQA(seconds)
+        : null
+    );
+    window.MrFeastFresh.frameDemonPrototypeForQA = (id) => (
+      state.qa && demonPrototypePatrol
+        ? demonPrototypePatrol.frameForQA(id)
+        : null
+    );
+    window.MrFeastFresh.poseDemonPrototypeForQA = (id, actionName, phase) => (
+      state.qa && demonPrototypePatrol
+        ? demonPrototypePatrol.poseForQA(id, actionName, phase)
+        : null
+    );
     window.MrFeastFresh.getContestant13State = () => contestant13Quest ? contestant13Quest.getDiagnostics() : null;
     window.MrFeastFresh.getReadableBookState = () => readableBookSystem ? readableBookSystem.getDiagnostics() : null;
     window.MrFeastFresh.openReadableBookForQA = (index) => state.qa && readableBookSystem ? readableBookSystem.openByIndex(index) : false;
@@ -36609,6 +37534,7 @@
       syncWorkroomDoorState();
       mrFeastNpc = new MrFeastWanderer();
       mansionContestants = new MansionContestantSystem();
+      demonPrototypePatrol = new DemonPrototypePatrolSystem();
       feastSaysSystem = new FeastSaysSystem();
       setLoading("Calling the storm", 82);
       rainSystem = new RainSystem();

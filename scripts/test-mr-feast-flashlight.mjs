@@ -101,7 +101,8 @@ async function run() {
   assert(/kitchen-under-sink/.test(runtime) && /upper-east-front-closet/.test(runtime) && /basement-archive/.test(runtime), "flashlight locations should cover the kitchen sink cabinet, an upper walk-in closet, and the basement");
   assert(/simple-flashlight-body/.test(runtime) && !/brass-cradle/.test(runtime), "pickup should be a simple household flashlight without the ornate cradle");
   assert(/id="mansion-flashlight-button"/.test(html), "touch Light control is missing");
-  assert(/intensity:\s*74\b/.test(runtime), "flashlight beam should use the slightly brighter 74 intensity tuning");
+  assert(/intensity:\s*84\b/.test(runtime), "flashlight beam should use the brighter 84 intensity tuning");
+  assert(/distance:\s*10\.6\b/.test(runtime) && /angle:\s*0\.35\b/.test(runtime), "flashlight beam should reach farther through a focused 10.6m cone");
   assert(!/carried-flashlight-(?:body|head|lens)/.test(runtime), "active flashlight should show only its light, not a carried model");
 
   let server = null;
@@ -199,9 +200,9 @@ async function run() {
     light = await flashlight(page);
     const layoutOn = (await diagnostics(page)).lighting;
     assert(light.beam.intensity > 0 && !light.beam.castShadow, "active flashlight should expose a real shadow-free beam");
-    assert(light.beam.authoredIntensity === 74, `beam should use the slightly brighter authored intensity; beam=${JSON.stringify(light.beam)}`);
-    assert(light.beam.distance >= 7.5 && light.beam.distance <= 9, `beam reach should stay useful but bounded; distance=${light.beam.distance}`);
-    assert(light.beam.angle >= 0.30 && light.beam.angle <= 0.58 && light.beam.penumbra >= 0.7, `beam cone should stay focused and soft; beam=${JSON.stringify(light.beam)}`);
+    assert(light.beam.authoredIntensity === 84, `beam should use the brighter authored intensity; beam=${JSON.stringify(light.beam)}`);
+    assert(light.beam.distance >= 10.3 && light.beam.distance <= 10.9, `beam should travel farther without becoming room-wide; distance=${light.beam.distance}`);
+    assert(light.beam.angle >= 0.32 && light.beam.angle <= 0.38 && light.beam.penumbra >= 0.7, `beam cone should stay focused and soft; beam=${JSON.stringify(light.beam)}`);
     assert(layoutOff.shaderSpotLights === layoutOn.shaderSpotLights && layoutOn.shaderSpotLights === layoutOn.shaderSpotBudget, `F must not change spot-light topology; off=${layoutOff.shaderSpotLights} on=${layoutOn.shaderSpotLights} budget=${layoutOn.shaderSpotBudget}`);
     const activations = light.activationCount;
     await page.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyF", key: "f", repeat: true, bubbles: true })));
@@ -209,9 +210,9 @@ async function run() {
     const onVisual = await captureBeamMetrics(page, "flashlight-beam-on-desktop");
     const centerDelta = onVisual.center - offVisual.center;
     const peripheralDelta = onVisual.periphery - offVisual.periphery;
-    assert(centerDelta >= 4, `the beam should materially brighten its central patch; off=${offVisual.center.toFixed(1)} on=${onVisual.center.toFixed(1)}`);
-    assert(peripheralDelta <= centerDelta * 0.62 + 1.5, `the spooky periphery should brighten much less than the center; center delta=${centerDelta.toFixed(1)} edge delta=${peripheralDelta.toFixed(1)}`);
-    assert(onVisual.center < 155, `the beam center should not wash out the Archive; luminance=${onVisual.center.toFixed(1)}`);
+    assert(centerDelta >= 7.5, `the brighter beam should materially lift its central patch; off=${offVisual.center.toFixed(1)} on=${onVisual.center.toFixed(1)}`);
+    assert(peripheralDelta <= centerDelta * 0.5 + 1, `the longer beam must keep the spooky room edges dark; center delta=${centerDelta.toFixed(1)} edge delta=${peripheralDelta.toFixed(1)}`);
+    assert(onVisual.center < 160, `the brighter beam center should not wash out the Archive; luminance=${onVisual.center.toFixed(1)}`);
     console.log(`flashlight qa: beam center delta ${centerDelta.toFixed(1)}, edge delta ${peripheralDelta.toFixed(1)}`);
     await page.keyboard.press("f");
     await page.keyboard.press("Escape");
@@ -245,7 +246,7 @@ async function run() {
     // activation or later while it remains on.
     await page.waitForFunction(() => window.MrFeastFresh.getMrFeastState()?.loaded === true, null, { timeout: 120000 });
     console.log("flashlight qa: Mr. Feast loaded");
-    const alert = await page.evaluate(() => {
+    const activationProbe = await page.evaluate(() => {
       window.MrFeastFresh.resetMrFeastWandererForQA();
       window.MrFeastFresh.resetCameraSecurityForQA("restricted");
       window.MrFeastFresh.setCameraSoloForQA("cam-basement-archive");
@@ -261,7 +262,18 @@ async function run() {
         pursuit: window.MrFeastFresh.getPursuitState?.() || null,
       };
     });
-    assert(alert.flashlight.alertCount === 1 && alert.flashlight.lastAlert?.reason === "flashlight-use", `activation should create one flashlight-specific alert; ${JSON.stringify(alert.flashlight)}`);
+    assert(activationProbe.flashlight.alertCount === 0, `switching the beam on must wait for an actual camera observation; ${JSON.stringify(activationProbe)}`);
+    assert(activationProbe.host.security?.state === "patrol", `switch-on alone should not summon Mr. Feast before camera observation; ${JSON.stringify(activationProbe.host.security)}`);
+    const alert = await page.evaluate(() => {
+      window.MrFeastFresh.advanceCameraSecurityForQA(0.25);
+      return {
+        flashlight: window.MrFeastFresh.getFlashlightState(),
+        security: window.MrFeastFresh.getCameraSecurityState(),
+        host: window.MrFeastFresh.getMrFeastState(),
+        pursuit: window.MrFeastFresh.getPursuitState?.() || null,
+      };
+    });
+    assert(alert.flashlight.alertCount === 1 && alert.flashlight.lastAlert?.reason === "flashlight-use", `camera observation should create one flashlight-specific alert; ${JSON.stringify(alert.flashlight)}`);
     assert(alert.flashlight.lastAlert.cameraId === "cam-basement-archive", `alert should identify the plausible Archive camera; ${JSON.stringify(alert.flashlight.lastAlert)}`);
     assert(alert.security.alarm?.count === 0 && alert.security.mode === "restricted", "flashlight alert must stay recoverable rather than forcing permanent lockdown");
     assert(alert.host.security?.state === "responding", `Mr. Feast should begin the bounded camera response; state=${alert.host.security?.state}`);
@@ -295,6 +307,23 @@ async function run() {
     assert(delayedAlert.afterObservation.alertCount === 1, `a camera must report a flashlight that remains on when it later gains sight; ${JSON.stringify(delayedAlert)}`);
     assert(delayedAlert.afterObservation.lastAlert?.cameraId === "cam-basement-archive", `delayed flashlight alert should name the observing camera; ${JSON.stringify(delayedAlert.afterObservation)}`);
     assert(delayedAlert.security.alarm?.count === 0 && delayedAlert.host.security?.state === "responding", `delayed flashlight observation should reuse bounded investigation without lockdown; ${JSON.stringify(delayedAlert)}`);
+
+    // The still-on beam must alert again after the camera genuinely loses and
+    // later regains sight. Reacquisition cannot require an off/on toggle.
+    const reacquiredAlert = await page.evaluate(() => {
+      window.MrFeastFresh.setCameraOccludedForQA("cam-basement-archive", true);
+      window.MrFeastFresh.advanceCameraSecurityForQA(0.25);
+      window.MrFeastFresh.advanceFlashlightForQA(1.6);
+      window.MrFeastFresh.setCameraOccludedForQA("cam-basement-archive", false);
+      window.MrFeastFresh.advanceCameraSecurityForQA(0.25);
+      return {
+        flashlight: window.MrFeastFresh.getFlashlightState(),
+        security: window.MrFeastFresh.getCameraSecurityState(),
+        host: window.MrFeastFresh.getMrFeastState(),
+      };
+    });
+    assert(reacquiredAlert.flashlight.on && reacquiredAlert.flashlight.alertCount === 2, `a camera regaining sight of the still-on beam should alert again; ${JSON.stringify(reacquiredAlert)}`);
+    assert(reacquiredAlert.flashlight.lastAlert?.cameraId === "cam-basement-archive", `reacquired flashlight alert should retain the observing camera; ${JSON.stringify(reacquiredAlert.flashlight)}`);
     await page.screenshot({ path: path.join(artifactDir, "flashlight-continuous-camera-alert-desktop.png") });
 
     // An occluded camera cannot become an invented source.
@@ -305,7 +334,7 @@ async function run() {
       window.MrFeastFresh.setFlashlightForQA(true);
       return window.MrFeastFresh.getFlashlightState();
     });
-    assert(occluded.alertCount === 1, "occluded flashlight use must not invent another camera alert");
+    assert(occluded.alertCount === 2, "occluded flashlight use must not invent another camera alert");
     console.log("flashlight qa: continuous bounded camera and host alert passed");
 
     // 6. Possession saves, but loading always extinguishes the transient beam

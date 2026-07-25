@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260724-all-window-curtains-bulk-symbols-3";
+  const MANSION_RUNTIME_VERSION = "20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -222,6 +222,8 @@
     panelBottomLift: 0.055,
     rodLift: 0.17,
     excludedKinds: Object.freeze([]),
+    excludedLevels: Object.freeze(["BASEMENT"]),
+    decorativeOnlyRooms: Object.freeze(["KITCHEN"]),
     installations: Object.freeze([
       Object.freeze({ id: "library-front-west", wall: "main-front-wall", center: -11.5, room: "LIBRARY", crackSide: "left" }),
       Object.freeze({ id: "library-front-center", wall: "main-front-wall", center: -8.2, room: "LIBRARY", crackSide: "right" }),
@@ -234,6 +236,20 @@
       Object.freeze({ id: "upper-lounge-rear-west", wall: "upper-rear-wall", center: -2.3, room: "REAR LOUNGE", crackSide: "left" }),
       Object.freeze({ id: "upper-lounge-rear-east", wall: "upper-rear-wall", center: 2.3, room: "REAR LOUNGE", crackSide: "right" }),
     ]),
+  });
+  const FURNITURE_TEXTILES = Object.freeze({
+    textureSize: 512,
+    repeats: Object.freeze({
+      forestDamask: Object.freeze([1.45, 1.85]),
+      oxbloodDamask: Object.freeze([1.45, 1.85]),
+      linen: Object.freeze([3.2, 3.2]),
+      coverlet: Object.freeze([1.35, 2.15]),
+    }),
+    bumpScale: Object.freeze({
+      velvet: 0.016,
+      linen: 0.011,
+      coverlet: 0.019,
+    }),
   });
   const ESTATE_GROUND_Y = -0.205;
   const MOBILE_RENDER_WIDTH = 720;
@@ -265,31 +281,85 @@
   const MAZE_MOON_INTENSITY = 0.60;
   const MAZE_EXPOSURE = 1.0;
   const CONTEXT_LIGHTING_RESPONSE = 4.5;
+  // Room labels may stay distinct for navigation, cameras, and story logic
+  // even when the architecture leaves them as one continuous space. Those
+  // spaces use one two-way circuit: either doorway switch owns every fixture,
+  // while fixture roles preserve one visible emitter in each half of the
+  // fixed basement light budget.
+  const SHARED_ROOM_LIGHTING = Object.freeze({
+    westBasement: Object.freeze({
+      circuit: "wine cellar and laundry lights",
+      color: 0xffa15a,
+      rooms: Object.freeze(["WINE CELLAR", "LAUNDRY & LINEN"]),
+      fixtureRoles: Object.freeze(["wine-cellar", "laundry"]),
+      fixtures: Object.freeze([
+        Object.freeze({ role: "wine-cellar", x: -11.3, z: 7.4 }),
+        Object.freeze({ role: "wine-cellar", x: -8.05, z: 7.4 }),
+        Object.freeze({ role: "wine-cellar", x: -4.8, z: 7.4 }),
+        Object.freeze({ role: "laundry", x: -11.3, z: 0 }),
+        Object.freeze({ role: "laundry", x: -8.05, z: 0 }),
+        Object.freeze({ role: "laundry", x: -4.8, z: 0 }),
+      ]),
+      switches: Object.freeze([
+        Object.freeze({ x: -1.461, z: 6.2, rotationY: -Math.PI / 2 }),
+        Object.freeze({ x: -1.461, z: -1.7, rotationY: -Math.PI / 2 }),
+      ]),
+    }),
+    eastBasement: Object.freeze({
+      circuit: "archive and pantry lights",
+      color: 0xffa864,
+      rooms: Object.freeze(["ARCHIVE", "PANTRY"]),
+      fixtureRoles: Object.freeze(["archive", "pantry"]),
+      fixtures: Object.freeze([
+        Object.freeze({ role: "archive", x: 4.8, z: 7.4 }),
+        Object.freeze({ role: "archive", x: 8.05, z: 7.4 }),
+        Object.freeze({ role: "archive", x: 11.3, z: 7.4 }),
+        Object.freeze({ role: "pantry", x: 6.0, z: 0 }),
+      ]),
+      switches: Object.freeze([
+        Object.freeze({ x: 1.461, z: 6.2, rotationY: Math.PI / 2 }),
+        Object.freeze({ x: 1.461, z: -1.7, rotationY: Math.PI / 2 }),
+      ]),
+    }),
+  });
+  // The foyer, grand stair, balcony, and upper landing are one uninterrupted
+  // two-storey volume. Keep their differently colored fixture groups, but put
+  // all four wall controls on one circuit so the entire volume changes state
+  // together. The rear lounge remains behind its own threshold and circuit.
+  const OPEN_VOLUME_SHARED_LIGHTING = Object.freeze({
+    circuit: "foyer and staircase lights",
+    fixtureRoles: Object.freeze(["foyer", "grand-stair", "upper-landing"]),
+    colors: Object.freeze({
+      foyer: 0xffc47a,
+      grandStair: 0xffb65d,
+      upperLanding: 0xffb86c,
+    }),
+  });
   const ROOM_LIGHTING = Object.freeze({
     "COAT CLOSET": ["coat closet lights"],
     "LIBRARY": ["library lights"],
-    "FRONT FOYER": ["foyer chandelier"],
+    "FRONT FOYER": [OPEN_VOLUME_SHARED_LIGHTING.circuit],
     "MUSIC ROOM": ["music room lights"],
     "MAIN HALL BATHROOM": ["main hall bathroom lights"],
-    "GRAND STAIR HALL": ["grand stair lights"],
+    "GRAND STAIR HALL": [OPEN_VOLUME_SHARED_LIGHTING.circuit],
     "PAINTING ROOM": ["painting room lights"],
     "DINING ROOM": ["dining room lights"],
     "BALLROOM": ["ballroom lights"],
     "KITCHEN": ["kitchen lights"],
     "UPPER GRAND BATHROOM": ["upper grand bathroom lights"],
     "WEST FRONT SUITE": ["west front suite lights", "west front walk-in closet light"],
-    "FOYER BALCONY": ["foyer chandelier"],
+    "FOYER BALCONY": [OPEN_VOLUME_SHARED_LIGHTING.circuit],
     "EAST FRONT SUITE": ["east front suite lights", "east front walk-in closet light"],
-    "UPPER LANDING": ["upper landing lights"],
+    "UPPER LANDING": [OPEN_VOLUME_SHARED_LIGHTING.circuit],
     "READING ROOM": ["reading room lights"],
     "PRIMARY SUITE": ["primary suite lights", "primary walk-in closet light"],
     "REAR LOUNGE": ["rear lounge lights"],
     "EAST REAR SUITE": ["east rear suite lights", "east rear walk-in closet light"],
-    "WINE CELLAR": ["wine cellar lights"],
-    "ARCHIVE": ["archive lights"],
+    "WINE CELLAR": [SHARED_ROOM_LIGHTING.westBasement.circuit],
+    "ARCHIVE": [SHARED_ROOM_LIGHTING.eastBasement.circuit],
     "BASEMENT CORRIDOR": ["basement corridor lights"],
-    "LAUNDRY & LINEN": ["laundry lights"],
-    "PANTRY": ["pantry store lights"],
+    "LAUNDRY & LINEN": [SHARED_ROOM_LIGHTING.westBasement.circuit],
+    "PANTRY": [SHARED_ROOM_LIGHTING.eastBasement.circuit],
     "SERVICE STAIR": ["service stair lights"],
     "REAR CROSS-CORRIDOR": ["rear service corridor lights"],
     "BOILER ROOM": ["boiler room lights"],
@@ -304,7 +374,7 @@
     "WEST LAWN": ["estate exterior lights"],
   });
   const OPEN_VOLUME_BUDGET_CIRCUITS = Object.freeze([
-    "foyer chandelier", "grand stair lights", "upper landing lights",
+    OPEN_VOLUME_SHARED_LIGHTING.circuit,
   ]);
   const OPEN_VOLUME_LIGHT_ROOMS = new Set([
     "FRONT FOYER", "GRAND STAIR HALL", "FOYER BALCONY", "UPPER LANDING",
@@ -750,16 +820,16 @@
     }),
     beam: Object.freeze({
       color: 0xffe3bd,
-      intensity: 74,
-      distance: 8.2,
-      angle: 0.38,
+      intensity: 84,
+      distance: 10.6,
+      angle: 0.35,
       penumbra: 0.78,
       decay: 2,
       poseSampleSeconds: 0.09,
       wallClearanceMeters: 0.22,
       minimumDistance: 0.9,
       originOffset: Object.freeze({ x: 0.16, y: -0.13, z: -0.08 }),
-      aimOffset: Object.freeze({ x: 0.02, y: -0.08, z: -8.2 }),
+      aimOffset: Object.freeze({ x: 0.02, y: -0.08, z: -10.6 }),
       activationFlutterSeconds: 0.18,
     }),
     stealthExposureFloor: 0.72,
@@ -3690,6 +3760,150 @@
     return texture;
   }
 
+  function makeFurnitureTextileTexture(kind, size = FURNITURE_TEXTILES.textureSize) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    const palettes = {
+      forestDamask: {
+        edge: "#071a17", field: "#163d34", lift: "#356453",
+        motif: "#b18a4b", shadow: "#08130f", thread: "#86a08b",
+      },
+      oxbloodDamask: {
+        edge: "#21070d", field: "#5a1723", lift: "#8b3440",
+        motif: "#c09959", shadow: "#160307", thread: "#bd737a",
+      },
+      linen: {
+        edge: "#a99d89", field: "#d8cebb", lift: "#eee6d6",
+        motif: "#b6a891", shadow: "#847966", thread: "#f7f1e7",
+      },
+      coverlet: {
+        edge: "#14182f", field: "#30345f", lift: "#5f5d8a",
+        motif: "#c29d58", shadow: "#111326", thread: "#9c91a6",
+      },
+    };
+    const palette = palettes[kind] || palettes.linen;
+    const base = ctx.createLinearGradient(0, 0, size, size);
+    base.addColorStop(0, palette.edge);
+    base.addColorStop(0.28, palette.field);
+    base.addColorStop(0.54, palette.lift);
+    base.addColorStop(0.76, palette.field);
+    base.addColorStop(1, palette.edge);
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, size, size);
+
+    // Alternating warp and weft makes the color map double as a restrained
+    // bump source. The grid stays fine enough to read as cloth, not graph paper.
+    ctx.lineWidth = 1;
+    for (let p = 0; p < size; p += 3) {
+      ctx.globalAlpha = p % 12 === 0 ? 0.2 : 0.08;
+      ctx.strokeStyle = p % 12 === 0 ? palette.thread : palette.shadow;
+      ctx.beginPath();
+      ctx.moveTo(p + 0.5, 0);
+      ctx.lineTo(p + 0.5, size);
+      ctx.stroke();
+    }
+    for (let p = 0; p < size; p += 4) {
+      ctx.globalAlpha = p % 16 === 0 ? 0.17 : 0.07;
+      ctx.strokeStyle = p % 16 === 0 ? palette.thread : palette.shadow;
+      ctx.beginPath();
+      ctx.moveTo(0, p + 0.5);
+      ctx.lineTo(size, p + 0.5);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    if (kind === "linen") {
+      // Short slubs and offset cross-stitches keep the pale sheets from
+      // looking like ceramic while staying quiet beneath the coverlet.
+      for (let y = 18; y < size; y += 31) {
+        for (let x = 12 + ((y / 31) % 2) * 9; x < size; x += 37) {
+          ctx.globalAlpha = 0.2;
+          ctx.strokeStyle = (x + y) % 3 ? palette.shadow : palette.thread;
+          ctx.beginPath();
+          ctx.moveTo(x - 4, y);
+          ctx.lineTo(x + 5, y + 1);
+          ctx.stroke();
+        }
+      }
+    } else if (kind === "coverlet") {
+      // A quilted diamond lattice and small antique-gold rosettes give the
+      // four suites a finished heirloom coverlet without extra mesh seams.
+      const step = 64;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.42;
+      ctx.strokeStyle = palette.thread;
+      for (let p = -size; p < size * 2; p += step) {
+        ctx.beginPath();
+        ctx.moveTo(p, 0);
+        ctx.lineTo(p + size, size);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(p, size);
+        ctx.lineTo(p + size, 0);
+        ctx.stroke();
+      }
+      for (let y = step / 2; y < size; y += step) {
+        for (let x = step / 2; x < size; x += step) {
+          ctx.globalAlpha = 0.72;
+          ctx.fillStyle = palette.motif;
+          ctx.beginPath();
+          for (let petal = 0; petal < 8; petal += 1) {
+            const angle = (petal / 8) * Math.PI * 2;
+            const radius = petal % 2 ? 8 : 13;
+            const px = x + Math.cos(angle) * radius;
+            const py = y + Math.sin(angle) * radius;
+            if (petal === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    } else {
+      // Mirrored leaf-and-diamond damask is bolder than the curtain pattern
+      // at sofa distance, but its low opacity keeps the upholstery period-quiet.
+      const motif = 96;
+      for (let y = -motif / 2; y < size + motif; y += motif) {
+        for (let x = -motif / 2; x < size + motif; x += motif) {
+          const cx = x + motif / 2;
+          const cy = y + motif / 2;
+          ctx.globalAlpha = 0.34;
+          ctx.strokeStyle = palette.motif;
+          ctx.fillStyle = palette.shadow;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - 30);
+          ctx.lineTo(cx + 18, cy);
+          ctx.lineTo(cx, cy + 30);
+          ctx.lineTo(cx - 18, cy);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          for (const side of [-1, 1]) {
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - 12);
+            ctx.bezierCurveTo(cx + side * 32, cy - 24, cx + side * 35, cy + 4, cx + side * 12, cy + 20);
+            ctx.bezierCurveTo(cx + side * 5, cy + 9, cx + side * 4, cy - 3, cx, cy - 12);
+            ctx.stroke();
+          }
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.name = `furniture-textile-${kind}`;
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    const repeat = FURNITURE_TEXTILES.repeats[kind] || [1, 1];
+    texture.repeat.set(repeat[0], repeat[1]);
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipMapLinearFilter;
+    texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
   function makeRadialGlowTexture(size) {
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = size;
@@ -4405,6 +4619,10 @@
     const musicRugMap = makeSalonRugTexture(512, "music");
     const fireFlameMap = makeFireFlameTexture(128);
     const curtainDamaskMap = makeCurtainDamaskTexture(512);
+    const sofaForestMap = makeFurnitureTextileTexture("forestDamask");
+    const sofaOxbloodMap = makeFurnitureTextileTexture("oxbloodDamask");
+    const bedLinenMap = makeFurnitureTextileTexture("linen");
+    const bedCoverletMap = makeFurnitureTextileTexture("coverlet");
     leafMap.repeat.set(5, 5);
     soilMap.repeat.set(7, 7);
     paverMap.repeat.set(8, 12);
@@ -4431,6 +4649,55 @@
       iron: new THREE.MeshStandardMaterial({ color: 0x14171a, metalness: 0.62, roughness: 0.48 }),
       copper: new THREE.MeshStandardMaterial({ color: 0x6c3927, metalness: 0.67, roughness: 0.42 }),
       velvet: new THREE.MeshStandardMaterial({ color: 0x241017, roughness: 0.94 }),
+      sofaForest: new THREE.MeshStandardMaterial({
+        name: "furniture-sofa-forest-damask",
+        map: sofaForestMap,
+        bumpMap: sofaForestMap,
+        bumpScale: FURNITURE_TEXTILES.bumpScale.velvet,
+        roughness: 0.82,
+        metalness: 0,
+      }),
+      sofaOxblood: new THREE.MeshStandardMaterial({
+        name: "furniture-sofa-oxblood-damask",
+        map: sofaOxbloodMap,
+        bumpMap: sofaOxbloodMap,
+        bumpScale: FURNITURE_TEXTILES.bumpScale.velvet,
+        roughness: 0.82,
+        metalness: 0,
+      }),
+      chairUpholstery: new THREE.MeshStandardMaterial({
+        name: "furniture-chair-oxblood-damask",
+        map: sofaOxbloodMap,
+        bumpMap: sofaOxbloodMap,
+        bumpScale: FURNITURE_TEXTILES.bumpScale.velvet,
+        roughness: 0.85,
+        metalness: 0,
+      }),
+      bedLinen: new THREE.MeshStandardMaterial({
+        name: "furniture-bed-woven-linen",
+        map: bedLinenMap,
+        bumpMap: bedLinenMap,
+        bumpScale: FURNITURE_TEXTILES.bumpScale.linen,
+        color: 0xf0e7d7,
+        roughness: 0.94,
+        metalness: 0,
+      }),
+      bedCoverlet: new THREE.MeshStandardMaterial({
+        name: "furniture-bed-quilted-coverlet",
+        map: bedCoverletMap,
+        bumpMap: bedCoverletMap,
+        bumpScale: FURNITURE_TEXTILES.bumpScale.coverlet,
+        roughness: 0.86,
+        metalness: 0,
+      }),
+      bedHeadboard: new THREE.MeshStandardMaterial({
+        name: "furniture-bed-oxblood-headboard",
+        map: sofaOxbloodMap,
+        bumpMap: sofaOxbloodMap,
+        bumpScale: FURNITURE_TEXTILES.bumpScale.velvet,
+        roughness: 0.88,
+        metalness: 0,
+      }),
       curtainDamask: new THREE.MeshStandardMaterial({
         map: curtainDamaskMap,
         bumpMap: curtainDamaskMap,
@@ -13229,6 +13496,7 @@
       this.id = config.id;
       this.wall = config.wall;
       this.room = config.room;
+      this.interactive = config.interactive !== false;
       this.crackSide = config.crackSide;
       this.axis = axis;
       this.fixed = fixed;
@@ -13348,40 +13616,45 @@
         parent: this.root,
         cast: false,
       });
-      this.interactionHitbox = box({
-        name: `${this.id}-curtain-interaction`,
-        w: Math.max(0.9, this.width * 0.74),
-        h: Math.min(1.72, this.height * 0.72),
-        d: 0.045,
-        y: this.windowBottom + this.height * 0.52,
-        material: M.curtainInteraction,
-        parent: this.root,
-        cast: false,
-        receive: false,
-      });
+      this.interactionHitbox = this.interactive
+        ? box({
+          name: `${this.id}-curtain-interaction`,
+          w: Math.max(0.9, this.width * 0.74),
+          h: Math.min(1.72, this.height * 0.72),
+          d: 0.045,
+          y: this.windowBottom + this.height * 0.52,
+          material: M.curtainInteraction,
+          parent: this.root,
+          cast: false,
+          receive: false,
+        })
+        : null;
 
       this.applyPanelLayout();
       this.root.traverse((object) => {
         object.userData.windowCurtainId = this.id;
       });
 
-      const hidePosition = this.worldPositionAtInset(WINDOW_CURTAINS.hideInsetFromWall);
-      const exitPosition = this.worldPositionAtInset(this.exitInset, this.exitOffset);
-      const roomTitle = this.room.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
-      this.hidingSpot = new HidingSpot({
-        name: `${roomTitle} curtains`,
-        targets: [this.interactionHitbox],
-        floorY,
-        hidePosition: { ...hidePosition, yaw: this.inwardYaw },
-        exitPosition: { ...exitPosition, yaw: this.inwardYaw },
-        enterLabel: `Hide behind ${roomTitle} curtains`,
-        leaveLabel: `Leave ${roomTitle} curtains`,
-        hiddenLabel: `Hidden behind the ${roomTitle} curtains`,
-        viewClasses: ["is-curtain-hiding", `curtain-crack-${this.crackSide}`],
-        onEnter: () => { this.targetOpenness = 0; },
-        onExit: () => { this.targetOpenness = 1; },
-      });
-      this.hidingSpot.curtainId = this.id;
+      this.hidingSpot = null;
+      if (this.interactive) {
+        const hidePosition = this.worldPositionAtInset(WINDOW_CURTAINS.hideInsetFromWall);
+        const exitPosition = this.worldPositionAtInset(this.exitInset, this.exitOffset);
+        const roomTitle = this.room.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+        this.hidingSpot = new HidingSpot({
+          name: `${roomTitle} curtains`,
+          targets: [this.interactionHitbox],
+          floorY,
+          hidePosition: { ...hidePosition, yaw: this.inwardYaw },
+          exitPosition: { ...exitPosition, yaw: this.inwardYaw },
+          enterLabel: `Hide behind ${roomTitle} curtains`,
+          leaveLabel: `Leave ${roomTitle} curtains`,
+          hiddenLabel: `Hidden behind the ${roomTitle} curtains`,
+          viewClasses: ["is-curtain-hiding", `curtain-crack-${this.crackSide}`],
+          onEnter: () => { this.targetOpenness = 0; },
+          onExit: () => { this.targetOpenness = 1; },
+        });
+        this.hidingSpot.curtainId = this.id;
+      }
       windowCurtains.push(this);
       animatedObjects.push(this);
     }
@@ -13411,7 +13684,7 @@
       this.exitInset = exitInset;
       this.exitOffset = exitOffset;
       const exitPosition = this.worldPositionAtInset(this.exitInset, this.exitOffset);
-      this.hidingSpot.exitPosition = { ...exitPosition, yaw: this.inwardYaw };
+      if (this.hidingSpot) this.hidingSpot.exitPosition = { ...exitPosition, yaw: this.inwardYaw };
     }
 
     applyPanelLayout() {
@@ -13495,7 +13768,8 @@
         wall: this.wall,
         room: this.room,
         floor: this.floorLabel,
-        active: state.activeHideSpot === this.hidingSpot,
+        interactive: this.interactive,
+        active: Boolean(this.hidingSpot && state.activeHideSpot === this.hidingSpot),
         openness: Number(this.openness.toFixed(3)),
         crackSide: this.crackSide,
         crackWidth: WINDOW_CURTAINS.crackWidth,
@@ -13522,7 +13796,7 @@
           visualOverlaps: [...this.clearance.visualOverlaps],
           egressOverlaps: [...this.clearance.egressOverlaps],
         },
-        prompt: this.hidingSpot.interaction.getLabel(),
+        prompt: this.hidingSpot?.interaction.getLabel() || null,
       };
     }
   }
@@ -13530,7 +13804,7 @@
   function syncWindowCurtainVisibility() {
     for (const curtain of windowCurtains) {
       curtain.root.visible = curtain.floorLabel === state.currentFloor
-        || state.activeHideSpot === curtain.hidingSpot;
+        || Boolean(curtain.hidingSpot && state.activeHideSpot === curtain.hidingSpot);
     }
   }
 
@@ -20318,13 +20592,6 @@
         this.flutterRemaining = FLASHLIGHT.beam.activationFlutterSeconds;
         this.raySampleRemaining = 0;
         this.syncPose(true);
-        if (!options.silent && this.state.alertCooldown <= 0) {
-          const alert = cameraSecurity?.reportFlashlightUse() || null;
-          if (alert) {
-            this.state.alertCooldown = FLASHLIGHT.alertCooldownSeconds;
-            this.state.alertLatchCameraId = alert.cameraId;
-          }
-        }
       } else {
         this.state.alertLatchCameraId = null;
         this.flutterRemaining = 0;
@@ -20485,6 +20752,13 @@
       updateLocation();
       this.syncPose(true);
       updateInteractionPrompt();
+      return this.getDiagnostics();
+    }
+
+    advanceForQA(seconds) {
+      if (!state.qa) return this.getDiagnostics();
+      const steps = Math.min(7200, Math.max(0, Math.ceil((Number(seconds) || 0) * 60)));
+      for (let step = 0; step < steps; step += 1) this.update(1 / 60);
       return this.getDiagnostics();
     }
 
@@ -21618,7 +21892,7 @@
       return point ? { id: point.id, x: lastSeen.x, y: point.y, z: lastSeen.z } : null;
     }
 
-    reportFlashlightUse(preferredCameraState = null) {
+    reportFlashlightUse(observedCameraState) {
       if (
         !state.started
         || !state.flashlight.on
@@ -21626,14 +21900,13 @@
         || state.gameOver
         || competitionSuspendsSecurity()
         || !physics
+        || !observedCameraState
+        || this.cameraById.get(observedCameraState.id) !== observedCameraState
       ) return null;
       const playerPosition = physics.playerPosition();
       const playerEye = new THREE.Vector3(camera.position.x, camera.position.y, camera.position.z);
       const candidates = [];
-      const candidateCameras = preferredCameraState && this.cameraById.get(preferredCameraState.id) === preferredCameraState
-        ? [preferredCameraState]
-        : this.cameras;
-      for (const cameraState of candidateCameras) {
+      for (const cameraState of [observedCameraState]) {
         if (!this.isCameraRelevant(cameraState, playerPosition)) continue;
         const direction = playerEye.clone().sub(cameraState.lensOrigin);
         const distance = direction.length();
@@ -23566,15 +23839,17 @@
   }
 
   function curtainConfigForWindow(wall, center, axis, fixed, floorY, ordinal) {
-    if (!wall) return null;
+    if (!wall || Math.abs(floorY - FLOOR.BASEMENT) < 0.01) return null;
     const authored = WINDOW_CURTAINS.installations.find((entry) => (
       entry.wall === wall && Math.abs(entry.center - center) < 0.001
     ));
+    const room = authored?.room || exteriorWindowRoom(axis, fixed, center, floorY);
     return {
       id: authored?.id || genericCurtainId(wall, center),
       wall,
       center,
-      room: authored?.room || exteriorWindowRoom(axis, fixed, center, floorY),
+      room,
+      interactive: room !== "KITCHEN",
       crackSide: authored?.crackSide || (ordinal % 2 === 0 ? "left" : "right"),
       exitOffset: Number(authored?.exitOffset) || 0,
       wallInset: curtainNeedsTightMount(wall, center) ? 0.21 : WINDOW_CURTAINS.insetFromWall,
@@ -23609,6 +23884,10 @@
       if (exterior) box({ name: "stone-window-sill", w: 0.42, h: 0.11, d: width + 0.34, x: fixed, y: floorY + bottom - 0.055, z: center, material: M.limestone, cast: false });
     }
     if (exterior) {
+      const room = exteriorWindowRoom(axis, fixed, center, floorY);
+      const intentionallyBareReason = Math.abs(floorY - FLOOR.BASEMENT) < 0.01
+        ? "basement-curtains-removed"
+        : null;
       const curtainConfig = curtainConfigForWindow(
         wallName,
         center,
@@ -23618,10 +23897,11 @@
         exteriorWindows.length,
       );
       const windowRecord = {
-        id: curtainConfig.id,
+        id: curtainConfig?.id || genericCurtainId(wallName, center),
         wall: wallName,
         level: windowLevelLabel(floorY),
-        room: curtainConfig.room,
+        room,
+        floorY,
         axis,
         fixed,
         center,
@@ -23629,10 +23909,13 @@
         bottom,
         top,
         curtainId: null,
+        intentionallyBareReason,
       };
       exteriorWindows.push(windowRecord);
-      const curtain = new WindowCurtain({ config: curtainConfig, axis, fixed, floorY, opening });
-      windowRecord.curtainId = curtain.id;
+      if (curtainConfig) {
+        const curtain = new WindowCurtain({ config: curtainConfig, axis, fixed, floorY, opening });
+        windowRecord.curtainId = curtain.id;
+      }
     }
   }
 
@@ -24117,10 +24400,10 @@
     visual.scale.y = heightScale;
     group.add(visual);
     box({ name: "chair-seat", w: 0.52, h: 0.1, d: 0.5, x: 0, y: 0.48, z: 0, material: material || M.darkWood, parent: visual });
-    box({ name: "chair-cushion", w: 0.46, h: 0.09, d: 0.44, x: 0, y: 0.565, z: -0.01, material: M.velvet, parent: visual, cast: false });
+    box({ name: "chair-cushion", w: 0.46, h: 0.09, d: 0.44, x: 0, y: 0.565, z: -0.01, material: M.chairUpholstery, parent: visual, cast: false });
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) cylinder({ name: "chair-leg", radius: 0.035, radiusBottom: 0.045, height: 0.47, segments: 9, x: sx * 0.2, y: 0.235, z: sz * 0.19, material: material || M.darkWood, parent: visual });
     for (const sx of [-1, 1]) cylinder({ name: "chair-back-post", radius: 0.038, height: 0.82, segments: 9, x: sx * 0.22, y: 0.89, z: 0.21, material: material || M.darkWood, parent: visual });
-    box({ name: "chair-back", w: 0.43, h: 0.48, d: 0.065, x: 0, y: 0.9, z: 0.21, material: M.velvet, parent: visual });
+    box({ name: "chair-back", w: 0.43, h: 0.48, d: 0.065, x: 0, y: 0.9, z: 0.21, material: M.chairUpholstery, parent: visual });
     const chairBody = physics.addFixedBox(x, floorY + 0.55, z, 0.56, 1.1, 0.56, rotationY || 0);
     const colliderRecord = physics.fixedBoxes[physics.fixedBoxes.length - 1] || null;
     const seat = seatingSystem?.registerChair({
@@ -24146,11 +24429,11 @@
     visual.scale.y = heightScale;
     group.add(visual);
     box({ name: "sofa-base", w, h: 0.42, d: 0.9, x: 0, y: 0.31, z: 0, material: M.blackWood, parent: visual });
-    roundedBox({ name: "sofa-seat", w: w - 0.34, h: 0.24, d: 0.7, radius: 0.1, x: 0, y: 0.6, z: -0.04, material: material || M.velvet, parent: visual });
-    roundedBox({ name: "sofa-back", w: w - 0.2, h: 0.78, d: 0.24, radius: 0.11, x: 0, y: 0.94, z: 0.34, material: material || M.velvet, parent: visual });
+    roundedBox({ name: "sofa-seat", w: w - 0.34, h: 0.24, d: 0.7, radius: 0.1, x: 0, y: 0.6, z: -0.04, material: material || M.sofaOxblood, parent: visual });
+    roundedBox({ name: "sofa-back", w: w - 0.2, h: 0.78, d: 0.24, radius: 0.11, x: 0, y: 0.94, z: 0.34, material: material || M.sofaOxblood, parent: visual });
     for (const sx of [-1, 1]) {
-      cylinder({ name: "rolled-sofa-arm", radius: 0.19, height: 0.78, segments: 18, x: sx * (w / 2 - 0.16), y: 0.72, z: 0, rotationX: Math.PI / 2, material: material || M.velvet, parent: visual });
-      sphere({ name: "sofa-arm-cap", radius: 0.19, x: sx * (w / 2 - 0.16), y: 0.72, z: -0.39, material: material || M.velvet, parent: visual, cast: true });
+      cylinder({ name: "rolled-sofa-arm", radius: 0.19, height: 0.78, segments: 18, x: sx * (w / 2 - 0.16), y: 0.72, z: 0, rotationX: Math.PI / 2, material: material || M.sofaOxblood, parent: visual });
+      sphere({ name: "sofa-arm-cap", radius: 0.19, x: sx * (w / 2 - 0.16), y: 0.72, z: -0.39, material: material || M.sofaOxblood, parent: visual, cast: true });
     }
     for (let i = 1; i < 3; i += 1) box({ name: "sofa-cushion-seam", w: 0.018, h: 0.18, d: 0.66, x: -w / 2 + i * w / 3, y: 0.61, z: -0.04, material: M.blackWood, parent: visual, cast: false });
     for (let i = 0; i < 5; i += 1) sphere({ name: "sofa-button", radius: 0.028, x: -w * 0.32 + i * w * 0.16, y: 0.99, z: 0.225, material: M.brass, parent: visual, cast: false });
@@ -24180,11 +24463,11 @@
     const w = width || 2.0;
     const d = 2.5;
     box({ name: "bed-frame", w, h: 0.34, d, x: 0, y: 0.32, z: 0, material: M.darkWood, parent: group });
-    box({ name: "bed-mattress", w: w - 0.16, h: 0.24, d: d - 0.2, x: 0, y: 0.61, z: -0.02, material: M.fabric, parent: group });
-    box({ name: "bed-coverlet", w: w - 0.2, h: 0.08, d: 1.5, x: 0, y: 0.77, z: -0.3, material: M.velvet, parent: group, cast: false });
-    for (const sx of [-0.22, 0.22]) roundedBox({ name: "bed-pillow", w: w * 0.4, h: 0.16, d: 0.55, radius: 0.07, x: sx * w, y: 0.8, z: 0.75, material: M.porcelain, parent: group, cast: false });
+    box({ name: "bed-mattress", w: w - 0.16, h: 0.24, d: d - 0.2, x: 0, y: 0.61, z: -0.02, material: M.bedLinen, parent: group });
+    box({ name: "bed-coverlet", w: w - 0.2, h: 0.08, d: 1.5, x: 0, y: 0.77, z: -0.3, material: M.bedCoverlet, parent: group, cast: false });
+    for (const sx of [-0.22, 0.22]) roundedBox({ name: "bed-pillow", w: w * 0.4, h: 0.16, d: 0.55, radius: 0.07, x: sx * w, y: 0.8, z: 0.75, material: M.bedLinen, parent: group, cast: false });
     box({ name: "bed-headboard", w: w + 0.18, h: 1.55, d: 0.18, x: 0, y: 0.9, z: d / 2, material: M.darkWood, parent: group });
-    box({ name: "bed-headboard-upholstery", w: w - 0.28, h: 0.92, d: 0.05, x: 0, y: 1.08, z: d / 2 - 0.12, material: M.velvet, parent: group, cast: false });
+    box({ name: "bed-headboard-upholstery", w: w - 0.28, h: 0.92, d: 0.05, x: 0, y: 1.08, z: d / 2 - 0.12, material: M.bedHeadboard, parent: group, cast: false });
     if (canopy) {
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) cylinder({ name: "canopy-post", radius: 0.045, height: 2.65, segments: 10, x: sx * (w / 2 + 0.02), y: 1.325, z: sz * (d / 2 + 0.02), material: M.darkWood, parent: group });
       box({ name: "canopy-top-front", w: w + 0.18, h: 0.1, d: 0.1, x: 0, y: 2.62, z: d / 2, material: M.darkWood, parent: group });
@@ -27011,7 +27294,7 @@
     }
     addFireplace("library fireplace", -5.35, 10.25, FLOOR.MAIN, Math.PI / 2);
     addMantelDecor(-5.35, 10.25, FLOOR.MAIN, Math.PI / 2, "clock");
-    addSofa(-8.2, 8.3, FLOOR.MAIN, Math.PI, 2.45, M.greenRug);
+    addSofa(-8.2, 8.3, FLOOR.MAIN, Math.PI, 2.45, M.sofaForest);
     addTable(-10.5, 5.2, 2.25, 1.05, FLOOR.MAIN, 0, M.darkWood);
     addChair(-10.5, 6.15, FLOOR.MAIN, 0, M.darkWood, {
       seatTag: "library-writing-chair",
@@ -27025,7 +27308,7 @@
     addMantelDecor(5.35, 10.25, FLOOR.MAIN, -Math.PI / 2, "urnPair");
     const musicPiano = { x: 11.2, z: 5.85 };
     const musicSofa = { x: 7.4, z: 9.2 };
-    const musicRoomSofa = addSofa(musicSofa.x, musicSofa.z, FLOOR.MAIN, faceTargetYaw(musicSofa.x, musicSofa.z, musicPiano.x, musicPiano.z), 2.5, M.velvet);
+    const musicRoomSofa = addSofa(musicSofa.x, musicSofa.z, FLOOR.MAIN, faceTargetYaw(musicSofa.x, musicSofa.z, musicPiano.x, musicPiano.z), 2.5, M.sofaOxblood);
     musicRoomSofa.name = "music-room-piano-facing-sofa";
     musicRoomSofa.userData.faces = "music-room-grand-piano";
     const musicRoomPiano = addPiano(musicPiano.x, musicPiano.z, FLOOR.MAIN, -0.55);
@@ -27085,10 +27368,10 @@
     for (const x of [-3.9, 3.9]) addTable(x, 9.3, 1.2, 0.55, FLOOR.MAIN, Math.PI / 2, M.marble);
     addFoyerConsoleDecor();
     for (const portrait of [
-      { x: -11.5, artId: "audit-of-souls", circuitName: "grand stair lights" },
-      { x: -6.5, artId: "generosity-engine", circuitName: "grand stair lights" },
-      { x: 6.5, artId: "garden-good-deeds", circuitName: "grand stair lights" },
-      { x: 10.1, artId: "last-applause", circuitName: "grand stair lights" },
+      { x: -11.5, artId: "audit-of-souls", circuitName: OPEN_VOLUME_SHARED_LIGHTING.circuit },
+      { x: -6.5, artId: "generosity-engine", circuitName: OPEN_VOLUME_SHARED_LIGHTING.circuit },
+      { x: 6.5, artId: "garden-good-deeds", circuitName: OPEN_VOLUME_SHARED_LIGHTING.circuit },
+      { x: 10.1, artId: "last-applause", circuitName: OPEN_VOLUME_SHARED_LIGHTING.circuit },
     ]) addWallPortrait({ axis: "x", fixed: -3.2, center: portrait.x, floorY: FLOOR.MAIN, centerY: 2.15, side: -1, width: 1.0, height: 1.42, color: 0x2b2830, artId: portrait.artId, circuitName: portrait.circuitName });
   }
 
@@ -27107,12 +27390,12 @@
 
     addBookshelf(14.45, -2.0, FLOOR.UPPER, Math.PI / 2, 2.2, 2.45, { collection: "READING ROOM" });
     addBookshelf(14.45, 2.0, FLOOR.UPPER, Math.PI / 2, 2.3, 2.45, { collection: "READING ROOM" });
-    addSofa(9.0, 0.0, FLOOR.UPPER, -Math.PI / 2, 2.25, M.greenRug, { seatTag: "reading-room-sofa", slots: 1, heightScale: MANSION_SEATING.readingRoomSofaHeightScale });
+    addSofa(9.0, 0.0, FLOOR.UPPER, -Math.PI / 2, 2.25, M.sofaForest, { seatTag: "reading-room-sofa", slots: 1, heightScale: MANSION_SEATING.readingRoomSofaHeightScale });
 
     addBed(-10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
     new Cabinet({ name: "primary walk-in closet", x: -6.0, z: -9.2, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: -Math.PI / 2, walkIn: true });
     addRug(0, -8.35, 6.0, 5.6, FLOOR.UPPER, M.exoticRug, 0);
-    addSofa(0, -6.45, FLOOR.UPPER, 0, 3.2, M.velvet);
+    addSofa(0, -6.45, FLOOR.UPPER, 0, 3.2, M.sofaOxblood);
     addTable(0, -8.25, 1.8, 0.78, FLOOR.UPPER, 0, M.marble);
     addChair(-2.35, -9.75, FLOOR.UPPER, Math.PI, M.darkWood);
     addChair(2.35, -9.75, FLOOR.UPPER, Math.PI, M.darkWood);
@@ -27848,7 +28131,16 @@
   }
 
   function buildLighting() {
-    const foyer = new LightCircuit("foyer chandelier", FLOOR.UPPER, 0xffc47a, true);
+    const markOpenVolumeRole = (circuit, startIndex, role) => {
+      for (const light of circuit.lights.slice(startIndex)) light.userData.sharedRoomRole = role;
+    };
+    const foyer = new LightCircuit(
+      OPEN_VOLUME_SHARED_LIGHTING.circuit,
+      FLOOR.UPPER,
+      OPEN_VOLUME_SHARED_LIGHTING.colors.foyer,
+      true,
+    );
+    const foyerRoleStart = foyer.lights.length;
     foyer.addLevel("MAIN LEVEL");
     addFoyerGrandChandelier(foyer, 0, 7.7);
     // An omnidirectional fill floating at chandelier height carries light to
@@ -27861,12 +28153,14 @@
     for (const side of [-1, 1]) for (const z of [5.35, 8.9]) {
       foyer.addWallSconce(side * 4.81, FLOOR.MAIN + 2.23, z, -side * Math.PI / 2, 24, 5.6, ["MAIN LEVEL", "SECOND FLOOR"], side * 0.6, FLOOR.MAIN + 0.75, z);
     }
+    markOpenVolumeRole(foyer, foyerRoleStart, "foyer");
     foyer.addSwitch(-1.75, 1.15, 11.839, Math.PI);
     foyer.addSwitch(-4.839, FLOOR.UPPER + 1.15, 5.45, Math.PI / 2);
 
     // The stair hall is double-height; hang its chandelier from the upper ceiling.
-    const stair = new LightCircuit("grand stair lights", FLOOR.UPPER, 0xffb65d, true);
-    stair.addLevel("MAIN LEVEL");
+    const stair = foyer;
+    stair.color = OPEN_VOLUME_SHARED_LIGHTING.colors.grandStair;
+    const stairRoleStart = stair.lights.length;
     stair.addFixture(0, -0.1, "atrium");
     // Everything hanging in the open stair volume stays lit on both floor
     // contexts: the player looks straight at these fixtures mid-climb, so
@@ -27887,6 +28181,7 @@
     stair.addPracticalLight(0, FLOOR.MAIN + 1.45, -0.45, 24, 5.0, ["MAIN LEVEL"], { contained: true, angle: 0.76 });
     stair.addWallSconce(-4.839, FLOOR.MAIN + 2.0, -1.8, Math.PI / 2, 38, 5.7, ["MAIN LEVEL", "SECOND FLOOR"], -0.45, FLOOR.MAIN + 0.85, -1.05);
     stair.addWallSconce(4.839, FLOOR.MAIN + 2.0, -1.8, -Math.PI / 2, 38, 5.7, ["MAIN LEVEL", "SECOND FLOOR"], 0.45, FLOOR.MAIN + 0.85, -1.05);
+    markOpenVolumeRole(stair, stairRoleStart, "grand-stair");
     stair.addSwitch(-4.839, 1.15, 2.45, Math.PI / 2);
 
     const library = new LightCircuit("library lights", FLOOR.MAIN, 0xffb56b, true);
@@ -27967,11 +28262,14 @@
 
     // The landing overlooks the open stair void, so its lights are readable
     // from the main hall below and stay rendered on both floor contexts.
-    const upperLanding = new LightCircuit("upper landing lights", FLOOR.UPPER, 0xffb86c, true);
+    const upperLanding = foyer;
+    upperLanding.color = OPEN_VOLUME_SHARED_LIGHTING.colors.upperLanding;
+    const upperLandingRoleStart = upperLanding.lights.length;
     upperLanding.addLevel("MAIN LEVEL");
     upperLanding.addWallSconce(-4.839, FLOOR.UPPER + 1.95, -1.15, Math.PI / 2, 44, 5.8, ["SECOND FLOOR", "MAIN LEVEL"], -0.5, FLOOR.UPPER + 0.72, -1.45);
     upperLanding.addWallSconce(4.839, FLOOR.UPPER + 1.95, -1.15, -Math.PI / 2, 44, 5.8, ["SECOND FLOOR", "MAIN LEVEL"], 0.5, FLOOR.UPPER + 0.72, -1.45);
     upperLanding.addPracticalLight(0, FLOOR.UPPER + 2.72, -2.15, 22, 6.5, ["SECOND FLOOR", "MAIN LEVEL"], { contained: false });
+    markOpenVolumeRole(upperLanding, upperLandingRoleStart, "upper-landing");
     upperLanding.addSwitch(4.839, FLOOR.UPPER + 1.15, 2.4, -Math.PI / 2);
 
     const primary = new LightCircuit("primary suite lights", FLOOR.UPPER, 0xffb66f, true);
@@ -28004,25 +28302,30 @@
     for (const z of [-0.6, 4.45, 9.5]) basementHall.addFixture(0, z, "corridor");
     basementHall.addSwitch(1.139, FLOOR.BASEMENT + 1.15, -2.5, -Math.PI / 2);
 
-    const wine = new LightCircuit("wine cellar lights", FLOOR.BASEMENT, 0xff9d4b, true);
-    for (const x of [-11.3, -8.05, -4.8]) wine.addFixture(x, 7.4, "basement");
-    wine.addSwitch(-1.461, FLOOR.BASEMENT + 1.15, 6.2, -Math.PI / 2);
-
-    const archive = new LightCircuit("archive lights", FLOOR.BASEMENT, 0xffa864, true);
-    for (const x of [4.8, 8.05, 11.3]) archive.addFixture(x, 7.4, "basement");
-    archive.addSwitch(1.461, FLOOR.BASEMENT + 1.15, 6.2, Math.PI / 2);
+    for (const sharedLighting of Object.values(SHARED_ROOM_LIGHTING)) {
+      const sharedCircuit = new LightCircuit(
+        sharedLighting.circuit,
+        FLOOR.BASEMENT,
+        sharedLighting.color,
+        true,
+      );
+      for (const fixtureConfig of sharedLighting.fixtures) {
+        const fixture = sharedCircuit.addFixture(fixtureConfig.x, fixtureConfig.z, "basement");
+        fixture.userData.sharedRoomRole = fixtureConfig.role;
+      }
+      for (const switchConfig of sharedLighting.switches) {
+        sharedCircuit.addSwitch(
+          switchConfig.x,
+          FLOOR.BASEMENT + 1.15,
+          switchConfig.z,
+          switchConfig.rotationY,
+        );
+      }
+    }
 
     const boiler = new LightCircuit("boiler room lights", FLOOR.BASEMENT, 0xff7e39, true);
     boiler.addFixture(-10.2, -8.5, "basement");
     boiler.addSwitch(-9.0, FLOOR.BASEMENT + 1.15, -5.061, Math.PI);
-
-    const laundry = new LightCircuit("laundry lights", FLOOR.BASEMENT, 0xffa96b, true);
-    for (const x of [-11.3, -8.05, -4.8]) laundry.addFixture(x, 0, "basement");
-    laundry.addSwitch(-1.461, FLOOR.BASEMENT + 1.15, -1.7, -Math.PI / 2);
-
-    const pantry = new LightCircuit("pantry store lights", FLOOR.BASEMENT, 0xffa96b, true);
-    pantry.addFixture(6.0, 0, "basement");
-    pantry.addSwitch(1.461, FLOOR.BASEMENT + 1.15, -1.7, Math.PI / 2);
 
     const rearService = new LightCircuit("rear service corridor lights", FLOOR.BASEMENT, 0xff9b55, true);
     for (const x of [-9.0, 0, 9.0]) rearService.addFixture(x, -4.05, "corridor");
@@ -29314,6 +29617,10 @@
     for (const curtain of windowCurtains) {
       const visual = curtain.visualBounds();
       curtain.clearance.visualOverlaps = overlapNames(visual);
+      if (!curtain.interactive) {
+        curtain.clearance.egressOverlaps = [];
+        continue;
+      }
 
       const originalInset = curtain.exitInset;
       const originalOffset = curtain.exitOffset;
@@ -32188,6 +32495,38 @@
       )));
     }
 
+    // Merging each continuous basement wing removes one circuit
+    // representative from the fixed selection. Spend those two freed point
+    // slots on the other named room half so an energized shared circuit still
+    // looks on in both spaces; the shader budget itself remains unchanged.
+    for (const sharedLighting of Object.values(SHARED_ROOM_LIGHTING)) {
+      const sharedCircuit = renderedCircuits.find((circuit) => circuit.name === sharedLighting.circuit);
+      for (const role of sharedLighting.fixtureRoles) {
+        trySelect(sharedCircuit?.lights.find((light) => light.userData.sharedRoomRole === role));
+      }
+    }
+
+    // Merging the foyer, stair hall, and upper landing into one switch-owned
+    // circuit removes two automatic representatives. Restore one emitter per
+    // architectural section so every part of the energized two-storey volume
+    // still reads as lit without changing the fixed shader-light budget.
+    const openVolumeSharedCircuit = renderedCircuits.find(
+      (circuit) => circuit.name === OPEN_VOLUME_SHARED_LIGHTING.circuit,
+    );
+    for (const role of OPEN_VOLUME_SHARED_LIGHTING.fixtureRoles) {
+      if (Array.from(selectedLights).some((light) => light.userData.sharedRoomRole === role)) continue;
+      const roleLights = openVolumeSharedCircuit?.lights.filter((light) => (
+        light.userData.sharedRoomRole === role
+        && rendersOnLevel(light)
+        && enclosureAvailable(light)
+      )) || [];
+      trySelect(
+        roleLights.find((light) => light.isPointLight)
+        || roleLights.find((light) => light.userData.visibleFixtureEmitter)
+        || roleLights[0],
+      );
+    }
+
     // The merged Workroom spans two former rooms, so one representative does
     // not illuminate both halves. Claim its second existing point-light slot
     // before optional same-circuit extras elsewhere in the basement. The
@@ -32778,10 +33117,60 @@
     };
   }
 
+  function getFurnitureTextileDiagnostics() {
+    const materialEntries = [
+      ["sofaForest", M?.sofaForest],
+      ["sofaOxblood", M?.sofaOxblood],
+      ["chairUpholstery", M?.chairUpholstery],
+      ["bedLinen", M?.bedLinen],
+      ["bedCoverlet", M?.bedCoverlet],
+      ["bedHeadboard", M?.bedHeadboard],
+    ];
+    const textileMaps = new Set(materialEntries.map(([, material]) => material?.map).filter(Boolean));
+    const meshCounts = { sofa: 0, chair: 0, bed: 0 };
+    const unmappedFurnitureMeshes = [];
+    const sofaNames = new Set(["sofa-seat", "sofa-back", "rolled-sofa-arm", "sofa-arm-cap"]);
+    const chairNames = new Set(["chair-cushion", "chair-back"]);
+    const bedNames = new Set(["bed-mattress", "bed-coverlet", "bed-pillow", "bed-headboard-upholstery"]);
+    scene.traverse((object) => {
+      if (!object.isMesh) return;
+      const role = sofaNames.has(object.name)
+        ? "sofa"
+        : chairNames.has(object.name)
+          ? "chair"
+          : bedNames.has(object.name) ? "bed" : null;
+      if (!role) return;
+      meshCounts[role] += 1;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      if (!materials.every((material) => material?.map && material?.bumpMap)) {
+        unmappedFurnitureMeshes.push(object.name);
+      }
+    });
+    return {
+      textureCount: textileMaps.size,
+      textureNames: [...textileMaps].map((texture) => texture.name),
+      shaderLightsAdded: 0,
+      geometryAdded: 0,
+      meshCounts,
+      unmappedFurnitureMeshes,
+      materials: materialEntries.map(([id, material]) => ({
+        id,
+        name: material?.name || null,
+        textureName: material?.map?.name || null,
+        hasMap: Boolean(material?.map),
+        hasBumpMap: Boolean(material?.bumpMap),
+        srgb: material?.map?.encoding === THREE.sRGBEncoding,
+        repeatX: Number(material?.map?.repeat?.x || 0),
+        repeatY: Number(material?.map?.repeat?.y || 0),
+        roughness: Number(material?.roughness || 0),
+      })),
+    };
+  }
+
   function getWindowCurtainDiagnostics() {
     const textureNames = new Set();
     if (M?.curtainDamask?.map) textureNames.add(M.curtainDamask.map.name || M.curtainDamask.map.uuid);
-    const byWall = {
+    const makeWallCounts = () => ({
       "main-front-wall": 0,
       "main-rear-wall": 0,
       "main-west-wall": 0,
@@ -32794,24 +33183,43 @@
       "basement-rear-wall": 0,
       "basement-west-wall": 0,
       "basement-east-wall": 0,
-    };
-    const byLevel = { "MAIN LEVEL": 0, "SECOND FLOOR": 0, "BASEMENT": 0 };
+    });
+    const windowByWall = makeWallCounts();
+    const curtainByWall = makeWallCounts();
+    const windowByLevel = { "MAIN LEVEL": 0, "SECOND FLOOR": 0, "BASEMENT": 0 };
+    const curtainByLevel = { "MAIN LEVEL": 0, "SECOND FLOOR": 0, "BASEMENT": 0 };
     for (const windowRecord of exteriorWindows) {
-      if (Object.hasOwn(byWall, windowRecord.wall)) byWall[windowRecord.wall] += 1;
-      if (Object.hasOwn(byLevel, windowRecord.level)) byLevel[windowRecord.level] += 1;
+      if (Object.hasOwn(windowByWall, windowRecord.wall)) windowByWall[windowRecord.wall] += 1;
+      if (Object.hasOwn(windowByLevel, windowRecord.level)) windowByLevel[windowRecord.level] += 1;
+    }
+    for (const curtain of windowCurtains) {
+      if (Object.hasOwn(curtainByWall, curtain.wall)) curtainByWall[curtain.wall] += 1;
+      if (Object.hasOwn(curtainByLevel, curtain.floorLabel)) curtainByLevel[curtain.floorLabel] += 1;
     }
     return {
       count: windowCurtains.length,
+      interactiveCount: windowCurtains.filter((curtain) => curtain.interactive).length,
+      decorativeOnlyCount: windowCurtains.filter((curtain) => !curtain.interactive).length,
       excludedKinds: [...WINDOW_CURTAINS.excludedKinds],
+      excludedLevels: [...WINDOW_CURTAINS.excludedLevels],
+      decorativeOnlyRooms: [...WINDOW_CURTAINS.decorativeOnlyRooms],
       windowInventory: {
         total: exteriorWindows.length,
-        byWall,
-        byLevel,
+        byWall: windowByWall,
+        byLevel: windowByLevel,
         uncoveredIds: exteriorWindows
-          .filter((windowRecord) => !windowRecord.curtainId)
+          .filter((windowRecord) => !windowRecord.curtainId && !windowRecord.intentionallyBareReason)
+          .map((windowRecord) => windowRecord.id),
+        intentionallyBareIds: exteriorWindows
+          .filter((windowRecord) => Boolean(windowRecord.intentionallyBareReason))
           .map((windowRecord) => windowRecord.id),
       },
-      activeId: windowCurtains.find((curtain) => state.activeHideSpot === curtain.hidingSpot)?.id || null,
+      curtainInventory: {
+        total: windowCurtains.length,
+        byWall: curtainByWall,
+        byLevel: curtainByLevel,
+      },
+      activeId: windowCurtains.find((curtain) => curtain.hidingSpot && state.activeHideSpot === curtain.hidingSpot)?.id || null,
       material: {
         textureName: M?.curtainDamask?.map?.name || null,
         sharedTextureCount: textureNames.size,
@@ -32911,6 +33319,7 @@
       estateStatues: getEstateStatueDiagnostics(),
       upperWindowGallery: getUpperWindowGalleryDiagnostics(),
       windowCurtains: getWindowCurtainDiagnostics(),
+      furnitureTextiles: getFurnitureTextileDiagnostics(),
       player: {
         x: Number(p.x.toFixed(2)),
         y: Number(p.y.toFixed(2)),
@@ -33108,6 +33517,13 @@
         levels: Array.from(c.levels),
         lights: c.lights.length,
         activeLights: c.lights.filter((light) => light.visible && light.intensity > 0).length,
+        sharedRoomRoles: Array.from(new Set(c.lights
+          .map((light) => light.userData.sharedRoomRole)
+          .filter(Boolean))),
+        activeSharedRoomRoles: Array.from(new Set(c.lights
+          .filter((light) => light.visible && light.intensity > 0)
+          .map((light) => light.userData.sharedRoomRole)
+          .filter(Boolean))),
         lightPools: c.glowMaterials.length,
         activeLightPools: c.glowMaterials.filter((material) => material.userData.renderLit).length,
       })),
@@ -33164,6 +33580,7 @@
     });
     window.MrFeastFresh.getDiagnostics = getDiagnostics;
     window.MrFeastFresh.getWindowCurtainState = getWindowCurtainDiagnostics;
+    window.MrFeastFresh.getFurnitureTextileState = getFurnitureTextileDiagnostics;
     window.MrFeastFresh.placePlayerNearWindowCurtainForQA = (id) => {
       if (!state.qa || !physics) return null;
       if (state.activeHideSpot) state.activeHideSpot.exit();
@@ -33181,7 +33598,8 @@
       return {
         id: curtain.id,
         room: curtain.room,
-        prompt: state.currentInteraction?.getLabel() || null,
+        interactive: curtain.interactive,
+        prompt: curtain.hidingSpot?.interaction.getLabel() || null,
         distance: Number(Math.hypot(player.x - curtain.root.position.x, player.z - curtain.root.position.z).toFixed(3)),
         clearance: {
           visualOverlaps: curtain.clearance.visualOverlaps.length,
@@ -33219,6 +33637,39 @@
       updateLocation();
       updateInteractionPrompt();
       return curtain.getDiagnostics();
+    };
+    window.MrFeastFresh.frameBareExteriorWindowForQA = (id, distance = 2.75) => {
+      if (!state.qa || !physics) return null;
+      if (state.activeHideSpot) state.activeHideSpot.exit();
+      const windowRecord = exteriorWindows.find((entry) => entry.id === String(id || ""));
+      if (!windowRecord || windowRecord.curtainId || !windowRecord.intentionallyBareReason) return null;
+      const inwardSign = windowRecord.fixed > 0 ? -1 : 1;
+      const framingInset = WINDOW_CURTAINS.insetFromWall + Math.max(1.7, Number(distance) || 2.75);
+      const target = windowRecord.axis === "x"
+        ? { x: windowRecord.center, z: windowRecord.fixed }
+        : { x: windowRecord.fixed, z: windowRecord.center };
+      const framing = windowRecord.axis === "x"
+        ? { x: windowRecord.center, z: windowRecord.fixed + inwardSign * framingInset }
+        : { x: windowRecord.fixed + inwardSign * framingInset, z: windowRecord.center };
+      const targetY = windowRecord.floorY + windowRecord.bottom + (windowRecord.top - windowRecord.bottom) * 0.52;
+      const horizontal = Math.max(0.001, Math.hypot(framing.x - target.x, framing.z - target.z));
+      teleport(
+        framing.x,
+        windowRecord.floorY,
+        framing.z,
+        faceTargetYaw(framing.x, framing.z, target.x, target.z),
+        Math.atan2(targetY - (windowRecord.floorY + PLAYER.eye), horizontal),
+      );
+      updateLocation();
+      updateInteractionPrompt();
+      return {
+        id: windowRecord.id,
+        wall: windowRecord.wall,
+        room: windowRecord.room,
+        level: windowRecord.level,
+        curtainId: windowRecord.curtainId,
+        intentionallyBareReason: windowRecord.intentionallyBareReason,
+      };
     };
     window.MrFeastFresh.advanceWindowCurtainsForQA = (seconds) => {
       if (!state.qa) return null;
@@ -33307,6 +33758,9 @@
     );
     window.MrFeastFresh.frameFlashlightBeamForQA = () => (
       state.qa && flashlightSystem ? flashlightSystem.frameBeamForQA() : null
+    );
+    window.MrFeastFresh.advanceFlashlightForQA = (seconds) => (
+      state.qa && flashlightSystem ? flashlightSystem.advanceForQA(seconds) : null
     );
     window.MrFeastFresh.getBulkStorageSecretState = () => (
       bulkStorageSecretSystem?.getDiagnostics() || null
@@ -33999,6 +34453,15 @@
         basement: [0, FLOOR.BASEMENT, -2.0, Math.PI],
         wine: [-3.0, FLOOR.BASEMENT, 7.2, Math.PI / 2],
         archive: [3.0, FLOOR.BASEMENT, 7.2, -Math.PI / 2],
+        wineCellarSwitch: [-2.25, FLOOR.BASEMENT, 6.2, -Math.PI / 2, -0.28],
+        laundrySwitch: [-2.25, FLOOR.BASEMENT, -1.7, -Math.PI / 2, -0.28],
+        archiveSwitch: [2.25, FLOOR.BASEMENT, 6.2, Math.PI / 2, -0.28],
+        pantrySwitch: [2.25, FLOOR.BASEMENT, -1.7, Math.PI / 2, -0.28],
+        foyerMainSwitch: [-1.75, FLOOR.MAIN, 11.0, Math.PI, -0.28],
+        foyerBalconySwitch: [-4.1, FLOOR.UPPER, 5.45, Math.PI / 2, -0.28],
+        grandStairSwitch: [-4.1, FLOOR.MAIN, 2.45, Math.PI / 2, -0.28],
+        upperLandingSharedSwitch: [4.1, FLOOR.UPPER, 2.4, -Math.PI / 2, -0.28],
+        rearLoungeSwitch: [-4.1, FLOOR.UPPER, -4.3, Math.PI / 2, -0.28],
         archiveDoorOutside: [0, FLOOR.BASEMENT, 7.2, -Math.PI / 2],
         archiveSouthAisle: [8.15, FLOOR.BASEMENT, 4.0, Math.PI],
         archiveWestAisle: [3.0, FLOOR.BASEMENT, 7.2, -Math.PI / 2],

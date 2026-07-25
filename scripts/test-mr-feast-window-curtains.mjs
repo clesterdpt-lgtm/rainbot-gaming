@@ -25,7 +25,7 @@ const REPRESENTATIVE_IDS = [
   "upper-lounge-rear-west",
   "upper-lounge-rear-east",
 ];
-const EXPECTED_WALL_COUNTS = Object.freeze({
+const EXPECTED_WINDOW_WALL_COUNTS = Object.freeze({
   "main-front-wall": 6,
   "main-rear-wall": 8,
   "main-west-wall": 4,
@@ -39,12 +39,41 @@ const EXPECTED_WALL_COUNTS = Object.freeze({
   "basement-west-wall": 4,
   "basement-east-wall": 3,
 });
-const EXPECTED_LEVEL_COUNTS = Object.freeze({
+const EXPECTED_WINDOW_LEVEL_COUNTS = Object.freeze({
   "MAIN LEVEL": 23,
   "SECOND FLOOR": 25,
   "BASEMENT": 19,
 });
-const EXPECTED_WINDOW_COUNT = Object.values(EXPECTED_WALL_COUNTS).reduce((total, count) => total + count, 0);
+const EXPECTED_CURTAIN_WALL_COUNTS = Object.freeze({
+  "main-front-wall": 6,
+  "main-rear-wall": 8,
+  "main-west-wall": 4,
+  "main-east-wall": 5,
+  "upper-front-wall": 7,
+  "upper-rear-wall": 8,
+  "upper-west-wall": 5,
+  "upper-east-wall": 5,
+  "basement-front-wall": 0,
+  "basement-rear-wall": 0,
+  "basement-west-wall": 0,
+  "basement-east-wall": 0,
+});
+const EXPECTED_CURTAIN_LEVEL_COUNTS = Object.freeze({
+  "MAIN LEVEL": 23,
+  "SECOND FLOOR": 25,
+  "BASEMENT": 0,
+});
+const KITCHEN_CURTAIN_IDS = Object.freeze([
+  "main-rear-window-pos-6-4",
+  "main-rear-window-pos-9-4",
+  "main-rear-window-pos-12-4",
+  "main-east-window-neg-9-4",
+  "main-east-window-neg-6-7",
+]);
+const EXPECTED_WINDOW_COUNT = Object.values(EXPECTED_WINDOW_WALL_COUNTS).reduce((total, count) => total + count, 0);
+const EXPECTED_CURTAIN_COUNT = Object.values(EXPECTED_CURTAIN_WALL_COUNTS).reduce((total, count) => total + count, 0);
+const EXPECTED_INTERACTIVE_COUNT = EXPECTED_CURTAIN_COUNT - KITCHEN_CURTAIN_IDS.length;
+const EXPECTED_BARE_BASEMENT_COUNT = EXPECTED_WINDOW_LEVEL_COUNTS.BASEMENT;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -130,6 +159,9 @@ async function run() {
   assert(/class WindowCurtain/.test(runtime), "missing focused WindowCurtain system");
   assert(/function makeCurtainDamaskTexture/.test(runtime), "missing procedural woven-damask curtain texture");
   assert(/getWindowCurtainState/.test(runtime) && /placePlayerNearWindowCurtainForQA/.test(runtime), "missing focused curtain diagnostics and staging controls");
+  assert(/basement-curtains-removed/.test(runtime), "basement windows need an explicit intentionally-bare curtain exclusion");
+  assert(/interactive:\s*room !== "KITCHEN"/.test(runtime), "Kitchen curtains must be authored as decorative-only");
+  assert(/frameBareExteriorWindowForQA/.test(runtime), "missing bare-window visual QA framing control");
   assert(/is-curtain-hiding/.test(html) && /curtain-crack-left/.test(html) && /curtain-crack-right/.test(html), "missing asymmetric curtain partial-view treatment");
   for (const id of REPRESENTATIVE_IDS) assert(runtime.includes(`id: "${id}"`), `missing preserved authored curtain override ${id}`);
 
@@ -149,15 +181,21 @@ async function run() {
 
     // Complete exterior-window coverage, orientation, mounting, material, and geometry.
     let curtains = await curtainState(page);
-    assert(curtains?.count === EXPECTED_WINDOW_COUNT, `expected curtains on all ${EXPECTED_WINDOW_COUNT} exterior windows: ${JSON.stringify(curtains?.windowInventory || curtains)}`);
+    assert(curtains?.count === EXPECTED_CURTAIN_COUNT, `expected ${EXPECTED_CURTAIN_COUNT} main/upper curtain installations: ${JSON.stringify(curtains?.windowInventory || curtains)}`);
     const runtimeVersion = runtime.match(/MANSION_RUNTIME_VERSION = "([^"]+)"/)?.[1] || "";
-    assert(runtimeVersion.startsWith("20260724-all-window-curtains"), `all-window curtain runtime cache identity is stale: ${runtimeVersion}`);
+    assert(runtimeVersion.startsWith("20260724-curtain-eligibility-furniture-textiles"), `curtain/furniture runtime cache identity is stale: ${runtimeVersion}`);
     assert(html.includes(`mr-feast-mansion.js?v=${runtimeVersion}`), `curtain page/runtime cache identities differ: ${runtimeVersion}`);
     assert(curtains.windowInventory?.total === EXPECTED_WINDOW_COUNT, `exterior window inventory should contain ${EXPECTED_WINDOW_COUNT}: ${JSON.stringify(curtains.windowInventory)}`);
-    assert(curtains.windowInventory?.uncoveredIds?.length === 0, `every exterior window needs curtains: ${JSON.stringify(curtains.windowInventory)}`);
-    assert(JSON.stringify(curtains.windowInventory?.byWall) === JSON.stringify(EXPECTED_WALL_COUNTS), `wall coverage drifted: ${JSON.stringify(curtains.windowInventory)}`);
-    assert(JSON.stringify(curtains.windowInventory?.byLevel) === JSON.stringify(EXPECTED_LEVEL_COUNTS), `level coverage drifted: ${JSON.stringify(curtains.windowInventory)}`);
-    assert(new Set(curtains.installations.map((entry) => entry.id)).size === EXPECTED_WINDOW_COUNT, `curtain IDs must be unique: ${JSON.stringify(curtains.installations.map((entry) => entry.id))}`);
+    assert(curtains.windowInventory?.uncoveredIds?.length === 0, `no exterior window may be accidentally uncovered: ${JSON.stringify(curtains.windowInventory)}`);
+    assert(JSON.stringify(curtains.windowInventory?.byWall) === JSON.stringify(EXPECTED_WINDOW_WALL_COUNTS), `exterior window inventory drifted: ${JSON.stringify(curtains.windowInventory)}`);
+    assert(JSON.stringify(curtains.windowInventory?.byLevel) === JSON.stringify(EXPECTED_WINDOW_LEVEL_COUNTS), `exterior window levels drifted: ${JSON.stringify(curtains.windowInventory)}`);
+    assert(JSON.stringify(curtains.curtainInventory?.byWall) === JSON.stringify(EXPECTED_CURTAIN_WALL_COUNTS), `curtain wall coverage drifted: ${JSON.stringify(curtains.curtainInventory)}`);
+    assert(JSON.stringify(curtains.curtainInventory?.byLevel) === JSON.stringify(EXPECTED_CURTAIN_LEVEL_COUNTS), `curtain levels drifted: ${JSON.stringify(curtains.curtainInventory)}`);
+    assert(curtains.interactiveCount === EXPECTED_INTERACTIVE_COUNT && curtains.decorativeOnlyCount === KITCHEN_CURTAIN_IDS.length, `expected ${EXPECTED_INTERACTIVE_COUNT} interactive and ${KITCHEN_CURTAIN_IDS.length} decorative-only curtains: ${JSON.stringify(curtains)}`);
+    assert(curtains.windowInventory?.intentionallyBareIds?.length === EXPECTED_BARE_BASEMENT_COUNT, `all ${EXPECTED_BARE_BASEMENT_COUNT} basement windows should be intentionally bare: ${JSON.stringify(curtains.windowInventory)}`);
+    assert(curtains.windowInventory.intentionallyBareIds.every((id) => id.startsWith("basement-")), `only basement windows may be intentionally bare: ${JSON.stringify(curtains.windowInventory)}`);
+    assert(new Set(curtains.installations.map((entry) => entry.id)).size === EXPECTED_CURTAIN_COUNT, `curtain IDs must be unique: ${JSON.stringify(curtains.installations.map((entry) => entry.id))}`);
+    assert(curtains.installations.every((entry) => entry.floor !== "BASEMENT"), `basement curtains must be removed entirely: ${JSON.stringify(curtains.installations.filter((entry) => entry.floor === "BASEMENT"))}`);
     assert(curtains.installations.every((entry) => entry.roomFacingDot >= 0.99 && entry.liningFacingDot <= -0.99), `every curtain must face damask into its room and lining toward glass: ${JSON.stringify(curtains.installations.map((entry) => ({ id: entry.id, roomFacingDot: entry.roomFacingDot, liningFacingDot: entry.liningFacingDot })))}`);
     assert(curtains.installations.every((entry) => entry.wallInset <= 0.36 && entry.wallInset >= 0.2), `curtains should sit close to their walls: ${JSON.stringify(curtains.installations.map((entry) => ({ id: entry.id, wallInset: entry.wallInset })))}`);
     assert(curtains.installations.every((entry) => entry.windowAlignmentError <= 0.001), `curtains must remain centered on their windows: ${JSON.stringify(curtains.installations.map((entry) => ({ id: entry.id, windowAlignmentError: entry.windowAlignmentError })))}`);
@@ -169,19 +207,29 @@ async function run() {
     assert(curtains.installations.every((entry) => entry.crackWidth >= 0.12 && entry.crackWidth <= 0.18), `cracks must stay narrow: ${JSON.stringify(curtains.installations)}`);
 
     // Every authored approach must resolve through the real center-look prompt.
-    for (const id of curtains.installations.map((entry) => entry.id)) {
+    for (const id of curtains.installations.filter((entry) => entry.interactive).map((entry) => entry.id)) {
       const staged = await stageCurtain(page, id);
       assert(staged.clearance?.visualOverlaps === 0 && staged.clearance?.egressOverlaps === 0, `${id} should stage from a clear pocket: ${JSON.stringify(staged)}`);
       assert(staged.distance <= 2.23, `${id} staging should remain inside the real 2.35m interaction range: ${JSON.stringify(staged)}`);
     }
 
-    // Preserve direct visual evidence for the corrected east-wall orientation,
-    // the crowded kitchen, the upper gallery, and the elevated basement set.
+    // Kitchen fabric remains visual dressing but cannot enter the hidden state.
+    for (const id of KITCHEN_CURTAIN_IDS) {
+      const staged = await page.evaluate(
+        (curtainId) => window.MrFeastFresh.placePlayerNearWindowCurtainForQA(curtainId),
+        id,
+      );
+      assert(staged?.id === id && staged.interactive === false && staged.prompt === null, `Kitchen curtain ${id} should be decorative-only: ${JSON.stringify(staged)}`);
+      await page.keyboard.press("e");
+      assert(!(await page.evaluate(() => window.MrFeastFresh.isPlayerHidden())), `Kitchen curtain ${id} must not hide the player`);
+    }
+
+    // Preserve direct visual evidence for room-facing mounting, decorative
+    // Kitchen drapery, the upper gallery, and the newly bare basement.
     for (const [id, fileName, framingDistance] of [
       ["main-east-window-pos-6-4", "east-wall-curtain-room-facing-desktop.png"],
-      ["main-rear-window-pos-9-4", "kitchen-curtain-close-mounted-desktop.png"],
+      ["main-rear-window-pos-9-4", "kitchen-curtain-decorative-only-desktop.png", 2.75],
       ["upper-front-window-zero", "upper-gallery-curtain-covered-desktop.png", 3.8],
-      ["basement-front-window-neg-11", "basement-curtain-covered-desktop.png"],
     ]) {
       if (framingDistance) {
         const framed = await page.evaluate(
@@ -194,6 +242,11 @@ async function run() {
       }
       await captureStage(page, fileName);
     }
+    const bareBasement = await page.evaluate(() => (
+      window.MrFeastFresh.frameBareExteriorWindowForQA("basement-front-window-neg-11")
+    ));
+    assert(bareBasement?.id === "basement-front-window-neg-11" && bareBasement.curtainId === null, `QA should frame a bare basement window: ${JSON.stringify(bareBasement)}`);
+    await captureStage(page, "basement-window-bare-desktop.png");
 
     // Real E enters a left-crack curtain, closes its textured panels, switches
     // off the flashlight, locks movement, and leaves looking available.
@@ -269,7 +322,7 @@ async function run() {
     await desktop.context.close();
 
     assert(errors.length === 0, `unexpected browser errors: ${errors.join(" | ")}`);
-    console.log(`Mr. Feast window curtain acceptance passed: all ${EXPECTED_WINDOW_COUNT} correctly oriented close-mounted installations, real E/touch hiding, left/right partial views, movement lock, flashlight shutdown, exit, and reuse verified`);
+    console.log(`Mr. Feast window curtain acceptance passed: ${EXPECTED_CURTAIN_COUNT} main/upper installations, ${EXPECTED_INTERACTIVE_COUNT} interactive hides, ${KITCHEN_CURTAIN_IDS.length} decorative-only Kitchen sets, ${EXPECTED_BARE_BASEMENT_COUNT} bare basement windows, real E/touch hiding, left/right partial views, movement lock, flashlight shutdown, exit, and reuse verified`);
   } finally {
     if (browser) await browser.close();
     if (server) server.kill("SIGTERM");

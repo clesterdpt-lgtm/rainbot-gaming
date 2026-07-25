@@ -130,6 +130,17 @@ async function assertSourceContract() {
     !/patronArmRest|posePatronArmsAtTable|rotateBoneEndpointToward/.test(runtime),
     "the banquet Patrons must not use the twisting tabletop arm solver",
   );
+  assert(
+    /makePatronCloak/.test(runtime)
+      && /cloakVisible/.test(runtime)
+      && /exposedBodyMeshCount/.test(runtime),
+    "the banquet Patrons need a named black-cloak treatment that fully hides the generated suit and arms",
+  );
+  assert(
+    /id:\s*"patron-stag"[\s\S]{0,180}?maskScale:\s*0\.84/.test(runtime)
+      && /id:\s*"patron-ram"[\s\S]{0,180}?maskScale:\s*0\.84/.test(runtime),
+    "the two left-row skull masks need the enlarged 0.84 presentation scale",
+  );
   assert(!/placeCard:\s*"CONTESTANT 13 — MAIN COURSE"/.test(runtime), "the loss scene must remove the Contestant 13 main-course sign");
   assert(/data-banquet-loss/.test(html) && /mansion-banquet-look-hint/.test(html), "the stage needs banquet presentation and look-hint states");
   assert(/user playtest/i.test(milestone), "Milestone 64 must retain visual user playtest acceptance");
@@ -330,21 +341,17 @@ async function run() {
         && banquet.patrons.every((entry) => entry.visible && entry.seated && entry.facingPlayer)
         && banquet.patrons.every((entry) => entry.faceFullyConcealed && entry.hoodVisible)
         && banquet.patrons.every((entry) => entry.maskScale >= 0.68)
-        && banquet.patrons.every((entry) => entry.visibleArmCount === 2)
-        && banquet.patrons.every((entry) => entry.armReadability.every(
-          (arm) => (
-            arm.restingAtSide
-            && !arm.tabletopReach
-            && arm.verticalDrop >= 0.09
-            && arm.handPosition.y <= 0.87
-            && arm.sleeveClearOfFloor
-            && arm.sleeveCompact
-          ),
-        ))
+        && banquet.patrons.every((entry) => entry.cloakVisible)
+        && banquet.patrons.every((entry) => entry.cloakBlack && entry.cloakCoversBody)
+        && banquet.patrons.every((entry) => entry.exposedBodyMeshCount === 0)
+        && banquet.patrons.every((entry) => entry.cloakTableClear && entry.cloakFaceClear)
+        && banquet.patrons
+          .filter((entry) => ["stag-crown", "ram-reliquary"].includes(entry.maskId))
+          .every((entry) => entry.maskScale >= 0.84)
         && new Set(banquet.patrons.map((entry) => entry.bodyFile)).size === 1
         && new Set(banquet.patrons.map((entry) => entry.maskId)).size === 6
         && new Set(banquet.patrons.map((entry) => entry.maskFile)).size === 6,
-      `the Patron tableau must reuse one body with six unique full-face masks: ${JSON.stringify(banquet.patrons)}`,
+      `the Patron tableau must hide its shared body under six black cloaks with unique full-face masks: ${JSON.stringify(banquet.patrons)}`,
     );
     assert(
       banquet.host.visible

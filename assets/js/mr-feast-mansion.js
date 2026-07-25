@@ -2837,13 +2837,21 @@
       heightScale: 1.12,
       depthScale: 0.68,
     }),
-    armSilhouette: Object.freeze({
-      minimumSleeveY: FLOOR.MAIN + 0.44,
-      maximumSleeveHeight: 0.88,
-      minimumWeightedVertexCount: 120,
-      minimumArmWeight: 0.28,
-      minimumWristDrop: 0.09,
-      maximumWristY: FLOOR.MAIN + 0.87,
+    cloak: Object.freeze({
+      color: 0x010103,
+      foldColor: 0x09050c,
+      centerY: FLOOR.MAIN + 0.73,
+      height: 0.92,
+      shoulderRadius: 0.27,
+      hemRadius: 0.42,
+      depthScale: 0.4,
+      cowlHeight: 0.22,
+      cowlTopRadius: 0.16,
+      cowlBottomRadius: 0.27,
+      cowlDepthScale: 0.55,
+      frontFoldHeight: 0.66,
+      minimumMaskClearance: 0.045,
+      minimumTableClearance: 0.002,
     }),
     victim: Object.freeze({
       torso: Object.freeze({
@@ -2896,8 +2904,8 @@
       RightHand: Object.freeze([0.071562, 0.981707, 0.087514, 0.153206]),
     }),
     patrons: Object.freeze([
-      Object.freeze({ id: "patron-stag", maskId: "stag-crown", x: -8.95, z: -7.25, scale: 0.98, maskScale: 0.74, phase: 0.11, tint: 0xf4e7dc }),
-      Object.freeze({ id: "patron-ram", maskId: "ram-reliquary", x: -10.35, z: -7.25, scale: 1.02, maskScale: 0.72, phase: 0.31, tint: 0xdad0e3 }),
+      Object.freeze({ id: "patron-stag", maskId: "stag-crown", x: -8.95, z: -7.25, scale: 0.98, maskScale: 0.84, phase: 0.11, tint: 0xf4e7dc }),
+      Object.freeze({ id: "patron-ram", maskId: "ram-reliquary", x: -10.35, z: -7.25, scale: 1.02, maskScale: 0.84, phase: 0.31, tint: 0xdad0e3 }),
       Object.freeze({ id: "patron-raven", maskId: "raven-mourning", x: -11.65, z: -7.25, scale: 0.96, maskScale: 0.68, phase: 0.49, tint: 0xcbd4e5 }),
       Object.freeze({ id: "patron-moth", maskId: "moth-veil", x: -8.95, z: -9.55, scale: 1.01, maskScale: 0.72, phase: 0.68, tint: 0xead1d6 }),
       Object.freeze({ id: "patron-grin", maskId: "porcelain-grin", x: -10.35, z: -9.55, scale: 0.97, maskScale: 0.76, phase: 0.82, tint: 0xe6dac8 }),
@@ -15301,6 +15309,53 @@
         metalness: 0,
         side: THREE.DoubleSide,
       });
+      this.patronCloakGeometry = new THREE.CylinderGeometry(
+        BANQUET_LOSS.cloak.shoulderRadius,
+        BANQUET_LOSS.cloak.hemRadius,
+        BANQUET_LOSS.cloak.height,
+        20,
+        4,
+        true,
+      );
+      const cloakPosition = this.patronCloakGeometry.attributes.position;
+      for (let index = 0; index < cloakPosition.count; index += 1) {
+        const x = cloakPosition.getX(index);
+        const z = cloakPosition.getZ(index);
+        const angle = Math.atan2(z, x);
+        const fold = 1 + Math.cos(angle * 8) * 0.035;
+        cloakPosition.setXYZ(
+          index,
+          x * fold,
+          cloakPosition.getY(index),
+          z * fold * BANQUET_LOSS.cloak.depthScale,
+        );
+      }
+      cloakPosition.needsUpdate = true;
+      this.patronCloakGeometry.computeVertexNormals();
+      this.patronCloakCowlGeometry = new THREE.CylinderGeometry(
+        BANQUET_LOSS.cloak.cowlTopRadius,
+        BANQUET_LOSS.cloak.cowlBottomRadius,
+        BANQUET_LOSS.cloak.cowlHeight,
+        16,
+        2,
+        true,
+      );
+      this.patronCloakFoldGeometry = new THREE.BoxGeometry(
+        0.018,
+        BANQUET_LOSS.cloak.frontFoldHeight,
+        0.012,
+      );
+      this.patronCloakMaterial = new THREE.MeshStandardMaterial({
+        color: BANQUET_LOSS.cloak.color,
+        roughness: 0.96,
+        metalness: 0,
+        side: THREE.DoubleSide,
+      });
+      this.patronCloakFoldMaterial = new THREE.MeshStandardMaterial({
+        color: BANQUET_LOSS.cloak.foldColor,
+        roughness: 0.94,
+        metalness: 0,
+      });
       this.makeRitualDressing();
       this.syncState();
     }
@@ -15626,6 +15681,56 @@
       return hood;
     }
 
+    makePatronCloak(spec) {
+      const cloak = new THREE.Group();
+      cloak.name = `${spec.id}-black-ritual-cloak`;
+      cloak.position.set(spec.x, BANQUET_LOSS.cloak.centerY, spec.z);
+      cloak.rotation.y = spec.z >= BANQUET_LOSS.table.centerZ ? Math.PI : 0;
+      cloak.scale.setScalar(spec.scale);
+      const drape = new THREE.Mesh(
+        this.patronCloakGeometry,
+        this.patronCloakMaterial,
+      );
+      drape.name = `${spec.id}-opaque-black-cloak-drape`;
+      drape.castShadow = true;
+      drape.receiveShadow = true;
+      cloak.add(drape);
+      const cowl = new THREE.Mesh(
+        this.patronCloakCowlGeometry,
+        this.patronCloakMaterial,
+      );
+      cowl.name = `${spec.id}-black-cloak-neck-cowl`;
+      cowl.position.y = BANQUET_LOSS.cloak.height * 0.5 - 0.07;
+      cowl.scale.z = BANQUET_LOSS.cloak.cowlDepthScale;
+      cowl.castShadow = true;
+      cowl.receiveShadow = true;
+      cloak.add(cowl);
+      for (const side of [-1, 1]) {
+        const fold = new THREE.Mesh(
+          this.patronCloakFoldGeometry,
+          this.patronCloakFoldMaterial,
+        );
+        fold.name = `${spec.id}-black-cloak-front-fold`;
+        fold.position.set(side * 0.08, -0.055, 0.14);
+        fold.castShadow = false;
+        fold.receiveShadow = true;
+        cloak.add(fold);
+      }
+      return cloak;
+    }
+
+    hidePatronBodyMeshes(body) {
+      let bodyMeshCount = 0;
+      body.traverse((object) => {
+        if (!object.isMesh) return;
+        bodyMeshCount += 1;
+        object.visible = false;
+        object.castShadow = false;
+        object.receiveShadow = false;
+      });
+      return bodyMeshCount;
+    }
+
     stageTabletopSightline() {
       if (this.tabletopSightlineSnapshot.length) return;
       scene.traverse((object) => {
@@ -15647,21 +15752,6 @@
       this.tabletopSightlineSnapshot = [];
     }
 
-    tintBody(body, tint) {
-      body.traverse((object) => {
-        if (!object.isMesh) return;
-        object.castShadow = true;
-        object.receiveShadow = true;
-        if (Array.isArray(object.material)) {
-          object.material = object.material.map((material) => material.clone());
-          for (const material of object.material) material.color?.multiply(new THREE.Color(tint));
-        } else if (object.material) {
-          object.material = object.material.clone();
-          object.material.color?.multiply(new THREE.Color(tint));
-        }
-      });
-    }
-
     applySeatedPose(body) {
       const bones = new Map();
       body.traverse((object) => {
@@ -15677,7 +15767,7 @@
 
     assemblePatrons() {
       for (const patron of this.patrons) {
-        this.root.remove(patron.body, patron.hood, patron.mask);
+        this.root.remove(patron.body, patron.cloak, patron.hood, patron.mask);
       }
       this.patrons = [];
       if (!this.bodyBase || !this.manifest) return;
@@ -15685,7 +15775,6 @@
       for (const spec of BANQUET_LOSS.patrons) {
         const body = THREE.SkeletonUtils.clone(this.bodyBase);
         body.name = `${spec.id}-shared-formal-body`;
-        this.tintBody(body, spec.tint);
         const yaw = Math.atan2(
           BANQUET_LOSS.camera.x - spec.x,
           BANQUET_LOSS.camera.z - spec.z,
@@ -15694,6 +15783,7 @@
         body.rotation.y = yaw;
         body.scale.setScalar(spec.scale);
         const bones = this.applySeatedPose(body);
+        const bodyMeshCount = this.hidePatronBodyMeshes(body);
         const torsoBones = ["Spine02", "Spine01", "Spine", "neck", "Head"]
           .map((name) => bones.get(name))
           .filter(Boolean);
@@ -15709,11 +15799,14 @@
           object.castShadow = true;
           object.receiveShadow = true;
         });
+        const cloak = this.makePatronCloak(spec);
         const hood = this.makePatronHood(spec);
-        this.root.add(body, hood, mask);
+        this.root.add(body, cloak, hood, mask);
         this.patrons.push({
           spec,
           body,
+          bodyMeshCount,
+          cloak,
           hood,
           mask,
           yaw,
@@ -16103,74 +16196,6 @@
       });
     }
 
-    measurePatronArmSilhouette(patron, side) {
-      const armBoneNames = new Set([
-        `${side}Arm`,
-        `${side}ForeArm`,
-        `${side}Hand`,
-      ]);
-      const bounds = new THREE.Box3();
-      const point = new THREE.Vector3();
-      let weightedVertexCount = 0;
-      patron.body.updateMatrixWorld(true);
-      patron.body.traverse((object) => {
-        if (!object.isSkinnedMesh) return;
-        const skinIndex = object.geometry?.attributes?.skinIndex;
-        const skinWeight = object.geometry?.attributes?.skinWeight;
-        if (!skinIndex || !skinWeight || !object.skeleton) return;
-        object.skeleton.update();
-        const sideBoneIndexes = new Set();
-        object.skeleton.bones.forEach((bone, index) => {
-          if (armBoneNames.has(bone.name)) sideBoneIndexes.add(index);
-        });
-        for (let vertexIndex = 0; vertexIndex < skinIndex.count; vertexIndex += 1) {
-          const indexes = [
-            skinIndex.getX(vertexIndex),
-            skinIndex.getY(vertexIndex),
-            skinIndex.getZ(vertexIndex),
-            skinIndex.getW(vertexIndex),
-          ];
-          const weights = [
-            skinWeight.getX(vertexIndex),
-            skinWeight.getY(vertexIndex),
-            skinWeight.getZ(vertexIndex),
-            skinWeight.getW(vertexIndex),
-          ];
-          const sideWeight = indexes.reduce(
-            (total, boneIndex, influenceIndex) => (
-              sideBoneIndexes.has(boneIndex) ? total + weights[influenceIndex] : total
-            ),
-            0,
-          );
-          if (sideWeight < BANQUET_LOSS.armSilhouette.minimumArmWeight) continue;
-          object.boneTransform(vertexIndex, point);
-          object.localToWorld(point);
-          bounds.expandByPoint(point);
-          weightedVertexCount += 1;
-        }
-      });
-      if (bounds.isEmpty()) {
-        return {
-          weightedVertexCount,
-          minimumY: null,
-          height: null,
-          clearOfFloor: false,
-          compact: false,
-        };
-      }
-      const height = bounds.max.y - bounds.min.y;
-      return {
-        weightedVertexCount,
-        minimumY: Number(bounds.min.y.toFixed(3)),
-        height: Number(height.toFixed(3)),
-        clearOfFloor: (
-          weightedVertexCount >= BANQUET_LOSS.armSilhouette.minimumWeightedVertexCount
-          && bounds.min.y >= BANQUET_LOSS.armSilhouette.minimumSleeveY
-        ),
-        compact: height <= BANQUET_LOSS.armSilhouette.maximumSleeveHeight,
-      };
-    }
-
     getDiagnostics() {
       const cameraTarget = {
         x: BANQUET_LOSS.camera.x,
@@ -16178,100 +16203,29 @@
         z: BANQUET_LOSS.camera.z,
       };
       const patrons = this.patrons.map((patron) => {
-        const armReadability = ["Left", "Right"].map((side) => {
-          const silhouette = this.measurePatronArmSilhouette(patron, side);
-          const forearm = patron.bones.get(`${side}ForeArm`);
-          const hand = patron.bones.get(`${side}Hand`);
-          const forearmPosition = forearm
-            ? forearm.getWorldPosition(new THREE.Vector3())
-            : null;
-          const handPosition = hand
-            ? hand.getWorldPosition(new THREE.Vector3())
-            : null;
-          const clearOfLap = Boolean(
-            forearmPosition
-            && handPosition
-            && Math.max(forearmPosition.y, handPosition.y) >= BANQUET_LOSS.table.surfaceY - 0.08
-          );
-          const rowSide = patron.spec.z >= BANQUET_LOSS.table.centerZ ? 1 : -1;
-          const physicalTableEdgeZ = BANQUET_LOSS.table.centerZ
-            + rowSide * BANQUET_LOSS.table.halfWidth;
-          const tableEdgeDistance = handPosition
-            ? Math.abs(handPosition.z - physicalTableEdgeZ)
-            : Infinity;
-          const bodySideDistance = handPosition
-            ? Math.hypot(
-              handPosition.x - patron.spec.x,
-              handPosition.z - patron.spec.z,
-            )
-            : Infinity;
-          const verticalDrop = forearmPosition && handPosition
-            ? forearmPosition.y - handPosition.y
-            : -Infinity;
-          const outsideTable = Boolean(
-            handPosition
-            && (
-              rowSide > 0
-                ? handPosition.z > physicalTableEdgeZ
-                : handPosition.z < physicalTableEdgeZ
-            )
-          );
-          const restingAtSide = Boolean(
-            forearmPosition
-            && handPosition
-            && outsideTable
-            && bodySideDistance <= 0.34
-            && verticalDrop >= BANQUET_LOSS.armSilhouette.minimumWristDrop
-            && handPosition.y <= BANQUET_LOSS.armSilhouette.maximumWristY
-            && forearmPosition.y <= BANQUET_LOSS.table.surfaceY + 0.22
-          );
-          const tabletopReach = Boolean(handPosition && !outsideTable);
-          const inView = Boolean(
-            this.root.visible
-            && forearm
-            && hand
-            && (this.pointInCamera(forearm) || this.pointInCamera(hand))
-          );
-          return {
-            side: side.toLowerCase(),
-            clearOfLap,
-            restingAtSide: restingAtSide && inView,
-            tabletopReach,
-            inView,
-            readable: restingAtSide && inView,
-            forearmPosition: forearmPosition ? {
-              x: Number(forearmPosition.x.toFixed(3)),
-              y: Number(forearmPosition.y.toFixed(3)),
-              z: Number(forearmPosition.z.toFixed(3)),
-            } : null,
-            handPosition: handPosition ? {
-              x: Number(handPosition.x.toFixed(3)),
-              y: Number(handPosition.y.toFixed(3)),
-              z: Number(handPosition.z.toFixed(3)),
-            } : null,
-            tableEdgeDistance: Number.isFinite(tableEdgeDistance)
-              ? Number(tableEdgeDistance.toFixed(3))
-              : null,
-            bodySideDistance: Number.isFinite(bodySideDistance)
-              ? Number(bodySideDistance.toFixed(3))
-              : null,
-            sleeveWeightedVertexCount: silhouette.weightedVertexCount,
-            sleeveMinimumY: silhouette.minimumY,
-            sleeveHeight: silhouette.height,
-            sleeveClearOfFloor: silhouette.clearOfFloor,
-            sleeveCompact: silhouette.compact,
-            verticalDrop: Number.isFinite(verticalDrop)
-              ? Number(verticalDrop.toFixed(3))
-              : null,
-          };
+        const cloakBox = new THREE.Box3().setFromObject(patron.cloak);
+        const cloakSize = cloakBox.getSize(new THREE.Vector3());
+        const rowSide = patron.spec.z >= BANQUET_LOSS.table.centerZ ? 1 : -1;
+        const physicalTableEdgeZ = BANQUET_LOSS.table.centerZ
+          + rowSide * BANQUET_LOSS.table.halfWidth;
+        let exposedBodyMeshCount = 0;
+        patron.body.traverse((object) => {
+          if (object.isMesh && object.visible) exposedBodyMeshCount += 1;
         });
+        const cloakTableClear = rowSide > 0
+          ? cloakBox.min.z >= physicalTableEdgeZ + BANQUET_LOSS.cloak.minimumTableClearance
+          : cloakBox.max.z <= physicalTableEdgeZ - BANQUET_LOSS.cloak.minimumTableClearance;
+        const cloakFaceClear = (
+          cloakBox.max.y
+          <= patron.mask.position.y - BANQUET_LOSS.cloak.minimumMaskClearance
+        );
         return {
           id: patron.spec.id,
           bodyFile: this.manifest?.body?.runtimeFile || BANQUET_LOSS.asset.bodyFile,
           maskId: patron.spec.maskId,
           maskFile: patron.maskManifest.runtimeFile,
           maskScale: patron.spec.maskScale,
-          visible: Boolean(this.root.visible && patron.body.visible && patron.mask.visible),
+          visible: Boolean(this.root.visible && patron.cloak.visible && patron.mask.visible),
           hoodVisible: Boolean(this.root.visible && patron.hood.visible),
           faceFullyConcealed: Boolean(
             this.root.visible
@@ -16280,8 +16234,26 @@
             && patron.spec.maskScale >= 0.68
           ),
           seated: true,
-          visibleArmCount: armReadability.filter((entry) => entry.readable).length,
-          armReadability,
+          cloakVisible: Boolean(
+            this.root.visible
+            && patron.cloak.visible
+            && this.pointInCamera(patron.cloak)
+          ),
+          cloakBlack: BANQUET_LOSS.cloak.color <= 0x101010,
+          cloakCoversBody: Boolean(
+            patron.bodyMeshCount > 0
+            && exposedBodyMeshCount === 0
+            && cloakSize.y >= BANQUET_LOSS.cloak.height * patron.spec.scale * 0.98
+          ),
+          cloakTableClear,
+          cloakFaceClear,
+          cloakBoundsMeters: {
+            width: Number(cloakSize.x.toFixed(3)),
+            height: Number(cloakSize.y.toFixed(3)),
+            depth: Number(cloakSize.z.toFixed(3)),
+          },
+          bodyMeshCount: patron.bodyMeshCount,
+          exposedBodyMeshCount,
           facingPlayer: this.facingPoint(patron.yaw, patron.body.position, cameraTarget),
           inView: Boolean(this.root.visible && this.pointInCamera(patron.mask)),
           position: {

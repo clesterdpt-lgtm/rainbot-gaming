@@ -335,7 +335,11 @@ async function assertHudFits(page, mobile = false) {
   assert(geometry.hud.left >= geometry.stage.left - 1 && geometry.hud.right <= geometry.stage.right + 1, `Storm HUD must fit stage width: ${JSON.stringify(geometry)}`);
   assert(geometry.hud.top >= geometry.stage.top - 1 && geometry.hud.bottom <= geometry.stage.bottom + 1, `Storm HUD must fit stage height: ${JSON.stringify(geometry)}`);
   assert(!geometry.overflow, `Storm HUD must not create horizontal overflow: ${JSON.stringify(geometry)}`);
-  assert(geometry.energy && !geometry.energy.hidden && geometry.energy.width > 0, `the sprint-energy meter must remain visible during Storm Run: ${JSON.stringify(geometry)}`);
+  assert(
+    geometry.energy
+      && (geometry.energy.hidden || geometry.energy.width > 0),
+    `the sprint-energy meter must stay mounted during Storm Run (hidden only when full): ${JSON.stringify(geometry)}`,
+  );
   assert(geometry.hud.height <= 58 && geometry.titleDisplay === "none" && geometry.checkpointDisplay === "none" && geometry.standingsDisplay === "none", `Storm Run must use only a shallow progress/time strip with no written directions or standings: ${JSON.stringify(geometry)}`);
   assert(geometry.speechDisplay !== "none", `Mr. Feast's speech must remain visible while Storm Run owns the HUD: ${JSON.stringify(geometry)}`);
   if (mobile) {

@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-banquet-loss-curtain-light-response-banquet-free-look-centered-ritual-victim-tableau-6";
+  const MANSION_RUNTIME_VERSION = "20260725-energy-hud-bottom-hide-full-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -34277,7 +34277,10 @@
     const movement = state.movement;
     const energyPercent = clamp((movement.energy / PLAYER.energyMax) * 100, 0, 100);
     const roundedEnergy = Math.round(movement.energy);
-    dom.energy.hidden = !state.started;
+    // Full reserve is the quiet default: only surface the meter while energy
+    // is incomplete or still recovering from exhaustion.
+    const energyFull = movement.energy >= PLAYER.energyMax - 0.001;
+    dom.energy.hidden = !state.started || (energyFull && !movement.exhausted);
     dom.energy.setAttribute("aria-valuenow", String(roundedEnergy));
     dom.energy.classList.toggle("is-exhausted", movement.exhausted);
     if (dom.energyFill) dom.energyFill.style.width = `${energyPercent}%`;

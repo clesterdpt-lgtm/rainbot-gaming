@@ -374,10 +374,10 @@
 
     #mansion-energy {
       position: absolute;
-      left: max(18px, env(safe-area-inset-left));
-      bottom: max(64px, calc(env(safe-area-inset-bottom) + 54px));
+      left: max(14px, env(safe-area-inset-left));
+      bottom: max(14px, calc(env(safe-area-inset-bottom) + 8px));
       z-index: 7;
-      width: min(210px, calc(100% - 36px));
+      width: min(196px, calc(100% - 28px));
       padding: 8px 10px 9px;
       border: 1px solid rgba(225, 198, 147, 0.24);
       border-radius: 3px;
@@ -2711,8 +2711,9 @@
       #mansion-action { bottom: max(148px, calc(env(safe-area-inset-bottom) + 130px)); }
       #mansion-energy,
       #mansion-stealth { left: max(10px, env(safe-area-inset-left)); width: 132px; padding: 5px 7px 6px; }
-      #mansion-energy { bottom: max(116px, calc(env(safe-area-inset-bottom) + 102px)); }
-      #mansion-stealth { bottom: max(150px, calc(env(safe-area-inset-bottom) + 136px)); }
+      /* Just above the left touch D-pad when energy is visible. */
+      #mansion-energy { bottom: max(108px, calc(env(safe-area-inset-bottom) + 94px)); }
+      #mansion-stealth { bottom: max(142px, calc(env(safe-area-inset-bottom) + 128px)); }
       .mansion-energy__head,
       .mansion-stealth__head { gap: 6px; margin-bottom: 3px; font-size: 0.48rem; letter-spacing: 0.11em; }
       .mansion-energy__track,
@@ -3502,6 +3503,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260723-mr-feast-rebrand-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-banquet-loss-curtain-light-response-banquet-free-look-centered-ritual-victim-tableau-6" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260725-energy-hud-bottom-hide-full-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

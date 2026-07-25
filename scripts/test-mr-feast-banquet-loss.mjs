@@ -8,7 +8,7 @@ import { chromium } from "playwright";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const port = Number(process.env.MR_FEAST_BANQUET_TEST_PORT || (59200 + (process.pid % 5000)));
 const baseUrl = `http://127.0.0.1:${port}`;
-const gameUrl = `${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1&allLights=1`;
+const gameUrl = `${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1`;
 const artifactDir = path.join(root, "output", "playwright", "mr-feast-banquet-loss");
 const closingLine = "Contestant Thirteen—you lost the million, but you still made the final cut. Our patrons call it sacrifice. The Guest calls it supper. I call it a feast.";
 
@@ -152,7 +152,7 @@ async function assertAssetContract() {
   assert(
     manifest.victim?.underwear === true
       && manifest.victim?.limbCount === 4
-      && manifest.victim?.sealedSurgicalCaps === 4
+      && manifest.victim?.sealedSurgicalCaps === 0
       && manifest.victim?.explicitGore === false
       && manifest.victim?.torso?.runtimeFile
       && manifest.victim?.limbs?.runtimeFile
@@ -161,6 +161,10 @@ async function assertAssetContract() {
       && manifest.victim?.torso?.blenderReport
       && manifest.victim?.limbs?.blenderReport
       && manifest.victim?.torso?.visibleMeshyDerivedCore === true
+      && manifest.victim?.torso?.torsoOnlySilhouette === true
+      && manifest.victim?.torso?.shoulderAttachments === 0
+      && manifest.victim?.torso?.splitLegStubs === 0
+      && manifest.victim?.torso?.torsoSocketBandageCaps === 0
       && manifest.victim?.limbs?.visibleMeshyDerivedCore === true,
     `victim outputs need non-gory Blender separation metadata: ${JSON.stringify(manifest.victim)}`,
   );
@@ -200,15 +204,9 @@ async function assertAssetContract() {
       && (torsoGlb.images || []).length >= 1,
     `the torso GLB needs one textured Meshy-derived underwear core: ${JSON.stringify({ nodes: torsoNodeNames, materials: torsoGlb.materials })}`,
   );
-  assertExactNames(
-    torsoNodeNames.filter((name) => name.endsWith("_Bandage_Cap")),
-    [
-      "Banquet_Victim_Left_Shoulder_Bandage_Cap",
-      "Banquet_Victim_Right_Shoulder_Bandage_Cap",
-      "Banquet_Victim_Left_Hip_Bandage_Cap",
-      "Banquet_Victim_Right_Hip_Bandage_Cap",
-    ],
-    "torso bandage-cap nodes",
+  assert(
+    torsoNodeNames.filter((name) => name.endsWith("_Bandage_Cap")).length === 0,
+    `the torso-only asset must not retain bulky shoulder or hip caps: ${JSON.stringify(torsoNodeNames)}`,
   );
   const forbiddenTorsoNodes = torsoNodeNames.filter(
     (name) => name.startsWith("Banquet_Victim_")
@@ -311,6 +309,8 @@ async function run() {
       banquet.patrons.length === 6
         && banquet.patrons.every((entry) => entry.visible && entry.seated && entry.facingPlayer)
         && banquet.patrons.every((entry) => entry.faceFullyConcealed && entry.hoodVisible)
+        && banquet.patrons.every((entry) => entry.maskScale >= 0.68)
+        && banquet.patrons.every((entry) => entry.visibleArmCount === 2)
         && new Set(banquet.patrons.map((entry) => entry.bodyFile)).size === 1
         && new Set(banquet.patrons.map((entry) => entry.maskId)).size === 6
         && new Set(banquet.patrons.map((entry) => entry.maskFile)).size === 6,
@@ -341,12 +341,24 @@ async function run() {
       banquet.victim.torsoVisible
         && banquet.victim.underwearVisible
         && banquet.victim.missingLimbCount === 4
-        && banquet.victim.sealedSurgicalCaps === 4
+        && banquet.victim.sealedSurgicalCaps === 0
+        && banquet.victim.torsoOnlySilhouette
+        && banquet.victim.shoulderAttachments === 0
+        && banquet.victim.splitLegStubs === 0
         && banquet.victim.explicitGore === false
         && banquet.victim.torsoCenteredOnPlatter
         && banquet.victim.torsoCenterOffset <= 0.025
         && banquet.victim.gameplayCollidersAdded === 0,
-      `the table victim must be a sealed limbless underwear torso: ${JSON.stringify(banquet.victim)}`,
+      `the table victim must be a compact torso-only underwear silhouette: ${JSON.stringify(banquet.victim)}`,
+    );
+    assert(
+      banquet.lighting.productionToneLift
+        && banquet.lighting.patronFillLightCount === 2
+        && banquet.lighting.hemisphereIntensity >= 0.3
+        && banquet.lighting.hemisphereIntensity <= 0.4
+        && banquet.lighting.moonIntensity >= 0.26
+        && banquet.lighting.moonIntensity <= 0.32,
+      `the loss scene needs a restrained production-dark light lift: ${JSON.stringify(banquet.lighting)}`,
     );
     assert(
       banquet.victim.limbPlatterVisible

@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-banquet-loss-curtain-light-response-banquet-free-look-centered-ritual-victim-tableau-2";
+  const MANSION_RUNTIME_VERSION = "20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-banquet-loss-curtain-light-response-banquet-free-look-centered-ritual-victim-tableau-3";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2819,6 +2819,14 @@
       scale: 1.06,
     }),
     bodyRootDrop: 0.33,
+    lighting: Object.freeze({
+      hemisphereIntensity: 0.34,
+      moonIntensity: 0.28,
+      exposure: 0.84,
+      ritualFillIntensity: 0.56,
+      patronFillIntensity: 0.48,
+      patronFillDistance: 4.6,
+    }),
     maskForwardOffset: 0.095,
     maskVerticalOffset: 0.015,
     maskHood: Object.freeze({
@@ -2872,20 +2880,20 @@
       RightUpLeg: Object.freeze([-0.638624, -0.000002, -0.0299, 0.768938]),
       RightLeg: Object.freeze([0.562837, -0.000001, -0.0298, 0.82603]),
       RightFoot: Object.freeze([-0.111425, 0.000002, -0.069813, 0.991318]),
-      LeftArm: Object.freeze([-0.175259, -0.000002, 0.298514, 0.938176]),
-      LeftForeArm: Object.freeze([0.624, 0, -0.076, 0.777]),
-      LeftHand: Object.freeze([-0.185697, -0.955626, 0.060458, 0.220545]),
-      RightArm: Object.freeze([-0.142239, 0, -0.32831, 0.933799]),
-      RightForeArm: Object.freeze([0.624, 0, 0.074, 0.777]),
-      RightHand: Object.freeze([-0.181763, 0.961743, -0.061838, 0.195421]),
+      LeftArm: Object.freeze([-0.146489, 0.000003, 0.498257, 0.854565]),
+      LeftForeArm: Object.freeze([0.9, 0, -0.14, 0.42]),
+      LeftHand: Object.freeze([0.053619, -0.913958, 0.369579, 0.158796]),
+      RightArm: Object.freeze([-0.189284, 0, -0.475843, 0.858921]),
+      RightForeArm: Object.freeze([0.9, 0, 0.14, 0.42]),
+      RightHand: Object.freeze([0.033553, 0.908823, -0.378105, 0.173064]),
     }),
     patrons: Object.freeze([
-      Object.freeze({ id: "patron-stag", maskId: "stag-crown", x: -8.95, z: -7.25, scale: 0.98, maskScale: 0.68, phase: 0.11, tint: 0xf4e7dc }),
-      Object.freeze({ id: "patron-ram", maskId: "ram-reliquary", x: -10.35, z: -7.25, scale: 1.02, maskScale: 0.56, phase: 0.31, tint: 0xdad0e3 }),
-      Object.freeze({ id: "patron-raven", maskId: "raven-mourning", x: -11.65, z: -7.25, scale: 0.96, maskScale: 0.58, phase: 0.49, tint: 0xcbd4e5 }),
-      Object.freeze({ id: "patron-moth", maskId: "moth-veil", x: -8.95, z: -9.55, scale: 1.01, maskScale: 0.55, phase: 0.68, tint: 0xead1d6 }),
-      Object.freeze({ id: "patron-grin", maskId: "porcelain-grin", x: -10.35, z: -9.55, scale: 0.97, maskScale: 0.67, phase: 0.82, tint: 0xe6dac8 }),
-      Object.freeze({ id: "patron-eclipse", maskId: "eclipse-oracle", x: -11.65, z: -9.55, scale: 1.03, maskScale: 0.52, phase: 0.94, tint: 0xd4c8bd }),
+      Object.freeze({ id: "patron-stag", maskId: "stag-crown", x: -8.95, z: -7.25, scale: 0.98, maskScale: 0.74, phase: 0.11, tint: 0xf4e7dc }),
+      Object.freeze({ id: "patron-ram", maskId: "ram-reliquary", x: -10.35, z: -7.25, scale: 1.02, maskScale: 0.72, phase: 0.31, tint: 0xdad0e3 }),
+      Object.freeze({ id: "patron-raven", maskId: "raven-mourning", x: -11.65, z: -7.25, scale: 0.96, maskScale: 0.68, phase: 0.49, tint: 0xcbd4e5 }),
+      Object.freeze({ id: "patron-moth", maskId: "moth-veil", x: -8.95, z: -9.55, scale: 1.01, maskScale: 0.72, phase: 0.68, tint: 0xead1d6 }),
+      Object.freeze({ id: "patron-grin", maskId: "porcelain-grin", x: -10.35, z: -9.55, scale: 0.97, maskScale: 0.76, phase: 0.82, tint: 0xe6dac8 }),
+      Object.freeze({ id: "patron-eclipse", maskId: "eclipse-oracle", x: -11.65, z: -9.55, scale: 1.03, maskScale: 0.68, phase: 0.94, tint: 0xd4c8bd }),
     ]),
   });
   const COMPETITION_FILM_SET = Object.freeze({
@@ -15258,6 +15266,7 @@
       this.placeCardMesh = null;
       this.limbPlatterMesh = null;
       this.perimeterCandles = [];
+      this.patronFillLights = [];
       this.tabletopSightlineSnapshot = [];
       this.lightSnapshot = null;
       this.locationSnapshot = null;
@@ -15608,7 +15617,12 @@
           phase: index * 0.73,
         });
       });
-      const ritualFillLight = new THREE.PointLight(0x9f1d2d, 0.48, 7.2, 2);
+      const ritualFillLight = new THREE.PointLight(
+        0x9f1d2d,
+        BANQUET_LOSS.lighting.ritualFillIntensity,
+        7.2,
+        2,
+      );
       ritualFillLight.name = "banquet-loss-ritual-fill-light";
       ritualFillLight.position.set(-10.15, FLOOR.MAIN + 0.72, -8.4);
       ritualFillLight.castShadow = false;
@@ -15618,6 +15632,19 @@
       hostKeyLight.position.set(-12.25, FLOOR.MAIN + 1.86, -7.72);
       hostKeyLight.castShadow = false;
       this.ritualRoot.add(hostKeyLight);
+      for (const [index, z] of [-6.86, -9.94].entries()) {
+        const patronFill = new THREE.PointLight(
+          0xd7744d,
+          BANQUET_LOSS.lighting.patronFillIntensity,
+          BANQUET_LOSS.lighting.patronFillDistance,
+          2,
+        );
+        patronFill.name = `banquet-loss-patron-row-fill-${index + 1}`;
+        patronFill.position.set(-10.15, FLOOR.MAIN + 1.42, z);
+        patronFill.castShadow = false;
+        this.ritualRoot.add(patronFill);
+        this.patronFillLights.push(patronFill);
+      }
     }
 
     makePatronHood(spec) {
@@ -15811,11 +15838,23 @@
       this.lightSnapshot = {
         hemisphere: hemisphereLight?.intensity ?? null,
         moon: moonLight?.intensity ?? null,
+        exposure: renderer.toneMappingExposure,
         dining,
         diningOn: dining?.on ?? null,
       };
-      if (hemisphereLight) hemisphereLight.intensity = Math.max(hemisphereLight.intensity, 0.36);
-      if (moonLight) moonLight.intensity = Math.max(moonLight.intensity, 0.22);
+      renderer.toneMappingExposure = BANQUET_LOSS.lighting.exposure;
+      if (hemisphereLight) {
+        hemisphereLight.intensity = Math.max(
+          hemisphereLight.intensity,
+          BANQUET_LOSS.lighting.hemisphereIntensity,
+        );
+      }
+      if (moonLight) {
+        moonLight.intensity = Math.max(
+          moonLight.intensity,
+          BANQUET_LOSS.lighting.moonIntensity,
+        );
+      }
       if (dining) dining.setState(true, true);
       syncLightRendering();
     }
@@ -15952,6 +15991,7 @@
 
     update(dt) {
       if (!this.active()) return;
+      renderer.toneMappingExposure = BANQUET_LOSS.lighting.exposure;
       const step = Math.min(
         BANQUET_LOSS.maximumTimerStepSeconds,
         Math.max(0, Number(dt) || 0),
@@ -16001,6 +16041,9 @@
         }
         if (moonLight && this.lightSnapshot.moon != null) {
           moonLight.intensity = this.lightSnapshot.moon;
+        }
+        if (this.lightSnapshot.exposure != null) {
+          renderer.toneMappingExposure = this.lightSnapshot.exposure;
         }
         if (this.lightSnapshot.dining && this.lightSnapshot.diningOn != null) {
           this.lightSnapshot.dining.setState(this.lightSnapshot.diningOn, true);
@@ -16103,33 +16146,70 @@
         y: BANQUET_LOSS.camera.y,
         z: BANQUET_LOSS.camera.z,
       };
-      const patrons = this.patrons.map((patron) => ({
-        id: patron.spec.id,
-        bodyFile: this.manifest?.body?.runtimeFile || BANQUET_LOSS.asset.bodyFile,
-        maskId: patron.spec.maskId,
-        maskFile: patron.maskManifest.runtimeFile,
-        visible: Boolean(this.root.visible && patron.body.visible && patron.mask.visible),
-        hoodVisible: Boolean(this.root.visible && patron.hood.visible),
-        faceFullyConcealed: Boolean(
-          this.root.visible
-          && patron.hood.visible
-          && patron.mask.visible
-          && patron.spec.maskScale >= 0.5
-        ),
-        seated: true,
-        facingPlayer: this.facingPoint(patron.yaw, patron.body.position, cameraTarget),
-        inView: Boolean(this.root.visible && this.pointInCamera(patron.mask)),
-        position: {
-          x: Number(patron.body.position.x.toFixed(3)),
-          y: Number(patron.body.position.y.toFixed(3)),
-          z: Number(patron.body.position.z.toFixed(3)),
-        },
-        maskPosition: {
-          x: Number(patron.mask.position.x.toFixed(3)),
-          y: Number(patron.mask.position.y.toFixed(3)),
-          z: Number(patron.mask.position.z.toFixed(3)),
-        },
-      }));
+      const patrons = this.patrons.map((patron) => {
+        const armReadability = ["Left", "Right"].map((side) => {
+          const forearm = patron.bones.get(`${side}ForeArm`);
+          const hand = patron.bones.get(`${side}Hand`);
+          const forearmPosition = forearm
+            ? forearm.getWorldPosition(new THREE.Vector3())
+            : null;
+          const handPosition = hand
+            ? hand.getWorldPosition(new THREE.Vector3())
+            : null;
+          const clearOfLap = Boolean(
+            forearmPosition
+            && handPosition
+            && Math.max(forearmPosition.y, handPosition.y) >= FLOOR.MAIN + 0.72
+          );
+          const inView = Boolean(
+            this.root.visible
+            && forearm
+            && hand
+            && (this.pointInCamera(forearm) || this.pointInCamera(hand))
+          );
+          return {
+            side: side.toLowerCase(),
+            clearOfLap,
+            inView,
+            readable: clearOfLap && inView,
+            handPosition: handPosition ? {
+              x: Number(handPosition.x.toFixed(3)),
+              y: Number(handPosition.y.toFixed(3)),
+              z: Number(handPosition.z.toFixed(3)),
+            } : null,
+          };
+        });
+        return {
+          id: patron.spec.id,
+          bodyFile: this.manifest?.body?.runtimeFile || BANQUET_LOSS.asset.bodyFile,
+          maskId: patron.spec.maskId,
+          maskFile: patron.maskManifest.runtimeFile,
+          maskScale: patron.spec.maskScale,
+          visible: Boolean(this.root.visible && patron.body.visible && patron.mask.visible),
+          hoodVisible: Boolean(this.root.visible && patron.hood.visible),
+          faceFullyConcealed: Boolean(
+            this.root.visible
+            && patron.hood.visible
+            && patron.mask.visible
+            && patron.spec.maskScale >= 0.68
+          ),
+          seated: true,
+          visibleArmCount: armReadability.filter((entry) => entry.readable).length,
+          armReadability,
+          facingPlayer: this.facingPoint(patron.yaw, patron.body.position, cameraTarget),
+          inView: Boolean(this.root.visible && this.pointInCamera(patron.mask)),
+          position: {
+            x: Number(patron.body.position.x.toFixed(3)),
+            y: Number(patron.body.position.y.toFixed(3)),
+            z: Number(patron.body.position.z.toFixed(3)),
+          },
+          maskPosition: {
+            x: Number(patron.mask.position.x.toFixed(3)),
+            y: Number(patron.mask.position.y.toFixed(3)),
+            z: Number(patron.mask.position.z.toFixed(3)),
+          },
+        };
+      });
       const hostPosition = mrFeastNpc?.root?.position || new THREE.Vector3();
       this.hostFocus.set(
         hostPosition.x,
@@ -16319,6 +16399,21 @@
           ),
           gameplayCollidersAdded: 0,
         },
+        lighting: {
+          productionToneLift: Boolean(
+            this.active()
+            && renderer.toneMappingExposure >= BANQUET_LOSS.lighting.exposure - 0.02
+          ),
+          exposure: Number(renderer.toneMappingExposure.toFixed(3)),
+          hemisphereIntensity: hemisphereLight
+            ? Number(hemisphereLight.intensity.toFixed(3))
+            : 0,
+          moonIntensity: moonLight
+            ? Number(moonLight.intensity.toFixed(3))
+            : 0,
+          patronFillLightCount: this.patronFillLights.length,
+          patronFillIntensity: BANQUET_LOSS.lighting.patronFillIntensity,
+        },
         victim: {
           torsoFile: victimManifest?.torso?.runtimeFile || BANQUET_LOSS.asset.victimTorsoFile,
           limbFile: victimManifest?.limbs?.runtimeFile || BANQUET_LOSS.asset.victimLimbsFile,
@@ -16331,6 +16426,9 @@
           ),
           missingLimbCount: victimManifest?.limbCount || 0,
           sealedSurgicalCaps: victimManifest?.sealedSurgicalCaps || 0,
+          torsoOnlySilhouette: Boolean(victimManifest?.torso?.torsoOnlySilhouette),
+          shoulderAttachments: victimManifest?.torso?.shoulderAttachments ?? 0,
+          splitLegStubs: victimManifest?.torso?.splitLegStubs ?? 0,
           explicitGore: Boolean(victimManifest?.explicitGore),
           limbPlatterVisible: Boolean(
             this.root.visible
@@ -31105,7 +31203,9 @@
       const stormRunBriefingLighting = outdoors && stormRunSystem?.show?.phase === STORM_RUN_PHASE.BRIEFING
         ? STORM_RUN.briefingLighting
         : null;
-      const baseExposure = stormRunBriefingLighting
+      const baseExposure = banquetLossLightingActive()
+        ? BANQUET_LOSS.lighting.exposure
+        : stormRunBriefingLighting
         ? stormRunBriefingLighting.exposure
         : state.mazeLightingContext
         ? MAZE_EXPOSURE
@@ -33720,18 +33820,28 @@
       : null;
   }
 
+  function banquetLossLightingActive() {
+    return ["revealing", "closing-line", "complete"].includes(
+      state.banquetLoss?.phase,
+    );
+  }
+
   function getContextLightingTargets() {
     const renderContext = getLightRenderContext();
     const openVolume = OPEN_VOLUME_LIGHT_ROOMS.has(state.currentRoom);
     const mazeContext = state.mazeLightingContext;
     const stormRunBriefingLighting = getStormRunBriefingLighting();
     return {
-      hemisphere: stormRunBriefingLighting
+      hemisphere: banquetLossLightingActive()
+        ? BANQUET_LOSS.lighting.hemisphereIntensity
+        : stormRunBriefingLighting
         ? stormRunBriefingLighting.hemisphereIntensity
         : renderContext === "grounds"
         ? mazeContext ? MAZE_HEMISPHERE_INTENSITY : GROUNDS_HEMISPHERE_INTENSITY
         : openVolume ? OPEN_VOLUME_HEMISPHERE_INTENSITY : NIGHT_LIGHTING.hemisphereIntensity,
-      moon: stormRunBriefingLighting
+      moon: banquetLossLightingActive()
+        ? BANQUET_LOSS.lighting.moonIntensity
+        : stormRunBriefingLighting
         ? stormRunBriefingLighting.moonIntensity
         : renderContext === "grounds"
         ? mazeContext ? MAZE_MOON_INTENSITY : GROUNDS_MOON_INTENSITY

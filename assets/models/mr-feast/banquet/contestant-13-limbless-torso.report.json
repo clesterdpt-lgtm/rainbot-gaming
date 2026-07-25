@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-25T14:29:39.484363+00:00",
+  "generatedAt": "2026-07-25T15:12:42.359485+00:00",
   "pipeline": "one selected Meshy image-to-3D/rig source -> Blender weighted source-face partition and hard planar cuts -> static standard glTF export",
   "blenderVersion": "4.5.11 LTS",
   "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/banquet/contestant-13-victim-source-v2-rigged.glb",
@@ -43,25 +43,27 @@
   "garmentCleanup": {
     "removed": [
       "head geometry because the first-person camera occupies the victim viewpoint",
-      "arm and leg geometry partitioned into the detached-limb prop"
+      "arm and leg geometry partitioned into the detached-limb prop",
+      "bulky shoulder sleeves and split upper-thigh stubs from the visible body silhouette"
     ],
-    "retained": "original Meshy v2 bare torso, opaque oxblood boxer briefs, body proportions, UVs, and PBR atlas",
-    "added": "four non-graphic ivory bandage caps only; no added underwear geometry"
+    "retained": "original Meshy v2 bare torso, opaque underwear waist, body proportions, UVs, and PBR atlas",
+    "added": "nothing; the visible body is the compact Meshy-derived torso core only"
   },
   "visibleMeshyDerivedCore": {
     "mesh": "Banquet_Victim_Meshy_Torso_Core",
-    "triangles": 6102,
-    "method": "direct rig-weight and coordinate-selected Meshy v2 source faces with original UVs and materials retained, then hard-bisected at the hip and first-person neck planes"
+    "triangles": 4237,
+    "method": "direct rig-weight and coordinate-selected Meshy v2 source faces with original UVs and materials retained, then hard-bisected at the raised torso-only pelvis and first-person neck planes"
+  },
+  "torsoOnlySilhouette": {
+    "enabled": true,
+    "shoulderAttachments": 0,
+    "splitLegStubs": 0,
+    "hipCutHeight": 0.94
   },
   "nonGraphicSocketTreatment": {
-    "material": "ivory cloth",
-    "torsoSocketBandageCaps": 4,
-    "locations": [
-      "left shoulder",
-      "right shoulder",
-      "left hip",
-      "right hip"
-    ],
+    "material": null,
+    "torsoSocketBandageCaps": 0,
+    "locations": [],
     "bloodOrExposedAnatomy": false
   },
   "fitScaleXYZ": [
@@ -71,37 +73,32 @@
   ],
   "boundsMeters": {
     "min": [
-      -0.415,
+      -0.2975,
       0.0,
-      -0.205
+      -0.179823
     ],
     "max": [
-      0.415,
-      0.24,
-      0.205
+      0.2975,
+      0.158224,
+      0.179823
     ],
     "size": [
-      0.83,
-      0.24,
-      0.41
+      0.595,
+      0.158224,
+      0.359646
     ]
   },
-  "triangles": 8134,
-  "meshCount": 5,
+  "triangles": 4237,
+  "meshCount": 1,
   "meshes": [
-    "Banquet_Victim_Left_Hip_Bandage_Cap",
-    "Banquet_Victim_Left_Shoulder_Bandage_Cap",
-    "Banquet_Victim_Meshy_Torso_Core",
-    "Banquet_Victim_Right_Hip_Bandage_Cap",
-    "Banquet_Victim_Right_Shoulder_Bandage_Cap"
+    "Banquet_Victim_Meshy_Torso_Core"
   ],
   "materials": [
-    "Banquet_Victim_Bandage_Ivory",
     "Banquet_Victim_Source_PBR_02"
   ],
   "preservedSourceMaterials": [
     "Banquet_Victim_Source_PBR_02"
   ],
   "sourceMaterialPolicy": "original Meshy v2 PBR atlas retained and resized to a packed 512px maximum",
-  "fileBytes": 445568
+  "fileBytes": 345348
 }

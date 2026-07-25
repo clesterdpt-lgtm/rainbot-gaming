@@ -39,7 +39,7 @@ assets/js/mr-feast-mansion.js            Mansion world, state, interactions, NPC
 assets/models/mr-feast/                  Character manifest, runtime GLBs, reports, reference art
 assets/models/mr-feast/banquet/          Deferred loss-tableau GLBs and truthful Meshy/Blender provenance
 scripts/blender/                          Repeatable Blender processing scripts
-scripts/blender/prepare-banquet-victim.py One-rig torso/limb separation, sealed cuts, bounds fit, r128 export
+scripts/blender/prepare-banquet-victim.py One-rig torso-only/limb separation, cropped body silhouette, bounds fit, r128 export
 scripts/test-mr-feast-renovation.mjs      Source and asset invariant regression
 scripts/test-mr-feast-banquet-loss.mjs    Deferred asset, first-person staging, dialogue, recovery, phone regression
 scripts/test-mr-feast-contestant-13.mjs   Real Chromium gameplay and visual regression
@@ -66,7 +66,7 @@ docs/milestones/                          Scoped feature acceptance criteria
 - **Persistence:** mansion saves use the existing `window.RBGameSaves` adapter with a versioned payload; transient actions and Dev Mode are never persisted.
 - **Configuration:** gameplay and visual tuning values live in named constant objects near the top of the mansion runtime rather than unexplained inline numbers.
 - **Assets:** runtime character assets use `mr-feast-<purpose>.glb`; raw generation files and DCC working files remain local/ignored.
-- **Banquet victim assets:** one selected rigged Meshy underwear body supplies both static runtime GLBs; Blender may separate and seal the torso/limbs but must preserve visible source-derived anatomy, center X/Z origins on their staging marks, ground Y at zero, export standard uncompressed glTF 2.0 for Three.js r128, and record rejected paid attempts rather than excluding them from credit totals.
+- **Banquet victim assets:** one selected rigged Meshy underwear body supplies both static runtime GLBs; Blender may separate the source into a compact torso-only body with no shoulder/leg attachments and a wrapped four-limb pile, but must preserve visible source-derived anatomy, center X/Z origins on their staging marks, ground Y at zero, export standard uncompressed glTF 2.0 for Three.js r128, and record rejected paid attempts rather than excluding them from credit totals.
 - **Super Slop character assets:** raw Meshy GLBs/actions remain ignored; reusable processed rigs and 8-column × 13-row WebP atlases are generated from checked-in scripts and provenance reports. Root translation is stripped on all axes because Canvas physics remains authoritative.
 - **Tardigrade assets:** raw Meshy masters and editable Blender files remain ignored below `assets/models/tardigrade/source/`; checked-in runtime GLBs are uncompressed for Three.js r128, use kebab-case names from the manifest, preserve visual-only animation without world-root translation, and retain procedural per-instance fallbacks. Animated clones use SkeletonUtils; clone disposal must never dispose shared cached geometry or materials.
 - **Tardigrade QA hooks:** `window.render_game_to_text()`, `window.advanceTime(ms)`, and `window.__MICRO_MAYHEM_DEBUG` expose deterministic state plus asset settlement, bounds, cost, action, and fallback diagnostics.

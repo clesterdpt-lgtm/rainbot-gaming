@@ -12,9 +12,9 @@ Run through Blender 4.5:
 
 The selected clean Meshy image-to-3D rig is baked into:
 
-* a face-up, head-+X torso retaining the source's original boxer briefs and
-  bare-torso PBR atlas, with four sealed bandage caps at the shoulder and hip
-  sockets; and
+* a compact face-up, head-+X torso retaining the source's underwear and
+  bare-torso PBR atlas, with the shoulder endpoints and upper-thigh split
+  cropped out of the visible silhouette; and
 * four detached limbs arranged as one compact, platter-ready static pile.
 
 The runtime GLBs deliberately use Blender's standard uncompressed glTF export
@@ -29,7 +29,6 @@ import bmesh
 import json
 import math
 import sys
-from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -41,7 +40,8 @@ from mathutils import Matrix, Vector
 TORSO_FILE = "contestant-13-limbless-torso.glb"
 LIMBS_FILE = "contestant-13-detached-limbs.glb"
 SOURCE_SLUG = "contestant-13-victim-source-v2"
-HIP_CUT_HEIGHT = 0.72
+TORSO_HIP_CUT_HEIGHT = 0.94
+LIMB_HIP_CUT_HEIGHT = 0.72
 SHOULDER_CUT_LATERAL = 0.18
 TORSO_MAX_RUNTIME_BOUNDS = Vector((0.95, 0.30, 0.58))
 LIMBS_MAX_RUNTIME_BOUNDS = Vector((1.30, 0.28, 0.76))
@@ -130,11 +130,16 @@ def blender_to_runtime(value: Vector) -> Vector:
     return Vector((value.x, value.z, -value.y))
 
 
-def source_world_to_runtime(value: Vector, *, depth_scale: float) -> Vector:
+def source_world_to_runtime(
+    value: Vector,
+    *,
+    depth_scale: float,
+    longitudinal_origin: float,
+) -> Vector:
     # Meshy is upright in Blender: source +Z is headward and source -Y is
     # facial/front. The banquet prop lies face-up in runtime space.
     return Vector((
-        value.z - HIP_CUT_HEIGHT,
+        value.z - longitudinal_origin,
         -value.y * depth_scale,
         value.x,
     ))
@@ -257,7 +262,7 @@ def select_torso_faces(
         # Reject every face crossing a surgical plane. This deliberately leaves
         # the source surface just inside the procedural cloth cap instead of
         # allowing long triangle tips to protrude through it.
-        if sum(point.z for point in points) / len(points) < HIP_CUT_HEIGHT - 0.045:
+        if sum(point.z for point in points) / len(points) < TORSO_HIP_CUT_HEIGHT - 0.045:
             continue
         # The first-person camera is the victim's viewpoint. Export only the
         # compact chest-to-hips body proxy, never a duplicate head/hair/neck.
@@ -302,7 +307,7 @@ def select_limb_faces(
         else:
             if (
                 sum(point.z for point in points) / len(points)
-                > HIP_CUT_HEIGHT + 0.045
+                > LIMB_HIP_CUT_HEIGHT + 0.045
             ):
                 continue
             if family_score < 0.22 or family_score < other_score:
@@ -516,51 +521,6 @@ def add_runtime_rounded_cap(
     bevel.limit_method = "ANGLE"
     bpy.ops.object.modifier_apply(modifier=bevel.name)
     return obj
-
-
-def make_torso_dressing() -> tuple[list[bpy.types.Object], list[bpy.types.Object]]:
-    bandage = make_material(
-        "Banquet_Victim_Bandage_Ivory",
-        (0.40, 0.35, 0.27, 1.0),
-        metallic=0.0,
-        roughness=0.88,
-    )
-    dressing: list[bpy.types.Object] = []
-    caps = [
-        add_runtime_rounded_cap(
-            "Banquet_Victim_Left_Shoulder_Bandage_Cap",
-            Vector((0.68, 0.0, 0.205)),
-            Vector((0, 0, 1)),
-            0.105,
-            0.075,
-            bandage,
-        ),
-        add_runtime_rounded_cap(
-            "Banquet_Victim_Right_Shoulder_Bandage_Cap",
-            Vector((0.68, 0.0, -0.205)),
-            Vector((0, 0, -1)),
-            0.105,
-            0.075,
-            bandage,
-        ),
-        add_runtime_rounded_cap(
-            "Banquet_Victim_Left_Hip_Bandage_Cap",
-            Vector((-0.015, 0.0, 0.085)),
-            Vector((-1, 0, 0)),
-            0.120,
-            0.080,
-            bandage,
-        ),
-        add_runtime_rounded_cap(
-            "Banquet_Victim_Right_Hip_Bandage_Cap",
-            Vector((-0.015, 0.0, -0.085)),
-            Vector((-1, 0, 0)),
-            0.120,
-            0.080,
-            bandage,
-        ),
-    ]
-    return dressing, caps
 
 
 def fit_runtime_bounds(
@@ -817,7 +777,7 @@ def update_manifest(
         "id": "contestant-13-victim",
         "description": (
             "Face-up headless Contestant 13 body proxy in plain opaque underwear, "
-            "with non-graphic sealed sockets and one platter-ready detached-limb pile."
+            "as a clean torso-only silhouette and one platter-ready detached-limb pile."
         ),
         "sourceCount": 1,
         "sourceFile": f"source/banquet/{SOURCE_SLUG}-rigged.glb",
@@ -827,7 +787,7 @@ def update_manifest(
         "runtimeAnimations": 0,
         "underwear": True,
         "limbCount": 4,
-        "sealedSurgicalCaps": 4,
+        "sealedSurgicalCaps": 0,
         "explicitGore": False,
         "orientation": {
             "headAxis": "+X",
@@ -837,11 +797,14 @@ def update_manifest(
         "torso": {
             "runtimeFile": TORSO_FILE,
             "visibleMeshyDerivedCore": True,
+            "torsoOnlySilhouette": True,
+            "shoulderAttachments": 0,
+            "splitLegStubs": 0,
             "boundsMeters": torso_report["boundsMeters"]["size"],
             "triangles": torso_report["triangles"],
             "fileBytes": torso_report["fileBytes"],
-            "torsoSocketBandageCaps": 4,
-            "garmentPolicy": "original Meshy v2 opaque oxblood boxer briefs retained; no added garment shell",
+            "torsoSocketBandageCaps": 0,
+            "garmentPolicy": "original Meshy v2 opaque underwear and bare-torso atlas retained; no added garment shell",
             "blenderReport": Path(torso_report["report"]).name,
         },
         "limbs": {
@@ -967,7 +930,7 @@ def main() -> None:
         bake_static_mesh(obj)
     hard_clip_mesh(
         torso_core,
-        plane_point=Vector((0, 0, HIP_CUT_HEIGHT)),
+        plane_point=Vector((0, 0, TORSO_HIP_CUT_HEIGHT)),
         keep_normal=Vector((0, 0, 1)),
     )
     hard_clip_mesh(
@@ -988,26 +951,34 @@ def main() -> None:
     for leg_core in limb_cores[2:]:
         hard_clip_mesh(
             leg_core,
-            plane_point=Vector((0, 0, HIP_CUT_HEIGHT)),
+            plane_point=Vector((0, 0, LIMB_HIP_CUT_HEIGHT)),
             keep_normal=Vector((0, 0, -1)),
         )
     transform_vertices(
         torso_core,
-        lambda point: source_world_to_runtime(point, depth_scale=0.56),
+        lambda point: source_world_to_runtime(
+            point,
+            depth_scale=0.56,
+            longitudinal_origin=TORSO_HIP_CUT_HEIGHT,
+        ),
     )
     for obj in limb_cores:
         transform_vertices(
             obj,
-            lambda point: source_world_to_runtime(point, depth_scale=0.52),
+            lambda point: source_world_to_runtime(
+                point,
+                depth_scale=0.52,
+                longitudinal_origin=LIMB_HIP_CUT_HEIGHT,
+            ),
         )
 
-    dressing, socket_caps = make_torso_dressing()
-    bandage_material = bpy.data.materials["Banquet_Victim_Bandage_Ivory"]
-    torso_objects = [
-        torso_core,
-        *dressing,
-        *socket_caps,
-    ]
+    bandage_material = make_material(
+        "Banquet_Victim_Bandage_Ivory",
+        (0.40, 0.35, 0.27, 1.0),
+        metallic=0.0,
+        roughness=0.88,
+    )
+    torso_objects = [torso_core]
     torso_fit_scale = fit_runtime_bounds(
         torso_objects,
         TORSO_MAX_RUNTIME_BOUNDS,
@@ -1137,12 +1108,13 @@ def main() -> None:
             "removed": [
                 "head geometry because the first-person camera occupies the victim viewpoint",
                 "arm and leg geometry partitioned into the detached-limb prop",
+                "bulky shoulder sleeves and split upper-thigh stubs from the visible body silhouette",
             ],
             "retained": (
-                "original Meshy v2 bare torso, opaque oxblood boxer briefs, "
+                "original Meshy v2 bare torso, opaque underwear waist, "
                 "body proportions, UVs, and PBR atlas"
             ),
-            "added": "four non-graphic ivory bandage caps only; no added underwear geometry",
+            "added": "nothing; the visible body is the compact Meshy-derived torso core only",
         },
         "visibleMeshyDerivedCore": {
             "mesh": torso_core.name,
@@ -1150,18 +1122,19 @@ def main() -> None:
             "method": (
                 "direct rig-weight and coordinate-selected Meshy v2 source faces "
                 "with original UVs and materials retained, then hard-bisected at "
-                "the hip and first-person neck planes"
+                "the raised torso-only pelvis and first-person neck planes"
             ),
         },
+        "torsoOnlySilhouette": {
+            "enabled": True,
+            "shoulderAttachments": 0,
+            "splitLegStubs": 0,
+            "hipCutHeight": TORSO_HIP_CUT_HEIGHT,
+        },
         "nonGraphicSocketTreatment": {
-            "material": "ivory cloth",
-            "torsoSocketBandageCaps": 4,
-            "locations": [
-                "left shoulder",
-                "right shoulder",
-                "left hip",
-                "right hip",
-            ],
+            "material": None,
+            "torsoSocketBandageCaps": 0,
+            "locations": [],
             "bloodOrExposedAnatomy": False,
         },
         "fitScaleXYZ": vector_list(torso_fit_scale),

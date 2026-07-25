@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-25T14:29:39.494076+00:00",
+  "generatedAt": "2026-07-25T15:12:42.369047+00:00",
   "pipeline": "Meshy source assets with deterministic Blender runtime preparation",
   "creditStrategy": {
     "sharedBodyGenerations": 1,
@@ -173,7 +173,7 @@
   ],
   "victim": {
     "id": "contestant-13-victim",
-    "description": "Face-up headless Contestant 13 body proxy in plain opaque underwear, with non-graphic sealed sockets and one platter-ready detached-limb pile.",
+    "description": "Face-up headless Contestant 13 body proxy in plain opaque underwear, as a clean torso-only silhouette and one platter-ready detached-limb pile.",
     "sourceCount": 1,
     "sourceFile": "source/banquet/contestant-13-victim-source-v2-rigged.glb",
     "static": true,
@@ -182,7 +182,7 @@
     "runtimeAnimations": 0,
     "underwear": true,
     "limbCount": 4,
-    "sealedSurgicalCaps": 4,
+    "sealedSurgicalCaps": 0,
     "explicitGore": false,
     "orientation": {
       "headAxis": "+X",
@@ -192,15 +192,18 @@
     "torso": {
       "runtimeFile": "contestant-13-limbless-torso.glb",
       "visibleMeshyDerivedCore": true,
+      "torsoOnlySilhouette": true,
+      "shoulderAttachments": 0,
+      "splitLegStubs": 0,
       "boundsMeters": [
-        0.83,
-        0.24,
-        0.41
+        0.595,
+        0.158224,
+        0.359646
       ],
-      "triangles": 8134,
-      "fileBytes": 445568,
-      "torsoSocketBandageCaps": 4,
-      "garmentPolicy": "original Meshy v2 opaque oxblood boxer briefs retained; no added garment shell",
+      "triangles": 4237,
+      "fileBytes": 345348,
+      "torsoSocketBandageCaps": 0,
+      "garmentPolicy": "original Meshy v2 opaque underwear and bare-torso atlas retained; no added garment shell",
       "blenderReport": "contestant-13-limbless-torso.report.json"
     },
     "limbs": {

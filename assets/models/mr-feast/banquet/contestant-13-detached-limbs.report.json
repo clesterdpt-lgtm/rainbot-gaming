@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-25T14:29:39.484363+00:00",
+  "generatedAt": "2026-07-25T15:12:42.359485+00:00",
   "pipeline": "one selected Meshy image-to-3D/rig source -> Blender weighted source-face partition and hard planar cuts -> static standard glTF export",
   "blenderVersion": "4.5.11 LTS",
   "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/banquet/contestant-13-victim-source-v2-rigged.glb",

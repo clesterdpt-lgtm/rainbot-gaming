@@ -2837,6 +2837,14 @@
       heightScale: 1.12,
       depthScale: 0.68,
     }),
+    armSilhouette: Object.freeze({
+      minimumSleeveY: FLOOR.MAIN + 0.44,
+      maximumSleeveHeight: 0.88,
+      minimumWeightedVertexCount: 120,
+      minimumArmWeight: 0.28,
+      minimumWristDrop: 0.09,
+      maximumWristY: FLOOR.MAIN + 0.87,
+    }),
     victim: Object.freeze({
       torso: Object.freeze({
         x: -7.96,
@@ -2881,11 +2889,11 @@
       RightLeg: Object.freeze([0.562837, -0.000001, -0.0298, 0.82603]),
       RightFoot: Object.freeze([-0.111425, 0.000002, -0.069813, 0.991318]),
       LeftArm: Object.freeze([-0.146489, 0.000003, 0.498257, 0.854565]),
-      LeftForeArm: Object.freeze([0.9, 0, -0.14, 0.42]),
-      LeftHand: Object.freeze([0.053619, -0.913958, 0.369579, 0.158796]),
+      LeftForeArm: Object.freeze([0.538898, -0.000005, -0.066183, 0.839767]),
+      LeftHand: Object.freeze([0.006716, -0.978986, -0.094749, 0.180456]),
       RightArm: Object.freeze([-0.189284, 0, -0.475843, 0.858921]),
-      RightForeArm: Object.freeze([0.9, 0, 0.14, 0.42]),
-      RightHand: Object.freeze([0.033553, 0.908823, -0.378105, 0.173064]),
+      RightForeArm: Object.freeze([0.564771, 0.000002, 0.058299, 0.823186]),
+      RightHand: Object.freeze([0.071562, 0.981707, 0.087514, 0.153206]),
     }),
     patrons: Object.freeze([
       Object.freeze({ id: "patron-stag", maskId: "stag-crown", x: -8.95, z: -7.25, scale: 0.98, maskScale: 0.74, phase: 0.11, tint: 0xf4e7dc }),
@@ -16095,6 +16103,74 @@
       });
     }
 
+    measurePatronArmSilhouette(patron, side) {
+      const armBoneNames = new Set([
+        `${side}Arm`,
+        `${side}ForeArm`,
+        `${side}Hand`,
+      ]);
+      const bounds = new THREE.Box3();
+      const point = new THREE.Vector3();
+      let weightedVertexCount = 0;
+      patron.body.updateMatrixWorld(true);
+      patron.body.traverse((object) => {
+        if (!object.isSkinnedMesh) return;
+        const skinIndex = object.geometry?.attributes?.skinIndex;
+        const skinWeight = object.geometry?.attributes?.skinWeight;
+        if (!skinIndex || !skinWeight || !object.skeleton) return;
+        object.skeleton.update();
+        const sideBoneIndexes = new Set();
+        object.skeleton.bones.forEach((bone, index) => {
+          if (armBoneNames.has(bone.name)) sideBoneIndexes.add(index);
+        });
+        for (let vertexIndex = 0; vertexIndex < skinIndex.count; vertexIndex += 1) {
+          const indexes = [
+            skinIndex.getX(vertexIndex),
+            skinIndex.getY(vertexIndex),
+            skinIndex.getZ(vertexIndex),
+            skinIndex.getW(vertexIndex),
+          ];
+          const weights = [
+            skinWeight.getX(vertexIndex),
+            skinWeight.getY(vertexIndex),
+            skinWeight.getZ(vertexIndex),
+            skinWeight.getW(vertexIndex),
+          ];
+          const sideWeight = indexes.reduce(
+            (total, boneIndex, influenceIndex) => (
+              sideBoneIndexes.has(boneIndex) ? total + weights[influenceIndex] : total
+            ),
+            0,
+          );
+          if (sideWeight < BANQUET_LOSS.armSilhouette.minimumArmWeight) continue;
+          object.boneTransform(vertexIndex, point);
+          object.localToWorld(point);
+          bounds.expandByPoint(point);
+          weightedVertexCount += 1;
+        }
+      });
+      if (bounds.isEmpty()) {
+        return {
+          weightedVertexCount,
+          minimumY: null,
+          height: null,
+          clearOfFloor: false,
+          compact: false,
+        };
+      }
+      const height = bounds.max.y - bounds.min.y;
+      return {
+        weightedVertexCount,
+        minimumY: Number(bounds.min.y.toFixed(3)),
+        height: Number(height.toFixed(3)),
+        clearOfFloor: (
+          weightedVertexCount >= BANQUET_LOSS.armSilhouette.minimumWeightedVertexCount
+          && bounds.min.y >= BANQUET_LOSS.armSilhouette.minimumSleeveY
+        ),
+        compact: height <= BANQUET_LOSS.armSilhouette.maximumSleeveHeight,
+      };
+    }
+
     getDiagnostics() {
       const cameraTarget = {
         x: BANQUET_LOSS.camera.x,
@@ -16103,6 +16179,7 @@
       };
       const patrons = this.patrons.map((patron) => {
         const armReadability = ["Left", "Right"].map((side) => {
+          const silhouette = this.measurePatronArmSilhouette(patron, side);
           const forearm = patron.bones.get(`${side}ForeArm`);
           const hand = patron.bones.get(`${side}Hand`);
           const forearmPosition = forearm
@@ -16144,8 +16221,8 @@
             && handPosition
             && outsideTable
             && bodySideDistance <= 0.34
-            && verticalDrop >= 0.035
-            && handPosition.y <= BANQUET_LOSS.table.surfaceY + 0.18
+            && verticalDrop >= BANQUET_LOSS.armSilhouette.minimumWristDrop
+            && handPosition.y <= BANQUET_LOSS.armSilhouette.maximumWristY
             && forearmPosition.y <= BANQUET_LOSS.table.surfaceY + 0.22
           );
           const tabletopReach = Boolean(handPosition && !outsideTable);
@@ -16178,6 +16255,11 @@
             bodySideDistance: Number.isFinite(bodySideDistance)
               ? Number(bodySideDistance.toFixed(3))
               : null,
+            sleeveWeightedVertexCount: silhouette.weightedVertexCount,
+            sleeveMinimumY: silhouette.minimumY,
+            sleeveHeight: silhouette.height,
+            sleeveClearOfFloor: silhouette.clearOfFloor,
+            sleeveCompact: silhouette.compact,
             verticalDrop: Number.isFinite(verticalDrop)
               ? Number(verticalDrop.toFixed(3))
               : null,

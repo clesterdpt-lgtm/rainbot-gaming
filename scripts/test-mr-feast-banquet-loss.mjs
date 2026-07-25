@@ -332,7 +332,14 @@ async function run() {
         && banquet.patrons.every((entry) => entry.maskScale >= 0.68)
         && banquet.patrons.every((entry) => entry.visibleArmCount === 2)
         && banquet.patrons.every((entry) => entry.armReadability.every(
-          (arm) => arm.restingAtSide && !arm.tabletopReach && arm.verticalDrop >= 0.035,
+          (arm) => (
+            arm.restingAtSide
+            && !arm.tabletopReach
+            && arm.verticalDrop >= 0.09
+            && arm.handPosition.y <= 0.87
+            && arm.sleeveClearOfFloor
+            && arm.sleeveCompact
+          ),
         ))
         && new Set(banquet.patrons.map((entry) => entry.bodyFile)).size === 1
         && new Set(banquet.patrons.map((entry) => entry.maskId)).size === 6

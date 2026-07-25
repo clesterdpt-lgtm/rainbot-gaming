@@ -1,0 +1,69 @@
+{
+  "generatedAt": "2026-07-25T02:10:13.540435+00:00",
+  "pipeline": "Meshy text-to-3D -> Meshy rig -> Blender browser preparation",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/banquet/cult-patron-body-rigged.glb",
+  "output": "cult-patron-body.glb",
+  "rigged": true,
+  "bones": [
+    "Hips",
+    "LeftUpLeg",
+    "LeftLeg",
+    "LeftFoot",
+    "LeftToeBase",
+    "RightUpLeg",
+    "RightLeg",
+    "RightFoot",
+    "RightToeBase",
+    "Spine02",
+    "Spine01",
+    "Spine",
+    "LeftShoulder",
+    "LeftArm",
+    "LeftForeArm",
+    "LeftHand",
+    "RightShoulder",
+    "RightArm",
+    "RightForeArm",
+    "RightHand",
+    "neck",
+    "Head",
+    "head_end",
+    "headfront"
+  ],
+  "forwardAxis": "+Z",
+  "targetHeightMeters": 1.78,
+  "normalizationScale": 0.9999999634585761,
+  "sourceTriangles": 237933,
+  "triangles": 15999,
+  "boundsMeters": {
+    "min": [
+      -0.549719,
+      -0.194406,
+      -0.001668
+    ],
+    "max": [
+      0.54927,
+      0.195232,
+      1.780541
+    ],
+    "size": [
+      1.098988,
+      0.389638,
+      1.782209
+    ]
+  },
+  "textureMaxSize": 512,
+  "images": [
+    {
+      "name": "texture_0",
+      "width": 512,
+      "height": 512
+    }
+  ],
+  "materials": [
+    "Banquet_Cult_Patron_Material_01"
+  ],
+  "fileBytes": 1089964,
+  "animationPolicy": "named runtime seated pose plus restrained procedural breathing",
+  "validatedFor": "Three.js r128 SkeletonUtils"
+}

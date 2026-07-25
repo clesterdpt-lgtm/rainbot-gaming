@@ -133,6 +133,32 @@
       transition: background 180ms ease;
     }
 
+    #mansion-stage[data-banquet-loss="active"]::after {
+      background:
+        linear-gradient(180deg, rgba(2, 1, 2, 0.86) 0 7%, transparent 14% 84%, rgba(2, 1, 2, 0.9) 94% 100%),
+        radial-gradient(ellipse at 50% 48%, transparent 34%, rgba(20, 2, 7, 0.28) 68%, rgba(1, 1, 2, 0.78) 100%);
+    }
+
+    #mansion-stage[data-banquet-loss="active"] .mansion-location,
+    #mansion-stage[data-banquet-loss="active"] .mansion-tools,
+    #mansion-stage[data-banquet-loss="active"] #mansion-prompt,
+    #mansion-stage[data-banquet-loss="active"] #mansion-hidden,
+    #mansion-stage[data-banquet-loss="active"] #mansion-casefile,
+    #mansion-stage[data-banquet-loss="active"] #mansion-energy,
+    #mansion-stage[data-banquet-loss="active"] #mansion-stealth,
+    #mansion-stage[data-banquet-loss="active"] #mansion-security,
+    #mansion-stage[data-banquet-loss="active"] #mansion-feast-says,
+    #mansion-stage[data-banquet-loss="active"] #mansion-storm-run,
+    #mansion-stage[data-banquet-loss="active"] #mansion-feast-hunt,
+    #mansion-stage[data-banquet-loss="active"] #mansion-touch,
+    #mansion-stage[data-banquet-loss="active"] #mansion-crosshair,
+    #mansion-stage[data-banquet-loss="active"] #mansion-discovery,
+    #mansion-stage[data-banquet-loss="active"] #mansion-action {
+      opacity: 0;
+      pointer-events: none;
+      visibility: hidden;
+    }
+
     #mansion-stage.is-hiding::after {
       background:
         linear-gradient(90deg, rgba(10, 6, 5, 0.78), transparent 24%, transparent 76%, rgba(10, 6, 5, 0.78)),
@@ -3067,7 +3093,7 @@
     <div class="game-layout mansion-layout">
       <div class="game-stage rb-standalone-stage mansion-stage-shell">
         <div class="canvas-wrap rb-standalone-surface mansion-surface">
-      <section id="mansion-stage" aria-label="Interactive three-dimensional mansion" aria-busy="true">
+      <section id="mansion-stage" aria-label="Interactive three-dimensional mansion" aria-busy="true" data-banquet-loss="inactive">
         <canvas id="mansion-canvas" tabindex="0" aria-label="First-person view in Mr Feast: Last to Leave"></canvas>
 
         <div class="mansion-location" aria-live="polite">
@@ -3451,6 +3477,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260723-mr-feast-rebrand-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-banquet-loss-curtain-light-response-2" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

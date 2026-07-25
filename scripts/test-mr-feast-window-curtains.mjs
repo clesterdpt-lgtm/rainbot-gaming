@@ -4,6 +4,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import sharp from "sharp";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runtimePath = path.join(root, "assets", "js", "mr-feast-mansion.js");
@@ -148,6 +149,32 @@ async function captureStage(page, fileName) {
   await page.screenshot({ path: path.join(artifactDir, fileName), clip });
 }
 
+async function captureCurtainLuminance(page, fileName) {
+  const clip = await page.locator("#mansion-stage").boundingBox();
+  assert(clip?.width > 0 && clip?.height > 0, `cannot capture ${fileName}: stage has no bounds`);
+  const buffer = await page.screenshot({ clip });
+  await sharp(buffer).png().toFile(path.join(artifactDir, fileName));
+  const metadata = await sharp(buffer).metadata();
+  const width = metadata.width || 1;
+  const height = metadata.height || 1;
+  const region = {
+    left: Math.floor(width * 0.12),
+    top: Math.floor(height * 0.13),
+    width: Math.max(1, Math.floor(width * 0.76)),
+    height: Math.max(1, Math.floor(height * 0.68)),
+  };
+  const { data, info } = await sharp(buffer)
+    .removeAlpha()
+    .extract(region)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let total = 0;
+  for (let index = 0; index < data.length; index += info.channels) {
+    total += data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722;
+  }
+  return total / Math.max(1, data.length / info.channels);
+}
+
 async function run() {
   const [runtime, html] = await Promise.all([
     readFile(runtimePath, "utf8"),
@@ -159,6 +186,8 @@ async function run() {
   assert(/class WindowCurtain/.test(runtime), "missing focused WindowCurtain system");
   assert(/function makeCurtainDamaskTexture/.test(runtime), "missing procedural woven-damask curtain texture");
   assert(/getWindowCurtainState/.test(runtime) && /placePlayerNearWindowCurtainForQA/.test(runtime), "missing focused curtain diagnostics and staging controls");
+  const curtainMaterialSource = runtime.match(/curtainDamask:\s*new THREE\.MeshStandardMaterial\(\{[\s\S]*?\}\),\s*curtainLining:/)?.[0] || "";
+  assert(curtainMaterialSource && !/emissive(?:Map|Intensity)?:/.test(curtainMaterialSource), "curtain damask must not emit light or glow when room circuits are off");
   assert(/basement-curtains-removed/.test(runtime), "basement windows need an explicit intentionally-bare curtain exclusion");
   assert(/interactive:\s*room !== "KITCHEN"/.test(runtime), "Kitchen curtains must be authored as decorative-only");
   assert(/frameBareExteriorWindowForQA/.test(runtime), "missing bare-window visual QA framing control");
@@ -201,10 +230,28 @@ async function run() {
     assert(curtains.installations.every((entry) => entry.windowAlignmentError <= 0.001), `curtains must remain centered on their windows: ${JSON.stringify(curtains.installations.map((entry) => ({ id: entry.id, windowAlignmentError: entry.windowAlignmentError })))}`);
     assert(curtains.material.textureName === "window-curtain-woven-damask" && curtains.material.sharedTextureCount === 1, `curtains should share one woven damask texture: ${JSON.stringify(curtains.material)}`);
     assert(curtains.material.doubleSided && curtains.material.lined && !curtains.material.castsShadow, `curtain fabric contract is wrong: ${JSON.stringify(curtains.material)}`);
+    assert(!curtains.material.emissiveMap && curtains.material.emissiveIntensity === 0, `curtains must receive switched room light without self-illumination: ${JSON.stringify(curtains.material)}`);
     assert(curtains.installations.every((entry) => entry.geometry.folds >= 8 && entry.geometry.rings >= 8 && entry.geometry.finials === 2 && entry.geometry.tiebacks === 2), `curtain hardware/folds are incomplete: ${JSON.stringify(curtains.installations)}`);
     assert(curtains.installations.every((entry) => entry.clearance.visualOverlaps.length === 0 && entry.clearance.egressOverlaps.length === 0), `curtains must not overlap props or their exit pockets: ${JSON.stringify(curtains.installations.map((entry) => ({ id: entry.id, clearance: entry.clearance })))}`);
     assert(curtains.installations.some((entry) => entry.crackSide === "left") && curtains.installations.some((entry) => entry.crackSide === "right"), "both left and right viewing cracks must be authored");
     assert(curtains.installations.every((entry) => entry.crackWidth >= 0.12 && entry.crackWidth <= 0.18), `cracks must stay narrow: ${JSON.stringify(curtains.installations)}`);
+
+    // The material must visibly follow the room circuit instead of keeping a
+    // self-lit red surface after every authored fixture has faded out.
+    await stageCurtain(page, "main-east-window-pos-6-4");
+    const litCurtainLuminance = await captureCurtainLuminance(page, "east-wall-curtain-lights-on-desktop.png");
+    await page.evaluate(() => {
+      window.MrFeastFresh.turnOffAllLights();
+      return window.MrFeastFresh.advanceLightFade(4);
+    });
+    const darkCurtainLuminance = await captureCurtainLuminance(page, "east-wall-curtain-lights-off-desktop.png");
+    const darkLighting = await page.evaluate(() => JSON.parse(window.render_game_to_text()).lighting);
+    assert(darkLighting.allOff && darkLighting.activeLocalLights === 0, `curtain blackout comparison needs every room circuit off: ${JSON.stringify(darkLighting)}`);
+    assert(darkCurtainLuminance <= litCurtainLuminance * 0.72, `curtains should become materially darker with room lights off: lit=${litCurtainLuminance.toFixed(1)} dark=${darkCurtainLuminance.toFixed(1)}`);
+    await page.evaluate(() => {
+      window.MrFeastFresh.turnOnAllLights();
+      return window.MrFeastFresh.advanceLightFade(4);
+    });
 
     // Every authored approach must resolve through the real center-look prompt.
     for (const id of curtains.installations.filter((entry) => entry.interactive).map((entry) => entry.id)) {

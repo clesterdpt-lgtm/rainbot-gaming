@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-1";
+  const MANSION_RUNTIME_VERSION = "20260724-curtain-eligibility-furniture-textiles-flashlight-camera-reacquire-shared-room-lights-foyer-stair-banquet-loss-curtain-light-response-2";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2768,6 +2768,67 @@
       }),
     ]),
   });
+  const BANQUET_LOSS = Object.freeze({
+    caughtReasons: Object.freeze([
+      "witnessed",
+      "recorded",
+      "feast-hunt-eliminated",
+    ]),
+    asset: Object.freeze({
+      manifest: "../models/mr-feast/banquet/manifest.json",
+      bodyFile: "cult-patron-body.glb",
+    }),
+    placeCard: "CONTESTANT 13 — MAIN COURSE",
+    closingLine: "Contestant Thirteen—you lost the million, but you still made the final cut. Our patrons call it sacrifice. The Guest calls it supper. I call it a feast.",
+    revealSeconds: 1.15,
+    closingLineAtSeconds: 1.35,
+    closingLineSeconds: 7.25,
+    overlayAtSeconds: 9.1,
+    maximumTimerStepSeconds: 0.25,
+    camera: Object.freeze({
+      x: -6.98,
+      y: FLOOR.MAIN + 1.17,
+      z: -8.4,
+      yaw: Math.PI / 2,
+      pitch: 0.045,
+      room: "DINING ROOM",
+    }),
+    hostMark: Object.freeze({
+      x: -13.08,
+      y: FLOOR.MAIN,
+      z: -8.4,
+      yaw: Math.PI / 2,
+      scale: 1,
+    }),
+    bodyRootDrop: 0.33,
+    maskForwardOffset: 0.055,
+    maskVerticalOffset: -0.035,
+    bodyPose: Object.freeze({
+      Spine02: Object.freeze([0.021814, 0.000113, 0.000107, 0.999762]),
+      Spine01: Object.freeze([0.021814, 0.000113, 0.000107, 0.999762]),
+      Spine: Object.freeze([0.017453, 0.000023, 0.000028, 0.999848]),
+      LeftUpLeg: Object.freeze([-0.637786, 0, 0.036649, 0.769341]),
+      LeftLeg: Object.freeze([0.560778, 0.000001, 0.038037, 0.827092]),
+      LeftFoot: Object.freeze([-0.114101, 0.000003, 0.06672, 0.991226]),
+      RightUpLeg: Object.freeze([-0.638624, -0.000002, -0.0299, 0.768938]),
+      RightLeg: Object.freeze([0.562837, -0.000001, -0.0298, 0.82603]),
+      RightFoot: Object.freeze([-0.111425, 0.000002, -0.069813, 0.991318]),
+      LeftArm: Object.freeze([-0.175259, -0.000002, 0.298514, 0.938176]),
+      LeftForeArm: Object.freeze([0.624, 0, -0.076, 0.777]),
+      LeftHand: Object.freeze([-0.185697, -0.955626, 0.060458, 0.220545]),
+      RightArm: Object.freeze([-0.142239, 0, -0.32831, 0.933799]),
+      RightForeArm: Object.freeze([0.624, 0, 0.074, 0.777]),
+      RightHand: Object.freeze([-0.181763, 0.961743, -0.061838, 0.195421]),
+    }),
+    patrons: Object.freeze([
+      Object.freeze({ id: "patron-stag", maskId: "stag-crown", x: -8.95, z: -7.25, scale: 0.98, maskScale: 0.62, phase: 0.11, tint: 0xf4e7dc }),
+      Object.freeze({ id: "patron-ram", maskId: "ram-reliquary", x: -10.35, z: -7.25, scale: 1.02, maskScale: 0.46, phase: 0.31, tint: 0xdad0e3 }),
+      Object.freeze({ id: "patron-raven", maskId: "raven-mourning", x: -11.65, z: -7.25, scale: 0.96, maskScale: 0.5, phase: 0.49, tint: 0xcbd4e5 }),
+      Object.freeze({ id: "patron-moth", maskId: "moth-veil", x: -8.95, z: -9.55, scale: 1.01, maskScale: 0.43, phase: 0.68, tint: 0xead1d6 }),
+      Object.freeze({ id: "patron-grin", maskId: "porcelain-grin", x: -10.35, z: -9.55, scale: 0.97, maskScale: 0.58, phase: 0.82, tint: 0xe6dac8 }),
+      Object.freeze({ id: "patron-eclipse", maskId: "eclipse-oracle", x: -11.65, z: -9.55, scale: 1.03, maskScale: 0.4, phase: 0.94, tint: 0xd4c8bd }),
+    ]),
+  });
   const COMPETITION_FILM_SET = Object.freeze({
     camera: Object.freeze({
       model: "long-lens-cinema-pedestal",
@@ -3090,6 +3151,15 @@
     devMode: false,
     devModeSnapshot: null,
     gameOver: null,
+    banquetLoss: {
+      phase: "inactive",
+      elapsed: 0,
+      triggerReason: null,
+      assetStatus: "idle",
+      visible: false,
+      closingSpoken: false,
+      overlayVisible: false,
+    },
     feastSays: {
       phase: FEAST_SAYS_PHASE.DORMANT,
       triggerReason: null,
@@ -3484,6 +3554,7 @@
   let feastSaysSystem = null;
   let stormRunSystem = null;
   let feastHuntSystem = null;
+  let banquetLossSystem = null;
   let workroomCodeClue = null;
 
   function activeCompetitionSystem() {
@@ -4703,9 +4774,6 @@
         bumpMap: curtainDamaskMap,
         bumpScale: 0.018,
         color: 0xf4c2cb,
-        emissiveMap: curtainDamaskMap,
-        emissive: 0x7a2235,
-        emissiveIntensity: 0.48,
         roughness: 0.88,
         metalness: 0,
         side: THREE.DoubleSide,
@@ -15082,6 +15150,651 @@
     }
   }
 
+  class BanquetLossSystem {
+    constructor() {
+      this.phase = "inactive";
+      this.elapsed = 0;
+      this.assetStatus = "idle";
+      this.error = null;
+      this.manifest = null;
+      this.bodyBase = null;
+      this.maskBases = new Map();
+      this.patrons = [];
+      this.pendingDetails = null;
+      this.loadPromise = null;
+      this.closingSpoken = false;
+      this.overlayVisible = false;
+      this.root = new THREE.Group();
+      this.root.name = "banquet-loss-tableau";
+      this.root.visible = false;
+      scene.add(this.root);
+      this.ritualRoot = new THREE.Group();
+      this.ritualRoot.name = "banquet-loss-ritual-dressing";
+      this.root.add(this.ritualRoot);
+      this.placeCardMesh = null;
+      this.lightSnapshot = null;
+      this.locationSnapshot = null;
+      this.contestantVisibilitySnapshot = null;
+      this.qaAdvanceSeconds = 0;
+      this.maskPosition = new THREE.Vector3();
+      this.forward = new THREE.Vector3();
+      this.projected = new THREE.Vector3();
+      this.bodyWorldQuaternion = new THREE.Quaternion();
+      this.breathEuler = new THREE.Euler(0, 0, 0, "XYZ");
+      this.breathQuaternion = new THREE.Quaternion();
+      this.makeRitualDressing();
+      this.syncState();
+    }
+
+    handlesReason(reason) {
+      return BANQUET_LOSS.caughtReasons.includes(String(reason || ""));
+    }
+
+    manifestUrl() {
+      const url = new URL(BANQUET_LOSS.asset.manifest, SCRIPT_URL);
+      url.searchParams.set("v", MANSION_RUNTIME_VERSION);
+      return url;
+    }
+
+    loadGlb(loader, url) {
+      return new Promise((resolve, reject) => {
+        loader.load(url.href, resolve, undefined, reject);
+      });
+    }
+
+    async load() {
+      if (this.assetStatus === "ready") return this.getDiagnostics();
+      if (this.loadPromise) return this.loadPromise;
+      this.assetStatus = "loading";
+      this.error = null;
+      this.syncState();
+      this.loadPromise = (async () => {
+        try {
+          if (typeof THREE.GLTFLoader !== "function") throw new Error("THREE.GLTFLoader is unavailable");
+          if (!THREE.SkeletonUtils || typeof THREE.SkeletonUtils.clone !== "function") {
+            throw new Error("THREE.SkeletonUtils.clone is unavailable");
+          }
+          const manifestResponse = await fetch(this.manifestUrl(), { cache: "force-cache" });
+          if (!manifestResponse.ok) throw new Error(`Banquet manifest failed (${manifestResponse.status})`);
+          const manifest = await manifestResponse.json();
+          if (
+            manifest.version !== 1
+            || manifest.body?.runtimeFile !== BANQUET_LOSS.asset.bodyFile
+            || !Array.isArray(manifest.masks)
+            || manifest.masks.length !== BANQUET_LOSS.patrons.length
+          ) {
+            throw new Error("Banquet manifest contract is invalid");
+          }
+          const baseUrl = new URL(".", this.manifestUrl());
+          const loader = new THREE.GLTFLoader();
+          const [body, ...masks] = await Promise.all([
+            this.loadGlb(loader, new URL(manifest.body.runtimeFile, baseUrl)),
+            ...manifest.masks.map((entry) => this.loadGlb(loader, new URL(entry.runtimeFile, baseUrl))),
+          ]);
+          this.manifest = manifest;
+          this.bodyBase = body.scene;
+          this.maskBases.clear();
+          manifest.masks.forEach((entry, index) => {
+            this.maskBases.set(entry.id, masks[index].scene);
+          });
+          this.assemblePatrons();
+          this.assetStatus = "ready";
+          this.syncState();
+          if (this.pendingDetails) this.reveal(this.pendingDetails);
+          return this.getDiagnostics();
+        } catch (error) {
+          this.assetStatus = "error";
+          this.error = error?.message || String(error);
+          this.syncState();
+          if (this.pendingDetails && state.gameOver) {
+            this.pendingDetails = null;
+            presentMansionGameOverOverlay();
+          }
+          return this.getDiagnostics();
+        } finally {
+          this.loadPromise = null;
+        }
+      })();
+      return this.loadPromise;
+    }
+
+    makePlaceCardTexture() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1024;
+      canvas.height = 256;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#d9c8a5";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.strokeStyle = "#5b1320";
+      context.lineWidth = 18;
+      context.strokeRect(18, 18, canvas.width - 36, canvas.height - 36);
+      context.strokeStyle = "#9e772f";
+      context.lineWidth = 5;
+      context.strokeRect(38, 38, canvas.width - 76, canvas.height - 76);
+      context.fillStyle = "#251518";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.font = "700 76px Georgia";
+      context.fillText("CONTESTANT 13", canvas.width / 2, 92);
+      context.fillStyle = "#711b27";
+      context.font = "700 46px Georgia";
+      context.fillText("MAIN COURSE", canvas.width / 2, 174);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.name = "banquet-loss-main-course-place-card";
+      texture.encoding = THREE.sRGBEncoding;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      return texture;
+    }
+
+    makeRitualDressing() {
+      const silver = new THREE.MeshStandardMaterial({
+        color: 0x9e9484,
+        roughness: 0.27,
+        metalness: 0.82,
+      });
+      const platter = new THREE.Mesh(
+        new THREE.TorusGeometry(0.54, 0.024, 8, 42),
+        silver,
+      );
+      platter.name = "banquet-loss-player-serving-platter";
+      platter.position.set(-7.55, FLOOR.MAIN + 0.905, -8.4);
+      platter.rotation.x = Math.PI / 2;
+      platter.scale.set(1.65, 1, 0.86);
+      platter.castShadow = false;
+      platter.receiveShadow = true;
+      this.ritualRoot.add(platter);
+      for (const [index, x] of [-7.52, -8.18].entries()) {
+        roundedBox({
+          name: `banquet-loss-player-restraint-${index + 1}`,
+          w: 0.13,
+          h: 0.035,
+          d: 1.18,
+          radius: 0.025,
+          x,
+          y: FLOOR.MAIN + 0.934,
+          z: -8.4,
+          material: M.leather,
+          parent: this.ritualRoot,
+          cast: false,
+        });
+        for (const z of [-8.86, -7.94]) {
+          roundedBox({
+            name: "banquet-loss-restraint-brass-keeper",
+            w: 0.17,
+            h: 0.045,
+            d: 0.055,
+            radius: 0.012,
+            x,
+            y: FLOOR.MAIN + 0.952,
+            z,
+            material: M.brass,
+            parent: this.ritualRoot,
+            cast: false,
+          });
+        }
+      }
+      const placeCardMaterial = new THREE.MeshStandardMaterial({
+        map: this.makePlaceCardTexture(),
+        roughness: 0.78,
+        metalness: 0,
+        side: THREE.DoubleSide,
+      });
+      this.placeCardMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.72, 0.18),
+        placeCardMaterial,
+      );
+      this.placeCardMesh.name = "banquet-loss-contestant-13-main-course-card";
+      this.placeCardMesh.position.set(-8.5, FLOOR.MAIN + 1.075, -7.72);
+      this.placeCardMesh.rotation.y = Math.PI / 2;
+      this.placeCardMesh.rotation.z = -0.04;
+      this.ritualRoot.add(this.placeCardMesh);
+      const flameMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffd08a,
+        emissive: 0xff8c3c,
+        emissiveIntensity: 2.6,
+        roughness: 0.35,
+      });
+      for (const x of [-8.35, -11.05]) {
+        for (const dx of [-0.19, 0, 0.19]) {
+          const flame = new THREE.Mesh(
+            new THREE.SphereGeometry(0.025, 8, 6),
+            flameMaterial,
+          );
+          flame.name = "banquet-loss-candle-flame";
+          flame.position.set(x + dx, FLOOR.MAIN + 1.355 + (dx === 0 ? 0.04 : 0), -8.4);
+          flame.scale.y = 1.8;
+          flame.castShadow = false;
+          this.ritualRoot.add(flame);
+        }
+      }
+      const hostKeyLight = new THREE.PointLight(0xffc38c, 0.92, 4.2, 2);
+      hostKeyLight.name = "banquet-loss-host-key-light";
+      hostKeyLight.position.set(-12.25, FLOOR.MAIN + 2.08, -8.4);
+      hostKeyLight.castShadow = false;
+      this.ritualRoot.add(hostKeyLight);
+    }
+
+    tintBody(body, tint) {
+      body.traverse((object) => {
+        if (!object.isMesh) return;
+        object.castShadow = true;
+        object.receiveShadow = true;
+        if (Array.isArray(object.material)) {
+          object.material = object.material.map((material) => material.clone());
+          for (const material of object.material) material.color?.multiply(new THREE.Color(tint));
+        } else if (object.material) {
+          object.material = object.material.clone();
+          object.material.color?.multiply(new THREE.Color(tint));
+        }
+      });
+    }
+
+    applySeatedPose(body) {
+      const bones = new Map();
+      body.traverse((object) => {
+        if (object.isBone) bones.set(object.name, object);
+      });
+      for (const [name, values] of Object.entries(BANQUET_LOSS.bodyPose)) {
+        const bone = bones.get(name);
+        if (!bone) continue;
+        bone.quaternion.multiply(new THREE.Quaternion(...values).normalize()).normalize();
+      }
+      return bones;
+    }
+
+    assemblePatrons() {
+      for (const patron of this.patrons) {
+        this.root.remove(patron.body, patron.mask);
+      }
+      this.patrons = [];
+      if (!this.bodyBase || !this.manifest) return;
+      const maskById = new Map(this.manifest.masks.map((entry) => [entry.id, entry]));
+      for (const spec of BANQUET_LOSS.patrons) {
+        const body = THREE.SkeletonUtils.clone(this.bodyBase);
+        body.name = `${spec.id}-shared-formal-body`;
+        this.tintBody(body, spec.tint);
+        const yaw = Math.atan2(
+          BANQUET_LOSS.camera.x - spec.x,
+          BANQUET_LOSS.camera.z - spec.z,
+        );
+        body.position.set(spec.x, FLOOR.MAIN - BANQUET_LOSS.bodyRootDrop, spec.z);
+        body.rotation.y = yaw;
+        body.scale.setScalar(spec.scale);
+        const bones = this.applySeatedPose(body);
+        const torsoBones = ["Spine02", "Spine01", "Spine", "neck", "Head"]
+          .map((name) => bones.get(name))
+          .filter(Boolean);
+        const torsoBase = new Map(torsoBones.map((bone) => [bone.name, bone.quaternion.clone()]));
+        const maskManifest = maskById.get(spec.maskId);
+        const maskBase = this.maskBases.get(spec.maskId);
+        if (!maskManifest || !maskBase) throw new Error(`Missing banquet mask ${spec.maskId}`);
+        const mask = maskBase.clone(true);
+        mask.name = `${spec.id}-${spec.maskId}`;
+        mask.scale.setScalar(spec.maskScale);
+        mask.traverse((object) => {
+          if (!object.isMesh) return;
+          object.castShadow = true;
+          object.receiveShadow = true;
+        });
+        this.root.add(body, mask);
+        this.patrons.push({
+          spec,
+          body,
+          mask,
+          yaw,
+          bones,
+          headFront: bones.get("headfront") || bones.get("Head"),
+          torsoBones,
+          torsoBase,
+          maskManifest,
+        });
+      }
+      this.root.updateMatrixWorld(true);
+      this.syncPatronMasks();
+    }
+
+    syncPatronMasks() {
+      for (const patron of this.patrons) {
+        if (!patron.headFront) continue;
+        patron.body.updateMatrixWorld(true);
+        patron.headFront.getWorldPosition(this.maskPosition);
+        this.forward.set(Math.sin(patron.yaw), 0, Math.cos(patron.yaw));
+        patron.mask.position.copy(this.maskPosition)
+          .addScaledVector(this.forward, BANQUET_LOSS.maskForwardOffset);
+        patron.mask.position.y += BANQUET_LOSS.maskVerticalOffset;
+        patron.body.getWorldQuaternion(this.bodyWorldQuaternion);
+        patron.mask.quaternion.copy(this.bodyWorldQuaternion);
+        patron.mask.updateMatrixWorld(true);
+      }
+    }
+
+    stageHost() {
+      if (!mrFeastNpc || mrFeastNpc.loadStatus !== "ready") return;
+      mrFeastNpc.stageChallenge(BANQUET_LOSS.hostMark, {
+        mode: "banquet-loss",
+        zone: "DINING ROOM",
+        level: MR_FEAST_LEVEL.MAIN,
+        responseNodeId: "main-dining-south",
+        colliderEnabled: false,
+        interactionsEnabled: false,
+        visible: true,
+      });
+    }
+
+    stageLighting() {
+      const dining = circuits.find((circuit) => circuit.name === "dining room lights");
+      this.lightSnapshot = {
+        hemisphere: hemisphereLight?.intensity ?? null,
+        moon: moonLight?.intensity ?? null,
+        dining,
+        diningOn: dining?.on ?? null,
+      };
+      if (hemisphereLight) hemisphereLight.intensity = Math.max(hemisphereLight.intensity, 0.36);
+      if (moonLight) moonLight.intensity = Math.max(moonLight.intensity, 0.22);
+      if (dining) dining.setState(true, true);
+      syncLightRendering();
+    }
+
+    stageContestants() {
+      if (!mansionContestants?.entries) return;
+      this.contestantVisibilitySnapshot = mansionContestants.entries.map((entry) => ({
+        entry,
+        visible: entry.root.visible,
+      }));
+      for (const snapshot of this.contestantVisibilitySnapshot) snapshot.entry.root.visible = false;
+    }
+
+    start(details = {}) {
+      if (!this.handlesReason(details.reason)) return false;
+      this.pendingDetails = { ...details };
+      state.banquetLoss.triggerReason = details.reason;
+      state.banquetLoss.phase = this.assetStatus === "ready" ? "revealing" : "loading";
+      state.banquetLoss.visible = this.assetStatus === "ready";
+      state.banquetLoss.overlayVisible = false;
+      this.overlayVisible = false;
+      if (dom.gameOver) dom.gameOver.hidden = true;
+      if (this.assetStatus === "ready") this.reveal(details);
+      else void this.load();
+      this.syncState();
+      return true;
+    }
+
+    reveal(details = this.pendingDetails || {}) {
+      if (this.assetStatus !== "ready") return false;
+      this.pendingDetails = null;
+      this.phase = "revealing";
+      this.elapsed = 0;
+      this.closingSpoken = false;
+      this.overlayVisible = false;
+      this.root.visible = true;
+      this.locationSnapshot = {
+        floor: state.currentFloor,
+        room: state.currentRoom,
+      };
+      state.currentFloor = "MAIN LEVEL";
+      state.currentRoom = "DINING ROOM";
+      state.banquetLoss.triggerReason = details.reason || state.banquetLoss.triggerReason;
+      if (dom.stage) dom.stage.dataset.banquetLoss = "active";
+      if (dom.gameOver) dom.gameOver.hidden = true;
+      speechSystem?.dismiss();
+      clearMovementInput();
+      flashlightSystem?.setEnabled?.(false, { source: "banquet-loss" });
+      this.stageLighting();
+      this.stageContestants();
+      this.stageHost();
+      this.applyCameraOverride();
+      this.syncPatronMasks();
+      this.syncState();
+      return true;
+    }
+
+    applyCameraOverride() {
+      if (!this.active()) return false;
+      camera.position.set(
+        BANQUET_LOSS.camera.x,
+        BANQUET_LOSS.camera.y,
+        BANQUET_LOSS.camera.z,
+      );
+      camera.rotation.y = BANQUET_LOSS.camera.yaw;
+      camera.rotation.x = BANQUET_LOSS.camera.pitch;
+      camera.rotation.z = 0;
+      camera.updateMatrixWorld(true);
+      return true;
+    }
+
+    updatePatrons() {
+      for (const patron of this.patrons) {
+        const wave = Math.sin((this.elapsed / 6.2 + patron.spec.phase) * Math.PI * 2);
+        patron.torsoBones.forEach((bone, index) => {
+          const base = patron.torsoBase.get(bone.name);
+          if (!base) return;
+          const amount = wave * (index < 3 ? 0.008 : 0.004);
+          this.breathEuler.set(amount, index === 4 ? amount * 0.35 : 0, 0, "XYZ");
+          this.breathQuaternion.setFromEuler(this.breathEuler);
+          bone.quaternion.copy(base).multiply(this.breathQuaternion).normalize();
+        });
+      }
+      this.syncPatronMasks();
+    }
+
+    update(dt) {
+      if (!this.active()) return;
+      const step = Math.min(
+        BANQUET_LOSS.maximumTimerStepSeconds,
+        Math.max(0, Number(dt) || 0),
+      );
+      this.elapsed += step;
+      this.updatePatrons();
+      if (!this.closingSpoken && this.elapsed >= BANQUET_LOSS.closingLineAtSeconds) {
+        this.closingSpoken = true;
+        this.phase = "closing-line";
+        speechSystem?.say(
+          "banquet-loss-closing",
+          BANQUET_LOSS.closingLine,
+          speechSystem.hostSpeaker(),
+          { durationSeconds: BANQUET_LOSS.closingLineSeconds },
+        );
+      }
+      speechSystem?.update(step);
+      if (!this.overlayVisible && this.elapsed >= BANQUET_LOSS.overlayAtSeconds) {
+        this.phase = "complete";
+        this.overlayVisible = true;
+        presentMansionGameOverOverlay();
+      }
+      this.syncState();
+    }
+
+    active() {
+      return ["revealing", "closing-line", "complete"].includes(this.phase);
+    }
+
+    restorePresentation() {
+      this.root.visible = false;
+      if (dom.stage) dom.stage.dataset.banquetLoss = "inactive";
+      if (mrFeastNpc?.challengeMode === "banquet-loss") mrFeastNpc.releaseChallenge();
+      if (this.contestantVisibilitySnapshot) {
+        for (const snapshot of this.contestantVisibilitySnapshot) {
+          snapshot.entry.root.visible = snapshot.visible;
+        }
+      }
+      this.contestantVisibilitySnapshot = null;
+      if (this.lightSnapshot) {
+        if (hemisphereLight && this.lightSnapshot.hemisphere != null) {
+          hemisphereLight.intensity = this.lightSnapshot.hemisphere;
+        }
+        if (moonLight && this.lightSnapshot.moon != null) {
+          moonLight.intensity = this.lightSnapshot.moon;
+        }
+        if (this.lightSnapshot.dining && this.lightSnapshot.diningOn != null) {
+          this.lightSnapshot.dining.setState(this.lightSnapshot.diningOn, true);
+        }
+        syncLightRendering();
+      }
+      this.lightSnapshot = null;
+      if (this.locationSnapshot) {
+        state.currentFloor = this.locationSnapshot.floor;
+        state.currentRoom = this.locationSnapshot.room;
+      }
+      this.locationSnapshot = null;
+    }
+
+    clear() {
+      if (speechSystem?.active?.category === "banquet-loss-closing") speechSystem.dismiss();
+      this.restorePresentation();
+      this.phase = "inactive";
+      this.elapsed = 0;
+      this.pendingDetails = null;
+      this.closingSpoken = false;
+      this.overlayVisible = false;
+      Object.assign(state.banquetLoss, {
+        phase: "inactive",
+        elapsed: 0,
+        triggerReason: null,
+        assetStatus: this.assetStatus,
+        visible: false,
+        closingSpoken: false,
+        overlayVisible: false,
+      });
+      return this.getDiagnostics();
+    }
+
+    advanceForQA(seconds) {
+      if (!state.qa || !this.active()) return this.getDiagnostics();
+      const duration = clamp(Number(seconds) || 0, 0, 60);
+      const fixedStep = 1 / 30;
+      let elapsed = 0;
+      while (elapsed < duration) {
+        this.update(Math.min(fixedStep, duration - elapsed));
+        elapsed += fixedStep;
+      }
+      this.qaAdvanceSeconds += elapsed;
+      this.applyCameraOverride();
+      return this.getDiagnostics();
+    }
+
+    pointInCamera(object) {
+      if (!object?.visible) return false;
+      object.getWorldPosition(this.projected);
+      this.projected.project(camera);
+      return (
+        this.projected.z >= -1
+        && this.projected.z <= 1
+        && Math.abs(this.projected.x) <= 1.12
+        && Math.abs(this.projected.y) <= 1.12
+      );
+    }
+
+    facingPoint(yaw, from, target) {
+      const dx = target.x - from.x;
+      const dz = target.z - from.z;
+      const distance = Math.max(0.0001, Math.hypot(dx, dz));
+      return (Math.sin(yaw) * dx + Math.cos(yaw) * dz) / distance >= 0.96;
+    }
+
+    syncState() {
+      Object.assign(state.banquetLoss, {
+        phase: this.phase === "inactive" && this.pendingDetails ? "loading" : this.phase,
+        elapsed: this.elapsed,
+        assetStatus: this.assetStatus,
+        visible: Boolean(this.root.visible),
+        closingSpoken: this.closingSpoken,
+        overlayVisible: Boolean(dom.gameOver && !dom.gameOver.hidden),
+      });
+    }
+
+    getDiagnostics() {
+      const cameraTarget = {
+        x: BANQUET_LOSS.camera.x,
+        y: BANQUET_LOSS.camera.y,
+        z: BANQUET_LOSS.camera.z,
+      };
+      const patrons = this.patrons.map((patron) => ({
+        id: patron.spec.id,
+        bodyFile: this.manifest?.body?.runtimeFile || BANQUET_LOSS.asset.bodyFile,
+        maskId: patron.spec.maskId,
+        maskFile: patron.maskManifest.runtimeFile,
+        visible: Boolean(this.root.visible && patron.body.visible && patron.mask.visible),
+        seated: true,
+        facingPlayer: this.facingPoint(patron.yaw, patron.body.position, cameraTarget),
+        inView: Boolean(this.root.visible && this.pointInCamera(patron.mask)),
+        position: {
+          x: Number(patron.body.position.x.toFixed(3)),
+          y: Number(patron.body.position.y.toFixed(3)),
+          z: Number(patron.body.position.z.toFixed(3)),
+        },
+        maskPosition: {
+          x: Number(patron.mask.position.x.toFixed(3)),
+          y: Number(patron.mask.position.y.toFixed(3)),
+          z: Number(patron.mask.position.z.toFixed(3)),
+        },
+      }));
+      const hostPosition = mrFeastNpc?.root?.position || new THREE.Vector3();
+      return {
+        phase: state.banquetLoss.phase,
+        elapsed: Number(this.elapsed.toFixed(3)),
+        triggerReason: state.banquetLoss.triggerReason,
+        assetStatus: this.assetStatus,
+        error: this.error,
+        visible: Boolean(this.root.visible),
+        bodySourceCount: this.manifest?.body?.sourceCount || 0,
+        maskSourceCount: this.manifest?.creditStrategy?.maskSourceGenerations || 0,
+        patrons,
+        camera: {
+          mode: "first-person-table",
+          locked: this.active(),
+          room: BANQUET_LOSS.camera.room,
+          movementSuppressed: Boolean(state.gameOver),
+          position: {
+            x: BANQUET_LOSS.camera.x,
+            y: BANQUET_LOSS.camera.y,
+            z: BANQUET_LOSS.camera.z,
+          },
+          yaw: BANQUET_LOSS.camera.yaw,
+          pitch: BANQUET_LOSS.camera.pitch,
+        },
+        host: {
+          visible: Boolean(this.root.visible && mrFeastNpc?.root?.visible),
+          atFarEnd: Boolean(
+            mrFeastNpc
+            && Math.hypot(
+              hostPosition.x - BANQUET_LOSS.hostMark.x,
+              hostPosition.z - BANQUET_LOSS.hostMark.z,
+            ) <= 0.05
+          ),
+          facingPlayer: Boolean(
+            mrFeastNpc
+            && this.facingPoint(mrFeastNpc.root.rotation.y, hostPosition, cameraTarget)
+          ),
+          position: {
+            x: Number(hostPosition.x.toFixed(3)),
+            y: Number(hostPosition.y.toFixed(3)),
+            z: Number(hostPosition.z.toFixed(3)),
+          },
+        },
+        ritualDressing: {
+          placeCard: BANQUET_LOSS.placeCard,
+          placeCardVisible: Boolean(this.root.visible && this.placeCardMesh?.visible),
+          servingPlatter: true,
+          restraintCount: 2,
+          existingDiningTable: true,
+          gameplayCollidersAdded: 0,
+        },
+        closingLine: BANQUET_LOSS.closingLine,
+        closingSpoken: this.closingSpoken,
+        speech: speechSystem?.getDiagnostics() || null,
+        overlayVisible: Boolean(dom.gameOver && !dom.gameOver.hidden),
+        recovery: {
+          loadLabel: dom.gameOverLoad?.textContent || null,
+          restartLabel: dom.gameOverRestart?.textContent || null,
+        },
+        credits: this.manifest?.creditStrategy || null,
+        qaAdvanceSeconds: Number(this.qaAdvanceSeconds.toFixed(3)),
+      };
+    }
+  }
+
   class MrFeastOpeningWelcome {
     constructor() {
       this.active = false;
@@ -20166,23 +20879,38 @@
     const floor = Number.isFinite(details.feetY) && details.feetY <= MR_FEAST_PURSUIT.basementFeetY
       ? "BASEMENT"
       : state.currentFloor;
+    const reason = details.reason || "witnessed";
+    const banquetEligible = Boolean(banquetLossSystem?.handlesReason(reason));
     state.gameOver = {
-      reason: details.reason || "witnessed",
+      reason,
       kind: details.kind || null,
       floor,
       room: state.currentRoom,
+      presentation: banquetEligible ? "banquet" : "immediate",
     };
     releasePointerLock();
+    if (banquetEligible && banquetLossSystem?.start(state.gameOver)) return state.gameOver;
+    presentMansionGameOverOverlay();
+    return state.gameOver;
+  }
+
+  function presentMansionGameOverOverlay() {
+    if (!state.gameOver) return null;
     const feastSaysElimination = ["feast-says-eliminated", "feast-says-no-show"].includes(state.gameOver.reason);
     const stormRunElimination = ["storm-run-eliminated", "storm-run-no-show"].includes(state.gameOver.reason);
     const feastHuntElimination = ["feast-hunt-eliminated", "feast-hunt-no-show", "feast-hunt-juniper-won"].includes(state.gameOver.reason);
+    const banquetPresented = state.gameOver.presentation === "banquet";
     if (dom.gameOverTitle) {
-      dom.gameOverTitle.textContent = feastSaysElimination || stormRunElimination || feastHuntElimination
+      dom.gameOverTitle.textContent = banquetPresented
+        ? "Served"
+        : feastSaysElimination || stormRunElimination || feastHuntElimination
         ? "Eliminated"
         : "Caught";
     }
     if (dom.gameOverCopy) {
-      dom.gameOverCopy.textContent = state.gameOver.reason === "feast-hunt-no-show"
+      dom.gameOverCopy.textContent = banquetPresented
+        ? "The Patrons have their sacrifice. The Guest has its supper."
+        : state.gameOver.reason === "feast-hunt-no-show"
         ? "You did not check in with Mr. Feast before the five-minute Feast Hunt call expired."
         : state.gameOver.reason === "feast-hunt-juniper-won"
           ? "Juniper found her three objects and returned to the foyer first. Feast Hunt is over."
@@ -20208,10 +20936,12 @@
         target?.focus({ preventScroll: true });
       });
     }
+    banquetLossSystem?.syncState();
     return state.gameOver;
   }
 
   function clearMansionGameOver() {
+    banquetLossSystem?.clear();
     state.gameOver = null;
     if (dom.gameOverTitle) dom.gameOverTitle.textContent = "Caught";
     if (dom.gameOver) dom.gameOver.hidden = true;
@@ -33076,7 +33806,11 @@
       // the world cannot cause catch-up.
       accumulator = 0;
     }
+    if (state.gameOver && banquetLossSystem?.active()) {
+      banquetLossSystem.update(Math.min(rawDt, BANQUET_LOSS.maximumTimerStepSeconds));
+    }
     syncCamera();
+    banquetLossSystem?.applyCameraOverride();
     flashlightSystem?.update(dt);
 
     interactionTimer -= dt;
@@ -33226,6 +33960,11 @@
         doubleSided: M?.curtainDamask?.side === THREE.DoubleSide,
         lined: windowCurtains.every((curtain) => Boolean(curtain.leftLining && curtain.rightLining)),
         castsShadow: windowCurtains.some((curtain) => curtain.leftPanel.castShadow || curtain.rightPanel.castShadow),
+        emissiveMap: Boolean(M?.curtainDamask?.emissiveMap),
+        emissiveColor: Number(M?.curtainDamask?.emissive?.getHex() || 0),
+        emissiveIntensity: M?.curtainDamask?.emissiveMap || M?.curtainDamask?.emissive?.getHex()
+          ? Number(M?.curtainDamask?.emissiveIntensity || 0)
+          : 0,
         shaderLightsAdded: 0,
       },
       installations: windowCurtains.map((curtain) => curtain.getDiagnostics()),
@@ -33314,6 +34053,7 @@
       feastSays: feastSaysSystem?.getDiagnostics() || null,
       stormRun: stormRunSystem?.getDiagnostics() || null,
       feastHunt: feastHuntSystem?.getDiagnostics() || null,
+      banquetLoss: banquetLossSystem?.getDiagnostics() || { ...state.banquetLoss },
       gameOver: state.gameOver ? { ...state.gameOver } : null,
       workroom: getWorkroomDiagnostics(),
       estateStatues: getEstateStatueDiagnostics(),
@@ -33916,6 +34656,20 @@
       tamperSystem ? tamperSystem.resetDistractionsForQA() : null
     );
     window.MrFeastFresh.getSpeechState = () => speechSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.getBanquetLossState = () => banquetLossSystem?.getDiagnostics() || { ...state.banquetLoss };
+    window.MrFeastFresh.triggerBanquetLossForQA = (reason = "witnessed") => {
+      if (!state.qa) return null;
+      if (state.gameOver) clearMansionGameOver();
+      return triggerMansionGameOver({ reason, kind: "qa-banquet-loss", feetY: FLOOR.BASEMENT });
+    };
+    window.MrFeastFresh.advanceBanquetLossForQA = (seconds) => (
+      banquetLossSystem?.advanceForQA(seconds) || null
+    );
+    window.MrFeastFresh.clearBanquetLossForQA = () => {
+      if (!state.qa) return null;
+      clearMansionGameOver();
+      return banquetLossSystem?.getDiagnostics() || null;
+    };
     window.MrFeastFresh.dismissSpeechForQA = () => {
       if (!state.qa || !speechSystem) return null;
       speechSystem.dismiss();
@@ -35065,6 +35819,7 @@
       stormSystem = new StormSystem();
       stormRunSystem = new StormRunSystem();
       feastHuntSystem = new FeastHuntSystem();
+      banquetLossSystem = new BanquetLossSystem();
       audioSystem = new MansionAudio();
       updateAudioButton();
       bindInput();

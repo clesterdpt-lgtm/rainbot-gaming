@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "generatedAt": "2026-07-25T02:10:33.324504+00:00",
+  "pipeline": "Meshy source assets with deterministic Blender runtime preparation",
+  "creditStrategy": {
+    "sharedBodyGenerations": 1,
+    "maskSourceGenerations": 3,
+    "runtimeBodyVariants": 1,
+    "runtimeMaskVariants": 6,
+    "estimatedConsumedCredits": 125
+  },
+  "body": {
+    "id": "cult-patron-body",
+    "runtimeFile": "cult-patron-body.glb",
+    "sourceCount": 1,
+    "rigged": true,
+    "forwardAxis": "+Z",
+    "heightMeters": 1.78,
+    "triangles": 15999,
+    "boundsMeters": [
+      1.098988,
+      0.389638,
+      1.782209
+    ],
+    "fileBytes": 1089964,
+    "boneCount": 24,
+    "animationPolicy": "named runtime seated pose plus restrained procedural breathing",
+    "meshy": {
+      "previewTaskId": "019f96f9-48e7-72f5-9219-04abf4d783a4",
+      "refineTaskId": "019f96fa-31d2-7335-bba5-7eac06eee78b",
+      "rigTaskId": "019f96fc-01a9-7721-b3f0-18c476e115d4",
+      "consumedCredits": 35
+    },
+    "blenderReport": "cult-patron-body.report.json"
+  },
+  "masks": [
+    {
+      "id": "stag-crown",
+      "label": "The Stag Crown",
+      "description": "Tall branching antlers, bone-white skull, and a narrow brass circlet.",
+      "runtimeFile": "mask-stag-crown.glb",
+      "sourceFile": "source/banquet/mask-stag-source-master.glb",
+      "forwardAxis": "+Z",
+      "boundsMeters": [
+        0.371598,
+        0.315385,
+        0.62
+      ],
+      "triangles": 10399,
+      "fileBytes": 1477608,
+      "blenderVariant": "stag-circlet",
+      "meshy": {
+        "previewTaskId": "019f96fd-bdfe-7763-b3ca-7c86f8eaa979",
+        "sourceTaskId": "019f96fe-9323-70b3-8607-fd74048a229b",
+        "consumedCredits": 30
+      },
+      "blenderReport": "mask-stag-crown.report.json"
+    },
+    {
+      "id": "ram-reliquary",
+      "label": "The Ram Reliquary",
+      "description": "A shortened bone face enclosed by two broad soot-black spiral horns.",
+      "runtimeFile": "mask-ram-reliquary.glb",
+      "sourceFile": "source/banquet/mask-stag-source-master.glb",
+      "forwardAxis": "+Z",
+      "boundsMeters": [
+        0.808778,
+        0.259994,
+        0.446691
+      ],
+      "triangles": 11019,
+      "fileBytes": 1487476,
+      "blenderVariant": "ram-horns",
+      "meshy": {
+        "previewTaskId": "019f96fd-bdfe-7763-b3ca-7c86f8eaa979",
+        "sourceTaskId": "019f96fe-9323-70b3-8607-fd74048a229b",
+        "consumedCredits": 30
+      },
+      "blenderReport": "mask-ram-reliquary.report.json"
+    },
+    {
+      "id": "raven-mourning",
+      "label": "The Mourning Raven",
+      "description": "Long black beak, gold feather filigree, and paired mourning chains.",
+      "runtimeFile": "mask-raven-mourning.glb",
+      "sourceFile": "source/banquet/mask-raven-source-master.glb",
+      "forwardAxis": "+Z",
+      "boundsMeters": [
+        0.411789,
+        0.434345,
+        0.565
+      ],
+      "triangles": 53030,
+      "fileBytes": 2928908,
+      "blenderVariant": "raven-chains",
+      "meshy": {
+        "previewTaskId": "019f96fd-be04-77a6-8eee-36b32f97a871",
+        "sourceTaskId": "019f96ff-7623-77c9-8a4a-023a3fd9189b",
+        "consumedCredits": 30
+      },
+      "blenderReport": "mask-raven-mourning.report.json"
+    },
+    {
+      "id": "moth-veil",
+      "label": "The Veiled Moth",
+      "description": "A compressed beak framed by broad oxblood moth wings and a fine veil.",
+      "runtimeFile": "mask-moth-veil.glb",
+      "sourceFile": "source/banquet/mask-raven-source-master.glb",
+      "forwardAxis": "+Z",
+      "boundsMeters": [
+        0.840527,
+        0.184999,
+        0.570281
+      ],
+      "triangles": 52822,
+      "fileBytes": 2914348,
+      "blenderVariant": "moth-wings",
+      "meshy": {
+        "previewTaskId": "019f96fd-be04-77a6-8eee-36b32f97a871",
+        "sourceTaskId": "019f96ff-7623-77c9-8a4a-023a3fd9189b",
+        "consumedCredits": 30
+      },
+      "blenderReport": "mask-moth-veil.report.json"
+    },
+    {
+      "id": "porcelain-grin",
+      "label": "The Porcelain Grin",
+      "description": "Warm porcelain, hollow eyes, a fixed red smile, and gold tear drops.",
+      "runtimeFile": "mask-porcelain-grin.glb",
+      "sourceFile": "source/banquet/mask-grin-source-master.glb",
+      "forwardAxis": "+Z",
+      "boundsMeters": [
+        0.301744,
+        0.346534,
+        0.48
+      ],
+      "triangles": 14225,
+      "fileBytes": 1694644,
+      "blenderVariant": "grin-tears",
+      "meshy": {
+        "previewTaskId": "019f96fd-be1b-73e1-8ab5-332e7c3a7805",
+        "sourceTaskId": "019f96ff-37ab-77c1-99db-26f16910a6c3",
+        "consumedCredits": 30
+      },
+      "blenderReport": "mask-porcelain-grin.report.json"
+    },
+    {
+      "id": "eclipse-oracle",
+      "label": "The Eclipse Oracle",
+      "description": "A smaller polite face surrounded by a black-and-gold solar halo.",
+      "runtimeFile": "mask-eclipse-oracle.glb",
+      "sourceFile": "source/banquet/mask-grin-source-master.glb",
+      "forwardAxis": "+Z",
+      "boundsMeters": [
+        0.775,
+        0.303538,
+        0.81
+      ],
+      "triangles": 14673,
+      "fileBytes": 1731164,
+      "blenderVariant": "eclipse-halo",
+      "meshy": {
+        "previewTaskId": "019f96fd-be1b-73e1-8ab5-332e7c3a7805",
+        "sourceTaskId": "019f96ff-37ab-77c1-99db-26f16910a6c3",
+        "consumedCredits": 30
+      },
+      "blenderReport": "mask-eclipse-oracle.report.json"
+    }
+  ]
+}

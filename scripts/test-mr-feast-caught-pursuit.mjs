@@ -263,15 +263,28 @@ async function run() {
       const element = document.getElementById("mansion-gameover");
       return { hidden: element.hidden, title: element.querySelector("#mansion-gameover-title")?.textContent || "", loadDisabled: document.getElementById("mansion-gameover-load")?.disabled };
     });
-    assert(!overlay.hidden && /caught/i.test(overlay.title), `the CAUGHT overlay should be visible; got ${JSON.stringify(overlay)}`);
-    assert(overlay.loadDisabled === false, "the load button should be enabled when a save exists");
-    await page.screenshot({ path: path.join(artifactDir, "game-over-desktop.png") });
+    assert(overlay.hidden, `a physical catch should hold recovery controls until the banquet closes; got ${JSON.stringify(overlay)}`);
+    await page.waitForFunction(
+      () => window.MrFeastFresh.getBanquetLossState()?.assetStatus === "ready"
+        && window.MrFeastFresh.getBanquetLossState()?.visible,
+      null,
+      { timeout: 180000 },
+    );
 
-    // Simulation must freeze underneath the overlay.
+    // Simulation must freeze underneath the captured-at-dinner presentation.
     const frozenBefore = await page.evaluate(() => JSON.parse(window.render_game_to_text()).mrFeast.position);
     await page.evaluate(() => window.advanceTime(600));
     const frozenAfter = await page.evaluate(() => JSON.parse(window.render_game_to_text()).mrFeast.position);
     assert(frozenBefore.x === frozenAfter.x && frozenBefore.z === frozenAfter.z, `the simulation should freeze during game over; got ${JSON.stringify({ frozenBefore, frozenAfter })}`);
+
+    await page.evaluate(() => window.MrFeastFresh.advanceBanquetLossForQA(10));
+    overlay = await page.evaluate(() => {
+      const element = document.getElementById("mansion-gameover");
+      return { hidden: element.hidden, title: element.querySelector("#mansion-gameover-title")?.textContent || "", loadDisabled: document.getElementById("mansion-gameover-load")?.disabled };
+    });
+    assert(!overlay.hidden && /served/i.test(overlay.title), `the SERVED recovery overlay should follow the banquet; got ${JSON.stringify(overlay)}`);
+    assert(overlay.loadDisabled === false, "the load button should be enabled when a save exists");
+    await page.screenshot({ path: path.join(artifactDir, "game-over-desktop.png") });
 
     await page.click("#mansion-gameover-load");
     await page.waitForTimeout(250);
@@ -372,6 +385,13 @@ async function run() {
       window.MrFeastFresh.reportInfractionForQA("portrait");
       return window.MrFeastFresh.runMrFeastPursuitForQA(120);
     });
+    await mobile.waitForFunction(
+      () => window.MrFeastFresh.getBanquetLossState()?.assetStatus === "ready"
+        && window.MrFeastFresh.getBanquetLossState()?.visible,
+      null,
+      { timeout: 180000 },
+    );
+    await mobile.evaluate(() => window.MrFeastFresh.advanceBanquetLossForQA(10));
     const mobileOverlay = await mobile.evaluate(() => {
       const element = document.getElementById("mansion-gameover");
       const rect = element.querySelector(".mansion-menu__panel").getBoundingClientRect();

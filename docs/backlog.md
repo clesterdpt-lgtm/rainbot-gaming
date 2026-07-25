@@ -12,6 +12,7 @@
 - [ ] Final sabotage and banquet endings — implement the complete escape/exposure win and captured-at-dinner loss sequences.
   - Source: 2026-07-15 gameplan confirmation
   - Rough size: L · Rough value: L
+  - Notes: The captured-at-dinner physical-catch loss sequence was promoted into `docs/milestones/64-captured-at-dinner-loss.md`; the escape/exposure win branches remain deferred here.
 
 - [ ] Stealth meter refinements — spike sampled light exposure during storm lightning flashes so outdoor sneaking has a rhythm, and surface the meter on phones once the deferred mobile crouch control exists.
   - Source: 2026-07-18 crouch stealth meter build (Milestone 51)

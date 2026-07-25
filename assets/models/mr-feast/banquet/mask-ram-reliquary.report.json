@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-07-25T02:10:15.880000+00:00",
+  "pipeline": "Meshy text-to-3D prop -> Blender crop/decimate/variant/export",
+  "id": "ram-reliquary",
+  "label": "The Ram Reliquary",
+  "description": "A shortened bone face enclosed by two broad soot-black spiral horns.",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/banquet/mask-stag-source-master.glb",
+  "output": "mask-ram-reliquary.glb",
+  "forwardAxis": "+Z",
+  "cropBottomRatio": 0.0,
+  "authoredScale": [
+    1.12,
+    0.92,
+    0.82
+  ],
+  "ornament": "ram-horns",
+  "sourceTriangles": 205032,
+  "triangles": 11019,
+  "boundsMeters": {
+    "min": [
+      -0.404389,
+      -0.129997,
+      -0.205
+    ],
+    "max": [
+      0.404389,
+      0.129997,
+      0.241691
+    ],
+    "size": [
+      0.808778,
+      0.259994,
+      0.446691
+    ]
+  },
+  "textureMaxSize": 512,
+  "images": [
+    {
+      "name": "Image_0",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_0.001",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_1",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_1.001",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_2",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_2.001",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_3",
+      "width": 512,
+      "height": 512
+    },
+    {
+      "name": "Image_3.001",
+      "width": 512,
+      "height": 512
+    }
+  ],
+  "materials": [
+    "Banquet_Mask_Ram_Reliquary_Material_01"
+  ],
+  "fileBytes": 1487476,
+  "rigged": false,
+  "validatedFor": "Three.js r128 static GLTFLoader"
+}

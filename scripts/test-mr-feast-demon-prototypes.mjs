@@ -20,7 +20,7 @@ assert.match(runtime, /const DEMON_PROTOTYPES = Object\.freeze/, "missing named 
 const runtimeCacheIdentity = runtime.match(/MANSION_RUNTIME_VERSION = "([^"]+)"/)?.[1] || "";
 const pageCacheIdentity = pageHtml.match(/mr-feast-mansion\.js\?v=([^"'&]+)/)?.[1] || "";
 assert.ok(
-  runtimeCacheIdentity.startsWith("20260725-demon-locomotion-propulsion-"),
+  runtimeCacheIdentity.startsWith("20260726-pale-maw-diagonal-gait-"),
   `demon prototype runtime cache identity is stale: ${runtimeCacheIdentity || "missing"}`,
 );
 assert.equal(
@@ -48,7 +48,7 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 assert.equal(manifest.version, 1, "unexpected demon prototype manifest version");
 assert.equal(
   manifest.assetVersion,
-  "20260725-demon-locomotion-propulsion-1",
+  "20260726-pale-maw-diagonal-gait-1",
   "demon animation assets need a fresh cache identity",
 );
 assert.equal(manifest.prototypes?.length, 2, "manifest must contain exactly two prototypes");
@@ -151,6 +151,27 @@ function maximumPairwiseQuaternionDelta(samples) {
     }
   }
   return maximum;
+}
+
+function sampleRange(values) {
+  return Math.max(...values) - Math.min(...values);
+}
+
+function correlation(left, right) {
+  assert.equal(left.length, right.length, "correlation samples do not match");
+  const leftMean = left.reduce((total, value) => total + value, 0) / left.length;
+  const rightMean = right.reduce((total, value) => total + value, 0) / right.length;
+  let numerator = 0;
+  let leftVariance = 0;
+  let rightVariance = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    const leftDelta = left[index] - leftMean;
+    const rightDelta = right[index] - rightMean;
+    numerator += leftDelta * rightDelta;
+    leftVariance += leftDelta ** 2;
+    rightVariance += rightDelta ** 2;
+  }
+  return numerator / Math.sqrt(leftVariance * rightVariance);
 }
 
 function accessorCount(gltf, accessorIndex) {
@@ -345,6 +366,48 @@ for (const prototype of manifest.prototypes) {
         animationReport.maximumKneeTwistDegrees <= 2,
         `${prototype.id} ${action} retains excessive knee twist`,
       );
+      assert.equal(
+        animationReport.jointStabilization,
+        "bind-angle-locked-distal-chains",
+        `${prototype.id} ${action} still double-articulates its knees or elbows`,
+      );
+      assert.equal(
+        animationReport.armDriver,
+        "upper-arm-parent-rigid-distal-chain",
+        `${prototype.id} ${action} does not carry each arm as one stable chain`,
+      );
+      assert.deepEqual(
+        animationReport.diagonalPairs,
+        {
+          leftArm: "rightLeg",
+          rightArm: "leftLeg",
+        },
+        `${prototype.id} ${action} does not declare the requested diagonal gait`,
+      );
+      assert.ok(
+        Object.values(animationReport.jointAngleExcursionDegrees)
+          .every((excursion) => excursion <= 0.5),
+        `${prototype.id} ${action} changes a knee/elbow bind angle enough to warp`,
+      );
+      for (const boneName of [
+        "LeftLeg",
+        "RightLeg",
+        "LeftForeArm",
+        "RightForeArm",
+      ]) {
+        const samples = samplesByBone.get(boneName);
+        assert.ok(samples?.length, `${clipLabel} is missing ${boneName}`);
+        assert.ok(
+          samples.every((sample) => (
+            quaternionDeltaDegrees(samples[0], sample) <= 0.02
+          )),
+          `${clipLabel} double-articulates ${boneName}`,
+        );
+      }
+      assert.ok(
+        animationReport.surfaceEdgeDeformation.maximumGrowthMeters <= 0.11,
+        `${prototype.id} ${action} stretches a surface edge by more than 11cm`,
+      );
       if (action === "idle") {
         assert.ok(
           animationReport.maximumLimbExcursionDegrees <= 8,
@@ -358,7 +421,7 @@ for (const prototype of manifest.prototypes) {
         );
         assert.ok(
           animationReport.maximumLimbExcursionDegrees >= 22
-            && animationReport.maximumLimbExcursionDegrees <= 36,
+            && animationReport.maximumLimbExcursionDegrees <= 50,
           `${prototype.id} ${action} limb excursion does not match patrol speed`,
         );
         assert.ok(
@@ -374,7 +437,9 @@ for (const prototype of manifest.prototypes) {
           const samples = samplesByBone.get(boneName);
           assert.ok(samples?.length, `${clipLabel} is missing ${boneName}`);
           assert.ok(
-            maximumPairwiseQuaternionDelta(samples) >= 40,
+            maximumPairwiseQuaternionDelta(samples) >= (
+              boneName.endsWith("Arm") ? 50 : 40
+            ),
             `${clipLabel} ${boneName} still has a short sliding stride`,
           );
         }
@@ -404,7 +469,7 @@ for (const prototype of manifest.prototypes) {
         }),
       );
       assert.ok(
-        maximumHindChainDeviation <= 36,
+        maximumHindChainDeviation <= 50,
         `${clipLabel} hind chain departs ${maximumHindChainDeviation.toFixed(2)} degrees from the clean bind plane`,
       );
     }
@@ -512,9 +577,10 @@ try {
       }
     } else {
       for (const action of ["walk", "run"]) {
-        assert.ok(
-          entry.animationTracks[action].dynamicRotation >= 8,
-          `${entry.id} ${action} does not articulate all four propelling limbs`,
+        assert.equal(
+          entry.animationTracks[action].dynamicRotation,
+          4,
+          `${entry.id} ${action} must move four stable upper limbs only`,
         );
       }
     }
@@ -596,12 +662,29 @@ try {
         const plantedHalfCycleTravel = (
           travelSpeed * lastSampled.animationDuration / playbackRate / 2
         );
-        for (const limbName of ["LeftHand", "RightHand", "LeftFoot", "RightFoot"]) {
-          const projections = anatomySamples.map((anatomy) => (
-            anatomy.limbTips[limbName].x * anatomy.forwardLocal.x
-            + anatomy.limbTips[limbName].z * anatomy.forwardLocal.z
-          ));
-          const sweep = Math.max(...projections) - Math.min(...projections);
+        const projectionsByLimb = Object.fromEntries(
+          ["LeftHand", "RightHand", "LeftFoot", "RightFoot"].map((limbName) => [
+            limbName,
+            anatomySamples.map((anatomy) => (
+              anatomy.limbTips[limbName].x * anatomy.forwardLocal.x
+              + anatomy.limbTips[limbName].z * anatomy.forwardLocal.z
+            )),
+          ]),
+        );
+        const jointSamples = {
+          leftKnee: anatomySamples.map((anatomy) => anatomy.joints.leftKnee),
+          rightKnee: anatomySamples.map((anatomy) => anatomy.joints.rightKnee),
+          leftElbow: anatomySamples.map((anatomy) => anatomy.joints.leftElbow),
+          rightElbow: anatomySamples.map((anatomy) => anatomy.joints.rightElbow),
+        };
+        for (const [jointName, values] of Object.entries(jointSamples)) {
+          assert.ok(
+            sampleRange(values) <= 0.5,
+            `${id} ${action} ${jointName} changes angle and deforms the mesh`,
+          );
+        }
+        for (const [limbName, projections] of Object.entries(projectionsByLimb)) {
+          const sweep = sampleRange(projections);
           assert.ok(
             sweep >= 0.45,
             `${id} ${action} ${limbName} sweeps only ${sweep.toFixed(3)}m`,
@@ -612,6 +695,36 @@ try {
               + `${plantedHalfCycleTravel.toFixed(3)}m root travel of its planted half-cycle`,
           );
         }
+        const armSweeps = [
+          sampleRange(projectionsByLimb.LeftHand),
+          sampleRange(projectionsByLimb.RightHand),
+        ];
+        const legSweeps = [
+          sampleRange(projectionsByLimb.LeftFoot),
+          sampleRange(projectionsByLimb.RightFoot),
+        ];
+        assert.ok(
+          Math.min(...armSweeps) / Math.max(...armSweeps) >= 0.82,
+          `${id} ${action} right/left arm movement is visibly unbalanced`,
+        );
+        assert.ok(
+          Math.min(...legSweeps) / Math.max(...legSweeps) >= 0.82,
+          `${id} ${action} right/left leg movement is visibly unbalanced`,
+        );
+        assert.ok(
+          correlation(
+            projectionsByLimb.LeftHand,
+            projectionsByLimb.RightFoot,
+          ) >= 0.95,
+          `${id} ${action} left arm does not pair with right leg`,
+        );
+        assert.ok(
+          correlation(
+            projectionsByLimb.RightHand,
+            projectionsByLimb.LeftFoot,
+          ) >= 0.95,
+          `${id} ${action} right arm does not pair with left leg`,
+        );
       }
       const posed = await page.evaluate(
         ({ prototypeId, actionName, actionPhase }) => (

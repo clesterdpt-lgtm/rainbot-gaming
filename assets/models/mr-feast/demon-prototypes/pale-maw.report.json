@@ -1,46 +1,46 @@
 {
-  "generatedAt": "2026-07-25T22:28:24.645847+00:00",
+  "generatedAt": "2026-07-26T10:27:14.464075+00:00",
   "pipeline": "approved concept -> Meshy image-to-3D -> Meshy auto-rig -> Blender 4.5 demon browser preparation",
   "blenderVersion": "4.5.11 LTS",
-  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/demon-prototypes/meshy/pale-maw-rigged.glb",
+  "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/demon-prototypes/meshy/pale-maw-v3-rigged.glb",
   "output": "pale-maw.glb",
   "slug": "pale-maw",
   "rigged": true,
   "boneCount": 24,
   "skinnedMeshCount": 1,
   "normalizationStrategy": "baked-scene-roots",
-  "normalizationScale": 0.9999999305138438,
+  "normalizationScale": 1.2346788810348914,
   "targetHeightMeters": 2.18,
-  "height": 2.180442,
-  "groundY": -0.000332,
+  "height": 2.18,
+  "groundY": 0.0,
   "targetTriangles": 30000,
-  "triangles": 30000,
+  "triangles": 29999,
   "textureMaxSize": 768,
   "maxTextureDimension": 768,
   "sourceBounds": {
     "min": [
-      -0.991713,
-      -0.988597,
-      -0.0
+      -1.089999,
+      -0.717457,
+      1e-06
     ],
     "max": [
-      0.991713,
-      0.988598,
-      2.18
+      1.09,
+      0.717457,
+      1.765642
     ]
   },
   "boundsMin": [
-    -0.991896,
-    -0.988597,
-    -0.000332
+    -1.346204,
+    -0.885828,
+    0.0
   ],
   "boundsMax": [
-    0.991713,
-    0.988597,
-    2.180109
+    1.346278,
+    0.886033,
+    2.18
   ],
-  "fileBytes": 2412152,
-  "sourceTriangles": 60651,
+  "fileBytes": 2468728,
+  "sourceTriangles": 61064,
   "meshes": [
     "Demon_Pale_Maw_Mesh_01"
   ],
@@ -56,14 +56,14 @@
   ],
   "warnings": [],
   "shading": {
-    "smoothPolygons": 30000,
-    "weldedVertices": 8098,
+    "smoothPolygons": 29999,
+    "weldedVertices": 8432,
     "weldDistanceMeters": 0.0001
   },
   "previews": [
-    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender/pale-maw-neutral-front.png",
-    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender/pale-maw-neutral-right.png",
-    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender/pale-maw-neutral-back.png"
+    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender-diagonal-gait-final/pale-maw-neutral-front.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender-diagonal-gait-final/pale-maw-neutral-right.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender-diagonal-gait-final/pale-maw-neutral-back.png"
   ],
   "features": {
     "animations": false,

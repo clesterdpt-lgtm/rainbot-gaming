@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "assetVersion": "20260725-demon-locomotion-propulsion-1",
+  "assetVersion": "20260726-pale-maw-diagonal-gait-1",
   "pipeline": "Approved ImageGen concept, Meshy 6 image-to-3D and auto-rig, then Blender 4.5 browser preparation and authored locomotion",
   "prototypes": [
     {
@@ -10,18 +10,17 @@
       "locomotionStyle": "anatomical-creep",
       "model": "pale-maw.glb",
       "preparationReport": "pale-maw.report.json",
-      "visualNotes": "A chalk-pale, eyeless stalking humanoid with a split vertical mouth, raised shoulder blades, elongated arms, reverse-jointed leg read, and black claws.",
+      "visualNotes": "A chalk-pale, eyeless four-point crawler with a split vertical mouth, raised shoulder blades, long independently skinned arms, a low wide crouch, reverse-jointed leg read, and black claws.",
       "reference": {
         "approvedConcept": "output/imagegen/mr-feast-demon-prototypes/05-pale-maw.png",
-        "meshyInput": "assets/models/mr-feast/source/demon-prototypes/references/pale-maw-approved.png"
+        "meshyInput": "assets/models/mr-feast/source/demon-prototypes/references/pale-maw-rigging-v3.png"
       },
       "provenance": {
         "meshy": {
           "model": "meshy-6",
-          "generationTaskId": "019f9b5d-7d11-7ab0-aa81-b2e86349304b",
-          "rigTaskId": "019f9b60-42ce-7ef1-8f49-b49c0b56efe3",
-          "idleTaskId": "019f9b61-b827-7b3a-b4f0-eeff81415203",
-          "consumedCredits": 38
+          "generationTaskId": "019f9dee-12b0-78aa-b20b-8e9c0bf1107b",
+          "rigTaskId": "019f9df0-6c58-7230-8917-00d7042b61cc",
+          "consumedCredits": 35
         },
         "blender": {
           "version": "4.5.11 LTS",
@@ -43,9 +42,9 @@
         "run": "pale-maw-run.glb"
       },
       "animationNotes": {
-        "idle": "A settled bind-basis crouch replaces the twisted generic idle so patrol transitions remain anatomically stable.",
-        "walk": "A speed-matched contralateral crawl gives both hands and both feet long contact sweeps that visibly propel the root while preserving the clean hind-chain bend planes.",
-        "run": "A faster four-limb contact-push cycle increases reach and recovery without adding knee or foot twist."
+        "idle": "The low four-point bind stance holds the generated knee and elbow angles while both arms make a restrained bilateral settling motion.",
+        "walk": "The left arm travels with the right leg and the right arm with the left leg; rigid distal chains prevent elbow and knee warping while balanced hand and foot sweeps visibly propel the crawler.",
+        "run": "The faster diagonal contact-push cycle increases reach and recovery while keeping every forearm and lower leg on its stable bind angle."
       },
       "animationReports": {
         "idle": "pale-maw-idle.animation-report.json",

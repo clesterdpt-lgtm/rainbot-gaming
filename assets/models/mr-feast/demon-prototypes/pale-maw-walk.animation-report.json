@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-07-26T03:41:34.641865+00:00",
+  "generatedAt": "2026-07-26T10:27:23.141862+00:00",
   "format": "animation-only-glb",
   "pipeline": "blender-authored-demon-locomotion",
-  "source": "assets/models/mr-feast/source/demon-prototypes/meshy/pale-maw-idle.glb",
+  "source": "assets/models/mr-feast/demon-prototypes/pale-maw.glb",
   "file": "pale-maw-walk.glb",
   "name": "walk",
   "stationary": true,
@@ -19,40 +19,115 @@
   "quaternionHemisphereFlips": 0,
   "baselineSourcePhase": null,
   "baselinePose": "processed-bind",
-  "bytes": 26620,
+  "bytes": 26788,
   "previews": [
-    "output/iterate/demon-prototypes/blender-animation-propulsion-final/pale-maw-walk-front-a.png",
-    "output/iterate/demon-prototypes/blender-animation-propulsion-final/pale-maw-walk-right-a.png",
-    "output/iterate/demon-prototypes/blender-animation-propulsion-final/pale-maw-walk-front-b.png",
-    "output/iterate/demon-prototypes/blender-animation-propulsion-final/pale-maw-walk-right-b.png"
+    "output/iterate/demon-prototypes/blender-diagonal-gait-final/pale-maw-walk-front-a.png",
+    "output/iterate/demon-prototypes/blender-diagonal-gait-final/pale-maw-walk-right-a.png",
+    "output/iterate/demon-prototypes/blender-diagonal-gait-final/pale-maw-walk-front-b.png",
+    "output/iterate/demon-prototypes/blender-diagonal-gait-final/pale-maw-walk-right-b.png"
   ],
   "authoredStyle": "anatomical-creep",
   "kneeBendDirection": "anatomical-backward-flex",
   "maximumKneeTwistDegrees": 0,
-  "maximumLimbExcursionDegrees": 30.000006,
+  "maximumLimbExcursionDegrees": 41.99999,
   "bilateralPhaseOffset": 0.5,
+  "jointStabilization": "bind-angle-locked-distal-chains",
+  "armDriver": "upper-arm-parent-rigid-distal-chain",
+  "diagonalPairs": {
+    "leftArm": "rightLeg",
+    "rightArm": "leftLeg"
+  },
+  "limbDriverExcursionDegrees": {
+    "leftArm": 30.0,
+    "rightArm": 30.0,
+    "leftLeg": 28.0,
+    "rightLeg": 42.0
+  },
   "gait": "speed-matched-contralateral",
   "propulsionMode": "four-limb-contact-push",
   "swingConstruction": "twist-free-directional-quaternion",
   "bindBasisMaximumAxialTwistDegrees": 0,
-  "kneeLockMinimumDegrees": 66.254187,
-  "elbowLockMinimumDegrees": 102.815288,
+  "kneeLockMinimumDegrees": 89.975899,
+  "elbowLockMinimumDegrees": 154.663814,
   "minimumFacingAlignment": 1.0,
-  "contactSweepMeters": {
-    "LeftHand": 0.868041,
-    "RightHand": 0.609302,
-    "LeftFoot": 0.491629,
-    "RightFoot": 0.540256
+  "groundContact": {
+    "maximumClearanceMeters": 0.0,
+    "maximumPenetrationMeters": 0.0
   },
-  "minimumContactSweepMeters": 0.491629,
+  "surfaceEdgeDeformation": {
+    "maximumStretchRatio": 4.049949,
+    "minimumScaleRatio": 0.147684,
+    "maximumGrowthMeters": 0.078713,
+    "maximumGrowthEdge": {
+      "mesh": "Demon_Pale_Maw_Mesh_01",
+      "frame": 28,
+      "edge": 30476,
+      "vertices": [
+        9820,
+        10534
+      ],
+      "bindLengthMeters": 0.097765,
+      "posedLengthMeters": 0.176478,
+      "stretchRatio": 1.805125,
+      "bindPositions": [
+        [
+          -0.534065,
+          0.029802,
+          0.870305
+        ],
+        [
+          -0.461612,
+          0.012466,
+          0.933615
+        ]
+      ],
+      "posedPositions": [
+        [
+          -0.591322,
+          0.300843,
+          0.800809
+        ],
+        [
+          -0.507119,
+          0.166542,
+          0.878382
+        ]
+      ],
+      "vertexWeights": {
+        "9820": {
+          "RightArm": 0.84636,
+          "RightShoulder": 0.152764,
+          "Spine01": 0.000876
+        },
+        "10534": {
+          "RightArm": 0.560074,
+          "RightShoulder": 0.435856,
+          "Spine01": 0.00407
+        }
+      }
+    }
+  },
+  "jointAngleExcursionDegrees": {
+    "leftKnee": 2.7e-05,
+    "rightKnee": 2.7e-05,
+    "leftElbow": 4.1e-05,
+    "rightElbow": 2.7e-05
+  },
+  "contactSweepMeters": {
+    "LeftHand": 1.044305,
+    "RightHand": 0.993759,
+    "LeftFoot": 0.678659,
+    "RightFoot": 0.638001
+  },
+  "minimumContactSweepMeters": 0.638001,
   "armTrailMeters": {
     "left": [
-      -0.183202,
-      0.684839
+      0.134081,
+      1.178386
     ],
     "right": [
-      -0.486518,
-      0.122783
+      0.130398,
+      1.124157
     ]
   }
 }

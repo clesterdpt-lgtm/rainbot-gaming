@@ -8,8 +8,9 @@ works directly on the shipped runtime rigs:
 
 - Banquet Saint: ceremonial-glide from the forward-facing bind pose, with
   locked knees/elbows and two straight arms trailing as one pendulum.
-- Pale Maw: anatomical-creep with speed-matched four-limb contact sweeps and
-  swing-only anatomical-backward-flex at both knees.
+- Pale Maw: diagonal anatomical-creep with stable lower-leg and forearm bind
+  angles, driven from the hips and upper arms so the skinned joints do not
+  stretch or double-articulate.
 
 The exported GLB contains one looped, rotation-only skeletal action and no
 mesh, skin, material, texture, translation, scale, or root-motion payload.
@@ -34,6 +35,29 @@ FPS = 24
 TARGET_HEIGHTS = {
     "pale-maw": 2.18,
     "banquet-saint": 2.34,
+}
+# Meshy's low crouch gives the two hip bones different bind-plane leverage.
+# The right-side angle is therefore larger so the visible foot-tip travel,
+# rather than the raw bone rotation, stays bilateral and speed-matched.
+PALE_MAW_GAIT = {
+    "idle": {
+        "durationSeconds": 3.4,
+        "leftHipSwingDegrees": 0.0,
+        "rightHipSwingDegrees": 0.0,
+        "armSwingDegrees": 1.2,
+    },
+    "walk": {
+        "durationSeconds": 1.6,
+        "leftHipSwingDegrees": 28.0,
+        "rightHipSwingDegrees": 42.0,
+        "armSwingDegrees": 30.0,
+    },
+    "run": {
+        "durationSeconds": 1.0,
+        "leftHipSwingDegrees": 32.0,
+        "rightHipSwingDegrees": 48.0,
+        "armSwingDegrees": 36.0,
+    },
 }
 BONE_NAMES = (
     "Hips",
@@ -68,8 +92,10 @@ CHILD_JOINT = {
     "RightUpLeg": "RightLeg",
     "RightLeg": "RightFoot",
     "RightFoot": "RightToeBase",
+    "LeftShoulder": "LeftArm",
     "LeftArm": "LeftForeArm",
     "LeftForeArm": "LeftHand",
+    "RightShoulder": "RightArm",
     "RightArm": "RightForeArm",
     "RightForeArm": "RightHand",
 }
@@ -150,14 +176,12 @@ def import_runtime_model(
         raise RuntimeError(
             f"Expected exactly {len(BONE_NAMES)} bones, found {len(armature.pose.bones)}"
         )
-    source_action = armature.animation_data.action if armature.animation_data else None
-    if source_action is None:
-        raise RuntimeError("Locomotion authoring requires the Meshy idle source action")
-
-    # Both generic idle clips contain unsuitable authored posture: the Pale
-    # Maw's crossed hind-chain twist and the Saint's crouched, diagonal-facing
+    # Generic Meshy clips contain unsuitable authored posture: the Pale Maw's
+    # crossed hind-chain twist and the Saint's crouched, diagonal-facing
     # stance. An identity Blender pose reproduces each processed runtime GLB's
     # clean, forward-facing bind basis before bespoke motion is layered on.
+    # Prepared runtime models intentionally contain no embedded source action,
+    # so authoring must work from that bind-only asset.
     source_phase = None
     baseline_pose = "processed-bind"
     armature.animation_data_clear()
@@ -450,16 +474,14 @@ def author_pale_maw_creep(
     action_name: str,
 ) -> tuple[int, dict[str, Any]]:
     is_idle = action_name == "idle"
-    is_run = action_name == "run"
-    duration_seconds = 3.4 if is_idle else 1.0 if is_run else 1.6
+    gait = PALE_MAW_GAIT[action_name]
+    duration_seconds = gait["durationSeconds"]
     end_frame = round(duration_seconds * FPS)
     fractions = (0.0, 0.25, 0.5, 0.75, 1.0)
     phases = (0.0, 1.0, 0.0, -1.0, 0.0)
-    hip_swing = 0.0 if is_idle else 34.0 if is_run else 30.0
-    front_limb_swing = 1.2 if is_idle else 32.0 if is_run else 26.0
-    forearm_swing = 0.6 if is_idle else 16.0 if is_run else 12.0
-    base_knee_flex = 3.0 if is_idle else 5.0 if is_run else 4.0
-    extra_knee_flex = 0.0 if is_idle else 14.0 if is_run else 10.0
+    left_hip_swing = gait["leftHipSwingDegrees"]
+    right_hip_swing = gait["rightHipSwingDegrees"]
+    arm_swing = gait["armSwingDegrees"]
     maximum_excursion = 0.0
 
     for fraction, phase in zip(fractions, phases):
@@ -467,44 +489,33 @@ def author_pale_maw_creep(
         reset_pose(armature, basis)
 
         rotations = {
-            "LeftUpLeg": directed_swing(basis, "LeftUpLeg", phase * hip_swing),
-            "RightUpLeg": directed_swing(basis, "RightUpLeg", -phase * hip_swing),
-            # Both knees only flex toward the creature's back. Their amount
-            # alternates, but their bend direction can never invert.
-            "LeftLeg": swing_toward(
+            "LeftUpLeg": directed_swing(
                 basis,
-                "LeftLeg",
-                basis.backward,
-                base_knee_flex + max(0.0, phase) * extra_knee_flex,
+                "LeftUpLeg",
+                phase * left_hip_swing,
             ),
-            "RightLeg": swing_toward(
+            "RightUpLeg": directed_swing(
                 basis,
-                "RightLeg",
-                basis.backward,
-                base_knee_flex + max(0.0, -phase) * extra_knee_flex,
+                "RightUpLeg",
+                -phase * right_hip_swing,
             ),
-            # Long contralateral front-limb sweeps create a visible planted
-            # push instead of letting the root slide ahead of nearly still
-            # hands. Forearms add a smaller same-direction recovery arc.
+            # Move each arm from its upper-arm parent and each leg from its
+            # hip. Leaving the forearm and lower-leg rotations on their clean
+            # bind values carries every distal chain as one rigid shape
+            # instead of folding the generated skin weights at its elbows and
+            # knees.
+            #
+            # These are strict diagonal pairs: left arm with right leg, right
+            # arm with left leg.
             "LeftArm": directed_swing(
                 basis,
                 "LeftArm",
-                -phase * front_limb_swing,
+                -phase * arm_swing,
             ),
             "RightArm": directed_swing(
                 basis,
                 "RightArm",
-                phase * front_limb_swing,
-            ),
-            "LeftForeArm": directed_swing(
-                basis,
-                "LeftForeArm",
-                -phase * forearm_swing,
-            ),
-            "RightForeArm": directed_swing(
-                basis,
-                "RightForeArm",
-                phase * forearm_swing,
+                phase * arm_swing,
             ),
         }
         for bone_name, rotation in rotations.items():
@@ -524,6 +535,18 @@ def author_pale_maw_creep(
         "maximumKneeTwistDegrees": 0,
         "maximumLimbExcursionDegrees": round(maximum_excursion, 6),
         "bilateralPhaseOffset": 0.5,
+        "jointStabilization": "bind-angle-locked-distal-chains",
+        "armDriver": "upper-arm-parent-rigid-distal-chain",
+        "diagonalPairs": {
+            "leftArm": "rightLeg",
+            "rightArm": "leftLeg",
+        },
+        "limbDriverExcursionDegrees": {
+            "leftArm": arm_swing,
+            "rightArm": arm_swing,
+            "leftLeg": left_hip_swing,
+            "rightLeg": right_hip_swing,
+        },
         "gait": (
             "settled-contralateral-idle"
             if is_idle
@@ -642,6 +665,7 @@ def joint_angle_degrees(
 def measure_action_metrics(
     slug: str,
     armature: bpy.types.Object,
+    meshes: list[bpy.types.Object],
     basis: RigBasis,
     end_frame: int,
 ) -> dict[str, Any]:
@@ -661,10 +685,37 @@ def measure_action_metrics(
     armature_to_world = armature.matrix_world.to_3x3()
     world_forward = armature_to_world @ basis.forward
     world_forward.normalize()
+    bpy.context.scene.frame_set(0)
+    bpy.context.view_layer.update()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    bind_edge_lengths: dict[str, list[float]] = {}
+    bind_positions_by_mesh: dict[str, list[Vector]] = {}
+    for mesh in meshes:
+        evaluated = mesh.evaluated_get(depsgraph)
+        evaluated_mesh = evaluated.to_mesh()
+        world = evaluated.matrix_world
+        positions = [world @ vertex.co for vertex in evaluated_mesh.vertices]
+        bind_positions_by_mesh[mesh.name] = positions
+        bind_edge_lengths[mesh.name] = [
+            (positions[edge.vertices[0]] - positions[edge.vertices[1]]).length
+            for edge in evaluated_mesh.edges
+        ]
+        evaluated.to_mesh_clear()
+    bind_floor_z = min(
+        position.z
+        for positions in bind_positions_by_mesh.values()
+        for position in positions
+    )
+    surface_floor_heights: list[float] = []
+    maximum_surface_edge_stretch = 1.0
+    minimum_surface_edge_scale = 1.0
+    maximum_surface_edge_growth = 0.0
+    maximum_surface_edge_detail: dict[str, Any] | None = None
 
     for frame in range(end_frame + 1):
         bpy.context.scene.frame_set(frame)
         bpy.context.view_layer.update()
+        frame_floor_z = math.inf
         for name, chain in joint_specs.items():
             joint_samples[name].append(joint_angle_degrees(armature, *chain))
 
@@ -701,6 +752,87 @@ def measure_action_metrics(
                 ).dot(world_forward)
                 * basis.runtime_scale
             )
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        for mesh in meshes:
+            evaluated = mesh.evaluated_get(depsgraph)
+            evaluated_mesh = evaluated.to_mesh()
+            world = evaluated.matrix_world
+            positions = [world @ vertex.co for vertex in evaluated_mesh.vertices]
+            frame_floor_z = min(
+                frame_floor_z,
+                min(position.z for position in positions),
+            )
+            for edge_index, (edge, bind_length) in enumerate(zip(
+                evaluated_mesh.edges,
+                bind_edge_lengths[mesh.name],
+            )):
+                if bind_length <= 1e-6:
+                    continue
+                current_length = (
+                    positions[edge.vertices[0]]
+                    - positions[edge.vertices[1]]
+                ).length
+                scale = current_length / bind_length
+                maximum_surface_edge_stretch = max(
+                    maximum_surface_edge_stretch,
+                    scale,
+                )
+                minimum_surface_edge_scale = min(
+                    minimum_surface_edge_scale,
+                    scale,
+                )
+                growth = (
+                    current_length - bind_length
+                ) * basis.runtime_scale
+                if growth > maximum_surface_edge_growth:
+                    maximum_surface_edge_growth = growth
+                    maximum_surface_edge_detail = {
+                        "mesh": mesh.name,
+                        "frame": frame,
+                        "edge": edge_index,
+                        "vertices": list(edge.vertices),
+                        "bindLengthMeters": round(
+                            bind_length * basis.runtime_scale,
+                            6,
+                        ),
+                        "posedLengthMeters": round(
+                            current_length * basis.runtime_scale,
+                            6,
+                        ),
+                        "stretchRatio": round(scale, 6),
+                        "bindPositions": [
+                            [
+                                round(component * basis.runtime_scale, 6)
+                                for component in bind_positions_by_mesh[mesh.name][
+                                    vertex_index
+                                ]
+                            ]
+                            for vertex_index in edge.vertices
+                        ],
+                        "posedPositions": [
+                            [
+                                round(component * basis.runtime_scale, 6)
+                                for component in positions[vertex_index]
+                            ]
+                            for vertex_index in edge.vertices
+                        ],
+                        "vertexWeights": {
+                            str(vertex_index): {
+                                mesh.vertex_groups[group.group].name: round(
+                                    group.weight,
+                                    6,
+                                )
+                                for group in mesh.data.vertices[
+                                    vertex_index
+                                ].groups
+                            }
+                            for vertex_index in edge.vertices
+                        },
+                    }
+            evaluated.to_mesh_clear()
+        surface_floor_heights.append(
+            (frame_floor_z - bind_floor_z) * basis.runtime_scale
+        )
 
     bpy.context.scene.frame_set(0)
     bpy.context.view_layer.update()
@@ -718,6 +850,23 @@ def measure_action_metrics(
             6,
         ),
         "minimumFacingAlignment": round(min(facing_alignments), 6),
+        "groundContact": {
+            "maximumClearanceMeters": round(max(surface_floor_heights), 6),
+            "maximumPenetrationMeters": round(
+                max(0.0, -min(surface_floor_heights)),
+                6,
+            ),
+        },
+        "surfaceEdgeDeformation": {
+            "maximumStretchRatio": round(maximum_surface_edge_stretch, 6),
+            "minimumScaleRatio": round(minimum_surface_edge_scale, 6),
+            "maximumGrowthMeters": round(maximum_surface_edge_growth, 6),
+            "maximumGrowthEdge": maximum_surface_edge_detail,
+        },
+        "jointAngleExcursionDegrees": {
+            name: round(max(values) - min(values), 6)
+            for name, values in joint_samples.items()
+        },
         "contactSweepMeters": contact_sweeps,
         "minimumContactSweepMeters": round(min(contact_sweeps.values()), 6),
         "armTrailMeters": {
@@ -852,6 +1001,7 @@ def main() -> None:
         measure_action_metrics(
             args.slug,
             armature,
+            meshes,
             basis,
             end_frame,
         )

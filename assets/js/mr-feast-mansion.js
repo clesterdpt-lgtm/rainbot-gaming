@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260725-demon-locomotion-propulsion-1";
+  const MANSION_RUNTIME_VERSION = "20260726-pale-maw-diagonal-gait-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1489,7 +1489,7 @@
   });
   const DEMON_PROTOTYPES = Object.freeze({
     manifestPath: "../models/mr-feast/demon-prototypes/manifest.json",
-    assetVersion: "20260725-demon-locomotion-propulsion-1",
+    assetVersion: "20260726-pale-maw-diagonal-gait-1",
     arrivalRadius: 0.075,
     turnSpeed: 2.45,
     movementAlignment: 0.965,

@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260725-demon-prototype-dev-patrol-1";
+  const MANSION_RUNTIME_VERSION = "20260725-demon-locomotion-polish-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1489,7 +1489,7 @@
   });
   const DEMON_PROTOTYPES = Object.freeze({
     manifestPath: "../models/mr-feast/demon-prototypes/manifest.json",
-    assetVersion: "20260725-demon-prototype-1",
+    assetVersion: "20260725-demon-locomotion-polish-1",
     arrivalRadius: 0.075,
     turnSpeed: 2.45,
     movementAlignment: 0.965,
@@ -13697,11 +13697,16 @@
         entry.maximumObservedSpeed,
         stepDt > 0 ? distanceStep / stepDt : 0,
       );
-      entry.activity = runLeg ? "running" : "walking";
+      const ceremonialGlide = entry.spec?.locomotionStyle === "ceremonial-glide";
+      entry.activity = ceremonialGlide
+        ? "gliding"
+        : runLeg
+          ? "running"
+          : "creeping";
       this.playAction(
         entry,
         runLeg ? "run" : "walk",
-        runLeg ? "run" : "walk",
+        ceremonialGlide ? "glide" : runLeg ? "run" : "creep",
         runLeg
           ? entry.placement.runPlaybackRate
           : entry.placement.walkPlaybackRate,
@@ -13732,7 +13737,7 @@
       return this.getDiagnostics();
     }
 
-    frameForQA(id) {
+    frameForQA(id, orbitRadians = 0) {
       if (!state.qa || !physics) return null;
       const entry = this.entries.find((candidate) => candidate.id === id);
       if (!entry || entry.status !== "ready" || !entry.root.visible) return null;
@@ -13753,8 +13758,13 @@
       entry.root.position.set(frameMark.x, frameMark.y, frameMark.z);
       entry.root.rotation.y = frameMark.yaw;
       const distance = entry.id === "pale-maw" ? 3.45 : 3.8;
-      const forwardX = Math.sin(entry.root.rotation.y);
-      const forwardZ = Math.cos(entry.root.rotation.y);
+      const viewAngle = entry.root.rotation.y + clamp(
+        Number(orbitRadians) || 0,
+        -Math.PI,
+        Math.PI,
+      );
+      const forwardX = Math.sin(viewAngle);
+      const forwardZ = Math.cos(viewAngle);
       const viewX = entry.root.position.x + forwardX * distance;
       const viewZ = entry.root.position.z + forwardZ * distance;
       const lookYaw = Math.atan2(
@@ -13799,6 +13809,7 @@
       return {
         id: entry.id,
         name: entry.spec?.name || null,
+        locomotionStyle: entry.spec?.locomotionStyle || null,
         room: entry.placement.room,
         floor: entry.placement.floor,
         status: entry.status,
@@ -36242,9 +36253,9 @@
         ? demonPrototypePatrol.advanceForQA(seconds)
         : null
     );
-    window.MrFeastFresh.frameDemonPrototypeForQA = (id) => (
+    window.MrFeastFresh.frameDemonPrototypeForQA = (id, orbitRadians = 0) => (
       state.qa && demonPrototypePatrol
-        ? demonPrototypePatrol.frameForQA(id)
+        ? demonPrototypePatrol.frameForQA(id, orbitRadians)
         : null
     );
     window.MrFeastFresh.poseDemonPrototypeForQA = (id, actionName, phase) => (

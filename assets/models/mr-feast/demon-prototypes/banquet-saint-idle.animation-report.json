@@ -1,32 +1,39 @@
 {
-  "generatedAt": "2026-07-25T22:29:37.379Z",
+  "generatedAt": "2026-07-26T02:39:30.241852+00:00",
   "format": "animation-only-glb",
+  "pipeline": "blender-authored-demon-locomotion",
   "source": "assets/models/mr-feast/source/demon-prototypes/meshy/banquet-saint-idle.glb",
   "file": "banquet-saint-idle.glb",
   "name": "idle",
   "stationary": true,
   "loopClosed": true,
   "compression": "none",
-  "bytes": 65196,
-  "durationSeconds": 4,
-  "channelsBefore": {
-    "rotation": 24,
-    "translation": 24,
-    "scale": 24,
-    "weights": 0,
-    "other": 0
-  },
-  "channelsAfter": {
-    "rotation": 24,
-    "translation": 0,
-    "scale": 0,
-    "weights": 0,
-    "other": 0
-  },
-  "animations": 1,
-  "nodes": 25,
-  "meshes": 0,
-  "skins": 0,
-  "materials": 0,
-  "textures": 0
+  "blenderVersion": "4.5.11 LTS",
+  "bones": 24,
+  "rotationTracks": 24,
+  "translationTracks": 0,
+  "scaleTracks": 0,
+  "rootMotion": false,
+  "durationSeconds": 4.0,
+  "keyframesPerTrack": 5,
+  "quaternionHemisphereFlips": 0,
+  "baselineSourcePhase": 0.57,
+  "baselinePose": "meshy-idle-readable-phase",
+  "bytes": 49324,
+  "previews": [
+    "output/iterate/demon-prototypes/blender-animation-final/banquet-saint-idle-front-a.png",
+    "output/iterate/demon-prototypes/blender-animation-final/banquet-saint-idle-right-a.png",
+    "output/iterate/demon-prototypes/blender-animation-final/banquet-saint-idle-front-b.png",
+    "output/iterate/demon-prototypes/blender-animation-final/banquet-saint-idle-right-b.png"
+  ],
+  "authoredStyle": "ceremonial-glide",
+  "armMotionMode": "symmetric-back-drift",
+  "armBackBiasDegrees": [
+    3.5,
+    5.5
+  ],
+  "armExcursionDegrees": 1.999602,
+  "armSymmetryErrorDegrees": 0.000285,
+  "legMotionDegrees": 0,
+  "maximumLimbExcursionDegrees": 5.5
 }

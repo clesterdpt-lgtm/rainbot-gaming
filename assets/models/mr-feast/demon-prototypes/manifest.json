@@ -1,12 +1,13 @@
 {
   "version": 1,
-  "assetVersion": "20260725-demon-prototype-1",
-  "pipeline": "Approved ImageGen concept, Meshy 6 image-to-3D and auto-rig, then Blender 4.5 browser preparation",
+  "assetVersion": "20260725-demon-locomotion-polish-1",
+  "pipeline": "Approved ImageGen concept, Meshy 6 image-to-3D and auto-rig, then Blender 4.5 browser preparation and authored locomotion",
   "prototypes": [
     {
       "id": "pale-maw",
       "name": "The Pale Maw",
       "targetHeight": 2.18,
+      "locomotionStyle": "anatomical-creep",
       "model": "pale-maw.glb",
       "preparationReport": "pale-maw.report.json",
       "visualNotes": "A chalk-pale, eyeless stalking humanoid with a split vertical mouth, raised shoulder blades, elongated arms, reverse-jointed leg read, and black claws.",
@@ -25,6 +26,7 @@
         "blender": {
           "version": "4.5.11 LTS",
           "script": "../../../../scripts/blender/prepare-demon-prototype.py",
+          "animationScript": "../../../../scripts/blender/refine-demon-prototype-animation.py",
           "triangles": 30000,
           "textureMaxSize": 768,
           "compression": "none"
@@ -40,6 +42,11 @@
         "walk": "pale-maw-walk.glb",
         "run": "pale-maw-run.glb"
       },
+      "animationNotes": {
+        "idle": "A settled bind-basis crouch replaces the twisted generic idle so patrol transitions remain anatomically stable.",
+        "walk": "A low-amplitude contralateral creep authored on the clean processed bind pose keeps both hind chains in their original bend planes.",
+        "run": "A faster version of the same bind-basis creep increases stride without adding knee or foot twist."
+      },
       "animationReports": {
         "idle": "pale-maw-idle.animation-report.json",
         "walk": "pale-maw-walk.animation-report.json",
@@ -50,6 +57,7 @@
       "id": "banquet-saint",
       "name": "The Banquet Saint",
       "targetHeight": 2.34,
+      "locomotionStyle": "ceremonial-glide",
       "model": "banquet-saint.glb",
       "preparationReport": "banquet-saint.report.json",
       "visualNotes": "A tall ceremonial figure with a blank porcelain mask, narrow black smile, crown-like cage, aged metal breastplate, oxblood brocade, and long skeletal hands.",
@@ -68,6 +76,7 @@
         "blender": {
           "version": "4.5.11 LTS",
           "script": "../../../../scripts/blender/prepare-demon-prototype.py",
+          "animationScript": "../../../../scripts/blender/refine-demon-prototype-animation.py",
           "triangles": 30000,
           "textureMaxSize": 768,
           "compression": "none"
@@ -84,7 +93,9 @@
         "run": "banquet-saint-run.glb"
       },
       "animationNotes": {
-        "run": "A faster stately stride derived from the Meshy walk take; the generic high-knee run collapsed the long ceremonial robe and was rejected during browser visual QA."
+        "idle": "The legs and robe remain still while both arms share a slight synchronized rearward drift.",
+        "walk": "Root translation creates the ceremonial ground glide; no leg bones step and the arms never alternate.",
+        "run": "The faster QA clip preserves the same motionless lower body and symmetric rearward arm drift."
       },
       "animationReports": {
         "idle": "banquet-saint-idle.animation-report.json",

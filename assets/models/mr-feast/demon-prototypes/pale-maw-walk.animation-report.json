@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-26T02:39:25.108600+00:00",
+  "generatedAt": "2026-07-26T03:41:34.641865+00:00",
   "format": "animation-only-glb",
   "pipeline": "blender-authored-demon-locomotion",
   "source": "assets/models/mr-feast/source/demon-prototypes/meshy/pale-maw-idle.glb",
@@ -21,17 +21,38 @@
   "baselinePose": "processed-bind",
   "bytes": 26620,
   "previews": [
-    "output/iterate/demon-prototypes/blender-animation-final/pale-maw-walk-front-a.png",
-    "output/iterate/demon-prototypes/blender-animation-final/pale-maw-walk-right-a.png",
-    "output/iterate/demon-prototypes/blender-animation-final/pale-maw-walk-front-b.png",
-    "output/iterate/demon-prototypes/blender-animation-final/pale-maw-walk-right-b.png"
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/pale-maw-walk-front-a.png",
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/pale-maw-walk-right-a.png",
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/pale-maw-walk-front-b.png",
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/pale-maw-walk-right-b.png"
   ],
   "authoredStyle": "anatomical-creep",
   "kneeBendDirection": "anatomical-backward-flex",
   "maximumKneeTwistDegrees": 0,
-  "maximumLimbExcursionDegrees": 7.000012,
+  "maximumLimbExcursionDegrees": 30.000006,
   "bilateralPhaseOffset": 0.5,
-  "gait": "low-amplitude-contralateral",
+  "gait": "speed-matched-contralateral",
+  "propulsionMode": "four-limb-contact-push",
   "swingConstruction": "twist-free-directional-quaternion",
-  "bindBasisMaximumAxialTwistDegrees": 0
+  "bindBasisMaximumAxialTwistDegrees": 0,
+  "kneeLockMinimumDegrees": 66.254187,
+  "elbowLockMinimumDegrees": 102.815288,
+  "minimumFacingAlignment": 1.0,
+  "contactSweepMeters": {
+    "LeftHand": 0.868041,
+    "RightHand": 0.609302,
+    "LeftFoot": 0.491629,
+    "RightFoot": 0.540256
+  },
+  "minimumContactSweepMeters": 0.491629,
+  "armTrailMeters": {
+    "left": [
+      -0.183202,
+      0.684839
+    ],
+    "right": [
+      -0.486518,
+      0.122783
+    ]
+  }
 }

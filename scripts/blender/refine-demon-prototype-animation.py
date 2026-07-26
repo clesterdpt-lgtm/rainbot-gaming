@@ -6,9 +6,9 @@ made the Banquet Saint step through its robe and drove the Pale Maw's unusual
 crouched legs through large, twisting human gait poses. This Blender pass
 works directly on the shipped runtime rigs:
 
-- Banquet Saint: ceremonial-glide with still legs and a small synchronized
-  symmetric-back-drift of both arms.
-- Pale Maw: anatomical-creep with low-amplitude alternating limb swings and
+- Banquet Saint: ceremonial-glide from the forward-facing bind pose, with
+  locked knees/elbows and two straight arms trailing as one pendulum.
+- Pale Maw: anatomical-creep with speed-matched four-limb contact sweeps and
   swing-only anatomical-backward-flex at both knees.
 
 The exported GLB contains one looped, rotation-only skeletal action and no
@@ -31,6 +31,10 @@ from mathutils import Quaternion, Vector
 
 
 FPS = 24
+TARGET_HEIGHTS = {
+    "pale-maw": 2.18,
+    "banquet-saint": 2.34,
+}
 BONE_NAMES = (
     "Hips",
     "LeftUpLeg",
@@ -82,6 +86,7 @@ class RigBasis:
     backward: Vector
     source_phase: float | None
     baseline_pose: str
+    runtime_scale: float
 
 
 def parse_args() -> argparse.Namespace:
@@ -149,40 +154,28 @@ def import_runtime_model(
     if source_action is None:
         raise RuntimeError("Locomotion authoring requires the Meshy idle source action")
 
-    if slug == "pale-maw":
-        # The generic idle contains the same crossed right-hind-chain twist
-        # that made its walk glitch. Clear it before deriving any gait axes.
-        # An identity Blender pose reproduces the processed runtime GLB's
-        # clean bind pose; locations/scales must also be reset so descendants
-        # are measured from the same untwisted basis.
-        source_phase = None
-        baseline_pose = "processed-bind"
-        armature.animation_data_clear()
-        for action in list(bpy.data.actions):
-            bpy.data.actions.remove(action)
-        bpy.context.scene.frame_set(0)
-        for pose_bone in armature.pose.bones:
-            pose_bone.rotation_mode = "QUATERNION"
-            pose_bone.rotation_quaternion = Quaternion((1.0, 0.0, 0.0, 0.0))
-            pose_bone.location = Vector((0.0, 0.0, 0.0))
-            pose_bone.scale = Vector((1.0, 1.0, 1.0))
-    else:
-        # The Saint's bind pose is an authoring stance. Sample one calm idle
-        # phase as its readable ceremonial silhouette, then replace all
-        # stepping and asymmetric arm motion with the authored glide below.
-        source_phase = 0.57
-        baseline_pose = "meshy-idle-readable-phase"
-        frame_start, frame_end = source_action.frame_range
-        source_frame = frame_start + (frame_end - frame_start) * source_phase
-        source_frame_integer = math.floor(source_frame)
-        bpy.context.scene.frame_set(
-            source_frame_integer,
-            subframe=source_frame - source_frame_integer,
-        )
-        for pose_bone in armature.pose.bones:
-            pose_bone.rotation_mode = "QUATERNION"
+    # Both generic idle clips contain unsuitable authored posture: the Pale
+    # Maw's crossed hind-chain twist and the Saint's crouched, diagonal-facing
+    # stance. An identity Blender pose reproduces each processed runtime GLB's
+    # clean, forward-facing bind basis before bespoke motion is layered on.
+    source_phase = None
+    baseline_pose = "processed-bind"
+    armature.animation_data_clear()
+    for action in list(bpy.data.actions):
+        bpy.data.actions.remove(action)
+    bpy.context.scene.frame_set(0)
+    for pose_bone in armature.pose.bones:
+        pose_bone.rotation_mode = "QUATERNION"
+        pose_bone.rotation_quaternion = Quaternion((1.0, 0.0, 0.0, 0.0))
+        pose_bone.location = Vector((0.0, 0.0, 0.0))
+        pose_bone.scale = Vector((1.0, 1.0, 1.0))
 
     bpy.context.view_layer.update()
+    minimum, maximum = world_bounds(meshes)
+    source_height = maximum.z - minimum.z
+    if source_height <= 1e-6:
+        raise RuntimeError("Runtime source has an invalid bind-pose height")
+    runtime_scale = TARGET_HEIGHTS[slug] / source_height
     rotations = {
         name: armature.pose.bones[name].rotation_quaternion.copy().normalized()
         for name in BONE_NAMES
@@ -229,6 +222,7 @@ def import_runtime_model(
         backward=-forward,
         source_phase=source_phase,
         baseline_pose=baseline_pose,
+        runtime_scale=runtime_scale,
     )
     armature.animation_data_clear()
     for action in list(bpy.data.actions):
@@ -288,6 +282,30 @@ def directed_swing(
 ) -> Quaternion:
     target = basis.forward if signed_degrees >= 0 else basis.backward
     return swing_toward(basis, bone_name, target, abs(signed_degrees))
+
+
+def align_direction(
+    basis: RigBasis,
+    bone_name: str,
+    target_direction: Vector,
+) -> Quaternion:
+    """Align one bone direction to a target without adding axial twist."""
+    rest_direction = basis.directions[bone_name]
+    target = target_direction.normalized()
+    swing_armature = rest_direction.rotation_difference(target)
+    posed_orientation = basis.orientations[bone_name]
+    local_delta = (
+        posed_orientation.inverted()
+        @ swing_armature
+        @ posed_orientation
+    ).normalized()
+    local_rotation = (
+        basis.rotations[bone_name]
+        @ local_delta
+    ).normalized()
+    if local_rotation.w < 0:
+        local_rotation.negate()
+    return local_rotation
 
 
 def set_rotation(
@@ -356,41 +374,73 @@ def author_banquet_glide(
     }[action_name]
     end_frame = round(duration_seconds * FPS)
     fractions = (0.0, 0.25, 0.5, 0.75, 1.0)
-    back_angles = (4.0, 5.5, 4.5, 3.5, 4.0)
-    arm_angles: dict[str, list[float]] = {"LeftArm": [], "RightArm": []}
+    back_angles = {
+        "idle": (0.0, 1.5, 0.0, -1.5, 0.0),
+        "walk": (8.0, 13.0, 9.0, 6.0, 8.0),
+        "run": (10.0, 15.0, 11.0, 7.0, 10.0),
+    }[action_name]
+    down = Vector((0.0, 0.0, -1.0))
+    locked_chain_rotations = {
+        "LeftLeg": align_direction(
+            basis,
+            "LeftLeg",
+            basis.directions["LeftUpLeg"],
+        ),
+        "RightLeg": align_direction(
+            basis,
+            "RightLeg",
+            basis.directions["RightUpLeg"],
+        ),
+        "LeftForeArm": align_direction(
+            basis,
+            "LeftForeArm",
+            basis.directions["LeftArm"],
+        ),
+        "RightForeArm": align_direction(
+            basis,
+            "RightForeArm",
+            basis.directions["RightArm"],
+        ),
+    }
 
     for fraction, back_angle in zip(fractions, back_angles):
         frame = round(fraction * end_frame)
         reset_pose(armature, basis)
+        for bone_name, rotation in locked_chain_rotations.items():
+            set_rotation(armature, bone_name, rotation)
+        pendulum_angle = math.radians(back_angle)
+        pendulum_direction = (
+            down * math.cos(pendulum_angle)
+            + basis.backward * math.sin(pendulum_angle)
+        ).normalized()
         for bone_name in ("LeftArm", "RightArm"):
-            rotation = swing_toward(
+            rotation = align_direction(
                 basis,
                 bone_name,
-                basis.backward,
-                back_angle,
+                pendulum_direction,
             )
             set_rotation(armature, bone_name, rotation)
-            arm_angles[bone_name].append(
-                quaternion_delta_degrees(
-                    basis.rotations[bone_name],
-                    rotation,
-                )
-            )
         key_all_bones(armature, frame)
 
-    symmetry_error = max(
-        abs(left - right)
-        for left, right in zip(arm_angles["LeftArm"], arm_angles["RightArm"])
-    )
-    excursion = max(arm_angles["LeftArm"]) - min(arm_angles["LeftArm"])
+    excursion = max(back_angles) - min(back_angles)
     return end_frame, {
         "authoredStyle": "ceremonial-glide",
-        "armMotionMode": "symmetric-back-drift",
+        "armMotionMode": "straight-pendulum-rear-trail",
         "armBackBiasDegrees": [min(back_angles), max(back_angles)],
         "armExcursionDegrees": round(excursion, 6),
-        "armSymmetryErrorDegrees": round(symmetry_error, 6),
+        "armSymmetryErrorDegrees": 0,
         "legMotionDegrees": 0,
-        "maximumLimbExcursionDegrees": round(max(back_angles), 6),
+        "pendulumOpposesTravel": True,
+        "maximumLimbExcursionDegrees": round(
+            max(
+                quaternion_delta_degrees(
+                    basis.rotations[bone_name],
+                    locked_chain_rotations[bone_name],
+                )
+                for bone_name in locked_chain_rotations
+            ),
+            6,
+        ),
     }
 
 
@@ -405,10 +455,11 @@ def author_pale_maw_creep(
     end_frame = round(duration_seconds * FPS)
     fractions = (0.0, 0.25, 0.5, 0.75, 1.0)
     phases = (0.0, 1.0, 0.0, -1.0, 0.0)
-    hip_swing = 0.0 if is_idle else 10.0 if is_run else 7.0
-    front_limb_swing = 1.2 if is_idle else 7.5 if is_run else 5.0
-    base_knee_flex = 3.0 if is_idle else 4.0 if is_run else 3.0
-    extra_knee_flex = 0.0 if is_idle else 5.0 if is_run else 4.0
+    hip_swing = 0.0 if is_idle else 34.0 if is_run else 30.0
+    front_limb_swing = 1.2 if is_idle else 32.0 if is_run else 26.0
+    forearm_swing = 0.6 if is_idle else 16.0 if is_run else 12.0
+    base_knee_flex = 3.0 if is_idle else 5.0 if is_run else 4.0
+    extra_knee_flex = 0.0 if is_idle else 14.0 if is_run else 10.0
     maximum_excursion = 0.0
 
     for fraction, phase in zip(fractions, phases):
@@ -432,8 +483,9 @@ def author_pale_maw_creep(
                 basis.backward,
                 base_knee_flex + max(0.0, -phase) * extra_knee_flex,
             ),
-            # Contralateral front-limb motion keeps the low crawl stable while
-            # leaving elbow/hand rest planes untouched.
+            # Long contralateral front-limb sweeps create a visible planted
+            # push instead of letting the root slide ahead of nearly still
+            # hands. Forearms add a smaller same-direction recovery arc.
             "LeftArm": directed_swing(
                 basis,
                 "LeftArm",
@@ -443,6 +495,16 @@ def author_pale_maw_creep(
                 basis,
                 "RightArm",
                 phase * front_limb_swing,
+            ),
+            "LeftForeArm": directed_swing(
+                basis,
+                "LeftForeArm",
+                -phase * forearm_swing,
+            ),
+            "RightForeArm": directed_swing(
+                basis,
+                "RightForeArm",
+                phase * forearm_swing,
             ),
         }
         for bone_name, rotation in rotations.items():
@@ -465,7 +527,12 @@ def author_pale_maw_creep(
         "gait": (
             "settled-contralateral-idle"
             if is_idle
-            else "low-amplitude-contralateral"
+            else "speed-matched-contralateral"
+        ),
+        "propulsionMode": (
+            "settled-four-contact"
+            if is_idle
+            else "four-limb-contact-push"
         ),
         "swingConstruction": "twist-free-directional-quaternion",
         "bindBasisMaximumAxialTwistDegrees": 0,
@@ -554,6 +621,116 @@ def world_bounds(meshes: list[bpy.types.Object]) -> tuple[Vector, Vector]:
     minimum = Vector(tuple(min(point[axis] for point in points) for axis in range(3)))
     maximum = Vector(tuple(max(point[axis] for point in points) for axis in range(3)))
     return minimum, maximum
+
+
+def joint_angle_degrees(
+    armature: bpy.types.Object,
+    parent_name: str,
+    joint_name: str,
+    child_name: str,
+) -> float:
+    parent = armature.pose.bones[parent_name].head
+    joint = armature.pose.bones[joint_name].head
+    child = armature.pose.bones[child_name].head
+    incoming = parent - joint
+    outgoing = child - joint
+    if incoming.length < 1e-6 or outgoing.length < 1e-6:
+        raise RuntimeError(f"Invalid joint chain at {joint_name}")
+    return math.degrees(incoming.angle(outgoing))
+
+
+def measure_action_metrics(
+    slug: str,
+    armature: bpy.types.Object,
+    basis: RigBasis,
+    end_frame: int,
+) -> dict[str, Any]:
+    joint_specs = {
+        "leftKnee": ("LeftUpLeg", "LeftLeg", "LeftFoot"),
+        "rightKnee": ("RightUpLeg", "RightLeg", "RightFoot"),
+        "leftElbow": ("LeftArm", "LeftForeArm", "LeftHand"),
+        "rightElbow": ("RightArm", "RightForeArm", "RightHand"),
+    }
+    joint_samples = {name: [] for name in joint_specs}
+    limb_projections = {
+        name: []
+        for name in ("LeftHand", "RightHand", "LeftFoot", "RightFoot")
+    }
+    facing_alignments: list[float] = []
+    arm_trails = {"left": [], "right": []}
+    armature_to_world = armature.matrix_world.to_3x3()
+    world_forward = armature_to_world @ basis.forward
+    world_forward.normalize()
+
+    for frame in range(end_frame + 1):
+        bpy.context.scene.frame_set(frame)
+        bpy.context.view_layer.update()
+        for name, chain in joint_specs.items():
+            joint_samples[name].append(joint_angle_degrees(armature, *chain))
+
+        hips = armature.pose.bones["Hips"].head
+        for bone_name in limb_projections:
+            relative = armature_to_world @ (
+                armature.pose.bones[bone_name].head - hips
+            )
+            limb_projections[bone_name].append(
+                relative.dot(world_forward) * basis.runtime_scale
+            )
+
+        posed_forward = (
+            armature.pose.bones["headfront"].head
+            - armature.pose.bones["Head"].head
+        )
+        posed_forward.z = 0
+        if posed_forward.length < 1e-6:
+            raise RuntimeError("Authored pose lost its horizontal facing direction")
+        posed_forward.normalize()
+        facing_alignments.append(posed_forward.dot(basis.forward))
+
+        for side, arm_name, hand_name in (
+            ("left", "LeftArm", "LeftHand"),
+            ("right", "RightArm", "RightHand"),
+        ):
+            arm_trails[side].append(
+                (
+                    armature_to_world
+                    @ (
+                        armature.pose.bones[hand_name].head
+                        - armature.pose.bones[arm_name].head
+                    )
+                ).dot(world_forward)
+                * basis.runtime_scale
+            )
+
+    bpy.context.scene.frame_set(0)
+    bpy.context.view_layer.update()
+    contact_sweeps = {
+        bone_name: round(max(values) - min(values), 6)
+        for bone_name, values in limb_projections.items()
+    }
+    measured = {
+        "kneeLockMinimumDegrees": round(
+            min(joint_samples["leftKnee"] + joint_samples["rightKnee"]),
+            6,
+        ),
+        "elbowLockMinimumDegrees": round(
+            min(joint_samples["leftElbow"] + joint_samples["rightElbow"]),
+            6,
+        ),
+        "minimumFacingAlignment": round(min(facing_alignments), 6),
+        "contactSweepMeters": contact_sweeps,
+        "minimumContactSweepMeters": round(min(contact_sweeps.values()), 6),
+        "armTrailMeters": {
+            side: [
+                round(min(values), 6),
+                round(max(values), 6),
+            ]
+            for side, values in arm_trails.items()
+        },
+    }
+    if slug == "banquet-saint":
+        measured["lockedJointTargetDegrees"] = 180
+    return measured
 
 
 def aim_at(obj: bpy.types.Object, target: Vector) -> None:
@@ -670,6 +847,14 @@ def main() -> None:
         basis,
         args.slug,
         args.name,
+    )
+    metrics.update(
+        measure_action_metrics(
+            args.slug,
+            armature,
+            basis,
+            end_frame,
+        )
     )
     hemisphere_flips = action_hemisphere_flips(action)
     if hemisphere_flips:

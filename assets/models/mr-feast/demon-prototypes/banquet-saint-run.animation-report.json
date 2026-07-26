@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-26T02:39:35.510480+00:00",
+  "generatedAt": "2026-07-26T03:42:39.156729+00:00",
   "format": "animation-only-glb",
   "pipeline": "blender-authored-demon-locomotion",
   "source": "assets/models/mr-feast/source/demon-prototypes/meshy/banquet-saint-idle.glb",
@@ -17,23 +17,45 @@
   "durationSeconds": 2.583333,
   "keyframesPerTrack": 5,
   "quaternionHemisphereFlips": 0,
-  "baselineSourcePhase": 0.57,
-  "baselinePose": "meshy-idle-readable-phase",
+  "baselineSourcePhase": null,
+  "baselinePose": "processed-bind",
   "bytes": 36144,
   "previews": [
-    "output/iterate/demon-prototypes/blender-animation-final/banquet-saint-run-front-a.png",
-    "output/iterate/demon-prototypes/blender-animation-final/banquet-saint-run-right-a.png",
-    "output/iterate/demon-prototypes/blender-animation-final/banquet-saint-run-front-b.png",
-    "output/iterate/demon-prototypes/blender-animation-final/banquet-saint-run-right-b.png"
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/banquet-saint-run-front-a.png",
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/banquet-saint-run-right-a.png",
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/banquet-saint-run-front-b.png",
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/banquet-saint-run-right-b.png"
   ],
   "authoredStyle": "ceremonial-glide",
-  "armMotionMode": "symmetric-back-drift",
+  "armMotionMode": "straight-pendulum-rear-trail",
   "armBackBiasDegrees": [
-    3.5,
-    5.5
+    7.0,
+    15.0
   ],
-  "armExcursionDegrees": 1.999602,
-  "armSymmetryErrorDegrees": 0.000285,
+  "armExcursionDegrees": 8.0,
+  "armSymmetryErrorDegrees": 0,
   "legMotionDegrees": 0,
-  "maximumLimbExcursionDegrees": 5.5
+  "pendulumOpposesTravel": true,
+  "maximumLimbExcursionDegrees": 20.442819,
+  "kneeLockMinimumDegrees": 179.999991,
+  "elbowLockMinimumDegrees": 179.999991,
+  "minimumFacingAlignment": 1.0,
+  "contactSweepMeters": {
+    "LeftHand": 0.065947,
+    "RightHand": 0.066475,
+    "LeftFoot": 0.0,
+    "RightFoot": 0.0
+  },
+  "minimumContactSweepMeters": 0.0,
+  "armTrailMeters": {
+    "left": [
+      -0.124633,
+      -0.058686
+    ],
+    "right": [
+      -0.12563,
+      -0.059155
+    ]
+  },
+  "lockedJointTargetDegrees": 180
 }

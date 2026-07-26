@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-26T02:39:22.606523+00:00",
+  "generatedAt": "2026-07-26T03:41:32.099119+00:00",
   "format": "animation-only-glb",
   "pipeline": "blender-authored-demon-locomotion",
   "source": "assets/models/mr-feast/source/demon-prototypes/meshy/pale-maw-idle.glb",
@@ -21,10 +21,10 @@
   "baselinePose": "processed-bind",
   "bytes": 43724,
   "previews": [
-    "output/iterate/demon-prototypes/blender-animation-final/pale-maw-idle-front-a.png",
-    "output/iterate/demon-prototypes/blender-animation-final/pale-maw-idle-right-a.png",
-    "output/iterate/demon-prototypes/blender-animation-final/pale-maw-idle-front-b.png",
-    "output/iterate/demon-prototypes/blender-animation-final/pale-maw-idle-right-b.png"
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/pale-maw-idle-front-a.png",
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/pale-maw-idle-right-a.png",
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/pale-maw-idle-front-b.png",
+    "output/iterate/demon-prototypes/blender-animation-propulsion-final/pale-maw-idle-right-b.png"
   ],
   "authoredStyle": "anatomical-creep",
   "kneeBendDirection": "anatomical-backward-flex",
@@ -32,6 +32,27 @@
   "maximumLimbExcursionDegrees": 2.999965,
   "bilateralPhaseOffset": 0.5,
   "gait": "settled-contralateral-idle",
+  "propulsionMode": "settled-four-contact",
   "swingConstruction": "twist-free-directional-quaternion",
-  "bindBasisMaximumAxialTwistDegrees": 0
+  "bindBasisMaximumAxialTwistDegrees": 0,
+  "kneeLockMinimumDegrees": 72.374604,
+  "elbowLockMinimumDegrees": 113.503804,
+  "minimumFacingAlignment": 1.0,
+  "contactSweepMeters": {
+    "LeftHand": 0.04299,
+    "RightHand": 0.030032,
+    "LeftFoot": 0.0,
+    "RightFoot": 0.0
+  },
+  "minimumContactSweepMeters": 0.0,
+  "armTrailMeters": {
+    "left": [
+      0.293623,
+      0.336613
+    ],
+    "right": [
+      -0.205281,
+      -0.175248
+    ]
+  }
 }

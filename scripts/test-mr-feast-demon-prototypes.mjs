@@ -20,7 +20,7 @@ assert.match(runtime, /const DEMON_PROTOTYPES = Object\.freeze/, "missing named 
 const runtimeCacheIdentity = runtime.match(/MANSION_RUNTIME_VERSION = "([^"]+)"/)?.[1] || "";
 const pageCacheIdentity = pageHtml.match(/mr-feast-mansion\.js\?v=([^"'&]+)/)?.[1] || "";
 assert.ok(
-  runtimeCacheIdentity.startsWith("20260725-demon-locomotion-polish-"),
+  runtimeCacheIdentity.startsWith("20260725-demon-locomotion-propulsion-"),
   `demon prototype runtime cache identity is stale: ${runtimeCacheIdentity || "missing"}`,
 );
 assert.equal(
@@ -34,6 +34,11 @@ assert.match(runtime, /awaitDemonPrototypesForQA/, "missing deterministic protot
 assert.match(runtime, /advanceDemonPrototypesForQA/, "missing deterministic prototype patrol control");
 assert.match(runtime, /frameDemonPrototypeForQA/, "missing prototype framing control");
 assert.match(runtime, /demonPrototypes:/, "prototype diagnostics are absent from render_game_to_text");
+assert.match(
+  runtime,
+  /id: "pale-maw"[\s\S]*?walkPlaybackRate: 1\.0,[\s\S]*?runPlaybackRate: 1\.0,/,
+  "Pale Maw clip tempo does not match its patrol travel speed",
+);
 
 assert.match(milestone, /\*\*Status:\*\* (In progress|Automated acceptance complete)/, "milestone status is not current");
 assert.match(milestone, /With developer mode off[\s\S]*no prototype asset fetch/, "milestone does not protect normal mode");
@@ -43,7 +48,7 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 assert.equal(manifest.version, 1, "unexpected demon prototype manifest version");
 assert.equal(
   manifest.assetVersion,
-  "20260725-demon-locomotion-polish-1",
+  "20260725-demon-locomotion-propulsion-1",
   "demon animation assets need a fresh cache identity",
 );
 assert.equal(manifest.prototypes?.length, 2, "manifest must contain exactly two prototypes");
@@ -133,6 +138,19 @@ function rotationSamplesByBone(glb, label) {
       readFloatAccessor(glb, sampler?.output, `${label} ${boneName}`),
     ];
   }));
+}
+
+function maximumPairwiseQuaternionDelta(samples) {
+  let maximum = 0;
+  for (let left = 0; left < samples.length; left += 1) {
+    for (let right = left + 1; right < samples.length; right += 1) {
+      maximum = Math.max(
+        maximum,
+        quaternionDeltaDegrees(samples[left], samples[right]),
+      );
+    }
+  }
+  return maximum;
 }
 
 function accessorCount(gltf, accessorIndex) {
@@ -237,23 +255,41 @@ for (const prototype of manifest.prototypes) {
     const samplesByBone = rotationSamplesByBone(clipGlb, clipLabel);
     if (prototype.id === "banquet-saint") {
       assert.equal(
+        animationReport.baselinePose,
+        "processed-bind",
+        `${prototype.id} ${action} still uses the crouched, sideways idle basis`,
+      );
+      assert.equal(
         animationReport.legMotionDegrees,
         0,
         `${prototype.id} ${action} must glide with motionless legs`,
       );
       assert.equal(
         animationReport.armMotionMode,
-        "symmetric-back-drift",
-        `${prototype.id} ${action} arms must drift back together`,
+        "straight-pendulum-rear-trail",
+        `${prototype.id} ${action} arms must hang and trail together`,
       );
       assert.ok(
-        animationReport.armExcursionDegrees >= 1
-          && animationReport.armExcursionDegrees <= 6,
-        `${prototype.id} ${action} arm movement is not slight`,
+        animationReport.armExcursionDegrees >= (action === "idle" ? 1.5 : 5)
+          && animationReport.armExcursionDegrees <= 14,
+        `${prototype.id} ${action} pendulum movement is outside its restrained range`,
       );
       assert.ok(
         animationReport.armSymmetryErrorDegrees <= 0.1,
         `${prototype.id} ${action} arm motion is not symmetric`,
+      );
+      assert.ok(
+        animationReport.kneeLockMinimumDegrees >= 178.5,
+        `${prototype.id} ${action} knees are not locked straight`,
+      );
+      assert.ok(
+        animationReport.elbowLockMinimumDegrees >= 178.5,
+        `${prototype.id} ${action} elbows are not locked straight`,
+      );
+      assert.equal(
+        animationReport.pendulumOpposesTravel,
+        true,
+        `${prototype.id} ${action} arms do not trail opposite travel`,
       );
       for (const boneName of [
         "Hips",
@@ -309,10 +345,40 @@ for (const prototype of manifest.prototypes) {
         animationReport.maximumKneeTwistDegrees <= 2,
         `${prototype.id} ${action} retains excessive knee twist`,
       );
-      assert.ok(
-        animationReport.maximumLimbExcursionDegrees <= 18,
-        `${prototype.id} ${action} limb excursion is still large enough to collapse the rig`,
-      );
+      if (action === "idle") {
+        assert.ok(
+          animationReport.maximumLimbExcursionDegrees <= 8,
+          `${prototype.id} idle is too restless`,
+        );
+      } else {
+        assert.equal(
+          animationReport.propulsionMode,
+          "four-limb-contact-push",
+          `${prototype.id} ${action} does not use a four-limb propulsion gait`,
+        );
+        assert.ok(
+          animationReport.maximumLimbExcursionDegrees >= 22
+            && animationReport.maximumLimbExcursionDegrees <= 36,
+          `${prototype.id} ${action} limb excursion does not match patrol speed`,
+        );
+        assert.ok(
+          animationReport.minimumContactSweepMeters >= 0.45,
+          `${prototype.id} ${action} contact sweep is too short to propel the root`,
+        );
+        for (const boneName of [
+          "LeftArm",
+          "RightArm",
+          "LeftUpLeg",
+          "RightUpLeg",
+        ]) {
+          const samples = samplesByBone.get(boneName);
+          assert.ok(samples?.length, `${clipLabel} is missing ${boneName}`);
+          assert.ok(
+            maximumPairwiseQuaternionDelta(samples) >= 40,
+            `${clipLabel} ${boneName} still has a short sliding stride`,
+          );
+        }
+      }
       assert.equal(
         animationReport.bilateralPhaseOffset,
         0.5,
@@ -338,7 +404,7 @@ for (const prototype of manifest.prototypes) {
         }),
       );
       assert.ok(
-        maximumHindChainDeviation <= 18,
+        maximumHindChainDeviation <= 36,
         `${clipLabel} hind chain departs ${maximumHindChainDeviation.toFixed(2)} degrees from the clean bind plane`,
       );
     }
@@ -348,9 +414,10 @@ for (const prototype of manifest.prototypes) {
 const locomotionPipeline = await readFile(locomotionPipelinePath, "utf8");
 for (const marker of [
   "ceremonial-glide",
-  "symmetric-back-drift",
+  "straight-pendulum-rear-trail",
   "anatomical-creep",
   "anatomical-backward-flex",
+  "four-limb-contact-push",
 ]) {
   assert.match(
     locomotionPipeline,
@@ -430,12 +497,24 @@ try {
     assert.ok(entry.boundClips.includes("idle"), `${entry.id} idle is not bound`);
     assert.ok(entry.boundClips.includes("walk"), `${entry.id} walk is not bound`);
     assert.ok(entry.boundClips.includes("run"), `${entry.id} run is not bound`);
+    assert.ok(
+      Number.isFinite(entry.route.walkPlaybackRate)
+      && Number.isFinite(entry.route.runPlaybackRate),
+      `${entry.id} does not report locomotion playback rates`,
+    );
     if (entry.id === "banquet-saint") {
       for (const action of ["idle", "walk", "run"]) {
         assert.equal(
           entry.animationTracks[action].dynamicRotation,
           2,
           `${entry.id} ${action} moves bones beyond its two arms`,
+        );
+      }
+    } else {
+      for (const action of ["walk", "run"]) {
+        assert.ok(
+          entry.animationTracks[action].dynamicRotation >= 8,
+          `${entry.id} ${action} does not articulate all four propelling limbs`,
         );
       }
     }
@@ -447,6 +526,10 @@ try {
     assert.ok(entry.completedLegs >= 1, `${entry.id} did not complete a route leg`);
     assert.ok(entry.poseChanged, `${entry.id} animation remained frozen`);
     assert.ok(entry.turnRadians > 0.1, `${entry.id} did not turn`);
+    assert.ok(
+      entry.minimumFacingAlignment >= 0.96,
+      `${entry.id} strafed instead of facing its patrol travel`,
+    );
   }
 
   const stageBox = await page.locator("#mansion-stage").boundingBox();
@@ -456,6 +539,8 @@ try {
     assert.equal(framed.id, id, `could not frame ${id}`);
     assert.equal(framed.visible, true, `${id} disappeared while framed`);
     for (const [action, phase] of [["idle", 0.36], ["walk", 0.24], ["run", 0.3]]) {
+      const anatomySamples = [];
+      let lastSampled = null;
       for (const sampledPhase of [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875]) {
         const sampled = await page.evaluate(
           ({ prototypeId, actionName, actionPhase }) => (
@@ -471,11 +556,62 @@ try {
             actionPhase: sampledPhase,
           },
         );
+        lastSampled = sampled;
         assert.equal(
           sampled.activeClip,
           action,
           `${id} did not hold its ${action} clip at phase ${sampledPhase}`,
         );
+        assert.ok(sampled.anatomy, `${id} ${action} has no anatomy diagnostics`);
+        anatomySamples.push(sampled.anatomy);
+      }
+      if (id === "banquet-saint") {
+        for (const anatomy of anatomySamples) {
+          assert.ok(
+            Math.min(anatomy.joints.leftKnee, anatomy.joints.rightKnee) >= 178.5,
+            `${id} ${action} bends a locked knee`,
+          );
+          assert.ok(
+            Math.min(anatomy.joints.leftElbow, anatomy.joints.rightElbow) >= 178.5,
+            `${id} ${action} bends a locked elbow`,
+          );
+          assert.ok(
+            anatomy.facingAlignment >= 0.97,
+            `${id} ${action} faces sideways`,
+          );
+          if (action !== "idle") {
+            assert.ok(
+              Math.max(anatomy.armTrail.left, anatomy.armTrail.right) <= -0.04,
+              `${id} ${action} arms do not trail behind travel`,
+            );
+          }
+        }
+      } else if (action !== "idle") {
+        const playbackRate = action === "run"
+          ? lastSampled.route.runPlaybackRate
+          : lastSampled.route.walkPlaybackRate;
+        const travelSpeed = action === "run"
+          ? lastSampled.route.runSpeed
+          : lastSampled.route.speed;
+        const plantedHalfCycleTravel = (
+          travelSpeed * lastSampled.animationDuration / playbackRate / 2
+        );
+        for (const limbName of ["LeftHand", "RightHand", "LeftFoot", "RightFoot"]) {
+          const projections = anatomySamples.map((anatomy) => (
+            anatomy.limbTips[limbName].x * anatomy.forwardLocal.x
+            + anatomy.limbTips[limbName].z * anatomy.forwardLocal.z
+          ));
+          const sweep = Math.max(...projections) - Math.min(...projections);
+          assert.ok(
+            sweep >= 0.45,
+            `${id} ${action} ${limbName} sweeps only ${sweep.toFixed(3)}m`,
+          );
+          assert.ok(
+            sweep >= plantedHalfCycleTravel,
+            `${id} ${action} ${limbName} cannot cover the `
+              + `${plantedHalfCycleTravel.toFixed(3)}m root travel of its planted half-cycle`,
+          );
+        }
       }
       const posed = await page.evaluate(
         ({ prototypeId, actionName, actionPhase }) => (

@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260725-demon-locomotion-polish-1";
+  const MANSION_RUNTIME_VERSION = "20260725-demon-locomotion-propulsion-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1489,7 +1489,7 @@
   });
   const DEMON_PROTOTYPES = Object.freeze({
     manifestPath: "../models/mr-feast/demon-prototypes/manifest.json",
-    assetVersion: "20260725-demon-locomotion-polish-1",
+    assetVersion: "20260725-demon-locomotion-propulsion-1",
     arrivalRadius: 0.075,
     turnSpeed: 2.45,
     movementAlignment: 0.965,
@@ -1507,8 +1507,8 @@
         walkSpeed: 0.78,
         runSpeed: 1.34,
         runEvery: 3,
-        walkPlaybackRate: 0.76,
-        runPlaybackRate: 0.82,
+        walkPlaybackRate: 1.0,
+        runPlaybackRate: 1.0,
         idlePlaybackRate: 0.78,
         inspectionLight: Object.freeze({
           color: 0xb9d8e8,
@@ -1554,6 +1554,36 @@
         ]),
       }),
     ]),
+  });
+  const DEMON_PROTOTYPE_ANATOMY = Object.freeze({
+    bones: Object.freeze([
+      "Hips",
+      "Head",
+      "headfront",
+      "LeftArm",
+      "LeftForeArm",
+      "LeftHand",
+      "RightArm",
+      "RightForeArm",
+      "RightHand",
+      "LeftUpLeg",
+      "LeftLeg",
+      "LeftFoot",
+      "RightUpLeg",
+      "RightLeg",
+      "RightFoot",
+    ]),
+    joints: Object.freeze({
+      leftKnee: Object.freeze(["LeftUpLeg", "LeftLeg", "LeftFoot"]),
+      rightKnee: Object.freeze(["RightUpLeg", "RightLeg", "RightFoot"]),
+      leftElbow: Object.freeze(["LeftArm", "LeftForeArm", "LeftHand"]),
+      rightElbow: Object.freeze(["RightArm", "RightForeArm", "RightHand"]),
+    }),
+    limbTips: Object.freeze(["LeftHand", "RightHand", "LeftFoot", "RightFoot"]),
+    armTrails: Object.freeze({
+      left: Object.freeze(["LeftArm", "LeftHand"]),
+      right: Object.freeze(["RightArm", "RightHand"]),
+    }),
   });
   function mrFeastResponseNode(id, x, y, z, zone, options = {}) {
     return Object.freeze({
@@ -13104,6 +13134,7 @@
           error: null,
           model: null,
           modelMeshes: [],
+          anatomyBones: null,
           mixer: null,
           actions: {},
           action: null,
@@ -13134,6 +13165,8 @@
           distanceTravelled: 0,
           maximumObservedSpeed: 0,
           turnRadians: 0,
+          lastFacingAlignment: 1,
+          minimumFacingAlignment: 1,
           pauseRemaining: placement.initialPause || 0,
           activity: "disabled",
           qaHoldRemaining: 0,
@@ -13189,6 +13222,8 @@
       entry.distanceTravelled = 0;
       entry.maximumObservedSpeed = 0;
       entry.turnRadians = 0;
+      entry.lastFacingAlignment = 1;
+      entry.minimumFacingAlignment = 1;
       entry.pauseRemaining = entry.placement.initialPause || 0;
       entry.activity = playIdle ? "idle" : "disabled";
       entry.qaHoldRemaining = 0;
@@ -13423,6 +13458,20 @@
         ...[...materials].map((material) => Number(material.roughness) || 1),
       );
       entry.model = model;
+      entry.anatomyBones = Object.fromEntries(
+        DEMON_PROTOTYPE_ANATOMY.bones.map((boneName) => [
+          boneName,
+          model.getObjectByName(boneName),
+        ]),
+      );
+      const missingAnatomyBones = DEMON_PROTOTYPE_ANATOMY.bones.filter(
+        (boneName) => !entry.anatomyBones[boneName],
+      );
+      if (missingAnatomyBones.length) {
+        throw new Error(
+          `Prototype rig is missing anatomy bones: ${missingAnatomyBones.join(", ")}`,
+        );
+      }
       entry.root.add(model);
       entry.mixer = new THREE.AnimationMixer(model);
       this.prepareAction(entry, idle, "idle");
@@ -13578,6 +13627,100 @@
       }
     }
 
+    anatomyPoint(entry, boneName) {
+      const bone = entry.anatomyBones?.[boneName];
+      if (!bone) return null;
+      const point = bone.getWorldPosition(new THREE.Vector3());
+      return entry.root.worldToLocal(point);
+    }
+
+    recordTravelFacing(entry, travelX, travelZ) {
+      if (!entry.model || !entry.anatomyBones) return;
+      entry.root.updateMatrixWorld(true);
+      const head = entry.anatomyBones.Head.getWorldPosition(new THREE.Vector3());
+      const headfront = entry.anatomyBones.headfront.getWorldPosition(
+        new THREE.Vector3(),
+      );
+      const forward = headfront.sub(head);
+      forward.y = 0;
+      const travel = new THREE.Vector3(travelX, 0, travelZ);
+      if (
+        forward.lengthSq() < 0.000001
+        || travel.lengthSq() < 0.000001
+      ) return;
+      forward.normalize();
+      travel.normalize();
+      const alignment = forward.dot(travel);
+      entry.lastFacingAlignment = alignment;
+      entry.minimumFacingAlignment = Math.min(
+        entry.minimumFacingAlignment,
+        alignment,
+      );
+    }
+
+    anatomyDiagnostics(entry) {
+      if (!entry.model || !entry.anatomyBones) return null;
+      entry.root.updateMatrixWorld(true);
+      const points = Object.fromEntries(
+        DEMON_PROTOTYPE_ANATOMY.bones.map((boneName) => [
+          boneName,
+          this.anatomyPoint(entry, boneName),
+        ]),
+      );
+      if (Object.values(points).some((point) => !point)) return null;
+      const forward = points.headfront.clone().sub(points.Head);
+      forward.y = 0;
+      if (forward.lengthSq() < 0.000001) return null;
+      forward.normalize();
+      const jointAngle = (chain) => {
+        const [parentName, jointName, childName] = chain;
+        const incoming = points[parentName].clone().sub(points[jointName]);
+        const outgoing = points[childName].clone().sub(points[jointName]);
+        if (
+          incoming.lengthSq() < 0.000001
+          || outgoing.lengthSq() < 0.000001
+        ) return 0;
+        return THREE.MathUtils.radToDeg(incoming.angleTo(outgoing));
+      };
+      const hips = points.Hips;
+      const round = (value, places = 5) => Number(value.toFixed(places));
+      return {
+        forwardLocal: {
+          x: round(forward.x),
+          z: round(forward.z),
+        },
+        facingAlignment: round(forward.z),
+        joints: Object.fromEntries(
+          Object.entries(DEMON_PROTOTYPE_ANATOMY.joints).map(([name, chain]) => [
+            name,
+            round(jointAngle(chain), 4),
+          ]),
+        ),
+        limbTips: Object.fromEntries(
+          DEMON_PROTOTYPE_ANATOMY.limbTips.map((boneName) => {
+            const relative = points[boneName].clone().sub(hips);
+            return [
+              boneName,
+              {
+                x: round(relative.x),
+                y: round(relative.y),
+                z: round(relative.z),
+              },
+            ];
+          }),
+        ),
+        armTrail: Object.fromEntries(
+          Object.entries(DEMON_PROTOTYPE_ANATOMY.armTrails)
+            .map(([side, [armName, handName]]) => [
+              side,
+              round(
+                points[handName].clone().sub(points[armName]).dot(forward),
+              ),
+            ]),
+        ),
+      };
+    }
+
     facePoint(entry, point, dt) {
       const dx = point.x - entry.root.position.x;
       const dz = point.z - entry.root.position.z;
@@ -13712,6 +13855,7 @@
           : entry.placement.walkPlaybackRate,
       );
       this.stepAnimation(entry, stepDt);
+      this.recordTravelFacing(entry, dx, dz);
     }
 
     update(dt) {
@@ -13867,6 +14011,8 @@
         distanceTravelled: Number(entry.distanceTravelled.toFixed(3)),
         maximumObservedSpeed: Number(entry.maximumObservedSpeed.toFixed(3)),
         turnRadians: Number(entry.turnRadians.toFixed(4)),
+        facingAlignment: Number(entry.lastFacingAlignment.toFixed(5)),
+        minimumFacingAlignment: Number(entry.minimumFacingAlignment.toFixed(5)),
         pauseRemaining: Number(entry.pauseRemaining.toFixed(3)),
         activeAction: entry.activeAction,
         activeClip: entry.activeClip,
@@ -13883,11 +14029,14 @@
           entry.animationProbeMaximumDelta.toFixed(8),
         ),
         blendCount: entry.blendCount,
+        anatomy: this.anatomyDiagnostics(entry),
         route: {
           points: entry.placement.route.length,
           speed: entry.placement.walkSpeed,
           runSpeed: entry.placement.runSpeed,
           runEvery: entry.placement.runEvery,
+          walkPlaybackRate: entry.placement.walkPlaybackRate,
+          runPlaybackRate: entry.placement.runPlaybackRate,
         },
       };
     }

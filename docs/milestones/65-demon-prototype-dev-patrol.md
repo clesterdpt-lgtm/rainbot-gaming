@@ -35,6 +35,7 @@ Turn the approved Pale Maw and Banquet Saint concepts into browser-ready, animat
 6. Disabling developer mode immediately hides both actors, stops their mixers, resets their patrol state, and leaves the existing developer-mode restore behavior intact.
 7. `render_game_to_text()` and `window.MrFeastFresh` expose prototype load, visibility, route, grounding, clip-binding, active-action, travel, and turn diagnostics plus deterministic controls to await loading, advance the patrol, and frame either creature.
 8. Desktop browser visual QA captures both prototypes from a readable full-body angle in the mansion, confirms recognizable correspondence with their approved concepts, and finds no persistent floor clipping, frozen bind pose, detached mesh, or extreme texture/material defect.
+9. The HTML and runtime publish the same demon-prototype cache identity, and the browser test enables and disables the patrol through the visible Escape-menu Developer Mode button.
 
 ## Verification
 
@@ -49,14 +50,14 @@ Turn the approved Pale Maw and Banquet Saint concepts into browser-ready, animat
 
 ## Automated verification results
 
-- The regression failed red first on the missing `DEMON_PROTOTYPES` tuning table, then passed static and real-browser acceptance after implementation.
+- The original regression failed red first on the missing `DEMON_PROTOTYPES` tuning table. After a user browser retained the older mansion runtime, the follow-up cache regression failed red on `20260725-energy-hud-bottom-hide-full-1`; the page and runtime now share `20260725-demon-prototype-dev-patrol-1`, and the focused browser path uses the visible Developer Mode button.
 - The Pale Maw uses Meshy generation `019f9b5d-7d11-7ab0-aa81-b2e86349304b`, rig `019f9b60-42ce-7ef1-8f49-b49c0b56efe3`, and idle `019f9b61-b827-7b3a-b4f0-eeff81415203`. The Banquet Saint uses generation `019f9b5d-7d27-746a-8d7b-6dca01766c48`, rig `019f9b60-42cd-7ef0-b02d-747528bb4c39`, and idle `019f9b61-b823-7b39-acf5-2649e2958104`. Each selected pipeline consumed `38` credits; the combined cost was `76`.
 - Blender 4.5.11 prepared both models at exactly `30,000` triangles with one 24-bone skinned mesh and a single 768px packed texture. Pale Maw is `2.180m`, grounded at `-0.0003m`, and `2,412,152` bytes. Banquet Saint is `2.340m`, grounded at `-0.0003m`, and `3,180,516` bytes.
 - All six runtime clip files are animation-only, loop-closed, stationary 24-track bone-rotation clips. Browser binding reports 24/24 bound rotations and live pose change for idle, walk, and run. The Banquet Saint's generic high-knee run was visually rejected because it collapsed the long robe; its optional fast clip now reuses the clean Meshy stride, while its authored patrol remains walk-only.
 - Fresh normal-mode browser state reports `loadStatus: "idle"`, `fetchCount: 0`, `loaded: 0`, and `visible: 0`. Developer Mode lazily loads and shows exactly two actors; deterministic 18-second stepping makes both travel over one metre, complete a route leg, turn, and change pose. Disabling Developer Mode hides both, stops their actions, and resets every route counter.
 - Neither actor has a collider, interaction, detection, clue, pursuit, competition, or persistence path. Existing contestant conversations and the complete Contestant 13 progression/gates/persistence/mobile suite pass.
 - `node --check assets/js/mr-feast-mansion.js`, `node scripts/test-mr-feast-demon-prototypes.mjs`, its `MR_FEAST_BROWSER_QA=1` browser path, `node scripts/test-mr-feast-contestant-conversations.mjs`, `node scripts/test-mr-feast-contestant-13.mjs`, and `git diff --check` pass with a clean focused browser console.
-- Adjacent baseline issues remain outside this milestone: renovation reports the already-selected rejected Mr. Feast face plus the existing page/runtime cache mismatch, and Player Systems reports the existing phone control footprint over its lower-24% target. This slice does not change those files or conditions.
+- Renovation now passes after the page/runtime cache identity alignment. Player Systems is unchanged by this follow-up.
 - Blender neutral turntables live in `output/iterate/demon-prototypes/blender/`; clean in-mansion idle/walk/run captures for both creatures live in `output/iterate/demon-prototypes/browser/`.
 
 ## Exit criteria

@@ -7,13 +7,26 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runtimePath = path.join(root, "assets/js/mr-feast-mansion.js");
+const pagePath = path.join(root, "games/mr-feast-mansion.html");
 const manifestPath = path.join(root, "assets/models/mr-feast/demon-prototypes/manifest.json");
 const milestonePath = path.join(root, "docs/milestones/65-demon-prototype-dev-patrol.md");
 
 const runtime = await readFile(runtimePath, "utf8");
+const pageHtml = await readFile(pagePath, "utf8");
 const milestone = await readFile(milestonePath, "utf8");
 
 assert.match(runtime, /const DEMON_PROTOTYPES = Object\.freeze/, "missing named demon prototype tuning table");
+const runtimeCacheIdentity = runtime.match(/MANSION_RUNTIME_VERSION = "([^"]+)"/)?.[1] || "";
+const pageCacheIdentity = pageHtml.match(/mr-feast-mansion\.js\?v=([^"'&]+)/)?.[1] || "";
+assert.ok(
+  runtimeCacheIdentity.startsWith("20260725-demon-prototype-dev-patrol-"),
+  `demon prototype runtime cache identity is stale: ${runtimeCacheIdentity || "missing"}`,
+);
+assert.equal(
+  pageCacheIdentity,
+  runtimeCacheIdentity,
+  `page/runtime cache identities must agree: ${JSON.stringify({ runtimeCacheIdentity, pageCacheIdentity })}`,
+);
 assert.match(runtime, /class DemonPrototypePatrolSystem/, "missing isolated demon prototype patrol system");
 assert.match(runtime, /demonPrototypePatrol\?\.setEnabled\(state\.devMode\)/, "developer mode does not own prototype visibility");
 assert.match(runtime, /awaitDemonPrototypesForQA/, "missing deterministic prototype load control");
@@ -150,7 +163,21 @@ try {
   assert.equal(normal.loaded, 0, "normal mode created prototype actors");
   assert.equal(normal.visible, 0, "normal mode exposes prototype actors");
 
-  await page.evaluate(() => window.MrFeastFresh.setDevModeForQA(true));
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.escapeOpen);
+  assert.equal(
+    await page.locator("#mansion-menu-dev").textContent(),
+    "Dev mode: Off",
+    "the player-facing menu does not expose the disabled Developer Mode state",
+  );
+  await page.locator("#mansion-menu-dev").click();
+  assert.equal(
+    await page.locator("#mansion-menu-dev").textContent(),
+    "Dev mode: On",
+    "the player-facing Developer Mode button did not enable the patrol",
+  );
+  await page.locator("#mansion-menu-resume").click();
+  await page.waitForFunction(() => !JSON.parse(window.render_game_to_text()).menus.escapeOpen);
   const loaded = await page.evaluate(() => window.MrFeastFresh.awaitDemonPrototypesForQA());
   assert.equal(loaded.enabled, true, "prototype patrol did not enable with developer mode");
   assert.equal(loaded.loadStatus, "ready", "prototype patrol did not finish loading");
@@ -171,6 +198,8 @@ try {
     assert.ok(entry.turnRadians > 0.1, `${entry.id} did not turn`);
   }
 
+  const stageBox = await page.locator("#mansion-stage").boundingBox();
+  assert.ok(stageBox?.width > 0 && stageBox?.height > 0, "mansion stage has no visible browser bounds");
   for (const id of ["pale-maw", "banquet-saint"]) {
     const framed = await page.evaluate((prototypeId) => window.MrFeastFresh.frameDemonPrototypeForQA(prototypeId), id);
     assert.equal(framed.id, id, `could not frame ${id}`);
@@ -184,13 +213,16 @@ try {
       );
       assert.equal(posed.activeClip, action, `${id} did not pose its ${action} clip`);
       await page.waitForTimeout(120);
-      await page.locator("#mansion-stage").screenshot({
+      await page.screenshot({
         path: path.join(artifactDir, `${id}-${action}.png`),
+        clip: stageBox,
       });
     }
   }
 
-  await page.evaluate(() => window.MrFeastFresh.setDevModeForQA(false));
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.escapeOpen);
+  await page.locator("#mansion-menu-dev").click();
   const disabled = await page.evaluate(() => window.MrFeastFresh.getDemonPrototypeState());
   assert.equal(disabled.enabled, false, "prototype patrol stayed enabled");
   assert.equal(disabled.visible, 0, "prototype actors stayed visible");

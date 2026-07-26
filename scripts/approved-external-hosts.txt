@@ -2,6 +2,7 @@
 # Additions should be reviewed before publishing because GitHub Pages serves
 # this repo directly from main.
 api.meshy.ai
+bigsoundbank.com
 buy.stripe.com
 cdn.jsdelivr.net
 cdn.tailwindcss.com

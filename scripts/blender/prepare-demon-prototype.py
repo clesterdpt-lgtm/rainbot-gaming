@@ -127,6 +127,49 @@ def normalize_roots(
     return scale, (minimum, maximum)
 
 
+def measure_pale_maw_rest_posture(
+    armature: bpy.types.Object,
+) -> dict[str, float]:
+    """Record the untouched processed-source bind in runtime metres."""
+    bpy.context.view_layer.update()
+    world = armature.matrix_world
+    hips = world @ armature.pose.bones["Hips"].head
+    shoulders = (
+        world @ armature.pose.bones["LeftArm"].head
+        + world @ armature.pose.bones["RightArm"].head
+    ) * 0.5
+    head = world @ armature.pose.bones["Head"].head
+    headfront = world @ armature.pose.bones["headfront"].head
+    head_forward = headfront - head
+    if head_forward.length < 1e-6:
+        raise RuntimeError("Pale Maw head has no forward direction")
+    head_forward.normalize()
+    torso = shoulders - hips
+    horizontal_extension = Vector((torso.x, torso.y, 0.0)).length
+    limb_points = [
+        world @ armature.pose.bones[name].head
+        for name in ("LeftHand", "RightHand", "LeftFoot", "RightFoot")
+    ]
+    return {
+        "headForwardPitchDegrees": round(
+            math.degrees(math.asin(max(-1.0, min(1.0, head_forward.z)))),
+            6,
+        ),
+        "headHeightAboveShouldersMeters": round(head.z - shoulders.z, 6),
+        "headHeightAboveHipsMeters": round(head.z - hips.z, 6),
+        "shoulderHeightAboveHipsMeters": round(shoulders.z - hips.z, 6),
+        "limbLateralSpanMeters": round(
+            max(point.x for point in limb_points)
+            - min(point.x for point in limb_points),
+            6,
+        ),
+        "torsoHorizontalToVerticalRatio": round(
+            horizontal_extension / max(abs(torso.z), 1e-6),
+            6,
+        ),
+    }
+
+
 def move_modifier_to_front(obj: bpy.types.Object, modifier_name: str) -> None:
     bpy.context.view_layer.objects.active = obj
     while obj.modifiers.find(modifier_name) > 0:
@@ -420,7 +463,18 @@ def main() -> None:
         bpy.data.actions.remove(action)
     bpy.context.scene.frame_set(0)
 
+    rest_posture = {
+        "name": "processed-source-bind",
+        "hipsPitchDegrees": 0.0,
+        "armRaiseDegrees": 0.0,
+        "neckLiftDegrees": 0.0,
+        "lateralScale": 1.0,
+        "headLeveling": "none",
+        "limbCompensation": "none",
+    }
     normalization_scale, source_bounds = normalize_roots(exportable, meshes, args.target_height)
+    if args.slug == "pale-maw":
+        rest_posture.update(measure_pale_maw_rest_posture(armatures[0]))
     mesh_names, material_names = rename_and_polish_assets(args.slug, meshes)
     source_triangles = triangle_count(meshes)
     warnings = decimate(meshes, args.target_triangles)
@@ -463,6 +517,7 @@ def main() -> None:
         "skinnedMeshCount": len(skinned_meshes),
         "normalizationStrategy": "baked-scene-roots",
         "normalizationScale": normalization_scale,
+        "restPosture": rest_posture,
         "targetHeightMeters": args.target_height,
         "height": round(float(height), 6),
         "groundY": round(float(ground_y), 6),

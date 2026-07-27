@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260726-pale-maw-diagonal-gait-1";
+  const MANSION_RUNTIME_VERSION = "20260726-pale-maw-elbow-tuck-storage-clothing-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -883,18 +883,59 @@
         textureFile: "symbols/bulk-storage-thorn-eye-v1-ai.png",
       }),
     ]),
-    clothing: Object.freeze({
-      x: 13.92,
-      z: -10.9,
-      yaw: -0.46,
-      journal: Object.freeze({
-        id: "kip-clothing",
-        title: "Clothes in Bulk Storage",
-        body: "A dark green jacket and leather-trimmed shirt left in the basement look like what Kip was wearing.",
+    clothing: Object.freeze([
+      Object.freeze({
+        id: "kip",
+        contestantId: "kip-solano",
+        label: "Kip",
+        foundField: "kipClothingFound",
+        unlockAfter: "always",
+        x: 13.72,
+        z: -10.82,
+        yaw: -0.46,
+        journal: Object.freeze({
+          id: "kip-clothing",
+          title: "Clothes in Bulk Storage",
+          body: "A dark green jacket and leather-trimmed shirt left in the basement look like what Kip was wearing.",
+        }),
+        observation: "This dark green jacket and leather-trimmed shirt look like what Kip was wearing.",
+        qa: Object.freeze({ x: 13.2, z: -9.62, pitch: -0.72 }),
       }),
-      observation: "This dark green jacket and leather-trimmed shirt look like what Kip was wearing.",
-      qa: Object.freeze({ x: 12.78, z: -10.02, pitch: -0.72 }),
-    }),
+      Object.freeze({
+        id: "mara",
+        contestantId: "mara-voss",
+        label: "Mara",
+        foundField: "maraClothingFound",
+        unlockAfter: "storm-run",
+        x: 12.48,
+        z: -10.72,
+        yaw: 0.34,
+        journal: Object.freeze({
+          id: "mara-clothing",
+          title: "Mara's Clothes in Bulk Storage",
+          body: "An oxblood jacket and ivory blouse appeared beside Kip's clothes after Storm Run. They look like what Mara was wearing.",
+        }),
+        observation: "This oxblood jacket and ivory blouse look like what Mara was wearing during Storm Run.",
+        qa: Object.freeze({ x: 12.48, z: -9.42, pitch: -0.72 }),
+      }),
+      Object.freeze({
+        id: "juniper",
+        contestantId: "juniper-cross",
+        label: "Juniper",
+        foundField: "juniperClothingFound",
+        unlockAfter: "feast-hunt",
+        x: 13.55,
+        z: -9.5,
+        yaw: -0.18,
+        journal: Object.freeze({
+          id: "juniper-clothing",
+          title: "Juniper's Clothes in Bulk Storage",
+          body: "A plum-and-black outfit appeared with Kip and Mara's clothes after Feast Hunt. It looks like what Juniper was wearing.",
+        }),
+        observation: "This plum-and-black outfit looks like what Juniper was wearing during Feast Hunt.",
+        qa: Object.freeze({ x: 12.42, z: -8.7, pitch: -0.7 }),
+      }),
+    ]),
   });
   const CAMERA_SECURITY_MODE = Object.freeze({
     SHOW: "show",
@@ -1489,7 +1530,7 @@
   });
   const DEMON_PROTOTYPES = Object.freeze({
     manifestPath: "../models/mr-feast/demon-prototypes/manifest.json",
-    assetVersion: "20260726-pale-maw-diagonal-gait-1",
+    assetVersion: "20260726-pale-maw-elbow-tuck-1",
     arrivalRadius: 0.075,
     turnSpeed: 2.45,
     movementAlignment: 0.965,
@@ -3523,6 +3564,8 @@
       inventory: [],
       journalEntries: [],
       kipClothingFound: false,
+      maraClothingFound: false,
+      juniperClothingFound: false,
     },
     lastMove: { dx: 0, dz: 0 },
     qaRoute: null,
@@ -13668,7 +13711,13 @@
         ]),
       );
       if (Object.values(points).some((point) => !point)) return null;
-      const forward = points.headfront.clone().sub(points.Head);
+      const headForward = points.headfront.clone().sub(points.Head);
+      if (headForward.lengthSq() < 0.000001) return null;
+      headForward.normalize();
+      const headForwardPitchDegrees = THREE.MathUtils.radToDeg(
+        Math.asin(clamp(headForward.y, -1, 1)),
+      );
+      const forward = headForward.clone();
       forward.y = 0;
       if (forward.lengthSq() < 0.000001) return null;
       forward.normalize();
@@ -13683,13 +13732,49 @@
         return THREE.MathUtils.radToDeg(incoming.angleTo(outgoing));
       };
       const hips = points.Hips;
+      const shoulders = points.LeftArm.clone().add(points.RightArm).multiplyScalar(0.5);
+      const torso = shoulders.sub(hips);
+      const torsoHorizontal = Math.hypot(torso.x, torso.z);
+      const torsoVertical = Math.abs(torso.y);
+      const limbPoints = DEMON_PROTOTYPE_ANATOMY.limbTips.map(
+        (boneName) => points[boneName],
+      );
+      const frontElbowOffsets = {
+        left: points.LeftForeArm.x - points.LeftArm.x,
+        right: points.RightArm.x - points.RightForeArm.x,
+      };
       const round = (value, places = 5) => Number(value.toFixed(places));
       return {
         forwardLocal: {
-          x: round(forward.x),
-          z: round(forward.z),
+          x: round(headForward.x),
+          y: round(headForward.y),
+          z: round(headForward.z),
         },
         facingAlignment: round(forward.z),
+        headForwardPitchDegrees: round(headForwardPitchDegrees, 4),
+        torso: {
+          forwardExtension: round(
+            torso.x * forward.x + torso.z * forward.z,
+          ),
+          horizontalToVerticalRatio: round(
+            torsoHorizontal / Math.max(torsoVertical, 0.00001),
+          ),
+          headHeightAboveHips: round(points.Head.y - hips.y),
+        },
+        limbLateralSpan: round(
+          Math.max(...limbPoints.map((point) => point.x))
+          - Math.min(...limbPoints.map((point) => point.x)),
+        ),
+        frontElbows: {
+          lateralSpan: round(
+            Math.abs(points.LeftForeArm.x - points.RightForeArm.x),
+          ),
+          maximumOutwardOffset: round(
+            Math.max(0, frontElbowOffsets.left, frontElbowOffsets.right),
+          ),
+          leftOutwardOffset: round(frontElbowOffsets.left),
+          rightOutwardOffset: round(frontElbowOffsets.right),
+        },
         joints: Object.fromEntries(
           Object.entries(DEMON_PROTOTYPE_ANATOMY.joints).map(([name, chain]) => [
             name,
@@ -13901,7 +13986,7 @@
       };
       entry.root.position.set(frameMark.x, frameMark.y, frameMark.z);
       entry.root.rotation.y = frameMark.yaw;
-      const distance = entry.id === "pale-maw" ? 3.45 : 3.8;
+      const distance = entry.id === "pale-maw" ? 4.8 : 3.8;
       const viewAngle = entry.root.rotation.y + clamp(
         Number(orbitRadians) || 0,
         -Math.PI,
@@ -15508,6 +15593,8 @@
         relaySabotaged: Boolean(this.story.relaySabotaged),
         threatEscalated: Boolean(this.story.threatEscalated),
         kipClothingFound: Boolean(this.story.kipClothingFound),
+        maraClothingFound: Boolean(this.story.maraClothingFound),
+        juniperClothingFound: Boolean(this.story.juniperClothingFound),
         workroomUnlocked: Boolean(state.workroom.unlocked),
         workroomScratches: workroomCodeClue ? workroomCodeClue.getSnapshot() : [],
         inventory: this.story.inventory.slice(),
@@ -15519,7 +15606,7 @@
       const booleanFields = [
         "bookRead", "shovelTaken", "digSiteExcavated", "basementKeyFound", "basementUnlocked",
         "badgeFound", "tapeFound", "archiveCageUnlocked", "recordingPlayed", "relaySabotaged", "threatEscalated",
-        "kipClothingFound",
+        "kipClothingFound", "maraClothingFound", "juniperClothingFound",
       ];
       for (const field of booleanFields) this.story[field] = Boolean(snapshot[field]);
       state.workroom.unlocked = Boolean(snapshot.workroomUnlocked);
@@ -15530,7 +15617,10 @@
       const allowedItems = new Set(Object.keys(CONTESTANT_13.itemLabels));
       this.story.inventory = Array.from(new Set(Array.isArray(snapshot.inventory) ? snapshot.inventory.filter((id) => allowedItems.has(id)) : []));
       const allowedEntries = new Map(
-        [...Object.values(CONTESTANT_13.journal), BULK_STORAGE_SECRET.clothing.journal]
+        [
+          ...Object.values(CONTESTANT_13.journal),
+          ...BULK_STORAGE_SECRET.clothing.map((entry) => entry.journal),
+        ]
           .map((entry) => [entry.id, entry]),
       );
       this.story.journalEntries = Array.from(new Set(Array.isArray(snapshot.journalEntries) ? snapshot.journalEntries.map((entry) => entry?.id).filter((id) => allowedEntries.has(id)) : []))
@@ -19113,6 +19203,7 @@
       }
       this.show.phase = nextPhase;
       this.show.lastInvalidTransition = null;
+      bulkStorageSecretSystem?.syncClothingProgression();
       this.syncPresentation();
       updateMenuControls();
       return true;
@@ -20173,6 +20264,7 @@
         ? source.postGameDialoguePendingIds.filter((id) => id === "juniper-cross")
         : [];
       mansionContestants?.setEliminated("mara-voss", this.show.eliminatedContestantId === "mara-voss");
+      bulkStorageSecretSystem?.syncClothingProgression();
       this.syncPresentation();
       return this.getDiagnostics();
     }
@@ -20753,6 +20845,7 @@
       }
       this.show.phase = nextPhase;
       this.show.lastInvalidTransition = null;
+      bulkStorageSecretSystem?.syncClothingProgression();
       this.syncPresentation();
       updateMenuControls();
       return true;
@@ -21724,6 +21817,7 @@
           3,
         ),
       );
+      bulkStorageSecretSystem?.syncClothingProgression();
       this.syncPresentation();
       return this.getDiagnostics();
     }
@@ -21869,6 +21963,7 @@
       mansionContestants?.setEliminated("kip-solano", Boolean(stormCompleted));
       mansionContestants?.setEliminated("mara-voss", Boolean(stormCompleted));
       cameraSecurity?.setStoryStateForQA({ relaySabotaged });
+      bulkStorageSecretSystem?.syncClothingProgression();
       return this.getDiagnostics();
     }
 
@@ -23346,6 +23441,7 @@
       this.boxes = [];
       this.symbols = [];
       this.grabbed = null;
+      this.clothingEntries = [];
       this.clothingRoot = null;
       this.clothingInteraction = null;
       this.clothingRegistered = false;
@@ -23358,7 +23454,7 @@
       });
       this.buildSymbols();
       this.buildBoxes();
-      this.buildKipClothing();
+      this.buildClothingPiles();
     }
 
     buildSymbols() {
@@ -23585,50 +23681,143 @@
       }
     }
 
-    buildKipClothing() {
-      const config = BULK_STORAGE_SECRET.clothing;
+    buildClothingPiles() {
+      for (const config of BULK_STORAGE_SECRET.clothing) this.buildClothingPile(config);
+      this.syncClothingProgression(false);
+    }
+
+    buildClothingPile(config) {
       const root = new THREE.Group();
-      root.name = "kip-clothing-bulk-storage";
+      root.name = `${config.id}-clothing-bulk-storage`;
       root.position.set(config.x, FLOOR.BASEMENT + 0.025, config.z);
       root.rotation.y = config.yaw;
       scene.add(root);
-      const jacketMaterial = new THREE.MeshStandardMaterial({ color: 0x17362f, roughness: 0.94 });
-      const shirtMaterial = new THREE.MeshStandardMaterial({ color: 0x243f38, roughness: 0.92 });
-      const leatherMaterial = new THREE.MeshStandardMaterial({ color: 0x342019, roughness: 0.82 });
-      roundedBox({ name: "kip-clothing-dark-green-jacket", w: 0.76, h: 0.09, d: 0.54, radius: 0.07, y: 0.095, rotationY: 0.08, material: jacketMaterial, parent: root, cast: false });
-      roundedBox({ name: "kip-clothing-leather-trimmed-shirt", w: 0.58, h: 0.075, d: 0.42, radius: 0.055, x: -0.05, y: 0.17, z: 0.02, rotationY: -0.12, material: shirtMaterial, parent: root, cast: false });
-      for (const side of [-1, 1]) {
-        roundedBox({
-          name: "kip-clothing-jacket-sleeve",
-          w: 0.21,
-          h: 0.065,
-          d: 0.55,
-          radius: 0.045,
-          x: side * 0.36,
-          y: 0.105 + (side > 0 ? 0.015 : 0),
-          z: 0.08,
-          rotationY: side * 0.42,
-          material: jacketMaterial,
-          parent: root,
-          cast: false,
-        });
-        box({
-          name: "kip-clothing-leather-cross-trim",
-          w: 0.055,
-          h: 0.018,
-          d: 0.45,
-          x: side * 0.13,
-          y: 0.214,
-          z: 0.01,
-          rotationY: side * 0.56,
-          material: leatherMaterial,
-          parent: root,
-          cast: false,
-        });
+      if (config.id === "kip") {
+        const jacketMaterial = new THREE.MeshStandardMaterial({ color: 0x17362f, roughness: 0.94 });
+        const shirtMaterial = new THREE.MeshStandardMaterial({ color: 0x243f38, roughness: 0.92 });
+        const leatherMaterial = new THREE.MeshStandardMaterial({ color: 0x342019, roughness: 0.82 });
+        roundedBox({ name: "kip-clothing-dark-green-jacket", w: 0.76, h: 0.09, d: 0.54, radius: 0.07, y: 0.095, rotationY: 0.08, material: jacketMaterial, parent: root, cast: false });
+        roundedBox({ name: "kip-clothing-leather-trimmed-shirt", w: 0.58, h: 0.075, d: 0.42, radius: 0.055, x: -0.05, y: 0.17, z: 0.02, rotationY: -0.12, material: shirtMaterial, parent: root, cast: false });
+        for (const side of [-1, 1]) {
+          roundedBox({
+            name: "kip-clothing-jacket-sleeve",
+            w: 0.21,
+            h: 0.065,
+            d: 0.55,
+            radius: 0.045,
+            x: side * 0.36,
+            y: 0.105 + (side > 0 ? 0.015 : 0),
+            z: 0.08,
+            rotationY: side * 0.42,
+            material: jacketMaterial,
+            parent: root,
+            cast: false,
+          });
+          box({
+            name: "kip-clothing-leather-cross-trim",
+            w: 0.055,
+            h: 0.018,
+            d: 0.45,
+            x: side * 0.13,
+            y: 0.214,
+            z: 0.01,
+            rotationY: side * 0.56,
+            material: leatherMaterial,
+            parent: root,
+            cast: false,
+          });
+        }
+        roundedBox({ name: "kip-clothing-dark-trousers", w: 0.68, h: 0.075, d: 0.3, radius: 0.045, x: 0.08, y: 0.055, z: -0.26, rotationY: 0.18, material: M.soot, parent: root, cast: false });
+        const collar = cylinder({ name: "kip-clothing-high-collar", radius: 0.12, height: 0.04, segments: 14, x: -0.08, y: 0.22, z: -0.16, material: leatherMaterial, parent: root, cast: false });
+        collar.scale.z = 0.55;
+      } else if (config.id === "mara") {
+        const oxblood = new THREE.MeshStandardMaterial({ color: 0x641f2c, roughness: 0.9 });
+        const ivory = new THREE.MeshStandardMaterial({ color: 0xd8cfb5, roughness: 0.96 });
+        const lining = new THREE.MeshStandardMaterial({ color: 0x31141b, roughness: 0.88 });
+        roundedBox({ name: "mara-clothing-oxblood-jacket", w: 0.78, h: 0.09, d: 0.55, radius: 0.07, y: 0.1, rotationY: -0.06, material: oxblood, parent: root, cast: false });
+        roundedBox({ name: "mara-clothing-ivory-blouse", w: 0.56, h: 0.072, d: 0.42, radius: 0.055, x: 0.03, y: 0.178, z: 0.03, rotationY: 0.11, material: ivory, parent: root, cast: false });
+        for (const side of [-1, 1]) {
+          roundedBox({
+            name: "mara-clothing-tailored-sleeve",
+            w: 0.2,
+            h: 0.064,
+            d: 0.58,
+            radius: 0.042,
+            x: side * 0.37,
+            y: 0.108 + (side < 0 ? 0.012 : 0),
+            z: 0.08,
+            rotationY: side * -0.38,
+            material: oxblood,
+            parent: root,
+            cast: false,
+          });
+          box({
+            name: "mara-clothing-ivory-cuff",
+            w: 0.19,
+            h: 0.022,
+            d: 0.075,
+            x: side * 0.49,
+            y: 0.13,
+            z: side < 0 ? 0.2 : 0.16,
+            rotationY: side * -0.38,
+            material: ivory,
+            parent: root,
+            cast: false,
+          });
+          box({
+            name: "mara-clothing-jacket-lapel",
+            w: 0.07,
+            h: 0.018,
+            d: 0.37,
+            x: side * 0.105,
+            y: 0.222,
+            z: 0.005,
+            rotationY: side * 0.48,
+            material: oxblood,
+            parent: root,
+            cast: false,
+          });
+        }
+        roundedBox({ name: "mara-clothing-dark-tailored-trousers", w: 0.7, h: 0.07, d: 0.31, radius: 0.045, x: -0.06, y: 0.053, z: -0.27, rotationY: -0.14, material: lining, parent: root, cast: false });
+      } else {
+        const plum = new THREE.MeshStandardMaterial({ color: 0x4b244c, roughness: 0.92 });
+        const black = new THREE.MeshStandardMaterial({ color: 0x151219, roughness: 0.95 });
+        const antiqueSilver = new THREE.MeshStandardMaterial({ color: 0x766e74, metalness: 0.36, roughness: 0.5 });
+        roundedBox({ name: "juniper-clothing-black-layer", w: 0.77, h: 0.085, d: 0.55, radius: 0.07, y: 0.09, rotationY: 0.07, material: black, parent: root, cast: false });
+        roundedBox({ name: "juniper-clothing-plum-tunic", w: 0.6, h: 0.078, d: 0.45, radius: 0.06, x: -0.04, y: 0.168, z: 0.015, rotationY: -0.11, material: plum, parent: root, cast: false });
+        for (const side of [-1, 1]) {
+          roundedBox({
+            name: "juniper-clothing-plum-sleeve",
+            w: 0.19,
+            h: 0.06,
+            d: 0.59,
+            radius: 0.042,
+            x: side * 0.36,
+            y: 0.1 + (side > 0 ? 0.014 : 0),
+            z: 0.07,
+            rotationY: side * 0.44,
+            material: plum,
+            parent: root,
+            cast: false,
+          });
+          box({
+            name: "juniper-clothing-black-cross-band",
+            w: 0.052,
+            h: 0.017,
+            d: 0.44,
+            x: side * 0.12,
+            y: 0.212,
+            z: 0.012,
+            rotationY: side * 0.52,
+            material: black,
+            parent: root,
+            cast: false,
+          });
+        }
+        roundedBox({ name: "juniper-clothing-black-skirt", w: 0.72, h: 0.07, d: 0.32, radius: 0.045, x: 0.07, y: 0.052, z: -0.27, rotationY: 0.16, material: black, parent: root, cast: false });
+        const brooch = cylinder({ name: "juniper-clothing-antique-silver-brooch", radius: 0.055, height: 0.022, segments: 14, x: -0.02, y: 0.226, z: -0.03, material: antiqueSilver, parent: root, cast: false });
+        brooch.rotation.x = Math.PI / 2;
       }
-      roundedBox({ name: "kip-clothing-dark-trousers", w: 0.68, h: 0.075, d: 0.3, radius: 0.045, x: 0.08, y: 0.055, z: -0.26, rotationY: 0.18, material: M.soot, parent: root, cast: false });
-      const collar = cylinder({ name: "kip-clothing-high-collar", radius: 0.12, height: 0.04, segments: 14, x: -0.08, y: 0.22, z: -0.16, material: leatherMaterial, parent: root, cast: false });
-      collar.scale.z = 0.55;
 
       const hitMaterial = new THREE.MeshBasicMaterial({
         transparent: true,
@@ -23637,7 +23826,7 @@
         colorWrite: false,
       });
       const hitbox = box({
-        name: "kip-clothing-interaction",
+        name: `${config.id}-clothing-interaction`,
         w: 1.05,
         h: 0.72,
         d: 0.95,
@@ -23648,17 +23837,60 @@
         receive: false,
       });
       hitbox.visible = false;
+      const entry = {
+        config,
+        root,
+        hitbox,
+        interaction: null,
+        registered: false,
+      };
       const interaction = {
         type: "story",
-        id: "kip-clothing",
-        getLabel: () => state.contestant13.kipClothingFound ? "Reinspect Kip's clothing" : "Inspect Kip's clothing",
-        activate: () => this.inspectClothing(),
-        resolve: () => competitionBlocksInvestigation() ? null : interaction,
+        id: `${config.id}-clothing`,
+        getLabel: () => state.contestant13[config.foundField]
+          ? `Reinspect ${config.label}'s clothing`
+          : `Inspect ${config.label}'s clothing`,
+        activate: () => this.inspectClothing(entry),
+        resolve: () => (
+          this.clothingUnlocked(config) && !competitionBlocksInvestigation()
+            ? interaction
+            : null
+        ),
       };
+      entry.interaction = interaction;
       addInteractionTarget(hitbox, interaction);
-      this.clothingRoot = root;
-      this.clothingInteraction = interaction;
-      this.clothingRegistered = true;
+      entry.registered = true;
+      this.clothingEntries.push(entry);
+      if (config.id === "kip") {
+        this.clothingRoot = root;
+        this.clothingInteraction = interaction;
+        this.clothingRegistered = true;
+      }
+      return entry;
+    }
+
+    clothingUnlocked(config) {
+      if (config.unlockAfter === "always") return true;
+      if (config.unlockAfter === "storm-run") {
+        return stormRunSystem?.show.phase === STORM_RUN_PHASE.COMPLETED;
+      }
+      if (config.unlockAfter === "feast-hunt") {
+        return feastHuntSystem?.show.phase === FEAST_HUNT_PHASE.COMPLETED;
+      }
+      return false;
+    }
+
+    syncClothingProgression(refreshPrompt = true) {
+      let changed = false;
+      for (const entry of this.clothingEntries) {
+        const visible = this.clothingUnlocked(entry.config);
+        if (entry.root.visible !== visible) {
+          entry.root.visible = visible;
+          changed = true;
+        }
+      }
+      if (refreshPrompt && changed) updateInteractionPrompt();
+      return changed;
     }
 
     beginHold(entry) {
@@ -23765,16 +23997,18 @@
         .map((entry) => entry.spec.id);
     }
 
-    inspectClothing() {
+    inspectClothing(entry) {
       if (competitionBlocksInvestigation()) {
         notifyCompetitionHold();
         return false;
       }
-      const newlyDiscovered = !state.contestant13.kipClothingFound;
-      state.contestant13.kipClothingFound = true;
-      contestant13Quest?.addJournalEntry(BULK_STORAGE_SECRET.clothing.journal);
+      if (!entry || !this.clothingUnlocked(entry.config)) return false;
+      const { config } = entry;
+      const newlyDiscovered = !state.contestant13[config.foundField];
+      state.contestant13[config.foundField] = true;
+      contestant13Quest?.addJournalEntry(config.journal);
       contestant13Quest?.updateUI();
-      contestant13Quest?.showDiscovery("Kip's clothes", BULK_STORAGE_SECRET.clothing.observation, 9000);
+      contestant13Quest?.showDiscovery(`${config.label}'s clothes`, config.observation, 9000);
       if (newlyDiscovered && audioSystem) audioSystem.ping(104, 0.34, 0.022, "sine");
       return true;
     }
@@ -23838,11 +24072,17 @@
       this.state.lastMoveMode = null;
       this.state.lastMovedBoxId = null;
       if (options.clearClue) {
-        state.contestant13.kipClothingFound = false;
+        for (const config of BULK_STORAGE_SECRET.clothing) {
+          state.contestant13[config.foundField] = false;
+        }
+        const clothingJournalIds = new Set(
+          BULK_STORAGE_SECRET.clothing.map((config) => config.journal.id),
+        );
         state.contestant13.journalEntries = state.contestant13.journalEntries
-          .filter((entry) => entry.id !== BULK_STORAGE_SECRET.clothing.journal.id);
+          .filter((entry) => !clothingJournalIds.has(entry.id));
         contestant13Quest?.updateUI();
       }
+      this.syncClothingProgression(false);
       updateInteractionPrompt();
       return this.getDiagnostics();
     }
@@ -23910,13 +24150,15 @@
       };
     }
 
-    placePlayerNearClothingForQA() {
-      if (!state.qa || !physics || !this.clothingRoot) return null;
+    placePlayerNearClothingForQA(id = "kip") {
+      const entry = this.clothingEntries.find((candidate) => candidate.config.id === id);
+      if (!state.qa || !physics || !entry) return null;
       this.endHold("qa-clothing");
       input.interactHeld = false;
-      const qa = BULK_STORAGE_SECRET.clothing.qa;
-      const dx = BULK_STORAGE_SECRET.clothing.x - qa.x;
-      const dz = BULK_STORAGE_SECRET.clothing.z - qa.z;
+      this.syncClothingProgression(false);
+      const qa = entry.config.qa;
+      const dx = entry.config.x - qa.x;
+      const dz = entry.config.z - qa.z;
       const yaw = Math.atan2(-dx, -dz);
       teleport(qa.x, FLOOR.BASEMENT, qa.z, yaw, qa.pitch);
       syncCamera();
@@ -23924,12 +24166,37 @@
       updateLocation();
       updateInteractionPrompt();
       return {
-        visible: Boolean(this.clothingRoot.visible),
+        id: entry.config.id,
+        visible: Boolean(entry.root.visible),
         prompt: state.currentInteraction?.getLabel() || null,
       };
     }
 
+    clothingDiagnostics(entry) {
+      const { config } = entry;
+      const journalEntryCount = state.contestant13.journalEntries
+        .filter((journalEntry) => journalEntry.id === config.journal.id).length;
+      return {
+        id: config.id,
+        contestantId: config.contestantId,
+        label: config.label,
+        unlockAfter: config.unlockAfter,
+        visible: Boolean(entry.root.visible),
+        registered: entry.registered,
+        discovered: Boolean(state.contestant13[config.foundField]),
+        journalEntryCount,
+        observation: config.observation,
+        prompt: entry.interaction?.getLabel() || null,
+        position: {
+          x: config.x,
+          y: FLOOR.BASEMENT,
+          z: config.z,
+        },
+      };
+    }
+
     getDiagnostics() {
+      this.syncClothingProgression(false);
       const symbolStates = this.symbols.map((symbol) => {
         const coveredByBoxIds = this.symbolCoverage(symbol);
         return {
@@ -23952,8 +24219,8 @@
           visibilityToggles: symbol.visibilityToggles,
         };
       });
-      const journalEntryCount = state.contestant13.journalEntries
-        .filter((entry) => entry.id === BULK_STORAGE_SECRET.clothing.journal.id).length;
+      const clothingPiles = this.clothingEntries.map((entry) => this.clothingDiagnostics(entry));
+      const kipClothing = clothingPiles.find((entry) => entry.id === "kip") || null;
       return {
         room: BULK_STORAGE_SECRET.room,
         interactionHeld: Boolean(input.interactHeld),
@@ -24001,19 +24268,8 @@
         symbols: symbolStates,
         revealedCount: symbolStates.filter((symbol) => !symbol.covered).length,
         allRevealed: symbolStates.every((symbol) => !symbol.covered),
-        clothing: {
-          visible: Boolean(this.clothingRoot?.visible),
-          registered: this.clothingRegistered,
-          discovered: Boolean(state.contestant13.kipClothingFound),
-          journalEntryCount,
-          observation: BULK_STORAGE_SECRET.clothing.observation,
-          prompt: this.clothingInteraction?.getLabel() || null,
-          position: {
-            x: BULK_STORAGE_SECRET.clothing.x,
-            y: FLOOR.BASEMENT,
-            z: BULK_STORAGE_SECRET.clothing.z,
-          },
-        },
+        clothing: kipClothing,
+        clothingPiles,
       };
     }
   }
@@ -33953,6 +34209,7 @@
     feastSaysSystem?.restoreSnapshot(data.feastSays, data.contestant13);
     stormRunSystem?.restoreSnapshot(data.stormRun, data.contestant13);
     feastHuntSystem?.restoreSnapshot(data.feastHunt);
+    bulkStorageSecretSystem?.syncClothingProgression();
     physics.verticalVelocity = 0;
     physics.playerBody.setTranslation({ x, y, z }, true);
     physics.playerBody.setNextKinematicTranslation({ x, y, z });
@@ -36373,7 +36630,12 @@
     );
     window.MrFeastFresh.placePlayerNearKipClothingForQA = () => (
       state.qa && bulkStorageSecretSystem
-        ? bulkStorageSecretSystem.placePlayerNearClothingForQA()
+        ? bulkStorageSecretSystem.placePlayerNearClothingForQA("kip")
+        : null
+    );
+    window.MrFeastFresh.placePlayerNearContestantClothingForQA = (id = "kip") => (
+      state.qa && bulkStorageSecretSystem
+        ? bulkStorageSecretSystem.placePlayerNearClothingForQA(id)
         : null
     );
     window.MrFeastFresh.resetBulkStorageSecretForQA = (options = {}) => (
@@ -37701,6 +37963,7 @@
       stormSystem = new StormSystem();
       stormRunSystem = new StormRunSystem();
       feastHuntSystem = new FeastHuntSystem();
+      bulkStorageSecretSystem.syncClothingProgression(false);
       banquetLossSystem = new BanquetLossSystem();
       audioSystem = new MansionAudio();
       updateAudioButton();

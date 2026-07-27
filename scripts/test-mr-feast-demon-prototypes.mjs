@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { access, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +12,8 @@ const pagePath = path.join(root, "games/mr-feast-mansion.html");
 const manifestPath = path.join(root, "assets/models/mr-feast/demon-prototypes/manifest.json");
 const milestonePath = path.join(root, "docs/milestones/65-demon-prototype-dev-patrol.md");
 const locomotionPipelinePath = path.join(root, "scripts/blender/refine-demon-prototype-animation.py");
+const PALE_MAW_DEFAULT_MODEL_SHA256 =
+  "cb0aac538d2e2cf9665a6e6fc84652226c1d8a7e3364c99d92636a2f9fcdbb5c";
 
 const runtime = await readFile(runtimePath, "utf8");
 const pageHtml = await readFile(pagePath, "utf8");
@@ -20,7 +23,7 @@ assert.match(runtime, /const DEMON_PROTOTYPES = Object\.freeze/, "missing named 
 const runtimeCacheIdentity = runtime.match(/MANSION_RUNTIME_VERSION = "([^"]+)"/)?.[1] || "";
 const pageCacheIdentity = pageHtml.match(/mr-feast-mansion\.js\?v=([^"'&]+)/)?.[1] || "";
 assert.ok(
-  runtimeCacheIdentity.startsWith("20260726-pale-maw-diagonal-gait-"),
+  runtimeCacheIdentity.startsWith("20260726-pale-maw-elbow-tuck-"),
   `demon prototype runtime cache identity is stale: ${runtimeCacheIdentity || "missing"}`,
 );
 assert.equal(
@@ -48,7 +51,7 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 assert.equal(manifest.version, 1, "unexpected demon prototype manifest version");
 assert.equal(
   manifest.assetVersion,
-  "20260726-pale-maw-diagonal-gait-1",
+  "20260726-pale-maw-elbow-tuck-1",
   "demon animation assets need a fresh cache identity",
 );
 assert.equal(manifest.prototypes?.length, 2, "manifest must contain exactly two prototypes");
@@ -202,8 +205,12 @@ for (const prototype of manifest.prototypes) {
   const modelPath = path.join(path.dirname(manifestPath), prototype.model);
   const modelBytes = (await stat(modelPath)).size;
   assert.ok(modelBytes <= 4 * 1024 * 1024, `${prototype.id} exceeds the 4 MiB runtime model budget`);
-  const modelGlb = parseGlb(await readFile(modelPath), `${prototype.id} model`);
+  const modelBuffer = await readFile(modelPath);
+  const modelGlb = parseGlb(modelBuffer, `${prototype.id} model`);
   const model = modelGlb.json;
+  const skinJointNames = (model.skins?.[0]?.joints ?? [])
+    .map((nodeIndex) => model.nodes?.[nodeIndex]?.name)
+    .filter(Boolean);
   const bindRotationByBone = new Map(
     (model.nodes ?? []).map((node) => [
       node.name,
@@ -222,6 +229,35 @@ for (const prototype of manifest.prototypes) {
   assert.ok((report.maxTextureDimension ?? 99_999) <= 1024, `${prototype.id} exceeds the texture budget`);
   assert.ok((report.skinnedMeshCount ?? 0) >= 1, `${prototype.id} report did not find a skinned mesh`);
   assert.ok((report.boneCount ?? 0) >= 20, `${prototype.id} report did not find a usable skeleton`);
+  if (prototype.id === "pale-maw") {
+    assert.equal(
+      createHash("sha256").update(modelBuffer).digest("hex"),
+      PALE_MAW_DEFAULT_MODEL_SHA256,
+      "Pale Maw model no longer matches the accepted default processed bind",
+    );
+    assert.equal(
+      report.restPosture?.name,
+      "processed-source-bind",
+      "Pale Maw runtime model must preserve the default processed bind pose",
+    );
+    for (const [field, expected] of [
+      ["hipsPitchDegrees", 0],
+      ["armRaiseDegrees", 0],
+      ["neckLiftDegrees", 0],
+      ["lateralScale", 1],
+    ]) {
+      assert.equal(
+        report.restPosture?.[field],
+        expected,
+        `Pale Maw default bind unexpectedly changes ${field}`,
+      );
+    }
+    assert.equal(
+      model.meshes?.length,
+      1,
+      "Pale Maw runtime GLB retained a non-skin rig helper mesh",
+    );
+  }
 
   const expectedLocomotionStyle = prototype.id === "banquet-saint"
     ? "ceremonial-glide"
@@ -366,15 +402,37 @@ for (const prototype of manifest.prototypes) {
         animationReport.maximumKneeTwistDegrees <= 2,
         `${prototype.id} ${action} retains excessive knee twist`,
       );
+      assert.ok(
+        animationReport.maximumIkErrorMeters <= 0.01,
+        `${prototype.id} ${action} contact solver misses its limb target`,
+      );
+      assert.equal(
+        animationReport.bodyPosture,
+        "default-processed-bind",
+        `${prototype.id} ${action} is not authored on the accepted default body pose`,
+      );
       assert.equal(
         animationReport.jointStabilization,
-        "bind-angle-locked-distal-chains",
-        `${prototype.id} ${action} still double-articulates its knees or elbows`,
+        "twist-free-two-bone-contact-ik",
+        `${prototype.id} ${action} does not use the stable contact IK chain`,
       );
       assert.equal(
         animationReport.armDriver,
-        "upper-arm-parent-rigid-distal-chain",
-        `${prototype.id} ${action} does not carry each arm as one stable chain`,
+        "upper-arm-and-forearm-contact-chain",
+        `${prototype.id} ${action} does not plant through both front-arm segments`,
+      );
+      assert.equal(
+        animationReport.frontElbowControl?.bendMode,
+        "symmetric-inward-pole",
+        `${prototype.id} ${action} does not tuck both front elbows toward the body`,
+      );
+      assert.ok(
+        animationReport.frontElbowControl?.maximumLateralSpanMeters <= 1.65,
+        `${prototype.id} ${action} front elbows still bow too far apart`,
+      );
+      assert.ok(
+        animationReport.frontElbowControl?.maximumOutwardOffsetMeters <= 0.55,
+        `${prototype.id} ${action} front elbow moves too far outside its shoulder`,
       );
       assert.deepEqual(
         animationReport.diagonalPairs,
@@ -386,61 +444,101 @@ for (const prototype of manifest.prototypes) {
       );
       assert.ok(
         Object.values(animationReport.jointAngleExcursionDegrees)
-          .every((excursion) => excursion <= 0.5),
-        `${prototype.id} ${action} changes a knee/elbow bind angle enough to warp`,
+          .every((excursion) => excursion <= 60),
+        `${prototype.id} ${action} over-folds a knee or elbow`,
       );
-      for (const boneName of [
-        "LeftLeg",
-        "RightLeg",
-        "LeftForeArm",
-        "RightForeArm",
-      ]) {
-        const samples = samplesByBone.get(boneName);
-        assert.ok(samples?.length, `${clipLabel} is missing ${boneName}`);
-        assert.ok(
-          samples.every((sample) => (
-            quaternionDeltaDegrees(samples[0], sample) <= 0.02
-          )),
-          `${clipLabel} double-articulates ${boneName}`,
-        );
-      }
       assert.ok(
         animationReport.surfaceEdgeDeformation.maximumGrowthMeters <= 0.11,
         `${prototype.id} ${action} stretches a surface edge by more than 11cm`,
       );
+      const animatedLimbBones = new Set([
+        "LeftArm",
+        "LeftForeArm",
+        "LeftHand",
+        "RightArm",
+        "RightForeArm",
+        "RightHand",
+        "LeftUpLeg",
+        "LeftLeg",
+        "RightUpLeg",
+        "RightLeg",
+      ]);
+      for (const boneName of skinJointNames.filter(
+        (name) => !animatedLimbBones.has(name),
+      )) {
+        const bindRotation = bindRotationByBone.get(boneName);
+        const samples = samplesByBone.get(boneName);
+        assert.ok(bindRotation && samples?.length, `${clipLabel} is missing core bind bone ${boneName}`);
+        assert.ok(
+          samples.every((sample) => quaternionDeltaDegrees(bindRotation, sample) <= 0.02),
+          `${clipLabel} changes ${boneName} instead of preserving the default model`,
+        );
+      }
       if (action === "idle") {
         assert.ok(
-          animationReport.maximumLimbExcursionDegrees <= 8,
+          animationReport.maximumLimbExcursionDegrees <= 30,
           `${prototype.id} idle is too restless`,
         );
       } else {
+        assert.equal(
+          animationReport.contactSolver,
+          "planted-diagonal-two-bone-ik",
+          `${prototype.id} ${action} does not solve each hand and foot to the floor`,
+        );
         assert.equal(
           animationReport.propulsionMode,
           "four-limb-contact-push",
           `${prototype.id} ${action} does not use a four-limb propulsion gait`,
         );
         assert.ok(
-          animationReport.maximumLimbExcursionDegrees >= 22
-            && animationReport.maximumLimbExcursionDegrees <= 50,
+          animationReport.maximumLimbExcursionDegrees >= 45
+          && animationReport.maximumLimbExcursionDegrees <= 105,
           `${prototype.id} ${action} limb excursion does not match patrol speed`,
         );
         assert.ok(
           animationReport.minimumContactSweepMeters >= 0.45,
           `${prototype.id} ${action} contact sweep is too short to propel the root`,
         );
+        for (const limbName of [
+          "LeftHand",
+          "RightHand",
+          "LeftFoot",
+          "RightFoot",
+        ]) {
+          const contact = animationReport.limbGroundContact?.[limbName];
+          assert.ok(contact, `${prototype.id} ${action} has no ${limbName} floor-contact report`);
+          assert.ok(
+            contact.minimumClearanceMeters <= 0.035,
+            `${prototype.id} ${action} ${limbName} never plants on the floor`,
+          );
+          assert.ok(
+            contact.maximumPenetrationMeters <= 0.055,
+            `${prototype.id} ${action} ${limbName} penetrates the floor`,
+          );
+          assert.ok(
+            contact.liftMeters >= 0.04,
+            `${prototype.id} ${action} ${limbName} does not lift for recovery`,
+          );
+          assert.ok(
+            contact.plantedSampleRatio >= 0.16,
+            `${prototype.id} ${action} ${limbName} has no sustained planted phase`,
+          );
+        }
         for (const boneName of [
           "LeftArm",
           "RightArm",
           "LeftUpLeg",
           "RightUpLeg",
+          "LeftForeArm",
+          "RightForeArm",
+          "LeftLeg",
+          "RightLeg",
         ]) {
           const samples = samplesByBone.get(boneName);
           assert.ok(samples?.length, `${clipLabel} is missing ${boneName}`);
           assert.ok(
-            maximumPairwiseQuaternionDelta(samples) >= (
-              boneName.endsWith("Arm") ? 50 : 40
-            ),
-            `${clipLabel} ${boneName} still has a short sliding stride`,
+            maximumPairwiseQuaternionDelta(samples) >= 4,
+            `${clipLabel} ${boneName} does not participate in the planted gait`,
           );
         }
       }
@@ -469,7 +567,7 @@ for (const prototype of manifest.prototypes) {
         }),
       );
       assert.ok(
-        maximumHindChainDeviation <= 50,
+        maximumHindChainDeviation <= 85,
         `${clipLabel} hind chain departs ${maximumHindChainDeviation.toFixed(2)} degrees from the clean bind plane`,
       );
     }
@@ -579,8 +677,8 @@ try {
       for (const action of ["walk", "run"]) {
         assert.equal(
           entry.animationTracks[action].dynamicRotation,
-          4,
-          `${entry.id} ${action} must move four stable upper limbs only`,
+          10,
+          `${entry.id} ${action} must solve all four contact chains and preserve both planted palms`,
         );
       }
     }
@@ -652,7 +750,19 @@ try {
             );
           }
         }
-      } else if (action !== "idle") {
+      } else {
+        for (const anatomy of anatomySamples) {
+          assert.ok(
+            anatomy.frontElbows.lateralSpan <= 1.65,
+            `${id} ${action} front elbows span ${anatomy.frontElbows.lateralSpan.toFixed(3)}m`,
+          );
+          assert.ok(
+            anatomy.frontElbows.maximumOutwardOffset <= 0.55,
+            `${id} ${action} elbow bows ${anatomy.frontElbows.maximumOutwardOffset.toFixed(3)}m outside its shoulder`,
+          );
+        }
+      }
+      if (id === "pale-maw" && action !== "idle") {
         const playbackRate = action === "run"
           ? lastSampled.route.runPlaybackRate
           : lastSampled.route.walkPlaybackRate;
@@ -679,8 +789,12 @@ try {
         };
         for (const [jointName, values] of Object.entries(jointSamples)) {
           assert.ok(
-            sampleRange(values) <= 0.5,
-            `${id} ${action} ${jointName} changes angle and deforms the mesh`,
+            sampleRange(values) <= 60,
+            `${id} ${action} ${jointName} over-folds during contact`,
+          );
+          assert.ok(
+            Math.min(...values) >= 40,
+            `${id} ${action} ${jointName} collapses or reverses`,
           );
         }
         for (const [limbName, projections] of Object.entries(projectionsByLimb)) {

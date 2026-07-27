@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-26T10:27:19.468528+00:00",
+  "generatedAt": "2026-07-27T00:30:38.408153+00:00",
   "format": "animation-only-glb",
   "pipeline": "blender-authored-demon-locomotion",
   "source": "assets/models/mr-feast/demon-prototypes/pale-maw.glb",
@@ -15,82 +15,97 @@
   "scaleTracks": 0,
   "rootMotion": false,
   "durationSeconds": 3.416667,
-  "keyframesPerTrack": 5,
+  "keyframesPerTrack": 83,
   "quaternionHemisphereFlips": 0,
   "baselineSourcePhase": null,
   "baselinePose": "processed-bind",
   "bytes": 43896,
   "previews": [
-    "output/iterate/demon-prototypes/blender-diagonal-gait-final/pale-maw-idle-front-a.png",
-    "output/iterate/demon-prototypes/blender-diagonal-gait-final/pale-maw-idle-right-a.png",
-    "output/iterate/demon-prototypes/blender-diagonal-gait-final/pale-maw-idle-front-b.png",
-    "output/iterate/demon-prototypes/blender-diagonal-gait-final/pale-maw-idle-right-b.png"
+    "output/iterate/demon-prototypes/blender-default-bind-elbow-tuck-final/pale-maw-idle-front-contact-a.png",
+    "output/iterate/demon-prototypes/blender-default-bind-elbow-tuck-final/pale-maw-idle-right-contact-a.png",
+    "output/iterate/demon-prototypes/blender-default-bind-elbow-tuck-final/pale-maw-idle-front-stride-a.png",
+    "output/iterate/demon-prototypes/blender-default-bind-elbow-tuck-final/pale-maw-idle-right-stride-a.png",
+    "output/iterate/demon-prototypes/blender-default-bind-elbow-tuck-final/pale-maw-idle-front-contact-b.png",
+    "output/iterate/demon-prototypes/blender-default-bind-elbow-tuck-final/pale-maw-idle-right-contact-b.png",
+    "output/iterate/demon-prototypes/blender-default-bind-elbow-tuck-final/pale-maw-idle-front-stride-b.png",
+    "output/iterate/demon-prototypes/blender-default-bind-elbow-tuck-final/pale-maw-idle-right-stride-b.png"
   ],
   "authoredStyle": "anatomical-creep",
+  "bodyPosture": "default-processed-bind",
   "kneeBendDirection": "anatomical-backward-flex",
   "maximumKneeTwistDegrees": 0,
-  "maximumLimbExcursionDegrees": 1.200062,
+  "maximumLimbExcursionDegrees": 28.832827,
+  "maximumIkErrorMeters": 1e-06,
   "bilateralPhaseOffset": 0.5,
-  "jointStabilization": "bind-angle-locked-distal-chains",
-  "armDriver": "upper-arm-parent-rigid-distal-chain",
+  "jointStabilization": "twist-free-two-bone-contact-ik",
+  "armDriver": "upper-arm-and-forearm-contact-chain",
   "diagonalPairs": {
     "leftArm": "rightLeg",
     "rightArm": "leftLeg"
   },
-  "limbDriverExcursionDegrees": {
-    "leftArm": 1.2,
-    "rightArm": 1.2,
-    "leftLeg": 0.0,
-    "rightLeg": 0.0
+  "limbTargetMotionMeters": {
+    "stride": 0.025,
+    "lift": 0.012
   },
   "gait": "settled-contralateral-idle",
+  "contactSolver": "settled-four-point-two-bone-ik",
   "propulsionMode": "settled-four-contact",
-  "swingConstruction": "twist-free-directional-quaternion",
+  "swingConstruction": "twist-free-analytic-two-bone-quaternion",
   "bindBasisMaximumAxialTwistDegrees": 0,
-  "kneeLockMinimumDegrees": 89.975912,
-  "elbowLockMinimumDegrees": 154.663828,
+  "kneeLockMinimumDegrees": 99.094953,
+  "elbowLockMinimumDegrees": 150.157952,
   "minimumFacingAlignment": 1.0,
+  "headPosture": {
+    "minimumForwardPitchDegrees": 0.0,
+    "maximumForwardPitchDegrees": 0.0,
+    "maximumAbsoluteForwardPitchDegrees": 0.0
+  },
+  "torsoPosture": {
+    "minimumForwardExtensionMeters": -0.204413,
+    "minimumHorizontalToVerticalRatio": 0.425065
+  },
+  "maximumLimbLateralSpanMeters": 2.056888,
   "groundContact": {
-    "maximumClearanceMeters": 0.0,
+    "maximumClearanceMeters": 0.00556,
     "maximumPenetrationMeters": 0.0
   },
   "surfaceEdgeDeformation": {
-    "maximumStretchRatio": 1.084352,
-    "minimumScaleRatio": 0.920928,
-    "maximumGrowthMeters": 0.002706,
+    "maximumStretchRatio": 1.422924,
+    "minimumScaleRatio": 0.618872,
+    "maximumGrowthMeters": 0.024544,
     "maximumGrowthEdge": {
       "mesh": "Demon_Pale_Maw_Mesh_01",
-      "frame": 62,
-      "edge": 30476,
+      "frame": 20,
+      "edge": 30479,
       "vertices": [
         9820,
-        10534
+        10537
       ],
-      "bindLengthMeters": 0.097765,
-      "posedLengthMeters": 0.100471,
-      "stretchRatio": 1.027676,
+      "bindLengthMeters": 0.097244,
+      "posedLengthMeters": 0.121788,
+      "stretchRatio": 1.25239,
       "bindPositions": [
         [
-          -0.534065,
-          0.029802,
-          0.870305
+          -0.779048,
+          0.043473,
+          1.269528
         ],
         [
-          -0.461612,
-          0.012466,
-          0.933615
+          -0.719166,
+          0.02281,
+          1.343309
         ]
       ],
       "posedPositions": [
         [
-          -0.538043,
-          0.039518,
-          0.865477
+          -0.696842,
+          0.129563,
+          1.1577
         ],
         [
-          -0.464382,
-          0.017784,
-          0.930254
+          -0.665939,
+          0.078856,
+          1.26403
         ]
       ],
       "vertexWeights": {
@@ -99,35 +114,67 @@
           "RightShoulder": 0.152764,
           "Spine01": 0.000876
         },
-        "10534": {
-          "RightArm": 0.560074,
-          "RightShoulder": 0.435856,
-          "Spine01": 0.00407
+        "10537": {
+          "RightArm": 0.619321,
+          "RightShoulder": 0.377947,
+          "Spine01": 0.002732
         }
       }
     }
   },
   "jointAngleExcursionDegrees": {
-    "leftKnee": 0.0,
-    "rightKnee": 0.0,
-    "leftElbow": 1.4e-05,
-    "rightElbow": 1.4e-05
+    "leftKnee": 1.914406,
+    "rightKnee": 3.142406,
+    "leftElbow": 1.827158,
+    "rightElbow": 1.884572
   },
   "contactSweepMeters": {
-    "LeftHand": 0.043741,
-    "RightHand": 0.041623,
-    "LeftFoot": 0.0,
-    "RightFoot": 0.0
+    "LeftHand": 0.024982,
+    "RightHand": 0.024981,
+    "LeftFoot": 0.024982,
+    "RightFoot": 0.024982
   },
-  "minimumContactSweepMeters": 0.0,
+  "minimumContactSweepMeters": 0.024981,
+  "limbGroundContact": {
+    "LeftHand": {
+      "minimumClearanceMeters": 0.008354,
+      "maximumPenetrationMeters": 0.0,
+      "liftMeters": 0.025831,
+      "plantedSampleRatio": 1.0
+    },
+    "RightHand": {
+      "minimumClearanceMeters": 0.001138,
+      "maximumPenetrationMeters": 0.0,
+      "liftMeters": 0.028382,
+      "plantedSampleRatio": 1.0
+    },
+    "LeftFoot": {
+      "minimumClearanceMeters": 0.002629,
+      "maximumPenetrationMeters": 0.0,
+      "liftMeters": 0.014834,
+      "plantedSampleRatio": 1.0
+    },
+    "RightFoot": {
+      "minimumClearanceMeters": 0.00111,
+      "maximumPenetrationMeters": 0.0,
+      "liftMeters": 0.014175,
+      "plantedSampleRatio": 1.0
+    }
+  },
   "armTrailMeters": {
     "left": [
-      0.735717,
-      0.779458
+      1.078231,
+      1.103213
     ],
     "right": [
-      0.703347,
-      0.74497
+      1.041442,
+      1.066424
     ]
+  },
+  "frontElbowControl": {
+    "bendMode": "symmetric-inward-pole",
+    "poleBlend": 0.38,
+    "maximumLateralSpanMeters": 1.564649,
+    "maximumOutwardOffsetMeters": 0.498172
   }
 }

@@ -148,7 +148,20 @@ async function run() {
   assert(/event\.code === "KeyE"[\s\S]{0,180}endCurrentInteractionHold/.test(runtime), "E keyup must release the held interaction");
   assert(/touchInteract[\s\S]{0,900}pointerup/.test(runtime), "the existing touch Interact button must support release as well as press");
   assert(/kip-clothing/.test(runtime) && /what Kip was wearing/i.test(runtime), "Kip's clothing clue and requested observation text are missing");
-  assert(/getBulkStorageSecretState/.test(runtime) && /placePlayerNearBulkStorageBoxForQA/.test(runtime) && /frameBulkStorageSymbolForQA/.test(runtime), "focused bulk-storage diagnostics and QA controls are missing");
+  assert(
+    /id:\s*"mara"[\s\S]{0,900}unlockAfter:\s*"storm-run"/.test(runtime)
+      && /id:\s*"juniper"[\s\S]{0,900}unlockAfter:\s*"feast-hunt"/.test(runtime),
+    "Mara and Juniper need named Game 2/Game 3 clothing progression contracts",
+  );
+  assert(/oxblood jacket and ivory blouse[\s\S]{0,500}Mara was wearing/i.test(runtime), "Mara's storage clothing must recall her oxblood-and-ivory outfit");
+  assert(/plum-and-black[\s\S]{0,500}Juniper was wearing/i.test(runtime), "Juniper's storage clothing must recall her plum-and-black outfit");
+  assert(
+    /getBulkStorageSecretState/.test(runtime)
+      && /placePlayerNearBulkStorageBoxForQA/.test(runtime)
+      && /frameBulkStorageSymbolForQA/.test(runtime)
+      && /placePlayerNearContestantClothingForQA/.test(runtime),
+    "focused bulk-storage diagnostics and QA controls are missing",
+  );
   assert(/id="touch-interact"/.test(html), "the existing touch Interact control must remain available");
 
   let server = null;
@@ -267,10 +280,107 @@ async function run() {
     assert(!mobileAfterState.interactionHeld && mobileAfterState.grabbedBoxId == null, "touch pointerup must release the box");
     await mobilePage.screenshot({ path: path.join(artifactDir, "bulk-storage-touch-hold-mobile.png") });
     await mobile.context.close();
+
+    // Competition-gated clothing progression: Kip is already present, Mara
+    // joins him after Game 2, and Juniper joins both after Game 3.
+    const progression = await bootPage(browser, errors);
+    const progressionPage = progression.page;
+    await progressionPage.waitForFunction(
+      () => window.MrFeastFresh.getContestantState?.()?.settled,
+      null,
+      { timeout: 120000 },
+    );
+    let progressionSecret = await secretState(progressionPage);
+    let piles = Object.fromEntries(progressionSecret.clothingPiles.map((pile) => [pile.id, pile]));
+    assert(
+      piles.kip?.visible
+        && !piles.mara?.visible
+        && !piles.juniper?.visible,
+      `fresh storage should contain only Kip's clothing: ${JSON.stringify(progressionSecret.clothingPiles)}`,
+    );
+
+    const stormCall = await progressionPage.evaluate(() => window.MrFeastFresh.callStormRunForQA("qa"));
+    assert(stormCall?.started, `Game 2 QA call should start: ${JSON.stringify(stormCall)}`);
+    await progressionPage.waitForFunction(
+      () => window.MrFeastFresh.getStormRunState?.()?.castReady,
+      null,
+      { timeout: 120000 },
+    );
+    const stormResult = await progressionPage.evaluate(() => window.MrFeastFresh.completeStormRunForQA("player"));
+    assert(stormResult?.survived, `Game 2 QA completion should survive: ${JSON.stringify(stormResult)}`);
+    await progressionPage.waitForFunction(
+      () => window.MrFeastFresh.getBulkStorageSecretState()?.clothingPiles?.find((pile) => pile.id === "mara")?.visible,
+    );
+    progressionSecret = await secretState(progressionPage);
+    piles = Object.fromEntries(progressionSecret.clothingPiles.map((pile) => [pile.id, pile]));
+    assert(
+      piles.kip.visible
+        && piles.mara.visible
+        && !piles.juniper.visible,
+      `Game 2 should add Mara beside Kip without revealing Juniper: ${JSON.stringify(progressionSecret.clothingPiles)}`,
+    );
+    const maraStage = await progressionPage.evaluate(
+      () => window.MrFeastFresh.placePlayerNearContestantClothingForQA("mara"),
+    );
+    assert(maraStage?.visible && /inspect.*mara.*clothing/i.test(maraStage.prompt || ""), `Mara's unlocked pile needs a reachable prompt: ${JSON.stringify(maraStage)}`);
+    await progressionPage.keyboard.press("e");
+    await progressionPage.waitForFunction(
+      () => window.MrFeastFresh.getBulkStorageSecretState()?.clothingPiles?.find((pile) => pile.id === "mara")?.discovered,
+    );
+
+    const calledHunt = await progressionPage.evaluate(() => {
+      window.MrFeastFresh.setFeastHuntGateForQA({ stormCompleted: true, relaySabotaged: true });
+      return window.MrFeastFresh.callFeastHuntForQA("gate");
+    });
+    assert(calledHunt?.started, `Game 3 should call after its gates: ${JSON.stringify(calledHunt)}`);
+    const startedHunt = await progressionPage.evaluate(() => window.MrFeastFresh.startFeastHuntForQA());
+    assert(startedHunt?.started, `Game 3 briefing should start: ${JSON.stringify(startedHunt)}`);
+    await progressionPage.keyboard.press("e");
+    await progressionPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(3.2));
+    assert((await progressionPage.evaluate(() => window.MrFeastFresh.getFeastHuntState())).phase === "hunting", "Game 3 QA progression must reach the live hunt");
+    for (const id of ["golden-bell", "golden-goblet", "golden-carving-knife"]) {
+      const collected = await progressionPage.evaluate(
+        (itemId) => window.MrFeastFresh.collectFeastHuntItemForQA(itemId),
+        id,
+      );
+      assert(collected?.accepted, `QA must collect ${id}: ${JSON.stringify(collected)}`);
+      const returnStage = await progressionPage.evaluate(() => window.MrFeastFresh.placePlayerAtFeastHuntReturnForQA());
+      assert(returnStage?.readyToReturn, `QA must stage the ${id} hand-in: ${JSON.stringify(returnStage)}`);
+      await progressionPage.keyboard.press("e");
+    }
+    await progressionPage.waitForFunction(
+      () => window.MrFeastFresh.getBulkStorageSecretState()?.clothingPiles?.find((pile) => pile.id === "juniper")?.visible,
+    );
+    progressionSecret = await secretState(progressionPage);
+    piles = Object.fromEntries(progressionSecret.clothingPiles.map((pile) => [pile.id, pile]));
+    assert(
+      piles.kip.visible && piles.mara.visible && piles.juniper.visible,
+      `Game 3 should leave Kip, Mara, and Juniper's clothing together: ${JSON.stringify(progressionSecret.clothingPiles)}`,
+    );
+    await progressionPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(7));
+    const juniperStage = await progressionPage.evaluate(
+      () => window.MrFeastFresh.placePlayerNearContestantClothingForQA("juniper"),
+    );
+    assert(juniperStage?.visible && /inspect.*juniper.*clothing/i.test(juniperStage.prompt || ""), `Juniper's unlocked pile needs a reachable prompt: ${JSON.stringify(juniperStage)}`);
+    await progressionPage.keyboard.press("e");
+    await progressionPage.waitForFunction(
+      () => window.MrFeastFresh.getBulkStorageSecretState()?.clothingPiles?.find((pile) => pile.id === "juniper")?.discovered,
+    );
+    await progressionPage.evaluate(() => window.MrFeastFresh.frameBulkStorageSecretForQA());
+    await progressionPage.screenshot({ path: path.join(artifactDir, "all-contestant-clothing-after-game-three-desktop.png") });
+    assert(await progressionPage.evaluate(() => window.MrFeastFresh.saveGameForQA()), "completed clothing progression should save");
+    assert(await progressionPage.evaluate(() => window.MrFeastFresh.loadGameForQA()), "completed clothing progression should reload");
+    progressionSecret = await secretState(progressionPage);
+    assert(
+      progressionSecret.clothingPiles.every((pile) => pile.visible)
+        && progressionSecret.clothingPiles.filter((pile) => pile.discovered).length === 2,
+      `save/load should preserve all three visible piles and the inspected Mara/Juniper clues: ${JSON.stringify(progressionSecret.clothingPiles)}`,
+    );
+    await progression.context.close();
     await desktop.context.close();
 
     assert(errors.length === 0, `unexpected browser errors: ${errors.join(" | ")}`);
-    console.log("Mr. Feast bulk storage secret acceptance passed: physical box reveal, held keyboard/touch manipulation, Kip clothing clue, and save/load verified");
+    console.log("Mr. Feast bulk storage secret acceptance passed: physical box reveal, held keyboard/touch manipulation, all three progression-gated clothing clues, and save/load verified");
   } finally {
     if (browser) await browser.close();
     if (server) server.kill("SIGTERM");

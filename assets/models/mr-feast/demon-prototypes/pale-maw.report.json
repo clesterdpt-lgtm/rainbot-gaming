@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-26T10:27:14.464075+00:00",
+  "generatedAt": "2026-07-26T16:19:22.433075+00:00",
   "pipeline": "approved concept -> Meshy image-to-3D -> Meshy auto-rig -> Blender 4.5 demon browser preparation",
   "blenderVersion": "4.5.11 LTS",
   "source": "/Volumes/External SSD/Projects/RainbotGaming/assets/models/mr-feast/source/demon-prototypes/meshy/pale-maw-v3-rigged.glb",
@@ -10,6 +10,21 @@
   "skinnedMeshCount": 1,
   "normalizationStrategy": "baked-scene-roots",
   "normalizationScale": 1.2346788810348914,
+  "restPosture": {
+    "name": "processed-source-bind",
+    "hipsPitchDegrees": 0.0,
+    "armRaiseDegrees": 0.0,
+    "neckLiftDegrees": 0.0,
+    "lateralScale": 1.0,
+    "headLeveling": "none",
+    "limbCompensation": "none",
+    "headForwardPitchDegrees": 9.3e-05,
+    "headHeightAboveShouldersMeters": -0.281225,
+    "headHeightAboveHipsMeters": 0.199679,
+    "shoulderHeightAboveHipsMeters": 0.480904,
+    "limbLateralSpanMeters": 2.068785,
+    "torsoHorizontalToVerticalRatio": 0.425062
+  },
   "targetHeightMeters": 2.18,
   "height": 2.18,
   "groundY": 0.0,
@@ -61,9 +76,9 @@
     "weldDistanceMeters": 0.0001
   },
   "previews": [
-    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender-diagonal-gait-final/pale-maw-neutral-front.png",
-    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender-diagonal-gait-final/pale-maw-neutral-right.png",
-    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender-diagonal-gait-final/pale-maw-neutral-back.png"
+    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender-default-bind-limbs-final/pale-maw-neutral-front.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender-default-bind-limbs-final/pale-maw-neutral-right.png",
+    "/Volumes/External SSD/Projects/RainbotGaming/output/iterate/demon-prototypes/blender-default-bind-limbs-final/pale-maw-neutral-back.png"
   ],
   "features": {
     "animations": false,

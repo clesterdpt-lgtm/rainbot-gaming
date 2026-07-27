@@ -8,9 +8,8 @@ works directly on the shipped runtime rigs:
 
 - Banquet Saint: ceremonial-glide from the forward-facing bind pose, with
   locked knees/elbows and two straight arms trailing as one pendulum.
-- Pale Maw: diagonal anatomical-creep with stable lower-leg and forearm bind
-  angles, driven from the hips and upper arms so the skinned joints do not
-  stretch or double-articulate.
+- Pale Maw: the untouched processed-source bind pose plus diagonal two-bone
+  contact targets that keep each elbow and knee on its authored bend plane.
 
 The exported GLB contains one looped, rotation-only skeletal action and no
 mesh, skin, material, texture, translation, scale, or root-motion payload.
@@ -42,21 +41,50 @@ TARGET_HEIGHTS = {
 PALE_MAW_GAIT = {
     "idle": {
         "durationSeconds": 3.4,
-        "leftHipSwingDegrees": 0.0,
-        "rightHipSwingDegrees": 0.0,
-        "armSwingDegrees": 1.2,
+        "strideMeters": 0.025,
+        "liftMeters": 0.012,
     },
     "walk": {
         "durationSeconds": 1.6,
-        "leftHipSwingDegrees": 28.0,
-        "rightHipSwingDegrees": 42.0,
-        "armSwingDegrees": 30.0,
+        "strideMeters": 0.66,
+        "liftMeters": 0.15,
     },
     "run": {
         "durationSeconds": 1.0,
-        "leftHipSwingDegrees": 32.0,
-        "rightHipSwingDegrees": 48.0,
-        "armSwingDegrees": 36.0,
+        "strideMeters": 0.68,
+        "liftMeters": 0.18,
+    },
+}
+PALE_MAW_FRONT_ELBOW_CONTROL = {
+    "poleBlend": 0.38,
+}
+LIMB_CONTACT_GROUPS = {
+    "LeftHand": ("LeftHand",),
+    "RightHand": ("RightHand",),
+    "LeftFoot": ("LeftFoot", "LeftToeBase"),
+    "RightFoot": ("RightFoot", "RightToeBase"),
+}
+# Meshy blends each distal surface across neighboring bones, so the bone-head
+# target needs a small skin-aware lift to keep the actual palm/toe surface on
+# the plane after the analytic chain solve.
+PALE_MAW_CONTACT_HEIGHT_BIAS_METERS = {
+    "idle": {
+        "LeftHand": 0.02,
+        "RightHand": 0.01,
+        "LeftFoot": 0.0,
+        "RightFoot": -0.05,
+    },
+    "walk": {
+        "LeftHand": 0.08,
+        "RightHand": 0.14,
+        "LeftFoot": 0.07,
+        "RightFoot": 0.09,
+    },
+    "run": {
+        "LeftHand": 0.07,
+        "RightHand": 0.13,
+        "LeftFoot": 0.07,
+        "RightFoot": 0.16,
     },
 }
 BONE_NAMES = (
@@ -163,7 +191,12 @@ def import_runtime_model(
     bpy.ops.import_scene.gltf(filepath=str(input_path))
     imported = [obj for obj in bpy.context.scene.objects if obj not in before]
     armatures = [obj for obj in imported if obj.type == "ARMATURE"]
-    meshes = [obj for obj in imported if obj.type == "MESH"]
+    meshes = [
+        obj
+        for obj in imported
+        if obj.type == "MESH"
+        and any(modifier.type == "ARMATURE" for modifier in obj.modifiers)
+    ]
     if len(armatures) != 1:
         raise RuntimeError(f"Expected one armature, found {len(armatures)}")
     if not meshes:
@@ -264,48 +297,236 @@ def reset_pose(armature: bpy.types.Object, basis: RigBasis) -> None:
         pose_bone.scale = basis.scales[pose_bone.name].copy()
 
 
-def swing_toward(
-    basis: RigBasis,
+def align_pose_segment_direction(
+    armature: bpy.types.Object,
     bone_name: str,
+    child_name: str,
     target_direction: Vector,
-    angle_degrees: float,
 ) -> Quaternion:
-    """Return a twist-free local-bone rotation toward an armature-space target."""
-    if abs(angle_degrees) < 1e-7:
-        return basis.rotations[bone_name].copy()
-    rest_direction = basis.directions[bone_name]
-    target = target_direction.normalized()
-    target_plane = target - rest_direction * rest_direction.dot(target)
-    if target_plane.length < 1e-6:
-        raise RuntimeError(f"{bone_name} cannot swing toward {list(target_direction)}")
-    target_plane.normalize()
-    axis_armature = rest_direction.cross(target_plane)
-    if axis_armature.length < 1e-6:
-        raise RuntimeError(f"{bone_name} produced a degenerate swing axis")
-    axis_armature.normalize()
-    swing_armature = Quaternion(axis_armature, math.radians(abs(angle_degrees)))
-    posed_orientation = basis.orientations[bone_name]
+    bpy.context.view_layer.update()
+    bone = armature.pose.bones[bone_name]
+    current_direction = armature.pose.bones[child_name].head - bone.head
+    if current_direction.length < 1e-6:
+        raise RuntimeError(f"{bone_name} to {child_name} is an invalid segment")
+    delta_armature = current_direction.normalized().rotation_difference(
+        target_direction.normalized()
+    )
+    posed_orientation = bone.matrix.to_quaternion().normalized()
     local_delta = (
         posed_orientation.inverted()
-        @ swing_armature
+        @ delta_armature
         @ posed_orientation
     ).normalized()
-    local_rotation = (
-        basis.rotations[bone_name]
-        @ local_delta
-    ).normalized()
-    if local_rotation.w < 0:
-        local_rotation.negate()
-    return local_rotation
+    rotation = (bone.rotation_quaternion @ local_delta).normalized()
+    if rotation.w < 0:
+        rotation.negate()
+    return rotation
 
 
-def directed_swing(
-    basis: RigBasis,
+def align_pose_bone_orientation(
+    armature: bpy.types.Object,
     bone_name: str,
-    signed_degrees: float,
+    target_orientation: Quaternion,
 ) -> Quaternion:
-    target = basis.forward if signed_degrees >= 0 else basis.backward
-    return swing_toward(basis, bone_name, target, abs(signed_degrees))
+    """Match an armature-space orientation without moving the bone head."""
+    bpy.context.view_layer.update()
+    bone = armature.pose.bones[bone_name]
+    current_orientation = bone.matrix.to_quaternion().normalized()
+    delta_armature = (
+        target_orientation.normalized()
+        @ current_orientation.inverted()
+    ).normalized()
+    local_delta = (
+        current_orientation.inverted()
+        @ delta_armature
+        @ current_orientation
+    ).normalized()
+    rotation = (bone.rotation_quaternion @ local_delta).normalized()
+    if rotation.w < 0:
+        rotation.negate()
+    return rotation
+
+
+def solve_two_bone_chain(
+    armature: bpy.types.Object,
+    upper_name: str,
+    lower_name: str,
+    tip_name: str,
+    target: Vector,
+    bend_pole: Vector | None = None,
+    bend_pole_blend: float = 0.0,
+) -> tuple[float, float]:
+    """Solve one bend-plane-preserving two-bone chain in armature space."""
+    bpy.context.view_layer.update()
+    upper = armature.pose.bones[upper_name]
+    lower = armature.pose.bones[lower_name]
+    tip = armature.pose.bones[tip_name]
+    root = upper.head.copy()
+    joint = lower.head.copy()
+    current_tip = tip.head.copy()
+    upper_length = (joint - root).length
+    lower_length = (current_tip - joint).length
+    target_delta = target - root
+    requested_distance = target_delta.length
+    if upper_length < 1e-6 or lower_length < 1e-6 or requested_distance < 1e-6:
+        raise RuntimeError(f"Invalid IK chain {upper_name}/{lower_name}/{tip_name}")
+    minimum_reach = abs(upper_length - lower_length) + 1e-4
+    maximum_reach = upper_length + lower_length - 1e-4
+    solved_distance = min(max(requested_distance, minimum_reach), maximum_reach)
+    direction = target_delta.normalized()
+    solved_target = root + direction * solved_distance
+    along = (
+        upper_length * upper_length
+        - lower_length * lower_length
+        + solved_distance * solved_distance
+    ) / (2.0 * solved_distance)
+    bend_height = math.sqrt(max(0.0, upper_length * upper_length - along * along))
+    bind_bend = joint - (root + direction * (joint - root).dot(direction))
+    if bind_bend.length < 1e-5:
+        bind_bend = Vector((1.0, 0.0, 0.0)).cross(direction)
+    if bind_bend.length < 1e-5:
+        bind_bend = Vector((0.0, 1.0, 0.0)).cross(direction)
+    bend_direction = bind_bend.normalized()
+    if bend_pole is not None and bend_pole_blend > 0:
+        preferred_bend = (
+            bend_pole
+            - direction * bend_pole.dot(direction)
+        )
+        if preferred_bend.length < 1e-5:
+            raise RuntimeError(f"{upper_name} elbow pole is parallel to its reach")
+        preferred_bend.normalize()
+        blend = max(0.0, min(1.0, bend_pole_blend))
+        try:
+            bend_direction = bend_direction.slerp(
+                preferred_bend,
+                blend,
+            ).normalized()
+        except ValueError:
+            bend_direction = (
+                bend_direction * (1.0 - blend)
+                + preferred_bend * blend
+            ).normalized()
+    solved_joint = root + direction * along + bend_direction * bend_height
+
+    set_rotation(
+        armature,
+        upper_name,
+        align_pose_segment_direction(
+            armature,
+            upper_name,
+            lower_name,
+            solved_joint - root,
+        ),
+    )
+    bpy.context.view_layer.update()
+    solved_joint_actual = armature.pose.bones[lower_name].head.copy()
+    set_rotation(
+        armature,
+        lower_name,
+        align_pose_segment_direction(
+            armature,
+            lower_name,
+            tip_name,
+            solved_target - solved_joint_actual,
+        ),
+    )
+    bpy.context.view_layer.update()
+    actual_tip = armature.pose.bones[tip_name].head
+    return requested_distance, (actual_tip - target).length
+
+
+def contact_target_bases(
+    armature: bpy.types.Object,
+    meshes: list[bpy.types.Object],
+    stride_meters: float,
+    action_name: str,
+) -> dict[str, Vector]:
+    """Calibrate each distal bone head so its weighted surface reaches floor."""
+    bpy.context.view_layer.update()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    global_floor_z = math.inf
+    limb_floor_z = {name: math.inf for name in LIMB_CONTACT_GROUPS}
+    for mesh in meshes:
+        evaluated = mesh.evaluated_get(depsgraph)
+        evaluated_mesh = evaluated.to_mesh()
+        positions = [
+            evaluated.matrix_world @ vertex.co
+            for vertex in evaluated_mesh.vertices
+        ]
+        global_floor_z = min(global_floor_z, min(point.z for point in positions))
+        for limb_name, group_names in LIMB_CONTACT_GROUPS.items():
+            group_indices = {
+                mesh.vertex_groups[group_name].index
+                for group_name in group_names
+                if group_name in mesh.vertex_groups
+            }
+            contact_indices = [
+                vertex.index
+                for vertex in mesh.data.vertices
+                if any(
+                    membership.group in group_indices
+                    and membership.weight >= 0.15
+                    for membership in vertex.groups
+                )
+            ]
+            if contact_indices:
+                limb_floor_z[limb_name] = min(
+                    limb_floor_z[limb_name],
+                    min(positions[index].z for index in contact_indices),
+                )
+        evaluated.to_mesh_clear()
+    armature_world = armature.matrix_world
+    inverse_armature_world = armature_world.inverted()
+    chain_roots = {
+        "LeftHand": ("LeftArm", "LeftForeArm"),
+        "RightHand": ("RightArm", "RightForeArm"),
+        "LeftFoot": ("LeftUpLeg", "LeftLeg"),
+        "RightFoot": ("RightUpLeg", "RightLeg"),
+    }
+    targets: dict[str, Vector] = {}
+    for limb_name, surface_z in limb_floor_z.items():
+        if not math.isfinite(surface_z):
+            raise RuntimeError(f"No weighted surface for {limb_name}")
+        tip_world = armature_world @ armature.pose.bones[limb_name].head
+        tip_world.z += global_floor_z - surface_z
+        tip_world.z += PALE_MAW_CONTACT_HEIGHT_BIAS_METERS[
+            action_name
+        ][limb_name]
+        upper_name, lower_name = chain_roots[limb_name]
+        root_world = armature_world @ armature.pose.bones[upper_name].head
+        joint_world = armature_world @ armature.pose.bones[lower_name].head
+        bind_tip_world = (
+            armature_world
+            @ armature.pose.bones[limb_name].head
+        )
+        maximum_reach = (
+            (joint_world - root_world).length
+            + (bind_tip_world - joint_world).length
+        )
+        vertical = tip_world.z - root_world.z
+        reserve = stride_meters * 0.5 + 0.04
+        target_reach = max(
+            abs(
+                (joint_world - root_world).length
+                - (bind_tip_world - joint_world).length
+            ) + 0.03,
+            maximum_reach - reserve,
+        )
+        maximum_horizontal = math.sqrt(
+            max(0.0, target_reach * target_reach - vertical * vertical)
+        )
+        horizontal = Vector((
+            tip_world.x - root_world.x,
+            tip_world.y - root_world.y,
+            0.0,
+        ))
+        if horizontal.length > maximum_horizontal > 1e-6:
+            horizontal.normalize()
+            horizontal *= maximum_horizontal
+            tip_world.x = root_world.x + horizontal.x
+            tip_world.y = root_world.y + horizontal.y
+        targets[limb_name] = inverse_armature_world @ tip_world
+    return targets
 
 
 def align_direction(
@@ -470,6 +691,7 @@ def author_banquet_glide(
 
 def author_pale_maw_creep(
     armature: bpy.types.Object,
+    meshes: list[bpy.types.Object],
     basis: RigBasis,
     action_name: str,
 ) -> tuple[int, dict[str, Any]]:
@@ -477,93 +699,156 @@ def author_pale_maw_creep(
     gait = PALE_MAW_GAIT[action_name]
     duration_seconds = gait["durationSeconds"]
     end_frame = round(duration_seconds * FPS)
-    fractions = (0.0, 0.25, 0.5, 0.75, 1.0)
-    phases = (0.0, 1.0, 0.0, -1.0, 0.0)
-    left_hip_swing = gait["leftHipSwingDegrees"]
-    right_hip_swing = gait["rightHipSwingDegrees"]
-    arm_swing = gait["armSwingDegrees"]
+    stride_meters = gait["strideMeters"]
+    lift_meters = gait["liftMeters"]
     maximum_excursion = 0.0
+    reset_pose(armature, basis)
+    bpy.context.view_layer.update()
+    chain_specs = {
+        "LeftArm": ("LeftForeArm", "LeftHand", 1.0),
+        "RightUpLeg": ("RightLeg", "RightFoot", 1.0),
+        "RightArm": ("RightForeArm", "RightHand", -1.0),
+        "LeftUpLeg": ("LeftLeg", "LeftFoot", -1.0),
+    }
+    contact_targets = contact_target_bases(
+        armature,
+        meshes,
+        stride_meters,
+        action_name,
+    )
+    armature_world = armature.matrix_world
+    inverse_armature_world = armature_world.inverted()
+    world_forward = armature_world.to_3x3() @ basis.forward
+    world_forward.normalize()
+    maximum_ik_error_meters = 0.0
 
-    for fraction, phase in zip(fractions, phases):
-        frame = round(fraction * end_frame)
+    for frame in range(end_frame + 1):
+        fraction = frame / max(end_frame, 1)
+        phase = math.sin(math.tau * fraction)
         reset_pose(armature, basis)
+        bpy.context.view_layer.update()
 
-        rotations = {
-            "LeftUpLeg": directed_swing(
-                basis,
-                "LeftUpLeg",
-                phase * left_hip_swing,
-            ),
-            "RightUpLeg": directed_swing(
-                basis,
-                "RightUpLeg",
-                -phase * right_hip_swing,
-            ),
-            # Move each arm from its upper-arm parent and each leg from its
-            # hip. Leaving the forearm and lower-leg rotations on their clean
-            # bind values carries every distal chain as one rigid shape
-            # instead of folding the generated skin weights at its elbows and
-            # knees.
-            #
-            # These are strict diagonal pairs: left arm with right leg, right
-            # arm with left leg.
-            "LeftArm": directed_swing(
-                basis,
-                "LeftArm",
-                -phase * arm_swing,
-            ),
-            "RightArm": directed_swing(
-                basis,
-                "RightArm",
-                phase * arm_swing,
-            ),
-        }
-        for bone_name, rotation in rotations.items():
-            set_rotation(armature, bone_name, rotation)
-            maximum_excursion = max(
-                maximum_excursion,
-                quaternion_delta_degrees(
-                    basis.rotations[bone_name],
-                    rotation,
+        # Left hand/right foot and right hand/left foot share phase. Each pair
+        # plants through its rearward push and lifts only for forward recovery.
+        for upper_name, (
+            lower_name,
+            tip_name,
+            pair_sign,
+        ) in chain_specs.items():
+            pair_phase = phase * pair_sign
+            target_world = armature_world @ contact_targets[tip_name]
+            target_world += world_forward * (
+                pair_phase * stride_meters * 0.5
+            )
+            target_world.z += max(0.0, pair_phase) * lift_meters
+            bend_pole = {
+                "LeftArm": Vector((-1.0, 0.0, 0.0)),
+                "RightArm": Vector((1.0, 0.0, 0.0)),
+            }.get(upper_name)
+            preserved_tip_orientation = None
+            if bend_pole is not None:
+                solve_two_bone_chain(
+                    armature,
+                    upper_name,
+                    lower_name,
+                    tip_name,
+                    inverse_armature_world @ target_world,
+                )
+                bpy.context.view_layer.update()
+                preserved_tip_orientation = (
+                    armature.pose.bones[tip_name]
+                    .matrix.to_quaternion().normalized()
+                )
+                for bone_name in (upper_name, lower_name, tip_name):
+                    set_rotation(
+                        armature,
+                        bone_name,
+                        basis.rotations[bone_name].copy(),
+                    )
+                bpy.context.view_layer.update()
+            _requested, ik_error = solve_two_bone_chain(
+                armature,
+                upper_name,
+                lower_name,
+                tip_name,
+                inverse_armature_world @ target_world,
+                bend_pole=bend_pole,
+                bend_pole_blend=(
+                    PALE_MAW_FRONT_ELBOW_CONTROL["poleBlend"]
+                    if bend_pole is not None
+                    else 0.0
                 ),
             )
+            if preserved_tip_orientation is not None:
+                set_rotation(
+                    armature,
+                    tip_name,
+                    align_pose_bone_orientation(
+                        armature,
+                        tip_name,
+                        preserved_tip_orientation,
+                    ),
+                )
+                bpy.context.view_layer.update()
+            ik_error_world = (
+                armature_world.to_3x3()
+                @ Vector((ik_error, 0.0, 0.0))
+            ).length
+            maximum_ik_error_meters = max(
+                maximum_ik_error_meters,
+                ik_error_world,
+            )
+            for bone_name in (upper_name, lower_name):
+                maximum_excursion = max(
+                    maximum_excursion,
+                    quaternion_delta_degrees(
+                        basis.rotations[bone_name],
+                        armature.pose.bones[bone_name].rotation_quaternion,
+                    ),
+                )
         key_all_bones(armature, frame)
 
     return end_frame, {
         "authoredStyle": "anatomical-creep",
+        "bodyPosture": "default-processed-bind",
         "kneeBendDirection": "anatomical-backward-flex",
         "maximumKneeTwistDegrees": 0,
         "maximumLimbExcursionDegrees": round(maximum_excursion, 6),
+        "maximumIkErrorMeters": round(maximum_ik_error_meters, 6),
         "bilateralPhaseOffset": 0.5,
-        "jointStabilization": "bind-angle-locked-distal-chains",
-        "armDriver": "upper-arm-parent-rigid-distal-chain",
+        "jointStabilization": "twist-free-two-bone-contact-ik",
+        "armDriver": "upper-arm-and-forearm-contact-chain",
         "diagonalPairs": {
             "leftArm": "rightLeg",
             "rightArm": "leftLeg",
         },
-        "limbDriverExcursionDegrees": {
-            "leftArm": arm_swing,
-            "rightArm": arm_swing,
-            "leftLeg": left_hip_swing,
-            "rightLeg": right_hip_swing,
+        "limbTargetMotionMeters": {
+            "stride": stride_meters,
+            "lift": lift_meters,
         },
         "gait": (
             "settled-contralateral-idle"
             if is_idle
             else "speed-matched-contralateral"
         ),
+        "contactSolver": (
+            "settled-four-point-two-bone-ik"
+            if is_idle
+            else "planted-diagonal-two-bone-ik"
+        ),
         "propulsionMode": (
             "settled-four-contact"
             if is_idle
             else "four-limb-contact-push"
         ),
-        "swingConstruction": "twist-free-directional-quaternion",
+        "swingConstruction": "twist-free-analytic-two-bone-quaternion",
         "bindBasisMaximumAxialTwistDegrees": 0,
     }
 
 
 def make_action(
     armature: bpy.types.Object,
+    meshes: list[bpy.types.Object],
     basis: RigBasis,
     slug: str,
     action_name: str,
@@ -580,12 +865,14 @@ def make_action(
     else:
         end_frame, metrics = author_pale_maw_creep(
             armature,
+            meshes,
             basis,
             action_name,
         )
+    interpolation = "SINE" if slug == "banquet-saint" else "LINEAR"
     for curve in action.fcurves:
         for point in curve.keyframe_points:
-            point.interpolation = "SINE"
+            point.interpolation = interpolation
     bpy.context.scene.frame_start = 0
     bpy.context.scene.frame_end = end_frame
     bpy.context.scene.render.fps = FPS
@@ -681,32 +968,84 @@ def measure_action_metrics(
         for name in ("LeftHand", "RightHand", "LeftFoot", "RightFoot")
     }
     facing_alignments: list[float] = []
+    head_forward_pitch_degrees: list[float] = []
     arm_trails = {"left": [], "right": []}
+    torso_forward_extensions: list[float] = []
+    torso_horizontal_to_vertical_ratios: list[float] = []
+    limb_lateral_spans: list[float] = []
+    front_elbow_lateral_spans: list[float] = []
+    front_elbow_outward_offsets: list[float] = []
     armature_to_world = armature.matrix_world.to_3x3()
     world_forward = armature_to_world @ basis.forward
     world_forward.normalize()
+    active_action = armature.animation_data.action
+    armature.animation_data.action = None
+    reset_pose(armature, basis)
     bpy.context.scene.frame_set(0)
     bpy.context.view_layer.update()
     depsgraph = bpy.context.evaluated_depsgraph_get()
     bind_edge_lengths: dict[str, list[float]] = {}
     bind_positions_by_mesh: dict[str, list[Vector]] = {}
+    contact_indices_by_mesh: dict[str, dict[str, list[int]]] = {}
+    contact_vertices_by_limb = {name: 0 for name in LIMB_CONTACT_GROUPS}
     for mesh in meshes:
         evaluated = mesh.evaluated_get(depsgraph)
         evaluated_mesh = evaluated.to_mesh()
         world = evaluated.matrix_world
         positions = [world @ vertex.co for vertex in evaluated_mesh.vertices]
         bind_positions_by_mesh[mesh.name] = positions
+        group_indices = {
+            group_name: mesh.vertex_groups[group_name].index
+            for group_names in LIMB_CONTACT_GROUPS.values()
+            for group_name in group_names
+            if group_name in mesh.vertex_groups
+        }
+        contact_indices_by_mesh[mesh.name] = {}
+        for limb_name, group_names in LIMB_CONTACT_GROUPS.items():
+            limb_group_indices = {
+                group_indices[group_name]
+                for group_name in group_names
+                if group_name in group_indices
+            }
+            contact_indices = [
+                vertex.index
+                for vertex in mesh.data.vertices
+                if any(
+                    membership.group in limb_group_indices
+                    and membership.weight >= 0.15
+                    for membership in vertex.groups
+                )
+            ]
+            contact_indices_by_mesh[mesh.name][limb_name] = contact_indices
+            if contact_indices:
+                contact_vertices_by_limb[limb_name] += len(contact_indices)
         bind_edge_lengths[mesh.name] = [
             (positions[edge.vertices[0]] - positions[edge.vertices[1]]).length
             for edge in evaluated_mesh.edges
         ]
         evaluated.to_mesh_clear()
+    armature.animation_data.action = active_action
+    bpy.context.scene.frame_set(0)
+    bpy.context.view_layer.update()
+    missing_contact_groups = [
+        limb_name
+        for limb_name, vertex_count in contact_vertices_by_limb.items()
+        if vertex_count == 0
+    ]
+    if missing_contact_groups:
+        raise RuntimeError(
+            f"Missing weighted contact vertices for {missing_contact_groups}"
+        )
     bind_floor_z = min(
         position.z
         for positions in bind_positions_by_mesh.values()
         for position in positions
     )
     surface_floor_heights: list[float] = []
+    limb_floor_clearances = {
+        limb_name: []
+        for limb_name in LIMB_CONTACT_GROUPS
+    }
     maximum_surface_edge_stretch = 1.0
     minimum_surface_edge_scale = 1.0
     maximum_surface_edge_growth = 0.0
@@ -716,10 +1055,26 @@ def measure_action_metrics(
         bpy.context.scene.frame_set(frame)
         bpy.context.view_layer.update()
         frame_floor_z = math.inf
+        frame_limb_floor_z = {
+            limb_name: math.inf
+            for limb_name in LIMB_CONTACT_GROUPS
+        }
         for name, chain in joint_specs.items():
             joint_samples[name].append(joint_angle_degrees(armature, *chain))
 
         hips = armature.pose.bones["Hips"].head
+        shoulders = (
+            armature.pose.bones["LeftArm"].head
+            + armature.pose.bones["RightArm"].head
+        ) * 0.5
+        torso = armature_to_world @ (shoulders - hips)
+        forward_extension = torso.dot(world_forward) * basis.runtime_scale
+        horizontal_extension = Vector((torso.x, torso.y, 0.0)).length
+        vertical_rise = abs(torso.z)
+        torso_forward_extensions.append(forward_extension)
+        torso_horizontal_to_vertical_ratios.append(
+            horizontal_extension / max(vertical_rise, 1e-6)
+        )
         for bone_name in limb_projections:
             relative = armature_to_world @ (
                 armature.pose.bones[bone_name].head - hips
@@ -727,16 +1082,59 @@ def measure_action_metrics(
             limb_projections[bone_name].append(
                 relative.dot(world_forward) * basis.runtime_scale
             )
+        limb_lateral_positions = [
+            (
+                armature_to_world
+                @ (armature.pose.bones[bone_name].head - hips)
+            ).x
+            * basis.runtime_scale
+            for bone_name in limb_projections
+        ]
+        limb_lateral_spans.append(
+            max(limb_lateral_positions) - min(limb_lateral_positions)
+        )
+        left_shoulder = armature_to_world @ (
+            armature.pose.bones["LeftArm"].head - hips
+        )
+        right_shoulder = armature_to_world @ (
+            armature.pose.bones["RightArm"].head - hips
+        )
+        left_elbow = armature_to_world @ (
+            armature.pose.bones["LeftForeArm"].head - hips
+        )
+        right_elbow = armature_to_world @ (
+            armature.pose.bones["RightForeArm"].head - hips
+        )
+        front_elbow_lateral_spans.append(
+            abs(left_elbow.x - right_elbow.x) * basis.runtime_scale
+        )
+        front_elbow_outward_offsets.append(
+            max(
+                0.0,
+                left_elbow.x - left_shoulder.x,
+                right_shoulder.x - right_elbow.x,
+            )
+            * basis.runtime_scale
+        )
 
         posed_forward = (
             armature.pose.bones["headfront"].head
             - armature.pose.bones["Head"].head
         )
-        posed_forward.z = 0
         if posed_forward.length < 1e-6:
-            raise RuntimeError("Authored pose lost its horizontal facing direction")
+            raise RuntimeError("Authored pose lost its head facing direction")
         posed_forward.normalize()
-        facing_alignments.append(posed_forward.dot(basis.forward))
+        head_forward_pitch_degrees.append(
+            math.degrees(
+                math.asin(max(-1.0, min(1.0, posed_forward.z)))
+            )
+        )
+        posed_forward_horizontal = posed_forward.copy()
+        posed_forward_horizontal.z = 0
+        if posed_forward_horizontal.length < 1e-6:
+            raise RuntimeError("Authored pose lost its horizontal facing direction")
+        posed_forward_horizontal.normalize()
+        facing_alignments.append(posed_forward_horizontal.dot(basis.forward))
 
         for side, arm_name, hand_name in (
             ("left", "LeftArm", "LeftHand"),
@@ -762,6 +1160,14 @@ def measure_action_metrics(
                 frame_floor_z,
                 min(position.z for position in positions),
             )
+            for limb_name, contact_indices in contact_indices_by_mesh[
+                mesh.name
+            ].items():
+                if contact_indices:
+                    frame_limb_floor_z[limb_name] = min(
+                        frame_limb_floor_z[limb_name],
+                        min(positions[index].z for index in contact_indices),
+                    )
             for edge_index, (edge, bind_length) in enumerate(zip(
                 evaluated_mesh.edges,
                 bind_edge_lengths[mesh.name],
@@ -833,6 +1239,14 @@ def measure_action_metrics(
         surface_floor_heights.append(
             (frame_floor_z - bind_floor_z) * basis.runtime_scale
         )
+        for limb_name in LIMB_CONTACT_GROUPS:
+            limb_floor_clearances[limb_name].append(
+                (
+                    frame_limb_floor_z[limb_name]
+                    - bind_floor_z
+                )
+                * basis.runtime_scale
+            )
 
     bpy.context.scene.frame_set(0)
     bpy.context.view_layer.update()
@@ -850,8 +1264,39 @@ def measure_action_metrics(
             6,
         ),
         "minimumFacingAlignment": round(min(facing_alignments), 6),
+        "headPosture": {
+            "minimumForwardPitchDegrees": round(
+                min(head_forward_pitch_degrees),
+                6,
+            ),
+            "maximumForwardPitchDegrees": round(
+                max(head_forward_pitch_degrees),
+                6,
+            ),
+            "maximumAbsoluteForwardPitchDegrees": round(
+                max(abs(value) for value in head_forward_pitch_degrees),
+                6,
+            ),
+        },
+        "torsoPosture": {
+            "minimumForwardExtensionMeters": round(
+                min(torso_forward_extensions),
+                6,
+            ),
+            "minimumHorizontalToVerticalRatio": round(
+                min(torso_horizontal_to_vertical_ratios),
+                6,
+            ),
+        },
+        "maximumLimbLateralSpanMeters": round(
+            max(limb_lateral_spans),
+            6,
+        ),
         "groundContact": {
-            "maximumClearanceMeters": round(max(surface_floor_heights), 6),
+            "maximumClearanceMeters": round(
+                max(0.0, max(surface_floor_heights)),
+                6,
+            ),
             "maximumPenetrationMeters": round(
                 max(0.0, -min(surface_floor_heights)),
                 6,
@@ -869,6 +1314,32 @@ def measure_action_metrics(
         },
         "contactSweepMeters": contact_sweeps,
         "minimumContactSweepMeters": round(min(contact_sweeps.values()), 6),
+        "limbGroundContact": {
+            limb_name: {
+                "minimumClearanceMeters": round(
+                    max(0.0, min(clearances)),
+                    6,
+                ),
+                "maximumPenetrationMeters": round(
+                    max(0.0, -min(clearances)),
+                    6,
+                ),
+                "liftMeters": round(
+                    max(clearances) - min(clearances),
+                    6,
+                ),
+                "plantedSampleRatio": round(
+                    sum(
+                        1
+                        for clearance in clearances
+                        if abs(clearance) <= 0.035
+                    )
+                    / len(clearances),
+                    6,
+                ),
+            }
+            for limb_name, clearances in limb_floor_clearances.items()
+        },
         "armTrailMeters": {
             side: [
                 round(min(values), 6),
@@ -879,6 +1350,19 @@ def measure_action_metrics(
     }
     if slug == "banquet-saint":
         measured["lockedJointTargetDegrees"] = 180
+    else:
+        measured["frontElbowControl"] = {
+            "bendMode": "symmetric-inward-pole",
+            "poleBlend": PALE_MAW_FRONT_ELBOW_CONTROL["poleBlend"],
+            "maximumLateralSpanMeters": round(
+                max(front_elbow_lateral_spans),
+                6,
+            ),
+            "maximumOutwardOffsetMeters": round(
+                max(front_elbow_outward_offsets),
+                6,
+            ),
+        }
     return measured
 
 
@@ -951,8 +1435,17 @@ def render_previews(
     scene.camera = camera
     distance = height * (2.5 if slug == "pale-maw" else 2.2)
     sample_frames = (
-        ("a", round(end_frame * 0.25)),
-        ("b", round(end_frame * 0.75)),
+        (
+            ("contact-a", 0),
+            ("stride-a", round(end_frame * 0.25)),
+            ("contact-b", round(end_frame * 0.5)),
+            ("stride-b", round(end_frame * 0.75)),
+        )
+        if slug == "pale-maw"
+        else (
+            ("a", round(end_frame * 0.25)),
+            ("b", round(end_frame * 0.75)),
+        )
     )
     views = {
         "front": Vector((center.x, minimum.y - distance, center.z)),
@@ -993,6 +1486,7 @@ def main() -> None:
     armature, meshes, basis = import_runtime_model(input_path, args.slug)
     action, end_frame, metrics = make_action(
         armature,
+        meshes,
         basis,
         args.slug,
         args.name,
@@ -1045,7 +1539,10 @@ def main() -> None:
         "scaleTracks": 0,
         "rootMotion": False,
         "durationSeconds": round(end_frame / FPS, 6),
-        "keyframesPerTrack": 5,
+        "keyframesPerTrack": max(
+            len(curve.keyframe_points)
+            for curve in action.fcurves
+        ),
         "quaternionHemisphereFlips": hemisphere_flips,
         "baselineSourcePhase": basis.source_phase,
         "baselinePose": basis.baseline_pose,

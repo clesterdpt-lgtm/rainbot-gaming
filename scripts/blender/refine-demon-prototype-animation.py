@@ -56,7 +56,8 @@ PALE_MAW_GAIT = {
     },
 }
 PALE_MAW_FRONT_ELBOW_CONTROL = {
-    "poleBlend": 0.38,
+    "poleBlend": 0.12,
+    "targetLateralInsetMeters": 0.25,
 }
 LIMB_CONTACT_GROUPS = {
     "LeftHand": ("LeftHand",),
@@ -75,14 +76,14 @@ PALE_MAW_CONTACT_HEIGHT_BIAS_METERS = {
         "RightFoot": -0.05,
     },
     "walk": {
-        "LeftHand": 0.08,
-        "RightHand": 0.14,
+        "LeftHand": 0.03,
+        "RightHand": 0.06,
         "LeftFoot": 0.07,
         "RightFoot": 0.09,
     },
     "run": {
-        "LeftHand": 0.07,
-        "RightHand": 0.13,
+        "LeftHand": 0.03,
+        "RightHand": 0.06,
         "LeftFoot": 0.07,
         "RightFoot": 0.16,
     },
@@ -720,6 +721,8 @@ def author_pale_maw_creep(
     inverse_armature_world = armature_world.inverted()
     world_forward = armature_world.to_3x3() @ basis.forward
     world_forward.normalize()
+    world_lateral = armature_world.to_3x3() @ Vector((1.0, 0.0, 0.0))
+    world_lateral.normalize()
     maximum_ik_error_meters = 0.0
 
     for frame in range(end_frame + 1):
@@ -741,12 +744,29 @@ def author_pale_maw_creep(
                 pair_phase * stride_meters * 0.5
             )
             target_world.z += max(0.0, pair_phase) * lift_meters
+            if upper_name in ("LeftArm", "RightArm"):
+                lateral_sign = (
+                    1.0
+                    if contact_targets[tip_name].x >= 0.0
+                    else -1.0
+                )
+                target_world -= (
+                    world_lateral
+                    * lateral_sign
+                    * PALE_MAW_FRONT_ELBOW_CONTROL[
+                        "targetLateralInsetMeters"
+                    ]
+                )
             bend_pole = {
                 "LeftArm": Vector((-1.0, 0.0, 0.0)),
                 "RightArm": Vector((1.0, 0.0, 0.0)),
             }.get(upper_name)
+            use_bend_pole = (
+                bend_pole is not None
+                and PALE_MAW_FRONT_ELBOW_CONTROL["poleBlend"] > 0.0
+            )
             preserved_tip_orientation = None
-            if bend_pole is not None:
+            if use_bend_pole:
                 solve_two_bone_chain(
                     armature,
                     upper_name,
@@ -775,7 +795,7 @@ def author_pale_maw_creep(
                 bend_pole=bend_pole,
                 bend_pole_blend=(
                     PALE_MAW_FRONT_ELBOW_CONTROL["poleBlend"]
-                    if bend_pole is not None
+                    if use_bend_pole
                     else 0.0
                 ),
             )
@@ -975,6 +995,8 @@ def measure_action_metrics(
     limb_lateral_spans: list[float] = []
     front_elbow_lateral_spans: list[float] = []
     front_elbow_outward_offsets: list[float] = []
+    front_hand_lateral_separations: list[float] = []
+    front_hand_own_side_offsets: list[float] = []
     armature_to_world = armature.matrix_world.to_3x3()
     world_forward = armature_to_world @ basis.forward
     world_forward.normalize()
@@ -987,6 +1009,7 @@ def measure_action_metrics(
     bind_edge_lengths: dict[str, list[float]] = {}
     bind_positions_by_mesh: dict[str, list[Vector]] = {}
     contact_indices_by_mesh: dict[str, dict[str, list[int]]] = {}
+    upper_arm_edge_indices_by_mesh: dict[str, dict[str, list[int]]] = {}
     contact_vertices_by_limb = {name: 0 for name in LIMB_CONTACT_GROUPS}
     for mesh in meshes:
         evaluated = mesh.evaluated_get(depsgraph)
@@ -1019,6 +1042,42 @@ def measure_action_metrics(
             contact_indices_by_mesh[mesh.name][limb_name] = contact_indices
             if contact_indices:
                 contact_vertices_by_limb[limb_name] += len(contact_indices)
+        upper_arm_edge_indices_by_mesh[mesh.name] = {}
+        for side, shoulder_name, arm_name in (
+            ("left", "LeftShoulder", "LeftArm"),
+            ("right", "RightShoulder", "RightArm"),
+        ):
+            if (
+                shoulder_name not in mesh.vertex_groups
+                or arm_name not in mesh.vertex_groups
+            ):
+                upper_arm_edge_indices_by_mesh[mesh.name][side] = []
+                continue
+            shoulder_index = mesh.vertex_groups[shoulder_name].index
+            arm_index = mesh.vertex_groups[arm_name].index
+
+            def upper_arm_weights(vertex_index: int) -> tuple[float, float]:
+                memberships = {
+                    membership.group: membership.weight
+                    for membership in mesh.data.vertices[vertex_index].groups
+                }
+                return (
+                    memberships.get(shoulder_index, 0.0),
+                    memberships.get(arm_index, 0.0),
+                )
+
+            upper_arm_edge_indices_by_mesh[mesh.name][side] = [
+                edge.index
+                for edge in evaluated_mesh.edges
+                if all(
+                    sum(upper_arm_weights(vertex_index)) >= 0.75
+                    for vertex_index in edge.vertices
+                )
+                and max(
+                    upper_arm_weights(vertex_index)[1]
+                    for vertex_index in edge.vertices
+                ) >= 0.5
+            ]
         bind_edge_lengths[mesh.name] = [
             (positions[edge.vertices[0]] - positions[edge.vertices[1]]).length
             for edge in evaluated_mesh.edges
@@ -1050,6 +1109,15 @@ def measure_action_metrics(
     minimum_surface_edge_scale = 1.0
     maximum_surface_edge_growth = 0.0
     maximum_surface_edge_detail: dict[str, Any] | None = None
+    upper_arm_surface_deformation = {
+        side: {
+            "maximumStretchRatio": 1.0,
+            "minimumScaleRatio": 1.0,
+            "maximumGrowthMeters": 0.0,
+            "maximumGrowthFrame": 0,
+        }
+        for side in ("left", "right")
+    }
 
     for frame in range(end_frame + 1):
         bpy.context.scene.frame_set(frame)
@@ -1115,6 +1183,18 @@ def measure_action_metrics(
                 right_shoulder.x - right_elbow.x,
             )
             * basis.runtime_scale
+        )
+        left_hand = armature_to_world @ (
+            armature.pose.bones["LeftHand"].head - hips
+        )
+        right_hand = armature_to_world @ (
+            armature.pose.bones["RightHand"].head - hips
+        )
+        front_hand_lateral_separations.append(
+            (left_hand.x - right_hand.x) * basis.runtime_scale
+        )
+        front_hand_own_side_offsets.append(
+            min(left_hand.x, -right_hand.x) * basis.runtime_scale
         )
 
         posed_forward = (
@@ -1235,6 +1315,34 @@ def measure_action_metrics(
                             for vertex_index in edge.vertices
                         },
                     }
+            for side, edge_indices in upper_arm_edge_indices_by_mesh[
+                mesh.name
+            ].items():
+                side_metrics = upper_arm_surface_deformation[side]
+                for edge_index in edge_indices:
+                    edge = evaluated_mesh.edges[edge_index]
+                    bind_length = bind_edge_lengths[mesh.name][edge_index]
+                    if bind_length <= 1e-6:
+                        continue
+                    current_length = (
+                        positions[edge.vertices[0]]
+                        - positions[edge.vertices[1]]
+                    ).length
+                    scale = current_length / bind_length
+                    side_metrics["maximumStretchRatio"] = max(
+                        side_metrics["maximumStretchRatio"],
+                        scale,
+                    )
+                    side_metrics["minimumScaleRatio"] = min(
+                        side_metrics["minimumScaleRatio"],
+                        scale,
+                    )
+                    growth = (
+                        current_length - bind_length
+                    ) * basis.runtime_scale
+                    if growth > side_metrics["maximumGrowthMeters"]:
+                        side_metrics["maximumGrowthMeters"] = growth
+                        side_metrics["maximumGrowthFrame"] = frame
             evaluated.to_mesh_clear()
         surface_floor_heights.append(
             (frame_floor_z - bind_floor_z) * basis.runtime_scale
@@ -1351,15 +1459,66 @@ def measure_action_metrics(
     if slug == "banquet-saint":
         measured["lockedJointTargetDegrees"] = 180
     else:
+        measured["upperArmSurfaceDeformation"] = {
+            "maximumGrowthMeters": round(
+                max(
+                    metrics["maximumGrowthMeters"]
+                    for metrics in upper_arm_surface_deformation.values()
+                ),
+                6,
+            ),
+            "maximumStretchRatio": round(
+                max(
+                    metrics["maximumStretchRatio"]
+                    for metrics in upper_arm_surface_deformation.values()
+                ),
+                6,
+            ),
+            "minimumScaleRatio": round(
+                min(
+                    metrics["minimumScaleRatio"]
+                    for metrics in upper_arm_surface_deformation.values()
+                ),
+                6,
+            ),
+            "sides": {
+                side: {
+                    key: (
+                        round(value, 6)
+                        if isinstance(value, float)
+                        else value
+                    )
+                    for key, value in metrics.items()
+                }
+                for side, metrics in upper_arm_surface_deformation.items()
+            },
+        }
         measured["frontElbowControl"] = {
-            "bendMode": "symmetric-inward-pole",
+            "bendMode": (
+                "inward-contact-target"
+                if PALE_MAW_FRONT_ELBOW_CONTROL["poleBlend"] == 0
+                else "inward-contact-target-with-pole"
+            ),
             "poleBlend": PALE_MAW_FRONT_ELBOW_CONTROL["poleBlend"],
+            "targetLateralInsetMeters": (
+                PALE_MAW_FRONT_ELBOW_CONTROL[
+                    "targetLateralInsetMeters"
+                ]
+            ),
             "maximumLateralSpanMeters": round(
                 max(front_elbow_lateral_spans),
                 6,
             ),
             "maximumOutwardOffsetMeters": round(
                 max(front_elbow_outward_offsets),
+                6,
+            ),
+            "minimumHandLateralSeparationMeters": round(
+                min(front_hand_lateral_separations),
+                6,
+            ),
+            "minimumHandOwnSideOffsetMeters": round(
+                min(front_hand_own_side_offsets),
                 6,
             ),
         }
@@ -1449,6 +1608,11 @@ def render_previews(
     )
     views = {
         "front": Vector((center.x, minimum.y - distance, center.z)),
+        "front-right": Vector((
+            center.x + distance * 0.72,
+            center.y - distance * 0.72,
+            center.z,
+        )),
         "right": Vector((maximum.x + distance, center.y, center.z)),
     }
     outputs: list[str] = []

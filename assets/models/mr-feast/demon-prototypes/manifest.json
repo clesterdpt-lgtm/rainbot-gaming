@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "assetVersion": "20260726-pale-maw-elbow-tuck-1",
+  "assetVersion": "20260726-pale-maw-shoulder-safe-arms-1",
   "pipeline": "Approved ImageGen concept, Meshy 6 image-to-3D and auto-rig, then Blender 4.5 browser preparation and authored locomotion",
   "prototypes": [
     {
@@ -42,9 +42,9 @@
         "run": "pale-maw-run.glb"
       },
       "animationNotes": {
-        "idle": "The accepted default processed bind remains unchanged through the torso, shoulders, neck, and head while inward elbow poles keep both front joints near the body and all four weighted surfaces settle on the floor.",
-        "walk": "The left hand plants with the right foot and the right hand with the left foot; inward elbow poles narrow the front silhouette while compensated palm rotations preserve supported contact without changing the default body or head pose.",
-        "run": "The faster diagonal contact-push cycle preserves the tucked front-elbow plane, planted palm orientation, default body/head bind, and skin-deformation guard."
+        "idle": "The accepted default processed bind remains unchanged through the torso, shoulders, neck, and head while slightly inward hand targets and a restrained elbow pole settle all four weighted surfaces without twisting the upper arms.",
+        "walk": "The left hand plants with the right foot and the right hand with the left foot; most of the front-arm tuck comes from a 0.25m inward contact path, with only a 0.12 bend-plane correction and compensated palm rotation.",
+        "run": "The faster diagonal contact-push cycle preserves smooth shoulder-to-elbow skin, separated front hands, planted palms, and the default body/head bind."
       },
       "animationReports": {
         "idle": "pale-maw-idle.animation-report.json",

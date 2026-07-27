@@ -23,7 +23,7 @@ assert.match(runtime, /const DEMON_PROTOTYPES = Object\.freeze/, "missing named 
 const runtimeCacheIdentity = runtime.match(/MANSION_RUNTIME_VERSION = "([^"]+)"/)?.[1] || "";
 const pageCacheIdentity = pageHtml.match(/mr-feast-mansion\.js\?v=([^"'&]+)/)?.[1] || "";
 assert.ok(
-  runtimeCacheIdentity.startsWith("20260726-pale-maw-elbow-tuck-"),
+  runtimeCacheIdentity.startsWith("20260726-pale-maw-shoulder-safe-arms-"),
   `demon prototype runtime cache identity is stale: ${runtimeCacheIdentity || "missing"}`,
 );
 assert.equal(
@@ -51,7 +51,7 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 assert.equal(manifest.version, 1, "unexpected demon prototype manifest version");
 assert.equal(
   manifest.assetVersion,
-  "20260726-pale-maw-elbow-tuck-1",
+  "20260726-pale-maw-shoulder-safe-arms-1",
   "demon animation assets need a fresh cache identity",
 );
 assert.equal(manifest.prototypes?.length, 2, "manifest must contain exactly two prototypes");
@@ -423,16 +423,33 @@ for (const prototype of manifest.prototypes) {
       );
       assert.equal(
         animationReport.frontElbowControl?.bendMode,
-        "symmetric-inward-pole",
-        `${prototype.id} ${action} does not tuck both front elbows toward the body`,
+        "inward-contact-target-with-pole",
+        `${prototype.id} ${action} does not use the shoulder-safe front-arm tuck`,
+      );
+      assert.equal(
+        animationReport.frontElbowControl?.targetLateralInsetMeters,
+        0.25,
+        `${prototype.id} ${action} does not carry both hand targets inward`,
       );
       assert.ok(
-        animationReport.frontElbowControl?.maximumLateralSpanMeters <= 1.65,
+        animationReport.frontElbowControl?.poleBlend <= 0.12,
+        `${prototype.id} ${action} swivels the elbow plane far enough to twist the upper arm`,
+      );
+      assert.ok(
+        animationReport.frontElbowControl?.maximumLateralSpanMeters <= 1.9,
         `${prototype.id} ${action} front elbows still bow too far apart`,
       );
       assert.ok(
-        animationReport.frontElbowControl?.maximumOutwardOffsetMeters <= 0.55,
+        animationReport.frontElbowControl?.maximumOutwardOffsetMeters <= 0.75,
         `${prototype.id} ${action} front elbow moves too far outside its shoulder`,
+      );
+      assert.ok(
+        animationReport.frontElbowControl?.minimumHandLateralSeparationMeters >= 0.15,
+        `${prototype.id} ${action} crosses its front hands`,
+      );
+      assert.ok(
+        animationReport.frontElbowControl?.minimumHandOwnSideOffsetMeters >= 0.02,
+        `${prototype.id} ${action} carries a front hand across the torso centerline`,
       );
       assert.deepEqual(
         animationReport.diagonalPairs,
@@ -450,6 +467,10 @@ for (const prototype of manifest.prototypes) {
       assert.ok(
         animationReport.surfaceEdgeDeformation.maximumGrowthMeters <= 0.11,
         `${prototype.id} ${action} stretches a surface edge by more than 11cm`,
+      );
+      assert.ok(
+        animationReport.upperArmSurfaceDeformation?.maximumGrowthMeters <= 0.05,
+        `${prototype.id} ${action} bends or stretches the skinned upper arm`,
       );
       const animatedLimbBones = new Set([
         "LeftArm",
@@ -492,7 +513,7 @@ for (const prototype of manifest.prototypes) {
         );
         assert.ok(
           animationReport.maximumLimbExcursionDegrees >= 45
-          && animationReport.maximumLimbExcursionDegrees <= 105,
+          && animationReport.maximumLimbExcursionDegrees <= 90,
           `${prototype.id} ${action} limb excursion does not match patrol speed`,
         );
         assert.ok(
@@ -753,11 +774,11 @@ try {
       } else {
         for (const anatomy of anatomySamples) {
           assert.ok(
-            anatomy.frontElbows.lateralSpan <= 1.65,
+            anatomy.frontElbows.lateralSpan <= 1.9,
             `${id} ${action} front elbows span ${anatomy.frontElbows.lateralSpan.toFixed(3)}m`,
           );
           assert.ok(
-            anatomy.frontElbows.maximumOutwardOffset <= 0.55,
+            anatomy.frontElbows.maximumOutwardOffset <= 0.75,
             `${id} ${action} elbow bows ${anatomy.frontElbows.maximumOutwardOffset.toFixed(3)}m outside its shoulder`,
           );
         }

@@ -22,14 +22,16 @@ const milestone = await readFile(milestonePath, "utf8");
 assert.match(runtime, /const DEMON_PROTOTYPES = Object\.freeze/, "missing named demon prototype tuning table");
 const runtimeCacheIdentity = runtime.match(/MANSION_RUNTIME_VERSION = "([^"]+)"/)?.[1] || "";
 const pageCacheIdentity = pageHtml.match(/mr-feast-mansion\.js\?v=([^"'&]+)/)?.[1] || "";
-assert.ok(
-  runtimeCacheIdentity.startsWith("20260726-pale-maw-shoulder-safe-arms-"),
-  `demon prototype runtime cache identity is stale: ${runtimeCacheIdentity || "missing"}`,
-);
+assert.ok(runtimeCacheIdentity, "missing mansion runtime cache identity");
 assert.equal(
   pageCacheIdentity,
   runtimeCacheIdentity,
   `page/runtime cache identities must agree: ${JSON.stringify({ runtimeCacheIdentity, pageCacheIdentity })}`,
+);
+assert.match(
+  runtime,
+  /assetVersion:\s*"20260726-pale-maw-shoulder-safe-arms-1"/,
+  "demon prototype asset cache identity is stale",
 );
 assert.match(runtime, /class DemonPrototypePatrolSystem/, "missing isolated demon prototype patrol system");
 assert.match(runtime, /demonPrototypePatrol\?\.setEnabled\(state\.devMode\)/, "developer mode does not own prototype visibility");

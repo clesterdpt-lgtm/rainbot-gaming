@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260726-pale-maw-shoulder-safe-arms-storage-clothing-1";
+  const MANSION_RUNTIME_VERSION = "20260727-quieter-outdoor-rain-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -32892,7 +32892,7 @@
       bodyLow.type = "lowpass";
       bodyLow.frequency.value = 1500;
       const bodyGain = this.ctx.createGain();
-      bodyGain.gain.value = 0.34;
+      bodyGain.gain.value = 0.22;
       body.connect(bodyHigh).connect(bodyLow).connect(bodyGain).connect(this.rain.gain);
       const hiss = this.ctx.createBufferSource();
       hiss.buffer = this.makeNoiseBuffer(2.3);
@@ -32902,12 +32902,12 @@
       hissBand.frequency.value = 4300;
       hissBand.Q.value = 0.65;
       const hissGain = this.ctx.createGain();
-      hissGain.gain.value = 0.1;
+      hissGain.gain.value = 0.065;
       hiss.connect(hissBand).connect(hissGain).connect(this.rain.gain);
       body.start();
       hiss.start();
       this.rain.mode = "procedural";
-      this.rain.level = 0.42;
+      this.rain.level = 0.28;
       this.rain.layers = 2;
       this.rain.source = {
         stop: () => {
@@ -32939,7 +32939,9 @@
       source.loopStart = 0.06;
       source.loopEnd = Math.max(1, baseBuffer.duration - 0.06);
       const baseGain = this.ctx.createGain();
-      baseGain.gain.value = 0.62;
+      // Keep outdoor rain present but restrained so dialogue, footsteps, and
+      // thunder still read clearly over the storm bed.
+      baseGain.gain.value = 0.38;
       source.connect(baseGain).connect(this.rain.gain);
       source.start();
       recordedSources.push(source);
@@ -32952,7 +32954,7 @@
       };
       this.rain.source = recordedRain;
       this.rain.mode = "recorded";
-      this.rain.level = 0.68;
+      this.rain.level = 0.42;
       this.rain.layers = 1;
       this.setRainExposure(this.rain.exposure);
 
@@ -32969,11 +32971,11 @@
         detailHigh.type = "highpass";
         detailHigh.frequency.value = 520;
         const detailGain = this.ctx.createGain();
-        detailGain.gain.value = 0.14;
+        detailGain.gain.value = 0.08;
         detail.connect(detailHigh).connect(detailGain).connect(this.rain.gain);
         detail.start(0, Math.min(9.5, Math.max(0, detailBuffer.duration - 0.25)));
         recordedSources.push(detail);
-        this.rain.level = 0.72;
+        this.rain.level = 0.45;
         this.rain.layers = 2;
         this.setRainExposure(this.rain.exposure);
       } catch (_) {

@@ -75,12 +75,14 @@ async function assertSourceContract() {
   ]);
   assert(/const THROWABLE_DISTRACTIONS\s*=\s*Object\.freeze/.test(runtime), "missing named THROWABLE_DISTRACTIONS tuning table");
   assert(
-    runtime.includes('const MANSION_RUNTIME_VERSION = "20260728-camera-last-seen-patrol-1"')
-      && html.includes("mr-feast-mansion.js?v=20260728-camera-last-seen-patrol-1"),
+    runtime.includes('const MANSION_RUNTIME_VERSION = "20260728-cabinet-throwables-1"')
+      && html.includes("mr-feast-mansion.js?v=20260728-cabinet-throwables-1"),
     "page and runtime must share the portable small-props cache identity",
   );
   assert(/class ThrowableDistractionSystem/.test(runtime), "missing focused ThrowableDistractionSystem");
-  assert(/minimumPortablePropCount:\s*40/.test(runtime), "small-prop coverage must require at least forty portable objects");
+  assert(/minimumPortablePropCount:\s*65/.test(runtime), "cabinet expansion must require at least sixty-five portable objects");
+  assert(/cabinetProfiles:\s*Object\.freeze/.test(runtime), "cabinet throwables need named stock-kind profiles");
+  assert(/registerCabinetEntries\s*\(/.test(runtime), "every Cabinet needs automatic throwable registration");
   assert(/adoptAuthoredVisual\s*\(/.test(runtime), "existing multi-part decor needs one portable assembly adoption path");
   assert(/addDynamicBox\s*\(/.test(runtime), "PhysicsWorld needs a bounded dynamic prop helper");
   assert(/Hold E · pick up/.test(runtime), "throwables need an explicit hold-E interaction label");
@@ -107,6 +109,7 @@ async function assertSourceContract() {
     "throwCarriedForQA",
     "resetThrowableDistractionsForQA",
     "probeThrowableThreatForQA",
+    "placePlayerNearCabinetThrowableForQA",
   ]) {
     assert(runtime.includes(hook), `missing deterministic throwable QA hook: ${hook}`);
   }
@@ -133,7 +136,7 @@ async function runBrowserFlow() {
     assert(
       throwables.entries.length >= 40
         && throwables.entries.length >= throwables.tuning.minimumPortablePropCount,
-      `expected broad forty-prop mansion coverage: ${JSON.stringify(throwables)}`,
+      `expected broad sixty-five-prop mansion coverage: ${JSON.stringify(throwables)}`,
     );
     const floors = new Set(throwables.entries.map((entry) => entry.floor));
     assert(
@@ -142,6 +145,81 @@ async function runBrowserFlow() {
     );
     const rooms = new Set(throwables.entries.map((entry) => entry.room));
     assert(rooms.size >= 16, `portable clutter must span at least sixteen authored rooms: ${JSON.stringify([...rooms])}`);
+    assert(
+      throwables.cabinetCoverage.total >= 24
+        && throwables.cabinetCoverage.covered === throwables.cabinetCoverage.total
+        && throwables.cabinetCoverage.uncoveredNames.length === 0
+        && throwables.cabinetCoverage.entries.every((entry) => (
+          entry.propId
+          && entry.mode === "resting"
+          && entry.atAuthoredPosition
+          && !entry.storageOpen
+          && !entry.homeVisible
+          && !entry.interactionRegistered
+        )),
+      `every closed Cabinet must own one hidden, storage-gated portable object: ${JSON.stringify(throwables.cabinetCoverage)}`,
+    );
+    const representativeCabinet = throwables.cabinetCoverage.entries.find((entry) => (
+      entry.storageName === "kitchen inner food cabinet"
+    )) || throwables.cabinetCoverage.entries[0];
+    const closedCabinetPlacement = await page.evaluate(
+      (storageName) => window.MrFeastFresh.placePlayerNearCabinetThrowableForQA(storageName, false),
+      representativeCabinet.storageName,
+    );
+    assert(
+      /^Open /i.test(closedCabinetPlacement?.prompt || ""),
+      `a closed cabinet should present its real door interaction first: ${JSON.stringify(closedCabinetPlacement)}`,
+    );
+    await page.keyboard.press("e");
+    await page.waitForTimeout(900);
+    const openCabinetPlacement = await page.evaluate(
+      (storageName) => window.MrFeastFresh.placePlayerNearCabinetThrowableForQA(storageName, true),
+      representativeCabinet.storageName,
+    );
+    assert(
+      openCabinetPlacement?.storageOpen
+        && openCabinetPlacement?.homeVisible
+        && /pick up/i.test(openCabinetPlacement?.prompt || ""),
+      `opening a cabinet must reveal its reachable portable object: ${JSON.stringify(openCabinetPlacement)}`,
+    );
+    await page.evaluate(() => {
+      window.MrFeastFresh.turnOnAllLights();
+      window.MrFeastFresh.collectFlashlightForQA();
+      window.MrFeastFresh.setFlashlightForQA(true, { silent: true });
+      window.MrFeastFresh.advanceThrowableDistractionsForQA(0.1);
+    });
+    await page.locator("#mansion-stage").screenshot({
+      path: path.join(artifactDir, "desktop-open-cabinet-item.png"),
+    });
+    await holdInteract(page, throwables.tuning.pickupHoldSeconds + 0.05);
+    let cabinetCarry = await throwableState(page);
+    assert(
+      cabinetCarry.carried?.storageName === representativeCabinet.storageName
+        && cabinetCarry.carried?.visibleInHand,
+      `a real hold must lift the cabinet's portable object: ${JSON.stringify(cabinetCarry.carried)}`,
+    );
+    await page.locator("#mansion-stage").screenshot({
+      path: path.join(artifactDir, "desktop-carried-cabinet-item.png"),
+    });
+    await page.evaluate(() => window.MrFeastFresh.setFlashlightForQA(false, { silent: true }));
+    await page.evaluate(() => window.MrFeastFresh.resetThrowableDistractionsForQA());
+    throwables = await throwableState(page);
+    const cabinetReachability = await page.evaluate(() => (
+      window.MrFeastFresh.getThrowableDistractions().cabinetCoverage.entries.map((entry) => ({
+        storageName: entry.storageName,
+        placement: window.MrFeastFresh.placePlayerNearCabinetThrowableForQA(entry.storageName, true),
+      }))
+    ));
+    assert(
+      cabinetReachability.every((entry) => (
+        entry.placement?.storageOpen
+        && entry.placement?.homeVisible
+        && /pick up/i.test(entry.placement?.prompt || "")
+      )),
+      `every Cabinet must reveal a reachable throwable when opened: ${JSON.stringify(
+        cabinetReachability.filter((entry) => !/pick up/i.test(entry.placement?.prompt || "")),
+      )}`,
+    );
     const authoredProps = throwables.entries.filter((entry) => entry.minimumSourceParts > 0);
     assert(
       authoredProps.length >= 32
@@ -539,8 +617,29 @@ async function runBrowserFlow() {
       { isMobile: true, hasTouch: true },
     );
     throwables = await throwableState(mobile);
-    const mobileTarget = throwables.entries.find((entry) => entry.floor === "SECOND FLOOR");
-    await mobile.evaluate((id) => window.MrFeastFresh.placePlayerNearThrowableForQA(id), mobileTarget.id);
+    const mobileCabinet = throwables.cabinetCoverage.entries.find((entry) => entry.walkIn)
+      || throwables.cabinetCoverage.entries[0];
+    let mobileCabinetPlacement = await mobile.evaluate(
+      (storageName) => window.MrFeastFresh.placePlayerNearCabinetThrowableForQA(storageName, false),
+      mobileCabinet.storageName,
+    );
+    assert(
+      /^Open /i.test(mobileCabinetPlacement?.prompt || ""),
+      `touch cabinet path must begin on the closed door: ${JSON.stringify(mobileCabinetPlacement)}`,
+    );
+    await mobile.locator("#touch-interact").tap();
+    await mobile.waitForTimeout(900);
+    mobileCabinetPlacement = await mobile.evaluate(
+      (storageName) => window.MrFeastFresh.placePlayerNearCabinetThrowableForQA(storageName, true),
+      mobileCabinet.storageName,
+    );
+    assert(
+      mobileCabinetPlacement?.storageOpen
+        && mobileCabinetPlacement?.homeVisible
+        && /pick up/i.test(mobileCabinetPlacement?.prompt || ""),
+      `touch must reveal the cabinet item: ${JSON.stringify(mobileCabinetPlacement)}`,
+    );
+    const mobileTarget = throwables.entries.find((entry) => entry.id === mobileCabinet.propId);
     await mobile.locator("#touch-interact").dispatchEvent("pointerdown", { pointerId: 17, pointerType: "touch" });
     await mobile.evaluate((seconds) => window.MrFeastFresh.advanceThrowableDistractionsForQA(seconds), throwables.tuning.pickupHoldSeconds + 0.05);
     await mobile.locator("#touch-interact").dispatchEvent("pointerup", { pointerId: 17, pointerType: "touch" });

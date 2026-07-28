@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260728-camera-last-seen-patrol-1";
+  const MANSION_RUNTIME_VERSION = "20260728-cabinet-throwables-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1750,7 +1750,7 @@
     serviceBellSwingRadians: 0.24,
   });
   const THROWABLE_DISTRACTIONS = Object.freeze({
-    minimumPortablePropCount: 40,
+    minimumPortablePropCount: 65,
     pickupHoldSeconds: 0.65,
     throwSpeedMetersPerSecond: 8.8,
     throwLiftMetersPerSecond: 1.25,
@@ -1776,6 +1776,76 @@
     saintHearingMeters: 18,
     maximumPlayerAudibleDistanceMeters: 22,
     panLimit: 0.82,
+    cabinetProfiles: Object.freeze({
+      walkIn: Object.freeze({
+        label: "perfume bottle", kind: "bottle", material: "glass",
+        size: Object.freeze({ x: 0.13, y: 0.25, z: 0.13 }),
+      }),
+      food: Object.freeze({
+        label: "provisions tin", kind: "tin", material: "brass",
+        size: Object.freeze({ x: 0.17, y: 0.22, z: 0.15 }),
+      }),
+      dishes: Object.freeze({
+        label: "porcelain cup", kind: "cup", material: "porcelain",
+        size: Object.freeze({ x: 0.18, y: 0.18, z: 0.18 }),
+      }),
+      barware: Object.freeze({
+        label: "reserve bottle", kind: "bottle", material: "wineRed",
+        size: Object.freeze({ x: 0.15, y: 0.32, z: 0.15 }),
+      }),
+      sideboard: Object.freeze({
+        label: "silver cordial cup", kind: "cup", material: "brass",
+        size: Object.freeze({ x: 0.15, y: 0.16, z: 0.15 }),
+      }),
+      cookware: Object.freeze({
+        label: "small copper pot", kind: "tin", material: "copper",
+        size: Object.freeze({ x: 0.24, y: 0.17, z: 0.22 }),
+      }),
+      prep: Object.freeze({
+        label: "mixing bowl", kind: "cup", material: "porcelain",
+        size: Object.freeze({ x: 0.22, y: 0.15, z: 0.22 }),
+      }),
+      undersink: Object.freeze({
+        label: "cleaning bottle", kind: "bottle", material: "glass",
+        size: Object.freeze({ x: 0.13, y: 0.24, z: 0.13 }),
+      }),
+      washroom: Object.freeze({
+        label: "amenity bottle", kind: "bottle", material: "glass",
+        size: Object.freeze({ x: 0.11, y: 0.2, z: 0.11 }),
+      }),
+      "cellar-reserve": Object.freeze({
+        label: "cellar bottle", kind: "bottle", material: "wineGreen",
+        size: Object.freeze({ x: 0.15, y: 0.32, z: 0.15 }),
+      }),
+      linens: Object.freeze({
+        label: "folded hand towel", kind: "book", material: "canvasLinen",
+        size: Object.freeze({ x: 0.3, y: 0.1, z: 0.22 }),
+      }),
+      "pantry-staples": Object.freeze({
+        label: "pantry tin", kind: "tin", material: "brass",
+        size: Object.freeze({ x: 0.16, y: 0.23, z: 0.15 }),
+      }),
+      preserves: Object.freeze({
+        label: "preserve jar", kind: "bottle", material: "wineRed",
+        size: Object.freeze({ x: 0.14, y: 0.23, z: 0.14 }),
+      }),
+      "dry-goods": Object.freeze({
+        label: "cocoa tin", kind: "tin", material: "iron",
+        size: Object.freeze({ x: 0.16, y: 0.23, z: 0.15 }),
+      }),
+      baking: Object.freeze({
+        label: "baking-powder tin", kind: "tin", material: "brass",
+        size: Object.freeze({ x: 0.16, y: 0.22, z: 0.15 }),
+      }),
+      "tinned-goods": Object.freeze({
+        label: "soup tin", kind: "tin", material: "iron",
+        size: Object.freeze({ x: 0.16, y: 0.23, z: 0.15 }),
+      }),
+      tools: Object.freeze({
+        label: "parts tin", kind: "tin", material: "iron",
+        size: Object.freeze({ x: 0.2, y: 0.16, z: 0.16 }),
+      }),
+    }),
     placements: Object.freeze([
       Object.freeze({
         id: "library-paperweight", label: "brass paperweight", kind: "paperweight",
@@ -16277,6 +16347,7 @@
       this.openAngle = openAngle;
       this.hasInteriorLight = Boolean(interiorLight);
       this.itemCount = 0;
+      this.portableThrowableId = null;
       this.open = false;
       this.angle = 0;
       this.target = 0;
@@ -16467,6 +16538,7 @@
         flashlightSystem.syncPickupVisibility();
         updateInteractionPrompt();
       }
+      throwableDistractionSystem?.syncStorageEntry(this);
       if (!silent && audioSystem) audioSystem.cabinet(this.open);
     }
 
@@ -25664,6 +25736,7 @@
     constructor() {
       this.entries = [];
       this.byId = new Map();
+      this.cabinetEntries = [];
       this.carried = null;
       this.pickup = null;
       this.activeSoundTask = null;
@@ -25678,11 +25751,126 @@
       THROWABLE_DISTRACTIONS.placements.forEach((placement, index) => {
         this.createEntry(placement, index);
       });
+      this.registerCabinetEntries();
       animatedObjects.push(this);
     }
 
     materialFor(name) {
       return M[name] || M.iron;
+    }
+
+    cabinetProfile(storage) {
+      const profileKey = storage.walkIn ? "walkIn" : storage.stockKind;
+      return {
+        profileKey,
+        profile: THROWABLE_DISTRACTIONS.cabinetProfiles[profileKey] || null,
+      };
+    }
+
+    cabinetEntryId(storage) {
+      return `cabinet-${storage.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")}`;
+    }
+
+    cabinetPlacement(storage) {
+      const { profileKey, profile } = this.cabinetProfile(storage);
+      if (!profile) return null;
+      storage.root.updateMatrixWorld(true);
+      const size = { ...profile.size };
+      const shelfHeights = kitchenShelfHeights(storage.height);
+      const shelfY = storage.walkIn
+        ? size.y / 2 + 0.09
+        : shelfHeights[storage.name === "kitchen sink base cabinet" ? 1 : 0]
+          + size.y / 2 + 0.035;
+      const localX = storage.name === "kitchen sink base cabinet"
+        ? -storage.width * 0.26
+        : 0;
+      const localZ = storage.walkIn
+        ? storage.depth / 2 - size.z / 2 - 0.16
+        : storage.name === "kitchen sink base cabinet"
+          ? storage.depth / 2 - size.z / 2 - 0.02
+          : storage.depth / 2 - size.z / 2 - 0.11;
+      const localPosition = new THREE.Vector3(
+        localX,
+        shelfY,
+        localZ,
+      );
+      const worldPosition = storage.root.localToWorld(localPosition.clone());
+      const qaPosition = storage.root.localToWorld(new THREE.Vector3(
+        localPosition.x,
+        0,
+        storage.depth / 2 + (
+          storage.walkIn
+            ? 0.65
+            : storage.name === "kitchen sink base cabinet" ? 0.55 : 0.72
+        ),
+      ));
+      const location = locateRoomAtFeet({
+        x: storage.root.position.x,
+        y: storage.floorY,
+        z: storage.root.position.z,
+      });
+      return {
+        id: this.cabinetEntryId(storage),
+        label: profile.label,
+        kind: profile.kind,
+        material: profile.material,
+        size,
+        floor: location.floorLabel,
+        room: location.roomLabel,
+        position: {
+          x: worldPosition.x,
+          y: worldPosition.y,
+          z: worldPosition.z,
+        },
+        qa: {
+          x: qaPosition.x,
+          y: storage.floorY,
+          z: qaPosition.z,
+        },
+        cabinetGenerated: true,
+        cabinetProfile: profileKey,
+        storageName: storage.name,
+      };
+    }
+
+    registerCabinetEntries() {
+      const cabinets = animatedObjects.filter((object) => object instanceof Cabinet);
+      cabinets.forEach((storage, index) => {
+        const placement = this.cabinetPlacement(storage);
+        if (!placement) return;
+        const entry = this.createEntry(
+          placement,
+          THROWABLE_DISTRACTIONS.placements.length + index,
+        );
+        entry.storage = storage;
+        storage.portableThrowableId = entry.id;
+        this.cabinetEntries.push(entry);
+        this.syncStorageEntry(storage);
+      });
+      return this.cabinetEntries.length;
+    }
+
+    syncStorageEntry(storage) {
+      const entry = storage?.portableThrowableId
+        ? this.byId.get(storage.portableThrowableId)
+        : null;
+      if (!entry) return false;
+      const atHome = entry.mode === "resting";
+      const available = !atHome || Boolean(storage.open);
+      if (atHome) {
+        entry.root.visible = available;
+        if (available) this.registerInteraction(entry);
+        else {
+          if (this.pickup?.entry === entry) this.endPickup("storage-closed");
+          this.unregisterInteraction(entry);
+        }
+      } else {
+        entry.root.visible = true;
+      }
+      return available;
     }
 
     isDescendantOf(object, root) {
@@ -26045,6 +26233,7 @@
         && !this.carried
         && !this.pickup
         && this.activeSoundTask?.propId !== entry.id
+        && (!entry.storage || entry.storage.open || entry.mode !== "resting")
         && this.toolsAllowed()
         && !state.gameOver
         && !state.activeSeat
@@ -26111,6 +26300,7 @@
       if (!entry || this.carried) return false;
       this.removePhysics(entry);
       this.unregisterInteraction(entry);
+      entry.root.visible = true;
       camera.updateMatrixWorld(true);
       camera.add(entry.root);
       entry.root.position.set(
@@ -26152,6 +26342,7 @@
       scene.add(entry.root);
       entry.root.position.copy(releasePosition);
       entry.root.quaternion.copy(releaseQuaternion);
+      entry.root.visible = true;
       const direction = new THREE.Vector3();
       camera.getWorldDirection(direction);
       if (options.direction) {
@@ -26524,7 +26715,11 @@
       entry.cleanupPending = false;
       entry.cleanupRemaining = 0;
       entry.lastPhysicsPosition.copy(entry.root.position);
-      this.registerInteraction(entry);
+      if (entry.storage) this.syncStorageEntry(entry.storage);
+      else {
+        entry.root.visible = true;
+        this.registerInteraction(entry);
+      }
       return true;
     }
 
@@ -26550,6 +26745,33 @@
 
     getDiagnostics() {
       const carried = this.carried;
+      const cabinetCoverageEntries = animatedObjects
+        .filter((object) => object instanceof Cabinet)
+        .map((storage) => {
+          const entry = storage.portableThrowableId
+            ? this.byId.get(storage.portableThrowableId)
+            : null;
+          const worldPosition = new THREE.Vector3();
+          if (entry) entry.root.getWorldPosition(worldPosition);
+          const home = entry?.placement.position;
+          return {
+            storageName: storage.name,
+            stockKind: storage.walkIn ? "walkIn" : storage.stockKind,
+            walkIn: Boolean(storage.walkIn),
+            storageOpen: Boolean(storage.open),
+            propId: entry?.id || null,
+            label: entry?.label || null,
+            mode: entry?.mode || null,
+            atAuthoredPosition: Boolean(
+              entry
+              && entry.mode === "resting"
+              && worldPosition.distanceTo(new THREE.Vector3(home.x, home.y, home.z)) <= 0.025
+            ),
+            homeVisible: Boolean(entry && entry.mode === "resting" && entry.root.visible),
+            interactionRegistered: Boolean(entry?.interactionRegistered),
+          };
+        });
+      const coveredCabinetEntries = cabinetCoverageEntries.filter((entry) => entry.propId);
       return {
         tuning: {
           minimumPortablePropCount: THROWABLE_DISTRACTIONS.minimumPortablePropCount,
@@ -26560,10 +26782,19 @@
           saintHearingMeters: THROWABLE_DISTRACTIONS.saintHearingMeters,
           saintInvestigationSeconds: THROWABLE_DISTRACTIONS.saintInvestigationSeconds,
         },
+        cabinetCoverage: {
+          total: cabinetCoverageEntries.length,
+          covered: coveredCabinetEntries.length,
+          uncoveredNames: cabinetCoverageEntries
+            .filter((entry) => !entry.propId)
+            .map((entry) => entry.storageName),
+          entries: cabinetCoverageEntries,
+        },
         carried: carried ? {
           id: carried.id,
           label: carried.label,
           mode: carried.mode,
+          storageName: carried.storage?.name || null,
           adoptedPartCount: carried.adoptedPartCount,
           visualPartCount: this.visualPartCount(carried),
           strandedSourcePartCount: this.strandedSourcePartCount(carried),
@@ -26615,6 +26846,10 @@
             kind: entry.placement.kind,
             floor: entry.placement.floor,
             room: entry.placement.room,
+            storageName: entry.storage?.name || null,
+            storageOpen: entry.storage ? Boolean(entry.storage.open) : null,
+            cabinetGenerated: Boolean(entry.placement.cabinetGenerated),
+            cabinetProfile: entry.placement.cabinetProfile || null,
             mode: entry.mode,
             position: {
               x: Number(worldPosition.x.toFixed(3)),
@@ -26623,6 +26858,7 @@
             },
             authoredPosition: { ...entry.placement.position },
             atAuthoredPosition,
+            homeVisible: entry.mode === "resting" ? Boolean(entry.root.visible) : null,
             interactionRegistered: entry.interactionRegistered,
             physicsActive: Boolean(entry.physicsRecord),
             sleeping: Boolean(entry.physicsRecord?.body?.isSleeping()),
@@ -26650,6 +26886,11 @@
       const entry = this.byId.get(id) || this.entries[0];
       if (!entry) return null;
       if (entry.mode !== "resting") this.restoreEntry(entry);
+      if (entry.storage && !entry.storage.open) {
+        entry.storage.setOpen(true, true);
+        entry.storage.update(5);
+        this.syncStorageEntry(entry.storage);
+      }
       const target = entry.placement.position;
       const qa = entry.placement.qa;
       const yaw = Math.atan2(qa.x - target.x, qa.z - target.z);
@@ -26670,6 +26911,60 @@
         floor: state.currentFloor,
         room: state.currentRoom,
         prompt: state.currentInteraction?.getLabel?.() || null,
+        storageName: entry.storage?.name || null,
+        storageOpen: entry.storage ? Boolean(entry.storage.open) : null,
+        homeVisible: entry.mode === "resting" ? Boolean(entry.root.visible) : null,
+        interactionRay: inspectInteractionRay(),
+      };
+    }
+
+    placePlayerNearCabinetForQA(storageName, open = true) {
+      if (!state.qa || !physics) return null;
+      const entry = this.cabinetEntries.find((candidate) => (
+        candidate.storage?.name === storageName
+      ));
+      if (!entry) return null;
+      if (entry.mode !== "resting") this.restoreEntry(entry);
+      const storage = entry.storage;
+      storage.setOpen(Boolean(open), true);
+      storage.update(5);
+      this.syncStorageEntry(storage);
+      if (open) return this.placePlayerNearForQA(entry.id);
+
+      storage.root.updateMatrixWorld(true);
+      const localX = storage.width * 0.22;
+      const target = storage.root.localToWorld(new THREE.Vector3(
+        localX,
+        storage.height * 0.52,
+        storage.depth / 2 + 0.08,
+      ));
+      const qa = storage.root.localToWorld(new THREE.Vector3(
+        localX,
+        0,
+        storage.depth / 2 + 1.25,
+      ));
+      const yaw = Math.atan2(qa.x - target.x, qa.z - target.z);
+      teleport(qa.x, storage.floorY, qa.z, yaw, -0.18);
+      syncCamera();
+      const horizontal = Math.max(
+        0.001,
+        Math.hypot(target.x - camera.position.x, target.z - camera.position.z),
+      );
+      state.pitch = Math.atan2(target.y - camera.position.y, horizontal);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      updateInteractionPrompt();
+      return {
+        placed: true,
+        id: entry.id,
+        storageName: storage.name,
+        storageOpen: Boolean(storage.open),
+        homeVisible: Boolean(entry.root.visible),
+        floor: state.currentFloor,
+        room: state.currentRoom,
+        prompt: state.currentInteraction?.getLabel?.() || null,
+        interactionRay: inspectInteractionRay(),
       };
     }
 
@@ -42471,6 +42766,11 @@
     window.MrFeastFresh.placePlayerNearThrowableForQA = (id) => (
       state.qa && throwableDistractionSystem
         ? throwableDistractionSystem.placePlayerNearForQA(id)
+        : null
+    );
+    window.MrFeastFresh.placePlayerNearCabinetThrowableForQA = (storageName, open = true) => (
+      state.qa && throwableDistractionSystem
+        ? throwableDistractionSystem.placePlayerNearCabinetForQA(storageName, open)
         : null
     );
     window.MrFeastFresh.advanceThrowableDistractionsForQA = (seconds) => (

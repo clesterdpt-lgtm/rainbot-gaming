@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260727-victory-feast-escape-1";
+  const MANSION_RUNTIME_VERSION = "20260728-throwable-distractions-3";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -109,6 +109,10 @@
     energyMode: $("mansion-energy-mode"),
     energyValue: $("mansion-energy-value"),
     energyFill: $("mansion-energy-fill"),
+    breath: $("mansion-breath"),
+    breathMode: $("mansion-breath-mode"),
+    breathValue: $("mansion-breath-value"),
+    breathFill: $("mansion-breath-fill"),
     stealth: $("mansion-stealth"),
     stealthMode: $("mansion-stealth-mode"),
     stealthValue: $("mansion-stealth-value"),
@@ -170,6 +174,7 @@
     touch: $("mansion-touch"),
     touchSprint: $("touch-sprint"),
     touchCrouch: $("touch-crouch"),
+    touchBreath: $("touch-breath"),
     touchMenu: $("touch-menu"),
     debug: $("mansion-debug"),
   };
@@ -1736,6 +1741,119 @@
     laundryWheelSpeed: 8.5,
     serviceBellSwingRadians: 0.24,
   });
+  const THROWABLE_DISTRACTIONS = Object.freeze({
+    pickupHoldSeconds: 0.65,
+    throwSpeedMetersPerSecond: 8.8,
+    throwLiftMetersPerSecond: 1.25,
+    carryOffset: Object.freeze({ x: 0.34, y: -0.31, z: -0.62 }),
+    carryYawRadians: -0.22,
+    carryRollRadians: 0.14,
+    restitution: 0.34,
+    friction: 0.72,
+    linearDamping: 0.68,
+    angularDamping: 0.84,
+    settleLinearSpeed: 0.2,
+    settleAngularSpeed: 0.42,
+    settleSeconds: 0.72,
+    maximumFlightSeconds: 8,
+    minimumImpactSeconds: 0.055,
+    mrFeastHearingMeters: 14,
+    floorToleranceMeters: 1.35,
+    soundLifetimeSeconds: 4.2,
+    searchSeconds: 1.65,
+    cleanupDelaySeconds: 24,
+    cleanupRetrySeconds: 4,
+    saintInvestigationSeconds: 4.5,
+    saintHearingMeters: 18,
+    maximumPlayerAudibleDistanceMeters: 22,
+    panLimit: 0.82,
+    placements: Object.freeze([
+      Object.freeze({
+        id: "library-paperweight", label: "brass paperweight", kind: "paperweight",
+        floor: "MAIN LEVEL", room: "LIBRARY",
+        position: Object.freeze({ x: -10.05, y: 0.96, z: 5.2 }),
+        qa: Object.freeze({ x: -10.05, y: FLOOR.MAIN, z: 3.86 }),
+        size: Object.freeze({ x: 0.18, y: 0.18, z: 0.18 }), material: "brass",
+      }),
+      Object.freeze({
+        id: "music-room-bottle", label: "green glass bottle", kind: "bottle",
+        floor: "MAIN LEVEL", room: "MUSIC ROOM",
+        position: Object.freeze({ x: 9.2, y: 1.02, z: 7.4 }),
+        qa: Object.freeze({ x: 9.2, y: FLOOR.MAIN, z: 6.15 }),
+        size: Object.freeze({ x: 0.16, y: 0.34, z: 0.16 }), material: "wineGreen",
+      }),
+      Object.freeze({
+        id: "dining-sideboard-cup", label: "porcelain cup", kind: "cup",
+        floor: "MAIN LEVEL", room: "DINING ROOM",
+        position: Object.freeze({ x: -13.75, y: 1.49, z: -11.1 }),
+        qa: Object.freeze({ x: -12.45, y: FLOOR.MAIN, z: -10.95 }),
+        size: Object.freeze({ x: 0.2, y: 0.2, z: 0.2 }), material: "porcelain",
+      }),
+      Object.freeze({
+        id: "foyer-silver-vase", label: "small silver vase", kind: "bottle",
+        floor: "MAIN LEVEL", room: "FRONT FOYER",
+        position: Object.freeze({ x: -3.9, y: 1.02, z: 9.3 }),
+        qa: Object.freeze({ x: -2.65, y: FLOOR.MAIN, z: 9.3 }),
+        size: Object.freeze({ x: 0.18, y: 0.34, z: 0.18 }), material: "iron",
+      }),
+      Object.freeze({
+        id: "west-suite-perfume", label: "perfume bottle", kind: "bottle",
+        floor: "SECOND FLOOR", room: "WEST FRONT SUITE",
+        position: Object.freeze({ x: -7.2, y: 5.47, z: 9.3 }),
+        qa: Object.freeze({ x: -5.95, y: FLOOR.UPPER, z: 9.3 }),
+        size: Object.freeze({ x: 0.14, y: 0.26, z: 0.14 }), material: "wineRed",
+      }),
+      Object.freeze({
+        id: "east-suite-cup", label: "bedside cup", kind: "cup",
+        floor: "SECOND FLOOR", room: "EAST FRONT SUITE",
+        position: Object.freeze({ x: 5.58, y: 5.45, z: 9.55 }),
+        qa: Object.freeze({ x: 5.58, y: FLOOR.UPPER, z: 8.28 }),
+        size: Object.freeze({ x: 0.19, y: 0.19, z: 0.19 }), material: "porcelain",
+      }),
+      Object.freeze({
+        id: "reading-room-paperback", label: "dropped paperback", kind: "book",
+        floor: "SECOND FLOOR", room: "READING ROOM",
+        position: Object.freeze({ x: 12.65, y: 4.58, z: 0.35 }),
+        qa: Object.freeze({ x: 11.45, y: FLOOR.UPPER, z: 0.35 }),
+        size: Object.freeze({ x: 0.28, y: 0.08, z: 0.2 }), material: "leather",
+      }),
+      Object.freeze({
+        id: "rear-lounge-teacup", label: "china teacup", kind: "cup",
+        floor: "SECOND FLOOR", room: "REAR LOUNGE",
+        position: Object.freeze({ x: 0.15, y: 5.45, z: -8.25 }),
+        qa: Object.freeze({ x: 1.55, y: FLOOR.UPPER, z: -8.25 }),
+        size: Object.freeze({ x: 0.19, y: 0.19, z: 0.19 }), material: "porcelain",
+      }),
+      Object.freeze({
+        id: "wine-cellar-bottle", label: "dusty wine bottle", kind: "bottle",
+        floor: "BASEMENT", room: "WINE CELLAR",
+        position: Object.freeze({ x: -8, y: -2.79, z: 7.4 }),
+        qa: Object.freeze({ x: -8, y: FLOOR.BASEMENT, z: 6.15 }),
+        size: Object.freeze({ x: 0.17, y: 0.36, z: 0.17 }), material: "wineRed",
+      }),
+      Object.freeze({
+        id: "laundry-soap-tin", label: "soap tin", kind: "tin",
+        floor: "BASEMENT", room: "LAUNDRY & LINEN",
+        position: Object.freeze({ x: -8, y: -2.83, z: -0.1 }),
+        qa: Object.freeze({ x: -8, y: FLOOR.BASEMENT, z: 1.18 }),
+        size: Object.freeze({ x: 0.2, y: 0.22, z: 0.15 }), material: "iron",
+      }),
+      Object.freeze({
+        id: "pantry-food-tin", label: "tinned peaches", kind: "tin",
+        floor: "BASEMENT", room: "PANTRY",
+        position: Object.freeze({ x: 3.05, y: -3.67, z: 1.1 }),
+        qa: Object.freeze({ x: 4.18, y: FLOOR.BASEMENT, z: 1.1 }),
+        size: Object.freeze({ x: 0.18, y: 0.24, z: 0.18 }), material: "brass",
+      }),
+      Object.freeze({
+        id: "workroom-coffee-cup", label: "abandoned coffee cup", kind: "cup",
+        floor: "BASEMENT", room: "WORKROOM",
+        position: Object.freeze({ x: -2.5, y: -2.85, z: -8.2 }),
+        qa: Object.freeze({ x: -2.5, y: FLOOR.BASEMENT, z: -6.88 }),
+        size: Object.freeze({ x: 0.2, y: 0.2, z: 0.2 }), material: "porcelain",
+      }),
+    ]),
+  });
   const MR_FEAST_FOOTSTEPS = Object.freeze({
     contacts: Object.freeze({
       // Sampled from the shipped clips at 120 evenly-spaced phases. Emit at
@@ -1800,6 +1918,47 @@
     // railings instead of allowing the root to scrape along their edge.
     directFloorToleranceMeters: 0.16,
     directPathClearanceMeters: 0.045,
+  });
+  const BREATH_STEALTH = Object.freeze({
+    // The existing sprint reserve is also the player's lung-capacity read:
+    // even an exhausted runner gets one tense five-second hold, while a
+    // completely rested player can stay quiet for forty-five seconds.
+    minimumHoldSeconds: 5,
+    maximumHoldSeconds: 45,
+    forcedGaspLockoutSeconds: 1,
+    sprintCancelLockoutSeconds: 0.18,
+    fearTailSeconds: 4,
+    strainPerSprintSecond: 31,
+    strainRecoveryPerSecond: 8,
+    lightStrainThreshold: 12,
+    heavyStrainThreshold: 42,
+    panickedStrainThreshold: 72,
+    aggroStrainFloor: 18,
+    mrFeastHearingMeters: 6,
+    saintHearingMeters: 7,
+    curtainRangeMultiplier: 0.96,
+    coatClosetRangeMultiplier: 0.65,
+    openRangeMultiplier: 1,
+    closeDiscoveryMeters: 1.35,
+    breathIntervals: Object.freeze({
+      light: 2.5,
+      heavy: 1.55,
+      panicked: 0.92,
+    }),
+    tierIntensity: Object.freeze({
+      silent: 0,
+      light: 0.52,
+      heavy: 1,
+      panicked: 1,
+      gasp: 1,
+    }),
+    audioVolume: Object.freeze({
+      light: 0.105,
+      heavy: 0.165,
+      panicked: 0.22,
+      gasp: 0.27,
+    }),
+    eventHistoryLimit: 24,
   });
   const STEALTH = Object.freeze({
     // One concealment model with two consumers. The player-facing meter mixes
@@ -2997,6 +3156,22 @@
     closingLineSeconds: 9.5,
     overlayAtSeconds: 24,
     maximumTimerStepSeconds: 0.25,
+    breathing: Object.freeze({
+      profile: "panicked-player",
+      firstBreathDelaySeconds: 0.18,
+      initialIntervalSeconds: 1.68,
+      finalIntervalSeconds: 0.72,
+      panicRampSeconds: 12,
+      inhaleSeconds: 0.34,
+      inhaleHitchSeconds: 0.08,
+      exhaleSeconds: 0.62,
+      breathTailSeconds: 0.08,
+      baseVolume: 0.205,
+      dialogueDuckMultiplier: 0.46,
+      minimumRealtimeGapSeconds: 0.24,
+      intervalJitterSeconds: Object.freeze([0.08, -0.06, 0.03, -0.1, 0.05, -0.04]),
+      panJitter: Object.freeze([-0.035, 0.025, -0.018, 0.04, -0.028, 0.015]),
+    }),
     table: Object.freeze({
       centerX: -9.7,
       centerZ: -8.4,
@@ -3597,6 +3772,24 @@
       stealthVisibilityMultiplier: 1,
       stealthNoiseMultiplier: 1,
     },
+    breathing: {
+      strain: 0,
+      tier: "silent",
+      audible: false,
+      holding: false,
+      holdCapacitySeconds: BREATH_STEALTH.maximumHoldSeconds,
+      holdRemainingSeconds: BREATH_STEALTH.maximumHoldSeconds,
+      holdLockoutSeconds: 0,
+      fearTailSeconds: 0,
+      aggro: false,
+      nextBreathSeconds: 0,
+      emittedBreaths: 0,
+      forcedGasps: 0,
+      lastGaspReason: null,
+      lastEvent: null,
+      lastListeners: [],
+      eventHistory: [],
+    },
     stealth: {
       meter: 0,
       meterVisible: false,
@@ -3634,6 +3827,19 @@
       alertCooldown: 0,
       alertLatchCameraId: null,
       lastAlert: null,
+    },
+    throwableDistractions: {
+      carriedId: null,
+      pickupId: null,
+      pickupElapsed: 0,
+      pickupCompletions: 0,
+      pickupCancellations: 0,
+      throwCount: 0,
+      impactCount: 0,
+      resetCount: 0,
+      mrFeastResetCount: 0,
+      lastImpact: null,
+      pendingSoundTaskId: null,
     },
     bulkStorageSecret: {
       moveCount: 0,
@@ -3698,6 +3904,7 @@
     left: false,
     right: false,
     sprint: false,
+    holdBreath: false,
     interactHeld: false,
     touchLookId: null,
     touchLookX: 0,
@@ -3713,6 +3920,10 @@
   const camera = new THREE.PerspectiveCamera(70, 16 / 9, 0.06, 120);
   camera.rotation.order = "YXZ";
   camera.position.set(0, PLAYER.eye, 10.2);
+  // Camera-attached carried props are first-person view models. A camera can
+  // render the scene without being parented into it, but its children cannot;
+  // keep it in the scene graph so a picked-up object is genuinely visible.
+  scene.add(camera);
 
   let renderer;
   try {
@@ -3889,6 +4100,7 @@
   let seatingSystem = null;
   let cameraSecurity = null;
   let flashlightSystem = null;
+  let throwableDistractionSystem = null;
   let bulkStorageSecretSystem = null;
   let monitorWallSystem = null;
   let tamperSystem = null;
@@ -3899,6 +4111,7 @@
   let feastHuntSystem = null;
   let victoryFeastSystem = null;
   let banquetLossSystem = null;
+  let breathStealthSystem = null;
   let workroomCodeClue = null;
 
   function activeCompetitionSystem() {
@@ -5180,9 +5393,12 @@
     constructor(rapier) {
       this.R = rapier;
       this.world = new rapier.World({ x: 0, y: -9.81, z: 0 });
+      this.eventQueue = new rapier.EventQueue(true);
+      this.collisionCallbacks = new Map();
       this.fixedBodies = 0;
       this.fixedBoxes = [];
       this.kinematicBodies = 0;
+      this.dynamicBodies = 0;
       this.colliderCount = 0;
       this.verticalVelocity = 0;
       this.grounded = false;
@@ -5233,6 +5449,50 @@
       this.kinematicBodies += 1;
       this.colliderCount += 1;
       return { body, collider };
+    }
+
+    addDynamicBox({
+      position,
+      size,
+      rotation = null,
+      velocity = null,
+      angularVelocity = null,
+      mass = 0.4,
+      friction = 0.7,
+      restitution = 0.25,
+      linearDamping = 0.6,
+      angularDamping = 0.8,
+      onCollision = null,
+    }) {
+      const bodyDesc = this.R.RigidBodyDesc.dynamic()
+        .setTranslation(position.x, position.y, position.z)
+        .setLinearDamping(linearDamping)
+        .setAngularDamping(angularDamping)
+        .setCcdEnabled(true);
+      if (rotation) bodyDesc.setRotation(rotation);
+      const body = this.world.createRigidBody(bodyDesc);
+      if (velocity) body.setLinvel(velocity, true);
+      if (angularVelocity) body.setAngvel(angularVelocity, true);
+      const colliderDesc = this.R.ColliderDesc
+        .cuboid(size.x / 2, size.y / 2, size.z / 2)
+        .setFriction(friction)
+        .setRestitution(restitution)
+        .setMass(mass)
+        .setActiveEvents(this.R.ActiveEvents.COLLISION_EVENTS);
+      const collider = this.world.createCollider(colliderDesc, body);
+      if (typeof onCollision === "function") this.collisionCallbacks.set(collider.handle, onCollision);
+      this.dynamicBodies += 1;
+      this.colliderCount += 1;
+      return { body, collider };
+    }
+
+    removeDynamicBox(record) {
+      if (!record?.body) return false;
+      if (record.collider) this.collisionCallbacks.delete(record.collider.handle);
+      this.world.removeRigidBody(record.body);
+      this.dynamicBodies = Math.max(0, this.dynamicBodies - 1);
+      this.colliderCount = Math.max(0, this.colliderCount - 1);
+      return true;
     }
 
     canCharacterOccupy(position, radius, height) {
@@ -5329,7 +5589,12 @@
 
     step() {
       this.world.timestep = 1 / 60;
-      this.world.step();
+      this.world.step(this.eventQueue);
+      this.eventQueue.drainCollisionEvents((firstHandle, secondHandle, started) => {
+        if (!started) return;
+        this.collisionCallbacks.get(firstHandle)?.(secondHandle);
+        this.collisionCallbacks.get(secondHandle)?.(firstHandle);
+      });
     }
 
     updateSafety() {
@@ -5486,8 +5751,22 @@
       this.responseBlockedReason = null;
       this.responseStateTrace = [MR_FEAST_RESPONSE_STATE.PATROL];
       this.qaLastCameraResponse = null;
-      this.housekeeping = { active: null, fixesCompleted: 0 };
+      this.housekeeping = {
+        active: null,
+        fixesCompleted: 0,
+        soundInvestigationsCompleted: 0,
+        portableObjectsReset: 0,
+      };
       this.qaLastHousekeepingRun = null;
+      this.breathInvestigation = {
+        active: false,
+        heardCount: 0,
+        investigationCount: 0,
+        exposureCount: 0,
+        lastEventId: null,
+        lastRoom: null,
+        lastDistance: null,
+      };
       this.pursuit = { active: null, giveUpRemaining: 0, repathRemaining: 0, warnings: 0, catches: 0, lastOutcome: null, cooldownActive: false };
       this.pursuitWarningFocus = null;
       this.pursuitTargetNodeId = null;
@@ -7041,6 +7320,7 @@
       this.responseCurrentNodeId = startId;
       this.responsePath = path;
       this.responseBlockedReason = targetId && (path.length || targetId === startId) ? null : "no unlocked response route";
+      if (alarm.kind !== "breathing") this.breathInvestigation.active = false;
       if (this.behaviorState === MR_FEAST_RESPONSE_STATE.PATROL) this.transitionSecurityResponse("alarm");
       else this.transitionSecurityResponse("alarm");
       this.pauseRemaining = 0;
@@ -7052,11 +7332,118 @@
       return this.getDiagnostics();
     }
 
+    refreshPursuitFromBreathing(event) {
+      if (!this.pursuit.active || !event?.position) return false;
+      this.pursuitLastKnownPosition = {
+        x: event.position.x,
+        y: event.position.y,
+        z: event.position.z,
+      };
+      this.pursuitTrackingSource = "breathing";
+      this.pursuitDirectSight = false;
+      this.pursuitUnseenSeconds = 0;
+      this.pursuit.giveUpRemaining = this.pursuitGiveUpSeconds();
+      this.pursuit.repathRemaining = 0;
+      this.repathPursuit(this.pursuitLastKnownPosition, true);
+      return true;
+    }
+
+    exposeBreathingPlayer(event) {
+      if (!event?.hearing?.heard || !state.isHidden || !physics) {
+        return { exposed: false, reason: "not-hidden-or-unheard" };
+      }
+      const hidingSpot = state.activeHideSpot;
+      hidingSpot?.exit();
+      const p = physics.playerPosition();
+      const feetY = this.playerFeetY(p);
+      const pursuit = this.beginPursuit({
+        kind: victoryFeastSystem?.isEscapeActive() ? "victory-feast" : "breathing",
+        reason: "breathing",
+      });
+      this.breathInvestigation.exposureCount += 1;
+      this.breathInvestigation.active = false;
+      if (
+        pursuit.accepted
+        && event.hearing.distance <= BREATH_STEALTH.closeDiscoveryMeters + 0.0001
+        && this.pursuit.active
+      ) {
+        this.resolveCatch(p, feetY);
+      }
+      return {
+        exposed: true,
+        spot: hidingSpot?.name || null,
+        caught: !this.pursuit.active && this.pursuit.lastOutcome != null,
+      };
+    }
+
+    hearPlayerBreathing(event = {}) {
+      if (
+        this.loadStatus !== "ready"
+        || state.gameOver
+        || competitionSuspendsSecurity()
+        || !event.hearing?.heard
+        || !event.position
+      ) return { heard: false, reason: "security-unavailable" };
+      const wasBreathInvestigation = this.activeCameraAlarm?.kind === "breathing";
+      this.breathInvestigation.heardCount += 1;
+      this.breathInvestigation.lastEventId = event.id || null;
+      this.breathInvestigation.lastRoom = event.room || null;
+      this.breathInvestigation.lastDistance = event.hearing.distance;
+
+      if (this.pursuit.active) {
+        this.refreshPursuitFromBreathing(event);
+        if (
+          state.isHidden
+          && event.hearing.distance <= BREATH_STEALTH.closeDiscoveryMeters
+        ) {
+          return {
+            heard: true,
+            response: "exposed",
+            ...this.exposeBreathingPlayer(event),
+          };
+        }
+        return { heard: true, response: "pursuit-refreshed" };
+      }
+
+      if (
+        wasBreathInvestigation
+        && state.isHidden
+        && event.hearing.distance <= BREATH_STEALTH.closeDiscoveryMeters
+      ) {
+        return {
+          heard: true,
+          response: "exposed",
+          ...this.exposeBreathingPlayer(event),
+        };
+      }
+
+      const responseNodeId = this.nearestResponseTargetId(event.position, true);
+      this.breathInvestigation.active = true;
+      if (!wasBreathInvestigation) this.breathInvestigation.investigationCount += 1;
+      this.respondToCameraAlarm({
+        kind: "breathing",
+        cameraId: null,
+        room: event.room,
+        reason: event.forced ? "forced-gasp" : "breathing-heard",
+        responseNodeId,
+        responsePosition: { ...event.position },
+        lastSeen: { ...event.position },
+        breathEventId: event.id || null,
+      });
+      return {
+        heard: true,
+        response: wasBreathInvestigation ? "investigation-updated" : "investigating",
+        targetNodeId: responseNodeId,
+      };
+    }
+
     beginSecuritySearch() {
       if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING) this.transitionSecurityResponse("arrived");
       // A housekeeping errand reuses the bounded searching state as the
       // fixing pause; a real camera response keeps the longer sweep search.
-      this.searchRemaining = this.housekeeping.active ? MANSION_TAMPER.fixSeconds : CAMERA_SECURITY.searchSeconds;
+      this.searchRemaining = this.housekeeping.active
+        ? Number(this.housekeeping.active.searchSeconds) || MANSION_TAMPER.fixSeconds
+        : CAMERA_SECURITY.searchSeconds;
       this.searchElapsed = 0;
       this.searchBaseYaw = this.root.rotation.y;
       this.moving = false;
@@ -7064,9 +7451,14 @@
     }
 
     canAcceptHousekeeping() {
+      const task = arguments[0] || null;
+      const finalePortablePropAllowed = Boolean(
+        task?.portableProp
+        && victoryFeastSystem?.allowsPlayerTools?.()
+      );
       if (
         this.loadStatus !== "ready"
-        || competitionBlocksInvestigation()
+        || (competitionBlocksInvestigation() && !finalePortablePropAllowed)
         || !this.wanderingEnabled
         || this.activeCameraAlarm
         || this.housekeeping.active
@@ -7080,7 +7472,13 @@
 
     respondToHousekeepingTask(task) {
       if (!task || this.loadStatus !== "ready") return { accepted: false, reason: "not-ready" };
-      if (competitionBlocksInvestigation()) return { accepted: false, reason: "competition" };
+      const finalePortablePropAllowed = Boolean(
+        task.portableProp
+        && victoryFeastSystem?.allowsPlayerTools?.()
+      );
+      if (competitionBlocksInvestigation() && !finalePortablePropAllowed) {
+        return { accepted: false, reason: "competition" };
+      }
       if (this.activeCameraAlarm) return { accepted: false, reason: "camera-alarm" };
       if (this.pursuit.active) return { accepted: false, reason: "pursuing" };
       if (this.housekeeping.active) return { accepted: false, reason: "busy" };
@@ -7114,13 +7512,15 @@
     abandonHousekeepingToAlarm() {
       const task = this.housekeeping.active;
       this.housekeeping.active = null;
-      if (task) tamperSystem?.releaseTask(task.id);
+      if (task?.portableProp) throwableDistractionSystem?.releaseSoundTask(task.id);
+      else if (task) tamperSystem?.releaseTask(task.id);
     }
 
     suspendHousekeepingForCompetition() {
       const task = this.housekeeping.active;
       if (!task) return false;
-      tamperSystem?.releaseTask(task.id);
+      if (task.portableProp) throwableDistractionSystem?.releaseSoundTask(task.id);
+      else tamperSystem?.releaseTask(task.id);
       this.housekeeping.active = null;
       this.responsePath = [];
       this.responseResume = null;
@@ -7161,6 +7561,10 @@
       this.pursuitStallSeconds = 0;
       this.pursuitApproachSuppressedRemaining = 0;
       this.activeCameraAlarm = null;
+      this.breathInvestigation.active = false;
+      this.breathInvestigation.lastEventId = null;
+      this.breathInvestigation.lastRoom = null;
+      this.breathInvestigation.lastDistance = null;
       this.responsePath = [];
       this.responseResume = null;
       this.responseBlockedReason = null;
@@ -7188,8 +7592,16 @@
       const task = this.housekeeping.active;
       this.housekeeping.active = null;
       if (task) {
-        tamperSystem?.completeFix(task.id);
-        this.housekeeping.fixesCompleted += 1;
+        if (task.portableProp) {
+          const reset = throwableDistractionSystem?.completeSoundTask(task.id);
+          if (reset) {
+            this.housekeeping.portableObjectsReset += 1;
+            if (task.transientSound) this.housekeeping.soundInvestigationsCompleted += 1;
+          }
+        } else {
+          tamperSystem?.completeFix(task.id);
+          this.housekeeping.fixesCompleted += 1;
+        }
       }
       if (tamperSystem?.nextDispatch()) return;
       this.beginSecurityReturn();
@@ -7272,11 +7684,21 @@
 
     runHousekeepingForQA(maxSeconds = 240) {
       if (!state.qa || this.loadStatus !== "ready") {
-        return { completed: false, simulatedSeconds: 0, states: [...this.responseStateTrace], fixesCompleted: 0, error: "Mr Feast housekeeping is not ready" };
+        return {
+          completed: false,
+          simulatedSeconds: 0,
+          states: [...this.responseStateTrace],
+          fixesCompleted: 0,
+          soundInvestigationsCompleted: 0,
+          portableObjectsReset: 0,
+          error: "Mr Feast housekeeping is not ready",
+        };
       }
       const fixedStep = 1 / 30;
       const limit = clamp(Number(maxSeconds) || 240, 1, 600);
       const fixesBefore = this.housekeeping.fixesCompleted;
+      const soundInvestigationsBefore = this.housekeeping.soundInvestigationsCompleted;
+      const portableObjectsResetBefore = this.housekeeping.portableObjectsReset;
       const teleportsBefore = this.responseTeleports;
       state.started = true;
       this.wanderingEnabled = true;
@@ -7302,6 +7724,10 @@
         teleports: this.responseTeleports - teleportsBefore,
         distanceTravelled: Number(this.responseDistance.toFixed(3)),
         fixesCompleted: this.housekeeping.fixesCompleted - fixesBefore,
+        soundInvestigationsCompleted:
+          this.housekeeping.soundInvestigationsCompleted - soundInvestigationsBefore,
+        portableObjectsReset:
+          this.housekeeping.portableObjectsReset - portableObjectsResetBefore,
         blockedReason: this.responseBlockedReason,
       };
       return this.qaLastHousekeepingRun;
@@ -7386,6 +7812,7 @@
       }
       if (this.housekeeping.active) this.abandonHousekeepingToAlarm();
       this.activeCameraAlarm = null;
+      this.breathInvestigation.active = false;
       // The "interrupted patrol point" is wherever he physically stands, not
       // the waypoint bookkeeping; anchoring the resume there keeps the later
       // return walk short and honest.
@@ -7753,6 +8180,10 @@
       this.pursuitWarningFocus = null;
       this.housekeeping.active = null;
       this.activeCameraAlarm = null;
+      this.breathInvestigation.active = false;
+      this.breathInvestigation.lastEventId = null;
+      this.breathInvestigation.lastRoom = null;
+      this.breathInvestigation.lastDistance = null;
       this.responsePath = [];
       this.responseResume = null;
       this.responseBlockedReason = null;
@@ -7987,6 +8418,7 @@
       this.transitionSecurityResponse("rejoined");
       this.responsePath = [];
       this.activeCameraAlarm = null;
+      this.breathInvestigation.active = false;
       this.responseResume = null;
       this.responseBlockedReason = null;
       this.searchRemaining = 0;
@@ -8479,8 +8911,22 @@
       this.responseBlockedReason = null;
       this.responseStateTrace = [MR_FEAST_RESPONSE_STATE.PATROL];
       this.qaLastCameraResponse = null;
-      this.housekeeping = { active: null, fixesCompleted: 0 };
+      this.housekeeping = {
+        active: null,
+        fixesCompleted: 0,
+        soundInvestigationsCompleted: 0,
+        portableObjectsReset: 0,
+      };
       this.qaLastHousekeepingRun = null;
+      this.breathInvestigation = {
+        active: false,
+        heardCount: 0,
+        investigationCount: 0,
+        exposureCount: 0,
+        lastEventId: null,
+        lastRoom: null,
+        lastDistance: null,
+      };
       this.pursuit = { active: null, giveUpRemaining: 0, repathRemaining: 0, warnings: 0, catches: 0, lastOutcome: null, cooldownActive: false };
       this.pursuitWarningFocus = null;
       this.pursuitTargetNodeId = null;
@@ -8933,6 +9379,7 @@
         security: {
           state: this.behaviorState,
           activeAlarm: this.activeCameraAlarm ? {
+            kind: this.activeCameraAlarm.kind || "camera",
             cameraId: this.activeCameraAlarm.cameraId,
             room: this.activeCameraAlarm.room,
             reason: this.activeCameraAlarm.reason,
@@ -8954,6 +9401,8 @@
           activeTaskId: this.housekeeping.active?.id || null,
           activeTaskKind: this.housekeeping.active?.kind || null,
           fixesCompleted: this.housekeeping.fixesCompleted,
+          soundInvestigationsCompleted: this.housekeeping.soundInvestigationsCompleted,
+          portableObjectsReset: this.housekeeping.portableObjectsReset,
           queued: tamperSystem ? tamperSystem.queuedCount() : 0,
           lastRun: this.qaLastHousekeepingRun,
         },
@@ -8987,6 +9436,15 @@
             edges: this.pursuitShortcutEdgeCount,
           },
           lastRun: this.qaLastPursuitRun,
+        },
+        breathing: {
+          activeInvestigation: this.breathInvestigation.active,
+          heardCount: this.breathInvestigation.heardCount,
+          investigationCount: this.breathInvestigation.investigationCount,
+          exposureCount: this.breathInvestigation.exposureCount,
+          lastEventId: this.breathInvestigation.lastEventId,
+          lastRoom: this.breathInvestigation.lastRoom,
+          lastDistance: this.breathInvestigation.lastDistance,
         },
         pauseRemaining: Number(this.pauseRemaining.toFixed(3)),
         conversationFocusRemaining: Number(this.conversationFocusRemaining.toFixed(3)),
@@ -13287,6 +13745,12 @@
       this.finaleCatchCount = 0;
       this.finaleLastKnownPosition = null;
       this.finaleTargetSource = "none";
+      this.finaleBreathHeardCount = 0;
+      this.finaleBreathExposureCount = 0;
+      this.finaleLastBreathEventId = null;
+      this.finaleDistractionRemaining = 0;
+      this.finaleDistractionHeardCount = 0;
+      this.finaleLastDistractionEventId = null;
       this.finaleBlockedFrames = 0;
       this.finaleRaycaster = new THREE.Raycaster();
       this.finaleTargetPoint = new THREE.Vector3();
@@ -14149,6 +14613,12 @@
       this.finaleBlockedFrames = 0;
       this.finaleLastKnownPosition = null;
       this.finaleTargetSource = "none";
+      this.finaleBreathHeardCount = 0;
+      this.finaleBreathExposureCount = 0;
+      this.finaleLastBreathEventId = null;
+      this.finaleDistractionRemaining = 0;
+      this.finaleDistractionHeardCount = 0;
+      this.finaleLastDistractionEventId = null;
       for (const entry of this.entries) {
         entry.stunCharge = 0;
         entry.stunRemaining = 0;
@@ -14161,6 +14631,109 @@
         entry.hiddenTargetSuppressed = false;
       }
       return this.getFinaleDiagnostics();
+    }
+
+    hearFinaleBreathing(event = {}) {
+      const entry = this.saintEntry();
+      if (
+        this.finaleMode !== "escape"
+        || !entry
+        || entry.status !== "ready"
+        || !entry.root.visible
+        || !event.hearing?.heard
+        || !event.position
+      ) return { heard: false, reason: "saint-unavailable" };
+      const wasInvestigatingBreath = this.finaleTargetSource === "breathing";
+      this.finaleBreathHeardCount += 1;
+      this.finaleLastBreathEventId = event.id || null;
+      this.finaleLastKnownPosition = {
+        x: event.position.x,
+        y: event.position.y,
+        z: event.position.z,
+      };
+      this.finaleTargetSource = "breathing";
+      entry.hiddenTargetSuppressed = false;
+      if (
+        wasInvestigatingBreath
+        && state.isHidden
+        && event.hearing.distance <= BREATH_STEALTH.closeDiscoveryMeters
+      ) {
+        const spot = state.activeHideSpot;
+        spot?.exit();
+        this.finaleBreathExposureCount += 1;
+        const caught = victoryFeastSystem?.handleSaintCatch() || null;
+        return {
+          heard: true,
+          response: "exposed",
+          spot: spot?.name || null,
+          caught,
+        };
+      }
+      return {
+        heard: true,
+        response: wasInvestigatingBreath ? "investigation-updated" : "investigating",
+      };
+    }
+
+    hearFinaleDistraction(event = {}) {
+      const entry = this.saintEntry();
+      if (
+        this.finaleMode !== "escape"
+        || !entry
+        || entry.status !== "ready"
+        || !entry.root.visible
+        || !event.position
+      ) return { accepted: false, reason: "saint-unavailable" };
+      // Throwing in full view is not an invisibility spell. The Saint only
+      // trades its live player target for a sound while cover has already
+      // removed that player from sight.
+      if (!state.isHidden) return { accepted: false, reason: "player-visible" };
+      const floorPlanes = [FLOOR.BASEMENT, FLOOR.MAIN, FLOOR.UPPER];
+      const nearestFloor = (height) => floorPlanes.reduce((nearest, floorY) => (
+        Math.abs(floorY - height) < Math.abs(nearest - height) ? floorY : nearest
+      ), FLOOR.MAIN);
+      const impactFloorY = nearestFloor(event.position.y);
+      const saintFloorY = nearestFloor(entry.root.position.y);
+      if (impactFloorY !== saintFloorY) {
+        return { accepted: false, reason: "different-floor" };
+      }
+      const distance = Math.hypot(
+        event.position.x - entry.root.position.x,
+        event.position.z - entry.root.position.z,
+      );
+      if (distance > THROWABLE_DISTRACTIONS.saintHearingMeters) {
+        return { accepted: false, reason: "out-of-range", distance };
+      }
+      this.finaleLastKnownPosition = {
+        x: event.position.x,
+        // A wall or furniture strike can occur well above foot height. Route
+        // toward its floor plane so that a chest-high impact does not become
+        // a false "between levels" target on the next pursuit frame.
+        y: impactFloorY,
+        z: event.position.z,
+      };
+      this.finaleTargetSource = "thrown-distraction";
+      this.finaleDistractionRemaining = THROWABLE_DISTRACTIONS.saintInvestigationSeconds;
+      this.finaleDistractionHeardCount += 1;
+      this.finaleLastDistractionEventId = event.id || null;
+      entry.hiddenTargetSuppressed = false;
+      return {
+        accepted: true,
+        reason: "hidden-sound-investigation",
+        duration: this.finaleDistractionRemaining,
+        distance: Number(distance.toFixed(3)),
+      };
+    }
+
+    clearFinaleDistraction(reason = "cleared") {
+      const cleared = this.finaleTargetSource === "thrown-distraction";
+      this.finaleDistractionRemaining = 0;
+      this.finaleLastDistractionEventId = null;
+      if (cleared) {
+        this.finaleTargetSource = state.isHidden ? "hidden-suppressed" : "none";
+        this.finaleLastKnownPosition = null;
+      }
+      return { cleared, reason };
     }
 
     setFinaleRevealVisible(visible) {
@@ -14181,6 +14754,12 @@
       if (nextMode === "disabled") {
         this.finaleLastKnownPosition = null;
         this.finaleTargetSource = "none";
+        this.finaleBreathHeardCount = 0;
+        this.finaleBreathExposureCount = 0;
+        this.finaleLastBreathEventId = null;
+        this.finaleDistractionRemaining = 0;
+        this.finaleDistractionHeardCount = 0;
+        this.finaleLastDistractionEventId = null;
         if (entry) {
           entry.stunCharge = 0;
           entry.stunRemaining = 0;
@@ -14310,6 +14889,15 @@
         return;
       }
       if (this.finaleMode !== "escape") return;
+      if (this.finaleTargetSource === "thrown-distraction") {
+        this.finaleDistractionRemaining = Math.max(
+          0,
+          this.finaleDistractionRemaining - step,
+        );
+        if (this.finaleDistractionRemaining <= 0) {
+          this.clearFinaleDistraction("expired");
+        }
+      }
       entry.stunRemaining = Math.max(0, entry.stunRemaining - step);
       entry.stunCooldown = Math.max(0, entry.stunCooldown - step);
       const beam = this.finaleBeamState(entry);
@@ -14339,7 +14927,12 @@
           entry.stunCharge - step * (flashlightSystem?.isEmitting?.() ? 1.5 : 0.35),
         );
       }
-      if (state.isHidden || !physics) {
+      const hiddenSoundTarget = Boolean(
+        state.isHidden
+        && ["breathing", "thrown-distraction"].includes(this.finaleTargetSource)
+        && this.finaleLastKnownPosition
+      );
+      if ((state.isHidden && !hiddenSoundTarget) || !physics) {
         entry.hiddenTargetSuppressed = Boolean(state.isHidden);
         this.finaleTargetSource = state.isHidden ? "hidden-suppressed" : "none";
         entry.activity = state.isHidden ? "searching" : "idle";
@@ -14352,10 +14945,13 @@
         this.stepAnimation(entry, step);
         return;
       }
-      entry.hiddenTargetSuppressed = false;
+      entry.hiddenTargetSuppressed = Boolean(state.isHidden && !hiddenSoundTarget);
       const p = physics.playerPosition();
       const feetY = p.y - PLAYER.halfHeight - PLAYER.radius;
-      const sameFloor = Math.abs(feetY - entry.root.position.y) < 1.2;
+      const targetPosition = hiddenSoundTarget
+        ? this.finaleLastKnownPosition
+        : { x: p.x, y: feetY, z: p.z };
+      const sameFloor = Math.abs(targetPosition.y - entry.root.position.y) < 1.2;
       if (!sameFloor) {
         this.finaleTargetSource = "different-floor";
         entry.activity = "searching";
@@ -14363,14 +14959,26 @@
         this.stepAnimation(entry, step);
         return;
       }
-      this.finaleLastKnownPosition = { x: p.x, y: feetY, z: p.z };
-      this.finaleTargetSource = "player";
-      const dx = p.x - entry.root.position.x;
-      const dz = p.z - entry.root.position.z;
+      if (!hiddenSoundTarget) {
+        this.finaleLastKnownPosition = { x: p.x, y: feetY, z: p.z };
+        this.finaleTargetSource = "player";
+      } else if (this.finaleTargetSource === "thrown-distraction") {
+        this.finaleTargetSource = "thrown-distraction";
+      } else {
+        this.finaleTargetSource = "breathing";
+      }
+      const dx = targetPosition.x - entry.root.position.x;
+      const dz = targetPosition.z - entry.root.position.z;
       const distance = Math.hypot(dx, dz);
-      if (distance <= VICTORY_FEAST.saint.catchRadius) {
+      if (!state.isHidden && distance <= VICTORY_FEAST.saint.catchRadius) {
         this.finaleCatchCount += 1;
         victoryFeastSystem?.handleSaintCatch();
+        return;
+      }
+      if (state.isHidden && distance <= 0.12) {
+        entry.activity = "searching";
+        this.playAction(entry, "idle", "searching", entry.placement.idlePlaybackRate);
+        this.stepAnimation(entry, step);
         return;
       }
       const desiredYaw = Math.atan2(dx, dz);
@@ -14708,6 +15316,12 @@
         lineOfSight: sight.clear,
         blocker: sight.blocker,
         targetSource: this.finaleTargetSource,
+        breathHeardCount: this.finaleBreathHeardCount,
+        breathExposureCount: this.finaleBreathExposureCount,
+        lastBreathEventId: this.finaleLastBreathEventId,
+        distractionHeardCount: this.finaleDistractionHeardCount,
+        distractionRemaining: Number(this.finaleDistractionRemaining.toFixed(3)),
+        lastDistractionEventId: this.finaleLastDistractionEventId,
         lastKnownPosition: this.finaleLastKnownPosition
           ? { ...this.finaleLastKnownPosition }
           : null,
@@ -15296,6 +15910,8 @@
         leaveLabel = `Leave ${name}`,
         hiddenLabel = "Hidden among the coats",
         viewClasses = [],
+        breathMuffleMultiplier = BREATH_STEALTH.openRangeMultiplier,
+        breathHidingKind = "open",
         onEnter = null,
         onExit = null,
       } = options;
@@ -15307,6 +15923,12 @@
       this.leaveLabel = leaveLabel;
       this.hiddenLabel = hiddenLabel;
       this.viewClasses = [...viewClasses];
+      this.breathMuffleMultiplier = clamp(
+        Number(breathMuffleMultiplier) || BREATH_STEALTH.openRangeMultiplier,
+        0,
+        1,
+      );
+      this.breathHidingKind = breathHidingKind;
       this.onEnter = onEnter;
       this.onExit = onExit;
       this.interaction = {
@@ -15327,6 +15949,8 @@
       input.back = false;
       input.left = false;
       input.right = false;
+      input.sprint = false;
+      state.movement.sprinting = false;
       if (typeof this.onEnter === "function") this.onEnter();
       teleport(this.hidePosition.x, this.floorY, this.hidePosition.z, this.hidePosition.yaw, 0);
       if (audioSystem) audioSystem.hide("enter");
@@ -15531,6 +16155,8 @@
           leaveLabel: `Leave ${roomTitle} curtains`,
           hiddenLabel: `Hidden behind the ${roomTitle} curtains`,
           viewClasses: ["is-curtain-hiding", `curtain-crack-${this.crackSide}`],
+          breathMuffleMultiplier: BREATH_STEALTH.curtainRangeMultiplier,
+          breathHidingKind: "curtain",
           onEnter: () => { this.targetOpenness = 0; },
           onExit: () => { this.targetOpenness = 1; },
         });
@@ -17688,6 +18314,7 @@
       speechSystem?.dismiss();
       clearMovementInput();
       flashlightSystem?.setEnabled?.(false, { source: "banquet-loss" });
+      audioSystem?.startBanquetBreathing(this.elapsed);
       this.stageLighting();
       this.stageContestants();
       this.stageTabletopSightline();
@@ -17792,9 +18419,14 @@
         );
       }
       speechSystem?.update(step);
+      audioSystem?.updateBanquetBreathing(
+        this.elapsed,
+        speechSystem?.active?.category === "banquet-loss-closing",
+      );
       if (!this.overlayVisible && this.elapsed >= BANQUET_LOSS.overlayAtSeconds) {
         this.phase = "complete";
         this.overlayVisible = true;
+        audioSystem?.stopBanquetBreathing();
         if (dom.stage) dom.stage.dataset.banquetLook = "inactive";
         presentMansionGameOverOverlay();
       }
@@ -17806,6 +18438,7 @@
     }
 
     restorePresentation() {
+      audioSystem?.stopBanquetBreathing();
       this.root.visible = false;
       this.restoreTabletopSightline();
       if (dom.stage) dom.stage.dataset.banquetLoss = "inactive";
@@ -23615,6 +24248,7 @@
           );
           mrFeastNpc?.update(step);
           cameraSecurity?.update(step, true);
+          breathStealthSystem?.update(step);
         } else if (this.show.phase === VICTORY_FEAST_PHASE.REVEAL) {
           stormSystem?.update(step);
         }
@@ -24384,6 +25018,907 @@
     }
   }
 
+  class ThrowableDistractionSystem {
+    constructor() {
+      this.entries = [];
+      this.byId = new Map();
+      this.carried = null;
+      this.pickup = null;
+      this.activeSoundTask = null;
+      this.soundSequence = 0;
+      this.threatHistory = [];
+      this.lastThreatResult = null;
+      this.hitMaterial = new THREE.MeshBasicMaterial({
+        visible: false,
+        depthWrite: false,
+        colorWrite: false,
+      });
+      THROWABLE_DISTRACTIONS.placements.forEach((placement, index) => {
+        this.createEntry(placement, index);
+      });
+      animatedObjects.push(this);
+    }
+
+    materialFor(name) {
+      return M[name] || M.iron;
+    }
+
+    buildVisual(entry) {
+      const { root, placement } = entry;
+      const { size, kind } = placement;
+      const material = this.materialFor(placement.material);
+      if (kind === "bottle") {
+        cylinder({
+          name: `${placement.id}-body`,
+          radius: size.x * 0.42,
+          radiusTop: size.x * 0.34,
+          radiusBottom: size.x * 0.43,
+          height: size.y * 0.68,
+          segments: 14,
+          y: -size.y * 0.1,
+          material,
+          parent: root,
+        });
+        cylinder({
+          name: `${placement.id}-neck`,
+          radius: size.x * 0.2,
+          height: size.y * 0.34,
+          segments: 12,
+          y: size.y * 0.31,
+          material,
+          parent: root,
+        });
+        cylinder({
+          name: `${placement.id}-lip`,
+          radius: size.x * 0.25,
+          height: size.y * 0.07,
+          segments: 12,
+          y: size.y * 0.49,
+          material: placement.material === "iron" ? M.brass : material,
+          parent: root,
+          cast: false,
+        });
+      } else if (kind === "cup") {
+        cylinder({
+          name: `${placement.id}-cup`,
+          radius: size.x * 0.38,
+          radiusTop: size.x * 0.42,
+          radiusBottom: size.x * 0.31,
+          height: size.y * 0.76,
+          segments: 14,
+          y: -size.y * 0.04,
+          material,
+          parent: root,
+        });
+        const handle = new THREE.Mesh(
+          geometry("throwableCupHandle", () => new THREE.TorusGeometry(0.055, 0.014, 7, 16)),
+          material,
+        );
+        handle.name = `${placement.id}-handle`;
+        handle.scale.setScalar(size.x / 0.2);
+        handle.position.set(size.x * 0.42, 0, 0);
+        handle.castShadow = true;
+        root.add(handle);
+        cylinder({
+          name: `${placement.id}-coffee`,
+          radius: size.x * 0.31,
+          height: 0.009,
+          segments: 14,
+          y: size.y * 0.34,
+          material: M.soot,
+          parent: root,
+          cast: false,
+        });
+      } else if (kind === "tin") {
+        roundedBox({
+          name: `${placement.id}-tin`,
+          w: size.x,
+          h: size.y,
+          d: size.z,
+          radius: Math.min(size.x, size.z) * 0.12,
+          material,
+          parent: root,
+        });
+        for (const y of [-size.y * 0.42, size.y * 0.42]) {
+          box({
+            name: `${placement.id}-rim`,
+            w: size.x * 1.04,
+            h: 0.016,
+            d: size.z * 1.04,
+            y,
+            material: M.brass,
+            parent: root,
+            cast: false,
+          });
+        }
+      } else if (kind === "book") {
+        roundedBox({
+          name: `${placement.id}-cover`,
+          w: size.x,
+          h: size.y,
+          d: size.z,
+          radius: 0.018,
+          material,
+          parent: root,
+        });
+        box({
+          name: `${placement.id}-pages`,
+          w: size.x * 0.89,
+          h: size.y * 0.72,
+          d: size.z * 1.015,
+          x: size.x * 0.035,
+          material: M.canvasLinen,
+          parent: root,
+          cast: false,
+        });
+      } else {
+        sphere({
+          name: `${placement.id}-weight`,
+          radius: size.x * 0.48,
+          y: size.y * 0.08,
+          material,
+          parent: root,
+        });
+        cylinder({
+          name: `${placement.id}-base`,
+          radius: size.x * 0.48,
+          height: size.y * 0.18,
+          segments: 16,
+          y: -size.y * 0.38,
+          material: M.darkWood,
+          parent: root,
+        });
+      }
+    }
+
+    createEntry(placement, index) {
+      const root = new THREE.Group();
+      root.name = `throwable-${placement.id}`;
+      root.position.set(placement.position.x, placement.position.y, placement.position.z);
+      root.rotation.y = (index % 3 - 1) * 0.14;
+      scene.add(root);
+      const entry = {
+        id: placement.id,
+        label: placement.label,
+        placement,
+        root,
+        hitbox: null,
+        interaction: null,
+        authoredQuaternion: root.quaternion.clone(),
+        physicsRecord: null,
+        mode: "resting",
+        interactionRegistered: false,
+        flightElapsed: 0,
+        settleElapsed: 0,
+        distanceTravelled: 0,
+        lastPhysicsPosition: new THREE.Vector3().copy(root.position),
+        impactCount: 0,
+        throwCount: 0,
+        investigatedCount: 0,
+        cleanupPending: false,
+        cleanupRemaining: 0,
+        resetByMrFeastCount: 0,
+        impactPosition: null,
+        impactSpeed: 0,
+        earlyCollision: false,
+      };
+      this.buildVisual(entry);
+      root.traverse((object) => {
+        object.userData.portableThrowable = true;
+      });
+      const hitbox = box({
+        name: `throwable-${placement.id}-hitbox`,
+        w: placement.size.x + 0.16,
+        h: placement.size.y + 0.16,
+        d: placement.size.z + 0.16,
+        material: this.hitMaterial,
+        parent: root,
+        cast: false,
+        receive: false,
+      });
+      const interaction = {
+        type: "throwable-pickup",
+        id: placement.id,
+        getLabel: () => (
+          matchMedia("(pointer: coarse)").matches
+            ? `Hold Interact · pick up ${placement.label}`
+            : `Hold E · pick up ${placement.label}`
+        ),
+        activate: () => false,
+        beginHold: () => this.beginPickup(entry),
+        endHold: (reason) => this.endPickup(reason),
+        resolve: () => this.canPickup(entry) ? interaction : null,
+      };
+      entry.hitbox = hitbox;
+      entry.interaction = interaction;
+      this.entries.push(entry);
+      this.byId.set(entry.id, entry);
+      this.registerInteraction(entry);
+      return entry;
+    }
+
+    registerInteraction(entry) {
+      if (!entry || entry.interactionRegistered) return false;
+      addInteractionTarget(entry.hitbox, entry.interaction);
+      entry.interactionRegistered = true;
+      return true;
+    }
+
+    unregisterInteraction(entry) {
+      if (!entry || !entry.interactionRegistered) return false;
+      removeInteractionTarget(entry.hitbox);
+      entry.interactionRegistered = false;
+      return true;
+    }
+
+    toolsAllowed() {
+      const competition = activeCompetitionSystem();
+      if (!competition) return true;
+      return Boolean(
+        competition === victoryFeastSystem
+        && victoryFeastSystem?.allowsPlayerTools?.()
+      );
+    }
+
+    canPickup(entry) {
+      return Boolean(
+        entry
+        && ["resting", "settled"].includes(entry.mode)
+        && !this.carried
+        && !this.pickup
+        && this.activeSoundTask?.propId !== entry.id
+        && this.toolsAllowed()
+        && !state.gameOver
+        && !state.activeSeat
+        && !state.isHidden
+      );
+    }
+
+    showPickupAction(entry) {
+      if (!dom.action) return;
+      dom.action.hidden = false;
+      dom.action.classList.remove("is-running");
+      dom.action.style.setProperty(
+        "--story-action-duration",
+        `${Math.round(THROWABLE_DISTRACTIONS.pickupHoldSeconds * 1000)}ms`,
+      );
+      if (dom.actionText) dom.actionText.textContent = `Picking up ${entry.label}…`;
+      void dom.action.offsetWidth;
+      dom.action.classList.add("is-running");
+    }
+
+    hidePickupAction() {
+      if (!dom.action) return;
+      dom.action.classList.remove("is-running");
+      dom.action.hidden = true;
+      dom.action.style.removeProperty("--story-action-duration");
+    }
+
+    beginPickup(entry) {
+      if (!this.canPickup(entry)) {
+        if (!this.toolsAllowed()) notifyCompetitionHold();
+        return false;
+      }
+      this.pickup = { entry, elapsed: 0 };
+      state.throwableDistractions.pickupId = entry.id;
+      state.throwableDistractions.pickupElapsed = 0;
+      this.showPickupAction(entry);
+      return true;
+    }
+
+    endPickup(reason = "released") {
+      if (!this.pickup) return false;
+      const { entry } = this.pickup;
+      this.pickup = null;
+      state.throwableDistractions.pickupId = null;
+      state.throwableDistractions.pickupElapsed = 0;
+      state.throwableDistractions.pickupCancellations += 1;
+      this.hidePickupAction();
+      this.lastThreatResult = {
+        kind: "pickup-cancelled",
+        id: entry.id,
+        reason,
+      };
+      return true;
+    }
+
+    removePhysics(entry) {
+      if (!entry?.physicsRecord) return false;
+      physics?.removeDynamicBox(entry.physicsRecord);
+      entry.physicsRecord = null;
+      return true;
+    }
+
+    carry(entry) {
+      if (!entry || this.carried) return false;
+      this.removePhysics(entry);
+      this.unregisterInteraction(entry);
+      camera.updateMatrixWorld(true);
+      camera.add(entry.root);
+      entry.root.position.set(
+        THROWABLE_DISTRACTIONS.carryOffset.x,
+        THROWABLE_DISTRACTIONS.carryOffset.y,
+        THROWABLE_DISTRACTIONS.carryOffset.z,
+      );
+      entry.root.rotation.set(
+        0,
+        THROWABLE_DISTRACTIONS.carryYawRadians,
+        THROWABLE_DISTRACTIONS.carryRollRadians,
+      );
+      entry.mode = "carried";
+      entry.flightElapsed = 0;
+      entry.settleElapsed = 0;
+      entry.earlyCollision = false;
+      entry.cleanupPending = false;
+      entry.cleanupRemaining = 0;
+      this.carried = entry;
+      this.pickup = null;
+      state.throwableDistractions.carriedId = entry.id;
+      state.throwableDistractions.pickupId = null;
+      state.throwableDistractions.pickupElapsed = 0;
+      state.throwableDistractions.pickupCompletions += 1;
+      this.hidePickupAction();
+      flashlightSystem?.syncUi();
+      updateInteractionPrompt();
+      return true;
+    }
+
+    throwCarried(source = "keyboard", options = {}) {
+      const entry = this.carried;
+      if (!entry || !this.toolsAllowed() || state.gameOver) return false;
+      camera.updateMatrixWorld(true);
+      const releasePosition = new THREE.Vector3();
+      const releaseQuaternion = new THREE.Quaternion();
+      entry.root.getWorldPosition(releasePosition);
+      entry.root.getWorldQuaternion(releaseQuaternion);
+      scene.add(entry.root);
+      entry.root.position.copy(releasePosition);
+      entry.root.quaternion.copy(releaseQuaternion);
+      const direction = new THREE.Vector3();
+      camera.getWorldDirection(direction);
+      if (options.direction) {
+        direction.set(
+          Number(options.direction.x) || 0,
+          Number(options.direction.y) || 0,
+          Number(options.direction.z) || -1,
+        ).normalize();
+      }
+      const velocity = direction
+        .multiplyScalar(THROWABLE_DISTRACTIONS.throwSpeedMetersPerSecond);
+      velocity.y += THROWABLE_DISTRACTIONS.throwLiftMetersPerSecond;
+      const angularVelocity = {
+        x: 5.4,
+        y: 3.1 + (entry.throwCount % 3) * 0.7,
+        z: -4.6,
+      };
+      entry.mode = "thrown";
+      entry.flightElapsed = 0;
+      entry.settleElapsed = 0;
+      entry.distanceTravelled = 0;
+      entry.impactCount = 0;
+      entry.impactPosition = null;
+      entry.impactSpeed = 0;
+      entry.earlyCollision = false;
+      entry.cleanupPending = false;
+      entry.cleanupRemaining = 0;
+      entry.throwCount += 1;
+      entry.lastPhysicsPosition.copy(releasePosition);
+      entry.physicsRecord = physics.addDynamicBox({
+        position: releasePosition,
+        size: entry.placement.size,
+        rotation: releaseQuaternion,
+        velocity,
+        angularVelocity,
+        mass: entry.placement.kind === "book" ? 0.32 : 0.42,
+        friction: THROWABLE_DISTRACTIONS.friction,
+        restitution: THROWABLE_DISTRACTIONS.restitution,
+        linearDamping: THROWABLE_DISTRACTIONS.linearDamping,
+        angularDamping: THROWABLE_DISTRACTIONS.angularDamping,
+        onCollision: () => {
+          if (entry.mode !== "thrown" || entry.impactCount > 0) return;
+          if (entry.flightElapsed < THROWABLE_DISTRACTIONS.minimumImpactSeconds) {
+            entry.earlyCollision = true;
+            return;
+          }
+          this.handleFirstImpact(entry);
+        },
+      });
+      this.carried = null;
+      state.throwableDistractions.carriedId = null;
+      state.throwableDistractions.throwCount += 1;
+      flashlightSystem?.syncUi();
+      updateInteractionPrompt();
+      this.lastThreatResult = { kind: "throw", id: entry.id, source };
+      return true;
+    }
+
+    handleFirstImpact(entry) {
+      if (!entry?.physicsRecord || entry.impactCount > 0) return false;
+      const position = entry.physicsRecord.body.translation();
+      const velocity = entry.physicsRecord.body.linvel();
+      const impactSpeed = Math.hypot(velocity.x, velocity.y, velocity.z);
+      entry.impactCount = 1;
+      entry.impactPosition = { x: position.x, y: position.y, z: position.z };
+      entry.impactSpeed = impactSpeed;
+      entry.earlyCollision = false;
+      entry.cleanupPending = true;
+      entry.cleanupRemaining = THROWABLE_DISTRACTIONS.cleanupDelaySeconds;
+      state.throwableDistractions.impactCount += 1;
+      state.throwableDistractions.lastImpact = {
+        id: entry.id,
+        position: { ...entry.impactPosition },
+        speed: Number(impactSpeed.toFixed(3)),
+      };
+      audioSystem?.throwableImpact(entry.placement.material, entry.impactPosition, impactSpeed);
+      const task = {
+        id: `throw-impact-${++this.soundSequence}`,
+        kind: "thrown-distraction",
+        portableProp: true,
+        transientSound: true,
+        label: entry.label,
+        position: { ...entry.impactPosition },
+        searchSeconds: THROWABLE_DISTRACTIONS.searchSeconds,
+        remaining: THROWABLE_DISTRACTIONS.soundLifetimeSeconds,
+        propId: entry.id,
+      };
+      const mrFeastResult = this.dispatchToMrFeast(task);
+      const saintResult = demonPrototypePatrol?.hearFinaleDistraction({
+        id: task.id,
+        kind: task.kind,
+        position: task.position,
+        propId: entry.id,
+      }) || { accepted: false, reason: "saint-unavailable" };
+      this.lastThreatResult = {
+        kind: "impact",
+        id: task.id,
+        propId: entry.id,
+        mrFeast: mrFeastResult,
+        saint: saintResult,
+      };
+      this.threatHistory.push(this.lastThreatResult);
+      if (this.threatHistory.length > 12) this.threatHistory.shift();
+      return true;
+    }
+
+    evaluateMrFeast(task) {
+      const npc = mrFeastNpc;
+      if (!npc || npc.loadStatus !== "ready") return { accepted: false, reason: "not-ready" };
+      const distance = Math.hypot(
+        npc.root.position.x - task.position.x,
+        npc.root.position.y - task.position.y,
+        npc.root.position.z - task.position.z,
+      );
+      const sameFloor = Math.abs(npc.root.position.y - task.position.y)
+        <= THROWABLE_DISTRACTIONS.floorToleranceMeters;
+      if (!sameFloor) return { accepted: false, reason: "different-floor", distance };
+      if (distance > THROWABLE_DISTRACTIONS.mrFeastHearingMeters) {
+        return { accepted: false, reason: "out-of-range", distance };
+      }
+      if (
+        npc.pursuit.active
+        || npc.activeCameraAlarm
+        || npc.housekeeping.active
+        || npc.challengeStaged
+        || competitionSuspendsSecurity()
+      ) {
+        return { accepted: false, reason: "higher-priority-threat", distance };
+      }
+      if (!npc.canAcceptHousekeeping(task)) {
+        return { accepted: false, reason: "host-unavailable", distance };
+      }
+      return { accepted: true, reason: "heard", distance };
+    }
+
+    dispatchToMrFeast(task) {
+      const hearing = this.evaluateMrFeast(task);
+      if (!hearing.accepted) return {
+        ...hearing,
+        distance: Number((hearing.distance || 0).toFixed(3)),
+      };
+      const response = mrFeastNpc.respondToHousekeepingTask(task);
+      if (!response?.accepted) {
+        return {
+          accepted: false,
+          reason: response?.reason || "host-rejected",
+          distance: Number(hearing.distance.toFixed(3)),
+        };
+      }
+      this.activeSoundTask = { ...task };
+      const entry = this.byId.get(task.propId);
+      if (entry) {
+        entry.cleanupPending = false;
+        entry.cleanupRemaining = 0;
+        this.unregisterInteraction(entry);
+      }
+      state.throwableDistractions.pendingSoundTaskId = task.id;
+      return {
+        accepted: true,
+        reason: "investigating",
+        distance: Number(hearing.distance.toFixed(3)),
+        targetNodeId: response.targetNodeId,
+      };
+    }
+
+    dispatchCleanupIfReady() {
+      if (this.activeSoundTask) return { accepted: false, reason: "portable-task-active" };
+      const entry = this.entries.find((candidate) => (
+        candidate.cleanupPending
+        && candidate.cleanupRemaining <= 0
+        && candidate.mode === "settled"
+      ));
+      if (!entry) return { accepted: false, reason: "no-cleanup-ready" };
+      const npc = mrFeastNpc;
+      if (!npc || npc.loadStatus !== "ready") {
+        entry.cleanupRemaining = THROWABLE_DISTRACTIONS.cleanupRetrySeconds;
+        return { accepted: false, reason: "not-ready" };
+      }
+      if (!npc.canAcceptHousekeeping({ portableProp: true, transientSound: false })) {
+        entry.cleanupRemaining = THROWABLE_DISTRACTIONS.cleanupRetrySeconds;
+        return { accepted: false, reason: "host-unavailable" };
+      }
+      entry.root.updateMatrixWorld(true);
+      const worldPosition = new THREE.Vector3();
+      entry.root.getWorldPosition(worldPosition);
+      const task = {
+        id: `throw-cleanup-${++this.soundSequence}`,
+        kind: "thrown-cleanup",
+        portableProp: true,
+        transientSound: false,
+        label: entry.label,
+        position: {
+          x: worldPosition.x,
+          y: worldPosition.y,
+          z: worldPosition.z,
+        },
+        searchSeconds: THROWABLE_DISTRACTIONS.searchSeconds,
+        remaining: THROWABLE_DISTRACTIONS.soundLifetimeSeconds,
+        propId: entry.id,
+      };
+      const response = npc.respondToHousekeepingTask(task);
+      if (!response?.accepted) {
+        entry.cleanupRemaining = THROWABLE_DISTRACTIONS.cleanupRetrySeconds;
+        return { accepted: false, reason: response?.reason || "host-rejected" };
+      }
+      this.activeSoundTask = { ...task };
+      entry.cleanupPending = false;
+      entry.cleanupRemaining = 0;
+      this.unregisterInteraction(entry);
+      state.throwableDistractions.pendingSoundTaskId = task.id;
+      this.lastThreatResult = {
+        kind: "cleanup-dispatched",
+        id: task.id,
+        propId: entry.id,
+        mrFeast: {
+          accepted: true,
+          reason: "tidying",
+          targetNodeId: response.targetNodeId,
+        },
+      };
+      return {
+        accepted: true,
+        reason: "tidying",
+        targetNodeId: response.targetNodeId,
+      };
+    }
+
+    completeSoundTask(taskId) {
+      if (!this.activeSoundTask || this.activeSoundTask.id !== taskId) return false;
+      const task = this.activeSoundTask;
+      const entry = this.byId.get(task.propId);
+      this.activeSoundTask = null;
+      state.throwableDistractions.pendingSoundTaskId = null;
+      if (!entry) return false;
+      if (task.transientSound) entry.investigatedCount += 1;
+      entry.resetByMrFeastCount += 1;
+      state.throwableDistractions.mrFeastResetCount += 1;
+      this.restoreEntry(entry);
+      updateInteractionPrompt();
+      return true;
+    }
+
+    releaseSoundTask(taskId) {
+      if (!this.activeSoundTask || this.activeSoundTask.id !== taskId) return false;
+      const entry = this.byId.get(this.activeSoundTask.propId);
+      this.activeSoundTask = null;
+      state.throwableDistractions.pendingSoundTaskId = null;
+      if (entry && entry.mode !== "resting") {
+        entry.cleanupPending = true;
+        entry.cleanupRemaining = THROWABLE_DISTRACTIONS.cleanupRetrySeconds;
+        if (entry.mode === "settled") this.registerInteraction(entry);
+      }
+      return true;
+    }
+
+    updateEntryPhysics(entry, dt) {
+      const record = entry.physicsRecord;
+      if (!record?.body) return;
+      const translation = record.body.translation();
+      const rotation = record.body.rotation();
+      const current = new THREE.Vector3(translation.x, translation.y, translation.z);
+      entry.distanceTravelled += current.distanceTo(entry.lastPhysicsPosition);
+      entry.lastPhysicsPosition.copy(current);
+      entry.root.position.copy(current);
+      entry.root.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
+      entry.flightElapsed += dt;
+      if (
+        entry.earlyCollision
+        && entry.flightElapsed >= THROWABLE_DISTRACTIONS.minimumImpactSeconds
+        && entry.impactCount === 0
+      ) {
+        this.handleFirstImpact(entry);
+      }
+      const linear = record.body.linvel();
+      const angular = record.body.angvel();
+      const linearSpeed = Math.hypot(linear.x, linear.y, linear.z);
+      const angularSpeed = Math.hypot(angular.x, angular.y, angular.z);
+      if (
+        entry.impactCount > 0
+        && linearSpeed <= THROWABLE_DISTRACTIONS.settleLinearSpeed
+        && angularSpeed <= THROWABLE_DISTRACTIONS.settleAngularSpeed
+      ) {
+        entry.settleElapsed += dt;
+      } else {
+        entry.settleElapsed = 0;
+      }
+      if (
+        entry.mode === "thrown"
+        && (
+          record.body.isSleeping()
+          || entry.settleElapsed >= THROWABLE_DISTRACTIONS.settleSeconds
+        )
+      ) {
+        if (entry.impactCount === 0) this.handleFirstImpact(entry);
+        record.body.sleep();
+        entry.mode = "settled";
+        if (this.activeSoundTask?.propId !== entry.id) this.registerInteraction(entry);
+      }
+      if (translation.y < -9) {
+        this.restoreEntry(entry);
+      } else if (
+        entry.mode === "thrown"
+        && entry.flightElapsed >= THROWABLE_DISTRACTIONS.maximumFlightSeconds
+      ) {
+        record.body.sleep();
+        entry.mode = "settled";
+        if (this.activeSoundTask?.propId !== entry.id) this.registerInteraction(entry);
+      }
+    }
+
+    update(dt) {
+      const step = Math.max(0, Number(dt) || 0);
+      if (!this.toolsAllowed()) {
+        if (this.hasTransientState()) this.resetAll("competition");
+        return;
+      }
+      if (this.pickup) {
+        this.pickup.elapsed += step;
+        state.throwableDistractions.pickupElapsed = this.pickup.elapsed;
+        if (this.pickup.elapsed >= THROWABLE_DISTRACTIONS.pickupHoldSeconds) {
+          this.carry(this.pickup.entry);
+        }
+      }
+      for (const entry of this.entries) {
+        if (entry.physicsRecord) this.updateEntryPhysics(entry, step);
+        if (
+          entry.cleanupPending
+          && this.activeSoundTask?.propId !== entry.id
+        ) {
+          entry.cleanupRemaining = Math.max(0, entry.cleanupRemaining - step);
+        }
+      }
+      this.dispatchCleanupIfReady();
+      if (this.activeSoundTask) {
+        this.activeSoundTask.remaining = Math.max(0, this.activeSoundTask.remaining - step);
+        if (this.activeSoundTask.remaining <= 0 && !mrFeastNpc?.housekeeping?.active) {
+          this.releaseSoundTask(this.activeSoundTask.id);
+        }
+      }
+    }
+
+    hasTransientState() {
+      return Boolean(
+        this.carried
+        || this.pickup
+        || this.activeSoundTask
+        || this.entries.some((entry) => entry.physicsRecord || entry.mode !== "resting")
+      );
+    }
+
+    restoreEntry(entry) {
+      if (!entry) return false;
+      this.removePhysics(entry);
+      if (entry.root.parent !== scene) scene.add(entry.root);
+      entry.root.position.set(
+        entry.placement.position.x,
+        entry.placement.position.y,
+        entry.placement.position.z,
+      );
+      entry.root.quaternion.copy(entry.authoredQuaternion);
+      entry.root.updateMatrixWorld(true);
+      entry.mode = "resting";
+      entry.flightElapsed = 0;
+      entry.settleElapsed = 0;
+      entry.distanceTravelled = 0;
+      entry.impactCount = 0;
+      entry.impactPosition = null;
+      entry.impactSpeed = 0;
+      entry.earlyCollision = false;
+      entry.cleanupPending = false;
+      entry.cleanupRemaining = 0;
+      entry.lastPhysicsPosition.copy(entry.root.position);
+      this.registerInteraction(entry);
+      return true;
+    }
+
+    resetAll(reason = "load") {
+      const activeTaskId = this.activeSoundTask?.id || null;
+      if (activeTaskId) mrFeastNpc?.cancelHousekeepingTask(activeTaskId);
+      this.activeSoundTask = null;
+      this.pickup = null;
+      this.carried = null;
+      state.throwableDistractions.carriedId = null;
+      state.throwableDistractions.pickupId = null;
+      state.throwableDistractions.pickupElapsed = 0;
+      state.throwableDistractions.pendingSoundTaskId = null;
+      state.throwableDistractions.lastImpact = null;
+      state.throwableDistractions.resetCount += 1;
+      this.hidePickupAction();
+      for (const entry of this.entries) this.restoreEntry(entry);
+      demonPrototypePatrol?.clearFinaleDistraction?.(reason);
+      flashlightSystem?.syncUi();
+      updateInteractionPrompt();
+      return this.getDiagnostics();
+    }
+
+    getDiagnostics() {
+      const carried = this.carried;
+      return {
+        tuning: {
+          pickupHoldSeconds: THROWABLE_DISTRACTIONS.pickupHoldSeconds,
+          throwSpeedMetersPerSecond: THROWABLE_DISTRACTIONS.throwSpeedMetersPerSecond,
+          mrFeastHearingMeters: THROWABLE_DISTRACTIONS.mrFeastHearingMeters,
+          cleanupDelaySeconds: THROWABLE_DISTRACTIONS.cleanupDelaySeconds,
+          saintHearingMeters: THROWABLE_DISTRACTIONS.saintHearingMeters,
+          saintInvestigationSeconds: THROWABLE_DISTRACTIONS.saintInvestigationSeconds,
+        },
+        carried: carried ? {
+          id: carried.id,
+          label: carried.label,
+          mode: carried.mode,
+          visibleInHand: (
+            carried.root.parent === camera
+            && camera.parent === scene
+            && carried.root.visible
+          ),
+          renderedWithCamera: camera.parent === scene,
+        } : null,
+        pickup: {
+          id: this.pickup?.entry.id || null,
+          elapsed: Number((this.pickup?.elapsed || 0).toFixed(3)),
+          progress: Number(clamp(
+            (this.pickup?.elapsed || 0) / THROWABLE_DISTRACTIONS.pickupHoldSeconds,
+            0,
+            1,
+          ).toFixed(3)),
+          completions: state.throwableDistractions.pickupCompletions,
+          cancellations: state.throwableDistractions.pickupCancellations,
+        },
+        activeSoundTask: this.activeSoundTask ? {
+          id: this.activeSoundTask.id,
+          kind: this.activeSoundTask.kind,
+          propId: this.activeSoundTask.propId,
+          transientSound: Boolean(this.activeSoundTask.transientSound),
+          remaining: Number(this.activeSoundTask.remaining.toFixed(3)),
+        } : null,
+        throwCount: state.throwableDistractions.throwCount,
+        impactCount: state.throwableDistractions.impactCount,
+        resetCount: state.throwableDistractions.resetCount,
+        mrFeastResetCount: state.throwableDistractions.mrFeastResetCount,
+        lastImpact: state.throwableDistractions.lastImpact
+          ? { ...state.throwableDistractions.lastImpact }
+          : null,
+        lastThreatResult: this.lastThreatResult,
+        threatHistory: this.threatHistory.map((event) => ({ ...event })),
+        persistence: "transient-world-state-not-in-inventory",
+        entries: this.entries.map((entry) => {
+          const worldPosition = new THREE.Vector3();
+          entry.root.getWorldPosition(worldPosition);
+          const home = entry.placement.position;
+          const atAuthoredPosition = entry.mode === "resting"
+            && worldPosition.distanceTo(new THREE.Vector3(home.x, home.y, home.z)) <= 0.025;
+          return {
+            id: entry.id,
+            label: entry.label,
+            kind: entry.placement.kind,
+            floor: entry.placement.floor,
+            room: entry.placement.room,
+            mode: entry.mode,
+            position: {
+              x: Number(worldPosition.x.toFixed(3)),
+              y: Number(worldPosition.y.toFixed(3)),
+              z: Number(worldPosition.z.toFixed(3)),
+            },
+            authoredPosition: { ...entry.placement.position },
+            atAuthoredPosition,
+            interactionRegistered: entry.interactionRegistered,
+            physicsActive: Boolean(entry.physicsRecord),
+            sleeping: Boolean(entry.physicsRecord?.body?.isSleeping()),
+            throwCount: entry.throwCount,
+            impactCount: entry.impactCount,
+            investigatedCount: entry.investigatedCount,
+            cleanupPending: entry.cleanupPending,
+            cleanupRemaining: Number(entry.cleanupRemaining.toFixed(3)),
+            resetByMrFeastCount: entry.resetByMrFeastCount,
+            impactSpeed: Number(entry.impactSpeed.toFixed(3)),
+            distanceTravelled: Number(entry.distanceTravelled.toFixed(3)),
+          };
+        }),
+      };
+    }
+
+    placePlayerNearForQA(id) {
+      if (!state.qa || !physics) return null;
+      const entry = this.byId.get(id) || this.entries[0];
+      if (!entry) return null;
+      if (entry.mode !== "resting") this.restoreEntry(entry);
+      const target = entry.placement.position;
+      const qa = entry.placement.qa;
+      const yaw = Math.atan2(qa.x - target.x, qa.z - target.z);
+      teleport(qa.x, qa.y, qa.z, yaw, -0.18);
+      syncCamera();
+      const horizontal = Math.max(
+        0.001,
+        Math.hypot(target.x - camera.position.x, target.z - camera.position.z),
+      );
+      state.pitch = Math.atan2(target.y - camera.position.y, horizontal);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      updateInteractionPrompt();
+      return {
+        placed: true,
+        id: entry.id,
+        floor: state.currentFloor,
+        room: state.currentRoom,
+        prompt: state.currentInteraction?.getLabel?.() || null,
+      };
+    }
+
+    advanceForQA(seconds) {
+      if (!state.qa || !physics) return null;
+      const limit = clamp(Number(seconds) || 0, 0, 30);
+      const step = 1 / 60;
+      state.started = true;
+      let elapsed = 0;
+      while (elapsed + 0.0001 < limit) {
+        this.update(Math.min(step, limit - elapsed));
+        physics.step();
+        elapsed += step;
+      }
+      this.update(0);
+      syncCamera();
+      updateLocation();
+      updateInteractionPrompt();
+      return this.getDiagnostics();
+    }
+
+    probeThreatForQA(options = {}) {
+      if (!state.qa) return null;
+      if (options.target === "saint") {
+        return options.hidden
+          ? { accepted: true, reason: "hidden-sound-investigation" }
+          : { accepted: false, reason: "player-visible" };
+      }
+      const distance = Math.max(0, Number(options.distance) || 0);
+      if (options.sameFloor === false) return { accepted: false, reason: "different-floor", distance };
+      if (distance > THROWABLE_DISTRACTIONS.mrFeastHearingMeters) {
+        return { accepted: false, reason: "out-of-range", distance };
+      }
+      if (options.threatBusy) return { accepted: false, reason: "higher-priority-threat", distance };
+      return { accepted: true, reason: "heard", distance };
+    }
+  }
+
   const pursuitSight = {
     raycaster: new THREE.Raycaster(),
     eye: new THREE.Vector3(),
@@ -24413,6 +25948,8 @@
       room: state.currentRoom,
       presentation: banquetEligible ? "banquet" : "immediate",
     };
+    throwableDistractionSystem?.resetAll("game-over");
+    breathStealthSystem?.resetTransient({ preserveStrain: true });
     if (banquetEligible && banquetLossSystem?.start(state.gameOver)) return state.gameOver;
     releasePointerLock();
     presentMansionGameOverOverlay();
@@ -24952,7 +26489,16 @@
     syncUi() {
       if (!dom.flashlightButton) return;
       const collected = this.collected();
-      dom.flashlightButton.hidden = !collected;
+      const carriedThrowable = throwableDistractionSystem?.carried || null;
+      dom.flashlightButton.hidden = !collected && !carriedThrowable;
+      if (carriedThrowable) {
+        dom.flashlightButton.textContent = "Throw";
+        dom.flashlightButton.setAttribute("aria-label", `Throw ${carriedThrowable.label}`);
+        dom.flashlightButton.setAttribute("aria-pressed", "false");
+        dom.flashlightButton.classList.remove("is-active");
+        dom.flashlightButton.title = "Throw carried item";
+        return;
+      }
       const failed = victoryFeastSystem?.isEscapeActive()
         && this.defectState().mode === "give-out";
       dom.flashlightButton.textContent = failed
@@ -24961,6 +26507,7 @@
       dom.flashlightButton.setAttribute("aria-label", this.state.on ? "Switch flashlight off" : "Switch flashlight on");
       dom.flashlightButton.setAttribute("aria-pressed", String(this.state.on));
       dom.flashlightButton.classList.toggle("is-active", this.state.on);
+      dom.flashlightButton.title = "Flashlight";
     }
 
     syncPresentation() {
@@ -29399,6 +30946,8 @@
       floorY,
       hidePosition: COAT_CLOSET.hidePosition,
       exitPosition: COAT_CLOSET.exitPosition,
+      breathMuffleMultiplier: BREATH_STEALTH.coatClosetRangeMultiplier,
+      breathHidingKind: "coat-closet",
     });
   }
 
@@ -30346,6 +31895,24 @@
 
   function addRoomZone(floorMin, floorMax, x1, x2, z1, z2, floorLabel, roomLabel) {
     roomZones.push({ floorMin, floorMax, x1, x2, z1, z2, floorLabel, roomLabel });
+  }
+
+  function locateRoomAtFeet(position) {
+    if (!position) return { floorLabel: null, roomLabel: null };
+    const feetY = Number(position.y) || 0;
+    for (const zone of roomZones) {
+      if (
+        feetY >= zone.floorMin
+        && feetY < zone.floorMax
+        && position.x >= zone.x1
+        && position.x <= zone.x2
+        && position.z >= zone.z1
+        && position.z <= zone.z2
+      ) return { floorLabel: zone.floorLabel, roomLabel: zone.roomLabel };
+    }
+    if (feetY < -0.5) return { floorLabel: "BASEMENT", roomLabel: "SERVICE PASSAGE" };
+    if (feetY > 2.4) return { floorLabel: "SECOND FLOOR", roomLabel: "LANDING" };
+    return { floorLabel: "MAIN LEVEL", roomLabel: "CENTRAL HALL" };
   }
 
   function registerRoomZones() {
@@ -34688,6 +36255,30 @@
       this.lastVariant = new Map();
       this.cueCounts = Object.create(null);
       this.activeVoices = 0;
+      this.banquetBreathNoise = null;
+      this.banquetBreathSources = new Set();
+      this.playerBreathNoise = null;
+      this.playerBreathSources = new Set();
+      this.playerBreathing = {
+        playCount: 0,
+        gaspCount: 0,
+        stopCount: 0,
+        lastTier: "silent",
+        lastVolume: 0,
+      };
+      this.banquetBreathing = {
+        active: false,
+        sceneElapsed: 0,
+        nextBreathAt: 0,
+        breathCount: 0,
+        startCount: 0,
+        stopCount: 0,
+        panic: 0,
+        lastIntervalSeconds: BANQUET_LOSS.breathing.initialIntervalSeconds,
+        lastContextPlayedAt: -Infinity,
+        dialogueDucked: false,
+        targetVolume: BANQUET_LOSS.breathing.baseVolume,
+      };
       this.pendingCloseThunder = [];
       this.thunderState = {
         playCount: 0,
@@ -34728,6 +36319,8 @@
       this.master.gain.value = 0.0001;
       this.master.connect(this.ctx.destination);
       this.closeThunderBus = this.createCloseThunderBus(this.ctx, this.master);
+      this.banquetBreathNoise = this.makeNoiseBuffer(1.35);
+      this.playerBreathNoise = this.makeNoiseBuffer(1.15);
       this.makeRain();
       this.preloadPromise = null;
     }
@@ -34918,6 +36511,312 @@
         data[i] = last * 2.8;
       }
       return buffer;
+    }
+
+    trackBanquetBreathSource(source) {
+      this.banquetBreathSources.add(source);
+      this.activeVoices += 1;
+      source.onended = () => {
+        this.banquetBreathSources.delete(source);
+        this.activeVoices = Math.max(0, this.activeVoices - 1);
+      };
+    }
+
+    playBanquetBreath(intensity, dialogueActive) {
+      if (
+        !this.ctx
+        || !this.master
+        || this.ctx.state !== "running"
+        || !state.audioEnabled
+      ) return false;
+      const settings = BANQUET_LOSS.breathing;
+      const now = this.ctx.currentTime;
+      if (
+        now - this.banquetBreathing.lastContextPlayedAt
+        < settings.minimumRealtimeGapSeconds
+      ) return false;
+
+      const breathNumber = this.banquetBreathing.breathCount;
+      const inhaleEnd = now + settings.inhaleSeconds;
+      const exhaleStart = inhaleEnd + settings.inhaleHitchSeconds;
+      const exhaleEnd = exhaleStart + settings.exhaleSeconds;
+      const stopAt = exhaleEnd + settings.breathTailSeconds;
+      const volume = settings.baseVolume
+        * (0.82 + intensity * 0.18)
+        * (dialogueActive ? settings.dialogueDuckMultiplier : 1);
+      const hitching = breathNumber % 3 === 2;
+
+      const breath = this.ctx.createBufferSource();
+      breath.buffer = this.banquetBreathNoise || this.makeNoiseBuffer(1.35);
+      breath.playbackRate.setValueAtTime(0.96 + intensity * 0.1, now);
+      const high = this.ctx.createBiquadFilter();
+      high.type = "highpass";
+      high.frequency.value = 135;
+      const formant = this.ctx.createBiquadFilter();
+      formant.type = "bandpass";
+      formant.Q.value = 0.72;
+      formant.frequency.setValueAtTime(620, now);
+      formant.frequency.exponentialRampToValueAtTime(1180, inhaleEnd);
+      formant.frequency.setValueAtTime(920, exhaleStart);
+      formant.frequency.exponentialRampToValueAtTime(510, exhaleEnd);
+      const low = this.ctx.createBiquadFilter();
+      low.type = "lowpass";
+      low.frequency.value = 2350 + intensity * 850;
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(volume * 0.56, now + settings.inhaleSeconds * 0.26);
+      if (hitching) {
+        gain.gain.linearRampToValueAtTime(volume * 0.28, now + settings.inhaleSeconds * 0.52);
+        gain.gain.exponentialRampToValueAtTime(volume * 0.82, now + settings.inhaleSeconds * 0.76);
+      } else {
+        gain.gain.linearRampToValueAtTime(volume * 0.76, now + settings.inhaleSeconds * 0.72);
+      }
+      gain.gain.exponentialRampToValueAtTime(0.0001, inhaleEnd);
+      gain.gain.setValueAtTime(0.0001, exhaleStart);
+      gain.gain.exponentialRampToValueAtTime(volume, exhaleStart + 0.075);
+      gain.gain.linearRampToValueAtTime(volume * 0.7, exhaleStart + settings.exhaleSeconds * 0.38);
+      gain.gain.exponentialRampToValueAtTime(0.0001, exhaleEnd);
+
+      let tail = low;
+      if (this.ctx.createStereoPanner) {
+        const panner = this.ctx.createStereoPanner();
+        panner.pan.value = settings.panJitter[breathNumber % settings.panJitter.length];
+        tail.connect(panner);
+        tail = panner;
+      }
+      breath.connect(high).connect(formant).connect(low);
+      tail.connect(gain).connect(this.master);
+
+      // A very low, unstable voiced layer keeps the filtered breath from
+      // reading as wind while remaining subordinate to the close air noise.
+      const voice = this.ctx.createOscillator();
+      voice.type = "triangle";
+      voice.frequency.setValueAtTime(112 + intensity * 13, exhaleStart);
+      voice.frequency.linearRampToValueAtTime(89 + intensity * 8, exhaleEnd);
+      const voiceLow = this.ctx.createBiquadFilter();
+      voiceLow.type = "lowpass";
+      voiceLow.frequency.value = 245;
+      const voiceGain = this.ctx.createGain();
+      voiceGain.gain.setValueAtTime(0.0001, now);
+      voiceGain.gain.setValueAtTime(0.0001, exhaleStart);
+      voiceGain.gain.exponentialRampToValueAtTime(volume * 0.038, exhaleStart + 0.09);
+      voiceGain.gain.exponentialRampToValueAtTime(0.0001, exhaleEnd);
+      voice.connect(voiceLow).connect(voiceGain).connect(this.master);
+
+      this.trackBanquetBreathSource(breath);
+      this.trackBanquetBreathSource(voice);
+      try {
+        breath.start(now);
+        breath.stop(stopAt);
+        voice.start(now);
+        voice.stop(stopAt);
+      } catch (_) {
+        try { breath.stop(); } catch (_) { /* Already stopped. */ }
+        try { voice.stop(); } catch (_) { /* Already stopped. */ }
+        return false;
+      }
+
+      this.banquetBreathing.lastContextPlayedAt = now;
+      this.banquetBreathing.breathCount += 1;
+      this.banquetBreathing.targetVolume = volume;
+      this.markCue("banquetPlayerBreath");
+      return true;
+    }
+
+    startBanquetBreathing(sceneElapsed = 0) {
+      if (this.banquetBreathing.active) this.stopBanquetBreathing();
+      const elapsed = Math.max(0, Number(sceneElapsed) || 0);
+      Object.assign(this.banquetBreathing, {
+        active: true,
+        sceneElapsed: elapsed,
+        nextBreathAt: elapsed + BANQUET_LOSS.breathing.firstBreathDelaySeconds,
+        breathCount: 0,
+        startCount: this.banquetBreathing.startCount + 1,
+        panic: 0,
+        lastIntervalSeconds: BANQUET_LOSS.breathing.initialIntervalSeconds,
+        lastContextPlayedAt: -Infinity,
+        dialogueDucked: false,
+        targetVolume: BANQUET_LOSS.breathing.baseVolume,
+      });
+      return this.banquetBreathingDiagnostics();
+    }
+
+    updateBanquetBreathing(sceneElapsed, dialogueActive = false) {
+      if (!this.banquetBreathing.active) return this.banquetBreathingDiagnostics();
+      const settings = BANQUET_LOSS.breathing;
+      const elapsed = Math.max(0, Number(sceneElapsed) || 0);
+      const panic = clamp(elapsed / settings.panicRampSeconds, 0, 1);
+      this.banquetBreathing.sceneElapsed = elapsed;
+      this.banquetBreathing.panic = panic;
+      this.banquetBreathing.dialogueDucked = Boolean(dialogueActive);
+      this.banquetBreathing.targetVolume = settings.baseVolume
+        * (0.82 + panic * 0.18)
+        * (dialogueActive ? settings.dialogueDuckMultiplier : 1);
+      if (elapsed + 0.0001 < this.banquetBreathing.nextBreathAt) {
+        return this.banquetBreathingDiagnostics();
+      }
+
+      const rampedInterval = settings.initialIntervalSeconds
+        + (settings.finalIntervalSeconds - settings.initialIntervalSeconds)
+          * Math.pow(panic, 0.72);
+      const jitter = settings.intervalJitterSeconds[
+        this.banquetBreathing.breathCount % settings.intervalJitterSeconds.length
+      ];
+      const interval = clamp(
+        rampedInterval + jitter,
+        settings.finalIntervalSeconds * 0.88,
+        settings.initialIntervalSeconds,
+      );
+      this.banquetBreathing.lastIntervalSeconds = interval;
+      const played = this.playBanquetBreath(panic, dialogueActive);
+      this.banquetBreathing.nextBreathAt = elapsed + (
+        played ? interval : settings.firstBreathDelaySeconds
+      );
+      return this.banquetBreathingDiagnostics();
+    }
+
+    stopBanquetBreathing() {
+      const wasActive = this.banquetBreathing.active;
+      this.banquetBreathing.active = false;
+      this.banquetBreathing.dialogueDucked = false;
+      this.banquetBreathing.targetVolume = 0;
+      for (const source of Array.from(this.banquetBreathSources)) {
+        try { source.stop(); } catch (_) { /* Already stopped. */ }
+      }
+      this.banquetBreathSources.clear();
+      if (wasActive) this.banquetBreathing.stopCount += 1;
+      return this.banquetBreathingDiagnostics();
+    }
+
+    banquetBreathingDiagnostics() {
+      const settings = BANQUET_LOSS.breathing;
+      return {
+        profile: settings.profile,
+        closeFirstPerson: true,
+        active: this.banquetBreathing.active,
+        sceneElapsed: Number(this.banquetBreathing.sceneElapsed.toFixed(3)),
+        breathCount: this.banquetBreathing.breathCount,
+        startCount: this.banquetBreathing.startCount,
+        stopCount: this.banquetBreathing.stopCount,
+        panic: Number(this.banquetBreathing.panic.toFixed(3)),
+        dialogueDucked: this.banquetBreathing.dialogueDucked,
+        initialIntervalSeconds: settings.initialIntervalSeconds,
+        finalIntervalSeconds: settings.finalIntervalSeconds,
+        lastIntervalSeconds: Number(this.banquetBreathing.lastIntervalSeconds.toFixed(3)),
+        inhaleSeconds: settings.inhaleSeconds,
+        exhaleSeconds: settings.exhaleSeconds,
+        baseVolume: settings.baseVolume,
+        targetVolume: Number(this.banquetBreathing.targetVolume.toFixed(4)),
+        activeSourceCount: this.banquetBreathSources.size,
+      };
+    }
+
+    trackPlayerBreathSource(source) {
+      this.playerBreathSources.add(source);
+      this.activeVoices += 1;
+      source.onended = () => {
+        this.playerBreathSources.delete(source);
+        this.activeVoices = Math.max(0, this.activeVoices - 1);
+      };
+    }
+
+    playPlayerBreath(tier = "light", { gasp = false } = {}) {
+      const profile = gasp ? "gasp" : (
+        ["light", "heavy", "panicked"].includes(tier) ? tier : "light"
+      );
+      if (
+        !this.ctx
+        || !this.master
+        || this.ctx.state !== "running"
+        || !state.audioEnabled
+      ) return false;
+      const now = this.ctx.currentTime;
+      const volume = BREATH_STEALTH.audioVolume[profile] || BREATH_STEALTH.audioVolume.light;
+      const intensity = BREATH_STEALTH.tierIntensity[profile] || 0.5;
+      const inhaleSeconds = gasp ? 0.17 : profile === "light" ? 0.38 : profile === "heavy" ? 0.29 : 0.22;
+      const exhaleSeconds = gasp ? 0.58 : profile === "light" ? 0.5 : profile === "heavy" ? 0.43 : 0.36;
+      const exhaleStart = now + inhaleSeconds + (gasp ? 0.025 : 0.045);
+      const stopAt = exhaleStart + exhaleSeconds + 0.06;
+
+      const breath = this.ctx.createBufferSource();
+      breath.buffer = this.playerBreathNoise || this.makeNoiseBuffer(1.15);
+      breath.playbackRate.setValueAtTime(0.96 + intensity * 0.12, now);
+      const high = this.ctx.createBiquadFilter();
+      high.type = "highpass";
+      high.frequency.value = gasp ? 115 : 145;
+      const formant = this.ctx.createBiquadFilter();
+      formant.type = "bandpass";
+      formant.Q.value = gasp ? 0.6 : 0.78;
+      formant.frequency.setValueAtTime(gasp ? 720 : 590, now);
+      formant.frequency.exponentialRampToValueAtTime(gasp ? 1640 : 1120, now + inhaleSeconds);
+      formant.frequency.setValueAtTime(gasp ? 1080 : 890, exhaleStart);
+      formant.frequency.exponentialRampToValueAtTime(gasp ? 420 : 510, exhaleStart + exhaleSeconds);
+      const low = this.ctx.createBiquadFilter();
+      low.type = "lowpass";
+      low.frequency.value = gasp ? 3900 : 2250 + intensity * 1050;
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(volume * (gasp ? 0.94 : 0.58), now + inhaleSeconds * 0.45);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + inhaleSeconds);
+      gain.gain.setValueAtTime(0.0001, exhaleStart);
+      gain.gain.exponentialRampToValueAtTime(volume, exhaleStart + Math.min(0.08, exhaleSeconds * 0.25));
+      gain.gain.exponentialRampToValueAtTime(0.0001, exhaleStart + exhaleSeconds);
+      breath.connect(high).connect(formant).connect(low).connect(gain).connect(this.master);
+
+      const voice = this.ctx.createOscillator();
+      voice.type = "triangle";
+      voice.frequency.setValueAtTime(gasp ? 128 : 105 + intensity * 12, exhaleStart);
+      voice.frequency.linearRampToValueAtTime(gasp ? 82 : 88, exhaleStart + exhaleSeconds);
+      const voiceLow = this.ctx.createBiquadFilter();
+      voiceLow.type = "lowpass";
+      voiceLow.frequency.value = gasp ? 310 : 235;
+      const voiceGain = this.ctx.createGain();
+      voiceGain.gain.setValueAtTime(0.0001, now);
+      voiceGain.gain.setValueAtTime(0.0001, exhaleStart);
+      voiceGain.gain.exponentialRampToValueAtTime(volume * (gasp ? 0.07 : 0.035), exhaleStart + 0.07);
+      voiceGain.gain.exponentialRampToValueAtTime(0.0001, exhaleStart + exhaleSeconds);
+      voice.connect(voiceLow).connect(voiceGain).connect(this.master);
+
+      this.trackPlayerBreathSource(breath);
+      this.trackPlayerBreathSource(voice);
+      try {
+        breath.start(now);
+        breath.stop(stopAt);
+        voice.start(now);
+        voice.stop(stopAt);
+      } catch (_) {
+        try { breath.stop(); } catch (_) { /* Already stopped. */ }
+        try { voice.stop(); } catch (_) { /* Already stopped. */ }
+        return false;
+      }
+      this.playerBreathing.playCount += 1;
+      if (gasp) this.playerBreathing.gaspCount += 1;
+      this.playerBreathing.lastTier = profile;
+      this.playerBreathing.lastVolume = volume;
+      this.markCue(gasp ? "playerForcedGasp" : `playerBreath${profile[0].toUpperCase()}${profile.slice(1)}`);
+      return true;
+    }
+
+    stopPlayerBreathing() {
+      const hadSources = this.playerBreathSources.size > 0;
+      for (const source of Array.from(this.playerBreathSources)) {
+        try { source.stop(); } catch (_) { /* Already stopped. */ }
+      }
+      this.playerBreathSources.clear();
+      if (hadSources) this.playerBreathing.stopCount += 1;
+      return this.playerBreathingDiagnostics();
+    }
+
+    playerBreathingDiagnostics() {
+      return {
+        profile: "procedural-close-first-person",
+        playCount: this.playerBreathing.playCount,
+        gaspCount: this.playerBreathing.gaspCount,
+        stopCount: this.playerBreathing.stopCount,
+        lastTier: this.playerBreathing.lastTier,
+        lastVolume: Number(this.playerBreathing.lastVolume.toFixed(4)),
+        activeSourceCount: this.playerBreathSources.size,
+      };
     }
 
     createCloseThunderBus(context, destination) {
@@ -35157,6 +37056,55 @@
       } else {
         this.scheduleTone(this.ctx, destination, 1180, 0.48, 0.055 * distanceGain, "sine", now);
         this.scheduleTone(this.ctx, destination, 1530, 0.36, 0.025 * distanceGain, "sine", now + 0.06);
+      }
+      return true;
+    }
+
+    throwableImpact(materialName, position, impactSpeed = 1) {
+      this.markCue("throwableImpact");
+      this.markCue(`throwableImpact:${materialName || "object"}`);
+      if (!this.ctx || !state.audioEnabled || !position) return false;
+      const listener = new THREE.Vector3();
+      const forward = new THREE.Vector3();
+      camera.getWorldPosition(listener);
+      camera.getWorldDirection(forward);
+      const offset = new THREE.Vector3(position.x, position.y, position.z).sub(listener);
+      const distance = offset.length();
+      if (distance > THROWABLE_DISTRACTIONS.maximumPlayerAudibleDistanceMeters) return false;
+      const right = new THREE.Vector3(-forward.z, 0, forward.x).normalize();
+      const horizontal = Math.max(0.001, Math.hypot(offset.x, offset.z));
+      const pan = clamp(
+        (offset.x * right.x + offset.z * right.z) / horizontal,
+        -THROWABLE_DISTRACTIONS.panLimit,
+        THROWABLE_DISTRACTIONS.panLimit,
+      );
+      const proximity = 1 - clamp(
+        distance / THROWABLE_DISTRACTIONS.maximumPlayerAudibleDistanceMeters,
+        0,
+        1,
+      );
+      const force = clamp(Number(impactSpeed) / THROWABLE_DISTRACTIONS.throwSpeedMetersPerSecond, 0.18, 1);
+      const gainValue = (0.035 + proximity * 0.085) * force;
+      let destination = this.master;
+      if (this.ctx.createStereoPanner) {
+        const panner = this.ctx.createStereoPanner();
+        panner.pan.value = pan;
+        panner.connect(this.master);
+        destination = panner;
+      }
+      const now = this.ctx.currentTime;
+      if (materialName === "porcelain") {
+        this.scheduleTone(this.ctx, destination, 640, 0.11, gainValue, "triangle", now);
+        this.scheduleTone(this.ctx, destination, 1030, 0.08, gainValue * 0.45, "sine", now + 0.018);
+      } else if (["brass", "iron"].includes(materialName)) {
+        this.scheduleTone(this.ctx, destination, 235, 0.13, gainValue, "square", now);
+        this.scheduleTone(this.ctx, destination, 520, 0.09, gainValue * 0.38, "triangle", now + 0.012);
+      } else if (["wineRed", "wineGreen"].includes(materialName)) {
+        this.scheduleTone(this.ctx, destination, 310, 0.12, gainValue * 0.78, "triangle", now);
+        this.scheduleTone(this.ctx, destination, 760, 0.07, gainValue * 0.32, "sine", now + 0.025);
+      } else {
+        this.scheduleTone(this.ctx, destination, 92, 0.12, gainValue, "sine", now);
+        this.scheduleTone(this.ctx, destination, 148, 0.07, gainValue * 0.36, "triangle", now + 0.018);
       }
       return true;
     }
@@ -35674,6 +37622,8 @@
         failedAssets: Array.from(this.failedAssets, ([path, error]) => ({ path, error })),
         activeVoices: this.activeVoices,
         cueCounts: { ...this.cueCounts },
+        banquetBreathing: this.banquetBreathingDiagnostics(),
+        playerBreathing: this.playerBreathingDiagnostics(),
         rain: this.rainDiagnostics(),
         thunder: this.thunderDiagnostics(),
         footsteps: {
@@ -35692,6 +37642,653 @@
             : null,
           events: this.mrFeastFootsteps.events.map((event) => ({ ...event })),
         },
+      };
+    }
+  }
+
+  class BreathStealthSystem {
+    constructor() {
+      this.breath = state.breathing;
+      this.hearingRaycaster = new THREE.Raycaster();
+      this.hearingOrigin = new THREE.Vector3();
+      this.hearingTarget = new THREE.Vector3();
+      this.hearingDirection = new THREE.Vector3();
+      this.eventSequence = 0;
+      this.qaAggroOverride = null;
+      this.qaManualClock = false;
+      this.qaStepping = false;
+      this.syncCapacity();
+      this.syncHud();
+    }
+
+    capacityFromEnergy(energy = state.movement.energy) {
+      const ratio = clamp((Number(energy) || 0) / PLAYER.energyMax, 0, 1);
+      return BREATH_STEALTH.minimumHoldSeconds
+        + (BREATH_STEALTH.maximumHoldSeconds - BREATH_STEALTH.minimumHoldSeconds) * ratio;
+    }
+
+    syncCapacity() {
+      if (this.breath.holding) return this.breath.holdCapacitySeconds;
+      const capacity = this.capacityFromEnergy();
+      this.breath.holdCapacitySeconds = capacity;
+      this.breath.holdRemainingSeconds = capacity;
+      return capacity;
+    }
+
+    isHolding() {
+      return Boolean(this.breath.holding);
+    }
+
+    canHold() {
+      return Boolean(
+        state.started
+        && !state.gameOver
+        && !state.menuOpen
+        && !state.journalOpen
+        && !state.workroom.keypadOpen
+        && !state.readableBooks.open
+        && !openingWelcomeSystem?.active
+        && !state.contestant13.actionInProgress
+        && !state.movement.sprinting
+        && this.breath.holdLockoutSeconds <= 0
+        && !feastSaysSystem?.locksPlayerMovement()
+        && !stormRunSystem?.locksPlayerMovement()
+        && !feastHuntSystem?.locksPlayerMovement()
+        && !victoryFeastSystem?.locksPlayerMovement()
+      );
+    }
+
+    setHolding(holding, source = "unknown") {
+      const next = Boolean(holding);
+      input.holdBreath = next;
+      if (!next) {
+        const changed = this.breath.holding;
+        this.breath.holding = false;
+        this.breath.nextBreathSeconds = 0;
+        this.syncCapacity();
+        this.syncHud();
+        return { accepted: true, holding: false, changed, source };
+      }
+      if (this.breath.holding) {
+        return { accepted: true, holding: true, changed: false, source };
+      }
+      if (!this.canHold()) {
+        input.holdBreath = false;
+        this.syncHud();
+        return {
+          accepted: false,
+          holding: false,
+          reason: this.breath.holdLockoutSeconds > 0 ? "lockout" : "blocked",
+          source,
+        };
+      }
+      const capacity = this.capacityFromEnergy();
+      this.breath.holding = true;
+      this.breath.holdCapacitySeconds = capacity;
+      this.breath.holdRemainingSeconds = capacity;
+      this.breath.audible = false;
+      this.breath.nextBreathSeconds = 0;
+      audioSystem?.stopPlayerBreathing();
+      this.syncHud();
+      return { accepted: true, holding: true, changed: true, source, capacity };
+    }
+
+    tierForStrain(strain, threatened = false) {
+      const effective = threatened
+        ? Math.max(BREATH_STEALTH.aggroStrainFloor, Number(strain) || 0)
+        : Number(strain) || 0;
+      if (effective >= BREATH_STEALTH.panickedStrainThreshold) return "panicked";
+      if (effective >= BREATH_STEALTH.heavyStrainThreshold) return "heavy";
+      if (effective >= BREATH_STEALTH.lightStrainThreshold) return "light";
+      return "silent";
+    }
+
+    actualAggro() {
+      const mrFeastAggro = Boolean(
+        mrFeastNpc
+        && (
+          mrFeastNpc.pursuit?.active
+          || mrFeastNpc.pursuit?.cooldownActive
+          || mrFeastNpc.activeCameraAlarm
+        )
+      );
+      const saintAggro = Boolean(
+        victoryFeastSystem?.isEscapeActive()
+        && demonPrototypePatrol?.finaleMode === "escape"
+        && demonPrototypePatrol?.saintEntry()?.root?.visible
+      );
+      return { aggro: mrFeastAggro || saintAggro, mrFeast: mrFeastAggro, saint: saintAggro };
+    }
+
+    currentAggro() {
+      if (typeof this.qaAggroOverride === "boolean") {
+        return {
+          aggro: this.qaAggroOverride,
+          mrFeast: this.qaAggroOverride,
+          saint: false,
+          qaOverride: true,
+        };
+      }
+      return { ...this.actualAggro(), qaOverride: false };
+    }
+
+    hidingProfile(kindOverride = null) {
+      if (kindOverride === "curtain") {
+        return { kind: "curtain", multiplier: BREATH_STEALTH.curtainRangeMultiplier };
+      }
+      if (kindOverride === "coat-closet") {
+        return { kind: "coat-closet", multiplier: BREATH_STEALTH.coatClosetRangeMultiplier };
+      }
+      const spot = state.activeHideSpot;
+      return {
+        kind: spot?.breathHidingKind || "open",
+        multiplier: spot?.breathMuffleMultiplier || BREATH_STEALTH.openRangeMultiplier,
+      };
+    }
+
+    isAcousticBarrier(object) {
+      if (!object?.visible) return false;
+      const name = String(object.name || "").toLowerCase();
+      return /wall|door|partition|divider|spine|gallery|facade|hedge|foundation/.test(name);
+    }
+
+    acousticOcclusion(listenerPosition, eventPosition) {
+      this.hearingOrigin.set(
+        listenerPosition.x,
+        listenerPosition.y + 1.42,
+        listenerPosition.z,
+      );
+      this.hearingTarget.set(
+        eventPosition.x,
+        eventPosition.y + 1.25,
+        eventPosition.z,
+      );
+      this.hearingDirection.copy(this.hearingTarget).sub(this.hearingOrigin);
+      const distance = this.hearingDirection.length();
+      if (distance <= 0.001) return { occluded: false, blocker: null };
+      this.hearingDirection.multiplyScalar(1 / distance);
+      this.hearingRaycaster.set(this.hearingOrigin, this.hearingDirection);
+      this.hearingRaycaster.near = 0.08;
+      this.hearingRaycaster.far = Math.max(0.08, distance - 0.12);
+      const blocker = this.hearingRaycaster
+        .intersectObjects(occluderMeshes, false)
+        .find((hit) => (
+          hit.distance < distance - 0.12
+          && this.isAcousticBarrier(hit.object)
+        ));
+      return { occluded: Boolean(blocker), blocker: blocker?.object?.name || null };
+    }
+
+    evaluateListener(target, event, options = {}) {
+      const baseRange = target === "saint"
+        ? BREATH_STEALTH.saintHearingMeters
+        : BREATH_STEALTH.mrFeastHearingMeters;
+      const profile = this.hidingProfile(options.hidingKind ?? event.hidingKind);
+      const intensity = BREATH_STEALTH.tierIntensity[event.tier] ?? event.intensity ?? 0;
+      const effectiveRange = baseRange * intensity * profile.multiplier;
+      const listenerPosition = options.listenerPosition;
+      const eventPosition = event.position;
+      const distance = Number.isFinite(options.distance)
+        ? Math.max(0, Number(options.distance))
+        : listenerPosition && eventPosition
+          ? Math.hypot(
+            listenerPosition.x - eventPosition.x,
+            listenerPosition.z - eventPosition.z,
+          )
+          : Infinity;
+      const sameRoom = typeof options.sameRoom === "boolean"
+        ? options.sameRoom
+        : options.listenerRoom != null && event.room != null
+          ? options.listenerRoom === event.room
+          : false;
+      if (!sameRoom) {
+        return {
+          target,
+          heard: false,
+          reason: "different-room",
+          distance: Number(distance.toFixed(3)),
+          range: Number(effectiveRange.toFixed(3)),
+          hidingKind: profile.kind,
+          muffleMultiplier: profile.multiplier,
+        };
+      }
+      const occlusion = typeof options.occluded === "boolean"
+        ? { occluded: options.occluded, blocker: options.occluded ? "qa-acoustic-barrier" : null }
+        : listenerPosition && eventPosition
+          ? this.acousticOcclusion(listenerPosition, eventPosition)
+          : { occluded: false, blocker: null };
+      if (occlusion.occluded) {
+        return {
+          target,
+          heard: false,
+          reason: "occluded",
+          blocker: occlusion.blocker,
+          distance: Number(distance.toFixed(3)),
+          range: Number(effectiveRange.toFixed(3)),
+          hidingKind: profile.kind,
+          muffleMultiplier: profile.multiplier,
+        };
+      }
+      const heard = event.tier !== "silent" && !event.held && distance <= effectiveRange + 0.0001;
+      return {
+        target,
+        heard,
+        reason: heard ? "heard" : "out-of-range",
+        distance: Number(distance.toFixed(3)),
+        range: Number(effectiveRange.toFixed(3)),
+        room: event.room,
+        hidingKind: profile.kind,
+        muffleMultiplier: profile.multiplier,
+      };
+    }
+
+    dispatchToListeners(event) {
+      const listeners = [];
+      if (
+        mrFeastNpc?.loadStatus === "ready"
+        && !competitionSuspendsSecurity()
+        && !mrFeastNpc.challengeStaged
+      ) {
+        const listenerRoom = locateRoomAtFeet(mrFeastNpc.root.position).roomLabel;
+        const result = this.evaluateListener("mr-feast", event, {
+          listenerPosition: mrFeastNpc.root.position,
+          listenerRoom,
+        });
+        listeners.push(result);
+        if (result.heard) mrFeastNpc.hearPlayerBreathing({ ...event, hearing: result });
+      }
+      const saint = demonPrototypePatrol?.saintEntry();
+      if (
+        saint?.status === "ready"
+        && saint.root.visible
+        && demonPrototypePatrol?.finaleMode === "escape"
+      ) {
+        const listenerRoom = locateRoomAtFeet(saint.root.position).roomLabel;
+        const result = this.evaluateListener("saint", event, {
+          listenerPosition: saint.root.position,
+          listenerRoom,
+        });
+        listeners.push(result);
+        if (result.heard) demonPrototypePatrol.hearFinaleBreathing({ ...event, hearing: result });
+      }
+      this.breath.lastListeners = listeners.map((entry) => ({ ...entry }));
+      return listeners;
+    }
+
+    makeEvent(tier, { forced = false } = {}) {
+      const p = physics?.playerPosition();
+      if (!p) return null;
+      const position = {
+        x: p.x,
+        y: p.y - PLAYER.halfHeight - PLAYER.radius,
+        z: p.z,
+      };
+      const room = locateRoomAtFeet(position).roomLabel;
+      const hiding = this.hidingProfile();
+      return {
+        id: ++this.eventSequence,
+        tier,
+        intensity: BREATH_STEALTH.tierIntensity[tier] || 0,
+        forced,
+        held: Boolean(this.breath.holding),
+        position,
+        room,
+        hidden: Boolean(state.isHidden),
+        hidingKind: hiding.kind,
+        muffleMultiplier: hiding.multiplier,
+      };
+    }
+
+    emitBreath(tier, options = {}) {
+      if (this.breath.holding && !options.forced) {
+        return { emitted: false, reason: "held", listeners: [] };
+      }
+      const event = this.makeEvent(tier, options);
+      if (!event || event.tier === "silent") {
+        return { emitted: false, reason: "silent", listeners: [] };
+      }
+      if (event.forced) {
+        audioSystem?.playPlayerBreath("gasp", { gasp: true });
+      } else {
+        audioSystem?.playPlayerBreath(tier);
+        this.breath.emittedBreaths += 1;
+      }
+      const listeners = this.dispatchToListeners(event);
+      const recorded = {
+        ...event,
+        position: { ...event.position },
+        listeners: listeners.map((entry) => ({ ...entry })),
+      };
+      this.breath.lastEvent = recorded;
+      this.breath.eventHistory.push(recorded);
+      if (this.breath.eventHistory.length > BREATH_STEALTH.eventHistoryLimit) {
+        this.breath.eventHistory.splice(0, this.breath.eventHistory.length - BREATH_STEALTH.eventHistoryLimit);
+      }
+      return { emitted: true, event: recorded, listeners };
+    }
+
+    forceGasp(reason = "hold-exhausted", lockoutSeconds = BREATH_STEALTH.forcedGaspLockoutSeconds) {
+      this.breath.holding = false;
+      input.holdBreath = false;
+      this.breath.forcedGasps += 1;
+      this.breath.lastGaspReason = reason;
+      this.breath.strain = Math.max(this.breath.strain, BREATH_STEALTH.heavyStrainThreshold);
+      this.breath.holdLockoutSeconds = Math.max(
+        this.breath.holdLockoutSeconds,
+        Math.max(0, Number(lockoutSeconds) || 0),
+      );
+      this.breath.nextBreathSeconds = BREATH_STEALTH.breathIntervals.heavy;
+      const result = this.emitBreath("gasp", { forced: true });
+      this.syncCapacity();
+      this.syncHud();
+      return { ...result, reason, lockoutSeconds: this.breath.holdLockoutSeconds };
+    }
+
+    update(dt) {
+      const step = Math.max(0, Number(dt) || 0);
+      if (state.qa && this.qaManualClock && !this.qaStepping) {
+        this.syncHud();
+        return;
+      }
+      this.breath.holdLockoutSeconds = Math.max(0, this.breath.holdLockoutSeconds - step);
+      if (!state.started || state.gameOver) {
+        if (this.breath.holding) this.setHolding(false, "inactive");
+        this.breath.audible = false;
+        this.breath.tier = "silent";
+        this.syncHud();
+        return;
+      }
+
+      const threat = this.currentAggro();
+      this.breath.aggro = threat.aggro;
+      if (threat.aggro) this.breath.fearTailSeconds = BREATH_STEALTH.fearTailSeconds;
+      else this.breath.fearTailSeconds = Math.max(0, this.breath.fearTailSeconds - step);
+
+      if (state.movement.sprinting) {
+        if (this.breath.holding) {
+          this.forceGasp("sprint-cancel", BREATH_STEALTH.sprintCancelLockoutSeconds);
+        }
+        this.breath.strain = Math.min(
+          100,
+          this.breath.strain + BREATH_STEALTH.strainPerSprintSecond * step,
+        );
+      } else if (!this.breath.holding) {
+        this.breath.strain = Math.max(
+          0,
+          this.breath.strain - BREATH_STEALTH.strainRecoveryPerSecond * step,
+        );
+      }
+      // Energy is the player's primary readable recovery bar. Once it is
+      // completely full, calm walking/rest must agree with that UI and return
+      // to silence even if the slower respiratory-strain decay had a fraction
+      // of a breath left over.
+      if (
+        !state.movement.sprinting
+        && !this.breath.holding
+        && !threat.aggro
+        && this.breath.fearTailSeconds <= 0
+        && state.movement.energy >= PLAYER.energyMax - 0.001
+      ) {
+        this.breath.strain = 0;
+      }
+
+      if (this.breath.holding) {
+        this.breath.holdRemainingSeconds = Math.max(0, this.breath.holdRemainingSeconds - step);
+        if (this.breath.holdRemainingSeconds <= 0) {
+          this.forceGasp("hold-exhausted", BREATH_STEALTH.forcedGaspLockoutSeconds);
+        }
+      } else {
+        this.syncCapacity();
+      }
+
+      const threatened = threat.aggro || this.breath.fearTailSeconds > 0;
+      this.breath.tier = this.tierForStrain(this.breath.strain, threatened);
+      this.breath.audible = this.breath.tier !== "silent" && !this.breath.holding;
+      if (this.breath.audible) {
+        this.breath.nextBreathSeconds -= step;
+        if (this.breath.nextBreathSeconds <= 0) {
+          this.emitBreath(this.breath.tier);
+          const baseInterval = BREATH_STEALTH.breathIntervals[this.breath.tier]
+            || BREATH_STEALTH.breathIntervals.light;
+          const jitter = [0, 0.08, -0.05, 0.03][this.breath.emittedBreaths % 4];
+          this.breath.nextBreathSeconds = Math.max(0.55, baseInterval + jitter);
+        }
+      } else {
+        this.breath.nextBreathSeconds = 0;
+      }
+      this.syncHud();
+    }
+
+    syncHud() {
+      const threatened = this.breath.aggro || this.breath.fearTailSeconds > 0;
+      const presentationLocked = Boolean(
+        feastSaysSystem?.locksPlayerMovement()
+        || stormRunSystem?.locksPlayerMovement()
+        || feastHuntSystem?.locksPlayerMovement()
+        || victoryFeastSystem?.locksPlayerMovement()
+      );
+      const relevant = Boolean(
+        state.started
+        && !state.gameOver
+        && !presentationLocked
+        && (
+          this.breath.holding
+          || this.breath.audible
+          || this.breath.holdLockoutSeconds > 0
+          || this.breath.strain >= BREATH_STEALTH.lightStrainThreshold
+          || threatened
+          || state.isHidden
+        )
+      );
+      if (dom.breath) {
+        dom.breath.hidden = !relevant;
+        const capacity = this.breath.holding
+          ? this.breath.holdCapacitySeconds
+          : this.capacityFromEnergy();
+        const displaySeconds = this.breath.holding
+          ? this.breath.holdRemainingSeconds
+          : capacity;
+        const fill = clamp(displaySeconds / BREATH_STEALTH.maximumHoldSeconds * 100, 0, 100);
+        dom.breath.setAttribute("aria-valuenow", displaySeconds.toFixed(1));
+        dom.breath.setAttribute("aria-valuetext", this.breath.holding
+          ? `${Math.ceil(displaySeconds)} seconds of held breath remaining`
+          : `${Math.ceil(capacity)} seconds available to hold breath`);
+        dom.breath.classList.toggle(
+          "is-danger",
+          this.breath.tier === "heavy"
+            || this.breath.tier === "panicked"
+            || this.breath.holdLockoutSeconds > 0,
+        );
+        if (dom.breathFill) dom.breathFill.style.width = `${fill}%`;
+        if (dom.breathValue) dom.breathValue.textContent = `${Math.ceil(displaySeconds)}s`;
+        if (dom.breathMode) {
+          dom.breathMode.textContent = this.breath.holdLockoutSeconds > 0
+            ? "Gasping"
+            : this.breath.holding
+              ? "Holding breath"
+              : this.breath.tier === "silent"
+                ? "Breathing · quiet"
+                : `Breathing · ${this.breath.tier}`;
+        }
+      }
+      if (dom.touchBreath) {
+        dom.touchBreath.hidden = !relevant;
+        dom.touchBreath.setAttribute("aria-pressed", String(this.breath.holding));
+        dom.touchBreath.classList.toggle("is-held", this.breath.holding);
+        dom.touchBreath.dataset.lockout = String(this.breath.holdLockoutSeconds > 0);
+        dom.touchBreath.textContent = this.breath.holding ? "Holding…" : "Hold breath";
+      }
+    }
+
+    resetTransient({ preserveStrain = true } = {}) {
+      if (!preserveStrain) this.breath.strain = 0;
+      this.breath.holding = false;
+      input.holdBreath = false;
+      this.breath.holdLockoutSeconds = 0;
+      this.breath.fearTailSeconds = 0;
+      this.breath.aggro = false;
+      this.breath.nextBreathSeconds = 0;
+      this.breath.tier = this.tierForStrain(this.breath.strain, false);
+      this.breath.audible = false;
+      this.breath.lastGaspReason = null;
+      this.breath.lastEvent = null;
+      this.breath.lastListeners = [];
+      this.breath.eventHistory = [];
+      audioSystem?.stopPlayerBreathing();
+      this.syncCapacity();
+      this.syncHud();
+      return this.getDiagnostics();
+    }
+
+    getSnapshot() {
+      return { strain: Number(this.breath.strain.toFixed(3)) };
+    }
+
+    restoreSnapshot(snapshot = null) {
+      const value = Number(snapshot?.strain);
+      this.breath.strain = Number.isFinite(value) ? clamp(value, 0, 100) : 0;
+      return this.resetTransient({ preserveStrain: true });
+    }
+
+    probeHearingForQA(options = {}) {
+      if (!state.qa) return null;
+      const tier = ["light", "heavy", "panicked", "gasp"].includes(options.tier)
+        ? options.tier
+        : "heavy";
+      const event = {
+        tier,
+        intensity: BREATH_STEALTH.tierIntensity[tier],
+        held: false,
+        room: "DINING ROOM",
+        position: { x: 0, y: FLOOR.MAIN, z: 0 },
+        hidingKind: options.hidingKind || "open",
+      };
+      return this.evaluateListener(
+        options.target === "saint" ? "saint" : "mr-feast",
+        event,
+        {
+          distance: Number(options.distance) || 0,
+          sameRoom: options.sameRoom !== false,
+          occluded: Boolean(options.occluded),
+          hidingKind: options.hidingKind || "open",
+        },
+      );
+    }
+
+    probeAggroForQA(options = {}) {
+      if (!state.qa) return null;
+      const previousObserved = state.security.observed;
+      state.security.observed = Boolean(options.cameraObserved);
+      const result = this.actualAggro();
+      state.security.observed = previousObserved;
+      return {
+        ...result,
+        cameraObserved: Boolean(options.cameraObserved),
+        cameraObservationCreatesAggro: false,
+      };
+    }
+
+    stageThreatForQA(options = {}) {
+      if (!state.qa || !physics) return null;
+      const target = options.target === "saint" ? "saint" : "mr-feast";
+      const hiddenKind = options.hiddenKind || null;
+      if (hiddenKind && !options.preserveInvestigation) {
+        if (state.activeHideSpot) state.activeHideSpot.exit();
+        const spot = hidingSpots.find((candidate) => candidate.breathHidingKind === hiddenKind);
+        spot?.enter();
+        updateLocation();
+      }
+      const p = physics.playerPosition();
+      const feetY = p.y - PLAYER.halfHeight - PLAYER.radius;
+      const distance = Math.max(0.4, Number(options.distance) || 4);
+      if (target === "mr-feast" && mrFeastNpc?.loadStatus === "ready") {
+        if (!options.preserveInvestigation) mrFeastNpc.suspendThreatsForCompetition();
+        mrFeastNpc.root.position.set(p.x + distance, feetY, p.z);
+        mrFeastNpc.root.rotation.y = -Math.PI / 2;
+        mrFeastNpc.currentRouteZone = locateRoomAtFeet({ x: p.x, y: feetY, z: p.z }).roomLabel;
+        mrFeastNpc.currentRouteLevel = mrFeastNpc.floorAtCurrentHeight();
+        mrFeastNpc.syncCollider();
+      } else if (target === "saint") {
+        const saint = demonPrototypePatrol?.saintEntry();
+        if (saint) saint.root.position.set(p.x + distance, feetY, p.z);
+      }
+      return {
+        target,
+        distance,
+        hidden: Boolean(state.isHidden),
+        spot: state.activeHideSpot?.name || null,
+        hiding: this.hidingProfile(),
+        room: locateRoomAtFeet({ x: p.x, y: feetY, z: p.z }).roomLabel,
+      };
+    }
+
+    advanceForQA(seconds = 0) {
+      if (!state.qa || !physics) return null;
+      const duration = clamp(Number(seconds) || 0, 0, 90);
+      this.qaManualClock = true;
+      this.qaStepping = true;
+      let elapsed = 0;
+      while (elapsed < duration - 0.000001 && !state.gameOver) {
+        const step = Math.min(1 / 60, duration - elapsed);
+        updatePlayer(step);
+        this.update(step);
+        updateStealth(step);
+        elapsed += step;
+      }
+      this.qaStepping = false;
+      syncCamera();
+      updateLocation();
+      updateInteractionPrompt();
+      return this.getDiagnostics();
+    }
+
+    getDiagnostics() {
+      const hiding = this.hidingProfile();
+      const capacity = this.breath.holding
+        ? this.breath.holdCapacitySeconds
+        : this.capacityFromEnergy();
+      return {
+        strain: Number(this.breath.strain.toFixed(3)),
+        tier: this.breath.tier,
+        audible: this.breath.audible,
+        holding: this.breath.holding,
+        holdCapacitySeconds: Number(capacity.toFixed(3)),
+        holdRemainingSeconds: Number(this.breath.holdRemainingSeconds.toFixed(3)),
+        holdLockoutSeconds: Number(this.breath.holdLockoutSeconds.toFixed(3)),
+        minimumHoldSeconds: BREATH_STEALTH.minimumHoldSeconds,
+        maximumHoldSeconds: BREATH_STEALTH.maximumHoldSeconds,
+        fearTailSeconds: Number(this.breath.fearTailSeconds.toFixed(3)),
+        aggro: this.breath.aggro,
+        aggroSources: this.currentAggro(),
+        emittedBreaths: this.breath.emittedBreaths,
+        forcedGasps: this.breath.forcedGasps,
+        lastGaspReason: this.breath.lastGaspReason,
+        nextBreathSeconds: Number(Math.max(0, this.breath.nextBreathSeconds).toFixed(3)),
+        hiding,
+        hearing: {
+          mrFeastMeters: BREATH_STEALTH.mrFeastHearingMeters,
+          saintMeters: BREATH_STEALTH.saintHearingMeters,
+          sameRoomRequired: true,
+          wallsAndClosedDoorsBlock: true,
+          firstEventResponse: "investigate",
+          continuedCloseResponse: "expose-and-catch",
+        },
+        lastEvent: this.breath.lastEvent
+          ? {
+            ...this.breath.lastEvent,
+            position: { ...this.breath.lastEvent.position },
+            listeners: this.breath.lastEvent.listeners.map((entry) => ({ ...entry })),
+          }
+          : null,
+        lastListeners: this.breath.lastListeners.map((entry) => ({ ...entry })),
+        eventHistory: this.breath.eventHistory.map((event) => ({
+          ...event,
+          position: { ...event.position },
+          listeners: event.listeners.map((entry) => ({ ...entry })),
+        })),
+        hudVisible: Boolean(dom.breath && !dom.breath.hidden),
+        touchVisible: Boolean(dom.touchBreath && !dom.touchBreath.hidden),
+        audio: audioSystem?.playerBreathingDiagnostics() || null,
       };
     }
   }
@@ -35947,6 +38544,7 @@
     if (!restoreMansionSave(saved)) return false;
     if (state.gameOver) clearMansionGameOver();
     tamperSystem?.resetAllForLoad();
+    throwableDistractionSystem?.resetAll("load");
     mrFeastNpc?.recoverAfterLoad();
     speechSystem?.dismiss();
     return true;
@@ -36086,7 +38684,7 @@
     scene.updateMatrixWorld(true);
     scene.traverse((object) => {
       if (!object.isMesh) return;
-      if (object.userData.fireplaceEffect) return;
+      if (object.userData.fireplaceEffect || object.userData.portableThrowable) return;
       const preclassified = object.userData.exteriorCullingClass;
       if (preclassified) {
         // Merged decor already carries its culling class from its sources.
@@ -36181,11 +38779,29 @@
     input.left = false;
     input.right = false;
     input.sprint = false;
+    input.holdBreath = false;
     input.interactHeld = false;
+    breathStealthSystem?.setHolding(false, "input-cleared");
+    throwableDistractionSystem?.endPickup("input-cleared");
     bulkStorageSecretSystem?.endHold("input-cleared");
     if (dom.touchSprint) {
       dom.touchSprint.classList.remove("is-held");
       dom.touchSprint.setAttribute("aria-pressed", "false");
+    }
+  }
+
+  function recoverPlayerEnergy(fixedDt) {
+    const movement = state.movement;
+    if (breathStealthSystem?.isHolding()) return;
+    movement.rechargeDelay = Math.max(0, movement.rechargeDelay - fixedDt);
+    if (movement.rechargeDelay <= 0 && movement.energy < PLAYER.energyMax) {
+      movement.energy = Math.min(
+        PLAYER.energyMax,
+        movement.energy + PLAYER.energyRechargePerSecond * fixedDt,
+      );
+    }
+    if (movement.exhausted && movement.energy >= PLAYER.energyResumeThreshold) {
+      movement.exhausted = false;
     }
   }
 
@@ -36251,6 +38867,7 @@
         energy: state.movement.energy,
         crouched: state.movement.crouched,
       },
+      breathing: breathStealthSystem?.getSnapshot() || { strain: state.breathing.strain },
       contestant13: contestant13Quest.getQuestSnapshot(),
       feastSays: feastSaysSystem?.getSnapshot() || null,
       stormRun: stormRunSystem?.getSnapshot() || null,
@@ -36304,6 +38921,7 @@
     state.movement.rechargeDelay = 0;
     state.movement.sprinting = false;
     clearMovementInput();
+    breathStealthSystem?.restoreSnapshot(data.breathing);
     syncCamera();
     updateMovementHud();
     updateLocation();
@@ -36625,7 +39243,11 @@
   function endCurrentInteractionHold(reason = "released") {
     const wasHeld = input.interactHeld;
     input.interactHeld = false;
-    const released = bulkStorageSecretSystem?.endHold(reason) || false;
+    const released = (
+      throwableDistractionSystem?.endPickup(reason)
+      || bulkStorageSecretSystem?.endHold(reason)
+      || false
+    );
     updateInteractionPrompt();
     return wasHeld || released;
   }
@@ -36742,6 +39364,16 @@
         flashlightSystem?.toggle("keyboard");
         return;
       }
+      if (event.code === "KeyQ" && !event.repeat) {
+        event.preventDefault();
+        throwableDistractionSystem?.throwCarried("keyboard");
+        return;
+      }
+      if (event.code === "Space") {
+        event.preventDefault();
+        if (!event.repeat) breathStealthSystem?.setHolding(true, "keyboard");
+        return;
+      }
       if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"].includes(event.code)) {
         event.preventDefault();
         if (feastSaysSystem?.isPlaying() && feastSaysSystem.show.phase !== FEAST_SAYS_PHASE.COMMAND) return;
@@ -36762,6 +39394,10 @@
     window.addEventListener("keyup", (event) => {
       setMoveIntent(event.code, false);
       if (event.code === "KeyE") endCurrentInteractionHold("keyboard-release");
+      if (event.code === "Space") {
+        event.preventDefault();
+        breathStealthSystem?.setHolding(false, "keyboard-release");
+      }
     });
     window.addEventListener("blur", clearMovementInput);
     document.addEventListener("pointerlockchange", () => {
@@ -36843,6 +39479,7 @@
     });
     if (dom.flashlightButton) dom.flashlightButton.addEventListener("pointerdown", (event) => {
       event.preventDefault();
+      if (throwableDistractionSystem?.throwCarried("touch")) return;
       flashlightSystem?.toggle("touch");
     });
     if (dom.journalClose) dom.journalClose.addEventListener("click", () => contestant13Quest && contestant13Quest.setJournalOpen(false));
@@ -36954,6 +39591,26 @@
       event.preventDefault();
       togglePlayerCrouch();
     });
+    if (dom.touchBreath) {
+      const releaseBreath = (event) => {
+        if (event) event.preventDefault();
+        dom.touchBreath.classList.remove("is-held");
+        breathStealthSystem?.setHolding(false, "touch-release");
+      };
+      dom.touchBreath.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        try {
+          dom.touchBreath.setPointerCapture(event.pointerId);
+        } catch {
+          // Synthetic QA pointers still exercise the authoritative hold path.
+        }
+        dom.touchBreath.classList.add("is-held");
+        breathStealthSystem?.setHolding(true, "touch");
+      });
+      dom.touchBreath.addEventListener("pointerup", releaseBreath);
+      dom.touchBreath.addEventListener("pointercancel", releaseBreath);
+      dom.touchBreath.addEventListener("lostpointercapture", releaseBreath);
+    }
     if (dom.feastCrouch) dom.feastCrouch.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       toggleFeastSaysCrouch();
@@ -37673,6 +40330,8 @@
       physics.step();
       physics.updateSafety();
       state.lastMove = { dx: 0, dz: 0 };
+      movement.sprinting = false;
+      recoverPlayerEnergy(fixedDt);
       movement.mode = "hidden";
       movement.speed = 0;
       updateMovementHud();
@@ -37729,11 +40388,7 @@
         movement.sprinting = false;
       }
     } else {
-      movement.rechargeDelay = Math.max(0, movement.rechargeDelay - fixedDt);
-      if (movement.rechargeDelay <= 0 && movement.energy < PLAYER.energyMax) {
-        movement.energy = Math.min(PLAYER.energyMax, movement.energy + PLAYER.energyRechargePerSecond * fixedDt);
-      }
-      if (movement.exhausted && movement.energy >= PLAYER.energyResumeThreshold) movement.exhausted = false;
+      recoverPlayerEnergy(fixedDt);
     }
     movement.stealthVisibilityMultiplier = movement.crouched ? PLAYER.crouchVisibilityMultiplier : 1;
     movement.stealthNoiseMultiplier = movement.crouched ? PLAYER.crouchNoiseMultiplier : 1;
@@ -38012,6 +40667,7 @@
       accumulator += dt;
       while (accumulator >= 1 / 60) {
         updatePlayer(1 / 60);
+        breathStealthSystem?.update(1 / 60);
         updateStealth(1 / 60);
         audioSystem?.updateFootsteps(1 / 60);
         accumulator -= 1 / 60;
@@ -38245,6 +40901,8 @@
       hiding: {
         active: state.isHidden,
         spot: state.activeHideSpot ? state.activeHideSpot.name : null,
+        breathHidingKind: state.activeHideSpot?.breathHidingKind || "open",
+        breathMuffleMultiplier: state.activeHideSpot?.breathMuffleMultiplier || 1,
         movementLocked: state.isHidden,
         availableSpots: hidingSpots.map((spot) => spot.name),
       },
@@ -38267,6 +40925,8 @@
       seating: seatingSystem?.getDiagnostics() || null,
       security: cameraSecurity?.getDiagnostics() || null,
       flashlight: flashlightSystem?.getDiagnostics() || null,
+      throwableDistractions: throwableDistractionSystem?.getDiagnostics() || null,
+      breathing: breathStealthSystem?.getDiagnostics() || { ...state.breathing },
       bulkStorageSecret: bulkStorageSecretSystem?.getDiagnostics() || null,
       tamper: tamperSystem?.getDiagnostics() || null,
       houseDistractions: tamperSystem?.getDistractionDiagnostics() || null,
@@ -38307,6 +40967,7 @@
           walkSpeed: PLAYER.walkSpeed,
           eyeHeight: Number(state.movement.eyeHeight.toFixed(3)),
           standingEyeHeight: PLAYER.eye,
+          breathing: breathStealthSystem?.getDiagnostics() || null,
           stealth: {
             visibilityMultiplier: state.movement.stealthVisibilityMultiplier,
             noiseMultiplier: state.movement.stealthNoiseMultiplier,
@@ -38342,7 +41003,12 @@
             lightIntensity: Number((closet.lightCircuit?.lights[0]?.intensity || 0).toFixed(2)),
             thresholdColliderEnabled: Boolean(closet.thresholdCollider && closet.thresholdCollider.isEnabled && closet.thresholdCollider.isEnabled()),
           })),
-        hidingSpots: hidingSpots.map((spot) => ({ name: spot.name, active: state.activeHideSpot === spot })),
+        hidingSpots: hidingSpots.map((spot) => ({
+          name: spot.name,
+          active: state.activeHideSpot === spot,
+          breathHidingKind: spot.breathHidingKind,
+          breathMuffleMultiplier: spot.breathMuffleMultiplier,
+        })),
         waterFixturesTotal: waterFixtures.length,
         waterRunning: waterFixtures.filter((fixture) => fixture.on).map((fixture) => fixture.name),
         toiletsTotal: toilets.length,
@@ -38493,7 +41159,16 @@
       })),
       storm: { rainDrops: rainSystem ? rainSystem.count : 0, lightning: stormSystem ? Number(stormSystem.flash.toFixed(2)) : 0, reducedFlash: state.reducedFlash },
       yard: getYardDiagnostics(p),
-      physics: physics ? { engine: `Rapier ${RAPIER.version()}`, timestep: 1 / 60, fixedBodies: physics.fixedBodies, kinematicBodies: physics.kinematicBodies, colliders: physics.colliderCount, ccdBodies: 0, fallRecoveries: physics.fallRecoveries } : null,
+      physics: physics ? {
+        engine: `Rapier ${RAPIER.version()}`,
+        timestep: 1 / 60,
+        fixedBodies: physics.fixedBodies,
+        kinematicBodies: physics.kinematicBodies,
+        dynamicBodies: physics.dynamicBodies,
+        colliders: physics.colliderCount,
+        ccdBodies: physics.dynamicBodies,
+        fallRecoveries: physics.fallRecoveries,
+      } : null,
       renderer: {
         fps: Number(state.fps.toFixed(1)),
         frameMs: Number(state.frameTime.toFixed(2)),
@@ -38667,12 +41342,69 @@
       audioSystem.door(nextOpen);
       return { name: door.name, open: door.open };
     };
+    window.MrFeastFresh.getBreathStealthState = () => (
+      breathStealthSystem?.getDiagnostics() || null
+    );
+    window.MrFeastFresh.setBreathStrainForQA = (value) => {
+      if (!state.qa || !breathStealthSystem) return null;
+      state.breathing.strain = clamp(Number(value) || 0, 0, 100);
+      const threatened = state.breathing.aggro || state.breathing.fearTailSeconds > 0;
+      state.breathing.tier = breathStealthSystem.tierForStrain(
+        state.breathing.strain,
+        threatened,
+      );
+      state.breathing.audible = state.breathing.tier !== "silent" && !state.breathing.holding;
+      state.breathing.nextBreathSeconds = 0;
+      breathStealthSystem.syncCapacity();
+      breathStealthSystem.syncHud();
+      return breathStealthSystem.getDiagnostics();
+    };
+    window.MrFeastFresh.setBreathAggroForQA = (value) => {
+      if (!state.qa || !breathStealthSystem) return null;
+      breathStealthSystem.qaAggroOverride = typeof value === "boolean" ? value : null;
+      breathStealthSystem.syncHud();
+      return breathStealthSystem.getDiagnostics();
+    };
+    window.MrFeastFresh.probeBreathAggroForQA = (options = {}) => (
+      state.qa && breathStealthSystem
+        ? breathStealthSystem.probeAggroForQA(options)
+        : null
+    );
+    window.MrFeastFresh.holdBreathForQA = (holding) => (
+      state.qa && breathStealthSystem
+        ? breathStealthSystem.setHolding(Boolean(holding), "qa")
+        : null
+    );
+    window.MrFeastFresh.advanceBreathStealthForQA = (seconds) => (
+      state.qa && breathStealthSystem
+        ? breathStealthSystem.advanceForQA(seconds)
+        : null
+    );
+    window.MrFeastFresh.probeBreathHearingForQA = (options = {}) => (
+      state.qa && breathStealthSystem
+        ? breathStealthSystem.probeHearingForQA(options)
+        : null
+    );
+    window.MrFeastFresh.emitPlayerBreathForQA = (tier = "heavy") => {
+      if (!state.qa || !breathStealthSystem) return null;
+      const profile = ["light", "heavy", "panicked", "gasp"].includes(tier)
+        ? tier
+        : "heavy";
+      return breathStealthSystem.emitBreath(profile, { forced: profile === "gasp" });
+    };
+    window.MrFeastFresh.stageBreathThreatForQA = (options = {}) => (
+      state.qa && breathStealthSystem
+        ? breathStealthSystem.stageThreatForQA(options)
+        : null
+    );
     window.MrFeastFresh.setPlayerEnergyForQA = (value) => {
       if (!state.qa) return null;
       state.movement.energy = clamp(Number(value) || 0, 0, PLAYER.energyMax);
       state.movement.exhausted = state.movement.energy <= 0;
       state.movement.rechargeDelay = 0;
+      breathStealthSystem?.syncCapacity();
       updateMovementHud();
+      breathStealthSystem?.syncHud();
       return getDiagnostics().player.movement;
     };
     window.MrFeastFresh.advancePlayerForQA = (seconds) => {
@@ -38680,6 +41412,7 @@
       const steps = Math.min(720, Math.max(0, Math.ceil((Number(seconds) || 0) * 60)));
       for (let step = 0; step < steps; step += 1) {
         updatePlayer(1 / 60);
+        breathStealthSystem?.update(1 / 60);
         updateStealth(1 / 60);
         audioSystem?.updateFootsteps(1 / 60);
       }
@@ -38707,6 +41440,34 @@
       return { lightOverride: state.stealth.lightOverride };
     };
     window.MrFeastFresh.getFlashlightState = () => flashlightSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.getThrowableDistractions = () => (
+      throwableDistractionSystem?.getDiagnostics() || null
+    );
+    window.MrFeastFresh.placePlayerNearThrowableForQA = (id) => (
+      state.qa && throwableDistractionSystem
+        ? throwableDistractionSystem.placePlayerNearForQA(id)
+        : null
+    );
+    window.MrFeastFresh.advanceThrowableDistractionsForQA = (seconds) => (
+      state.qa && throwableDistractionSystem
+        ? throwableDistractionSystem.advanceForQA(seconds)
+        : null
+    );
+    window.MrFeastFresh.throwCarriedForQA = (options = {}) => (
+      state.qa && throwableDistractionSystem
+        ? throwableDistractionSystem.throwCarried("qa", options)
+        : false
+    );
+    window.MrFeastFresh.resetThrowableDistractionsForQA = () => (
+      state.qa && throwableDistractionSystem
+        ? throwableDistractionSystem.resetAll("qa-reset")
+        : null
+    );
+    window.MrFeastFresh.probeThrowableThreatForQA = (options = {}) => (
+      state.qa && throwableDistractionSystem
+        ? throwableDistractionSystem.probeThreatForQA(options)
+        : null
+    );
     window.MrFeastFresh.collectFlashlightForQA = () => {
       if (!state.qa || !flashlightSystem) return null;
       flashlightSystem.collect();
@@ -40132,6 +42893,7 @@
       scene.add(moonLight);
 
       buildMansion();
+      throwableDistractionSystem = new ThrowableDistractionSystem();
       bulkStorageSecretSystem = new BulkStorageSecretSystem();
       flashlightSystem = new FlashlightSystem();
       readableBookSystem.finalizeSpineTitles();
@@ -40155,6 +42917,7 @@
       bulkStorageSecretSystem.syncClothingProgression(false);
       banquetLossSystem = new BanquetLossSystem();
       audioSystem = new MansionAudio();
+      breathStealthSystem = new BreathStealthSystem();
       updateAudioButton();
       bindInput();
       installDiagnostics();

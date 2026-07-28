@@ -1,0 +1,511 @@
+import { spawn } from "node:child_process";
+import { mkdir, readFile } from "node:fs/promises";
+import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const runtimePath = path.join(root, "assets", "js", "mr-feast-mansion.js");
+const pagePath = path.join(root, "games", "mr-feast-mansion.html");
+const milestonePath = path.join(root, "docs", "milestones", "68-throwable-distractions.md");
+const port = Number(process.env.MR_FEAST_THROWABLE_TEST_PORT || (53000 + (process.pid % 8000)));
+const baseUrl = `http://127.0.0.1:${port}`;
+const gameUrl = `${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1&allLights=1`;
+const artifactDir = path.join(root, "output", "playwright", "mr-feast-throwable-distractions");
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+async function serverResponds() {
+  try {
+    return (await fetch(`${baseUrl}/games/mr-feast-mansion.html`, { cache: "no-store" })).ok;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function waitForServer() {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (await serverResponds()) return;
+    await delay(100);
+  }
+  throw new Error(`Timed out waiting for ${baseUrl}`);
+}
+
+function watchErrors(page, errors, label) {
+  page.on("pageerror", (error) => errors.push(`${label}: ${error.message}`));
+  page.on("console", (message) => {
+    if (message.type() === "error" && !/favicon\.ico|fonts\.googleapis|fonts\.gstatic/i.test(message.text())) {
+      errors.push(`${label}: ${message.text()}`);
+    }
+  });
+}
+
+async function bootPage(browser, viewport, errors, contextOptions = {}) {
+  const page = await browser.newPage({ viewport, ...contextOptions });
+  watchErrors(page, errors, `${viewport.width}x${viewport.height}`);
+  await page.addInitScript(() => localStorage.removeItem("rainbot_game_save:mr-feast-mansion"));
+  await page.goto(gameUrl, { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 180000 });
+  await page.waitForFunction(() => Boolean(window.MrFeastFresh?.getThrowableDistractions), null, { timeout: 180000 });
+  return page;
+}
+
+async function diagnostics(page) {
+  return page.evaluate(() => JSON.parse(window.render_game_to_text()));
+}
+
+async function throwableState(page) {
+  return page.evaluate(() => window.MrFeastFresh.getThrowableDistractions());
+}
+
+async function holdInteract(page, seconds, { release = true } = {}) {
+  await page.keyboard.down("e");
+  await page.evaluate((duration) => window.MrFeastFresh.advanceThrowableDistractionsForQA(duration), seconds);
+  if (release) await page.keyboard.up("e");
+}
+
+async function assertSourceContract() {
+  const [runtime, html, milestone] = await Promise.all([
+    readFile(runtimePath, "utf8"),
+    readFile(pagePath, "utf8"),
+    readFile(milestonePath, "utf8"),
+  ]);
+  assert(/const THROWABLE_DISTRACTIONS\s*=\s*Object\.freeze/.test(runtime), "missing named THROWABLE_DISTRACTIONS tuning table");
+  assert(/class ThrowableDistractionSystem/.test(runtime), "missing focused ThrowableDistractionSystem");
+  assert(/addDynamicBox\s*\(/.test(runtime), "PhysicsWorld needs a bounded dynamic prop helper");
+  assert(/Hold E · pick up/.test(runtime), "throwables need an explicit hold-E interaction label");
+  assert(
+    /event\.code === "KeyQ"[\s\S]{0,180}throwableDistractionSystem\?\.throwCarried\("keyboard"\)/.test(runtime),
+    "Q must throw a carried throwable",
+  );
+  assert(!/event\.code === "KeyG"[\s\S]{0,180}throwableDistractionSystem\?\.throwCarried/.test(runtime), "G must no longer own throw");
+  assert(
+    /event\.code === "KeyF"[\s\S]{0,160}flashlightSystem\?\.toggle\("keyboard"\)/.test(runtime),
+    "F must remain the flashlight key",
+  );
+  assert(/hearFinaleDistraction\s*\(/.test(runtime), "the Saint needs an explicit thrown-sound handoff");
+  assert(/transientSound/.test(runtime), "Mr. Feast needs a one-shot response task distinction");
+  assert(/throwableImpact\s*\(/.test(runtime), "MansionAudio needs a spatial impact cue");
+  assert((html.match(/F<\/kbd>\s*flashlight/gi) || []).length >= 2, "both desktop guides must retain F for flashlight");
+  assert((html.match(/Q<\/kbd>\s*throw carried item/gi) || []).length >= 2, "both desktop guides must explain Q throw");
+  assert(!/id="mansion-throwable-inventory"/.test(html), "throwables must not add inventory UI");
+  assert(/User playtest/i.test(milestone), "Milestone 68 must retain subjective throw-balance playtest");
+  for (const hook of [
+    "getThrowableDistractions",
+    "placePlayerNearThrowableForQA",
+    "advanceThrowableDistractionsForQA",
+    "throwCarriedForQA",
+    "resetThrowableDistractionsForQA",
+    "probeThrowableThreatForQA",
+  ]) {
+    assert(runtime.includes(hook), `missing deterministic throwable QA hook: ${hook}`);
+  }
+}
+
+async function runBrowserFlow() {
+  let server = null;
+  let browser = null;
+  if (!(await serverResponds())) {
+    server = spawn(
+      "python3",
+      ["-m", "http.server", String(port), "--bind", "127.0.0.1", "--directory", root],
+      { stdio: "ignore" },
+    );
+  }
+  try {
+    await waitForServer();
+    await mkdir(artifactDir, { recursive: true });
+    browser = await chromium.launch({ headless: true });
+    const errors = [];
+    const page = await bootPage(browser, { width: 1280, height: 820 }, errors);
+
+    let throwables = await throwableState(page);
+    assert(throwables.entries.length >= 12, `expected at least twelve authored props: ${JSON.stringify(throwables)}`);
+    const floors = new Set(throwables.entries.map((entry) => entry.floor));
+    assert(
+      ["MAIN LEVEL", "SECOND FLOOR", "BASEMENT"].every((floor) => floors.has(floor)),
+      `props must span all mansion levels: ${JSON.stringify([...floors])}`,
+    );
+    const target = throwables.entries.find((entry) => entry.floor === "MAIN LEVEL");
+    assert(target, "missing main-floor throwable");
+
+    // A released hold is a true cancellation.
+    let placement = await page.evaluate((id) => window.MrFeastFresh.placePlayerNearThrowableForQA(id), target.id);
+    assert(placement?.placed, `QA placement failed: ${JSON.stringify(placement)}`);
+    await page.waitForFunction(
+      () => /hold e · pick up/i.test(JSON.parse(window.render_game_to_text()).prompt || ""),
+      null,
+      { timeout: 8000 },
+    );
+    await holdInteract(page, 0.2);
+    throwables = await throwableState(page);
+    assert(!throwables.carried && throwables.pickup.cancellations === 1, `early release must cancel: ${JSON.stringify(throwables.pickup)}`);
+    assert(throwables.entries.find((entry) => entry.id === target.id)?.mode === "resting", "cancelled prop must remain resting");
+
+    // A complete real key hold carries one visible prop and never touches Bag.
+    const inventoryBefore = (await diagnostics(page)).inventory.items.map((entry) => entry.id);
+    await holdInteract(page, throwables.tuning.pickupHoldSeconds + 0.05);
+    throwables = await throwableState(page);
+    let state = await diagnostics(page);
+    assert(
+      throwables.carried?.id === target.id
+        && throwables.carried.visibleInHand
+        && throwables.carried.renderedWithCamera
+        && throwables.carried.mode === "carried",
+      `completed hold must visibly carry the prop: ${JSON.stringify(throwables.carried)}`,
+    );
+    assert(
+      JSON.stringify(state.inventory.items.map((entry) => entry.id)) === JSON.stringify(inventoryBefore),
+      `carry must not mutate Bag inventory: ${JSON.stringify(state.inventory)}`,
+    );
+    assert(!state.prompt, `a carried prop must not keep its world prompt: ${state.prompt}`);
+    assert(await page.locator("#mansion-flashlight-button").textContent() === "Throw", "contextual tool must say Throw while carrying");
+    await page.locator("#mansion-stage").screenshot({
+      path: path.join(artifactDir, "desktop-carried.png"),
+    });
+
+    // F stays the flashlight even while carrying; real Q input owns throwing.
+    await page.evaluate(() => window.MrFeastFresh.collectFlashlightForQA());
+    const beforeThrow = await diagnostics(page);
+    const flashlightBefore = beforeThrow.flashlight.activationCount;
+    const cameraAlarmsBefore = beforeThrow.security.alarmCount;
+    await page.keyboard.press("f");
+    let afterFlashlight = await diagnostics(page);
+    throwables = await throwableState(page);
+    assert(
+      throwables.carried?.id === target.id
+        && afterFlashlight.flashlight.activationCount === flashlightBefore + 1,
+      `F must toggle the flashlight without dropping a carried prop: ${JSON.stringify({
+        carried: throwables.carried,
+        flashlight: afterFlashlight.flashlight,
+      })}`,
+    );
+    await page.keyboard.press("g");
+    throwables = await throwableState(page);
+    assert(
+      throwables.carried?.id === target.id,
+      `G must no longer throw the carried prop: ${JSON.stringify(throwables.carried)}`,
+    );
+    await page.keyboard.press("q");
+    await page.evaluate(() => window.MrFeastFresh.advanceThrowableDistractionsForQA(3));
+    throwables = await throwableState(page);
+    state = await diagnostics(page);
+    const thrown = throwables.entries.find((entry) => entry.id === target.id);
+    assert(!throwables.carried && thrown.throwCount === 1, `Q must release the carried prop: ${JSON.stringify(thrown)}`);
+    assert(thrown.impactCount === 1 && thrown.distanceTravelled > 0.5, `throw must make one moving impact: ${JSON.stringify(thrown)}`);
+    assert(["settled", "thrown"].includes(thrown.mode), `prop must remain physical after impact: ${JSON.stringify(thrown)}`);
+    assert((state.audio.cueCounts.throwableImpact || 0) === 1, `first impact must emit exactly one audio cue: ${JSON.stringify(state.audio.cueCounts)}`);
+    assert(state.flashlight.activationCount === afterFlashlight.flashlight.activationCount, "throwing must not toggle the flashlight");
+    assert(state.security.alarmCount === cameraAlarmsBefore, "cameras must not hear thrown objects");
+    await page.locator("#mansion-stage").screenshot({
+      path: path.join(artifactDir, "desktop-thrown.png"),
+    });
+
+    // Empty-hand F keeps the same dedicated flashlight contract.
+    const lightWasOn = state.flashlight.on;
+    await page.keyboard.press("f");
+    state = await diagnostics(page);
+    assert(state.flashlight.on !== lightWasOn, "empty-hand F must toggle the flashlight");
+
+    // A settled prop can be reused, and load/reset returns every prop home.
+    placement = await page.evaluate((id) => window.MrFeastFresh.placePlayerNearThrowableForQA(id), target.id);
+    assert(
+      /pick up/i.test(placement?.prompt || ""),
+      `restored prop must reacquire its interaction prompt: ${JSON.stringify({ placement, diagnostics: await diagnostics(page) })}`,
+    );
+    await holdInteract(page, throwables.tuning.pickupHoldSeconds + 0.05);
+    const repicked = await throwableState(page);
+    assert(repicked.carried?.id === target.id, `settled prop must be pickable again: ${JSON.stringify(repicked)}`);
+    const saveProbe = await page.evaluate(() => {
+      const saved = window.MrFeastFresh.saveGameForQA();
+      const payload = Array.from({ length: localStorage.length }, (_, index) => {
+        const key = localStorage.key(index);
+        return `${key}:${localStorage.getItem(key)}`;
+      }).join("\n");
+      return { saved, payload };
+    });
+    assert(saveProbe.saved, "a carried prop must not block an ordinary mansion save");
+    assert(
+      !saveProbe.payload.includes(target.id)
+        && !saveProbe.payload.includes("throwableDistractions")
+        && !saveProbe.payload.includes("\"carriedId\""),
+      `throwable state must not enter the save payload: ${saveProbe.payload}`,
+    );
+    assert(await page.evaluate(() => window.MrFeastFresh.loadGameForQA()), "the focused save must reload");
+    const reset = await throwableState(page);
+    assert(
+      !reset.carried && reset.entries.every((entry) => entry.mode === "resting" && entry.atAuthoredPosition),
+      `load must restore every transient prop: ${JSON.stringify(reset)}`,
+    );
+
+    // Priority/range boundaries are deterministic and do not require a chase.
+    const threat = await page.evaluate(() => ({
+      feastAccepted: window.MrFeastFresh.probeThrowableThreatForQA({ target: "mr-feast", distance: 8, sameFloor: true, threatBusy: false }),
+      feastFar: window.MrFeastFresh.probeThrowableThreatForQA({ target: "mr-feast", distance: 30, sameFloor: true, threatBusy: false }),
+      feastPursuit: window.MrFeastFresh.probeThrowableThreatForQA({ target: "mr-feast", distance: 4, sameFloor: true, threatBusy: true }),
+      saintHidden: window.MrFeastFresh.probeThrowableThreatForQA({ target: "saint", hidden: true }),
+      saintExposed: window.MrFeastFresh.probeThrowableThreatForQA({ target: "saint", hidden: false }),
+    }));
+    assert(threat.feastAccepted.accepted, `near free Mr. Feast must hear impact: ${JSON.stringify(threat)}`);
+    assert(!threat.feastFar.accepted && threat.feastFar.reason === "out-of-range", `far Mr. Feast must not hear impact: ${JSON.stringify(threat)}`);
+    assert(!threat.feastPursuit.accepted && threat.feastPursuit.reason === "higher-priority-threat", `pursuit must win: ${JSON.stringify(threat)}`);
+    assert(threat.saintHidden.accepted && !threat.saintExposed.accepted, `only hidden player may redirect Saint: ${JSON.stringify(threat)}`);
+
+    // A real first-impact event sends a nearby free Mr. Feast through his
+    // physical response/search/return route without teleporting.
+    await page.evaluate(() => {
+      window.MrFeastFresh.resetThrowableDistractionsForQA();
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.setMrFeastPoseForQA({
+        action: "idle",
+        x: -5.8,
+        y: 0.2,
+        z: -6,
+        yaw: -Math.PI / 2,
+      });
+      window.MrFeastFresh.resumeMrFeastForQA();
+    });
+    const diningTarget = (await throwableState(page)).entries.find((entry) => entry.id === "dining-sideboard-cup");
+    assert(diningTarget, "missing Dining Room response prop");
+    await page.evaluate((id) => window.MrFeastFresh.placePlayerNearThrowableForQA(id), diningTarget.id);
+    await holdInteract(page, (await throwableState(page)).tuning.pickupHoldSeconds + 0.05);
+    await page.keyboard.press("q");
+    await page.evaluate(() => window.MrFeastFresh.advanceThrowableDistractionsForQA(2.5));
+    state = await diagnostics(page);
+    throwables = await throwableState(page);
+    assert(
+      throwables.lastThreatResult?.mrFeast?.accepted
+        && state.mrFeast.housekeeping.activeTaskKind === "thrown-distraction",
+      `a nearby free Mr. Feast must own the real impact task: ${JSON.stringify({
+        threat: throwables.lastThreatResult,
+        housekeeping: state.mrFeast.housekeeping,
+      })}`,
+    );
+    const soundRoute = await page.evaluate(() => window.MrFeastFresh.runMrFeastHousekeepingForQA(420));
+    state = await diagnostics(page);
+    assert(
+      soundRoute.completed
+        && soundRoute.soundInvestigationsCompleted === 1
+        && soundRoute.teleports === 0
+        && soundRoute.states.includes("responding")
+        && soundRoute.states.includes("searching")
+        && soundRoute.states.includes("returning")
+        && state.mrFeast.housekeeping.soundInvestigationsCompleted === 1,
+      `Mr. Feast must walk to the sound, search, and return: ${JSON.stringify({
+        soundRoute,
+        housekeeping: state.mrFeast.housekeeping,
+      })}`,
+    );
+    throwables = await throwableState(page);
+    const resetDiningProp = throwables.entries.find((entry) => entry.id === diningTarget.id);
+    assert(
+      resetDiningProp.mode === "resting"
+        && resetDiningProp.atAuthoredPosition
+        && resetDiningProp.resetByMrFeastCount === 1
+        && state.mrFeast.housekeeping.portableObjectsReset === 1,
+      `Mr. Feast must return the investigated object to its authored spot: ${JSON.stringify({
+        prop: resetDiningProp,
+        housekeeping: state.mrFeast.housekeeping,
+      })}`,
+    );
+
+    // An unheard settled object joins a delayed housekeeping queue, so
+    // repeatedly thrown clutter cannot remain scattered around the mansion.
+    await page.evaluate(() => {
+      window.MrFeastFresh.resetThrowableDistractionsForQA();
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.resumeMrFeastForQA();
+    });
+    await page.evaluate((id) => window.MrFeastFresh.placePlayerNearThrowableForQA(id), target.id);
+    await holdInteract(page, (await throwableState(page)).tuning.pickupHoldSeconds + 0.05);
+    await page.keyboard.press("q");
+    await page.evaluate(() => window.MrFeastFresh.advanceThrowableDistractionsForQA(3));
+    throwables = await throwableState(page);
+    const queuedProp = throwables.entries.find((entry) => entry.id === target.id);
+    assert(
+      queuedProp.cleanupPending && !throwables.activeSoundTask,
+      `an unheard impact must wait in the physical cleanup queue: ${JSON.stringify({
+        prop: queuedProp,
+        task: throwables.activeSoundTask,
+      })}`,
+    );
+    await page.evaluate(
+      (seconds) => window.MrFeastFresh.advanceThrowableDistractionsForQA(seconds),
+      throwables.tuning.cleanupDelaySeconds + 0.1,
+    );
+    throwables = await throwableState(page);
+    state = await diagnostics(page);
+    assert(
+      throwables.activeSoundTask?.kind === "thrown-cleanup"
+        && state.mrFeast.housekeeping.activeTaskKind === "thrown-cleanup",
+      `Mr. Feast must accept delayed prop cleanup when free: ${JSON.stringify({
+        task: throwables.activeSoundTask,
+        housekeeping: state.mrFeast.housekeeping,
+      })}`,
+    );
+    const cleanupRoute = await page.evaluate(() => window.MrFeastFresh.runMrFeastHousekeepingForQA(420));
+    throwables = await throwableState(page);
+    state = await diagnostics(page);
+    const cleanedProp = throwables.entries.find((entry) => entry.id === target.id);
+    assert(
+      cleanupRoute.completed
+        && cleanupRoute.teleports === 0
+        && cleanupRoute.portableObjectsReset === 1
+        && cleanedProp.mode === "resting"
+        && cleanedProp.atAuthoredPosition
+        && cleanedProp.resetByMrFeastCount === 1,
+      `delayed housekeeping must physically reset unattended clutter: ${JSON.stringify({
+        cleanupRoute,
+        prop: cleanedProp,
+        housekeeping: state.mrFeast.housekeeping,
+      })}`,
+    );
+
+    // Competition ownership blocks pickup and cleans an already carried item.
+    await page.evaluate(() => window.MrFeastFresh.resetThrowableDistractionsForQA());
+    await page.evaluate((id) => window.MrFeastFresh.placePlayerNearThrowableForQA(id), target.id);
+    await holdInteract(page, throwables.tuning.pickupHoldSeconds + 0.05);
+    const competition = await page.evaluate(() => {
+      const before = window.MrFeastFresh.getThrowableDistractions();
+      const call = window.MrFeastFresh.callFeastSaysForQA("qa-throwable-block");
+      window.MrFeastFresh.advanceThrowableDistractionsForQA(0.1);
+      return { before, call, after: window.MrFeastFresh.getThrowableDistractions() };
+    });
+    assert(competition.call.started, `Feast Says must start: ${JSON.stringify(competition.call)}`);
+    assert(competition.before.carried && !competition.after.carried, "competition start must clear carried prop");
+    assert(competition.after.entries.every((entry) => entry.atAuthoredPosition), "competition must restore prop positions");
+    assert(errors.length === 0, `desktop console errors: ${errors.join(" | ")}`);
+    await page.close();
+
+    // In the real finale state, a physical impact redirects the loaded Saint
+    // only after an authoritative hiding spot has concealed the player.
+    const finaleErrors = [];
+    const finale = await bootPage(browser, { width: 1280, height: 820 }, finaleErrors);
+    const called = await finale.evaluate(() => window.MrFeastFresh.callVictoryFeastForQA("feast-hunt-player-win"));
+    assert(called?.started, `Victory Feast QA call failed: ${JSON.stringify(called)}`);
+    await finale.evaluate(() => window.MrFeastFresh.awaitVictoryFeastAssetsForQA());
+    await finale.waitForFunction(
+      () => (
+        ["ready", "error"].includes(window.MrFeastFresh.getMrFeastState?.()?.loadStatus)
+        && window.MrFeastFresh.getVictoryFeastState()?.saint?.loadStatus === "ready"
+      ),
+      null,
+      { timeout: 180000 },
+    );
+    const feastStaging = await finale.evaluate(() => window.MrFeastFresh.startVictoryFeastForQA());
+    assert(feastStaging?.started, `Victory Feast report staging failed: ${JSON.stringify(feastStaging)}`);
+    await finale.evaluate(() => window.MrFeastFresh.skipVictoryFeastDialogueForQA());
+    assert((await finale.evaluate(() => window.MrFeastFresh.revealVictoryFeastSaintForQA()))?.triggered, "Saint reveal failed");
+    await finale.waitForFunction(
+      () => window.MrFeastFresh.getVictoryFeastState()?.saint?.loadStatus === "ready",
+      null,
+      { timeout: 180000 },
+    );
+    assert((await finale.evaluate(() => window.MrFeastFresh.startVictoryFeastEscapeForQA()))?.started, "Victory Feast escape failed");
+    let finaleThrowables = await throwableState(finale);
+    const finaleTarget = finaleThrowables.entries.find((entry) => entry.id === "dining-sideboard-cup");
+    await finale.evaluate((id) => window.MrFeastFresh.placePlayerNearThrowableForQA(id), finaleTarget.id);
+    await holdInteract(finale, finaleThrowables.tuning.pickupHoldSeconds + 0.05);
+    const exposedBefore = await finale.evaluate(() => window.MrFeastFresh.getVictoryFeastState().saint);
+    await finale.keyboard.press("q");
+    await finale.evaluate(() => window.MrFeastFresh.advanceThrowableDistractionsForQA(2.5));
+    let finaleState = await finale.evaluate(() => window.MrFeastFresh.getVictoryFeastState());
+    finaleThrowables = await throwableState(finale);
+    assert(
+      finaleThrowables.lastThreatResult?.saint?.reason === "player-visible"
+        && finaleState.saint.targetSource !== "thrown-distraction",
+      `an exposed throw must not replace the Saint's player target: ${JSON.stringify({
+        threat: finaleThrowables.lastThreatResult,
+        saint: finaleState.saint,
+      })}`,
+    );
+    await finale.evaluate(() => window.MrFeastFresh.resetThrowableDistractionsForQA());
+    await finale.evaluate((id) => window.MrFeastFresh.placePlayerNearThrowableForQA(id), finaleTarget.id);
+    await holdInteract(finale, finaleThrowables.tuning.pickupHoldSeconds + 0.05);
+    const hidden = await finale.evaluate(() => window.MrFeastFresh.hideFromVictoryFeastForQA("coat"));
+    assert(hidden?.hidden, `finale distraction test needs real cover: ${JSON.stringify(hidden)}`);
+    const saintBefore = await finale.evaluate(() => window.MrFeastFresh.getVictoryFeastState().saint);
+    await finale.keyboard.press("q");
+    await finale.evaluate(() => window.MrFeastFresh.advanceThrowableDistractionsForQA(2.5));
+    finaleThrowables = await throwableState(finale);
+    finaleState = await finale.evaluate(() => window.MrFeastFresh.getVictoryFeastState());
+    assert(
+      finaleThrowables.lastThreatResult?.saint?.accepted
+        && finaleState.saint.targetSource === "thrown-distraction"
+        && finaleState.saint.distractionHeardCount === saintBefore.distractionHeardCount + 1,
+      `a hidden player's real impact must redirect the Saint: ${JSON.stringify({
+        threat: finaleThrowables.lastThreatResult,
+        before: saintBefore,
+        after: finaleState.saint,
+      })}`,
+    );
+    await finale.evaluate(() => window.MrFeastFresh.advanceVictoryFeastForQA(0.5));
+    const saintAfter = await finale.evaluate(() => window.MrFeastFresh.getVictoryFeastState().saint);
+    assert(
+      saintAfter.distanceTravelled > saintBefore.distanceTravelled
+        && saintAfter.targetSource === "thrown-distraction",
+      `the loaded Saint must physically travel toward the thrown impact: ${JSON.stringify({
+        exposedBefore,
+        before: saintBefore,
+        after: saintAfter,
+      })}`,
+    );
+    await finale.locator("#mansion-stage").screenshot({
+      path: path.join(artifactDir, "desktop-saint-distraction.png"),
+    });
+    assert(finaleErrors.length === 0, `finale console errors: ${finaleErrors.join(" | ")}`);
+    await finale.close();
+
+    // Touch Interact holds the same world object; the existing Light tool becomes Throw.
+    const mobileErrors = [];
+    const mobile = await bootPage(
+      browser,
+      { width: 390, height: 844 },
+      mobileErrors,
+      { isMobile: true, hasTouch: true },
+    );
+    throwables = await throwableState(mobile);
+    const mobileTarget = throwables.entries.find((entry) => entry.floor === "SECOND FLOOR");
+    await mobile.evaluate((id) => window.MrFeastFresh.placePlayerNearThrowableForQA(id), mobileTarget.id);
+    await mobile.locator("#touch-interact").dispatchEvent("pointerdown", { pointerId: 17, pointerType: "touch" });
+    await mobile.evaluate((seconds) => window.MrFeastFresh.advanceThrowableDistractionsForQA(seconds), throwables.tuning.pickupHoldSeconds + 0.05);
+    await mobile.locator("#touch-interact").dispatchEvent("pointerup", { pointerId: 17, pointerType: "touch" });
+    throwables = await throwableState(mobile);
+    assert(throwables.carried?.id === mobileTarget.id, `touch hold must carry the prop: ${JSON.stringify(throwables.carried)}`);
+    assert(await mobile.locator("#mansion-flashlight-button").isVisible(), "contextual Throw must be visible on touch");
+    assert(await mobile.locator("#mansion-flashlight-button").textContent() === "Throw", "touch tool must relabel to Throw");
+    await mobile.locator("#mansion-flashlight-button").tap();
+    await mobile.evaluate(() => window.MrFeastFresh.advanceThrowableDistractionsForQA(1.5));
+    throwables = await throwableState(mobile);
+    assert(!throwables.carried && throwables.entries.find((entry) => entry.id === mobileTarget.id).throwCount === 1, "touch Throw must release prop");
+    assert(await mobile.locator("#mansion-throwable-inventory").count() === 0, "mobile must not add throwable inventory UI");
+    await mobile.locator("#mansion-stage").screenshot({
+      path: path.join(artifactDir, "mobile-throw.png"),
+    });
+    assert(mobileErrors.length === 0, `mobile console errors: ${mobileErrors.join(" | ")}`);
+
+    console.log(JSON.stringify({
+      ok: true,
+      props: throwables.entries.length,
+      artifacts: artifactDir,
+      desktopErrors: errors,
+      mobileErrors,
+    }, null, 2));
+  } finally {
+    if (browser) await browser.close();
+    if (server) server.kill("SIGTERM");
+  }
+}
+
+async function run() {
+  await assertSourceContract();
+  await runBrowserFlow();
+}
+
+run().catch((error) => {
+  console.error(error.stack || error.message);
+  process.exitCode = 1;
+});

@@ -98,6 +98,19 @@ async function bootPage(browser, viewport, errors) {
     null,
     { timeout: 180000 },
   );
+  await page.waitForFunction(() => window.MrFeastFresh?.state?.started, null, { timeout: 15000 });
+  const audioEnabled = await page.evaluate(
+    () => Boolean(window.MrFeastFresh.getAudioStateForQA()?.enabled),
+  );
+  if (!audioEnabled) {
+    await page.keyboard.press("KeyM");
+    await page.waitForFunction(
+      () => window.MrFeastFresh.getAudioStateForQA()?.contextState === "running"
+        && window.MrFeastFresh.getAudioStateForQA()?.enabled,
+      null,
+      { timeout: 15000 },
+    );
+  }
   return page;
 }
 
@@ -124,6 +137,13 @@ async function assertSourceContract() {
     "focused banquet QA controls must include deterministic free look",
   );
   assert(/overlayAtSeconds:\s*(?:2[0-9]|[3-9][0-9])/.test(runtime), "the banquet must hold for at least 20 seconds");
+  assert(
+    /breathing:\s*Object\.freeze\(\{/.test(runtime)
+      && /startBanquetBreathing/.test(runtime)
+      && /updateBanquetBreathing/.test(runtime)
+      && /stopBanquetBreathing/.test(runtime),
+    "the table scene needs a named, lifecycle-owned panicked player breathing treatment",
+  );
   assert(runtime.includes(closingLine), "Mr. Feast's complete authored closing line is missing");
   assert(!runtime.includes("Contestant Thirteen—you lost the million"), "Mr. Feast must not identify the player as Contestant Thirteen");
   assert(
@@ -324,6 +344,25 @@ async function run() {
     );
     assert(banquet.presentationDurationSeconds >= 20, `the banquet needs a long look window: ${JSON.stringify(banquet)}`);
     assert(!banquet.overlayVisible, "the game-over overlay must not cover the establishing tableau");
+    await desktop.waitForFunction(
+      () => window.MrFeastFresh.getAudioStateForQA()?.banquetBreathing?.breathCount >= 1,
+      null,
+      { timeout: 5000 },
+    );
+    await delay(260);
+    await desktop.evaluate(() => window.MrFeastFresh.advanceBanquetLossForQA(2));
+    let banquetAudio = await desktop.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
+    assert(
+      banquetAudio.banquetBreathing.active
+        && banquetAudio.banquetBreathing.profile === "panicked-player"
+        && banquetAudio.banquetBreathing.closeFirstPerson
+        && banquetAudio.banquetBreathing.breathCount >= 2
+        && banquetAudio.banquetBreathing.inhaleSeconds > 0.2
+        && banquetAudio.banquetBreathing.exhaleSeconds > banquetAudio.banquetBreathing.inhaleSeconds
+        && banquetAudio.banquetBreathing.lastIntervalSeconds < banquetAudio.banquetBreathing.initialIntervalSeconds
+        && !banquetAudio.banquetBreathing.dialogueDucked,
+      `the player must audibly panic-breathe from the table and accelerate: ${JSON.stringify(banquetAudio.banquetBreathing)}`,
+    );
     await desktop.screenshot({ path: path.join(artifactDir, "banquet-ceiling-reveal-desktop.png") });
 
     const tableLook = await desktop.evaluate(() => window.MrFeastFresh.setBanquetLookForQA({
@@ -445,6 +484,10 @@ async function run() {
     assert(rightLook.patrons.filter((entry) => entry.inView).length >= 2, `right look should reveal its Patron row: ${JSON.stringify(rightLook.patrons)}`);
     await desktop.screenshot({ path: path.join(artifactDir, "banquet-look-right-desktop.png") });
     await desktop.evaluate(() => {
+      // Asset loading, real breath proof, and four evidence captures consume
+      // wall-clock scene time. Restart the already-warm physical loss route
+      // so the closing-performance checkpoint still observes the live line.
+      window.MrFeastFresh.triggerBanquetLossForQA("witnessed");
       window.MrFeastFresh.setBanquetLookForQA({ yaw: Math.PI / 2, pitch: 0.045 });
       window.MrFeastFresh.advanceBanquetLossForQA(5);
     });
@@ -456,6 +499,14 @@ async function run() {
         && !banquet.overlayVisible,
       `Mr. Feast must finish the scene before recovery UI: ${JSON.stringify(banquet)}`,
     );
+    banquetAudio = await desktop.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
+    assert(
+      banquetAudio.banquetBreathing.active
+        && banquetAudio.banquetBreathing.dialogueDucked
+        && banquetAudio.banquetBreathing.targetVolume
+          < banquetAudio.banquetBreathing.baseVolume,
+      `the player's panic breathing must duck under Mr. Feast's closing line: ${JSON.stringify(banquetAudio.banquetBreathing)}`,
+    );
     await desktop.screenshot({ path: path.join(artifactDir, "banquet-closing-line-desktop.png") });
 
     await desktop.evaluate(() => window.MrFeastFresh.advanceBanquetLossForQA(20));
@@ -466,6 +517,12 @@ async function run() {
         && banquet.recovery.loadLabel === "Load last save"
         && banquet.recovery.restartLabel === "Start over",
       `the loss must end in recoverable controls: ${JSON.stringify(banquet)}`,
+    );
+    banquetAudio = await desktop.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
+    assert(
+      !banquetAudio.banquetBreathing.active
+        && banquetAudio.banquetBreathing.stopCount >= 1,
+      `panic breathing must stop when the table presentation ends: ${JSON.stringify(banquetAudio.banquetBreathing)}`,
     );
 
     const cleared = await desktop.evaluate(() => window.MrFeastFresh.clearBanquetLossForQA());

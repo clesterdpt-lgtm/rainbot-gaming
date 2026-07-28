@@ -376,6 +376,37 @@ async function runBrowserFlow() {
     assert(!hiddenCatch.caught && hiddenCatch.reason === "hidden", `the Saint cannot catch a hidden player: ${JSON.stringify(hiddenCatch)}`);
     feast = await victoryState(page);
     assert(feast.player.hidden && !feast.flashlightDefect.requestedOn, `hiding must extinguish the flashlight: ${JSON.stringify(feast)}`);
+    const breathStage = await page.evaluate(() => window.MrFeastFresh.stageBreathThreatForQA({
+      target: "saint",
+      // Keep the Saint clear of the closet's east wall by more than its
+      // character radius while remaining inside the same acoustic room.
+      distance: 2,
+      preserveInvestigation: true,
+    }));
+    const saintBeforeBreath = (await victoryState(page)).saint;
+    const saintHeard = await page.evaluate(() => window.MrFeastFresh.emitPlayerBreathForQA("heavy"));
+    feast = await victoryState(page);
+    assert(
+      breathStage?.hidden
+        && saintHeard?.listeners?.some((entry) => entry.target === "saint" && entry.heard)
+        && feast.saint.targetSource === "breathing"
+        && feast.saint.breathHeardCount >= 1,
+      `a nearby Saint must investigate real heavy breathing through the coat closet: ${JSON.stringify({
+        breathStage,
+        saintHeard,
+        saint: feast.saint,
+      })}`,
+    );
+    await page.evaluate(() => window.MrFeastFresh.advanceVictoryFeastForQA(0.5));
+    const saintAfterBreath = (await victoryState(page)).saint;
+    assert(
+      saintAfterBreath.distanceTravelled > saintBeforeBreath.distanceTravelled
+        && saintAfterBreath.targetSource === "breathing",
+      `the hidden Saint pursuit must travel toward the last audible position: ${JSON.stringify({
+        before: saintBeforeBreath,
+        after: saintAfterBreath,
+      })}`,
+    );
     await page.locator("#mansion-stage").screenshot({
       path: path.join(artifactDir, "victory-feast-hidden-desktop.png"),
     });

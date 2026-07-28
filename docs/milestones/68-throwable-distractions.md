@@ -10,7 +10,8 @@ Let the player improvise short-lived stealth distractions from ordinary mansion 
 
 ## Scope
 
-- Place a curated set of recognizable small props across the main floor, second floor, and basement.
+- Make at least forty recognizable small props portable across at least sixteen authored room labels on the main floor, second floor, and basement.
+- Reuse existing mansion dressing directly wherever it is already suitable, and adopt every visible child of a composite prop into one moving assembly so pickup cannot strand pieces such as vase flowers.
 - Require a short continuous E/touch hold to pick up one prop at a time; releasing early cancels cleanly.
 - Show the carried prop in first person and use Q for throwing without changing F's flashlight ownership.
 - Give every throw a Rapier-owned arc, collision, bounce, first-impact sound, and settled state that can be picked up again.
@@ -33,7 +34,8 @@ Let the player improvise short-lived stealth distractions from ordinary mansion 
 
 ## Acceptance criteria
 
-- [x] At least twelve authored props are distributed across all three mansion levels and expose a reachable `Hold E · pick up …` / touch interaction. — test: `scripts/test-mr-feast-throwable-distractions.mjs::distribution and real hold`
+- [x] At least forty props are distributed across all three mansion levels and at least sixteen authored room labels, and every one exposes a reachable `Hold E · pick up …` / touch interaction. — test: `scripts/test-mr-feast-throwable-distractions.mjs::distribution and real hold`
+- [x] At least thirty-two props adopt existing mansion meshes rather than placing a duplicate. Every declared visual part belongs to the portable root, and each foyer flower vase carries and resets its vessel, three stems, and three blooms as one seven-part assembly with no stranded source meshes. — test: `scripts/test-mr-feast-throwable-distractions.mjs::authored adoption and composite vase`
 - [x] Releasing E/touch before the named pickup duration leaves the prop in place; completing the hold carries exactly one visibly in hand and removes its world prompt. — test: `scripts/test-mr-feast-throwable-distractions.mjs::cancel and carry`
 - [x] A carried prop is absent from the Bag, clue inventory, and save payload; the runtime exposes it only through focused throwable diagnostics and the contextual hand/tool presentation. — test: `scripts/test-mr-feast-throwable-distractions.mjs::no inventory ownership`
 - [x] Q throws a carried prop while F always retains its flashlight behavior, including while the player is carrying. On touch, the existing Light tool becomes Throw only while carrying. — test: `scripts/test-mr-feast-throwable-distractions.mjs::desktop and mobile tool ownership`
@@ -60,4 +62,5 @@ Create `scripts/test-mr-feast-throwable-distractions.mjs` before implementation 
 - The focused browser suite uses real E cancellation/completion, real F and Q input, the shipped touch controls, a real save/load payload, dynamic Rapier collision, complete no-teleport Mr. Feast response/cleanup routes, and a separately loaded Victory Feast Saint. The exposed finale throw is rejected; the coat-closet throw changes the Saint's target and produces measured travel toward the impact.
 - The delayed cleanup regression caught the old eight-second projectile fallback teleporting slow-settling clutter home before Mr. Feast could collect it. That fallback now forces a physical settled state; only an object that falls out of the world is immediately restored.
 - Visual inspection caught and fixed a false-positive carry state: the item was attached to a camera that was not itself in the rendered scene graph. The current proof shows the brass paperweight clearly in the lower-right first-person view. Desktop carry/impact/finale and phone impact captures live under `output/playwright/mr-feast-throwable-distractions/`.
+- The small-prop expansion first failed red on the new forty-prop requirement. A stricter authored-adoption pass then caught bad world anchors for the foyer trays, Painting Room cart, kitchen towels, and main bathroom vanity dressing; those mappings now use the builders' exact positions. The focused browser suite proves 41 reachable props across 17 room labels, 32 complete existing-mesh assemblies, and zero stranded source parts. `desktop-carried-flower-vase.png` is the dedicated composite carry proof.
 - Runtime and focused-test syntax, `git diff --check`, house distractions, breath stealth, flashlight, camera security, caught pursuit, Victory Feast, window curtains, player systems, and full desktop/mobile Contestant 13 pass. Renovation retains only its unrelated current-origin `28 stairwell continuity` light-handoff failure.

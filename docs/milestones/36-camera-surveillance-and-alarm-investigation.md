@@ -6,7 +6,7 @@ in-progress — automated acceptance complete; user tension/readability playtest
 
 ## Objective
 
-Turn the mansion's implied show-camera network into a fair stealth system. Working surveillance cameras scan most major interior spaces and outdoor chokepoints, distinguish permitted filming from restricted behavior, and raise an alarm that diverts Mr. Feast to the nearest authored response point for the player's last-seen position and a limited search. This milestone consumes Milestone 35's crouch/hiding contracts without expanding into full chase, capture, or failure behavior.
+Turn the mansion's implied show-camera network into a fair stealth system. Working surveillance cameras scan most major interior spaces and outdoor chokepoints, distinguish permitted filming from restricted behavior, and raise an alarm that continuously records the player's latest reliable position. Mr. Feast travels to that exact reachable spot, walks a 150-second local patrol around it, and only then returns to his route. This milestone consumes Milestone 35's crouch/hiding contracts without expanding into full chase, capture, or failure behavior.
 
 ## Scope
 
@@ -17,7 +17,7 @@ Turn the mansion's implied show-camera network into a fair stealth system. Worki
 - Drive camera policy through one explicit `show` → `restricted` → `lockdown` state: normal filming is allowed in show spaces, observed sabotage always alarms, basement sightings become trespass after the basement is unlocked, and any alarm or patron-feed sabotage starts global lockdown.
 - Keep the visible brass-tagged public surveillance network active after the separate private patron feed is severed.
 - Give the player fair acquisition feedback through camera LEDs, a transient text-first HUD notice, and restrained audio cues without persistently advertising camera policy or suspicion values.
-- Divert Mr. Feast through explicit `patrol` → `responding` → `searching` → `returning` states to the nearest safe route point for the camera's last-seen position, then return him to his route if the player hides or escapes.
+- Divert Mr. Feast through explicit `patrol` → `responding` → `searching` → `returning` states. A hostile camera keeps refreshing one latched alarm while it retains sight, meaningful player movement immediately retargets the route, Mr. Feast reaches the exact collision-clear last-seen position, then walks nearby response nodes for 150 seconds before returning.
 - Expose deterministic camera, policy, alarm, and Mr. Feast response diagnostics and QA controls.
 
 ## Out of scope
@@ -47,9 +47,9 @@ Turn the mansion's implied show-camera network into a fair stealth system. Worki
 
 | From | Event | To | Result |
 |---|---|---|---|
-| `patrol` / `returning` | Camera alarm | `responding` | Follow authored route points toward the alarm zone without teleporting. |
-| `responding` | Response point reached | `searching` | Inspect the last-seen area for a bounded interval. |
-| `searching` | New camera alarm | `responding` | Redirect to the newest reliable sighting. |
+| `patrol` / `returning` | Camera alarm | `responding` | Follow collision-clear route shortcuts toward the alarm zone without teleporting. |
+| `responding` | Exact last-seen point reached | `searching` | Begin a 150-second walking patrol within 5.5 metres of the recorded position. |
+| `responding` / `searching` | Latched camera updates the sighting | `responding` | Redirect the same alarm to meaningful player movement without incrementing the alarm count. |
 | `searching` | Search expires | `returning` | Rejoin the nearest safe patrol waypoint. |
 | `returning` | Patrol route rejoined | `patrol` | Resume the existing whole-home loop. |
 
@@ -63,7 +63,8 @@ Turn the mansion's implied show-camera network into a fair stealth system. Worki
 - [x] Camera policy permits ordinary show-space filming while still providing visible acquisition/tracking feedback without suspicion, immediately alarms on tagged sabotage performed in view, treats the unlocked basement as restricted, and enters global lockdown after any alarm or patron-feed sabotage. Blind sabotage starts lockdown without summoning Mr. Feast until a later sighting. — test: `scripts/test-mr-feast-camera-security.mjs::show restricted and lockdown policy`
 - [x] Walls, closed doors, hedges, and authored cover interrupt camera line of sight; reopening or clearing the blocker restores detection without allowing cameras to see through adjacent rooms. — test: `scripts/test-mr-feast-camera-security.mjs::line-of-sight occlusion`
 - [x] Crouching consumes the existing `0.5` visibility multiplier to slow exposure, and an active hiding spot prevents camera detection entirely. — test: `scripts/test-mr-feast-camera-security.mjs::crouch and hiding stealth contract`
-- [x] An alarm records the triggering camera, room, and last-seen position; latches one continuous sighting rather than spamming alarms; gives clear local/HUD feedback; and drives Mr. Feast through responding, searching, returning, and patrol without teleporting. — test: `scripts/test-mr-feast-camera-security.mjs::alarm investigation lifecycle`
+- [x] An alarm records the triggering camera, room, and last-seen position; refreshes that position at least twice per second while one hostile sighting remains latched; and meaningfully retargets Mr. Feast without incrementing the alarm count. — test: `scripts/test-mr-feast-camera-security.mjs::continuous alarm tracking`
+- [x] Mr. Feast uses collision-clear routing to physically reach within 0.5 metres of the exact final sighting, then walks a 150-second local patrol with multiple node visits and at least ten metres of travel before returning to his route with zero teleports. Ordinary breathing, throwable, and housekeeping investigations retain their shorter authored timing. — test: `scripts/test-mr-feast-camera-security.mjs::exact last-seen arrival and sustained patrol lifecycle`
 - [x] Camera policy, sweep phase, exposure, occlusion, alarm history, and Mr. Feast response are available through `render_game_to_text()` and deterministic `window.MrFeastFresh` controls. — tests: `scripts/test-mr-feast-renovation.mjs::camera surveillance diagnostics` and `scripts/test-mr-feast-camera-security.mjs::deterministic camera QA controls`
 - [x] Camera acquisition shows only a subtle `Spotted` notice during the three-pulse warning, changes to `Being recorded` once tracking locks, and disappears as soon as observation ends; no policy label, percentage, or suspicion track remains. The notice stays compact on desktop and the 390×844 touch layout with no new console errors. — test: `scripts/test-mr-feast-camera-security.mjs::transient camera status presentation`
 - [x] The existing renovation, Contestant 13, basement-key, and player-system suites retain their prior results. — tests: `node scripts/test-mr-feast-renovation.mjs`, `node scripts/test-mr-feast-contestant-13.mjs`, `node scripts/test-mr-feast-basement-key-trail.mjs`, and `node scripts/test-mr-feast-player-systems.mjs`
@@ -89,3 +90,4 @@ User watches a camera sweep away, crosses its lane safely, crouches to reduce su
 - The implementation must use the mansion's single-runtime architecture and shared low-poly meshes/materials. Camera detection is a focused system class inside that runtime, not a repo-wide modularization.
 - Automated proof covers 32 cameras: 24 ceiling-height, wall-centered indoor units and eight outdoor chokepoints. The Workroom's two former units are removed while its monitor wall continues to page through the remaining public network. Real-browser QA includes the corrected Reading Room facing, removed grand-stair mid-landing unit, supported pool fixture, a 10.5–14.5 second one-way sweep, rendered green/red fixture-pixel checks, three-pulse permitted and hostile acquisition, solid-red follow behavior, a two-second hostile tracking grace, an actual keyboard-driven blind-side crossing, natural foyer LOS, a naturally blocked basement partition, continuous-alarm latching, full Mr. Feast response/return, unchanged light topology, and desktop/mobile captures under `output/playwright/mr-feast-camera-security/` plus the placement captures under `output/iterate/`.
 - The July 16 feedback refinement removes the persistent mode/percentage/track card. `camera-status-desktop.png` and `camera-status-mobile.png` show the replacement status pill without changing the underlying exposure or alarm state machines.
+- The July 28 tracking refinement replaces the former 6.5-second stationary camera sweep with a 150-second walking patrol inside a 5.5-metre search radius. `camera-last-seen-search-desktop.png` shows Mr. Feast physically searching the recorded foyer position; scared breathing can still expose a close hidden player, but cannot downgrade an active camera investigation to the short generic sound sweep.

@@ -74,7 +74,14 @@ async function assertSourceContract() {
     readFile(milestonePath, "utf8"),
   ]);
   assert(/const THROWABLE_DISTRACTIONS\s*=\s*Object\.freeze/.test(runtime), "missing named THROWABLE_DISTRACTIONS tuning table");
+  assert(
+    runtime.includes('const MANSION_RUNTIME_VERSION = "20260728-camera-last-seen-patrol-1"')
+      && html.includes("mr-feast-mansion.js?v=20260728-camera-last-seen-patrol-1"),
+    "page and runtime must share the portable small-props cache identity",
+  );
   assert(/class ThrowableDistractionSystem/.test(runtime), "missing focused ThrowableDistractionSystem");
+  assert(/minimumPortablePropCount:\s*40/.test(runtime), "small-prop coverage must require at least forty portable objects");
+  assert(/adoptAuthoredVisual\s*\(/.test(runtime), "existing multi-part decor needs one portable assembly adoption path");
   assert(/addDynamicBox\s*\(/.test(runtime), "PhysicsWorld needs a bounded dynamic prop helper");
   assert(/Hold E · pick up/.test(runtime), "throwables need an explicit hold-E interaction label");
   assert(
@@ -123,12 +130,76 @@ async function runBrowserFlow() {
     const page = await bootPage(browser, { width: 1280, height: 820 }, errors);
 
     let throwables = await throwableState(page);
-    assert(throwables.entries.length >= 12, `expected at least twelve authored props: ${JSON.stringify(throwables)}`);
+    assert(
+      throwables.entries.length >= 40
+        && throwables.entries.length >= throwables.tuning.minimumPortablePropCount,
+      `expected broad forty-prop mansion coverage: ${JSON.stringify(throwables)}`,
+    );
     const floors = new Set(throwables.entries.map((entry) => entry.floor));
     assert(
       ["MAIN LEVEL", "SECOND FLOOR", "BASEMENT"].every((floor) => floors.has(floor)),
       `props must span all mansion levels: ${JSON.stringify([...floors])}`,
     );
+    const rooms = new Set(throwables.entries.map((entry) => entry.room));
+    assert(rooms.size >= 16, `portable clutter must span at least sixteen authored rooms: ${JSON.stringify([...rooms])}`);
+    const authoredProps = throwables.entries.filter((entry) => entry.minimumSourceParts > 0);
+    assert(
+      authoredProps.length >= 32
+        && authoredProps.every((entry) => (
+          entry.sourceAdoptionComplete
+          && entry.adoptedPartCount >= entry.minimumSourceParts
+          && entry.strandedSourcePartCount === 0
+        )),
+      `existing mansion dressing must be wholly adopted into portable assemblies: ${JSON.stringify(
+        authoredProps.filter((entry) => (
+          !entry.sourceAdoptionComplete
+          || entry.adoptedPartCount < entry.minimumSourceParts
+          || entry.strandedSourcePartCount !== 0
+        )),
+      )}`,
+    );
+    const reachability = await page.evaluate(() => (
+      window.MrFeastFresh.getThrowableDistractions().entries.map((entry) => ({
+        id: entry.id,
+        placement: window.MrFeastFresh.placePlayerNearThrowableForQA(entry.id),
+      }))
+    ));
+    assert(
+      reachability.every((entry) => /pick up/i.test(entry.placement?.prompt || "")),
+      `every authored small prop must expose a real reachable pickup prompt: ${JSON.stringify(
+        reachability.filter((entry) => !/pick up/i.test(entry.placement?.prompt || "")),
+      )}`,
+    );
+    const floralVases = throwables.entries.filter((entry) => (
+      ["foyer-silver-vase", "foyer-east-flower-vase"].includes(entry.id)
+    ));
+    assert(
+      floralVases.length === 2
+        && floralVases.every((entry) => (
+          entry.adoptedPartCount >= 7
+          && entry.visualPartCount >= 7
+          && entry.strandedSourcePartCount === 0
+        )),
+      `both foyer vases must own their vase, stems, and blooms as one assembly: ${JSON.stringify(floralVases)}`,
+    );
+    await page.evaluate(() => window.MrFeastFresh.placePlayerNearThrowableForQA("foyer-silver-vase"));
+    await holdInteract(page, throwables.tuning.pickupHoldSeconds + 0.05);
+    let carriedVase = await throwableState(page);
+    assert(
+      carriedVase.carried?.id === "foyer-silver-vase"
+        && carriedVase.carried.adoptedPartCount >= 7
+        && carriedVase.carried.visualPartCount >= 7
+        && carriedVase.carried.strandedSourcePartCount === 0,
+      `picking up the vase must carry every flower part with it: ${JSON.stringify(carriedVase.carried)}`,
+    );
+    await page.keyboard.press("f");
+    await page.evaluate(() => window.MrFeastFresh.advanceThrowableDistractionsForQA(0.1));
+    await page.locator("#mansion-stage").screenshot({
+      path: path.join(artifactDir, "desktop-carried-flower-vase.png"),
+    });
+    await page.keyboard.press("f");
+    await page.evaluate(() => window.MrFeastFresh.resetThrowableDistractionsForQA());
+    throwables = await throwableState(page);
     const target = throwables.entries.find((entry) => entry.floor === "MAIN LEVEL");
     assert(target, "missing main-floor throwable");
 

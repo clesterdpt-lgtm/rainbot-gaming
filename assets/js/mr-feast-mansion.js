@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260728-flashlight-open-cabinet-1";
+  const MANSION_RUNTIME_VERSION = "20260728-camera-last-seen-patrol-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -995,7 +995,13 @@
     statusHaloScale: 0.095,
     alertHaloScale: 0.12,
     responseSpeed: 1.08,
+    lastSeenRefreshSeconds: 0.5,
+    lastSeenRetargetMeters: 0.8,
     searchSeconds: 6.5,
+    searchPatrolSeconds: 150,
+    searchPatrolRadiusMeters: 5.5,
+    searchPatrolPauseSeconds: 1.6,
+    searchPatrolMaximumNodes: 5,
     searchHalfAngle: THREE.MathUtils.degToRad(52),
     searchSweepSeconds: 3.2,
     exemptZones: Object.freeze(["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET", "WALK-IN WARDROBES", "WORKROOM", "DEEP HEDGE MAZE"]),
@@ -1744,6 +1750,7 @@
     serviceBellSwingRadians: 0.24,
   });
   const THROWABLE_DISTRACTIONS = Object.freeze({
+    minimumPortablePropCount: 40,
     pickupHoldSeconds: 0.65,
     throwSpeedMetersPerSecond: 8.8,
     throwLiftMetersPerSecond: 1.25,
@@ -1792,11 +1799,13 @@
         size: Object.freeze({ x: 0.2, y: 0.2, z: 0.2 }), material: "porcelain",
       }),
       Object.freeze({
-        id: "foyer-silver-vase", label: "small silver vase", kind: "bottle",
+        id: "foyer-silver-vase", label: "west flower vase", kind: "floralVase",
         floor: "MAIN LEVEL", room: "FRONT FOYER",
-        position: Object.freeze({ x: -3.9, y: 1.02, z: 9.3 }),
+        position: Object.freeze({ x: -3.9, y: 1.07, z: 9.32 }),
         qa: Object.freeze({ x: -2.65, y: FLOOR.MAIN, z: 9.3 }),
-        size: Object.freeze({ x: 0.18, y: 0.34, z: 0.18 }), material: "iron",
+        size: Object.freeze({ x: 0.24, y: 0.46, z: 0.24 }), material: "porcelain",
+        sourceNames: Object.freeze(["foyer-console-vase", "foyer-vase-stem", "foyer-vase-bloom"]),
+        sourceRadius: 0.46, minimumSourceParts: 7,
       }),
       Object.freeze({
         id: "west-suite-perfume", label: "perfume bottle", kind: "bottle",
@@ -1829,9 +1838,11 @@
       Object.freeze({
         id: "wine-cellar-bottle", label: "dusty wine bottle", kind: "bottle",
         floor: "BASEMENT", room: "WINE CELLAR",
-        position: Object.freeze({ x: -8, y: -2.79, z: 7.4 }),
-        qa: Object.freeze({ x: -8, y: FLOOR.BASEMENT, z: 6.15 }),
+        position: Object.freeze({ x: -8.55, y: -2.84, z: 7.25 }),
+        qa: Object.freeze({ x: -8.55, y: FLOOR.BASEMENT, z: 6.05 }),
         size: Object.freeze({ x: 0.17, y: 0.36, z: 0.17 }), material: "wineRed",
+        sourceNames: Object.freeze(["wine-tasting-bottle", "wine-tasting-bottle-neck"]),
+        sourceRadius: 0.24, minimumSourceParts: 2,
       }),
       Object.freeze({
         id: "laundry-soap-tin", label: "soap tin", kind: "tin",
@@ -1850,9 +1861,274 @@
       Object.freeze({
         id: "workroom-coffee-cup", label: "abandoned coffee cup", kind: "cup",
         floor: "BASEMENT", room: "WORKROOM",
-        position: Object.freeze({ x: -2.5, y: -2.85, z: -8.2 }),
-        qa: Object.freeze({ x: -2.5, y: FLOOR.BASEMENT, z: -6.88 }),
+        position: Object.freeze({ x: 0.35, y: -2.98, z: -9.05 }),
+        qa: Object.freeze({ x: 0.35, y: FLOOR.BASEMENT, z: -7.72 }),
         size: Object.freeze({ x: 0.2, y: 0.2, z: 0.2 }), material: "porcelain",
+        sourceNames: Object.freeze(["workroom-abandoned-coffee-cup"]),
+        sourceRadius: 0.16, minimumSourceParts: 1,
+      }),
+      Object.freeze({
+        id: "foyer-east-flower-vase", label: "east flower vase", kind: "floralVase",
+        floor: "MAIN LEVEL", room: "FRONT FOYER",
+        position: Object.freeze({ x: 3.9, y: 1.07, z: 9.32 }),
+        qa: Object.freeze({ x: 2.65, y: FLOOR.MAIN, z: 9.3 }),
+        size: Object.freeze({ x: 0.24, y: 0.46, z: 0.24 }), material: "porcelain",
+        sourceNames: Object.freeze(["foyer-console-vase", "foyer-vase-stem", "foyer-vase-bloom"]),
+        sourceRadius: 0.46, minimumSourceParts: 7,
+      }),
+      Object.freeze({
+        id: "foyer-west-card-tray", label: "west calling-card tray", kind: "book",
+        floor: "MAIN LEVEL", room: "FRONT FOYER",
+        position: Object.freeze({ x: -3.76, y: 0.861, z: 9.28 }),
+        qa: Object.freeze({ x: -2.55, y: FLOOR.MAIN, z: 9.05 }),
+        size: Object.freeze({ x: 0.22, y: 0.05, z: 0.16 }), material: "brass",
+        sourceNames: Object.freeze(["foyer-console-card-tray"]),
+        sourceRadius: 0.12, minimumSourceParts: 1,
+      }),
+      Object.freeze({
+        id: "foyer-east-card-tray", label: "east calling-card tray", kind: "book",
+        floor: "MAIN LEVEL", room: "FRONT FOYER",
+        position: Object.freeze({ x: 3.76, y: 0.861, z: 9.28 }),
+        qa: Object.freeze({ x: 2.55, y: FLOOR.MAIN, z: 9.05 }),
+        size: Object.freeze({ x: 0.22, y: 0.05, z: 0.16 }), material: "brass",
+        sourceNames: Object.freeze(["foyer-console-card-tray"]),
+        sourceRadius: 0.12, minimumSourceParts: 1,
+      }),
+      Object.freeze({
+        id: "kitchen-copper-pot", label: "copper pot", kind: "tin",
+        floor: "MAIN LEVEL", room: "KITCHEN",
+        position: Object.freeze({ x: 7.7, y: 1.28, z: -11.56 }),
+        qa: Object.freeze({ x: 7.7, y: FLOOR.MAIN, z: -10.15 }),
+        size: Object.freeze({ x: 0.36, y: 0.22, z: 0.36 }), material: "copper",
+        sourceNames: Object.freeze(["kitchen-copper-pot", "kitchen-copper-pot-lid", "kitchen-copper-pot-knob"]),
+        sourceRadius: 0.24, minimumSourceParts: 3,
+      }),
+      Object.freeze({
+        id: "kitchen-copper-pan", label: "copper pan", kind: "book",
+        floor: "MAIN LEVEL", room: "KITCHEN",
+        position: Object.freeze({ x: 7.27, y: 1.23, z: -11.61 }),
+        qa: Object.freeze({ x: 7.1, y: FLOOR.MAIN, z: -10.15 }),
+        size: Object.freeze({ x: 0.46, y: 0.12, z: 0.28 }), material: "copper",
+        sourceNames: Object.freeze(["kitchen-copper-pan", "kitchen-copper-pan-handle"]),
+        sourceRadius: 0.3, minimumSourceParts: 2,
+      }),
+      Object.freeze({
+        id: "kitchen-utensil-crock", label: "utensil crock", kind: "bottle",
+        floor: "MAIN LEVEL", room: "KITCHEN",
+        position: Object.freeze({ x: 10.95, y: 1.33, z: -11.58 }),
+        qa: Object.freeze({ x: 10.95, y: FLOOR.MAIN, z: -10.15 }),
+        size: Object.freeze({ x: 0.22, y: 0.4, z: 0.22 }), material: "terracotta",
+        sourceNames: Object.freeze(["kitchen-utensil-crock", "kitchen-utensil-handle"]),
+        sourceRadius: 0.3, minimumSourceParts: 4,
+      }),
+      Object.freeze({
+        id: "kitchen-fruit-bowl", label: "fruit bowl", kind: "cup",
+        floor: "MAIN LEVEL", room: "KITCHEN",
+        position: Object.freeze({ x: 12.35, y: 1.27, z: -11.52 }),
+        qa: Object.freeze({ x: 12.35, y: FLOOR.MAIN, z: -10.15 }),
+        size: Object.freeze({ x: 0.38, y: 0.22, z: 0.34 }), material: "porcelain",
+        sourceNames: Object.freeze(["kitchen-fruit-bowl", "kitchen-bowl-fruit"]),
+        sourceUniqueNames: Object.freeze(["kitchen-bowl-fruit"]),
+        sourceRadius: 0.28, minimumSourceParts: 2,
+      }),
+      Object.freeze({
+        id: "kitchen-plate-stack", label: "stack of plates", kind: "tin",
+        floor: "MAIN LEVEL", room: "KITCHEN",
+        position: Object.freeze({ x: 13.45, y: 1.23, z: -11.52 }),
+        qa: Object.freeze({ x: 13.35, y: FLOOR.MAIN, z: -10.15 }),
+        size: Object.freeze({ x: 0.3, y: 0.13, z: 0.3 }), material: "porcelain",
+        sourceNames: Object.freeze(["kitchen-plate-stack"]),
+        sourceUniqueNames: Object.freeze(["kitchen-plate-stack"]),
+        sourceRadius: 0.22, minimumSourceParts: 1,
+      }),
+      Object.freeze({
+        id: "kitchen-towel-stack", label: "folded kitchen towels", kind: "book",
+        floor: "MAIN LEVEL", room: "KITCHEN",
+        position: Object.freeze({ x: 14.45, y: 1.035, z: -6.05 }),
+        qa: Object.freeze({ x: 13.15, y: FLOOR.MAIN, z: -6.05 }),
+        size: Object.freeze({ x: 0.34, y: 0.14, z: 0.25 }), material: "leather",
+        sourceNames: Object.freeze(["kitchen-folded-towel"]),
+        sourceRadius: 0.12, minimumSourceParts: 2,
+      }),
+      Object.freeze({
+        id: "painting-red-pot", label: "red paint pot", kind: "tin",
+        floor: "MAIN LEVEL", room: "PAINTING ROOM",
+        position: Object.freeze({ x: 9.25, y: 0.94, z: -1.7 }),
+        qa: Object.freeze({ x: 9.25, y: FLOOR.MAIN, z: -0.35 }),
+        size: Object.freeze({ x: 0.18, y: 0.2, z: 0.18 }), material: "iron",
+        sourceNames: Object.freeze(["painting-room-paint-pot"]),
+        sourceRadius: 0.105, minimumSourceParts: 1,
+      }),
+      Object.freeze({
+        id: "painting-green-pot", label: "green paint pot", kind: "tin",
+        floor: "MAIN LEVEL", room: "PAINTING ROOM",
+        position: Object.freeze({ x: 9.47, y: 0.94, z: -1.7 }),
+        qa: Object.freeze({ x: 9.47, y: FLOOR.MAIN, z: -0.35 }),
+        size: Object.freeze({ x: 0.18, y: 0.2, z: 0.18 }), material: "iron",
+        sourceNames: Object.freeze(["painting-room-paint-pot"]),
+        sourceRadius: 0.105, minimumSourceParts: 1,
+      }),
+      Object.freeze({
+        id: "painting-terracotta-pot", label: "terracotta paint pot", kind: "tin",
+        floor: "MAIN LEVEL", room: "PAINTING ROOM",
+        position: Object.freeze({ x: 9.7, y: 0.94, z: -1.7 }),
+        qa: Object.freeze({ x: 9.7, y: FLOOR.MAIN, z: -0.35 }),
+        size: Object.freeze({ x: 0.18, y: 0.2, z: 0.18 }), material: "iron",
+        sourceNames: Object.freeze(["painting-room-paint-pot"]),
+        sourceRadius: 0.105, minimumSourceParts: 1,
+      }),
+      Object.freeze({
+        id: "painting-mauve-pot", label: "mauve paint pot", kind: "tin",
+        floor: "MAIN LEVEL", room: "PAINTING ROOM",
+        position: Object.freeze({ x: 9.89, y: 0.94, z: -1.7 }),
+        qa: Object.freeze({ x: 9.89, y: FLOOR.MAIN, z: -0.35 }),
+        size: Object.freeze({ x: 0.18, y: 0.2, z: 0.18 }), material: "iron",
+        sourceNames: Object.freeze(["painting-room-paint-pot"]),
+        sourceRadius: 0.095, minimumSourceParts: 1,
+      }),
+      Object.freeze({
+        id: "painting-palette", label: "paint palette", kind: "book",
+        floor: "MAIN LEVEL", room: "PAINTING ROOM",
+        position: Object.freeze({ x: 9.6, y: 0.94, z: -1.72 }),
+        qa: Object.freeze({ x: 9.6, y: FLOOR.MAIN, z: -0.35 }),
+        size: Object.freeze({ x: 0.34, y: 0.08, z: 0.25 }), material: "leather",
+        sourceNames: Object.freeze(["painting-room-palette"]),
+        sourceRadius: 0.2, minimumSourceParts: 1,
+      }),
+      Object.freeze({
+        id: "painting-brush-bundle", label: "bundle of paintbrushes", kind: "bottle",
+        floor: "MAIN LEVEL", room: "PAINTING ROOM",
+        position: Object.freeze({ x: 9.55, y: 1.05, z: -1.62 }),
+        qa: Object.freeze({ x: 9.55, y: FLOOR.MAIN, z: -0.35 }),
+        size: Object.freeze({ x: 0.36, y: 0.58, z: 0.18 }), material: "brass",
+        sourceNames: Object.freeze(["painting-room-brush"]),
+        sourceRadius: 0.24, minimumSourceParts: 3,
+      }),
+      Object.freeze({
+        id: "wine-cellar-green-bottle", label: "green wine bottle", kind: "bottle",
+        floor: "BASEMENT", room: "WINE CELLAR",
+        position: Object.freeze({ x: -8.3, y: -2.84, z: 7.6 }),
+        qa: Object.freeze({ x: -8.3, y: FLOOR.BASEMENT, z: 6.25 }),
+        size: Object.freeze({ x: 0.17, y: 0.4, z: 0.17 }), material: "wineGreen",
+        sourceNames: Object.freeze(["wine-tasting-bottle", "wine-tasting-bottle-neck"]),
+        sourceRadius: 0.24, minimumSourceParts: 2,
+      }),
+      Object.freeze({
+        id: "wine-cellar-west-goblet", label: "west tasting goblet", kind: "cup",
+        floor: "BASEMENT", room: "WINE CELLAR",
+        position: Object.freeze({ x: -7.76, y: -2.98, z: 7.3 }),
+        qa: Object.freeze({ x: -7.76, y: FLOOR.BASEMENT, z: 6.05 }),
+        size: Object.freeze({ x: 0.13, y: 0.13, z: 0.13 }), material: "brass",
+        sourceNames: Object.freeze(["wine-tasting-goblet"]),
+        sourceRadius: 0.09, minimumSourceParts: 1,
+      }),
+      Object.freeze({
+        id: "wine-cellar-east-goblet", label: "east tasting goblet", kind: "cup",
+        floor: "BASEMENT", room: "WINE CELLAR",
+        position: Object.freeze({ x: -7.44, y: -2.98, z: 7.3 }),
+        qa: Object.freeze({ x: -7.44, y: FLOOR.BASEMENT, z: 6.05 }),
+        size: Object.freeze({ x: 0.13, y: 0.13, z: 0.13 }), material: "brass",
+        sourceNames: Object.freeze(["wine-tasting-goblet"]),
+        sourceRadius: 0.09, minimumSourceParts: 1,
+      }),
+      Object.freeze({
+        id: "wine-cellar-ledger", label: "tasting ledger", kind: "book",
+        floor: "BASEMENT", room: "WINE CELLAR",
+        position: Object.freeze({ x: -8.85, y: -3.02, z: 7.05 }),
+        qa: Object.freeze({ x: -8.85, y: FLOOR.BASEMENT, z: 5.82 }),
+        size: Object.freeze({ x: 0.36, y: 0.05, z: 0.26 }), material: "leather",
+        sourceNames: Object.freeze(["wine-tasting-ledger"]),
+        sourceRadius: 0.15, minimumSourceParts: 1,
+      }),
+      Object.freeze({
+        id: "wine-cellar-candlestick", label: "tasting candlestick", kind: "bottle",
+        floor: "BASEMENT", room: "WINE CELLAR",
+        position: Object.freeze({ x: -7.15, y: -2.95, z: 7.55 }),
+        qa: Object.freeze({ x: -7.15, y: FLOOR.BASEMENT, z: 6.25 }),
+        size: Object.freeze({ x: 0.14, y: 0.18, z: 0.14 }), material: "brass",
+        sourceNames: Object.freeze(["wine-tasting-candlestick", "wine-tasting-candle"]),
+        sourceRadius: 0.14, minimumSourceParts: 2,
+      }),
+      Object.freeze({
+        id: "main-bathroom-soap", label: "soap dish", kind: "tin",
+        floor: "MAIN LEVEL", room: "MAIN HALL BATHROOM",
+        position: Object.freeze({ x: -7.3, y: 0.935, z: -2.53 }),
+        qa: Object.freeze({ x: -7.3, y: FLOOR.MAIN, z: -1.25 }),
+        size: Object.freeze({ x: 0.14, y: 0.09, z: 0.14 }), material: "porcelain",
+        sourceNames: Object.freeze(["main-hall-bathroom-soap-dish", "main-hall-bathroom-soap-bar"]),
+        sourceRadius: 0.12, minimumSourceParts: 2,
+      }),
+      Object.freeze({
+        id: "main-bathroom-amenity", label: "bathroom amenity bottle", kind: "bottle",
+        floor: "MAIN LEVEL", room: "MAIN HALL BATHROOM",
+        position: Object.freeze({ x: -8.37, y: 0.975, z: -2.59 }),
+        qa: Object.freeze({ x: -8.37, y: FLOOR.MAIN, z: -1.25 }),
+        size: Object.freeze({ x: 0.1, y: 0.16, z: 0.1 }), material: "glass",
+        sourceNames: Object.freeze(["main-hall-bathroom-amenity-bottle"]),
+        sourceRadius: 0.1, minimumSourceParts: 1,
+      }),
+      Object.freeze({
+        id: "main-bathroom-towels", label: "guest towel stack", kind: "book",
+        floor: "MAIN LEVEL", room: "MAIN HALL BATHROOM",
+        position: Object.freeze({ x: -6.23, y: 0.967, z: -2.65 }),
+        qa: Object.freeze({ x: -6.23, y: FLOOR.MAIN, z: -1.25 }),
+        size: Object.freeze({ x: 0.31, y: 0.14, z: 0.2 }), material: "leather",
+        sourceNames: Object.freeze(["main-hall-bathroom-guest-towel"]),
+        sourceRadius: 0.14, minimumSourceParts: 2,
+      }),
+      Object.freeze({
+        id: "upper-bathroom-soap", label: "upstairs soap dish", kind: "tin",
+        floor: "SECOND FLOOR", room: "GRAND BATHROOM",
+        position: Object.freeze({ x: -8.15, y: 5.435, z: -2.53 }),
+        qa: Object.freeze({ x: -8.15, y: FLOOR.UPPER, z: -1.25 }),
+        size: Object.freeze({ x: 0.14, y: 0.09, z: 0.14 }), material: "porcelain",
+        sourceNames: Object.freeze(["upper-grand-bathroom-soap-dish", "upper-grand-bathroom-soap-bar"]),
+        sourceRadius: 0.12, minimumSourceParts: 2,
+      }),
+      Object.freeze({
+        id: "upper-bathroom-amenity", label: "upstairs amenity bottle", kind: "bottle",
+        floor: "SECOND FLOOR", room: "GRAND BATHROOM",
+        position: Object.freeze({ x: -9.26, y: 5.475, z: -2.59 }),
+        qa: Object.freeze({ x: -9.26, y: FLOOR.UPPER, z: -1.25 }),
+        size: Object.freeze({ x: 0.1, y: 0.16, z: 0.1 }), material: "glass",
+        sourceNames: Object.freeze(["upper-grand-bathroom-amenity-bottle"]),
+        sourceRadius: 0.1, minimumSourceParts: 1,
+      }),
+      Object.freeze({
+        id: "upper-bathroom-towels", label: "upstairs guest towels", kind: "book",
+        floor: "SECOND FLOOR", room: "GRAND BATHROOM",
+        position: Object.freeze({ x: -7.04, y: 5.467, z: -2.65 }),
+        qa: Object.freeze({ x: -7.04, y: FLOOR.UPPER, z: -1.25 }),
+        size: Object.freeze({ x: 0.31, y: 0.14, z: 0.2 }), material: "leather",
+        sourceNames: Object.freeze(["upper-grand-bathroom-guest-towel"]),
+        sourceRadius: 0.14, minimumSourceParts: 2,
+      }),
+      Object.freeze({
+        id: "boiler-coal-scuttle", label: "coal scuttle", kind: "tin",
+        floor: "BASEMENT", room: "BOILER ROOM",
+        position: Object.freeze({ x: -9.15, y: -3.69, z: -10.3 }),
+        qa: Object.freeze({ x: -8.0, y: FLOOR.BASEMENT, z: -9.45 }),
+        size: Object.freeze({ x: 0.44, y: 0.4, z: 0.44 }), material: "iron",
+        sourceNames: Object.freeze(["boiler-coal-scuttle", "boiler-coal-lump"]),
+        sourceRadius: 0.42, minimumSourceParts: 4,
+      }),
+      Object.freeze({
+        id: "workroom-radio", label: "two-way radio", kind: "tin",
+        floor: "BASEMENT", room: "WORKROOM",
+        position: Object.freeze({ x: 4.63, y: -2.77, z: -9.2 }),
+        qa: Object.freeze({ x: 4.63, y: FLOOR.BASEMENT, z: -7.72 }),
+        size: Object.freeze({ x: 0.24, y: 0.62, z: 0.16 }), material: "iron",
+        sourceNames: Object.freeze(["workroom-two-way-radio", "workroom-radio-antenna"]),
+        sourceRadius: 0.36, minimumSourceParts: 2,
+      }),
+      Object.freeze({
+        id: "workroom-shift-logs", label: "stack of shift logs", kind: "book",
+        floor: "BASEMENT", room: "WORKROOM",
+        position: Object.freeze({ x: 1.24, y: -2.96, z: -9.3 }),
+        qa: Object.freeze({ x: 1.24, y: FLOOR.BASEMENT, z: -7.72 }),
+        size: Object.freeze({ x: 0.5, y: 0.09, z: 0.3 }), material: "leather",
+        sourceNames: Object.freeze(["workroom-shift-log-paper"]),
+        sourceRadius: 0.28, minimumSourceParts: 5,
       }),
     ]),
   });
@@ -3840,6 +4116,7 @@
       lastAlarm: null,
       alarmCooldown: 0,
       alarmLatchCameraId: null,
+      alarmTrackingRefreshRemaining: 0,
       flashlightAlertCount: 0,
       lastFlashlightAlert: null,
       flashlightWarningRemaining: 0,
@@ -5771,6 +6048,7 @@
       this.searchRemaining = 0;
       this.searchElapsed = 0;
       this.searchBaseYaw = 0;
+      this.cameraSearch = this.createCameraSearchState();
       this.responseDistance = 0;
       this.responseTeleports = 0;
       this.responseBlockedReason = null;
@@ -7310,6 +7588,156 @@
       return lane;
     }
 
+    createCameraSearchState() {
+      return {
+        active: false,
+        center: null,
+        anchorNodeId: null,
+        arrivedLastSeen: false,
+        minimumDistanceToLastSeen: Infinity,
+        durationSeconds: 0,
+        elapsedSeconds: 0,
+        patrolDistance: 0,
+        nodeVisits: 0,
+        patrolNodeIds: [],
+        nextNodeIndex: 0,
+        pauseRemaining: 0,
+        returningToAnchor: false,
+      };
+    }
+
+    isCameraSightingAlarm(alarm = this.activeCameraAlarm) {
+      return Boolean(
+        alarm?.cameraId
+        && alarm?.lastSeen
+        && alarm.kind !== "breathing"
+      );
+    }
+
+    resetCameraSearch(alarm = null, anchorNodeId = null) {
+      this.cameraSearch = this.createCameraSearchState();
+      if (!this.isCameraSightingAlarm(alarm)) return this.cameraSearch;
+      this.cameraSearch.active = true;
+      this.cameraSearch.center = {
+        x: Number(alarm.lastSeen.x),
+        y: Number(alarm.lastSeen.y),
+        z: Number(alarm.lastSeen.z),
+      };
+      this.cameraSearch.anchorNodeId = anchorNodeId;
+      this.updateCameraSearchProximity();
+      return this.cameraSearch;
+    }
+
+    updateCameraSearchProximity() {
+      if (!this.cameraSearch.active || !this.cameraSearch.center) return null;
+      const distance = Math.hypot(
+        this.root.position.x - this.cameraSearch.center.x,
+        this.root.position.y - this.cameraSearch.center.y,
+        this.root.position.z - this.cameraSearch.center.z,
+      );
+      this.cameraSearch.minimumDistanceToLastSeen = Math.min(
+        this.cameraSearch.minimumDistanceToLastSeen,
+        distance,
+      );
+      if (distance <= Math.max(0.5, MR_FEAST_NPC.arrivalRadius)) {
+        this.cameraSearch.arrivedLastSeen = true;
+      }
+      return distance;
+    }
+
+    cameraSearchDiagnostics() {
+      const search = this.cameraSearch || this.createCameraSearchState();
+      return {
+        active: Boolean(search.active),
+        center: search.center ? { ...search.center } : null,
+        anchorNodeId: search.anchorNodeId,
+        arrivedLastSeen: Boolean(search.arrivedLastSeen),
+        minimumDistanceToLastSeen: Number.isFinite(search.minimumDistanceToLastSeen)
+          ? Number(search.minimumDistanceToLastSeen.toFixed(3))
+          : null,
+        durationSeconds: Number(search.durationSeconds.toFixed(3)),
+        elapsedSeconds: Number(search.elapsedSeconds.toFixed(3)),
+        patrolDistance: Number(search.patrolDistance.toFixed(3)),
+        nodeVisits: search.nodeVisits,
+        patrolNodeIds: [...search.patrolNodeIds],
+        pauseRemaining: Number(search.pauseRemaining.toFixed(3)),
+      };
+    }
+
+    cameraResponseAnchorId(alarm, fallbackId) {
+      if (!this.isCameraSightingAlarm(alarm) || !physics) return fallbackId;
+      const center = alarm.lastSeen;
+      const surfaceY = this.pursuitSurfaceY(center);
+      if (surfaceY == null) return fallbackId;
+      const candidates = [...this.responseGraph.nodes.values()]
+        .filter((node) => (
+          node.segmentKind !== "stairs"
+          && node.segmentKind !== "ramp"
+          && Math.abs(node.y - surfaceY) <= 0.08
+          && this.pursuitLevelSegmentClear(node, center)
+        ))
+        .sort((a, b) => {
+          const aZone = a.zone === alarm.room ? 0 : 1;
+          const bZone = b.zone === alarm.room ? 0 : 1;
+          if (aZone !== bZone) return aZone - bZone;
+          return (
+            Math.hypot(a.x - center.x, a.z - center.z)
+            - Math.hypot(b.x - center.x, b.z - center.z)
+          );
+        });
+      return candidates[0]?.id || fallbackId;
+    }
+
+    responsePathFromActualPosition(startId, targetId, useShortcuts = false) {
+      if (!startId || !targetId) return [];
+      const path = this.findResponsePath(startId, targetId, useShortcuts);
+      const startNode = this.responseGraph.nodes.get(startId);
+      if (!startNode) return path;
+      const distance = Math.hypot(
+        startNode.x - this.root.position.x,
+        startNode.y - this.root.position.y,
+        startNode.z - this.root.position.z,
+      );
+      if (
+        distance > MR_FEAST_NPC.arrivalRadius
+        && this.pursuitLevelSegmentClear(this.root.position, startNode)
+      ) {
+        path.unshift({
+          node: startNode,
+          door: null,
+          approachAnchor: true,
+        });
+      }
+      return path;
+    }
+
+    appendCameraLastSeenStep(path, alarm, anchorNodeId) {
+      if (!this.isCameraSightingAlarm(alarm)) return false;
+      const anchor = this.responseGraph.nodes.get(anchorNodeId);
+      const lastSeen = alarm.lastSeen;
+      if (!anchor || !this.pursuitLevelSegmentClear(anchor, lastSeen)) return false;
+      const distance = Math.hypot(
+        anchor.x - lastSeen.x,
+        anchor.y - lastSeen.y,
+        anchor.z - lastSeen.z,
+      );
+      if (distance <= MR_FEAST_NPC.arrivalRadius) return true;
+      path.push({
+        node: {
+          ...anchor,
+          x: lastSeen.x,
+          y: lastSeen.y,
+          z: lastSeen.z,
+          zone: alarm.room || anchor.zone,
+          cameraLastSeen: true,
+        },
+        door: null,
+        cameraLastSeen: true,
+        anchorNodeId,
+      });
+      return true;
+    }
+
     transitionSecurityResponse(eventName) {
       const next = MR_FEAST_RESPONSE_TRANSITIONS[this.behaviorState]?.[eventName];
       if (!next) {
@@ -7337,11 +7765,22 @@
           pauseRemaining: this.pauseRemaining,
         };
       }
-      const targetId = this.responseGraph.nodes.has(alarm.responseNodeId)
+      const fallbackTargetId = this.responseGraph.nodes.has(alarm.responseNodeId)
         ? alarm.responseNodeId
         : this.nearestResponseTargetId(alarm.responsePosition || alarm.lastSeen);
-      const path = targetId ? this.findResponsePath(startId, targetId) : [];
-      this.activeCameraAlarm = { ...alarm, targetNodeId: targetId };
+      const targetId = this.cameraResponseAnchorId(alarm, fallbackTargetId);
+      const path = targetId
+        ? this.responsePathFromActualPosition(startId, targetId, true)
+        : [];
+      const exactApproach = targetId
+        ? this.appendCameraLastSeenStep(path, alarm, targetId)
+        : false;
+      this.activeCameraAlarm = {
+        ...alarm,
+        targetNodeId: targetId,
+        exactApproach,
+      };
+      this.resetCameraSearch(this.activeCameraAlarm, targetId);
       this.responseCurrentNodeId = startId;
       this.responsePath = path;
       this.responseBlockedReason = targetId && (path.length || targetId === startId) ? null : "no unlocked response route";
@@ -7431,14 +7870,25 @@
       }
 
       if (
-        wasBreathInvestigation
-        && state.isHidden
+        state.isHidden
         && event.hearing.distance <= BREATH_STEALTH.closeDiscoveryMeters
       ) {
         return {
           heard: true,
           response: "exposed",
           ...this.exposeBreathingPlayer(event),
+        };
+      }
+
+      // A breathing ping cannot downgrade an active camera sighting into the
+      // short generic sound sweep. Mr. Feast is already committed to that
+      // room and will hear the player as he patrols it; close hidden breathing
+      // still exposes the player through the branch above.
+      if (this.cameraSearch.active && this.activeCameraAlarm) {
+        return {
+          heard: true,
+          response: "camera-investigation-active",
+          targetNodeId: this.activeCameraAlarm.targetNodeId || null,
         };
       }
 
@@ -7465,14 +7915,146 @@
     beginSecuritySearch() {
       if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING) this.transitionSecurityResponse("arrived");
       // A housekeeping errand reuses the bounded searching state as the
-      // fixing pause; a real camera response keeps the longer sweep search.
+      // fixing pause. Breathing and chase-loss investigations keep the
+      // original short sweep, while a real camera sighting owns a sustained
+      // local patrol around the final recorded position.
       this.searchRemaining = this.housekeeping.active
         ? Number(this.housekeeping.active.searchSeconds) || MANSION_TAMPER.fixSeconds
-        : CAMERA_SECURITY.searchSeconds;
+        : this.cameraSearch.active
+          ? CAMERA_SECURITY.searchPatrolSeconds
+          : CAMERA_SECURITY.searchSeconds;
       this.searchElapsed = 0;
       this.searchBaseYaw = this.root.rotation.y;
+      if (this.cameraSearch.active) {
+        this.cameraSearch.durationSeconds = CAMERA_SECURITY.searchPatrolSeconds;
+        this.cameraSearch.elapsedSeconds = 0;
+        this.cameraSearch.patrolDistance = 0;
+        this.cameraSearch.nodeVisits = 0;
+        this.cameraSearch.pauseRemaining = CAMERA_SECURITY.searchPatrolPauseSeconds;
+        this.cameraSearch.patrolNodeIds = this.buildCameraSearchPatrolNodeIds();
+        this.cameraSearch.nextNodeIndex = 0;
+        const anchor = this.responseGraph.nodes.get(this.cameraSearch.anchorNodeId);
+        this.cameraSearch.returningToAnchor = Boolean(
+          anchor
+          && Math.hypot(
+            anchor.x - this.root.position.x,
+            anchor.y - this.root.position.y,
+            anchor.z - this.root.position.z,
+          ) > MR_FEAST_NPC.arrivalRadius
+        );
+        this.updateCameraSearchProximity();
+      }
       this.moving = false;
       this.fadeToAction("idle");
+    }
+
+    buildCameraSearchPatrolNodeIds() {
+      if (!this.cameraSearch.active || !this.cameraSearch.center) return [];
+      const center = this.cameraSearch.center;
+      const surfaceY = this.pursuitSurfaceY(center);
+      const anchorId = this.cameraSearch.anchorNodeId;
+      if (surfaceY == null || !anchorId) return [];
+      const candidates = [...this.responseGraph.nodes.values()]
+        .filter((node) => (
+          node.id !== anchorId
+          && node.segmentKind !== "stairs"
+          && node.segmentKind !== "ramp"
+          && Math.abs(node.y - surfaceY) <= 0.08
+          && Math.hypot(node.x - center.x, node.z - center.z)
+            <= CAMERA_SECURITY.searchPatrolRadiusMeters
+          && this.findResponsePath(anchorId, node.id).length > 0
+        ))
+        .sort((a, b) => {
+          const aZone = a.zone === this.activeCameraAlarm?.room ? 0 : 1;
+          const bZone = b.zone === this.activeCameraAlarm?.room ? 0 : 1;
+          if (aZone !== bZone) return aZone - bZone;
+          const aAngle = Math.atan2(a.z - center.z, a.x - center.x);
+          const bAngle = Math.atan2(b.z - center.z, b.x - center.x);
+          return aAngle - bAngle;
+        });
+      return candidates
+        .slice(0, CAMERA_SECURITY.searchPatrolMaximumNodes)
+        .map((node) => node.id);
+    }
+
+    queueNextCameraSearchPatrolPath() {
+      if (!this.cameraSearch.active) return false;
+      if (this.cameraSearch.returningToAnchor) {
+        const anchor = this.responseGraph.nodes.get(this.cameraSearch.anchorNodeId);
+        this.cameraSearch.returningToAnchor = false;
+        if (anchor) {
+          const distance = Math.hypot(
+            anchor.x - this.root.position.x,
+            anchor.y - this.root.position.y,
+            anchor.z - this.root.position.z,
+          );
+          if (
+            distance > MR_FEAST_NPC.arrivalRadius
+            && this.pursuitLevelSegmentClear(this.root.position, anchor)
+          ) {
+            this.responsePath = [{
+              node: anchor,
+              door: null,
+              cameraSearchAnchor: true,
+            }];
+            return true;
+          }
+          this.responseCurrentNodeId = anchor.id;
+        }
+      }
+      const ids = this.cameraSearch.patrolNodeIds;
+      if (!ids.length) return false;
+      for (let attempt = 0; attempt < ids.length; attempt += 1) {
+        const targetId = ids[this.cameraSearch.nextNodeIndex % ids.length];
+        this.cameraSearch.nextNodeIndex = (this.cameraSearch.nextNodeIndex + 1) % ids.length;
+        if (targetId === this.responseCurrentNodeId) continue;
+        const path = this.responsePathFromActualPosition(
+          this.responseCurrentNodeId,
+          targetId,
+        );
+        if (!path.length) continue;
+        this.responsePath = path;
+        return true;
+      }
+      return false;
+    }
+
+    updateCameraSearchPatrol(dt) {
+      this.cameraSearch.elapsedSeconds += dt;
+      this.updateCameraSearchProximity();
+      if (this.cameraSearch.pauseRemaining > 0) {
+        this.cameraSearch.pauseRemaining = Math.max(
+          0,
+          this.cameraSearch.pauseRemaining - dt,
+        );
+        this.root.rotation.y = this.searchBaseYaw
+          + Math.sin(this.searchElapsed / CAMERA_SECURITY.searchSweepSeconds * Math.PI * 2)
+            * CAMERA_SECURITY.searchHalfAngle;
+        this.moving = false;
+        this.fadeToAction("idle");
+        this.closeClearedRouteDoors(null);
+        this.stepAnimationAndFace(dt);
+        return;
+      }
+      if (!this.responsePath.length && !this.queueNextCameraSearchPatrolPath()) {
+        this.root.rotation.y = this.searchBaseYaw
+          + Math.sin(this.searchElapsed / CAMERA_SECURITY.searchSweepSeconds * Math.PI * 2)
+            * CAMERA_SECURITY.searchHalfAngle;
+        this.moving = false;
+        this.fadeToAction("idle");
+        this.stepAnimationAndFace(dt);
+        return;
+      }
+      const before = this.root.position.clone();
+      const pathLengthBefore = this.responsePath.length;
+      this.updateSecurityPath(dt);
+      this.cameraSearch.patrolDistance += before.distanceTo(this.root.position);
+      this.updateCameraSearchProximity();
+      if (pathLengthBefore > 0 && !this.responsePath.length) {
+        this.cameraSearch.nodeVisits += 1;
+        this.cameraSearch.pauseRemaining = CAMERA_SECURITY.searchPatrolPauseSeconds;
+        this.searchBaseYaw = this.root.rotation.y;
+      }
     }
 
     canAcceptHousekeeping() {
@@ -7586,6 +8168,7 @@
       this.pursuitStallSeconds = 0;
       this.pursuitApproachSuppressedRemaining = 0;
       this.activeCameraAlarm = null;
+      this.cameraSearch = this.createCameraSearchState();
       this.breathInvestigation.active = false;
       this.breathInvestigation.lastEventId = null;
       this.breathInvestigation.lastRoom = null;
@@ -7837,6 +8420,7 @@
       }
       if (this.housekeeping.active) this.abandonHousekeepingToAlarm();
       this.activeCameraAlarm = null;
+      this.cameraSearch = this.createCameraSearchState();
       this.breathInvestigation.active = false;
       // The "interrupted patrol point" is wherever he physically stands, not
       // the waypoint bookkeeping; anchoring the resume there keeps the later
@@ -8205,6 +8789,7 @@
       this.pursuitWarningFocus = null;
       this.housekeeping.active = null;
       this.activeCameraAlarm = null;
+      this.cameraSearch = this.createCameraSearchState();
       this.breathInvestigation.active = false;
       this.breathInvestigation.lastEventId = null;
       this.breathInvestigation.lastRoom = null;
@@ -8416,6 +9001,7 @@
     beginSecurityReturn() {
       this.pursuitWarningFocus = null;
       if (!this.responseResume) {
+        this.cameraSearch.active = false;
         this.behaviorState = MR_FEAST_RESPONSE_STATE.PATROL;
         return;
       }
@@ -8424,10 +9010,14 @@
       // corners as the chase; only a camera-alarm investigation keeps its
       // fully authored return leg.
       const startId = this.activeCameraAlarm
-        ? this.responseCurrentNodeId
+        ? this.nearestPursuitAnchorId(this.root.position) || this.responseCurrentNodeId
         : this.nearestResponseTargetId(this.root.position, true) || this.responseCurrentNodeId;
       if (startId) this.responseCurrentNodeId = startId;
-      this.responsePath = this.findResponsePath(startId, this.responseResume.nodeId, !this.activeCameraAlarm);
+      this.responsePath = this.responsePathFromActualPosition(
+        startId,
+        this.responseResume.nodeId,
+        !this.activeCameraAlarm,
+      );
       if (!this.responsePath.length && startId === this.responseResume.nodeId) this.finishSecurityReturn();
     }
 
@@ -8443,6 +9033,7 @@
       this.transitionSecurityResponse("rejoined");
       this.responsePath = [];
       this.activeCameraAlarm = null;
+      this.cameraSearch.active = false;
       this.breathInvestigation.active = false;
       this.responseResume = null;
       this.responseBlockedReason = null;
@@ -8482,15 +9073,22 @@
       this.setSegmentPresentation(target);
       if (distance <= MR_FEAST_NPC.arrivalRadius) {
         this.root.position.set(target.x, target.y, target.z);
-        this.responseCurrentNodeId = target.id;
+        this.responseCurrentNodeId = pathStep.cameraLastSeen
+          ? pathStep.anchorNodeId
+          : target.id;
         this.currentRouteZone = target.zone;
         this.currentRouteLevel = target.level;
+        if (pathStep.cameraLastSeen) {
+          this.cameraSearch.arrivedLastSeen = true;
+          this.cameraSearch.minimumDistanceToLastSeen = 0;
+        }
         this.responsePath.shift();
         this.closeClearedRouteDoors(this.responsePath[0]?.node || null);
         if (!this.responsePath.length && !this.pursuit.active) {
           if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RESPONDING) this.beginSecuritySearch();
-          else this.finishSecurityReturn();
+          else if (this.behaviorState === MR_FEAST_RESPONSE_STATE.RETURNING) this.finishSecurityReturn();
         }
+        this.updateCameraSearchProximity();
         this.stepAnimationAndFace(dt);
         return;
       }
@@ -8509,6 +9107,7 @@
       const step = Math.min(distance, travelSpeed * dt);
       const movedDistance = this.moveWithCollision(dx / distance * step, dy / distance * step, dz / distance * step);
       this.responseDistance += movedDistance;
+      this.updateCameraSearchProximity();
       this.moving = movedDistance > 0.0001;
       this.closeClearedRouteDoors(target);
       if (this.pursuit.active) this.fadeToAction("run", MR_FEAST_NPC.fadeSeconds, false, this.runPlaybackRate());
@@ -8531,14 +9130,18 @@
         } else if (this.pursuitWarningFocus) {
           // Delivering a warning: he keeps facing the player he just caught.
           this.faceTarget(this.pursuitWarningFocus);
+        } else if (this.cameraSearch.active) {
+          this.updateCameraSearchPatrol(dt);
         } else {
           this.root.rotation.y = this.searchBaseYaw
             + Math.sin(this.searchElapsed / CAMERA_SECURITY.searchSweepSeconds * Math.PI * 2) * CAMERA_SECURITY.searchHalfAngle;
         }
-        this.moving = false;
-        this.fadeToAction("idle");
-        this.closeClearedRouteDoors(null);
-        this.stepAnimationAndFace(dt);
+        if (!this.cameraSearch.active || this.housekeeping.active || this.pursuitWarningFocus) {
+          this.moving = false;
+          this.fadeToAction("idle");
+          this.closeClearedRouteDoors(null);
+          this.stepAnimationAndFace(dt);
+        }
         if (this.searchRemaining <= 0) {
           if (this.housekeeping.active) {
             this.completeHousekeepingFix();
@@ -8928,6 +9531,7 @@
       this.responseCurrentNodeId = start.id;
       this.responseResume = null;
       this.activeCameraAlarm = null;
+      this.cameraSearch = this.createCameraSearchState();
       this.searchRemaining = 0;
       this.searchElapsed = 0;
       this.searchBaseYaw = 0;
@@ -9255,6 +9859,7 @@
           states: [...this.responseStateTrace],
           teleports: this.responseTeleports,
           distanceTravelled: Number(this.responseDistance.toFixed(3)),
+          search: this.cameraSearchDiagnostics(),
           error: "Mr Feast camera response is not ready",
         };
       }
@@ -9287,7 +9892,10 @@
           room: alarm.room,
           reason: alarm.reason,
           targetNodeId: alarm.targetNodeId,
+          lastSeen: alarm.lastSeen ? { ...alarm.lastSeen } : null,
+          exactApproach: Boolean(alarm.exactApproach),
         } : null,
+        search: this.cameraSearchDiagnostics(),
         blockedReason: this.responseBlockedReason,
       };
       return this.qaLastCameraResponse;
@@ -9409,6 +10017,8 @@
             room: this.activeCameraAlarm.room,
             reason: this.activeCameraAlarm.reason,
             targetNodeId: this.activeCameraAlarm.targetNodeId,
+            lastSeen: this.activeCameraAlarm.lastSeen ? { ...this.activeCameraAlarm.lastSeen } : null,
+            exactApproach: Boolean(this.activeCameraAlarm.exactApproach),
           } : null,
           pathRemaining: this.responsePath.length,
           currentNodeId: this.responseCurrentNodeId,
@@ -9417,6 +10027,7 @@
           teleports: this.responseTeleports,
           blockedReason: this.responseBlockedReason,
           states: [...this.responseStateTrace],
+          cameraSearch: this.cameraSearchDiagnostics(),
           qaLastResponse: this.qaLastCameraResponse,
         },
         housekeeping: {
@@ -25074,11 +25685,140 @@
       return M[name] || M.iron;
     }
 
+    isDescendantOf(object, root) {
+      let cursor = object;
+      while (cursor) {
+        if (cursor === root) return true;
+        cursor = cursor.parent;
+      }
+      return false;
+    }
+
+    authoredVisualCandidates(placement) {
+      const localNames = new Set(placement.sourceNames || []);
+      const uniqueNames = new Set(placement.sourceUniqueNames || []);
+      if (!localNames.size && !uniqueNames.size) return [];
+      const center = new THREE.Vector3(
+        placement.position.x,
+        placement.position.y,
+        placement.position.z,
+      );
+      const radius = Math.max(0.01, placement.sourceRadius || 0.35);
+      const worldPosition = new THREE.Vector3();
+      const matches = [];
+      scene.updateMatrixWorld(true);
+      scene.traverse((object) => {
+        if (!object.isMesh || (!localNames.has(object.name) && !uniqueNames.has(object.name))) return;
+        let portableAncestor = object.parent;
+        while (portableAncestor && portableAncestor !== scene) {
+          if (portableAncestor.userData.portableThrowableRoot) return;
+          portableAncestor = portableAncestor.parent;
+        }
+        if (uniqueNames.has(object.name)) {
+          matches.push(object);
+          return;
+        }
+        object.getWorldPosition(worldPosition);
+        if (worldPosition.distanceTo(center) <= radius) matches.push(object);
+      });
+      return matches;
+    }
+
+    adoptAuthoredVisual(entry) {
+      const matches = this.authoredVisualCandidates(entry.placement);
+      entry.adoptedPartNames = matches.map((object) => object.name);
+      entry.adoptedPartCount = matches.length;
+      entry.minimumSourceParts = Math.max(0, entry.placement.minimumSourceParts || 0);
+      entry.sourceAdoptionComplete = (
+        entry.minimumSourceParts === 0
+        || entry.adoptedPartCount >= entry.minimumSourceParts
+      );
+      for (const object of matches) {
+        entry.root.attach(object);
+        object.traverse((child) => {
+          child.userData.portableThrowable = true;
+        });
+      }
+      return matches.length;
+    }
+
+    visualPartCount(entry) {
+      let count = 0;
+      entry.root.traverse((object) => {
+        if (object.isMesh && object !== entry.hitbox) count += 1;
+      });
+      return count;
+    }
+
+    strandedSourcePartCount(entry) {
+      const localNames = new Set(entry.placement.sourceNames || []);
+      const uniqueNames = new Set(entry.placement.sourceUniqueNames || []);
+      if (!localNames.size && !uniqueNames.size) return 0;
+      const center = new THREE.Vector3(
+        entry.placement.position.x,
+        entry.placement.position.y,
+        entry.placement.position.z,
+      );
+      const radius = Math.max(0.01, entry.placement.sourceRadius || 0.35);
+      const worldPosition = new THREE.Vector3();
+      let count = 0;
+      scene.updateMatrixWorld(true);
+      scene.traverse((object) => {
+        if (
+          !object.isMesh
+          || this.isDescendantOf(object, entry.root)
+          || (!localNames.has(object.name) && !uniqueNames.has(object.name))
+        ) return;
+        if (uniqueNames.has(object.name)) {
+          count += 1;
+          return;
+        }
+        object.getWorldPosition(worldPosition);
+        if (worldPosition.distanceTo(center) <= radius) count += 1;
+      });
+      return count;
+    }
+
     buildVisual(entry) {
       const { root, placement } = entry;
       const { size, kind } = placement;
       const material = this.materialFor(placement.material);
-      if (kind === "bottle") {
+      if (kind === "floralVase") {
+        cylinder({
+          name: `${placement.id}-vase`,
+          radius: size.x * 0.38,
+          radiusTop: size.x * 0.28,
+          radiusBottom: size.x * 0.32,
+          height: size.y * 0.56,
+          segments: 18,
+          y: -size.y * 0.2,
+          material,
+          parent: root,
+        });
+        [-0.07, 0, 0.07].forEach((x, stemIndex) => {
+          cylinder({
+            name: `${placement.id}-stem-${stemIndex + 1}`,
+            radius: 0.008,
+            height: size.y * 0.62,
+            segments: 7,
+            x,
+            y: size.y * 0.25,
+            z: stemIndex === 1 ? 0.025 : -0.018,
+            material: M.olive,
+            parent: root,
+            cast: false,
+          });
+          sphere({
+            name: `${placement.id}-bloom-${stemIndex + 1}`,
+            radius: 0.052,
+            x,
+            y: size.y * 0.57 + (stemIndex === 1 ? 0.035 : 0),
+            z: stemIndex === 1 ? 0.025 : -0.018,
+            material: stemIndex === 1 ? M.cream : M.crimson,
+            parent: root,
+          });
+        });
+      } else if (kind === "bottle") {
         cylinder({
           name: `${placement.id}-body`,
           radius: size.x * 0.42,
@@ -25205,8 +25945,11 @@
     createEntry(placement, index) {
       const root = new THREE.Group();
       root.name = `throwable-${placement.id}`;
+      root.userData.portableThrowableRoot = placement.id;
       root.position.set(placement.position.x, placement.position.y, placement.position.z);
-      root.rotation.y = (index % 3 - 1) * 0.14;
+      root.rotation.y = placement.sourceNames?.length || placement.sourceUniqueNames?.length
+        ? 0
+        : (index % 3 - 1) * 0.14;
       scene.add(root);
       const entry = {
         id: placement.id,
@@ -25232,8 +25975,12 @@
         impactPosition: null,
         impactSpeed: 0,
         earlyCollision: false,
+        adoptedPartNames: [],
+        adoptedPartCount: 0,
+        minimumSourceParts: 0,
+        sourceAdoptionComplete: true,
       };
-      this.buildVisual(entry);
+      if (!this.adoptAuthoredVisual(entry)) this.buildVisual(entry);
       root.traverse((object) => {
         object.userData.portableThrowable = true;
       });
@@ -25805,6 +26552,7 @@
       const carried = this.carried;
       return {
         tuning: {
+          minimumPortablePropCount: THROWABLE_DISTRACTIONS.minimumPortablePropCount,
           pickupHoldSeconds: THROWABLE_DISTRACTIONS.pickupHoldSeconds,
           throwSpeedMetersPerSecond: THROWABLE_DISTRACTIONS.throwSpeedMetersPerSecond,
           mrFeastHearingMeters: THROWABLE_DISTRACTIONS.mrFeastHearingMeters,
@@ -25816,6 +26564,10 @@
           id: carried.id,
           label: carried.label,
           mode: carried.mode,
+          adoptedPartCount: carried.adoptedPartCount,
+          visualPartCount: this.visualPartCount(carried),
+          strandedSourcePartCount: this.strandedSourcePartCount(carried),
+          sourceAdoptionComplete: carried.sourceAdoptionComplete,
           visibleInHand: (
             carried.root.parent === camera
             && camera.parent === scene
@@ -25882,6 +26634,12 @@
             resetByMrFeastCount: entry.resetByMrFeastCount,
             impactSpeed: Number(entry.impactSpeed.toFixed(3)),
             distanceTravelled: Number(entry.distanceTravelled.toFixed(3)),
+            adoptedPartCount: entry.adoptedPartCount,
+            adoptedPartNames: [...entry.adoptedPartNames],
+            minimumSourceParts: entry.minimumSourceParts,
+            sourceAdoptionComplete: entry.sourceAdoptionComplete,
+            visualPartCount: this.visualPartCount(entry),
+            strandedSourcePartCount: this.strandedSourcePartCount(entry),
           };
         }),
       };
@@ -28017,6 +28775,7 @@
         state.security.occludedBy = null;
         state.security.exposure = 0;
         state.security.alarmLatchCameraId = null;
+        state.security.alarmTrackingRefreshRemaining = 0;
         return;
       }
       const inspections = this.cameras
@@ -28042,6 +28801,7 @@
       flashlightSystem?.observeCamera(selected?.cameraState || null);
       if (!selected) {
         state.security.alarmLatchCameraId = null;
+        state.security.alarmTrackingRefreshRemaining = 0;
         state.security.exposure = Math.max(0, state.security.exposure - CAMERA_SECURITY.exposureDecayPerSecond * dt);
         return;
       }
@@ -28059,17 +28819,25 @@
       }
       if (selected.permitted) {
         state.security.alarmLatchCameraId = null;
+        state.security.alarmTrackingRefreshRemaining = 0;
         state.security.exposure = 0;
         return;
       }
       if (selected.reason === "observed-sabotage") {
         selected.cameraState.acquisition = 1;
         state.security.exposure = 1;
-        this.raiseAlarm(selected.cameraState, selected.reason);
+        if (!this.raiseAlarm(selected.cameraState, selected.reason)) {
+          this.refreshLatchedAlarm(selected.cameraState, selected.reason);
+        }
         return;
       }
       state.security.exposure = clamp(state.security.exposure + dt / CAMERA_SECURITY.exposureSeconds * visibility, 0, 1);
-      if (state.security.exposure >= 1) this.raiseAlarm(selected.cameraState, selected.reason);
+      if (
+        state.security.exposure >= 1
+        && !this.raiseAlarm(selected.cameraState, selected.reason)
+      ) {
+        this.refreshLatchedAlarm(selected.cameraState, selected.reason);
+      }
     }
 
     responseAnchor(cameraState, lastSeen) {
@@ -28081,6 +28849,58 @@
         return !nearest || distance < nearest.distance ? { point: candidate, distance } : nearest;
       }, null)?.point;
       return point ? { id: point.id, x: lastSeen.x, y: point.y, z: lastSeen.z } : null;
+    }
+
+    currentPlayerLastSeen(cameraState) {
+      const playerPosition = physics?.playerPosition();
+      const source = playerPosition || {
+        x: cameraState.x,
+        y: cameraState.floorY + PLAYER.halfHeight + PLAYER.radius,
+        z: cameraState.z,
+      };
+      return {
+        x: Number(source.x.toFixed(3)),
+        y: Number((source.y - (PLAYER.halfHeight + PLAYER.radius)).toFixed(3)),
+        z: Number(source.z.toFixed(3)),
+      };
+    }
+
+    refreshLatchedAlarm(cameraState, reason = "lockdown-sighting") {
+      const prior = state.security.lastAlarm;
+      if (
+        !cameraState
+        || !prior
+        || state.security.alarmLatchCameraId !== cameraState.id
+        || prior.cameraId !== cameraState.id
+      ) return false;
+      const lastSeen = this.currentPlayerLastSeen(cameraState);
+      const movedDistance = Math.hypot(
+        lastSeen.x - prior.lastSeen.x,
+        lastSeen.y - prior.lastSeen.y,
+        lastSeen.z - prior.lastSeen.z,
+      );
+      const shouldRetarget = movedDistance >= CAMERA_SECURITY.lastSeenRetargetMeters;
+      if (
+        state.security.alarmTrackingRefreshRemaining > 0
+        && !shouldRetarget
+      ) return false;
+      const response = this.responseAnchor(cameraState, lastSeen);
+      const refreshedAlarm = {
+        ...prior,
+        room: cameraState.room,
+        reason,
+        lastSeen,
+        responseNodeId: response?.id || null,
+        responsePosition: response ? { x: response.x, y: response.y, z: response.z } : null,
+        trackingRefreshCount: (Number(prior.trackingRefreshCount) || 0) + 1,
+        trackingRefreshDistance: Number(movedDistance.toFixed(3)),
+      };
+      state.security.lastAlarm = refreshedAlarm;
+      state.security.alarmTrackingRefreshRemaining = CAMERA_SECURITY.lastSeenRefreshSeconds;
+      // Avoid restarting the route for tiny camera jitter. Meaningful movement
+      // immediately retargets the same alarm without incrementing its count.
+      if (shouldRetarget) mrFeastNpc?.respondToCameraAlarm(refreshedAlarm);
+      return true;
     }
 
     reportFlashlightUse(observedCameraState) {
@@ -28154,12 +28974,7 @@
         state.security.alarmCooldown > 0
         || state.security.alarmLatchCameraId === cameraState.id
       ))) return false;
-      const p = physics?.playerPosition() || { x: cameraState.x, y: cameraState.floorY, z: cameraState.z };
-      const lastSeen = {
-        x: Number(p.x.toFixed(3)),
-        y: Number((p.y - (PLAYER.halfHeight + PLAYER.radius)).toFixed(3)),
-        z: Number(p.z.toFixed(3)),
-      };
+      const lastSeen = this.currentPlayerLastSeen(cameraState);
       const response = this.responseAnchor(cameraState, lastSeen);
       state.security.alarmCount += 1;
       state.security.lastAlarm = {
@@ -28170,9 +28985,12 @@
         lastSeen,
         responseNodeId: response?.id || null,
         responsePosition: response ? { x: response.x, y: response.y, z: response.z } : null,
+        trackingRefreshCount: 0,
+        trackingRefreshDistance: 0,
       };
       state.security.alarmCooldown = CAMERA_SECURITY.alarmCooldownSeconds;
       state.security.alarmLatchCameraId = cameraState.id;
+      state.security.alarmTrackingRefreshRemaining = CAMERA_SECURITY.lastSeenRefreshSeconds;
       state.security.exposure = 1;
       state.security.activeCameraId = cameraState.id;
       this.transitionPolicy("alarm");
@@ -28245,6 +29063,7 @@
       state.security.occludedBy = null;
       state.security.alarmCooldown = 0;
       state.security.alarmLatchCameraId = null;
+      state.security.alarmTrackingRefreshRemaining = 0;
       state.security.flashlightWarningRemaining = 0;
       for (const cameraState of this.cameras) {
         cameraState.playerInCone = false;
@@ -28275,6 +29094,10 @@
         return;
       }
       state.security.alarmCooldown = Math.max(0, state.security.alarmCooldown - safeDt);
+      state.security.alarmTrackingRefreshRemaining = Math.max(
+        0,
+        state.security.alarmTrackingRefreshRemaining - safeDt,
+      );
       state.security.flashlightWarningRemaining = Math.max(0, state.security.flashlightWarningRemaining - safeDt);
       for (const cameraState of this.cameras) {
         cameraState.flashlightWarningRemaining = Math.max(0, cameraState.flashlightWarningRemaining - safeDt);
@@ -28388,6 +29211,10 @@
           warningPulseCount: CAMERA_SECURITY.warningPulseCount,
           trackingThreshold: CAMERA_SECURITY.trackingThreshold,
           trackingTurnSpeed: Number(CAMERA_SECURITY.trackingTurnSpeed.toFixed(4)),
+          lastSeenRefreshSeconds: CAMERA_SECURITY.lastSeenRefreshSeconds,
+          lastSeenRetargetMeters: CAMERA_SECURITY.lastSeenRetargetMeters,
+          searchPatrolSeconds: CAMERA_SECURITY.searchPatrolSeconds,
+          searchPatrolRadiusMeters: CAMERA_SECURITY.searchPatrolRadiusMeters,
         },
         qa: {
           manual: this.qaManual,
@@ -28415,6 +29242,7 @@
       state.security.lastAlarm = null;
       state.security.alarmCooldown = 0;
       state.security.alarmLatchCameraId = null;
+      state.security.alarmTrackingRefreshRemaining = 0;
       flashlightSystem?.resetAlerts();
       if (state.activeHideSpot) state.activeHideSpot.exit();
       state.isHidden = false;

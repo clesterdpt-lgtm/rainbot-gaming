@@ -127,6 +127,13 @@ async function run() {
     assert(state.security.tuning.scanMinimumSeconds >= 10 && state.security.tuning.scanMaximumSeconds > state.security.tuning.scanMinimumSeconds, `camera one-way sweeps should be deliberately slow; tuning=${JSON.stringify(state.security.tuning)}`);
     assert(state.security.tuning.warningPulseCount === 3 && state.security.tuning.trackingThreshold > 0.5 && state.security.tuning.trackingThreshold < 1, `camera warning/tracking tuning should provide three pulses before alarm; tuning=${JSON.stringify(state.security.tuning)}`);
     assert(state.security.tuning.warningSeconds >= 2 && state.security.tuning.trackingGraceSeconds >= 1.5 && state.security.tuning.exposureSeconds >= state.security.tuning.warningSeconds + state.security.tuning.trackingGraceSeconds, `warning and solid-red tracking phases need readable real-time durations; tuning=${JSON.stringify(state.security.tuning)}`);
+    assert(
+      state.security.tuning.lastSeenRefreshSeconds <= 1
+        && state.security.tuning.lastSeenRetargetMeters <= 1
+        && state.security.tuning.searchPatrolSeconds >= 120
+        && state.security.tuning.searchPatrolRadiusMeters >= 4,
+      `camera alarms need frequent final-position refresh and a multi-minute local patrol; tuning=${JSON.stringify(state.security.tuning)}`,
+    );
     const securityDetails = await page.evaluate(() => window.MrFeastFresh.getCameraSecurityState());
     const indoorMounts = securityDetails.cameras.details.filter((entry) => !entry.outdoors);
     const cameraById = new Map(securityDetails.cameras.details.map((entry) => [entry.id, entry]));
@@ -294,6 +301,23 @@ async function run() {
     await advanceSecurity(page, 5);
     state = await diagnostics(page);
     assert(state.security.alarm.count === 1 && state.security.mode === "lockdown", `sustained hostile exposure should raise one alarm; security=${JSON.stringify(state.security)}`);
+    const firstAlarmPosition = { ...state.security.alarm.last.lastSeen };
+    await page.evaluate((id) => window.MrFeastFresh.placePlayerInCameraLaneForQA(id, {
+      distance: 4,
+      lateral: 1.35,
+    }), mainCamera);
+    await advanceSecurity(page, 1.2);
+    state = await diagnostics(page);
+    const refreshedAlarmPosition = state.security.alarm.last.lastSeen;
+    assert(
+      state.security.alarm.count === 1
+        && state.security.alarm.last.trackingRefreshCount >= 1
+        && Math.hypot(
+          refreshedAlarmPosition.x - firstAlarmPosition.x,
+          refreshedAlarmPosition.z - firstAlarmPosition.z,
+        ) >= state.security.tuning.lastSeenRetargetMeters,
+      `one latched alarm must keep the final recorded position current without spamming alarm count; first=${JSON.stringify(firstAlarmPosition)} refreshed=${JSON.stringify(state.security.alarm.last)}`,
+    );
     await advanceSecurity(page, 3);
     state = await diagnostics(page);
     assert(state.security.alarm.count === 1, `one continuous camera sighting should stay latched instead of spamming alarms; alarm=${JSON.stringify(state.security.alarm)}`);
@@ -366,16 +390,39 @@ async function run() {
     await page.evaluate((id) => {
       window.MrFeastFresh.resetMrFeastWandererForQA();
       window.MrFeastFresh.resetCameraSecurityForQA("show");
+      window.MrFeastFresh.setCameraSoloForQA(id);
+      window.MrFeastFresh.setCameraSweepForQA(id, 0);
+      window.MrFeastFresh.setCameraOccludedForQA(id, false);
+      window.MrFeastFresh.placePlayerInCameraLaneForQA(id, { distance: 4, lateral: 1.2 });
       window.MrFeastFresh.triggerCameraAlarmForQA(id, "qa-investigation");
     }, mainCamera);
     state = await diagnostics(page);
     assert(state.mrFeast.security.state === "responding", `camera alarm should divert Mr. Feast from patrol; mrFeast=${JSON.stringify(state.mrFeast.security)}`);
-    const response = await page.evaluate(() => window.MrFeastFresh.runMrFeastCameraResponseForQA(180));
+    const expectedLastSeen = { ...state.security.alarm.last.lastSeen };
+    const arrivalProbe = await page.evaluate(() => window.MrFeastFresh.runMrFeastCameraResponseForQA(45));
+    assert(
+      !arrivalProbe.completed
+        && arrivalProbe.search?.arrivedLastSeen
+        && arrivalProbe.search.minimumDistanceToLastSeen <= 0.5
+        && arrivalProbe.search.elapsedSeconds > 0,
+      `Mr. Feast must physically reach the exact reachable camera position before beginning his long patrol; expected=${JSON.stringify(expectedLastSeen)} response=${JSON.stringify(arrivalProbe)}`,
+    );
+    await screenshotStage(page, "camera-last-seen-search-desktop.png");
+    const response = await page.evaluate(() => window.MrFeastFresh.runMrFeastCameraResponseForQA(360));
     assert(response.completed, `Mr. Feast response should complete in deterministic QA time; response=${JSON.stringify(response)}`);
     for (const responseState of ["responding", "searching", "returning", "patrol"]) {
       assert(response.states.includes(responseState), `alarm lifecycle never entered ${responseState}; response=${JSON.stringify(response)}`);
     }
-    assert(response.teleports === 0 && response.distanceTravelled > 0, `Mr. Feast must navigate rather than teleport; response=${JSON.stringify(response)}`);
+    assert(
+      response.teleports === 0
+        && response.distanceTravelled > 0
+        && response.search?.durationSeconds >= 120
+        && response.search.elapsedSeconds >= response.search.durationSeconds
+        && response.search.patrolDistance >= 10
+        && response.search.nodeVisits >= 2
+        && response.search.minimumDistanceToLastSeen <= 0.5,
+      `Mr. Feast must navigate to the final camera position and patrol nearby for a few minutes before returning; response=${JSON.stringify(response)}`,
+    );
 
     await configureCameraScenario(page, { cameraId: mainCamera, mode: "lockdown", sweep: 0 });
     await advanceSecurity(page, 0.35);

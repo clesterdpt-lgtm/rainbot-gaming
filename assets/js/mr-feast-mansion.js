@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260728-throwable-distractions-3";
+  const MANSION_RUNTIME_VERSION = "20260728-flashlight-open-cabinet-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -62,6 +62,8 @@
     keypadTick: Object.freeze(["../Sounds/mr-feast/keypad-tick.ogg"]),
     keypadConfirm: Object.freeze(["../Sounds/mr-feast/keypad-confirm.ogg"]),
     keypadError: Object.freeze(["../Sounds/mr-feast/keypad-error.ogg"]),
+    breathSprint: Object.freeze(["../Sounds/mr-feast/player-breath-sprint.ogg"]),
+    breathHoldRelease: Object.freeze(["../Sounds/mr-feast/player-breath-hold-release.ogg"]),
   });
   const THREE = window.THREE;
   const boot = window.__MR_FEAST_BOOT__;
@@ -1957,6 +1959,29 @@
       heavy: 0.165,
       panicked: 0.22,
       gasp: 0.27,
+    }),
+    // The recorded files are loudness-prepared once at authoring time, then
+    // shaped non-destructively here. Scared breathing at full energy reuses
+    // the sprint recording at a distinctly slower, quieter setting so fear
+    // reads without sounding as if the player is still physically exhausted.
+    recordedAudio: Object.freeze({
+      fearRestRate: 0.74,
+      fearRestVolume: 0.18,
+      sprintRate: Object.freeze({
+        light: 0.92,
+        heavy: 1,
+        panicked: 1.08,
+      }),
+      sprintVolume: Object.freeze({
+        light: 0.42,
+        heavy: 0.64,
+        panicked: 0.82,
+      }),
+      holdReleaseRate: 0.96,
+      holdReleaseVolume: 0.68,
+      fadeSeconds: 0.045,
+      highpassHz: 70,
+      lowpassHz: 5200,
     }),
     eventHistoryLimit: 24,
   });
@@ -15825,6 +15850,12 @@
       if (this.walkIn) syncLightRendering();
       else if (this.interiorLight) syncLightRendering();
       if (this.stockMeshes) for (const mesh of this.stockMeshes) mesh.visible = this.open && !interiorDetailsHidden;
+      // Storage-gated world pickups (kitchen under-sink flashlight, walk-in
+      // copies) only become interactable while this enclosure is open.
+      if (flashlightSystem) {
+        flashlightSystem.syncPickupVisibility();
+        updateInteractionPrompt();
+      }
       if (!silent && audioSystem) audioSystem.cabinet(this.open);
     }
 
@@ -26471,14 +26502,25 @@
       };
     }
 
+    isStorageAccessible(location) {
+      if (!location?.storageName) return true;
+      const storage = animatedObjects.find(
+        (object) => object instanceof Cabinet && object.name === location.storageName,
+      );
+      // Under-sink and walk-in copies stay sealed until the player opens that
+      // exact piece of storage; a missing cabinet is treated as closed.
+      return Boolean(storage?.open);
+    }
+
     syncPickupVisibility() {
-      const visible = !this.collected();
+      const collected = this.collected();
       for (const pickup of this.pickups || []) {
-        pickup.root.visible = visible;
-        if (visible && !pickup.registered) {
+        const accessible = !collected && this.isStorageAccessible(pickup.location);
+        pickup.root.visible = accessible;
+        if (accessible && !pickup.registered) {
           addInteractionTarget(pickup.hitbox, pickup.interaction);
           pickup.registered = true;
-        } else if (!visible && pickup.registered) {
+        } else if (!accessible && pickup.registered) {
           removeInteractionTarget(pickup.hitbox);
           pickup.registered = false;
         }
@@ -26524,6 +26566,10 @@
 
     collect() {
       if (this.collected()) return false;
+      const canReachCopy = (this.pickups || []).some(
+        (pickup) => pickup.registered && this.isStorageAccessible(pickup.location),
+      );
+      if (!canReachCopy) return false;
       if (
         competitionBlocksInvestigation()
         && !victoryFeastSystem?.allowsPlayerTools()
@@ -26755,6 +26801,7 @@
           label: pickup.location.label,
           visible: Boolean(pickup.root.visible),
           registered: pickup.registered,
+          storageAccessible: this.isStorageAccessible(pickup.location),
           position: {
             x: pickup.location.x,
             y: pickup.location.y,
@@ -33284,10 +33331,11 @@
   ]);
 
   function addDiningServiceBell() {
-    // The complete curtain pass occupies every exterior opening. Move the bell
-    // to the clear north-wall pier between the coat-closet and bathroom doors
-    // so neither device has to float in front of a west window.
-    const x = -11.5;
+    // Keep the bell on the dining-room face of the gallery wall, but not on the
+    // coat-closet pier where "The Audit of Souls" already hangs at x=-11.5.
+    // The open stretch between the bathroom gallery door (~x=-9.0) and the
+    // "Generosity Engine" portrait (~x=-7.0) leaves a clean mid-pier mount.
+    const x = -8.1;
     const z = -3.38;
     const floorY = FLOOR.MAIN;
     const root = new THREE.Group();
@@ -33324,7 +33372,7 @@
       hit,
       pulseSeconds: MANSION_DISTRACTIONS.serviceBellPulseSeconds,
       labels: { tamperLabel: "Pull the service bell", restoreLabel: "Silence the service bell" },
-      qa: { x, z: -4.72, floorY, pitch: -0.16 },
+      qa: { x: -8.1, z: -4.72, floorY, pitch: -0.16 },
       apply: (active) => {
         if (!active) bellPivot.rotation.z = 0;
       },
@@ -36263,8 +36311,14 @@
         playCount: 0,
         gaspCount: 0,
         stopCount: 0,
+        fallbackCount: 0,
+        overlapSkipCount: 0,
         lastTier: "silent",
         lastVolume: 0,
+        lastRate: 1,
+        lastAssetRole: null,
+        lastAssetPath: null,
+        lastPresentation: "silent",
       };
       this.banquetBreathing = {
         active: false,
@@ -36720,7 +36774,70 @@
       };
     }
 
-    playPlayerBreath(tier = "light", { gasp = false } = {}) {
+    playRecordedPlayerBreath(assetRole, {
+      profile,
+      presentation,
+      rate,
+      volume,
+      gasp = false,
+    }) {
+      const [path] = this.availableAssets(assetRole);
+      const buffer = path ? this.buffers.get(path) : null;
+      if (!buffer) return false;
+      if (this.playerBreathSources.size > 0) {
+        if (assetRole !== "breathHoldRelease") {
+          // AI breath events keep their authored cadence, but a 3.5-second
+          // recorded loop should not stack over itself every 0.9–2.5 seconds.
+          this.playerBreathing.overlapSkipCount += 1;
+          return true;
+        }
+        this.stopPlayerBreathing();
+      }
+      const now = this.ctx.currentTime;
+      const source = this.ctx.createBufferSource();
+      source.buffer = buffer;
+      source.playbackRate.setValueAtTime(rate, now);
+      const high = this.ctx.createBiquadFilter();
+      high.type = "highpass";
+      high.frequency.value = BREATH_STEALTH.recordedAudio.highpassHz;
+      const low = this.ctx.createBiquadFilter();
+      low.type = "lowpass";
+      low.frequency.value = BREATH_STEALTH.recordedAudio.lowpassHz;
+      const gain = this.ctx.createGain();
+      const duration = buffer.duration / Math.max(0.25, rate);
+      const fade = Math.min(
+        BREATH_STEALTH.recordedAudio.fadeSeconds,
+        Math.max(0.01, duration * 0.12),
+      );
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.linearRampToValueAtTime(volume, now + fade);
+      gain.gain.setValueAtTime(volume, Math.max(now + fade, now + duration - fade));
+      gain.gain.linearRampToValueAtTime(0.0001, now + duration);
+      source.connect(high).connect(low).connect(gain).connect(this.master);
+      this.trackPlayerBreathSource(source);
+      try {
+        source.start(now);
+      } catch (_) {
+        try { source.stop(); } catch (_) { /* Already stopped. */ }
+        return false;
+      }
+      this.playerBreathing.playCount += 1;
+      if (gasp) this.playerBreathing.gaspCount += 1;
+      this.playerBreathing.lastTier = profile;
+      this.playerBreathing.lastVolume = volume;
+      this.playerBreathing.lastRate = rate;
+      this.playerBreathing.lastAssetRole = assetRole;
+      this.playerBreathing.lastAssetPath = path;
+      this.playerBreathing.lastPresentation = presentation;
+      this.markCue(gasp ? "playerForcedGasp" : `playerBreath${profile[0].toUpperCase()}${profile.slice(1)}`);
+      return true;
+    }
+
+    playPlayerBreath(tier = "light", {
+      gasp = false,
+      holdRelease = false,
+      restedFear = false,
+    } = {}) {
       const profile = gasp ? "gasp" : (
         ["light", "heavy", "panicked"].includes(tier) ? tier : "light"
       );
@@ -36730,6 +36847,35 @@
         || this.ctx.state !== "running"
         || !state.audioEnabled
       ) return false;
+      const settings = BREATH_STEALTH.recordedAudio;
+      const releasePresentation = gasp || holdRelease;
+      const assetRole = releasePresentation ? "breathHoldRelease" : "breathSprint";
+      const presentation = releasePresentation
+        ? "hold-release"
+        : restedFear
+          ? "rested-fear"
+          : "sprint-recovery";
+      const rate = releasePresentation
+        ? settings.holdReleaseRate
+        : restedFear
+          ? settings.fearRestRate
+          : settings.sprintRate[profile] || settings.sprintRate.light;
+      const recordedVolume = releasePresentation
+        ? settings.holdReleaseVolume
+        : restedFear
+          ? settings.fearRestVolume
+          : settings.sprintVolume[profile] || settings.sprintVolume.light;
+      if (this.playRecordedPlayerBreath(assetRole, {
+        profile,
+        presentation,
+        rate,
+        volume: recordedVolume,
+        gasp,
+      })) return true;
+
+      // Recorded files may still be decoding immediately after the trusted
+      // start gesture or may fail to load offline. Retain the original close,
+      // procedural breath as a zero-network fallback.
       const now = this.ctx.currentTime;
       const volume = BREATH_STEALTH.audioVolume[profile] || BREATH_STEALTH.audioVolume.light;
       const intensity = BREATH_STEALTH.tierIntensity[profile] || 0.5;
@@ -36790,9 +36936,14 @@
         return false;
       }
       this.playerBreathing.playCount += 1;
+      this.playerBreathing.fallbackCount += 1;
       if (gasp) this.playerBreathing.gaspCount += 1;
       this.playerBreathing.lastTier = profile;
       this.playerBreathing.lastVolume = volume;
+      this.playerBreathing.lastRate = 1;
+      this.playerBreathing.lastAssetRole = "procedural";
+      this.playerBreathing.lastAssetPath = null;
+      this.playerBreathing.lastPresentation = presentation;
       this.markCue(gasp ? "playerForcedGasp" : `playerBreath${profile[0].toUpperCase()}${profile.slice(1)}`);
       return true;
     }
@@ -36808,13 +36959,32 @@
     }
 
     playerBreathingDiagnostics() {
+      const loadedAssetRoles = ["breathSprint", "breathHoldRelease"]
+        .filter((role) => this.availableAssets(role).length > 0);
+      const pending = ["breathSprint", "breathHoldRelease"]
+        .some((role) => this.assetsFor(role).some((path) => this.pendingAssets.has(path)));
       return {
-        profile: "procedural-close-first-person",
+        profile: "recorded-close-first-person-with-procedural-fallback",
+        mode: loadedAssetRoles.length === 2
+          ? "recorded-ready"
+          : pending
+            ? "recorded-loading"
+            : "procedural-fallback",
+        recordedReady: loadedAssetRoles.length === 2,
+        loadedAssetRoles,
         playCount: this.playerBreathing.playCount,
         gaspCount: this.playerBreathing.gaspCount,
         stopCount: this.playerBreathing.stopCount,
+        fallbackCount: this.playerBreathing.fallbackCount,
+        overlapSkipCount: this.playerBreathing.overlapSkipCount,
         lastTier: this.playerBreathing.lastTier,
         lastVolume: Number(this.playerBreathing.lastVolume.toFixed(4)),
+        lastRate: Number(this.playerBreathing.lastRate.toFixed(4)),
+        lastAssetRole: this.playerBreathing.lastAssetRole,
+        lastAssetPath: this.playerBreathing.lastAssetPath,
+        lastPresentation: this.playerBreathing.lastPresentation,
+        fearRestRate: BREATH_STEALTH.recordedAudio.fearRestRate,
+        fearRestVolume: BREATH_STEALTH.recordedAudio.fearRestVolume,
         activeSourceCount: this.playerBreathSources.size,
       };
     }
@@ -37705,6 +37875,13 @@
         const changed = this.breath.holding;
         this.breath.holding = false;
         this.breath.nextBreathSeconds = 0;
+        if (
+          changed
+          && source !== "inactive"
+          && source !== "input-cleared"
+        ) {
+          audioSystem?.playPlayerBreath("light", { holdRelease: true });
+        }
         this.syncCapacity();
         this.syncHud();
         return { accepted: true, holding: false, changed, source };
@@ -37950,7 +38127,12 @@
       if (event.forced) {
         audioSystem?.playPlayerBreath("gasp", { gasp: true });
       } else {
-        audioSystem?.playPlayerBreath(tier);
+        const restedFear = (
+          tier === "light"
+          && this.breath.strain < BREATH_STEALTH.lightStrainThreshold
+          && (this.breath.aggro || this.breath.fearTailSeconds > 0)
+        );
+        audioSystem?.playPlayerBreath(tier, { restedFear });
         this.breath.emittedBreaths += 1;
       }
       const listeners = this.dispatchToListeners(event);
@@ -41317,6 +41499,21 @@
       return getWindowCurtainDiagnostics();
     };
     window.MrFeastFresh.getAudioStateForQA = () => audioSystem ? audioSystem.getDiagnostics() : null;
+    window.MrFeastFresh.prepareBreathAudioForQA = async () => {
+      if (!state.qa || !audioSystem) return null;
+      await audioSystem.unlock();
+      await Promise.allSettled(
+        ["breathSprint", "breathHoldRelease"]
+          .flatMap((role) => audioSystem.assetsFor(role))
+          .map((path) => audioSystem.loadAsset(path)),
+      );
+      return audioSystem.playerBreathingDiagnostics();
+    };
+    window.MrFeastFresh.stopPlayerBreathingForQA = () => (
+      state.qa && audioSystem
+        ? audioSystem.stopPlayerBreathing()
+        : null
+    );
     window.MrFeastFresh.suspendAudioForQA = () => (
       state.qa && audioSystem
         ? audioSystem.suspendForQA()

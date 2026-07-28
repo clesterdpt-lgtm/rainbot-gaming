@@ -82,6 +82,17 @@ async function assertSourceContract() {
   assert(/hearFinaleBreathing\s*\(/.test(runtime), "the Saint needs a finale breath-investigation handoff");
   assert(/playPlayerBreath\s*\(/.test(runtime), "MansionAudio needs a gameplay player-breath cue");
   assert(/stopPlayerBreathing\s*\(/.test(runtime), "holding/cleanup must stop active gameplay breath sources");
+  assert(
+    /breathSprint:\s*Object\.freeze\(\["\.\.\/Sounds\/mr-feast\/player-breath-sprint\.ogg"\]\)/.test(runtime),
+    "breathloop02 must be the recorded sprint/recovery breath asset",
+  );
+  assert(
+    /breathHoldRelease:\s*Object\.freeze\(\["\.\.\/Sounds\/mr-feast\/player-breath-hold-release\.ogg"\]\)/.test(runtime),
+    "breathloop01 must be the recorded held-breath release asset",
+  );
+  assert(/recordedAudio:\s*Object\.freeze/.test(runtime), "recorded breath playback needs named tuning");
+  assert(/fearRestRate:\s*0\.[0-9]+/.test(runtime), "rested frightened breathing needs an explicit slowed playback rate");
+  assert(/fearRestVolume:\s*0\.[0-9]+/.test(runtime), "rested frightened breathing needs an explicit quieter gain");
   assert(/event\.code === "Space"/.test(runtime), "Space must own the desktop hold-breath input");
   assert(/id="mansion-breath"/.test(html), "missing accessible breath meter");
   assert(/id="touch-breath"/.test(html), "missing contextual touch hold-breath control");
@@ -95,6 +106,8 @@ async function assertSourceContract() {
     "probeBreathHearingForQA",
     "emitPlayerBreathForQA",
     "stageBreathThreatForQA",
+    "prepareBreathAudioForQA",
+    "stopPlayerBreathingForQA",
   ]) {
     assert(runtime.includes(hook), `missing deterministic breath QA hook: ${hook}`);
   }
@@ -117,6 +130,13 @@ async function runBrowserFlow() {
     browser = await chromium.launch({ headless: true });
     const errors = [];
     const page = await bootPage(browser, { width: 1280, height: 820 }, errors);
+    const audioReady = await page.evaluate(() => window.MrFeastFresh.prepareBreathAudioForQA());
+    assert(
+      audioReady?.recordedReady
+        && audioReady.loadedAssetRoles.includes("breathSprint")
+        && audioReady.loadedAssetRoles.includes("breathHoldRelease"),
+      `both recorded breathing clips must decode before the focused audio flow: ${JSON.stringify(audioReady)}`,
+    );
 
     // A rested walking player is the silent baseline.
     await page.evaluate(() => {
@@ -141,7 +161,14 @@ async function runBrowserFlow() {
       `holding Space must start the authoritative full-energy breath hold: ${JSON.stringify(breath)}`,
     );
     await page.keyboard.up("Space");
-    assert(!(await breathState(page)).holding, "releasing Space must release held breath");
+    breath = await breathState(page);
+    assert(!breath.holding, "releasing Space must release held breath");
+    assert(
+      breath.audio.lastAssetRole === "breathHoldRelease"
+        && breath.audio.lastPresentation === "hold-release",
+      `releasing held breath must use breathloop01: ${JSON.stringify(breath.audio)}`,
+    );
+    await page.evaluate(() => window.MrFeastFresh.stopPlayerBreathingForQA());
 
     // Actual sprint input raises strain and drains the existing reserve.
     await page.keyboard.down("w");
@@ -159,6 +186,12 @@ async function runBrowserFlow() {
         && breath.emittedBreaths > 0,
       `sprinting must create audible respiratory strain: ${JSON.stringify({ breath, movement: playerAfterSprint.movement })}`,
     );
+    assert(
+      breath.audio.lastAssetRole === "breathSprint"
+        && breath.audio.lastPresentation === "sprint-recovery",
+      `post-sprint breathing must use breathloop02: ${JSON.stringify(breath.audio)}`,
+    );
+    const sprintAudio = { rate: breath.audio.lastRate, volume: breath.audio.lastVolume };
     await page.evaluate(() => {
       window.MrFeastFresh.setPlayerEnergyForQA(100);
       window.MrFeastFresh.setBreathStrainForQA(45);
@@ -222,6 +255,7 @@ async function runBrowserFlow() {
 
     // Threat-driven idle breathing and the exact four-second tail.
     await page.evaluate(() => {
+      window.MrFeastFresh.stopPlayerBreathingForQA();
       window.MrFeastFresh.setPlayerEnergyForQA(100);
       window.MrFeastFresh.setBreathStrainForQA(0);
       window.MrFeastFresh.setBreathAggroForQA(true);
@@ -229,6 +263,16 @@ async function runBrowserFlow() {
     await advanceBreath(page, 0.2);
     breath = await breathState(page);
     assert(breath.aggro && breath.tier === "light" && breath.audible, `aggro must create light scared breathing at rest: ${JSON.stringify(breath)}`);
+    assert(
+      breath.audio.lastAssetRole === "breathSprint"
+        && breath.audio.lastPresentation === "rested-fear"
+        && breath.audio.lastRate < sprintAudio.rate
+        && breath.audio.lastVolume < sprintAudio.volume,
+      `fully rested scared breathloop02 must be slower and quieter than sprint recovery: ${JSON.stringify({
+        rested: breath.audio,
+        sprint: sprintAudio,
+      })}`,
+    );
     await page.evaluate(() => window.MrFeastFresh.setBreathAggroForQA(false));
     await advanceBreath(page, 3.9);
     breath = await breathState(page);

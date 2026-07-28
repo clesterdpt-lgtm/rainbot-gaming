@@ -21,12 +21,13 @@ Make sprinting create an audible stealth consequence. A winded player breathes h
 - Let Mr. Feast hear a maximum of six metres and the Saint hear a maximum of seven metres, subject to the same acoustic room and wall/closed-door occlusion.
 - Give curtains almost no sound reduction and the coat closet a thirty-five-percent hearing-range reduction; neither hiding place grants silence.
 - Route a first breath sound into investigation. Continued breathing or a forced gasp after the listener reaches the hiding place can expose and catch the player.
-- Use the existing Web Audio mix and procedural player-breath grammar without adding an autoplay path or downloaded sound asset.
+- Use local recorded breathing through the existing trusted-gesture Web Audio mix: `breathloop02` for sprint recovery, `breathloop01` for held-breath release/forced gasp, and the procedural grammar only as a decode/load fallback.
+- Reuse `breathloop02` at a named slower playback rate and lower gain when a fully rested player is breathing only from fear.
 - Preserve deterministic QA, save/load normalization, desktop/mobile layout, and the captured-at-dinner breathing scene.
 
 ## Out of scope
 
-- Voice acting or recorded breathing samples.
+- Voice acting beyond the two approved local breathing recordings.
 - A whole-house propagation graph, sound reflections, vents, floor-to-floor leakage, or sound through open exterior space.
 - Rebalancing footsteps, camera vision, crouch visibility, Mr. Feast movement speed, or Saint flashlight stun tuning.
 - Workroom sabotage, gate escape, or the completed finale ending.
@@ -43,6 +44,8 @@ Make sprinting create an audible stealth consequence. A winded player breathes h
 - [x] Hold capacity is a linear `5s` at zero energy through `45s` at full energy. Space and the contextual touch button share one hold state and accessible meter.
 - [x] Holding suppresses breath audio and AI hearing and pauses energy recovery. Sprinting cancels the hold with a gasp; exhausting it forces a gasp and a `1s` lockout.
 - [x] Active Mr. Feast pursuit/investigation or an active finale Saint creates light scared breathing at rest. Mere camera observation does not. The fear floor lasts exactly four seconds after aggro ends.
+- [x] Post-sprint light/heavy/panicked breathing uses the local `breathloop02` recording. Fully rested scared breathing reuses that file at `0.74×` playback and `0.18` gain, below every sprint-recovery profile.
+- [x] Releasing a held breath and forced gasp use local `breathloop01` at `0.96×` playback and `0.68` gain. Recorded sources never stack over their own multi-second duration, stop on hold/cleanup, and fall back to the prior procedural cue if decoding is unavailable.
 - [x] Heavy breath reaches Mr. Feast only inside `6m` and the Saint only inside `7m`, only within the same authored room and with no wall or closed door between listener and player.
 - [x] Curtain hiding retains at least `95%` of the hearing range. The coat closet applies a `0.65` range multiplier. Both still allow a nearby listener to hear.
 - [x] Mr. Feast treats the first audible breath as a bounded sound investigation rather than instant knowledge/capture. Continued breathing or a forced gasp at the reached hiding place exposes the player and resolves through the existing pursuit/catch rules.
@@ -59,7 +62,7 @@ The player can sprint away, hear their breathing become dangerous, enter a hidin
 ## Test plan
 
 1. Add `scripts/test-mr-feast-breath-stealth.mjs` first and confirm its source contract fails on the missing named system.
-2. Implement the centralized system, Web Audio cues, hiding attenuation, listener handoffs, HUD, input, persistence, and QA controls.
+2. Implement the centralized system, recorded Web Audio cues with procedural fallback, hiding attenuation, listener handoffs, HUD, input, persistence, and QA controls.
 3. Use deterministic browser probes for all capacity endpoints, energy recovery, gasp paths, fear tail, hearing ranges, room/occlusion gates, and first-hear investigation.
 4. Capture desktop and `390×844` hidden/hold states after inspecting `render_game_to_text()`.
 5. Run runtime/test syntax, the focused suite, player systems, audio, pursuit, curtains, Victory Feast, banquet loss, full Contestant 13, renovation, and `git diff --check`.
@@ -67,6 +70,7 @@ The player can sprint away, hear their breathing become dangerous, enter a hidin
 ## Automated verification results
 
 - The red-first focused contract stopped on `missing named BREATH_STEALTH tuning table`. The completed browser suite proves calm silence, actual sprint strain, light/heavy/panicked tiers, exact `5s`/`45s` capacity endpoints, Space and touch hold/release, paused recovery, sprint/empty gasps, one-second lockout, four-second fear tail, camera-only non-aggro, both hearing maxima, room/occlusion gates, hiding attenuation, bounded Mr. Feast investigation, close hidden exposure, persistence normalization, and desktop/phone presentation.
+- The recorded-audio refinement then failed red on `breathloop02 must be the recorded sprint/recovery breath asset`. Green browser diagnostics prove both local OGG files decode after audio unlock, loop02 owns sprint recovery, loop01 owns held-breath release, and the fully rested fear profile is both slower and quieter than the exercised heavy sprint profile without changing AI-hearing authority.
 - The Victory Feast suite additionally stages a real hidden coat-closet event: the Saint hears the partially muffled breath, switches to the last audible position, and physically advances toward it without receiving later silent live tracking.
 - Inspected visual proof is `output/playwright/mr-feast-breath-stealth/breath-stealth-desktop.png` and `breath-hold-mobile.png`. The phone layout keeps every contextual action at least `44px`; the persistent baseline controls occupy `22.93%` of the `390×844` stage after the adjacent touch-row correction.
 - Runtime and changed-test syntax, focused Breath Stealth, Player Systems, Victory Feast, mansion audio, caught pursuit, all-window curtains, banquet loss, Feast Hunt, full desktop/mobile Contestant 13, and the relevant static contract pass. The renovation audit retains only its unrelated current-origin `28 stairwell continuity` failure. User approval of breathing cadence, hold tension, and hiding fairness remains open.

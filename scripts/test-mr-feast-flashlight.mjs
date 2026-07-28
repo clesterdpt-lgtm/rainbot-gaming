@@ -131,10 +131,16 @@ async function run() {
     await page.waitForTimeout(1000);
     console.log("flashlight qa: desktop ready");
 
-    // 1. Fresh state and pre-collection input stay inert.
+    // 1. Fresh state and pre-collection input stay inert. Only open-shelf
+    // copies are world-visible; under-sink and walk-in copies stay sealed
+    // until their storage is opened.
     let light = await flashlight(page);
     assert(light && !light.collected && !light.on && light.pickupVisible, `fresh flashlight state is wrong: ${JSON.stringify(light)}`);
-    assert(light.pickups?.length === 3 && light.pickups.every((pickup) => pickup.visible), `fresh run should show all three flashlight pickups: ${JSON.stringify(light.pickups)}`);
+    assert(light.pickups?.length === 3, `fresh run should declare all three flashlight pickups: ${JSON.stringify(light.pickups)}`);
+    const byId = Object.fromEntries((light.pickups || []).map((pickup) => [pickup.id, pickup]));
+    assert(byId["basement-archive"]?.visible && byId["basement-archive"]?.registered, `open-shelf archive copy should be free: ${JSON.stringify(byId["basement-archive"])}`);
+    assert(!byId["kitchen-under-sink"]?.visible && !byId["kitchen-under-sink"]?.registered && byId["kitchen-under-sink"]?.storageAccessible === false, `kitchen under-sink copy must stay sealed until the cabinet opens: ${JSON.stringify(byId["kitchen-under-sink"])}`);
+    assert(!byId["upper-east-front-closet"]?.visible && !byId["upper-east-front-closet"]?.registered && byId["upper-east-front-closet"]?.storageAccessible === false, `walk-in copy must stay sealed until the closet opens: ${JSON.stringify(byId["upper-east-front-closet"])}`);
     await page.keyboard.press("f");
     assert(!(await flashlight(page)).on, "F must do nothing before the flashlight is collected");
 
@@ -151,8 +157,19 @@ async function run() {
       await pickupPage.addInitScript(() => localStorage.removeItem("rainbot_game_save:mr-feast-mansion"));
       await pickupPage.goto(gameUrl, { waitUntil: "domcontentloaded" });
       await pickupPage.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
+      // Closed storage must not offer the pickup prompt before the helper opens it.
+      const sealed = await pickupPage.evaluate((id) => {
+        const before = window.MrFeastFresh.getFlashlightState()?.pickups?.find((pickup) => pickup.id === id);
+        return {
+          visible: Boolean(before?.visible),
+          registered: Boolean(before?.registered),
+          storageAccessible: before?.storageAccessible,
+        };
+      }, locationId);
+      assert(!sealed.visible && !sealed.registered && sealed.storageAccessible === false, `${locationId} must stay sealed before its storage opens: ${JSON.stringify(sealed)}`);
       const locationStaging = await pickupPage.evaluate((id) => window.MrFeastFresh.placePlayerNearFlashlightForQA(id), locationId);
       assert(locationStaging?.locationId === locationId, `QA staging should target ${locationId}; staging=${JSON.stringify(locationStaging)}`);
+      assert(locationStaging?.storageOpen === true, `${locationId} QA staging should open its storage: ${JSON.stringify(locationStaging)}`);
       try {
         await pickupPage.waitForFunction(() => /take flashlight/i.test(document.getElementById("mansion-prompt-text")?.textContent || ""), null, { timeout: 15000 });
       } catch (_) {

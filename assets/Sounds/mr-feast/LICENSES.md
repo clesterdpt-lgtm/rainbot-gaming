@@ -1,9 +1,21 @@
 # Mr. Feast mansion audio provenance
 
-All files in this folder are stored locally so game playback never depends on a third-party host. Every downloaded sound in this set is released under Creative Commons CC0 1.0 Universal; attribution is not required, but the creators and source pages are recorded here for provenance.
+All files in this folder are stored locally so game playback never depends on a third-party host. The storm, interaction, and footstep files below are released under Creative Commons CC0 1.0 Universal; attribution is not required, but the creators and source pages are recorded here for provenance. The two player-breath files are separately identified purchased Unity Asset Store content and are not CC0.
 
 - License: https://creativecommons.org/publicdomain/zero/1.0/
 - Downloaded: 2026-07-16
+
+## Horror Bundle - Sound Effects player breathing
+
+- Product: `Horror Bundle - Sound Effects`
+- Unity Asset Store product ID: `231304`
+- Package version recorded by the source Unity project: `6.0`
+- License: purchased Unity Asset Store content; not CC0 and not licensed for redistribution as a standalone sound pack
+- Local entitled source project: `/Volumes/External SSD/Projects/Ronins Blight`
+- Runtime conversions:
+  - `player-breath-sprint.ogg` — `SFX_breathloop02.wav`, used for sprint recovery and slowed/quieter rested fear
+  - `player-breath-hold-release.ogg` — `SFX_breathloop01.wav`, used after releasing held breath and for forced gasps
+- Preparation: loudness target `-22 LUFS`, `-3 dBTP` ceiling, 44.1 kHz stereo Vorbis
 
 ## BigSoundBank storm recordings
 

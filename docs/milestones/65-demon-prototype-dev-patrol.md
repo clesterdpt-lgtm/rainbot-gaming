@@ -1,6 +1,6 @@
 # Milestone 65 — Demon Prototype Dev Patrol
 
-**Status:** Automated acceptance complete — user visual and patrol-feel approval pending
+**Status:** Banquet Saint retained; Pale Maw removed from the active patrol after user review
 **Depends on:** Milestone 35 — Player Developer Mode; the existing Meshy/Blender character pipeline
 **Blocks:** Choosing and canonizing a late-game demon design
 
@@ -26,7 +26,7 @@ Turn the approved Pale Maw and Banquet Saint concepts into browser-ready, animat
 - Replacing Mr. Feast or any contestant.
 - Publishing the prototypes as finished production characters.
 
-## Acceptance criteria
+## Original prototype acceptance criteria (historical)
 
 1. `assets/models/mr-feast/demon-prototypes/manifest.json` declares exactly the Pale Maw and Banquet Saint, including their approved reference image, Meshy generation and rig task provenance, Blender preparation report, runtime model, and animation clips.
 2. Each runtime model is a valid glTF 2.0 skinned character, is grounded within `0.03 m`, has an authored target height between `1.9 m` and `2.5 m`, stays at or below `35,000` triangles and `4 MiB`, and uses textures no larger than `1024 px`.
@@ -38,6 +38,16 @@ Turn the approved Pale Maw and Banquet Saint concepts into browser-ready, animat
 8. Desktop browser visual QA captures both prototypes from a readable full-body angle in the mansion, confirms recognizable correspondence with their approved concepts, and finds no persistent floor clipping, frozen bind pose, detached mesh, or extreme texture/material defect.
 9. The HTML and runtime publish the same demon-prototype cache identity, and the browser test enables and disables the patrol through the visible Escape-menu Developer Mode button.
 10. The Banquet Saint's idle, walk, and run use the forward-facing processed bind pose, keep both knees and elbows at least `178.5°` straight, hold every lower-body track still, and let both straight arms trail at least `0.04m` behind travel as one restrained pendulum. The Pale Maw model exactly preserves the accepted processed-source bind (`cb0aac538d2e2cf9665a6e6fc84652226c1d8a7e3364c99d92636a2f9fcdbb5c`) with no baked hips, shoulder, neck, head, arm, or lateral reshaping. Every skin joint outside the ten upper/lower limb and palm-orientation drivers remains within `0.02°` of that bind in every clip. Walk and run use twist-free two-bone contact targets on all four limbs, pair left hand with right foot and right hand with left foot at correlation `>= 0.95`, keep the front-elbow span at or below `1.90m`, keep each elbow no more than `0.75m` outside its shoulder, keep both front hands on their own side and at least `0.15m` apart, limit weighted shoulder/upper-arm surface growth to `0.05m`, keep every knee/elbow in its authored bend plane above `40°` with no more than `60°` of range, keep all skin-edge growth below `0.11m`, plant every weighted hand/foot surface within `0.055m` of the floor for at least `16%` of the sampled cycle, lift each recovering limb at least `0.04m`, sweep every hand and foot at least `0.45m`, and cover the root's full planted half-cycle.
+
+## User-review refinement — 2026-07-27
+
+The Pale Maw visual direction was rejected after inspection. Its paid source provenance and generated files remain dormant and recoverable, but it is no longer an active game or Developer Mode character. The Banquet Saint remains the only active prototype while its finale role is designed.
+
+- [x] `DEMON_PROTOTYPES.placements` declares only `banquet-saint`; no normal or Developer Mode path creates, loads, frames, animates, or reports `pale-maw`.
+- [x] The active manifest declares only the Banquet Saint while preserving the Pale Maw entry under non-runtime `dormantPrototypes`.
+- [x] Fresh normal mode still performs zero demon asset fetches, and Developer Mode lazily loads, patrols, frames, and hides exactly one Banquet Saint with a clean console.
+- [x] The runtime/page and demon manifest cache identities are advanced together; syntax, focused static/browser acceptance, full Contestant 13, and `git diff --check` pass.
+- [ ] The adjacent renovation suite returns to green; its current `28 stairwell continuity` failure is present in the unrelated current-origin stair-sconce baseline and this slice changes no lighting code.
 
 ## Verification
 
@@ -52,6 +62,7 @@ Turn the approved Pale Maw and Banquet Saint concepts into browser-ready, animat
 
 ## Automated verification results
 
+- The 2026-07-27 user-review regression failed red on the prior Pale Maw asset identity. The runtime patrol and active manifest now register only `banquet-saint`; the rejected Pale Maw entry and paid provenance remain under non-runtime `dormantPrototypes`, and its generated files remain untouched for a possible redesign. Fresh normal mode reports zero demon loads, while the visible Developer Mode path loads, frames, animates, patrols, and hides exactly one Saint. Static and live-browser focused acceptance, runtime/test/manifest syntax, the full desktop/mobile Contestant 13 suite, and `git diff --check` pass under `20260727-banquet-saint-only-1`; the live walk capture is `output/iterate/demon-prototypes/browser/banquet-saint-walk.png`. The adjacent renovation suite stops on its current unrelated `28 stairwell continuity` light-handoff invariant; this slice changes no lighting builder or circuit code.
 - The default-bind regression failed red first because the prior runtime report still declared `extended-horizontal-crawler`. Blender preparation now applies only the original uniform scale, grounding, mesh cleanup, and browser-budget pass: it reproduces the accepted Pale Maw GLB byte-for-byte at SHA-256 `cb0aac538d2e2cf9665a6e6fc84652226c1d8a7e3364c99d92636a2f9fcdbb5c`. The first elbow-tuck pass narrowed the silhouette but rotated its pole far enough to stretch a weighted shoulder/upper-arm edge by `0.083m`; the new regression failed red because no upper-arm-specific deformation report existed. Locomotion still keys the eight upper/lower limb drivers plus two wrist counter-rotations, while every torso, shoulder, neck, head, foot, and toe joint stays on the default bind. The demon manifest/cache identity is `20260726-pale-maw-shoulder-safe-arms-1`, and the focused browser path still uses the visible Developer Mode button.
 - The accepted Pale Maw replacement uses Meshy generation `019f9dee-12b0-78aa-b20b-8e9c0bf1107b` and rig `019f9df0-6c58-7230-8917-00d7042b61cc` for `35` credits. Its rigging reference preserves the low four-point silhouette while placing continuous background gaps between every arm and leg. The unchanged Banquet Saint uses generation `019f9b5d-7d27-746a-8d7b-6dca01766c48`, rig `019f9b60-42cd-7ef0-b02d-747528bb4c39`, and idle `019f9b61-b823-7b39-acf5-2649e2958104` for `38` credits. The current selected pipelines total `73` credits; including the original Pale Maw and one rejected upright separation retry, cumulative prototype exploration is `146` credits.
 - Blender 4.5.11 prepares the restored Pale Maw at `29,999` triangles, one 24-bone skinned mesh, one 768px packed texture, `2.180m`, exactly grounded at `0.000m`, and `2,468,728` bytes. Its original default bounds are `2.692m × 1.772m × 2.180m`; the visible head sits `0.200m` above the hips with no corrective neck or head bake. The unchanged Banquet Saint remains `30,000` triangles, `2.340m`, grounded at `-0.0003m`, and `3,180,516` bytes.
@@ -63,6 +74,10 @@ Turn the approved Pale Maw and Banquet Saint concepts into browser-ready, animat
 - Renovation passes after the page/runtime cache identity alignment. Contestant Conversations and the complete Contestant 13 desktop/mobile progression, gates, persistence, accessibility, and touch suite pass. The adjacent Player Systems run reaches its unchanged phone layout audit and stops on the existing lower-control-footprint `24%` assertion; this demon-only slice changes no control or stage layout.
 - Final Pale Maw shoulder-safe front, side, and three-quarter contact/recovery renders live in `output/iterate/demon-prototypes/blender-shoulder-safe-arms-final/`; clean in-mansion idle/walk/run captures live in `output/iterate/demon-prototypes/browser/`, and the two worst-frame shipped side proofs are under `output/playwright/pale-maw-shoulder-safe-arms/`.
 
-## Exit criteria
+## Original exit criteria (historical)
 
 The user can enable Developer Mode, observe the Pale Maw and Banquet Saint patrolling with readable silhouettes and active animation, frame either prototype for inspection, and disable Developer Mode to return to the unchanged normal game state.
+
+## Current exit criteria
+
+The user can enable Developer Mode and observe only the Banquet Saint; the Pale Maw never loads or appears, and disabling Developer Mode removes the Saint without affecting normal story state.

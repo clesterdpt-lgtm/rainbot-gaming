@@ -150,6 +150,7 @@
     #mansion-stage[data-banquet-loss="active"] #mansion-feast-says,
     #mansion-stage[data-banquet-loss="active"] #mansion-storm-run,
     #mansion-stage[data-banquet-loss="active"] #mansion-feast-hunt,
+    #mansion-stage[data-banquet-loss="active"] #mansion-victory-feast,
     #mansion-stage[data-banquet-loss="active"] #mansion-touch,
     #mansion-stage[data-banquet-loss="active"] #mansion-crosshair,
     #mansion-stage[data-banquet-loss="active"] #mansion-discovery,
@@ -3093,6 +3094,143 @@
       }
     }
 
+    #mansion-victory-feast {
+      position: absolute;
+      top: max(18px, calc(env(safe-area-inset-top) + 10px));
+      left: 50%;
+      z-index: 11;
+      display: grid;
+      box-sizing: border-box;
+      width: min(460px, calc(100% - 260px));
+      min-height: 50px;
+      max-height: 68px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "victory-header victory-objective"
+        "victory-status victory-objective";
+      gap: 2px 12px;
+      padding: 7px 10px 8px 14px;
+      overflow: hidden;
+      border: 1px solid rgba(207, 180, 120, 0.62);
+      border-radius: 8px;
+      color: #eee7d8;
+      background:
+        linear-gradient(110deg, rgba(47, 35, 23, 0.97), rgba(12, 13, 15, 0.96) 58%, rgba(4, 5, 7, 0.97)),
+        rgba(8, 8, 10, 0.97);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.54), inset 0 1px 0 rgba(255, 239, 205, 0.08);
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+      transform: translateX(-50%);
+    }
+
+    #mansion-victory-feast::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: linear-gradient(#e5cc8a, #7a5a33 46%, #5b1117);
+      box-shadow: 0 0 14px rgba(203, 52, 62, 0.24);
+    }
+
+    #mansion-victory-feast[hidden] { display: none; }
+
+    .mansion-victory__header {
+      grid-area: victory-header;
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #mansion-victory-feast-eyebrow,
+    #mansion-victory-feast-timer {
+      color: #dec785;
+      font-size: 0.54rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      line-height: 1.2;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    #mansion-victory-feast-eyebrow {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #mansion-victory-feast-timer {
+      margin-left: auto;
+      color: rgba(234, 220, 188, 0.72);
+      font-variant-numeric: tabular-nums;
+    }
+
+    #mansion-victory-feast-status {
+      grid-area: victory-status;
+      min-width: 0;
+      margin: 0;
+      overflow: hidden;
+      color: rgba(235, 230, 217, 0.82);
+      font-size: 0.69rem;
+      font-weight: 650;
+      line-height: 1.15;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #mansion-victory-feast-objective {
+      grid-area: victory-objective;
+      min-width: 70px;
+      place-self: center end;
+      padding: 6px 9px;
+      border: 1px solid rgba(218, 190, 126, 0.34);
+      border-radius: 99px;
+      color: #f1d99b;
+      background: rgba(218, 190, 126, 0.08);
+      font-size: 0.64rem;
+      font-weight: 900;
+      letter-spacing: 0.07em;
+      line-height: 1;
+      text-align: center;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    #mansion-victory-feast[data-phase="reveal"],
+    #mansion-victory-feast[data-phase="escape"] {
+      border-color: rgba(179, 53, 62, 0.8);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), inset 0 0 24px rgba(132, 18, 29, 0.16);
+    }
+
+    @media (max-width: 560px) {
+      #mansion-victory-feast {
+        top: max(58px, calc(env(safe-area-inset-top) + 54px));
+        width: calc(100% - 24px);
+        min-height: 46px;
+        max-height: 64px;
+        gap: 1px 8px;
+        padding: 6px 8px 7px 11px;
+      }
+
+      #mansion-victory-feast-eyebrow,
+      #mansion-victory-feast-timer { font-size: 0.47rem; }
+      #mansion-victory-feast-status { font-size: 0.61rem; }
+      #mansion-victory-feast-objective {
+        min-width: 62px;
+        padding: 5px 7px;
+        font-size: 0.56rem;
+      }
+    }
+
+    @media (max-height: 420px) and (orientation: landscape) {
+      #mansion-victory-feast {
+        top: max(2px, env(safe-area-inset-top));
+        width: min(440px, calc(100% - 112px));
+        min-height: 42px;
+        padding-block: 4px 5px;
+      }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
         scroll-behavior: auto !important;
@@ -3193,6 +3331,15 @@
           </div>
           <p id="mansion-feast-hunt-status">Report to the Grand Foyer</p>
           <output id="mansion-feast-hunt-progress" aria-label="Feast Hunt item progress">0 / 3</output>
+        </section>
+
+        <section id="mansion-victory-feast" role="region" aria-label="Victory Feast status" aria-live="polite" aria-atomic="true" data-phase="dormant" hidden>
+          <div class="mansion-victory__header">
+            <span id="mansion-victory-feast-eyebrow">Finale · Victory Feast</span>
+            <output id="mansion-victory-feast-timer" aria-label="Victory Feast time remaining" aria-live="off">05:00</output>
+          </div>
+          <p id="mansion-victory-feast-status">Report to the Dining Room</p>
+          <output id="mansion-victory-feast-objective" aria-label="Victory Feast objective">REPORT</output>
         </section>
 
         <div class="mansion-tools" aria-label="View controls">
@@ -3503,6 +3650,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260723-mr-feast-rebrand-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260727-stair-door-sconce-center-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260727-victory-feast-escape-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

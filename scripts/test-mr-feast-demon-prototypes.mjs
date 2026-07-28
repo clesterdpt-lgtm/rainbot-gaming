@@ -30,7 +30,7 @@ assert.equal(
 );
 assert.match(
   runtime,
-  /assetVersion:\s*"20260726-pale-maw-shoulder-safe-arms-1"/,
+  /assetVersion:\s*"20260727-banquet-saint-only-1"/,
   "demon prototype asset cache identity is stale",
 );
 assert.match(runtime, /class DemonPrototypePatrolSystem/, "missing isolated demon prototype patrol system");
@@ -39,13 +39,17 @@ assert.match(runtime, /awaitDemonPrototypesForQA/, "missing deterministic protot
 assert.match(runtime, /advanceDemonPrototypesForQA/, "missing deterministic prototype patrol control");
 assert.match(runtime, /frameDemonPrototypeForQA/, "missing prototype framing control");
 assert.match(runtime, /demonPrototypes:/, "prototype diagnostics are absent from render_game_to_text");
-assert.match(
+assert.doesNotMatch(
   runtime,
-  /id: "pale-maw"[\s\S]*?walkPlaybackRate: 1\.0,[\s\S]*?runPlaybackRate: 1\.0,/,
-  "Pale Maw clip tempo does not match its patrol travel speed",
+  /id: "pale-maw"/,
+  "the rejected Pale Maw remains registered in the runtime patrol",
 );
 
-assert.match(milestone, /\*\*Status:\*\* (In progress|Automated acceptance complete)/, "milestone status is not current");
+assert.match(
+  milestone,
+  /\*\*Status:\*\* Banquet Saint retained; Pale Maw removed from the active patrol after user review/,
+  "milestone status is not current",
+);
 assert.match(milestone, /With developer mode off[\s\S]*no prototype asset fetch/, "milestone does not protect normal mode");
 
 await access(manifestPath);
@@ -53,14 +57,19 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 assert.equal(manifest.version, 1, "unexpected demon prototype manifest version");
 assert.equal(
   manifest.assetVersion,
-  "20260726-pale-maw-shoulder-safe-arms-1",
+  "20260727-banquet-saint-only-1",
   "demon animation assets need a fresh cache identity",
 );
-assert.equal(manifest.prototypes?.length, 2, "manifest must contain exactly two prototypes");
+assert.equal(manifest.prototypes?.length, 1, "manifest must contain exactly one active prototype");
 assert.deepEqual(
   manifest.prototypes.map((prototype) => prototype.id).sort(),
-  ["banquet-saint", "pale-maw"],
-  "manifest prototype identities changed"
+  ["banquet-saint"],
+  "the Banquet Saint must be the only active prototype",
+);
+assert.deepEqual(
+  manifest.dormantPrototypes?.map((prototype) => prototype.id).sort(),
+  ["pale-maw"],
+  "the rejected Pale Maw provenance should remain dormant and recoverable",
 );
 
 function parseGlb(buffer, label) {
@@ -668,8 +677,13 @@ try {
   const loaded = await page.evaluate(() => window.MrFeastFresh.awaitDemonPrototypesForQA());
   assert.equal(loaded.enabled, true, "prototype patrol did not enable with developer mode");
   assert.equal(loaded.loadStatus, "ready", "prototype patrol did not finish loading");
-  assert.equal(loaded.loaded, 2, "both prototypes were not loaded");
-  assert.equal(loaded.visible, 2, "both prototypes are not visible");
+  assert.equal(loaded.loaded, 1, "the Banquet Saint was not loaded");
+  assert.equal(loaded.visible, 1, "the Banquet Saint is not visible");
+  assert.deepEqual(
+    loaded.entries.map((entry) => entry.id),
+    ["banquet-saint"],
+    "Developer Mode exposed a prototype other than the Banquet Saint",
+  );
   for (const entry of loaded.entries) {
     const expectedLocomotionStyle = entry.id === "banquet-saint"
       ? "ceremonial-glide"
@@ -721,7 +735,7 @@ try {
 
   const stageBox = await page.locator("#mansion-stage").boundingBox();
   assert.ok(stageBox?.width > 0 && stageBox?.height > 0, "mansion stage has no visible browser bounds");
-  for (const id of ["pale-maw", "banquet-saint"]) {
+  for (const id of ["banquet-saint"]) {
     const framed = await page.evaluate((prototypeId) => window.MrFeastFresh.frameDemonPrototypeForQA(prototypeId), id);
     assert.equal(framed.id, id, `could not frame ${id}`);
     assert.equal(framed.visible, true, `${id} disappeared while framed`);

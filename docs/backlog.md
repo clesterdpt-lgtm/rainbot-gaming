@@ -12,7 +12,7 @@
 - [ ] Final sabotage and banquet endings — implement the complete escape/exposure win and captured-at-dinner loss sequences.
   - Source: 2026-07-15 gameplan confirmation
   - Rough size: L · Rough value: L
-  - Notes: The captured-at-dinner physical-catch loss sequence was promoted into `docs/milestones/64-captured-at-dinner-loss.md`; the escape/exposure win branches remain deferred here.
+  - Notes: The captured-at-dinner physical-catch loss sequence was promoted into `docs/milestones/64-captured-at-dinner-loss.md`; the completed escape/exposure win remains deferred here. The approved Victory Feast prototype now supplies the finale setup and immediate survival loop: completing Feast Hunt starts a five-active-minute Dining Room call; a camera-covered food spread stages Mr. Feast's congratulations; he reveals that Contestant 13, the clue trail, and the apparent patron-feed vulnerability were planted parts of the game; every interior light dies; and lightning reveals the Banquet Saint in the corner. The following phase recombines hostile cameras, Mr. Feast pursuit, Saint evasion, hiding, and a flashlight that can briefly stun the Saint while stuttering or cutting out unpredictably. The real sabotage targets, their required order, the front-gate release, and the completed escape resolution remain deferred.
 
 - [ ] Stealth meter refinements — spike sampled light exposure during storm lightning flashes so outdoor sneaking has a rhythm, and surface the meter on phones once the deferred mobile crouch control exists.
   - Source: 2026-07-18 crouch stealth meter build (Milestone 51)
@@ -22,7 +22,7 @@
 - [ ] Expand the basement puzzle and sabotage network — add more documents, puzzle/clue chains, house sabotage targets, and a keypad-locked Workshop whose code is learned from in-world evidence.
   - Source: 2026-07-15 basement-key sequence request
   - Rough size: L · Rough value: L
-  - Notes: Deliberately deferred from Milestone 34; the current Workshop remains accessible so the existing patron-feed vertical slice can still be completed until the keypad clue chain is designed. The keypad-code-from-in-world-evidence portion landed in `docs/milestones/49-workroom-keycode-scratches.md` (the Painting Room scratch hunt); the broader document/sabotage network remains deferred here.
+  - Notes: Deliberately deferred from Milestone 34; the current Workroom patron-feed interaction remains accessible and continues to gate Feast Hunt, but the Victory Feast reveal now identifies it as a planted production decoy rather than the true escape sabotage. The keypad-code-from-in-world-evidence portion landed in `docs/milestones/49-workroom-keycode-scratches.md` (the Painting Room scratch hunt); the broader document/sabotage network and the real finale targets remain deferred here.
 
 - [ ] Extend meaningful room interactions beyond the first house-distraction set — give underused suites, utility rooms, and grounds authored evidence, a small number of useful tools, additional route/hiding leverage, and phase-reactive changes without turning the mansion into a collectible checklist.
   - Source: 2026-07-24 mansion-wide interaction brainstorm
@@ -59,3 +59,4 @@
 - [ ] Final sabotage count — decide how many independent house/show systems the full ending requires.
   - Source: 2026-07-15 gameplan confirmation
   - Rough size: S · Rough value: L
+  - Notes: The Victory Feast now owns the approved opening survival phase and already recombines the learned flashlight, camera, hiding, and pursuit rules. This deferred decision is specifically about the later objective chain: choose a small number of distinct physical systems whose sabotage produces readable consequences, determine their order or interdependence, and define the final manual or powered front-gate release. Do not replace those authored consequences with a generic `Sabotage 3/5` counter.

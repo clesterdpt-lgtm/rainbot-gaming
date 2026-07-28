@@ -599,7 +599,7 @@ async function run() {
         && completionSafety.pursuit.active === null,
       `the visible SAFE completion card must suspend camera and personal reacquisition: ${JSON.stringify(completionSafety)}`,
     );
-    const threatsResume = await winPage.evaluate(() => {
+    const finaleCallHold = await winPage.evaluate(() => {
       window.MrFeastFresh.advanceFeastHuntForQA(6.1);
       const cameraId = "cam-basement-boiler";
       window.MrFeastFresh.resetCameraSecurityForQA(null);
@@ -612,11 +612,15 @@ async function run() {
       return {
         security,
         feastHunt: window.MrFeastFresh.getFeastHuntState(),
+        victoryFeast: window.MrFeastFresh.getVictoryFeastState(),
       };
     });
     assert(
-      threatsResume.feastHunt.completionCardRemaining === 0 && threatsResume.security.observed,
-      `ordinary mansion security should resume after the completion grace: ${JSON.stringify(threatsResume)}`,
+      finaleCallHold.feastHunt.completionCardRemaining === 0
+        && finaleCallHold.victoryFeast.phase === "called"
+        && finaleCallHold.victoryFeast.reportRemaining > 0
+        && !finaleCallHold.security.observed,
+      `the Game 3 grace must hand directly to the five-minute Victory Feast production hold: ${JSON.stringify(finaleCallHold)}`,
     );
     await winPage.close();
 

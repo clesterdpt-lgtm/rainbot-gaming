@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "assetVersion": "20260726-pale-maw-shoulder-safe-arms-1",
+  "assetVersion": "20260727-banquet-saint-only-1",
   "pipeline": "Approved ImageGen concept, Meshy 6 image-to-3D and auto-rig, then Blender 4.5 browser preparation and authored locomotion",
-  "prototypes": [
+  "dormantPrototypes": [
     {
       "id": "pale-maw",
       "name": "The Pale Maw",
@@ -51,7 +51,9 @@
         "walk": "pale-maw-walk.animation-report.json",
         "run": "pale-maw-run.animation-report.json"
       }
-    },
+    }
+  ],
+  "prototypes": [
     {
       "id": "banquet-saint",
       "name": "The Banquet Saint",

@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260727-quieter-outdoor-rain-1";
+  const MANSION_RUNTIME_VERSION = "20260727-stair-door-sconce-center-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -30956,11 +30956,26 @@
     // Everything hanging in the open stair volume stays lit on both floor
     // contexts: the player looks straight at these fixtures mid-climb, so
     // they can never participate in a floor handover.
+    // Flank the mirrored bathroom and painting-room doors (centers at z=0 on
+    // the west/east spines) with matching sconce pairs. The old 0.9 / -1.8
+    // mounts sat south of both doorways; keep them clear of the 1.35m casings
+    // while staying level and centered on each leaf.
     for (const side of [-1, 1]) {
       const wallX = side * 4.839;
-      // Mount at the same height as the rear pair below so all four stair-hall
-      // sconces read as one level line along each wall.
-      stair.addWallSconce(wallX, FLOOR.MAIN + 2.0, 0.9, -side * Math.PI / 2, 34, 5.7, ["MAIN LEVEL", "SECOND FLOOR"], side * 0.45, FLOOR.MAIN + 0.75, 0.35);
+      for (const doorFlank of [1.35, -1.35]) {
+        stair.addWallSconce(
+          wallX,
+          FLOOR.MAIN + 2.0,
+          doorFlank,
+          -side * Math.PI / 2,
+          36,
+          5.7,
+          ["MAIN LEVEL", "SECOND FLOOR"],
+          side * 0.45,
+          FLOOR.MAIN + 0.8,
+          doorFlank * 0.55,
+        );
+      }
     }
     // A hidden omnidirectional bounce mid-void keeps the dark-oak stair, the
     // landing edge above, and the surrounding walls readable without adding
@@ -30970,8 +30985,6 @@
     // warm return light that would come from the paired wall sconces. It is
     // owned by this circuit, so it never changes without the stair switch.
     stair.addPracticalLight(0, FLOOR.MAIN + 1.45, -0.45, 24, 5.0, ["MAIN LEVEL"], { contained: true, angle: 0.76 });
-    stair.addWallSconce(-4.839, FLOOR.MAIN + 2.0, -1.8, Math.PI / 2, 38, 5.7, ["MAIN LEVEL", "SECOND FLOOR"], -0.45, FLOOR.MAIN + 0.85, -1.05);
-    stair.addWallSconce(4.839, FLOOR.MAIN + 2.0, -1.8, -Math.PI / 2, 38, 5.7, ["MAIN LEVEL", "SECOND FLOOR"], 0.45, FLOOR.MAIN + 0.85, -1.05);
     markOpenVolumeRole(stair, stairRoleStart, "grand-stair");
     stair.addSwitch(-4.839, 1.15, 2.45, Math.PI / 2);
 

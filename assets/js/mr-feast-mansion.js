@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260729-remove-gameplay-breath-1";
+  const MANSION_RUNTIME_VERSION = "20260729-center-ballroom-marble-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -25664,6 +25664,9 @@
       while (elapsed < duration && !state.gameOver) {
         const step = Math.min(fixedStep, duration - elapsed);
         if (this.show.phase === VICTORY_FEAST_PHASE.ESCAPE) {
+          for (const object of animatedObjects) {
+            if (object instanceof HingedDoor) object.update(step);
+          }
           flashlightSystem?.update(step);
           demonPrototypePatrol?.updateFinaleEntry(
             demonPrototypePatrol.saintEntry(),
@@ -33825,9 +33828,11 @@
     addRug(-9.7, -8.4, 7.2, 3.8, FLOOR.MAIN, M.redRug, 0);
     // A thin, non-colliding ballroom finish reuses the estate's generated
     // antique-marble texture while the oak slab remains the physics surface.
-    box({ name: "ballroom-ai-marble-floor", w: 9.6, h: 0.035, d: 6.7, x: 0, y: FLOOR.MAIN + 0.018, z: -8.45, material: M.marble, cast: false, receive: true });
-    for (const x of [-4.76, 4.76]) box({ name: "ballroom-marble-brass-inlay", w: 0.035, h: 0.018, d: 6.5, x, y: FLOOR.MAIN + 0.043, z: -8.45, material: M.brass, cast: false });
-    for (const z of [-11.71, -5.19]) box({ name: "ballroom-marble-brass-inlay", w: 9.5, h: 0.018, d: 0.035, x: 0, y: FLOOR.MAIN + 0.043, z, material: M.brass, cast: false });
+    // Room BALLROOM is z∈[-12,-3.2] (mid -7.6); keep the insert centered so
+    // oak border shows evenly at the foyer side and rear terrace wall.
+    box({ name: "ballroom-ai-marble-floor", w: 9.6, h: 0.035, d: 6.7, x: 0, y: FLOOR.MAIN + 0.018, z: -7.6, material: M.marble, cast: false, receive: true });
+    for (const x of [-4.76, 4.76]) box({ name: "ballroom-marble-brass-inlay", w: 0.035, h: 0.018, d: 6.5, x, y: FLOOR.MAIN + 0.043, z: -7.6, material: M.brass, cast: false });
+    for (const z of [-10.86, -4.34]) box({ name: "ballroom-marble-brass-inlay", w: 9.5, h: 0.018, d: 0.035, x: 0, y: FLOOR.MAIN + 0.043, z, material: M.brass, cast: false });
   }
 
   function buildExteriorWalls() {

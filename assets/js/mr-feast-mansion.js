@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260728-deliberate-camera-search-1";
+  const MANSION_RUNTIME_VERSION = "20260729-throwable-hold-release-audio-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -322,11 +322,15 @@
       circuit: "archive and pantry lights",
       color: 0xffa864,
       rooms: Object.freeze(["ARCHIVE", "PANTRY"]),
-      fixtureRoles: Object.freeze(["archive", "pantry"]),
+      fixtureRoles: Object.freeze(["archive", "archive-landing", "pantry"]),
       fixtures: Object.freeze([
         Object.freeze({ role: "archive", x: 4.8, z: 7.4 }),
         Object.freeze({ role: "archive", x: 8.05, z: 7.4 }),
-        Object.freeze({ role: "archive", x: 11.3, z: 7.4 }),
+        // This is the first visible Archive bulb from the service-stair
+        // landing. Keep it in the fixed light budget and give its existing
+        // emitter a modest lift so the stair exit reads without flattening
+        // the deeper shelves or adding another shader light.
+        Object.freeze({ role: "archive-landing", x: 11.3, z: 7.4, intensityScale: 1.25 }),
         Object.freeze({ role: "pantry", x: 6.0, z: 0 }),
       ]),
       switches: Object.freeze([
@@ -1752,9 +1756,11 @@
   });
   const THROWABLE_DISTRACTIONS = Object.freeze({
     minimumPortablePropCount: 65,
-    pickupHoldSeconds: 0.65,
     throwSpeedMetersPerSecond: 8.8,
     throwLiftMetersPerSecond: 1.25,
+    dropForwardMetersPerSecond: 0.45,
+    dropDownMetersPerSecond: 0.3,
+    dropAngularSpeed: 1.15,
     carryOffset: Object.freeze({ x: 0.34, y: -0.31, z: -0.62 }),
     carryYawRadians: -0.22,
     carryRollRadians: 0.14,
@@ -3527,6 +3533,7 @@
     maximumTimerStepSeconds: 0.25,
     breathing: Object.freeze({
       profile: "panicked-player",
+      assetRole: "breathSprint",
       firstBreathDelaySeconds: 0.18,
       initialIntervalSeconds: 1.68,
       finalIntervalSeconds: 0.72,
@@ -3538,6 +3545,14 @@
       baseVolume: 0.205,
       dialogueDuckMultiplier: 0.46,
       minimumRealtimeGapSeconds: 0.24,
+      recordedStartSeconds: 0.04,
+      recordedEndSeconds: 0.82,
+      recordedInitialRate: 0.82,
+      recordedFinalRate: 1.16,
+      recordedHitchRateBoost: 0.06,
+      recordedFadeSeconds: 0.045,
+      recordedHighpassHz: 70,
+      recordedLowpassHz: 5200,
       intervalJitterSeconds: Object.freeze([0.08, -0.06, 0.03, -0.1, 0.05, -0.04]),
       panJitter: Object.freeze([-0.035, 0.025, -0.018, 0.04, -0.028, 0.015]),
     }),
@@ -4205,6 +4220,7 @@
       pickupCompletions: 0,
       pickupCancellations: 0,
       throwCount: 0,
+      dropCount: 0,
       impactCount: 0,
       resetCount: 0,
       mrFeastResetCount: 0,
@@ -26325,6 +26341,9 @@
         lastPhysicsPosition: new THREE.Vector3().copy(root.position),
         impactCount: 0,
         throwCount: 0,
+        dropCount: 0,
+        releaseKind: null,
+        carrySource: null,
         investigatedCount: 0,
         cleanupPending: false,
         cleanupRemaining: 0,
@@ -26356,11 +26375,11 @@
         id: placement.id,
         getLabel: () => (
           matchMedia("(pointer: coarse)").matches
-            ? `Hold Interact · pick up ${placement.label}`
-            : `Hold E · pick up ${placement.label}`
+            ? `Hold Interact · carry ${placement.label}`
+            : `Hold E · carry ${placement.label}`
         ),
         activate: () => false,
-        beginHold: () => this.beginPickup(entry),
+        beginHold: (source) => this.beginPickup(entry, source),
         endHold: (reason) => this.endPickup(reason),
         resolve: () => this.canPickup(entry) ? interaction : null,
       };
@@ -26410,19 +26429,6 @@
       );
     }
 
-    showPickupAction(entry) {
-      if (!dom.action) return;
-      dom.action.hidden = false;
-      dom.action.classList.remove("is-running");
-      dom.action.style.setProperty(
-        "--story-action-duration",
-        `${Math.round(THROWABLE_DISTRACTIONS.pickupHoldSeconds * 1000)}ms`,
-      );
-      if (dom.actionText) dom.actionText.textContent = `Picking up ${entry.label}…`;
-      void dom.action.offsetWidth;
-      dom.action.classList.add("is-running");
-    }
-
     hidePickupAction() {
       if (!dom.action) return;
       dom.action.classList.remove("is-running");
@@ -26430,16 +26436,12 @@
       dom.action.style.removeProperty("--story-action-duration");
     }
 
-    beginPickup(entry) {
+    beginPickup(entry, source = "keyboard") {
       if (!this.canPickup(entry)) {
         if (!this.toolsAllowed()) notifyCompetitionHold();
         return false;
       }
-      this.pickup = { entry, elapsed: 0 };
-      state.throwableDistractions.pickupId = entry.id;
-      state.throwableDistractions.pickupElapsed = 0;
-      this.showPickupAction(entry);
-      return true;
+      return this.carry(entry, source);
     }
 
     endPickup(reason = "released") {
@@ -26465,7 +26467,7 @@
       return true;
     }
 
-    carry(entry) {
+    carry(entry, source = "keyboard") {
       if (!entry || this.carried) return false;
       this.removePhysics(entry);
       this.unregisterInteraction(entry);
@@ -26488,6 +26490,8 @@
       entry.earlyCollision = false;
       entry.cleanupPending = false;
       entry.cleanupRemaining = 0;
+      entry.releaseKind = null;
+      entry.carrySource = source;
       this.carried = entry;
       this.pickup = null;
       state.throwableDistractions.carriedId = entry.id;
@@ -26500,9 +26504,10 @@
       return true;
     }
 
-    throwCarried(source = "keyboard", options = {}) {
+    releaseCarried(kind, source = "keyboard", options = {}) {
       const entry = this.carried;
       if (!entry || !this.toolsAllowed() || state.gameOver) return false;
+      const releaseKind = kind === "drop" ? "drop" : "throw";
       camera.updateMatrixWorld(true);
       const releasePosition = new THREE.Vector3();
       const releaseQuaternion = new THREE.Quaternion();
@@ -26521,15 +26526,27 @@
           Number(options.direction.z) || -1,
         ).normalize();
       }
-      const velocity = direction
-        .multiplyScalar(THROWABLE_DISTRACTIONS.throwSpeedMetersPerSecond);
-      velocity.y += THROWABLE_DISTRACTIONS.throwLiftMetersPerSecond;
-      const angularVelocity = {
-        x: 5.4,
-        y: 3.1 + (entry.throwCount % 3) * 0.7,
-        z: -4.6,
-      };
+      const velocity = releaseKind === "throw"
+        ? direction
+          .multiplyScalar(THROWABLE_DISTRACTIONS.throwSpeedMetersPerSecond)
+          .add(new THREE.Vector3(0, THROWABLE_DISTRACTIONS.throwLiftMetersPerSecond, 0))
+        : direction
+          .multiplyScalar(THROWABLE_DISTRACTIONS.dropForwardMetersPerSecond)
+          .add(new THREE.Vector3(0, -THROWABLE_DISTRACTIONS.dropDownMetersPerSecond, 0));
+      const angularVelocity = releaseKind === "throw"
+        ? {
+          x: 5.4,
+          y: 3.1 + (entry.throwCount % 3) * 0.7,
+          z: -4.6,
+        }
+        : {
+          x: THROWABLE_DISTRACTIONS.dropAngularSpeed,
+          y: THROWABLE_DISTRACTIONS.dropAngularSpeed * 0.55,
+          z: -THROWABLE_DISTRACTIONS.dropAngularSpeed * 0.72,
+        };
       entry.mode = "thrown";
+      entry.releaseKind = releaseKind;
+      entry.carrySource = null;
       entry.flightElapsed = 0;
       entry.settleElapsed = 0;
       entry.distanceTravelled = 0;
@@ -26539,7 +26556,8 @@
       entry.earlyCollision = false;
       entry.cleanupPending = false;
       entry.cleanupRemaining = 0;
-      entry.throwCount += 1;
+      if (releaseKind === "throw") entry.throwCount += 1;
+      else entry.dropCount += 1;
       entry.lastPhysicsPosition.copy(releasePosition);
       entry.physicsRecord = physics.addDynamicBox({
         position: releasePosition,
@@ -26563,11 +26581,21 @@
       });
       this.carried = null;
       state.throwableDistractions.carriedId = null;
-      state.throwableDistractions.throwCount += 1;
+      if (releaseKind === "throw") state.throwableDistractions.throwCount += 1;
+      else state.throwableDistractions.dropCount += 1;
+      audioSystem?.throwableRelease(releaseKind, entry.placement.material);
       flashlightSystem?.syncUi();
       updateInteractionPrompt();
-      this.lastThreatResult = { kind: "throw", id: entry.id, source };
+      this.lastThreatResult = { kind: releaseKind, id: entry.id, source };
       return true;
+    }
+
+    throwCarried(source = "keyboard", options = {}) {
+      return this.releaseCarried("throw", source, options);
+    }
+
+    dropCarried(reason = "released") {
+      return this.releaseCarried("drop", reason);
     }
 
     handleFirstImpact(entry) {
@@ -26828,13 +26856,6 @@
         if (this.hasTransientState()) this.resetAll("competition");
         return;
       }
-      if (this.pickup) {
-        this.pickup.elapsed += step;
-        state.throwableDistractions.pickupElapsed = this.pickup.elapsed;
-        if (this.pickup.elapsed >= THROWABLE_DISTRACTIONS.pickupHoldSeconds) {
-          this.carry(this.pickup.entry);
-        }
-      }
       for (const entry of this.entries) {
         if (entry.physicsRecord) this.updateEntryPhysics(entry, step);
         if (
@@ -26881,6 +26902,8 @@
       entry.impactPosition = null;
       entry.impactSpeed = 0;
       entry.earlyCollision = false;
+      entry.releaseKind = null;
+      entry.carrySource = null;
       entry.cleanupPending = false;
       entry.cleanupRemaining = 0;
       entry.lastPhysicsPosition.copy(entry.root.position);
@@ -26944,8 +26967,9 @@
       return {
         tuning: {
           minimumPortablePropCount: THROWABLE_DISTRACTIONS.minimumPortablePropCount,
-          pickupHoldSeconds: THROWABLE_DISTRACTIONS.pickupHoldSeconds,
+          pickupMode: "instant-hold-to-carry",
           throwSpeedMetersPerSecond: THROWABLE_DISTRACTIONS.throwSpeedMetersPerSecond,
+          dropForwardMetersPerSecond: THROWABLE_DISTRACTIONS.dropForwardMetersPerSecond,
           mrFeastHearingMeters: THROWABLE_DISTRACTIONS.mrFeastHearingMeters,
           cleanupDelaySeconds: THROWABLE_DISTRACTIONS.cleanupDelaySeconds,
           saintHearingMeters: THROWABLE_DISTRACTIONS.saintHearingMeters,
@@ -26968,6 +26992,7 @@
           visualPartCount: this.visualPartCount(carried),
           strandedSourcePartCount: this.strandedSourcePartCount(carried),
           sourceAdoptionComplete: carried.sourceAdoptionComplete,
+          carrySource: carried.carrySource,
           visibleInHand: (
             carried.root.parent === camera
             && camera.parent === scene
@@ -26978,11 +27003,7 @@
         pickup: {
           id: this.pickup?.entry.id || null,
           elapsed: Number((this.pickup?.elapsed || 0).toFixed(3)),
-          progress: Number(clamp(
-            (this.pickup?.elapsed || 0) / THROWABLE_DISTRACTIONS.pickupHoldSeconds,
-            0,
-            1,
-          ).toFixed(3)),
+          progress: carried ? 1 : 0,
           completions: state.throwableDistractions.pickupCompletions,
           cancellations: state.throwableDistractions.pickupCancellations,
         },
@@ -26994,6 +27015,7 @@
           remaining: Number(this.activeSoundTask.remaining.toFixed(3)),
         } : null,
         throwCount: state.throwableDistractions.throwCount,
+        dropCount: state.throwableDistractions.dropCount,
         impactCount: state.throwableDistractions.impactCount,
         resetCount: state.throwableDistractions.resetCount,
         mrFeastResetCount: state.throwableDistractions.mrFeastResetCount,
@@ -27032,6 +27054,8 @@
             physicsActive: Boolean(entry.physicsRecord),
             sleeping: Boolean(entry.physicsRecord?.body?.isSleeping()),
             throwCount: entry.throwCount,
+            dropCount: entry.dropCount,
+            releaseKind: entry.releaseKind,
             impactCount: entry.impactCount,
             investigatedCount: entry.investigatedCount,
             cleanupPending: entry.cleanupPending,
@@ -27805,7 +27829,7 @@
       this.syncPresentation();
       contestant13Quest.showDiscovery(
         "Flashlight found",
-        "Press F to switch it on. The beam is useful, but the cameras will notice it.",
+        "Press F to switch it on. The beam is useful, but it makes you easier to see.",
         9000,
       );
       audioSystem?.pickup("object");
@@ -27873,22 +27897,6 @@
       }
       this.syncPresentation();
       return this.getDiagnostics();
-    }
-
-    observeCamera(cameraState) {
-      if (!this.isVisibleToSecurity() || !cameraState) {
-        this.state.alertLatchCameraId = null;
-        return null;
-      }
-      if (
-        this.state.alertCooldown > 0
-        || this.state.alertLatchCameraId === cameraState.id
-      ) return null;
-      const alert = cameraSecurity?.reportFlashlightUse(cameraState) || null;
-      if (!alert) return null;
-      this.state.alertCooldown = FLASHLIGHT.alertCooldownSeconds;
-      this.state.alertLatchCameraId = alert.cameraId;
-      return alert;
     }
 
     syncPose(forceRaycast = false) {
@@ -29262,7 +29270,6 @@
       state.security.permitted = Boolean(selected?.permitted);
       state.security.activeCameraId = selected?.cameraState.id || null;
       state.security.occludedBy = selected ? null : inspections.find((inspection) => inspection.cameraState.blocker)?.cameraState.blocker || null;
-      flashlightSystem?.observeCamera(selected?.cameraState || null);
       if (!selected) {
         state.security.alarmLatchCameraId = null;
         state.security.alarmTrackingRefreshRemaining = 0;
@@ -29365,72 +29372,6 @@
       // immediately retargets the same alarm without incrementing its count.
       if (shouldRetarget) mrFeastNpc?.respondToCameraAlarm(refreshedAlarm);
       return true;
-    }
-
-    reportFlashlightUse(observedCameraState) {
-      if (
-        !state.started
-        || !flashlightSystem?.isVisibleToSecurity?.()
-        || state.isHidden
-        || state.gameOver
-        || competitionSuspendsSecurity()
-        || !physics
-        || !observedCameraState
-        || this.cameraById.get(observedCameraState.id) !== observedCameraState
-      ) return null;
-      const playerPosition = physics.playerPosition();
-      const playerEye = new THREE.Vector3(camera.position.x, camera.position.y, camera.position.z);
-      const candidates = [];
-      for (const cameraState of [observedCameraState]) {
-        if (!this.isCameraRelevant(cameraState, playerPosition)) continue;
-        const direction = playerEye.clone().sub(cameraState.lensOrigin);
-        const distance = direction.length();
-        if (distance <= 0.05 || distance > cameraState.range) continue;
-        direction.multiplyScalar(1 / distance);
-        if (!this.lineOfSight(cameraState, playerEye, direction, distance)) continue;
-        candidates.push({
-          cameraState,
-          distance,
-          sameRoom: cameraState.room === state.currentRoom,
-        });
-      }
-      candidates.sort((a, b) => Number(b.sameRoom) - Number(a.sameRoom) || a.distance - b.distance);
-      const selected = candidates[0];
-      if (!selected) return null;
-      const feetY = playerPosition.y - (PLAYER.halfHeight + PLAYER.radius);
-      const lastSeen = {
-        x: Number(playerPosition.x.toFixed(3)),
-        y: Number(feetY.toFixed(3)),
-        z: Number(playerPosition.z.toFixed(3)),
-      };
-      const response = this.responseAnchor(selected.cameraState, lastSeen);
-      state.security.flashlightAlertCount += 1;
-      state.flashlight.alertCount += 1;
-      const alert = {
-        count: state.security.flashlightAlertCount,
-        cameraId: selected.cameraState.id,
-        room: selected.cameraState.room,
-        reason: "flashlight-use",
-        lastSeen,
-        responseNodeId: response?.id || null,
-        responsePosition: response ? { x: response.x, y: response.y, z: response.z } : null,
-      };
-      state.security.lastFlashlightAlert = alert;
-      state.flashlight.lastAlert = alert;
-      state.security.flashlightWarningRemaining = FLASHLIGHT.warningSeconds;
-      state.security.observed = true;
-      state.security.permitted = false;
-      state.security.activeCameraId = selected.cameraState.id;
-      selected.cameraState.flashlightWarningRemaining = FLASHLIGHT.warningSeconds;
-      selected.cameraState.acquisition = Math.max(selected.cameraState.acquisition, CAMERA_SECURITY.trackingThreshold);
-      if (audioSystem) {
-        audioSystem.ping(610, 0.16, 0.052, "square");
-        audioSystem.ping(305, 0.28, 0.045, "sawtooth");
-      }
-      mrFeastNpc?.respondToCameraAlarm(alert);
-      this.updatePresentation();
-      this.updateHud();
-      return alert;
     }
 
     raiseAlarm(cameraState, reason = "lockdown-sighting", options = {}) {
@@ -36075,6 +36016,11 @@
       for (const fixtureConfig of sharedLighting.fixtures) {
         const fixture = sharedCircuit.addFixture(fixtureConfig.x, fixtureConfig.z, "basement");
         fixture.userData.sharedRoomRole = fixtureConfig.role;
+        if (fixtureConfig.intensityScale) {
+          fixture.userData.intensityScale = fixtureConfig.intensityScale;
+          fixture.userData.baseIntensity *= fixtureConfig.intensityScale;
+          fixture.intensity = sharedCircuit.on ? fixture.userData.baseIntensity : 0;
+        }
       }
       for (const switchConfig of sharedLighting.switches) {
         sharedCircuit.addSwitch(
@@ -37632,6 +37578,11 @@
         lastContextPlayedAt: -Infinity,
         dialogueDucked: false,
         targetVolume: BANQUET_LOSS.breathing.baseVolume,
+        mode: "waiting",
+        recordedCount: 0,
+        fallbackCount: 0,
+        lastAssetRole: null,
+        lastAssetPath: null,
       };
       this.pendingCloseThunder = [];
       this.thunderState = {
@@ -37876,6 +37827,71 @@
       };
     }
 
+    playRecordedBanquetBreath(path, buffer, intensity, volume, breathNumber) {
+      if (!path || !buffer) return false;
+      const settings = BANQUET_LOSS.breathing;
+      const now = this.ctx.currentTime;
+      const source = this.ctx.createBufferSource();
+      source.buffer = buffer;
+      const hitching = breathNumber % 3 === 2;
+      const rate = settings.recordedInitialRate
+        + (settings.recordedFinalRate - settings.recordedInitialRate) * intensity
+        + (hitching ? settings.recordedHitchRateBoost : 0);
+      source.playbackRate.setValueAtTime(rate, now);
+      const high = this.ctx.createBiquadFilter();
+      high.type = "highpass";
+      high.frequency.value = settings.recordedHighpassHz;
+      const low = this.ctx.createBiquadFilter();
+      low.type = "lowpass";
+      low.frequency.value = settings.recordedLowpassHz;
+      const gain = this.ctx.createGain();
+      const clipStart = Math.min(
+        settings.recordedStartSeconds,
+        Math.max(0, buffer.duration * 0.1),
+      );
+      const clipEnd = Math.max(
+        clipStart + 0.25,
+        Math.min(buffer.duration - 0.01, settings.recordedEndSeconds),
+      );
+      const clipDuration = clipEnd - clipStart;
+      const presentationDuration = clipDuration / Math.max(0.25, rate);
+      const fade = Math.min(
+        settings.recordedFadeSeconds,
+        Math.max(0.01, presentationDuration * 0.12),
+      );
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.linearRampToValueAtTime(volume, now + fade);
+      gain.gain.setValueAtTime(
+        volume,
+        Math.max(now + fade, now + presentationDuration - fade),
+      );
+      gain.gain.linearRampToValueAtTime(0.0001, now + presentationDuration);
+
+      let tail = low;
+      if (this.ctx.createStereoPanner) {
+        const panner = this.ctx.createStereoPanner();
+        panner.pan.value = settings.panJitter[breathNumber % settings.panJitter.length];
+        tail.connect(panner);
+        tail = panner;
+      }
+      source.connect(high).connect(low);
+      tail.connect(gain).connect(this.master);
+      this.trackBanquetBreathSource(source);
+      try {
+        source.start(now, clipStart, clipDuration);
+      } catch (_) {
+        this.banquetBreathSources.delete(source);
+        this.activeVoices = Math.max(0, this.activeVoices - 1);
+        try { source.stop(); } catch (_) { /* Already stopped. */ }
+        return false;
+      }
+      this.banquetBreathing.mode = "recorded";
+      this.banquetBreathing.recordedCount += 1;
+      this.banquetBreathing.lastAssetRole = settings.assetRole;
+      this.banquetBreathing.lastAssetPath = path;
+      return true;
+    }
+
     playBanquetBreath(intensity, dialogueActive) {
       if (
         !this.ctx
@@ -37899,6 +37915,23 @@
         * (0.82 + intensity * 0.18)
         * (dialogueActive ? settings.dialogueDuckMultiplier : 1);
       const hitching = breathNumber % 3 === 2;
+      const [recordedPath] = this.availableAssets(settings.assetRole);
+      const recordedBuffer = recordedPath ? this.buffers.get(recordedPath) : null;
+      if (
+        this.playRecordedBanquetBreath(
+          recordedPath,
+          recordedBuffer,
+          intensity,
+          volume,
+          breathNumber,
+        )
+      ) {
+        this.banquetBreathing.lastContextPlayedAt = now;
+        this.banquetBreathing.breathCount += 1;
+        this.banquetBreathing.targetVolume = volume;
+        this.markCue("banquetPlayerBreath");
+        return true;
+      }
 
       const breath = this.ctx.createBufferSource();
       breath.buffer = this.banquetBreathNoise || this.makeNoiseBuffer(1.35);
@@ -37973,6 +38006,10 @@
       this.banquetBreathing.lastContextPlayedAt = now;
       this.banquetBreathing.breathCount += 1;
       this.banquetBreathing.targetVolume = volume;
+      this.banquetBreathing.mode = "procedural-fallback";
+      this.banquetBreathing.fallbackCount += 1;
+      this.banquetBreathing.lastAssetRole = "procedural";
+      this.banquetBreathing.lastAssetPath = null;
       this.markCue("banquetPlayerBreath");
       return true;
     }
@@ -37991,6 +38028,11 @@
         lastContextPlayedAt: -Infinity,
         dialogueDucked: false,
         targetVolume: BANQUET_LOSS.breathing.baseVolume,
+        mode: "waiting",
+        recordedCount: 0,
+        fallbackCount: 0,
+        lastAssetRole: null,
+        lastAssetPath: null,
       });
       return this.banquetBreathingDiagnostics();
     }
@@ -38062,6 +38104,11 @@
         baseVolume: settings.baseVolume,
         targetVolume: Number(this.banquetBreathing.targetVolume.toFixed(4)),
         activeSourceCount: this.banquetBreathSources.size,
+        mode: this.banquetBreathing.mode,
+        recordedCount: this.banquetBreathing.recordedCount,
+        fallbackCount: this.banquetBreathing.fallbackCount,
+        lastAssetRole: this.banquetBreathing.lastAssetRole,
+        lastAssetPath: this.banquetBreathing.lastAssetPath,
       };
     }
 
@@ -38709,6 +38756,51 @@
         this.scheduleTone(this.ctx, destination, 1180, 0.48, 0.055 * distanceGain, "sine", now);
         this.scheduleTone(this.ctx, destination, 1530, 0.36, 0.025 * distanceGain, "sine", now + 0.06);
       }
+      return true;
+    }
+
+    throwableRelease(kind = "throw", materialName = "object") {
+      const releaseKind = kind === "drop" ? "drop" : "throw";
+      this.markCue(releaseKind === "drop" ? "throwableDrop" : "throwableThrow");
+      this.markCue(`throwableRelease:${releaseKind}:${materialName || "object"}`);
+      if (!this.ctx || !state.audioEnabled) return false;
+      const now = this.ctx.currentTime;
+      if (releaseKind === "drop") {
+        const metallic = ["brass", "iron"].includes(materialName);
+        this.scheduleTone(
+          this.ctx,
+          this.master,
+          metallic ? 185 : 118,
+          0.075,
+          metallic ? 0.032 : 0.026,
+          metallic ? "triangle" : "sine",
+          now,
+        );
+        this.scheduleTone(
+          this.ctx,
+          this.master,
+          metallic ? 410 : 172,
+          0.045,
+          0.012,
+          "triangle",
+          now + 0.018,
+        );
+        return true;
+      }
+      const source = this.ctx.createBufferSource();
+      source.buffer = this.makeNoiseBuffer(0.2);
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.Q.value = 0.72;
+      filter.frequency.setValueAtTime(1650, now);
+      filter.frequency.exponentialRampToValueAtTime(520, now + 0.18);
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.058, now + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.19);
+      source.connect(filter).connect(gain).connect(this.master);
+      source.start(now);
+      source.stop(now + 0.2);
       return true;
     }
 
@@ -40524,6 +40616,7 @@
     input.holdBreath = false;
     input.interactHeld = false;
     breathStealthSystem?.setHolding(false, "input-cleared");
+    throwableDistractionSystem?.dropCarried("input-cleared");
     throwableDistractionSystem?.endPickup("input-cleared");
     bulkStorageSecretSystem?.endHold("input-cleared");
     if (dom.touchSprint) {
@@ -40961,7 +41054,7 @@
     updateInteractionPrompt();
   }
 
-  function beginCurrentInteractionHold() {
+  function beginCurrentInteractionHold(source = "keyboard") {
     if (
       state.journalOpen
       || state.menuOpen
@@ -40973,7 +41066,7 @@
     const interaction = state.activeSeat?.interaction || state.currentInteraction;
     if (interaction && typeof interaction.beginHold === "function") {
       input.interactHeld = true;
-      const started = Boolean(interaction.beginHold());
+      const started = Boolean(interaction.beginHold(source));
       if (!started) input.interactHeld = false;
       updateInteractionPrompt();
       return started;
@@ -40986,7 +41079,8 @@
     const wasHeld = input.interactHeld;
     input.interactHeld = false;
     const released = (
-      throwableDistractionSystem?.endPickup(reason)
+      throwableDistractionSystem?.dropCarried(reason)
+      || throwableDistractionSystem?.endPickup(reason)
       || bulkStorageSecretSystem?.endHold(reason)
       || false
     );
@@ -41126,7 +41220,7 @@
       }
       if (event.code === "KeyE" && !event.repeat) {
         event.preventDefault();
-        beginCurrentInteractionHold();
+        beginCurrentInteractionHold("keyboard");
       }
       if (event.code === "KeyM" && !event.repeat && audioSystem) {
         event.preventDefault();
@@ -41323,7 +41417,7 @@
           // Deterministic QA dispatches an otherwise valid synthetic pointer.
         }
         touchInteract.classList.add("is-held");
-        beginCurrentInteractionHold();
+        beginCurrentInteractionHold("touch");
       });
       touchInteract.addEventListener("pointerup", releaseInteraction);
       touchInteract.addEventListener("pointercancel", releaseInteraction);

@@ -28,7 +28,7 @@ const SHARED_CIRCUITS = Object.freeze([
     secondSwitch: "pantrySwitch",
     firstRoom: "archive",
     secondRoom: "pantry",
-    roles: Object.freeze(["archive", "pantry"]),
+    roles: Object.freeze(["archive", "archive-landing", "pantry"]),
     fixtureCount: 4,
   }),
 ]);
@@ -111,6 +111,15 @@ async function run() {
   assert(/"ARCHIVE": \[SHARED_ROOM_LIGHTING\.eastBasement\.circuit\]/.test(runtime), "Archive is not mapped to the east shared circuit");
   assert(/"PANTRY": \[SHARED_ROOM_LIGHTING\.eastBasement\.circuit\]/.test(runtime), "Pantry is not mapped to the east shared circuit");
   assert(/sharedRoomRole/.test(runtime) && /SHARED_ROOM_LIGHTING[\s\S]*?fixtureRoles/.test(runtime), "shared circuit fixtures need named room roles");
+  assert(
+    /fixtureRoles:\s*Object\.freeze\(\["archive",\s*"archive-landing",\s*"pantry"\]\)/.test(runtime)
+      && /role:\s*"archive-landing",\s*x:\s*11\.3,\s*z:\s*7\.4,\s*intensityScale:\s*1\.25/.test(runtime),
+    "Archive landing needs a fixed-budget, modestly boosted emitter at the bottom of the service stairs",
+  );
+  assert(
+    /fixtureConfig\.intensityScale[\s\S]*?fixture\.userData\.baseIntensity\s*\*=/.test(runtime),
+    "shared-room fixture tuning does not apply the authored Archive landing intensity boost",
+  );
   assert(/for \(const sharedLighting of Object\.values\(SHARED_ROOM_LIGHTING\)\)/.test(runtime), "fixed light selection does not preserve both halves of shared circuits");
   assert(!/new LightCircuit\("(?:wine cellar|laundry|archive|pantry store) lights"/.test(runtime), "legacy independent basement circuits remain");
   for (const destination of SHARED_CIRCUITS.flatMap((circuit) => [circuit.firstSwitch, circuit.secondSwitch])) {

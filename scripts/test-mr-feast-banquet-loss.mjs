@@ -144,6 +144,11 @@ async function assertSourceContract() {
       && /stopBanquetBreathing/.test(runtime),
     "the table scene needs a named, lifecycle-owned panicked player breathing treatment",
   );
+  assert(
+    /assetRole:\s*"breathSprint"/.test(runtime)
+      && /playRecordedBanquetBreath/.test(runtime),
+    "the table-scene breathing must use the new recorded sprint-breath SFX",
+  );
   assert(runtime.includes(closingLine), "Mr. Feast's complete authored closing line is missing");
   assert(!runtime.includes("Contestant Thirteen—you lost the million"), "Mr. Feast must not identify the player as Contestant Thirteen");
   assert(
@@ -356,6 +361,10 @@ async function run() {
       banquetAudio.banquetBreathing.active
         && banquetAudio.banquetBreathing.profile === "panicked-player"
         && banquetAudio.banquetBreathing.closeFirstPerson
+        && banquetAudio.banquetBreathing.mode === "recorded"
+        && banquetAudio.banquetBreathing.lastAssetRole === "breathSprint"
+        && /player-breath-sprint\.ogg$/.test(banquetAudio.banquetBreathing.lastAssetPath || "")
+        && banquetAudio.banquetBreathing.recordedCount >= 2
         && banquetAudio.banquetBreathing.breathCount >= 2
         && banquetAudio.banquetBreathing.inhaleSeconds > 0.2
         && banquetAudio.banquetBreathing.exhaleSeconds > banquetAudio.banquetBreathing.inhaleSeconds

@@ -95,7 +95,10 @@ async function run() {
   assert(/const FLASHLIGHT = Object\.freeze\(\{/.test(runtime), "missing named FLASHLIGHT tuning table");
   assert(/class FlashlightSystem/.test(runtime), "missing focused FlashlightSystem");
   assert(/code === "KeyF"/.test(runtime) && /event\.repeat/.test(runtime), "F must toggle through the central non-repeating input path");
-  assert(/reportFlashlightUse/.test(runtime) && /flashlight-use/.test(runtime), "flashlight use must report a camera-security event");
+  assert(
+    !/reportFlashlightUse/.test(runtime) && !/reason:\s*"flashlight-use"/.test(runtime),
+    "flashlight visibility must not create its own camera offense or Mr. Feast response",
+  );
   assert(/getFlashlightState/.test(runtime) && /setFlashlightForQA/.test(runtime), "focused flashlight diagnostics and QA controls are missing");
   assert(/locations:\s*Object\.freeze\(\[/.test(runtime), "flashlight should declare its three discoverable pickup locations");
   assert(/kitchen-under-sink/.test(runtime) && /upper-east-front-closet/.test(runtime) && /basement-archive/.test(runtime), "flashlight locations should cover the kitchen sink cabinet, an upper walk-in closet, and the basement");
@@ -258,11 +261,43 @@ async function run() {
     await page.evaluate(() => window.MrFeastFresh.setStealthLightOverrideForQA(null));
     console.log(`flashlight qa: stealth ${stealthOff.meter.toFixed(1)} off -> ${stealthOn.meter.toFixed(1)} on`);
 
-    // 5. A camera-visible beam produces one recoverable security event and
-    // one bounded Mr. Feast investigation, whether the camera sees it at
-    // activation or later while it remains on.
+    // 5. The flashlight changes visibility, not camera policy. Ordinary
+    // show-space filming must stay harmless even when the beam is plainly on;
+    // only an independently hostile basement or sabotage sighting may summon
+    // Mr. Feast.
     await page.waitForFunction(() => window.MrFeastFresh.getMrFeastState()?.loaded === true, null, { timeout: 120000 });
     console.log("flashlight qa: Mr. Feast loaded");
+    const permittedFilming = await page.evaluate(() => {
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.resetCameraSecurityForQA("show");
+      window.MrFeastFresh.setCameraSoloForQA("cam-main-foyer");
+      window.MrFeastFresh.setCameraSweepForQA("cam-main-foyer", 0);
+      window.MrFeastFresh.setCameraOccludedForQA("cam-main-foyer", false);
+      window.MrFeastFresh.placePlayerInCameraLaneForQA("cam-main-foyer", { distance: 4 });
+      window.MrFeastFresh.setFlashlightForQA(true, { silent: true });
+      window.MrFeastFresh.advanceCameraSecurityForQA(2);
+      return {
+        flashlight: window.MrFeastFresh.getFlashlightState(),
+        security: window.MrFeastFresh.getCameraSecurityState(),
+        host: window.MrFeastFresh.getMrFeastState(),
+        pursuit: window.MrFeastFresh.getPursuitState?.() || null,
+      };
+    });
+    assert(
+      permittedFilming.flashlight.on
+        && permittedFilming.flashlight.alertCount === 0
+        && permittedFilming.security.observed
+        && permittedFilming.security.permitted
+        && permittedFilming.security.alarm?.count === 0
+        && permittedFilming.host.security?.state === "patrol"
+        && !permittedFilming.host.pursuit?.active
+        && !permittedFilming.pursuit?.active,
+      `an ordinary camera must not aggro on flashlight use: ${JSON.stringify(permittedFilming)}`,
+    );
+    await page.screenshot({ path: path.join(artifactDir, "flashlight-permitted-filming-desktop.png") });
+
+    // A restricted basement camera remains dangerous, but because the player
+    // is trespassing—not because the flashlight itself is a separate offense.
     const activationProbe = await page.evaluate(() => {
       window.MrFeastFresh.resetMrFeastWandererForQA();
       window.MrFeastFresh.resetCameraSecurityForQA("restricted");
@@ -279,9 +314,9 @@ async function run() {
         pursuit: window.MrFeastFresh.getPursuitState?.() || null,
       };
     });
-    assert(activationProbe.flashlight.alertCount === 0, `switching the beam on must wait for an actual camera observation; ${JSON.stringify(activationProbe)}`);
+    assert(activationProbe.flashlight.alertCount === 0, `switching the beam on must not create a security offense; ${JSON.stringify(activationProbe)}`);
     assert(activationProbe.host.security?.state === "patrol", `switch-on alone should not summon Mr. Feast before camera observation; ${JSON.stringify(activationProbe.host.security)}`);
-    const alert = await page.evaluate(() => {
+    const basementWarning = await page.evaluate(() => {
       window.MrFeastFresh.advanceCameraSecurityForQA(0.25);
       return {
         flashlight: window.MrFeastFresh.getFlashlightState(),
@@ -290,18 +325,37 @@ async function run() {
         pursuit: window.MrFeastFresh.getPursuitState?.() || null,
       };
     });
-    assert(alert.flashlight.alertCount === 1 && alert.flashlight.lastAlert?.reason === "flashlight-use", `camera observation should create one flashlight-specific alert; ${JSON.stringify(alert.flashlight)}`);
-    assert(alert.flashlight.lastAlert.cameraId === "cam-basement-archive", `alert should identify the plausible Archive camera; ${JSON.stringify(alert.flashlight.lastAlert)}`);
-    assert(alert.security.alarm?.count === 0 && alert.security.mode === "restricted", "flashlight alert must stay recoverable rather than forcing permanent lockdown");
-    assert(alert.host.security?.state === "responding", `Mr. Feast should begin the bounded camera response; state=${alert.host.security?.state}`);
-    assert(!alert.host.pursuit?.active && !alert.pursuit?.active, "flashlight activation must not directly start pursuit");
-    await page.evaluate(() => window.MrFeastFresh.advanceCameraSecurityForQA(2));
-    assert((await flashlight(page)).alertCount === 1, "leaving the beam on must not spam security alerts");
+    assert(
+      basementWarning.flashlight.alertCount === 0
+        && basementWarning.security.observed
+        && !basementWarning.security.permitted
+        && basementWarning.security.alarm?.count === 0
+        && basementWarning.host.security?.state === "patrol",
+      `early basement observation should warn without a flashlight-specific response: ${JSON.stringify(basementWarning)}`,
+    );
+    const basementAlarm = await page.evaluate(() => {
+      window.MrFeastFresh.advanceCameraSecurityForQA(6);
+      return {
+        flashlight: window.MrFeastFresh.getFlashlightState(),
+        security: window.MrFeastFresh.getCameraSecurityState(),
+        host: window.MrFeastFresh.getMrFeastState(),
+        pursuit: window.MrFeastFresh.getPursuitState?.() || null,
+      };
+    });
+    assert(
+      basementAlarm.flashlight.alertCount === 0
+        && basementAlarm.security.alarm?.count === 1
+        && basementAlarm.security.alarm?.last?.reason === "restricted-trespass"
+        && basementAlarm.host.security?.state === "responding"
+        && !basementAlarm.host.pursuit?.active
+        && !basementAlarm.pursuit?.active,
+      `the basement should summon Mr. Feast for trespass, never for the flashlight itself: ${JSON.stringify(basementAlarm)}`,
+    );
 
     // Turning the light on behind an occluder must not make the later visible
-    // beam safe. The camera should report it as soon as the player emerges,
-    // without requiring another off/on toggle.
-    const delayedAlert = await page.evaluate(() => {
+    // trespass safe. The ordinary camera acquisition should begin when the
+    // player emerges, without creating a separate beam offense.
+    const delayedTrespass = await page.evaluate(() => {
       window.MrFeastFresh.resetMrFeastWandererForQA();
       window.MrFeastFresh.resetCameraSecurityForQA("restricted");
       window.MrFeastFresh.setCameraSoloForQA("cam-basement-archive");
@@ -311,37 +365,28 @@ async function run() {
       window.MrFeastFresh.setFlashlightForQA(false, { silent: true });
       window.MrFeastFresh.setFlashlightForQA(true);
       const atActivation = window.MrFeastFresh.getFlashlightState();
+      window.MrFeastFresh.advanceCameraSecurityForQA(2);
+      const whileOccluded = window.MrFeastFresh.getCameraSecurityState();
       window.MrFeastFresh.setCameraOccludedForQA("cam-basement-archive", false);
-      window.MrFeastFresh.advanceCameraSecurityForQA(0.25);
+      window.MrFeastFresh.advanceCameraSecurityForQA(6);
       return {
         atActivation,
         afterObservation: window.MrFeastFresh.getFlashlightState(),
+        whileOccluded,
         security: window.MrFeastFresh.getCameraSecurityState(),
         host: window.MrFeastFresh.getMrFeastState(),
       };
     });
-    assert(delayedAlert.atActivation.alertCount === 0, `occluded activation should stay unreported initially; ${JSON.stringify(delayedAlert.atActivation)}`);
-    assert(delayedAlert.afterObservation.alertCount === 1, `a camera must report a flashlight that remains on when it later gains sight; ${JSON.stringify(delayedAlert)}`);
-    assert(delayedAlert.afterObservation.lastAlert?.cameraId === "cam-basement-archive", `delayed flashlight alert should name the observing camera; ${JSON.stringify(delayedAlert.afterObservation)}`);
-    assert(delayedAlert.security.alarm?.count === 0 && delayedAlert.host.security?.state === "responding", `delayed flashlight observation should reuse bounded investigation without lockdown; ${JSON.stringify(delayedAlert)}`);
-
-    // The still-on beam must alert again after the camera genuinely loses and
-    // later regains sight. Reacquisition cannot require an off/on toggle.
-    const reacquiredAlert = await page.evaluate(() => {
-      window.MrFeastFresh.setCameraOccludedForQA("cam-basement-archive", true);
-      window.MrFeastFresh.advanceCameraSecurityForQA(0.25);
-      window.MrFeastFresh.advanceFlashlightForQA(1.6);
-      window.MrFeastFresh.setCameraOccludedForQA("cam-basement-archive", false);
-      window.MrFeastFresh.advanceCameraSecurityForQA(0.25);
-      return {
-        flashlight: window.MrFeastFresh.getFlashlightState(),
-        security: window.MrFeastFresh.getCameraSecurityState(),
-        host: window.MrFeastFresh.getMrFeastState(),
-      };
-    });
-    assert(reacquiredAlert.flashlight.on && reacquiredAlert.flashlight.alertCount === 2, `a camera regaining sight of the still-on beam should alert again; ${JSON.stringify(reacquiredAlert)}`);
-    assert(reacquiredAlert.flashlight.lastAlert?.cameraId === "cam-basement-archive", `reacquired flashlight alert should retain the observing camera; ${JSON.stringify(reacquiredAlert.flashlight)}`);
-    await page.screenshot({ path: path.join(artifactDir, "flashlight-continuous-camera-alert-desktop.png") });
+    assert(delayedTrespass.atActivation.alertCount === 0, `occluded activation should stay harmless: ${JSON.stringify(delayedTrespass.atActivation)}`);
+    assert(!delayedTrespass.whileOccluded.observed && delayedTrespass.whileOccluded.alarm?.count === 0, `the occluder must prevent any invented trespass sighting: ${JSON.stringify(delayedTrespass.whileOccluded)}`);
+    assert(
+      delayedTrespass.afterObservation.alertCount === 0
+        && delayedTrespass.security.alarm?.count === 1
+        && delayedTrespass.security.alarm?.last?.reason === "restricted-trespass"
+        && delayedTrespass.host.security?.state === "responding",
+      `emerging in the basement should create only the normal trespass response: ${JSON.stringify(delayedTrespass)}`,
+    );
+    await page.screenshot({ path: path.join(artifactDir, "flashlight-policy-gated-basement-alarm-desktop.png") });
 
     // An occluded camera cannot become an invented source.
     const occluded = await page.evaluate(async () => {
@@ -349,10 +394,17 @@ async function run() {
       window.MrFeastFresh.setCameraOccludedForQA("cam-basement-archive", true);
       await window.advanceTime(1600);
       window.MrFeastFresh.setFlashlightForQA(true);
-      return window.MrFeastFresh.getFlashlightState();
+      return {
+        flashlight: window.MrFeastFresh.getFlashlightState(),
+        security: window.MrFeastFresh.getCameraSecurityState(),
+      };
     });
-    assert(occluded.alertCount === 2, "occluded flashlight use must not invent another camera alert");
-    console.log("flashlight qa: continuous bounded camera and host alert passed");
+    assert(
+      occluded.flashlight.alertCount === 0
+        && occluded.security.alarm?.count === 1,
+      `occluded flashlight use must not invent another security event: ${JSON.stringify(occluded)}`,
+    );
+    console.log("flashlight qa: policy-gated camera response passed");
 
     // 6. Possession saves, but loading always extinguishes the transient beam
     // without manufacturing another alert.
@@ -403,7 +455,7 @@ async function run() {
     await mobileContext.close();
 
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
-    console.log("Mr. Feast flashlight browser test: landing pickup, F/touch input, restrained beam, fixed shader topology, stealth cost, recoverable camera/Mr. Feast alert, persistence, and mobile layout passed");
+    console.log("Mr. Feast flashlight browser test: landing pickup, F/touch input, restrained beam, fixed shader topology, stealth cost, policy-gated camera response, persistence, and mobile layout passed");
   } finally {
     if (browser) await browser.close();
     if (server) server.kill("SIGTERM");

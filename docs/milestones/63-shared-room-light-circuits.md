@@ -15,6 +15,9 @@ Make every physical switch in a continuous architectural volume control the whol
 - Keep both existing wall switches in each wing and bind either one to the complete shared circuit.
 - Preserve every existing fixture and the fixed six-spot/eleven-point shader-light budget.
 - Reserve one live fixed-budget fixture representative for each named half of a shared circuit.
+- Keep the existing Archive bulb nearest the service-stair landing live in the
+  fixed budget and lift only that emitter by `1.25×`, without adding another
+  shader light or changing the deeper shelf lighting.
 - Map both room labels in each wing to the same circuit for light sampling and diagnostics.
 - Replace the separate foyer chandelier, grand stair, and upper landing circuits with one `foyer and staircase lights` circuit.
 - Keep the main-foyer, foyer-balcony, grand-stair, and upper-landing wall controls and bind all four to the complete open volume.
@@ -39,6 +42,7 @@ Make every physical switch in a continuous architectural volume control the whol
 - [x] Each shared circuit retains two physical wall switches and every existing fixture: six across Wine Cellar/Laundry and four across Archive/Pantry. — test: `scripts/test-mr-feast-shared-light-circuits.mjs::runtime inventory`
 - [x] Real E interaction at either switch turns the complete paired wing off or on, while the other shared wing remains unchanged. — test: `scripts/test-mr-feast-shared-light-circuits.mjs::physical two-way switching`
 - [x] An energized shared circuit keeps at least one selected real emitter in each named room half without changing the fixed shader budgets. — tests: `scripts/test-mr-feast-shared-light-circuits.mjs::fixed-budget coverage` and `scripts/test-mr-feast-renovation.mjs::global shader padding`
+- [x] The existing Archive fixture at `(11.3, 7.4)` is guaranteed a fixed-budget `archive-landing` role and applies a localized `1.25×` intensity scale, making the bottom of the service stairs readable without adding a fixture, shadow, or shader slot. — test: `scripts/test-mr-feast-shared-light-circuits.mjs::Archive landing emitter`
 - [x] Feast Hunt still blacks out every interior circuit, rejects switch restores during the hunt, and restores the exact pre-hunt shared-circuit states afterward. — test: `scripts/test-mr-feast-feast-hunt.mjs::full-house blackout lifecycle`
 - [x] `render_game_to_text()` exposes both shared room roles and which roles currently retain active rendered fixtures. — test: `scripts/test-mr-feast-shared-light-circuits.mjs::diagnostics`
 - [x] `ROOM_LIGHTING` maps Front Foyer, Grand Stair Hall, Foyer Balcony, and Upper Landing to one named circuit; the three legacy independent circuit objects no longer exist. — test: `scripts/test-mr-feast-shared-light-circuits.mjs::open-volume source contract`
@@ -63,3 +67,8 @@ Create `scripts/test-mr-feast-shared-light-circuits.mjs` before implementation a
 - Runtime/test syntax, renovation invariants, the focused physical-switch browser suite, the complete Feast Hunt blackout/restoration suite, the stealth-meter browser suite, full desktop/mobile Contestant 13, and `git diff --check` pass.
 - The foyer/stair refinement additionally passes all four real switch approaches, rear-lounge isolation, the upper-window/gallery physical guard and balcony loop, and the complete Feast Hunt blackout/restoration lifecycle.
 - Browser proof lives under `output/playwright/mr-feast-shared-light-circuits/`.
+- The Archive landing refinement failed red first on the missing fixed-budget
+  role, then passed the complete physical two-way switching suite with three
+  active Archive/Pantry roles inside the unchanged `6`-spot/`11`-point
+  budget. Before/after proof is under
+  `output/iterate/archive-bottom-lighting/`.

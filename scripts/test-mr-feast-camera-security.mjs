@@ -130,9 +130,12 @@ async function run() {
     assert(
       state.security.tuning.lastSeenRefreshSeconds <= 1
         && state.security.tuning.lastSeenRetargetMeters <= 1
-        && state.security.tuning.searchPatrolSeconds >= 120
-        && state.security.tuning.searchPatrolRadiusMeters >= 4,
-      `camera alarms need frequent final-position refresh and a multi-minute local patrol; tuning=${JSON.stringify(state.security.tuning)}`,
+        && state.security.tuning.searchPatrolSeconds >= 180
+        && state.security.tuning.searchPatrolRadiusMeters >= 8
+        && state.security.tuning.searchPatrolPauseSeconds >= 3
+        && state.security.tuning.searchPatrolMaximumNodes >= 8
+        && state.security.tuning.searchAwarenessCheckSeconds <= 0.25,
+      `camera alarms need frequent final-position refresh, a broad three-minute sweep, and personal reacquisition; tuning=${JSON.stringify(state.security.tuning)}`,
     );
     const securityDetails = await page.evaluate(() => window.MrFeastFresh.getCameraSecurityState());
     const indoorMounts = securityDetails.cameras.details.filter((entry) => !entry.outdoors);
@@ -395,16 +398,22 @@ async function run() {
       window.MrFeastFresh.setCameraOccludedForQA(id, false);
       window.MrFeastFresh.placePlayerInCameraLaneForQA(id, { distance: 4, lateral: 1.2 });
       window.MrFeastFresh.triggerCameraAlarmForQA(id, "qa-investigation");
+      window.MrFeastFresh.setCameraPlayerHiddenForQA(true);
     }, mainCamera);
     state = await diagnostics(page);
     assert(state.mrFeast.security.state === "responding", `camera alarm should divert Mr. Feast from patrol; mrFeast=${JSON.stringify(state.mrFeast.security)}`);
     const expectedLastSeen = { ...state.security.alarm.last.lastSeen };
     const arrivalProbe = await page.evaluate(() => window.MrFeastFresh.runMrFeastCameraResponseForQA(45));
+    const searchingHost = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
     assert(
       !arrivalProbe.completed
         && arrivalProbe.search?.arrivedLastSeen
         && arrivalProbe.search.minimumDistanceToLastSeen <= 0.5
-        && arrivalProbe.search.elapsedSeconds > 0,
+        && arrivalProbe.search.elapsedSeconds > 0
+        && arrivalProbe.search.plannedNodeCount >= 8
+        && arrivalProbe.search.plannedZoneCount >= 2
+        && searchingHost.security?.state === "searching"
+        && searchingHost.security.searchRemaining > 120,
       `Mr. Feast must physically reach the exact reachable camera position before beginning his long patrol; expected=${JSON.stringify(expectedLastSeen)} response=${JSON.stringify(arrivalProbe)}`,
     );
     await screenshotStage(page, "camera-last-seen-search-desktop.png");
@@ -418,11 +427,58 @@ async function run() {
         && response.distanceTravelled > 0
         && response.search?.durationSeconds >= 120
         && response.search.elapsedSeconds >= response.search.durationSeconds
-        && response.search.patrolDistance >= 10
-        && response.search.nodeVisits >= 2
+        && response.search.patrolDistance >= 20
+        && response.search.nodeVisits >= 4
+        && response.search.visitedZoneCount >= 2
         && response.search.minimumDistanceToLastSeen <= 0.5,
       `Mr. Feast must navigate to the final camera position and patrol nearby for a few minutes before returning; response=${JSON.stringify(response)}`,
     );
+    await page.evaluate(() => window.MrFeastFresh.setCameraPlayerHiddenForQA(false));
+
+    // A camera search is active perception rather than blind waypoint
+    // walking. Silent hiding remains authoritative, but an exposed player in
+    // his clear forward view must be reacquired through normal pursuit.
+    await page.evaluate((id) => {
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.resetCameraSecurityForQA("show");
+      window.MrFeastFresh.setCameraSoloForQA(id);
+      window.MrFeastFresh.setCameraSweepForQA(id, 0);
+      window.MrFeastFresh.setCameraOccludedForQA(id, false);
+      window.MrFeastFresh.placePlayerInCameraLaneForQA(id, { distance: 4, lateral: 1.2 });
+      window.MrFeastFresh.triggerCameraAlarmForQA(id, "qa-search-reacquisition");
+      window.MrFeastFresh.setCameraPlayerHiddenForQA(true);
+      window.MrFeastFresh.runMrFeastCameraResponseForQA(45);
+    }, mainCamera);
+    const hiddenSearchStage = await page.evaluate(() => (
+      window.MrFeastFresh.stagePlayerForCameraSearchQA({ distance: 2.5, hidden: true })
+    ));
+    await page.evaluate(() => window.MrFeastFresh.advanceMrFeastAwarenessForQA(1));
+    let searchReacquisition = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
+    assert(
+      hiddenSearchStage?.hidden
+        && hiddenSearchStage.clearLane
+        && !searchReacquisition.pursuit?.active
+        && searchReacquisition.security?.state === "searching",
+      `silent hiding must remain safe during a deliberate nearby search: ${JSON.stringify({ hiddenSearchStage, searchReacquisition })}`,
+    );
+    const exposedSearchStage = await page.evaluate(() => (
+      window.MrFeastFresh.stagePlayerForCameraSearchQA({ distance: 2.5, hidden: false })
+    ));
+    await page.evaluate(() => window.MrFeastFresh.advanceMrFeastAwarenessForQA(0.5));
+    searchReacquisition = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
+    assert(
+      exposedSearchStage?.clearLane
+        && !exposedSearchStage.hidden
+        && exposedSearchStage.personalSight
+        && searchReacquisition.pursuit?.active?.kind === "camera-search"
+        && searchReacquisition.pursuit?.active?.reason === "witnessed",
+      `an exposed player found during the area sweep must start normal sight-led pursuit: ${JSON.stringify({ exposedSearchStage, searchReacquisition })}`,
+    );
+    await screenshotStage(page, "camera-search-reacquired-desktop.png");
+    await page.evaluate(() => {
+      window.MrFeastFresh.setCameraPlayerHiddenForQA(false);
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+    });
 
     await configureCameraScenario(page, { cameraId: mainCamera, mode: "lockdown", sweep: 0 });
     await advanceSecurity(page, 0.35);

@@ -75,6 +75,7 @@ async function assertSourceContract() {
   assert(/fearTailSeconds:\s*0/.test(runtime), "pursuit breathing must stop without a post-threat fear tail");
   assert(/mrFeastHearingMeters:\s*6/.test(runtime), "Mr. Feast hearing maximum must be six metres");
   assert(/saintHearingMeters:\s*7/.test(runtime), "Saint hearing maximum must be seven metres");
+  assert(/heardBreathDirectSeconds:\s*1\.[0-9]+/.test(runtime), "a heard breath needs a bounded direction-independent pursuit clue");
   assert(/forcedGaspLockoutSeconds:\s*1/.test(runtime), "empty hold must create a one-second lockout");
   assert(/breathMuffleMultiplier:\s*BREATH_STEALTH\.curtainRangeMultiplier/.test(runtime), "curtain hiding must declare its breath range multiplier");
   assert(/breathMuffleMultiplier:\s*BREATH_STEALTH\.coatClosetRangeMultiplier/.test(runtime), "coat closet must declare its breath range multiplier");
@@ -98,8 +99,11 @@ async function assertSourceContract() {
   assert(/fullEnergyRate:\s*0\.[0-9]+/.test(runtime), "full-energy pursuit breathing needs an explicit slow rate");
   assert(/emptyEnergyRate:\s*1\.[0-9]+/.test(runtime), "empty-energy pursuit breathing needs an explicit fast rate");
   assert(/fullEnergyVolume:\s*0\.[0-9]+/.test(runtime), "full-energy pursuit breathing needs an explicit quiet gain");
-  assert(/emptyEnergyVolume:\s*0\.[0-9]+/.test(runtime), "empty-energy pursuit breathing needs an explicit loud gain");
+  assert(/emptyEnergyVolume:\s*0\.70?\b/.test(runtime), "empty-energy pursuit breathing peak gain must be lowered to 0.70");
   assert(/loopEndSeconds:\s*0\.[0-9]+/.test(runtime), "the loop must end after one inhale-exhale pair instead of all four recorded breaths");
+  const actualAggroBody = runtime.match(/actualAggro\(\)\s*\{([\s\S]*?)\n    \}\n\n    currentAggro/)?.[1] || "";
+  assert(actualAggroBody, "missing authoritative pursuit-only breath classification");
+  assert(!/activeCameraAlarm/.test(actualAggroBody), "a camera alarm by itself must not trigger player breathing");
   assert(/event\.code === "Space"/.test(runtime), "Space must own the desktop hold-breath input");
   assert(/id="mansion-breath"/.test(html), "missing accessible breath meter");
   assert(/id="touch-breath"/.test(html), "missing contextual touch hold-breath control");
@@ -330,6 +334,8 @@ async function runBrowserFlow() {
     assert(
       breath.tier === "panicked"
         && breath.audio.energyRatio <= 0.03
+        && breath.audio.emptyEnergyVolume === 0.7
+        && emptyEnergyAudio.volume <= 0.7
         && emptyEnergyAudio.rate > halfEnergyAudio.rate
         && emptyEnergyAudio.volume > halfEnergyAudio.volume
         && emptyEnergyAudio.loopStartCount === fullEnergyAudio.loopStartCount,
@@ -350,6 +356,22 @@ async function runBrowserFlow() {
       return window.MrFeastFresh.probeBreathAggroForQA({ cameraObserved: true });
     });
     assert(!cameraOnly.aggro, `mere camera observation must not create scared breathing: ${JSON.stringify(cameraOnly)}`);
+    const cameraAlarmOnly = await page.evaluate(() => (
+      window.MrFeastFresh.probeBreathAggroForQA({ cameraAlarm: true })
+    ));
+    assert(
+      cameraAlarmOnly.cameraAlarm
+        && !cameraAlarmOnly.aggro
+        && !cameraAlarmOnly.cameraAlarmCreatesAggro,
+      `camera-alarm response alone must remain silent until Mr. Feast actually pursues: ${JSON.stringify(cameraAlarmOnly)}`,
+    );
+    const mrFeastPursuit = await page.evaluate(() => (
+      window.MrFeastFresh.probeBreathAggroForQA({ mrFeastPursuit: true })
+    ));
+    assert(
+      mrFeastPursuit.aggro && mrFeastPursuit.mrFeast && mrFeastPursuit.mrFeastPursuit,
+      `an actual Mr. Feast pursuit must still trigger breathing: ${JSON.stringify(mrFeastPursuit)}`,
+    );
 
     // Exact listener maxima plus room, occlusion, and hiding attenuation.
     const probes = await page.evaluate(() => ({
@@ -362,6 +384,8 @@ async function runBrowserFlow() {
       curtain: window.MrFeastFresh.probeBreathHearingForQA({ target: "mr-feast", distance: 5.7, tier: "heavy", hidingKind: "curtain" }),
       coatNear: window.MrFeastFresh.probeBreathHearingForQA({ target: "mr-feast", distance: 3.8, tier: "heavy", hidingKind: "coat-closet" }),
       coatFar: window.MrFeastFresh.probeBreathHearingForQA({ target: "mr-feast", distance: 4.1, tier: "heavy", hidingKind: "coat-closet" }),
+      facingToward: window.MrFeastFresh.probeBreathHearingForQA({ target: "mr-feast", distance: 3, tier: "heavy", facingDot: 1 }),
+      facingAway: window.MrFeastFresh.probeBreathHearingForQA({ target: "mr-feast", distance: 3, tier: "heavy", facingDot: -1 }),
     }));
     assert(probes.feastInside.heard && !probes.feastOutside.heard, `Mr. Feast maximum must be 6m: ${JSON.stringify(probes)}`);
     assert(probes.saintInside.heard && !probes.saintOutside.heard, `Saint maximum must be 7m: ${JSON.stringify(probes)}`);
@@ -369,9 +393,78 @@ async function runBrowserFlow() {
     assert(!probes.occluded.heard && probes.occluded.reason === "occluded", `walls/closed doors must block breath: ${JSON.stringify(probes.occluded)}`);
     assert(probes.curtain.heard, `curtains should provide almost no acoustic protection: ${JSON.stringify(probes.curtain)}`);
     assert(probes.coatNear.heard && !probes.coatFar.heard, `coat closet should reduce 6m by 35%: ${JSON.stringify(probes)}`);
+    assert(
+      probes.facingToward.heard
+        && probes.facingAway.heard
+        && probes.facingAway.facingDot === -1
+        && probes.facingAway.requiresFacing === false,
+      `breathing must be equally audible in front of and behind Mr. Feast: ${JSON.stringify(probes)}`,
+    );
 
-    // A real first event redirects Mr. Feast; continued close noise exposes a
-    // hidden player and resolves through his existing catch path.
+    // A post-chase Mr. Feast who is facing directly away must visibly
+    // reacquire the last breath position without receiving visual tracking.
+    const rearStage = await page.evaluate(() => window.MrFeastFresh.stageBreathThreatForQA({
+      target: "mr-feast",
+      distance: 3,
+      hiddenKind: "curtain",
+      listenerFacing: "away",
+      pursuitCooldown: true,
+    }));
+    assert(
+      rearStage?.hidden
+        && rearStage.listenerFacingDot <= -0.95
+        && rearStage.pursuitCooldown,
+      `rear-hearing probe must place an actual post-chase listener facing away: ${JSON.stringify(rearStage)}`,
+    );
+    const rearHear = await page.evaluate(() => window.MrFeastFresh.emitPlayerBreathForQA("heavy"));
+    let rearHost = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
+    assert(
+      rearHear.listeners.some((entry) => (
+        entry.target === "mr-feast"
+        && entry.heard
+        && entry.facingDot <= -0.95
+        && entry.requiresFacing === false
+      ))
+        && rearHost.pursuit?.active?.reason === "breathing"
+        && rearHost.pursuit?.trackingSource === "breathing"
+        && !rearHost.pursuit?.directSight
+        && rearHost.pursuit?.breathClueRemaining > 0,
+      `a rear breath must reacquire pursuit through sound rather than sight: ${JSON.stringify({ rearStage, rearHear, rearHost })}`,
+    );
+    const rearDx = rearStage.playerPosition.x - rearHost.position.x;
+    const rearDz = rearStage.playerPosition.z - rearHost.position.z;
+    const rearDistance = Math.hypot(rearDx, rearDz);
+    const rearTurnDot = (
+      Math.sin(rearHost.yaw) * rearDx
+      + Math.cos(rearHost.yaw) * rearDz
+    ) / rearDistance;
+    assert(
+      rearTurnDot > 0.8
+        && rearHost.security?.state === "responding"
+        && rearHost.pursuit?.targetNodeId
+        && Math.hypot(
+          rearStage.playerPosition.x - rearHost.pursuit.lastKnownPosition.x,
+          rearStage.playerPosition.z - rearHost.pursuit.lastKnownPosition.z,
+        ) < 0.05,
+      `Mr. Feast must turn and route toward the last-heard rear clue: ${JSON.stringify({
+        rearTurnDot,
+        rearStage,
+        rearHost,
+      })}`,
+    );
+    await page.evaluate(() => window.MrFeastFresh.advanceMrFeastPursuitForQA(0.35));
+    rearHost = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
+    assert(
+      rearHost.pursuit?.active?.reason === "breathing"
+        && rearHost.pursuit?.trackingSource === "breathing"
+        && !rearHost.pursuit?.directSight
+        && rearHost.pursuit?.breathClueRemaining > 0
+        && rearHost.security?.pathRemaining > 0,
+      `the unseen rear breath must remain an active routed clue: ${JSON.stringify(rearHost)}`,
+    );
+
+    // A real first event starts sound-led pursuit; continued close noise
+    // exposes a hidden player and resolves through his existing catch path.
     await page.waitForFunction(
       () => window.MrFeastFresh.getMrFeastState?.()?.loadStatus === "ready",
       null,
@@ -387,9 +480,11 @@ async function runBrowserFlow() {
     let host = await page.evaluate(() => window.MrFeastFresh.getMrFeastState());
     assert(
       firstHear.listeners.some((entry) => entry.target === "mr-feast" && entry.heard)
-        && host.security?.state === "responding"
-        && host.security?.activeAlarm?.kind === "breathing",
-      `first breath must start a bounded sound investigation: ${JSON.stringify({ firstHear, host })}`,
+        && host.pursuit?.active?.reason === "breathing"
+        && host.pursuit?.trackingSource === "breathing"
+        && !host.pursuit?.directSight
+        && host.pursuit?.breathClueRemaining > 0,
+      `first breath must start sound-led pursuit without visual tracking: ${JSON.stringify({ firstHear, host })}`,
     );
     await page.evaluate(() => window.MrFeastFresh.stageBreathThreatForQA({
       target: "mr-feast",

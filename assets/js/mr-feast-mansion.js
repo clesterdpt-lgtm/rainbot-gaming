@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260728-pursuit-energy-breathing-1";
+  const MANSION_RUNTIME_VERSION = "20260728-deliberate-camera-search-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -998,10 +998,11 @@
     lastSeenRefreshSeconds: 0.5,
     lastSeenRetargetMeters: 0.8,
     searchSeconds: 6.5,
-    searchPatrolSeconds: 150,
-    searchPatrolRadiusMeters: 5.5,
-    searchPatrolPauseSeconds: 1.6,
-    searchPatrolMaximumNodes: 5,
+    searchPatrolSeconds: 180,
+    searchPatrolRadiusMeters: 9,
+    searchPatrolPauseSeconds: 3.2,
+    searchPatrolMaximumNodes: 12,
+    searchAwarenessCheckSeconds: 0.2,
     searchHalfAngle: THREE.MathUtils.degToRad(52),
     searchSweepSeconds: 3.2,
     exemptZones: Object.freeze(["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET", "WALK-IN WARDROBES", "WORKROOM", "DEEP HEDGE MAZE"]),
@@ -2285,6 +2286,7 @@
     panickedEnergyRatio: 0.33,
     mrFeastHearingMeters: 6,
     saintHearingMeters: 7,
+    heardBreathDirectSeconds: 1.8,
     curtainRangeMultiplier: 0.96,
     coatClosetRangeMultiplier: 0.65,
     openRangeMultiplier: 1,
@@ -2314,7 +2316,7 @@
       fullEnergyRate: 0.72,
       emptyEnergyRate: 1.18,
       fullEnergyVolume: 0.16,
-      emptyEnergyVolume: 0.78,
+      emptyEnergyVolume: 0.70,
       holdReleaseRate: 0.96,
       holdReleaseVolume: 0.68,
       fadeSeconds: 0.045,
@@ -6150,6 +6152,7 @@
       this.pursuitSightCheckRemaining = 0;
       this.pursuitStallSeconds = 0;
       this.pursuitApproachSuppressedRemaining = 0;
+      this.pursuitBreathClueRemaining = 0;
       this.pursuitBlockedEdges = new Map();
       this.pursuitShortcuts = null;
       this.pursuitShortcutEdgeCount = 0;
@@ -7666,9 +7669,13 @@
         patrolDistance: 0,
         nodeVisits: 0,
         patrolNodeIds: [],
+        visitedPatrolNodeIds: [],
         nextNodeIndex: 0,
+        currentPatrolTargetId: null,
         pauseRemaining: 0,
         returningToAnchor: false,
+        awarenessCheckRemaining: 0,
+        awarenessChecks: 0,
       };
     }
 
@@ -7713,6 +7720,9 @@
 
     cameraSearchDiagnostics() {
       const search = this.cameraSearch || this.createCameraSearchState();
+      const nodeZone = (id) => this.responseGraph?.nodes?.get(id)?.zone || null;
+      const plannedZones = [...new Set(search.patrolNodeIds.map(nodeZone).filter(Boolean))];
+      const visitedZones = [...new Set(search.visitedPatrolNodeIds.map(nodeZone).filter(Boolean))];
       return {
         active: Boolean(search.active),
         center: search.center ? { ...search.center } : null,
@@ -7726,7 +7736,15 @@
         patrolDistance: Number(search.patrolDistance.toFixed(3)),
         nodeVisits: search.nodeVisits,
         patrolNodeIds: [...search.patrolNodeIds],
+        plannedNodeCount: search.patrolNodeIds.length,
+        plannedZones,
+        plannedZoneCount: plannedZones.length,
+        visitedPatrolNodeIds: [...search.visitedPatrolNodeIds],
+        visitedZones,
+        visitedZoneCount: visitedZones.length,
+        currentPatrolTargetId: search.currentPatrolTargetId,
         pauseRemaining: Number(search.pauseRemaining.toFixed(3)),
+        awarenessChecks: search.awarenessChecks,
       };
     }
 
@@ -7871,9 +7889,14 @@
       };
       this.pursuitTrackingSource = "breathing";
       this.pursuitDirectSight = false;
+      this.pursuitBreathClueRemaining = BREATH_STEALTH.heardBreathDirectSeconds;
       this.pursuitUnseenSeconds = 0;
       this.pursuit.giveUpRemaining = this.pursuitGiveUpSeconds();
       this.pursuit.repathRemaining = 0;
+      // Sound has no field of view. Turn immediately so a close rear breath
+      // produces visible feedback even when the nearest graph node is already
+      // the host's current node.
+      this.faceTarget(this.pursuitLastKnownPosition, true);
       this.repathPursuit(this.pursuitLastKnownPosition, true);
       return true;
     }
@@ -7921,6 +7944,7 @@
       this.breathInvestigation.lastDistance = event.hearing.distance;
 
       if (this.pursuit.active) {
+        this.breathInvestigation.active = true;
         this.refreshPursuitFromBreathing(event);
         if (
           state.isHidden
@@ -7946,35 +7970,19 @@
         };
       }
 
-      // A breathing ping cannot downgrade an active camera sighting into the
-      // short generic sound sweep. Mr. Feast is already committed to that
-      // room and will hear the player as he patrols it; close hidden breathing
-      // still exposes the player through the branch above.
-      if (this.cameraSearch.active && this.activeCameraAlarm) {
-        return {
-          heard: true,
-          response: "camera-investigation-active",
-          targetNodeId: this.activeCameraAlarm.targetNodeId || null,
-        };
-      }
-
-      const responseNodeId = this.nearestResponseTargetId(event.position, true);
-      this.breathInvestigation.active = true;
       if (!wasBreathInvestigation) this.breathInvestigation.investigationCount += 1;
-      this.respondToCameraAlarm({
+      const pursuit = this.beginPursuit({
         kind: "breathing",
-        cameraId: null,
-        room: event.room,
-        reason: event.forced ? "forced-gasp" : "breathing-heard",
-        responseNodeId,
-        responsePosition: { ...event.position },
-        lastSeen: { ...event.position },
-        breathEventId: event.id || null,
+        reason: "breathing",
       });
+      if (pursuit.accepted) {
+        this.breathInvestigation.active = true;
+        this.refreshPursuitFromBreathing(event);
+      }
       return {
-        heard: true,
-        response: wasBreathInvestigation ? "investigation-updated" : "investigating",
-        targetNodeId: responseNodeId,
+        heard: Boolean(pursuit.accepted),
+        response: pursuit.accepted ? "pursuit-reacquired" : "pursuit-unavailable",
+        targetNodeId: this.pursuitTargetNodeId,
       };
     }
 
@@ -7998,7 +8006,11 @@
         this.cameraSearch.nodeVisits = 0;
         this.cameraSearch.pauseRemaining = CAMERA_SECURITY.searchPatrolPauseSeconds;
         this.cameraSearch.patrolNodeIds = this.buildCameraSearchPatrolNodeIds();
+        this.cameraSearch.visitedPatrolNodeIds = [];
         this.cameraSearch.nextNodeIndex = 0;
+        this.cameraSearch.currentPatrolTargetId = null;
+        this.cameraSearch.awarenessCheckRemaining = 0;
+        this.cameraSearch.awarenessChecks = 0;
         const anchor = this.responseGraph.nodes.get(this.cameraSearch.anchorNodeId);
         this.cameraSearch.returningToAnchor = Boolean(
           anchor
@@ -8029,18 +8041,45 @@
           && Math.hypot(node.x - center.x, node.z - center.z)
             <= CAMERA_SECURITY.searchPatrolRadiusMeters
           && this.findResponsePath(anchorId, node.id).length > 0
-        ))
+        ));
+      const candidatesByZone = new Map();
+      for (const node of candidates) {
+        if (!candidatesByZone.has(node.zone)) candidatesByZone.set(node.zone, []);
+        candidatesByZone.get(node.zone).push(node);
+      }
+      const zones = [...candidatesByZone.entries()]
+        .map(([zone, nodes]) => ({
+          zone,
+          nodes: nodes.sort((a, b) => (
+            Math.atan2(a.z - center.z, a.x - center.x)
+            - Math.atan2(b.z - center.z, b.x - center.x)
+          )),
+          minimumDistance: Math.min(...nodes.map((node) => Math.hypot(
+            node.x - center.x,
+            node.z - center.z,
+          ))),
+        }))
         .sort((a, b) => {
-          const aZone = a.zone === this.activeCameraAlarm?.room ? 0 : 1;
-          const bZone = b.zone === this.activeCameraAlarm?.room ? 0 : 1;
-          if (aZone !== bZone) return aZone - bZone;
-          const aAngle = Math.atan2(a.z - center.z, a.x - center.x);
-          const bAngle = Math.atan2(b.z - center.z, b.x - center.x);
-          return aAngle - bAngle;
+          const aPriority = a.zone === this.activeCameraAlarm?.room ? 0 : 1;
+          const bPriority = b.zone === this.activeCameraAlarm?.room ? 0 : 1;
+          if (aPriority !== bPriority) return aPriority - bPriority;
+          return a.minimumDistance - b.minimumDistance;
         });
-      return candidates
-        .slice(0, CAMERA_SECURITY.searchPatrolMaximumNodes)
-        .map((node) => node.id);
+      // Round-robin nearby room labels instead of taking the first angular
+      // cluster. This produces a legible room-and-corridor sweep around the
+      // recorded point while keeping every destination graph-reachable.
+      const selected = [];
+      while (
+        selected.length < CAMERA_SECURITY.searchPatrolMaximumNodes
+        && zones.some((entry) => entry.nodes.length)
+      ) {
+        for (const entry of zones) {
+          if (selected.length >= CAMERA_SECURITY.searchPatrolMaximumNodes) break;
+          const node = entry.nodes.shift();
+          if (node) selected.push(node.id);
+        }
+      }
+      return selected;
     }
 
     queueNextCameraSearchPatrolPath() {
@@ -8058,6 +8097,7 @@
             distance > MR_FEAST_NPC.arrivalRadius
             && this.pursuitLevelSegmentClear(this.root.position, anchor)
           ) {
+            this.cameraSearch.currentPatrolTargetId = null;
             this.responsePath = [{
               node: anchor,
               door: null,
@@ -8079,6 +8119,7 @@
           targetId,
         );
         if (!path.length) continue;
+        this.cameraSearch.currentPatrolTargetId = targetId;
         this.responsePath = path;
         return true;
       }
@@ -8118,9 +8159,34 @@
       this.updateCameraSearchProximity();
       if (pathLengthBefore > 0 && !this.responsePath.length) {
         this.cameraSearch.nodeVisits += 1;
+        if (
+          this.cameraSearch.currentPatrolTargetId
+          && !this.cameraSearch.visitedPatrolNodeIds.includes(this.cameraSearch.currentPatrolTargetId)
+        ) {
+          this.cameraSearch.visitedPatrolNodeIds.push(this.cameraSearch.currentPatrolTargetId);
+        }
+        this.cameraSearch.currentPatrolTargetId = null;
         this.cameraSearch.pauseRemaining = CAMERA_SECURITY.searchPatrolPauseSeconds;
         this.searchBaseYaw = this.root.rotation.y;
       }
+    }
+
+    updateCameraSearchAwareness(dt) {
+      if (!this.cameraSearch.active || this.pursuit.active || !physics) return false;
+      this.cameraSearch.awarenessCheckRemaining = Math.max(
+        0,
+        this.cameraSearch.awarenessCheckRemaining - dt,
+      );
+      if (this.cameraSearch.awarenessCheckRemaining > 0) return false;
+      this.cameraSearch.awarenessCheckRemaining = CAMERA_SECURITY.searchAwarenessCheckSeconds;
+      this.cameraSearch.awarenessChecks += 1;
+      const source = this.personalDetectionSource();
+      if (!source) return false;
+      const pursuit = this.beginPursuit({
+        kind: "camera-search",
+        reason: source === "sight" ? "witnessed" : source,
+      });
+      return Boolean(pursuit.accepted);
     }
 
     canAcceptHousekeeping() {
@@ -8233,6 +8299,7 @@
       this.pursuitSightCheckRemaining = 0;
       this.pursuitStallSeconds = 0;
       this.pursuitApproachSuppressedRemaining = 0;
+      this.pursuitBreathClueRemaining = 0;
       this.activeCameraAlarm = null;
       this.cameraSearch = this.createCameraSearchState();
       this.breathInvestigation.active = false;
@@ -8485,6 +8552,8 @@
         return { accepted: true, refreshed: true };
       }
       if (this.housekeeping.active) this.abandonHousekeepingToAlarm();
+      this.pursuit.cooldownActive = false;
+      this.pursuitBreathClueRemaining = 0;
       this.activeCameraAlarm = null;
       this.cameraSearch = this.createCameraSearchState();
       this.breathInvestigation.active = false;
@@ -8588,6 +8657,10 @@
       const dz = p.z - this.root.position.z;
       const horizontal = Math.hypot(dx, dz);
       const sameFloor = Math.abs(feetY - this.root.position.y) < 1.2;
+      this.pursuitBreathClueRemaining = Math.max(
+        0,
+        (this.pursuitBreathClueRemaining ?? 0) - dt,
+      );
       if (!state.isHidden && sameFloor && horizontal <= MR_FEAST_PURSUIT.catchRadiusMeters) {
         this.resolveCatch(p, feetY);
         return;
@@ -8615,9 +8688,16 @@
           this.pursuitLastKnownPosition = nextKnown;
           this.pursuitTrackingSource = personalSource || "camera";
           this.pursuitDirectSight = personallySeen;
+          this.pursuitBreathClueRemaining = 0;
           this.pursuitUnseenSeconds = 0;
           this.pursuit.giveUpRemaining = this.pursuitGiveUpSeconds();
           if (targetMoved) this.repathPursuit(nextKnown);
+        } else if (this.pursuitBreathClueRemaining > 0) {
+          // A recent breath is a position clue, not vision. Keep moving toward
+          // the heard point regardless of which way Mr. Feast was facing, but
+          // never refresh it from the live player after the sound ends.
+          this.pursuitTrackingSource = "breathing";
+          this.pursuitDirectSight = false;
         } else {
           this.pursuitTrackingSource = "lost";
           this.pursuitDirectSight = false;
@@ -8650,8 +8730,12 @@
       const knownHorizontal = known ? Math.hypot(known.x - this.root.position.x, known.z - this.root.position.z) : Infinity;
       const knownSameFloor = known ? Math.abs(known.y - this.root.position.y) < 1.2 : false;
       const directLane = this.refreshPursuitDirectLane();
+      const hasDirectPursuitClue = this.pursuitDirectSight || (
+        this.pursuitTrackingSource === "breathing"
+        && this.pursuitBreathClueRemaining > 0
+      );
       if (
-        this.pursuitDirectSight
+        hasDirectPursuitClue
         && knownSameFloor
         && knownHorizontal <= MR_FEAST_PURSUIT.directSightRadiusMeters
         && directLane.clear
@@ -8736,8 +8820,12 @@
       const sameFloor = Math.abs(target.y - this.root.position.y) < 1.2;
       const approachSuppressed = (this.pursuitApproachSuppressedRemaining ?? 0) > 0;
       const directLane = this.refreshPursuitDirectLane();
+      const hasDirectPursuitClue = this.pursuitDirectSight || (
+        this.pursuitTrackingSource === "breathing"
+        && this.pursuitBreathClueRemaining > 0
+      );
       if (
-        this.pursuitDirectSight
+        hasDirectPursuitClue
         && directLane.clear
         && !approachSuppressed
         && sameFloor
@@ -8780,6 +8868,7 @@
       this.pursuitDirectPathClear = false;
       this.pursuitDetourReason = null;
       this.pursuitTrackingSource = "none";
+      this.pursuitBreathClueRemaining = 0;
       this.pursuit.catches += 1;
       this.faceTarget({ x: p.x, z: p.z }, true);
       this.moving = false;
@@ -8830,6 +8919,7 @@
       this.pursuitDirectPathClear = false;
       this.pursuitDetourReason = null;
       this.pursuitTrackingSource = "lost";
+      this.pursuitBreathClueRemaining = 0;
       this.pursuit.lastOutcome = "lost";
       this.pursuit.cooldownActive = true;
       speechSystem?.sayFromPool("pursuit-lost");
@@ -8850,6 +8940,7 @@
       this.pursuitDetourReason = null;
       this.pursuitUnseenSeconds = 0;
       this.pursuitDirectSteeringFrames = 0;
+      this.pursuitBreathClueRemaining = 0;
       this.conversationFocusRemaining = 0;
       this.pursuit.cooldownActive = false;
       this.pursuitWarningFocus = null;
@@ -9064,6 +9155,82 @@
       };
     }
 
+    stagePlayerForCameraSearchQA(options = {}) {
+      if (
+        !state.qa
+        || !physics
+        || this.loadStatus !== "ready"
+        || !this.cameraSearch.active
+        || this.behaviorState !== MR_FEAST_RESPONSE_STATE.SEARCHING
+      ) {
+        return { staged: false, reason: "camera-search-inactive" };
+      }
+      const distance = clamp(Number(options.distance) || 2.5, 1.6, 6);
+      const baseYaw = this.root.rotation.y;
+      const offsets = [
+        0,
+        Math.PI / 4,
+        -Math.PI / 4,
+        Math.PI / 2,
+        -Math.PI / 2,
+        Math.PI * 3 / 4,
+        -Math.PI * 3 / 4,
+        Math.PI,
+      ];
+      const placement = offsets
+        .map((offset) => {
+          const yaw = baseYaw + offset;
+          return {
+            yaw,
+            position: {
+              x: this.root.position.x + Math.sin(yaw) * distance,
+              y: this.root.position.y,
+              z: this.root.position.z + Math.cos(yaw) * distance,
+            },
+          };
+        })
+        .find((candidate) => this.pursuitLevelSegmentClear(this.root.position, candidate.position));
+      if (!placement) return { staged: false, reason: "no-clear-lane" };
+      if (state.activeHideSpot?.exit) state.activeHideSpot.exit();
+      state.isHidden = Boolean(options.hidden);
+      state.activeHideSpot = state.isHidden ? { name: "QA camera-search hide" } : null;
+      if (state.isHidden) {
+        state.security.observed = false;
+        state.security.exposure = 0;
+      }
+      this.root.rotation.y = placement.yaw;
+      this.searchBaseYaw = placement.yaw;
+      teleport(
+        placement.position.x,
+        placement.position.y,
+        placement.position.z,
+        placement.yaw,
+        0,
+      );
+      updateLocation();
+      updateInteractionPrompt();
+      this.root.updateMatrixWorld(true);
+      const p = physics.playerPosition();
+      const dx = p.x - this.root.position.x;
+      const dz = p.z - this.root.position.z;
+      const horizontal = Math.max(0.0001, Math.hypot(dx, dz));
+      return {
+        staged: true,
+        hidden: Boolean(state.isHidden),
+        clearLane: this.pursuitLevelSegmentClear(this.root.position, {
+          x: p.x,
+          y: this.playerFeetY(p),
+          z: p.z,
+        }),
+        distance: Number(horizontal.toFixed(3)),
+        facingDot: Number((
+          (Math.sin(this.root.rotation.y) * dx + Math.cos(this.root.rotation.y) * dz)
+          / horizontal
+        ).toFixed(3)),
+        personalSight: this.canSeePlayerAct(),
+      };
+    }
+
     beginSecurityReturn() {
       this.pursuitWarningFocus = null;
       if (!this.responseResume) {
@@ -9188,6 +9355,10 @@
         return;
       }
       if (this.behaviorState === MR_FEAST_RESPONSE_STATE.SEARCHING) {
+        if (this.cameraSearch.active && this.updateCameraSearchAwareness(dt)) {
+          this.syncResponseVisibility();
+          return;
+        }
         this.searchRemaining = Math.max(0, this.searchRemaining - dt);
         this.searchElapsed += dt;
         if (this.housekeeping.active) {
@@ -9636,6 +9807,7 @@
       this.pursuitSightCheckRemaining = 0;
       this.pursuitStallSeconds = 0;
       this.pursuitApproachSuppressedRemaining = 0;
+      this.pursuitBreathClueRemaining = 0;
       this.pursuitBlockedEdges = new Map();
       this.trespassDwell = 0;
       this.trespassCheckRemaining = 0;
@@ -10126,6 +10298,7 @@
           } : null,
           trackingSource: this.pursuitTrackingSource,
           directSight: this.pursuitDirectSight,
+          breathClueRemaining: Number(Math.max(0, this.pursuitBreathClueRemaining).toFixed(3)),
           directPathClear: this.pursuitDirectPathClear,
           detourReason: this.pursuitDetourReason,
           unseenSeconds: Number(this.pursuitUnseenSeconds.toFixed(2)),
@@ -29506,6 +29679,9 @@
           lastSeenRetargetMeters: CAMERA_SECURITY.lastSeenRetargetMeters,
           searchPatrolSeconds: CAMERA_SECURITY.searchPatrolSeconds,
           searchPatrolRadiusMeters: CAMERA_SECURITY.searchPatrolRadiusMeters,
+          searchPatrolPauseSeconds: CAMERA_SECURITY.searchPatrolPauseSeconds,
+          searchPatrolMaximumNodes: CAMERA_SECURITY.searchPatrolMaximumNodes,
+          searchAwarenessCheckSeconds: CAMERA_SECURITY.searchAwarenessCheckSeconds,
         },
         qa: {
           manual: this.qaManual,
@@ -39230,7 +39406,6 @@
         && (
           mrFeastNpc.pursuit?.active
           || mrFeastNpc.pursuit?.cooldownActive
-          || mrFeastNpc.activeCameraAlarm
         )
       );
       const saintAggro = Boolean(
@@ -39322,6 +39497,9 @@
         : options.listenerRoom != null && event.room != null
           ? options.listenerRoom === event.room
           : false;
+      const facingDot = Number.isFinite(options.facingDot)
+        ? Number(clamp(options.facingDot, -1, 1).toFixed(3))
+        : null;
       if (!sameRoom) {
         return {
           target,
@@ -39331,6 +39509,8 @@
           range: Number(effectiveRange.toFixed(3)),
           hidingKind: profile.kind,
           muffleMultiplier: profile.multiplier,
+          facingDot,
+          requiresFacing: false,
         };
       }
       const occlusion = typeof options.occluded === "boolean"
@@ -39348,6 +39528,8 @@
           range: Number(effectiveRange.toFixed(3)),
           hidingKind: profile.kind,
           muffleMultiplier: profile.multiplier,
+          facingDot,
+          requiresFacing: false,
         };
       }
       const heard = event.tier !== "silent" && !event.held && distance <= effectiveRange + 0.0001;
@@ -39360,7 +39542,22 @@
         room: event.room,
         hidingKind: profile.kind,
         muffleMultiplier: profile.multiplier,
+        facingDot,
+        requiresFacing: false,
       };
+    }
+
+    listenerFacingDot(listenerPosition, listenerYaw, eventPosition) {
+      if (!listenerPosition || !eventPosition || !Number.isFinite(listenerYaw)) return null;
+      const dx = eventPosition.x - listenerPosition.x;
+      const dz = eventPosition.z - listenerPosition.z;
+      const horizontal = Math.hypot(dx, dz);
+      if (horizontal <= 0.0001) return 1;
+      return clamp(
+        (Math.sin(listenerYaw) * dx + Math.cos(listenerYaw) * dz) / horizontal,
+        -1,
+        1,
+      );
     }
 
     dispatchToListeners(event) {
@@ -39374,6 +39571,11 @@
         const result = this.evaluateListener("mr-feast", event, {
           listenerPosition: mrFeastNpc.root.position,
           listenerRoom,
+          facingDot: this.listenerFacingDot(
+            mrFeastNpc.root.position,
+            mrFeastNpc.root.rotation.y,
+            event.position,
+          ),
         });
         listeners.push(result);
         if (result.heard) mrFeastNpc.hearPlayerBreathing({ ...event, hearing: result });
@@ -39388,6 +39590,11 @@
         const result = this.evaluateListener("saint", event, {
           listenerPosition: saint.root.position,
           listenerRoom,
+          facingDot: this.listenerFacingDot(
+            saint.root.position,
+            saint.root.rotation.y,
+            event.position,
+          ),
         });
         listeners.push(result);
         if (result.heard) demonPrototypePatrol.hearFinaleBreathing({ ...event, hearing: result });
@@ -39656,6 +39863,7 @@
           sameRoom: options.sameRoom !== false,
           occluded: Boolean(options.occluded),
           hidingKind: options.hidingKind || "open",
+          facingDot: options.facingDot,
         },
       );
     }
@@ -39663,12 +39871,40 @@
     probeAggroForQA(options = {}) {
       if (!state.qa) return null;
       const previousObserved = state.security.observed;
+      const previousCameraAlarm = mrFeastNpc?.activeCameraAlarm || null;
+      const previousPursuitActive = mrFeastNpc?.pursuit?.active || null;
+      const previousPursuitCooldown = Boolean(mrFeastNpc?.pursuit?.cooldownActive);
       state.security.observed = Boolean(options.cameraObserved);
+      if (mrFeastNpc && options.cameraAlarm) {
+        mrFeastNpc.activeCameraAlarm = {
+          kind: "camera",
+          cameraId: "qa-camera",
+          room: state.currentRoom,
+        };
+        if (mrFeastNpc.pursuit) {
+          mrFeastNpc.pursuit.active = null;
+          mrFeastNpc.pursuit.cooldownActive = false;
+        }
+      } else if (mrFeastNpc?.pursuit && options.mrFeastPursuit) {
+        mrFeastNpc.activeCameraAlarm = null;
+        mrFeastNpc.pursuit.active = { source: "qa-pursuit" };
+        mrFeastNpc.pursuit.cooldownActive = false;
+      }
       const result = this.actualAggro();
       state.security.observed = previousObserved;
+      if (mrFeastNpc) {
+        mrFeastNpc.activeCameraAlarm = previousCameraAlarm;
+        if (mrFeastNpc.pursuit) {
+          mrFeastNpc.pursuit.active = previousPursuitActive;
+          mrFeastNpc.pursuit.cooldownActive = previousPursuitCooldown;
+        }
+      }
       return {
         ...result,
         cameraObserved: Boolean(options.cameraObserved),
+        cameraAlarm: Boolean(options.cameraAlarm),
+        cameraAlarmCreatesAggro: false,
+        mrFeastPursuit: Boolean(options.mrFeastPursuit),
         cameraObservationCreatesAggro: false,
       };
     }
@@ -39689,9 +39925,21 @@
       if (target === "mr-feast" && mrFeastNpc?.loadStatus === "ready") {
         if (!options.preserveInvestigation) mrFeastNpc.suspendThreatsForCompetition();
         mrFeastNpc.root.position.set(p.x + distance, feetY, p.z);
-        mrFeastNpc.root.rotation.y = -Math.PI / 2;
+        const towardPlayerYaw = Math.atan2(
+          p.x - mrFeastNpc.root.position.x,
+          p.z - mrFeastNpc.root.position.z,
+        );
+        mrFeastNpc.root.rotation.y = options.listenerFacing === "away"
+          ? towardPlayerYaw + Math.PI
+          : towardPlayerYaw;
         mrFeastNpc.currentRouteZone = locateRoomAtFeet({ x: p.x, y: feetY, z: p.z }).roomLabel;
         mrFeastNpc.currentRouteLevel = mrFeastNpc.floorAtCurrentHeight();
+        if (options.pursuitCooldown) {
+          mrFeastNpc.pursuit.active = null;
+          mrFeastNpc.pursuit.cooldownActive = true;
+          mrFeastNpc.pursuitTrackingSource = "lost";
+          mrFeastNpc.pursuitBreathClueRemaining = 0;
+        }
         mrFeastNpc.syncCollider();
       } else if (target === "saint") {
         const saint = demonPrototypePatrol?.saintEntry();
@@ -39704,6 +39952,15 @@
         spot: state.activeHideSpot?.name || null,
         hiding: this.hidingProfile(),
         room: locateRoomAtFeet({ x: p.x, y: feetY, z: p.z }).roomLabel,
+        playerPosition: { x: p.x, y: feetY, z: p.z },
+        listenerFacingDot: target === "mr-feast" && mrFeastNpc
+          ? Number(this.listenerFacingDot(
+            mrFeastNpc.root.position,
+            mrFeastNpc.root.rotation.y,
+            { x: p.x, y: feetY, z: p.z },
+          ).toFixed(3))
+          : null,
+        pursuitCooldown: Boolean(target === "mr-feast" && mrFeastNpc?.pursuit.cooldownActive),
       };
     }
 
@@ -43164,6 +43421,9 @@
     window.MrFeastFresh.runMrFeastLocomotionProbeForQA = (options) => mrFeastNpc ? mrFeastNpc.runLocomotionProbeForQA(options) : null;
     window.MrFeastFresh.runMrFeastWholeHomeRouteForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runWholeHomeRouteForQA(maxSeconds) : null;
     window.MrFeastFresh.runMrFeastCameraResponseForQA = (maxSeconds) => mrFeastNpc ? mrFeastNpc.runCameraResponseForQA(maxSeconds) : null;
+    window.MrFeastFresh.stagePlayerForCameraSearchQA = (options = {}) => (
+      mrFeastNpc ? mrFeastNpc.stagePlayerForCameraSearchQA(options) : null
+    );
     window.MrFeastFresh.getTamperState = () => tamperSystem?.getDiagnostics() || null;
     window.MrFeastFresh.tamperForQA = (id, tampered = true) => tamperSystem ? tamperSystem.setTamperedForQA(id, tampered) : null;
     window.MrFeastFresh.advanceTamperForQA = (seconds) => tamperSystem ? tamperSystem.advanceForQA(seconds) : null;

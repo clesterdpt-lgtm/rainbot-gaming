@@ -75,8 +75,8 @@ async function assertSourceContract() {
   ]);
   assert(/const THROWABLE_DISTRACTIONS\s*=\s*Object\.freeze/.test(runtime), "missing named THROWABLE_DISTRACTIONS tuning table");
   assert(
-    runtime.includes('const MANSION_RUNTIME_VERSION = "20260728-pursuit-energy-breathing-1"')
-      && html.includes("mr-feast-mansion.js?v=20260728-pursuit-energy-breathing-1"),
+    runtime.includes('const MANSION_RUNTIME_VERSION = "20260728-deliberate-camera-search-1"')
+      && html.includes("mr-feast-mansion.js?v=20260728-deliberate-camera-search-1"),
     "page and runtime must share the portable small-props cache identity",
   );
   assert(/class ThrowableDistractionSystem/.test(runtime), "missing focused ThrowableDistractionSystem");

@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260729-throwable-hold-release-audio-1";
+  const MANSION_RUNTIME_VERSION = "20260729-saint-proximity-voice-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -64,7 +64,9 @@
     keypadError: Object.freeze(["../Sounds/mr-feast/keypad-error.ogg"]),
     breathSprint: Object.freeze(["../Sounds/mr-feast/player-breath-sprint.ogg"]),
     breathHoldRelease: Object.freeze(["../Sounds/mr-feast/player-breath-hold-release.ogg"]),
+    saintVoice: Object.freeze(["../Sounds/mr-feast/saint-voice-low-long-05.ogg"]),
   });
+  const MANSION_DEFERRED_AUDIO_ROLES = new Set(["saintVoice"]);
   const THREE = window.THREE;
   const boot = window.__MR_FEAST_BOOT__;
 
@@ -3500,6 +3502,21 @@
       stunSeconds: 1.6,
       stunCooldownSeconds: 0.85,
       blockedSidestepScale: 0.82,
+      presenceAudio: Object.freeze({
+        maximumDistanceMeters: 18,
+        fullGainDistanceMeters: 1.2,
+        maximumGain: 0.38,
+        distanceExponent: 1.45,
+        gainSmoothingSeconds: 0.12,
+        panSmoothingSeconds: 0.1,
+        panLimit: 0.72,
+        distantLowpassHz: 1350,
+        nearLowpassHz: 6200,
+        filterSmoothingSeconds: 0.14,
+        highpassHz: 48,
+        playbackRate: 0.94,
+        fadeOutSeconds: 0.24,
+      }),
     }),
     flashlightDefects: Object.freeze({
       seed: 0x13f3a57,
@@ -14758,6 +14775,7 @@
           entry.root.visible = this.shouldShowEntry(entry);
           if (!this.finaleVisible()) this.resetEntry(entry, { playIdle: false });
         }
+        if (!this.finaleVisible()) audioSystem?.stopSaintVoice();
         return this.getDiagnostics();
       }
       for (const entry of this.entries) {
@@ -15643,6 +15661,7 @@
       document.documentElement.dataset.banquetSaintStory = nextMode;
       const entry = this.saintEntry();
       if (nextMode === "disabled") {
+        audioSystem?.stopSaintVoice();
         this.finaleLastKnownPosition = null;
         this.finaleTargetSource = "none";
         this.finaleBreathHeardCount = 0;
@@ -24479,6 +24498,7 @@
       this.transition(VICTORY_FEAST_PHASE.CALLED, `call:${reason}`);
       demonPrototypePatrol?.prepareForFinale();
       demonPrototypePatrol?.setFinaleMode("prepared");
+      void audioSystem?.prepareSaintVoice();
       mrFeastNpc?.suspendThreatsForCompetition();
       cameraSecurity?.suspendForCompetition();
       contestant13Quest?.showDiscovery(
@@ -37536,7 +37556,11 @@
       this.closeThunderBus = null;
       this.rain = null;
       this.waterLoops = new Map();
-      this.assetPaths = Array.from(new Set(Object.values(MANSION_AUDIO_ASSETS).flat()));
+      this.assetPaths = Array.from(new Set(
+        Object.entries(MANSION_AUDIO_ASSETS)
+          .filter(([role]) => !MANSION_DEFERRED_AUDIO_ROLES.has(role))
+          .flatMap(([, paths]) => paths),
+      ));
       this.buffers = new Map();
       this.loadingAssets = new Map();
       this.pendingAssets = new Set(this.assetPaths);
@@ -37549,6 +37573,28 @@
       this.playerBreathNoise = null;
       this.playerBreathSources = new Set();
       this.playerBreathLoop = null;
+      this.saintVoice = {
+        source: null,
+        gain: null,
+        lowpass: null,
+        panner: null,
+        active: false,
+        stopping: false,
+        loading: false,
+        startCount: 0,
+        stopCount: 0,
+        distanceMeters: null,
+        proximity: 0,
+        targetGain: 0,
+        pan: 0,
+        lowpassHz: VICTORY_FEAST.saint.presenceAudio.distantLowpassHz,
+        assetPath: MANSION_AUDIO_ASSETS.saintVoice[0],
+        durationSeconds: 0,
+      };
+      this.saintVoiceListener = new THREE.Vector3();
+      this.saintVoiceForward = new THREE.Vector3();
+      this.saintVoiceRight = new THREE.Vector3();
+      this.saintVoiceOffset = new THREE.Vector3();
       this.playerBreathing = {
         playCount: 0,
         gaspCount: 0,
@@ -37713,6 +37759,7 @@
     loadAsset(path) {
       if (this.buffers.has(path)) return Promise.resolve(this.buffers.get(path));
       if (this.loadingAssets.has(path)) return this.loadingAssets.get(path);
+      this.pendingAssets.add(path);
       const loading = (async () => {
         if (!this.ctx || !SCRIPT_URL) throw new Error("Web Audio is unavailable");
         const url = new URL(path, SCRIPT_URL).href;
@@ -37742,6 +37789,237 @@
 
     availableAssets(key) {
       return this.assetsFor(key).filter((path) => this.buffers.has(path));
+    }
+
+    async prepareSaintVoice() {
+      if (!this.ctx) return this.saintVoiceDiagnostics();
+      const [path] = this.assetsFor("saintVoice");
+      if (!path) return this.saintVoiceDiagnostics();
+      this.saintVoice.loading = !this.buffers.has(path);
+      try {
+        const buffer = await this.loadAsset(path);
+        this.saintVoice.assetPath = path;
+        this.saintVoice.durationSeconds = buffer.duration;
+      } catch (_) {
+        // The finale remains playable if the optional voice recording fails.
+      } finally {
+        this.saintVoice.loading = false;
+      }
+      this.syncSaintVoice();
+      return this.saintVoiceDiagnostics();
+    }
+
+    startSaintVoice() {
+      if (
+        !this.ctx
+        || !this.master
+        || this.saintVoice.source
+        || this.saintVoice.stopping
+      ) return Boolean(this.saintVoice.source);
+      const [path] = this.availableAssets("saintVoice");
+      const buffer = path ? this.buffers.get(path) : null;
+      if (!path || !buffer) return false;
+      const settings = VICTORY_FEAST.saint.presenceAudio;
+      const now = this.ctx.currentTime;
+      const source = this.ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      source.playbackRate.value = settings.playbackRate;
+      const highpass = this.ctx.createBiquadFilter();
+      highpass.type = "highpass";
+      highpass.frequency.value = settings.highpassHz;
+      const lowpass = this.ctx.createBiquadFilter();
+      lowpass.type = "lowpass";
+      lowpass.frequency.value = settings.distantLowpassHz;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0.0001;
+      let tail = lowpass;
+      let panner = null;
+      if (this.ctx.createStereoPanner) {
+        panner = this.ctx.createStereoPanner();
+        panner.pan.value = 0;
+        tail.connect(panner);
+        tail = panner;
+      }
+      source.connect(highpass).connect(lowpass);
+      tail.connect(gain).connect(this.master);
+      this.saintVoice.source = source;
+      this.saintVoice.gain = gain;
+      this.saintVoice.lowpass = lowpass;
+      this.saintVoice.panner = panner;
+      this.saintVoice.stopping = false;
+      this.saintVoice.assetPath = path;
+      this.saintVoice.durationSeconds = buffer.duration;
+      this.saintVoice.startCount += 1;
+      this.activeVoices += 1;
+      source.onended = () => {
+        this.activeVoices = Math.max(0, this.activeVoices - 1);
+        if (this.saintVoice.source !== source) return;
+        this.saintVoice.source = null;
+        this.saintVoice.gain = null;
+        this.saintVoice.lowpass = null;
+        this.saintVoice.panner = null;
+        this.saintVoice.active = false;
+        this.saintVoice.stopping = false;
+      };
+      try {
+        source.start(now);
+      } catch (_) {
+        this.activeVoices = Math.max(0, this.activeVoices - 1);
+        this.saintVoice.source = null;
+        this.saintVoice.gain = null;
+        this.saintVoice.lowpass = null;
+        this.saintVoice.panner = null;
+        return false;
+      }
+      this.markCue("saintVoiceStart");
+      return true;
+    }
+
+    stopSaintVoice({ immediate = false } = {}) {
+      const voice = this.saintVoice;
+      voice.active = false;
+      voice.distanceMeters = null;
+      voice.proximity = 0;
+      voice.targetGain = 0;
+      voice.pan = 0;
+      voice.lowpassHz = VICTORY_FEAST.saint.presenceAudio.distantLowpassHz;
+      if (!voice.source || voice.stopping) return this.saintVoiceDiagnostics();
+      const now = this.ctx?.currentTime || 0;
+      const fade = immediate ? 0 : VICTORY_FEAST.saint.presenceAudio.fadeOutSeconds;
+      voice.stopping = true;
+      if (voice.gain) {
+        voice.gain.gain.cancelScheduledValues(now);
+        voice.gain.gain.setValueAtTime(
+          Math.max(0.0001, voice.gain.gain.value || 0.0001),
+          now,
+        );
+        voice.gain.gain.linearRampToValueAtTime(0.0001, now + fade);
+      }
+      try { voice.source.stop(now + fade); } catch (_) { /* Already stopped. */ }
+      voice.stopCount += 1;
+      this.markCue("saintVoiceStop");
+      return this.saintVoiceDiagnostics();
+    }
+
+    syncSaintVoice() {
+      if (!this.ctx || !this.master) return this.saintVoiceDiagnostics();
+      const entry = demonPrototypePatrol?.saintEntry();
+      const keepAlive = Boolean(
+        state.started
+        && !state.gameOver
+        && entry?.status === "ready"
+        && entry.root?.visible
+      );
+      if (!keepAlive) return this.stopSaintVoice();
+
+      const [path] = this.assetsFor("saintVoice");
+      if (!this.buffers.has(path)) {
+        if (!this.loadingAssets.has(path)) void this.prepareSaintVoice();
+        this.saintVoice.active = false;
+        this.saintVoice.targetGain = 0;
+        return this.saintVoiceDiagnostics();
+      }
+      if (!this.saintVoice.source && !this.startSaintVoice()) {
+        return this.saintVoiceDiagnostics();
+      }
+
+      const settings = VICTORY_FEAST.saint.presenceAudio;
+      const listener = this.saintVoiceListener;
+      const forward = this.saintVoiceForward;
+      const right = this.saintVoiceRight;
+      camera.getWorldPosition(listener);
+      camera.getWorldDirection(forward);
+      const offset = this.saintVoiceOffset.set(
+        entry.root.position.x,
+        entry.root.position.y + 1.1,
+        entry.root.position.z,
+      ).sub(listener);
+      const distance = offset.length();
+      const proximity = 1 - clamp(
+        (distance - settings.fullGainDistanceMeters)
+          / (settings.maximumDistanceMeters - settings.fullGainDistanceMeters),
+        0,
+        1,
+      );
+      const targetGain = settings.maximumGain
+        * Math.pow(proximity, settings.distanceExponent);
+      right.set(-forward.z, 0, forward.x).normalize();
+      const horizontal = Math.hypot(offset.x, offset.z);
+      const pan = horizontal > 0.0001
+        ? clamp(
+          (offset.x * right.x + offset.z * right.z) / horizontal,
+          -settings.panLimit,
+          settings.panLimit,
+        )
+        : 0;
+      const lowpassHz = THREE.MathUtils.lerp(
+        settings.distantLowpassHz,
+        settings.nearLowpassHz,
+        proximity,
+      );
+      const audible = Boolean(
+        state.audioEnabled
+        && this.ctx.state === "running"
+        && !state.menuOpen
+        && !state.workroom.keypadOpen
+      );
+      const audibleGain = audible ? targetGain : 0;
+      const now = this.ctx.currentTime;
+      this.saintVoice.gain.gain.setTargetAtTime(
+        Math.max(0.0001, audibleGain),
+        now,
+        settings.gainSmoothingSeconds,
+      );
+      this.saintVoice.lowpass.frequency.setTargetAtTime(
+        lowpassHz,
+        now,
+        settings.filterSmoothingSeconds,
+      );
+      if (this.saintVoice.panner) {
+        this.saintVoice.panner.pan.setTargetAtTime(
+          pan,
+          now,
+          settings.panSmoothingSeconds,
+        );
+      }
+      this.saintVoice.active = audible && targetGain > 0.0001;
+      this.saintVoice.distanceMeters = distance;
+      this.saintVoice.proximity = proximity;
+      this.saintVoice.targetGain = audibleGain;
+      this.saintVoice.pan = pan;
+      this.saintVoice.lowpassHz = lowpassHz;
+      return this.saintVoiceDiagnostics();
+    }
+
+    saintVoiceDiagnostics() {
+      const voice = this.saintVoice;
+      const settings = VICTORY_FEAST.saint.presenceAudio;
+      return {
+        profile: "recorded-loop-with-distance-gain-and-stereo-position",
+        recordedReady: this.availableAssets("saintVoice").length > 0,
+        loading: voice.loading || this.assetsFor("saintVoice")
+          .some((path) => this.pendingAssets.has(path)),
+        assetPath: voice.assetPath,
+        durationSeconds: Number((voice.durationSeconds || 0).toFixed(3)),
+        active: voice.active,
+        looping: Boolean(voice.source && !voice.stopping),
+        stopping: voice.stopping,
+        startCount: voice.startCount,
+        stopCount: voice.stopCount,
+        distanceMeters: Number.isFinite(voice.distanceMeters)
+          ? Number(voice.distanceMeters.toFixed(3))
+          : null,
+        maximumDistanceMeters: settings.maximumDistanceMeters,
+        proximity: Number(voice.proximity.toFixed(4)),
+        targetGain: Number(voice.targetGain.toFixed(4)),
+        currentGain: Number((voice.gain?.gain.value || 0).toFixed(4)),
+        maximumGain: settings.maximumGain,
+        distanceExponent: settings.distanceExponent,
+        pan: Number(voice.pan.toFixed(4)),
+        lowpassHz: Math.round(voice.lowpassHz),
+        playbackRate: settings.playbackRate,
+      };
     }
 
     playSample(key, options = {}) {
@@ -39368,6 +39646,7 @@
         cueCounts: { ...this.cueCounts },
         banquetBreathing: this.banquetBreathingDiagnostics(),
         playerBreathing: this.playerBreathingDiagnostics(),
+        saintVoice: this.saintVoiceDiagnostics(),
         rain: this.rainDiagnostics(),
         thunder: this.thunderDiagnostics(),
         footsteps: {
@@ -42520,6 +42799,7 @@
     syncCamera();
     banquetLossSystem?.applyCameraOverride();
     flashlightSystem?.update(dt);
+    audioSystem?.syncSaintVoice();
 
     interactionTimer -= dt;
     diagnosticsTimer -= dt;
@@ -43163,6 +43443,17 @@
       );
       return audioSystem.playerBreathingDiagnostics();
     };
+    window.MrFeastFresh.prepareSaintAudioForQA = async () => {
+      if (!state.qa || !audioSystem) return null;
+      await audioSystem.unlock();
+      await audioSystem.prepareSaintVoice();
+      return audioSystem.syncSaintVoice();
+    };
+    window.MrFeastFresh.updateSaintAudioForQA = () => (
+      state.qa && audioSystem
+        ? audioSystem.syncSaintVoice()
+        : null
+    );
     window.MrFeastFresh.stopPlayerBreathingForQA = () => (
       state.qa && audioSystem
         ? audioSystem.stopPlayerBreathing()

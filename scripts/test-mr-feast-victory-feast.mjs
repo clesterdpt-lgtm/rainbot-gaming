@@ -9,6 +9,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runtimePath = path.join(root, "assets", "js", "mr-feast-mansion.js");
 const pagePath = path.join(root, "games", "mr-feast-mansion.html");
 const milestonePath = path.join(root, "docs", "milestones", "66-victory-feast-escape-prototype.md");
+const saintVoicePath = path.join(root, "assets", "Sounds", "mr-feast", "saint-voice-low-long-05.ogg");
 const port = Number(process.env.MR_FEAST_VICTORY_FEAST_TEST_PORT || (61000 + (process.pid % 4000)));
 const baseUrl = `http://127.0.0.1:${port}`;
 const gameUrl = `${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1&allLights=1`;
@@ -67,10 +68,11 @@ async function bootPage(browser, viewport, errors, contextOptions = {}) {
 }
 
 async function assertSourceContract() {
-  const [runtime, html, milestone] = await Promise.all([
+  const [runtime, html, milestone, saintVoice] = await Promise.all([
     readFile(runtimePath, "utf8"),
     readFile(pagePath, "utf8"),
     readFile(milestonePath, "utf8"),
+    readFile(saintVoicePath).catch(() => null),
   ]);
 
   // Red-first: these checks intentionally stop before the browser until the
@@ -99,6 +101,23 @@ async function assertSourceContract() {
     /victoryFeast:\s*victoryFeastSystem\?\.getDiagnostics/.test(runtime),
     "render_game_to_text must expose Victory Feast diagnostics",
   );
+  assert(
+    /saintVoice:\s*Object\.freeze\(\["\.\.\/Sounds\/mr-feast\/saint-voice-low-long-05\.ogg"\]\)/.test(runtime),
+    "the Banquet Saint must register the approved voicelowlong05 recording",
+  );
+  assert(
+    /presenceAudio:\s*Object\.freeze\(\{[\s\S]*maximumDistanceMeters:[\s\S]*maximumGain:[\s\S]*distanceExponent:/m.test(runtime),
+    "the Saint needs a named distance-gain tuning contract",
+  );
+  assert(/syncSaintVoice\(/.test(runtime), "the Saint needs lifecycle-owned positional voice playback");
+  assert(
+    /saintVoice:\s*this\.saintVoiceDiagnostics\(\)/.test(runtime),
+    "mansion audio diagnostics must expose the Saint voice lifecycle",
+  );
+  assert(
+    saintVoice && saintVoice.length > 10000,
+    "missing prepared saint-voice-low-long-05.ogg runtime asset",
+  );
 
   const requiredQaHooks = [
     "getVictoryFeastState",
@@ -113,6 +132,8 @@ async function assertSourceContract() {
     "triggerVictoryFlashlightDefectForQA",
     "hideFromVictoryFeastForQA",
     "catchVictoryFeastPlayerForQA",
+    "prepareSaintAudioForQA",
+    "updateSaintAudioForQA",
   ];
   for (const hook of requiredQaHooks) {
     assert(runtime.includes(hook), `missing focused Victory Feast QA hook: ${hook}`);
@@ -413,6 +434,52 @@ async function runBrowserFlow() {
     const leftHide = await page.evaluate(() => window.MrFeastFresh.hideFromVictoryFeastForQA(null));
     assert(leftHide?.hidden === false, `focused hiding control should leave cleanly: ${JSON.stringify(leftHide)}`);
 
+    const preparedSaintVoice = await page.evaluate(() => (
+      window.MrFeastFresh.prepareSaintAudioForQA()
+    ));
+    assert(
+      preparedSaintVoice?.recordedReady
+        && /saint-voice-low-long-05\.ogg$/.test(preparedSaintVoice.assetPath || ""),
+      `voicelowlong05 must decode through the trusted mansion audio graph: ${JSON.stringify(preparedSaintVoice)}`,
+    );
+    await page.evaluate(() => {
+      window.MrFeastFresh.stageBreathThreatForQA({
+        target: "saint",
+        distance: 12,
+        preserveInvestigation: true,
+      });
+      return window.MrFeastFresh.updateSaintAudioForQA();
+    });
+    await page.waitForTimeout(450);
+    const farSaintVoice = (await page.evaluate(() => (
+      window.MrFeastFresh.getAudioStateForQA()
+    ))).saintVoice;
+    await page.evaluate(() => {
+      window.MrFeastFresh.stageBreathThreatForQA({
+        target: "saint",
+        distance: 2,
+        preserveInvestigation: true,
+      });
+      return window.MrFeastFresh.updateSaintAudioForQA();
+    });
+    await page.waitForTimeout(450);
+    const nearSaintVoice = (await page.evaluate(() => (
+      window.MrFeastFresh.getAudioStateForQA()
+    ))).saintVoice;
+    assert(
+      farSaintVoice.active
+        && nearSaintVoice.active
+        && Math.abs(farSaintVoice.distanceMeters - 12) <= 0.2
+        && Math.abs(nearSaintVoice.distanceMeters - 2) <= 0.2
+        && nearSaintVoice.targetGain > farSaintVoice.targetGain * 3
+        && nearSaintVoice.currentGain > farSaintVoice.currentGain * 3
+        && nearSaintVoice.targetGain <= nearSaintVoice.maximumGain,
+      `the Saint voice must grow smoothly louder at close range: ${JSON.stringify({
+        far: farSaintVoice,
+        near: nearSaintVoice,
+      })}`,
+    );
+
     // A live finale save returns to a safe physical Dining report checkpoint,
     // not the player's fragile escape position or transient threat timers.
     await page.evaluate(() => window.MrFeastFresh.teleport("basement"));
@@ -428,6 +495,8 @@ async function runBrowserFlow() {
         && !feast.saint.visible
         && feast.saint.stunCount === 0
         && feast.saint.distanceTravelled === 0
+        && !game.audio.saintVoice.active
+        && game.audio.saintVoice.targetGain === 0
         && feast.flashlightDefect.eventCount === 0
         && restoredFlashlight.collected
         && !restoredFlashlight.on

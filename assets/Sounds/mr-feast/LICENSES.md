@@ -15,6 +15,7 @@ All files in this folder are stored locally so game playback never depends on a 
 - Runtime conversions:
   - `player-breath-sprint.ogg` — `SFX_breathloop02.wav`, used for sprint recovery and slowed/quieter rested fear
   - `player-breath-hold-release.ogg` — `SFX_breathloop01.wav`, used after releasing held breath and for forced gasps
+  - `saint-voice-low-long-05.ogg` — `PACKBundle/CreatureVoices/SFX_voicelowlong05.wav`, used as the Banquet Saint's looping distance-aware presence voice
 - Preparation: loudness target `-22 LUFS`, `-3 dBTP` ceiling, 44.1 kHz stereo Vorbis
 
 ## BigSoundBank storm recordings

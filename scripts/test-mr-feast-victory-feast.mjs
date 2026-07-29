@@ -109,6 +109,16 @@ async function assertSourceContract() {
     /presenceAudio:\s*Object\.freeze\(\{[\s\S]*maximumDistanceMeters:[\s\S]*maximumGain:[\s\S]*distanceExponent:/m.test(runtime),
     "the Saint needs a named distance-gain tuning contract",
   );
+  assert(
+    /navigation:\s*Object\.freeze\(\{[\s\S]*pathClearanceMeters:[\s\S]*repathSeconds:[\s\S]*stallSeconds:/m.test(runtime),
+    "the Saint needs named full-width navigation and stall-recovery tuning",
+  );
+  assert(
+    /finaleDirectLane\(/.test(runtime)
+      && /planFinaleRoute\(/.test(runtime)
+      && /updateFinaleNavigation\(/.test(runtime),
+    "the Saint must route around blocked whole-path lanes instead of relying on local sidesteps",
+  );
   assert(/syncSaintVoice\(/.test(runtime), "the Saint needs lifecycle-owned positional voice playback");
   assert(
     /saintVoice:\s*this\.saintVoiceDiagnostics\(\)/.test(runtime),
@@ -134,6 +144,8 @@ async function assertSourceContract() {
     "catchVictoryFeastPlayerForQA",
     "prepareSaintAudioForQA",
     "updateSaintAudioForQA",
+    "stageSaintPathingForQA",
+    "clearSaintPathingProbeForQA",
   ];
   for (const hook of requiredQaHooks) {
     assert(runtime.includes(hook), `missing focused Victory Feast QA hook: ${hook}`);
@@ -397,35 +409,23 @@ async function runBrowserFlow() {
     assert(!hiddenCatch.caught && hiddenCatch.reason === "hidden", `the Saint cannot catch a hidden player: ${JSON.stringify(hiddenCatch)}`);
     feast = await victoryState(page);
     assert(feast.player.hidden && !feast.flashlightDefect.requestedOn, `hiding must extinguish the flashlight: ${JSON.stringify(feast)}`);
+    // Gameplay breath stealth is retired; a hidden player stays silent and
+    // the Saint must not invent a breath-led investigation.
     const breathStage = await page.evaluate(() => window.MrFeastFresh.stageBreathThreatForQA({
       target: "saint",
-      // Keep the Saint clear of the closet's east wall by more than its
-      // character radius while remaining inside the same acoustic room.
       distance: 2,
       preserveInvestigation: true,
     }));
-    const saintBeforeBreath = (await victoryState(page)).saint;
     const saintHeard = await page.evaluate(() => window.MrFeastFresh.emitPlayerBreathForQA("heavy"));
     feast = await victoryState(page);
     assert(
       breathStage?.hidden
-        && saintHeard?.listeners?.some((entry) => entry.target === "saint" && entry.heard)
-        && feast.saint.targetSource === "breathing"
-        && feast.saint.breathHeardCount >= 1,
-      `a nearby Saint must investigate real heavy breathing through the coat closet: ${JSON.stringify({
+        && (!saintHeard?.emitted || saintHeard?.reason === "disabled")
+        && feast.saint.targetSource !== "breathing",
+      `gameplay breath must stay disabled during escape: ${JSON.stringify({
         breathStage,
         saintHeard,
         saint: feast.saint,
-      })}`,
-    );
-    await page.evaluate(() => window.MrFeastFresh.advanceVictoryFeastForQA(0.5));
-    const saintAfterBreath = (await victoryState(page)).saint;
-    assert(
-      saintAfterBreath.distanceTravelled > saintBeforeBreath.distanceTravelled
-        && saintAfterBreath.targetSource === "breathing",
-      `the hidden Saint pursuit must travel toward the last audible position: ${JSON.stringify({
-        before: saintBeforeBreath,
-        after: saintAfterBreath,
       })}`,
     );
     await page.locator("#mansion-stage").screenshot({
@@ -478,6 +478,44 @@ async function runBrowserFlow() {
         far: farSaintVoice,
         near: nearSaintVoice,
       })}`,
+    );
+
+    // A wall-blocked target must produce a real graph detour. The old local
+    // sidestep could only press along the Library/Foyer divider; it had no
+    // route-level knowledge of the actual doorway.
+    const stagedSaintPathing = await page.evaluate(() => (
+      window.MrFeastFresh.stageSaintPathingForQA("library-foyer-wall")
+    ));
+    assert(
+      stagedSaintPathing?.staged
+        && stagedSaintPathing.navigation?.directPathClear === false
+        && stagedSaintPathing.navigation?.detourReason === "obstacle"
+        && stagedSaintPathing.navigation?.routeRemaining >= 3,
+      `the Library/Foyer wall must create a multi-node Saint detour: ${JSON.stringify(stagedSaintPathing)}`,
+    );
+    const saintPathStartDistance = stagedSaintPathing.navigation.targetDistance;
+    await page.evaluate(() => window.MrFeastFresh.advanceVictoryFeastForQA(30));
+    const routedSaint = (await victoryState(page)).saint;
+    assert(
+      routedSaint.navigation?.routeBuilds >= 1
+        && routedSaint.navigation?.completedRouteSteps >= 3
+        && routedSaint.navigation?.detourFrames > 0
+        && routedSaint.navigation?.targetDistance < 0.45
+        && routedSaint.navigation?.targetDistance < saintPathStartDistance - 8,
+      `the Saint must clear the wall route and reach the target instead of sticking: ${JSON.stringify({
+        startDistance: saintPathStartDistance,
+        saint: routedSaint,
+      })}`,
+    );
+    await page.locator("#mansion-stage").screenshot({
+      path: path.join(artifactDir, "victory-feast-saint-wall-detour-desktop.png"),
+    });
+    const clearedSaintPathing = await page.evaluate(() => (
+      window.MrFeastFresh.clearSaintPathingProbeForQA()
+    ));
+    assert(
+      clearedSaintPathing?.navigation?.qaProbe === false,
+      `focused Saint pathing QA must clean up its catch suppression: ${JSON.stringify(clearedSaintPathing)}`,
     );
 
     // A live finale save returns to a safe physical Dining report checkpoint,

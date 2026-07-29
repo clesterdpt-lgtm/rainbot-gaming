@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260729-quieter-player-breath-1";
+  const MANSION_RUNTIME_VERSION = "20260729-remove-gameplay-breath-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2277,6 +2277,11 @@
     directPathClearanceMeters: 0.045,
   });
   const BREATH_STEALTH = Object.freeze({
+    // Gameplay breath stealth was removed as too intrusive. Keep the table
+    // and system hooks so saves/QA stay stable, but never emit audio or AI
+    // hearing during free-roam or escape. Captured-at-dinner panic breath is
+    // a separate banquet-owned treatment under BANQUET_LOSS.breathing.
+    enabled: false,
     // The existing sprint reserve is also the player's lung-capacity read:
     // even an exhausted runner gets one tense five-second hold, while a
     // completely rested player can stay quiet for forty-five seconds.
@@ -3505,6 +3510,18 @@
       stunSeconds: 1.6,
       stunCooldownSeconds: 0.85,
       blockedSidestepScale: 0.82,
+      navigation: Object.freeze({
+        pathClearanceMeters: 0.06,
+        repathSeconds: 0.75,
+        retargetDistanceMeters: 0.85,
+        arrivalRadiusMeters: 0.12,
+        stallSeconds: 0.55,
+        stallProgressRatio: 0.18,
+        blockedEdgeSeconds: 5,
+        doorOpenDistanceMeters: 1.65,
+        doorWaitDistanceMeters: 0.86,
+        doorCloseDistanceMeters: 2.4,
+      }),
       presenceAudio: Object.freeze({
         maximumDistanceMeters: 18,
         fullGainDistanceMeters: 1.2,
@@ -14666,6 +14683,7 @@
       this.finaleRaycaster = new THREE.Raycaster();
       this.finaleTargetPoint = new THREE.Vector3();
       this.finaleToTarget = new THREE.Vector3();
+      this.finaleNavigation = this.createFinaleNavigationState();
       this.loadStatus = "idle";
       this.settled = false;
       this.error = null;
@@ -14738,6 +14756,37 @@
         };
       });
       animatedObjects.push(this);
+    }
+
+    createFinaleNavigationState() {
+      return {
+        path: [],
+        currentNodeId: null,
+        targetNodeId: null,
+        lastPlannedTarget: null,
+        repathRemaining: 0,
+        mode: "idle",
+        directPathClear: false,
+        detourReason: null,
+        routeBuilds: 0,
+        completedRouteSteps: 0,
+        directSteeringFrames: 0,
+        detourFrames: 0,
+        stallRemaining: 0,
+        stallCount: 0,
+        blockedEdges: new Map(),
+        autoOpenedDoors: new Set(),
+        qaProbe: false,
+      };
+    }
+
+    resetFinaleNavigation() {
+      const previous = this.finaleNavigation;
+      for (const door of previous?.autoOpenedDoors || []) {
+        if (door.open && !door.playerInSwingPath()) door.setOpen(false);
+      }
+      this.finaleNavigation = this.createFinaleNavigationState();
+      return this.finaleNavigation;
     }
 
     assetUrl(relativePath, manifestUrl) {
@@ -15489,6 +15538,7 @@
 
     stageFinaleEntry(entry = this.saintEntry()) {
       if (!entry) return null;
+      this.resetFinaleNavigation();
       entry.root.position.set(
         VICTORY_FEAST.saintCorner.x,
         VICTORY_FEAST.saintCorner.y,
@@ -15523,6 +15573,7 @@
     resetFinaleSession() {
       this.finaleCatchCount = 0;
       this.finaleBlockedFrames = 0;
+      this.resetFinaleNavigation();
       this.finaleLastKnownPosition = null;
       this.finaleTargetSource = "none";
       this.finaleBreathHeardCount = 0;
@@ -15665,6 +15716,7 @@
       const entry = this.saintEntry();
       if (nextMode === "disabled") {
         audioSystem?.stopSaintVoice();
+        this.resetFinaleNavigation();
         this.finaleLastKnownPosition = null;
         this.finaleTargetSource = "none";
         this.finaleBreathHeardCount = 0;
@@ -15782,6 +15834,361 @@
       };
     }
 
+    finaleCharacterRadius() {
+      return VICTORY_FEAST.saint.colliderRadius
+        + VICTORY_FEAST.saint.navigation.pathClearanceMeters;
+    }
+
+    finaleSegmentClear(start, end) {
+      if (!physics || !start || !end) return false;
+      if (Math.abs((Number(start.y) || 0) - (Number(end.y) || 0)) > 0.08) return false;
+      return physics.canCharacterTraverse(
+        start,
+        end,
+        this.finaleCharacterRadius(),
+        VICTORY_FEAST.saint.colliderHeight,
+      );
+    }
+
+    finaleDirectLane(entry, targetPosition) {
+      if (!entry || !targetPosition || !physics) {
+        return { clear: false, reason: "no-target" };
+      }
+      if (Math.abs(targetPosition.y - entry.root.position.y) >= 1.2) {
+        return { clear: false, reason: "different-floor" };
+      }
+      return this.finaleSegmentClear(entry.root.position, targetPosition)
+        ? { clear: true, reason: null }
+        : { clear: false, reason: "obstacle" };
+    }
+
+    finaleAnchorCandidates(position) {
+      const graph = mrFeastNpc?.responseGraph;
+      if (!graph || !position) return [];
+      return [...graph.nodes.values()]
+        .filter((node) => (
+          node.segmentKind !== "stairs"
+          && node.segmentKind !== "ramp"
+          && Math.abs(node.y - position.y) <= 0.08
+          && this.finaleSegmentClear(position, node)
+        ))
+        .sort((a, b) => (
+          Math.hypot(a.x - position.x, a.z - position.z)
+          - Math.hypot(b.x - position.x, b.z - position.z)
+        ));
+    }
+
+    finaleEdgeKey(fromId, toId) {
+      return `${fromId}>${toId}`;
+    }
+
+    findFinaleRoute(startId, targetId, floorY) {
+      const graph = mrFeastNpc?.responseGraph;
+      if (!graph?.nodes.has(startId) || !graph.nodes.has(targetId)) return [];
+      if (startId === targetId) return [];
+      const shortcuts = mrFeastNpc.ensurePursuitShortcuts?.() || new Map();
+      const allowed = new Set(
+        [...graph.nodes.values()]
+          .filter((node) => (
+            node.segmentKind !== "stairs"
+            && node.segmentKind !== "ramp"
+            && Math.abs(node.y - floorY) <= 0.08
+          ))
+          .map((node) => node.id),
+      );
+      if (!allowed.has(startId) || !allowed.has(targetId)) return [];
+      const distances = new Map([[startId, 0]]);
+      const previous = new Map();
+      const unvisited = new Set(allowed);
+      while (unvisited.size) {
+        let currentId = null;
+        let currentDistance = Infinity;
+        for (const id of unvisited) {
+          const distance = distances.get(id) ?? Infinity;
+          if (distance < currentDistance) {
+            currentId = id;
+            currentDistance = distance;
+          }
+        }
+        if (currentId == null || currentDistance === Infinity) break;
+        unvisited.delete(currentId);
+        if (currentId === targetId) break;
+        const authored = graph.edges.get(currentId) || [];
+        const extra = shortcuts.get(currentId) || [];
+        for (const edge of [...authored, ...extra]) {
+          if (!unvisited.has(edge.to)) continue;
+          if (
+            this.finaleNavigation.blockedEdges.has(
+              this.finaleEdgeKey(currentId, edge.to),
+            )
+          ) continue;
+          if (edge.door && !mrFeastNpc.responseDoorAvailable(edge.door)) continue;
+          const from = graph.nodes.get(currentId);
+          const to = graph.nodes.get(edge.to);
+          if (!from || !to) continue;
+          if (!edge.door && !this.finaleSegmentClear(from, to)) continue;
+          const nextDistance = currentDistance + Math.max(0.001, Number(edge.cost) || 0.001);
+          if (nextDistance >= (distances.get(edge.to) ?? Infinity)) continue;
+          distances.set(edge.to, nextDistance);
+          previous.set(edge.to, {
+            from: currentId,
+            door: edge.door || null,
+            shortcut: Boolean(edge.shortcut),
+          });
+        }
+      }
+      if (!previous.has(targetId)) return [];
+      const reversed = [];
+      for (let cursor = targetId; cursor !== startId;) {
+        const step = previous.get(cursor);
+        if (!step) return [];
+        reversed.push({
+          node: graph.nodes.get(cursor),
+          door: step.door,
+          shortcut: step.shortcut,
+        });
+        cursor = step.from;
+      }
+      return reversed.reverse();
+    }
+
+    planFinaleRoute(entry, targetPosition, force = false) {
+      const navigation = this.finaleNavigation;
+      const directLane = this.finaleDirectLane(entry, targetPosition);
+      navigation.directPathClear = directLane.clear;
+      navigation.detourReason = directLane.reason;
+      if (directLane.clear) {
+        navigation.path = [];
+        navigation.targetNodeId = null;
+        navigation.lastPlannedTarget = { ...targetPosition };
+        navigation.repathRemaining = VICTORY_FEAST.saint.navigation.repathSeconds;
+        navigation.mode = "direct";
+        return navigation;
+      }
+      const targetMoved = !navigation.lastPlannedTarget
+        || Math.hypot(
+          targetPosition.x - navigation.lastPlannedTarget.x,
+          targetPosition.z - navigation.lastPlannedTarget.z,
+        ) >= VICTORY_FEAST.saint.navigation.retargetDistanceMeters;
+      if (!force && navigation.path.length && !targetMoved) return navigation;
+      const startCandidates = this.finaleAnchorCandidates(entry.root.position);
+      const startNode = startCandidates[0] || null;
+      if (!startNode) {
+        navigation.path = [];
+        navigation.currentNodeId = null;
+        navigation.targetNodeId = null;
+        navigation.lastPlannedTarget = { ...targetPosition };
+        navigation.repathRemaining = VICTORY_FEAST.saint.navigation.repathSeconds;
+        navigation.mode = "blocked";
+        navigation.detourReason = "no-start-anchor";
+        navigation.routeBuilds += 1;
+        return navigation;
+      }
+      let selectedTarget = null;
+      let selectedPath = [];
+      const targetCandidates = this.finaleAnchorCandidates(targetPosition).slice(0, 16);
+      for (const candidate of targetCandidates) {
+        if (candidate.id === startNode.id) continue;
+        const path = this.findFinaleRoute(startNode.id, candidate.id, entry.root.position.y);
+        if (!path.length) continue;
+        selectedTarget = candidate;
+        selectedPath = path;
+        break;
+      }
+      const distanceToStart = Math.hypot(
+        startNode.x - entry.root.position.x,
+        startNode.z - entry.root.position.z,
+      );
+      if (
+        selectedPath.length
+        && distanceToStart > VICTORY_FEAST.saint.navigation.arrivalRadiusMeters
+      ) {
+        selectedPath.unshift({
+          node: startNode,
+          door: null,
+          shortcut: false,
+          approachAnchor: true,
+        });
+      }
+      navigation.path = selectedPath;
+      navigation.currentNodeId = startNode.id;
+      navigation.targetNodeId = selectedTarget?.id || null;
+      navigation.lastPlannedTarget = { ...targetPosition };
+      navigation.repathRemaining = VICTORY_FEAST.saint.navigation.repathSeconds;
+      navigation.mode = selectedPath.length ? "detour" : "blocked";
+      navigation.detourReason = selectedPath.length ? directLane.reason : "no-route";
+      navigation.routeBuilds += 1;
+      navigation.stallRemaining = 0;
+      return navigation;
+    }
+
+    prepareFinaleRouteDoor(pathStep, distance) {
+      const navigation = this.finaleNavigation;
+      const doorName = pathStep?.door || pathStep?.node?.door || null;
+      if (!doorName) return false;
+      const door = mrFeastNpc?.routeDoor(doorName);
+      if (!door || door.locked) return Boolean(door?.locked);
+      const settings = VICTORY_FEAST.saint.navigation;
+      if (distance <= settings.doorOpenDistanceMeters && !door.open) {
+        door.setOpen(true);
+        navigation.autoOpenedDoors.add(door);
+      }
+      const swingRemaining = Math.abs(door.target - door.angle);
+      return distance <= settings.doorWaitDistanceMeters && swingRemaining > 0.12;
+    }
+
+    closeFinaleRouteDoors(nextStep = null) {
+      const navigation = this.finaleNavigation;
+      const nextDoorName = nextStep?.door || nextStep?.node?.door || null;
+      for (const door of [...navigation.autoOpenedDoors]) {
+        if (!door.open) {
+          navigation.autoOpenedDoors.delete(door);
+          continue;
+        }
+        if (door.name === nextDoorName) continue;
+        const distance = Math.hypot(
+          door.root.position.x - this.saintEntry().root.position.x,
+          door.root.position.z - this.saintEntry().root.position.z,
+        );
+        if (
+          distance <= VICTORY_FEAST.saint.navigation.doorCloseDistanceMeters
+          || door.playerInSwingPath()
+        ) continue;
+        door.setOpen(false);
+        navigation.autoOpenedDoors.delete(door);
+      }
+    }
+
+    updateFinaleNavigation(entry, targetPosition, dt) {
+      const navigation = this.finaleNavigation;
+      for (const [edgeKey, remaining] of navigation.blockedEdges) {
+        const nextRemaining = remaining - dt;
+        if (nextRemaining <= 0) navigation.blockedEdges.delete(edgeKey);
+        else navigation.blockedEdges.set(edgeKey, nextRemaining);
+      }
+      navigation.repathRemaining = Math.max(0, navigation.repathRemaining - dt);
+      const directLane = this.finaleDirectLane(entry, targetPosition);
+      navigation.directPathClear = directLane.clear;
+      navigation.detourReason = directLane.reason;
+      if (directLane.clear) {
+        navigation.path = [];
+        navigation.targetNodeId = null;
+        navigation.lastPlannedTarget = { ...targetPosition };
+        navigation.repathRemaining = VICTORY_FEAST.saint.navigation.repathSeconds;
+        navigation.mode = "direct";
+        navigation.directSteeringFrames += 1;
+        navigation.stallRemaining = 0;
+        this.closeFinaleRouteDoors();
+        return { target: targetPosition, pathStep: null };
+      }
+      const targetMoved = !navigation.lastPlannedTarget
+        || Math.hypot(
+          targetPosition.x - navigation.lastPlannedTarget.x,
+          targetPosition.z - navigation.lastPlannedTarget.z,
+        ) >= VICTORY_FEAST.saint.navigation.retargetDistanceMeters;
+      if (
+        targetMoved
+        || (!navigation.path.length && navigation.repathRemaining <= 0)
+      ) {
+        this.planFinaleRoute(entry, targetPosition, targetMoved);
+      }
+      const pathStep = navigation.path[0] || null;
+      if (!pathStep) {
+        navigation.mode = "blocked";
+        navigation.detourReason = navigation.detourReason || "no-route";
+        navigation.detourFrames += 1;
+        return { target: targetPosition, pathStep: null };
+      }
+      const distance = Math.hypot(
+        pathStep.node.x - entry.root.position.x,
+        pathStep.node.z - entry.root.position.z,
+      );
+      if (distance <= VICTORY_FEAST.saint.navigation.arrivalRadiusMeters) {
+        entry.root.position.x = pathStep.node.x;
+        entry.root.position.z = pathStep.node.z;
+        navigation.currentNodeId = pathStep.node.id;
+        navigation.path.shift();
+        navigation.completedRouteSteps += 1;
+        navigation.stallRemaining = 0;
+        this.closeFinaleRouteDoors(navigation.path[0] || null);
+        navigation.mode = navigation.path.length ? "detour" : "repath";
+        return { target: null, pathStep };
+      }
+      if (this.prepareFinaleRouteDoor(pathStep, distance)) {
+        navigation.mode = "waiting-door";
+        navigation.detourFrames += 1;
+        navigation.stallRemaining = 0;
+        return { target: null, pathStep };
+      }
+      navigation.mode = "detour";
+      navigation.detourFrames += 1;
+      return { target: pathStep.node, pathStep };
+    }
+
+    recordFinaleNavigationProgress(entry, pathStep, travel, moved, dt) {
+      const navigation = this.finaleNavigation;
+      const settings = VICTORY_FEAST.saint.navigation;
+      if (
+        navigation.mode === "detour"
+        && travel > 0.0001
+        && moved < travel * settings.stallProgressRatio
+      ) {
+        navigation.stallRemaining += dt;
+      } else {
+        navigation.stallRemaining = 0;
+      }
+      if (navigation.stallRemaining < settings.stallSeconds) return;
+      navigation.stallRemaining = 0;
+      navigation.stallCount += 1;
+      const fromId = navigation.currentNodeId;
+      const toId = pathStep?.node?.id;
+      if (fromId && toId) {
+        navigation.blockedEdges.set(
+          this.finaleEdgeKey(fromId, toId),
+          settings.blockedEdgeSeconds,
+        );
+        navigation.blockedEdges.set(
+          this.finaleEdgeKey(toId, fromId),
+          settings.blockedEdgeSeconds,
+        );
+      }
+      this.planFinaleRoute(
+        entry,
+        navigation.lastPlannedTarget || this.finaleLastKnownPosition,
+        true,
+      );
+    }
+
+    finaleNavigationDiagnostics(entry = this.saintEntry()) {
+      const navigation = this.finaleNavigation;
+      const target = navigation.lastPlannedTarget || this.finaleLastKnownPosition;
+      const targetDistance = entry && target
+        ? Math.hypot(
+          target.x - entry.root.position.x,
+          target.z - entry.root.position.z,
+        )
+        : null;
+      return {
+        mode: navigation.mode,
+        directPathClear: navigation.directPathClear,
+        detourReason: navigation.detourReason,
+        routeRemaining: navigation.path.length,
+        routeNodeIds: navigation.path.map((step) => step.node.id),
+        currentNodeId: navigation.currentNodeId,
+        targetNodeId: navigation.targetNodeId,
+        targetDistance: targetDistance == null ? null : Number(targetDistance.toFixed(3)),
+        routeBuilds: navigation.routeBuilds,
+        completedRouteSteps: navigation.completedRouteSteps,
+        directSteeringFrames: navigation.directSteeringFrames,
+        detourFrames: navigation.detourFrames,
+        stallCount: navigation.stallCount,
+        blockedEdges: [...navigation.blockedEdges.keys()],
+        pathClearanceMeters: VICTORY_FEAST.saint.navigation.pathClearanceMeters,
+        repathSeconds: VICTORY_FEAST.saint.navigation.repathSeconds,
+        qaProbe: navigation.qaProbe,
+      };
+    }
+
     updateFinaleEntry(entry, dt) {
       if (
         !entry
@@ -15883,7 +16290,11 @@
       const dx = targetPosition.x - entry.root.position.x;
       const dz = targetPosition.z - entry.root.position.z;
       const distance = Math.hypot(dx, dz);
-      if (!state.isHidden && distance <= VICTORY_FEAST.saint.catchRadius) {
+      if (
+        !this.finaleNavigation.qaProbe
+        && !state.isHidden
+        && distance <= VICTORY_FEAST.saint.catchRadius
+      ) {
         this.finaleCatchCount += 1;
         victoryFeastSystem?.handleSaintCatch();
         return;
@@ -15894,7 +16305,20 @@
         this.stepAnimation(entry, step);
         return;
       }
-      const desiredYaw = Math.atan2(dx, dz);
+      const navigationStep = this.updateFinaleNavigation(entry, targetPosition, step);
+      const movementTarget = navigationStep.target;
+      if (!movementTarget) {
+        entry.activity = this.finaleNavigation.mode === "waiting-door"
+          ? "waiting"
+          : "routing";
+        this.playAction(entry, "idle", entry.activity, entry.placement.idlePlaybackRate);
+        this.stepAnimation(entry, step);
+        return;
+      }
+      const moveDx = movementTarget.x - entry.root.position.x;
+      const moveDz = movementTarget.z - entry.root.position.z;
+      const moveDistance = Math.hypot(moveDx, moveDz);
+      const desiredYaw = Math.atan2(moveDx, moveDz);
       const yawDelta = Math.atan2(
         Math.sin(desiredYaw - entry.root.rotation.y),
         Math.cos(desiredYaw - entry.root.rotation.y),
@@ -15904,11 +16328,11 @@
         -DEMON_PROTOTYPES.turnSpeed * step,
         DEMON_PROTOTYPES.turnSpeed * step,
       );
-      const travel = Math.min(distance, VICTORY_FEAST.saint.speed * step);
+      const travel = Math.min(moveDistance, VICTORY_FEAST.saint.speed * step);
       const requested = {
-        x: distance > 0 ? dx / distance * travel : 0,
+        x: moveDistance > 0 ? moveDx / moveDistance * travel : 0,
         y: 0,
-        z: distance > 0 ? dz / distance * travel : 0,
+        z: moveDistance > 0 ? moveDz / moveDistance * travel : 0,
       };
       let movement = physics.resolveCharacterMovement(
         entry.root.position,
@@ -15925,9 +16349,9 @@
         const sidestepSign = Math.floor(entry.finaleBlockedFrames / 45) % 2 ? -1 : 1;
         const sidestepTravel = travel * VICTORY_FEAST.saint.blockedSidestepScale;
         const sidestep = {
-          x: -dz / distance * sidestepTravel * sidestepSign,
+          x: -moveDz / moveDistance * sidestepTravel * sidestepSign,
           y: 0,
-          z: dx / distance * sidestepTravel * sidestepSign,
+          z: moveDx / moveDistance * sidestepTravel * sidestepSign,
         };
         const alternate = physics.resolveCharacterMovement(
           entry.root.position,
@@ -15945,6 +16369,13 @@
       entry.root.position.z += movement.z;
       entry.root.position.y = VICTORY_FEAST.saintCorner.y;
       entry.finaleDistanceTravelled += moved;
+      this.recordFinaleNavigationProgress(
+        entry,
+        navigationStep.pathStep,
+        travel,
+        moved,
+        step,
+      );
       entry.activity = moved > 0.0001 ? "gliding" : "blocked";
       this.playAction(
         entry,
@@ -15956,6 +16387,75 @@
       );
       this.stepAnimation(entry, step);
       if (moved > 0.0001) this.recordTravelFacing(entry, movement.x, movement.z);
+    }
+
+    stageFinalePathingForQA(scenario = "library-foyer-wall") {
+      const entry = this.saintEntry();
+      const graph = mrFeastNpc?.responseGraph;
+      if (
+        !state.qa
+        || !physics
+        || this.finaleMode !== "escape"
+        || !entry
+        || entry.status !== "ready"
+        || !graph
+      ) return { staged: false, reason: "saint-unavailable" };
+      const scenarios = {
+        "library-foyer-wall": {
+          startId: "main-library-north",
+          targetId: "main-foyer-center",
+        },
+      };
+      const selected = scenarios[String(scenario || "")] || scenarios["library-foyer-wall"];
+      const start = graph.nodes.get(selected.startId);
+      const target = graph.nodes.get(selected.targetId);
+      if (!start || !target) return { staged: false, reason: "missing-route-node" };
+      if (state.activeHideSpot?.exit) state.activeHideSpot.exit();
+      state.isHidden = false;
+      state.activeHideSpot = null;
+      flashlightSystem?.setOn(false, { silent: true });
+      this.resetFinaleNavigation();
+      this.finaleNavigation.qaProbe = true;
+      entry.root.position.set(start.x, start.y, start.z);
+      entry.root.rotation.y = Math.atan2(target.x - start.x, target.z - start.z);
+      entry.root.visible = true;
+      entry.stunCharge = 0;
+      entry.stunRemaining = 0;
+      entry.stunCooldown = 0;
+      entry.finaleDistanceTravelled = 0;
+      entry.finaleBlockedFrames = 0;
+      this.finaleLastKnownPosition = { x: target.x, y: target.y, z: target.z };
+      this.finaleTargetSource = "player";
+      teleport(
+        target.x,
+        target.y,
+        target.z,
+        faceTargetYaw(target.x, target.z, start.x, start.z),
+        -0.08,
+      );
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      this.planFinaleRoute(entry, this.finaleLastKnownPosition, true);
+      return {
+        staged: true,
+        scenario: "library-foyer-wall",
+        start: { id: start.id, x: start.x, y: start.y, z: start.z },
+        target: { id: target.id, x: target.x, y: target.y, z: target.z },
+        navigation: this.finaleNavigationDiagnostics(entry),
+      };
+    }
+
+    clearFinalePathingProbeForQA() {
+      if (!state.qa) return { cleared: false, reason: "qa-only" };
+      this.finaleNavigation.qaProbe = false;
+      this.finaleNavigation.path = [];
+      this.finaleNavigation.mode = "idle";
+      this.closeFinaleRouteDoors();
+      return {
+        cleared: true,
+        navigation: this.finaleNavigationDiagnostics(),
+      };
     }
 
     update(dt) {
@@ -16249,6 +16749,7 @@
         beamOccluded: Boolean(entry?.beamOccluded),
         distanceTravelled: Number((entry?.finaleDistanceTravelled || 0).toFixed(3)),
         blockedFrames: entry?.finaleBlockedFrames || 0,
+        navigation: this.finaleNavigationDiagnostics(entry),
         hiddenTargetSuppressed: Boolean(entry?.hiddenTargetSuppressed),
         catchCount: this.finaleCatchCount,
         colliderEnabled: false,
@@ -38599,6 +39100,10 @@
     }
 
     syncPlayerBreathingLoop(tier = "light", { energy = state.movement.energy } = {}) {
+      if (!BREATH_STEALTH.enabled) {
+        this.stopPlayerBreathingLoop();
+        return false;
+      }
       const profile = ["light", "heavy", "panicked"].includes(tier) ? tier : "light";
       if (
         !this.ctx
@@ -38621,6 +39126,7 @@
       holdRelease = false,
       energy = state.movement.energy,
     } = {}) {
+      if (!BREATH_STEALTH.enabled) return false;
       const profile = gasp ? "gasp" : (
         ["light", "heavy", "panicked"].includes(tier) ? tier : "light"
       );
@@ -39694,8 +40200,13 @@
       this.qaAggroOverride = null;
       this.qaManualClock = false;
       this.qaStepping = false;
+      this.enabled = BREATH_STEALTH.enabled;
       this.syncCapacity();
       this.syncHud();
+    }
+
+    isEnabled() {
+      return this.enabled !== false;
     }
 
     capacityFromEnergy(energy = state.movement.energy) {
@@ -39736,6 +40247,17 @@
     }
 
     setHolding(holding, source = "unknown") {
+      // Breath hold is retired from free-roam/escape. Ignore every request so
+      // leftover key/touch handlers cannot re-arm the old mechanic.
+      if (!this.isEnabled()) {
+        input.holdBreath = false;
+        this.breath.holding = false;
+        this.breath.audible = false;
+        this.breath.tier = "silent";
+        this.syncCapacity();
+        this.syncHud();
+        return { accepted: false, holding: false, changed: false, reason: "disabled", source };
+      }
       const next = Boolean(holding);
       input.holdBreath = next;
       if (!next) {
@@ -40013,6 +40535,9 @@
     }
 
     emitBreath(tier, options = {}) {
+      if (!this.isEnabled()) {
+        return { emitted: false, reason: "disabled", listeners: [] };
+      }
       if (this.breath.holding && !options.forced) {
         return { emitted: false, reason: "held", listeners: [] };
       }
@@ -40044,6 +40569,14 @@
     }
 
     forceGasp(reason = "hold-exhausted", lockoutSeconds = BREATH_STEALTH.forcedGaspLockoutSeconds) {
+      if (!this.isEnabled()) {
+        this.breath.holding = false;
+        input.holdBreath = false;
+        this.breath.audible = false;
+        this.breath.tier = "silent";
+        this.syncHud();
+        return { emitted: false, reason: "disabled", listeners: [], lockoutSeconds: 0 };
+      }
       this.breath.holding = false;
       input.holdBreath = false;
       this.breath.forcedGasps += 1;
@@ -40061,6 +40594,20 @@
     }
 
     update(dt) {
+      if (!this.isEnabled()) {
+        // Keep gameplay silent; banquet panic breath is owned elsewhere.
+        if (this.breath.holding || this.breath.audible || this.breath.tier !== "silent") {
+          this.breath.holding = false;
+          input.holdBreath = false;
+          this.breath.audible = false;
+          this.breath.tier = "silent";
+          this.breath.aggro = false;
+          this.breath.nextBreathSeconds = 0;
+          audioSystem?.stopPlayerBreathing();
+        }
+        this.syncHud();
+        return;
+      }
       const step = Math.max(0, Number(dt) || 0);
       if (state.qa && this.qaManualClock && !this.qaStepping) {
         this.syncHud();
@@ -40138,6 +40685,15 @@
     }
 
     syncHud() {
+      if (!this.isEnabled()) {
+        if (dom.breath) dom.breath.hidden = true;
+        if (dom.touchBreath) {
+          dom.touchBreath.hidden = true;
+          dom.touchBreath.classList.remove("is-held");
+          dom.touchBreath.setAttribute("aria-pressed", "false");
+        }
+        return;
+      }
       const threatened = this.breath.aggro;
       const presentationLocked = Boolean(
         feastSaysSystem?.locksPlayerMovement()
@@ -40375,6 +40931,7 @@
         ? this.breath.holdCapacitySeconds
         : this.capacityFromEnergy();
       return {
+        enabled: this.isEnabled(),
         strain: Number(this.breath.strain.toFixed(3)),
         tier: this.breath.tier,
         audible: this.breath.audible,
@@ -41526,11 +42083,6 @@
         throwableDistractionSystem?.throwCarried("keyboard");
         return;
       }
-      if (event.code === "Space") {
-        event.preventDefault();
-        if (!event.repeat) breathStealthSystem?.setHolding(true, "keyboard");
-        return;
-      }
       if (["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"].includes(event.code)) {
         event.preventDefault();
         if (feastSaysSystem?.isPlaying() && feastSaysSystem.show.phase !== FEAST_SAYS_PHASE.COMMAND) return;
@@ -41551,10 +42103,7 @@
     window.addEventListener("keyup", (event) => {
       setMoveIntent(event.code, false);
       if (event.code === "KeyE") endCurrentInteractionHold("keyboard-release");
-      if (event.code === "Space") {
-        event.preventDefault();
-        breathStealthSystem?.setHolding(false, "keyboard-release");
-      }
+
     });
     window.addEventListener("blur", clearMovementInput);
     document.addEventListener("pointerlockchange", () => {
@@ -41749,25 +42298,11 @@
       event.preventDefault();
       togglePlayerCrouch();
     });
+    // Touch hold-breath is retired with gameplay breath stealth. Keep the node
+    // in the markup for layout compatibility, but leave it permanently hidden.
     if (dom.touchBreath) {
-      const releaseBreath = (event) => {
-        if (event) event.preventDefault();
-        dom.touchBreath.classList.remove("is-held");
-        breathStealthSystem?.setHolding(false, "touch-release");
-      };
-      dom.touchBreath.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        try {
-          dom.touchBreath.setPointerCapture(event.pointerId);
-        } catch {
-          // Synthetic QA pointers still exercise the authoritative hold path.
-        }
-        dom.touchBreath.classList.add("is-held");
-        breathStealthSystem?.setHolding(true, "touch");
-      });
-      dom.touchBreath.addEventListener("pointerup", releaseBreath);
-      dom.touchBreath.addEventListener("pointercancel", releaseBreath);
-      dom.touchBreath.addEventListener("lostpointercapture", releaseBreath);
+      dom.touchBreath.hidden = true;
+      dom.touchBreath.setAttribute("aria-hidden", "true");
     }
     if (dom.feastCrouch) dom.feastCrouch.addEventListener("pointerdown", (event) => {
       event.preventDefault();
@@ -44227,6 +44762,16 @@
       state.qa && demonPrototypePatrol
         ? demonPrototypePatrol.stunFinaleSaint("qa-clear-beam")
         : { stunned: false, reason: "qa-only" }
+    );
+    window.MrFeastFresh.stageSaintPathingForQA = (scenario) => (
+      state.qa && demonPrototypePatrol
+        ? demonPrototypePatrol.stageFinalePathingForQA(scenario)
+        : { staged: false, reason: "qa-only" }
+    );
+    window.MrFeastFresh.clearSaintPathingProbeForQA = () => (
+      state.qa && demonPrototypePatrol
+        ? demonPrototypePatrol.clearFinalePathingProbeForQA()
+        : { cleared: false, reason: "qa-only" }
     );
     window.MrFeastFresh.triggerVictoryFlashlightDefectForQA = (mode = "stutter") => (
       state.qa && flashlightSystem

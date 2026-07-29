@@ -99,7 +99,7 @@ async function assertSourceContract() {
   assert(/fullEnergyRate:\s*0\.[0-9]+/.test(runtime), "full-energy pursuit breathing needs an explicit slow rate");
   assert(/emptyEnergyRate:\s*1\.[0-9]+/.test(runtime), "empty-energy pursuit breathing needs an explicit fast rate");
   assert(/fullEnergyVolume:\s*0\.[0-9]+/.test(runtime), "full-energy pursuit breathing needs an explicit quiet gain");
-  assert(/emptyEnergyVolume:\s*0\.70?\b/.test(runtime), "empty-energy pursuit breathing peak gain must be lowered to 0.70");
+  assert(/emptyEnergyVolume:\s*0\.3[0-9]/.test(runtime), "empty-energy pursuit breathing peak gain must stay restrained under 0.40");
   assert(/loopEndSeconds:\s*0\.[0-9]+/.test(runtime), "the loop must end after one inhale-exhale pair instead of all four recorded breaths");
   const actualAggroBody = runtime.match(/actualAggro\(\)\s*\{([\s\S]*?)\n    \}\n\n    currentAggro/)?.[1] || "";
   assert(actualAggroBody, "missing authoritative pursuit-only breath classification");
@@ -334,8 +334,8 @@ async function runBrowserFlow() {
     assert(
       breath.tier === "panicked"
         && breath.audio.energyRatio <= 0.03
-        && breath.audio.emptyEnergyVolume === 0.7
-        && emptyEnergyAudio.volume <= 0.7
+        && breath.audio.emptyEnergyVolume === 0.36
+        && emptyEnergyAudio.volume <= 0.36
         && emptyEnergyAudio.rate > halfEnergyAudio.rate
         && emptyEnergyAudio.volume > halfEnergyAudio.volume
         && emptyEnergyAudio.loopStartCount === fullEnergyAudio.loopStartCount,

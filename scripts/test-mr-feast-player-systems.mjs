@@ -138,14 +138,26 @@ async function run() {
     assert(state.player.movement.eyeHeight < state.player.movement.standingEyeHeight - 0.25, "crouch should visibly lower the eye line");
     assert(state.player.movement.stealth.visibilityMultiplier < 1 && state.player.movement.stealth.noiseMultiplier < 1, "crouch should improve visibility and noise stealth multipliers");
     const crouchStart = state.player;
+    // Walk while crouched (no Shift) stays the slow stealth gait.
+    await holdMove(page, { sprint: false, milliseconds: 650 });
+    const crouchWalkEnd = (await diagnostics(page)).player;
+    const crouchWalkDistance = planarDistance(crouchStart, crouchWalkEnd);
+    assert(crouchWalkDistance < walkDistance * 0.85, `crouch-walking should remain slower than standing walk; crouch=${crouchWalkDistance.toFixed(3)} walk=${walkDistance.toFixed(3)}`);
+    assert(crouchWalkEnd.movement.mode === "crouch" && crouchWalkEnd.movement.crouched, "crouch-walking without Shift must stay crouched");
+    // Shift breaks crouch and starts a normal sprint on the same press.
+    await page.evaluate(() => window.MrFeastFresh.setPlayerEnergyForQA(100));
+    const preBreak = (await diagnostics(page)).player;
     await holdMove(page, { sprint: true, milliseconds: 650 });
-    const crouchEnd = (await diagnostics(page)).player;
-    const crouchDistance = planarDistance(crouchStart, crouchEnd);
-    assert(crouchDistance < walkDistance * 0.85, `crouching should remain slower even with Shift held; crouch=${crouchDistance.toFixed(3)} walk=${walkDistance.toFixed(3)}`);
-    assert(crouchEnd.movement.mode !== "sprint", "crouching should prevent sprint mode");
-    await page.keyboard.press("c");
-    await page.evaluate(() => window.MrFeastFresh.advancePlayerForQA(0.45));
-    assert(!(await diagnostics(page)).player.movement.crouched, "pressing C again should restore standing stance");
+    const postBreak = (await diagnostics(page)).player;
+    assert(
+      !postBreak.movement.crouched
+        && postBreak.movement.mode === "sprint"
+        && planarDistance(preBreak, postBreak) > crouchWalkDistance * 1.15,
+      `Shift while crouched should stand up and sprint; crouchWalk=${crouchWalkDistance.toFixed(3)} break=${planarDistance(preBreak, postBreak).toFixed(3)} movement=${JSON.stringify(postBreak.movement)}`,
+    );
+    await page.keyboard.up("Shift");
+    await page.evaluate(() => window.MrFeastFresh.advancePlayerForQA(0.1));
+    assert(!(await diagnostics(page)).player.movement.crouched, "releasing Shift after a crouch-break sprint should leave the player standing");
 
     await page.keyboard.press("i");
     await page.waitForTimeout(50);

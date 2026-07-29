@@ -62,7 +62,8 @@ async function throwableState(page) {
 }
 
 async function beginCarry(page, seconds = 0.05) {
-  await page.keyboard.down("e");
+  // One E press latches the prop; E-up must not drop it.
+  await page.keyboard.press("e");
   await page.evaluate((duration) => window.MrFeastFresh.advanceThrowableDistractionsForQA(duration), seconds);
 }
 
@@ -74,8 +75,8 @@ async function assertSourceContract() {
   ]);
   assert(/const THROWABLE_DISTRACTIONS\s*=\s*Object\.freeze/.test(runtime), "missing named THROWABLE_DISTRACTIONS tuning table");
   assert(
-    runtime.includes('const MANSION_RUNTIME_VERSION = "20260729-throwable-hold-release-audio-1"')
-      && html.includes("mr-feast-mansion.js?v=20260729-throwable-hold-release-audio-1"),
+    runtime.includes('const MANSION_RUNTIME_VERSION = "20260729-throwable-toggle-carry-1"')
+      && html.includes("mr-feast-mansion.js?v=20260729-throwable-toggle-carry-1"),
     "page and runtime must share the portable small-props cache identity",
   );
   assert(/class ThrowableDistractionSystem/.test(runtime), "missing focused ThrowableDistractionSystem");
@@ -84,9 +85,14 @@ async function assertSourceContract() {
   assert(/registerCabinetEntries\s*\(/.test(runtime), "every Cabinet needs automatic throwable registration");
   assert(/adoptAuthoredVisual\s*\(/.test(runtime), "existing multi-part decor needs one portable assembly adoption path");
   assert(/addDynamicBox\s*\(/.test(runtime), "PhysicsWorld needs a bounded dynamic prop helper");
-  assert(/Hold E · carry/.test(runtime), "throwables need an explicit hold-E carry label");
+  assert(/Pick up \$\{placement\.label\}/.test(runtime), "throwables need a single-press pick-up label");
+  assert(/getDropInteraction\s*\(/.test(runtime), "a free second E press must offer a synthetic drop prompt while carrying");
   assert(!/pickupHoldSeconds/.test(runtime), "instant pickup must remove the old delayed pickup timer");
-  assert(/dropCarried\s*\(/.test(runtime), "releasing E/touch must own a focused physical drop path");
+  assert(
+    !/throwableDistractionSystem\?\.dropCarried\(reason\)/.test(runtime),
+    "E/touch key-up must not automatically drop a latched throwable",
+  );
+  assert(/dropCarried\s*\(/.test(runtime), "a deliberate second interact press must own the drop path");
   assert(
     /releaseCarried\s*\(\s*"drop"/.test(runtime)
       && /releaseCarried\s*\(\s*"throw"/.test(runtime),
@@ -107,7 +113,7 @@ async function assertSourceContract() {
   assert(/throwableRelease\s*\(/.test(runtime), "MansionAudio needs a physical drop/throw release cue");
   assert((html.match(/F<\/kbd>\s*flashlight/gi) || []).length >= 2, "both desktop guides must retain F for flashlight");
   assert((html.match(/Q<\/kbd>\s*throw carried item/gi) || []).length >= 2, "both desktop guides must explain Q throw");
-  assert((html.match(/Hold E<\/kbd>\s*carry · release drop/gi) || []).length >= 2, "both desktop guides must explain held carry and release drop");
+  assert((html.match(/E<\/kbd>\s*pick up \/ drop/gi) || []).length >= 2, "both desktop guides must explain toggle pick-up and drop");
   assert(!/id="mansion-throwable-inventory"/.test(html), "throwables must not add inventory UI");
   assert(/User playtest/i.test(milestone), "Milestone 68 must retain subjective throw-balance playtest");
   for (const hook of [
@@ -189,7 +195,7 @@ async function runBrowserFlow() {
     assert(
       openCabinetPlacement?.storageOpen
         && openCabinetPlacement?.homeVisible
-        && /carry/i.test(openCabinetPlacement?.prompt || ""),
+        && /pick up/i.test(openCabinetPlacement?.prompt || ""),
       `opening a cabinet must reveal its reachable portable object: ${JSON.stringify(openCabinetPlacement)}`,
     );
     await page.evaluate(() => {
@@ -213,7 +219,6 @@ async function runBrowserFlow() {
     });
     await page.evaluate(() => window.MrFeastFresh.setFlashlightForQA(false, { silent: true }));
     await page.evaluate(() => window.MrFeastFresh.resetThrowableDistractionsForQA());
-    await page.keyboard.up("e");
     throwables = await throwableState(page);
     const cabinetReachability = await page.evaluate(() => (
       window.MrFeastFresh.getThrowableDistractions().cabinetCoverage.entries.map((entry) => ({
@@ -225,10 +230,10 @@ async function runBrowserFlow() {
       cabinetReachability.every((entry) => (
         entry.placement?.storageOpen
         && entry.placement?.homeVisible
-        && /carry/i.test(entry.placement?.prompt || "")
+        && /pick up/i.test(entry.placement?.prompt || "")
       )),
       `every Cabinet must reveal a reachable throwable when opened: ${JSON.stringify(
-        cabinetReachability.filter((entry) => !/carry/i.test(entry.placement?.prompt || "")),
+        cabinetReachability.filter((entry) => !/pick up/i.test(entry.placement?.prompt || "")),
       )}`,
     );
     const authoredProps = throwables.entries.filter((entry) => entry.minimumSourceParts > 0);
@@ -254,9 +259,9 @@ async function runBrowserFlow() {
       }))
     ));
     assert(
-      reachability.every((entry) => /carry/i.test(entry.placement?.prompt || "")),
+      reachability.every((entry) => /pick up/i.test(entry.placement?.prompt || "")),
       `every authored small prop must expose a real reachable pickup prompt: ${JSON.stringify(
-        reachability.filter((entry) => !/carry/i.test(entry.placement?.prompt || "")),
+        reachability.filter((entry) => !/pick up/i.test(entry.placement?.prompt || "")),
       )}`,
     );
     const floralVases = throwables.entries.filter((entry) => (
@@ -288,17 +293,16 @@ async function runBrowserFlow() {
     });
     await page.keyboard.press("f");
     await page.evaluate(() => window.MrFeastFresh.resetThrowableDistractionsForQA());
-    await page.keyboard.up("e");
     throwables = await throwableState(page);
     const target = throwables.entries.find((entry) => entry.floor === "MAIN LEVEL");
     assert(target, "missing main-floor throwable");
 
-    // E-down picks up immediately, the held key keeps the prop carried, and
-    // E-up drops it through the physical path with one release cue.
+    // One E press latches the prop; releasing E keeps it carried; a second
+    // free E drops it with one release cue.
     let placement = await page.evaluate((id) => window.MrFeastFresh.placePlayerNearThrowableForQA(id), target.id);
     assert(placement?.placed, `QA placement failed: ${JSON.stringify(placement)}`);
     await page.waitForFunction(
-      () => /hold e · carry/i.test(JSON.parse(window.render_game_to_text()).prompt || ""),
+      () => /pick up/i.test(JSON.parse(window.render_game_to_text()).prompt || ""),
       null,
       { timeout: 8000 },
     );
@@ -312,21 +316,21 @@ async function runBrowserFlow() {
         && throwables.carried.visibleInHand
         && throwables.carried.renderedWithCamera
         && throwables.carried.mode === "carried",
-      `E-down must visibly carry the prop immediately: ${JSON.stringify(throwables.carried)}`,
+      `E press must visibly carry the prop: ${JSON.stringify(throwables.carried)}`,
     );
     await page.evaluate(() => window.MrFeastFresh.advanceThrowableDistractionsForQA(0.4));
     throwables = await throwableState(page);
-    assert(throwables.carried?.id === target.id, `holding E must keep the prop carried: ${JSON.stringify(throwables.carried)}`);
+    assert(throwables.carried?.id === target.id, `releasing E must keep the prop carried: ${JSON.stringify(throwables.carried)}`);
     assert(
       JSON.stringify(state.inventory.items.map((entry) => entry.id)) === JSON.stringify(inventoryBefore),
       `carry must not mutate Bag inventory: ${JSON.stringify(state.inventory)}`,
     );
-    assert(!state.prompt, `a carried prop must not keep its world prompt: ${state.prompt}`);
+    assert(/drop/i.test(state.prompt || ""), `a free carried prop should offer drop: ${state.prompt}`);
     assert(await page.locator("#mansion-flashlight-button").textContent() === "Throw", "contextual tool must say Throw while carrying");
     await page.locator("#mansion-stage").screenshot({
       path: path.join(artifactDir, "desktop-carried.png"),
     });
-    await page.keyboard.up("e");
+    await page.keyboard.press("e");
     throwables = await throwableState(page);
     state = await diagnostics(page);
     const dropped = throwables.entries.find((entry) => entry.id === target.id);
@@ -334,18 +338,17 @@ async function runBrowserFlow() {
       !throwables.carried
         && dropped.dropCount === 1
         && dropped.mode === "thrown",
-      `E-up must physically drop the carried prop: ${JSON.stringify(dropped)}`,
+      `a second free E must physically drop the carried prop: ${JSON.stringify(dropped)}`,
     );
     assert(
       (state.audio.cueCounts.throwableDrop || 0) === (releaseAudioBefore.throwableDrop || 0) + 1,
-      `E-up must emit exactly one drop-release cue: ${JSON.stringify(state.audio.cueCounts)}`,
+      `drop must emit exactly one drop-release cue: ${JSON.stringify(state.audio.cueCounts)}`,
     );
 
-    // Reset the dropped prop, then keep E held while exercising F/G/Q so the
-    // later keyup can prove that a completed throw does not double-drop.
+    // Reset the dropped prop, then latch carry again and exercise F/G/Q.
     await page.evaluate(() => window.MrFeastFresh.resetThrowableDistractionsForQA());
     placement = await page.evaluate((id) => window.MrFeastFresh.placePlayerNearThrowableForQA(id), target.id);
-    assert(/hold e · carry/i.test(placement?.prompt || ""), `reset prop must be immediately carryable: ${JSON.stringify(placement)}`);
+    assert(/pick up/i.test(placement?.prompt || ""), `reset prop must be immediately carryable: ${JSON.stringify(placement)}`);
     await beginCarry(page, 0);
 
     // F stays the flashlight even while carrying; real Q input owns throwing.
@@ -371,14 +374,13 @@ async function runBrowserFlow() {
       `G must no longer throw the carried prop: ${JSON.stringify(throwables.carried)}`,
     );
     await page.keyboard.press("q");
-    await page.keyboard.up("e");
     await page.evaluate(() => window.MrFeastFresh.advanceThrowableDistractionsForQA(3));
     throwables = await throwableState(page);
     state = await diagnostics(page);
     const thrown = throwables.entries.find((entry) => entry.id === target.id);
     assert(
       !throwables.carried && thrown.throwCount === 1 && thrown.dropCount === 1,
-      `Q must throw once and later E-up must not add a duplicate drop: ${JSON.stringify(thrown)}`,
+      `Q must throw once without inventing a second drop: ${JSON.stringify(thrown)}`,
     );
     assert(thrown.impactCount === 1 && thrown.distanceTravelled > 0.5, `throw must make one moving impact: ${JSON.stringify(thrown)}`);
     assert(["settled", "thrown"].includes(thrown.mode), `prop must remain physical after impact: ${JSON.stringify(thrown)}`);
@@ -402,7 +404,7 @@ async function runBrowserFlow() {
     // A settled prop can be reused, and load/reset returns every prop home.
     placement = await page.evaluate((id) => window.MrFeastFresh.placePlayerNearThrowableForQA(id), target.id);
     assert(
-      /carry/i.test(placement?.prompt || ""),
+      /pick up/i.test(placement?.prompt || ""),
       `restored prop must reacquire its interaction prompt: ${JSON.stringify({ placement, diagnostics: await diagnostics(page) })}`,
     );
     await beginCarry(page);
@@ -684,21 +686,20 @@ async function runBrowserFlow() {
     assert(
       mobileCabinetPlacement?.storageOpen
         && mobileCabinetPlacement?.homeVisible
-        && /carry/i.test(mobileCabinetPlacement?.prompt || ""),
+        && /pick up/i.test(mobileCabinetPlacement?.prompt || ""),
       `touch must reveal the cabinet item: ${JSON.stringify(mobileCabinetPlacement)}`,
     );
     const mobileTarget = throwables.entries.find((entry) => entry.id === mobileCabinet.propId);
     const mobileReleaseAudioBefore = (await diagnostics(mobile)).audio.cueCounts;
-    await mobile.locator("#touch-interact").dispatchEvent("pointerdown", { pointerId: 17, pointerType: "touch" });
+    await mobile.locator("#touch-interact").tap();
     throwables = await throwableState(mobile);
-    assert(throwables.carried?.id === mobileTarget.id, `touch down must immediately carry the prop: ${JSON.stringify(throwables.carried)}`);
+    assert(throwables.carried?.id === mobileTarget.id, `touch Interact must latch the prop: ${JSON.stringify(throwables.carried)}`);
     await mobile.evaluate(() => window.MrFeastFresh.advanceThrowableDistractionsForQA(0.4));
     throwables = await throwableState(mobile);
-    assert(throwables.carried?.id === mobileTarget.id, `continued touch hold must retain the prop: ${JSON.stringify(throwables.carried)}`);
+    assert(throwables.carried?.id === mobileTarget.id, `a latched prop must stay carried without holding Interact: ${JSON.stringify(throwables.carried)}`);
     assert(await mobile.locator("#mansion-flashlight-button").isVisible(), "contextual Throw must be visible on touch");
     assert(await mobile.locator("#mansion-flashlight-button").textContent() === "Throw", "touch tool must relabel to Throw");
     await mobile.locator("#mansion-flashlight-button").tap();
-    await mobile.locator("#touch-interact").dispatchEvent("pointerup", { pointerId: 17, pointerType: "touch" });
     await mobile.evaluate(() => window.MrFeastFresh.advanceThrowableDistractionsForQA(1.5));
     throwables = await throwableState(mobile);
     const mobileState = await diagnostics(mobile);

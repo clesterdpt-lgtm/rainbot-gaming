@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260729-saint-proximity-voice-1";
+  const MANSION_RUNTIME_VERSION = "20260729-quieter-player-breath-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2312,21 +2312,24 @@
       gasp: 1,
     }),
     audioVolume: Object.freeze({
-      light: 0.105,
-      heavy: 0.165,
-      panicked: 0.22,
-      gasp: 0.27,
+      // Procedural fallback gains stay well under the recorded loop so a
+      // decode miss never becomes louder than the shipped breath bed.
+      light: 0.055,
+      heavy: 0.09,
+      panicked: 0.12,
+      gasp: 0.15,
     }),
     // Loop only the first complete inhale/exhale in breathloop02. Energy then
     // moves that one cycle continuously between a restrained full-reserve
-    // profile and a fast, loud empty-reserve panic profile.
+    // profile and a faster empty-reserve panic profile — kept quieter so
+    // footsteps, doors, and Saint audio remain readable over it.
     recordedAudio: Object.freeze({
       fullEnergyRate: 0.72,
       emptyEnergyRate: 1.18,
-      fullEnergyVolume: 0.16,
-      emptyEnergyVolume: 0.70,
+      fullEnergyVolume: 0.08,
+      emptyEnergyVolume: 0.36,
       holdReleaseRate: 0.96,
-      holdReleaseVolume: 0.68,
+      holdReleaseVolume: 0.34,
       fadeSeconds: 0.045,
       loopStartSeconds: 0.04,
       loopEndSeconds: 0.82,
@@ -3559,7 +3562,7 @@
       inhaleHitchSeconds: 0.08,
       exhaleSeconds: 0.62,
       breathTailSeconds: 0.08,
-      baseVolume: 0.205,
+      baseVolume: 0.12,
       dialogueDuckMultiplier: 0.46,
       minimumRealtimeGapSeconds: 0.24,
       recordedStartSeconds: 0.04,
@@ -26395,12 +26398,12 @@
         id: placement.id,
         getLabel: () => (
           matchMedia("(pointer: coarse)").matches
-            ? `Hold Interact · carry ${placement.label}`
-            : `Hold E · carry ${placement.label}`
+            ? `Pick up ${placement.label}`
+            : `Pick up ${placement.label}`
         ),
-        activate: () => false,
-        beginHold: (source) => this.beginPickup(entry, source),
-        endHold: (reason) => this.endPickup(reason),
+        // One E/touch press latches the prop in hand. A later E/touch drops it
+        // only when no other world interaction (door, switch, etc.) is armed.
+        activate: (source = "keyboard") => this.beginPickup(entry, source),
         resolve: () => this.canPickup(entry) ? interaction : null,
       };
       entry.hitbox = hitbox;
@@ -26616,6 +26619,17 @@
 
     dropCarried(reason = "released") {
       return this.releaseCarried("drop", reason);
+    }
+
+    // Synthetic prompt used while carrying and not looking at another target.
+    getDropInteraction() {
+      if (!this.carried || !this.toolsAllowed() || state.gameOver) return null;
+      return {
+        type: "throwable-drop",
+        id: this.carried.id,
+        getLabel: () => `Drop ${this.carried.label}`,
+        activate: (source = "keyboard") => this.dropCarried(source),
+      };
     }
 
     handleFirstImpact(entry) {
@@ -40878,12 +40892,36 @@
     renderer.shadowMap.needsUpdate = true;
   }
 
+  function setSprintIntent(value) {
+    const next = Boolean(value);
+    input.sprint = next;
+    // Shift / Sprint is the deliberate "break stealth and run" control: if the
+    // player is crouched, stand them up immediately so the same press can
+    // enter sprint as soon as they are moving and have energy.
+    if (
+      next
+      && state.movement.crouched
+      && !feastSaysSystem?.isPlaying()
+      && !stormRunSystem?.locksPlayerMovement()
+      && !feastHuntSystem?.locksPlayerMovement()
+      && !victoryFeastSystem?.locksPlayerMovement()
+      && !state.activeSeat
+      && !state.contestant13.actionInProgress
+      && !openingWelcomeSystem?.active
+    ) {
+      state.movement.crouched = false;
+      state.movement.sprinting = false;
+      updateMovementHud();
+    }
+    return input.sprint;
+  }
+
   function setMoveIntent(key, value) {
     if (key === "KeyW" || key === "ArrowUp") input.forward = value;
     if (key === "KeyS" || key === "ArrowDown") input.back = value;
     if (key === "KeyA" || key === "ArrowLeft") input.left = value;
     if (key === "KeyD" || key === "ArrowRight") input.right = value;
-    if (key === "ShiftLeft" || key === "ShiftRight") input.sprint = value;
+    if (key === "ShiftLeft" || key === "ShiftRight") setSprintIntent(value);
   }
 
   function clearMovementInput() {
@@ -41295,7 +41333,7 @@
     reclaimLookControl({ armFollowUps: true });
   }
 
-  function activateCurrentInteraction() {
+  function activateCurrentInteraction(source = "keyboard") {
     if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.contestant13.actionInProgress || state.gameOver) return;
     if (openingWelcomeSystem?.active) {
       openingWelcomeSystem.requestAdvance("player");
@@ -41329,7 +41367,8 @@
     }
     const interaction = state.activeSeat?.interaction || state.currentInteraction;
     if (!interaction) return;
-    interaction.activate();
+    // Throwable pick-up/drop accept the input source; doors/switches ignore it.
+    interaction.activate(source);
     updateInteractionPrompt();
   }
 
@@ -41343,6 +41382,8 @@
       || state.gameOver
     ) return false;
     const interaction = state.activeSeat?.interaction || state.currentInteraction;
+    // Continuous hold remains for bulk-storage box moves only. Throwables use
+    // a single press to latch and another free press to drop.
     if (interaction && typeof interaction.beginHold === "function") {
       input.interactHeld = true;
       const started = Boolean(interaction.beginHold(source));
@@ -41350,16 +41391,17 @@
       updateInteractionPrompt();
       return started;
     }
-    activateCurrentInteraction();
-    return false;
+    activateCurrentInteraction(source);
+    return true;
   }
 
   function endCurrentInteractionHold(reason = "released") {
     const wasHeld = input.interactHeld;
     input.interactHeld = false;
+    // Carried throwables stay latched until a deliberate second press or throw;
+    // only continuous-hold interactions (bulk storage) end on release.
     const released = (
-      throwableDistractionSystem?.dropCarried(reason)
-      || throwableDistractionSystem?.endPickup(reason)
+      throwableDistractionSystem?.endPickup(reason)
       || bulkStorageSecretSystem?.endHold(reason)
       || false
     );
@@ -41674,7 +41716,8 @@
         } catch {
           // Keep the held control active for this dispatched pointer.
         }
-        input[property] = true;
+        if (property === "sprint") setSprintIntent(true);
+        else input[property] = true;
         button.classList.add("is-held");
       });
       button.addEventListener("pointerup", release);
@@ -41957,6 +42000,11 @@
       return;
     }
     state.currentInteraction = findInteraction();
+    // Prefer real world targets (doors, switches, etc.) while carrying. Only
+    // when nothing else is armed does E become "drop carried prop".
+    if (!state.currentInteraction && state.started) {
+      state.currentInteraction = throwableDistractionSystem?.getDropInteraction?.() || null;
+    }
     if (!state.currentInteraction || !state.started) {
       dom.prompt.hidden = true;
       return;
@@ -42554,7 +42602,8 @@
     }
     if (dom.touchSprint) {
       dom.touchSprint.setAttribute("aria-pressed", String(input.sprint));
-      dom.touchSprint.dataset.unavailable = String(movement.crouched || movement.exhausted);
+      // Sprint is available while crouched: pressing it stands the player up.
+      dom.touchSprint.dataset.unavailable = String(movement.exhausted);
     }
   }
 

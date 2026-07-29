@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260728-cabinet-throwables-1";
+  const MANSION_RUNTIME_VERSION = "20260728-pursuit-energy-breathing-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2275,13 +2275,14 @@
     maximumHoldSeconds: 45,
     forcedGaspLockoutSeconds: 1,
     sprintCancelLockoutSeconds: 0.18,
-    fearTailSeconds: 4,
+    // Breathing is a pursuit tell, not a general stamina punishment. The loop
+    // ends as soon as the authoritative threat state ends.
+    fearTailSeconds: 0,
     strainPerSprintSecond: 31,
     strainRecoveryPerSecond: 8,
-    lightStrainThreshold: 12,
     heavyStrainThreshold: 42,
-    panickedStrainThreshold: 72,
-    aggroStrainFloor: 18,
+    lightEnergyRatio: 0.66,
+    panickedEnergyRatio: 0.33,
     mrFeastHearingMeters: 6,
     saintHearingMeters: 7,
     curtainRangeMultiplier: 0.96,
@@ -2306,26 +2307,21 @@
       panicked: 0.22,
       gasp: 0.27,
     }),
-    // The recorded files are loudness-prepared once at authoring time, then
-    // shaped non-destructively here. Scared breathing at full energy reuses
-    // the sprint recording at a distinctly slower, quieter setting so fear
-    // reads without sounding as if the player is still physically exhausted.
+    // Loop only the first complete inhale/exhale in breathloop02. Energy then
+    // moves that one cycle continuously between a restrained full-reserve
+    // profile and a fast, loud empty-reserve panic profile.
     recordedAudio: Object.freeze({
-      fearRestRate: 0.74,
-      fearRestVolume: 0.18,
-      sprintRate: Object.freeze({
-        light: 0.92,
-        heavy: 1,
-        panicked: 1.08,
-      }),
-      sprintVolume: Object.freeze({
-        light: 0.42,
-        heavy: 0.64,
-        panicked: 0.82,
-      }),
+      fullEnergyRate: 0.72,
+      emptyEnergyRate: 1.18,
+      fullEnergyVolume: 0.16,
+      emptyEnergyVolume: 0.78,
       holdReleaseRate: 0.96,
       holdReleaseVolume: 0.68,
       fadeSeconds: 0.045,
+      loopStartSeconds: 0.04,
+      loopEndSeconds: 0.82,
+      loopFadeSeconds: 0.09,
+      loopTransitionSeconds: 0.12,
       highpassHz: 70,
       lowpassHz: 5200,
     }),
@@ -37430,18 +37426,23 @@
       this.banquetBreathSources = new Set();
       this.playerBreathNoise = null;
       this.playerBreathSources = new Set();
+      this.playerBreathLoop = null;
       this.playerBreathing = {
         playCount: 0,
         gaspCount: 0,
         stopCount: 0,
         fallbackCount: 0,
         overlapSkipCount: 0,
+        loopStartCount: 0,
+        loopUpdateCount: 0,
+        loopStopCount: 0,
         lastTier: "silent",
         lastVolume: 0,
         lastRate: 1,
         lastAssetRole: null,
         lastAssetPath: null,
         lastPresentation: "silent",
+        lastEnergyRatio: 1,
       };
       this.banquetBreathing = {
         active: false,
@@ -37888,13 +37889,122 @@
       };
     }
 
-    trackPlayerBreathSource(source) {
+    trackPlayerBreathSource(source, onEnded = null) {
       this.playerBreathSources.add(source);
       this.activeVoices += 1;
       source.onended = () => {
         this.playerBreathSources.delete(source);
         this.activeVoices = Math.max(0, this.activeVoices - 1);
+        if (typeof onEnded === "function") onEnded();
       };
+    }
+
+    startOrUpdateRecordedPlayerBreathLoop(path, buffer, {
+      profile,
+      presentation,
+      rate,
+      volume,
+      energyRatio,
+    }) {
+      const now = this.ctx.currentTime;
+      const existing = this.playerBreathLoop;
+      if (existing && !existing.stopping) {
+        const changed = (
+          existing.profile !== profile
+          || existing.presentation !== presentation
+          || Math.abs(existing.rate - rate) > 0.001
+          || Math.abs(existing.volume - volume) > 0.001
+        );
+        if (changed) {
+          const transition = BREATH_STEALTH.recordedAudio.loopTransitionSeconds;
+          existing.source.playbackRate.cancelScheduledValues(now);
+          existing.source.playbackRate.setTargetAtTime(rate, now, transition);
+          existing.gain.gain.cancelScheduledValues(now);
+          existing.gain.gain.setTargetAtTime(volume, now, transition);
+          existing.profile = profile;
+          existing.presentation = presentation;
+          existing.rate = rate;
+          existing.volume = volume;
+          existing.energyRatio = energyRatio;
+          this.playerBreathing.loopUpdateCount += 1;
+        }
+        this.playerBreathing.lastTier = profile;
+        this.playerBreathing.lastVolume = volume;
+        this.playerBreathing.lastRate = rate;
+        this.playerBreathing.lastAssetRole = "breathSprint";
+        this.playerBreathing.lastAssetPath = path;
+        this.playerBreathing.lastPresentation = presentation;
+        this.playerBreathing.lastEnergyRatio = energyRatio;
+        return true;
+      }
+      // A hold-release or forced-gasp take remains a complete one-shot. The
+      // recovery loop resumes on the first animation frame after it ends.
+      if (this.playerBreathSources.size > 0) {
+        this.playerBreathing.overlapSkipCount += 1;
+        return true;
+      }
+
+      const source = this.ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      source.loopStart = Math.min(
+        BREATH_STEALTH.recordedAudio.loopStartSeconds,
+        Math.max(0, buffer.duration * 0.1),
+      );
+      source.loopEnd = Math.max(
+        source.loopStart + 0.25,
+        Math.min(
+          buffer.duration - 0.01,
+          BREATH_STEALTH.recordedAudio.loopEndSeconds,
+        ),
+      );
+      source.playbackRate.setValueAtTime(rate, now);
+      const high = this.ctx.createBiquadFilter();
+      high.type = "highpass";
+      high.frequency.value = BREATH_STEALTH.recordedAudio.highpassHz;
+      const low = this.ctx.createBiquadFilter();
+      low.type = "lowpass";
+      low.frequency.value = BREATH_STEALTH.recordedAudio.lowpassHz;
+      const gain = this.ctx.createGain();
+      const fade = BREATH_STEALTH.recordedAudio.loopFadeSeconds;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.linearRampToValueAtTime(volume, now + fade);
+      source.connect(high).connect(low).connect(gain).connect(this.master);
+      const loop = {
+        source,
+        gain,
+        profile,
+        presentation,
+        rate,
+        volume,
+        energyRatio,
+        startedAt: now,
+        loopStart: source.loopStart,
+        loopEnd: source.loopEnd,
+        stopping: false,
+      };
+      this.playerBreathLoop = loop;
+      this.trackPlayerBreathSource(source, () => {
+        if (this.playerBreathLoop?.source === source) this.playerBreathLoop = null;
+      });
+      try {
+        source.start(now, source.loopStart);
+      } catch (_) {
+        this.playerBreathLoop = null;
+        try { source.stop(); } catch (_) { /* Already stopped. */ }
+        return false;
+      }
+      this.playerBreathing.playCount += 1;
+      this.playerBreathing.loopStartCount += 1;
+      this.playerBreathing.lastTier = profile;
+      this.playerBreathing.lastVolume = volume;
+      this.playerBreathing.lastRate = rate;
+      this.playerBreathing.lastAssetRole = "breathSprint";
+      this.playerBreathing.lastAssetPath = path;
+      this.playerBreathing.lastPresentation = presentation;
+      this.playerBreathing.lastEnergyRatio = energyRatio;
+      this.markCue(`playerBreath${profile[0].toUpperCase()}${profile.slice(1)}`);
+      return true;
     }
 
     playRecordedPlayerBreath(assetRole, {
@@ -37902,18 +38012,22 @@
       presentation,
       rate,
       volume,
+      energyRatio = 1,
       gasp = false,
     }) {
       const [path] = this.availableAssets(assetRole);
       const buffer = path ? this.buffers.get(path) : null;
       if (!buffer) return false;
+      if (assetRole === "breathSprint") {
+        return this.startOrUpdateRecordedPlayerBreathLoop(path, buffer, {
+          profile,
+          presentation,
+          rate,
+          volume,
+          energyRatio,
+        });
+      }
       if (this.playerBreathSources.size > 0) {
-        if (assetRole !== "breathHoldRelease") {
-          // AI breath events keep their authored cadence, but a 3.5-second
-          // recorded loop should not stack over itself every 0.9–2.5 seconds.
-          this.playerBreathing.overlapSkipCount += 1;
-          return true;
-        }
         this.stopPlayerBreathing();
       }
       const now = this.ctx.currentTime;
@@ -37956,10 +38070,41 @@
       return true;
     }
 
+    pursuitEnergyAudio(energy = state.movement.energy) {
+      const settings = BREATH_STEALTH.recordedAudio;
+      const energyRatio = clamp((Number(energy) || 0) / PLAYER.energyMax, 0, 1);
+      const depletion = 1 - energyRatio;
+      return {
+        energyRatio,
+        rate: settings.fullEnergyRate
+          + (settings.emptyEnergyRate - settings.fullEnergyRate) * depletion,
+        volume: settings.fullEnergyVolume
+          + (settings.emptyEnergyVolume - settings.fullEnergyVolume) * depletion,
+      };
+    }
+
+    syncPlayerBreathingLoop(tier = "light", { energy = state.movement.energy } = {}) {
+      const profile = ["light", "heavy", "panicked"].includes(tier) ? tier : "light";
+      if (
+        !this.ctx
+        || !this.master
+        || this.ctx.state !== "running"
+        || !state.audioEnabled
+      ) return false;
+      const energyAudio = this.pursuitEnergyAudio(energy);
+      return this.playRecordedPlayerBreath("breathSprint", {
+        profile,
+        presentation: "pursuit-energy",
+        rate: energyAudio.rate,
+        volume: energyAudio.volume,
+        energyRatio: energyAudio.energyRatio,
+      });
+    }
+
     playPlayerBreath(tier = "light", {
       gasp = false,
       holdRelease = false,
-      restedFear = false,
+      energy = state.movement.energy,
     } = {}) {
       const profile = gasp ? "gasp" : (
         ["light", "heavy", "panicked"].includes(tier) ? tier : "light"
@@ -37973,26 +38118,20 @@
       const settings = BREATH_STEALTH.recordedAudio;
       const releasePresentation = gasp || holdRelease;
       const assetRole = releasePresentation ? "breathHoldRelease" : "breathSprint";
-      const presentation = releasePresentation
-        ? "hold-release"
-        : restedFear
-          ? "rested-fear"
-          : "sprint-recovery";
+      const presentation = releasePresentation ? "hold-release" : "pursuit-energy";
+      const energyAudio = this.pursuitEnergyAudio(energy);
       const rate = releasePresentation
         ? settings.holdReleaseRate
-        : restedFear
-          ? settings.fearRestRate
-          : settings.sprintRate[profile] || settings.sprintRate.light;
+        : energyAudio.rate;
       const recordedVolume = releasePresentation
         ? settings.holdReleaseVolume
-        : restedFear
-          ? settings.fearRestVolume
-          : settings.sprintVolume[profile] || settings.sprintVolume.light;
+        : energyAudio.volume;
       if (this.playRecordedPlayerBreath(assetRole, {
         profile,
         presentation,
         rate,
         volume: recordedVolume,
+        energyRatio: energyAudio.energyRatio,
         gasp,
       })) return true;
 
@@ -38071,8 +38210,28 @@
       return true;
     }
 
+    stopPlayerBreathingLoop() {
+      const loop = this.playerBreathLoop;
+      if (!loop || loop.stopping) return this.playerBreathingDiagnostics();
+      const now = this.ctx?.currentTime || 0;
+      const fade = BREATH_STEALTH.recordedAudio.loopFadeSeconds;
+      loop.stopping = true;
+      this.playerBreathLoop = null;
+      loop.gain.gain.cancelScheduledValues(now);
+      loop.gain.gain.setValueAtTime(
+        Math.max(0.0001, Math.min(loop.volume, loop.gain.gain.value || loop.volume)),
+        now,
+      );
+      loop.gain.gain.linearRampToValueAtTime(0.0001, now + fade);
+      try { loop.source.stop(now + fade); } catch (_) { /* Already stopped. */ }
+      this.playerBreathing.loopStopCount += 1;
+      return this.playerBreathingDiagnostics();
+    }
+
     stopPlayerBreathing() {
       const hadSources = this.playerBreathSources.size > 0;
+      if (this.playerBreathLoop) this.playerBreathing.loopStopCount += 1;
+      this.playerBreathLoop = null;
       for (const source of Array.from(this.playerBreathSources)) {
         try { source.stop(); } catch (_) { /* Already stopped. */ }
       }
@@ -38086,8 +38245,15 @@
         .filter((role) => this.availableAssets(role).length > 0);
       const pending = ["breathSprint", "breathHoldRelease"]
         .some((role) => this.assetsFor(role).some((path) => this.pendingAssets.has(path)));
+      const loop = this.playerBreathLoop;
+      const loopElapsedSeconds = loop && this.ctx
+        ? Math.max(0, this.ctx.currentTime - loop.startedAt)
+        : 0;
+      const loopCycleSeconds = loop
+        ? (loop.loopEnd - loop.loopStart) / Math.max(0.25, loop.rate)
+        : 0;
       return {
-        profile: "recorded-close-first-person-with-procedural-fallback",
+        profile: "continuous-recorded-close-first-person-with-procedural-fallback",
         mode: loadedAssetRoles.length === 2
           ? "recorded-ready"
           : pending
@@ -38100,14 +38266,31 @@
         stopCount: this.playerBreathing.stopCount,
         fallbackCount: this.playerBreathing.fallbackCount,
         overlapSkipCount: this.playerBreathing.overlapSkipCount,
+        loopStartCount: this.playerBreathing.loopStartCount,
+        loopUpdateCount: this.playerBreathing.loopUpdateCount,
+        loopStopCount: this.playerBreathing.loopStopCount,
+        continuousLoopActive: Boolean(loop && !loop.stopping),
+        continuousLoopAssetRole: loop ? "breathSprint" : null,
+        loopElapsedSeconds: Number(loopElapsedSeconds.toFixed(3)),
+        loopCycleSeconds: Number(loopCycleSeconds.toFixed(3)),
+        completedLoopCycles: loopCycleSeconds > 0
+          ? Math.floor(loopElapsedSeconds / loopCycleSeconds)
+          : 0,
+        loopStartSeconds: loop ? Number(loop.loopStart.toFixed(3)) : null,
+        loopEndSeconds: loop ? Number(loop.loopEnd.toFixed(3)) : null,
         lastTier: this.playerBreathing.lastTier,
         lastVolume: Number(this.playerBreathing.lastVolume.toFixed(4)),
         lastRate: Number(this.playerBreathing.lastRate.toFixed(4)),
         lastAssetRole: this.playerBreathing.lastAssetRole,
         lastAssetPath: this.playerBreathing.lastAssetPath,
         lastPresentation: this.playerBreathing.lastPresentation,
-        fearRestRate: BREATH_STEALTH.recordedAudio.fearRestRate,
-        fearRestVolume: BREATH_STEALTH.recordedAudio.fearRestVolume,
+        energyRatio: Number(
+          (loop?.energyRatio ?? this.playerBreathing.lastEnergyRatio).toFixed(4),
+        ),
+        fullEnergyRate: BREATH_STEALTH.recordedAudio.fullEnergyRate,
+        emptyEnergyRate: BREATH_STEALTH.recordedAudio.emptyEnergyRate,
+        fullEnergyVolume: BREATH_STEALTH.recordedAudio.fullEnergyVolume,
+        emptyEnergyVolume: BREATH_STEALTH.recordedAudio.emptyEnergyVolume,
         activeSourceCount: this.playerBreathSources.size,
       };
     }
@@ -39002,6 +39185,7 @@
           changed
           && source !== "inactive"
           && source !== "input-cleared"
+          && this.currentAggro().aggro
         ) {
           audioSystem?.playPlayerBreath("light", { holdRelease: true });
         }
@@ -39033,14 +39217,11 @@
       return { accepted: true, holding: true, changed: true, source, capacity };
     }
 
-    tierForStrain(strain, threatened = false) {
-      const effective = threatened
-        ? Math.max(BREATH_STEALTH.aggroStrainFloor, Number(strain) || 0)
-        : Number(strain) || 0;
-      if (effective >= BREATH_STEALTH.panickedStrainThreshold) return "panicked";
-      if (effective >= BREATH_STEALTH.heavyStrainThreshold) return "heavy";
-      if (effective >= BREATH_STEALTH.lightStrainThreshold) return "light";
-      return "silent";
+    tierForEnergy(energy = state.movement.energy) {
+      const ratio = clamp((Number(energy) || 0) / PLAYER.energyMax, 0, 1);
+      if (ratio <= BREATH_STEALTH.panickedEnergyRatio) return "panicked";
+      if (ratio <= BREATH_STEALTH.lightEnergyRatio) return "heavy";
+      return "light";
     }
 
     actualAggro() {
@@ -39243,6 +39424,9 @@
       if (this.breath.holding && !options.forced) {
         return { emitted: false, reason: "held", listeners: [] };
       }
+      if (!this.breath.aggro && !options.qaBypassAggro) {
+        return { emitted: false, reason: "not-pursued", listeners: [] };
+      }
       const event = this.makeEvent(tier, options);
       if (!event || event.tier === "silent") {
         return { emitted: false, reason: "silent", listeners: [] };
@@ -39250,12 +39434,7 @@
       if (event.forced) {
         audioSystem?.playPlayerBreath("gasp", { gasp: true });
       } else {
-        const restedFear = (
-          tier === "light"
-          && this.breath.strain < BREATH_STEALTH.lightStrainThreshold
-          && (this.breath.aggro || this.breath.fearTailSeconds > 0)
-        );
-        audioSystem?.playPlayerBreath(tier, { restedFear });
+        audioSystem?.syncPlayerBreathingLoop(tier, { energy: state.movement.energy });
         this.breath.emittedBreaths += 1;
       }
       const listeners = this.dispatchToListeners(event);
@@ -39300,14 +39479,14 @@
         if (this.breath.holding) this.setHolding(false, "inactive");
         this.breath.audible = false;
         this.breath.tier = "silent";
+        audioSystem?.stopPlayerBreathingLoop();
         this.syncHud();
         return;
       }
 
       const threat = this.currentAggro();
       this.breath.aggro = threat.aggro;
-      if (threat.aggro) this.breath.fearTailSeconds = BREATH_STEALTH.fearTailSeconds;
-      else this.breath.fearTailSeconds = Math.max(0, this.breath.fearTailSeconds - step);
+      this.breath.fearTailSeconds = 0;
 
       if (state.movement.sprinting) {
         if (this.breath.holding) {
@@ -39323,15 +39502,12 @@
           this.breath.strain - BREATH_STEALTH.strainRecoveryPerSecond * step,
         );
       }
-      // Energy is the player's primary readable recovery bar. Once it is
-      // completely full, calm walking/rest must agree with that UI and return
-      // to silence even if the slower respiratory-strain decay had a fraction
-      // of a breath left over.
+      // Once the readable energy bar is completely full, clear the slower
+      // internal strain remainder as well so saves and diagnostics agree.
       if (
         !state.movement.sprinting
         && !this.breath.holding
         && !threat.aggro
-        && this.breath.fearTailSeconds <= 0
         && state.movement.energy >= PLAYER.energyMax - 0.001
       ) {
         this.breath.strain = 0;
@@ -39346,10 +39522,14 @@
         this.syncCapacity();
       }
 
-      const threatened = threat.aggro || this.breath.fearTailSeconds > 0;
-      this.breath.tier = this.tierForStrain(this.breath.strain, threatened);
-      this.breath.audible = this.breath.tier !== "silent" && !this.breath.holding;
+      this.breath.tier = threat.aggro
+        ? this.tierForEnergy(state.movement.energy)
+        : "silent";
+      this.breath.audible = threat.aggro && !this.breath.holding;
       if (this.breath.audible) {
+        audioSystem?.syncPlayerBreathingLoop(this.breath.tier, {
+          energy: state.movement.energy,
+        });
         this.breath.nextBreathSeconds -= step;
         if (this.breath.nextBreathSeconds <= 0) {
           this.emitBreath(this.breath.tier);
@@ -39360,12 +39540,13 @@
         }
       } else {
         this.breath.nextBreathSeconds = 0;
+        audioSystem?.stopPlayerBreathingLoop();
       }
       this.syncHud();
     }
 
     syncHud() {
-      const threatened = this.breath.aggro || this.breath.fearTailSeconds > 0;
+      const threatened = this.breath.aggro;
       const presentationLocked = Boolean(
         feastSaysSystem?.locksPlayerMovement()
         || stormRunSystem?.locksPlayerMovement()
@@ -39380,7 +39561,6 @@
           this.breath.holding
           || this.breath.audible
           || this.breath.holdLockoutSeconds > 0
-          || this.breath.strain >= BREATH_STEALTH.lightStrainThreshold
           || threatened
           || state.isHidden
         )
@@ -39433,7 +39613,7 @@
       this.breath.fearTailSeconds = 0;
       this.breath.aggro = false;
       this.breath.nextBreathSeconds = 0;
-      this.breath.tier = this.tierForStrain(this.breath.strain, false);
+      this.breath.tier = "silent";
       this.breath.audible = false;
       this.breath.lastGaspReason = null;
       this.breath.lastEvent = null;
@@ -42668,12 +42848,13 @@
     window.MrFeastFresh.setBreathStrainForQA = (value) => {
       if (!state.qa || !breathStealthSystem) return null;
       state.breathing.strain = clamp(Number(value) || 0, 0, 100);
-      const threatened = state.breathing.aggro || state.breathing.fearTailSeconds > 0;
-      state.breathing.tier = breathStealthSystem.tierForStrain(
-        state.breathing.strain,
-        threatened,
-      );
-      state.breathing.audible = state.breathing.tier !== "silent" && !state.breathing.holding;
+      const threatened = breathStealthSystem.currentAggro().aggro;
+      state.breathing.aggro = threatened;
+      state.breathing.fearTailSeconds = 0;
+      state.breathing.tier = threatened
+        ? breathStealthSystem.tierForEnergy(state.movement.energy)
+        : "silent";
+      state.breathing.audible = threatened && !state.breathing.holding;
       state.breathing.nextBreathSeconds = 0;
       breathStealthSystem.syncCapacity();
       breathStealthSystem.syncHud();
@@ -42682,6 +42863,13 @@
     window.MrFeastFresh.setBreathAggroForQA = (value) => {
       if (!state.qa || !breathStealthSystem) return null;
       breathStealthSystem.qaAggroOverride = typeof value === "boolean" ? value : null;
+      const threatened = breathStealthSystem.currentAggro().aggro;
+      state.breathing.aggro = threatened;
+      state.breathing.fearTailSeconds = 0;
+      state.breathing.tier = threatened
+        ? breathStealthSystem.tierForEnergy(state.movement.energy)
+        : "silent";
+      state.breathing.audible = threatened && !state.breathing.holding;
       breathStealthSystem.syncHud();
       return breathStealthSystem.getDiagnostics();
     };
@@ -42710,7 +42898,10 @@
       const profile = ["light", "heavy", "panicked", "gasp"].includes(tier)
         ? tier
         : "heavy";
-      return breathStealthSystem.emitBreath(profile, { forced: profile === "gasp" });
+      return breathStealthSystem.emitBreath(profile, {
+        forced: profile === "gasp",
+        qaBypassAggro: true,
+      });
     };
     window.MrFeastFresh.stageBreathThreatForQA = (options = {}) => (
       state.qa && breathStealthSystem

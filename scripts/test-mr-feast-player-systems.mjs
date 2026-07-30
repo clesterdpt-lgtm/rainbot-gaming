@@ -252,6 +252,8 @@ async function run() {
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.escapeOpen, null, { timeout: 3000 });
     await page.locator("#mansion-menu-load").click();
+    assert(await page.locator("#mansion-load-chooser").isVisible(), "Load should open the manual/autosave picker");
+    await page.locator('[data-save-source="manual"]').click();
     await page.waitForTimeout(150);
     state = await diagnostics(page);
     assert(!state.devMode.enabled && state.inventory.items.length === 0 && state.journal.entries.length === 0, "loading the clean save should leave Dev Mode and restore the saved quest snapshot");

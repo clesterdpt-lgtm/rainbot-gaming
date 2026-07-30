@@ -287,6 +287,8 @@ async function run() {
     await page.screenshot({ path: path.join(artifactDir, "game-over-desktop.png") });
 
     await page.click("#mansion-gameover-load");
+    assert(await page.locator("#mansion-load-chooser").isVisible(), "game-over Load should open the save picker");
+    await page.locator('[data-save-source="manual"]').click();
     await page.waitForTimeout(250);
     state = await diagnostics(page);
     assert(state.gameOver === null, "loading the save should clear the fail state");

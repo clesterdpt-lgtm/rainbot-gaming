@@ -15,10 +15,6 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-function angularDelta(a, b) {
-  return Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
-}
-
 async function serverResponds() {
   try {
     return (await fetch(`${baseUrl}/games/mr-feast-mansion.html`, { cache: "no-store" })).ok;
@@ -147,11 +143,23 @@ async function assertSourceContract() {
     /golden-carving-knife-blade/.test(runtime)
       && /golden-carving-knife-bolster/.test(runtime)
       && /golden-carving-knife-rivet/.test(runtime),
-    "the smaller carving knife needs a pointed blade, bolster, handle, and rivets",
+    "the enlarged carving knife needs a pointed blade, bolster, handle, and rivets",
   );
   assert(
     /visualScale:/.test(runtime) && /hidingContext:/.test(runtime) && /interactionSize:/.test(runtime),
-    "Feast Hunt props need authored smaller scales, dressed hiding contexts, and tighter interaction volumes",
+    "Feast Hunt props need authored scales, dressed hiding contexts, and interaction volumes",
+  );
+  assert(
+    /activeGoldItemId\(/.test(runtime)
+      && /visibleGoldCount/.test(runtime)
+      && /reason:\s*"inactive-gold-item"/.test(runtime),
+    "Feast Hunt must expose and enforce exactly one sequential gold target",
+  );
+  assert(
+    /patrolNodeIds:/.test(runtime)
+      && /configureCompetitionPatrol\(/.test(runtime)
+      && /advanceFeastHuntHostPatrolForQA/.test(runtime),
+    "Mr. Feast needs an item-local authored patrol that remains physically testable",
   );
   assert(/allowsSecuritySystems/.test(runtime), "Feast Hunt must distinguish clue hold from active camera/security ownership");
   assert(/feast-hunt-eliminated/.test(runtime) && /feast-hunt-no-show/.test(runtime) && /feast-hunt-juniper-won/.test(runtime), "Feast Hunt catch, no-show, and rival-win losses need explicit recoverable outcomes");
@@ -162,7 +170,12 @@ async function assertSourceContract() {
   assert(/startFeastHuntRace/.test(runtime) && /updateFeastHuntEntry/.test(runtime), "Juniper needs an authored active Feast Hunt route");
   assert(/rivalPendingItemId/.test(runtime) && /searchPauseSeconds:\s*(?:[3-9]\d|[1-9]\d{2,})/.test(runtime), "Juniper needs a substantial pre-find search delay");
   assert(/returnedIds:\s*\[\]/.test(runtime) && /carriedItemId:\s*null/.test(runtime), "Feast Hunt must track individual foyer hand-ins and one carried item");
-  assert(/stageThree:/.test(runtime) && /colliderBody/.test(runtime), "the foyer statues need a dramatic third relocation with aligned physical colliders");
+  assert(
+    /updateStatueCreep\(/.test(runtime)
+      && /stageFeastHuntStatueLookForQA/.test(runtime)
+      && /colliderBody/.test(runtime),
+    "the foyer statues need repeatable turn-away movement with aligned physical colliders",
+  );
   assert(/activateBlackout/.test(runtime) && /restoreBlackout/.test(runtime), "Feast Hunt needs competition-owned full-house blackout lifecycle");
   assert(/setFeastHuntGateForQA/.test(runtime) && /triggerFeastHuntPursuitForQA/.test(runtime), "Feast Hunt gate/pursuit QA controls are missing");
   assert(/id="mansion-feast-hunt"/.test(html), "the game page is missing the Feast Hunt HUD region");
@@ -250,7 +263,13 @@ async function run() {
         && hunt.briefing.rulesLine.toLowerCase().includes("caught"),
       `Feast Hunt needs a complete spoken countdown and explicit rules: ${JSON.stringify(hunt.briefing)}`,
     );
-    assert(hunt.items.length === 3 && hunt.items.every((item) => item.visible && item.registered), `all three props should appear at release: ${JSON.stringify(hunt.items)}`);
+    assert(
+      hunt.items.length === 3
+        && hunt.activeItemId === "golden-bell"
+        && hunt.visibleGoldCount === 1
+        && hunt.items.filter((item) => item.visible && item.registered).map((item) => item.id).join(",") === "golden-bell",
+      `only the first sequential gold target should appear at release: ${JSON.stringify(hunt.items)}`,
+    );
     assert(
       hunt.items.every((item) => item.level !== "basement-level")
         && new Set(hunt.items.map((item) => item.level)).size === 2,
@@ -279,8 +298,49 @@ async function run() {
       `Juniper must visibly leave her foyer mark when the hunt starts: ${JSON.stringify({ start: juniperStart, rival: hunt.rival })}`,
     );
 
+    // --- Foyer statues creep once per genuine look-away ----------------------
+    await playPage.evaluate(() => window.MrFeastFresh.stageFeastHuntStatueLookForQA(true));
+    await playPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(0.1));
+    const statuesBeforeTurn = (await huntState(playPage)).statues;
+    await playPage.evaluate(() => window.MrFeastFresh.stageFeastHuntStatueLookForQA(false));
+    await playPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(0.1));
+    const statuesAfterTurn = (await huntState(playPage)).statues;
+    assert(
+      statuesAfterTurn.turnAwayCount === statuesBeforeTurn.turnAwayCount + 1
+        && statuesAfterTurn.moveEvents === statuesBeforeTurn.moveEvents + 1
+        && statuesAfterTurn.entries.every((entry) => (
+          entry.lastStepDistance >= 0.2
+          && entry.lastStepDistance <= 0.55
+          && Math.abs(entry.position.y) <= 0.001
+          && entry.firstFloor
+          && entry.colliderAligned
+        )),
+      `turning away should creep both statues one small physical step on the first floor: ${JSON.stringify({ before: statuesBeforeTurn, after: statuesAfterTurn })}`,
+    );
+    await playPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(0.5));
+    const statuesWhileBackTurned = (await huntState(playPage)).statues;
+    assert(
+      statuesWhileBackTurned.moveEvents === statuesAfterTurn.moveEvents,
+      `holding the same back-turned view must not move the statues every frame: ${JSON.stringify(statuesWhileBackTurned)}`,
+    );
+    await playPage.evaluate(() => window.MrFeastFresh.stageFeastHuntStatueLookForQA(true));
+    await playPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(0.1));
+    await playPage.evaluate(() => window.MrFeastFresh.stageFeastHuntStatueLookForQA(false));
+    await playPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(0.1));
+    const statuesAfterSecondTurn = (await huntState(playPage)).statues;
+    assert(
+      statuesAfterSecondTurn.turnAwayCount === statuesAfterTurn.turnAwayCount + 1
+        && statuesAfterSecondTurn.moveEvents === statuesAfterTurn.moveEvents + 1
+        && statuesAfterSecondTurn.entries.every((entry) => entry.firstFloor && entry.colliderAligned),
+      `a second look-then-turn-away should produce exactly one more first-floor creep: ${JSON.stringify(statuesAfterSecondTurn)}`,
+    );
+    await playPage.evaluate(() => window.MrFeastFresh.stageFeastHuntStatueLookForQA(true));
+    await playPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(0.1));
+    await playPage.screenshot({ path: path.join(artifactDir, "feast-hunt-statues-turn-away.png") });
+
     const bellStaging = await playPage.evaluate(() => window.MrFeastFresh.placePlayerNearFeastHuntItemForQA("golden-bell"));
     assert(bellStaging?.itemId === "golden-bell", `QA staging must target the Golden Bell: ${JSON.stringify(bellStaging)}`);
+    assert(/golden bell/i.test(bellStaging?.prompt || ""), `Bell staging should immediately reacquire its real prompt: ${JSON.stringify(bellStaging)}`);
     await playPage.waitForFunction(() => /golden bell/i.test(JSON.parse(window.render_game_to_text()).prompt || ""), null, { timeout: 10000 });
     await playPage.keyboard.press("e");
     await playPage.waitForFunction(() => window.MrFeastFresh.getFeastHuntState()?.collectedCount === 1);
@@ -293,12 +353,9 @@ async function run() {
     );
     const duplicateBell = await playPage.evaluate(() => window.MrFeastFresh.collectFeastHuntItemForQA("golden-bell"));
     assert(!duplicateBell.accepted && duplicateBell.reason === "already-collected", `duplicate pickup must be rejected: ${JSON.stringify(duplicateBell)}`);
-    const statuesAfterBell = hunt.statues;
     assert(
-      statuesAfterBell.stage === 1
-        && statuesAfterBell.movedWhileUnobserved
-        && statuesAfterBell.entries.every((entry) => entry.positionUnchanged && entry.rotationChanged),
-      `first pickup should turn both fixed foyer statues only while unobserved: ${JSON.stringify(statuesAfterBell)}`,
+      hunt.statues.moveEvents === statuesAfterSecondTurn.moveEvents,
+      `collecting gold must not replace look-away as the statue movement trigger: ${JSON.stringify(hunt.statues)}`,
     );
     assert(
       hunt.readyToReturn
@@ -324,6 +381,9 @@ async function run() {
     assert(
       hunt.phase === "hunting"
         && hunt.returnedIds.join(",") === "golden-bell"
+        && hunt.activeItemId === "golden-goblet"
+        && hunt.visibleGoldCount === 1
+        && hunt.items.filter((item) => item.visible).map((item) => item.id).join(",") === "golden-goblet"
         && hunt.carriedItemId === null
         && !hunt.readyToReturn
         && !hunt.returnStation.visible
@@ -428,6 +488,15 @@ async function run() {
     const winPage = await bootPage(browser, { width: 1280, height: 820 }, errors);
     await beginHunt(winPage);
     hunt = await huntState(winPage);
+    const bellPatrol = await winPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntHostPatrolForQA(24, true));
+    assert(
+      bellPatrol?.activeItemId === "golden-bell"
+        && bellPatrol.distanceTravelled > 4
+        && bellPatrol.allowedRooms.includes("DINING ROOM")
+        && bellPatrol.allowedRooms.includes("BALLROOM")
+        && bellPatrol.visitedRooms.every((room) => bellPatrol.allowedRooms.includes(room)),
+      `Mr. Feast should physically patrol only the Bell's nearby room cluster: ${JSON.stringify(bellPatrol)}`,
+    );
     const hiddenBell = hunt.items.find((entry) => entry.id === "golden-bell");
     const hiddenGoblet = hunt.items.find((entry) => entry.id === "golden-goblet");
     const kitchenKnife = hunt.items.find((entry) => entry.id === "golden-carving-knife");
@@ -457,17 +526,39 @@ async function run() {
         && kitchenKnife.position.z <= -11.2
         && kitchenKnife.position.y >= 0.95
         && kitchenKnife.position.y <= 1.1
-        && Math.max(kitchenKnife.visualSize.x, kitchenKnife.visualSize.z) <= 0.31
+        && Math.max(kitchenKnife.visualSize.x, kitchenKnife.visualSize.z) >= 0.43
+        && Math.max(kitchenKnife.visualSize.x, kitchenKnife.visualSize.z) <= 0.52
         && Math.max(kitchenKnife.visualSize.x, kitchenKnife.visualSize.z)
           >= Math.min(kitchenKnife.visualSize.x, kitchenKnife.visualSize.z) * 4
-        && kitchenKnife.interactionSize <= 0.62,
-      `the smaller carving knife should remain recognizable while partly hidden on the Kitchen bread board: ${JSON.stringify(kitchenKnife)}`,
+        && kitchenKnife.interactionSize >= 0.68
+        && kitchenKnife.noticeable,
+      `the larger carving knife should read clearly on the Kitchen bread board during blackout: ${JSON.stringify(kitchenKnife)}`,
     );
     const itemIds = ["golden-bell", "golden-goblet", "golden-carving-knife"];
-    const statueDeltas = [];
-    const statuePositionDeltas = [];
     for (let index = 0; index < itemIds.length; index += 1) {
       const id = itemIds[index];
+      hunt = await huntState(winPage);
+      assert(
+        hunt.activeItemId === id
+          && hunt.visibleGoldCount === 1
+          && hunt.items.filter((item) => item.visible && item.registered).map((item) => item.id).join(",") === id,
+        `lap ${index + 1} must expose only ${id}: ${JSON.stringify(hunt.items)}`,
+      );
+      if (id === "golden-carving-knife") {
+        const knifePatrol = await winPage.evaluate(() => (
+          window.MrFeastFresh.advanceFeastHuntHostPatrolForQA(70, true)
+        ));
+        assert(
+          knifePatrol?.activeItemId === id
+            && ["KITCHEN", "BALLROOM", "PAINTING ROOM"].every((room) => (
+              knifePatrol.allowedRooms.includes(room)
+              && knifePatrol.visitedRooms.includes(room)
+            ))
+            && knifePatrol.visitedRooms.every((room) => knifePatrol.allowedRooms.includes(room))
+            && knifePatrol.currentFloor === "MAIN LEVEL",
+          `the active Knife should keep Mr. Feast physically cycling through Kitchen, Ballroom, and Painting Room: ${JSON.stringify(knifePatrol)}`,
+        );
+      }
       const itemStaging = await winPage.evaluate(
         (itemId) => window.MrFeastFresh.placePlayerNearFeastHuntItemForQA(itemId),
         id,
@@ -497,41 +588,6 @@ async function run() {
           && hunt.returnStation.registered,
         `pickup ${index + 1} must require its own foyer return: ${JSON.stringify(hunt)}`,
       );
-      const deltas = hunt.statues.entries.map((entry) => angularDelta(entry.rotationY, entry.baseRotationY));
-      const positionDeltas = hunt.statues.entries.map((entry) => entry.positionDelta);
-      statueDeltas.push(deltas);
-      statuePositionDeltas.push(positionDeltas);
-      assert(
-        hunt.statues.stage === index + 1
-          && hunt.statues.entries.every((entry) => entry.rotationChanged && entry.colliderAligned),
-        `pickup ${index + 1} should advance the physical statues to stage ${index + 1}: ${JSON.stringify(hunt.statues)}`,
-      );
-      if (index === 0) {
-        assert(deltas.every((delta) => delta >= 0.12 && delta <= 0.32), `stage one should be slight: ${JSON.stringify(deltas)}`);
-        assert(positionDeltas.every((delta) => delta <= 0.01), `stage one should turn without relocating: ${JSON.stringify(positionDeltas)}`);
-      } else if (index === 1) {
-        assert(
-          positionDeltas.every((delta) => delta >= 0.2 && delta <= 0.45),
-          `stage two should shift each statue slightly: ${JSON.stringify(positionDeltas)}`,
-        );
-        assert(
-          deltas.every((delta, entryIndex) => delta >= statueDeltas[index - 1][entryIndex] * 1.55),
-          `statue rotation should escalate strongly at stage ${index + 1}: ${JSON.stringify(statueDeltas)}`,
-        );
-      } else {
-        assert(
-          deltas.every((delta, entryIndex) => delta >= statueDeltas[index - 1][entryIndex] * 1.55),
-          `statue rotation should escalate strongly at stage ${index + 1}: ${JSON.stringify(statueDeltas)}`,
-        );
-        assert(
-          positionDeltas.every((delta, entryIndex) => (
-            delta >= 2
-            && delta >= statuePositionDeltas[index - 1][entryIndex] * 5
-          )),
-          `stage three should relocate each statue drastically: ${JSON.stringify(statuePositionDeltas)}`,
-        );
-      }
-
       const returnStaging = await winPage.evaluate(() => window.MrFeastFresh.placePlayerAtFeastHuntReturnForQA());
       assert(
         returnStaging?.readyToReturn && returnStaging.carriedItemId === id,
@@ -549,6 +605,8 @@ async function run() {
         assert(
           hunt.phase === "hunting"
             && hunt.returnedCount === index + 1
+            && hunt.activeItemId === itemIds[index + 1]
+            && hunt.visibleGoldCount === 1
             && hunt.carriedItemId === null
             && !hunt.returnStation.visible
             && !hunt.returnStation.registered,

@@ -36,6 +36,7 @@ Replace the abrupt overlay used after a physical catch with a complete first-per
 ## Acceptance criteria
 
 - [x] A physical `witnessed`, `recorded`, or `feast-hunt-eliminated` catch starts the banquet tableau before the game-over overlay, while non-catch eliminations retain their immediate overlay. — test: `scripts/test-mr-feast-banquet-loss.mjs::catch routing`
+- [x] A physical catch on the far grounds restores the complete Dining Room shell and all four façade sides before staging the indoor banquet tableau, without re-showing the tabletop service intentionally hidden for the loss scene. — test: `scripts/test-mr-feast-banquet-loss.mjs::outdoor catch culling reset`
 - [x] The first-person camera begins face-up toward the Dining Room ceiling from a fixed lying position, then accepts mouse and touch look so the player can inspect both Patron rows and Mr. Feast while movement/HUD controls remain suppressed. — test: `scripts/test-mr-feast-banquet-loss.mjs::lying free-look viewpoint`
 - [x] The banquet remains explorable for at least 20 seconds before the recovery overlay appears, including time before and after Mr. Feast's complete closing line. — test: `scripts/test-mr-feast-banquet-loss.mjs::extended look window`
 - [x] Close first-person player breathing begins as the table scene appears, uses the recorded sprint-breath SFX with irregular hitched variation, accelerates toward near-hyperventilation, ducks beneath Mr. Feast's closing line, and stops when recovery controls appear or the loss scene is cleared; the prior procedural breath remains only as a decode/offline fallback. — test: `scripts/test-mr-feast-banquet-loss.mjs::panicked player breathing`
@@ -66,6 +67,7 @@ Create `scripts/test-mr-feast-banquet-loss.mjs` before implementation and confir
 
 ## Verification
 
+- The outdoor-catch regression failed red first with `interiorDetailsHidden: true` and only the front façade visible after a far-front-drive capture. The banquet reveal now switches exterior detail culling to its indoor camera context before snapshotting loss-only tabletop visibility; the focused desktop/phone suite, caught-pursuit suite, and full desktop/mobile Contestant 13 suite pass with clean browser consoles. The renovation audit retains only its unrelated current-origin `28 stairwell continuity` baseline. Inspected proof is `output/playwright/mr-feast-banquet-loss/banquet-table-desktop.png`.
 - The focused regression failed red first with `missing named banquet-loss tuning table`, then passed the complete desktop/phone source, asset, staging, dialogue, timing, recovery, and non-catch-bypass contract.
 - Meshy generated one formal Patron body plus three mask sources; the body was rigged once, and Blender 4.5 prepared one shared browser body and six distinct optimized mask variants. The manifest records all task IDs, bounds, runtime files, and the `125`-credit generation total.
 - Banquet GLBs stay deferred during ordinary exploration and load only after a physical catch. The focused test proves `assetStatus: "idle"` before capture, then waits for the real loss route to load and reveal the tableau.

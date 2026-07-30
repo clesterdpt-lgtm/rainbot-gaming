@@ -357,10 +357,33 @@ async function runBrowserFlow() {
         && !feast.escape.completed,
       `escape phase must unlock evasion without inventing the ending: ${JSON.stringify(feast)}`,
     );
+    const escapeMobility = await page.evaluate(() => {
+      const game = JSON.parse(window.render_game_to_text());
+      return {
+        seated: Boolean(game.player?.seated || game.seating?.player?.seated),
+        seatId: game.player?.seatId || game.seating?.player?.seatId || null,
+        stance: game.player?.movement?.stance || null,
+        movementMode: game.player?.movement?.mode || null,
+        movementLocked: Boolean(window.MrFeastFresh.getVictoryFeastState()?.player?.movementLocked),
+        x: game.player?.x,
+        z: game.player?.z,
+      };
+    });
+    assert(
+      !escapeMobility.seated
+        && !escapeMobility.seatId
+        && !escapeMobility.movementLocked
+        && escapeMobility.stance === "standing"
+        && Math.hypot((escapeMobility.x ?? 0) + 5.55, (escapeMobility.z ?? 0) + 6.55) <= 0.25,
+      `escape must free the player from the dining chair: ${JSON.stringify(escapeMobility)}`,
+    );
 
     await page.evaluate(() => {
       window.MrFeastFresh.collectFlashlightForQA();
       window.MrFeastFresh.setFlashlightForQA(true, { silent: true });
+      // Escape frees the player; keep Mr. Feast off the dining mark so defect
+      // clocks can settle without an immediate catch ending the finale early.
+      window.MrFeastFresh.resetMrFeastWandererForQA();
     });
     const stunned = await page.evaluate(() => window.MrFeastFresh.stunVictoryFeastSaintForQA());
     assert(
@@ -368,7 +391,10 @@ async function runBrowserFlow() {
       `a centered, unobstructed, actually emitting flashlight should stun the Saint: ${JSON.stringify(stunned)}`,
     );
     const beforeStunStep = await victoryState(page);
-    await page.evaluate(() => window.MrFeastFresh.advanceVictoryFeastForQA(1));
+    await page.evaluate(() => {
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.advanceVictoryFeastForQA(1);
+    });
     const duringStun = await victoryState(page);
     assert(
       duringStun.saint.stunned
@@ -378,7 +404,10 @@ async function runBrowserFlow() {
         during: duringStun.saint,
       })}`,
     );
-    await page.evaluate(() => window.MrFeastFresh.advanceVictoryFeastForQA(0.8));
+    await page.evaluate(() => {
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.advanceVictoryFeastForQA(0.8);
+    });
     assert(
       !(await victoryState(page)).saint.stunned,
       "the Saint must resume after the named stun duration expires",
@@ -391,7 +420,10 @@ async function runBrowserFlow() {
       defect?.mode === "stutter" && defect.requestedOn && !defect.beamOutput,
       `stutter must interrupt actual output without losing requested power: ${JSON.stringify(defect)}`,
     );
-    await page.evaluate(() => window.MrFeastFresh.advanceVictoryFeastForQA(2));
+    await page.evaluate(() => {
+      window.MrFeastFresh.resetMrFeastWandererForQA();
+      window.MrFeastFresh.advanceVictoryFeastForQA(2);
+    });
     defect = (await victoryState(page)).flashlightDefect;
     assert(defect.mode === "none" && defect.requestedOn && defect.beamOutput, `stutter must recover automatically: ${JSON.stringify(defect)}`);
 
@@ -562,7 +594,7 @@ async function runBrowserFlow() {
         && restoredFlashlight.collected
         && !restoredFlashlight.on
         && game.room === "DINING ROOM"
-        && Math.hypot(game.player.x + 6.12, game.player.z + 8.4) <= 0.08,
+        && Math.hypot(game.player.x + 12.1, game.player.z + 6.85) <= 0.08,
       `escape save must normalize to a clean Dining report checkpoint: ${JSON.stringify({
         feast,
         flashlight: restoredFlashlight,
@@ -602,8 +634,8 @@ async function runBrowserFlow() {
       window.MrFeastFresh.placePlayerAtVictoryFeastForQA()
     ));
     assert(
-      /Join Mr\. Feast|Victory Feast/i.test(report?.prompt || ""),
-      `mobile player must physically reach the dining report interaction: ${JSON.stringify(report)}`,
+      /Speak with Mr\. Feast|Join Mr\. Feast|Victory Feast/i.test(report?.prompt || ""),
+      `mobile player must physically reach Mr. Feast to start the Victory Feast: ${JSON.stringify(report)}`,
     );
     await mobile.locator("#touch-interact").tap();
     await mobile.waitForFunction(() => (

@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260729-saint-route-navigation-1";
+  const MANSION_RUNTIME_VERSION = "20260729-victory-feast-escape-unstick-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -166,6 +166,9 @@
     menuLoad: $("mansion-menu-load"),
     menuDev: $("mansion-menu-dev"),
     menuStatus: $("mansion-menu-status"),
+    loadChooser: $("mansion-load-chooser"),
+    loadChoices: $("mansion-load-choices"),
+    loadCancel: $("mansion-load-cancel"),
     workroomKeypad: $("mansion-workroom-keypad"),
     workroomKeypadClose: $("mansion-workroom-keypad-close"),
     workroomKeypadDisplay: $("mansion-workroom-keypad-display"),
@@ -2587,6 +2590,12 @@
     ESCAPE: "escape",
     FAILED: "failed",
   });
+  const CHECKPOINT_AUTOSAVES = Object.freeze({
+    storageKey: "rainbot_game_autosaves:mr-feast-mansion",
+    version: 1,
+    maximumSlots: 3,
+    checkIntervalSeconds: 0.75,
+  });
   const FEAST_SAYS = Object.freeze({
     instructionDelivery: "speech",
     intermissionSeconds: 10 * 60,
@@ -3281,7 +3290,7 @@
     directSightDwellSeconds: 0.4,
     qaStepSeconds: 1 / 30,
     callLine: "Contestants, report to the foyer set. Feast Hunt begins in five minutes.",
-    briefingLine: "The house lights are dead. Each of you has three golden objects hidden inside. Carry one at a time and bring each object back to this foyer before searching for the next. Stay out of my cameras, stay out of my sight, and do not get caught.",
+    briefingLine: "The house lights are dead. Each of you has three golden objects, but production will place only one at a time. Bring it back to this foyer before the next appears. Stay out of my cameras, stay out of my sight, and do not get caught.",
     countdownLines: Object.freeze({ 3: "Three.", 2: "Two.", 1: "One." }),
     startLine: "Hunt.",
     completionLine: "Three objects returned, one trip at a time. You beat Juniper back to the foyer. Feast Hunt is complete.",
@@ -3391,6 +3400,27 @@
         visualScale: 0.62,
         interactionSize: 0.58,
         hidingContext: "dining-sideboard-back-corner",
+        patrolRooms: Object.freeze(["BALLROOM", "DINING ROOM", "MAIN HALL BATHROOM"]),
+        patrolNodeIds: Object.freeze([
+          "main-ballroom-west",
+          "main-dining-east",
+          "main-dining-south",
+          "main-dining-west",
+          "main-dining-north",
+          "main-bath-gallery-approach",
+          "main-bath-gallery-door",
+          "main-bath-south",
+          "main-bath-center",
+          "main-bath-north",
+          "main-bath-center",
+          "main-bath-south",
+          "main-bath-gallery-door",
+          "main-bath-gallery-approach",
+          "main-dining-north",
+          "main-dining-west",
+          "main-dining-south",
+          "main-dining-east",
+        ]),
       }),
       Object.freeze({
         id: "golden-goblet",
@@ -3403,34 +3433,92 @@
         visualScale: 0.65,
         interactionSize: 0.56,
         hidingContext: "reading-room-low-bookcase",
+        patrolRooms: Object.freeze(["READING ROOM", "UPPER LANDING", "REAR LOUNGE"]),
+        patrolNodeIds: Object.freeze([
+          "upper-reading-northeast",
+          "upper-reading-southeast",
+          "upper-reading-southwest",
+          "upper-reading-entry",
+          "upper-reading-door-out",
+          "upper-landing-east",
+          "upper-landing-east-rear",
+          "upper-rear-east-guard",
+          "upper-lounge-east",
+          "upper-lounge-southeast",
+          "upper-lounge-northeast",
+          "upper-lounge-east",
+          "upper-rear-east-guard",
+          "upper-landing-east-rear",
+          "upper-landing-east",
+          "upper-reading-door",
+          "upper-reading-entry",
+          "upper-reading-northwest",
+        ]),
       }),
       Object.freeze({
         id: "golden-carving-knife",
         label: "Golden Carving Knife",
         level: "main-level",
         room: "KITCHEN",
-        position: Object.freeze({ x: 6.56, y: FLOOR.MAIN + 0.985, z: -11.35 }),
-        yaw: 0,
+        position: Object.freeze({ x: 6.56, y: FLOOR.MAIN + 1.015, z: -11.35 }),
+        yaw: -0.18,
         qa: Object.freeze({ x: 6.56, y: FLOOR.MAIN, z: -9.94 }),
-        visualScale: 0.78,
-        interactionSize: 0.54,
+        visualScale: 1.18,
+        interactionSize: 0.72,
         hidingContext: "kitchen-bread-board",
+        noticeable: true,
+        patrolRooms: Object.freeze(["KITCHEN", "BALLROOM", "PAINTING ROOM"]),
+        patrolNodeIds: Object.freeze([
+          "main-ballroom-south",
+          "main-rear-east",
+          "main-kitchen-exit",
+          "main-kitchen-west",
+          "main-kitchen-center",
+          "main-kitchen-south",
+          "main-kitchen-center",
+          "main-kitchen-west",
+          "main-kitchen-north",
+          "main-gallery-door",
+          "main-painting-south",
+          "main-painting-west-south",
+          "main-painting-west-north",
+          "main-painting-north",
+          "main-painting-west-north",
+          "main-painting-west-south",
+          "main-painting-south",
+          "main-gallery-door",
+          "main-kitchen-north",
+          "main-kitchen-west",
+          "main-kitchen-exit",
+          "main-rear-east",
+        ]),
       }),
     ]),
-    statueTurns: Object.freeze([
-      Object.freeze({
-        id: "foyer-listening-host",
-        stageOne: Object.freeze({ rotationY: 0.18, x: 0, z: 0 }),
-        stageTwo: Object.freeze({ rotationY: 0.55, x: 0.22, z: -0.16 }),
-        stageThree: Object.freeze({ rotationY: 1.25, x: 2.35, z: -2.0 }),
-      }),
-      Object.freeze({
-        id: "foyer-veiled-waltz",
-        stageOne: Object.freeze({ rotationY: -0.18, x: 0, z: 0 }),
-        stageTwo: Object.freeze({ rotationY: -0.55, x: -0.2, z: -0.19 }),
-        stageThree: Object.freeze({ rotationY: -1.25, x: -2.15, z: -2.55 }),
-      }),
-    ]),
+    statueCreep: Object.freeze({
+      ids: Object.freeze(["foyer-listening-host", "foyer-veiled-waltz"]),
+      stepMeters: 0.38,
+      bodyClearanceMeters: 0.045,
+      observationMinimumDot: 0.12,
+      observationMaximumDistanceMeters: 24,
+      faceTurnRadians: 0.22,
+      firstFloorToleranceMeters: 0.01,
+      targetNodeIds: Object.freeze([
+        "main-foyer-west",
+        "main-foyer-northwest",
+        "main-foyer-center",
+        "main-foyer-northeast",
+        "main-stair-center",
+        "main-stair-east",
+        "main-stair-south",
+        "main-ballroom-south",
+        "main-ballroom-west",
+        "main-dining-east",
+        "main-dining-south",
+        "main-kitchen-exit",
+        "main-kitchen-west",
+        "main-kitchen-center",
+      ]),
+    }),
   });
   const VICTORY_FEAST = Object.freeze({
     instructionDelivery: "speech",
@@ -3454,22 +3542,27 @@
       yaw: Math.PI / 2,
       scale: 1.04,
     }),
+    // Clear floor east of the guest-of-honor chair (-6.7, -8.4) and north of
+    // the table. The old mark sat inside that chair collider, so escape began
+    // with the player stuck and immovable.
     playerMark: Object.freeze({
-      x: -6.72,
+      x: -5.55,
       y: FLOOR.MAIN,
-      z: -8.4,
+      z: -6.55,
       yaw: Math.PI / 2,
       pitch: -0.04,
     }),
+    // Stand just north of the west table head so the player can aim at Mr.
+    // Feast himself (interaction range 2.35m) rather than the mid-table prop.
     reportApproach: Object.freeze({
-      x: -6.12,
+      x: -12.1,
       y: FLOOR.MAIN,
-      z: -8.4,
-      yaw: Math.PI / 2,
+      z: -6.85,
+      yaw: 0.43,
       pitch: -0.08,
     }),
     reportInteractionMark: Object.freeze({
-      x: -8,
+      x: -12.82,
       y: FLOOR.MAIN,
       z: -8.4,
       width: 1.08,
@@ -4036,6 +4129,7 @@
     activeSeat: null,
     journalOpen: false,
     menuOpen: false,
+    loadChooserOpen: false,
     maximized: false,
     devMode: false,
     devModeSnapshot: null,
@@ -4127,6 +4221,11 @@
       readyToReturn: false,
       statueStage: 0,
       statuesMovedWhileUnobserved: false,
+      statueObservationInitialized: false,
+      statuesObserved: false,
+      statueTurnAwayCount: 0,
+      statueMoveEvents: 0,
+      statueLastStepById: {},
       directSightDwell: 0,
       blackoutActive: false,
       rivalActive: false,
@@ -4335,6 +4434,48 @@
   };
 
   const mansionSaveSlot = window.RBGameSaves?.create("mr-feast-mansion", { version: 1 }) || null;
+  let lastCheckpointAutosaveId = null;
+  let checkpointAutosaveElapsed = 0;
+  let loadChooserReturnFocus = null;
+
+  function compatibleMansionSaveEnvelope(saved) {
+    const data = saved?.data;
+    const position = data?.playerPosition;
+    return Boolean(
+      saved
+      && Number(saved.version) === CHECKPOINT_AUTOSAVES.version
+      && data
+      && position
+      && [position.x, position.y, position.z].every((value) => Number.isFinite(Number(value)))
+      && data.contestant13
+      && typeof data.contestant13 === "object"
+    );
+  }
+
+  function readCheckpointAutosaves() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(CHECKPOINT_AUTOSAVES.storageKey));
+      if (!stored || stored.version !== CHECKPOINT_AUTOSAVES.version || !Array.isArray(stored.entries)) return [];
+      return stored.entries
+        .filter((entry) => compatibleMansionSaveEnvelope(entry) && entry.meta?.type === "autosave")
+        .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))
+        .slice(0, CHECKPOINT_AUTOSAVES.maximumSlots);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function writeCheckpointAutosaves(entries) {
+    try {
+      localStorage.setItem(CHECKPOINT_AUTOSAVES.storageKey, JSON.stringify({
+        version: CHECKPOINT_AUTOSAVES.version,
+        entries,
+      }));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x05070d);
@@ -4683,7 +4824,7 @@
 
   function handleIntroLoadClick() {
     if (!state.ready) return;
-    loadMansionGame();
+    openLoadChooser(dom.introLoad);
   }
 
   function startOptionalCharacterLoads() {
@@ -5918,11 +6059,12 @@
       return true;
     }
 
-    canCharacterOccupy(position, radius, height) {
+    canCharacterOccupy(position, radius, height, excludedBox = null) {
       const bodyBottom = position.y + 0.06;
       const bodyTop = position.y + height;
       const paddedRadius = radius + 0.015;
       for (const box of this.fixedBoxes) {
+        if (box === excludedBox) continue;
         if (box.rotationX || box.rotationZ) continue;
         const boxBottom = box.y - box.h / 2;
         const boxTop = box.y + box.h / 2;
@@ -5941,7 +6083,7 @@
       return true;
     }
 
-    canCharacterTraverse(start, end, radius, height) {
+    canCharacterTraverse(start, end, radius, height, excludedBox = null) {
       const distance = Math.hypot(end.x - start.x, end.y - start.y, end.z - start.z);
       const samples = Math.max(1, Math.ceil(distance / Math.max(0.04, radius * 0.5)));
       for (let sample = 1; sample <= samples; sample += 1) {
@@ -5950,12 +6092,12 @@
           x: THREE.MathUtils.lerp(start.x, end.x, t),
           y: THREE.MathUtils.lerp(start.y, end.y, t),
           z: THREE.MathUtils.lerp(start.z, end.z, t),
-        }, radius, height)) return false;
+        }, radius, height, excludedBox)) return false;
       }
       return true;
     }
 
-    resolveCharacterMovement(start, requested, radius, height) {
+    resolveCharacterMovement(start, requested, radius, height, excludedBox = null) {
       const horizontal = Math.hypot(requested.x, requested.z);
       const angles = horizontal > 0.000001
         ? [0, Math.PI / 4, -Math.PI / 4, Math.PI / 2, -Math.PI / 2]
@@ -5973,7 +6115,7 @@
           y: start.y + movement.y,
           z: start.z + movement.z,
         };
-        if (this.canCharacterTraverse(start, end, radius, height)) {
+        if (this.canCharacterTraverse(start, end, radius, height, excludedBox)) {
           return { ...movement, avoided: angle !== 0, blocked: false };
         }
       }
@@ -6162,6 +6304,7 @@
       this.qaLastLocomotionProbe = null;
       this.behaviorState = MR_FEAST_RESPONSE_STATE.PATROL;
       this.responseGraph = this.buildResponseGraph();
+      this.competitionPatrol = this.createCompetitionPatrolState();
       this.responsePath = [];
       this.responseCurrentNodeId = MR_FEAST_NPC.waypoints[0].id;
       this.responseResume = null;
@@ -8406,7 +8549,14 @@
       const interaction = {
         type: "mr-feast-talk",
         id: "mr-feast-converse",
-        getLabel: () => "Speak with Mr. Feast",
+        getLabel: () => {
+          if (victoryFeastSystem?.show.phase === VICTORY_FEAST_PHASE.CALLED) {
+            return victoryFeastSystem.castReady()
+              ? "Speak with Mr. Feast about the Victory Feast"
+              : "Wait for the final guest";
+          }
+          return "Speak with Mr. Feast";
+        },
         activate: () => this.converse(),
         // A stale conversation prompt makes a real pursuit look inert. Keep
         // ordinary busy dialogue for errands/alarms, but pursuit owns the
@@ -8431,6 +8581,11 @@
     }
 
     converse() {
+      // Victory Feast begins by speaking with the host in the Dining Room,
+      // not by using the mid-table production prop as a station button.
+      if (victoryFeastSystem?.show.phase === VICTORY_FEAST_PHASE.CALLED) {
+        return victoryFeastSystem.reportToDiningRoom();
+      }
       if (this.loadStatus !== "ready" || !speechSystem) return null;
       const busy = Boolean(this.housekeeping.active) || this.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL;
       const line = speechSystem.sayFromPool(busy ? "busy" : "talk");
@@ -8554,6 +8709,17 @@
       return state.stealth ? state.stealth.sightRangeMeters : MR_FEAST_PURSUIT.sightRangeMeters;
     }
 
+    traceSightLine(origin, target) {
+      pursuitSight.direction.copy(target).sub(origin);
+      const distance = pursuitSight.direction.length();
+      if (distance < 0.0001) return { visible: true, blocker: null };
+      pursuitSight.direction.divideScalar(distance);
+      pursuitSight.raycaster.set(origin, pursuitSight.direction);
+      pursuitSight.raycaster.far = Math.max(0.05, distance - 0.1);
+      const blocker = pursuitSight.raycaster.intersectObjects(occluderMeshes, false)[0] || null;
+      return { visible: !blocker, blocker };
+    }
+
     canSeePlayerAct(options = {}) {
       if (this.loadStatus !== "ready" || !physics || state.isHidden) return false;
       const p = physics.playerPosition();
@@ -8571,13 +8737,7 @@
       }
       pursuitSight.eye.set(this.root.position.x, this.root.position.y + MR_FEAST_PURSUIT.eyeHeightMeters, this.root.position.z);
       pursuitSight.target.set(p.x, p.y + 0.35, p.z);
-      pursuitSight.direction.copy(pursuitSight.target).sub(pursuitSight.eye);
-      const distance = pursuitSight.direction.length();
-      if (distance < 0.0001) return true;
-      pursuitSight.direction.divideScalar(distance);
-      pursuitSight.raycaster.set(pursuitSight.eye, pursuitSight.direction);
-      pursuitSight.raycaster.far = Math.max(0.05, distance - 0.1);
-      return pursuitSight.raycaster.intersectObjects(occluderMeshes, false).length === 0;
+      return this.traceSightLine(pursuitSight.eye, pursuitSight.target).visible;
     }
 
     canNoticeBasementProximity() {
@@ -8985,6 +9145,7 @@
     }
 
     recoverAfterLoad() {
+      this.clearCompetitionPatrol();
       this.pursuit.active = null;
       this.pursuitLastKnownPosition = null;
       this.pursuitTrackingSource = "none";
@@ -9562,6 +9723,244 @@
       this.root.rotation.y = Math.atan2(Math.sin(nextYaw), Math.cos(nextYaw));
     }
 
+    createCompetitionPatrolState() {
+      return {
+        owner: null,
+        activeItemId: null,
+        routeNodeIds: [],
+        allowedRooms: [],
+        routeIndex: 0,
+        approachPath: [],
+        pauseRemaining: 0,
+        distanceTravelled: 0,
+        routeSteps: 0,
+        completedLoops: 0,
+        visitedRooms: new Set(),
+        blockedReason: null,
+      };
+    }
+
+    competitionPatrolTarget() {
+      const patrol = this.competitionPatrol;
+      if (!patrol?.owner) return null;
+      const approach = patrol.approachPath[0] || null;
+      if (approach?.node) return { ...approach.node, door: approach.door || approach.node.door || null };
+      const id = patrol.routeNodeIds[patrol.routeIndex] || patrol.routeNodeIds[0];
+      return id ? this.responseGraph.nodes.get(id) || null : null;
+    }
+
+    configureCompetitionPatrol(owner, activeItemId, routeNodeIds = [], allowedRooms = []) {
+      const validNodeIds = routeNodeIds.filter((id) => this.responseGraph.nodes.has(id));
+      if (!owner || !activeItemId || !validNodeIds.length) {
+        this.clearCompetitionPatrol(owner || null);
+        return this.competitionPatrolDiagnostics();
+      }
+      const current = this.competitionPatrol;
+      const unchanged = current.owner === owner
+        && current.activeItemId === activeItemId
+        && current.routeNodeIds.join(",") === validNodeIds.join(",");
+      if (unchanged) return this.competitionPatrolDiagnostics();
+
+      const patrol = this.createCompetitionPatrolState();
+      patrol.owner = owner;
+      patrol.activeItemId = activeItemId;
+      patrol.routeNodeIds = [...validNodeIds];
+      patrol.allowedRooms = [...new Set(allowedRooms)];
+      const startId = this.nearestPursuitAnchorId(this.root.position)
+        || this.nearestResponseTargetId(this.root.position, true);
+      patrol.approachPath = startId
+        ? this.pursuitPathFromActualPosition(startId, validNodeIds[0])
+        : [];
+      patrol.blockedReason = !patrol.approachPath.length
+        && startId !== validNodeIds[0]
+        ? "no-approach-route"
+        : null;
+      this.competitionPatrol = patrol;
+      this.pauseRemaining = 0;
+      this.wanderingEnabled = true;
+      this.qaAnimationFrozen = false;
+      return this.competitionPatrolDiagnostics();
+    }
+
+    clearCompetitionPatrol(owner = null) {
+      if (owner && this.competitionPatrol.owner && this.competitionPatrol.owner !== owner) return false;
+      if (!this.competitionPatrol.owner) return false;
+      this.competitionPatrol = this.createCompetitionPatrolState();
+      this.closeClearedRouteDoors(null);
+      return true;
+    }
+
+    arriveAtCompetitionPatrolTarget(target) {
+      const patrol = this.competitionPatrol;
+      this.root.position.set(target.x, target.y, target.z);
+      this.currentRouteZone = target.zone;
+      this.currentRouteLevel = target.level;
+      this.responseCurrentNodeId = target.id;
+      patrol.visitedRooms.add(target.zone);
+      patrol.routeSteps += 1;
+      patrol.pauseRemaining = target.pause || 0;
+      if (patrol.approachPath.length) {
+        patrol.approachPath.shift();
+        if (!patrol.approachPath.length) {
+          const arrivedIndex = patrol.routeNodeIds.indexOf(target.id);
+          patrol.routeIndex = arrivedIndex >= 0
+            ? (arrivedIndex + 1) % patrol.routeNodeIds.length
+            : 0;
+        }
+      } else {
+        const nextIndex = (patrol.routeIndex + 1) % patrol.routeNodeIds.length;
+        if (nextIndex === 0) patrol.completedLoops += 1;
+        patrol.routeIndex = nextIndex;
+      }
+      this.syncCollider();
+    }
+
+    updateCompetitionPatrol(dt) {
+      const patrol = this.competitionPatrol;
+      if (!patrol?.owner || this.behaviorState !== MR_FEAST_RESPONSE_STATE.PATROL) return false;
+      if (patrol.pauseRemaining > 0) {
+        patrol.pauseRemaining = Math.max(0, patrol.pauseRemaining - dt);
+        this.moving = false;
+        this.fadeToAction("idle");
+        this.closeClearedRouteDoors(this.competitionPatrolTarget());
+        this.stepAnimationAndFace(dt);
+        return true;
+      }
+      const target = this.competitionPatrolTarget();
+      if (!target) {
+        patrol.blockedReason = "missing-route-target";
+        this.moving = false;
+        this.fadeToAction("idle");
+        this.stepAnimationAndFace(dt);
+        return true;
+      }
+      const dx = target.x - this.root.position.x;
+      const dy = target.y - this.root.position.y;
+      const dz = target.z - this.root.position.z;
+      const horizontalDistance = Math.hypot(dx, dz);
+      const distance = Math.hypot(dx, dy, dz);
+      this.setSegmentPresentation(target);
+      if (distance <= MR_FEAST_NPC.arrivalRadius) {
+        this.arriveAtCompetitionPatrolTarget(target);
+        this.closeClearedRouteDoors(this.competitionPatrolTarget());
+        this.fadeToAction(
+          patrol.pauseRemaining > 0 ? "idle" : "stalk",
+          MR_FEAST_NPC.fadeSeconds,
+          false,
+          this.stalkPlaybackRateForSpeed(MR_FEAST_NPC.speed),
+        );
+        this.stepAnimationAndFace(dt);
+        return true;
+      }
+      this.faceTarget(target);
+      const facingAlignment = horizontalDistance > 0.0001
+        ? (Math.sin(this.root.rotation.y) * dx + Math.cos(this.root.rotation.y) * dz) / horizontalDistance
+        : 1;
+      const waitingForDoor = this.prepareRouteDoor(target, distance);
+      if (waitingForDoor || facingAlignment < MR_FEAST_NPC.movementAlignment) {
+        this.moving = false;
+        this.fadeToAction("idle");
+        this.stepAnimationAndFace(dt);
+        return true;
+      }
+      const step = Math.min(distance, MR_FEAST_NPC.speed * dt);
+      const movedDistance = this.moveWithCollision(
+        dx / distance * step,
+        dy / distance * step,
+        dz / distance * step,
+      );
+      patrol.distanceTravelled += movedDistance;
+      this.distanceTravelled += movedDistance;
+      this.moving = movedDistance > 0.0001;
+      if (this.moving) patrol.blockedReason = null;
+      this.closeClearedRouteDoors(target);
+      this.fadeToAction(
+        "stalk",
+        MR_FEAST_NPC.fadeSeconds,
+        false,
+        this.stalkPlaybackRateForSpeed(MR_FEAST_NPC.speed),
+      );
+      this.stepAnimationAndFace(dt);
+      return true;
+    }
+
+    competitionPatrolDiagnostics() {
+      const patrol = this.competitionPatrol;
+      const target = this.competitionPatrolTarget();
+      return {
+        owner: patrol.owner,
+        active: Boolean(patrol.owner),
+        activeItemId: patrol.activeItemId,
+        phase: patrol.approachPath.length ? "approaching" : patrol.owner ? "patrolling" : "inactive",
+        targetNodeId: target?.id || null,
+        routeNodeIds: [...patrol.routeNodeIds],
+        routeIndex: patrol.routeIndex,
+        allowedRooms: [...patrol.allowedRooms],
+        visitedRooms: [...patrol.visitedRooms],
+        distanceTravelled: Number(patrol.distanceTravelled.toFixed(3)),
+        routeSteps: patrol.routeSteps,
+        completedLoops: patrol.completedLoops,
+        pauseRemaining: Number(patrol.pauseRemaining.toFixed(3)),
+        blockedReason: patrol.blockedReason,
+        currentFloor: this.floorAtCurrentHeight(),
+        currentRoom: this.currentRouteZone,
+      };
+    }
+
+    runCompetitionPatrolForQA(seconds = 20, stageAtRouteStart = false) {
+      if (!state.qa || this.loadStatus !== "ready" || !this.competitionPatrol.owner) {
+        return { ...this.competitionPatrolDiagnostics(), simulatedSeconds: 0 };
+      }
+      const patrol = this.competitionPatrol;
+      if (stageAtRouteStart) {
+        const first = this.responseGraph.nodes.get(patrol.routeNodeIds[0]);
+        if (first) {
+          this.root.position.set(first.x, first.y, first.z);
+          this.root.rotation.y = 0;
+          this.currentRouteZone = first.zone;
+          this.currentRouteLevel = first.level;
+          this.responseCurrentNodeId = first.id;
+          patrol.routeIndex = patrol.routeNodeIds.length > 1 ? 1 : 0;
+          patrol.approachPath = [];
+          patrol.pauseRemaining = 0;
+          patrol.visitedRooms = new Set([first.zone]);
+          patrol.distanceTravelled = 0;
+          patrol.routeSteps = 0;
+          patrol.completedLoops = 0;
+          patrol.blockedReason = null;
+          this.behaviorState = MR_FEAST_RESPONSE_STATE.PATROL;
+          this.responsePath = [];
+          this.pursuit.active = null;
+          this.syncCollider();
+        }
+      }
+      const fixedStep = 1 / 30;
+      const limit = clamp(Number(seconds) || 0, 0, 180);
+      const previousHidden = state.isHidden;
+      const previousHideSpot = state.activeHideSpot;
+      state.isHidden = true;
+      state.activeHideSpot = previousHideSpot || { name: "QA Feast Hunt patrol concealment" };
+      state.started = true;
+      this.wanderingEnabled = true;
+      this.qaAnimationFrozen = false;
+      let elapsed = 0;
+      while (elapsed < limit - 0.000001 && this.competitionPatrol.owner) {
+        const step = Math.min(fixedStep, limit - elapsed);
+        for (const object of animatedObjects) {
+          if (object instanceof HingedDoor || object instanceof Refrigerator) object.update(step);
+        }
+        this.update(step);
+        elapsed += step;
+      }
+      state.isHidden = previousHidden;
+      state.activeHideSpot = previousHideSpot;
+      this.root.updateMatrixWorld(true);
+      return {
+        ...this.competitionPatrolDiagnostics(),
+        simulatedSeconds: Number(elapsed.toFixed(3)),
+      };
+    }
+
     stageOpeningWelcome() {
       const placement = MR_FEAST_OPENING_WELCOME.hostPosition;
       const resumeIndex = MR_FEAST_NPC.waypoints.findIndex(
@@ -9746,6 +10145,8 @@
         return;
       }
 
+      if (this.updateCompetitionPatrol(this.lastDt)) return;
+
       if (this.pauseRemaining > 0) {
         this.pauseRemaining = Math.max(0, this.pauseRemaining - this.lastDt);
         this.fadeToAction("idle");
@@ -9817,6 +10218,7 @@
       this.qaLastWholeHomeRun = null;
       this.qaLastLocomotionProbe = null;
       this.behaviorState = MR_FEAST_RESPONSE_STATE.PATROL;
+      this.competitionPatrol = this.createCompetitionPatrolState();
       this.responsePath = [];
       this.responseCurrentNodeId = start.id;
       this.responseResume = null;
@@ -10239,7 +10641,9 @@
 
     getDiagnostics() {
       const liveBones = this.getLiveBoneMetrics();
-      const target = MR_FEAST_NPC.waypoints[this.waypointIndex] || null;
+      const target = this.competitionPatrol?.owner
+        ? this.competitionPatrolTarget()
+        : MR_FEAST_NPC.waypoints[this.waypointIndex] || null;
       const targetDx = target ? target.x - this.root.position.x : 0;
       const targetDy = target ? target.y - this.root.position.y : 0;
       const targetDz = target ? target.z - this.root.position.z : 0;
@@ -10300,6 +10704,7 @@
           zones: routeZones,
           doors: new Set(MR_FEAST_NPC.waypoints.map((point) => point.door).filter(Boolean)).size,
         },
+        competitionPatrol: this.competitionPatrolDiagnostics(),
         security: {
           state: this.behaviorState,
           activeAlarm: this.activeCameraAlarm ? {
@@ -16822,6 +17227,13 @@
     return reusable[name];
   }
 
+  function registerSightOccluder(mesh, role = null) {
+    if (!mesh) return mesh;
+    if (!occluderMeshes.includes(mesh)) occluderMeshes.push(mesh);
+    if (role) mesh.userData.sightOccluderRole = role;
+    return mesh;
+  }
+
   function box(options) {
     const {
       name = "box", w = 1, h = 1, d = 1, x = 0, y = 0, z = 0,
@@ -16837,7 +17249,7 @@
     mesh.receiveShadow = receive;
     parent.add(mesh);
     if (collider) physics.addFixedBox(x, y, z, w, h, d, rotationY);
-    if (occluder || collider) occluderMeshes.push(mesh);
+    if (occluder || collider) registerSightOccluder(mesh, typeof occluder === "string" ? occluder : null);
     return mesh;
   }
 
@@ -16846,7 +17258,7 @@
       name = "cylinder", radius = 0.5, radiusTop = radius, radiusBottom = radius,
       height = 1, segments = 14, x = 0, y = 0, z = 0, rotationX = 0,
       rotationY = 0, rotationZ = 0, material = M.iron, parent = scene,
-      cast = true, receive = true,
+      cast = true, receive = true, occluder = false,
     } = options || {};
     const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radiusTop, radiusBottom, height, segments), material);
     mesh.name = name;
@@ -16855,6 +17267,7 @@
     mesh.castShadow = cast;
     mesh.receiveShadow = receive;
     parent.add(mesh);
+    if (occluder) registerSightOccluder(mesh, typeof occluder === "string" ? occluder : null);
     return mesh;
   }
 
@@ -16862,12 +17275,14 @@
     const {
       name = "sphere", radius = 0.2, widthSegments = 14, heightSegments = 9,
       x = 0, y = 0, z = 0, material = M.brass, parent = scene, cast = true,
+      occluder = false,
     } = options || {};
     const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, widthSegments, heightSegments), material);
     mesh.name = name;
     mesh.position.set(x, y, z);
     mesh.castShadow = cast;
     parent.add(mesh);
+    if (occluder) registerSightOccluder(mesh, typeof occluder === "string" ? occluder : null);
     return mesh;
   }
 
@@ -16890,7 +17305,7 @@
     const {
       name = "rounded-box", w = 1, h = 1, d = 1, radius = 0.08,
       x = 0, y = 0, z = 0, rotationX = 0, rotationY = 0, rotationZ = 0,
-      material = M.velvet, parent = scene, cast = true,
+      material = M.velvet, parent = scene, cast = true, occluder = false,
     } = options || {};
     const r = Math.min(radius, w / 3, h / 3);
     const shape = new THREE.Shape();
@@ -16912,6 +17327,7 @@
     mesh.castShadow = cast;
     mesh.receiveShadow = true;
     parent.add(mesh);
+    if (occluder) registerSightOccluder(mesh, typeof occluder === "string" ? occluder : null);
     return mesh;
   }
 
@@ -17120,8 +17536,8 @@
       scene.add(this.root);
 
       const shell = walkIn ? 0.11 : 0.085;
-      box({ name: `${name}-back`, w: width, h: height, d: shell, x: 0, y: height / 2, z: -depth / 2 + shell / 2, material: M.blackWood, parent: this.root, cast: true });
-      for (const side of [-1, 1]) box({ name: `${name}-side`, w: shell, h: height, d: depth, x: side * (width / 2 - shell / 2), y: height / 2, z: 0, material, parent: this.root, cast: true });
+      box({ name: `${name}-back`, w: width, h: height, d: shell, x: 0, y: height / 2, z: -depth / 2 + shell / 2, material: M.blackWood, parent: this.root, cast: true, occluder: "cabinet-back" });
+      for (const side of [-1, 1]) box({ name: `${name}-side`, w: shell, h: height, d: depth, x: side * (width / 2 - shell / 2), y: height / 2, z: 0, material, parent: this.root, cast: true, occluder: "cabinet-side" });
       box({ name: `${name}-crown`, w: width, h: shell, d: depth, x: 0, y: height - shell / 2, z: 0, material, parent: this.root, cast: true });
       box({ name: `${name}-sill`, w: width, h: 0.075, d: depth, x: 0, y: 0.0375, z: 0, material: M.blackWood, parent: this.root, cast: false });
       if (walkIn) {
@@ -17315,7 +17731,7 @@
     }
 
     makeDoor(width, height, side, material, pivot) {
-      const door = box({ name: `${this.name}-door`, w: width - 0.025, h: height * 0.91, d: 0.07, x: side * width / 2, y: height * 0.52, z: 0, material, parent: pivot, cast: true });
+      const door = box({ name: `${this.name}-door`, w: width - 0.025, h: height * 0.91, d: 0.07, x: side * width / 2, y: height * 0.52, z: 0, material, parent: pivot, cast: true, occluder: "cabinet-door" });
       for (const face of [-1, 1]) {
         box({ name: `${this.name}-door-inset`, w: width * 0.68, h: height * 0.68, d: 0.018, x: side * width / 2, y: height * 0.52, z: face * 0.047, material: M.blackWood, parent: pivot, cast: false });
         // Pulls sit just inside the meeting seam and remain attached to their
@@ -19781,6 +20197,7 @@
       };
       state.currentFloor = "MAIN LEVEL";
       state.currentRoom = "DINING ROOM";
+      updateExteriorDetailCulling();
       this.lookYaw = BANQUET_LOSS.camera.initialYaw;
       this.lookPitch = BANQUET_LOSS.camera.initialPitch;
       state.banquetLoss.triggerReason = details.reason || state.banquetLoss.triggerReason;
@@ -23492,6 +23909,10 @@
       this.blackoutCircuitSnapshot = new Map();
       this.qaManualClock = false;
       this.qaStepping = false;
+      this.statueViewForward = new THREE.Vector3();
+      this.statueViewOffset = new THREE.Vector3();
+      this.statueViewTarget = new THREE.Vector3();
+      this.statueRaycaster = new THREE.Raycaster();
       this.transitionTable = Object.freeze({
         [FEAST_HUNT_PHASE.DORMANT]: Object.freeze([FEAST_HUNT_PHASE.CALLED, FEAST_HUNT_PHASE.COMPLETED]),
         [FEAST_HUNT_PHASE.CALLED]: Object.freeze([FEAST_HUNT_PHASE.BRIEFING, FEAST_HUNT_PHASE.FAILED, FEAST_HUNT_PHASE.DORMANT]),
@@ -23809,9 +24230,11 @@
     releaseProduction() {
       this.show.staged = false;
       if (mrFeastNpc?.challengeMode === "feast-hunt") mrFeastNpc.releaseChallenge();
+      mrFeastNpc?.clearCompetitionPatrol("feast-hunt");
       if (mansionContestants?.challengeMode === "feast-hunt") {
         mansionContestants.releaseChallenge({ eliminatedId: null });
       }
+      this.resetStatueCreep();
       clearMovementInput();
       state.movement.crouched = false;
       state.movement.sprinting = false;
@@ -23918,6 +24341,8 @@
       cameraSecurity?.suspendForCompetition();
       cameraSecurity?.handlePatronFeedSabotage();
       mrFeastNpc?.recoverAfterLoad();
+      this.resetStatueCreep();
+      this.syncHostPatrol();
       audioSystem?.stormCountdown(0);
       speechSystem?.say(
         "feast-hunt-start",
@@ -23950,6 +24375,31 @@
       return FEAST_HUNT.items.find((item) => item.id === this.show.carriedItemId) || null;
     }
 
+    activeGoldItemId() {
+      if (this.show.phase !== FEAST_HUNT_PHASE.HUNTING) return null;
+      if (this.show.carriedItemId) return this.show.carriedItemId;
+      return FEAST_HUNT.items.find((item) => !this.returned(item.id))?.id || null;
+    }
+
+    activeGoldItem() {
+      const id = this.activeGoldItemId();
+      return FEAST_HUNT.items.find((item) => item.id === id) || null;
+    }
+
+    syncHostPatrol() {
+      const item = this.activeGoldItem();
+      if (!item || !mrFeastNpc) {
+        mrFeastNpc?.clearCompetitionPatrol("feast-hunt");
+        return null;
+      }
+      return mrFeastNpc.configureCompetitionPatrol(
+        "feast-hunt",
+        item.id,
+        item.patrolNodeIds,
+        item.patrolRooms,
+      );
+    }
+
     setItemInteractive(entry, interactive) {
       if (!entry?.hitbox) return;
       if (interactive && !entry.registered) {
@@ -23961,59 +24411,159 @@
       }
     }
 
-    applyStatueStage(stage, { requireUnobserved = false } = {}) {
-      const targetStage = clamp(Math.floor(Number(stage) || 0), 0, 3);
-      if (targetStage > 0 && requireUnobserved && state.currentRoom === "FRONT FOYER") {
-        return false;
-      }
-      this.show.statueStage = targetStage;
-      for (const turn of FEAST_HUNT.statueTurns) {
-        const entry = estateStatueScene.statues.find((statue) => statue.id === turn.id);
-        if (!entry?.root) continue;
-        const pose = targetStage <= 0
-          ? { rotationY: 0, x: 0, z: 0 }
-          : targetStage === 1
-            ? turn.stageOne
-            : targetStage === 2
-              ? turn.stageTwo
-              : turn.stageThree;
-        entry.root.position.set(
-          entry.placement.position.x + pose.x,
-          entry.placement.position.y,
-          entry.placement.position.z + pose.z,
-        );
-        entry.root.rotation.y = entry.placement.rotationY + pose.rotationY;
-        entry.root.updateMatrixWorld(true);
-        if (entry.colliderBody) {
-          const center = {
-            x: entry.root.position.x,
-            y: entry.root.position.y + entry.placement.collider.height / 2,
-            z: entry.root.position.z,
-          };
-          const rotation = new THREE.Quaternion().setFromEuler(
-            new THREE.Euler(0, entry.root.rotation.y, 0),
-          );
-          entry.colliderBody.setTranslation(center, false);
-          entry.colliderBody.setRotation(rotation, false);
-          if (entry.colliderFixedBox) {
-            entry.colliderFixedBox.x = center.x;
-            entry.colliderFixedBox.y = center.y;
-            entry.colliderFixedBox.z = center.z;
-            entry.colliderFixedBox.rotationY = entry.root.rotation.y;
-          }
-        }
-      }
-      if (targetStage > 0 && requireUnobserved) {
-        this.show.statuesMovedWhileUnobserved = true;
+    feastHuntStatueEntries() {
+      return FEAST_HUNT.statueCreep.ids
+        .map((id) => estateStatueScene.statues.find((statue) => statue.id === id))
+        .filter((entry) => entry?.root);
+    }
+
+    syncStatueCollider(entry) {
+      if (!entry?.root || !entry.colliderBody) return false;
+      const center = {
+        x: entry.root.position.x,
+        y: FLOOR.MAIN + entry.placement.collider.height / 2,
+        z: entry.root.position.z,
+      };
+      const rotation = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(0, entry.root.rotation.y, 0),
+      );
+      entry.colliderBody.setTranslation(center, false);
+      entry.colliderBody.setRotation(rotation, false);
+      if (entry.colliderFixedBox) {
+        entry.colliderFixedBox.x = center.x;
+        entry.colliderFixedBox.y = center.y;
+        entry.colliderFixedBox.z = center.z;
+        entry.colliderFixedBox.rotationY = entry.root.rotation.y;
       }
       return true;
     }
 
-    syncPendingStatueStage() {
-      const desiredStage = clamp(this.show.collectedIds.length, 0, 3);
-      if (desiredStage > this.show.statueStage) {
-        this.applyStatueStage(desiredStage, { requireUnobserved: true });
+    resetStatueCreep() {
+      for (const entry of this.feastHuntStatueEntries()) {
+        entry.root.position.set(
+          entry.placement.position.x,
+          FLOOR.MAIN,
+          entry.placement.position.z,
+        );
+        entry.root.rotation.y = entry.placement.rotationY;
+        entry.root.updateMatrixWorld(true);
+        this.syncStatueCollider(entry);
       }
+      this.show.statueStage = 0;
+      this.show.statuesMovedWhileUnobserved = false;
+      this.show.statueObservationInitialized = true;
+      this.show.statuesObserved = this.statuesObservedByPlayer();
+      this.show.statueTurnAwayCount = 0;
+      this.show.statueMoveEvents = 0;
+      this.show.statueLastStepById = {};
+    }
+
+    statuesObservedByPlayer() {
+      if (!camera) return false;
+      camera.getWorldDirection(this.statueViewForward).normalize();
+      for (const entry of this.feastHuntStatueEntries()) {
+        this.statueViewTarget.set(
+          entry.root.position.x,
+          FLOOR.MAIN + entry.placement.collider.height * 0.58,
+          entry.root.position.z,
+        );
+        this.statueViewOffset.copy(this.statueViewTarget).sub(camera.position);
+        const distance = this.statueViewOffset.length();
+        if (
+          distance <= 0.001
+          || distance > FEAST_HUNT.statueCreep.observationMaximumDistanceMeters
+        ) continue;
+        this.statueViewOffset.multiplyScalar(1 / distance);
+        if (
+          this.statueViewForward.dot(this.statueViewOffset)
+          < FEAST_HUNT.statueCreep.observationMinimumDot
+        ) continue;
+        this.statueRaycaster.set(camera.position, this.statueViewOffset);
+        this.statueRaycaster.near = 0.05;
+        this.statueRaycaster.far = Math.max(0.05, distance - 0.2);
+        if (!this.statueRaycaster.intersectObjects(occluderMeshes, false)[0]) return true;
+      }
+      return false;
+    }
+
+    statueCreepTarget() {
+      if (!mrFeastNpc || !physics) return null;
+      const player = physics.playerPosition();
+      return FEAST_HUNT.statueCreep.targetNodeIds
+        .map((id) => mrFeastNpc.responseGraph.nodes.get(id))
+        .filter(Boolean)
+        .reduce((best, node) => {
+          const distance = Math.hypot(node.x - player.x, node.z - player.z);
+          return !best || distance < best.distance ? { node, distance } : best;
+        }, null)?.node || null;
+    }
+
+    creepStatue(entry, target) {
+      if (!entry?.root || !target || !physics) return 0;
+      const dx = target.x - entry.root.position.x;
+      const dz = target.z - entry.root.position.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance <= 0.001) return 0;
+      const step = Math.min(FEAST_HUNT.statueCreep.stepMeters, distance);
+      const radius = Math.max(
+        entry.placement.collider.width,
+        entry.placement.collider.depth,
+      ) / 2 + FEAST_HUNT.statueCreep.bodyClearanceMeters;
+      const movement = physics.resolveCharacterMovement(
+        entry.root.position,
+        { x: dx / distance * step, y: 0, z: dz / distance * step },
+        radius,
+        entry.placement.collider.height,
+        entry.colliderFixedBox,
+      );
+      const movedDistance = Math.hypot(movement.x, movement.z);
+      entry.root.position.x += movement.x;
+      entry.root.position.y = FLOOR.MAIN;
+      entry.root.position.z += movement.z;
+      const desiredYaw = Math.atan2(dx, dz);
+      const yawDelta = Math.atan2(
+        Math.sin(desiredYaw - entry.root.rotation.y),
+        Math.cos(desiredYaw - entry.root.rotation.y),
+      );
+      entry.root.rotation.y += clamp(
+        yawDelta,
+        -FEAST_HUNT.statueCreep.faceTurnRadians,
+        FEAST_HUNT.statueCreep.faceTurnRadians,
+      );
+      entry.root.rotation.y = Math.atan2(
+        Math.sin(entry.root.rotation.y),
+        Math.cos(entry.root.rotation.y),
+      );
+      entry.root.updateMatrixWorld(true);
+      this.syncStatueCollider(entry);
+      this.show.statueLastStepById[entry.id] = movedDistance;
+      return movedDistance;
+    }
+
+    moveStatuesForTurnAway() {
+      const target = this.statueCreepTarget();
+      if (!target) return false;
+      const entries = this.feastHuntStatueEntries();
+      const moved = entries.map((entry) => this.creepStatue(entry, target));
+      this.show.statueTurnAwayCount += 1;
+      this.show.statueMoveEvents += 1;
+      this.show.statueStage = Math.min(3, this.show.statueTurnAwayCount);
+      this.show.statuesMovedWhileUnobserved = true;
+      return moved.some((distance) => distance > 0.001);
+    }
+
+    updateStatueCreep() {
+      if (!this.isHunting()) return false;
+      const observed = this.statuesObservedByPlayer();
+      if (!this.show.statueObservationInitialized) {
+        this.show.statueObservationInitialized = true;
+        this.show.statuesObserved = observed;
+        return false;
+      }
+      const turnedAway = this.show.statuesObserved && !observed;
+      this.show.statuesObserved = observed;
+      if (!turnedAway) return false;
+      return this.moveStatuesForTurnAway();
     }
 
     collectItem(id, source = "player") {
@@ -24041,10 +24591,17 @@
           carriedItemId: this.show.carriedItemId,
         };
       }
+      if (id !== this.activeGoldItemId()) {
+        return {
+          accepted: false,
+          reason: "inactive-gold-item",
+          itemId: id,
+          activeItemId: this.activeGoldItemId(),
+        };
+      }
       this.show.collectedIds.push(id);
       this.show.carriedItemId = id;
       this.show.readyToReturn = true;
-      this.syncPendingStatueStage();
       this.syncScene();
       audioSystem?.pickup("object");
       contestant13Quest?.showDiscovery(
@@ -24079,6 +24636,7 @@
       if (this.show.returnedIds.length >= FEAST_HUNT.items.length) {
         return this.finishCompetition(source);
       }
+      this.syncHostPatrol();
       audioSystem?.pickup("object");
       contestant13Quest?.showDiscovery(
         `${carried.label.toUpperCase()} RETURNED`,
@@ -24108,6 +24666,7 @@
       this.show.completionCardRemaining = FEAST_HUNT.completionCardSeconds;
       this.show.directSightDwell = 0;
       this.show.rivalActive = false;
+      mrFeastNpc?.clearCompetitionPatrol("feast-hunt");
       this.transition(FEAST_HUNT_PHASE.COMPLETED, "three-items-returned-to-foyer");
       this.releaseProduction();
       this.restoreBlackout();
@@ -24150,6 +24709,7 @@
       this.show.directSightDwell = 0;
       this.show.rivalActive = false;
       this.show.rivalReturned = true;
+      mrFeastNpc?.clearCompetitionPatrol("feast-hunt");
       this.transition(FEAST_HUNT_PHASE.FAILED, "juniper-returned-first");
       this.releaseProduction();
       this.restoreBlackout();
@@ -24169,6 +24729,7 @@
       this.show.outcome = "player-eliminated";
       this.show.finalePending = false;
       this.show.directSightDwell = 0;
+      mrFeastNpc?.clearCompetitionPatrol("feast-hunt");
       this.transition(FEAST_HUNT_PHASE.FAILED, "caught-by-mr-feast");
       this.releaseProduction();
       this.restoreBlackout();
@@ -24261,7 +24822,8 @@
         if (this.show.briefingRemaining <= 0) this.beginHunt();
       } else if (this.show.phase === FEAST_HUNT_PHASE.HUNTING) {
         this.maintainBlackout();
-        this.syncPendingStatueStage();
+        this.syncHostPatrol();
+        this.updateStatueCreep();
         this.updateThreats(step);
       }
       this.syncPresentation();
@@ -24311,6 +24873,7 @@
       this.setReturnInteractive(returnReady);
       for (const entry of feastHuntScene.items) {
         const visible = this.show.phase === FEAST_HUNT_PHASE.HUNTING
+          && entry.config.id === this.activeGoldItemId()
           && !this.collected(entry.config.id);
         entry.root.visible = visible;
         this.setItemInteractive(entry, visible);
@@ -24355,11 +24918,12 @@
         setText(dom.feastHuntTimer, "LIVE");
         const rivalProgress = `${FEAST_HUNT.rival.label} ${this.show.rivalCollectedIds.length}/${FEAST_HUNT.items.length}`;
         const carried = this.carriedItem();
+        const active = this.activeGoldItem();
         setText(
           dom.feastHuntStatus,
           this.show.readyToReturn
             ? `Return ${carried?.label || "the object"} to the foyer · ${rivalProgress}`
-            : `Find the gold · ${rivalProgress}`,
+            : `Find ${active?.label || "the gold"} · ${rivalProgress}`,
         );
       } else if (phase === FEAST_HUNT_PHASE.COMPLETED) {
         setText(dom.feastHuntEyebrow, "Game 3 · Complete");
@@ -24419,6 +24983,8 @@
       this.show.staged = false;
       this.show.directSightDwell = 0;
       this.resetRivalState();
+      mrFeastNpc?.clearCompetitionPatrol("feast-hunt");
+      this.resetStatueCreep();
     }
 
     restoreSnapshot(snapshot = null) {
@@ -24487,6 +25053,11 @@
         && Boolean(this.show.carriedItemId);
       this.show.statueStage = 0;
       this.show.statuesMovedWhileUnobserved = Boolean(source.statuesMovedWhileUnobserved);
+      this.show.statueObservationInitialized = false;
+      this.show.statuesObserved = false;
+      this.show.statueTurnAwayCount = 0;
+      this.show.statueMoveEvents = 0;
+      this.show.statueLastStepById = {};
       this.show.directSightDwell = 0;
       this.show.staged = false;
       this.show.outcome = restoredPhase === FEAST_HUNT_PHASE.COMPLETED
@@ -24500,13 +25071,7 @@
       this.resetRivalState();
       this.show.invalidTransitions = 0;
       this.show.lastInvalidTransition = null;
-      this.applyStatueStage(
-        clamp(
-          Number(source.statueStage) || Math.min(this.show.collectedIds.length, 3),
-          0,
-          3,
-        ),
-      );
+      this.resetStatueCreep();
       bulkStorageSecretSystem?.syncClothingProgression();
       this.syncPresentation();
       return this.getDiagnostics();
@@ -24546,20 +25111,46 @@
       if (!entry) return null;
       const qa = entry.config.qa;
       const target = entry.config.position;
-      const yaw = Math.atan2(-(target.x - qa.x), -(target.z - qa.z));
-      teleport(qa.x, qa.y, qa.z, yaw, -0.32);
-      syncCamera();
-      const horizontal = Math.max(0.001, Math.hypot(target.x - camera.position.x, target.z - camera.position.z));
-      state.pitch = Math.atan2(target.y + 0.2 - camera.position.y, horizontal);
-      syncCamera();
-      camera.updateMatrixWorld(true);
-      updateLocation();
-      updateInteractionPrompt();
+      const candidates = [
+        qa,
+        { x: target.x + 1.35, y: qa.y, z: target.z },
+        { x: target.x - 1.35, y: qa.y, z: target.z },
+        { x: target.x, y: qa.y, z: target.z + 1.35 },
+        { x: target.x, y: qa.y, z: target.z - 1.35 },
+        { x: target.x + 1.05, y: qa.y, z: target.z + 1.05 },
+        { x: target.x - 1.05, y: qa.y, z: target.z + 1.05 },
+      ];
+      let staged = qa;
+      for (const candidate of candidates) {
+        const yaw = Math.atan2(
+          -(target.x - candidate.x),
+          -(target.z - candidate.z),
+        );
+        teleport(candidate.x, candidate.y, candidate.z, yaw, -0.32);
+        syncCamera();
+        const horizontal = Math.max(
+          0.001,
+          Math.hypot(target.x - camera.position.x, target.z - camera.position.z),
+        );
+        state.pitch = Math.atan2(target.y + 0.2 - camera.position.y, horizontal);
+        syncCamera();
+        camera.updateMatrixWorld(true);
+        updateLocation();
+        updateInteractionPrompt();
+        staged = candidate;
+        if (state.currentInteraction?.id === entry.config.id) break;
+      }
       return {
         itemId: entry.config.id,
         label: entry.config.label,
         room: state.currentRoom,
         prompt: state.currentInteraction?.getLabel() || null,
+        qaPosition: { x: staged.x, y: staged.y, z: staged.z },
+        phase: this.show.phase,
+        activeItemId: this.activeGoldItemId(),
+        visible: Boolean(entry.root.visible),
+        registered: entry.registered,
+        gameOver: state.gameOver?.reason || null,
       };
     }
 
@@ -24582,6 +25173,35 @@
         returnedCount: this.show.returnedIds.length,
         room: state.currentRoom,
         prompt: state.currentInteraction?.getLabel() || null,
+      };
+    }
+
+    stageStatueLookForQA(observed = true) {
+      if (!state.qa || !physics || !this.isHunting()) return null;
+      teleport(
+        0,
+        FLOOR.MAIN,
+        9.45,
+        observed ? 0 : Math.PI,
+        -0.04,
+      );
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      updateInteractionPrompt();
+      return {
+        observed: Boolean(observed),
+        room: state.currentRoom,
+        statues: this.statueDiagnostics(),
+      };
+    }
+
+    advanceHostPatrolForQA(seconds = 20, stageAtRouteStart = false) {
+      if (!state.qa || !this.isHunting() || !mrFeastNpc) return null;
+      this.syncHostPatrol();
+      return {
+        ...mrFeastNpc.runCompetitionPatrolForQA(seconds, Boolean(stageAtRouteStart)),
+        activeItemId: this.activeGoldItemId(),
       };
     }
 
@@ -24659,8 +25279,8 @@
 
     statueDiagnostics() {
       const normalizeDelta = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
-      const entries = FEAST_HUNT.statueTurns.map((turn) => {
-        const entry = estateStatueScene.statues.find((statue) => statue.id === turn.id);
+      const entries = FEAST_HUNT.statueCreep.ids.map((id) => {
+        const entry = estateStatueScene.statues.find((statue) => statue.id === id);
         const root = entry?.root || null;
         const placement = entry?.placement || null;
         const positionDelta = root && placement
@@ -24691,9 +25311,10 @@
           && Math.abs(normalizeDelta(root.rotation.y, placement.rotationY)) > 0.01
         );
         return {
-          id: turn.id,
+          id,
           positionUnchanged,
           positionDelta: positionDelta == null ? null : Number(positionDelta.toFixed(4)),
+          lastStepDistance: Number((this.show.statueLastStepById[id] || 0).toFixed(4)),
           position: root ? {
             x: Number(root.position.x.toFixed(4)),
             y: Number(root.position.y.toFixed(4)),
@@ -24703,6 +25324,11 @@
           rotationChanged,
           rotationY: root ? Number(root.rotation.y.toFixed(4)) : null,
           baseRotationY: placement ? Number(placement.rotationY.toFixed(4)) : null,
+          firstFloor: Boolean(
+            root
+            && Math.abs(root.position.y - FLOOR.MAIN)
+              <= FEAST_HUNT.statueCreep.firstFloorToleranceMeters
+          ),
           colliderAligned: colliderOffset != null && colliderOffset <= 0.001,
           colliderOffset: colliderOffset == null ? null : Number(colliderOffset.toFixed(4)),
         };
@@ -24710,6 +25336,12 @@
       return {
         stage: this.show.statueStage,
         movedWhileUnobserved: this.show.statuesMovedWhileUnobserved,
+        observed: this.show.statuesObserved,
+        observationInitialized: this.show.statueObservationInitialized,
+        turnAwayCount: this.show.statueTurnAwayCount,
+        moveEvents: this.show.statueMoveEvents,
+        stepMeters: FEAST_HUNT.statueCreep.stepMeters,
+        firstFloorOnly: entries.every((entry) => entry.firstFloor),
         entries,
       };
     }
@@ -24756,12 +25388,15 @@
         returnedIds: [...this.show.returnedIds],
         carriedItemId: this.show.carriedItemId,
         readyToReturn: this.show.readyToReturn,
+        activeItemId: this.activeGoldItemId(),
+        visibleGoldCount: feastHuntScene.items.filter((entry) => entry.root.visible).length,
         returnStation: {
           visible: Boolean(feastHuntScene.returnRoot?.visible),
           registered: this.returnInteractionRegistered,
           position: { ...FEAST_HUNT.returnMark },
         },
         blackout: this.blackoutDiagnostics(),
+        hostPatrol: mrFeastNpc?.competitionPatrolDiagnostics() || null,
         rival: (() => {
           const entry = mansionContestants?.entryById(FEAST_HUNT.rival.id);
           return {
@@ -24797,6 +25432,10 @@
           position: { ...entry.config.position },
           visualScale: entry.config.visualScale || 1,
           interactionSize: entry.config.interactionSize || 0.78,
+          noticeable: Boolean(entry.config.noticeable),
+          active: entry.config.id === this.activeGoldItemId(),
+          patrolRooms: [...(entry.config.patrolRooms || [])],
+          patrolNodeIds: [...(entry.config.patrolNodeIds || [])],
           visualSize: Object.fromEntries(
             Object.entries(entry.visualSize || {}).map(([key, value]) => [key, Number(value.toFixed(4))]),
           ),
@@ -24855,7 +25494,7 @@
         type: "victory-feast-host-start",
         id: "victory-feast-host-start",
         getLabel: () => this.castReady()
-          ? "Join Mr. Feast at the Victory Feast"
+          ? "Speak with Mr. Feast about the Victory Feast"
           : "Wait for the final guest",
         activate: () => this.reportToDiningRoom(),
       };
@@ -24986,9 +25625,10 @@
         level: MR_FEAST_LEVEL.MAIN,
         responseNodeId: "main-dining-south",
         colliderEnabled: true,
-        interactionsEnabled: false,
+        // Keep Mr. Feast talkable so the feast starts by speaking with him.
         visible: true,
       });
+      mrFeastNpc.setChallengeInteractionsEnabled(true);
       return Boolean(
         mrFeastNpc.challengeStaged
         && mrFeastNpc.challengeMode === "victory-feast"
@@ -25341,6 +25981,34 @@
       updateMovementHud();
     }
 
+    releasePlayerForEscape() {
+      // Dialogue/reveal park the player at playerMark and lock movement. Clear
+      // any seat state and re-enable the capsule so the escape phase is free.
+      if (state.activeSeat) seatingSystem?.standPlayer();
+      if (state.isHidden) state.activeHideSpot?.exit();
+      if (physics?.playerCollider) physics.playerCollider.setEnabled(true);
+      clearMovementInput();
+      state.movement.crouched = false;
+      state.movement.sprinting = false;
+      state.movement.eyeHeight = PLAYER.eye;
+      state.movement.mode = "idle";
+      // Stay on the clear mark (not the guest chair) and keep the reveal facing
+      // so the Saint remains in the beam/sightline when movement returns.
+      teleport(
+        VICTORY_FEAST.playerMark.x,
+        VICTORY_FEAST.playerMark.y,
+        VICTORY_FEAST.playerMark.z,
+        VICTORY_FEAST.reveal.playerYaw,
+        VICTORY_FEAST.reveal.playerPitch,
+      );
+      if (physics) {
+        const body = physics.playerPosition();
+        physics.lastSafePosition = { x: body.x, y: body.y, z: body.z };
+      }
+      updateMovementHud();
+      updateInteractionPrompt();
+    }
+
     startEscape(reason = "lightning-ended") {
       if (this.show.phase === VICTORY_FEAST_PHASE.ESCAPE) {
         return { started: false, reason: "already-escaping" };
@@ -25356,6 +26024,7 @@
       this.transition(VICTORY_FEAST_PHASE.ESCAPE, reason);
       if (victoryFeastScene.revealLight) victoryFeastScene.revealLight.intensity = 0;
       this.releaseHostForEscape();
+      this.releasePlayerForEscape();
       demonPrototypePatrol?.setFinaleMode("escape");
       const saint = demonPrototypePatrol?.saintEntry();
       if (saint?.status === "ready") saint.root.visible = true;
@@ -25462,6 +26131,8 @@
       if (victoryFeastScene.root) victoryFeastScene.root.visible = visible;
       if (victoryFeastScene.reportRoot) victoryFeastScene.reportRoot.visible = visible;
       if (victoryFeastScene.spreadRoot) victoryFeastScene.spreadRoot.visible = visible;
+      // Prefer speaking with Mr. Feast himself. Keep the host-body station as a
+      // secondary aim surface when talk targets are not yet registered.
       this.setStationInteractive(this.show.phase === VICTORY_FEAST_PHASE.CALLED);
     }
 
@@ -27864,11 +28535,12 @@
           ? "The cameras marked you, and Mr. Feast collected you in the basement. The house keeps its guests."
           : "Mr. Feast caught you in the restricted basement. The house keeps its guests.";
     }
-    if (dom.gameOverLoad) dom.gameOverLoad.disabled = !mansionSaveSlot?.has();
+    const hasRecoverySave = availableMansionSaveChoices().length > 0;
+    if (dom.gameOverLoad) dom.gameOverLoad.disabled = !hasRecoverySave;
     if (dom.gameOver) {
       dom.gameOver.hidden = false;
       requestAnimationFrame(() => {
-        const target = mansionSaveSlot?.has() ? dom.gameOverLoad : dom.gameOverRestart;
+        const target = hasRecoverySave ? dom.gameOverLoad : dom.gameOverRestart;
         target?.focus({ preventScroll: true });
       });
     }
@@ -29795,6 +30467,23 @@
       return !blocker;
     }
 
+    probeSightLineForQA(origin, target) {
+      const direction = target.clone().sub(origin);
+      const distance = direction.length();
+      if (distance < 0.0001) return { blocked: false, blocker: null };
+      direction.divideScalar(distance);
+      const cameraState = {
+        lensOrigin: origin.clone(),
+        forward: direction.clone(),
+        blocker: null,
+      };
+      const visible = this.lineOfSight(cameraState, target, direction, distance);
+      return {
+        blocked: !visible,
+        blocker: cameraState.blocker,
+      };
+    }
+
     inspectCamera(cameraState, playerEye) {
       cameraState.playerInCone = false;
       cameraState.hasLineOfSight = false;
@@ -30889,10 +31578,10 @@
       const shell = 0.09;
       const liner = new THREE.MeshStandardMaterial({ color: 0xcfd3cf, emissive: 0xffd6a0, emissiveIntensity: 0.02, roughness: 0.35 });
       this.liner = liner;
-      box({ name: `${name}-back`, w: width, h: height, d: shell, x: 0, y: height / 2, z: -depth / 2 + shell / 2, material: liner, parent: this.root });
-      for (const side of [-1, 1]) box({ name: `${name}-side`, w: shell, h: height, d: depth, x: side * (width / 2 - shell / 2), y: height / 2, z: 0, material: M.enamel, parent: this.root });
-      box({ name: `${name}-top`, w: width, h: shell, d: depth, x: 0, y: height - shell / 2, z: 0, material: M.enamel, parent: this.root });
-      box({ name: `${name}-base`, w: width, h: shell, d: depth, x: 0, y: shell / 2, z: 0, material: M.enamel, parent: this.root });
+      box({ name: `${name}-back`, w: width, h: height, d: shell, x: 0, y: height / 2, z: -depth / 2 + shell / 2, material: liner, parent: this.root, occluder: "refrigerator-back" });
+      for (const side of [-1, 1]) box({ name: `${name}-side`, w: shell, h: height, d: depth, x: side * (width / 2 - shell / 2), y: height / 2, z: 0, material: M.enamel, parent: this.root, occluder: "refrigerator-side" });
+      box({ name: `${name}-top`, w: width, h: shell, d: depth, x: 0, y: height - shell / 2, z: 0, material: M.enamel, parent: this.root, occluder: "refrigerator-side" });
+      box({ name: `${name}-base`, w: width, h: shell, d: depth, x: 0, y: shell / 2, z: 0, material: M.enamel, parent: this.root, occluder: "refrigerator-side" });
       for (const sy of [0.52, 1.02, 1.5]) box({ name: `${name}-glass-shelf`, w: width * 0.84, h: 0.035, d: depth * 0.67, x: 0, y: sy, z: -0.02, material: M.glass, parent: this.root, cast: false });
       const stock = addStockedStorageContents(this.root, name, "refrigerator", width, height, depth);
       this.itemCount = stock.count;
@@ -30902,7 +31591,7 @@
       this.doorPivot = new THREE.Group();
       this.doorPivot.position.set(-width / 2, 0, depth / 2 + 0.035);
       this.root.add(this.doorPivot);
-      this.door = box({ name: `${name}-door`, w: width, h: height * 0.94, d: 0.095, x: width / 2, y: height * 0.52, z: 0, material: M.enamel, parent: this.doorPivot });
+      this.door = box({ name: `${name}-door`, w: width, h: height * 0.94, d: 0.095, x: width / 2, y: height * 0.52, z: 0, material: M.enamel, parent: this.doorPivot, occluder: "refrigerator-door" });
       box({ name: `${name}-freezer-panel`, w: width * 0.88, h: height * 0.28, d: 0.018, x: width / 2, y: height * 0.2, z: 0.058, material: M.agedTrim, parent: this.doorPivot, cast: false });
       const handle = cylinder({ name: `${name}-handle`, radius: 0.026, height: height * 0.46, x: width * 0.88, y: height * 0.66, z: 0.095, material: M.brass, parent: this.doorPivot });
       const interaction = {
@@ -32407,7 +33096,7 @@
     group.position.set(x, floorY, z);
     group.rotation.y = rotationY || 0;
     scene.add(group);
-    box({ name: "table-top", w: width, h: 0.12, d: depth, x: 0, y: 0.79, z: 0, material: material || M.darkWood, parent: group });
+    box({ name: "table-top", w: width, h: 0.12, d: depth, x: 0, y: 0.79, z: 0, material: material || M.darkWood, parent: group, occluder: "table-top" });
     box({ name: "table-apron-long-a", w: width - 0.22, h: 0.18, d: 0.08, x: 0, y: 0.66, z: depth / 2 - 0.09, material: M.blackWood, parent: group, cast: false });
     box({ name: "table-apron-long-b", w: width - 0.22, h: 0.18, d: 0.08, x: 0, y: 0.66, z: -depth / 2 + 0.09, material: M.blackWood, parent: group, cast: false });
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -32428,11 +33117,11 @@
     visual.name = "chair-visual";
     visual.scale.y = heightScale;
     group.add(visual);
-    box({ name: "chair-seat", w: 0.52, h: 0.1, d: 0.5, x: 0, y: 0.48, z: 0, material: material || M.darkWood, parent: visual });
-    box({ name: "chair-cushion", w: 0.46, h: 0.09, d: 0.44, x: 0, y: 0.565, z: -0.01, material: M.chairUpholstery, parent: visual, cast: false });
+    box({ name: "chair-seat", w: 0.52, h: 0.1, d: 0.5, x: 0, y: 0.48, z: 0, material: material || M.darkWood, parent: visual, occluder: "chair-seat" });
+    box({ name: "chair-cushion", w: 0.46, h: 0.09, d: 0.44, x: 0, y: 0.565, z: -0.01, material: M.chairUpholstery, parent: visual, cast: false, occluder: "chair-seat" });
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) cylinder({ name: "chair-leg", radius: 0.035, radiusBottom: 0.045, height: 0.47, segments: 9, x: sx * 0.2, y: 0.235, z: sz * 0.19, material: material || M.darkWood, parent: visual });
     for (const sx of [-1, 1]) cylinder({ name: "chair-back-post", radius: 0.038, height: 0.82, segments: 9, x: sx * 0.22, y: 0.89, z: 0.21, material: material || M.darkWood, parent: visual });
-    box({ name: "chair-back", w: 0.43, h: 0.48, d: 0.065, x: 0, y: 0.9, z: 0.21, material: M.chairUpholstery, parent: visual });
+    box({ name: "chair-back", w: 0.43, h: 0.48, d: 0.065, x: 0, y: 0.9, z: 0.21, material: M.chairUpholstery, parent: visual, occluder: "chair-back" });
     const chairBody = physics.addFixedBox(x, floorY + 0.55, z, 0.56, 1.1, 0.56, rotationY || 0);
     const colliderRecord = physics.fixedBoxes[physics.fixedBoxes.length - 1] || null;
     const seat = seatingSystem?.registerChair({
@@ -32457,12 +33146,12 @@
     visual.name = "sofa-visual";
     visual.scale.y = heightScale;
     group.add(visual);
-    box({ name: "sofa-base", w, h: 0.42, d: 0.9, x: 0, y: 0.31, z: 0, material: M.blackWood, parent: visual });
-    roundedBox({ name: "sofa-seat", w: w - 0.34, h: 0.24, d: 0.7, radius: 0.1, x: 0, y: 0.6, z: -0.04, material: material || M.sofaOxblood, parent: visual });
-    roundedBox({ name: "sofa-back", w: w - 0.2, h: 0.78, d: 0.24, radius: 0.11, x: 0, y: 0.94, z: 0.34, material: material || M.sofaOxblood, parent: visual });
+    box({ name: "sofa-base", w, h: 0.42, d: 0.9, x: 0, y: 0.31, z: 0, material: M.blackWood, parent: visual, occluder: "sofa-base" });
+    roundedBox({ name: "sofa-seat", w: w - 0.34, h: 0.24, d: 0.7, radius: 0.1, x: 0, y: 0.6, z: -0.04, material: material || M.sofaOxblood, parent: visual, occluder: "sofa-seat" });
+    roundedBox({ name: "sofa-back", w: w - 0.2, h: 0.78, d: 0.24, radius: 0.11, x: 0, y: 0.94, z: 0.34, material: material || M.sofaOxblood, parent: visual, occluder: "sofa-back" });
     for (const sx of [-1, 1]) {
-      cylinder({ name: "rolled-sofa-arm", radius: 0.19, height: 0.78, segments: 18, x: sx * (w / 2 - 0.16), y: 0.72, z: 0, rotationX: Math.PI / 2, material: material || M.sofaOxblood, parent: visual });
-      sphere({ name: "sofa-arm-cap", radius: 0.19, x: sx * (w / 2 - 0.16), y: 0.72, z: -0.39, material: material || M.sofaOxblood, parent: visual, cast: true });
+      cylinder({ name: "rolled-sofa-arm", radius: 0.19, height: 0.78, segments: 18, x: sx * (w / 2 - 0.16), y: 0.72, z: 0, rotationX: Math.PI / 2, material: material || M.sofaOxblood, parent: visual, occluder: "sofa-arm" });
+      sphere({ name: "sofa-arm-cap", radius: 0.19, x: sx * (w / 2 - 0.16), y: 0.72, z: -0.39, material: material || M.sofaOxblood, parent: visual, cast: true, occluder: "sofa-arm" });
     }
     for (let i = 1; i < 3; i += 1) box({ name: "sofa-cushion-seam", w: 0.018, h: 0.18, d: 0.66, x: -w / 2 + i * w / 3, y: 0.61, z: -0.04, material: M.blackWood, parent: visual, cast: false });
     for (let i = 0; i < 5; i += 1) sphere({ name: "sofa-button", radius: 0.028, x: -w * 0.32 + i * w * 0.16, y: 0.99, z: 0.225, material: M.brass, parent: visual, cast: false });
@@ -32491,12 +33180,12 @@
     scene.add(group);
     const w = width || 2.0;
     const d = 2.5;
-    box({ name: "bed-frame", w, h: 0.34, d, x: 0, y: 0.32, z: 0, material: M.darkWood, parent: group });
-    box({ name: "bed-mattress", w: w - 0.16, h: 0.24, d: d - 0.2, x: 0, y: 0.61, z: -0.02, material: M.bedLinen, parent: group });
-    box({ name: "bed-coverlet", w: w - 0.2, h: 0.08, d: 1.5, x: 0, y: 0.77, z: -0.3, material: M.bedCoverlet, parent: group, cast: false });
+    box({ name: "bed-frame", w, h: 0.34, d, x: 0, y: 0.32, z: 0, material: M.darkWood, parent: group, occluder: "bed-frame" });
+    box({ name: "bed-mattress", w: w - 0.16, h: 0.24, d: d - 0.2, x: 0, y: 0.61, z: -0.02, material: M.bedLinen, parent: group, occluder: "bed-mattress" });
+    box({ name: "bed-coverlet", w: w - 0.2, h: 0.08, d: 1.5, x: 0, y: 0.77, z: -0.3, material: M.bedCoverlet, parent: group, cast: false, occluder: "bed-coverlet" });
     for (const sx of [-0.22, 0.22]) roundedBox({ name: "bed-pillow", w: w * 0.4, h: 0.16, d: 0.55, radius: 0.07, x: sx * w, y: 0.8, z: 0.75, material: M.bedLinen, parent: group, cast: false });
-    box({ name: "bed-headboard", w: w + 0.18, h: 1.55, d: 0.18, x: 0, y: 0.9, z: d / 2, material: M.darkWood, parent: group });
-    box({ name: "bed-headboard-upholstery", w: w - 0.28, h: 0.92, d: 0.05, x: 0, y: 1.08, z: d / 2 - 0.12, material: M.bedHeadboard, parent: group, cast: false });
+    box({ name: "bed-headboard", w: w + 0.18, h: 1.55, d: 0.18, x: 0, y: 0.9, z: d / 2, material: M.darkWood, parent: group, occluder: "bed-headboard" });
+    box({ name: "bed-headboard-upholstery", w: w - 0.28, h: 0.92, d: 0.05, x: 0, y: 1.08, z: d / 2 - 0.12, material: M.bedHeadboard, parent: group, cast: false, occluder: "bed-headboard" });
     if (canopy) {
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) cylinder({ name: "canopy-post", radius: 0.045, height: 2.65, segments: 10, x: sx * (w / 2 + 0.02), y: 1.325, z: sz * (d / 2 + 0.02), material: M.darkWood, parent: group });
       box({ name: "canopy-top-front", w: w + 0.18, h: 0.1, d: 0.1, x: 0, y: 2.62, z: d / 2, material: M.darkWood, parent: group });
@@ -32938,13 +33627,13 @@
     const h = height || 2.75;
     const reservedBookSlots = options?.reservedBookSlots || [];
     const reservedSlots = new Set(reservedBookSlots.map(({ shelf, slot }) => `${shelf}:${slot}`));
-    box({ name: "bookcase-back", w, h, d: 0.18, x: 0, y: h / 2, z: 0.18, material: M.blackWood, parent: group });
-    for (const sx of [-1, 1]) box({ name: "bookcase-side", w: 0.14, h: h + 0.1, d: 0.44, x: sx * (w / 2 - 0.07), y: h / 2, z: 0, material: M.darkWood, parent: group });
+    box({ name: "bookcase-back", w, h, d: 0.18, x: 0, y: h / 2, z: 0.18, material: M.blackWood, parent: group, occluder: "bookcase-back" });
+    for (const sx of [-1, 1]) box({ name: "bookcase-side", w: 0.14, h: h + 0.1, d: 0.44, x: sx * (w / 2 - 0.07), y: h / 2, z: 0, material: M.darkWood, parent: group, occluder: "bookcase-side" });
     const bookTransforms = M.bookPalette.map(() => []);
     const readableRows = [];
     for (let shelf = 0; shelf < 5; shelf += 1) {
       const sy = 0.14 + shelf * (h - 0.25) / 4;
-      box({ name: "bookcase-shelf", w: w - 0.12, h: 0.09, d: 0.46, x: 0, y: sy, z: 0, material: M.darkWood, parent: group });
+      box({ name: "bookcase-shelf", w: w - 0.12, h: 0.09, d: 0.46, x: 0, y: sy, z: 0, material: M.darkWood, parent: group, occluder: "bookcase-shelf" });
       if (shelf < 4) {
         const count = Math.floor(w / 0.16);
         const rowEntries = [];
@@ -33253,11 +33942,13 @@
     shape.lineTo(-1.2, 0.68);
     shape.closePath();
     const lid = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.12, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.04, bevelSegments: 2 }), M.blackWood);
+    lid.name = "piano-lid";
     lid.rotation.x = Math.PI / 2;
     lid.position.y = 1.03;
     lid.castShadow = true;
     group.add(lid);
-    box({ name: "piano-key-bed", w: 1.7, h: 0.18, d: 0.62, x: -0.35, y: 0.84, z: -0.74, material: M.blackWood, parent: group });
+    registerSightOccluder(lid, "piano-body");
+    box({ name: "piano-key-bed", w: 1.7, h: 0.18, d: 0.62, x: -0.35, y: 0.84, z: -0.74, material: M.blackWood, parent: group, occluder: "piano-body" });
     const keys = [];
     for (let i = 0; i < 18; i += 1) {
       const key = box({ name: "piano-key", w: 0.078, h: 0.035, d: 0.42, x: -1.13 + i * 0.082, y: 0.95, z: -0.84, material: i % 3 === 1 ? M.iron : M.porcelain, parent: group, cast: false });
@@ -33329,8 +34020,8 @@
     canvasMount.position.set(0, 1.385, 0.015);
     canvasMount.rotation.x = -0.07;
     easel.add(canvasMount);
-    box({ name: "painting-room-unfinished-linen", w: 0.96, h: 1.2, d: 0.055, x: 0, y: 0, z: 0, material: M.canvasLinen, parent: canvasMount });
-    box({ name: "painting-room-easel-canvas-back", w: 0.9, h: 1.14, d: 0.018, x: 0, y: 0, z: -0.036, material: M.canvasLinen, parent: canvasMount, cast: false });
+    box({ name: "painting-room-unfinished-linen", w: 0.96, h: 1.2, d: 0.055, x: 0, y: 0, z: 0, material: M.canvasLinen, parent: canvasMount, occluder: "easel-canvas" });
+    box({ name: "painting-room-easel-canvas-back", w: 0.9, h: 1.14, d: 0.018, x: 0, y: 0, z: -0.036, material: M.canvasLinen, parent: canvasMount, cast: false, occluder: "easel-canvas" });
     for (const yOffset of [-0.42, 0.42]) {
       box({ name: "painting-room-easel-stretcher-horizontal", w: 0.78, h: 0.052, d: 0.055, x: 0, y: yOffset, z: -0.068, material: M.darkWood, parent: canvasMount });
     }
@@ -33380,9 +34071,9 @@
     group.position.set(x, floorY, z);
     group.rotation.y = rotationY || 0;
     scene.add(group);
-    box({ name: "kitchen-range-body", w: 1.45, h: 0.88, d: 0.72, x: 0, y: 0.44, z: 0, material: M.enamel, parent: group });
-    box({ name: "kitchen-range-cooktop", w: 1.48, h: 0.07, d: 0.75, x: 0, y: 0.915, z: 0, material: M.iron, parent: group });
-    box({ name: "kitchen-oven-door", w: 1.14, h: 0.52, d: 0.065, x: 0, y: 0.42, z: -0.395, material: M.iron, parent: group });
+    box({ name: "kitchen-range-body", w: 1.45, h: 0.88, d: 0.72, x: 0, y: 0.44, z: 0, material: M.enamel, parent: group, occluder: "kitchen-range" });
+    box({ name: "kitchen-range-cooktop", w: 1.48, h: 0.07, d: 0.75, x: 0, y: 0.915, z: 0, material: M.iron, parent: group, occluder: "kitchen-range" });
+    box({ name: "kitchen-oven-door", w: 1.14, h: 0.52, d: 0.065, x: 0, y: 0.42, z: -0.395, material: M.iron, parent: group, occluder: "kitchen-range" });
     box({ name: "kitchen-oven-window", w: 0.88, h: 0.31, d: 0.018, x: 0, y: 0.43, z: -0.435, material: M.glass, parent: group, cast: false });
     cylinder({ name: "kitchen-oven-handle", radius: 0.027, height: 0.92, x: 0, y: 0.7, z: -0.465, rotationZ: Math.PI / 2, material: M.brass, parent: group, cast: false });
     for (const sx of [-0.45, -0.15, 0.15, 0.45]) cylinder({ name: "kitchen-range-knob", radius: 0.055, height: 0.08, segments: 12, x: sx, y: 0.8, z: -0.44, rotationX: Math.PI / 2, material: M.brass, parent: group });
@@ -33397,8 +34088,8 @@
     // the glass and suspend the hood in front of the curtain plane rather than
     // letting its old wall-backed canopy pass through both window treatments.
     box({ name: "kitchen-range-low-backsplash", w: 1.62, h: 0.2, d: 0.045, x: 0, y: 1.11, z: 0.37, material: M.marble, parent: group, cast: false, receive: true });
-    box({ name: "kitchen-range-hood-canopy", w: 1.68, h: 0.2, d: 0.64, x: 0, y: 1.82, z: -0.24, material: M.iron, parent: group });
-    box({ name: "kitchen-range-hood-flue", w: 0.62, h: 1.48, d: 0.3, x: 0, y: 2.56, z: -0.18, material: M.iron, parent: group });
+    box({ name: "kitchen-range-hood-canopy", w: 1.68, h: 0.2, d: 0.64, x: 0, y: 1.82, z: -0.24, material: M.iron, parent: group, occluder: "kitchen-range" });
+    box({ name: "kitchen-range-hood-flue", w: 0.62, h: 1.48, d: 0.3, x: 0, y: 2.56, z: -0.18, material: M.iron, parent: group, occluder: "kitchen-range" });
     for (const sx of [-0.42, 0.42]) {
       const taskMaterial = new THREE.MeshStandardMaterial({ color: 0xffe1ae, emissive: 0xffa957, emissiveIntensity: 1.15, roughness: 0.28 });
       const taskBulb = box({ name: "kitchen-range-hood-task-light", w: 0.34, h: 0.028, d: 0.16, x: sx, y: 1.705, z: -0.5, material: taskMaterial, parent: group, cast: false, receive: false });
@@ -33599,8 +34290,8 @@
     group.rotation.y = rotationY || 0;
     scene.add(group);
     const w = width || 2.5;
-    box({ name: "wine-rack-frame", w, h: 2.25, d: 0.42, x: 0, y: 1.125, z: 0, material: M.darkWood, parent: group });
-    box({ name: "wine-rack-void", w: w - 0.18, h: 2.04, d: 0.44, x: 0, y: 1.13, z: -0.03, material: M.soot, parent: group, cast: false });
+    box({ name: "wine-rack-frame", w, h: 2.25, d: 0.42, x: 0, y: 1.125, z: 0, material: M.darkWood, parent: group, occluder: "wine-rack" });
+    box({ name: "wine-rack-void", w: w - 0.18, h: 2.04, d: 0.44, x: 0, y: 1.13, z: -0.03, material: M.soot, parent: group, cast: false, occluder: "wine-rack" });
     const bottleTransforms = [[], []];
     for (let row = 0; row < 5; row += 1) for (let col = 0; col < Math.floor(w / 0.32); col += 1) {
       bottleTransforms[row % 2].push({ x: -w / 2 + 0.22 + col * 0.31, y: 0.28 + row * 0.39, z: -0.2, tilt: (col % 2 ? 1 : -1) * 0.03 });
@@ -33625,7 +34316,7 @@
   }
 
   function addBoiler(x, z, floorY) {
-    cylinder({ name: "riveted-boiler", radius: 0.74, height: 2.25, segments: 22, x, y: floorY + 1.12, z, material: M.iron });
+    cylinder({ name: "riveted-boiler", radius: 0.74, height: 2.25, segments: 22, x, y: floorY + 1.12, z, material: M.iron, occluder: "boiler" });
     for (const sy of [0.4, 1.12, 1.84]) {
       const ring = new THREE.Mesh(new THREE.TorusGeometry(0.75, 0.045, 8, 28), M.brass);
       ring.position.set(x, floorY + sy, z);
@@ -34734,6 +35425,13 @@
       metalness: 0.82,
       roughness: 0.28,
     });
+    const knifeGold = new THREE.MeshStandardMaterial({
+      color: 0xffd568,
+      emissive: 0x6f3c08,
+      emissiveIntensity: 0.74,
+      metalness: 0.92,
+      roughness: 0.16,
+    });
     const hitboxMaterial = new THREE.MeshBasicMaterial({
       transparent: true,
       opacity: 0,
@@ -34844,7 +35542,7 @@
           bevelThickness: 0.003,
         });
         bladeGeometry.rotateX(-Math.PI / 2);
-        const blade = new THREE.Mesh(bladeGeometry, gold);
+        const blade = new THREE.Mesh(bladeGeometry, knifeGold);
         blade.name = "feast-hunt-golden-carving-knife-blade";
         blade.position.y = 0.018;
         blade.castShadow = true;
@@ -34869,7 +35567,7 @@
           radius: 0.008,
           x: -0.025,
           y: 0.024,
-          material: darkGold,
+          material: knifeGold,
           parent: visualRoot,
         });
         for (const x of [-0.15, -0.095]) {
@@ -34880,7 +35578,7 @@
             segments: 10,
             x,
             y: 0.023,
-            material: gold,
+            material: knifeGold,
             parent: visualRoot,
           });
         }
@@ -34966,6 +35664,8 @@
       });
     }
     victoryFeastScene.filmSets.push(northSet, southSet);
+    // Host-body report hitbox sits on Mr. Feast (reportRoot is at hostMark),
+    // matching the other competitions' film-set host start targets.
     const reportMark = VICTORY_FEAST.reportInteractionMark;
     const reportHitbox = new THREE.Mesh(
       new THREE.BoxGeometry(
@@ -34980,11 +35680,7 @@
       }),
     );
     reportHitbox.name = "victory-feast-report-hitbox";
-    reportHitbox.position.set(
-      reportMark.x - VICTORY_FEAST.hostMark.x,
-      reportMark.height / 2,
-      reportMark.z - VICTORY_FEAST.hostMark.z,
-    );
+    reportHitbox.position.set(0, reportMark.height / 2, 0);
     reportRoot.add(reportHitbox);
     victoryFeastScene.reportHitbox = reportHitbox;
 
@@ -41207,6 +41903,10 @@
 
   function setStageOverlayInert(activeOverlay, active, { keepCanvasInteractive = false } = {}) {
     if (!dom.stage || !activeOverlay) return;
+    // An overlay can itself have been made inert by the dialog underneath it
+    // (for example, the save picker opened from the paused menu). Promote the
+    // new topmost dialog before disabling its siblings.
+    if (active) activeOverlay.inert = false;
     for (const child of dom.stage.children) {
       if (child === activeOverlay) continue;
       // Making the pointer-lock target inert forces browsers to drop lock and
@@ -41218,6 +41918,223 @@
       }
       child.inert = Boolean(active);
     }
+  }
+
+  function checkpointAutosaveBlockers() {
+    const blockers = [];
+    const transientCompetition = Boolean(
+      [FEAST_SAYS_PHASE.BRIEFING, FEAST_SAYS_PHASE.COMMAND, FEAST_SAYS_PHASE.RESULT]
+        .includes(feastSaysSystem?.show.phase)
+      || [STORM_RUN_PHASE.BRIEFING, STORM_RUN_PHASE.RUNNING]
+        .includes(stormRunSystem?.show.phase)
+      || [FEAST_HUNT_PHASE.BRIEFING, FEAST_HUNT_PHASE.HUNTING]
+        .includes(feastHuntSystem?.show.phase)
+      || [VICTORY_FEAST_PHASE.DIALOGUE, VICTORY_FEAST_PHASE.REVEAL, VICTORY_FEAST_PHASE.ESCAPE]
+        .includes(victoryFeastSystem?.show.phase)
+    );
+    if (!state.ready || !state.started || !physics || !contestant13Quest) blockers.push("not-playing");
+    if (openingWelcomeSystem?.active) blockers.push("opening-welcome");
+    if (state.devMode) blockers.push("dev-mode");
+    if (state.gameOver) blockers.push("game-over");
+    if (state.menuOpen) blockers.push("menu-open");
+    if (state.loadChooserOpen) blockers.push("load-chooser-open");
+    if (state.journalOpen || state.readableBooks.open || state.workroom.keypadOpen) blockers.push("blocking-overlay");
+    if (state.contestant13.actionInProgress) blockers.push("timed-interaction");
+    if (state.isHidden || state.activeHideSpot) blockers.push("hiding");
+    if (state.activeSeat) blockers.push("seated");
+    if (throwableDistractionSystem?.carried) blockers.push("carrying-throwable");
+    if (transientCompetition) blockers.push("live-competition");
+    if (mrFeastNpc?.pursuit?.active) blockers.push("active-pursuit");
+    if (mrFeastNpc?.pursuit?.cooldownActive || mrFeastNpc?.cameraSearch?.active) blockers.push("active-search");
+    return blockers;
+  }
+
+  function currentCheckpointAutosaveDefinition() {
+    const quest = contestant13Quest?.getQuestSnapshot();
+    if (!quest) return null;
+    const scratches = Array.isArray(quest.workroomScratches) ? quest.workroomScratches.length : 0;
+    if (feastHuntSystem?.show.phase === FEAST_HUNT_PHASE.COMPLETED) {
+      return { id: "feast-hunt-complete", label: "Feast Hunt complete" };
+    }
+    if (quest.relaySabotaged) {
+      return { id: "patron-feed-disabled", label: "Patron feed disabled" };
+    }
+    if (quest.workroomUnlocked) {
+      return { id: "workroom-unlocked", label: "Workroom unlocked" };
+    }
+    if (quest.recordingPlayed) {
+      return { id: "archive-evidence", label: "Archive evidence recovered" };
+    }
+    if (quest.archiveCageUnlocked) {
+      return { id: "archive-opened", label: "Archive cage opened" };
+    }
+    if (quest.basementUnlocked) {
+      return { id: "basement-opened", label: "Basement opened" };
+    }
+    if (stormRunSystem?.show.phase === STORM_RUN_PHASE.COMPLETED) {
+      return { id: "storm-run-complete", label: "Storm Run complete" };
+    }
+    if (quest.basementKeyFound) {
+      return { id: "basement-key", label: "Basement key recovered" };
+    }
+    if (feastSaysSystem?.show.phase === FEAST_SAYS_PHASE.COMPLETED) {
+      return { id: "feast-says-complete", label: "Feast Says complete" };
+    }
+    if (quest.bookRead || quest.shovelTaken || quest.digSiteExcavated || scratches > 0) {
+      return { id: "first-investigation-clue", label: "First investigation clue" };
+    }
+    if (openingWelcomeSystem?.completed) {
+      return { id: "welcome-complete", label: "Welcome complete" };
+    }
+    return null;
+  }
+
+  function captureCheckpointAutosave(checkpoint) {
+    const checkpointId = String(checkpoint?.id || "").trim();
+    const checkpointLabel = String(checkpoint?.label || "").trim();
+    const blockers = checkpointAutosaveBlockers();
+    if (!checkpointId || !checkpointLabel) blockers.push("invalid-checkpoint");
+    if (blockers.length) return { saved: false, checkpointId: checkpointId || null, blockers };
+    const payload = serializeMansionSave();
+    if (!payload) return { saved: false, checkpointId, blockers: ["serialization-unavailable"] };
+    const existing = readCheckpointAutosaves();
+    const newestSavedAt = existing.reduce((newest, entry) => Math.max(newest, Number(entry.savedAt) || 0), 0);
+    const savedAt = Math.max(Date.now(), newestSavedAt + 1);
+    const entry = {
+      version: CHECKPOINT_AUTOSAVES.version,
+      savedAt,
+      meta: {
+        type: "autosave",
+        checkpointId,
+        checkpointLabel,
+        room: state.currentRoom,
+        objective: contestant13Quest?.getObjective() || "",
+      },
+      data: payload,
+    };
+    const entries = [
+      entry,
+      ...existing.filter((candidate) => candidate.meta?.checkpointId !== checkpointId),
+    ].slice(0, CHECKPOINT_AUTOSAVES.maximumSlots);
+    const saved = writeCheckpointAutosaves(entries);
+    if (saved) lastCheckpointAutosaveId = checkpointId;
+    return {
+      saved,
+      checkpointId,
+      blockers: saved ? [] : ["storage-unavailable"],
+      entries: saved ? entries.length : existing.length,
+    };
+  }
+
+  function attemptAutomaticCheckpointAutosave() {
+    const checkpoint = currentCheckpointAutosaveDefinition();
+    if (!checkpoint || checkpoint.id === lastCheckpointAutosaveId) return null;
+    return captureCheckpointAutosave(checkpoint);
+  }
+
+  function getCheckpointAutosaveDiagnostics() {
+    return {
+      storageKey: CHECKPOINT_AUTOSAVES.storageKey,
+      version: CHECKPOINT_AUTOSAVES.version,
+      maximumSlots: CHECKPOINT_AUTOSAVES.maximumSlots,
+      lastCheckpointId: lastCheckpointAutosaveId,
+      blockers: checkpointAutosaveBlockers(),
+      currentCheckpoint: currentCheckpointAutosaveDefinition(),
+      entries: readCheckpointAutosaves().map((entry) => ({
+        checkpointId: entry.meta.checkpointId,
+        checkpointLabel: entry.meta.checkpointLabel,
+        room: entry.meta.room || "",
+        objective: entry.meta.objective || "",
+        savedAt: entry.savedAt,
+        playerPosition: { ...entry.data.playerPosition },
+      })),
+    };
+  }
+
+  function formatSaveChoiceTime(savedAt) {
+    const date = new Date(savedAt || 0);
+    if (Number.isNaN(date.getTime())) return "Unknown time";
+    return date.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  function availableMansionSaveChoices() {
+    const choices = [];
+    const manual = mansionSaveSlot?.read() || null;
+    if (manual) {
+      choices.push({
+        source: "manual",
+        checkpointId: null,
+        label: "Manual Save",
+        saved: manual,
+      });
+    }
+    for (const saved of readCheckpointAutosaves()) {
+      choices.push({
+        source: "autosave",
+        checkpointId: saved.meta.checkpointId,
+        label: `Autosave · ${saved.meta.checkpointLabel || "Safe checkpoint"}`,
+        saved,
+      });
+    }
+    return choices;
+  }
+
+  function closeLoadChooser({ restoreFocus = true } = {}) {
+    if (!state.loadChooserOpen) return false;
+    state.loadChooserOpen = false;
+    if (dom.loadChooser) dom.loadChooser.hidden = true;
+    setStageOverlayInert(dom.loadChooser, false);
+    if (state.menuOpen && dom.menu) setStageOverlayInert(dom.menu, true);
+    const focusTarget = loadChooserReturnFocus;
+    loadChooserReturnFocus = null;
+    if (restoreFocus) focusTarget?.focus?.({ preventScroll: true });
+    return true;
+  }
+
+  function openLoadChooser(returnFocus = document.activeElement) {
+    const choices = availableMansionSaveChoices();
+    if (!choices.length || !dom.loadChooser || !dom.loadChoices) {
+      setMenuStatus("No compatible save found.");
+      updateMenuControls();
+      return false;
+    }
+    loadChooserReturnFocus = returnFocus instanceof HTMLElement ? returnFocus : null;
+    dom.loadChoices.replaceChildren();
+    for (const choice of choices) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "mansion-load-chooser__choice";
+      button.dataset.saveSource = choice.source;
+      if (choice.checkpointId) button.dataset.checkpointId = choice.checkpointId;
+      const source = document.createElement("span");
+      source.className = "mansion-load-chooser__source";
+      source.textContent = choice.label;
+      const detail = document.createElement("span");
+      detail.className = "mansion-load-chooser__detail";
+      const room = String(choice.saved.meta?.room || "Unknown room").trim();
+      detail.textContent = `${room} · ${formatSaveChoiceTime(choice.saved.savedAt)}`;
+      button.append(source, detail);
+      button.setAttribute("aria-label", `${choice.label}, ${detail.textContent}`);
+      button.addEventListener("click", () => {
+        closeLoadChooser({ restoreFocus: false });
+        loadMansionGame(choice.saved, {
+          source: choice.source,
+          checkpointId: choice.checkpointId,
+          checkpointLabel: choice.saved.meta?.checkpointLabel || "",
+        });
+      });
+      dom.loadChoices.append(button);
+    }
+    state.loadChooserOpen = true;
+    dom.loadChooser.hidden = false;
+    setStageOverlayInert(dom.loadChooser, true);
+    requestAnimationFrame(() => dom.loadChoices.querySelector("button")?.focus({ preventScroll: true }));
+    return true;
   }
 
   function formatIntroSaveSummary(saved) {
@@ -41240,18 +42157,20 @@
   }
 
   function updateIntroMenuControls(saved = mansionSaveSlot?.read() || null) {
-    const hasSave = Boolean(saved);
+    const autosaves = readCheckpointAutosaves();
+    const compatibleManual = saved || null;
+    const hasSave = Boolean(compatibleManual || autosaves.length);
     const ready = Boolean(state.ready && !state.loadFailed && !state.started);
     if (dom.introLoad) {
       if (!ready) {
         dom.introLoad.disabled = true;
         dom.introLoad.setAttribute("aria-disabled", "true");
         if (!state.ready && !state.loadFailed) {
-          dom.introLoad.textContent = "Load save";
+          dom.introLoad.textContent = "Choose save";
         } else if (!hasSave) {
           dom.introLoad.textContent = "No save yet";
         } else {
-          dom.introLoad.textContent = "Load save";
+          dom.introLoad.textContent = "Choose save";
         }
       } else if (!hasSave) {
         dom.introLoad.disabled = true;
@@ -41260,13 +42179,21 @@
       } else {
         dom.introLoad.disabled = false;
         dom.introLoad.removeAttribute("aria-disabled");
-        dom.introLoad.textContent = "Load save";
+        dom.introLoad.textContent = "Choose save";
       }
     }
     if (dom.introSaveStatus) {
       if (ready && hasSave) {
+        const newest = [compatibleManual, ...autosaves]
+          .filter(Boolean)
+          .sort((a, b) => Number(b.savedAt || 0) - Number(a.savedAt || 0))[0];
         dom.introSaveStatus.hidden = false;
-        dom.introSaveStatus.textContent = formatIntroSaveSummary(saved);
+        const sourceSummary = autosaves.length
+          ? `${compatibleManual ? "Manual + " : ""}${autosaves.length} autosave${autosaves.length === 1 ? "" : "s"}`
+          : "";
+        dom.introSaveStatus.textContent = sourceSummary
+          ? `${formatIntroSaveSummary(newest)} · ${sourceSummary}`
+          : formatIntroSaveSummary(newest);
       } else {
         dom.introSaveStatus.hidden = true;
         dom.introSaveStatus.textContent = "";
@@ -41467,6 +42394,7 @@
   function updateExteriorDetailCulling() {
     const p = physics.playerPosition();
     const isOutdoor = outdoorRoomNames.has(state.currentRoom);
+    const banquetInteriorView = Boolean(state.gameOver && banquetLossSystem?.active());
     const houseDx = Math.max(Math.abs(p.x) - 15, 0);
     const houseDz = Math.max(Math.abs(p.z) - 12, 0);
     const distanceFromHouse = Math.hypot(houseDx, houseDz);
@@ -41477,11 +42405,15 @@
     // player reaches an exterior threshold. Far-yard culling still protects
     // performance, but it can no longer create a black interior with live
     // invisible colliders at the doorway.
-    const shouldHide = isOutdoor && !nearHouse;
+    // The banquet loss camera is staged inside the Dining Room while the
+    // captured player's frozen physics body remains at the catch position.
+    // Give that presentation the complete indoor shell instead of repeatedly
+    // reapplying the outdoor body's far-yard culling mask during game over.
+    const shouldHide = !banquetInteriorView && isOutdoor && !nearHouse;
     const magnitude = Math.max(0.001, Math.hypot(p.x, p.z));
     const nx = p.x / magnitude;
     const nz = p.z / magnitude;
-    const visibleSides = isOutdoor ? new Set([
+    const visibleSides = isOutdoor && !banquetInteriorView ? new Set([
       ...(nz > 0.35 ? ["front"] : []),
       ...(nz < -0.35 ? ["rear"] : []),
       ...(nx < -0.35 ? ["west"] : []),
@@ -41714,8 +42646,7 @@
     return saved;
   }
 
-  function loadMansionGame() {
-    const saved = mansionSaveSlot?.read() || null;
+  function loadMansionGame(saved = mansionSaveSlot?.read() || null, options = {}) {
     if (!saved) {
       setMenuStatus("No compatible save found.");
       updateMenuControls();
@@ -41735,14 +42666,26 @@
           dom.introSaveStatus.hidden = false;
           dom.introSaveStatus.textContent = "This save could not be restored. Start a new game instead.";
         }
+      } else {
+        lastCheckpointAutosaveId = options.checkpointId || currentCheckpointAutosaveDefinition()?.id || null;
+        setMenuStatus(options.source === "autosave"
+          ? `Saved game restored from autosave: ${options.checkpointLabel || "safe checkpoint"}.`
+          : "Saved game restored from your manual save.");
       }
       return started;
     }
     // Loading is time travel: any capture, pursuit, errand, or tilted
     // decor in flight belongs to the abandoned timeline.
     const loaded = applyLoadedSaveState(saved);
-    setMenuStatus(loaded ? "Saved game restored." : "No compatible save found.");
-    if (loaded) setMenuOpen(false);
+    setMenuStatus(loaded
+      ? options.source === "autosave"
+        ? `Saved game restored from autosave: ${options.checkpointLabel || "safe checkpoint"}.`
+        : "Saved game restored from your manual save."
+      : "No compatible save found.");
+    if (loaded) {
+      lastCheckpointAutosaveId = options.checkpointId || currentCheckpointAutosaveDefinition()?.id || null;
+      if (state.menuOpen) setMenuOpen(false);
+    }
     updateMenuControls();
     return loaded;
   }
@@ -41753,7 +42696,7 @@
 
   function updateMenuControls() {
     const saved = mansionSaveSlot?.read() || null;
-    const hasSave = Boolean(saved);
+    const hasSave = Boolean(saved || readCheckpointAutosaves().length);
     const welcomeActive = Boolean(openingWelcomeSystem?.active);
     const feastSaysActive = Boolean(feastSaysSystem?.isPlaying());
     if (dom.menuLoad) dom.menuLoad.disabled = !hasSave || welcomeActive;
@@ -41936,7 +42879,12 @@
       if (dom.menu) dom.menu.hidden = false;
       setStageOverlayInert(dom.menu, true);
       updateMenuControls();
-      if (!mansionSaveSlot?.has()) setMenuStatus("Progress is not autosaved.");
+      const autosaves = readCheckpointAutosaves();
+      if (!availableMansionSaveChoices().length) {
+        setMenuStatus("No save yet. Checkpoint autosaves begin after the welcome.");
+      } else if (autosaves.length) {
+        setMenuStatus(`Checkpoint autosaves ready: ${autosaves.length} of ${CHECKPOINT_AUTOSAVES.maximumSlots}.`);
+      }
       requestAnimationFrame(() => dom.menuResume?.focus({ preventScroll: true }));
       return;
     }
@@ -42035,6 +42983,26 @@
     }, true);
     window.addEventListener("keydown", (event) => {
       if (audioSystem) void audioSystem.resumeIfInterrupted();
+      if (state.loadChooserOpen) {
+        if (event.code === "Escape") {
+          event.preventDefault();
+          closeLoadChooser();
+          return;
+        }
+        if (event.code === "Tab" && dom.loadChooser) {
+          const focusable = Array.from(dom.loadChooser.querySelectorAll("button:not([disabled])"));
+          if (focusable.length) {
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (focusable.length === 1 || (!event.shiftKey && document.activeElement === last) || (event.shiftKey && document.activeElement === first)) {
+              event.preventDefault();
+              (event.shiftKey ? last : first).focus();
+            }
+          }
+          return;
+        }
+        return;
+      }
       if (state.gameOver) {
         // The fail overlay owns the page: only its focusable buttons react.
         if (event.code === "Escape") event.preventDefault();
@@ -42259,7 +43227,7 @@
     if (dom.bookReader) dom.bookReader.addEventListener("click", (event) => {
       if (event.target === dom.bookReader) readableBookSystem?.close();
     });
-    if (dom.gameOverLoad) dom.gameOverLoad.addEventListener("click", () => loadMansionGame());
+    if (dom.gameOverLoad) dom.gameOverLoad.addEventListener("click", () => openLoadChooser(dom.gameOverLoad));
     if (dom.gameOverRestart) dom.gameOverRestart.addEventListener("click", () => location.reload());
     if (dom.menuResume) {
       // Use pointerdown as the primary Resume gesture and keep retrying lock
@@ -42280,7 +43248,8 @@
       });
     }
     if (dom.menuSave) dom.menuSave.addEventListener("click", saveMansionGame);
-    if (dom.menuLoad) dom.menuLoad.addEventListener("click", loadMansionGame);
+    if (dom.menuLoad) dom.menuLoad.addEventListener("click", () => openLoadChooser(dom.menuLoad));
+    if (dom.loadCancel) dom.loadCancel.addEventListener("click", () => closeLoadChooser());
     if (dom.menuDev) dom.menuDev.addEventListener("click", () => {
       if (!contestant13Quest) return;
       contestant13Quest.setDevMode(!state.devMode);
@@ -43467,6 +44436,11 @@
       dom.debug.textContent = JSON.stringify(getDiagnostics(), null, 2);
       diagnosticsTimer = 0.5;
     }
+    checkpointAutosaveElapsed += rawDt;
+    if (checkpointAutosaveElapsed >= CHECKPOINT_AUTOSAVES.checkIntervalSeconds) {
+      checkpointAutosaveElapsed = 0;
+      attemptAutomaticCheckpointAutosave();
+    }
     renderer.render(scene, camera);
   }
 
@@ -43652,11 +44626,15 @@
       menus: {
         inventoryOpen: state.journalOpen,
         escapeOpen: state.menuOpen,
+        loadChooserOpen: state.loadChooserOpen,
         keypadOpen: state.workroom.keypadOpen,
-        simulationPaused: state.menuOpen || state.workroom.keypadOpen,
+        simulationPaused: state.menuOpen || state.loadChooserOpen || state.workroom.keypadOpen,
         maximized: state.maximized,
-        hasSave: Boolean(mansionSaveSlot?.has()),
+        hasSave: availableMansionSaveChoices().length > 0,
+        hasManualSave: Boolean(mansionSaveSlot?.has()),
+        autosaveCount: readCheckpointAutosaves().length,
       },
+      checkpointAutosaves: getCheckpointAutosaveDiagnostics(),
       devMode: {
         enabled: state.devMode,
         snapshotPresent: Boolean(state.devModeSnapshot),
@@ -44323,6 +45301,22 @@
     );
     window.MrFeastFresh.saveGameForQA = () => state.qa ? saveMansionGame() : false;
     window.MrFeastFresh.loadGameForQA = () => state.qa ? loadMansionGame() : false;
+    window.MrFeastFresh.getCheckpointAutosaves = () => getCheckpointAutosaveDiagnostics();
+    window.MrFeastFresh.captureCheckpointAutosaveForQA = (id, label) => (
+      state.qa
+        ? captureCheckpointAutosave({ id, label })
+        : { saved: false, blockers: ["qa-only"] }
+    );
+    window.MrFeastFresh.clearCheckpointAutosavesForQA = () => {
+      if (!state.qa) return false;
+      try {
+        localStorage.removeItem(CHECKPOINT_AUTOSAVES.storageKey);
+        lastCheckpointAutosaveId = null;
+        return true;
+      } catch (_) {
+        return false;
+      }
+    };
     window.MrFeastFresh.setMenuOpenForQA = (open) => {
       if (!state.qa) return null;
       setMenuOpen(Boolean(open));
@@ -44749,6 +45743,14 @@
     window.MrFeastFresh.advanceFeastHuntForQA = (seconds) => (
       state.qa && feastHuntSystem ? feastHuntSystem.advanceForQA(seconds) : null
     );
+    window.MrFeastFresh.advanceFeastHuntHostPatrolForQA = (seconds, stageAtRouteStart = false) => (
+      state.qa && feastHuntSystem
+        ? feastHuntSystem.advanceHostPatrolForQA(seconds, stageAtRouteStart)
+        : null
+    );
+    window.MrFeastFresh.stageFeastHuntStatueLookForQA = (observed = true) => (
+      state.qa && feastHuntSystem ? feastHuntSystem.stageStatueLookForQA(observed) : null
+    );
     window.MrFeastFresh.placePlayerNearFeastHuntItemForQA = (id) => (
       state.qa && feastHuntSystem ? feastHuntSystem.placePlayerNearItemForQA(id) : null
     );
@@ -44954,6 +45956,92 @@
       return { yaw: Number(state.yaw.toFixed(3)) };
     };
     window.MrFeastFresh.isPlayerHidden = () => state.isHidden;
+    window.MrFeastFresh.probeFurnitureSightOcclusionForQA = () => {
+      if (!state.qa || !mrFeastNpc || !cameraSecurity) return [];
+      scene.updateMatrixWorld(true);
+      const roles = [
+        "table-top",
+        "chair-back",
+        "sofa-back",
+        "bed-headboard",
+        "bookcase-back",
+        "cabinet-back",
+        "cabinet-door",
+        "refrigerator-back",
+        "refrigerator-door",
+        "piano-body",
+        "easel-canvas",
+        "wine-rack",
+        "boiler",
+        "kitchen-range",
+      ];
+      const isEffectivelyVisible = (object) => {
+        let current = object;
+        while (current) {
+          if (!current.visible) return false;
+          current = current.parent;
+        }
+        return true;
+      };
+      const bounds = new THREE.Box3();
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      const probeMesh = (role) => {
+        const candidates = occluderMeshes
+          .filter((mesh) => mesh.userData.sightOccluderRole === role && isEffectivelyVisible(mesh))
+          .map((mesh) => {
+            const meshBounds = new THREE.Box3().setFromObject(mesh);
+            const meshSize = meshBounds.getSize(new THREE.Vector3());
+            return { mesh, meshBounds, volume: meshSize.x * meshSize.y * meshSize.z };
+          })
+          .sort((a, b) => b.volume - a.volume);
+        const selected = candidates[0];
+        if (!selected) return { role, missing: true };
+        bounds.copy(selected.meshBounds);
+        bounds.getSize(size);
+        bounds.getCenter(center);
+        const alongX = size.x <= size.z;
+        const halfSpan = (alongX ? size.x : size.z) / 2 + 0.4;
+        const origin = center.clone();
+        const target = center.clone();
+        if (alongX) {
+          origin.x -= halfSpan;
+          target.x += halfSpan;
+        } else {
+          origin.z -= halfSpan;
+          target.z += halfSpan;
+        }
+        const cameraProbe = cameraSecurity.probeSightLineForQA(origin, target);
+        const mrFeastProbe = mrFeastNpc.traceSightLine(origin, target);
+        const clearanceOrigin = origin.clone();
+        const clearanceTarget = target.clone();
+        clearanceOrigin.y = bounds.max.y + 0.45;
+        clearanceTarget.y = clearanceOrigin.y;
+        const cameraClearance = cameraSecurity.probeSightLineForQA(clearanceOrigin, clearanceTarget);
+        const mrFeastClearance = mrFeastNpc.traceSightLine(clearanceOrigin, clearanceTarget);
+        return {
+          role,
+          name: selected.mesh.name,
+          visible: selected.mesh.visible,
+          parentVisible: isEffectivelyVisible(selected.mesh),
+          bounds: {
+            x: Number(size.x.toFixed(3)),
+            y: Number(size.y.toFixed(3)),
+            z: Number(size.z.toFixed(3)),
+          },
+          camera: cameraProbe,
+          mrFeast: {
+            blocked: !mrFeastProbe.visible,
+            blocker: mrFeastProbe.blocker?.object?.name || null,
+          },
+          clearance: {
+            cameraClear: !cameraClearance.blocked,
+            mrFeastClear: mrFeastClearance.visible,
+          },
+        };
+      };
+      return roles.map(probeMesh);
+    };
     window.MrFeastFresh.probeSceneRayForQA = (fromX, fromY, fromZ, toX, toY, toZ) => {
       if (!state.qa) return null;
       const origin = new THREE.Vector3(fromX, fromY, fromZ);

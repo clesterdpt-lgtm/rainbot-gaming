@@ -327,6 +327,14 @@ async function run() {
     assert(initial.assetStatus === "idle", `banquet assets must remain deferred before a catch: ${JSON.stringify(initial)}`);
     assert(initial.phase === "inactive" && initial.visible === false, `loss dressing must be hidden during ordinary play: ${JSON.stringify(initial)}`);
 
+    const outdoorCatchSetup = await desktop.evaluate(() => {
+      window.MrFeastFresh.placePlayerAlongStormLegForQA(5, 0.8);
+      return JSON.parse(window.render_game_to_text());
+    });
+    assert(
+      outdoorCatchSetup.rendering.interiorDetailsHidden,
+      `the regression setup must begin far enough outside to engage interior culling: ${JSON.stringify(outdoorCatchSetup.rendering)}`,
+    );
     const caught = await desktop.evaluate(() => window.MrFeastFresh.triggerBanquetLossForQA("witnessed"));
     assert(caught?.reason === "witnessed", `QA catch must use the real game-over route: ${JSON.stringify(caught)}`);
     await desktop.waitForFunction(
@@ -334,6 +342,13 @@ async function run() {
         && window.MrFeastFresh.getBanquetLossState()?.visible,
       null,
       { timeout: 180000 },
+    );
+    await desktop.waitForTimeout(160);
+    const outdoorCatchRendering = await desktop.evaluate(() => JSON.parse(window.render_game_to_text()).rendering);
+    assert(
+      !outdoorCatchRendering.interiorDetailsHidden
+        && outdoorCatchRendering.facadeVisibilityKey === "east|front|rear|west",
+      `an outdoor catch must restore the complete Dining Room shell for the indoor banquet camera: ${JSON.stringify(outdoorCatchRendering)}`,
     );
     let banquet = await readState(desktop);
     assert(
@@ -523,7 +538,7 @@ async function run() {
     assert(
       banquet.phase === "complete"
         && banquet.overlayVisible
-        && banquet.recovery.loadLabel === "Load last save"
+        && banquet.recovery.loadLabel === "Choose save"
         && banquet.recovery.restartLabel === "Start over",
       `the loss must end in recoverable controls: ${JSON.stringify(banquet)}`,
     );

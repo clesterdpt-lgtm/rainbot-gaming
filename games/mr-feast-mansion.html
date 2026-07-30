@@ -1418,7 +1418,9 @@
     #mansion-intro[hidden] { display: none; }
 
     .mansion-intro__panel {
+      overflow: hidden;
       width: min(560px, 100%);
+      min-width: 0;
       max-height: 100%;
       padding: clamp(18px, 3.5vmin, 36px);
       border: 1px solid rgba(226, 202, 159, 0.32);
@@ -1554,11 +1556,16 @@
     }
 
     .mansion-intro__save-status {
+      overflow: hidden;
+      min-width: 0;
+      max-width: 100%;
       margin: 10px 0 0;
       color: #a89a82;
       font-size: 0.68rem;
       letter-spacing: 0.04em;
       line-height: 1.4;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .mansion-intro__save-status[hidden] { display: none; }
@@ -1618,7 +1625,8 @@
     #mansion-journal[hidden],
     #mansion-book-reader[hidden],
     #mansion-workroom-keypad[hidden],
-    #mansion-menu[hidden] { display: none; }
+    #mansion-menu[hidden],
+    #mansion-load-chooser[hidden] { display: none; }
 
     #mansion-discovery-title {
       display: block;
@@ -2221,7 +2229,8 @@
       text-transform: uppercase;
     }
 
-    #mansion-menu {
+    #mansion-menu,
+    #mansion-load-chooser {
       position: absolute;
       inset: 0;
       z-index: 21;
@@ -2232,7 +2241,14 @@
       background: transparent;
     }
 
-    .mansion-menu__panel {
+    #mansion-load-chooser {
+      z-index: 23;
+      background: rgba(3, 4, 6, 0.62);
+      backdrop-filter: blur(3px);
+    }
+
+    .mansion-menu__panel,
+    .mansion-load-chooser__panel {
       width: min(520px, 100%);
       max-height: 100%;
       padding: clamp(18px, 3.5vmin, 36px);
@@ -2242,7 +2258,8 @@
       box-shadow: 0 30px 90px rgba(0, 0, 0, 0.8);
     }
 
-    .mansion-menu__eyebrow {
+    .mansion-menu__eyebrow,
+    .mansion-load-chooser__eyebrow {
       margin: 0;
       color: var(--mansion-brass-bright);
       font-size: 0.58rem;
@@ -2251,7 +2268,8 @@
       text-transform: uppercase;
     }
 
-    .mansion-menu__title {
+    .mansion-menu__title,
+    .mansion-load-chooser__title {
       margin: 7px 0 10px;
       color: #f0e7d6;
       font-family: var(--mansion-serif);
@@ -2261,6 +2279,7 @@
     }
 
     .mansion-menu__copy,
+    .mansion-load-chooser__copy,
     #mansion-menu-status {
       color: #aaa093;
       font-size: 0.72rem;
@@ -2273,13 +2292,19 @@
       color: #d5bd90;
     }
 
+    .mansion-load-chooser__copy {
+      margin: 0 0 12px;
+    }
+
     .mansion-menu__actions {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 9px;
     }
 
-    .mansion-menu__button {
+    .mansion-menu__button,
+    .mansion-load-chooser__choice,
+    .mansion-load-chooser__cancel {
       min-height: 44px;
       padding: 10px 13px;
       border: 1px solid rgba(226, 199, 151, 0.3);
@@ -2293,7 +2318,11 @@
     }
 
     .mansion-menu__button:hover,
-    .mansion-menu__button:focus-visible {
+    .mansion-menu__button:focus-visible,
+    .mansion-load-chooser__choice:hover,
+    .mansion-load-chooser__choice:focus-visible,
+    .mansion-load-chooser__cancel:hover,
+    .mansion-load-chooser__cancel:focus-visible {
       border-color: var(--mansion-brass-bright);
       color: var(--mansion-brass-bright);
       outline: none;
@@ -2307,6 +2336,46 @@
 
     .mansion-menu__button[disabled] { cursor: not-allowed; opacity: 0.42; }
     #mansion-menu-dev[aria-pressed="true"] { border-color: #b96455; color: #f0b3a8; background: rgba(124, 44, 34, 0.18); }
+
+    .mansion-load-chooser__choices {
+      display: grid;
+      gap: 7px;
+    }
+
+    .mansion-load-chooser__choice {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 52px;
+      text-align: left;
+    }
+
+    .mansion-load-chooser__source {
+      overflow: hidden;
+      color: #ede2ce;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mansion-load-chooser__detail {
+      overflow: hidden;
+      max-width: 29ch;
+      color: #a99c87;
+      font-size: 0.56rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-align: right;
+      text-overflow: ellipsis;
+      text-transform: none;
+      white-space: nowrap;
+    }
+
+    .mansion-load-chooser__cancel {
+      width: 100%;
+      margin-top: 8px;
+    }
 
     #mansion-prompt {
       position: absolute;
@@ -2890,14 +2959,17 @@
 
     @media (max-height: 700px) {
       #mansion-intro,
-      #mansion-menu {
+      #mansion-menu,
+      #mansion-load-chooser {
         padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
       }
       .mansion-intro__panel,
-      .mansion-menu__panel { padding: 18px 20px; }
+      .mansion-menu__panel,
+      .mansion-load-chooser__panel { padding: 18px 20px; }
       .mansion-controls,
       .mansion-intro__note,
-      .mansion-menu__copy { display: none; }
+      .mansion-menu__copy,
+      .mansion-load-chooser__copy { display: none; }
       .mansion-intro__eyebrow { margin-bottom: 6px; }
       .mansion-intro__lead { margin-top: 9px; line-height: 1.35; }
       .mansion-intro__actions { margin-top: 10px; }
@@ -2923,12 +2995,14 @@
 
     @media (max-height: 600px) and (orientation: landscape) {
       #mansion-intro,
-      #mansion-menu {
+      #mansion-menu,
+      #mansion-load-chooser {
         place-items: start center;
         padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
       }
       .mansion-intro__panel,
-      .mansion-menu__panel { padding: 10px 16px; }
+      .mansion-menu__panel,
+      .mansion-load-chooser__panel { padding: 10px 16px; }
       .mansion-intro__eyebrow { margin-bottom: 4px; }
       .mansion-intro__title { font-size: 2rem; }
       .mansion-intro__lead { margin-top: 7px; font-size: 0.86rem; line-height: 1.3; }
@@ -2940,9 +3014,12 @@
       .mansion-intro__note { display: none; }
       .mansion-menu__title { margin: 3px 0 5px; font-size: 2rem; }
       .mansion-menu__copy { display: none; }
+      .mansion-load-chooser__title { margin: 3px 0 6px; font-size: 1.7rem; }
       #mansion-menu-status { margin: 5px 0; font-size: 0.64rem; line-height: 1.25; }
       .mansion-menu__actions { gap: 6px; }
       .mansion-menu__button { min-height: 44px; padding: 7px 9px; font-size: 0.59rem; }
+      .mansion-load-chooser__choice,
+      .mansion-load-chooser__cancel { min-height: 44px; padding: 6px 8px; font-size: 0.58rem; }
     }
 
     @media (max-width: 900px) and (max-height: 600px) and (orientation: landscape) {
@@ -2954,16 +3031,25 @@
 
     @media (max-height: 420px) and (orientation: landscape) {
       #mansion-intro,
-      #mansion-menu {
+      #mansion-menu,
+      #mansion-load-chooser {
         padding: max(2px, env(safe-area-inset-top)) max(2px, env(safe-area-inset-right)) max(2px, env(safe-area-inset-bottom)) max(2px, env(safe-area-inset-left));
       }
       .mansion-intro__panel,
-      .mansion-menu__panel { padding: 6px 10px; }
+      .mansion-menu__panel,
+      .mansion-load-chooser__panel { padding: 6px 10px; }
       .mansion-intro__eyebrow,
       .mansion-intro__lead,
       .mansion-menu__eyebrow,
-      .mansion-menu__title { display: none; }
+      .mansion-menu__title,
+      .mansion-load-chooser__eyebrow,
+      .mansion-load-chooser__title,
+      .mansion-load-chooser__copy { display: none; }
       .mansion-menu__actions { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+      .mansion-load-chooser__choices { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+      .mansion-load-chooser__choice { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+      .mansion-load-chooser__detail { display: none; }
+      .mansion-load-chooser__cancel { margin-top: 4px; }
       #mansion-menu-status { display: none; }
       #mansion-feast-says {
         top: max(2px, env(safe-area-inset-top));
@@ -3556,7 +3642,7 @@
             <p class="mansion-menu__eyebrow">Mansion menu</p>
             <h2 class="mansion-menu__title" id="mansion-menu-title">Paused</h2>
             <p class="mansion-menu__copy">Resume the investigation, toggle sound, go fullscreen, or preserve your progress.</p>
-            <p id="mansion-menu-status" role="status" aria-live="polite">Progress is not autosaved.</p>
+            <p id="mansion-menu-status" role="status" aria-live="polite">Checkpoint autosaves begin after safe milestones.</p>
             <div class="mansion-menu__actions">
               <button id="mansion-menu-resume" class="mansion-menu__button mansion-menu__button--primary" type="button">Resume</button>
               <button id="mansion-menu-music" class="mansion-menu__button" type="button" aria-pressed="false">Sound: Off</button>
@@ -3568,13 +3654,23 @@
           </div>
         </section>
 
+        <section id="mansion-load-chooser" role="dialog" aria-modal="true" aria-labelledby="mansion-load-title" hidden>
+          <div class="mansion-load-chooser__panel">
+            <p class="mansion-load-chooser__eyebrow">Load game</p>
+            <h2 class="mansion-load-chooser__title" id="mansion-load-title">Choose a Save</h2>
+            <p class="mansion-load-chooser__copy">Restore your manual save or return to one of the three newest safe checkpoints.</p>
+            <div id="mansion-load-choices" class="mansion-load-chooser__choices" aria-label="Available saves"></div>
+            <button id="mansion-load-cancel" class="mansion-load-chooser__cancel" type="button">Cancel</button>
+          </div>
+        </section>
+
         <section id="mansion-gameover" role="dialog" aria-modal="true" aria-labelledby="mansion-gameover-title" hidden>
           <div class="mansion-menu__panel mansion-gameover__panel">
             <p class="mansion-menu__eyebrow">Game over</p>
             <h2 class="mansion-menu__title" id="mansion-gameover-title">Caught</h2>
             <p class="mansion-menu__copy" id="mansion-gameover-copy">Mr. Feast caught you in the restricted basement. The house keeps its guests.</p>
             <div class="mansion-menu__actions">
-              <button id="mansion-gameover-load" class="mansion-menu__button mansion-menu__button--primary" type="button">Load last save</button>
+              <button id="mansion-gameover-load" class="mansion-menu__button mansion-menu__button--primary" type="button">Choose save</button>
               <button id="mansion-gameover-restart" class="mansion-menu__button" type="button">Start over</button>
             </div>
           </div>
@@ -3757,6 +3853,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260723-mr-feast-rebrand-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260729-saint-route-navigation-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260729-victory-feast-escape-unstick-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

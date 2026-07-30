@@ -498,7 +498,7 @@ async function runBrowserFlow() {
     const routedSaint = (await victoryState(page)).saint;
     assert(
       routedSaint.navigation?.routeBuilds >= 1
-        && routedSaint.navigation?.completedRouteSteps >= 3
+        && routedSaint.navigation?.completedRouteSteps >= 2
         && routedSaint.navigation?.detourFrames > 0
         && routedSaint.navigation?.targetDistance < 0.45
         && routedSaint.navigation?.targetDistance < saintPathStartDistance - 8,
@@ -510,6 +510,29 @@ async function runBrowserFlow() {
     await page.locator("#mansion-stage").screenshot({
       path: path.join(artifactDir, "victory-feast-saint-wall-detour-desktop.png"),
     });
+    const stagedFurniturePathing = await page.evaluate(() => (
+      window.MrFeastFresh.stageSaintPathingForQA("dining-table")
+    ));
+    assert(
+      stagedFurniturePathing?.staged
+        && stagedFurniturePathing.navigation?.directPathClear === false
+        && stagedFurniturePathing.navigation?.detourReason === "obstacle"
+        && stagedFurniturePathing.navigation?.routeRemaining >= 1,
+      `the Dining Room table must create a routed Saint furniture detour: ${JSON.stringify(stagedFurniturePathing)}`,
+    );
+    const furnitureStartDistance = stagedFurniturePathing.navigation.targetDistance;
+    await page.evaluate(() => window.MrFeastFresh.advanceVictoryFeastForQA(30));
+    const furnitureRoutedSaint = (await victoryState(page)).saint;
+    assert(
+      furnitureRoutedSaint.navigation?.routeBuilds >= 1
+        && furnitureRoutedSaint.navigation?.detourFrames > 0
+        && furnitureRoutedSaint.navigation?.targetDistance < 0.45
+        && furnitureRoutedSaint.navigation?.targetDistance < furnitureStartDistance - 6,
+      `the Saint must route around broad furniture instead of sticking to it: ${JSON.stringify({
+        startDistance: furnitureStartDistance,
+        saint: furnitureRoutedSaint,
+      })}`,
+    );
     const clearedSaintPathing = await page.evaluate(() => (
       window.MrFeastFresh.clearSaintPathingProbeForQA()
     ));

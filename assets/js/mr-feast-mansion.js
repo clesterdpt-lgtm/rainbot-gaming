@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260729-center-ballroom-marble-1";
+  const MANSION_RUNTIME_VERSION = "20260729-saint-route-navigation-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -16406,7 +16406,51 @@
           targetId: "main-foyer-center",
         },
       };
-      const selected = scenarios[String(scenario || "")] || scenarios["library-foyer-wall"];
+      const requestedScenario = String(scenario || "");
+      const selectedKey = requestedScenario === "dining-table"
+        ? "dining-table"
+        : "library-foyer-wall";
+      let selected = scenarios[selectedKey] || null;
+      if (selectedKey === "dining-table") {
+        const diningNodes = [...graph.nodes.values()]
+          .filter((node) => (
+            /^main-dining-/.test(node.id)
+            && node.segmentKind === "room"
+            && this.finaleSegmentClear(node, node)
+          ));
+        for (let fromIndex = 0; fromIndex < diningNodes.length && !selected; fromIndex += 1) {
+          for (let toIndex = fromIndex + 1; toIndex < diningNodes.length; toIndex += 1) {
+            const startCandidate = diningNodes[fromIndex];
+            const targetCandidate = diningNodes[toIndex];
+            const distance = Math.hypot(
+              targetCandidate.x - startCandidate.x,
+              targetCandidate.z - startCandidate.z,
+            );
+            if (
+              distance < 4
+              || this.finaleSegmentClear(startCandidate, targetCandidate)
+            ) continue;
+            const startAnchor = this.finaleAnchorCandidates(startCandidate)[0] || null;
+            const targetAnchors = this.finaleAnchorCandidates(targetCandidate).slice(0, 12);
+            if (!startAnchor) continue;
+            const hasRoute = targetAnchors.some((targetAnchor) => (
+              targetAnchor.id !== startAnchor.id
+              && this.findFinaleRoute(
+                startAnchor.id,
+                targetAnchor.id,
+                startCandidate.y,
+              ).length > 0
+            ));
+            if (!hasRoute) continue;
+            selected = {
+              startId: startCandidate.id,
+              targetId: targetCandidate.id,
+            };
+            break;
+          }
+        }
+      }
+      if (!selected) return { staged: false, reason: "no-furniture-route" };
       const start = graph.nodes.get(selected.startId);
       const target = graph.nodes.get(selected.targetId);
       if (!start || !target) return { staged: false, reason: "missing-route-node" };
@@ -16414,6 +16458,7 @@
       state.isHidden = false;
       state.activeHideSpot = null;
       flashlightSystem?.setOn(false, { silent: true });
+      mrFeastNpc?.resetForQA();
       this.resetFinaleNavigation();
       this.finaleNavigation.qaProbe = true;
       entry.root.position.set(start.x, start.y, start.z);
@@ -16439,7 +16484,7 @@
       this.planFinaleRoute(entry, this.finaleLastKnownPosition, true);
       return {
         staged: true,
-        scenario: "library-foyer-wall",
+        scenario: selectedKey,
         start: { id: start.id, x: start.x, y: start.y, z: start.z },
         target: { id: target.id, x: target.x, y: target.y, z: target.z },
         navigation: this.finaleNavigationDiagnostics(entry),
@@ -16452,6 +16497,15 @@
       this.finaleNavigation.path = [];
       this.finaleNavigation.mode = "idle";
       this.closeFinaleRouteDoors();
+      const entry = this.saintEntry();
+      if (entry) {
+        entry.root.position.set(
+          entry.placement.position.x,
+          entry.placement.position.y,
+          entry.placement.position.z,
+        );
+        entry.root.rotation.y = entry.placement.rotationY;
+      }
       return {
         cleared: true,
         navigation: this.finaleNavigationDiagnostics(),
@@ -25320,6 +25374,10 @@
     }
 
     updateThreats(dt) {
+      if (state.qa && demonPrototypePatrol?.finaleNavigation?.qaProbe) {
+        this.show.directSightDwell = 0;
+        return;
+      }
       if (!this.isEscapeActive() || state.isHidden || !mrFeastNpc) {
         this.show.directSightDwell = 0;
         return;

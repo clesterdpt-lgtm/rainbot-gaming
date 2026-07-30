@@ -1560,7 +1560,16 @@ check("56 flashlight simple loose model", /simple-flashlight-body/.test(flashlig
 check("56 flashlight input", /code === "KeyF"/.test(flashlightInput) && /event\.repeat/.test(flashlightInput) && /flashlightSystem\?\.toggle/.test(flashlightInput) && /mansion-flashlight-button/.test(page), "flashlight does not share one non-repeating F/touch toggle path");
 check("56 flashlight hidden control", /\.mansion-tool\[hidden\]\s*\{\s*display:\s*none/.test(page), "the coarse-pointer toolbar overrides the fresh run's hidden Light control");
 check("56 flashlight beam", /new THREE\.SpotLight/.test(flashlightSystem) && /castShadow = false/.test(flashlightSystem) && /intensity = this\.isEmitting\(\)/.test(flashlightSystem), "flashlight beam is not a shadow-free, actual-output-toggled spotlight");
-check("56 flashlight light-only presentation", /intensity:\s*84\b/.test(flashlightConfig) && /distance:\s*10\.6\b/.test(flashlightConfig) && /angle:\s*0\.35\b/.test(flashlightConfig) && !/carried-flashlight-(?:body|head|lens)/.test(flashlightSystem), "flashlight must use the brighter, longer focused tuning without drawing a carried model");
+check(
+  "56 flashlight light-only presentation",
+  /intensity:\s*112\b/.test(flashlightConfig)
+    && /distance:\s*11\.2\b/.test(flashlightConfig)
+    && /angle:\s*0\.39\b/.test(flashlightConfig)
+    && /penumbra:\s*0\.68\b/.test(flashlightConfig)
+    && /decay:\s*1\.85\b/.test(flashlightConfig)
+    && !/carried-flashlight-(?:body|head|lens)/.test(flashlightSystem),
+  "flashlight must use the brighter, texture-readable focused tuning without drawing a carried model",
+);
 check("56 flashlight inactive cost", /if \(!this\.state\.on\) \{[\s\S]*this\.beam\.intensity = 0;[\s\S]*return;[\s\S]*\}[\s\S]*this\.syncPose\(\)/.test(flashlightUpdate), "the inactive flashlight still updates its camera pose or raycasts against the mansion");
 check("56 flashlight stealth cost", /FLASHLIGHT\.stealthExposureFloor/.test(flashlightStealth) && /state\.flashlight\.on/.test(flashlightStealth), "active flashlight does not explicitly lower crouched concealment");
 check("56 flashlight policy gate", !/reportFlashlightUse/.test(mansion) && !/observeCamera\(cameraState\)/.test(flashlightSystem) && !/flashlight-use/.test(cameraSecuritySystem), "flashlight visibility still creates its own camera offense");

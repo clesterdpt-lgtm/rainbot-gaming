@@ -58,6 +58,19 @@ async function averageLuminance(buffer, region) {
   return total / Math.max(1, data.length / info.channels);
 }
 
+async function readablePixelFraction(buffer, region, minimumLuminance = 8) {
+  let image = sharp(buffer).removeAlpha();
+  if (region) image = image.extract(region);
+  const { data, info } = await image.raw().toBuffer({ resolveWithObject: true });
+  let readable = 0;
+  const pixels = Math.max(1, data.length / info.channels);
+  for (let index = 0; index < data.length; index += info.channels) {
+    const luminance = data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722;
+    if (luminance >= minimumLuminance) readable += 1;
+  }
+  return readable / pixels;
+}
+
 async function captureBeamMetrics(page, name) {
   const canvasBox = await page.locator("#mansion-canvas").boundingBox();
   assert(canvasBox, "mansion canvas should have a captureable viewport");
@@ -81,6 +94,8 @@ async function captureBeamMetrics(page, name) {
   return {
     center: await averageLuminance(buffer, center),
     periphery: await averageLuminance(buffer, periphery),
+    centerReadableFraction: await readablePixelFraction(buffer, center),
+    peripheryReadableFraction: await readablePixelFraction(buffer, periphery),
   };
 }
 
@@ -104,8 +119,14 @@ async function run() {
   assert(/kitchen-under-sink/.test(runtime) && /upper-east-front-closet/.test(runtime) && /basement-archive/.test(runtime), "flashlight locations should cover the kitchen sink cabinet, an upper walk-in closet, and the basement");
   assert(/simple-flashlight-body/.test(runtime) && !/brass-cradle/.test(runtime), "pickup should be a simple household flashlight without the ornate cradle");
   assert(/id="mansion-flashlight-button"/.test(html), "touch Light control is missing");
-  assert(/intensity:\s*84\b/.test(runtime), "flashlight beam should use the brighter 84 intensity tuning");
-  assert(/distance:\s*10\.6\b/.test(runtime) && /angle:\s*0\.35\b/.test(runtime), "flashlight beam should reach farther through a focused 10.6m cone");
+  assert(/intensity:\s*112\b/.test(runtime), "flashlight beam should use the brighter 112 intensity tuning");
+  assert(
+    /distance:\s*11\.2\b/.test(runtime)
+      && /angle:\s*0\.39\b/.test(runtime)
+      && /penumbra:\s*0\.68\b/.test(runtime)
+      && /decay:\s*1\.85\b/.test(runtime),
+    "flashlight beam should use the broader-core, slower-falloff texture-readability tuning",
+  );
   assert(!/carried-flashlight-(?:body|head|lens)/.test(runtime), "active flashlight should show only its light, not a carried model");
 
   let server = null;
@@ -220,9 +241,17 @@ async function run() {
     light = await flashlight(page);
     const layoutOn = (await diagnostics(page)).lighting;
     assert(light.beam.intensity > 0 && !light.beam.castShadow, "active flashlight should expose a real shadow-free beam");
-    assert(light.beam.authoredIntensity === 84, `beam should use the brighter authored intensity; beam=${JSON.stringify(light.beam)}`);
-    assert(light.beam.distance >= 10.3 && light.beam.distance <= 10.9, `beam should travel farther without becoming room-wide; distance=${light.beam.distance}`);
-    assert(light.beam.angle >= 0.32 && light.beam.angle <= 0.38 && light.beam.penumbra >= 0.7, `beam cone should stay focused and soft; beam=${JSON.stringify(light.beam)}`);
+    assert(light.beam.authoredIntensity === 112, `beam should use the brighter authored intensity; beam=${JSON.stringify(light.beam)}`);
+    assert(light.beam.distance >= 10.9 && light.beam.distance <= 11.5, `beam should travel farther without becoming room-wide; distance=${light.beam.distance}`);
+    assert(
+      light.beam.angle >= 0.37
+        && light.beam.angle <= 0.41
+        && light.beam.penumbra >= 0.64
+        && light.beam.penumbra <= 0.72
+        && light.beam.decay >= 1.8
+        && light.beam.decay <= 1.9,
+      `beam cone should keep a focused soft edge while improving its usable core; beam=${JSON.stringify(light.beam)}`,
+    );
     assert(layoutOff.shaderSpotLights === layoutOn.shaderSpotLights && layoutOn.shaderSpotLights === layoutOn.shaderSpotBudget, `F must not change spot-light topology; off=${layoutOff.shaderSpotLights} on=${layoutOn.shaderSpotLights} budget=${layoutOn.shaderSpotBudget}`);
     const activations = light.activationCount;
     await page.evaluate(() => document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyF", key: "f", repeat: true, bubbles: true })));
@@ -230,10 +259,19 @@ async function run() {
     const onVisual = await captureBeamMetrics(page, "flashlight-beam-on-desktop");
     const centerDelta = onVisual.center - offVisual.center;
     const peripheralDelta = onVisual.periphery - offVisual.periphery;
+    const readableCoverageDelta = onVisual.centerReadableFraction - offVisual.centerReadableFraction;
     assert(centerDelta >= 7.5, `the brighter beam should materially lift its central patch; off=${offVisual.center.toFixed(1)} on=${onVisual.center.toFixed(1)}`);
+    assert(
+      readableCoverageDelta >= 0.24,
+      `the beam should reveal substantially more of the Archive's mixed dark textures; off=${(offVisual.centerReadableFraction * 100).toFixed(1)}% on=${(onVisual.centerReadableFraction * 100).toFixed(1)}%`,
+    );
     assert(peripheralDelta <= centerDelta * 0.5 + 1, `the longer beam must keep the spooky room edges dark; center delta=${centerDelta.toFixed(1)} edge delta=${peripheralDelta.toFixed(1)}`);
+    assert(
+      onVisual.peripheryReadableFraction <= offVisual.peripheryReadableFraction + 0.04,
+      `texture readability should stay localized to the beam; off edge=${(offVisual.peripheryReadableFraction * 100).toFixed(1)}% on edge=${(onVisual.peripheryReadableFraction * 100).toFixed(1)}%`,
+    );
     assert(onVisual.center < 160, `the brighter beam center should not wash out the Archive; luminance=${onVisual.center.toFixed(1)}`);
-    console.log(`flashlight qa: beam center delta ${centerDelta.toFixed(1)}, edge delta ${peripheralDelta.toFixed(1)}`);
+    console.log(`flashlight qa: beam center delta ${centerDelta.toFixed(1)}, readable texture coverage +${(readableCoverageDelta * 100).toFixed(1)} points, edge delta ${peripheralDelta.toFixed(1)}`);
     await page.keyboard.press("f");
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.escapeOpen);

@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260729-victory-feast-seal-exits-hedge-maze-1";
+  const MANSION_RUNTIME_VERSION = "20260730-flashlight-texture-readability-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -842,11 +842,11 @@
     }),
     beam: Object.freeze({
       color: 0xffe3bd,
-      intensity: 84,
-      distance: 10.6,
-      angle: 0.35,
-      penumbra: 0.78,
-      decay: 2,
+      intensity: 112,
+      distance: 11.2,
+      angle: 0.39,
+      penumbra: 0.68,
+      decay: 1.85,
       poseSampleSeconds: 0.09,
       wallClearanceMeters: 0.22,
       minimumDistance: 0.9,

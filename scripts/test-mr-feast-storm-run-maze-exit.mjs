@@ -80,14 +80,14 @@ async function run() {
     assert(
       scare.trigger.id === "maze-final-corridor-turn"
         && scare.trigger.x === 22
-        && scare.trigger.z === -0.25,
+        && scare.trigger.z === -24.25,
       `the final scare must arm on entry to the long last straight: ${JSON.stringify(scare.trigger)}`,
     );
     assert(
       scare.reveal.position.x === 22
         && scare.reveal.position.z === -13.75
-        && angleDistance(scare.reveal.yaw, 0) <= 0.001,
-      `Mr. Feast must stand at the far end facing north toward the player: ${JSON.stringify(scare.reveal)}`,
+        && angleDistance(scare.reveal.yaw, Math.PI) <= 0.001,
+      `Mr. Feast must stand at the far end facing south toward the player: ${JSON.stringify(scare.reveal)}`,
     );
     const preview = await page.evaluate(() => window.MrFeastFresh.previewStormScareForQA(2));
     assert(
@@ -95,8 +95,8 @@ async function run() {
         && preview.lineOfSight
         && preview.blocker == null
         && Math.abs(preview.projected.x) <= 0.06
-        && preview.distance >= 13.4
-        && preview.distance <= 13.6
+        && preview.distance >= 10.4
+        && preview.distance <= 10.6
         && preview.projectedHeight >= 0.1
         && preview.hostFacingPlayerDot >= 0.99,
       `the final-straight composition must be clear, centered, life-size, and player-facing: ${JSON.stringify(preview)}`,

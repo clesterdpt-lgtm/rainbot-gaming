@@ -2,7 +2,7 @@
 
 ## Status
 
-in-progress
+Implemented — automated acceptance complete; user playtest pending
 
 ## Objective
 
@@ -29,10 +29,10 @@ Rebuild the hedge maze so the shortest north-entrance-to-rear-exit route crosses
 
 ## Acceptance criteria
 
-- [ ] The shortest north-entrance-to-rear-exit path visits at least `50%` of all walkable maze cells, with the ratio exposed in deterministic yard diagnostics. — tests: `scripts/test-mr-feast-hedge-maze-layout.mjs::entrance-to-exit traversal ratio` and `scripts/test-mr-feast-storm-run.mjs::ordered collision-clear yard course`
-- [ ] The B-13 dig site is a one-neighbor dead end whose shortest path from either portal exceeds half the maze's walkable-cell count; excavation, inventory, and Storm Run triggering remain unchanged. — tests: `scripts/test-mr-feast-hedge-maze-layout.mjs::deep buried-key dead end` and `scripts/test-mr-feast-basement-key-trail.mjs::real interaction progression and gates`
-- [ ] Storm Run's contestants traverse the authoritative entrance-to-exit cell route without wall-crossing or a hand-authored maze shortcut, while the player remains gated by the ordered maze and rear-lawn checkpoints. — tests: `scripts/test-mr-feast-hedge-maze-layout.mjs::shared Storm Run maze route` and `scripts/test-mr-feast-storm-run.mjs::contestant run contract`
-- [ ] The relocated final-straight apparition remains life-size, facing the player, unobstructed, darkness-synchronized, and followed by the restored rear-exit practical. — test: `scripts/test-mr-feast-storm-run.mjs::mapped facing-gated desktop, interrupted-audio, and phone scares`
+- [x] The shortest north-entrance-to-rear-exit path visits at least `50%` of all walkable maze cells, with the ratio exposed in deterministic yard diagnostics. — tests: `scripts/test-mr-feast-hedge-maze-layout.mjs::entrance-to-exit traversal ratio` and `scripts/test-mr-feast-storm-run.mjs::ordered collision-clear yard course`
+- [x] The B-13 dig site is a one-neighbor dead end whose shortest path from either portal exceeds half the maze's walkable-cell count; excavation, inventory, and Storm Run triggering remain unchanged. — tests: `scripts/test-mr-feast-hedge-maze-layout.mjs::deep buried-key dead end` and `scripts/test-mr-feast-basement-key-trail.mjs::real interaction progression and gates`
+- [x] Storm Run's contestants traverse the authoritative entrance-to-exit cell route without wall-crossing or a hand-authored maze shortcut, while the player remains gated by the ordered maze and rear-lawn checkpoints. — tests: `scripts/test-mr-feast-hedge-maze-layout.mjs::shared Storm Run maze route` and `scripts/test-mr-feast-storm-run.mjs::contestant run contract`
+- [x] The relocated final-straight apparition remains life-size, facing the player, unobstructed, darkness-synchronized, and followed by the restored rear-exit practical. — test: `scripts/test-mr-feast-storm-run.mjs::mapped facing-gated desktop, interrupted-audio, and phone scares`
 - [ ] The redesigned maze, key chamber, active Storm Run route, and final lightning corridor read clearly in real-browser desktop and phone captures with zero new console errors. — verified by user playtest; automated evidence: `scripts/test-mr-feast-storm-run.mjs` and `scripts/test-mr-feast-basement-key-trail.mjs`
 
 ## Exit condition
@@ -50,4 +50,8 @@ User enters the maze through either finished portal → must traverse at least h
 
 - The pre-change grid contains `128` walkable cells; its shortest north-to-rear route uses `32`, exactly `25%`.
 - The redesign deliberately keeps the maze static and authored. Graph metrics protect pacing without introducing dynamic-generation complexity.
+- The new grid contains `117` walkable cells; its `78`-cell north-to-rear route covers `66.7%`. The B-13 cache at `(5, 7)` is `63` steps from the north portal and `62` from the rear portal.
+- Storm Run derives both contestants' maze leg from that authoritative `78`-cell route. The final scare now arms at `(22, -24.25)` and reveals Mr. Feast `10.5m` ahead at `(22, -13.75)`, facing south toward the approaching player.
+- Focused layout, Storm Run, basement-key, and Contestant 13 suites pass. The renovation suite retains only its unrelated existing `28 stairwell continuity` failure.
+- Fresh Chromium proof at desktop and phone sizes reported zero console errors. Key-chamber proof is under `output/iterate/2026-07-29-hedge-maze-key-chamber-flashlight-{desktop,mobile}.png`; final-corridor proof is under `output/playwright/mr-feast-storm-run/mr-feast-final-straight-lightning-{desktop,mobile}.png`.
 - Existing unrelated Victory Feast exit-sealing edits in the shared runtime remain outside this milestone.

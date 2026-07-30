@@ -723,9 +723,19 @@ if (mazeRows.length) {
   check("19 hedge maze", mazeRows.every((row) => row.length === width) && width === 9, "long maze is not a rectangular 31x9 layout");
   const cells = mazeRows.join("");
   check("19 hedge maze", (cells.match(/S/g) || []).length === 1 && (cells.match(/E/g) || []).length === 1, "maze needs one entrance and one internal traversal goal");
-  check("33 closed south maze wall", mazeRows.at(-1) === "#########" && mazeRows.at(-2).includes("E"), "maze still has a visible exit cut through its south boundary");
   const start = cells.indexOf("S");
   const exit = cells.indexOf("E");
+  const exitRow = Math.floor(exit / width);
+  const exitCol = exit % width;
+  check(
+    "33 closed south maze wall",
+    mazeRows.at(-1) === "#########"
+      && exitRow > 0
+      && exitRow < mazeRows.length - 1
+      && exitCol > 0
+      && exitCol < width - 1,
+    "maze traversal goal must remain an internal dead end rather than a boundary exit",
+  );
   const queue = start >= 0 ? [start] : [];
   const seen = new Set(queue);
   while (queue.length) {
@@ -754,10 +764,15 @@ if (mazeRows.length) {
     }).length;
   };
   const junctions = openCells.filter((index) => openDegree(index) >= 3);
+  const deadEnds = openCells.filter((index) => openDegree(index) === 1);
   const edgeCount = openCells.reduce((total, index) => total + openDegree(index), 0) / 2;
   const routeChoices = edgeCount - openCells.length + 1;
   const northOpenCells = openCells.filter((index) => Math.floor(index / width) < Math.floor(mazeRows.length / 2));
-  check("32 hedge maze choices", junctions.length >= 18 && routeChoices >= 8, `maze offers only ${junctions.length} junction cells and ${routeChoices} alternate loops`);
+  check(
+    "32 hedge maze choices",
+    junctions.length >= 6 && deadEnds.length >= 8 && routeChoices === 0,
+    `maze needs an acyclic forced route with meaningful branches; got ${junctions.length} junctions, ${deadEnds.length} dead ends, and ${routeChoices} loops`,
+  );
   check("32 north maze access", mazeRows[5][0] === "." && northOpenCells.every((index) => seen.has(index)), "north maze lacks a visible west-side entrance or contains unreachable passages");
   check("36 rear maze alignment", mazeRows[18][0] === "S" && mazeRows[19][0] === "#", "rear maze opening is not shifted onto the terrace centerline row");
 }
@@ -1243,14 +1258,14 @@ check("41 Contestant 13 page copy", !/There are no objectives/i.test(page) && /C
 
 // 42. Discovery tuning makes the physical clues less obvious without making
 // them unreliable: the shovel sits low inside a rose row, the cache is at the
-// maze's maximum-depth dead end, and excavation removes every authored mark.
+// maze's deep terminal chamber, and excavation removes every authored mark.
 check("42 Contestant 13 rose-hidden shovel", /shovel:\s*Object\.freeze\(\{ x:\s*-22\.35, z:\s*-5\.50, yOffset:\s*0\.16, scale:\s*0\.56 \}\)/.test(contestant13Config) && /group\.position\.set\(shovelLayout\.x, YARD_LAYOUT\.groundY \+ shovelLayout\.yOffset, shovelLayout\.z\)/.test(contestant13ShovelBuild) && /group\.scale\.setScalar\(shovelLayout\.scale\)/.test(contestant13ShovelBuild) && /group\.rotation\.z\s*=\s*-1\.42/.test(contestant13ShovelBuild), "shovel is not reduced and placed low inside the shifted southeast rose bed");
 check("42 Contestant 13 shovel target", /contestant-13-garden-shovel-hitbox/.test(contestant13ShovelBuild) && /hitbox\.visible\s*=\s*false/.test(contestant13ShovelBuild) && /\[hitbox\]/.test(contestant13ShovelBuild), "hidden shovel lacks a dedicated forgiving interaction target");
-check("42 Contestant 13 deeper cache", /const goal\s*=\s*mazeCellCenter\(19, 3\)/.test(contestant13DigSiteBuild) && /pathStepsFromRear:\s*82/.test(contestant13Config), "cache is not at the maze's deepest reachable dead end");
+check("42 Contestant 13 deeper cache", /const goal\s*=\s*mazeCellCenter\(CONTESTANT_13\.world\.digSite\.row,\s*CONTESTANT_13\.world\.digSite\.col\)/.test(contestant13DigSiteBuild) && /digSite:\s*Object\.freeze\(\{\s*row:\s*5,\s*col:\s*7,\s*pathStepsFromRear:\s*62,\s*pathStepsFromNorth:\s*63\s*\}\)/.test(contestant13Config), "cache is not at the redesigned maze's deep terminal chamber");
 check("42 Contestant 13 subtle mark", /contestant-13-dig-site-marker/.test(contestant13DigSiteBuild) && /w:\s*0\.025[^;]+h:\s*0\.012[^;]+d:\s*0\.18/.test(contestant13DigSiteBuild) && /material:\s*M\.darkFloor/.test(contestant13DigSiteBuild), "XIII marker remains too large, bright, or raised");
 check("42 Contestant 13 clean hole", /digMound\.visible\s*=\s*false/.test(contestant13Quest) && /digMarker\.visible\s*=\s*false/.test(contestant13Quest) && /digHole\.visible\s*=\s*true/.test(contestant13Quest) && /contestant-13-dig-site-open-hole[^;]+height:\s*0\.02[^;]+y:\s*0\.045/.test(contestant13DigSiteBuild) && /Inspect empty hole/.test(contestant13DigSiteBuild), "excavation does not remove the mound and XIII mark while preserving a visible inspectable hole above the maze path surface");
 check("42 Contestant 13 discovery diagnostics", /shovelScale:/.test(contestant13Quest) && /pathStepsFromRear:/.test(contestant13Quest) && /digMoundVisible:/.test(contestant13Quest) && /digMarkerVisible:/.test(contestant13Quest) && /digHoleVisible:/.test(contestant13Quest), "runtime diagnostics do not expose the tuned clue geometry and post-dig state");
-check("42 Contestant 13 tuned QA views", /contestant13GardenShovel:\s*\[-22\.28,\s*YARD_LAYOUT\.groundY,\s*-4\.05,\s*0,\s*-0\.75\]/.test(qaRoomViews) && /contestant13DigSite:\s*\[25,\s*YARD_LAYOUT\.groundY,\s*-13\.90,\s*0,\s*-0\.93\]/.test(qaRoomViews), "QA views do not frame the concealed shovel and deeper cache");
+check("42 Contestant 13 tuned QA views", /contestant13GardenShovel:\s*\[-22\.28,\s*YARD_LAYOUT\.groundY,\s*-4\.05,\s*0,\s*-0\.75\]/.test(qaRoomViews) && /contestant13DigSite:\s*\[29\.65,\s*YARD_LAYOUT\.groundY,\s*5\.75,\s*-Math\.PI \/ 2,\s*-0\.93\]/.test(qaRoomViews), "QA views do not frame the concealed shovel and deep terminal cache");
 check("44 garden quest placement", /const shovelLayout = CONTESTANT_13\.world\.shovel;/.test(contestant13ShovelBuild) && /group\.position\.set\(shovelLayout\.x, YARD_LAYOUT\.groundY \+ shovelLayout\.yOffset, shovelLayout\.z\)/.test(contestant13ShovelBuild), "the garden shovel does not move with its authored garden placement");
 
 // 47. The revised trail starts with a subtle shelf volume, separates the

@@ -30,7 +30,8 @@ async function assertSourceContract() {
   assert(source.includes("const STORM_RUN"), "Storm Run must keep tuning in a named constant table");
   assert((source.match(/reportDeadlineSeconds:\s*5\s*\*\s*60/g) || []).length >= 2, "both competition calls must share a five-minute Mr. Feast check-in deadline");
   assert(source.includes("addCompetitionFilmSet"), "Storm Run must use the shared film-set staging instead of a sign");
-  const filmCameraTuning = source.match(/camera:\s*Object\.freeze\(\{([\s\S]*?)\}\),\s*lights:/)?.[1] || "";
+  const competitionFilmSet = source.match(/const COMPETITION_FILM_SET\s*=\s*Object\.freeze\(\{([\s\S]*?)\n  \}\);/)?.[1] || "";
+  const filmCameraTuning = competitionFilmSet.match(/camera:\s*Object\.freeze\(\{([\s\S]*?)\}\),\s*lights:/)?.[1] || "";
   const filmCameraScale = Number(filmCameraTuning.match(/scale:\s*([\d.]+)/)?.[1]);
   const filmCameraX = Number(filmCameraTuning.match(/x:\s*(-?[\d.]+)/)?.[1]);
   const filmCameraAudienceZ = Number(filmCameraTuning.match(/audienceZ:\s*([\d.]+)/)?.[1]);
@@ -576,8 +577,17 @@ async function run() {
     assert(new Set(checkpoints.map((entry) => entry.region)).size >= 7, `checkpoints must still span the named yard regions: ${JSON.stringify(checkpoints)}`);
     assert(checkpoints.filter((entry) => entry.insideMaze).length === 1, `exactly one checkpoint must be inside the hedge maze: ${JSON.stringify(checkpoints)}`);
     assert(checkpoints.every((entry) => entry.inYardBounds && entry.walkable), `every checkpoint must be in a walkable yard position: ${JSON.stringify(checkpoints)}`);
+    const yardMaze = (await diagnostics(timerPage)).yard?.maze;
+    assert(
+      yardMaze?.entranceToExitCoverageRatio >= yardMaze?.minimumExitTraversalRatio
+        && yardMaze.entranceToExitCoverageRatio >= 0.5
+        && yardMaze.entranceToExitPathLength === 78
+        && yardMaze.totalWalkableCells === 117,
+      `the redesigned entrance-to-exit route must require at least half of the hedge maze: ${JSON.stringify(yardMaze)}`,
+    );
     const postFirstGardenSegments = storm.courseRoute?.segments.filter((entry) => entry.index >= 3 && entry.index <= 10) || [];
     assert(storm.courseRoute?.postFirstGardenToFrontClear && postFirstGardenSegments.length === 8 && postFirstGardenSegments.every((entry) => entry.clear), `the route after checkpoint one must physically clear the garden and front-drive colliders for the player capsule: ${JSON.stringify(storm.courseRoute)}`);
+    assert(storm.courseRoute?.allClear, `the complete reconfigured contestant route must remain clear for the player capsule: ${JSON.stringify(storm.courseRoute)}`);
     assert(checkpoints.every((entry) => entry.guidance?.visibleFromPrevious), `every next marker must be configured as visible from the previous checkpoint: ${JSON.stringify(checkpoints)}`);
     assert(checkpoints.every((entry) => entry.guidance?.distanceFromPrevious <= 32), `no breadcrumb leg may exceed the readable yard distance: ${JSON.stringify(checkpoints)}`);
     assert(checkpoints.every((entry) => entry.callout == null), `checkpoint diagnostics must not expose unused spoken landmark lines: ${JSON.stringify(checkpoints.map((entry) => entry.callout))}`);
@@ -684,14 +694,14 @@ async function run() {
     assert(
       mazeExitScare.trigger.id === "maze-final-corridor-turn"
         && mazeExitScare.trigger.x === 22
-        && mazeExitScare.trigger.z === -0.25,
+        && mazeExitScare.trigger.z === -24.25,
       `the final scare must arm as the player turns into the long last straight: ${JSON.stringify(mazeExitScare.trigger)}`,
     );
     assert(
       mazeExitScare.reveal.position.x === 22
         && mazeExitScare.reveal.position.z === -13.75
-        && angleDistance(mazeExitScare.reveal.yaw, 0) <= 0.001,
-      `Mr. Feast must wait at the far end before the westward exit turn facing north toward the player: ${JSON.stringify(mazeExitScare.reveal)}`,
+        && angleDistance(mazeExitScare.reveal.yaw, Math.PI) <= 0.001,
+      `Mr. Feast must wait at the far end before the westward exit turn facing south toward the player: ${JSON.stringify(mazeExitScare.reveal)}`,
     );
     assert(
       mazeExitState.mazeExitLighting?.dark
@@ -703,11 +713,11 @@ async function run() {
     const thirdComposition = await timerPage.evaluate(() => window.MrFeastFresh.previewStormScareForQA(2));
     assert(thirdComposition?.onScreen && thirdComposition.lineOfSight && Math.abs(thirdComposition.projected.x) <= 0.06, `the maze apparition must center in the player's unobstructed final-straight view: ${JSON.stringify(thirdComposition)}`);
     assert(
-      thirdComposition.distance >= 13.4
-        && thirdComposition.distance <= 13.6
+      thirdComposition.distance >= 10.4
+        && thirdComposition.distance <= 10.6
         && thirdComposition.projectedHeight >= 0.1
         && thirdComposition.hostFacingPlayerDot >= 0.99,
-      `the final apparition must read life-size at the far end while facing north toward the approaching player: ${JSON.stringify(thirdComposition)}`,
+      `the final apparition must read life-size at the far end while facing south toward the approaching player: ${JSON.stringify(thirdComposition)}`,
     );
     const thirdScare = await triggerScareThroughFacingGate(timerPage, 2, expectedScareIds[2]);
     assert(thirdScare.visible.scare.baselineLightExposure <= thirdScare.visible.scare.maximumLightExposure, `the hedge-maze apparition must begin in deep shadow: ${JSON.stringify(thirdScare.visible.scare)}`);

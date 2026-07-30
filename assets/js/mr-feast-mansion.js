@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260730-flashlight-texture-readability-1";
+  const MANSION_RUNTIME_VERSION = "20260730-bedroom-hiding-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2347,6 +2347,52 @@
       lowpassHz: 5200,
     }),
     eventHistoryLimit: 24,
+  });
+  const BEDROOM_HIDING = Object.freeze({
+    underBedCameraHeight: 0.24,
+    underBedRangeMultiplier: 0.82,
+    underBedInteractionHeight: 0.34,
+    underBedInteractionDepth: 1.15,
+    underBedTargetOutset: 0.08,
+    underBedApproachClearance: 0.72,
+    underBedCameraInset: 0.28,
+    underBedExitClearance: 0.9,
+    closetApproachClearance: 0.72,
+    closetExitClearance: 0.82,
+    suites: Object.freeze([
+      Object.freeze({
+        id: "west-front",
+        label: "West Front Suite",
+        closetId: "west-front-closet",
+        bedId: "west-front-bed",
+        closet: Object.freeze({ name: "west front walk-in closet", x: -12.8, z: 3.98, rotationY: 0 }),
+        bed: Object.freeze({ x: -10.5, z: 10.1, rotationY: 0, width: 2.05, approachSide: 1 }),
+      }),
+      Object.freeze({
+        id: "east-front",
+        label: "East Front Suite",
+        closetId: "east-front-closet",
+        bedId: "east-front-bed",
+        closet: Object.freeze({ name: "east front walk-in closet", x: 12.8, z: 3.98, rotationY: 0 }),
+        bed: Object.freeze({ x: 10.5, z: 10.1, rotationY: 0, width: 2.05, approachSide: -1 }),
+      }),
+      Object.freeze({
+        id: "primary",
+        label: "Primary Suite",
+        closetId: "primary-closet",
+        bedId: "primary-bed",
+        closet: Object.freeze({ name: "primary walk-in closet", x: -6, z: -9.2, rotationY: -Math.PI / 2 }),
+        bed: Object.freeze({ x: -10.5, z: -10.1, rotationY: Math.PI, width: 1.9, approachSide: 1 }),
+      }),
+      Object.freeze({
+        id: "east-rear",
+        label: "East Rear Suite",
+        closetId: "east-rear-closet",
+        bedId: "east-rear-bed",
+        closet: Object.freeze({ name: "east rear walk-in closet", x: 6, z: -9.2, rotationY: Math.PI / 2 }),
+        bed: Object.freeze({ x: 10.5, z: -10.1, rotationY: Math.PI, width: 1.9, approachSide: -1 }),
+      }),
+    ]),
   });
   const STEALTH = Object.freeze({
     // One concealment model with two consumers. The player-facing meter mixes
@@ -17577,6 +17623,7 @@
         name, x, y, z, width = 1.8, height = 1.9, depth = 0.52,
         rotationY = 0, material = M.darkWood, floorY = y, walkIn = false,
         stockKind = null, openAngle = 102, interiorLight = true,
+        bedroomHiding = null,
       } = options;
       this.name = name;
       this.walkIn = walkIn;
@@ -17588,6 +17635,7 @@
       this.rotationY = rotationY;
       this.openAngle = openAngle;
       this.hasInteriorLight = Boolean(interiorLight);
+      this.bedroomHiding = bedroomHiding;
       this.itemCount = 0;
       this.portableThrowableId = null;
       this.open = false;
@@ -17755,6 +17803,68 @@
       } else {
         addLocalCollider(0, height / 2, 0, width, height, depth);
       }
+      if (walkIn && bedroomHiding) {
+        const hidingTargetMaterial = new THREE.MeshBasicMaterial({
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          colorWrite: false,
+        });
+        const hidingTarget = box({
+          name: `${name}-walk-in-hiding-interaction`,
+          w: width * 0.42,
+          h: 1.52,
+          d: 0.08,
+          x: 0,
+          y: 1.16,
+          z: -depth / 2 + 0.18,
+          material: hidingTargetMaterial,
+          parent: this.walkInInteriorRoot,
+          cast: false,
+          receive: false,
+        });
+        const worldAt = (localX, localZ) => ({
+          x: x + Math.cos(rotationY) * localX + Math.sin(rotationY) * localZ,
+          z: z - Math.sin(rotationY) * localX + Math.cos(rotationY) * localZ,
+        });
+        const hidePoint = worldAt(0, -0.04);
+        const approachPoint = worldAt(0, depth / 2 + BEDROOM_HIDING.closetApproachClearance);
+        const exitPoint = worldAt(0, depth / 2 + BEDROOM_HIDING.closetExitClearance);
+        this.hidingSpot = new HidingSpot({
+          id: bedroomHiding.closetId,
+          name: `${bedroomHiding.label} closet`,
+          suiteId: bedroomHiding.id,
+          category: "bedroom-closet",
+          targets: [hidingTarget],
+          floorY,
+          hidePosition: {
+            ...hidePoint,
+            yaw: rotationY + Math.PI,
+          },
+          exitPosition: {
+            ...exitPoint,
+            yaw: rotationY + Math.PI,
+          },
+          approachPosition: {
+            ...approachPoint,
+            yaw: rotationY,
+            pitch: -0.08,
+          },
+          enterLabel: `Hide in ${bedroomHiding.label} closet`,
+          leaveLabel: `Leave ${bedroomHiding.label} closet`,
+          hiddenLabel: `Hidden inside the ${bedroomHiding.label} closet`,
+          viewClasses: ["is-bedroom-closet-hiding"],
+          breathMuffleMultiplier: BREATH_STEALTH.coatClosetRangeMultiplier,
+          breathHidingKind: "bedroom-closet",
+          prepareForApproach: () => {
+            this.setOpen(true, true);
+            this.update(1);
+          },
+          onEnter: () => this.setOpen(false),
+          onExit: () => this.setOpen(true),
+        });
+        this.hidingSpot.enclosure = this;
+      }
       animatedObjects.push(this);
     }
 
@@ -17861,20 +17971,31 @@
   class HidingSpot {
     constructor(options) {
       const {
+        id = null,
         name, targets, floorY, hidePosition, exitPosition,
+        suiteId = null,
+        category = "general",
+        approachPosition = null,
+        cameraPosition = null,
         enterLabel = `Hide in ${name}`,
         leaveLabel = `Leave ${name}`,
         hiddenLabel = "Hidden among the coats",
         viewClasses = [],
         breathMuffleMultiplier = BREATH_STEALTH.openRangeMultiplier,
         breathHidingKind = "open",
+        prepareForApproach = null,
         onEnter = null,
         onExit = null,
       } = options;
+      this.id = id || String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       this.name = name;
+      this.suiteId = suiteId;
+      this.category = category;
       this.floorY = floorY;
       this.hidePosition = hidePosition;
       this.exitPosition = exitPosition;
+      this.approachPosition = approachPosition;
+      this.cameraPosition = cameraPosition;
       this.enterLabel = enterLabel;
       this.leaveLabel = leaveLabel;
       this.hiddenLabel = hiddenLabel;
@@ -17885,6 +18006,7 @@
         1,
       );
       this.breathHidingKind = breathHidingKind;
+      this.prepareForApproach = prepareForApproach;
       this.onEnter = onEnter;
       this.onExit = onExit;
       this.interaction = {
@@ -17894,6 +18016,61 @@
       };
       for (const target of targets) addInteractionTarget(target, this.interaction);
       hidingSpots.push(this);
+    }
+
+    playerCameraAnchor(target) {
+      if (state.activeHideSpot !== this || !this.cameraPosition) return false;
+      target.set(
+        this.cameraPosition.x,
+        this.cameraPosition.y,
+        this.cameraPosition.z,
+      );
+      return true;
+    }
+
+    stageForQA() {
+      if (!state.qa || !physics || !this.approachPosition) return null;
+      if (state.activeHideSpot) state.activeHideSpot.exit();
+      if (typeof this.prepareForApproach === "function") this.prepareForApproach();
+      teleport(
+        this.approachPosition.x,
+        this.floorY,
+        this.approachPosition.z,
+        this.approachPosition.yaw,
+        this.approachPosition.pitch || 0,
+      );
+      updateLocation();
+      updateInteractionPrompt();
+      camera.updateMatrixWorld(true);
+      const ray = inspectInteractionRay();
+      return {
+        ...this.getDiagnostics(),
+        prompt: state.currentInteraction?.getLabel?.() || null,
+        distance: ray?.hit?.distance ?? null,
+        interactionRay: ray,
+      };
+    }
+
+    getDiagnostics() {
+      return {
+        id: this.id,
+        name: this.name,
+        suiteId: this.suiteId,
+        category: this.category,
+        active: state.activeHideSpot === this,
+        prompt: this.interaction.getLabel(),
+        floorY: this.floorY,
+        hidePosition: { ...this.hidePosition },
+        exitPosition: { ...this.exitPosition },
+        approachPosition: this.approachPosition ? { ...this.approachPosition } : null,
+        cameraPosition: this.cameraPosition ? { ...this.cameraPosition } : null,
+        breathHidingKind: this.breathHidingKind,
+        breathMuffleMultiplier: this.breathMuffleMultiplier,
+        enclosureOpen: this.enclosure ? Boolean(this.enclosure.open) : null,
+        interiorVisible: this.enclosure
+          ? Boolean(this.enclosure.walkInInteriorRoot?.visible)
+          : null,
+      };
     }
 
     enter() {
@@ -17908,7 +18085,13 @@
       input.sprint = false;
       state.movement.sprinting = false;
       if (typeof this.onEnter === "function") this.onEnter();
-      teleport(this.hidePosition.x, this.floorY, this.hidePosition.z, this.hidePosition.yaw, 0);
+      teleport(
+        this.hidePosition.x,
+        this.floorY,
+        this.hidePosition.z,
+        this.hidePosition.yaw,
+        this.hidePosition.pitch || 0,
+      );
       if (audioSystem) audioSystem.hide("enter");
       if (dom.stage) {
         dom.stage.classList.add("is-hiding");
@@ -33334,17 +33517,27 @@
     return Math.atan2(fromX - targetX, fromZ - targetZ);
   }
 
-  function addBed(x, z, floorY, rotationY, width, canopy) {
+  function addBed(x, z, floorY, rotationY, width, canopy, bedroomHiding = null) {
     const group = new THREE.Group();
     group.position.set(x, floorY, z);
     group.rotation.y = rotationY || 0;
     scene.add(group);
     const w = width || 2.0;
     const d = 2.5;
-    box({ name: "bed-frame", w, h: 0.34, d, x: 0, y: 0.32, z: 0, material: M.darkWood, parent: group, occluder: "bed-frame" });
-    box({ name: "bed-mattress", w: w - 0.16, h: 0.24, d: d - 0.2, x: 0, y: 0.61, z: -0.02, material: M.bedLinen, parent: group, occluder: "bed-mattress" });
-    box({ name: "bed-coverlet", w: w - 0.2, h: 0.08, d: 1.5, x: 0, y: 0.77, z: -0.3, material: M.bedCoverlet, parent: group, cast: false, occluder: "bed-coverlet" });
-    for (const sx of [-0.22, 0.22]) roundedBox({ name: "bed-pillow", w: w * 0.4, h: 0.16, d: 0.55, radius: 0.07, x: sx * w, y: 0.8, z: 0.75, material: M.bedLinen, parent: group, cast: false });
+    // A rail-and-leg frame preserves the existing mattress height while
+    // creating a real, camera-readable hiding gap instead of a solid plinth.
+    for (const sx of [-1, 1]) {
+      box({ name: "bed-side-rail", w: 0.13, h: 0.18, d, x: sx * (w / 2 - 0.065), y: 0.45, z: 0, material: M.darkWood, parent: group, occluder: "bed-frame" });
+      for (const sz of [-1, 1]) {
+        roundedBox({ name: "bed-leg", w: 0.16, h: 0.38, d: 0.16, radius: 0.025, x: sx * (w / 2 - 0.12), y: 0.19, z: sz * (d / 2 - 0.12), material: M.darkWood, parent: group, occluder: "bed-frame" });
+      }
+    }
+    for (const sz of [-1, 1]) {
+      box({ name: "bed-end-rail", w: w - 0.2, h: 0.18, d: 0.13, x: 0, y: 0.45, z: sz * (d / 2 - 0.065), material: M.darkWood, parent: group, occluder: "bed-frame" });
+    }
+    box({ name: "bed-mattress", w: w - 0.16, h: 0.24, d: d - 0.2, x: 0, y: 0.66, z: -0.02, material: M.bedLinen, parent: group, occluder: "bed-mattress" });
+    box({ name: "bed-coverlet", w: w - 0.2, h: 0.08, d: 1.5, x: 0, y: 0.82, z: -0.3, material: M.bedCoverlet, parent: group, cast: false, occluder: "bed-coverlet" });
+    for (const sx of [-0.22, 0.22]) roundedBox({ name: "bed-pillow", w: w * 0.4, h: 0.16, d: 0.55, radius: 0.07, x: sx * w, y: 0.85, z: 0.75, material: M.bedLinen, parent: group, cast: false });
     box({ name: "bed-headboard", w: w + 0.18, h: 1.55, d: 0.18, x: 0, y: 0.9, z: d / 2, material: M.darkWood, parent: group, occluder: "bed-headboard" });
     box({ name: "bed-headboard-upholstery", w: w - 0.28, h: 0.92, d: 0.05, x: 0, y: 1.08, z: d / 2 - 0.12, material: M.bedHeadboard, parent: group, cast: false, occluder: "bed-headboard" });
     if (canopy) {
@@ -33355,6 +33548,73 @@
     const cw = Math.abs(Math.cos(rotationY || 0)) * w + Math.abs(Math.sin(rotationY || 0)) * d;
     const cd = Math.abs(Math.sin(rotationY || 0)) * w + Math.abs(Math.cos(rotationY || 0)) * d;
     physics.addFixedBox(x, floorY + 0.7, z, cw, 1.4, cd, 0);
+    if (bedroomHiding) {
+      const worldSide = bedroomHiding.bed.approachSide;
+      const localSide = worldSide * (Math.cos(rotationY || 0) >= 0 ? 1 : -1);
+      const targetMaterial = new THREE.MeshBasicMaterial({
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+        colorWrite: false,
+      });
+      const target = box({
+        name: `${bedroomHiding.bedId}-under-bed-hiding-interaction`,
+        w: 0.16,
+        h: BEDROOM_HIDING.underBedInteractionHeight,
+        d: BEDROOM_HIDING.underBedInteractionDepth,
+        x: localSide * (w / 2 + BEDROOM_HIDING.underBedTargetOutset),
+        y: BEDROOM_HIDING.underBedInteractionHeight / 2 + 0.02,
+        z: -0.06,
+        material: targetMaterial,
+        parent: group,
+        cast: false,
+        receive: false,
+      });
+      const approachX = x + worldSide * (w / 2 + BEDROOM_HIDING.underBedApproachClearance);
+      const exitX = x + worldSide * (w / 2 + BEDROOM_HIDING.underBedExitClearance);
+      const cameraX = x + worldSide * (w / 2 - BEDROOM_HIDING.underBedCameraInset);
+      const outwardYaw = -worldSide * Math.PI / 2;
+      const hidingSpot = new HidingSpot({
+        id: bedroomHiding.bedId,
+        name: `${bedroomHiding.label} bed`,
+        suiteId: bedroomHiding.id,
+        category: "under-bed",
+        targets: [target],
+        floorY,
+        hidePosition: {
+          x: exitX,
+          z,
+          yaw: outwardYaw,
+          pitch: 0.02,
+        },
+        exitPosition: {
+          x: exitX,
+          z,
+          yaw: outwardYaw,
+        },
+        approachPosition: {
+          x: approachX,
+          z,
+          yaw: faceTargetYaw(approachX, z, x, z),
+          pitch: Math.atan2(
+            BEDROOM_HIDING.underBedInteractionHeight * 0.5 + 0.02 - PLAYER.eye,
+            BEDROOM_HIDING.underBedApproachClearance - BEDROOM_HIDING.underBedTargetOutset,
+          ),
+        },
+        cameraPosition: {
+          x: cameraX,
+          y: floorY + BEDROOM_HIDING.underBedCameraHeight,
+          z: z - 0.06,
+        },
+        enterLabel: `Hide under ${bedroomHiding.label} bed`,
+        leaveLabel: `Leave ${bedroomHiding.label} bed`,
+        hiddenLabel: `Hidden under the ${bedroomHiding.label} bed`,
+        viewClasses: ["is-under-bed-hiding"],
+        breathMuffleMultiplier: BEDROOM_HIDING.underBedRangeMultiplier,
+        breathHidingKind: "under-bed",
+      });
+      hidingSpot.bedRoot = group;
+    }
     return group;
   }
 
@@ -36522,14 +36782,30 @@
   }
 
   function furnishUpperFloor() {
-    addBed(-10.5, 10.1, FLOOR.UPPER, 0, 2.05, false);
-    new Cabinet({ name: "west front walk-in closet", x: -12.8, z: 3.98, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: 0, walkIn: true });
+    const [westFrontHiding, eastFrontHiding, primaryHiding, eastRearHiding] = BEDROOM_HIDING.suites;
+    const addBedroomHidingFurniture = (config) => {
+      const bed = config.bed;
+      const closet = config.closet;
+      addBed(bed.x, bed.z, FLOOR.UPPER, bed.rotationY, bed.width, false, config);
+      new Cabinet({
+        name: closet.name,
+        x: closet.x,
+        z: closet.z,
+        floorY: FLOOR.UPPER,
+        width: 2.6,
+        height: 2.6,
+        depth: 1.55,
+        rotationY: closet.rotationY,
+        walkIn: true,
+        bedroomHiding: config,
+      });
+    };
+    addBedroomHidingFurniture(westFrontHiding);
     addTable(-7.2, 9.3, 1.25, 0.68, FLOOR.UPPER, Math.PI / 2, M.darkWood);
     addChair(-7.2, 8.45, FLOOR.UPPER, Math.PI, M.darkWood);
     addBedroomSuiteDressing(-10.5, 10.1, 0, ["candle", "books"]);
 
-    addBed(10.5, 10.1, FLOOR.UPPER, 0, 2.05, false);
-    new Cabinet({ name: "east front walk-in closet", x: 12.8, z: 3.98, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: 0, walkIn: true });
+    addBedroomHidingFurniture(eastFrontHiding);
     addTable(5.58, 9.55, 1.25, 0.68, FLOOR.UPPER, -Math.PI / 2, M.darkWood);
     addChair(6.48, 9.55, FLOOR.UPPER, Math.PI / 2, M.darkWood);
     addBedroomSuiteDressing(10.5, 10.1, 0, ["carafe", "candle"]);
@@ -36538,8 +36814,7 @@
     addBookshelf(14.45, 2.0, FLOOR.UPPER, Math.PI / 2, 2.3, 2.45, { collection: "READING ROOM" });
     addSofa(9.0, 0.0, FLOOR.UPPER, -Math.PI / 2, 2.25, M.sofaForest, { seatTag: "reading-room-sofa", slots: 1, heightScale: MANSION_SEATING.readingRoomSofaHeightScale });
 
-    addBed(-10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
-    new Cabinet({ name: "primary walk-in closet", x: -6.0, z: -9.2, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: -Math.PI / 2, walkIn: true });
+    addBedroomHidingFurniture(primaryHiding);
     addRug(0, -8.35, 6.0, 5.6, FLOOR.UPPER, M.exoticRug, 0);
     addSofa(0, -6.45, FLOOR.UPPER, 0, 3.2, M.sofaOxblood);
     addTable(0, -8.25, 1.8, 0.78, FLOOR.UPPER, 0, M.marble);
@@ -36549,8 +36824,7 @@
     addMantelDecor(-4.7, -10.18, FLOOR.UPPER, -Math.PI / 2, "frame");
     addBedroomSuiteDressing(-10.5, -10.1, Math.PI, ["books", "watch"], { rugMaterial: M.exoticRug });
     addRearLoungeTeaService();
-    addBed(10.5, -10.1, FLOOR.UPPER, Math.PI, 1.9, false);
-    new Cabinet({ name: "east rear walk-in closet", x: 6.0, z: -9.2, floorY: FLOOR.UPPER, width: 2.6, height: 2.6, depth: 1.55, rotationY: Math.PI / 2, walkIn: true });
+    addBedroomHidingFurniture(eastRearHiding);
     addBedroomSuiteDressing(10.5, -10.1, Math.PI, ["candle", "carafe"]);
     for (const portrait of [
       { x: -12.5, artId: "house-dreams-back", circuitName: "primary suite lights" },
@@ -44466,7 +44740,10 @@
     const p = physics.playerPosition();
     // Rapier's controller keeps a small skin depth around stepped surfaces; the
     // extra 0.17m preserves the authored 1.67m eye line without changing collision.
-    if (!seatingSystem?.playerCameraAnchor(camera.position)) {
+    if (
+      !state.activeHideSpot?.playerCameraAnchor?.(camera.position)
+      && !seatingSystem?.playerCameraAnchor(camera.position)
+    ) {
       camera.position.set(p.x, p.y + state.movement.eyeHeight - (PLAYER.halfHeight + PLAYER.radius) + 0.17, p.z);
     }
     camera.rotation.y = state.yaw;
@@ -44749,6 +45026,31 @@
     };
   }
 
+  function getBedroomHidingDiagnostics() {
+    const spots = hidingSpots
+      .filter((spot) => spot.category === "bedroom-closet" || spot.category === "under-bed")
+      .map((spot) => spot.getDiagnostics());
+    const active = hidingSpots.find((spot) => (
+      state.activeHideSpot === spot
+      && (spot.category === "bedroom-closet" || spot.category === "under-bed")
+    )) || null;
+    return {
+      count: spots.length,
+      closetCount: spots.filter((spot) => spot.category === "bedroom-closet").length,
+      bedCount: spots.filter((spot) => spot.category === "under-bed").length,
+      activeId: active?.id || null,
+      activeCategory: active?.category || null,
+      activeCameraHeight: active
+        ? Number((camera.position.y - active.floorY).toFixed(3))
+        : null,
+      spots,
+      stageTreatment: {
+        closet: Boolean(dom.stage?.classList.contains("is-bedroom-closet-hiding")),
+        underBed: Boolean(dom.stage?.classList.contains("is-under-bed-hiding")),
+      },
+    };
+  }
+
   function getDiagnostics() {
     const p = physics ? physics.playerPosition() : { x: 0, y: 0, z: 0 };
     const feetY = p.y - (PLAYER.halfHeight + PLAYER.radius);
@@ -44841,6 +45143,7 @@
       estateStatues: getEstateStatueDiagnostics(),
       upperWindowGallery: getUpperWindowGalleryDiagnostics(),
       windowCurtains: getWindowCurtainDiagnostics(),
+      bedroomHiding: getBedroomHidingDiagnostics(),
       furnitureTextiles: getFurnitureTextileDiagnostics(),
       player: {
         x: Number(p.x.toFixed(2)),
@@ -45123,7 +45426,30 @@
     });
     window.MrFeastFresh.getDiagnostics = getDiagnostics;
     window.MrFeastFresh.getWindowCurtainState = getWindowCurtainDiagnostics;
+    window.MrFeastFresh.getBedroomHidingState = getBedroomHidingDiagnostics;
     window.MrFeastFresh.getFurnitureTextileState = getFurnitureTextileDiagnostics;
+    window.MrFeastFresh.placePlayerNearBedroomHideForQA = (id) => {
+      if (!state.qa || !physics) return null;
+      const query = String(id || "").toLowerCase();
+      const spot = hidingSpots.find((entry) => (
+        entry.id.toLowerCase() === query
+        && (entry.category === "bedroom-closet" || entry.category === "under-bed")
+      ));
+      return spot?.stageForQA() || null;
+    };
+    window.MrFeastFresh.advanceBedroomHidingForQA = (seconds) => {
+      if (!state.qa) return null;
+      const dt = Math.max(0, Number(seconds) || 0);
+      for (const spot of hidingSpots) {
+        if (spot.category === "bedroom-closet" && spot.enclosure) {
+          spot.enclosure.update(dt);
+        }
+      }
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateInteractionPrompt();
+      return getBedroomHidingDiagnostics();
+    };
     window.MrFeastFresh.placePlayerNearWindowCurtainForQA = (id) => {
       if (!state.qa || !physics) return null;
       if (state.activeHideSpot) state.activeHideSpot.exit();

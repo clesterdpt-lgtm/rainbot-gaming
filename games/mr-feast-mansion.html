@@ -191,6 +191,21 @@
         radial-gradient(ellipse at center, transparent 28%, rgba(0, 0, 0, 0.64));
     }
 
+    #mansion-stage.is-hiding.is-under-bed-hiding::after {
+      background:
+        linear-gradient(180deg,
+          rgba(8, 5, 4, 0.99) 0%,
+          rgba(18, 11, 8, 0.98) 33%,
+          rgba(8, 5, 4, 0.78) 39%,
+          transparent 45%,
+          transparent 67%,
+          rgba(4, 3, 2, 0.72) 75%,
+          rgba(4, 3, 2, 0.96) 100%),
+        repeating-linear-gradient(90deg,
+          rgba(63, 39, 25, 0.18) 0 8px,
+          rgba(8, 5, 4, 0.08) 8px 18px);
+    }
+
     #mansion-stage.is-hiding.is-curtain-hiding::after {
       transition: background 320ms ease;
     }
@@ -3853,6 +3868,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260723-mr-feast-rebrand-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260730-flashlight-texture-readability-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260730-bedroom-hiding-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

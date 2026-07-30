@@ -48,10 +48,10 @@ async function assertSourceContract() {
   assert(/class BreathStealthSystem/.test(runtime), "BreathStealthSystem should remain as a disabled stub for save/QA compatibility");
   assert(/BANQUET_LOSS[\s\S]*breathing:\s*Object\.freeze/.test(runtime), "captured-at-dinner panic breathing must stay banquet-owned");
   assert(/startBanquetBreathing|playBanquetBreath|updateBanquetBreathing/.test(runtime), "banquet panic breath methods must remain");
+  const runtimeVersion = runtime.match(/MANSION_RUNTIME_VERSION = "([^"]+)"/)?.[1] || "";
   assert(
-    runtime.includes('const MANSION_RUNTIME_VERSION = "20260729-center-ballroom-marble-1"')
-      && html.includes("mr-feast-mansion.js?v=20260729-center-ballroom-marble-1"),
-    "page and runtime cache identities must agree after removing gameplay breath",
+    runtimeVersion.length > 0 && html.includes(`mr-feast-mansion.js?v=${runtimeVersion}`),
+    `page and runtime cache identities must agree after removing gameplay breath: ${runtimeVersion}`,
   );
   assert(!/<kbd>Space<\/kbd>\s*hold breath/i.test(html), "desktop guide must not advertise hold-breath");
   assert(

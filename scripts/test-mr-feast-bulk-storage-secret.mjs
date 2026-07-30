@@ -348,8 +348,39 @@ async function run() {
       assert(returnStage?.readyToReturn, `QA must stage the ${id} hand-in: ${JSON.stringify(returnStage)}`);
       await progressionPage.keyboard.press("e");
     }
+    let liveGameThree = await progressionPage.evaluate(() => ({
+      feastHunt: window.MrFeastFresh.getFeastHuntState(),
+      contestants: window.MrFeastFresh.getContestantState(),
+      storage: window.MrFeastFresh.getBulkStorageSecretState(),
+    }));
+    let liveJuniper = liveGameThree.contestants.entries.find((entry) => entry.id === "juniper-cross");
+    let liveJuniperPile = liveGameThree.storage.clothingPiles.find((pile) => pile.id === "juniper");
+    assert(
+      liveGameThree.feastHunt.aftermath.active
+        && liveJuniper?.modelVisible
+        && !liveJuniper.eliminated
+        && !liveJuniperPile?.visible,
+      `Juniper must finish her losing dialogue before her storage clothing appears: ${JSON.stringify(liveGameThree)}`,
+    );
+    await progressionPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(16));
+    await progressionPage.evaluate(() => window.MrFeastFresh.placePlayerNearBulkStorageBoxForQA("bulk-box-d"));
+    await progressionPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(0.25));
     await progressionPage.waitForFunction(
       () => window.MrFeastFresh.getBulkStorageSecretState()?.clothingPiles?.find((pile) => pile.id === "juniper")?.visible,
+    );
+    liveGameThree = await progressionPage.evaluate(() => ({
+      feastHunt: window.MrFeastFresh.getFeastHuntState(),
+      contestants: window.MrFeastFresh.getContestantState(),
+      storage: window.MrFeastFresh.getBulkStorageSecretState(),
+    }));
+    liveJuniper = liveGameThree.contestants.entries.find((entry) => entry.id === "juniper-cross");
+    liveJuniperPile = liveGameThree.storage.clothingPiles.find((pile) => pile.id === "juniper");
+    assert(
+      !liveGameThree.feastHunt.aftermath.active
+        && liveJuniper?.eliminated
+        && !liveJuniper.modelVisible
+        && liveJuniperPile?.visible,
+      `Juniper must disappear as her Game 3 clothing pile unlocks: ${JSON.stringify(liveGameThree)}`,
     );
     progressionSecret = await secretState(progressionPage);
     piles = Object.fromEntries(progressionSecret.clothingPiles.map((pile) => [pile.id, pile]));

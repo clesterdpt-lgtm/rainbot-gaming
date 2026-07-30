@@ -62,7 +62,7 @@ of the shipped welcome says exactly that.
 |---|------|---------|-----|
 | 03 | Mara Voss | The Strategist | Day-one contestant; has watched nine people "go home" and strategized herself into denial. Eliminated after Game 2. |
 | 07 | Kip Solano | The Wild Card | Treats everything as content. While he's alive the game is allowed to be funny. Eliminated after Game 1. |
-| 10 | Juniper Cross | The Folklorist | Applied on purpose — she has been researching this estate for years. The player's ally and lore engine. Actively races the player in Game 3; her final story result is deferred. |
+| 10 | Juniper Cross | The Folklorist | Applied on purpose — she has been researching this estate for years. The player's ally and lore engine. Loses Game 3 after the player returns first, delivers one final warning about the house, then disappears offscreen. |
 | 13 | *(prior)* | — | The previous Contestant 13: investigated, hid the badge/tape/key trail, "became our most-watched episode." Ghost guide and co-protagonist of the true ending. |
 | 13 | **The player** | The Replacement | The season opened with twelve. Nine seats were already cleared before you arrived. Your number is reissued. |
 
@@ -186,10 +186,12 @@ rises with it, and the finale is a scheduled arrival.
   the Listening Host and Veiled Waltz turn only while unobserved, camera LEDs go dark
   while tracking remains active, and Mr. Feast's cheerful announcements thin into
   silence. The statues redirect and frighten but never damage the player.
-- **Juniper's end is deliberately simple and deferred.** Game 3 does not require a
-  sacrifice cinematic. A later finale slice may eliminate or escort her offscreen
-  after an authored warning about the Winner's Dinner, while her research remains
-  the investigation-earned route to the true ending.
+- **Juniper's end is deliberately simple.** A player win keeps her in the foyer for
+  Mr. Feast's elimination result, her warning that the house showed every hiding
+  place but no way out, and his answer that she mistook being chosen for being safe.
+  She disappears only after the player leaves the witnessed scene; her clothes then
+  join Kip's and Mara's in Bulk Storage. There is no sacrifice cinematic or death
+  reveal, and her research remains the investigation-earned route to the true ending.
 
 ### Finale — THE WINNER'S DINNER
 
@@ -334,8 +336,8 @@ idea that fits a lane is automatically coherent; anything that fits none gets cu
    line-pool swaps, statue notches, the reverse-jingle motif.
 7. **Game 3 core: Feast Hunt** — full-house blackout, three mansion-wide props,
    live cameras, pursuit, hiding, a physical foyer hand-in, Juniper's competing
-   search route, and the first unobserved foyer-statue turns. Her final story result
-   is deferred.
+   search route, the first unobserved foyer-statue turns, and her witnessed loss
+   dialogue plus offscreen disappearance/clothing handoff.
 8. **Winner's Dinner + three endings** — the shipped welcome replay is the bad
    ending's whole script; the shipped Workroom sabotage is the true ending's first
    half.

@@ -169,6 +169,18 @@ async function assertSourceContract() {
   assert(/placePlayerAtFeastHuntReturnForQA/.test(runtime), "Feast Hunt needs a real foyer return QA control");
   assert(/startFeastHuntRace/.test(runtime) && /updateFeastHuntEntry/.test(runtime), "Juniper needs an authored active Feast Hunt route");
   assert(/rivalPendingItemId/.test(runtime) && /searchPauseSeconds:\s*(?:[3-9]\d|[1-9]\d{2,})/.test(runtime), "Juniper needs a substantial pre-find search delay");
+  assert(
+    /beginFeastHuntAftermath/.test(runtime)
+      && /finishFeastHuntAftermath/.test(runtime)
+      && /feast-hunt-aftermath/.test(runtime),
+    "Juniper needs an authored post-loss aftermath before she disappears",
+  );
+  assert(
+    /juniperLine:/.test(runtime)
+      && /hostLine:/.test(runtime)
+      && /aftermathActive:\s*false/.test(runtime),
+    "Game 3 must keep Juniper's losing dialogue in named tuning and authoritative state",
+  );
   assert(/returnedIds:\s*\[\]/.test(runtime) && /carriedItemId:\s*null/.test(runtime), "Feast Hunt must track individual foyer hand-ins and one carried item");
   assert(
     /updateStatueCreep\(/.test(runtime)
@@ -620,14 +632,79 @@ async function run() {
       hunt.phase === "completed"
         && hunt.outcome === "player"
         && hunt.finalePending
+        && hunt.aftermath.active
+        && hunt.aftermath.stage === "result-speaking"
         && !hunt.blackout.active
         && !hunt.returnStation.registered
         && !hunt.juniperSacrifice,
       `the real foyer hand-in should complete Game 3 and restore mansion lighting: ${JSON.stringify(hunt)}`,
     );
+    let completionScene = await winPage.evaluate(() => JSON.parse(window.render_game_to_text()));
+    let aftermathJuniper = completionScene.contestants.entries.find((entry) => entry.id === "juniper-cross");
+    let juniperClothing = completionScene.bulkStorageSecret.clothingPiles.find((entry) => entry.id === "juniper");
+    assert(
+      completionScene.contestants.challengeMode === "feast-hunt-aftermath"
+        && aftermathJuniper?.modelVisible
+        && !aftermathJuniper.eliminated
+        && !aftermathJuniper.interactionRegistered
+        && aftermathJuniper.challengeResponse?.action === "upset"
+        && !juniperClothing?.visible
+        && completionScene.speech.category === "feast-hunt-aftermath-result"
+        && /Juniper.*eliminated/i.test(completionScene.speech.text || ""),
+      `Juniper must remain for the witnessed Game 3 result before her clothes appear: ${JSON.stringify({
+        contestants: completionScene.contestants,
+        clothing: juniperClothing,
+        speech: completionScene.speech,
+      })}`,
+    );
     const visibleHud = await winPage.locator("#mansion-feast-hunt").isVisible();
     assert(visibleHud, "the completion card should remain briefly visible");
     await winPage.screenshot({ path: path.join(artifactDir, "feast-hunt-complete-desktop.png") });
+
+    await winPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(5));
+    completionScene = await winPage.evaluate(() => JSON.parse(window.render_game_to_text()));
+    assert(
+      completionScene.feastHunt.aftermath.stage === "juniper-speaking"
+        && completionScene.speech.speakerId === "juniper-cross"
+        && completionScene.speech.category === "feast-hunt-aftermath-juniper"
+        && /house.*way out/i.test(completionScene.speech.text || ""),
+      `Juniper needs her own losing line after the result: ${JSON.stringify({
+        aftermath: completionScene.feastHunt.aftermath,
+        speech: completionScene.speech,
+      })}`,
+    );
+    await winPage.screenshot({ path: path.join(artifactDir, "juniper-game-three-losing-line.png") });
+    await winPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(5.6));
+    completionScene = await winPage.evaluate(() => JSON.parse(window.render_game_to_text()));
+    assert(
+      completionScene.feastHunt.aftermath.stage === "host-speaking"
+        && completionScene.speech.speakerId === "mr-feast"
+        && completionScene.speech.category === "feast-hunt-aftermath-host"
+        && /chosen.*safe/i.test(completionScene.speech.text || ""),
+      `Mr. Feast must answer Juniper before production removes her: ${JSON.stringify({
+        aftermath: completionScene.feastHunt.aftermath,
+        speech: completionScene.speech,
+      })}`,
+    );
+    await winPage.screenshot({ path: path.join(artifactDir, "juniper-game-three-elimination-dialogue.png") });
+    await winPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(4.8));
+    completionScene = await winPage.evaluate(() => JSON.parse(window.render_game_to_text()));
+    aftermathJuniper = completionScene.contestants.entries.find((entry) => entry.id === "juniper-cross");
+    juniperClothing = completionScene.bulkStorageSecret.clothingPiles.find((entry) => entry.id === "juniper");
+    assert(
+      completionScene.feastHunt.aftermath.active
+        && completionScene.feastHunt.aftermath.stage === "waiting-for-player-exit"
+        && aftermathJuniper?.modelVisible
+        && !aftermathJuniper.eliminated
+        && !juniperClothing?.visible
+        && completionScene.victoryFeast.phase === "dormant",
+      `Juniper must not pop out or unlock her clothing while the player can still witness the scene: ${JSON.stringify({
+        aftermath: completionScene.feastHunt.aftermath,
+        juniper: aftermathJuniper,
+        clothing: juniperClothing,
+        victoryFeast: completionScene.victoryFeast,
+      })}`,
+    );
 
     const completionSafety = await winPage.evaluate(() => {
       const cameraId = "cam-basement-boiler";
@@ -651,14 +728,14 @@ async function run() {
       };
     });
     assert(
-      completionSafety.feastHunt.completionCardRemaining > 0
+      completionSafety.feastHunt.aftermath.active
         && !completionSafety.security.observed
         && !completionSafety.awareness.active
         && completionSafety.pursuit.active === null,
-      `the visible SAFE completion card must suspend camera and personal reacquisition: ${JSON.stringify(completionSafety)}`,
+      `the witnessed Juniper aftermath must suspend camera and personal reacquisition: ${JSON.stringify(completionSafety)}`,
     );
     const finaleCallHold = await winPage.evaluate(() => {
-      window.MrFeastFresh.advanceFeastHuntForQA(6.1);
+      window.MrFeastFresh.advanceFeastHuntForQA(0.25);
       const cameraId = "cam-basement-boiler";
       window.MrFeastFresh.resetCameraSecurityForQA(null);
       window.MrFeastFresh.setCameraStoryStateForQA({ basementUnlocked: true, relaySabotaged: true });
@@ -671,14 +748,24 @@ async function run() {
         security,
         feastHunt: window.MrFeastFresh.getFeastHuntState(),
         victoryFeast: window.MrFeastFresh.getVictoryFeastState(),
+        contestants: window.MrFeastFresh.getContestantState(),
+        bulkStorage: window.MrFeastFresh.getBulkStorageSecretState(),
       };
     });
+    aftermathJuniper = finaleCallHold.contestants.entries.find((entry) => entry.id === "juniper-cross");
+    juniperClothing = finaleCallHold.bulkStorage.clothingPiles.find((entry) => entry.id === "juniper");
     assert(
       finaleCallHold.feastHunt.completionCardRemaining === 0
+        && !finaleCallHold.feastHunt.aftermath.active
+        && aftermathJuniper?.eliminated
+        && !aftermathJuniper.modelVisible
+        && !aftermathJuniper.colliderEnabled
+        && !aftermathJuniper.interactionRegistered
+        && juniperClothing?.visible
         && finaleCallHold.victoryFeast.phase === "called"
         && finaleCallHold.victoryFeast.reportRemaining > 0
         && !finaleCallHold.security.observed,
-      `the Game 3 grace must hand directly to the five-minute Victory Feast production hold: ${JSON.stringify(finaleCallHold)}`,
+      `leaving the aftermath must remove Juniper, reveal her storage clothing, and begin the Victory Feast hold: ${JSON.stringify(finaleCallHold)}`,
     );
     await winPage.close();
 

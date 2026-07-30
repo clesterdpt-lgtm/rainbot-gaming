@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260730-bedroom-hiding-1";
+  const MANSION_RUNTIME_VERSION = "20260730-juniper-aftermath-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -3403,7 +3403,7 @@
     briefingLine: "The house lights are dead. Each of you has three golden objects, but production will place only one at a time. Bring it back to this foyer before the next appears. Stay out of my cameras, stay out of my sight, and do not get caught.",
     countdownLines: Object.freeze({ 3: "Three.", 2: "Two.", 1: "One." }),
     startLine: "Hunt.",
-    completionLine: "Three objects returned, one trip at a time. You beat Juniper back to the foyer. Feast Hunt is complete.",
+    completionLine: "Three objects returned. Juniper Cross, you reached the foyer last. You are eliminated.",
     hostMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 7.25, yaw: Math.PI, scale: 1 }),
     briefingHostMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 7.25, yaw: 0, scale: 1 }),
     playerMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 9.75, yaw: 0, pitch: -0.08 }),
@@ -3411,6 +3411,22 @@
       "juniper-cross": Object.freeze({ x: 1.55, y: FLOOR.MAIN, z: 8.45, yaw: Math.PI }),
     }),
     returnMark: Object.freeze({ x: 0, y: FLOOR.MAIN, z: 7.25, yaw: Math.PI }),
+    aftermath: Object.freeze({
+      resultLineSeconds: 4.8,
+      juniperLine: "No. The house showed me every hiding place. It never showed me a way out.",
+      juniperLineSeconds: 5.4,
+      hostLine: "It did, Juniper. You simply mistook being chosen for being safe.",
+      hostLineSeconds: 4.6,
+      eliminatedAction: "upset",
+      returnSpeed: 1,
+      arrivalRadius: 0.08,
+      farMainFloorDistance: 9,
+      hostMark: Object.freeze({ x: -1.1, y: FLOOR.MAIN, z: 7.25, yaw: 0, scale: 1 }),
+      stageMarks: Object.freeze({
+        "juniper-cross": Object.freeze({ x: 1.1, y: FLOOR.MAIN, z: 7.35, yaw: 0 }),
+      }),
+      returnRoutes: Object.freeze({}),
+    }),
     rival: Object.freeze({
       id: "juniper-cross",
       label: "Juniper",
@@ -4387,8 +4403,13 @@
         outputFactor: 1,
         lastDefect: null,
       },
+      eliminatedContestantId: null,
       invalidTransitions: 0,
       lastInvalidTransition: null,
+      aftermathActive: false,
+      aftermathStage: "inactive",
+      aftermathElapsed: 0,
+      aftermathCleanupReason: null,
     },
     movement: {
       crouched: false,
@@ -13470,7 +13491,7 @@
           if (entry.status !== "ready" || !entry.root.visible) continue;
           if (this.challengeMode === "storm-run") this.updateStormRunEntry(entry, dt);
           else if (this.challengeMode === "feast-hunt") this.updateFeastHuntEntry(entry, dt);
-          else if (["feast-says-aftermath", "storm-run-aftermath"].includes(this.challengeMode)) this.updateCompetitionAftermathEntry(entry, dt);
+          else if (["feast-says-aftermath", "storm-run-aftermath", "feast-hunt-aftermath"].includes(this.challengeMode)) this.updateCompetitionAftermathEntry(entry, dt);
           else this.updateChallengeEntry(entry, dt);
         }
         this.syncStormRunCastVisibility();
@@ -13682,6 +13703,7 @@
       });
     }
 
+          this.setColliderEnabled(entry, false);
     beginStormRunAftermath(eliminatedId = "mara-voss") {
       return this.beginCompetitionAftermath({
         sourceMode: "storm-run",
@@ -13731,6 +13753,16 @@
         }
       }
       const dx = target.x - entry.root.position.x;
+    beginFeastHuntAftermath(eliminatedId = "juniper-cross") {
+      return this.beginCompetitionAftermath({
+        sourceMode: "feast-hunt",
+        aftermathMode: "feast-hunt-aftermath",
+        eliminatedId,
+        config: FEAST_HUNT.aftermath,
+        stageMarks: FEAST_HUNT.aftermath.stageMarks,
+      });
+    }
+
       const dy = target.y - entry.root.position.y;
       const dz = target.z - entry.root.position.z;
       const distance = Math.max(0.000001, Math.hypot(dx, dy, dz));
@@ -13820,6 +13852,10 @@
       entry.activity = CONTESTANT_ACTIVITY.RUNNING;
       this.setColliderEnabled(entry, false);
       if (entry.interactionRegistered) {
+    finishFeastHuntAftermath({ eliminatedId = "juniper-cross" } = {}) {
+      return this.finishCompetitionAftermath({ eliminatedId });
+    }
+
         removeInteractionTarget(entry.interactionTarget);
         entry.interactionRegistered = false;
       }
@@ -14420,7 +14456,7 @@
 
     advanceChallengeForQA(seconds = 0) {
       if (!state.qa || !this.challengeActive) return this.getDiagnostics();
-      const aftermathActive = ["feast-says-aftermath", "storm-run-aftermath"].includes(this.challengeMode);
+      const aftermathActive = ["feast-says-aftermath", "storm-run-aftermath", "feast-hunt-aftermath"].includes(this.challengeMode);
       const duration = clamp(Number(seconds) || 0, 0, aftermathActive ? 90 : 5);
       const fixedStep = aftermathActive ? 1 / 30 : 1 / 60;
       let elapsed = 0;
@@ -24478,7 +24514,7 @@
       this.show.staged = false;
       if (mrFeastNpc?.challengeMode === "feast-hunt") mrFeastNpc.releaseChallenge();
       mrFeastNpc?.clearCompetitionPatrol("feast-hunt");
-      if (mansionContestants?.challengeMode === "feast-hunt") {
+      if (["feast-hunt", "feast-hunt-aftermath"].includes(mansionContestants?.challengeMode)) {
         mansionContestants.releaseChallenge({ eliminatedId: null });
       }
       this.resetStatueCreep();
@@ -24490,7 +24526,9 @@
 
     releaseHostForHunt() {
       this.show.staged = false;
-      if (mrFeastNpc?.challengeMode === "feast-hunt") mrFeastNpc.releaseChallenge();
+      if (["feast-hunt", "feast-hunt-aftermath"].includes(mrFeastNpc?.challengeMode)) {
+        mrFeastNpc.releaseChallenge();
+      }
       clearMovementInput();
       state.movement.crouched = false;
       state.movement.sprinting = false;
@@ -24603,6 +24641,7 @@
         6200,
       );
       this.syncPresentation();
+        || this.show.aftermathActive
       return true;
     }
 
@@ -24701,8 +24740,13 @@
       this.show.statueObservationInitialized = true;
       this.show.statuesObserved = this.statuesObservedByPlayer();
       this.show.statueTurnAwayCount = 0;
+      this.show.eliminatedContestantId = null;
       this.show.statueMoveEvents = 0;
       this.show.statueLastStepById = {};
+      this.show.aftermathActive = false;
+      this.show.aftermathStage = "inactive";
+      this.show.aftermathElapsed = 0;
+      this.show.aftermathCleanupReason = null;
     }
 
     statuesObservedByPlayer() {
@@ -24920,19 +24964,113 @@
       mrFeastNpc?.suspendThreatsForCompetition();
       cameraSecurity?.suspendForCompetition();
       speechSystem?.say(
-        "feast-hunt-complete",
+        "feast-hunt-aftermath-result",
         FEAST_HUNT.completionLine,
         speechSystem.announcerSpeaker(),
-        { durationSeconds: 4.8 },
+        { durationSeconds: FEAST_HUNT.aftermath.resultLineSeconds },
       );
-      contestant13Quest?.showDiscovery(
-        "FEAST HUNT — COMPLETE",
-        "All three gold objects reached the foyer before Juniper. Mr. Feast says your Victory Feast begins in five minutes.",
-        8200,
+      bulkStorageSecretSystem?.syncClothingProgression();
+      return staged;
+    }
+
+    aftermathSceneOnScreen() {
+      const juniper = mansionContestants?.entryById("juniper-cross");
+      if (!juniper?.root?.visible || !camera) return false;
+      juniper.root.updateMatrixWorld(true);
+      const target = new THREE.Vector3(
+        juniper.root.position.x,
+        juniper.root.position.y + 1.25,
+        juniper.root.position.z,
       );
-      victoryFeastSystem?.call("game-3-complete");
+      const projected = target.clone().project(camera);
+      const onScreen = projected.z >= -1 && projected.z <= 1
+        && Math.abs(projected.x) <= 1.05
+        && Math.abs(projected.y) <= 1.05;
+      if (!onScreen) return false;
+      const sightDirection = target.sub(camera.position);
+      const sightDistance = sightDirection.length();
+      if (sightDistance < 0.0001) return true;
+      sightDirection.divideScalar(sightDistance);
+      const sightRay = new THREE.Raycaster(
+        camera.position,
+        sightDirection,
+        0,
+        Math.max(0.05, sightDistance - 0.15),
+      );
+      return sightRay.intersectObjects(occluderMeshes, false).length === 0;
+    }
+
+    playerHasLeftAftermath() {
+      if (!physics) return false;
+      if (outdoorRoomNames.has(state.currentRoom)) return true;
+      if (["SECOND FLOOR", "BASEMENT"].includes(state.currentFloor)) return true;
+      const player = physics.playerPosition();
+      const anchor = FEAST_HUNT.returnMark;
+      const distance = Math.hypot(player.x - anchor.x, player.z - anchor.z);
+      return distance >= FEAST_HUNT.aftermath.farMainFloorDistance
+        && !this.aftermathSceneOnScreen();
+    }
+
+    updateAftermath(dt) {
+      if (!this.show.aftermathActive) return;
+      this.show.aftermathElapsed += Math.max(0, Number(dt) || 0);
+      if (
+        this.show.aftermathStage === "result-speaking"
+        && this.show.aftermathElapsed >= FEAST_HUNT.aftermath.resultLineSeconds
+      ) {
+        this.show.aftermathStage = "juniper-speaking";
+        this.show.aftermathElapsed = 0;
+        const juniper = mansionContestants?.entryById("juniper-cross");
+        speechSystem?.sayForSpeaker(
+          juniper?.speaker,
+          "feast-hunt-aftermath-juniper",
+          FEAST_HUNT.aftermath.juniperLine,
+          { durationSeconds: FEAST_HUNT.aftermath.juniperLineSeconds },
+        );
+      } else if (
+        this.show.aftermathStage === "juniper-speaking"
+        && this.show.aftermathElapsed >= FEAST_HUNT.aftermath.juniperLineSeconds
+      ) {
+        this.show.aftermathStage = "host-speaking";
+        this.show.aftermathElapsed = 0;
+        speechSystem?.say(
+          "feast-hunt-aftermath-host",
+          FEAST_HUNT.aftermath.hostLine,
+          speechSystem.hostSpeaker(),
+          { durationSeconds: FEAST_HUNT.aftermath.hostLineSeconds },
+        );
+      } else if (
+        this.show.aftermathStage === "host-speaking"
+        && this.show.aftermathElapsed >= FEAST_HUNT.aftermath.hostLineSeconds
+      ) {
+        this.show.aftermathStage = "waiting-for-player-exit";
+        this.show.aftermathElapsed = 0;
+      }
+      if (
+        this.show.aftermathStage === "waiting-for-player-exit"
+        && this.playerHasLeftAftermath()
+      ) {
+        this.resolveAftermath(`player-left:${state.currentFloor}:${state.currentRoom}`);
+      }
+    }
+
+    resolveAftermath(reason = "player-left") {
+      if (!this.show.aftermathActive) return { resolved: false, reason: "inactive" };
+      this.show.aftermathActive = false;
+      this.show.aftermathStage = "resolved";
+      this.show.aftermathElapsed = 0;
+      this.show.aftermathCleanupReason = reason;
+      this.show.staged = false;
+      mansionContestants?.finishFeastHuntAftermath({ eliminatedId: "juniper-cross" });
+      if (mrFeastNpc?.challengeMode === "feast-hunt-aftermath") mrFeastNpc.releaseChallenge();
+      clearMovementInput();
+      state.movement.crouched = false;
+      state.movement.sprinting = false;
+      updateMovementHud();
+      bulkStorageSecretSystem?.syncClothingProgression();
+      victoryFeastSystem?.call("juniper-elimination-resolved");
       this.syncPresentation();
-      return { completed: true, survived: true, finalePending: true, source };
+      return { resolved: true, reason };
     }
 
     noteRivalItem(itemId) {
@@ -24978,7 +25116,6 @@
       this.show.directSightDwell = 0;
       mrFeastNpc?.clearCompetitionPatrol("feast-hunt");
       this.transition(FEAST_HUNT_PHASE.FAILED, "caught-by-mr-feast");
-      this.releaseProduction();
       this.restoreBlackout();
       cameraSecurity?.suspendForCompetition();
       triggerMansionGameOver({
@@ -25223,7 +25360,8 @@
       if (
         this.show.staged
         || mrFeastNpc?.challengeMode === "feast-hunt"
-        || mansionContestants?.challengeMode === "feast-hunt"
+        || mrFeastNpc?.challengeMode === "feast-hunt-aftermath"
+        || ["feast-hunt", "feast-hunt-aftermath"].includes(mansionContestants?.challengeMode)
       ) {
         this.releaseProduction();
       }
@@ -25281,6 +25419,7 @@
         && Number.isFinite(restoredReportRemaining)
         && restoredReportRemaining > 0
         ? clamp(restoredReportRemaining, 0, FEAST_HUNT.reportDeadlineSeconds)
+      this.show.eliminatedContestantId = "juniper-cross";
         : restoredPhase === FEAST_HUNT_PHASE.CALLED
           ? FEAST_HUNT.reportDeadlineSeconds
           : 0;
@@ -25291,6 +25430,48 @@
         ? [...validItemIds]
         : collectedIds;
       this.show.returnedIds = restoredPhase === FEAST_HUNT_PHASE.COMPLETED
+      this.beginAftermath();
+      contestant13Quest?.showDiscovery(
+        "FEAST HUNT — COMPLETE",
+        "All three gold objects reached the foyer before Juniper. Stay for the result.",
+        8200,
+      );
+      this.syncPresentation();
+      return {
+        completed: true,
+        survived: true,
+        finalePending: true,
+        aftermathActive: this.show.aftermathActive,
+        source,
+      };
+    }
+
+    beginAftermath() {
+      const staged = mansionContestants?.beginFeastHuntAftermath("juniper-cross");
+      if (!staged?.started) {
+        mansionContestants?.setEliminated("juniper-cross", true);
+        this.releaseProduction();
+        this.show.aftermathActive = false;
+        this.show.aftermathStage = "resolved";
+        this.show.aftermathElapsed = 0;
+        this.show.aftermathCleanupReason = "cast-unavailable";
+        bulkStorageSecretSystem?.syncClothingProgression();
+        victoryFeastSystem?.call("juniper-elimination-resolved");
+        return staged || { started: false, reason: "cast-unavailable" };
+      }
+      this.show.aftermathActive = true;
+      this.show.aftermathStage = "result-speaking";
+      this.show.aftermathElapsed = 0;
+      this.show.aftermathCleanupReason = null;
+      mrFeastNpc?.stageChallenge(FEAST_HUNT.aftermath.hostMark, {
+        mode: "feast-hunt-aftermath",
+        zone: "FRONT FOYER",
+        level: MR_FEAST_LEVEL.MAIN,
+        responseNodeId: "main-foyer-center",
+        colliderEnabled: false,
+        interactionsEnabled: false,
+        visible: true,
+      });
         ? [...validItemIds]
         : returnedIds;
       this.show.carriedItemId = restoredPhase === FEAST_HUNT_PHASE.COMPLETED
@@ -25324,6 +25505,7 @@
       return this.getDiagnostics();
     }
 
+      this.show.eliminatedContestantId = "player";
     advanceForQA(seconds) {
       if (!state.qa) return null;
       const duration = clamp(Number(seconds) || 0, 0, 900);
@@ -25342,10 +25524,11 @@
       let elapsed = 0;
       while (elapsed < duration && !state.menuOpen && !state.gameOver) {
         const step = Math.min(fixedStep, duration - elapsed);
-        if (this.show.phase === FEAST_HUNT_PHASE.HUNTING) {
+        if (this.show.phase === FEAST_HUNT_PHASE.HUNTING || this.show.aftermathActive) {
           mansionContestants?.update(step);
         }
         this.update(step);
+      this.show.eliminatedContestantId = "player";
         elapsed += step;
       }
       this.qaStepping = false;
@@ -25404,6 +25587,7 @@
     placePlayerAtReturnForQA() {
       if (!state.qa || !physics) return null;
       const mark = FEAST_HUNT.returnMark;
+        this.updateAftermath(step);
       const qa = { x: mark.x, y: mark.y, z: mark.z + 1.55 };
       const yaw = Math.atan2(-(mark.x - qa.x), -(mark.z - qa.z));
       teleport(qa.x, qa.y, qa.z, yaw, -0.3);
@@ -25586,6 +25770,7 @@
         observed: this.show.statuesObserved,
         observationInitialized: this.show.statueObservationInitialized,
         turnAwayCount: this.show.statueTurnAwayCount,
+        eliminatedContestantId: this.show.eliminatedContestantId,
         moveEvents: this.show.statueMoveEvents,
         stepMeters: FEAST_HUNT.statueCreep.stepMeters,
         firstFloorOnly: entries.every((entry) => entry.firstFloor),
@@ -25601,6 +25786,10 @@
         triggerGate: this.triggerGateState(),
         triggerReason: this.show.triggerReason,
         callCount: this.show.callCount,
+      this.show.aftermathActive = false;
+      this.show.aftermathStage = "inactive";
+      this.show.aftermathElapsed = 0;
+      this.show.aftermathCleanupReason = null;
         reportDeadlineSeconds: FEAST_HUNT.reportDeadlineSeconds,
         reportRemaining: Number(this.show.reportRemaining.toFixed(3)),
         hostWaiting: Boolean(
@@ -25682,15 +25871,28 @@
           noticeable: Boolean(entry.config.noticeable),
           active: entry.config.id === this.activeGoldItemId(),
           patrolRooms: [...(entry.config.patrolRooms || [])],
+      this.show.eliminatedContestantId = restoredPhase === FEAST_HUNT_PHASE.COMPLETED
+        ? "juniper-cross"
+        : source.eliminatedContestantId || null;
           patrolNodeIds: [...(entry.config.patrolNodeIds || [])],
           visualSize: Object.fromEntries(
             Object.entries(entry.visualSize || {}).map(([key, value]) => [key, Number(value.toFixed(4))]),
           ),
+      this.show.aftermathActive = false;
+      this.show.aftermathStage = "inactive";
+      this.show.aftermathElapsed = 0;
+      this.show.aftermathCleanupReason = restoredPhase === FEAST_HUNT_PHASE.COMPLETED
+        ? "save-restored-offscreen"
+        : null;
         })),
         statues: this.statueDiagnostics(),
         directSightDwell: Number(this.show.directSightDwell.toFixed(3)),
         outcome: this.show.outcome,
         finalePending: this.show.finalePending,
+      mansionContestants?.setEliminated(
+        "juniper-cross",
+        this.show.eliminatedContestantId === "juniper-cross",
+      );
         juniperSacrifice: false,
         completionCardRemaining: Number(this.show.completionCardRemaining.toFixed(3)),
         invalidTransitions: this.show.invalidTransitions,
@@ -25717,6 +25919,7 @@
         [VICTORY_FEAST_PHASE.DORMANT]: Object.freeze([VICTORY_FEAST_PHASE.CALLED]),
         [VICTORY_FEAST_PHASE.CALLED]: Object.freeze([
           VICTORY_FEAST_PHASE.DIALOGUE,
+        if (this.show.aftermathActive) speechSystem?.update(step);
           VICTORY_FEAST_PHASE.FAILED,
           VICTORY_FEAST_PHASE.DORMANT,
         ]),
@@ -25773,7 +25976,16 @@
         && feastHuntSystem.show.outcome === "player"
         && feastHuntSystem.show.finalePending
       );
-      return { feastHuntWon, satisfied: feastHuntWon };
+      const juniperAftermathResolved = Boolean(
+        feastHuntWon
+        && !feastHuntSystem.show.aftermathActive
+        && mansionContestants?.eliminatedIds.has("juniper-cross")
+      );
+      return {
+        feastHuntWon,
+        juniperAftermathResolved,
+        satisfied: feastHuntWon && juniperAftermathResolved,
+      };
     }
 
     eligible() {
@@ -25891,6 +26103,7 @@
         || !mrFeastNpc
       ) return false;
       const placement = VICTORY_FEAST.hostMark;
+      mansionContestants?.setEliminated("juniper-cross", false);
       if (!mrFeastNpc.challengeStaged || mrFeastNpc.challengeMode !== "victory-feast") {
         mrFeastNpc.stageChallenge(placement, {
           mode: "victory-feast",
@@ -26062,9 +26275,21 @@
       speechSystem?.say(
         "victory-feast-dialogue-final",
         VICTORY_FEAST.dialogueLines[VICTORY_FEAST.dialogueLines.length - 1],
+        eliminatedContestantId: this.show.eliminatedContestantId,
         speechSystem.hostSpeaker(),
         { durationSeconds: VICTORY_FEAST.dialogueLineSeconds },
       );
+        aftermath: {
+          active: this.show.aftermathActive,
+          stage: this.show.aftermathStage,
+          elapsed: Number(this.show.aftermathElapsed.toFixed(3)),
+          cleanupReason: this.show.aftermathCleanupReason,
+          playerHasLeft: this.show.aftermathActive ? this.playerHasLeftAftermath() : null,
+          sceneOnScreen: this.show.aftermathActive ? this.aftermathSceneOnScreen() : null,
+          resultLine: FEAST_HUNT.completionLine,
+          juniperLine: FEAST_HUNT.aftermath.juniperLine,
+          hostLine: FEAST_HUNT.aftermath.hostLine,
+        },
       if (beginReveal) this.beginReveal("dialogue-complete");
       else this.syncPresentation();
       return {
@@ -30100,7 +30325,7 @@
           : `Inspect ${config.label}'s clothing`,
         activate: () => this.inspectClothing(entry),
         resolve: () => (
-          this.clothingUnlocked(config) && !competitionBlocksInvestigation()
+          this.clothingUnlocked(config) && this.clothingInspectionAllowed(config)
             ? interaction
             : null
         ),
@@ -30123,7 +30348,11 @@
         return stormRunSystem?.show.phase === STORM_RUN_PHASE.COMPLETED;
       }
       if (config.unlockAfter === "feast-hunt") {
-        return feastHuntSystem?.show.phase === FEAST_HUNT_PHASE.COMPLETED;
+        return Boolean(
+          feastHuntSystem?.show.phase === FEAST_HUNT_PHASE.COMPLETED
+          && !feastHuntSystem.show.aftermathActive
+          && mansionContestants?.eliminatedIds.has("juniper-cross")
+        );
       }
       return false;
     }
@@ -30246,11 +30475,11 @@
     }
 
     inspectClothing(entry) {
-      if (competitionBlocksInvestigation()) {
+      if (!entry || !this.clothingInspectionAllowed(entry.config)) {
         notifyCompetitionHold();
         return false;
       }
-      if (!entry || !this.clothingUnlocked(entry.config)) return false;
+      if (!this.clothingUnlocked(entry.config)) return false;
       const { config } = entry;
       const newlyDiscovered = !state.contestant13[config.foundField];
       state.contestant13[config.foundField] = true;
@@ -30500,6 +30729,14 @@
             },
             home: { ...entry.home },
             size: {
+    clothingInspectionAllowed(config) {
+      if (!competitionBlocksInvestigation()) return true;
+      return Boolean(
+        config?.id === "juniper"
+        && victoryFeastSystem?.show.phase === VICTORY_FEAST_PHASE.CALLED
+      );
+    }
+
               width: entry.spec.width,
               height: entry.spec.height,
               depth: entry.spec.depth,
@@ -46777,6 +47014,11 @@
     };
     window.MrFeastFresh.flushToilet = (name) => {
       const toilet = toilets.find((candidate) => candidate.name.toLowerCase().includes(String(name).toLowerCase()));
+      feastHuntSystem.show.eliminatedContestantId = "juniper-cross";
+      feastHuntSystem.show.aftermathActive = false;
+      feastHuntSystem.show.aftermathStage = "resolved";
+      feastHuntSystem.show.aftermathElapsed = 0;
+      feastHuntSystem.show.aftermathCleanupReason = "qa-resolved";
       return toilet ? toilet.flush() : null;
     };
     window.MrFeastFresh.setFireplace = (name, on) => {

@@ -103,7 +103,12 @@ async function assertSourceContract() {
   );
   assert(
     /saintVoice:\s*Object\.freeze\(\["\.\.\/Sounds\/mr-feast\/saint-voice-low-long-05\.ogg"\]\)/.test(runtime),
-    "the Banquet Saint must register the approved voicelowlong05 recording",
+    "the Feast Father must register the approved voicelowlong05 recording",
+  );
+  assert(
+    /Survive me\. Survive the Feast Father\. Survive the house\./.test(runtime)
+      && /flashlight can stun the Feast Father/.test(runtime),
+    "the Victory Feast dialogue and HUD must use the Feast Father name",
   );
   assert(
     /presenceAudio:\s*Object\.freeze\(\{[\s\S]*maximumDistanceMeters:[\s\S]*maximumGain:[\s\S]*distanceExponent:/m.test(runtime),
@@ -408,7 +413,7 @@ async function runBrowserFlow() {
     const stunned = await page.evaluate(() => window.MrFeastFresh.stunVictoryFeastSaintForQA());
     assert(
       stunned?.stunned && stunned.beam?.hit && !stunned.beam?.occluded,
-      `a centered, unobstructed, actually emitting flashlight should stun the Saint: ${JSON.stringify(stunned)}`,
+      `a centered, unobstructed, actually emitting flashlight should stun the Feast Father: ${JSON.stringify(stunned)}`,
     );
     const beforeStunStep = await victoryState(page);
     await page.evaluate(() => {

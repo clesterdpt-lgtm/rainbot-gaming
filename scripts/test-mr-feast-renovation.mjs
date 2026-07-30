@@ -439,8 +439,15 @@ check("7 ballroom marble", !/addRug\(\s*0\s*,\s*-8\.2[^;]*M\.greenRug/.test(slab
 check("7 ballroom marble", mansion.includes('textureUrl("antique-marble-ai.jpg")'), "ballroom marble must retain the generated antique-marble texture source");
 
 // 8. Every dining chair faces the table center.
-const diningChairs = parsedCalls("addChair", section("// Dining room", "// Ballroom", mainFurnishings));
-check("dining room wall clearance", !/addWallPortrait|artId:\s*"feast-of-merit"/.test(section("// Dining room", "// Ballroom", mainFurnishings)), "the dining-room portrait still overlaps the window composition");
+const diningFurnishings = section("// Dining room", "// Ballroom", mainFurnishings);
+const diningChairs = parsedCalls("addChair", diningFurnishings);
+check(
+  "dining room wall clearance",
+  count(diningFurnishings, /addWallPortrait\(/g) === 1
+    && /axis:\s*"z"[\s\S]*?fixed:\s*-15[\s\S]*?center:\s*-11\.22[\s\S]*?width:\s*0\.88[\s\S]*?height:\s*1\.32[\s\S]*?artId:\s*"feast-father-at-table"/.test(diningFurnishings)
+    && !/artId:\s*"feast-of-merit"/.test(diningFurnishings),
+  "the Dining Room must keep one narrow side-wall lore painting clear of the window composition",
+);
 const diningAt = (x, z) => diningChairs.find((call) => near(call.values[0], x, 0.08) && near(call.values[1], z, 0.08));
 for (const x of [-12, -10.45, -8.95, -7.4]) {
   check("8 dining-chair orientation", near(diningAt(x, -7.25)?.values[3], 0), `north dining chair at x=${x} must face south toward the table`);
@@ -1021,6 +1028,7 @@ const expectedPortraitFiles = [
   "portrait-last-applause-v1-ai.jpg",
   "portrait-orchard-porcelain-teeth-v1-ai.jpg",
   "portrait-house-dreams-back-v1-ai.jpg",
+  "portrait-feast-father-at-table-v1-ai.jpg",
 ];
 const expectedPaintingFiles = [
   "painting-work-in-progress-dreaming-v1-ai.jpg",
@@ -1038,8 +1046,8 @@ const expectedArtworkFiles = [
 const newPortraitIds = ["banquet-forgot-guests", "last-applause", "orchard-porcelain-teeth", "house-dreams-back"];
 const paintingRoomWallArtIds = ["choir-floorboards", "polite-eclipse", "five-doors", "garden-knees", "moths-guests", "arrived-early"];
 const paintingRoomArtworkIds = ["work-in-progress-dreaming", ...paintingRoomWallArtIds];
-check("21 generated portrait collection", count(portraitManifest, /file:\s*"(?:portraits\/portrait|paintings\/painting)-[^"]+-v1-ai\.jpg"/g) === 17, "artwork manifest does not expose all seventeen immutable generated artwork files");
-check("21 generated portrait collection", count(portraitFurnishings, /artId:\s*"[^"]+"/g) === 19, "all nineteen mansion picture frames are not assigned a stable generated art ID");
+check("21 generated portrait collection", count(portraitManifest, /file:\s*"(?:portraits\/portrait|paintings\/painting)-[^"]+-v1-ai\.jpg"/g) === 18, "artwork manifest does not expose all eighteen immutable generated artwork files");
+check("21 generated portrait collection", count(portraitFurnishings, /artId:\s*"[^"]+"/g) === 20, "all twenty mansion picture frames are not assigned a stable generated art ID");
 for (const artId of newPortraitIds) {
   check("23 non-host painting collection", portraitManifest.includes(`"${artId}"`) && portraitFurnishings.includes(`artId: "${artId}"`), `${artId} is not registered and placed in the mansion`);
 }
@@ -1052,7 +1060,7 @@ for (const view of ["mainGalleryLastApplause", "upperArtHouseDreams", "upperArtB
 check("21 generated portrait loader", /function loadArtworkTexture/.test(mansion) && /ClampToEdgeWrapping/.test(portraitBuilder) && /THREE\.sRGBEncoding/.test(portraitBuilder) && !/RepeatWrapping/.test(portraitBuilder), "artwork textures are not loaded as clamped sRGB paintings");
 check("21 generated portrait loader", /portrait-art-\$\{artId\}/.test(portraitBuilder) && /if \(!artTexture\)/.test(portraitBuilder), "generated art lacks stable scene names or procedural fallback gating");
 check("21 generated portrait diptych", /repeatX:\s*0\.5,\s*offsetX:\s*0/.test(portraitFurnishings) && /repeatX:\s*0\.5,\s*offsetX:\s*0\.5/.test(portraitFurnishings), "ballroom diptych halves are not mapped to complementary frames");
-check("21 switch-owned portrait visibility", count(portraitFurnishings, /circuitName:\s*"[^"]+"/g) + count(portraitFurnishings, /circuitName:\s*OPEN_VOLUME_SHARED_LIGHTING\.circuit/g) === 19 && /function bindPortraitMaterialsToLighting/.test(mansion) && /circuit\.glowMaterials\.push\(placement\.material\)/.test(mansion), "portrait readability is not owned by the same manual light switches as its room");
+check("21 switch-owned portrait visibility", count(portraitFurnishings, /circuitName:\s*"[^"]+"/g) + count(portraitFurnishings, /circuitName:\s*OPEN_VOLUME_SHARED_LIGHTING\.circuit/g) === 20 && /function bindPortraitMaterialsToLighting/.test(mansion) && /circuit\.glowMaterials\.push\(placement\.material\)/.test(mansion), "portrait readability is not owned by the same manual light switches as its room");
 check("23 painting readability", /onEmissiveIntensity\s*=\s*0\.48/.test(portraitBuilder) && /offEmissiveIntensity\s*=\s*0/.test(portraitBuilder) && /circuit\.on\s*\?\s*0\.48\s*:\s*0/.test(portraitBuilder), "lit paintings are not gently readable while preserving a true zero-emissive lights-off state");
 for (const relativeFile of expectedArtworkFiles) {
   const fullPath = path.join(root, "assets/textures/mr-feast/generated", relativeFile);

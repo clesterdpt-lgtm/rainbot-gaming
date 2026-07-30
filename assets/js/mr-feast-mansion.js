@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260730-bedroom-hiding-1";
+  const MANSION_RUNTIME_VERSION = "20260730-feast-father-lore-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -425,6 +425,7 @@
     "last-applause": Object.freeze({ title: "The Last Applause", file: "portraits/portrait-last-applause-v1-ai.jpg" }),
     "orchard-porcelain-teeth": Object.freeze({ title: "The Orchard of Porcelain Teeth", file: "portraits/portrait-orchard-porcelain-teeth-v1-ai.jpg" }),
     "house-dreams-back": Object.freeze({ title: "The House That Dreams Back", file: "portraits/portrait-house-dreams-back-v1-ai.jpg" }),
+    "feast-father-at-table": Object.freeze({ title: "The Place at the Head", file: "portraits/portrait-feast-father-at-table-v1-ai.jpg" }),
     "work-in-progress-dreaming": Object.freeze({ title: "The Prompt Is Still Dreaming", file: "paintings/painting-work-in-progress-dreaming-v1-ai.jpg" }),
     "choir-floorboards": Object.freeze({ title: "The Choir Beneath the Floorboards", file: "paintings/painting-choir-floorboards-v1-ai.jpg" }),
     "polite-eclipse": Object.freeze({ title: "A Very Polite Eclipse", file: "paintings/painting-polite-eclipse-v1-ai.jpg" }),
@@ -1558,7 +1559,7 @@
   });
   const DEMON_PROTOTYPES = Object.freeze({
     manifestPath: "../models/mr-feast/demon-prototypes/manifest.json",
-    assetVersion: "20260727-banquet-saint-only-1",
+    assetVersion: "20260730-feast-father-lore-1",
     arrivalRadius: 0.075,
     turnSpeed: 2.45,
     movementAlignment: 0.965,
@@ -2867,6 +2868,15 @@
     kind: "clue",
     annotation: "The basement key is buried where the hedge maze stops.\nShovel — under the dead roses, formal garden, beside the faceless angel.\nHurry.\n—XIII",
   });
+  const FEAST_FATHER_LORE_BOOK = Object.freeze({
+    placementId: "feast-father-household-observances",
+    id: "household-observances-long-table",
+    kind: "lore",
+    title: "Household Observances for the Long Table",
+    author: "E. Vane, Steward",
+    collection: "Library · household records",
+    preview: "At the winter feast, the chair at the head of the table is to remain unclaimed. The oldest servants call this courtesy “keeping Father’s place.” Curtains are drawn before the final bell, and no portrait may face the table until morning. A later hand adds only: “The Feast Father remembers every guest.”",
+  });
 
   const CONTESTANT_13 = Object.freeze({
     title: "Contestant 13",
@@ -3643,7 +3653,7 @@
       "We wrote the notes. We buried the key. We planted the XIII book, the tape, the warnings, and every desperate clue.",
       "We left you a patron feed to cut. It was a decoy. Following that trail was part of the game, and every camera watched.",
       "You did not expose my show. You completed it. We needed to know whether our winner would break the rules and reach the Workroom.",
-      "But one final challenge remains. Survive me. Survive the Saint. Survive the house.",
+      "But one final challenge remains. Survive me. Survive the Feast Father. Survive the house.",
     ]),
     hostMark: Object.freeze({
       x: -12.82,
@@ -4060,6 +4070,7 @@
     mainGalleryLastApplause: [10.1, FLOOR.MAIN, -5.2, Math.PI],
     diningA: [-13.7, FLOOR.MAIN, -10.7, -2.1],
     diningB: [-6.2, FLOOR.MAIN, -10.7, 2.15],
+    diningFeastFatherPainting: [-12.6, FLOOR.MAIN, -11.22, Math.PI / 2, -0.02],
     ballroomA: [0, FLOOR.MAIN, -5.8, 0],
     ballroomB: [0, FLOOR.MAIN, -10.7, Math.PI],
     ballroomPortraits: [0, FLOOR.MAIN, -8.7, 0],
@@ -15716,7 +15727,7 @@
           if (
             declaredIds.length !== expectedIds.length
             || declaredIds.some((id, index) => id !== expectedIds[index])
-          ) throw new Error("Demon prototype manifest must declare exactly the active Banquet Saint");
+          ) throw new Error("Demon prototype manifest must declare exactly the active Feast Father");
           this.manifest = manifest;
           const loader = new THREE.GLTFLoader();
           await Promise.all(this.entries.map(async (entry) => {
@@ -19261,7 +19272,7 @@
     }
 
     registerSpecialBook(book, spine) {
-      if (!book?.placementId || !spine) return null;
+      if (!book?.placementId) return null;
       const printedBook = book.kind === "clue" ? this.cluePrintBook : book;
       const placement = {
         placementId: book.placementId,
@@ -19276,12 +19287,14 @@
         annotationSlot: book.kind === "clue" ? this.clueAnnotationSlot : null,
       };
       this.specialPlacements.set(placement.placementId, placement);
-      this.registerSpineTitle({
-        bookId: placement.bookId,
-        title: placement.title,
-        kind: placement.kind,
-        ...spine,
-      });
+      if (spine) {
+        this.registerSpineTitle({
+          bookId: placement.bookId,
+          title: placement.title,
+          kind: placement.kind,
+          ...spine,
+        });
+      }
       return placement;
     }
 
@@ -19455,6 +19468,13 @@
       return this.open(this.placements[normalized]);
     }
 
+    openByPlacementId(placementId) {
+      const placement = this.placements.find((candidate) => candidate.placementId === placementId)
+        || this.specialPlacements.get(placementId)
+        || null;
+      return placement ? this.open(placement) : false;
+    }
+
     getDiagnostics() {
       const active = this.placements.find((placement) => placement.placementId === state.readableBooks.activePlacementId)
         || this.specialPlacements.get(state.readableBooks.activePlacementId)
@@ -19486,6 +19506,15 @@
           placementId: placement.placementId,
           bookId: placement.bookId,
           collection: placement.collection,
+        })),
+        specialBooks: [...this.specialPlacements.values()].map((placement) => ({
+          placementId: placement.placementId,
+          printBookId: placement.printBookId,
+          title: placement.title,
+          author: placement.author,
+          collection: placement.collection,
+          kind: placement.kind || "lore",
+          previewLength: placement.preview.length,
         })),
         clueBookReserved: true,
         clueBook: (() => {
@@ -26515,7 +26544,7 @@
       } else if (phase === VICTORY_FEAST_PHASE.ESCAPE) {
         setText(dom.victoryFeastEyebrow, "Final challenge · Escape");
         setText(dom.victoryFeastTimer, "LIVE");
-        setText(dom.victoryFeastStatus, "Evade · Hide · The flashlight can stun the Saint");
+        setText(dom.victoryFeastStatus, "Evade · Hide · The flashlight can stun the Feast Father");
         setText(dom.victoryFeastObjective, "SURVIVE");
       } else if (phase === VICTORY_FEAST_PHASE.FAILED) {
         setText(dom.victoryFeastEyebrow, "Final challenge · Caught");
@@ -36389,10 +36418,19 @@
 
   function addLibraryWritingSet() {
     const tableTop = FLOOR.MAIN + 0.852;
-    box({ name: "library-open-book-cover", w: 0.42, h: 0.016, d: 0.3, x: -10.85, y: tableTop + 0.008, z: 5.05, rotationY: 0.18, material: M.leather, cast: false });
+    const loreBookTargets = [];
+    loreBookTargets.push(box({ name: "feast-father-lore-book-cover", w: 0.42, h: 0.016, d: 0.3, x: -10.85, y: tableTop + 0.008, z: 5.05, rotationY: 0.18, material: M.leather, cast: false }));
     for (const side of [-1, 1]) {
-      box({ name: "library-open-book-pages", w: 0.19, h: 0.02, d: 0.27, x: -10.85 + side * 0.1 * Math.cos(0.18), y: tableTop + 0.026, z: 5.05 + side * 0.1 * Math.sin(0.18), rotationY: 0.18, rotationZ: side * 0.045, material: M.porcelain, cast: false });
+      loreBookTargets.push(box({ name: "feast-father-lore-book-pages", w: 0.19, h: 0.02, d: 0.27, x: -10.85 + side * 0.1 * Math.cos(0.18), y: tableTop + 0.026, z: 5.05 + side * 0.1 * Math.sin(0.18), rotationY: 0.18, rotationZ: side * 0.045, material: M.porcelain, cast: false }));
     }
+    const lorePlacement = readableBookSystem?.registerSpecialBook(FEAST_FATHER_LORE_BOOK);
+    const loreInteraction = {
+      type: "readable-book",
+      id: FEAST_FATHER_LORE_BOOK.placementId,
+      getLabel: () => `${READABLE_BOOKS.promptVerb} “${lorePlacement?.title || FEAST_FATHER_LORE_BOOK.title}”`,
+      activate: () => readableBookSystem?.open(lorePlacement),
+    };
+    loreBookTargets.forEach((target) => addInteractionTarget(target, loreInteraction));
     cylinder({ name: "library-inkwell", radius: 0.036, height: 0.065, segments: 12, x: -10.12, y: tableTop + 0.033, z: 4.92, material: M.glass, cast: false });
     cylinder({ name: "library-inkwell-cap", radius: 0.02, height: 0.02, segments: 10, x: -10.12, y: tableTop + 0.075, z: 4.92, material: M.brass, cast: false });
     for (const [index, offset] of [0.005, 0.017].entries()) {
@@ -36749,6 +36787,21 @@
     addChair(-12.7, -8.4, FLOOR.MAIN, -Math.PI / 2, M.darkWood);
     addChair(-6.7, -8.4, FLOOR.MAIN, Math.PI / 2, M.darkWood);
     new Cabinet({ name: "dining sideboard", x: -14.0, z: -11.22, floorY: FLOOR.MAIN, width: 1.6, height: 1.35, rotationY: 0, stockKind: "sideboard", interiorLight: false });
+    // This household portrait foreshadows the final guest through ritual
+    // posture and a veiled silhouette, never a readable creature design.
+    addWallPortrait({
+      axis: "z",
+      fixed: -15,
+      center: -11.22,
+      floorY: FLOOR.MAIN,
+      centerY: 2.35,
+      side: 1,
+      width: 0.88,
+      height: 1.32,
+      color: 0x201b1c,
+      artId: "feast-father-at-table",
+      circuitName: "dining room lights",
+    });
     addDiningTableService();
     addDiningServiceBell();
     // Ballroom — keep the marble dance floor open; Kip's sideline chair sits
@@ -45838,6 +45891,11 @@
     window.MrFeastFresh.getContestant13State = () => contestant13Quest ? contestant13Quest.getDiagnostics() : null;
     window.MrFeastFresh.getReadableBookState = () => readableBookSystem ? readableBookSystem.getDiagnostics() : null;
     window.MrFeastFresh.openReadableBookForQA = (index) => state.qa && readableBookSystem ? readableBookSystem.openByIndex(index) : false;
+    window.MrFeastFresh.openFeastFatherLoreBookForQA = () => (
+      state.qa && readableBookSystem
+        ? readableBookSystem.openByPlacementId(FEAST_FATHER_LORE_BOOK.placementId)
+        : false
+    );
     window.MrFeastFresh.closeReadableBookForQA = () => state.qa && readableBookSystem ? readableBookSystem.close() : false;
     window.MrFeastFresh.getMrFeastState = () => mrFeastNpc ? mrFeastNpc.getDiagnostics() : null;
     window.MrFeastFresh.probeMrFeastFurnitureCollisionForQA = () => (

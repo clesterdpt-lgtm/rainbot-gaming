@@ -6,7 +6,7 @@ Implementation and automated acceptance complete; user story/pressure playtest r
 
 ## Objective
 
-Turn the player’s Feast Hunt victory into the opening movement of the mansion finale. Mr. Feast congratulates the winner, calls them to a camera-covered Victory Feast after five minutes, reveals that Contestant 13 and the clue trail were manufactured parts of the show, then kills the house lights. A lightning flash exposes the Banquet Saint in the Dining Room corner and releases the player into a first playable escape phase built from the mansion’s existing cameras, pursuit, crouch, flashlight, and hiding systems.
+Turn the player’s Feast Hunt victory into the opening movement of the mansion finale. Mr. Feast congratulates the winner, calls them to a camera-covered Victory Feast after five minutes, reveals that Contestant 13 and the clue trail were manufactured parts of the show, then kills the house lights. A lightning flash exposes the Feast Father in the Dining Room corner and releases the player into a first playable escape phase built from the mansion’s existing cameras, pursuit, crouch, flashlight, and hiding systems.
 
 ## Scope
 
@@ -15,9 +15,9 @@ Turn the player’s Feast Hunt victory into the opening movement of the mansion 
 - Stage Mr. Feast, multiple production cameras, and a large feast spread in the Dining Room.
 - Deliver complete readable dialogue revealing that Contestant 13 never existed and the clue trail was part of the game.
 - Black out every interior light circuit only after the dialogue completes while leaving cameras hostile and operational.
-- Lazy-load the existing Banquet Saint outside Developer Mode and reveal it in a Dining Room corner during one authored lightning flash.
+- Lazy-load the existing Feast Father outside Developer Mode and reveal it in a Dining Room corner during one authored lightning flash.
 - Release ordinary movement into a first escape phase where Mr. Feast, cameras, the Saint, and existing hiding spots create immediate pressure.
-- Let a collected flashlight stun the Saint while giving the finale-only flashlight two deterministic defect modes: brief stuttering and a complete give-out.
+- Let a collected flashlight stun the Feast Father while giving the finale-only flashlight two deterministic defect modes: brief stuttering and a complete give-out.
 - Preserve focused diagnostics, deterministic QA controls, replay-safe save normalization, and desktop/mobile presentation.
 
 ## Out of scope
@@ -31,7 +31,7 @@ Turn the player’s Feast Hunt victory into the opening movement of the mansion 
 
 ## Dependencies
 
-- **Depends on:** Milestone 50 front-door host speech; Milestone 56 flashlight; Milestone 57 pursuit evasion; Milestone 59 Feast Hunt; Milestone 62 curtain hiding; Milestone 63 shared light circuits; Milestone 65 Banquet Saint.
+- **Depends on:** Milestone 50 front-door host speech; Milestone 56 flashlight; Milestone 57 pursuit evasion; Milestone 59 Feast Hunt; Milestone 62 curtain hiding; Milestone 63 shared light circuits; Milestone 65 Feast Father (legacy asset ID `banquet-saint`).
 - **Blocks:** Workroom sabotage, gate escape, and final ending milestones.
 
 ## Acceptance criteria
@@ -41,20 +41,20 @@ Turn the player’s Feast Hunt victory into the opening movement of the mansion 
 - [x] Reporting stages the player face-to-face with Mr. Feast, locks movement for the dialogue, keeps at least two production cameras trained on the host/winner marks, and fills the Dining table with a large multi-dish spread that adds no gameplay colliders or blocked host sightline. — test: `scripts/test-mr-feast-victory-feast.mjs::Dining Room production feast`
 - [x] Mr. Feast’s complete transcript explicitly reveals that Contestant Thirteen never existed, the XIII book/tape/warnings were planted by production, following the trail was part of the game, and the winner now faces a final survival challenge. The reveal does not remove or duplicate earned Bag entries. — test: `scripts/test-mr-feast-victory-feast.mjs::fake Contestant 13 reveal`
 - [x] The final dialogue line blacks out every interior light circuit, rejects ordinary switch relighting, and leaves the camera network operational and hostile. Loading or resetting out of the finale restores the pre-feast circuit state. — test: `scripts/test-mr-feast-victory-feast.mjs::finale blackout and live cameras`
-- [x] The Banquet Saint remains unloaded during ordinary play, then lazy-loads without enabling Developer Mode. One deterministic lightning flash reveals it grounded, unobstructed, and readable in an authored Dining Room corner; it neither appears early nor repeats the reveal. — test: `scripts/test-mr-feast-victory-feast.mjs::lightning Saint corner reveal`
+- [x] The Feast Father remains unloaded during ordinary play, then lazy-loads without enabling Developer Mode. One deterministic lightning flash reveals it grounded, unobstructed, and readable in an authored Dining Room corner; it neither appears early nor repeats the reveal. — test: `scripts/test-mr-feast-victory-feast.mjs::lightning Feast Father corner reveal`
 - [x] The visible Saint owns the approved local `voicelowlong05` recording as one lifecycle-managed looping presence voice. The recording lazy-loads after the finale call, remains behind the trusted-gesture master/mute graph, rises smoothly from silence over an `18m` range to a bounded `0.38` gain within `1.2m`, pans toward the live Saint, opens from a distant low-pass as it approaches, and fades/stops when the Saint is hidden, disabled, caught, reset, or unloaded. — test: `scripts/test-mr-feast-victory-feast.mjs::recorded Saint proximity voice`
 - [x] After the flash, ordinary sprint, crouch, camera acquisition, Mr. Feast pursuit, and existing hiding remain authoritative. The Saint uses a small physical first-slice threat loop without teleporting. Existing hiding switches off the flashlight, blocks camera acquisition, prevents a silent hidden Saint catch, and lets Mr. Feast lose the player through the existing bounded window; Milestone 67 adds the explicit audible-breath exception without restoring live visual tracking. — test: `scripts/test-mr-feast-victory-feast.mjs::escape, hide, breath investigation, and catch`
 - [x] Saint pursuit checks the complete lane with its `0.28m` body radius plus `0.06m` clearance against the fixed Rapier wall/furnishing map. A blocked lane selects reachable same-floor nodes from the existing door-aware response graph, opens and waits for route doors, switches back to direct steering as soon as the full-width lane clears, and blocks/replans a graph edge after a real `0.55s` stall. Navigation diagnostics expose mode, route nodes, direct clearance, detour frames, completed steps, and stall recovery. — test: `scripts/test-mr-feast-victory-feast.mjs::Library/Foyer wall detour`
 - [x] A collected, actually emitting flashlight with a clear centered beam stuns the Saint for a named duration and stops its travel without damaging or removing it. An off, occluded, or defective beam cannot begin a stun, and the Saint resumes after the stun expires. — test: `scripts/test-mr-feast-victory-feast.mjs::flashlight Saint stun`
 - [x] Finale-only flashlight defects distinguish requested power from actual beam output. `stutter` briefly interrupts output and recovers automatically; `give-out` extinguishes the light until the player reactivates it. Diagnostics and deterministic QA expose the mode, remaining time, event counts, and actual beam output. — test: `scripts/test-mr-feast-victory-feast.mjs::deterministic flashlight defects`
-- [x] The emitting beam can lower concealment and stun the Saint but never creates a flashlight-specific camera offense. Only the finale's independently hostile camera policy, active sabotage, basement trespass, direct sight, or breathing can start/redirect a threat; a zero-output defect contributes no flashlight visibility. — tests: `scripts/test-mr-feast-flashlight.mjs::policy-gated camera response` and `scripts/test-mr-feast-victory-feast.mjs::flashlight stun and defects`
+- [x] The emitting beam can lower concealment and stun the Feast Father but never creates a flashlight-specific camera offense. Only the finale's independently hostile camera policy, active sabotage, basement trespass, direct sight, or breathing can start/redirect a threat; a zero-output defect contributes no flashlight visibility. — tests: `scripts/test-mr-feast-flashlight.mjs::policy-gated camera response` and `scripts/test-mr-feast-victory-feast.mjs::flashlight stun and defects`
 - [x] A save made during the escape phase restores to a replay-safe Dining Room report checkpoint: circuits restored, Saint hidden, pursuit cleared, flashlight ownership retained but switched off, and stun/defect timers cleared. Sabotage and gate escape remain explicitly pending. — test: `scripts/test-mr-feast-victory-feast.mjs::escape save normalization`
 - [x] `render_game_to_text()` and `window.MrFeastFresh` expose the phase, timer, dialogue, feast staging, blackout, reveal, Saint motion/stun, flashlight defects, hiding/catch state, and deferred sabotage/escape outcome. Desktop and 390×844 touch presentation remain readable with zero unexpected browser errors. — test: `scripts/test-mr-feast-victory-feast.mjs::diagnostics and responsive presentation`
 - [ ] User playtest confirms the feast reads as a large staged celebration, the fake-Contestant-13 reveal lands clearly, the Saint is unmistakable in the lightning flash, and flashlight failure plus hiding feels tense rather than arbitrary.
 
 ## Exit condition
 
-The player wins Feast Hunt, hears Mr. Feast announce a five-minute Victory Feast, physically reports to the camera-covered Dining Room, sees the large spread, and hears that Contestant 13 was a production fiction. The lights die, lightning reveals the Banquet Saint in the corner, and control returns in a dark hostile mansion. The player can run, crouch, hide from the existing threats, and use a collected but unreliable flashlight to stun the Saint. Sabotage targets and the front-gate escape remain visibly pending rather than falsely completed.
+The player wins Feast Hunt, hears Mr. Feast announce a five-minute Victory Feast, physically reports to the camera-covered Dining Room, sees the large spread, and hears that Contestant 13 was a production fiction. The lights die, lightning reveals the Feast Father in the corner, and control returns in a dark hostile mansion. The player can run, crouch, hide from the existing threats, and use a collected but unreliable flashlight to stun the Feast Father. Sabotage targets and the front-gate escape remain visibly pending rather than falsely completed.
 
 ## Test plan
 

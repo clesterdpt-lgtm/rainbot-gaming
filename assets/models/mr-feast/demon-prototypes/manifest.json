@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "assetVersion": "20260727-banquet-saint-only-1",
+  "assetVersion": "20260730-feast-father-lore-1",
   "pipeline": "Approved ImageGen concept, Meshy 6 image-to-3D and auto-rig, then Blender 4.5 browser preparation and authored locomotion",
   "dormantPrototypes": [
     {
@@ -56,7 +56,7 @@
   "prototypes": [
     {
       "id": "banquet-saint",
-      "name": "The Banquet Saint",
+      "name": "The Feast Father",
       "targetHeight": 2.34,
       "locomotionStyle": "ceremonial-glide",
       "model": "banquet-saint.glb",

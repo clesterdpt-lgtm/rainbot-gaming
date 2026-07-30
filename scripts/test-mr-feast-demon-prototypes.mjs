@@ -30,7 +30,7 @@ assert.equal(
 );
 assert.match(
   runtime,
-  /assetVersion:\s*"20260727-banquet-saint-only-1"/,
+  /assetVersion:\s*"20260730-feast-father-lore-1"/,
   "demon prototype asset cache identity is stale",
 );
 assert.match(runtime, /class DemonPrototypePatrolSystem/, "missing isolated demon prototype patrol system");
@@ -57,15 +57,16 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 assert.equal(manifest.version, 1, "unexpected demon prototype manifest version");
 assert.equal(
   manifest.assetVersion,
-  "20260727-banquet-saint-only-1",
+  "20260730-feast-father-lore-1",
   "demon animation assets need a fresh cache identity",
 );
 assert.equal(manifest.prototypes?.length, 1, "manifest must contain exactly one active prototype");
 assert.deepEqual(
   manifest.prototypes.map((prototype) => prototype.id).sort(),
   ["banquet-saint"],
-  "the Banquet Saint must be the only active prototype",
+  "the Feast Father must be the only active prototype",
 );
+assert.equal(manifest.prototypes[0].name, "The Feast Father", "the active prototype display name is stale");
 assert.deepEqual(
   manifest.dormantPrototypes?.map((prototype) => prototype.id).sort(),
   ["pale-maw"],
@@ -677,12 +678,12 @@ try {
   const loaded = await page.evaluate(() => window.MrFeastFresh.awaitDemonPrototypesForQA());
   assert.equal(loaded.enabled, true, "prototype patrol did not enable with developer mode");
   assert.equal(loaded.loadStatus, "ready", "prototype patrol did not finish loading");
-  assert.equal(loaded.loaded, 1, "the Banquet Saint was not loaded");
-  assert.equal(loaded.visible, 1, "the Banquet Saint is not visible");
+  assert.equal(loaded.loaded, 1, "the Feast Father was not loaded");
+  assert.equal(loaded.visible, 1, "the Feast Father is not visible");
   assert.deepEqual(
     loaded.entries.map((entry) => entry.id),
     ["banquet-saint"],
-    "Developer Mode exposed a prototype other than the Banquet Saint",
+    "Developer Mode exposed a prototype other than the Feast Father",
   );
   for (const entry of loaded.entries) {
     const expectedLocomotionStyle = entry.id === "banquet-saint"

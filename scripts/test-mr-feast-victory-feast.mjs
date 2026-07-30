@@ -357,6 +357,26 @@ async function runBrowserFlow() {
         && !feast.escape.completed,
       `escape phase must unlock evasion without inventing the ending: ${JSON.stringify(feast)}`,
     );
+    assert(
+      feast.exteriorExits?.sealed
+        && feast.exteriorExits?.allLocked
+        && feast.exteriorExits?.doorCount >= 4
+        && feast.exteriorExits?.lockedCount === feast.exteriorExits?.doorCount
+        && feast.exteriorExits?.openCount === 0
+        && feast.exteriorExits?.gateLocked,
+      `escape must seal every exterior exit so the player cannot leave the house: ${JSON.stringify(feast.exteriorExits)}`,
+    );
+    const exteriorProbe = await page.evaluate(() => {
+      const opened = window.MrFeastFresh.openExteriorDoors();
+      const exits = window.MrFeastFresh.getVictoryFeastState()?.exteriorExits || null;
+      return { opened, exits };
+    });
+    assert(
+      exteriorProbe.opened === 0
+        && exteriorProbe.exits?.allLocked
+        && exteriorProbe.exits?.openCount === 0,
+      `sealed exterior doors must refuse openExteriorDoors during escape: ${JSON.stringify(exteriorProbe)}`,
+    );
     const escapeMobility = await page.evaluate(() => {
       const game = JSON.parse(window.render_game_to_text());
       return {

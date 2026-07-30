@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260729-victory-feast-escape-unstick-1";
+  const MANSION_RUNTIME_VERSION = "20260729-victory-feast-seal-exits-hedge-maze-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2898,7 +2898,7 @@
         scratchWidth: 0.098, scratchHeight: 0.078,
       }),
       shovel: Object.freeze({ x: -22.35, z: -5.50, yOffset: 0.16, scale: 0.56 }),
-      digSite: Object.freeze({ row: 19, col: 3, pathStepsFromRear: 82, pathStepsFromNorth: 73 }),
+      digSite: Object.freeze({ row: 5, col: 7, pathStepsFromRear: 62, pathStepsFromNorth: 63 }),
     }),
   });
 
@@ -2996,42 +2996,43 @@
     porticoUrn: Object.freeze({ x: 4.18, z: 14.15 }),
   });
 
-  // A long, narrow maze follows the whole east lawn from the rear grounds to
-  // the front facade. # cells are clipped hedges, while S/E and dots are
-  // walkable. E is an internal traversal goal rather than a boundary opening.
-  // Its west edge leaves a broad house-side promenade.
+  // A long, narrow perfect maze follows the whole east lawn from the rear
+  // grounds to the front facade. # cells are clipped hedges, while S/E and
+  // dots are walkable. The two west portals are joined by one deliberately
+  // winding route, and E marks the separate deep dead end that holds the
+  // buried B-13 key. Its west edge leaves a broad house-side promenade.
   const HEDGE_MAZE_LAYOUT = Object.freeze({
     rows: Object.freeze([
       "#########",
-      "#.#.....#",
       "#...#...#",
+      "#.#.#.#.#",
+      "#.#.#.#.#",
+      "#.#.#.#.#",
+      "..#.#.#E#",
+      "###.#.###",
       "#...#...#",
-      "#..##.#.#",
-      "....#.#.#",
-      "#.###.#.#",
-      "#.#...#.#",
-      "###.###.#",
-      "#...#.#.#",
-      "#.###.#.#",
-      "#.#...#.#",
-      "#.#...#.#",
-      "#.#.#.#.#",
-      "#.#.#.#.#",
-      "#.#.#.#.#",
-      "#.#.#.#.#",
-      "#.#.#.#.#",
-      "S.#.#.#.#",
-      "#.#.#.#.#",
+      "#.#####.#",
+      "#.....#.#",
       "#####.#.#",
       "#.....#.#",
-      "#...###.#",
-      "#.#.#...#",
-      "#.#.#..##",
-      "#.#.#...#",
-      "#.#.###.#",
+      "#.#####.#",
+      "#.....#.#",
+      "#####.#.#",
+      "#...#.#.#",
+      "#.###.#.#",
+      "#...#...#",
+      "S.#.###.#",
+      "#.....#.#",
+      "#.#####.#",
+      "#.#.....#",
+      "#.#.#####",
       "#.#...#.#",
       "#.###.#.#",
-      "#...#E..#",
+      "#...#...#",
+      "#.#.###.#",
+      "#.#...#.#",
+      "#.#.###.#",
+      "#.#.....#",
       "#########",
     ]),
     cellSize: 1.5,
@@ -3042,10 +3043,84 @@
     Object.freeze({ id: "rear", row: 18, col: 0 }),
     Object.freeze({ id: "north", row: 5, col: 0 }),
   ]);
+  const HEDGE_MAZE_MINIMUM_EXIT_TRAVERSAL_RATIO = 0.5;
+  const HEDGE_MAZE_NORTH_PORTAL = HEDGE_MAZE_PORTALS.find((portal) => portal.id === "north");
   const HEDGE_MAZE_REAR_PORTAL = HEDGE_MAZE_PORTALS.find((portal) => portal.id === "rear");
   const HEDGE_MAZE_REAR_ENTRANCE = Object.freeze(mazeCellCenter(HEDGE_MAZE_REAR_PORTAL.row, HEDGE_MAZE_REAR_PORTAL.col));
-  const HEDGE_MAZE_FINAL_STRAIGHT_TURN = Object.freeze(mazeCellCenter(9, 1));
+  const HEDGE_MAZE_STORM_CHECKPOINT_CELL = Object.freeze({ row: 7, col: 3 });
+  const HEDGE_MAZE_STORM_CHECKPOINT = Object.freeze(mazeCellCenter(
+    HEDGE_MAZE_STORM_CHECKPOINT_CELL.row,
+    HEDGE_MAZE_STORM_CHECKPOINT_CELL.col,
+  ));
+  const HEDGE_MAZE_FINAL_STRAIGHT_TURN = Object.freeze(mazeCellCenter(25, 1));
   const HEDGE_MAZE_FINAL_STRAIGHT_END = Object.freeze(mazeCellCenter(18, 1));
+
+  function hedgeMazeCellKey(cell) {
+    return `${cell.row},${cell.col}`;
+  }
+
+  function hedgeMazeCellWalkable(cell) {
+    return Boolean(
+      cell
+      && cell.row >= 0
+      && cell.row < HEDGE_MAZE_LAYOUT.rows.length
+      && cell.col >= 0
+      && cell.col < HEDGE_MAZE_LAYOUT.rows[0].length
+      && HEDGE_MAZE_LAYOUT.rows[cell.row][cell.col] !== "#"
+    );
+  }
+
+  function hedgeMazeCellNeighbors(cell) {
+    return [
+      { row: cell.row - 1, col: cell.col },
+      { row: cell.row + 1, col: cell.col },
+      { row: cell.row, col: cell.col - 1 },
+      { row: cell.row, col: cell.col + 1 },
+    ].filter((candidate) => hedgeMazeCellWalkable(candidate));
+  }
+
+  function solveHedgeMazePath(start, goal) {
+    if (!hedgeMazeCellWalkable(start) || !hedgeMazeCellWalkable(goal)) return [];
+    const queue = [start];
+    const previous = new Map([[hedgeMazeCellKey(start), null]]);
+    const cells = new Map([[hedgeMazeCellKey(start), start]]);
+    while (queue.length) {
+      const current = queue.shift();
+      if (hedgeMazeCellKey(current) === hedgeMazeCellKey(goal)) break;
+      for (const next of hedgeMazeCellNeighbors(current)) {
+        const key = hedgeMazeCellKey(next);
+        if (previous.has(key)) continue;
+        previous.set(key, hedgeMazeCellKey(current));
+        cells.set(key, next);
+        queue.push(next);
+      }
+    }
+    if (!previous.has(hedgeMazeCellKey(goal))) return [];
+    const path = [];
+    for (let cursor = hedgeMazeCellKey(goal); cursor != null; cursor = previous.get(cursor)) {
+      path.push(cells.get(cursor));
+    }
+    return path.reverse();
+  }
+
+  const HEDGE_MAZE_ENTRANCE_TO_EXIT_CELLS = Object.freeze(
+    solveHedgeMazePath(HEDGE_MAZE_NORTH_PORTAL, HEDGE_MAZE_REAR_PORTAL)
+      .map((cell) => Object.freeze({ ...cell })),
+  );
+  const HEDGE_MAZE_STORM_ROUTE = Object.freeze(
+    HEDGE_MAZE_ENTRANCE_TO_EXIT_CELLS.map((cell) => {
+      const center = mazeCellCenter(cell.row, cell.col);
+      const checkpointIndex = cell.row === HEDGE_MAZE_STORM_CHECKPOINT_CELL.row
+        && cell.col === HEDGE_MAZE_STORM_CHECKPOINT_CELL.col
+        ? 9
+        : null;
+      return Object.freeze({
+        x: center.x,
+        z: center.z,
+        ...(checkpointIndex == null ? {} : { checkpointIndex }),
+      });
+    }),
+  );
   const MAZE_NORTH_VISIBILITY = Object.freeze({
     fixture: "maze-wayfinding-lamp-3",
     intensity: 380,
@@ -3198,7 +3273,7 @@
       Object.freeze({ id: "east-front-lawn", label: "East Front Lawn", region: "EAST FRONT LAWN", x: 17.35, y: YARD_LAYOUT.groundY, z: 16.3, insideMaze: false }),
       Object.freeze({ id: "maze-promenade", label: "Maze Promenade", region: "MAZE PROMENADE", x: 17.35, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
       Object.freeze({ id: "maze-north-entrance", label: "Maze North Entrance", region: "MAZE ENTRANCE", x: 20.5, y: YARD_LAYOUT.groundY, z: 5.75, insideMaze: false }),
-      Object.freeze({ id: "hedge-maze", label: "Hedge Maze", region: "HEDGE MAZE", x: 26.5, y: YARD_LAYOUT.groundY, z: 2.75, insideMaze: true }),
+      Object.freeze({ id: "hedge-maze", label: "Hedge Maze", region: "HEDGE MAZE", x: HEDGE_MAZE_STORM_CHECKPOINT.x, y: YARD_LAYOUT.groundY, z: HEDGE_MAZE_STORM_CHECKPOINT.z, insideMaze: true }),
       Object.freeze({ id: "east-rear-lawn", label: "East Rear Lawn", region: "EAST LAWN", x: 13.5, y: YARD_LAYOUT.groundY, z: -15.6, insideMaze: false }),
       Object.freeze({ id: "pool-terrace", label: "Pool Terrace", region: "POOL TERRACE", x: -12.8, y: YARD_LAYOUT.groundY, z: -18.85, insideMaze: false }),
     ]),
@@ -3234,7 +3309,7 @@
           x: HEDGE_MAZE_FINAL_STRAIGHT_END.x,
           y: YARD_LAYOUT.groundY,
           z: HEDGE_MAZE_FINAL_STRAIGHT_END.z,
-          yaw: 0,
+          yaw: Math.PI,
           scale: 1,
           fillScale: 1,
           darkSpot: true,
@@ -3258,17 +3333,7 @@
       Object.freeze({ x: 17.35, z: 16.3, checkpointIndex: 6 }),
       Object.freeze({ x: 17.35, z: 5.75, checkpointIndex: 7 }),
       Object.freeze({ x: 20.5, z: 5.75, checkpointIndex: 8 }),
-      Object.freeze({ x: 22, z: 5.75 }),
-      Object.freeze({ x: 22, z: 10.25 }),
-      Object.freeze({ x: 25, z: 10.25 }),
-      Object.freeze({ x: 25, z: 11.75 }),
-      Object.freeze({ x: 28, z: 11.75 }),
-      Object.freeze({ x: 28, z: 2.75 }),
-      Object.freeze({ x: 26.5, z: 2.75, checkpointIndex: 9 }),
-      Object.freeze({ x: 25, z: 2.75 }),
-      Object.freeze({ x: 25, z: -0.25 }),
-      Object.freeze({ x: 22, z: -0.25 }),
-      Object.freeze({ x: 22, z: -13.75 }),
+      ...HEDGE_MAZE_STORM_ROUTE.slice(1),
       Object.freeze({ x: 20.5, z: -13.75 }),
       Object.freeze({ x: 17.35, z: -13.75 }),
       Object.freeze({ x: 13.5, z: -15.6, checkpointIndex: 10 }),
@@ -4104,7 +4169,7 @@
     yardMazeCenterLamp: [25, YARD_LAYOUT.groundY, -10.8, Math.PI, -0.1],
     contestant13LibraryBook: [-12.6, FLOOR.MAIN, 8.1, Math.PI / 2, -0.08],
     contestant13GardenShovel: [-22.28, YARD_LAYOUT.groundY, -4.05, 0, -0.75],
-    contestant13DigSite: [25, YARD_LAYOUT.groundY, -13.90, 0, -0.93],
+    contestant13DigSite: [29.65, YARD_LAYOUT.groundY, 5.75, -Math.PI / 2, -0.93],
     contestant13BasementDoor: [12.55, FLOOR.MAIN, -4.65, Math.PI, -0.08],
     contestant13ArchiveCage: [13.15, FLOOR.BASEMENT, 5.25, Math.PI / 2, -0.14],
     contestant13WorkshopRelay: [-2.5, FLOOR.BASEMENT, -10.0, 0, -0.12],
@@ -25894,6 +25959,98 @@
       return wasActive;
     }
 
+    exteriorExitDoors() {
+      return animatedObjects.filter((object) => (
+        object instanceof HingedDoor
+        && /(?:front door|terrace door)/i.test(object.name || "")
+      ));
+    }
+
+    sealExteriorExits(reason = "victory-feast-escape") {
+      const sealed = [];
+      for (const door of this.exteriorExitDoors()) {
+        if (door.open) door.setOpen(false);
+        door.locked = true;
+        door.getLockedLabel = () => "The house is sealed";
+        door.onLockedActivate = () => {
+          contestant13Quest?.showDiscovery(
+            "THE HOUSE IS SEALED",
+            "Front and terrace doors will not open. Find another way through the house.",
+            4200,
+          );
+          audioSystem?.ping(58, 0.14, 0.03, "square");
+        };
+        sealed.push(door.name);
+      }
+      // Keep the driveway gate closed for the same finale pressure.
+      if (yardState?.gate) {
+        yardState.gate.locked = true;
+        yardState.gate.open = false;
+        yardState.gate.colliderEnabled = true;
+      }
+      updateInteractionPrompt();
+      return { sealed: true, reason, doors: sealed, count: sealed.length };
+    }
+
+    releaseExteriorExits() {
+      for (const door of this.exteriorExitDoors()) {
+        door.locked = false;
+        door.getLockedLabel = null;
+        door.onLockedActivate = null;
+      }
+      updateInteractionPrompt();
+      return { sealed: false, count: this.exteriorExitDoors().length };
+    }
+
+    maintainExteriorSeals() {
+      if (!this.isEscapeActive()) return;
+      let changed = false;
+      for (const door of this.exteriorExitDoors()) {
+        if (door.open) {
+          door.setOpen(false);
+          changed = true;
+        }
+        if (!door.locked) {
+          door.locked = true;
+          door.getLockedLabel = () => "The house is sealed";
+          door.onLockedActivate = () => {
+            contestant13Quest?.showDiscovery(
+              "THE HOUSE IS SEALED",
+              "Front and terrace doors will not open. Find another way through the house.",
+              4200,
+            );
+            audioSystem?.ping(58, 0.14, 0.03, "square");
+          };
+          changed = true;
+        }
+      }
+      if (yardState?.gate && (!yardState.gate.locked || yardState.gate.open)) {
+        yardState.gate.locked = true;
+        yardState.gate.open = false;
+        yardState.gate.colliderEnabled = true;
+        changed = true;
+      }
+      if (changed) updateInteractionPrompt();
+    }
+
+    exteriorExitDiagnostics() {
+      const doors = this.exteriorExitDoors().map((door) => ({
+        name: door.name,
+        locked: Boolean(door.locked),
+        open: Boolean(door.open),
+      }));
+      const allLocked = doors.length > 0 && doors.every((door) => door.locked && !door.open);
+      return {
+        sealed: Boolean(allLocked && this.isEscapeActive()),
+        allLocked,
+        doorCount: doors.length,
+        lockedCount: doors.filter((door) => door.locked).length,
+        openCount: doors.filter((door) => door.open).length,
+        doors,
+        gateLocked: Boolean(yardState?.gate?.locked),
+      };
+    }
+
     blackoutDiagnostics() {
       const interior = this.interiorCircuits();
       const offCircuitCount = interior.filter((circuit) => !circuit.on).length;
@@ -26025,6 +26182,7 @@
       if (victoryFeastScene.revealLight) victoryFeastScene.revealLight.intensity = 0;
       this.releaseHostForEscape();
       this.releasePlayerForEscape();
+      this.sealExteriorExits("victory-feast-escape");
       demonPrototypePatrol?.setFinaleMode("escape");
       const saint = demonPrototypePatrol?.saintEntry();
       if (saint?.status === "ready") saint.root.visible = true;
@@ -26034,12 +26192,12 @@
       contestant13Quest?.hideDiscovery();
       speechSystem?.say(
         "victory-feast-escape",
-        "Run. The cameras are still rolling.",
+        "Run. The cameras are still rolling. The house is sealed.",
         speechSystem.hostSpeaker(),
-        { durationSeconds: 3.4 },
+        { durationSeconds: 3.6 },
       );
       this.syncPresentation();
-      return { started: true, phase: this.show.phase };
+      return { started: true, phase: this.show.phase, exits: this.exteriorExitDiagnostics() };
     }
 
     updateThreats(dt) {
@@ -26248,6 +26406,7 @@
         ) this.startEscape("lightning-ended");
       } else if (this.show.phase === VICTORY_FEAST_PHASE.ESCAPE) {
         this.maintainBlackout();
+        this.maintainExteriorSeals();
         this.updateThreats(step);
       }
       this.syncPresentation();
@@ -26278,6 +26437,7 @@
     cancelStaging() {
       this.setStationInteractive(false);
       this.restoreBlackout();
+      this.releaseExteriorExits();
       this.show.staged = false;
       this.show.revealElapsed = 0;
       this.show.lightningTriggered = false;
@@ -26534,8 +26694,10 @@
         escape: {
           pending: true,
           completed: false,
-          objective: "Evade and hide. Sabotage and the front gate arrive in a later milestone.",
+          objective: "Evade and hide. The exterior doors are sealed. Sabotage and the front gate arrive in a later milestone.",
+          exits: this.exteriorExitDiagnostics(),
         },
+        exteriorExits: this.exteriorExitDiagnostics(),
         directSightDwell: Number(this.show.directSightDwell.toFixed(3)),
         outcome: this.show.outcome,
         invalidTransitions: this.show.invalidTransitions,
@@ -37003,7 +37165,7 @@
   }
 
   function addContestantThirteenDigSite() {
-    const goal = mazeCellCenter(19, 3);
+    const goal = mazeCellCenter(CONTESTANT_13.world.digSite.row, CONTESTANT_13.world.digSite.col);
     const group = new THREE.Group();
     group.name = "contestant-13-dig-site";
     group.position.set(goal.x, YARD_LAYOUT.groundY, goal.z);
@@ -38012,36 +38174,15 @@
 
   function solveHedgeMaze() {
     const rows = HEDGE_MAZE_LAYOUT.rows;
-    const width = rows[0].length;
-    let start = -1;
-    let goal = -1;
+    let start = null;
+    let goal = null;
     rows.forEach((row, rowIndex) => {
       const s = row.indexOf("S");
       const e = row.indexOf("E");
-      if (s >= 0) start = rowIndex * width + s;
-      if (e >= 0) goal = rowIndex * width + e;
+      if (s >= 0) start = { row: rowIndex, col: s };
+      if (e >= 0) goal = { row: rowIndex, col: e };
     });
-    const queue = start >= 0 ? [start] : [];
-    const previous = new Map([[start, null]]);
-    while (queue.length) {
-      const index = queue.shift();
-      if (index === goal) break;
-      const row = Math.floor(index / width);
-      const col = index % width;
-      for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-        const nr = row + dr;
-        const nc = col + dc;
-        if (nr < 0 || nr >= rows.length || nc < 0 || nc >= width || rows[nr][nc] === "#") continue;
-        const next = nr * width + nc;
-        if (previous.has(next)) continue;
-        previous.set(next, index);
-        queue.push(next);
-      }
-    }
-    if (!previous.has(goal)) return [];
-    const path = [];
-    for (let cursor = goal; cursor != null; cursor = previous.get(cursor)) path.push({ row: Math.floor(cursor / width), col: cursor % width });
-    return path.reverse();
+    return solveHedgeMazePath(start, goal);
   }
 
   function buildMazeRouteActions() {
@@ -38135,6 +38276,15 @@
     addOutdoorInstanceBatch("hedge-maze-clipped-foliage", "clippedHedgeFoliage", makeClippedHedgeGeometry, M.hedge, foliageShells, false, true);
     for (const portal of HEDGE_MAZE_PORTALS) addMazeEntrancePortal(portal, size, groundY);
     const solution = solveHedgeMaze();
+    const entranceToExit = HEDGE_MAZE_ENTRANCE_TO_EXIT_CELLS;
+    const totalWalkableCells = rows.reduce(
+      (total, row) => total + Array.from(row).filter((cell) => cell !== "#").length,
+      0,
+    );
+    const entranceToExitCoverageRatio = entranceToExit.length / Math.max(1, totalWalkableCells);
+    const keyCell = CONTESTANT_13.world.digSite;
+    const northToKey = solveHedgeMazePath(HEDGE_MAZE_NORTH_PORTAL, keyCell);
+    const rearToKey = solveHedgeMazePath(HEDGE_MAZE_REAR_PORTAL, keyCell);
     const entranceCell = solution[0] || { row: 0, col: 4 };
     const southGoalCell = solution[solution.length - 1] || { row: rows.length - 2, col: 5 };
     yardState.maze = {
@@ -38143,6 +38293,14 @@
       entrance: mazeCellCenter(entranceCell.row, entranceCell.col),
       southGoal: mazeCellCenter(southGoalCell.row, southGoalCell.col),
       shortestPathLength: solution.length,
+      totalWalkableCells,
+      entranceToExitPathLength: entranceToExit.length,
+      entranceToExitCoverageRatio: Number(entranceToExitCoverageRatio.toFixed(4)),
+      minimumExitTraversalRatio: HEDGE_MAZE_MINIMUM_EXIT_TRAVERSAL_RATIO,
+      keyCell: { row: keyCell.row, col: keyCell.col },
+      keyDeadEnd: hedgeMazeCellNeighbors(keyCell).length === 1,
+      keyPathStepsFromNorth: Math.max(0, northToKey.length - 1),
+      keyPathStepsFromRear: Math.max(0, rearToKey.length - 1),
     };
     yardState.featureCounts.mazeHedges = walls.length;
   }
@@ -38378,11 +38536,11 @@
     ];
     const mazeWayfindingCells = [
       { row: 3, col: 4, targetRow: 3, targetCol: 3, role: "wayfinding", name: MAZE_NORTH_VISIBILITY.fixture },
-      { row: 7, col: 6, targetRow: 7, targetCol: 5, role: "wayfinding" },
+      { row: 7, col: 4, targetRow: 7, targetCol: 3, role: "wayfinding" },
       { row: 11, col: 6, targetRow: 11, targetCol: 5, role: "wayfinding" },
       { row: 15, col: 4, targetRow: 15, targetCol: 3, role: "center", name: "maze-center-tall-lamp", castsShadow: true },
-      { row: 19, col: 4, targetRow: 19, targetCol: 3, role: "wayfinding" },
-      { row: 23, col: 4, targetRow: 23, targetCol: 5, role: "wayfinding" },
+      { row: 19, col: 6, targetRow: 19, targetCol: 7, role: "wayfinding" },
+      { row: 23, col: 2, targetRow: 23, targetCol: 3, role: "wayfinding" },
       { row: 27, col: 6, targetRow: 27, targetCol: 5, role: "wayfinding" },
     ];
     const mazeLampSources = [
@@ -44730,7 +44888,13 @@
         doorsTotal: animatedObjects.filter((object) => object instanceof HingedDoor).length,
         exteriorDoors: animatedObjects
           .filter((object) => object instanceof HingedDoor && /(?:front door|terrace door)/i.test(object.name))
-          .map((door) => ({ name: door.name, open: door.open, angle: Number(door.angle.toFixed(3)), colliderEnabled: door.collider.isEnabled() })),
+          .map((door) => ({
+            name: door.name,
+            open: door.open,
+            locked: Boolean(door.locked),
+            angle: Number(door.angle.toFixed(3)),
+            colliderEnabled: door.collider.isEnabled(),
+          })),
         cabinetsOpen: animatedObjects.filter((object) => object instanceof Cabinet && object.open).length,
         cabinetsTotal: animatedObjects.filter((object) => object instanceof Cabinet).length,
         walkInClosets: animatedObjects

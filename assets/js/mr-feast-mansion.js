@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260731-under-bed-interaction-1";
+  const MANSION_RUNTIME_VERSION = "20260731-hedge-maze-haunt-audio-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -64,6 +64,8 @@
     keypadError: Object.freeze(["../Sounds/mr-feast/keypad-error.ogg"]),
     breathSprint: Object.freeze(["../Sounds/mr-feast/player-breath-sprint.ogg"]),
     breathHoldRelease: Object.freeze(["../Sounds/mr-feast/player-breath-hold-release.ogg"]),
+    hedgeMazeBlocked: Object.freeze(["../Sounds/mr-feast/hedge-maze-blocked-sting.wav"]),
+    mazeFeastFather: Object.freeze(["../Sounds/mr-feast/saint-voice-low-long-05.ogg"]),
     saintVoice: Object.freeze(["../Sounds/mr-feast/saint-voice-low-long-05.ogg"]),
   });
   const MANSION_DEFERRED_AUDIO_ROLES = new Set(["saintVoice"]);
@@ -3186,30 +3188,38 @@
       riseSpeed: 7.2,
     }),
     darkness: Object.freeze({
-      baseScale: 0.065,
-      flickerScale: 0.26,
+      baseScale: 0,
+      blackoutDurationSeconds: 1.15,
+      blackoutStepSeconds: 0.105,
+      blackoutPattern: Object.freeze([0.9, 0.04, 0.64, 0, 0.42, 0.025, 0.24, 0, 0.12, 0, 0]),
+      flickerScale: 0.18,
       flickerPeriodSeconds: 3.15,
       flickerStartSeconds: 2.2,
       flickerEndSeconds: 2.48,
     }),
     ambient: Object.freeze({
-      durationSeconds: 4.6,
+      durationSeconds: 5.1,
       firstDelaySeconds: 2.4,
-      intervalSeconds: Object.freeze([5.4, 6.8, 5.9]),
+      intervalSeconds: Object.freeze([4.8, 5.6, 5.2]),
       phases: Object.freeze({
         stirEnd: 1.25,
-        nearbyEnd: 3.55,
+        nearbyEnd: 4.05,
       }),
       bulges: Object.freeze([
-        Object.freeze({ start: 0.18, duration: 3.5 }),
-        Object.freeze({ start: 0.72, duration: 3.25 }),
-        Object.freeze({ start: 1.34, duration: 2.7 }),
+        Object.freeze({ start: 0.12, duration: 4.05 }),
+        Object.freeze({ start: 0.46, duration: 3.85 }),
+        Object.freeze({ start: 0.82, duration: 3.55 }),
+        Object.freeze({ start: 1.2, duration: 3.25 }),
+        Object.freeze({ start: 1.62, duration: 2.9 }),
       ]),
       events: Object.freeze([
-        Object.freeze({ at: 0.18, id: "ambient-rustle", cue: "rustle", bulge: 0 }),
-        Object.freeze({ at: 0.92, id: "ambient-branch", cue: "branch-left", bulge: 1 }),
-        Object.freeze({ at: 2.35, id: "ambient-inhale", cue: "inhale", bulge: 2 }),
-        Object.freeze({ at: 3.72, id: "ambient-withdraw", cue: "retreat", bulge: 1 }),
+        Object.freeze({ at: 0, id: "ambient-feast-father", cue: "feast-father", bulge: 0 }),
+        Object.freeze({ at: 0.12, id: "ambient-rustle-1", cue: "rustle", bulge: 0 }),
+        Object.freeze({ at: 0.62, id: "ambient-branch-2", cue: "branch-left", bulge: 1 }),
+        Object.freeze({ at: 1.16, id: "ambient-rustle-3", cue: "rustle", bulge: 2 }),
+        Object.freeze({ at: 1.72, id: "ambient-branch-4", cue: "branch-right", bulge: 3 }),
+        Object.freeze({ at: 2.48, id: "ambient-inhale-5", cue: "inhale", bulge: 4 }),
+        Object.freeze({ at: 4.12, id: "ambient-withdraw", cue: "retreat", bulge: 2 }),
       ]),
     }),
     release: Object.freeze({
@@ -3239,6 +3249,7 @@
         Object.freeze({ at: 1.62, id: "rustle-west", cue: "rustle", bulge: 0 }),
         Object.freeze({ at: 2.42, id: "rustle-east", cue: "rustle", bulge: 1 }),
         Object.freeze({ at: 3.35, id: "rustle-south", cue: "rustle", bulge: 2 }),
+        Object.freeze({ at: 4.08, id: "release-feast-father", cue: "feast-father", bulge: 2 }),
         Object.freeze({ at: 5.42, id: "inhale", cue: "inhale", bulge: 2 }),
         Object.freeze({ at: 7.02, id: "retreat-1", cue: "retreat", bulge: 3 }),
         Object.freeze({ at: 7.78, id: "retreat-2", cue: "retreat", bulge: 4 }),
@@ -18885,9 +18896,11 @@
       this.audioEvents = [];
       this.lastAmbientEvents = [];
       this.ambientPulseCount = 0;
+      this.ambientSpotCount = 0;
       this.ambientNextIn = HEDGE_MAZE_HAUNT.ambient.firstDelaySeconds;
       this.flickerClock = 0;
       this.flickerCount = 0;
+      this.blackoutFlickerRemaining = 0;
       this.mazeDarknessActive = false;
       this.mazeLightSnapshots = [];
       this.keyOwnedAtTrigger = false;
@@ -19053,7 +19066,7 @@
       }
     }
 
-    setEntrancesSealed(sealed, { silent = false } = {}) {
+    setEntrancesSealed(sealed, { silent = false, blockedReveal = false, position = null } = {}) {
       const next = Boolean(sealed);
       if (this.entrancesSealed === next) return false;
       this.entrancesSealed = next;
@@ -19062,7 +19075,9 @@
         seal.root.visible = true;
         this.setSealCollider(seal, next);
       }
-      if (!silent) {
+      if (blockedReveal && next) {
+        audioSystem?.hedgeMazeEntranceBlocked(position);
+      } else if (!silent) {
         const cue = next ? "branch-right" : "release";
         for (const seal of this.entranceSeals) {
           audioSystem?.hedgeMazeScare(cue, {
@@ -19159,8 +19174,15 @@
         : HEDGE_MAZE_KEY_SCARE.events;
     }
 
-    startMazeDarkness() {
-      if (this.mazeDarknessActive) return false;
+    startMazeDarkness({ blackout = false } = {}) {
+      if (this.mazeDarknessActive) {
+        if (blackout) {
+          this.blackoutFlickerRemaining = HEDGE_MAZE_HAUNT.darkness.blackoutDurationSeconds;
+          this.flickerClock = 0;
+          this.applyMazeFlicker();
+        }
+        return false;
+      }
       const candidates = yardState.circuit?.lights.filter((light) => light.userData.mazeSource) || [];
       this.mazeLightSnapshots = candidates.map((light, index) => ({
         light,
@@ -19170,6 +19192,9 @@
       this.mazeDarknessActive = this.mazeLightSnapshots.length > 0;
       this.flickerClock = 0;
       this.flickerCount = 0;
+      this.blackoutFlickerRemaining = blackout
+        ? HEDGE_MAZE_HAUNT.darkness.blackoutDurationSeconds
+        : 0;
       this.applyMazeFlicker();
       return this.mazeDarknessActive;
     }
@@ -19177,6 +19202,20 @@
     applyMazeFlicker() {
       if (!this.mazeDarknessActive) return;
       const config = HEDGE_MAZE_HAUNT.darkness;
+      if (this.blackoutFlickerRemaining > 0) {
+        const elapsed = config.blackoutDurationSeconds - this.blackoutFlickerRemaining;
+        const patternIndex = clamp(
+          Math.floor(elapsed / config.blackoutStepSeconds),
+          0,
+          config.blackoutPattern.length - 1,
+        );
+        const scale = config.blackoutPattern[patternIndex];
+        for (const snapshot of this.mazeLightSnapshots) {
+          snapshot.light.userData.eventIntensityScale = snapshot.previousScale * scale;
+          snapshot.light.intensity = renderedLightIntensity(snapshot.light);
+        }
+        return;
+      }
       const cycle = this.flickerClock % config.flickerPeriodSeconds;
       const cycleIndex = Math.floor(this.flickerClock / config.flickerPeriodSeconds);
       const activeIndex = this.mazeLightSnapshots.length
@@ -19194,6 +19233,20 @@
 
     updateMazeFlicker(dt) {
       if (!this.mazeDarknessActive) return;
+      if (this.blackoutFlickerRemaining > 0) {
+        const config = HEDGE_MAZE_HAUNT.darkness;
+        const previousStep = Math.floor(
+          (config.blackoutDurationSeconds - this.blackoutFlickerRemaining) / config.blackoutStepSeconds,
+        );
+        this.blackoutFlickerRemaining = Math.max(0, this.blackoutFlickerRemaining - Math.max(0, dt));
+        const currentStep = Math.floor(
+          (config.blackoutDurationSeconds - this.blackoutFlickerRemaining) / config.blackoutStepSeconds,
+        );
+        if (currentStep > previousStep) this.flickerCount += currentStep - previousStep;
+        if (this.blackoutFlickerRemaining === 0) this.flickerClock = 0;
+        this.applyMazeFlicker();
+        return;
+      }
       const previousCycle = Math.floor(this.flickerClock / HEDGE_MAZE_HAUNT.darkness.flickerPeriodSeconds);
       this.flickerClock += Math.max(0, dt);
       const currentCycle = Math.floor(this.flickerClock / HEDGE_MAZE_HAUNT.darkness.flickerPeriodSeconds);
@@ -19209,6 +19262,7 @@
       }
       this.mazeLightSnapshots = [];
       this.mazeDarknessActive = false;
+      this.blackoutFlickerRemaining = 0;
       return true;
     }
 
@@ -19270,6 +19324,7 @@
 
     configureAmbientBulges(position) {
       const faces = this.nearbyWallFaces(position);
+      this.ambientSpotCount = faces.length;
       for (let index = 0; index < this.bulges.length; index += 1) {
         const beat = this.bulges[index];
         const face = faces[index];
@@ -19336,7 +19391,11 @@
       if (this.sequence === "release" && event.cue === "hush") this.rainDucked = true;
       if (this.sequence === "release" && event.cue === "release") this.rainDucked = false;
       this.audioEvents.push(event.id);
-      audioSystem?.hedgeMazeScare(event.cue, this.eventPosition(event));
+      if (event.cue === "feast-father") {
+        audioSystem?.hedgeMazeFeastFather(this.eventPosition(event), this.ambientPulseCount);
+      } else {
+        audioSystem?.hedgeMazeScare(event.cue, this.eventPosition(event));
+      }
     }
 
     processEvents() {
@@ -19533,9 +19592,11 @@
       this.audioEvents = [];
       this.lastAmbientEvents = [];
       this.ambientPulseCount = 0;
+      this.ambientSpotCount = 0;
       this.ambientNextIn = HEDGE_MAZE_HAUNT.ambient.firstDelaySeconds;
       this.flickerClock = 0;
       this.flickerCount = 0;
+      this.blackoutFlickerRemaining = 0;
       this.keyOwnedAtTrigger = false;
       this.colliderCountAtTrigger = null;
       this.fixedBoxCountAtTrigger = null;
@@ -19573,16 +19634,24 @@
         return;
       }
 
-      this.startMazeDarkness();
-      this.updateMazeFlicker(dt);
+      let newlyLocked = false;
       if (
         !state.contestant13.mazeLockInTriggered
         && status.depthCells >= HEDGE_MAZE_HAUNT.lockDepthCells
       ) {
         state.contestant13.mazeLockInTriggered = true;
+        newlyLocked = true;
         this.ambientNextIn = Math.min(this.ambientNextIn, 1.35);
       }
-      this.setEntrancesSealed(Boolean(state.contestant13.mazeLockInTriggered));
+      if (state.contestant13.mazeLockInTriggered) {
+        this.startMazeDarkness({ blackout: newlyLocked });
+        this.setEntrancesSealed(true, {
+          silent: !newlyLocked,
+          blockedReveal: newlyLocked,
+          position: status.position,
+        });
+        this.updateMazeFlicker(dt);
+      }
 
       if (!this.active) {
         this.ambientNextIn = Math.max(0, this.ambientNextIn - Math.max(0, dt));
@@ -19662,6 +19731,7 @@
           colliderEnabled: seal.colliderEnabled,
         })),
         ambientPulseCount: this.ambientPulseCount,
+        ambientSpotCount: this.ambientSpotCount,
         ambientNextIn: Number(this.ambientNextIn.toFixed(3)),
         rootVisible: Boolean(this.root.visible),
         overlayCount: this.bulges.length,
@@ -19673,12 +19743,15 @@
         mazeDarknessActive: this.mazeDarknessActive,
         mazeDarkenedLightCount: this.mazeLightSnapshots.length,
         mazeLightAverageScale: Number(mazeLightAverageScale.toFixed(4)),
+        blackoutFlickerActive: this.blackoutFlickerRemaining > 0,
+        blackoutFlickerRemaining: Number(this.blackoutFlickerRemaining.toFixed(3)),
         flickerCount: this.flickerCount,
         rainDucked: this.rainDucked,
         audioEvents: [...this.audioEvents],
         lastAmbientEvents: [...this.lastAmbientEvents],
         flashlightCollected: Boolean(flashlightSystem?.collected()),
         flashlightOn: Boolean(flashlightSystem?.state.on),
+        flashlightCanToggle: Boolean(flashlightSystem?.canToggle()),
         movementLocked: false,
         colliderCountAtBoot: this.colliderCountAtBoot,
         colliderCountAtTrigger: this.colliderCountAtTrigger,
@@ -23853,6 +23926,10 @@
     }
 
     blocksInvestigation() {
+      return [STORM_RUN_PHASE.CALLED, STORM_RUN_PHASE.BRIEFING, STORM_RUN_PHASE.RUNNING].includes(this.show.phase);
+    }
+
+    allowsPlayerTools() {
       return [STORM_RUN_PHASE.CALLED, STORM_RUN_PHASE.BRIEFING, STORM_RUN_PHASE.RUNNING].includes(this.show.phase);
     }
 
@@ -30459,6 +30536,7 @@
         && !state.contestant13.actionInProgress
         && (
           !competitionBlocksInvestigation()
+          || stormRunSystem?.allowsPlayerTools()
           || feastHuntSystem?.allowsPlayerTools()
           || victoryFeastSystem?.allowsPlayerTools()
         )
@@ -41031,7 +41109,8 @@
       const rateVariance = Math.max(0, Number(options.rateVariance) || 0);
       source.playbackRate.value = baseRate + (Math.random() * 2 - 1) * rateVariance;
       const gain = this.ctx.createGain();
-      gain.gain.value = Math.max(0.0001, Number(options.volume) || 0.1);
+      const volume = Math.max(0.0001, Number(options.volume) || 0.1);
+      gain.gain.value = volume;
       let tail = source;
       if (options.highpass) {
         const high = this.ctx.createBiquadFilter();
@@ -41062,10 +41141,31 @@
         ? options.offsetByPath[path]
         : null;
       const offset = Math.max(0, Number.isFinite(Number(offsetByPath)) ? Number(offsetByPath) : Number(options.offset) || 0);
+      const availableDuration = Math.max(0, source.buffer.duration - offset);
+      const requestedDuration = Number(options.duration);
+      const duration = Number.isFinite(requestedDuration) && requestedDuration > 0
+        ? Math.min(requestedDuration, availableDuration)
+        : 0;
+      const playbackDuration = duration > 0
+        ? duration / Math.max(0.25, source.playbackRate.value)
+        : 0;
+      const attack = Math.min(playbackDuration * 0.4, Math.max(0, Number(options.attack) || 0));
+      const release = Math.min(playbackDuration * 0.4, Math.max(0, Number(options.release) || 0));
+      if (attack > 0 || release > 0) {
+        gain.gain.cancelScheduledValues(when);
+        gain.gain.setValueAtTime(attack > 0 ? 0.0001 : volume, when);
+        if (attack > 0) gain.gain.linearRampToValueAtTime(volume, when + attack);
+        if (release > 0 && playbackDuration > 0) {
+          const releaseStart = Math.max(when + attack, when + playbackDuration - release);
+          gain.gain.setValueAtTime(volume, releaseStart);
+          gain.gain.exponentialRampToValueAtTime(0.0001, when + playbackDuration);
+        }
+      }
       this.activeVoices += 1;
       source.onended = () => { this.activeVoices = Math.max(0, this.activeVoices - 1); };
       try {
-        source.start(when, offset);
+        if (duration > 0) source.start(when, offset, duration);
+        else source.start(when, offset);
         return true;
       } catch (_) {
         this.activeVoices = Math.max(0, this.activeVoices - 1);
@@ -41075,6 +41175,50 @@
 
     markCue(name) {
       this.cueCounts[name] = (this.cueCounts[name] || 0) + 1;
+    }
+
+    hedgeMazeEntranceBlocked() {
+      this.markCue("hedgeMazeEntranceBlocked");
+      return this.playSample("hedgeMazeBlocked", {
+        volume: 0.17,
+        lowpass: 6200,
+        attack: 0.025,
+        release: 0.32,
+        duration: 4,
+      });
+    }
+
+    hedgeMazeFeastFather(position, pulseIndex = 0) {
+      this.markCue("hedgeMazeFeastFather");
+      if (!this.ctx || !this.master || !state.audioEnabled) return false;
+      const listener = new THREE.Vector3();
+      const forward = new THREE.Vector3();
+      const right = new THREE.Vector3();
+      const offset = new THREE.Vector3();
+      camera.getWorldPosition(listener);
+      camera.getWorldDirection(forward);
+      right.set(-forward.z, 0, forward.x).normalize();
+      offset.set(
+        Number(position?.x) || listener.x,
+        Number(position?.y) || listener.y,
+        Number(position?.z) || listener.z,
+      ).sub(listener);
+      const horizontal = Math.max(0.001, Math.hypot(offset.x, offset.z));
+      const pan = clamp((offset.x * right.x + offset.z * right.z) / horizontal, -0.72, 0.72);
+      const fragments = [0.6, 5.4, 10.8, 15.2];
+      const fragmentIndex = Math.abs(Math.floor(Number(pulseIndex) || 0)) % fragments.length;
+      return this.playSample("mazeFeastFather", {
+        volume: 0.045,
+        rate: 0.76,
+        rateVariance: 0.018,
+        highpass: 72,
+        lowpass: 720,
+        pan,
+        offset: fragments[fragmentIndex],
+        duration: 1.55,
+        attack: 0.12,
+        release: 0.34,
+      });
     }
 
     hedgeMazeScare(kind, position) {

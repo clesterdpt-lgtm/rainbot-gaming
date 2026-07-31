@@ -1,6 +1,6 @@
 # Mr. Feast mansion audio provenance
 
-All files in this folder are stored locally so game playback never depends on a third-party host. The storm, interaction, and footstep files below are released under Creative Commons CC0 1.0 Universal; attribution is not required, but the creators and source pages are recorded here for provenance. The two player-breath files are separately identified purchased Unity Asset Store content and are not CC0.
+All files in this folder are stored locally so game playback never depends on a third-party host. The storm, interaction, and footstep files below are released under Creative Commons CC0 1.0 Universal; attribution is not required, but the creators and source pages are recorded here for provenance. The Horror Bundle recordings are separately identified purchased Unity Asset Store content and are not CC0.
 
 - License: https://creativecommons.org/publicdomain/zero/1.0/
 - Downloaded: 2026-07-16
@@ -16,7 +16,9 @@ All files in this folder are stored locally so game playback never depends on a 
   - `player-breath-sprint.ogg` — `SFX_breathloop02.wav`, used for sprint recovery and slowed/quieter rested fear
   - `player-breath-hold-release.ogg` — `SFX_breathloop01.wav`, used after releasing held breath and for forced gasps
   - `saint-voice-low-long-05.ogg` — `PACKBundle/CreatureVoices/SFX_voicelowlong05.wav`, used as the Feast Father's looping distance-aware presence voice
+  - `hedge-maze-blocked-sting.wav` — `PACKBundle/MoodAndAmbienceDefiners/SFX_eguitaruncertainty13.wav`, used for the hedge-maze entrance lock realization
 - Preparation: loudness target `-22 LUFS`, `-3 dBTP` ceiling, 44.1 kHz stereo Vorbis
+- Entrance sting preparation: original 44.1 kHz 16-bit stereo PCM copied without transcoding
 
 ## BigSoundBank storm recordings
 

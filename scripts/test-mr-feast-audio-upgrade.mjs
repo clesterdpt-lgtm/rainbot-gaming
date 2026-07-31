@@ -90,6 +90,7 @@ async function run() {
     "keypad-tick.ogg",
     "keypad-confirm.ogg",
     "keypad-error.ogg",
+    "hedge-maze-blocked-sting.wav",
   ];
   for (const filename of expectedAssets) {
     const info = await stat(path.join(root, "assets/Sounds/mr-feast", filename));

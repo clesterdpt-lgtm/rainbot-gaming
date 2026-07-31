@@ -104,6 +104,8 @@ async function run() {
   }
   assert(/walk-in-hiding-interaction/.test(runtime), "walk-in closets need a dedicated interior hiding target");
   assert(/under-bed-hiding-interaction/.test(runtime), "beds need a dedicated low hiding target");
+  assert(/underBedInteractionWidth:\s*0\.34/.test(runtime) && /underBedInteractionHeight:\s*0\.72/.test(runtime), "under-bed hiding needs a forgiving side interaction target");
+  assert(/underBedInteractionDepth:\s*1\.45/.test(runtime) && /underBedTargetOutset:\s*0\.16/.test(runtime), "under-bed hiding target should cover a useful approach span outside the bed rail");
   assert(/bed-side-rail/.test(runtime) && /bed-leg/.test(runtime), "beds need a real raised frame with visible under-bed clearance");
   assert(/playerCameraAnchor/.test(runtime) && /cameraPosition/.test(runtime), "under-bed hiding needs a low first-person camera anchor");
   assert(/underBedRangeMultiplier/.test(runtime) && /breathHidingKind:\s*"under-bed"/.test(runtime), "under-bed hiding must participate in breath-stealth authority");

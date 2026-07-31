@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260731-bathroom-curtain-hiding-1";
+  const MANSION_RUNTIME_VERSION = "20260731-under-bed-interaction-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2352,9 +2352,15 @@
   const BEDROOM_HIDING = Object.freeze({
     underBedCameraHeight: 0.24,
     underBedRangeMultiplier: 0.82,
-    underBedInteractionHeight: 0.34,
-    underBedInteractionDepth: 1.15,
-    underBedTargetOutset: 0.08,
+    // The hide prompt should be forgiving while the player looks toward the
+    // bed frame, rather than requiring a pixel-perfect ray through the gap.
+    // The target remains outside the raised rail, so this changes acquisition
+    // room without changing the physical bed or the under-bed camera.
+    underBedInteractionWidth: 0.34,
+    underBedInteractionHeight: 0.72,
+    underBedInteractionCenterHeight: 0.42,
+    underBedInteractionDepth: 1.45,
+    underBedTargetOutset: 0.16,
     underBedApproachClearance: 0.72,
     underBedCameraInset: 0.28,
     underBedExitClearance: 0.9,
@@ -33907,11 +33913,11 @@
       });
       const target = box({
         name: `${bedroomHiding.bedId}-under-bed-hiding-interaction`,
-        w: 0.16,
+        w: BEDROOM_HIDING.underBedInteractionWidth,
         h: BEDROOM_HIDING.underBedInteractionHeight,
         d: BEDROOM_HIDING.underBedInteractionDepth,
         x: localSide * (w / 2 + BEDROOM_HIDING.underBedTargetOutset),
-        y: BEDROOM_HIDING.underBedInteractionHeight / 2 + 0.02,
+        y: BEDROOM_HIDING.underBedInteractionCenterHeight,
         z: -0.06,
         material: targetMaterial,
         parent: group,
@@ -33945,7 +33951,7 @@
           z,
           yaw: faceTargetYaw(approachX, z, x, z),
           pitch: Math.atan2(
-            BEDROOM_HIDING.underBedInteractionHeight * 0.5 + 0.02 - PLAYER.eye,
+            BEDROOM_HIDING.underBedInteractionCenterHeight - PLAYER.eye,
             BEDROOM_HIDING.underBedApproachClearance - BEDROOM_HIDING.underBedTargetOutset,
           ),
         },

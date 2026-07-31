@@ -3177,6 +3177,40 @@
     Object.freeze({ id: "north", row: 5, col: 0 }),
   ]);
   const HEDGE_MAZE_MINIMUM_EXIT_TRAVERSAL_RATIO = 0.5;
+  const HEDGE_MAZE_KEY_SCARE = Object.freeze({
+    durationSeconds: 7.4,
+    lightDimScale: 0.1,
+    lightCount: 2,
+    leafCount: 30,
+    phases: Object.freeze({
+      hushEnd: 0.45,
+      blackoutEnd: 0.95,
+      surroundEnd: 3.25,
+      inhaleEnd: 4.5,
+      retreatEnd: 6.25,
+    }),
+    bulges: Object.freeze([
+      Object.freeze({ id: "west-chamber", row: 5, col: 6, normalX: 1, normalZ: 0, start: 0.62, duration: 2.25 }),
+      Object.freeze({ id: "east-chamber", row: 5, col: 8, normalX: -1, normalZ: 0, start: 0.98, duration: 2.2 }),
+      Object.freeze({ id: "south-chamber", row: 6, col: 7, normalX: 0, normalZ: 1, start: 1.32, duration: 3.1 }),
+      Object.freeze({ id: "north-retreat-1", row: 4, col: 8, normalX: -1, normalZ: 0, start: 4.2, duration: 1.22 }),
+      Object.freeze({ id: "north-retreat-2", row: 3, col: 8, normalX: -1, normalZ: 0, start: 4.62, duration: 1.16 }),
+      Object.freeze({ id: "north-retreat-3", row: 2, col: 8, normalX: -1, normalZ: 0, start: 5.02, duration: 1.08 }),
+    ]),
+    events: Object.freeze([
+      Object.freeze({ at: 0, id: "hush", cue: "hush", bulge: 0 }),
+      Object.freeze({ at: 0.34, id: "lamp-1", light: 0, cue: "branch-left", bulge: 0 }),
+      Object.freeze({ at: 0.68, id: "lamp-2", light: 1, cue: "branch-right", bulge: 1 }),
+      Object.freeze({ at: 1.02, id: "rustle-west", cue: "rustle", bulge: 0 }),
+      Object.freeze({ at: 1.48, id: "rustle-east", cue: "rustle", bulge: 1 }),
+      Object.freeze({ at: 2.12, id: "rustle-south", cue: "rustle", bulge: 2 }),
+      Object.freeze({ at: 3.28, id: "inhale", cue: "inhale", bulge: 2 }),
+      Object.freeze({ at: 4.38, id: "retreat-1", cue: "retreat", bulge: 3 }),
+      Object.freeze({ at: 4.8, id: "retreat-2", cue: "retreat", bulge: 4 }),
+      Object.freeze({ at: 5.2, id: "retreat-3", cue: "retreat", bulge: 5 }),
+      Object.freeze({ at: 6.3, id: "release", cue: "release", bulge: 5 }),
+    ]),
+  });
   const HEDGE_MAZE_NORTH_PORTAL = HEDGE_MAZE_PORTALS.find((portal) => portal.id === "north");
   const HEDGE_MAZE_REAR_PORTAL = HEDGE_MAZE_PORTALS.find((portal) => portal.id === "rear");
   const HEDGE_MAZE_REAR_ENTRANCE = Object.freeze(mazeCellCenter(HEDGE_MAZE_REAR_PORTAL.row, HEDGE_MAZE_REAR_PORTAL.col));
@@ -4586,6 +4620,7 @@
       shovelTaken: false,
       digSiteExcavated: false,
       basementKeyFound: false,
+      mazeKeyScareSeen: false,
       basementUnlocked: false,
       badgeFound: false,
       tapeFound: false,
@@ -4871,6 +4906,7 @@
   let openingWelcomeSystem = null;
   let feastSaysSystem = null;
   let stormRunSystem = null;
+  let hedgeMazeKeyScareSystem = null;
   let feastHuntSystem = null;
   let victoryFeastSystem = null;
   let banquetLossSystem = null;
@@ -18801,6 +18837,387 @@
     }
   }
 
+  class HedgeMazeKeyScareSystem {
+    constructor() {
+      this.active = false;
+      this.phase = "idle";
+      this.elapsed = 0;
+      this.eventIndex = 0;
+      this.audioEvents = [];
+      this.keyOwnedAtTrigger = false;
+      this.colliderCountAtTrigger = null;
+      this.fixedBoxCountAtTrigger = null;
+      this.lastStopReason = null;
+      this.rainDucked = false;
+      this.qaManualClock = false;
+      this.qaStepping = false;
+      this.lightSnapshots = [];
+      this.keyCenter = mazeCellCenter(CONTESTANT_13.world.digSite.row, CONTESTANT_13.world.digSite.col);
+      this.root = new THREE.Group();
+      this.root.name = "hedge-maze-key-scare-overlays";
+      this.root.visible = false;
+      scene.add(this.root);
+
+      this.bulgeMaterial = M.hedge.clone();
+      this.bulgeMaterial.name = "hedge-maze-key-scare-bulge-foliage";
+      this.bulgeMaterial.color.multiplyScalar(0.82);
+      this.bulgeMaterial.emissive.setHex(0x07150c);
+      this.bulgeMaterial.emissiveIntensity = 0.025;
+      this.bulgeGeometry = new THREE.IcosahedronGeometry(1, 2);
+      this.bulges = HEDGE_MAZE_KEY_SCARE.bulges.map((config, index) => {
+        const wall = mazeCellCenter(config.row, config.col);
+        const surface = {
+          x: wall.x + config.normalX * (HEDGE_MAZE_LAYOUT.cellSize / 2 + 0.012),
+          z: wall.z + config.normalZ * (HEDGE_MAZE_LAYOUT.cellSize / 2 + 0.012),
+        };
+        const group = new THREE.Group();
+        group.name = `hedge-maze-key-scare-bulge-${config.id}`;
+        group.position.set(surface.x, YARD_LAYOUT.groundY, surface.z);
+        group.visible = false;
+        this.root.add(group);
+        const meshes = [];
+        for (let part = 0; part < 3; part += 1) {
+          const mesh = new THREE.Mesh(this.bulgeGeometry, this.bulgeMaterial);
+          mesh.name = `${group.name}-part-${part + 1}`;
+          const tangentX = -config.normalZ;
+          const tangentZ = config.normalX;
+          const offset = (part - 1) * 0.1 + yardJitter(index * 7 + part, 171) * 0.045;
+          mesh.position.set(tangentX * offset, 0.72 + part * 0.43, tangentZ * offset);
+          mesh.scale.setScalar(0.001);
+          mesh.castShadow = false;
+          mesh.receiveShadow = true;
+          group.add(mesh);
+          meshes.push(mesh);
+        }
+        return { config, group, meshes, surface, pulse: 0 };
+      });
+
+      this.leafMaterial = new THREE.MeshStandardMaterial({
+        name: "hedge-maze-key-scare-loose-leaves",
+        map: M.hedge.map,
+        color: 0x315f3b,
+        roughness: 0.9,
+        side: THREE.DoubleSide,
+      });
+      this.leaves = new THREE.InstancedMesh(
+        new THREE.PlaneGeometry(0.12, 0.068),
+        this.leafMaterial,
+        HEDGE_MAZE_KEY_SCARE.leafCount,
+      );
+      this.leaves.name = "hedge-maze-key-scare-falling-leaves";
+      this.leaves.castShadow = false;
+      this.leaves.receiveShadow = false;
+      this.leaves.frustumCulled = false;
+      this.root.add(this.leaves);
+      this.leafTransform = new THREE.Object3D();
+      this.leafSeeds = Array.from({ length: HEDGE_MAZE_KEY_SCARE.leafCount }, (_, index) => ({
+        beatIndex: index % this.bulges.length,
+        startOffset: 0.04 + (Math.floor(index / this.bulges.length) % 5) * 0.075,
+        tangent: yardJitter(index, 211) * 0.82,
+        height: 0.72 + Math.abs(yardJitter(index, 223)) * 1.05,
+        drift: 0.42 + Math.abs(yardJitter(index, 227)) * 0.52,
+        spin: yardJitter(index, 229) * Math.PI * 2,
+      }));
+      this.visibleLeaves = 0;
+      this.hideVisuals();
+      animatedObjects.push(this);
+    }
+
+    phaseAt(elapsed) {
+      const phases = HEDGE_MAZE_KEY_SCARE.phases;
+      if (elapsed < phases.hushEnd) return "hush";
+      if (elapsed < phases.blackoutEnd) return "blackout";
+      if (elapsed < phases.surroundEnd) return "surround";
+      if (elapsed < phases.inhaleEnd) return "inhale";
+      if (elapsed < phases.retreatEnd) return "retreat";
+      if (elapsed < HEDGE_MAZE_KEY_SCARE.durationSeconds) return "release";
+      return "complete";
+    }
+
+    selectLights() {
+      const candidates = yardState.circuit?.lights.filter((light) => light.userData.mazeSource) || [];
+      this.lightSnapshots = candidates
+        .map((light) => ({
+          light,
+          distance: Math.hypot(light.position.x - this.keyCenter.x, light.position.z - this.keyCenter.z),
+          previousScale: light.userData.eventIntensityScale ?? 1,
+          dimmed: false,
+        }))
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, HEDGE_MAZE_KEY_SCARE.lightCount);
+    }
+
+    dimLight(index) {
+      const snapshot = this.lightSnapshots[index];
+      if (!snapshot || snapshot.dimmed) return false;
+      snapshot.dimmed = true;
+      snapshot.light.userData.eventIntensityScale = snapshot.previousScale * HEDGE_MAZE_KEY_SCARE.lightDimScale;
+      snapshot.light.intensity = renderedLightIntensity(snapshot.light);
+      return true;
+    }
+
+    restoreLights() {
+      for (const snapshot of this.lightSnapshots) {
+        snapshot.light.userData.eventIntensityScale = snapshot.previousScale;
+        snapshot.light.intensity = renderedLightIntensity(snapshot.light);
+        snapshot.dimmed = false;
+      }
+      this.lightSnapshots = [];
+    }
+
+    eventPosition(event) {
+      const beat = this.bulges[event.bulge] || this.bulges[0];
+      if (!beat) return { x: this.keyCenter.x, y: YARD_LAYOUT.groundY + 1.2, z: this.keyCenter.z };
+      return {
+        x: beat.surface.x,
+        y: YARD_LAYOUT.groundY + 1.2,
+        z: beat.surface.z,
+      };
+    }
+
+    handleEvent(event) {
+      if (Number.isInteger(event.light)) this.dimLight(event.light);
+      if (event.cue === "hush") this.rainDucked = true;
+      if (event.cue === "release") this.rainDucked = false;
+      this.audioEvents.push(event.id);
+      audioSystem?.hedgeMazeScare(event.cue, this.eventPosition(event));
+    }
+
+    processEvents() {
+      while (
+        this.eventIndex < HEDGE_MAZE_KEY_SCARE.events.length
+        && HEDGE_MAZE_KEY_SCARE.events[this.eventIndex].at <= this.elapsed + 0.0001
+      ) {
+        this.handleEvent(HEDGE_MAZE_KEY_SCARE.events[this.eventIndex]);
+        this.eventIndex += 1;
+      }
+    }
+
+    bulgePulse(config) {
+      const progress = (this.elapsed - config.start) / config.duration;
+      if (progress <= 0 || progress >= 1) return 0;
+      const envelope = Math.pow(Math.sin(progress * Math.PI), 1.22);
+      return envelope * (0.82 + Math.sin(progress * Math.PI * 4.2) * 0.18);
+    }
+
+    updateVisuals() {
+      this.root.visible = this.active;
+      let visibleBulges = 0;
+      for (let index = 0; index < this.bulges.length; index += 1) {
+        const beat = this.bulges[index];
+        const pulse = this.active ? this.bulgePulse(beat.config) : 0;
+        beat.pulse = pulse;
+        beat.group.visible = pulse > 0.012;
+        if (!beat.group.visible) continue;
+        visibleBulges += 1;
+        const retreat = index >= 3;
+        const travel = pulse * (retreat ? 0.04 : 0.065);
+        beat.group.position.set(
+          beat.surface.x + beat.config.normalX * travel,
+          YARD_LAYOUT.groundY,
+          beat.surface.z + beat.config.normalZ * travel,
+        );
+        for (let part = 0; part < beat.meshes.length; part += 1) {
+          const mesh = beat.meshes[part];
+          const width = (0.165 + part * 0.022) * pulse;
+          const height = (0.24 + part * 0.03) * pulse;
+          const depth = (0.025 + pulse * (retreat ? 0.085 : 0.125));
+          mesh.scale.set(
+            beat.config.normalX ? depth : width,
+            height,
+            beat.config.normalZ ? depth : width,
+          );
+          mesh.rotation.y = Math.sin(this.elapsed * 4.1 + index + part) * 0.08 * pulse;
+        }
+      }
+      this.visibleBulgeCount = visibleBulges;
+
+      let visibleLeaves = 0;
+      for (let index = 0; index < this.leafSeeds.length; index += 1) {
+        const seed = this.leafSeeds[index];
+        const beat = this.bulges[seed.beatIndex];
+        const start = beat.config.start + seed.startOffset;
+        const duration = beat.config.duration * 0.72;
+        const progress = (this.elapsed - start) / duration;
+        if (!this.active || progress <= 0 || progress >= 1) {
+          this.leafTransform.position.set(0, -20, 0);
+          this.leafTransform.scale.setScalar(0.001);
+        } else {
+          visibleLeaves += 1;
+          const tangentX = -beat.config.normalZ;
+          const tangentZ = beat.config.normalX;
+          const outward = 0.06 + progress * seed.drift;
+          const tangent = seed.tangent + Math.sin(progress * Math.PI * 2 + seed.spin) * 0.12;
+          this.leafTransform.position.set(
+            beat.surface.x + beat.config.normalX * outward + tangentX * tangent,
+            YARD_LAYOUT.groundY + seed.height + Math.sin(progress * Math.PI) * 0.34 - progress * 0.82,
+            beat.surface.z + beat.config.normalZ * outward + tangentZ * tangent,
+          );
+          this.leafTransform.rotation.set(
+            progress * 5.5 + seed.spin,
+            progress * 8.2 - seed.spin,
+            progress * 4.4,
+          );
+          const scale = 0.74 + Math.sin(progress * Math.PI) * 0.42;
+          this.leafTransform.scale.set(scale, scale, scale);
+        }
+        this.leafTransform.updateMatrix();
+        this.leaves.setMatrixAt(index, this.leafTransform.matrix);
+      }
+      this.visibleLeaves = visibleLeaves;
+      this.leaves.instanceMatrix.needsUpdate = true;
+      this.leaves.visible = this.active && visibleLeaves > 0;
+    }
+
+    hideVisuals() {
+      this.root.visible = false;
+      this.visibleBulgeCount = 0;
+      this.visibleLeaves = 0;
+      for (const beat of this.bulges) {
+        beat.pulse = 0;
+        beat.group.visible = false;
+      }
+      this.leaves.visible = false;
+    }
+
+    trigger(options = {}) {
+      const simulateStormRun = Boolean(state.qa && options.simulateStormRun);
+      if (this.active) return { triggered: false, reason: "already-active", ...this.getDiagnostics() };
+      if (state.contestant13.mazeKeyScareSeen) return { triggered: false, reason: "already-seen", ...this.getDiagnostics() };
+      if (simulateStormRun || stormRunSystem?.isPlaying()) {
+        return { triggered: false, reason: "storm-run-active", ...this.getDiagnostics() };
+      }
+      const keyOwned = Boolean(
+        state.contestant13.basementKeyFound
+        && state.contestant13.inventory.includes("basement-key-b13")
+      );
+      if (!keyOwned) return { triggered: false, reason: "key-not-owned", ...this.getDiagnostics() };
+
+      state.contestant13.mazeKeyScareSeen = true;
+      this.active = true;
+      this.phase = "hush";
+      this.elapsed = 0;
+      this.eventIndex = 0;
+      this.audioEvents = [];
+      this.keyOwnedAtTrigger = keyOwned;
+      this.colliderCountAtTrigger = physics?.colliderCount ?? null;
+      this.fixedBoxCountAtTrigger = physics?.fixedBoxes.length ?? null;
+      this.lastStopReason = null;
+      this.rainDucked = false;
+      this.selectLights();
+      this.root.visible = true;
+      this.processEvents();
+      this.updateVisuals();
+      return { triggered: true, reason: "key-recovered", ...this.getDiagnostics() };
+    }
+
+    finish(reason = "complete") {
+      if (this.rainDucked) audioSystem?.hedgeMazeScare("release", this.eventPosition({ bulge: 5 }));
+      this.rainDucked = false;
+      this.restoreLights();
+      this.active = false;
+      this.phase = reason === "complete" ? "complete" : "cancelled";
+      this.lastStopReason = reason;
+      this.hideVisuals();
+      return this.getDiagnostics();
+    }
+
+    reset({ clearSeen = false, reason = "reset" } = {}) {
+      if (this.rainDucked) audioSystem?.hedgeMazeScare("release", this.eventPosition({ bulge: 5 }));
+      this.rainDucked = false;
+      this.restoreLights();
+      this.active = false;
+      this.phase = "idle";
+      this.elapsed = 0;
+      this.eventIndex = 0;
+      this.audioEvents = [];
+      this.keyOwnedAtTrigger = false;
+      this.colliderCountAtTrigger = null;
+      this.fixedBoxCountAtTrigger = null;
+      this.lastStopReason = reason;
+      if (clearSeen) state.contestant13.mazeKeyScareSeen = false;
+      this.hideVisuals();
+      return this.getDiagnostics();
+    }
+
+    updateInternal(dt) {
+      if (!this.active) return;
+      if (stormRunSystem?.isPlaying()) {
+        this.finish("storm-run-started");
+        return;
+      }
+      if (state.gameOver) {
+        this.finish("game-over");
+        return;
+      }
+      this.elapsed = Math.min(HEDGE_MAZE_KEY_SCARE.durationSeconds, this.elapsed + Math.max(0, dt));
+      this.phase = this.phaseAt(this.elapsed);
+      this.processEvents();
+      this.updateVisuals();
+      if (this.elapsed >= HEDGE_MAZE_KEY_SCARE.durationSeconds) this.finish("complete");
+    }
+
+    update(dt) {
+      if (state.qa && this.qaManualClock && !this.qaStepping) return;
+      this.updateInternal(dt);
+    }
+
+    advanceForQA(seconds) {
+      if (!state.qa) return this.getDiagnostics();
+      this.qaManualClock = true;
+      this.qaStepping = true;
+      let remaining = Math.max(0, Number(seconds) || 0);
+      while (remaining > 0 && this.active) {
+        const step = Math.min(1 / 60, remaining);
+        this.updateInternal(step);
+        remaining -= step;
+      }
+      this.qaStepping = false;
+      return this.getDiagnostics();
+    }
+
+    getDiagnostics() {
+      const colliderCountNow = physics?.colliderCount ?? null;
+      const fixedBoxCountNow = physics?.fixedBoxes.length ?? null;
+      const keyOwned = Boolean(
+        state.contestant13.basementKeyFound
+        && state.contestant13.inventory.includes("basement-key-b13")
+      );
+      return {
+        active: this.active,
+        phase: this.phase,
+        elapsed: Number(this.elapsed.toFixed(3)),
+        durationSeconds: HEDGE_MAZE_KEY_SCARE.durationSeconds,
+        seen: Boolean(state.contestant13.mazeKeyScareSeen),
+        keyOwned,
+        keyOwnedAtTrigger: this.keyOwnedAtTrigger,
+        rootVisible: Boolean(this.root.visible),
+        overlayCount: this.bulges.length,
+        visibleBulges: this.visibleBulgeCount || 0,
+        leafCount: HEDGE_MAZE_KEY_SCARE.leafCount,
+        visibleLeaves: this.visibleLeaves,
+        lightTargetCount: this.lightSnapshots.length,
+        dimmedLightCount: this.lightSnapshots.filter((snapshot) => snapshot.dimmed).length,
+        rainDucked: this.rainDucked,
+        audioEvents: [...this.audioEvents],
+        movementLocked: false,
+        colliderCountAtTrigger: this.colliderCountAtTrigger,
+        colliderCountNow,
+        colliderCountDelta: this.colliderCountAtTrigger == null || colliderCountNow == null
+          ? 0
+          : colliderCountNow - this.colliderCountAtTrigger,
+        fixedBoxCountAtTrigger: this.fixedBoxCountAtTrigger,
+        fixedBoxCountNow,
+        fixedBoxCountDelta: this.fixedBoxCountAtTrigger == null || fixedBoxCountNow == null
+          ? 0
+          : fixedBoxCountNow - this.fixedBoxCountAtTrigger,
+        stormRunActive: Boolean(stormRunSystem?.isPlaying()),
+        lastStopReason: this.lastStopReason,
+        topology: "temporary-non-colliding-overlays",
+      };
+    }
+  }
+
   class ContestantThirteenQuest {
     constructor() {
       this.story = state.contestant13;
@@ -19131,6 +19548,7 @@
           audioSystem.pickup("key");
           audioSystem.ping(236, 0.4, 0.035, "sine");
         }
+        hedgeMazeKeyScareSystem?.trigger();
         noteMajorClueDiscovered("hedge-maze-b13-cache");
       });
       if (!started) this.story.digging = false;
@@ -19266,6 +19684,7 @@
         shovelTaken: Boolean(this.story.shovelTaken),
         digSiteExcavated: Boolean(this.story.digSiteExcavated),
         basementKeyFound: Boolean(this.story.basementKeyFound),
+        mazeKeyScareSeen: Boolean(this.story.mazeKeyScareSeen),
         basementUnlocked: Boolean(this.story.basementUnlocked),
         badgeFound: Boolean(this.story.badgeFound),
         tapeFound: Boolean(this.story.tapeFound),
@@ -19285,10 +19704,11 @@
 
     restoreQuestSnapshot(snapshot = {}) {
       const booleanFields = [
-        "bookRead", "shovelTaken", "digSiteExcavated", "basementKeyFound", "basementUnlocked",
+        "bookRead", "shovelTaken", "digSiteExcavated", "basementKeyFound", "mazeKeyScareSeen", "basementUnlocked",
         "badgeFound", "tapeFound", "archiveCageUnlocked", "recordingPlayed", "relaySabotaged", "threatEscalated",
         "kipClothingFound", "maraClothingFound", "juniperClothingFound",
       ];
+      hedgeMazeKeyScareSystem?.reset({ reason: "quest-restore" });
       for (const field of booleanFields) this.story[field] = Boolean(snapshot[field]);
       state.workroom.unlocked = Boolean(snapshot.workroomUnlocked);
       syncWorkroomDoorState();
@@ -19350,6 +19770,7 @@
         this.story.shovelTaken = true;
         this.story.digSiteExcavated = true;
         this.story.basementKeyFound = true;
+        this.story.mazeKeyScareSeen = true;
         this.story.basementUnlocked = true;
         this.story.badgeFound = true;
         this.story.tapeFound = true;
@@ -19405,6 +19826,7 @@
         shovelTaken: this.story.shovelTaken,
         digSiteExcavated: this.story.digSiteExcavated,
         basementKeyFound: this.story.basementKeyFound,
+        mazeKeyScareSeen: this.story.mazeKeyScareSeen,
         basementUnlocked: this.story.basementUnlocked,
         badgeFound: this.story.badgeFound,
         tapeFound: this.story.tapeFound,
@@ -40172,6 +40594,106 @@
       this.cueCounts[name] = (this.cueCounts[name] || 0) + 1;
     }
 
+    hedgeMazeScare(kind, position) {
+      const cue = String(kind || "rustle");
+      this.markCue("hedgeMazeKeyScare");
+      this.markCue(`hedgeMazeKeyScare:${cue}`);
+      if (this.ctx && this.rain?.duck) {
+        const now = this.ctx.currentTime;
+        if (cue === "hush") {
+          this.rain.duck.gain.cancelScheduledValues(now);
+          this.rain.duck.gain.setTargetAtTime(0.12, now, 0.09);
+        } else if (cue === "release") {
+          this.rain.duck.gain.cancelScheduledValues(now);
+          this.rain.duck.gain.setTargetAtTime(1, now, 0.34);
+        }
+      }
+      if (!this.ctx || !this.master || !state.audioEnabled || cue === "hush" || cue === "release") {
+        return cue === "hush" || cue === "release";
+      }
+
+      const listener = new THREE.Vector3();
+      const forward = new THREE.Vector3();
+      const right = new THREE.Vector3();
+      const offset = new THREE.Vector3();
+      camera.getWorldPosition(listener);
+      camera.getWorldDirection(forward);
+      right.set(-forward.z, 0, forward.x).normalize();
+      offset.set(
+        Number(position?.x) || listener.x,
+        Number(position?.y) || listener.y,
+        Number(position?.z) || listener.z,
+      ).sub(listener);
+      const horizontal = Math.max(0.001, Math.hypot(offset.x, offset.z));
+      const pan = clamp((offset.x * right.x + offset.z * right.z) / horizontal, -0.86, 0.86);
+      const now = this.ctx.currentTime;
+
+      const playNoise = ({ duration, volume, frequency, type = "bandpass", q = 0.8, delay = 0 }) => {
+        const source = this.ctx.createBufferSource();
+        source.buffer = this.makeNoiseBuffer(duration + 0.08);
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = type;
+        filter.frequency.value = frequency;
+        filter.Q.value = q;
+        const gain = this.ctx.createGain();
+        const start = now + delay;
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.linearRampToValueAtTime(volume, start + Math.min(0.08, duration * 0.2));
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        let tail = gain;
+        if (this.ctx.createStereoPanner) {
+          const panner = this.ctx.createStereoPanner();
+          panner.pan.value = pan;
+          gain.connect(panner);
+          tail = panner;
+        }
+        source.connect(filter).connect(gain);
+        tail.connect(this.master);
+        this.activeVoices += 1;
+        source.onended = () => { this.activeVoices = Math.max(0, this.activeVoices - 1); };
+        source.start(start);
+        source.stop(start + duration + 0.01);
+      };
+
+      if (cue.startsWith("branch")) {
+        const samplePlayed = this.playSample("footstepGrass", {
+          volume: 0.095,
+          rate: cue === "branch-left" ? 0.62 : 0.74,
+          rateVariance: 0.025,
+          highpass: 180,
+          lowpass: 1800,
+          pan,
+        });
+        if (!samplePlayed) playNoise({ duration: 0.22, volume: 0.07, frequency: 1180, q: 1.7 });
+        this.scheduleTone(this.ctx, this.master, 92, 0.075, 0.018, "triangle", now + 0.02);
+        return true;
+      }
+      if (cue === "rustle") {
+        playNoise({ duration: 0.54, volume: 0.082, frequency: 920, q: 0.72 });
+        playNoise({ duration: 0.31, volume: 0.035, frequency: 3100, q: 1.1, delay: 0.08 });
+        return true;
+      }
+      if (cue === "inhale") {
+        playNoise({ duration: 1.12, volume: 0.115, frequency: 340, type: "lowpass", q: 0.55 });
+        playNoise({ duration: 0.88, volume: 0.052, frequency: 1180, q: 0.62, delay: 0.12 });
+        this.scheduleTone(this.ctx, this.master, 54, 0.92, 0.026, "sine", now + 0.06);
+        return true;
+      }
+      if (cue === "retreat") {
+        const samplePlayed = this.playSample("footstepGrass", {
+          volume: 0.105,
+          rate: 0.68,
+          rateVariance: 0.035,
+          highpass: 130,
+          lowpass: 1450,
+          pan,
+        });
+        if (!samplePlayed) playNoise({ duration: 0.28, volume: 0.064, frequency: 760, q: 0.9 });
+        return true;
+      }
+      return false;
+    }
+
     makeNoiseBuffer(seconds) {
       const length = Math.floor(this.ctx.sampleRate * seconds);
       const buffer = this.ctx.createBuffer(1, length, this.ctx.sampleRate);
@@ -45547,6 +46069,7 @@
       openingWelcome: openingWelcomeSystem?.getDiagnostics() || null,
       feastSays: feastSaysSystem?.getDiagnostics() || null,
       stormRun: stormRunSystem?.getDiagnostics() || null,
+      hedgeMazeKeyScare: hedgeMazeKeyScareSystem?.getDiagnostics() || null,
       feastHunt: feastHuntSystem?.getDiagnostics() || null,
       victoryFeast: victoryFeastSystem?.getDiagnostics() || null,
       banquetLoss: banquetLossSystem?.getDiagnostics() || { ...state.banquetLoss },
@@ -46473,6 +46996,54 @@
       else contestant13Quest.readBook();
       return feastSaysSystem?.getDiagnostics() || null;
     };
+    window.MrFeastFresh.getHedgeMazeKeyScareState = () => (
+      hedgeMazeKeyScareSystem?.getDiagnostics() || null
+    );
+    window.MrFeastFresh.prepareHedgeMazeKeyScareForQA = () => {
+      if (!state.qa || !hedgeMazeKeyScareSystem || !contestant13Quest || !physics) return null;
+      hedgeMazeKeyScareSystem.reset({ clearSeen: true, reason: "qa-prepare" });
+      contestant13Quest.story.bookRead = true;
+      contestant13Quest.story.shovelTaken = true;
+      contestant13Quest.story.digSiteExcavated = true;
+      contestant13Quest.story.basementKeyFound = true;
+      contestant13Quest.story.badgeFound = true;
+      contestant13Quest.story.tapeFound = true;
+      contestant13Quest.addItem("garden-shovel");
+      contestant13Quest.addItem("basement-key-b13");
+      contestant13Quest.addItem("contestant-13-badge");
+      contestant13Quest.addItem("contestant-13-tape");
+      contestant13Quest.syncWorldPresentation();
+      contestant13Quest.updateUI();
+      const center = mazeCellCenter(CONTESTANT_13.world.digSite.row, CONTESTANT_13.world.digSite.col);
+      const position = { x: center.x, y: YARD_LAYOUT.groundY, z: center.z + 0.98 };
+      const yaw = faceTargetYaw(position.x, position.z, center.x, center.z - 0.58);
+      teleport(position.x, position.y, position.z, yaw, -0.12);
+      updateLocation();
+      syncLightRendering("snap");
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateInteractionPrompt();
+      return {
+        ...hedgeMazeKeyScareSystem.getDiagnostics(),
+        position,
+        yaw: Number(yaw.toFixed(4)),
+      };
+    };
+    window.MrFeastFresh.triggerHedgeMazeKeyScareForQA = (options = {}) => (
+      state.qa && hedgeMazeKeyScareSystem
+        ? hedgeMazeKeyScareSystem.trigger({ simulateStormRun: Boolean(options?.simulateStormRun) })
+        : { triggered: false, reason: "qa-only" }
+    );
+    window.MrFeastFresh.advanceHedgeMazeKeyScareForQA = (seconds) => (
+      state.qa && hedgeMazeKeyScareSystem
+        ? hedgeMazeKeyScareSystem.advanceForQA(seconds)
+        : null
+    );
+    window.MrFeastFresh.resetHedgeMazeKeyScareForQA = (clearSeen = false) => (
+      state.qa && hedgeMazeKeyScareSystem
+        ? hedgeMazeKeyScareSystem.reset({ clearSeen: Boolean(clearSeen), reason: "qa-reset" })
+        : null
+    );
     window.MrFeastFresh.getStormRunState = () => stormRunSystem?.getDiagnostics() || null;
     window.MrFeastFresh.advanceStormRunForQA = (seconds) => (
       state.qa && stormRunSystem ? stormRunSystem.advanceForQA(seconds) : null
@@ -46802,6 +47373,7 @@
         contestant13Quest.addItem("basement-key-b13");
         contestant13Quest.syncWorldPresentation();
         contestant13Quest.updateUI();
+        hedgeMazeKeyScareSystem?.trigger();
         noteMajorClueDiscovered("hedge-maze-b13-cache");
       } else if (kind === "scratch" || /^scratch-\d+$/.test(kind)) {
         if (competitionBlocksInvestigation()) notifyCompetitionHold();
@@ -47747,6 +48319,7 @@
       bulkStorageSecretSystem.syncClothingProgression(false);
       banquetLossSystem = new BanquetLossSystem();
       audioSystem = new MansionAudio();
+      hedgeMazeKeyScareSystem = new HedgeMazeKeyScareSystem();
       breathStealthSystem = new BreathStealthSystem();
       updateAudioButton();
       bindInput();

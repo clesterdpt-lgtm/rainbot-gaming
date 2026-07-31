@@ -57,7 +57,8 @@ async function run() {
   assert(/lockDepthCells:\s*3/.test(runtime), "the entrances should seal after three cells of inward travel");
   assert(/hedgeMazeBlocked:\s*Object\.freeze\(\["\.\.\/Sounds\/mr-feast\/hedge-maze-blocked-sting\.wav"\]\)/.test(runtime), "the supplied blocked-entrance sting must be in the mansion audio manifest");
   assert(/mazeFeastFather:\s*Object\.freeze\(\["\.\.\/Sounds\/mr-feast\/saint-voice-low-long-05\.ogg"\]\)/.test(runtime), "maze movement must use the Feast Father recording");
-  assert(/blackoutDurationSeconds:\s*1\.[0-9]+/.test(runtime) && /baseScale:\s*0[,\n]/.test(runtime), "the entrance lock must rapidly flicker the maze fixtures fully out");
+  assert(/blackoutDurationSeconds:\s*1\.[5-9]/.test(runtime) && /baseScale:\s*0[,\n]/.test(runtime), "the entrance lock must use a clearly readable stutter before the maze fixtures go out");
+  assert(/flickerBursts:\s*Object\.freeze\(\[/.test(runtime) && /scale:\s*0\.[5-9]/.test(runtime), "the sustained darkness must use visible multi-pulse fixture flickers");
   const ambientConfig = sourceSection(runtime, "ambient: Object.freeze({", "release: Object.freeze({");
   assert((ambientConfig.match(/Object\.freeze\(\{ start:/g) || []).length >= 5, "ambient haunt pulses must move at least five nearby hedge faces");
   assert(/class HedgeMazeKeyScareSystem/.test(runtime), "missing focused hedge-maze haunt authority");
@@ -69,6 +70,11 @@ async function run() {
   assert(/allowsPlayerTools\(\)/.test(stormRunClass), "Storm Run must explicitly preserve player tools");
   const flashlightClass = sourceSection(runtime, "class FlashlightSystem", "class BulkStorageSecretSystem");
   assert(/stormRunSystem\?\.allowsPlayerTools\(\)/.test(flashlightClass), "the flashlight gate must honor Storm Run's player-tool policy");
+  const rainClass = sourceSection(runtime, "class RainSystem", "class StormSystem");
+  assert(/state\.currentRoom === "HEDGE MAZE"/.test(rainClass) && /this\.lines\.visible/.test(rainClass), "visible rain must stop inside the hedge maze");
+  const audioClass = sourceSection(runtime, "class MansionAudio", "function updateAudioButton");
+  assert(/mazeSilenced/.test(audioClass), "the rain mix must have an explicit hedge-maze silence state");
+  assert(/hedgeMazeFeastFather[\s\S]+volume:\s*0\.1[0-9]/.test(audioClass), "Feast Father maze fragments must be mixed at a clearly audible level");
   assert(/prepareHedgeMazeLockInForQA/.test(runtime), "focused maze lock-in QA staging is missing");
   assert(/collectHedgeMazeKeyForQA/.test(runtime), "focused maze-key release QA control is missing");
   assert(/hedge-maze-haunt/.test(html), "the runtime cache key should identify the hedge-maze haunt release");
@@ -108,22 +114,66 @@ async function run() {
     await page.evaluate(() => window.MrFeastFresh.prepareHedgeMazeLockInForQA({ questReady: false }));
     const early = await page.evaluate(() => window.MrFeastFresh.placePlayerInsideHedgeMazeForQA("north", 4));
     assert(!early.lockInTriggered && !early.entrancesSealed, `early exploration must not strand the player: ${JSON.stringify(early)}`);
+    await page.waitForTimeout(420);
+    const earlyRain = await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
+    assert(
+      earlyRain.rain.mazeSilenced && earlyRain.rain.visualSuppressed && earlyRain.rain.targetGain <= 0.0001 && earlyRain.rain.gain <= 0.002,
+      `both visible and audible rain must stop when the player enters the maze: ${JSON.stringify(earlyRain.rain)}`,
+    );
 
     const staged = await page.evaluate(() => window.MrFeastFresh.prepareHedgeMazeLockInForQA({ questReady: true, flashlightOn: true }));
     assert(staged.flashlightOn, `QA should stage the real carried flashlight switched on: ${JSON.stringify(staged)}`);
     assert(!staged.mazeDarknessActive, `maze fixtures must remain normal until the entrance actually seals: ${JSON.stringify(staged)}`);
-    const colliderCount = JSON.parse(await page.evaluate(() => window.render_game_to_text())).physics.colliders;
     const locked = await page.evaluate(() => window.MrFeastFresh.placePlayerInsideHedgeMazeForQA("north", 4));
     assert(locked.lockInTriggered && locked.entrancesSealed, `quest-ready inward travel should seal the maze: ${JSON.stringify(locked)}`);
     assert(locked.sealedEntranceCount === 2 && locked.enabledSealColliders === 2, `both portals must be visibly and physically sealed: ${JSON.stringify(locked)}`);
-    assert(locked.colliderCountNow === colliderCount, `sealing must toggle boot-time colliders without changing topology: ${JSON.stringify(locked)}`);
+    assert(locked.colliderCountDelta === 0 && locked.fixedBoxCountDelta === 0, `sealing must toggle boot-time colliders without changing topology: ${JSON.stringify(locked)}`);
     assert(locked.mazeDarknessActive && locked.blackoutFlickerActive, `the entrance lock must begin the fixture blackout immediately: ${JSON.stringify(locked)}`);
     assert(locked.flashlightOn, `the carried flashlight must remain usable while the maze is sealed: ${JSON.stringify(locked)}`);
     let mazeAudio = await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
     assert(mazeAudio.cueCounts.hedgeMazeEntranceBlocked === 1, `the supplied sting must play once when the portals seal: ${JSON.stringify(mazeAudio.cueCounts)}`);
-    await page.evaluate(() => window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(1.25));
+    await page.evaluate(() => window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(1.8));
     const blackedOut = await page.evaluate(() => window.MrFeastFresh.getHedgeMazeKeyScareState());
     assert(!blackedOut.blackoutFlickerActive && blackedOut.mazeLightAverageScale <= 0.001, `the lock flicker must settle with maze fixtures fully out: ${JSON.stringify(blackedOut)}`);
+    await page.waitForTimeout(140);
+    const offLighting = JSON.parse(await page.evaluate(() => window.render_game_to_text())).lighting;
+    await captureStage(page, "maze-fixtures-fully-off-desktop.png");
+    const visibleFlicker = await page.evaluate(() => {
+      for (let index = 0; index < 240; index += 1) {
+        const state = window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(0.01);
+        if (state.mazeLightMaximumScale >= 0.55) return state;
+      }
+      return window.MrFeastFresh.getHedgeMazeKeyScareState();
+    });
+    assert(visibleFlicker.mazeLightMaximumScale >= 0.55, `QA must reach a visible sustained flicker frame: ${JSON.stringify(visibleFlicker)}`);
+    await page.waitForTimeout(140);
+    const onLighting = JSON.parse(await page.evaluate(() => window.render_game_to_text())).lighting;
+    assert(
+      onLighting.hemisphereIntensity >= offLighting.hemisphereIntensity + 0.25
+        && onLighting.moonIntensity >= offLighting.moonIntensity + 0.25,
+      `the visible maze fill must snap brighter with the fixture pulse: ${JSON.stringify({ offLighting, onLighting })}`,
+    );
+    await captureStage(page, "maze-fixtures-flicker-on-desktop.png");
+    const flickerProbe = await page.evaluate(() => {
+      const samples = [];
+      for (let index = 0; index < 120; index += 1) {
+        const state = window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(0.02);
+        samples.push({ scale: state.mazeLightMaximumScale, lit: state.mazeLitLightCount });
+      }
+      return {
+        maximumScale: Math.max(...samples.map((sample) => sample.scale)),
+        minimumScale: Math.min(...samples.map((sample) => sample.scale)),
+        litSamples: samples.filter((sample) => sample.lit > 0).length,
+        darkSamples: samples.filter((sample) => sample.lit === 0).length,
+        maximumLitLights: Math.max(...samples.map((sample) => sample.lit)),
+      };
+    });
+    assert(
+      flickerProbe.maximumScale >= 0.55 && flickerProbe.minimumScale === 0
+        && flickerProbe.litSamples >= 10 && flickerProbe.darkSamples >= 40
+        && flickerProbe.maximumLitLights === blackedOut.mazeDarkenedLightCount,
+      `the mostly-off maze needs an unmistakable all-fixture multi-pulse flicker: ${JSON.stringify(flickerProbe)}`,
+    );
     await page.evaluate(() => window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(0.8));
     const sealedView = await page.evaluate(() => window.MrFeastFresh.placePlayerAtHedgeMazeSealForQA("north"));
     assert(
@@ -142,7 +192,13 @@ async function run() {
     assert(haunted.ambientSpotCount >= 5, `each ambient pulse should pressure at least five nearby hedge faces: ${JSON.stringify(haunted)}`);
     assert(haunted.flashlightOn && haunted.entrancesSealed, `the flashlight and seals must survive recurring scares: ${JSON.stringify(haunted)}`);
     mazeAudio = await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
-    assert((mazeAudio.cueCounts.hedgeMazeFeastFather || 0) >= 3, `each recurring hedge movement should carry a Feast Father voice fragment: ${JSON.stringify(mazeAudio.cueCounts)}`);
+    assert((mazeAudio.cueCounts.hedgeMazeFeastFather || 0) >= 6, `each recurring hedge movement should carry two Feast Father voice fragments: ${JSON.stringify(mazeAudio.cueCounts)}`);
+    assert(
+      mazeAudio.hedgeMaze.feastFatherPlayCount >= 6
+        && mazeAudio.hedgeMaze.lastFeastFatherVolume >= 0.1
+        && mazeAudio.hedgeMaze.lastFeastFatherLowpassHz >= 1600,
+      `the decoded Feast Father fragments must be played with an audible maze mix: ${JSON.stringify(mazeAudio.hedgeMaze)}`,
+    );
     await captureStage(page, "maze-locked-recurring-haunt-desktop.png");
 
     const saveRoundTrip = await page.evaluate(() => {
@@ -183,7 +239,7 @@ async function run() {
 
     await context.close();
     assert(errors.length === 0, `unexpected browser errors: ${errors.join(" | ")}`);
-    console.log("Mr. Feast hedge-maze haunt acceptance passed: supplied lock sting, synchronized blackout, five-face recurring movement with Feast Father voice, persistent entrance seals, post-key Storm Run flashlight continuity, save/load restoration, and longer key release verified");
+    console.log("Mr. Feast hedge-maze haunt acceptance passed: maze rain silence, unmistakable multi-pulse fixture flicker, audible two-beat Feast Father movement voice, supplied lock sting, five-face recurring movement, persistent entrance seals, post-key Storm Run flashlight continuity, save/load restoration, and longer key release verified");
   } finally {
     if (browser) await browser.close();
     if (server) server.kill("SIGTERM");

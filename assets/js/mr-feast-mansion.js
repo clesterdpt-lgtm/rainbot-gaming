@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260731-hedge-maze-haunt-audio-1";
+  const MANSION_RUNTIME_VERSION = "20260731-hedge-maze-haunt-audio-2";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -3189,13 +3189,20 @@
     }),
     darkness: Object.freeze({
       baseScale: 0,
-      blackoutDurationSeconds: 1.15,
-      blackoutStepSeconds: 0.105,
-      blackoutPattern: Object.freeze([0.9, 0.04, 0.64, 0, 0.42, 0.025, 0.24, 0, 0.12, 0, 0]),
-      flickerScale: 0.18,
-      flickerPeriodSeconds: 3.15,
-      flickerStartSeconds: 2.2,
-      flickerEndSeconds: 2.48,
+      blackoutDurationSeconds: 1.65,
+      blackoutStepSeconds: 0.125,
+      blackoutPattern: Object.freeze([1, 0.04, 0.82, 0, 0.62, 0.025, 0.42, 0, 0.28, 0, 0.14, 0, 0]),
+      flickerPeriodSeconds: 2.15,
+      flickerBursts: Object.freeze([
+        Object.freeze({ start: 0.22, end: 0.36, scale: 0.68 }),
+        Object.freeze({ start: 0.46, end: 0.56, scale: 0.24 }),
+        Object.freeze({ start: 0.68, end: 0.86, scale: 0.56 }),
+      ]),
+      ambientFloorHemisphere: 0.035,
+      ambientPeakHemisphere: 0.78,
+      ambientFloorMoon: 0.06,
+      ambientPeakMoon: 0.92,
+      ambientResponse: 28,
     }),
     ambient: Object.freeze({
       durationSeconds: 5.1,
@@ -3213,12 +3220,13 @@
         Object.freeze({ start: 1.62, duration: 2.9 }),
       ]),
       events: Object.freeze([
-        Object.freeze({ at: 0, id: "ambient-feast-father", cue: "feast-father", bulge: 0 }),
         Object.freeze({ at: 0.12, id: "ambient-rustle-1", cue: "rustle", bulge: 0 }),
+        Object.freeze({ at: 0.3, id: "ambient-feast-father-far", cue: "feast-father", bulge: 0 }),
         Object.freeze({ at: 0.62, id: "ambient-branch-2", cue: "branch-left", bulge: 1 }),
         Object.freeze({ at: 1.16, id: "ambient-rustle-3", cue: "rustle", bulge: 2 }),
         Object.freeze({ at: 1.72, id: "ambient-branch-4", cue: "branch-right", bulge: 3 }),
         Object.freeze({ at: 2.48, id: "ambient-inhale-5", cue: "inhale", bulge: 4 }),
+        Object.freeze({ at: 2.72, id: "ambient-feast-father-near", cue: "feast-father", bulge: 4 }),
         Object.freeze({ at: 4.12, id: "ambient-withdraw", cue: "retreat", bulge: 2 }),
       ]),
     }),
@@ -18900,6 +18908,7 @@
       this.ambientNextIn = HEDGE_MAZE_HAUNT.ambient.firstDelaySeconds;
       this.flickerClock = 0;
       this.flickerCount = 0;
+      this.currentMazeFlickerScale = 1;
       this.blackoutFlickerRemaining = 0;
       this.mazeDarknessActive = false;
       this.mazeLightSnapshots = [];
@@ -19210,6 +19219,7 @@
           config.blackoutPattern.length - 1,
         );
         const scale = config.blackoutPattern[patternIndex];
+        this.currentMazeFlickerScale = scale;
         for (const snapshot of this.mazeLightSnapshots) {
           snapshot.light.userData.eventIntensityScale = snapshot.previousScale * scale;
           snapshot.light.intensity = renderedLightIntensity(snapshot.light);
@@ -19217,15 +19227,12 @@
         return;
       }
       const cycle = this.flickerClock % config.flickerPeriodSeconds;
-      const cycleIndex = Math.floor(this.flickerClock / config.flickerPeriodSeconds);
-      const activeIndex = this.mazeLightSnapshots.length
-        ? cycleIndex % this.mazeLightSnapshots.length
-        : -1;
-      const flashing = cycle >= config.flickerStartSeconds && cycle < config.flickerEndSeconds;
+      const burst = config.flickerBursts.find((candidate) => (
+        cycle >= candidate.start && cycle < candidate.end
+      ));
+      const scale = burst ? burst.scale : config.baseScale;
+      this.currentMazeFlickerScale = scale;
       for (const snapshot of this.mazeLightSnapshots) {
-        const scale = flashing && snapshot.index === activeIndex
-          ? config.flickerScale
-          : config.baseScale;
         snapshot.light.userData.eventIntensityScale = snapshot.previousScale * scale;
         snapshot.light.intensity = renderedLightIntensity(snapshot.light);
       }
@@ -19262,8 +19269,13 @@
       }
       this.mazeLightSnapshots = [];
       this.mazeDarknessActive = false;
+      this.currentMazeFlickerScale = 1;
       this.blackoutFlickerRemaining = 0;
       return true;
+    }
+
+    ambientFlickerScale() {
+      return this.mazeDarknessActive ? this.currentMazeFlickerScale : null;
     }
 
     nearbyWallFaces(position) {
@@ -19392,7 +19404,8 @@
       if (this.sequence === "release" && event.cue === "release") this.rainDucked = false;
       this.audioEvents.push(event.id);
       if (event.cue === "feast-father") {
-        audioSystem?.hedgeMazeFeastFather(this.eventPosition(event), this.ambientPulseCount);
+        const fragmentIndex = this.ambientPulseCount * 2 + (event.id.endsWith("near") ? 1 : 0);
+        audioSystem?.hedgeMazeFeastFather(this.eventPosition(event), fragmentIndex);
       } else {
         audioSystem?.hedgeMazeScare(event.cue, this.eventPosition(event));
       }
@@ -19704,6 +19717,8 @@
       const mazeLightAverageScale = mazeLightScales.length
         ? mazeLightScales.reduce((sum, scale) => sum + scale, 0) / mazeLightScales.length
         : 1;
+      const mazeLightMaximumScale = mazeLightScales.length ? Math.max(...mazeLightScales) : 1;
+      const mazeLitLightCount = mazeLightScales.filter((scale) => scale > 0.005).length;
       const mazeStatus = this.playerMazeStatus();
       return {
         active: this.active,
@@ -19743,6 +19758,8 @@
         mazeDarknessActive: this.mazeDarknessActive,
         mazeDarkenedLightCount: this.mazeLightSnapshots.length,
         mazeLightAverageScale: Number(mazeLightAverageScale.toFixed(4)),
+        mazeLightMaximumScale: Number(mazeLightMaximumScale.toFixed(4)),
+        mazeLitLightCount,
         blackoutFlickerActive: this.blackoutFlickerRemaining > 0,
         blackoutFlickerRemaining: Number(this.blackoutFlickerRemaining.toFixed(3)),
         flickerCount: this.flickerCount,
@@ -40514,6 +40531,9 @@
     }
 
     update(dt) {
+      const mazeSuppressed = state.currentRoom === "HEDGE MAZE";
+      this.lines.visible = !mazeSuppressed;
+      if (mazeSuppressed) return;
       for (let i = 0; i < this.count; i += 1) {
         const k = i * 6;
         const drop = this.speeds[i] * dt;
@@ -40640,6 +40660,13 @@
       this.lastVariant = new Map();
       this.cueCounts = Object.create(null);
       this.activeVoices = 0;
+      this.hedgeMazeAudio = {
+        feastFatherPlayCount: 0,
+        lastFeastFatherVolume: 0,
+        lastFeastFatherLowpassHz: 0,
+        lastFeastFatherDurationSeconds: 0,
+        lastFeastFatherRate: 1,
+      };
       this.banquetBreathNoise = null;
       this.banquetBreathSources = new Set();
       this.playerBreathNoise = null;
@@ -41207,18 +41234,25 @@
       const pan = clamp((offset.x * right.x + offset.z * right.z) / horizontal, -0.72, 0.72);
       const fragments = [0.6, 5.4, 10.8, 15.2];
       const fragmentIndex = Math.abs(Math.floor(Number(pulseIndex) || 0)) % fragments.length;
-      return this.playSample("mazeFeastFather", {
-        volume: 0.045,
-        rate: 0.76,
-        rateVariance: 0.018,
+      const settings = {
+        volume: 0.12,
+        rate: 0.88,
+        rateVariance: 0.012,
         highpass: 72,
-        lowpass: 720,
+        lowpass: 1800,
         pan,
         offset: fragments[fragmentIndex],
-        duration: 1.55,
-        attack: 0.12,
-        release: 0.34,
-      });
+        duration: 2.05,
+        attack: 0.08,
+        release: 0.3,
+      };
+      const played = this.playSample("mazeFeastFather", settings);
+      this.hedgeMazeAudio.lastFeastFatherVolume = settings.volume;
+      this.hedgeMazeAudio.lastFeastFatherLowpassHz = settings.lowpass;
+      this.hedgeMazeAudio.lastFeastFatherDurationSeconds = settings.duration;
+      this.hedgeMazeAudio.lastFeastFatherRate = settings.rate;
+      if (played) this.hedgeMazeAudio.feastFatherPlayCount += 1;
+      return played;
     }
 
     hedgeMazeScare(kind, position) {
@@ -42064,7 +42098,18 @@
       const duck = this.ctx.createGain();
       duck.gain.value = 1;
       gain.connect(muffle).connect(duck).connect(this.master);
-      this.rain = { gain, muffle, duck, source: null, mode: "pending", level: 0.5, exposure: 1, layers: 0 };
+      this.rain = {
+        gain,
+        muffle,
+        duck,
+        source: null,
+        mode: "pending",
+        level: 0.5,
+        exposure: 1,
+        layers: 0,
+        mazeSilenced: false,
+        targetGain: 0.0001,
+      };
       this.startProceduralRain();
     }
 
@@ -42184,10 +42229,15 @@
       // filter opens with exposure so stepping outside reads as walls falling
       // away, not a pure volume knob.
       const gainFloor = 0.003;
-      const gainTarget = this.rain.level * (gainFloor + (1 - gainFloor) * Math.pow(clamped, 1.35));
-      const cutoffTarget = 160 + 8060 * Math.pow(clamped, 1.6);
-      this.rain.gain.gain.setTargetAtTime(gainTarget, now, 0.24);
-      this.rain.muffle.frequency.setTargetAtTime(cutoffTarget, now, 0.24);
+      const mazeSilenced = state.currentRoom === "HEDGE MAZE";
+      const gainTarget = mazeSilenced
+        ? 0.0001
+        : this.rain.level * (gainFloor + (1 - gainFloor) * Math.pow(clamped, 1.35));
+      const cutoffTarget = mazeSilenced ? 160 : 160 + 8060 * Math.pow(clamped, 1.6);
+      this.rain.mazeSilenced = mazeSilenced;
+      this.rain.targetGain = gainTarget;
+      this.rain.gain.gain.setTargetAtTime(gainTarget, now, mazeSilenced ? 0.045 : 0.24);
+      this.rain.muffle.frequency.setTargetAtTime(cutoffTarget, now, mazeSilenced ? 0.045 : 0.24);
     }
 
     rainDiagnostics() {
@@ -42197,6 +42247,9 @@
         layers: this.rain.layers,
         exposure: Number(this.rain.exposure.toFixed(3)),
         gain: Number(this.rain.gain.gain.value.toFixed(4)),
+        targetGain: Number(this.rain.targetGain.toFixed(4)),
+        mazeSilenced: this.rain.mazeSilenced,
+        visualSuppressed: Boolean(rainSystem && !rainSystem.lines.visible),
         duckGain: Number(this.rain.duck.gain.value.toFixed(4)),
         duckTargetGain: STORM_RUN.scareThunderRainDuckGain,
         duckActive: this.ctx.currentTime < this.thunderState.lastRainDuckUntil,
@@ -42887,6 +42940,10 @@
         failedAssets: Array.from(this.failedAssets, ([path, error]) => ({ path, error })),
         activeVoices: this.activeVoices,
         cueCounts: { ...this.cueCounts },
+        hedgeMaze: {
+          ...this.hedgeMazeAudio,
+          recordedFeastFatherReady: this.availableAssets("mazeFeastFather").length > 0,
+        },
         banquetBreathing: this.banquetBreathingDiagnostics(),
         playerBreathing: this.playerBreathingDiagnostics(),
         saintVoice: this.saintVoiceDiagnostics(),
@@ -45673,6 +45730,11 @@
     const renderContext = getLightRenderContext();
     const openVolume = OPEN_VOLUME_LIGHT_ROOMS.has(state.currentRoom);
     const mazeContext = state.mazeLightingContext;
+    const mazeFlickerScale = mazeContext
+      ? hedgeMazeKeyScareSystem?.ambientFlickerScale()
+      : null;
+    const mazeHauntLighting = Number.isFinite(mazeFlickerScale);
+    const mazeDarkness = HEDGE_MAZE_HAUNT.darkness;
     const stormRunBriefingLighting = getStormRunBriefingLighting();
     return {
       hemisphere: banquetLossLightingActive()
@@ -45680,14 +45742,30 @@
         : stormRunBriefingLighting
         ? stormRunBriefingLighting.hemisphereIntensity
         : renderContext === "grounds"
-        ? mazeContext ? MAZE_HEMISPHERE_INTENSITY : GROUNDS_HEMISPHERE_INTENSITY
+        ? mazeContext
+          ? mazeHauntLighting
+            ? THREE.MathUtils.lerp(
+              mazeDarkness.ambientFloorHemisphere,
+              mazeDarkness.ambientPeakHemisphere,
+              mazeFlickerScale,
+            )
+            : MAZE_HEMISPHERE_INTENSITY
+          : GROUNDS_HEMISPHERE_INTENSITY
         : openVolume ? OPEN_VOLUME_HEMISPHERE_INTENSITY : NIGHT_LIGHTING.hemisphereIntensity,
       moon: banquetLossLightingActive()
         ? BANQUET_LOSS.lighting.moonIntensity
         : stormRunBriefingLighting
         ? stormRunBriefingLighting.moonIntensity
         : renderContext === "grounds"
-        ? mazeContext ? MAZE_MOON_INTENSITY : GROUNDS_MOON_INTENSITY
+        ? mazeContext
+          ? mazeHauntLighting
+            ? THREE.MathUtils.lerp(
+              mazeDarkness.ambientFloorMoon,
+              mazeDarkness.ambientPeakMoon,
+              mazeFlickerScale,
+            )
+            : MAZE_MOON_INTENSITY
+          : GROUNDS_MOON_INTENSITY
         : NIGHT_LIGHTING.moonIntensity,
       moonPosition: stormRunBriefingLighting?.moonPosition || NIGHT_LIGHTING.moonPosition,
       moonPose: stormRunBriefingLighting ? "storm-run-briefing" : "night",
@@ -45697,7 +45775,13 @@
   function updateContextLighting(dt) {
     if (!hemisphereLight || !moonLight) return;
     const targets = getContextLightingTargets();
-    const blend = 1 - Math.exp(-CONTEXT_LIGHTING_RESPONSE * dt);
+    const mazeHauntLighting = Number.isFinite(
+      hedgeMazeKeyScareSystem?.ambientFlickerScale(),
+    );
+    const response = mazeHauntLighting
+      ? HEDGE_MAZE_HAUNT.darkness.ambientResponse
+      : CONTEXT_LIGHTING_RESPONSE;
+    const blend = 1 - Math.exp(-response * dt);
     hemisphereLight.intensity += (targets.hemisphere - hemisphereLight.intensity) * blend;
     moonLight.intensity += (targets.moon - moonLight.intensity) * blend;
     if (moonLightingPose !== targets.moonPose) {

@@ -3177,40 +3177,77 @@
     Object.freeze({ id: "north", row: 5, col: 0 }),
   ]);
   const HEDGE_MAZE_MINIMUM_EXIT_TRAVERSAL_RATIO = 0.5;
-  const HEDGE_MAZE_KEY_SCARE = Object.freeze({
-    durationSeconds: 7.4,
-    lightDimScale: 0.1,
-    lightCount: 2,
-    leafCount: 30,
-    phases: Object.freeze({
-      hushEnd: 0.45,
-      blackoutEnd: 0.95,
-      surroundEnd: 3.25,
-      inhaleEnd: 4.5,
-      retreatEnd: 6.25,
+  const HEDGE_MAZE_HAUNT = Object.freeze({
+    lockDepthCells: 3,
+    entranceSeal: Object.freeze({
+      width: 0.54,
+      height: 2.26,
+      depth: 1.48,
+      riseSpeed: 7.2,
     }),
-    bulges: Object.freeze([
-      Object.freeze({ id: "west-chamber", row: 5, col: 6, normalX: 1, normalZ: 0, start: 0.62, duration: 2.25 }),
-      Object.freeze({ id: "east-chamber", row: 5, col: 8, normalX: -1, normalZ: 0, start: 0.98, duration: 2.2 }),
-      Object.freeze({ id: "south-chamber", row: 6, col: 7, normalX: 0, normalZ: 1, start: 1.32, duration: 3.1 }),
-      Object.freeze({ id: "north-retreat-1", row: 4, col: 8, normalX: -1, normalZ: 0, start: 4.2, duration: 1.22 }),
-      Object.freeze({ id: "north-retreat-2", row: 3, col: 8, normalX: -1, normalZ: 0, start: 4.62, duration: 1.16 }),
-      Object.freeze({ id: "north-retreat-3", row: 2, col: 8, normalX: -1, normalZ: 0, start: 5.02, duration: 1.08 }),
-    ]),
-    events: Object.freeze([
-      Object.freeze({ at: 0, id: "hush", cue: "hush", bulge: 0 }),
-      Object.freeze({ at: 0.34, id: "lamp-1", light: 0, cue: "branch-left", bulge: 0 }),
-      Object.freeze({ at: 0.68, id: "lamp-2", light: 1, cue: "branch-right", bulge: 1 }),
-      Object.freeze({ at: 1.02, id: "rustle-west", cue: "rustle", bulge: 0 }),
-      Object.freeze({ at: 1.48, id: "rustle-east", cue: "rustle", bulge: 1 }),
-      Object.freeze({ at: 2.12, id: "rustle-south", cue: "rustle", bulge: 2 }),
-      Object.freeze({ at: 3.28, id: "inhale", cue: "inhale", bulge: 2 }),
-      Object.freeze({ at: 4.38, id: "retreat-1", cue: "retreat", bulge: 3 }),
-      Object.freeze({ at: 4.8, id: "retreat-2", cue: "retreat", bulge: 4 }),
-      Object.freeze({ at: 5.2, id: "retreat-3", cue: "retreat", bulge: 5 }),
-      Object.freeze({ at: 6.3, id: "release", cue: "release", bulge: 5 }),
-    ]),
+    darkness: Object.freeze({
+      baseScale: 0.065,
+      flickerScale: 0.26,
+      flickerPeriodSeconds: 3.15,
+      flickerStartSeconds: 2.2,
+      flickerEndSeconds: 2.48,
+    }),
+    ambient: Object.freeze({
+      durationSeconds: 4.6,
+      firstDelaySeconds: 2.4,
+      intervalSeconds: Object.freeze([5.4, 6.8, 5.9]),
+      phases: Object.freeze({
+        stirEnd: 1.25,
+        nearbyEnd: 3.55,
+      }),
+      bulges: Object.freeze([
+        Object.freeze({ start: 0.18, duration: 3.5 }),
+        Object.freeze({ start: 0.72, duration: 3.25 }),
+        Object.freeze({ start: 1.34, duration: 2.7 }),
+      ]),
+      events: Object.freeze([
+        Object.freeze({ at: 0.18, id: "ambient-rustle", cue: "rustle", bulge: 0 }),
+        Object.freeze({ at: 0.92, id: "ambient-branch", cue: "branch-left", bulge: 1 }),
+        Object.freeze({ at: 2.35, id: "ambient-inhale", cue: "inhale", bulge: 2 }),
+        Object.freeze({ at: 3.72, id: "ambient-withdraw", cue: "retreat", bulge: 1 }),
+      ]),
+    }),
+    release: Object.freeze({
+      durationSeconds: 11.6,
+      lightDimScale: 0.08,
+      lightCount: 2,
+      leafCount: 30,
+      phases: Object.freeze({
+        hushEnd: 0.82,
+        blackoutEnd: 1.72,
+        surroundEnd: 5.35,
+        inhaleEnd: 7.2,
+        retreatEnd: 10.1,
+      }),
+      bulges: Object.freeze([
+        Object.freeze({ id: "west-chamber", row: 5, col: 6, normalX: 1, normalZ: 0, start: 0.92, duration: 4.25 }),
+        Object.freeze({ id: "east-chamber", row: 5, col: 8, normalX: -1, normalZ: 0, start: 1.38, duration: 4.15 }),
+        Object.freeze({ id: "south-chamber", row: 6, col: 7, normalX: 0, normalZ: 1, start: 1.9, duration: 4.8 }),
+        Object.freeze({ id: "north-retreat-1", row: 4, col: 8, normalX: -1, normalZ: 0, start: 6.82, duration: 2.0 }),
+        Object.freeze({ id: "north-retreat-2", row: 3, col: 8, normalX: -1, normalZ: 0, start: 7.55, duration: 1.92 }),
+        Object.freeze({ id: "north-retreat-3", row: 2, col: 8, normalX: -1, normalZ: 0, start: 8.24, duration: 1.82 }),
+      ]),
+      events: Object.freeze([
+        Object.freeze({ at: 0, id: "hush", cue: "hush", bulge: 0 }),
+        Object.freeze({ at: 0.56, id: "lamp-1", light: 0, cue: "branch-left", bulge: 0 }),
+        Object.freeze({ at: 1.08, id: "lamp-2", light: 1, cue: "branch-right", bulge: 1 }),
+        Object.freeze({ at: 1.62, id: "rustle-west", cue: "rustle", bulge: 0 }),
+        Object.freeze({ at: 2.42, id: "rustle-east", cue: "rustle", bulge: 1 }),
+        Object.freeze({ at: 3.35, id: "rustle-south", cue: "rustle", bulge: 2 }),
+        Object.freeze({ at: 5.42, id: "inhale", cue: "inhale", bulge: 2 }),
+        Object.freeze({ at: 7.02, id: "retreat-1", cue: "retreat", bulge: 3 }),
+        Object.freeze({ at: 7.78, id: "retreat-2", cue: "retreat", bulge: 4 }),
+        Object.freeze({ at: 8.52, id: "retreat-3", cue: "retreat", bulge: 5 }),
+        Object.freeze({ at: 10.18, id: "release", cue: "release", bulge: 5 }),
+      ]),
+    }),
   });
+  const HEDGE_MAZE_KEY_SCARE = HEDGE_MAZE_HAUNT.release;
   const HEDGE_MAZE_NORTH_PORTAL = HEDGE_MAZE_PORTALS.find((portal) => portal.id === "north");
   const HEDGE_MAZE_REAR_PORTAL = HEDGE_MAZE_PORTALS.find((portal) => portal.id === "rear");
   const HEDGE_MAZE_REAR_ENTRANCE = Object.freeze(mazeCellCenter(HEDGE_MAZE_REAR_PORTAL.row, HEDGE_MAZE_REAR_PORTAL.col));
@@ -4620,6 +4657,7 @@
       shovelTaken: false,
       digSiteExcavated: false,
       basementKeyFound: false,
+      mazeLockInTriggered: false,
       mazeKeyScareSeen: false,
       basementUnlocked: false,
       badgeFound: false,
@@ -18840,10 +18878,18 @@
   class HedgeMazeKeyScareSystem {
     constructor() {
       this.active = false;
+      this.sequence = "idle";
       this.phase = "idle";
       this.elapsed = 0;
       this.eventIndex = 0;
       this.audioEvents = [];
+      this.lastAmbientEvents = [];
+      this.ambientPulseCount = 0;
+      this.ambientNextIn = HEDGE_MAZE_HAUNT.ambient.firstDelaySeconds;
+      this.flickerClock = 0;
+      this.flickerCount = 0;
+      this.mazeDarknessActive = false;
+      this.mazeLightSnapshots = [];
       this.keyOwnedAtTrigger = false;
       this.colliderCountAtTrigger = null;
       this.fixedBoxCountAtTrigger = null;
@@ -18889,7 +18935,7 @@
           group.add(mesh);
           meshes.push(mesh);
         }
-        return { config, group, meshes, surface, pulse: 0 };
+        return { config, releaseConfig: config, active: true, group, meshes, surface, pulse: 0 };
       });
 
       this.leafMaterial = new THREE.MeshStandardMaterial({
@@ -18920,10 +18966,177 @@
       }));
       this.visibleLeaves = 0;
       this.hideVisuals();
+      this.portalDistanceByCell = this.buildPortalDistanceMap();
+      this.entrancesSealed = false;
+      this.entranceSeals = this.buildEntranceSeals();
+      this.colliderCountAtBoot = physics?.colliderCount ?? null;
       animatedObjects.push(this);
     }
 
+    buildPortalDistanceMap() {
+      const distances = new Map();
+      const queue = HEDGE_MAZE_PORTALS.map((portal) => ({ cell: portal, distance: 0 }));
+      for (const entry of queue) distances.set(hedgeMazeCellKey(entry.cell), entry.distance);
+      while (queue.length) {
+        const current = queue.shift();
+        for (const next of hedgeMazeCellNeighbors(current.cell)) {
+          const key = hedgeMazeCellKey(next);
+          if (distances.has(key)) continue;
+          const distance = current.distance + 1;
+          distances.set(key, distance);
+          queue.push({ cell: next, distance });
+        }
+      }
+      return distances;
+    }
+
+    buildEntranceSeals() {
+      const config = HEDGE_MAZE_HAUNT.entranceSeal;
+      return HEDGE_MAZE_PORTALS.map((portal) => {
+        const center = mazeCellCenter(portal.row, portal.col);
+        const x = center.x - HEDGE_MAZE_LAYOUT.cellSize * 0.49;
+        const root = new THREE.Group();
+        root.name = `hedge-maze-${portal.id}-living-seal`;
+        root.position.set(x, YARD_LAYOUT.groundY - config.height - 0.14, center.z);
+        root.visible = false;
+        scene.add(root);
+        const foliage = new THREE.Mesh(makeClippedHedgeGeometry(), M.hedge);
+        foliage.name = `${root.name}-foliage`;
+        foliage.position.y = config.height / 2;
+        foliage.scale.set(config.width, config.height, config.depth);
+        foliage.castShadow = true;
+        foliage.receiveShadow = true;
+        root.add(foliage);
+        registerSightOccluder(foliage, "hedge-maze-entrance-seal");
+        const physical = physics.addKinematicBox(
+          x,
+          YARD_LAYOUT.groundY + config.height / 2,
+          center.z,
+          config.width,
+          config.height,
+          config.depth,
+        );
+        physical.collider.setEnabled(false);
+        const parked = { x, y: -100, z: center.z };
+        physical.body.setTranslation(parked, true);
+        physical.body.setNextKinematicTranslation(parked);
+        return {
+          id: portal.id,
+          portal,
+          root,
+          foliage,
+          physical,
+          openness: 1,
+          targetOpenness: 1,
+          closedPosition: { x, y: YARD_LAYOUT.groundY, z: center.z },
+          colliderEnabled: false,
+        };
+      });
+    }
+
+    setSealCollider(seal, enabled) {
+      const next = Boolean(enabled);
+      seal.colliderEnabled = next;
+      seal.physical.collider.setEnabled(next);
+      if (next) {
+        const center = {
+          x: seal.closedPosition.x,
+          y: YARD_LAYOUT.groundY + HEDGE_MAZE_HAUNT.entranceSeal.height / 2,
+          z: seal.closedPosition.z,
+        };
+        seal.physical.body.setTranslation(center, true);
+        seal.physical.body.setNextKinematicTranslation(center);
+      } else {
+        const parked = { x: seal.closedPosition.x, y: -100, z: seal.closedPosition.z };
+        seal.physical.body.setTranslation(parked, true);
+        seal.physical.body.setNextKinematicTranslation(parked);
+      }
+    }
+
+    setEntrancesSealed(sealed, { silent = false } = {}) {
+      const next = Boolean(sealed);
+      if (this.entrancesSealed === next) return false;
+      this.entrancesSealed = next;
+      for (const seal of this.entranceSeals) {
+        seal.targetOpenness = next ? 0 : 1;
+        seal.root.visible = true;
+        this.setSealCollider(seal, next);
+      }
+      if (!silent) {
+        const cue = next ? "branch-right" : "release";
+        for (const seal of this.entranceSeals) {
+          audioSystem?.hedgeMazeScare(cue, {
+            x: seal.closedPosition.x,
+            y: YARD_LAYOUT.groundY + 1.1,
+            z: seal.closedPosition.z,
+          });
+        }
+      }
+      renderer.shadowMap.needsUpdate = true;
+      return true;
+    }
+
+    updateEntranceSeals(dt) {
+      const config = HEDGE_MAZE_HAUNT.entranceSeal;
+      for (const seal of this.entranceSeals) {
+        seal.openness = ease(seal.openness, seal.targetOpenness, config.riseSpeed, dt);
+        if (Math.abs(seal.openness - seal.targetOpenness) < 0.002) seal.openness = seal.targetOpenness;
+        seal.root.position.y = lerp(YARD_LAYOUT.groundY, YARD_LAYOUT.groundY - config.height - 0.14, seal.openness);
+        seal.root.visible = seal.openness < 0.999;
+      }
+    }
+
+    keyOwned() {
+      return Boolean(
+        state.contestant13.basementKeyFound
+        && state.contestant13.inventory.includes("basement-key-b13")
+      );
+    }
+
+    questReadyForMaze() {
+      return Boolean(
+        state.contestant13.bookRead
+        && state.contestant13.inventory.includes("garden-shovel")
+        && !this.keyOwned()
+      );
+    }
+
+    worldCell(position = physics?.playerPosition()) {
+      if (!position) return null;
+      const columns = HEDGE_MAZE_LAYOUT.rows[0].length;
+      const rows = HEDGE_MAZE_LAYOUT.rows.length;
+      const col = Math.round(
+        (position.x - HEDGE_MAZE_LAYOUT.centerX) / HEDGE_MAZE_LAYOUT.cellSize
+        + (columns - 1) / 2,
+      );
+      const row = Math.round(
+        (HEDGE_MAZE_LAYOUT.centerZ - position.z) / HEDGE_MAZE_LAYOUT.cellSize
+        + (rows - 1) / 2,
+      );
+      const cell = { row, col };
+      return hedgeMazeCellWalkable(cell) ? cell : null;
+    }
+
+    playerMazeStatus() {
+      const position = physics?.playerPosition() || null;
+      const cell = this.worldCell(position);
+      const inMaze = Boolean(cell && state.currentRoom === "HEDGE MAZE");
+      return {
+        position,
+        cell,
+        inMaze,
+        depthCells: cell ? (this.portalDistanceByCell.get(hedgeMazeCellKey(cell)) ?? -1) : -1,
+      };
+    }
+
     phaseAt(elapsed) {
+      if (this.sequence === "ambient") {
+        const phases = HEDGE_MAZE_HAUNT.ambient.phases;
+        if (elapsed < phases.stirEnd) return "stir";
+        if (elapsed < phases.nearbyEnd) return "nearby";
+        if (elapsed < HEDGE_MAZE_HAUNT.ambient.durationSeconds) return "withdraw";
+        return "waiting";
+      }
       const phases = HEDGE_MAZE_KEY_SCARE.phases;
       if (elapsed < phases.hushEnd) return "hush";
       if (elapsed < phases.blackoutEnd) return "blackout";
@@ -18932,6 +19145,149 @@
       if (elapsed < phases.retreatEnd) return "retreat";
       if (elapsed < HEDGE_MAZE_KEY_SCARE.durationSeconds) return "release";
       return "complete";
+    }
+
+    sequenceDuration() {
+      return this.sequence === "ambient"
+        ? HEDGE_MAZE_HAUNT.ambient.durationSeconds
+        : HEDGE_MAZE_KEY_SCARE.durationSeconds;
+    }
+
+    sequenceEvents() {
+      return this.sequence === "ambient"
+        ? HEDGE_MAZE_HAUNT.ambient.events
+        : HEDGE_MAZE_KEY_SCARE.events;
+    }
+
+    startMazeDarkness() {
+      if (this.mazeDarknessActive) return false;
+      const candidates = yardState.circuit?.lights.filter((light) => light.userData.mazeSource) || [];
+      this.mazeLightSnapshots = candidates.map((light, index) => ({
+        light,
+        index,
+        previousScale: light.userData.eventIntensityScale ?? 1,
+      }));
+      this.mazeDarknessActive = this.mazeLightSnapshots.length > 0;
+      this.flickerClock = 0;
+      this.flickerCount = 0;
+      this.applyMazeFlicker();
+      return this.mazeDarknessActive;
+    }
+
+    applyMazeFlicker() {
+      if (!this.mazeDarknessActive) return;
+      const config = HEDGE_MAZE_HAUNT.darkness;
+      const cycle = this.flickerClock % config.flickerPeriodSeconds;
+      const cycleIndex = Math.floor(this.flickerClock / config.flickerPeriodSeconds);
+      const activeIndex = this.mazeLightSnapshots.length
+        ? cycleIndex % this.mazeLightSnapshots.length
+        : -1;
+      const flashing = cycle >= config.flickerStartSeconds && cycle < config.flickerEndSeconds;
+      for (const snapshot of this.mazeLightSnapshots) {
+        const scale = flashing && snapshot.index === activeIndex
+          ? config.flickerScale
+          : config.baseScale;
+        snapshot.light.userData.eventIntensityScale = snapshot.previousScale * scale;
+        snapshot.light.intensity = renderedLightIntensity(snapshot.light);
+      }
+    }
+
+    updateMazeFlicker(dt) {
+      if (!this.mazeDarknessActive) return;
+      const previousCycle = Math.floor(this.flickerClock / HEDGE_MAZE_HAUNT.darkness.flickerPeriodSeconds);
+      this.flickerClock += Math.max(0, dt);
+      const currentCycle = Math.floor(this.flickerClock / HEDGE_MAZE_HAUNT.darkness.flickerPeriodSeconds);
+      if (currentCycle > previousCycle) this.flickerCount += currentCycle - previousCycle;
+      this.applyMazeFlicker();
+    }
+
+    stopMazeDarkness() {
+      if (!this.mazeDarknessActive && !this.mazeLightSnapshots.length) return false;
+      for (const snapshot of this.mazeLightSnapshots) {
+        snapshot.light.userData.eventIntensityScale = snapshot.previousScale;
+        snapshot.light.intensity = renderedLightIntensity(snapshot.light);
+      }
+      this.mazeLightSnapshots = [];
+      this.mazeDarknessActive = false;
+      return true;
+    }
+
+    nearbyWallFaces(position) {
+      const playerCell = this.worldCell(position);
+      if (!playerCell || !position) return [];
+      const candidates = [];
+      for (let radius = 1; radius <= 3; radius += 1) {
+        for (let row = playerCell.row - radius; row <= playerCell.row + radius; row += 1) {
+          for (let col = playerCell.col - radius; col <= playerCell.col + radius; col += 1) {
+            if (
+              row < 0
+              || row >= HEDGE_MAZE_LAYOUT.rows.length
+              || col < 0
+              || col >= HEDGE_MAZE_LAYOUT.rows[0].length
+              || HEDGE_MAZE_LAYOUT.rows[row][col] !== "#"
+            ) continue;
+            const wall = mazeCellCenter(row, col);
+            const dx = position.x - wall.x;
+            const dz = position.z - wall.z;
+            const useX = Math.abs(dx) >= Math.abs(dz);
+            const normalX = useX ? (Math.sign(dx) || 1) : 0;
+            const normalZ = useX ? 0 : (Math.sign(dz) || 1);
+            const surface = {
+              x: wall.x + normalX * (HEDGE_MAZE_LAYOUT.cellSize / 2 + 0.012),
+              z: wall.z + normalZ * (HEDGE_MAZE_LAYOUT.cellSize / 2 + 0.012),
+            };
+            candidates.push({
+              row,
+              col,
+              normalX,
+              normalZ,
+              surface,
+              distance: Math.hypot(position.x - surface.x, position.z - surface.z),
+            });
+          }
+        }
+        if (candidates.length >= HEDGE_MAZE_HAUNT.ambient.bulges.length) break;
+      }
+      return candidates
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, HEDGE_MAZE_HAUNT.ambient.bulges.length);
+    }
+
+    configureReleaseBulges() {
+      for (let index = 0; index < this.bulges.length; index += 1) {
+        const beat = this.bulges[index];
+        const config = beat.releaseConfig;
+        const wall = mazeCellCenter(config.row, config.col);
+        beat.config = config;
+        beat.active = true;
+        beat.surface = {
+          x: wall.x + config.normalX * (HEDGE_MAZE_LAYOUT.cellSize / 2 + 0.012),
+          z: wall.z + config.normalZ * (HEDGE_MAZE_LAYOUT.cellSize / 2 + 0.012),
+        };
+        beat.group.position.set(beat.surface.x, YARD_LAYOUT.groundY, beat.surface.z);
+      }
+    }
+
+    configureAmbientBulges(position) {
+      const faces = this.nearbyWallFaces(position);
+      for (let index = 0; index < this.bulges.length; index += 1) {
+        const beat = this.bulges[index];
+        const face = faces[index];
+        const timing = HEDGE_MAZE_HAUNT.ambient.bulges[index];
+        beat.active = Boolean(face && timing);
+        if (!beat.active) continue;
+        beat.config = {
+          id: `ambient-${index + 1}`,
+          row: face.row,
+          col: face.col,
+          normalX: face.normalX,
+          normalZ: face.normalZ,
+          start: timing.start,
+          duration: timing.duration,
+        };
+        beat.surface = face.surface;
+        beat.group.position.set(face.surface.x, YARD_LAYOUT.groundY, face.surface.z);
+      }
     }
 
     selectLights() {
@@ -18977,18 +19333,19 @@
 
     handleEvent(event) {
       if (Number.isInteger(event.light)) this.dimLight(event.light);
-      if (event.cue === "hush") this.rainDucked = true;
-      if (event.cue === "release") this.rainDucked = false;
+      if (this.sequence === "release" && event.cue === "hush") this.rainDucked = true;
+      if (this.sequence === "release" && event.cue === "release") this.rainDucked = false;
       this.audioEvents.push(event.id);
       audioSystem?.hedgeMazeScare(event.cue, this.eventPosition(event));
     }
 
     processEvents() {
+      const events = this.sequenceEvents();
       while (
-        this.eventIndex < HEDGE_MAZE_KEY_SCARE.events.length
-        && HEDGE_MAZE_KEY_SCARE.events[this.eventIndex].at <= this.elapsed + 0.0001
+        this.eventIndex < events.length
+        && events[this.eventIndex].at <= this.elapsed + 0.0001
       ) {
-        this.handleEvent(HEDGE_MAZE_KEY_SCARE.events[this.eventIndex]);
+        this.handleEvent(events[this.eventIndex]);
         this.eventIndex += 1;
       }
     }
@@ -19005,12 +19362,12 @@
       let visibleBulges = 0;
       for (let index = 0; index < this.bulges.length; index += 1) {
         const beat = this.bulges[index];
-        const pulse = this.active ? this.bulgePulse(beat.config) : 0;
+        const pulse = this.active && beat.active ? this.bulgePulse(beat.config) : 0;
         beat.pulse = pulse;
         beat.group.visible = pulse > 0.012;
         if (!beat.group.visible) continue;
         visibleBulges += 1;
-        const retreat = index >= 3;
+        const retreat = this.sequence === "release" && index >= 3;
         const travel = pulse * (retreat ? 0.04 : 0.065);
         beat.group.position.set(
           beat.surface.x + beat.config.normalX * travel,
@@ -19036,6 +19393,13 @@
       for (let index = 0; index < this.leafSeeds.length; index += 1) {
         const seed = this.leafSeeds[index];
         const beat = this.bulges[seed.beatIndex];
+        if (!beat.active) {
+          this.leafTransform.position.set(0, -20, 0);
+          this.leafTransform.scale.setScalar(0.001);
+          this.leafTransform.updateMatrix();
+          this.leaves.setMatrixAt(index, this.leafTransform.matrix);
+          continue;
+        }
         const start = beat.config.start + seed.startOffset;
         const duration = beat.config.duration * 0.72;
         const progress = (this.elapsed - start) / duration;
@@ -19082,19 +19446,20 @@
 
     trigger(options = {}) {
       const simulateStormRun = Boolean(state.qa && options.simulateStormRun);
-      if (this.active) return { triggered: false, reason: "already-active", ...this.getDiagnostics() };
-      if (state.contestant13.mazeKeyScareSeen) return { triggered: false, reason: "already-seen", ...this.getDiagnostics() };
+      if (this.active && this.sequence === "release") return { triggered: false, reason: "already-active", ...this.getDiagnostics() };
+      if (this.active && this.sequence === "ambient") this.finishSequence("key-recovered");
+      const keyOwned = this.keyOwned();
+      if (!keyOwned) return { triggered: false, reason: "key-not-owned", ...this.getDiagnostics() };
+      this.setEntrancesSealed(false);
+      this.stopMazeDarkness();
       if (simulateStormRun || stormRunSystem?.isPlaying()) {
         return { triggered: false, reason: "storm-run-active", ...this.getDiagnostics() };
       }
-      const keyOwned = Boolean(
-        state.contestant13.basementKeyFound
-        && state.contestant13.inventory.includes("basement-key-b13")
-      );
-      if (!keyOwned) return { triggered: false, reason: "key-not-owned", ...this.getDiagnostics() };
+      if (state.contestant13.mazeKeyScareSeen) return { triggered: false, reason: "already-seen", ...this.getDiagnostics() };
 
       state.contestant13.mazeKeyScareSeen = true;
       this.active = true;
+      this.sequence = "release";
       this.phase = "hush";
       this.elapsed = 0;
       this.eventIndex = 0;
@@ -19104,6 +19469,7 @@
       this.fixedBoxCountAtTrigger = physics?.fixedBoxes.length ?? null;
       this.lastStopReason = null;
       this.rainDucked = false;
+      this.configureReleaseBulges();
       this.selectLights();
       this.root.visible = true;
       this.processEvents();
@@ -19111,50 +19477,132 @@
       return { triggered: true, reason: "key-recovered", ...this.getDiagnostics() };
     }
 
-    finish(reason = "complete") {
+    beginAmbient(position) {
+      if (this.active || this.keyOwned()) return false;
+      this.configureAmbientBulges(position);
+      if (!this.bulges.some((beat) => beat.active)) return false;
+      this.active = true;
+      this.sequence = "ambient";
+      this.phase = "stir";
+      this.elapsed = 0;
+      this.eventIndex = 0;
+      this.audioEvents = [];
+      this.lastStopReason = null;
+      this.ambientPulseCount += 1;
+      this.root.visible = true;
+      this.processEvents();
+      this.updateVisuals();
+      return true;
+    }
+
+    finishSequence(reason = "complete") {
+      const completedSequence = this.sequence;
       if (this.rainDucked) audioSystem?.hedgeMazeScare("release", this.eventPosition({ bulge: 5 }));
       this.rainDucked = false;
-      this.restoreLights();
+      if (completedSequence === "release") this.restoreLights();
+      if (completedSequence === "ambient") this.lastAmbientEvents = [...this.audioEvents];
       this.active = false;
-      this.phase = reason === "complete" ? "complete" : "cancelled";
+      this.sequence = "idle";
+      this.phase = completedSequence === "ambient"
+        ? (reason === "ambient-complete" ? "waiting" : "idle")
+        : (reason === "complete" ? "complete" : "cancelled");
       this.lastStopReason = reason;
       this.hideVisuals();
+      if (completedSequence === "ambient" && reason === "ambient-complete") {
+        const intervals = HEDGE_MAZE_HAUNT.ambient.intervalSeconds;
+        this.ambientNextIn = intervals[(this.ambientPulseCount - 1) % intervals.length];
+      }
       return this.getDiagnostics();
+    }
+
+    finish(reason = "complete") {
+      return this.finishSequence(reason);
     }
 
     reset({ clearSeen = false, reason = "reset" } = {}) {
       if (this.rainDucked) audioSystem?.hedgeMazeScare("release", this.eventPosition({ bulge: 5 }));
       this.rainDucked = false;
       this.restoreLights();
+      this.stopMazeDarkness();
+      this.setEntrancesSealed(false, { silent: true });
       this.active = false;
+      this.sequence = "idle";
       this.phase = "idle";
       this.elapsed = 0;
       this.eventIndex = 0;
       this.audioEvents = [];
+      this.lastAmbientEvents = [];
+      this.ambientPulseCount = 0;
+      this.ambientNextIn = HEDGE_MAZE_HAUNT.ambient.firstDelaySeconds;
+      this.flickerClock = 0;
+      this.flickerCount = 0;
       this.keyOwnedAtTrigger = false;
       this.colliderCountAtTrigger = null;
       this.fixedBoxCountAtTrigger = null;
       this.lastStopReason = reason;
-      if (clearSeen) state.contestant13.mazeKeyScareSeen = false;
+      if (clearSeen) {
+        state.contestant13.mazeKeyScareSeen = false;
+        state.contestant13.mazeLockInTriggered = false;
+      }
       this.hideVisuals();
       return this.getDiagnostics();
     }
 
+    maintainPreKeyHaunt(dt) {
+      const stormRunActive = Boolean(stormRunSystem?.isPlaying());
+      if (state.gameOver || stormRunActive) {
+        if (this.active) this.finishSequence(state.gameOver ? "game-over" : "storm-run-started");
+        this.stopMazeDarkness();
+        this.setEntrancesSealed(false);
+        return;
+      }
+
+      const status = this.playerMazeStatus();
+      if (this.keyOwned()) {
+        if (this.active && this.sequence === "ambient") this.finishSequence("key-recovered");
+        this.stopMazeDarkness();
+        this.setEntrancesSealed(false);
+        return;
+      }
+
+      const questReady = this.questReadyForMaze();
+      if (!status.inMaze || !questReady) {
+        if (this.active && this.sequence === "ambient") this.finishSequence("maze-left");
+        this.stopMazeDarkness();
+        this.setEntrancesSealed(false);
+        return;
+      }
+
+      this.startMazeDarkness();
+      this.updateMazeFlicker(dt);
+      if (
+        !state.contestant13.mazeLockInTriggered
+        && status.depthCells >= HEDGE_MAZE_HAUNT.lockDepthCells
+      ) {
+        state.contestant13.mazeLockInTriggered = true;
+        this.ambientNextIn = Math.min(this.ambientNextIn, 1.35);
+      }
+      this.setEntrancesSealed(Boolean(state.contestant13.mazeLockInTriggered));
+
+      if (!this.active) {
+        this.ambientNextIn = Math.max(0, this.ambientNextIn - Math.max(0, dt));
+        if (this.ambientNextIn <= 0) this.beginAmbient(status.position);
+      }
+    }
+
     updateInternal(dt) {
+      const step = Math.max(0, dt);
+      this.updateEntranceSeals(step);
+      this.maintainPreKeyHaunt(step);
       if (!this.active) return;
-      if (stormRunSystem?.isPlaying()) {
-        this.finish("storm-run-started");
-        return;
-      }
-      if (state.gameOver) {
-        this.finish("game-over");
-        return;
-      }
-      this.elapsed = Math.min(HEDGE_MAZE_KEY_SCARE.durationSeconds, this.elapsed + Math.max(0, dt));
+      const duration = this.sequenceDuration();
+      this.elapsed = Math.min(duration, this.elapsed + step);
       this.phase = this.phaseAt(this.elapsed);
       this.processEvents();
       this.updateVisuals();
-      if (this.elapsed >= HEDGE_MAZE_KEY_SCARE.durationSeconds) this.finish("complete");
+      if (this.elapsed >= duration) {
+        this.finishSequence(this.sequence === "ambient" ? "ambient-complete" : "complete");
+      }
     }
 
     update(dt) {
@@ -19167,8 +19615,9 @@
       this.qaManualClock = true;
       this.qaStepping = true;
       let remaining = Math.max(0, Number(seconds) || 0);
-      while (remaining > 0 && this.active) {
-        const step = Math.min(1 / 60, remaining);
+      if (remaining === 0) this.updateInternal(0);
+      while (remaining > 0) {
+        const step = Math.min(1 / 30, remaining);
         this.updateInternal(step);
         remaining -= step;
       }
@@ -19179,18 +19628,41 @@
     getDiagnostics() {
       const colliderCountNow = physics?.colliderCount ?? null;
       const fixedBoxCountNow = physics?.fixedBoxes.length ?? null;
-      const keyOwned = Boolean(
-        state.contestant13.basementKeyFound
-        && state.contestant13.inventory.includes("basement-key-b13")
-      );
+      const keyOwned = this.keyOwned();
+      const mazeLightScales = this.mazeLightSnapshots.map((snapshot) => (
+        (snapshot.light.userData.eventIntensityScale ?? 1) / Math.max(0.0001, snapshot.previousScale)
+      ));
+      const mazeLightAverageScale = mazeLightScales.length
+        ? mazeLightScales.reduce((sum, scale) => sum + scale, 0) / mazeLightScales.length
+        : 1;
+      const mazeStatus = this.playerMazeStatus();
       return {
         active: this.active,
+        sequence: this.sequence,
         phase: this.phase,
         elapsed: Number(this.elapsed.toFixed(3)),
-        durationSeconds: HEDGE_MAZE_KEY_SCARE.durationSeconds,
+        durationSeconds: this.sequence === "ambient"
+          ? HEDGE_MAZE_HAUNT.ambient.durationSeconds
+          : HEDGE_MAZE_KEY_SCARE.durationSeconds,
         seen: Boolean(state.contestant13.mazeKeyScareSeen),
         keyOwned,
         keyOwnedAtTrigger: this.keyOwnedAtTrigger,
+        questReady: this.questReadyForMaze(),
+        lockDepthCells: HEDGE_MAZE_HAUNT.lockDepthCells,
+        playerMazeDepthCells: mazeStatus.depthCells,
+        lockInTriggered: Boolean(state.contestant13.mazeLockInTriggered),
+        entrancesSealed: this.entrancesSealed,
+        sealedEntranceCount: this.entranceSeals.filter((seal) => seal.targetOpenness === 0).length,
+        enabledSealColliders: this.entranceSeals.filter((seal) => seal.colliderEnabled).length,
+        entranceSeals: this.entranceSeals.map((seal) => ({
+          id: seal.id,
+          openness: Number(seal.openness.toFixed(3)),
+          targetOpenness: seal.targetOpenness,
+          visible: Boolean(seal.root.visible),
+          colliderEnabled: seal.colliderEnabled,
+        })),
+        ambientPulseCount: this.ambientPulseCount,
+        ambientNextIn: Number(this.ambientNextIn.toFixed(3)),
         rootVisible: Boolean(this.root.visible),
         overlayCount: this.bulges.length,
         visibleBulges: this.visibleBulgeCount || 0,
@@ -19198,9 +19670,17 @@
         visibleLeaves: this.visibleLeaves,
         lightTargetCount: this.lightSnapshots.length,
         dimmedLightCount: this.lightSnapshots.filter((snapshot) => snapshot.dimmed).length,
+        mazeDarknessActive: this.mazeDarknessActive,
+        mazeDarkenedLightCount: this.mazeLightSnapshots.length,
+        mazeLightAverageScale: Number(mazeLightAverageScale.toFixed(4)),
+        flickerCount: this.flickerCount,
         rainDucked: this.rainDucked,
         audioEvents: [...this.audioEvents],
+        lastAmbientEvents: [...this.lastAmbientEvents],
+        flashlightCollected: Boolean(flashlightSystem?.collected()),
+        flashlightOn: Boolean(flashlightSystem?.state.on),
         movementLocked: false,
+        colliderCountAtBoot: this.colliderCountAtBoot,
         colliderCountAtTrigger: this.colliderCountAtTrigger,
         colliderCountNow,
         colliderCountDelta: this.colliderCountAtTrigger == null || colliderCountNow == null
@@ -19213,7 +19693,7 @@
           : fixedBoxCountNow - this.fixedBoxCountAtTrigger,
         stormRunActive: Boolean(stormRunSystem?.isPlaying()),
         lastStopReason: this.lastStopReason,
-        topology: "temporary-non-colliding-overlays",
+        topology: "two-boot-time-kinematic-entrance-seals-plus-temporary-non-colliding-overlays",
       };
     }
   }
@@ -19684,6 +20164,7 @@
         shovelTaken: Boolean(this.story.shovelTaken),
         digSiteExcavated: Boolean(this.story.digSiteExcavated),
         basementKeyFound: Boolean(this.story.basementKeyFound),
+        mazeLockInTriggered: Boolean(this.story.mazeLockInTriggered),
         mazeKeyScareSeen: Boolean(this.story.mazeKeyScareSeen),
         basementUnlocked: Boolean(this.story.basementUnlocked),
         badgeFound: Boolean(this.story.badgeFound),
@@ -19704,7 +20185,7 @@
 
     restoreQuestSnapshot(snapshot = {}) {
       const booleanFields = [
-        "bookRead", "shovelTaken", "digSiteExcavated", "basementKeyFound", "mazeKeyScareSeen", "basementUnlocked",
+        "bookRead", "shovelTaken", "digSiteExcavated", "basementKeyFound", "mazeLockInTriggered", "mazeKeyScareSeen", "basementUnlocked",
         "badgeFound", "tapeFound", "archiveCageUnlocked", "recordingPlayed", "relaySabotaged", "threatEscalated",
         "kipClothingFound", "maraClothingFound", "juniperClothingFound",
       ];
@@ -19770,6 +20251,7 @@
         this.story.shovelTaken = true;
         this.story.digSiteExcavated = true;
         this.story.basementKeyFound = true;
+        this.story.mazeLockInTriggered = true;
         this.story.mazeKeyScareSeen = true;
         this.story.basementUnlocked = true;
         this.story.badgeFound = true;
@@ -19826,6 +20308,7 @@
         shovelTaken: this.story.shovelTaken,
         digSiteExcavated: this.story.digSiteExcavated,
         basementKeyFound: this.story.basementKeyFound,
+        mazeLockInTriggered: this.story.mazeLockInTriggered,
         mazeKeyScareSeen: this.story.mazeKeyScareSeen,
         basementUnlocked: this.story.basementUnlocked,
         badgeFound: this.story.badgeFound,
@@ -46999,6 +47482,120 @@
     window.MrFeastFresh.getHedgeMazeKeyScareState = () => (
       hedgeMazeKeyScareSystem?.getDiagnostics() || null
     );
+    window.MrFeastFresh.prepareHedgeMazeLockInForQA = (options = {}) => {
+      if (!state.qa || !hedgeMazeKeyScareSystem || !contestant13Quest || !physics) return null;
+      const questReady = options?.questReady !== false;
+      const flashlightOn = Boolean(options?.flashlightOn);
+      hedgeMazeKeyScareSystem.reset({ clearSeen: true, reason: "qa-lock-in-prepare" });
+      contestant13Quest.story.bookRead = questReady;
+      contestant13Quest.story.shovelTaken = questReady;
+      contestant13Quest.story.digSiteExcavated = false;
+      contestant13Quest.story.basementKeyFound = false;
+      contestant13Quest.story.mazeLockInTriggered = false;
+      contestant13Quest.story.badgeFound = false;
+      contestant13Quest.story.tapeFound = false;
+      contestant13Quest.story.inventory = contestant13Quest.story.inventory.filter((id) => ![
+        "garden-shovel",
+        "basement-key-b13",
+        "contestant-13-badge",
+        "contestant-13-tape",
+        FLASHLIGHT.itemId,
+      ].includes(id));
+      if (questReady) contestant13Quest.addItem("garden-shovel");
+      if (flashlightOn) contestant13Quest.addItem(FLASHLIGHT.itemId);
+      contestant13Quest.syncWorldPresentation();
+      flashlightSystem?.restoreFromInventory({ clearTransient: true });
+      if (flashlightOn) flashlightSystem?.setOn(true, { force: true, silent: true });
+      contestant13Quest.updateUI();
+      const portal = HEDGE_MAZE_NORTH_PORTAL;
+      const center = mazeCellCenter(portal.row, portal.col);
+      const position = { x: center.x + 0.08, y: YARD_LAYOUT.groundY, z: center.z };
+      teleport(position.x, position.y, position.z, -Math.PI / 2, -0.08);
+      updateLocation();
+      syncLightRendering("snap");
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      hedgeMazeKeyScareSystem.advanceForQA(0);
+      updateInteractionPrompt();
+      return { ...hedgeMazeKeyScareSystem.getDiagnostics(), position };
+    };
+    window.MrFeastFresh.placePlayerInsideHedgeMazeForQA = (portalId = "north", depthCells = 4) => {
+      if (!state.qa || !hedgeMazeKeyScareSystem || !physics) return null;
+      const fromNorth = portalId !== "rear";
+      const route = fromNorth
+        ? HEDGE_MAZE_ENTRANCE_TO_EXIT_CELLS
+        : [...HEDGE_MAZE_ENTRANCE_TO_EXIT_CELLS].reverse();
+      const index = clamp(Math.round(Number(depthCells) || 0), 0, route.length - 1);
+      const cell = route[index];
+      const center = mazeCellCenter(cell.row, cell.col);
+      const next = route[Math.min(route.length - 1, index + 1)] || cell;
+      const nextCenter = mazeCellCenter(next.row, next.col);
+      const yaw = faceTargetYaw(center.x, center.z, nextCenter.x, nextCenter.z);
+      teleport(center.x, YARD_LAYOUT.groundY, center.z, yaw, -0.08);
+      updateLocation();
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      hedgeMazeKeyScareSystem.advanceForQA(0);
+      updateInteractionPrompt();
+      return {
+        ...hedgeMazeKeyScareSystem.getDiagnostics(),
+        position: { x: center.x, y: YARD_LAYOUT.groundY, z: center.z },
+        cell: { row: cell.row, col: cell.col },
+      };
+    };
+    window.MrFeastFresh.placePlayerAtHedgeMazeSealForQA = (portalId = "north") => {
+      if (!state.qa || !hedgeMazeKeyScareSystem || !physics) return null;
+      const portal = HEDGE_MAZE_PORTALS.find((candidate) => candidate.id === portalId) || HEDGE_MAZE_NORTH_PORTAL;
+      const center = mazeCellCenter(portal.row, portal.col);
+      const position = { x: center.x + 0.32, y: YARD_LAYOUT.groundY, z: center.z };
+      const yaw = faceTargetYaw(position.x, position.z, center.x - 1, center.z);
+      teleport(position.x, position.y, position.z, yaw, -0.04);
+      updateLocation();
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      hedgeMazeKeyScareSystem.advanceForQA(0);
+      updateInteractionPrompt();
+      return { ...hedgeMazeKeyScareSystem.getDiagnostics(), position };
+    };
+    window.MrFeastFresh.probeHedgeMazeSealCollisionForQA = (portalId = "north") => {
+      if (!state.qa || !hedgeMazeKeyScareSystem || !physics) return null;
+      const portal = HEDGE_MAZE_PORTALS.find((candidate) => candidate.id === portalId) || HEDGE_MAZE_NORTH_PORTAL;
+      const center = mazeCellCenter(portal.row, portal.col);
+      const start = physics.playerPosition();
+      for (let frame = 0; frame < 120; frame += 1) {
+        physics.movePlayer(-PLAYER.speed / 60, 0);
+        physics.step();
+      }
+      const end = physics.playerPosition();
+      const sealX = center.x - HEDGE_MAZE_LAYOUT.cellSize * 0.49;
+      return {
+        ...hedgeMazeKeyScareSystem.getDiagnostics(),
+        start: { x: start.x, y: start.y, z: start.z },
+        end: { x: end.x, y: end.y, z: end.z },
+        sealX,
+        blocked: end.x >= sealX + PLAYER.radius,
+      };
+    };
+    window.MrFeastFresh.setHedgeMazeFlashlightForQA = (on = true) => {
+      if (!state.qa || !contestant13Quest || !flashlightSystem) return null;
+      contestant13Quest.addItem(FLASHLIGHT.itemId);
+      flashlightSystem.restoreFromInventory();
+      flashlightSystem.setOn(Boolean(on), { force: true, silent: true });
+      return hedgeMazeKeyScareSystem?.getDiagnostics() || null;
+    };
+    window.MrFeastFresh.collectHedgeMazeKeyForQA = () => {
+      if (!state.qa || !contestant13Quest || !hedgeMazeKeyScareSystem) return null;
+      contestant13Quest.story.digSiteExcavated = true;
+      contestant13Quest.story.basementKeyFound = true;
+      contestant13Quest.story.badgeFound = true;
+      contestant13Quest.story.tapeFound = true;
+      contestant13Quest.addItem("basement-key-b13");
+      contestant13Quest.addItem("contestant-13-badge");
+      contestant13Quest.addItem("contestant-13-tape");
+      contestant13Quest.syncWorldPresentation();
+      contestant13Quest.updateUI();
+      return hedgeMazeKeyScareSystem.trigger();
+    };
     window.MrFeastFresh.prepareHedgeMazeKeyScareForQA = () => {
       if (!state.qa || !hedgeMazeKeyScareSystem || !contestant13Quest || !physics) return null;
       hedgeMazeKeyScareSystem.reset({ clearSeen: true, reason: "qa-prepare" });
@@ -47006,6 +47603,7 @@
       contestant13Quest.story.shovelTaken = true;
       contestant13Quest.story.digSiteExcavated = true;
       contestant13Quest.story.basementKeyFound = true;
+      contestant13Quest.story.mazeLockInTriggered = true;
       contestant13Quest.story.badgeFound = true;
       contestant13Quest.story.tapeFound = true;
       contestant13Quest.addItem("garden-shovel");

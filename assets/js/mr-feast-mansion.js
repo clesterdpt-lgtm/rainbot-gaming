@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260730-feast-father-lore-1";
+  const MANSION_RUNTIME_VERSION = "20260731-bathroom-curtain-hiding-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2395,6 +2395,77 @@
       }),
     ]),
   });
+  const BATHROOM_CURTAINS = Object.freeze({
+    panelBottom: 0.16,
+    panelHeight: 2.02,
+    rodLift: 0.08,
+    foldsPerPanel: 7,
+    gatheredWidthRatio: 0.2,
+    crackWidth: 0.12,
+    closeSpeed: 10,
+    interactionHeight: 1.72,
+    interactionDepth: 0.055,
+    approachDistance: 0.78,
+    hiddenBodyDistance: 0.58,
+    exitDistance: 0.86,
+    cameraInset: 0.34,
+    cameraHeight: 1.28,
+    breathRangeMultiplier: 0.9,
+    fixtures: Object.freeze([
+      Object.freeze({
+        id: "main-hall-bathtub-curtain",
+        label: "main hall bathtub curtain",
+        room: "MAIN HALL BATHROOM",
+        kind: "tub",
+        floorY: FLOOR.MAIN,
+        x: -6.85,
+        z: 1.51,
+        rotationY: 0,
+        width: 2.15,
+        returnDepth: 1.02,
+        crackSide: "left",
+      }),
+      Object.freeze({
+        id: "main-hall-shower-curtain",
+        label: "main hall shower curtain",
+        room: "MAIN HALL BATHROOM",
+        kind: "shower",
+        floorY: FLOOR.MAIN,
+        x: -12.79,
+        z: 2.28,
+        rotationY: -Math.PI / 2,
+        width: 1.45,
+        returnDepth: 0,
+        crackSide: "right",
+      }),
+      Object.freeze({
+        id: "upper-grand-bathtub-curtain",
+        label: "upper grand bathtub curtain",
+        room: "UPPER GRAND BATHROOM",
+        kind: "tub",
+        floorY: FLOOR.UPPER,
+        x: -6.85,
+        z: 1.51,
+        rotationY: 0,
+        width: 2.15,
+        returnDepth: 1.02,
+        crackSide: "right",
+      }),
+      Object.freeze({
+        id: "upper-grand-shower-curtain",
+        label: "upper grand shower curtain",
+        room: "UPPER GRAND BATHROOM",
+        kind: "shower",
+        floorY: FLOOR.UPPER,
+        x: -12.79,
+        z: 2.28,
+        rotationY: -Math.PI / 2,
+        width: 1.45,
+        returnDepth: 0,
+        crackSide: "left",
+      }),
+    ]),
+  });
   const STEALTH = Object.freeze({
     // One concealment model with two consumers. The player-facing meter mixes
     // stance, sampled room light, and recent movement into a readable 0-100
@@ -4678,6 +4749,7 @@
   const kitchenTaskBulbs = [];
   const hidingSpots = [];
   const windowCurtains = [];
+  const bathroomCurtains = [];
   const exteriorWindows = [];
   const roomZones = [];
   const lightningMaterials = [];
@@ -5937,6 +6009,9 @@
     const sofaOxbloodMap = makeFurnitureTextileTexture("oxbloodDamask");
     const bedLinenMap = makeFurnitureTextileTexture("linen");
     const bedCoverletMap = makeFurnitureTextileTexture("coverlet");
+    const bathroomCurtainMap = makeFurnitureTextileTexture("linen");
+    bathroomCurtainMap.name = "bathroom-curtain-woven-linen";
+    bathroomCurtainMap.repeat.set(1.45, 3.25);
     leafMap.repeat.set(5, 5);
     soilMap.repeat.set(7, 7);
     paverMap.repeat.set(8, 12);
@@ -6023,6 +6098,16 @@
       }),
       curtainLining: new THREE.MeshStandardMaterial({ color: 0x38232a, roughness: 0.96, metalness: 0, side: THREE.DoubleSide }),
       curtainInteraction: new THREE.MeshBasicMaterial({ visible: false, transparent: true, opacity: 0, depthWrite: false, colorWrite: false }),
+      bathroomCurtain: new THREE.MeshStandardMaterial({
+        name: "bathroom-curtain-waxed-woven-linen",
+        map: bathroomCurtainMap,
+        bumpMap: bathroomCurtainMap,
+        bumpScale: 0.012,
+        color: 0xd8d2c3,
+        roughness: 0.82,
+        metalness: 0,
+        side: THREE.DoubleSide,
+      }),
       leather: new THREE.MeshStandardMaterial({ color: 0x33221a, roughness: 0.78 }),
       fabric: new THREE.MeshStandardMaterial({ color: 0x4a5358, roughness: 0.96 }),
       porcelain: new THREE.MeshPhysicalMaterial({ color: 0xc9c6b9, roughness: 0.18, clearcoat: 0.72 }),
@@ -18133,6 +18218,240 @@
       updateLocation();
       updateInteractionPrompt();
       return true;
+    }
+  }
+
+  class BathroomCurtain {
+    constructor(config) {
+      this.config = config;
+      this.id = config.id;
+      this.kind = config.kind;
+      this.room = config.room;
+      this.floorY = config.floorY;
+      this.floorLabel = config.floorY === FLOOR.UPPER ? "SECOND FLOOR" : "MAIN LEVEL";
+      this.width = config.width;
+      this.crackSide = config.crackSide;
+      this.openness = 1;
+      this.targetOpenness = 1;
+
+      this.root = new THREE.Group();
+      this.root.name = `bathroom-curtain-${this.id}`;
+      this.root.position.set(config.x, config.floorY, config.z);
+      this.root.rotation.y = config.rotationY || 0;
+      scene.add(this.root);
+
+      const panelGeometry = geometry(
+        `bathroomCurtainPanel-${BATHROOM_CURTAINS.foldsPerPanel}`,
+        () => createCurtainPanelGeometry(BATHROOM_CURTAINS.foldsPerPanel),
+      );
+      this.leftPanel = new THREE.Mesh(panelGeometry, M.bathroomCurtain);
+      this.leftPanel.name = `${this.id}-bathroom-curtain-left-panel`;
+      this.leftPanel.castShadow = false;
+      this.leftPanel.receiveShadow = true;
+      this.root.add(this.leftPanel);
+      this.rightPanel = new THREE.Mesh(panelGeometry, M.bathroomCurtain);
+      this.rightPanel.name = `${this.id}-bathroom-curtain-right-panel`;
+      this.rightPanel.castShadow = false;
+      this.rightPanel.receiveShadow = true;
+      this.root.add(this.rightPanel);
+
+      const rodY = BATHROOM_CURTAINS.panelBottom + BATHROOM_CURTAINS.panelHeight + BATHROOM_CURTAINS.rodLift;
+      cylinder({
+        name: `${this.id}-bathroom-curtain-front-rod`,
+        radius: 0.027,
+        height: this.width + 0.18,
+        y: rodY,
+        rotationZ: Math.PI / 2,
+        material: M.brass,
+        parent: this.root,
+        cast: false,
+      });
+      if (config.returnDepth > 0) {
+        for (const side of [-1, 1]) {
+          cylinder({
+            name: `${this.id}-bathroom-curtain-return-rod`,
+            radius: 0.027,
+            height: config.returnDepth,
+            x: side * this.width / 2,
+            y: rodY,
+            z: config.returnDepth / 2,
+            rotationX: Math.PI / 2,
+            material: M.brass,
+            parent: this.root,
+            cast: false,
+          });
+          cylinder({
+            name: `${this.id}-bathroom-curtain-ceiling-stay`,
+            radius: 0.018,
+            height: 0.68,
+            x: side * (this.width / 2 - 0.08),
+            y: rodY + 0.34,
+            z: config.returnDepth * 0.55,
+            material: M.brass,
+            parent: this.root,
+            cast: false,
+          });
+        }
+      }
+
+      this.ringCount = 12;
+      const ringGeometry = geometry("bathroomCurtainRing", () => new THREE.TorusGeometry(0.047, 0.01, 7, 14));
+      const rings = new THREE.InstancedMesh(ringGeometry, M.brass, this.ringCount);
+      rings.name = `${this.id}-bathroom-curtain-rings`;
+      rings.castShadow = false;
+      const hardwareTransform = new THREE.Object3D();
+      for (let index = 0; index < this.ringCount; index += 1) {
+        hardwareTransform.position.set(-this.width / 2 + (index / (this.ringCount - 1)) * this.width, rodY - 0.055, 0);
+        hardwareTransform.rotation.set(0, 0, 0);
+        hardwareTransform.scale.set(1, 1, 1);
+        hardwareTransform.updateMatrix();
+        rings.setMatrixAt(index, hardwareTransform.matrix);
+      }
+      rings.instanceMatrix.needsUpdate = true;
+      this.root.add(rings);
+
+      for (const side of [-1, 1]) {
+        const tieback = new THREE.Mesh(
+          geometry("bathroomCurtainTieback", () => new THREE.TorusGeometry(0.09, 0.02, 7, 14)),
+          M.brass,
+        );
+        tieback.name = `${this.id}-bathroom-curtain-tieback`;
+        tieback.position.set(side * (this.width / 2 - 0.12), BATHROOM_CURTAINS.panelBottom + 0.74, 0.035);
+        tieback.scale.set(0.72, 1, 1);
+        tieback.castShadow = false;
+        this.root.add(tieback);
+      }
+
+      this.interactionHitbox = box({
+        name: `${this.id}-bathroom-curtain-interaction`,
+        w: Math.max(0.72, this.width * 0.76),
+        h: BATHROOM_CURTAINS.interactionHeight,
+        d: BATHROOM_CURTAINS.interactionDepth,
+        y: BATHROOM_CURTAINS.panelBottom + BATHROOM_CURTAINS.panelHeight * 0.52,
+        material: M.curtainInteraction,
+        parent: this.root,
+        cast: false,
+        receive: false,
+      });
+
+      this.applyPanelLayout();
+      this.root.updateMatrixWorld(true);
+      const approach = this.worldPosition(0, -BATHROOM_CURTAINS.approachDistance);
+      const hiddenBody = this.worldPosition(0, -BATHROOM_CURTAINS.hiddenBodyDistance);
+      const exit = this.worldPosition(0, -BATHROOM_CURTAINS.exitDistance);
+      const cameraAnchor = this.worldPosition(0, BATHROOM_CURTAINS.cameraInset);
+      const approachYaw = faceTargetYaw(approach.x, approach.z, this.root.position.x, this.root.position.z);
+      const outwardYaw = faceTargetYaw(cameraAnchor.x, cameraAnchor.z, this.root.position.x, this.root.position.z);
+      const fixtureLabel = this.kind === "tub" ? "bathtub" : "shower";
+      this.hidingSpot = new HidingSpot({
+        id: this.id,
+        name: config.label,
+        category: "bathroom-curtain",
+        targets: [this.interactionHitbox],
+        floorY: this.floorY,
+        hidePosition: { ...hiddenBody, yaw: outwardYaw },
+        exitPosition: { ...exit, yaw: outwardYaw },
+        approachPosition: {
+          ...approach,
+          yaw: approachYaw,
+          pitch: Math.atan2(
+            BATHROOM_CURTAINS.panelBottom + BATHROOM_CURTAINS.panelHeight * 0.52 - PLAYER.eye,
+            BATHROOM_CURTAINS.approachDistance,
+          ),
+        },
+        cameraPosition: {
+          ...cameraAnchor,
+          y: this.floorY + BATHROOM_CURTAINS.cameraHeight,
+        },
+        enterLabel: `Hide behind ${fixtureLabel} curtain`,
+        leaveLabel: `Leave ${fixtureLabel} curtain`,
+        hiddenLabel: `Hidden behind the ${fixtureLabel} curtain`,
+        viewClasses: ["is-curtain-hiding", "is-bathroom-curtain-hiding", `curtain-crack-${this.crackSide}`],
+        breathMuffleMultiplier: BATHROOM_CURTAINS.breathRangeMultiplier,
+        breathHidingKind: "bathroom-curtain",
+        prepareForApproach: () => this.setOpen(true, true),
+        onEnter: () => this.setOpen(false),
+        onExit: () => this.setOpen(true),
+      });
+      this.hidingSpot.bathroomCurtainId = this.id;
+      this.root.traverse((object) => {
+        object.userData.bathroomCurtainId = this.id;
+      });
+      bathroomCurtains.push(this);
+      animatedObjects.push(this);
+    }
+
+    worldPosition(localX, localZ) {
+      const rotation = this.config.rotationY || 0;
+      return {
+        x: this.root.position.x + localX * Math.cos(rotation) + localZ * Math.sin(rotation),
+        z: this.root.position.z - localX * Math.sin(rotation) + localZ * Math.cos(rotation),
+      };
+    }
+
+    setOpen(open, immediate = false) {
+      this.targetOpenness = open ? 1 : 0;
+      if (immediate) {
+        this.openness = this.targetOpenness;
+        this.applyPanelLayout();
+      }
+    }
+
+    applyPanelLayout() {
+      const half = this.width / 2;
+      const gathered = this.width * BATHROOM_CURTAINS.gatheredWidthRatio;
+      const crackCenter = (this.crackSide === "left" ? -1 : 1) * Math.min(0.13, this.width * 0.1);
+      const closedLeftEnd = crackCenter - BATHROOM_CURTAINS.crackWidth / 2;
+      const closedRightStart = crackCenter + BATHROOM_CURTAINS.crackWidth / 2;
+      const leftWidth = THREE.MathUtils.lerp(closedLeftEnd + half, gathered, this.openness);
+      const rightWidth = THREE.MathUtils.lerp(half - closedRightStart, gathered, this.openness);
+      const leftCenter = THREE.MathUtils.lerp(
+        (-half + closedLeftEnd) / 2,
+        -half + gathered / 2,
+        this.openness,
+      );
+      const rightCenter = THREE.MathUtils.lerp(
+        (closedRightStart + half) / 2,
+        half - gathered / 2,
+        this.openness,
+      );
+      const panelY = BATHROOM_CURTAINS.panelBottom + BATHROOM_CURTAINS.panelHeight / 2;
+      this.leftPanel.position.set(leftCenter, panelY, 0);
+      this.leftPanel.scale.set(leftWidth, BATHROOM_CURTAINS.panelHeight, 1);
+      this.rightPanel.position.set(rightCenter, panelY, 0);
+      this.rightPanel.scale.set(rightWidth, BATHROOM_CURTAINS.panelHeight, 1);
+      this.root.updateMatrixWorld(true);
+    }
+
+    update(dt) {
+      const previous = this.openness;
+      this.openness = ease(this.openness, this.targetOpenness, BATHROOM_CURTAINS.closeSpeed, dt);
+      if (Math.abs(this.openness - this.targetOpenness) < 0.0015) this.openness = this.targetOpenness;
+      if (Math.abs(previous - this.openness) > 0.0001) this.applyPanelLayout();
+    }
+
+    getDiagnostics() {
+      return {
+        id: this.id,
+        kind: this.kind,
+        room: this.room,
+        floor: this.floorLabel,
+        active: state.activeHideSpot === this.hidingSpot,
+        openness: Number(this.openness.toFixed(3)),
+        crackSide: this.crackSide,
+        crackWidth: BATHROOM_CURTAINS.crackWidth,
+        prompt: this.hidingSpot.interaction.getLabel(),
+        cameraPosition: { ...this.hidingSpot.cameraPosition },
+        hidePosition: { ...this.hidingSpot.hidePosition },
+        exitPosition: { ...this.hidingSpot.exitPosition },
+        approachPosition: { ...this.hidingSpot.approachPosition },
+        geometry: {
+          panels: 2,
+          foldsPerPanel: BATHROOM_CURTAINS.foldsPerPanel,
+          rings: this.ringCount,
+          returnRods: this.config.returnDepth > 0 ? 2 : 0,
+        },
+      };
     }
   }
 
@@ -34049,6 +34368,9 @@
     const shower = addWalkInShower("main-hall-bathroom", -13.55, 2.28, FLOOR.MAIN);
     new WaterFixture({ name: "main hall shower", kind: "shower", x: shower.x, y: shower.y, z: shower.z, drop: 1.66, handleOffset: shower.handleOffset });
     addTowelRail(-5.2, 1.35, 2.0, -Math.PI / 2, FLOOR.MAIN);
+    for (const curtainConfig of BATHROOM_CURTAINS.fixtures.filter((entry) => entry.floorY === FLOOR.MAIN)) {
+      new BathroomCurtain(curtainConfig);
+    }
   }
 
   function furnishUpperGrandBathroom() {
@@ -34066,6 +34388,9 @@
     const shower = addWalkInShower("upper-grand-bathroom", -13.55, 2.28, FLOOR.UPPER);
     new WaterFixture({ name: "upper grand shower", kind: "shower", x: shower.x, y: shower.y, z: shower.z, drop: 1.66, handleOffset: shower.handleOffset });
     addTowelRail(-5.2, 1.35, 2.0, -Math.PI / 2, FLOOR.UPPER);
+    for (const curtainConfig of BATHROOM_CURTAINS.fixtures.filter((entry) => entry.floorY === FLOOR.UPPER)) {
+      new BathroomCurtain(curtainConfig);
+    }
   }
 
   function addBookshelf(x, z, floorY, rotationY, width, height, options = {}) {
@@ -45079,6 +45404,34 @@
     };
   }
 
+  function getBathroomCurtainDiagnostics() {
+    const active = bathroomCurtains.find((curtain) => state.activeHideSpot === curtain.hidingSpot) || null;
+    return {
+      count: bathroomCurtains.length,
+      tubCount: bathroomCurtains.filter((curtain) => curtain.kind === "tub").length,
+      showerCount: bathroomCurtains.filter((curtain) => curtain.kind === "shower").length,
+      activeId: active?.id || null,
+      activeCameraHeight: active
+        ? Number((camera.position.y - active.floorY).toFixed(3))
+        : null,
+      material: {
+        name: M?.bathroomCurtain?.name || null,
+        textureName: M?.bathroomCurtain?.map?.name || null,
+        textured: Boolean(M?.bathroomCurtain?.map && M?.bathroomCurtain?.bumpMap),
+        doubleSided: M?.bathroomCurtain?.side === THREE.DoubleSide,
+        emissive: Number(M?.bathroomCurtain?.emissive?.getHex() || 0),
+        shaderLightsAdded: 0,
+      },
+      installations: bathroomCurtains.map((curtain) => curtain.getDiagnostics()),
+      stageTreatment: {
+        active: Boolean(dom.stage?.classList.contains("is-bathroom-curtain-hiding")),
+        crackSide: dom.stage?.classList.contains("curtain-crack-left")
+          ? "left"
+          : dom.stage?.classList.contains("curtain-crack-right") ? "right" : null,
+      },
+    };
+  }
+
   function getBedroomHidingDiagnostics() {
     const spots = hidingSpots
       .filter((spot) => spot.category === "bedroom-closet" || spot.category === "under-bed")
@@ -45196,6 +45549,7 @@
       estateStatues: getEstateStatueDiagnostics(),
       upperWindowGallery: getUpperWindowGalleryDiagnostics(),
       windowCurtains: getWindowCurtainDiagnostics(),
+      bathroomCurtains: getBathroomCurtainDiagnostics(),
       bedroomHiding: getBedroomHidingDiagnostics(),
       furnitureTextiles: getFurnitureTextileDiagnostics(),
       player: {
@@ -45479,6 +45833,7 @@
     });
     window.MrFeastFresh.getDiagnostics = getDiagnostics;
     window.MrFeastFresh.getWindowCurtainState = getWindowCurtainDiagnostics;
+    window.MrFeastFresh.getBathroomCurtainState = getBathroomCurtainDiagnostics;
     window.MrFeastFresh.getBedroomHidingState = getBedroomHidingDiagnostics;
     window.MrFeastFresh.getFurnitureTextileState = getFurnitureTextileDiagnostics;
     window.MrFeastFresh.placePlayerNearBedroomHideForQA = (id) => {
@@ -45502,6 +45857,22 @@
       camera.updateMatrixWorld(true);
       updateInteractionPrompt();
       return getBedroomHidingDiagnostics();
+    };
+    window.MrFeastFresh.placePlayerNearBathroomCurtainForQA = (id) => {
+      if (!state.qa || !physics) return null;
+      const query = String(id || "").toLowerCase();
+      const curtain = bathroomCurtains.find((entry) => entry.id.toLowerCase() === query);
+      if (!curtain) return null;
+      return curtain.hidingSpot.stageForQA();
+    };
+    window.MrFeastFresh.advanceBathroomCurtainsForQA = (seconds) => {
+      if (!state.qa) return null;
+      const dt = Math.max(0, Number(seconds) || 0);
+      for (const curtain of bathroomCurtains) curtain.update(dt);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateInteractionPrompt();
+      return getBathroomCurtainDiagnostics();
     };
     window.MrFeastFresh.placePlayerNearWindowCurtainForQA = (id) => {
       if (!state.qa || !physics) return null;

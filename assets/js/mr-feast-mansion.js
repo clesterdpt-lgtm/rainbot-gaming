@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260731-feast-hunt-random-roam-1";
+  const MANSION_RUNTIME_VERSION = "20260731-feast-hunt-random-roam-1-hedge-maze-haunt-3";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -3181,6 +3181,11 @@
   const HEDGE_MAZE_MINIMUM_EXIT_TRAVERSAL_RATIO = 0.5;
   const HEDGE_MAZE_HAUNT = Object.freeze({
     lockDepthCells: 3,
+    ambientStartDepthCells: 7,
+    rain: Object.freeze({
+      visualFadeResponse: 1.8,
+      audioFadeResponse: 0.72,
+    }),
     entranceSeal: Object.freeze({
       width: 0.54,
       height: 2.26,
@@ -3206,8 +3211,8 @@
     }),
     ambient: Object.freeze({
       durationSeconds: 5.1,
-      firstDelaySeconds: 2.4,
-      intervalSeconds: Object.freeze([4.8, 5.6, 5.2]),
+      firstDelaySeconds: 3.6,
+      intervalSeconds: Object.freeze([5.8, 6.6, 6.2]),
       phases: Object.freeze({
         stirEnd: 1.25,
         nearbyEnd: 4.05,
@@ -19016,6 +19021,8 @@
       this.fixedBoxCountAtTrigger = null;
       this.lastStopReason = null;
       this.rainDucked = false;
+      this.blockedRevealPending = false;
+      this.blockedRevealPosition = null;
       this.qaManualClock = false;
       this.qaStepping = false;
       this.lightSnapshots = [];
@@ -19178,13 +19185,19 @@
       const next = Boolean(sealed);
       if (this.entrancesSealed === next) return false;
       this.entrancesSealed = next;
+      this.blockedRevealPending = Boolean(blockedReveal && next);
+      this.blockedRevealPosition = this.blockedRevealPending && position
+        ? { ...position }
+        : null;
       for (const seal of this.entranceSeals) {
         seal.targetOpenness = next ? 0 : 1;
         seal.root.visible = true;
         this.setSealCollider(seal, next);
       }
       if (blockedReveal && next) {
-        audioSystem?.hedgeMazeEntranceBlocked(position);
+        // Wait until the living hedge has finished rising into view. The
+        // realization sting should land on what the player sees, not on the
+        // earlier state change that starts the lock-in.
       } else if (!silent) {
         const cue = next ? "branch-right" : "release";
         for (const seal of this.entranceSeals) {
@@ -19206,6 +19219,16 @@
         if (Math.abs(seal.openness - seal.targetOpenness) < 0.002) seal.openness = seal.targetOpenness;
         seal.root.position.y = lerp(YARD_LAYOUT.groundY, YARD_LAYOUT.groundY - config.height - 0.14, seal.openness);
         seal.root.visible = seal.openness < 0.999;
+      }
+      if (
+        this.blockedRevealPending
+        && this.entrancesSealed
+        && this.entranceSeals.length > 0
+        && this.entranceSeals.every((seal) => seal.openness <= 0.08)
+      ) {
+        this.blockedRevealPending = false;
+        this.audioEvents.push("entrance-blocked-reveal");
+        audioSystem?.hedgeMazeEntranceBlocked(this.blockedRevealPosition);
       }
     }
 
@@ -19709,6 +19732,8 @@
       this.flickerClock = 0;
       this.flickerCount = 0;
       this.blackoutFlickerRemaining = 0;
+      this.blockedRevealPending = false;
+      this.blockedRevealPosition = null;
       this.keyOwnedAtTrigger = false;
       this.colliderCountAtTrigger = null;
       this.fixedBoxCountAtTrigger = null;
@@ -19765,7 +19790,7 @@
         this.updateMazeFlicker(dt);
       }
 
-      if (!this.active) {
+      if (!this.active && status.depthCells >= HEDGE_MAZE_HAUNT.ambientStartDepthCells) {
         this.ambientNextIn = Math.max(0, this.ambientNextIn - Math.max(0, dt));
         if (this.ambientNextIn <= 0) this.beginAmbient(status.position);
       }
@@ -40743,7 +40768,10 @@
       for (let i = 0; i < this.count; i += 1) this.reset(i, true);
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.BufferAttribute(this.positions, 3));
-      const material = new THREE.LineBasicMaterial({ color: 0x9eb7c9, transparent: true, opacity: 0.26, depthWrite: false, blending: THREE.AdditiveBlending });
+      this.baseOpacity = 0.26;
+      this.opacity = this.baseOpacity;
+      this.targetOpacity = this.baseOpacity;
+      const material = new THREE.LineBasicMaterial({ color: 0x9eb7c9, transparent: true, opacity: this.opacity, depthWrite: false, blending: THREE.AdditiveBlending });
       this.lines = new THREE.LineSegments(geometry, material);
       this.lines.name = "exterior-rain-curtain";
       this.lines.frustumCulled = false;
@@ -40776,8 +40804,11 @@
 
     update(dt) {
       const mazeSuppressed = state.currentRoom === "HEDGE MAZE";
-      this.lines.visible = !mazeSuppressed;
-      if (mazeSuppressed) return;
+      this.targetOpacity = mazeSuppressed ? 0 : this.baseOpacity;
+      const blend = 1 - Math.exp(-HEDGE_MAZE_HAUNT.rain.visualFadeResponse * Math.max(0, dt));
+      this.opacity += (this.targetOpacity - this.opacity) * blend;
+      this.lines.material.opacity = this.opacity;
+      this.lines.visible = this.opacity > 0.001;
       for (let i = 0; i < this.count; i += 1) {
         const k = i * 6;
         const drop = this.speeds[i] * dt;
@@ -42480,8 +42511,9 @@
       const cutoffTarget = mazeSilenced ? 160 : 160 + 8060 * Math.pow(clamped, 1.6);
       this.rain.mazeSilenced = mazeSilenced;
       this.rain.targetGain = gainTarget;
-      this.rain.gain.gain.setTargetAtTime(gainTarget, now, mazeSilenced ? 0.045 : 0.24);
-      this.rain.muffle.frequency.setTargetAtTime(cutoffTarget, now, mazeSilenced ? 0.045 : 0.24);
+      const response = mazeSilenced ? HEDGE_MAZE_HAUNT.rain.audioFadeResponse : 0.24;
+      this.rain.gain.gain.setTargetAtTime(gainTarget, now, response);
+      this.rain.muffle.frequency.setTargetAtTime(cutoffTarget, now, response);
     }
 
     rainDiagnostics() {
@@ -42493,7 +42525,9 @@
         gain: Number(this.rain.gain.gain.value.toFixed(4)),
         targetGain: Number(this.rain.targetGain.toFixed(4)),
         mazeSilenced: this.rain.mazeSilenced,
-        visualSuppressed: Boolean(rainSystem && !rainSystem.lines.visible),
+        visualSuppressed: Boolean(rainSystem && rainSystem.targetOpacity <= 0.001),
+        visualFading: Boolean(rainSystem && Math.abs(rainSystem.opacity - rainSystem.targetOpacity) > 0.001),
+        visualOpacity: Number(rainSystem?.opacity?.toFixed(4) || 0),
         duckGain: Number(this.rain.duck.gain.value.toFixed(4)),
         duckTargetGain: STORM_RUN.scareThunderRainDuckGain,
         duckActive: this.ctx.currentTime < this.thunderState.lastRainDuckUntil,

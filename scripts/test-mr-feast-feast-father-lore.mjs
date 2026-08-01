@@ -67,8 +67,8 @@ async function run() {
   const manifest = JSON.parse(manifestSource);
 
   assert(
-    /MANSION_RUNTIME_VERSION = "20260730-feast-father-lore-1"/.test(runtime)
-      && /mr-feast-mansion\.js\?v=20260730-feast-father-lore-1/.test(pageHtml),
+    /MANSION_RUNTIME_VERSION = "20260801-archive-workroom-haunts-1"/.test(runtime)
+      && /mr-feast-mansion\.js\?v=20260801-archive-workroom-haunts-1/.test(pageHtml),
     "page and runtime need the Feast Father lore cache identity",
   );
   assert(
@@ -88,7 +88,7 @@ async function run() {
   assert(
     /title:\s*"Household Observances for the Long Table"/.test(loreSource)
       && /The Feast Father remembers every guest/.test(loreSource),
-    "the guaranteed Library lore volume is missing its restrained household warning",
+    "the guaranteed Archive lore volume is missing its restrained household warning",
   );
   assert(
     !/\b(?:demon|horn|claw|teeth|skull|true form)\b/i.test(loreSource),
@@ -173,7 +173,7 @@ async function run() {
         && reader.author === "by E. Vane, Steward"
         && /keeping Father’s place/.test(reader.preview || "")
         && /Feast Father remembers every guest/.test(reader.preview || "")
-        && /household records/.test(reader.collection || "")
+        && /Archive · household records/.test(reader.collection || "")
         && reader.kind === "lore",
       `the shared reader did not present the intended subtle lore: ${JSON.stringify(reader)}`,
     );
@@ -190,7 +190,7 @@ async function run() {
     state = await diagnostics(page);
     assert(!state.books.open, "closing the lore volume must return to ordinary exploration");
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
-    console.log("Mr. Feast Feast Father lore test: renamed finale, fixed Library volume, veiled Dining Room painting, and browser presentation passed");
+    console.log("Mr. Feast Feast Father lore test: renamed finale, fixed Archive volume, veiled Dining Room painting, and browser presentation passed");
   } finally {
     if (browser) await browser.close();
     if (server) server.kill("SIGTERM");

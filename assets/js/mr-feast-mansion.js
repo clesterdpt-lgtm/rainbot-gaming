@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260801-hedge-maze-haunt-depth-pressure-1";
+  const MANSION_RUNTIME_VERSION = "20260801-archive-workroom-haunts-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2953,8 +2953,49 @@
     kind: "lore",
     title: "Household Observances for the Long Table",
     author: "E. Vane, Steward",
-    collection: "Library · household records",
+    collection: "Archive · household records",
     preview: "At the winter feast, the chair at the head of the table is to remain unclaimed. The oldest servants call this courtesy “keeping Father’s place.” Curtains are drawn before the final bell, and no portrait may face the table until morning. A later hand adds only: “The Feast Father remembers every guest.”",
+  });
+  const BASEMENT_HAUNT = Object.freeze({
+    archive: Object.freeze({
+      fallSeconds: 0.72,
+      blackoutSeconds: 4.45,
+      shelfPosition: Object.freeze({ x: 7.76, y: FLOOR.BASEMENT + 1.82, z: 7.72 }),
+      floorPosition: Object.freeze({ x: 8.18, y: FLOOR.BASEMENT + 0.045, z: 7.48 }),
+      triggerBounds: Object.freeze({ minX: 4.6, maxX: 13.8, minZ: 4.0, maxZ: 10.8 }),
+      circuitName: "archive and pantry lights",
+      closeDoors: Object.freeze(["basement stair door", "archive door"]),
+    }),
+    workroom: Object.freeze({
+      durationSeconds: 6.1,
+      breathingSeconds: 5.25,
+      breathingGain: 0.24,
+      circuitName: "workroom lights",
+      closeDoors: Object.freeze(["workroom door"]),
+    }),
+    contestantFiles: Object.freeze([
+      Object.freeze({
+        id: "contestant-04",
+        physicalName: "archive-contestant-preparation-file-04",
+        title: "Contestant 04 — Mara Ellison",
+        body: "Intake marked her as a winter course. Sedation was increased before preparation; the shoulders were reserved for a slow rosemary braise, and the tasting notes describe which guests requested seconds.",
+        color: 0x5d3028,
+      }),
+      Object.freeze({
+        id: "contestant-09",
+        physicalName: "archive-contestant-preparation-file-09",
+        title: "Contestant 09 — Emil Ward",
+        body: "The kitchen ledger calls him too lean for a roast. He was prepared as a smoked first course instead, with every usable cut weighed, numbered, and assigned to a patron's place setting.",
+        color: 0x293b33,
+      }),
+      Object.freeze({
+        id: "contestant-12",
+        physicalName: "archive-contestant-preparation-file-12",
+        title: "Contestant 12 — Ana Ruiz",
+        body: "Her file is stamped SERVED. A carving diagram divides the body by course, while a handwritten note asks that the face remain covered until the Feast Father has chosen his portion.",
+        color: 0x40302e,
+      }),
+    ]),
   });
 
   const CONTESTANT_13 = Object.freeze({
@@ -4322,6 +4363,7 @@
     archiveB: [13.3, FLOOR.BASEMENT, 7.2, Math.PI / 2],
     archiveRows: [3.0, FLOOR.BASEMENT, 7.2, -Math.PI / 2],
     archiveSkull: [9.0, FLOOR.BASEMENT, 9.4, Math.PI / 2],
+    archiveHauntBook: [9.5, FLOOR.BASEMENT, 7.48, Math.PI / 2, -0.42],
     basementCorridorA: [0, FLOOR.BASEMENT, 10.8, 0],
     basementCorridorB: [0, FLOOR.BASEMENT, -2.5, Math.PI],
     laundryA: [-2.3, FLOOR.BASEMENT, -2.3, 2.0],
@@ -4690,6 +4732,11 @@
       activePlacementId: null,
       openedPlacementIds: [],
     },
+    basementHaunt: {
+      archiveDropSeen: false,
+      archiveFileReadIds: [],
+      workroomSeen: false,
+    },
     contestant13: {
       bookRead: false,
       shovelTaken: false,
@@ -4893,6 +4940,14 @@
     relayAlarmBulb: null,
     relayAlarmMaterial: null,
   };
+  const basementHauntScene = {
+    archiveBookRoot: null,
+    archiveBookTargets: [],
+    archiveBookInteraction: null,
+    archiveBookInteractionEnabled: false,
+    contestantFileRoot: null,
+    contestantFiles: [],
+  };
   const workroomScene = {
     entranceDoor: null,
     keypadRoot: null,
@@ -4987,6 +5042,7 @@
   let throwableDistractionSystem = null;
   let bulkStorageSecretSystem = null;
   let monitorWallSystem = null;
+  let basementHauntSystem = null;
   let tamperSystem = null;
   let speechSystem = null;
   let openingWelcomeSystem = null;
@@ -20485,7 +20541,8 @@
         }
         this.addJournalEntry(CONTESTANT_13.journal.sabotage);
         cameraSecurity?.handlePatronFeedSabotage();
-        this.showDiscovery("Patron signal lost", "The hidden feed collapses into static. A warning lamp begins to pulse: the house knows the patrons are blind.", 11000);
+        basementHauntSystem?.triggerWorkroomPatronHaunt();
+        this.showDiscovery("Patron signal lost", "The room dies around the hidden feed. Every screen becomes static, and something breathes close by before the house returns to normal.", 11000);
         if (audioSystem) {
           audioSystem.ping(74, 0.7, 0.09, "sawtooth");
           audioSystem.ping(520, 0.18, 0.08, "square");
@@ -34000,6 +34057,8 @@
       this.normalFrameRenderCount = 0;
       this.maxNormalFeedsPerFrame = 0;
       this.lastRenderStateRestored = true;
+      this.staticActive = false;
+      this.staticPhase = 0;
       // A stylized low-light normal pass keeps remote rooms legible even when
       // their physical circuit is outside the player's active floor. It still
       // renders the real scene geometry from each live security-camera pose,
@@ -34036,7 +34095,11 @@
       const feedCamera = new THREE.PerspectiveCamera(WORKROOM_SECURITY.monitorFov, 16 / 9, 0.06, 120);
       feedCamera.rotation.order = "YXZ";
       const material = new THREE.ShaderMaterial({
-        uniforms: { map: { value: target.texture } },
+        uniforms: {
+          map: { value: target.texture },
+          staticMix: { value: 0 },
+          staticPhase: { value: 0 },
+        },
         vertexShader: `
           varying vec2 vUv;
           void main() {
@@ -34046,7 +34109,12 @@
         `,
         fragmentShader: `
           uniform sampler2D map;
+          uniform float staticMix;
+          uniform float staticPhase;
           varying vec2 vUv;
+          float staticNoise(vec2 cell) {
+            return fract(sin(dot(cell, vec2(12.9898, 78.233)) + staticPhase * 41.71) * 43758.5453);
+          }
           void main() {
             vec3 source = texture2D(map, vUv).rgb;
             float structure = dot(source, vec3(0.30, 0.52, 0.18));
@@ -34054,7 +34122,12 @@
             vec3 darkSignal = vec3(0.006, 0.018, 0.012);
             vec3 liveSignal = vec3(0.16, 0.92, 0.46);
             float scanline = 0.91 + 0.09 * sin(vUv.y * 620.0);
-            gl_FragColor = vec4(mix(darkSignal, liveSignal, visibleSignal) * scanline, 1.0);
+            vec3 liveFrame = mix(darkSignal, liveSignal, visibleSignal) * scanline;
+            vec2 staticCell = floor(vUv * vec2(356.0, 204.0));
+            float grain = staticNoise(staticCell);
+            float tear = step(0.965, staticNoise(vec2(floor(vUv.y * 92.0), floor(staticPhase * 7.0))));
+            vec3 staticFrame = vec3(grain * 0.82 + tear * 0.18) * (0.82 + 0.18 * scanline);
+            gl_FragColor = vec4(mix(liveFrame, staticFrame, staticMix), 1.0);
           }
         `,
         depthWrite: true,
@@ -34180,6 +34253,10 @@
 
     update(dt) {
       this.normalFrameRenderCount = 0;
+      if (this.staticActive) {
+        this.staticPhase += Math.max(0, Number(dt) || 0);
+        for (const feed of this.feeds) feed.material.uniforms.staticPhase.value = this.staticPhase;
+      }
       if (!this.isActive()) return;
       this.pageAccumulator += Math.max(0, Number(dt) || 0);
       if (this.pageAccumulator >= WORKROOM_SECURITY.monitorPageSeconds) {
@@ -34192,6 +34269,16 @@
       if (this.renderFeed(this.feeds[this.feedCursor])) this.normalFrameRenderCount = 1;
       this.maxNormalFeedsPerFrame = Math.max(this.maxNormalFeedsPerFrame, this.normalFrameRenderCount);
       this.feedCursor = (this.feedCursor + 1) % Math.max(1, this.feeds.length);
+    }
+
+    setStatic(active) {
+      this.staticActive = Boolean(active);
+      if (!this.staticActive) this.staticPhase = 0;
+      for (const feed of this.feeds) {
+        feed.material.uniforms.staticMix.value = this.staticActive ? 1 : 0;
+        feed.material.uniforms.staticPhase.value = this.staticPhase;
+      }
+      return this.getDiagnostics();
     }
 
     refreshForQA(cameraId = null) {
@@ -34219,6 +34306,9 @@
       return {
         active: this.isActive(),
         live: this.feeds.some((feed) => feed.renderCount > 0),
+        staticActive: this.staticActive,
+        staticScreens: this.staticActive ? this.feeds.length : 0,
+        staticPhase: Number(this.staticPhase.toFixed(3)),
         screenCount: this.feeds.length,
         renderTargets: this.feeds.filter((feed) => feed.target?.isWebGLRenderTarget).length,
         rosterCameraCount: this.rosterCameraIds.length,
@@ -34242,6 +34332,324 @@
           renderCount: feed.renderCount,
           signature: feed.signature,
         })),
+      };
+    }
+  }
+
+  class BasementHauntSystem {
+    constructor() {
+      this.archive = {
+        active: false,
+        phase: "idle",
+        elapsed: 0,
+        dropSoundCount: 0,
+        closedDoors: [],
+      };
+      this.workroom = {
+        active: false,
+        phase: "idle",
+        elapsed: 0,
+        closedDoors: [],
+      };
+      this.setBookDropped(Boolean(state.basementHaunt.archiveDropSeen));
+    }
+
+    circuit(name) {
+      return circuits.find((candidate) => candidate.name === name) || null;
+    }
+
+    door(name) {
+      return animatedObjects.find((object) => object instanceof HingedDoor && object.name === name) || null;
+    }
+
+    ensureDoorClosed(name, record) {
+      const door = this.door(name);
+      if (!door) return false;
+      if (door.open && door.playerInSwingPath()) return false;
+      if (door.open) {
+        door.setOpen(false);
+        audioSystem?.door(false);
+      }
+      if (!record.includes(name)) record.push(name);
+      return true;
+    }
+
+    enableBookInteraction(enabled) {
+      const sceneState = basementHauntScene;
+      const next = Boolean(enabled);
+      if (!sceneState.archiveBookInteraction || sceneState.archiveBookInteractionEnabled === next) return;
+      for (const target of sceneState.archiveBookTargets) {
+        if (next) addInteractionTarget(target, sceneState.archiveBookInteraction);
+        else removeInteractionTarget(target);
+      }
+      sceneState.archiveBookInteractionEnabled = next;
+    }
+
+    setBookDropped(dropped) {
+      const root = basementHauntScene.archiveBookRoot;
+      if (!root) return;
+      const config = BASEMENT_HAUNT.archive;
+      root.visible = Boolean(dropped);
+      if (dropped) {
+        root.position.set(config.floorPosition.x, config.floorPosition.y, config.floorPosition.z);
+        root.rotation.set(-0.03, -0.32, 0.015);
+      } else {
+        root.position.set(config.shelfPosition.x, config.shelfPosition.y, config.shelfPosition.z);
+        root.rotation.set(-0.18, 0.34, 0.08);
+      }
+      this.enableBookInteraction(Boolean(dropped));
+    }
+
+    triggerArchiveHaunt({ force = false } = {}) {
+      if (this.archive.active || state.basementHaunt.archiveDropSeen) return this.getDiagnostics();
+      if (!force && (!state.started || !state.contestant13.basementUnlocked || competitionBlocksInvestigation())) {
+        return this.getDiagnostics();
+      }
+      this.archive.active = true;
+      this.archive.phase = "book-falling";
+      this.archive.elapsed = 0;
+      this.archive.dropSoundCount = 0;
+      this.archive.closedDoors = [];
+      this.enableBookInteraction(false);
+      const root = basementHauntScene.archiveBookRoot;
+      if (root) {
+        root.visible = true;
+        const start = BASEMENT_HAUNT.archive.shelfPosition;
+        root.position.set(start.x, start.y, start.z);
+        root.rotation.set(-0.18, 0.34, 0.08);
+      }
+      return this.getDiagnostics();
+    }
+
+    impactArchiveBook() {
+      if (this.archive.phase !== "book-falling") return;
+      state.basementHaunt.archiveDropSeen = true;
+      this.setBookDropped(true);
+      this.archive.phase = "blackout";
+      this.archive.elapsed = 0;
+      for (const name of BASEMENT_HAUNT.archive.closeDoors) {
+        this.ensureDoorClosed(name, this.archive.closedDoors);
+      }
+      this.circuit(BASEMENT_HAUNT.archive.circuitName)?.setTransientBlackout(true);
+      audioSystem?.archiveBookDrop(BASEMENT_HAUNT.archive.floorPosition);
+      this.archive.dropSoundCount += 1;
+      contestant13Quest?.showDiscovery(
+        "Something fell in the Archive",
+        "A heavy volume has struck the stone beside a shelf of contestant records.",
+        6500,
+      );
+    }
+
+    finishArchiveHaunt() {
+      this.circuit(BASEMENT_HAUNT.archive.circuitName)?.setTransientBlackout(false);
+      this.archive.active = false;
+      this.archive.phase = "complete";
+      this.archive.elapsed = 0;
+    }
+
+    triggerWorkroomPatronHaunt({ force = false } = {}) {
+      if (this.workroom.active || state.basementHaunt.workroomSeen) return this.getDiagnostics();
+      if (!force && (!state.contestant13.relaySabotaged || competitionBlocksInvestigation())) {
+        return this.getDiagnostics();
+      }
+      state.basementHaunt.workroomSeen = true;
+      this.workroom.active = true;
+      this.workroom.phase = "blackout";
+      this.workroom.elapsed = 0;
+      this.workroom.closedDoors = [];
+      for (const name of BASEMENT_HAUNT.workroom.closeDoors) {
+        this.ensureDoorClosed(name, this.workroom.closedDoors);
+      }
+      this.circuit(BASEMENT_HAUNT.workroom.circuitName)?.setTransientBlackout(true);
+      monitorWallSystem?.setStatic(true);
+      audioSystem?.workroomFeastFatherBreathing(BASEMENT_HAUNT.workroom.breathingSeconds);
+      return this.getDiagnostics();
+    }
+
+    finishWorkroomHaunt() {
+      this.circuit(BASEMENT_HAUNT.workroom.circuitName)?.setTransientBlackout(false);
+      monitorWallSystem?.setStatic(false);
+      audioSystem?.stopWorkroomFeastFatherBreathing();
+      this.workroom.active = false;
+      this.workroom.phase = "complete";
+      this.workroom.elapsed = 0;
+    }
+
+    readContestantFile(id) {
+      const file = BASEMENT_HAUNT.contestantFiles.find((candidate) => candidate.id === id);
+      if (!file) return null;
+      if (!state.basementHaunt.archiveFileReadIds.includes(id)) {
+        state.basementHaunt.archiveFileReadIds.push(id);
+      }
+      contestant13Quest?.showDiscovery(file.title, file.body, 12500);
+      audioSystem?.book(true);
+      return { id: file.id, title: file.title, body: file.body, read: true };
+    }
+
+    updateArchive(dt) {
+      const config = BASEMENT_HAUNT.archive;
+      this.archive.elapsed += dt;
+      if (this.archive.phase === "book-falling") {
+        const root = basementHauntScene.archiveBookRoot;
+        const t = clamp(this.archive.elapsed / config.fallSeconds, 0, 1);
+        const fall = t * t * (3 - 2 * t);
+        if (root) {
+          root.position.set(
+            lerp(config.shelfPosition.x, config.floorPosition.x, fall),
+            lerp(config.shelfPosition.y, config.floorPosition.y, fall),
+            lerp(config.shelfPosition.z, config.floorPosition.z, fall),
+          );
+          root.rotation.set(
+            lerp(-0.18, -0.03, fall),
+            lerp(0.34, -0.32, fall),
+            lerp(0.08, Math.PI * 1.85, fall),
+          );
+        }
+        if (t >= 1) this.impactArchiveBook();
+        return;
+      }
+      if (this.archive.phase === "blackout" && this.archive.elapsed >= config.blackoutSeconds) {
+        this.finishArchiveHaunt();
+      }
+    }
+
+    updateWorkroom(dt) {
+      this.workroom.elapsed += dt;
+      if (this.workroom.elapsed >= BASEMENT_HAUNT.workroom.durationSeconds) {
+        this.finishWorkroomHaunt();
+      }
+    }
+
+    shouldTriggerArchive() {
+      if (
+        this.archive.active
+        || state.basementHaunt.archiveDropSeen
+        || !state.started
+        || !state.contestant13.basementUnlocked
+        || state.currentRoom !== "ARCHIVE"
+        || competitionBlocksInvestigation()
+        || !physics
+      ) return false;
+      const p = physics.playerPosition();
+      const bounds = BASEMENT_HAUNT.archive.triggerBounds;
+      return p.x >= bounds.minX && p.x <= bounds.maxX && p.z >= bounds.minZ && p.z <= bounds.maxZ;
+    }
+
+    update(dt) {
+      const step = Math.max(0, Number(dt) || 0);
+      if (this.shouldTriggerArchive()) this.triggerArchiveHaunt();
+      if (this.archive.active) this.updateArchive(step);
+      if (this.workroom.active) this.updateWorkroom(step);
+    }
+
+    advanceForQA(seconds) {
+      if (!state.qa) return this.getDiagnostics();
+      let remaining = Math.min(30, Math.max(0, Number(seconds) || 0));
+      while (remaining > 0) {
+        const step = Math.min(1 / 60, remaining);
+        if (this.archive.active) this.updateArchive(step);
+        if (this.workroom.active) this.updateWorkroom(step);
+        monitorWallSystem?.update(step);
+        remaining -= step;
+      }
+      return this.getDiagnostics();
+    }
+
+    frameBookForQA() {
+      if (!state.qa) return null;
+      teleport(9.5, FLOOR.BASEMENT, 7.48, Math.PI / 2, -0.42);
+      updateLocation();
+      return this.getDiagnostics();
+    }
+
+    frameFilesForQA() {
+      if (!state.qa) return null;
+      teleport(9.25, FLOOR.BASEMENT, 8.52, Math.PI / 2, -0.12);
+      updateLocation();
+      return this.getDiagnostics();
+    }
+
+    getSnapshot() {
+      return {
+        archiveDropSeen: Boolean(state.basementHaunt.archiveDropSeen),
+        archiveFileReadIds: [...state.basementHaunt.archiveFileReadIds],
+        workroomSeen: Boolean(state.basementHaunt.workroomSeen),
+      };
+    }
+
+    restoreSnapshot(snapshot) {
+      this.reset({ clearSeen: true, reason: "load" });
+      state.basementHaunt.archiveDropSeen = Boolean(snapshot?.archiveDropSeen);
+      state.basementHaunt.archiveFileReadIds = Array.isArray(snapshot?.archiveFileReadIds)
+        ? snapshot.archiveFileReadIds.filter((id) => BASEMENT_HAUNT.contestantFiles.some((file) => file.id === id))
+        : [];
+      state.basementHaunt.workroomSeen = Boolean(snapshot?.workroomSeen);
+      this.setBookDropped(state.basementHaunt.archiveDropSeen);
+      return this.getDiagnostics();
+    }
+
+    reset({ clearSeen = false, reason = "reset" } = {}) {
+      this.circuit(BASEMENT_HAUNT.archive.circuitName)?.setTransientBlackout(false, true);
+      this.circuit(BASEMENT_HAUNT.workroom.circuitName)?.setTransientBlackout(false, true);
+      monitorWallSystem?.setStatic(false);
+      audioSystem?.stopWorkroomFeastFatherBreathing({ immediate: true });
+      this.archive.active = false;
+      this.archive.phase = reason === "load" ? "restored" : "idle";
+      this.archive.elapsed = 0;
+      this.archive.dropSoundCount = 0;
+      this.archive.closedDoors = [];
+      this.workroom.active = false;
+      this.workroom.phase = reason === "load" ? "restored" : "idle";
+      this.workroom.elapsed = 0;
+      this.workroom.closedDoors = [];
+      if (clearSeen) {
+        state.basementHaunt.archiveDropSeen = false;
+        state.basementHaunt.archiveFileReadIds = [];
+        state.basementHaunt.workroomSeen = false;
+      }
+      this.setBookDropped(state.basementHaunt.archiveDropSeen);
+      syncLightRendering();
+      return this.getDiagnostics();
+    }
+
+    getDiagnostics() {
+      const archiveCircuit = this.circuit(BASEMENT_HAUNT.archive.circuitName);
+      const workroomCircuit = this.circuit(BASEMENT_HAUNT.workroom.circuitName);
+      const root = basementHauntScene.archiveBookRoot;
+      return {
+        archive: {
+          active: this.archive.active,
+          phase: this.archive.phase,
+          dropSeen: Boolean(state.basementHaunt.archiveDropSeen),
+          dropSoundCount: this.archive.dropSoundCount,
+          closedDoors: [...this.archive.closedDoors],
+          blackoutActive: Boolean(archiveCircuit?.transientBlackout),
+          circuitOn: Boolean(archiveCircuit?.on),
+          book: {
+            visible: Boolean(root?.visible),
+            onFloor: Boolean(root?.visible && state.basementHaunt.archiveDropSeen),
+            placementId: FEAST_FATHER_LORE_BOOK.placementId,
+            room: "ARCHIVE",
+          },
+          files: {
+            physicalCount: basementHauntScene.contestantFiles.length,
+            readIds: [...state.basementHaunt.archiveFileReadIds].sort(),
+            ids: BASEMENT_HAUNT.contestantFiles.map((file) => file.id),
+          },
+        },
+        workroom: {
+          active: this.workroom.active,
+          phase: this.workroom.phase,
+          seen: Boolean(state.basementHaunt.workroomSeen),
+          closedDoors: [...this.workroom.closedDoors],
+          blackoutActive: Boolean(workroomCircuit?.transientBlackout),
+          circuitOn: Boolean(workroomCircuit?.on),
+          staticActive: Boolean(monitorWallSystem?.staticActive),
+          breathing: audioSystem?.workroomHauntDiagnostics() || {
+            active: false,
+            targetGain: BASEMENT_HAUNT.workroom.breathingGain,
+          },
+        },
       };
     }
   }
@@ -34667,6 +35075,10 @@
       this.floorY = floorY;
       this.color = color || 0xffc57a;
       this.on = initiallyOn !== false;
+      // Story scares gate electrical output without mutating the player's
+      // physical switch choice. Releasing the gate therefore restores the
+      // exact state the player left behind.
+      this.transientBlackout = false;
       this.lights = [];
       this.bulbs = [];
       this.glowMaterials = [];
@@ -35198,9 +35610,19 @@
       // syncLightRendering adds floor/shell context so exterior halos remain
       // dark indoors and energize only after the player crosses outside.
       // Silent callers batch several circuits and request one sync themselves.
-      this.setGlowRenderState(this.on);
+      this.setGlowRenderState(this.on && !this.transientBlackout);
       if (!silent && audioSystem) audioSystem.light(this.on);
       if (!silent) syncLightRendering();
+      return true;
+    }
+
+    setTransientBlackout(active, silent = false) {
+      const next = Boolean(active);
+      if (this.transientBlackout === next) return false;
+      this.transientBlackout = next;
+      this.setGlowRenderState(this.on && !this.transientBlackout);
+      if (!silent && this.on && audioSystem) audioSystem.light(!next);
+      syncLightRendering();
       return true;
     }
 
@@ -38988,19 +39410,6 @@
 
   function addLibraryWritingSet() {
     const tableTop = FLOOR.MAIN + 0.852;
-    const loreBookTargets = [];
-    loreBookTargets.push(box({ name: "feast-father-lore-book-cover", w: 0.42, h: 0.016, d: 0.3, x: -10.85, y: tableTop + 0.008, z: 5.05, rotationY: 0.18, material: M.leather, cast: false }));
-    for (const side of [-1, 1]) {
-      loreBookTargets.push(box({ name: "feast-father-lore-book-pages", w: 0.19, h: 0.02, d: 0.27, x: -10.85 + side * 0.1 * Math.cos(0.18), y: tableTop + 0.026, z: 5.05 + side * 0.1 * Math.sin(0.18), rotationY: 0.18, rotationZ: side * 0.045, material: M.porcelain, cast: false }));
-    }
-    const lorePlacement = readableBookSystem?.registerSpecialBook(FEAST_FATHER_LORE_BOOK);
-    const loreInteraction = {
-      type: "readable-book",
-      id: FEAST_FATHER_LORE_BOOK.placementId,
-      getLabel: () => `${READABLE_BOOKS.promptVerb} “${lorePlacement?.title || FEAST_FATHER_LORE_BOOK.title}”`,
-      activate: () => readableBookSystem?.open(lorePlacement),
-    };
-    loreBookTargets.forEach((target) => addInteractionTarget(target, loreInteraction));
     cylinder({ name: "library-inkwell", radius: 0.036, height: 0.065, segments: 12, x: -10.12, y: tableTop + 0.033, z: 4.92, material: M.glass, cast: false });
     cylinder({ name: "library-inkwell-cap", radius: 0.02, height: 0.02, segments: 10, x: -10.12, y: tableTop + 0.075, z: 4.92, material: M.brass, cast: false });
     for (const [index, offset] of [0.005, 0.017].entries()) {
@@ -40163,6 +40572,83 @@
     );
   }
 
+  function addBasementHauntStoryProps() {
+    const bookRoot = new THREE.Group();
+    bookRoot.name = "archive-feast-father-lore-book-floor";
+    bookRoot.position.set(
+      BASEMENT_HAUNT.archive.shelfPosition.x,
+      BASEMENT_HAUNT.archive.shelfPosition.y,
+      BASEMENT_HAUNT.archive.shelfPosition.z,
+    );
+    bookRoot.rotation.set(-0.18, 0.34, 0.08);
+    scene.add(bookRoot);
+    const bookTargets = [
+      box({ name: "archive-feast-father-lore-book-floor-cover", w: 0.44, h: 0.035, d: 0.31, x: 0, y: 0, z: 0, material: M.leather, parent: bookRoot, cast: true }),
+      box({ name: "archive-feast-father-lore-book-floor-pages", w: 0.39, h: 0.045, d: 0.275, x: 0, y: 0.025, z: 0, material: M.porcelain, parent: bookRoot, cast: false }),
+      box({ name: "archive-feast-father-lore-book-floor-top-cover", w: 0.44, h: 0.018, d: 0.31, x: 0, y: 0.058, z: 0, material: M.leather, parent: bookRoot, cast: false }),
+      box({ name: "archive-feast-father-lore-book-floor-spine", w: 0.055, h: 0.065, d: 0.315, x: -0.215, y: 0.018, z: 0, material: M.wineRed, parent: bookRoot, cast: false }),
+      box({ name: "archive-feast-father-lore-book-floor-title-plate", w: 0.16, h: 0.008, d: 0.105, x: 0.025, y: 0.071, z: -0.015, material: M.brass, parent: bookRoot, cast: false }),
+    ];
+    const lorePlacement = readableBookSystem?.registerSpecialBook(FEAST_FATHER_LORE_BOOK);
+    basementHauntScene.archiveBookRoot = bookRoot;
+    basementHauntScene.archiveBookTargets = bookTargets;
+    basementHauntScene.archiveBookInteraction = {
+      type: "readable-book",
+      id: FEAST_FATHER_LORE_BOOK.placementId,
+      getLabel: () => `${READABLE_BOOKS.promptVerb} “${lorePlacement?.title || FEAST_FATHER_LORE_BOOK.title}”`,
+      activate: () => readableBookSystem?.open(lorePlacement),
+    };
+    bookRoot.visible = false;
+
+    const fileRoot = new THREE.Group();
+    fileRoot.name = "archive-contestant-preparation-files";
+    fileRoot.position.set(7.73, FLOOR.BASEMENT, 8.52);
+    scene.add(fileRoot);
+    basementHauntScene.contestantFileRoot = fileRoot;
+    BASEMENT_HAUNT.contestantFiles.forEach((file, index) => {
+      const localZ = (index - 1) * 0.36;
+      const folderMaterial = new THREE.MeshStandardMaterial({
+        color: file.color,
+        roughness: 0.84,
+        metalness: 0.02,
+      });
+      const folder = roundedBox({
+        name: file.physicalName,
+        w: 0.055,
+        h: 0.35,
+        d: 0.29,
+        radius: 0.015,
+        x: 0,
+        y: 1.34,
+        z: localZ,
+        rotationZ: (index - 1) * 0.045,
+        material: folderMaterial,
+        parent: fileRoot,
+        cast: false,
+      });
+      box({
+        name: `${file.physicalName}-typed-label`,
+        w: 0.012,
+        h: 0.12,
+        d: 0.2,
+        x: 0.034,
+        y: 1.35,
+        z: localZ,
+        material: M.canvasLinen,
+        parent: fileRoot,
+        cast: false,
+      });
+      const interaction = {
+        type: "archive-contestant-file",
+        id: file.id,
+        getLabel: () => `Read preparation file ${file.id.replace("contestant-", "")}`,
+        activate: () => basementHauntSystem?.readContestantFile(file.id),
+      };
+      addInteractionTarget(folder, interaction);
+      basementHauntScene.contestantFiles.push({ file, folder, interaction });
+    });
+  }
+
   function buildContestantThirteenQuest() {
     contestant13Quest = new ContestantThirteenQuest();
     addContestantThirteenLibraryBook();
@@ -40170,6 +40656,7 @@
     addContestantThirteenDigSite();
     addContestantThirteenArchiveCage();
     addContestantThirteenCameraRelay();
+    addBasementHauntStoryProps();
     contestant13Quest.updateUI();
   }
 
@@ -41929,6 +42416,22 @@
         lastFeastFatherDepthCells: null,
         lastFeastFatherDepthPressure: 0,
       };
+      this.basementHauntAudio = {
+        archiveDropCount: 0,
+        workroom: {
+          source: null,
+          gain: null,
+          active: false,
+          stopping: false,
+          startCount: 0,
+          stopCount: 0,
+          recordedCount: 0,
+          fallbackCount: 0,
+          targetGain: BASEMENT_HAUNT.workroom.breathingGain,
+          durationSeconds: 0,
+          assetPath: MANSION_AUDIO_ASSETS.mazeFeastFather[0],
+        },
+      };
       this.banquetBreathNoise = null;
       this.banquetBreathSources = new Set();
       this.playerBreathNoise = null;
@@ -42475,6 +42978,144 @@
         release: 0.32,
         duration: 4,
       });
+    }
+
+    archiveBookDrop(position) {
+      this.basementHauntAudio.archiveDropCount += 1;
+      this.markCue("archiveBookDrop");
+      if (!this.ctx || !this.master || !state.audioEnabled) return false;
+      const listener = new THREE.Vector3();
+      const forward = new THREE.Vector3();
+      const right = new THREE.Vector3();
+      const offset = new THREE.Vector3();
+      camera.getWorldPosition(listener);
+      camera.getWorldDirection(forward);
+      right.set(-forward.z, 0, forward.x).normalize();
+      offset.set(
+        Number(position?.x) || listener.x,
+        Number(position?.y) || listener.y,
+        Number(position?.z) || listener.z,
+      ).sub(listener);
+      const horizontal = Math.max(0.001, Math.hypot(offset.x, offset.z));
+      const pan = clamp((offset.x * right.x + offset.z * right.z) / horizontal, -0.7, 0.7);
+      const recorded = this.playSample("bookClose", {
+        volume: 0.3,
+        rate: 0.78,
+        rateVariance: 0.025,
+        lowpass: 2600,
+        pan,
+      });
+      this.ping(68, 0.34, 0.11, "sine");
+      return recorded;
+    }
+
+    async prepareBasementHauntAudio() {
+      if (!this.ctx) return this.workroomHauntDiagnostics();
+      await this.unlock();
+      const [path] = this.assetsFor("mazeFeastFather");
+      if (path) {
+        try { await this.loadAsset(path); } catch (_) { /* Procedural fallback remains available. */ }
+      }
+      return this.workroomHauntDiagnostics();
+    }
+
+    workroomFeastFatherBreathing(duration = BASEMENT_HAUNT.workroom.breathingSeconds) {
+      const haunt = this.basementHauntAudio.workroom;
+      this.stopWorkroomFeastFatherBreathing({ immediate: true, countStop: false });
+      const safeDuration = clamp(Number(duration) || BASEMENT_HAUNT.workroom.breathingSeconds, 1, 12);
+      haunt.active = true;
+      haunt.stopping = false;
+      haunt.targetGain = BASEMENT_HAUNT.workroom.breathingGain;
+      haunt.durationSeconds = safeDuration;
+      haunt.startCount += 1;
+      this.markCue("workroomFeastFatherBreathing");
+      if (!this.ctx || !this.master || !state.audioEnabled) return false;
+
+      const now = this.ctx.currentTime;
+      const [path] = this.availableAssets("mazeFeastFather");
+      const buffer = path ? this.buffers.get(path) : null;
+      const source = this.ctx.createBufferSource();
+      if (buffer) {
+        source.buffer = buffer;
+        source.playbackRate.value = 0.86;
+        haunt.assetPath = path;
+        haunt.recordedCount += 1;
+      } else {
+        source.buffer = this.makeNoiseBuffer(safeDuration + 0.2);
+        source.playbackRate.value = 0.72;
+        haunt.assetPath = null;
+        haunt.fallbackCount += 1;
+      }
+      const highpass = this.ctx.createBiquadFilter();
+      highpass.type = "highpass";
+      highpass.frequency.value = buffer ? 68 : 95;
+      const lowpass = this.ctx.createBiquadFilter();
+      lowpass.type = "lowpass";
+      lowpass.frequency.value = buffer ? 2350 : 980;
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.linearRampToValueAtTime(haunt.targetGain, now + 0.12);
+      gain.gain.setValueAtTime(haunt.targetGain, now + Math.max(0.12, safeDuration - 0.55));
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + safeDuration);
+      source.connect(highpass).connect(lowpass).connect(gain).connect(this.master);
+      haunt.source = source;
+      haunt.gain = gain;
+      this.activeVoices += 1;
+      source.onended = () => {
+        this.activeVoices = Math.max(0, this.activeVoices - 1);
+        if (haunt.source !== source) return;
+        haunt.source = null;
+        haunt.gain = null;
+        haunt.active = false;
+        haunt.stopping = false;
+      };
+      try {
+        const offset = buffer && buffer.duration > safeDuration + 1 ? 0.6 : 0;
+        source.start(now, offset, safeDuration);
+      } catch (_) {
+        this.activeVoices = Math.max(0, this.activeVoices - 1);
+        haunt.source = null;
+        haunt.gain = null;
+        haunt.active = false;
+        return false;
+      }
+      return true;
+    }
+
+    stopWorkroomFeastFatherBreathing({ immediate = false, countStop = true } = {}) {
+      const haunt = this.basementHauntAudio.workroom;
+      const source = haunt.source;
+      haunt.active = false;
+      if (!source || haunt.stopping) return this.workroomHauntDiagnostics();
+      const now = this.ctx?.currentTime || 0;
+      const fade = immediate ? 0 : 0.22;
+      haunt.stopping = true;
+      if (haunt.gain) {
+        haunt.gain.gain.cancelScheduledValues(now);
+        haunt.gain.gain.setValueAtTime(Math.max(0.0001, haunt.gain.gain.value || 0.0001), now);
+        haunt.gain.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.001, fade));
+      }
+      try { source.stop(now + fade); } catch (_) { /* Already stopped. */ }
+      if (countStop) haunt.stopCount += 1;
+      this.markCue("workroomFeastFatherBreathingStop");
+      return this.workroomHauntDiagnostics();
+    }
+
+    workroomHauntDiagnostics() {
+      const haunt = this.basementHauntAudio.workroom;
+      return {
+        profile: "close-recorded-feast-father-breath-with-procedural-fallback",
+        active: haunt.active,
+        recordedReady: this.availableAssets("mazeFeastFather").length > 0,
+        targetGain: Number(haunt.targetGain.toFixed(4)),
+        currentGain: Number((haunt.gain?.gain.value || 0).toFixed(4)),
+        durationSeconds: Number(haunt.durationSeconds.toFixed(3)),
+        startCount: haunt.startCount,
+        stopCount: haunt.stopCount,
+        recordedCount: haunt.recordedCount,
+        fallbackCount: haunt.fallbackCount,
+        assetPath: haunt.assetPath,
+      };
     }
 
     hedgeMazeFeastFather(position, pulseIndex = 0, depthOptions = {}) {
@@ -44222,6 +44863,10 @@
         banquetBreathing: this.banquetBreathingDiagnostics(),
         playerBreathing: this.playerBreathingDiagnostics(),
         saintVoice: this.saintVoiceDiagnostics(),
+        basementHaunt: {
+          archiveDropCount: this.basementHauntAudio.archiveDropCount,
+          workroom: this.workroomHauntDiagnostics(),
+        },
         rain: this.rainDiagnostics(),
         thunder: this.thunderDiagnostics(),
         footsteps: {
@@ -45874,6 +46519,7 @@
       feastHunt: feastHuntSystem?.getSnapshot() || null,
       victoryFeast: victoryFeastSnapshot,
       bulkStorageSecret: bulkStorageSecretSystem?.getSnapshot() || null,
+      basementHaunt: basementHauntSystem?.getSnapshot() || null,
     };
   }
 
@@ -45904,6 +46550,7 @@
     demonPrototypePatrol?.setEnabled(false);
     contestant13Quest.restoreQuestSnapshot(data.contestant13);
     bulkStorageSecretSystem?.restoreSnapshot(data.bulkStorageSecret);
+    basementHauntSystem?.restoreSnapshot(data.basementHaunt);
     flashlightSystem?.restoreFromInventory({ clearTransient: true });
     feastSaysSystem?.restoreSnapshot(data.feastSays, data.contestant13);
     stormRunSystem?.restoreSnapshot(data.stormRun, data.contestant13);
@@ -47234,7 +47881,8 @@
       // stable while the player moves inside that authored context. In
       // particular, exterior emitters never occupy indoor shader slots.
       const rendersInContext = circuitRendersInContext(circuit, floors, renderContext);
-      circuit.setGlowRenderState(circuit.on && rendersInContext);
+      const circuitEnergized = circuit.on && !circuit.transientBlackout;
+      circuit.setGlowRenderState(circuitEnergized && rendersInContext);
       const mobileUpperBudget = state.mobileRenderProfile && floors.has("SECOND FLOOR");
       for (const light of circuit.lights) {
         // The fixed light profile keeps the moon as the single structural
@@ -47260,13 +47908,13 @@
         // it can replace one zero-energy spot with the real lamp without
         // minting a new program; the enclosure still gates its energy.
         const nextVisible = rendersInContext && rendersOnLevel && budgetedLights.has(light);
-        if (applyLightRenderState(light, nextVisible, circuit.on && enclosureOpen, !fade)) shadowTopologyChanged = true;
+        if (applyLightRenderState(light, nextVisible, circuitEnergized && enclosureOpen, !fade)) shadowTopologyChanged = true;
       }
       for (const bulb of circuit.bulbs) {
         const enclosure = bulb.userData.requiresOpenCabinet;
         const bulbLevels = bulb.userData.levels;
         const bulbRendersOnLevel = !bulbLevels || bulbLevels.has(state.currentFloor);
-        const lit = circuit.on && rendersInContext && bulbRendersOnLevel && (!enclosure || enclosure.open || enclosure.angle > 0.025);
+        const lit = circuitEnergized && rendersInContext && bulbRendersOnLevel && (!enclosure || enclosure.open || enclosure.angle > 0.025);
         applyBulbRenderState(bulb, lit, !fade);
       }
     }
@@ -47717,6 +48365,7 @@
       feastHuntSystem?.update(Math.min(rawDt, FEAST_HUNT.maximumTimerStepSeconds));
       victoryFeastSystem?.update(Math.min(rawDt, VICTORY_FEAST.maximumTimerStepSeconds));
       finaleSabotageSystem?.update(dt);
+      basementHauntSystem?.update(dt);
       if (state.contestant13.relaySabotaged && contestant13Scene.relayAlarmMaterial) {
         const warningPulse = 0.5 + Math.sin(frameNow * 0.009) * 0.5;
         contestant13Scene.relayAlarmMaterial.emissiveIntensity = 1.55 + warningPulse * 2.1;
@@ -48040,6 +48689,7 @@
         active: null,
       },
       contestant13: contestant13Quest?.getDiagnostics() || null,
+      basementHaunt: basementHauntSystem?.getDiagnostics() || null,
       mrFeast: mrFeastNpc?.getDiagnostics() || null,
       contestants: mansionContestants?.getDiagnostics() || null,
       demonPrototypes: demonPrototypePatrol?.getDiagnostics() || null,
@@ -48274,6 +48924,7 @@
       circuits: circuits.map((c) => ({
         name: c.name,
         on: c.on,
+        transientBlackout: c.transientBlackout,
         controls: c.controls,
         levels: Array.from(c.levels),
         lights: c.lights.length,
@@ -48783,6 +49434,31 @@
       state.qa && readableBookSystem
         ? readableBookSystem.openByPlacementId(FEAST_FATHER_LORE_BOOK.placementId)
         : false
+    );
+    window.MrFeastFresh.getBasementHauntState = () => basementHauntSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.prepareBasementHauntAudioForQA = () => (
+      state.qa && audioSystem ? audioSystem.prepareBasementHauntAudio() : null
+    );
+    window.MrFeastFresh.resetBasementHauntForQA = (options = {}) => (
+      state.qa && basementHauntSystem ? basementHauntSystem.reset(options) : null
+    );
+    window.MrFeastFresh.triggerArchiveHauntForQA = () => (
+      state.qa && basementHauntSystem ? basementHauntSystem.triggerArchiveHaunt({ force: true }) : null
+    );
+    window.MrFeastFresh.advanceBasementHauntForQA = (seconds) => (
+      state.qa && basementHauntSystem ? basementHauntSystem.advanceForQA(seconds) : null
+    );
+    window.MrFeastFresh.readArchiveContestantFileForQA = (id) => (
+      state.qa && basementHauntSystem ? basementHauntSystem.readContestantFile(id) : null
+    );
+    window.MrFeastFresh.frameArchiveContestantFilesForQA = () => (
+      state.qa && basementHauntSystem ? basementHauntSystem.frameFilesForQA() : null
+    );
+    window.MrFeastFresh.frameArchiveHauntBookForQA = () => (
+      state.qa && basementHauntSystem ? basementHauntSystem.frameBookForQA() : null
+    );
+    window.MrFeastFresh.triggerWorkroomPatronHauntForQA = () => (
+      state.qa && basementHauntSystem ? basementHauntSystem.triggerWorkroomPatronHaunt({ force: true }) : null
     );
     window.MrFeastFresh.closeReadableBookForQA = () => state.qa && readableBookSystem ? readableBookSystem.close() : false;
     window.MrFeastFresh.getMrFeastState = () => mrFeastNpc ? mrFeastNpc.getDiagnostics() : null;
@@ -50483,6 +51159,7 @@
       bulkStorageSecretSystem.syncClothingProgression(false);
       banquetLossSystem = new BanquetLossSystem();
       audioSystem = new MansionAudio();
+      basementHauntSystem = new BasementHauntSystem();
       hedgeMazeKeyScareSystem = new HedgeMazeKeyScareSystem();
       breathStealthSystem = new BreathStealthSystem();
       updateAudioButton();

@@ -63,6 +63,16 @@ async function run() {
   assert(/flickerBursts:\s*Object\.freeze\(\[/.test(runtime) && /scale:\s*0\.[5-9]/.test(runtime), "the sustained darkness must use visible multi-pulse fixture flickers");
   const ambientConfig = sourceSection(runtime, "ambient: Object.freeze({", "release: Object.freeze({");
   assert((ambientConfig.match(/Object\.freeze\(\{ start:/g) || []).length >= 5, "ambient haunt pulses must move at least five nearby hedge faces");
+  assert(
+    /aheadMinimumMeters:\s*1\.35/.test(ambientConfig)
+      && /aheadTargetMeters:\s*2\.4/.test(ambientConfig)
+      && /aheadMaximumMeters:\s*4\.8/.test(ambientConfig),
+    "ambient hedge movement needs an authored few-feet-ahead placement window",
+  );
+  assert(
+    /shallowVolume:\s*0\.1/.test(ambientConfig) && /deepVolume:\s*0\.24/.test(ambientConfig),
+    "Feast Father breathing needs a named shallow-to-deep volume range",
+  );
   assert(/class HedgeMazeKeyScareSystem/.test(runtime), "missing focused hedge-maze haunt authority");
   const hauntClass = sourceSection(runtime, "class HedgeMazeKeyScareSystem", "class ContestantThirteenQuest");
   assert(/addKinematicBox/.test(hauntClass), "the two entrance seals need fixed-topology kinematic colliders");
@@ -76,8 +86,9 @@ async function run() {
   assert(/state\.currentRoom === "HEDGE MAZE"/.test(rainClass) && /this\.lines\.visible/.test(rainClass), "visible rain must stop inside the hedge maze");
   const audioClass = sourceSection(runtime, "class MansionAudio", "function updateAudioButton");
   assert(/mazeSilenced/.test(audioClass), "the rain mix must have an explicit hedge-maze silence state");
-  assert(/hedgeMazeFeastFather[\s\S]+volume:\s*0\.1[0-9]/.test(audioClass), "Feast Father maze fragments must be mixed at a clearly audible level");
+  assert(/hedgeMazeFeastFather[\s\S]+depthPressure[\s\S]+breathing\.deepVolume/.test(audioClass), "Feast Father maze fragments must consume the depth-based volume range");
   assert(/prepareHedgeMazeLockInForQA/.test(runtime), "focused maze lock-in QA staging is missing");
+  assert(/triggerHedgeMazeAmbientForQA/.test(runtime), "focused recurring-haunt QA trigger is missing");
   assert(/collectHedgeMazeKeyForQA/.test(runtime), "focused maze-key release QA control is missing");
   assert(/hedge-maze-haunt/.test(html), "the runtime cache key should identify the hedge-maze haunt release");
 
@@ -201,7 +212,43 @@ async function run() {
     await captureStage(page, "maze-north-entrance-sealed-desktop.png");
     const collisionProbe = await page.evaluate(() => window.MrFeastFresh.probeHedgeMazeSealCollisionForQA("north"));
     assert(collisionProbe.blocked, `the raised north seal must physically stop an exit attempt: ${JSON.stringify(collisionProbe)}`);
-    await page.evaluate(() => window.MrFeastFresh.placePlayerInsideHedgeMazeForQA("north", 7));
+    const shallowPlacement = await page.evaluate(() => window.MrFeastFresh.placePlayerInsideHedgeMazeForQA("north", 7));
+    const shallowPulse = await page.evaluate(() => window.MrFeastFresh.triggerHedgeMazeAmbientForQA());
+    assert(shallowPulse.triggered && shallowPulse.ambientSpotCount >= 5, `QA should start a full shallow recurring pulse: ${JSON.stringify(shallowPulse)}`);
+    assert(
+      shallowPulse.ambientAheadMinimumMeters >= 1.35
+        && shallowPulse.ambientAheadMaximumMeters <= 4.8
+        && shallowPulse.ambientFacingMinimumDot > 0,
+      `recurring hedge movement should stage a few feet ahead instead of beside the player: ${JSON.stringify(shallowPulse)}`,
+    );
+    await page.evaluate(() => window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(3));
+    const shallowAudio = await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
+    assert(
+      shallowAudio.hedgeMaze.lastFeastFatherDepthCells === shallowPlacement.playerMazeDepthCells
+        && shallowAudio.hedgeMaze.lastFeastFatherDepthPressure <= 0.02,
+      `the first breathing fragments should use the shallow maze mix: ${JSON.stringify({ shallowPlacement, audio: shallowAudio.hedgeMaze })}`,
+    );
+    await page.evaluate(() => window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(2.2));
+
+    const deepPlacement = await page.evaluate(() => window.MrFeastFresh.placePlayerInsideHedgeMazeForQA("north", 38));
+    const deepPulse = await page.evaluate(() => window.MrFeastFresh.triggerHedgeMazeAmbientForQA());
+    assert(deepPulse.triggered && deepPlacement.playerMazeDepthCells > shallowPlacement.playerMazeDepthCells, `QA should stage a genuinely deeper pulse: ${JSON.stringify({ shallowPlacement, deepPlacement, deepPulse })}`);
+    assert(
+      deepPulse.ambientAheadMinimumMeters >= 1.35
+        && deepPulse.ambientAheadMaximumMeters <= 4.8
+        && deepPulse.ambientFacingMinimumDot > 0,
+      `deep recurring movement should remain ahead of the player: ${JSON.stringify(deepPulse)}`,
+    );
+    await page.evaluate(() => window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(3));
+    const deepAudio = await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
+    assert(
+      deepAudio.hedgeMaze.lastFeastFatherDepthCells === deepPlacement.playerMazeDepthCells
+        && deepAudio.hedgeMaze.lastFeastFatherDepthPressure > shallowAudio.hedgeMaze.lastFeastFatherDepthPressure
+        && deepAudio.hedgeMaze.lastFeastFatherVolume >= shallowAudio.hedgeMaze.lastFeastFatherVolume + 0.04,
+      `Feast Father breathing must grow louder with maze depth: ${JSON.stringify({ shallow: shallowAudio.hedgeMaze, deep: deepAudio.hedgeMaze })}`,
+    );
+    await captureStage(page, "maze-forward-hedge-movement-desktop.png");
+    await page.evaluate(() => window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(2.2));
 
     await page.evaluate(() => window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(28));
     const haunted = await page.evaluate(() => window.MrFeastFresh.getHedgeMazeKeyScareState());
@@ -212,7 +259,7 @@ async function run() {
     mazeAudio = await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
     assert((mazeAudio.cueCounts.hedgeMazeFeastFather || 0) >= 6, `each recurring hedge movement should carry two Feast Father voice fragments: ${JSON.stringify(mazeAudio.cueCounts)}`);
     assert(
-      mazeAudio.hedgeMaze.feastFatherPlayCount >= 6
+      mazeAudio.hedgeMaze.feastFatherPlayCount >= 8
         && mazeAudio.hedgeMaze.lastFeastFatherVolume >= 0.1
         && mazeAudio.hedgeMaze.lastFeastFatherLowpassHz >= 1600,
       `the decoded Feast Father fragments must be played with an audible maze mix: ${JSON.stringify(mazeAudio.hedgeMaze)}`,
@@ -257,7 +304,7 @@ async function run() {
 
     await context.close();
     assert(errors.length === 0, `unexpected browser errors: ${errors.join(" | ")}`);
-    console.log("Mr. Feast hedge-maze haunt acceptance passed: eased maze rain silence, visible blocked-entrance realization sting timing, unmistakable multi-pulse fixture flicker, audible two-beat Feast Father movement voice deeper in the maze, five-face recurring movement, persistent entrance seals, post-key Storm Run flashlight continuity, save/load restoration, and longer key release verified");
+    console.log("Mr. Feast hedge-maze haunt acceptance passed: eased maze rain silence, visible blocked-entrance realization sting timing, unmistakable multi-pulse fixture flicker, depth-ramped Feast Father breathing, five-face movement a few feet ahead, persistent entrance seals, post-key Storm Run flashlight continuity, save/load restoration, and longer key release verified");
   } finally {
     if (browser) await browser.close();
     if (server) server.kill("SIGTERM");

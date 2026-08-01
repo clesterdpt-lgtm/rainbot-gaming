@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260801-victory-feast-key-theft-1";
+  const MANSION_RUNTIME_VERSION = "20260801-hedge-maze-haunt-depth-pressure-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -3235,6 +3235,17 @@
       durationSeconds: 5.1,
       firstDelaySeconds: 3.6,
       intervalSeconds: Object.freeze([5.8, 6.6, 6.2]),
+      placement: Object.freeze({
+        aheadMinimumMeters: 1.35,
+        aheadTargetMeters: 2.4,
+        aheadMaximumMeters: 4.8,
+        aheadMinimumFacingDot: 0.24,
+        scanRadiusCells: 4,
+      }),
+      breathing: Object.freeze({
+        shallowVolume: 0.1,
+        deepVolume: 0.24,
+      }),
       phases: Object.freeze({
         stirEnd: 1.25,
         nearbyEnd: 4.05,
@@ -19073,6 +19084,8 @@
       this.lastAmbientEvents = [];
       this.ambientPulseCount = 0;
       this.ambientSpotCount = 0;
+      this.ambientAheadDistances = [];
+      this.ambientFacingDots = [];
       this.ambientNextIn = HEDGE_MAZE_HAUNT.ambient.firstDelaySeconds;
       this.flickerClock = 0;
       this.flickerCount = 0;
@@ -19159,6 +19172,7 @@
       this.visibleLeaves = 0;
       this.hideVisuals();
       this.portalDistanceByCell = this.buildPortalDistanceMap();
+      this.maximumMazeDepthCells = Math.max(0, ...this.portalDistanceByCell.values());
       this.entrancesSealed = false;
       this.entranceSeals = this.buildEntranceSeals();
       this.colliderCountAtBoot = physics?.colliderCount ?? null;
@@ -19339,6 +19353,12 @@
       };
     }
 
+    mazeDepthPressure(status = this.playerMazeStatus()) {
+      const startDepth = HEDGE_MAZE_HAUNT.ambientStartDepthCells;
+      const depthSpan = Math.max(1, this.maximumMazeDepthCells - startDepth);
+      return clamp((status.depthCells - startDepth) / depthSpan, 0, 1);
+    }
+
     phaseAt(elapsed) {
       if (this.sequence === "ambient") {
         const phases = HEDGE_MAZE_HAUNT.ambient.phases;
@@ -19467,41 +19487,60 @@
     nearbyWallFaces(position) {
       const playerCell = this.worldCell(position);
       if (!playerCell || !position) return [];
+      const placement = HEDGE_MAZE_HAUNT.ambient.placement;
+      const forward = new THREE.Vector3();
+      camera.getWorldDirection(forward);
+      forward.y = 0;
+      if (forward.lengthSq() < 0.0001) forward.set(1, 0, 0);
+      else forward.normalize();
       const candidates = [];
-      for (let radius = 1; radius <= 3; radius += 1) {
-        for (let row = playerCell.row - radius; row <= playerCell.row + radius; row += 1) {
-          for (let col = playerCell.col - radius; col <= playerCell.col + radius; col += 1) {
-            if (
-              row < 0
-              || row >= HEDGE_MAZE_LAYOUT.rows.length
-              || col < 0
-              || col >= HEDGE_MAZE_LAYOUT.rows[0].length
-              || HEDGE_MAZE_LAYOUT.rows[row][col] !== "#"
-            ) continue;
-            const wall = mazeCellCenter(row, col);
-            const dx = position.x - wall.x;
-            const dz = position.z - wall.z;
-            const useX = Math.abs(dx) >= Math.abs(dz);
-            const normalX = useX ? (Math.sign(dx) || 1) : 0;
-            const normalZ = useX ? 0 : (Math.sign(dz) || 1);
-            const surface = {
-              x: wall.x + normalX * (HEDGE_MAZE_LAYOUT.cellSize / 2 + 0.012),
-              z: wall.z + normalZ * (HEDGE_MAZE_LAYOUT.cellSize / 2 + 0.012),
-            };
-            candidates.push({
-              row,
-              col,
-              normalX,
-              normalZ,
-              surface,
-              distance: Math.hypot(position.x - surface.x, position.z - surface.z),
-            });
-          }
+      for (let row = playerCell.row - placement.scanRadiusCells; row <= playerCell.row + placement.scanRadiusCells; row += 1) {
+        for (let col = playerCell.col - placement.scanRadiusCells; col <= playerCell.col + placement.scanRadiusCells; col += 1) {
+          if (
+            row < 0
+            || row >= HEDGE_MAZE_LAYOUT.rows.length
+            || col < 0
+            || col >= HEDGE_MAZE_LAYOUT.rows[0].length
+            || HEDGE_MAZE_LAYOUT.rows[row][col] !== "#"
+          ) continue;
+          const wall = mazeCellCenter(row, col);
+          const dx = position.x - wall.x;
+          const dz = position.z - wall.z;
+          const useX = Math.abs(dx) >= Math.abs(dz);
+          const normalX = useX ? (Math.sign(dx) || 1) : 0;
+          const normalZ = useX ? 0 : (Math.sign(dz) || 1);
+          const surface = {
+            x: wall.x + normalX * (HEDGE_MAZE_LAYOUT.cellSize / 2 + 0.012),
+            z: wall.z + normalZ * (HEDGE_MAZE_LAYOUT.cellSize / 2 + 0.012),
+          };
+          const toSurfaceX = surface.x - position.x;
+          const toSurfaceZ = surface.z - position.z;
+          const distance = Math.max(0.001, Math.hypot(toSurfaceX, toSurfaceZ));
+          const aheadMeters = toSurfaceX * forward.x + toSurfaceZ * forward.z;
+          const facingDot = aheadMeters / distance;
+          if (
+            aheadMeters < placement.aheadMinimumMeters
+            || aheadMeters > placement.aheadMaximumMeters
+            || facingDot < placement.aheadMinimumFacingDot
+          ) continue;
+          const lateralMeters = Math.abs(toSurfaceX * forward.z - toSurfaceZ * forward.x);
+          candidates.push({
+            row,
+            col,
+            normalX,
+            normalZ,
+            surface,
+            distance,
+            aheadMeters,
+            facingDot,
+            placementScore: Math.abs(aheadMeters - placement.aheadTargetMeters) * 1.25
+              + lateralMeters * 0.72
+              + distance * 0.04,
+          });
         }
-        if (candidates.length >= HEDGE_MAZE_HAUNT.ambient.bulges.length) break;
       }
       return candidates
-        .sort((a, b) => a.distance - b.distance)
+        .sort((a, b) => a.placementScore - b.placementScore)
         .slice(0, HEDGE_MAZE_HAUNT.ambient.bulges.length);
     }
 
@@ -19523,6 +19562,8 @@
     configureAmbientBulges(position) {
       const faces = this.nearbyWallFaces(position);
       this.ambientSpotCount = faces.length;
+      this.ambientAheadDistances = faces.map((face) => face.aheadMeters);
+      this.ambientFacingDots = faces.map((face) => face.facingDot);
       for (let index = 0; index < this.bulges.length; index += 1) {
         const beat = this.bulges[index];
         const face = faces[index];
@@ -19591,7 +19632,11 @@
       this.audioEvents.push(event.id);
       if (event.cue === "feast-father") {
         const fragmentIndex = this.ambientPulseCount * 2 + (event.id.endsWith("near") ? 1 : 0);
-        audioSystem?.hedgeMazeFeastFather(this.eventPosition(event), fragmentIndex);
+        const mazeStatus = this.playerMazeStatus();
+        audioSystem?.hedgeMazeFeastFather(this.eventPosition(event), fragmentIndex, {
+          depthCells: mazeStatus.depthCells,
+          depthPressure: this.mazeDepthPressure(mazeStatus),
+        });
       } else {
         audioSystem?.hedgeMazeScare(event.cue, this.eventPosition(event));
       }
@@ -19792,6 +19837,8 @@
       this.lastAmbientEvents = [];
       this.ambientPulseCount = 0;
       this.ambientSpotCount = 0;
+      this.ambientAheadDistances = [];
+      this.ambientFacingDots = [];
       this.ambientNextIn = HEDGE_MAZE_HAUNT.ambient.firstDelaySeconds;
       this.flickerClock = 0;
       this.flickerCount = 0;
@@ -19935,6 +19982,17 @@
         })),
         ambientPulseCount: this.ambientPulseCount,
         ambientSpotCount: this.ambientSpotCount,
+        ambientAheadMinimumMeters: this.ambientAheadDistances.length
+          ? Number(Math.min(...this.ambientAheadDistances).toFixed(3))
+          : null,
+        ambientAheadMaximumMeters: this.ambientAheadDistances.length
+          ? Number(Math.max(...this.ambientAheadDistances).toFixed(3))
+          : null,
+        ambientFacingMinimumDot: this.ambientFacingDots.length
+          ? Number(Math.min(...this.ambientFacingDots).toFixed(3))
+          : null,
+        maximumMazeDepthCells: this.maximumMazeDepthCells,
+        mazeDepthPressure: Number(this.mazeDepthPressure(mazeStatus).toFixed(3)),
         ambientNextIn: Number(this.ambientNextIn.toFixed(3)),
         rootVisible: Boolean(this.root.visible),
         overlayCount: this.bulges.length,
@@ -41868,6 +41926,8 @@
         lastFeastFatherLowpassHz: 0,
         lastFeastFatherDurationSeconds: 0,
         lastFeastFatherRate: 1,
+        lastFeastFatherDepthCells: null,
+        lastFeastFatherDepthPressure: 0,
       };
       this.banquetBreathNoise = null;
       this.banquetBreathSources = new Set();
@@ -42417,7 +42477,7 @@
       });
     }
 
-    hedgeMazeFeastFather(position, pulseIndex = 0) {
+    hedgeMazeFeastFather(position, pulseIndex = 0, depthOptions = {}) {
       this.markCue("hedgeMazeFeastFather");
       if (!this.ctx || !this.master || !state.audioEnabled) return false;
       const listener = new THREE.Vector3();
@@ -42436,8 +42496,16 @@
       const pan = clamp((offset.x * right.x + offset.z * right.z) / horizontal, -0.72, 0.72);
       const fragments = [0.6, 5.4, 10.8, 15.2];
       const fragmentIndex = Math.abs(Math.floor(Number(pulseIndex) || 0)) % fragments.length;
+      const configuredPressure = Number(depthOptions?.depthPressure);
+      const depthPressure = clamp(Number.isFinite(configuredPressure) ? configuredPressure : 0, 0, 1);
+      const configuredDepthCells = Number(depthOptions?.depthCells);
+      const depthCells = Number.isFinite(configuredDepthCells) ? Math.round(configuredDepthCells) : null;
       const settings = {
-        volume: 0.12,
+        volume: lerp(
+          HEDGE_MAZE_HAUNT.ambient.breathing.shallowVolume,
+          HEDGE_MAZE_HAUNT.ambient.breathing.deepVolume,
+          depthPressure,
+        ),
         rate: 0.88,
         rateVariance: 0.012,
         highpass: 72,
@@ -42453,6 +42521,8 @@
       this.hedgeMazeAudio.lastFeastFatherLowpassHz = settings.lowpass;
       this.hedgeMazeAudio.lastFeastFatherDurationSeconds = settings.duration;
       this.hedgeMazeAudio.lastFeastFatherRate = settings.rate;
+      this.hedgeMazeAudio.lastFeastFatherDepthCells = depthCells;
+      this.hedgeMazeAudio.lastFeastFatherDepthPressure = Number(depthPressure.toFixed(3));
       if (played) this.hedgeMazeAudio.feastFatherPlayCount += 1;
       return played;
     }
@@ -49017,6 +49087,21 @@
       flashlightSystem.restoreFromInventory();
       flashlightSystem.setOn(Boolean(on), { force: true, silent: true });
       return hedgeMazeKeyScareSystem?.getDiagnostics() || null;
+    };
+    window.MrFeastFresh.triggerHedgeMazeAmbientForQA = () => {
+      if (!state.qa || !hedgeMazeKeyScareSystem) return { triggered: false, reason: "qa-only" };
+      if (hedgeMazeKeyScareSystem.active) hedgeMazeKeyScareSystem.finishSequence("qa-retrigger");
+      const status = hedgeMazeKeyScareSystem.playerMazeStatus();
+      const triggered = Boolean(
+        status.inMaze
+        && hedgeMazeKeyScareSystem.questReadyForMaze()
+        && hedgeMazeKeyScareSystem.beginAmbient(status.position)
+      );
+      return {
+        triggered,
+        reason: triggered ? "qa-ambient" : "not-ready",
+        ...hedgeMazeKeyScareSystem.getDiagnostics(),
+      };
     };
     window.MrFeastFresh.collectHedgeMazeKeyForQA = () => {
       if (!state.qa || !contestant13Quest || !hedgeMazeKeyScareSystem) return null;

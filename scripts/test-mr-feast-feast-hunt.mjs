@@ -167,14 +167,24 @@ async function assertSourceContract() {
   assert(/briefingHostMark/.test(runtime) && /stageHostForBriefing/.test(runtime), "Feast Hunt must own a face-to-face host pose throughout the Game 3 explanation");
   assert(/collectFeastHuntItemForQA/.test(runtime) && /placePlayerNearFeastHuntItemForQA/.test(runtime), "Feast Hunt item QA controls are missing");
   assert(/placePlayerAtFeastHuntReturnForQA/.test(runtime), "Feast Hunt needs a real foyer return QA control");
-  assert(/startFeastHuntRace/.test(runtime) && /updateFeastHuntEntry/.test(runtime), "Juniper needs an authored active Feast Hunt route");
+  assert(
+    /startFeastHuntRace/.test(runtime)
+      && /buildRandomFeastHuntRoute/.test(runtime)
+      && /findResponsePath/.test(runtime)
+      && /roamStopsPerFind/.test(runtime),
+    "Juniper needs a randomized door-aware whole-house Feast Hunt route",
+  );
   assert(/rivalPendingItemId/.test(runtime) && /searchPauseSeconds:\s*(?:[3-9]\d|[1-9]\d{2,})/.test(runtime), "Juniper needs a substantial pre-find search delay");
   assert(/returnedIds:\s*\[\]/.test(runtime) && /carriedItemId:\s*null/.test(runtime), "Feast Hunt must track individual foyer hand-ins and one carried item");
   assert(
     /updateStatueCreep\(/.test(runtime)
       && /stageFeastHuntStatueLookForQA/.test(runtime)
+      && /stageFeastHuntStatueStaircasePressureForQA/.test(runtime)
+      && /movingId:\s*"foyer-listening-host"/.test(runtime)
+      && /stepGrowthMeters/.test(runtime)
+      && /staircaseExclusion/.test(runtime)
       && /colliderBody/.test(runtime),
-    "the foyer statues need repeatable turn-away movement with aligned physical colliders",
+    "the male foyer statue needs escalating turn-away movement, aligned collision, and a staircase exclusion",
   );
   assert(/activateBlackout/.test(runtime) && /restoreBlackout/.test(runtime), "Feast Hunt needs competition-owned full-house blackout lifecycle");
   assert(/setFeastHuntGateForQA/.test(runtime) && /triggerFeastHuntPursuitForQA/.test(runtime), "Feast Hunt gate/pursuit QA controls are missing");
@@ -286,8 +296,13 @@ async function run() {
       hunt.rival.active
         && hunt.rival.id === "juniper-cross"
         && hunt.rival.collectedCount === 0
-        && hunt.rival.challengeMode === "feast-hunt",
-      `Juniper must begin an active competing route instead of returning to the Reading Room: ${JSON.stringify(hunt.rival)}`,
+        && hunt.rival.challengeMode === "feast-hunt"
+        && hunt.rival.routeMode === "random-house-roam"
+        && hunt.rival.roamDestinationIds.length >= 6
+        && hunt.rival.searchDestinationIds.length === 3
+        && new Set(hunt.rival.roamLevels).size === 3
+        && !hunt.rival.targetsPlayerGoldPositions,
+      `Juniper must begin a randomized whole-house route that does not target the player's gold: ${JSON.stringify(hunt.rival)}`,
     );
     const juniperStart = hunt.rival.position;
     await playPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(4));
@@ -298,24 +313,28 @@ async function run() {
       `Juniper must visibly leave her foyer mark when the hunt starts: ${JSON.stringify({ start: juniperStart, rival: hunt.rival })}`,
     );
 
-    // --- Foyer statues creep once per genuine look-away ----------------------
+    // --- Only the male foyer statue escalates once per genuine look-away -----
     await playPage.evaluate(() => window.MrFeastFresh.stageFeastHuntStatueLookForQA(true));
     await playPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(0.1));
     const statuesBeforeTurn = (await huntState(playPage)).statues;
     await playPage.evaluate(() => window.MrFeastFresh.stageFeastHuntStatueLookForQA(false));
     await playPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(0.1));
     const statuesAfterTurn = (await huntState(playPage)).statues;
+    const maleAfterTurn = statuesAfterTurn.entries.find((entry) => entry.id === "foyer-listening-host");
+    const femaleAfterTurn = statuesAfterTurn.entries.find((entry) => entry.id === "foyer-veiled-waltz");
     assert(
       statuesAfterTurn.turnAwayCount === statuesBeforeTurn.turnAwayCount + 1
         && statuesAfterTurn.moveEvents === statuesBeforeTurn.moveEvents + 1
-        && statuesAfterTurn.entries.every((entry) => (
-          entry.lastStepDistance >= 0.2
-          && entry.lastStepDistance <= 0.55
-          && Math.abs(entry.position.y) <= 0.001
-          && entry.firstFloor
-          && entry.colliderAligned
-        )),
-      `turning away should creep both statues one small physical step on the first floor: ${JSON.stringify({ before: statuesBeforeTurn, after: statuesAfterTurn })}`,
+        && statuesAfterTurn.movingId === "foyer-listening-host"
+        && maleAfterTurn.lastStepDistance >= 0.35
+        && maleAfterTurn.lastStepDistance <= 0.65
+        && maleAfterTurn.firstFloor
+        && maleAfterTurn.colliderAligned
+        && maleAfterTurn.staircaseClear
+        && femaleAfterTurn.positionUnchanged
+        && femaleAfterTurn.lastStepDistance === 0
+        && femaleAfterTurn.colliderAligned,
+      `turning away should move only the male statue in one safe physical step: ${JSON.stringify({ before: statuesBeforeTurn, after: statuesAfterTurn })}`,
     );
     await playPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(0.5));
     const statuesWhileBackTurned = (await huntState(playPage)).statues;
@@ -328,14 +347,38 @@ async function run() {
     await playPage.evaluate(() => window.MrFeastFresh.stageFeastHuntStatueLookForQA(false));
     await playPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(0.1));
     const statuesAfterSecondTurn = (await huntState(playPage)).statues;
+    const maleAfterSecondTurn = statuesAfterSecondTurn.entries.find((entry) => entry.id === "foyer-listening-host");
+    const femaleAfterSecondTurn = statuesAfterSecondTurn.entries.find((entry) => entry.id === "foyer-veiled-waltz");
     assert(
       statuesAfterSecondTurn.turnAwayCount === statuesAfterTurn.turnAwayCount + 1
         && statuesAfterSecondTurn.moveEvents === statuesAfterTurn.moveEvents + 1
-        && statuesAfterSecondTurn.entries.every((entry) => entry.firstFloor && entry.colliderAligned),
-      `a second look-then-turn-away should produce exactly one more first-floor creep: ${JSON.stringify(statuesAfterSecondTurn)}`,
+        && maleAfterSecondTurn.lastRequestedStep > maleAfterTurn.lastRequestedStep
+        && maleAfterSecondTurn.lastStepDistance > maleAfterTurn.lastStepDistance
+        && maleAfterSecondTurn.firstFloor
+        && maleAfterSecondTurn.colliderAligned
+        && maleAfterSecondTurn.staircaseClear
+        && femaleAfterSecondTurn.positionUnchanged
+        && femaleAfterSecondTurn.lastStepDistance === 0,
+      `each new head turn should make only the male statue follow farther: ${JSON.stringify(statuesAfterSecondTurn)}`,
+    );
+    const staircasePressure = await playPage.evaluate(() => (
+      window.MrFeastFresh.stageFeastHuntStatueStaircasePressureForQA(12)
+    ));
+    const pressuredMale = staircasePressure.entries.find((entry) => entry.id === "foyer-listening-host");
+    const pressuredFemale = staircasePressure.entries.find((entry) => entry.id === "foyer-veiled-waltz");
+    assert(
+      staircasePressure.staircaseIntrusions === 0
+        && staircasePressure.minimumStaircaseClearance >= 0
+        && pressuredMale.staircaseClear
+        && pressuredMale.firstFloor
+        && pressuredMale.colliderAligned
+        && pressuredFemale.positionUnchanged
+        && pressuredFemale.lastStepDistance === 0,
+      `repeated escalating follow steps must route around rather than clip into the grand staircase: ${JSON.stringify(staircasePressure)}`,
     );
     await playPage.evaluate(() => window.MrFeastFresh.stageFeastHuntStatueLookForQA(true));
     await playPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(0.1));
+    const statueMoveEventsBeforeGold = (await huntState(playPage)).statues.moveEvents;
     await playPage.screenshot({ path: path.join(artifactDir, "feast-hunt-statues-turn-away.png") });
 
     const bellStaging = await playPage.evaluate(() => window.MrFeastFresh.placePlayerNearFeastHuntItemForQA("golden-bell"));
@@ -354,7 +397,7 @@ async function run() {
     const duplicateBell = await playPage.evaluate(() => window.MrFeastFresh.collectFeastHuntItemForQA("golden-bell"));
     assert(!duplicateBell.accepted && duplicateBell.reason === "already-collected", `duplicate pickup must be rejected: ${JSON.stringify(duplicateBell)}`);
     assert(
-      hunt.statues.moveEvents === statuesAfterSecondTurn.moveEvents,
+      hunt.statues.moveEvents === statueMoveEventsBeforeGold,
       `collecting gold must not replace look-away as the statue movement trigger: ${JSON.stringify(hunt.statues)}`,
     );
     assert(
@@ -443,7 +486,7 @@ async function run() {
     );
     await catchPage.close();
 
-    // --- Juniper searches deliberately, then can still return and win --------
+    // --- Juniper roams randomly, then can still return and win ----------------
     const rivalPage = await bootPage(browser, { width: 1280, height: 820 }, errors);
     await beginHunt(rivalPage);
     await rivalPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(20));
@@ -452,26 +495,28 @@ async function run() {
       rivalHunt.phase === "hunting"
         && rivalHunt.rival.collectedCount === 0
         && rivalHunt.rival.active
-        && rivalHunt.rival.distanceTravelled > 20,
-      `Juniper should still be traveling toward the first hiding place at 20 seconds: ${JSON.stringify(rivalHunt.rival)}`,
+        && rivalHunt.rival.distanceTravelled > 10
+        && rivalHunt.rival.routeMode === "random-house-roam"
+        && rivalHunt.rival.roamDestinationIds.length >= 6
+        && !rivalHunt.rival.targetsPlayerGoldPositions,
+      `Juniper should be roaming away from her foyer mark without targeting a gold prop: ${JSON.stringify(rivalHunt.rival)}`,
     );
-    await rivalPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(10));
-    rivalHunt = await huntState(rivalPage);
+    rivalHunt = await rivalPage.evaluate(() => {
+      for (let index = 0; index < 480; index += 1) {
+        window.MrFeastFresh.advanceFeastHuntForQA(0.5);
+        const state = window.MrFeastFresh.getFeastHuntState();
+        if (state?.rival?.pendingItemId) return state;
+      }
+      return window.MrFeastFresh.getFeastHuntState();
+    });
     assert(
       rivalHunt.rival.collectedCount === 0
         && rivalHunt.rival.pendingItemId === "golden-bell"
-        && rivalHunt.rival.pauseRemaining > 0,
-      `Juniper should spend real time searching after reaching the first object: ${JSON.stringify(rivalHunt.rival)}`,
+        && rivalHunt.rival.pauseRemaining > 0
+        && rivalHunt.rival.roamRooms.includes(rivalHunt.rival.room),
+      `Juniper should search only after reaching a random roaming destination: ${JSON.stringify(rivalHunt.rival)}`,
     );
-    await rivalPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(210));
-    diagnostics = await rivalPage.evaluate(() => JSON.parse(window.render_game_to_text()));
-    assert(
-      !diagnostics.gameOver
-        && diagnostics.feastHunt.phase === "hunting"
-        && !diagnostics.feastHunt.rival.returned,
-      `Juniper should take substantially longer than the former 240-second finish: ${JSON.stringify(diagnostics.feastHunt.rival)}`,
-    );
-    await rivalPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntForQA(180));
+    await rivalPage.evaluate(() => window.MrFeastFresh.advanceFeastHuntRivalForQA(900));
     diagnostics = await rivalPage.evaluate(() => JSON.parse(window.render_game_to_text()));
     assert(
       diagnostics.gameOver?.reason === "feast-hunt-juniper-won"
@@ -479,8 +524,11 @@ async function run() {
         && diagnostics.feastHunt.outcome === "juniper"
         && diagnostics.feastHunt.rival.collectedCount === 3
         && diagnostics.feastHunt.rival.returned
+        && ["MAIN LEVEL", "SECOND FLOOR", "BASEMENT"].every((level) => (
+          diagnostics.feastHunt.rival.visitedLevels.includes(level)
+        ))
         && !diagnostics.feastHunt.blackout.active,
-      `Juniper must be able to finish her own route and beat the player back to the foyer: ${JSON.stringify({ gameOver: diagnostics.gameOver, hunt: diagnostics.feastHunt })}`,
+      `Juniper must roam all three house levels before she can return and win: ${JSON.stringify({ gameOver: diagnostics.gameOver, hunt: diagnostics.feastHunt })}`,
     );
     await rivalPage.close();
 

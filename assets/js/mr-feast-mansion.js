@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260731-hedge-maze-haunt-audio-2";
+  const MANSION_RUNTIME_VERSION = "20260731-feast-hunt-random-roam-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -3594,86 +3594,16 @@
       speed: 1.1,
       arrivalRadius: 0.1,
       searchPauseSeconds: 30,
-      route: Object.freeze([
-        "main-stair-center",
-        "main-stair-east",
-        "main-stair-south",
-        "main-ballroom-west",
-        "main-dining-east",
-        Object.freeze({ x: -9.7, y: FLOOR.MAIN, z: -8.4, room: "DINING ROOM", itemId: "golden-bell" }),
-        "main-dining-east",
-        "main-ballroom-west",
-        "main-stair-south",
-        "main-stair-east",
-        "main-stair-center",
-        "grand-lower-bottom",
-        "grand-lower-25",
-        "grand-lower-50",
-        "grand-lower-75",
-        "grand-lower-top",
-        "grand-mid-depth",
-        "grand-mid-east",
-        "grand-east-foot",
-        "grand-east-25",
-        "grand-east-50",
-        "grand-east-75",
-        "grand-east-top",
-        "upper-east-top-landing",
-        "upper-east-balcony",
-        "upper-landing-east",
-        "upper-reading-door",
-        "upper-reading-entry",
-        Object.freeze({ x: 12.5, y: FLOOR.UPPER, z: 2.2, room: "READING ROOM", itemId: "golden-goblet" }),
-        "upper-reading-entry",
-        "upper-reading-door-out",
-        "upper-landing-east",
-        "upper-east-balcony",
-        "upper-east-top-landing",
-        "grand-east-top",
-        "grand-east-75",
-        "grand-east-50",
-        "grand-east-25",
-        "grand-east-foot",
-        "grand-mid-east",
-        "grand-mid-center-return",
-        "grand-lower-top-return",
-        "grand-lower-return-75",
-        "grand-lower-return-50",
-        "grand-lower-return-25",
-        "grand-lower-bottom-return",
-        "main-service-return-east",
-        "main-service-return-south",
-        "main-service-kitchen-entry",
-        "main-service-kitchen-west",
-        "main-service-kitchen-east",
-        "main-service-door-approach",
-        "main-service-door",
-        "service-main-top",
-        "service-down-25",
-        "service-down-50",
-        "service-down-75",
-        "service-basement-bottom",
-        "basement-archive-stair-exit",
-        "basement-archive-east-cross",
-        Object.freeze({ x: 6.88, y: FLOOR.BASEMENT, z: 9.4, room: "ARCHIVE", itemId: "golden-carving-knife" }),
-        "basement-archive-east-return",
-        "basement-service-approach",
-        "service-basement-bottom-return",
-        "service-up-25",
-        "service-up-50",
-        "service-up-75",
-        "service-main-top-return",
-        "main-service-door-return",
-        "main-service-exit",
-        "main-kitchen-service-return",
-        "main-kitchen-east-return",
-        "main-kitchen-west-return",
-        "main-ballroom-east-return",
-        "main-ballroom-north-return",
-        "main-stair-east",
-        "main-stair-north",
-        Object.freeze({ x: 0, y: FLOOR.MAIN, z: 7.25, room: "FRONT FOYER", returned: true }),
+      roamStopsPerFind: 2,
+      roamLevels: Object.freeze([
+        MR_FEAST_LEVEL.MAIN,
+        MR_FEAST_LEVEL.UPPER,
+        MR_FEAST_LEVEL.BASEMENT,
       ]),
+      roamDestinationKinds: Object.freeze(["room"]),
+      roamExcludedZones: Object.freeze(["FRONT FOYER", "GRAND STAIR HALL", "GRAND STAIR"]),
+      minimumDestinationSeparationMeters: 6,
+      returnNodeId: "main-foyer-center",
     }),
     items: Object.freeze([
       Object.freeze({
@@ -3783,20 +3713,37 @@
     ]),
     statueCreep: Object.freeze({
       ids: Object.freeze(["foyer-listening-host", "foyer-veiled-waltz"]),
-      stepMeters: 0.38,
+      movingId: "foyer-listening-host",
+      baseStepMeters: 0.46,
+      stepGrowthMeters: 0.16,
+      maximumStepMeters: 1.26,
       bodyClearanceMeters: 0.045,
       observationMinimumDot: 0.12,
       observationMaximumDistanceMeters: 24,
       faceTurnRadians: 0.22,
       firstFloorToleranceMeters: 0.01,
+      movementAttemptAngles: Object.freeze([
+        0,
+        Math.PI / 8,
+        -Math.PI / 8,
+        Math.PI / 4,
+        -Math.PI / 4,
+        Math.PI / 2,
+        -Math.PI / 2,
+      ]),
+      staircaseExclusion: Object.freeze({
+        minimumX: -3.55,
+        maximumX: 3.55,
+        minimumZ: -2.35,
+        maximumZ: 4.35,
+      }),
+      staircasePressureMark: Object.freeze({ x: -4.1, y: FLOOR.MAIN, z: 4.0 }),
+      staircasePressurePlayerMark: Object.freeze({ x: 4.2, y: FLOOR.MAIN, z: -6.0 }),
       targetNodeIds: Object.freeze([
         "main-foyer-west",
         "main-foyer-northwest",
         "main-foyer-center",
         "main-foyer-northeast",
-        "main-stair-center",
-        "main-stair-east",
-        "main-stair-south",
         "main-ballroom-south",
         "main-ballroom-west",
         "main-dining-east",
@@ -4514,6 +4461,9 @@
       statueTurnAwayCount: 0,
       statueMoveEvents: 0,
       statueLastStepById: {},
+      statueLastRequestedStepById: {},
+      statueStaircaseIntrusions: 0,
+      statueMinimumStaircaseClearance: null,
       directSightDwell: 0,
       blackoutActive: false,
       rivalActive: false,
@@ -4524,6 +4474,8 @@
       rivalDistanceTravelled: 0,
       rivalReturned: false,
       rivalRoom: "FRONT FOYER",
+      rivalVisitedRooms: [],
+      rivalVisitedLevels: [],
       staged: false,
       outcome: null,
       finalePending: false,
@@ -13989,13 +13941,142 @@
       return true;
     }
 
-    feastHuntRoutePoint(index) {
-      const token = FEAST_HUNT.rival.route[index];
-      if (!token) return null;
-      if (typeof token === "string") {
-        return MR_FEAST_PATROL_ROUTE.find((point) => point.id === token) || null;
+    shuffleFeastHuntValues(values) {
+      const shuffled = [...values];
+      for (let index = shuffled.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
       }
-      return token;
+      return shuffled;
+    }
+
+    nearestFeastHuntRouteNode(position) {
+      return MR_FEAST_PATROL_ROUTE.reduce((best, node) => {
+        const distance = Math.hypot(
+          node.x - position.x,
+          node.y - position.y,
+          node.z - position.z,
+        );
+        return !best || distance < best.distance ? { node, distance } : best;
+      }, null)?.node || null;
+    }
+
+    feastHuntRoamCandidates(level, currentNode, usedDestinationIds, usedZones) {
+      const kinds = new Set(FEAST_HUNT.rival.roamDestinationKinds);
+      const excludedZones = new Set(FEAST_HUNT.rival.roamExcludedZones);
+      const eligible = MR_FEAST_PATROL_ROUTE.filter((node) => (
+        node.level === level
+        && kinds.has(node.segmentKind)
+        && !excludedZones.has(node.zone)
+        && !usedDestinationIds.has(node.id)
+        && node.id !== currentNode?.id
+        && Math.hypot(
+          node.x - (currentNode?.x || 0),
+          node.y - (currentNode?.y || 0),
+          node.z - (currentNode?.z || 0),
+        ) >= FEAST_HUNT.rival.minimumDestinationSeparationMeters
+      ));
+      const freshZones = eligible.filter((node) => !usedZones.has(node.zone));
+      return this.shuffleFeastHuntValues(freshZones.length ? freshZones : eligible);
+    }
+
+    buildRandomFeastHuntRoute(entry) {
+      if (!mrFeastNpc?.responseGraph || !entry?.root) return null;
+      const itemIds = FEAST_HUNT.items.map((item) => item.id);
+      const stopCount = itemIds.length * FEAST_HUNT.rival.roamStopsPerFind;
+      const levelPlan = [];
+      while (levelPlan.length < stopCount) {
+        levelPlan.push(...this.shuffleFeastHuntValues(FEAST_HUNT.rival.roamLevels));
+      }
+      levelPlan.length = stopCount;
+
+      const route = [];
+      const roamDestinationIds = [];
+      const roamRooms = [];
+      const roamLevels = [];
+      const searchDestinationIds = [];
+      const usedDestinationIds = new Set();
+      const usedZones = new Set();
+      let successfulStops = 0;
+      let currentNode = this.nearestFeastHuntRouteNode(entry.root.position);
+      if (!currentNode) return null;
+
+      const appendPath = (path) => {
+        for (const step of path) {
+          route.push({
+            ...step.node,
+            room: step.node.zone,
+            door: step.door || step.node.door || null,
+          });
+        }
+      };
+
+      for (let stopIndex = 0; stopIndex < stopCount; stopIndex += 1) {
+        const level = levelPlan[stopIndex];
+        const candidates = this.feastHuntRoamCandidates(
+          level,
+          currentNode,
+          usedDestinationIds,
+          usedZones,
+        );
+        let destination = null;
+        let path = [];
+        while (candidates.length && !path.length) {
+          const candidate = candidates.shift();
+          const candidatePath = mrFeastNpc.findResponsePath(currentNode.id, candidate.id);
+          if (!candidatePath.length) continue;
+          destination = candidate;
+          path = candidatePath;
+        }
+        if (!destination || !path.length) continue;
+        appendPath(path);
+        currentNode = destination;
+        usedDestinationIds.add(destination.id);
+        usedZones.add(destination.zone);
+        roamDestinationIds.push(destination.id);
+        roamRooms.push(destination.zone);
+        roamLevels.push(destination.level);
+        successfulStops += 1;
+        const destinationStep = route[route.length - 1];
+        destinationStep.roamDestination = true;
+        destinationStep.roamDestinationId = destination.id;
+        if (successfulStops % FEAST_HUNT.rival.roamStopsPerFind === 0) {
+          const itemId = itemIds[Math.floor(successfulStops / FEAST_HUNT.rival.roamStopsPerFind) - 1];
+          destinationStep.itemId = itemId;
+          searchDestinationIds.push(destination.id);
+        }
+      }
+
+      const returnPath = mrFeastNpc.findResponsePath(currentNode.id, FEAST_HUNT.rival.returnNodeId);
+      appendPath(returnPath);
+      route.push({
+        ...FEAST_HUNT.returnMark,
+        id: "feast-hunt-juniper-return",
+        level: MR_FEAST_LEVEL.MAIN,
+        room: "FRONT FOYER",
+        returned: true,
+      });
+      const searchSteps = route.filter((point) => point.itemId);
+      const targetsPlayerGoldPositions = searchSteps.some((point) => (
+        FEAST_HUNT.items.some((item) => Math.hypot(
+          point.x - item.position.x,
+          point.y - item.position.y,
+          point.z - item.position.z,
+        ) < 0.75)
+      ));
+      return {
+        route,
+        routeMode: "random-house-roam",
+        roamDestinationIds,
+        roamRooms,
+        roamLevels,
+        searchDestinationIds,
+        targetsPlayerGoldPositions,
+      };
+    }
+
+    feastHuntRoutePoint(entry, index) {
+      return entry?.feastHuntRace?.route?.[index] || null;
     }
 
     startFeastHuntRace() {
@@ -14011,7 +14092,19 @@
       show.rivalDistanceTravelled = 0;
       show.rivalReturned = false;
       show.rivalRoom = "FRONT FOYER";
-      entry.feastHuntRace = { active: true };
+      show.rivalVisitedRooms = ["FRONT FOYER"];
+      show.rivalVisitedLevels = [MR_FEAST_LEVEL.MAIN];
+      const randomRoute = this.buildRandomFeastHuntRoute(entry);
+      if (
+        !randomRoute
+        || randomRoute.roamDestinationIds.length !== FEAST_HUNT.items.length * FEAST_HUNT.rival.roamStopsPerFind
+        || randomRoute.searchDestinationIds.length !== FEAST_HUNT.items.length
+        || FEAST_HUNT.rival.roamLevels.some((level) => !randomRoute.roamLevels.includes(level))
+      ) {
+        show.rivalActive = false;
+        return false;
+      }
+      entry.feastHuntRace = { active: true, ...randomRoute };
       entry.activity = CONTESTANT_ACTIVITY.RUNNING;
       this.setColliderEnabled(entry, false);
       if (entry.interactionRegistered) {
@@ -14053,7 +14146,7 @@
         return;
       }
 
-      let target = this.feastHuntRoutePoint(show.rivalRouteIndex);
+      let target = this.feastHuntRoutePoint(entry, show.rivalRouteIndex);
       while (target) {
         const distance = Math.hypot(
           target.x - entry.root.position.x,
@@ -14062,7 +14155,13 @@
         );
         if (distance > FEAST_HUNT.rival.arrivalRadius) break;
         show.rivalRouteIndex += 1;
-        if (target.room) show.rivalRoom = target.room;
+        if (target.room) {
+          show.rivalRoom = target.room;
+          if (!show.rivalVisitedRooms.includes(target.room)) show.rivalVisitedRooms.push(target.room);
+        }
+        if (target.level && !show.rivalVisitedLevels.includes(target.level)) {
+          show.rivalVisitedLevels.push(target.level);
+        }
         if (target.itemId && !show.rivalCollectedIds.includes(target.itemId)) {
           show.rivalPendingItemId = target.itemId;
           show.rivalPauseRemaining = FEAST_HUNT.rival.searchPauseSeconds;
@@ -14081,7 +14180,7 @@
           feastHuntSystem?.handleRivalWin();
           return;
         }
-        target = this.feastHuntRoutePoint(show.rivalRouteIndex);
+        target = this.feastHuntRoutePoint(entry, show.rivalRouteIndex);
       }
       if (!target) {
         show.rivalActive = false;
@@ -25859,6 +25958,10 @@
       this.show.rivalDistanceTravelled = 0;
       this.show.rivalReturned = false;
       this.show.rivalRoom = "FRONT FOYER";
+      this.show.rivalVisitedRooms = [];
+      this.show.rivalVisitedLevels = [];
+      const entry = mansionContestants?.entryById(FEAST_HUNT.rival.id);
+      if (entry) entry.feastHuntRace = null;
     }
 
     interiorCircuits() {
@@ -26011,10 +26114,13 @@
       }
     }
 
-    feastHuntStatueEntries() {
+    feastHuntStatueEntries({ movingOnly = false } = {}) {
       return FEAST_HUNT.statueCreep.ids
         .map((id) => estateStatueScene.statues.find((statue) => statue.id === id))
-        .filter((entry) => entry?.root);
+        .filter((entry) => (
+          entry?.root
+          && (!movingOnly || entry.id === FEAST_HUNT.statueCreep.movingId)
+        ));
     }
 
     syncStatueCollider(entry) {
@@ -26056,12 +26162,18 @@
       this.show.statueTurnAwayCount = 0;
       this.show.statueMoveEvents = 0;
       this.show.statueLastStepById = {};
+      this.show.statueLastRequestedStepById = {};
+      this.show.statueStaircaseIntrusions = 0;
+      const movingEntry = this.feastHuntStatueEntries({ movingOnly: true })[0] || null;
+      this.show.statueMinimumStaircaseClearance = movingEntry
+        ? this.statueStaircaseClearance(movingEntry.root.position, this.statueRadius(movingEntry))
+        : null;
     }
 
     statuesObservedByPlayer() {
       if (!camera) return false;
       camera.getWorldDirection(this.statueViewForward).normalize();
-      for (const entry of this.feastHuntStatueEntries()) {
+      for (const entry of this.feastHuntStatueEntries({ movingOnly: true })) {
         this.statueViewTarget.set(
           entry.root.position.x,
           FLOOR.MAIN + entry.placement.collider.height * 0.58,
@@ -26098,24 +26210,75 @@
         }, null)?.node || null;
     }
 
-    creepStatue(entry, target) {
+    statueRadius(entry) {
+      return Math.max(
+        entry?.placement?.collider?.width || 0,
+        entry?.placement?.collider?.depth || 0,
+      ) / 2 + FEAST_HUNT.statueCreep.bodyClearanceMeters;
+    }
+
+    statueStaircaseClearance(position, radius = 0) {
+      const exclusion = FEAST_HUNT.statueCreep.staircaseExclusion;
+      const nearestX = clamp(position.x, exclusion.minimumX, exclusion.maximumX);
+      const nearestZ = clamp(position.z, exclusion.minimumZ, exclusion.maximumZ);
+      return Math.hypot(position.x - nearestX, position.z - nearestZ) - radius;
+    }
+
+    statueMovementAvoidsStaircase(start, movement, radius) {
+      const distance = Math.hypot(movement.x, movement.z);
+      const samples = Math.max(1, Math.ceil(distance / 0.05));
+      for (let sample = 1; sample <= samples; sample += 1) {
+        const amount = sample / samples;
+        const clearance = this.statueStaircaseClearance({
+          x: start.x + movement.x * amount,
+          z: start.z + movement.z * amount,
+        }, radius);
+        if (clearance < -0.0001) return false;
+      }
+      return true;
+    }
+
+    statueStepMeters() {
+      return Math.min(
+        FEAST_HUNT.statueCreep.maximumStepMeters,
+        FEAST_HUNT.statueCreep.baseStepMeters
+          + this.show.statueTurnAwayCount * FEAST_HUNT.statueCreep.stepGrowthMeters,
+      );
+    }
+
+    creepStatue(entry, target, requestedStepMeters = this.statueStepMeters()) {
       if (!entry?.root || !target || !physics) return 0;
       const dx = target.x - entry.root.position.x;
       const dz = target.z - entry.root.position.z;
       const distance = Math.hypot(dx, dz);
       if (distance <= 0.001) return 0;
-      const step = Math.min(FEAST_HUNT.statueCreep.stepMeters, distance);
-      const radius = Math.max(
-        entry.placement.collider.width,
-        entry.placement.collider.depth,
-      ) / 2 + FEAST_HUNT.statueCreep.bodyClearanceMeters;
-      const movement = physics.resolveCharacterMovement(
-        entry.root.position,
-        { x: dx / distance * step, y: 0, z: dz / distance * step },
-        radius,
-        entry.placement.collider.height,
-        entry.colliderFixedBox,
-      );
+      const step = Math.min(requestedStepMeters, distance);
+      const radius = this.statueRadius(entry);
+      let movement = { x: 0, y: 0, z: 0, blocked: true };
+      for (const angle of FEAST_HUNT.statueCreep.movementAttemptAngles) {
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        const requestX = dx / distance * step;
+        const requestZ = dz / distance * step;
+        const candidate = physics.resolveCharacterMovement(
+          entry.root.position,
+          {
+            x: requestX * cos - requestZ * sin,
+            y: 0,
+            z: requestX * sin + requestZ * cos,
+          },
+          radius,
+          entry.placement.collider.height,
+          entry.colliderFixedBox,
+        );
+        if (
+          Math.hypot(candidate.x, candidate.z) > 0.001
+          && this.statueMovementAvoidsStaircase(entry.root.position, candidate, radius)
+        ) {
+          movement = candidate;
+          break;
+        }
+      }
       const movedDistance = Math.hypot(movement.x, movement.z);
       entry.root.position.x += movement.x;
       entry.root.position.y = FLOOR.MAIN;
@@ -26137,14 +26300,21 @@
       entry.root.updateMatrixWorld(true);
       this.syncStatueCollider(entry);
       this.show.statueLastStepById[entry.id] = movedDistance;
+      this.show.statueLastRequestedStepById[entry.id] = step;
+      const staircaseClearance = this.statueStaircaseClearance(entry.root.position, radius);
+      if (staircaseClearance < -0.0001) this.show.statueStaircaseIntrusions += 1;
+      this.show.statueMinimumStaircaseClearance = this.show.statueMinimumStaircaseClearance == null
+        ? staircaseClearance
+        : Math.min(this.show.statueMinimumStaircaseClearance, staircaseClearance);
       return movedDistance;
     }
 
     moveStatuesForTurnAway() {
       const target = this.statueCreepTarget();
       if (!target) return false;
-      const entries = this.feastHuntStatueEntries();
-      const moved = entries.map((entry) => this.creepStatue(entry, target));
+      const entries = this.feastHuntStatueEntries({ movingOnly: true });
+      const stepMeters = this.statueStepMeters();
+      const moved = entries.map((entry) => this.creepStatue(entry, target, stepMeters));
       this.show.statueTurnAwayCount += 1;
       this.show.statueMoveEvents += 1;
       this.show.statueStage = Math.min(3, this.show.statueTurnAwayCount);
@@ -26705,6 +26875,20 @@
       return { elapsed: Number(elapsed.toFixed(3)), state: this.getDiagnostics() };
     }
 
+    advanceRivalForQA(seconds) {
+      if (!state.qa || !this.isHunting() || !mansionContestants) return null;
+      const duration = clamp(Number(seconds) || 0, 0, 900);
+      const fixedStep = 0.25;
+      let elapsed = 0;
+      while (elapsed < duration && this.isHunting() && !state.gameOver) {
+        const step = Math.min(fixedStep, duration - elapsed);
+        mansionContestants.update(step);
+        this.update(step);
+        elapsed += step;
+      }
+      return { elapsed: Number(elapsed.toFixed(3)), state: this.getDiagnostics() };
+    }
+
     placePlayerNearItemForQA(id) {
       if (!state.qa || !physics) return null;
       const entry = this.itemEntry(id);
@@ -26796,6 +26980,30 @@
       };
     }
 
+    stageStatueStaircasePressureForQA(turns = 12) {
+      if (!state.qa || !physics || !this.isHunting()) return null;
+      this.resetStatueCreep();
+      const movingEntry = this.feastHuntStatueEntries({ movingOnly: true })[0] || null;
+      if (!movingEntry) return this.statueDiagnostics();
+      const statueMark = FEAST_HUNT.statueCreep.staircasePressureMark;
+      const playerMark = FEAST_HUNT.statueCreep.staircasePressurePlayerMark;
+      movingEntry.root.position.set(statueMark.x, statueMark.y, statueMark.z);
+      movingEntry.root.updateMatrixWorld(true);
+      this.syncStatueCollider(movingEntry);
+      this.show.statueMinimumStaircaseClearance = this.statueStaircaseClearance(
+        movingEntry.root.position,
+        this.statueRadius(movingEntry),
+      );
+      teleport(playerMark.x, playerMark.y, playerMark.z, 0, -0.04);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      const turnCount = clamp(Math.floor(Number(turns) || 0), 1, 24);
+      for (let index = 0; index < turnCount; index += 1) this.moveStatuesForTurnAway();
+      updateLocation();
+      updateInteractionPrompt();
+      return this.statueDiagnostics();
+    }
+
     advanceHostPatrolForQA(seconds = 20, stageAtRouteStart = false) {
       if (!state.qa || !this.isHunting() || !mrFeastNpc) return null;
       this.syncHostPatrol();
@@ -26872,7 +27080,17 @@
       }
       mansionContestants?.setEliminated("kip-solano", Boolean(stormCompleted));
       mansionContestants?.setEliminated("mara-voss", Boolean(stormCompleted));
-      cameraSecurity?.setStoryStateForQA({ relaySabotaged });
+      if (relaySabotaged) {
+        state.contestant13.basementUnlocked = true;
+        if (contestant13Scene.basementDoor) {
+          contestant13Scene.basementDoor.locked = false;
+          contestant13Scene.basementDoor.setOpen(true);
+        }
+      }
+      cameraSecurity?.setStoryStateForQA({
+        relaySabotaged,
+        basementUnlocked: Boolean(relaySabotaged || state.contestant13.basementUnlocked),
+      });
       bulkStorageSecretSystem?.syncClothingProgression();
       return this.getDiagnostics();
     }
@@ -26910,11 +27128,16 @@
           && placement
           && Math.abs(normalizeDelta(root.rotation.y, placement.rotationY)) > 0.01
         );
+        const staircaseClearance = root && entry
+          ? this.statueStaircaseClearance(root.position, this.statueRadius(entry))
+          : null;
         return {
           id,
+          moving: id === FEAST_HUNT.statueCreep.movingId,
           positionUnchanged,
           positionDelta: positionDelta == null ? null : Number(positionDelta.toFixed(4)),
           lastStepDistance: Number((this.show.statueLastStepById[id] || 0).toFixed(4)),
+          lastRequestedStep: Number((this.show.statueLastRequestedStepById[id] || 0).toFixed(4)),
           position: root ? {
             x: Number(root.position.x.toFixed(4)),
             y: Number(root.position.y.toFixed(4)),
@@ -26931,6 +27154,8 @@
           ),
           colliderAligned: colliderOffset != null && colliderOffset <= 0.001,
           colliderOffset: colliderOffset == null ? null : Number(colliderOffset.toFixed(4)),
+          staircaseClear: staircaseClearance != null && staircaseClearance >= -0.0001,
+          staircaseClearance: staircaseClearance == null ? null : Number(staircaseClearance.toFixed(4)),
         };
       });
       return {
@@ -26940,7 +27165,17 @@
         observationInitialized: this.show.statueObservationInitialized,
         turnAwayCount: this.show.statueTurnAwayCount,
         moveEvents: this.show.statueMoveEvents,
-        stepMeters: FEAST_HUNT.statueCreep.stepMeters,
+        movingId: FEAST_HUNT.statueCreep.movingId,
+        stationaryIds: FEAST_HUNT.statueCreep.ids.filter((id) => id !== FEAST_HUNT.statueCreep.movingId),
+        stepMeters: Number(this.statueStepMeters().toFixed(4)),
+        baseStepMeters: FEAST_HUNT.statueCreep.baseStepMeters,
+        stepGrowthMeters: FEAST_HUNT.statueCreep.stepGrowthMeters,
+        maximumStepMeters: FEAST_HUNT.statueCreep.maximumStepMeters,
+        staircaseIntrusions: this.show.statueStaircaseIntrusions,
+        minimumStaircaseClearance: this.show.statueMinimumStaircaseClearance == null
+          ? null
+          : Number(this.show.statueMinimumStaircaseClearance.toFixed(4)),
+        staircaseExclusion: { ...FEAST_HUNT.statueCreep.staircaseExclusion },
         firstFloorOnly: entries.every((entry) => entry.firstFloor),
         entries,
       };
@@ -26999,6 +27234,7 @@
         hostPatrol: mrFeastNpc?.competitionPatrolDiagnostics() || null,
         rival: (() => {
           const entry = mansionContestants?.entryById(FEAST_HUNT.rival.id);
+          const race = entry?.feastHuntRace || null;
           return {
             id: FEAST_HUNT.rival.id,
             label: FEAST_HUNT.rival.label,
@@ -27007,8 +27243,16 @@
             collectedCount: this.show.rivalCollectedIds.length,
             collectedIds: [...this.show.rivalCollectedIds],
             routeIndex: this.show.rivalRouteIndex,
-            routeLength: FEAST_HUNT.rival.route.length,
+            routeLength: race?.route?.length || 0,
+            routeMode: race?.routeMode || null,
+            roamDestinationIds: [...(race?.roamDestinationIds || [])],
+            roamRooms: [...(race?.roamRooms || [])],
+            roamLevels: [...(race?.roamLevels || [])],
+            searchDestinationIds: [...(race?.searchDestinationIds || [])],
+            targetsPlayerGoldPositions: Boolean(race?.targetsPlayerGoldPositions),
             room: this.show.rivalRoom,
+            visitedRooms: [...this.show.rivalVisitedRooms],
+            visitedLevels: [...this.show.rivalVisitedLevels],
             pauseRemaining: Number(this.show.rivalPauseRemaining.toFixed(3)),
             pendingItemId: this.show.rivalPendingItemId,
             searchPauseSeconds: FEAST_HUNT.rival.searchPauseSeconds,
@@ -48064,6 +48308,9 @@
     window.MrFeastFresh.advanceFeastHuntForQA = (seconds) => (
       state.qa && feastHuntSystem ? feastHuntSystem.advanceForQA(seconds) : null
     );
+    window.MrFeastFresh.advanceFeastHuntRivalForQA = (seconds) => (
+      state.qa && feastHuntSystem ? feastHuntSystem.advanceRivalForQA(seconds) : null
+    );
     window.MrFeastFresh.advanceFeastHuntHostPatrolForQA = (seconds, stageAtRouteStart = false) => (
       state.qa && feastHuntSystem
         ? feastHuntSystem.advanceHostPatrolForQA(seconds, stageAtRouteStart)
@@ -48071,6 +48318,11 @@
     );
     window.MrFeastFresh.stageFeastHuntStatueLookForQA = (observed = true) => (
       state.qa && feastHuntSystem ? feastHuntSystem.stageStatueLookForQA(observed) : null
+    );
+    window.MrFeastFresh.stageFeastHuntStatueStaircasePressureForQA = (turns = 12) => (
+      state.qa && feastHuntSystem
+        ? feastHuntSystem.stageStatueStaircasePressureForQA(turns)
+        : null
     );
     window.MrFeastFresh.placePlayerNearFeastHuntItemForQA = (id) => (
       state.qa && feastHuntSystem ? feastHuntSystem.placePlayerNearItemForQA(id) : null

@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260731-feast-hunt-random-roam-1-hedge-maze-haunt-3";
+  const MANSION_RUNTIME_VERSION = "20260801-finale-boiler-gate-sabotage-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -3009,6 +3009,8 @@
       "contestant-13-badge": "Badge 13",
       "contestant-13-tape": "Tape reel",
       "basement-flashlight": "Basement flashlight",
+      "finale-crowbar": "Crowbar",
+      "finale-boiler-crank": "Boiler crank",
     }),
     itemIcons: Object.freeze({
       "garden-shovel": "shovel",
@@ -3016,6 +3018,8 @@
       "contestant-13-badge": "badge",
       "contestant-13-tape": "tape",
       "basement-flashlight": "flashlight",
+      "finale-crowbar": "crowbar",
+      "finale-boiler-crank": "crank",
     }),
     itemDetails: Object.freeze({
       "garden-shovel": "Garden tool",
@@ -3023,6 +3027,8 @@
       "contestant-13-badge": "Contestant credential",
       "contestant-13-tape": "Sealed recording",
       "basement-flashlight": "Camera-visible hand light",
+      "finale-crowbar": "Heavy iron pry bar",
+      "finale-boiler-crank": "Removable power-cutoff handle",
     }),
     world: Object.freeze({
       book: Object.freeze({
@@ -3076,6 +3082,19 @@
           <path d="M40 39h16M40 47h16M40 55h16" stroke="#211b16" stroke-width="3" opacity=".55"/>
           <path d="M40 72h16" stroke="#fff4d1" stroke-width="2" opacity=".34"/>
         </g>
+      `,
+      crowbar: `
+        <g transform="rotate(-34 48 48)">
+          <path d="M49 13v62" stroke="currentColor" stroke-width="8" stroke-linecap="round"/>
+          <path d="M49 17c0-8 13-10 20-4" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+          <path d="M49 75c0 7-8 11-15 9" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+        </g>
+      `,
+      crank: `
+        <circle cx="48" cy="49" r="21" fill="none" stroke="currentColor" stroke-width="7"/>
+        <circle cx="48" cy="49" r="6" fill="currentColor"/>
+        <path d="M48 28V13M30 39 17 31M66 39l13-8M48 70v13" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+        <circle cx="48" cy="12" r="7" fill="currentColor"/>
       `,
     };
     return `<svg viewBox="0 0 96 96" focusable="false" aria-hidden="true">${paths[iconName] || paths.badge}</svg>`;
@@ -3880,6 +3899,23 @@
       recoveryGapSeconds: 2.5,
     }),
   });
+  const FINALE_SABOTAGE = Object.freeze({
+    crowbarItemId: "finale-crowbar",
+    crankItemId: "finale-boiler-crank",
+    wineCabinetName: "wine cabinet",
+    workroomCabinetName: "workroom tool cabinet",
+    pickupActionMs: 520,
+    cutoffActionMs: 1450,
+    gatePryActionMs: 2100,
+    gateOpenRadians: 1.18,
+    gateOpenSpeed: 2.6,
+    boilerSocket: Object.freeze({ x: -10.95, y: FLOOR.BASEMENT + 1.18, z: -8.58, rotationY: Math.PI / 2 }),
+    text: Object.freeze({
+      preChase: "Locked. I guess we're stuck here.",
+      powerNeeded: "The gate is locked. Cut off the power source.",
+      pryToolNeeded: "The power is cut, but the gate is jammed. Find something to pry it open.",
+    }),
+  });
   const BANQUET_LOSS = Object.freeze({
     caughtReasons: Object.freeze([
       "witnessed",
@@ -4525,6 +4561,13 @@
       invalidTransitions: 0,
       lastInvalidTransition: null,
     },
+    finaleSabotage: {
+      powerCut: false,
+      gateOpened: false,
+      gateOpenProgress: 0,
+      cutoffCount: 0,
+      gatePryCount: 0,
+    },
     movement: {
       crouched: false,
       sprinting: false,
@@ -4882,6 +4925,14 @@
     spreadServingDishCount: 0,
     revealLight: null,
   };
+  const finaleSabotageScene = {
+    wineCabinet: null,
+    workroomCabinet: null,
+    crowbarRoot: null,
+    crankRoot: null,
+    boilerRoot: null,
+    boilerIndicatorMaterial: null,
+  };
   const estateStatueScene = {
     settled: false,
     colliders: 0,
@@ -4923,6 +4974,7 @@
   let hedgeMazeKeyScareSystem = null;
   let feastHuntSystem = null;
   let victoryFeastSystem = null;
+  let finaleSabotageSystem = null;
   let banquetLossSystem = null;
   let breathStealthSystem = null;
   let workroomCodeClue = null;
@@ -18190,6 +18242,8 @@
         updateInteractionPrompt();
       }
       throwableDistractionSystem?.syncStorageEntry(this);
+      finaleSabotageSystem?.syncPickupVisibility();
+      updateInteractionPrompt();
       if (!silent && audioSystem) audioSystem.cabinet(this.open);
     }
 
@@ -20454,6 +20508,7 @@
       if (contestant13Scene.relayOnlineBulb) contestant13Scene.relayOnlineBulb.visible = !this.story.relaySabotaged;
       if (contestant13Scene.relayAlarmBulb) contestant13Scene.relayAlarmBulb.visible = this.story.relaySabotaged;
       flashlightSystem?.restoreFromInventory();
+      finaleSabotageSystem?.syncPickupVisibility();
     }
 
     setDevMode(enabled) {
@@ -27328,6 +27383,446 @@
     }
   }
 
+  class FinaleSabotageSystem {
+    constructor() {
+      this.progress = state.finaleSabotage;
+      this.exteriorCircuitSnapshot = new Map();
+      this.pickups = new Map();
+      this.boilerInteractionRegistered = false;
+      this.createCabinetPickups();
+      this.createBoilerCutoff();
+      this.syncPickupVisibility();
+      this.syncBoilerInteraction();
+      this.syncGatePresentation(true);
+    }
+
+    hasItem(id) {
+      return Boolean(contestant13Quest?.hasItem(id));
+    }
+
+    registerTree(root, interaction) {
+      root?.traverse((object) => {
+        if (object.isMesh && object.userData.interaction !== interaction) addInteractionTarget(object, interaction);
+      });
+    }
+
+    unregisterTree(root) {
+      root?.traverse((object) => {
+        if (object.isMesh) removeInteractionTarget(object);
+      });
+    }
+
+    createCrowbar(parent) {
+      const root = new THREE.Group();
+      root.name = "wine-cellar-crowbar";
+      root.position.set(0, 1.32, 0.11);
+      root.rotation.set(0.08, 0.12, Math.PI / 2 - 0.12);
+      parent.add(root);
+      const crowbarMaterial = new THREE.MeshStandardMaterial({
+        color: 0x8f3025,
+        roughness: 0.48,
+        metalness: 0.72,
+      });
+      cylinder({ name: "crowbar-shaft", radius: 0.042, height: 0.86, segments: 12, y: 0, material: crowbarMaterial, parent: root });
+      cylinder({ name: "crowbar-hook", radius: 0.042, height: 0.24, segments: 12, x: 0.07, y: 0.47, rotationZ: -0.7, material: crowbarMaterial, parent: root });
+      cylinder({ name: "crowbar-pry-end", radius: 0.042, height: 0.2, segments: 12, x: -0.06, y: -0.47, rotationZ: -0.62, material: crowbarMaterial, parent: root });
+      box({ name: "crowbar-pry-tip", w: 0.16, h: 0.055, d: 0.075, x: -0.13, y: -0.54, rotationZ: -0.62, material: crowbarMaterial, parent: root });
+      return root;
+    }
+
+    createCrank(parent, options = {}) {
+      const root = new THREE.Group();
+      root.name = options.name || "workroom-boiler-crank";
+      root.position.set(options.x || 0, options.y || 0.72, options.z || 0.1);
+      root.rotation.set(Math.PI / 2, 0, options.rotationZ || 0.12);
+      parent.add(root);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.035, 8, 24), M.iron);
+      rim.name = `${root.name}-wheel`;
+      rim.castShadow = true;
+      root.add(rim);
+      cylinder({ name: `${root.name}-hub`, radius: 0.07, height: 0.12, segments: 14, rotationX: Math.PI / 2, material: M.brass, parent: root });
+      for (const rotationZ of [0, Math.PI / 2]) {
+        box({ name: `${root.name}-spoke`, w: 0.38, h: 0.035, d: 0.05, rotationZ, material: M.iron, parent: root });
+      }
+      cylinder({ name: `${root.name}-handle`, radius: 0.04, height: 0.18, segments: 12, x: 0.22, z: 0.1, rotationX: Math.PI / 2, material: M.darkWood, parent: root });
+      return root;
+    }
+
+    createCabinetPickups() {
+      const entries = [
+        {
+          id: FINALE_SABOTAGE.crowbarItemId,
+          label: "crowbar",
+          cabinet: finaleSabotageScene.wineCabinet,
+          root: this.createCrowbar(finaleSabotageScene.wineCabinet.root),
+          title: "CROWBAR",
+          body: "A heavy iron crowbar was hidden behind the wine reserve.",
+        },
+        {
+          id: FINALE_SABOTAGE.crankItemId,
+          label: "boiler crank",
+          cabinet: finaleSabotageScene.workroomCabinet,
+          root: this.createCrank(finaleSabotageScene.workroomCabinet.root),
+          title: "BOILER CRANK",
+          body: "A removable iron crank was stored with the Workroom tools.",
+        },
+      ];
+      for (const entry of entries) {
+        entry.interaction = {
+          type: "finale-item",
+          id: `take-${entry.id}`,
+          getLabel: () => `Take ${entry.label}`,
+          activate: () => this.takeItem(entry),
+        };
+        this.pickups.set(entry.id, entry);
+      }
+      finaleSabotageScene.crowbarRoot = this.pickups.get(FINALE_SABOTAGE.crowbarItemId).root;
+      finaleSabotageScene.crankRoot = this.pickups.get(FINALE_SABOTAGE.crankItemId).root;
+    }
+
+    createBoilerCutoff() {
+      const config = FINALE_SABOTAGE.boilerSocket;
+      const root = new THREE.Group();
+      root.name = "boiler-main-power-cutoff";
+      root.position.set(config.x, config.y, config.z);
+      root.rotation.y = config.rotationY;
+      scene.add(root);
+      box({ name: "boiler-cutoff-backplate", w: 0.46, h: 0.58, d: 0.1, z: 0, material: M.iron, parent: root });
+      cylinder({ name: "boiler-cutoff-empty-socket", radius: 0.105, height: 0.14, segments: 16, z: 0.1, rotationX: Math.PI / 2, material: M.brass, parent: root });
+      const indicatorMaterial = new THREE.MeshStandardMaterial({ color: 0x7c1b12, emissive: 0xff2b16, emissiveIntensity: 1.6, roughness: 0.38 });
+      const indicator = sphere({ name: "boiler-main-power-indicator", radius: 0.055, x: 0, y: 0.19, z: 0.1, material: indicatorMaterial, parent: root, cast: false });
+      const hitbox = box({
+        name: "boiler-main-power-cutoff-hitbox", w: 0.72, h: 0.86, d: 0.32, z: 0.15,
+        material: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+        parent: root, cast: false, receive: false,
+      });
+      hitbox.visible = false;
+      const installedCrank = this.createCrank(root, { name: "installed-boiler-crank", y: -0.08, z: 0.24, rotationZ: 0 });
+      installedCrank.scale.setScalar(0.86);
+      installedCrank.visible = false;
+      this.boilerInteraction = {
+        type: "finale-sabotage",
+        id: "boiler-main-power-cutoff",
+        getLabel: () => this.hasItem(FINALE_SABOTAGE.crankItemId)
+          ? "Use the crank to cut power to the house"
+          : "Empty power-cutoff socket",
+        activate: () => this.interactBoilerCutoff(),
+      };
+      finaleSabotageScene.boilerRoot = root;
+      finaleSabotageScene.boilerHitbox = hitbox;
+      finaleSabotageScene.boilerInstalledCrank = installedCrank;
+      finaleSabotageScene.boilerIndicatorMaterial = indicatorMaterial;
+      addInteractionTarget(indicator, this.boilerInteraction);
+      removeInteractionTarget(indicator);
+    }
+
+    takeItem(entry) {
+      if (!entry || this.hasItem(entry.id)) return false;
+      return contestant13Quest?.runTimedAction(
+        `take-${entry.id}`,
+        `Taking ${entry.label}`,
+        FINALE_SABOTAGE.pickupActionMs,
+        () => {
+          contestant13Quest.addItem(entry.id);
+          this.syncPickupVisibility();
+          contestant13Quest.showDiscovery(entry.title, entry.body, 4200);
+          contestant13Quest.updateUI();
+          audioSystem?.pickup("object");
+        },
+      ) || false;
+    }
+
+    syncPickupVisibility() {
+      for (const entry of this.pickups.values()) {
+        this.unregisterTree(entry.root);
+        const visible = Boolean(entry.cabinet?.open && !this.hasItem(entry.id) && !interiorDetailsHidden);
+        entry.root.visible = visible;
+        if (visible) this.registerTree(entry.root, entry.interaction);
+      }
+    }
+
+    chaseActive() {
+      return Boolean(victoryFeastSystem?.isEscapeActive());
+    }
+
+    powerCut() {
+      return Boolean(this.progress.powerCut);
+    }
+
+    gateLabel() {
+      if (this.progress.gateOpened) return "The driveway gate is open";
+      if (!this.chaseActive()) return FINALE_SABOTAGE.text.preChase;
+      if (!this.progress.powerCut) return FINALE_SABOTAGE.text.powerNeeded;
+      if (!this.hasItem(FINALE_SABOTAGE.crowbarItemId)) return FINALE_SABOTAGE.text.pryToolNeeded;
+      return "Pry the jammed gate open with the crowbar";
+    }
+
+    interactGate() {
+      if (this.progress.gateOpened) return false;
+      yardState.gate.deniedAttempts += 1;
+      if (!this.chaseActive()) {
+        contestant13Quest?.showDiscovery("LOCKED", FINALE_SABOTAGE.text.preChase, 3200);
+        audioSystem?.ping(57, 0.34, 0.045, "square");
+        return false;
+      }
+      if (!this.progress.powerCut) {
+        contestant13Quest?.showDiscovery("THE GATE IS LOCKED", FINALE_SABOTAGE.text.powerNeeded, 4200);
+        audioSystem?.ping(57, 0.34, 0.045, "square");
+        return false;
+      }
+      if (!this.hasItem(FINALE_SABOTAGE.crowbarItemId)) {
+        contestant13Quest?.showDiscovery("THE GATE IS JAMMED", FINALE_SABOTAGE.text.pryToolNeeded, 4800);
+        audioSystem?.ping(49, 0.42, 0.055, "square");
+        return false;
+      }
+      return contestant13Quest?.runTimedAction(
+        "pry-front-gate",
+        "Prying the front gate open",
+        FINALE_SABOTAGE.gatePryActionMs,
+        () => this.openGate(),
+      ) || false;
+    }
+
+    interactBoilerCutoff() {
+      if (!this.chaseActive() || this.progress.powerCut) return false;
+      if (!this.hasItem(FINALE_SABOTAGE.crankItemId)) {
+        contestant13Quest?.showDiscovery(
+          "A MISSING CRANK",
+          "The house power cutoff has an empty crank socket. Find the crank.",
+          4400,
+        );
+        audioSystem?.ping(66, 0.22, 0.035, "square");
+        return false;
+      }
+      return contestant13Quest?.runTimedAction(
+        "cut-house-power",
+        "Fitting the crank and cutting house power",
+        FINALE_SABOTAGE.cutoffActionMs,
+        () => this.cutHousePower(),
+      ) || false;
+    }
+
+    cutHousePower() {
+      if (this.progress.powerCut) return false;
+      this.exteriorCircuitSnapshot.clear();
+      for (const circuit of circuits) {
+        if (circuit.name === "estate exterior lights") this.exteriorCircuitSnapshot.set(circuit.name, circuit.on);
+        circuit.setState(false, true);
+      }
+      this.progress.powerCut = true;
+      this.progress.cutoffCount += 1;
+      if (victoryFeastSystem) victoryFeastSystem.show.sabotagePending = false;
+      if (finaleSabotageScene.boilerInstalledCrank) finaleSabotageScene.boilerInstalledCrank.visible = true;
+      if (finaleSabotageScene.boilerIndicatorMaterial) finaleSabotageScene.boilerIndicatorMaterial.emissiveIntensity = 0;
+      if (yardState.gate) yardState.gate.locked = true;
+      this.syncBoilerInteraction();
+      syncLightRendering("snap");
+      cameraSecurity?.suspendForCompetition();
+      contestant13Quest?.showDiscovery(
+        "HOUSE POWER CUT",
+        "The boiler dies. The mansion, cameras, and front-gate motor lose power—but the gate may still be jammed.",
+        6200,
+      );
+      audioSystem?.ping(42, 0.72, 0.08, "sawtooth");
+      audioSystem?.ping(31, 0.95, 0.06, "square");
+      victoryFeastSystem?.syncPresentation();
+      return true;
+    }
+
+    syncBoilerInteraction() {
+      const root = finaleSabotageScene.boilerRoot;
+      if (!root) return;
+      const shouldRegister = this.chaseActive() && !this.progress.powerCut;
+      if (shouldRegister !== this.boilerInteractionRegistered) {
+        this.unregisterTree(root);
+        this.boilerInteractionRegistered = shouldRegister;
+        if (this.boilerInteractionRegistered) this.registerTree(root, this.boilerInteraction);
+      }
+      if (finaleSabotageScene.boilerInstalledCrank) {
+        finaleSabotageScene.boilerInstalledCrank.visible = this.progress.powerCut;
+      }
+      if (finaleSabotageScene.boilerIndicatorMaterial) {
+        finaleSabotageScene.boilerIndicatorMaterial.emissiveIntensity = this.progress.powerCut ? 0 : 1.6;
+      }
+    }
+
+    syncGatePresentation(snap = false) {
+      if (!yardState.gate) return;
+      if (snap) this.progress.gateOpenProgress = this.progress.gateOpened ? 1 : 0;
+      for (const leaf of yardState.gate.leafRoots || []) {
+        leaf.root.rotation.y = -leaf.side * FINALE_SABOTAGE.gateOpenRadians * this.progress.gateOpenProgress;
+      }
+      yardState.gate.open = Boolean(this.progress.gateOpened);
+      yardState.gate.locked = !this.progress.gateOpened;
+      yardState.gate.colliderEnabled = !this.progress.gateOpened;
+      yardState.gate.colliderBody?.setEnabled(!this.progress.gateOpened);
+      derivePerimeterCoverage();
+    }
+
+    openGate() {
+      if (!this.chaseActive() || !this.progress.powerCut || this.progress.gateOpened) return false;
+      this.progress.gateOpened = true;
+      this.progress.gatePryCount += 1;
+      this.syncGatePresentation();
+      contestant13Quest?.showDiscovery(
+        "THE GATE GIVES",
+        "The crowbar tears the dead latch free. The driveway gate swings open.",
+        5800,
+      );
+      audioSystem?.ping(86, 0.18, 0.08, "square");
+      audioSystem?.ping(46, 0.72, 0.065, "sawtooth");
+      victoryFeastSystem?.completeEscape("front-gate-pried-open");
+      return true;
+    }
+
+    beginFinale() {
+      this.resetFinaleState({ restoreExteriorPower: false });
+      this.syncBoilerInteraction();
+      updateInteractionPrompt();
+    }
+
+    resetFinaleState(options = {}) {
+      const restoreExteriorPower = options.restoreExteriorPower !== false;
+      if (restoreExteriorPower && this.exteriorCircuitSnapshot.size) {
+        for (const circuit of circuits) {
+          if (this.exteriorCircuitSnapshot.has(circuit.name)) {
+            circuit.setState(this.exteriorCircuitSnapshot.get(circuit.name), true);
+          }
+        }
+        syncLightRendering("snap");
+      }
+      this.exteriorCircuitSnapshot.clear();
+      this.progress.powerCut = false;
+      this.progress.gateOpened = false;
+      this.progress.gateOpenProgress = 0;
+      if (finaleSabotageScene.boilerInstalledCrank) finaleSabotageScene.boilerInstalledCrank.visible = false;
+      this.syncGatePresentation(true);
+      this.syncBoilerInteraction();
+      this.syncPickupVisibility();
+    }
+
+    maintainPowerCut() {
+      if (!this.progress.powerCut) return;
+      let changed = false;
+      for (const circuit of circuits) {
+        if (!circuit.on) continue;
+        circuit.setState(false, true);
+        changed = true;
+      }
+      if (changed) syncLightRendering("snap");
+    }
+
+    update(dt) {
+      this.syncBoilerInteraction();
+      this.maintainPowerCut();
+      const target = this.progress.gateOpened ? 1 : 0;
+      if (this.progress.gateOpenProgress !== target) {
+        const direction = Math.sign(target - this.progress.gateOpenProgress);
+        this.progress.gateOpenProgress = clamp(
+          this.progress.gateOpenProgress + direction * FINALE_SABOTAGE.gateOpenSpeed * Math.max(0, Number(dt) || 0),
+          0,
+          1,
+        );
+        this.syncGatePresentation();
+        renderer.shadowMap.needsUpdate = true;
+      }
+    }
+
+    placePlayerAtPickupForQA(id) {
+      if (!state.qa || !physics) return null;
+      const entry = this.pickups.get(id);
+      if (!entry) return null;
+      entry.cabinet.setOpen(true, true);
+      entry.cabinet.update(1);
+      entry.root.updateMatrixWorld(true);
+      const position = new THREE.Vector3();
+      entry.root.getWorldPosition(position);
+      const approach = new THREE.Vector3(0, 0, 1.25).applyQuaternion(entry.cabinet.root.quaternion);
+      teleport(position.x + approach.x, entry.cabinet.floorY, position.z + approach.z, faceTargetYaw(position.x + approach.x, position.z + approach.z, position.x, position.z), -0.18);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      this.syncPickupVisibility();
+      updateInteractionPrompt();
+      return { id, prompt: state.currentInteraction?.getLabel() || null, room: state.currentRoom };
+    }
+
+    collectItemForQA(id) {
+      if (!state.qa) return null;
+      const entry = this.pickups.get(id);
+      if (!entry) return null;
+      contestant13Quest.addItem(id);
+      this.syncPickupVisibility();
+      contestant13Quest.updateUI();
+      return this.getDiagnostics();
+    }
+
+    placePlayerAtBoilerForQA() {
+      if (!state.qa || !physics) return null;
+      const target = FINALE_SABOTAGE.boilerSocket;
+      const position = { x: target.x - 1.2, y: FLOOR.BASEMENT, z: target.z };
+      teleport(position.x, position.y, position.z, faceTargetYaw(position.x, position.z, target.x, target.z), -0.48);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      this.syncBoilerInteraction();
+      updateInteractionPrompt();
+      return { room: state.currentRoom, prompt: state.currentInteraction?.getLabel() || null, position };
+    }
+
+    placePlayerAtGateForQA() {
+      if (!state.qa || !physics) return null;
+      const target = YARD_LAYOUT.gate;
+      const position = { x: target.centerX, y: YARD_LAYOUT.groundY, z: target.centerZ - 1.55 };
+      teleport(position.x, position.y, position.z, faceTargetYaw(position.x, position.z, target.centerX, target.centerZ), -0.04);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      updateInteractionPrompt();
+      return { room: state.currentRoom, prompt: state.currentInteraction?.getLabel() || null, position };
+    }
+
+    advanceForQA(seconds) {
+      if (!state.qa) return null;
+      const duration = clamp(Number(seconds) || 0, 0, 20);
+      let elapsed = 0;
+      while (elapsed < duration) {
+        const step = Math.min(1 / 60, duration - elapsed);
+        this.update(step);
+        elapsed += step;
+      }
+      return this.getDiagnostics();
+    }
+
+    getDiagnostics() {
+      return {
+        chaseActive: this.chaseActive(),
+        powerCut: this.progress.powerCut,
+        gateOpened: this.progress.gateOpened,
+        gateOpenProgress: Number(this.progress.gateOpenProgress.toFixed(3)),
+        cutoffCount: this.progress.cutoffCount,
+        gatePryCount: this.progress.gatePryCount,
+        gateLabel: this.gateLabel(),
+        gateColliderEnabled: Boolean(yardState.gate?.colliderEnabled),
+        boilerInteractionActive: this.boilerInteractionRegistered,
+        items: {
+          crowbar: {
+            owned: this.hasItem(FINALE_SABOTAGE.crowbarItemId),
+            visible: Boolean(finaleSabotageScene.crowbarRoot?.visible),
+            cabinetOpen: Boolean(finaleSabotageScene.wineCabinet?.open),
+          },
+          crank: {
+            owned: this.hasItem(FINALE_SABOTAGE.crankItemId),
+            visible: Boolean(finaleSabotageScene.crankRoot?.visible),
+            cabinetOpen: Boolean(finaleSabotageScene.workroomCabinet?.open),
+            installed: Boolean(finaleSabotageScene.boilerInstalledCrank?.visible),
+          },
+        },
+        text: { ...FINALE_SABOTAGE.text },
+      };
+    }
+  }
+
   class VictoryFeastSystem {
     constructor() {
       this.show = state.victoryFeast;
@@ -27412,7 +27907,7 @@
     }
 
     allowsSecuritySystems() {
-      return [
+      return !finaleSabotageSystem?.powerCut() && [
         VICTORY_FEAST_PHASE.REVEAL,
         VICTORY_FEAST_PHASE.ESCAPE,
       ].includes(this.show.phase);
@@ -27426,7 +27921,7 @@
       contestant13Quest?.showDiscovery(
         "Final challenge",
         this.isEscapeActive()
-          ? "The planted clue trail is over. Evade and hide until the real sabotage route is added."
+          ? "The planted clue trail is over. Cut the house power and force the front gate."
           : "Report to the Dining Room for the Victory Feast.",
         5200,
       );
@@ -27434,7 +27929,7 @@
     }
 
     isEscapeActive() {
-      return this.show.phase === VICTORY_FEAST_PHASE.ESCAPE && !state.gameOver;
+      return this.show.phase === VICTORY_FEAST_PHASE.ESCAPE && !this.show.escapeCompleted && !state.gameOver;
     }
 
     locksPlayerMovement() {
@@ -27560,6 +28055,7 @@
       this.show.escapePending = true;
       this.show.escapeCompleted = false;
       this.show.outcome = null;
+      finaleSabotageSystem?.resetFinaleState();
       demonPrototypePatrol?.resetFinaleSession();
       flashlightSystem?.resetFinaleDefect();
       this.transition(VICTORY_FEAST_PHASE.CALLED, `call:${reason}`);
@@ -27786,11 +28282,13 @@
         };
         sealed.push(door.name);
       }
-      // Keep the driveway gate closed for the same finale pressure.
-      if (yardState?.gate) {
+      // The powered motor keeps the driveway gate sealed until the Boiler
+      // Room cutoff releases it to the crowbar interaction.
+      if (yardState?.gate && !finaleSabotageSystem?.powerCut()) {
         yardState.gate.locked = true;
         yardState.gate.open = false;
         yardState.gate.colliderEnabled = true;
+        yardState.gate.colliderBody?.setEnabled(true);
       }
       updateInteractionPrompt();
       return { sealed: true, reason, doors: sealed, count: sealed.length };
@@ -27828,10 +28326,11 @@
           changed = true;
         }
       }
-      if (yardState?.gate && (!yardState.gate.locked || yardState.gate.open)) {
+      if (yardState?.gate && !finaleSabotageSystem?.powerCut() && (!yardState.gate.locked || yardState.gate.open)) {
         yardState.gate.locked = true;
         yardState.gate.open = false;
         yardState.gate.colliderEnabled = true;
+        yardState.gate.colliderBody?.setEnabled(true);
         changed = true;
       }
       if (changed) updateInteractionPrompt();
@@ -27852,6 +28351,8 @@
         openCount: doors.filter((door) => door.open).length,
         doors,
         gateLocked: Boolean(yardState?.gate?.locked),
+        gateOpen: Boolean(yardState?.gate?.open),
+        gateColliderEnabled: Boolean(yardState?.gate?.colliderEnabled),
       };
     }
 
@@ -27986,6 +28487,7 @@
       if (victoryFeastScene.revealLight) victoryFeastScene.revealLight.intensity = 0;
       this.releaseHostForEscape();
       this.releasePlayerForEscape();
+      finaleSabotageSystem?.beginFinale();
       this.sealExteriorExits("victory-feast-escape");
       demonPrototypePatrol?.setFinaleMode("escape");
       const saint = demonPrototypePatrol?.saintEntry();
@@ -27996,12 +28498,33 @@
       contestant13Quest?.hideDiscovery();
       speechSystem?.say(
         "victory-feast-escape",
-        "Run. The cameras are still rolling. The house is sealed.",
+        "Run. Cut the power. Get through the front gate before the Feast Father catches you.",
         speechSystem.hostSpeaker(),
         { durationSeconds: 3.6 },
       );
       this.syncPresentation();
       return { started: true, phase: this.show.phase, exits: this.exteriorExitDiagnostics() };
+    }
+
+    completeEscape(reason = "front-gate-open") {
+      if (!this.isEscapeActive()) return { completed: false, reason: "not-escaping" };
+      this.show.sabotagePending = false;
+      this.show.escapePending = false;
+      this.show.escapeCompleted = true;
+      this.show.outcome = "escaped";
+      this.show.directSightDwell = 0;
+      demonPrototypePatrol?.setFinaleMode("disabled");
+      mrFeastNpc?.suspendThreatsForCompetition();
+      cameraSecurity?.suspendForCompetition();
+      flashlightSystem?.resetFinaleDefect();
+      speechSystem?.say(
+        "victory-feast-escaped",
+        "No. That gate was not part of the challenge.",
+        speechSystem.hostSpeaker(),
+        { durationSeconds: 3.4 },
+      );
+      this.syncPresentation();
+      return { completed: true, reason, outcome: this.show.outcome };
     }
 
     updateThreats(dt) {
@@ -28042,6 +28565,7 @@
       }
       this.show.outcome = "caught-by-mr-feast";
       this.transition(VICTORY_FEAST_PHASE.FAILED, "caught-by-mr-feast");
+      finaleSabotageSystem?.resetFinaleState();
       this.restoreBlackout();
       demonPrototypePatrol?.setFinaleMode("disabled");
       flashlightSystem?.resetFinaleDefect();
@@ -28060,6 +28584,7 @@
       if (state.isHidden) return { caught: false, reason: "hidden" };
       this.show.outcome = "caught-by-saint";
       this.transition(VICTORY_FEAST_PHASE.FAILED, "caught-by-saint");
+      finaleSabotageSystem?.resetFinaleState();
       this.restoreBlackout();
       demonPrototypePatrol?.setFinaleMode("disabled");
       flashlightSystem?.resetFinaleDefect();
@@ -28136,9 +28661,19 @@
         setText(dom.victoryFeastObjective, "WAIT");
       } else if (phase === VICTORY_FEAST_PHASE.ESCAPE) {
         setText(dom.victoryFeastEyebrow, "Final challenge · Escape");
-        setText(dom.victoryFeastTimer, "LIVE");
-        setText(dom.victoryFeastStatus, "Evade · Hide · The flashlight can stun the Feast Father");
-        setText(dom.victoryFeastObjective, "SURVIVE");
+        if (this.show.escapeCompleted) {
+          setText(dom.victoryFeastTimer, "OUT");
+          setText(dom.victoryFeastStatus, "The driveway gate is open · You escaped");
+          setText(dom.victoryFeastObjective, "ESCAPED");
+        } else if (finaleSabotageSystem?.powerCut()) {
+          setText(dom.victoryFeastTimer, "DARK");
+          setText(dom.victoryFeastStatus, "Power is cut · Reach the front gate");
+          setText(dom.victoryFeastObjective, "ESCAPE");
+        } else {
+          setText(dom.victoryFeastTimer, "LIVE");
+          setText(dom.victoryFeastStatus, "Find the Boiler Room cutoff · Evade · Hide · The flashlight can stun the Feast Father");
+          setText(dom.victoryFeastObjective, "SABOTAGE");
+        }
       } else if (phase === VICTORY_FEAST_PHASE.FAILED) {
         setText(dom.victoryFeastEyebrow, "Final challenge · Caught");
         setText(dom.victoryFeastTimer, "OUT");
@@ -28240,6 +28775,7 @@
 
     cancelStaging() {
       this.setStationInteractive(false);
+      finaleSabotageSystem?.resetFinaleState();
       this.restoreBlackout();
       this.releaseExteriorExits();
       this.show.staged = false;
@@ -28478,8 +29014,9 @@
         cameras: {
           operational: this.allowsSecuritySystems(),
           hostile: Boolean(
-            this.show.phase === VICTORY_FEAST_PHASE.REVEAL
-            || this.show.phase === VICTORY_FEAST_PHASE.ESCAPE
+            !finaleSabotageSystem?.powerCut()
+            && (this.show.phase === VICTORY_FEAST_PHASE.REVEAL
+            || this.show.phase === VICTORY_FEAST_PHASE.ESCAPE)
           ),
           securityMode: state.security.mode,
           observed: state.security.observed,
@@ -28494,11 +29031,19 @@
         },
         saint: demonPrototypePatrol?.getFinaleDiagnostics() || null,
         flashlightDefect: flashlightSystem?.getDefectDiagnostics() || null,
-        sabotage: { pending: true, completed: false },
+        sabotage: {
+          pending: !Boolean(finaleSabotageSystem?.powerCut()),
+          completed: Boolean(finaleSabotageSystem?.powerCut()),
+          route: finaleSabotageSystem?.getDiagnostics() || null,
+        },
         escape: {
-          pending: true,
-          completed: false,
-          objective: "Evade and hide. The exterior doors are sealed. Sabotage and the front gate arrive in a later milestone.",
+          pending: !this.show.escapeCompleted,
+          completed: this.show.escapeCompleted,
+          objective: this.show.escapeCompleted
+            ? "Escaped through the pried-open driveway gate."
+            : finaleSabotageSystem?.powerCut()
+              ? "Reach the front gate and force it open."
+              : "Use the Workroom crank at the Boiler Room power cutoff.",
           exits: this.exteriorExitDiagnostics(),
         },
         exteriorExits: this.exteriorExitDiagnostics(),
@@ -36482,7 +37027,7 @@
     }
   }
 
-  function addBeamBetween(name, from, to, radius, material) {
+  function addBeamBetween(name, from, to, radius, material, parent = scene) {
     const start = new THREE.Vector3(from[0], from[1], from[2]);
     const end = new THREE.Vector3(to[0], to[1], to[2]);
     const direction = end.clone().sub(start);
@@ -36492,7 +37037,7 @@
     mesh.position.copy(start).add(end).multiplyScalar(0.5);
     mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
     mesh.castShadow = true;
-    scene.add(mesh);
+    parent.add(mesh);
     return mesh;
   }
 
@@ -38640,7 +39185,7 @@
     for (const z of [5.0, 7.8, 10.5]) addWineRack(-14.35, z, FLOOR.BASEMENT, -Math.PI / 2, 2.25);
     for (const x of [-11.5, -8.8, -6.1, -3.4]) addWineRack(x, 11.55, FLOOR.BASEMENT, 0, 2.35);
     addTable(-8.0, 7.4, 2.6, 1.05, FLOOR.BASEMENT, 0, M.darkWood);
-    new Cabinet({ name: "wine cabinet", x: -2.0, z: 9.6, floorY: FLOOR.BASEMENT, width: 1.55, height: 1.9, rotationY: -Math.PI / 2, stockKind: "cellar-reserve", interiorLight: false });
+    finaleSabotageScene.wineCabinet = new Cabinet({ name: "wine cabinet", x: -2.0, z: 9.6, floorY: FLOOR.BASEMENT, width: 1.55, height: 1.9, rotationY: -Math.PI / 2, stockKind: "cellar-reserve", interiorLight: false });
     addWineCellarDetails();
 
     // Archive — the perimeter is intentionally bare. Three double-sided rows
@@ -38708,7 +39253,7 @@
     addPipeRun([[-10.2, -1.35, -8.6], [-10.2, -0.65, -8.6], [-10.2, -0.65, -5.2], [-2.2, -0.65, -5.2]], 0.075, M.copper);
     addPipeRun([[-7.8, -1.3, -8.8], [-7.8, -0.9, -10.7], [4.4, -0.9, -10.7]], 0.065, M.iron);
     addTable(-2.5, -8.2, 3.1, 1.25, FLOOR.BASEMENT, 0, M.darkWood);
-    new Cabinet({ name: "workroom tool cabinet", x: -5.3, z: -8.4, floorY: FLOOR.BASEMENT, width: 1.6, height: 1.75, rotationY: Math.PI / 2, stockKind: "tools", interiorLight: false });
+    finaleSabotageScene.workroomCabinet = new Cabinet({ name: "workroom tool cabinet", x: -5.3, z: -8.4, floorY: FLOOR.BASEMENT, width: 1.6, height: 1.75, rotationY: Math.PI / 2, stockKind: "tools", interiorLight: false });
     addWorkroomKeypadHardware();
     addWorkroomSecurityHub();
     addBoilerRoomDetails();
@@ -39568,43 +40113,52 @@
     const groundY = YARD_LAYOUT.groundY;
     const interaction = {
       type: "door",
-      getLabel: () => "Locked driveway gate — the storm has sealed the estate",
-      activate: () => {
-        yardState.gate.deniedAttempts += 1;
-        if (audioSystem) audioSystem.ping(57, 0.34, 0.045, "square");
-      },
+      id: "finale-driveway-gate",
+      getLabel: () => finaleSabotageSystem?.gateLabel() || FINALE_SABOTAGE.text.preChase,
+      activate: () => finaleSabotageSystem?.interactGate() || false,
     };
+    yardState.gate.leafRoots = [];
     for (const side of [-1, 1]) {
       const pierX = side * 3.9;
       box({ name: "driveway-gate-stone-pier", w: 1.05, h: 3.25, d: 1.15, x: pierX, y: groundY + 1.62, z, material: M.limestone, collider: true });
       box({ name: "driveway-gate-pier-cap", w: 1.3, h: 0.22, d: 1.4, x: pierX, y: groundY + 3.28, z, material: M.marble });
       sphere({ name: "driveway-gate-finial", radius: 0.27, x: pierX, y: groundY + 3.65, z, material: M.brass });
 
+      const hingeX = side * 3.35;
       const leafCenter = side * 1.7;
+      const localCenterX = leafCenter - hingeX;
       const leafName = side < 0 ? "locked-driveway-gate-left" : "locked-driveway-gate-right";
-      const interactionRail = box({ name: leafName, w: 3.35, h: 0.14, d: 0.18, x: leafCenter, y: groundY + 1.42, z, material: M.iron });
+      const leafRoot = new THREE.Group();
+      leafRoot.name = `${leafName}-pivot`;
+      leafRoot.position.set(hingeX, 0, z);
+      scene.add(leafRoot);
+      yardState.gate.leafRoots.push({ side, root: leafRoot });
+      const interactionRail = box({ name: leafName, w: 3.35, h: 0.14, d: 0.18, x: localCenterX, y: groundY + 1.42, z: 0, material: M.iron, parent: leafRoot });
       addInteractionTarget(interactionRail, interaction);
       for (const y of [groundY + 0.22, groundY + 2.5]) {
-        const rail = box({ name: `${leafName}-rail`, w: 3.35, h: 0.13, d: 0.18, x: leafCenter, y, z, material: M.iron });
+        const rail = box({ name: `${leafName}-rail`, w: 3.35, h: 0.13, d: 0.18, x: localCenterX, y, z: 0, material: M.iron, parent: leafRoot });
         addInteractionTarget(rail, interaction);
       }
       for (const x of [leafCenter - 1.58, leafCenter + 1.58]) {
-        const stile = box({ name: `${leafName}-stile`, w: 0.14, h: 2.45, d: 0.18, x, y: groundY + 1.3, z, material: M.iron });
+        const stile = box({ name: `${leafName}-stile`, w: 0.14, h: 2.45, d: 0.18, x: x - hingeX, y: groundY + 1.3, z: 0, material: M.iron, parent: leafRoot });
         addInteractionTarget(stile, interaction);
       }
       for (let i = 0; i < 7; i += 1) {
         const x = leafCenter - 1.35 + i * 0.45;
-        const bar = box({ name: `${leafName}-bar`, w: 0.055, h: 2.28, d: 0.085, x, y: groundY + 1.3, z, material: M.iron, cast: false });
+        const bar = box({ name: `${leafName}-bar`, w: 0.055, h: 2.28, d: 0.085, x: x - hingeX, y: groundY + 1.3, z: 0, material: M.iron, cast: false, parent: leafRoot });
         addInteractionTarget(bar, interaction);
+        cylinder({
+          name: `${leafName}-spike`, radiusTop: 0, radiusBottom: 0.09, height: 0.56,
+          x: x - hingeX, y: groundY + 2.78, z: 0, segments: 8, material: M.brass,
+          parent: leafRoot, cast: false,
+        });
       }
-      addBeamBetween(`${leafName}-scroll-a`, [leafCenter - 1.42, groundY + 0.42, z - 0.02], [leafCenter + 1.42, groundY + 2.25, z - 0.02], 0.035, M.brass);
-      addBeamBetween(`${leafName}-scroll-b`, [leafCenter + 1.42, groundY + 0.42, z + 0.02], [leafCenter - 1.42, groundY + 2.25, z + 0.02], 0.035, M.brass);
+      addBeamBetween(`${leafName}-scroll-a`, [localCenterX - 1.42, groundY + 0.42, -0.02], [localCenterX + 1.42, groundY + 2.25, -0.02], 0.035, M.brass, leafRoot);
+      addBeamBetween(`${leafName}-scroll-b`, [localCenterX + 1.42, groundY + 0.42, 0.02], [localCenterX - 1.42, groundY + 2.25, 0.02], 0.035, M.brass, leafRoot);
+      const latchX = -side * 3.17;
+      const escutcheon = box({ name: `${leafName}-lock-escutcheon`, w: 0.36, h: 0.58, d: 0.12, x: latchX, y: groundY + 1.22, z: -0.13, material: M.brass, parent: leafRoot });
+      addInteractionTarget(escutcheon, interaction);
     }
-    const spikes = [];
-    for (let i = 0; i < 15; i += 1) spikes.push({ x: -3.15 + i * 0.45, y: groundY + 2.75, z, sx: 0.09, sy: 0.28, sz: 0.09 });
-    addOutdoorInstanceBatch("locked-driveway-gate-spikes", "yardGateSpike", () => new THREE.ConeGeometry(1, 1, 8), M.brass, spikes, true, true);
-    box({ name: "driveway-gate-lock-escutcheon", w: 0.46, h: 0.58, d: 0.12, x: 0, y: groundY + 1.22, z: z - 0.13, material: M.brass });
-    sphere({ name: "driveway-gate-lock", radius: 0.11, x: 0, y: groundY + 1.25, z: z - 0.22, material: M.iron });
     const hitbox = box({
       name: "locked-driveway-gate-hitbox", w: 6.6, h: 2.8, d: 0.28, x: 0, y: groundY + 1.4, z: z - 0.1,
       material: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }), cast: false, receive: false,
@@ -39612,7 +40166,7 @@
     hitbox.visible = false;
     addInteractionTarget(hitbox, interaction);
     const gateColliderWidth = 7.2;
-    physics.addFixedBox(0, groundY + 1.42, z, gateColliderWidth, 2.85, 0.4, 0);
+    yardState.gate.colliderBody = physics.addFixedBox(0, groundY + 1.42, z, gateColliderWidth, 2.85, 0.4, 0);
     if (yardState.perimeterSegments) yardState.perimeterSegments.north.push([-gateColliderWidth / 2, gateColliderWidth / 2]);
     yardState.gate.locked = true;
     yardState.gate.open = false;
@@ -40565,7 +41119,13 @@
       bounds,
       featureCounts: { ...yardState.featureCounts },
       perimeter: { closed: yardState.perimeterClosed, uncoveredIntervals: yardState.perimeterUncoveredIntervals.map((gap) => ({ ...gap })) },
-      gate: { ...yardState.gate },
+      gate: {
+        locked: Boolean(yardState.gate?.locked),
+        open: Boolean(yardState.gate?.open),
+        colliderEnabled: Boolean(yardState.gate?.colliderEnabled),
+        deniedAttempts: Number(yardState.gate?.deniedAttempts) || 0,
+        leafCount: yardState.gate?.leafRoots?.length || 0,
+      },
       maze: { ...yardState.maze, renderedLightSources: renderedMazeSources },
       lighting: {
         total: circuit ? circuit.lights.length : 0,
@@ -46719,6 +47279,7 @@
       stormRunSystem?.update(Math.min(rawDt, STORM_RUN.maximumTimerStepSeconds));
       feastHuntSystem?.update(Math.min(rawDt, FEAST_HUNT.maximumTimerStepSeconds));
       victoryFeastSystem?.update(Math.min(rawDt, VICTORY_FEAST.maximumTimerStepSeconds));
+      finaleSabotageSystem?.update(dt);
       if (state.contestant13.relaySabotaged && contestant13Scene.relayAlarmMaterial) {
         const warningPulse = 0.5 + Math.sin(frameNow * 0.009) * 0.5;
         contestant13Scene.relayAlarmMaterial.emissiveIntensity = 1.55 + warningPulse * 2.1;
@@ -47061,6 +47622,7 @@
       hedgeMazeKeyScare: hedgeMazeKeyScareSystem?.getDiagnostics() || null,
       feastHunt: feastHuntSystem?.getDiagnostics() || null,
       victoryFeast: victoryFeastSystem?.getDiagnostics() || null,
+      finaleSabotage: finaleSabotageSystem?.getDiagnostics() || null,
       banquetLoss: banquetLossSystem?.getDiagnostics() || { ...state.banquetLoss },
       gameOver: state.gameOver ? { ...state.gameOver } : null,
       workroom: getWorkroomDiagnostics(),
@@ -48382,6 +48944,30 @@
     window.MrFeastFresh.getVictoryFeastState = () => (
       victoryFeastSystem?.getDiagnostics() || null
     );
+    window.MrFeastFresh.getFinaleSabotageState = () => (
+      finaleSabotageSystem?.getDiagnostics() || null
+    );
+    window.MrFeastFresh.placePlayerAtFinaleItemForQA = (id) => (
+      state.qa && finaleSabotageSystem ? finaleSabotageSystem.placePlayerAtPickupForQA(id) : null
+    );
+    window.MrFeastFresh.collectFinaleItemForQA = (id) => (
+      state.qa && finaleSabotageSystem ? finaleSabotageSystem.collectItemForQA(id) : null
+    );
+    window.MrFeastFresh.placePlayerAtBoilerCutoffForQA = () => (
+      state.qa && finaleSabotageSystem ? finaleSabotageSystem.placePlayerAtBoilerForQA() : null
+    );
+    window.MrFeastFresh.interactBoilerCutoffForQA = () => (
+      state.qa && finaleSabotageSystem ? finaleSabotageSystem.interactBoilerCutoff() : false
+    );
+    window.MrFeastFresh.placePlayerAtFinaleGateForQA = () => (
+      state.qa && finaleSabotageSystem ? finaleSabotageSystem.placePlayerAtGateForQA() : null
+    );
+    window.MrFeastFresh.interactFinaleGateForQA = () => (
+      state.qa && finaleSabotageSystem ? finaleSabotageSystem.interactGate() : false
+    );
+    window.MrFeastFresh.advanceFinaleSabotageForQA = (seconds) => (
+      state.qa && finaleSabotageSystem ? finaleSabotageSystem.advanceForQA(seconds) : null
+    );
     window.MrFeastFresh.attemptVictoryFeastCallForQA = (reason = "qa-gate-check") => (
       state.qa && victoryFeastSystem
         ? victoryFeastSystem.call(reason)
@@ -49410,6 +49996,7 @@
       throwableDistractionSystem = new ThrowableDistractionSystem();
       bulkStorageSecretSystem = new BulkStorageSecretSystem();
       flashlightSystem = new FlashlightSystem();
+      finaleSabotageSystem = new FinaleSabotageSystem();
       readableBookSystem.finalizeSpineTitles();
       setLoading("Unveiling the estate statues", 68);
       await loadEstateStatues();

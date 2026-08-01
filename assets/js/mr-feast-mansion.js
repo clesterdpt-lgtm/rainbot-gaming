@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260801-finale-boiler-gate-sabotage-1";
+  const MANSION_RUNTIME_VERSION = "20260801-victory-feast-key-theft-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -3011,6 +3011,7 @@
       "basement-flashlight": "Basement flashlight",
       "finale-crowbar": "Crowbar",
       "finale-boiler-crank": "Boiler crank",
+      "finale-estate-keyring": "Mr. Feast's keyring",
     }),
     itemIcons: Object.freeze({
       "garden-shovel": "shovel",
@@ -3020,6 +3021,7 @@
       "basement-flashlight": "flashlight",
       "finale-crowbar": "crowbar",
       "finale-boiler-crank": "crank",
+      "finale-estate-keyring": "key",
     }),
     itemDetails: Object.freeze({
       "garden-shovel": "Garden tool",
@@ -3029,6 +3031,7 @@
       "basement-flashlight": "Camera-visible hand light",
       "finale-crowbar": "Heavy iron pry bar",
       "finale-boiler-crank": "Removable power-cutoff handle",
+      "finale-estate-keyring": "Keys to the mansion's exterior doors",
     }),
     world: Object.freeze({
       book: Object.freeze({
@@ -3902,9 +3905,13 @@
   const FINALE_SABOTAGE = Object.freeze({
     crowbarItemId: "finale-crowbar",
     crankItemId: "finale-boiler-crank",
+    estateKeyItemId: "finale-estate-keyring",
     wineCabinetName: "wine cabinet",
     workroomCabinetName: "workroom tool cabinet",
     pickupActionMs: 520,
+    keyStealActionMs: 620,
+    keyStealDistanceMeters: 1.45,
+    keyStealBehindDot: -0.28,
     cutoffActionMs: 1450,
     gatePryActionMs: 2100,
     gateOpenRadians: 1.18,
@@ -4567,6 +4574,7 @@
       gateOpenProgress: 0,
       cutoffCount: 0,
       gatePryCount: 0,
+      keyStealCount: 0,
     },
     movement: {
       crouched: false,
@@ -4930,6 +4938,8 @@
     workroomCabinet: null,
     crowbarRoot: null,
     crankRoot: null,
+    keychainRoot: null,
+    keychainHitbox: null,
     boilerRoot: null,
     boilerIndicatorMaterial: null,
   };
@@ -8701,13 +8711,13 @@
 
     canAcceptHousekeeping() {
       const task = arguments[0] || null;
-      const finalePortablePropAllowed = Boolean(
-        task?.portableProp
+      const finaleSoundAllowed = Boolean(
+        (task?.portableProp || task?.soundDistraction)
         && victoryFeastSystem?.allowsPlayerTools?.()
       );
       if (
         this.loadStatus !== "ready"
-        || (competitionBlocksInvestigation() && !finalePortablePropAllowed)
+        || (competitionBlocksInvestigation() && !finaleSoundAllowed)
         || !this.wanderingEnabled
         || this.activeCameraAlarm
         || this.housekeeping.active
@@ -8721,11 +8731,11 @@
 
     respondToHousekeepingTask(task) {
       if (!task || this.loadStatus !== "ready") return { accepted: false, reason: "not-ready" };
-      const finalePortablePropAllowed = Boolean(
-        task.portableProp
+      const finaleSoundAllowed = Boolean(
+        (task.portableProp || task.soundDistraction)
         && victoryFeastSystem?.allowsPlayerTools?.()
       );
-      if (competitionBlocksInvestigation() && !finalePortablePropAllowed) {
+      if (competitionBlocksInvestigation() && !finaleSoundAllowed) {
         return { accepted: false, reason: "competition" };
       }
       if (this.activeCameraAlarm) return { accepted: false, reason: "camera-alarm" };
@@ -27389,6 +27399,13 @@
       this.exteriorCircuitSnapshot = new Map();
       this.pickups = new Map();
       this.boilerInteractionRegistered = false;
+      this.keyStealInteractionRegistered = false;
+      this.keyStealInteraction = {
+        type: "finale-key-theft",
+        id: "steal-mr-feast-keyring",
+        getLabel: () => this.keyStealLabel(),
+        activate: () => this.attemptKeySteal(),
+      };
       this.createCabinetPickups();
       this.createBoilerCutoff();
       this.syncPickupVisibility();
@@ -27446,6 +27463,202 @@
       }
       cylinder({ name: `${root.name}-handle`, radius: 0.04, height: 0.18, segments: 12, x: 0.22, z: 0.1, rotationX: Math.PI / 2, material: M.darkWood, parent: root });
       return root;
+    }
+
+    createEstateKeychain(parent) {
+      const root = new THREE.Group();
+      root.name = "mr-feast-estate-keychain";
+      // Mr. Feast faces local +Z. The ring sits on his right hip with the
+      // hanging keys slightly behind his jacket, readable during the feast.
+      root.position.set(0.31, 1.06, -0.055);
+      root.rotation.set(0.04, -0.12, 0.08);
+      parent.add(root);
+
+      const brass = new THREE.MeshStandardMaterial({
+        color: 0xc69b3f,
+        roughness: 0.34,
+        metalness: 0.82,
+      });
+      const darkBrass = new THREE.MeshStandardMaterial({
+        color: 0x765328,
+        roughness: 0.48,
+        metalness: 0.72,
+      });
+      const beltRing = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.012, 7, 18), brass);
+      beltRing.name = "mr-feast-keychain-belt-ring";
+      beltRing.castShadow = true;
+      root.add(beltRing);
+      for (let index = 0; index < 3; index += 1) {
+        const link = new THREE.Mesh(new THREE.TorusGeometry(0.026, 0.007, 6, 14), brass);
+        link.name = `mr-feast-keychain-link-${index + 1}`;
+        link.position.set(0.012 * Math.sin(index), -0.07 - index * 0.045, 0.004 * index);
+        link.rotation.y = index % 2 ? Math.PI / 2 : 0;
+        link.castShadow = true;
+        root.add(link);
+      }
+      const keyOffsets = [-0.045, 0.015, 0.07];
+      keyOffsets.forEach((x, index) => {
+        const key = new THREE.Group();
+        key.name = `mr-feast-estate-key-${index + 1}`;
+        key.position.set(x, -0.25 - index * 0.018, 0.008 * index);
+        key.rotation.z = (index - 1) * 0.18;
+        root.add(key);
+        const bow = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.009, 7, 16), index === 1 ? brass : darkBrass);
+        bow.name = `${key.name}-bow`;
+        bow.castShadow = true;
+        key.add(bow);
+        cylinder({ name: `${key.name}-shaft`, radius: 0.009, height: 0.13, segments: 8, y: -0.09, material: index === 1 ? brass : darkBrass, parent: key });
+        box({ name: `${key.name}-tooth`, w: 0.055, h: 0.022, d: 0.018, x: 0.018, y: -0.15, material: index === 1 ? brass : darkBrass, parent: key });
+      });
+      const hitbox = box({
+        name: "mr-feast-estate-keychain-hitbox",
+        w: 0.42,
+        h: 0.5,
+        d: 0.34,
+        y: -0.13,
+        material: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+        parent: root,
+        cast: false,
+        receive: false,
+      });
+      finaleSabotageScene.keychainRoot = root;
+      finaleSabotageScene.keychainHitbox = hitbox;
+      return root;
+    }
+
+    ensureKeychainAttached() {
+      if (!mrFeastNpc?.root) return false;
+      if (!finaleSabotageScene.keychainRoot) this.createEstateKeychain(mrFeastNpc.root);
+      else if (finaleSabotageScene.keychainRoot.parent !== mrFeastNpc.root) {
+        mrFeastNpc.root.add(finaleSabotageScene.keychainRoot);
+      }
+      return true;
+    }
+
+    keychainShouldBeVisible() {
+      return Boolean(
+        !this.hasItem(FINALE_SABOTAGE.estateKeyItemId)
+        && victoryFeastSystem
+        && [
+          VICTORY_FEAST_PHASE.CALLED,
+          VICTORY_FEAST_PHASE.DIALOGUE,
+          VICTORY_FEAST_PHASE.REVEAL,
+          VICTORY_FEAST_PHASE.ESCAPE,
+        ].includes(victoryFeastSystem.show.phase)
+      );
+    }
+
+    syncKeychainPresentation() {
+      if (!this.ensureKeychainAttached()) return;
+      const root = finaleSabotageScene.keychainRoot;
+      const hitbox = finaleSabotageScene.keychainHitbox;
+      const visible = this.keychainShouldBeVisible();
+      const interactive = visible && this.chaseActive();
+      root.visible = visible;
+      if (interactive !== this.keyStealInteractionRegistered) {
+        removeInteractionTarget(hitbox);
+        this.keyStealInteractionRegistered = interactive;
+        if (interactive) addInteractionTarget(hitbox, this.keyStealInteraction);
+      }
+      if (visible) root.updateMatrixWorld(true);
+    }
+
+    qualifiesKeyDistraction(task = mrFeastNpc?.housekeeping?.active) {
+      return Boolean(
+        task
+        && (
+          (task.portableProp && task.transientSound)
+          || (task.distraction && task.soundDistraction)
+        )
+      );
+    }
+
+    keyStealStatus() {
+      const npc = mrFeastNpc;
+      if (this.hasItem(FINALE_SABOTAGE.estateKeyItemId)) {
+        return { eligible: false, reason: "already-owned", distance: null, behindDot: null, distracted: false };
+      }
+      if (!this.chaseActive()) {
+        return { eligible: false, reason: "not-escaping", distance: null, behindDot: null, distracted: false };
+      }
+      if (!npc?.root || !physics) {
+        return { eligible: false, reason: "host-unavailable", distance: null, behindDot: null, distracted: false };
+      }
+      const task = npc.housekeeping?.active || null;
+      const distracted = this.qualifiesKeyDistraction(task) && !npc.pursuit.active;
+      const player = physics.playerPosition();
+      const dx = player.x - npc.root.position.x;
+      const dz = player.z - npc.root.position.z;
+      const distance = Math.hypot(dx, dz);
+      const behindDot = distance > 0.0001
+        ? (Math.sin(npc.root.rotation.y) * dx + Math.cos(npc.root.rotation.y) * dz) / distance
+        : 1;
+      const behind = behindDot <= FINALE_SABOTAGE.keyStealBehindDot;
+      const inRange = distance <= FINALE_SABOTAGE.keyStealDistanceMeters;
+      return {
+        eligible: Boolean(distracted && behind && inRange),
+        reason: !distracted ? "needs-sound-distraction" : !behind ? "get-behind" : !inRange ? "too-far" : "ready",
+        distance: Number(distance.toFixed(3)),
+        behindDot: Number(behindDot.toFixed(3)),
+        distracted,
+        behind,
+        inRange,
+        distractionKind: task?.kind || null,
+      };
+    }
+
+    keyStealLabel() {
+      const status = this.keyStealStatus();
+      if (status.reason === "needs-sound-distraction") return "Mr. Feast's keys — make a sound to distract him";
+      if (status.reason === "get-behind") return "Get behind Mr. Feast to take the keys";
+      if (status.reason === "too-far") return "Move closer to Mr. Feast's keyring";
+      return status.eligible ? "Steal Mr. Feast's keyring" : "Mr. Feast's keyring";
+    }
+
+    showKeyStealHint(status = this.keyStealStatus()) {
+      if (status.reason === "needs-sound-distraction") {
+        contestant13Quest?.showDiscovery(
+          "HE'S WATCHING",
+          "Mr. Feast is guarding the keys. Throw something or use an object that makes sound to draw him away.",
+          4800,
+        );
+      } else if (status.reason === "get-behind") {
+        contestant13Quest?.showDiscovery(
+          "THE KEYS ARE AT HIS WAIST",
+          "He followed the sound. Sneak behind him and take the keyring.",
+          4200,
+        );
+      }
+      audioSystem?.ping(58, 0.14, 0.03, "square");
+      return false;
+    }
+
+    finishKeySteal() {
+      const status = this.keyStealStatus();
+      if (!status.eligible) return this.showKeyStealHint(status);
+      contestant13Quest.addItem(FINALE_SABOTAGE.estateKeyItemId);
+      this.progress.keyStealCount = (Number(this.progress.keyStealCount) || 0) + 1;
+      this.syncKeychainPresentation();
+      contestant13Quest.updateUI();
+      contestant13Quest.showDiscovery(
+        "MR. FEAST'S KEYS",
+        "You slip the keyring from his waist. The front and terrace doors can now be unlocked.",
+        5600,
+      );
+      audioSystem?.pickup("key");
+      victoryFeastSystem?.syncPresentation();
+      return true;
+    }
+
+    attemptKeySteal() {
+      const status = this.keyStealStatus();
+      if (!status.eligible) return this.showKeyStealHint(status);
+      return contestant13Quest?.runTimedAction(
+        "steal-mr-feast-keyring",
+        "Taking Mr. Feast's keyring",
+        FINALE_SABOTAGE.keyStealActionMs,
+        () => this.finishKeySteal(),
+      ) || false;
     }
 
     createCabinetPickups() {
@@ -27678,6 +27891,7 @@
     beginFinale() {
       this.resetFinaleState({ restoreExteriorPower: false });
       this.syncBoilerInteraction();
+      this.syncKeychainPresentation();
       updateInteractionPrompt();
     }
 
@@ -27699,6 +27913,7 @@
       this.syncGatePresentation(true);
       this.syncBoilerInteraction();
       this.syncPickupVisibility();
+      this.syncKeychainPresentation();
     }
 
     maintainPowerCut() {
@@ -27714,6 +27929,7 @@
 
     update(dt) {
       this.syncBoilerInteraction();
+      this.syncKeychainPresentation();
       this.maintainPowerCut();
       const target = this.progress.gateOpened ? 1 : 0;
       if (this.progress.gateOpenProgress !== target) {
@@ -27757,6 +27973,62 @@
       return this.getDiagnostics();
     }
 
+    stageKeyTheftForQA(kind = "throwable", behind = true) {
+      if (!state.qa || !physics || !mrFeastNpc?.root || !this.chaseActive()) {
+        return { staged: false, reason: "qa-only-or-not-escaping" };
+      }
+      const soundKind = String(kind || "throwable").toLowerCase();
+      const houseSound = soundKind !== "throwable";
+      mrFeastNpc.pursuit.active = null;
+      mrFeastNpc.pursuit.cooldownActive = false;
+      mrFeastNpc.activeCameraAlarm = null;
+      mrFeastNpc.challengeStaged = false;
+      mrFeastNpc.challengeMode = null;
+      mrFeastNpc.wanderingEnabled = true;
+      mrFeastNpc.responsePath = [];
+      mrFeastNpc.behaviorState = MR_FEAST_RESPONSE_STATE.SEARCHING;
+      mrFeastNpc.searchRemaining = 30;
+      mrFeastNpc.searchElapsed = 0;
+      const qaHostPosition = MR_FEAST_NPC.waypoints.find((point) => point.id === "main-ballroom-south")
+        || { x: 0, y: FLOOR.MAIN, z: -9.8 };
+      mrFeastNpc.root.position.set(qaHostPosition.x, FLOOR.MAIN, qaHostPosition.z);
+      mrFeastNpc.root.rotation.y = 0;
+      mrFeastNpc.root.visible = true;
+      mrFeastNpc.housekeeping.active = {
+        id: houseSound ? "qa-house-sound" : "qa-thrown-impact",
+        kind: houseSound ? soundKind : "thrown-distraction",
+        portableProp: !houseSound,
+        transientSound: !houseSound,
+        distraction: houseSound,
+        soundDistraction: houseSound,
+        position: {
+          x: mrFeastNpc.root.position.x,
+          y: FLOOR.MAIN,
+          z: mrFeastNpc.root.position.z + 2.4,
+        },
+      };
+      const playerZ = mrFeastNpc.root.position.z + (behind ? -1.05 : 1.05);
+      const playerX = mrFeastNpc.root.position.x + 0.22;
+      teleport(
+        playerX,
+        FLOOR.MAIN,
+        playerZ,
+        faceTargetYaw(playerX, playerZ, mrFeastNpc.root.position.x + 0.31, mrFeastNpc.root.position.z),
+        -0.64,
+      );
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      this.syncKeychainPresentation();
+      updateInteractionPrompt();
+      return {
+        staged: true,
+        kind: mrFeastNpc.housekeeping.active.kind,
+        prompt: state.currentInteraction?.getLabel() || null,
+        key: this.keyStealStatus(),
+      };
+    }
+
     placePlayerAtBoilerForQA() {
       if (!state.qa || !physics) return null;
       const target = FINALE_SABOTAGE.boilerSocket;
@@ -27795,6 +28067,7 @@
     }
 
     getDiagnostics() {
+      const keyStatus = this.keyStealStatus();
       return {
         chaseActive: this.chaseActive(),
         powerCut: this.progress.powerCut,
@@ -27802,6 +28075,7 @@
         gateOpenProgress: Number(this.progress.gateOpenProgress.toFixed(3)),
         cutoffCount: this.progress.cutoffCount,
         gatePryCount: this.progress.gatePryCount,
+        keyStealCount: Number(this.progress.keyStealCount) || 0,
         gateLabel: this.gateLabel(),
         gateColliderEnabled: Boolean(yardState.gate?.colliderEnabled),
         boilerInteractionActive: this.boilerInteractionRegistered,
@@ -27816,6 +28090,13 @@
             visible: Boolean(finaleSabotageScene.crankRoot?.visible),
             cabinetOpen: Boolean(finaleSabotageScene.workroomCabinet?.open),
             installed: Boolean(finaleSabotageScene.boilerInstalledCrank?.visible),
+          },
+          estateKeyring: {
+            owned: this.hasItem(FINALE_SABOTAGE.estateKeyItemId),
+            visible: Boolean(finaleSabotageScene.keychainRoot?.visible),
+            interactive: this.keyStealInteractionRegistered,
+            parent: finaleSabotageScene.keychainRoot?.parent?.name || null,
+            steal: keyStatus,
           },
         },
         text: { ...FINALE_SABOTAGE.text },
@@ -27921,7 +28202,7 @@
       contestant13Quest?.showDiscovery(
         "Final challenge",
         this.isEscapeActive()
-          ? "The planted clue trail is over. Cut the house power and force the front gate."
+          ? "Find a way to escape. Don't get caught."
           : "Report to the Dining Room for the Victory Feast.",
         5200,
       );
@@ -28266,20 +28547,54 @@
       ));
     }
 
+    hasUnlockedExteriorExit() {
+      return this.exteriorExitDoors().some((door) => !door.locked);
+    }
+
+    ownsExteriorKey() {
+      return Boolean(finaleSabotageSystem?.hasItem(FINALE_SABOTAGE.estateKeyItemId));
+    }
+
+    configureExteriorExitLock(door) {
+      if (!door) return;
+      door.getLockedLabel = () => this.ownsExteriorKey()
+        ? `Unlock ${door.name} with Mr. Feast's key`
+        : "Locked — you need Mr. Feast's key";
+      door.onLockedActivate = () => this.interactExteriorExit(door);
+    }
+
+    interactExteriorExit(door) {
+      if (!this.isEscapeActive() || !door?.locked) return false;
+      if (!this.ownsExteriorKey()) {
+        contestant13Quest?.showDiscovery(
+          "LOCKED",
+          "You need a key. You noticed one hanging from Mr. Feast's waist.",
+          4600,
+        );
+        audioSystem?.ping(58, 0.14, 0.03, "square");
+        return false;
+      }
+      door.locked = false;
+      door.getLockedLabel = null;
+      door.onLockedActivate = null;
+      door.setOpen(true);
+      contestant13Quest?.showDiscovery(
+        "DOOR UNLOCKED",
+        `Mr. Feast's key turns in the ${door.name}. The way outside is open.`,
+        4200,
+      );
+      audioSystem?.pickup("key");
+      audioSystem?.ping(92, 0.12, 0.035, "triangle");
+      this.syncPresentation();
+      return true;
+    }
+
     sealExteriorExits(reason = "victory-feast-escape") {
       const sealed = [];
       for (const door of this.exteriorExitDoors()) {
         if (door.open) door.setOpen(false);
         door.locked = true;
-        door.getLockedLabel = () => "The house is sealed";
-        door.onLockedActivate = () => {
-          contestant13Quest?.showDiscovery(
-            "THE HOUSE IS SEALED",
-            "Front and terrace doors will not open. Find another way through the house.",
-            4200,
-          );
-          audioSystem?.ping(58, 0.14, 0.03, "square");
-        };
+        this.configureExteriorExitLock(door);
         sealed.push(door.name);
       }
       // The powered motor keeps the driveway gate sealed until the Boiler
@@ -28308,23 +28623,15 @@
       if (!this.isEscapeActive()) return;
       let changed = false;
       for (const door of this.exteriorExitDoors()) {
-        if (door.open) {
+        if (!this.ownsExteriorKey() && door.open) {
           door.setOpen(false);
           changed = true;
         }
-        if (!door.locked) {
+        if (!this.ownsExteriorKey() && !door.locked) {
           door.locked = true;
-          door.getLockedLabel = () => "The house is sealed";
-          door.onLockedActivate = () => {
-            contestant13Quest?.showDiscovery(
-              "THE HOUSE IS SEALED",
-              "Front and terrace doors will not open. Find another way through the house.",
-              4200,
-            );
-            audioSystem?.ping(58, 0.14, 0.03, "square");
-          };
           changed = true;
         }
+        if (door.locked) this.configureExteriorExitLock(door);
       }
       if (yardState?.gate && !finaleSabotageSystem?.powerCut() && (!yardState.gate.locked || yardState.gate.open)) {
         yardState.gate.locked = true;
@@ -28346,8 +28653,10 @@
       return {
         sealed: Boolean(allLocked && this.isEscapeActive()),
         allLocked,
+        keyOwned: this.ownsExteriorKey(),
         doorCount: doors.length,
         lockedCount: doors.filter((door) => door.locked).length,
+        unlockedCount: doors.filter((door) => !door.locked).length,
         openCount: doors.filter((door) => door.open).length,
         doors,
         gateLocked: Boolean(yardState?.gate?.locked),
@@ -28437,6 +28746,9 @@
         mrFeastNpc.releaseChallenge();
       }
       mrFeastNpc?.recoverAfterLoad();
+      // Conversation has no role once the hunt begins. Removing its broad
+      // body hitbox lets the smaller waist keychain own the close E/touch aim.
+      mrFeastNpc?.setChallengeInteractionsEnabled(false);
       clearMovementInput();
       state.movement.crouched = false;
       state.movement.sprinting = false;
@@ -28496,9 +28808,14 @@
       cameraSecurity?.suspendForCompetition();
       cameraSecurity?.handlePatronFeedSabotage();
       contestant13Quest?.hideDiscovery();
+      contestant13Quest?.showDiscovery(
+        "ESCAPE",
+        "Find a way to escape. Don't get caught.",
+        6200,
+      );
       speechSystem?.say(
         "victory-feast-escape",
-        "Run. Cut the power. Get through the front gate before the Feast Father catches you.",
+        "Run. Find a way out. Don't let the Feast Father catch you.",
         speechSystem.hostSpeaker(),
         { durationSeconds: 3.6 },
       );
@@ -28515,6 +28832,7 @@
       this.show.directSightDwell = 0;
       demonPrototypePatrol?.setFinaleMode("disabled");
       mrFeastNpc?.suspendThreatsForCompetition();
+      mrFeastNpc?.setChallengeInteractionsEnabled(true);
       cameraSecurity?.suspendForCompetition();
       flashlightSystem?.resetFinaleDefect();
       speechSystem?.say(
@@ -28665,6 +28983,14 @@
           setText(dom.victoryFeastTimer, "OUT");
           setText(dom.victoryFeastStatus, "The driveway gate is open · You escaped");
           setText(dom.victoryFeastObjective, "ESCAPED");
+        } else if (!this.ownsExteriorKey()) {
+          setText(dom.victoryFeastTimer, "LIVE");
+          setText(dom.victoryFeastStatus, "Find a way to escape · Don't get caught");
+          setText(dom.victoryFeastObjective, "ESCAPE");
+        } else if (!this.hasUnlockedExteriorExit()) {
+          setText(dom.victoryFeastTimer, "KEY");
+          setText(dom.victoryFeastStatus, "Use Mr. Feast's key on an exterior door");
+          setText(dom.victoryFeastObjective, "UNLOCK");
         } else if (finaleSabotageSystem?.powerCut()) {
           setText(dom.victoryFeastTimer, "DARK");
           setText(dom.victoryFeastStatus, "Power is cut · Reach the front gate");
@@ -28685,6 +29011,7 @@
     syncPresentation() {
       this.syncScene();
       this.syncCast();
+      finaleSabotageSystem?.syncKeychainPresentation();
       this.syncHud();
       updateInteractionPrompt();
     }
@@ -28785,6 +29112,7 @@
       this.show.directSightDwell = 0;
       if (victoryFeastScene.revealLight) victoryFeastScene.revealLight.intensity = 0;
       if (mrFeastNpc?.challengeMode === "victory-feast") mrFeastNpc.releaseChallenge();
+      mrFeastNpc?.setChallengeInteractionsEnabled(true);
       demonPrototypePatrol?.setFinaleMode("disabled");
       flashlightSystem?.resetFinaleDefect();
       clearMovementInput();
@@ -28928,6 +29256,24 @@
       };
     }
 
+    interactExteriorExitForQA(query = "front door") {
+      if (!state.qa) return { accepted: false, reason: "qa-only" };
+      const normalized = String(query || "").toLowerCase();
+      const door = this.exteriorExitDoors().find((candidate) => (
+        !normalized || candidate.name.toLowerCase().includes(normalized)
+      ));
+      if (!door) return { accepted: false, reason: "door-not-found" };
+      this.configureExteriorExitLock(door);
+      const accepted = this.interactExteriorExit(door);
+      return {
+        accepted,
+        name: door.name,
+        locked: Boolean(door.locked),
+        open: Boolean(door.open),
+        exits: this.exteriorExitDiagnostics(),
+      };
+    }
+
     hideForQA(query = "coat") {
       if (!state.qa) return null;
       if (state.activeHideSpot) {
@@ -29041,7 +29387,11 @@
           completed: this.show.escapeCompleted,
           objective: this.show.escapeCompleted
             ? "Escaped through the pried-open driveway gate."
-            : finaleSabotageSystem?.powerCut()
+            : !this.ownsExteriorKey()
+              ? "Find a way out without getting caught. The exterior doors are locked."
+              : !this.hasUnlockedExteriorExit()
+                ? "Use Mr. Feast's keyring to unlock an exterior door."
+                : finaleSabotageSystem?.powerCut()
               ? "Reach the front gate and force it open."
               : "Use the Workroom crank at the Boiler Room power cutoff.",
           exits: this.exteriorExitDiagnostics(),
@@ -29400,9 +29750,21 @@
       return this.setTampered(entry, !entry.tampered, "player");
     }
 
+    finaleDistractionAllowed(entry) {
+      return Boolean(
+        entry?.distraction
+        && victoryFeastSystem?.allowsPlayerTools?.()
+      );
+    }
+
     setTampered(entry, tampered, cause) {
       if (entry.isTampered || entry.tampered === tampered) return false;
-      if (tampered && entry.distraction && competitionBlocksInvestigation()) {
+      if (
+        tampered
+        && entry.distraction
+        && competitionBlocksInvestigation()
+        && !this.finaleDistractionAllowed(entry)
+      ) {
         entry.blockedReason = "live competition production hold";
         notifyCompetitionHold();
         return false;
@@ -29453,13 +29815,12 @@
 
     update(dt, dispatchCollector = null) {
       if (!state.started) return;
-      if (competitionBlocksInvestigation()) {
-        for (const entry of this.entries) {
-          if (entry.distraction && entry.tampered) this.setTampered(entry, false, "competition");
-        }
-        return;
-      }
+      const productionHold = competitionBlocksInvestigation();
       for (const entry of this.entries) {
+        if (productionHold && !this.finaleDistractionAllowed(entry)) {
+          if (entry.distraction && entry.tampered) this.setTampered(entry, false, "competition");
+          continue;
+        }
         if (entry.cooldownRemaining > 0) entry.cooldownRemaining = Math.max(0, entry.cooldownRemaining - dt);
         if (entry.isTampered) {
           const derived = entry.isTampered();
@@ -29490,10 +29851,11 @@
     }
 
     dispatch(entry, dispatchCollector = null) {
-      if (competitionBlocksInvestigation()) return false;
+      if (competitionBlocksInvestigation() && !this.finaleDistractionAllowed(entry)) return false;
       const npc = mrFeastNpc;
-      if (!npc || !npc.canAcceptHousekeeping()) return false;
-      const response = npc.respondToHousekeepingTask(this.taskFor(entry));
+      const task = this.taskFor(entry);
+      if (!npc || !npc.canAcceptHousekeeping(task)) return false;
+      const response = npc.respondToHousekeepingTask(task);
       if (!response?.accepted) {
         entry.noticeRemaining = MANSION_TAMPER.blockedRetrySeconds;
         return false;
@@ -29509,6 +29871,8 @@
       return {
         id: entry.id,
         kind: entry.kind,
+        distraction: Boolean(entry.distraction),
+        soundDistraction: Boolean(entry.distraction),
         title: entry.title,
         position: { x: entry.position.x, y: entry.position.y, z: entry.position.z },
       };
@@ -30443,7 +30807,10 @@
         || npc.activeCameraAlarm
         || npc.housekeeping.active
         || npc.challengeStaged
-        || competitionSuspendsSecurity()
+        || (
+          competitionSuspendsSecurity()
+          && !victoryFeastSystem?.allowsPlayerTools?.()
+        )
       ) {
         return { accepted: false, reason: "higher-priority-threat", distance };
       }
@@ -48964,6 +49331,19 @@
     );
     window.MrFeastFresh.interactFinaleGateForQA = () => (
       state.qa && finaleSabotageSystem ? finaleSabotageSystem.interactGate() : false
+    );
+    window.MrFeastFresh.stageFinaleKeyTheftForQA = (kind = "throwable", behind = true) => (
+      state.qa && finaleSabotageSystem
+        ? finaleSabotageSystem.stageKeyTheftForQA(kind, behind)
+        : { staged: false, reason: "qa-only" }
+    );
+    window.MrFeastFresh.attemptFinaleKeyStealForQA = () => (
+      state.qa && finaleSabotageSystem ? finaleSabotageSystem.attemptKeySteal() : false
+    );
+    window.MrFeastFresh.interactFinaleExteriorDoorForQA = (query = "front door") => (
+      state.qa && victoryFeastSystem
+        ? victoryFeastSystem.interactExteriorExitForQA(query)
+        : { accepted: false, reason: "qa-only" }
     );
     window.MrFeastFresh.advanceFinaleSabotageForQA = (seconds) => (
       state.qa && finaleSabotageSystem ? finaleSabotageSystem.advanceForQA(seconds) : null

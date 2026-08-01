@@ -42,15 +42,20 @@ async function sourceContract() {
     "class FinaleSabotageSystem",
     'crowbarItemId: "finale-crowbar"',
     'crankItemId: "finale-boiler-crank"',
+    'estateKeyItemId: "finale-estate-keyring"',
+    'root.name = "mr-feast-estate-keychain"',
     'name: "wine cabinet"',
     'name: "workroom tool cabinet"',
     "boiler-main-power-cutoff",
     "pry-front-gate",
+    "steal-mr-feast-keyring",
   ]) assert(runtime.includes(token), `missing finale sabotage source contract: ${token}`);
   for (const text of [
     "Locked. I guess we're stuck here.",
     "The gate is locked. Cut off the power source.",
     "The power is cut, but the gate is jammed. Find something to pry it open.",
+    "Find a way to escape. Don't get caught.",
+    "You need a key. You noticed one hanging from Mr. Feast's waist.",
   ]) {
     assert(runtime.includes(text), `missing conditional gate text: ${text}`);
     assert(milestone.includes(text), `milestone omits conditional gate text: ${text}`);
@@ -63,6 +68,9 @@ async function sourceContract() {
     "interactBoilerCutoffForQA",
     "placePlayerAtFinaleGateForQA",
     "interactFinaleGateForQA",
+    "stageFinaleKeyTheftForQA",
+    "attemptFinaleKeyStealForQA",
+    "interactFinaleExteriorDoorForQA",
   ]) assert(runtime.includes(hook), `missing finale sabotage QA hook: ${hook}`);
 }
 
@@ -129,15 +137,64 @@ async function runBrowserFlow() {
     );
     const started = await page.evaluate(() => window.MrFeastFresh.startVictoryFeastForQA());
     assert(started.started, `Victory Feast dialogue failed to start: ${JSON.stringify(started)}`);
+    route = await page.evaluate(() => window.MrFeastFresh.getFinaleSabotageState());
+    assert(route.items.estateKeyring.visible, `Mr. Feast's waist keychain must be visible during the Victory Feast: ${JSON.stringify(route.items.estateKeyring)}`);
+    assert(!route.items.estateKeyring.interactive, `The ceremony must foreshadow the keys without allowing an early theft: ${JSON.stringify(route.items.estateKeyring)}`);
+    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "victory-feast-waist-keychain.png") });
     await page.evaluate(() => window.MrFeastFresh.skipVictoryFeastDialogueForQA());
     const revealed = await page.evaluate(() => window.MrFeastFresh.revealVictoryFeastSaintForQA());
     assert(revealed.triggered, `Feast Father reveal failed: ${JSON.stringify(revealed)}`);
     const escaped = await page.evaluate(() => window.MrFeastFresh.startVictoryFeastEscapeForQA());
     assert(escaped.started, `Feast Father chase failed to start: ${JSON.stringify(escaped)}`);
 
+    const escapeTip = await page.locator("#mansion-discovery-body").textContent();
+    assert(escapeTip === "Find a way to escape. Don't get caught.", `escape tip is missing or over-specific: ${escapeTip}`);
+
     route = await page.evaluate(() => window.MrFeastFresh.getFinaleSabotageState());
     assert(route.chaseActive && route.boilerInteractionActive, `cutoff must activate only with the chase: ${JSON.stringify(route)}`);
     assert(route.gateLabel === "The gate is locked. Cut off the power source.", `powered chase gate must direct the player to power: ${JSON.stringify(route)}`);
+    let feast = await page.evaluate(() => window.MrFeastFresh.getVictoryFeastState());
+    assert(feast.exteriorExits.allLocked && feast.exteriorExits.lockedCount === feast.exteriorExits.doorCount, `every exterior house door must seal at chase start: ${JSON.stringify(feast.exteriorExits)}`);
+    assert(route.items.estateKeyring.visible && route.items.estateKeyring.interactive, `the waist keychain must become stealable during the chase: ${JSON.stringify(route.items.estateKeyring)}`);
+
+    const lockedDoor = await page.evaluate(() => window.MrFeastFresh.interactFinaleExteriorDoorForQA("front door"));
+    const lockedDoorHint = await page.locator("#mansion-discovery-body").textContent();
+    assert(!lockedDoor.accepted && lockedDoor.locked, `exterior door opened without Mr. Feast's key: ${JSON.stringify(lockedDoor)}`);
+    assert(lockedDoorHint === "You need a key. You noticed one hanging from Mr. Feast's waist.", `locked exterior door did not point back to the visible key: ${lockedDoorHint}`);
+
+    const undistractedSteal = await page.evaluate(() => window.MrFeastFresh.attemptFinaleKeyStealForQA());
+    const undistractedHint = await page.locator("#mansion-discovery-body").textContent();
+    assert(!undistractedSteal && /throw something|object that makes sound/i.test(undistractedHint || ""), `key theft must require a sound distraction: ${undistractedHint}`);
+
+    const activatedPiano = await page.evaluate(() => window.MrFeastFresh.activateHouseDistractionForQA("piano", true));
+    assert(activatedPiano?.active, `Victory Feast escape must allow the real piano distraction: ${JSON.stringify(activatedPiano)}`);
+    const pianoDispatch = await page.evaluate(() => window.MrFeastFresh.advanceHouseDistractionsForQA(4));
+    route = await page.evaluate(() => window.MrFeastFresh.getFinaleSabotageState());
+    assert(pianoDispatch.dispatched.length === 1 && route.items.estateKeyring.steal.distracted && route.items.estateKeyring.steal.distractionKind === "piano", `the real piano task must pull Mr. Feast into a valid key-theft distraction: ${JSON.stringify({ pianoDispatch, key: route.items.estateKeyring.steal })}`);
+
+    const houseSound = await page.evaluate(() => window.MrFeastFresh.stageFinaleKeyTheftForQA("piano", false));
+    assert(houseSound.staged && houseSound.key.distracted && houseSound.key.reason === "get-behind", `a mansion sound object must distract Mr. Feast but still require the player to get behind him: ${JSON.stringify(houseSound)}`);
+    const wrongSideSteal = await page.evaluate(() => window.MrFeastFresh.attemptFinaleKeyStealForQA());
+    const wrongSideHint = await page.locator("#mansion-discovery-body").textContent();
+    assert(!wrongSideSteal && /sneak behind/i.test(wrongSideHint || ""), `front-side key theft must be refused: ${wrongSideHint}`);
+
+    const thrownSound = await page.evaluate(() => window.MrFeastFresh.stageFinaleKeyTheftForQA("throwable", true));
+    assert(thrownSound.staged && thrownSound.key.eligible && thrownSound.key.distractionKind === "thrown-distraction", `a thrown impact plus a rear approach must enable the theft: ${JSON.stringify(thrownSound)}`);
+    assert(/steal.*keyring/i.test(thrownSound.prompt || ""), `the physical waist keychain must own the E/touch prompt from behind: ${JSON.stringify(thrownSound)}`);
+    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "key-theft-behind-mr-feast.png") });
+    const keyStealStarted = await page.evaluate(() => window.MrFeastFresh.attemptFinaleKeyStealForQA());
+    assert(keyStealStarted, "valid behind-the-back key theft did not start");
+    await page.waitForFunction(
+      () => window.MrFeastFresh.getFinaleSabotageState?.()?.items?.estateKeyring?.owned,
+      null,
+      { timeout: 5000 },
+    );
+    route = await page.evaluate(() => window.MrFeastFresh.getFinaleSabotageState());
+    assert(route.items.estateKeyring.owned && !route.items.estateKeyring.visible && !route.items.estateKeyring.interactive, `stolen keys must enter the Bag and leave Mr. Feast's waist: ${JSON.stringify(route.items.estateKeyring)}`);
+    const unlockedDoor = await page.evaluate(() => window.MrFeastFresh.interactFinaleExteriorDoorForQA("front door"));
+    assert(unlockedDoor.accepted && !unlockedDoor.locked && unlockedDoor.open, `Mr. Feast's stolen key must unlock and open an exterior door: ${JSON.stringify(unlockedDoor)}`);
+    feast = await page.evaluate(() => window.MrFeastFresh.getVictoryFeastState());
+    assert(feast.exteriorExits.unlockedCount >= 1 && feast.ui.objective === "SABOTAGE", `opening the house must hand off to the existing sabotage route: ${JSON.stringify({ exits: feast.exteriorExits, ui: feast.ui })}`);
 
     let boilerPlacement = await page.evaluate(() => window.MrFeastFresh.placePlayerAtBoilerCutoffForQA());
     assert(/empty.*socket/i.test(boilerPlacement?.prompt || ""), `missing crank needs a readable empty-socket prompt: ${JSON.stringify(boilerPlacement)}`);
@@ -153,7 +210,7 @@ async function runBrowserFlow() {
     assert(cutoffStarted, "Boiler cutoff timed interaction did not start");
     await delay(1750);
     route = await page.evaluate(() => window.MrFeastFresh.getFinaleSabotageState());
-    let feast = await page.evaluate(() => window.MrFeastFresh.getVictoryFeastState());
+    feast = await page.evaluate(() => window.MrFeastFresh.getVictoryFeastState());
     const game = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
     assert(route.powerCut && route.items.crank.installed, `crank must cut power and remain visibly installed: ${JSON.stringify(route)}`);
     assert(route.gateColliderEnabled && !route.gateOpened, `power cut must leave the jammed gate physically blocked: ${JSON.stringify(route)}`);

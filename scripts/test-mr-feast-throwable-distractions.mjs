@@ -74,10 +74,10 @@ async function assertSourceContract() {
     readFile(milestonePath, "utf8"),
   ]);
   assert(/const THROWABLE_DISTRACTIONS\s*=\s*Object\.freeze/.test(runtime), "missing named THROWABLE_DISTRACTIONS tuning table");
+  const runtimeVersion = runtime.match(/const MANSION_RUNTIME_VERSION = "([^"]+)";/)?.[1] || null;
   assert(
-    runtime.includes('const MANSION_RUNTIME_VERSION = "20260729-throwable-toggle-carry-1"')
-      && html.includes("mr-feast-mansion.js?v=20260729-throwable-toggle-carry-1"),
-    "page and runtime must share the portable small-props cache identity",
+    runtimeVersion && html.includes(`mr-feast-mansion.js?v=${runtimeVersion}`),
+    "page and runtime must share the active mansion cache identity",
   );
   assert(/class ThrowableDistractionSystem/.test(runtime), "missing focused ThrowableDistractionSystem");
   assert(/minimumPortablePropCount:\s*65/.test(runtime), "cabinet expansion must require at least sixty-five portable objects");

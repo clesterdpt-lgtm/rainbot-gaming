@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260801-flashlight-cone-1";
+  const MANSION_RUNTIME_VERSION = "20260801-instant-smaller-key-victory-seating-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -4047,7 +4047,7 @@
     wineCabinetName: "wine cabinet",
     workroomCabinetName: "workroom tool cabinet",
     pickupActionMs: 520,
-    keyStealActionMs: 620,
+    estateKeyVisualScale: 0.84,
     keyStealDistanceMeters: 1.45,
     keyStealBehindDot: -0.28,
     cutoffActionMs: 1450,
@@ -27708,6 +27708,7 @@
         key.name = `mr-feast-estate-key-${index + 1}`;
         key.position.set(x, -0.25 - index * 0.018, 0.008 * index);
         key.rotation.z = (index - 1) * 0.18;
+        key.scale.setScalar(FINALE_SABOTAGE.estateKeyVisualScale);
         root.add(key);
         const bow = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.009, 7, 16), index === 1 ? brass : darkBrass);
         bow.name = `${key.name}-bow`;
@@ -27859,12 +27860,11 @@
     attemptKeySteal() {
       const status = this.keyStealStatus();
       if (!status.eligible) return this.showKeyStealHint(status);
-      return contestant13Quest?.runTimedAction(
-        "steal-mr-feast-keyring",
-        "Taking Mr. Feast's keyring",
-        FINALE_SABOTAGE.keyStealActionMs,
-        () => this.finishKeySteal(),
-      ) || false;
+      // Mr. Feast keeps walking toward the active sound investigation. Once
+      // the player earns a valid rear approach, the same E/touch press that
+      // targets the moving keyring must complete the theft before he moves
+      // out of the narrow interaction window.
+      return this.finishKeySteal();
     }
 
     createCabinetPickups() {
@@ -28301,6 +28301,7 @@
             owned: this.hasItem(FINALE_SABOTAGE.estateKeyItemId),
             visible: Boolean(finaleSabotageScene.keychainRoot?.visible),
             interactive: this.keyStealInteractionRegistered,
+            visualScale: FINALE_SABOTAGE.estateKeyVisualScale,
             parent: finaleSabotageScene.keychainRoot?.parent?.name || null,
             steal: keyStatus,
           },

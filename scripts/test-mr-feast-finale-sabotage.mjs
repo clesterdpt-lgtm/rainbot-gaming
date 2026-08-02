@@ -43,6 +43,7 @@ async function sourceContract() {
     'crowbarItemId: "finale-crowbar"',
     'crankItemId: "finale-boiler-crank"',
     'estateKeyItemId: "finale-estate-keyring"',
+    "estateKeyVisualScale: 0.84",
     'root.name = "mr-feast-estate-keychain"',
     'name: "wine cabinet"',
     'name: "workroom tool cabinet"',
@@ -72,6 +73,9 @@ async function sourceContract() {
     "attemptFinaleKeyStealForQA",
     "interactFinaleExteriorDoorForQA",
   ]) assert(runtime.includes(hook), `missing finale sabotage QA hook: ${hook}`);
+  const keyStealMethod = runtime.match(/attemptKeySteal\(\) \{([\s\S]*?)\n    \}/)?.[1] || "";
+  assert(keyStealMethod.includes("return this.finishKeySteal();"), "a valid keyring interaction must collect immediately");
+  assert(!keyStealMethod.includes("runTimedAction"), "keyring theft must not use a hold or timed-action window");
 }
 
 async function runBrowserFlow() {
@@ -139,6 +143,7 @@ async function runBrowserFlow() {
     assert(started.started, `Victory Feast dialogue failed to start: ${JSON.stringify(started)}`);
     route = await page.evaluate(() => window.MrFeastFresh.getFinaleSabotageState());
     assert(route.items.estateKeyring.visible, `Mr. Feast's waist keychain must be visible during the Victory Feast: ${JSON.stringify(route.items.estateKeyring)}`);
+    assert(route.items.estateKeyring.visualScale === 0.84, `waist keys must use the reduced visual scale without shrinking interaction reach: ${JSON.stringify(route.items.estateKeyring)}`);
     assert(!route.items.estateKeyring.interactive, `The ceremony must foreshadow the keys without allowing an early theft: ${JSON.stringify(route.items.estateKeyring)}`);
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "victory-feast-waist-keychain.png") });
     await page.evaluate(() => window.MrFeastFresh.skipVictoryFeastDialogueForQA());
@@ -183,14 +188,10 @@ async function runBrowserFlow() {
     assert(/steal.*keyring/i.test(thrownSound.prompt || ""), `the physical waist keychain must own the E/touch prompt from behind: ${JSON.stringify(thrownSound)}`);
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "key-theft-behind-mr-feast.png") });
     const keyStealStarted = await page.evaluate(() => window.MrFeastFresh.attemptFinaleKeyStealForQA());
-    assert(keyStealStarted, "valid behind-the-back key theft did not start");
-    await page.waitForFunction(
-      () => window.MrFeastFresh.getFinaleSabotageState?.()?.items?.estateKeyring?.owned,
-      null,
-      { timeout: 5000 },
-    );
+    assert(keyStealStarted, "valid behind-the-back key theft did not complete");
     route = await page.evaluate(() => window.MrFeastFresh.getFinaleSabotageState());
-    assert(route.items.estateKeyring.owned && !route.items.estateKeyring.visible && !route.items.estateKeyring.interactive, `stolen keys must enter the Bag and leave Mr. Feast's waist: ${JSON.stringify(route.items.estateKeyring)}`);
+    assert(route.items.estateKeyring.owned && route.keyStealCount === 1, `one interaction must put the keys in the Bag immediately: ${JSON.stringify(route)}`);
+    assert(!route.items.estateKeyring.visible && !route.items.estateKeyring.interactive, `stolen keys must leave Mr. Feast's waist immediately: ${JSON.stringify(route.items.estateKeyring)}`);
     const unlockedDoor = await page.evaluate(() => window.MrFeastFresh.interactFinaleExteriorDoorForQA("front door"));
     assert(unlockedDoor.accepted && !unlockedDoor.locked && unlockedDoor.open, `Mr. Feast's stolen key must unlock and open an exterior door: ${JSON.stringify(unlockedDoor)}`);
     feast = await page.evaluate(() => window.MrFeastFresh.getVictoryFeastState());

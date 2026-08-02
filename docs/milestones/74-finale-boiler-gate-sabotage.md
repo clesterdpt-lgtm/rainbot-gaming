@@ -2,7 +2,7 @@
 
 ## Status
 
-The boiler-and-gate route was published on 2026-08-01. The Victory Feast key-theft expansion is implemented locally and awaiting its next requested publish.
+The boiler-and-gate route and Victory Feast key-theft expansion were published on 2026-08-01. The instant keyring-pickup follow-up is implemented locally and awaiting its next requested publish.
 
 ## Player route
 
@@ -10,7 +10,7 @@ The boiler-and-gate route was published on 2026-08-01. The Victory Feast key-the
 2. Unlock the Workroom, open its tool cabinet, and take the physical boiler crank.
 3. Complete all three competitions and report to the Victory Feast. A small physical keychain is visible hanging from Mr. Feast's right waist throughout the ceremony.
 4. When the Feast Father appears, the escape opens with `Find a way to escape. Don't get caught.` Every front and terrace door is locked. Trying one reveals: `You need a key. You noticed one hanging from Mr. Feast's waist.`
-5. Throw a portable object or activate the piano, laundry wringer, or service bell so Mr. Feast leaves to investigate the sound. While he is distracted, sneak behind him and take the physical keyring from his waist. Approaching from the front is refused.
+5. Throw a portable object or activate the piano, laundry wringer, or service bell so Mr. Feast leaves to investigate the sound. While he is distracted, sneak behind him and press E/touch Interact once to take the moving physical keyring instantly. Approaching from the front is refused, but a valid interaction has no hold or timed-action window.
 6. Use the stolen keyring to unlock and open a front or terrace door. Unopened exterior doors remain locked, while the opened route remains usable.
 7. Fit the crank to the Boiler Room's main cutoff. This kills every house and exterior light circuit, disables the cameras, and removes power from the front-gate motor.
 8. Reach the driveway gate and use the crowbar to tear the jammed latch free. Both gate leaves swing open, their collision barrier is disabled, and the escape is completed.
@@ -42,11 +42,11 @@ The crowbar and crank may be discovered before the finale, but the Boiler Room c
 
 - The crowbar is visible and interactable only while the Wine Cellar cabinet is open and disappears after collection.
 - The crank follows the same rule in the Workroom tool cabinet.
-- A modeled brass keychain hangs at Mr. Feast's right waist during every Victory Feast phase until it is stolen.
+- A modeled brass keychain hangs at Mr. Feast's right waist during every Victory Feast phase until it is stolen; its three keys use a restrained `0.84×` visual scale while the forgiving interaction hitbox remains unchanged.
 - The keychain is visual foreshadowing during the ceremony and only becomes interactable during the escape chase.
 - All front and terrace doors close and lock at chase start, and a locked-door interaction points back to the waist key.
 - Neither an undistracted approach nor an approach from in front of Mr. Feast can take the keys.
-- Both a thrown-object impact and an active mansion sound prop can create the distraction window; a rear, close-range interaction during that window adds the keyring to the Bag and removes it from his waist.
+- Both a thrown-object impact and an active mansion sound prop can create the distraction window; one rear, close-range E/touch interaction during that window immediately adds the keyring to the Bag and removes it from his waist in the same input turn.
 - The stolen keyring unlocks one selected exterior door without silently unlocking every other door.
 - The Boiler Room cutoff exposes no interaction before the Feast Father chase.
 - During the chase, the cutoff requires the crank and supplies a missing-crank clue when needed.

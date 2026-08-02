@@ -87,7 +87,7 @@ async function assertSourceContract() {
   assert(source.includes("placePlayerAtStormScareTriggerForQA"), "authored scare positions need a focused proximity QA hook");
   assert(source.includes("completeStormRunForQA"), "Storm Run outcomes must be deterministic in QA");
   assert(source.includes("beginStormRunAftermath"), "a player victory must stage Mara's witnessed Storm Run aftermath before removing her");
-  assert(source.includes('eliminatedAction: "cover-face"'), "Storm Run must author Mara's hands-over-face loss separately from Kip's Feast Says pose");
+  assert(source.includes('eliminatedAction: "cover-face"'), "Storm Run must retain the shared hands-over-face loss action");
   assert(source.includes('"storm-run-aftermath"'), "Storm Run must keep Mara and Juniper staged during the finish aftermath");
   assert(source.includes("completeStormRunWithAftermathForQA"), "Storm Run must expose a focused QA path that preserves its witnessed aftermath");
   assert(source.includes("syncStormRunAftermathVisibility"), "the witnessed Storm Run ending must continuously keep Mr. Feast visible at the back door");

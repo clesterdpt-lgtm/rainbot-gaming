@@ -972,7 +972,7 @@ async function run() {
   assert(/updateFeastSaysAftermathEntry\(/.test(runtimeSource), "surviving contestants must visibly walk back to their normal routines");
   assert(/resolveAftermath\(/.test(runtimeSource), "Feast Says must defer Kip's disappearance and Mr. Feast's release until the player leaves");
   assert(/consumePostGameContestantLine\(/.test(runtimeSource), "survivors need a one-use post-game conversation before returning to normal dialogue");
-  assert(/challengeMotionKind\s*=\s*["']upset["']/.test(runtimeSource), "Kip needs a readable upset aftermath pose");
+  assert(/const FEAST_SAYS\s*=\s*Object\.freeze\([\s\S]{0,1800}aftermath:\s*Object\.freeze\([\s\S]{0,500}eliminatedAction:\s*["']cover-face["']/.test(runtimeSource), "Kip must reuse Mara's hands-over-face loss action");
   assert(/contestantLine:[\s\S]{0,240}hostWarning:/.test(runtimeSource), "the command deck needs contestant banter paired with Mr. Feast's no-talking warnings");
   assert(/applyChallengeResponsePose\(/.test(runtimeSource), "contestant responses need a challenge-only skeletal pose layer");
   assert(/returnSeconds:\s*0\.[5-9]/.test(runtimeSource), "contestant response motion needs a named eased-return duration");
@@ -1254,7 +1254,9 @@ async function run() {
     assert(state.feastSays.staging.hostStaged && state.contestants.challengeMode === "feast-says-aftermath", `Mr. Feast and the cast should remain staged during the aftermath; got ${JSON.stringify({ feast: state.feastSays.staging, contestants: state.contestants.challengeMode })}`);
     const aftermathKip = state.contestants.entries.find((entry) => entry.id === "kip-solano");
     assert(!aftermathKip?.eliminated && aftermathKip?.modelVisible && !aftermathKip?.interactionRegistered, `Kip should remain visible but unavailable for normal chatter during his scripted loss; got ${JSON.stringify(aftermathKip)}`);
-    assert(aftermathKip?.challengeResponse?.motion?.kind === "upset" && aftermathKip.challengeResponse.motion.upperBodyMaximumAngleDegrees >= 8, `Kip needs a visibly slumped upset pose; got ${JSON.stringify(aftermathKip?.challengeResponse)}`);
+    assert(aftermathKip?.challengeResponse?.action === "cover-face" && aftermathKip.challengeResponse.motion?.kind === "cover-face", `Kip must use the same hands-over-face loss action as Mara; got ${JSON.stringify(aftermathKip?.challengeResponse)}`);
+    assert(aftermathKip.challengeResponse.motion.upperBodyMaximumAngleDegrees >= 25, `Kip's shared loss pose must visibly raise and fold both arms; got ${JSON.stringify(aftermathKip.challengeResponse.motion)}`);
+    assert(aftermathKip.challengeResponse.motion.faceCoverHandDistances?.left <= 0.34 && aftermathKip.challengeResponse.motion.faceCoverHandDistances?.right <= 0.34, `both of Kip's hands must reach his face like Mara's loss pose; got ${JSON.stringify(aftermathKip.challengeResponse.motion.faceCoverHandDistances)}`);
     assert(state.speech?.speakerId === "kip-solano" && /give back the money|do it again/i.test(state.speech.text || ""), `Kip should plead immediately after losing; got ${JSON.stringify(state.speech)}`);
     const returningSurvivors = state.contestants.entries.filter((entry) => ["mara-voss", "juniper-cross"].includes(entry.id));
     assert(returningSurvivors.every((entry) => entry.aftermathReturn?.active), `both surviving contestants should start walking home; got ${JSON.stringify(returningSurvivors.map((entry) => ({ id: entry.id, aftermathReturn: entry.aftermathReturn })))}`);

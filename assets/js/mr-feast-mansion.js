@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260802-contestant-palms-1";
+  const MANSION_RUNTIME_VERSION = "20260802-kip-loss-cover-face-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2782,6 +2782,7 @@
       kipLineSeconds: 4.8,
       hostLine: "You misunderstand, Kip. Losing is how you become part of the show.",
       hostLineSeconds: 4.5,
+      eliminatedAction: "cover-face",
       returnSpeed: 1.05,
       arrivalRadius: 0.08,
       farMainFloorDistance: 13,

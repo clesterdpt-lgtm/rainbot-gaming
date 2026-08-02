@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260801-victory-screen-save-picker-1";
+  const MANSION_RUNTIME_VERSION = "20260802-victory-feast-candle-clear-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -3940,38 +3940,57 @@
       "But one final challenge remains. Survive me. Survive the Feast Father. Survive the house.",
     ]),
     hostMark: Object.freeze({
-      x: -12.82,
+      // Center Mr. Feast on the table's west end, one full step behind the
+      // head-chair backrest. This reads as deliberate host staging while
+      // preserving visible air between his body, the chair, and the wall.
+      x: -13.95,
       y: FLOOR.MAIN,
       z: -8.4,
       yaw: Math.PI / 2,
       scale: 1.04,
     }),
-    // Clear floor east of the guest-of-honor chair (-6.7, -8.4) and north of
-    // the table. The old mark sat inside that chair collider, so escape began
-    // with the player stuck and immovable.
-    playerMark: Object.freeze({
-      x: -5.55,
-      y: FLOOR.MAIN,
-      z: -6.55,
-      yaw: Math.PI / 2,
-      pitch: -0.04,
+    hostChairTag: "victory-feast-host-chair",
+    playerSeatTag: "victory-feast-winner",
+    playerSeatPitch: -0.04,
+    spreadPresentation: Object.freeze({
+      // Keep the celebration dense, but push the winner-end hero dish away
+      // from the seated camera so it reads as table dressing instead of a
+      // first-person foreground wall.
+      winnerEndPlatter: Object.freeze({ x: -8.65, z: -8.8, radius: 0.32 }),
+      layerCake: Object.freeze({ radius: 0.16, height: 0.17 }),
+      nearCloche: Object.freeze({ x: -9.55, z: -8.12, radius: 0.14, height: 0.14 }),
+      maximumCakeAngularDiameterDegrees: 10.5,
     }),
-    // Stand just north of the west table head so the player can aim at Mr.
-    // Feast himself (interaction range 2.35m) rather than the mid-table prop.
-    reportApproach: Object.freeze({
-      x: -12.1,
+    // Standing clearance directly behind the east head chair. The seated
+    // capsule is disabled during the speech, then restored only at this mark.
+    playerReleaseMark: Object.freeze({
+      x: -5.52,
       y: FLOOR.MAIN,
-      z: -6.85,
-      yaw: 0.43,
+      z: -8.4,
+      yaw: 2.14,
+      pitch: -0.06,
+    }),
+    // Approach from the chair's open north side so reporting never asks the
+    // player to squeeze between Mr. Feast, the chair, and the west wall.
+    reportApproach: Object.freeze({
+      x: -13.65,
+      y: FLOOR.MAIN,
+      z: -6.95,
+      yaw: 0.204,
       pitch: -0.08,
     }),
     reportInteractionMark: Object.freeze({
-      x: -12.82,
+      x: -13.95,
       y: FLOOR.MAIN,
       z: -8.4,
       width: 1.08,
       height: 2.18,
       depth: 1.08,
+    }),
+    productionMark: Object.freeze({
+      x: -13.65,
+      y: FLOOR.MAIN,
+      z: -8.4,
     }),
     saintCorner: Object.freeze({
       x: -13.35,
@@ -3987,6 +4006,7 @@
       lightDistance: 9.5,
       playerYaw: 2.14,
       playerPitch: -0.06,
+      productionClearanceMeters: 1.2,
       flashDecayPerSecond: 2.8,
       flashPulses: Object.freeze([
         Object.freeze({ delay: 0, strength: 1 }),
@@ -28446,6 +28466,62 @@
       return this.hostReady() && this.saintReadyForReveal();
     }
 
+    winnerSeat() {
+      return seatingSystem?.entryForTag(VICTORY_FEAST.playerSeatTag) || null;
+    }
+
+    hostChair() {
+      return seatingSystem?.entryForTag(VICTORY_FEAST.hostChairTag) || null;
+    }
+
+    prepareWinnerSeat() {
+      const seat = this.winnerSeat();
+      if (!seat) return { prepared: false, reason: "winner-seat-missing" };
+      if (seat.occupantBy && seat.occupantBy !== "player") {
+        seatingSystem?.releaseNpc(seat.occupantBy);
+      }
+      const tamperEntry = seat.tamperId ? tamperSystem?.byId.get(seat.tamperId) : null;
+      if (tamperEntry?.tampered) tamperSystem.setTampered(tamperEntry, false, "competition");
+      return {
+        prepared: !seat.occupantBy || seat.occupantBy === "player",
+        seatId: seat.id,
+      };
+    }
+
+    seatPlayerForDialogue() {
+      const prepared = this.prepareWinnerSeat();
+      if (!prepared.prepared) return { seated: false, reason: prepared.reason };
+      const result = seatingSystem?.sitPlayer(prepared.seatId)
+        || { seated: false, reason: "seating-unavailable" };
+      if (!result.seated) return result;
+      state.pitch = VICTORY_FEAST.playerSeatPitch;
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      return result;
+    }
+
+    playerReleaseIsClear() {
+      if (!physics) return false;
+      const mark = VICTORY_FEAST.playerReleaseMark;
+      return physics.canCharacterOccupy(
+        { x: mark.x, y: mark.y, z: mark.z },
+        PLAYER.radius,
+        PLAYER.halfHeight * 2 + PLAYER.radius * 2,
+      );
+    }
+
+    nearestHostChairDistance() {
+      if (!seatingSystem?.entries?.length || !mrFeastNpc?.root) return null;
+      return seatingSystem.entries.reduce((nearest, seat) => {
+        const position = seatingSystem.worldPoint(seat, "localSeat");
+        const distance = Math.hypot(
+          mrFeastNpc.root.position.x - position.x,
+          mrFeastNpc.root.position.z - position.z,
+        );
+        return Math.min(nearest, distance);
+      }, Infinity);
+    }
+
     saveCheckpointTransform() {
       const transient = [
         VICTORY_FEAST_PHASE.DIALOGUE,
@@ -28630,13 +28706,13 @@
         interactionsEnabled: false,
         visible: true,
       });
-      teleport(
-        VICTORY_FEAST.playerMark.x,
-        VICTORY_FEAST.playerMark.y,
-        VICTORY_FEAST.playerMark.z,
-        VICTORY_FEAST.playerMark.yaw,
-        VICTORY_FEAST.playerMark.pitch,
-      );
+      const seated = this.seatPlayerForDialogue();
+      if (!seated.seated) {
+        this.show.staged = false;
+        mrFeastNpc.releaseChallenge();
+        mrFeastNpc.setChallengeInteractionsEnabled(true);
+        return { started: false, reason: seated.reason || "winner-seat-unavailable" };
+      }
       this.transition(VICTORY_FEAST_PHASE.DIALOGUE, "reported-to-dining-room");
       this.playDialogueLine(0);
       updateMovementHud();
@@ -28913,13 +28989,13 @@
       demonPrototypePatrol?.setFinaleRevealVisible(false);
       const saint = demonPrototypePatrol?.saintEntry();
       if (saint) saint.root.visible = false;
-      teleport(
-        VICTORY_FEAST.playerMark.x,
-        VICTORY_FEAST.playerMark.y,
-        VICTORY_FEAST.playerMark.z,
-        VICTORY_FEAST.reveal.playerYaw,
-        VICTORY_FEAST.reveal.playerPitch,
-      );
+      // The winner remains physically seated through the blackout. Only the
+      // view turns toward the Feast Father; the capsule stays disabled until
+      // the escape phase explicitly releases it.
+      state.yaw = VICTORY_FEAST.reveal.playerYaw;
+      state.pitch = VICTORY_FEAST.reveal.playerPitch;
+      syncCamera();
+      camera.updateMatrixWorld(true);
       this.stageHostForDialogue();
       // Keep the lightning sightline clear, especially on phones. The compact
       // finale HUD carries the objective while the Saint occupies the frame.
@@ -28969,25 +29045,25 @@
     }
 
     releasePlayerForEscape() {
-      // Dialogue/reveal park the player at playerMark and lock movement. Clear
-      // any seat state and re-enable the capsule so the escape phase is free.
+      // Dialogue/reveal keep the player in the winner chair with the capsule
+      // disabled. Stand first to release ownership, then put the capsule on a
+      // known-clear mark behind the chair before free movement resumes.
       if (state.activeSeat) seatingSystem?.standPlayer();
       if (state.isHidden) state.activeHideSpot?.exit();
-      if (physics?.playerCollider) physics.playerCollider.setEnabled(true);
       clearMovementInput();
       state.movement.crouched = false;
       state.movement.sprinting = false;
       state.movement.eyeHeight = PLAYER.eye;
       state.movement.mode = "idle";
-      // Stay on the clear mark (not the guest chair) and keep the reveal facing
-      // so the Saint remains in the beam/sightline when movement returns.
+      const releaseMark = VICTORY_FEAST.playerReleaseMark;
       teleport(
-        VICTORY_FEAST.playerMark.x,
-        VICTORY_FEAST.playerMark.y,
-        VICTORY_FEAST.playerMark.z,
-        VICTORY_FEAST.reveal.playerYaw,
-        VICTORY_FEAST.reveal.playerPitch,
+        releaseMark.x,
+        releaseMark.y,
+        releaseMark.z,
+        releaseMark.yaw,
+        releaseMark.pitch,
       );
+      if (physics?.playerCollider) physics.playerCollider.setEnabled(true);
       if (physics) {
         const body = physics.playerPosition();
         physics.lastSafePosition = { x: body.x, y: body.y, z: body.z };
@@ -29522,6 +29598,70 @@
         .filter(Boolean);
       const camerasFacingWinner = cameraDiagnostics.length >= 2
         && cameraDiagnostics.every((entry) => entry.facingTargetDot >= 0.94);
+      const winnerSeat = this.winnerSeat();
+      const winnerSeatPosition = winnerSeat
+        ? seatingSystem.worldPoint(winnerSeat, "localSeat")
+        : null;
+      const releaseMark = VICTORY_FEAST.playerReleaseMark;
+      const hostChairDistance = this.nearestHostChairDistance();
+      const hostChair = this.hostChair();
+      const hostChairPosition = hostChair
+        ? seatingSystem.worldPoint(hostChair, "localSeat")
+        : null;
+      const hostChairYaw = hostChair ? seatingSystem.worldYaw(hostChair) : null;
+      const hostChairBackX = Number.isFinite(hostChairYaw) ? Math.sin(hostChairYaw) : null;
+      const hostChairBackZ = Number.isFinite(hostChairYaw) ? Math.cos(hostChairYaw) : null;
+      const hostFromChairX = hostChairPosition
+        ? VICTORY_FEAST.hostMark.x - hostChairPosition.x
+        : null;
+      const hostFromChairZ = hostChairPosition
+        ? VICTORY_FEAST.hostMark.z - hostChairPosition.z
+        : null;
+      const hostBehindChairDistance = Number.isFinite(hostChairBackX)
+        ? hostFromChairX * hostChairBackX + hostFromChairZ * hostChairBackZ
+        : null;
+      const hostChairCenterlineOffset = Number.isFinite(hostChairBackX)
+        ? Math.abs(hostFromChairX * hostChairBackZ - hostFromChairZ * hostChairBackX)
+        : null;
+      const revealLineClearance = (entry) => {
+        if (!winnerSeatPosition || !entry?.position) return null;
+        const startX = winnerSeatPosition.x;
+        const startZ = winnerSeatPosition.z;
+        const endX = VICTORY_FEAST.saintCorner.x;
+        const endZ = VICTORY_FEAST.saintCorner.z;
+        const lineX = endX - startX;
+        const lineZ = endZ - startZ;
+        const lineLengthSquared = lineX * lineX + lineZ * lineZ;
+        const amount = lineLengthSquared > 0.0001
+          ? clamp(
+            ((entry.position.x - startX) * lineX + (entry.position.z - startZ) * lineZ)
+              / lineLengthSquared,
+            0,
+            1,
+          )
+          : 0;
+        const nearestX = startX + lineX * amount;
+        const nearestZ = startZ + lineZ * amount;
+        return Math.hypot(entry.position.x - nearestX, entry.position.z - nearestZ);
+      };
+      const cameraRevealClearances = cameraDiagnostics
+        .map(revealLineClearance)
+        .filter(Number.isFinite);
+      const minimumCameraRevealClearance = cameraRevealClearances.length
+        ? Math.min(...cameraRevealClearances)
+        : null;
+      const winnerEndPlatter = VICTORY_FEAST.spreadPresentation.winnerEndPlatter;
+      const winnerEndDistance = winnerSeatPosition
+        ? Math.hypot(
+          winnerEndPlatter.x - winnerSeatPosition.x,
+          winnerEndPlatter.z - winnerSeatPosition.z,
+        )
+        : null;
+      const cakeAngularDiameter = winnerEndDistance
+        ? THREE.MathUtils.radToDeg(2 * Math.atan(
+          VICTORY_FEAST.spreadPresentation.layerCake.radius / winnerEndDistance,
+        ))
+        : null;
       return {
         phase: this.show.phase,
         triggerReason: this.show.triggerReason,
@@ -29535,6 +29675,17 @@
         player: {
           movementLocked: this.locksPlayerMovement(),
           hidden: Boolean(state.isHidden),
+          seated: Boolean(winnerSeat && state.activeSeat === winnerSeat && winnerSeat.occupantBy === "player"),
+          seatId: state.activeSeat?.id || null,
+          colliderEnabled: Boolean(physics?.playerCollider?.isEnabled?.()),
+          winnerSeatTag: VICTORY_FEAST.playerSeatTag,
+          winnerSeatPosition: winnerSeatPosition ? {
+            x: Number(winnerSeatPosition.x.toFixed(3)),
+            y: Number(winnerSeatPosition.y.toFixed(3)),
+            z: Number(winnerSeatPosition.z.toFixed(3)),
+          } : null,
+          releaseMark: { ...releaseMark },
+          releaseMarkClear: this.playerReleaseIsClear(),
         },
         host: {
           visible: hostVisible,
@@ -29547,6 +29698,20 @@
           ),
           unobstructedSightline: victoryFeastScene.spreadServingDishCount >= 4,
           mark: { ...VICTORY_FEAST.hostMark },
+          reportApproach: { ...VICTORY_FEAST.reportApproach },
+          nearestChairDistanceMeters: Number.isFinite(hostChairDistance)
+            ? Number(hostChairDistance.toFixed(3))
+            : null,
+          headChairId: hostChair?.id || null,
+          behindHeadChair: Number.isFinite(hostBehindChairDistance)
+            && hostBehindChairDistance >= 1.2
+            && hostChairCenterlineOffset <= 0.08,
+          behindChairDistanceMeters: Number.isFinite(hostBehindChairDistance)
+            ? Number(hostBehindChairDistance.toFixed(3))
+            : null,
+          chairCenterlineOffsetMeters: Number.isFinite(hostChairCenterlineOffset)
+            ? Number(hostChairCenterlineOffset.toFixed(3))
+            : null,
         },
         production: {
           visible: Boolean(victoryFeastScene.root?.visible),
@@ -29556,12 +29721,26 @@
           ),
           camerasFacingWinner,
           cameras: cameraDiagnostics,
+          revealClearanceMeters: Number.isFinite(minimumCameraRevealClearance)
+            ? Number(minimumCameraRevealClearance.toFixed(3))
+            : null,
+          revealClearanceRequiredMeters: VICTORY_FEAST.reveal.productionClearanceMeters,
+          revealSightlineClear: Number.isFinite(minimumCameraRevealClearance)
+            && minimumCameraRevealClearance >= VICTORY_FEAST.reveal.productionClearanceMeters,
         },
         spread: {
           visible: Boolean(victoryFeastScene.spreadRoot?.visible),
           foodPropCount: victoryFeastScene.spreadFoodPropCount,
           servingDishCount: victoryFeastScene.spreadServingDishCount,
           gameplayCollidersAdded: 0,
+          winnerEndDistanceMeters: Number.isFinite(winnerEndDistance)
+            ? Number(winnerEndDistance.toFixed(3))
+            : null,
+          winnerEndCakeAngularDiameterDegrees: Number.isFinite(cakeAngularDiameter)
+            ? Number(cakeAngularDiameter.toFixed(2))
+            : null,
+          maximumCakeAngularDiameterDegrees:
+            VICTORY_FEAST.spreadPresentation.maximumCakeAngularDiameterDegrees,
         },
         dialogue: {
           authoredLines: [...VICTORY_FEAST.dialogueLines],
@@ -40355,23 +40534,27 @@
     const reportRoot = new THREE.Group();
     reportRoot.name = "victory-feast-production-call-set";
     reportRoot.position.set(
-      VICTORY_FEAST.hostMark.x,
-      VICTORY_FEAST.hostMark.y,
-      VICTORY_FEAST.hostMark.z,
+      VICTORY_FEAST.productionMark.x,
+      VICTORY_FEAST.productionMark.y,
+      VICTORY_FEAST.productionMark.z,
     );
     root.add(reportRoot);
     victoryFeastScene.reportRoot = reportRoot;
     const winnerFraming = Object.freeze({
       subject: "Victory Feast winner and host",
       locked: true,
-      target: Object.freeze({ x: 3.05, y: 1.2, z: 0 }),
+      // Midpoint between Mr. Feast behind the west head chair and the seated
+      // winner at the east head chair.
+      target: Object.freeze({ x: 3.305, y: 1.2, z: 0 }),
     });
     const northSet = addCompetitionFilmSet(reportRoot, {
       id: "victory-feast-north",
       audienceSide: 1,
       accentColor: 0xffcf82,
       cameraFraming: winnerFraming,
-      cameraPlacement: Object.freeze({ x: 5, audienceZ: 1.75 }),
+      // Pull this camera toward the north table edge. From the winner's chair
+      // it now sits well outside the diagonal lightning view to the Father.
+      cameraPlacement: Object.freeze({ x: 2, audienceZ: 0.9 }),
       lightFraming: winnerFraming,
     });
     const southSet = addCompetitionFilmSet(reportRoot, {
@@ -40379,7 +40562,7 @@
       audienceSide: -1,
       accentColor: 0xd9a45e,
       cameraFraming: winnerFraming,
-      cameraPlacement: Object.freeze({ x: 5, audienceZ: 1.75 }),
+      cameraPlacement: Object.freeze({ x: 3, audienceZ: 1.85 }),
       lightFraming: winnerFraming,
     });
     // The Dining Room already has a chandelier and camera-readable practicals.
@@ -40396,8 +40579,8 @@
       });
     }
     victoryFeastScene.filmSets.push(northSet, southSet);
-    // Host-body report hitbox sits on Mr. Feast (reportRoot is at hostMark),
-    // matching the other competitions' film-set host start targets.
+    // The camera rig keeps its own symmetric table staging, so offset the
+    // report target back onto Mr. Feast's clear northwest-corner mark.
     const reportMark = VICTORY_FEAST.reportInteractionMark;
     const reportHitbox = new THREE.Mesh(
       new THREE.BoxGeometry(
@@ -40412,7 +40595,11 @@
       }),
     );
     reportHitbox.name = "victory-feast-report-hitbox";
-    reportHitbox.position.set(0, reportMark.height / 2, 0);
+    reportHitbox.position.set(
+      reportMark.x - VICTORY_FEAST.productionMark.x,
+      reportMark.height / 2,
+      reportMark.z - VICTORY_FEAST.productionMark.z,
+    );
     reportRoot.add(reportHitbox);
     victoryFeastScene.reportHitbox = reportHitbox;
 
@@ -40441,16 +40628,22 @@
       roughness: 0.76,
       metalness: 0,
     });
-    const servingCenters = [-11.65, -10.35, -9.05, -7.75];
-    servingCenters.forEach((x, index) => {
+    const winnerEndPlatter = VICTORY_FEAST.spreadPresentation.winnerEndPlatter;
+    const servingCenters = [
+      Object.freeze({ x: -11.65, z: -8.4, radius: 0.42 }),
+      Object.freeze({ x: -10.35, z: -8.4, radius: 0.42 }),
+      Object.freeze({ x: -9.05, z: -8.4, radius: 0.42 }),
+      winnerEndPlatter,
+    ];
+    servingCenters.forEach((placement, index) => {
       cylinder({
         name: `victory-feast-serving-platter-${index + 1}`,
-        radius: 0.42,
+        radius: placement.radius,
         height: 0.035,
         segments: 28,
-        x,
+        x: placement.x,
         y: 0.018,
-        z: -8.4,
+        z: placement.z,
         material: silver,
         parent: spreadRoot,
         cast: false,
@@ -40510,45 +40703,50 @@
       });
       victoryFeastScene.spreadFoodPropCount += 1;
     }
+    const layerCake = VICTORY_FEAST.spreadPresentation.layerCake;
     cylinder({
       name: "victory-feast-layer-cake",
-      radius: 0.26,
-      radiusTop: 0.22,
-      radiusBottom: 0.28,
-      height: 0.28,
+      radius: layerCake.radius,
+      radiusTop: layerCake.radius * 0.84,
+      radiusBottom: layerCake.radius * 1.08,
+      height: layerCake.height,
       segments: 24,
-      x: -7.75,
-      y: 0.17,
-      z: -8.4,
+      x: winnerEndPlatter.x,
+      y: 0.12,
+      z: winnerEndPlatter.z,
       material: cream,
       parent: spreadRoot,
       cast: false,
     });
     victoryFeastScene.spreadFoodPropCount += 1;
-    for (const x of [-7.91, -7.75, -7.59]) {
+    for (const offsetX of [-0.09, 0, 0.09]) {
       sphere({
         name: "victory-feast-cake-berry",
-        radius: 0.045,
-        x,
-        y: 0.34,
-        z: -8.4,
+        radius: 0.03,
+        x: winnerEndPlatter.x + offsetX,
+        y: 0.205,
+        z: winnerEndPlatter.z,
         material: M.produce,
         parent: spreadRoot,
         cast: false,
       });
       victoryFeastScene.spreadFoodPropCount += 1;
     }
-    for (const x of [-11.0, -8.4]) {
+    const clochePlacements = [
+      Object.freeze({ x: -11, z: -8.4, radius: 0.22, height: 0.24 }),
+      VICTORY_FEAST.spreadPresentation.nearCloche,
+    ];
+    for (const placement of clochePlacements) {
       cylinder({
         name: "victory-feast-silver-cloche",
-        radius: 0.22,
+        radius: placement.radius,
         radiusTop: 0.045,
-        radiusBottom: 0.24,
-        height: 0.24,
+        radiusBottom: placement.radius * 1.08,
+        height: placement.height,
         segments: 24,
-        x,
-        y: 0.14,
-        z: -8.4,
+        x: placement.x,
+        y: placement.height / 2 + 0.02,
+        z: placement.z,
         material: silver,
         parent: spreadRoot,
         cast: false,
@@ -40666,7 +40864,10 @@
     addLocalInstanceBatch("dining-service-plates", group, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 16), M.porcelain, plates);
     addLocalInstanceBatch("dining-service-goblets", group, "unitGoblet", () => new THREE.CylinderGeometry(0.72, 1, 1, 12), M.brass, goblets);
     addLocalInstanceBatch("dining-service-napkins", group, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.canvasLinen, napkins);
-    for (const x of [-11.05, -8.35]) {
+    // The former winner-end candelabrum at x=-8.35 sat directly on the seated
+    // player-to-host centerline and covered Mr. Feast from the waist up. Keep
+    // the farther fixture for atmosphere, but leave the hero sightline open.
+    for (const x of [-11.05]) {
       cylinder({ name: "dining-candelabrum-base", radius: 0.095, height: 0.035, segments: 14, x, y: 0.018, z: -8.4, material: M.brass, parent: group, cast: false });
       cylinder({ name: "dining-candelabrum-stem", radius: 0.026, height: 0.35, segments: 10, x, y: 0.2, z: -8.4, material: M.brass, parent: group, cast: false });
       box({ name: "dining-candelabrum-crossarm", w: 0.44, h: 0.026, d: 0.045, x, y: 0.375, z: -8.4, material: M.brass, parent: group, cast: false });
@@ -41053,8 +41254,15 @@
     addChair(-8.95, -9.55, FLOOR.MAIN, Math.PI, M.darkWood);
     addChair(-7.4, -7.25, FLOOR.MAIN, 0, M.darkWood);
     addChair(-7.4, -9.55, FLOOR.MAIN, Math.PI, M.darkWood);
-    addChair(-12.7, -8.4, FLOOR.MAIN, -Math.PI / 2, M.darkWood);
-    addChair(-6.7, -8.4, FLOOR.MAIN, Math.PI / 2, M.darkWood);
+    addChair(-12.7, -8.4, FLOOR.MAIN, -Math.PI / 2, M.darkWood, {
+      seatTag: VICTORY_FEAST.hostChairTag,
+    });
+    addChair(-6.7, -8.4, FLOOR.MAIN, Math.PI / 2, M.darkWood, {
+      seatTag: VICTORY_FEAST.playerSeatTag,
+      // Local +z points east for this chair: one deliberate stand-up step
+      // therefore clears both the chair back and the dining-table end.
+      exitLocal: { x: 0, y: 0, z: 1.18 },
+    });
     new Cabinet({ name: "dining sideboard", x: -14.0, z: -11.22, floorY: FLOOR.MAIN, width: 1.6, height: 1.35, rotationY: 0, stockKind: "sideboard", interiorLight: false });
     // This household portrait foreshadows the final guest through ritual
     // posture and a veiled silhouette, never a readable creature design.

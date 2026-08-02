@@ -85,6 +85,10 @@ async function assertSourceContract() {
     /const VICTORY_FEAST\s*=\s*Object\.freeze/.test(runtime),
     "missing named VICTORY_FEAST tuning table",
   );
+  assert(
+    /former winner-end candelabrum at x=-8\.35[\s\S]*for \(const x of \[-11\.05\]\)/.test(runtime),
+    "the winner-end candle must stay removed from the Mr. Feast sightline",
+  );
   assert(/class VictoryFeastSystem/.test(runtime), "missing focused VictoryFeastSystem");
   assert(/victoryFeast:\s*\{/.test(runtime), "authoritative mansion state must own Victory Feast");
   assert(
@@ -262,15 +266,34 @@ async function runBrowserFlow() {
       feast.phase === "dialogue"
         && feast.staged
         && feast.player.movementLocked
+        && feast.player.seated
+        && feast.player.seatId === "seat-victory-feast-winner"
+        && feast.player.colliderEnabled === false
+        && feast.player.releaseMarkClear
         && feast.host.visible
         && feast.host.facingPlayer
+        && feast.host.nearestChairDistanceMeters >= 1.2
+        && feast.host.headChairId === "seat-victory-feast-host-chair"
+        && feast.host.behindHeadChair
+        && feast.host.behindChairDistanceMeters >= 1.2
+        && feast.host.chairCenterlineOffsetMeters <= 0.08
         && feast.production.cameraCount >= 2
         && feast.production.camerasFacingWinner
         && feast.spread.foodPropCount >= 12
         && feast.spread.servingDishCount >= 4
         && feast.spread.gameplayCollidersAdded === 0
+        && feast.spread.winnerEndDistanceMeters >= 1.9
+        && feast.spread.winnerEndCakeAngularDiameterDegrees
+          <= feast.spread.maximumCakeAngularDiameterDegrees
         && feast.host.unobstructedSightline,
       `Dining Room production feast is incomplete: ${JSON.stringify(feast)}`,
+    );
+    assert(
+      Math.hypot(
+        (feast.player.winnerSeatPosition?.x ?? 0) + 6.74,
+        (feast.player.winnerSeatPosition?.z ?? 0) + 8.4,
+      ) <= 0.08,
+      `the winner must be seated in the east end chair during Mr. Feast's speech: ${JSON.stringify(feast.player)}`,
     );
     await page.locator("#mansion-stage").screenshot({
       path: path.join(artifactDir, "victory-feast-spread-desktop.png"),
@@ -315,6 +338,8 @@ async function runBrowserFlow() {
     game = await diagnostics(page);
     assert(
       feast.phase === "reveal"
+        && feast.player.seated
+        && feast.player.colliderEnabled === false
         && feast.blackout.active
         && feast.blackout.allInteriorOff
         && feast.blackout.offCircuitCount === feast.blackout.interiorCircuitCount
@@ -337,6 +362,9 @@ async function runBrowserFlow() {
         && feast.saint.cornerPlacement
         && feast.saint.onScreen
         && feast.saint.lineOfSight
+        && feast.production.revealSightlineClear
+        && feast.production.revealClearanceMeters
+          >= feast.production.revealClearanceRequiredMeters
         && feast.reveal.count === 1,
       `lightning must reveal one grounded in-view Saint without Developer Mode: ${JSON.stringify({
         devMode: game.devMode,
@@ -389,7 +417,7 @@ async function runBrowserFlow() {
         seatId: game.player?.seatId || game.seating?.player?.seatId || null,
         stance: game.player?.movement?.stance || null,
         movementMode: game.player?.movement?.mode || null,
-        movementLocked: Boolean(window.MrFeastFresh.getVictoryFeastState()?.player?.movementLocked),
+        finalePlayer: window.MrFeastFresh.getVictoryFeastState()?.player || null,
         x: game.player?.x,
         z: game.player?.z,
       };
@@ -397,11 +425,54 @@ async function runBrowserFlow() {
     assert(
       !escapeMobility.seated
         && !escapeMobility.seatId
-        && !escapeMobility.movementLocked
+        && !escapeMobility.finalePlayer?.movementLocked
+        && escapeMobility.finalePlayer?.colliderEnabled
+        && escapeMobility.finalePlayer?.releaseMarkClear
         && escapeMobility.stance === "standing"
-        && Math.hypot((escapeMobility.x ?? 0) + 5.55, (escapeMobility.z ?? 0) + 6.55) <= 0.25,
+        && Math.hypot(
+          (escapeMobility.x ?? 0) - escapeMobility.finalePlayer.releaseMark.x,
+          (escapeMobility.z ?? 0) - escapeMobility.finalePlayer.releaseMark.z,
+        ) <= 0.12,
       `escape must free the player from the dining chair: ${JSON.stringify(escapeMobility)}`,
     );
+
+    await page.evaluate(() => window.MrFeastFresh.resetMrFeastWandererForQA());
+    const movementStart = await diagnostics(page);
+    await page.keyboard.down("s");
+    try {
+      await page.waitForFunction(({ x, z }) => {
+        const player = JSON.parse(window.render_game_to_text()).player;
+        return Math.hypot(player.x - x, player.z - z) >= 0.45;
+      }, { x: movementStart.player.x, z: movementStart.player.z }, { timeout: 4000 });
+    } finally {
+      await page.keyboard.up("s");
+    }
+    await page.waitForTimeout(120);
+    const movementEnd = await diagnostics(page);
+    assert(
+      Math.hypot(
+        movementEnd.player.x - movementStart.player.x,
+        movementEnd.player.z - movementStart.player.z,
+      ) >= 0.45
+        && !movementEnd.player.seated
+        && movementEnd.seating?.player?.colliderEnabled,
+      `the released player must be able to run away from the chair immediately: ${JSON.stringify({
+        start: movementStart.player,
+        end: movementEnd.player,
+        seating: movementEnd.seating?.player,
+      })}`,
+    );
+    // Restore the authored release mark so the existing centered flashlight
+    // fixture retains its exact distance/aim contract after mobility proof.
+    await page.keyboard.down("w");
+    try {
+      await page.waitForFunction(({ x, z }) => {
+        const player = JSON.parse(window.render_game_to_text()).player;
+        return Math.hypot(player.x - x, player.z - z) <= 0.12;
+      }, { x: movementStart.player.x, z: movementStart.player.z }, { timeout: 4000 });
+    } finally {
+      await page.keyboard.up("w");
+    }
 
     await page.evaluate(() => {
       window.MrFeastFresh.collectFlashlightForQA();
@@ -619,7 +690,10 @@ async function runBrowserFlow() {
         && restoredFlashlight.collected
         && !restoredFlashlight.on
         && game.room === "DINING ROOM"
-        && Math.hypot(game.player.x + 12.1, game.player.z + 6.85) <= 0.08,
+        && Math.hypot(
+          game.player.x - feast.host.reportApproach.x,
+          game.player.z - feast.host.reportApproach.z,
+        ) <= 0.08,
       `escape save must normalize to a clean Dining report checkpoint: ${JSON.stringify({
         feast,
         flashlight: restoredFlashlight,
@@ -669,6 +743,8 @@ async function runBrowserFlow() {
     let mobileFeast = await victoryState(mobile);
     assert(
       mobileFeast.player.movementLocked
+        && mobileFeast.player.seated
+        && mobileFeast.player.colliderEnabled === false
         && mobileFeast.dialogue.history.length >= 1
         && /There was never a Contestant Thirteen/i.test(mobileFeast.dialogue.authoredLines.join(" "))
         && /part of the game/i.test(mobileFeast.dialogue.authoredLines.join(" ")),
@@ -685,7 +761,8 @@ async function runBrowserFlow() {
       mobileFeast.phase === "reveal"
         && mobileFeast.reveal.lightning > 0
         && mobileFeast.saint.visible
-        && mobileFeast.saint.onScreen,
+        && mobileFeast.saint.onScreen
+        && mobileFeast.production.revealSightlineClear,
       `390x844 lightning must visibly reveal the Saint: ${JSON.stringify({
         reveal: mobileFeast.reveal,
         saint: mobileFeast.saint,
@@ -707,6 +784,9 @@ async function runBrowserFlow() {
     mobileFeast = await victoryState(mobile);
     assert(
       mobileFeast.phase === "escape"
+        && !mobileFeast.player.seated
+        && mobileFeast.player.colliderEnabled
+        && mobileFeast.player.releaseMarkClear
         && mobileFlashlight.collected
         && mobileFlashlight.on
         && mobileFeast.flashlightDefect.beamOutput,

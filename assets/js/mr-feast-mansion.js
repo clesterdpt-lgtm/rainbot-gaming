@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260802-kip-loss-cover-face-1";
+  const MANSION_RUNTIME_VERSION = "20260802-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1769,7 +1769,10 @@
     chairColliderCenterY: 0.55,
   });
   const MANSION_DISTRACTIONS = Object.freeze({
-    noticeSeconds: 2.4,
+    // Loud, deliberate house devices should pull Mr. Feast off his route
+    // almost immediately. Personally witnessed/camera-recorded activations
+    // still bypass this housekeeping delay and begin pursuit at once.
+    noticeSeconds: 0.8,
     maximumDistanceMeters: 22,
     panLimit: 0.78,
     pianoPulseSeconds: 0.54,
@@ -4576,6 +4579,7 @@
     currentFloor: "MAIN LEVEL",
     currentRoom: "FRONT FOYER",
     mazeLightingContext: false,
+    mazeFixtureLightingContext: false,
     currentInteraction: null,
     isHidden: false,
     activeHideSpot: null,
@@ -19571,6 +19575,21 @@
       );
     }
 
+    restoreEnvironmentAfterKey() {
+      if (!this.keyOwned()) return false;
+      const previousMazeLightingContext = state.mazeLightingContext;
+      const playerPosition = physics?.playerPosition() || null;
+      state.mazeLightingContext = isMazeLightingContext(
+        state.currentRoom,
+        playerPosition,
+      );
+      state.mazeFixtureLightingContext = isMazeFixtureLightingContext(state.currentRoom, playerPosition);
+      rainSystem?.syncTargetOpacity();
+      audioSystem?.setRainExposure(computeRainExposure());
+      if (previousMazeLightingContext !== state.mazeLightingContext) syncLightRendering("snap");
+      return true;
+    }
+
     questReadyForMaze() {
       return Boolean(
         state.contestant13.bookRead
@@ -20009,6 +20028,7 @@
       if (!keyOwned) return { triggered: false, reason: "key-not-owned", ...this.getDiagnostics() };
       this.setEntrancesSealed(false);
       this.stopMazeDarkness();
+      this.restoreEnvironmentAfterKey();
       if (simulateStormRun || stormRunSystem?.isPlaying()) {
         return { triggered: false, reason: "storm-run-active", ...this.getDiagnostics() };
       }
@@ -20264,6 +20284,11 @@
         blackoutFlickerRemaining: Number(this.blackoutFlickerRemaining.toFixed(3)),
         flickerCount: this.flickerCount,
         rainDucked: this.rainDucked,
+        environmentRestoredAfterKey: Boolean(
+          keyOwned
+          && !state.mazeLightingContext
+          && !hedgeMazeKeyEnvironmentActive()
+        ),
         audioEvents: [...this.audioEvents],
         lastAmbientEvents: [...this.lastAmbientEvents],
         flashlightCollected: Boolean(flashlightSystem?.collected()),
@@ -43406,6 +43431,9 @@
     if (bulbMesh) {
       M.lampGlow.userData.onEmissiveIntensity = 1.0;
       M.lampGlow.userData.offEmissiveIntensity = 0;
+      bulbMesh.userData.onEmissiveIntensity = 1.0;
+      bulbMesh.userData.levels = new Set(["MAIN LEVEL"]);
+      circuit.bulbs.push(bulbMesh);
       circuit.glowMaterials.push(M.lampGlow);
     }
   }
@@ -43853,9 +43881,14 @@
       this.speeds[i] = 13 + Math.random() * 8;
     }
 
-    update(dt) {
-      const mazeSuppressed = state.currentRoom === "HEDGE MAZE";
+    syncTargetOpacity() {
+      const mazeSuppressed = state.currentRoom === "HEDGE MAZE" && !hedgeMazeKeyRecovered();
       this.targetOpacity = mazeSuppressed ? 0 : this.baseOpacity;
+      return this.targetOpacity;
+    }
+
+    update(dt) {
+      this.syncTargetOpacity();
       const blend = 1 - Math.exp(-HEDGE_MAZE_HAUNT.rain.visualFadeResponse * Math.max(0, dt));
       this.opacity += (this.targetOpacity - this.opacity) * blend;
       this.lines.material.opacity = this.opacity;
@@ -43985,6 +44018,16 @@
       this.failedAssets = new Map();
       this.lastVariant = new Map();
       this.cueCounts = Object.create(null);
+      this.houseDistractionSfx = {
+        playCount: 0,
+        lastKind: null,
+        lastVoiceCount: 0,
+        lastDistanceMeters: null,
+        lastDistanceGain: 0,
+        lastPan: 0,
+        pianoPatternStep: 0,
+        pianoNoteCount: 0,
+      };
       this.activeVoices = 0;
       this.hedgeMazeAudio = {
         feastFatherPlayCount: 0,
@@ -45721,7 +45764,7 @@
       // filter opens with exposure so stepping outside reads as walls falling
       // away, not a pure volume knob.
       const gainFloor = 0.003;
-      const mazeSilenced = state.currentRoom === "HEDGE MAZE";
+      const mazeSilenced = state.currentRoom === "HEDGE MAZE" && !hedgeMazeKeyRecovered();
       const gainTarget = mazeSilenced
         ? 0.0001
         : this.rain.level * (gainFloor + (1 - gainFloor) * Math.pow(clamped, 1.35));
@@ -45813,18 +45856,41 @@
         destination = panner;
       }
       const now = this.ctx.currentTime;
+      let voiceCount = 0;
+      const playVoice = (frequency, duration, gainValue, type, when = now) => {
+        if (this.scheduleTone(this.ctx, destination, frequency, duration, gainValue, type, when)) voiceCount += 1;
+      };
       if (kind === "piano") {
-        const notes = [146.83, 174.61, 207.65];
+        // A repeating descending diminished figure reads as a real haunted
+        // player piano instead of the old faint low triangle pad. Each key has
+        // a warm body, bright string partial, and short hammer transient.
+        const pianoPatterns = [
+          [146.83, 174.61, 207.65, 293.66],
+          [138.59, 164.81, 196, 277.18],
+          [130.81, 155.56, 185, 261.63],
+        ];
+        const notes = pianoPatterns[this.houseDistractionSfx.pianoPatternStep % pianoPatterns.length];
+        this.houseDistractionSfx.pianoPatternStep += 1;
+        this.houseDistractionSfx.pianoNoteCount += notes.length;
         notes.forEach((frequency, index) => {
-          this.scheduleTone(this.ctx, destination, frequency, 0.42, 0.035 * distanceGain, "triangle", now + index * 0.045);
+          const strike = now + index * 0.065;
+          playVoice(frequency, 0.62, 0.085 * distanceGain, "triangle", strike);
+          playVoice(frequency * 2.01, 0.43, 0.026 * distanceGain, "sine", strike + 0.004);
+          playVoice(frequency * 5.02, 0.055, 0.012 * distanceGain, "sine", strike);
         });
       } else if (kind === "laundry") {
-        this.scheduleTone(this.ctx, destination, 72, 0.12, 0.055 * distanceGain, "square", now);
-        this.scheduleTone(this.ctx, destination, 118, 0.08, 0.028 * distanceGain, "sawtooth", now + 0.055);
+        playVoice(72, 0.12, 0.055 * distanceGain, "square", now);
+        playVoice(118, 0.08, 0.028 * distanceGain, "sawtooth", now + 0.055);
       } else {
-        this.scheduleTone(this.ctx, destination, 1180, 0.48, 0.055 * distanceGain, "sine", now);
-        this.scheduleTone(this.ctx, destination, 1530, 0.36, 0.025 * distanceGain, "sine", now + 0.06);
+        playVoice(1180, 0.48, 0.055 * distanceGain, "sine", now);
+        playVoice(1530, 0.36, 0.025 * distanceGain, "sine", now + 0.06);
       }
+      this.houseDistractionSfx.playCount += 1;
+      this.houseDistractionSfx.lastKind = kind;
+      this.houseDistractionSfx.lastVoiceCount = voiceCount;
+      this.houseDistractionSfx.lastDistanceMeters = Number(distance.toFixed(3));
+      this.houseDistractionSfx.lastDistanceGain = Number(distanceGain.toFixed(4));
+      this.houseDistractionSfx.lastPan = Number(pan.toFixed(3));
       return true;
     }
 
@@ -46435,6 +46501,7 @@
         failedAssets: Array.from(this.failedAssets, ([path, error]) => ({ path, error })),
         activeVoices: this.activeVoices,
         cueCounts: { ...this.cueCounts },
+        houseDistractions: { ...this.houseDistractionSfx },
         hedgeMaze: {
           ...this.hedgeMazeAudio,
           recordedFeastFatherReady: this.availableAssets("mazeFeastFather").length > 0,
@@ -48971,6 +49038,7 @@
   function updateLocation() {
     const previousLightContext = getLightRenderContext();
     const previousMazeLightingContext = state.mazeLightingContext;
+    const previousMazeFixtureLightingContext = state.mazeFixtureLightingContext;
     const p = physics.playerPosition();
     const feetY = p.y - (PLAYER.halfHeight + PLAYER.radius);
     let match = null;
@@ -48999,11 +49067,13 @@
       }
     }
     syncWindowCurtainVisibility();
+    state.mazeFixtureLightingContext = isMazeFixtureLightingContext(state.currentRoom, p);
     state.mazeLightingContext = isMazeLightingContext(state.currentRoom, p);
     updateExteriorDetailCulling();
     if (audioSystem) audioSystem.setRainExposure(computeRainExposure());
     const lightContextChanged = previousLightContext !== getLightRenderContext();
     const mazeLightingContextChanged = previousMazeLightingContext !== state.mazeLightingContext;
+    const mazeFixtureLightingContextChanged = previousMazeFixtureLightingContext !== state.mazeFixtureLightingContext;
     // Interior room labels never influence light state. The only room-level
     // boundary is the mansion shell itself: the grounds own a separate,
     // fixed-budget selection so exterior emitters do not inflate every indoor
@@ -49014,6 +49084,7 @@
     if (floorContextChanged) syncLightRendering();
     else if (lightContextChanged) syncLightRendering();
     else if (mazeLightingContextChanged) syncLightRendering();
+    else if (mazeFixtureLightingContextChanged) syncLightRendering();
   }
 
   function findInteraction() {
@@ -49133,6 +49204,9 @@
   // expensive frames the renderer ever draws — under three quarters of a
   // second, while still reading as a fade rather than a switch.
   const LIGHT_FADE_OUT_RATE = 1.35;
+  const LIGHT_BULB_OFF_COLOR = 0x74787c;
+  const bulbOnColorScratch = new THREE.Color();
+  const bulbOffColorScratch = new THREE.Color(LIGHT_BULB_OFF_COLOR);
 
   function renderedLightIntensity(light) {
     const data = light?.userData || {};
@@ -49165,6 +49239,23 @@
     return light.visible !== wasVisible && Boolean(light.castShadow);
   }
 
+  function syncBulbMaterialState(bulb) {
+    const data = bulb.userData;
+    const material = bulb.material;
+    if (!material || Array.isArray(material)) return;
+    const materialData = material.userData;
+    if (materialData.onBulbColor == null && material.color) materialData.onBulbColor = material.color.getHex();
+    if (materialData.offBulbColor == null) materialData.offBulbColor = LIGHT_BULB_OFF_COLOR;
+    if (material.color && materialData.onBulbColor != null) {
+      bulbOnColorScratch.setHex(materialData.onBulbColor);
+      bulbOffColorScratch.setHex(materialData.offBulbColor);
+      material.color.copy(bulbOffColorScratch).lerp(bulbOnColorScratch, data.renderFactor);
+    }
+    if ("emissiveIntensity" in material) {
+      material.emissiveIntensity = (data.onEmissiveIntensity || 1.4) * data.renderFactor;
+    }
+  }
+
   function applyBulbRenderState(bulb, lit, snap) {
     const data = bulb.userData;
     if (data.renderFactor == null) data.renderFactor = bulb.material.emissiveIntensity > 0 ? 1 : 0;
@@ -49175,7 +49266,7 @@
     } else {
       fadingBulbs.add(bulb);
     }
-    bulb.material.emissiveIntensity = (data.onEmissiveIntensity || 1.4) * data.renderFactor;
+    syncBulbMaterialState(bulb);
   }
 
   function stepRenderFactor(data, dt) {
@@ -49201,7 +49292,7 @@
     for (const bulb of fadingBulbs) {
       const data = bulb.userData;
       const settled = stepRenderFactor(data, dt);
-      bulb.material.emissiveIntensity = (data.onEmissiveIntensity || 1.4) * data.renderFactor;
+      syncBulbMaterialState(bulb);
       if (settled) fadingBulbs.delete(bulb);
     }
     if (shadowTopologyChanged) renderer.shadowMap.needsUpdate = true;
@@ -49214,7 +49305,18 @@
     return floorLabel.toLowerCase().replaceAll(" ", "-");
   }
 
-  function isMazeLightingContext(roomLabel = state.currentRoom, position = null) {
+  function hedgeMazeKeyRecovered() {
+    return Boolean(
+      state.contestant13.basementKeyFound
+      && state.contestant13.inventory.includes("basement-key-b13")
+    );
+  }
+
+  function hedgeMazeKeyEnvironmentActive(roomLabel = state.currentRoom) {
+    return roomLabel === "HEDGE MAZE" && !hedgeMazeKeyRecovered();
+  }
+
+  function isMazeFixtureLightingContext(roomLabel = state.currentRoom, position = null) {
     if (roomLabel === "HEDGE MAZE") return true;
     if ((roomLabel !== "EAST LAWN" && roomLabel !== "REAR LAWN") || !position) return false;
     const halfWidth = HEDGE_MAZE_LAYOUT.rows[0].length * HEDGE_MAZE_LAYOUT.cellSize / 2;
@@ -49223,6 +49325,10 @@
       && position.x <= HEDGE_MAZE_LAYOUT.centerX + halfWidth + HEDGE_MAZE_LAYOUT.cellSize
       && position.z >= HEDGE_MAZE_LAYOUT.centerZ - halfDepth - HEDGE_MAZE_LAYOUT.cellSize
       && position.z <= HEDGE_MAZE_LAYOUT.centerZ + halfDepth + HEDGE_MAZE_LAYOUT.cellSize;
+  }
+
+  function isMazeLightingContext(roomLabel = state.currentRoom, position = null) {
+    return !hedgeMazeKeyRecovered() && isMazeFixtureLightingContext(roomLabel, position);
   }
 
   function circuitRendersInContext(circuit, floors, renderContext) {
@@ -49359,7 +49465,7 @@
         : [];
       const groundsSpotLimit = Math.min(spotLimit, GROUND_BUDGETED_SPOT_LIGHTS);
       const groundsPointLimit = Math.min(pointLimit, GROUND_BUDGETED_POINT_LIGHTS);
-      if (state.mazeLightingContext) {
+      if (state.mazeFixtureLightingContext) {
         const mazeCandidates = candidates
           .filter((light) => Number.isFinite(light.userData.mazeBudgetPriority))
           .sort((a, b) => a.userData.mazeBudgetPriority - b.userData.mazeBudgetPriority);
@@ -50673,6 +50779,7 @@
         renderPolicy: lightRenderPolicy,
         renderContext: getLightRenderContext(),
         mazeLightingContext: state.mazeLightingContext,
+        mazeFixtureLightingContext: state.mazeFixtureLightingContext,
         mobileRenderProfile: state.mobileRenderProfile,
         mobileLightBudgetPerCircuit: null,
         mobileUpperLightBudget: state.mobileRenderProfile && state.currentFloor === "SECOND FLOOR"
@@ -50738,6 +50845,16 @@
         levels: Array.from(c.levels),
         lights: c.lights.length,
         activeLights: c.lights.filter((light) => light.visible && light.intensity > 0).length,
+        bulbs: c.bulbs.reduce((total, bulb) => total + (bulb.isInstancedMesh ? bulb.count : 1), 0),
+        activeBulbs: c.bulbs.reduce((total, bulb) => total + (
+          (bulb.userData.renderFactor || 0) > 0.01 ? (bulb.isInstancedMesh ? bulb.count : 1) : 0
+        ), 0),
+        grayBulbs: c.bulbs.reduce((total, bulb) => total + (
+          bulb.material?.color?.getHex() === LIGHT_BULB_OFF_COLOR ? (bulb.isInstancedMesh ? bulb.count : 1) : 0
+        ), 0),
+        bulbColors: Array.from(new Set(c.bulbs
+          .map((bulb) => bulb.material?.color?.getHexString?.())
+          .filter(Boolean))),
         sharedRoomRoles: Array.from(new Set(c.lights
           .map((light) => light.userData.sharedRoomRole)
           .filter(Boolean))),
@@ -51002,6 +51119,11 @@
       return getWindowCurtainDiagnostics();
     };
     window.MrFeastFresh.getAudioStateForQA = () => audioSystem ? audioSystem.getDiagnostics() : null;
+    window.MrFeastFresh.prepareHouseDistractionAudioForQA = async () => {
+      if (!state.qa || !audioSystem) return null;
+      await audioSystem.unlock();
+      return audioSystem.getDiagnostics().houseDistractions;
+    };
     window.MrFeastFresh.prepareBreathAudioForQA = async () => {
       if (!state.qa || !audioSystem) return null;
       await audioSystem.unlock();

@@ -83,9 +83,9 @@ async function run() {
   const flashlightClass = sourceSection(runtime, "class FlashlightSystem", "class BulkStorageSecretSystem");
   assert(/stormRunSystem\?\.allowsPlayerTools\(\)/.test(flashlightClass), "the flashlight gate must honor Storm Run's player-tool policy");
   const rainClass = sourceSection(runtime, "class RainSystem", "class StormSystem");
-  assert(/state\.currentRoom === "HEDGE MAZE"/.test(rainClass) && /this\.lines\.visible/.test(rainClass), "visible rain must stop inside the hedge maze");
+  assert(/state\.currentRoom === "HEDGE MAZE"[\s\S]*?!hedgeMazeKeyRecovered\(\)/.test(rainClass) && /this\.lines\.visible/.test(rainClass), "visible rain must stop inside the hedge maze only until the key is recovered");
   const audioClass = sourceSection(runtime, "class MansionAudio", "function updateAudioButton");
-  assert(/mazeSilenced/.test(audioClass), "the rain mix must have an explicit hedge-maze silence state");
+  assert(/mazeSilenced[\s\S]*?!hedgeMazeKeyRecovered\(\)/.test(audioClass), "the rain mix must release its hedge-maze silence after key recovery");
   assert(/hedgeMazeFeastFather[\s\S]+depthPressure[\s\S]+breathing\.deepVolume/.test(audioClass), "Feast Father maze fragments must consume the depth-based volume range");
   assert(/prepareHedgeMazeLockInForQA/.test(runtime), "focused maze lock-in QA staging is missing");
   assert(/triggerHedgeMazeAmbientForQA/.test(runtime), "focused recurring-haunt QA trigger is missing");
@@ -137,7 +137,11 @@ async function run() {
       earlyRain.rain.visualFading && earlyRain.rain.visualOpacity > 0.02 && earlyRain.rain.gain > 0.002,
       `the rain should ease away instead of cutting out at the maze boundary: ${JSON.stringify(earlyRain.rain)}`,
     );
-    await page.waitForTimeout(2600);
+    await page.waitForFunction(
+      () => window.MrFeastFresh?.getAudioStateForQA?.()?.rain?.visualOpacity <= 0.02,
+      null,
+      { timeout: 12000 },
+    );
     const settledRain = await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
     assert(
       settledRain.rain.visualOpacity <= 0.02 && settledRain.rain.gain <= 0.03,
@@ -281,6 +285,8 @@ async function run() {
 
     const feast = await page.evaluate(() => window.MrFeastFresh.completeFeastSaysForQA(6));
     assert(feast?.survived === true, `flashlight regression setup should complete Feast Says: ${JSON.stringify(feast)}`);
+    const keyChamber = await page.evaluate(() => window.MrFeastFresh.placePlayerInsideHedgeMazeForQA("north", 38));
+    assert(keyChamber.playerMazeDepthCells >= 7, `post-competition key QA must return to the real maze route: ${JSON.stringify(keyChamber)}`);
     await page.evaluate(() => window.MrFeastFresh.setHedgeMazeFlashlightForQA(true));
     const keyCall = await page.evaluate(() => window.MrFeastFresh.triggerStormRunClueForQA("key"));
     assert(keyCall?.phase === "called", `the real B-13 clue transition should call Storm Run: ${JSON.stringify(keyCall)}`);
@@ -288,6 +294,30 @@ async function run() {
     assert(released.active && released.sequence === "release" && released.keyOwned, `the real key-owned release scare should begin: ${JSON.stringify(released)}`);
     assert(!released.entrancesSealed && released.enabledSealColliders === 0, `finding the key must immediately reopen both entrances: ${JSON.stringify(released)}`);
     assert(!released.mazeDarknessActive && released.flashlightOn, `key recovery should restore fixtures without touching the flashlight: ${JSON.stringify(released)}`);
+    assert(released.environmentRestoredAfterKey, `key recovery must release the special maze lighting and rain context immediately: ${JSON.stringify(released)}`);
+    await page.waitForFunction(
+      () => {
+        const rain = window.MrFeastFresh?.getAudioStateForQA?.()?.rain;
+        return rain && !rain.visualSuppressed && rain.visualOpacity >= 0.22;
+      },
+      null,
+      { timeout: 12000 },
+    );
+    const restoredEnvironment = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
+    assert(
+      !restoredEnvironment.lighting.mazeLightingContext
+        && restoredEnvironment.lighting.hemisphereTarget === 0.34
+        && restoredEnvironment.lighting.moonTarget === 0.52,
+      `post-key maze lighting must return to the normal grounds targets: ${JSON.stringify(restoredEnvironment.lighting)}`,
+    );
+    assert(
+      !restoredEnvironment.audio.rain.mazeSilenced
+        && !restoredEnvironment.audio.rain.visualSuppressed
+        && restoredEnvironment.audio.rain.visualOpacity >= 0.22
+        && restoredEnvironment.audio.rain.targetGain >= 0.4,
+      `post-key visual and audible rain must return to normal while still inside the maze: ${JSON.stringify(restoredEnvironment.audio.rain)}`,
+    );
+    await captureStage(page, "maze-key-environment-restored-desktop.png");
     assert(released.flashlightCanToggle, `Storm Run's post-key call must leave flashlight input available: ${JSON.stringify(released)}`);
     await page.evaluate(() => window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(0.1));
     const postKeyFlashlight = await page.evaluate(() => window.MrFeastFresh.getHedgeMazeKeyScareState());

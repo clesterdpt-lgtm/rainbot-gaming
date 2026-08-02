@@ -17,6 +17,7 @@ const expected = [
     startPrompt: /start the player piano/i,
     stopPrompt: /stop the player piano/i,
     cue: "houseDistractionPiano",
+    minimumVoices: 12,
   },
   {
     kind: "laundry",
@@ -24,6 +25,7 @@ const expected = [
     startPrompt: /start the laundry wringer/i,
     stopPrompt: /stop the laundry wringer/i,
     cue: "houseDistractionLaundry",
+    minimumVoices: 2,
   },
   {
     kind: "service-bell",
@@ -31,6 +33,7 @@ const expected = [
     startPrompt: /pull the service bell/i,
     stopPrompt: /silence the service bell/i,
     cue: "houseDistractionServiceBell",
+    minimumVoices: 2,
   },
 ];
 
@@ -83,6 +86,7 @@ async function boot(page) {
   await page.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
   await page.waitForFunction(() => window.MrFeastFresh.getMrFeastState()?.loadStatus === "ready", null, { timeout: 120000 });
   await page.evaluate(() => window.MrFeastFresh.setDevModeForQA(true));
+  await page.evaluate(() => window.MrFeastFresh.prepareHouseDistractionAudioForQA());
   await page.waitForTimeout(250);
 }
 
@@ -90,6 +94,7 @@ async function run() {
   const runtimeSource = await readFile(path.join(root, "assets/js/mr-feast-mansion.js"), "utf8");
   const pageSource = await readFile(path.join(root, "games/mr-feast-mansion.html"), "utf8");
   assert(/const MANSION_DISTRACTIONS\s*=\s*Object\.freeze/.test(runtimeSource), "runtime is missing the MANSION_DISTRACTIONS tuning table");
+  assert(/const MANSION_DISTRACTIONS\s*=\s*Object\.freeze\(\{[\s\S]{0,500}noticeSeconds:\s*0\.8/.test(runtimeSource), "all three loud house devices must alert Mr. Feast within 0.8 seconds");
   assert(/registerDistraction\s*\(/.test(runtimeSource), "runtime is missing the shared distraction registration path");
   assert(/noticed-piano/.test(runtimeSource) && /fixed-service-bell/.test(runtimeSource), "runtime is missing device-specific Mr. Feast speech pools");
   assert(/competitionBlocksInvestigation\(\)/.test(runtimeSource), "distraction activation must preserve competition ownership");
@@ -135,6 +140,7 @@ async function run() {
       state = await diagnostics(page);
       let entry = entryFor(state, device.kind);
       assert(entry?.active === true, `real E interaction should activate ${device.kind}; got ${JSON.stringify(entry)}`);
+      assert(entry.noticeRemaining > 0 && entry.noticeRemaining <= 0.81, `${device.kind} must make Mr. Feast react within 0.8 seconds; got ${JSON.stringify(entry)}`);
       assert(device.stopPrompt.test(state.prompt || ""), `${device.kind} should expose its stop prompt after activation; got ${state.prompt}`);
       const advanced = await page.evaluate(() => window.MrFeastFresh.advanceHouseDistractionsForQA(0.3));
       assert(advanced, `deterministic distraction time should advance for ${device.kind}`);
@@ -143,19 +149,27 @@ async function run() {
       assert(entry.pulseCount > 0, `${device.kind} should emit repeating spatial sound pulses; got ${JSON.stringify(entry)}`);
       assert(Math.abs(entry.visualOffset) > 0.001, `${device.kind} should visibly animate while active; got ${JSON.stringify(entry)}`);
       assert((state.audio.cueCounts[device.cue] || 0) > 0, `${device.kind} should record its procedural audio cue; got ${JSON.stringify(state.audio.cueCounts)}`);
+      assert(state.audio.houseDistractions?.lastKind === device.kind && state.audio.houseDistractions.lastVoiceCount >= device.minimumVoices, `${device.kind} must schedule its audible spatial voices; got ${JSON.stringify(state.audio.houseDistractions)}`);
+      if (device.kind === "piano") {
+        assert(state.audio.houseDistractions.pianoNoteCount >= 4, `the piano must play a recognizable multi-note figure; got ${JSON.stringify(state.audio.houseDistractions)}`);
+      }
       assert(state.room === device.room, `${device.kind} QA placement should remain in ${device.room}; got ${state.room}`);
       await page.screenshot({ path: path.join(artifactDir, `${device.kind}-active.png`), fullPage: true });
 
-      await page.evaluate(() => {
-        window.MrFeastFresh.teleport("foyer");
-        window.MrFeastFresh.resetMrFeastWandererForQA();
-      });
+      // Move the player clear without resetting Mr. Feast: with the faster
+      // response he may already own the errand by the end of image capture.
+      await page.evaluate(() => window.MrFeastFresh.teleport("foyer"));
       const notice = await page.evaluate(() => window.MrFeastFresh.advanceHouseDistractionsForQA(30));
       state = await diagnostics(page);
       assert(
         notice.dispatched.includes(entry.id) || entryFor(state, device.kind)?.dispatched,
         `${device.kind} should dispatch Mr. Feast after its notice delay; got ${JSON.stringify({ notice, room: state.room, security: state.mrFeast.security, housekeeping: state.mrFeast.housekeeping })}`,
       );
+      if (notice.dispatched.includes(entry.id)) {
+        assert(notice.seconds <= 0.85, `${device.kind} should dispatch Mr. Feast in under a second; got ${JSON.stringify(notice)}`);
+      } else {
+        assert(entryFor(state, device.kind)?.dispatched, `${device.kind} should already be dispatched if the 0.8-second live window elapsed during capture; got ${JSON.stringify({ notice, entry: entryFor(state, device.kind) })}`);
+      }
       assert(state.mrFeast.housekeeping.activeTaskId === entry.id, `Mr. Feast should own the ${device.kind} errand; got ${JSON.stringify(state.mrFeast.housekeeping)}`);
       assert(state.speech.category === `noticed-${device.kind}`, `${device.kind} should use its noticed speech pool; got ${JSON.stringify(state.speech)}`);
 

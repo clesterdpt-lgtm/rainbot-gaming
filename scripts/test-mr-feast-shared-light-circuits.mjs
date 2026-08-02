@@ -202,6 +202,7 @@ async function run() {
       await page.evaluate(() => window.MrFeastFresh.advanceLightFade(4));
       circuit = await circuitState(page, shared.name);
       assert(!circuit.on && circuit.activeLights === 0 && circuit.activeLightPools === 0, `first switch must darken the complete ${shared.name}: ${JSON.stringify(circuit)}`);
+      assert(circuit.bulbs > 0 && circuit.activeBulbs === 0 && circuit.grayBulbs === circuit.bulbs, `every unpowered bulb in ${shared.name} must turn neutral gray instead of staying yellow: ${JSON.stringify(circuit)}`);
       assert((await circuitState(page, other.name)).on === otherBefore.on, `${shared.name} must not alter ${other.name}`);
       await page.evaluate((view) => window.MrFeastFresh.teleport(view), shared.secondRoom);
       await screenshotStage(page, `${shared.secondRoom}-dark-from-${shared.firstSwitch}.png`);
@@ -215,6 +216,7 @@ async function run() {
       await page.evaluate(() => window.MrFeastFresh.advanceLightFade(4));
       circuit = await circuitState(page, shared.name);
       assert(circuit.on && circuit.activeLights >= 2, `second switch must relight both halves of ${shared.name}: ${JSON.stringify(circuit)}`);
+      assert(circuit.activeBulbs > 0 && circuit.grayBulbs < circuit.bulbs, `powered bulbs in ${shared.name} must regain their warm color: ${JSON.stringify(circuit)}`);
       assert(
         shared.roles.every((role) => circuit.activeSharedRoomRoles?.includes(role)),
         `fixed light selection must visibly represent both halves of ${shared.name}: ${JSON.stringify(circuit)}`,
@@ -274,6 +276,19 @@ async function run() {
     openVolume = await circuitState(page, OPEN_VOLUME_CIRCUIT.name);
     assert(!lounge.on && openVolume.on, `rear lounge switch must stay independent of the foyer/stair circuit: ${JSON.stringify({ lounge, openVolume })}`);
     await screenshotStage(page, "rear-lounge-dark-foyer-stair-lit.png");
+
+    const globalBulbCheck = await page.evaluate(() => {
+      window.MrFeastFresh.turnOffAllLights();
+      window.MrFeastFresh.advanceLightFade(4);
+      return JSON.parse(window.render_game_to_text()).circuits.filter((circuit) => circuit.bulbs > 0);
+    });
+    assert(
+      globalBulbCheck.length > 0
+        && globalBulbCheck.every((circuit) => circuit.activeBulbs === 0 && circuit.grayBulbs === circuit.bulbs),
+      `every registered interior and exterior bulb must be gray when globally unpowered: ${JSON.stringify(globalBulbCheck)}`,
+    );
+    const exteriorBulbs = globalBulbCheck.find((circuit) => circuit.name === "estate exterior lights");
+    assert(exteriorBulbs?.grayBulbs === exteriorBulbs?.bulbs, `instanced estate lantern bulbs must also turn gray: ${JSON.stringify(exteriorBulbs)}`);
 
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
     await context.close();

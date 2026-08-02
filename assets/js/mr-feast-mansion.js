@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260801-instant-smaller-key-victory-seating-1";
+  const MANSION_RUNTIME_VERSION = "20260801-victory-screen-save-picker-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -155,6 +155,11 @@
     victoryFeastTimer: $("mansion-victory-feast-timer"),
     victoryFeastStatus: $("mansion-victory-feast-status"),
     victoryFeastObjective: $("mansion-victory-feast-objective"),
+    victoryScreen: $("mansion-victory-screen"),
+    victoryTitle: $("mansion-victory-title"),
+    victoryCopy: $("mansion-victory-copy"),
+    victoryRestart: $("mansion-victory-restart"),
+    victoryLoad: $("mansion-victory-load"),
     gameOver: $("mansion-gameover"),
     gameOverTitle: $("mansion-gameover-title"),
     gameOverCopy: $("mansion-gameover-copy"),
@@ -4555,6 +4560,7 @@
     maximized: false,
     devMode: false,
     devModeSnapshot: null,
+    gameWon: null,
     gameOver: null,
     banquetLoss: {
       phase: "inactive",
@@ -28421,7 +28427,7 @@
     }
 
     locksPlayerMovement() {
-      return [
+      return this.show.escapeCompleted || [
         VICTORY_FEAST_PHASE.DIALOGUE,
         VICTORY_FEAST_PHASE.REVEAL,
       ].includes(this.show.phase);
@@ -29049,6 +29055,7 @@
         { durationSeconds: 3.4 },
       );
       this.syncPresentation();
+      presentMansionVictoryOverlay({ reason });
       return { completed: true, reason, outcome: this.show.outcome };
     }
 
@@ -31639,6 +31646,36 @@
     if (dom.gameOverTitle) dom.gameOverTitle.textContent = "Caught";
     if (dom.gameOver) dom.gameOver.hidden = true;
     dom.canvas?.focus({ preventScroll: true });
+  }
+
+  function presentMansionVictoryOverlay(details = {}) {
+    state.gameWon = {
+      outcome: "escaped",
+      reason: details.reason || "front-gate-open",
+      room: state.currentRoom,
+    };
+    clearMovementInput();
+    throwableDistractionSystem?.resetAll("game-won");
+    breathStealthSystem?.resetTransient({ preserveStrain: true });
+    contestant13Quest?.hideDiscovery();
+    releasePointerLock();
+    const hasRecoverySave = availableMansionSaveChoices().length > 0;
+    if (dom.victoryLoad) dom.victoryLoad.disabled = !hasRecoverySave;
+    if (dom.victoryScreen) {
+      dom.victoryScreen.hidden = false;
+      setStageOverlayInert(dom.victoryScreen, true);
+      requestAnimationFrame(() => dom.victoryRestart?.focus({ preventScroll: true }));
+    }
+    return state.gameWon;
+  }
+
+  function clearMansionVictoryOverlay({ restoreFocus = true } = {}) {
+    if (!state.gameWon && dom.victoryScreen?.hidden) return false;
+    state.gameWon = null;
+    if (dom.victoryScreen) dom.victoryScreen.hidden = true;
+    setStageOverlayInert(dom.victoryScreen, false);
+    if (restoreFocus) dom.canvas?.focus({ preventScroll: true });
+    return true;
   }
 
   let workroomKeypadReturnFocus = null;
@@ -47030,6 +47067,7 @@
       || state.menuOpen
       || state.workroom.keypadOpen
       || (state.gameOver && !banquetLookEnabled)
+      || state.gameWon
       || matchMedia("(pointer: coarse)").matches
     ) return false;
     if (!dom.canvas) return false;
@@ -47069,7 +47107,7 @@
         clearLookReclaimFollowUps();
         return;
       }
-      if (state.menuOpen || state.journalOpen || state.workroom.keypadOpen || state.gameOver || !state.started) return;
+      if (state.menuOpen || state.journalOpen || state.workroom.keypadOpen || state.gameOver || state.gameWon || !state.started) return;
       void restoreNativeFullscreenIfWanted();
       requestPointerLock();
       if (document.pointerLockElement === dom.canvas && (!wantNativeFullscreen || isNativeFullscreen())) {
@@ -47082,7 +47120,7 @@
   }
 
   function reclaimLookControl({ armFollowUps = false } = {}) {
-    if (!state.started || state.menuOpen || state.journalOpen || state.workroom.keypadOpen || state.gameOver) return false;
+    if (!state.started || state.menuOpen || state.journalOpen || state.workroom.keypadOpen || state.gameOver || state.gameWon) return false;
     if (dom.canvas) {
       dom.canvas.inert = false;
       try { dom.canvas.focus({ preventScroll: true }); } catch (_) { /* focus is best-effort */ }
@@ -47130,6 +47168,7 @@
     if (openingWelcomeSystem?.active) blockers.push("opening-welcome");
     if (state.devMode) blockers.push("dev-mode");
     if (state.gameOver) blockers.push("game-over");
+    if (state.gameWon) blockers.push("game-won");
     if (state.menuOpen) blockers.push("menu-open");
     if (state.loadChooserOpen) blockers.push("load-chooser-open");
     if (state.journalOpen || state.readableBooks.open || state.workroom.keypadOpen) blockers.push("blocking-overlay");
@@ -47411,6 +47450,7 @@
   function applyLoadedSaveState(saved = mansionSaveSlot?.read() || null) {
     if (!restoreMansionSave(saved)) return false;
     if (state.gameOver) clearMansionGameOver();
+    if (state.gameWon) clearMansionVictoryOverlay({ restoreFocus: false });
     tamperSystem?.resetAllForLoad();
     throwableDistractionSystem?.resetAll("load");
     mrFeastNpc?.recoverAfterLoad();
@@ -47724,6 +47764,7 @@
       || state.workroom.keypadOpen
       || state.readableBooks.open
       || state.gameOver
+      || state.gameWon
       || openingWelcomeSystem?.active
       || state.activeSeat
       || state.contestant13.actionInProgress
@@ -48044,6 +48085,7 @@
       if (
         state.started
         && !state.gameOver
+        && !state.gameWon
         && !state.menuOpen
         && !state.readableBooks.open
         && !state.workroom.keypadOpen
@@ -48100,7 +48142,7 @@
   }
 
   function activateCurrentInteraction(source = "keyboard") {
-    if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.contestant13.actionInProgress || state.gameOver) return;
+    if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.contestant13.actionInProgress || state.gameOver || state.gameWon) return;
     if (openingWelcomeSystem?.active) {
       openingWelcomeSystem.requestAdvance("player");
       updateInteractionPrompt();
@@ -48146,6 +48188,7 @@
       || state.readableBooks.open
       || state.contestant13.actionInProgress
       || state.gameOver
+      || state.gameWon
     ) return false;
     const interaction = state.activeSeat?.interaction || state.currentInteraction;
     // Continuous hold remains for bulk-storage box moves only. Throwables use
@@ -48203,6 +48246,11 @@
       }
       if (state.gameOver) {
         // The fail overlay owns the page: only its focusable buttons react.
+        if (event.code === "Escape") event.preventDefault();
+        return;
+      }
+      if (state.gameWon) {
+        // The victory overlay owns the page: only its focusable buttons react.
         if (event.code === "Escape") event.preventDefault();
         return;
       }
@@ -48342,7 +48390,8 @@
         && !state.readableBooks.open
         && !state.menuOpen
         && !state.workroom.keypadOpen
-        && !state.journalOpen;
+        && !state.journalOpen
+        && !state.gameWon;
       dom.crosshair.classList.toggle("is-active", showCrosshair);
       // One Escape while locked often only exits pointer lock. Treat that as
       // opening the pause menu immediately so players never need a second Esc.
@@ -48356,6 +48405,7 @@
         && !state.workroom.keypadOpen
         && !state.readableBooks.open
         && !state.gameOver
+        && !state.gameWon
       ) {
         ignoreEscapeMenuToggleUntil = performance.now() + 400;
         setMenuOpen(true);
@@ -48370,6 +48420,7 @@
         || state.menuOpen
         || state.journalOpen
         || state.workroom.keypadOpen
+        || state.gameWon
         || (state.gameOver && !banquetLookEnabled)
         || (feastSaysSystem?.isPlaying() && !feastSaysSystem.allowsLook())
         || stormRunSystem?.locksPlayerMovement()
@@ -48387,7 +48438,7 @@
       state.pitch = clamp(state.pitch - event.movementY * 0.00185, -1.35, 1.35);
     });
     dom.canvas.addEventListener("click", () => {
-      if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open) return;
+      if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.gameWon) return;
       if (state.pointerLocked && banquetLossSystem?.allowsLook()) return;
       if (state.pointerLocked) activateCurrentInteraction();
       else requestPointerLock();
@@ -48410,7 +48461,7 @@
     });
     if (dom.touchMenu) dom.touchMenu.addEventListener("click", (event) => {
       event.preventDefault();
-      if (state.started && !state.gameOver) setMenuOpen(true);
+      if (state.started && !state.gameOver && !state.gameWon) setMenuOpen(true);
     });
     if (dom.flashlightButton) dom.flashlightButton.addEventListener("pointerdown", (event) => {
       event.preventDefault();
@@ -48427,6 +48478,8 @@
     });
     if (dom.gameOverLoad) dom.gameOverLoad.addEventListener("click", () => openLoadChooser(dom.gameOverLoad));
     if (dom.gameOverRestart) dom.gameOverRestart.addEventListener("click", () => location.reload());
+    if (dom.victoryLoad) dom.victoryLoad.addEventListener("click", () => openLoadChooser(dom.victoryLoad));
+    if (dom.victoryRestart) dom.victoryRestart.addEventListener("click", () => location.reload());
     if (dom.menuResume) {
       // Use pointerdown as the primary Resume gesture and keep retrying lock
       // through pointerup/click of the same press. Do not wait for click only.
@@ -48543,6 +48596,7 @@
       if (
         event.pointerType !== "touch"
         || event.clientX < innerWidth * 0.38
+        || state.gameWon
         || (state.gameOver && !banquetLossSystem?.allowsLook())
         || (feastSaysSystem?.isPlaying() && !feastSaysSystem.allowsLook())
         || stormRunSystem?.locksPlayerMovement()
@@ -48561,7 +48615,8 @@
     dom.canvas.addEventListener("pointermove", (event) => {
       if (event.pointerId !== input.touchLookId) return;
       if (
-        (state.gameOver && !banquetLossSystem?.allowsLook())
+        state.gameWon
+        || (state.gameOver && !banquetLossSystem?.allowsLook())
         || (feastSaysSystem?.isPlaying() && !feastSaysSystem.allowsLook())
         || stormRunSystem?.locksPlayerMovement()
         || feastHuntSystem?.locksPlayerMovement()
@@ -48673,7 +48728,7 @@
   }
 
   function findInteraction() {
-    if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.contestant13.actionInProgress || state.gameOver) return null;
+    if (state.journalOpen || state.menuOpen || state.workroom.keypadOpen || state.readableBooks.open || state.contestant13.actionInProgress || state.gameOver || state.gameWon) return null;
     if (state.activeHideSpot) return state.activeHideSpot.interaction;
     if (state.activeSeat) return state.activeSeat.interaction;
     raycaster.setFromCamera(lookCenter, camera);
@@ -49600,7 +49655,7 @@
       fpsElapsed = 0;
     }
 
-    if (!state.menuOpen && !state.workroom.keypadOpen && !state.gameOver) {
+    if (!state.menuOpen && !state.workroom.keypadOpen && !state.gameOver && !state.gameWon) {
       for (const object of animatedObjects) object.update(dt);
       if (cameraSecurity) cameraSecurity.update(dt);
       if (tamperSystem) tamperSystem.update(dt);
@@ -50118,7 +50173,8 @@
         escapeOpen: state.menuOpen,
         loadChooserOpen: state.loadChooserOpen,
         keypadOpen: state.workroom.keypadOpen,
-        simulationPaused: state.menuOpen || state.loadChooserOpen || state.workroom.keypadOpen,
+        victoryOpen: Boolean(state.gameWon),
+        simulationPaused: state.menuOpen || state.loadChooserOpen || state.workroom.keypadOpen || Boolean(state.gameWon),
         maximized: state.maximized,
         hasSave: availableMansionSaveChoices().length > 0,
         hasManualSave: Boolean(mansionSaveSlot?.has()),
@@ -50173,6 +50229,7 @@
       victoryFeast: victoryFeastSystem?.getDiagnostics() || null,
       finaleSabotage: finaleSabotageSystem?.getDiagnostics() || null,
       banquetLoss: banquetLossSystem?.getDiagnostics() || { ...state.banquetLoss },
+      gameWon: state.gameWon ? { ...state.gameWon } : null,
       gameOver: state.gameOver ? { ...state.gameOver } : null,
       workroom: getWorkroomDiagnostics(),
       estateStatues: getEstateStatueDiagnostics(),

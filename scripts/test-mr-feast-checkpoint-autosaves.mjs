@@ -245,6 +245,25 @@ async function run() {
     state = await diagnostics(page);
     assert(planarDistance(state.player, expectedById.get("qa-recording").player) < 0.08, "game-over picker should restore the selected checkpoint");
 
+    // Banquet Loss keeps the game-over surface visible behind the shared
+    // picker. The real pointer click must reach a recovery option rather
+    // than being intercepted by that surface.
+    await page.evaluate(() => window.MrFeastFresh.triggerBanquetLossForQA("witnessed"));
+    await page.waitForFunction(
+      () => window.MrFeastFresh.getBanquetLossState()?.assetStatus === "ready"
+        && window.MrFeastFresh.getBanquetLossState()?.visible,
+      null,
+      { timeout: 180000 },
+    );
+    await page.evaluate(() => window.MrFeastFresh.advanceBanquetLossForQA(25));
+    await page.waitForFunction(() => !document.getElementById("mansion-gameover")?.hidden);
+    await page.locator("#mansion-gameover-load").click();
+    assert(await page.locator("#mansion-load-chooser").isVisible(), "Banquet Loss Choose save should show the shared picker");
+    const banquetEntries = await pickerEntries(page);
+    assert(banquetEntries.some((entry) => entry.source === "autosave" && entry.checkpointId === "qa-recording"), `Banquet Loss picker should expose the saved checkpoint; entries=${JSON.stringify(banquetEntries)}`);
+    await page.locator('[data-save-source="autosave"][data-checkpoint-id="qa-recording"]').click();
+    await page.waitForFunction(() => !JSON.parse(window.render_game_to_text()).gameOver);
+
     await page.evaluate(() => {
       window.MrFeastFresh.clearCheckpointAutosavesForQA();
       window.MrFeastFresh.triggerFeastSaysClueForQA("book");

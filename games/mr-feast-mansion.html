@@ -1279,7 +1279,8 @@
 
     #mansion-speech-skip[hidden] { display: none; }
 
-    #mansion-gameover {
+    #mansion-gameover,
+    #mansion-victory-screen {
       position: absolute;
       inset: 0;
       z-index: 24;
@@ -1291,11 +1292,29 @@
       backdrop-filter: blur(10px);
     }
 
-    #mansion-gameover[hidden] { display: none; }
+    #mansion-gameover[hidden],
+    #mansion-victory-screen[hidden] { display: none; }
 
     .mansion-gameover__panel {
       border-color: rgba(186, 80, 60, 0.55);
       background: linear-gradient(150deg, rgba(38, 18, 16, 0.98), rgba(10, 8, 10, 0.98));
+    }
+
+    #mansion-victory-screen {
+      background: rgba(4, 10, 5, 0.88);
+    }
+
+    #mansion-victory-screen .mansion-victory__panel {
+      border-color: rgba(221, 190, 105, 0.68);
+      background:
+        radial-gradient(circle at 50% 0%, rgba(132, 109, 48, 0.3), transparent 48%),
+        linear-gradient(150deg, rgba(31, 37, 25, 0.99), rgba(8, 11, 9, 0.99));
+      box-shadow: 0 34px 110px rgba(0, 0, 0, 0.82), inset 0 0 44px rgba(220, 191, 108, 0.08);
+    }
+
+    #mansion-victory-title {
+      color: #f2dda0;
+      letter-spacing: 0.09em;
     }
 
     #mansion-gameover-title {
@@ -2285,7 +2304,9 @@
     }
 
     #mansion-load-chooser {
-      z-index: 23;
+      /* End-state surfaces are 24; the shared picker must sit above them
+         when "Choose save" opens from game over or victory. */
+      z-index: 25;
       background: rgba(3, 4, 6, 0.62);
       backdrop-filter: blur(3px);
     }
@@ -3719,6 +3740,18 @@
           </div>
         </section>
 
+        <section id="mansion-victory-screen" role="dialog" aria-modal="true" aria-labelledby="mansion-victory-title" hidden>
+          <div class="mansion-menu__panel mansion-victory__panel">
+            <p class="mansion-menu__eyebrow">Game complete</p>
+            <h2 class="mansion-menu__title" id="mansion-victory-title">You're Off the Menu</h2>
+            <p class="mansion-menu__copy" id="mansion-victory-copy">You beat the games, stole the host's keys, and escaped the estate. Mr. Feast finally served one thing he never planned: an exit.</p>
+            <div class="mansion-menu__actions">
+              <button id="mansion-victory-restart" class="mansion-menu__button mansion-menu__button--primary" type="button">Play again</button>
+              <button id="mansion-victory-load" class="mansion-menu__button" type="button">Choose save</button>
+            </div>
+          </div>
+        </section>
+
         <div id="mansion-touch" aria-label="Touch movement controls">
           <div class="mansion-touch__move">
             <button id="touch-forward" class="mansion-touch__button" type="button" aria-label="Move forward">▲</button>
@@ -3896,6 +3929,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260723-mr-feast-rebrand-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260801-instant-smaller-key-victory-seating-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260801-victory-screen-save-picker-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

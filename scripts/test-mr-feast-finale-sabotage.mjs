@@ -113,6 +113,7 @@ async function runBrowserFlow() {
     assert(!route.chaseActive, `route must be dormant before the Feast Father: ${JSON.stringify(route)}`);
     assert(route.gateLabel === "Locked. I guess we're stuck here.", `pre-chase gate leaked a finale clue: ${JSON.stringify(route)}`);
     assert(!route.boilerInteractionActive, `Boiler cutoff must be inert before the chase: ${JSON.stringify(route)}`);
+    assert(await page.evaluate(() => window.MrFeastFresh.saveGameForQA()), "pre-finale recovery save setup should succeed");
     await page.evaluate(() => window.MrFeastFresh.placePlayerAtFinaleGateForQA());
     await page.evaluate(() => window.MrFeastFresh.interactFinaleGateForQA());
     const preChaseGateText = await page.locator("#mansion-discovery-body").textContent();
@@ -236,7 +237,43 @@ async function runBrowserFlow() {
     feast = await page.evaluate(() => window.MrFeastFresh.getVictoryFeastState());
     assert(route.gateOpened && !route.gateColliderEnabled && route.gateOpenProgress === 1, `gate leaves and collision must open together: ${JSON.stringify(route)}`);
     assert(feast.escape.completed && feast.outcome === "escaped" && !route.chaseActive, `prying the gate must complete and stop the chase: ${JSON.stringify({ feast, route })}`);
-    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "front-gate-pried-open.png") });
+    const winningScreen = await page.evaluate(() => {
+      const screen = document.getElementById("mansion-victory-screen");
+      return {
+        hidden: screen?.hidden,
+        title: document.getElementById("mansion-victory-title")?.textContent || "",
+        copy: document.getElementById("mansion-victory-copy")?.textContent || "",
+        replayLabel: document.getElementById("mansion-victory-restart")?.textContent || "",
+        loadDisabled: document.getElementById("mansion-victory-load")?.disabled,
+        activeElement: document.activeElement?.id || null,
+        gameWon: JSON.parse(window.render_game_to_text()).gameWon,
+      };
+    });
+    assert(
+      !winningScreen.hidden
+        && winningScreen.title === "You're Off the Menu"
+        && /served one thing he never planned: an exit/i.test(winningScreen.copy)
+        && winningScreen.replayLabel === "Play again"
+        && winningScreen.loadDisabled === false
+        && winningScreen.gameWon?.outcome === "escaped",
+      `opening the gate must present the complete winning screen: ${JSON.stringify(winningScreen)}`,
+    );
+    await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "victory-screen-desktop.png") });
+    await page.locator("#mansion-victory-load").click();
+    assert(await page.locator("#mansion-load-chooser").isVisible(), "winning-screen Choose save should reveal the shared save options");
+    assert(await page.locator('[data-save-source="manual"]').isVisible(), "winning-screen save picker should show the manual save");
+    await page.locator("#mansion-load-cancel").click();
+    assert(await page.locator("#mansion-victory-screen").isVisible(), "cancelling the winning-screen save picker should return to the victory screen");
+
+    await page.locator("#mansion-victory-load").click();
+    await page.locator('[data-save-source="manual"]').click();
+    await page.waitForFunction(() => !JSON.parse(window.render_game_to_text()).gameWon);
+    assert(!(await page.locator("#mansion-victory-screen").isVisible()), "loading a save should clear the winning screen");
+    await page.evaluate(() => window.MrFeastFresh.triggerBanquetLossForQA("feast-says-no-show"));
+    await page.locator("#mansion-gameover-load").click();
+    assert(await page.locator("#mansion-load-chooser").isVisible(), "game-over Choose save should still reveal the shared save options");
+    assert(await page.locator('[data-save-source="manual"]').isVisible(), "game-over save picker should retain the manual recovery option");
+    await page.locator("#mansion-load-cancel").click();
 
     assert(errors.length === 0, `browser emitted errors: ${errors.join(" | ")}`);
     console.log("Mr. Feast finale sabotage browser regression passed.");

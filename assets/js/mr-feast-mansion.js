@@ -2745,7 +2745,7 @@
   });
   const FEAST_SAYS = Object.freeze({
     instructionDelivery: "speech",
-    intermissionSeconds: 10 * 60,
+    paintingNumbersRequired: 4,
     reportDeadlineSeconds: 5 * 60,
     maximumTimerStepSeconds: 0.5,
     briefingSeconds: 11,
@@ -3548,7 +3548,6 @@
   });
   const STORM_RUN = Object.freeze({
     instructionDelivery: "visual-checkpoints",
-    paintingNumbersRequired: WORKROOM_CODE_SCRATCHES.length,
     reportDeadlineSeconds: 5 * 60,
     maximumTimerStepSeconds: 0.5,
     briefingSeconds: 14,
@@ -23325,23 +23324,20 @@
       return true;
     }
 
-    welcomeIsCompleteForTimer() {
-      if (!openingWelcomeSystem) return false;
-      if (openingWelcomeSystem.completed && !openingWelcomeSystem.active) return true;
-      // QA autostart deliberately bypasses the welcome. Treat that harness as
-      // a post-welcome exploration session without weakening the live rule.
-      return Boolean(state.qa && state.started && !openingWelcomeSystem.active);
+    triggerGateState() {
+      const paintingNumbersFound = workroomCodeClue?.discovered?.size || 0;
+      const paintingsComplete = paintingNumbersFound >= FEAST_SAYS.paintingNumbersRequired;
+      return {
+        paintingNumbersFound,
+        paintingNumbersRequired: FEAST_SAYS.paintingNumbersRequired,
+        paintingsComplete,
+        satisfied: paintingsComplete,
+        source: paintingsComplete ? "painting-code" : null,
+      };
     }
 
-    canCountIntermission() {
-      return Boolean(
-        state.started
-        && this.show.phase === FEAST_SAYS_PHASE.DORMANT
-        && this.welcomeIsCompleteForTimer()
-        && !state.menuOpen
-        && !state.workroom.keypadOpen
-        && !state.gameOver
-      );
+    eligible() {
+      return this.triggerGateState().satisfied;
     }
 
     blocksInvestigation() {
@@ -23425,11 +23421,16 @@
       return true;
     }
 
-    call(reason = "timer", clueId = null) {
+    call(reason = "qa", clueId = null) {
+      const qaBypass = state.qa && String(reason).startsWith("qa");
+      const gate = this.triggerGateState();
+      if (!qaBypass && !gate.satisfied) {
+        return { called: false, reason: "trigger-gate-incomplete", phase: this.show.phase, triggerGate: gate };
+      }
       if (this.show.phase !== FEAST_SAYS_PHASE.DORMANT) {
         return { called: false, reason: "already-called", phase: this.show.phase };
       }
-      this.show.triggerReason = reason === "timer" ? "timer" : "clue";
+      this.show.triggerReason = qaBypass ? "qa" : "painting-code";
       this.show.triggerClueId = clueId;
       this.show.callCount += 1;
       this.show.phaseRemaining = 0;
@@ -23438,7 +23439,7 @@
       this.transition(FEAST_SAYS_PHASE.CALLED, `call:${this.show.triggerReason}`);
       mrFeastNpc?.suspendThreatsForCompetition();
       cameraSecurity?.suspendForCompetition();
-      const preserveClue = this.show.triggerReason === "clue" && dom.discovery && !dom.discovery.hidden;
+      const preserveClue = this.show.triggerReason === "painting-code" && dom.discovery && !dom.discovery.hidden;
       const clueTitle = preserveClue ? dom.discoveryTitle?.textContent?.trim() : "";
       const clueBody = preserveClue ? dom.discoveryBody?.textContent?.trim() : "";
       contestant13Quest?.showDiscovery(
@@ -23466,7 +23467,14 @@
     }
 
     noteClueDiscovered(clueId) {
-      return this.call("clue", clueId);
+      if (!String(clueId || "").startsWith("painting-scratch:")) {
+        return { called: false, reason: "not-feast-says-trigger", clueId };
+      }
+      const gate = this.triggerGateState();
+      if (!gate.satisfied) {
+        return { called: false, reason: "painting-code-incomplete", clueId, triggerGate: gate };
+      }
+      return this.call("painting-code", clueId);
     }
 
     notifyInvestigationPaused() {
@@ -23994,12 +24002,14 @@
         return;
       }
       if (this.show.phase === FEAST_SAYS_PHASE.DORMANT) {
-        if (this.canCountIntermission() && (!state.qa || !this.qaManualClock || this.qaStepping)) {
-          this.show.intermissionElapsed = Math.min(
-            FEAST_SAYS.intermissionSeconds,
-            this.show.intermissionElapsed + step,
-          );
-          if (this.show.intermissionElapsed >= FEAST_SAYS.intermissionSeconds) this.call("timer");
+        const gate = this.triggerGateState();
+        if (
+          state.started
+          && gate.satisfied
+          && !competitionReportClockBlocked()
+          && (!state.qa || !this.qaManualClock || this.qaStepping)
+        ) {
+          this.call(gate.source, "painting-code-complete");
         }
         this.syncHud();
         return;
@@ -24122,11 +24132,10 @@
       if (dom.touchSprint) dom.touchSprint.hidden = this.isPlaying();
       if (dom.touchCrouch) dom.touchCrouch.hidden = this.isPlaying();
       if (phase === FEAST_SAYS_PHASE.DORMANT) {
-        const remaining = FEAST_SAYS.intermissionSeconds - this.show.intermissionElapsed;
         setText(dom.feastEyebrow, "Next live event");
         setText(dom.feastRound, "Game 1");
         setText(dom.feastCommand, "");
-        setText(dom.feastTimer, this.formatClock(remaining));
+        setText(dom.feastTimer, "");
       } else if (phase === FEAST_SAYS_PHASE.CALLED) {
         setText(dom.feastEyebrow, "Feast Says");
         setText(dom.feastRound, this.castReady() ? "Called" : "Holding for cast");
@@ -24177,8 +24186,8 @@
         triggerReason: this.show.triggerReason,
         triggerClueId: this.show.triggerClueId,
         callCount: this.show.callCount,
-        callAfterSeconds: FEAST_SAYS.intermissionSeconds,
-        intermissionElapsed: this.show.intermissionElapsed,
+        callAfterSeconds: null,
+        intermissionElapsed: 0,
         reportRemaining: transient
           ? FEAST_SAYS.reportDeadlineSeconds
           : this.show.phase === FEAST_SAYS_PHASE.CALLED
@@ -24240,7 +24249,7 @@
       this.show.triggerReason = source.triggerReason || (restoredPhase === FEAST_SAYS_PHASE.DORMANT ? null : "saved");
       this.show.triggerClueId = source.triggerClueId || null;
       this.show.callCount = clamp(Number(source.callCount) || (restoredPhase === FEAST_SAYS_PHASE.DORMANT ? 0 : 1), 0, 1);
-      this.show.intermissionElapsed = clamp(Number(source.intermissionElapsed) || 0, 0, FEAST_SAYS.intermissionSeconds);
+      this.show.intermissionElapsed = 0;
       const restoredReportRemaining = Number(source.reportRemaining);
       this.show.reportRemaining = restoredPhase === FEAST_SAYS_PHASE.CALLED
         ? requestedPhase === FEAST_SAYS_PHASE.CALLED
@@ -24368,9 +24377,11 @@
         triggerReason: this.show.triggerReason,
         triggerClueId: this.show.triggerClueId,
         callCount: this.show.callCount,
-        callAfterSeconds: FEAST_SAYS.intermissionSeconds,
-        intermissionElapsed: Number(this.show.intermissionElapsed.toFixed(3)),
-        secondsUntilCall: Number(Math.max(0, FEAST_SAYS.intermissionSeconds - this.show.intermissionElapsed).toFixed(3)),
+        eligible: this.eligible(),
+        triggerGate: this.triggerGateState(),
+        callAfterSeconds: null,
+        intermissionElapsed: 0,
+        secondsUntilCall: null,
         reportDeadlineSeconds: FEAST_SAYS.reportDeadlineSeconds,
         reportRemaining: Number(this.show.reportRemaining.toFixed(3)),
         hostWaiting: Boolean(
@@ -24540,19 +24551,19 @@
 
     triggerGateState() {
       const paintingNumbersFound = workroomCodeClue?.discovered?.size || 0;
-      const paintingsComplete = paintingNumbersFound >= STORM_RUN.paintingNumbersRequired;
+      const paintingsComplete = paintingNumbersFound >= FEAST_SAYS.paintingNumbersRequired;
       const hedgeMazeKeyFound = Boolean(state.contestant13.basementKeyFound);
-      const discoverySatisfied = paintingsComplete || hedgeMazeKeyFound;
+      const discoverySatisfied = hedgeMazeKeyFound;
       const gameOneComplete = this.gameOneComplete();
       return {
         gameOneComplete,
         paintingNumbersFound,
-        paintingNumbersRequired: STORM_RUN.paintingNumbersRequired,
+        paintingNumbersRequired: FEAST_SAYS.paintingNumbersRequired,
         paintingsComplete,
         hedgeMazeKeyFound,
         discoverySatisfied,
         satisfied: gameOneComplete && discoverySatisfied,
-        source: hedgeMazeKeyFound ? "hedge-maze-key" : paintingsComplete ? "painting-code" : null,
+        source: hedgeMazeKeyFound ? "hedge-maze-key" : null,
       };
     }
 
@@ -24709,11 +24720,7 @@
       if (this.show.phase !== STORM_RUN_PHASE.DORMANT) {
         return { called: false, reason: "already-called", phase: this.show.phase };
       }
-      this.show.triggerReason = reason === "qa"
-        ? "qa"
-        : reason === "hedge-maze-key"
-          ? "hedge-maze-key"
-          : "painting-code";
+      this.show.triggerReason = reason === "qa" ? "qa" : "hedge-maze-key";
       this.show.triggerClueId = clueId;
       this.show.callCount += 1;
       this.show.reportRemaining = STORM_RUN.reportDeadlineSeconds;
@@ -24767,11 +24774,13 @@
     }
 
     noteClueDiscovered(clueId) {
+      if (clueId !== "hedge-maze-b13-cache") {
+        return { called: false, reason: "not-storm-run-trigger", clueId };
+      }
       if (!this.gameOneComplete()) return { called: false, reason: "game-one-incomplete", clueId };
       const gate = this.triggerGateState();
       if (!gate.satisfied) return { called: false, reason: "trigger-gate-incomplete", clueId, triggerGate: gate };
-      const reason = clueId === "hedge-maze-b13-cache" ? "hedge-maze-key" : "painting-code";
-      return this.call(reason, clueId);
+      return this.call("hedge-maze-key", clueId);
     }
 
     notifyInvestigationPaused() {
@@ -25332,7 +25341,7 @@
         ) {
           this.call(
             gate.source,
-            gate.source === "hedge-maze-key" ? "hedge-maze-b13-cache" : "painting-code-complete",
+            "hedge-maze-b13-cache",
           );
         }
         this.syncHud();
@@ -51894,7 +51903,7 @@
     window.MrFeastFresh.advanceFeastSaysCastForQA = (seconds) => (
       state.qa && mansionContestants ? mansionContestants.advanceChallengeForQA(seconds) : null
     );
-    window.MrFeastFresh.callFeastSaysForQA = (reason = "timer") => {
+    window.MrFeastFresh.callFeastSaysForQA = (reason = "qa") => {
       if (!state.qa || !feastSaysSystem) return { started: false, reason: "qa-only" };
       const result = feastSaysSystem.call(reason);
       return { ...result, started: Boolean(result.called) };

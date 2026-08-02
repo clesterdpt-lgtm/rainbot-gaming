@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260802-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1";
+  const MANSION_RUNTIME_VERSION = "20260802-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -4195,16 +4195,46 @@
       foldColor: 0x09050c,
       centerY: FLOOR.MAIN + 0.73,
       height: 0.92,
-      shoulderRadius: 0.27,
-      hemRadius: 0.42,
       depthScale: 0.4,
       cowlHeight: 0.22,
       cowlTopRadius: 0.16,
       cowlBottomRadius: 0.27,
       cowlDepthScale: 0.55,
-      frontFoldHeight: 0.66,
       minimumMaskClearance: 0.045,
       minimumTableClearance: 0.002,
+      // Lathe profile (radius, height) for the drape, read shoulder-down. The
+      // nipped chest and flared hem are what separate a robed figure from the
+      // plain cone the tableau used to render.
+      profile: Object.freeze([
+        Object.freeze([0.198, 0.46]),
+        Object.freeze([0.246, 0.418]),
+        Object.freeze([0.264, 0.342]),
+        Object.freeze([0.252, 0.206]),
+        Object.freeze([0.272, 0.058]),
+        Object.freeze([0.318, -0.108]),
+        Object.freeze([0.377, -0.286]),
+        Object.freeze([0.428, -0.42]),
+        Object.freeze([0.446, -0.48]),
+      ]),
+      mantleProfile: Object.freeze([
+        Object.freeze([0.185, 0.442]),
+        Object.freeze([0.246, 0.386]),
+        Object.freeze([0.298, 0.288]),
+        Object.freeze([0.326, 0.196]),
+        Object.freeze([0.332, 0.152]),
+      ]),
+      foldCount: 11,
+      foldBaseAmplitude: 0.022,
+      foldHemAmplitude: 0.048,
+      mantleFoldCount: 14,
+      mantleFoldAmplitude: 0.026,
+      sleeve: Object.freeze({
+        shoulder: Object.freeze([0.182, 0.302, 0.012]),
+        cuff: Object.freeze([0.203, -0.052, 0.222]),
+        shoulderRadius: 0.101,
+        cuffRadius: 0.062,
+        handRadius: 0.054,
+      }),
     }),
     victim: Object.freeze({
       torso: Object.freeze({
@@ -21676,41 +21706,33 @@
         metalness: 0,
         side: THREE.DoubleSide,
       });
-      this.patronCloakGeometry = new THREE.CylinderGeometry(
-        BANQUET_LOSS.cloak.shoulderRadius,
-        BANQUET_LOSS.cloak.hemRadius,
-        BANQUET_LOSS.cloak.height,
-        20,
-        4,
-        true,
-      );
-      const cloakPosition = this.patronCloakGeometry.attributes.position;
-      for (let index = 0; index < cloakPosition.count; index += 1) {
-        const x = cloakPosition.getX(index);
-        const z = cloakPosition.getZ(index);
-        const angle = Math.atan2(z, x);
-        const fold = 1 + Math.cos(angle * 8) * 0.035;
-        cloakPosition.setXYZ(
-          index,
-          x * fold,
-          cloakPosition.getY(index),
-          z * fold * BANQUET_LOSS.cloak.depthScale,
-        );
-      }
-      cloakPosition.needsUpdate = true;
-      this.patronCloakGeometry.computeVertexNormals();
+      this.patronCloakGeometry = this.makeDrapedClothGeometry({
+        profile: BANQUET_LOSS.cloak.profile,
+        segments: 36,
+        foldCount: BANQUET_LOSS.cloak.foldCount,
+        baseAmplitude: BANQUET_LOSS.cloak.foldBaseAmplitude,
+        hemAmplitude: BANQUET_LOSS.cloak.foldHemAmplitude,
+      });
+      this.patronCloakMantleGeometry = this.makeDrapedClothGeometry({
+        profile: BANQUET_LOSS.cloak.mantleProfile,
+        segments: 36,
+        foldCount: BANQUET_LOSS.cloak.mantleFoldCount,
+        baseAmplitude: BANQUET_LOSS.cloak.mantleFoldAmplitude * 0.4,
+        hemAmplitude: BANQUET_LOSS.cloak.mantleFoldAmplitude,
+      });
       this.patronCloakCowlGeometry = new THREE.CylinderGeometry(
         BANQUET_LOSS.cloak.cowlTopRadius,
         BANQUET_LOSS.cloak.cowlBottomRadius,
         BANQUET_LOSS.cloak.cowlHeight,
-        16,
+        20,
         2,
         true,
       );
-      this.patronCloakFoldGeometry = new THREE.BoxGeometry(
-        0.018,
-        BANQUET_LOSS.cloak.frontFoldHeight,
-        0.012,
+      this.patronCloakSleeveGeometry = this.makeCloakSleeveGeometry();
+      this.patronCloakHandGeometry = new THREE.SphereGeometry(
+        BANQUET_LOSS.cloak.sleeve.handRadius,
+        12,
+        9,
       );
       this.patronCloakMaterial = new THREE.MeshStandardMaterial({
         color: BANQUET_LOSS.cloak.color,
@@ -22032,6 +22054,60 @@
       }
     }
 
+    // Lathe a cloth surface from an authored profile, then ripple it into folds
+    // that deepen toward the hem. Flat cones read as cardboard under the red
+    // ritual fill; rippled cloth holds a highlight on every fold crest.
+    makeDrapedClothGeometry(options) {
+      const { profile, segments, foldCount, baseAmplitude, hemAmplitude } = options;
+      const points = profile.map(([radius, y]) => new THREE.Vector2(radius, y));
+      const geometry = new THREE.LatheGeometry(points, segments);
+      const topY = points[0].y;
+      const bottomY = points[points.length - 1].y;
+      const span = Math.max(0.0001, topY - bottomY);
+      const position = geometry.attributes.position;
+      for (let index = 0; index < position.count; index += 1) {
+        const x = position.getX(index);
+        const y = position.getY(index);
+        const z = position.getZ(index);
+        const angle = Math.atan2(z, x);
+        const drop = Math.min(1, Math.max(0, (topY - y) / span));
+        const fold = 1 + Math.cos(angle * foldCount)
+          * (baseAmplitude + (hemAmplitude - baseAmplitude) * drop);
+        position.setXYZ(index, x * fold, y, z * fold * BANQUET_LOSS.cloak.depthScale);
+      }
+      position.needsUpdate = true;
+      geometry.computeVertexNormals();
+      return geometry;
+    }
+
+    // One sleeve, baked into place so all six patrons share the geometry: the
+    // left arm is the same mesh mirrored on X.
+    makeCloakSleeveGeometry() {
+      const { shoulder, cuff, shoulderRadius, cuffRadius } = BANQUET_LOSS.cloak.sleeve;
+      const from = new THREE.Vector3(shoulder[0], shoulder[1], shoulder[2]);
+      const to = new THREE.Vector3(cuff[0], cuff[1], cuff[2]);
+      const direction = new THREE.Vector3().subVectors(to, from);
+      const geometry = new THREE.CylinderGeometry(shoulderRadius, cuffRadius, direction.length(), 16, 3, false);
+      const position = geometry.attributes.position;
+      for (let index = 0; index < position.count; index += 1) {
+        const x = position.getX(index);
+        const z = position.getZ(index);
+        const fold = 1 + Math.cos(Math.atan2(z, x) * 7) * 0.055;
+        position.setXYZ(index, x * fold, position.getY(index), z * fold);
+      }
+      position.needsUpdate = true;
+      geometry.applyMatrix4(new THREE.Matrix4().compose(
+        from.clone().addScaledVector(direction, 0.5),
+        new THREE.Quaternion().setFromUnitVectors(
+          new THREE.Vector3(0, 1, 0),
+          direction.clone().normalize(),
+        ),
+        new THREE.Vector3(1, 1, 1),
+      ));
+      geometry.computeVertexNormals();
+      return geometry;
+    }
+
     makePatronHood(spec) {
       const hood = new THREE.Group();
       hood.name = `${spec.id}-full-face-formal-hood`;
@@ -22072,16 +22148,35 @@
       cowl.castShadow = true;
       cowl.receiveShadow = true;
       cloak.add(cowl);
+      const mantle = new THREE.Mesh(
+        this.patronCloakMantleGeometry,
+        this.patronCloakFoldMaterial,
+      );
+      mantle.name = `${spec.id}-black-cloak-shoulder-mantle`;
+      mantle.castShadow = true;
+      mantle.receiveShadow = true;
+      cloak.add(mantle);
+      const { cuff, handRadius } = BANQUET_LOSS.cloak.sleeve;
       for (const side of [-1, 1]) {
-        const fold = new THREE.Mesh(
-          this.patronCloakFoldGeometry,
+        const sleeve = new THREE.Mesh(
+          this.patronCloakSleeveGeometry,
+          this.patronCloakMaterial,
+        );
+        sleeve.name = `${spec.id}-black-cloak-sleeve`;
+        sleeve.scale.x = side;
+        sleeve.castShadow = true;
+        sleeve.receiveShadow = true;
+        cloak.add(sleeve);
+        const hand = new THREE.Mesh(
+          this.patronCloakHandGeometry,
           this.patronCloakFoldMaterial,
         );
-        fold.name = `${spec.id}-black-cloak-front-fold`;
-        fold.position.set(side * 0.08, -0.055, 0.14);
-        fold.castShadow = false;
-        fold.receiveShadow = true;
-        cloak.add(fold);
+        hand.name = `${spec.id}-black-cloak-gloved-hand`;
+        hand.position.set(side * (cuff[0] + 0.004), cuff[1] - 0.012, cuff[2] + handRadius * 0.5);
+        hand.scale.set(0.86, 0.72, 1.12);
+        hand.castShadow = true;
+        hand.receiveShadow = true;
+        cloak.add(hand);
       }
       return cloak;
     }
@@ -27773,16 +27868,136 @@
       root.position.set(0, 1.32, 0.11);
       root.rotation.set(0.08, 0.12, Math.PI / 2 - 0.12);
       parent.add(root);
-      const crowbarMaterial = new THREE.MeshStandardMaterial({
-        color: 0x8f3025,
-        roughness: 0.48,
-        metalness: 0.72,
+      // Flat shading is what sells the hexagonal stock: smooth normals on a
+      // six-sided cylinder just read as a round copper pipe.
+      const shaftMaterial = new THREE.MeshStandardMaterial({
+        color: 0x72271e,
+        roughness: 0.68,
+        metalness: 0.62,
+        flatShading: true,
       });
-      cylinder({ name: "crowbar-shaft", radius: 0.042, height: 0.86, segments: 12, y: 0, material: crowbarMaterial, parent: root });
-      cylinder({ name: "crowbar-hook", radius: 0.042, height: 0.24, segments: 12, x: 0.07, y: 0.47, rotationZ: -0.7, material: crowbarMaterial, parent: root });
-      cylinder({ name: "crowbar-pry-end", radius: 0.042, height: 0.2, segments: 12, x: -0.06, y: -0.47, rotationZ: -0.62, material: crowbarMaterial, parent: root });
-      box({ name: "crowbar-pry-tip", w: 0.16, h: 0.055, d: 0.075, x: -0.13, y: -0.54, rotationZ: -0.62, material: crowbarMaterial, parent: root });
+      const forgedMaterial = new THREE.MeshStandardMaterial({
+        color: 0x5d2219,
+        roughness: 0.76,
+        metalness: 0.56,
+      });
+      // Fully metallic without an environment map renders as a black notch in
+      // the silhouette, so the worn edges stay half-metal and light-catching.
+      const wornSteelMaterial = new THREE.MeshStandardMaterial({
+        color: 0xc3bbae,
+        roughness: 0.42,
+        metalness: 0.5,
+      });
+      cylinder({ name: "crowbar-shaft", radiusTop: 0.031, radiusBottom: 0.037, height: 0.85, segments: 6, y: 0.01, material: shaftMaterial, parent: root });
+      const gooseneckCurve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0, 0.38, 0),
+        new THREE.Vector3(0.006, 0.487, 0),
+        new THREE.Vector3(0.052, 0.567, 0),
+        new THREE.Vector3(0.128, 0.583, 0),
+        new THREE.Vector3(0.176, 0.539, 0),
+      ]);
+      const gooseneck = new THREE.Mesh(
+        new THREE.TubeGeometry(gooseneckCurve, 22, 0.032, 6, false),
+        shaftMaterial,
+      );
+      gooseneck.name = "crowbar-gooseneck";
+      gooseneck.castShadow = true;
+      gooseneck.receiveShadow = true;
+      root.add(gooseneck);
+      root.add(this.makeCrowbarClaw({
+        name: "crowbar-hook",
+        x: 0.178,
+        y: 0.535,
+        rotationZ: 0.82,
+        length: 0.132,
+        halfWidth: 0.037,
+        slotDepth: 0.078,
+        thickness: 0.046,
+        taper: 0.5,
+        material: forgedMaterial,
+        tipMaterial: wornSteelMaterial,
+      }));
+      root.add(this.makeCrowbarClaw({
+        name: "crowbar-pry-end",
+        x: -0.014,
+        y: -0.398,
+        rotationZ: -0.58,
+        length: 0.184,
+        halfWidth: 0.036,
+        slotDepth: 0.07,
+        thickness: 0.05,
+        taper: 0.78,
+        material: forgedMaterial,
+        tipMaterial: wornSteelMaterial,
+      }));
       return root;
+    }
+
+    // Both ends of a crowbar are the same forging: a flat blade split by a nail
+    // slot, thinned toward a bright worn edge. One builder keeps them consistent.
+    makeCrowbarClaw(options) {
+      const {
+        name, x, y, rotationZ, length, halfWidth, slotDepth, thickness, taper,
+        material, tipMaterial,
+      } = options;
+      const group = new THREE.Group();
+      group.name = name;
+      group.position.set(x, y, 0);
+      group.rotation.z = rotationZ;
+      // The shoulder is buried inside the shaft/gooseneck so the forging reads
+      // as one piece instead of a blade butted onto a pipe.
+      const shoulder = 0.062;
+      const shape = new THREE.Shape();
+      shape.moveTo(-halfWidth * 0.78, shoulder);
+      shape.lineTo(halfWidth * 0.78, shoulder);
+      shape.quadraticCurveTo(halfWidth, -length * 0.42, halfWidth * 0.94, -length * 0.74);
+      shape.lineTo(halfWidth * 0.72, -length);
+      shape.lineTo(halfWidth * 0.3, -length * 1.02);
+      shape.lineTo(halfWidth * 0.2, -slotDepth);
+      shape.quadraticCurveTo(0, -slotDepth * 0.82, -halfWidth * 0.2, -slotDepth);
+      shape.lineTo(-halfWidth * 0.3, -length * 1.02);
+      shape.lineTo(-halfWidth * 0.72, -length);
+      shape.lineTo(-halfWidth * 0.94, -length * 0.74);
+      shape.quadraticCurveTo(-halfWidth, -length * 0.42, -halfWidth * 0.78, shoulder);
+      const geometry = new THREE.ExtrudeGeometry(shape, {
+        depth: thickness,
+        bevelEnabled: true,
+        bevelSize: 0.007,
+        bevelThickness: 0.007,
+        bevelSegments: 2,
+        curveSegments: 6,
+      });
+      geometry.translate(0, 0, -thickness / 2);
+      // Thin the extrusion toward the tip so the blade ends as a chisel rather
+      // than a slab; ExtrudeGeometry cannot taper on its own.
+      const position = geometry.attributes.position;
+      for (let index = 0; index < position.count; index += 1) {
+        const localY = position.getY(index);
+        const along = Math.min(1, Math.max(0, (shoulder - localY) / (length + shoulder)));
+        position.setZ(index, position.getZ(index) * (1 - along * taper));
+      }
+      position.needsUpdate = true;
+      geometry.computeVertexNormals();
+      const blade = new THREE.Mesh(geometry, material);
+      blade.name = `${name}-blade`;
+      blade.castShadow = true;
+      blade.receiveShadow = true;
+      group.add(blade);
+      for (const side of [-1, 1]) {
+        box({
+          name: `${name}-worn-tip`,
+          w: halfWidth * 0.36,
+          h: 0.009,
+          d: thickness * (1 - taper) * 0.7,
+          x: side * halfWidth * 0.46,
+          y: -length * 1.0,
+          material: tipMaterial,
+          parent: group,
+          cast: false,
+          receive: false,
+        });
+      }
+      return group;
     }
 
     createCrank(parent, options = {}) {
@@ -42047,15 +42262,78 @@
     group.rotation.y = 0.24;
     group.rotation.z = -1.42;
     scene.add(group);
-    cylinder({ name: "contestant-13-garden-shovel-shaft", radius: 0.035, height: 1.45, segments: 10, y: 0.79, material: M.darkWood, parent: group });
-    roundedBox({ name: "contestant-13-garden-shovel-blade", w: 0.34, h: 0.42, d: 0.075, radius: 0.055, y: 0.08, material: M.iron, parent: group });
-    box({ name: "contestant-13-garden-shovel-tread", w: 0.42, h: 0.055, d: 0.11, y: 0.31, material: M.iron, parent: group, cast: false });
+    const bladeSteel = new THREE.MeshStandardMaterial({ color: 0x45443f, roughness: 0.6, metalness: 0.74 });
+    const bladeEdge = new THREE.MeshStandardMaterial({ color: 0xa9a296, roughness: 0.36, metalness: 0.62 });
+    const cakedSoil = new THREE.MeshStandardMaterial({ color: 0x241a12, roughness: 0.97, metalness: 0.03 });
+    // Dished spade blade: a rounded outline drawn as a profile, extruded thin,
+    // then curved across its width so it catches a highlight like real steel.
+    const bladeShape = new THREE.Shape();
+    bladeShape.moveTo(-0.15, 0.3);
+    bladeShape.lineTo(0.15, 0.3);
+    bladeShape.quadraticCurveTo(0.175, 0.19, 0.171, 0.08);
+    bladeShape.quadraticCurveTo(0.166, -0.03, 0.128, -0.085);
+    bladeShape.quadraticCurveTo(0.078, -0.152, 0, -0.163);
+    bladeShape.quadraticCurveTo(-0.078, -0.152, -0.128, -0.085);
+    bladeShape.quadraticCurveTo(-0.166, -0.03, -0.171, 0.08);
+    bladeShape.quadraticCurveTo(-0.175, 0.19, -0.15, 0.3);
+    const bladeGeometry = new THREE.ExtrudeGeometry(bladeShape, {
+      depth: 0.022,
+      bevelEnabled: true,
+      bevelSize: 0.008,
+      bevelThickness: 0.006,
+      bevelSegments: 2,
+      curveSegments: 10,
+    });
+    bladeGeometry.translate(0, 0, -0.011);
+    const bladePosition = bladeGeometry.attributes.position;
+    for (let index = 0; index < bladePosition.count; index += 1) {
+      const bx = bladePosition.getX(index) / 0.175;
+      const by = bladePosition.getY(index);
+      const dish = bx * bx * 0.052 + Math.max(0, 0.3 - by) * 0.028;
+      bladePosition.setZ(index, bladePosition.getZ(index) - dish);
+    }
+    bladePosition.needsUpdate = true;
+    bladeGeometry.computeVertexNormals();
+    const blade = new THREE.Mesh(bladeGeometry, bladeSteel);
+    blade.name = "contestant-13-garden-shovel-blade";
+    blade.castShadow = true;
+    blade.receiveShadow = true;
+    group.add(blade);
+    box({ name: "contestant-13-garden-shovel-edge", w: 0.13, h: 0.02, d: 0.016, y: -0.152, rotationZ: 0, material: bladeEdge, parent: group, cast: false });
+    for (const side of [-1, 1]) {
+      box({ name: "contestant-13-garden-shovel-edge-shoulder", w: 0.09, h: 0.018, d: 0.015, x: side * 0.086, y: -0.104, rotationZ: side * 0.62, material: bladeEdge, parent: group, cast: false });
+      // Rolled foot treads sit at the blade shoulders, where a gardener steps.
+      cylinder({ name: "contestant-13-garden-shovel-tread", radius: 0.021, height: 0.115, segments: 10, x: side * 0.098, y: 0.298, z: 0.014, rotationZ: Math.PI / 2, material: bladeSteel, parent: group, cast: false });
+    }
+    cylinder({ name: "contestant-13-garden-shovel-socket", radiusTop: 0.043, radiusBottom: 0.072, height: 0.19, segments: 12, y: 0.375, material: bladeSteel, parent: group });
+    for (const offset of [0.33, 0.43]) {
+      cylinder({ name: "contestant-13-garden-shovel-rivet", radius: 0.009, height: 0.096, segments: 8, y: offset, rotationX: Math.PI / 2, material: bladeEdge, parent: group, cast: false });
+    }
+    for (const clod of [[0.062, -0.015, 0.034], [-0.074, 0.078, 0.028]]) {
+      const soil = sphere({ name: "contestant-13-garden-shovel-caked-soil", radius: clod[2], widthSegments: 8, heightSegments: 6, x: clod[0], y: clod[1], z: -0.03, material: cakedSoil, parent: group, cast: false });
+      soil.scale.set(1.7, 1.25, 0.38);
+    }
+    cylinder({ name: "contestant-13-garden-shovel-shaft", radiusTop: 0.032, radiusBottom: 0.038, height: 1.1, segments: 12, y: 0.99, material: M.darkWood, parent: group });
+    cylinder({ name: "contestant-13-garden-shovel-grip-collar", radiusTop: 0.036, radiusBottom: 0.033, height: 0.06, segments: 12, y: 1.53, material: bladeSteel, parent: group, cast: false });
     const grip = new THREE.Group();
     grip.position.y = 1.55;
     group.add(grip);
-    cylinder({ name: "contestant-13-garden-shovel-grip-left", radius: 0.03, height: 0.32, segments: 9, x: -0.13, rotationZ: -0.75, material: M.darkWood, parent: grip });
-    cylinder({ name: "contestant-13-garden-shovel-grip-right", radius: 0.03, height: 0.32, segments: 9, x: 0.13, rotationZ: 0.75, material: M.darkWood, parent: grip });
+    // Split-D handle: two splayed arms closed by a loop, with the cross dowel
+    // the hand actually wraps.
+    for (const side of [-1, 1]) {
+      cylinder({ name: side < 0 ? "contestant-13-garden-shovel-grip-left" : "contestant-13-garden-shovel-grip-right", radiusTop: 0.023, radiusBottom: 0.029, height: 0.115, segments: 10, x: side * 0.06, y: 0.05, rotationZ: side * -0.42, material: M.darkWood, parent: grip });
+    }
+    const gripLoop = new THREE.Mesh(new THREE.TorusGeometry(0.083, 0.023, 9, 20, Math.PI), M.darkWood);
+    gripLoop.name = "contestant-13-garden-shovel-grip-loop";
+    gripLoop.position.y = 0.104;
+    gripLoop.castShadow = true;
+    gripLoop.receiveShadow = true;
+    grip.add(gripLoop);
+    cylinder({ name: "contestant-13-garden-shovel-grip-dowel", radius: 0.024, height: 0.168, segments: 10, y: 0.112, rotationZ: Math.PI / 2, material: M.darkWood, parent: grip });
     box({ name: "contestant-13-garden-shovel-xiii-mark", w: 0.1, h: 0.015, d: 0.045, x: 0.038, y: 1.05, z: 0.04, material: M.brass, parent: group, cast: false });
+    for (const markY of [1.12, 1.16, 1.2]) {
+      box({ name: "contestant-13-garden-shovel-xiii-scratch", w: 0.012, h: 0.03, d: 0.006, x: 0.03, y: markY, z: 0.036, rotationZ: 0.18, material: cakedSoil, parent: group, cast: false });
+    }
     const hitMaterial = new THREE.MeshBasicMaterial({
       transparent: true,
       opacity: 0,

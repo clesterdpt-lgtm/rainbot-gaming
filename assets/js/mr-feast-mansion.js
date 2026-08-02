@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260801-food-storage-unique-clearance-6";
+  const MANSION_RUNTIME_VERSION = "20260801-flashlight-cone-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -853,6 +853,14 @@
       poseSampleSeconds: 0.09,
       wallClearanceMeters: 0.22,
       minimumDistance: 0.9,
+      occlusionProbeAngleScale: 0.82,
+      occlusionProbeOffsets: Object.freeze([
+        Object.freeze([0, 0]),
+        Object.freeze([-1, 0]),
+        Object.freeze([1, 0]),
+        Object.freeze([0, -1]),
+        Object.freeze([0, 1]),
+      ]),
       originOffset: Object.freeze({ x: 0.16, y: -0.13, z: -0.08 }),
       aimOffset: Object.freeze({ x: 0.02, y: -0.08, z: -10.6 }),
       activationFlutterSeconds: 0.18,
@@ -31836,6 +31844,12 @@
       this.origin = new THREE.Vector3();
       this.aim = new THREE.Vector3();
       this.direction = new THREE.Vector3();
+      this.probeDirection = new THREE.Vector3();
+      this.probeRight = new THREE.Vector3();
+      this.probeUp = new THREE.Vector3();
+      this.probeReaches = FLASHLIGHT.beam.occlusionProbeOffsets.map(() => FLASHLIGHT.beam.distance);
+      this.probeBlockers = FLASHLIGHT.beam.occlusionProbeOffsets.map(() => null);
+      this.probeBlockedSampleCount = 0;
       this.cameraQuaternion = new THREE.Quaternion();
       this.buildPickup();
       this.buildBeam();
@@ -32244,6 +32258,68 @@
       return this.getDiagnostics();
     }
 
+    isEffectiveBeamBlocker(hit) {
+      const object = hit?.object;
+      if (!object || hit.distance < 0.18) return false;
+      for (let current = object; current; current = current.parent) {
+        if (!current.visible) return false;
+      }
+      const name = String(object.name || "").toLowerCase();
+      if (/security-camera|rain|lightning|water-surface|glow|bulb|interaction/.test(name)) return false;
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      return !materials.some((material) => material?.transparent && material.opacity < 0.35);
+    }
+
+    traceBeamReach(direction, sampleIndex) {
+      this.raycaster.set(this.origin, direction);
+      this.raycaster.near = 0.16;
+      this.raycaster.far = FLASHLIGHT.beam.distance;
+      const blocker = this.raycaster
+        .intersectObjects(occluderMeshes, false)
+        .find((hit) => this.isEffectiveBeamBlocker(hit));
+      this.probeBlockers[sampleIndex] = blocker?.object?.name || null;
+      return clamp(
+        blocker ? blocker.distance + FLASHLIGHT.beam.wallClearanceMeters : FLASHLIGHT.beam.distance,
+        FLASHLIGHT.beam.minimumDistance,
+        FLASHLIGHT.beam.distance,
+      );
+    }
+
+    sampleBeamReach() {
+      this.direction.copy(this.aim).sub(this.origin).normalize();
+      this.probeRight.set(1, 0, 0).applyQuaternion(this.cameraQuaternion);
+      this.probeUp.set(0, 1, 0).applyQuaternion(this.cameraQuaternion);
+      this.probeDirection.copy(this.direction);
+      this.probeReaches[0] = this.traceBeamReach(this.probeDirection, 0);
+      if (!this.probeBlockers[0]) {
+        for (let index = 1; index < this.probeReaches.length; index += 1) {
+          this.probeReaches[index] = FLASHLIGHT.beam.distance;
+          this.probeBlockers[index] = null;
+        }
+        this.probeBlockedSampleCount = 0;
+        return FLASHLIGHT.beam.distance;
+      }
+      const probeSpread = Math.tan(
+        FLASHLIGHT.beam.angle * FLASHLIGHT.beam.occlusionProbeAngleScale,
+      );
+      let farthestReach = this.probeReaches[0];
+      for (let index = 1; index < FLASHLIGHT.beam.occlusionProbeOffsets.length; index += 1) {
+        const [right, up] = FLASHLIGHT.beam.occlusionProbeOffsets[index];
+        const offsetLength = Math.max(1, Math.hypot(right, up));
+        this.probeDirection.copy(this.direction)
+          .addScaledVector(this.probeRight, right / offsetLength * probeSpread)
+          .addScaledVector(this.probeUp, up / offsetLength * probeSpread)
+          .normalize();
+        this.probeReaches[index] = this.traceBeamReach(this.probeDirection, index);
+        farthestReach = Math.max(farthestReach, this.probeReaches[index]);
+      }
+      this.probeBlockedSampleCount = 0;
+      for (let index = 0; index < this.probeReaches.length; index += 1) {
+        if (this.probeBlockers[index]) this.probeBlockedSampleCount += 1;
+      }
+      return farthestReach;
+    }
+
     syncPose(forceRaycast = false) {
       if (!this.beam) return;
       camera.updateMatrixWorld(true);
@@ -32262,23 +32338,10 @@
       this.beam.target.position.copy(this.aim);
       this.beam.target.updateMatrixWorld(true);
       if (forceRaycast || this.raySampleRemaining <= 0) {
-        this.direction.copy(this.aim).sub(this.origin).normalize();
-        this.raycaster.set(this.origin, this.direction);
-        this.raycaster.near = 0.16;
-        this.raycaster.far = FLASHLIGHT.beam.distance;
-        const blocker = this.raycaster.intersectObjects(occluderMeshes, false).find((hit) => {
-          const object = hit.object;
-          if (!object?.visible || hit.distance < 0.18) return false;
-          const name = String(object.name || "").toLowerCase();
-          if (/security-camera|rain|lightning|water-surface|glow|bulb|interaction/.test(name)) return false;
-          const materials = Array.isArray(object.material) ? object.material : [object.material];
-          return !materials.some((material) => material?.transparent && material.opacity < 0.35);
-        });
-        this.currentDistance = clamp(
-          blocker ? blocker.distance + FLASHLIGHT.beam.wallClearanceMeters : FLASHLIGHT.beam.distance,
-          FLASHLIGHT.beam.minimumDistance,
-          FLASHLIGHT.beam.distance,
-        );
+        // One center hit must not collapse the whole cone. A single scalar
+        // cutoff has to preserve the farthest sampled path through the cone,
+        // so chairs and corners leave useful light while a full wall contains it.
+        this.currentDistance = this.sampleBeamReach();
         this.beam.distance = this.currentDistance;
         this.raySampleRemaining = FLASHLIGHT.beam.poseSampleSeconds;
       }
@@ -32358,6 +32421,22 @@
       return this.getDiagnostics();
     }
 
+    frameOcclusionForQA(scenario = "chair", chairYaw = 0) {
+      if (!state.qa || !physics) return null;
+      if (scenario === "wall") {
+        teleport(-9.7, FLOOR.MAIN, -4.05, Math.PI / 2, 0);
+      } else {
+        const yaw = Number.isFinite(Number(chairYaw)) ? Number(chairYaw) : 0;
+        teleport(-12, FLOOR.MAIN, -5.9, yaw, -0.65);
+      }
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      this.syncPose(true);
+      updateInteractionPrompt();
+      return this.getDiagnostics();
+    }
+
     advanceForQA(seconds) {
       if (!state.qa) return this.getDiagnostics();
       const steps = Math.min(7200, Math.max(0, Math.ceil((Number(seconds) || 0) * 60)));
@@ -32404,6 +32483,15 @@
           decay: FLASHLIGHT.beam.decay,
           castShadow: Boolean(this.beam?.castShadow),
           shaderResident: Boolean(this.beam?.visible),
+          occlusionProbe: {
+            sampleCount: this.probeReaches.length,
+            angleScale: FLASHLIGHT.beam.occlusionProbeAngleScale,
+            blockedSampleCount: this.probeBlockedSampleCount,
+            openSampleCount: this.probeReaches.length - this.probeBlockedSampleCount,
+            selection: "farthest-sampled-path",
+            reaches: this.probeReaches.map((distance) => Number(distance.toFixed(2))),
+            blockers: [...this.probeBlockers],
+          },
         },
         stealthExposureFloor: FLASHLIGHT.stealthExposureFloor,
         activationCount: this.state.activationCount,
@@ -50775,6 +50863,11 @@
     );
     window.MrFeastFresh.frameFlashlightBeamForQA = () => (
       state.qa && flashlightSystem ? flashlightSystem.frameBeamForQA() : null
+    );
+    window.MrFeastFresh.frameFlashlightOcclusionForQA = (scenario, chairYaw) => (
+      state.qa && flashlightSystem
+        ? flashlightSystem.frameOcclusionForQA(scenario, chairYaw)
+        : null
     );
     window.MrFeastFresh.advanceFlashlightForQA = (seconds) => (
       state.qa && flashlightSystem ? flashlightSystem.advanceForQA(seconds) : null

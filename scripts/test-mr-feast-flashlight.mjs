@@ -127,6 +127,13 @@ async function run() {
       && /decay:\s*1\.85\b/.test(runtime),
     "flashlight beam should use the broader-core, slower-falloff texture-readability tuning",
   );
+  assert(
+    /occlusionProbeOffsets/.test(runtime)
+      && /sampleBeamReach\(\)/.test(runtime)
+      && /farthest-sampled-path/.test(runtime)
+      && /frameFlashlightOcclusionForQA/.test(runtime),
+    "flashlight reach should use a cone-coverage probe instead of one center-ray cutoff",
+  );
   assert(!/carried-flashlight-(?:body|head|lens)/.test(runtime), "active flashlight should show only its light, not a carried model");
 
   let server = null;
@@ -272,6 +279,61 @@ async function run() {
     );
     assert(onVisual.center < 160, `the brighter beam center should not wash out the Archive; luminance=${onVisual.center.toFixed(1)}`);
     console.log(`flashlight qa: beam center delta ${centerDelta.toFixed(1)}, readable texture coverage +${(readableCoverageDelta * 100).toFixed(1)} points, edge delta ${peripheralDelta.toFixed(1)}`);
+
+    // A narrow chair panel or its edge must not shorten the entire broad cone.
+    // The adjacent aim samples reproduce the former snap, while the broad wall
+    // control proves the more forgiving reach does not remove room containment.
+    const chairReach = [];
+    for (const yaw of [-0.22, 0, 0.22]) {
+      chairReach.push(await page.evaluate(
+        (value) => window.MrFeastFresh.frameFlashlightOcclusionForQA("chair", value).beam,
+        yaw,
+      ));
+    }
+    const chairDistances = chairReach.map((beam) => beam.currentDistance);
+    const chairSpread = Math.max(...chairDistances) - Math.min(...chairDistances);
+    assert(
+      chairReach.every((beam) => beam.occlusionProbe?.sampleCount === 5),
+      `chair reach should use five cone samples: ${JSON.stringify(chairReach)}`,
+    );
+    assert(
+      chairReach.some((beam) => (
+        beam.occlusionProbe?.blockers?.[0] === "chair-back"
+        && beam.occlusionProbe?.reaches?.[0] < 2
+      ))
+        && chairReach.some((beam) => beam.occlusionProbe?.reaches?.[0] >= 3),
+      `chair fixture must exercise the former center-ray snap instead of passing vacuously: ${JSON.stringify(chairReach)}`,
+    );
+    assert(
+      Math.min(...chairDistances) >= 3,
+      `a chair or its edge must leave useful beam reach; distances=${chairDistances.join(",")}`,
+    );
+    assert(
+      chairSpread <= 0.35,
+      `small chair aim changes must not collapse the beam; distances=${chairDistances.join(",")} spread=${chairSpread}`,
+    );
+    await page.evaluate(() => window.MrFeastFresh.frameFlashlightOcclusionForQA("chair", 0));
+    await page.screenshot({ path: path.join(artifactDir, "flashlight-chair-edge-consistency-desktop.png") });
+
+    const wallBeam = await page.evaluate(
+      () => window.MrFeastFresh.frameFlashlightOcclusionForQA("wall").beam,
+    );
+    const wallLayout = await page.evaluate(() => window.MrFeastFresh.lightLayout());
+    assert(
+      wallBeam.currentDistance >= 4.8 && wallBeam.currentDistance <= 6.2,
+      `a wall spanning the cone should still contain its reach; beam=${JSON.stringify(wallBeam)}`,
+    );
+    assert(
+      wallBeam.occlusionProbe?.blockedSampleCount === 5
+        && wallBeam.occlusionProbe?.openSampleCount === 0,
+      `the broad-wall control should block every cone sample; beam=${JSON.stringify(wallBeam)}`,
+    );
+    assert(
+      wallLayout.spot === layoutOn.shaderSpotLights && wallLayout.spotShadow === 0,
+      `cone probing must preserve the fixed shadow-free spotlight topology; layout=${JSON.stringify(wallLayout)}`,
+    );
+    console.log(`flashlight qa: chair reach ${chairDistances.map((distance) => distance.toFixed(2)).join(" / ")}m, wall ${wallBeam.currentDistance.toFixed(2)}m`);
+
     await page.keyboard.press("f");
     await page.keyboard.press("Escape");
     await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).menus.escapeOpen);
@@ -493,7 +555,7 @@ async function run() {
     await mobileContext.close();
 
     assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
-    console.log("Mr. Feast flashlight browser test: landing pickup, F/touch input, restrained beam, fixed shader topology, stealth cost, policy-gated camera response, persistence, and mobile layout passed");
+    console.log("Mr. Feast flashlight browser test: landing pickup, F/touch input, restrained cone-consistent beam, fixed shader topology, stealth cost, policy-gated camera response, persistence, and mobile layout passed");
   } finally {
     if (browser) await browser.close();
     if (server) server.kill("SIGTERM");

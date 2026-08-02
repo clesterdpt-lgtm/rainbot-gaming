@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260802-victory-feast-candle-clear-1";
+  const MANSION_RUNTIME_VERSION = "20260802-contestant-palms-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -619,7 +619,7 @@
     npcSeatPauseSeconds: 36,
     maximumNpcSeatDwellSeconds: 240,
     minimumNpcPostSeatWalkDistance: 0.35,
-    npcSeatTransitionSeconds: 0.82,
+    npcSeatTransitionSeconds: 0.95,
     contestantTalkPauseSeconds: 2.8,
     occupantClearanceRadius: 0.72,
   });
@@ -797,6 +797,11 @@
   // correction preserves the inward palm read without candy-wrapper twisting.
   const CONTESTANT_STANDING_HAND_ORIENTATION_BLEND = Object.freeze({
     "kip-solano": 0.4,
+  });
+  // Kip's palm correction is shared with the forearm so the wrist seam keeps
+  // its volume while the hand still settles onto the stable inward axis.
+  const CONTESTANT_STANDING_FOREARM_TWIST_BLEND = Object.freeze({
+    "kip-solano": 1,
   });
   const FLASHLIGHT = Object.freeze({
     itemId: "basement-flashlight",
@@ -12297,12 +12302,65 @@
       return true;
     }
 
-    applyBodyFacingHands(entry, blend = 1) {
-      const torso = entry.restPoseByName.Spine02?.bone || entry.restPoseByName.Spine?.bone;
-      if (!torso) return false;
+    twistForearmTowardPalm(forearm, hand, geometryAxes, desiredPalm, blend = 1) {
+      const amount = clamp(Number(blend) || 0, 0, 1);
+      if (!forearm?.parent || !hand || !geometryAxes || amount <= 0) return false;
+      forearm.getWorldPosition(this.seatedArmElbow);
+      hand.getWorldPosition(this.seatedArmWrist);
+      this.seatedArmDirection
+        .copy(this.seatedArmWrist)
+        .sub(this.seatedArmElbow);
+      if (this.seatedArmDirection.lengthSq() < 0.00000001) return false;
+      this.seatedArmDirection.normalize();
+      hand.getWorldQuaternion(this.handOrientationWorld);
+      this.handOrientationCurrentPalm
+        .set(...geometryAxes.palm)
+        .applyQuaternion(this.handOrientationWorld)
+        .addScaledVector(
+          this.seatedArmDirection,
+          -this.handOrientationCurrentPalm.dot(this.seatedArmDirection),
+        );
+      this.seatedArmThighNormal
+        .copy(desiredPalm)
+        .addScaledVector(
+          this.seatedArmDirection,
+          -desiredPalm.dot(this.seatedArmDirection),
+        );
+      if (
+        this.handOrientationCurrentPalm.lengthSq() < 0.00000001
+        || this.seatedArmThighNormal.lengthSq() < 0.00000001
+      ) return false;
+      this.handOrientationCurrentPalm.normalize();
+      this.seatedArmThighNormal.normalize();
+      this.handOrientationCross.crossVectors(
+        this.handOrientationCurrentPalm,
+        this.seatedArmThighNormal,
+      );
+      const signedTwist = Math.atan2(
+        this.seatedArmDirection.dot(this.handOrientationCross),
+        clamp(this.handOrientationCurrentPalm.dot(this.seatedArmThighNormal), -1, 1),
+      );
+      forearm.getWorldQuaternion(this.seatedArmWorldQuaternion);
+      this.seatedArmDeltaQuaternion.setFromAxisAngle(
+        this.seatedArmDirection,
+        signedTwist * amount,
+      );
+      this.seatedArmWorldQuaternion
+        .premultiply(this.seatedArmDeltaQuaternion)
+        .normalize();
+      forearm.parent.getWorldQuaternion(this.seatedArmParentQuaternion).conjugate();
+      this.seatedArmDesiredQuaternion
+        .copy(this.seatedArmParentQuaternion)
+        .multiply(this.seatedArmWorldQuaternion)
+        .normalize();
+      forearm.quaternion.copy(this.seatedArmDesiredQuaternion);
+      forearm.updateWorldMatrix(true, true);
+      return true;
+    }
+
+    applyBodyFacingHands(entry, blend = 1, forearmTwistBlend = 0) {
       const geometryAxes = CONTESTANT_HAND_GEOMETRY_AXES[entry.id];
       if (!geometryAxes) return false;
-      torso.getWorldPosition(this.handOrientationTorso);
       this.seatedArmForward.set(
         Math.sin(entry.root.rotation.y),
         0,
@@ -12311,16 +12369,29 @@
       let applied = false;
       for (const sideName of ["Left", "Right"]) {
         const sideKey = sideName.toLowerCase();
+        const forearm = entry.restPoseByName[`${sideName}ForeArm`]?.bone;
         const hand = entry.restPoseByName[`${sideName}Hand`]?.bone;
         const axes = geometryAxes[sideKey];
-        if (!hand || !axes) continue;
-        hand.getWorldPosition(this.handOrientationWrist);
+        if (!forearm || !hand || !axes) continue;
+        const inwardSign = sideName === "Left" ? -1 : 1;
+        // A wrist moves ahead of and behind the torso during locomotion. Aiming
+        // its palm at the torso position makes that palm roll forward at one
+        // swing extreme and backward at the other. Use the body's anatomical
+        // inward axis instead so the palm remains beside the contestant.
         this.handOrientationDesiredPalm
-          .copy(this.handOrientationTorso)
-          .sub(this.handOrientationWrist);
-        this.handOrientationDesiredPalm.y = 0;
-        if (this.handOrientationDesiredPalm.lengthSq() < 0.00000001) continue;
-        this.handOrientationDesiredPalm.normalize();
+          .set(
+            Math.cos(entry.root.rotation.y) * inwardSign,
+            0,
+            -Math.sin(entry.root.rotation.y) * inwardSign,
+          )
+          .normalize();
+        this.twistForearmTowardPalm(
+          forearm,
+          hand,
+          axes,
+          this.handOrientationDesiredPalm,
+          forearmTwistBlend,
+        );
         this.handOrientationDesiredFinger
           .set(0, -1, 0)
           .addScaledVector(this.seatedArmForward, 0.12)
@@ -12824,6 +12895,7 @@
           fingerThighDot: fingerDirection.dot(thighDirection),
           palmTowardThighAlignment: -palmDirection.dot(thighSurfaceNormal),
           palmTowardBodyAlignment: palmDirection.dot(inwardToBody),
+          palmForwardAlignment: palmDirection.z,
           handLocalOffsetDegrees: THREE.MathUtils.radToDeg(
             2 * Math.acos(clamp(Math.abs(handLocalOffset.w), 0, 1)),
           ),
@@ -12869,6 +12941,9 @@
         minimumPalmTowardBodyAlignment: left && right
           ? Math.min(left.palmTowardBodyAlignment, right.palmTowardBodyAlignment)
           : -1,
+        maximumPalmForwardAlignment: left && right
+          ? Math.max(left.palmForwardAlignment, right.palmForwardAlignment)
+          : 1,
         maximumHandLocalOffsetDegrees: left && right
           ? Math.max(left.handLocalOffsetDegrees, right.handLocalOffsetDegrees)
           : Infinity,
@@ -12901,6 +12976,7 @@
             fingerThighDot: left.fingerThighDot,
             palmTowardThighAlignment: left.palmTowardThighAlignment,
             palmTowardBodyAlignment: left.palmTowardBodyAlignment,
+            palmForwardAlignment: left.palmForwardAlignment,
             handLocalOffsetDegrees: left.handLocalOffsetDegrees,
             handTipToThighDistance: left.handTipToThighDistance,
             wristThighClearance: left.wristThighClearance,
@@ -12916,6 +12992,7 @@
             fingerThighDot: right.fingerThighDot,
             palmTowardThighAlignment: right.palmTowardThighAlignment,
             palmTowardBodyAlignment: right.palmTowardBodyAlignment,
+            palmForwardAlignment: right.palmForwardAlignment,
             handLocalOffsetDegrees: right.handLocalOffsetDegrees,
             handTipToThighDistance: right.handTipToThighDistance,
             wristThighClearance: right.wristThighClearance,
@@ -12988,7 +13065,10 @@
         1,
         seatedBlend,
       );
-      this.applyBodyFacingHands(entry, handOrientationBlend);
+      const forearmTwistBlend = (
+        CONTESTANT_STANDING_FOREARM_TWIST_BLEND[entry.id] ?? 0
+      ) * (1 - seatedBlend);
+      this.applyBodyFacingHands(entry, handOrientationBlend, forearmTwistBlend);
       entry.armPoseMode = mode;
       entry.armPoseMaximumAngle = maximumPoseAngle;
       entry.armSwingCurrent = swing;

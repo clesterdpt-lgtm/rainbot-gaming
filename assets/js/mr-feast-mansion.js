@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260801-archive-workroom-haunts-1";
+  const MANSION_RUNTIME_VERSION = "20260801-food-storage-unique-clearance-6";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2998,6 +2998,84 @@
     ]),
   });
 
+  const BATHROOM_MIRROR_SCARE = Object.freeze({
+    message: Object.freeze(["GET CLEAN.", "DINNER\nIS SOON."]),
+    fogStartSeconds: 12,
+    fogFullSeconds: 22,
+    messageStartSeconds: 25,
+    firstMirrorRevealSeconds: 5.5,
+    betweenMirrorPauseSeconds: 1.2,
+    secondMirrorRevealSeconds: 6.5,
+    clearSeconds: 7,
+    interruptedDecayRate: 2.6,
+    fogMaximumOpacity: 0.86,
+    messageMaximumOpacity: 0.9,
+    fogTextureWidth: 512,
+    fogTextureHeight: 640,
+    messageTextureWidth: 512,
+    messageTextureHeight: 320,
+    fogSurfaceInset: 0.066,
+    messageSurfaceInset: 0.071,
+    rooms: Object.freeze([
+      Object.freeze({
+        id: "main-hall-bathroom",
+        label: "MAIN HALL BATHROOM",
+        frame: Object.freeze({ x: -7.3, y: FLOOR.MAIN, z: -0.35, yaw: 0, pitch: 0.02 }),
+      }),
+      Object.freeze({
+        id: "upper-grand-bathroom",
+        label: "UPPER GRAND BATHROOM",
+        frame: Object.freeze({ x: -8.15, y: FLOOR.UPPER, z: -0.35, yaw: 0, pitch: 0.02 }),
+      }),
+    ]),
+  });
+
+  const QUESTIONABLE_PROVISIONS = Object.freeze({
+    labelTextureWidth: 512,
+    labelTextureHeight: 256,
+    marblingTextureSize: 256,
+    maximumAuthoredParts: 124,
+    supportingStock: Object.freeze({
+      minimumScale: 0.72,
+      maximumScale: 0.84,
+      minimumHeightScale: 0.86,
+      maximumHeightScale: 0.98,
+      maximumLean: 0.025,
+      maximumYawVariation: 0.34,
+      overlapTolerance: 0.002,
+    }),
+    palette: Object.freeze({
+      paper: "#d2bd91",
+      paperShadow: "#735a37",
+      ink: "#21160f",
+      stamp: "#7d1720",
+      meat: 0x5b1518,
+      fat: 0xd8bd9d,
+      brine: 0x3d291c,
+      preserved: 0xcabca0,
+      wax: 0x741720,
+      twine: 0x8f7045,
+    }),
+    labels: Object.freeze({
+      fridgeCut: Object.freeze({ title: "PATRON RESERVE", detail: "LOT 07 · TASTING CUT", stamp: "KEEP CHILLED" }),
+      fridgeJar: Object.freeze({ title: "HOUSE SAMPLE", detail: "SOFT STOCK · 04", stamp: "DO NOT FREEZE" }),
+      ocularSample: Object.freeze({ title: "OCULAR SAMPLE", detail: "LEFT · LOT 08", stamp: "SERVE WHOLE" }),
+      choirCut: Object.freeze({ title: "CHOIR CUT", detail: "MUSCLE NO. 2", stamp: "SLICE THIN" }),
+      preserves: Object.freeze([
+        Object.freeze({ title: "HOUSE RESERVE", detail: "WINTER LOT · 04", stamp: "COURSE II" }),
+        Object.freeze({ title: "HOUSE RESERVE", detail: "WINTER LOT · 09", stamp: "COURSE III" }),
+        Object.freeze({ title: "HOUSE RESERVE", detail: "WINTER LOT · 12", stamp: "FINAL COURSE" }),
+      ]),
+      parcel: Object.freeze({ title: "FINAL TABLE", detail: "SHOULDER CUT · LOT 04", stamp: "KEEP SEALED" }),
+      marrowTin: Object.freeze({ title: "MARROW STOCK", detail: "PATRON GRADE", stamp: "HOUSE USE" }),
+      salts: Object.freeze({ title: "TENDERIZING SALTS", detail: "SERVICE PANTRY", stamp: "MEASURE TWICE" }),
+      dentalGarnish: Object.freeze({ title: "TABLE GARNISH", detail: "DENTAL PEARLS · 12", stamp: "RINSE FIRST" }),
+      jointStock: Object.freeze({ title: "JOINT STOCK", detail: "FLEXIBLE CUT · 03", stamp: "SIMMER LOW" }),
+      fineStrands: Object.freeze({ title: "FINE STRANDS", detail: "GUEST BATCH · 06", stamp: "DO NOT RINSE" }),
+      renderedReserve: Object.freeze({ title: "RENDERED RESERVE", detail: "GUEST FAT · BATCH 3", stamp: "WHIP COLD" }),
+    }),
+  });
+
   const CONTESTANT_13 = Object.freeze({
     title: "Contestant 13",
     clueBook: CONTESTANT_13_CLUE_BOOK,
@@ -4906,6 +4984,9 @@
   const animatedObjects = [];
   const circuits = [];
   const waterFixtures = [];
+  const bathroomMirrorSurfaces = [];
+  const questionableProvisionEntries = [];
+  const questionableProvisionClearanceRecords = [];
   const toilets = [];
   const fireplaces = [];
   const stockedStorages = [];
@@ -5043,6 +5124,7 @@
   let bulkStorageSecretSystem = null;
   let monitorWallSystem = null;
   let basementHauntSystem = null;
+  let bathroomMirrorScareSystem = null;
   let tamperSystem = null;
   let speechSystem = null;
   let openingWelcomeSystem = null;
@@ -5055,6 +5137,7 @@
   let banquetLossSystem = null;
   let breathStealthSystem = null;
   let workroomCodeClue = null;
+  let questionableProvisionMaterials = null;
 
   function activeCompetitionSystem() {
     if (victoryFeastSystem?.blocksInvestigation()) return victoryFeastSystem;
@@ -34667,20 +34750,706 @@
     if (!transforms.length) return null;
     const mesh = new THREE.InstancedMesh(geometry(geometryName, geometryFactory), material, transforms.length);
     const dummy = new THREE.Object3D();
+    const stockAssemblyIds = [];
+    const stockAppearanceSignatures = [];
+    const stockVisualRoles = [];
     transforms.forEach((item, index) => {
       dummy.position.set(item.x, item.y, item.z);
       dummy.rotation.set(item.rx || 0, item.ry || 0, item.rz || 0);
       dummy.scale.set(item.sx, item.sy, item.sz);
       dummy.updateMatrix();
       mesh.setMatrixAt(index, dummy.matrix);
+      stockAssemblyIds.push(item.stockAssemblyId || `${name}:instance-${index}`);
+      stockAppearanceSignatures.push(item.stockAppearanceSignature || `${geometryName}:${item.sx}:${item.sy}:${item.sz}:${item.rx || 0}:${item.ry || 0}:${item.rz || 0}`);
+      stockVisualRoles.push(item.stockVisualRole || geometryName);
     });
     mesh.name = name;
     mesh.castShadow = false;
     mesh.receiveShadow = true;
     mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
     mesh.instanceMatrix.needsUpdate = true;
+    mesh.userData.stockAssemblyIds = stockAssemblyIds;
+    mesh.userData.stockAppearanceSignatures = stockAppearanceSignatures;
+    mesh.userData.stockVisualRoles = stockVisualRoles;
     parent.add(mesh);
     return mesh;
+  }
+
+  function makeQuestionableProvisionMarblingTexture() {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = QUESTIONABLE_PROVISIONS.marblingTextureSize;
+    const ctx = canvas.getContext("2d");
+    const base = ctx.createRadialGradient(110, 86, 18, 128, 128, 190);
+    base.addColorStop(0, "#8b3434");
+    base.addColorStop(0.52, "#5c171b");
+    base.addColorStop(1, "#26090c");
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let seed = 7907;
+    const random = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+    ctx.lineCap = "round";
+    for (let vein = 0; vein < 24; vein += 1) {
+      const startX = -24 + random() * 80;
+      const startY = random() * canvas.height;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      for (let point = 1; point <= 5; point += 1) {
+        ctx.bezierCurveTo(
+          startX + point * 46 - 34 + random() * 68,
+          startY + (random() - 0.5) * 76,
+          startX + point * 46 - 28 + random() * 58,
+          startY + (random() - 0.5) * 94,
+          startX + point * 46,
+          startY + (random() - 0.5) * 58,
+        );
+      }
+      ctx.strokeStyle = `rgba(229, 194, 163, ${(0.08 + random() * 0.17).toFixed(3)})`;
+      ctx.lineWidth = 1.5 + random() * 5;
+      ctx.stroke();
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.name = "questionable-provisions-meat-marbling";
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearMipMapLinearFilter;
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
+  function makeQuestionableProvisionStainTexture() {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 256;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const stain = ctx.createRadialGradient(132, 126, 10, 128, 128, 112);
+    stain.addColorStop(0, "rgba(80, 17, 18, 0.52)");
+    stain.addColorStop(0.38, "rgba(95, 31, 23, 0.32)");
+    stain.addColorStop(0.72, "rgba(76, 39, 24, 0.14)");
+    stain.addColorStop(1, "rgba(54, 32, 20, 0)");
+    ctx.save();
+    ctx.translate(128, 128);
+    ctx.scale(1.16, 0.72);
+    ctx.translate(-128, -128);
+    ctx.fillStyle = stain;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.name = "questionable-provisions-paper-seep-stain";
+    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
+  function makeQuestionableProvisionLabelTexture(label, id) {
+    const canvas = document.createElement("canvas");
+    canvas.width = QUESTIONABLE_PROVISIONS.labelTextureWidth;
+    canvas.height = QUESTIONABLE_PROVISIONS.labelTextureHeight;
+    const ctx = canvas.getContext("2d");
+    const paper = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    paper.addColorStop(0, QUESTIONABLE_PROVISIONS.palette.paper);
+    paper.addColorStop(0.55, "#ead8aa");
+    paper.addColorStop(1, "#a98d5d");
+    ctx.fillStyle = paper;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let seed = [...String(id)].reduce((total, character) => total + character.charCodeAt(0), 1337);
+    const random = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+    for (let mark = 0; mark < 180; mark += 1) {
+      const alpha = 0.025 + random() * 0.06;
+      ctx.fillStyle = `rgba(66, 43, 25, ${alpha.toFixed(3)})`;
+      ctx.fillRect(random() * canvas.width, random() * canvas.height, 1 + random() * 5, 1 + random() * 2);
+    }
+    ctx.strokeStyle = QUESTIONABLE_PROVISIONS.palette.paperShadow;
+    ctx.lineWidth = 8;
+    ctx.strokeRect(12, 12, canvas.width - 24, canvas.height - 24);
+    ctx.fillStyle = QUESTIONABLE_PROVISIONS.palette.ink;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "700 48px Georgia, serif";
+    ctx.fillText(label.title, canvas.width / 2, 74);
+    ctx.font = "700 29px Arial, sans-serif";
+    ctx.letterSpacing = "2px";
+    ctx.fillText(label.detail, canvas.width / 2, 137);
+    ctx.save();
+    ctx.translate(canvas.width / 2, 205);
+    ctx.rotate(-0.032);
+    ctx.strokeStyle = QUESTIONABLE_PROVISIONS.palette.stamp;
+    ctx.fillStyle = QUESTIONABLE_PROVISIONS.palette.stamp;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(-126, -24, 252, 48);
+    ctx.font = "800 29px Arial, sans-serif";
+    ctx.fillText(label.stamp, 0, 1);
+    ctx.restore();
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.name = `questionable-provision-label-${id}`;
+    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
+    texture.encoding = THREE.sRGBEncoding;
+    return texture;
+  }
+
+  function getQuestionableProvisionMaterials() {
+    if (questionableProvisionMaterials) return questionableProvisionMaterials;
+    const marbling = makeQuestionableProvisionMarblingTexture();
+    const meat = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-marbled-cut",
+      map: marbling,
+      color: QUESTIONABLE_PROVISIONS.palette.meat,
+      roughness: 0.42,
+      clearcoat: 0.18,
+      clearcoatRoughness: 0.36,
+    });
+    const fat = new THREE.MeshStandardMaterial({
+      name: "questionable-provisions-fat",
+      color: QUESTIONABLE_PROVISIONS.palette.fat,
+      roughness: 0.7,
+    });
+    const plastic = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-vacuum-plastic",
+      color: 0xdde4df,
+      transparent: true,
+      opacity: 0.28,
+      roughness: 0.1,
+      clearcoat: 1,
+      clearcoatRoughness: 0.12,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const glass = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-clouded-glass",
+      color: 0xb9c7ba,
+      transparent: true,
+      opacity: 0.34,
+      roughness: 0.18,
+      clearcoat: 0.85,
+      clearcoatRoughness: 0.2,
+      depthWrite: false,
+    });
+    const brine = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-dark-brine",
+      color: QUESTIONABLE_PROVISIONS.palette.brine,
+      transparent: true,
+      opacity: 0.82,
+      roughness: 0.2,
+      clearcoat: 0.3,
+    });
+    const preserved = new THREE.MeshStandardMaterial({
+      name: "questionable-provisions-preserved-pale",
+      color: QUESTIONABLE_PROVISIONS.palette.preserved,
+      roughness: 0.62,
+    });
+    const paper = new THREE.MeshStandardMaterial({
+      name: "questionable-provisions-butcher-paper",
+      color: 0xbca883,
+      roughness: 0.94,
+      metalness: 0,
+    });
+    const paperStain = new THREE.MeshStandardMaterial({
+      name: "questionable-provisions-paper-seep-stain",
+      map: makeQuestionableProvisionStainTexture(),
+      transparent: true,
+      opacity: 0.82,
+      roughness: 1,
+      metalness: 0,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const twine = new THREE.MeshStandardMaterial({
+      name: "questionable-provisions-twine",
+      color: QUESTIONABLE_PROVISIONS.palette.twine,
+      roughness: 1,
+    });
+    const wax = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-wax-seal",
+      color: QUESTIONABLE_PROVISIONS.palette.wax,
+      roughness: 0.48,
+      clearcoat: 0.32,
+    });
+    const tray = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-black-enamel-tray",
+      color: 0x141112,
+      roughness: 0.24,
+      metalness: 0.42,
+      clearcoat: 0.72,
+    });
+    const tin = M.foodTin.clone();
+    tin.name = "questionable-provisions-patron-tin";
+    tin.color.setHex(0x6f6858);
+    tin.roughness = 0.48;
+    tin.metalness = 0.58;
+    const amberGlass = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-amber-bottle",
+      color: 0x70431f,
+      transparent: true,
+      opacity: 0.72,
+      roughness: 0.2,
+      clearcoat: 0.65,
+      depthWrite: false,
+    });
+    const sclera = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-ocular-sclera",
+      color: 0xd7cfb8,
+      roughness: 0.4,
+      clearcoat: 0.42,
+      clearcoatRoughness: 0.2,
+    });
+    const iris = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-ocular-iris",
+      color: 0x5a9a86,
+      roughness: 0.28,
+      clearcoat: 0.64,
+      clearcoatRoughness: 0.12,
+      emissive: 0x102c24,
+      emissiveIntensity: 0.12,
+    });
+    const pupil = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-ocular-pupil",
+      color: 0x050505,
+      roughness: 0.06,
+      clearcoat: 1,
+      clearcoatRoughness: 0.05,
+    });
+    const ocularVein = new THREE.MeshStandardMaterial({
+      name: "questionable-provisions-ocular-veins",
+      color: 0x8c1f2a,
+      roughness: 0.72,
+    });
+    const cornea = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-clear-cornea",
+      color: 0xe9f1e8,
+      transparent: true,
+      opacity: 0.16,
+      roughness: 0.04,
+      clearcoat: 1,
+      clearcoatRoughness: 0.03,
+      depthWrite: false,
+    });
+    const tooth = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-dental-enamel",
+      color: 0xd8caa8,
+      roughness: 0.36,
+      clearcoat: 0.28,
+      clearcoatRoughness: 0.22,
+    });
+    const lingual = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-lingual-muscle",
+      color: 0x6f252b,
+      roughness: 0.46,
+      clearcoat: 0.25,
+      clearcoatRoughness: 0.34,
+    });
+    const strands = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-fine-strands",
+      color: 0x1b1411,
+      roughness: 0.38,
+      clearcoat: 0.24,
+      clearcoatRoughness: 0.18,
+    });
+    const renderedFat = new THREE.MeshPhysicalMaterial({
+      name: "questionable-provisions-rendered-reserve",
+      color: 0xd6c5a2,
+      roughness: 0.64,
+      clearcoat: 0.16,
+      clearcoatRoughness: 0.4,
+    });
+    questionableProvisionMaterials = {
+      marbling,
+      meat,
+      fat,
+      plastic,
+      glass,
+      brine,
+      preserved,
+      paper,
+      paperStain,
+      twine,
+      wax,
+      tray,
+      tin,
+      amberGlass,
+      sclera,
+      iris,
+      pupil,
+      ocularVein,
+      cornea,
+      tooth,
+      lingual,
+      strands,
+      renderedFat,
+      labels: new Map(),
+    };
+    return questionableProvisionMaterials;
+  }
+
+  function questionableProvisionLabelMaterial(id, label) {
+    const materials = getQuestionableProvisionMaterials();
+    if (materials.labels.has(id)) return materials.labels.get(id);
+    const texture = makeQuestionableProvisionLabelTexture(label, id);
+    const material = new THREE.MeshStandardMaterial({
+      name: `questionable-provision-label-material-${id}`,
+      map: texture,
+      color: 0xffffff,
+      roughness: 0.78,
+      metalness: 0,
+      emissive: 0x2b1c0f,
+      emissiveIntensity: 0.06,
+      side: THREE.DoubleSide,
+    });
+    materials.labels.set(id, material);
+    return material;
+  }
+
+  function addQuestionableProvisionLabel(root, id, label, options = {}) {
+    return plane({
+      name: `${id}-aged-provision-label`,
+      w: options.width || 0.22,
+      h: options.height || 0.11,
+      x: options.x || 0,
+      y: options.y || 0,
+      z: options.z || 0,
+      rotationX: options.rotationX == null ? 0 : options.rotationX,
+      rotationY: options.rotationY || 0,
+      rotationZ: options.rotationZ || 0,
+      material: questionableProvisionLabelMaterial(id, label),
+      parent: root,
+    });
+  }
+
+  function registerQuestionableProvision({ id, storageName, kind, label, root }) {
+    root.name = id;
+    root.userData.questionableProvision = true;
+    root.userData.storageName = storageName;
+    root.userData.provisionKind = kind;
+    root.updateMatrixWorld(true);
+    let partCount = 0;
+    root.traverse((object) => { if (object.isMesh) partCount += 1; });
+    const entry = { id, storageName, kind, label, root, partCount };
+    questionableProvisionEntries.push(entry);
+    return entry;
+  }
+
+  function addQuestionableProvisionContents(parent, storageName, kind, usable, shelfYs, z) {
+    const materials = getQuestionableProvisionMaterials();
+    const roots = [];
+    const addRoot = (id, label, provisionKind, root) => {
+      registerQuestionableProvision({ id, storageName, kind: provisionKind, label, root });
+      roots.push(root);
+      return root;
+    };
+
+    if (kind === "refrigerator") {
+      const cut = new THREE.Group();
+      cut.position.set(-usable * 0.21, shelfYs[1] + 0.028, z + 0.035);
+      parent.add(cut);
+      roundedBox({ name: "patron-reserve-black-tray", w: 0.43, h: 0.032, d: 0.26, radius: 0.025, y: 0.016, material: materials.tray, parent: cut, cast: false });
+      roundedBox({ name: "patron-reserve-marbled-cut", w: 0.29, h: 0.095, d: 0.16, radius: 0.045, x: -0.035, y: 0.078, material: materials.meat, parent: cut, cast: false });
+      for (const [index, offset] of [-0.055, 0.035].entries()) {
+        cylinder({ name: "patron-reserve-fat-seam", radius: 0.008 + index * 0.002, height: 0.19, segments: 10, x: -0.035, y: 0.126, z: offset, rotationZ: Math.PI / 2, rotationY: index ? 0.18 : -0.12, material: materials.fat, parent: cut, cast: false });
+      }
+      roundedBox({ name: "patron-reserve-vacuum-wrap", w: 0.37, h: 0.14, d: 0.22, radius: 0.045, x: -0.01, y: 0.077, material: materials.plastic, parent: cut, cast: false });
+      addQuestionableProvisionLabel(cut, "fridge-patron-reserve", QUESTIONABLE_PROVISIONS.labels.fridgeCut, { width: 0.22, height: 0.1, x: 0.08, y: 0.082, z: 0.116, rotationZ: -0.025 });
+      cylinder({ name: "patron-reserve-wax-mark", radius: 0.027, height: 0.008, segments: 20, x: -0.145, y: 0.105, z: 0.125, rotationX: Math.PI / 2, material: materials.wax, parent: cut, cast: false });
+      addRoot("fridge-patron-reserve", QUESTIONABLE_PROVISIONS.labels.fridgeCut, "vacuum-cut", cut);
+
+      const ocular = new THREE.Group();
+      ocular.position.set(usable * 0.3, shelfYs[1] + 0.028, z + 0.035);
+      parent.add(ocular);
+      roundedBox({ name: "ocular-sample-black-saucer", w: 0.24, h: 0.025, d: 0.18, radius: 0.03, y: 0.013, material: materials.tray, parent: ocular, cast: false });
+      const saucerRing = new THREE.Mesh(new THREE.TorusGeometry(0.073, 0.007, 8, 28), materials.tin);
+      saucerRing.name = "ocular-sample-saucer-ring";
+      saucerRing.position.y = 0.032;
+      saucerRing.rotation.x = Math.PI / 2;
+      saucerRing.castShadow = false;
+      ocular.add(saucerRing);
+      const eyeball = sphere({ name: "ocular-sample-sclera", radius: 0.052, widthSegments: 28, heightSegments: 20, y: 0.083, material: materials.sclera, parent: ocular, cast: false });
+      eyeball.scale.set(1, 0.96, 1.02);
+      cylinder({ name: "ocular-sample-optic-nerve", radius: 0.014, height: 0.105, segments: 12, y: 0.08, z: -0.075, rotationX: Math.PI / 2, material: materials.preserved, parent: ocular, cast: false });
+      sphere({ name: "ocular-sample-optic-nerve-end", radius: 0.018, widthSegments: 12, heightSegments: 8, y: 0.08, z: -0.126, material: materials.preserved, parent: ocular, cast: false });
+      cylinder({ name: "ocular-sample-iris", radius: 0.022, height: 0.004, segments: 32, y: 0.083, z: 0.052, rotationX: Math.PI / 2, material: materials.iris, parent: ocular, cast: false });
+      cylinder({ name: "ocular-sample-pupil", radius: 0.008, height: 0.006, segments: 24, y: 0.083, z: 0.055, rotationX: Math.PI / 2, material: materials.pupil, parent: ocular, cast: false });
+      sphere({ name: "ocular-sample-clear-cornea", radius: 0.055, widthSegments: 28, heightSegments: 20, y: 0.083, z: 0.002, material: materials.cornea, parent: ocular, cast: false });
+      for (const [index, angle] of [-2.45, -0.72, 0.62, 2.34].entries()) {
+        const points = [0.024, 0.036, 0.049].map((distance, pointIndex) => {
+          const bentAngle = angle + (pointIndex - 1) * (index % 2 ? 0.09 : -0.075);
+          const x = Math.cos(bentAngle) * distance;
+          const localY = Math.sin(bentAngle) * distance * 0.82;
+          const surfaceZ = Math.sqrt(Math.max(0, 0.052 * 0.052 - x * x - localY * localY));
+          return new THREE.Vector3(x, 0.083 + localY, surfaceZ + 0.003);
+        });
+        const vein = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 10, 0.0017, 5, false), materials.ocularVein);
+        vein.name = `ocular-sample-vein-${index + 1}`;
+        vein.castShadow = false;
+        ocular.add(vein);
+      }
+      addQuestionableProvisionLabel(ocular, "fridge-ocular-sample", QUESTIONABLE_PROVISIONS.labels.ocularSample, { width: 0.12, height: 0.064, x: -0.058, y: 0.035, z: 0.096, rotationZ: -0.035 });
+      addRoot("fridge-ocular-sample", QUESTIONABLE_PROVISIONS.labels.ocularSample, "ocular-sample", ocular);
+
+      const choirCut = new THREE.Group();
+      choirCut.position.set(0, shelfYs[0] + 0.028, z + 0.035);
+      parent.add(choirCut);
+      roundedBox({ name: "choir-cut-black-tray", w: 0.38, h: 0.025, d: 0.22, radius: 0.03, y: 0.013, material: materials.tray, parent: choirCut, cast: false });
+      const choirBody = sphere({ name: "choir-cut-muscle-body", radius: 0.075, widthSegments: 24, heightSegments: 16, x: -0.02, y: 0.075, material: materials.lingual, parent: choirCut, cast: false });
+      choirBody.scale.set(1.55, 0.52, 0.76);
+      const choirTip = sphere({ name: "choir-cut-muscle-tip", radius: 0.052, widthSegments: 20, heightSegments: 14, x: 0.105, y: 0.071, z: 0.004, material: materials.lingual, parent: choirCut, cast: false });
+      choirTip.scale.set(1.05, 0.58, 0.72);
+      for (const [index, x] of [-0.105, -0.045, 0.015, 0.075].entries()) {
+        cylinder({ name: `choir-cut-suture-${index + 1}`, radius: 0.0032, height: 0.09, segments: 8, x, y: 0.099, rotationX: Math.PI / 2, material: materials.pupil, parent: choirCut, cast: false });
+      }
+      roundedBox({ name: "choir-cut-vacuum-wrap", w: 0.34, h: 0.105, d: 0.18, radius: 0.045, y: 0.065, material: materials.plastic, parent: choirCut, cast: false });
+      addQuestionableProvisionLabel(choirCut, "fridge-choir-cut", QUESTIONABLE_PROVISIONS.labels.choirCut, { width: 0.18, height: 0.08, x: 0.055, y: 0.057, z: 0.152, rotationZ: -0.028 });
+      cylinder({ name: "choir-cut-wax-mark", radius: 0.023, height: 0.008, segments: 20, x: -0.145, y: 0.085, z: 0.118, rotationX: Math.PI / 2, material: materials.wax, parent: choirCut, cast: false });
+      addRoot("fridge-choir-cut", QUESTIONABLE_PROVISIONS.labels.choirCut, "stitched-muscle", choirCut);
+
+      const sample = new THREE.Group();
+      sample.position.set(usable * 0.35, shelfYs[2] + 0.025, z + 0.035);
+      parent.add(sample);
+      cylinder({ name: "house-sample-dark-brine", radius: 0.062, height: 0.195, segments: 24, y: 0.118, material: materials.brine, parent: sample, cast: false });
+      for (const [index, x] of [-0.026, 0.004, 0.029].entries()) {
+        cylinder({ name: "house-sample-preserved-piece", radius: 0.012 + index * 0.002, height: 0.11 - index * 0.012, segments: 12, x, y: 0.12, z: 0.006 + index * 0.012, rotationZ: -0.28 + index * 0.27, material: materials.preserved, parent: sample, cast: false });
+        sphere({ name: "house-sample-preserved-tip", radius: 0.017, widthSegments: 12, heightSegments: 8, x: x + 0.012, y: 0.164 - index * 0.004, z: 0.006 + index * 0.012, material: materials.preserved, parent: sample, cast: false });
+      }
+      cylinder({ name: "house-sample-clouded-jar", radius: 0.076, height: 0.25, segments: 24, y: 0.135, material: materials.glass, parent: sample, cast: false });
+      cylinder({ name: "house-sample-lid", radius: 0.082, height: 0.032, segments: 24, y: 0.277, material: materials.tin, parent: sample, cast: false });
+      addQuestionableProvisionLabel(sample, "fridge-house-sample", QUESTIONABLE_PROVISIONS.labels.fridgeJar, { width: 0.13, height: 0.082, y: 0.145, z: 0.078 });
+      addRoot("fridge-house-sample", QUESTIONABLE_PROVISIONS.labels.fridgeJar, "specimen-jar", sample);
+    }
+
+    if (kind === "preserves") {
+      QUESTIONABLE_PROVISIONS.labels.preserves.forEach((label, index) => {
+        const lot = ["04", "09", "12"][index];
+        const vesselRadius = [0.1, 0.072, 0.088][index];
+        const vesselHeight = [0.24, 0.36, 0.3][index];
+        const vesselSegments = [24, 18, 10][index];
+        const vesselCenterY = 0.015 + vesselHeight / 2;
+        const brineHeight = vesselHeight - 0.055;
+        const jar = new THREE.Group();
+        jar.position.set((index - 1) * usable * 0.29, shelfYs[1] + 0.025, z + 0.085);
+        parent.add(jar);
+        cylinder({ name: `winter-lot-${lot}-brine`, radius: vesselRadius - 0.016, height: brineHeight, segments: vesselSegments, y: 0.022 + brineHeight / 2, material: materials.brine, parent: jar, cast: false });
+        for (let piece = 0; piece < 3; piece += 1) {
+          const angle = (piece / 3) * Math.PI * 2 + index * 0.45;
+          cylinder({ name: `winter-lot-${lot}-preserved-piece`, radius: 0.012 + index * 0.0015 + piece * 0.0015, height: 0.09 + index * 0.018 - piece * 0.012, segments: 10 + index * 2, x: Math.cos(angle) * vesselRadius * 0.29, y: vesselCenterY - 0.005, z: Math.sin(angle) * vesselRadius * 0.3, rotationZ: -0.34 + piece * 0.3, material: materials.preserved, parent: jar, cast: false });
+        }
+        cylinder({ name: `winter-lot-${lot}-clouded-jar`, radius: vesselRadius, height: vesselHeight, segments: vesselSegments, y: vesselCenterY, material: materials.glass, parent: jar, cast: false });
+        cylinder({ name: `winter-lot-${lot}-lid`, radius: vesselRadius + 0.007, height: 0.035, segments: vesselSegments, y: 0.0325 + vesselHeight, material: index === 2 ? materials.wax : materials.tin, parent: jar, cast: false });
+        addQuestionableProvisionLabel(jar, `pantry-preserve-lot-${lot}`, label, { width: vesselRadius * 1.62, height: 0.082, y: vesselCenterY, z: vesselRadius + 0.002, rotationZ: (index - 1) * 0.018 });
+        addRoot(`pantry-preserve-lot-${lot}`, label, "preserve-jar", jar);
+      });
+
+      const joint = new THREE.Group();
+      joint.position.set(0, shelfYs[0] + 0.025, z + 0.085);
+      parent.add(joint);
+      cylinder({ name: "joint-stock-dark-brine", radius: 0.09, height: 0.24, segments: 28, y: 0.135, material: materials.brine, parent: joint, cast: false });
+      sphere({ name: "joint-stock-center-knuckle", radius: 0.039, widthSegments: 18, heightSegments: 12, y: 0.14, material: materials.tooth, parent: joint, cast: false });
+      cylinder({ name: "joint-stock-upper-bone", radius: 0.016, radiusTop: 0.012, radiusBottom: 0.019, height: 0.082, segments: 12, x: 0.009, y: 0.205, rotationZ: -0.15, material: materials.tooth, parent: joint, cast: false });
+      cylinder({ name: "joint-stock-lower-bone", radius: 0.016, radiusTop: 0.019, radiusBottom: 0.011, height: 0.08, segments: 12, x: -0.009, y: 0.075, rotationZ: 0.13, material: materials.tooth, parent: joint, cast: false });
+      sphere({ name: "joint-stock-upper-end", radius: 0.023, widthSegments: 14, heightSegments: 10, x: 0.015, y: 0.252, material: materials.tooth, parent: joint, cast: false });
+      sphere({ name: "joint-stock-lower-end", radius: 0.022, widthSegments: 14, heightSegments: 10, x: -0.015, y: 0.03, material: materials.tooth, parent: joint, cast: false });
+      cylinder({ name: "joint-stock-clouded-jar", radius: 0.11, height: 0.29, segments: 30, y: 0.16, material: materials.glass, parent: joint, cast: false });
+      cylinder({ name: "joint-stock-wax-lid", radius: 0.116, height: 0.035, segments: 28, y: 0.323, material: materials.wax, parent: joint, cast: false });
+      addQuestionableProvisionLabel(joint, "pantry-joint-stock", QUESTIONABLE_PROVISIONS.labels.jointStock, { width: 0.18, height: 0.1, y: 0.166, z: 0.112, rotationZ: -0.018 });
+      addRoot("pantry-joint-stock", QUESTIONABLE_PROVISIONS.labels.jointStock, "joint-stock", joint);
+    }
+
+    if (kind === "dry-goods") {
+      const dental = new THREE.Group();
+      dental.position.set(0, shelfYs[1] + 0.025, z + 0.07);
+      parent.add(dental);
+      roundedBox({ name: "dental-garnish-black-tray", w: 0.48, h: 0.028, d: 0.24, radius: 0.028, y: 0.014, material: materials.tray, parent: dental, cast: false });
+      for (const [index, x] of [-0.16, -0.08, 0, 0.08, 0.16].entries()) {
+        const toothRoot = new THREE.Group();
+        toothRoot.name = `dental-garnish-tooth-${index + 1}`;
+        toothRoot.position.set(x, 0.024, (index % 2 ? 0.012 : -0.008));
+        toothRoot.rotation.z = (index - 2) * 0.045;
+        dental.add(toothRoot);
+        cylinder({ name: "dental-garnish-tapered-root", radius: 0.012, radiusTop: 0.014, radiusBottom: 0.006, height: 0.052, segments: 14, y: 0.026, material: materials.tooth, parent: toothRoot, cast: false });
+        const crown = sphere({ name: "dental-garnish-enamel-crown", radius: 0.027, widthSegments: 16, heightSegments: 12, y: 0.064, material: materials.tooth, parent: toothRoot, cast: false });
+        crown.scale.set(0.78 + (index % 2) * 0.06, 0.9, 0.68);
+      }
+      roundedBox({ name: "dental-garnish-vacuum-cover", w: 0.45, h: 0.115, d: 0.21, radius: 0.035, y: 0.064, material: materials.plastic, parent: dental, cast: false });
+      addQuestionableProvisionLabel(dental, "pantry-dental-garnish", QUESTIONABLE_PROVISIONS.labels.dentalGarnish, { width: 0.25, height: 0.1, x: 0.02, y: 0.062, z: 0.175, rotationZ: 0.018 });
+      cylinder({ name: "dental-garnish-wax-mark", radius: 0.025, height: 0.008, segments: 20, x: -0.205, y: 0.083, z: 0.126, rotationX: Math.PI / 2, material: materials.wax, parent: dental, cast: false });
+      addRoot("pantry-dental-garnish", QUESTIONABLE_PROVISIONS.labels.dentalGarnish, "dental-garnish", dental);
+
+      const fineStrands = new THREE.Group();
+      fineStrands.position.set(0, shelfYs[2] + 0.025, z + 0.07);
+      parent.add(fineStrands);
+      for (let index = 0; index < 4; index += 1) {
+        const strand = new THREE.Mesh(new THREE.TorusKnotGeometry(0.036 - index * 0.002, 0.005, 42, 6, 2, 3), materials.strands);
+        strand.name = `fine-strands-coil-${index + 1}`;
+        strand.position.set((index % 2 ? 1 : -1) * 0.025, 0.08 + index * 0.045, (index % 3 - 1) * 0.012);
+        strand.rotation.set(index * 0.42, index * 0.55, index * 0.31);
+        strand.scale.set(0.9, 0.58, 0.88);
+        strand.castShadow = false;
+        fineStrands.add(strand);
+      }
+      cylinder({ name: "fine-strands-clouded-jar", radius: 0.105, height: 0.32, segments: 30, y: 0.17, material: materials.glass, parent: fineStrands, cast: false });
+      cylinder({ name: "fine-strands-black-lid", radius: 0.111, height: 0.034, segments: 28, y: 0.347, material: materials.tray, parent: fineStrands, cast: false });
+      addQuestionableProvisionLabel(fineStrands, "pantry-fine-strands", QUESTIONABLE_PROVISIONS.labels.fineStrands, { width: 0.18, height: 0.1, y: 0.177, z: 0.108, rotationZ: 0.02 });
+      addRoot("pantry-fine-strands", QUESTIONABLE_PROVISIONS.labels.fineStrands, "fine-strands", fineStrands);
+    }
+
+    if (kind === "pantry-staples") {
+      const parcel = new THREE.Group();
+      parcel.position.set(0, shelfYs[1] + 0.025, z + 0.075);
+      parent.add(parcel);
+      roundedBox({ name: "final-table-butcher-parcel", w: 0.5, h: 0.15, d: 0.31, radius: 0.035, y: 0.075, material: materials.paper, parent: parcel, cast: false });
+      plane({ name: "final-table-parcel-seep-stain", w: 0.41, h: 0.24, y: 0.153, rotationX: -Math.PI / 2, rotationZ: 0.16, material: materials.paperStain, parent: parcel });
+      cylinder({ name: "final-table-parcel-twine-cross", radius: 0.008, height: 0.53, segments: 10, y: 0.155, rotationZ: Math.PI / 2, material: materials.twine, parent: parcel, cast: false });
+      cylinder({ name: "final-table-parcel-twine-length", radius: 0.008, height: 0.34, segments: 10, y: 0.155, rotationX: Math.PI / 2, material: materials.twine, parent: parcel, cast: false });
+      cylinder({ name: "final-table-parcel-wax-seal", radius: 0.04, height: 0.015, segments: 24, x: 0.02, y: 0.17, z: 0.015, material: materials.wax, parent: parcel, cast: false });
+      addQuestionableProvisionLabel(parcel, "pantry-final-table-parcel", QUESTIONABLE_PROVISIONS.labels.parcel, { width: 0.29, height: 0.12, x: 0.04, y: 0.086, z: 0.23, rotationZ: -0.025 });
+      addRoot("pantry-final-table-parcel", QUESTIONABLE_PROVISIONS.labels.parcel, "butcher-parcel", parcel);
+    }
+
+    if (kind === "tinned-goods") {
+      const tin = new THREE.Group();
+      tin.position.set(0, shelfYs[1] + 0.025, z + 0.075);
+      parent.add(tin);
+      cylinder({ name: "patron-grade-marrow-tin", radius: 0.13, height: 0.38, segments: 28, y: 0.19, material: materials.tin, parent: tin, cast: false });
+      cylinder({ name: "patron-grade-marrow-tin-lid", radius: 0.135, height: 0.02, segments: 28, y: 0.39, material: materials.tray, parent: tin, cast: false });
+      const pullRing = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.007, 8, 20), materials.twine);
+      pullRing.name = "patron-grade-marrow-tin-pull-ring";
+      pullRing.position.set(0.025, 0.406, 0);
+      pullRing.rotation.x = Math.PI / 2;
+      pullRing.castShadow = false;
+      tin.add(pullRing);
+      addQuestionableProvisionLabel(tin, "pantry-marrow-stock", QUESTIONABLE_PROVISIONS.labels.marrowTin, { width: 0.22, height: 0.13, y: 0.21, z: 0.132 });
+      addRoot("pantry-marrow-stock", QUESTIONABLE_PROVISIONS.labels.marrowTin, "marrow-tin", tin);
+    }
+
+    if (kind === "baking") {
+      const salts = new THREE.Group();
+      salts.position.set(0, shelfYs[1] + 0.025, z + 0.075);
+      parent.add(salts);
+      cylinder({ name: "tenderizing-salts-amber-bottle", radius: 0.095, radiusTop: 0.065, radiusBottom: 0.1, height: 0.31, segments: 24, y: 0.155, material: materials.amberGlass, parent: salts, cast: false });
+      cylinder({ name: "tenderizing-salts-granules", radius: 0.078, height: 0.2, segments: 20, y: 0.105, material: materials.preserved, parent: salts, cast: false });
+      cylinder({ name: "tenderizing-salts-stopper", radius: 0.072, height: 0.065, segments: 20, y: 0.343, material: materials.tray, parent: salts, cast: false });
+      addQuestionableProvisionLabel(salts, "pantry-tenderizing-salts", QUESTIONABLE_PROVISIONS.labels.salts, { width: 0.17, height: 0.1, y: 0.18, z: 0.097 });
+      addRoot("pantry-tenderizing-salts", QUESTIONABLE_PROVISIONS.labels.salts, "tenderizing-salts", salts);
+
+      const rendered = new THREE.Group();
+      rendered.position.set(0, shelfYs[2] + 0.025, z + 0.07);
+      parent.add(rendered);
+      cylinder({ name: "rendered-reserve-pale-fill", radius: 0.094, height: 0.225, segments: 28, y: 0.125, material: materials.renderedFat, parent: rendered, cast: false });
+      for (let index = 0; index < 3; index += 1) {
+        const swirl = new THREE.Mesh(new THREE.TorusGeometry(0.065 - index * 0.014, 0.009, 8, 28), materials.renderedFat);
+        swirl.name = `rendered-reserve-whipped-ring-${index + 1}`;
+        swirl.position.set(0, 0.242 + index * 0.018, 0.014);
+        swirl.castShadow = false;
+        rendered.add(swirl);
+      }
+      const dollop = sphere({ name: "rendered-reserve-dollop", radius: 0.027, widthSegments: 16, heightSegments: 10, y: 0.298, z: 0.012, material: materials.renderedFat, parent: rendered, cast: false });
+      dollop.scale.set(0.72, 1, 0.72);
+      cylinder({ name: "rendered-reserve-clouded-jar", radius: 0.112, height: 0.32, segments: 30, y: 0.17, material: materials.glass, parent: rendered, cast: false });
+      cylinder({ name: "rendered-reserve-paper-lid", radius: 0.118, height: 0.034, segments: 28, y: 0.347, material: materials.paper, parent: rendered, cast: false });
+      addQuestionableProvisionLabel(rendered, "pantry-rendered-reserve", QUESTIONABLE_PROVISIONS.labels.renderedReserve, { width: 0.185, height: 0.1, y: 0.178, z: 0.115, rotationZ: -0.016 });
+      addRoot("pantry-rendered-reserve", QUESTIONABLE_PROVISIONS.labels.renderedReserve, "rendered-reserve", rendered);
+    }
+
+    return { roots, count: roots.length };
+  }
+
+  function storageVariationRandom(token) {
+    let seed = [...String(token)].reduce((total, character) => Math.imul(total ^ character.charCodeAt(0), 16777619) >>> 0, 2166136261);
+    return () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+  }
+
+  function styleFoodStorageBackdrop(storageName, kind, batches) {
+    const supportedKinds = new Set(["refrigerator", "preserves", "pantry-staples", "dry-goods", "baking", "tinned-goods"]);
+    if (!supportedKinds.has(kind)) return;
+    const heightVariantRoles = new Set(["boxes", "tins", "bottles", "produce", "sacks", "cheeseWedges", "lettuces", "eggs"]);
+    const sphereHeightRoles = new Set(["produce", "sacks", "lettuces", "eggs"]);
+    for (const [role, collection] of Object.entries(batches)) {
+      for (let index = 0; index < collection.length; index += 1) {
+        const item = collection[index];
+        const assemblyId = item.stockAssemblyId || `${storageName}:${role}:${index}`;
+        const variationId = item.stockVariationId || assemblyId;
+        const assemblyRandom = storageVariationRandom(`${variationId}:shape`);
+        const appearanceRandom = storageVariationRandom(`${storageName}:${role}:${variationId}:${index}:appearance`);
+        const scaleRange = QUESTIONABLE_PROVISIONS.supportingStock.maximumScale - QUESTIONABLE_PROVISIONS.supportingStock.minimumScale;
+        const widthScale = QUESTIONABLE_PROVISIONS.supportingStock.minimumScale + assemblyRandom() * scaleRange;
+        const depthScale = QUESTIONABLE_PROVISIONS.supportingStock.minimumScale + assemblyRandom() * scaleRange;
+        const heightRange = QUESTIONABLE_PROVISIONS.supportingStock.maximumHeightScale - QUESTIONABLE_PROVISIONS.supportingStock.minimumHeightScale;
+        const heightScale = QUESTIONABLE_PROVISIONS.supportingStock.minimumHeightScale + appearanceRandom() * heightRange;
+        const lean = (assemblyRandom() - 0.5) * QUESTIONABLE_PROVISIONS.supportingStock.maximumLean * 2;
+        const yaw = (appearanceRandom() - 0.5) * QUESTIONABLE_PROVISIONS.supportingStock.maximumYawVariation * 2;
+        item.sx *= widthScale;
+        item.sz *= depthScale;
+        if (heightVariantRoles.has(role)) {
+          const heightMultiplier = sphereHeightRoles.has(role) ? 2 : 1;
+          const originalHeight = item.sy * heightMultiplier;
+          const bottom = item.y - originalHeight / 2;
+          item.sy *= heightScale;
+          item.y = bottom + item.sy * heightMultiplier / 2;
+        }
+        item.ry = (item.ry || 0) + yaw;
+        item.rz = (item.rz || 0) + lean;
+        item.stockAssemblyId = assemblyId;
+        item.stockVisualRole = role;
+        item.stockAppearanceSignature = [
+          role,
+          item.sx.toFixed(5), item.sy.toFixed(5), item.sz.toFixed(5),
+          (item.rx || 0).toFixed(5), item.ry.toFixed(5), item.rz.toFixed(5),
+        ].join(":");
+      }
+    }
+  }
+
+  function reserveQuestionableProvisionShelfClearance(storageName, kind, usable, shelfYs, collections) {
+    const heroShelfKinds = new Set(["refrigerator", "preserves", "pantry-staples", "dry-goods", "baking", "tinned-goods"]);
+    if (!heroShelfKinds.has(kind) || shelfYs.length < 2) return;
+    const zones = [{ shelfY: shelfYs[1], minX: -Infinity, maxX: Infinity, role: "hero-middle-shelf" }];
+    if (kind === "refrigerator" && shelfYs.length > 2) {
+      zones.push({ shelfY: shelfYs[2], minX: usable * 0.21, maxX: Infinity, role: "specimen-top-right" });
+      zones.push({ shelfY: shelfYs[0], minX: -usable * 0.25, maxX: usable * 0.25, role: "choir-cut-low-center" });
+    }
+    if (kind === "preserves") {
+      zones.push({ shelfY: shelfYs[0], minX: -usable * 0.25, maxX: usable * 0.25, role: "joint-stock-low-center" });
+    }
+    if ((kind === "dry-goods" || kind === "baking") && shelfYs.length > 2) {
+      zones.push({ shelfY: shelfYs[2], minX: -usable * 0.24, maxX: usable * 0.24, role: kind === "dry-goods" ? "fine-strands-top-center" : "rendered-reserve-top-center" });
+    }
+    let removed = 0;
+    for (const collection of collections) {
+      for (let index = collection.length - 1; index >= 0; index -= 1) {
+        const item = collection[index];
+        const halfWidth = Math.max(Math.abs(item.sx || 0), Math.abs(item.sz || 0)) * 0.55;
+        const occupiesReservedZone = zones.some((zone) => (
+          item.y >= zone.shelfY - 0.025
+          && item.y <= zone.shelfY + 0.445
+          && item.x + halfWidth >= zone.minX
+          && item.x - halfWidth <= zone.maxX
+        ));
+        if (!occupiesReservedZone) continue;
+        collection.splice(index, 1);
+        removed += 1;
+      }
+    }
+    questionableProvisionClearanceRecords.push({
+      storageName,
+      kind,
+      removedGenericParts: removed,
+      zones: zones.map((zone) => ({
+        shelfY: Number(zone.shelfY.toFixed(3)),
+        minX: Number.isFinite(zone.minX) ? Number(zone.minX.toFixed(3)) : null,
+        maxX: Number.isFinite(zone.maxX) ? Number(zone.maxX.toFixed(3)) : null,
+        role: zone.role,
+      })),
+    });
   }
 
   function addStockedStorageContents(parent, name, kind, width, height, depth) {
@@ -34727,71 +35496,65 @@
         }
       });
     } else if (kind === "preserves") {
-      shelfYs.forEach((shelfY, shelfIndex) => {
-        const count = 6;
-        for (let i = 0; i < count; i += 1) {
-          const x = positionX(i, count);
-          const jarHeight = 0.22 + ((i + shelfIndex) % 2) * 0.045;
-          jars.push({ x, y: shelfY + jarHeight / 2 + 0.035, z, sx: 0.075, sy: jarHeight, sz: 0.075 });
-          jarLids.push({ x, y: shelfY + jarHeight + 0.045, z, sx: 0.082, sy: 0.025, sz: 0.082 });
-        }
-      });
+      const [lowY, , topY] = shelfYs;
+      const preserveAssemblyId = `${name}:preserve-low-left`;
+      jars.push({ x: -usable * 0.39, y: lowY + 0.145, z, sx: 0.075, sy: 0.22, sz: 0.075, stockAssemblyId: preserveAssemblyId, stockVariationId: preserveAssemblyId });
+      jarLids.push({ x: -usable * 0.39, y: lowY + 0.265, z, sx: 0.082, sy: 0.025, sz: 0.082, stockAssemblyId: preserveAssemblyId, stockVariationId: preserveAssemblyId });
+      bottles.push({ x: usable * 0.39, y: lowY + 0.17, z, sx: 0.065, sy: 0.31, sz: 0.065 });
+      sacks.push({ x: -usable * 0.37, y: topY + 0.13, z, sx: 0.13, sy: 0.16, sz: 0.085, rz: -0.045 });
+      boxes.push({ x: -usable * 0.12, y: topY + 0.16, z, sx: 0.16, sy: 0.3, sz: 0.14 });
+      tins.push({ x: usable * 0.13, y: topY + 0.12, z, sx: 0.085, sy: 0.22, sz: 0.085 });
+      produce.push({ x: usable * 0.38, y: topY + 0.1, z, sx: 0.095, sy: 0.095, sz: 0.095 });
     } else if (kind === "tinned-goods") {
-      shelfYs.forEach((shelfY, shelfIndex) => {
-        const count = 7;
-        for (let i = 0; i < count; i += 1) {
-          const x = positionX(i, count);
-          if ((i + shelfIndex) % 4 === 0) boxes.push({ x, y: shelfY + 0.17, z, sx: 0.17, sy: 0.32, sz: 0.15 });
-          else tins.push({ x, y: shelfY + 0.12, z, sx: 0.085, sy: 0.22, sz: 0.085 });
-        }
-      });
+      const [lowY, , topY] = shelfYs;
+      boxes.push({ x: -usable * 0.32, y: lowY + 0.17, z, sx: 0.17, sy: 0.32, sz: 0.15 });
+      tins.push({ x: 0, y: lowY + 0.12, z, sx: 0.085, sy: 0.22, sz: 0.085 });
+      bottles.push({ x: usable * 0.32, y: lowY + 0.17, z, sx: 0.065, sy: 0.31, sz: 0.065 });
+      sacks.push({ x: -usable * 0.32, y: topY + 0.13, z, sx: 0.125, sy: 0.16, sz: 0.082, rz: -0.04 });
+      const tinCabinetJarId = `${name}:tin-cabinet-jar`;
+      jars.push({ x: 0, y: topY + 0.12, z, sx: 0.071, sy: 0.22, sz: 0.071, stockAssemblyId: tinCabinetJarId, stockVariationId: tinCabinetJarId });
+      jarLids.push({ x: 0, y: topY + 0.245, z, sx: 0.077, sy: 0.024, sz: 0.077, stockAssemblyId: tinCabinetJarId, stockVariationId: tinCabinetJarId });
+      produce.push({ x: usable * 0.33, y: topY + 0.1, z, sx: 0.095, sy: 0.095, sz: 0.095 });
     } else if (["pantry-staples", "dry-goods", "baking"].includes(kind)) {
-      shelfYs.forEach((shelfY, shelfIndex) => {
-        const count = 6;
-        for (let i = 0; i < count; i += 1) {
-          const x = positionX(i, count);
-          const selector = (i + shelfIndex * 2 + (kind === "baking" ? 1 : 0)) % 4;
-          if (selector === 0) boxes.push({ x, y: shelfY + 0.18, z, sx: 0.18, sy: 0.34, sz: 0.16 });
-          else if (selector === 1) sacks.push({ x, y: shelfY + 0.14, z, sx: 0.14, sy: 0.17, sz: 0.09, rz: (i % 2 ? 1 : -1) * 0.04 });
-          else if (selector === 2) tins.push({ x, y: shelfY + 0.12, z, sx: 0.085, sy: 0.22, sz: 0.085 });
-          else bottles.push({ x, y: shelfY + 0.17, z, sx: 0.07, sy: 0.32, sz: 0.07 });
-        }
-      });
+      const [lowY, , topY] = shelfYs;
+      boxes.push({ x: -usable * 0.33, y: lowY + 0.18, z, sx: 0.18, sy: 0.34, sz: 0.16 });
+      sacks.push({ x: 0, y: lowY + 0.14, z, sx: 0.14, sy: 0.17, sz: 0.09, rz: -0.04 });
+      tins.push({ x: usable * 0.33, y: lowY + 0.12, z, sx: 0.085, sy: 0.22, sz: 0.085 });
+      bottles.push({ x: -usable * 0.34, y: topY + 0.17, z, sx: 0.07, sy: 0.32, sz: 0.07 });
+      const stapleJarId = `${name}:upper-jar`;
+      jars.push({ x: 0, y: topY + 0.12, z, sx: 0.071, sy: 0.22, sz: 0.071, stockAssemblyId: stapleJarId, stockVariationId: stapleJarId });
+      jarLids.push({ x: 0, y: topY + 0.245, z, sx: 0.077, sy: 0.024, sz: 0.077, stockAssemblyId: stapleJarId, stockVariationId: stapleJarId });
+      produce.push({ x: usable * 0.34, y: topY + 0.1, z, sx: 0.095, sy: 0.095, sz: 0.095 });
     } else if (kind === "refrigerator") {
       // Semantic cold-larder shelves instead of the generic dry-goods mix:
-      // milk and jam low, the roast/cheese board mid, eggs and fruit up top.
-      const [lowY, midY, topY] = shelfYs;
-      for (const [index, x] of [-0.36, -0.26].entries()) {
-        milkBottles.push({ x: x * usable, y: lowY + 0.115, z, sx: 0.05, sy: 0.23, sz: 0.05 });
-        milkCaps.push({ x: x * usable, y: lowY + 0.245, z, sx: 0.028, sy: 0.028, sz: 0.028, ry: index });
+      // milk and jam stay low, one specimen egg and one fruit sit up top,
+      // and the authored questionable provisions own the staged shelf centers.
+      const [lowY, , topY] = shelfYs;
+      for (const [index, x] of [-0.36].entries()) {
+        const assemblyId = `${name}:milk-${index}`;
+        milkBottles.push({ x: x * usable, y: lowY + 0.115, z, sx: 0.05, sy: 0.23, sz: 0.05, stockAssemblyId: assemblyId, stockVariationId: assemblyId });
+        milkCaps.push({ x: x * usable, y: lowY + 0.245, z, sx: 0.028, sy: 0.028, sz: 0.028, ry: index, stockAssemblyId: assemblyId, stockVariationId: assemblyId });
       }
-      butterDishes.push({ x: -0.02 * usable, y: lowY + 0.024, z, sx: 0.17, sy: 0.048, sz: 0.115 });
-      butterSlabs.push({ x: -0.02 * usable, y: lowY + 0.062, z, sx: 0.115, sy: 0.028, sz: 0.07 });
-      for (const [index, x] of [0.22, 0.36].entries()) {
+      for (const [index, x] of [0.36].entries()) {
         const jarHeight = 0.16 + index * 0.03;
-        jars.push({ x: x * usable, y: lowY + jarHeight / 2 + 0.01, z, sx: 0.062, sy: jarHeight, sz: 0.062 });
-        jarLids.push({ x: x * usable, y: lowY + jarHeight + 0.02, z, sx: 0.068, sy: 0.022, sz: 0.068 });
+        const assemblyId = `${name}:cold-jar-${index}`;
+        jars.push({ x: x * usable, y: lowY + jarHeight / 2 + 0.01, z, sx: 0.062, sy: jarHeight, sz: 0.062, stockAssemblyId: assemblyId, stockVariationId: assemblyId });
+        jarLids.push({ x: x * usable, y: lowY + jarHeight + 0.02, z, sx: 0.068, sy: 0.022, sz: 0.068, stockAssemblyId: assemblyId, stockVariationId: assemblyId });
       }
-      plates.push({ x: -0.22 * usable, y: midY + 0.008, z, sx: 0.125, sy: 0.014, sz: 0.125 });
-      hams.push({ x: -0.22 * usable, y: midY + 0.08, z, sx: 0.15, sy: 0.085, sz: 0.1, ry: 0.4 });
-      for (const [index, x] of [0.05, 0.17].entries()) {
-        cheeseWedges.push({ x: x * usable, y: midY + 0.033, z: z + index * 0.05 - 0.02, sx: 0.085, sy: 0.065, sz: 0.085, ry: 0.7 + index * 1.9 });
-      }
-      lettuces.push({ x: 0.34 * usable, y: midY + 0.062, z, sx: 0.078, sy: 0.062, sz: 0.078 });
-      eggTrays.push({ x: -0.25 * usable, y: topY + 0.014, z, sx: 0.26, sy: 0.026, sz: 0.15 });
-      for (let egg = 0; egg < 6; egg += 1) {
+      const eggAssemblyId = `${name}:egg-tray`;
+      eggTrays.push({ x: -0.25 * usable, y: topY + 0.014, z, sx: 0.26, sy: 0.026, sz: 0.15, stockAssemblyId: eggAssemblyId, stockVariationId: `${eggAssemblyId}:tray` });
+      for (let egg = 0; egg < 1; egg += 1) {
         eggs.push({
-          x: -0.25 * usable + ((egg % 3) - 1) * 0.075,
+          x: -0.25 * usable,
           y: topY + 0.05,
-          z: z + (egg < 3 ? -0.033 : 0.033),
+          z,
           sx: 0.026, sy: 0.033, sz: 0.026,
+          stockAssemblyId: eggAssemblyId,
+          stockVariationId: `${eggAssemblyId}:egg-${egg}`,
         });
       }
-      for (let i = 0; i < 3; i += 1) {
-        produce.push({ x: (0.12 + i * 0.12) * usable, y: topY + 0.05, z: z + (i % 2) * 0.04 - 0.02, sx: 0.05, sy: 0.047, sz: 0.05 });
-      }
-      milkBottles.push({ x: 0.38 * usable, y: topY + 0.115, z, sx: 0.05, sy: 0.23, sz: 0.05 });
-      milkCaps.push({ x: 0.38 * usable, y: topY + 0.245, z, sx: 0.028, sy: 0.028, sz: 0.028 });
+      produce.push({ x: 0.06 * usable, y: topY + 0.05, z: z - 0.018, sx: 0.052, sy: 0.047, sz: 0.048 });
+      cheeseWedges.push({ x: 0.19 * usable, y: topY + 0.035, z: z + 0.022, sx: 0.078, sy: 0.068, sz: 0.074, ry: 1.15 });
     } else if (["barware", "sideboard", "cookware", "prep", "undersink", "cellar-reserve", "linens", "tools", "washroom"].includes(kind)) {
       // Final no-empty-cabinets sweep: every remaining cupboard receives a
       // role-specific shelf set. Shelves without standing headroom (short
@@ -34863,6 +35626,15 @@
         }
       });
     }
+    const foodStockBatches = {
+      boxes, tins, bottles, produce, sacks, jars, jarLids, plates, cups, milkBottles, milkCaps,
+      butterDishes, butterSlabs, hams, cheeseWedges, lettuces, eggTrays, eggs, copperware,
+      brassCups, whiteLinens, clothRolls, ironTools, toolJars, ceramicBowls, wineReds,
+      wineGreens, glassBottles, woodBoards,
+    };
+    reserveQuestionableProvisionShelfClearance(name, kind, usable, shelfYs, Object.values(foodStockBatches));
+    styleFoodStorageBackdrop(name, kind, foodStockBatches);
+    const questionableStock = addQuestionableProvisionContents(parent, name, kind, usable, shelfYs, z);
     const meshes = [
       addLocalInstanceBatch(`${name}-stocked-boxes`, parent, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.groceryBox, boxes),
       addLocalInstanceBatch(`${name}-stocked-tins`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.groceryTin, tins),
@@ -34893,12 +35665,14 @@
       addLocalInstanceBatch(`${name}-stocked-wine-green`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 12), M.wineGreen, wineGreens),
       addLocalInstanceBatch(`${name}-stocked-glass-bottles`, parent, "unitCylinder", () => new THREE.CylinderGeometry(1, 1, 1, 10), M.glass, glassBottles),
       addLocalInstanceBatch(`${name}-stocked-wood-boards`, parent, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.darkWood, woodBoards),
+      ...questionableStock.roots,
     ].filter(Boolean);
     return {
       count: boxes.length + tins.length + bottles.length + produce.length + sacks.length + jars.length + plates.length + cups.length
         + milkBottles.length + butterDishes.length + hams.length + cheeseWedges.length + lettuces.length + eggTrays.length + eggs.length
         + copperware.length + brassCups.length + whiteLinens.length + clothRolls.length + ironTools.length + toolJars.length
-        + ceramicBowls.length + wineReds.length + wineGreens.length + glassBottles.length + woodBoards.length,
+        + ceramicBowls.length + wineReds.length + wineGreens.length + glassBottles.length + woodBoards.length
+        + questionableStock.count,
       meshes,
     };
   }
@@ -34974,10 +35748,11 @@
     constructor(options) {
       const {
         name, kind = "sink", x = 0, y = 0, z = 0, rotationY = 0,
-        drop = 0.28, parent = scene, handleOffset = null,
+        drop = 0.28, parent = scene, handleOffset = null, roomId = null,
       } = options;
       this.name = name;
       this.kind = kind;
+      this.roomId = roomId;
       this.on = false;
       this.flow = 0;
       this.targetFlow = 0;
@@ -35066,6 +35841,381 @@
       this.rippleMaterial.opacity = this.flow * 0.48;
       const pulse = 0.88 + Math.sin(performance.now() * 0.006 + this.phase) * 0.12;
       this.ripple.scale.setScalar(pulse * this.flow);
+    }
+  }
+
+  class BathroomMirrorScareSystem {
+    constructor() {
+      this.completed = false;
+      this.completedRoomId = null;
+      this.activeRoomId = null;
+      this.rooms = new Map(BATHROOM_MIRROR_SCARE.rooms.map((room) => [room.id, {
+        ...room,
+        runningSeconds: 0,
+        clearElapsed: 0,
+        fogProgress: 0,
+        firstMessageProgress: 0,
+        secondMessageProgress: 0,
+      }]));
+      this.installMirrorEffects();
+      this.applyAllVisuals();
+    }
+
+    makeFogTexture(seed = 1) {
+      const canvas = document.createElement("canvas");
+      canvas.width = BATHROOM_MIRROR_SCARE.fogTextureWidth;
+      canvas.height = BATHROOM_MIRROR_SCARE.fogTextureHeight;
+      const ctx = canvas.getContext("2d");
+      const gradient = ctx.createRadialGradient(
+        canvas.width * 0.52,
+        canvas.height * 0.42,
+        canvas.width * 0.08,
+        canvas.width * 0.5,
+        canvas.height * 0.5,
+        canvas.width * 0.72,
+      );
+      gradient.addColorStop(0, "rgba(220, 224, 218, 0.58)");
+      gradient.addColorStop(0.52, "rgba(232, 232, 222, 0.84)");
+      gradient.addColorStop(1, "rgba(191, 198, 194, 0.94)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      let randomState = seed >>> 0;
+      const random = () => {
+        randomState = (randomState * 1664525 + 1013904223) >>> 0;
+        return randomState / 4294967296;
+      };
+      for (let index = 0; index < 96; index += 1) {
+        const x = random() * canvas.width;
+        const y = random() * canvas.height;
+        const radiusX = 18 + random() * 72;
+        const radiusY = 12 + random() * 56;
+        ctx.fillStyle = `rgba(245, 244, 232, ${(0.018 + random() * 0.055).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.ellipse(x, y, radiusX, radiusY, random() * Math.PI, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.name = `bathroom-mirror-condensation-${seed}`;
+      texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.magFilter = THREE.LinearFilter;
+      texture.minFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      texture.encoding = THREE.sRGBEncoding;
+      return texture;
+    }
+
+    makeMessageTexture(text, seed = 1) {
+      const canvas = document.createElement("canvas");
+      canvas.width = BATHROOM_MIRROR_SCARE.messageTextureWidth;
+      canvas.height = BATHROOM_MIRROR_SCARE.messageTextureHeight;
+      const ctx = canvas.getContext("2d");
+      const lines = String(text).split("\n");
+      const fontSize = lines.length > 1 ? 76 : 70;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate((seed % 2 ? -1 : 1) * 0.012);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.font = `700 ${fontSize}px "Bradley Hand", "Segoe Print", cursive`;
+      const lineHeight = fontSize * 1.08;
+      lines.forEach((line, index) => {
+        const y = (index - (lines.length - 1) / 2) * lineHeight;
+        ctx.strokeStyle = "rgba(238, 236, 220, 0.22)";
+        ctx.lineWidth = 13;
+        ctx.strokeText(line, 0, y);
+        ctx.fillStyle = "rgba(25, 24, 21, 0.91)";
+        ctx.shadowColor = "rgba(12, 10, 9, 0.34)";
+        ctx.shadowBlur = 4;
+        ctx.fillText(line, 0, y);
+      });
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.name = `bathroom-mirror-message-${seed}`;
+      texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.magFilter = THREE.LinearFilter;
+      texture.minFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      texture.encoding = THREE.sRGBEncoding;
+      return texture;
+    }
+
+    installMirrorEffects() {
+      bathroomMirrorSurfaces.forEach((surface, surfaceIndex) => {
+        const fogTexture = this.makeFogTexture(811 + surfaceIndex * 97);
+        const fogMaterial = new THREE.MeshBasicMaterial({
+          map: fogTexture,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          toneMapped: false,
+        });
+        fogMaterial.name = `${surface.roomId}-mirror-fog-material-${surface.mirrorIndex + 1}`;
+        const fogMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(surface.width * 0.97, surface.height * 0.97),
+          fogMaterial,
+        );
+        fogMesh.name = `${surface.roomId}-mirror-fog-${surface.mirrorIndex + 1}`;
+        fogMesh.position.z = BATHROOM_MIRROR_SCARE.fogSurfaceInset;
+        fogMesh.visible = false;
+        fogMesh.renderOrder = 7;
+        surface.group.add(fogMesh);
+
+        const text = BATHROOM_MIRROR_SCARE.message[surface.mirrorIndex] || BATHROOM_MIRROR_SCARE.message[0];
+        const messageTexture = this.makeMessageTexture(text, 907 + surfaceIndex * 131);
+        messageTexture.repeat.set(0.001, 1);
+        const messageMaterial = new THREE.MeshBasicMaterial({
+          map: messageTexture,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          toneMapped: false,
+        });
+        messageMaterial.name = `${surface.roomId}-mirror-message-material-${surface.mirrorIndex + 1}`;
+        const messageWidth = surface.width * 0.88;
+        const messageMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(messageWidth, surface.height * 0.58),
+          messageMaterial,
+        );
+        messageMesh.name = `${surface.roomId}-mirror-message-${surface.mirrorIndex + 1}`;
+        messageMesh.position.z = BATHROOM_MIRROR_SCARE.messageSurfaceInset;
+        messageMesh.visible = false;
+        messageMesh.renderOrder = 8;
+        surface.group.add(messageMesh);
+        Object.assign(surface, {
+          text,
+          fogTexture,
+          fogMaterial,
+          fogMesh,
+          messageTexture,
+          messageMaterial,
+          messageMesh,
+          messageWidth,
+        });
+      });
+    }
+
+    relevantFixtures(roomId) {
+      return waterFixtures.filter((fixture) => (
+        fixture.roomId === roomId
+        && (fixture.kind === "sink" || fixture.kind === "shower")
+      ));
+    }
+
+    roomWaterRunning(roomId) {
+      return this.relevantFixtures(roomId).some((fixture) => fixture.on);
+    }
+
+    messageProgress(elapsedSeconds) {
+      const first = clamp(
+        (elapsedSeconds - BATHROOM_MIRROR_SCARE.messageStartSeconds)
+          / BATHROOM_MIRROR_SCARE.firstMirrorRevealSeconds,
+        0,
+        1,
+      );
+      const secondStart = BATHROOM_MIRROR_SCARE.messageStartSeconds
+        + BATHROOM_MIRROR_SCARE.firstMirrorRevealSeconds
+        + BATHROOM_MIRROR_SCARE.betweenMirrorPauseSeconds;
+      const second = clamp(
+        (elapsedSeconds - secondStart) / BATHROOM_MIRROR_SCARE.secondMirrorRevealSeconds,
+        0,
+        1,
+      );
+      return { first, second };
+    }
+
+    applyMessageReveal(surface, progress, fade) {
+      if (!surface.messageMesh) return;
+      const reveal = clamp(progress, 0, 1);
+      const visible = reveal > 0.001 && fade > 0.001;
+      surface.messageMesh.visible = visible;
+      surface.messageMaterial.opacity = visible
+        ? BATHROOM_MIRROR_SCARE.messageMaximumOpacity * fade
+        : 0;
+      surface.messageTexture.repeat.x = Math.max(0.001, reveal);
+      surface.messageMesh.scale.x = Math.max(0.001, reveal);
+      surface.messageMesh.position.x = -surface.messageWidth * (1 - reveal) / 2;
+    }
+
+    applyRoomVisuals(entry, fade = 1) {
+      const surfaces = bathroomMirrorSurfaces.filter((surface) => surface.roomId === entry.id);
+      for (const surface of surfaces) {
+        const fogOpacity = BATHROOM_MIRROR_SCARE.fogMaximumOpacity * entry.fogProgress * fade;
+        surface.fogMaterial.opacity = fogOpacity;
+        surface.fogMesh.visible = fogOpacity > 0.001;
+        this.applyMessageReveal(
+          surface,
+          surface.mirrorIndex === 0 ? entry.firstMessageProgress : entry.secondMessageProgress,
+          fade,
+        );
+      }
+    }
+
+    clearRoomVisuals(entry) {
+      entry.fogProgress = 0;
+      entry.firstMessageProgress = 0;
+      entry.secondMessageProgress = 0;
+      this.applyRoomVisuals(entry, 0);
+    }
+
+    applyAllVisuals() {
+      for (const entry of this.rooms.values()) this.clearRoomVisuals(entry);
+    }
+
+    update(dt) {
+      const step = Math.max(0, Number(dt) || 0);
+      if (step <= 0) return;
+      if (!this.activeRoomId && !this.completed) {
+        for (const entry of this.rooms.values()) {
+          entry.runningSeconds = this.roomWaterRunning(entry.id)
+            ? entry.runningSeconds + step
+            : Math.max(0, entry.runningSeconds - step * BATHROOM_MIRROR_SCARE.interruptedDecayRate);
+        }
+        const ready = [...this.rooms.values()]
+          .filter((entry) => entry.runningSeconds >= BATHROOM_MIRROR_SCARE.fogStartSeconds)
+          .sort((a, b) => b.runningSeconds - a.runningSeconds)[0];
+        if (ready) this.activeRoomId = ready.id;
+      }
+
+      const active = this.rooms.get(this.activeRoomId);
+      if (!active) return;
+      for (const entry of this.rooms.values()) {
+        if (entry !== active) {
+          entry.runningSeconds = 0;
+          this.clearRoomVisuals(entry);
+        }
+      }
+
+      const waterRunning = this.roomWaterRunning(active.id);
+      if (!this.completed) {
+        active.runningSeconds = waterRunning
+          ? active.runningSeconds + step
+          : Math.max(0, active.runningSeconds - step * BATHROOM_MIRROR_SCARE.interruptedDecayRate);
+        active.fogProgress = clamp(
+          (active.runningSeconds - BATHROOM_MIRROR_SCARE.fogStartSeconds)
+            / (BATHROOM_MIRROR_SCARE.fogFullSeconds - BATHROOM_MIRROR_SCARE.fogStartSeconds),
+          0,
+          1,
+        );
+        const message = this.messageProgress(active.runningSeconds);
+        active.firstMessageProgress = message.first;
+        active.secondMessageProgress = message.second;
+        active.clearElapsed = 0;
+        this.applyRoomVisuals(active, 1);
+        if (message.second >= 1) {
+          this.completed = true;
+          this.completedRoomId = active.id;
+        } else if (!waterRunning && active.runningSeconds <= 0) {
+          this.clearRoomVisuals(active);
+          this.activeRoomId = null;
+        }
+        return;
+      }
+
+      active.fogProgress = 1;
+      active.firstMessageProgress = 1;
+      active.secondMessageProgress = 1;
+      active.clearElapsed = waterRunning ? 0 : active.clearElapsed + step;
+      const fade = waterRunning
+        ? 1
+        : clamp(1 - active.clearElapsed / BATHROOM_MIRROR_SCARE.clearSeconds, 0, 1);
+      this.applyRoomVisuals(active, fade);
+    }
+
+    reset({ turnOffWater = false } = {}) {
+      this.completed = false;
+      this.completedRoomId = null;
+      this.activeRoomId = null;
+      for (const entry of this.rooms.values()) {
+        entry.runningSeconds = 0;
+        entry.clearElapsed = 0;
+        this.clearRoomVisuals(entry);
+      }
+      if (turnOffWater) {
+        for (const room of this.rooms.values()) {
+          for (const fixture of this.relevantFixtures(room.id)) {
+            fixture.setOn(false, true);
+            audioSystem?.setWater(fixture.name, false, fixture.kind);
+          }
+        }
+      }
+      return this.getDiagnostics();
+    }
+
+    getSnapshot() {
+      return {
+        completed: Boolean(this.completed),
+        roomId: this.completedRoomId,
+      };
+    }
+
+    restoreSnapshot(snapshot = null) {
+      this.reset({ turnOffWater: true });
+      this.completed = Boolean(snapshot?.completed);
+      this.completedRoomId = this.rooms.has(snapshot?.roomId) ? snapshot.roomId : null;
+      return this.getDiagnostics();
+    }
+
+    frameForQA(roomId = "main-hall-bathroom") {
+      if (!state.qa || !physics) return null;
+      const room = this.rooms.get(roomId) || this.rooms.values().next().value;
+      teleport(room.frame.x, room.frame.y, room.frame.z, room.frame.yaw, room.frame.pitch);
+      updateLocation();
+      updateInteractionPrompt();
+      return this.getDiagnostics();
+    }
+
+    advanceForQA(seconds = 0) {
+      if (!state.qa) return null;
+      let remaining = clamp(Number(seconds) || 0, 0, 90);
+      while (remaining > 0.000001) {
+        const step = Math.min(0.1, remaining);
+        this.update(step);
+        remaining -= step;
+      }
+      return this.getDiagnostics();
+    }
+
+    getDiagnostics() {
+      return {
+        completed: this.completed,
+        completedRoomId: this.completedRoomId,
+        activeRoomId: this.activeRoomId,
+        message: BATHROOM_MIRROR_SCARE.message.map((line) => line.replace("\n", " ")),
+        timing: {
+          fogStartSeconds: BATHROOM_MIRROR_SCARE.fogStartSeconds,
+          fogFullSeconds: BATHROOM_MIRROR_SCARE.fogFullSeconds,
+          messageStartSeconds: BATHROOM_MIRROR_SCARE.messageStartSeconds,
+          fullRevealSeconds: BATHROOM_MIRROR_SCARE.messageStartSeconds
+            + BATHROOM_MIRROR_SCARE.firstMirrorRevealSeconds
+            + BATHROOM_MIRROR_SCARE.betweenMirrorPauseSeconds
+            + BATHROOM_MIRROR_SCARE.secondMirrorRevealSeconds,
+          clearSeconds: BATHROOM_MIRROR_SCARE.clearSeconds,
+        },
+        surfaceCount: bathroomMirrorSurfaces.length,
+        rooms: [...this.rooms.values()].map((entry) => ({
+          id: entry.id,
+          label: entry.label,
+          waterRunning: this.roomWaterRunning(entry.id),
+          runningFixtures: this.relevantFixtures(entry.id).filter((fixture) => fixture.on).map((fixture) => fixture.name),
+          runningSeconds: Number(entry.runningSeconds.toFixed(2)),
+          fogProgress: Number(entry.fogProgress.toFixed(3)),
+          firstMessageProgress: Number(entry.firstMessageProgress.toFixed(3)),
+          secondMessageProgress: Number(entry.secondMessageProgress.toFixed(3)),
+          visibleFogSurfaces: bathroomMirrorSurfaces.filter((surface) => surface.roomId === entry.id && surface.fogMesh?.visible).length,
+          visibleMessageSurfaces: bathroomMirrorSurfaces.filter((surface) => surface.roomId === entry.id && surface.messageMesh?.visible).length,
+        })),
+        surfaces: bathroomMirrorSurfaces.map((surface) => ({
+          roomId: surface.roomId,
+          mirrorIndex: surface.mirrorIndex,
+          text: surface.text,
+          fogVisible: Boolean(surface.fogMesh?.visible),
+          fogOpacity: Number((surface.fogMaterial?.opacity || 0).toFixed(3)),
+          messageVisible: Boolean(surface.messageMesh?.visible),
+          messageOpacity: Number((surface.messageMaterial?.opacity || 0).toFixed(3)),
+          revealScale: Number((surface.messageMesh?.scale.x || 0).toFixed(3)),
+        })),
+      };
     }
   }
 
@@ -36633,9 +37783,12 @@
     return group;
   }
 
-  function addWallMirror(axis, fixed, center, floorY, centerY, side, width, height) {
+  function addWallMirror(axis, fixed, center, floorY, centerY, side, width, height, options = {}) {
     const offset = 0.19;
     const group = new THREE.Group();
+    group.name = options.roomId
+      ? `${options.roomId}-vanity-mirror-${Number(options.mirrorIndex || 0) + 1}`
+      : "bathroom-vanity-mirror";
     if (axis === "x") {
       group.position.set(center, floorY + centerY, fixed + side * offset);
       group.rotation.y = side > 0 ? 0 : Math.PI;
@@ -36646,6 +37799,15 @@
     scene.add(group);
     box({ name: "bathroom-mirror-back", w: width + 0.14, h: height + 0.14, d: 0.07, x: 0, y: 0, z: 0, material: M.brass, parent: group, cast: false });
     box({ name: "aged-silver-mirror", w: width, h: height, d: 0.025, x: 0, y: 0, z: 0.052, material: M.mirror, parent: group, cast: false, receive: false });
+    if (options.roomId) {
+      bathroomMirrorSurfaces.push({
+        roomId: options.roomId,
+        mirrorIndex: Number(options.mirrorIndex || 0),
+        group,
+        width,
+        height,
+      });
+    }
     return group;
   }
 
@@ -36967,12 +38129,12 @@
     return { nx, nz };
   }
 
-  function addDoubleVanityBase(label, x, z, floorY, width) {
+  function addDoubleVanityBase(label, x, z, floorY, width, roomId) {
     const vanity = new Cabinet({ name: `${label} double vanity`, x, z, floorY, width, height: 0.84, depth: 0.58, rotationY: 0, material: M.darkWood, stockKind: "washroom", interiorLight: false });
     vanity.root.traverse((object) => { if (object.isMesh) object.castShadow = false; });
     roundedBox({ name: `${label}-vanity-marble-countertop`, w: width + 0.12, h: 0.07, d: 0.68, radius: 0.035, x, y: floorY + 0.875, z, material: M.marble, cast: false });
     const sinkXs = [x - width * 0.23, x + width * 0.23];
-    for (const sinkX of sinkXs) {
+    for (const [index, sinkX] of sinkXs.entries()) {
       const basin = new THREE.Mesh(geometry("bathroomVesselBasinShell", () => new THREE.LatheGeometry([
         new THREE.Vector2(0.17, 0),
         new THREE.Vector2(0.27, 0.03),
@@ -37002,7 +38164,7 @@
       sphere({ name: `${label}-faucet-elbow`, radius: 0.042, x: sinkX, y: floorY + 1.225, z: z - 0.18, material: M.brass, cast: false });
       cylinder({ name: `${label}-faucet-spout`, radius: 0.021, height: 0.32, x: sinkX, y: floorY + 1.225, z: z - 0.03, rotationX: Math.PI / 2, material: M.brass, cast: false });
       cylinder({ name: `${label}-faucet-nozzle`, radius: 0.026, height: 0.12, x: sinkX, y: floorY + 1.165, z: z + 0.13, material: M.brass, cast: false });
-      addWallMirror("x", -3.2, sinkX, floorY, 2.0, 1, 0.92, 1.18);
+      addWallMirror("x", -3.2, sinkX, floorY, 2.0, 1, 0.92, 1.18, { roomId, mirrorIndex: index });
     }
     return sinkXs;
   }
@@ -37022,18 +38184,19 @@
   function furnishMainHallBathroom() {
     box({ name: "main-hall-bathroom-marble-floor", w: 6.35, h: 0.045, d: 6.15, x: -8.25, y: FLOOR.MAIN + 0.024, z: 0, material: M.marble, cast: false, receive: true });
     box({ name: "main-hall-bathroom-north-annex-floor", w: 3.35, h: 0.045, d: 1.5, x: -13.25, y: FLOOR.MAIN + 0.024, z: 2.38, material: M.marble, cast: false, receive: true });
-    const sinkXs = addDoubleVanityBase("main hall bathroom", -7.3, -2.65, FLOOR.MAIN, 2.55);
+    const roomId = "main-hall-bathroom";
+    const sinkXs = addDoubleVanityBase("main hall bathroom", -7.3, -2.65, FLOOR.MAIN, 2.55, roomId);
     addVanityCounterSet("main-hall-bathroom", -7.3, -2.65, FLOOR.MAIN, 2.55);
     for (const [index, sinkX] of sinkXs.entries()) {
-      new WaterFixture({ name: `main hall bathroom sink ${index + 1}`, kind: "sink", x: sinkX, y: FLOOR.MAIN + 1.105, z: -2.52, drop: 0.165 });
+      new WaterFixture({ name: `main hall bathroom sink ${index + 1}`, kind: "sink", x: sinkX, y: FLOOR.MAIN + 1.105, z: -2.52, drop: 0.165, roomId });
     }
     const toilet = addToilet("main hall bathroom toilet", -10.65, 0.05, FLOOR.MAIN, -Math.PI / 2);
     toilet.traverse((object) => { if (object.isMesh) object.castShadow = false; });
     const tub = addBathtub(-6.85, 2.05, FLOOR.MAIN, Math.PI / 2);
     tub.traverse((object) => { if (object.isMesh) object.castShadow = false; });
-    new WaterFixture({ name: "main hall bathtub tap", kind: "tub", x: -0.05, y: 0.82, z: 0.66, drop: 0.34, parent: tub });
+    new WaterFixture({ name: "main hall bathtub tap", kind: "tub", x: -0.05, y: 0.82, z: 0.66, drop: 0.34, parent: tub, roomId });
     const shower = addWalkInShower("main-hall-bathroom", -13.55, 2.28, FLOOR.MAIN);
-    new WaterFixture({ name: "main hall shower", kind: "shower", x: shower.x, y: shower.y, z: shower.z, drop: 1.66, handleOffset: shower.handleOffset });
+    new WaterFixture({ name: "main hall shower", kind: "shower", x: shower.x, y: shower.y, z: shower.z, drop: 1.66, handleOffset: shower.handleOffset, roomId });
     addTowelRail(-5.2, 1.35, 2.0, -Math.PI / 2, FLOOR.MAIN);
     for (const curtainConfig of BATHROOM_CURTAINS.fixtures.filter((entry) => entry.floorY === FLOOR.MAIN)) {
       new BathroomCurtain(curtainConfig);
@@ -37042,18 +38205,19 @@
 
   function furnishUpperGrandBathroom() {
     box({ name: "upper-grand-bathroom-marble-floor", w: 9.7, h: 0.045, d: 6.15, x: -10, y: FLOOR.UPPER + 0.024, z: 0, material: M.marble, cast: false, receive: true });
-    const sinkXs = addDoubleVanityBase("upper grand bathroom", -8.15, -2.65, FLOOR.UPPER, 2.65);
+    const roomId = "upper-grand-bathroom";
+    const sinkXs = addDoubleVanityBase("upper grand bathroom", -8.15, -2.65, FLOOR.UPPER, 2.65, roomId);
     addVanityCounterSet("upper-grand-bathroom", -8.15, -2.65, FLOOR.UPPER, 2.65);
     for (const [index, sinkX] of sinkXs.entries()) {
-      new WaterFixture({ name: `upper grand bathroom sink ${index + 1}`, kind: "sink", x: sinkX, y: FLOOR.UPPER + 1.105, z: -2.52, drop: 0.165 });
+      new WaterFixture({ name: `upper grand bathroom sink ${index + 1}`, kind: "sink", x: sinkX, y: FLOOR.UPPER + 1.105, z: -2.52, drop: 0.165, roomId });
     }
     const toilet = addToilet("upper grand bathroom toilet", -13.8, 0.0, FLOOR.UPPER, -Math.PI / 2);
     toilet.traverse((object) => { if (object.isMesh) object.castShadow = false; });
     const tub = addBathtub(-6.85, 2.05, FLOOR.UPPER, Math.PI / 2);
     tub.traverse((object) => { if (object.isMesh) object.castShadow = false; });
-    new WaterFixture({ name: "upper grand bathtub tap", kind: "tub", x: -0.05, y: 0.82, z: 0.66, drop: 0.34, parent: tub });
+    new WaterFixture({ name: "upper grand bathtub tap", kind: "tub", x: -0.05, y: 0.82, z: 0.66, drop: 0.34, parent: tub, roomId });
     const shower = addWalkInShower("upper-grand-bathroom", -13.55, 2.28, FLOOR.UPPER);
-    new WaterFixture({ name: "upper grand shower", kind: "shower", x: shower.x, y: shower.y, z: shower.z, drop: 1.66, handleOffset: shower.handleOffset });
+    new WaterFixture({ name: "upper grand shower", kind: "shower", x: shower.x, y: shower.y, z: shower.z, drop: 1.66, handleOffset: shower.handleOffset, roomId });
     addTowelRail(-5.2, 1.35, 2.0, -Math.PI / 2, FLOOR.UPPER);
     for (const curtainConfig of BATHROOM_CURTAINS.fixtures.filter((entry) => entry.floorY === FLOOR.UPPER)) {
       new BathroomCurtain(curtainConfig);
@@ -46520,6 +47684,7 @@
       victoryFeast: victoryFeastSnapshot,
       bulkStorageSecret: bulkStorageSecretSystem?.getSnapshot() || null,
       basementHaunt: basementHauntSystem?.getSnapshot() || null,
+      bathroomMirrorScare: bathroomMirrorScareSystem?.getSnapshot() || null,
     };
   }
 
@@ -46551,6 +47716,7 @@
     contestant13Quest.restoreQuestSnapshot(data.contestant13);
     bulkStorageSecretSystem?.restoreSnapshot(data.bulkStorageSecret);
     basementHauntSystem?.restoreSnapshot(data.basementHaunt);
+    bathroomMirrorScareSystem?.restoreSnapshot(data.bathroomMirrorScare);
     flashlightSystem?.restoreFromInventory({ clearTransient: true });
     feastSaysSystem?.restoreSnapshot(data.feastSays, data.contestant13);
     stormRunSystem?.restoreSnapshot(data.stormRun, data.contestant13);
@@ -48366,6 +49532,7 @@
       victoryFeastSystem?.update(Math.min(rawDt, VICTORY_FEAST.maximumTimerStepSeconds));
       finaleSabotageSystem?.update(dt);
       basementHauntSystem?.update(dt);
+      bathroomMirrorScareSystem?.update(dt);
       if (state.contestant13.relaySabotaged && contestant13Scene.relayAlarmMaterial) {
         const warningPulse = 0.5 + Math.sin(frameNow * 0.009) * 0.5;
         contestant13Scene.relayAlarmMaterial.emissiveIntensity = 1.55 + warningPulse * 2.1;
@@ -48621,6 +49788,211 @@
     };
   }
 
+  function questionableProvisionWorldVisible(root) {
+    let object = root;
+    while (object) {
+      if (!object.visible) return false;
+      object = object.parent;
+    }
+    return true;
+  }
+
+  function questionableProvisionOverlapDiagnostics() {
+    scene.updateMatrixWorld(true);
+    const overlapDetails = [];
+    const heroBounds = new Map(questionableProvisionEntries.map((entry) => [entry.id, new THREE.Box3().setFromObject(entry.root)]));
+    const recordOverlap = (entryId, otherId, category, firstBox, secondBox) => {
+      if (!firstBox.intersectsBox(secondBox)) return;
+      const intersection = firstBox.clone().intersect(secondBox);
+      const size = intersection.getSize(new THREE.Vector3());
+      if (Math.min(size.x, size.y, size.z) <= 0.002) return;
+      overlapDetails.push({
+        entryId,
+        otherId,
+        category,
+        penetration: [size.x, size.y, size.z].map((value) => Number(value.toFixed(4))),
+      });
+    };
+    for (const entry of questionableProvisionEntries) {
+      const storage = stockedStorages.find((candidate) => candidate.name === entry.storageName);
+      const entryBox = heroBounds.get(entry.id);
+      for (const mesh of storage?.stockMeshes || []) {
+        if (!mesh.isInstancedMesh) continue;
+        if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+        const instanceMatrix = new THREE.Matrix4();
+        const worldMatrix = new THREE.Matrix4();
+        for (let index = 0; index < mesh.count; index += 1) {
+          mesh.getMatrixAt(index, instanceMatrix);
+          worldMatrix.multiplyMatrices(mesh.matrixWorld, instanceMatrix);
+          const stockBox = mesh.geometry.boundingBox.clone().applyMatrix4(worldMatrix);
+          recordOverlap(entry.id, `${mesh.name}[${index}]`, "generic-stock", entryBox, stockBox);
+        }
+      }
+    }
+    for (let first = 0; first < questionableProvisionEntries.length; first += 1) {
+      const firstEntry = questionableProvisionEntries[first];
+      for (let second = first + 1; second < questionableProvisionEntries.length; second += 1) {
+        const secondEntry = questionableProvisionEntries[second];
+        if (firstEntry.storageName !== secondEntry.storageName) continue;
+        recordOverlap(firstEntry.id, secondEntry.id, "authored-provision", heroBounds.get(firstEntry.id), heroBounds.get(secondEntry.id));
+      }
+    }
+    return {
+      overlapCount: overlapDetails.length,
+      genericOverlapCount: overlapDetails.filter((detail) => detail.category === "generic-stock").length,
+      authoredOverlapCount: overlapDetails.filter((detail) => detail.category === "authored-provision").length,
+      details: overlapDetails,
+    };
+  }
+
+  function foodStorageSupportingStockDiagnostics() {
+    scene.updateMatrixWorld(true);
+    const supportedKinds = new Set(["refrigerator", "preserves", "pantry-staples", "dry-goods", "baking", "tinned-goods"]);
+    const tolerance = QUESTIONABLE_PROVISIONS.supportingStock.overlapTolerance;
+    const overlapDetails = [];
+    const duplicateAppearanceDetails = [];
+    const repeatedSilhouetteDetails = [];
+    const appearanceOwners = new Map();
+    const storages = [];
+    let instanceCount = 0;
+    let assemblyCount = 0;
+    for (const storage of stockedStorages.filter((candidate) => supportedKinds.has(candidate.stockKind))) {
+      const assemblyBounds = new Map();
+      const assemblyRoles = new Map();
+      let storageInstances = 0;
+      for (const mesh of storage.stockMeshes || []) {
+        if (!mesh.isInstancedMesh) continue;
+        if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+        const instanceMatrix = new THREE.Matrix4();
+        const worldMatrix = new THREE.Matrix4();
+        const assemblyIds = mesh.userData.stockAssemblyIds || [];
+        const signatures = mesh.userData.stockAppearanceSignatures || [];
+        const visualRoles = mesh.userData.stockVisualRoles || [];
+        for (let index = 0; index < mesh.count; index += 1) {
+          mesh.getMatrixAt(index, instanceMatrix);
+          worldMatrix.multiplyMatrices(mesh.matrixWorld, instanceMatrix);
+          const instanceBox = mesh.geometry.boundingBox.clone().applyMatrix4(worldMatrix);
+          const assemblyId = assemblyIds[index] || `${mesh.name}:instance-${index}`;
+          const existing = assemblyBounds.get(assemblyId);
+          if (existing) existing.union(instanceBox);
+          else assemblyBounds.set(assemblyId, instanceBox);
+          if (!assemblyRoles.has(assemblyId)) assemblyRoles.set(assemblyId, new Set());
+          assemblyRoles.get(assemblyId).add(visualRoles[index] || mesh.name);
+          const signature = signatures[index] || `${mesh.name}:instance-${index}`;
+          const owner = appearanceOwners.get(signature);
+          if (owner) {
+            duplicateAppearanceDetails.push({ signature, first: owner, second: `${mesh.name}[${index}]` });
+          } else {
+            appearanceOwners.set(signature, `${mesh.name}[${index}]`);
+          }
+          storageInstances += 1;
+          instanceCount += 1;
+        }
+      }
+      const assemblies = [...assemblyBounds.entries()];
+      const silhouetteOwners = new Map();
+      for (const [assemblyId, roles] of assemblyRoles) {
+        for (const role of roles) {
+          const firstAssemblyId = silhouetteOwners.get(role);
+          if (firstAssemblyId) {
+            repeatedSilhouetteDetails.push({
+              storageName: storage.name,
+              role,
+              firstAssemblyId,
+              secondAssemblyId: assemblyId,
+            });
+          } else {
+            silhouetteOwners.set(role, assemblyId);
+          }
+        }
+      }
+      assemblyCount += assemblies.length;
+      for (let first = 0; first < assemblies.length; first += 1) {
+        for (let second = first + 1; second < assemblies.length; second += 1) {
+          const [firstId, firstBox] = assemblies[first];
+          const [secondId, secondBox] = assemblies[second];
+          if (!firstBox.intersectsBox(secondBox)) continue;
+          const penetration = firstBox.clone().intersect(secondBox).getSize(new THREE.Vector3());
+          if (Math.min(penetration.x, penetration.y, penetration.z) <= tolerance) continue;
+          overlapDetails.push({
+            storageName: storage.name,
+            firstId,
+            secondId,
+            penetration: [penetration.x, penetration.y, penetration.z].map((value) => Number(value.toFixed(4))),
+          });
+        }
+      }
+      storages.push({
+        storageName: storage.name,
+        kind: storage.stockKind,
+        instanceCount: storageInstances,
+        assemblyCount: assemblies.length,
+      });
+    }
+    return {
+      storageCount: storages.length,
+      instanceCount,
+      assemblyCount,
+      overlapCount: overlapDetails.length,
+      duplicateAppearanceCount: duplicateAppearanceDetails.length,
+      repeatedSilhouetteCount: repeatedSilhouetteDetails.length,
+      overlaps: overlapDetails,
+      duplicateAppearances: duplicateAppearanceDetails,
+      repeatedSilhouettes: repeatedSilhouetteDetails,
+      storages,
+    };
+  }
+
+  function getQuestionableProvisionDiagnostics() {
+    const materials = questionableProvisionMaterials;
+    const totalParts = questionableProvisionEntries.reduce((total, entry) => total + entry.partCount, 0);
+    const clearance = questionableProvisionOverlapDiagnostics();
+    const supportingStock = foodStorageSupportingStockDiagnostics();
+    return {
+      count: questionableProvisionEntries.length,
+      refrigeratorCount: questionableProvisionEntries.filter((entry) => entry.storageName === "kitchen refrigerator").length,
+      pantryCount: questionableProvisionEntries.filter((entry) => entry.storageName !== "kitchen refrigerator").length,
+      visibleCount: questionableProvisionEntries.filter((entry) => questionableProvisionWorldVisible(entry.root)).length,
+      totalParts,
+      maximumAuthoredParts: QUESTIONABLE_PROVISIONS.maximumAuthoredParts,
+      labelTextureCount: materials?.labels?.size || 0,
+      shaderLightsAdded: 0,
+      clearance: {
+        ...clearance,
+        supportingStock,
+        reservedStorages: questionableProvisionClearanceRecords.map((record) => ({
+          storageName: record.storageName,
+          kind: record.kind,
+          removedGenericParts: record.removedGenericParts,
+          zones: record.zones.map((zone) => ({ ...zone })),
+        })),
+      },
+      materials: materials ? {
+        meat: materials.meat.name,
+        plastic: materials.plastic.name,
+        glass: materials.glass.name,
+        brine: materials.brine.name,
+        paper: materials.paper.name,
+        tin: materials.tin.name,
+        sclera: materials.sclera.name,
+        iris: materials.iris.name,
+        tooth: materials.tooth.name,
+        lingual: materials.lingual.name,
+        strands: materials.strands.name,
+        renderedFat: materials.renderedFat.name,
+        marblingTexture: materials.marbling.name,
+      } : null,
+      entries: questionableProvisionEntries.map((entry) => ({
+        id: entry.id,
+        storageName: entry.storageName,
+        kind: entry.kind,
+        visible: questionableProvisionWorldVisible(entry.root),
+        partCount: entry.partCount,
+        label: { ...entry.label },
+      })),
+    };
+  }
+
   function getDiagnostics() {
     const p = physics ? physics.playerPosition() : { x: 0, y: 0, z: 0 };
     const feetY = p.y - (PLAYER.halfHeight + PLAYER.radius);
@@ -48699,6 +50071,7 @@
       throwableDistractions: throwableDistractionSystem?.getDiagnostics() || null,
       breathing: breathStealthSystem?.getDiagnostics() || { ...state.breathing },
       bulkStorageSecret: bulkStorageSecretSystem?.getDiagnostics() || null,
+      questionableProvisions: getQuestionableProvisionDiagnostics(),
       tamper: tamperSystem?.getDiagnostics() || null,
       houseDistractions: tamperSystem?.getDistractionDiagnostics() || null,
       workroomCode: workroomCodeClue?.getDiagnostics() || null,
@@ -48717,6 +50090,7 @@
       upperWindowGallery: getUpperWindowGalleryDiagnostics(),
       windowCurtains: getWindowCurtainDiagnostics(),
       bathroomCurtains: getBathroomCurtainDiagnostics(),
+      bathroomMirrorScare: bathroomMirrorScareSystem?.getDiagnostics() || null,
       bedroomHiding: getBedroomHidingDiagnostics(),
       furnitureTextiles: getFurnitureTextileDiagnostics(),
       player: {
@@ -49002,6 +50376,60 @@
     window.MrFeastFresh.getDiagnostics = getDiagnostics;
     window.MrFeastFresh.getWindowCurtainState = getWindowCurtainDiagnostics;
     window.MrFeastFresh.getBathroomCurtainState = getBathroomCurtainDiagnostics;
+    window.MrFeastFresh.getBathroomMirrorScareState = () => bathroomMirrorScareSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.getQuestionableProvisionState = getQuestionableProvisionDiagnostics;
+    window.MrFeastFresh.setQuestionableProvisionStorageForQA = (id, open) => {
+      if (!state.qa) return null;
+      const query = String(id || "").toLowerCase();
+      const entry = questionableProvisionEntries.find((candidate) => candidate.id.toLowerCase() === query);
+      const storage = entry && stockedStorages.find((candidate) => candidate.name === entry.storageName);
+      if (!storage) return null;
+      storage.setOpen(Boolean(open), true);
+      storage.update?.(1);
+      scene.updateMatrixWorld(true);
+      return getQuestionableProvisionDiagnostics();
+    };
+    window.MrFeastFresh.frameQuestionableProvisionForQA = (id) => {
+      if (!state.qa || !physics) return null;
+      const query = String(id || "").toLowerCase();
+      const entry = questionableProvisionEntries.find((candidate) => candidate.id.toLowerCase() === query);
+      if (!entry) return null;
+      const storage = stockedStorages.find((candidate) => candidate.name === entry.storageName);
+      if (!storage) return null;
+      storage.setOpen(true, true);
+      storage.update?.(1);
+      scene.updateMatrixWorld(true);
+      const target = new THREE.Vector3();
+      entry.root.getWorldPosition(target);
+      const storageQuaternion = new THREE.Quaternion();
+      storage.root.getWorldQuaternion(storageQuaternion);
+      const outward = new THREE.Vector3(0, 0, 1).applyQuaternion(storageQuaternion).setY(0).normalize();
+      const distance = entry.storageName === "kitchen refrigerator" ? 1.35 : 1.45;
+      const approach = target.clone().addScaledVector(outward, distance);
+      const floorY = Number(storage.floorY ?? storage.root.position.y) || 0;
+      const pitch = clamp(Math.atan2(target.y - (floorY + PLAYER.eye), distance), -0.62, 0.28);
+      teleport(approach.x, floorY, approach.z, faceTargetYaw(approach.x, approach.z, target.x, target.z), pitch);
+      syncCamera();
+      camera.updateMatrixWorld(true);
+      updateLocation();
+      updateInteractionPrompt();
+      return getQuestionableProvisionDiagnostics();
+    };
+    window.MrFeastFresh.resetBathroomMirrorScareForQA = () => (
+      state.qa && bathroomMirrorScareSystem
+        ? bathroomMirrorScareSystem.reset({ turnOffWater: true })
+        : null
+    );
+    window.MrFeastFresh.advanceBathroomMirrorScareForQA = (seconds) => (
+      state.qa && bathroomMirrorScareSystem
+        ? bathroomMirrorScareSystem.advanceForQA(seconds)
+        : null
+    );
+    window.MrFeastFresh.frameBathroomMirrorScareForQA = (roomId) => (
+      state.qa && bathroomMirrorScareSystem
+        ? bathroomMirrorScareSystem.frameForQA(String(roomId || "main-hall-bathroom"))
+        : null
+    );
     window.MrFeastFresh.getBedroomHidingState = getBedroomHidingDiagnostics;
     window.MrFeastFresh.getFurnitureTextileState = getFurnitureTextileDiagnostics;
     window.MrFeastFresh.placePlayerNearBedroomHideForQA = (id) => {
@@ -51134,6 +52562,7 @@
       scene.add(moonLight);
 
       buildMansion();
+      bathroomMirrorScareSystem = new BathroomMirrorScareSystem();
       throwableDistractionSystem = new ThrowableDistractionSystem();
       bulkStorageSecretSystem = new BulkStorageSecretSystem();
       flashlightSystem = new FlashlightSystem();

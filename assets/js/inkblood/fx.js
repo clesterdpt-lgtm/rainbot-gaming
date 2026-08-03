@@ -867,9 +867,9 @@ export class Fx {
           { width: 1.5, taper: "both", jitter: 0.14, seed: 100, colour: w.colour });
       }
       inkText(g, w.text, 0, 0, {
-        font: fonts.impact(w.text.length > 3 ? 34 : 46),
-        halo: 9,
-        outline: 5,
+        font: fonts.display(w.text.length > 3 ? 31 : 39),
+        halo: 5,
+        outline: 2.2,
         colour: w.colour,
         align: "center",
         baseline: "middle",
@@ -887,9 +887,9 @@ export class Fx {
       const sc = f.scale * (0.55 + pop * 0.5);
       g.scale(sc, sc);
       inkText(g, f.text, 0, 0, {
-        font: fonts.impact(f.crit ? 40 : 32),
-        halo: f.crit ? 7 : 5,
-        outline: f.crit ? 4.5 : 3.4,
+        font: fonts.display(f.crit ? 34 : 27),
+        halo: f.crit ? 5 : 3.5,
+        outline: f.crit ? 2.4 : 1.8,
         colour: f.crit ? PAL.blood : PAL.ink,
         align: "center",
         baseline: "middle",

@@ -235,7 +235,7 @@ export class Hud {
     g.restore();
     g.restore();
     inkText(g, clock, cx, cy + Math.max(8, 11 * u), {
-      font: this.fonts.impact(Math.max(25, 39 * u)), halo: 0, outline: 0,
+      font: this.fonts.display(Math.max(24, 37 * u)), halo: 0, outline: 0,
       colour: PAL.paperLit, align: "center",
     });
   }
@@ -387,7 +387,7 @@ export class Hud {
       const hpH = 17 * u;
       this.commandBar(g, hpX, hpY, hpW, hpH, st.hp / st.maxHp, PAL.blood, 73);
       inkText(g, `HP  ${Math.ceil(st.hp)} / ${Math.round(st.maxHp)}`, hpX, hpY + 30 * u, {
-        font: this.fonts.display(15 * u), halo: 3.5 * u, outline: 0,
+        font: this.fonts.display(Math.max(12, 15 * u)), halo: Math.max(2.5, 3.5 * u), outline: 0,
         colour: PAL.ink, align: "left",
       });
       this.regions.hp = { x: hpX, y: hpY, w: hpW, h: hpH };
@@ -398,12 +398,12 @@ export class Hud {
       const xpY = bandY + 15 * u;
       this.commandBar(g, rightX, xpY, xpW, 8 * u, st.xp / st.xpNeed, PAL.arcane, 78);
       inkText(g, `LV. ${st.level}`, rightEdge, xpY - 2 * u, {
-        font: this.fonts.display(15 * u), halo: 3.5 * u, outline: 0,
+        font: this.fonts.display(Math.max(12, 15 * u)), halo: Math.max(2.5, 3.5 * u), outline: 0,
         colour: PAL.ink, align: "right",
       });
       this.regions.xp = { x: rightX, y: xpY, w: xpW, h: 8 * u };
 
-      const statFont = 21 * u;
+      const statFont = Math.max(14, 21 * u);
       this.skullIcon(g, rightEdge - 8 * u, bandY + 50 * u, 8 * u);
       inkText(g, `${st.kills}`, rightEdge - 24 * u, bandY + 57 * u, {
         font: this.fonts.display(statFont), halo: 4 * u, outline: 0,
@@ -441,7 +441,8 @@ export class Hud {
         colour: PAL.ink, accent: PAL.blood,
       });
       inkText(g, st.boss.def.name.toUpperCase(), W / 2, by - 8 * s, {
-        font: this.fonts.display(19 * s), halo: 6, outline: 3, colour: PAL.ink, align: "center",
+        font: this.fonts.display(Math.max(14, 18 * s)), halo: 3.5, outline: 1.2,
+        colour: PAL.ink, align: "center",
       });
       this.bar(g, bx, by, bw, 18 * s, st.boss.hp / st.boss.maxHp, PAL.blood);
     }
@@ -563,7 +564,7 @@ export class Hud {
 
     const pop = Math.min(1, anim / 0.22);
     inkText(g, "LEVEL UP", W / 2, 92 * s * pop, {
-      font: this.fonts.impact(58 * s), halo: 12, outline: 6, colour: PAL.ink, align: "center",
+      font: this.fonts.display(52 * s), halo: 6, outline: 2.4, colour: PAL.ink, align: "center",
     });
     brush(g, [[W / 2 - 118 * s, 122 * s * pop], [W / 2 - 26 * s, 122 * s * pop]],
       { width: 2.4 * s, taper: "both", jitter: 0.2, seed: 80, colour: PAL.blood });
@@ -623,7 +624,8 @@ export class Hud {
         g.rotate(0.24);
         splat(g, 0, 0, 22 * s, { seed: 12 + i, colour: PAL.blood, drops: 4, rough: 0.5 });
         inkText(g, "NEW", 0, 5 * s, {
-          font: this.fonts.display(15 * s), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
+          font: this.fonts.display(Math.max(11, 15 * s)), halo: 0, outline: 0,
+          colour: PAL.paperLit, align: "center",
         });
         g.restore();
       }
@@ -633,20 +635,23 @@ export class Hud {
         { width: 2.6 * s, taper: "both", jitter: 0.3, seed: 41 + i, colour: PAL.ink });
 
       inkText(g, c.name.toUpperCase(), x + cw / 2, y + 188 * s, {
-        font: this.fonts.display(19 * s), halo: 0, outline: 0, colour: PAL.ink, align: "center",
+        font: this.fonts.display(Math.max(13, 19 * s)), halo: 0, outline: 0,
+        colour: PAL.ink, align: "center",
       });
       const kindLabel = c.evolved ? "EVOLUTION"
         : c.level ? `LEVEL ${c.level}`
           : (c.kind === "newPassive" ? "NEW RELIC"
             : c.kind === "newWeapon" ? "NEW WEAPON" : "BOON");
       inkText(g, kindLabel, x + cw / 2, y + 208 * s, {
-        font: this.fonts.display(13 * s), halo: 0, outline: 0,
+        font: this.fonts.display(Math.max(11, 13 * s)), halo: 0, outline: 0,
         colour: c.evolved ? PAL.blood : PAL.inkSoft, align: "center",
       });
 
       // Description, wrapped.
       g.save();
-      g.font = this.fonts.body(13.5 * s);
+      const bodySize = Math.max(11.5, 13.5 * s);
+      const bodyLine = Math.max(14, 17 * s);
+      g.font = this.fonts.body(bodySize);
       g.fillStyle = PAL.inkSoft;
       g.textAlign = "center";
       const words = c.desc.split(" ");
@@ -656,7 +661,7 @@ export class Hud {
         const test = line ? `${line} ${word}` : word;
         if (g.measureText(test).width > cw - 28 * s) {
           g.fillText(line, x + cw / 2, ly);
-          ly += 17 * s;
+          ly += bodyLine;
           line = word;
         } else line = test;
       }
@@ -665,13 +670,14 @@ export class Hud {
 
       if (isSel) {
         inkText(g, "▲", x + cw / 2, y + ch + 24 * s, {
-          font: this.fonts.display(20 * s), halo: 4, outline: 2, colour: PAL.blood, align: "center",
+          font: this.fonts.display(19 * s), halo: 2.5, outline: 1, colour: PAL.blood, align: "center",
         });
       }
     });
 
     inkText(g, "← →  CHOOSE      ENTER  TAKE IT", W / 2, H - 26 * s, {
-      font: this.fonts.display(15 * s), halo: 5, outline: 2, colour: PAL.inkSoft, align: "center",
+      font: this.fonts.display(Math.max(12, 15 * s)), halo: 2.5, outline: 1,
+      colour: PAL.inkSoft, align: "center",
     });
   }
 

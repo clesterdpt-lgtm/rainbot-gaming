@@ -27,7 +27,7 @@ import { bakeCast } from "./sprites.js?v=20260803-2";
 import {
   bakeProps, drawGround, Ash, installGeneratedEnvironment, BACKGROUND,
 } from "./props.js?v=20260803-calm-1";
-import { bakeFx, Fx, ATLAS } from "./fx.js?v=20260803-actions-1";
+import { bakeFx, Fx, ATLAS } from "./fx.js?v=20260803-type-1";
 import {
   WEAPONS, PASSIVES, WEP_ART, bakeWeaponArt, makeProjectile, stepProjectile,
   drawProjectile, drawChains,
@@ -35,7 +35,7 @@ import {
 import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js?v=20260803-calm-1";
 import { Audio } from "./audio.js?v=20260803-actions-1";
 import { Input } from "./input.js?v=20260803-actions-1";
-import { Hud } from "./hud.js?v=20260803-actions-1";
+import { Hud } from "./hud.js?v=20260803-type-1";
 import { loadGeneratedAssets } from "./generated-assets.js?v=20260803-calm-1";
 import { ActionSystem } from "./actions.js?v=20260803-actions-1";
 
@@ -1845,7 +1845,7 @@ export class Game {
       });
     }
     inkText(g, "WASD / ARROWS  MOVE      SPACE / SHIFT  INK STEP      Q  BLOOD ECLIPSE      P  PAUSE", W / 2, H * 0.972, {
-      font: FONTS.display(15 * ts), halo: 0, outline: 0, colour: "#b9b3a6", align: "center",
+      font: FONTS.display(16 * ts), halo: 0, outline: 0, colour: "#c8c2b5", align: "center",
     });
 
     this.drawPageFrame(g);
@@ -1911,7 +1911,7 @@ export class Game {
         colour: PAL.paperLit, accent: PAL.blood, paper: PAL.ink,
       });
       inkText(g, p.name.toUpperCase(), W / 2, cy + 34 * ts, {
-        font: FONTS.impact(44 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
+        font: FONTS.display(40 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
       });
       inkText(g, p.title || "", W / 2, cy + 62 * ts, {
         font: FONTS.display(19 * ts), halo: 0, outline: 0, colour: "#c9c4b8", align: "center",
@@ -1921,28 +1921,28 @@ export class Game {
         colour: PAL.paperLit, accent: PAL.blood, paper: PAL.ink,
       });
       inkText(g, "BOSS SLAIN", W / 2, cy + 29 * ts, {
-        font: FONTS.impact(38 * ts), halo: 0, outline: 0, colour: PAL.blood, align: "center",
+        font: FONTS.display(36 * ts), halo: 0, outline: 0, colour: PAL.blood, align: "center",
       });
       inkText(g, `${p.name.toUpperCase()} FALLS`, W / 2, cy + 59 * ts, {
-        font: FONTS.impact(32 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
+        font: FONTS.display(30 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
       });
     } else if (panel.kind === "evolve") {
       drawInkSigil(g, p.sigil || "slash", W / 2, cy - 29 * ts, 72 * ts, {
         colour: PAL.paperLit, accent: PAL.blood, paper: PAL.ink, evolved: true,
       });
       inkText(g, `${p.name.toUpperCase()}`, W / 2, cy + 42 * ts, {
-        font: FONTS.impact(36 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
+        font: FONTS.display(34 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
       });
     } else if (panel.kind === "revive") {
       drawInkSigil(g, "revive", W / 2, cy - 24 * ts, 70 * ts, {
         colour: PAL.paperLit, accent: PAL.blood, paper: PAL.ink,
       });
       inkText(g, "RISE AGAIN", W / 2, cy + 43 * ts, {
-        font: FONTS.impact(39 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
+        font: FONTS.display(36 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
       });
     } else if (panel.kind === "chest") {
       inkText(g, `${p.name.toUpperCase()}  →  LV ${p.level}`, W / 2, cy + 10 * ts, {
-        font: FONTS.impact(38 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
+        font: FONTS.display(35 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
       });
     }
     g.restore();
@@ -1961,13 +1961,13 @@ export class Game {
     fillToneDevice(g, 0.24, 4);
     g.restore();
     inkText(g, "PAUSED", W / 2, H / 2 - 10, {
-      font: FONTS.impact(78), halo: 14, outline: 7, colour: PAL.ink, align: "center",
+      font: FONTS.display(68), halo: 7, outline: 2.6, colour: PAL.ink, align: "center",
     });
     drawInkSigil(g, "pause", W / 2, H / 2 - 92, 54, {
       colour: PAL.blood, accent: PAL.blood,
     });
     inkText(g, "P OR Ⅱ TO CONTINUE", W / 2, H / 2 + 82, {
-      font: FONTS.display(22), halo: 6, outline: 3, colour: PAL.inkSoft, align: "center",
+      font: FONTS.display(21), halo: 3, outline: 1.2, colour: PAL.inkSoft, align: "center",
     });
   }
 
@@ -1989,7 +1989,7 @@ export class Game {
     });
     inkText(g, won ? "THE PARADE ENDS" : "YOU ARE ONE OF THEM NOW",
       W / 2, H * 0.48, {
-        font: FONTS.impact(46 * ts), halo: 0, outline: 0, colour: fg, align: "center",
+        font: FONTS.display(43 * ts), halo: 0, outline: 0, colour: fg, align: "center",
       });
 
     const rows = [

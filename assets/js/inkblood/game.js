@@ -22,18 +22,18 @@ import {
   PAL, paper, makeCanvas, ctxOf, inkText, panelFrame, brush, splat, rng,
   starburst, roughCircle, fillToneDevice, tone, focusLines, feather, wobble,
   drawInkSigil,
-} from "./art.js?v=20260803-1";
-import { bakeCast, PX_PER_UNIT } from "./sprites.js?v=20260803-1";
-import { bakeProps, drawGround, Ash } from "./props.js?v=20260803-1";
-import { bakeFx, Fx, ATLAS } from "./fx.js?v=20260803-1";
+} from "./art.js?v=20260803-2";
+import { bakeCast, PX_PER_UNIT } from "./sprites.js?v=20260803-2";
+import { bakeProps, drawGround, Ash } from "./props.js?v=20260803-2";
+import { bakeFx, Fx, ATLAS } from "./fx.js?v=20260803-2";
 import {
   WEAPONS, PASSIVES, bakeWeaponArt, makeProjectile, stepProjectile,
   drawProjectile, drawChains,
-} from "./weapons.js?v=20260803-1";
-import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js?v=20260803-1";
-import { Audio } from "./audio.js?v=20260803-1";
-import { Input } from "./input.js?v=20260803-1";
-import { Hud } from "./hud.js?v=20260803-1";
+} from "./weapons.js?v=20260803-2";
+import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js?v=20260803-2";
+import { Audio } from "./audio.js?v=20260803-2";
+import { Input } from "./input.js?v=20260803-2";
+import { Hud } from "./hud.js?v=20260803-2";
 
 // The camera guarantees a minimum window onto the world in BOTH
 // axes. Driving zoom from height alone is fine on a laptop and

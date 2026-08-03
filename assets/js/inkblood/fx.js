@@ -22,7 +22,7 @@
 import {
   PAL, makeCanvas, ctxOf, brush, splat, spray, rng, wobble, focusLines,
   starburst, boltPath, roughCircle, tone, inkText,
-} from "./art.js?v=20260803-1";
+} from "./art.js?v=20260803-2";
 
 /* ---------------------------------------------------------- */
 /* Baked effect atlas                                          */

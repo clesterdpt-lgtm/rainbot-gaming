@@ -183,6 +183,25 @@ const gaitOrder = await page.evaluate(async () => {
 check("shared walk cycle advances in the corrected direction",
   gaitOrder.join(",") === "7,6,5", `frames=${gaitOrder.join("→")}`);
 
+const walkArms = await page.evaluate(async () => {
+  const { runPose } = await import("/assets/js/inkblood/figure.js");
+  const pose = runPose(0.25);
+  return {
+    armA: pose.armA,
+    armB: pose.armB,
+    legA: pose.legA,
+    legB: pose.legB,
+    elbowA: pose.elbowA,
+    elbowB: pose.elbowB,
+  };
+});
+check("shared player and enemy arms counter-swing with forward-facing elbows",
+  walkArms.armA * walkArms.legA < 0
+    && walkArms.armB * walkArms.legB < 0
+    && walkArms.elbowA * walkArms.armA > 0
+    && walkArms.elbowB * walkArms.armB > 0,
+  JSON.stringify(walkArms));
+
 const enemyFacing = await page.evaluate(() => {
   const g = window.__INK.game;
   g.enemies.length = 0;

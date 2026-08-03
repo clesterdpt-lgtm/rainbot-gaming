@@ -21,7 +21,7 @@
 import {
   PAL, brush, tone, wobble, rng, splat, fillToneDevice, deviceSpace,
   hatchShade, stippleShade, inkContour, samplePath, feather,
-} from "./art.js?v=20260803-1";
+} from "./art.js?v=20260803-2";
 
 /**
  * The light. Everything in the game is lit from the upper right by
@@ -415,15 +415,27 @@ export function runPose(t, opts = {}) {
   const w = t * Math.PI * 2;
   const legA = Math.sin(w) * 0.62 * amp;
   const legB = Math.sin(w + Math.PI) * 0.62 * amp;
+  const armA = Math.sin(w + Math.PI) * 0.56 * amp + 0.06;
+  const armB = Math.sin(w) * 0.56 * amp + 0.06;
+
+  // Bend each elbow back toward the body's centre line. The old
+  // pose always used a positive bend, so a rearward upper arm bent
+  // even farther behind the torso instead of letting the forearm
+  // return beneath it. Both hands consequently trailed the figure
+  // through most of the cycle, even though the shoulders were
+  // counter-swinging correctly against the legs.
+  const walkElbow = (arm) => (
+    Math.tanh(arm * 4) * (0.28 + Math.abs(arm) * 0.2)
+  );
   return {
     legA,
     legB,
     kneeA: Math.max(0, Math.sin(w - 0.9)) * 0.95 * amp + 0.12,
     kneeB: Math.max(0, Math.sin(w + Math.PI - 0.9)) * 0.95 * amp + 0.12,
-    armA: Math.sin(w + Math.PI) * 0.5 * amp - 0.1,
-    armB: Math.sin(w) * 0.5 * amp - 0.1,
-    elbowA: 0.5 + Math.max(0, Math.sin(w + Math.PI)) * 0.5,
-    elbowB: 0.5 + Math.max(0, Math.sin(w)) * 0.5,
+    armA,
+    armB,
+    elbowA: walkElbow(armA),
+    elbowB: walkElbow(armB),
     bob: Math.abs(Math.sin(w * 2)) * 1.9 * amp,
     lean: opts.lean == null ? 3.5 : opts.lean,
     phase: t,

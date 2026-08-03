@@ -24,7 +24,7 @@ export class Hud {
     this.scale = 1;
     this.hitRects = [];      // clickable regions, rebuilt each frame
     this.regions = {};       // named layout regions for visual QA
-    this.presentation = "open-ornamental-frame";
+    this.presentation = "minimal-command-frame";
   }
 
   layout(w, h) {
@@ -322,8 +322,8 @@ export class Hud {
     const bandY = Math.max(7, 11 * s);
     const bandX = inset;
     const bandW = W - inset * 2;
-    const bandH = (this.compact ? 132 : 124) * u;
-    const controlReserve = this.compact ? 90 : 100;
+    const bandH = (this.compact ? 114 : 118) * u;
+    const controlReserve = 78;
     this.commandPanel(g, bandX, bandY, bandW, bandH);
     this.regions.band = { x: bandX, y: bandY, w: bandW, h: bandH };
 
@@ -332,45 +332,37 @@ export class Hud {
     const clock = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 
     if (this.compact) {
-      const hpX = bandX + 9 * u;
-      const hpY = bandY + 11 * u;
-      const hpW = Math.max(110, bandW - controlReserve - 17 * u);
-      const hpH = 12 * u;
-      this.commandBar(g, hpX, hpY, hpW, hpH, st.hp / st.maxHp, PAL.blood, 72);
-      inkText(g, `HP  ${Math.ceil(st.hp)} / ${Math.round(st.maxHp)}`, hpX, hpY + 27 * u, {
-        font: this.fonts.display(Math.max(12, 14 * u)), halo: Math.max(2.5, 3 * u), outline: 0,
-        colour: PAL.ink, align: "left",
-      });
-      this.regions.hp = { x: hpX, y: hpY, w: hpW, h: hpH };
-
-      const timerW = 112 * u;
-      const timerH = 46 * u;
-      const timerY = bandY + 50 * u;
+      const timerW = 96 * u;
+      const timerH = 40 * u;
+      const timerY = bandY + 23 * u;
       this.timerPlate(g, W / 2, timerY, timerW, timerH, clock);
       this.regions.timer = { x: W / 2 - timerW / 2, y: timerY - timerH / 2, w: timerW, h: timerH };
 
-      inkText(g, `LV. ${st.level}`, bandX + 11 * u, bandY + 65 * u, {
-        font: this.fonts.display(Math.max(12, 14 * u)), halo: Math.max(2.5, 3 * u), outline: 0,
+      // Mobile treats health and experience as one paired meter: HP first,
+      // XP directly beneath it. The old timer/counter split separated the two
+      // bars and made their relationship look reversed.
+      const meterX = bandX + 9 * u;
+      const meterW = bandW - 18 * u;
+      const hpY = bandY + 46 * u;
+      const hpH = 10 * u;
+      this.commandBar(g, meterX, hpY, meterW, hpH, st.hp / st.maxHp, PAL.blood, 72);
+      inkText(g, `HP ${Math.ceil(st.hp)} / ${Math.round(st.maxHp)}`, meterX + 5 * u, hpY + 9 * u, {
+        font: this.fonts.display(Math.max(10, 12 * u)), halo: Math.max(1.5, 2 * u), outline: 0,
         colour: PAL.ink, align: "left",
       });
-      const counterY = bandY + 63 * u;
-      const right = bandX + bandW - 10 * u;
-      this.skullIcon(g, right - 77 * u, counterY - 5 * u, 7 * u);
-      inkText(g, `${st.kills}`, right - 64 * u, counterY, {
-        font: this.fonts.display(Math.max(12, 14 * u)), halo: Math.max(2.5, 3 * u), outline: 0,
-        colour: PAL.ink, align: "left",
+      inkText(g, `LV ${st.level}`, meterX + meterW - 5 * u, hpY + 9 * u, {
+        font: this.fonts.display(Math.max(10, 12 * u)), halo: Math.max(1.5, 2 * u), outline: 0,
+        colour: PAL.ink, align: "right",
       });
-      this.soulIcon(g, right - 28 * u, counterY - 5 * u, 6 * u);
-      inkText(g, `${st.coins}`, right - 16 * u, counterY, {
-        font: this.fonts.display(Math.max(12, 14 * u)), halo: Math.max(2.5, 3 * u), outline: 0,
-        colour: PAL.ink, align: "left",
-      });
-      const xpY = bandY + 70 * u;
-      this.commandBar(g, bandX + 10 * u, xpY, bandW - 20 * u, 3 * u,
-        st.xp / st.xpNeed, PAL.arcane, 79);
-      this.regions.xp = { x: bandX + 10 * u, y: xpY, w: bandW - 20 * u, h: 3 * u };
+      this.regions.hp = { x: meterX, y: hpY, w: meterW, h: hpH };
 
-      const loadoutY = bandY + 84 * u;
+      const xpY = hpY + 13 * u;
+      const xpH = 4 * u;
+      this.commandBar(g, meterX, xpY, meterW, xpH,
+        st.xp / st.xpNeed, PAL.arcane, 79);
+      this.regions.xp = { x: meterX, y: xpY, w: meterW, h: xpH };
+
+      const loadoutY = bandY + 70 * u;
       this.regions.loadout = this.drawLoadout(g, st, bandX + 11 * u, loadoutY, bandW - 22 * u);
     } else {
       const timerW = 180 * u;
@@ -423,14 +415,12 @@ export class Hud {
     /* ---- stat block, bottom left -------------------------- */
     if (st.showStats && !this.compact) this.statBlock(g, 14 * s, H - 232 * s, 172 * s, 218 * s, st);
 
-    /* ---- minimap, bottom right ---------------------------- */
-    if (!this.compact) {
-      const radarSize = 78 * u;
-      const radarX = W - radarSize - 17 * u;
-      const radarY = H - radarSize - 17 * u;
-      this.minimap(g, radarX, radarY, radarSize, st);
-      this.regions.radar = { x: radarX, y: radarY, w: radarSize, h: radarSize };
-    }
+    /* ---- compact radar, upper right below the command frame -------- */
+    const radarSize = (this.compact ? 64 : 70) * u;
+    const radarX = W - radarSize - inset;
+    const radarY = bandY + bandH + 8 * u;
+    this.minimap(g, radarX, radarY, radarSize, st);
+    this.regions.radar = { x: radarX, y: radarY, w: radarSize, h: radarSize };
 
     /* ---- boss bar ----------------------------------------- */
     if (st.boss && !st.boss.dead) {

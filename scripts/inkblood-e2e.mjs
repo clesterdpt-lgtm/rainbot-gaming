@@ -131,35 +131,41 @@ check("opens in the minimized game-page shell", embedded.shell && !embedded.maxe
   embedded.size);
 check("canvas fits the minimized play surface", embedded.fitted, embedded.size);
 
-// Keep this long gameplay suite in a resizable normal browser window. Native
-// fullscreen uses the same click path in production; here we deliberately
-// exercise the full-window CSS fallback that browsers use when it is denied.
-await page.evaluate(() => {
-  const surface = document.querySelector(".rb-standalone-surface");
-  if (!surface) return;
-  Object.defineProperty(surface, "requestFullscreen", { value: undefined });
-  Object.defineProperty(surface, "webkitRequestFullscreen", { value: undefined });
-});
-await page.locator("#btn-fullscreen").click();
+// Escape is now the only entry point for screen sizing and controls.
+await page.keyboard.press("Escape");
+await settle(page, 180);
+const initialMenu = await page.evaluate(() => ({
+  open: !document.getElementById("ink-game-menu")?.hidden,
+  expanded: document.getElementById("ink-menu-trigger")?.getAttribute("aria-expanded"),
+  maxLabel: document.querySelector('[data-ink-menu-action="maximize"]')?.textContent.trim(),
+}));
+await page.locator('[data-ink-menu-action="maximize"]').click();
 await settle(page, 300);
 const maxed = await page.evaluate(() => {
   const surface = document.querySelector(".rb-standalone-surface");
   return surface?.classList.contains("is-maxed")
     && document.body.classList.contains("rb-game-maxed")
-    && document.getElementById("btn-fullscreen")?.getAttribute("aria-pressed") === "true";
+    && document.getElementById("ink-game-menu")?.hidden;
 });
-check("Max expands the play surface", maxed);
+check("Escape menu opens and maximizes the play surface",
+  initialMenu.open && initialMenu.expanded === "true"
+    && initialMenu.maxLabel === "Maximize screen" && maxed,
+  JSON.stringify(initialMenu));
 
-await page.locator("#btn-fullscreen").click();
+await page.keyboard.press("Escape");
+await settle(page, 180);
+const returnLabel = await page.locator('[data-ink-menu-action="maximize"]').textContent();
+await page.locator('[data-ink-menu-action="maximize"]').click();
 await settle(page, 300);
 const restored = await page.evaluate(() => {
   const surface = document.querySelector(".rb-standalone-surface");
   return !surface?.classList.contains("is-maxed")
     && !document.body.classList.contains("rb-game-maxed")
-    && document.getElementById("btn-fullscreen")?.getAttribute("aria-pressed") === "false"
     && document.activeElement === document.getElementById("ink-canvas");
 });
-check("Max closes back to the minimized page and playfield", restored);
+check("menu returns to the minimized page and playfield",
+  returnLabel?.trim() === "Return to page" && restored,
+  `label=${returnLabel?.trim()}`);
 
 // 2. Title -> play via a real key press
 await page.keyboard.press("Space");
@@ -183,37 +189,43 @@ const mangaHud = await page.evaluate(() => {
       && r.loadout.y > r.hp.y + r.hp.h,
     timerCentered: Math.abs((r.timer.x + r.timer.w / 2) - g.w / 2) <= 2,
     ledgerHidden: !g.showStats,
-    compactRadar: r.radar && r.radar.w < 100,
+    radarMoved: r.radar && r.radar.w < 100
+      && r.radar.x > g.w / 2
+      && r.radar.y >= r.band.y + r.band.h
+      && r.radar.y < g.h / 2,
     regions: r,
   };
 });
-check("combat readouts use the open ornamental manga frame",
-  mangaHud.presentation === "open-ornamental-frame"
+check("combat readouts use the minimal manga command frame",
+  mangaHud.presentation === "minimal-command-frame"
     && mangaHud.allInBand && mangaHud.topWeighted && mangaHud.hierarchy && mangaHud.timerCentered,
   JSON.stringify(mangaHud.regions));
-check("combat defaults hide the ledger and keep the radar secondary",
-  mangaHud.ledgerHidden && mangaHud.compactRadar,
+check("combat defaults hide the ledger and move the radar above the action dock",
+  mangaHud.ledgerHidden && mangaHud.radarMoved,
   `ledgerHidden=${mangaHud.ledgerHidden} radar=${Math.round(mangaHud.regions.radar?.w || 0)}`);
 
-const stageControls = await page.evaluate(() => {
+const minimalControls = await page.evaluate(() => {
   const canvas = document.getElementById("ink-canvas")?.getBoundingClientRect();
-  const pause = document.getElementById("btn-pause")?.getBoundingClientRect();
-  const max = document.getElementById("btn-fullscreen")?.getBoundingClientRect();
-  const overlaps = pause && max
-    ? !(pause.right <= max.left || max.right <= pause.left || pause.bottom <= max.top || max.bottom <= pause.top)
-    : true;
+  const trigger = document.getElementById("ink-menu-trigger")?.getBoundingClientRect();
+  const special = document.getElementById("btn-special")?.getBoundingClientRect();
+  const dodge = document.getElementById("btn-dodge")?.getBoundingClientRect();
   const inside = (r) => Boolean(canvas && r)
     && r.left >= canvas.left && r.top >= canvas.top && r.right <= canvas.right && r.bottom <= canvas.bottom;
   return {
-    enabled: !document.getElementById("btn-pause")?.disabled,
-    pressed: document.getElementById("btn-pause")?.getAttribute("aria-pressed"),
-    separate: !overlaps,
-    inside: inside(pause) && inside(max),
+    oneMenu: Boolean(trigger) && inside(trigger)
+      && !document.getElementById("btn-pause")
+      && !document.getElementById("btn-fullscreen")
+      && !document.querySelector(".rb-escape-btn"),
+    uniformActions: Boolean(special && dodge)
+      && Math.abs(special.width - dodge.width) <= 1
+      && Math.abs(special.height - dodge.height) <= 1
+      && Math.abs(special.top - dodge.top) <= 1
+      && special.right <= dodge.left,
   };
 });
-check("pause and Max are distinct accessible stage controls",
-  stageControls.enabled && stageControls.pressed === "false" && stageControls.separate && stageControls.inside,
-  JSON.stringify(stageControls));
+check("one menu trigger and a uniform horizontal action dock replace the loose controls",
+  minimalControls.oneMenu && minimalControls.uniformActions,
+  JSON.stringify(minimalControls));
 
 const generatedManifest = await page.evaluate(() => {
   const manifest = window.__INK.game.generatedAssets;
@@ -648,26 +660,32 @@ await settle(page, 260);
 const resumed = await page.evaluate(() => window.__INK.phase === "playing");
 check("P pauses and resumes", paused && resumed, `paused=${paused} resumed=${resumed} phase=${await page.evaluate(() => window.__INK.phase)}`);
 
-await page.locator("#btn-pause").click();
+await page.keyboard.press("Escape");
 await settle(page, 260);
-const pausedByControl = await page.evaluate(() => ({
+const openedByEscape = await page.evaluate(() => ({
   phase: window.__INK.phase,
-  pressed: document.getElementById("btn-pause")?.getAttribute("aria-pressed"),
-  label: document.getElementById("btn-pause")?.getAttribute("aria-label"),
+  open: !document.getElementById("ink-game-menu")?.hidden,
+  focused: document.activeElement?.dataset.inkMenuAction,
 }));
-await page.locator("#btn-pause").click();
+await page.locator('[data-ink-menu-action="controls"]').click();
+const controlsShown = await page.evaluate(() => ({
+  visible: !document.getElementById("ink-menu-controls")?.hidden,
+  expanded: document.querySelector('[data-ink-menu-action="controls"]')?.getAttribute("aria-expanded"),
+  copy: document.getElementById("ink-menu-controls")?.textContent || "",
+}));
+await page.keyboard.press("Escape");
 await settle(page, 260);
-const resumedByControl = await page.evaluate(() => ({
+const resumedFromMenu = await page.evaluate(() => ({
   phase: window.__INK.phase,
-  pressed: document.getElementById("btn-pause")?.getAttribute("aria-pressed"),
+  closed: document.getElementById("ink-game-menu")?.hidden,
+  focused: document.activeElement === document.getElementById("ink-canvas"),
 }));
-check("the manga pause control pauses and resumes",
-  pausedByControl.phase === "paused"
-    && pausedByControl.pressed === "true"
-    && pausedByControl.label === "Resume game"
-    && resumedByControl.phase === "playing"
-    && resumedByControl.pressed === "false",
-  `paused=${JSON.stringify(pausedByControl)} resumed=${JSON.stringify(resumedByControl)}`);
+check("Escape opens the paused menu, reveals controls, and resumes cleanly",
+  openedByEscape.phase === "paused" && openedByEscape.open && openedByEscape.focused === "resume"
+    && controlsShown.visible && controlsShown.expanded === "true"
+    && controlsShown.copy.includes("WASD") && controlsShown.copy.includes("Touch")
+    && resumedFromMenu.phase === "playing" && resumedFromMenu.closed && resumedFromMenu.focused,
+  `opened=${JSON.stringify(openedByEscape)} controls=${JSON.stringify(controlsShown)} resumed=${JSON.stringify(resumedFromMenu)}`);
 
 // 6. Level up, taken with the keyboard. Exactly one level is granted
 // so that taking it returns to play rather than opening the next card.
@@ -776,6 +794,34 @@ const mobileFit = await page.evaluate(() => {
   };
 });
 check("phone layout uses a fitted portrait game panel", mobileFit.pass, mobileFit.detail);
+
+await page.keyboard.press("Escape");
+await settle(page, 180);
+await page.locator('[data-ink-menu-action="maximize"]').click();
+await settle(page, 300);
+const mobileMaxed = await page.evaluate(() => {
+  const surface = document.querySelector(".rb-standalone-surface")?.getBoundingClientRect();
+  return Boolean(surface)
+    && document.body.classList.contains("rb-game-maxed")
+    && Math.abs(surface.left) <= 1
+    && Math.abs(surface.top) <= 1
+    && Math.abs(surface.width - window.innerWidth) <= 1
+    && Math.abs(surface.height - window.innerHeight) <= 1;
+});
+await page.keyboard.press("Escape");
+await settle(page, 180);
+await page.locator('[data-ink-menu-action="maximize"]').click();
+await settle(page, 300);
+const mobileReturned = await page.evaluate(() => {
+  const surface = document.querySelector(".rb-standalone-surface")?.getBoundingClientRect();
+  return Boolean(surface)
+    && !document.body.classList.contains("rb-game-maxed")
+    && Math.abs((surface.width / surface.height) - 0.75) < 0.03;
+});
+check("phone Escape menu maximizes and returns without leaving the portrait shell",
+  mobileMaxed && mobileReturned,
+  `maxed=${mobileMaxed} returned=${mobileReturned}`);
+
 const mobileHud = await page.evaluate(() => {
   const g = window.__INK.game;
   const r = g.hud.regions;
@@ -785,20 +831,34 @@ const mobileHud = await page.evaluate(() => {
     && part.y >= r.band.y - 1
     && part.x + part.w <= r.band.x + r.band.w + 1
     && part.y + part.h <= bandBottom + 1;
-  const pause = document.getElementById("btn-pause")?.getBoundingClientRect();
-  const max = document.getElementById("btn-fullscreen")?.getBoundingClientRect();
+  const canvas = document.getElementById("ink-canvas")?.getBoundingClientRect();
+  const trigger = document.getElementById("ink-menu-trigger")?.getBoundingClientRect();
+  const special = document.getElementById("btn-special")?.getBoundingClientRect();
+  const dodge = document.getElementById("btn-dodge")?.getBoundingClientRect();
   return {
     compact: g.hud.compact,
     allWithin: [r.hp, r.timer, r.xp, r.loadout].every(within),
     timerCentered: Math.abs((r.timer.x + r.timer.w / 2) - g.w / 2) <= 2,
-    loadoutBelowTimer: r.loadout.y >= r.timer.y + r.timer.h,
-    controlsSeparated: Boolean(pause && max && max.right <= pause.left),
+    pairedMeters: r.xp.y >= r.hp.y + r.hp.h
+      && r.xp.y - (r.hp.y + r.hp.h) <= 8,
+    loadoutBelowMeters: r.loadout.y >= r.xp.y + r.xp.h,
+    radarMoved: Boolean(r.radar)
+      && r.radar.x > g.w / 2
+      && r.radar.y >= r.band.y + r.band.h
+      && r.radar.y < g.h / 2,
+    menuInside: Boolean(canvas && trigger)
+      && trigger.left >= canvas.left && trigger.top >= canvas.top
+      && trigger.right <= canvas.right && trigger.bottom <= canvas.bottom,
+    uniformActions: Boolean(special && dodge)
+      && Math.abs(special.width - dodge.width) <= 1
+      && Math.abs(special.top - dodge.top) <= 1,
     band: r.band,
   };
 });
-check("phone HUD keeps the sample hierarchy inside its ornamental frame",
+check("phone HUD pairs HP over XP and keeps controls clear of the moved radar",
   mobileHud.compact && mobileHud.allWithin && mobileHud.timerCentered
-    && mobileHud.loadoutBelowTimer && mobileHud.controlsSeparated,
+    && mobileHud.pairedMeters && mobileHud.loadoutBelowMeters && mobileHud.radarMoved
+    && mobileHud.menuInside && mobileHud.uniformActions,
   JSON.stringify(mobileHud));
 await page.setViewportSize({ width: 1600, height: 700 });
 await settle(page, 400);

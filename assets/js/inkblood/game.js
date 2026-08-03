@@ -35,7 +35,7 @@ import {
 import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js?v=20260803-calm-1";
 import { Audio } from "./audio.js?v=20260803-actions-1";
 import { Input } from "./input.js?v=20260803-actions-1";
-import { Hud } from "./hud.js?v=20260803-close-slash-1";
+import { Hud } from "./hud.js?v=20260803-ui-minimal-1";
 import { loadGeneratedAssets } from "./generated-assets.js?v=20260803-calm-1";
 import { ActionSystem } from "./actions.js?v=20260803-actions-1";
 

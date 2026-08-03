@@ -8,7 +8,7 @@
 
 "use strict";
 
-import { Game } from "./game.js?v=20260803-close-slash-1";
+import { Game } from "./game.js?v=20260803-ui-minimal-1";
 
 const GAME_ID = "inkblood";
 
@@ -49,6 +49,113 @@ function scoreApi() {
   };
 }
 
+function installGameMenu(game, canvas) {
+  const trigger = document.getElementById("ink-menu-trigger");
+  const menu = document.getElementById("ink-game-menu");
+  const surface = trigger?.closest(".rb-standalone-surface");
+  if (!trigger || !menu || !surface) return null;
+
+  const resumeButton = menu.querySelector('[data-ink-menu-action="resume"]');
+  const maximizeButton = menu.querySelector('[data-ink-menu-action="maximize"]');
+  const controlsButton = menu.querySelector('[data-ink-menu-action="controls"]');
+  const controls = document.getElementById("ink-menu-controls");
+  const title = document.getElementById("ink-menu-title");
+  const copy = menu.querySelector(".ink-menu__copy");
+  let focusBeforeMenu = null;
+
+  const isMaxed = () => surface.classList.contains("is-maxed");
+  const isOpen = () => !menu.hidden;
+  const sync = () => {
+    const paused = game.phase === "paused";
+    if (title) title.textContent = paused ? "Paused" : "Game menu";
+    if (copy) copy.textContent = paused ? "The ink can wait." : "Adjust the frame or review the controls.";
+    if (resumeButton) resumeButton.textContent = paused ? "Resume" : "Close menu";
+    if (maximizeButton) maximizeButton.textContent = isMaxed() ? "Return to page" : "Maximize screen";
+    trigger.setAttribute("aria-expanded", String(isOpen()));
+  };
+  const setMaxed = (active) => {
+    surface.classList.toggle("is-maxed", active);
+    document.body.classList.toggle("rb-game-maxed", active);
+    window.dispatchEvent(new Event("resize"));
+  };
+  const close = ({ resume = true, restoreFocus = true } = {}) => {
+    if (!isOpen()) return;
+    menu.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+    if (controls) controls.hidden = true;
+    if (controlsButton) {
+      controlsButton.textContent = "Show controls";
+      controlsButton.setAttribute("aria-expanded", "false");
+    }
+    if (resume && game.phase === "paused") game.togglePause();
+    game.audio.resume();
+    if (restoreFocus) {
+      const target = resume ? canvas
+        : (focusBeforeMenu && focusBeforeMenu !== document.body ? focusBeforeMenu : canvas);
+      requestAnimationFrame(() => target?.focus?.({ preventScroll: true }));
+    }
+    focusBeforeMenu = null;
+    sync();
+  };
+  const open = () => {
+    if (isOpen()) return;
+    focusBeforeMenu = document.activeElement;
+    if (game.phase === "playing") game.togglePause();
+    menu.hidden = false;
+    sync();
+    requestAnimationFrame(() => resumeButton?.focus({ preventScroll: true }));
+  };
+  const toggleControls = () => {
+    if (!controls || !controlsButton) return;
+    const expanded = controls.hidden;
+    controls.hidden = !expanded;
+    controlsButton.textContent = expanded ? "Hide controls" : "Show controls";
+    controlsButton.setAttribute("aria-expanded", String(expanded));
+  };
+
+  trigger.hidden = false;
+  trigger.addEventListener("click", open);
+  menu.addEventListener("click", (event) => {
+    if (event.target === menu) { close(); return; }
+    const action = event.target.closest("[data-ink-menu-action]")?.dataset.inkMenuAction;
+    if (action === "resume") close();
+    if (action === "maximize") {
+      setMaxed(!isMaxed());
+      close();
+    }
+    if (action === "controls") toggleControls();
+  });
+  menu.addEventListener("keydown", (event) => {
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(menu.querySelectorAll("button:not([disabled]), a[href]"));
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const target = event.target;
+    if (target?.closest?.("input, textarea, select, [contenteditable='true']")) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (isOpen()) close();
+    else open();
+  }, true);
+
+  game.onUiState = sync;
+  sync();
+  const api = { open, close, isOpen, isMaxed, toggleControls };
+  window.__INK_MENU = api;
+  return api;
+}
+
 export async function start({ boot } = {}) {
   const progress = (p, label) => boot && boot.progress(p, label);
 
@@ -72,25 +179,7 @@ export async function start({ boot } = {}) {
   progress(1, "Ready");
   if (boot) boot.hide();
   game.start();
-
-  const pauseButton = document.getElementById("btn-pause");
-  const syncPauseControl = (phase = game.phase) => {
-    if (!pauseButton) return;
-    const paused = phase === "paused";
-    const available = phase === "playing" || paused;
-    pauseButton.disabled = !available;
-    pauseButton.setAttribute("aria-pressed", paused ? "true" : "false");
-    pauseButton.setAttribute("aria-label", paused ? "Resume game" : "Pause game");
-    pauseButton.setAttribute("title", paused ? "Resume (P)" : "Pause (P)");
-  };
-  game.onUiState = syncPauseControl;
-  syncPauseControl();
-  pauseButton?.addEventListener("click", () => {
-    if (game.togglePause()) {
-      game.audio.resume();
-      requestAnimationFrame(() => canvas.focus({ preventScroll: true }));
-    }
-  });
+  const gameMenu = installGameMenu(game, canvas);
 
   const dodgeButton = document.getElementById("btn-dodge");
   const specialButton = document.getElementById("btn-special");
@@ -154,7 +243,7 @@ export async function start({ boot } = {}) {
   game.onActionState = syncActionControls;
   syncActionControls();
 
-  installDebug(game);
+  installDebug(game, gameMenu);
   return game;
 }
 
@@ -162,7 +251,7 @@ export async function start({ boot } = {}) {
 /* Debug hook                                                  */
 /* ---------------------------------------------------------- */
 
-function installDebug(game) {
+function installDebug(game, gameMenu) {
   /**
    * `sim` is the important one. The screenshot harness runs in a
    * headless browser where requestAnimationFrame is throttled to
@@ -392,6 +481,12 @@ function installDebug(game) {
           hook.sim(8);
           game.phase = "paused";
           break;
+        case "menu":
+          hook.newRun();
+          hook.sim(8);
+          gameMenu?.open();
+          if (arg === "controls") gameMenu?.toggleControls();
+          break;
         case "dodge":
           hook.newRun();
           hook.god(true);
@@ -445,6 +540,8 @@ function installDebug(game) {
           : (p.dodgeT > 0 ? "ink-step" : (p.slashT > 0 ? "slash" : (p.moving ? "run" : "idle"))),
       } : null,
       abilities: game.actionState(),
+      menuOpen: Boolean(gameMenu?.isOpen()),
+      maxed: Boolean(gameMenu?.isMaxed()),
       enemies: visible,
     });
   };

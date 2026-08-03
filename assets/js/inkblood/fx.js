@@ -339,6 +339,18 @@ export const SFX_WORDS = {
   crit: ["CRIT", "X", "✦", "!!"],
 };
 
+/** Compact, lightly outlined combat numbers that stay readable in a crowd. */
+export const DAMAGE_NUMBER_STYLE = Object.freeze({
+  normalFontPx: 21,
+  critFontPx: 27,
+  normalHalo: 1.8,
+  critHalo: 2.6,
+  normalOutline: 0.45,
+  critOutline: 0.7,
+  normalScale: 0.9,
+  critScale: 1.15,
+});
+
 /* ---------------------------------------------------------- */
 /* The effect system                                           */
 /* ---------------------------------------------------------- */
@@ -440,7 +452,7 @@ export class Fx {
       text: String(Math.max(1, Math.round(value))),
       crit,
       rot: (Math.random() - 0.5) * 0.3,
-      scale: crit ? 1.6 : 1,
+      scale: crit ? DAMAGE_NUMBER_STYLE.critScale : DAMAGE_NUMBER_STYLE.normalScale,
     });
   }
 
@@ -887,9 +899,9 @@ export class Fx {
       const sc = f.scale * (0.55 + pop * 0.5);
       g.scale(sc, sc);
       inkText(g, f.text, 0, 0, {
-        font: fonts.display(f.crit ? 34 : 27),
-        halo: f.crit ? 5 : 3.5,
-        outline: f.crit ? 2.4 : 1.8,
+        font: fonts.display(f.crit ? DAMAGE_NUMBER_STYLE.critFontPx : DAMAGE_NUMBER_STYLE.normalFontPx),
+        halo: f.crit ? DAMAGE_NUMBER_STYLE.critHalo : DAMAGE_NUMBER_STYLE.normalHalo,
+        outline: f.crit ? DAMAGE_NUMBER_STYLE.critOutline : DAMAGE_NUMBER_STYLE.normalOutline,
         colour: f.crit ? PAL.blood : PAL.ink,
         align: "center",
         baseline: "middle",

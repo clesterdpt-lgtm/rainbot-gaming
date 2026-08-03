@@ -467,8 +467,8 @@ check("sword slash animation is baked", slashFrames.normal === 8 && slashFrames.
   `normal=${slashFrames.normal} hurt=${slashFrames.hurt}`);
 
 const symbolLanguage = await page.evaluate(async () => {
-  const { WEAPONS, PASSIVES } = await import("/assets/js/inkblood/weapons.js");
-  const { SFX_WORDS } = await import("/assets/js/inkblood/fx.js");
+  const { WEAPONS, PASSIVES } = await import("/assets/js/inkblood/weapons.js?v=20260803-close-slash-1");
+  const { SFX_WORDS } = await import("/assets/js/inkblood/fx.js?v=20260803-close-slash-1");
   const impactMarks = Object.values(SFX_WORDS).flat().join("");
   return {
     weaponSigils: Object.values(WEAPONS).every((d) => Boolean(d.sigil)),
@@ -554,12 +554,56 @@ check("level-one Crimson Arc fires exactly one forward slash",
   `duration=${slashTrigger.duration.toFixed(2)} arcs=${slashTrigger.arcs} forward=${slashTrigger.forward}`);
 
 const crimsonArcProgression = await page.evaluate(async () => {
-  const { WEAPONS } = await import("/assets/js/inkblood/weapons.js?v=20260803-solo-slash-1");
+  const { WEAPONS } = await import("/assets/js/inkblood/weapons.js?v=20260803-close-slash-1");
   return Array.from({ length: 8 }, (_, index) => WEAPONS.crimsonArc.stats(index + 1).amount);
 });
 check("Crimson Arc unlocks additional slashes only at later levels",
   crimsonArcProgression.join(",") === "1,1,2,2,3,3,3,4",
   crimsonArcProgression.join("→"));
+
+const damageNumberStyle = await page.evaluate(async () => {
+  const { DAMAGE_NUMBER_STYLE } = await import("/assets/js/inkblood/fx.js?v=20260803-close-slash-1");
+  return DAMAGE_NUMBER_STYLE;
+});
+check("damage numbers use the smaller, thinner combat style",
+  damageNumberStyle.normalFontPx === 21
+    && damageNumberStyle.normalOutline <= 0.5
+    && damageNumberStyle.normalScale < 1
+    && damageNumberStyle.critFontPx <= 27
+    && damageNumberStyle.critOutline <= 0.7
+    && damageNumberStyle.critScale < 1.2,
+  JSON.stringify(damageNumberStyle));
+
+const closeSlashCoverage = await page.evaluate(async () => {
+  const { WEAPONS } = await import("/assets/js/inkblood/weapons.js?v=20260803-close-slash-1");
+  const g = window.__INK.game;
+  const weapon = g.weapons[0];
+  weapon.level = 1;
+  g.player.facing = 1;
+  g.enemies.length = 0;
+  g.projectiles.length = 0;
+  const curve = { hp: 1, speed: 0, damage: 0 };
+  const front = g.spawnEnemy("gaki", g.player.x + 12, g.player.y, curve);
+  const rear = g.spawnEnemy("gaki", g.player.x - 12, g.player.y, curve);
+  front.hp = front.maxHp = 500;
+  rear.hp = rear.maxHp = 500;
+  g.rebuildGrid();
+  WEAPONS.crimsonArc.fire(g, weapon);
+  const slash = g.projectiles.find((projectile) => projectile.sector);
+  g.updateProjectiles(1 / 60);
+  const result = {
+    frontHit: front.hp < 500,
+    rearHeld: rear.hp === 500,
+    originAtPlayer: slash?.sector.originX === g.player.x,
+  };
+  g.enemies.length = 0;
+  g.projectiles.length = 0;
+  g.rebuildGrid();
+  return result;
+});
+check("Crimson Arc catches overlapping enemies without becoming a rear attack",
+  closeSlashCoverage.frontHit && closeSlashCoverage.rearHeld && closeSlashCoverage.originAtPlayer,
+  JSON.stringify(closeSlashCoverage));
 
 // 3. Real movement
 const before = await page.evaluate(() => ({ x: window.__INK.game.player.x, y: window.__INK.game.player.y }));

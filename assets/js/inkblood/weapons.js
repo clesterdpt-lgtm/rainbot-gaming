@@ -432,14 +432,17 @@ export const WEAPONS = {
       for (let i = 0; i < s.amount; i++) {
         const ang = base + (CRIMSON_ARC_OFFSETS[i] == null ? (i * 1.1) : CRIMSON_ARC_OFFSETS[i]);
         const dist = 66 * s.area;
+        const originX = ctx.player.x;
+        const originY = ctx.player.y - ctx.player.h * 0.42;
         const px = ctx.player.x + Math.cos(ang) * dist;
-        const py = ctx.player.y - ctx.player.h * 0.42 + Math.sin(ang) * dist * 0.5;
+        const py = originY + Math.sin(ang) * dist * 0.5;
         ctx.fx.slash(px, py, ang, 0.62 * s.area);
         spawn(ctx, {
           kind: "static", art: "none",
           x: px, y: py, r: 92 * s.area,
           damage: s.damage, pierce: 999, life: 0.16,
-          knockback: s.knockback, sector: { angle: ang, spread: 1.5 },
+          knockback: s.knockback,
+          sector: { angle: ang, spread: 1.5, originX, originY },
           hitCooldown: w.level >= 7 ? 0.35 : 0,
         });
       }
@@ -465,14 +468,17 @@ export const WEAPONS = {
       for (let i = 0; i < s.amount; i++) {
         const ang = (i / s.amount) * TAU + ctx.time * 1.7;
         const dist = 74 * s.area;
+        const originX = ctx.player.x;
+        const originY = ctx.player.y - ctx.player.h * 0.42;
         const px = ctx.player.x + Math.cos(ang) * dist;
-        const py = ctx.player.y - ctx.player.h * 0.42 + Math.sin(ang) * dist * 0.5;
+        const py = originY + Math.sin(ang) * dist * 0.5;
         ctx.fx.slash(px, py, ang, 0.8 * s.area);
         spawn(ctx, {
           kind: "static", art: "none",
           x: px, y: py, r: 96 * s.area,
           damage: s.damage, pierce: 999, life: 0.18,
-          knockback: s.knockback, sector: { angle: ang, spread: 1.7 },
+          knockback: s.knockback,
+          sector: { angle: ang, spread: 1.7, originX, originY },
           hitCooldown: 0.3,
         });
       }

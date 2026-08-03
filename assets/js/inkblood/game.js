@@ -27,15 +27,15 @@ import { bakeCast } from "./sprites.js?v=20260803-2";
 import {
   bakeProps, drawGround, Ash, installGeneratedEnvironment, BACKGROUND,
 } from "./props.js?v=20260803-calm-1";
-import { bakeFx, Fx, ATLAS } from "./fx.js?v=20260803-type-1";
+import { bakeFx, Fx, ATLAS } from "./fx.js?v=20260803-close-slash-1";
 import {
   WEAPONS, PASSIVES, WEP_ART, bakeWeaponArt, makeProjectile, stepProjectile,
   drawProjectile, drawChains,
-} from "./weapons.js?v=20260803-solo-slash-1";
+} from "./weapons.js?v=20260803-close-slash-1";
 import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js?v=20260803-calm-1";
 import { Audio } from "./audio.js?v=20260803-actions-1";
 import { Input } from "./input.js?v=20260803-actions-1";
-import { Hud } from "./hud.js?v=20260803-type-1";
+import { Hud } from "./hud.js?v=20260803-close-slash-1";
 import { loadGeneratedAssets } from "./generated-assets.js?v=20260803-calm-1";
 import { ActionSystem } from "./actions.js?v=20260803-actions-1";
 
@@ -1181,7 +1181,12 @@ export class Game {
 
       // Sector weapons (the arc) only bite inside their wedge.
       if (p.sector) {
-        const a = Math.atan2(dy, dx);
+        // The visual crescent is offset from the player, but its blade begins
+        // at the cast origin. Measuring from the crescent centre made nearby
+        // enemies look behind the wedge and slip through the main attack.
+        const sectorDx = e.x - (p.sector.originX ?? p.x);
+        const sectorDy = (e.y - e.h * 0.45) - (p.sector.originY ?? p.y);
+        const a = Math.atan2(sectorDy, sectorDx);
         let d = a - p.sector.angle;
         while (d > Math.PI) d -= Math.PI * 2;
         while (d < -Math.PI) d += Math.PI * 2;

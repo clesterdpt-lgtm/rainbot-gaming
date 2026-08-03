@@ -59,8 +59,8 @@ const report = await page.evaluate(async () => {
   // Match the exact versioned module URLs imported by game.js. Importing the
   // bare paths would create fresh module instances with uninstalled atlases.
   const { PROPS } = await import("/assets/js/inkblood/props.js?v=20260803-calm-1");
-  const { ATLAS } = await import("/assets/js/inkblood/fx.js?v=20260803-2");
-  const { WEP_ART } = await import("/assets/js/inkblood/weapons.js?v=20260803-solo-slash-1");
+  const { ATLAS } = await import("/assets/js/inkblood/fx.js?v=20260803-close-slash-1");
+  const { WEP_ART } = await import("/assets/js/inkblood/weapons.js?v=20260803-close-slash-1");
   const game = window.__INK.game;
   const records = [];
   const gallery = { cast: [], props: [], combat: [] };

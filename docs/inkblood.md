@@ -207,7 +207,7 @@ without depending on an arbitrary external sleep.
 ```bash
 node scripts/inkblood-artcheck.mjs  # procedural fallback bake boxes: is art cropped?
 node scripts/inkblood-asset-audit.mjs  # generated hero/cast/props/combat bounds + contact sheets
-node scripts/inkblood-e2e.mjs       # 40 checks, including slash progression, float poses and no-hum audio
+node scripts/inkblood-e2e.mjs       # 47 checks, including close-slash coverage, lean damage text and no-hum audio
 node scripts/inkblood-soak.mjs --god  # full 15-minute run, leak + curve report
 node scripts/inkblood-perf.mjs      # headed FPS probe at worst case
 node scripts/inkblood-shots.mjs --script title,play,swarm,boss,levelup

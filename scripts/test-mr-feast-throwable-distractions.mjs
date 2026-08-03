@@ -111,6 +111,12 @@ async function assertSourceContract() {
   assert(/transientSound/.test(runtime), "Mr. Feast needs a one-shot response task distinction");
   assert(/throwableImpact\s*\(/.test(runtime), "MansionAudio needs a spatial impact cue");
   assert(/throwableRelease\s*\(/.test(runtime), "MansionAudio needs a physical drop/throw release cue");
+  assert(
+    /throwReleasePeakGain:\s*0\.085/.test(runtime)
+      && /impactBaseGain:\s*0\.055/.test(runtime)
+      && /impactProximityGain:\s*0\.145/.test(runtime),
+    "throw release and impact SFX need the louder named mix",
+  );
   assert((html.match(/F<\/kbd>\s*flashlight/gi) || []).length >= 2, "both desktop guides must retain F for flashlight");
   assert((html.match(/Q<\/kbd>\s*throw carried item/gi) || []).length >= 2, "both desktop guides must explain Q throw");
   assert((html.match(/E<\/kbd>\s*pick up \/ drop/gi) || []).length >= 2, "both desktop guides must explain toggle pick-up and drop");
@@ -389,6 +395,13 @@ async function runBrowserFlow() {
       `Q must emit exactly one throw-release cue: ${JSON.stringify(state.audio.cueCounts)}`,
     );
     assert((state.audio.cueCounts.throwableImpact || 0) >= 1, `first impact must emit its spatial audio cue: ${JSON.stringify(state.audio.cueCounts)}`);
+    assert(
+      state.audio.throwables?.lastReleaseKind === "throw"
+        && state.audio.throwables.lastReleasePeakGain >= 0.08
+        && state.audio.throwables.impactPlayCount >= 1
+        && state.audio.throwables.lastImpactGain > 0.05,
+      `throw release and impact must use the louder in-game mix: ${JSON.stringify(state.audio.throwables)}`,
+    );
     assert(state.flashlight.activationCount === afterFlashlight.flashlight.activationCount, "throwing must not toggle the flashlight");
     assert(state.security.alarmCount === cameraAlarmsBefore, "cameras must not hear thrown objects");
     await page.locator("#mansion-stage").screenshot({

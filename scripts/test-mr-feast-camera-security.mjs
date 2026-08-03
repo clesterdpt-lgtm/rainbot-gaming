@@ -130,12 +130,12 @@ async function run() {
     assert(
       state.security.tuning.lastSeenRefreshSeconds <= 1
         && state.security.tuning.lastSeenRetargetMeters <= 1
-        && state.security.tuning.searchPatrolSeconds >= 180
+        && state.security.tuning.searchPatrolSeconds === 120
         && state.security.tuning.searchPatrolRadiusMeters >= 8
         && state.security.tuning.searchPatrolPauseSeconds >= 3
         && state.security.tuning.searchPatrolMaximumNodes >= 8
         && state.security.tuning.searchAwarenessCheckSeconds <= 0.25,
-      `camera alarms need frequent final-position refresh, a broad three-minute sweep, and personal reacquisition; tuning=${JSON.stringify(state.security.tuning)}`,
+      `camera alarms need frequent final-position refresh, an exact two-minute sweep, and personal reacquisition; tuning=${JSON.stringify(state.security.tuning)}`,
     );
     const securityDetails = await page.evaluate(() => window.MrFeastFresh.getCameraSecurityState());
     const indoorMounts = securityDetails.cameras.details.filter((entry) => !entry.outdoors);
@@ -413,7 +413,7 @@ async function run() {
         && arrivalProbe.search.plannedNodeCount >= 8
         && arrivalProbe.search.plannedZoneCount >= 2
         && searchingHost.security?.state === "searching"
-        && searchingHost.security.searchRemaining > 120,
+        && searchingHost.security.searchRemaining > 60,
       `Mr. Feast must physically reach the exact reachable camera position before beginning his long patrol; expected=${JSON.stringify(expectedLastSeen)} response=${JSON.stringify(arrivalProbe)}`,
     );
     await screenshotStage(page, "camera-last-seen-search-desktop.png");
@@ -425,10 +425,10 @@ async function run() {
     assert(
       response.teleports === 0
         && response.distanceTravelled > 0
-        && response.search?.durationSeconds >= 120
+        && response.search?.durationSeconds === 120
         && response.search.elapsedSeconds >= response.search.durationSeconds
         && response.search.patrolDistance >= 20
-        && response.search.nodeVisits >= 4
+        && response.search.nodeVisits >= 3
         && response.search.visitedZoneCount >= 2
         && response.search.minimumDistanceToLastSeen <= 0.5,
       `Mr. Feast must navigate to the final camera position and patrol nearby for a few minutes before returning; response=${JSON.stringify(response)}`,

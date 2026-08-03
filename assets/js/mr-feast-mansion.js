@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260802-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1";
+  const MANSION_RUNTIME_VERSION = "20260803-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1028,7 +1028,7 @@
     lastSeenRefreshSeconds: 0.5,
     lastSeenRetargetMeters: 0.8,
     searchSeconds: 6.5,
-    searchPatrolSeconds: 180,
+    searchPatrolSeconds: 120,
     searchPatrolRadiusMeters: 9,
     searchPatrolPauseSeconds: 3.2,
     searchPatrolMaximumNodes: 12,
@@ -1812,6 +1812,9 @@
     saintHearingMeters: 18,
     maximumPlayerAudibleDistanceMeters: 22,
     panLimit: 0.82,
+    throwReleasePeakGain: 0.085,
+    impactBaseGain: 0.055,
+    impactProximityGain: 0.145,
     cabinetProfiles: Object.freeze({
       walkIn: Object.freeze({
         label: "perfume bottle", kind: "bottle", material: "glass",
@@ -31878,6 +31881,11 @@
           throwSpeedMetersPerSecond: THROWABLE_DISTRACTIONS.throwSpeedMetersPerSecond,
           dropForwardMetersPerSecond: THROWABLE_DISTRACTIONS.dropForwardMetersPerSecond,
           mrFeastHearingMeters: THROWABLE_DISTRACTIONS.mrFeastHearingMeters,
+          throwReleasePeakGain: THROWABLE_DISTRACTIONS.throwReleasePeakGain,
+          impactBaseGain: THROWABLE_DISTRACTIONS.impactBaseGain,
+          impactProximityGain: THROWABLE_DISTRACTIONS.impactProximityGain,
+          maximumImpactGain: THROWABLE_DISTRACTIONS.impactBaseGain
+            + THROWABLE_DISTRACTIONS.impactProximityGain,
           cleanupDelaySeconds: THROWABLE_DISTRACTIONS.cleanupDelaySeconds,
           saintHearingMeters: THROWABLE_DISTRACTIONS.saintHearingMeters,
           saintInvestigationSeconds: THROWABLE_DISTRACTIONS.saintInvestigationSeconds,
@@ -44354,6 +44362,16 @@
         pianoPatternStep: 0,
         pianoNoteCount: 0,
       };
+      this.throwableSfx = {
+        releasePlayCount: 0,
+        impactPlayCount: 0,
+        lastReleaseKind: null,
+        lastReleasePeakGain: 0,
+        lastImpactGain: 0,
+        lastImpactDistanceMeters: null,
+        lastImpactForce: 0,
+        lastImpactPan: 0,
+      };
       this.activeVoices = 0;
       this.hedgeMazeAudio = {
         feastFatherPlayCount: 0,
@@ -46302,12 +46320,13 @@
       const now = this.ctx.currentTime;
       if (releaseKind === "drop") {
         const metallic = ["brass", "iron"].includes(materialName);
+        const peakGain = metallic ? 0.032 : 0.026;
         this.scheduleTone(
           this.ctx,
           this.master,
           metallic ? 185 : 118,
           0.075,
-          metallic ? 0.032 : 0.026,
+          peakGain,
           metallic ? "triangle" : "sine",
           now,
         );
@@ -46320,6 +46339,9 @@
           "triangle",
           now + 0.018,
         );
+        this.throwableSfx.releasePlayCount += 1;
+        this.throwableSfx.lastReleaseKind = releaseKind;
+        this.throwableSfx.lastReleasePeakGain = peakGain;
         return true;
       }
       const source = this.ctx.createBufferSource();
@@ -46331,11 +46353,17 @@
       filter.frequency.exponentialRampToValueAtTime(520, now + 0.18);
       const gain = this.ctx.createGain();
       gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.058, now + 0.018);
+      gain.gain.exponentialRampToValueAtTime(
+        THROWABLE_DISTRACTIONS.throwReleasePeakGain,
+        now + 0.018,
+      );
       gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.19);
       source.connect(filter).connect(gain).connect(this.master);
       source.start(now);
       source.stop(now + 0.2);
+      this.throwableSfx.releasePlayCount += 1;
+      this.throwableSfx.lastReleaseKind = releaseKind;
+      this.throwableSfx.lastReleasePeakGain = THROWABLE_DISTRACTIONS.throwReleasePeakGain;
       return true;
     }
 
@@ -46363,7 +46391,10 @@
         1,
       );
       const force = clamp(Number(impactSpeed) / THROWABLE_DISTRACTIONS.throwSpeedMetersPerSecond, 0.18, 1);
-      const gainValue = (0.035 + proximity * 0.085) * force;
+      const gainValue = (
+        THROWABLE_DISTRACTIONS.impactBaseGain
+        + proximity * THROWABLE_DISTRACTIONS.impactProximityGain
+      ) * force;
       let destination = this.master;
       if (this.ctx.createStereoPanner) {
         const panner = this.ctx.createStereoPanner();
@@ -46385,6 +46416,11 @@
         this.scheduleTone(this.ctx, destination, 92, 0.12, gainValue, "sine", now);
         this.scheduleTone(this.ctx, destination, 148, 0.07, gainValue * 0.36, "triangle", now + 0.018);
       }
+      this.throwableSfx.impactPlayCount += 1;
+      this.throwableSfx.lastImpactGain = Number(gainValue.toFixed(4));
+      this.throwableSfx.lastImpactDistanceMeters = Number(distance.toFixed(3));
+      this.throwableSfx.lastImpactForce = Number(force.toFixed(4));
+      this.throwableSfx.lastImpactPan = Number(pan.toFixed(4));
       return true;
     }
 
@@ -46902,6 +46938,7 @@
         activeVoices: this.activeVoices,
         cueCounts: { ...this.cueCounts },
         houseDistractions: { ...this.houseDistractionSfx },
+        throwables: { ...this.throwableSfx },
         hedgeMaze: {
           ...this.hedgeMazeAudio,
           recordedFeastFatherReady: this.availableAssets("mazeFeastFather").length > 0,

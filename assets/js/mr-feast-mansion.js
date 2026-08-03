@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260802-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1";
+  const MANSION_RUNTIME_VERSION = "20260802-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -4053,6 +4053,19 @@
         fullGainDistanceMeters: 1.2,
         maximumGain: 0.38,
         distanceExponent: 1.45,
+        crossFloorPortals: Object.freeze([
+          Object.freeze({
+            id: "grand-stair",
+            floors: Object.freeze([FLOOR.MAIN, FLOOR.UPPER]),
+            bounds: Object.freeze({ minX: -5, maxX: 5, minZ: -2.75, maxZ: 4.75 }),
+          }),
+          Object.freeze({
+            id: "service-stair",
+            floors: Object.freeze([FLOOR.BASEMENT, FLOOR.MAIN]),
+            bounds: Object.freeze({ minX: 10.4, maxX: 15, minZ: -3.4, maxZ: 3.4 }),
+          }),
+        ]),
+        crossFloorMuteSeconds: 0.035,
         gainSmoothingSeconds: 0.12,
         panSmoothingSeconds: 0.1,
         panLimit: 0.72,
@@ -44383,6 +44396,12 @@
         startCount: 0,
         stopCount: 0,
         distanceMeters: null,
+        sourceFloor: null,
+        listenerFloor: null,
+        sameFloor: true,
+        crossFloorAllowed: false,
+        acousticReason: "same-floor",
+        staircaseId: null,
         proximity: 0,
         targetGain: 0,
         pan: 0,
@@ -44679,6 +44698,12 @@
       const voice = this.saintVoice;
       voice.active = false;
       voice.distanceMeters = null;
+      voice.sourceFloor = null;
+      voice.listenerFloor = null;
+      voice.sameFloor = true;
+      voice.crossFloorAllowed = false;
+      voice.acousticReason = "same-floor";
+      voice.staircaseId = null;
       voice.proximity = 0;
       voice.targetGain = 0;
       voice.pan = 0;
@@ -44699,6 +44724,51 @@
       voice.stopCount += 1;
       this.markCue("saintVoiceStop");
       return this.saintVoiceDiagnostics();
+    }
+
+    saintVoiceFloorAtHeight(height) {
+      return [FLOOR.BASEMENT, FLOOR.MAIN, FLOOR.UPPER].reduce((nearest, floorY) => (
+        Math.abs(floorY - height) < Math.abs(nearest - height) ? floorY : nearest
+      ), FLOOR.MAIN);
+    }
+
+    saintVoiceFloorLabel(floorY) {
+      if (floorY === FLOOR.BASEMENT) return "BASEMENT";
+      if (floorY === FLOOR.UPPER) return "SECOND FLOOR";
+      return "MAIN LEVEL";
+    }
+
+    saintVoiceAcousticRoute(sourcePosition, listenerPosition) {
+      const settings = VICTORY_FEAST.saint.presenceAudio;
+      const playerBody = physics?.playerPosition();
+      const listenerFeetY = playerBody
+        ? playerBody.y - PLAYER.halfHeight - PLAYER.radius - 0.03
+        : listenerPosition.y - PLAYER.eye;
+      const sourceFloorY = this.saintVoiceFloorAtHeight(sourcePosition.y);
+      const listenerFloorY = this.saintVoiceFloorAtHeight(listenerFeetY);
+      const sameFloor = sourceFloorY === listenerFloorY;
+      const staircase = sameFloor ? null : settings.crossFloorPortals.find((portal) => {
+        if (!portal.floors.includes(sourceFloorY) || !portal.floors.includes(listenerFloorY)) {
+          return false;
+        }
+        const { bounds } = portal;
+        return sourcePosition.x >= bounds.minX
+          && sourcePosition.x <= bounds.maxX
+          && sourcePosition.z >= bounds.minZ
+          && sourcePosition.z <= bounds.maxZ;
+      }) || null;
+      return {
+        sourceFloor: this.saintVoiceFloorLabel(sourceFloorY),
+        listenerFloor: this.saintVoiceFloorLabel(listenerFloorY),
+        sameFloor,
+        crossFloorAllowed: Boolean(staircase),
+        acousticReason: sameFloor
+          ? "same-floor"
+          : staircase
+            ? "staircase-portal"
+            : "different-floor",
+        staircaseId: staircase?.id || null,
+      };
     }
 
     syncSaintVoice() {
@@ -44734,6 +44804,7 @@
         entry.root.position.y + 1.1,
         entry.root.position.z,
       ).sub(listener);
+      const acoustics = this.saintVoiceAcousticRoute(entry.root.position, listener);
       const distance = offset.length();
       const proximity = 1 - clamp(
         (distance - settings.fullGainDistanceMeters)
@@ -44762,13 +44833,17 @@
         && this.ctx.state === "running"
         && !state.menuOpen
         && !state.workroom.keypadOpen
+        && (acoustics.sameFloor || acoustics.crossFloorAllowed)
       );
       const audibleGain = audible ? targetGain : 0;
+      const gainSmoothingSeconds = !acoustics.sameFloor && !acoustics.crossFloorAllowed
+        ? settings.crossFloorMuteSeconds
+        : settings.gainSmoothingSeconds;
       const now = this.ctx.currentTime;
       this.saintVoice.gain.gain.setTargetAtTime(
         Math.max(0.0001, audibleGain),
         now,
-        settings.gainSmoothingSeconds,
+        gainSmoothingSeconds,
       );
       this.saintVoice.lowpass.frequency.setTargetAtTime(
         lowpassHz,
@@ -44784,6 +44859,12 @@
       }
       this.saintVoice.active = audible && targetGain > 0.0001;
       this.saintVoice.distanceMeters = distance;
+      this.saintVoice.sourceFloor = acoustics.sourceFloor;
+      this.saintVoice.listenerFloor = acoustics.listenerFloor;
+      this.saintVoice.sameFloor = acoustics.sameFloor;
+      this.saintVoice.crossFloorAllowed = acoustics.crossFloorAllowed;
+      this.saintVoice.acousticReason = acoustics.acousticReason;
+      this.saintVoice.staircaseId = acoustics.staircaseId;
       this.saintVoice.proximity = proximity;
       this.saintVoice.targetGain = audibleGain;
       this.saintVoice.pan = pan;
@@ -44795,7 +44876,7 @@
       const voice = this.saintVoice;
       const settings = VICTORY_FEAST.saint.presenceAudio;
       return {
-        profile: "recorded-loop-with-distance-gain-and-stereo-position",
+        profile: "recorded-loop-with-floor-gated-distance-gain-and-stereo-position",
         recordedReady: this.availableAssets("saintVoice").length > 0,
         loading: voice.loading || this.assetsFor("saintVoice")
           .some((path) => this.pendingAssets.has(path)),
@@ -44810,6 +44891,12 @@
           ? Number(voice.distanceMeters.toFixed(3))
           : null,
         maximumDistanceMeters: settings.maximumDistanceMeters,
+        sourceFloor: voice.sourceFloor,
+        listenerFloor: voice.listenerFloor,
+        sameFloor: voice.sameFloor,
+        crossFloorAllowed: voice.crossFloorAllowed,
+        acousticReason: voice.acousticReason,
+        staircaseId: voice.staircaseId,
         proximity: Number(voice.proximity.toFixed(4)),
         targetGain: Number(voice.targetGain.toFixed(4)),
         currentGain: Number((voice.gain?.gain.value || 0).toFixed(4)),

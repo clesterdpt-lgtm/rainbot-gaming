@@ -119,6 +119,11 @@ async function assertSourceContract() {
     "the Saint needs a named distance-gain tuning contract",
   );
   assert(
+    /crossFloorPortals:\s*Object\.freeze\(\[[\s\S]*id:\s*"grand-stair"[\s\S]*id:\s*"service-stair"/.test(runtime)
+      && /acoustics\.sameFloor\s*\|\|\s*acoustics\.crossFloorAllowed/.test(runtime),
+    "the Feast Father voice needs explicit grand/service stair portals between floors",
+  );
+  assert(
     /navigation:\s*Object\.freeze\(\{[\s\S]*pathClearanceMeters:[\s\S]*repathSeconds:[\s\S]*stallSeconds:/m.test(runtime),
     "the Saint needs named full-width navigation and stall-recovery tuning",
   );
@@ -606,6 +611,82 @@ async function runBrowserFlow() {
         far: farSaintVoice,
         near: nearSaintVoice,
       })}`,
+    );
+
+    await page.evaluate(() => {
+      window.MrFeastFresh.teleport("dining");
+      window.MrFeastFresh.stageBreathThreatForQA({
+        target: "saint",
+        distance: 2,
+        preserveInvestigation: true,
+      });
+      window.MrFeastFresh.teleport("rearLounge");
+      return window.MrFeastFresh.updateSaintAudioForQA();
+    });
+    await page.waitForTimeout(450);
+    const blockedUpperVoice = (await page.evaluate(() => (
+      window.MrFeastFresh.getAudioStateForQA()
+    ))).saintVoice;
+    assert(
+      blockedUpperVoice.looping
+        && !blockedUpperVoice.active
+        && blockedUpperVoice.sourceFloor === "MAIN LEVEL"
+        && blockedUpperVoice.listenerFloor === "SECOND FLOOR"
+        && blockedUpperVoice.acousticReason === "different-floor"
+        && blockedUpperVoice.crossFloorAllowed === false
+        && blockedUpperVoice.targetGain === 0
+        && blockedUpperVoice.currentGain <= 0.001,
+      `the Feast Father must be silent through an ordinary ceiling: ${JSON.stringify(blockedUpperVoice)}`,
+    );
+
+    await page.evaluate(() => {
+      window.MrFeastFresh.teleport("stairBottom");
+      window.MrFeastFresh.stageBreathThreatForQA({
+        target: "saint",
+        distance: 1.5,
+        preserveInvestigation: true,
+      });
+      window.MrFeastFresh.teleport("westTopExit");
+      return window.MrFeastFresh.updateSaintAudioForQA();
+    });
+    await page.waitForTimeout(450);
+    const grandStairVoice = (await page.evaluate(() => (
+      window.MrFeastFresh.getAudioStateForQA()
+    ))).saintVoice;
+    assert(
+      grandStairVoice.active
+        && grandStairVoice.sourceFloor === "MAIN LEVEL"
+        && grandStairVoice.listenerFloor === "SECOND FLOOR"
+        && grandStairVoice.acousticReason === "staircase-portal"
+        && grandStairVoice.crossFloorAllowed
+        && grandStairVoice.staircaseId === "grand-stair"
+        && grandStairVoice.targetGain > 0.01,
+      `the grand staircase must carry the Feast Father's voice between its floors: ${JSON.stringify(grandStairVoice)}`,
+    );
+
+    await page.evaluate(() => {
+      window.MrFeastFresh.teleport("serviceTop");
+      window.MrFeastFresh.stageBreathThreatForQA({
+        target: "saint",
+        distance: 1,
+        preserveInvestigation: true,
+      });
+      window.MrFeastFresh.teleport("serviceBottom");
+      return window.MrFeastFresh.updateSaintAudioForQA();
+    });
+    await page.waitForTimeout(450);
+    const serviceStairVoice = (await page.evaluate(() => (
+      window.MrFeastFresh.getAudioStateForQA()
+    ))).saintVoice;
+    assert(
+      serviceStairVoice.active
+        && serviceStairVoice.sourceFloor === "MAIN LEVEL"
+        && serviceStairVoice.listenerFloor === "BASEMENT"
+        && serviceStairVoice.acousticReason === "staircase-portal"
+        && serviceStairVoice.crossFloorAllowed
+        && serviceStairVoice.staircaseId === "service-stair"
+        && serviceStairVoice.targetGain > 0.01,
+      `the service staircase must carry the Feast Father's voice between its floors: ${JSON.stringify(serviceStairVoice)}`,
     );
 
     // A wall-blocked target must produce a real graph detour. The old local

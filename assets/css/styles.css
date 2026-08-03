@@ -13027,3 +13027,17 @@ body.arcade-home :where(a, button, input, select, textarea, [tabindex]):focus-vi
     padding-bottom: 8px;
   }
 }
+
+
+/* ---------------------------------------------------------------
+   Inkblood — the cover is a 3:2 manga plate, so it needs a cover
+   crop to sit in the shared 16:9 card frame without letterboxing.
+   No saturation lift here: the art is deliberately monochrome apart
+   from the blood, and warming it would break that.
+   --------------------------------------------------------------- */
+.poster-card--inkblood img,
+.directory-card__poster--inkblood img {
+  object-fit: cover;
+  object-position: center 42%;
+  filter: contrast(1.04);
+}

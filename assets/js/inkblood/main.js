@@ -8,7 +8,7 @@
 
 "use strict";
 
-import { Game } from "./game.js?v=20260802-5";
+import { Game } from "./game.js?v=20260803-1";
 
 const GAME_ID = "inkblood";
 

@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260802-5";
+  const VERSION = "20260803-1";
 
   const scriptUrl = document.currentScript
     ? document.currentScript.src

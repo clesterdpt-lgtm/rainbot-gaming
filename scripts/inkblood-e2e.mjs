@@ -183,6 +183,28 @@ const gaitOrder = await page.evaluate(async () => {
 check("shared walk cycle advances in the corrected direction",
   gaitOrder.join(",") === "7,6,5", `frames=${gaitOrder.join("→")}`);
 
+const enemyFacing = await page.evaluate(() => {
+  const g = window.__INK.game;
+  g.enemies.length = 0;
+  g.rebuildGrid();
+  const curve = g.director.curve(g.time);
+  const right = g.spawnEnemy("gaki", g.player.x + 320, g.player.y, curve);
+  const left = g.spawnEnemy("gaki", g.player.x - 320, g.player.y, curve);
+  g.rebuildGrid();
+  g.updateEnemies(1 / 60);
+  const result = {
+    right: { intent: right.wantX, flipped: right.flip },
+    left: { intent: left.wantX, flipped: left.flip },
+  };
+  g.enemies.length = 0;
+  g.rebuildGrid();
+  return result;
+});
+check("enemies face into their travel direction on both sides",
+  enemyFacing.right.intent < 0 && enemyFacing.right.flipped
+    && enemyFacing.left.intent > 0 && !enemyFacing.left.flipped,
+  `right=${enemyFacing.right.intent.toFixed(1)}/${enemyFacing.right.flipped} left=${enemyFacing.left.intent.toFixed(1)}/${enemyFacing.left.flipped}`);
+
 const slashTrigger = await page.evaluate(() => {
   const g = window.__INK.game;
   g.player.slashT = 0;

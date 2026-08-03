@@ -18,8 +18,8 @@
 import {
   PAL, makeCanvas, ctxOf, brush, splat, rng, wobble, tone, roughCircle,
   hatch, starburst, fillToneDevice, hatchShade, stippleShade, feather,
-} from "./art.js?v=20260802-5";
-import { shape, smoothPath, lock, gloss, folds, LIGHT } from "./figure.js?v=20260802-5";
+} from "./art.js?v=20260803-1";
+import { shape, smoothPath, lock, gloss, folds, LIGHT } from "./figure.js?v=20260803-1";
 
 const CELL = 300;
 

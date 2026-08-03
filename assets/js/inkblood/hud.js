@@ -15,8 +15,8 @@
 import {
   PAL, panelFrame, panelBody, inkText, brush, splat, tone, roughCircle,
   starburst, wobble, fillToneDevice, drawInkSigil,
-} from "./art.js?v=20260802-5";
-import { WEAPONS, PASSIVES } from "./weapons.js?v=20260802-5";
+} from "./art.js?v=20260803-1";
+import { WEAPONS, PASSIVES } from "./weapons.js?v=20260803-1";
 
 export class Hud {
   constructor(fonts) {

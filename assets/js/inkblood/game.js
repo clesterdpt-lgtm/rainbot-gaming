@@ -22,18 +22,18 @@ import {
   PAL, paper, makeCanvas, ctxOf, inkText, panelFrame, brush, splat, rng,
   starburst, roughCircle, fillToneDevice, tone, focusLines, feather, wobble,
   drawInkSigil,
-} from "./art.js?v=20260802-5";
-import { bakeCast, PX_PER_UNIT } from "./sprites.js?v=20260802-5";
-import { bakeProps, drawGround, Ash } from "./props.js?v=20260802-5";
-import { bakeFx, Fx, ATLAS } from "./fx.js?v=20260802-5";
+} from "./art.js?v=20260803-1";
+import { bakeCast, PX_PER_UNIT } from "./sprites.js?v=20260803-1";
+import { bakeProps, drawGround, Ash } from "./props.js?v=20260803-1";
+import { bakeFx, Fx, ATLAS } from "./fx.js?v=20260803-1";
 import {
   WEAPONS, PASSIVES, bakeWeaponArt, makeProjectile, stepProjectile,
   drawProjectile, drawChains,
-} from "./weapons.js?v=20260802-5";
-import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js?v=20260802-5";
-import { Audio } from "./audio.js?v=20260802-5";
-import { Input } from "./input.js?v=20260802-5";
-import { Hud } from "./hud.js?v=20260802-5";
+} from "./weapons.js?v=20260803-1";
+import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js?v=20260803-1";
+import { Audio } from "./audio.js?v=20260803-1";
+import { Input } from "./input.js?v=20260803-1";
+import { Hud } from "./hud.js?v=20260803-1";
 
 // The camera guarantees a minimum window onto the world in BOTH
 // axes. Driving zoom from height alone is fine on a laptop and
@@ -472,7 +472,10 @@ export class Game {
       h: def.h, radius: def.radius,
       speedMult: curve.speed,
       damageMult: curve.damage,
-      flip: false,
+      // Every baked figure faces +x. Enemies spawned to the right of
+      // the player immediately need the mirrored drawing so their
+      // first visible frame does not moonwalk toward the fight.
+      flip: this.player ? x > this.player.x : false,
       animT: Math.random() * 4,
       hitFlash: 0,
       dead: false,
@@ -951,6 +954,13 @@ export class Game {
       if (e.dead) { this.enemies.splice(i, 1); continue; }
 
       stepEnemy(e, dt, this);
+
+      // The walk cycle is authored facing +x. `flip` used to stay at
+      // its spawn default forever, so anything travelling left moved
+      // feet-first while looking right. Follow locomotion intent (not
+      // knockback or separation) and retain the last facing during a
+      // nearly vertical approach to prevent horizontal jitter.
+      if (Math.abs(e.wantX) > 1) e.flip = e.wantX < 0;
 
       // Knockback decays, desired velocity blends in.
       e.vx *= Math.pow(0.0009, dt);

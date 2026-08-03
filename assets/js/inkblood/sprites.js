@@ -17,13 +17,13 @@
 import {
   PAL, makeCanvas, ctxOf, brush, tone, splat, rng, wobble, starburst, roughCircle,
   hatchShade, stippleShade, inkContour, feather,
-} from "./art.js?v=20260802-5";
+} from "./art.js?v=20260803-1";
 import {
   shape, limb, lock, gloss, buildRig, runPose, idlePose, drawLeg, drawArm, drawTorso,
   drawHead, drawNeck, drawCoat, drawRags, drawHairBack, drawHairFront, hairMass,
   faceHero, faceYokai, formShadow, rimLight, silhouetteOf, grime, smoothPath, lerp,
   toneRegion, TONE, folds, LIGHT,
-} from "./figure.js?v=20260802-5";
+} from "./figure.js?v=20260803-1";
 
 /** World pixels per figure unit, and the supersample factor. */
 export const PX_PER_UNIT = 1.15;

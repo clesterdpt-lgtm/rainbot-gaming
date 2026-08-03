@@ -25,8 +25,8 @@
 
 import {
   PAL, makeCanvas, ctxOf, brush, splat, rng, starburst, roughCircle, boltPath,
-} from "./art.js?v=20260802-5";
-import { shape, smoothPath, gloss } from "./figure.js?v=20260802-5";
+} from "./art.js?v=20260803-1";
+import { shape, smoothPath, gloss } from "./figure.js?v=20260803-1";
 
 /* ---------------------------------------------------------- */
 /* Projectile art                                              */

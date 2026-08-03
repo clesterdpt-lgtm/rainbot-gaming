@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260802-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1";
+  const MANSION_RUNTIME_VERSION = "20260802-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -3658,6 +3658,7 @@
     }),
     mazeExitLighting: Object.freeze({
       finalScareId: "maze-turn",
+      holdRoom: "HEDGE MAZE",
       darkEnergyScale: 0,
       fixtures: Object.freeze([
         "maze-rear-entrance-lamp-north",
@@ -4690,6 +4691,8 @@
       scareBaselineLightExposure: 1,
       scareProfile: null,
       hostVisible: false,
+      mazeExitBlackoutActive: false,
+      mazeExitBlackoutReleased: false,
       postGameDialoguePendingIds: [],
       invalidTransitions: 0,
       lastInvalidTransition: null,
@@ -24608,10 +24611,19 @@
     mazeExitLightingShouldBeDark() {
       if (this.show.phase !== STORM_RUN_PHASE.RUNNING) return false;
       const finalTriggered = this.show.scareTriggeredIds.includes(STORM_RUN.mazeExitLighting.finalScareId);
-      return !finalTriggered || this.show.scareRevealRemaining > 0;
+      return !finalTriggered || this.show.mazeExitBlackoutActive;
+    }
+
+    releaseMazeExitBlackoutIfPlayerExited() {
+      if (!this.show.mazeExitBlackoutActive) return false;
+      if (state.currentRoom === STORM_RUN.mazeExitLighting.holdRoom) return false;
+      this.show.mazeExitBlackoutActive = false;
+      this.show.mazeExitBlackoutReleased = true;
+      return true;
     }
 
     syncMazeExitLighting() {
+      this.releaseMazeExitBlackoutIfPlayerExited();
       const dark = this.mazeExitLightingShouldBeDark();
       const eventIntensityScale = dark ? STORM_RUN.mazeExitLighting.darkEnergyScale : 1;
       for (const light of this.mazeExitLights()) {
@@ -24639,7 +24651,11 @@
         }),
         dark,
         finalScareTriggered: finalTriggered,
-        restoredAfterScare: Boolean(finalTriggered && this.show.scareRevealRemaining <= 0),
+        blackoutActive: Boolean(this.show.mazeExitBlackoutActive),
+        waitingForMazeExit: Boolean(finalTriggered && this.show.mazeExitBlackoutActive),
+        restoredAfterMazeExit: Boolean(finalTriggered && this.show.mazeExitBlackoutReleased),
+        holdRoom: STORM_RUN.mazeExitLighting.holdRoom,
+        playerRoom: state.currentRoom,
         energizedFixtureCount: lights.filter((light) => light.visible && light.intensity > 0.01).length,
         shaderResidentFixtureCount: lights.filter((light) => light.visible).length,
         topology: "fixed-zero-energy",
@@ -24743,6 +24759,8 @@
       this.show.scareBaselineLightExposure = 1;
       this.show.scareProfile = null;
       this.show.hostVisible = false;
+      this.show.mazeExitBlackoutActive = false;
+      this.show.mazeExitBlackoutReleased = false;
       this.transition(STORM_RUN_PHASE.CALLED, `call:${this.show.triggerReason}`);
       mrFeastNpc?.suspendThreatsForCompetition();
       cameraSecurity?.suspendForCompetition();
@@ -25075,6 +25093,10 @@
       }, { ignoreOverride: true });
       this.show.scareProfile = "storm-run";
       this.show.hostVisible = false;
+      if (scare.id === STORM_RUN.mazeExitLighting.finalScareId) {
+        this.show.mazeExitBlackoutActive = true;
+        this.show.mazeExitBlackoutReleased = false;
+      }
       mrFeastNpc?.setStormRunReveal(scare.reveal, false);
       this.positionScareRevealLight(scare);
       audioSystem?.stormScare();
@@ -25532,6 +25554,8 @@
       this.show.scareRevealRemaining = 0;
       this.show.scareBaselineLightExposure = 1;
       this.show.scareProfile = null;
+      this.show.mazeExitBlackoutActive = false;
+      this.show.mazeExitBlackoutReleased = false;
       this.clearScareCandidate();
       this.syncScareRevealLight();
     }
@@ -25597,6 +25621,8 @@
       this.show.scareBaselineLightExposure = 1;
       this.show.scareProfile = null;
       this.show.hostVisible = false;
+      this.show.mazeExitBlackoutActive = false;
+      this.show.mazeExitBlackoutReleased = false;
       this.show.postGameDialoguePendingIds = Array.isArray(source.postGameDialoguePendingIds)
         ? source.postGameDialoguePendingIds.filter((id) => id === "juniper-cross")
         : [];

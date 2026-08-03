@@ -85,6 +85,8 @@ async function assertSourceContract() {
   assert(source.includes("stormCheckpoint"), "Storm Run checkpoints must use a dedicated audible progress cue");
   assert(source.includes("stormScare"), "Mr. Feast apparitions must use a dedicated sting in addition to thunder");
   assert(source.includes("placePlayerAtStormScareTriggerForQA"), "authored scare positions need a focused proximity QA hook");
+  assert(source.includes("releaseMazeExitBlackoutIfPlayerExited"), "the hedge-maze apparition blackout must have an explicit maze-exit release gate");
+  assert(/holdRoom:\s*"HEDGE MAZE"/.test(source), "the Storm Run blackout must stay latched to the authored hedge-maze room boundary");
   assert(source.includes("completeStormRunForQA"), "Storm Run outcomes must be deterministic in QA");
   assert(source.includes("beginStormRunAftermath"), "a player victory must stage Mara's witnessed Storm Run aftermath before removing her");
   assert(source.includes('eliminatedAction: "cover-face"'), "Storm Run must retain the shared hands-over-face loss action");
@@ -313,6 +315,8 @@ async function assertHudFits(page, mobile = false) {
     const sprint = document.getElementById("touch-sprint")?.getBoundingClientRect();
     const interact = document.getElementById("touch-interact")?.getBoundingClientRect();
     const menu = document.getElementById("touch-menu")?.getBoundingClientRect();
+    const toolsElement = document.querySelector(".mansion-tools");
+    const tools = toolsElement?.getBoundingClientRect();
     const energyElement = document.getElementById("mansion-energy");
     const energy = energyElement?.getBoundingClientRect();
     const overlaps = (a, b) => Boolean(a && b && a.width && b.width && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top);
@@ -322,10 +326,15 @@ async function assertHudFits(page, mobile = false) {
       sprint: sprint ? { left: sprint.left, top: sprint.top, right: sprint.right, bottom: sprint.bottom, width: sprint.width, height: sprint.height } : null,
       interact: interact ? { left: interact.left, top: interact.top, right: interact.right, bottom: interact.bottom, width: interact.width, height: interact.height } : null,
       menu: menu ? { left: menu.left, top: menu.top, right: menu.right, bottom: menu.bottom, width: menu.width, height: menu.height } : null,
+      tools: tools ? { left: tools.left, top: tools.top, right: tools.right, bottom: tools.bottom, width: tools.width, height: tools.height } : null,
+      toolsDisplay: toolsElement ? getComputedStyle(toolsElement).display : "none",
+      toolsZ: toolsElement ? getComputedStyle(toolsElement).zIndex : "auto",
+      hudZ: getComputedStyle(document.getElementById("mansion-storm-run")).zIndex,
       energy: energy ? { left: energy.left, top: energy.top, right: energy.right, bottom: energy.bottom, width: energy.width, height: energy.height, hidden: energyElement.hidden } : null,
       overlapsSprint: overlaps(hud, sprint),
       overlapsInteract: overlaps(hud, interact),
       overlapsMenu: overlaps(hud, menu),
+      overlapsTools: overlaps(hud, tools),
       overflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
       titleDisplay: getComputedStyle(document.getElementById("mansion-storm-run-title")).display,
       checkpointDisplay: getComputedStyle(document.getElementById("mansion-storm-run-checkpoint")).display,
@@ -346,6 +355,15 @@ async function assertHudFits(page, mobile = false) {
   if (mobile) {
     assert(!geometry.overlapsSprint && !geometry.overlapsInteract && !geometry.overlapsMenu, `Storm HUD must yield to touch controls: ${JSON.stringify(geometry)}`);
     assert(geometry.sprint?.width >= 44 && geometry.sprint?.height >= 44, `Sprint must remain a 44px target during Storm Run: ${JSON.stringify(geometry)}`);
+    assert(
+      geometry.toolsDisplay !== "none"
+        && geometry.tools?.width >= 44
+        && geometry.tools?.height >= 44
+        && geometry.hud.top >= geometry.tools.bottom - 1
+        && !geometry.overlapsTools
+        && Number(geometry.toolsZ) >= Number(geometry.hudZ),
+      `called/live Storm HUD must leave the mobile Light/Bag/Menu row visible and above it: ${JSON.stringify(geometry)}`,
+    );
   }
   return geometry;
 }
@@ -705,7 +723,8 @@ async function run() {
     );
     assert(
       mazeExitState.mazeExitLighting?.dark
-        && !mazeExitState.mazeExitLighting.restoredAfterScare
+        && !mazeExitState.mazeExitLighting.blackoutActive
+        && !mazeExitState.mazeExitLighting.restoredAfterMazeExit
         && mazeExitState.mazeExitLighting.energizedFixtureCount === 0
         && mazeExitState.mazeExitLighting.shaderResidentFixtureCount >= 1,
       `the maze rear exit must be dark before the final bolt without removing its fixed light slot: ${JSON.stringify(mazeExitState.mazeExitLighting)}`,
@@ -723,7 +742,9 @@ async function run() {
     assert(thirdScare.visible.scare.baselineLightExposure <= thirdScare.visible.scare.maximumLightExposure, `the hedge-maze apparition must begin in deep shadow: ${JSON.stringify(thirdScare.visible.scare)}`);
     assert(
       thirdScare.visible.mazeExitLighting?.dark
-        && !thirdScare.visible.mazeExitLighting.restoredAfterScare
+        && thirdScare.visible.mazeExitLighting.blackoutActive
+        && thirdScare.visible.mazeExitLighting.waitingForMazeExit
+        && !thirdScare.visible.mazeExitLighting.restoredAfterMazeExit
         && thirdScare.visible.mazeExitLighting.energizedFixtureCount === 0,
       `the rear-exit practical must stay dark throughout Mr. Feast's lightning reveal: ${JSON.stringify(thirdScare.visible.mazeExitLighting)}`,
     );
@@ -732,10 +753,25 @@ async function run() {
     const mazeScareGone = await stormState(timerPage);
     assert(!mazeScareGone.scare.hostVisible && mazeScareGone.scare.lightning === 0, `the final apparition must vanish with the close bolt: ${JSON.stringify(mazeScareGone.scare)}`);
     assert(
-      !mazeScareGone.mazeExitLighting?.dark
-        && mazeScareGone.mazeExitLighting.restoredAfterScare
-        && mazeScareGone.mazeExitLighting.energizedFixtureCount >= 1,
-      `the rear-exit practical must relight only after Mr. Feast has disappeared: ${JSON.stringify(mazeScareGone.mazeExitLighting)}`,
+      mazeScareGone.mazeExitLighting?.dark
+        && mazeScareGone.mazeExitLighting.blackoutActive
+        && mazeScareGone.mazeExitLighting.waitingForMazeExit
+        && !mazeScareGone.mazeExitLighting.restoredAfterMazeExit
+        && mazeScareGone.mazeExitLighting.energizedFixtureCount === 0,
+      `the rear-exit practical must remain dark after Mr. Feast disappears while the player is still in the maze: ${JSON.stringify(mazeScareGone.mazeExitLighting)}`,
+    );
+    const mazeExitPlacement = await timerPage.evaluate(() => window.MrFeastFresh.teleport("yardMazeA"));
+    assert(mazeExitPlacement?.room !== "HEDGE MAZE", `the blackout release check must cross the authored rear maze portal: ${JSON.stringify({ room: mazeExitPlacement?.room, player: mazeExitPlacement?.player })}`);
+    await timerPage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.05));
+    const mazeExited = await stormState(timerPage);
+    assert(
+      !mazeExited.mazeExitLighting?.dark
+        && !mazeExited.mazeExitLighting.blackoutActive
+        && !mazeExited.mazeExitLighting.waitingForMazeExit
+        && mazeExited.mazeExitLighting.restoredAfterMazeExit
+        && mazeExited.mazeExitLighting.playerRoom !== "HEDGE MAZE"
+        && mazeExited.mazeExitLighting.energizedFixtureCount >= 1,
+      `the rear-exit practical must relight only after the player exits the hedge maze: ${JSON.stringify(mazeExited.mazeExitLighting)}`,
     );
 
     for (let index = 10; index < checkpoints.length; index += 1) {
@@ -968,6 +1004,10 @@ async function run() {
     assert(!phoneDormantLayout.caseVisible && !phoneDormantLayout.stormVisible, `phone free investigation must hide trail and next-game countdown HUDs: ${JSON.stringify(phoneDormantLayout)}`);
     const phoneCalled = await phonePage.evaluate(() => window.MrFeastFresh.callStormRunForQA("qa"));
     assert(phoneCalled?.started === true, `the phone Storm Run call should start: ${JSON.stringify(phoneCalled)}`);
+    await assertHudFits(phonePage, true);
+    await phonePage.setViewportSize({ width: 568, height: 320 });
+    await assertHudFits(phonePage, true);
+    await phonePage.setViewportSize({ width: 390, height: 844 });
     const phoneStarted = await phonePage.evaluate(() => window.MrFeastFresh.startStormRunForQA());
     assert(phoneStarted?.started === true, `the phone Storm Run should stage: ${JSON.stringify(phoneStarted)}`);
     await phonePage.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0));

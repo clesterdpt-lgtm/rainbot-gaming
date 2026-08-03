@@ -1368,7 +1368,8 @@
       position: absolute;
       top: max(14px, env(safe-area-inset-top));
       right: max(14px, env(safe-area-inset-right));
-      z-index: 8;
+      /* Keep Light/Bag/Menu above any live competition status strip. */
+      z-index: 12;
       display: none;
       gap: 8px;
     }
@@ -3135,8 +3136,7 @@
         gap: 3px;
         padding: 4px 8px 5px 10px;
       }
-      #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"])) .mansion-location,
-      #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"])) .mansion-tools {
+      #mansion-stage:has(#mansion-feast-says:not([hidden]):not([data-phase="dormant"])) .mansion-location {
         display: none;
       }
       #mansion-feast-says:not([data-phase="dormant"]) .mansion-feast__header {
@@ -3179,8 +3179,7 @@
         gap: 2px 8px;
         padding: 4px 8px 5px 11px;
       }
-      #mansion-stage:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) .mansion-location,
-      #mansion-stage:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) .mansion-tools {
+      #mansion-stage:has(#mansion-storm-run:not([hidden]):not([data-phase="dormant"])) .mansion-location {
         display: none;
       }
       #mansion-storm-run-title { font-size: 0.92rem; }
@@ -3337,6 +3336,19 @@
     @media (max-width: 560px) and (orientation: portrait) {
       #mansion-feast-says[data-guidance="speech"]:not([hidden]),
       #mansion-storm-run[data-guidance="speech"]:not([hidden]) {
+        top: max(58px, calc(env(safe-area-inset-top) + 58px));
+      }
+    }
+
+    /* A called game must leave a dedicated top lane for the touch tools. The
+       58px floor covers the wider short-landscape phone/tablet shell where
+       the base tool row starts 14px from the stage edge instead of 9px. */
+    @media (max-width: 560px) and (orientation: portrait),
+           (max-height: 420px) and (orientation: landscape) {
+      #mansion-feast-says[data-guidance="speech"]:not([hidden]),
+      #mansion-storm-run[data-guidance="speech"]:not([hidden]),
+      #mansion-feast-hunt:not([hidden]):not([data-phase="dormant"]),
+      #mansion-victory-feast:not([hidden]):not([data-phase="dormant"]) {
         top: max(58px, calc(env(safe-area-inset-top) + 58px));
       }
     }
@@ -3929,6 +3941,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260802-inkblood" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260802-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-competition-discovery-gates-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260802-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

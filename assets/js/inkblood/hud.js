@@ -23,6 +23,8 @@ export class Hud {
     this.fonts = fonts;
     this.scale = 1;
     this.hitRects = [];      // clickable regions, rebuilt each frame
+    this.regions = {};       // named layout regions for visual QA
+    this.presentation = "open-ornamental-frame";
   }
 
   layout(w, h) {
@@ -101,6 +103,208 @@ export class Hud {
     }
   }
 
+  /**
+   * An open ornamental frame, not a filled panel. The reference lets the
+   * battlefield run behind the readouts and uses fine ruled borders to bind
+   * them into one composition.
+   */
+  commandPanel(g, x, y, w, h, seed = 61) {
+    const u = this.uiScale || this.scale;
+    g.save();
+    g.globalAlpha = 0.82;
+    const ruled = (a, b, lineSeed) => {
+      brush(g, [a, b], {
+        width: 1.65 * u, taper: "both", jitter: 0.2, seed: lineSeed, colour: PAL.paperLit,
+      });
+      brush(g, [a, b], {
+        width: 0.48 * u, taper: "both", jitter: 0.2, seed: lineSeed, colour: PAL.ink,
+      });
+    };
+    ruled([x + 11 * u, y + 6 * u], [x + w - 11 * u, y + 6 * u], seed + 2);
+
+    g.globalAlpha = 0.72;
+    const corners = [
+      [x + 4 * u, y + 17 * u, 1, -1],
+      [x + w - 4 * u, y + 17 * u, -1, -1],
+    ];
+    corners.forEach(([cx, cy, dx, dy], i) => {
+      brush(g, [[cx, cy], [cx + dx * 10 * u, cy], [cx + dx * 15 * u, cy + dy * 5 * u]], {
+        width: 1.9 * u, taper: "both", jitter: 0.16, seed: seed + 10 + i, colour: PAL.paperLit,
+      });
+      brush(g, [[cx, cy], [cx + dx * 10 * u, cy], [cx + dx * 15 * u, cy + dy * 5 * u]], {
+        width: 0.58 * u, taper: "both", jitter: 0.16, seed: seed + 10 + i, colour: PAL.ink,
+      });
+    });
+    g.restore();
+  }
+
+  /** A local paper knockout keeps each meter readable over the battlefield. */
+  commandBar(g, x, y, w, h, frac, colour, seed = 71) {
+    const u = this.uiScale || this.scale;
+    const f = Math.max(0, Math.min(1, frac));
+    g.save();
+    g.fillStyle = "rgba(248,245,236,0.82)";
+    g.fillRect(x, y, w, h);
+    if (f > 0.001) {
+      const fw = Math.max(h * 0.45, w * f);
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x + Math.max(0, fw - h * 0.42), y);
+      g.lineTo(x + fw, y + h * 0.5);
+      g.lineTo(x + Math.max(0, fw - h * 0.42), y + h);
+      g.lineTo(x, y + h);
+      g.closePath();
+      g.fillStyle = colour;
+      g.fill();
+      g.globalAlpha = 0.28;
+      g.fillStyle = PAL.paperLit;
+      g.fillRect(x + 2 * u, y + 2 * u, Math.max(0, fw - 5 * u), Math.max(1, h * 0.18));
+      g.globalAlpha = 1;
+    }
+    panelFrame(g, x, y, w, h, {
+      colour: PAL.paperLit, weight: 2.25 * u, seed, jitter: 0.45,
+    });
+    panelFrame(g, x, y, w, h, {
+      colour: PAL.ink, weight: 0.85 * u, seed, jitter: 0.45,
+    });
+    g.restore();
+  }
+
+  /** The timer sits in a deliberately overbuilt manga chapter cartouche. */
+  timerPlate(g, cx, cy, w, h, clock) {
+    const u = this.uiScale || this.scale;
+    const outer = [
+      [cx, cy - h / 2 - 12 * u],
+      [cx + w / 2 + 29 * u, cy],
+      [cx, cy + h / 2 + 12 * u],
+      [cx - w / 2 - 29 * u, cy],
+    ];
+    const points = [
+      [cx - w / 2 + 18 * u, cy - h / 2],
+      [cx + w / 2 - 18 * u, cy - h / 2],
+      [cx + w / 2, cy],
+      [cx + w / 2 - 18 * u, cy + h / 2],
+      [cx - w / 2 + 18 * u, cy + h / 2],
+      [cx - w / 2, cy],
+    ];
+    g.save();
+    // Oversized diamond braces are the most distinctive piece of the sample
+    // HUD. A paper under-stroke keeps their hairlines alive over busy terrain.
+    outer.forEach((p, i) => {
+      const q = outer[(i + 1) % outer.length];
+      brush(g, [p, q], {
+        width: 1.65 * u, taper: "both", jitter: 0.15, seed: 84 + i, colour: PAL.paperLit,
+      });
+      brush(g, [p, q], {
+        width: 0.46 * u, taper: "both", jitter: 0.15, seed: 84 + i, colour: PAL.ink,
+      });
+    });
+    g.beginPath();
+    points.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])));
+    g.closePath();
+    g.fillStyle = "rgba(27,27,34,0.98)";
+    g.fill();
+    points.forEach((p, i) => {
+      const q = points[(i + 1) % points.length];
+      brush(g, [p, q], {
+        width: 2.2 * u, taper: "none", jitter: 0.18, seed: 90 + i, colour: PAL.ink,
+      });
+      brush(g, [p, q], {
+        width: 0.72 * u, taper: "none", jitter: 0.18, seed: 90 + i, colour: PAL.paperLit,
+      });
+    });
+    g.globalAlpha = 0.72;
+    brush(g, [[cx - w / 2 - 26 * u, cy], [cx - w / 2 + 2 * u, cy]], {
+      width: 0.68 * u, taper: "both", jitter: 0.14, seed: 98, colour: PAL.ink,
+    });
+    brush(g, [[cx + w / 2 - 2 * u, cy], [cx + w / 2 + 26 * u, cy]], {
+      width: 0.68 * u, taper: "both", jitter: 0.14, seed: 99, colour: PAL.ink,
+    });
+    g.globalAlpha = 0.9;
+    g.strokeStyle = PAL.ink;
+    g.lineWidth = 0.9 * u;
+    g.save();
+    g.translate(cx, cy - h / 2);
+    g.rotate(Math.PI / 4);
+    g.strokeRect(-5 * u, -5 * u, 10 * u, 10 * u);
+    g.restore();
+    g.save();
+    g.translate(cx, cy + h / 2);
+    g.rotate(Math.PI / 4);
+    g.strokeRect(-5 * u, -5 * u, 10 * u, 10 * u);
+    g.restore();
+    g.restore();
+    inkText(g, clock, cx, cy + Math.max(8, 11 * u), {
+      font: this.fonts.impact(Math.max(25, 39 * u)), halo: 0, outline: 0,
+      colour: PAL.paperLit, align: "center",
+    });
+  }
+
+  emptySlot(g, x, y, size, seed) {
+    const u = this.uiScale || this.scale;
+    g.save();
+    g.fillStyle = "rgba(248,245,236,0.82)";
+    g.fillRect(x, y, size, size);
+    g.globalAlpha = 0.8;
+    panelFrame(g, x, y, size, size, {
+      colour: PAL.paperLit, weight: 2.1 * u, seed, jitter: 0.5,
+    });
+    panelFrame(g, x, y, size, size, {
+      colour: PAL.ink, weight: 0.78 * u, seed, jitter: 0.5,
+    });
+    brush(g, [[x + size * 0.29, y + size * 0.67], [x + size * 0.7, y + size * 0.31]], {
+      width: 0.58 * u, taper: "both", jitter: 0.18, seed: seed + 1, colour: PAL.ink,
+    });
+    g.restore();
+  }
+
+  drawLoadout(g, st, x, y, maxW) {
+    const u = this.uiScale || this.scale;
+    const wSize = (this.compact ? 34 : 42) * u;
+    const pSize = (this.compact ? 22 : 25) * u;
+    const gap = 5 * u;
+    const weaponCount = Math.min(6, Math.max(5, st.weapons.length));
+    let sx = x;
+    for (let i = 0; i < weaponCount; i++) {
+      const weapon = st.weapons[i];
+      if (weapon) {
+        const def = WEAPONS[weapon.id];
+        this.slot(g, sx, y, wSize, def.sigil, weapon.level, weapon.level >= def.max, {
+          seed: i + 2, evolved: !!def.evolved,
+        });
+      } else {
+        this.emptySlot(g, sx, y, wSize, 112 + i * 3);
+      }
+      sx += wSize + gap;
+    }
+
+    sx += 6 * u;
+    for (let i = 0; i < st.passives.length; i++) {
+      if (sx + pSize > x + maxW) break;
+      const passive = st.passives[i];
+      const def = PASSIVES[passive.id];
+      this.slot(g, sx, y + (wSize - pSize) / 2, pSize, def.sigil,
+        passive.level, passive.level >= def.max, { seed: i + 30 });
+      sx += pSize + gap;
+    }
+    return { x, y, w: Math.min(maxW, Math.max(0, sx - x - gap)), h: wSize };
+  }
+
+  soulIcon(g, x, y, r) {
+    g.save();
+    g.translate(x, y);
+    g.rotate(Math.PI / 4);
+    g.fillStyle = PAL.arcane;
+    g.fillRect(-r * 0.7, -r * 0.7, r * 1.4, r * 1.4);
+    g.strokeStyle = PAL.ink;
+    g.lineWidth = Math.max(1, r * 0.16);
+    g.strokeRect(-r * 0.7, -r * 0.7, r * 1.4, r * 1.4);
+    g.globalAlpha = 0.6;
+    g.strokeStyle = PAL.ink;
+    g.strokeRect(-r * 0.32, -r * 0.32, r * 0.64, r * 0.64);
+    g.restore();
+  }
+
   /* ------------------------------------------------------- */
   /* The main HUD                                            */
   /* ------------------------------------------------------- */
@@ -109,95 +313,124 @@ export class Hud {
     const s = this.scale;
     const W = this.w;
     const H = this.h;
+    const u = this.compact ? Math.max(0.72, s) : s;
+    this.uiScale = u;
     this.hitRects.length = 0;
+    this.regions = {};
 
-    /* ---- soul bar, hairline across the very top ------------ */
-    const barY = 10 * s;
-    const barX = 14 * s;
-    const barW = W - 28 * s;
-    this.bar(g, barX, barY, barW, 15 * s, st.xp / st.xpNeed, PAL.arcane);
-    inkText(g, `LV ${st.level}`, barX + 10 * s, barY + 13 * s, {
-      font: this.fonts.display(14 * s), halo: 4, outline: 2, colour: PAL.ink, align: "left",
-    });
+    const inset = Math.max(7, 14 * s);
+    const bandY = Math.max(7, 11 * s);
+    const bandX = inset;
+    const bandW = W - inset * 2;
+    const bandH = (this.compact ? 132 : 124) * u;
+    const controlReserve = this.compact ? 90 : 100;
+    this.commandPanel(g, bandX, bandY, bandW, bandH);
+    this.regions.band = { x: bandX, y: bandY, w: bandW, h: bandH };
 
-    /* ---- portrait + life ---------------------------------- */
-    const pw = 124 * s;
-    const ph = 138 * s;
-    const px = 14 * s;
-    const py = barY + 24 * s;
-    this.panel(g, px, py, pw, ph, { seed: 5 });
-    if (st.portrait) {
-      g.save();
-      g.beginPath();
-      g.rect(px + 4 * s, py + 4 * s, pw - 8 * s, ph - 8 * s);
-      g.clip();
-      const img = st.portrait.canvas;
-      const k = Math.max((pw - 8 * s) / img.width, (ph - 8 * s) / img.height);
-      g.drawImage(img, px + 4 * s, py + 4 * s, img.width * k, img.height * k);
-      g.restore();
-    }
-    g.fillStyle = PAL.ink;
-    g.fillRect(px + 4 * s, py + ph - 26 * s, pw - 8 * s, 22 * s);
-    inkText(g, "血墨", px + pw / 2, py + ph - 9 * s, {
-      font: this.fonts.jp(15 * s), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
-    });
-
-    const lifeY = py + ph + 6 * s;
-    this.bar(g, px, lifeY, pw, 17 * s, st.hp / st.maxHp, PAL.blood);
-    inkText(g, `${Math.ceil(st.hp)} / ${Math.round(st.maxHp)}`, px + pw / 2, lifeY + 13 * s, {
-      font: this.fonts.display(13 * s), halo: 3, outline: 1.6, colour: PAL.ink, align: "center",
-    });
-
-    /* ---- clock, top centre --------------------------------- */
     const mins = Math.floor(st.time / 60);
     const secs = Math.floor(st.time % 60);
-    const clock = `${mins}:${String(secs).padStart(2, "0")}`;
-    inkText(g, clock, W / 2, barY + 62 * s, {
-      font: this.fonts.impact(46 * s), halo: 10, outline: 4.5, colour: PAL.ink, align: "center",
-    });
+    const clock = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 
-    /* ---- kills + coin, top right --------------------------- */
-    const rx = W - 16 * s;
-    inkText(g, `${st.kills}`, rx - 28 * s, py + 22 * s, {
-      font: this.fonts.display(24 * s), halo: 5, outline: 2.4, colour: PAL.ink, align: "right",
-    });
-    this.skullIcon(g, rx - 14 * s, py + 14 * s, 11 * s);
-    inkText(g, `${st.coins}`, rx - 28 * s, py + 48 * s, {
-      font: this.fonts.display(24 * s), halo: 5, outline: 2.4, colour: PAL.ink, align: "right",
-    });
-    this.coinIcon(g, rx - 14 * s, py + 40 * s, 9 * s);
-
-    /* ---- loadout, bottom centre ---------------------------- */
-    // Down here it can never collide with the clock or the soul bar,
-    // however many weapons the run ends up carrying.
-    const wSize = 36 * s;
-    const pSize = 30 * s;
-    const gapS = 5 * s;
-    const wTotal = st.weapons.length * (wSize + gapS) - gapS;
-    const pTotal = st.passives.length * (pSize + gapS) - gapS;
-    const rowY = H - (st.boss && !st.boss.dead ? 152 * s : 78 * s)
-      - (this.compact ? 44 * s : 0);
-    let sx = W / 2 - wTotal / 2;
-    st.weapons.forEach((w, i) => {
-      const def = WEAPONS[w.id];
-      this.slot(g, sx, rowY, wSize, def.sigil, w.level, w.level >= def.max, {
-        seed: i + 2, evolved: !!def.evolved,
+    if (this.compact) {
+      const hpX = bandX + 9 * u;
+      const hpY = bandY + 11 * u;
+      const hpW = Math.max(110, bandW - controlReserve - 17 * u);
+      const hpH = 12 * u;
+      this.commandBar(g, hpX, hpY, hpW, hpH, st.hp / st.maxHp, PAL.blood, 72);
+      inkText(g, `HP  ${Math.ceil(st.hp)} / ${Math.round(st.maxHp)}`, hpX, hpY + 27 * u, {
+        font: this.fonts.display(Math.max(12, 14 * u)), halo: Math.max(2.5, 3 * u), outline: 0,
+        colour: PAL.ink, align: "left",
       });
-      sx += wSize + gapS;
-    });
-    sx = W / 2 - pTotal / 2;
-    const rowY2 = rowY + wSize + gapS;
-    st.passives.forEach((pp, i) => {
-      const def = PASSIVES[pp.id];
-      this.slot(g, sx, rowY2, pSize, def.sigil, pp.level, pp.level >= def.max, { seed: i + 20 });
-      sx += pSize + gapS;
-    });
+      this.regions.hp = { x: hpX, y: hpY, w: hpW, h: hpH };
+
+      const timerW = 112 * u;
+      const timerH = 46 * u;
+      const timerY = bandY + 50 * u;
+      this.timerPlate(g, W / 2, timerY, timerW, timerH, clock);
+      this.regions.timer = { x: W / 2 - timerW / 2, y: timerY - timerH / 2, w: timerW, h: timerH };
+
+      inkText(g, `LV. ${st.level}`, bandX + 11 * u, bandY + 65 * u, {
+        font: this.fonts.display(Math.max(12, 14 * u)), halo: Math.max(2.5, 3 * u), outline: 0,
+        colour: PAL.ink, align: "left",
+      });
+      const counterY = bandY + 63 * u;
+      const right = bandX + bandW - 10 * u;
+      this.skullIcon(g, right - 77 * u, counterY - 5 * u, 7 * u);
+      inkText(g, `${st.kills}`, right - 64 * u, counterY, {
+        font: this.fonts.display(Math.max(12, 14 * u)), halo: Math.max(2.5, 3 * u), outline: 0,
+        colour: PAL.ink, align: "left",
+      });
+      this.soulIcon(g, right - 28 * u, counterY - 5 * u, 6 * u);
+      inkText(g, `${st.coins}`, right - 16 * u, counterY, {
+        font: this.fonts.display(Math.max(12, 14 * u)), halo: Math.max(2.5, 3 * u), outline: 0,
+        colour: PAL.ink, align: "left",
+      });
+      const xpY = bandY + 70 * u;
+      this.commandBar(g, bandX + 10 * u, xpY, bandW - 20 * u, 3 * u,
+        st.xp / st.xpNeed, PAL.arcane, 79);
+      this.regions.xp = { x: bandX + 10 * u, y: xpY, w: bandW - 20 * u, h: 3 * u };
+
+      const loadoutY = bandY + 84 * u;
+      this.regions.loadout = this.drawLoadout(g, st, bandX + 11 * u, loadoutY, bandW - 22 * u);
+    } else {
+      const timerW = 180 * u;
+      const timerH = 68 * u;
+      const timerCx = W / 2;
+      const timerCy = bandY + 42 * u;
+      this.timerPlate(g, timerCx, timerCy, timerW, timerH, clock);
+      this.regions.timer = { x: timerCx - timerW / 2, y: timerCy - timerH / 2, w: timerW, h: timerH };
+
+      const hpX = bandX + 12 * u;
+      const hpY = bandY + 15 * u;
+      const hpW = Math.max(180 * u,
+        Math.min(360 * u, timerCx - timerW / 2 - hpX - 26 * u));
+      const hpH = 17 * u;
+      this.commandBar(g, hpX, hpY, hpW, hpH, st.hp / st.maxHp, PAL.blood, 73);
+      inkText(g, `HP  ${Math.ceil(st.hp)} / ${Math.round(st.maxHp)}`, hpX, hpY + 30 * u, {
+        font: this.fonts.display(15 * u), halo: 3.5 * u, outline: 0,
+        colour: PAL.ink, align: "left",
+      });
+      this.regions.hp = { x: hpX, y: hpY, w: hpW, h: hpH };
+
+      const rightX = timerCx + timerW / 2 + 28 * u;
+      const rightEdge = bandX + bandW - controlReserve;
+      const xpW = Math.max(80 * u, rightEdge - rightX);
+      const xpY = bandY + 15 * u;
+      this.commandBar(g, rightX, xpY, xpW, 8 * u, st.xp / st.xpNeed, PAL.arcane, 78);
+      inkText(g, `LV. ${st.level}`, rightEdge, xpY - 2 * u, {
+        font: this.fonts.display(15 * u), halo: 3.5 * u, outline: 0,
+        colour: PAL.ink, align: "right",
+      });
+      this.regions.xp = { x: rightX, y: xpY, w: xpW, h: 8 * u };
+
+      const statFont = 21 * u;
+      this.skullIcon(g, rightEdge - 8 * u, bandY + 50 * u, 8 * u);
+      inkText(g, `${st.kills}`, rightEdge - 24 * u, bandY + 57 * u, {
+        font: this.fonts.display(statFont), halo: 4 * u, outline: 0,
+        colour: PAL.ink, align: "right",
+      });
+      this.soulIcon(g, rightEdge - 8 * u, bandY + 82 * u, 7 * u);
+      inkText(g, `${st.coins}`, rightEdge - 24 * u, bandY + 88 * u, {
+        font: this.fonts.display(statFont), halo: 4 * u, outline: 0,
+        colour: PAL.ink, align: "right",
+      });
+
+      const loadoutY = bandY + 70 * u;
+      const maxLoadoutW = timerCx - timerW / 2 - hpX - 18 * u;
+      this.regions.loadout = this.drawLoadout(g, st, hpX, loadoutY, maxLoadoutW);
+    }
 
     /* ---- stat block, bottom left -------------------------- */
     if (st.showStats && !this.compact) this.statBlock(g, 14 * s, H - 232 * s, 172 * s, 218 * s, st);
 
     /* ---- minimap, bottom right ---------------------------- */
-    if (!this.compact || W > 560) this.minimap(g, W - 130 * s, H - 130 * s, 114 * s, st);
+    if (!this.compact || W > 560) {
+      const radarSize = 78 * u;
+      const radarX = W - radarSize - 17 * u;
+      const radarY = H - radarSize - 17 * u;
+      this.minimap(g, radarX, radarY, radarSize, st);
+      this.regions.radar = { x: radarX, y: radarY, w: radarSize, h: radarSize };
+    }
 
     /* ---- boss bar ----------------------------------------- */
     if (st.boss && !st.boss.dead) {
@@ -214,12 +447,12 @@ export class Hud {
     }
   }
 
-  skullIcon(g, x, y, r) {
+  skullIcon(g, x, y, r, invert = false) {
     g.save();
-    g.fillStyle = PAL.ink;
+    g.fillStyle = invert ? PAL.paperLit : PAL.ink;
     roughCircle(g, x, y, r, 3, 0.06);
     g.fill();
-    g.fillStyle = PAL.paperLit;
+    g.fillStyle = invert ? PAL.ink : PAL.paperLit;
     g.beginPath();
     g.ellipse(x - r * 0.34, y - r * 0.1, r * 0.24, r * 0.3, 0, 0, Math.PI * 2);
     g.ellipse(x + r * 0.34, y - r * 0.1, r * 0.24, r * 0.3, 0, 0, Math.PI * 2);

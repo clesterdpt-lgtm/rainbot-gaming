@@ -8,7 +8,7 @@
 
 "use strict";
 
-import { Game } from "./game.js?v=20260803-solo-slash-1";
+import { Game } from "./game.js?v=20260803-manga-ui-1";
 
 const GAME_ID = "inkblood";
 
@@ -72,6 +72,25 @@ export async function start({ boot } = {}) {
   progress(1, "Ready");
   if (boot) boot.hide();
   game.start();
+
+  const pauseButton = document.getElementById("btn-pause");
+  const syncPauseControl = (phase = game.phase) => {
+    if (!pauseButton) return;
+    const paused = phase === "paused";
+    const available = phase === "playing" || paused;
+    pauseButton.disabled = !available;
+    pauseButton.setAttribute("aria-pressed", paused ? "true" : "false");
+    pauseButton.setAttribute("aria-label", paused ? "Resume game" : "Pause game");
+    pauseButton.setAttribute("title", paused ? "Resume (P)" : "Pause (P)");
+  };
+  game.onUiState = syncPauseControl;
+  syncPauseControl();
+  pauseButton?.addEventListener("click", () => {
+    if (game.togglePause()) {
+      game.audio.resume();
+      requestAnimationFrame(() => canvas.focus({ preventScroll: true }));
+    }
+  });
 
   installDebug(game);
   return game;

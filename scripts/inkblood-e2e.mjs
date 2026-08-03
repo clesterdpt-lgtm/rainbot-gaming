@@ -166,6 +166,55 @@ await page.keyboard.press("Space");
 await settle(page, 300);
 check("any key starts a run", await page.evaluate(() => window.__INK.phase === "playing"));
 
+const mangaHud = await page.evaluate(() => {
+  const g = window.__INK.game;
+  const r = g.hud.regions;
+  const inside = (part, whole) => Boolean(part && whole)
+    && part.x >= whole.x - 1
+    && part.y >= whole.y - 1
+    && part.x + part.w <= whole.x + whole.w + 1
+    && part.y + part.h <= whole.y + whole.h + 1;
+  return {
+    presentation: g.hud.presentation,
+    allInBand: [r.hp, r.timer, r.xp, r.loadout].every((part) => inside(part, r.band)),
+    topWeighted: r.band.y < g.h * 0.04 && r.band.h < g.h * 0.22,
+    hierarchy: r.hp.x + r.hp.w < r.timer.x
+      && r.timer.x + r.timer.w < r.xp.x
+      && r.loadout.y > r.hp.y + r.hp.h,
+    timerCentered: Math.abs((r.timer.x + r.timer.w / 2) - g.w / 2) <= 2,
+    ledgerHidden: !g.showStats,
+    compactRadar: r.radar && r.radar.w < 100,
+    regions: r,
+  };
+});
+check("combat readouts use the open ornamental manga frame",
+  mangaHud.presentation === "open-ornamental-frame"
+    && mangaHud.allInBand && mangaHud.topWeighted && mangaHud.hierarchy && mangaHud.timerCentered,
+  JSON.stringify(mangaHud.regions));
+check("combat defaults hide the ledger and keep the radar secondary",
+  mangaHud.ledgerHidden && mangaHud.compactRadar,
+  `ledgerHidden=${mangaHud.ledgerHidden} radar=${Math.round(mangaHud.regions.radar?.w || 0)}`);
+
+const stageControls = await page.evaluate(() => {
+  const canvas = document.getElementById("ink-canvas")?.getBoundingClientRect();
+  const pause = document.getElementById("btn-pause")?.getBoundingClientRect();
+  const max = document.getElementById("btn-fullscreen")?.getBoundingClientRect();
+  const overlaps = pause && max
+    ? !(pause.right <= max.left || max.right <= pause.left || pause.bottom <= max.top || max.bottom <= pause.top)
+    : true;
+  const inside = (r) => Boolean(canvas && r)
+    && r.left >= canvas.left && r.top >= canvas.top && r.right <= canvas.right && r.bottom <= canvas.bottom;
+  return {
+    enabled: !document.getElementById("btn-pause")?.disabled,
+    pressed: document.getElementById("btn-pause")?.getAttribute("aria-pressed"),
+    separate: !overlaps,
+    inside: inside(pause) && inside(max),
+  };
+});
+check("pause and Max are distinct accessible stage controls",
+  stageControls.enabled && stageControls.pressed === "false" && stageControls.separate && stageControls.inside,
+  JSON.stringify(stageControls));
+
 const generatedManifest = await page.evaluate(() => {
   const manifest = window.__INK.game.generatedAssets;
   return {
@@ -555,6 +604,27 @@ await settle(page, 260);
 const resumed = await page.evaluate(() => window.__INK.phase === "playing");
 check("P pauses and resumes", paused && resumed, `paused=${paused} resumed=${resumed} phase=${await page.evaluate(() => window.__INK.phase)}`);
 
+await page.locator("#btn-pause").click();
+await settle(page, 260);
+const pausedByControl = await page.evaluate(() => ({
+  phase: window.__INK.phase,
+  pressed: document.getElementById("btn-pause")?.getAttribute("aria-pressed"),
+  label: document.getElementById("btn-pause")?.getAttribute("aria-label"),
+}));
+await page.locator("#btn-pause").click();
+await settle(page, 260);
+const resumedByControl = await page.evaluate(() => ({
+  phase: window.__INK.phase,
+  pressed: document.getElementById("btn-pause")?.getAttribute("aria-pressed"),
+}));
+check("the manga pause control pauses and resumes",
+  pausedByControl.phase === "paused"
+    && pausedByControl.pressed === "true"
+    && pausedByControl.label === "Resume game"
+    && resumedByControl.phase === "playing"
+    && resumedByControl.pressed === "false",
+  `paused=${JSON.stringify(pausedByControl)} resumed=${JSON.stringify(resumedByControl)}`);
+
 // 6. Level up, taken with the keyboard. Exactly one level is granted
 // so that taking it returns to play rather than opening the next card.
 await page.evaluate(() => {
@@ -563,6 +633,11 @@ await page.evaluate(() => {
   g.enemies.length = 0;
   g.player.life = g.player.maxLife;
   g.player.xp = 0;
+  // Movement, pause, and the opening Space press are intentionally queued for
+  // edge-triggered menus. Drain stale inputs so this authored level-up remains
+  // open for inspection instead of intermittently consuming itself.
+  g.input.takePressed();
+  g.input.consumeAny();
   g.gainXp(g.player.xpNeed);
 });
 await settle(page, 260);
@@ -657,6 +732,30 @@ const mobileFit = await page.evaluate(() => {
   };
 });
 check("phone layout uses a fitted portrait game panel", mobileFit.pass, mobileFit.detail);
+const mobileHud = await page.evaluate(() => {
+  const g = window.__INK.game;
+  const r = g.hud.regions;
+  const bandBottom = r.band.y + r.band.h;
+  const within = (part) => Boolean(part)
+    && part.x >= r.band.x - 1
+    && part.y >= r.band.y - 1
+    && part.x + part.w <= r.band.x + r.band.w + 1
+    && part.y + part.h <= bandBottom + 1;
+  const pause = document.getElementById("btn-pause")?.getBoundingClientRect();
+  const max = document.getElementById("btn-fullscreen")?.getBoundingClientRect();
+  return {
+    compact: g.hud.compact,
+    allWithin: [r.hp, r.timer, r.xp, r.loadout].every(within),
+    timerCentered: Math.abs((r.timer.x + r.timer.w / 2) - g.w / 2) <= 2,
+    loadoutBelowTimer: r.loadout.y >= r.timer.y + r.timer.h,
+    controlsSeparated: Boolean(pause && max && max.right <= pause.left),
+    band: r.band,
+  };
+});
+check("phone HUD keeps the sample hierarchy inside its ornamental frame",
+  mobileHud.compact && mobileHud.allWithin && mobileHud.timerCentered
+    && mobileHud.loadoutBelowTimer && mobileHud.controlsSeparated,
+  JSON.stringify(mobileHud));
 await page.setViewportSize({ width: 1600, height: 700 });
 await settle(page, 400);
 check("survives viewport changes", true);

@@ -35,7 +35,7 @@ import {
 import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js?v=20260803-calm-1";
 import { Audio } from "./audio.js?v=20260803-calm-1";
 import { Input } from "./input.js?v=20260803-2";
-import { Hud } from "./hud.js?v=20260803-solo-slash-1";
+import { Hud } from "./hud.js?v=20260803-manga-ui-1";
 import { loadGeneratedAssets } from "./generated-assets.js?v=20260803-calm-1";
 
 // The camera guarantees a minimum window onto the world in BOTH
@@ -167,12 +167,16 @@ export class Game {
     this.paused = false;
     this.slowmo = 0;
     this.dpr = 1;
-    this.showStats = true;
+    // The status ledger is still available through the debug toggle, but the
+    // combat view now follows the reference's clean, top-weighted hierarchy.
+    this.showStats = false;
     this.frame = 0;
     this.fpsSamples = [];
     this.fps = 60;
 
     this.onScore = null;   // set by main.js so the site can record it
+    this.onUiState = null;
+    this.lastUiPhase = "";
 
     this.bindCanvas();
   }
@@ -275,6 +279,13 @@ export class Game {
     } else if (this.phase === "title" || this.phase === "dead" || this.phase === "won") {
       this.onConfirm();
     }
+  }
+
+  togglePause() {
+    if (this.phase === "playing") this.phase = "paused";
+    else if (this.phase === "paused") this.phase = "playing";
+    else return false;
+    return true;
   }
 
   /* ------------------------------------------------------- */
@@ -881,8 +892,7 @@ export class Game {
     this.input.update();
 
     if (this.input.consumePause()) {
-      if (this.phase === "playing") this.phase = "paused";
-      else if (this.phase === "paused") this.phase = "playing";
+      this.togglePause();
     }
 
     if (this.phase === "title") {
@@ -1329,6 +1339,11 @@ export class Game {
     if (this.phase === "won") this.drawEnd(g, true);
 
     this.drawTouchStick(g);
+
+    if (this.lastUiPhase !== this.phase) {
+      this.lastUiPhase = this.phase;
+      if (this.onUiState) this.onUiState(this.phase);
+    }
   }
 
   /** One y-sorted pass over everything that stands on the ground. */
@@ -1878,7 +1893,7 @@ export class Game {
     drawInkSigil(g, "pause", W / 2, H / 2 - 92, 54, {
       colour: PAL.blood, accent: PAL.blood,
     });
-    inkText(g, "P TO CONTINUE", W / 2, H / 2 + 82, {
+    inkText(g, "P OR Ⅱ TO CONTINUE", W / 2, H / 2 + 82, {
       font: FONTS.display(22), halo: 6, outline: 3, colour: PAL.inkSoft, align: "center",
     });
   }

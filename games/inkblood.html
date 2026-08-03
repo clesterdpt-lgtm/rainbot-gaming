@@ -78,6 +78,49 @@
       cursor: crosshair;
     }
 
+    /* The reference treats controls as part of the manga frame: squared,
+       high-contrast blocks tucked into the same top command strip. */
+    .inkblood-page .ink-stage-control,
+    .inkblood-page #btn-fullscreen {
+      top: 14px;
+      width: 38px;
+      height: 38px;
+      border: 1px solid rgba(248, 245, 236, 0.76);
+      border-radius: 0;
+      clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+      background: rgba(8, 8, 12, 0.9);
+      color: #f8f5ec;
+      font-family: var(--inkblood-display);
+      font-size: 19px;
+      line-height: 1;
+      z-index: 43;
+    }
+    .inkblood-page #btn-pause { right: 14px; }
+    .inkblood-page #btn-fullscreen { right: 58px; }
+    .inkblood-page #btn-pause[aria-pressed="true"] {
+      background: rgba(192, 20, 33, 0.94);
+    }
+    .inkblood-page #btn-pause:disabled {
+      cursor: default;
+      opacity: 0.38;
+    }
+    .inkblood-page .ink-stage-control:focus-visible,
+    .inkblood-page #btn-fullscreen:focus-visible {
+      outline: 2px solid #8f52ff;
+      outline-offset: 2px;
+    }
+
+    /* The generic site menu remains available, but it no longer sits over HP. */
+    .inkblood-page .rb-escape-btn {
+      top: auto;
+      bottom: 9px;
+      left: 9px;
+      width: 32px;
+      height: 32px;
+      border-radius: 0;
+      background: rgba(8, 8, 12, 0.72);
+    }
+
     /* ---------- boot screen ---------- */
     #ink-boot {
       position: absolute;
@@ -193,7 +236,7 @@
     /* Persistent exit hatch once the game is running. */
     #ink-exit {
       position: absolute;
-      left: 14px;
+      left: 48px;
       bottom: 12px;
       z-index: 40;
       font-family: var(--inkblood-display);
@@ -215,6 +258,10 @@
         max-height: none;
         min-height: 0;
       }
+      .inkblood-page .ink-stage-control,
+      .inkblood-page #btn-fullscreen { top: 9px; }
+      .inkblood-page #btn-pause { right: 9px; }
+      .inkblood-page #btn-fullscreen { right: 53px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -238,6 +285,7 @@
       <div class="game-stage rb-standalone-stage">
         <div class="canvas-wrap rb-standalone-surface">
           <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" aria-pressed="false" title="Max screen">⛶</button>
+          <button class="ink-stage-control" id="btn-pause" type="button" aria-label="Pause game" aria-controls="ink-canvas" aria-pressed="false" title="Pause (P)" disabled>Ⅱ</button>
 
           <div id="ink-root">
             <canvas id="ink-canvas" tabindex="0" aria-label="Inkblood playfield"></canvas>
@@ -297,7 +345,7 @@
   </footer>
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/inkblood/boot.js?v=20260803-solo-slash-1"></script>
+  <script src="../assets/js/inkblood/boot.js?v=20260803-manga-ui-1"></script>
   <script src="../assets/js/main.js?v=20260802-inkblood-shell-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");

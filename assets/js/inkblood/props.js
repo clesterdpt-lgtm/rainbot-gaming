@@ -22,6 +22,12 @@ import {
 import { shape, smoothPath, lock, gloss, folds, LIGHT } from "./figure.js?v=20260803-2";
 
 const CELL = 300;
+// A large cell keeps the authored composition from reading as wallpaper.
+// The half-cell offset puts a new run in the plate's open combat centre
+// instead of at the meeting point of four mirrored edges.
+const GROUND_CELL = 2100;
+const GROUND_OFFSET = GROUND_CELL / 2;
+let generatedGround = null;
 
 export const PROPS = {
   grass: [],
@@ -31,8 +37,30 @@ export const PROPS = {
   lantern: null,
   torii: null,
   tree: [],
+  ruin: [],
   patch: [],
 };
+
+/**
+ * Replace the procedural boot art with the generated manga plates.
+ * The original canvases remain the fallback when an image fails to load.
+ */
+export function installGeneratedEnvironment({ props, ground } = {}) {
+  if (ground) {
+    generatedGround = ground;
+    // The authored plate already carries cracks, scuffs and hatch fields.
+    // Clear the old oval patches even if the optional prop sheet failed.
+    PROPS.patch.length = 0;
+  }
+  if (!props) return;
+
+  for (const key of ["grass", "stone", "bone", "grave", "tree", "ruin"]) {
+    if (Array.isArray(props[key]) && props[key].length) PROPS[key] = props[key];
+  }
+  for (const key of ["lantern", "torii"]) {
+    if (props[key]) PROPS[key] = props[key];
+  }
+}
 
 /* ---------------------------------------------------------- */
 /* Baking                                                      */
@@ -317,21 +345,25 @@ export function drawGround(g, view) {
   const y0 = Math.floor((view.y - CELL) / CELL);
   const y1 = Math.ceil((view.y + view.h + CELL) / CELL);
 
+  if (generatedGround) drawGeneratedGround(g, view);
+
   // Pass 1: tone patches, well underneath everything.
-  for (let cy = y0; cy <= y1; cy++) {
-    for (let cx = x0; cx <= x1; cx++) {
-      const r = hash2(cx, cy, 11);
-      if (r > 0.34) continue;
-      const img = PROPS.patch[(hash2(cx, cy, 12) * PROPS.patch.length) | 0];
-      const px = cx * CELL + hash2(cx, cy, 13) * CELL;
-      const py = cy * CELL + hash2(cx, cy, 14) * CELL;
-      const s = 0.7 + hash2(cx, cy, 15) * 0.85;
-      g.save();
-      g.globalAlpha = 0.75;
-      g.translate(px, py);
-      g.scale(s, s * 0.8);
-      g.drawImage(img, -img.width / 2, -img.height / 2);
-      g.restore();
+  if (PROPS.patch.length) {
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const r = hash2(cx, cy, 11);
+        if (r > 0.34) continue;
+        const img = PROPS.patch[(hash2(cx, cy, 12) * PROPS.patch.length) | 0];
+        const px = cx * CELL + hash2(cx, cy, 13) * CELL;
+        const py = cy * CELL + hash2(cx, cy, 14) * CELL;
+        const s = 0.7 + hash2(cx, cy, 15) * 0.85;
+        g.save();
+        g.globalAlpha = 0.75;
+        g.translate(px, py);
+        g.scale(s, s * 0.8);
+        g.drawImage(img, -img.width / 2, -img.height / 2);
+        g.restore();
+      }
     }
   }
 
@@ -366,10 +398,11 @@ export function drawGround(g, view) {
         const pick = hash2(cx, cy, 4);
         let img;
         let scale = 1;
-        if (pick < 0.3) img = PROPS.grave[(hash2(cx, cy, 5) * PROPS.grave.length) | 0];
-        else if (pick < 0.55) img = PROPS.lantern;
-        else if (pick < 0.8) img = PROPS.tree[(hash2(cx, cy, 6) * PROPS.tree.length) | 0];
-        else { img = PROPS.torii; scale = 1.1; }
+        if (pick < 0.28) img = PROPS.grave[(hash2(cx, cy, 5) * PROPS.grave.length) | 0];
+        else if (pick < 0.5) img = PROPS.lantern;
+        else if (pick < 0.72) img = PROPS.tree[(hash2(cx, cy, 6) * PROPS.tree.length) | 0];
+        else if (pick < 0.9 || !PROPS.ruin.length) { img = PROPS.torii; scale = 1.1; }
+        else img = PROPS.ruin[(hash2(cx, cy, 7) * PROPS.ruin.length) | 0];
         g.save();
         g.translate(px, py);
         g.scale(scale, scale);
@@ -378,6 +411,37 @@ export function drawGround(g, view) {
       }
     }
   }
+}
+
+/**
+ * The authored plate is mirrored on alternating cells. That makes each
+ * shared edge meet the same source edge, eliminating hard repeat seams
+ * while keeping the battlefield world-locked under the camera.
+ */
+function drawGeneratedGround(g, view) {
+  const x0 = Math.floor((view.x + GROUND_OFFSET) / GROUND_CELL);
+  const x1 = Math.floor((view.x + view.w + GROUND_OFFSET) / GROUND_CELL);
+  const y0 = Math.floor((view.y + GROUND_OFFSET) / GROUND_CELL);
+  const y1 = Math.floor((view.y + view.h + GROUND_OFFSET) / GROUND_CELL);
+
+  g.save();
+  // Let silhouettes and blood remain the darkest values in a busy fight.
+  g.globalAlpha = 0.62;
+  for (let cy = y0; cy <= y1; cy++) {
+    for (let cx = x0; cx <= x1; cx++) {
+      const flipX = Math.abs(cx) % 2 === 1;
+      const flipY = Math.abs(cy) % 2 === 1;
+      const left = cx * GROUND_CELL - GROUND_OFFSET;
+      const top = cy * GROUND_CELL - GROUND_OFFSET;
+      g.save();
+      g.translate(left + (flipX ? GROUND_CELL : 0),
+        top + (flipY ? GROUND_CELL : 0));
+      g.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+      g.drawImage(generatedGround, 0, 0, GROUND_CELL, GROUND_CELL);
+      g.restore();
+    }
+  }
+  g.restore();
 }
 
 /* ---------------------------------------------------------- */

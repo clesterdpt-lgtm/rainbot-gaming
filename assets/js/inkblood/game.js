@@ -23,17 +23,20 @@ import {
   starburst, roughCircle, fillToneDevice, tone, focusLines, feather, wobble,
   drawInkSigil,
 } from "./art.js?v=20260803-2";
-import { bakeCast, PX_PER_UNIT } from "./sprites.js?v=20260803-2";
-import { bakeProps, drawGround, Ash } from "./props.js?v=20260803-2";
+import { bakeCast } from "./sprites.js?v=20260803-2";
+import {
+  bakeProps, drawGround, Ash, installGeneratedEnvironment,
+} from "./props.js?v=20260803-manga-1";
 import { bakeFx, Fx, ATLAS } from "./fx.js?v=20260803-2";
 import {
-  WEAPONS, PASSIVES, bakeWeaponArt, makeProjectile, stepProjectile,
+  WEAPONS, PASSIVES, WEP_ART, bakeWeaponArt, makeProjectile, stepProjectile,
   drawProjectile, drawChains,
 } from "./weapons.js?v=20260803-2";
-import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js?v=20260803-2";
+import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js?v=20260803-manga-1";
 import { Audio } from "./audio.js?v=20260803-2";
 import { Input } from "./input.js?v=20260803-2";
 import { Hud } from "./hud.js?v=20260803-2";
+import { loadGeneratedAssets } from "./generated-assets.js?v=20260803-manga-1";
 
 // The camera guarantees a minimum window onto the world in BOTH
 // axes. Driving zoom from height alone is fine on a laptop and
@@ -75,6 +78,31 @@ export const FONTS = {
   jp: (px) => `900 ${px.toFixed(1)}px "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif`,
   body: (px) => `${px.toFixed(1)}px system-ui, -apple-system, "Segoe UI", sans-serif`,
 };
+
+// The title treatment was composed around the original long, dry-brush cut.
+// Keep that one plate for the poster while generated combat uses the richer
+// painted slash everywhere in the world.
+let titleSlash = null;
+
+function installGeneratedCombat(combat) {
+  if (!combat) return;
+
+  for (const key of ["gem", "gemBig", "coin", "heart", "chest", "magnet", "bomb"]) {
+    if (combat[key]) ATLAS[key] = combat[key];
+  }
+  if (combat.slash) {
+    titleSlash ||= ATLAS.slash[0] || null;
+    ATLAS.slash = Array.from({ length: 4 }, () => combat.slash);
+  }
+  if (combat.bloodSplat) ATLAS.bloodSplat = Array.from({ length: 6 }, () => combat.bloodSplat);
+  if (combat.inkHit) ATLAS.inkHit = Array.from({ length: 5 }, () => combat.inkHit);
+  if (combat.enemyShot) ATLAS.enemyShot = combat.enemyShot;
+
+  for (const key of ["kunai", "ofuda", "sickle", "fang"]) {
+    if (combat[key]) WEP_ART[key] = combat[key];
+  }
+  if (Array.isArray(combat.crow) && combat.crow.length >= 2) WEP_ART.crow = combat.crow;
+}
 
 /* ---------------------------------------------------------- */
 /* Spatial hash                                                */
@@ -163,14 +191,31 @@ export class Game {
     await new Promise((r) => setTimeout(r, 0));
 
     bakeProps();
-    step(0.3, "Raising the torii");
+    step(0.24, "Raising the torii");
     await new Promise((r) => setTimeout(r, 0));
 
     bakeWeaponArt();
-    step(0.38, "Folding paper charms");
+    step(0.28, "Folding paper charms");
     await new Promise((r) => setTimeout(r, 0));
 
-    this.art = await bakeCast((p, label) => step(0.38 + p * 0.58, label));
+    try {
+      const generated = await loadGeneratedAssets((p, label) => {
+        step(0.3 + p * 0.66, label || "Mounting manga plates");
+      });
+      this.art = generated.art;
+      installGeneratedEnvironment(generated);
+      installGeneratedCombat(generated.combat);
+      this.generatedAssets = { mode: "generated", ...generated.manifest };
+    } catch (error) {
+      console.warn("[inkblood] generated manga art unavailable; using procedural fallback", error);
+      this.generatedAssets = {
+        mode: "procedural-fallback",
+        loaded: 0,
+        failed: [String(error?.message || error)],
+      };
+      this.art = await bakeCast((p, label) => step(0.3 + p * 0.66, label));
+    }
+
     step(0.99, "Opening the gate");
     this.titleBg = this.bakeTitleArt();
     this.titleCrowd = this.bakeTitleCrowd();
@@ -477,6 +522,11 @@ export class Game {
       // first visible frame does not moonwalk toward the fight.
       flip: this.player ? x > this.player.x : false,
       animT: Math.random() * 4,
+      attackT: 0,
+      attackDuration: 0.36,
+      attackKind: "",
+      attackFlip: null,
+      attackProgressStart: 0,
       hitFlash: 0,
       dead: false,
       contactCd: 0,
@@ -960,7 +1010,8 @@ export class Game {
       // feet-first while looking right. Follow locomotion intent (not
       // knockback or separation) and retain the last facing during a
       // nearly vertical approach to prevent horizontal jitter.
-      if (Math.abs(e.wantX) > 1) e.flip = e.wantX < 0;
+      if (e.attackT > 0 && typeof e.attackFlip === "boolean") e.flip = e.attackFlip;
+      else if (Math.abs(e.wantX) > 1) e.flip = e.wantX < 0;
 
       // Knockback decays, desired velocity blends in.
       e.vx *= Math.pow(0.0009, dt);
@@ -968,6 +1019,14 @@ export class Game {
       e.x += (e.wantX + e.vx) * dt;
       e.y += (e.wantY + e.vy) * dt;
       e.animT += dt * (0.9 + e.speedMult * 0.4);
+      if (e.attackT > 0) {
+        e.attackT = Math.max(0, e.attackT - dt);
+        if (e.attackT === 0) {
+          e.attackKind = "";
+          e.attackFlip = null;
+          e.attackProgressStart = 0;
+        }
+      }
       if (e.hitFlash > 0) e.hitFlash -= dt;
       if (e.contactCd > 0) e.contactCd -= dt;
 
@@ -1002,6 +1061,16 @@ export class Game {
       const rr = e.radius + p.radius;
       if (dx * dx + dy * dy * 1.6 < rr * rr && e.contactCd <= 0) {
         e.contactCd = 0.55;
+        // Do not interrupt a more expressive authored action (dash,
+        // cast or boss wind-up), but give ordinary contact damage a
+        // visible claw/lunge frame instead of a sliding walk pose.
+        if (e.attackT <= 0) {
+          e.attackT = 0.3;
+          e.attackDuration = 0.3;
+          e.attackKind = "contact";
+          e.attackFlip = p.x < e.x;
+          e.attackProgressStart = 0.25;
+        }
         this.hurtPlayer(e.def.damage * e.damageMult, Math.atan2(dy, dx));
       }
 
@@ -1327,9 +1396,22 @@ export class Game {
   drawEnemy(g, e) {
     const rec = this.art.cast[e.def.sprite];
     if (!rec) return;
-    const n = rec.frames.length;
-    const idx = gaitFrameIndex(e.animT, 8, n, e.seed);
-    const f = rec.frames[idx];
+    const attacking = e.attackT > 0 && rec.attackFrames?.length;
+    const set = attacking ? rec.attackFrames : rec.frames;
+    const n = set.length;
+    const attackElapsed = attacking
+      ? 1 - e.attackT / Math.max(0.001, e.attackDuration || 0.36)
+      : 0;
+    const attackStart = attacking
+      ? Math.max(0, Math.min(0.75, e.attackProgressStart || 0))
+      : 0;
+    const attackProgress = attacking
+      ? attackStart + attackElapsed * (1 - attackStart)
+      : 0;
+    const idx = attacking
+      ? Math.min(n - 1, Math.max(0, Math.floor(attackProgress * n)))
+      : gaitFrameIndex(e.animT, 8, n, e.seed);
+    const f = set[idx];
     const bob = e.def.bob ? Math.sin(this.time * 3 + e.bobPhase) * e.def.bob : 0;
 
     if (!e.def.ghost) this.shadow(g, e.x, e.y - 2, e.radius * 0.95);
@@ -1343,7 +1425,8 @@ export class Game {
     const oy = -f.oy / 2;
     if (e.def.ghost) g.globalAlpha = 0.82;
     if (e.hitFlash > 0) {
-      g.drawImage(rec.flashFrames[idx], ox, oy, w, h);
+      const flash = attacking ? rec.attackFlashFrames?.[idx] : rec.flashFrames[idx];
+      g.drawImage(flash || f.canvas, ox, oy, w, h);
     } else {
       g.drawImage(f.canvas, ox, oy, w, h);
     }
@@ -1385,12 +1468,17 @@ export class Game {
       g.save();
       g.translate(s.x, s.y);
       g.rotate(s.rot);
-      g.fillStyle = PAL.ink;
-      starburst(g, 0, 0, 11, { points: 5, inner: 0.42, colour: PAL.ink });
-      g.fillStyle = PAL.paperLit;
-      g.beginPath();
-      g.arc(0, 0, 3.4, 0, Math.PI * 2);
-      g.fill();
+      if (ATLAS.enemyShot) {
+        const img = ATLAS.enemyShot;
+        g.drawImage(img, -img.width / 2, -img.height / 2);
+      } else {
+        g.fillStyle = PAL.ink;
+        starburst(g, 0, 0, 11, { points: 5, inner: 0.42, colour: PAL.ink });
+        g.fillStyle = PAL.paperLit;
+        g.beginPath();
+        g.arc(0, 0, 3.4, 0, Math.PI * 2);
+        g.fill();
+      }
       g.restore();
     }
   }
@@ -1626,7 +1714,7 @@ export class Game {
     }
 
     // One crimson cut across the whole plate.
-    const slash = ATLAS.slash[0];
+    const slash = titleSlash || ATLAS.slash[0];
     g.save();
     g.globalAlpha = 0.95;
     g.translate(W * 0.46, H * 0.5);

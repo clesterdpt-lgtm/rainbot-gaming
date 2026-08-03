@@ -82,8 +82,19 @@ const proc = await ensureServer();
 const browser = await chromium.launch({ headless: !headed });
 const page = await browser.newPage({ viewport: { width: 1440, height: 860 }, deviceScaleFactor: 1 });
 const errors = [];
+const generatedAssetNetworkErrors = [];
 page.on("pageerror", (e) => errors.push(`${e.message}`));
 page.on("console", (m) => { if (m.type() === "error") errors.push(`console: ${m.text()}`); });
+page.on("requestfailed", (request) => {
+  if (!request.url().includes("/assets/img/inkblood/generated/")) return;
+  generatedAssetNetworkErrors.push(
+    `request failed: ${request.url()} (${request.failure()?.errorText || "unknown error"})`,
+  );
+});
+page.on("response", (response) => {
+  if (!response.url().includes("/assets/img/inkblood/generated/") || response.status() < 400) return;
+  generatedAssetNetworkErrors.push(`HTTP ${response.status()}: ${response.url()}`);
+});
 
 await page.goto(`http://127.0.0.1:${PORT}/games/inkblood.html`, { waitUntil: "domcontentloaded" });
 
@@ -154,6 +165,227 @@ check("Max closes back to the minimized page and playfield", restored);
 await page.keyboard.press("Space");
 await settle(page, 300);
 check("any key starts a run", await page.evaluate(() => window.__INK.phase === "playing"));
+
+const generatedManifest = await page.evaluate(() => {
+  const manifest = window.__INK.game.generatedAssets;
+  return {
+    mode: manifest?.mode || "missing",
+    status: manifest?.status || "missing",
+    loaded: Array.isArray(manifest?.loaded) ? manifest.loaded.length : -1,
+    failed: Array.isArray(manifest?.failed) ? manifest.failed.length : -1,
+  };
+});
+check("loads the complete generated manga asset manifest",
+  generatedManifest.mode === "generated"
+    && generatedManifest.status === "ready"
+    && generatedManifest.loaded === 7
+    && generatedManifest.failed === 0,
+  JSON.stringify(generatedManifest));
+
+const generatedAnimationArt = await page.evaluate(() => {
+  const pixelSignature = (frame) => {
+    const canvas = frame?.canvas || frame;
+    if (!(canvas instanceof HTMLCanvasElement) || !canvas.width || !canvas.height) {
+      return { signature: "missing", opaque: 0 };
+    }
+    const pixels = canvas.getContext("2d", { willReadFrequently: true })
+      .getImageData(0, 0, canvas.width, canvas.height).data;
+    let hash = 2166136261;
+    let opaque = 0;
+    // Sampling every fourth pixel keeps this inexpensive while still hashing
+    // thousands of authored pixels from each full-size generated frame.
+    for (let i = 0; i < pixels.length; i += 16) {
+      if (pixels[i + 3] > 8) opaque++;
+      hash = Math.imul(hash ^ pixels[i], 16777619);
+      hash = Math.imul(hash ^ pixels[i + 1], 16777619);
+      hash = Math.imul(hash ^ pixels[i + 2], 16777619);
+      hash = Math.imul(hash ^ pixels[i + 3], 16777619);
+    }
+    return {
+      signature: `${canvas.width}x${canvas.height}:${(hash >>> 0).toString(16)}`,
+      opaque,
+    };
+  };
+
+  const clipSummary = (frames) => {
+    const signatures = (frames || []).map(pixelSignature);
+    return {
+      count: signatures.length,
+      unique: new Set(signatures.map((entry) => entry.signature)).size,
+      nonempty: signatures.every((entry) => entry.opaque > 0),
+    };
+  };
+
+  const art = window.__INK.game.art;
+  const castProblems = [];
+  for (const [name, record] of Object.entries(art.cast || {})) {
+    const attacks = record.attackFrames || [];
+    const walk = pixelSignature(record.frames?.[0]);
+    const attack = pixelSignature(attacks[1]);
+    if (attacks.length !== 4 || attack.opaque <= 0 || attack.signature === walk.signature) {
+      castProblems.push(`${name}:${attacks.length}/${walk.signature}/${attack.signature}`);
+    }
+  }
+
+  return {
+    run: clipSummary(art.hero?.run),
+    slash: clipSummary(art.hero?.slash),
+    castCount: Object.keys(art.cast || {}).length,
+    castProblems,
+  };
+});
+check("generated hero run frames are visibly animated",
+  generatedAnimationArt.run.count === 8
+    && generatedAnimationArt.run.nonempty
+    && generatedAnimationArt.run.unique > 1,
+  JSON.stringify(generatedAnimationArt.run));
+check("generated hero slash frames are visibly animated",
+  generatedAnimationArt.slash.count === 8
+    && generatedAnimationArt.slash.nonempty
+    && generatedAnimationArt.slash.unique > 1,
+  JSON.stringify(generatedAnimationArt.slash));
+check("every generated enemy and boss has a distinct four-frame attack clip",
+  generatedAnimationArt.castCount === 11 && generatedAnimationArt.castProblems.length === 0,
+  `cast=${generatedAnimationArt.castCount} problems=${generatedAnimationArt.castProblems.join(" | ") || "none"}`);
+
+const enemyAttackStates = await page.evaluate(() => {
+  const g = window.__INK.game;
+  const previous = {
+    enemies: g.enemies,
+    enemyShots: g.enemyShots,
+    boss: g.boss,
+  };
+
+  const pixelSignature = (frame) => {
+    const canvas = frame?.canvas || frame;
+    const pixels = canvas.getContext("2d", { willReadFrequently: true })
+      .getImageData(0, 0, canvas.width, canvas.height).data;
+    let hash = 2166136261;
+    for (let i = 0; i < pixels.length; i += 16) {
+      hash = Math.imul(hash ^ pixels[i], 16777619);
+      hash = Math.imul(hash ^ pixels[i + 1], 16777619);
+      hash = Math.imul(hash ^ pixels[i + 2], 16777619);
+      hash = Math.imul(hash ^ pixels[i + 3], 16777619);
+    }
+    return `${canvas.width}x${canvas.height}:${(hash >>> 0).toString(16)}`;
+  };
+
+  const selectedFrame = (enemy) => {
+    const record = g.art.cast[enemy.def.sprite];
+    const active = enemy.attackT > 0 && record.attackFrames?.length === 4;
+    const elapsed = active
+      ? 1 - enemy.attackT / Math.max(0.001, enemy.attackDuration || 0.36)
+      : 0;
+    const start = active ? Math.max(0, Math.min(0.75, enemy.attackProgressStart || 0)) : 0;
+    const progress = active ? start + elapsed * (1 - start) : 0;
+    const index = active
+      ? Math.min(record.attackFrames.length - 1, Math.max(0, Math.floor(progress * record.attackFrames.length)))
+      : -1;
+    return {
+      active,
+      index,
+      differsFromWalk: active
+        && pixelSignature(record.attackFrames[index]) !== pixelSignature(record.frames[0]),
+    };
+  };
+
+  const curve = { hp: 1, speed: 1, damage: 1 };
+  let ranged;
+  let slam;
+  let priority;
+  try {
+    g.enemies = [];
+    g.enemyShots = [];
+    g.boss = null;
+    g.rebuildGrid();
+
+    const kappa = g.spawnEnemy("kappa", g.player.x + 180, g.player.y, curve);
+    kappa.shotT = -1;
+    g.rebuildGrid();
+    g.updateEnemies(0.11);
+    ranged = {
+      attackT: kappa.attackT,
+      attackKind: kappa.attackKind,
+      shots: g.enemyShots.length,
+      retreats: kappa.wantX > 0,
+      facesPlayer: kappa.flip && kappa.attackFlip === true,
+      selected: selectedFrame(kappa),
+    };
+
+    g.enemies.length = 0;
+    g.enemyShots.length = 0;
+    g.boss = null;
+    g.rebuildGrid();
+
+    const boss = g.spawnEnemy("gashadokuro", g.player.x + 180, g.player.y, curve);
+    boss.boss = true;
+    boss.slamT = -1;
+    g.boss = boss;
+    g.rebuildGrid();
+    // Cross the 0.62s slam telegraph in one deterministic step. The authored
+    // strike must still be selected on the exact impact update.
+    g.updateEnemies(0.63);
+    slam = {
+      attackT: boss.attackT,
+      attackKind: boss.attackKind,
+      telegraph: boss.telegraph,
+      selected: selectedFrame(boss),
+    };
+
+    g.enemies.length = 0;
+    g.enemyShots.length = 0;
+    g.boss = null;
+    g.rebuildGrid();
+
+    const commander = g.spawnEnemy("nurarihyon", g.player.x + 180, g.player.y, curve);
+    commander.boss = true;
+    commander.slamT = -1;
+    commander.summonT = -1;
+    g.boss = commander;
+    g.rebuildGrid();
+    g.updateEnemies(0.63);
+    priority = {
+      attackT: commander.attackT,
+      attackKind: commander.attackKind,
+      telegraph: commander.telegraph,
+      enemyCount: g.enemies.length,
+      selected: selectedFrame(commander),
+    };
+  } finally {
+    g.enemies = previous.enemies;
+    g.enemyShots = previous.enemyShots;
+    g.boss = previous.boss;
+    g.rebuildGrid();
+  }
+  return { ranged, slam, priority };
+});
+check("ranged enemy firing selects its generated attack pose",
+  enemyAttackStates.ranged.attackT > 0
+    && enemyAttackStates.ranged.attackKind === "ranged"
+    && enemyAttackStates.ranged.shots === 1
+    && enemyAttackStates.ranged.retreats
+    && enemyAttackStates.ranged.facesPlayer
+    && enemyAttackStates.ranged.selected.active
+    && enemyAttackStates.ranged.selected.index > 0
+    && enemyAttackStates.ranged.selected.differsFromWalk,
+  JSON.stringify(enemyAttackStates.ranged));
+check("Gashadokuro impact holds its generated attack pose",
+  enemyAttackStates.slam.attackT > 0
+    && enemyAttackStates.slam.attackKind === "slam"
+    && enemyAttackStates.slam.telegraph <= 0
+    && enemyAttackStates.slam.selected.active
+    && enemyAttackStates.slam.selected.index === 2
+    && enemyAttackStates.slam.selected.differsFromWalk,
+  JSON.stringify(enemyAttackStates.slam));
+check("boss slam pose takes priority over a simultaneous summon",
+  enemyAttackStates.priority.attackT > 0
+    && enemyAttackStates.priority.attackKind === "slam"
+    && enemyAttackStates.priority.telegraph <= 0
+    && enemyAttackStates.priority.enemyCount === 1
+    && enemyAttackStates.priority.selected.active
+    && enemyAttackStates.priority.selected.index === 2
+    && enemyAttackStates.priority.selected.differsFromWalk,
+  JSON.stringify(enemyAttackStates.priority));
 
 const slashFrames = await page.evaluate(() => ({
   normal: window.__INK.game.art.hero.slash?.length || 0,
@@ -385,6 +617,9 @@ await page.setViewportSize({ width: 1600, height: 700 });
 await settle(page, 400);
 check("survives viewport changes", true);
 
+check("generated manga asset requests have no network or HTTP failures",
+  generatedAssetNetworkErrors.length === 0,
+  generatedAssetNetworkErrors.slice(0, 4).join(" | "));
 check("no console or page errors", errors.length === 0, errors.slice(0, 4).join(" | "));
 
 await browser.close();

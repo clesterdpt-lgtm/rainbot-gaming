@@ -248,6 +248,16 @@ function pickWeighted(pool) {
  * of collision resolution — game.js owns both — so this stays a
  * pure "decide where I want to be" function.
  */
+function beginAttack(e, kind, duration, facingLeft, progressStart = 0.25) {
+  e.attackDuration = duration;
+  e.attackT = duration;
+  e.attackKind = kind;
+  e.attackFlip = facingLeft;
+  // Most gameplay events resolve immediately, so begin on the authored
+  // action pose. Telegraphs pass 0 to retain their visible wind-up.
+  e.attackProgressStart = progressStart;
+}
+
 export function stepEnemy(e, dt, ctx) {
   const px = ctx.player.x;
   const py = ctx.player.y - ctx.player.h * 0.35;
@@ -268,6 +278,7 @@ export function stepEnemy(e, dt, ctx) {
         if (e.dashing) { e.dashing = false; e.dashT = 1.1 + Math.random() * 0.8; }
         else if (dist < 420) {
           e.dashing = true; e.dashT = 0.42;
+          beginAttack(e, "dash", e.dashT, dx < 0);
           e.dashX = dx; e.dashY = dy;
           ctx.fx.word(e.x, e.y - e.h - 8, "light", { text: ">>", scale: 0.5, life: 0.4 });
         } else e.dashT = 0.4;
@@ -285,6 +296,7 @@ export function stepEnemy(e, dt, ctx) {
         want *= dist < def.range * 0.7 ? -0.55 : 0.12;    // hold the line
         if (e.shotT <= 0) {
           e.shotT = def.shotCd * (0.8 + Math.random() * 0.4);
+          beginAttack(e, "ranged", 0.36, dx < 0);
           ctx.spawnEnemyShot(e, dx, dy, def);
         }
       }
@@ -301,6 +313,10 @@ export function stepEnemy(e, dt, ctx) {
       if (e.slamT <= 0 && dist < def.slamRadius * 1.5) {
         e.slamT = def.slamCd;
         e.telegraph = 0.62;
+        e.charging = 0;
+        // Hold the generated strike pose through the 0.62s impact, then
+        // leave a short recovery instead of returning to a walk frame early.
+        beginAttack(e, "slam", 0.9, dx < 0, 0);
       }
       if (e.telegraph > 0) {
         e.telegraph -= dt;
@@ -309,15 +325,24 @@ export function stepEnemy(e, dt, ctx) {
       }
       if (def.summonCd) {
         e.summonT = (e.summonT || def.summonCd) - dt;
-        if (e.summonT <= 0) { e.summonT = def.summonCd; ctx.bossSummon(e); }
+        const bossActionActive = e.attackT > 0
+          && (e.attackKind === "slam" || e.attackKind === "summon" || e.attackKind === "charge");
+        if (e.summonT <= 0 && !bossActionActive) {
+          e.summonT = def.summonCd;
+          beginAttack(e, "summon", 0.8, dx < 0);
+          ctx.bossSummon(e);
+        }
       }
       if (def.chargeCd) {
         e.chargeT = (e.chargeT || def.chargeCd) - dt;
-        if (e.chargeT <= 0 && dist > 200) {
+        const bossActionActive = e.attackT > 0
+          && (e.attackKind === "slam" || e.attackKind === "summon" || e.attackKind === "charge");
+        if (e.chargeT <= 0 && dist > 200 && !bossActionActive) {
           e.chargeT = def.chargeCd;
           e.charging = 1.1;
+          beginAttack(e, "charge", e.charging, dx < 0);
         }
-        if (e.charging > 0) { e.charging -= dt; want *= 3.1; }
+        if (e.charging > 0 && e.attackKind !== "slam") { e.charging -= dt; want *= 3.1; }
       }
       break;
     }

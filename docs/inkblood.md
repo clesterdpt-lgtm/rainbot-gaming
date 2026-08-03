@@ -17,13 +17,64 @@ standard `.game-layout` chrome.
 
 ---
 
-## The art engine
+## The art pipeline
 
-Nothing in this game is a bitmap asset. Every character, prop, effect
-and UI panel is drawn from four primitives at boot and blitted at
-runtime.
+The shipping presentation is a hybrid rather than an all-procedural
+renderer. Human-directed generative-AI manga sheets provide the primary
+characters, environment props, ground and combat art. They are processed
+into gameplay-ready plates ahead of time and loaded as ordinary same-origin
+images at boot; no model or image-generation API runs in the browser.
 
-### `art.js` — marks
+The original Canvas figure and mark system remains in the repository. It
+still draws effects and UI details, provides the complete fallback cast and
+environment when the generated plates cannot load, and powers the existing
+large-scale figure inspection harness.
+
+### Generated manga plates
+
+All generated gameplay art lives under `assets/img/inkblood/generated/`.
+The repository keeps only the cleaned production plates; temporary keyed
+generation sheets are not shipped. Character, prop and combat plates have
+transparent exteriors so the engine can derive hit flashes and silhouettes
+from their alpha. The lossless WebP plates are pixel-identical to their
+cleaned PNG masters while reducing the shipped art payload by roughly one
+third. `ground-manga-v1.webp` is an opaque authored battlefield plate.
+
+| Plate | Runtime role |
+| --- | --- |
+| `hero-manga-v1.webp` | Hero animation: **4 idle, 8 run and 8 slash frames** |
+| `hero-portrait-manga-v1.webp` | HUD/title portrait |
+| `enemies-manga-v1.webp` | Eight normal yokai; each six-frame gait is derived from two distinct walk poses, with separate explicit attack frames |
+| `bosses-manga-v1.webp` | Gashadokuro, Oni and Nurarihyon; **4 gait frames plus explicit attack frames** per boss |
+| `props-manga-v1.webp` | Authored grass, stones, bones, graves, lantern, torii, tree and broken-shrine ruin props |
+| `ground-manga-v1.webp` | World-locked manga ground, enlarged and centre-offset across alternating mirrored cells to avoid hard repeat seams and obvious wallpaper repetition |
+| `combat-manga-v1.webp` | Authored pickups, weapon art, enemy shot, ink hit, slash and blood-splat icons; existing motion, rotation and effect systems keep them animated |
+
+The production prompt set used the supplied screenshot as an art-direction
+reference for density and mood, while requesting original designs: hand-inked
+seinen manga, dry-brush contours, cross-hatching and screentone on bone-white
+paper, with crimson blood and restrained violet energy. Separate structured
+plates requested a 4x5 hero idle/run/slash sheet, normal-yokai and boss
+walk/attack sheets, a shrine-graveyard prop sheet, an open-centre top-down
+battlefield, combat/pickup icons, and a square hero portrait. Character and
+object plates were generated on a flat chroma field, then alpha-cleaned for
+runtime slicing.
+
+`assets/js/inkblood/generated-assets.js` loads and slices these plates into
+the engine's existing foot-anchored `{ canvas, ox, oy, w, h }` frame records.
+It also builds the blood/white/ink silhouette canvases used for damage
+flashes, title crowds and boss panels. Keeping that record contract means
+camera motion, y-sorting, facing flips, collision and combat timing did not
+need to change for the new art.
+
+`Game.load()` first bakes the procedural props, effects and weapon art, then
+installs the generated cast, ground, props and combat images. If a required
+generated image cannot load or decode, startup logs the failure, calls
+`bakeCast()` and continues with the already-baked procedural art instead.
+`__INK.stats.artMode`, `assetsLoaded` and `assetsFailed` expose which path a
+run is using.
+
+### `art.js` — procedural marks and fallback effects
 
 | Primitive | What it is | Why |
 | --- | --- | --- |
@@ -35,13 +86,13 @@ runtime.
 | `splat` / `spray` | Wobbled radial blobs, directional flicks | Blood and ink impacts. |
 | `toneTile` / `fillToneDevice` | Seamless 45° halftone | Used sparingly now — hatching carries most of the value. |
 
-**Everything is measured in device pixels.** `fillToneDevice`,
+**Procedural marks are measured in device pixels.** `fillToneDevice`,
 `hatchShade` and `stippleShade` all reset the transform before
 drawing. Screentone and pen weight are properties of the *paper*, not
 of the thing being drawn: let them scale with the figure and a sprite
 baked at 2x comes out looking like a chessboard.
 
-### `figure.js` — bodies
+### `figure.js` — fallback bodies
 
 `shape(ctx, pts, opts)` is the one call that matters. It fills, grains,
 hatches, contours and rim-lights a closed form:
@@ -71,16 +122,20 @@ Two rules are load-bearing and were both learned the hard way:
 `SHADE_GAIN` in `figure.js` is a single global knob for how dark the
 whole cast reads.
 
-### `sprites.js` — the cast
+### `sprites.js` — procedural fallback cast
 
-Eleven characters, each a parametric rig (`buildRig` + `runPose`)
-drawn through the figure primitives and baked into frames at boot.
-`PX_PER_UNIT` sets world scale; `SS` is the supersample.
+Eleven characters remain available as parametric rigs (`buildRig` +
+`runPose`) drawn through the figure primitives. `bakeCast()` produces the
+same runtime record shape as the generated loader, including the hero's
+4-frame idle, 8-frame run and 8-frame slash sets, six gait frames for normal
+enemies and four for bosses. `PX_PER_UNIT` sets world scale; `SS` is the
+supersample.
 
 `bakeFigure(name, { scale })` bakes one character at arbitrary size —
 used by `tests/fixtures/inkblood-figure.html` to inspect a character at 3–4x,
 which is the only way to judge whether hatch density is reading as
-strokes or as mud.
+strokes or as mud. This fixture intentionally exercises the retained
+procedural fallback rather than the generated atlas.
 
 ---
 
@@ -89,10 +144,12 @@ strokes or as mud.
 | Module | Owns |
 | --- | --- |
 | `game.js` | Loop, entity arrays, spatial hash, camera, render layering, screens |
+| `generated-assets.js` | Generated plate loading/slicing, frame records and alpha-derived variants |
+| `sprites.js` | Procedural fallback cast and single-figure inspection bake |
 | `weapons.js` | 9 weapon lines + evolutions, 10 passives, projectile motion + rendering |
 | `enemies.js` | Roster, wave schedule, scripted events, per-enemy AI |
 | `fx.js` | Baked effect atlas, damage numbers, katakana SFX, blood, screen shake |
-| `props.js` | Deterministic infinite ground scatter, drifting ash |
+| `props.js` | Generated ground/prop installation, deterministic infinite scatter, procedural fallback, drifting ash |
 | `hud.js` | Canvas HUD panels, level-up cards |
 | `audio.js` | Fully synthesised taiko + drone score, no sound files |
 | `input.js` | Keyboard, gamepad, floating touch thumbstick |
@@ -100,8 +157,8 @@ strokes or as mud.
 **Performance shape.** One array per entity class, all swept with a
 backwards splice. A uniform-grid spatial hash is rebuilt each frame
 and every "what is near X" query goes through it. Measured **75fps
-with 330 enemies, 300 pickups, 150 blood decals and a live boss at
-DPR 2 on a 3200×1800 backing store.**
+with 329 enemies, 293 pickups, 150 blood decals and a live boss at
+DPR 2 on a 2252×1266 backing store** after the generated-art integration.
 
 ---
 
@@ -111,6 +168,8 @@ DPR 2 on a 3200×1800 backing store.**
 
 ```js
 __INK.stats                 // fps, entity counts, time, level, kills
+                            // plus artMode/assetsLoaded/assetsFailed
+                            // and the current enemyAttacking count
 __INK.sim(seconds)          // advance without rendering; kites the player
                             // and auto-resolves level-ups
 __INK.newRun()
@@ -128,13 +187,26 @@ __INK.shotStep(name)        // named states for the screenshot harness
 so waiting real seconds for the game to reach an interesting state does
 not work.
 
+Two stable browser-QA hooks are also installed directly on `window`:
+
+```js
+render_game_to_text()       // JSON: mode/time/score/art mode, player action,
+                            // world-coordinate convention and visible enemies
+await advanceTime(ms)       // wait through requestAnimationFrame for real-time
+                            // animation/state observation
+```
+
+`advanceTime()` does not fast-forward the simulation; use `__INK.sim()` for
+that. It exists so browser automation can wait for real rendered animation
+without depending on an arbitrary external sleep.
+
 ---
 
 ## Harnesses
 
 ```bash
-node scripts/inkblood-artcheck.mjs  # sprite bake boxes: is any art cropped?
-node scripts/inkblood-e2e.mjs       # 17 checks, real key/mouse input
+node scripts/inkblood-artcheck.mjs  # procedural fallback bake boxes: is art cropped?
+node scripts/inkblood-e2e.mjs       # 37 checks, including generated clips and enemy attack poses
 node scripts/inkblood-soak.mjs --god  # full 15-minute run, leak + curve report
 node scripts/inkblood-perf.mjs      # headed FPS probe at worst case
 node scripts/inkblood-shots.mjs --script title,play,swarm,boss,levelup
@@ -144,19 +216,21 @@ node scripts/inkblood-shots.mjs --url "/tests/fixtures/inkblood-figure.html?who=
 The perf probe runs **headed on purpose** — headless has no compositor
 and reports render costs roughly 30× worse than reality.
 
-### Bake boxes
+### Procedural fallback bake boxes
 
-Each entry in `CAST` (and `heroBox`) carries a hand-written extents
-box in figure units. Get it wrong and the art is **silently cropped** —
-a sword tip, a horn, a club head just stops at the canvas edge and
-nothing errors. Five of twelve figures were clipped on the first pass.
+Each procedural entry in `CAST` (and `heroBox`) carries a hand-written
+extents box in figure units. Get it wrong and the fallback art is
+**silently cropped** — a sword tip, a horn, a club head just stops at the
+canvas edge and nothing errors. Five of twelve figures were clipped on the
+first pass.
 
 `scripts/inkblood-artcheck.mjs` bakes every figure across its whole
 cycle, reads the alpha channel, and reports both border contact and
 the *minimum* margin across frames (minimum, because trimming a box
 against one frame's slack would clip another frame where a limb swings
-further). **Run it after changing any figure's proportions, pose
-amplitude or held equipment.**
+further). **Run it after changing any fallback figure's proportions, pose
+amplitude or held equipment.** Generated plates need their own rendered-game
+inspection because their crop and anchors are owned by `generated-assets.js`.
 
 ### Alternate in-engine cover
 

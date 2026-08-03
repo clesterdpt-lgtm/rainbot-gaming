@@ -8,7 +8,7 @@
 
 "use strict";
 
-import { Game } from "./game.js?v=20260803-2";
+import { Game } from "./game.js?v=20260803-manga-1";
 
 const GAME_ID = "inkblood";
 
@@ -106,6 +106,10 @@ function installDebug(game) {
         hp: game.player && Math.round(game.player.hp),
         kills: game.kills,
         slashing: Boolean(game.player && game.player.slashT > 0),
+        enemyAttacking: game.enemies.filter((e) => !e.dead && e.attackT > 0).length,
+        artMode: game.generatedAssets?.mode || "unknown",
+        assetsLoaded: game.generatedAssets?.loaded?.length ?? game.generatedAssets?.loaded ?? 0,
+        assetsFailed: game.generatedAssets?.failed?.length ?? 0,
       };
     },
 
@@ -261,15 +265,23 @@ function installDebug(game) {
         case "bossfight":
           hook.newRun();
           hook.god(true);
-          hook.give("crimsonArc", 8);
-          hook.give("raijin", 6);
-          hook.sim(3);
+          for (const weapon of game.weapons) weapon.cd = 999;
           hook.boss(arg || "oni");
-          // Bosses walk in from the spawn ring; four seconds is not
-          // enough for one to reach the player and the shot comes
-          // back empty.
-          hook.sim(14);
-          while (game.phase === "levelup") game.takeChoice();
+          // Compose a deterministic close-range wind-up. Letting the boss
+          // walk in from the spawn ring made this visual-QA state randomly
+          // empty once high-level weapons killed it off camera.
+          if (game.boss) {
+            game.boss.x = game.player.x + 190;
+            game.boss.y = game.player.y + 46;
+            game.boss.attackDuration = 0.9;
+            game.boss.attackT = 0.9;
+            game.boss.attackKind = "slam";
+            game.boss.attackFlip = true;
+            game.boss.attackProgressStart = 0.25;
+            game.boss.telegraph = 0.62;
+            game.rebuildGrid();
+          }
+          game.fx.panel = null;
           break;
         case "death":
           hook.newRun();
@@ -298,4 +310,35 @@ function installDebug(game) {
     },
   };
   window.__INK = hook;
+
+  // Small, stable inspection surface for browser QA and assistive tooling.
+  window.render_game_to_text = () => {
+    const p = game.player;
+    const visible = game.enemies.filter((e) => !e.dead).slice(0, 16).map((e) => ({
+      type: e.type,
+      x: Math.round(e.x),
+      y: Math.round(e.y),
+      action: e.attackT > 0 ? e.attackKind || "attack" : "walk",
+    }));
+    return JSON.stringify({
+      coords: "origin:world x:right y:down; camera follows player",
+      mode: game.phase,
+      time: Number(game.time.toFixed(2)),
+      score: game.kills || 0,
+      art: game.generatedAssets?.mode || "unknown",
+      player: p ? {
+        x: Math.round(p.x), y: Math.round(p.y), hp: Math.round(p.hp),
+        moving: p.moving, action: p.slashT > 0 ? "slash" : (p.moving ? "run" : "idle"),
+      } : null,
+      enemies: visible,
+    });
+  };
+  window.advanceTime = (ms) => new Promise((resolve) => {
+    const start = performance.now();
+    const tick = () => {
+      if (performance.now() - start >= ms) resolve();
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
 }

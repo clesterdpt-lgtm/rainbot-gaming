@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260803-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1";
+  const MANSION_RUNTIME_VERSION = "20260803-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2987,13 +2987,24 @@
       blackoutSeconds: 4.45,
       shelfPosition: Object.freeze({ x: 7.76, y: FLOOR.BASEMENT + 1.82, z: 7.72 }),
       floorPosition: Object.freeze({ x: 8.18, y: FLOOR.BASEMENT + 0.045, z: 7.48 }),
+      contestantFileShelf: Object.freeze({
+        x: 11.455,
+        y: FLOOR.BASEMENT + 1.57,
+        z: 5.25,
+        spacing: 0.36,
+        viewerX: 13.15,
+        viewerYaw: Math.PI / 2,
+      }),
       triggerBounds: Object.freeze({ minX: 4.6, maxX: 13.8, minZ: 4.0, maxZ: 10.8 }),
       circuitName: "archive and pantry lights",
       closeDoors: Object.freeze(["basement stair door", "archive door"]),
     }),
     workroom: Object.freeze({
-      durationSeconds: 6.1,
-      breathingSeconds: 5.25,
+      durationSeconds: 18,
+      breathingSeconds: 18,
+      breathingRampSeconds: 15,
+      breathingStartGain: 0.008,
+      breathingReleaseSeconds: 0.8,
       breathingGain: 0.24,
       circuitName: "workroom lights",
       closeDoors: Object.freeze(["workroom door"]),
@@ -4608,7 +4619,7 @@
     contestant13GardenShovel: [-22.28, YARD_LAYOUT.groundY, -4.05, 0, -0.75],
     contestant13DigSite: [29.65, YARD_LAYOUT.groundY, 5.75, -Math.PI / 2, -0.93],
     contestant13BasementDoor: [12.55, FLOOR.MAIN, -4.65, Math.PI, -0.08],
-    contestant13ArchiveCage: [13.15, FLOOR.BASEMENT, 5.25, Math.PI / 2, -0.14],
+    contestant13ArchiveCage: [9.0, FLOOR.BASEMENT, 10.12, Math.PI / 2, -0.14],
     contestant13WorkshopRelay: [-2.5, FLOOR.BASEMENT, -10.0, 0, -0.12],
   });
 
@@ -19399,6 +19410,7 @@
       this.blackoutFlickerRemaining = 0;
       this.mazeDarknessActive = false;
       this.mazeLightSnapshots = [];
+      this.mazeBulbSnapshots = [];
       this.keyOwnedAtTrigger = false;
       this.colliderCountAtTrigger = null;
       this.fixedBoxCountAtTrigger = null;
@@ -19725,7 +19737,14 @@
         index,
         previousScale: light.userData.eventIntensityScale ?? 1,
       }));
-      this.mazeDarknessActive = this.mazeLightSnapshots.length > 0;
+      const bulbCandidates = yardState.circuit?.bulbs.filter((bulb) => (
+        bulb.userData.mazeFixtureNames?.length > 0
+      )) || [];
+      this.mazeBulbSnapshots = bulbCandidates.map((bulb) => ({
+        bulb,
+        previousScale: bulb.userData.eventIntensityScale ?? 1,
+      }));
+      this.mazeDarknessActive = this.mazeLightSnapshots.length > 0 || this.mazeBulbSnapshots.length > 0;
       this.flickerClock = 0;
       this.flickerCount = 0;
       this.blackoutFlickerRemaining = blackout
@@ -19751,6 +19770,10 @@
           snapshot.light.userData.eventIntensityScale = snapshot.previousScale * scale;
           snapshot.light.intensity = renderedLightIntensity(snapshot.light);
         }
+        for (const snapshot of this.mazeBulbSnapshots) {
+          snapshot.bulb.userData.eventIntensityScale = snapshot.previousScale * scale;
+          syncBulbMaterialState(snapshot.bulb);
+        }
         return;
       }
       const cycle = this.flickerClock % config.flickerPeriodSeconds;
@@ -19762,6 +19785,10 @@
       for (const snapshot of this.mazeLightSnapshots) {
         snapshot.light.userData.eventIntensityScale = snapshot.previousScale * scale;
         snapshot.light.intensity = renderedLightIntensity(snapshot.light);
+      }
+      for (const snapshot of this.mazeBulbSnapshots) {
+        snapshot.bulb.userData.eventIntensityScale = snapshot.previousScale * scale;
+        syncBulbMaterialState(snapshot.bulb);
       }
     }
 
@@ -19789,12 +19816,17 @@
     }
 
     stopMazeDarkness() {
-      if (!this.mazeDarknessActive && !this.mazeLightSnapshots.length) return false;
+      if (!this.mazeDarknessActive && !this.mazeLightSnapshots.length && !this.mazeBulbSnapshots.length) return false;
       for (const snapshot of this.mazeLightSnapshots) {
         snapshot.light.userData.eventIntensityScale = snapshot.previousScale;
         snapshot.light.intensity = renderedLightIntensity(snapshot.light);
       }
+      for (const snapshot of this.mazeBulbSnapshots) {
+        snapshot.bulb.userData.eventIntensityScale = snapshot.previousScale;
+        syncBulbMaterialState(snapshot.bulb);
+      }
       this.mazeLightSnapshots = [];
+      this.mazeBulbSnapshots = [];
       this.mazeDarknessActive = false;
       this.currentMazeFlickerScale = 1;
       this.blackoutFlickerRemaining = 0;
@@ -20276,6 +20308,24 @@
         : 1;
       const mazeLightMaximumScale = mazeLightScales.length ? Math.max(...mazeLightScales) : 1;
       const mazeLitLightCount = mazeLightScales.filter((scale) => scale > 0.005).length;
+      const mazeBulbScales = this.mazeBulbSnapshots.map((snapshot) => (
+        (snapshot.bulb.userData.eventIntensityScale ?? 1) / Math.max(0.0001, snapshot.previousScale)
+      ));
+      const mazeBulbAverageScale = mazeBulbScales.length
+        ? mazeBulbScales.reduce((sum, scale) => sum + scale, 0) / mazeBulbScales.length
+        : 1;
+      const mazeBulbMaximumScale = mazeBulbScales.length ? Math.max(...mazeBulbScales) : 1;
+      const currentMazeBulbs = yardState.circuit?.bulbs.filter((bulb) => (
+        bulb.userData.mazeFixtureNames?.length > 0
+      )) || [];
+      const mazeDarkenedBulbCount = this.mazeBulbSnapshots.reduce((total, snapshot) => (
+        total + (snapshot.bulb.isInstancedMesh ? snapshot.bulb.count : 1)
+      ), 0);
+      const mazeLitBulbCount = currentMazeBulbs.reduce((total, bulb) => (
+        total + ((bulb.userData.outputFactor || 0) > 0.005
+          ? (bulb.isInstancedMesh ? bulb.count : 1)
+          : 0)
+      ), 0);
       const mazeStatus = this.playerMazeStatus();
       return {
         active: this.active,
@@ -20328,6 +20378,20 @@
         mazeLightAverageScale: Number(mazeLightAverageScale.toFixed(4)),
         mazeLightMaximumScale: Number(mazeLightMaximumScale.toFixed(4)),
         mazeLitLightCount,
+        mazeBulbGroupCount: currentMazeBulbs.length,
+        mazeDarkenedBulbCount,
+        mazeBulbAverageScale: Number(mazeBulbAverageScale.toFixed(4)),
+        mazeBulbMaximumScale: Number(mazeBulbMaximumScale.toFixed(4)),
+        mazeLitBulbCount,
+        mazeBulbGroups: currentMazeBulbs.map((bulb) => ({
+          name: bulb.name,
+          role: bulb.userData.mazeRole,
+          fixtures: [...bulb.userData.mazeFixtureNames],
+          count: bulb.isInstancedMesh ? bulb.count : 1,
+          outputFactor: Number((bulb.userData.outputFactor || 0).toFixed(4)),
+          color: bulb.material?.color?.getHexString?.() || null,
+          emissiveIntensity: Number((bulb.material?.emissiveIntensity || 0).toFixed(4)),
+        })),
         blackoutFlickerActive: this.blackoutFlickerRemaining > 0,
         blackoutFlickerRemaining: Number(this.blackoutFlickerRemaining.toFixed(3)),
         flickerCount: this.flickerCount,
@@ -24624,6 +24688,13 @@
       )) || [];
     }
 
+    mazeExitBulbs() {
+      const fixtures = STORM_RUN.mazeExitLighting.fixtures;
+      return yardState.circuit?.bulbs.filter((bulb) => (
+        bulb.userData.mazeFixtureNames?.some((fixture) => fixtures.includes(fixture))
+      )) || [];
+    }
+
     mazeExitLightingShouldBeDark() {
       if (this.show.phase !== STORM_RUN_PHASE.RUNNING) return false;
       const finalTriggered = this.show.scareTriggeredIds.includes(STORM_RUN.mazeExitLighting.finalScareId);
@@ -24646,11 +24717,16 @@
         light.userData.eventIntensityScale = eventIntensityScale;
         light.intensity = renderedLightIntensity(light);
       }
+      for (const bulb of this.mazeExitBulbs()) {
+        bulb.userData.eventIntensityScale = eventIntensityScale;
+        syncBulbMaterialState(bulb);
+      }
       return !dark;
     }
 
     mazeExitLightingDiagnostics() {
       const lights = this.mazeExitLights();
+      const bulbs = this.mazeExitBulbs();
       const dark = this.mazeExitLightingShouldBeDark();
       const finalTriggered = this.show.scareTriggeredIds.includes(STORM_RUN.mazeExitLighting.finalScareId);
       return {
@@ -24674,6 +24750,22 @@
         playerRoom: state.currentRoom,
         energizedFixtureCount: lights.filter((light) => light.visible && light.intensity > 0.01).length,
         shaderResidentFixtureCount: lights.filter((light) => light.visible).length,
+        bulbs: bulbs.map((bulb) => ({
+          name: bulb.name,
+          fixtures: [...bulb.userData.mazeFixtureNames],
+          count: bulb.isInstancedMesh ? bulb.count : 1,
+          outputFactor: Number((bulb.userData.outputFactor || 0).toFixed(4)),
+          color: bulb.material?.color?.getHexString?.() || null,
+          emissiveIntensity: Number((bulb.material?.emissiveIntensity || 0).toFixed(4)),
+        })),
+        energizedBulbCount: bulbs.reduce((total, bulb) => (
+          total + ((bulb.userData.outputFactor || 0) > 0.005
+            ? (bulb.isInstancedMesh ? bulb.count : 1)
+            : 0)
+        ), 0),
+        shaderResidentBulbCount: bulbs.reduce((total, bulb) => (
+          total + (bulb.visible ? (bulb.isInstancedMesh ? bulb.count : 1) : 0)
+        ), 0),
         topology: "fixed-zero-energy",
       };
     }
@@ -24810,6 +24902,18 @@
     noteClueDiscovered(clueId) {
       if (clueId !== "hedge-maze-b13-cache") {
         return { called: false, reason: "not-storm-run-trigger", clueId };
+      }
+      // The key is an authored hard trigger, not a poll-only gate. If the
+      // player recovers it while Feast Says survivors are still clearing the
+      // Ballroom, finish that non-interactive aftermath before calling the
+      // next production event. The dormant update remains a save/load and
+      // early-key fallback, but the live pickup now always gets an immediate
+      // Storm Run response once Game 1 has been won.
+      if (
+        feastSaysSystem?.show.phase === FEAST_SAYS_PHASE.COMPLETED
+        && feastSaysSystem.show.aftermathActive
+      ) {
+        feastSaysSystem.resolveAftermath("storm-run-key-recovered");
       }
       if (!this.gameOneComplete()) return { called: false, reason: "game-one-incomplete", clueId };
       const gate = this.triggerGateState();
@@ -35116,6 +35220,8 @@
         elapsed: 0,
         closedDoors: [],
       };
+      this.qaManualClock = false;
+      this.qaStepping = false;
       this.setBookDropped(Boolean(state.basementHaunt.archiveDropSeen));
     }
 
@@ -35301,6 +35407,7 @@
     }
 
     update(dt) {
+      if (state.qa && this.qaManualClock && !this.qaStepping) return;
       const step = Math.max(0, Number(dt) || 0);
       if (this.shouldTriggerArchive()) this.triggerArchiveHaunt();
       if (this.archive.active) this.updateArchive(step);
@@ -35309,6 +35416,8 @@
 
     advanceForQA(seconds) {
       if (!state.qa) return this.getDiagnostics();
+      this.qaManualClock = true;
+      this.qaStepping = true;
       let remaining = Math.min(30, Math.max(0, Number(seconds) || 0));
       while (remaining > 0) {
         const step = Math.min(1 / 60, remaining);
@@ -35317,6 +35426,7 @@
         monitorWallSystem?.update(step);
         remaining -= step;
       }
+      this.qaStepping = false;
       return this.getDiagnostics();
     }
 
@@ -35327,10 +35437,14 @@
       return this.getDiagnostics();
     }
 
-    frameFilesForQA() {
+    frameFilesForQA(id = "contestant-09") {
       if (!state.qa) return null;
-      teleport(9.25, FLOOR.BASEMENT, 8.52, Math.PI / 2, -0.12);
+      const fileShelf = BASEMENT_HAUNT.archive.contestantFileShelf;
+      const index = Math.max(0, BASEMENT_HAUNT.contestantFiles.findIndex((file) => file.id === id));
+      const fileZ = fileShelf.z + (index - 1) * fileShelf.spacing;
+      teleport(fileShelf.viewerX, FLOOR.BASEMENT, fileZ, fileShelf.viewerYaw, -0.12);
       updateLocation();
+      updateInteractionPrompt();
       return this.getDiagnostics();
     }
 
@@ -35405,6 +35519,9 @@
         workroom: {
           active: this.workroom.active,
           phase: this.workroom.phase,
+          elapsed: Number(this.workroom.elapsed.toFixed(3)),
+          durationSeconds: BASEMENT_HAUNT.workroom.durationSeconds,
+          remainingSeconds: Number(Math.max(0, BASEMENT_HAUNT.workroom.durationSeconds - this.workroom.elapsed).toFixed(3)),
           seen: Boolean(state.basementHaunt.workroomSeen),
           closedDoors: [...this.workroom.closedDoors],
           blackoutActive: Boolean(workroomCircuit?.transientBlackout),
@@ -38973,10 +39090,10 @@
     return group;
   }
 
-  function addArchiveCurio(parent, name, kind, shelfY, faceZ) {
+  function addArchiveCurio(parent, name, kind, shelfY, faceZ, localX = 0) {
     const curio = new THREE.Group();
     curio.name = `${name}-${kind}`;
-    curio.position.set(0, shelfY, faceZ);
+    curio.position.set(localX, shelfY, faceZ);
     parent.add(curio);
 
     if (kind === "skull") {
@@ -39015,12 +39132,23 @@
     }
   }
 
-  function addArchiveShelfBank({ name, x, z, floorY, rotationY = 0, width = 2.3, height = 3.05, depth = 0.72, seed = 0, curio = null }) {
+  function addArchiveShelfBank({ name, x, z, floorY, rotationY = 0, width = 2.3, height = 3.05, depth = 0.72, seed = 0, curio = null, storyDisplay = null }) {
     const group = new THREE.Group();
     group.name = name;
     group.position.set(x, floorY, z);
     group.rotation.y = rotationY;
-    group.userData = { freestanding: true, doubleSided: true, contents: ["documents", "books", "tapes"], curio };
+    const curioPlacements = Array.isArray(curio)
+      ? curio
+      : curio
+        ? [{ kind: curio, x: 0 }]
+        : [];
+    group.userData = {
+      freestanding: true,
+      doubleSided: true,
+      contents: ["documents", "books", "tapes"],
+      curios: curioPlacements.map((placement) => placement.kind),
+      storyDisplay,
+    };
     scene.add(group);
 
     const shelfYs = Array.from({ length: 5 }, (_, index) => 0.12 + index * (height - 0.24) / 4);
@@ -39043,7 +39171,7 @@
     const contentWidth = width - 0.32;
     for (const [faceIndex, face] of [-1, 1].entries()) {
       for (let shelfIndex = 0; shelfIndex < 4; shelfIndex += 1) {
-        if (curio && face === 1 && shelfIndex === 2) continue;
+        if ((curioPlacements.length || storyDisplay) && face === 1 && shelfIndex === 2) continue;
         const shelfTop = shelfYs[shelfIndex] + 0.045;
         const kind = (seed + shelfIndex + faceIndex) % 3;
         if (kind === 0) {
@@ -39105,7 +39233,16 @@
     addLocalInstanceBatch(`${name}-archive-document-labels`, group, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), M.brass, documentLabels);
     tapeBatches.forEach((transforms, index) => addLocalInstanceBatch(`${name}-archive-tapes-${index + 1}`, group, "unitBox", () => new THREE.BoxGeometry(1, 1, 1), tapeMaterials[index], transforms));
 
-    if (curio) addArchiveCurio(group, name, curio, shelfYs[2] + 0.045, 0.255);
+    for (const placement of curioPlacements) {
+      addArchiveCurio(
+        group,
+        name,
+        placement.kind,
+        shelfYs[2] + 0.045,
+        0.255,
+        Number(placement.x) || 0,
+      );
+    }
     const worldWidth = Math.abs(Math.cos(rotationY)) * width + Math.abs(Math.sin(rotationY)) * depth;
     const worldDepth = Math.abs(Math.sin(rotationY)) * width + Math.abs(Math.cos(rotationY)) * depth;
     physics.addFixedBox(x, floorY + height / 2, z, worldWidth, height, worldDepth, 0);
@@ -41906,10 +42043,15 @@
       { id: "north", z: 9.4, width: 2.6 },
     ];
     const archiveCurios = new Map([
-      ["1-north", "sealed-ledger"],
-      ["2-north", "skull"],
-      ["3-south", "reel-to-reel"],
+      ["2-north", [
+        { kind: "reel-to-reel", x: -0.72 },
+        { kind: "skull", x: 0 },
+        { kind: "sealed-ledger", x: 0.92 },
+      ]],
       ["3-north", "specimen-jar"],
+    ]);
+    const archiveStoryDisplays = new Map([
+      ["3-south", "contestant-files"],
     ]);
     archiveRowXs.forEach((x, rowIndex) => archiveShelfBanks.forEach((bank, bankIndex) => {
       const rowNumber = rowIndex + 1;
@@ -41924,6 +42066,7 @@
         depth: 0.72,
         seed: rowIndex * 2 + bankIndex,
         curio: archiveCurios.get(`${rowNumber}-${bank.id}`) || null,
+        storyDisplay: archiveStoryDisplays.get(`${rowNumber}-${bank.id}`) || null,
       });
     }));
 
@@ -42540,11 +42683,12 @@
 
     const fileRoot = new THREE.Group();
     fileRoot.name = "archive-contestant-preparation-files";
-    fileRoot.position.set(7.73, FLOOR.BASEMENT, 8.52);
+    const fileShelf = BASEMENT_HAUNT.archive.contestantFileShelf;
+    fileRoot.position.set(fileShelf.x, fileShelf.y, fileShelf.z);
     scene.add(fileRoot);
     basementHauntScene.contestantFileRoot = fileRoot;
     BASEMENT_HAUNT.contestantFiles.forEach((file, index) => {
-      const localZ = (index - 1) * 0.36;
+      const localZ = (index - 1) * fileShelf.spacing;
       const folderMaterial = new THREE.MeshStandardMaterial({
         color: file.color,
         roughness: 0.84,
@@ -42557,20 +42701,22 @@
         d: 0.29,
         radius: 0.015,
         x: 0,
-        y: 1.34,
+        y: 0.185,
         z: localZ,
-        rotationZ: (index - 1) * 0.045,
+        rotationZ: 0,
         material: folderMaterial,
         parent: fileRoot,
         cast: false,
       });
+      folder.userData.archiveDisplayFace = "east-aisle";
+      folder.userData.archiveDisplayOrientation = "upright";
       box({
         name: `${file.physicalName}-typed-label`,
         w: 0.012,
         h: 0.12,
         d: 0.2,
         x: 0.034,
-        y: 1.35,
+        y: 0.19,
         z: localZ,
         material: M.canvasLinen,
         parent: fileRoot,
@@ -43678,7 +43824,7 @@
     const height = settings.height || 2.16;
     const name = settings.name || "estate-lantern";
     let sourceLight = null;
-    lanterns.push({ x, z, height, name });
+    lanterns.push({ x, z, height, name, role: settings.role || null });
     if (settings.castsLight) {
       const sourceY = YARD_LAYOUT.groundY + height + 0.11;
       const aimed = Number.isFinite(settings.targetX) && Number.isFinite(settings.targetZ);
@@ -43756,19 +43902,69 @@
     const groundY = YARD_LAYOUT.groundY;
     const poles = lanterns.map(({ x, z, height }) => ({ x, y: groundY + height / 2, z, sx: 0.085, sy: height, sz: 0.085 }));
     const cages = lanterns.map(({ x, z, height }) => ({ x, y: groundY + height + 0.1, z, sx: 0.38, sy: 0.62, sz: 0.38 }));
-    const bulbs = lanterns.map(({ x, z, height }) => ({ x, y: groundY + height + 0.11, z, sx: 0.13, sy: 0.18, sz: 0.13 }));
     const caps = lanterns.map(({ x, z, height }) => ({ x, y: groundY + height + 0.51, z, sx: 0.42, sy: 0.28, sz: 0.42 }));
     addOutdoorInstanceBatch("estate-lantern-poles", "estateLanternPole", () => new THREE.CylinderGeometry(1, 1.15, 1, 10), M.iron, poles, true, true);
     addOutdoorInstanceBatch("estate-lantern-cages", "estateLanternCage", () => new THREE.BoxGeometry(1, 1, 1, 1, 1, 1), new THREE.MeshBasicMaterial({ color: 0x202326, wireframe: true }), cages, false, true);
-    const bulbMesh = addOutdoorInstanceBatch("estate-lantern-bulbs", "estateLanternBulb", () => new THREE.SphereGeometry(1, 12, 8), M.lampGlow, bulbs, false, false);
     addOutdoorInstanceBatch("estate-lantern-caps", "estateLanternCap", () => new THREE.ConeGeometry(1, 1, 10), M.iron, caps, true, true);
-    if (bulbMesh) {
-      M.lampGlow.userData.onEmissiveIntensity = 1.0;
-      M.lampGlow.userData.offEmissiveIntensity = 0;
+
+    // Keep the static yard geometry in one batch, but give visible bulbs
+    // independent event-owned groups. The key-search blackout owns every maze
+    // group, while Storm Run owns only the two rear-exit bulbs. A single amber
+    // material used to leave all of these bulbs visibly yellow even after the
+    // corresponding real light energy reached zero.
+    const mazeExitFixtures = new Set(STORM_RUN.mazeExitLighting.fixtures);
+    const bulbGroups = [
+      {
+        name: "estate-lantern-bulbs",
+        lanterns: lanterns.filter((entry) => !entry.role),
+        material: M.lampGlow,
+        mazeRole: null,
+      },
+      {
+        name: "hedge-maze-lantern-bulbs",
+        lanterns: lanterns.filter((entry) => entry.role && !mazeExitFixtures.has(entry.name)),
+        material: M.lampGlow.clone(),
+        mazeRole: "maze",
+      },
+      {
+        name: "hedge-maze-rear-exit-lantern-bulbs",
+        lanterns: lanterns.filter((entry) => entry.role && mazeExitFixtures.has(entry.name)),
+        material: M.lampGlow.clone(),
+        mazeRole: "storm-run-exit",
+      },
+    ];
+    for (const group of bulbGroups) {
+      if (!group.lanterns.length) continue;
+      const bulbs = group.lanterns.map(({ x, z, height }) => ({
+        x,
+        y: groundY + height + 0.11,
+        z,
+        sx: 0.13,
+        sy: 0.18,
+        sz: 0.13,
+      }));
+      const bulbMesh = addOutdoorInstanceBatch(
+        group.name,
+        "estateLanternBulb",
+        () => new THREE.SphereGeometry(1, 12, 8),
+        group.material,
+        bulbs,
+        false,
+        false,
+      );
+      if (!bulbMesh) continue;
+      group.material.userData.onEmissiveIntensity = 1.0;
+      group.material.userData.offEmissiveIntensity = 0;
       bulbMesh.userData.onEmissiveIntensity = 1.0;
       bulbMesh.userData.levels = new Set(["MAIN LEVEL"]);
+      bulbMesh.userData.eventIntensityScale = 1;
+      bulbMesh.userData.fixtureNames = group.lanterns.map((entry) => entry.name);
+      bulbMesh.userData.mazeFixtureNames = group.mazeRole
+        ? group.lanterns.map((entry) => entry.name)
+        : [];
+      bulbMesh.userData.mazeRole = group.mazeRole;
       circuit.bulbs.push(bulbMesh);
-      circuit.glowMaterials.push(M.lampGlow);
+      circuit.glowMaterials.push(group.material);
     }
   }
 
@@ -44394,7 +44590,14 @@
           recordedCount: 0,
           fallbackCount: 0,
           targetGain: BASEMENT_HAUNT.workroom.breathingGain,
+          startGain: BASEMENT_HAUNT.workroom.breathingStartGain,
+          rampSeconds: BASEMENT_HAUNT.workroom.breathingRampSeconds,
+          releaseSeconds: BASEMENT_HAUNT.workroom.breathingReleaseSeconds,
           durationSeconds: 0,
+          startedAtContextTime: null,
+          rampEndsAtContextTime: null,
+          releaseStartsAtContextTime: null,
+          endsAtContextTime: null,
           assetPath: MANSION_AUDIO_ASSETS.mazeFeastFather[0],
         },
       };
@@ -45062,16 +45265,38 @@
     workroomFeastFatherBreathing(duration = BASEMENT_HAUNT.workroom.breathingSeconds) {
       const haunt = this.basementHauntAudio.workroom;
       this.stopWorkroomFeastFatherBreathing({ immediate: true, countStop: false });
-      const safeDuration = clamp(Number(duration) || BASEMENT_HAUNT.workroom.breathingSeconds, 1, 12);
+      const safeDuration = clamp(Number(duration) || BASEMENT_HAUNT.workroom.breathingSeconds, 1, 30);
+      const releaseSeconds = Math.min(
+        BASEMENT_HAUNT.workroom.breathingReleaseSeconds,
+        safeDuration * 0.4,
+      );
+      const rampSeconds = Math.min(
+        BASEMENT_HAUNT.workroom.breathingRampSeconds,
+        Math.max(0.05, safeDuration - releaseSeconds),
+      );
       haunt.active = true;
       haunt.stopping = false;
       haunt.targetGain = BASEMENT_HAUNT.workroom.breathingGain;
+      haunt.startGain = BASEMENT_HAUNT.workroom.breathingStartGain;
+      haunt.rampSeconds = rampSeconds;
+      haunt.releaseSeconds = releaseSeconds;
       haunt.durationSeconds = safeDuration;
+      haunt.startedAtContextTime = null;
+      haunt.rampEndsAtContextTime = null;
+      haunt.releaseStartsAtContextTime = null;
+      haunt.endsAtContextTime = null;
       haunt.startCount += 1;
       this.markCue("workroomFeastFatherBreathing");
       if (!this.ctx || !this.master || !state.audioEnabled) return false;
 
       const now = this.ctx.currentTime;
+      const rampEnd = now + rampSeconds;
+      const releaseStart = now + Math.max(rampSeconds, safeDuration - releaseSeconds);
+      const end = now + safeDuration;
+      haunt.startedAtContextTime = now;
+      haunt.rampEndsAtContextTime = rampEnd;
+      haunt.releaseStartsAtContextTime = releaseStart;
+      haunt.endsAtContextTime = end;
       const [path] = this.availableAssets("mazeFeastFather");
       const buffer = path ? this.buffers.get(path) : null;
       const source = this.ctx.createBufferSource();
@@ -45093,10 +45318,10 @@
       lowpass.type = "lowpass";
       lowpass.frequency.value = buffer ? 2350 : 980;
       const gain = this.ctx.createGain();
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.linearRampToValueAtTime(haunt.targetGain, now + 0.12);
-      gain.gain.setValueAtTime(haunt.targetGain, now + Math.max(0.12, safeDuration - 0.55));
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + safeDuration);
+      gain.gain.setValueAtTime(haunt.startGain, now);
+      gain.gain.linearRampToValueAtTime(haunt.targetGain, rampEnd);
+      gain.gain.setValueAtTime(haunt.targetGain, releaseStart);
+      gain.gain.exponentialRampToValueAtTime(0.0001, end);
       source.connect(highpass).connect(lowpass).connect(gain).connect(this.master);
       haunt.source = source;
       haunt.gain = gain;
@@ -45143,13 +45368,42 @@
 
     workroomHauntDiagnostics() {
       const haunt = this.basementHauntAudio.workroom;
+      const elapsedSeconds = haunt.startedAtContextTime == null || !this.ctx
+        ? 0
+        : clamp(this.ctx.currentTime - haunt.startedAtContextTime, 0, haunt.durationSeconds);
+      const rampProgress = haunt.rampSeconds > 0
+        ? clamp(elapsedSeconds / haunt.rampSeconds, 0, 1)
+        : 1;
+      const releaseStartSeconds = Math.max(
+        haunt.rampSeconds,
+        haunt.durationSeconds - haunt.releaseSeconds,
+      );
+      let estimatedGain = lerp(haunt.startGain, haunt.targetGain, rampProgress);
+      if (elapsedSeconds >= haunt.rampSeconds) estimatedGain = haunt.targetGain;
+      if (elapsedSeconds > releaseStartSeconds && haunt.releaseSeconds > 0) {
+        const releaseProgress = clamp(
+          (elapsedSeconds - releaseStartSeconds) / haunt.releaseSeconds,
+          0,
+          1,
+        );
+        estimatedGain = haunt.targetGain * Math.pow(0.0001 / haunt.targetGain, releaseProgress);
+      }
+      if (!haunt.active) estimatedGain = 0;
       return {
-        profile: "close-recorded-feast-father-breath-with-procedural-fallback",
+        profile: "slow-rising-close-recorded-feast-father-breath-with-procedural-fallback",
         active: haunt.active,
         recordedReady: this.availableAssets("mazeFeastFather").length > 0,
+        startGain: Number(haunt.startGain.toFixed(4)),
         targetGain: Number(haunt.targetGain.toFixed(4)),
-        currentGain: Number((haunt.gain?.gain.value || 0).toFixed(4)),
+        currentGain: Number(estimatedGain.toFixed(4)),
+        nodeGain: Number((haunt.gain?.gain.value || 0).toFixed(4)),
         durationSeconds: Number(haunt.durationSeconds.toFixed(3)),
+        staticDurationSeconds: BASEMENT_HAUNT.workroom.durationSeconds,
+        rampSeconds: Number(haunt.rampSeconds.toFixed(3)),
+        rampProgress: Number(rampProgress.toFixed(4)),
+        releaseSeconds: Number(haunt.releaseSeconds.toFixed(3)),
+        elapsedSeconds: Number(elapsedSeconds.toFixed(3)),
+        automation: "linear-rise-then-short-exponential-release",
         startCount: haunt.startCount,
         stopCount: haunt.stopCount,
         recordedCount: haunt.recordedCount,
@@ -49681,16 +49935,22 @@
     const material = bulb.material;
     if (!material || Array.isArray(material)) return;
     const materialData = material.userData;
+    const renderFactor = data.renderFactor == null
+      ? (material.emissiveIntensity > 0 ? 1 : 0)
+      : data.renderFactor;
+    const eventIntensityScale = clamp(data.eventIntensityScale ?? 1, 0, 1);
+    const outputFactor = renderFactor * eventIntensityScale;
     if (materialData.onBulbColor == null && material.color) materialData.onBulbColor = material.color.getHex();
     if (materialData.offBulbColor == null) materialData.offBulbColor = LIGHT_BULB_OFF_COLOR;
     if (material.color && materialData.onBulbColor != null) {
       bulbOnColorScratch.setHex(materialData.onBulbColor);
       bulbOffColorScratch.setHex(materialData.offBulbColor);
-      material.color.copy(bulbOffColorScratch).lerp(bulbOnColorScratch, data.renderFactor);
+      material.color.copy(bulbOffColorScratch).lerp(bulbOnColorScratch, outputFactor);
     }
     if ("emissiveIntensity" in material) {
-      material.emissiveIntensity = (data.onEmissiveIntensity || 1.4) * data.renderFactor;
+      material.emissiveIntensity = (data.onEmissiveIntensity || 1.4) * outputFactor;
     }
+    data.outputFactor = outputFactor;
   }
 
   function applyBulbRenderState(bulb, lit, snap) {
@@ -51284,7 +51544,9 @@
         activeLights: c.lights.filter((light) => light.visible && light.intensity > 0).length,
         bulbs: c.bulbs.reduce((total, bulb) => total + (bulb.isInstancedMesh ? bulb.count : 1), 0),
         activeBulbs: c.bulbs.reduce((total, bulb) => total + (
-          (bulb.userData.renderFactor || 0) > 0.01 ? (bulb.isInstancedMesh ? bulb.count : 1) : 0
+          (bulb.userData.outputFactor ?? bulb.userData.renderFactor ?? 0) > 0.01
+            ? (bulb.isInstancedMesh ? bulb.count : 1)
+            : 0
         ), 0),
         grayBulbs: c.bulbs.reduce((total, bulb) => total + (
           bulb.material?.color?.getHex() === LIGHT_BULB_OFF_COLOR ? (bulb.isInstancedMesh ? bulb.count : 1) : 0
@@ -51878,8 +52140,8 @@
     window.MrFeastFresh.readArchiveContestantFileForQA = (id) => (
       state.qa && basementHauntSystem ? basementHauntSystem.readContestantFile(id) : null
     );
-    window.MrFeastFresh.frameArchiveContestantFilesForQA = () => (
-      state.qa && basementHauntSystem ? basementHauntSystem.frameFilesForQA() : null
+    window.MrFeastFresh.frameArchiveContestantFilesForQA = (id) => (
+      state.qa && basementHauntSystem ? basementHauntSystem.frameFilesForQA(id) : null
     );
     window.MrFeastFresh.frameArchiveHauntBookForQA = () => (
       state.qa && basementHauntSystem ? basementHauntSystem.frameBookForQA() : null

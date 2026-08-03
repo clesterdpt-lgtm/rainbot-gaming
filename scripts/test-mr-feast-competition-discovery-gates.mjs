@@ -33,6 +33,7 @@ async function run() {
   const runtimeSource = await readFile(path.join(root, "assets/js/mr-feast-mansion.js"), "utf8");
   assert(!/intermissionSeconds\s*:/.test(runtimeSource), "Feast Says must not retain an elapsed-time trigger");
   assert(/clueId\s*!==\s*"hedge-maze-b13-cache"/.test(runtimeSource), "Storm Run must reject every clue except the B-13 key");
+  assert(/resolveAftermath\("storm-run-key-recovered"\)/.test(runtimeSource), "the live B-13 pickup must settle the finished Game 1 aftermath before calling Storm Run");
   assert(/clueId\s*!==\s*"patron-feed-sabotage"/.test(runtimeSource), "Feast Hunt must reject every clue except the severed patron feed");
 
   let server = null;
@@ -82,16 +83,26 @@ async function run() {
       `the fourth painting number must call Game 1 exactly once; got ${JSON.stringify(feast)}`,
     );
 
-    const feastResult = await page.evaluate(() => window.MrFeastFresh.completeFeastSaysForQA(6));
-    assert(feastResult?.survived === true, `Game 1 QA completion failed: ${JSON.stringify(feastResult)}`);
+    const feastResult = await page.evaluate(() => window.MrFeastFresh.completeFeastSaysWithAftermathForQA(6));
+    assert(
+      feastResult?.survived === true && feastResult.aftermathActive === true,
+      `Game 1 should be won with its non-interactive aftermath still active for the key-pickup regression: ${JSON.stringify(feastResult)}`,
+    );
 
     const prematureStorm = await page.evaluate(() => window.MrFeastFresh.callStormRunForQA?.("gate"));
     if (prematureStorm) assert(prematureStorm.started === false, `painting completion must not call Game 2; got ${JSON.stringify(prematureStorm)}`);
     let storm = await page.evaluate(() => window.MrFeastFresh.getStormRunState());
     assert(storm.phase === "dormant" && storm.triggerGate.hedgeMazeKeyFound === false, `Game 2 must wait for the hedge key; got ${JSON.stringify(storm)}`);
 
-    await page.evaluate(() => window.MrFeastFresh.triggerStormRunClueForQA("key"));
+    // Exercise the real quest completion callback, not the shortcut that
+    // grants the key and dispatches the clue directly.
+    await page.evaluate(() => window.MrFeastFresh.triggerFeastSaysClueForQA("book"));
+    await page.evaluate(() => window.MrFeastFresh.closeReadableBookForQA());
+    await page.evaluate(() => window.MrFeastFresh.triggerStormRunClueForQA("shovel"));
+    await page.evaluate(() => window.MrFeastFresh.triggerStormRunClueForQA("dig"));
+    await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).contestant13?.basementKeyFound, null, { timeout: 8000 });
     storm = await page.evaluate(() => window.MrFeastFresh.getStormRunState());
+    feast = await page.evaluate(() => window.MrFeastFresh.getFeastSaysState());
     assert(
       storm.phase === "called"
         && storm.callCount === 1
@@ -99,6 +110,7 @@ async function run() {
         && storm.triggerClueId === "hedge-maze-b13-cache",
       `finding the hedge-maze key must call Game 2 exactly once; got ${JSON.stringify(storm)}`,
     );
+    assert(!feast.aftermath.active, `finding the B-13 key should finish the won Game 1 aftermath before Game 2 is called; got ${JSON.stringify(feast.aftermath)}`);
 
     const stormResult = await page.evaluate(() => window.MrFeastFresh.completeStormRunForQA("player"));
     assert(stormResult?.survived === true, `Game 2 QA completion failed: ${JSON.stringify(stormResult)}`);

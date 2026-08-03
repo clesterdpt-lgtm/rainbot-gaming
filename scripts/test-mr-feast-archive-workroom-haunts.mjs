@@ -59,7 +59,23 @@ async function run() {
   assert(/archive-feast-father-lore-book-floor/.test(runtime), "the Feast Father lore volume is not a physical Archive floor discovery");
   assert(!/feast-father-lore-book-cover/.test(runtime), "the Feast Father lore volume still has a duplicate Library-table prop");
   assert((runtime.match(/archive-contestant-preparation-file-/g) || []).length >= 3, "the Archive needs at least three physical previous-contestant files");
+  assert(
+    /\["2-north",\s*\[\s*\{ kind: "reel-to-reel", x: -0\.72 \},\s*\{ kind: "skull", x: 0 \},\s*\{ kind: "sealed-ledger", x: 0\.92 \}/.test(runtime),
+    "the previous-guest ledger and Player 13 recorder must share the authored skull display shelf",
+  );
+  assert(
+    /contestantFileShelf:\s*Object\.freeze\(\{\s*x:\s*11\.455,[\s\S]{0,180}z:\s*5\.25/.test(runtime)
+      && /\["3-south", "contestant-files"\]/.test(runtime),
+    "the three previous-guest records must reserve the recorder's former row-3 south display shelf",
+  );
   assert(/workroomFeastFatherBreathing/.test(runtime), "the Workroom blackout lacks a dedicated Feast Father breathing treatment");
+  assert(
+    /durationSeconds:\s*18/.test(runtime)
+      && /breathingSeconds:\s*18/.test(runtime)
+      && /breathingRampSeconds:\s*15/.test(runtime)
+      && /linearRampToValueAtTime\(haunt\.targetGain, rampEnd\)/.test(runtime),
+    "the patron-feed static must hold for 18 seconds while breathing rises gradually for 15 seconds",
+  );
   assert(/setStatic\(active/.test(runtime) && /staticMix/.test(runtime), "the live Workroom monitor bank lacks a temporary animated-static state");
   assert(/setTransientBlackout\(active/.test(runtime), "room circuits need a transient blackout that preserves switch state");
   const runtimeVersion = runtime.match(/MANSION_RUNTIME_VERSION\s*=\s*"([^"]+)"/)?.[1];
@@ -81,6 +97,54 @@ async function run() {
     await page.goto(gameUrl, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
     await page.evaluate(() => window.MrFeastFresh.prepareBasementHauntAudioForQA());
+
+    const archiveDisplay = await page.evaluate(() => ({
+      skull: window.MrFeastFresh.inspectScene("archive-curio-skull-cranium"),
+      ledger: window.MrFeastFresh.inspectScene("archive-curio-sealed-ledger"),
+      recorder: window.MrFeastFresh.inspectScene("archive-curio-reel-to-reel-deck"),
+    }));
+    const skull = archiveDisplay.skull.meshes[0]?.position;
+    const ledger = archiveDisplay.ledger.meshes[0]?.position;
+    const recorder = archiveDisplay.recorder.meshes[0]?.position;
+    assert(skull && ledger && recorder, `the skull-shelf display is missing an authored prop: ${JSON.stringify(archiveDisplay)}`);
+    assert(
+      Math.max(skull.x, ledger.x, recorder.x) - Math.min(skull.x, ledger.x, recorder.x) < 0.02
+        && Math.max(skull.y, ledger.y, recorder.y) - Math.min(skull.y, ledger.y, recorder.y) < 0.25
+        && ledger.z < skull.z
+        && recorder.z > skull.z,
+      `the guest ledger, skull, and Player 13 recorder must form one readable shelf row: ${JSON.stringify({ skull, ledger, recorder })}`,
+    );
+
+    const recordDisplay = await page.evaluate(() => ({
+      records: window.MrFeastFresh.inspectScene("archive-contestant-preparation-file-"),
+      shelf: window.MrFeastFresh.inspectScene("archive-row-3-south-shelf-3"),
+    }));
+    const recordFolders = recordDisplay.records.meshes
+      .filter((mesh) => /file-\d+$/.test(mesh.name))
+      .sort((a, b) => a.position.z - b.position.z);
+    const recordLabels = recordDisplay.records.meshes
+      .filter((mesh) => /typed-label$/.test(mesh.name))
+      .sort((a, b) => a.position.z - b.position.z);
+    const formerRecorderShelf = recordDisplay.shelf.meshes[0];
+    assert(recordFolders.length === 3 && recordLabels.length === 3 && formerRecorderShelf, `the former recorder shelf must hold three complete record folders: ${JSON.stringify(recordDisplay)}`);
+    assert(
+      recordFolders.every((folder, index) => (
+        Math.abs(folder.position.x - 11.455) < 0.01
+        && Math.abs(folder.position.y - formerRecorderShelf.position.y - 0.23) < 0.02
+        && folder.size.x < folder.size.z
+        && folder.size.y > folder.size.z
+        && recordLabels[index].position.x > folder.position.x
+        && Math.abs(recordLabels[index].position.z - folder.position.z) < 0.01
+      ))
+        && Math.abs(recordFolders[1].position.z - recordFolders[0].position.z - 0.36) < 0.01
+        && Math.abs(recordFolders[2].position.z - recordFolders[1].position.z - 0.36) < 0.01,
+      `the previous-guest records must sit upright, evenly spaced, with labels facing the east aisle: ${JSON.stringify({ recordFolders, recordLabels, formerRecorderShelf })}`,
+    );
+    await page.evaluate(() => window.MrFeastFresh.teleport("archiveSkull"));
+    await page.evaluate(() => window.advanceTime(100));
+    await captureStage(page, "archive-skull-ledger-player-13-display-desktop.png");
+    const recorderView = await page.evaluate(() => window.MrFeastFresh.teleport("contestant13ArchiveCage"));
+    assert(/evidence cage.*locked/i.test(recorderView.prompt || ""), `the moved Player 13 recorder must remain interactable beside the skull: ${JSON.stringify(recorderView.prompt)}`);
 
     let haunt = await page.evaluate(() => window.MrFeastFresh.resetBasementHauntForQA({ clearSeen: true }));
     assert(!haunt.archive.dropSeen && !haunt.archive.book.visible, `fresh Archive haunt state should hide the floor book: ${JSON.stringify(haunt)}`);
@@ -112,28 +176,91 @@ async function run() {
     await page.keyboard.press("Escape");
 
     for (const id of ["contestant-04", "contestant-09", "contestant-12"]) {
-      const file = await page.evaluate((fileId) => window.MrFeastFresh.readArchiveContestantFileForQA(fileId), id);
-      assert(file?.id === id && file.read && /prepared|course|served|roast|brais|carv/i.test(`${file.title} ${file.body}`), `Archive file ${id} needs disturbing preparation records: ${JSON.stringify(file)}`);
+      await page.evaluate((fileId) => window.MrFeastFresh.frameArchiveContestantFilesForQA(fileId), id);
+      const framed = await diagnostics(page);
+      assert(new RegExp(`preparation file ${id.slice(-2)}`, "i").test(framed.prompt || ""), `Archive file ${id} must expose its physical read interaction from the aisle: ${JSON.stringify(framed.prompt)}`);
+      await page.keyboard.press("e");
+      await page.waitForTimeout(120);
+      const file = await page.evaluate(() => ({
+        title: document.getElementById("mansion-discovery-title")?.textContent || "",
+        body: document.getElementById("mansion-discovery-body")?.textContent || "",
+      }));
+      assert(/prepared|course|served|roast|brais|carv/i.test(`${file.title} ${file.body}`), `Archive file ${id} needs disturbing preparation records: ${JSON.stringify(file)}`);
     }
     haunt = await page.evaluate(() => window.MrFeastFresh.getBasementHauntState());
     assert(haunt.archive.files.readIds.length === 3 && haunt.archive.files.physicalCount >= 3, `all physical contestant dossiers should be independently readable: ${JSON.stringify(haunt.archive.files)}`);
-    await page.evaluate(() => window.MrFeastFresh.frameArchiveContestantFilesForQA());
+    await page.evaluate(() => window.MrFeastFresh.frameArchiveContestantFilesForQA("contestant-09"));
     await captureStage(page, "archive-contestant-preparation-files-desktop.png");
 
     await page.evaluate(() => window.MrFeastFresh.teleport("workroomMonitorWall"));
     const lightLayoutBefore = await page.evaluate(() => window.MrFeastFresh.lightLayout());
     await page.evaluate(() => window.MrFeastFresh.triggerWorkroomPatronHauntForQA());
+    await page.evaluate(() => window.MrFeastFresh.advanceBasementHauntForQA(0));
     haunt = await page.evaluate(() => window.MrFeastFresh.getBasementHauntState());
     assert(haunt.workroom.active && haunt.workroom.phase === "blackout", `relay sabotage should begin the Workroom haunt: ${JSON.stringify(haunt.workroom)}`);
     assert(haunt.workroom.blackoutActive && haunt.workroom.staticActive, `Workroom lights and all screens should fail together: ${JSON.stringify(haunt.workroom)}`);
     assert(haunt.workroom.closedDoors.includes("workroom door"), `the Workroom door should close without relocking: ${JSON.stringify(haunt.workroom.closedDoors)}`);
-    assert(haunt.workroom.breathing.active && haunt.workroom.breathing.targetGain >= 0.2, `the close Feast Father breathing should be deliberately loud but bounded: ${JSON.stringify(haunt.workroom.breathing)}`);
+    assert(
+      haunt.workroom.durationSeconds === 18
+        && haunt.workroom.remainingSeconds > 17
+        && haunt.workroom.breathing.active
+        && haunt.workroom.breathing.durationSeconds === 18
+        && haunt.workroom.breathing.staticDurationSeconds === 18
+        && haunt.workroom.breathing.rampSeconds === 15
+        && haunt.workroom.breathing.startGain < 0.01
+        && haunt.workroom.breathing.targetGain >= 0.2
+        && haunt.workroom.breathing.automation === "linear-rise-then-short-exponential-release",
+      `the close Feast Father breathing should start almost inaudibly and rise across the extended static: ${JSON.stringify(haunt.workroom.breathing)}`,
+    );
     const monitorStatic = await page.evaluate(() => window.MrFeastFresh.getMonitorWallState());
     assert(monitorStatic.staticActive && monitorStatic.staticScreens === monitorStatic.screenCount, `every Workroom display should show animated static: ${JSON.stringify(monitorStatic)}`);
     await page.waitForTimeout(250);
     await captureStage(page, "workroom-patron-feed-static-blackout-desktop.png");
 
+    await page.waitForFunction(
+      () => window.MrFeastFresh?.getBasementHauntState?.()?.workroom?.breathing?.elapsedSeconds >= 6.5,
+      null,
+      { timeout: 25000 },
+    );
+    haunt = await page.evaluate(() => window.MrFeastFresh.getBasementHauntState());
+    assert(
+      haunt.workroom.active
+        && haunt.workroom.blackoutActive
+        && haunt.workroom.staticActive
+        && haunt.workroom.breathing.active
+        && haunt.workroom.breathing.rampProgress > 0.35
+        && haunt.workroom.breathing.rampProgress < 1
+        && haunt.workroom.breathing.currentGain > haunt.workroom.breathing.startGain
+        && haunt.workroom.breathing.currentGain < haunt.workroom.breathing.targetGain,
+      `static must outlast the old six-second scare while breathing is still rising toward its fifteen-second peak: ${JSON.stringify(haunt.workroom)}`,
+    );
     haunt = await page.evaluate(() => window.MrFeastFresh.advanceBasementHauntForQA(7));
+    assert(
+      haunt.workroom.active
+        && haunt.workroom.elapsed >= 7
+        && haunt.workroom.staticActive
+        && haunt.workroom.blackoutActive,
+      `the simulated Workroom clock must retain static and blackout beyond the old six-second duration: ${JSON.stringify(haunt.workroom)}`,
+    );
+    await page.waitForFunction(
+      () => window.MrFeastFresh?.getBasementHauntState?.()?.workroom?.breathing?.elapsedSeconds >= 14.7,
+      null,
+      { timeout: 25000 },
+    );
+    haunt = await page.evaluate(() => window.MrFeastFresh.getBasementHauntState());
+    const breathAtPeakCheck = haunt.workroom.breathing;
+    const peakReachedOrReleaseStarted = breathAtPeakCheck.currentGain >= breathAtPeakCheck.targetGain * 0.95
+      || breathAtPeakCheck.elapsedSeconds >= breathAtPeakCheck.durationSeconds - breathAtPeakCheck.releaseSeconds;
+    assert(
+      haunt.workroom.active
+        && haunt.workroom.staticActive
+        && haunt.workroom.elapsed < haunt.workroom.durationSeconds
+        && haunt.workroom.breathing.active
+        && haunt.workroom.breathing.rampProgress >= 0.98
+        && peakReachedOrReleaseStarted,
+      `breathing must reach its authored maximum around fifteen seconds, or be in its short release, while static still holds: ${JSON.stringify(haunt.workroom)}`,
+    );
+    haunt = await page.evaluate(() => window.MrFeastFresh.advanceBasementHauntForQA(20));
     assert(!haunt.workroom.active && haunt.workroom.seen && !haunt.workroom.blackoutActive && !haunt.workroom.staticActive, `the Workroom should return to normal after the bounded scare: ${JSON.stringify(haunt.workroom)}`);
     assert(!haunt.workroom.breathing.active && haunt.workroom.circuitOn, `breathing must stop and the prior Workroom light state must restore: ${JSON.stringify(haunt.workroom)}`);
     const monitorRestored = await page.evaluate(() => window.MrFeastFresh.getMonitorWallState());

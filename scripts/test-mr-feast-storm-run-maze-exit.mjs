@@ -105,8 +105,11 @@ async function run() {
     assert(
       storm.mazeExitLighting?.dark
         && storm.mazeExitLighting.energizedFixtureCount === 0
-        && storm.mazeExitLighting.shaderResidentFixtureCount >= 1,
-      `the exit practical must stay dark in the final-straight render topology before the reveal: ${JSON.stringify(storm.mazeExitLighting)}`,
+        && storm.mazeExitLighting.shaderResidentFixtureCount >= 1
+        && storm.mazeExitLighting.energizedBulbCount === 0
+        && storm.mazeExitLighting.shaderResidentBulbCount >= 2
+        && storm.mazeExitLighting.bulbs.every((bulb) => bulb.outputFactor === 0 && bulb.emissiveIntensity === 0 && bulb.color === "74787c"),
+      `the exit practical and visible bulbs must stay dark in the final-straight render topology before the reveal: ${JSON.stringify(storm.mazeExitLighting)}`,
     );
 
     await page.evaluate(() => window.MrFeastFresh.placePlayerAtStormScareTriggerForQA(2, false));
@@ -128,8 +131,9 @@ async function run() {
       visible.scare.hostVisible
         && visible.scare.lightning > 0
         && visible.mazeExitLighting?.dark
-        && visible.mazeExitLighting.energizedFixtureCount === 0,
-      `Mr. Feast and lightning must appear while the exit practical remains dark: ${JSON.stringify({ scare: visible.scare, lighting: visible.mazeExitLighting })}`,
+        && visible.mazeExitLighting.energizedFixtureCount === 0
+        && visible.mazeExitLighting.energizedBulbCount === 0,
+      `Mr. Feast and lightning must appear while the exit practical and its amber bulbs remain dark: ${JSON.stringify({ scare: visible.scare, lighting: visible.mazeExitLighting })}`,
     );
     await page.screenshot({ path: artifactPath });
 
@@ -138,10 +142,28 @@ async function run() {
     assert(
       !after.scare.hostVisible
         && after.scare.lightning === 0
-        && !after.mazeExitLighting?.dark
-        && after.mazeExitLighting.restoredAfterScare
-        && after.mazeExitLighting.energizedFixtureCount >= 1,
-      `the exit practical must restore only after Mr. Feast disappears: ${JSON.stringify({ scare: after.scare, lighting: after.mazeExitLighting })}`,
+        && after.mazeExitLighting?.dark
+        && after.mazeExitLighting.blackoutActive
+        && after.mazeExitLighting.waitingForMazeExit
+        && !after.mazeExitLighting.restoredAfterMazeExit
+        && after.mazeExitLighting.energizedFixtureCount === 0
+        && after.mazeExitLighting.energizedBulbCount === 0,
+      `the exit practical and its amber bulbs must remain dark after Mr. Feast disappears while the player is still in the maze: ${JSON.stringify({ scare: after.scare, lighting: after.mazeExitLighting })}`,
+    );
+    const exitPlacement = await page.evaluate(() => window.MrFeastFresh.teleport("yardMazeA"));
+    assert(exitPlacement?.room !== "HEDGE MAZE", `the blackout release check must cross the authored rear maze portal: ${JSON.stringify({ room: exitPlacement?.room, player: exitPlacement?.player })}`);
+    await page.evaluate(() => window.MrFeastFresh.advanceStormRunForQA(0.05));
+    const exited = await page.evaluate(() => window.MrFeastFresh.getStormRunState());
+    assert(
+      !exited.mazeExitLighting?.dark
+        && !exited.mazeExitLighting.blackoutActive
+        && !exited.mazeExitLighting.waitingForMazeExit
+        && exited.mazeExitLighting.restoredAfterMazeExit
+        && exited.mazeExitLighting.playerRoom !== "HEDGE MAZE"
+        && exited.mazeExitLighting.energizedFixtureCount >= 1
+        && exited.mazeExitLighting.energizedBulbCount >= 2
+        && exited.mazeExitLighting.bulbs.every((bulb) => bulb.outputFactor === 1 && bulb.emissiveIntensity === 1),
+      `the exit practical and its visible bulbs must restore only after the player crosses out of the hedge maze: ${JSON.stringify(exited.mazeExitLighting)}`,
     );
     assert(errors.length === 0, `final-straight reveal produced browser errors: ${JSON.stringify(errors)}`);
     console.log(`Storm Run final-straight reveal passed: ${JSON.stringify({
@@ -151,7 +173,11 @@ async function run() {
       projectedHeight: preview.projectedHeight,
       hostFacingPlayerDot: preview.hostFacingPlayerDot,
       lightDuring: visible.mazeExitLighting.fixtures,
-      lightAfter: after.mazeExitLighting.fixtures,
+      bulbDuring: visible.mazeExitLighting.bulbs,
+      lightAfterDisappearance: after.mazeExitLighting.fixtures,
+      bulbAfterDisappearance: after.mazeExitLighting.bulbs,
+      lightAfterMazeExit: exited.mazeExitLighting.fixtures,
+      bulbAfterMazeExit: exited.mazeExitLighting.bulbs,
     })}`);
   } finally {
     await browser?.close();

@@ -61,6 +61,13 @@ async function run() {
   assert(/mazeFeastFather:\s*Object\.freeze\(\["\.\.\/Sounds\/mr-feast\/saint-voice-low-long-05\.ogg"\]\)/.test(runtime), "maze movement must use the Feast Father recording");
   assert(/blackoutDurationSeconds:\s*1\.[5-9]/.test(runtime) && /baseScale:\s*0[,\n]/.test(runtime), "the entrance lock must use a clearly readable stutter before the maze fixtures go out");
   assert(/flickerBursts:\s*Object\.freeze\(\[/.test(runtime) && /scale:\s*0\.[5-9]/.test(runtime), "the sustained darkness must use visible multi-pulse fixture flickers");
+  assert(
+    /hedge-maze-lantern-bulbs/.test(runtime)
+      && /hedge-maze-rear-exit-lantern-bulbs/.test(runtime)
+      && /eventIntensityScale/.test(runtime)
+      && /syncBulbMaterialState\(snapshot\.bulb\)/.test(runtime),
+    "maze lantern bulbs need event-owned render groups that follow the same blackout scale as their real lights",
+  );
   const ambientConfig = sourceSection(runtime, "ambient: Object.freeze({", "release: Object.freeze({");
   assert((ambientConfig.match(/Object\.freeze\(\{ start:/g) || []).length >= 5, "ambient haunt pulses must move at least five nearby hedge faces");
   assert(
@@ -156,6 +163,7 @@ async function run() {
     assert(locked.sealedEntranceCount === 2 && locked.enabledSealColliders === 2, `both portals must be visibly and physically sealed: ${JSON.stringify(locked)}`);
     assert(locked.colliderCountDelta === 0 && locked.fixedBoxCountDelta === 0, `sealing must toggle boot-time colliders without changing topology: ${JSON.stringify(locked)}`);
     assert(locked.mazeDarknessActive && locked.blackoutFlickerActive, `the entrance lock must begin the fixture blackout immediately: ${JSON.stringify(locked)}`);
+    assert(locked.mazeBulbGroupCount === 2 && locked.mazeDarkenedBulbCount >= 17, `every authored maze bulb must join the blackout without darkening unrelated estate lamps: ${JSON.stringify(locked)}`);
     assert(locked.flashlightOn, `the carried flashlight must remain usable while the maze is sealed: ${JSON.stringify(locked)}`);
     let mazeAudio = await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA());
     assert(!mazeAudio.cueCounts.hedgeMazeEntranceBlocked, `the realization sting must wait for the visible blocked-entrance reveal: ${JSON.stringify(mazeAudio.cueCounts)}`);
@@ -167,18 +175,30 @@ async function run() {
     assert(mazeAudio.cueCounts.hedgeMazeEntranceBlocked === 1, `the supplied sting must play after the player can see the entrance blocked: ${JSON.stringify(mazeAudio.cueCounts)}`);
     await page.evaluate(() => window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(1.8));
     const blackedOut = await page.evaluate(() => window.MrFeastFresh.getHedgeMazeKeyScareState());
-    assert(!blackedOut.blackoutFlickerActive && blackedOut.mazeLightAverageScale <= 0.001, `the lock flicker must settle with maze fixtures fully out: ${JSON.stringify(blackedOut)}`);
+    assert(
+      !blackedOut.blackoutFlickerActive
+        && blackedOut.mazeLightAverageScale <= 0.001
+        && blackedOut.mazeBulbAverageScale <= 0.001
+        && blackedOut.mazeLitBulbCount === 0
+        && blackedOut.mazeBulbGroups.every((group) => group.outputFactor === 0 && group.emissiveIntensity === 0 && group.color === "74787c"),
+      `the lock flicker must settle with both the real lights and visible amber bulbs fully out: ${JSON.stringify(blackedOut)}`,
+    );
     await page.waitForTimeout(140);
     const offLighting = JSON.parse(await page.evaluate(() => window.render_game_to_text())).lighting;
     await captureStage(page, "maze-fixtures-fully-off-desktop.png");
     const visibleFlicker = await page.evaluate(() => {
       for (let index = 0; index < 240; index += 1) {
         const state = window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(0.01);
-        if (state.mazeLightMaximumScale >= 0.55) return state;
+        if (state.mazeLightMaximumScale >= 0.55 && state.mazeBulbMaximumScale >= 0.55) return state;
       }
       return window.MrFeastFresh.getHedgeMazeKeyScareState();
     });
-    assert(visibleFlicker.mazeLightMaximumScale >= 0.55, `QA must reach a visible sustained flicker frame: ${JSON.stringify(visibleFlicker)}`);
+    assert(
+      visibleFlicker.mazeLightMaximumScale >= 0.55
+        && visibleFlicker.mazeBulbMaximumScale >= 0.55
+        && visibleFlicker.mazeLitBulbCount === visibleFlicker.mazeDarkenedBulbCount,
+      `QA must reach a visible sustained flicker frame for both fixture energy and bulb surfaces: ${JSON.stringify(visibleFlicker)}`,
+    );
     await page.waitForTimeout(140);
     const onLighting = JSON.parse(await page.evaluate(() => window.render_game_to_text())).lighting;
     assert(
@@ -191,20 +211,33 @@ async function run() {
       const samples = [];
       for (let index = 0; index < 120; index += 1) {
         const state = window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(0.02);
-        samples.push({ scale: state.mazeLightMaximumScale, lit: state.mazeLitLightCount });
+        samples.push({
+          scale: state.mazeLightMaximumScale,
+          lit: state.mazeLitLightCount,
+          bulbScale: state.mazeBulbMaximumScale,
+          litBulbs: state.mazeLitBulbCount,
+        });
       }
       return {
         maximumScale: Math.max(...samples.map((sample) => sample.scale)),
         minimumScale: Math.min(...samples.map((sample) => sample.scale)),
+        maximumBulbScale: Math.max(...samples.map((sample) => sample.bulbScale)),
+        minimumBulbScale: Math.min(...samples.map((sample) => sample.bulbScale)),
         litSamples: samples.filter((sample) => sample.lit > 0).length,
         darkSamples: samples.filter((sample) => sample.lit === 0).length,
         maximumLitLights: Math.max(...samples.map((sample) => sample.lit)),
+        litBulbSamples: samples.filter((sample) => sample.litBulbs > 0).length,
+        darkBulbSamples: samples.filter((sample) => sample.litBulbs === 0).length,
+        maximumLitBulbs: Math.max(...samples.map((sample) => sample.litBulbs)),
       };
     });
     assert(
       flickerProbe.maximumScale >= 0.55 && flickerProbe.minimumScale === 0
+        && flickerProbe.maximumBulbScale >= 0.55 && flickerProbe.minimumBulbScale === 0
         && flickerProbe.litSamples >= 10 && flickerProbe.darkSamples >= 40
-        && flickerProbe.maximumLitLights === blackedOut.mazeDarkenedLightCount,
+        && flickerProbe.maximumLitLights === blackedOut.mazeDarkenedLightCount
+        && flickerProbe.litBulbSamples >= 10 && flickerProbe.darkBulbSamples >= 40
+        && flickerProbe.maximumLitBulbs === blackedOut.mazeDarkenedBulbCount,
       `the mostly-off maze needs an unmistakable all-fixture multi-pulse flicker: ${JSON.stringify(flickerProbe)}`,
     );
     await page.evaluate(() => window.MrFeastFresh.advanceHedgeMazeKeyScareForQA(0.8));
@@ -293,7 +326,14 @@ async function run() {
     const released = await page.evaluate(() => window.MrFeastFresh.getHedgeMazeKeyScareState());
     assert(released.active && released.sequence === "release" && released.keyOwned, `the real key-owned release scare should begin: ${JSON.stringify(released)}`);
     assert(!released.entrancesSealed && released.enabledSealColliders === 0, `finding the key must immediately reopen both entrances: ${JSON.stringify(released)}`);
-    assert(!released.mazeDarknessActive && released.flashlightOn, `key recovery should restore fixtures without touching the flashlight: ${JSON.stringify(released)}`);
+    assert(
+      !released.mazeDarknessActive
+        && released.flashlightOn
+        && released.mazeBulbAverageScale === 1
+        && released.mazeLitBulbCount >= 17
+        && released.mazeBulbGroups.every((group) => group.outputFactor === 1 && group.emissiveIntensity === 1),
+      `key recovery should restore both fixture energy and visible bulbs without touching the flashlight: ${JSON.stringify(released)}`,
+    );
     assert(released.environmentRestoredAfterKey, `key recovery must release the special maze lighting and rain context immediately: ${JSON.stringify(released)}`);
     await page.waitForFunction(
       () => {

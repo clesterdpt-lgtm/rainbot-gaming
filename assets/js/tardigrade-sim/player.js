@@ -108,7 +108,15 @@ const T = {
   // zeroes wall-directed velocity every frame and it only ever rebuilds one
   // frame of acceleration. Smoothing the fraction over ~0.1s widens the gap
   // further, since rough ground spikes while a wall sustains.
-  climbStall: 0.35,
+  climbStall: 0.30,
+  // Pushing hard and going nowhere. This is the case the deflection test
+  // above CANNOT see: once the body has actually stopped, velocity is ~0,
+  // so there is no intended step left to deflect and the ratio collapses.
+  // Traced against a grass blade it read 0.24-0.28 for a second and a half
+  // while the animal stood there going 0.01 units per frame - the invisible
+  // wall the player hits, passable only by jumping.
+  climbPressTime: 0.15,   // seconds of pushing without moving
+  climbStuckSpeed: 2.5,   // units/s below which "pushing" counts as "stuck"
 
   /* ---- bonk ---- */
   bonkLunge: 21,
@@ -567,6 +575,8 @@ export async function createPlayer(ctx) {
   const climbDir = new THREE.Vector3();
   let stall = 0;
   let stallFrames = 0;
+  /** Seconds spent pushing a direction while the body barely moves. */
+  let pressTime = 0;
   let dbgBlockedFrac = 0;
   let dbgInto = 0;
   // Closure scope, not step scope: report() reads this, and declaring it
@@ -1457,7 +1467,21 @@ export async function createPlayer(ctx) {
       // far the achieved step was deflected from the intended one.
       const wanted = Math.hypot(delta.x, delta.z);
       const eaten = Math.hypot(delta.x - moved.dx, delta.z - moved.dz);
+      const got = Math.hypot(moved.dx, moved.dz);
       const now = wanted > 1e-4 ? clamp01(eaten / wanted) : 0;
+      // Actual ground speed achieved this step, which stays honest whether
+      // the body is sliding along an obstacle or jammed dead against it.
+      // Slow AND obstructed. Requiring some deflection is what separates
+      // "jammed against something" from "just started walking": a standing
+      // start is equally slow but has nothing in its way (measured 0.08
+      // deflection, against 0.24 while stuck on a blade). Without that
+      // second term the animal climbs every time it sets off.
+      if (throttle > 0.05 && controllable
+          && got / step < T.climbStuckSpeed && now > 0.1) {
+        pressTime += step;
+      } else {
+        pressTime = 0;
+      }
       // Count consecutive frames rather than smoothing. Wall contact while
       // climbing is intermittent - the body touches, rides up, drifts off -
       // so an exponential average washes it to nothing (measured 0.04 at a
@@ -1528,6 +1552,13 @@ export async function createPlayer(ctx) {
           }
         }
       }
+    }
+
+    /* --- jammed head-on: climb out of it --- */
+    if (pressTime > T.climbPressTime && !curled && controllable && throttle > 0.05) {
+      climbTimer = T.climbLatch;
+      climbDir.set(wish.x, 0, wish.z);
+      if (climbDir.lengthSq() > 1e-6) climbDir.normalize();
     }
 
     /* --- sustain the climb between contacts --- */
@@ -1991,6 +2022,7 @@ export async function createPlayer(ctx) {
         timeScale: Number(ctx.time.timeScale.toFixed(3)),
         hitStop: Number(hitStop.toFixed(3)),
         climb: Number(climbTimer.toFixed(3)),
+        press: Number(pressTime.toFixed(2)),
         blockedFrac: Number(dbgBlockedFrac.toFixed(2)),
         into: Number(dbgInto.toFixed(2)),
         submersion: Number(submersion.toFixed(2)),

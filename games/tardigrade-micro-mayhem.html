@@ -2,6 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="refresh" content="0; url=tardigrade-simulator.html" />
+  <script>
+    (() => {
+      const target = new URL("tardigrade-simulator.html", window.location.href);
+      target.search = window.location.search;
+      target.hash = window.location.hash;
+      window.location.replace(target.href);
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tardigrade Micro Mayhem - Rainbot Network</title>
   <meta name="description" content="A low-poly 3D browser sandbox where you play a tardigrade causing microscopic chaos." />

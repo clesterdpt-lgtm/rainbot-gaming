@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#05070a" />
+  <title>Tardigrade Simulator - Rainbot Network</title>
+  <meta name="description" content="An open-world micro-scale physics sandbox. You are a nearly indestructible water bear loose in a giant back garden. Grapple, headbutt, ragdoll and rack up absurd combos." />
+  <meta property="og:title" content="Tardigrade Simulator" />
+  <meta property="og:description" content="Open-world micro-scale physics sandbox. Be the indestructible water bear." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%90%BB%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    :root {
+      --ts-ink: #05070a;
+      --ts-panel: rgba(9, 13, 18, 0.82);
+      --ts-line: rgba(150, 214, 255, 0.22);
+      --ts-text: #e9f2f8;
+      --ts-dim: #8ea3b4;
+      --ts-accent: #6ee7a8;
+      --ts-accent-2: #ffd166;
+      --ts-hot: #ff6b6b;
+      --ts-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+      --ts-sans: "Inter", system-ui, -apple-system, sans-serif;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #05070a;
+      color: var(--ts-text);
+      font-family: var(--ts-sans);
+      overscroll-behavior: none;
+      touch-action: none;
+    }
+
+    #ts-root {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    #ts-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    /* UI layers are populated by ui.js. Keep them here so layering is stable. */
+    #ts-hud, #ts-overlay, #ts-touch {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    #ts-hud { z-index: 10; }
+    #ts-touch { z-index: 20; }
+    #ts-overlay { z-index: 30; }
+
+    /* ---- Boot / loading screen (owned by the page, removed by ui.js) ---- */
+    #ts-boot {
+      position: absolute;
+      inset: 0;
+      z-index: 90;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 26px;
+      background:
+        radial-gradient(120% 90% at 50% 8%, #123047 0%, #0a1620 45%, #05070a 100%);
+      transition: opacity 700ms ease;
+    }
+    #ts-boot.is-hidden { opacity: 0; pointer-events: none; }
+
+    .ts-boot__mark {
+      position: relative;
+      width: 128px;
+      height: 128px;
+      display: grid;
+      place-items: center;
+    }
+    .ts-boot__ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 2px solid rgba(110, 231, 168, 0.18);
+      border-top-color: var(--ts-accent);
+      animation: ts-spin 1.5s cubic-bezier(0.6, 0.1, 0.3, 0.9) infinite;
+    }
+    .ts-boot__ring:nth-child(2) {
+      inset: 14px;
+      border-top-color: transparent;
+      border-right-color: rgba(255, 209, 102, 0.7);
+      animation-duration: 2.4s;
+      animation-direction: reverse;
+    }
+    .ts-boot__glyph { font-size: 46px; filter: drop-shadow(0 0 18px rgba(110, 231, 168, 0.45)); }
+
+    @keyframes ts-spin { to { transform: rotate(360deg); } }
+
+    .ts-boot__title {
+      margin: 0;
+      font-family: var(--ts-display);
+      font-size: clamp(34px, 7vw, 74px);
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      line-height: 0.95;
+      text-align: center;
+      background: linear-gradient(180deg, #ffffff 10%, #9fe9c4 60%, #4fb389 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 6px 26px rgba(0, 0, 0, 0.6));
+    }
+    .ts-boot__sub {
+      margin: -14px 0 0;
+      font-size: clamp(11px, 1.5vw, 14px);
+      letter-spacing: 0.42em;
+      text-transform: uppercase;
+      color: var(--ts-dim);
+      text-align: center;
+    }
+
+    .ts-boot__bar {
+      width: min(420px, 74vw);
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+    }
+    .ts-boot__fill {
+      height: 100%;
+      width: 4%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--ts-accent), var(--ts-accent-2));
+      box-shadow: 0 0 18px rgba(110, 231, 168, 0.6);
+      transition: width 260ms ease;
+    }
+    .ts-boot__status {
+      font-size: 12px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--ts-dim);
+      min-height: 1.2em;
+      text-align: center;
+      padding: 0 18px;
+    }
+    .ts-boot__err {
+      max-width: min(620px, 88vw);
+      font-size: 13px;
+      line-height: 1.6;
+      color: #ffb4b4;
+      text-align: center;
+      white-space: pre-wrap;
+      display: none;
+    }
+    #ts-boot.has-error .ts-boot__err { display: block; }
+    #ts-boot.has-error .ts-boot__ring { animation-play-state: paused; border-top-color: var(--ts-hot); }
+
+    .ts-boot__back {
+      position: absolute;
+      left: 20px;
+      top: 18px;
+      font-size: 12px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--ts-dim);
+      text-decoration: none;
+      pointer-events: auto;
+    }
+    .ts-boot__back:hover { color: var(--ts-text); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ts-boot__ring { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="ts-root">
+    <canvas id="ts-canvas"></canvas>
+    <div id="ts-hud"></div>
+    <div id="ts-touch"></div>
+    <div id="ts-overlay"></div>
+
+    <div id="ts-boot">
+      <a class="ts-boot__back" href="../games.html">&larr; Rainbot</a>
+      <div class="ts-boot__mark">
+        <div class="ts-boot__ring"></div>
+        <div class="ts-boot__ring"></div>
+        <div class="ts-boot__glyph">🐻</div>
+      </div>
+      <h1 class="ts-boot__title">Tardigrade<br />Simulator</h1>
+      <p class="ts-boot__sub">Micro-scale physics sandbox</p>
+      <div class="ts-boot__bar"><div class="ts-boot__fill" id="ts-boot-fill"></div></div>
+      <div class="ts-boot__status" id="ts-boot-status">Waking the water bear</div>
+      <div class="ts-boot__err" id="ts-boot-error"></div>
+    </div>
+  </div>
+
+  <script src="../assets/js/tardigrade-sim/boot.js?v=20260803-37"></script>
+</body>
+</html>

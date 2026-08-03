@@ -59,6 +59,7 @@ const ENEMY_ROWS = [
 ];
 
 const BOSS_ROWS = ["gashadokuro", "oni", "nurarihyon"];
+const FLOATING_CAST = new Set(["yurei", "onryo"]);
 
 function sourceUrl(file) {
   const url = new URL(file, ASSET_ROOT);
@@ -194,7 +195,7 @@ function addCount(map, key, x, y, core) {
   }
 }
 
-function isolateGrid(image, columns, rows) {
+function isolateGrid(image, columns, rows, options = {}) {
   const width = image.naturalWidth;
   const height = image.naturalHeight;
   const pixelCount = width * height;
@@ -223,7 +224,14 @@ function isolateGrid(image, columns, rows) {
   for (let start = 0; start < pixelCount; start++) {
     if (labels[start] || !foreground(start)) continue;
     const label = ++nextLabel;
-    const stats = { count: 0, cells: new Map() };
+    const stats = {
+      count: 0,
+      cells: new Map(),
+      left: width,
+      top: height,
+      right: -1,
+      bottom: -1,
+    };
     let head = 0;
     let tail = 0;
     labels[start] = label;
@@ -243,6 +251,10 @@ function isolateGrid(image, columns, rows) {
       const core = u >= 0.18 && u <= 0.82 && v >= 0.18 && v <= 0.88;
       addCount(stats.cells, cell, x, y, core);
       stats.count += 1;
+      stats.left = Math.min(stats.left, x);
+      stats.top = Math.min(stats.top, y);
+      stats.right = Math.max(stats.right, x);
+      stats.bottom = Math.max(stats.bottom, y);
 
       if (x > 0) tail = enqueue(index - 1, label, tail);
       if (x + 1 < width) tail = enqueue(index + 1, label, tail);
@@ -276,6 +288,28 @@ function isolateGrid(image, columns, rows) {
     }
     stats.owner = seeds.length === 1 ? seeds[0].cell : dominantCell;
     stats.seeds = seeds.length > 1 ? seeds : null;
+
+    // The tall tree and shrine ruin deliberately break into the cell above
+    // their nominal row. Their fine upper branches are disconnected from the
+    // trunks by transparent gaps, so position-only ownership used to donate
+    // those fragments to the two gravestones above: clipped landmarks plus
+    // graves wearing stray branches. Reunite only low, disconnected spill
+    // components from the explicitly named source cells.
+    const spillSource = options.spillDownFrom?.find((cell) => {
+      const lowerCell = cell + columns;
+      if (!stats.cells.has(cell) || lowerCell >= cellCount) return false;
+      if (stats.cells.has(lowerCell)) return true;
+      const ownerRow = (cell / columns) | 0;
+      const ownerHeight = yEdges[ownerRow + 1] - yEdges[ownerRow];
+      return stats.owner === cell
+        && stats.top >= yEdges[ownerRow] + ownerHeight * 0.42;
+    });
+    if (spillSource != null) {
+      stats.owner = spillSource + columns;
+      // Do not Voronoi-split a connected trunk/branch component back across
+      // the row boundary after explicitly reuniting it with its landmark.
+      stats.seeds = null;
+    }
     components[label] = stats;
   }
 
@@ -483,7 +517,7 @@ function makePortrait(image) {
   return canvas;
 }
 
-function castRecord(walkA, walkB, attack, spec, frameCount, boss) {
+function castRecord(walkA, walkB, attack, spec, frameCount, boss, floating = false) {
   const walkItems = [placement(walkA), placement(walkB)];
   const attackBaseline = rowBaseline([walkA, walkB]) - attack.offsetY;
   const attackItem = placement(attack, attackBaseline);
@@ -493,8 +527,16 @@ function castRecord(walkA, walkB, attack, spec, frameCount, boss) {
   );
   const walkFrames = walkItems.map((item) => frameFrom(item, spec, scale));
   const attackPose = frameFrom(attackItem, spec, scale);
-  const frames = Array.from({ length: frameCount }, (_, i) => walkFrames[i % 2]);
-  const attackFrames = [walkFrames[0], attackPose, attackPose, walkFrames[1]];
+  // Wraiths translate through the world and bob vertically; alternating their
+  // trailing robes reads as footfall locomotion. Their generated lunge cells
+  // also contain detached cloth islands, so a clean held float pose is both
+  // the intended motion language and the safest combat silhouette.
+  const frames = floating
+    ? Array.from({ length: frameCount }, () => walkFrames[0])
+    : Array.from({ length: frameCount }, (_, i) => walkFrames[i % 2]);
+  const attackFrames = floating
+    ? Array.from({ length: 4 }, () => walkFrames[0])
+    : [walkFrames[0], attackPose, attackPose, walkFrames[1]];
   return {
     frames,
     attackFrames,
@@ -524,6 +566,7 @@ function castArt(enemyImage, bossImage) {
         { width, height, ox: width * 0.5, oy: height * 0.92 },
         6,
         false,
+        FLOATING_CAST.has(name),
       );
     }
   }
@@ -584,7 +627,7 @@ function staticGroup(cells, width, height, align = "center") {
 }
 
 function propArt(image) {
-  const c = isolateGrid(image, 4, 4);
+  const c = isolateGrid(image, 4, 4, { spillDownFrom: [10, 11] });
   return {
     grass: staticGroup(c.slice(0, 4), 90, 70, "bottom"),
     stone: staticGroup(c.slice(4, 7), 110, 80, "bottom"),

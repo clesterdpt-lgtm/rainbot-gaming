@@ -29,6 +29,16 @@ const GROUND_CELL = 2100;
 const GROUND_OFFSET = GROUND_CELL / 2;
 let generatedGround = null;
 
+export const BACKGROUND = Object.freeze({
+  groundPlateAlpha: 0.46,
+  smallPropSlots: 3,
+  smallPropThreshold: 0.8,
+  landmarkChance: 0.09,
+  ashCount: 42,
+  ashDarkAlpha: 0.24,
+  ashLightAlpha: 0.34,
+});
+
 export const PROPS = {
   grass: [],
   stone: [],
@@ -372,9 +382,9 @@ export function drawGround(g, view) {
     for (let cx = x0; cx <= x1; cx++) {
       const base = hash2(cx, cy, 1);
 
-      for (let k = 0; k < 4; k++) {
+      for (let k = 0; k < BACKGROUND.smallPropSlots; k++) {
         const r = hash2(cx, cy, 20 + k);
-        if (r > 0.72) continue;
+        if (r > BACKGROUND.smallPropThreshold) continue;
         const px = cx * CELL + hash2(cx, cy, 30 + k) * CELL;
         const py = cy * CELL + hash2(cx, cy, 40 + k) * CELL;
         const pick = hash2(cx, cy, 50 + k);
@@ -392,7 +402,7 @@ export function drawGround(g, view) {
         g.restore();
       }
 
-      if (base < 0.14) {
+      if (base < BACKGROUND.landmarkChance) {
         const px = cx * CELL + hash2(cx, cy, 2) * CELL;
         const py = cy * CELL + hash2(cx, cy, 3) * CELL;
         const pick = hash2(cx, cy, 4);
@@ -426,7 +436,7 @@ function drawGeneratedGround(g, view) {
 
   g.save();
   // Let silhouettes and blood remain the darkest values in a busy fight.
-  g.globalAlpha = 0.62;
+  g.globalAlpha = BACKGROUND.groundPlateAlpha;
   for (let cy = y0; cy <= y1; cy++) {
     for (let cx = x0; cx <= x1; cx++) {
       const flipX = Math.abs(cx) % 2 === 1;
@@ -480,7 +490,7 @@ export class Ash {
   draw(g, w, h) {
     g.save();
     for (const m of this.motes) {
-      g.globalAlpha = m.dark ? 0.34 : 0.5;
+      g.globalAlpha = m.dark ? BACKGROUND.ashDarkAlpha : BACKGROUND.ashLightAlpha;
       g.fillStyle = m.dark ? PAL.ink : PAL.paperLit;
       g.beginPath();
       g.ellipse(m.x * w, m.y * h, m.r, m.r * 1.4, m.p, 0, Math.PI * 2);

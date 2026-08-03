@@ -382,6 +382,8 @@ function spawn(ctx, o) {
 }
 
 const TAU = Math.PI * 2;
+const CRIMSON_ARC_EXTRA_SLASH_LEVELS = [3, 5, 8];
+const CRIMSON_ARC_OFFSETS = [0, Math.PI, 0.62, Math.PI - 0.62];
 
 /* ---------------------------------------------------------- */
 /* The arsenal                                                 */
@@ -397,14 +399,14 @@ export const WEAPONS = {
     kana: "クリムゾン・アーク",
     desc: "A drawn cut that opens a crescent of blood in front of you.",
     levelText: [
-      "Crescents open in front of you and behind.",
+      "One crescent opens in front of you.",
       "+9 damage.",
-      "A third crescent.",
+      "A second crescent opens behind you.",
       "+10 damage.",
-      "+1 arc.",
+      "A third crescent joins the cut.",
       "+14 damage, wider sweep.",
       "Cuts leave a lingering wound.",
-      "+1 arc.",
+      "A fourth crescent joins the cut.",
     ],
     max: 8,
     evolve: { into: "requiem", requires: "might" },
@@ -413,11 +415,9 @@ export const WEAPONS = {
         damage: 20 + l * 9,
         cooldown: 1.1 - l * 0.045,
         area: 1 + l * 0.09,
-        // TWO arcs from level one, front and back. With a single
-        // forward arc the opening minutes are unwinnable: you spend
-        // them retreating, the cut lands on empty ground, no souls
-        // drop, no levels arrive, and the run never starts.
-        amount: 2 + (l >= 3 ? 1 : 0) + (l >= 5 ? 1 : 0) + (l >= 8 ? 1 : 0),
+        // Begin with one committed forward cut. Later ranks add the rear
+        // guard and then two diagonal crescents as earned coverage.
+        amount: 1 + CRIMSON_ARC_EXTRA_SLASH_LEVELS.filter((level) => l >= level).length,
         knockback: 200,
       };
     },
@@ -429,9 +429,8 @@ export const WEAPONS = {
       // forward. A survivor spends most of the run retreating, and a
       // weapon that only cuts the way you face kills nothing at all
       // while you are running away from the thing chasing you.
-      const OFFSETS = [0, Math.PI, 0.62, Math.PI - 0.62, -0.62, Math.PI + 0.62];
       for (let i = 0; i < s.amount; i++) {
-        const ang = base + (OFFSETS[i] == null ? (i * 1.1) : OFFSETS[i]);
+        const ang = base + (CRIMSON_ARC_OFFSETS[i] == null ? (i * 1.1) : CRIMSON_ARC_OFFSETS[i]);
         const dist = 66 * s.area;
         const px = ctx.player.x + Math.cos(ang) * dist;
         const py = ctx.player.y - ctx.player.h * 0.42 + Math.sin(ang) * dist * 0.5;

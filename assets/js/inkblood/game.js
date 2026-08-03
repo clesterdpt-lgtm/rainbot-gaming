@@ -25,18 +25,18 @@ import {
 } from "./art.js?v=20260803-2";
 import { bakeCast } from "./sprites.js?v=20260803-2";
 import {
-  bakeProps, drawGround, Ash, installGeneratedEnvironment,
-} from "./props.js?v=20260803-manga-1";
+  bakeProps, drawGround, Ash, installGeneratedEnvironment, BACKGROUND,
+} from "./props.js?v=20260803-calm-1";
 import { bakeFx, Fx, ATLAS } from "./fx.js?v=20260803-2";
 import {
   WEAPONS, PASSIVES, WEP_ART, bakeWeaponArt, makeProjectile, stepProjectile,
   drawProjectile, drawChains,
-} from "./weapons.js?v=20260803-2";
-import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js?v=20260803-manga-1";
-import { Audio } from "./audio.js?v=20260803-2";
+} from "./weapons.js?v=20260803-solo-slash-1";
+import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js?v=20260803-calm-1";
+import { Audio } from "./audio.js?v=20260803-calm-1";
 import { Input } from "./input.js?v=20260803-2";
-import { Hud } from "./hud.js?v=20260803-2";
-import { loadGeneratedAssets } from "./generated-assets.js?v=20260803-manga-1";
+import { Hud } from "./hud.js?v=20260803-solo-slash-1";
+import { loadGeneratedAssets } from "./generated-assets.js?v=20260803-calm-1";
 
 // The camera guarantees a minimum window onto the world in BOTH
 // axes. Driving zoom from height alone is fine on a laptop and
@@ -151,7 +151,7 @@ export class Game {
     this.hud = new Hud(FONTS);
     this.director = new Director();
     this.grid = new Grid(CELL);
-    this.ash = new Ash(70);
+    this.ash = new Ash(BACKGROUND.ashCount);
 
     this.enemies = [];
     this.projectiles = [];
@@ -1396,7 +1396,8 @@ export class Game {
   drawEnemy(g, e) {
     const rec = this.art.cast[e.def.sprite];
     if (!rec) return;
-    const attacking = e.attackT > 0 && rec.attackFrames?.length;
+    const floating = e.def.locomotion === "float";
+    const attacking = !floating && e.attackT > 0 && rec.attackFrames?.length;
     const set = attacking ? rec.attackFrames : rec.frames;
     const n = set.length;
     const attackElapsed = attacking
@@ -1410,7 +1411,7 @@ export class Game {
       : 0;
     const idx = attacking
       ? Math.min(n - 1, Math.max(0, Math.floor(attackProgress * n)))
-      : gaitFrameIndex(e.animT, 8, n, e.seed);
+      : (floating ? 0 : gaitFrameIndex(e.animT, 8, n, e.seed));
     const f = set[idx];
     const bob = e.def.bob ? Math.sin(this.time * 3 + e.bobPhase) * e.def.bob : 0;
 
@@ -1518,7 +1519,7 @@ export class Game {
   drawPageFrame(g) {
     if (this.vignette) {
       g.save();
-      g.globalAlpha = 0.5;
+      g.globalAlpha = 0.38;
       g.drawImage(this.vignette, 0, 0, this.w, this.h);
       g.restore();
     }

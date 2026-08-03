@@ -3,9 +3,9 @@
    Everything is synthesised; there are no sound files.
 
    Palette: taiko-ish membrane hits (pitch-swept sine through a
-   short decay), steel (filtered noise burst), and a slow modal
-   drone built on the in-sen scale so the bed never resolves and
-   never gets cheerful.
+   short decay), steel (filtered noise burst), and sparse taiko and
+   breath cues. There is deliberately no continuous oscillator bed:
+   on small speakers it read as an electrical hum.
    ============================================================ */
 
 "use strict";
@@ -185,42 +185,12 @@ export class Audio {
 
   /* --- music ------------------------------------------------- */
 
-  /**
-   * A slow drone on the in-sen scale plus a taiko pulse whose
-   * tempo is driven by `intensity` (0..1), so the bed tightens as
-   * the horde thickens without ever changing key.
-   */
+  /** Sparse taiko pulse whose tempo is driven by `intensity` (0..1). */
   startMusic() {
     if (!this.ctx || this.started) return;
     this.started = true;
     this.musicGain.gain.linearRampToValueAtTime(0.5, this.t + 3);
-
-    const root = 73.42;                     // D2
-    const drone = [1, 1.5, 2].map((mult, i) => {
-      const o = this.ctx.createOscillator();
-      const g = this.ctx.createGain();
-      const f = this.ctx.createBiquadFilter();
-      o.type = i === 0 ? "sawtooth" : "sine";
-      o.frequency.value = root * mult;
-      o.detune.value = (i - 1) * 6;
-      f.type = "lowpass";
-      f.frequency.value = 340;
-      g.gain.value = i === 0 ? 0.10 : 0.05;
-      o.connect(f); f.connect(g); g.connect(this.musicGain);
-      o.start();
-      return { o, g, f };
-    });
-    this.musicNodes = drone;
-
-    // Slow LFO on the filter so the drone breathes.
-    const lfo = this.ctx.createOscillator();
-    const lfoGain = this.ctx.createGain();
-    lfo.frequency.value = 0.06;
-    lfoGain.gain.value = 150;
-    lfo.connect(lfoGain);
-    lfoGain.connect(drone[0].f.frequency);
-    lfo.start();
-    this.musicNodes.push({ o: lfo });
+    this.musicNodes = [];
 
     this.intensity = 0;
     this.pulseAcc = 0;

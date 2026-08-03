@@ -44,7 +44,7 @@ third. `ground-manga-v1.webp` is an opaque authored battlefield plate.
 | --- | --- |
 | `hero-manga-v1.webp` | Hero animation: **4 idle, 8 run and 8 slash frames** |
 | `hero-portrait-manga-v1.webp` | HUD/title portrait |
-| `enemies-manga-v1.webp` | Eight normal yokai; each six-frame gait is derived from two distinct walk poses, with separate explicit attack frames |
+| `enemies-manga-v1.webp` | Eight normal yokai; grounded enemies use two-pose gaits and explicit attacks, while Yurei and Onryo hold a clean silhouette and bob as floating wraiths |
 | `bosses-manga-v1.webp` | Gashadokuro, Oni and Nurarihyon; **4 gait frames plus explicit attack frames** per boss |
 | `props-manga-v1.webp` | Authored grass, stones, bones, graves, lantern, torii, tree and broken-shrine ruin props |
 | `ground-manga-v1.webp` | World-locked manga ground, enlarged and centre-offset across alternating mirrored cells to avoid hard repeat seams and obvious wallpaper repetition |
@@ -151,7 +151,7 @@ procedural fallback rather than the generated atlas.
 | `fx.js` | Baked effect atlas, damage numbers, katakana SFX, blood, screen shake |
 | `props.js` | Generated ground/prop installation, deterministic infinite scatter, procedural fallback, drifting ash |
 | `hud.js` | Canvas HUD panels, level-up cards |
-| `audio.js` | Fully synthesised taiko + drone score, no sound files |
+| `audio.js` | Fully synthesised sparse taiko/breath score and combat SFX; no continuous drone or sound files |
 | `input.js` | Keyboard, gamepad, floating touch thumbstick |
 
 **Performance shape.** One array per entity class, all swept with a
@@ -206,7 +206,8 @@ without depending on an arbitrary external sleep.
 
 ```bash
 node scripts/inkblood-artcheck.mjs  # procedural fallback bake boxes: is art cropped?
-node scripts/inkblood-e2e.mjs       # 37 checks, including generated clips and enemy attack poses
+node scripts/inkblood-asset-audit.mjs  # generated hero/cast/props/combat bounds + contact sheets
+node scripts/inkblood-e2e.mjs       # 40 checks, including slash progression, float poses and no-hum audio
 node scripts/inkblood-soak.mjs --god  # full 15-minute run, leak + curve report
 node scripts/inkblood-perf.mjs      # headed FPS probe at worst case
 node scripts/inkblood-shots.mjs --script title,play,swarm,boss,levelup
@@ -231,6 +232,9 @@ against one frame's slack would clip another frame where a limb swings
 further). **Run it after changing any fallback figure's proportions, pose
 amplitude or held equipment.** Generated plates need their own rendered-game
 inspection because their crop and anchors are owned by `generated-assets.js`.
+`scripts/inkblood-asset-audit.mjs` now performs that shipping-path inspection:
+it checks every generated hero, enemy, boss, prop and combat canvas for edge
+contact and writes cast/prop/combat contact sheets for visual review.
 
 ### Alternate in-engine cover
 
@@ -248,10 +252,9 @@ site currently uses the generative AI key art above.
 
 Numbers that were tuned against the soak test and are easy to break:
 
-- **The Crimson Arc opens with TWO arcs, front and back.** With a
-  single forward arc the opening minutes are unwinnable: you spend
-  them retreating, the cut lands on empty ground, no souls drop, no
-  levels arrive, and the run never starts.
+- **The Crimson Arc opens with one forward slash.** Coverage is earned rather
+  than granted: the rear slash unlocks at level 3, a third crescent at level 5,
+  and a fourth at level 8.
 - **Bosses opt out of the HP curve** (`Director.bossCurve`). Scaling
   authored boss health a second time by the clock made the final boss
   ~480,000 HP and stretched a 15-minute run past 30.

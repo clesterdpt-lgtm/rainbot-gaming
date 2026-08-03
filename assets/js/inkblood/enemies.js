@@ -48,7 +48,7 @@ export const ENEMIES = {
   yurei: {
     id: "yurei", sprite: "yurei", name: "Yurei", jp: "幽霊",
     hp: 42, speed: 58, damage: 10, xp: 4, h: 72, radius: 19, mass: 0.4,
-    behavior: "drift", ghost: true, bob: 6,
+    behavior: "drift", locomotion: "float", ghost: true, bob: 6,
   },
   mukade: {
     id: "mukade", sprite: "mukade", name: "Omukade", jp: "大百足",
@@ -58,7 +58,7 @@ export const ENEMIES = {
   onryo: {
     id: "onryo", sprite: "onryo", name: "Onryo", jp: "怨霊",
     hp: 240, speed: 52, damage: 18, xp: 14, h: 90, radius: 26, mass: 2.4,
-    behavior: "drift", ghost: true, elite: true, kbResist: 0.6, bob: 5,
+    behavior: "drift", locomotion: "float", ghost: true, elite: true, kbResist: 0.6, bob: 5,
   },
 
   /* ---- bosses ---- */

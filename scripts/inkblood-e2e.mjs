@@ -218,10 +218,21 @@ const generatedAnimationArt = await page.evaluate(() => {
 
   const art = window.__INK.game.art;
   const castProblems = [];
+  const floatingProblems = [];
+  const floatingCast = new Set(["yurei", "onryo"]);
   for (const [name, record] of Object.entries(art.cast || {})) {
     const attacks = record.attackFrames || [];
     const walk = pixelSignature(record.frames?.[0]);
     const attack = pixelSignature(attacks[1]);
+    if (floatingCast.has(name)) {
+      const allFrames = [...(record.frames || []), ...attacks].map(pixelSignature);
+      const unique = new Set(allFrames.map((entry) => entry.signature)).size;
+      if (record.frames?.length !== 6 || attacks.length !== 4
+        || allFrames.some((entry) => entry.opaque <= 0) || unique !== 1) {
+        floatingProblems.push(`${name}:${record.frames?.length}/${attacks.length}/unique=${unique}`);
+      }
+      continue;
+    }
     if (attacks.length !== 4 || attack.opaque <= 0 || attack.signature === walk.signature) {
       castProblems.push(`${name}:${attacks.length}/${walk.signature}/${attack.signature}`);
     }
@@ -232,6 +243,7 @@ const generatedAnimationArt = await page.evaluate(() => {
     slash: clipSummary(art.hero?.slash),
     castCount: Object.keys(art.cast || {}).length,
     castProblems,
+    floatingProblems,
   };
 });
 check("generated hero run frames are visibly animated",
@@ -244,9 +256,20 @@ check("generated hero slash frames are visibly animated",
     && generatedAnimationArt.slash.nonempty
     && generatedAnimationArt.slash.unique > 1,
   JSON.stringify(generatedAnimationArt.slash));
-check("every generated enemy and boss has a distinct four-frame attack clip",
+check("every walking generated enemy and boss has a distinct four-frame attack clip",
   generatedAnimationArt.castCount === 11 && generatedAnimationArt.castProblems.length === 0,
   `cast=${generatedAnimationArt.castCount} problems=${generatedAnimationArt.castProblems.join(" | ") || "none"}`);
+check("Yurei and Onryo hold one clean generated float silhouette",
+  generatedAnimationArt.floatingProblems.length === 0,
+  generatedAnimationArt.floatingProblems.join(" | ") || "stable float frames");
+
+const ambientAudio = await page.evaluate(() => ({
+  started: window.__INK.game.audio.started,
+  continuousNodes: window.__INK.game.audio.musicNodes.length,
+}));
+check("ambient score has no continuous hum oscillators",
+  ambientAudio.started && ambientAudio.continuousNodes === 0,
+  JSON.stringify(ambientAudio));
 
 const enemyAttackStates = await page.evaluate(() => {
   const g = window.__INK.game;
@@ -458,17 +481,36 @@ check("enemies face into their travel direction on both sides",
 
 const slashTrigger = await page.evaluate(() => {
   const g = window.__INK.game;
+  const weapon = g.weapons[0];
+  weapon.level = 1;
   g.player.slashT = 0;
-  g.weapons[0].cd = 0;
+  g.fx.slashes.length = 0;
+  g.projectiles.length = 0;
+  weapon.cd = 0;
   g.step(1 / 60);
+  const slash = g.projectiles.find((projectile) => projectile.sector);
+  const expected = g.player.facing >= 0 ? 0 : Math.PI;
+  let delta = (slash?.sector.angle ?? Infinity) - expected;
+  while (delta > Math.PI) delta -= Math.PI * 2;
+  while (delta < -Math.PI) delta += Math.PI * 2;
   return {
     active: g.player.slashT > 0,
     duration: g.player.slashDuration,
     arcs: g.fx.slashes.length,
+    forward: Math.abs(delta) < 0.001,
   };
 });
-check("Crimson Arc triggers the hero sword swing", slashTrigger.active && slashTrigger.arcs >= 2,
-  `duration=${slashTrigger.duration.toFixed(2)} arcs=${slashTrigger.arcs}`);
+check("level-one Crimson Arc fires exactly one forward slash",
+  slashTrigger.active && slashTrigger.arcs === 1 && slashTrigger.forward,
+  `duration=${slashTrigger.duration.toFixed(2)} arcs=${slashTrigger.arcs} forward=${slashTrigger.forward}`);
+
+const crimsonArcProgression = await page.evaluate(async () => {
+  const { WEAPONS } = await import("/assets/js/inkblood/weapons.js?v=20260803-solo-slash-1");
+  return Array.from({ length: 8 }, (_, index) => WEAPONS.crimsonArc.stats(index + 1).amount);
+});
+check("Crimson Arc unlocks additional slashes only at later levels",
+  crimsonArcProgression.join(",") === "1,1,2,2,3,3,3,4",
+  crimsonArcProgression.join("→"));
 
 // 3. Real movement
 const before = await page.evaluate(() => ({ x: window.__INK.game.player.x, y: window.__INK.game.player.y }));
@@ -518,6 +560,8 @@ check("P pauses and resumes", paused && resumed, `paused=${paused} resumed=${res
 await page.evaluate(() => {
   const g = window.__INK.game;
   g.queuedLevels = 0;
+  g.enemies.length = 0;
+  g.player.life = g.player.maxLife;
   g.player.xp = 0;
   g.gainXp(g.player.xpNeed);
 });

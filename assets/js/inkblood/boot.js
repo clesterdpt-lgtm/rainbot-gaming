@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "20260803-manga-1";
+  const VERSION = "20260803-solo-slash-1";
 
   const scriptUrl = document.currentScript
     ? document.currentScript.src

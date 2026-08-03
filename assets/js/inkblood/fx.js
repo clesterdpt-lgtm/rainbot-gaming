@@ -22,7 +22,7 @@
 import {
   PAL, makeCanvas, ctxOf, brush, splat, spray, rng, wobble, focusLines,
   starburst, boltPath, roughCircle, tone, inkText,
-} from "./art.js";
+} from "./art.js?v=20260802-5";
 
 /* ---------------------------------------------------------- */
 /* Baked effect atlas                                          */
@@ -328,15 +328,15 @@ function bakeBomb(S) {
 }
 
 /* ---------------------------------------------------------- */
-/* Onomatopoeia                                                */
+/* Impact marks                                                */
 /* ---------------------------------------------------------- */
 
-/** Katakana impact words, roughly ordered by how hard the hit was. */
+/** Graphic marks, roughly ordered by how hard the hit was. */
 export const SFX_WORDS = {
-  light: ["ドッ", "ガッ", "ザッ", "ドス", "バシ"],
-  heavy: ["ドゴォ", "ズバッ", "ゴガッ", "バキィ", "ドガァ"],
-  huge: ["ドドドド", "ズシャアア", "ゴオオオ", "ドオォン", "ギャアア"],
-  crit: ["会心", "斬", "血", "死"],
+  light: ["!", "•", "×", ">", "/"],
+  heavy: ["!!", "X", "//", "◆", "!"],
+  huge: ["!!!", "✦", "X", "///", "◆"],
+  crit: ["CRIT", "X", "✦", "!!"],
 };
 
 /* ---------------------------------------------------------- */
@@ -349,7 +349,7 @@ export class Fx {
     this.bursts = [];     // short-lived directional sprays
     this.hits = [];       // ink impact blots
     this.floaters = [];   // damage numbers
-    this.words = [];      // katakana SFX
+    this.words = [];      // graphic impact marks
     this.rings = [];      // expanding shockwaves
     this.slashes = [];    // crimson arcs
     this.bolts = [];      // lightning
@@ -447,7 +447,7 @@ export class Fx {
     this.words.push({
       x, y, t: 0,
       life: opts.life || 0.7,
-      text,
+      text, tier,
       rot: opts.rot == null ? (Math.random() - 0.5) * 0.42 : opts.rot,
       scale: opts.scale || 1,
       vy: opts.vy == null ? -26 : opts.vy,
@@ -719,7 +719,7 @@ export class Fx {
     g.globalAlpha = 1;
   }
 
-  /** Lettering, drawn last in world space so it is never occluded. */
+  /** Impact marks and numbers, drawn last so they are never occluded. */
   drawText(g, fonts) {
     for (const w of this.words) {
       const k = w.t / w.life;
@@ -730,8 +730,26 @@ export class Fx {
       g.translate(w.x, w.y);
       g.rotate(w.rot);
       g.scale(sc, sc);
+      // Procedural speed/impact strokes carry the manga energy that
+      // used to come from repeated katakana, while the central mark
+      // stays legible at thumbnail size.
+      if (w.tier === "huge") {
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          brush(g, [[Math.cos(a) * 29, Math.sin(a) * 29], [Math.cos(a) * 50, Math.sin(a) * 50]],
+            { width: 2.2, taper: "end", jitter: 0.16, seed: 90 + i, colour: w.colour });
+        }
+      } else if (w.tier === "heavy" || w.tier === "crit") {
+        brush(g, [[-38, 25], [38, -25]],
+          { width: 2.4, taper: "both", jitter: 0.16, seed: 98, colour: w.colour });
+        brush(g, [[-30, -26], [30, 26]],
+          { width: 1.4, taper: "both", jitter: 0.16, seed: 99, colour: w.colour });
+      } else {
+        brush(g, [[-34, 15], [-18, 5]],
+          { width: 1.5, taper: "both", jitter: 0.14, seed: 100, colour: w.colour });
+      }
       inkText(g, w.text, 0, 0, {
-        font: fonts.jp(46),
+        font: fonts.impact(w.text.length > 3 ? 34 : 46),
         halo: 9,
         outline: 5,
         colour: w.colour,

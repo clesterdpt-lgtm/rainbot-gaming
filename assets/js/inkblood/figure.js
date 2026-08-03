@@ -21,7 +21,7 @@
 import {
   PAL, brush, tone, wobble, rng, splat, fillToneDevice, deviceSpace,
   hatchShade, stippleShade, inkContour, samplePath, feather,
-} from "./art.js";
+} from "./art.js?v=20260802-5";
 
 /**
  * The light. Everything in the game is lit from the upper right by

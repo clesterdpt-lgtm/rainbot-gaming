@@ -13,7 +13,7 @@
 
 "use strict";
 
-import { PAL } from "./art.js";
+import { PAL } from "./art.js?v=20260802-5";
 
 /* ---------------------------------------------------------- */
 /* Roster                                                      */
@@ -63,21 +63,21 @@ export const ENEMIES = {
 
   /* ---- bosses ---- */
   gashadokuro: {
-    id: "gashadokuro", sprite: "gashadokuro", name: "Gashadokuro", jp: "餓者髑髏",
+    id: "gashadokuro", sprite: "gashadokuro", name: "Gashadokuro", sigil: "boss-skull", jp: "餓者髑髏",
     title: "THE FAMINE SKELETON",
     hp: 9000, speed: 40, damage: 30, xp: 240, h: 190, radius: 56, mass: 30,
     behavior: "boss", kbResist: 0.96, boss: true,
     slamCd: 4.2, slamRadius: 250, slamDamage: 30,
   },
   oni: {
-    id: "oni", sprite: "oni", name: "Oni", jp: "鬼",
+    id: "oni", sprite: "oni", name: "Oni", sigil: "boss-oni", jp: "鬼",
     title: "THE RED-BROWED",
     hp: 34000, speed: 56, damage: 38, xp: 420, h: 155, radius: 48, mass: 30,
     behavior: "boss", kbResist: 0.96, boss: true,
     slamCd: 3.2, slamRadius: 210, slamDamage: 38, chargeCd: 7,
   },
   nurarihyon: {
-    id: "nurarihyon", sprite: "nurarihyon", name: "Nurarihyon", jp: "ぬらりひょん",
+    id: "nurarihyon", sprite: "nurarihyon", name: "Nurarihyon", sigil: "boss-command", jp: "ぬらりひょん",
     title: "SUPREME COMMANDER OF THE NIGHT PARADE",
     hp: 90000, speed: 48, damage: 44, xp: 900, h: 145, radius: 46, mass: 30,
     behavior: "boss", kbResist: 0.98, boss: true, ghost: true,
@@ -211,7 +211,7 @@ export class Director {
         const a = (i / ev.count) * Math.PI * 2 + Math.random() * 0.1;
         ctx.spawnEnemy(ev.type, ctx.player.x + Math.cos(a) * R, ctx.player.y + Math.sin(a) * R * 0.8, c);
       }
-      ctx.fx.word(ctx.player.x, ctx.player.y - 200, "heavy", { text: "ザワ…", scale: 1.2, life: 1.2 });
+      ctx.fx.word(ctx.player.x, ctx.player.y - 200, "heavy", { text: "•••", scale: 1.2, life: 1.2 });
       ctx.audio.swarm();
     } else if (ev.kind === "pack") {
       const a0 = Math.random() * Math.PI * 2;
@@ -269,7 +269,7 @@ export function stepEnemy(e, dt, ctx) {
         else if (dist < 420) {
           e.dashing = true; e.dashT = 0.42;
           e.dashX = dx; e.dashY = dy;
-          ctx.fx.word(e.x, e.y - e.h - 8, "light", { text: "シュッ", scale: 0.5, life: 0.4 });
+          ctx.fx.word(e.x, e.y - e.h - 8, "light", { text: ">>", scale: 0.5, life: 0.4 });
         } else e.dashT = 0.4;
       }
       if (e.dashing) {

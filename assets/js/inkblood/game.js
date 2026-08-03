@@ -21,18 +21,19 @@
 import {
   PAL, paper, makeCanvas, ctxOf, inkText, panelFrame, brush, splat, rng,
   starburst, roughCircle, fillToneDevice, tone, focusLines, feather, wobble,
-} from "./art.js";
-import { bakeCast, PX_PER_UNIT } from "./sprites.js";
-import { bakeProps, drawGround, Ash } from "./props.js";
-import { bakeFx, Fx, ATLAS } from "./fx.js";
+  drawInkSigil,
+} from "./art.js?v=20260802-5";
+import { bakeCast, PX_PER_UNIT } from "./sprites.js?v=20260802-5";
+import { bakeProps, drawGround, Ash } from "./props.js?v=20260802-5";
+import { bakeFx, Fx, ATLAS } from "./fx.js?v=20260802-5";
 import {
   WEAPONS, PASSIVES, bakeWeaponArt, makeProjectile, stepProjectile,
   drawProjectile, drawChains,
-} from "./weapons.js";
-import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js";
-import { Audio } from "./audio.js";
-import { Input } from "./input.js";
-import { Hud } from "./hud.js";
+} from "./weapons.js?v=20260802-5";
+import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js?v=20260802-5";
+import { Audio } from "./audio.js?v=20260802-5";
+import { Input } from "./input.js?v=20260802-5";
+import { Hud } from "./hud.js?v=20260802-5";
 
 // The camera guarantees a minimum window onto the world in BOTH
 // axes. Driving zoom from height alone is fine on a laptop and
@@ -43,6 +44,10 @@ const WORLD_VIEW_H = 700;
 const WORLD_VIEW_W = 780;
 const MAX_ENEMIES = 340;
 const CELL = 72;
+// The baked gait reads forward when its planted foot travels from
+// front to back. The original runtime advanced it in the opposite
+// order, giving every moving figure a moonwalk/backpedal read.
+const WALK_CYCLE_DIRECTION = -1;
 
 /**
  * Safe cyclic frame index. Guards against a negative or NaN time
@@ -55,6 +60,13 @@ export function frameAt(list, t, rate) {
   const raw = Math.floor((t || 0) * rate);
   const i = ((raw % n) + n) % n;
   return list[i];
+}
+
+/** Shared forward gait order for the hero and every walking yokai. */
+export function gaitFrameIndex(t, rate, frameCount, phase = 0) {
+  if (!frameCount) return -1;
+  const raw = Math.floor((t || 0) * rate * WALK_CYCLE_DIRECTION + phase);
+  return ((raw % frameCount) + frameCount) % frameCount;
 }
 
 export const FONTS = {
@@ -171,16 +183,31 @@ export class Game {
 
   bindCanvas() {
     this.resize();
-    window.addEventListener("resize", () => this.resize());
+    let resizeFrame = 0;
+    const scheduleResize = () => {
+      if (resizeFrame) cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = 0;
+        this.resize();
+      });
+    };
+    window.addEventListener("resize", scheduleResize);
+    if (typeof ResizeObserver === "function" && this.canvas.parentElement) {
+      this.resizeObserver = new ResizeObserver(scheduleResize);
+      this.resizeObserver.observe(this.canvas.parentElement);
+    }
     this.canvas.addEventListener("pointerdown", (e) => this.onPointer(e));
   }
 
   resize() {
-    const w = Math.max(320, window.innerWidth);
-    const h = Math.max(240, window.innerHeight);
+    const host = this.canvas.parentElement;
+    const w = Math.max(1, Math.round(host?.clientWidth || window.innerWidth));
+    const h = Math.max(1, Math.round(host?.clientHeight || window.innerHeight));
     // Cap the backing store: a 4K display would otherwise ask the
     // 2D context to fill 8M pixels of screentone every frame.
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (this.w === w && this.h === h && this.dpr === dpr) return;
+    this.dpr = dpr;
     this.canvas.width = Math.floor(w * this.dpr);
     this.canvas.height = Math.floor(h * this.dpr);
     this.canvas.style.width = `${w}px`;
@@ -231,6 +258,7 @@ export class Game {
       level: 1, xp: 0, xpNeed: this.xpFor(1),
       invuln: 0, hurtFlash: 0,
       animT: 0, moving: false,
+      slashT: 0, slashDuration: 0.34,
       regenAcc: 0,
     };
 
@@ -315,6 +343,14 @@ export class Game {
   /* ------------------------------------------------------- */
 
   after(delay, fn) { this.timers.push({ t: delay, fn }); }
+
+  animatePlayerSlash(angle = 0, duration = 0.34) {
+    const p = this.player;
+    if (!p) return;
+    if (Math.abs(Math.cos(angle)) > 0.08) p.facing = Math.cos(angle) >= 0 ? 1 : -1;
+    p.slashDuration = Math.max(0.18, duration);
+    p.slashT = p.slashDuration;
+  }
 
   nearestEnemy(x, y, maxDist) {
     let best = null;
@@ -458,7 +494,7 @@ export class Game {
     if (!e) return;
     e.boss = true;
     this.boss = e;
-    this.fx.showPanel("boss", { name: def.name, jp: def.jp, title: def.title, sprite: type }, 2.6);
+    this.fx.showPanel("boss", { name: def.name, sigil: def.sigil, title: def.title, sprite: type }, 2.6);
     this.fx.screenFlash(0.55, true);
     this.fx.shake(20);
     this.fx.focusTarget = 0.9;
@@ -573,7 +609,7 @@ export class Game {
     }
 
     if (e.boss) {
-      this.fx.showPanel("kill", { name: e.def.name, jp: e.def.jp }, 2.2);
+      this.fx.showPanel("kill", { name: e.def.name, sigil: e.def.sigil }, 2.2);
       this.fx.screenFlash(0.7);
       this.fx.shake(24);
       this.slowmo = 1.4;
@@ -680,7 +716,7 @@ export class Game {
       const ev = WEAPONS[def.evolve.into];
       out.push({
         kind: "evolve", id: def.evolve.into, from: w.id,
-        name: ev.name, jp: ev.jp, desc: ev.desc, evolved: true, level: 0,
+        name: ev.name, sigil: ev.sigil, desc: ev.desc, evolved: true, level: 0,
       });
     }
     if (out.length) return out.slice(0, 3);
@@ -690,7 +726,7 @@ export class Game {
       const def = WEAPONS[w.id];
       if (def.evolved || w.level >= def.max) continue;
       pool.push({
-        kind: "weaponUp", id: w.id, name: def.name, jp: def.jp, level: w.level + 1,
+        kind: "weaponUp", id: w.id, name: def.name, sigil: def.sigil, level: w.level + 1,
         desc: def.levelText ? def.levelText[w.level] : def.desc, weight: 10,
       });
     }
@@ -698,7 +734,7 @@ export class Game {
       const def = PASSIVES[p.id];
       if (p.level >= def.max) continue;
       pool.push({
-        kind: "passiveUp", id: p.id, name: def.name, jp: def.jp, level: p.level + 1,
+        kind: "passiveUp", id: p.id, name: def.name, sigil: def.sigil, level: p.level + 1,
         desc: def.desc, weight: 8,
       });
     }
@@ -707,7 +743,7 @@ export class Game {
         const def = WEAPONS[id];
         if (def.evolved || wIds.includes(id)) continue;
         pool.push({
-          kind: "newWeapon", id, name: def.name, jp: def.jp, level: 0,
+          kind: "newWeapon", id, name: def.name, sigil: def.sigil, level: 0,
           desc: def.desc, isNew: true, weight: 14,
         });
       }
@@ -717,7 +753,7 @@ export class Game {
         if (pIds.includes(id)) continue;
         const def = PASSIVES[id];
         pool.push({
-          kind: "newPassive", id, name: def.name, jp: def.jp, level: 0,
+          kind: "newPassive", id, name: def.name, sigil: def.sigil, level: 0,
           desc: def.desc, isNew: true, weight: 10,
         });
       }
@@ -725,8 +761,8 @@ export class Game {
 
     if (!pool.length) {
       return [
-        { kind: "heal", name: "Rice Offering", jp: "飯", desc: "Restore 40 life.", level: 0 },
-        { kind: "coins", name: "Found Coin", jp: "銭", desc: "+80 coin.", level: 0 },
+        { kind: "heal", name: "Rice Offering", sigil: "rice", desc: "Restore 40 life.", level: 0 },
+        { kind: "coins", name: "Found Coin", sigil: "coin", desc: "+80 coin.", level: 0 },
       ];
     }
 
@@ -766,7 +802,7 @@ export class Game {
         w.level = 1;
         w.orbs = [];
         if (w.orb) { w.orb.dead = true; w.orb = null; }
-        this.fx.showPanel("evolve", { name: WEAPONS[c.id].name, jp: WEAPONS[c.id].jp }, 2);
+        this.fx.showPanel("evolve", { name: WEAPONS[c.id].name, sigil: WEAPONS[c.id].sigil }, 2);
         break;
       }
       case "weaponUp": this.weapons.find((x) => x.id === c.id).level++; break;
@@ -886,6 +922,7 @@ export class Game {
     p.moving = Math.abs(ix) + Math.abs(iy) > 0.05;
     if (Math.abs(ix) > 0.05) p.facing = ix > 0 ? 1 : -1;
     p.animT += dt * (p.moving ? 1 : 0.55);
+    if (p.slashT > 0) p.slashT = Math.max(0, p.slashT - dt);
     if (p.invuln > 0) p.invuln -= dt;
     if (p.hurtFlash > 0) p.hurtFlash -= dt;
 
@@ -1241,9 +1278,17 @@ export class Game {
     const p = this.player;
     const art = this.art.hero;
     const moving = p.moving;
-    const set = moving ? art.run : art.idle;
+    const slashing = p.slashT > 0 && art.slash?.length;
+    const set = slashing ? art.slash : (moving ? art.run : art.idle);
     const rate = moving ? 11 : 3.4;
-    const f = frameAt(set, p.animT, rate);
+    const slashProgress = slashing
+      ? 1 - (p.slashT / Math.max(0.001, p.slashDuration))
+      : 0;
+    const slashIndex = slashing
+      ? Math.min(set.length - 1, Math.floor(slashProgress * set.length))
+      : -1;
+    const gaitIndex = moving ? gaitFrameIndex(p.animT, rate, set.length) : -1;
+    const f = slashing ? set[slashIndex] : (moving ? set[gaitIndex] : frameAt(set, p.animT, rate));
     if (!f) return;
     this.shadow(g, p.x, p.y - 2, 26);
 
@@ -1257,8 +1302,10 @@ export class Game {
     if (p.invuln > 0 && Math.floor(this.realTime * 22) % 2 === 0) g.globalAlpha = 0.45;
     g.drawImage(f.canvas, ox, oy, w, h);
     if (p.hurtFlash > 0) {
-      const hurtSet = moving ? art.hurtRun : art.hurtIdle;
-      const hf = frameAt(hurtSet, p.animT, rate);
+      const hurtSet = slashing ? art.hurtSlash : (moving ? art.hurtRun : art.hurtIdle);
+      const hf = slashing
+        ? hurtSet?.[slashIndex]
+        : (moving ? hurtSet?.[gaitIndex] : frameAt(hurtSet, p.animT, rate));
       if (hf) {
         g.globalAlpha = Math.min(1, p.hurtFlash * 3);
         g.drawImage(hf, ox, oy, w, h);
@@ -1271,7 +1318,7 @@ export class Game {
     const rec = this.art.cast[e.def.sprite];
     if (!rec) return;
     const n = rec.frames.length;
-    const idx = ((Math.floor((e.animT || 0) * 8 + e.seed) % n) + n) % n;
+    const idx = gaitFrameIndex(e.animT, 8, n, e.seed);
     const f = rec.frames[idx];
     const bob = e.def.bob ? Math.sin(this.time * 3 + e.bobPhase) * e.def.bob : 0;
 
@@ -1673,9 +1720,8 @@ export class Game {
         g.drawImage(f.canvas, W * 0.22 - bw / 2, y + bandH * 0.98 - bh, bw, bh);
         g.restore();
       }
-      inkText(g, p.jp, W / 2, cy - 14 * ts, {
-        font: FONTS.jp(74 * ts), halo: 0, outline: 6, colour: PAL.blood,
-        outlineColour: PAL.paperLit, align: "center",
+      drawInkSigil(g, p.sigil || "boss-skull", W / 2, cy - 29 * ts, 68 * ts, {
+        colour: PAL.paperLit, accent: PAL.blood, paper: PAL.ink,
       });
       inkText(g, p.name.toUpperCase(), W / 2, cy + 34 * ts, {
         font: FONTS.impact(44 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
@@ -1684,25 +1730,28 @@ export class Game {
         font: FONTS.display(19 * ts), halo: 0, outline: 0, colour: "#c9c4b8", align: "center",
       });
     } else if (panel.kind === "kill") {
-      inkText(g, "討 伐", W / 2, cy + 4 * ts, {
-        font: FONTS.jp(70 * ts), halo: 0, outline: 6, colour: PAL.blood,
-        outlineColour: PAL.paperLit, align: "center",
+      drawInkSigil(g, "kill", W / 2, cy - 28 * ts, 68 * ts, {
+        colour: PAL.paperLit, accent: PAL.blood, paper: PAL.ink,
       });
-      inkText(g, `${p.name} FALLS`, W / 2, cy + 48 * ts, {
+      inkText(g, "BOSS SLAIN", W / 2, cy + 29 * ts, {
+        font: FONTS.impact(38 * ts), halo: 0, outline: 0, colour: PAL.blood, align: "center",
+      });
+      inkText(g, `${p.name.toUpperCase()} FALLS`, W / 2, cy + 59 * ts, {
         font: FONTS.impact(32 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
       });
     } else if (panel.kind === "evolve") {
-      inkText(g, p.jp, W / 2, cy - 8 * ts, {
-        font: FONTS.jp(70 * ts), halo: 0, outline: 6, colour: PAL.blood,
-        outlineColour: PAL.paperLit, align: "center",
+      drawInkSigil(g, p.sigil || "slash", W / 2, cy - 29 * ts, 72 * ts, {
+        colour: PAL.paperLit, accent: PAL.blood, paper: PAL.ink, evolved: true,
       });
       inkText(g, `${p.name.toUpperCase()}`, W / 2, cy + 42 * ts, {
         font: FONTS.impact(36 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
       });
     } else if (panel.kind === "revive") {
-      inkText(g, "復 活", W / 2, cy + 10 * ts, {
-        font: FONTS.jp(72 * ts), halo: 0, outline: 6, colour: PAL.blood,
-        outlineColour: PAL.paperLit, align: "center",
+      drawInkSigil(g, "revive", W / 2, cy - 24 * ts, 70 * ts, {
+        colour: PAL.paperLit, accent: PAL.blood, paper: PAL.ink,
+      });
+      inkText(g, "RISE AGAIN", W / 2, cy + 43 * ts, {
+        font: FONTS.impact(39 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
       });
     } else if (panel.kind === "chest") {
       inkText(g, `${p.name.toUpperCase()}  →  LV ${p.level}`, W / 2, cy + 10 * ts, {
@@ -1727,8 +1776,8 @@ export class Game {
     inkText(g, "PAUSED", W / 2, H / 2 - 10, {
       font: FONTS.impact(78), halo: 14, outline: 7, colour: PAL.ink, align: "center",
     });
-    inkText(g, "一時停止", W / 2, H / 2 + 34, {
-      font: FONTS.jp(26), halo: 7, outline: 3, colour: PAL.blood, align: "center",
+    drawInkSigil(g, "pause", W / 2, H / 2 - 92, 54, {
+      colour: PAL.blood, accent: PAL.blood,
     });
     inkText(g, "P TO CONTINUE", W / 2, H / 2 + 82, {
       font: FONTS.display(22), halo: 6, outline: 3, colour: PAL.inkSoft, align: "center",
@@ -1748,9 +1797,8 @@ export class Game {
     const ts = Math.min(1.3, W / 1100);
     const fg = won ? PAL.ink : PAL.paperLit;
 
-    inkText(g, won ? "夜明け" : "終", W / 2, H * 0.38, {
-      font: FONTS.jp(120 * ts), halo: 0, outline: 8,
-      colour: PAL.blood, outlineColour: fg, align: "center",
+    drawInkSigil(g, won ? "sunrise" : "defeat", W / 2, H * 0.36, 132 * ts, {
+      colour: fg, accent: PAL.blood, paper: won ? PAL.paperLit : PAL.ink,
     });
     inkText(g, won ? "THE PARADE ENDS" : "YOU ARE ONE OF THEM NOW",
       W / 2, H * 0.48, {

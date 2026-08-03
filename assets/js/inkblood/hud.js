@@ -14,9 +14,9 @@
 
 import {
   PAL, panelFrame, panelBody, inkText, brush, splat, tone, roughCircle,
-  starburst, wobble, fillToneDevice,
-} from "./art.js";
-import { WEAPONS, PASSIVES } from "./weapons.js";
+  starburst, wobble, fillToneDevice, drawInkSigil,
+} from "./art.js?v=20260802-5";
+import { WEAPONS, PASSIVES } from "./weapons.js?v=20260802-5";
 
 export class Hud {
   constructor(fonts) {
@@ -81,17 +81,16 @@ export class Hud {
     g.restore();
   }
 
-  /** Weapon / passive slot: a small inked square with a kanji. */
-  slot(g, x, y, size, glyph, level, maxed, opts = {}) {
+  /** Weapon / passive slot: a small inked square with a pictogram. */
+  slot(g, x, y, size, sigil, level, maxed, opts = {}) {
     const s = this.scale;
     panelBody(g, x, y, size, size, { fill: opts.evolved ? PAL.ink : "rgba(243,239,229,0.95)", shadow: false });
     panelFrame(g, x, y, size, size, { weight: 2.4 * s, seed: (opts.seed || 1) * 7, jitter: 0.9 });
-    inkText(g, glyph, x + size / 2, y + size * 0.74, {
-      font: this.fonts.jp(size * 0.62),
-      halo: 0,
-      outline: 0,
+    drawInkSigil(g, sigil, x + size / 2, y + size / 2, size * 0.72, {
       colour: opts.evolved ? PAL.paperLit : PAL.ink,
-      align: "center",
+      accent: opts.evolved ? PAL.bloodHot : PAL.blood,
+      paper: opts.evolved ? PAL.ink : PAL.paperLit,
+      evolved: !!opts.evolved,
     });
     if (level != null) {
       const pips = Math.min(level, 8);
@@ -181,7 +180,7 @@ export class Hud {
     let sx = W / 2 - wTotal / 2;
     st.weapons.forEach((w, i) => {
       const def = WEAPONS[w.id];
-      this.slot(g, sx, rowY, wSize, def.jp, w.level, w.level >= def.max, {
+      this.slot(g, sx, rowY, wSize, def.sigil, w.level, w.level >= def.max, {
         seed: i + 2, evolved: !!def.evolved,
       });
       sx += wSize + gapS;
@@ -190,7 +189,7 @@ export class Hud {
     const rowY2 = rowY + wSize + gapS;
     st.passives.forEach((pp, i) => {
       const def = PASSIVES[pp.id];
-      this.slot(g, sx, rowY2, pSize, def.jp, pp.level, pp.level >= def.max, { seed: i + 20 });
+      this.slot(g, sx, rowY2, pSize, def.sigil, pp.level, pp.level >= def.max, { seed: i + 20 });
       sx += pSize + gapS;
     });
 
@@ -205,7 +204,10 @@ export class Hud {
       const bw = Math.min(720 * s, W * 0.6);
       const bx = (W - bw) / 2;
       const by = H - 52 * s;
-      inkText(g, `${st.boss.def.jp}  ${st.boss.def.name.toUpperCase()}`, W / 2, by - 8 * s, {
+      drawInkSigil(g, st.boss.def.sigil || "boss-skull", bx + 17 * s, by - 15 * s, 30 * s, {
+        colour: PAL.ink, accent: PAL.blood,
+      });
+      inkText(g, st.boss.def.name.toUpperCase(), W / 2, by - 8 * s, {
         font: this.fonts.display(19 * s), halo: 6, outline: 3, colour: PAL.ink, align: "center",
       });
       this.bar(g, bx, by, bw, 18 * s, st.boss.hp / st.boss.maxHp, PAL.blood);
@@ -330,9 +332,11 @@ export class Hud {
     inkText(g, "LEVEL UP", W / 2, 92 * s * pop, {
       font: this.fonts.impact(58 * s), halo: 12, outline: 6, colour: PAL.ink, align: "center",
     });
-    inkText(g, "レベルアップ", W / 2, 122 * s * pop, {
-      font: this.fonts.jp(20 * s), halo: 6, outline: 3, colour: PAL.blood, align: "center",
-    });
+    brush(g, [[W / 2 - 118 * s, 122 * s * pop], [W / 2 - 26 * s, 122 * s * pop]],
+      { width: 2.4 * s, taper: "both", jitter: 0.2, seed: 80, colour: PAL.blood });
+    starburst(g, W / 2, 122 * s * pop, 8 * s, { points: 4, inner: 0.18, colour: PAL.blood });
+    brush(g, [[W / 2 + 26 * s, 122 * s * pop], [W / 2 + 118 * s, 122 * s * pop]],
+      { width: 2.4 * s, taper: "both", jitter: 0.2, seed: 81, colour: PAL.blood });
 
     const n = choices.length;
     const cw = Math.min(280 * s, (W - 60 * s) / n - 16 * s);
@@ -359,7 +363,8 @@ export class Hud {
       g.restore();
       panelFrame(g, x, y, cw, ch, { weight: (isSel ? 5 : 3) * s, seed: 30 + i * 5, jitter: 1.8 });
 
-      // Big kanji, ink-heavy, with tone behind it.
+      // A large hand-drawn sigil makes the choice readable by shape,
+      // without asking every card to carry another line of Japanese.
       g.save();
       g.beginPath();
       g.rect(x + 6 * s, y + 6 * s, cw - 12 * s, 150 * s);
@@ -373,10 +378,11 @@ export class Hud {
       g.lineTo(x + cw, y + 160 * s);
       g.closePath();
       fillToneDevice(g, c.evolved ? 0.62 : 0.3, 4);
-      inkText(g, c.jp, x + cw / 2, y + 130 * s, {
-        font: this.fonts.jp(c.jp.length > 2 ? 62 * s : 82 * s),
-        halo: 5, outline: 2,
-        colour: c.evolved ? PAL.blood : PAL.ink, align: "center",
+      drawInkSigil(g, c.sigil || "slash", x + cw / 2, y + 83 * s, Math.min(112 * s, cw * 0.56), {
+        colour: PAL.ink,
+        accent: PAL.blood,
+        paper: PAL.paperLit,
+        evolved: !!c.evolved,
       });
       if (c.isNew) {
         g.save();

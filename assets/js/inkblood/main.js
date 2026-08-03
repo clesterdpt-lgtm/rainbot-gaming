@@ -1,6 +1,6 @@
 /* ============================================================
    INKBLOOD — main.js
-   Entry point. Waits for the display fonts (the katakana impact
+   Entry point. Waits for the display fonts (the ink impact
    lettering is baked into sprites and panels, so booting before
    the font resolves would ink the whole game in a fallback face),
    builds the game, and installs the debug hook.
@@ -8,7 +8,7 @@
 
 "use strict";
 
-import { Game } from "./game.js";
+import { Game } from "./game.js?v=20260802-5";
 
 const GAME_ID = "inkblood";
 
@@ -105,6 +105,7 @@ function installDebug(game) {
         level: game.player && game.player.level,
         hp: game.player && Math.round(game.player.hp),
         kills: game.kills,
+        slashing: Boolean(game.player && game.player.slashT > 0),
       };
     },
 

@@ -14,35 +14,59 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Noto+Sans+JP:wght@700;900&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260802-inkblood-shell-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23efeade'/%3E%3Cpath d='M20 78 Q50 8 80 78 Q50 58 20 78Z' fill='%23101014'/%3E%3Ccircle cx='50' cy='42' r='11' fill='%23c01421'/%3E%3C/svg%3E" />
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-
-    :root {
-      --ink: #101014;
-      --paper: #efeade;
-      --paper-lit: #f8f5ec;
-      --blood: #c01421;
-      --display: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
-      --impact: "Anton", Impact, "Arial Black", sans-serif;
-      --jp: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
-    }
 
     html, body {
       margin: 0;
       padding: 0;
       height: 100%;
       overflow: hidden;
-      background: var(--paper);
-      color: var(--ink);
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       overscroll-behavior: none;
+    }
+
+    .inkblood-page .rb-standalone-stage {
+      background: #111116;
+      border-color: rgba(239, 234, 222, 0.2);
+    }
+
+    .inkblood-page .rb-standalone-surface {
+      --game-aspect: 1.7778;
+      --game-aspect-ratio: 16 / 9;
+      --game-max-width: 1180px;
+      background: #efeade;
+      border-color: rgba(239, 234, 222, 0.24);
+    }
+
+    .inkblood-page .game-side__panel--inkblood {
+      color: var(--ink-dim);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .inkblood-page .game-side__panel--inkblood p { margin: 0; }
+    .inkblood-page .game-side__panel--inkblood p + p { margin-top: 8px; }
+
+    #ink-root {
+      --inkblood-ink: #101014;
+      --inkblood-paper: #efeade;
+      --inkblood-paper-lit: #f8f5ec;
+      --inkblood-blood: #c01421;
+      --inkblood-display: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
+      --inkblood-impact: "Anton", Impact, "Arial Black", sans-serif;
+      --inkblood-jp: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      background: var(--inkblood-paper);
+      color: var(--inkblood-ink);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       touch-action: none;
       -webkit-user-select: none;
       user-select: none;
     }
-
-    #ink-root { position: fixed; inset: 0; overflow: hidden; }
 
     #ink-canvas {
       position: absolute;
@@ -64,7 +88,7 @@
       align-items: center;
       justify-content: center;
       gap: 22px;
-      background: var(--paper-lit);
+      background: var(--inkblood-paper-lit);
       transition: opacity 0.55s ease;
     }
     #ink-boot.is-hidden { opacity: 0; pointer-events: none; }
@@ -83,30 +107,30 @@
       inset: 0;
       border-radius: 50%;
       border: 5px solid transparent;
-      border-top-color: var(--ink);
-      border-right-color: var(--ink);
+      border-top-color: var(--inkblood-ink);
+      border-right-color: var(--inkblood-ink);
       animation: ink-spin 1.5s cubic-bezier(0.6, 0.1, 0.3, 0.9) infinite;
     }
     .ink-boot__ring:nth-child(2) {
       inset: 16px;
-      border-top-color: var(--blood);
+      border-top-color: var(--inkblood-blood);
       border-right-color: transparent;
-      border-left-color: var(--blood);
+      border-left-color: var(--inkblood-blood);
       animation-duration: 2.4s;
       animation-direction: reverse;
     }
     .ink-boot__glyph {
-      font-family: var(--jp);
+      font-family: var(--inkblood-jp);
       font-weight: 900;
       font-size: 46px;
-      color: var(--ink);
+      color: var(--inkblood-ink);
       line-height: 1;
     }
     @keyframes ink-spin { to { transform: rotate(360deg); } }
 
     .ink-boot__title {
       margin: 0;
-      font-family: var(--impact);
+      font-family: var(--inkblood-impact);
       font-size: clamp(38px, 8vw, 74px);
       letter-spacing: 0.03em;
       line-height: 0.94;
@@ -114,27 +138,27 @@
     }
     .ink-boot__sub {
       margin: -12px 0 0;
-      font-family: var(--display);
+      font-family: var(--inkblood-display);
       font-size: clamp(12px, 2.4vw, 17px);
       letter-spacing: 0.34em;
       color: #4a4a52;
       text-align: center;
     }
     .ink-boot__bar {
-      width: min(380px, 76vw);
+      width: min(380px, 76%);
       height: 8px;
-      border: 2px solid var(--ink);
+      border: 2px solid var(--inkblood-ink);
       background: transparent;
       overflow: hidden;
     }
     .ink-boot__fill {
       height: 100%;
       width: 2%;
-      background: var(--blood);
+      background: var(--inkblood-blood);
       transition: width 0.28s ease;
     }
     .ink-boot__status {
-      font-family: var(--display);
+      font-family: var(--inkblood-display);
       font-size: 14px;
       letter-spacing: 0.2em;
       color: #4a4a52;
@@ -143,7 +167,7 @@
     }
     .ink-boot__err {
       display: none;
-      max-width: min(620px, 88vw);
+      max-width: min(620px, 88%);
       font-size: 13px;
       line-height: 1.6;
       color: #7d0a13;
@@ -157,14 +181,14 @@
       position: absolute;
       left: 20px;
       top: 18px;
-      font-family: var(--display);
+      font-family: var(--inkblood-display);
       font-size: 13px;
       letter-spacing: 0.22em;
       text-transform: uppercase;
       color: #4a4a52;
       text-decoration: none;
     }
-    .ink-boot__back:hover { color: var(--ink); }
+    .ink-boot__back:hover { color: var(--inkblood-ink); }
 
     /* Persistent exit hatch once the game is running. */
     #ink-exit {
@@ -172,7 +196,7 @@
       left: 14px;
       bottom: 12px;
       z-index: 40;
-      font-family: var(--display);
+      font-family: var(--inkblood-display);
       font-size: 12px;
       letter-spacing: 0.2em;
       text-transform: uppercase;
@@ -180,34 +204,107 @@
       text-decoration: none;
       padding: 6px 10px;
     }
-    #ink-exit:hover { color: var(--ink); }
+    #ink-exit:hover { color: var(--inkblood-ink); }
+
+    @media (max-width: 900px) {
+      .inkblood-page .rb-standalone-surface:not(.is-maxed) {
+        --game-aspect: 0.75;
+        --game-aspect-ratio: 3 / 4;
+        aspect-ratio: var(--game-aspect-ratio);
+        height: auto;
+        max-height: none;
+        min-height: 0;
+      }
+    }
 
     @media (prefers-reduced-motion: reduce) {
       .ink-boot__ring { animation: none; }
     }
   </style>
 </head>
-<body>
-  <div id="ink-root">
-    <canvas id="ink-canvas" tabindex="0" aria-label="Inkblood playfield"></canvas>
-    <a id="ink-exit" href="../games.html">&larr; Rainbot</a>
+<body class="rb-standalone-shell inkblood-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
 
-    <div id="ink-boot">
-      <a class="ink-boot__back" href="../games.html">&larr; Rainbot</a>
-      <div class="ink-boot__mark">
-        <div class="ink-boot__ring"></div>
-        <div class="ink-boot__ring"></div>
-        <div class="ink-boot__glyph">血</div>
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">INKBLOOD 血墨</h1>
+        <div class="game-page__sub">Manga horde survival · start minimized, then choose Max when the Night Parade begins</div>
       </div>
-      <h1 class="ink-boot__title">INKBLOOD</h1>
-      <p class="ink-boot__sub">NIGHT PARADE OF ONE HUNDRED DEMONS</p>
-      <div class="ink-boot__bar"><div class="ink-boot__fill" id="ink-boot-fill"></div></div>
-      <div class="ink-boot__status" id="ink-boot-status">Grinding the ink stick</div>
-      <div class="ink-boot__err" id="ink-boot-error"></div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">All games</a>
     </div>
-  </div>
+
+    <div class="game-layout">
+      <div class="game-stage rb-standalone-stage">
+        <div class="canvas-wrap rb-standalone-surface">
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" aria-pressed="false" title="Max screen">⛶</button>
+
+          <div id="ink-root">
+            <canvas id="ink-canvas" tabindex="0" aria-label="Inkblood playfield"></canvas>
+            <a id="ink-exit" href="../games.html">&larr; Rainbot</a>
+
+            <div id="ink-boot">
+              <a class="ink-boot__back" href="../games.html">&larr; Rainbot</a>
+              <div class="ink-boot__mark">
+                <div class="ink-boot__ring"></div>
+                <div class="ink-boot__ring"></div>
+                <div class="ink-boot__glyph">血</div>
+              </div>
+              <h2 class="ink-boot__title">INKBLOOD</h2>
+              <p class="ink-boot__sub">NIGHT PARADE OF ONE HUNDRED DEMONS</p>
+              <div class="ink-boot__bar"><div class="ink-boot__fill" id="ink-boot-fill"></div></div>
+              <div class="ink-boot__status" id="ink-boot-status">Grinding the ink stick</div>
+              <div class="ink-boot__err" id="ink-boot-error"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <img class="game-side__poster" src="../assets/img/inkblood/card-inkblood-ai.jpg?v=20260802-ai-1" alt="Inkblood cover art: a lone manga swordsman faces a yokai horde beneath a colossal skeleton and crimson ink slashes" />
+        </div>
+
+        <div class="game-side__panel game-side__panel--inkblood">
+          <h3 class="game-side__title">NIGHT PARADE</h3>
+          <p>Move with WASD, arrow keys, or touch. Attacks fire automatically.</p>
+          <p>The game stays embedded here until you choose Max in the upper-right corner.</p>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li>Choose your slayer, then survive the fifteen-minute Night Parade.</li>
+            <li>Move to evade yokai; your equipped weapons attack automatically.</li>
+            <li>Collect ink shards, level up, and build a stronger loadout.</li>
+            <li>Use Max for an immersive run; press the close icon or Escape to return to the page.</li>
+          </ul>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>&copy; 2026 Rainbot Network. Parody.</div>
+  </footer>
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/inkblood/boot.js?v=20260802-1"></script>
+  <script src="../assets/js/inkblood/boot.js?v=20260802-5"></script>
+  <script src="../assets/js/main.js?v=20260802-inkblood-shell-1"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+    document.getElementById("btn-fullscreen")?.addEventListener("click", () => {
+      requestAnimationFrame(() => document.getElementById("ink-canvas")?.focus({ preventScroll: true }));
+    });
+  </script>
 </body>
 </html>

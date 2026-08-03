@@ -25,8 +25,8 @@
 
 import {
   PAL, makeCanvas, ctxOf, brush, splat, rng, starburst, roughCircle, boltPath,
-} from "./art.js";
-import { shape, smoothPath, gloss } from "./figure.js";
+} from "./art.js?v=20260802-5";
+import { shape, smoothPath, gloss } from "./figure.js?v=20260802-5";
 
 /* ---------------------------------------------------------- */
 /* Projectile art                                              */
@@ -392,6 +392,7 @@ export const WEAPONS = {
   crimsonArc: {
     id: "crimsonArc",
     name: "Crimson Arc",
+    sigil: "slash",
     jp: "斬",
     kana: "クリムゾン・アーク",
     desc: "A drawn cut that opens a crescent of blood in front of you.",
@@ -423,6 +424,7 @@ export const WEAPONS = {
     fire(ctx, w) {
       const s = ctx.scaled(w);
       const base = ctx.player.facing >= 0 ? 0 : Math.PI;
+      ctx.animatePlayerSlash(base, 0.34);
       // Extra arcs alternate FRONT and BEHIND rather than fanning
       // forward. A survivor spends most of the run retreating, and a
       // weapon that only cuts the way you face kills nothing at all
@@ -450,6 +452,7 @@ export const WEAPONS = {
   requiem: {
     id: "requiem", evolved: true,
     name: "Thousand-Cut Requiem",
+    sigil: "slash",
     jp: "千斬",
     kana: "センザン・レクイエム",
     desc: "The cut no longer needs a direction. Everything around you opens at once.",
@@ -459,6 +462,7 @@ export const WEAPONS = {
     },
     fire(ctx, w) {
       const s = ctx.scaled(w);
+      ctx.animatePlayerSlash(ctx.player.facing >= 0 ? 0 : Math.PI, 0.32);
       for (let i = 0; i < s.amount; i++) {
         const ang = (i / s.amount) * TAU + ctx.time * 1.7;
         const dist = 74 * s.area;
@@ -484,6 +488,7 @@ export const WEAPONS = {
   kunai: {
     id: "kunai",
     name: "Kunai Fan",
+    sigil: "kunai",
     jp: "苦無",
     kana: "クナイ",
     desc: "Throws steel at whatever is closest. Simple. Reliable.",
@@ -529,6 +534,7 @@ export const WEAPONS = {
   nailStorm: {
     id: "nailStorm", evolved: true,
     name: "Storm of Nails",
+    sigil: "kunai",
     jp: "鉄雨",
     kana: "ネイル・ストーム",
     desc: "A wall of steel, thrown wide enough that aiming stops mattering.",
@@ -560,6 +566,7 @@ export const WEAPONS = {
   ofuda: {
     id: "ofuda",
     name: "Ofuda Talismans",
+    sigil: "ofuda",
     jp: "御札",
     kana: "オフダ",
     desc: "Paper seals that hunt on their own and burst on contact.",
@@ -605,6 +612,7 @@ export const WEAPONS = {
   sutra: {
     id: "sutra", evolved: true,
     name: "Sutra of Ruin",
+    sigil: "ofuda",
     jp: "破滅経",
     kana: "スートラ",
     desc: "The seals no longer burn out. They circle, and they keep reading.",
@@ -637,6 +645,7 @@ export const WEAPONS = {
   bloodLotus: {
     id: "bloodLotus",
     name: "Blood Lotus",
+    sigil: "lotus",
     jp: "血蓮",
     kana: "ブラッド・ロータス",
     desc: "Opens a ring of your own blood that shoves everything away.",
@@ -677,6 +686,7 @@ export const WEAPONS = {
   redBloom: {
     id: "redBloom", evolved: true,
     name: "Red Bloom",
+    sigil: "lotus",
     jp: "紅蓮",
     kana: "レッド・ブルーム",
     desc: "Three rings, one after another, and the ground stays wet.",
@@ -705,6 +715,7 @@ export const WEAPONS = {
   crows: {
     id: "crows",
     name: "Ink Crows",
+    sigil: "crow",
     jp: "烏",
     kana: "インク・クロウ",
     desc: "Birds cut out of wet ink. They circle you and they are always hungry.",
@@ -756,6 +767,7 @@ export const WEAPONS = {
   murder: {
     id: "murder", evolved: true,
     name: "A Murder of Ink",
+    sigil: "crow",
     jp: "烏群",
     kana: "マーダー",
     desc: "The flock doubles and the ring widens until it is simply a wall of birds.",
@@ -769,6 +781,7 @@ export const WEAPONS = {
   raijin: {
     id: "raijin",
     name: "Raijin's Wrath",
+    sigil: "lightning",
     jp: "雷",
     kana: "ライジン",
     desc: "The thunder god notices you. Bolts fall where the crowd is thickest.",
@@ -813,6 +826,7 @@ export const WEAPONS = {
   tally: {
     id: "tally", evolved: true,
     name: "Heaven's Tally",
+    sigil: "lightning",
     jp: "天罰",
     kana: "テンバツ",
     desc: "Judgement stops being selective.",
@@ -825,6 +839,7 @@ export const WEAPONS = {
   severing: {
     id: "severing",
     name: "Severing Line",
+    sigil: "severing",
     jp: "一閃",
     kana: "イッセン",
     desc: "One line, drawn all the way across the page. Everything on it is already cut.",
@@ -852,6 +867,7 @@ export const WEAPONS = {
       const base = t
         ? Math.atan2(t.y - t.h * 0.4 - (ctx.player.y - ctx.player.h * 0.4), t.x - ctx.player.x)
         : (ctx.player.facing >= 0 ? 0 : Math.PI);
+      ctx.animatePlayerSlash(base, 0.3);
       for (let i = 0; i < s.amount; i++) {
         dirs.push(base + (i - (s.amount - 1) / 2) * 0.5);
       }
@@ -876,6 +892,7 @@ export const WEAPONS = {
   horizon: {
     id: "horizon", evolved: true,
     name: "Horizon Cut",
+    sigil: "severing",
     jp: "地平斬",
     kana: "ホライズン",
     desc: "Six lines, every direction, the width of the panel.",
@@ -883,6 +900,7 @@ export const WEAPONS = {
     stats() { return { damage: 190, cooldown: 2.0, area: 1.9, amount: 6, both: false, length: 900 }; },
     fire(ctx, w) {
       const s = ctx.scaled(w);
+      ctx.animatePlayerSlash(ctx.player.facing >= 0 ? 0 : Math.PI, 0.32);
       for (let i = 0; i < s.amount; i++) {
         const a = (i / s.amount) * TAU + ctx.time * 0.6;
         const p = spawn(ctx, {
@@ -895,7 +913,7 @@ export const WEAPONS = {
         p.x2 = p.x + Math.cos(a) * p.length;
         p.y2 = p.y + Math.sin(a) * p.length;
       }
-      ctx.fx.word(ctx.player.x, ctx.player.y - 140, "crit", { text: "一閃", scale: 1.2 });
+      ctx.fx.word(ctx.player.x, ctx.player.y - 140, "crit", { text: "X", scale: 1.2 });
       ctx.audio.slash(1.5);
       ctx.fx.shake(10);
       ctx.fx.focusTarget = 0.6;
@@ -906,6 +924,7 @@ export const WEAPONS = {
   oniAura: {
     id: "oniAura",
     name: "Oni Breath",
+    sigil: "oni",
     jp: "鬼氣",
     kana: "オニ・オーラ",
     desc: "Something old is standing very close to you, and it is not friendly to them.",
@@ -943,6 +962,7 @@ export const WEAPONS = {
   mandala: {
     id: "mandala", evolved: true,
     name: "Demon Mandala",
+    sigil: "oni",
     jp: "鬼曼荼羅",
     kana: "マンダラ",
     desc: "The field becomes a wheel, and the wheel does not stop turning.",
@@ -956,6 +976,7 @@ export const WEAPONS = {
   kusarigama: {
     id: "kusarigama",
     name: "Chain Sickle",
+    sigil: "chain",
     jp: "鎖鎌",
     kana: "クサリガマ",
     desc: "Thrown out on a chain and hauled back through whatever it caught.",
@@ -1002,6 +1023,7 @@ export const WEAPONS = {
   tether: {
     id: "tether", evolved: true,
     name: "Reaper's Tether",
+    sigil: "chain",
     jp: "死鎖",
     kana: "テザー",
     desc: "Four chains, always out, and each one drags a little life back to you.",
@@ -1037,14 +1059,14 @@ export function drawChains(g, projectiles) {
 }
 
 export const PASSIVES = {
-  might: { id: "might", name: "Ogre Charm", jp: "力", desc: "All damage +12%.", max: 5, apply: (s, l) => { s.might += 0.12 * l; } },
-  haste: { id: "haste", name: "Whetstone", jp: "疾", desc: "Attacks come 8% sooner.", max: 5, apply: (s, l) => { s.cooldown -= 0.08 * l; } },
-  reach: { id: "reach", name: "Lens of Ma", jp: "域", desc: "Area of effect +14%.", max: 5, apply: (s, l) => { s.area += 0.14 * l; } },
-  ink: { id: "ink", name: "Ink Pot", jp: "墨", desc: "Effects last 16% longer.", max: 5, apply: (s, l) => { s.duration += 0.16 * l; } },
-  twin: { id: "twin", name: "Twin Blade", jp: "双", desc: "+1 projectile at levels 2 and 4.", max: 5, apply: (s, l) => { s.amount += (l >= 2 ? 1 : 0) + (l >= 4 ? 1 : 0); } },
-  guard: { id: "guard", name: "Iron Ward", jp: "護", desc: "Armour +1. Blunts every hit.", max: 5, apply: (s, l) => { s.armor += l; } },
-  swift: { id: "swift", name: "Wind Sandals", jp: "韋", desc: "Move speed +9%.", max: 5, apply: (s, l) => { s.moveSpeed += 0.09 * l; } },
-  charm: { id: "charm", name: "Soul Charm", jp: "縁", desc: "Pickup range +28%.", max: 5, apply: (s, l) => { s.magnet += 0.28 * l; } },
-  fortune: { id: "fortune", name: "Fortune Cat", jp: "運", desc: "Souls and coin are worth 12% more.", max: 5, apply: (s, l) => { s.luck += 0.12 * l; } },
-  vitality: { id: "vitality", name: "Rice God", jp: "命", desc: "+24 max life, and you knit back together slowly.", max: 5, apply: (s, l) => { s.maxHp += 24 * l; s.regen += 0.32 * l; } },
+  might: { id: "might", name: "Ogre Charm", sigil: "might", jp: "力", desc: "All damage +12%.", max: 5, apply: (s, l) => { s.might += 0.12 * l; } },
+  haste: { id: "haste", name: "Whetstone", sigil: "haste", jp: "疾", desc: "Attacks come 8% sooner.", max: 5, apply: (s, l) => { s.cooldown -= 0.08 * l; } },
+  reach: { id: "reach", name: "Lens of Ma", sigil: "reach", jp: "域", desc: "Area of effect +14%.", max: 5, apply: (s, l) => { s.area += 0.14 * l; } },
+  ink: { id: "ink", name: "Ink Pot", sigil: "ink", jp: "墨", desc: "Effects last 16% longer.", max: 5, apply: (s, l) => { s.duration += 0.16 * l; } },
+  twin: { id: "twin", name: "Twin Blade", sigil: "twin", jp: "双", desc: "+1 projectile at levels 2 and 4.", max: 5, apply: (s, l) => { s.amount += (l >= 2 ? 1 : 0) + (l >= 4 ? 1 : 0); } },
+  guard: { id: "guard", name: "Iron Ward", sigil: "guard", jp: "護", desc: "Armour +1. Blunts every hit.", max: 5, apply: (s, l) => { s.armor += l; } },
+  swift: { id: "swift", name: "Wind Sandals", sigil: "swift", jp: "韋", desc: "Move speed +9%.", max: 5, apply: (s, l) => { s.moveSpeed += 0.09 * l; } },
+  charm: { id: "charm", name: "Soul Charm", sigil: "charm", jp: "縁", desc: "Pickup range +28%.", max: 5, apply: (s, l) => { s.magnet += 0.28 * l; } },
+  fortune: { id: "fortune", name: "Fortune Cat", sigil: "fortune", jp: "運", desc: "Souls and coin are worth 12% more.", max: 5, apply: (s, l) => { s.luck += 0.12 * l; } },
+  vitality: { id: "vitality", name: "Rice God", sigil: "vitality", jp: "命", desc: "+24 max life, and you knit back together slowly.", max: 5, apply: (s, l) => { s.maxHp += 24 * l; s.regen += 0.32 * l; } },
 };

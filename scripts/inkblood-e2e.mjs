@@ -96,10 +96,106 @@ await page.waitForFunction(() => !document.getElementById("ink-boot"), null, { t
 
 check("starts on the title screen", await page.evaluate(() => window.__INK.phase === "title"));
 
+const embedded = await page.evaluate(() => {
+  const surface = document.querySelector(".rb-standalone-surface");
+  const root = document.getElementById("ink-root");
+  const canvas = document.getElementById("ink-canvas");
+  const surfaceRect = surface?.getBoundingClientRect();
+  const rootRect = root?.getBoundingClientRect();
+  const canvasRect = canvas?.getBoundingClientRect();
+  return {
+    shell: document.body.classList.contains("rb-standalone-shell"),
+    maxed: surface?.classList.contains("is-maxed"),
+    nav: Boolean(document.querySelector(".nav")),
+    side: Boolean(document.querySelector(".game-side")),
+    fitted: Boolean(rootRect && canvasRect)
+      && Math.abs(rootRect.width - canvasRect.width) <= 1
+      && Math.abs(rootRect.height - canvasRect.height) <= 1,
+    size: surfaceRect && canvasRect
+      ? `surface=${Math.round(surfaceRect.width)}x${Math.round(surfaceRect.height)} canvas=${Math.round(canvasRect.width)}x${Math.round(canvasRect.height)}`
+      : "missing",
+  };
+});
+check("opens in the minimized game-page shell", embedded.shell && !embedded.maxed && embedded.nav && embedded.side,
+  embedded.size);
+check("canvas fits the minimized play surface", embedded.fitted, embedded.size);
+
+// Keep this long gameplay suite in a resizable normal browser window. Native
+// fullscreen uses the same click path in production; here we deliberately
+// exercise the full-window CSS fallback that browsers use when it is denied.
+await page.evaluate(() => {
+  const surface = document.querySelector(".rb-standalone-surface");
+  if (!surface) return;
+  Object.defineProperty(surface, "requestFullscreen", { value: undefined });
+  Object.defineProperty(surface, "webkitRequestFullscreen", { value: undefined });
+});
+await page.locator("#btn-fullscreen").click();
+await settle(page, 300);
+const maxed = await page.evaluate(() => {
+  const surface = document.querySelector(".rb-standalone-surface");
+  return surface?.classList.contains("is-maxed")
+    && document.body.classList.contains("rb-game-maxed")
+    && document.getElementById("btn-fullscreen")?.getAttribute("aria-pressed") === "true";
+});
+check("Max expands the play surface", maxed);
+
+await page.locator("#btn-fullscreen").click();
+await settle(page, 300);
+const restored = await page.evaluate(() => {
+  const surface = document.querySelector(".rb-standalone-surface");
+  return !surface?.classList.contains("is-maxed")
+    && !document.body.classList.contains("rb-game-maxed")
+    && document.getElementById("btn-fullscreen")?.getAttribute("aria-pressed") === "false"
+    && document.activeElement === document.getElementById("ink-canvas");
+});
+check("Max closes back to the minimized page and playfield", restored);
+
 // 2. Title -> play via a real key press
 await page.keyboard.press("Space");
 await settle(page, 300);
 check("any key starts a run", await page.evaluate(() => window.__INK.phase === "playing"));
+
+const slashFrames = await page.evaluate(() => ({
+  normal: window.__INK.game.art.hero.slash?.length || 0,
+  hurt: window.__INK.game.art.hero.hurtSlash?.length || 0,
+}));
+check("sword slash animation is baked", slashFrames.normal === 8 && slashFrames.hurt === 8,
+  `normal=${slashFrames.normal} hurt=${slashFrames.hurt}`);
+
+const symbolLanguage = await page.evaluate(async () => {
+  const { WEAPONS, PASSIVES } = await import("/assets/js/inkblood/weapons.js");
+  const { SFX_WORDS } = await import("/assets/js/inkblood/fx.js");
+  const impactMarks = Object.values(SFX_WORDS).flat().join("");
+  return {
+    weaponSigils: Object.values(WEAPONS).every((d) => Boolean(d.sigil)),
+    passiveSigils: Object.values(PASSIVES).every((d) => Boolean(d.sigil)),
+    impactMarksAreGraphic: !/[\u3040-\u30ff\u3400-\u9fff]/u.test(impactMarks),
+  };
+});
+check("weapons, relics, and impacts use the new symbol language",
+  symbolLanguage.weaponSigils && symbolLanguage.passiveSigils && symbolLanguage.impactMarksAreGraphic,
+  JSON.stringify(symbolLanguage));
+
+const gaitOrder = await page.evaluate(async () => {
+  const mod = await import("/assets/js/inkblood/game.js");
+  return [0.1, 0.2, 0.3].map((t) => mod.gaitFrameIndex(t, 10, 8));
+});
+check("shared walk cycle advances in the corrected direction",
+  gaitOrder.join(",") === "7,6,5", `frames=${gaitOrder.join("→")}`);
+
+const slashTrigger = await page.evaluate(() => {
+  const g = window.__INK.game;
+  g.player.slashT = 0;
+  g.weapons[0].cd = 0;
+  g.step(1 / 60);
+  return {
+    active: g.player.slashT > 0,
+    duration: g.player.slashDuration,
+    arcs: g.fx.slashes.length,
+  };
+});
+check("Crimson Arc triggers the hero sword swing", slashTrigger.active && slashTrigger.arcs >= 2,
+  `duration=${slashTrigger.duration.toFixed(2)} arcs=${slashTrigger.arcs}`);
 
 // 3. Real movement
 const before = await page.evaluate(() => ({ x: window.__INK.game.player.x, y: window.__INK.game.player.y }));
@@ -154,6 +250,7 @@ await page.evaluate(() => {
 });
 await settle(page, 260);
 const inLevelUp = await page.evaluate(() => window.__INK.phase === "levelup");
+const cardSigils = await page.evaluate(() => window.__INK.game.choices.every((c) => c.sigil && !("jp" in c)));
 const pickBefore = await page.evaluate(() => window.__INK.game.selected);
 await page.keyboard.press("ArrowRight");
 await settle(page, 200);
@@ -163,6 +260,7 @@ await settle(page, 320);
 const tookIt = await page.evaluate(() => window.__INK.phase === "playing");
 check("arrow key moves the card selection", pickAfter !== pickBefore,
   `${pickBefore} -> ${pickAfter}`);
+check("level-up cards carry pictograms instead of Japanese labels", cardSigils);
 check("level-up opens and Enter takes the card", inLevelUp && tookIt, `open=${inLevelUp} took=${tookIt} phase=${await page.evaluate(() => window.__INK.phase)}`);
 
 // 7. Level up, taken with a click
@@ -175,7 +273,8 @@ await page.evaluate(() => {
 await settle(page, 260);
 const box = await page.evaluate(() => {
   const r = window.__INK.game.hud.hitRects[1] || window.__INK.game.hud.hitRects[0];
-  return r ? { x: r.x + r.w / 2, y: r.y + r.h / 2 } : null;
+  const canvas = document.getElementById("ink-canvas")?.getBoundingClientRect();
+  return r && canvas ? { x: canvas.left + r.x + r.w / 2, y: canvas.top + r.y + r.h / 2 } : null;
 });
 if (box) {
   await page.mouse.click(box.x, box.y);
@@ -223,8 +322,24 @@ await settle(page, 300);
 check("victory resolves", await page.evaluate(() => window.__INK.phase === "won"));
 
 // 12. Resize does not throw
-await page.setViewportSize({ width: 700, height: 1200 });
+await page.setViewportSize({ width: 390, height: 844 });
 await settle(page, 400);
+const mobileFit = await page.evaluate(() => {
+  const surface = document.querySelector(".rb-standalone-surface")?.getBoundingClientRect();
+  const canvas = document.getElementById("ink-canvas")?.getBoundingClientRect();
+  const pass = Boolean(surface && canvas)
+    && surface.width <= window.innerWidth
+    && Math.abs((surface.width / surface.height) - 0.75) < 0.03
+    && Math.abs(surface.width - canvas.width) <= 3
+    && Math.abs(surface.height - canvas.height) <= 3;
+  return {
+    pass,
+    detail: surface && canvas
+      ? `surface=${Math.round(surface.width)}x${Math.round(surface.height)} canvas=${Math.round(canvas.width)}x${Math.round(canvas.height)} ratio=${(surface.width / surface.height).toFixed(3)}`
+      : "missing",
+  };
+});
+check("phone layout uses a fitted portrait game panel", mobileFit.pass, mobileFit.detail);
 await page.setViewportSize({ width: 1600, height: 700 });
 await settle(page, 400);
 check("survives viewport changes", true);

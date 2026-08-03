@@ -137,13 +137,13 @@ async function main() {
       // The sim leaves the kite input engaged, so the game keeps
       // playing during the real frames before capture and can pop a
       // level-up card over the shot. Drain it right before shooting.
-      await page.evaluate(() => {
+      await page.evaluate((keepLevelUp) => {
         const g = window.__INK && window.__INK.game;
         if (!g) return;
         let guard = 0;
-        while (g.phase === "levelup" && guard++ < 40) g.takeChoice();
+        while (!keepLevelUp && g.phase === "levelup" && guard++ < 40) g.takeChoice();
         g.input.x = 0; g.input.y = 0;
-      });
+      }, name === "levelup");
       await waitFrames(page, 2);
       const file = path.join(OUT, `${stepName.replace(/[^a-z0-9-]+/gi, "_")}.png`);
       await page.screenshot({ path: file });

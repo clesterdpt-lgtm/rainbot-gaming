@@ -17,13 +17,13 @@
 import {
   PAL, makeCanvas, ctxOf, brush, tone, splat, rng, wobble, starburst, roughCircle,
   hatchShade, stippleShade, inkContour, feather,
-} from "./art.js";
+} from "./art.js?v=20260802-5";
 import {
   shape, limb, lock, gloss, buildRig, runPose, idlePose, drawLeg, drawArm, drawTorso,
   drawHead, drawNeck, drawCoat, drawRags, drawHairBack, drawHairFront, hairMass,
   faceHero, faceYokai, formShadow, rimLight, silhouetteOf, grime, smoothPath, lerp,
   toneRegion, TONE, folds, LIGHT,
-} from "./figure.js";
+} from "./figure.js?v=20260802-5";
 
 /** World pixels per figure unit, and the supersample factor. */
 export const PX_PER_UNIT = 1.15;
@@ -118,11 +118,12 @@ function drawHero(g, pose, opts = {}) {
   const rig = buildRig(p, pose);
   const wind = opts.wind == null ? 3 : opts.wind;
   const seed = 900;
+  const slashing = Number.isFinite(opts.slashAngle);
 
   // 0. The slab sword, slung across the back. Drawn first so the
   //    body overlaps it: it reads as a diagonal behind the shoulders
   //    rather than a plank stuck to the hip.
-  drawGreatsword(g, rig, p, opts);
+  if (!slashing) drawGreatsword(g, rig, p, opts);
 
   // 1. Hair, then the cape's wind-caught tails.
   drawHairBack(g, rig, p, {
@@ -246,6 +247,11 @@ function drawHero(g, pose, opts = {}) {
   drawHead(g, rig, p, { fill: PAL.paperLit, shade: 0.36, seed: seed + 120 });
   faceHero(g, rig, p, { glare: opts.glare || 0, scar: true });
   drawHairFront(g, rig, p, { bangs: 5 });
+
+  // During the attack the sword leaves its back scabbard and crosses
+  // the whole silhouette. Drawing it last keeps the blade readable
+  // over the cape and makes the weapon motion unmistakable at game size.
+  if (slashing) drawHeldGreatsword(g, rig, p, opts.slashAngle, opts.slashProgress || 0);
 }
 
 /**
@@ -295,6 +301,89 @@ function drawGreatsword(g, rig, p, opts = {}) {
   g.arc(pom[0], pom[1], 2.6, 0, Math.PI * 2);
   g.fillStyle = PAL.ink;
   g.fill();
+}
+
+/** The same slab sword, now gripped in both hands during the attack. */
+function drawHeldGreatsword(g, rig, p, angle, progress) {
+  const near = rig.arms[0].wrist;
+  const far = rig.arms[1].wrist;
+  const ox = (near[0] + far[0]) * 0.5;
+  const oy = (near[1] + far[1]) * 0.5;
+  const ca = Math.cos(angle);
+  const sa = Math.sin(angle);
+  const nx = -sa;
+  const ny = ca;
+  const L = 78;
+  const W = 5.4;
+  const at = (d, side) => [ox + ca * d + nx * side, oy + sa * d + ny * side];
+
+  // Blade: broad enough to read at normal gameplay scale, with a
+  // slightly hooked point and the same hatched steel as the back pose.
+  shape(g, [
+    at(3, -W * 0.82), at(L * 0.55, -W), at(L - 8, -W * 0.86),
+    at(L, -W * 0.05), at(L - 9, W * 0.92),
+    at(L * 0.54, W), at(3, W * 0.82),
+  ], {
+    fill: PAL.paperLit, line: 2.3, tension: 0.14,
+    shade: 0.58, seed: 780 + Math.round(progress * 7), contrast: 1.45,
+    gap: 4.4, hatchWeight: 0.88,
+  });
+  brush(g, [at(8, -W * 0.52), at(L * 0.6, -W * 0.6), at(L - 12, -W * 0.5)],
+    { width: 0.72, taper: "both", jitter: 0.1, seed: 790, colour: PAL.paperLit });
+
+  // Guard, wrapped handle, and two pale gripping hands. The hand
+  // marks are deliberately oversized by a fraction so they survive
+  // the 2x-to-1x sprite downsample.
+  shape(g, [at(-1, -W * 1.75), at(4, -W * 1.55), at(4, W * 1.55), at(-1, W * 1.75)],
+    { fill: PAL.ink, line: 1.5, tension: 0.04, seed: 792 });
+  brush(g, [at(-1, 0), at(-21, 0)],
+    { width: 1.45, taper: "none", jitter: 0.08, seed: 794, colour: PAL.ink });
+  for (let i = 0; i < 5; i++) {
+    const d = -4 - i * 3.3;
+    brush(g, [at(d, -1.8), at(d, 1.8)],
+      { width: 0.34, taper: "both", jitter: 0.04, seed: 796 + i, colour: PAL.paperLit });
+  }
+  for (const d of [-6, -13]) {
+    const [hx, hy] = at(d, 0);
+    g.beginPath();
+    g.arc(hx, hy, 2.8, 0, Math.PI * 2);
+    g.fillStyle = PAL.paperLit;
+    g.fill();
+    g.strokeStyle = PAL.ink;
+    g.lineWidth = 1.2;
+    g.stroke();
+  }
+  const [px, py] = at(-23, 0);
+  g.beginPath();
+  g.arc(px, py, 2.7, 0, Math.PI * 2);
+  g.fillStyle = PAL.ink;
+  g.fill();
+}
+
+/**
+ * Hero-only attack pose. The body plants, winds up, lunges, then
+ * settles while the blade crosses from high behind to low ahead.
+ */
+function heroSlashPose(t) {
+  const k = Math.max(0, Math.min(1, t));
+  const sweep = k < 0.14 ? 0 : 1 - Math.pow(1 - ((k - 0.14) / 0.7), 3);
+  const s = Math.max(0, Math.min(1, sweep));
+  const recover = Math.max(0, (k - 0.84) / 0.16);
+  const angle = lerp(lerp(-2.02, 0.42, s), 0.26, recover);
+  const pose = {
+    legA: lerp(-0.18, 0.42, s),
+    legB: lerp(0.12, -0.46, s),
+    kneeA: lerp(0.22, 0.38, s),
+    kneeB: lerp(0.18, 0.3, s),
+    armA: lerp(2.18, 0.94, s),
+    armB: lerp(1.92, 0.7, s),
+    elbowA: lerp(1.02, 0.24, s),
+    elbowB: lerp(0.88, 0.2, s),
+    bob: Math.sin(k * Math.PI) * 1.2,
+    lean: lerp(-0.8, 7.2, s) - recover * 1.6,
+    phase: k,
+  };
+  return { pose, angle };
 }
 
 /** The cape: ragged hem, heavy black, folds cut back in white. */
@@ -1323,13 +1412,20 @@ function drawNurarihyon(g, pose, opts = {}) {
  */
 export function bakeFigure(name, opts = {}) {
   const scale = opts.scale || 1;
-  const pose = opts.pose || runPose(opts.t == null ? 0.25 : opts.t, { amp: 1, lean: 4 });
-  pose.phase = opts.t == null ? 0.25 : opts.t;
+  const t = opts.t == null ? 0.25 : opts.t;
+  const pose = opts.pose || runPose(t, { amp: 1, lean: 4 });
+  pose.phase = t;
 
   if (name === "hero") {
-    const box = [-64, -144, 70, 10];
-    return bakeAt(box, scale, (g) => drawHero(g, pose, {
-      wind: 3.4, phase: 1.2, flare: 1.1, ...opts.draw,
+    const slash = opts.action === "slash" ? heroSlashPose(t) : null;
+    const box = slash ? [-80, -154, 120, 18] : [-64, -144, 70, 10];
+    return bakeAt(box, scale, (g) => drawHero(g, slash ? slash.pose : pose, {
+      wind: slash ? 5.4 : 3.4,
+      phase: slash ? t * 5 : 1.2,
+      flare: 1.1,
+      slashAngle: slash?.angle,
+      slashProgress: slash ? t : undefined,
+      ...opts.draw,
     }), { shade: 0, grime: opts.grime == null ? 3 : opts.grime, seed: 900 });
   }
   const def = CAST[name];
@@ -1400,8 +1496,10 @@ export async function bakeCast(onProgress) {
 
   // ---- Hero ----
   const heroBox = [-64, -144, 70, 10];   // top clears the greatsword tip
+  const heroSlashBox = [-80, -154, 120, 18];
   out.hero.run = [];
   out.hero.idle = [];
+  out.hero.slash = [];
   for (let i = 0; i < 8; i++) {
     const t = i / 8;
     const pose = runPose(t, { amp: 1, lean: 4 });
@@ -1420,6 +1518,21 @@ export async function bakeCast(onProgress) {
       { shade: 0.28, grime: 3, seed: 920 + i },
     ));
   }
+  for (let i = 0; i < 8; i++) {
+    const t = i / 7;
+    const slash = heroSlashPose(t);
+    out.hero.slash.push(bake(
+      heroSlashBox,
+      (g) => drawHero(g, slash.pose, {
+        wind: 4.2 + Math.sin(t * Math.PI) * 2.6,
+        phase: t * 5,
+        flare: 1.4,
+        slashAngle: slash.angle,
+        slashProgress: t,
+      }),
+      { shade: 0.28, grime: 3, seed: 940 + i },
+    ));
+  }
   out.hero.variants = variants(out.hero.run[0]);
   // Per-frame blood silhouettes for the damage flash. Tinting the
   // hero with a source-atop fillRect at draw time instead paints the
@@ -1427,6 +1540,7 @@ export async function bakeCast(onProgress) {
   // means atop EVERYTHING already drawn there, not just the sprite.
   out.hero.hurtRun = out.hero.run.map((f) => silhouetteOf(f.canvas, PAL.blood));
   out.hero.hurtIdle = out.hero.idle.map((f) => silhouetteOf(f.canvas, PAL.blood));
+  out.hero.hurtSlash = out.hero.slash.map((f) => silhouetteOf(f.canvas, PAL.blood));
   await step("Inking the swordsman");
 
   // ---- Portrait bust for the HUD ----

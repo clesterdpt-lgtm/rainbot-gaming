@@ -21,6 +21,8 @@ const q = new URLSearchParams(location.search);
 const names = (q.get("who") || "hero").split(",");
 const SCALE = Number(q.get("scale") || 3);
 const GAME = q.get("game") !== "0";
+const ACTION = q.get("action") || undefined;
+const CYCLE = q.get("cycle") === "1";
 
 const log = document.getElementById("log");
 const c = document.getElementById("sheet");
@@ -30,14 +32,24 @@ window.addEventListener("error", (e) => { errs.push(String(e.message)); log.text
 
 (async () => {
   const t0 = performance.now();
-  const big = [];
-  for (const n of names) big.push({ n, f: bakeFigure(n, { scale: SCALE, t: 0.25 }) });
-  const small = GAME ? names.map((n) => ({ n, f: bakeFigure(n, { scale: 1, t: 0.25 }) })) : [];
+  const samples = CYCLE
+    ? names.flatMap((name) => Array.from({ length: 8 }, (_, i) => ({ name, t: i / 7 })))
+    : names.map((name) => ({ name, t: 0.25 }));
+  const big = samples.map(({ name, t }) => ({
+    n: CYCLE ? `${name} ${Math.round(t * 100)}%` : name,
+    f: bakeFigure(name, { scale: SCALE, t, action: ACTION }),
+  }));
+  const small = GAME ? samples.map(({ name, t }) => ({
+    n: name,
+    f: bakeFigure(name, { scale: 1, t, action: ACTION }),
+  })) : [];
   const t1 = performance.now();
 
   const pad = 40;
   const W = big.reduce((a, b) => a + b.f.w / 2 + pad, pad) + (GAME ? 260 : 0);
-  const H = Math.max(...big.map((b) => b.f.h / 2)) + pad * 2 + 40;
+  const bigHeight = Math.max(...big.map((b) => b.f.h / 2));
+  const smallHeight = GAME ? small.reduce((sum, item) => sum + item.f.h / 2 + 14, 0) : 0;
+  const H = Math.max(bigHeight, smallHeight) + pad * 2 + 40;
   c.width = Math.ceil(W); c.height = Math.ceil(H);
 
   g.fillStyle = g.createPattern(paper(), "repeat");

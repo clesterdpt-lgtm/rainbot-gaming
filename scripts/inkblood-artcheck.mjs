@@ -56,7 +56,7 @@ const report = await page.evaluate(async () => {
 
   for (const name of names) {
     const def = name === "hero" ? null : mod.CAST[name];
-    const frames = def ? def.frames : 8;
+    const frames = def ? def.frames : 16;
     // Worst clipping across the cycle, but MINIMUM margin across the
     // cycle — trimming a box against one frame's slack would clip a
     // different frame where the limb swings further.
@@ -64,7 +64,14 @@ const report = await page.evaluate(async () => {
     const minMargin = { top: 1e9, bottom: 1e9, left: 1e9, right: 1e9 };
 
     for (let i = 0; i < frames; i++) {
-      const f = mod.bakeFigure(name, { scale: 1, t: i / frames });
+      const heroSlash = name === "hero" && i >= 8;
+      const frame = heroSlash ? i - 8 : i;
+      const frameCount = name === "hero" ? 8 : frames;
+      const f = mod.bakeFigure(name, {
+        scale: 1,
+        t: frame / frameCount,
+        action: heroSlash ? "slash" : undefined,
+      });
       const g = f.canvas.getContext("2d", { willReadFrequently: true });
       const { width: W, height: H } = f.canvas;
       const d = g.getImageData(0, 0, W, H).data;

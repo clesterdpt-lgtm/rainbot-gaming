@@ -994,6 +994,200 @@ export function starburst(ctx, x, y, r, opts = {}) {
   ctx.fill();
 }
 
+/**
+ * Small hand-drawn pictograms used by the HUD and drama panels.
+ *
+ * The game once used a kanji in every available square. That was a
+ * strong title treatment but a weak icon system: players had to read
+ * the same visual language in weapon slots, upgrade cards, boss bars
+ * and impact effects. These sigils keep the ink-brush character while
+ * making each object recognisable by silhouette alone.
+ */
+export function drawInkSigil(ctx, kind, x, y, size, opts = {}) {
+  const ink = opts.colour || PAL.ink;
+  const accent = opts.accent || PAL.blood;
+  const paper = opts.paper || PAL.paperLit;
+  const s = size / 100;
+  const line = (pts, width = 4, colour = ink, seed = 1, taper = "both") => {
+    brush(ctx, pts, { width, colour, seed, taper, jitter: 0.18 });
+  };
+  const circle = (cx, cy, r, colour = ink, width = 4, seed = 1) => {
+    roughCircle(ctx, cx, cy, r, seed, 0.04);
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  };
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  if (opts.evolved) {
+    circle(0, 0, 45, accent, 3.4, 37);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      line([[Math.cos(a) * 39, Math.sin(a) * 39], [Math.cos(a) * 47, Math.sin(a) * 47]], 1.8, accent, 40 + i, "none");
+    }
+  }
+
+  switch (kind) {
+    case "slash":
+      line([[-40, 25], [-18, 3], [12, -15], [40, -28]], 6.5, accent, 2);
+      line([[-30, 35], [-8, 16], [22, 0], [36, -7]], 2.2, ink, 3);
+      break;
+    case "kunai":
+      ctx.beginPath();
+      ctx.moveTo(-33, 0); ctx.lineTo(12, -14); ctx.lineTo(40, 0); ctx.lineTo(12, 14); ctx.closePath();
+      ctx.fillStyle = paper; ctx.fill(); ctx.strokeStyle = ink; ctx.lineWidth = 4; ctx.stroke();
+      line([[-36, 0], [30, 0]], 1.8, ink, 4, "none");
+      circle(-39, 0, 7, ink, 3, 5);
+      break;
+    case "ofuda":
+      ctx.fillStyle = paper; ctx.fillRect(-22, -36, 44, 72);
+      ctx.strokeStyle = ink; ctx.lineWidth = 4; ctx.strokeRect(-22, -36, 44, 72);
+      line([[0, -24], [0, 24]], 2.2, accent, 6, "none");
+      line([[-10, -12], [10, -12]], 2, accent, 7, "none");
+      line([[-10, 2], [10, 2]], 2, accent, 8, "none");
+      line([[-10, 16], [10, 16]], 2, accent, 9, "none");
+      break;
+    case "lotus":
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2;
+        ctx.save(); ctx.rotate(a); ctx.beginPath();
+        ctx.ellipse(0, -18, 10, 26, 0, 0, Math.PI * 2);
+        ctx.fillStyle = i % 2 ? accent : paper; ctx.fill();
+        ctx.strokeStyle = ink; ctx.lineWidth = 3; ctx.stroke(); ctx.restore();
+      }
+      circle(0, 0, 7, ink, 3, 8);
+      break;
+    case "crow":
+      ctx.beginPath();
+      [[-44, 4], [-17, -22], [-6, -8], [11, -15], [37, -3], [15, 4], [43, 18], [8, 12], [-7, 23], [-18, 10]].forEach((p, i) => {
+        if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]);
+      });
+      ctx.closePath(); ctx.fillStyle = ink; ctx.fill();
+      ctx.beginPath(); ctx.arc(14, -6, 2.7, 0, Math.PI * 2); ctx.fillStyle = paper; ctx.fill();
+      break;
+    case "lightning":
+      line([[-10, -43], [18, -15], [-3, -7], [25, 13], [4, 9], [12, 41], [-20, 4], [1, 5]], 6, accent, 10, "none");
+      break;
+    case "severing":
+      circle(0, 0, 34, ink, 3.5, 11);
+      line([[-44, 24], [44, -24]], 7, accent, 12);
+      line([[-37, 34], [37, -6]], 1.8, paper, 13);
+      break;
+    case "oni":
+    case "boss-oni":
+      line([[-25, -22], [-40, -43], [-7, -31]], 5, ink, 14, "none");
+      line([[25, -22], [40, -43], [7, -31]], 5, ink, 15, "none");
+      ctx.beginPath(); ctx.moveTo(-30, -23); ctx.quadraticCurveTo(-38, 10, 0, 39); ctx.quadraticCurveTo(38, 10, 30, -23); ctx.quadraticCurveTo(0, -42, -30, -23); ctx.closePath();
+      ctx.fillStyle = opts.filled ? ink : paper; ctx.fill(); ctx.strokeStyle = ink; ctx.lineWidth = 4; ctx.stroke();
+      line([[-21, -5], [-7, 2]], 4, accent, 16, "none");
+      line([[21, -5], [7, 2]], 4, accent, 17, "none");
+      line([[-12, 21], [0, 13], [12, 21]], 3, ink, 18, "none");
+      break;
+    case "chain":
+      ctx.beginPath(); ctx.arc(-8, -4, 30, -1.25, 1.35); ctx.strokeStyle = ink; ctx.lineWidth = 6; ctx.stroke();
+      line([[12, 18], [35, 35]], 4, accent, 19, "none");
+      for (let i = 0; i < 3; i++) circle(18 + i * 10, 22 + i * 7, 5, ink, 2, 20 + i);
+      break;
+    case "might":
+      line([[-28, 30], [-20, -10], [-7, -31]], 7, ink, 23, "none");
+      line([[-7, 28], [0, -17]], 7, ink, 24, "none");
+      line([[12, 26], [18, -13]], 7, ink, 25, "none");
+      line([[28, 25], [34, -5]], 7, ink, 26, "none");
+      line([[-28, 29], [5, 38], [30, 25]], 5, accent, 27, "none");
+      break;
+    case "haste":
+      for (let i = 0; i < 3; i++) line([[-42, -18 + i * 18], [5, -18 + i * 18]], 2.8, ink, 28 + i);
+      ctx.beginPath(); ctx.moveTo(2, -28); ctx.lineTo(42, 0); ctx.lineTo(2, 28); ctx.lineTo(15, 0); ctx.closePath();
+      ctx.fillStyle = accent; ctx.fill();
+      break;
+    case "reach":
+      circle(0, 0, 34, ink, 3.5, 31); circle(0, 0, 17, accent, 3, 32);
+      starburst(ctx, 0, 0, 7, { points: 4, inner: 0.24, colour: ink });
+      break;
+    case "ink":
+      ctx.beginPath(); ctx.moveTo(-28, -18); ctx.lineTo(24, -18); ctx.lineTo(32, 30); ctx.lineTo(-33, 30); ctx.closePath();
+      ctx.fillStyle = ink; ctx.fill();
+      ctx.fillStyle = paper; ctx.fillRect(-22, -12, 41, 8);
+      ctx.beginPath(); ctx.moveTo(7, -38); ctx.bezierCurveTo(-5, -23, -5, -8, 7, -6); ctx.bezierCurveTo(19, -8, 19, -23, 7, -38); ctx.fillStyle = accent; ctx.fill();
+      break;
+    case "twin":
+    case "kill":
+      line([[-34, 34], [32, -32]], 5, ink, 33);
+      line([[-32, -32], [34, 34]], 5, accent, 34);
+      line([[-39, 23], [-24, 38]], 3, ink, 35, "none");
+      line([[24, 38], [39, 23]], 3, accent, 36, "none");
+      break;
+    case "guard":
+      ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(35, -25); ctx.lineTo(28, 18); ctx.quadraticCurveTo(0, 43, -28, 18); ctx.lineTo(-35, -25); ctx.closePath();
+      ctx.fillStyle = paper; ctx.fill(); ctx.strokeStyle = ink; ctx.lineWidth = 5; ctx.stroke();
+      line([[0, -28], [0, 28]], 2.7, accent, 38, "none");
+      break;
+    case "swift":
+      line([[-36, 26], [4, 13], [35, -30]], 4.5, accent, 39);
+      line([[-31, 9], [-4, 0], [20, -25]], 3.5, ink, 40);
+      line([[-24, -6], [-2, -13], [9, -27]], 2.5, ink, 41);
+      break;
+    case "charm":
+      circle(0, 0, 28, accent, 4, 42);
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2; circle(Math.cos(a) * 35, Math.sin(a) * 35, 5, ink, 2, 43 + i);
+      }
+      starburst(ctx, 0, 0, 8, { points: 5, inner: 0.35, colour: ink });
+      break;
+    case "fortune":
+    case "coin":
+      circle(0, 0, 34, ink, 5, 47);
+      ctx.fillStyle = accent; ctx.fillRect(-10, -10, 20, 20);
+      ctx.fillStyle = paper; ctx.fillRect(-5, -5, 10, 10);
+      break;
+    case "vitality":
+    case "revive":
+      ctx.beginPath(); ctx.moveTo(0, 35); ctx.bezierCurveTo(-42, 10, -42, -22, -16, -29); ctx.bezierCurveTo(-5, -32, 0, -22, 0, -14); ctx.bezierCurveTo(0, -22, 5, -32, 16, -29); ctx.bezierCurveTo(42, -22, 42, 10, 0, 35); ctx.closePath();
+      ctx.fillStyle = accent; ctx.fill(); ctx.strokeStyle = ink; ctx.lineWidth = 3.5; ctx.stroke();
+      if (kind === "revive") starburst(ctx, 25, -26, 13, { points: 4, inner: 0.18, colour: paper });
+      break;
+    case "rice":
+      ctx.beginPath(); ctx.arc(0, 0, 31, 0, Math.PI); ctx.lineTo(-31, 0); ctx.closePath(); ctx.fillStyle = ink; ctx.fill();
+      ctx.fillStyle = paper; ctx.beginPath(); ctx.ellipse(0, -2, 29, 12, 0, 0, Math.PI * 2); ctx.fill();
+      for (let i = -2; i <= 2; i++) circle(i * 10, -5 - Math.abs(i) * 2, 6, ink, 1.5, 50 + i);
+      break;
+    case "boss-skull":
+    case "defeat":
+      ctx.beginPath(); ctx.arc(0, -5, 32, Math.PI, Math.PI * 2); ctx.lineTo(28, 20); ctx.lineTo(15, 36); ctx.lineTo(-15, 36); ctx.lineTo(-28, 20); ctx.closePath();
+      ctx.fillStyle = kind === "defeat" ? paper : ink; ctx.fill(); ctx.strokeStyle = ink; ctx.lineWidth = 4; ctx.stroke();
+      for (const ex of [-13, 13]) { ctx.beginPath(); ctx.arc(ex, 1, 8, 0, Math.PI * 2); ctx.fillStyle = kind === "defeat" ? ink : paper; ctx.fill(); }
+      line([[-12, 26], [12, 26]], 3, kind === "defeat" ? ink : paper, 55, "none");
+      break;
+    case "boss-command":
+      circle(0, 3, 30, ink, 4, 56);
+      for (let i = -2; i <= 2; i++) line([[i * 13, 29], [i * 19, 43]], 3, accent, 57 + i, "none");
+      line([[-28, -18], [0, -42], [28, -18]], 5, accent, 60, "none");
+      break;
+    case "pause":
+      line([[-15, -31], [-15, 31]], 8, ink, 61, "none");
+      line([[15, -31], [15, 31]], 8, ink, 62, "none");
+      break;
+    case "sunrise":
+      ctx.beginPath(); ctx.arc(0, 18, 24, Math.PI, Math.PI * 2); ctx.fillStyle = accent; ctx.fill();
+      line([[-42, 19], [42, 19]], 4, ink, 63, "none");
+      for (let i = 0; i < 5; i++) {
+        const a = Math.PI + (i / 4) * Math.PI;
+        line([[Math.cos(a) * 29, 18 + Math.sin(a) * 29], [Math.cos(a) * 43, 18 + Math.sin(a) * 43]], 2.5, ink, 64 + i, "none");
+      }
+      break;
+    default:
+      starburst(ctx, 0, 0, 38, { points: 6, inner: 0.22, colour: accent });
+      break;
+  }
+
+  ctx.restore();
+}
+
 /** Jagged lightning polyline between two points. */
 export function boltPath(x0, y0, x1, y1, segments, amp, seed) {
   const pts = [[x0, y0]];

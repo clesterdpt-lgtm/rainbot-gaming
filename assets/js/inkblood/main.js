@@ -8,7 +8,7 @@
 
 "use strict";
 
-import { Game } from "./game.js?v=20260803-manga-ui-1";
+import { Game } from "./game.js?v=20260803-actions-1";
 
 const GAME_ID = "inkblood";
 
@@ -92,6 +92,68 @@ export async function start({ boot } = {}) {
     }
   });
 
+  const dodgeButton = document.getElementById("btn-dodge");
+  const specialButton = document.getElementById("btn-special");
+  const actionDock = document.getElementById("ink-action-dock");
+  const bindActionButton = (button, press) => {
+    if (!button) return;
+    const activate = (event) => {
+      if (button.disabled) return;
+      event.preventDefault();
+      game.audio.init();
+      game.audio.resume();
+      press();
+      button.classList.remove("is-pressed");
+      void button.offsetWidth;
+      button.classList.add("is-pressed");
+    };
+    button.addEventListener("pointerdown", activate);
+    // Keyboard and assistive-technology activation produces a click with no
+    // pointer detail. Pointer clicks already fired on pointerdown above.
+    button.addEventListener("click", (event) => {
+      if (event.detail === 0) activate(event);
+    });
+    button.addEventListener("animationend", () => button.classList.remove("is-pressed"));
+  };
+  bindActionButton(dodgeButton, () => game.input.pressDodge());
+  bindActionButton(specialButton, () => game.input.pressSpecial());
+
+  let lastActionSignature = "";
+  const syncActionControls = (actions = game.actionState(), phase = game.phase) => {
+    const playing = phase === "playing";
+    const dodge = actions.dodge;
+    const special = actions.special;
+    const signature = [
+      phase,
+      Math.round(dodge.progress * 100), dodge.active, dodge.ready,
+      Math.round(special.progress * 100), special.active, special.ready,
+    ].join(":");
+    if (signature === lastActionSignature) return;
+    lastActionSignature = signature;
+    actionDock?.classList.toggle("is-visible", playing);
+
+    if (dodgeButton) {
+      dodgeButton.style.setProperty("--action-progress", dodge.progress.toFixed(3));
+      dodgeButton.disabled = !playing || !dodge.ready;
+      dodgeButton.classList.toggle("is-active", dodge.active);
+      dodgeButton.classList.toggle("is-ready", playing && dodge.ready);
+      dodgeButton.setAttribute("aria-label", dodge.ready
+        ? "Ink Step dodge ready. Space or Shift."
+        : `Ink Step dodge recharging, ${dodge.cooldown.toFixed(1)} seconds.`);
+    }
+    if (specialButton) {
+      specialButton.style.setProperty("--action-progress", special.progress.toFixed(3));
+      specialButton.disabled = !playing || !special.ready;
+      specialButton.classList.toggle("is-active", special.active);
+      specialButton.classList.toggle("is-ready", playing && special.ready);
+      specialButton.setAttribute("aria-label", special.ready
+        ? "Blood Eclipse special ready. Press Q."
+        : `Blood Eclipse charge ${Math.round(special.progress * 100)} percent.`);
+    }
+  };
+  game.onActionState = syncActionControls;
+  syncActionControls();
+
   installDebug(game);
   return game;
 }
@@ -126,6 +188,7 @@ function installDebug(game) {
         kills: game.kills,
         slashing: Boolean(game.player && game.player.slashT > 0),
         enemyAttacking: game.enemies.filter((e) => !e.dead && e.attackT > 0).length,
+        actions: game.actionState(),
         artMode: game.generatedAssets?.mode || "unknown",
         assetsLoaded: game.generatedAssets?.loaded?.length ?? game.generatedAssets?.loaded ?? 0,
         assetsFailed: game.generatedAssets?.failed?.length ?? 0,
@@ -215,6 +278,13 @@ function installDebug(game) {
     win() { game.win(); },
     setFocus(v) { game.fx.focusTarget = v; },
     toggleStats() { game.showStats = !game.showStats; },
+    chargeSpecial(fraction = 1, quiet = false) {
+      const max = game.actionState().special.maxCharge;
+      game.actions.setCharge(max * Math.max(0, Math.min(1, fraction)), { quiet });
+      return game.actionState();
+    },
+    dodge() { return game.tryDodge(); },
+    special() { return game.trySpecial(); },
 
     /** Named states for the screenshot harness. */
     async shotStep(name, arg) {
@@ -322,6 +392,29 @@ function installDebug(game) {
           hook.sim(8);
           game.phase = "paused";
           break;
+        case "dodge":
+          hook.newRun();
+          hook.god(true);
+          game.input.x = 1;
+          game.input.y = -0.18;
+          game.tryDodge();
+          game.player.dodgeT = Math.max(game.player.dodgeT, 0.62);
+          break;
+        case "special-ready":
+          hook.newRun();
+          hook.god(true);
+          hook.spawn("gaki", 42, 430);
+          hook.chargeSpecial(1);
+          break;
+        case "special":
+          hook.newRun();
+          hook.god(true);
+          hook.spawn("gaki", 52, 350);
+          hook.chargeSpecial(1, true);
+          game.trySpecial();
+          game.actions.update(0.32);
+          game.player.specialT = Math.max(game.player.specialT, 0.62);
+          break;
         default:
           break;
       }
@@ -347,8 +440,11 @@ function installDebug(game) {
       art: game.generatedAssets?.mode || "unknown",
       player: p ? {
         x: Math.round(p.x), y: Math.round(p.y), hp: Math.round(p.hp),
-        moving: p.moving, action: p.slashT > 0 ? "slash" : (p.moving ? "run" : "idle"),
+        moving: p.moving,
+        action: p.specialT > 0 ? "blood-eclipse"
+          : (p.dodgeT > 0 ? "ink-step" : (p.slashT > 0 ? "slash" : (p.moving ? "run" : "idle"))),
       } : null,
+      abilities: game.actionState(),
       enemies: visible,
     });
   };

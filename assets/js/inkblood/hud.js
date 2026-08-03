@@ -424,7 +424,7 @@ export class Hud {
     if (st.showStats && !this.compact) this.statBlock(g, 14 * s, H - 232 * s, 172 * s, 218 * s, st);
 
     /* ---- minimap, bottom right ---------------------------- */
-    if (!this.compact || W > 560) {
+    if (!this.compact) {
       const radarSize = 78 * u;
       const radarX = W - radarSize - 17 * u;
       const radarY = H - radarSize - 17 * u;

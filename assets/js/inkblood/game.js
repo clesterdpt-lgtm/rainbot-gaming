@@ -27,16 +27,17 @@ import { bakeCast } from "./sprites.js?v=20260803-2";
 import {
   bakeProps, drawGround, Ash, installGeneratedEnvironment, BACKGROUND,
 } from "./props.js?v=20260803-calm-1";
-import { bakeFx, Fx, ATLAS } from "./fx.js?v=20260803-2";
+import { bakeFx, Fx, ATLAS } from "./fx.js?v=20260803-actions-1";
 import {
   WEAPONS, PASSIVES, WEP_ART, bakeWeaponArt, makeProjectile, stepProjectile,
   drawProjectile, drawChains,
 } from "./weapons.js?v=20260803-solo-slash-1";
 import { ENEMIES, Director, stepEnemy, RUN_LENGTH } from "./enemies.js?v=20260803-calm-1";
-import { Audio } from "./audio.js?v=20260803-calm-1";
-import { Input } from "./input.js?v=20260803-2";
-import { Hud } from "./hud.js?v=20260803-manga-ui-1";
+import { Audio } from "./audio.js?v=20260803-actions-1";
+import { Input } from "./input.js?v=20260803-actions-1";
+import { Hud } from "./hud.js?v=20260803-actions-1";
 import { loadGeneratedAssets } from "./generated-assets.js?v=20260803-calm-1";
+import { ActionSystem } from "./actions.js?v=20260803-actions-1";
 
 // The camera guarantees a minimum window onto the world in BOTH
 // axes. Driving zoom from height alone is fine on a laptop and
@@ -149,6 +150,7 @@ export class Game {
     this.audio = new Audio();
     this.input = new Input(canvas);
     this.hud = new Hud(FONTS);
+    this.actions = new ActionSystem(this);
     this.director = new Director();
     this.grid = new Grid(CELL);
     this.ash = new Ash(BACKGROUND.ashCount);
@@ -176,6 +178,7 @@ export class Game {
 
     this.onScore = null;   // set by main.js so the site can record it
     this.onUiState = null;
+    this.onActionState = null;
     this.lastUiPhase = "";
 
     this.bindCanvas();
@@ -288,11 +291,19 @@ export class Game {
     return true;
   }
 
+  tryDodge() { return this.actions.tryDodge(); }
+
+  trySpecial() { return this.actions.trySpecial(); }
+
+  actionState() { return this.actions.state(); }
+
   /* ------------------------------------------------------- */
   /* Run lifecycle                                           */
   /* ------------------------------------------------------- */
 
   newRun() {
+    this.input.clearActionPresses();
+    this.input.takePressed();
     this.time = 0;
     this.enemies.length = 0;
     this.projectiles.length = 0;
@@ -317,6 +328,7 @@ export class Game {
       slashT: 0, slashDuration: 0.34,
       regenAcc: 0,
     };
+    this.actions.reset(this.player);
 
     this.baseStats = {
       might: 1, cooldown: 1, area: 1, duration: 1, amount: 0,
@@ -626,7 +638,9 @@ export class Game {
     const hx = e.x + Math.cos(dir) * e.radius * 0.4;
     const hy = e.y - e.h * 0.45 + Math.sin(dir) * e.radius * 0.3;
     const power = Math.min(3, 0.5 + dmg / 42);
-    const showNumber = crit || !!e.boss || this.fx.floaters.length < 26;
+    const showNumber = opts.number === false
+      ? false
+      : (crit || !!e.boss || this.fx.floaters.length < 26);
     this.fx.hit(hx, hy, dir, dmg, { power, crit, big: !!e.boss, number: showNumber });
 
     const kb = (opts.knockback || 100) * (1 - (e.def.kbResist || 0));
@@ -647,6 +661,7 @@ export class Game {
   killEnemy(e, dir) {
     e.dead = true;
     this.kills++;
+    this.actions.onKill(e);
 
     const big = !!e.boss || !!e.def.elite;
     this.fx.stain(e.x, e.y, big ? 2.4 : 0.9);
@@ -715,11 +730,17 @@ export class Game {
   }
 
   clearField(radius) {
-    for (const e of this.enemies) {
-      if (e.dead || e.boss) continue;
-      const dx = e.x - this.player.x;
-      const dy = e.y - this.player.y;
-      if (dx * dx + dy * dy < radius * radius) this.damageEnemy(e, 99999, Math.atan2(dy, dx));
+    const oldSuppress = this.actions.suppressCharge;
+    this.actions.suppressCharge = true;
+    try {
+      for (const e of this.enemies) {
+        if (e.dead || e.boss) continue;
+        const dx = e.x - this.player.x;
+        const dy = e.y - this.player.y;
+        if (dx * dx + dy * dy < radius * radius) this.damageEnemy(e, 99999, Math.atan2(dy, dx));
+      }
+    } finally {
+      this.actions.suppressCharge = oldSuppress;
     }
   }
 
@@ -890,10 +911,16 @@ export class Game {
   step(dtReal) {
     this.realTime += dtReal;
     this.input.update();
+    const phaseAtInput = this.phase;
 
     if (this.input.consumePause()) {
       this.togglePause();
     }
+
+    // Action intents are deliberately discarded while a screen or pause is
+    // in control. Space can start/restart/confirm without leaking a dodge
+    // into the first resumed combat frame; Q cannot queue an Eclipse.
+    if (phaseAtInput !== "playing" || this.phase !== "playing") this.input.clearActionPresses();
 
     if (this.phase === "title") {
       this.fx.update(dtReal);
@@ -907,7 +934,11 @@ export class Game {
       this.handleLevelUpInput();
       return;
     }
-    if (this.phase === "paused") { this.fx.update(dtReal * 0.2); return; }
+    if (this.phase === "paused") {
+      this.input.takePressed();
+      this.fx.update(dtReal * 0.2);
+      return;
+    }
     if (this.phase === "dead" || this.phase === "won") {
       this.fx.update(dtReal);
       this.ash.update(dtReal, this.w, this.h);
@@ -927,6 +958,9 @@ export class Game {
 
     this.frame++;
     this.time += dt;
+
+    if (this.input.consumeDodge()) this.tryDodge();
+    if (this.input.consumeSpecial()) this.trySpecial();
 
     this.updateTimers(dt);
     this.updatePlayer(dt);
@@ -975,19 +1009,26 @@ export class Game {
 
   updatePlayer(dt) {
     const p = this.player;
-    const speed = 232 * this.stats.moveSpeed;
-    const ix = this.input.x;
-    const iy = this.input.y;
-    p.vx = ix * speed;
-    p.vy = iy * speed * 0.86;
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.moving = Math.abs(ix) + Math.abs(iy) > 0.05;
-    if (Math.abs(ix) > 0.05) p.facing = ix > 0 ? 1 : -1;
-    p.animT += dt * (p.moving ? 1 : 0.55);
+    const action = this.actions.update(dt);
+    if (action === "none") {
+      const speed = 232 * this.stats.moveSpeed;
+      const ix = this.input.x;
+      const iy = this.input.y;
+      p.vx = ix * speed;
+      p.vy = iy * speed * 0.86;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.moving = Math.abs(ix) + Math.abs(iy) > 0.05;
+      if (Math.abs(ix) > 0.05) p.facing = ix > 0 ? 1 : -1;
+      p.animT += dt * (p.moving ? 1 : 0.55);
+    } else if (action === "dodge") {
+      p.animT += dt * 2.7;
+    } else {
+      p.animT += dt * 0.72;
+    }
     if (p.slashT > 0) p.slashT = Math.max(0, p.slashT - dt);
-    if (p.invuln > 0) p.invuln -= dt;
-    if (p.hurtFlash > 0) p.hurtFlash -= dt;
+    if (p.invuln > 0) p.invuln = Math.max(0, p.invuln - dt);
+    if (p.hurtFlash > 0) p.hurtFlash = Math.max(0, p.hurtFlash - dt);
 
     if (this.stats.regen > 0 && p.hp < p.maxHp) {
       p.regenAcc += this.stats.regen * dt;
@@ -1344,6 +1385,7 @@ export class Game {
       this.lastUiPhase = this.phase;
       if (this.onUiState) this.onUiState(this.phase);
     }
+    if (this.onActionState) this.onActionState(this.actionState(), this.phase);
   }
 
   /** One y-sorted pass over everything that stands on the ground. */
@@ -1372,18 +1414,42 @@ export class Game {
     const p = this.player;
     const art = this.art.hero;
     const moving = p.moving;
-    const slashing = p.slashT > 0 && art.slash?.length;
-    const set = slashing ? art.slash : (moving ? art.run : art.idle);
-    const rate = moving ? 11 : 3.4;
-    const slashProgress = slashing
-      ? 1 - (p.slashT / Math.max(0.001, p.slashDuration))
-      : 0;
-    const slashIndex = slashing
-      ? Math.min(set.length - 1, Math.floor(slashProgress * set.length))
+    const special = p.specialT > 0 && art.slash?.length;
+    const dodging = !special && p.dodgeT > 0 && art.run?.length;
+    const slashing = !special && !dodging && p.slashT > 0 && art.slash?.length;
+    const set = special || slashing ? art.slash : ((moving || dodging) ? art.run : art.idle);
+    const rate = dodging ? 22 : ((moving || dodging) ? 11 : 3.4);
+    const actionProgress = special
+      ? 1 - (p.specialT / Math.max(0.001, p.specialDuration))
+      : (slashing ? 1 - (p.slashT / Math.max(0.001, p.slashDuration)) : 0);
+    const slashIndex = special || slashing
+      ? Math.min(set.length - 1, Math.floor(actionProgress * set.length))
       : -1;
-    const gaitIndex = moving ? gaitFrameIndex(p.animT, rate, set.length) : -1;
-    const f = slashing ? set[slashIndex] : (moving ? set[gaitIndex] : frameAt(set, p.animT, rate));
+    const gaitIndex = moving || dodging ? gaitFrameIndex(p.animT, rate, set.length) : -1;
+    const f = special || slashing
+      ? set[slashIndex]
+      : ((moving || dodging) ? set[gaitIndex] : frameAt(set, p.animT, rate));
     if (!f) return;
+
+    // The echoes are full authored run poses—not translucent ovals—so the
+    // action reads as a swordsman vanishing through sequential manga panels.
+    if (art.run?.length && p.dodgeTrail?.length) {
+      for (const echo of p.dodgeTrail) {
+        const k = echo.t / echo.life;
+        const echoIndex = gaitFrameIndex(echo.animT + echo.t * 1.8, 18, art.run.length);
+        const ef = art.run[echoIndex];
+        if (!ef) continue;
+        g.save();
+        g.translate(echo.x, echo.y);
+        if (echo.facing < 0) g.scale(-1, 1);
+        g.globalAlpha = Math.max(0, (1 - k) * 0.32);
+        g.shadowColor = PAL.blood;
+        g.shadowBlur = 12 * (1 - k);
+        g.drawImage(ef.canvas, -ef.ox / 2, -ef.oy / 2, ef.canvas.width / 2, ef.canvas.height / 2);
+        g.restore();
+      }
+    }
+
     this.shadow(g, p.x, p.y - 2, 26);
 
     g.save();
@@ -1393,13 +1459,19 @@ export class Game {
     const h = f.canvas.height / 2;
     const ox = -f.ox / 2;
     const oy = -f.oy / 2;
-    if (p.invuln > 0 && Math.floor(this.realTime * 22) % 2 === 0) g.globalAlpha = 0.45;
+    if (special) {
+      g.shadowColor = PAL.blood;
+      g.shadowBlur = 18 + Math.sin(this.realTime * 34) * 6;
+    }
+    if (p.invuln > 0 && !dodging && !special && Math.floor(this.realTime * 22) % 2 === 0) {
+      g.globalAlpha = 0.45;
+    }
     g.drawImage(f.canvas, ox, oy, w, h);
     if (p.hurtFlash > 0) {
-      const hurtSet = slashing ? art.hurtSlash : (moving ? art.hurtRun : art.hurtIdle);
-      const hf = slashing
+      const hurtSet = special || slashing ? art.hurtSlash : ((moving || dodging) ? art.hurtRun : art.hurtIdle);
+      const hf = special || slashing
         ? hurtSet?.[slashIndex]
-        : (moving ? hurtSet?.[gaitIndex] : frameAt(hurtSet, p.animT, rate));
+        : ((moving || dodging) ? hurtSet?.[gaitIndex] : frameAt(hurtSet, p.animT, rate));
       if (hf) {
         g.globalAlpha = Math.min(1, p.hurtFlash * 3);
         g.drawImage(hf, ox, oy, w, h);
@@ -1559,6 +1631,7 @@ export class Game {
       weapons: this.weapons, passives: this.passives,
       stats: this.stats, portrait: this.art.hero.portrait,
       showStats: this.showStats,
+      actions: this.actionState(),
       enemyPositions: positions, px: this.player.x, py: this.player.y,
       boss: this.boss,
     };
@@ -1771,7 +1844,7 @@ export class Game {
         font: FONTS.display(26 * ts), halo: 0, outline: 0, colour: PAL.paperLit, align: "center",
       });
     }
-    inkText(g, "WASD / ARROWS  MOVE      P  PAUSE      YOUR BLADE SWINGS ITSELF", W / 2, H * 0.972, {
+    inkText(g, "WASD / ARROWS  MOVE      SPACE / SHIFT  INK STEP      Q  BLOOD ECLIPSE      P  PAUSE", W / 2, H * 0.972, {
       font: FONTS.display(15 * ts), halo: 0, outline: 0, colour: "#b9b3a6", align: "center",
     });
 

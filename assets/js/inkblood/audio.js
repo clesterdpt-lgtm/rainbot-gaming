@@ -122,6 +122,22 @@ export class Audio {
     this.tone(320 * power, 0.1, { type: "triangle", sweep: 120, gain: 0.1 });
   }
 
+  dodge() {
+    this.noise(0.14, { type: "highpass", freq: 1800, sweep: 6200, q: 0.8, gain: 0.14, rate: 1.9 });
+    this.tone(410, 0.12, { type: "triangle", sweep: 120, gain: 0.08 });
+  }
+
+  specialReady() {
+    this.tone(392, 0.22, { type: "triangle", sweep: 784, gain: 0.1 });
+    setTimeout(() => this.tone(784, 0.34, { type: "sine", sweep: 1046, gain: 0.12 }), 85);
+  }
+
+  special() {
+    this.tone(92, 0.52, { type: "sine", sweep: 36, gain: 0.3 });
+    this.noise(0.34, { type: "bandpass", freq: 2400, sweep: 520, q: 1.4, gain: 0.16, rate: 0.78 });
+    setTimeout(() => this.tone(311, 0.28, { type: "sawtooth", sweep: 74, gain: 0.13, filter: 1100 }), 170);
+  }
+
   throwHit(power = 1) {
     this.noise(0.07, { freq: 5200, sweep: 1800, q: 2.2, gain: 0.11 * power, rate: 2 });
   }

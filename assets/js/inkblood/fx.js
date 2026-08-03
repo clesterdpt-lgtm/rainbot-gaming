@@ -352,6 +352,8 @@ export class Fx {
     this.words = [];      // graphic impact marks
     this.rings = [];      // expanding shockwaves
     this.slashes = [];    // crimson arcs
+    this.dashes = [];     // authored Ink Step speed cuts
+    this.eclipses = [];   // staged Blood Eclipse tableaux
     this.bolts = [];      // lightning
     this.motes = [];      // blood droplets / ink flecks
     this.shakeX = 0;
@@ -369,7 +371,8 @@ export class Fx {
   reset() {
     this.decals.length = 0; this.bursts.length = 0; this.hits.length = 0;
     this.floaters.length = 0; this.words.length = 0; this.rings.length = 0;
-    this.slashes.length = 0; this.bolts.length = 0; this.motes.length = 0;
+    this.slashes.length = 0; this.dashes.length = 0; this.eclipses.length = 0;
+    this.bolts.length = 0; this.motes.length = 0;
     this.shakeAmt = 0; this.focus = 0; this.focusTarget = 0; this.flash = 0;
     this.panel = null;
   }
@@ -477,6 +480,31 @@ export class Fx {
     });
   }
 
+  /** Three dry-brush cuts preview the full path of an Ink Step. */
+  dash(x0, y0, x1, y1, opts = {}) {
+    this.dashes.push({
+      x0, y0, x1, y1,
+      t: 0,
+      life: opts.life || 0.34,
+      colour: opts.colour || PAL.blood,
+      seed: this.nextSeed(),
+    });
+  }
+
+  /** One effect owns the Eclipse wind-up, black sun and impact bloom. */
+  eclipse(x, y, radius, life, opts = {}) {
+    this.eclipses.push({
+      x, y, radius,
+      t: 0,
+      life: life || 0.82,
+      impactAt: opts.impactAt == null ? 0.38 : opts.impactAt,
+      follow: opts.follow || null,
+      offsetX: opts.offsetX || 0,
+      offsetY: opts.offsetY || 0,
+      seed: this.nextSeed(),
+    });
+  }
+
   bolt(x0, y0, x1, y1, opts = {}) {
     const seed = this.nextSeed();
     const pts = boltPath(x0, y0, x1, y1, opts.segments || 14, opts.amp || 64, seed);
@@ -547,6 +575,8 @@ export class Fx {
     decay(this.bursts);
     decay(this.rings);
     decay(this.slashes);
+    decay(this.dashes);
+    decay(this.eclipses);
     decay(this.bolts);
     decay(this.decals);
 
@@ -618,6 +648,94 @@ export class Fx {
 
   /** Mid layer: impacts and energy, drawn over the entities. */
   drawWorld(g) {
+    for (const d of this.dashes) {
+      const k = d.t / d.life;
+      const dx = d.x1 - d.x0;
+      const dy = d.y1 - d.y0;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+      const drawCut = (offset, width, colour, seed) => {
+        const lead = 0.02 + k * 0.2;
+        const tail = Math.min(1, 0.8 + k * 0.35);
+        brush(g, [
+          [d.x0 + dx * lead + nx * offset, d.y0 + dy * lead + ny * offset],
+          [d.x0 + dx * tail + nx * offset, d.y0 + dy * tail + ny * offset],
+        ], { width, taper: "both", jitter: 0.3, seed, colour });
+      };
+      g.save();
+      g.globalAlpha = Math.max(0, 1 - k * k);
+      drawCut(5, 12 * (1 - k * 0.5), PAL.paperLit, d.seed + 1);
+      drawCut(2, 7 * (1 - k * 0.55), PAL.ink, d.seed + 2);
+      drawCut(0, 3.6 * (1 - k * 0.6), d.colour, d.seed + 3);
+      drawCut(-12, 2.6 * (1 - k), PAL.ink, d.seed + 4);
+      drawCut(16, 1.8 * (1 - k), d.colour, d.seed + 5);
+      g.restore();
+    }
+
+    for (const e of this.eclipses) {
+      const k = e.t / e.life;
+      const cx = e.follow ? e.follow.x + e.offsetX : e.x;
+      const cy = e.follow ? e.follow.y + e.offsetY : e.y;
+      const impact = Math.max(0.05, e.impactAt);
+      g.save();
+      if (k < impact) {
+        const q = k / impact;
+        const outer = e.radius * (0.78 - q * 0.63);
+        const moon = 12 + 35 * Math.pow(q, 1.7);
+        g.globalAlpha = 0.22 + q * 0.72;
+        g.fillStyle = PAL.ink;
+        roughCircle(g, cx, cy, moon, e.seed, 0.075);
+        g.fill();
+        g.strokeStyle = PAL.arcaneHot;
+        g.lineWidth = 8 - q * 3;
+        roughCircle(g, cx, cy, outer, e.seed + 2, 0.035);
+        g.stroke();
+        g.strokeStyle = PAL.blood;
+        g.lineWidth = 3.5;
+        roughCircle(g, cx, cy, outer + 12, e.seed + 3, 0.05);
+        g.stroke();
+        for (let i = 0; i < 14; i++) {
+          const a = (i / 14) * Math.PI * 2 + e.seed * 0.13;
+          const r0 = outer + 18;
+          const r1 = outer + 52 + (i % 3) * 8;
+          brush(g, [
+            [cx + Math.cos(a) * r0, cy + Math.sin(a) * r0],
+            [cx + Math.cos(a) * r1, cy + Math.sin(a) * r1],
+          ], { width: 2.4, taper: "both", jitter: 0.25, seed: e.seed + i, colour: PAL.ink });
+        }
+      } else {
+        const q = (k - impact) / (1 - impact);
+        const rad = 35 + (e.radius - 35) * Math.pow(q, 0.52);
+        g.globalAlpha = Math.max(0, 1 - q * q);
+        g.strokeStyle = PAL.ink;
+        g.lineWidth = 19 * (1 - q * 0.72);
+        roughCircle(g, cx, cy, rad + 4, e.seed + 4, 0.065);
+        g.stroke();
+        g.strokeStyle = PAL.blood;
+        g.lineWidth = 10 * (1 - q * 0.62);
+        roughCircle(g, cx, cy, rad, e.seed + 5, 0.055);
+        g.stroke();
+        g.strokeStyle = PAL.paperLit;
+        g.lineWidth = 2.2 * (1 - q);
+        roughCircle(g, cx, cy, rad - 8, e.seed + 6, 0.04);
+        g.stroke();
+        for (let i = 0; i < 18; i++) {
+          const a = (i / 18) * Math.PI * 2 + e.seed * 0.07;
+          const inner = rad * (0.68 + (i % 2) * 0.08);
+          const outer = rad * (1.08 + (i % 3) * 0.07);
+          brush(g, [
+            [cx + Math.cos(a) * inner, cy + Math.sin(a) * inner],
+            [cx + Math.cos(a) * outer, cy + Math.sin(a) * outer],
+          ], {
+            width: 4.8 * (1 - q * 0.72), taper: "both", jitter: 0.3,
+            seed: e.seed + 30 + i, colour: i % 4 === 0 ? PAL.blood : PAL.ink,
+          });
+        }
+      }
+      g.restore();
+    }
+
     for (const s of this.slashes) {
       const k = s.t / s.life;
       const img = ATLAS.slash[s.idx];

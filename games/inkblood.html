@@ -97,6 +97,12 @@
     }
     .inkblood-page #btn-pause { right: 14px; }
     .inkblood-page #btn-fullscreen { right: 58px; }
+    @supports (right: max(1px, env(safe-area-inset-right))) {
+      .inkblood-page #btn-pause { right: max(14px, env(safe-area-inset-right)); }
+      .inkblood-page #btn-fullscreen {
+        right: calc(max(14px, env(safe-area-inset-right)) + 44px);
+      }
+    }
     .inkblood-page #btn-pause[aria-pressed="true"] {
       background: rgba(192, 20, 33, 0.94);
     }
@@ -113,12 +119,171 @@
     /* The generic site menu remains available, but it no longer sits over HP. */
     .inkblood-page .rb-escape-btn {
       top: auto;
-      bottom: 9px;
-      left: 9px;
+      bottom: max(9px, env(safe-area-inset-bottom));
+      left: max(9px, env(safe-area-inset-left));
       width: 32px;
       height: 32px;
       border-radius: 0;
       background: rgba(8, 8, 12, 0.72);
+    }
+    .inkblood-page .rb-standalone-surface.is-maxed .rb-escape-btn {
+      top: auto !important;
+      right: auto !important;
+      bottom: max(9px, env(safe-area-inset-bottom)) !important;
+      left: max(9px, env(safe-area-inset-left)) !important;
+    }
+
+    /* ---------- player actions ----------
+       These are manga seals, never a toolbar. The clipped paper shapes keep
+       the battlefield visible while the rising fill communicates cooldown or
+       earned blood at a glance. */
+    .ink-action-dock {
+      position: absolute;
+      right: max(13px, env(safe-area-inset-right));
+      bottom: max(15px, env(safe-area-inset-bottom));
+      z-index: 46;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 9px;
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(10px);
+      transition: opacity 160ms ease, transform 160ms ease, visibility 160ms;
+      pointer-events: none;
+      filter: drop-shadow(3px 4px 0 rgba(16, 16, 20, 0.28));
+    }
+    .ink-action-dock.is-visible {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
+    .ink-action {
+      --action-progress: 0;
+      position: relative;
+      display: grid;
+      place-items: center;
+      isolation: isolate;
+      overflow: hidden;
+      padding: 0;
+      border: 3px solid var(--inkblood-ink, #101014);
+      border-radius: 0;
+      background: rgba(248, 245, 236, 0.9);
+      color: var(--inkblood-ink, #101014);
+      pointer-events: auto;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      cursor: pointer;
+    }
+    .ink-action::after {
+      content: "";
+      position: absolute;
+      inset: 4px;
+      z-index: -1;
+      border: 1px solid currentColor;
+      opacity: 0.55;
+      transform: rotate(-1.5deg);
+      pointer-events: none;
+    }
+    .ink-action__fill {
+      position: absolute;
+      z-index: -2;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: calc(var(--action-progress) * 100%);
+      background: rgba(16, 16, 20, 0.72);
+      transition: height 110ms linear;
+    }
+    .ink-action__sigil {
+      font-family: var(--inkblood-jp, "Noto Sans JP", sans-serif);
+      font-weight: 900;
+      line-height: 0.9;
+      text-shadow: 1px 0 #f8f5ec, -1px 0 #f8f5ec, 0 1px #f8f5ec, 0 -1px #f8f5ec;
+      transform: rotate(-5deg);
+    }
+    .ink-action__label {
+      position: absolute;
+      left: 4px;
+      right: 4px;
+      bottom: 4px;
+      font-family: var(--inkblood-display, Impact, sans-serif);
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      line-height: 1;
+      text-align: center;
+      text-shadow: 1px 1px #f8f5ec, -1px -1px #f8f5ec;
+    }
+    .ink-action__key {
+      position: absolute;
+      top: 3px;
+      right: 4px;
+      min-width: 15px;
+      padding: 1px 3px;
+      border: 1px solid currentColor;
+      background: rgba(248, 245, 236, 0.82);
+      font: 10px/1 var(--inkblood-display, Impact, sans-serif);
+      text-align: center;
+    }
+    .ink-action--special {
+      width: 72px;
+      height: 72px;
+      clip-path: polygon(18% 0, 82% 0, 100% 18%, 100% 82%, 82% 100%, 18% 100%, 0 82%, 0 18%);
+    }
+    .ink-action--special .ink-action__fill {
+      background: linear-gradient(to top, rgba(125, 10, 19, 0.98), rgba(255, 58, 58, 0.84));
+    }
+    .ink-action--special .ink-action__sigil { font-size: 35px; }
+    .ink-action--dodge {
+      width: 60px;
+      height: 56px;
+      clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+    }
+    .ink-action--dodge .ink-action__sigil {
+      font-family: var(--inkblood-impact, Impact, sans-serif);
+      font-size: 30px;
+      font-style: italic;
+    }
+    .ink-action:disabled {
+      opacity: 0.82;
+      cursor: default;
+    }
+    .ink-action.is-ready {
+      color: #f8f5ec;
+      background: rgba(16, 16, 20, 0.94);
+    }
+    .ink-action.is-ready .ink-action__sigil {
+      text-shadow: 2px 2px #101014, -1px 0 #101014, 0 -1px #101014;
+    }
+    .ink-action--special.is-ready {
+      border-color: #f8f5ec;
+      background: #7d0a13;
+      animation: eclipse-ready 1.15s steps(2, end) infinite;
+    }
+    .ink-action.is-active { animation: action-impact 280ms cubic-bezier(.2,.9,.22,1); }
+    .ink-action.is-pressed { animation: action-press 170ms ease-out; }
+    .ink-action:focus-visible {
+      outline: 3px solid #8f52ff;
+      outline-offset: 3px;
+    }
+    @keyframes eclipse-ready {
+      50% { filter: drop-shadow(0 0 11px rgba(192, 20, 33, 0.95)); transform: rotate(-2deg) scale(1.04); }
+    }
+    @keyframes action-impact {
+      45% { transform: scale(0.86) rotate(-4deg); }
+      75% { transform: scale(1.1) rotate(2deg); }
+    }
+    @keyframes action-press {
+      45% { transform: translate(2px, 3px) scale(0.92); filter: none; }
+    }
+
+    @media (min-width: 721px) and (min-height: 521px) {
+      .ink-action-dock { right: max(111px, calc(env(safe-area-inset-right) + 96px)); }
+    }
+    @media (pointer: coarse) {
+      .ink-action__key { display: none; }
+      .ink-action--special { width: 68px; height: 68px; }
+      .ink-action--dodge { width: 60px; height: 58px; }
     }
 
     /* ---------- boot screen ---------- */
@@ -260,12 +425,16 @@
       }
       .inkblood-page .ink-stage-control,
       .inkblood-page #btn-fullscreen { top: 9px; }
-      .inkblood-page #btn-pause { right: 9px; }
-      .inkblood-page #btn-fullscreen { right: 53px; }
+      .inkblood-page #btn-pause { right: max(9px, env(safe-area-inset-right)); }
+      .inkblood-page #btn-fullscreen {
+        right: calc(max(9px, env(safe-area-inset-right)) + 44px);
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
       .ink-boot__ring { animation: none; }
+      .ink-action { animation: none !important; transition: none; }
+      .ink-action__fill { transition: none; }
     }
   </style>
 </head>
@@ -305,6 +474,22 @@
               <div class="ink-boot__err" id="ink-boot-error"></div>
             </div>
           </div>
+          <div class="ink-action-dock" id="ink-action-dock" role="group" aria-label="Combat abilities">
+            <button class="ink-action ink-action--special" id="btn-special" type="button"
+              aria-keyshortcuts="Q" aria-label="Blood Eclipse charge 0 percent." disabled>
+              <span class="ink-action__fill" aria-hidden="true"></span>
+              <span class="ink-action__sigil" aria-hidden="true">蝕</span>
+              <span class="ink-action__label" aria-hidden="true">ECLIPSE</span>
+              <span class="ink-action__key" aria-hidden="true">Q</span>
+            </button>
+            <button class="ink-action ink-action--dodge" id="btn-dodge" type="button"
+              aria-keyshortcuts="Space Shift" aria-label="Ink Step dodge ready." disabled>
+              <span class="ink-action__fill" aria-hidden="true"></span>
+              <span class="ink-action__sigil" aria-hidden="true">≫</span>
+              <span class="ink-action__label" aria-hidden="true">INK STEP</span>
+              <span class="ink-action__key" aria-hidden="true">SPC</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -315,7 +500,7 @@
 
         <div class="game-side__panel game-side__panel--inkblood">
           <h3 class="game-side__title">NIGHT PARADE</h3>
-          <p>Move with WASD, arrow keys, or touch. Attacks fire automatically.</p>
+          <p>Move with WASD, arrow keys, or touch. Space/Shift performs an Ink Step; Q releases Blood Eclipse when its seal is full.</p>
           <p>The game stays embedded here until you choose Max in the upper-right corner.</p>
         </div>
 
@@ -327,6 +512,8 @@
           <ul>
             <li>Choose your slayer, then survive the fifteen-minute Night Parade.</li>
             <li>Move to evade yokai; your equipped weapons attack automatically.</li>
+            <li>Dodge with Space or Shift. Ink Step has brief invulnerability and a short cooldown.</li>
+            <li>Kills fill the Blood Eclipse seal. Press Q when it turns crimson to cut every nearby yokai.</li>
             <li>Collect ink shards, level up, and build a stronger loadout.</li>
             <li>Use Max for an immersive run; press the close icon or Escape to return to the page.</li>
           </ul>
@@ -345,7 +532,7 @@
   </footer>
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/inkblood/boot.js?v=20260803-manga-ui-1"></script>
+  <script src="../assets/js/inkblood/boot.js?v=20260803-actions-1"></script>
   <script src="../assets/js/main.js?v=20260802-inkblood-shell-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");

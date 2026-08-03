@@ -1529,8 +1529,27 @@ export async function createPlayer(ctx) {
         dbgInto = into;
         if (into > 0) {
           const k = curled ? 1 + T.curlBounce : 1;
-          velocity.x -= tmpA.x * into * k;
-          velocity.z -= tmpA.z * into * k;
+          // Remove what the obstruction ACTUALLY ate, not the whole
+          // component along it. Normalising `tmpA` throws the magnitude
+          // away, so the old form cancelled exactly as much speed for a
+          // blocked sliver of 1e-5 units as for a head-on wall. The
+          // controller shaves such a sliver on every step of ordinary
+          // ground - slope projection, the skin offset, snap-to-ground -
+          // and its direction is the direction of travel, so walking on
+          // FLAT terrain had its entire forward velocity deleted several
+          // times a second. Traced at (-160, 240): deflection 0.0000 while
+          // `into` spiked to 9.28, velocity sawtoothing 10.8 -> 6.6 -> 0.8
+          // and averaging 5.0 against a walk speed of 13.5. Airborne steps
+          // are never clipped, so jumping kept its speed - which is exactly
+          // why holding W crawled while spamming jump ran.
+          //
+          // blockedLen is a distance over one step, so it converts to the
+          // speed the obstruction removed. Capping at `into` keeps a real
+          // wall fully cancelling (there blockedLen/step == into) and stops
+          // the slide from ever reversing the body.
+          const cut = Math.min(into, blockedLen / step) * k;
+          velocity.x -= tmpA.x * cut;
+          velocity.z -= tmpA.z * cut;
           // A real wall only. The character controller shaves a sliver off
           // horizontal motion on ANY uneven ground - slope projection,
           // friction, micro-contacts - so the old test ("was anything eaten

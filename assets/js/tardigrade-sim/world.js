@@ -1596,19 +1596,48 @@ export async function createWorld(ctx) {
       // set. Thinning keeps grass solid and climbable at a fraction of that.
       grassCollideCounter += 1;
       if (grassCollideCounter % GRASS_COLLIDE_EVERY !== 0) continue;
-      // A capsule up the lower ~85% of the blade: that is the part a
+      // A capsule up the lower ~87% of the blade: that is the part a
       // tardigrade climbs, and a capsule (rather than a box) gives the
       // character controller no sharp edges to catch on in a thicket.
+      //
+      // It has to follow the blade's LEAN. bladeGeometry(4, 0.26) is a
+      // curved ribbon - local y = t - 0.06t^2, local z = 0.26t^2 - and the
+      // instance scales z by h*0.55, so the tip swings out horizontally by
+      // ~0.11h. A straight vertical capsule at the base therefore stood in
+      // open air for most of its length: measured against the real instance
+      // matrices, the gap between capsule axis and drawn blade was 13.35
+      // units at the top of the capsule against a radius of 1.16 - 11.8x
+      // the radius, on 100% of blades. That is what the animal was climbing
+      // and then standing on top of when nothing was visibly there.
+      //
+      // Fit the capsule to the chord from base to tip instead: anchor it at
+      // the base, offset the centre to the chord midpoint, and lean it by
+      // the chord's angle.
+      //
+      // The bend is a parabola, so it sags away from its own chord by
+      // tipZ/4 at mid-blade (measured: 2.78 units against a 1.16 radius).
+      // Sliding the axis tipZ/8 back toward the curve splits that error
+      // evenly between base, middle and tip and halves the worst case, for
+      // nothing - a second capsule per blade would fit better still, but
+      // grass colliders are already the most numerous in the world and this
+      // gets within about one radius everywhere.
+      const TOP = 0.87;
+      const tipY = (TOP - 0.06 * TOP * TOP) * h;
+      const tipZ = 0.26 * TOP * TOP * (h * 0.55);
+      const chord = Math.hypot(tipY, tipZ);
+      // Deliberately thinner than the blade looks. At w*0.3 the hero
+      // clipped a blade with almost every step through a clump, and since
+      // brushing a near-vertical face arms the climb assist, crossing a
+      // lawn became continuous hopping again. Thin colliders leave gaps to
+      // walk through while a blade you actually drive into still catches.
+      const gRadius = w * 0.16;
       foliageColliders.push({
         shape: "capsule",
-        x, y: (y - 2) + h * 0.45, z,
-        // Deliberately thinner than the blade looks. At w*0.3 the hero
-        // clipped a blade with almost every step through a clump, and since
-        // brushing a near-vertical face arms the climb assist, crossing a
-        // lawn became continuous hopping again. Thin colliders leave gaps to
-        // walk through while a blade you actually drive into still catches.
-        radius: w * 0.16,
-        halfHeight: h * 0.42,
+        x, y: y - 2, z,                       // the blade's base
+        localOffset: [0, tipY * 0.5, tipZ * 0.375],
+        leanX: Math.atan2(tipZ, tipY),
+        radius: gRadius,
+        halfHeight: Math.max(0.05, chord * 0.5 - gRadius),
         rx: gRx, ry: gRy, rz: gRz,
         tag: "grass",
       });
@@ -3960,9 +3989,14 @@ export async function createWorld(ctx) {
         color: new THREE_.Color(1, 1, 1),
         key: rng(),
       });
+      // Anchored at the base, like the grass. The centre used to be placed
+      // straight above it while the capsule itself was tilted, which pivots
+      // the stem about its own middle rather than about the root - so the
+      // solid part leaned one way while the drawn stem leaned the other.
       foliageColliders.push({
         shape: "capsule",
-        x: p.x, y: (y - 4) + p.h * 0.45, z: p.z,
+        x: p.x, y: y - 4, z: p.z,
+        localOffset: [0, p.h * 0.45, 0],
         radius: 3.2,
         halfHeight: p.h * 0.44,
         rx: Math.cos(p.rot) * p.tilt, ry: 0, rz: Math.sin(p.rot) * p.tilt,
@@ -4404,15 +4438,35 @@ export async function createWorld(ctx) {
     {
       const e = new THREE_.Euler();
       const qq = new THREE_.Quaternion();
+      // Extra bend applied in the instance's OWN frame, for colliders that
+      // stand in for curved geometry.
+      const lean = new THREE_.Quaternion();
+      const XAXIS = new THREE_.Vector3(1, 0, 0);
+      const off = new THREE_.Vector3();
       for (const f of foliageColliders) {
         try {
-          e.set(f.rx || 0, f.ry || 0, f.rz || 0);
+          // "YXZ", to match buildScatter's instance matrices. On the default
+          // XYZ the tilt was applied about the wrong axis, so every blade's
+          // collider leaned in a different compass direction from the blade
+          // it stands for.
+          e.set(f.rx || 0, f.ry || 0, f.rz || 0, "YXZ");
           qq.setFromEuler(e);
+          // A descriptor may anchor itself at the instance ORIGIN (a blade's
+          // base) and give the collider centre as a local offset, which is
+          // the only way to place a tilted capsule correctly: putting the
+          // centre straight above the base pivots the capsule about its own
+          // middle instead of about the root it grows from.
+          let px = f.x, py = f.y, pz = f.z;
+          if (f.localOffset) {
+            off.fromArray(f.localOffset).applyQuaternion(qq);
+            px += off.x; py += off.y; pz += off.z;
+          }
+          if (f.leanX) qq.multiply(lean.setFromAxisAngle(XAXIS, f.leanX));
           const shape = f.shape === "capsule"
             ? R.ColliderDesc.capsule(f.halfHeight, f.radius)
             : R.ColliderDesc.cuboid(f.hx, f.hy, f.hz);
           P.addStatic({
-            position: [f.x, f.y, f.z],
+            position: [px, py, pz],
             rotation: [qq.x, qq.y, qq.z, qq.w],
             shape,
             kind: "foliage",

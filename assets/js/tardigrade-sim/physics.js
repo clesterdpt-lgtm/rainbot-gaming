@@ -777,7 +777,18 @@ export async function createPhysics(ctx) {
     // Rapier wants a small skin so the capsule never rests exactly on a
     // surface; ~6% of the radius is stable without visible float.
     const offset = options.offset === undefined ? Math.max(0.01, radius * 0.06) : options.offset;
+    // A capsule cannot be both short and wide - its height can never be less
+    // than twice its radius - so a flat, broad animal cannot be described by
+    // one. `bodyRadius` asks for a ROUND CYLINDER instead: the same overall
+    // height as the capsule it replaces, but a horizontal footprint set
+    // independently, with rounded edges so the rim cannot catch on ledges
+    // the way a hard cylinder lip does.
+    const bodyRadius = options.bodyRadius === undefined ? 0 : options.bodyRadius;
     const halfTall = halfHeight + radius;
+    const round = bodyRadius > 0
+      ? Math.min(options.bodyRound === undefined ? 0.12 : options.bodyRound,
+                 halfTall * 0.5, bodyRadius * 0.5)
+      : 0;
     const position = readVec(options.position, 0, 2, 0);
     const membership = options.group === undefined ? LAYER.HERO : options.group;
     const filter = options.filter === undefined
@@ -788,7 +799,14 @@ export async function createPhysics(ctx) {
     const body = world.createRigidBody(
       RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(position.x, position.y, position.z)
     );
-    const colliderDesc = RAPIER.ColliderDesc.capsule(halfHeight, radius)
+    // Same total height either way (2 * halfTall), so nothing that depends on
+    // the hero's standing height - foot offset, autostep, snap - has to move.
+    const shapeDesc = bodyRadius > 0
+      ? (typeof RAPIER.ColliderDesc.roundCylinder === "function"
+        ? RAPIER.ColliderDesc.roundCylinder(halfTall - round, bodyRadius - round, round)
+        : RAPIER.ColliderDesc.cylinder(halfTall, bodyRadius))
+      : RAPIER.ColliderDesc.capsule(halfHeight, radius);
+    const colliderDesc = shapeDesc
       .setFriction(options.friction === undefined ? 0.6 : options.friction)
       .setRestitution(0)
       .setCollisionGroups(groups)
@@ -873,6 +891,8 @@ export async function createPhysics(ctx) {
       radius,
       halfHeight,
       offset,
+      /** Horizontal half-extent actually in the world (0 -> capsule radius). */
+      bodyRadius: bodyRadius > 0 ? bodyRadius : radius,
 
       /**
        * @param {{x,y,z}|number[]} desiredTranslation movement for this step

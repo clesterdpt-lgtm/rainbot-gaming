@@ -2584,6 +2584,34 @@ export async function createWorld(ctx) {
 
   const waterMeshes = [];
 
+  /* The shoreline each water mesh was actually built to, kept so that
+     "am I in water?" can be answered against the DRAWN edge.
+
+     inWater() puts the edge at radius * wob (at most 1.19x), but buildWater
+     walks outward until the ground rises above the liquid and only gives up
+     at radius * 1.6 - so over flat paving the spill is drawn half again as
+     wide as the game believes it is. Measured: the spill mesh spans x
+     -475..-221 (radius ~127) against a nominal 78. Everything in that ring
+     is liquid you can see and stand on while the game reports dry land - no
+     submersion, no drag, and the camera happily drops under the surface,
+     which fills the screen with the spill's own colours. */
+  const waterShores = new Map();
+
+  /** Is (x,z) inside the shoreline the mesh for `spec` was built to? */
+  function inDrawnWater(x, z, spec) {
+    const shore = waterShores.get(spec);
+    if (!shore) return inWater(x, z, spec, 0);
+    const dx = x - spec.x;
+    const dz = z - spec.z;
+    // Same angular parameterisation buildWater uses, so the test and the
+    // triangles agree by construction rather than by tuning.
+    const t = (((Math.atan2(dz, dx) / TAU) % 1) + 1) % 1 * shore.length;
+    const i0 = Math.floor(t) % shore.length;
+    const i1 = (i0 + 1) % shore.length;
+    const f = t - Math.floor(t);
+    return Math.hypot(dx, dz) < shore[i0] * (1 - f) + shore[i1] * f;
+  }
+
   function buildWater(spec, opts) {
     const RINGS = 30;
     const SEG = 96;
@@ -2827,6 +2855,7 @@ export async function createWorld(ctx) {
       shallow: new THREE_.Color(0x5d7f6a),
       rim: new THREE_.Color(0xbfe4e8),
     });
+    waterShores.set(PUDDLE, built.shore);
     const mat = waterMaterial("puddle", 0x9fd8dd, 0.030, 0.09, 0.86, 0.035);
     const mesh = new THREE_.Mesh(built.geometry, mat);
     mesh.name = "Puddle";
@@ -2851,6 +2880,7 @@ export async function createWorld(ctx) {
       shallow: new THREE_.Color(0x9a4d16),
       rim: new THREE_.Color(0xffd2a0),
     });
+    waterShores.set(SPILL, built.shore);
     const mat = waterMaterial("spill", 0xd98a3c, 0.03, 0.16, 0.9, 0.05, 0.7, [0.78, 0.62, 0.42]);
     const mesh = new THREE_.Mesh(built.geometry, mat);
     mesh.name = "SpilledDrink";
@@ -4783,8 +4813,10 @@ export async function createWorld(ctx) {
 
     /** Water level lookup - vfx / player can ask "am I in water?". */
     waterAt(x, z) {
-      if (inWater(x, z, PUDDLE, 0)) return PUDDLE.level;
-      if (inWater(x, z, SPILL, 0)) return SPILL.level;
+      // Against the DRAWN shoreline, not the nominal radius - see the note
+      // on waterShores. Liquid you can see is liquid you are standing in.
+      if (inDrawnWater(x, z, PUDDLE)) return PUDDLE.level;
+      if (inDrawnWater(x, z, SPILL)) return SPILL.level;
       return null;
     },
 

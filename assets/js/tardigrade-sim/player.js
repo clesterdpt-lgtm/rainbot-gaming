@@ -40,6 +40,22 @@ const T = {
   halfHeight: 0.07,
   skin: 0.02,
   headHeight: 0.62,
+  // The DRAWN animal is 1.52 x 1.90 units across and 0.72 tall; the capsule
+  // above is 0.64 across. Measured, that is 3x too narrow, and it caused
+  // both of the faults reported against big objects and against grass:
+  //   - pressed against a surface, two thirds of the body is past it, which
+  //     is what "the tardigrade clips inside the object" looks like;
+  //   - grass capsules are ~1.16 across and deliberately spaced to leave
+  //     gaps, so a 0.64 hero slips BETWEEN blades and never gets a purchase
+  //     to climb - 54% of runs into dense grass never touched a blade.
+  // A capsule cannot fix this: its height can never be under twice its
+  // radius, so widening it to match would double the animal's standing
+  // height. physics.js takes bodyRadius as a round cylinder of the SAME
+  // total height instead, so nothing vertical moves. Kept just inside the
+  // drawn silhouette (1.44 against the body's narrow 1.52) so the animal
+  // never collides wider than it looks.
+  bodyRadius: 0.72,
+  bodyRound: 0.12,
 
   /* ---- scuttle ---- */
   walkSpeed: 13.5,
@@ -165,7 +181,13 @@ const T = {
   camLeadMax: 3.4,
   camFovSpeed: 15,
   camRecenter: 1.4,
-  camMinDist: 1.5,
+  // How close the lens may sit to whatever the collision ray found, and how
+  // close it may come to the pivot when a surface forces it in. Neither is
+  // allowed to push it past the surface - see the clamp in updateCamera.
+  camWallPad: 0.35,
+  camNearFloor: 0.28,
+  // Clearance kept above a liquid surface the animal is not swimming in.
+  camWaterLift: 0.4,
 
   /* ---- scoring ---- */
   comboWindow: 3.4,
@@ -257,6 +279,8 @@ function createCharacterAdapter(ctx, position) {
       const handle = ctx.physics.createCharacter({
         radius: T.radius,
         halfHeight: T.halfHeight,
+        bodyRadius: T.bodyRadius,
+        bodyRound: T.bodyRound,
         offset: T.skin,
         position: [position.x, position.y + FOOT_OFFSET, position.z],
       });
@@ -1580,6 +1604,31 @@ export async function createPlayer(ctx) {
       if (climbDir.lengthSq() > 1e-6) climbDir.normalize();
     }
 
+    /* --- foliage is the thing it is MEANT to climb: arm on contact --- */
+    // A blade is 1.16 across and stands within a few degrees of vertical, so
+    // the controller slides around one almost as readily as it walks past.
+    // It never builds the sustained deflection the generic wall test wants,
+    // and 46% of runs into dense grass climbed nothing at all. Keying off
+    // the foliage RECORD is specific enough not to bring back the
+    // hopping-on-open-ground that the deflection threshold exists to stop,
+    // since only grass, stems and leaves carry that kind.
+    if (!curled && controllable && throttle > 0.05 && moved.collisions) {
+      for (const c of moved.collisions) {
+        const rec = c && c.record;
+        if (!rec || rec.kind !== "foliage") continue;
+        const n = c.normal || c.normal2 || c.normal1;
+        if (!n) continue;
+        // A face, not a floor - standing on a leaf must not arm a climb.
+        if (Math.abs(n.y) > 0.6) continue;
+        // normal2 points out of the obstacle, so pushing into it is negative.
+        if (wish.x * n.x + wish.z * n.z > -0.15) continue;
+        climbTimer = T.climbLatch;
+        climbDir.set(wish.x, 0, wish.z);
+        if (climbDir.lengthSq() > 1e-6) climbDir.normalize();
+        break;
+      }
+    }
+
     /* --- sustain the climb between contacts --- */
     // The latch carries the animal for climbLatch seconds after each touch,
     // and any further contact refreshes it, so an intermittent series of
@@ -1897,7 +1946,16 @@ export async function createPlayer(ctx) {
       tmpA.multiplyScalar(1 / goalDist);
       const hit = castRay(camPivot, tmpA, goalDist + 0.45);
       if (hit.hit && hit.distance < goalDist) {
-        camGoal.copy(camPivot).addScaledVector(tmpA, Math.max(T.camMinDist, hit.distance - 0.4));
+        // Never put the lens PAST what the ray found. The old floor did
+        // exactly that: Math.max(camMinDist, ...) with camMinDist 1.5 means
+        // any surface closer than 1.5 units behind the pivot placed the
+        // camera a unit INSIDE it. Pressed against a big object that fills
+        // the screen with its interior, which is the reported "the
+        // tardigrade is inside the object". A camera tucked in close reads
+        // as a shoulder cam; a camera inside a wall reads as a bug.
+        let safe = hit.distance - T.camWallPad;
+        if (safe < T.camNearFloor) safe = Math.min(T.camNearFloor, hit.distance * 0.9);
+        camGoal.copy(camPivot).addScaledVector(tmpA, Math.min(goalDist, Math.max(0.05, safe)));
       }
     }
 
@@ -1912,6 +1970,37 @@ export async function createPlayer(ctx) {
     camPos.x = smoothDamp(camPos.x, camGoal.x, camVel, "x", smooth, dt);
     camPos.y = smoothDamp(camPos.y, camGoal.y, camVel, "y", smooth * 1.15, dt);
     camPos.z = smoothDamp(camPos.z, camGoal.z, camVel, "z", smooth, dt);
+
+    /* --- the smoothed position has to obey the collision too --- */
+    // The clamp above fixes the GOAL, but camPos springs toward it over
+    // camSmooth seconds, so on any quick approach the lens travels through
+    // the surface on its way to a legal spot - and sits there for as long as
+    // the spring takes. The goal decides where to aim; this decides what is
+    // actually legal to occupy.
+    tmpB.copy(camPos).sub(camPivot);
+    const posDist = tmpB.length();
+    if (posDist > 1e-4) {
+      tmpB.multiplyScalar(1 / posDist);
+      const posHit = castRay(camPivot, tmpB, posDist);
+      if (posHit.hit && posHit.distance < posDist) {
+        const safe = Math.max(0.05, Math.min(posHit.distance - T.camWallPad, posHit.distance * 0.9));
+        camPos.copy(camPivot).addScaledVector(tmpB, safe);
+      }
+    }
+
+    /* --- do not let the lens sink into a liquid the animal is not in --- */
+    // The spill and the puddle are DRAWN but have no collider, so the ray
+    // above goes straight through them and the camera settles under the
+    // surface - the shot becomes a flat wall of colour with a bright band
+    // where the meniscus is. Measured as the largest remaining occluder of
+    // the hero. When the animal really is under, the camera should be under
+    // with it, so this only lifts the lens while the hero is not submerged.
+    if (submersion < 0.35 && ctx.world && typeof ctx.world.waterAt === "function") {
+      const level = ctx.world.waterAt(camPos.x, camPos.z);
+      if (level !== null && level !== undefined && camPos.y < level + T.camWaterLift) {
+        camPos.y = level + T.camWaterLift;
+      }
+    }
 
     camLook.x = smoothDamp(camLook.x, camPivot.x, lookVel, "x", T.camLookSmooth, dt);
     camLook.y = smoothDamp(camLook.y, camPivot.y, lookVel, "y", T.camLookSmooth, dt);

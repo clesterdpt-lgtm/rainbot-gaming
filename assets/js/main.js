@@ -129,6 +129,7 @@ const RB_GAME_META = {
       "skibidi_toilet_tower_defense_rooftop",
     ],
   },
+  blacksand: { title: "BLACKSAND", scoreIds: ["blacksand"] },
   "smooth-brain-snacker": { title: "Smooth Brain Snacker", scoreIds: ["smoothbrain"] },
   "storm-area-51": { title: "Storm Area 51: Raid The Base", scoreIds: ["storm-area-51"] },
   "strait-of-hormuz": { title: "Escape the Straight", scoreIds: ["hormuz"] },
@@ -188,6 +189,7 @@ const RB_GAME_VISUALS = {
   "rizz-craft": { image: "assets/img/mockup/card-rizz-craft.jpg?v=20260712-jpg", kind: "Sandbox" },
   "scrap-circuit": { image: "assets/img/scrap-circuit/card-scrap-circuit.png?v=20260703-scrap-cover-1", kind: "Retro Car Combat" },
   "skibidi-toilet-tower-defense": { image: "assets/img/mockup/card-skibidi-toilet-tower-defense.jpg?v=20260712-jpg", kind: "Defense" },
+  blacksand: { image: "assets/img/blacksand/card-blacksand.jpg?v=20260803-1", kind: "Multiplayer FPS", alt: "BLACKSAND cover art: a desert Conquest theatre with armour on a highway and a low sun" },
   "smooth-brain-snacker": { image: "assets/img/mockup/card-smooth-brain-snacker.jpg?v=20260712-jpg", kind: "Arcade" },
   "storm-area-51": { image: "assets/img/storm-area-51/card-storm-area-51.jpg?v=20260712-jpg", kind: "Crowd Heist" },
   "strait-of-hormuz": { image: "assets/img/mockup/card-escape-straight-wide.png?v=20260611-7", kind: "Action" },
@@ -576,10 +578,7 @@ function renderNav(state = RB.state) {
     isAgentGamesRoute ||
     isAfterDarkRoute
   );
-  const localProfile = RB && typeof RB.getLocalProfile === "function" ? RB.getLocalProfile() : {};
-  const localName = cleanVisibleGameTitle(localProfile.displayName || "");
-  const localProfileLabel = localName && localName !== "Rainbot Player" ? localName : "Profile";
-  const authLabel = backendState.user ? escapeHtml(getBackendDisplayName(backendState)) : escapeHtml(localProfileLabel);
+  const authLabel = backendState.user ? escapeHtml(getBackendDisplayName(backendState)) : "Log in";
 
   const navLinksMarkup = `
       <a href="${RB_BASE}" class="${isHome ? "is-active" : ""}">Home</a>
@@ -1153,7 +1152,10 @@ const RBGameActivity = (() => {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
       return {
-        favorites: Array.isArray(saved?.favorites) ? saved.favorites : [],
+        favorites: Array.from(new Set(
+          (Array.isArray(saved?.favorites) ? saved.favorites : [])
+            .filter((slug) => typeof slug === "string" && slug.trim())
+        )),
         games: saved?.games && typeof saved.games === "object" ? saved.games : {},
       };
     } catch (error) {
@@ -1204,6 +1206,7 @@ const RBGameActivity = (() => {
   };
 
   const isFavorite = (slug) => read().favorites.includes(slug);
+  const favoriteSlugs = () => read().favorites.slice();
   const toggleFavorite = (slug) => {
     const activity = read();
     const favorites = new Set(activity.favorites);
@@ -1211,11 +1214,15 @@ const RBGameActivity = (() => {
     else favorites.add(slug);
     activity.favorites = Array.from(favorites);
     write(activity);
-    return favorites.has(slug);
+    const isNowFavorite = favorites.has(slug);
+    window.dispatchEvent(new CustomEvent("rainbot:favoriteschange", {
+      detail: { slug, isFavorite: isNowFavorite },
+    }));
+    return isNowFavorite;
   };
   const secondsFor = (slug) => Math.max(0, Number(read().games[slug]?.seconds) || 0);
 
-  return { init, isFavorite, toggleFavorite, secondsFor };
+  return { init, isFavorite, favoriteSlugs, toggleFavorite, secondsFor, storageKey: STORAGE_KEY };
 })();
 
 function formatGamePlayTime(seconds) {
@@ -1236,6 +1243,9 @@ function initGamesCatalog() {
   const sortSelect = catalog.querySelector("[data-games-sort]");
   const searchInput = catalog.querySelector("[data-games-search]");
   const resetButton = catalog.querySelector("[data-games-reset]");
+  const favoritesButton = catalog.querySelector("[data-games-favorites]");
+  const favoritesCountEl = catalog.querySelector("[data-games-favorites-count]");
+  const favoritesIconEl = catalog.querySelector("[data-games-favorites-icon]");
   const modeButtons = Array.from(catalog.querySelectorAll("[data-games-section-filter]"));
   const countEl = catalog.querySelector("[data-games-count]");
   const totalEl = document.querySelector("[data-games-total]");
@@ -1439,41 +1449,59 @@ function initGamesCatalog() {
       multiplayerBadge.textContent = "Multiplayer";
       badges.append(multiplayerBadge);
     }
-    if (body && !body.querySelector(".directory-card__activity")) {
-      const activity = document.createElement("span");
+    let activity = body?.querySelector(".directory-card__activity");
+    if (body && !activity) {
+      activity = document.createElement("span");
       activity.className = "directory-card__activity";
-      const favorite = document.createElement("span");
-      favorite.className = "directory-card__favorite";
-      favorite.setAttribute("role", "button");
-      favorite.setAttribute("tabindex", "0");
-      const syncFavorite = (isFavorite = RBGameActivity.isFavorite(slug)) => {
-        favorite.classList.toggle("is-favorite", isFavorite);
-        favorite.setAttribute("aria-pressed", String(isFavorite));
-        favorite.setAttribute("aria-label", `${isFavorite ? "Remove" : "Add"} ${title} ${isFavorite ? "from" : "to"} favorites`);
-        favorite.textContent = isFavorite ? "♥ Favorite" : "♡ Favorite";
-      };
-      const toggleFavorite = (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        syncFavorite(RBGameActivity.toggleFavorite(slug));
-      };
-      favorite.addEventListener("click", toggleFavorite);
-      favorite.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") toggleFavorite(event);
-      });
-      syncFavorite();
+      body.append(activity);
+    }
+    activity?.querySelector(".directory-card__favorite")?.remove();
+    if (activity && !activity.querySelector(".directory-card__playtime")) {
       const playTime = document.createElement("span");
       playTime.className = "directory-card__playtime";
       playTime.textContent = `◷ ${formatGamePlayTime(RBGameActivity.secondsFor(slug))}`;
-      activity.append(favorite, playTime);
-      body.append(activity);
+      activity.append(playTime);
     }
+
+    const sectionKey = card.dataset.gameSection || card.closest("[data-games-section]")?.dataset.gamesSection || sectionForCard(card);
+    let cardShell = card.parentElement?.classList.contains("directory-card-shell") ? card.parentElement : null;
+    if (!cardShell) {
+      cardShell = document.createElement("article");
+      cardShell.className = "directory-card-shell";
+      card.parentNode?.insertBefore(cardShell, card);
+      cardShell.append(card);
+    }
+    let favoriteButton = cardShell.querySelector(":scope > .directory-card__favorite");
+    if (!favoriteButton) {
+      favoriteButton = document.createElement("button");
+      favoriteButton.type = "button";
+      favoriteButton.className = "directory-card__favorite";
+      favoriteButton.innerHTML = '<span aria-hidden="true">♡</span>';
+      cardShell.append(favoriteButton);
+      favoriteButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        RBGameActivity.toggleFavorite(slug);
+      });
+    }
+    const syncFavorite = (isFavorite = RBGameActivity.isFavorite(slug)) => {
+      favoriteButton.classList.toggle("is-favorite", isFavorite);
+      favoriteButton.setAttribute("aria-pressed", String(isFavorite));
+      favoriteButton.setAttribute("aria-label", `${isFavorite ? "Remove" : "Add"} ${title} ${isFavorite ? "from" : "to"} favorites`);
+      favoriteButton.title = `${isFavorite ? "Remove from" : "Add to"} favorites`;
+      const icon = favoriteButton.querySelector("span");
+      if (icon) icon.textContent = isFavorite ? "♥" : "♡";
+    };
+    syncFavorite();
 
     return {
       card,
+      node: cardShell,
+      slug,
+      syncFavorite,
       order,
       title: title || `Game ${order + 1}`,
-      sectionKey: card.dataset.gameSection || card.closest("[data-games-section]")?.dataset.gamesSection || sectionForCard(card),
+      sectionKey,
       filterTags,
       category,
       categoryKey: categoryKey(category),
@@ -1504,6 +1532,7 @@ function initGamesCatalog() {
     category: "all",
     sort: "featured",
     search: normalize(new URLSearchParams(location.search).get("q") || ""),
+    favoritesOnly: false,
   };
   if (searchInput) searchInput.value = state.search;
 
@@ -1515,8 +1544,25 @@ function initGamesCatalog() {
     });
   };
 
-  const sortCards = () => {
+  const syncFavoritesControl = (favoriteSet) => {
+    if (favoritesCountEl) favoritesCountEl.textContent = String(favoriteSet.size);
+    if (favoritesIconEl) favoritesIconEl.textContent = state.favoritesOnly ? "♥" : "♡";
+    if (favoritesButton) {
+      favoritesButton.classList.toggle("is-active", state.favoritesOnly);
+      favoritesButton.setAttribute("aria-pressed", String(state.favoritesOnly));
+      favoritesButton.setAttribute(
+        "aria-label",
+        `${state.favoritesOnly ? "Show all games" : "Show favorite games"}. ${favoriteSet.size} saved.`
+      );
+    }
+  };
+
+  const sortCards = (favoriteSet) => {
     const sorted = cards.slice().sort((a, b) => {
+      if (state.sort === "favorites") {
+        const favoriteDifference = Number(favoriteSet.has(b.slug)) - Number(favoriteSet.has(a.slug));
+        return favoriteDifference || (a.order - b.order);
+      }
       if (state.sort === "new") {
         return (b.newRank - a.newRank) || (a.order - b.order);
       }
@@ -1534,14 +1580,15 @@ function initGamesCatalog() {
 
     sorted.forEach((item) => {
       const sectionGrid = sectionGrids.get(item.sectionKey) || grid;
-      sectionGrid.append(item.card);
+      sectionGrid.append(item.node);
     });
   };
 
   const applyFilters = () => {
     state.category = categorySelect.value;
     state.sort = sortSelect.value;
-    sortCards();
+    const favoriteSet = new Set(RBGameActivity.favoriteSlugs());
+    sortCards(favoriteSet);
 
     let visible = 0;
     const sectionVisible = new Map(sectionEls.map((section) => [section.key, 0]));
@@ -1553,8 +1600,10 @@ function initGamesCatalog() {
         || (state.section === "after-dark" && item.filterTags.has("after-dark"));
       const categoryMatch = state.category === "all" || item.categoryKey === state.category;
       const searchMatch = !state.search || item.searchText.includes(state.search);
-      const show = sectionMatch && categoryMatch && searchMatch;
-      item.card.toggleAttribute("hidden", !show);
+      const favoriteMatch = !state.favoritesOnly || favoriteSet.has(item.slug);
+      const show = sectionMatch && categoryMatch && searchMatch && favoriteMatch;
+      item.node.toggleAttribute("hidden", !show);
+      item.syncFavorite(favoriteSet.has(item.slug));
       if (show) {
         visible += 1;
         sectionVisible.set(item.sectionKey, (sectionVisible.get(item.sectionKey) || 0) + 1);
@@ -1568,11 +1617,21 @@ function initGamesCatalog() {
     });
 
     if (countEl) {
-      countEl.textContent = visible === cards.length
+      countEl.textContent = state.favoritesOnly
+        ? `${visible} favorite ${visible === 1 ? "game" : "games"}`
+        : visible === cards.length
         ? `${cards.length} games online`
         : `${visible} of ${cards.length} games`;
     }
-    if (emptyEl) emptyEl.hidden = visible !== 0;
+    if (emptyEl) {
+      emptyEl.hidden = visible !== 0;
+      emptyEl.textContent = state.favoritesOnly && favoriteSet.size === 0
+        ? "No favorites yet. Tap a heart on any game to save it here."
+        : state.favoritesOnly
+          ? "No favorite games match those filters."
+          : "No games match those filters.";
+    }
+    syncFavoritesControl(favoriteSet);
     syncModeButtons();
   };
 
@@ -1591,6 +1650,7 @@ function initGamesCatalog() {
     },
     reset() {
       state.section = "all";
+      state.favoritesOnly = false;
       categorySelect.value = "all";
       sortSelect.value = "featured";
       state.search = "";
@@ -1622,6 +1682,14 @@ function initGamesCatalog() {
     applyFilters();
   });
   if (resetButton) resetButton.addEventListener("click", () => window.RBGamesCatalog.reset());
+  if (favoritesButton) favoritesButton.addEventListener("click", () => {
+    state.favoritesOnly = !state.favoritesOnly;
+    applyFilters();
+  });
+  window.addEventListener("rainbot:favoriteschange", applyFilters);
+  window.addEventListener("storage", (event) => {
+    if (event.key === RBGameActivity.storageKey) applyFilters();
+  });
 
   applyFilters();
 }
@@ -1668,129 +1736,159 @@ function setModalStatus(root, message, kind = "") {
   status.dataset.kind = kind;
 }
 
-function openAuthModal() {
-  if (document.getElementById("rb-auth-modal")) return;
+function openAuthModal(initialMode = "login") {
+  const existingModal = document.getElementById("rb-auth-modal");
+  if (existingModal) {
+    existingModal.querySelector("input:not([type='hidden']), button")?.focus();
+    return;
+  }
   const backendState = getBackendState();
-  const localProfile = getLocalProfileSnapshot();
-  const localProfileName = cleanVisibleGameTitle(localProfile.displayName || "");
-  const signupNameValue = localProfileName && localProfileName !== "Rainbot Player" ? localProfileName : "";
+  const returnFocus = document.activeElement;
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop modal-backdrop--open";
   backdrop.id = "rb-auth-modal";
   const setupBody = `
-    <div class="modal__body">
-      Rainbot accounts are staged, but Supabase is not connected yet. Add your project URL and anon key in <code>assets/js/supabase-config.js</code>, then run the SQL in <code>supabase/migrations</code>.
-    </div>
-    <div class="modal__actions">
-      <button class="btn btn--secondary" id="rb-close-auth">Got it</button>
+    <div class="rb-auth-unavailable">
+      <strong>Account login is temporarily unavailable.</strong>
+      <span>You can still play every Rainbot game while we reconnect cloud accounts.</span>
     </div>
   `;
   const loginBody = `
-    <div class="rb-auth-tabs" role="tablist" aria-label="Login method">
-      <button class="rb-auth-tab is-active" type="button" role="tab" aria-selected="true" data-auth-mode="password">Password</button>
-      <button class="rb-auth-tab" type="button" role="tab" aria-selected="false" data-auth-mode="magic">Magic Link</button>
+    <div class="rb-auth-heading">
+      <span class="rb-auth-kicker">Player account</span>
+      <h2 data-auth-heading>Welcome back</h2>
+      <p data-auth-copy>Log in to sync your saves, scores, and community profile.</p>
     </div>
-    <form class="rb-auth-form rb-auth-panel" id="rb-password-auth-form" data-auth-panel="password">
-      <label class="rb-form-field" for="rb-signup-display-name">
-        <span>Player Name</span>
-        <input id="rb-signup-display-name" type="text" autocomplete="nickname" maxlength="32" placeholder="Rainbot Player" value="${escapeHtml(signupNameValue)}" />
+    <div class="rb-auth-tabs" role="tablist" aria-label="Account options">
+      <button class="rb-auth-tab is-active" id="rb-auth-login-tab" type="button" role="tab" aria-selected="true" aria-controls="rb-login-form" data-auth-mode="login">Log in</button>
+      <button class="rb-auth-tab" id="rb-auth-create-tab" type="button" role="tab" aria-selected="false" aria-controls="rb-create-form" data-auth-mode="create">Create account</button>
+    </div>
+    <form class="rb-auth-form rb-auth-panel" id="rb-login-form" role="tabpanel" aria-labelledby="rb-auth-login-tab" data-auth-panel="login">
+      <label class="rb-form-field" for="rb-login-identifier">
+        <span>Username</span>
+        <input id="rb-login-identifier" type="text" autocomplete="username" inputmode="email" placeholder="you@example.com" required />
+        <small>Use the email connected to your Rainbot username.</small>
       </label>
-      <label class="rb-form-field" for="rb-password-email">
-        <span>Email</span>
-        <input id="rb-password-email" type="email" autocomplete="email" placeholder="you@example.com" required />
+      <label class="rb-form-field" for="rb-login-password">
+        <span class="rb-auth-password-label"><span>Password</span><button id="rb-reset-password" type="button">Forgot password?</button></span>
+        <input id="rb-login-password" type="password" autocomplete="current-password" minlength="8" placeholder="Enter your password" required />
       </label>
-      <label class="rb-form-field" for="rb-auth-password">
-        <span>Password</span>
-        <input id="rb-auth-password" type="password" autocomplete="current-password" minlength="8" required />
-      </label>
-      <div class="rb-auth-actions">
-        <button class="btn btn--primary" type="submit">Sign In</button>
-        <button class="btn btn--secondary" id="rb-create-account" type="button">Create Account</button>
-        <button class="btn btn--ghost" id="rb-reset-password" type="button">Reset Password</button>
-      </div>
+      <button class="btn btn--primary rb-auth-submit" type="submit">Log in</button>
     </form>
-    <form class="rb-auth-form rb-auth-panel" id="rb-magic-auth-form" data-auth-panel="magic" hidden>
-      <label class="rb-form-field" for="rb-magic-email">
-        <span>Email</span>
-        <input id="rb-magic-email" type="email" autocomplete="email" placeholder="you@example.com" required />
+    <form class="rb-auth-form rb-auth-panel" id="rb-create-form" role="tabpanel" aria-labelledby="rb-auth-create-tab" data-auth-panel="create" hidden>
+      <label class="rb-form-field" for="rb-create-username">
+        <span>Username</span>
+        <input id="rb-create-username" type="text" autocomplete="nickname" minlength="2" maxlength="32" placeholder="Choose a player name" required />
       </label>
-      <button class="btn btn--primary" type="submit">Send Magic Link</button>
+      <label class="rb-form-field" for="rb-create-email">
+        <span>Email</span>
+        <input id="rb-create-email" type="email" autocomplete="email" placeholder="you@example.com" required />
+      </label>
+      <label class="rb-form-field" for="rb-create-password">
+        <span>Password</span>
+        <input id="rb-create-password" type="password" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required />
+      </label>
+      <button class="btn btn--primary rb-auth-submit" type="submit">Create account</button>
     </form>
     <div class="rb-auth-divider"><span>or</span></div>
-    <button class="btn btn--secondary rb-google-button" id="rb-google-auth" type="button">Continue with Google</button>
-    <p class="modal__body rb-modal-note">Use the same login later for cloud saves, high scores, profile, forum posts, and comments.</p>
-    <div class="modal__actions">
-      <button class="btn btn--ghost" id="rb-close-auth" type="button">Close</button>
-    </div>
+    <button class="rb-google-button" id="rb-google-auth" type="button">
+      <img src="${RB_BASE}assets/img/google-g.svg" alt="" width="20" height="20" />
+      <span>Sign in with Google</span>
+    </button>
+    <p class="rb-modal-note">One account keeps your cloud saves, high scores, profile, and community activity together.</p>
   `;
   backdrop.innerHTML = `
-    <div class="modal rb-account-modal" role="dialog" aria-modal="true" aria-labelledby="rb-auth-title">
-      <div class="modal__title" id="rb-auth-title">Rainbot Account</div>
+    <div class="modal rb-account-modal rb-auth-modal" role="dialog" aria-modal="true" aria-labelledby="rb-auth-title">
+      <div class="rb-auth-topbar">
+        <div class="rb-auth-brand">
+          <span aria-hidden="true">RB</span>
+          <strong id="rb-auth-title">Rainbot Account</strong>
+        </div>
+        <button class="rb-auth-close" id="rb-close-auth" type="button" aria-label="Close account window">&times;</button>
+      </div>
       ${backendState.configured ? loginBody : setupBody}
-      <p class="rb-modal-status" data-modal-status></p>
+      <p class="rb-modal-status" data-modal-status aria-live="polite"></p>
     </div>
   `;
   document.body.appendChild(backdrop);
-  const close = () => backdrop.remove();
+  const close = () => {
+    backdrop.remove();
+    if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
+  };
   backdrop.querySelector("#rb-close-auth").addEventListener("click", close);
   backdrop.addEventListener("click", (event) => {
     if (event.target === backdrop) close();
   });
+  backdrop.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    close();
+  });
 
-  const passwordForm = backdrop.querySelector("#rb-password-auth-form");
-  const magicForm = backdrop.querySelector("#rb-magic-auth-form");
+  const loginForm = backdrop.querySelector("#rb-login-form");
+  const createForm = backdrop.querySelector("#rb-create-form");
   const googleButton = backdrop.querySelector("#rb-google-auth");
-  if (passwordForm && magicForm) {
-    const signupDisplayName = passwordForm.querySelector("#rb-signup-display-name");
-    const passwordEmail = passwordForm.querySelector("#rb-password-email");
-    const passwordInput = passwordForm.querySelector("#rb-auth-password");
-    const magicEmail = magicForm.querySelector("#rb-magic-email");
+  if (loginForm && createForm) {
+    const loginIdentifier = loginForm.querySelector("#rb-login-identifier");
+    const loginPassword = loginForm.querySelector("#rb-login-password");
+    const createUsername = createForm.querySelector("#rb-create-username");
+    const createEmail = createForm.querySelector("#rb-create-email");
+    const createPassword = createForm.querySelector("#rb-create-password");
+    const heading = backdrop.querySelector("[data-auth-heading]");
+    const copy = backdrop.querySelector("[data-auth-copy]");
     const setMode = (mode) => {
-      const usePassword = mode === "password";
-      passwordForm.hidden = !usePassword;
-      magicForm.hidden = usePassword;
+      const useLogin = mode !== "create";
+      loginForm.hidden = !useLogin;
+      createForm.hidden = useLogin;
+      heading.textContent = useLogin ? "Welcome back" : "Create your player account";
+      copy.textContent = useLogin
+        ? "Log in to sync your saves, scores, and community profile."
+        : "Choose a username and keep your Rainbot progress on every device.";
       backdrop.querySelectorAll("[data-auth-mode]").forEach((button) => {
-        const isActive = button.dataset.authMode === mode;
+        const isActive = button.dataset.authMode === (useLogin ? "login" : "create");
         button.classList.toggle("is-active", isActive);
         button.setAttribute("aria-selected", isActive ? "true" : "false");
+        button.tabIndex = isActive ? 0 : -1;
       });
       setModalStatus(backdrop, "", "");
-      (usePassword ? passwordEmail : magicEmail).focus();
+      (useLogin ? loginIdentifier : createUsername).focus();
     };
     backdrop.querySelectorAll("[data-auth-mode]").forEach((button) => {
       button.addEventListener("click", () => setMode(button.dataset.authMode));
     });
-    passwordEmail.focus();
-    passwordForm.addEventListener("submit", async (event) => {
+    setMode(initialMode);
+    loginForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const button = passwordForm.querySelector("button[type='submit']");
+      const button = loginForm.querySelector("button[type='submit']");
       button.disabled = true;
-      setModalStatus(backdrop, "Signing in...", "");
+      setModalStatus(backdrop, "Logging in...", "");
       try {
-        await window.RBBackend.signInWithPassword(passwordEmail.value, passwordInput.value);
-        setModalStatus(backdrop, "Signed in.", "good");
-        RB.toast("Signed in", "good");
+        await window.RBBackend.signInWithPassword(loginIdentifier.value, loginPassword.value);
+        setModalStatus(backdrop, "Logged in.", "good");
+        RB.toast("Logged in", "good");
         close();
       } catch (error) {
-        setModalStatus(backdrop, error.message || "Sign-in failed.", "bad");
+        setModalStatus(backdrop, error.message || "Login failed.", "bad");
       } finally {
         button.disabled = false;
       }
     });
-    backdrop.querySelector("#rb-create-account").addEventListener("click", async () => {
-      const button = backdrop.querySelector("#rb-create-account");
-      const displayName = signupDisplayName.value.trim();
-      if (displayName.length < 2) {
-        setModalStatus(backdrop, "Enter a player name before creating an account.", "bad");
-        signupDisplayName.focus();
-        return;
-      }
+    createForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = createForm.querySelector("button[type='submit']");
       button.disabled = true;
       setModalStatus(backdrop, "Creating account...", "");
       try {
-        await window.RBBackend.signUpWithPassword(passwordEmail.value, passwordInput.value, { display_name: displayName });
-        setModalStatus(backdrop, "Account created. Check your email if confirmation is required.", "good");
+        const result = await window.RBBackend.signUpWithPassword(createEmail.value, createPassword.value, {
+          display_name: createUsername.value,
+        });
+        setModalStatus(
+          backdrop,
+          result && result.session ? "Account created. You're logged in." : "Account created. Check your email to confirm it, then log in.",
+          "good"
+        );
         RB.toast("Account created", "good");
+        if (result && result.session) close();
       } catch (error) {
         setModalStatus(backdrop, error.message || "Account creation failed.", "bad");
       } finally {
@@ -1802,26 +1900,11 @@ function openAuthModal() {
       button.disabled = true;
       setModalStatus(backdrop, "Sending reset email...", "");
       try {
-        await window.RBBackend.requestPasswordReset(passwordEmail.value);
+        await window.RBBackend.requestPasswordReset(loginIdentifier.value);
         setModalStatus(backdrop, "Check your email for the password reset link.", "good");
         RB.toast("Reset email sent", "good");
       } catch (error) {
         setModalStatus(backdrop, error.message || "Reset failed.", "bad");
-      } finally {
-        button.disabled = false;
-      }
-    });
-    magicForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const button = magicForm.querySelector("button[type='submit']");
-      button.disabled = true;
-      setModalStatus(backdrop, "Sending sign-in link...", "");
-      try {
-        await window.RBBackend.signInWithMagicLink(magicEmail.value);
-        setModalStatus(backdrop, "Check your email for the Rainbot sign-in link.", "good");
-        RB.toast("Magic link sent", "good");
-      } catch (error) {
-        setModalStatus(backdrop, error.message || "Sign-in failed.", "bad");
       } finally {
         button.disabled = false;
       }
@@ -2670,6 +2753,7 @@ function homeAchievementsMarkup() {
   const entries = achievementEntries();
   const unlocked = entries.filter((entry) => entry.unlocked).length;
   const levelInfo = playerLevelInfo();
+  const signedIn = Boolean(getBackendState().user);
   return `
     <div class="home-achievements-card">
       <div class="home-level-card">
@@ -2689,7 +2773,7 @@ function homeAchievementsMarkup() {
           <small>Profile Progress</small>
           <strong>${formatStatNumber(unlocked)}/${formatStatNumber(entries.length)} unlocked</strong>
         </span>
-        <button type="button" data-home-profile>Profile</button>
+        <button type="button" data-home-profile>${signedIn ? "Profile" : "Log in"}</button>
       </div>
       <div class="home-achievement-grid">
         ${entries.slice(0, 6).map((entry) => `
@@ -2974,7 +3058,7 @@ function renderHomeProgressPanel() {
   const achievementRoot = root.querySelector("[data-home-achievements-content]");
   const profileButton = root.querySelector(".arcade-panel__header [data-home-profile]");
   const signedIn = Boolean(getBackendState().user);
-  if (profileButton) profileButton.textContent = signedIn ? "Achievements" : "Sign in";
+  if (profileButton) profileButton.textContent = signedIn ? "Achievements" : "Log in";
   if (challengeRoot) challengeRoot.innerHTML = homeDailyChallengeMarkup();
   if (achievementRoot) achievementRoot.innerHTML = homeAchievementsMarkup();
 }
@@ -3003,7 +3087,7 @@ function renderHomeRecentPanel() {
   const signedIn = Boolean(backendState.user);
   const entries = recentHomeGameEntries(3);
   root.classList.toggle("is-empty", entries.length === 0);
-  if (profileButton) profileButton.textContent = signedIn ? "Profile" : "Sign in";
+  if (profileButton) profileButton.textContent = signedIn ? "Profile" : "Log in";
 
   if (entries.length) {
     content.innerHTML = `<div class="home-recent-grid">${entries.map(homeRecentCardMarkup).join("")}</div>`;
@@ -3012,7 +3096,7 @@ function renderHomeRecentPanel() {
 
   const emptyKicker = signedIn
     ? `Welcome back, ${getBackendDisplayName(backendState)}`
-    : "Sign in to sync";
+    : "Log in to sync";
   content.innerHTML = `
     <div class="home-recent-empty">
       <span>
@@ -3021,7 +3105,7 @@ function renderHomeRecentPanel() {
         <em>Start a run and it will land here.</em>
       </span>
       <a href="${RB_BASE}games.html">Browse games</a>
-      <button type="button" data-home-profile>${signedIn ? "Profile" : "Sign in"}</button>
+      <button type="button" data-home-profile>${signedIn ? "Profile" : "Log in"}</button>
     </div>
   `;
 }
@@ -3041,22 +3125,22 @@ function initHomeRecentPanel() {
 
 function openProfileModal() {
   const backendState = getBackendState();
+  if (!backendState.user) {
+    openAuthModal();
+    return;
+  }
   if (document.getElementById("rb-profile-modal")) return;
-  const signedIn = Boolean(backendState.user);
-  const localProfile = getLocalProfileSnapshot();
-  const profile = signedIn ? (backendState.profile || {}) : localProfile;
-  const displayName = signedIn ? getBackendDisplayName(backendState) : (localProfile.displayName || "Rainbot Player");
-  const email = signedIn ? (backendState.user.email || "") : "Saved on this device";
-  const role = signedIn
-    ? profile.is_bot ? profileBotLabel(profile) : profile.role === "admin" ? "Admin" : profile.role === "moderator" ? "Moderator" : "Player"
-    : "Local Player";
+  const profile = backendState.profile || {};
+  const displayName = getBackendDisplayName(backendState);
+  const email = backendState.user.email || "";
+  const role = profile.is_bot ? profileBotLabel(profile) : profile.role === "admin" ? "Admin" : profile.role === "moderator" ? "Moderator" : "Player";
   const profileTitle = profileField(profile, "profile_title", "profileTitle", "Arcade Regular");
   const bio = profile.bio || "";
   const favoriteGame = profileField(profile, "favorite_game", "favoriteGame", "");
   const avatarStyle = cleanProfileUiChoice(profileField(profile, "avatar_style", "avatarStyle", "bot"), RB_PROFILE_AVATARS, "bot");
   const accentColor = cleanProfileUiChoice(profileField(profile, "accent_color", "accentColor", "cyan"), RB_PROFILE_ACCENTS, "cyan");
-  const accountState = signedIn ? "Cloud Sync" : "Local Profile";
-  const accountDetail = signedIn ? (email || "Connected") : "Saved on this device";
+  const accountState = "Cloud Sync";
+  const accountDetail = email || "Connected";
   const avatarOptions = RB_PROFILE_AVATARS.map((option) => `
     <label class="rb-avatar-choice">
       <input type="radio" name="avatar_style" value="${option.value}"${option.value === avatarStyle ? " checked" : ""} />
@@ -3141,13 +3225,9 @@ function openProfileModal() {
         </form>
       </div>
       <div class="modal__actions rb-profile-actions">
-        ${
-          signedIn
-            ? `<button class="btn btn--secondary" id="rb-sync-now" type="button">Sync Now</button>
-               <button class="btn btn--ghost" id="rb-change-password" type="button">Change Password</button>
-               <button class="btn btn--ghost" id="rb-sign-out" type="button">Sign Out</button>`
-            : `<button class="btn btn--secondary" id="rb-sign-in-profile" type="button">Sign In to Sync</button>`
-        }
+        <button class="btn btn--secondary" id="rb-sync-now" type="button">Sync Now</button>
+        <button class="btn btn--ghost" id="rb-change-password" type="button">Change Password</button>
+        <button class="btn btn--ghost" id="rb-sign-out" type="button">Sign Out</button>
         <button class="btn btn--ghost" id="rb-close-profile" type="button">Close</button>
       </div>
       <p class="rb-modal-status" data-modal-status></p>
@@ -3198,29 +3278,18 @@ function openProfileModal() {
     event.preventDefault();
     const button = form.querySelector("button[type='submit']");
     button.disabled = true;
-    setModalStatus(backdrop, signedIn ? "Saving profile..." : "Saving local profile...", "");
+    setModalStatus(backdrop, "Saving profile...", "");
     try {
-      if (signedIn) {
-        await window.RBBackend.updateProfile({
-          display_name: displayInput.value,
-          profile_title: titleInput.value,
-          favorite_game: favoriteInput.value,
-          bio: bioInput.value,
-          avatar_style: selectedAvatar(),
-          accent_color: selectedAccent(),
-        });
-      } else if (RB && typeof RB.updateLocalProfile === "function") {
-        RB.updateLocalProfile({
-          displayName: displayInput.value,
-          profileTitle: titleInput.value,
-          favoriteGame: favoriteInput.value,
-          bio: bioInput.value,
-          avatarStyle: selectedAvatar(),
-          accentColor: selectedAccent(),
-        });
-      }
-      setModalStatus(backdrop, signedIn ? "Profile saved." : "Local profile saved.", "good");
-      RB.toast(signedIn ? "Profile saved" : "Local profile saved", "good");
+      await window.RBBackend.updateProfile({
+        display_name: displayInput.value,
+        profile_title: titleInput.value,
+        favorite_game: favoriteInput.value,
+        bio: bioInput.value,
+        avatar_style: selectedAvatar(),
+        accent_color: selectedAccent(),
+      });
+      setModalStatus(backdrop, "Profile saved.", "good");
+      RB.toast("Profile saved", "good");
       renderNav(RB.state);
       updatePreview();
     } catch (error) {
@@ -3247,13 +3316,6 @@ function openProfileModal() {
       } catch (error) {
         setModalStatus(backdrop, error.message || "Sync failed.", "bad");
       }
-    });
-  }
-  const signInButton = backdrop.querySelector("#rb-sign-in-profile");
-  if (signInButton) {
-    signInButton.addEventListener("click", () => {
-      close();
-      openAuthModal();
     });
   }
   const signOutButton = backdrop.querySelector("#rb-sign-out");

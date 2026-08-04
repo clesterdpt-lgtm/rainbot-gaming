@@ -5120,9 +5120,57 @@ body.arcade-home::before {
 }
 
 .games-filterbar select:focus-visible,
+.games-filterbar__favorites:focus-visible,
 .games-filterbar__reset:focus-visible {
   outline: 2px solid var(--arcade-cyan);
   outline-offset: 2px;
+}
+
+.games-filterbar__favorites {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-height: 44px;
+  border: 1px solid rgba(255, 125, 188, 0.52);
+  border-radius: 4px;
+  background: rgba(255, 20, 144, 0.08);
+  color: #ffd5e9;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  padding: 0 12px;
+  text-transform: uppercase;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.games-filterbar__favorites > span {
+  color: #ff7dbc;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.games-filterbar__favorites strong {
+  font-size: 10px;
+  letter-spacing: 0;
+}
+
+.games-filterbar__favorites em {
+  display: grid;
+  min-width: 22px;
+  min-height: 22px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--arcade-white);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.games-filterbar__favorites:hover,
+.games-filterbar__favorites.is-active {
+  border-color: var(--arcade-pink);
+  background: rgba(255, 20, 144, 0.2);
+  box-shadow: 0 0 20px rgba(255, 20, 144, 0.16);
 }
 
 .games-filterbar__reset {
@@ -6504,6 +6552,11 @@ body.arcade-home::before {
   }
 
   .games-filterbar__reset {
+    width: 100%;
+  }
+
+  .games-filterbar__favorites {
+    justify-content: center;
     width: 100%;
   }
 
@@ -8823,74 +8876,293 @@ body.arcade-home::before {
   text-align: left;
 }
 
+.rb-auth-modal {
+  max-height: calc(100dvh - 32px);
+  max-width: 560px;
+  overflow-y: auto;
+  padding: 0;
+  border: 1px solid rgba(35, 223, 242, 0.52);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(35, 223, 242, 0.14), transparent 34%),
+    radial-gradient(circle at 100% 22%, rgba(255, 20, 144, 0.1), transparent 35%),
+    linear-gradient(160deg, #0a101a 0%, #05080f 66%, #080712 100%);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.72), 0 0 42px rgba(35, 223, 242, 0.12);
+}
+
+.rb-auth-topbar {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  padding: 22px 28px 6px;
+}
+
+.rb-auth-brand {
+  align-items: center;
+  display: inline-flex;
+  gap: 11px;
+}
+
+.rb-auth-brand > span {
+  align-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(35, 223, 242, 0.72);
+  border-radius: 10px;
+  background: linear-gradient(145deg, rgba(35, 223, 242, 0.2), rgba(255, 20, 144, 0.16));
+  box-shadow: inset 0 0 16px rgba(35, 223, 242, 0.08);
+  color: var(--arcade-cyan);
+  display: inline-flex;
+  font: 900 10px/1 var(--arcade-font);
+  justify-content: center;
+}
+
+.rb-auth-brand strong {
+  color: var(--arcade-white);
+  font: 900 11px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rb-auth-close {
+  align-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(151, 171, 194, 0.24);
+  border-radius: 50%;
+  background: rgba(5, 8, 15, 0.72);
+  color: #b9c6d4;
+  cursor: pointer;
+  display: inline-flex;
+  font: 400 24px/1 var(--font-body);
+  justify-content: center;
+  padding: 0 0 2px;
+}
+
+.rb-auth-close:hover,
+.rb-auth-close:focus-visible {
+  border-color: var(--arcade-cyan);
+  color: var(--arcade-white);
+  outline: none;
+}
+
+.rb-auth-heading {
+  padding: 20px 32px 0;
+}
+
+.rb-auth-kicker {
+  color: var(--arcade-pink);
+  display: block;
+  font: 900 10px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.rb-auth-heading h2 {
+  color: var(--arcade-white);
+  font: 900 clamp(25px, 5vw, 34px)/1.05 var(--font-body);
+  letter-spacing: -0.035em;
+  margin: 0;
+  text-transform: none;
+}
+
+.rb-auth-heading p {
+  color: #aebdca;
+  font: 500 14px/1.55 var(--font-body);
+  margin: 10px 0 0;
+  max-width: 430px;
+}
+
 .rb-auth-form {
   display: grid;
   gap: 14px;
   margin: 18px 0;
 }
 
+.rb-auth-modal .rb-auth-form {
+  gap: 16px;
+  margin: 20px 32px 0;
+}
+
 .rb-auth-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin: 16px 0 4px;
+  gap: 4px;
+  margin: 22px 32px 0;
   padding: 4px;
-  border: 1px solid rgba(151, 171, 194, 0.22);
-  border-radius: 6px;
-  background: rgba(5, 7, 13, 0.72);
+  border: 1px solid rgba(151, 171, 194, 0.2);
+  border-radius: 12px;
+  background: rgba(2, 5, 10, 0.7);
 }
 
 .rb-auth-tab {
   border: 0;
-  border-radius: 4px;
+  border-radius: 8px;
   background: transparent;
-  color: var(--arcade-muted);
+  color: #8fa1b2;
   cursor: pointer;
-  font: 800 12px/1 var(--font-mono);
-  padding: 10px 8px;
-  text-transform: uppercase;
+  font: 800 13px/1 var(--font-body);
+  padding: 12px 10px;
 }
 
 .rb-auth-tab.is-active {
-  background: rgba(35, 223, 242, 0.14);
-  color: var(--arcade-cyan);
+  background: linear-gradient(180deg, rgba(35, 223, 242, 0.19), rgba(35, 223, 242, 0.09));
+  box-shadow: inset 0 0 0 1px rgba(35, 223, 242, 0.28);
+  color: var(--arcade-white);
+}
+
+.rb-auth-tab:focus-visible {
+  outline: 2px solid var(--arcade-cyan);
+  outline-offset: 2px;
 }
 
 .rb-auth-panel[hidden] {
   display: none;
 }
 
-.rb-auth-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+.rb-auth-modal .rb-form-field {
+  color: #c2ceda;
+  font-size: 10px;
+  gap: 8px;
+  letter-spacing: 0.08em;
 }
 
-.rb-auth-actions .btn:first-child {
-  grid-column: 1 / -1;
+.rb-auth-modal .rb-form-field input {
+  min-height: 50px;
+  border-color: rgba(151, 171, 194, 0.32);
+  border-radius: 10px;
+  background: rgba(2, 5, 10, 0.82);
+  font-size: 15px;
+  padding: 13px 14px;
+}
+
+.rb-auth-modal .rb-form-field input::placeholder {
+  color: #617181;
+}
+
+.rb-auth-modal .rb-form-field small {
+  color: #788999;
+  font: 500 11px/1.4 var(--font-body);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.rb-auth-password-label {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.rb-auth-password-label button {
+  border: 0;
+  background: transparent;
+  color: var(--arcade-cyan);
+  cursor: pointer;
+  font: 700 11px/1 var(--font-body);
+  padding: 2px 0;
+  text-transform: none;
+}
+
+.rb-auth-password-label button:hover,
+.rb-auth-password-label button:focus-visible {
+  color: var(--arcade-white);
+  text-decoration: underline;
+}
+
+.rb-auth-submit {
+  width: 100%;
+  min-height: 50px;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(255, 20, 144, 0.18);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .rb-auth-divider {
   align-items: center;
-  color: var(--arcade-muted);
+  color: #6f8191;
   display: grid;
-  font: 800 11px/1 var(--font-mono);
+  font: 700 11px/1 var(--font-body);
   grid-template-columns: 1fr auto 1fr;
-  gap: 10px;
+  gap: 14px;
   letter-spacing: 0;
-  margin: 12px 0;
-  text-transform: uppercase;
+  margin: 22px 32px;
 }
 
 .rb-auth-divider::before,
 .rb-auth-divider::after {
-  background: rgba(151, 171, 194, 0.24);
+  background: rgba(151, 171, 194, 0.2);
   content: "";
   height: 1px;
 }
 
 .rb-google-button {
-  width: 100%;
+  align-items: center;
+  width: calc(100% - 64px);
+  min-height: 50px;
+  border: 1px solid #d7dce1;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #202124;
+  cursor: pointer;
+  display: flex;
+  font: 700 14px/1 var(--font-body);
+  gap: 12px;
+  justify-content: center;
+  margin: 0 32px;
+  padding: 12px 18px;
+}
+
+.rb-google-button:hover,
+.rb-google-button:focus-visible {
+  background: #f7f9fb;
+  border-color: #ffffff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+  outline: none;
+}
+
+.rb-google-button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.rb-google-button img {
+  flex: 0 0 20px;
+  object-fit: contain;
+}
+
+.rb-auth-modal .rb-modal-note {
+  color: #7f909f;
+  font: 500 12px/1.5 var(--font-body);
+  margin: 16px 32px 0;
+  text-align: center;
+}
+
+.rb-auth-modal .rb-modal-status {
+  margin: 10px 32px 0;
+  min-height: 42px;
+  padding: 0 0 20px;
+}
+
+.rb-auth-unavailable {
+  display: grid;
+  gap: 8px;
+  padding: 42px 32px 48px;
+  text-align: center;
+}
+
+.rb-auth-unavailable strong {
+  color: var(--arcade-white);
+  font: 900 22px/1.2 var(--font-body);
+}
+
+.rb-auth-unavailable span {
+  color: #95a7b7;
+  font: 500 14px/1.5 var(--font-body);
 }
 
 .rb-form-field {
@@ -11073,12 +11345,46 @@ body.arcade-home::before {
     width: 100%;
   }
 
-  .rb-auth-actions {
-    grid-template-columns: 1fr;
+  .rb-auth-modal {
+    max-height: calc(100dvh - 20px);
+    border-radius: 14px;
   }
 
-  .rb-auth-actions .btn:first-child {
-    grid-column: auto;
+  .rb-auth-topbar {
+    padding: 18px 20px 4px;
+  }
+
+  .rb-auth-heading {
+    padding: 16px 20px 0;
+  }
+
+  .rb-auth-heading h2 {
+    font-size: 27px;
+  }
+
+  .rb-auth-tabs,
+  .rb-auth-modal .rb-auth-form {
+    margin-left: 20px;
+    margin-right: 20px;
+  }
+
+  .rb-auth-divider {
+    margin: 20px;
+  }
+
+  .rb-google-button {
+    width: calc(100% - 40px);
+    margin: 0 20px;
+  }
+
+  .rb-auth-modal .rb-modal-note,
+  .rb-auth-modal .rb-modal-status {
+    margin-left: 20px;
+    margin-right: 20px;
+  }
+
+  .rb-auth-unavailable {
+    padding: 36px 20px 42px;
   }
 }
 
@@ -12685,6 +12991,7 @@ body.arcade-home::before {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
   .games-filterbar__field--search,
+  .games-filterbar__favorites,
   .games-filterbar__reset { grid-column: 1 / -1; }
   .directory-card__body { padding: 13px 14px 12px; }
   .directory-card__title { font-size: 18px; }
@@ -12698,6 +13005,13 @@ body.arcade-home::before {
 }
 
 /* Artwork-first game directory: details appear only when a card is explored. */
+.directory-card-shell {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 16 / 9;
+  isolation: isolate;
+}
+
 .directory-card {
   aspect-ratio: 16 / 9;
   display: block;
@@ -12706,6 +13020,8 @@ body.arcade-home::before {
   isolation: isolate;
   transform-origin: center;
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  width: 100%;
+  height: 100%;
 }
 
 .directory-card:hover,
@@ -12826,7 +13142,7 @@ body.arcade-home::before {
 .directory-card__activity {
   position: absolute;
   top: 14px;
-  right: 14px;
+  right: 62px;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -12835,7 +13151,6 @@ body.arcade-home::before {
   transition: opacity 160ms ease, transform 160ms ease;
 }
 
-.directory-card__favorite,
 .directory-card__playtime {
   border: 1px solid rgba(255, 255, 255, 0.24);
   background: rgba(3, 6, 11, 0.92);
@@ -12848,16 +13163,49 @@ body.arcade-home::before {
   white-space: nowrap;
 }
 
-.directory-card__favorite {
+.directory-card-shell > .directory-card__favorite {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 8;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 999px;
+  background: rgba(3, 6, 11, 0.84);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.32);
+  color: #fff;
   cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+  padding: 0;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, transform 140ms ease;
 }
 
-.directory-card__favorite:hover,
-.directory-card__favorite:focus-visible,
-.directory-card__favorite.is-favorite {
+.directory-card-shell > .directory-card__favorite:hover,
+.directory-card-shell > .directory-card__favorite:focus-visible,
+.directory-card-shell > .directory-card__favorite.is-favorite {
   border-color: var(--arcade-pink);
+  background: rgba(39, 5, 24, 0.94);
   color: #ff7dbc;
   outline: none;
+}
+
+.directory-card-shell > .directory-card__favorite:hover {
+  transform: scale(1.08);
+}
+
+.directory-card-shell > .directory-card__favorite:focus-visible {
+  outline: 2px solid var(--arcade-cyan);
+  outline-offset: 2px;
+}
+
+.directory-card-shell > .directory-card__favorite.is-favorite {
+  box-shadow: 0 0 0 1px rgba(255, 20, 144, 0.26), 0 0 24px rgba(255, 20, 144, 0.38);
 }
 
 .directory-card:hover .directory-card__badges,

@@ -226,9 +226,16 @@ export async function start(options) {
   boot.progress(0.96, "Warming up");
 
   /* ---------- resize ---------- */
+  const resizeTarget = ctx.dom.root || canvas.parentElement || canvas;
+  let resizeWidth = 0;
+  let resizeHeight = 0;
   const applyResize = () => {
-    const width = Math.max(1, Math.floor(window.innerWidth));
-    const height = Math.max(1, Math.floor(window.innerHeight));
+    const rect = resizeTarget.getBoundingClientRect();
+    const width = Math.max(1, Math.floor(rect.width || resizeTarget.clientWidth || window.innerWidth));
+    const height = Math.max(1, Math.floor(rect.height || resizeTarget.clientHeight || window.innerHeight));
+    if (width === resizeWidth && height === resizeHeight) return;
+    resizeWidth = width;
+    resizeHeight = height;
     ctx.engine.resize(width, height);
     for (const entry of updatables) {
       if (typeof entry.api.resize === "function") entry.api.resize(width, height);
@@ -237,6 +244,10 @@ export async function start(options) {
   };
   window.addEventListener("resize", applyResize, { passive: true });
   window.addEventListener("orientationchange", () => window.setTimeout(applyResize, 120), { passive: true });
+  if (typeof ResizeObserver === "function") {
+    const resizeObserver = new ResizeObserver(applyResize);
+    resizeObserver.observe(resizeTarget);
+  }
   applyResize();
 
   /* ---------- pre-compile so the first frames do not hitch ---------- */

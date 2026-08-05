@@ -723,7 +723,7 @@
     if (input.lock) toggleTargetLock();
 
     cameraState.yaw -= input.lookX * 0.0017;
-    cameraState.pitch = clamp(cameraState.pitch - input.lookY * 0.00135, 0.05, 0.78);
+    cameraState.pitch = clamp(cameraState.pitch + input.lookY * 0.00135, 0.05, 0.78);
     input.lookX = 0;
     input.lookY = 0;
 

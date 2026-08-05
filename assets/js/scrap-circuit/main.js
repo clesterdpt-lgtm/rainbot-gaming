@@ -423,7 +423,9 @@
   const ps1 = new SCRAP.Ps1Renderer(canvas, { height: 270, dither: 1 });
   if (SCRAP.textures && SCRAP.textures.configureRenderer) SCRAP.textures.configureRenderer(ps1.renderer);
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.2, 420);
+  // Far plane has to clear the sky dome and the skyline ring behind it,
+  // or the dome gets sliced and the flat clear colour shows through.
+  const camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.2, 900);
   const hemi = new THREE.HemisphereLight(0xffffff, 0x333333, 0.8);
   const sun = new THREE.DirectionalLight(0xffffff, 0.8);
   scene.add(hemi, sun);
@@ -516,11 +518,19 @@
     }
   }
   function trailPuff(x, y, z, color, size = 0.45) {
-    burst(x, y, z, color, 1, 1.2, 0.8, { gravity: 0.4, ttl: 0.28, size, drag: 1.8, noFloor: true });
+    // Rocket exhaust: a bright ember plus the smoke it leaves hanging.
+    burst(x, y, z, color, 1, 1.0, 0.6, { gravity: 0.4, ttl: 0.2, size: size * 0.7, drag: 1.8, noFloor: true });
+    spriteFX.puff(x, y, z, size * 2.2, {
+      ttl: 1.1 + Math.random() * 0.7, rise: 0.8, grow: 2.4,
+      alpha: 0.62, spread: 0.5, tint: 0x9e9a92,
+    });
   }
   function muzzleFlash(x, y, z, color, power = 7) {
-    burst(x, y, z, color, 5, power, 3, { gravity: 2, ttl: 0.18, size: 0.55 });
-    burst(x, y, z, 0xfff2c0, 2, power * 0.5, 1.5, { gravity: 1, ttl: 0.12, size: 0.35 });
+    burst(x, y, z, color, 4, power, 3, { gravity: 2, ttl: 0.16, size: 0.42 });
+    spriteFX.flash(x, y, z, 1.5, { ttl: 0.075, tint: color });
+    if (Math.random() < 0.4) {
+      spriteFX.puff(x, y, z, 0.7, { ttl: 0.6, rise: 1.1, grow: 2.4, alpha: 0.5, tint: 0x9a968e });
+    }
   }
   function updateParticles(dt) {
     particlePool.forEach((p) => {
@@ -696,18 +706,55 @@
       lastDamageBy: null,
     };
     // status meshes
-    const iceMat = new THREE.MeshLambertMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.55 });
+    const iceMat = new THREE.MeshLambertMaterial({ color: 0x9fe8ff, transparent: true, opacity: 0.34 });
     if (SCRAP.ps1ify) SCRAP.ps1ify(iceMat);
-    car.fx.ice = new THREE.Mesh(iceGeo, iceMat);
-    car.fx.ice.scale.set(def.stats.radius * 2.2, 4, def.stats.radius * 2.6);
-    car.fx.ice.position.y = 2;
+    /* Frozen-solid look. A scaled translucent cube reads as a packing
+       crate dropped on the car; a cluster of faceted shards reads as
+       ice from every angle and costs about the same. */
+    const iceGroup = new THREE.Group();
+    const r = def.stats.radius;
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), iceMat);
+    core.scale.set(r * 1.25, 1.9, r * 1.5);
+    core.position.y = 1.5;
+    iceGroup.add(core);
+    for (let i = 0; i < 7; i += 1) {
+      const ang = (i / 7) * Math.PI * 2 + 0.4;
+      const shard = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.5 + (i % 3) * 0.6, 5), iceMat);
+      shard.position.set(Math.cos(ang) * r * 0.95, 0.9 + (i % 2) * 0.7, Math.sin(ang) * r * 1.15);
+      shard.rotation.z = Math.cos(ang) * 0.55;
+      shard.rotation.x = -Math.sin(ang) * 0.55;
+      iceGroup.add(shard);
+    }
+    car.fx.ice = iceGroup;
     car.fx.ice.visible = false;
     mesh.add(car.fx.ice);
-    const shieldMat = new THREE.MeshBasicMaterial({ color: 0x63f2c8, transparent: true, opacity: 0.26, side: THREE.DoubleSide });
-    if (SCRAP.ps1ify) SCRAP.ps1ify(shieldMat);
-    car.fx.shield = new THREE.Mesh(new THREE.SphereGeometry(def.stats.radius * 1.9, 10, 8), shieldMat);
+    /* Shield bubble. A 26%-opaque solid sphere reads as a pale grey dome
+       pasted over the screen once the camera is close — it hid the car it
+       was protecting and everything behind it. Additive at low strength
+       brightens instead of washing, and equator bands give it a readable
+       shape without filling the frame. */
+    const shieldMat = new THREE.MeshBasicMaterial({
+      color: 0x3fd8b4, transparent: true, opacity: 0.14,
+      side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const shieldRing = new THREE.MeshBasicMaterial({
+      color: 0x8ffce4, transparent: true, opacity: 0.4,
+      side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const sr = def.stats.radius * 1.9;
+    car.fx.shield = new THREE.Group();
+    const bubble = new THREE.Mesh(new THREE.SphereGeometry(sr, 12, 9), shieldMat);
+    car.fx.shield.add(bubble);
+    [0.0, 0.45, -0.45].forEach((t) => {
+      const r = sr * Math.sqrt(Math.max(0.05, 1 - t * t));
+      const band = new THREE.Mesh(new THREE.TorusGeometry(r, sr * 0.035, 4, 16), shieldRing);
+      band.rotation.x = Math.PI / 2;
+      band.position.y = sr * t;
+      car.fx.shield.add(band);
+    });
     car.fx.shield.position.y = 1.6;
     car.fx.shield.visible = false;
+    car.fx.shield.renderOrder = 9;
     mesh.add(car.fx.shield);
     return car;
   }
@@ -790,6 +837,204 @@
     state.salvage += Math.max(0, Math.round(points));
   }
 
+  /* ============================================================
+     SPRITE FX
+     ------------------------------------------------------------
+     Billboarded sprite animations, which is how a 90s arena
+     brawler blew things up. The previous expanding-sphere-plus-
+     torus reads as a modern shader effect and, at PS1 resolution,
+     mostly as a beige ball.
+
+     Three pools: a frame-walked explosion sheet, soft smoke puffs
+     that rise and swell, and additive flashes for muzzles and
+     impacts. Ground scorches are flat quads with their own pool.
+     ============================================================ */
+  const spriteFX = (() => {
+    const PROC = SCRAP.proc;
+    const boomSheet = PROC ? PROC.sheet("explosion", { cols: 4, rows: 4, cell: 96 }) : null;
+    const smokeTex = PROC ? PROC.fxTex("smoke", { size: 96 }) : null;
+    const flashTex = PROC ? PROC.fxTex("flash", { size: 96 }) : null;
+    const scorchTex = PROC ? PROC.fxTex("scorch", { size: 96 }) : null;
+    const group = new THREE.Group();
+    group.renderOrder = 8;
+    scene.add(group);
+
+    const booms = [];
+    const puffs = [];
+    const flashes = [];
+    const scorches = [];
+    const BOOM_MAX = 22;
+    const PUFF_MAX = 70;
+    const FLASH_MAX = 26;
+    const SCORCH_MAX = 26;
+
+    function makeSprite(map, blending) {
+      const mat = new THREE.SpriteMaterial({
+        map, transparent: true, depthWrite: false,
+        blending: blending || THREE.NormalBlending, fog: true,
+      });
+      const s = new THREE.Sprite(mat);
+      s.visible = false;
+      group.add(s);
+      return s;
+    }
+
+    function explode(x, y, z, scale = 6, opts = {}) {
+      if (!boomSheet) return;
+      let b = booms.find((q) => !q.alive);
+      if (!b) {
+        if (booms.length >= BOOM_MAX) { b = booms[0]; }
+        else {
+          // Each sprite walks its own offset, so it needs its own texture
+          // view. Cloning shares the image and only copies the transform.
+          const tex = boomSheet.texture.clone();
+          tex.needsUpdate = true;
+          tex.repeat.set(1 / boomSheet.cols, 1 / boomSheet.rows);
+          b = { sprite: makeSprite(tex, THREE.NormalBlending), tex, alive: false };
+          booms.push(b);
+        }
+      }
+      b.alive = true;
+      b.t = 0;
+      b.dur = opts.duration || 0.62;
+      b.scale = scale;
+      b.spin = (Math.random() - 0.5) * 1.2;
+      b.sprite.visible = true;
+      b.sprite.position.set(x, y, z);
+      b.sprite.material.color.setHex(opts.tint == null ? 0xffffff : opts.tint);
+      b.sprite.material.rotation = Math.random() * Math.PI * 2;
+      b.sprite.scale.setScalar(scale * 0.5);
+    }
+
+    function puff(x, y, z, scale = 2, opts = {}) {
+      if (!smokeTex) return;
+      let p = puffs.find((q) => !q.alive);
+      if (!p) {
+        if (puffs.length >= PUFF_MAX) return;
+        p = { sprite: makeSprite(smokeTex), alive: false };
+        puffs.push(p);
+      }
+      p.alive = true;
+      p.t = -(opts.delay || 0);
+      p.dur = opts.ttl || 1.5;
+      p.scale = scale;
+      p.grow = opts.grow == null ? 2.1 : opts.grow;
+      p.rise = opts.rise == null ? 1.6 : opts.rise;
+      p.drift = [(Math.random() - 0.5) * (opts.spread || 1.2), (Math.random() - 0.5) * (opts.spread || 1.2)];
+      p.alpha = opts.alpha == null ? 0.72 : opts.alpha;
+      p.spin = (Math.random() - 0.5) * 1.4;
+      p.sprite.visible = true;
+      p.sprite.position.set(x, y, z);
+      p.sprite.material.color.setHex(opts.tint == null ? 0x8a8880 : opts.tint);
+      p.sprite.material.rotation = Math.random() * Math.PI * 2;
+      p.sprite.scale.setScalar(scale);
+    }
+
+    function flash(x, y, z, scale = 1.4, opts = {}) {
+      if (!flashTex) return;
+      let f = flashes.find((q) => !q.alive);
+      if (!f) {
+        if (flashes.length >= FLASH_MAX) return;
+        f = { sprite: makeSprite(flashTex, THREE.AdditiveBlending), alive: false };
+        flashes.push(f);
+      }
+      f.alive = true;
+      f.t = 0;
+      f.dur = opts.ttl || 0.11;
+      f.scale = scale;
+      f.sprite.visible = true;
+      f.sprite.position.set(x, y, z);
+      f.sprite.material.color.setHex(opts.tint == null ? 0xffe6a0 : opts.tint);
+      f.sprite.material.rotation = Math.random() * Math.PI * 2;
+      f.sprite.scale.setScalar(scale);
+    }
+
+    function scorch(x, y, z, radius = 3) {
+      if (!scorchTex) return;
+      let s = scorches.find((q) => !q.alive);
+      if (!s) {
+        if (scorches.length >= SCORCH_MAX) { s = scorches.shift(); scorches.push(s); }
+        else {
+          const mat = new THREE.MeshBasicMaterial({
+            map: scorchTex, transparent: true, depthWrite: false, opacity: 0.85, fog: true,
+          });
+          const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+          m.rotation.x = -Math.PI / 2;
+          m.renderOrder = 6;
+          m.visible = false;
+          group.add(m);
+          s = { mesh: m, alive: false };
+          scorches.push(s);
+        }
+      }
+      s.alive = true;
+      s.t = 0;
+      s.dur = 14;
+      s.mesh.visible = true;
+      s.mesh.position.set(x, y + 0.05, z);
+      s.mesh.rotation.z = Math.random() * Math.PI;
+      s.mesh.scale.set(radius * 2, radius * 2, 1);
+      s.mesh.material.opacity = 0.85;
+    }
+
+    function update(dt) {
+      booms.forEach((b) => {
+        if (!b.alive) return;
+        b.t += dt;
+        const k = b.t / b.dur;
+        if (k >= 1) { b.alive = false; b.sprite.visible = false; return; }
+        const frame = Math.min(boomSheet.frames - 1, Math.floor(k * boomSheet.frames));
+        b.tex.offset.set(
+          (frame % boomSheet.cols) / boomSheet.cols,
+          1 - 1 / boomSheet.rows - Math.floor(frame / boomSheet.cols) / boomSheet.rows
+        );
+        // Fast punch out, then a slow swell — the shape of a real blast.
+        const s = b.scale * (0.42 + Math.pow(k, 0.45) * 0.62);
+        b.sprite.scale.setScalar(s);
+        b.sprite.material.rotation += b.spin * dt;
+        b.sprite.material.opacity = k > 0.7 ? 1 - (k - 0.7) / 0.3 : 1;
+      });
+      puffs.forEach((p) => {
+        if (!p.alive) return;
+        p.t += dt;
+        if (p.t < 0) { p.sprite.visible = false; return; }
+        p.sprite.visible = true;
+        const k = p.t / p.dur;
+        if (k >= 1) { p.alive = false; p.sprite.visible = false; return; }
+        p.sprite.position.y += p.rise * dt;
+        p.sprite.position.x += p.drift[0] * dt;
+        p.sprite.position.z += p.drift[1] * dt;
+        p.sprite.scale.setScalar(p.scale * (1 + k * p.grow));
+        p.sprite.material.rotation += p.spin * dt;
+        p.sprite.material.opacity = p.alpha * (k < 0.18 ? k / 0.18 : 1 - (k - 0.18) / 0.82);
+      });
+      flashes.forEach((f) => {
+        if (!f.alive) return;
+        f.t += dt;
+        const k = f.t / f.dur;
+        if (k >= 1) { f.alive = false; f.sprite.visible = false; return; }
+        f.sprite.scale.setScalar(f.scale * (0.7 + k * 0.9));
+        f.sprite.material.opacity = 1 - k;
+      });
+      scorches.forEach((s) => {
+        if (!s.alive) return;
+        s.t += dt;
+        if (s.t >= s.dur) { s.alive = false; s.mesh.visible = false; return; }
+        const k = s.t / s.dur;
+        s.mesh.material.opacity = 0.85 * (k > 0.6 ? 1 - (k - 0.6) / 0.4 : 1);
+      });
+    }
+
+    function clear() {
+      booms.forEach((b) => { b.alive = false; b.sprite.visible = false; });
+      puffs.forEach((p) => { p.alive = false; p.sprite.visible = false; });
+      flashes.forEach((f) => { f.alive = false; f.sprite.visible = false; });
+      scorches.forEach((s) => { s.alive = false; s.mesh.visible = false; });
+    }
+
+    return { explode, puff, flash, scorch, update, clear, group };
+  })();
+
   // ---------- explosions ----------
   const boomMat = new THREE.MeshBasicMaterial({ color: 0xffc23b, transparent: true, opacity: 0.85 });
   if (SCRAP.ps1ify) SCRAP.ps1ify(boomMat);
@@ -797,6 +1042,40 @@
   const boomRingGeo = new THREE.TorusGeometry(1, 0.12, 5, 16);
   const boomPool = [];
   function boomVisual(x, y, z, r, color = 0xffc23b) {
+    /* Sprite fireball first — it is the effect. The old expanding shell
+       stays underneath as a coloured core so freeze/ricochet/remote keep
+       their palette read, but at a fraction of its former size. */
+    spriteFX.explode(x, y + r * 0.18, z, r * 1.9, {
+      tint: color === 0xff8a2e ? 0xffffff : color,
+      duration: 0.5 + Math.min(0.35, r * 0.03),
+    });
+    // Smoke outlives the flame by a couple of seconds — a blast that
+    // vanishes cleanly is the tell that it was one sprite and no plume.
+    const puffs = Math.min(9, 3 + Math.round(r * 0.55));
+    for (let i = 0; i < puffs; i += 1) {
+      spriteFX.puff(
+        x + (Math.random() - 0.5) * r * 0.7,
+        y + r * 0.12 + Math.random() * r * 0.35,
+        z + (Math.random() - 0.5) * r * 0.7,
+        r * (0.26 + Math.random() * 0.22),
+        {
+          ttl: 1.9 + Math.random() * 1.6,
+          rise: 1.5 + Math.random() * 1.6,
+          grow: 1.5,
+          // The first couple are sooty, close to the fire; later ones
+          // are the lighter smoke that drifts up off it.
+          tint: i < 2 ? 0x453f39 : 0x77726a,
+          alpha: 0.5 + Math.random() * 0.18,
+          spread: 1.5,
+          delay: i * 0.055 + Math.random() * 0.06,
+        }
+      );
+    }
+    spriteFX.flash(x, y + r * 0.2, z, r * 1.5, { ttl: 0.14, tint: 0xfff0c0 });
+    if (r > 3.5) {
+      const gy = sampleGround(x, z, y + 2);
+      if (Math.abs(gy - y) < 4) spriteFX.scorch(x, gy, z, r * 0.55);
+    }
     let b = boomPool.find((q) => !q.alive);
     if (!b) {
       const shell = new THREE.Mesh(boomGeo, boomMat.clone());
@@ -816,20 +1095,22 @@
     b.mesh.position.set(x, y, z);
     b.shell.material.color.setHex(color);
     b.ring.material.color.setHex(color);
-    b.shell.material.opacity = 0.85;
-    b.ring.material.opacity = 0.7;
+    b.shell.material.opacity = 0.5;
+    b.ring.material.opacity = 0.85;
   }
   function updateBooms(dt) {
     boomPool.forEach((b) => {
       if (!b.alive) return;
       b.t += dt * 3.4;
       if (b.t >= 1) { b.alive = false; b.mesh.visible = false; return; }
-      const s = 0.3 + b.t * b.r;
+      // The shell is now just a hot core inside the sprite fireball, so it
+      // stays small; the shock ring outruns it and does the reading.
+      const s = (0.25 + b.t * b.r) * 0.42;
       b.shell.scale.set(s, s, s);
-      const rs = s * 1.15;
-      b.ring.scale.set(rs, rs, rs);
-      b.shell.material.opacity = 0.85 * (1 - b.t);
-      b.ring.material.opacity = 0.7 * (1 - b.t);
+      const rs = (0.3 + b.t * b.r) * 1.5;
+      b.ring.scale.set(rs, rs * 0.6, rs);
+      b.shell.material.opacity = 0.5 * (1 - b.t);
+      b.ring.material.opacity = 0.85 * (1 - b.t) * (1 - b.t);
     });
   }
 
@@ -885,7 +1166,10 @@
   const PK_WHITE = 0xf4f8ff, PK_DARK = 0x14141c, PK_METAL = 0x6a7080, PK_GOLD = 0xffd23b;
   // Bold silhouette-first pad models: type-colored halo, light pillar, unique body.
   // Oversized for PS1 480x270 — small detail dies in the dither/fog; big shapes survive.
-  const PICKUP_SCALE = 1.65;
+  /* Pickups used to stand ~5 m tall — taller than the cars and taller
+     than a garage. Now the icon sits about chest-high on a car, which is
+     where a 90s arena brawler puts it: findable, not scenery-blocking. */
+  const PICKUP_SCALE = 0.78;
   function makePickupModel(type) {
     const g = new THREE.Group();
     const col = PICKUP_COLORS[type] || PK_GOLD;
@@ -1044,7 +1328,7 @@
   function buildPickupMesh(p) {
     if (p.mesh) scene.remove(p.mesh);
     p.mesh = makePickupModel(p.type);
-    p.mesh.position.set(p.x, p.gy + 1.85, p.z);
+    p.mesh.position.set(p.x, p.gy + 1.05, p.z);
     scene.add(p.mesh);
   }
   function setupPickups() {
@@ -1140,7 +1424,21 @@
   }
 
   // ---------- projectiles / mines / fire ----------
-  const projGeo = new THREE.BoxGeometry(0.22, 0.22, 1.35);
+  /* Tracer body. Short and dull, a bullet at 90 m/s reads as a white
+     stick tumbling through the air; long, hot and additive, it reads as
+     gunfire — which is the whole point of a machine gun you never run
+     out of. */
+  const projGeo = new THREE.BoxGeometry(0.17, 0.17, 3.0);
+  let tracerMat = null;
+  function tracerMaterial() {
+    if (!tracerMat) {
+      tracerMat = new THREE.MeshBasicMaterial({
+        color: 0xfff0b4, transparent: true, opacity: 0.95,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+    }
+    return tracerMat;
+  }
   const junkGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
   const PROJ_TRAIL = {
     tracer: { color: 0xffe08a, every: 0.05, size: 0.3 },
@@ -1160,11 +1458,20 @@
     const dark = pickupMat(PK_DARK);
     const white = pickupMat(PK_WHITE);
     if (kind === "tracer") {
-      const core = new THREE.Mesh(projGeo, bodyMat);
+      const core = new THREE.Mesh(projGeo, tracerMaterial());
+      core.renderOrder = 7;
       g.add(core);
-      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.35, 5), white);
+      // A softer, wider sheath so the streak has a halo at PS1 resolution.
+      const glow = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 2.1), tracerMaterial());
+      glow.material = new THREE.MeshBasicMaterial({
+        color: 0xffb43c, transparent: true, opacity: 0.4,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      });
+      glow.renderOrder = 7;
+      g.add(glow);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.4, 5), white);
       tip.rotation.x = Math.PI / 2;
-      tip.position.z = 0.75;
+      tip.position.z = 1.6;
       g.add(tip);
     } else if (kind === "missile" || kind === "surge") {
       // rocket along +Z (lookAt aligns -Z forward in three... mesh.lookAt handles orientation)
@@ -1980,6 +2287,53 @@
     }
     car.fx.ice.visible = car.frozen > 0;
     car.fx.shield.visible = car.shield > 0;
+
+    /* Damage state you can read across the arena. Below half health the
+       chassis trails grey smoke; below a quarter it is black and shot
+       through with flame. Knowing who is nearly dead without squinting
+       at a health bar is half of what makes the format work. */
+    const hpFrac = car.hp / car.maxHp;
+    if (hpFrac < 0.55) {
+      car.smokeTick = (car.smokeTick || 0) - dt;
+      if (car.smokeTick <= 0) {
+        const bad = hpFrac < 0.25;
+        car.smokeTick = bad ? 0.08 : 0.2;
+        const f2 = forward(car);
+        spriteFX.puff(
+          car.x - f2.x * 1.2 + (Math.random() - 0.5) * 0.7,
+          car.y + 1.5,
+          car.z - f2.z * 1.2 + (Math.random() - 0.5) * 0.7,
+          bad ? 1.5 : 1.0,
+          {
+            ttl: bad ? 1.5 : 1.1, rise: 2.4, grow: 2.2, spread: 0.9,
+            tint: bad ? 0x2e2b28 : 0x8c8880, alpha: bad ? 0.72 : 0.42,
+          }
+        );
+        if (bad && Math.random() < 0.55) {
+          spriteFX.flash(car.x - f2.x * 1.0, car.y + 1.5, car.z - f2.z * 1.0, 1.0, { ttl: 0.12, tint: 0xff8a30 });
+        }
+      }
+    }
+    // Tyre smoke while the handbrake is down and the car is on the deck.
+    if (car.drift && car.y <= sampleGround(car.x, car.z, car.y) + 0.2) {
+      const sp = Math.hypot(car.vx, car.vz);
+      if (sp > 9) {
+        car.tyreTick = (car.tyreTick || 0) - dt;
+        if (car.tyreTick <= 0) {
+          car.tyreTick = 0.055;
+          const f3 = forward(car);
+          [-1, 1].forEach((side) => {
+            spriteFX.puff(
+              car.x - f3.x * 1.5 + f3.z * side * 0.9,
+              car.y + 0.35,
+              car.z - f3.z * 1.5 - f3.x * side * 0.9,
+              0.7,
+              { ttl: 0.75, rise: 0.55, grow: 3.0, spread: 1.0, tint: 0xb8b2a8, alpha: 0.36 }
+            );
+          });
+        }
+      }
+    }
     if (car.gunCooldown > 0) car.gunCooldown -= dt;
     if (car.fireCooldown > 0) car.fireCooldown -= dt;
     car.special = Math.min(100, car.special + (car.specialRate || SPECIAL_RATE) * dt);
@@ -2404,12 +2758,16 @@
 
   // ---------- camera ----------
   const camPos = new THREE.Vector3();
+  let qaFreeCam = false;   // QA harness parks the camera; chase cam stands down
   function updateCamera(dt, snap = false) {
+    if (qaFreeCam) return;
     const car = state.player;
     if (!car) return;
     const back = state.lookBack ? -1 : 1;
     const f = forward(car);
-    const dist = 10.5, height = 4.6;
+    // Framing: far enough back that the road ahead and the horizon both
+    // fit, which is what a 90s arena brawler's chase cam gives you.
+    const dist = 12.4, height = 5.3;
     const tx = car.x - f.x * dist * back;
     const tz = car.z - f.z * dist * back;
     const ty = car.y + height;
@@ -2427,8 +2785,61 @@
       sx = (Math.random() - 0.5) * state.shake * 0.7;
       sy = (Math.random() - 0.5) * state.shake * 0.5;
     }
-    camera.position.set(camPos.x + sx, cy + sy, camPos.z + sx);
-    camera.lookAt(car.x + f.x * 5 * back, car.y + 1.6, car.z + f.z * 5 * back);
+    /* Keep the camera out of the scenery. Without this the chase cam
+       reverses straight into a wall whenever the car does, and the frame
+       becomes a flat slab of masonry with a bumper at the bottom — the
+       one shot that lost a blind comparison against the reference. Walk
+       the segment from the car out to the desired eye and stop at the
+       first collider it crosses. */
+    let ex = camPos.x + sx;
+    let ez = camPos.z + sx;
+    let pulledIn = 1;
+    if (arena) {
+      const ox = car.x;
+      const oz = car.z;
+      const dx = ex - ox;
+      const dz = ez - oz;
+      const len = Math.hypot(dx, dz);
+      if (len > 0.5) {
+        const steps = Math.max(4, Math.ceil(len / 0.7));
+        const eyeY = cy + sy;
+        let hit = 1;
+        for (let i = 1; i <= steps; i += 1) {
+          const t = i / steps;
+          const px = ox + dx * t;
+          const pz = oz + dz * t;
+          let blocked = false;
+          for (let c = 0; c < arena.colliders.length; c += 1) {
+            const col = arena.colliders[c];
+            if (eyeY < col.base - 0.4 || eyeY > col.top + 0.4) continue;
+            if (Math.abs(px - col.x) < col.hw + 0.6 && Math.abs(pz - col.z) < col.hd + 0.6) {
+              blocked = true;
+              break;
+            }
+          }
+          if (blocked) { hit = Math.max(0.22, (i - 1) / steps); break; }
+        }
+        if (hit < 1) {
+          ex = ox + dx * hit;
+          ez = oz + dz * hit;
+          pulledIn = hit;
+        }
+      }
+    }
+    /* Pulling the camera in is only half the fix. Flush against a wall it
+       still frames a flat slab of masonry with a bumper at the bottom, and
+       the player cannot see what is about to hit them. So the closer the
+       camera is forced, the higher it climbs and the further down it
+       looks — trading the blocked view for a steeper one over the top. */
+    const closeUp = 1 - pulledIn;
+    const eyeY = cy + sy + closeUp * (height * 1.5 + 2.0);
+    const aimDrop = closeUp * 3.4;
+    camera.position.set(ex, eyeY, ez);
+    camera.lookAt(
+      car.x + f.x * 7 * back,
+      car.y + 2.1 - aimDrop,
+      car.z + f.z * 7 * back
+    );
   }
 
   // ---------- input ----------
@@ -2537,9 +2948,21 @@
     hold("touch-drift", () => { touchMove.drift = true; }, () => { touchMove.drift = false; });
   }
 
+  /* QA harnesses drive the player through this instead of the keyboard;
+     assigning to car.throttle directly is useless because this function
+     overwrites it at the top of every simulation step. */
+  let qaInput = null;
   function readPlayerInput() {
     const car = state.player;
     if (!car || car.wrecked) return;
+    if (qaInput) {
+      car.throttle = Math.max(-1, Math.min(1, qaInput.throttle || 0));
+      car.steer = Math.max(-1, Math.min(1, qaInput.steer || 0));
+      car.drift = !!qaInput.drift;
+      car.wantFire = !!qaInput.fire;
+      if (qaInput.special) car.wantSpecial = true;
+      return;
+    }
     let throttle = 0, steer = 0;
     if (keys.KeyW || keys.ArrowUp) throttle += 1;
     if (keys.KeyS || keys.ArrowDown) throttle -= 1;
@@ -2950,6 +3373,7 @@
     state.firePatches = [];
     state.smokes = [];
     state.pickups = [];
+    spriteFX.clear();
     arena = null;
   }
 
@@ -2980,6 +3404,7 @@
     music.startForRound(arenaId, roundIndex);
     arena = SCRAP.arenas.build(arenaId);
     scene.add(arena.group);
+    ps1.sky = arena.skyDome || null;
     scene.background = new THREE.Color(arena.sky);
     scene.fog = new THREE.Fog(arena.fog.color, arena.fog.near, arena.fog.far);
     ps1.renderer.setClearColor(arena.sky, 1);
@@ -3672,6 +4097,7 @@
     updateSmokes(dt);
     updateParticles(dt);
     updateBooms(dt);
+    spriteFX.update(dt);
     updateFreezeFx(dt);
     // remote bomb blink / idle spin
     state.cars.forEach((car) => {
@@ -4018,6 +4444,166 @@
       if (car.burning > 0 && Math.random() < dt * 2) burst(car.x, car.y + 1.6, car.z, 0xff8a2e, 3, 3, 5);
     },
   };
+
+  // ---------- QA capture hooks ----------
+  /* `?qa=1` exposes a free camera and a synchronous frame grab so the
+     screenshot harness can pose the camera anywhere in an arena and read
+     the drawing buffer directly. Reading the buffer beats page.screenshot()
+     because headless Chromium throttles compositing to ~1fps, which yields
+     byte-identical captures of a stale surface. */
+  if (PARAMS.get("qa") === "1") {
+    const qa = {
+      get ready() { return true; },
+      get state() { return state; },
+      get arena() { return arena; },
+      get scene() { return scene; },
+      get camera() { return camera; },
+      sampleGround,
+      begin(arenaId, vehicleId) {
+        if (vehicleId) {
+          const i = SCRAP.vehicles.list.findIndex((v) => v.id === vehicleId);
+          if (i >= 0) state.vehicleIndex = i;
+        }
+        if (arenaId) state.arenaId = arenaId;
+        startMatch();
+        state.phase = "running";
+        state.countdownT = 0;
+        if (el.countdown) el.countdown.hidden = true;
+        return { arena: arena.name, bounds: arena.bounds };
+      },
+      hideHUD(hide = true) {
+        document.querySelectorAll(".scrap-hud, .scrap-touch, .scrap-bark, .scrap-countdown")
+          .forEach((n) => { n.style.visibility = hide ? "hidden" : ""; });
+        const wrap = el.wrap;
+        if (wrap) wrap.classList.toggle("qa-clean", hide);
+      },
+      freeCam(on = true) { qaFreeCam = !!on; },
+      /* Park the camera. `at` is the eye, `look` the target, both world space. */
+      pose(at, look, fov) {
+        qaFreeCam = true;
+        camera.position.set(at[0], at[1], at[2]);
+        camera.lookAt(look[0], look[1], look[2]);
+        if (fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+        return this.render();
+      },
+      chase() { qaFreeCam = false; updateCamera(0, true); return this.render(); },
+      render() { ps1.render(scene, camera); return true; },
+      /* Deterministic sim advance — rAF may be throttled or paused. */
+      step(seconds = 1, dt = 1 / 60) {
+        const n = Math.max(1, Math.round(seconds / dt));
+        state.phase = "running";
+        for (let i = 0; i < n; i += 1) { state.time += dt; advanceSim(dt); }
+        return state.time;
+      },
+      /* Move the player car somewhere (for staged action shots). */
+      placePlayer(x, z, heading = 0) {
+        const p = state.player;
+        if (!p) return null;
+        p.x = x; p.z = z; p.heading = heading;
+        p.y = sampleGround(x, z, 100);
+        p.vx = 0; p.vz = 0;
+        p.mesh.position.set(p.x, p.y, p.z);
+        p.mesh.rotation.set(0, p.heading, 0);
+        return { x: p.x, y: p.y, z: p.z };
+      },
+      /* Park a specific car for staged shots (index 0 is the player). */
+      placeCar(i, x, z, heading = 0) {
+        const c = state.cars[i];
+        if (!c) return null;
+        c.x = x; c.z = z; c.heading = heading;
+        c.y = sampleGround(x, z, 100);
+        c.vx = 0; c.vz = 0;
+        c.mesh.position.set(c.x, c.y, c.z);
+        c.mesh.rotation.set(0, c.heading, 0);
+        return { id: c.def.id, x: c.x, y: c.y, z: c.z };
+      },
+      capture() {
+        ps1.render(scene, camera);
+        return canvas.toDataURL("image/png");
+      },
+      /* Vehicle turntable: isolate one chassis on a neutral stage. */
+      vehicleStage(vehicleId) {
+        const def = SCRAP.vehicles.list.find((v) => v.id === vehicleId);
+        if (!def) return null;
+        const stage = new THREE.Scene();
+        stage.background = new THREE.Color(0x1a1c24);
+        const h = new THREE.HemisphereLight(0xcfe0ff, 0x30281f, 0.9);
+        const s = new THREE.DirectionalLight(0xfff2dc, 1.0);
+        s.position.set(7, 11, 6);
+        stage.add(h, s);
+        const grid = new THREE.Mesh(
+          new THREE.PlaneGeometry(40, 40),
+          new THREE.MeshLambertMaterial({ color: 0x2c303c })
+        );
+        grid.rotation.x = -Math.PI / 2;
+        stage.add(grid);
+        const body = def.build();
+        stage.add(body);
+        qa._stage = { stage, body, def };
+        return { id: def.id, name: def.name };
+      },
+      stagePose(at, look, fov = 38) {
+        if (!qa._stage) return false;
+        const cam = new THREE.PerspectiveCamera(fov, ps1.width / ps1.height, 0.1, 200);
+        cam.position.set(at[0], at[1], at[2]);
+        cam.lookAt(look[0], look[1], look[2]);
+        ps1.render(qa._stage.stage, cam);
+        return canvas.toDataURL("image/png");
+      },
+      /* Drive the player. Pass null to hand control back to the keyboard. */
+      input(cmd) { qaInput = cmd; return true; },
+      /* Park every bot far off the playfield. Drivability and ramp checks
+         are otherwise non-deterministic: a bot ramming the car mid-climb
+         reads exactly like a ramp that cannot be driven. */
+      clearBots() {
+        let n = 0;
+        state.cars.forEach((c) => {
+          if (c.isPlayer) return;
+          c.x = 9000 + n * 40;
+          c.z = 9000;
+          c.vx = 0; c.vz = 0;
+          c.wrecked = true;
+          c.mesh.visible = false;
+          n += 1;
+        });
+        return n;
+      },
+      /* Fire an effect on demand so the VFX harness can stop time at a
+         chosen frame of an explosion instead of hoping to catch one. */
+      fx(kind, x, y, z, scale) {
+        if (kind === "boom") boom(x, y, z, scale || 7, 0, null);
+        else if (kind === "explode") spriteFX.explode(x, y, z, scale || 8);
+        else if (kind === "puff") spriteFX.puff(x, y, z, scale || 3, { ttl: 3 });
+        else if (kind === "flash") spriteFX.flash(x, y, z, scale || 2, { ttl: 3 });
+        else if (kind === "muzzle") muzzleFlash(x, y, z, 0xffd06a, 7);
+        else if (kind === "trail") trailPuff(x, y, z, 0xffa040, 0.5);
+        return true;
+      },
+      /* Advance only the effect pools — no physics, no AI. */
+      fxStep(seconds, dt = 1 / 60) {
+        const n = Math.max(1, Math.round(seconds / dt));
+        for (let i = 0; i < n; i += 1) {
+          updateParticles(dt);
+          updateBooms(dt);
+          spriteFX.update(dt);
+        }
+        return true;
+      },
+      stats() {
+        let meshes = 0, tris = 0;
+        scene.traverse((o) => {
+          if (o.isMesh && o.geometry) {
+            meshes += 1;
+            const g = o.geometry;
+            const count = g.index ? g.index.count : (g.attributes.position ? g.attributes.position.count : 0);
+            tris += count / 3;
+          }
+        });
+        return { meshes, tris: Math.round(tris), drawCalls: ps1.renderer.info.render.calls };
+      },
+    };
+    window.__scrapQA = qa;
+  }
 
   // ---------- debug hooks ----------
   if (DEBUG) {

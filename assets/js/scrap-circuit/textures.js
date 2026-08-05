@@ -21,7 +21,7 @@
   "use strict";
   const SCRAP = (window.SCRAP = window.SCRAP || {});
 
-  const TEXTURE_ASSET_VERSION = "20260704-texture-stability-1";
+  const TEXTURE_ASSET_VERSION = "20260805-visual-overhaul-1";
   const MANIFEST_URL = "../assets/textures/scrap-circuit/manifest.json";
   const TEXTURE_BASE_URL = "../assets/textures/scrap-circuit/";
   const registry = new Map(); // logical key -> [materials]

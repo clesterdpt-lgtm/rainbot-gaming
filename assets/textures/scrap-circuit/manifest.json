@@ -3,7 +3,6 @@
   "textures": {
     "vehicle.shared.tire": "vehicle/shared_tire.png",
     "vehicle.shared.hub": "vehicle/shared_hub.png",
-    "vehicle.shared.glass": "vehicle/shared_glass.png",
     "vehicle.shared.glass_dark": "vehicle/shared_glass_dark.png",
     "vehicle.shared.chrome": "vehicle/shared_chrome.png",
     "vehicle.shared.dark": "vehicle/shared_dark.png",
@@ -29,14 +28,12 @@
     "vehicle.bus.body": "vehicle/bus_body.png",
     "vehicle.bus.stripe": "vehicle/bus_stripe.png",
     "vehicle.bus.sign": "vehicle/bus_sign.png",
-    "vehicle.rideshare.body": "vehicle/rideshare_body.png",
     "vehicle.rideshare.star": "vehicle/rideshare_star.png",
     "vehicle.rv.body": "vehicle/rv_body.png",
     "vehicle.rv.stripe": "vehicle/rv_stripe.png",
     "vehicle.rv.chair": "vehicle/rv_chair.png",
     "vehicle.towtruck.body": "vehicle/towtruck_body.png",
     "vehicle.towtruck.boom": "vehicle/towtruck_boom.png",
-    "vehicle.garbage.body": "vehicle/garbage_body.png",
     "vehicle.garbage.hopper": "vehicle/garbage_hopper.png",
     "vehicle.garbage.junk": "vehicle/garbage_junk.png",
     "arena.suburb.road": "arena/suburb_road.png",
@@ -82,5 +79,10 @@
     "prop.crate": "prop/crate.png",
     "ui.hud.frame": "ui/hud_frame.png"
   },
-  "planned": {}
+  "planned": {},
+  "retired": {
+    "vehicle.shared.glass": "vehicle/shared_glass.png",
+    "vehicle.rideshare.body": "vehicle/rideshare_body.png",
+    "vehicle.garbage.body": "vehicle/garbage_body.png"
+  }
 }

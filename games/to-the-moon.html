@@ -2,12 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>TO THE MOON — Mine memecoins. Survive the bears. Moon.</title>
+  <link rel="manifest" href="../site.webmanifest" />
+  <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/to-the-moon.html" />
+  <meta property="og:title" content="TO THE MOON — Mine memecoins. Survive the bears. Moon." />
+  <meta property="og:description" content="A crypto-mining survival game. Drill the blockchain for memecoins during the bull market, defend your rocket from a virus swarm in the bear market, and build enough to launch to the moon. A Motherload x tower-defense roguelite." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/to-the-moon.html" />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="TO THE MOON — Mine memecoins. Survive the bears. Moon." />
+  <meta name="twitter:description" content="A crypto-mining survival game. Drill the blockchain for memecoins during the bull market, defend your rocket from a virus swarm in the bear market, and build enough to launch to the moon. A Motherload x tower-defense roguelite." />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
 <meta name="description" content="A crypto-mining survival game. Drill the blockchain for memecoins during the bull market, defend your rocket from a virus swarm in the bear market, and build enough to launch to the moon. A Motherload x tower-defense roguelite." />
 <meta name="theme-color" content="#05060f" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305060f'/%3E%3Ccircle cx='58' cy='40' r='22' fill='%23e9c24a'/%3E%3Ccircle cx='50' cy='34' r='6' fill='%23c79a2e'/%3E%3Cpath d='M50 88 L34 50 L50 60 L66 50 Z' fill='%235fdf6a'/%3E%3C/svg%3E" />
-<link rel="stylesheet" href="../assets/css/styles.css?v=20260802-inkblood" />
+<link rel="stylesheet" href="../assets/css/styles.css?v=20260806-network-polish-1" />
 <style>
   /* ============================================================
      TO THE MOON — single-file crypto-mining / tower-defense survival
@@ -141,7 +152,7 @@
   .scr-card::-webkit-scrollbar{ width:8px; }
   .scr-card::-webkit-scrollbar-track{ background:rgba(5,8,20,.5); border-radius:8px; }
   .scr-card::-webkit-scrollbar-thumb{ background:linear-gradient(180deg,var(--cyan),var(--purple)); border-radius:8px; }
-  .scr h1{ font-family:var(--disp); font-size:clamp(34px,8vw,62px); line-height:.92; letter-spacing:.02em;
+  .scr h2{ font-family:var(--disp); font-size:clamp(34px,8vw,62px); line-height:.92; letter-spacing:.02em;
     background:linear-gradient(90deg,var(--cyan),var(--pink) 60%,var(--yellow)); -webkit-background-clip:text;
     background-clip:text; color:transparent; filter:drop-shadow(0 3px 18px rgba(46,224,255,.25)); }
   .scr .tag{ font-size:11px; letter-spacing:.34em; color:var(--pink); text-transform:uppercase; margin-bottom:14px; }
@@ -199,9 +210,9 @@
 
   .stat-line{ font-size:12px; color:var(--dim); margin:6px 0; }
   .stat-line b{ color:var(--ink); }
-  .win h1, .over h1{ font-size:clamp(40px,9vw,76px); }
-  .over h1{ background:linear-gradient(90deg,var(--red),var(--pink)); -webkit-background-clip:text; background-clip:text; color:transparent; }
-  .win h1{ background:linear-gradient(90deg,var(--green),var(--cyan),var(--yellow)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .win h2, .over h2{ font-size:clamp(40px,9vw,76px); }
+  .over h2{ background:linear-gradient(90deg,var(--red),var(--pink)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .win h2{ background:linear-gradient(90deg,var(--green),var(--cyan),var(--yellow)); -webkit-background-clip:text; background-clip:text; color:transparent; }
 
   /* ---------- mobile controls ---------- */
   #touch{ position:absolute; inset:0; z-index:8; display:none; pointer-events:none; }
@@ -309,7 +320,7 @@
   <div class="scr show" id="scr-boot">
     <div class="scr-card panel">
       <div class="tag">Rainbot Gaming · Degen Protocol</div>
-      <h1>TO THE MOON</h1>
+      <h2>TO THE MOON</h2>
       <p class="lore">Your trading rig crash-landed deep in a procedurally generated blockchain. During the <b style="color:var(--green)">bull market</b> the viruses sleep — explore caverns and data-biomes for <b style="color:var(--cyan)">$DOGE, $SHIB, $PEPE, $BONK &amp; rare $MOON shards</b>, crack vaults for permanent protocols, and build automated cyber-defenses. Every <b style="color:var(--red)">bear market</b> brings a different modifier and a specialized virus swarm. Choose exclusive rig modules, assemble all four rocket systems, then HODL through launch 🚀 <b>to the moon</b>.</p>
       <div class="keys">
         <span><kbd>A</kbd><kbd>D</kbd> drive</span>
@@ -354,7 +365,7 @@
   <div class="scr" id="scr-protocol">
     <div class="scr-card panel" style="width:min(760px,96vw)">
       <div class="tag">Validator Technology Recovered</div>
-      <h1 style="font-size:42px">CHOOSE A PROTOCOL</h1>
+      <h2 style="font-size:42px">CHOOSE A PROTOCOL</h2>
       <p class="lore">Install one permanent run modifier. Protocol choices cannot be undone.</p>
       <div class="grid3" id="protocol-grid"></div>
       <div id="protocol-owned"></div>
@@ -365,7 +376,7 @@
   <div class="scr" id="scr-pause">
     <div class="scr-card panel">
       <div class="tag">Standby</div>
-      <h1 style="font-size:46px">PAUSED</h1>
+      <h2 style="font-size:46px">PAUSED</h2>
       <div class="row" style="margin-top:20px">
         <button class="cta" id="btn-resume">▸ Resume</button>
         <button class="cta alt" id="btn-restart">↻ Restart</button>
@@ -378,7 +389,7 @@
   <div class="scr over" id="scr-over">
     <div class="scr-card panel">
       <div class="tag" style="color:var(--red)">Rugged</div>
-      <h1 id="over-title">REKT</h1>
+      <h2 id="over-title">REKT</h2>
       <p class="lore" id="over-msg"></p>
       <div id="over-stats"></div>
       <div class="row" style="margin-top:18px"><button class="cta" id="btn-retry">↻ Try Again</button></div>
@@ -389,7 +400,7 @@
   <div class="scr win" id="scr-win">
     <div class="scr-card panel">
       <div class="tag" style="color:var(--green)">WAGMI 🚀</div>
-      <h1>TO THE MOON</h1>
+      <h2>TO THE MOON</h2>
       <p class="lore">The rocket screams skyward, the virus swarm crashes into the dirt, and your bags pump to the heavens. Diamond hands rewarded. You made it — to the moon. 🌕</p>
       <div id="win-stats"></div>
       <div class="row" style="margin-top:18px"><button class="cta" id="btn-again">↻ Play Again</button></div>
@@ -2662,7 +2673,7 @@
 })();
 </script>
 <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/main.js?v=20260802-inkblood"></script>
+  <script src="../assets/js/main.js?v=20260806-network-polish-1"></script>
 <script>
   renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
   renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

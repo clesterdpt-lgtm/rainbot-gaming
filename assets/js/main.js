@@ -129,6 +129,7 @@ const RB_GAME_META = {
       "skibidi_toilet_tower_defense_rooftop",
     ],
   },
+  saintfall: { title: "Saintfall: Vesper-IX", scoreIds: ["saintfall"] },
   blacksand: { title: "BLACKSAND", scoreIds: ["blacksand"] },
   "smooth-brain-snacker": { title: "Smooth Brain Snacker", scoreIds: ["smoothbrain"] },
   "storm-area-51": { title: "Storm Area 51: Raid The Base", scoreIds: ["storm-area-51"] },
@@ -189,6 +190,11 @@ const RB_GAME_VISUALS = {
   "rizz-craft": { image: "assets/img/mockup/card-rizz-craft.jpg?v=20260712-jpg", kind: "Sandbox" },
   "scrap-circuit": { image: "assets/img/scrap-circuit/card-scrap-circuit.png?v=20260703-scrap-cover-1", kind: "Retro Car Combat" },
   "skibidi-toilet-tower-defense": { image: "assets/img/mockup/card-skibidi-toilet-tower-defense.jpg?v=20260712-jpg", kind: "Defense" },
+  saintfall: {
+    image: "assets/img/saintfall/card-saintfall.jpg?v=20260805-1",
+    kind: "3D Adventure",
+    alt: "Saintfall cover art: a processional road crosses golden dunes toward a fallen bronze colossus and distant cathedral spire",
+  },
   blacksand: { image: "assets/img/blacksand/card-blacksand.jpg?v=20260803-1", kind: "Multiplayer FPS", alt: "BLACKSAND cover art: a desert Conquest theatre with armour on a highway and a low sun" },
   "smooth-brain-snacker": { image: "assets/img/mockup/card-smooth-brain-snacker.jpg?v=20260712-jpg", kind: "Arcade" },
   "storm-area-51": { image: "assets/img/storm-area-51/card-storm-area-51.jpg?v=20260712-jpg", kind: "Crowd Heist" },
@@ -202,6 +208,23 @@ const RB_GAME_VISUALS = {
   "to-the-moon": { image: "assets/img/to-the-moon/card-to-the-moon-hq.jpg?v=20260712-jpg", kind: "Survival" },
   "unhoused-and-unhinged": { image: "assets/img/mockup/card-unhoused-and-unhinged.jpg?v=20260712-jpg", kind: "3D Sandbox" },
 };
+
+const RB_OPTIMIZED_CARD_SLUGS = new Set([
+  "again", "ai-slop-factory", "apop-demon-hunters", "big-baby-bum", "billionaire-space-race",
+  "boomer-monopoly", "brainrot-2048", "consensus-collapse", "crescendo", "debt-breakout",
+  "dont-become-pizza", "dont-fck-with-cats", "dont-look-gym-girl", "doorcrash-no-tip-nitro",
+  "drone-hunter", "echo-loop", "echo-loop-3d", "escape-poop-cruise", "flappy-stonks",
+  "gen-z-driving-simulator", "incident-commander", "inkblood", "karen-merger",
+  "looksmaxxing-grindset", "mr-feast-mansion", "recursive-reward-labyrinth", "rizz-craft",
+  "saintfall", "scrap-circuit", "skibidi-toilet-tower-defense", "smooth-brain-snacker",
+  "storm-area-51", "strait-of-hormuz", "super-slop-brothers", "tardigrade-simulator",
+  "the-last-signal", "the-optimizer", "the-weight", "to-the-moon", "unhoused-and-unhinged",
+]);
+
+RB_OPTIMIZED_CARD_SLUGS.forEach((slug) => {
+  if (!RB_GAME_VISUALS[slug]) return;
+  RB_GAME_VISUALS[slug].image = `assets/img/cards/${slug}.avif?v=20260806-1`;
+});
 
 const RB_SLOPWIRE_ARTICLES = [
   { href: "articles/smart-toaster-giving-life-advice.html", label: "Smart Toaster Starts Giving Life Advice After Firmware Update", search: "Smart Toaster Starts Giving Life Advice After Firmware Update fake news satire slopwire toaster breakfast firmware therapy" },
@@ -249,6 +272,7 @@ const RB_GAME_SEARCH_TEXT = {
   "boomer-monopoly": "Boomer Monopoly housing board game parody",
   "apop-demon-hunters": "Apop Demon Moggers side-scroller platformer pop action boyz ii hell",
   "skibidi-toilet-tower-defense": "Skibidi Toilet Tower Defense toilets towers camera speaker plunger",
+  saintfall: "Saintfall Vesper IX gilded silence open level third person desert pilgrimage cathedral reliquary fallen colossus gothic sci fi action exploration",
   "dont-look-gym-girl": "Don't Look at the Gym Girl stealth awkward parody",
 };
 
@@ -271,6 +295,10 @@ const RB_SEARCH_TYPE_FILTERS = [
   { key: "page", label: "Pages" },
 ];
 
+// Playable routes kept for direct links or in-progress QA, but intentionally
+// omitted from the public discovery surfaces until they are a catalog release.
+const RB_UNLISTED_GAME_SLUGS = new Set(["blacksand", "saintfall", "tardigrade-micro-mayhem"]);
+
 let rbSearchIndexCache = null;
 let rbSearchDocBound = false;
 
@@ -288,6 +316,7 @@ function getSearchIndex() {
   if (rbSearchIndexCache) return rbSearchIndexCache;
   const items = [];
   Object.entries(RB_GAME_SEARCH_TEXT).forEach(([slug, search]) => {
+    if (RB_UNLISTED_GAME_SLUGS.has(slug)) return;
     const visuals = RB_GAME_VISUALS[slug];
     items.push({
       href: `games/${slug}.html`,
@@ -558,6 +587,21 @@ window.RBProfileAvatars = {
   },
 };
 
+function rainbotRandomGameCandidates() {
+  const current = currentGameSlug();
+  return Object.keys(RB_GAME_META).filter((slug) => slug !== current && !RB_UNLISTED_GAME_SLUGS.has(slug));
+}
+
+function openRandomRainbotGame() {
+  const candidates = rainbotRandomGameCandidates();
+  if (!candidates.length) return;
+  const randomValue = window.crypto && typeof window.crypto.getRandomValues === "function"
+    ? window.crypto.getRandomValues(new Uint32Array(1))[0]
+    : Math.floor(Math.random() * 0xffffffff);
+  const slug = candidates[randomValue % candidates.length];
+  window.location.href = `${RB_BASE}games/${slug}.html`;
+}
+
 function renderNav(state = RB.state) {
   const slot = document.getElementById("nav-slot");
   if (!slot) return;
@@ -614,26 +658,35 @@ function renderNav(state = RB.state) {
         <div class="nav__search-results" id="rb-search-results" hidden role="listbox" aria-label="Search results"></div>
       </div>
       <div class="nav__actions">
+        <button type="button" id="rb-chaos-game" class="nav__cta nav__cta--chaos" title="Launch a random game">
+          <span aria-hidden="true">↻</span><span>Chaos</span>
+        </button>
         ${proBadge}
         ${
           state.isPro
-            ? `<a href="#" id="rb-manage-pro" class="nav__cta nav__cta--pro">Manage</a>`
-            : `<a href="#" id="rb-go-pro" class="nav__cta nav__cta--pro">Pro Preview</a>`
+            ? `<button type="button" id="rb-manage-pro" class="nav__cta nav__cta--pro">Manage</button>`
+            : `<button type="button" id="rb-go-pro" class="nav__cta nav__cta--pro">Pro Preview</button>`
         }
-        <a href="#" id="rb-login" class="nav__cta nav__cta--login">${authLabel}</a>
+        <button type="button" id="rb-login" class="nav__cta nav__cta--login">${authLabel}</button>
       </div>
     </div>
     <nav class="nav__drawer" id="rb-nav-drawer" aria-label="Site sections" hidden>
       ${navLinksMarkup}
       <div class="nav__drawer-actions">
-        <a href="#" id="rb-drawer-pro">${state.isPro ? "Manage Pro" : "Pro Preview"}</a>
-        <a href="#" id="rb-drawer-profile">${authLabel}</a>
+        <button type="button" id="rb-drawer-chaos">Random game</button>
+        <button type="button" id="rb-drawer-pro">${state.isPro ? "Manage Pro" : "Pro Preview"}</button>
+        <button type="button" id="rb-drawer-profile">${authLabel}</button>
       </div>
     </nav>
   `;
 
   bindSearch(slot);
   bindNavMenu(slot);
+
+  const chaosGame = document.getElementById("rb-chaos-game");
+  if (chaosGame) chaosGame.addEventListener("click", openRandomRainbotGame);
+  const drawerChaos = document.getElementById("rb-drawer-chaos");
+  if (drawerChaos) drawerChaos.addEventListener("click", openRandomRainbotGame);
 
   const goPro = document.getElementById("rb-go-pro");
   if (goPro) goPro.addEventListener("click", (e) => {
@@ -690,8 +743,8 @@ function bindNavMenu(root) {
     setDrawerOpen(drawer.hidden);
   });
 
-  drawer.querySelectorAll("a").forEach((link) => {
-    link.addEventListener("click", () => setDrawerOpen(false));
+  drawer.querySelectorAll("a, button").forEach((control) => {
+    control.addEventListener("click", () => setDrawerOpen(false));
   });
 
   if (!rbNavMenuDocBound) {
@@ -981,6 +1034,15 @@ function initSearchPage() {
   const typeButtons = Array.from(page.querySelectorAll("[data-search-type-filter]"));
   if (!form || !input || !resultsEl) return;
 
+  const searchIndex = getSearchIndex();
+  const searchStats = page.querySelectorAll(".search-hero__stats span b");
+  const indexedCounts = ["game", "article", "video"].map((type) => (
+    searchIndex.filter((item) => item.type === type).length
+  ));
+  searchStats.forEach((element, index) => {
+    if (Number.isFinite(indexedCounts[index])) element.textContent = String(indexedCounts[index]);
+  });
+
   const readStateFromUrl = () => {
     const params = new URLSearchParams(location.search);
     const type = params.get("type") || "all";
@@ -1207,6 +1269,7 @@ const RBGameActivity = (() => {
 
   const isFavorite = (slug) => read().favorites.includes(slug);
   const favoriteSlugs = () => read().favorites.slice();
+  const lastPlayedAtFor = (slug) => Date.parse(read().games[slug]?.lastPlayedAt || "") || 0;
   const toggleFavorite = (slug) => {
     const activity = read();
     const favorites = new Set(activity.favorites);
@@ -1222,7 +1285,7 @@ const RBGameActivity = (() => {
   };
   const secondsFor = (slug) => Math.max(0, Number(read().games[slug]?.seconds) || 0);
 
-  return { init, isFavorite, favoriteSlugs, toggleFavorite, secondsFor, storageKey: STORAGE_KEY };
+  return { init, isFavorite, favoriteSlugs, lastPlayedAtFor, toggleFavorite, secondsFor, storageKey: STORAGE_KEY };
 })();
 
 function formatGamePlayTime(seconds) {
@@ -1513,6 +1576,25 @@ function initGamesCatalog() {
   });
   if (!cards.length) return;
   if (totalEl) totalEl.textContent = String(cards.length);
+  const sectionCounts = {
+    all: cards.length,
+    human: cards.filter((item) => item.sectionKey === "human").length,
+    agent: cards.filter((item) => item.sectionKey === "agent").length,
+    multiplayer: cards.filter((item) => item.filterTags.has("multiplayer")).length,
+    "after-dark": cards.filter((item) => item.filterTags.has("after-dark")).length,
+  };
+  modeButtons.forEach((button) => {
+    const key = button.dataset.gamesSectionFilter;
+    const count = sectionCounts[key] || 0;
+    let badge = button.querySelector(".games-modebar__count");
+    if (!badge) {
+      badge = document.createElement("em");
+      badge.className = "games-modebar__count";
+      button.append(badge);
+    }
+    badge.textContent = String(count);
+    button.setAttribute("aria-label", `${button.querySelector("b")?.textContent || key}: ${count} games`);
+  });
 
   const categoryLabels = new Map();
   cards.forEach((item) => {
@@ -1527,14 +1609,34 @@ function initGamesCatalog() {
       categorySelect.append(option);
     });
 
+  const initialCatalogParams = new URLSearchParams(location.search);
+  const initialCategory = initialCatalogParams.get("category") || "all";
+  const initialSort = initialCatalogParams.get("sort") || "featured";
+  const allowedSorts = new Set(["featured", "recent", "favorites", "new", "popular", "category", "az"]);
   const state = {
     section: sectionKeyFromHash(),
-    category: "all",
-    sort: "featured",
-    search: normalize(new URLSearchParams(location.search).get("q") || ""),
-    favoritesOnly: false,
+    category: categorySelect.querySelector(`option[value="${CSS.escape(initialCategory)}"]`) ? initialCategory : "all",
+    sort: allowedSorts.has(initialSort) ? initialSort : "featured",
+    search: normalize(initialCatalogParams.get("q") || ""),
+    favoritesOnly: initialCatalogParams.get("favorites") === "1",
   };
+  categorySelect.value = state.category;
+  sortSelect.value = state.sort;
   if (searchInput) searchInput.value = state.search;
+
+  const syncCatalogUrl = () => {
+    if (!history.replaceState) return;
+    const url = new URL(location.href);
+    if (state.category !== "all") url.searchParams.set("category", state.category);
+    else url.searchParams.delete("category");
+    if (state.sort !== "featured") url.searchParams.set("sort", state.sort);
+    else url.searchParams.delete("sort");
+    if (state.search) url.searchParams.set("q", state.search);
+    else url.searchParams.delete("q");
+    if (state.favoritesOnly) url.searchParams.set("favorites", "1");
+    else url.searchParams.delete("favorites");
+    history.replaceState(null, "", url);
+  };
 
   const syncModeButtons = () => {
     modeButtons.forEach((button) => {
@@ -1562,6 +1664,10 @@ function initGamesCatalog() {
       if (state.sort === "favorites") {
         const favoriteDifference = Number(favoriteSet.has(b.slug)) - Number(favoriteSet.has(a.slug));
         return favoriteDifference || (a.order - b.order);
+      }
+      if (state.sort === "recent") {
+        const recentDifference = RBGameActivity.lastPlayedAtFor(b.slug) - RBGameActivity.lastPlayedAtFor(a.slug);
+        return recentDifference || (a.order - b.order);
       }
       if (state.sort === "new") {
         return (b.newRank - a.newRank) || (a.order - b.order);
@@ -1610,6 +1716,20 @@ function initGamesCatalog() {
       }
     });
 
+    const humanSection = sectionEls.find((item) => item.key === "human");
+    if (humanSection) {
+      const visibleConfig = state.section === "multiplayer" || state.section === "after-dark"
+        ? sectionConfigByKey.get(state.section)
+        : sectionConfigByKey.get("human");
+      const eyebrow = humanSection.section.querySelector(".games-section__eyebrow");
+      const heading = humanSection.section.querySelector("h3");
+      const deck = humanSection.section.querySelector(".games-section__header p");
+      if (eyebrow) eyebrow.textContent = visibleConfig.eyebrow;
+      if (heading) heading.textContent = visibleConfig.title;
+      if (deck) deck.textContent = visibleConfig.deck;
+      humanSection.section.classList.toggle("games-section--filter-view", state.section === "multiplayer" || state.section === "after-dark");
+    }
+
     sectionEls.forEach((item) => {
       const sectionCount = sectionVisible.get(item.key) || 0;
       item.section.hidden = sectionCount === 0;
@@ -1633,6 +1753,7 @@ function initGamesCatalog() {
     }
     syncFavoritesControl(favoriteSet);
     syncModeButtons();
+    syncCatalogUrl();
   };
 
   window.RBGamesCatalog = {
@@ -1660,6 +1781,9 @@ function initGamesCatalog() {
       if (history.replaceState) {
         const url = new URL(location.href);
         url.searchParams.delete("q");
+        url.searchParams.delete("category");
+        url.searchParams.delete("sort");
+        url.searchParams.delete("favorites");
         url.hash = "";
         history.replaceState(null, "", url);
       }
@@ -1669,7 +1793,7 @@ function initGamesCatalog() {
 
   modeButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      window.RBGamesCatalog.setSection(button.dataset.gamesSectionFilter);
+      window.RBGamesCatalog.setSection(button.dataset.gamesSectionFilter, true);
     });
   });
   window.addEventListener("hashchange", () => {
@@ -1694,6 +1818,42 @@ function initGamesCatalog() {
   applyFilters();
 }
 
+function restoreModalFocus(preferred, fallbackSelector) {
+  const focusBestTarget = () => {
+    const target = preferred?.isConnected ? preferred : document.querySelector(fallbackSelector);
+    if (target && typeof target.focus === "function") target.focus();
+  };
+  focusBestTarget();
+  window.setTimeout(() => {
+    if (document.activeElement === document.body) focusBestTarget();
+  }, 120);
+}
+
+function keepModalFocus(event, root, close) {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    close();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const focusable = Array.from(root.querySelectorAll(
+    "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+  )).filter((element) => !element.hidden && element.getClientRects().length);
+  if (!focusable.length) {
+    event.preventDefault();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 function openProModal(defaultPlan = "monthly") {
   if (document.getElementById("rb-pro-modal")) return;
   const returnFocus = document.activeElement;
@@ -1715,18 +1875,14 @@ function openProModal(defaultPlan = "monthly") {
   document.body.appendChild(backdrop);
   const closePreview = () => {
     backdrop.remove();
-    if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
+    restoreModalFocus(returnFocus, "#rb-go-pro");
   };
   backdrop.querySelector("#rb-pro-updates")?.focus();
   backdrop.querySelector("#rb-close-pro").addEventListener("click", closePreview);
   backdrop.addEventListener("click", (event) => {
     if (event.target === backdrop) closePreview();
   });
-  backdrop.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    event.preventDefault();
-    closePreview();
-  });
+  backdrop.addEventListener("keydown", (event) => keepModalFocus(event, backdrop, closePreview));
 }
 
 function setModalStatus(root, message, kind = "") {
@@ -1813,17 +1969,13 @@ function openAuthModal(initialMode = "login") {
   document.body.appendChild(backdrop);
   const close = () => {
     backdrop.remove();
-    if (returnFocus && typeof returnFocus.focus === "function") returnFocus.focus();
+    restoreModalFocus(returnFocus, "#rb-login");
   };
   backdrop.querySelector("#rb-close-auth").addEventListener("click", close);
   backdrop.addEventListener("click", (event) => {
     if (event.target === backdrop) close();
   });
-  backdrop.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    event.preventDefault();
-    close();
-  });
+  backdrop.addEventListener("keydown", (event) => keepModalFocus(event, backdrop, close));
 
   const loginForm = backdrop.querySelector("#rb-login-form");
   const createForm = backdrop.querySelector("#rb-create-form");
@@ -2187,7 +2339,7 @@ function achievementEntries() {
 }
 
 function achievementBadgeImageSrc(id) {
-  return `${RB_BASE}assets/img/badges/achievement-${id}.png?v=20260701-badge-art-1`;
+  return `${RB_BASE}assets/img/badges/achievement-${id}.avif?v=20260806-performance-1`;
 }
 
 function achievementBadgeMarkup(entry) {
@@ -2430,7 +2582,7 @@ function gameHubRecommendations(meta, limit = 3) {
   const currentKind = currentVisual.kind || "";
   const recent = new Set(recentHomeGameEntries(6).map((entry) => canonicalGameSlug(entry.gameId)));
   return Object.entries(RB_GAME_META)
-    .filter(([slug]) => slug !== meta.slug && RB_GAME_VISUALS[slug])
+    .filter(([slug]) => slug !== meta.slug && RB_GAME_VISUALS[slug] && !RB_UNLISTED_GAME_SLUGS.has(slug))
     .map(([slug, item], index) => {
       const visual = RB_GAME_VISUALS[slug] || {};
       const sameKind = currentKind && visual.kind === currentKind ? 1 : 0;
@@ -2458,6 +2610,86 @@ function gameHubRecommendationsMarkup(meta) {
   }).join("");
 }
 
+const RB_GAME_VIBE_STORAGE_KEY = "rainbot_game_vibes:v1";
+const RB_GAME_VIBES = [
+  { key: "fire", icon: "🔥", label: "Fire" },
+  { key: "chaos", icon: "🤡", label: "Chaos" },
+  { key: "cursed", icon: "💀", label: "Cursed" },
+];
+
+function readGameVibes() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(RB_GAME_VIBE_STORAGE_KEY) || "{}");
+    return stored && typeof stored === "object" ? stored : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function setGameVibe(slug, vibe) {
+  const stored = readGameVibes();
+  if (vibe) stored[slug] = vibe;
+  else delete stored[slug];
+  try {
+    localStorage.setItem(RB_GAME_VIBE_STORAGE_KEY, JSON.stringify(stored));
+  } catch (error) {}
+}
+
+function gameHubPlayMode(meta) {
+  if (["scrap-circuit", "super-slop-brothers", "rizz-craft", "the-last-signal", "blacksand"].includes(meta.slug)) {
+    return "Multiplayer ready";
+  }
+  if (["incident-commander", "consensus-collapse", "recursive-reward-labyrinth"].includes(meta.slug)) {
+    return "Agent protocol";
+  }
+  return "Solo arcade";
+}
+
+function gameHubInputMode() {
+  const touchReady = Boolean(document.querySelector(
+    ".touch-controls, .mobile-controls, [class*='touch-controls'], [data-touch-controls], [data-mobile-controls]"
+  ));
+  const pointerReady = Boolean(document.querySelector("canvas, .game-stage"));
+  if (touchReady) return "Keyboard + touch";
+  if (pointerReady) return "Keyboard + pointer";
+  return "Keyboard / controls shown in game";
+}
+
+function gameHubDetailsMarkup(meta) {
+  const visual = gameVisualForHome(meta.slug);
+  const selectedVibe = readGameVibes()[meta.slug] || "";
+  return `
+    <section class="rb-game-hub__panel rb-game-hub__panel--details" aria-label="Game details and vibe rating">
+      <div class="rb-game-hub__panel-title">
+        <small>Game Details</small>
+        <strong>Free · No Install</strong>
+      </div>
+      <dl class="rb-game-hub__facts">
+        <div><dt>Genre</dt><dd>${escapeHtml(visual.kind)}</dd></div>
+        <div><dt>Mode</dt><dd>${escapeHtml(gameHubPlayMode(meta))}</dd></div>
+        <div><dt>Controls</dt><dd>${escapeHtml(gameHubInputMode())}</dd></div>
+        <div><dt>Platform</dt><dd>Modern browser</dd></div>
+      </dl>
+      <div class="rb-game-hub__vibe">
+        <span><small>Vibe Check</small><em>Saved on this device</em></span>
+        <div role="group" aria-label="Rate this game's vibe">
+          ${RB_GAME_VIBES.map((vibe) => `
+            <button
+              type="button"
+              class="${selectedVibe === vibe.key ? "is-active" : ""}"
+              data-rb-game-hub-action="vibe"
+              data-rb-vibe="${vibe.key}"
+              aria-pressed="${selectedVibe === vibe.key}"
+              aria-label="Rate ${escapeHtml(meta.title)} ${vibe.label}"
+              title="${vibe.label}"
+            ><span aria-hidden="true">${vibe.icon}</span><b>${vibe.label}</b></button>
+          `).join("")}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function gameHubChallengeMarkup(meta) {
   const challenge = currentDailyChallenge();
   const progress = dailyChallengeProgress(challenge);
@@ -2479,6 +2711,7 @@ function gameHubChallengeMarkup(meta) {
 function gameHubMarkup(meta) {
   const visual = gameVisualForHome(meta.slug);
   const summary = gameHubSummary(meta);
+  const isFavorite = RBGameActivity.isFavorite(meta.slug);
   const savedAt = summary.saved && summary.saved.saved ? Number(summary.saved.saved.savedAt) || 0 : 0;
   const hasSave = Boolean(summary.saved);
   const lastText = summary.lastActivity ? formatRelativeActivity(summary.lastActivity) : "Not played yet";
@@ -2493,6 +2726,7 @@ function gameHubMarkup(meta) {
         <button type="button" data-rb-game-hub-action="play">${hasSave ? "Resume" : "Play"}</button>
         <button type="button" data-rb-game-hub-action="leaderboard">Scores</button>
         <button type="button" data-rb-game-hub-action="comments">Comments</button>
+        <button type="button" data-rb-game-hub-action="favorite" aria-pressed="${isFavorite}">${isFavorite ? "♥ Saved" : "♡ Favorite"}</button>
         <button type="button" data-rb-game-hub-action="share">Share</button>
       </div>
     </header>
@@ -2516,6 +2750,7 @@ function gameHubMarkup(meta) {
         </div>
         ${gameHubChallengeMarkup(meta)}
       </section>
+      ${gameHubDetailsMarkup(meta)}
       <section class="rb-game-hub__panel rb-game-hub__panel--more" aria-label="More games">
         <div class="rb-game-hub__panel-title">
           <small>More Like This</small>
@@ -2608,6 +2843,17 @@ function bindGameHub(root) {
     if (action === "leaderboard") handleGameHubLeaderboard();
     if (action === "comments") handleGameHubComments();
     if (action === "share") handleGameHubShare(meta);
+    if (action === "favorite") {
+      RBGameActivity.toggleFavorite(meta.slug);
+      renderGameHub(root);
+    }
+    if (action === "vibe") {
+      const vibe = actionTarget.dataset.rbVibe || "";
+      const selected = readGameVibes()[meta.slug] === vibe ? "" : vibe;
+      setGameVibe(meta.slug, selected);
+      renderGameHub(root);
+      RB.toast(selected ? `Vibe saved: ${selected}` : "Vibe cleared", selected ? "good" : "");
+    }
   });
 }
 
@@ -2615,13 +2861,14 @@ function initGameHub() {
   if (!location.pathname.includes("/games/")) return;
   const page = document.querySelector(".game-page");
   const layout = document.querySelector(".game-layout");
-  if (!page || !layout) return;
+  if (!page) return;
   let root = document.querySelector("[data-rb-game-hub]");
   if (!root) {
     root = document.createElement("section");
     root.className = "rb-game-hub";
     root.dataset.rbGameHub = "";
-    layout.insertAdjacentElement("afterend", root);
+    if (layout) layout.insertAdjacentElement("afterend", root);
+    else page.append(root);
   }
   bindGameHub(root);
   renderGameHub(root);
@@ -4921,6 +5168,86 @@ function initSkipLink() {
   document.body.insertAdjacentElement("afterbegin", link);
 }
 
+function ensureRuntimeMetadata() {
+  if (!document.head.querySelector('link[rel="manifest"]')) {
+    const manifest = document.createElement("link");
+    manifest.rel = "manifest";
+    manifest.href = `${RB_BASE}site.webmanifest`;
+    document.head.append(manifest);
+  }
+  const description = document.querySelector('meta[name="description"]')?.content
+    || "Free browser games, satirical headlines, community scores, and deeply unserious internet culture from Rainbot Network.";
+  const values = [
+    ["property", "og:title", document.title],
+    ["property", "og:description", description],
+    ["property", "og:type", location.pathname.includes("/articles/") ? "article" : "website"],
+    ["property", "og:image", new URL(`${RB_BASE}assets/img/rainbot-network-social-v1.png`, location.href).href],
+    ["name", "twitter:card", "summary_large_image"],
+    ["name", "twitter:title", document.title],
+    ["name", "twitter:description", description],
+    ["name", "twitter:image", new URL(`${RB_BASE}assets/img/rainbot-network-social-v1.png`, location.href).href],
+    ["name", "theme-color", "#05070d"],
+  ];
+  values.forEach(([attribute, key, content]) => {
+    if (document.head.querySelector(`meta[${attribute}="${key}"]`)) return;
+    const meta = document.createElement("meta");
+    meta.setAttribute(attribute, key);
+    meta.content = content;
+    document.head.append(meta);
+  });
+}
+
+function initSitePolish() {
+  document.documentElement.classList.add("rb-js");
+  ensureRuntimeMetadata();
+
+  const progress = document.createElement("div");
+  progress.className = "rb-scroll-progress";
+  progress.setAttribute("aria-hidden", "true");
+  progress.innerHTML = "<i></i>";
+  document.body.append(progress);
+
+  const backToTop = document.createElement("button");
+  backToTop.type = "button";
+  backToTop.className = "rb-back-to-top";
+  backToTop.setAttribute("aria-label", "Back to top");
+  backToTop.title = "Back to top";
+  backToTop.innerHTML = '<span aria-hidden="true">↑</span>';
+  backToTop.hidden = true;
+  backToTop.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+  document.body.append(backToTop);
+
+  let updateFrame = 0;
+  const updateScrollUi = () => {
+    updateFrame = 0;
+    const maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+    const percent = Math.max(0, Math.min(1, window.scrollY / maxScroll));
+    progress.style.setProperty("--rb-scroll", String(percent));
+    backToTop.hidden = window.scrollY < Math.max(640, window.innerHeight * 0.9);
+  };
+  window.addEventListener("scroll", () => {
+    if (!updateFrame) updateFrame = requestAnimationFrame(updateScrollUi);
+  }, { passive: true });
+  window.addEventListener("resize", updateScrollUi, { passive: true });
+  updateScrollUi();
+
+  document.addEventListener("keydown", (event) => {
+    const target = event.target;
+    if (event.key !== "/" || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (target && target.closest && target.closest("input, textarea, select, [contenteditable='true']")) return;
+    const searchToggle = document.getElementById("rb-search-toggle");
+    if (!searchToggle) return;
+    event.preventDefault();
+    searchToggle.click();
+  });
+
+  document.querySelectorAll("img").forEach((img) => {
+    const markLoaded = () => img.classList.add("rb-image-loaded");
+    if (img.complete) markLoaded();
+    else img.addEventListener("load", markLoaded, { once: true });
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   initSkipLink();
   RBSfx.init();
@@ -4949,6 +5276,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   window.addEventListener("rainbot:authchange", handleBackendAuthChange);
   initRainbotBackend();
+  initSitePolish();
   scheduleGameCanvasFit();
 });
 

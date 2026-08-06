@@ -4,11 +4,23 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Games — Rainbot Network</title>
+  <link rel="manifest" href="./site.webmanifest" />
+  <meta name="theme-color" content="#05070d" />
+  <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games.html" />
+  <meta property="og:title" content="Games — Rainbot Network" />
+  <meta property="og:description" content="All Rainbot Network browser games, grouped into Human, Multiplayer, Agent, and After Dark sections. Free, instant-play, meme-worthy." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/games.html" />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Games — Rainbot Network" />
+  <meta name="twitter:description" content="All Rainbot Network browser games, grouped into Human, Multiplayer, Agent, and After Dark sections. Free, instant-play, meme-worthy." />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
   <meta name="description" content="All Rainbot Network browser games, grouped into Human, Multiplayer, Agent, and After Dark sections. Free, instant-play, meme-worthy." />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
   <meta name="color-scheme" content="dark" />
   <style>html,body{min-height:100%;background:#080810;color:#f5f7fb}</style>
-  <link rel="stylesheet" href="assets/css/styles.css?v=20260803-favorites-1" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=20260806-network-polish-1" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2305070d'/%3E%3Ccircle cx='35' cy='50' r='8' fill='%23ff1490'/%3E%3Ccircle cx='65' cy='50' r='8' fill='%2323dff2'/%3E%3Cpath d='M28 68h44' stroke='%23f7d924' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E" />
 </head>
 <body class="games-index arcade-home">
@@ -22,7 +34,7 @@
         <p>Human Games now holds arcade chaos, online multiplayer, and After Dark horror in one vault — with agent protocol experiments in their own lane.</p>
       </div>
       <div class="games-hero__stats" aria-label="Arcade directory stats">
-        <span><b data-games-total>39</b> games online</span>
+        <span><b data-games-total>40</b> games online</span>
         <span><b>4</b> sections</span>
         <span><b>100%</b> browser</span>
       </div>
@@ -35,6 +47,10 @@
       </div>
 
       <nav class="games-modebar" aria-label="Game sections">
+        <button type="button" data-games-section-filter="all" aria-pressed="false">
+          <b>All</b>
+          <span>Full vault</span>
+        </button>
         <button type="button" data-games-section-filter="human" aria-pressed="false">
           <b>Human</b>
           <span>Arcade chaos</span>
@@ -71,6 +87,7 @@
           <span class="games-filterbar__select">
             <select id="games-sort" data-games-sort>
               <option value="featured">Featured</option>
+              <option value="recent">Recently played</option>
               <option value="favorites">Favorites first</option>
               <option value="new">New first</option>
               <option value="popular">Most played</option>
@@ -102,7 +119,7 @@
 
         <a href="games/big-baby-bum.html" class="directory-card" data-title="Big Baby Bum 3D katamari parody baby eat grow snack nom crumbs toys cats grandma cars houses buildings town backyard roll ball sphere puke broccoli damacy snowball hungry burp persistent save">
           <div class="directory-card__poster directory-card__poster--bbb">
-            <img src="assets/img/mockup/card-big-baby-bum-ai-v4.jpg?v=20260712-jpg" alt="Big Baby Bum cover art — a realistic cartoon diapered baby rolls through a sunny neighborhood while broccoli flees" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/big-baby-bum.avif?v=20260806-1" alt="Big Baby Bum cover art — a realistic cartoon diapered baby rolls through a sunny neighborhood while broccoli flees" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">Big Baby Bum</span>
           </div>
@@ -115,7 +132,7 @@
 
         <a href="games/crescendo.html" class="directory-card" data-title="Crescendo vertical scrolling rhythm shmup raiden shooter beat synced music synthwave requiem conductor last note tap on beat weapon power up groove fermata bomb boss rush neon procedural soundtrack webaudio timpanist first chair metronome movement adagio presto">
           <div class="directory-card__poster directory-card__poster--crescendo">
-            <img src="assets/img/crescendo/card-crescendo-ai-v1.jpg?v=20260712-jpg" alt="Crescendo cover art — a white musical-note spaceship trailing cyan light through rings of pink beat projectiles beneath the silhouette of The Conductor" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/crescendo.avif?v=20260806-1" alt="Crescendo cover art — a white musical-note spaceship trailing cyan light through rings of pink beat projectiles beneath the silhouette of The Conductor" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
           </div>
           <div class="directory-card__body">
@@ -127,7 +144,7 @@
 
         <a href="games/the-optimizer.html" class="directory-card" data-title="The Optimizer industrial horror incremental AI paperclip maximizer low poly PS1 factory automation resource management cosmic extinction recursive self improvement">
           <div class="directory-card__poster directory-card__poster--optimizer">
-            <img src="assets/img/the-optimizer/card-the-optimizer-ai-v1.jpg?v=20260712-jpg" alt="The Optimizer cover art — a cheerful mint terminal and fabricator workbench watched by a giant pink machine eye" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/the-optimizer.avif?v=20260806-1" alt="The Optimizer cover art — a cheerful mint terminal and fabricator workbench watched by a giant pink machine eye" loading="lazy" decoding="async" />
             <span class="directory-card__status">Rebuilt</span>
           </div>
           <div class="directory-card__body">
@@ -139,7 +156,7 @@
 
         <a href="games/echo-loop-3d.html" class="directory-card" data-title="Echo Loop 3D first person time loop echo puzzler webgl three js clone rewind ghost replay fps puzzle stand on yourself past selves pressure plate crate tower crevasse paradox real time lighting physics chrono">
           <div class="directory-card__poster directory-card__poster--echoloop3d">
-            <img src="assets/img/echo-loop-3d/card-echo-loop-3d-ai-v1.jpg?v=20260712-jpg" alt="Echo Loop 3D cover art — a first-person view through a neon corridor where translucent cyan echoes form a staircase toward a golden portal" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/echo-loop-3d.avif?v=20260806-1" alt="Echo Loop 3D cover art — a first-person view through a neon corridor where translucent cyan echoes form a staircase toward a golden portal" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
           </div>
           <div class="directory-card__body">
@@ -151,7 +168,7 @@
 
         <a href="games/echo-loop.html" class="directory-card" data-title="Echo Loop time loop echo puzzler clone rewind ghost replay platformer puzzle stand on yourself past selves pressure plate crate tower crevasse paradox chrono">
           <div class="directory-card__poster directory-card__poster--echoloop">
-            <img src="assets/img/echo-loop/card-echo-loop-ai-v1.jpg?v=20260712-jpg" alt="Echo Loop cover art — a hot-pink runner leaping across a staircase of translucent cyan echoes toward a golden portal" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/echo-loop.avif?v=20260806-1" alt="Echo Loop cover art — a hot-pink runner leaping across a staircase of translucent cyan echoes toward a golden portal" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
           </div>
           <div class="directory-card__body">
@@ -163,7 +180,7 @@
 
         <a href="games/debt-breakout.html" class="directory-card" data-title="Debt Breakout breakout arkanoid parody bills rent subscription copay medical student loan crypto loss utilities buy now pay later BNPL zombie sub annual renewal refund inflation interest paddle paycheck payment coin brick buster satire personal finance debt statement">
           <div class="directory-card__poster directory-card__poster--debt">
-            <img src="assets/img/mockup/card-debt-breakout.jpg?v=20260712-jpg" alt="Debt Breakout cover: a payment ball smashing through a wall of debt bricks — credit card, student loan, car loan, mortgage, payday loan, and more." loading="lazy" decoding="async" />
+            <img src="assets/img/cards/debt-breakout.avif?v=20260806-1" alt="Debt Breakout cover: a payment ball smashing through a wall of debt bricks — credit card, student loan, car loan, mortgage, payday loan, and more." loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
           </div>
           <div class="directory-card__body">
@@ -175,7 +192,7 @@
 
         <a href="games/scrap-circuit.html" class="directory-card" data-game-section="multiplayer" data-title="Scrap Circuit Last Chassis Standing PS1 retro 3D arena vehicular combat demolition derby cars ice cream truck monster truck hearse school bus tow truck garbage truck weapons pickups specials insurance adjuster low poly fog dither online multiplayer room codes online derby">
           <div class="directory-card__poster directory-card__poster--scrap">
-            <img src="assets/img/scrap-circuit/card-scrap-circuit.png?v=20260703-scrap-cover-1" alt="Scrap Circuit: Last Chassis Standing poster art - low-poly ice cream truck and monster tow rig colliding in a junkyard arena under a chunky retro title" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/scrap-circuit.avif?v=20260806-1" alt="Scrap Circuit: Last Chassis Standing poster art - low-poly ice cream truck and monster tow rig colliding in a junkyard arena under a chunky retro title" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
           </div>
           <div class="directory-card__body">
@@ -187,7 +204,7 @@
 
         <a href="games/to-the-moon.html" class="directory-card" data-title="To The Moon crypto mining tower defense memecoin doge shib pepe bonk bull bear market virus rocket moon motherload dig survive blockchain hodl wagmi diamond hands black swan">
           <div class="directory-card__poster directory-card__poster--tothemoon">
-            <img src="assets/img/to-the-moon/card-to-the-moon-hq.jpg?v=20260712-jpg" alt="To The Moon cover art - a rocket launching toward a glowing moon over a digital mining world defended from virus swarms" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/to-the-moon.avif?v=20260806-1" alt="To The Moon cover art - a rocket launching toward a glowing moon over a digital mining world defended from virus swarms" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
           </div>
           <div class="directory-card__body">
@@ -199,7 +216,7 @@
 
         <a href="games/the-last-signal.html" class="directory-card" data-game-section="multiplayer" data-title="The Last Signal RTS real time strategy skirmish humans robots aliens factions base building workers harvest matter energy signal serious sci-fi lore buried signal hollow online multiplayer online skirmish room codes">
           <div class="directory-card__poster directory-card__poster--tls">
-            <img src="assets/img/the-last-signal/poster-ai-v4-title.jpg?v=20260712-jpg" alt="The Last Signal titled key art - three sci-fi factions surround a violet signal beam rising from a vast excavation crater" />
+            <img src="assets/img/cards/the-last-signal.avif?v=20260806-1" alt="The Last Signal titled key art - three sci-fi factions surround a violet signal beam rising from a vast excavation crater" />
             <span class="directory-card__status">New</span>
           </div>
           <div class="directory-card__body">
@@ -211,7 +228,7 @@
 
         <a href="games/escape-poop-cruise.html" class="directory-card" data-title="Escape the Poop Cruise low poly 3D horror FPS Roe Jogan cruise crud infected passengers cure dart shotgun lifeboat procedural">
           <div class="directory-card__poster directory-card__poster--poop-cruise">
-            <img src="assets/img/mockup/card-escape-poop-cruise-v2.jpg?v=20260712-jpg" alt="Escape the Poop Cruise low-poly horror FPS poster art with a cure dart blaster and infected cruise corridor" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/escape-poop-cruise.avif?v=20260806-1" alt="Escape the Poop Cruise low-poly horror FPS poster art with a cure dart blaster and infected cruise corridor" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">Escape the<br />Poop Cruise</span>
           </div>
@@ -224,7 +241,7 @@
 
         <a href="games/flappy-stonks.html" class="directory-card" data-title="Flappy Stonks stock market flappy bird parody candlestick chart trail dividends stop loss shield arcade runner">
           <div class="directory-card__poster directory-card__poster--stonks">
-            <img src="assets/img/mockup/card-flappy-stonks-funny.jpg?v=20260712-jpg" alt="Funny Flappy Stonks cover art with a panicked investor bird, candlestick obstacles, and a jagged stock chart trail" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/flappy-stonks.avif?v=20260806-1" alt="Funny Flappy Stonks cover art with a panicked investor bird, candlestick obstacles, and a jagged stock chart trail" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">Flappy<br />Stonks</span>
           </div>
@@ -237,7 +254,7 @@
 
         <a href="games/incident-commander.html" class="directory-card directory-card--agent" data-title="Incident Commander agent games ai benchmark incident response security operations logs hosts services root cause protocol observation action DSL">
           <div class="directory-card__poster directory-card__poster--agent">
-            <img src="assets/img/agent-games/incident-commander-cover.jpg?v=20260712-jpg" alt="Incident Commander cyber incident command center key art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/incident-commander.avif?v=20260806-1" alt="Incident Commander cyber incident command center key art" loading="lazy" decoding="async" />
             <span class="directory-card__status">Agent</span>
             <span class="directory-card__poster-title">Incident<br />Commander</span>
           </div>
@@ -250,7 +267,7 @@
 
         <a href="games/consensus-collapse.html" class="directory-card directory-card--agent" data-title="Consensus Collapse agent games ai benchmark treaty negotiation council matrix hidden preferences quorum protocol observation action DSL">
           <div class="directory-card__poster directory-card__poster--agent">
-            <img src="assets/img/agent-games/consensus-collapse.jpg?v=20260712-jpg" alt="Consensus Collapse fractured council key art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/consensus-collapse.avif?v=20260806-1" alt="Consensus Collapse fractured council key art" loading="lazy" decoding="async" />
             <span class="directory-card__status">Agent</span>
             <span class="directory-card__poster-title">Consensus<br />Collapse</span>
           </div>
@@ -288,7 +305,7 @@
 
         <a href="games/drone-hunter.html" class="directory-card" data-title="Drone Hunter duck hunt parody light gun shooting gallery crosshair shoot drones delivery surveillance camera ad-drone peace dove robo dog quota arcade">
           <div class="directory-card__poster directory-card__poster--drone">
-            <img src="assets/img/mockup/card-drone-hunter.jpg?v=20260712-jpg" alt="Drone Hunter cover art with a robo-dog spotter, goofy cargo drones, and protected doves" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/drone-hunter.avif?v=20260806-1" alt="Drone Hunter cover art with a robo-dog spotter, goofy cargo drones, and protected doves" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">Drone<br />Hunter</span>
           </div>
@@ -301,7 +318,7 @@
 
         <a href="games/storm-area-51.html" class="directory-card" data-title="Storm Area 51 RSVP Raid alien rescue crowd heist top down stealth tactics searchlights hype alert raider squads fictional sci fi base">
           <div class="directory-card__poster directory-card__poster--storm">
-            <img src="assets/img/storm-area-51/card-storm-area-51.jpg?v=20260712-jpg" alt="Storm Area 51 generated poster art with a fictional desert base, raiders, a van, searchlights, and a cute alien" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/storm-area-51.avif?v=20260806-1" alt="Storm Area 51 generated poster art with a fictional desert base, raiders, a van, searchlights, and a cute alien" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">Storm<br />Area 51</span>
           </div>
@@ -314,7 +331,7 @@
 
         <a href="games/dont-become-pizza.html" class="directory-card" data-title="Don't Become Pizza horror private island pizza conspiracy stealth masked elites oven after dark">
           <div class="directory-card__poster directory-card__poster--pizza">
-            <img src="assets/img/mockup/card-dont-become-pizza.jpg?v=20260712-jpg" alt="Don't Become Pizza cover art with a moonlit private island, glowing pizza oven, and masked searchlights" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/dont-become-pizza.avif?v=20260806-1" alt="Don't Become Pizza cover art with a moonlit private island, glowing pizza oven, and masked searchlights" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">Don't Become<br />Pizza</span>
           </div>
@@ -327,7 +344,7 @@
 
         <a href="games/super-slop-brothers.html" class="directory-card" data-game-section="multiplayer" data-title="Super Slop Brothers platform fighter smash bros parody online multiplayer local multiplayer cpu ai slop rainbot gigachad mr feast skibidi sigma percent knockback stocks blast zone hazards online brawl room codes">
           <div class="directory-card__poster directory-card__poster--ssb">
-            <img src="assets/img/mockup/card-super-slop-brothers.jpg?v=20260712-jpg" alt="Super Slop Brothers funny arcade cover art with goofy original slop fighters" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/super-slop-brothers.avif?v=20260806-1" alt="Super Slop Brothers funny arcade cover art with goofy original slop fighters" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
           </div>
           <div class="directory-card__body">
@@ -339,7 +356,7 @@
 
         <a href="games/dont-fck-with-cats.html" class="directory-card" data-title="Don't F*ck with Cats cat swarm runner levels gates multiplier laser pointer hairball roomba cucumber vacuum arcade">
           <div class="directory-card__poster directory-card__poster--clowder">
-            <img src="assets/img/mockup/card-dont-fck-with-cats.jpg?v=20260712-jpg" alt="Don't F*ck with Cats cover art with a properly proportioned cat swarm charging through a chaotic living room" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/dont-fck-with-cats.avif?v=20260806-1" alt="Don't F*ck with Cats cover art with a properly proportioned cat swarm charging through a chaotic living room" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">Don't F*ck<br />with Cats</span>
           </div>
@@ -352,7 +369,7 @@
 
         <a href="games/ai-slop-factory.html" class="directory-card" data-title="AI Slop Factory content moderation conveyor arcade boost demonetize fact check delete milk engagement ai thumbnails ragebait bots misinformation deepfake crypto scams">
           <div class="directory-card__poster directory-card__poster--slop">
-            <img src="assets/img/mockup/card-ai-slop-factory.jpg?v=20260712-jpg" alt="AI Slop Factory robot moderator poster art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/ai-slop-factory.avif?v=20260806-1" alt="AI Slop Factory robot moderator poster art" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">AI Slop<br />Factory</span>
           </div>
@@ -365,7 +382,7 @@
 
         <a href="games/karen-merger.html" class="directory-card" data-title="Complaint Chain bubble drop physics manager ascension complaints coupons retail kaiju">
           <div class="directory-card__poster directory-card__poster--karen">
-            <img src="assets/img/mockup/card-karen-merger.jpg?v=20260712-jpg" alt="Complaint Chain generated arcade poster art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/karen-merger.avif?v=20260806-1" alt="Complaint Chain generated arcade poster art" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">Complaint<br />Chain</span>
           </div>
@@ -378,7 +395,7 @@
 
         <a href="games/gen-z-driving-simulator.html" class="directory-card" data-title="Gen Z Driving Simulator driving phone road curves steering vibe check distracted driver">
           <div class="directory-card__poster directory-card__poster--genz">
-            <img src="assets/img/mockup/card-gen-z-driving-simulator.jpg?v=20260712-jpg" alt="Gen Z Driving Simulator arcade poster mark" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/gen-z-driving-simulator.avif?v=20260806-1" alt="Gen Z Driving Simulator arcade poster mark" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">Gen Z Driving<br />Simulator</span>
           </div>
@@ -391,7 +408,7 @@
 
         <a href="games/again.html" class="directory-card" data-title="Again horror hallway after dark">
           <div class="directory-card__poster directory-card__poster--again">
-            <img src="assets/img/mockup/card-again.jpg?v=20260712-jpg" alt="AGAIN horror hallway poster art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/again.avif?v=20260806-1" alt="AGAIN horror hallway poster art" loading="lazy" decoding="async" />
             <span class="directory-card__status">Playable</span>
             <span class="directory-card__poster-title">AGAIN.</span>
           </div>
@@ -404,7 +421,7 @@
 
         <a href="games/the-weight.html" class="directory-card" data-title="The Weight sleep paralysis horror after dark entity bedroom 3am wake body">
           <div class="directory-card__poster directory-card__poster--weight">
-            <img src="assets/img/mockup/card-the-weight-wide-v2.jpg?v=20260712-jpg" alt="The Weight sleep paralysis horror poster art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/the-weight.avif?v=20260806-1" alt="The Weight sleep paralysis horror poster art" loading="lazy" decoding="async" />
             <span class="directory-card__status">Playable</span>
             <span class="directory-card__poster-title">The Weight</span>
           </div>
@@ -418,7 +435,7 @@
 
         <a href="games/smooth-brain-snacker.html" class="directory-card" data-title="Smooth Brain Snacker snake parody brain worm eat smart ideas poop brainrot skibidi rizz gyatt sigma grow tail arcade">
           <div class="directory-card__poster directory-card__poster--snake">
-            <img src="assets/img/mockup/card-smooth-brain-snacker.jpg?v=20260712-jpg" alt="Smooth Brain Snacker brain-worm snake parody cover art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/smooth-brain-snacker.avif?v=20260806-1" alt="Smooth Brain Snacker brain-worm snake parody cover art" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">Smooth Brain<br />Snacker</span>
           </div>
@@ -431,7 +448,7 @@
 
         <a href="games/brainrot-2048.html" class="directory-card" data-title="Brainrot 2048 merge puzzle sliding tiles npc skibidi rizz sigma gyatt ohio gigachad galaxy brain">
           <div class="directory-card__poster directory-card__poster--merge">
-            <img src="assets/img/mockup/card-brainrot-2048.jpg?v=20260712-jpg" alt="Brainrot 2048 cover art — NPC, Sigma, Mogger and Chad meme tiles" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/brainrot-2048.avif?v=20260806-1" alt="Brainrot 2048 cover art — NPC, Sigma, Mogger and Chad meme tiles" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
           </div>
           <div class="directory-card__body">
@@ -444,7 +461,7 @@
 
         <a href="games/unhoused-and-unhinged.html" class="directory-card" data-title="Unhoused and Unhinged low poly 3D sandbox street antics cop chase Tweeker Zombies plunger survival">
           <div class="directory-card__poster directory-card__poster--unhinged">
-            <img src="assets/img/mockup/card-unhoused-and-unhinged.jpg?v=20260712-jpg" alt="Unhoused and Unhinged low-poly city sandbox cover art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/unhoused-and-unhinged.avif?v=20260806-1" alt="Unhoused and Unhinged low-poly city sandbox cover art" loading="lazy" decoding="async" />
             <span class="directory-card__status">Prototype</span>
             <span class="directory-card__poster-title">Unhoused<br />and Unhinged</span>
           </div>
@@ -457,7 +474,7 @@
 
         <a href="games/billionaire-space-race.html" class="directory-card" data-title="Billionaire Space Race rocket launch land lunar lander parody musk bezos platform dodge satellites drones">
           <div class="directory-card__poster directory-card__poster--bsr">
-            <img src="assets/img/mockup/card-billionaire-space-race.jpg?v=20260712-jpg" alt="Billionaire Space Race satirical rocket-race poster art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/billionaire-space-race.avif?v=20260806-1" alt="Billionaire Space Race satirical rocket-race poster art" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">Billionaire<br />Space Race</span>
           </div>
@@ -470,7 +487,7 @@
 
         <a href="games/rizz-craft.html" class="directory-card" data-game-section="multiplayer" data-title="Rizz-Craft voxel mining sandbox parody blocks craft survive ohio sigma rizz online multiplayer co-op coop room codes">
           <div class="directory-card__poster directory-card__poster--rizzcraft">
-            <img src="assets/img/mockup/card-rizz-craft.jpg?v=20260712-jpg" alt="Rizz-Craft voxel mining poster art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/rizz-craft.avif?v=20260806-1" alt="Rizz-Craft voxel mining poster art" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">Rizz-<br />Craft</span>
           </div>
@@ -483,7 +500,7 @@
 
         <a href="games/tardigrade-simulator.html" class="directory-card" data-title="Tardigrade Micro Mayhem 3D physics sandbox open world microscopic tardigrade">
           <div class="directory-card__poster directory-card__poster--tardigrade">
-            <img src="assets/img/mockup/card-tardigrade-micro-mayhem.jpg?v=20260712-jpg" alt="Tardigrade: Micro Mayhem generated game preview" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/tardigrade-simulator.avif?v=20260806-1" alt="Tardigrade: Micro Mayhem generated game preview" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">Tardigrade:<br />Micro Mayhem</span>
           </div>
@@ -496,7 +513,7 @@
 
         <a href="games/doorcrash-no-tip-nitro.html" class="directory-card" data-title="DoorCrash No Tip Nitro 3D delivery runner food car obstacles">
           <div class="directory-card__poster directory-card__poster--doorcrash">
-            <img src="assets/img/mockup/card-doorcrash-no-tip-nitro.jpg?v=20260712-jpg" alt="DoorCrash: No Tip Nitro poster art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/doorcrash-no-tip-nitro.avif?v=20260806-1" alt="DoorCrash: No Tip Nitro poster art" loading="lazy" decoding="async" />
             <span class="directory-card__status">New</span>
             <span class="directory-card__poster-title">DoorCrash:<br />No Tip Nitro</span>
           </div>
@@ -509,7 +526,7 @@
 
         <a href="games/strait-of-hormuz.html" class="directory-card" data-title="Escape the Straight action tanker mines drones">
           <div class="directory-card__poster directory-card__poster--escape">
-            <img src="assets/img/mockup/card-escape-straight-wide.png?v=20260611-7" alt="Escape the Straight tanker poster art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/strait-of-hormuz.avif?v=20260806-1" alt="Escape the Straight tanker poster art" loading="lazy" decoding="async" />
             <span class="directory-card__status">Playable</span>
             <span class="directory-card__poster-title">Escape the<br />Straight</span>
           </div>
@@ -522,7 +539,7 @@
 
         <a href="games/mr-feast-mansion.html" class="directory-card" data-title="Mr Feast: Last to Leave reality-show competition stealth horror mansion investigation sabotage 3D">
           <div class="directory-card__poster directory-card__poster--feast">
-            <img src="assets/img/mr-feast/card-mr-feast-last-to-leave-ai-v1.jpg?v=20260723-2" alt="Mr Feast: Last to Leave cover art with the uncanny host, surveillance cameras, and a stormy mansion" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/mr-feast-mansion.avif?v=20260806-1" alt="Mr Feast: Last to Leave cover art with the uncanny host, surveillance cameras, and a stormy mansion" loading="lazy" decoding="async" />
             <span class="directory-card__status">Updated</span>
           </div>
           <div class="directory-card__body">
@@ -534,7 +551,7 @@
 
         <a href="games/looksmaxxing-grindset.html" class="directory-card" data-title="Looksmaxxing Grindset idle sim gym mewing water">
           <div class="directory-card__poster directory-card__poster--looksmaxxing">
-            <img src="assets/img/mockup/card-looksmaxxing.png?v=20260611-7" alt="Looksmaxxing Grindset poster art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/looksmaxxing-grindset.avif?v=20260806-1" alt="Looksmaxxing Grindset poster art" loading="lazy" decoding="async" />
             <span class="directory-card__status">Playable</span>
           </div>
           <div class="directory-card__body">
@@ -546,7 +563,7 @@
 
         <a href="games/boomer-monopoly.html" class="directory-card" data-title="Boomer Monopoly housing board game parody">
           <div class="directory-card__poster">
-            <img src="assets/img/mockup/card-boomer-monopoly.jpg?v=20260712-jpg" alt="Boomer Monopoly poster art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/boomer-monopoly.avif?v=20260806-1" alt="Boomer Monopoly poster art" loading="lazy" decoding="async" />
             <span class="directory-card__status">Playable</span>
           </div>
           <div class="directory-card__body">
@@ -558,7 +575,7 @@
 
         <a href="games/apop-demon-hunters.html" class="directory-card" data-title="Apop Demon Moggers side-scroller platformer pop action boyz ii hell">
           <div class="directory-card__poster directory-card__poster--apop">
-            <img src="assets/img/mockup/card-apop-moggers-v3.jpg?v=20260712-jpg" alt="Apop Demon Moggers updated cartoon poster art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/apop-demon-hunters.avif?v=20260806-1" alt="Apop Demon Moggers updated cartoon poster art" loading="lazy" decoding="async" />
             <span class="directory-card__status">Playable</span>
             <span class="directory-card__poster-title">Apop<br />Demon Moggers</span>
           </div>
@@ -571,7 +588,7 @@
 
         <a href="games/skibidi-toilet-tower-defense.html" class="directory-card" data-title="Skibidi Toilet Tower Defense toilets towers camera speaker plunger">
           <div class="directory-card__poster directory-card__poster--escape">
-            <img src="assets/img/mockup/card-skibidi-toilet-tower-defense.jpg?v=20260712-jpg" alt="Skibidi Toilet Tower Defense poster art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/skibidi-toilet-tower-defense.avif?v=20260806-1" alt="Skibidi Toilet Tower Defense poster art" loading="lazy" decoding="async" />
             <span class="directory-card__status">Playable</span>
           </div>
           <div class="directory-card__body">
@@ -583,7 +600,7 @@
 
         <a href="games/dont-look-gym-girl.html" class="directory-card" data-title="Don't Look at the Gym Girl stealth awkward parody">
           <div class="directory-card__poster">
-            <img src="assets/img/mockup/card-gym-girl.jpg?v=20260712-jpg" alt="Don't Look at the Gym Girl poster art" loading="lazy" decoding="async" />
+            <img src="assets/img/cards/dont-look-gym-girl.avif?v=20260806-1" alt="Don't Look at the Gym Girl poster art" loading="lazy" decoding="async" />
             <span class="directory-card__status">Playable</span>
           </div>
           <div class="directory-card__body">
@@ -609,17 +626,15 @@
       <a href="legal/terms.html">Terms</a>
       <a href="mailto:press@rainbotgaming.com">Press Kit</a>
     </div>
-    <div class="site-footer__social" aria-label="Social links">
-      <a href="#" aria-label="Discord">DI</a>
-      <a href="#" aria-label="X">X</a>
-      <a href="#" aria-label="YouTube">YT</a>
-      <a href="#" aria-label="TikTok">TT</a>
-      <a href="#" aria-label="Instagram">IG</a>
+    <div class="site-footer__social" aria-label="Network links">
+      <a href="community.html" aria-label="Rainbot community">Forum</a>
+      <a href="mailto:hello@rainbotgaming.com" aria-label="Email Rainbot Network">Email</a>
+      <a href="mailto:press@rainbotgaming.com" aria-label="Rainbot press contact">Press</a>
     </div>
   </footer>
 
   <script src="assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="assets/js/main.js?v=20260803-favorites-1"></script>
+  <script src="assets/js/main.js?v=20260806-network-polish-1"></script>
   <script>renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");</script>
 </body>
 </html>

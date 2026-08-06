@@ -4,6 +4,19 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Gen Z Driving Simulator — Rainbot Network</title>
+  <link rel="manifest" href="../site.webmanifest" />
+  <meta name="theme-color" content="#05070d" />
+  <link rel="icon" type="image/png" href="../assets/img/avatars/rainbot-avatar-01-rainbot.png" />
+  <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/gen-z-driving-simulator.html" />
+  <meta property="og:title" content="Gen Z Driving Simulator — Rainbot Network" />
+  <meta property="og:description" content="A distracted-driving parody sim. Spin a real steering wheel through the back roads while the phone keeps begging for clout." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/gen-z-driving-simulator.html" />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Gen Z Driving Simulator — Rainbot Network" />
+  <meta name="twitter:description" content="A distracted-driving parody sim. Spin a real steering wheel through the back roads while the phone keeps begging for clout." />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
 <meta name="description" content="A distracted-driving parody sim. Spin a real steering wheel through the back roads while the phone keeps begging for clout." />
 
 <!-- ===== Tailwind ===== -->
@@ -13,7 +26,7 @@
 <!-- ===== Fonts ===== -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Orbitron:wght@600;800;900&family=Press+Start+2P&family=Rubik:wght@400;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="../assets/css/styles.css?v=20260802-inkblood" />
+<link rel="stylesheet" href="../assets/css/styles.css?v=20260806-network-polish-1" />
 
 <style>
   /* =========================================================
@@ -531,7 +544,7 @@
 
 <div id="screen-start" class="screen">
   <div class="text-6xl mb-2">🚗💨📱</div>
-  <h1 class="title-glow text-4xl sm:text-6xl mb-2"><span class="rb">RAINBOT</span></h1>
+  <h2 class="title-glow text-4xl sm:text-6xl mb-2"><span class="rb">RAINBOT</span></h2>
   <h2 class="font-arcade text-lg sm:text-2xl mb-5 text-white/80">Gen Z Driving Simulator</h2>
   <p class="max-w-md text-white/80 mb-5 leading-relaxed">
     You <b>cannot stop scrolling.</b> Rack up clout on your phone 📱 while you actually <b>drive</b> the
@@ -552,14 +565,14 @@
 </div>
 
 <div id="screen-level" class="screen hidden">
-  <div class="text-6xl mb-3">🏁</div><h1 class="title-glow text-3xl sm:text-5xl mb-2">YOU MADE IT!</h1>
+  <div class="text-6xl mb-3">🏁</div><h2 class="title-glow text-3xl sm:text-5xl mb-2">YOU MADE IT!</h2>
   <p id="level-msg" class="accent font-arcade text-lg mb-4">Nice driving.</p>
   <p class="text-white/80 mb-6">Score so far: <span id="level-score" class="font-arcade">0</span></p>
   <button class="btn-neon" onclick="Game.next()">NEXT DESTINATION ▶</button>
 </div>
 
 <div id="screen-over" class="screen hidden">
-  <div class="text-6xl mb-3">💥🚗</div><h1 class="title-glow text-4xl sm:text-6xl mb-2">VIBE CHECK FAILED</h1>
+  <div class="text-6xl mb-3">💥🚗</div><h2 class="title-glow text-4xl sm:text-6xl mb-2">VIBE CHECK FAILED</h2>
   <p id="over-msg" class="text-red-300 mb-4 max-w-md">The meter hit zero. The road, phone, and grass all witnessed it.</p>
   <p class="text-white/80 mb-1">Final score: <span id="over-score" class="font-arcade text-2xl">0</span></p>
   <p id="over-distance" class="text-white/50 text-sm mb-6">You drove 0 m before becoming a meme.</p>
@@ -567,14 +580,14 @@
 </div>
 
 <div id="screen-win" class="screen hidden">
-  <div class="text-6xl mb-3">🏆</div><h1 class="title-glow text-4xl sm:text-6xl mb-2">ROAD LEGEND</h1>
+  <div class="text-6xl mb-3">🏆</div><h2 class="title-glow text-4xl sm:text-6xl mb-2">ROAD LEGEND</h2>
   <p class="text-white/80 mb-4 max-w-md">You reached every destination without losing your phone privileges. Reckless. Iconic.</p>
   <p class="text-white/80 mb-6">Final score: <span id="win-score" class="font-arcade text-2xl">0</span></p>
   <button class="btn-neon" onclick="Game.restart()">DRIVE AGAIN ↻</button>
 </div>
 
 <div id="screen-error" class="screen hidden">
-  <div class="text-6xl mb-3">📡💀</div><h1 class="title-glow text-3xl mb-3">No signal</h1>
+  <div class="text-6xl mb-3">📡💀</div><h2 class="title-glow text-3xl mb-3">No signal</h2>
   <p class="text-white/80 max-w-md" id="error-msg">The 3D world couldn't load. Reload the page and try again.</p>
 </div>
         </div>
@@ -640,7 +653,7 @@
   </footer>
 
 <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-<script src="../assets/js/main.js?v=20260802-inkblood"></script>
+<script src="../assets/js/main.js?v=20260806-network-polish-1"></script>
 
 <script>
 /* =================================================================

@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The Optimizer — Rainbot Network</title>
+  <link rel="manifest" href="../site.webmanifest" />
+  <meta name="theme-color" content="#05070d" />
+  <link rel="icon" type="image/png" href="../assets/img/avatars/rainbot-avatar-01-rainbot.png" />
+  <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/the-optimizer.html" />
   <meta name="description" content="Operate and upgrade a physical paperclip press in a full-screen low-poly industrial horror game." />
   <meta property="og:title" content="The Optimizer — Rainbot Network" />
   <meta property="og:description" content="Load the wire. Pull the lever. Collect the clip. Then teach the machine to continue without you." />
@@ -11,7 +15,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/the-optimizer/card-the-optimizer-ai-v1.jpg?v=20260712-jpg" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" />
-  <link rel="stylesheet" href="../assets/css/styles.css?v=20260802-inkblood" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260806-network-polish-1" />
   <style>
     *{box-sizing:border-box}html,body{width:100%;margin:0;background:#020303}body{font-family:var(--font-mono,"JetBrains Mono",monospace)}
     .optimizer-page .game-page{--game-side-width:clamp(292px,24vw,350px)}
@@ -125,7 +129,7 @@
     <aside class="po-upgrade-menu" id="po-upgrade-menu"><div class="po-menu-head"><b>OPTIMIZATION</b><span>LOCAL CONTROL</span><button id="btn-close-upgrades" aria-label="Close upgrades">×</button></div><div class="po-tabs" role="tablist"><button class="is-active" data-tab="hardware" role="tab">HARDWARE</button><button data-tab="research" role="tab">RESEARCH</button><button data-tab="records" role="tab">RECORDS</button></div><section class="po-panel is-active" data-panel="hardware"><div class="po-upgrade-list" id="po-upgrade-list"></div></section><section class="po-panel" data-panel="research"><div class="po-compute-card"><span>AVAILABLE PROCESSOR CYCLES</span><b id="menu-cycles">0.00</b><button id="btn-allocate">ALLOCATE ONE CYCLE</button></div><div class="po-research-list" id="po-research-list"></div></section><section class="po-panel" data-panel="records"><div class="po-records"><div class="po-setting"><label for="difficulty">OPTIMIZATION PACE</label><select id="difficulty"><option value="accelerated">Accelerated</option><option value="standard">Standard</option><option value="austere">Austere</option></select></div><div class="po-stat-grid" id="po-stats"></div><div class="po-achievements" id="po-achievements"></div></div></section><div class="po-menu-foot"><div class="po-log" id="po-log"></div><button id="btn-reset" style="margin-top:7px;background:none;border:0;cursor:pointer">ERASE SIMULATION</button></div></aside>
     <div class="po-resources"><div class="po-resource po-resource--clips"><span>PAPERCLIPS</span><b id="res-clips">0.00</b></div><div class="po-resource"><span>WIRE STOCK</span><b id="res-wire">3</b></div><div class="po-resource po-resource--power"><span>POWER</span><b id="res-power">100%</b><small id="res-power-rate">+0.18/s · -2.00/press</small><div class="po-mini-bar"><i id="res-power-bar" style="width:100%"></i></div></div><div class="po-resource po-resource--cycles"><span>PROCESSOR CYCLES</span><b id="res-cycles">0.00</b><small id="res-cycle-rate">+0/s</small></div><div class="po-resource"><span>MATTER REMAINING</span><b id="res-matter">LOCAL</b><div class="po-mini-bar po-mini-bar--matter"><i id="res-matter-bar" style="width:100%"></i></div></div><div class="po-resource"><span>AUTOMATIC RATE</span><b id="res-rate">0.00/s</b></div></div>
     <div class="po-event" id="po-event"></div><div class="po-era" id="po-era"></div>
-    <div class="overlay overlay--show" id="overlay"><h1 class="overlay__title" id="overlay-title">THE OPTIMIZER</h1><p class="overlay__sub" id="overlay-sub">Loading machine…</p><div class="overlay__score" id="overlay-score"></div><div class="po-overlay-actions"><button class="btn btn--primary" id="btn-primary">Activate</button><button class="btn po-restart" id="btn-restart" hidden>Restart Simulation</button></div></div>
+    <div class="overlay overlay--show" id="overlay"><h2 class="overlay__title" id="overlay-title">THE OPTIMIZER</h2><p class="overlay__sub" id="overlay-sub">Loading machine…</p><div class="overlay__score" id="overlay-score"></div><div class="po-overlay-actions"><button class="btn btn--primary" id="btn-primary">Activate</button><button class="btn po-restart" id="btn-restart" hidden>Restart Simulation</button></div></div>
           </div>
         </div>
       </div>
@@ -177,7 +181,7 @@
 
   <script src="../assets/vendor/three/three-r128.min.js"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/main.js?v=20260802-inkblood"></script>
+  <script src="../assets/js/main.js?v=20260806-network-polish-1"></script>
   <script src="../assets/js/paperclip-optimizer/config.js?v=20260722-po-23"></script><script src="../assets/js/paperclip-optimizer/simulation.js?v=20260722-po-23"></script><script src="../assets/js/paperclip-optimizer/renderer.js?v=20260722-po-24"></script><script src="../assets/js/paperclip-optimizer/audio.js?v=20260722-po-23"></script><script src="../assets/js/paperclip-optimizer/main.js?v=20260722-po-26"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");

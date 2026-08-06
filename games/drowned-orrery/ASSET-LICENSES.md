@@ -5,10 +5,11 @@ The shipped game uses no Nintendo, Zelda, Ocarina of Time, stock-game, or third-
 | Asset/system | Provenance |
 | --- | --- |
 | `assets/img/drowned-orrery/drowned-orrery-key-art.png` | Original image generated for this project with OpenAI's built-in ImageGen tool on 2026-08-04. The prompt required original characters, architecture, symbols, and typography and explicitly excluded copyrighted game designs. |
-| World, terrain, water, vegetation, mechanisms, VFX, and character meshes | Original procedural Three.js geometry, materials, canvas textures, and shaders in this repository. |
+| World, terrain, water, vegetation, mechanisms, and VFX | Original procedural Three.js geometry, materials, canvas textures, and shaders in this repository. |
+| Gold-slice hero, Bell Warden, Meridian Lock, rigs, animation clips, and PBR texture sets | Original Blender-authored work created from scratch for this project on 2026-08-05. Runtime GLBs are in `models/gold-slice/`; the deterministic source build is in `scripts/blender/build_drowned_gold_slice.py`. No stock meshes, textures, motion capture, or franchise assets are used. |
 | Music, ambience, and sound effects | Original real-time Web Audio synthesis in `js/audio.js`; no recorded music or sound files. |
 | Typography | Local system font stacks only; no downloaded font files. |
-| Three.js r128 | Repository-local dependency under `assets/vendor/three/`; see its adjacent `LICENSE`. |
+| Three.js r128, classic GLTFLoader, and SkeletonUtils | Exact repository-local files from the official `three@0.128.0` npm package under `assets/vendor/three/`; see the adjacent MIT `LICENSE`. |
 
 ## ImageGen production prompt
 

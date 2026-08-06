@@ -39,9 +39,15 @@
         ? Math.min(quality === 2 ? 8 : 4, renderer.capabilities.getMaxAnisotropy())
         : 1;
       var terrainMap = makeSurfaceTexture(THREE, textureSize, 0x71847f, 0xbcc0aa, 401, 'mottle', maxAnisotropy);
-      terrainMap.repeat.set(12, 20);
+      // Non-harmonic tiling plus a slight diagonal bias keeps the procedural
+      // swatches from resolving into a visible checker across long hill faces.
+      terrainMap.repeat.set(10.75, 17.25);
+      terrainMap.center.set(0.5, 0.5);
+      terrainMap.rotation = 0.065;
       var terrainDetailMap = makeSurfaceTexture(THREE, textureSize, 0xb8b8b8, 0xf5f5f5, 409, 'stone', maxAnisotropy);
-      terrainDetailMap.repeat.set(24, 38);
+      terrainDetailMap.repeat.set(28.5, 43.25);
+      terrainDetailMap.center.set(0.5, 0.5);
+      terrainDetailMap.rotation = -0.09;
       if (THREE.LinearEncoding !== undefined) terrainDetailMap.encoding = THREE.LinearEncoding;
       var routeDetailMap = terrainDetailMap.clone();
       routeDetailMap.name = 'Worn route microdetail';
@@ -184,12 +190,92 @@
       root.add(horizonFill);
       root.add(horizonFill.target);
 
+      // A restrained cross-key gives textured glTF metals and cloth a neutral
+      // read without washing the authored storm lighting across the terrain.
+      var materialKey = new THREE.DirectionalLight(0xffdfb0, quality === 0 ? 0.26 : 0.42);
+      materialKey.name = 'Surveyor warm material key';
+      materialKey.position.set(-18, 14, 18);
+      materialKey.target.position.set(0, 3, -36);
+      root.add(materialKey);
+      root.add(materialKey.target);
+
+      var materialRim = new THREE.DirectionalLight(0x91d8dc, quality === 0 ? 0.2 : 0.31);
+      materialRim.name = 'Surveyor cool silhouette rim';
+      materialRim.position.set(21, 11, -68);
+      materialRim.target.position.set(0, 4, -34);
+      root.add(materialRim);
+      root.add(materialRim.target);
+
+      // Local no-shadow pools shape the two destination spaces without raising
+      // the exposure of the whole valley. The gate's own cyan seal supplies its
+      // cool half; the arena receives a deliberate warm/cool cross-light.
+      var gateWarmFocus = new THREE.SpotLight(
+        0xffbd78,
+        quality === 0 ? 0.72 : 1.16,
+        31,
+        0.5,
+        0.78,
+        1.8
+      );
+      gateWarmFocus.name = 'Gate amber threshold focus';
+      gateWarmFocus.position.set(-10.5, 10.5, -30.5);
+      gateWarmFocus.target.position.set(0, 2.9, -44);
+      root.add(gateWarmFocus);
+      root.add(gateWarmFocus.target);
+
+      var arenaWarmFocus = new THREE.SpotLight(
+        0xffc886,
+        quality === 0 ? 0.62 : 0.98,
+        36,
+        0.54,
+        0.82,
+        1.9
+      );
+      arenaWarmFocus.name = 'Arena low amber key';
+      arenaWarmFocus.position.set(-15, 13.5, -49);
+      arenaWarmFocus.target.position.set(-1.8, 1.9, -66);
+      root.add(arenaWarmFocus);
+      root.add(arenaWarmFocus.target);
+
+      var arenaCoolFocus = new THREE.SpotLight(
+        0x70cbd2,
+        quality === 0 ? 0.52 : 0.82,
+        31,
+        0.5,
+        0.84,
+        2.0
+      );
+      arenaCoolFocus.name = 'Arena drowned-blue rim pool';
+      arenaCoolFocus.position.set(13, 9, -79);
+      arenaCoolFocus.target.position.set(2.4, 2.7, -66);
+      root.add(arenaCoolFocus);
+      root.add(arenaCoolFocus.target);
+
       function heightAt(x, z) {
         x = Number(x) || 0;
         z = Number(z) || 0;
         var broad = fbm(x * 0.041, z * 0.041) * 1.22;
         var detail = valueNoise(x * 0.118 + 13.2, z * 0.118 - 4.7) * 0.38;
         var y = -0.72 + broad + detail + Math.sin(z * 0.055 + x * 0.018) * 0.22;
+
+        // Three authored, overlapping landforms interrupt the noise field's
+        // uniform frequency. They sit outside the traversal ribbon, so their
+        // asymmetry reads in the long camera while the route remains predictable.
+        var westShoulderDistance = Math.sqrt(
+          Math.pow((x + 42) / 15.5, 2) + Math.pow((z - 9) / 47, 2)
+        );
+        var eastShoulderDistance = Math.sqrt(
+          Math.pow((x - 43) / 17, 2) + Math.pow((z + 8) / 40, 2)
+        );
+        var northShelfDistance = Math.sqrt(
+          Math.pow((x - 21) / 24, 2) + Math.pow((z - 58) / 19, 2)
+        );
+        var westShoulder = 1 - smoothstep(0.22, 1.05, westShoulderDistance);
+        var eastShoulder = 1 - smoothstep(0.2, 1.0, eastShoulderDistance);
+        var northShelf = 1 - smoothstep(0.18, 1.0, northShelfDistance);
+        y += westShoulder * (1.62 + valueNoise(x * 0.075 - 3.2, z * 0.052 + 8.4) * 0.28);
+        y += eastShoulder * (1.28 + valueNoise(x * 0.061 + 9.7, z * 0.068 - 2.1) * 0.24);
+        y += northShelf * (0.74 + valueNoise(x * 0.09 - 12.0, z * 0.07 + 5.0) * 0.16);
 
         var edge = Math.max(0, Math.abs(x) - 34) / 18;
         y += edge * edge * (10.8 + 2.2 * valueNoise(x * 0.07, z * 0.04));
@@ -362,8 +448,8 @@
       var fogRestored = new THREE.Color(0x54736f);
       var hemiSkyDormant = new THREE.Color(0x7aa5ad);
       var hemiSkyRestored = new THREE.Color(0x91c8c4);
-      var hemiGroundDormant = new THREE.Color(0x1b2927);
-      var hemiGroundRestored = new THREE.Color(0x32422e);
+      var hemiGroundDormant = new THREE.Color(0x242a31);
+      var hemiGroundRestored = new THREE.Color(0x3a3b34);
       var sunDormant = new THREE.Color(0xffbd70);
       var sunRestored = new THREE.Color(0xffe1a6);
 
@@ -397,6 +483,22 @@
         sun.color.copy(sunDormant).lerp(sunRestored, restoredAmount);
         sun.intensity = (quality === 0 ? 1.78 : 2.22) + restoredAmount * 0.34;
         horizonFill.intensity = 0.82 + restoredAmount * 0.16;
+        var bossPresentation = runtimeState.bossActive ? 1 : 0;
+        if (arena.presentationObstructions) {
+          for (var obstructionIndex = 0; obstructionIndex < arena.presentationObstructions.length; obstructionIndex++) {
+            arena.presentationObstructions[obstructionIndex].visible = !bossPresentation;
+          }
+        }
+        materialKey.intensity = (quality === 0 ? 0.26 : 0.42) + bossPresentation * 0.2 + restoredAmount * 0.06;
+        materialRim.intensity = (quality === 0 ? 0.2 : 0.31) + bossPresentation * 0.24 + restoredAmount * 0.05;
+        gateWarmFocus.intensity = (quality === 0 ? 0.72 : 1.16) + (1 - gate._amount) * 0.12 + restoredAmount * 0.08;
+        arenaWarmFocus.intensity = (quality === 0 ? 0.62 : 0.98) + bossPresentation * 0.34 + restoredAmount * 0.1;
+        arenaCoolFocus.intensity = (quality === 0 ? 0.52 : 0.82) + bossPresentation * 0.42 + restoredAmount * 0.08;
+        var lightFocus = runtimeState.bossActive ? arena.center : runtimeState.playerPosition;
+        if (lightFocus) {
+          materialKey.target.position.set(lightFocus.x, lightFocus.y + 2.4, lightFocus.z);
+          materialRim.target.position.set(lightFocus.x, lightFocus.y + 3.2, lightFocus.z);
+        }
         rootMaterial.emissive.setRGB(
           0.065 + restoredAmount * 0.09,
           0.074 + restoredAmount * 0.11,
@@ -416,7 +518,7 @@
         }
 
         gate._update(dt, worldClock, reduceMotion);
-        updateOrrery(orrery, dt, worldClock, activeCount / mechanisms.length, restoredAmount, reduceMotion);
+        updateOrrery(orrery, dt, worldClock, activeCount / mechanisms.length, restoredAmount, reduceMotion, !!runtimeState.bossActive);
       }
 
       function resolvePosition(previous, desired, radius) {
@@ -568,6 +670,9 @@
     var path = new THREE.Color(0xc4ad70);
     var wet = new THREE.Color(0x102b33);
     var stone = new THREE.Color(0x354b50);
+    var lichen = new THREE.Color(0x5d6f61);
+    var peat = new THREE.Color(0x263437);
+    var ochre = new THREE.Color(0x756747);
     var foreground = new THREE.Color(0x172e31);
     var middleDistance = new THREE.Color(0x58635a);
     var atmosphere = new THREE.Color(0x425d64);
@@ -581,7 +686,11 @@
         var x = minX + (maxX - minX) * vx;
         var y = heightAt(x, z);
         positions.push(x, y, z);
-        uvs.push(vx * 1.0, vz * 1.0);
+        // Continuous domain warping interrupts identical texels at the scale of
+        // whole hills while preserving a stable, seam-free micro surface.
+        var uvWarpX = fbm(x * 0.026 + 6.7, z * 0.024 - 11.3) * 0.012 + Math.sin(z * 0.041) * 0.006;
+        var uvWarpZ = fbm(x * 0.021 - 9.2, z * 0.029 + 4.6) * 0.011 + Math.sin(x * 0.038) * 0.005;
+        uvs.push(vx + uvWarpX, vz + uvWarpZ);
 
         var n = valueNoise(x * 0.19 + 4.2, z * 0.19 - 8.1) * 0.5 + 0.5;
         tmp.copy(moss).lerp(dry, clamp((y + 0.7) * 0.065 + n * 0.16, 0, 0.38));
@@ -592,8 +701,15 @@
         tmp.lerp(foreground, foregroundBand * 0.72);
         tmp.lerp(middleDistance, midBand * 0.2);
         tmp.lerp(atmosphere, distanceBand * 0.48);
-        var groundBreakup = fbm(x * 0.105 + 17.3, z * 0.105 - 9.7) * 0.075;
-        groundBreakup += valueNoise(x * 0.48 - 3.2, z * 0.48 + 6.1) * 0.028;
+        var macroPatch = clamp(fbm(x * 0.032 - 8.4, z * 0.028 + 13.1) * 0.5 + 0.5, 0, 1);
+        var broadSwale = clamp(fbm(x * 0.057 + 19.0, z * 0.044 - 5.7) * 0.5 + 0.5, 0, 1);
+        var mineralBand = Math.sin(x * 0.115 + z * 0.041 + macroPatch * 3.8) * 0.5 + 0.5;
+        var shoulderWeight = smoothstep(20, 48, Math.abs(x));
+        tmp.lerp(lichen, smoothstep(0.57, 0.88, macroPatch) * (0.08 + shoulderWeight * 0.09));
+        tmp.lerp(peat, smoothstep(0.68, 0.94, 1 - broadSwale) * 0.13);
+        tmp.lerp(ochre, smoothstep(0.84, 0.98, mineralBand) * shoulderWeight * 0.14);
+        var groundBreakup = fbm(x * 0.105 + 17.3, z * 0.105 - 9.7) * 0.1;
+        groundBreakup += valueNoise(x * 0.48 - 3.2, z * 0.48 + 6.1) * 0.035;
         var breakupWeight = 0.38 + smoothstep(-28, 72, z) * 0.62;
         tmp.offsetHSL(groundBreakup * 0.035, -0.018, groundBreakup * breakupWeight);
         var streamDist = Math.abs(x - streamX(z));
@@ -1494,38 +1610,145 @@
   }
 
   function createStarFlowers(THREE, heightAt, palette, rng, quality) {
-    var count = quality === 2 ? 42 : quality === 1 ? 28 : 16;
+    var count = quality === 2 ? 60 : quality === 1 ? 38 : 22;
+    var group = new THREE.Group();
+    group.name = 'Naturalized star-flower colonies';
     var geometry = new THREE.OctahedronGeometry(0.12, 0);
-    geometry.scale(1, 1.8, 1);
+    geometry.scale(1, 1.42, 1);
     var material = new THREE.MeshStandardMaterial({
-      name: 'Coral star flowers',
-      color: palette.coral.clone(),
+      name: 'Variegated coral star-flower petals',
+      color: new THREE.Color(0xffffff),
       emissive: new THREE.Color(0x421008),
-      emissiveIntensity: 0.5,
-      roughness: 0.55,
+      emissiveIntensity: 0.27,
+      roughness: 0.52,
       metalness: 0.02
     });
     var mesh = new THREE.InstancedMesh(geometry, material, count);
-    mesh.name = 'Clustered coral bend accents';
+    mesh.name = 'Open star-flower blossoms';
+
+    var budGeometry = new THREE.DodecahedronGeometry(0.075, 0);
+    budGeometry.scale(0.8, 1.55, 0.8);
+    var budMaterial = material.clone();
+    budMaterial.name = 'Closed star-flower buds';
+    budMaterial.roughness = 0.62;
+    var buds = new THREE.InstancedMesh(budGeometry, budMaterial, count);
+    buds.name = 'Closed star-flower buds';
+
+    var stemGeometry = new THREE.CylinderGeometry(0.018, 0.032, 1, 6);
+    var stemMaterial = new THREE.MeshStandardMaterial({
+      name: 'Variegated star-flower stems',
+      color: new THREE.Color(0xffffff),
+      roughness: 0.88,
+      metalness: 0.0
+    });
+    var stems = new THREE.InstancedMesh(stemGeometry, stemMaterial, count);
+    stems.name = 'Star-flower stems';
+
+    var leafGeometry = new THREE.OctahedronGeometry(0.1, 0);
+    leafGeometry.scale(0.5, 0.18, 1.28);
+    var leafMaterial = new THREE.MeshStandardMaterial({
+      name: 'Sage star-flower leaves',
+      color: new THREE.Color(0xffffff),
+      roughness: 0.92,
+      metalness: 0.0
+    });
+    var leaves = new THREE.InstancedMesh(leafGeometry, leafMaterial, count * 2);
+    leaves.name = 'Paired star-flower leaves';
+
+    // Hand-placed colony anchors create readable pockets of ecology. The seeded
+    // scatter within each anchor keeps their edges irregular without becoming
+    // evenly distributed confetti along the path.
+    var colonySites = [
+      { z: 42.5, side: -1, spreadX: 1.7, spreadZ: 2.7 },
+      { z: 35.0, side: 1, spreadX: 1.25, spreadZ: 1.8 },
+      { z: 10.5, side: -1, spreadX: 1.45, spreadZ: 2.4 },
+      { z: 3.5, side: 1, spreadX: 1.8, spreadZ: 2.6 },
+      { z: -16.5, side: -1, spreadX: 1.35, spreadZ: 2.1 },
+      { z: -23.5, side: 1, spreadX: 1.6, spreadZ: 2.3 }
+    ];
+    var petalColors = [
+      palette.coral.clone().lerp(new THREE.Color(0xffc09a), 0.48),
+      new THREE.Color(0xf07b68),
+      new THREE.Color(0xe9b879),
+      new THREE.Color(0xd6c29b)
+    ];
+    var stemColors = [new THREE.Color(0x2d514d), new THREE.Color(0x526d5b), new THREE.Color(0x6f7457)];
+    var leafColors = [new THREE.Color(0x365e57), new THREE.Color(0x6b8068), new THREE.Color(0x8b8963)];
     var dummy = new THREE.Object3D();
-    var bendCenters = [38, 7, -19];
     var placed = 0;
+    var budCount = 0;
+    var leafCount = 0;
     var attempts = 0;
-    while (placed < count && attempts++ < count * 20) {
-      var z = bendCenters[placed % bendCenters.length] + (rng() - 0.5) * 9.5;
-      var x = pathX(z) + (rng() < 0.5 ? -1 : 1) * (4.55 + rng() * 1.65);
+    while (placed < count && attempts++ < count * 32) {
+      var colony = colonySites[Math.floor(rng() * colonySites.length)];
+      var clusterAngle = rng() * Math.PI * 2;
+      var clusterRadius = Math.pow(rng(), 0.72);
+      var z = colony.z + Math.sin(clusterAngle) * colony.spreadZ * clusterRadius;
+      var x = pathX(colony.z) + colony.side * (5.05 + Math.cos(clusterAngle) * colony.spreadX * clusterRadius);
       if (Math.abs(x - streamX(z)) < 3.0 && z > -38) continue;
-      dummy.position.set(x, heightAt(x, z) + 0.1, z);
-      dummy.rotation.set(rng(), rng() * Math.PI, rng());
-      var s = 0.52 + rng() * 0.55;
-      dummy.scale.set(s, s, s);
+      if (Math.abs(x - pathX(z)) < 4.05) continue;
+      var ground = heightAt(x, z);
+      var s = 0.58 + rng() * 0.72;
+      var stemHeight = 0.25 + s * (0.17 + rng() * 0.08);
+      var leanX = (rng() - 0.5) * 0.22;
+      var leanZ = (rng() - 0.5) * 0.22;
+      var flowerX = x + leanX * stemHeight * 0.48;
+      var flowerZ = z + leanZ * stemHeight * 0.48;
+      var flowerY = ground + stemHeight;
+
+      dummy.position.set(x, ground + stemHeight * 0.5, z);
+      dummy.rotation.set(leanZ, rng() * Math.PI, -leanX);
+      dummy.scale.set(s, stemHeight, s);
       dummy.updateMatrix();
-      mesh.setMatrixAt(placed, dummy.matrix);
+      stems.setMatrixAt(placed, dummy.matrix);
+      if (stems.setColorAt) stems.setColorAt(placed, stemColors[placed % stemColors.length]);
+
+      var isBud = rng() < 0.22;
+      dummy.position.set(flowerX, flowerY, flowerZ);
+      dummy.rotation.set(leanZ * 0.7, rng() * Math.PI, -leanX * 0.7);
+      dummy.scale.setScalar(isBud ? s * 0.82 : s);
+      dummy.updateMatrix();
+      var petalColor = petalColors[(placed + Math.floor(rng() * petalColors.length)) % petalColors.length];
+      if (isBud) {
+        buds.setMatrixAt(budCount, dummy.matrix);
+        if (buds.setColorAt) buds.setColorAt(budCount, petalColor.clone().multiplyScalar(0.82));
+        budCount++;
+      } else {
+        mesh.setMatrixAt(placed - budCount, dummy.matrix);
+        if (mesh.setColorAt) mesh.setColorAt(placed - budCount, petalColor);
+      }
+
+      var leavesOnStem = rng() < 0.64 ? 2 : 1;
+      for (var leafIndex = 0; leafIndex < leavesOnStem; leafIndex++) {
+        var leafYaw = clusterAngle + leafIndex * 2.25 + (rng() - 0.5) * 0.65;
+        var leafLift = stemHeight * (0.31 + leafIndex * 0.22);
+        var leafLength = s * (0.58 + rng() * 0.36);
+        dummy.position.set(x + Math.sin(leafYaw) * 0.065 * s, ground + leafLift, z + Math.cos(leafYaw) * 0.065 * s);
+        dummy.rotation.set(0.18 + rng() * 0.24, leafYaw, (rng() - 0.5) * 0.28);
+        dummy.scale.set(leafLength, leafLength, leafLength);
+        dummy.updateMatrix();
+        leaves.setMatrixAt(leafCount, dummy.matrix);
+        if (leaves.setColorAt) leaves.setColorAt(leafCount, leafColors[(placed + leafIndex) % leafColors.length]);
+        leafCount++;
+      }
       placed++;
     }
-    mesh.count = placed;
+    mesh.count = placed - budCount;
     mesh.instanceMatrix.needsUpdate = true;
-    return mesh;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    buds.count = budCount;
+    buds.instanceMatrix.needsUpdate = true;
+    if (buds.instanceColor) buds.instanceColor.needsUpdate = true;
+    stems.count = placed;
+    stems.instanceMatrix.needsUpdate = true;
+    if (stems.instanceColor) stems.instanceColor.needsUpdate = true;
+    leaves.count = leafCount;
+    leaves.instanceMatrix.needsUpdate = true;
+    if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
+    mesh.castShadow = quality > 0;
+    buds.castShadow = quality > 0;
+    group.add(stems, leaves, buds, mesh);
+    return group;
   }
 
   function createArena(THREE, heightAt, basalt, cutBasalt, bronze, edge, unitCylinder, colliders) {
@@ -1535,50 +1758,230 @@
     var radius = 20;
     group.position.copy(center);
 
-    var floor = new THREE.Mesh(new THREE.CylinderGeometry(18.7, 19.35, 0.36, 64, 1), cutBasalt);
+    var floorMaterial = cutBasalt.clone();
+    floorMaterial.name = 'Blue slate ritual floor';
+    floorMaterial.color.setHex(0x58686c);
+    floorMaterial.roughness = 0.68;
+    floorMaterial.metalness = 0.11;
+    var rimMaterial = bronze.clone();
+    rimMaterial.name = 'Rain-dulled arena rim';
+    rimMaterial.color.setHex(0x8f8360);
+    rimMaterial.roughness = 0.53;
+    var pillarMaterial = basalt.clone();
+    pillarMaterial.name = 'Deep blue arena monoliths';
+    pillarMaterial.color.setHex(0x27383f);
+    var brokenPillarMaterial = basalt.clone();
+    brokenPillarMaterial.name = 'Warm weathered broken monoliths';
+    brokenPillarMaterial.color.setHex(0x4b4640);
+    brokenPillarMaterial.roughness = 0.98;
+    var ritualMaterial = edge.clone();
+    ritualMaterial.name = 'Burnished ritual inscriptions';
+    ritualMaterial.color.setHex(0xd6aa62);
+    ritualMaterial.roughness = 0.34;
+
+    var floor = new THREE.Mesh(new THREE.CylinderGeometry(18.7, 19.35, 0.36, 64, 1), floorMaterial);
     floor.position.y = -0.12;
     floor.receiveShadow = true;
     group.add(floor);
-    var rim = new THREE.Mesh(new THREE.TorusGeometry(19.1, 0.36, 8, 72), bronze);
+    var rim = new THREE.Mesh(new THREE.TorusGeometry(19.1, 0.36, 8, 72), rimMaterial);
     rim.rotation.x = Math.PI * 0.5;
     rim.position.y = 0.12;
     rim.receiveShadow = true;
     group.add(rim);
-    for (var ringIndex = 0; ringIndex < 3; ringIndex++) {
-      var inlay = new THREE.Mesh(new THREE.TorusGeometry(5.2 + ringIndex * 4.15, 0.07, 5, 56), edge);
+
+    // These calibration paths were repaired in different eras: one complete,
+    // one interrupted, one deliberately left open toward the drowned gate.
+    var inlaySpecs = [
+      { radius: 5.2, tube: 0.065, arc: Math.PI * 2, rotation: 0, material: ritualMaterial },
+      { radius: 9.35, tube: 0.052, arc: Math.PI * 1.72, rotation: 0.38, material: edge },
+      { radius: 13.5, tube: 0.085, arc: Math.PI * 1.38, rotation: -0.84, material: rimMaterial }
+    ];
+    for (var ringIndex = 0; ringIndex < inlaySpecs.length; ringIndex++) {
+      var inlaySpec = inlaySpecs[ringIndex];
+      var inlay = new THREE.Mesh(new THREE.TorusGeometry(inlaySpec.radius, inlaySpec.tube, 5, 56, inlaySpec.arc), inlaySpec.material);
       inlay.rotation.x = Math.PI * 0.5;
+      inlay.rotation.z = inlaySpec.rotation;
       inlay.position.y = 0.105;
       group.add(inlay);
     }
+
+    var spokeLengths = [17.4, 14.8, 16.6, 12.9, 17.1, 15.6, 13.7, 16.9];
+    var spokes = new THREE.InstancedMesh(unitCylinder, rimMaterial, spokeLengths.length);
+    spokes.name = 'Uneven repaired arena spokes';
+    var dummy = new THREE.Object3D();
     for (var spoke = 0; spoke < 8; spoke++) {
       var a = spoke / 8 * Math.PI * 2;
-      var spokeMesh = new THREE.Mesh(unitCylinder, bronze);
-      spokeMesh.scale.set(0.08, 17.5, 0.08);
-      spokeMesh.position.set(Math.sin(a) * 8.7, 0.1, Math.cos(a) * 8.7);
-      spokeMesh.rotation.z = Math.PI * 0.5;
-      spokeMesh.rotation.y = a;
-      group.add(spokeMesh);
+      var spokeStart = spoke === 3 || spoke === 6 ? 1.15 : 0.22;
+      var spokeLength = spokeLengths[spoke];
+      var spokeCenter = spokeStart + spokeLength * 0.5;
+      dummy.position.set(Math.sin(a) * spokeCenter, 0.1, Math.cos(a) * spokeCenter);
+      dummy.rotation.set(0, a, Math.PI * 0.5);
+      dummy.scale.set(0.065 + (spoke % 3) * 0.012, spokeLength, 0.065 + (spoke % 2) * 0.014);
+      dummy.updateMatrix();
+      spokes.setMatrixAt(spoke, dummy.matrix);
     }
+    spokes.instanceMatrix.needsUpdate = true;
+    spokes.receiveShadow = true;
+    group.add(spokes);
+
+    var pillarData = [
+      { height: 5.15, broken: false, leanX: 0.01, leanZ: -0.018, crown: true },
+      { height: 4.35, broken: false, leanX: -0.026, leanZ: 0.01, cap: true },
+      { height: 3.55, broken: true, leanX: 0.055, leanZ: -0.022 },
+      { height: 4.72, broken: false, leanX: -0.014, leanZ: -0.012 },
+      { height: 3.18, broken: true, leanX: -0.064, leanZ: 0.025 },
+      { height: 5.34, broken: false, leanX: 0.016, leanZ: 0.018, cap: true },
+      { height: 3.82, broken: true, leanX: 0.048, leanZ: 0.038 },
+      { height: 4.58, broken: false, leanX: -0.018, leanZ: 0.026, crown: true }
+    ];
+    var intactCount = 0;
+    var brokenCount = 0;
+    for (var pillarCountIndex = 0; pillarCountIndex < pillarData.length; pillarCountIndex++) {
+      if (pillarData[pillarCountIndex].broken) brokenCount++;
+      else intactCount++;
+    }
+    var intactPillars = new THREE.InstancedMesh(makeWeatheredPillarGeometry(THREE, false), pillarMaterial, intactCount);
+    intactPillars.name = 'Standing arena monolith variants';
+    var brokenPillars = new THREE.InstancedMesh(makeWeatheredPillarGeometry(THREE, true), brokenPillarMaterial, brokenCount);
+    brokenPillars.name = 'Broken arena monolith variants';
+    var capGeometry = new THREE.CylinderGeometry(0.92, 0.84, 0.24, 7);
+    var caps = new THREE.InstancedMesh(capGeometry, cutBasalt, 2);
+    caps.name = 'Repaired monolith capstones';
+    var crownGeometry = new THREE.OctahedronGeometry(0.38, 0);
+    var crowns = new THREE.InstancedMesh(crownGeometry, ritualMaterial, 2);
+    crowns.name = 'Surviving astronomer crowns';
+    var plaqueGeometry = new THREE.OctahedronGeometry(0.24, 0);
+    plaqueGeometry.scale(0.72, 1.45, 0.16);
+    var plaques = new THREE.InstancedMesh(plaqueGeometry, ritualMaterial, 6);
+    plaques.name = 'Ritual monolith inscriptions';
+    var intactIndex = 0;
+    var brokenIndex = 0;
+    var capIndex = 0;
+    var crownIndex = 0;
+    var plaqueIndex = 0;
     for (var p = 0; p < 8; p++) {
       var angle = p / 8 * Math.PI * 2 + Math.PI / 8;
       var px = Math.sin(angle) * 20.7;
       var pz = Math.cos(angle) * 20.7;
-      var pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.25, 4.2 + (p % 2) * 1.1, 7), basalt);
-      pillar.position.set(px, 1.55, pz);
-      pillar.rotation.y = angle;
-      pillar.castShadow = true;
-      pillar.receiveShadow = true;
-      group.add(pillar);
-      if (p % 2 === 0) {
-        var crown = new THREE.Mesh(new THREE.OctahedronGeometry(0.38, 0), bronze);
-        crown.position.set(px, 3.42, pz);
-        crown.scale.set(0.72, 1.65, 0.72);
-        crown.rotation.y = angle;
-        group.add(crown);
+      var pillarSpec = pillarData[p];
+      dummy.position.set(px, pillarSpec.height * 0.5 - 0.3, pz);
+      dummy.rotation.set(pillarSpec.leanX, angle, pillarSpec.leanZ);
+      dummy.scale.set(0.92 + (p % 3) * 0.045, pillarSpec.height, 0.94 + ((p + 1) % 3) * 0.04);
+      dummy.updateMatrix();
+      if (pillarSpec.broken) brokenPillars.setMatrixAt(brokenIndex++, dummy.matrix);
+      else intactPillars.setMatrixAt(intactIndex++, dummy.matrix);
+
+      if (pillarSpec.cap) {
+        dummy.position.set(px, pillarSpec.height - 0.18, pz);
+        dummy.rotation.set(pillarSpec.leanX, angle, pillarSpec.leanZ);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        caps.setMatrixAt(capIndex++, dummy.matrix);
+      }
+      if (pillarSpec.crown) {
+        dummy.position.set(px, pillarSpec.height + 0.08, pz);
+        dummy.rotation.set(0.08 * (p ? -1 : 1), angle, 0.12);
+        dummy.scale.set(0.72, 1.65, 0.72);
+        dummy.updateMatrix();
+        crowns.setMatrixAt(crownIndex++, dummy.matrix);
+      }
+      if (!pillarSpec.broken || p === 2) {
+        // The plaques face the dais, so they read as a deliberate observatory
+        // language instead of generic trim on every repeated column.
+        dummy.position.set(Math.sin(angle) * 19.82, 1.35 + (p % 3) * 0.34, Math.cos(angle) * 19.82);
+        dummy.rotation.set(0, angle, p % 2 ? 0.08 : -0.08);
+        dummy.scale.setScalar(0.86 + (p % 3) * 0.1);
+        dummy.updateMatrix();
+        plaques.setMatrixAt(plaqueIndex++, dummy.matrix);
       }
       colliders.push({ x: center.x + px, z: center.z + pz, radius: 1.05, kind: 'arena-pillar' });
     }
-    return { root: group, center: center, radius: radius };
+
+    intactPillars.instanceMatrix.needsUpdate = true;
+    brokenPillars.instanceMatrix.needsUpdate = true;
+    caps.instanceMatrix.needsUpdate = true;
+    crowns.instanceMatrix.needsUpdate = true;
+    plaques.count = plaqueIndex;
+    plaques.instanceMatrix.needsUpdate = true;
+    intactPillars.castShadow = intactPillars.receiveShadow = true;
+    brokenPillars.castShadow = brokenPillars.receiveShadow = true;
+    caps.castShadow = caps.receiveShadow = true;
+    crowns.castShadow = true;
+    group.add(intactPillars, brokenPillars, caps, crowns, plaques);
+
+    // A small, readable survey accident tells why one monolith is broken. The
+    // tablets and spilled lens fragments stay at the perimeter, out of combat.
+    var tabletGeometry = new THREE.BoxGeometry(1.15, 0.12, 0.68);
+    var tabletMaterial = cutBasalt.clone();
+    tabletMaterial.name = 'Ochre survey tablets';
+    tabletMaterial.color.setHex(0x665b4a);
+    tabletMaterial.roughness = 0.88;
+    var tablets = new THREE.InstancedMesh(tabletGeometry, tabletMaterial, 3);
+    tablets.name = 'Abandoned perimeter survey tablets';
+    var tabletSites = [
+      [-13.8, 0.18, -11.2, -0.42],
+      [-14.9, 0.23, -10.5, 0.36],
+      [14.1, 0.16, 10.9, 0.58]
+    ];
+    for (var tabletIndex = 0; tabletIndex < tabletSites.length; tabletIndex++) {
+      var tabletSite = tabletSites[tabletIndex];
+      dummy.position.set(tabletSite[0], tabletSite[1], tabletSite[2]);
+      dummy.rotation.set(0.04 + tabletIndex * 0.035, tabletSite[3], tabletIndex === 1 ? 0.16 : -0.05);
+      dummy.scale.set(1 + tabletIndex * 0.12, 1, 0.88 + (tabletIndex % 2) * 0.2);
+      dummy.updateMatrix();
+      tablets.setMatrixAt(tabletIndex, dummy.matrix);
+    }
+    tablets.instanceMatrix.needsUpdate = true;
+    tablets.castShadow = tablets.receiveShadow = true;
+    group.add(tablets);
+
+    var shardGeometry = new THREE.OctahedronGeometry(0.17, 0);
+    shardGeometry.scale(1.6, 0.24, 0.66);
+    var shards = new THREE.InstancedMesh(shardGeometry, ritualMaterial, 5);
+    shards.name = 'Spilled calibration lens fragments';
+    for (var shardIndex = 0; shardIndex < 5; shardIndex++) {
+      var shardAngle = 3.53 + shardIndex * 0.74;
+      var shardRadius = 14.5 + (shardIndex % 3) * 0.72;
+      dummy.position.set(Math.sin(shardAngle) * shardRadius, 0.19, Math.cos(shardAngle) * shardRadius);
+      dummy.rotation.set(0.18, shardAngle * 1.7, (shardIndex - 2) * 0.12);
+      dummy.scale.setScalar(0.72 + shardIndex * 0.09);
+      dummy.updateMatrix();
+      shards.setMatrixAt(shardIndex, dummy.matrix);
+    }
+    shards.instanceMatrix.needsUpdate = true;
+    group.add(shards);
+    return {
+      root: group,
+      center: center,
+      radius: radius,
+      // Broken monoliths add story and silhouette during exploration, but the
+      // near-camera instances become oversized occluders in the boss framing.
+      presentationObstructions: [brokenPillars]
+    };
+  }
+
+  function makeWeatheredPillarGeometry(THREE, broken) {
+    var geometry = new THREE.CylinderGeometry(0.8, 1.25, 1, 7, 2, false);
+    var positions = geometry.attributes.position;
+    var cuts = broken
+      ? [0.02, 0.23, 0.09, 0.32, 0.13, 0.27, 0.05]
+      : [0.0, 0.025, 0.008, 0.018, 0.0, 0.03, 0.012];
+    for (var vertexIndex = 0; vertexIndex < positions.count; vertexIndex++) {
+      var x = positions.getX(vertexIndex);
+      var y = positions.getY(vertexIndex);
+      var z = positions.getZ(vertexIndex);
+      if (y > 0.24) {
+        var normalizedAngle = (Math.atan2(z, x) + Math.PI * 2) % (Math.PI * 2);
+        var facet = Math.round(normalizedAngle / (Math.PI * 2) * 7) % 7;
+        var topBlend = smoothstep(0.24, 0.5, y);
+        y -= cuts[facet] * topBlend;
+      }
+      var weather = 1 + Math.sin((y + 0.5) * 13.0 + Math.atan2(z, x) * 3.0) * (broken ? 0.025 : 0.01);
+      positions.setXYZ(vertexIndex, x * weather, y, z * weather);
+    }
+    positions.needsUpdate = true;
+    geometry.computeVertexNormals();
+    return geometry;
   }
 
   function createMechanism(THREE, config, groundY, basalt, bronze, bronzeEdge, glassBase, unitCylinder, quality) {
@@ -1877,20 +2280,42 @@
     var innerGlow = new THREE.Mesh(new THREE.TorusGeometry(9.25, 0.09, 5, 72), innerEnergy);
     innerPivot.add(innerGlow);
 
+    var majorSpokes = new THREE.InstancedMesh(unitCylinder, landmarkEdge, 4);
+    majorSpokes.name = 'Orrery cardinal spokes';
+    var minorSpokes = new THREE.InstancedMesh(unitCylinder, landmarkBronze, 8);
+    minorSpokes.name = 'Orrery minor spokes';
+    var nodeGeometry = new THREE.OctahedronGeometry(0.34, 0);
+    var cardinalNodes = new THREE.InstancedMesh(nodeGeometry, energy, 4);
+    cardinalNodes.name = 'Orrery cardinal light nodes';
+    var spokeDummy = new THREE.Object3D();
+    var majorSpokeIndex = 0;
+    var minorSpokeIndex = 0;
+    var cardinalNodeIndex = 0;
     for (var spoke = 0; spoke < 12; spoke++) {
       var a = spoke / 12 * Math.PI * 2;
-      var spokeMesh = new THREE.Mesh(unitCylinder, spoke % 3 === 0 ? landmarkEdge : landmarkBronze);
-      spokeMesh.scale.set(spoke % 3 === 0 ? 0.13 : 0.07, 15.7, spoke % 3 === 0 ? 0.13 : 0.07);
-      spokeMesh.position.set(Math.sin(a) * 7.85, Math.cos(a) * 7.85, 0);
-      spokeMesh.rotation.z = -a;
-      spokeMesh.castShadow = quality > 0;
-      outerPivot.add(spokeMesh);
+      var isCardinal = spoke % 3 === 0;
+      spokeDummy.position.set(Math.sin(a) * 7.85, Math.cos(a) * 7.85, 0);
+      spokeDummy.rotation.set(0, 0, -a);
+      spokeDummy.scale.set(isCardinal ? 0.13 : 0.07, 15.7, isCardinal ? 0.13 : 0.07);
+      spokeDummy.updateMatrix();
+      if (isCardinal) majorSpokes.setMatrixAt(majorSpokeIndex++, spokeDummy.matrix);
+      else minorSpokes.setMatrixAt(minorSpokeIndex++, spokeDummy.matrix);
       if (spoke % 3 === 0) {
-        var node = new THREE.Mesh(new THREE.OctahedronGeometry(0.34, 0), energy);
-        node.position.set(Math.sin(a) * 15.65, Math.cos(a) * 15.65, 0);
-        outerPivot.add(node);
+        spokeDummy.position.set(Math.sin(a) * 15.65, Math.cos(a) * 15.65, 0);
+        spokeDummy.rotation.set(0, 0, 0);
+        spokeDummy.scale.set(1, 1, 1);
+        spokeDummy.updateMatrix();
+        cardinalNodes.setMatrixAt(cardinalNodeIndex++, spokeDummy.matrix);
       }
     }
+    majorSpokes.instanceMatrix.needsUpdate = true;
+    minorSpokes.instanceMatrix.needsUpdate = true;
+    cardinalNodes.instanceMatrix.needsUpdate = true;
+    majorSpokes.castShadow = quality > 0;
+    minorSpokes.castShadow = quality > 0;
+    outerPivot.add(majorSpokes);
+    outerPivot.add(minorSpokes);
+    outerPivot.add(cardinalNodes);
 
     var tree = new THREE.Group();
     tree.name = 'Luminous skyroot tree';
@@ -2002,6 +2427,9 @@
     group.userData.outerPivot = outerPivot;
     group.userData.middlePivot = middlePivot;
     group.userData.innerPivot = innerPivot;
+    group.userData.structuralBands = [outer, middle, inner];
+    group.userData.minorSpokes = minorSpokes;
+    group.userData.presentationRails = [outerLight, middleGlow];
     group.userData.outerLight = outerLight;
     group.userData.middleGlow = middleGlow;
     group.userData.innerGlow = innerGlow;
@@ -2013,11 +2441,25 @@
     group.userData.cyan = palette.cyan.clone();
     group.userData.gold = palette.gold.clone();
     group.userData.progress = 0;
+    group.userData.bossPresentation = false;
     return group;
   }
 
-  function updateOrrery(orrery, dt, elapsed, mechanismProgress, restored, reduceMotion) {
+  function updateOrrery(orrery, dt, elapsed, mechanismProgress, restored, reduceMotion, bossPresentation) {
     var data = orrery.userData;
+    bossPresentation = !!bossPresentation;
+    if (bossPresentation !== data.bossPresentation) {
+      data.bossPresentation = bossPresentation;
+      // Keep one luminous meridian as an arena frame while removing the opaque
+      // bands and duplicate rails that otherwise slice through both silhouettes.
+      for (var bandIndex = 0; bandIndex < data.structuralBands.length; bandIndex++) {
+        data.structuralBands[bandIndex].visible = !bossPresentation;
+      }
+      data.minorSpokes.visible = !bossPresentation;
+      for (var railIndex = 0; railIndex < data.presentationRails.length; railIndex++) {
+        data.presentationRails[railIndex].visible = !bossPresentation;
+      }
+    }
     data.progress += (mechanismProgress - data.progress) * (1 - Math.exp(-dt * 2.2));
     var motion = reduceMotion ? 0.16 : 1;
     data.outerPivot.rotation.z = elapsed * 0.018 * motion * (0.2 + data.progress);

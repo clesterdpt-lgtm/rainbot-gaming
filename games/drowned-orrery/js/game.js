@@ -83,6 +83,7 @@
   let frameAccumulator = 0;
   let frameCount = 0;
   let displayedFps = 60;
+  let hitStopTimer = 0;
   let disposed = false;
   let hasPointerLocked = false;
   let pointerLockSuppressed = false;
@@ -91,6 +92,8 @@
   let activeMechanisms = 0;
   let boss = null;
   let bossStarted = false;
+  let bossShardGeometry = null;
+  let bossShardMaterials = null;
   let checkpoint = new THREE.Vector3(0, 0, 68);
   let lockedTarget = null;
 
@@ -145,7 +148,7 @@
     maxHealth: 5,
     charge: 100,
     attackTimer: 0,
-    attackDuration: 0.48,
+    attackDuration: 0.68,
     attackCombo: 0,
     attackHit: false,
     attackQueued: false,
@@ -155,6 +158,7 @@
     guarding: false,
     parryTimer: 0,
     hurtTimer: 0,
+    interactTimer: 0,
     deadTimer: 0,
     lastMoveSpeed: 0,
   };
@@ -223,7 +227,7 @@
     dom.canvas.addEventListener("webglcontextrestored", () => location.reload());
   }
 
-  function initialize() {
+  async function initialize() {
     try {
       if (!window.THREE || !window.DrownedWorld || !window.DrownedActors || !window.DrownedAudio) {
         throw new Error("One or more local game systems did not load.");
@@ -243,6 +247,18 @@
         quality: quality === 2 ? "high" : quality === 1 ? "medium" : "low",
         reduceMotion: reducedMotion,
       });
+
+      if (window.DrownedGoldAssets && typeof window.DrownedGoldAssets.preload === "function") {
+        setBoot(44, "RECOVERING THE MERIDIAN LOCK");
+        try {
+          await window.DrownedGoldAssets.preload(THREE);
+          if (typeof window.DrownedGoldAssets.attachGateVisual === "function") {
+            window.DrownedGoldAssets.attachGateVisual(THREE, world.gate);
+          }
+        } catch (error) {
+          console.warn("[The Drowned Orrery] Gold slice unavailable; continuing with procedural art.", error);
+        }
+      }
 
       setBoot(56, "ASSEMBLING THE CARTOGRAPHER");
       hero = DrownedActors.createHero(THREE);
@@ -509,26 +525,72 @@
       cameraState.pitch = 0.12;
       enemies.forEach((enemy) => { enemy.root.visible = false; enemy.disabled = true; });
       dom.shell.classList.remove("is-cinematic");
+    } else if (qaMode === "gate" || qaMode === "gate-open") {
+      cinematicTimer = 0;
+      player.position.set(-2.7, world.heightAt(-2.7, -17.5), -17.5);
+      player.yaw = 0;
+      cameraState.yaw = -0.02;
+      cameraState.pitch = 0.12;
+      cameraState.distance = 9.8;
+      world.gate.setOpen(qaMode === "gate-open");
+      if (world.orrery) world.orrery.visible = false;
+      world.mechanisms.forEach((mechanism) => { mechanism.root.visible = false; });
+      enemies.forEach((enemy) => { enemy.root.visible = false; enemy.disabled = true; });
+      dom.shell.classList.remove("is-cinematic");
+      dom.objectiveCard.classList.remove("is-visible");
+      dom.subtitle.classList.remove("is-visible");
     } else if (qaMode === "combat") {
       cinematicTimer = 0;
-      player.position.set(-18.5, world.heightAt(-18.5, 23), 23);
-      player.yaw = 0;
-      cameraState.yaw = 0;
-      const combatTarget = enemies.find((enemy) => enemy.kind === "rootbound" && Math.abs(enemy.position.x + 18.5) < 0.1);
+      player.position.set(-3.1, world.heightAt(-3.1, -20.5), -20.5);
+      player.yaw = 0.28;
+      cameraState.yaw = 0.2;
+      cameraState.pitch = 0.11;
+      cameraState.distance = 9.4;
+      world.gate.setOpen(false);
+      if (world.orrery) world.orrery.visible = false;
+      world.mechanisms.forEach((mechanism) => { mechanism.root.visible = false; });
+      const combatTarget = enemies.find((enemy) => enemy.kind === "warden");
       enemies.forEach((enemy) => {
         const featured = enemy === combatTarget;
-        enemy.disabled = !featured;
+        enemy.disabled = true;
         enemy.root.visible = featured;
-        if (featured) enemy.alert = 1;
+        if (featured) {
+          enemy.position.set(-1.2, world.heightAt(-1.2, -22.6), -22.6);
+          enemy.root.position.copy(enemy.position);
+          enemy.facing = Math.atan2(player.position.x - enemy.position.x, -(player.position.z - enemy.position.z));
+          enemy.root.rotation.y = -enemy.facing;
+          enemy.disabled = false;
+          enemy.qaFrozen = true;
+          enemy.alert = 1;
+          DrownedActors.updateEnemy(enemy.actor, { speed: 0, alert: 1, facing: -enemy.facing }, 1 / 60, elapsed);
+        }
       });
-      lockedTarget = combatTarget || null;
+      lockedTarget = null;
       dom.shell.classList.remove("is-cinematic");
+      dom.objectiveCard.classList.remove("is-visible");
+      dom.subtitle.classList.remove("is-visible");
     } else if (qaMode === "boss") {
-      cinematicTimer = 0.4;
       activateAllMechanisms();
-      player.position.set(0, world.heightAt(0, -57.5), -57.5);
+      // Stage the deterministic review shot just inside the front monoliths.
+      // The centered ritual-axis sightline keeps both full silhouettes clear
+      // and turns the floor inlays into leading lines instead of visual noise.
+      player.position.set(0, world.heightAt(0, -55.5), -55.5);
+      player.yaw = 0;
       cameraState.yaw = 0;
+      cameraState.pitch = 0.1;
+      cameraState.distance = 13.4;
       startBossBattle(true);
+      cinematicTimer = 0;
+      if (boss) {
+        // Keep the critic view repeatable: preserve the authored idle motion,
+        // but hold the encounter lead on-axis so target lock cannot pan back
+        // toward either foreground monolith while screenshots are settling.
+        boss.state = "intro";
+        boss.stateTimer = 3600;
+      }
+      dom.shell.classList.remove("is-cinematic");
+      dom.objectiveCard.classList.remove("is-visible");
+      dom.subtitle.classList.remove("is-visible");
     } else if (qaMode === "finale") {
       cinematicTimer = 0;
       activateAllMechanisms();
@@ -721,6 +783,7 @@
   function updatePlayer(dt) {
     readMovementInput();
     if (input.lock) toggleTargetLock();
+    player.interactTimer = Math.max(0, player.interactTimer - dt);
 
     cameraState.yaw += input.lookX * 0.0017;
     cameraState.pitch = clamp(cameraState.pitch + input.lookY * 0.00135, 0.05, 0.78);
@@ -762,6 +825,7 @@
     let targetSpeed = sprinting ? 9.2 : 5.8;
     if (player.guarding) targetSpeed *= 0.42;
     if (player.attackTimer > 0) targetSpeed *= 0.28;
+    if (player.interactTimer > 0) targetSpeed *= 0.18;
 
     if (player.dodgeTimer > 0) {
       player.dodgeTimer -= dt;
@@ -837,7 +901,7 @@
       return;
     }
     player.attackCombo = player.attackCombo % 3 + 1;
-    player.attackDuration = player.attackCombo === 3 ? 0.58 : 0.46;
+    player.attackDuration = player.attackCombo === 3 ? 0.88 : 0.68;
     player.attackTimer = player.attackDuration;
     player.attackHit = false;
     if (lockedTarget && !lockedTarget.dead) {
@@ -889,6 +953,7 @@
     if (connected) {
       player.charge = Math.min(100, player.charge + 7);
       cameraShake = Math.max(cameraShake, reducedMotion ? 0.02 : 0.11);
+      hitStopTimer = Math.max(hitStopTimer, reducedMotion ? 0.025 : 0.055);
       safeAudio("hit", { volume: 0.72 });
     }
   }
@@ -965,6 +1030,7 @@
     enemy.hurtTimer = Math.max(enemy.hurtTimer, 0.38);
     enemy.staggerTimer = Math.max(enemy.staggerTimer, source === "prism" ? 1.3 : 0.25);
     spawnImpact(enemy.position, enemy === boss ? 0xffd17c : 0xb866a7, enemy === boss ? 12 : 7);
+    if (source === "melee") spawnImpactRing(enemy.position, 0xffd17c);
     safeAudio(enemy === boss ? "bosshit" : "enemyhit", { volume: 0.68 });
     if (enemy.hp <= 0) killEnemy(enemy);
     else if (enemy === boss && source === "melee" && boss.staggerDamage >= 3) finishBossExposure(true);
@@ -993,6 +1059,7 @@
       combo: player.attackCombo,
       guarding: player.guarding,
       dodging: player.dodgeTimer > 0,
+      interacting: player.interactTimer > 0,
       hurt: player.hurtTimer > 0 ? player.hurtTimer / 0.45 : 0,
       dead: player.deadTimer > 0,
       facing: -player.yaw,
@@ -1003,6 +1070,17 @@
     for (let i = enemies.length - 1; i >= 0; i -= 1) {
       const enemy = enemies[i];
       if (enemy.disabled) continue;
+      if (enemy.qaFrozen) {
+        enemy.hurtTimer = Math.max(0, enemy.hurtTimer - dt);
+        enemy.root.position.copy(enemy.position);
+        DrownedActors.updateEnemy(enemy.actor, {
+          speed: 0,
+          hurt: enemy.hurtTimer > 0 ? clamp(enemy.hurtTimer / 0.38, 0, 1) : 0,
+          alert: 1,
+          facing: -enemy.facing,
+        }, dt, elapsed);
+        continue;
+      }
       if (enemy.dead) {
         enemy.stateTimer -= dt;
         enemy.root.position.y -= dt * 0.08;
@@ -1186,6 +1264,7 @@
     if (!mechanism || mechanism.active) return;
     mechanism.activate();
     mechanism.active = true;
+    player.interactTimer = 0.72;
     activeMechanisms = world.mechanisms.filter((entry) => entry.active).length;
     checkpoint.copy(mechanism.position || mechanism.root.position);
     checkpoint.z += 3.2;
@@ -1379,24 +1458,51 @@
     safeAudio("prismcharge");
   }
 
-  function launchBossVolley(count) {
-    for (let i = 0; i < count; i += 1) {
-      const geometry = new THREE.OctahedronGeometry(0.2 + (i % 2) * 0.05, 0);
-      const material = new THREE.MeshStandardMaterial({
-        color: 0x7e3f75,
-        emissive: 0x7e3f75,
-        emissiveIntensity: 2.5,
-        roughness: 0.28,
+  function ensureBossShardAssets() {
+    if (bossShardGeometry && bossShardMaterials) return;
+    bossShardGeometry = new THREE.OctahedronGeometry(0.32, 0);
+    bossShardGeometry.scale(0.56, 1.5, 0.48);
+    bossShardMaterials = [
+      new THREE.MeshStandardMaterial({
+        name: "Astronomer violet star-glass",
+        color: 0xe5b7d6,
+        emissive: 0x74315f,
+        emissiveIntensity: 1.55,
+        metalness: 0.34,
+        roughness: 0.24,
+        flatShading: true,
         transparent: true,
-      });
-      const mesh = new THREE.Mesh(geometry, material);
+        opacity: 0.94,
+      }),
+      new THREE.MeshStandardMaterial({
+        name: "Astronomer drowned-cyan star-glass",
+        color: 0xa8d8d2,
+        emissive: 0x285f63,
+        emissiveIntensity: 1.45,
+        metalness: 0.38,
+        roughness: 0.21,
+        flatShading: true,
+        transparent: true,
+        opacity: 0.92,
+      }),
+    ];
+  }
+
+  function launchBossVolley(count) {
+    ensureBossShardAssets();
+    for (let i = 0; i < count; i += 1) {
+      const mesh = new THREE.Mesh(bossShardGeometry, bossShardMaterials[i % bossShardMaterials.length]);
       mesh.position.copy(boss.position);
       mesh.position.y += Math.sin(i) * 0.4;
+      mesh.rotation.set(i * 0.67, i * 1.13, Math.PI * 0.25 + i * 0.21);
+      const shardScale = 0.82 + (i % 3) * 0.11;
+      mesh.scale.setScalar(shardScale);
+      mesh.castShadow = quality > 0;
       scene.add(mesh);
       const direction = tempA.subVectors(player.position, boss.position).setY(0.15).normalize();
       const spread = (i - (count - 1) / 2) * 0.12;
       direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), spread);
-      projectiles.push({ mesh, velocity: direction.clone().multiplyScalar(8.2 + boss.phase), life: 5, hostile: true });
+      projectiles.push({ mesh, velocity: direction.clone().multiplyScalar(8.2 + boss.phase), life: 5, hostile: true, sharedVisual: true });
     }
     safeAudio("bossvolley");
   }
@@ -1488,8 +1594,10 @@
       }
       if (projectile.life <= 0) {
         scene.remove(projectile.mesh);
-        projectile.mesh.geometry.dispose();
-        projectile.mesh.material.dispose();
+        if (!projectile.sharedVisual) {
+          projectile.mesh.geometry.dispose();
+          projectile.mesh.material.dispose();
+        }
         projectiles.splice(i, 1);
       }
     }
@@ -1500,11 +1608,13 @@
       const projectile = projectiles[i];
       if (!projectile.hostile) continue;
       scene.remove(projectile.mesh);
-      projectile.mesh.geometry.dispose();
-      if (Array.isArray(projectile.mesh.material)) {
-        projectile.mesh.material.forEach((material) => material.dispose());
-      } else {
-        projectile.mesh.material.dispose();
+      if (!projectile.sharedVisual) {
+        projectile.mesh.geometry.dispose();
+        if (Array.isArray(projectile.mesh.material)) {
+          projectile.mesh.material.forEach((material) => material.dispose());
+        } else {
+          projectile.mesh.material.dispose();
+        }
       }
       projectiles.splice(i, 1);
     }
@@ -1564,6 +1674,26 @@
         type: "particle",
       });
     }
+  }
+
+  function spawnImpactRing(position, color) {
+    const geometry = new THREE.TorusGeometry(0.48, 0.055, 6, 28);
+    const material = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.92,
+      depthTest: false,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(position);
+    mesh.position.y += 1.35;
+    mesh.quaternion.copy(camera.quaternion);
+    mesh.renderOrder = 14;
+    scene.add(mesh);
+    effects.push({ mesh, life: 0.3, maxLife: 0.3, type: "shockwave", speed: 1.45, opacity: 0.92 });
   }
 
   function spawnGroundPuff(position, count) {
@@ -1680,6 +1810,8 @@
       focusPosition = tempC.copy(player.position).lerp(boss.position, 0.58);
       cameraState.yaw = dampAngle(cameraState.yaw, 0.08, 1.8, cameraDt);
       cameraState.pitch = damp(cameraState.pitch, 0.22, 2.2, cameraDt);
+    } else if (qaMode === "boss" && boss && !boss.dead) {
+      focusPosition = tempC.copy(player.position).lerp(boss.position, 0.32);
     } else if (mode === "ending" && boss) {
       focusPosition = tempC.copy(world.arena.center);
       focusPosition.y += 2.2;
@@ -1871,10 +2003,14 @@
     if (mode === "playing" || mode === "ending") {
       missionElapsed += dt;
       if (mode === "playing") {
-        updatePlayer(dt);
-        updateEnemies(dt);
-        updateBoss(dt);
-        updateProjectiles(dt);
+        const simulationPaused = hitStopTimer > 0;
+        hitStopTimer = Math.max(0, hitStopTimer - dt);
+        if (!simulationPaused) {
+          updatePlayer(dt);
+          updateEnemies(dt);
+          updateBoss(dt);
+          updateProjectiles(dt);
+        }
         updateEffects(dt);
         checkMissionProgress();
       } else {
@@ -2004,6 +2140,8 @@
   window.addEventListener("beforeunload", () => {
     disposed = true;
     cancelAnimationFrame(animationId);
+    if (bossShardGeometry) bossShardGeometry.dispose();
+    if (bossShardMaterials) bossShardMaterials.forEach((material) => material.dispose());
     if (audio && audio.dispose) audio.dispose();
   });
 

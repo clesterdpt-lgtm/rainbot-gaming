@@ -26,6 +26,10 @@ supabase/.temp/
 node_modules/
 .cache/
 
+dist/
+__pycache__/
+*.blend1
+
 # Mr. Feast source downloads and editable DCC files (runtime GLBs stay tracked)
 assets/models/mr-feast/source/
 assets/models/mr-feast/mr-feast-rigged.glb

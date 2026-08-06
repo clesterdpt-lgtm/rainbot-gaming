@@ -283,7 +283,35 @@
     return actor;
   }
 
+  function polishImportedGoldActor(THREE, actor) {
+    if (!actor || !actor._gold || !Array.isArray(actor.materials)) return actor;
+    const neutralHighlight = new THREE.Color(0xfff4dc);
+    for (let i = 0; i < actor.materials.length; i += 1) {
+      const material = actor.materials[i];
+      if (!material) continue;
+      // Blender's authored values are preserved, but a small neutral lift keeps
+      // the glTF albedo from collapsing into the valley's green ambient fill.
+      if (material.color) {
+        const metallic = typeof material.metalness === "number" && material.metalness > 0.22;
+        material.color.lerp(neutralHighlight, metallic ? 0.075 : 0.045);
+      }
+      if (typeof material.roughness === "number") {
+        material.roughness = Math.max(0.2, Math.min(0.94, material.roughness * 0.88));
+      }
+      if (typeof material.metalness === "number" && material.metalness > 0.16) {
+        material.metalness = Math.min(1, material.metalness * 1.08);
+      }
+      material.dithering = true;
+      material.needsUpdate = true;
+    }
+    return actor;
+  }
+
   function createHero(THREE) {
+    if (global.DrownedGoldAssets && typeof global.DrownedGoldAssets.createHeroActor === "function") {
+      const importedHero = global.DrownedGoldAssets.createHeroActor(THREE);
+      if (importedHero) return polishImportedGoldActor(THREE, importedHero);
+    }
     const ctx = createContext(THREE);
     const root = new THREE.Group();
     root.name = "Ilyra Vale - sky cartographer";
@@ -1054,6 +1082,10 @@
   }
 
   function createWarden(THREE, variant) {
+    if (global.DrownedGoldAssets && typeof global.DrownedGoldAssets.createWardenActor === "function") {
+      const importedWarden = global.DrownedGoldAssets.createWardenActor(THREE, variant);
+      if (importedWarden) return polishImportedGoldActor(THREE, importedWarden);
+    }
     const ctx = createContext(THREE);
     const v = variantIndex(variant);
     const root = new THREE.Group();
@@ -1520,6 +1552,11 @@
   function updateHero(actor, visualState, dt, elapsed) {
     if (!actor || actor.kind !== "hero" || !actor._rig) return;
     const state = visualState || {};
+    if (actor._gold && global.DrownedGoldAssets && typeof global.DrownedGoldAssets.updateHero === "function") {
+      applyFacing(actor, state, dt);
+      global.DrownedGoldAssets.updateHero(actor, state, dt, elapsed);
+      return;
+    }
     const rig = actor._rig;
     const t = typeof elapsed === "number" ? elapsed : ((actor._elapsed || 0) + (dt || 0));
     actor._elapsed = t;
@@ -1820,6 +1857,11 @@
   function updateEnemy(actor, visualState, dt, elapsed) {
     if (!actor || !actor._rig) return;
     const state = visualState || {};
+    if (actor._gold && actor.kind === "warden" && global.DrownedGoldAssets && typeof global.DrownedGoldAssets.updateWarden === "function") {
+      applyFacing(actor, state, dt);
+      global.DrownedGoldAssets.updateWarden(actor, state, dt, elapsed);
+      return;
+    }
     const t = typeof elapsed === "number" ? elapsed : ((actor._elapsed || 0) + (dt || 0));
     actor._elapsed = t;
     applyFacing(actor, state, dt);

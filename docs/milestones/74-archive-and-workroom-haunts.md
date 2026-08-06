@@ -9,7 +9,7 @@ Turn the Archive lore and patron-relay sabotage into authored physical horror be
 - The Feast Father steward volume has moved from the Library writing table to a one-time Archive shelf fall. Its spatial impact, grounded physical prop, shared readable-book presentation, door closure, and brief east-wing blackout form one bounded sequence.
 - Three separate preparation files remain on the adjacent Archive shelf. Contestants 04, 09, and 12 each have their own interaction and disturbing kitchen record.
 - The Archive and Workroom use transient circuit gates that preserve the player's physical switch state and fixed renderer light topology.
-- Cutting the patron relay closes the Workroom entrance without relocking it, blacks out the room, turns all eight live screens to animated static, and plays close recorded Feast Father breathing before restoring the room after `6.1s`.
+- Cutting the patron relay closes and temporarily locks the Workroom entrance, blacks out the room, and holds all eight live screens in animated static for `18s`. A transparent black mask baked directly from the active `banquet-saint.glb` Feast Father model preserves its thin cage crown, pointed shoulders, separated long hands, narrow torso, and flared robe hem; it begins small inside every feed and grows with the breathing ramp. The close recorded breath rises from near silence to a louder `0.30` peak over `15s`, then the door, lights, live feeds, and audio restore together. The reproducible mask bake is `scripts/blender/render-demon-silhouette.py`.
 - Completed one-shot flags and Archive file reads save. Active blackouts, static, and breathing never resume from a save.
 
 ## Acceptance evidence

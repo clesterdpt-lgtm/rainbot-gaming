@@ -8,6 +8,8 @@ import { chromium } from "playwright";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runtimePath = path.join(root, "assets", "js", "mr-feast-mansion.js");
 const pagePath = path.join(root, "games", "mr-feast-mansion.html");
+const silhouetteAssetPath = path.join(root, "assets", "img", "mr-feast", "feast-father-static-silhouette.png");
+const silhouetteBakePath = path.join(root, "scripts", "blender", "render-demon-silhouette.py");
 const port = Number(process.env.MR_FEAST_BASEMENT_HAUNT_TEST_PORT || (50000 + (process.pid % 12000)));
 const baseUrl = `http://127.0.0.1:${port}`;
 const gameUrl = `${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1&allLights=1&view=archiveHauntBook&frame=1`;
@@ -49,9 +51,11 @@ async function captureStage(page, fileName) {
 }
 
 async function run() {
-  const [runtime, html] = await Promise.all([
+  const [runtime, html, silhouetteAsset, silhouetteBake] = await Promise.all([
     readFile(runtimePath, "utf8"),
     readFile(pagePath, "utf8"),
+    readFile(silhouetteAssetPath),
+    readFile(silhouetteBakePath, "utf8"),
   ]);
 
   assert(/const BASEMENT_HAUNT = Object\.freeze\(\{/.test(runtime), "missing named BASEMENT_HAUNT tuning and story table");
@@ -73,10 +77,34 @@ async function run() {
     /durationSeconds:\s*18/.test(runtime)
       && /breathingSeconds:\s*18/.test(runtime)
       && /breathingRampSeconds:\s*15/.test(runtime)
+      && /breathingGain:\s*0\.3/.test(runtime)
       && /linearRampToValueAtTime\(haunt\.targetGain, rampEnd\)/.test(runtime),
-    "the patron-feed static must hold for 18 seconds while breathing rises gradually for 15 seconds",
+    "the patron-feed static must hold for 18 seconds while breathing rises to its louder peak over 15 seconds",
   );
-  assert(/setStatic\(active/.test(runtime) && /staticMix/.test(runtime), "the live Workroom monitor bank lacks a temporary animated-static state");
+  assert(
+    /setStatic\(active/.test(runtime)
+      && /staticMix/.test(runtime)
+      && /float feastFatherShadow\(vec2 uv\)/.test(runtime)
+      && /feastFatherProgress/.test(runtime)
+      && /sampler2D feastFatherSilhouette/.test(runtime)
+      && /shadowSourceModel:\s*"assets\/models\/mr-feast\/demon-prototypes\/banquet-saint\.glb"/.test(runtime)
+      && /texture2D\(feastFatherSilhouette, silhouetteUv\)\.a/.test(runtime)
+      && !/ellipseMask\(|segmentMask\(/.test(runtime),
+    "the static must use an exact Banquet Saint model mask instead of a geometric approximation",
+  );
+  assert(
+    silhouetteAsset.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      && silhouetteAsset.readUInt32BE(16) === 512
+      && silhouetteAsset.readUInt32BE(20) === 1024
+      && silhouetteAsset.byteLength > 12000
+      && /banquet-saint\.glb/.test(silhouetteBake)
+      && /film_transparent = True/.test(silhouetteBake),
+    "the model-derived 512x1024 transparent Feast Father silhouette and reproducible Blender bake are missing",
+  );
+  assert(
+    /door\.locked = !state\.workroom\.unlocked \|\| Boolean\(basementHauntSystem\?\.workroom\?\.active\)/.test(runtime),
+    "the Workroom door must remain locked for the complete patron-feed haunt",
+  );
   assert(/setTransientBlackout\(active/.test(runtime), "room circuits need a transient blackout that preserves switch state");
   const runtimeVersion = runtime.match(/MANSION_RUNTIME_VERSION\s*=\s*"([^"]+)"/)?.[1];
   assert(runtimeVersion && html.includes(`mr-feast-mansion.js?v=${runtimeVersion}`), "page/runtime cache identities must match");
@@ -199,7 +227,12 @@ async function run() {
     haunt = await page.evaluate(() => window.MrFeastFresh.getBasementHauntState());
     assert(haunt.workroom.active && haunt.workroom.phase === "blackout", `relay sabotage should begin the Workroom haunt: ${JSON.stringify(haunt.workroom)}`);
     assert(haunt.workroom.blackoutActive && haunt.workroom.staticActive, `Workroom lights and all screens should fail together: ${JSON.stringify(haunt.workroom)}`);
-    assert(haunt.workroom.closedDoors.includes("workroom door"), `the Workroom door should close without relocking: ${JSON.stringify(haunt.workroom.closedDoors)}`);
+    assert(
+      haunt.workroom.closedDoors.includes("workroom door")
+        && haunt.workroom.lockedDoors.includes("workroom door")
+        && haunt.workroom.doorLocked,
+      `the Workroom entrance should close and lock for the scare: ${JSON.stringify(haunt.workroom)}`,
+    );
     assert(
       haunt.workroom.durationSeconds === 18
         && haunt.workroom.remainingSeconds > 17
@@ -208,12 +241,24 @@ async function run() {
         && haunt.workroom.breathing.staticDurationSeconds === 18
         && haunt.workroom.breathing.rampSeconds === 15
         && haunt.workroom.breathing.startGain < 0.01
-        && haunt.workroom.breathing.targetGain >= 0.2
+        && haunt.workroom.breathing.targetGain >= 0.3
         && haunt.workroom.breathing.automation === "linear-rise-then-short-exponential-release",
       `the close Feast Father breathing should start almost inaudibly and rise across the extended static: ${JSON.stringify(haunt.workroom.breathing)}`,
     );
     const monitorStatic = await page.evaluate(() => window.MrFeastFresh.getMonitorWallState());
     assert(monitorStatic.staticActive && monitorStatic.staticScreens === monitorStatic.screenCount, `every Workroom display should show animated static: ${JSON.stringify(monitorStatic)}`);
+    assert(
+      monitorStatic.feastFatherShadow.active
+        && monitorStatic.feastFatherShadow.screenCount === monitorStatic.screenCount
+        && monitorStatic.feastFatherShadow.progress < 0.08
+        && monitorStatic.feastFatherShadow.scale <= monitorStatic.feastFatherShadow.startScale + 0.05
+        && monitorStatic.feastFatherShadow.synchronizedTo === "feast-father-breathing-gain"
+        && monitorStatic.feastFatherShadow.silhouette === "exact-banquet-saint-model-mask"
+        && monitorStatic.feastFatherShadow.sourceModel.endsWith("banquet-saint.glb")
+        && monitorStatic.feastFatherShadow.textureReady
+        && monitorStatic.feastFatherShadow.maskKind === "model-derived-alpha",
+      `a small Feast Father shadow should begin inside every static feed: ${JSON.stringify(monitorStatic.feastFatherShadow)}`,
+    );
     await page.waitForTimeout(250);
     await captureStage(page, "workroom-patron-feed-static-blackout-desktop.png");
 
@@ -234,6 +279,16 @@ async function run() {
         && haunt.workroom.breathing.currentGain < haunt.workroom.breathing.targetGain,
       `static must outlast the old six-second scare while breathing is still rising toward its fifteen-second peak: ${JSON.stringify(haunt.workroom)}`,
     );
+    const monitorGrowing = await page.evaluate(() => window.MrFeastFresh.getMonitorWallState());
+    assert(
+      monitorGrowing.feastFatherShadow.active
+        && monitorGrowing.feastFatherShadow.progress > 0.35
+        && monitorGrowing.feastFatherShadow.progress < 0.75
+        && monitorGrowing.feastFatherShadow.scale > monitorGrowing.feastFatherShadow.startScale
+        && monitorGrowing.feastFatherShadow.scale < monitorGrowing.feastFatherShadow.endScale,
+      `the black Feast Father shadow should grow with the rising breath: ${JSON.stringify(monitorGrowing.feastFatherShadow)}`,
+    );
+    await captureStage(page, "workroom-feast-father-shadow-growing-desktop.png");
     haunt = await page.evaluate(() => window.MrFeastFresh.advanceBasementHauntForQA(7));
     assert(
       haunt.workroom.active
@@ -251,20 +306,37 @@ async function run() {
     const breathAtPeakCheck = haunt.workroom.breathing;
     const peakReachedOrReleaseStarted = breathAtPeakCheck.currentGain >= breathAtPeakCheck.targetGain * 0.95
       || breathAtPeakCheck.elapsedSeconds >= breathAtPeakCheck.durationSeconds - breathAtPeakCheck.releaseSeconds;
+    const breathPeakWindowReached = breathAtPeakCheck.active
+      || breathAtPeakCheck.elapsedSeconds >= breathAtPeakCheck.durationSeconds - breathAtPeakCheck.releaseSeconds;
     assert(
       haunt.workroom.active
         && haunt.workroom.staticActive
         && haunt.workroom.elapsed < haunt.workroom.durationSeconds
-        && haunt.workroom.breathing.active
+        && breathPeakWindowReached
         && haunt.workroom.breathing.rampProgress >= 0.98
         && peakReachedOrReleaseStarted,
-      `breathing must reach its authored maximum around fifteen seconds, or be in its short release, while static still holds: ${JSON.stringify(haunt.workroom)}`,
+      `breathing must reach its authored maximum around fifteen seconds, or complete its short release, while static still holds: ${JSON.stringify(haunt.workroom)}`,
     );
+    const monitorLarge = await page.evaluate(() => window.MrFeastFresh.getMonitorWallState());
+    assert(
+      monitorLarge.feastFatherShadow.active
+        && monitorLarge.feastFatherShadow.progress >= 0.98
+        && monitorLarge.feastFatherShadow.scale >= monitorLarge.feastFatherShadow.endScale * 0.98,
+      `the Feast Father shadow should fill the feed as the breathing peaks: ${JSON.stringify(monitorLarge.feastFatherShadow)}`,
+    );
+    await captureStage(page, "workroom-feast-father-shadow-large-desktop.png");
     haunt = await page.evaluate(() => window.MrFeastFresh.advanceBasementHauntForQA(20));
     assert(!haunt.workroom.active && haunt.workroom.seen && !haunt.workroom.blackoutActive && !haunt.workroom.staticActive, `the Workroom should return to normal after the bounded scare: ${JSON.stringify(haunt.workroom)}`);
     assert(!haunt.workroom.breathing.active && haunt.workroom.circuitOn, `breathing must stop and the prior Workroom light state must restore: ${JSON.stringify(haunt.workroom)}`);
     const monitorRestored = await page.evaluate(() => window.MrFeastFresh.getMonitorWallState());
     assert(!monitorRestored.staticActive && monitorRestored.staticScreens === 0, `live monitor presentation should return after the scare: ${JSON.stringify(monitorRestored)}`);
+    assert(
+      !monitorRestored.feastFatherShadow.active
+        && monitorRestored.feastFatherShadow.screenCount === 0
+        && monitorRestored.feastFatherShadow.progress === 0
+        && !haunt.workroom.doorLocked,
+      `the shadow and temporary Workroom door lock must clear with the scare: ${JSON.stringify({ shadow: monitorRestored.feastFatherShadow, workroom: haunt.workroom })}`,
+    );
     const lightLayoutAfter = await page.evaluate(() => window.MrFeastFresh.lightLayout());
     assert(JSON.stringify(lightLayoutAfter) === JSON.stringify(lightLayoutBefore), `haunts must not change the fixed shader-light topology: before=${JSON.stringify(lightLayoutBefore)} after=${JSON.stringify(lightLayoutAfter)}`);
 

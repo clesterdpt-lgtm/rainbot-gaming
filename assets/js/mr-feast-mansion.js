@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260803-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1";
+  const MANSION_RUNTIME_VERSION = "20260803-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1-locked-growing-saint-static-1-model-baked-saint-shadow-2";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -3005,7 +3005,12 @@
       breathingRampSeconds: 15,
       breathingStartGain: 0.008,
       breathingReleaseSeconds: 0.8,
-      breathingGain: 0.24,
+      breathingGain: 0.3,
+      shadowStartScale: 0.16,
+      shadowEndScale: 0.94,
+      shadowAspectRatio: 0.5,
+      shadowTexturePath: "../img/mr-feast/feast-father-static-silhouette.png",
+      shadowSourceModel: "assets/models/mr-feast/demon-prototypes/banquet-saint.glb",
       circuitName: "workroom lights",
       closeDoors: Object.freeze(["workroom door"]),
     }),
@@ -5292,6 +5297,7 @@
   const exteriorRainDoors = [];
   const portraitTextures = new Map();
   const bulkStorageSymbolTextures = new Map();
+  let feastFatherSilhouetteTexture = null;
   const portraitPlacements = [];
   const interiorDetailMeshes = [];
   const facadeSideMeshes = [];
@@ -6345,9 +6351,34 @@
     });
   }
 
+  function loadSilhouetteTexture(relativePath) {
+    return new Promise((resolve) => {
+      const url = new URL(relativePath, SCRIPT_URL);
+      url.searchParams.set("v", MANSION_RUNTIME_VERSION);
+      new THREE.TextureLoader().load(
+        url.href,
+        (texture) => {
+          texture.name = "workroom-static-feast-father-model-silhouette";
+          texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+          texture.magFilter = THREE.LinearFilter;
+          // The cage loops and separated fingers become one or two monitor
+          // pixels at full growth. Sampling the authored mask directly keeps
+          // those negative spaces from averaging shut in a mip level.
+          texture.minFilter = THREE.LinearFilter;
+          texture.generateMipmaps = false;
+          texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+          texture.encoding = THREE.LinearEncoding;
+          resolve(texture);
+        },
+        () => noteStartupActivity(),
+        () => resolve(null),
+      );
+    });
+  }
+
   async function createMaterials() {
     setLoading("Preparing the estate", 8);
-    const [damask, oak, stone, marble, artworkEntries, bulkStorageSymbolEntries] = await Promise.all([
+    const [damask, oak, stone, marble, artworkEntries, bulkStorageSymbolEntries, saintSilhouette] = await Promise.all([
       loadTexture(textureUrl("blue-damask-wallpaper-ai.jpg"), 3.2, 2.4, THREE.sRGBEncoding),
       loadTexture(textureUrl("smoked-oak-herringbone-ai.jpg"), 7, 7, THREE.sRGBEncoding),
       loadTexture(textureUrl("damp-limestone-ai.jpg"), 5.5, 3.2, THREE.sRGBEncoding),
@@ -6357,7 +6388,9 @@
         symbol.id,
         await loadSymbolTexture(textureUrl(symbol.textureFile), symbol.id),
       ])),
+      loadSilhouetteTexture(BASEMENT_HAUNT.workroom.shadowTexturePath),
     ]);
+    feastFatherSilhouetteTexture = saintSilhouette;
     for (const [artId, texture] of artworkEntries) {
       if (texture) portraitTextures.set(artId, texture);
     }
@@ -32371,7 +32404,7 @@
     const door = workroomScene.entranceDoor;
     if (door) {
       if (!state.workroom.unlocked && door.open) door.setOpen(false);
-      door.locked = !state.workroom.unlocked;
+      door.locked = !state.workroom.unlocked || Boolean(basementHauntSystem?.workroom?.active);
     }
     updateWorkroomKeypadPresentation();
   }
@@ -34928,6 +34961,15 @@
       this.lastRenderStateRestored = true;
       this.staticActive = false;
       this.staticPhase = 0;
+      this.feastFatherProgress = 0;
+      this.feastFatherSilhouetteReady = Boolean(feastFatherSilhouetteTexture);
+      if (feastFatherSilhouetteTexture) {
+        this.feastFatherSilhouetteTexture = feastFatherSilhouetteTexture;
+      } else {
+        const emptyPixel = new Uint8Array([0, 0, 0, 0]);
+        this.feastFatherSilhouetteTexture = new THREE.DataTexture(emptyPixel, 1, 1, THREE.RGBAFormat);
+        this.feastFatherSilhouetteTexture.needsUpdate = true;
+      }
       // A stylized low-light normal pass keeps remote rooms legible even when
       // their physical circuit is outside the player's active floor. It still
       // renders the real scene geometry from each live security-camera pose,
@@ -34968,6 +35010,12 @@
           map: { value: target.texture },
           staticMix: { value: 0 },
           staticPhase: { value: 0 },
+          feastFatherProgress: { value: 0 },
+          feastFatherStartScale: { value: BASEMENT_HAUNT.workroom.shadowStartScale },
+          feastFatherEndScale: { value: BASEMENT_HAUNT.workroom.shadowEndScale },
+          feastFatherAspectRatio: { value: BASEMENT_HAUNT.workroom.shadowAspectRatio },
+          feastFatherSilhouette: { value: this.feastFatherSilhouetteTexture },
+          feastFatherSilhouetteReady: { value: this.feastFatherSilhouetteReady ? 1 : 0 },
         },
         vertexShader: `
           varying vec2 vUv;
@@ -34980,9 +35028,26 @@
           uniform sampler2D map;
           uniform float staticMix;
           uniform float staticPhase;
+          uniform float feastFatherProgress;
+          uniform float feastFatherStartScale;
+          uniform float feastFatherEndScale;
+          uniform float feastFatherAspectRatio;
+          uniform sampler2D feastFatherSilhouette;
+          uniform float feastFatherSilhouetteReady;
           varying vec2 vUv;
           float staticNoise(vec2 cell) {
             return fract(sin(dot(cell, vec2(12.9898, 78.233)) + staticPhase * 41.71) * 43758.5453);
+          }
+          float feastFatherShadow(vec2 uv) {
+            float growth = smoothstep(0.0, 1.0, feastFatherProgress);
+            float height = mix(feastFatherStartScale, feastFatherEndScale, growth);
+            vec2 silhouetteSize = vec2(height * feastFatherAspectRatio, height);
+            vec2 silhouetteUv = (uv - vec2(0.5, 0.5)) / max(silhouetteSize, vec2(0.001)) + vec2(0.5);
+            float inside = step(0.0, silhouetteUv.x) * step(silhouetteUv.x, 1.0)
+              * step(0.0, silhouetteUv.y) * step(silhouetteUv.y, 1.0);
+            return texture2D(feastFatherSilhouette, silhouetteUv).a
+              * inside
+              * feastFatherSilhouetteReady;
           }
           void main() {
             vec3 source = texture2D(map, vUv).rgb;
@@ -34996,6 +35061,9 @@
             float grain = staticNoise(staticCell);
             float tear = step(0.965, staticNoise(vec2(floor(vUv.y * 92.0), floor(staticPhase * 7.0))));
             vec3 staticFrame = vec3(grain * 0.82 + tear * 0.18) * (0.82 + 0.18 * scanline);
+            float shadow = feastFatherShadow(vUv);
+            float shadowOpacity = mix(0.82, 1.0, smoothstep(0.0, 1.0, feastFatherProgress));
+            staticFrame = mix(staticFrame, vec3(0.0), shadow * shadowOpacity);
             gl_FragColor = vec4(mix(liveFrame, staticFrame, staticMix), 1.0);
           }
         `,
@@ -35124,7 +35192,19 @@
       this.normalFrameRenderCount = 0;
       if (this.staticActive) {
         this.staticPhase += Math.max(0, Number(dt) || 0);
-        for (const feed of this.feeds) feed.material.uniforms.staticPhase.value = this.staticPhase;
+        const fallbackProgress = clamp(
+          this.staticPhase / BASEMENT_HAUNT.workroom.breathingRampSeconds,
+          0,
+          1,
+        );
+        const breathing = audioSystem?.workroomHauntDiagnostics();
+        this.feastFatherProgress = breathing?.elapsedSeconds > 0
+          ? breathing.rampProgress
+          : fallbackProgress;
+        for (const feed of this.feeds) {
+          feed.material.uniforms.staticPhase.value = this.staticPhase;
+          feed.material.uniforms.feastFatherProgress.value = this.feastFatherProgress;
+        }
       }
       if (!this.isActive()) return;
       this.pageAccumulator += Math.max(0, Number(dt) || 0);
@@ -35142,10 +35222,14 @@
 
     setStatic(active) {
       this.staticActive = Boolean(active);
-      if (!this.staticActive) this.staticPhase = 0;
+      if (!this.staticActive) {
+        this.staticPhase = 0;
+        this.feastFatherProgress = 0;
+      }
       for (const feed of this.feeds) {
         feed.material.uniforms.staticMix.value = this.staticActive ? 1 : 0;
         feed.material.uniforms.staticPhase.value = this.staticPhase;
+        feed.material.uniforms.feastFatherProgress.value = this.feastFatherProgress;
       }
       return this.getDiagnostics();
     }
@@ -35172,12 +35256,32 @@
 
     getDiagnostics() {
       const size = this.targetSize();
+      const shadowScale = lerp(
+        BASEMENT_HAUNT.workroom.shadowStartScale,
+        BASEMENT_HAUNT.workroom.shadowEndScale,
+        this.feastFatherProgress,
+      );
       return {
         active: this.isActive(),
         live: this.feeds.some((feed) => feed.renderCount > 0),
         staticActive: this.staticActive,
         staticScreens: this.staticActive ? this.feeds.length : 0,
         staticPhase: Number(this.staticPhase.toFixed(3)),
+        feastFatherShadow: {
+          active: this.staticActive,
+          screenCount: this.staticActive ? this.feeds.length : 0,
+          progress: Number(this.feastFatherProgress.toFixed(4)),
+          scale: Number(shadowScale.toFixed(4)),
+          startScale: BASEMENT_HAUNT.workroom.shadowStartScale,
+          endScale: BASEMENT_HAUNT.workroom.shadowEndScale,
+          rampSeconds: BASEMENT_HAUNT.workroom.breathingRampSeconds,
+          synchronizedTo: "feast-father-breathing-gain",
+          silhouette: "exact-banquet-saint-model-mask",
+          sourceModel: BASEMENT_HAUNT.workroom.shadowSourceModel,
+          texturePath: BASEMENT_HAUNT.workroom.shadowTexturePath,
+          textureReady: this.feastFatherSilhouetteReady,
+          maskKind: "model-derived-alpha",
+        },
         screenCount: this.feeds.length,
         renderTargets: this.feeds.filter((feed) => feed.target?.isWebGLRenderTarget).length,
         rosterCameraCount: this.rosterCameraIds.length,
@@ -35219,6 +35323,7 @@
         phase: "idle",
         elapsed: 0,
         closedDoors: [],
+        lockedDoors: [],
       };
       this.qaManualClock = false;
       this.qaStepping = false;
@@ -35241,6 +35346,14 @@
         door.setOpen(false);
         audioSystem?.door(false);
       }
+      if (!record.includes(name)) record.push(name);
+      return true;
+    }
+
+    lockClosedDoor(name, record) {
+      const door = this.door(name);
+      if (!door || door.open) return false;
+      door.locked = true;
       if (!record.includes(name)) record.push(name);
       return true;
     }
@@ -35328,9 +35441,13 @@
       this.workroom.phase = "blackout";
       this.workroom.elapsed = 0;
       this.workroom.closedDoors = [];
+      this.workroom.lockedDoors = [];
       for (const name of BASEMENT_HAUNT.workroom.closeDoors) {
-        this.ensureDoorClosed(name, this.workroom.closedDoors);
+        if (this.ensureDoorClosed(name, this.workroom.closedDoors)) {
+          this.lockClosedDoor(name, this.workroom.lockedDoors);
+        }
       }
+      syncWorkroomDoorState();
       this.circuit(BASEMENT_HAUNT.workroom.circuitName)?.setTransientBlackout(true);
       monitorWallSystem?.setStatic(true);
       audioSystem?.workroomFeastFatherBreathing(BASEMENT_HAUNT.workroom.breathingSeconds);
@@ -35342,6 +35459,7 @@
       monitorWallSystem?.setStatic(false);
       audioSystem?.stopWorkroomFeastFatherBreathing();
       this.workroom.active = false;
+      syncWorkroomDoorState();
       this.workroom.phase = "complete";
       this.workroom.elapsed = 0;
     }
@@ -35481,6 +35599,8 @@
       this.workroom.phase = reason === "load" ? "restored" : "idle";
       this.workroom.elapsed = 0;
       this.workroom.closedDoors = [];
+      this.workroom.lockedDoors = [];
+      syncWorkroomDoorState();
       if (clearSeen) {
         state.basementHaunt.archiveDropSeen = false;
         state.basementHaunt.archiveFileReadIds = [];
@@ -35524,6 +35644,8 @@
           remainingSeconds: Number(Math.max(0, BASEMENT_HAUNT.workroom.durationSeconds - this.workroom.elapsed).toFixed(3)),
           seen: Boolean(state.basementHaunt.workroomSeen),
           closedDoors: [...this.workroom.closedDoors],
+          lockedDoors: [...this.workroom.lockedDoors],
+          doorLocked: Boolean(this.door("workroom door")?.locked),
           blackoutActive: Boolean(workroomCircuit?.transientBlackout),
           circuitOn: Boolean(workroomCircuit?.on),
           staticActive: Boolean(monitorWallSystem?.staticActive),
@@ -40164,7 +40286,9 @@
       {
         kind: "door", center: -2.3, width: 1.35, label: "workroom door", direction: -1,
         locked: true,
-        getLockedLabel: () => "Workroom access — enter the four-digit PIN",
+        getLockedLabel: () => basementHauntSystem?.workroom?.active
+          ? "Workroom door — locked from the outside"
+          : "Workroom access — enter the four-digit PIN",
         onLockedActivate: () => openWorkroomKeypad(),
         onCreate: (door) => { workroomScene.entranceDoor = door; },
       },
@@ -52146,9 +52270,15 @@
     window.MrFeastFresh.frameArchiveHauntBookForQA = () => (
       state.qa && basementHauntSystem ? basementHauntSystem.frameBookForQA() : null
     );
-    window.MrFeastFresh.triggerWorkroomPatronHauntForQA = () => (
-      state.qa && basementHauntSystem ? basementHauntSystem.triggerWorkroomPatronHaunt({ force: true }) : null
-    );
+    window.MrFeastFresh.triggerWorkroomPatronHauntForQA = () => {
+      if (!state.qa || !basementHauntSystem) return null;
+      // Natural relay sabotage is only possible after keypad access. Mirror
+      // that authoritative precondition so QA proves a temporary haunt lock
+      // rather than the Workroom's separate persistent PIN lock.
+      state.workroom.unlocked = true;
+      syncWorkroomDoorState();
+      return basementHauntSystem.triggerWorkroomPatronHaunt({ force: true });
+    };
     window.MrFeastFresh.closeReadableBookForQA = () => state.qa && readableBookSystem ? readableBookSystem.close() : false;
     window.MrFeastFresh.getMrFeastState = () => mrFeastNpc ? mrFeastNpc.getDiagnostics() : null;
     window.MrFeastFresh.probeMrFeastFurnitureCollisionForQA = () => (

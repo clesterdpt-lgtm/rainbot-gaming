@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260803-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1-locked-growing-saint-static-1-model-baked-saint-shadow-2";
+  const MANSION_RUNTIME_VERSION = "20260803-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1-locked-growing-saint-static-1-model-baked-saint-shadow-2-archive-center-drop-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2995,6 +2995,7 @@
         viewerX: 13.15,
         viewerYaw: Math.PI / 2,
       }),
+      centerCrossingZ: 7.6,
       triggerBounds: Object.freeze({ minX: 4.6, maxX: 13.8, minZ: 4.0, maxZ: 10.8 }),
       circuitName: "archive and pantry lights",
       closeDoors: Object.freeze(["basement stair door", "archive door"]),
@@ -35520,8 +35521,14 @@
         || !physics
       ) return false;
       const p = physics.playerPosition();
-      const bounds = BASEMENT_HAUNT.archive.triggerBounds;
-      return p.x >= bounds.minX && p.x <= bounds.maxX && p.z >= bounds.minZ && p.z <= bounds.maxZ;
+      const config = BASEMENT_HAUNT.archive;
+      const bounds = config.triggerBounds;
+      return (
+        p.x >= bounds.minX
+        && p.x <= bounds.maxX
+        && p.z >= Math.max(bounds.minZ, config.centerCrossingZ)
+        && p.z <= bounds.maxZ
+      );
     }
 
     update(dt) {

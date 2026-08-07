@@ -60,6 +60,11 @@ async function run() {
 
   assert(/const BASEMENT_HAUNT = Object\.freeze\(\{/.test(runtime), "missing named BASEMENT_HAUNT tuning and story table");
   assert(/class BasementHauntSystem/.test(runtime), "missing lifecycle-owned BasementHauntSystem");
+  assert(
+    /centerCrossingZ:\s*7\.6/.test(runtime)
+      && /p\.z >= Math\.max\(bounds\.minZ, config\.centerCrossingZ\)/.test(runtime),
+    "the Archive book must wait until the player crosses the room's authored center line",
+  );
   assert(/archive-feast-father-lore-book-floor/.test(runtime), "the Feast Father lore volume is not a physical Archive floor discovery");
   assert(!/feast-father-lore-book-cover/.test(runtime), "the Feast Father lore volume still has a duplicate Library-table prop");
   assert((runtime.match(/archive-contestant-preparation-file-/g) || []).length >= 3, "the Archive needs at least three physical previous-contestant files");
@@ -174,10 +179,22 @@ async function run() {
     const recorderView = await page.evaluate(() => window.MrFeastFresh.teleport("contestant13ArchiveCage"));
     assert(/evidence cage.*locked/i.test(recorderView.prompt || ""), `the moved Player 13 recorder must remain interactable beside the skull: ${JSON.stringify(recorderView.prompt)}`);
 
+    await page.evaluate(() => window.MrFeastFresh.setCameraStoryStateForQA({ basementUnlocked: false, relaySabotaged: false }));
+    await page.evaluate(() => window.MrFeastFresh.teleport("serviceStairBottomSwitch"));
     let haunt = await page.evaluate(() => window.MrFeastFresh.resetBasementHauntForQA({ clearSeen: true }));
     assert(!haunt.archive.dropSeen && !haunt.archive.book.visible, `fresh Archive haunt state should hide the floor book: ${JSON.stringify(haunt)}`);
-    haunt = await page.evaluate(() => window.MrFeastFresh.triggerArchiveHauntForQA());
-    assert(haunt.archive.active && haunt.archive.phase === "book-falling", `Archive exploration should begin with the book fall: ${JSON.stringify(haunt)}`);
+    await page.evaluate(() => window.MrFeastFresh.setCameraStoryStateForQA({ basementUnlocked: true, relaySabotaged: false }));
+    await page.waitForTimeout(150);
+    haunt = await page.evaluate(() => window.MrFeastFresh.getBasementHauntState());
+    assert(!haunt.archive.active && !haunt.archive.dropSeen && !haunt.archive.book.visible, `arriving at the bottom of the basement stairs must not reveal or drop the Archive book: ${JSON.stringify(haunt.archive)}`);
+    await page.evaluate(() => window.MrFeastFresh.teleport("archiveB"));
+    await page.waitForTimeout(150);
+    haunt = await page.evaluate(() => window.MrFeastFresh.getBasementHauntState());
+    assert(!haunt.archive.active && !haunt.archive.dropSeen && !haunt.archive.book.visible, `the book must still be absent just before the Archive center line: ${JSON.stringify(haunt.archive)}`);
+    await page.evaluate(() => window.MrFeastFresh.teleport("archiveSkull"));
+    await page.waitForFunction(() => window.MrFeastFresh.getBasementHauntState()?.archive?.active);
+    haunt = await page.evaluate(() => window.MrFeastFresh.getBasementHauntState());
+    assert(haunt.archive.active && haunt.archive.phase === "book-falling", `crossing the Archive center should begin the book fall: ${JSON.stringify(haunt)}`);
     haunt = await page.evaluate(() => window.MrFeastFresh.advanceBasementHauntForQA(0.9));
     assert(haunt.archive.dropSeen && haunt.archive.book.visible && haunt.archive.book.onFloor, `the impact must leave the lore book on the Archive floor: ${JSON.stringify(haunt.archive)}`);
     assert(haunt.archive.dropSoundCount === 1, `the physical drop should emit exactly one spatial impact: ${JSON.stringify(haunt.archive)}`);
@@ -219,6 +236,11 @@ async function run() {
     assert(haunt.archive.files.readIds.length === 3 && haunt.archive.files.physicalCount >= 3, `all physical contestant dossiers should be independently readable: ${JSON.stringify(haunt.archive.files)}`);
     await page.evaluate(() => window.MrFeastFresh.frameArchiveContestantFilesForQA("contestant-09"));
     await captureStage(page, "archive-contestant-preparation-files-desktop.png");
+    if (process.env.MR_FEAST_ARCHIVE_TRIGGER_ONLY === "1") {
+      assert(errors.length === 0, `browser errors: ${errors.join(" | ")}`);
+      console.log("Mr. Feast Archive center-trigger regression passed.");
+      return;
+    }
 
     await page.evaluate(() => window.MrFeastFresh.teleport("workroomMonitorWall"));
     const lightLayoutBefore = await page.evaluate(() => window.MrFeastFresh.lightLayout());

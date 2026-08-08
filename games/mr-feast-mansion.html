@@ -142,23 +142,24 @@
         radial-gradient(ellipse at 50% 48%, transparent 34%, rgba(20, 2, 7, 0.28) 68%, rgba(1, 1, 2, 0.78) 100%);
     }
 
-    #mansion-stage[data-banquet-loss="active"] .mansion-location,
-    #mansion-stage[data-banquet-loss="active"] .mansion-tools,
-    #mansion-stage[data-banquet-loss="active"] #mansion-prompt,
-    #mansion-stage[data-banquet-loss="active"] #mansion-hidden,
-    #mansion-stage[data-banquet-loss="active"] #mansion-casefile,
-    #mansion-stage[data-banquet-loss="active"] #mansion-energy,
-    #mansion-stage[data-banquet-loss="active"] #mansion-breath,
-    #mansion-stage[data-banquet-loss="active"] #mansion-stealth,
-    #mansion-stage[data-banquet-loss="active"] #mansion-security,
-    #mansion-stage[data-banquet-loss="active"] #mansion-feast-says,
-    #mansion-stage[data-banquet-loss="active"] #mansion-storm-run,
-    #mansion-stage[data-banquet-loss="active"] #mansion-feast-hunt,
-    #mansion-stage[data-banquet-loss="active"] #mansion-victory-feast,
-    #mansion-stage[data-banquet-loss="active"] #mansion-touch,
-    #mansion-stage[data-banquet-loss="active"] #mansion-crosshair,
-    #mansion-stage[data-banquet-loss="active"] #mansion-discovery,
-    #mansion-stage[data-banquet-loss="active"] #mansion-action {
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) .mansion-location,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) .mansion-tools,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-prompt,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-hidden,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-casefile,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-energy,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-breath,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-stealth,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-security,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-speech,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-feast-says,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-storm-run,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-feast-hunt,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-victory-feast,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-touch,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-crosshair,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-discovery,
+    #mansion-stage:is([data-banquet-loss="active"], [data-catch-scare="active"]) #mansion-action {
       opacity: 0;
       pointer-events: none;
       visibility: hidden;
@@ -186,6 +187,55 @@
 
     #mansion-stage[data-banquet-look="active"] #mansion-banquet-look-hint {
       display: block;
+    }
+
+    #mansion-catch-scare {
+      position: absolute;
+      inset: 0;
+      z-index: 18;
+      overflow: hidden;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse at 50% 46%, transparent 24%, rgba(32, 1, 6, 0.22) 54%, rgba(2, 0, 1, 0.9) 100%),
+        linear-gradient(180deg, rgba(4, 0, 1, 0.28), transparent 24%, transparent 70%, rgba(4, 0, 1, 0.46));
+      box-shadow:
+        inset 0 0 72px rgba(104, 6, 13, 0.36),
+        inset 0 0 12px rgba(255, 208, 166, 0.08);
+    }
+
+    #mansion-catch-scare[hidden] { display: none; }
+
+    #mansion-catch-scare::before {
+      content: "";
+      position: absolute;
+      inset: -18%;
+      opacity: 0.18;
+      background:
+        repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.055) 0 1px, transparent 1px 4px),
+        repeating-linear-gradient(112deg, transparent 0 13px, rgba(158, 18, 26, 0.12) 14px 15px, transparent 16px 29px);
+      transform: translate3d(-1.5%, -1%, 0) rotate(-0.35deg);
+      animation: mansion-catch-scare-grain 180ms steps(2, end) infinite;
+    }
+
+    #mansion-catch-scare::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border: clamp(2px, 0.65vw, 8px) solid rgba(113, 8, 14, 0.26);
+      box-shadow: inset 0 0 42px rgba(0, 0, 0, 0.88);
+    }
+
+    #mansion-catch-scare[data-catcher="feast-father"] {
+      background:
+        radial-gradient(ellipse at 50% 43%, transparent 18%, rgba(35, 0, 7, 0.3) 48%, rgba(0, 0, 0, 0.96) 100%),
+        linear-gradient(180deg, rgba(0, 0, 0, 0.5), transparent 32%, rgba(9, 0, 2, 0.34));
+      box-shadow:
+        inset 0 0 96px rgba(80, 0, 9, 0.54),
+        inset 0 0 16px rgba(218, 182, 153, 0.06);
+    }
+
+    @keyframes mansion-catch-scare-grain {
+      50% { transform: translate3d(1.25%, 0.8%, 0) rotate(0.3deg); }
     }
 
     #mansion-stage.is-hiding::after {
@@ -3520,8 +3570,11 @@
     <div class="game-layout mansion-layout">
       <div class="game-stage rb-standalone-stage mansion-stage-shell">
         <div class="canvas-wrap rb-standalone-surface mansion-surface">
-      <section id="mansion-stage" aria-label="Interactive three-dimensional mansion" aria-busy="true" data-banquet-loss="inactive" data-banquet-look="inactive">
+      <section id="mansion-stage" aria-label="Interactive three-dimensional mansion" aria-busy="true" data-banquet-loss="inactive" data-banquet-look="inactive" data-catch-scare="inactive">
         <canvas id="mansion-canvas" tabindex="0" aria-label="First-person view in Mr Feast: Last to Leave"></canvas>
+        <div id="mansion-catch-scare" aria-hidden="true" hidden>
+          <span id="mansion-catch-scare-announcement" class="sr-only" role="status" aria-live="assertive"></span>
+        </div>
         <div id="mansion-banquet-look-hint" role="status">Drag or move to look around</div>
 
         <div class="mansion-location" aria-live="polite">
@@ -3946,6 +3999,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260806-network-polish-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260808-no-service-stair-cam-hide-location-hud-1-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1-locked-growing-saint-static-1-model-baked-saint-shadow-2-called-game-flashlight-1-archive-center-drop-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260808-no-service-stair-cam-hide-location-hud-1-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1-locked-growing-saint-static-1-model-baked-saint-shadow-2-called-game-flashlight-1-archive-center-drop-1-confirmed-catch-scare-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

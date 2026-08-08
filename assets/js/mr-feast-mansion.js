@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260808-no-service-stair-cam-hide-location-hud-1-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1-locked-growing-saint-static-1-model-baked-saint-shadow-2-called-game-flashlight-1-archive-center-drop-1";
+  const MANSION_RUNTIME_VERSION = "20260808-no-service-stair-cam-hide-location-hud-1-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1-locked-growing-saint-static-1-model-baked-saint-shadow-2-called-game-flashlight-1-archive-center-drop-1-confirmed-catch-scare-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -165,6 +165,8 @@
     gameOverCopy: $("mansion-gameover-copy"),
     gameOverLoad: $("mansion-gameover-load"),
     gameOverRestart: $("mansion-gameover-restart"),
+    catchScare: $("mansion-catch-scare"),
+    catchScareAnnouncement: $("mansion-catch-scare-announcement"),
     menu: $("mansion-menu"),
     menuResume: $("mansion-menu-resume"),
     menuMusic: $("mansion-menu-music"),
@@ -4329,6 +4331,60 @@
       Object.freeze({ id: "patron-eclipse", maskId: "eclipse-oracle", x: -11.65, z: -9.55, scale: 1.03, maskScale: 0.68, phase: 0.94, tint: 0xd4c8bd }),
     ]),
   });
+  const CATCH_SCARE = Object.freeze({
+    durationSeconds: 2,
+    maximumTimerStepSeconds: 0.1,
+    reducedMotionScale: 0.18,
+    catchers: Object.freeze({
+      "mr-feast": Object.freeze({
+        label: "Mr. Feast",
+        reasons: Object.freeze(["witnessed", "recorded", "feast-hunt-eliminated", "victory-feast-caught"]),
+        cameraFov: 43,
+        cameraDistanceHeightRatio: 0.34,
+        focusHeightRatio: 0.88,
+        cameraLiftHeightRatio: 0.008,
+        startDepthHeightRatio: -0.08,
+        lungeDepthHeightRatio: 0.16,
+        shakePositionHeightRatio: 0.0075,
+        shakeRotationRadians: 0.034,
+        keyColor: 0xffd4a2,
+        keyIntensity: 3.2,
+        rimColor: 0xa51418,
+        rimIntensity: 2.6,
+        ambientColor: 0x3b2220,
+        ambientIntensity: 0.34,
+      }),
+      "feast-father": Object.freeze({
+        label: "the Feast Father",
+        reasons: Object.freeze(["victory-feast-saint"]),
+        cameraFov: 39,
+        cameraDistanceHeightRatio: 0.3,
+        focusHeightRatio: 0.77,
+        cameraLiftHeightRatio: 0.025,
+        startDepthHeightRatio: -0.12,
+        lungeDepthHeightRatio: 0.2,
+        shakePositionHeightRatio: 0.006,
+        shakeRotationRadians: 0.028,
+        keyColor: 0xd6b7a2,
+        keyIntensity: 2.15,
+        rimColor: 0x6f0711,
+        rimIntensity: 3.4,
+        ambientColor: 0x17070a,
+        ambientIntensity: 0.12,
+      }),
+    }),
+    audio: Object.freeze({
+      noiseSeconds: 1.72,
+      mrFeastNoisePeak: 0.18,
+      feastFatherNoisePeak: 0.15,
+      mrFeastImpactHz: 52,
+      feastFatherImpactHz: 34,
+      mrFeastShriekStartHz: 860,
+      mrFeastShriekEndHz: 128,
+      feastFatherShriekStartHz: 510,
+      feastFatherShriekEndHz: 58,
+    }),
+  });
   const COMPETITION_FILM_SET = Object.freeze({
     camera: Object.freeze({
       model: "long-lens-cinema-pedestal",
@@ -4656,6 +4712,15 @@
     devModeSnapshot: null,
     gameWon: null,
     gameOver: null,
+    catchScare: {
+      phase: "inactive",
+      elapsed: 0,
+      catcher: null,
+      triggerReason: null,
+      reducedMotion: false,
+      overlayVisible: false,
+      modelCloned: false,
+    },
     banquetLoss: {
       phase: "inactive",
       elapsed: 0,
@@ -5245,6 +5310,7 @@
   let victoryFeastSystem = null;
   let finaleSabotageSystem = null;
   let banquetLossSystem = null;
+  let catchScareSystem = null;
   let breathStealthSystem = null;
   let workroomCodeClue = null;
   let questionableProvisionMaterials = null;
@@ -21772,6 +21838,337 @@
     }
   }
 
+  class CatchScareSystem {
+    constructor() {
+      this.phase = "inactive";
+      this.elapsed = 0;
+      this.details = null;
+      this.catcherId = null;
+      this.catcher = null;
+      this.model = null;
+      this.modelSource = null;
+      this.modelHeight = 1;
+      this.modelBaseZ = 0;
+      this.qaManualClock = false;
+      this.qaStepping = false;
+      this.scene = new THREE.Scene();
+      this.scene.background = new THREE.Color(0x020003);
+      this.camera = new THREE.PerspectiveCamera(43, 1, 0.02, 40);
+      this.cameraBasePosition = new THREE.Vector3();
+      this.cameraFocus = new THREE.Vector3();
+      this.focusProjected = new THREE.Vector3();
+      this.keyLight = new THREE.PointLight(0xffd4a2, 0, 8, 2);
+      this.rimLight = new THREE.PointLight(0x8f0b16, 0, 9, 2);
+      this.ambientLight = new THREE.HemisphereLight(0x2c1517, 0x020002, 0);
+      this.scene.add(this.keyLight, this.rimLight, this.ambientLight);
+      this.resize(dom.stage?.clientWidth || 1, dom.stage?.clientHeight || 1);
+      this.syncState();
+    }
+
+    catcherForReason(reason) {
+      const normalized = String(reason || "");
+      return Object.entries(CATCH_SCARE.catchers).find(([, config]) => (
+        config.reasons.includes(normalized)
+      )) || null;
+    }
+
+    handlesReason(reason) {
+      return Boolean(this.catcherForReason(reason));
+    }
+
+    sourceForCatcher(catcherId) {
+      if (catcherId === "feast-father") return demonPrototypePatrol?.saintEntry()?.root || null;
+      return mrFeastNpc?.root || null;
+    }
+
+    cloneCatcher(source) {
+      if (!source) return null;
+      const clone = THREE.SkeletonUtils?.clone
+        ? THREE.SkeletonUtils.clone(source)
+        : source.clone(true);
+      clone.name = `catch-scare-${this.catcherId}-model`;
+      clone.position.set(0, 0, 0);
+      clone.rotation.set(0, 0, 0);
+      clone.visible = true;
+      clone.traverse((object) => {
+        object.frustumCulled = false;
+      });
+      return clone;
+    }
+
+    stageModel() {
+      if (!this.model || !this.catcher) return false;
+      this.scene.add(this.model);
+      this.model.updateMatrixWorld(true);
+      let bounds = new THREE.Box3().setFromObject(this.model);
+      if (bounds.isEmpty()) return false;
+      const center = bounds.getCenter(new THREE.Vector3());
+      const size = bounds.getSize(new THREE.Vector3());
+      this.model.position.x -= center.x;
+      this.model.position.y -= bounds.min.y;
+      this.model.position.z -= center.z;
+      this.model.updateMatrixWorld(true);
+      bounds = new THREE.Box3().setFromObject(this.model);
+      const normalizedSize = bounds.getSize(new THREE.Vector3());
+      this.modelHeight = Math.max(0.5, normalizedSize.y || size.y || 1);
+      this.modelBaseZ = this.catcher.startDepthHeightRatio * this.modelHeight;
+      this.model.position.z = this.modelBaseZ;
+      const focusY = bounds.min.y + this.modelHeight * this.catcher.focusHeightRatio;
+      const cameraDistance = Math.max(
+        0.44,
+        this.modelHeight * this.catcher.cameraDistanceHeightRatio,
+      );
+      this.camera.fov = this.catcher.cameraFov;
+      this.camera.near = Math.max(0.01, cameraDistance * 0.025);
+      this.camera.far = Math.max(20, this.modelHeight * 12);
+      this.cameraBasePosition.set(
+        0,
+        focusY + this.modelHeight * this.catcher.cameraLiftHeightRatio,
+        cameraDistance,
+      );
+      this.cameraFocus.set(0, focusY, 0);
+      this.keyLight.color.setHex(this.catcher.keyColor);
+      this.keyLight.intensity = this.catcher.keyIntensity;
+      this.keyLight.distance = this.modelHeight * 3.2;
+      this.keyLight.position.set(
+        this.modelHeight * 0.34,
+        focusY + this.modelHeight * 0.18,
+        cameraDistance * 0.55,
+      );
+      this.rimLight.color.setHex(this.catcher.rimColor);
+      this.rimLight.intensity = this.catcher.rimIntensity;
+      this.rimLight.distance = this.modelHeight * 3.6;
+      this.rimLight.position.set(
+        -this.modelHeight * 0.42,
+        focusY + this.modelHeight * 0.08,
+        -this.modelHeight * 0.32,
+      );
+      this.ambientLight.color.setHex(this.catcher.ambientColor);
+      this.ambientLight.groundColor.setHex(0x010001);
+      this.ambientLight.intensity = this.catcher.ambientIntensity;
+      this.camera.position.copy(this.cameraBasePosition);
+      this.camera.lookAt(this.cameraFocus);
+      this.camera.updateProjectionMatrix();
+      this.camera.updateMatrixWorld(true);
+      return true;
+    }
+
+    start(details = {}) {
+      const catcherEntry = this.catcherForReason(details.reason);
+      if (!catcherEntry || this.isActive()) return false;
+      const [catcherId, catcher] = catcherEntry;
+      const source = this.sourceForCatcher(catcherId);
+      if (!source) return false;
+      this.catcherId = catcherId;
+      this.catcher = catcher;
+      this.details = { ...details };
+      this.elapsed = 0;
+      this.modelSource = catcherId === "feast-father" ? "banquet-saint" : "mr-feast";
+      this.model = this.cloneCatcher(source);
+      if (!this.model || !this.stageModel()) {
+        if (this.model) this.scene.remove(this.model);
+        this.model = null;
+        return false;
+      }
+      this.phase = "active";
+      clearMovementInput();
+      speechSystem?.dismiss();
+      flashlightSystem?.setEnabled?.(false, { source: "catch-scare" });
+      releasePointerLock();
+      if (dom.stage) dom.stage.dataset.catchScare = "active";
+      if (dom.catchScare) {
+        dom.catchScare.hidden = false;
+        dom.catchScare.dataset.catcher = catcherId;
+        dom.catchScare.setAttribute("aria-hidden", "false");
+      }
+      if (dom.catchScareAnnouncement) {
+        dom.catchScareAnnouncement.textContent = `${catcher.label} caught you.`;
+      }
+      audioSystem?.catchScare(catcherId);
+      // Use the two-second scare as useful loading time without allowing the
+      // banquet system to steal the camera before the close-up completes.
+      if (banquetLossSystem?.assetStatus !== "ready") void banquetLossSystem?.load();
+      this.updatePresentation(0);
+      this.syncState();
+      return true;
+    }
+
+    updatePresentation(step) {
+      if (!this.isActive() || !this.model || !this.catcher) return;
+      const progress = clamp(this.elapsed / CATCH_SCARE.durationSeconds, 0, 1);
+      const eased = 1 - Math.pow(1 - progress, this.catcherId === "mr-feast" ? 3.4 : 2.15);
+      this.model.position.z = this.modelBaseZ
+        + this.modelHeight * this.catcher.lungeDepthHeightRatio * eased;
+      this.model.rotation.y = this.catcherId === "mr-feast"
+        ? Math.sin(progress * Math.PI * 1.4) * 0.045
+        : Math.sin(progress * Math.PI * 0.8) * 0.025;
+      this.model.rotation.z = this.catcherId === "mr-feast"
+        ? Math.sin(progress * Math.PI * 2.1) * 0.018
+        : -0.012 + Math.sin(progress * Math.PI) * 0.01;
+      const motionScale = state.reducedFlash ? CATCH_SCARE.reducedMotionScale : 1;
+      const positionAmplitude = this.modelHeight
+        * this.catcher.shakePositionHeightRatio
+        * motionScale;
+      const rotationAmplitude = this.catcher.shakeRotationRadians * motionScale;
+      const shakeEnvelope = state.reducedFlash
+        ? Math.sin(Math.min(1, progress * 2.4) * Math.PI)
+        : 0.62 + Math.sin(progress * Math.PI) * 0.38;
+      const time = this.elapsed;
+      this.camera.position.copy(this.cameraBasePosition);
+      this.camera.position.x += (
+        Math.sin(time * 83) + Math.sin(time * 131) * 0.42
+      ) * positionAmplitude * shakeEnvelope;
+      this.camera.position.y += (
+        Math.cos(time * 71) + Math.sin(time * 109) * 0.36
+      ) * positionAmplitude * 0.72 * shakeEnvelope;
+      this.camera.lookAt(this.cameraFocus);
+      this.camera.rotation.z += (
+        Math.sin(time * 97) + Math.cos(time * 47) * 0.34
+      ) * rotationAmplitude * shakeEnvelope;
+      if (this.catcherId === "feast-father") {
+        const reveal = 0.12 + eased * 0.88;
+        this.keyLight.intensity = this.catcher.keyIntensity * reveal;
+        this.rimLight.intensity = this.catcher.rimIntensity * (0.58 + eased * 0.42);
+      }
+      this.model.updateMatrixWorld(true);
+      this.camera.updateMatrixWorld(true);
+    }
+
+    update(dt) {
+      if (!this.isActive()) return;
+      if (state.qa && this.qaManualClock && !this.qaStepping) return;
+      const step = Math.min(
+        CATCH_SCARE.maximumTimerStepSeconds,
+        Math.max(0, Number(dt) || 0),
+      );
+      this.elapsed += step;
+      this.updatePresentation(step);
+      if (this.elapsed + 0.000001 >= CATCH_SCARE.durationSeconds) {
+        this.finish();
+        return;
+      }
+      this.syncState();
+    }
+
+    finish() {
+      if (!this.isActive()) return false;
+      const details = { ...(this.details || state.gameOver || {}) };
+      this.clear();
+      if (state.gameOver && banquetLossSystem?.handlesReason(details.reason)) {
+        if (!banquetLossSystem.start(details)) presentMansionGameOverOverlay();
+      } else if (state.gameOver) {
+        presentMansionGameOverOverlay();
+      }
+      return true;
+    }
+
+    clear() {
+      if (this.model) this.scene.remove(this.model);
+      this.model = null;
+      this.phase = "inactive";
+      this.elapsed = 0;
+      this.details = null;
+      this.catcherId = null;
+      this.catcher = null;
+      this.modelSource = null;
+      this.qaManualClock = false;
+      this.qaStepping = false;
+      if (dom.stage) dom.stage.dataset.catchScare = "inactive";
+      if (dom.catchScare) {
+        dom.catchScare.hidden = true;
+        dom.catchScare.removeAttribute("data-catcher");
+        dom.catchScare.setAttribute("aria-hidden", "true");
+      }
+      if (dom.catchScareAnnouncement) dom.catchScareAnnouncement.textContent = "";
+      this.syncState();
+      return this.getDiagnostics();
+    }
+
+    resize(width, height) {
+      this.camera.aspect = Math.max(1, Number(width) || 1) / Math.max(1, Number(height) || 1);
+      this.camera.updateProjectionMatrix();
+    }
+
+    render(targetRenderer) {
+      if (!this.isActive()) return false;
+      const previousExposure = targetRenderer.toneMappingExposure;
+      targetRenderer.toneMappingExposure = this.catcherId === "feast-father" ? 0.98 : 1.08;
+      targetRenderer.render(this.scene, this.camera);
+      targetRenderer.toneMappingExposure = previousExposure;
+      return true;
+    }
+
+    isActive() {
+      return this.phase === "active";
+    }
+
+    advanceForQA(seconds) {
+      if (!state.qa || !this.isActive()) return this.getDiagnostics();
+      const duration = clamp(Number(seconds) || 0, 0, 10);
+      const fixedStep = 1 / 60;
+      let advanced = 0;
+      this.qaStepping = true;
+      try {
+        while (advanced < duration - 0.000001 && this.isActive()) {
+          const step = Math.min(fixedStep, duration - advanced);
+          this.update(step);
+          advanced += step;
+        }
+      } finally {
+        this.qaStepping = false;
+      }
+      return this.getDiagnostics();
+    }
+
+    syncState() {
+      Object.assign(state.catchScare, {
+        phase: this.phase,
+        elapsed: this.elapsed,
+        catcher: this.catcherId,
+        triggerReason: this.details?.reason || null,
+        reducedMotion: Boolean(state.reducedFlash),
+        overlayVisible: Boolean(dom.catchScare && !dom.catchScare.hidden),
+        modelCloned: Boolean(this.model),
+      });
+    }
+
+    getDiagnostics() {
+      if (this.isActive()) {
+        this.focusProjected.copy(this.cameraFocus).project(this.camera);
+      } else {
+        this.focusProjected.set(0, 0, 0);
+      }
+      return {
+        phase: this.phase,
+        elapsed: Number(this.elapsed.toFixed(3)),
+        durationSeconds: CATCH_SCARE.durationSeconds,
+        catcher: this.catcherId,
+        catcherLabel: this.catcher?.label || null,
+        triggerReason: this.details?.reason || null,
+        confirmedCatchOnly: true,
+        unskippable: true,
+        flashing: false,
+        reducedMotion: Boolean(state.reducedFlash),
+        reducedMotionScale: CATCH_SCARE.reducedMotionScale,
+        overlayVisible: Boolean(dom.catchScare && !dom.catchScare.hidden),
+        modelCloned: Boolean(this.model),
+        modelSource: this.modelSource,
+        modelHeight: Number(this.modelHeight.toFixed(3)),
+        modelVisible: Boolean(this.model?.visible),
+        framing: "live-3d-close-up",
+        camera: {
+          fov: this.camera.fov,
+          distanceHeightRatio: this.catcher?.cameraDistanceHeightRatio || null,
+          focusOnScreen: this.isActive()
+            && Math.abs(this.focusProjected.x) <= 1
+            && Math.abs(this.focusProjected.y) <= 1,
+          shakePositionHeightRatio: this.catcher?.shakePositionHeightRatio || null,
+          shakeRotationRadians: this.catcher?.shakeRotationRadians || null,
+        },
+      };
+    }
+  }
+
   class BanquetLossSystem {
     constructor() {
       this.phase = "inactive";
@@ -32349,6 +32746,7 @@
     };
     throwableDistractionSystem?.resetAll("game-over");
     breathStealthSystem?.resetTransient({ preserveStrain: true });
+    if (banquetEligible && catchScareSystem?.start(state.gameOver)) return state.gameOver;
     if (banquetEligible && banquetLossSystem?.start(state.gameOver)) return state.gameOver;
     releasePointerLock();
     presentMansionGameOverOverlay();
@@ -32404,6 +32802,7 @@
   }
 
   function clearMansionGameOver() {
+    catchScareSystem?.clear();
     banquetLossSystem?.clear();
     state.gameOver = null;
     if (dom.gameOverTitle) dom.gameOverTitle.textContent = "Caught";
@@ -44868,6 +45267,17 @@
         lastAssetRole: null,
         lastAssetPath: null,
       };
+      this.catchScareSfx = {
+        playCount: 0,
+        mrFeastPlayCount: 0,
+        feastFatherPlayCount: 0,
+        lastCatcher: null,
+        lastNoisePeak: 0,
+        lastImpactHz: 0,
+        lastShriekStartHz: 0,
+        lastShriekEndHz: 0,
+        durationSeconds: CATCH_SCARE.audio.noiseSeconds,
+      };
       this.pendingCloseThunder = [];
       this.thunderState = {
         playCount: 0,
@@ -46939,6 +47349,100 @@
       return true;
     }
 
+    catchScare(catcherId = "mr-feast") {
+      const feastFather = catcherId === "feast-father";
+      const settings = CATCH_SCARE.audio;
+      const noisePeak = feastFather
+        ? settings.feastFatherNoisePeak
+        : settings.mrFeastNoisePeak;
+      const impactHz = feastFather
+        ? settings.feastFatherImpactHz
+        : settings.mrFeastImpactHz;
+      const shriekStartHz = feastFather
+        ? settings.feastFatherShriekStartHz
+        : settings.mrFeastShriekStartHz;
+      const shriekEndHz = feastFather
+        ? settings.feastFatherShriekEndHz
+        : settings.mrFeastShriekEndHz;
+      Object.assign(this.catchScareSfx, {
+        playCount: this.catchScareSfx.playCount + 1,
+        mrFeastPlayCount: this.catchScareSfx.mrFeastPlayCount + (feastFather ? 0 : 1),
+        feastFatherPlayCount: this.catchScareSfx.feastFatherPlayCount + (feastFather ? 1 : 0),
+        lastCatcher: feastFather ? "feast-father" : "mr-feast",
+        lastNoisePeak: noisePeak,
+        lastImpactHz: impactHz,
+        lastShriekStartHz: shriekStartHz,
+        lastShriekEndHz: shriekEndHz,
+      });
+      this.markCue(feastFather ? "catchScareFeastFather" : "catchScareMrFeast");
+      if (!this.ctx || !this.master || !state.audioEnabled) return false;
+
+      const now = this.ctx.currentTime;
+      const duration = settings.noiseSeconds;
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = this.makeNoiseBuffer(duration + 0.08);
+      const highpass = this.ctx.createBiquadFilter();
+      highpass.type = "highpass";
+      highpass.frequency.setValueAtTime(feastFather ? 64 : 118, now);
+      const bandpass = this.ctx.createBiquadFilter();
+      bandpass.type = "bandpass";
+      bandpass.frequency.setValueAtTime(feastFather ? 620 : 1760, now);
+      bandpass.frequency.exponentialRampToValueAtTime(feastFather ? 118 : 360, now + duration);
+      bandpass.Q.value = feastFather ? 0.72 : 1.15;
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.0001, now);
+      noiseGain.gain.exponentialRampToValueAtTime(noisePeak, now + 0.012);
+      noiseGain.gain.setValueAtTime(noisePeak * (feastFather ? 0.54 : 0.42), now + 0.16);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      noise.connect(highpass).connect(bandpass).connect(noiseGain).connect(this.master);
+      noise.start(now);
+      noise.stop(now + duration + 0.02);
+
+      const impact = this.ctx.createOscillator();
+      impact.type = "sine";
+      impact.frequency.setValueAtTime(impactHz, now);
+      impact.frequency.exponentialRampToValueAtTime(Math.max(18, impactHz * 0.58), now + 0.82);
+      const impactGain = this.ctx.createGain();
+      impactGain.gain.setValueAtTime(feastFather ? 0.17 : 0.19, now);
+      impactGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.92);
+      impact.connect(impactGain).connect(this.master);
+      impact.start(now);
+      impact.stop(now + 0.94);
+
+      const shriek = this.ctx.createOscillator();
+      shriek.type = feastFather ? "sawtooth" : "square";
+      shriek.frequency.setValueAtTime(shriekStartHz, now);
+      shriek.frequency.exponentialRampToValueAtTime(shriekEndHz, now + (feastFather ? 1.48 : 0.72));
+      const shriekFilter = this.ctx.createBiquadFilter();
+      shriekFilter.type = "lowpass";
+      shriekFilter.frequency.setValueAtTime(feastFather ? 980 : 3900, now);
+      shriekFilter.frequency.exponentialRampToValueAtTime(feastFather ? 240 : 760, now + duration);
+      const shriekGain = this.ctx.createGain();
+      shriekGain.gain.setValueAtTime(0.0001, now);
+      shriekGain.gain.exponentialRampToValueAtTime(feastFather ? 0.062 : 0.085, now + 0.006);
+      shriekGain.gain.exponentialRampToValueAtTime(0.0001, now + (feastFather ? 1.58 : 0.78));
+      shriek.connect(shriekFilter).connect(shriekGain).connect(this.master);
+      shriek.start(now);
+      shriek.stop(now + (feastFather ? 1.6 : 0.8));
+
+      if (feastFather) {
+        const undertone = this.ctx.createOscillator();
+        undertone.type = "triangle";
+        undertone.frequency.setValueAtTime(92, now);
+        undertone.frequency.exponentialRampToValueAtTime(29, now + 1.72);
+        const undertoneGain = this.ctx.createGain();
+        undertoneGain.gain.setValueAtTime(0.075, now);
+        undertoneGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.72);
+        undertone.connect(undertoneGain).connect(this.master);
+        undertone.start(now);
+        undertone.stop(now + 1.74);
+      } else {
+        this.scheduleTone(this.ctx, this.master, 1180, 0.19, 0.055, "triangle", now + 0.035);
+        this.scheduleTone(this.ctx, this.master, 210, 0.34, 0.07, "sawtooth", now + 0.11);
+      }
+      return true;
+    }
+
     door(opening) {
       const cue = opening ? "doorOpen" : "doorClose";
       const played = this.playSample(cue, {
@@ -47397,6 +47901,7 @@
           recordedFeastFatherReady: this.availableAssets("mazeFeastFather").length > 0,
         },
         banquetBreathing: this.banquetBreathingDiagnostics(),
+        catchScare: { ...this.catchScareSfx },
         playerBreathing: this.playerBreathingDiagnostics(),
         saintVoice: this.saintVoiceDiagnostics(),
         basementHaunt: {
@@ -48298,6 +48803,7 @@
       : 70;
     camera.fov = clamp(portraitExpansion, 70, 96);
     camera.updateProjectionMatrix();
+    catchScareSystem?.resize(width, height);
     if (mobileProfileChanged) monitorWallSystem?.setMobileProfile();
     // Rotating a phone can cross the render-profile boundary without changing
     // floors. Re-apply the bounded light layout once the scene is ready so a
@@ -50987,7 +51493,9 @@
       // the world cannot cause catch-up.
       accumulator = 0;
     }
-    if (state.gameOver && banquetLossSystem?.active()) {
+    if (state.gameOver && catchScareSystem?.isActive()) {
+      catchScareSystem.update(Math.min(rawDt, CATCH_SCARE.maximumTimerStepSeconds));
+    } else if (state.gameOver && banquetLossSystem?.active()) {
       banquetLossSystem.update(Math.min(rawDt, BANQUET_LOSS.maximumTimerStepSeconds));
     }
     syncCamera();
@@ -51019,7 +51527,7 @@
       checkpointAutosaveElapsed = 0;
       attemptAutomaticCheckpointAutosave();
     }
-    renderer.render(scene, camera);
+    if (!catchScareSystem?.render(renderer)) renderer.render(scene, camera);
   }
 
   function getUpperWindowGalleryDiagnostics() {
@@ -52476,6 +52984,18 @@
       tamperSystem ? tamperSystem.resetDistractionsForQA() : null
     );
     window.MrFeastFresh.getSpeechState = () => speechSystem?.getDiagnostics() || null;
+    window.MrFeastFresh.getCatchScareState = () => catchScareSystem?.getDiagnostics() || { ...state.catchScare };
+    window.MrFeastFresh.triggerCatchScareForQA = (catcher = "mr-feast") => {
+      if (!state.qa) return null;
+      if (state.gameOver) clearMansionGameOver();
+      const reason = catcher === "feast-father" ? "victory-feast-saint" : "witnessed";
+      const result = triggerMansionGameOver({ reason, kind: "qa-catch-scare", feetY: FLOOR.BASEMENT });
+      if (catchScareSystem?.isActive()) catchScareSystem.qaManualClock = true;
+      return result;
+    };
+    window.MrFeastFresh.advanceCatchScareForQA = (seconds) => (
+      catchScareSystem?.advanceForQA(seconds) || null
+    );
     window.MrFeastFresh.getBanquetLossState = () => banquetLossSystem?.getDiagnostics() || { ...state.banquetLoss };
     window.MrFeastFresh.triggerBanquetLossForQA = (reason = "witnessed") => {
       if (!state.qa) return null;
@@ -54054,6 +54574,7 @@
       bulkStorageSecretSystem.syncClothingProgression(false);
       banquetLossSystem = new BanquetLossSystem();
       audioSystem = new MansionAudio();
+      catchScareSystem = new CatchScareSystem();
       basementHauntSystem = new BasementHauntSystem();
       hedgeMazeKeyScareSystem = new HedgeMazeKeyScareSystem();
       breathStealthSystem = new BreathStealthSystem();

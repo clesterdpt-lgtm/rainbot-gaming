@@ -102,7 +102,7 @@ async function run() {
 
     let state = await diagnostics(page);
     assert(state.room === "WORKROOM", `both former room halves should resolve to WORKROOM, received ${state.room}`);
-    assert(state.security.cameras.total === 32 && state.security.cameras.indoors === 24 && state.security.cameras.outdoors === 8, `the Workroom camera removal should leave a 32-camera estate roster; cameras=${JSON.stringify(state.security.cameras)}`);
+    assert(state.security.cameras.total === 31 && state.security.cameras.indoors === 23 && state.security.cameras.outdoors === 8, `the estate roster should leave 31 public cameras after Workroom and service-stair removals; cameras=${JSON.stringify(state.security.cameras)}`);
     assert(state.security.cameras.exemptZones.includes("WORKROOM") && !state.security.cameras.coveredZones.includes("WORKROOM"), "the Workroom should be an explicit camera-free zone");
     const eastHalf = await page.evaluate(() => window.MrFeastFresh.teleport("workroomEast"));
     assert(eastHalf.room === "WORKROOM", `the former Cold Room half should resolve to WORKROOM, received ${eastHalf.room}`);

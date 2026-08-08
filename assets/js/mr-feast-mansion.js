@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260803-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1-locked-growing-saint-static-1-model-baked-saint-shadow-2-called-game-flashlight-1-archive-center-drop-1";
+  const MANSION_RUNTIME_VERSION = "20260808-no-service-stair-cam-hide-location-hud-1-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1-locked-growing-saint-static-1-model-baked-saint-shadow-2-called-game-flashlight-1-archive-center-drop-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -1035,7 +1035,7 @@
     searchAwarenessCheckSeconds: 0.2,
     searchHalfAngle: THREE.MathUtils.degToRad(52),
     searchSweepSeconds: 3.2,
-    exemptZones: Object.freeze(["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET", "WALK-IN WARDROBES", "WORKROOM", "DEEP HEDGE MAZE"]),
+    exemptZones: Object.freeze(["MAIN HALL BATHROOM", "UPPER GRAND BATHROOM", "COAT CLOSET", "WALK-IN WARDROBES", "WORKROOM", "SERVICE STAIR", "DEEP HEDGE MAZE"]),
     requiredCoverage: Object.freeze(["FRONT FOYER", "BALLROOM", "FRONT DRIVE", "FORMAL GARDEN", "REAR LAWN"]),
   });
   const SECURITY_CAMERA_FIXTURE = Object.freeze({
@@ -1198,7 +1198,8 @@
     securityCameraPlacement("cam-basement-corridor", "BASEMENT CORRIDOR", 0, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, 11.6, 0, 58, 14.3, { floorY: FLOOR.BASEMENT, restricted: true }),
     securityCameraPlacement("cam-basement-laundry", "LAUNDRY & LINEN", -8.15, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, 2.85, 0, 38, 13.6, { floorY: FLOOR.BASEMENT, restricted: true }),
     securityCameraPlacement("cam-basement-pantry", "PANTRY", 5.85, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, 2.85, 0, 38, 10.2, { floorY: FLOOR.BASEMENT, restricted: true }),
-    securityCameraPlacement("cam-basement-service-stair", "SERVICE STAIR", 14.6, SECURITY_CAMERA_FIXTURE.indoorMountY.main, 0, 90, 48, 7.6, { restricted: true, pitchDegrees: -30 }),
+    // The service stair to the basement is intentionally camera-free so the
+    // approach into the restricted floor is not covered mid-descent.
     securityCameraPlacement("cam-basement-cross", "REAR CROSS-CORRIDOR", 0, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, -3.52, 0, 82, 14.1, { floorY: FLOOR.BASEMENT, restricted: true }),
     securityCameraPlacement("cam-basement-boiler", "BOILER ROOM", -10.5, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, -5.25, 0, 38, 10.5, { floorY: FLOOR.BASEMENT, restricted: true }),
     securityCameraPlacement("cam-basement-bulk", "BULK STORAGE", 11.3, SECURITY_CAMERA_FIXTURE.indoorMountY.basement, -5.25, 0, 38, 8.8, { floorY: FLOOR.BASEMENT, restricted: true }),

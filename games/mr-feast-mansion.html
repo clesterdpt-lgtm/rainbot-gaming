@@ -310,11 +310,13 @@
     }
 
     .mansion-location {
+      /* Location floor/room HUD is intentionally hidden; room state still
+         tracks internally for lights, cameras, and story logic. */
+      display: none;
       position: absolute;
       top: max(18px, env(safe-area-inset-top));
       left: max(18px, env(safe-area-inset-left));
       z-index: 6;
-      display: grid;
       gap: 2px;
       max-width: min(60%, 420px);
       padding-left: 13px;
@@ -3944,6 +3946,6 @@
   <script src="../assets/vendor/three/SkeletonUtils-r128.js" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;animation-tools&quot;)"></script>
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-shell&quot;)"></script>
   <script src="../assets/js/main.js?v=20260806-network-polish-1" onload="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.progress(&quot;site-controls&quot;)"></script>
-  <script src="../assets/js/mr-feast-mansion.js?v=20260803-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1-locked-growing-saint-static-1-model-baked-saint-shadow-2-called-game-flashlight-1-archive-center-drop-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
+  <script src="../assets/js/mr-feast-mansion.js?v=20260808-no-service-stair-cam-hide-location-hud-1-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1-locked-growing-saint-static-1-model-baked-saint-shadow-2-called-game-flashlight-1-archive-center-drop-1" onerror="window.__MR_FEAST_BOOT__ &amp;&amp; window.__MR_FEAST_BOOT__.fail(&quot;The mansion runtime could not be loaded. Retry loading.&quot;)"></script>
 </body>
 </html>

@@ -55,6 +55,8 @@ async function run() {
     await page.goto(`${baseUrl}/games/mr-feast-mansion.html?qa=1&autostart=1&allLights=1`, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => window.MrFeastFresh?.state?.ready, null, { timeout: 120000 });
     await page.waitForFunction(() => window.MrFeastFresh.getMrFeastState()?.loadStatus === "ready", null, { timeout: 120000 });
+    const collectedFlashlight = await page.evaluate(() => window.MrFeastFresh.collectFlashlightForQA());
+    assert(collectedFlashlight?.collected, `called-game flashlight coverage requires the shared pickup: ${JSON.stringify(collectedFlashlight)}`);
 
     await page.evaluate(() => {
       window.MrFeastFresh.advanceFeastSaysForQA(900);
@@ -62,6 +64,7 @@ async function run() {
       window.MrFeastFresh.triggerFeastSaysClueForQA("book");
       window.MrFeastFresh.triggerFeastSaysClueForQA("shovel");
     });
+    await page.evaluate(() => window.MrFeastFresh.closeReadableBookForQA());
     let feast = await page.evaluate(() => window.MrFeastFresh.getFeastSaysState());
     assert(feast.phase === "dormant" && feast.callCount === 0, `time and ordinary clues must not call Game 1; got ${JSON.stringify(feast)}`);
     assert(feast.callAfterSeconds === null && feast.secondsUntilCall === null, `Game 1 must expose no countdown trigger; got ${JSON.stringify(feast)}`);
@@ -82,6 +85,10 @@ async function run() {
         && feast.triggerGate.paintingsComplete,
       `the fourth painting number must call Game 1 exactly once; got ${JSON.stringify(feast)}`,
     );
+    await page.keyboard.press("f");
+    let calledFlashlight = await page.evaluate(() => window.MrFeastFresh.getFlashlightState());
+    assert(calledFlashlight.on && calledFlashlight.canToggle, `the flashlight must remain usable while reporting to Feast Says: ${JSON.stringify(calledFlashlight)}`);
+    await page.keyboard.press("f");
 
     const feastResult = await page.evaluate(() => window.MrFeastFresh.completeFeastSaysWithAftermathForQA(6));
     assert(
@@ -111,6 +118,10 @@ async function run() {
       `finding the hedge-maze key must call Game 2 exactly once; got ${JSON.stringify(storm)}`,
     );
     assert(!feast.aftermath.active, `finding the B-13 key should finish the won Game 1 aftermath before Game 2 is called; got ${JSON.stringify(feast.aftermath)}`);
+    await page.keyboard.press("f");
+    calledFlashlight = await page.evaluate(() => window.MrFeastFresh.getFlashlightState());
+    assert(calledFlashlight.on && calledFlashlight.canToggle, `the flashlight must remain usable while reporting to Storm Run: ${JSON.stringify(calledFlashlight)}`);
+    await page.keyboard.press("f");
 
     const stormResult = await page.evaluate(() => window.MrFeastFresh.completeStormRunForQA("player"));
     assert(stormResult?.survived === true, `Game 2 QA completion failed: ${JSON.stringify(stormResult)}`);
@@ -133,6 +144,9 @@ async function run() {
         && hunt.triggerReason === "patron-feed-sabotage",
       `severing the patron feed must call Game 3 exactly once; got call=${JSON.stringify(severedFeed)} state=${JSON.stringify(hunt)}`,
     );
+    await page.keyboard.press("f");
+    calledFlashlight = await page.evaluate(() => window.MrFeastFresh.getFlashlightState());
+    assert(calledFlashlight.on && calledFlashlight.canToggle, `the flashlight must remain usable while reporting to Feast Hunt: ${JSON.stringify(calledFlashlight)}`);
 
     const rendered = await page.evaluate(() => JSON.parse(window.render_game_to_text()));
     assert(rendered.renderer.calls > 0 && rendered.renderer.triangles > 0, `the browser scene must remain rendered; got ${JSON.stringify(rendered.renderer)}`);

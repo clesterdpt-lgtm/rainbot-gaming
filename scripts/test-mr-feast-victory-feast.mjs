@@ -187,6 +187,15 @@ async function beginCalledVictoryFeast(page) {
       && /dining/i.test(feast.callLine || ""),
     `Victory Feast call state is incomplete: ${JSON.stringify(feast)}`,
   );
+  const collectedFlashlight = await page.evaluate(() => window.MrFeastFresh.collectFlashlightForQA());
+  assert(collectedFlashlight?.collected, `Victory Feast report-light coverage requires the shared pickup: ${JSON.stringify(collectedFlashlight)}`);
+  await page.keyboard.press("f");
+  const calledFlashlight = await page.evaluate(() => window.MrFeastFresh.getFlashlightState());
+  assert(
+    calledFlashlight.on && calledFlashlight.canToggle,
+    `the flashlight must remain usable while reporting to the Victory Feast: ${JSON.stringify(calledFlashlight)}`,
+  );
+  await page.keyboard.press("f");
   return feast;
 }
 
@@ -439,6 +448,40 @@ async function runBrowserFlow() {
           (escapeMobility.z ?? 0) - escapeMobility.finalePlayer.releaseMark.z,
         ) <= 0.12,
       `escape must free the player from the dining chair: ${JSON.stringify(escapeMobility)}`,
+    );
+    // Mr. Feast must remain at the west/host end of the table, not restore a
+    // pre-feast snapshot onto the winner seat and instant-catch the player.
+    const hostEscapePlacement = await page.evaluate(() => {
+      const feast = window.MrFeastFresh.getVictoryFeastState();
+      const host = window.MrFeastFresh.getMrFeastState();
+      const player = JSON.parse(window.render_game_to_text()).player;
+      const hostPos = host?.position || feast?.host?.position || null;
+      const mark = feast?.host?.mark || null;
+      const distanceToPlayer = hostPos && player
+        ? Math.hypot(hostPos.x - player.x, hostPos.z - player.z)
+        : null;
+      const distanceToMark = hostPos && mark
+        ? Math.hypot(hostPos.x - mark.x, hostPos.z - mark.z)
+        : feast?.host?.markDistanceMeters ?? null;
+      return {
+        phase: feast?.phase,
+        hostPos,
+        mark,
+        distanceToPlayer,
+        distanceToMark,
+        atHostMark: feast?.host?.atHostMark,
+        pursuitActive: Boolean(host?.pursuit?.active),
+        catches: host?.pursuit?.catches ?? 0,
+        gameOver: Boolean(window.MrFeastFresh.state?.gameOver),
+      };
+    });
+    assert(
+      hostEscapePlacement.atHostMark
+        && (hostEscapePlacement.distanceToMark ?? 99) <= 0.35
+        && (hostEscapePlacement.distanceToPlayer ?? 0) >= 6
+        && !hostEscapePlacement.gameOver
+        && hostEscapePlacement.catches === 0,
+      `escape must leave Mr. Feast at the opposite end of the table: ${JSON.stringify(hostEscapePlacement)}`,
     );
 
     await page.evaluate(() => window.MrFeastFresh.resetMrFeastWandererForQA());

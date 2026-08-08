@@ -168,25 +168,18 @@ async function runBrowserFlow() {
     assert(!lockedDoor.accepted && lockedDoor.locked, `exterior door opened without Mr. Feast's key: ${JSON.stringify(lockedDoor)}`);
     assert(lockedDoorHint === "You need a key. You noticed one hanging from Mr. Feast's waist.", `locked exterior door did not point back to the visible key: ${lockedDoorHint}`);
 
-    const undistractedSteal = await page.evaluate(() => window.MrFeastFresh.attemptFinaleKeyStealForQA());
-    const undistractedHint = await page.locator("#mansion-discovery-body").textContent();
-    assert(!undistractedSteal && /throw something|object that makes sound/i.test(undistractedHint || ""), `key theft must require a sound distraction: ${undistractedHint}`);
-
-    const activatedPiano = await page.evaluate(() => window.MrFeastFresh.activateHouseDistractionForQA("piano", true));
-    assert(activatedPiano?.active, `Victory Feast escape must allow the real piano distraction: ${JSON.stringify(activatedPiano)}`);
-    const pianoDispatch = await page.evaluate(() => window.MrFeastFresh.advanceHouseDistractionsForQA(4));
-    route = await page.evaluate(() => window.MrFeastFresh.getFinaleSabotageState());
-    assert(pianoDispatch.dispatched.length === 1 && route.items.estateKeyring.steal.distracted && route.items.estateKeyring.steal.distractionKind === "piano", `the real piano task must pull Mr. Feast into a valid key-theft distraction: ${JSON.stringify({ pianoDispatch, key: route.items.estateKeyring.steal })}`);
-
-    const houseSound = await page.evaluate(() => window.MrFeastFresh.stageFinaleKeyTheftForQA("piano", false));
-    assert(houseSound.staged && houseSound.key.distracted && houseSound.key.reason === "get-behind", `a mansion sound object must distract Mr. Feast but still require the player to get behind him: ${JSON.stringify(houseSound)}`);
+    // Front approach is refused; only a close rear approach is required.
+    const frontApproach = await page.evaluate(() => window.MrFeastFresh.stageFinaleKeyTheftForQA("none", false));
+    assert(frontApproach.staged && frontApproach.key.reason === "get-behind" && !frontApproach.key.eligible, `front-side approach must refuse key theft: ${JSON.stringify(frontApproach)}`);
     const wrongSideSteal = await page.evaluate(() => window.MrFeastFresh.attemptFinaleKeyStealForQA());
     const wrongSideHint = await page.locator("#mansion-discovery-body").textContent();
     assert(!wrongSideSteal && /sneak behind/i.test(wrongSideHint || ""), `front-side key theft must be refused: ${wrongSideHint}`);
 
-    const thrownSound = await page.evaluate(() => window.MrFeastFresh.stageFinaleKeyTheftForQA("throwable", true));
-    assert(thrownSound.staged && thrownSound.key.eligible && thrownSound.key.distractionKind === "thrown-distraction", `a thrown impact plus a rear approach must enable the theft: ${JSON.stringify(thrownSound)}`);
-    assert(/steal.*keyring/i.test(thrownSound.prompt || ""), `the physical waist keychain must own the E/touch prompt from behind: ${JSON.stringify(thrownSound)}`);
+    // Sneaking behind him is enough — no thrown impact or house sound required.
+    const pureRear = await page.evaluate(() => window.MrFeastFresh.stageFinaleKeyTheftForQA("none", true));
+    assert(pureRear.staged && pureRear.key.eligible && pureRear.key.behind && pureRear.key.inRange, `a rear approach without distraction must enable key theft: ${JSON.stringify(pureRear)}`);
+    assert(!pureRear.key.distracted && pureRear.kind === "none", `key theft must not require an active sound distraction: ${JSON.stringify(pureRear)}`);
+    assert(/steal.*keyring/i.test(pureRear.prompt || ""), `the physical waist keychain must own the E/touch prompt from behind: ${JSON.stringify(pureRear)}`);
     await page.locator("#mansion-stage").screenshot({ path: path.join(artifactDir, "key-theft-behind-mr-feast.png") });
     const keyStealStarted = await page.evaluate(() => window.MrFeastFresh.attemptFinaleKeyStealForQA());
     assert(keyStealStarted, "valid behind-the-back key theft did not complete");

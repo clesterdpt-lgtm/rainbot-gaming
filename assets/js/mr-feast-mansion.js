@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260803-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1-locked-growing-saint-static-1-model-baked-saint-shadow-2-archive-center-drop-1";
+  const MANSION_RUNTIME_VERSION = "20260803-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1-locked-growing-saint-static-1-model-baked-saint-shadow-2-called-game-flashlight-1-archive-center-drop-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -5258,6 +5258,10 @@
 
   function competitionBlocksInvestigation() {
     return Boolean(activeCompetitionSystem());
+  }
+
+  function competitionAllowsPlayerTools() {
+    return Boolean(activeCompetitionSystem()?.allowsPlayerTools?.());
   }
 
   function competitionSuspendsSecurity() {
@@ -23466,6 +23470,10 @@
       ].includes(this.show.phase);
     }
 
+    allowsPlayerTools() {
+      return this.show.phase === FEAST_SAYS_PHASE.CALLED;
+    }
+
     isPlaying() {
       return [FEAST_SAYS_PHASE.BRIEFING, FEAST_SAYS_PHASE.COMMAND, FEAST_SAYS_PHASE.RESULT].includes(this.show.phase);
     }
@@ -26410,7 +26418,7 @@
     }
 
     allowsPlayerTools() {
-      return this.show.phase === FEAST_HUNT_PHASE.HUNTING;
+      return [FEAST_HUNT_PHASE.CALLED, FEAST_HUNT_PHASE.HUNTING].includes(this.show.phase);
     }
 
     isHunting() {
@@ -28327,6 +28335,8 @@
       if (!npc?.root || !physics) {
         return { eligible: false, reason: "host-unavailable", distance: null, behindDot: null, distracted: false };
       }
+      // Sound distractions still pull him away, but the keys only need a close
+      // rear approach — no investigation window is required to take them.
       const task = npc.housekeeping?.active || null;
       const distracted = this.qualifiesKeyDistraction(task) && !npc.pursuit.active;
       const player = physics.playerPosition();
@@ -28339,8 +28349,8 @@
       const behind = behindDot <= FINALE_SABOTAGE.keyStealBehindDot;
       const inRange = distance <= FINALE_SABOTAGE.keyStealDistanceMeters;
       return {
-        eligible: Boolean(distracted && behind && inRange),
-        reason: !distracted ? "needs-sound-distraction" : !behind ? "get-behind" : !inRange ? "too-far" : "ready",
+        eligible: Boolean(behind && inRange),
+        reason: !behind ? "get-behind" : !inRange ? "too-far" : "ready",
         distance: Number(distance.toFixed(3)),
         behindDot: Number(behindDot.toFixed(3)),
         distracted,
@@ -28352,24 +28362,23 @@
 
     keyStealLabel() {
       const status = this.keyStealStatus();
-      if (status.reason === "needs-sound-distraction") return "Mr. Feast's keys — make a sound to distract him";
       if (status.reason === "get-behind") return "Get behind Mr. Feast to take the keys";
       if (status.reason === "too-far") return "Move closer to Mr. Feast's keyring";
       return status.eligible ? "Steal Mr. Feast's keyring" : "Mr. Feast's keyring";
     }
 
     showKeyStealHint(status = this.keyStealStatus()) {
-      if (status.reason === "needs-sound-distraction") {
-        contestant13Quest?.showDiscovery(
-          "HE'S WATCHING",
-          "Mr. Feast is guarding the keys. Throw something or use an object that makes sound to draw him away.",
-          4800,
-        );
-      } else if (status.reason === "get-behind") {
+      if (status.reason === "get-behind") {
         contestant13Quest?.showDiscovery(
           "THE KEYS ARE AT HIS WAIST",
-          "He followed the sound. Sneak behind him and take the keyring.",
+          "Sneak behind him and take the keyring.",
           4200,
+        );
+      } else if (status.reason === "too-far") {
+        contestant13Quest?.showDiscovery(
+          "THE KEYS ARE AT HIS WAIST",
+          "Get closer from behind and take the keyring.",
+          3600,
         );
       }
       audioSystem?.ping(58, 0.14, 0.03, "square");
@@ -28396,10 +28405,9 @@
     attemptKeySteal() {
       const status = this.keyStealStatus();
       if (!status.eligible) return this.showKeyStealHint(status);
-      // Mr. Feast keeps walking toward the active sound investigation. Once
-      // the player earns a valid rear approach, the same E/touch press that
-      // targets the moving keyring must complete the theft before he moves
-      // out of the narrow interaction window.
+      // A close rear approach is enough: the same E/touch press that targets
+      // the moving keyring completes the theft immediately, with no hold or
+      // timed-action window and no required sound distraction.
       return this.finishKeySteal();
     }
 
@@ -28719,8 +28727,9 @@
       if (!state.qa || !physics || !mrFeastNpc?.root || !this.chaseActive()) {
         return { staged: false, reason: "qa-only-or-not-escaping" };
       }
-      const soundKind = String(kind || "throwable").toLowerCase();
-      const houseSound = soundKind !== "throwable";
+      const soundKind = String(kind ?? "throwable").toLowerCase();
+      const noDistraction = soundKind === "none" || soundKind === "undistracted";
+      const houseSound = !noDistraction && soundKind !== "throwable";
       mrFeastNpc.pursuit.active = null;
       mrFeastNpc.pursuit.cooldownActive = false;
       mrFeastNpc.activeCameraAlarm = null;
@@ -28728,27 +28737,31 @@
       mrFeastNpc.challengeMode = null;
       mrFeastNpc.wanderingEnabled = true;
       mrFeastNpc.responsePath = [];
-      mrFeastNpc.behaviorState = MR_FEAST_RESPONSE_STATE.SEARCHING;
-      mrFeastNpc.searchRemaining = 30;
+      mrFeastNpc.behaviorState = noDistraction
+        ? MR_FEAST_RESPONSE_STATE.PATROL
+        : MR_FEAST_RESPONSE_STATE.SEARCHING;
+      mrFeastNpc.searchRemaining = noDistraction ? 0 : 30;
       mrFeastNpc.searchElapsed = 0;
       const qaHostPosition = MR_FEAST_NPC.waypoints.find((point) => point.id === "main-ballroom-south")
         || { x: 0, y: FLOOR.MAIN, z: -9.8 };
       mrFeastNpc.root.position.set(qaHostPosition.x, FLOOR.MAIN, qaHostPosition.z);
       mrFeastNpc.root.rotation.y = 0;
       mrFeastNpc.root.visible = true;
-      mrFeastNpc.housekeeping.active = {
-        id: houseSound ? "qa-house-sound" : "qa-thrown-impact",
-        kind: houseSound ? soundKind : "thrown-distraction",
-        portableProp: !houseSound,
-        transientSound: !houseSound,
-        distraction: houseSound,
-        soundDistraction: houseSound,
-        position: {
-          x: mrFeastNpc.root.position.x,
-          y: FLOOR.MAIN,
-          z: mrFeastNpc.root.position.z + 2.4,
-        },
-      };
+      mrFeastNpc.housekeeping.active = noDistraction
+        ? null
+        : {
+          id: houseSound ? "qa-house-sound" : "qa-thrown-impact",
+          kind: houseSound ? soundKind : "thrown-distraction",
+          portableProp: !houseSound,
+          transientSound: !houseSound,
+          distraction: houseSound,
+          soundDistraction: houseSound,
+          position: {
+            x: mrFeastNpc.root.position.x,
+            y: FLOOR.MAIN,
+            z: mrFeastNpc.root.position.z + 2.4,
+          },
+        };
       const playerZ = mrFeastNpc.root.position.z + (behind ? -1.05 : 1.05);
       const playerX = mrFeastNpc.root.position.x + 0.22;
       teleport(
@@ -28765,7 +28778,7 @@
       updateInteractionPrompt();
       return {
         staged: true,
-        kind: mrFeastNpc.housekeeping.active.kind,
+        kind: mrFeastNpc.housekeeping.active?.kind || "none",
         prompt: state.currentInteraction?.getLabel() || null,
         key: this.keyStealStatus(),
       };
@@ -28938,7 +28951,7 @@
     }
 
     allowsPlayerTools() {
-      return this.show.phase === VICTORY_FEAST_PHASE.ESCAPE;
+      return [VICTORY_FEAST_PHASE.CALLED, VICTORY_FEAST_PHASE.ESCAPE].includes(this.show.phase);
     }
 
     notifyInvestigationPaused() {
@@ -29541,13 +29554,41 @@
 
     releaseHostForEscape() {
       this.show.staged = false;
-      if (mrFeastNpc?.challengeMode === "victory-feast") {
-        mrFeastNpc.releaseChallenge();
+      if (!mrFeastNpc) {
+        clearMovementInput();
+        state.movement.crouched = false;
+        state.movement.sprinting = false;
+        updateMovementHud();
+        return;
       }
-      mrFeastNpc?.recoverAfterLoad();
+      // Keep Mr. Feast at the west head of the table. releaseChallenge() would
+      // restore his pre-feast patrol snapshot and can drop him on top of the
+      // newly released winner seat, causing an instant catch / game over.
+      const placement = VICTORY_FEAST.hostMark;
+      if (mrFeastNpc.challengeMode === "victory-feast" || mrFeastNpc.challengeStaged) {
+        mrFeastNpc.challengeStaged = false;
+        mrFeastNpc.challengeMode = null;
+        mrFeastNpc.challengeSnapshot = null;
+        mrFeastNpc.challengeIdlePoseTime = null;
+      }
+      mrFeastNpc.root.position.set(placement.x, placement.y, placement.z);
+      mrFeastNpc.root.rotation.y = placement.yaw;
+      mrFeastNpc.root.scale.setScalar(Number(placement.scale) > 0 ? Number(placement.scale) : 1);
+      mrFeastNpc.root.visible = true;
+      for (const mesh of mrFeastNpc.meshes) mesh.visible = true;
+      if (mrFeastNpc.contactShadow) mrFeastNpc.contactShadow.visible = true;
+      mrFeastNpc.setChallengeColliderEnabled(true);
+      mrFeastNpc.recoverAfterLoad();
+      // recoverAfterLoad only selects the nearest patrol waypoint; re-pin so
+      // escape still begins with him across the table from the winner.
+      mrFeastNpc.root.position.set(placement.x, placement.y, placement.z);
+      mrFeastNpc.root.rotation.y = placement.yaw;
+      mrFeastNpc.root.scale.setScalar(Number(placement.scale) > 0 ? Number(placement.scale) : 1);
+      if (typeof mrFeastNpc.syncCollider === "function") mrFeastNpc.syncCollider();
+      mrFeastNpc.root.updateMatrixWorld(true);
       // Conversation has no role once the hunt begins. Removing its broad
       // body hitbox lets the smaller waist keychain own the close E/touch aim.
-      mrFeastNpc?.setChallengeInteractionsEnabled(false);
+      mrFeastNpc.setChallengeInteractionsEnabled(false);
       clearMovementInput();
       state.movement.crouched = false;
       state.movement.sprinting = false;
@@ -30121,6 +30162,20 @@
       const hostChairYaw = hostChair ? seatingSystem.worldYaw(hostChair) : null;
       const hostChairBackX = Number.isFinite(hostChairYaw) ? Math.sin(hostChairYaw) : null;
       const hostChairBackZ = Number.isFinite(hostChairYaw) ? Math.cos(hostChairYaw) : null;
+      const hostLivePosition = mrFeastNpc?.root
+        ? {
+          x: mrFeastNpc.root.position.x,
+          y: mrFeastNpc.root.position.y,
+          z: mrFeastNpc.root.position.z,
+          yaw: mrFeastNpc.root.rotation.y,
+        }
+        : null;
+      const hostMarkDistance = hostLivePosition
+        ? Math.hypot(
+          hostLivePosition.x - VICTORY_FEAST.hostMark.x,
+          hostLivePosition.z - VICTORY_FEAST.hostMark.z,
+        )
+        : null;
       const hostFromChairX = hostChairPosition
         ? VICTORY_FEAST.hostMark.x - hostChairPosition.x
         : null;
@@ -30198,7 +30253,20 @@
           releaseMarkClear: this.playerReleaseIsClear(),
         },
         host: {
-          visible: hostVisible,
+          visible: hostVisible || Boolean(
+            this.isEscapeActive()
+            && mrFeastNpc?.root?.visible
+          ),
+          position: hostLivePosition ? {
+            x: Number(hostLivePosition.x.toFixed(3)),
+            y: Number(hostLivePosition.y.toFixed(3)),
+            z: Number(hostLivePosition.z.toFixed(3)),
+            yaw: Number(hostLivePosition.yaw.toFixed(3)),
+          } : null,
+          markDistanceMeters: Number.isFinite(hostMarkDistance)
+            ? Number(hostMarkDistance.toFixed(3))
+            : null,
+          atHostMark: Number.isFinite(hostMarkDistance) && hostMarkDistance <= 0.35,
           facingPlayer: Boolean(
             this.show.staged
             && [
@@ -32678,9 +32746,7 @@
         && !state.contestant13.actionInProgress
         && (
           !competitionBlocksInvestigation()
-          || stormRunSystem?.allowsPlayerTools()
-          || feastHuntSystem?.allowsPlayerTools()
-          || victoryFeastSystem?.allowsPlayerTools()
+          || competitionAllowsPlayerTools()
         )
       );
     }
@@ -33180,6 +33246,7 @@
       return {
         collected: this.collected(),
         on: Boolean(this.state.on),
+        canToggle: this.canToggle(),
         pickupVisible: Boolean(this.pickupRoot?.visible),
         pickupRegistered: this.pickupRegistered,
         pickups: (this.pickups || []).map((pickup) => ({

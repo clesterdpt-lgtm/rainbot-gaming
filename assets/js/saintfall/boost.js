@@ -185,7 +185,7 @@ export function buildBoost(ctx, player) {
 
     let hits = 0;
     for (const inst of ctx.enemies.live) {
-      if (!inst || inst.state === "death" || struck.has(inst)) continue;
+      if (!inst || inst.state === "death" || inst.emerging?.active || struck.has(inst)) continue;
       const box = ctx.combat.hitbox[inst.key] || ctx.combat.hitbox.thresher;
       const contact = segmentDistanceSq(inst.x, inst.z, fromX, fromZ, toX, toZ);
       const reach = config.bodyRadius + box.r;

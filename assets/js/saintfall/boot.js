@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260811-5";
+  const BUILD = "20260811-6";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -95,7 +95,7 @@
   const MODULES = [
     "core", "art", "sky", "terrain", "structures", "world", "collide",
     "vfx", "render", "player", "jetpack", "boost", "shield", "enemies", "weapons", "ik", "combat",
-    "mission", "audio", "hud", "touch", "qa", "main",
+    "mission", "breaches", "audio", "hud", "touch", "qa", "main",
   ];
 
   function installImportMap(base) {

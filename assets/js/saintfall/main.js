@@ -25,6 +25,7 @@ import { buildEnemies } from "saintfall/enemies.js";
 import { buildCollision } from "saintfall/collide.js";
 import { buildCombat } from "saintfall/combat.js";
 import { buildMission } from "saintfall/mission.js";
+import { buildBreaches } from "saintfall/breaches.js";
 import { buildAudio } from "saintfall/audio.js";
 import { buildWeapons } from "saintfall/weapons.js";
 import { buildHud } from "saintfall/hud.js";
@@ -122,6 +123,8 @@ export async function start({ boot, build } = {}) {
   ctx.combat = combat;
   const mission = buildMission(ctx);
   ctx.mission = mission;
+  const breaches = buildBreaches(ctx);
+  ctx.breaches = breaches;
   const shield = buildShield(ctx, player);
   ctx.shield = shield;
   const boost = buildBoost(ctx, player);
@@ -169,6 +172,7 @@ export async function start({ boot, build } = {}) {
     collide,
     combat,
     mission,
+    breaches,
     audio,
     audioFactory: buildAudio,
     fps: 0,
@@ -313,7 +317,7 @@ export async function start({ boot, build } = {}) {
       // `state === "death"` is how enemies.js marks a corpse mid-clip;
       // there is no `dead` flag, and testing for one silently treated
       // every body on the field as a live threat.
-      if (inst.state === "death") continue;
+      if (inst.state === "death" || inst.emerging?.active) continue;
       const dx = inst.root.position.x - px;
       const dz = inst.root.position.z - pz;
       if (dx * dx + dz * dz < STOW_THREAT_RANGE * STOW_THREAT_RANGE) return true;
@@ -400,6 +404,7 @@ export async function start({ boot, build } = {}) {
       && player.input.state.ads ? 1 : 0);
     updateStow(d);
     combat.update(d);
+    breaches.update(d);
     mission.update(d);
     audio.update(d, player, render.camera);
     if (colliderView) {

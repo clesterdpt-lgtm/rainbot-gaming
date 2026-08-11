@@ -58,6 +58,7 @@ export const BESTIARY = {
   thresher: {
     url: "assets/models/saintfall/thresher.glb",
     faction: "bloom",
+    health: 60,
     /* Authored at 1:1 with the world and scaled here rather than in
        Blender, so proportion can be tuned against the trooper IN
        ENGINE - it is a thing you measure in context, not in the
@@ -81,6 +82,7 @@ export const BESTIARY = {
   gleaner: {
     url: "assets/models/saintfall/gleaner.glb",
     faction: "bloom",
+    health: 150,
     /* Shipped at 1:1 and 3.55m tall - nearly twice the trooper, and
        three times the Thresher standing next to it. It is the ranged
        caste, so it has to be identifiable from further away than
@@ -108,6 +110,7 @@ export const BESTIARY = {
   harrow: {
     url: "assets/models/saintfall/harrow.glb",
     faction: "bloom",
+    health: 420,
     /* Squat and WIDE. Height is not what makes a heavy read as heavy -
        a wide, low, horizontal mass is, which is why this one is
        shorter than the Gleaner and reads as twice its weight. */
@@ -126,6 +129,7 @@ export const BESTIARY = {
   matriarch: {
     url: "assets/models/saintfall/matriarch.glb",
     faction: "bloom",
+    health: 3600,
     /* Shipped at 1:1: 5.05m tall, 6.93m wide and 10.93m long. There
        is exactly one of these on the map, so the usual argument for
        tuning scale in engine - that proportion is read against the
@@ -291,6 +295,192 @@ export async function buildEnemies(ctx, onProgress) {
 
   const live = [];
   const rng = makeRng((ctx.seed ^ 0x3e5e17) >>> 0 || 991);
+  const reducedMotion = typeof window !== "undefined"
+    && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+  /* ------------------------------------------------------------
+     EMERGENCE
+
+     The animation is deliberately split between the creature and the
+     ground. A model merely translated upward reads as an elevator; a
+     telegraphed fissure, thrown debris, a compressed body and a slight
+     overshoot read as something forcing its way through a surface.
+     ------------------------------------------------------------ */
+  const fissureGeo = new THREE.RingGeometry(0.42, 1, 40, 1);
+  const shardGeo = new THREE.OctahedronGeometry(0.18, 0);
+  const shardMat = new THREE.MeshStandardMaterial({
+    color: 0x5b3021,
+    roughness: 0.96,
+    metalness: 0,
+    flatShading: true,
+  });
+  patchMaterial(shardMat, atmos, { rim: 0.15, glitter: 0 });
+
+  function makeEmergenceFx(inst, spec) {
+    const fx = new THREE.Group();
+    fx.name = `sf-breach-${inst.key}`;
+    fx.position.set(inst.x, inst.y + 0.07, inst.z);
+
+    const darkMat = new THREE.MeshBasicMaterial({
+      color: 0x2b0d0b,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: inst.key === "matriarch" ? 0xffb13b : 0xdf6b24,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    const dark = new THREE.Mesh(fissureGeo, darkMat);
+    const glow = new THREE.Mesh(fissureGeo, glowMat);
+    dark.rotation.x = -Math.PI * 0.5;
+    glow.rotation.x = -Math.PI * 0.5;
+    glow.scale.setScalar(0.73);
+    dark.renderOrder = 3;
+    glow.renderOrder = 4;
+    fx.add(dark, glow);
+
+    const shards = [];
+    const shardCount = inst.key === "matriarch" ? 16 : inst.key === "harrow" ? 12 : 9;
+    for (let i = 0; i < shardCount; i += 1) {
+      const angle = (i / shardCount) * TAU + rng() * 0.35;
+      const shard = new THREE.Mesh(shardGeo, shardMat);
+      const size = (0.55 + rng() * 1.05) * (inst.key === "matriarch" ? 2.4 : 1);
+      shard.scale.set(size * 0.75, size * (0.7 + rng()), size);
+      shard.rotation.set(rng() * TAU, rng() * TAU, rng() * TAU);
+      shard.visible = false;
+      shard.userData.breach = {
+        angle,
+        reach: spec.radius * (0.55 + rng() * 0.72),
+        lift: spec.radius * (0.28 + rng() * 0.34),
+        spin: (rng() - 0.5) * 5,
+      };
+      fx.add(shard);
+      shards.push(shard);
+    }
+    scene.add(fx);
+    return { group: fx, dark, glow, shards, darkMat, glowMat };
+  }
+
+  function disposeEmergence(inst) {
+    const fx = inst.emerging?.fx;
+    if (!fx) return;
+    scene.remove(fx.group);
+    fx.darkMat.dispose();
+    fx.glowMat.dispose();
+    inst.emerging.fx = null;
+  }
+
+  function configureEmergence(inst, options) {
+    const duration = reducedMotion ? Math.min(0.42, options.duration || 1.2) : options.duration || 1.2;
+    const depth = Math.max(0.7, options.depth || 1.3);
+    const radius = Math.max(1.8, inst.spec.collisionRadius * (options.boss ? 3.0 : 3.1));
+    inst.emerging = {
+      active: true,
+      surfaced: false,
+      burst: false,
+      elapsed: 0,
+      delay: reducedMotion ? Math.min(0.2, options.delay || 0) : Math.max(0, options.delay || 0),
+      duration,
+      depth,
+      radius,
+      baseScale: inst.root.scale.x,
+      fx: null,
+    };
+    inst.emerging.fx = makeEmergenceFx(inst, inst.emerging);
+    inst.root.position.y = inst.y - depth;
+    inst.root.scale.setScalar(inst.emerging.baseScale * 0.68);
+    inst.state = "emerge";
+    inst.suspicion = 0;
+    inst.alerted = false;
+  }
+
+  function updateEmergence(inst, dt) {
+    const e = inst.emerging;
+    if (!e) return false;
+    e.elapsed += dt;
+    const fx = e.fx;
+
+    if (e.active && e.elapsed < e.delay) {
+      const pulse = 0.5 + Math.sin(e.elapsed * 8.5 + inst.x * 0.07) * 0.5;
+      const warning = 0.66 + pulse * 0.22;
+      fx.dark.scale.setScalar(e.radius * warning);
+      fx.glow.scale.setScalar(e.radius * (0.52 + pulse * 0.16));
+      fx.darkMat.opacity = 0.34 + pulse * 0.22;
+      fx.glowMat.opacity = 0.17 + pulse * 0.16;
+      fx.group.rotation.y += dt * 0.18;
+      return true;
+    }
+
+    const t = clamp01((e.elapsed - e.delay) / Math.max(0.01, e.duration));
+    if (e.active && !e.burst) {
+      e.burst = true;
+      ctx.vfx?.breach?.(inst.x, inst.y, inst.z, e.radius, inst.key === "matriarch" ? 1.8 : 1);
+    }
+
+    if (e.active) {
+      const rise = 1 - Math.pow(1 - t, 3);
+      const settle = Math.sin(t * Math.PI) * e.depth * 0.055;
+      inst.root.position.set(inst.x, inst.y - e.depth * (1 - rise) + settle, inst.z);
+      const widen = Math.sin(t * Math.PI) * 0.09;
+      const base = e.baseScale;
+      inst.root.scale.set(
+        base * (0.68 + rise * 0.32 + widen),
+        base * (0.52 + rise * 0.48 - widen * 0.35),
+        base * (0.68 + rise * 0.32 + widen)
+      );
+      inst.root.rotation.x = Math.sin(t * Math.PI * 3) * (1 - t) * 0.075;
+      inst.root.rotation.z = Math.sin(t * Math.PI * 2.2 + inst.yaw) * (1 - t) * 0.06;
+
+      fx.dark.scale.setScalar(e.radius * (0.72 + t * 0.82));
+      fx.glow.scale.setScalar(e.radius * (0.55 + t * 0.48));
+      fx.darkMat.opacity = (1 - t * 0.72) * 0.65;
+      fx.glowMat.opacity = (1 - t) * 0.52;
+      for (const shard of fx.shards) {
+        const s = shard.userData.breach;
+        shard.visible = t > 0.015;
+        const travel = Math.min(1, t * 1.65);
+        shard.position.set(
+          Math.cos(s.angle) * s.reach * travel,
+          Math.sin(travel * Math.PI) * s.lift + 0.05,
+          Math.sin(s.angle) * s.reach * travel
+        );
+        shard.rotation.x += dt * s.spin;
+        shard.rotation.z -= dt * s.spin * 0.7;
+      }
+
+      if (t >= 1) {
+        e.active = false;
+        e.surfaced = true;
+        inst.root.position.set(inst.x, inst.y, inst.z);
+        inst.root.scale.setScalar(e.baseScale);
+        inst.root.rotation.x = 0;
+        inst.root.rotation.z = 0;
+        inst.suspicion = 1;
+        inst.alerted = true;
+        play(inst, "alert", 0.12);
+      }
+      return e.active;
+    }
+
+    const after = (e.elapsed - e.delay - e.duration) / 0.72;
+    if (fx) {
+      const fade = 1 - clamp01(after);
+      fx.darkMat.opacity = fade * 0.18;
+      fx.glowMat.opacity = fade * 0.08;
+      for (const shard of fx.shards) shard.visible = fade > 0.01;
+    }
+    if (after >= 1) {
+      disposeEmergence(inst);
+      inst.emerging = null;
+    }
+    return false;
+  }
 
   function spawn(key, x, z, opts = {}) {
     const sp = species.get(key);
@@ -356,7 +546,11 @@ export async function buildEnemies(ctx, onProgress) {
       yaw: opts.yaw ?? rng() * TAU,
       speed: 0,
       state: "idle",
-      health: opts.health ?? 100,
+      health: opts.health ?? sp.spec.health ?? 100,
+      maxHealth: opts.health ?? sp.spec.health ?? 100,
+      damageScale: Number.isFinite(opts.damageScale) ? opts.damageScale : 1,
+      eventId: opts.eventId || null,
+      eventWave: Number.isFinite(opts.eventWave) ? opts.eventWave : null,
       stride: 0,
       current: null,
     };
@@ -404,6 +598,7 @@ export async function buildEnemies(ctx, onProgress) {
     }
 
     play(inst, "idle", 0);
+    if (opts.emerge) configureEmergence(inst, opts.emerge);
     live.push(inst);
     return inst;
   }
@@ -657,7 +852,8 @@ export async function buildEnemies(ctx, onProgress) {
 
       if (dying || d2 < ANIM_RANGE * ANIM_RANGE) inst.mixer.update(dt);
 
-      if (inst.state !== "death") {
+      const emerging = !dying && updateEmergence(inst, dt);
+      if (inst.state !== "death" && !emerging) {
         inst.y = damp(inst.y, groundY(inst.x, inst.z), 12, dt);
         inst.root.position.set(inst.x, inst.y, inst.z);
         inst.root.rotation.y = inst.yaw;
@@ -669,7 +865,7 @@ export async function buildEnemies(ctx, onProgress) {
          before it is overwritten. This ordering is what makes "clips
          own the body, the solver owns the legs" actually true rather
          than merely intended. */
-      if (dying || d2 < IK_RANGE * IK_RANGE) solveLegs(inst, dt);
+      if (!emerging && (dying || d2 < IK_RANGE * IK_RANGE)) solveLegs(inst, dt);
     }
   }
 
@@ -767,39 +963,8 @@ export async function buildEnemies(ctx, onProgress) {
     //     problem, once, at the start.
     { key: "thresher", at: [0, 700], r: 150, n: 4 },
 
-    /* THE MATRIARCH. One of them, on the crater floor beside the
-       fallen reliquary, and two things about this entry are load
-       bearing.
-
-       WHERE. The Bloom is where a queen belongs, and it is also the
-       one district the mission never sends anyone to - this file
-       says so eighty lines up. A boss placed there is a boss most
-       players never meet. At the Saint, every run ends in front of
-       it. It does not gate the mission either: extraction completes
-       on the shuttle timer, not on a body count, so this is what
-       makes those ninety-three seconds cost something rather than a
-       wall that has to come down first.
-
-       ON LEVEL GROUND, and that is a constraint no other unit in
-       this list has. A creature's body sits at ONE ground sample
-       taken at its origin while only its feet are terrain-solved -
-       which is invisible on a 1.19m Thresher and ruinous on a body
-       10.9m long. Measured over the footprint it actually covers,
-       the first position picked by eye had 5.01m of relief across
-       it and the render showed the gaster buried to the spine in a
-       dune. This one has 0.21m, and sits 44m off the extraction pad:
-       close enough to be the reason those ninety-three seconds are
-       hard, far enough not to be standing on the objective.
-
-       LAST IN THE LIST, and that is not tidiness. `grng` is one
-       sequential stream shared by every entry in this array, and
-       this entry draws from it four times - bearing, distance, yaw
-       and the size roll. Inserted anywhere else, those four draws
-       shift every number handed to every entry BELOW it, which
-       re-places four districts' worth of units that have already
-       been reviewed and framed. Appended, adding the boss cannot
-       move anything that was already here. */
-    { key: "matriarch", at: [-32, -50], r: 0, n: 1, unique: true },
+    // No Matriarch here. The unique boss is raised by the final Bloom
+    // breach, after the player has survived the four lesser surges.
   ];
 
   function garrison() {
@@ -862,7 +1027,10 @@ export async function buildEnemies(ctx, onProgress) {
     update,
     kill(inst) { play(inst, "death", 0.12); },
     clear() {
-      for (const inst of live) group.remove(inst.root);
+      for (const inst of live) {
+        disposeEmergence(inst);
+        group.remove(inst.root);
+      }
       live.length = 0;
     },
     stats() {

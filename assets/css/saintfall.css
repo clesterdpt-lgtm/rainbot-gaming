@@ -232,6 +232,108 @@ html.sf-maximised body {
   color: rgba(230, 219, 189, 0.45);
 }
 
+/* A rotating local tactical map. The player stays upright while the
+   world turns beneath them, so a red contact at the top is always in
+   front regardless of the compass bearing. */
+.sf-hud__minimap {
+  position: absolute;
+  top: 3.7rem;
+  right: 1.15rem;
+  width: 10.4rem;
+  padding: .48rem .5rem .55rem;
+  border: 1px solid rgba(216, 164, 65, .28);
+  border-radius: .35rem;
+  background:
+    linear-gradient(135deg, rgba(216, 164, 65, .08), transparent 34%),
+    rgba(7, 5, 7, .68);
+  box-shadow: inset 0 0 0 1px rgba(255, 237, 203, .035), 0 .45rem 1.5rem rgba(0, 0, 0, .28);
+  backdrop-filter: blur(3px);
+}
+.sf-hud__minimap::before,
+.sf-hud__minimap::after {
+  content: "";
+  position: absolute;
+  width: 1rem;
+  height: 1rem;
+  border-color: rgba(246, 196, 102, .64);
+  pointer-events: none;
+}
+.sf-hud__minimap::before { left: -.18rem; top: -.18rem; border-left: 2px solid; border-top: 2px solid; }
+.sf-hud__minimap::after { right: -.18rem; bottom: -.18rem; border-right: 2px solid; border-bottom: 2px solid; }
+.sf-minimap__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: .3rem;
+  color: rgba(255, 228, 183, .66);
+  font-size: .52rem;
+  letter-spacing: .18em;
+}
+.sf-minimap__head b { color: #f2c46e; font-size: .5rem; letter-spacing: .08em; }
+#sf-map-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  filter: drop-shadow(0 0 .4rem rgba(216, 164, 65, .12));
+}
+.sf-minimap__event {
+  margin-top: .38rem;
+  padding-top: .34rem;
+  border-top: 1px solid rgba(255, 224, 179, .16);
+  text-transform: uppercase;
+}
+.sf-minimap__event > div {
+  display: flex;
+  justify-content: space-between;
+  gap: .35rem;
+  align-items: baseline;
+  font-size: .51rem;
+  letter-spacing: .06em;
+  color: rgba(255, 233, 204, .76);
+}
+.sf-minimap__event > div span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-minimap__event > div b { flex: none; color: #efbb64; font-size: .5rem; }
+.sf-minimap__event small {
+  display: block;
+  overflow: hidden;
+  margin-top: .17rem;
+  color: rgba(226, 213, 190, .44);
+  font-size: .43rem;
+  letter-spacing: .08em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-minimap__event > i {
+  display: block;
+  height: 2px;
+  margin-top: .3rem;
+  overflow: hidden;
+  background: rgba(255, 235, 205, .12);
+}
+.sf-minimap__event > i em {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: #d8a441;
+  box-shadow: 0 0 .4rem rgba(255, 167, 69, .8);
+  transition: width .12s linear;
+}
+.sf-minimap__event[data-phase="warning"] > div b,
+.sf-minimap__event[data-phase="active"] > div b { color: #ff8b58; }
+.sf-minimap__event[data-phase="warning"] > i em,
+.sf-minimap__event[data-phase="active"] > i em { background: #f0643e; }
+.sf-minimap__event[data-phase="complete"] > div b,
+.sf-minimap__event[data-phase="complete"] small { color: #91e5c0; }
+.sf-hud__minimap[data-event="1"] {
+  border-color: rgba(245, 101, 58, .55);
+  box-shadow: inset 0 0 0 1px rgba(255, 118, 66, .08), 0 0 1.2rem rgba(151, 41, 22, .22);
+}
+
 .sf-hud__hint {
   position: absolute;
   left: 50%;
@@ -483,6 +585,16 @@ html.sf-maximised body {
   position: absolute; left: 5.25rem; bottom: 1.5rem;
   width: min(19rem, 34vw); pointer-events: none;
 }
+.sf-hud__hplabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: .2rem;
+  color: rgba(255, 232, 200, .64);
+  font: 650 .54rem/1.1 ui-monospace, "SFMono-Regular", Menlo, monospace;
+  letter-spacing: .12em;
+}
+.sf-hud__hplabel b { color: #eaf5d8; font-size: .58rem; letter-spacing: .04em; }
 .sf-hud__hpwrap {
   height: 9px; border: 1px solid rgba(255, 236, 214, .34);
   background: rgba(12, 8, 10, .5); overflow: hidden;
@@ -589,6 +701,11 @@ html.sf-maximised body {
   width: min(30rem, 76vw); text-align: center; pointer-events: none;
   transition: opacity .3s;
 }
+.sf-hud__objective[data-event="1"] .sf-hud__objlabel {
+  color: #ffd8c2;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .95), 0 0 10px rgba(209, 54, 30, .36);
+}
+.sf-hud__objective[data-event="1"] .sf-hud__objbar i { background: #ef633e; }
 .sf-hud__objlabel {
   font: 600 .74rem/1.3 ui-monospace, "SFMono-Regular", Menlo, monospace;
   letter-spacing: .1em; text-transform: uppercase;
@@ -607,6 +724,40 @@ html.sf-maximised body {
   text-align: center; white-space: nowrap; pointer-events: none;
   transition: opacity .35s;
 }
+
+.sf-hud__breach-alert {
+  position: absolute;
+  left: 50%;
+  top: 23%;
+  min-width: min(31rem, 78vw);
+  padding: .55rem 1.2rem .65rem;
+  transform: translate(-50%, -.6rem) scale(.98);
+  border-top: 1px solid rgba(239, 99, 62, .58);
+  border-bottom: 1px solid rgba(239, 99, 62, .32);
+  background: linear-gradient(90deg, transparent, rgba(34, 8, 8, .7) 20%, rgba(34, 8, 8, .7) 80%, transparent);
+  text-align: center;
+  opacity: 0;
+  transition: opacity .26s ease, transform .26s ease;
+}
+.sf-hud__breach-alert.is-shown { opacity: 1; transform: translate(-50%, 0) scale(1); }
+.sf-hud__breach-alert small {
+  display: block;
+  margin-bottom: .18rem;
+  color: #f18a59;
+  font-size: .55rem;
+  letter-spacing: .28em;
+}
+.sf-hud__breach-alert strong {
+  display: block;
+  color: #ffe5d1;
+  font: 700 clamp(.95rem, 1.8vw, 1.45rem)/1.1 "Cinzel", Georgia, serif;
+  letter-spacing: .14em;
+}
+.sf-hud__breach-alert[data-boss="1"] {
+  border-color: rgba(255, 185, 66, .72);
+  background: linear-gradient(90deg, transparent, rgba(51, 23, 5, .76) 20%, rgba(51, 23, 5, .76) 80%, transparent);
+}
+.sf-hud__breach-alert[data-boss="1"] small { color: #ffc25e; }
 
 .sf-hud__strat {
   position: absolute; right: 1.6rem; bottom: 1.5rem;
@@ -1038,6 +1189,27 @@ html.sf-maximised body {
   width: min(22rem, 56%);
 }
 
+.sf-stage.sf-touch-enabled .sf-hud__minimap {
+  top: max(5.15rem, calc(env(safe-area-inset-top) + 5.15rem));
+  right: max(.55rem, env(safe-area-inset-right));
+  width: min(8rem, 33vw);
+  padding: .32rem .34rem .38rem;
+  background: rgba(7, 5, 7, .6);
+}
+.sf-stage.sf-touch-enabled .sf-minimap__head { margin-bottom: .15rem; font-size: .42rem; }
+.sf-stage.sf-touch-enabled .sf-minimap__head b { font-size: .41rem; }
+.sf-stage.sf-touch-enabled .sf-minimap__event { margin-top: .2rem; padding-top: .22rem; }
+.sf-stage.sf-touch-enabled .sf-minimap__event > div { font-size: .42rem; }
+.sf-stage.sf-touch-enabled .sf-minimap__event > div b { font-size: .41rem; }
+.sf-stage.sf-touch-enabled .sf-minimap__event small { font-size: .36rem; }
+.sf-stage.sf-touch-enabled .sf-hud__breach-alert {
+  top: 25%;
+  min-width: min(23rem, 84vw);
+  padding: .4rem .8rem .45rem;
+}
+.sf-stage.sf-touch-enabled .sf-hud__breach-alert small { font-size: .46rem; }
+.sf-stage.sf-touch-enabled .sf-hud__breach-alert strong { font-size: clamp(.78rem, 3.4vw, 1.05rem); }
+
 .sf-stage.sf-touch-enabled .sf-hud__objlabel {
   overflow: hidden;
   font-size: .59rem;
@@ -1056,6 +1228,8 @@ html.sf-maximised body {
 }
 
 .sf-stage.sf-touch-enabled .sf-hud__hpwrap { height: 6px; }
+.sf-stage.sf-touch-enabled .sf-hud__hplabel { margin-bottom: .12rem; font-size: .45rem; }
+.sf-stage.sf-touch-enabled .sf-hud__hplabel b { font-size: .47rem; }
 .sf-stage.sf-touch-enabled .sf-hud__jet { margin-top: .28rem; }
 .sf-stage.sf-touch-enabled .sf-hud__jetlabel { margin-bottom: .1rem; font-size: .48rem; }
 .sf-stage.sf-touch-enabled .sf-hud__jetlabel b { font-size: .5rem; }
@@ -1108,6 +1282,14 @@ html.sf-maximised body {
   .sf-touch__dir { min-height: 2.75rem; }
   .sf-touch__look span { margin-bottom: 3.8rem; }
   .sf-stage.sf-touch-enabled .sf-hud__vitals { top: 5.15rem; }
+  .sf-stage.sf-touch-enabled .sf-hud__minimap {
+    top: max(.45rem, env(safe-area-inset-top));
+    right: max(3.75rem, calc(env(safe-area-inset-right) + 3.75rem));
+    width: 5.15rem;
+    padding: .24rem .26rem .28rem;
+  }
+  .sf-stage.sf-touch-enabled .sf-minimap__event small { display: none; }
+  .sf-stage.sf-touch-enabled .sf-hud__breach-alert { top: 27%; }
 }
 
 @media (max-width: 360px) {
@@ -1123,6 +1305,7 @@ html.sf-maximised body {
   .sf-hud__strat { right: 1rem; bottom: 1rem; }
   .sf-hud__stratitem { min-width: 8.4rem; font-size: .58rem; }
   .sf-hud__banner { font-size: 1.05rem; }
+  .sf-hud__minimap { width: 8.2rem; top: 4rem; right: .7rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1131,4 +1314,6 @@ html.sf-maximised body {
   .sf-touch__look span,
   .sf-touch__button { transition: none; }
   .sf-touch__button.is-tapped { animation: none; }
+  .sf-hud__breach-alert { transition: none; }
+  .sf-minimap__event > i em { transition: none; }
 }

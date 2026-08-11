@@ -18,6 +18,13 @@ import { clamp, damp, makeBus } from "saintfall/core.js";
 
 const TAU = Math.PI * 2;
 
+export const SURVIVAL_CONFIG = Object.freeze({
+  playerMaxHp: 150,
+  enemyDamageMultiplier: 0.82,
+  regenDelay: 5.5,
+  regenPerSecond: 10,
+});
+
 /* Body capsules in WORLD metres, taken from what
    `saintfall-bestiary-measure.mjs` measured rather than guessed - a
    hit volume that does not match the silhouette is the single
@@ -121,7 +128,7 @@ export function buildCombat(ctx) {
   const bus = makeBus();
 
   const player = {
-    hp: 100, maxHp: 100,
+    hp: SURVIVAL_CONFIG.playerMaxHp, maxHp: SURVIVAL_CONFIG.playerMaxHp,
     dead: false,
     respawnIn: 0,
     lastHitAt: -99,
@@ -213,7 +220,7 @@ export function buildCombat(ctx) {
     let best = null;
     let bestT = maxDist;
     for (const inst of enemies.live) {
-      if (inst.state === "death") continue;
+      if (inst.state === "death" || inst.emerging?.active) continue;
       const box = HITBOX[inst.key] || HITBOX.thresher;
 
       // Project the enemy's centre onto the ray.
@@ -334,7 +341,7 @@ export function buildCombat(ctx) {
    * impact, otherwise the number rises from the centre of the target.
    */
   function applyDamage(inst, dmg, detail = {}) {
-    if (!inst || inst.state === "death") return 0;
+    if (!inst || inst.state === "death" || inst.emerging?.active) return 0;
     if (typeof detail === "boolean") detail = { head: detail };
     const requested = Math.max(0, Number(dmg) || 0);
     const before = Math.max(0, Number(inst.health) || 0);
@@ -541,7 +548,7 @@ export function buildCombat(ctx) {
   }
 
   function stepEnemy(inst, dt, px, py, pz) {
-    if (inst.state === "death") return;
+    if (inst.state === "death" || inst.emerging?.active) return;
     const spec = SPEC[inst.key] || SPEC.thresher;
     const dx = px - inst.x;
     const dz = pz - inst.z;
@@ -684,7 +691,10 @@ export function buildCombat(ctx) {
       const bz = -5.6;
       const x = inst.x + s * bz + c * spread;
       const z = inst.z + c * bz - s * spread;
-      const kid = enemies.spawn("thresher", x, z, { yaw: inst.yaw + Math.PI });
+      const kid = enemies.spawn("thresher", x, z, {
+        yaw: inst.yaw + Math.PI,
+        emerge: { delay: i * 0.12, duration: 1.05, depth: 1.2 },
+      });
       if (!kid) continue;
       // Born awake and looking at you. A clutch that has to notice
       // the player first gives away the seconds that make it a threat.
@@ -711,7 +721,9 @@ export function buildCombat(ctx) {
     // Machines miss; a charging xeno at arm's length does not.
     const accuracy = spec.burst ? 0.55 : 1;
     const landed = Math.random() < accuracy;
-    if (landed) hurtPlayer(spec.damage, {
+    const incoming = spec.damage * SURVIVAL_CONFIG.enemyDamageMultiplier
+      * (Number.isFinite(inst.damageScale) ? inst.damageScale : 1);
+    if (landed) hurtPlayer(incoming, {
       source: spec.burst ? "enemy-fire" : "enemy-melee",
       x: inst.x,
       y: inst.y + (HITBOX[inst.key] || HITBOX.thresher).head,
@@ -765,8 +777,8 @@ export function buildCombat(ctx) {
 
     // Regeneration, but only well after the last hit - long enough
     // that it never rewards standing in the open.
-    if (clock - player.lastHitAt > 6.5 && player.hp < player.maxHp) {
-      player.hp = Math.min(player.maxHp, player.hp + dt * 7.5);
+    if (clock - player.lastHitAt > SURVIVAL_CONFIG.regenDelay && player.hp < player.maxHp) {
+      player.hp = Math.min(player.maxHp, player.hp + dt * SURVIVAL_CONFIG.regenPerSecond);
     }
 
     const eyeY = ps.y + 1.62;
@@ -826,6 +838,7 @@ export function buildCombat(ctx) {
     stats() {
       return {
         hp: Math.round(player.hp),
+        maxHp: player.maxHp,
         kills: player.kills,
         accuracy: player.shots ? Math.round((player.hits / player.shots) * 100) : 0,
         live: enemies.live.filter((e) => e.state !== "death").length,

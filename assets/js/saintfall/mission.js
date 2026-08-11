@@ -361,13 +361,16 @@ export function buildMission(ctx) {
       if (state.extractCalled) {
         state.extractTimer -= dt;
         if (state.extractTimer <= 0) {
-          if (d < 24 && ps.grounded && !combat.player.dead) {
+          const breachesClear = !ctx.breaches || ctx.breaches.state.complete;
+          if (d < 24 && ps.grounded && !combat.player.dead && breachesClear) {
             state.phase = "won";
             say("EXTRACTION COMPLETE", 99);
             bus.emit("won", {});
           } else {
             state.extractTimer = 12;
-            say("SHUTTLE HOLDING - GET TO THE PAD", 4);
+            say(breachesClear
+              ? "SHUTTLE HOLDING - GET TO THE PAD"
+              : "SHUTTLE HOLDING - PURGE THE BLOOM", 4);
           }
         }
       }
@@ -409,6 +412,8 @@ export function buildMission(ctx) {
     /** Compass bearing and range to whatever matters right now. */
     objective() {
       const ps = ctx.player.state;
+      const breach = ctx.breaches?.objective?.();
+      if (breach) return breach;
       if (state.phase === "relays") {
         const { relay, dist } = nearestRelay(ps.x, ps.z);
         if (!relay) return null;

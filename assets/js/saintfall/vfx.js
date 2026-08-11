@@ -1340,6 +1340,16 @@ export function buildVfx(ctx, world) {
     impacts.emit(x, y + 0.2, z, 40, radius * 0.22, 4.2, 0.15);
   }
 
+  /** Sand, stone and a low bio-flash thrown by a creature surfacing. */
+  function breach(x, y, z, radius, intensity = 1) {
+    const power = Math.max(0.5, intensity);
+    impacts.emit(x, y + 0.12, z, Math.round(22 * power), radius * 0.78,
+      0.72 * power, 0.12);
+    impacts.emit(x, y + 0.28, z, Math.round(12 * power), radius * 0.38,
+      1.15 * power, 0.62);
+    flashes.emit(x, y + 0.16, z, radius * 0.22, 0.18 + power * 0.025, 0.28);
+  }
+
   return {
     group,
     plumes,
@@ -1347,6 +1357,7 @@ export function buildVfx(ctx, world) {
     shafts,
     spark,
     blast,
+    breach,
     tracer,
     muzzle,
     update(dt, camera) {

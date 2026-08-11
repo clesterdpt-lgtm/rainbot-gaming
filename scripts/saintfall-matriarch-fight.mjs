@@ -67,17 +67,23 @@ try {
     if (el && el.parentNode) el.parentNode.removeChild(el);
   });
 
-  /* ---------------- it is on the map ---------------- */
+  /* ---------------- it is earned by the breach progression ---------------- */
   console.log("\n=== PLACEMENT ===");
   const placed = await page.evaluate(() => {
     const T = window.__SF;
+    const initial = T.ctx.enemies.live.filter((e) => e.key === "matriarch").length;
+    const ps = T.playerState();
+    T.startBreachWave(4, ps.x, ps.z - 44, true);
     const all = T.ctx.enemies.live.filter((e) => e.key === "matriarch");
-    return all.map((e) => ({ x: +e.x.toFixed(1), z: +e.z.toFixed(1),
-      hp: e.health, state: e.state }));
+    return { initial, spawned: all.map((e) => ({ x: +e.x.toFixed(1), z: +e.z.toFixed(1),
+      hp: e.health, state: e.state, emerging: !!e.emerging?.active })) };
   });
   console.log("  matriarchs on the map:", JSON.stringify(placed));
-  check(placed.length === 1, "exactly one Matriarch is garrisoned",
-    `${placed.length} found`);
+  check(placed.initial === 0, "the Matriarch is absent before the final breach",
+    `${placed.initial} found at boot`);
+  check(placed.spawned.length === 1 && placed.spawned[0].emerging,
+    "the final breach raises exactly one Matriarch",
+    `${placed.spawned.length} found after the event started`);
 
   /* ---------------- the weak point ---------------- */
   console.log("\n=== WEAK POINT ===");

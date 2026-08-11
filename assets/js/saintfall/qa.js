@@ -3058,6 +3058,32 @@ export function installQa(ctx, api) {
     },
 
     missionState: () => api.mission.stats(),
+    breachState: () => api.breaches?.status() || null,
+    setBreachAuto(enabled = true) { return api.breaches?.setAuto(enabled) ?? false; },
+    startBreachWave(index = 0, x, z, immediate = true) {
+      const options = { immediate: !!immediate };
+      if (Number.isFinite(x) && Number.isFinite(z)) { options.x = x; options.z = z; }
+      const result = api.breaches?.start(index, options) || null;
+      api.step(1 / 60, true);
+      return result;
+    },
+    minimapState() {
+      const map = document.getElementById("sf-minimap");
+      const canvas = document.getElementById("sf-map-canvas");
+      const event = document.getElementById("sf-map-event");
+      if (!map || !canvas || !event) return null;
+      const box = map.getBoundingClientRect();
+      return {
+        visible: getComputedStyle(map).display !== "none" && box.width > 0 && box.height > 0,
+        x: Number(box.x.toFixed(1)),
+        y: Number(box.y.toFixed(1)),
+        width: Number(box.width.toFixed(1)),
+        height: Number(box.height.toFixed(1)),
+        pixels: [canvas.width, canvas.height],
+        phase: event.dataset.phase,
+        text: event.textContent.replace(/\s+/g, " ").trim(),
+      };
+    },
     /** Sweep the palm roll live. Radians, [support, trigger]. */
     setPalmRoll(support, trigger) {
       api.player.setPalmRoll(support, trigger);
@@ -3125,6 +3151,7 @@ export function installQa(ctx, api) {
     get combat() { return api.combat; },
     get figure() { return api.player.figure; },
     get mission() { return api.mission; },
+    get breaches() { return api.breaches; },
     get collide() { return api.collide; },
   };
 

@@ -537,7 +537,7 @@ export function buildAudio(ctx) {
      ============================================================ */
 
   function attach() {
-    const { combat, mission } = ctx;
+    const { combat, mission, breaches } = ctx;
     if (combat) {
       combat.bus.on("hit", (e) => impact(e.x, e.z, "flesh"));
       /* The `big` death is now the Harrow's. It is a two-tonne animal
@@ -569,6 +569,13 @@ export function buildAudio(ctx) {
       mission.bus.on("lost", () => chord([196, 147, 110], 1.6, 0.24));
       mission.bus.on("inbound", (e) => inbound(e.x, e.z, e.seconds));
       mission.bus.on("impact", (e) => explosion(e.x, e.z, e.radius));
+    }
+    if (breaches) {
+      breaches.bus.on("warning", () => chord([147, 196, 220], 0.72, 0.14));
+      breaches.bus.on("bossWarning", () => chord([92, 110, 147, 196], 1.45, 0.24));
+      breaches.bus.on("opened", (e) => explosion(e.x, e.z, e.boss ? 18 : 10));
+      breaches.bus.on("cleared", () => chord([294, 392, 494], 0.7, 0.16));
+      breaches.bus.on("complete", () => chord([392, 523, 659, 880], 1.25, 0.22));
     }
   }
 

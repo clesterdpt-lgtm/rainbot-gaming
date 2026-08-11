@@ -23,9 +23,13 @@ import { roadPointAtZ } from "saintfall/terrain.js";
 /* Codes are entered on the arrow keys / WASD-adjacent direction
    pad. Short enough to be muscle memory, long enough that entering
    one while something is charging you is a decision. */
+export const STRATAGEM_WHEEL_ORDER = Object.freeze(["orbital", "cluster", "resupply"]);
+
 export const STRATAGEMS = {
   orbital: {
     name: "Orbital Lance",
+    short: "Lance",
+    role: "Precision strike",
     code: ["up", "right", "down", "down", "down"],
     cooldown: 95,
     delay: 4.2,
@@ -34,7 +38,9 @@ export const STRATAGEMS = {
     colour: "#7fd4ff",
   },
   cluster: {
-    name: "Eagle Cluster",
+    name: "Cluster Salvo",
+    short: "Cluster",
+    role: "Wide suppression",
     code: ["up", "right", "down", "down", "right"],
     cooldown: 52,
     delay: 2.4,
@@ -43,7 +49,9 @@ export const STRATAGEMS = {
     colour: "#ffbe4d",
   },
   resupply: {
-    name: "Resupply",
+    name: "Reinforcement Drop",
+    short: "Reinforce",
+    role: "Recover and rearm",
     code: ["down", "down", "up", "right"],
     cooldown: 74,
     delay: 3.0,
@@ -51,6 +59,7 @@ export const STRATAGEMS = {
     damage: 0,
     colour: "#9df58c",
     heals: true,
+    reinforcements: 1,
   },
 };
 
@@ -149,6 +158,7 @@ export function buildMission(ctx) {
     elapsed: 0,
     deaths: 0,
     reinforcements: 5,
+    maxReinforcements: 5,
     banner: null,
     bannerFor: 0,
   };
@@ -218,6 +228,7 @@ export function buildMission(ctx) {
   function call(key) {
     if (combat.player.dead) return null;
     const spec = STRATAGEMS[key];
+    if (!spec) return null;
     if (cooldowns[key] > 0) {
       say(`${spec.name.toUpperCase()} ON COOLDOWN`, 1.6);
       return null;
@@ -248,7 +259,11 @@ export function buildMission(ctx) {
     if (spec.heals) {
       combat.player.hp = combat.player.maxHp;
       if (ctx.weapons && ctx.weapons.resupply) ctx.weapons.resupply();
-      say("RESUPPLY DELIVERED", 2.4);
+      state.reinforcements = Math.min(
+        state.maxReinforcements,
+        state.reinforcements + (spec.reinforcements || 0)
+      );
+      say("REINFORCEMENT DROP DELIVERED", 2.4);
     } else {
       combat.explode(shot.x, shot.y + 1, shot.z, spec.radius, spec.damage);
       say(`${spec.name.toUpperCase()} IMPACT`, 2.0);
@@ -382,6 +397,7 @@ export function buildMission(ctx) {
       state.deaths += 1;
       state.reinforcements -= 1;
       if (state.reinforcements < 0) {
+        state.reinforcements = 0;
         state.phase = "lost";
         say("MISSION FAILED - NO REINFORCEMENTS", 99);
         bus.emit("lost", {});
@@ -392,6 +408,116 @@ export function buildMission(ctx) {
   }
 
   void world; void clamp;
+
+  function snapshotState() {
+    return {
+      phase: state.phase,
+      relaysDone: state.relaysDone,
+      extractCalled: state.extractCalled,
+      extractTimer: Number(Math.max(0, state.extractTimer).toFixed(3)),
+      elapsed: Number(state.elapsed.toFixed(3)),
+      deaths: state.deaths,
+      reinforcements: state.reinforcements,
+      maxReinforcements: state.maxReinforcements,
+      relays: relays.map((relay) => ({
+        key: relay.key,
+        done: relay.done,
+        progress: Number(relay.progress.toFixed(4)),
+      })),
+      cooldowns: Object.fromEntries(Object.entries(cooldowns)
+        .map(([key, value]) => [key, Number(value.toFixed(3))])),
+      /* Public field saves are gated while a command is inbound, so this is
+         normally empty on disk. Keeping the authoritative flight data in
+         snapshots also makes apply() rollback transactional if a later
+         subsystem rejects a load while the current command is still spent. */
+      pending: pending.map((shot) => ({
+        key: shot.key,
+        x: Number(shot.x.toFixed(4)),
+        z: Number(shot.z.toFixed(4)),
+        remaining: Number(Math.max(0, shot.t).toFixed(4)),
+      })),
+    };
+  }
+
+  function clearPending() {
+    for (const shot of pending) group.remove(shot.marker.group);
+    pending.length = 0;
+  }
+
+  function canFieldSave() {
+    return pending.length === 0 && !state.channelling && !entry.active;
+  }
+
+  function restore(saved = {}) {
+    clearPending();
+    cancelEntry();
+    const phases = new Set(["relays", "extract", "won", "lost"]);
+    state.phase = phases.has(saved.phase) ? saved.phase : "relays";
+    state.extractCalled = !!saved.extractCalled && state.phase === "extract";
+    state.extractTimer = Math.max(0, Number(saved.extractTimer) || 0);
+    state.elapsed = Math.max(0, Number(saved.elapsed) || 0);
+    state.deaths = Math.max(0, Math.round(Number(saved.deaths) || 0));
+    state.maxReinforcements = Math.max(1,
+      Math.round(Number(saved.maxReinforcements) || 5));
+    state.reinforcements = Math.max(0, Math.min(state.maxReinforcements,
+      Math.round(Number(saved.reinforcements) || 0)));
+    state.channelling = null;
+    state.countedDeath = false;
+    state.banner = null;
+    state.bannerFor = 0;
+
+    const relayState = new Map((Array.isArray(saved.relays) ? saved.relays : [])
+      .filter((relay) => relay && typeof relay.key === "string")
+      .map((relay) => [relay.key, relay]));
+    let done = 0;
+    for (const relay of relays) {
+      const restored = relayState.get(relay.key) || {};
+      relay.done = !!restored.done;
+      relay.progress = relay.done ? 1 : clamp01(Number(restored.progress) || 0);
+      if (relay.done) {
+        done += 1;
+        group.remove(relay.beacon.group);
+      } else if (relay.beacon.group.parent !== group) {
+        group.add(relay.beacon.group);
+      }
+    }
+    state.relaysDone = done;
+    if (state.phase === "relays" && done >= relays.length) state.phase = "extract";
+    if (state.phase !== "relays" && done < relays.length) {
+      for (const relay of relays) {
+        relay.done = true;
+        relay.progress = 1;
+        group.remove(relay.beacon.group);
+      }
+      state.relaysDone = relays.length;
+    }
+    pad.group.visible = state.phase === "extract";
+
+    for (const key of Object.keys(cooldowns)) {
+      const value = Number(saved.cooldowns?.[key]);
+      cooldowns[key] = Math.max(0, Math.min(STRATAGEMS[key].cooldown,
+        Number.isFinite(value) ? value : 0));
+    }
+    for (const record of Array.isArray(saved.pending) ? saved.pending : []) {
+      const spec = STRATAGEMS[record?.key];
+      if (!spec) continue;
+      const x = Number(record.x);
+      const z = Number(record.z);
+      const remaining = Number(record.remaining);
+      if (![x, z, remaining].every(Number.isFinite) || remaining <= 0) continue;
+      pending.push({
+        key: record.key,
+        spec,
+        x,
+        z,
+        y: groundY(x, z),
+        t: Math.min(spec.delay, remaining),
+        marker: makeBeacon(x, z, spec.colour, 30),
+      });
+    }
+    bus.emit("restored", snapshotState());
+    return snapshotState();
+  }
 
   return {
     group,
@@ -407,6 +533,11 @@ export function buildMission(ctx) {
     cancelEntry,
     pushDirection,
     call,
+    wheelOrder: STRATAGEM_WHEEL_ORDER,
+    announce: say,
+    snapshot: snapshotState,
+    restore,
+    canFieldSave,
     update,
     nearestRelay,
     /** Compass bearing and range to whatever matters right now. */

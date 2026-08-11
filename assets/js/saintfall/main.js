@@ -31,6 +31,8 @@ import { buildWeapons } from "saintfall/weapons.js";
 import { buildHud } from "saintfall/hud.js";
 import { buildTouchControls } from "saintfall/touch.js";
 import { buildDropIntro } from "saintfall/intro.js";
+import { buildSaveSystem } from "saintfall/save.js";
+import { buildGameUi } from "saintfall/ui.js";
 import { installQa } from "saintfall/qa.js";
 
 export async function start({ boot, build } = {}) {
@@ -154,22 +156,43 @@ export async function start({ boot, build } = {}) {
   const touch = buildTouchControls(ctx, player, touchHost, stage);
   ctx.touch = touch;
 
+  /* Durable state and the native field interface are deliberately
+     constructed after every owning gameplay domain. The menu never
+     reaches into scene graphs itself: save.js asks each domain for a
+     normalized snapshot, and the command wheel confirms through the
+     same mission.call() path as every other deployment. */
+  const saves = buildSaveSystem(ctx, { setTime, setStorm });
+  ctx.saves = saves;
+  const gameUi = buildGameUi(ctx, { stage, canvas, save: saves, touch });
+  ctx.gameUi = gameUi;
+
   const introHost = document.getElementById("sf-intro");
   const touchEnabledAfterDrop = !!touch.enabled;
   const runtimePauseReasons = {
     menu: document.body.classList.contains("rb-escape-menu-open"),
     visibility: document.hidden,
+    command: document.body.classList.contains("sf-command-open"),
   };
+  let runtimeAudioPaused = false;
   function syncRuntimePaused() {
     runtimePauseReasons.menu = document.body.classList.contains("rb-escape-menu-open");
     runtimePauseReasons.visibility = document.hidden;
+    runtimePauseReasons.command = document.body.classList.contains("sf-command-open");
     if (ctx.runtime.phase !== "playing") return ctx.runtime.paused;
-    const next = Object.values(runtimePauseReasons).some(Boolean);
-    if (next === ctx.runtime.paused) return next;
-    ctx.runtime.paused = next;
-    if (next) player.input.clearAll?.();
-    void audio.setPaused?.(next);
-    return next;
+    const nextSimulation = Object.values(runtimePauseReasons).some(Boolean);
+    const nextAudio = runtimePauseReasons.menu || runtimePauseReasons.visibility;
+    if (nextSimulation !== ctx.runtime.paused) {
+      ctx.runtime.paused = nextSimulation;
+      if (nextSimulation) player.input.clearAll?.();
+    }
+    /* The command wheel freezes the battlefield for deliberate
+       selection, but its confirmation tones and the held ambience
+       remain live. A real menu/hidden tab suspends both. */
+    if (nextAudio !== runtimeAudioPaused) {
+      runtimeAudioPaused = nextAudio;
+      void audio.setPaused?.(nextAudio);
+    }
+    return nextSimulation;
   }
   if (introEnabled) {
     hud.setVisible(false);
@@ -238,6 +261,8 @@ export async function start({ boot, build } = {}) {
     breaches,
     audio,
     intro,
+    saves,
+    gameUi,
     runtime: ctx.runtime,
     audioFactory: buildAudio,
     fps: 0,
@@ -247,6 +272,7 @@ export async function start({ boot, build } = {}) {
     setTime,
     setStorm,
     setQuality,
+    frameOnce: null,
     /* Assigned once `shoot` is defined below. The QA trigger has to
        come through HERE and not through `weapons.fire()`, which only
        spends a round and kicks the weapon - everything a shot does
@@ -512,6 +538,8 @@ export async function start({ boot, build } = {}) {
     vfx.update(d, render.camera);
     touch.update(d);
     hud.update(d, player, render.camera);
+    saves.update(d);
+    gameUi.update?.(d);
     if (draw) render.render(render.camera);
   }
 
@@ -529,11 +557,13 @@ export async function start({ boot, build } = {}) {
       return;
     }
     if (ctx.runtime.paused) {
+      gameUi.update?.(0);
       if (draw) render.render(render.camera);
       return;
     }
     step(dt, draw);
   }
+  api.frameOnce = frame;
 
   let last = performance.now();
   function loop(now) {
@@ -551,7 +581,14 @@ export async function start({ boot, build } = {}) {
   /* -------------------------- keyboard extras -------------------------- */
 
   const TIME_KEYS = ["goldenhour", "noon", "dusk", "night", "storm"];
+  const ownsKeyboard = () => document.pointerLockElement === canvas
+    || player.input?.state?.locked || document.activeElement === canvas
+    || document.documentElement.classList.contains("sf-maximised");
+  const isInteractiveKeyTarget = (target) => target instanceof Element
+    && !!target.closest("button, a, input, select, textarea, [contenteditable='true'],"
+      + " [role='button'], [role='menuitem'], [role='tab']");
   window.addEventListener("keydown", (e) => {
+    if (!ownsKeyboard() || e.defaultPrevented || isInteractiveKeyTarget(e.target)) return;
     if (intro.isBlocking() && e.code !== "KeyM") return;
     if (ctx.runtime.paused && e.code !== "KeyM") return;
     if (e.code >= "Digit1" && e.code <= "Digit5") {
@@ -587,7 +624,8 @@ export async function start({ boot, build } = {}) {
         : "Colliders hidden");
     }
     if (e.code === "KeyM") {
-      audio.setEnabled(!audio.enabled);
+      if (gameUi.toggleAudio) gameUi.toggleAudio();
+      else audio.setEnabled(!audio.enabled);
       hud.flashDistrict(audio.enabled ? "Audio on" : "Audio muted");
     }
   });

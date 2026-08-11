@@ -256,7 +256,7 @@ export function buildBreaches(ctx) {
     state.total = members.length;
     state.remaining = members.length;
     state.boss = members.find((inst) => inst.key === "matriarch") || null;
-    bus.emit(wave.boss ? "bossWarning" : "warning", snapshot());
+    if (!options.silent) bus.emit(wave.boss ? "bossWarning" : "warning", snapshot());
     return snapshot();
   }
 
@@ -352,6 +352,7 @@ export function buildBreaches(ctx) {
     return {
       phase: state.phase,
       wave: state.waveIndex + 1,
+      waveIndex: state.waveIndex,
       waveCount: state.waveCount,
       name: state.name,
       subtitle: state.subtitle,
@@ -363,11 +364,102 @@ export function buildBreaches(ctx) {
       remaining: state.remaining,
       complete: state.complete,
       auto: state.auto,
+      serial: state.serial,
+      memberIds: members.filter((inst) => isLiving(inst) && inst.id).map((inst) => inst.id),
+      bossId: boss?.id || null,
+      rng: rng.getState?.() || null,
       boss: boss ? {
         health: Math.max(0, Math.round(boss.health)),
         maxHealth: Math.round(boss.maxHealth || boss.health),
       } : null,
     };
+  }
+
+  function restore(saved = {}) {
+    members.length = 0;
+    const phase = ["dormant", "warning", "active", "intermission", "complete"]
+      .includes(saved.phase) ? saved.phase : "dormant";
+    const waveIndex = clamp(Math.round((Number(saved.wave) || 0) - 1),
+      -1, BREACH_WAVES.length - 1);
+    const timer = Math.max(0, Number(saved.timer) || 0);
+    const x = Number.isFinite(Number(saved.x)) ? Number(saved.x) : 0;
+    const z = Number.isFinite(Number(saved.z)) ? Number(saved.z) : 0;
+    state.auto = saved.auto === undefined ? !ctx.qa : !!saved.auto;
+    state.complete = phase === "complete" || !!saved.complete;
+    state.waveIndex = waveIndex;
+    state.timer = timer;
+    state.x = x;
+    state.z = z;
+    state.total = 0;
+    state.remaining = 0;
+    state.boss = null;
+    eventSerial = Math.max(eventSerial, Math.round(Number(saved.serial) || 0));
+
+    if (state.complete) {
+      state.phase = "complete";
+      state.waveIndex = BREACH_WAVES.length - 1;
+      state.name = "Bloom severed";
+      state.subtitle = "All breach signatures extinguished";
+      state.timer = 0;
+    } else if ((phase === "warning" || phase === "active") && waveIndex >= 0) {
+      const byId = new Map(enemies.live.filter((inst) => inst?.id)
+        .map((inst) => [inst.id, inst]));
+      const savedMemberIds = Array.isArray(saved.memberIds) ? saved.memberIds : [];
+      const restoredMembers = savedMemberIds
+        .map((id) => byId.get(id)).filter((inst) => isLiving(inst));
+      const savedRemaining = Number(saved.remaining);
+      /* A strike can kill the last member after breaches.update() and before
+         mission.update() in the same frame. Empty+zero is an exact active
+         roster, not a legacy payload that needs a replacement wave. */
+      const exactEmpty = savedMemberIds.length === 0
+        && Number.isFinite(savedRemaining) && Math.round(savedRemaining) === 0;
+      if (restoredMembers.length) members.push(...restoredMembers);
+      else if (!exactEmpty) launchWave(waveIndex, { x, z, immediate: true, silent: true });
+      state.phase = phase;
+      state.timer = phase === "warning" ? timer : 0;
+
+      const targetRemaining = Math.max(0, Math.min(members.length,
+        Number.isFinite(savedRemaining) ? Math.round(savedRemaining) : members.length));
+      if (!restoredMembers.length && !exactEmpty) {
+        while (members.length > targetRemaining) {
+          const inst = members.pop();
+          enemies.remove?.(inst);
+        }
+      }
+      state.total = Math.max(targetRemaining,
+        Math.round(Number(saved.total) || targetRemaining));
+      state.remaining = members.filter(isLiving).length;
+      state.name = saved.name || BREACH_WAVES[waveIndex].name;
+      state.subtitle = saved.subtitle || BREACH_WAVES[waveIndex].subtitle;
+      state.boss = byId.get(saved.bossId)
+        || members.find((inst) => inst.key === "matriarch") || null;
+      if (state.boss && saved.boss) {
+        const maxHealth = Math.max(1, Number(saved.boss.maxHealth) || state.boss.maxHealth);
+        state.boss.maxHealth = maxHealth;
+        state.boss.health = Math.max(1, Math.min(maxHealth,
+          Number(saved.boss.health) || maxHealth));
+      }
+    } else if (phase === "intermission" && waveIndex >= 0) {
+      const wave = BREACH_WAVES[waveIndex];
+      state.phase = "intermission";
+      state.name = saved.name || "Breach sealed";
+      state.subtitle = saved.subtitle || "Next pressure front forming";
+      state.timer = timer;
+      state.total = Math.max(0, Math.round(Number(saved.total) || 0));
+      state.remaining = 0;
+      if (wave?.boss) state.waveIndex = Math.max(0, waveIndex - 1);
+    } else {
+      state.phase = "dormant";
+      state.waveIndex = -1;
+      state.name = "Bloom pressure";
+      state.subtitle = "Signal quiet";
+      state.timer = timer || BREACH_CONFIG.firstWarningAfter;
+    }
+
+    rng.setState?.(saved.rng);
+    state.serial = ++eventSerial;
+    bus.emit("restored", snapshot());
+    return snapshot();
   }
 
   return {
@@ -381,5 +473,6 @@ export function buildBreaches(ctx) {
     update,
     objective,
     status: snapshot,
+    restore,
   };
 }

@@ -13,25 +13,38 @@ export function buildHud(ctx, host) {
   const el = host;
   el.innerHTML = `
     <div class="sf-hud__district" id="sf-district">
-      <div class="sf-hud__eyebrow">Vesper-IX &middot; Operation The Gilded Silence</div>
+      <div class="sf-hud__eyebrow">VESPER-IX &middot; OPERATION THE GILDED SILENCE</div>
       <div class="sf-hud__name" id="sf-district-name"></div>
     </div>
     <div class="sf-hud__compass" id="sf-compass">
+      <span class="sf-hud__compass-label" aria-hidden="true">BEARING</span>
       <div class="sf-hud__strip" id="sf-compass-strip"></div>
       <div class="sf-hud__needle"></div>
     </div>
-    <div class="sf-hud__readout" id="sf-readout"></div>
+    ${ctx.qa ? '<output class="sf-hud__readout" id="sf-readout" aria-label="QA world coordinates"></output>' : ""}
     <aside class="sf-hud__minimap" id="sf-minimap" aria-label="Tactical mini-map">
-      <div class="sf-minimap__head"><span>TACTICAL</span><b id="sf-map-range">180M</b></div>
+      <div class="sf-minimap__head">
+        <span><small>VESPER TACTICAL</small><strong>NORTH-UP</strong></span>
+        <b id="sf-map-range">180M</b>
+      </div>
       <canvas id="sf-map-canvas" width="280" height="280" aria-hidden="true"></canvas>
       <div class="sf-minimap__event" id="sf-map-event" data-phase="dormant">
-        <div><span id="sf-event-name">BLOOM PRESSURE</span><b id="sf-event-count">STANDBY</b></div>
+        <div class="sf-minimap__event-head">
+          <span class="sf-minimap__event-title">
+            <small id="sf-event-kicker">BLOOM PRESSURE</small>
+            <strong id="sf-event-name">SIGNAL QUIET</strong>
+          </span>
+          <b id="sf-event-count">STANDBY</b>
+        </div>
         <small id="sf-event-sub">SIGNAL QUIET</small>
         <i><em id="sf-event-fill"></em></i>
       </div>
     </aside>
     <div class="sf-hud__objective" id="sf-objective">
-      <div class="sf-hud__objlabel" id="sf-objlabel"></div>
+      <div class="sf-hud__objhead">
+        <span>PRIMARY DIRECTIVE</span>
+        <div class="sf-hud__objlabel" id="sf-objlabel"></div>
+      </div>
       <div class="sf-hud__objbar"><i id="sf-objbar"></i></div>
     </div>
     <div class="sf-hud__banner" id="sf-banner"></div>
@@ -56,14 +69,17 @@ export function buildHud(ctx, host) {
         <span id="sf-reinf"></span>
       </div>
     </div>
-    <div class="sf-hud__strat" id="sf-strat"></div>
-    <div class="sf-hud__code" id="sf-code"></div>
+    <section class="sf-hud__command" id="sf-command-status" aria-label="Command availability">
+      <header class="sf-hud__command-head">
+        <span>RELIQUARY COMMAND</span>
+        <strong><kbd>TAB</kbd> HOLD</strong>
+      </header>
+      <div class="sf-hud__strat" id="sf-strat"></div>
+    </section>
     <div class="sf-hud__hint" id="sf-hint">
-      <b>WASD</b> move &middot; <b>Shift</b> sprint &middot; <b>Ctrl</b> crouch &middot;
-      <b>Space</b> vault &middot; <b>Shift+Space</b> jetpack &middot; <b>E</b> boost slide &middot; <b>X</b> hold shield &middot; <b>Ctrl</b> descend &middot;
-      <b>LMB</b> fire &middot; <b>RMB</b> aim &middot;
-      <b>Q</b> lance rite &middot; <b>R</b> vent heat &middot; <b>V</b>+arrows stratagem &middot;
-      <b>M</b> mute &middot; <b>K</b> show colliders &middot; <b>1&ndash;5</b> time of day &middot; <b>F</b> free camera
+      <span><kbd>TAB</kbd> <b>HOLD COMMAND WHEEL</b></span>
+      <i aria-hidden="true"></i>
+      <span><kbd>ESC</kbd> <b>FIELD MENU</b></span>
     </div>
   `;
 
@@ -75,6 +91,7 @@ export function buildHud(ctx, host) {
   const mapCanvas = el.querySelector("#sf-map-canvas");
   const mapRangeEl = el.querySelector("#sf-map-range");
   const mapEventEl = el.querySelector("#sf-map-event");
+  const eventKickerEl = el.querySelector("#sf-event-kicker");
   const eventNameEl = el.querySelector("#sf-event-name");
   const eventCountEl = el.querySelector("#sf-event-count");
   const eventSubEl = el.querySelector("#sf-event-sub");
@@ -99,7 +116,6 @@ export function buildHud(ctx, host) {
   const ammoEl = el.querySelector("#sf-ammo");
   const reinfEl = el.querySelector("#sf-reinf");
   const stratEl = el.querySelector("#sf-strat");
-  const codeEl = el.querySelector("#sf-code");
   const hurtEl = el.querySelector("#sf-hurt");
   const reticleEl = el.querySelector("#sf-reticle");
   const damageLayerEl = el.querySelector("#sf-damage-numbers");
@@ -135,18 +151,60 @@ export function buildHud(ctx, host) {
     });
   });
 
-  // One node per stratagem, built once. Rebuilding this markup every
+  /* Compact readiness sigils replace the old on-screen direction cards.
+     The wheel owns selection; this dock only answers the question a player
+     needs before opening it: what is available right now? */
+  const commandSigil = (key) => ({
+    orbital: `
+      <svg viewBox="0 0 32 32" focusable="false" aria-hidden="true">
+        <path d="M16 2v8M11 6l5 5 5-5M16 12v17"/>
+        <path d="M7 25h18M10 29h12"/>
+      </svg>`,
+    cluster: `
+      <svg viewBox="0 0 32 32" focusable="false" aria-hidden="true">
+        <path d="M16 3v9M12 8l4 4 4-4"/>
+        <circle cx="8" cy="23" r="3"/><circle cx="16" cy="26" r="3"/><circle cx="24" cy="23" r="3"/>
+      </svg>`,
+    resupply: `
+      <svg viewBox="0 0 32 32" focusable="false" aria-hidden="true">
+        <path d="M16 2v8M12 6l4 4 4-4"/>
+        <path d="M7 13h18v15H7zM16 16v9M11.5 20.5h9"/>
+      </svg>`,
+  }[key] || `
+    <svg viewBox="0 0 32 32" focusable="false" aria-hidden="true">
+      <circle cx="16" cy="16" r="11"/><path d="M16 9v14M9 16h14"/>
+    </svg>`);
+
+  // One node per command, built once. Rebuilding this markup every
   // frame is the classic way to make a HUD cost more than the scene.
   const stratNodes = [];
   if (ctx.mission) {
-    for (const [key, spec] of Object.entries(ctx.mission.stratagems)) {
+    const order = Array.isArray(ctx.mission.wheelOrder)
+      ? ctx.mission.wheelOrder : Object.keys(ctx.mission.stratagems);
+    for (const key of order.slice(0, 3)) {
+      const spec = ctx.mission.stratagems[key];
+      if (!spec) continue;
       const node = document.createElement("div");
       node.className = "sf-hud__stratitem";
-      node.innerHTML = `<b>${spec.name}</b><span>${spec.code
-        .map((d) => ({ up: "&uarr;", down: "&darr;", left: "&larr;", right: "&rarr;" }[d]))
-        .join("")}</span><i></i>`;
+      node.dataset.command = key;
+      node.style.setProperty("--sf-command-colour", spec.colour || "#d8a441");
+      node.setAttribute("aria-label", `${spec.name}, ready`);
+      node.innerHTML = `
+        <span class="sf-hud__stratglyph">${commandSigil(key)}</span>
+        <span class="sf-hud__stratcopy">
+          <b>${spec.name}</b>
+          <small>${spec.role || "Reliquary support"}</small>
+        </span>
+        <strong class="sf-hud__stratstatus">READY</strong>
+        <i class="sf-hud__stratfill" aria-hidden="true"></i>`;
       stratEl.appendChild(node);
-      stratNodes.push({ key, spec, node, fill: node.querySelector("i") });
+      stratNodes.push({
+        key,
+        spec,
+        node,
+        fill: node.querySelector(".sf-hud__stratfill"),
+        status: node.querySelector(".sf-hud__stratstatus"),
+      });
     }
   }
   let lastHurt = -99;
@@ -174,10 +232,12 @@ export function buildHud(ctx, host) {
   }
 
   /* --- compass ticks --- */
+  /* Player/camera yaw zero points toward authored +Z, which is south on
+     Vesper-IX. Authored north is -Z (pi), east is +X (pi / 2). */
   const marks = [
-    { a: 0, label: "N" }, { a: 45, label: "NE" }, { a: 90, label: "E" },
-    { a: 135, label: "SE" }, { a: 180, label: "S" }, { a: 225, label: "SW" },
-    { a: 270, label: "W" }, { a: 315, label: "NW" },
+    { a: 0, label: "S" }, { a: 45, label: "SE" }, { a: 90, label: "E" },
+    { a: 135, label: "NE" }, { a: 180, label: "N" }, { a: 225, label: "NW" },
+    { a: 270, label: "W" }, { a: 315, label: "SW" },
   ];
   const tickEls = [];
   for (const m of marks) {
@@ -202,6 +262,25 @@ export function buildHud(ctx, host) {
   const fwdVec = new ctx.THREE.Vector3();
   const map2d = mapCanvas.getContext("2d");
   let mapTick = 0;
+  let mapDrawSeq = 0;
+  const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+  const mapNumber = (value) => Number(value.toFixed(3));
+  let minimapSemantic = {
+    drawSeq: 0,
+    worldRotation: 0,
+    bodyYaw: 0,
+    cameraYaw: 0,
+    arrowYaw: 0,
+    arrowCanvasYaw: Math.PI,
+    north: {
+      axis: "-Z",
+      worldYaw: Math.PI,
+      canvasYaw: 0,
+      x: null,
+      y: null,
+    },
+    contacts: [],
+  };
 
   function drawMinimap(player) {
     const bounds = mapCanvas.getBoundingClientRect();
@@ -228,8 +307,13 @@ export function buildHud(ctx, host) {
       ? Math.max(180, Math.min(420, (event.distance || 0) * 1.18 + 26))
       : 180;
     mapRangeEl.textContent = `${Math.round(mapRange)}M`;
-    const heading = Number.isFinite(ps.camYaw)
-      ? ps.camYaw : Number.isFinite(ps.yaw) ? ps.yaw : 0;
+    const bodyYaw = wrapAngle(Number.isFinite(ps.yaw) ? ps.yaw : 0);
+    const cameraYaw = wrapAngle(Number.isFinite(ps.camYaw) ? ps.camYaw : bodyYaw);
+    /* The glyph is authored pointing toward canvas-up. In world space yaw
+       zero faces +Z (south, canvas-down), so body yaw maps to canvas rotation
+       pi - yaw. Camera orbit never participates in this transform. */
+    const arrowCanvasYaw = wrapAngle(Math.PI - bodyYaw);
+    const contacts = [];
 
     const point = (x, z, edge = false) => {
       const dx = x - ps.x;
@@ -238,10 +322,23 @@ export function buildHud(ctx, host) {
       const limit = edge ? Math.min(1, (mapRange * 0.93) / Math.max(1e-4, dist)) : 1;
       return {
         x: cx + (dx * limit / mapRange) * radius,
-        y: cy - (dz * limit / mapRange) * radius,
+        // Authored north is -Z, so negative Z belongs at canvas-up.
+        y: cy + (dz * limit / mapRange) * radius,
         inside: dist <= mapRange,
         dist,
       };
+    };
+    const recordContact = (type, id, x, z, p, details = {}) => {
+      contacts.push({
+        type,
+        id: String(id),
+        worldX: mapNumber(x),
+        worldZ: mapNumber(z),
+        canvasX: mapNumber(p.x),
+        canvasY: mapNumber(p.y),
+        inside: !!p.inside,
+        ...details,
+      });
     };
 
     map2d.save();
@@ -270,15 +367,19 @@ export function buildHud(ctx, host) {
     // threat detector. Labels stay off the tiny surface; silhouettes
     // and the compass already carry their names.
     map2d.fillStyle = "rgba(224,214,188,.36)";
-    for (const poi of ctx.world.pois || []) {
+    for (const [poiIndex, poi] of (ctx.world.pois || []).entries()) {
       const p = point(poi.x, poi.z);
       if (!p.inside) continue;
+      recordContact("poi", poi.key || poi.name || poiIndex, poi.x, poi.z, p);
       map2d.fillRect(p.x - 1, p.y - 1, 2, 2);
     }
 
-    for (const relay of ctx.mission?.relays || []) {
+    for (const [relayIndex, relay] of (ctx.mission?.relays || []).entries()) {
       const p = point(relay.x, relay.z);
       if (!p.inside) continue;
+      recordContact("relay", relay.key || relayIndex, relay.x, relay.z, p, {
+        done: !!relay.done,
+      });
       map2d.save();
       map2d.translate(p.x, p.y);
       map2d.rotate(Math.PI * 0.25);
@@ -288,11 +389,17 @@ export function buildHud(ctx, host) {
     }
 
     const pulse = 0.5 + Math.sin(ctx.atmos.elapsed * 6.4) * 0.5;
-    for (const inst of ctx.enemies.live) {
+    for (const [enemyIndex, inst] of ctx.enemies.live.entries()) {
       if (!inst || inst.state === "death") continue;
       const p = point(inst.x, inst.z);
       if (!p.inside) continue;
       const eventUnit = !!inst.eventId;
+      recordContact("enemy", inst.id || `${inst.key || "unit"}-${enemyIndex}`,
+        inst.x, inst.z, p, {
+          species: inst.key || "unknown",
+          event: eventUnit,
+          emerging: !!inst.emerging?.active,
+        });
       const size = inst.key === "matriarch" ? 5.5
         : inst.key === "harrow" ? 3.4 : inst.key === "gleaner" ? 2.5 : 1.7;
       map2d.fillStyle = inst.emerging?.active
@@ -314,6 +421,9 @@ export function buildHud(ctx, host) {
     const objective = ctx.mission?.objective?.();
     if (objective && !objective.event) {
       const p = point(objective.x, objective.z, true);
+      recordContact("objective", objective.name || "mission", objective.x, objective.z, p, {
+        edge: !p.inside,
+      });
       map2d.save();
       map2d.translate(p.x, p.y);
       map2d.rotate(Math.PI * 0.25);
@@ -325,6 +435,8 @@ export function buildHud(ctx, host) {
 
     if (activeEvent) {
       const p = point(event.x, event.z, true);
+      recordContact("breach", event.serial || event.name || "active",
+        event.x, event.z, p, { edge: !p.inside, phase: event.phase });
       map2d.beginPath();
       map2d.arc(p.x, p.y, 7 + pulse * 3, 0, Math.PI * 2);
       map2d.strokeStyle = `rgba(255,101,58,${0.55 + pulse * 0.35})`;
@@ -333,11 +445,11 @@ export function buildHud(ctx, host) {
     }
     map2d.restore();
 
-    // The map keeps a fixed world orientation. Only the player arrow turns,
-    // preserving the view-heading cue without making landmarks orbit the mouse.
+    // The map keeps a fixed, true north-up world orientation. Only the player
+    // body arrow turns; orbiting the camera cannot rotate either layer.
     map2d.save();
     map2d.translate(cx, cy);
-    map2d.rotate(heading);
+    map2d.rotate(arrowCanvasYaw);
     map2d.fillStyle = "#fff0bf";
     map2d.shadowColor = "rgba(255,188,75,.8)";
     map2d.shadowBlur = 5;
@@ -346,11 +458,29 @@ export function buildHud(ctx, host) {
     map2d.closePath(); map2d.fill();
     map2d.restore();
 
-    const north = point(ps.x, ps.z + mapRange * 0.82, true);
+    const north = point(ps.x, ps.z - mapRange * 0.82, true);
     map2d.fillStyle = "rgba(255,224,159,.68)";
     map2d.font = "600 8px Share Tech Mono, monospace";
     map2d.textAlign = "center";
     map2d.fillText("N", north.x, north.y + 3);
+
+    mapDrawSeq += 1;
+    minimapSemantic = {
+      drawSeq: mapDrawSeq,
+      worldRotation: 0,
+      bodyYaw,
+      cameraYaw,
+      arrowYaw: bodyYaw,
+      arrowCanvasYaw,
+      north: {
+        axis: "-Z",
+        worldYaw: Math.PI,
+        canvasYaw: 0,
+        x: mapNumber(north.x),
+        y: mapNumber(north.y),
+      },
+      contacts,
+    };
   }
 
   function updateBreachReadout() {
@@ -358,8 +488,11 @@ export function buildHud(ctx, host) {
     if (!event) { minimapEl.dataset.event = "0"; return; }
     mapEventEl.dataset.phase = event.phase;
     minimapEl.dataset.event = event.phase === "warning" || event.phase === "active" ? "1" : "0";
-    eventNameEl.textContent = event.complete ? "BLOOM SEVERED"
-      : event.wave > 0 ? `BREACH ${event.wave} / ${event.waveCount} · ${event.name}` : "BLOOM PRESSURE";
+    eventKickerEl.textContent = event.complete ? "BLOOM STATUS"
+      : event.wave > 0 ? `BREACH ${event.wave} / ${event.waveCount}` : "BLOOM PRESSURE";
+    eventNameEl.textContent = event.complete ? "SIGNAL SEVERED"
+      : event.wave > 0 ? event.name : "SIGNAL QUIET";
+    eventNameEl.title = eventNameEl.textContent;
     eventSubEl.textContent = event.subtitle;
     if (event.phase === "dormant") eventCountEl.textContent = `${Math.ceil(event.timer)}S`;
     else if (event.phase === "warning") eventCountEl.textContent = `IN ${event.timer.toFixed(1)}S`;
@@ -412,23 +545,49 @@ export function buildHud(ctx, host) {
       camera.getWorldDirection(fwdVec);
       const fwd = Math.atan2(fwdVec.x, fwdVec.z);
       const half = 62;
-      const layout = (angleRad, node) => {
+      const screenBearing = (angleRad) => {
         let delta = ((angleRad - fwd) * 180) / Math.PI;
         while (delta > 180) delta -= 360;
         while (delta < -180) delta += 360;
-        if (Math.abs(delta) > half) { node.style.opacity = "0"; return; }
-        node.style.left = `${50 + (delta / half) * 50}%`;
-        node.style.opacity = String(clamp01(1 - Math.abs(delta) / half * 0.85));
+        if (Math.abs(delta) > half) return null;
+        return {
+          left: 50 + (delta / half) * 50,
+          opacity: clamp01(1 - Math.abs(delta) / half * 0.85),
+        };
+      };
+      const layout = (angleRad, node) => {
+        const screen = screenBearing(angleRad);
+        if (!screen) { node.style.opacity = "0"; return; }
+        node.style.left = `${screen.left}%`;
+        node.style.opacity = String(screen.opacity);
       };
       for (const t of tickEls) layout((t.a * Math.PI) / 180, t.node);
+      /* Eleven district names inside a 29rem compass become one
+         unreadable word when several share a bearing. Keep only the
+         three nearest, screen-separated landmarks; the tactical map
+         carries the full field picture. */
+      const poiCandidates = [];
       for (const { poi, node } of poiEls) {
         const bearing = Math.atan2(poi.x - p.x, poi.z - p.z);
         const dist = Math.hypot(poi.x - p.x, poi.z - p.z);
-        layout(bearing, node);
-        node.style.fontSize = `${lerp(11, 8, clamp01(dist / 1400))}px`;
+        const screen = screenBearing(bearing);
+        node.style.opacity = "0";
+        if (screen) poiCandidates.push({ node, dist, screen });
+      }
+      poiCandidates.sort((a, b) => a.dist - b.dist);
+      const occupied = [];
+      for (const candidate of poiCandidates) {
+        if (occupied.length >= 3
+          || occupied.some((left) => Math.abs(left - candidate.screen.left) < 17)) continue;
+        occupied.push(candidate.screen.left);
+        candidate.node.style.left = `${candidate.screen.left}%`;
+        candidate.node.style.opacity = String(candidate.screen.opacity * 0.78);
+        candidate.node.style.fontSize = `${lerp(11, 9, clamp01(candidate.dist / 1400))}px`;
       }
 
-      readoutEl.textContent = `${Math.round(p.x)} , ${Math.round(p.z)}   ·   ${Math.round(p.y)}m`;
+      if (readoutEl) {
+        readoutEl.textContent = `${Math.round(p.x)} , ${Math.round(p.z)}   ·   ${Math.round(p.y)}m`;
+      }
 
       mapTick -= dt;
       if (mapTick <= 0) {
@@ -565,18 +724,16 @@ export function buildHud(ctx, host) {
       bannerEl.style.opacity = mission.state.banner ? "1" : "0";
 
       for (const s of stratNodes) {
-        const cd = mission.cooldowns[s.key];
-        s.fill.style.width = `${clamp01(1 - cd / s.spec.cooldown) * 100}%`;
-        s.node.dataset.ready = cd <= 0 ? "1" : "0";
-      }
-
-      if (mission.entry.active) {
-        codeEl.style.opacity = "1";
-        codeEl.innerHTML = mission.entry.keys
-          .map((d) => `<b>${{ up: "&uarr;", down: "&darr;", left: "&larr;", right: "&rarr;" }[d]}</b>`)
-          .join("") || "<b>&hellip;</b>";
-      } else {
-        codeEl.style.opacity = "0";
+        const cd = Math.max(0, Number(mission.cooldowns[s.key]) || 0);
+        const ready = cd <= 0;
+        const pct = s.spec.cooldown > 0
+          ? clamp01(1 - cd / s.spec.cooldown) : 1;
+        const status = ready ? "READY" : cd < 10 ? `${cd.toFixed(1)}S` : `${Math.ceil(cd)}S`;
+        s.fill.style.width = `${pct * 100}%`;
+        s.status.textContent = status;
+        s.node.dataset.ready = ready ? "1" : "0";
+        s.node.dataset.cooldown = ready ? "0" : String(Math.ceil(cd));
+        s.node.setAttribute("aria-label", `${s.spec.name}, ${ready ? "ready" : `${Math.ceil(cd)} seconds`}`);
       }
 
       /* The lance is drawn for the airborne silhouette, but firing is
@@ -584,6 +741,13 @@ export function buildHud(ctx, host) {
          shooting affordance until the boots are back down. */
       reticleEl.style.opacity = combat.player.dead || jet?.inFlight || boost?.active
         || shield?.active ? "0" : "1";
+    },
+    minimapState() {
+      return {
+        ...minimapSemantic,
+        north: { ...minimapSemantic.north },
+        contacts: minimapSemantic.contacts.map((contact) => ({ ...contact })),
+      };
     },
     redrawMinimap() { drawMinimap(ctx.player); },
     setVisible(v) { el.style.display = v ? "" : "none"; },

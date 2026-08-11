@@ -1341,6 +1341,7 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
 #sf-intro {
   --sf-intro-heat: .04;
   --sf-intro-shake: 0;
+  --sf-intro-blend: 0;
   position: absolute;
   inset: 0;
   z-index: 50;
@@ -1436,7 +1437,15 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
 
 .sf-intro__letterbox--top { top: 0; transform-origin: top; }
 .sf-intro__letterbox--bottom { bottom: 0; transform-origin: bottom; }
-#sf-intro.is-running .sf-intro__letterbox { transform: scaleY(1); }
+/* Retracted by the CAMERA BLEND, not by the end of the clock. The
+   last two seconds are already the gameplay camera easing into
+   place; bars that stay until the cinematic formally ends would
+   snap away on a frame where nothing else changes, which is the one
+   thing the whole handoff is built to avoid. */
+#sf-intro.is-running .sf-intro__letterbox {
+  transform: scaleY(calc(1 - var(--sf-intro-blend, 0)));
+  transition: transform .9s cubic-bezier(.2, .8, .2, 1);
+}
 
 .sf-intro__scan,
 .sf-intro__heat,
@@ -1473,6 +1482,13 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
 #sf-intro[data-phase="impact"] .sf-intro__flash {
   animation: sf-intro-impact-flash .46s cubic-bezier(.1, .7, .3, 1) 1;
 }
+#sf-intro[data-phase="hatch"] .sf-intro__flash,
+#sf-intro[data-phase="egress"] .sf-intro__flash {
+  background:
+    radial-gradient(circle at 50% 62%, rgba(255, 244, 214, .30), transparent 46%);
+  opacity: calc(.55 - var(--sf-intro-blend, 0) * .55);
+  animation: none;
+}
 #sf-intro[data-shot="handoff"] .sf-intro__flash {
   background: #ffdeb0;
   animation: sf-intro-handoff-flash .72s cubic-bezier(.12, .7, .2, 1) 1;
@@ -1489,7 +1505,14 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   transition: opacity .5s ease .45s, transform .5s ease .45s;
 }
 
-#sf-intro.is-running .sf-intro__telemetry { opacity: 1; transform: none; }
+#sf-intro.is-running .sf-intro__telemetry {
+  opacity: calc(1 - var(--sf-intro-blend, 0));
+  transform: none;
+}
+/* Instrumentation belongs to the descent. Once the trooper is out
+   and the camera is becoming the chase rig, the readouts are the
+   only thing left on screen that says "cutscene". */
+#sf-intro[data-phase="egress"] .sf-intro__telemetry { opacity: .34; }
 .sf-intro__eyebrow,
 .sf-intro__numbers {
   display: flex;
@@ -1547,7 +1570,10 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   transform: translateY(.8rem);
   transition: opacity .56s ease .55s, transform .56s ease .55s;
 }
-#sf-intro.is-running .sf-intro__chapter { opacity: 1; transform: none; }
+#sf-intro.is-running .sf-intro__chapter {
+  opacity: calc(1 - var(--sf-intro-blend, 0));
+  transform: none;
+}
 .sf-intro__chapter small {
   color: #e5ad52;
   font-size: clamp(.5rem, .82vw, .7rem);
@@ -1812,4 +1838,1254 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   .sf-intro__flash { display: none; }
   .sf-intro__heat { opacity: calc(var(--sf-intro-heat) * .16); }
   .sf-boot__ring { animation: none; }
+}
+
+/* ======================================================================
+   PREMIUM HUD + TOUCH OVERHAUL · RELIQUARY COMMAND LITURGY
+
+   This final cascade layer deliberately leaves the original production
+   rules intact. Saintfall's interface now reads as engraved field hardware:
+   smoked black iron, bone telemetry, brass hierarchy and restrained oxblood
+   alarms. All positioning below is edge-safe at the four release viewports.
+   ====================================================================== */
+
+.sf-stage {
+  --sf-ui-iron: #070506;
+  --sf-ui-iron-2: #110c0e;
+  --sf-ui-bone: #f2e5c7;
+  --sf-ui-bone-dim: rgba(242, 229, 199, .67);
+  --sf-ui-brass: #d8a441;
+  --sf-ui-gold: #f5d88e;
+  --sf-ui-oxblood: #8a2230;
+  --sf-ui-threat: #ef633e;
+  --sf-ui-verdigris: #76cda7;
+  --sf-ui-orbital: #78d4f6;
+  --sf-ui-edge-x: max(1.4rem, calc(env(safe-area-inset-left) + 1rem));
+  --sf-ui-edge-y: max(1.25rem, calc(env(safe-area-inset-top) + .8rem));
+}
+
+#sf-hud {
+  color: var(--sf-ui-bone);
+  font-variant-numeric: tabular-nums lining-nums;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Shared instrument construction. The stepped highlights and corner cuts
+   create one family without surrounding every value with a heavy box. */
+.sf-hud__minimap,
+.sf-hud__vitals,
+.sf-hud__command {
+  box-sizing: border-box;
+  border: 1px solid rgba(216, 164, 65, .34);
+  border-radius: 2px;
+  background:
+    linear-gradient(135deg, rgba(245, 216, 142, .08), transparent 24%),
+    linear-gradient(180deg, rgba(17, 12, 14, .9), rgba(7, 5, 6, .78));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 240, 211, .035),
+    inset 3px 0 0 rgba(138, 34, 48, .36),
+    0 .8rem 2.4rem rgba(0, 0, 0, .38);
+  backdrop-filter: blur(7px) saturate(.72);
+  -webkit-backdrop-filter: blur(7px) saturate(.72);
+}
+
+/* ------------------------------ top rail ----------------------------- */
+
+.sf-hud__compass {
+  left: 50%;
+  top: var(--sf-ui-edge-y);
+  width: min(29rem, 34vw);
+  height: 3.1rem;
+  transform: translateX(-50%);
+  overflow: hidden;
+  border-top: 1px solid rgba(216, 164, 65, .19);
+  mask-image: linear-gradient(90deg, transparent, #000 11%, #000 89%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 11%, #000 89%, transparent);
+}
+
+.sf-hud__compass-label {
+  position: absolute;
+  left: 50%;
+  top: -.05rem;
+  z-index: 2;
+  transform: translateX(-50%);
+  padding: 0 .55rem;
+  background: rgba(7, 5, 6, .72);
+  color: rgba(245, 216, 142, .52);
+  font-size: 11px;
+  letter-spacing: .22em;
+  line-height: 1.2;
+}
+
+.sf-hud__strip {
+  inset: 1.05rem 0 0;
+  height: 2rem;
+}
+
+.sf-hud__tick,
+.sf-hud__poi {
+  top: .05rem;
+  min-width: 2.2rem;
+  color: var(--sf-ui-gold);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-align: center;
+}
+
+.sf-hud__poi {
+  top: 1.1rem;
+  color: rgba(242, 229, 199, .71);
+  font-size: 11px !important;
+  font-weight: 500;
+  letter-spacing: .08em;
+}
+
+.sf-hud__needle {
+  top: .82rem;
+  width: 2px;
+  height: 1.65rem;
+  background: linear-gradient(180deg, #fff0b4 0 28%, var(--sf-ui-brass) 29% 62%, transparent 100%);
+  box-shadow: 0 0 .5rem rgba(245, 216, 142, .38);
+}
+
+.sf-hud__objective {
+  left: max(4.75rem, calc(env(safe-area-inset-left) + 1.25rem));
+  top: var(--sf-ui-edge-y);
+  width: min(20.5rem, 25vw);
+  transform: none;
+  text-align: left;
+}
+
+.sf-hud__objhead {
+  display: grid;
+  gap: .28rem;
+  padding-left: .65rem;
+  border-left: 2px solid var(--sf-ui-brass);
+}
+
+.sf-hud__objhead > span {
+  color: rgba(216, 164, 65, .7);
+  font-size: 11px;
+  letter-spacing: .2em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.sf-hud__objlabel {
+  overflow: hidden;
+  color: var(--sf-ui-bone);
+  font: 650 13px/1.32 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .055em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-hud__objbar {
+  width: 100%;
+  height: 3px;
+  margin: .48rem 0 0;
+  background: rgba(242, 229, 199, .13);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .76);
+}
+
+.sf-hud__objbar i {
+  background: linear-gradient(90deg, var(--sf-ui-oxblood), var(--sf-ui-brass));
+  box-shadow: 0 0 .55rem rgba(216, 164, 65, .36);
+}
+
+.sf-hud__objective[data-event="1"] .sf-hud__objhead {
+  border-left-color: var(--sf-ui-threat);
+}
+
+.sf-hud__objective[data-event="1"] .sf-hud__objbar i {
+  background: linear-gradient(90deg, #8e1d27, var(--sf-ui-threat));
+}
+
+/* District cards are intentionally not persistent HUD chrome. They occupy
+   the upper quiet field only during their brief authored reveal. */
+.sf-hud__district {
+  top: 12.5%;
+  max-width: min(42rem, 58vw);
+  filter: drop-shadow(0 .7rem 1.5rem rgba(0, 0, 0, .72));
+}
+
+.sf-hud__eyebrow {
+  margin-bottom: .48rem;
+  color: rgba(245, 216, 142, .69);
+  font-size: 11px;
+  letter-spacing: .28em;
+}
+
+/* ---------------------------- tactical map --------------------------- */
+
+.sf-hud__minimap {
+  top: 3.75rem;
+  right: max(1.4rem, calc(env(safe-area-inset-right) + 1rem));
+  width: 11.5rem;
+  padding: .58rem .58rem .64rem;
+}
+
+.sf-hud__minimap::before,
+.sf-hud__minimap::after {
+  width: 1.2rem;
+  height: 1.2rem;
+  border-color: rgba(245, 216, 142, .72);
+}
+
+.sf-minimap__head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: .45rem;
+  min-height: 1.8rem;
+  margin-bottom: .38rem;
+  color: var(--sf-ui-bone-dim);
+  font-size: 11px;
+  letter-spacing: .08em;
+  line-height: 1.05;
+}
+
+.sf-minimap__head > span {
+  display: grid;
+  min-width: 0;
+  gap: .18rem;
+}
+
+.sf-minimap__head small {
+  overflow: hidden;
+  color: rgba(242, 229, 199, .54);
+  font-size: 10px;
+  letter-spacing: .11em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-minimap__head strong {
+  color: var(--sf-ui-gold);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .12em;
+}
+
+.sf-minimap__head b {
+  flex: none;
+  color: var(--sf-ui-gold);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .06em;
+}
+
+#sf-map-canvas {
+  width: 100%;
+  border: 1px solid rgba(216, 164, 65, .12);
+  background: radial-gradient(circle, rgba(46, 29, 22, .14), rgba(4, 4, 5, .3));
+  box-shadow: inset 0 0 1rem rgba(0, 0, 0, .3);
+  filter: drop-shadow(0 0 .55rem rgba(216, 164, 65, .15));
+}
+
+.sf-minimap__event {
+  margin-top: .5rem;
+  padding-top: .46rem;
+  border-top-color: rgba(245, 216, 142, .2);
+}
+
+.sf-minimap__event > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: .5rem;
+  color: var(--sf-ui-bone);
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.sf-minimap__event > div span.sf-minimap__event-title {
+  display: grid;
+  min-width: 0;
+  gap: .14rem;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.sf-minimap__event-title small {
+  color: rgba(242, 229, 199, .5);
+  font-size: 10px;
+  letter-spacing: .08em;
+  line-height: 1.1;
+  white-space: normal;
+}
+
+.sf-minimap__event-title strong {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--sf-ui-bone);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .045em;
+  line-height: 1.2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.sf-minimap__event > div b {
+  color: var(--sf-ui-brass);
+  font-size: 11px;
+  letter-spacing: .035em;
+}
+
+.sf-minimap__event > small {
+  display: block;
+  overflow: hidden;
+  margin-top: .25rem;
+  color: rgba(242, 229, 199, .51);
+  font-size: 10px;
+  letter-spacing: .055em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-minimap__event > i {
+  height: 3px;
+  margin-top: .38rem;
+  background: rgba(242, 229, 199, .13);
+}
+
+.sf-minimap__event > i em {
+  background: linear-gradient(90deg, var(--sf-ui-oxblood), var(--sf-ui-brass));
+}
+
+.sf-hud__minimap[data-event="1"] {
+  border-color: rgba(239, 99, 62, .64);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 118, 66, .06),
+    inset 3px 0 0 rgba(138, 34, 48, .62),
+    0 0 1.7rem rgba(151, 41, 22, .24);
+}
+
+/* -------------------------- survival cluster ------------------------- */
+
+.sf-hud__vitals {
+  left: max(4.75rem, calc(env(safe-area-inset-left) + 1.25rem));
+  bottom: max(1.45rem, calc(env(safe-area-inset-bottom) + 1rem));
+  width: min(19rem, 27vw);
+  padding: .72rem .78rem .74rem .9rem;
+}
+
+.sf-hud__vitals::before {
+  content: "VESPER RELIQUARY / LIFE SUPPORT";
+  display: block;
+  margin: -.1rem 0 .58rem;
+  color: rgba(216, 164, 65, .66);
+  font-size: 10px;
+  letter-spacing: .13em;
+  line-height: 1.2;
+}
+
+.sf-hud__hplabel,
+.sf-hud__jetlabel {
+  margin-bottom: .3rem;
+  color: rgba(242, 229, 199, .72);
+  font: 600 11px/1.2 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .08em;
+}
+
+.sf-hud__hplabel b,
+.sf-hud__jetlabel b {
+  color: var(--sf-ui-bone);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sf-hud__hpwrap {
+  height: 8px;
+  border-color: rgba(242, 229, 199, .34);
+  background: rgba(0, 0, 0, .55);
+}
+
+.sf-hud__hp {
+  background: linear-gradient(90deg, #417d61, var(--sf-ui-verdigris));
+  box-shadow: 0 0 .55rem rgba(118, 205, 167, .23);
+}
+
+.sf-hud__hp[data-state="warn"] {
+  background: linear-gradient(90deg, #8d5e21, #e0ad4a);
+}
+
+.sf-hud__hp[data-state="crit"] {
+  background: linear-gradient(90deg, #6f1722, var(--sf-ui-threat));
+}
+
+.sf-hud__jet {
+  margin-top: .64rem;
+}
+
+.sf-hud__jettrack {
+  height: 6px;
+}
+
+.sf-hud__boost,
+.sf-hud__shield {
+  margin-top: .42rem;
+  color: rgba(242, 229, 199, .67);
+  font: 600 11px/1.2 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .045em;
+}
+
+.sf-hud__boost span b,
+.sf-hud__shield span b {
+  display: inline-grid;
+  min-width: 1.25rem;
+  min-height: 1.25rem;
+  margin-right: .2rem;
+  place-items: center;
+  border: 1px solid rgba(216, 164, 65, .38);
+  color: var(--sf-ui-gold);
+  font-size: 11px;
+}
+
+.sf-hud__boost strong,
+.sf-hud__shield strong {
+  color: rgba(242, 229, 199, .78);
+  font-size: 11px;
+}
+
+.sf-hud__boost[data-state="ready"] strong,
+.sf-hud__shield[data-state="ready"] strong {
+  color: var(--sf-ui-verdigris);
+}
+
+.sf-hud__vitalrow {
+  align-items: center;
+  gap: .55rem;
+  margin-top: .58rem;
+  color: rgba(242, 229, 199, .82);
+  font: 600 11px/1.2 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .035em;
+}
+
+.sf-hud__vitalrow b { color: var(--sf-ui-bone); }
+.sf-heat { gap: .38rem; }
+.sf-heat__track { width: 5.1rem; height: .38rem; }
+.sf-heat u { min-width: 3.25rem; }
+
+/* --------------------------- command dock ---------------------------- */
+
+.sf-hud__command {
+  position: absolute;
+  right: max(1.4rem, calc(env(safe-area-inset-right) + 1rem));
+  bottom: max(1.45rem, calc(env(safe-area-inset-bottom) + 1rem));
+  width: min(19rem, 28vw);
+  padding: .62rem;
+  pointer-events: none;
+}
+
+.sf-hud__command-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .7rem;
+  margin: -.04rem .08rem .52rem;
+  padding-bottom: .48rem;
+  border-bottom: 1px solid rgba(216, 164, 65, .2);
+}
+
+.sf-hud__command-head span {
+  color: rgba(216, 164, 65, .71);
+  font-size: 10px;
+  letter-spacing: .14em;
+}
+
+.sf-hud__command-head strong {
+  color: rgba(242, 229, 199, .72);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .06em;
+}
+
+.sf-hud__command-head kbd,
+.sf-hud__hint kbd {
+  display: inline-grid;
+  min-width: 1.8rem;
+  min-height: 1.45rem;
+  padding: 0 .28rem;
+  place-items: center;
+  border: 1px solid rgba(245, 216, 142, .42);
+  border-bottom-color: rgba(245, 216, 142, .7);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, .36);
+  color: var(--sf-ui-gold);
+  font: inherit;
+  box-shadow: inset 0 -2px 0 rgba(216, 164, 65, .1);
+}
+
+.sf-hud__strat {
+  position: static;
+  display: grid;
+  gap: .36rem;
+}
+
+.sf-hud__stratitem {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .55rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem;
+  box-sizing: border-box;
+  padding: .4rem .52rem;
+  overflow: hidden;
+  border: 1px solid rgba(242, 229, 199, .1);
+  border-left: 2px solid rgba(216, 164, 65, .3);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--sf-command-colour) 8%, transparent), transparent 55%),
+    rgba(0, 0, 0, .24);
+  color: rgba(242, 229, 199, .58);
+  font: 600 11px/1.15 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .025em;
+}
+
+.sf-hud__stratglyph {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid rgba(216, 164, 65, .24);
+  color: rgba(242, 229, 199, .47);
+}
+
+.sf-hud__stratglyph svg {
+  width: 1.45rem;
+  height: 1.45rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 1.35;
+}
+
+.sf-hud__stratcopy {
+  display: grid;
+  min-width: 0;
+  gap: .14rem;
+  letter-spacing: normal !important;
+}
+
+.sf-hud__stratcopy b {
+  overflow: hidden;
+  color: rgba(242, 229, 199, .78);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-hud__stratcopy small {
+  overflow: hidden;
+  color: rgba(242, 229, 199, .42);
+  font-size: 10px;
+  letter-spacing: .025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-hud__stratstatus {
+  color: rgba(242, 229, 199, .5);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .035em;
+}
+
+.sf-hud__stratfill {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--sf-command-colour, var(--sf-ui-brass));
+  box-shadow: 0 0 .45rem currentColor;
+}
+
+.sf-hud__stratitem[data-ready="1"] {
+  border-left-color: var(--sf-command-colour, var(--sf-ui-brass));
+  color: var(--sf-ui-bone);
+}
+
+.sf-hud__stratitem[data-ready="1"] .sf-hud__stratglyph {
+  border-color: color-mix(in srgb, var(--sf-command-colour) 45%, transparent);
+  color: var(--sf-command-colour, var(--sf-ui-gold));
+  box-shadow: inset 0 0 .7rem color-mix(in srgb, var(--sf-command-colour) 10%, transparent);
+}
+
+.sf-hud__stratitem[data-ready="1"] .sf-hud__stratstatus {
+  color: var(--sf-ui-verdigris);
+}
+
+/* ------------------------- centre messaging -------------------------- */
+
+.sf-hud__hint {
+  bottom: max(1.1rem, calc(env(safe-area-inset-bottom) + .75rem));
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  min-height: 2.05rem;
+  box-sizing: border-box;
+  padding: .25rem .62rem;
+  border-top: 1px solid rgba(216, 164, 65, .22);
+  border-bottom: 1px solid rgba(216, 164, 65, .13);
+  background: linear-gradient(90deg, transparent, rgba(7, 5, 6, .7) 12%, rgba(7, 5, 6, .7) 88%, transparent);
+  color: rgba(242, 229, 199, .68);
+  font-size: 11px;
+  letter-spacing: .035em;
+}
+
+.sf-hud__hint span { display: flex; align-items: center; gap: .38rem; }
+.sf-hud__hint b { color: rgba(242, 229, 199, .82); font-weight: 500; }
+.sf-hud__hint i { width: 1px; height: 1rem; background: rgba(216, 164, 65, .27); }
+
+.sf-hud__banner {
+  max-width: min(48rem, 82vw);
+  white-space: normal;
+  color: #fff0d5;
+  font-size: clamp(1.25rem, 2.2vw, 1.85rem);
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.sf-hud__breach-alert {
+  top: 24%;
+  min-width: min(33rem, 78vw);
+  box-sizing: border-box;
+}
+
+.sf-hud__breach-alert small { font-size: 11px; }
+.sf-hud__breach-alert strong { font-size: clamp(1.05rem, 1.8vw, 1.48rem); }
+
+/* Keep QA telemetry obvious when explicitly enabled, while production never
+   creates this node. */
+.sf-hud__readout {
+  left: var(--sf-ui-edge-x);
+  bottom: max(.45rem, env(safe-area-inset-bottom));
+  padding: .2rem .35rem;
+  background: rgba(7, 5, 6, .72);
+  font-size: 11px;
+}
+
+/* -------------------------- touch command rig ------------------------ */
+
+.sf-stage.sf-touch-enabled .sf-hud__command,
+.sf-stage.sf-touch-enabled .sf-hud__hint,
+.sf-stage.sf-touch-enabled .sf-hud__readout {
+  display: none;
+}
+
+.sf-stage.sf-touch-enabled .sf-fs-btn {
+  top: max(.5rem, env(safe-area-inset-top));
+  right: max(.5rem, env(safe-area-inset-right));
+  width: 44px;
+  height: 44px;
+  border-radius: 2px;
+  background: rgba(7, 5, 6, .82);
+  color: var(--sf-ui-gold);
+}
+
+.sf-stage.sf-touch-enabled .sf-hud__compass {
+  top: max(.65rem, calc(env(safe-area-inset-top) + .35rem));
+  width: min(15rem, 58vw);
+  height: 2.9rem;
+}
+
+.sf-stage.sf-touch-enabled .sf-hud__compass-label,
+.sf-stage.sf-touch-enabled .sf-hud__poi { font-size: 11px !important; }
+.sf-stage.sf-touch-enabled .sf-hud__poi {
+  /* District names need desktop-width separation. On touch layouts the
+     north-up tactical map already carries those landmarks, so keeping the
+     compass cardinal-only preserves a clean sight line. */
+  display: none;
+}
+.sf-stage.sf-touch-enabled .sf-hud__tick { font-size: 12px; }
+
+.sf-stage.sf-touch-enabled .sf-hud__objective {
+  left: max(.75rem, env(safe-area-inset-left));
+  top: max(3.85rem, calc(env(safe-area-inset-top) + 3.3rem));
+  width: min(14.5rem, 59vw);
+}
+
+.sf-stage.sf-touch-enabled .sf-hud__objhead > span { font-size: 11px; }
+.sf-stage.sf-touch-enabled .sf-hud__objlabel {
+  font-size: 12px;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.sf-stage.sf-touch-enabled .sf-hud__minimap {
+  top: max(7rem, calc(env(safe-area-inset-top) + 6.4rem));
+  right: max(.65rem, env(safe-area-inset-right));
+  width: 7.35rem;
+  padding: .42rem;
+}
+
+.sf-stage.sf-touch-enabled .sf-minimap__head {
+  min-height: 1.3rem;
+  margin-bottom: .28rem;
+  font-size: 11px;
+}
+
+.sf-stage.sf-touch-enabled .sf-minimap__head small { display: none; }
+.sf-stage.sf-touch-enabled .sf-minimap__head strong,
+.sf-stage.sf-touch-enabled .sf-minimap__head b,
+.sf-stage.sf-touch-enabled .sf-minimap__event > div,
+.sf-stage.sf-touch-enabled .sf-minimap__event-title small,
+.sf-stage.sf-touch-enabled .sf-minimap__event-title strong,
+.sf-stage.sf-touch-enabled .sf-minimap__event > div b,
+.sf-stage.sf-touch-enabled .sf-minimap__event > small {
+  font-size: 11px;
+}
+
+.sf-stage.sf-touch-enabled .sf-minimap__event {
+  margin-top: .35rem;
+  padding-top: .35rem;
+}
+
+.sf-stage.sf-touch-enabled .sf-minimap__event > div {
+  display: block;
+}
+
+.sf-stage.sf-touch-enabled .sf-minimap__event > div b {
+  display: block;
+  margin-top: .22rem;
+}
+
+.sf-stage.sf-touch-enabled .sf-minimap__event > small { display: none; }
+
+.sf-stage.sf-touch-enabled .sf-hud__vitals {
+  left: max(.65rem, env(safe-area-inset-left));
+  top: max(7rem, calc(env(safe-area-inset-top) + 6.4rem));
+  bottom: auto;
+  width: min(14.35rem, 59vw);
+  padding: .55rem .62rem .58rem .72rem;
+}
+
+.sf-stage.sf-touch-enabled .sf-hud__vitals::before {
+  margin-bottom: .4rem;
+  font-size: 11px;
+  letter-spacing: .07em;
+}
+
+.sf-stage.sf-touch-enabled .sf-hud__hplabel,
+.sf-stage.sf-touch-enabled .sf-hud__jetlabel,
+.sf-stage.sf-touch-enabled .sf-hud__boost,
+.sf-stage.sf-touch-enabled .sf-hud__shield,
+.sf-stage.sf-touch-enabled .sf-hud__vitalrow {
+  font-size: 11px;
+}
+
+.sf-stage.sf-touch-enabled .sf-hud__hplabel b,
+.sf-stage.sf-touch-enabled .sf-hud__jetlabel b,
+.sf-stage.sf-touch-enabled .sf-hud__boost strong,
+.sf-stage.sf-touch-enabled .sf-hud__shield strong {
+  font-size: 11px;
+}
+
+.sf-stage.sf-touch-enabled .sf-hud__hpwrap { height: 7px; }
+.sf-stage.sf-touch-enabled .sf-hud__jet { margin-top: .48rem; }
+.sf-stage.sf-touch-enabled .sf-hud__jettrack { height: 5px; }
+.sf-stage.sf-touch-enabled :is(.sf-hud__boost, .sf-hud__shield) { margin-top: .32rem; }
+.sf-stage.sf-touch-enabled .sf-hud__vitalrow { margin-top: .42rem; }
+.sf-stage.sf-touch-enabled .sf-heat__track { width: 3.7rem; height: .34rem; }
+.sf-stage.sf-touch-enabled .sf-heat u { min-width: 3rem; }
+
+.sf-touch__look span {
+  color: rgba(245, 216, 142, .38);
+  font-size: 11px;
+}
+
+.sf-stage.sf-touch-enabled .sf-touch__stick {
+  left: max(.65rem, env(safe-area-inset-left));
+  bottom: max(.6rem, env(safe-area-inset-bottom));
+  width: clamp(7.5rem, 32vw, 8.35rem);
+}
+
+.sf-touch__stick::before {
+  border-color: rgba(216, 164, 65, .48);
+  background:
+    radial-gradient(circle, rgba(245, 216, 142, .11) 0 16%, transparent 17%),
+    conic-gradient(from 45deg,
+      rgba(216, 164, 65, .2), transparent 16%,
+      rgba(216, 164, 65, .2) 17%, transparent 33%,
+      rgba(216, 164, 65, .2) 34%, transparent 50%,
+      rgba(216, 164, 65, .2) 51%, transparent 67%,
+      rgba(216, 164, 65, .2) 68%, transparent 84%,
+      rgba(216, 164, 65, .2) 85%),
+    rgba(7, 5, 6, .24);
+}
+
+.sf-touch__stick > span,
+.sf-touch__stick > span small {
+  color: rgba(245, 216, 142, .78);
+  font-size: 11px;
+  letter-spacing: .06em;
+}
+
+.sf-touch__stick > span small { color: rgba(242, 229, 199, .56); }
+
+.sf-stage.sf-touch-enabled .sf-touch__stack {
+  right: max(.65rem, env(safe-area-inset-right));
+  bottom: max(.6rem, env(safe-area-inset-bottom));
+  width: clamp(10.75rem, 45vw, 11.6rem);
+  gap: .38rem;
+}
+
+.sf-touch__utility,
+.sf-touch__mobility,
+.sf-touch__actions { gap: .34rem; }
+
+.sf-touch__button,
+.sf-touch__actions .sf-touch__button {
+  min-width: 44px;
+  min-height: 48px;
+  padding: .22rem .14rem;
+  border-radius: 2px;
+  border-color: rgba(216, 164, 65, .51);
+  background:
+    linear-gradient(150deg, rgba(216, 164, 65, .12), transparent 42%),
+    rgba(7, 5, 6, .76);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 235, 190, .04),
+    inset 2px 0 0 rgba(138, 34, 48, .35),
+    0 .35rem .8rem rgba(0, 0, 0, .34);
+}
+
+.sf-touch__button b { color: var(--sf-ui-gold); font-size: 1.05rem; }
+
+.sf-touch__button span {
+  color: var(--sf-ui-bone);
+  font-size: 11px;
+  letter-spacing: .015em;
+}
+
+.sf-touch__button small { display: none; }
+
+.sf-touch__button--command {
+  border-color: rgba(120, 212, 246, .64);
+  background:
+    radial-gradient(circle at 50% 25%, rgba(120, 212, 246, .16), transparent 54%),
+    rgba(7, 20, 25, .78);
+}
+
+.sf-touch__button--command b { color: var(--sf-ui-orbital); }
+
+.sf-touch__button--fire {
+  border-color: rgba(239, 99, 62, .76);
+  background:
+    radial-gradient(circle at 50% 32%, rgba(239, 99, 62, .22), transparent 52%),
+    rgba(74, 17, 24, .86);
+}
+
+.sf-touch__button.is-held,
+.sf-touch__button.is-tapped {
+  border-color: var(--sf-ui-gold);
+  background-color: rgba(112, 60, 25, .76);
+}
+
+.sf-touch__button:focus-visible {
+  outline-color: var(--sf-ui-gold);
+  outline-width: 3px;
+}
+
+/* Portrait phones keep instruments in two readable columns above the lower
+   thumb zone. This also covers the 390 x 844 release proof viewport. */
+@media (orientation: portrait) and (max-width: 540px) {
+  .sf-stage.sf-touch-enabled .sf-hud__compass { width: 58vw; }
+
+  .sf-stage.sf-touch-enabled .sf-hud__objective {
+    top: max(4rem, calc(env(safe-area-inset-top) + 3.45rem));
+    width: min(14.35rem, 59vw);
+  }
+
+  .sf-stage.sf-touch-enabled .sf-hud__minimap,
+  .sf-stage.sf-touch-enabled .sf-hud__vitals {
+    top: max(8.2rem, calc(env(safe-area-inset-top) + 7.55rem));
+  }
+
+  .sf-stage.sf-touch-enabled .sf-hud__breach-alert {
+    top: 36%;
+    min-width: calc(100% - 1.5rem);
+  }
+
+  .sf-stage.sf-touch-enabled .sf-hud__district {
+    /* The persistent portrait instruments already identify the current
+       directive. Suppress the cinematic district reveal here so its fading
+       title never crosses the reticle or the deployment title card. */
+    display: none;
+  }
+}
+
+/* Short landscape phones: reserve the outer 56px for shell controls, then
+   fit objective, compass and a 104px map on one rail. The action stack and
+   map share the right column without intersecting. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .sf-stage.sf-touch-enabled .sf-hud__compass {
+    top: max(.45rem, env(safe-area-inset-top));
+    width: min(15.25rem, 29vw);
+  }
+
+  .sf-stage.sf-touch-enabled .sf-hud__objective {
+    left: max(4rem, calc(env(safe-area-inset-left) + 3.5rem));
+    top: max(.55rem, env(safe-area-inset-top));
+    width: min(12rem, 23vw);
+  }
+
+  .sf-stage.sf-touch-enabled .sf-hud__objhead { gap: .18rem; }
+  .sf-stage.sf-touch-enabled .sf-hud__objbar { margin-top: .3rem; }
+
+  .sf-stage.sf-touch-enabled .sf-hud__minimap {
+    top: max(3.7rem, calc(env(safe-area-inset-top) + 3.2rem));
+    right: max(12.25rem, calc(env(safe-area-inset-right) + 11.75rem));
+    width: 6.5rem;
+    padding: .34rem;
+  }
+
+  .sf-stage.sf-touch-enabled .sf-minimap__head {
+    min-height: 1rem;
+    margin-bottom: .2rem;
+  }
+
+  .sf-stage.sf-touch-enabled .sf-minimap__event {
+    margin-top: .22rem;
+    padding-top: .25rem;
+  }
+
+  .sf-stage.sf-touch-enabled .sf-minimap__event-title small,
+  .sf-stage.sf-touch-enabled .sf-minimap__event > small { display: none; }
+
+  .sf-stage.sf-touch-enabled .sf-minimap__event-title strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sf-stage.sf-touch-enabled .sf-hud__vitals {
+    left: max(4rem, calc(env(safe-area-inset-left) + 3.5rem));
+    top: max(5.1rem, calc(env(safe-area-inset-top) + 4.55rem));
+    width: min(14.35rem, 28vw);
+  }
+
+  .sf-stage.sf-touch-enabled .sf-hud__vitals::before { display: none; }
+
+  .sf-stage.sf-touch-enabled .sf-touch__stick {
+    left: max(.5rem, env(safe-area-inset-left));
+    bottom: max(.45rem, env(safe-area-inset-bottom));
+    width: 7.2rem;
+  }
+
+  .sf-stage.sf-touch-enabled .sf-touch__stack {
+    right: max(.5rem, env(safe-area-inset-right));
+    bottom: max(.45rem, env(safe-area-inset-bottom));
+    width: 11.5rem;
+    gap: .32rem;
+  }
+
+  .sf-touch__utility,
+  .sf-touch__mobility,
+  .sf-touch__actions { gap: .3rem; }
+
+  .sf-touch__button,
+  .sf-touch__actions .sf-touch__button { min-height: 48px; }
+
+  .sf-touch__look span { display: none; }
+  .sf-stage.sf-touch-enabled .sf-hud__breach-alert { top: 28%; }
+}
+
+/* 360px-wide devices retain 44px hit targets and readable labels by reducing
+   chrome width rather than type size. */
+@media (orientation: portrait) and (max-width: 360px) {
+  .sf-stage.sf-touch-enabled .sf-hud__objective,
+  .sf-stage.sf-touch-enabled .sf-hud__vitals { width: 58vw; }
+  .sf-stage.sf-touch-enabled .sf-hud__minimap { width: 6.75rem; }
+  .sf-stage.sf-touch-enabled .sf-touch__stack { width: 10.35rem; }
+  .sf-stage.sf-touch-enabled .sf-touch__stick { width: 7.15rem; }
+}
+
+/* ------------------------- accessibility hooks ----------------------- */
+
+body.sf-hud-large #sf-hud,
+body.sf-hud-scale-large #sf-hud,
+body[data-sf-hud-scale="large"] #sf-hud {
+  font-size: 18px;
+}
+
+body.sf-hud-large .sf-hud__vitals,
+body.sf-hud-scale-large .sf-hud__vitals,
+body[data-sf-hud-scale="large"] .sf-hud__vitals,
+body.sf-hud-large .sf-hud__command,
+body.sf-hud-scale-large .sf-hud__command,
+body[data-sf-hud-scale="large"] .sf-hud__command {
+  transform: scale(1.08);
+}
+
+body.sf-hud-large .sf-hud__vitals,
+body.sf-hud-scale-large .sf-hud__vitals,
+body[data-sf-hud-scale="large"] .sf-hud__vitals { transform-origin: left bottom; }
+
+body.sf-hud-large .sf-hud__command,
+body.sf-hud-scale-large .sf-hud__command,
+body[data-sf-hud-scale="large"] .sf-hud__command { transform-origin: right bottom; }
+
+body.sf-hud-large .sf-stage.sf-touch-enabled .sf-hud__vitals,
+body.sf-hud-scale-large .sf-stage.sf-touch-enabled .sf-hud__vitals,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__vitals {
+  transform: none;
+}
+
+body.sf-high-contrast .sf-stage,
+body.sf-ui-high-contrast .sf-stage,
+body[data-sf-contrast="high"] .sf-stage {
+  --sf-ui-bone: #fff8e8;
+  --sf-ui-bone-dim: rgba(255, 248, 232, .86);
+  --sf-ui-gold: #ffe39a;
+  --sf-ui-brass: #edb84e;
+  --sf-ui-threat: #ff724b;
+  --sf-ui-verdigris: #8cebc2;
+}
+
+body.sf-high-contrast :is(.sf-hud__minimap, .sf-hud__vitals, .sf-hud__command),
+body.sf-ui-high-contrast :is(.sf-hud__minimap, .sf-hud__vitals, .sf-hud__command),
+body[data-sf-contrast="high"] :is(.sf-hud__minimap, .sf-hud__vitals, .sf-hud__command) {
+  border-color: rgba(255, 227, 154, .72);
+  background: rgba(3, 3, 3, .94);
+  backdrop-filter: none;
+}
+
+body.sf-reduced-motion #sf-hud *,
+body.sf-ui-reduced-motion #sf-hud *,
+body[data-sf-motion="reduced"] #sf-hud *,
+body.sf-reduced-motion #sf-touch *,
+body.sf-ui-reduced-motion #sf-touch *,
+body[data-sf-motion="reduced"] #sf-touch * {
+  animation: none !important;
+  scroll-behavior: auto !important;
+  transition-duration: .01ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #sf-hud *,
+  #sf-touch * {
+    animation: none !important;
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* ======================================================================
+   FINAL RESPONSIVE COLLISION CORRECTIONS
+
+   These selectors are intentionally more specific than saintfall-ui.css,
+   which is loaded after this sheet. They reserve the shell-control rail on
+   short landscape screens, give portrait instruments a measured gutter,
+   and keep the command wheel's visual ink within the stage.
+   ====================================================================== */
+
+@media (orientation: landscape) and (max-height: 500px) {
+  #sf-native-ui .sf-menu-trigger {
+    top: max(.5rem, env(safe-area-inset-top));
+    left: max(.5rem, env(safe-area-inset-left));
+    width: 3rem;
+    min-width: 3rem;
+    height: 3rem;
+    min-height: 3rem;
+    padding: .55rem;
+    justify-content: center;
+  }
+
+  #sf-native-ui .sf-menu-trigger span,
+  #sf-native-ui .sf-menu-trigger kbd {
+    display: none;
+  }
+}
+
+@media (orientation: portrait) and (max-width: 540px) {
+  /* 390px release geometry: vitals 224.25px wide at x=10.4; map 112px
+     wide at x=267.6. That leaves a 32.95px panel gutter (about 30px even
+     after the minimap's etched corner projects beyond its border). */
+  .sf-stage.sf-touch-enabled .sf-hud__vitals {
+    width: min(14.05rem, 57.5vw);
+  }
+
+  .sf-stage.sf-touch-enabled .sf-hud__minimap {
+    width: 7rem;
+  }
+
+  .sf-stage.sf-touch-enabled .sf-hud__minimap,
+  .sf-stage.sf-touch-enabled .sf-hud__vitals {
+    top: max(8.45rem, calc(env(safe-area-inset-top) + 7.8rem));
+  }
+
+  /* A compact two-row grid prevents the heat limiter and the long,
+     right-aligned reinforcement label from competing for one flex line. */
+  .sf-stage.sf-touch-enabled .sf-hud__vitalrow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    min-width: 0;
+  }
+
+  .sf-stage.sf-touch-enabled #sf-reinf {
+    min-width: 0;
+    max-width: none;
+    justify-self: end;
+    text-align: right;
+    white-space: normal;
+  }
+
+  /* The side cards retain their radial relationship but move 13.6px in
+     from either stage edge at 390px. Their content becomes a true two-row
+     grid, so REINFORCEMENT DROP and READY no longer occupy the same ink. */
+  #sf-native-ui .sf-command-wheel__option {
+    width: 10rem;
+    min-height: 5.25rem;
+    grid-template-columns: 2.2rem minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    column-gap: .4rem;
+    row-gap: .14rem;
+    padding: .4rem;
+    overflow: hidden;
+  }
+
+  #sf-native-ui .sf-command-wheel__option[data-index="1"] {
+    left: calc(50% + min(6.3rem, 26vw));
+  }
+
+  #sf-native-ui .sf-command-wheel__option[data-index="2"] {
+    left: calc(50% - min(6.3rem, 26vw));
+  }
+
+  #sf-native-ui .sf-command-wheel__sigil {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    width: 2.2rem;
+    height: 2.2rem;
+  }
+
+  #sf-native-ui .sf-command-wheel__copy {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    align-content: center;
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+  }
+
+  #sf-native-ui .sf-command-wheel__copy strong {
+    box-sizing: border-box;
+    width: 100%;
+    padding-right: 0;
+    overflow: visible;
+    font-size: 10px;
+    line-height: 1.2;
+    letter-spacing: .015em;
+    overflow-wrap: normal;
+    text-wrap: wrap;
+    white-space: normal;
+  }
+
+  #sf-native-ui .sf-command-wheel__copy small {
+    font-size: 10px;
+    line-height: 1.15;
+  }
+
+  #sf-native-ui .sf-command-wheel__option > b[data-command-status] {
+    position: static;
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
+    align-self: end;
+    font-size: 10px;
+    line-height: 1.1;
+  }
+}
+
+/* Large HUD is a controlled typographic and gauge step on touch screens,
+   not a transform. It is visibly larger while retaining the measured panel
+   boxes and gutters above. */
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__compass-label,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__poi,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__objhead > span,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-minimap__head strong,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-minimap__head b,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-minimap__event > div,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-minimap__event-title small,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-minimap__event-title strong,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-minimap__event > div b,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__vitals::before,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__hplabel,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__jetlabel,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__boost,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__shield,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__vitalrow,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__hplabel b,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__jetlabel b,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__boost strong,
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__shield strong {
+  font-size: 12px !important;
+}
+
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__tick {
+  font-size: 14px;
+}
+
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__objlabel {
+  font-size: 13px;
+}
+
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__objbar {
+  height: 4px;
+}
+
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__hpwrap {
+  height: 9px;
+}
+
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__jettrack {
+  height: 7px;
+}
+
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-heat__track {
+  width: 3rem;
+  height: .42rem;
+}
+
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-heat u {
+  min-width: 2.4rem;
+}
+
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__vitalrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: .3rem;
+}
+
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled #sf-reinf {
+  justify-self: end;
+  letter-spacing: 0;
+  text-align: right;
+}
+
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
+  transform: scale(1.16);
+  transform-origin: center;
+}
+
+@media (orientation: portrait) and (max-width: 380px) {
+  body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__vitalrow {
+    grid-template-columns: 1fr;
+    row-gap: .28rem;
+  }
 }

@@ -295,6 +295,7 @@ export async function buildEnemies(ctx, onProgress) {
 
   const live = [];
   const rng = makeRng((ctx.seed ^ 0x3e5e17) >>> 0 || 991);
+  let nextId = 1;
   const reducedMotion = typeof window !== "undefined"
     && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
@@ -400,7 +401,7 @@ export async function buildEnemies(ctx, onProgress) {
     inst.alerted = false;
   }
 
-  function updateEmergence(inst, dt) {
+  function updateEmergence(inst, dt, silent = false) {
     const e = inst.emerging;
     if (!e) return false;
     e.elapsed += dt;
@@ -420,7 +421,10 @@ export async function buildEnemies(ctx, onProgress) {
     const t = clamp01((e.elapsed - e.delay) / Math.max(0.01, e.duration));
     if (e.active && !e.burst) {
       e.burst = true;
-      ctx.vfx?.breach?.(inst.x, inst.y, inst.z, e.radius, inst.key === "matriarch" ? 1.8 : 1);
+      if (!silent) {
+        ctx.vfx?.breach?.(inst.x, inst.y, inst.z, e.radius,
+          inst.key === "matriarch" ? 1.8 : 1);
+      }
     }
 
     if (e.active) {
@@ -539,6 +543,7 @@ export async function buildEnemies(ctx, onProgress) {
     root.traverse((o) => { if (o.isSkinnedMesh && !skin) skin = o; });
 
     const inst = {
+      id: typeof opts.id === "string" && opts.id ? opts.id : `sf-enemy-${nextId++}`,
       key, root, mixer, actions, bones, legs, skin,
       spec: sp.spec,
       x, z,
@@ -1017,22 +1022,146 @@ export async function buildEnemies(ctx, onProgress) {
     return placed;
   }
 
+  function snapshot() {
+    return {
+      rng: rng.getState?.() || null,
+      nextId,
+      live: live.filter((inst) => inst && inst.state !== "death" && inst.health > 0)
+        .map((inst) => ({
+          id: inst.id,
+          key: inst.key,
+          x: Number(inst.x.toFixed(4)),
+          z: Number(inst.z.toFixed(4)),
+          yaw: Number(inst.yaw.toFixed(5)),
+          /* Emergence animates root.scale; persisting that frame would bake
+             the temporary underground squash into the creature's permanent
+             authored size when configureEmergence runs after load. */
+          scale: Number(((inst.emerging?.baseScale ?? inst.root.scale.x)
+            / Math.max(1e-5, inst.spec.scale)).toFixed(4)),
+          health: Number(inst.health.toFixed(3)),
+          maxHealth: Number(inst.maxHealth.toFixed(3)),
+          damageScale: Number((inst.damageScale || 1).toFixed(4)),
+          eventId: inst.eventId || null,
+          eventWave: Number.isFinite(inst.eventWave) ? inst.eventWave : null,
+          home: inst.home ? { x: Number(inst.home.x.toFixed(4)), z: Number(inst.home.z.toFixed(4)) } : null,
+          suspicion: Number((inst.suspicion || 0).toFixed(4)),
+          alerted: !!inst.alerted,
+          fireTimer: Number((inst.fireTimer || 0).toFixed(4)),
+          burstLeft: Math.max(0, Math.round(inst.burstLeft || 0)),
+          broodTimer: Number.isFinite(inst.broodTimer) ? Number(inst.broodTimer.toFixed(4)) : null,
+          broodIds: (inst.broodKids || [])
+            .filter((kid) => kid?.id && kid.state !== "death" && kid.health > 0)
+            .map((kid) => kid.id),
+          emergence: inst.emerging ? {
+            active: !!inst.emerging.active,
+            surfaced: !!inst.emerging.surfaced,
+            burst: !!inst.emerging.burst,
+            elapsed: Number((inst.emerging.elapsed || 0).toFixed(4)),
+            delay: Number((inst.emerging.delay || 0).toFixed(4)),
+            duration: Number((inst.emerging.duration || 1.2).toFixed(4)),
+            depth: Number((inst.emerging.depth || 1.3).toFixed(4)),
+            boss: inst.key === "matriarch",
+          } : null,
+        })),
+    };
+  }
+
+  function clearAll() {
+    for (const inst of live) {
+      disposeEmergence(inst);
+      group.remove(inst.root);
+    }
+    live.length = 0;
+  }
+
+  function restore(saved = {}) {
+    const records = Array.isArray(saved.live) ? saved.live.slice(0, 420) : [];
+    clearAll();
+    const byId = new Map();
+    nextId = Math.max(1, Math.round(Number(saved.nextId) || 1));
+    for (const record of records) {
+      if (!record || !species.has(record.key) || typeof record.id !== "string") continue;
+      const x = clamp(Number(record.x) || 0, -980, 980);
+      const z = clamp(Number(record.z) || 0, -980, 980);
+      /* The 0.72s post-surface dust tail is visual-only. Reconstructing it
+         would run configureEmergence again and shrink an already-surfaced
+         creature to its underground scale with no active update to restore
+         it. Only genuinely active rises survive a field-state load. */
+      const emergenceRecord = record.emergence?.active === true ? record.emergence : null;
+      const emergence = emergenceRecord ? {
+        delay: Math.max(0, Number(emergenceRecord.delay) || 0),
+        duration: Math.max(0.1, Number(emergenceRecord.duration) || 1.2),
+        depth: Math.max(0.7, Number(emergenceRecord.depth) || 1.3),
+        boss: !!emergenceRecord.boss,
+      } : null;
+      const inst = spawn(record.key, x, z, {
+        id: record.id,
+        yaw: Number(record.yaw) || 0,
+        scale: clamp(Number(record.scale) || 1, 0.7, 1.35),
+        health: Math.max(1, Number(record.maxHealth) || Number(record.health) || 1),
+        damageScale: clamp(Number(record.damageScale) || 1, 0.2, 4),
+        eventId: typeof record.eventId === "string" ? record.eventId : null,
+        eventWave: record.eventWave !== null && record.eventWave !== undefined
+          && Number.isFinite(Number(record.eventWave)) ? Number(record.eventWave) : null,
+        emerge: emergence,
+      });
+      if (!inst) continue;
+      inst.health = clamp(Number(record.health) || inst.maxHealth, 1, inst.maxHealth);
+      inst.home = record.home && Number.isFinite(Number(record.home.x))
+        && Number.isFinite(Number(record.home.z))
+        ? { x: Number(record.home.x), z: Number(record.home.z) } : { x, z };
+      inst.suspicion = clamp01(Number(record.suspicion) || 0);
+      inst.alerted = !!record.alerted;
+      inst.fireTimer = Math.max(0, Number(record.fireTimer) || 0);
+      inst.burstLeft = Math.max(0, Math.round(Number(record.burstLeft) || 0));
+      if (record.broodTimer !== null && record.broodTimer !== undefined
+        && Number.isFinite(Number(record.broodTimer))) {
+        inst.broodTimer = Math.max(0, Number(record.broodTimer));
+      }
+      if (inst.emerging && emergenceRecord) {
+        inst.emerging.elapsed = Math.max(0, Number(emergenceRecord.elapsed) || 0);
+        inst.emerging.active = true;
+        inst.emerging.surfaced = !!emergenceRecord.surfaced;
+        inst.emerging.burst = !!emergenceRecord.burst;
+        /* The load menu may keep the scene paused for several seconds.
+           Sample the saved rise immediately so the paused background does
+           not show one frame at configureEmergence's initial 0.68 scale. */
+        updateEmergence(inst, 0, true);
+      } else {
+        play(inst, inst.alerted ? "alert" : "idle", 0);
+      }
+      byId.set(inst.id, inst);
+    }
+    for (const record of records) {
+      const inst = byId.get(record.id);
+      if (!inst) continue;
+      inst.broodKids = (Array.isArray(record.broodIds) ? record.broodIds : [])
+        .map((id) => byId.get(id)).filter(Boolean);
+    }
+    rng.setState?.(saved.rng);
+    return { restored: byId.size, byId };
+  }
+
   return {
     group,
     species,
     live,
     garrison,
     spawn,
+    snapshot,
+    restore,
     play,
     update,
     kill(inst) { play(inst, "death", 0.12); },
-    clear() {
-      for (const inst of live) {
-        disposeEmergence(inst);
-        group.remove(inst.root);
-      }
-      live.length = 0;
+    remove(inst) {
+      const index = live.indexOf(inst);
+      if (index < 0) return false;
+      disposeEmergence(inst);
+      group.remove(inst.root);
+      live.splice(index, 1);
+      return true;
     },
+    clear: clearAll,
     stats() {
       return {
         species: species.size,

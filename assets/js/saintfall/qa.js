@@ -113,6 +113,24 @@ export function installQa(ctx, api) {
       return steps;
     },
 
+    /**
+     * Advance through the production frame gate instead of stepping the
+     * simulation directly. This is the hook for pause/menu/command-wheel QA:
+     * `advanceTime` intentionally bypasses runtime pause, while this method
+     * must respect it. Main owns `frameOnce` because only main knows every
+     * reason the simulation may be frozen.
+     */
+    advanceRuntimeTime(seconds, dt = 1 / 60) {
+      if (typeof api.frameOnce !== "function") {
+        return { supported: false, steps: 0, phase: api.runtime?.phase || null,
+          paused: !!api.runtime?.paused };
+      }
+      const steps = Math.max(1, Math.round(seconds / dt));
+      for (let i = 0; i < steps; i += 1) api.frameOnce(dt);
+      return { supported: true, steps, phase: api.runtime?.phase || null,
+        paused: !!api.runtime?.paused };
+    },
+
     setTime(key) {
       api.setTime(key);
       return key;
@@ -521,6 +539,18 @@ export function installQa(ctx, api) {
       // useless to inspect.
       if (dist !== undefined) s.camDist = clamp(dist, 1.2, 12);
       return { camYaw: s.camYaw, camPitch: s.camPitch, camDist: s.camDist };
+    },
+
+    /** Set only the authored model/body heading. The camera is deliberately
+     * untouched so map tests can prove that the player marker follows the
+     * trooper rather than the mouse-look orbit. */
+    setBodyHeading(yaw) {
+      const s = api.player.state;
+      const next = Math.atan2(Math.sin(Number(yaw) || 0), Math.cos(Number(yaw) || 0));
+      const cameraYaw = s.camYaw;
+      s.yaw = next;
+      api.hud?.redrawMinimap?.();
+      return { bodyYaw: s.yaw, cameraYaw, cameraUnchanged: s.camYaw === cameraYaw };
     },
 
     /** The live leg records, so a probe can read foot placement in the
@@ -1505,19 +1535,21 @@ export function installQa(ctx, api) {
       };
     },
 
-    /** Enter a stratagem code and run it to impact. */
+    /** Dispatch a command through the same authoritative seam used by the
+     * command wheel, then run it to impact. Direction-code entry remains an
+     * internal compatibility path and is intentionally not exercised here. */
     stratagem(key) {
       const spec = api.mission.stratagems[key];
       if (!spec) return { error: `no stratagem "${key}"` };
       api.mission.cooldowns[key] = 0;
-      api.mission.beginEntry();
-      for (const d of spec.code) api.mission.pushDirection(d);
       const before = api.enemies.live.filter((e) => e.state !== "death").length;
       const hpBefore = api.combat.player.hp;
+      const dispatched = api.mission.call(key);
       hook.advanceTime(spec.delay + 0.6, 1 / 60);
       return {
         name: spec.name,
-        accepted: !api.mission.entry.active,
+        accepted: dispatched === key,
+        dispatched,
         onCooldown: Number(api.mission.cooldowns[key].toFixed(1)),
         liveBefore: before,
         liveAfter: api.enemies.live.filter((e) => e.state !== "death").length,
@@ -3128,10 +3160,11 @@ export function installQa(ctx, api) {
       return result;
     },
     minimapState() {
+      const semantic = api.hud?.minimapState?.() || null;
       const map = document.getElementById("sf-minimap");
       const canvas = document.getElementById("sf-map-canvas");
       const event = document.getElementById("sf-map-event");
-      if (!map || !canvas || !event) return null;
+      if (!map || !canvas) return semantic;
       const box = map.getBoundingClientRect();
       return {
         visible: getComputedStyle(map).display !== "none" && box.width > 0 && box.height > 0,
@@ -3140,9 +3173,27 @@ export function installQa(ctx, api) {
         width: Number(box.width.toFixed(1)),
         height: Number(box.height.toFixed(1)),
         pixels: [canvas.width, canvas.height],
-        phase: event.dataset.phase,
-        text: event.textContent.replace(/\s+/g, " ").trim(),
+        phase: event?.dataset.phase || null,
+        text: event?.textContent.replace(/\s+/g, " ").trim() || "",
+        ...(semantic || {}),
       };
+    },
+    commandWheelState: () => (api.gameUi || ctx.gameUi)?.wheelState?.() || null,
+    menuState: () => (api.gameUi || ctx.gameUi)?.menuState?.() || null,
+    settingsState: () => (api.gameUi || ctx.gameUi)?.settingsState?.() || null,
+    persistenceState: () => (api.saves || ctx.saves)?.state?.() || null,
+    openMenu(panel = "operation") {
+      return (api.gameUi || ctx.gameUi)?.openMenu?.(panel) ?? false;
+    },
+    closeMenu() { return (api.gameUi || ctx.gameUi)?.closeMenu?.() ?? false; },
+    saveSlot(index = 0) { return (api.saves || ctx.saves)?.saveManual?.(index) || null; },
+    saveAutosave(force = true) {
+      return (api.saves || ctx.saves)?.saveAuto?.(!!force) || null;
+    },
+    loadSlot(index = 0) { return (api.saves || ctx.saves)?.load?.("manual", index) ?? false; },
+    loadAutosave() { return (api.saves || ctx.saves)?.load?.("autosave", 0) ?? false; },
+    clearSaveSlot(index = 0) {
+      return (api.saves || ctx.saves)?.clearManual?.(index) ?? false;
     },
     /** Sweep the palm roll live. Radians, [support, trigger]. */
     setPalmRoll(support, trigger) {
@@ -3213,6 +3264,8 @@ export function installQa(ctx, api) {
     get mission() { return api.mission; },
     get breaches() { return api.breaches; },
     get collide() { return api.collide; },
+    get gameUi() { return api.gameUi || ctx.gameUi || null; },
+    get saves() { return api.saves || ctx.saves || null; },
     get intro() { return ctx.qa ? api.intro : productionIntroView; },
   };
 

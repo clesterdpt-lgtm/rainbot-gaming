@@ -1928,20 +1928,27 @@ function makeInput(canvas, captureMeleeAim = null) {
     clearTouch();
   }
 
-  /* Holding the stratagem key turns the direction pad into a code
-     pad. WASD keeps driving movement, so the arrows do double duty:
-     free look while walking, code entry while called. */
-  const DIRS = {
-    ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right",
-  };
-
+  const ownsKeyboard = () => state.locked || document.activeElement === canvas
+    || document.documentElement.classList.contains("sf-maximised");
+  const isInteractiveKeyTarget = (target) => target instanceof Element
+    && !!target.closest("button, a, input, select, textarea, [contenteditable='true'],"
+      + " [role='button'], [role='menuitem'], [role='tab']");
   const onKey = (e, down) => {
     const k = e.code;
     const held = keys.has(k);
+    /* The game lives inside a larger, keyboard-navigable page. Only claim
+       gameplay keys after the canvas owns interaction or in max-screen mode.
+       Keyup still clears a key captured earlier, even if ownership was lost. */
+    if (down && (!ownsKeyboard() || e.defaultPrevented || isInteractiveKeyTarget(e.target))) return;
     if (down) keys.add(k); else keys.delete(k);
+    /* A keyup that belongs to a focused control must retain the browser's
+       native Space/Enter click. We still deleted a previously held gameplay
+       key above, but only claimed keyup when that key was actually ours. */
+    if (!down && (!held || e.defaultPrevented || isInteractiveKeyTarget(e.target))) return;
+    if (!down && !ownsKeyboard()) return;
     if (["KeyW", "KeyA", "KeyS", "KeyD", "Space", "ShiftLeft", "ShiftRight", "ControlLeft",
       "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyR",
-      "KeyQ", "KeyV", "KeyE", "KeyX"].includes(k)) e.preventDefault();
+      "KeyQ", "KeyE", "KeyX"].includes(k)) e.preventDefault();
     if (!down || held) return;                 // key REPEATS are not presses
     /* MELEE IS AN ACTION, NOT A MODE.
        This was KeyX = "swap", which toggled the lance between its
@@ -1965,9 +1972,6 @@ function makeInput(canvas, captureMeleeAim = null) {
     else if (k === "KeyR") state.events.push({ type: "vent" });
     else if (k === "KeyE") state.events.push({ type: "boost" });
     else if (k === "Space") state.jumpPressed = true;
-    else if (DIRS[k] && keys.has("KeyV")) {
-      state.events.push({ type: "dir", dir: DIRS[k] });
-    }
   };
   window.addEventListener("keydown", (e) => onKey(e, true));
   window.addEventListener("keyup", (e) => onKey(e, false));
@@ -1982,7 +1986,12 @@ function makeInput(canvas, captureMeleeAim = null) {
   });
 
   canvas.addEventListener("click", () => {
-    if (!state.locked && canvas.requestPointerLock) canvas.requestPointerLock();
+    if (!state.locked && canvas.requestPointerLock) {
+      try {
+        const lock = canvas.requestPointerLock();
+        lock?.catch?.(() => false);
+      } catch (_) { /* pointer-lock policy is browser-owned */ }
+    }
   });
   document.addEventListener("pointerlockchange", () => {
     state.locked = document.pointerLockElement === canvas;
@@ -2027,9 +2036,6 @@ function makeInput(canvas, captureMeleeAim = null) {
         state.move.y = (keys.has("KeyS") || keys.has("ArrowDown") ? 1 : 0)
           - (keys.has("KeyW") || keys.has("ArrowUp") ? 1 : 0);
       }
-      // Arrow keys drive the code pad while the stratagem key is
-      // held, so they must not also walk the trooper.
-      if (keys.has("KeyV")) { state.move.x = 0; state.move.y = 0; }
       state.sprint = keys.has("ShiftLeft") || keys.has("ShiftRight") || touch.sprint;
       state.crouch = keys.has("ControlLeft") || keys.has("KeyC") || touch.crouch;
       state.jump = keys.has("Space");
@@ -2589,6 +2595,24 @@ export async function createPlayer(ctx, canvas) {
     action.queuedAimYaw = null;
     return beginAction(`melee${action.combo}`, aimYaw);
   }
+
+  /* Save/load and other hard handoffs must never resume a half-applied hit
+     window at a new world position. Input clearing stops the next action;
+     this clears the action that is already on the authored timeline. */
+  function cancelTransientActions() {
+    action.name = null;
+    action.t = 0;
+    action.spec = null;
+    action.hitDone = false;
+    action.queued = null;
+    action.aimYaw = null;
+    action.queuedAimYaw = null;
+    action.combo = 0;
+    action.comboAt = -9;
+    sampleAction(0);
+    return true;
+  }
+  
 
   function sampleAction(dt) {
     if (!action.spec) {
@@ -4951,6 +4975,7 @@ export async function createPlayer(ctx, canvas) {
     beginAction,
     sampleActionAt,
     meleeSwing,
+    cancelTransientActions,
     listActions: () => Object.keys(ACTIONS),
     actionSpec: (n) => ACTIONS[n] || null,
     get action() { return action.name; },

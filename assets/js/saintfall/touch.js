@@ -28,12 +28,6 @@ const TAP_ACTIONS = Object.freeze({
   boost: ["boost", null],
   melee: ["melee", null],
   vent: ["vent", null],
-  strat: ["stratOpen", null],
-  cancel: ["stratCancel", null],
-  up: ["dir", { dir: "up" }],
-  down: ["dir", { dir: "down" }],
-  left: ["dir", { dir: "left" }],
-  right: ["dir", { dir: "right" }],
 });
 
 function actionButton(action, glyph, label, mode, extra = "") {
@@ -65,7 +59,13 @@ function buildMarkup() {
       <div class="sf-touch__utility">
         ${actionButton("crouch", "⌄", "CROUCH", "hold")}
         ${actionButton("vent", "↻", "VENT", "tap")}
-        ${actionButton("strat", "⌁", "STRAT", "tap")}
+        <button class="sf-touch__button sf-touch__button--command" type="button"
+          data-touch-command aria-label="Hold and drag to select battlefield support"
+          aria-haspopup="dialog" style="min-width:48px;min-height:48px">
+          <b aria-hidden="true">⌁</b>
+          <span>CALL</span>
+          <small>hold + drag</small>
+        </button>
       </div>
       <div class="sf-touch__mobility">
         ${actionButton("vault", "↑", "VAULT", "tap")}
@@ -78,15 +78,6 @@ function buildMarkup() {
         ${actionButton("melee", "╱", "MELEE", "tap")}
         ${actionButton("fire", "●", "FIRE", "hold", "sf-touch__button--fire")}
       </div>
-    </div>
-
-    <div class="sf-touch__strat" data-touch-strat aria-label="Stratagem direction pad">
-      <div class="sf-touch__strat-title">STRATAGEM CODE</div>
-      ${actionButton("up", "↑", "UP", "tap", "sf-touch__dir sf-touch__dir--up")}
-      ${actionButton("left", "←", "LEFT", "tap", "sf-touch__dir sf-touch__dir--left")}
-      ${actionButton("cancel", "×", "CANCEL", "tap", "sf-touch__dir sf-touch__dir--cancel")}
-      ${actionButton("right", "→", "RIGHT", "tap", "sf-touch__dir sf-touch__dir--right")}
-      ${actionButton("down", "↓", "DOWN", "tap", "sf-touch__dir sf-touch__dir--down")}
     </div>`;
 }
 
@@ -128,7 +119,6 @@ export function buildTouchControls(ctx, player, host, stage) {
   let lookPointer = null;
   let lookX = 0;
   let lookY = 0;
-  let stratEntry = false;
   let wasDead = false;
   const holdPointers = new Map();
 
@@ -196,7 +186,7 @@ export function buildTouchControls(ctx, player, host, stage) {
   }
 
   stick.addEventListener("pointerdown", (event) => {
-    if (!enabled || stickPointer !== null || stratEntry) return;
+    if (!enabled || stickPointer !== null) return;
     prevent(event);
     stickPointer = event.pointerId;
     stick.classList.add("is-held");
@@ -246,7 +236,7 @@ export function buildTouchControls(ctx, player, host, stage) {
     if (!button) continue;
     void inputName;
     button.addEventListener("pointerdown", (event) => {
-      if (!enabled || holdPointers.has(action) || stratEntry) return;
+      if (!enabled || holdPointers.has(action)) return;
       prevent(event);
       holdPointers.set(action, event.pointerId);
       try { button.setPointerCapture(event.pointerId); } catch (_) { /* best effort */ }
@@ -275,8 +265,6 @@ export function buildTouchControls(ctx, player, host, stage) {
     if (!button) continue;
     const press = (event) => {
       if (!enabled) return;
-      if (stratEntry && !["up", "down", "left", "right", "cancel"].includes(action)) return;
-      if (!stratEntry && ["up", "down", "left", "right", "cancel"].includes(action)) return;
       prevent(event);
       input.pressTouch(eventType, detail || {});
       button.classList.remove("is-tapped");
@@ -310,7 +298,6 @@ export function buildTouchControls(ctx, player, host, stage) {
     enabled = value;
     if (!enabled) releaseAll();
     stage.classList.toggle("sf-touch-enabled", enabled);
-    stage.classList.toggle("sf-touch-strat", enabled && stratEntry);
     surface?.classList.toggle("sf-touch-surface", enabled);
     host.setAttribute("aria-hidden", enabled ? "false" : "true");
     return enabled;
@@ -354,19 +341,6 @@ export function buildTouchControls(ctx, player, host, stage) {
   }
 
   function update() {
-    const nextEntry = !!ctx.mission?.entry?.active;
-    if (nextEntry !== stratEntry) {
-      stratEntry = nextEntry;
-      host.classList.toggle("is-strat-entry", stratEntry);
-      stage.classList.toggle("sf-touch-strat", stratEntry && !!enabled);
-      if (stratEntry) {
-        // Keyboard code entry suppresses movement while V is held. A
-        // modal touch pad should make the same promise and must also
-        // release any combat hold hidden underneath it.
-        releaseAll();
-      }
-    }
-
     const fuel = ctx.jetpack?.state?.fuel || 0;
     setButtonState("boost", ctx.boost?.state?.active
       ? "active"
@@ -402,7 +376,6 @@ export function buildTouchControls(ctx, player, host, stage) {
         jet: input.touch.jetpack,
         crouch: input.touch.crouch,
       },
-      stratEntry,
       pointers: {
         stick: stickPointer,
         look: lookPointer,

@@ -823,6 +823,75 @@ export function buildCombat(ctx) {
     bus.emit("respawn", {});
   }
 
+  /* ============================================================
+     DURABLE PLAYER STATE
+
+     Save files carry outcomes, never momentary combat effects. In
+     particular, a load must not replay the death/respawn bus or leave
+     the player half-way through a damage transition. The regeneration
+     lock is stored as time REMAINING instead of the private combat
+     clock, so a save is portable across fresh sessions.
+     ============================================================ */
+
+  function snapshot() {
+    const sinceHit = Math.max(0, clock - player.lastHitAt);
+    return {
+      hp: player.hp,
+      maxHp: player.maxHp,
+      kills: player.kills,
+      shots: player.shots,
+      hits: player.hits,
+      regenLockRemaining: clamp(
+        SURVIVAL_CONFIG.regenDelay - sinceHit,
+        0,
+        SURVIVAL_CONFIG.regenDelay
+      ),
+    };
+  }
+
+  function restore(saved) {
+    if (!saved || typeof saved !== "object") return false;
+
+    // These generous ceilings make corrupt/untrusted local saves safe
+    // without constraining any value normal play can produce.
+    const finite = (value, fallback) => {
+      const number = Number(value);
+      return Number.isFinite(number) ? number : fallback;
+    };
+    const counter = (value, fallback) => Math.round(clamp(
+      finite(value, fallback), 0, 1_000_000_000
+    ));
+
+    const maxHp = clamp(
+      finite(saved.maxHp, SURVIVAL_CONFIG.playerMaxHp),
+      1,
+      10_000
+    );
+    const shots = counter(saved.shots, 0);
+    const regenLockRemaining = clamp(
+      finite(saved.regenLockRemaining, 0),
+      0,
+      SURVIVAL_CONFIG.regenDelay
+    );
+
+    player.maxHp = maxHp;
+    // A durable save may have been captured at the instant of death.
+    // Loading always resumes in a playable state rather than starting
+    // a silent respawn timer with no matching death presentation.
+    player.hp = clamp(finite(saved.hp, maxHp), 1, maxHp);
+    player.kills = counter(saved.kills, 0);
+    player.shots = shots;
+    player.hits = Math.min(shots, counter(saved.hits, 0));
+    player.dead = false;
+    player.respawnIn = 0;
+    player.invulnerable = false;
+
+    player.lastHitAt = regenLockRemaining > 0
+      ? clock - (SURVIVAL_CONFIG.regenDelay - regenLockRemaining)
+      : clock - SURVIVAL_CONFIG.regenDelay - 1;
+    return true;
+  }
+
   void eye; void tmp; void damp;
 
   return {
@@ -835,6 +904,8 @@ export function buildCombat(ctx) {
     hurtPlayer,
     raycastEnemies,
     update,
+    snapshot,
+    restore,
     hitbox: HITBOX,
     stats() {
       return {

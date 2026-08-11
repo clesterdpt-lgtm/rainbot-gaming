@@ -254,5 +254,15 @@ export function buildBoost(ctx, player) {
     };
   }
 
-  return { config, state, trigger, beginFrame, noteMotion, reset, stop, status };
+  function restore(saved = {}) {
+    reset(true);
+    state.cooldownRemaining = Math.max(0,
+      Math.min(config.cooldown, Number(saved.cooldownRemaining) || 0));
+    state.boosts = Math.max(0, Math.round(Number(saved.boosts) || 0));
+    state.hits = Math.max(0, Math.round(Number(saved.hits) || 0));
+    state.lastReason = "restored";
+    return status();
+  }
+
+  return { config, state, trigger, beginFrame, noteMotion, reset, stop, status, restore };
 }

@@ -1102,6 +1102,11 @@ export async function buildTerrain(ctx, onProgress) {
   return {
     group,
     chunks,
+    /* Collision can then include any rendered-grid vertex that falls
+       inside a capsule footprint. A triangulated height field reaches
+       an interior maximum only at one of those vertices; exposing the
+       real step avoids duplicating the LOD0 resolution elsewhere. */
+    groundSampleStep: CHUNK_SIZE / FINE,
     field,
     rng,
     coarseHeight,

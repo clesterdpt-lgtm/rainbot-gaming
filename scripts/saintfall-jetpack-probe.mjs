@@ -17,7 +17,8 @@ const port = 45200 + (process.pid % 1400);
 const base = `http://127.0.0.1:${port}`;
 const sources = [
   "assets/js/saintfall/jetpack.js", "assets/js/saintfall/player.js",
-  "assets/js/saintfall/collide.js", "assets/js/saintfall/main.js",
+  "assets/js/saintfall/collide.js", "assets/js/saintfall/terrain.js",
+  "assets/js/saintfall/world.js", "assets/js/saintfall/main.js",
   "assets/js/saintfall/hud.js", "assets/js/saintfall/audio.js",
   "assets/js/saintfall/combat.js", "assets/js/saintfall/mission.js",
   "assets/js/saintfall/weapons.js", "assets/js/saintfall/vfx.js",
@@ -419,6 +420,11 @@ async function main() {
       landed = await step(1 / 60);
       if (landed.grounded) break;
     }
+    /* Terrain-rim handoff intentionally preserves the resolved
+       flight height on its first grounded frame, then eases onto the
+       center walking support. Let that short visible settle finish
+       before applying the exact foot-height gate. */
+    if (landed?.grounded) landed = await step(0.25);
     report.states.landed = landed;
     const landGround = await page.evaluate(() => {
       const T = window.__SF; const p = T.player.state;
@@ -486,31 +492,419 @@ async function main() {
     // an endpoint-only aerial grid once crossed it and the controller
     // snapped the player onto the ridge on the following frame.
     report.terrainSweep = await page.evaluate(() => {
-      const C = window.__SF.collide;
-      const x = -652; const z = 316;
-      const y = C.groundHeight(x, z);
-      const targetGround = C.groundHeight(x, z + 3);
-      const result = C.sweepFlightCapsule(x, y, z, x, y, z + 3);
-      return { start: [x, y, z], targetGround, result };
+      const T = window.__SF;
+      const C = T.collide;
+      const x = -652; const z = 315;
+      /* Start genuinely airborne and clear of the bank. Beginning at
+         z=316 on the ground already puts this radius across the
+         cliff face, which cannot distinguish a bad result from an
+         invalid initial overlap. */
+      const y = C.groundHeight(x, z) + 1;
+      const targetGround = C.groundHeight(x, z + 4);
+      const result = C.sweepFlightCapsule(x, y, z, x, y, z + 4);
+      const denseOffsets = [[0, 0]];
+      for (let ring = 1; ring <= 8; ring += 1) {
+        const r = C.radius * ring / 8;
+        for (let deg = 0; deg < 360; deg += 2) {
+          const a = deg * Math.PI / 180;
+          denseOffsets.push([Math.cos(a) * r, Math.sin(a) * r]);
+        }
+      }
+      let maxGround = Math.max(...denseOffsets.map(([dx, dz]) =>
+        C.groundHeight(result.x + dx, result.z + dz)));
+      const gridStep = T.ctx.terrain.groundSampleStep;
+      const minGX = Math.ceil((result.x - C.radius + 1024) / gridStep);
+      const maxGX = Math.floor((result.x + C.radius + 1024) / gridStep);
+      const minGZ = Math.ceil((result.z - C.radius + 1024) / gridStep);
+      const maxGZ = Math.floor((result.z + C.radius + 1024) / gridStep);
+      for (let gx = minGX; gx <= maxGX; gx += 1) {
+        for (let gz = minGZ; gz <= maxGZ; gz += 1) {
+          const px = gx * gridStep - 1024;
+          const pz = gz * gridStep - 1024;
+          if ((px - result.x) ** 2 + (pz - result.z) ** 2 <= C.radius ** 2 + 1e-9) {
+            maxGround = Math.max(maxGround, C.groundHeight(px, pz));
+          }
+        }
+      }
+      return {
+        start: [x, y, z], targetGround, result,
+        approachDistance: result.z - z,
+        maxCapsuleGround: maxGround,
+        terrainPenetration: maxGround - result.y,
+      };
     });
     check("flight sweep cannot tunnel through steep terrain",
       report.terrainSweep.result.hitZ
         && report.terrainSweep.result.z < 318
+        && report.terrainSweep.approachDistance >= 0.20
         && report.terrainSweep.result.y + 0.12 >= report.terrainSweep.start[1],
       JSON.stringify(report.terrainSweep));
+    check("flight sweep keeps the whole capsule above steep terrain",
+      report.terrainSweep.terrainPenetration <= 0.025,
+      JSON.stringify(report.terrainSweep));
+
+    report.authoredFootprint = await page.evaluate(() => {
+      const T = window.__SF;
+      const C = T.collide;
+      const x = -66.418158;
+      const z = -443.940060;
+      const footprint = C.flightGroundHeight(x, z, C.radius);
+      const authoredVertex = T.ctx.world.walkSurfaceMaxInCircle(x, z, C.radius);
+      return {
+        x, z, footprint, authoredVertex,
+        blocksThreeCmBelow: C.flightBlocked(x, z, footprint - 0.03),
+        clearsThreeCmAbove: !C.flightBlocked(x, z, footprint + 0.03),
+      };
+    });
+    check("flight footprint includes authored road vertices",
+      Number.isFinite(report.authoredFootprint.authoredVertex)
+        && report.authoredFootprint.footprint + 1e-6
+          >= report.authoredFootprint.authoredVertex
+        && report.authoredFootprint.blocksThreeCmBelow
+        && report.authoredFootprint.clearsThreeCmAbove,
+      JSON.stringify(report.authoredFootprint));
+
+    /* Controller-level proof of the reported path: ignite with real
+       Shift+Space, hold real W into the same Fosse bank, and inspect
+       every resolved frame over a dense full-disk capsule footprint.
+       The old collision primitive called an uphill overlap a
+       fresh takeoff and allowed the feet 0.82m under the hill for a
+       frame even though its final endpoint looked blocked. */
+    await page.evaluate(() => {
+      const T = window.__SF;
+      T.clearEnemies();
+      T.releaseCamera();
+      T.teleport(-652, 315.30, 0);
+      T.setCam(0, -0.04, 5.2);
+      T.setGaitInput(null, null);
+      T.setJetpackState({ fuel: 100, cooldownRemaining: 0, rechargeDelayRemaining: 0 });
+    });
+    await page.keyboard.down("ShiftLeft");
+    await page.keyboard.down("Space");
+    await step(0.06);
+    await page.keyboard.down("KeyW");
+    report.hillContact = await page.evaluate(() => {
+      const T = window.__SF;
+      const p = T.player.state;
+      const C = T.collide;
+      /* Launch clearance has already done its job. Clearing this
+         latch makes the hill contact prove ordinary airborne rules,
+         not the intentionally bounded takeoff exemption. */
+      const denseOffsets = [[0, 0]];
+      for (let ring = 1; ring <= 8; ring += 1) {
+        const r = C.radius * ring / 8;
+        for (let deg = 0; deg < 360; deg += 2) {
+          const a = deg * Math.PI / 180;
+          denseOffsets.push([Math.cos(a) * r, Math.sin(a) * r]);
+        }
+      }
+      const maxFootprintGround = (x, z) => {
+        let high = -Infinity;
+        for (const [dx, dz] of denseOffsets) {
+          high = Math.max(high, C.groundHeight(x + dx, z + dz));
+        }
+        const gridStep = T.ctx.terrain.groundSampleStep;
+        const minGX = Math.ceil((x - C.radius + 1024) / gridStep);
+        const maxGX = Math.floor((x + C.radius + 1024) / gridStep);
+        const minGZ = Math.ceil((z - C.radius + 1024) / gridStep);
+        const maxGZ = Math.floor((z + C.radius + 1024) / gridStep);
+        for (let gx = minGX; gx <= maxGX; gx += 1) {
+          for (let gz = minGZ; gz <= maxGZ; gz += 1) {
+            const px = gx * gridStep - 1024;
+            const pz = gz * gridStep - 1024;
+            if ((px - x) ** 2 + (pz - z) ** 2 <= C.radius ** 2 + 1e-9) {
+              high = Math.max(high, C.groundHeight(px, pz));
+            }
+          }
+        }
+        return high;
+      };
+      const startGround = C.groundHeight(p.x, p.z);
+      const startMaxGround = maxFootprintGround(p.x, p.z);
+      /* Start clear across the full capsule footprint, but still inside the old
+         +STEP proximity test so a regression would re-arm its false
+         takeoff exemption on the first high-speed frame. */
+      p.y = startMaxGround + 0.03;
+      p.vy = 0;
+      p.speed = T.jetpack.config.cruiseSpeed;
+      p.grounded = false;
+      T.jetpack.state.takeoffClearing = false;
+      const startedInFlight = T.jetpack.state.inFlight;
+      const startedActive = T.jetpack.state.active;
+      const blockedBefore = T.jetpack.state.blockedFrames;
+      let minClearance = Infinity;
+      let maxUpStep = 0;
+      let maxForwardProgress = 0;
+      let poweredFrames = 0;
+      let worst = null;
+      let previousY = p.y;
+      const samples = [];
+      for (let frame = 0; frame < 120; frame += 1) {
+        T.renderOnce(1 / 60);
+        const maxGround = maxFootprintGround(p.x, p.z);
+        const clearance = p.y - maxGround;
+        const upStep = p.y - previousY;
+        previousY = p.y;
+        maxUpStep = Math.max(maxUpStep, upStep);
+        maxForwardProgress = Math.max(maxForwardProgress, p.z - 315.30);
+        if (T.jetpack.state.inFlight && T.jetpack.state.active) poweredFrames += 1;
+        if (clearance < minClearance) {
+          minClearance = clearance;
+          worst = { frame, x: p.x, y: p.y, z: p.z, maxGround, clearance };
+        }
+        if (frame % 15 === 0) {
+          samples.push({ frame, x: p.x, y: p.y, z: p.z, maxGround, clearance });
+        }
+      }
+      return {
+        start: {
+          x: -652, z: 315.30, ground: startGround, maxGround: startMaxGround,
+          y: startMaxGround + 0.03,
+        },
+        end: { x: p.x, y: p.y, z: p.z },
+        startedInFlight,
+        startedActive,
+        poweredFrames,
+        maxForwardProgress,
+        minClearance,
+        maxUpStep,
+        blockedFrames: T.jetpack.state.blockedFrames - blockedBefore,
+        climbStepLimit: T.jetpack.config.climbSpeed / 60 + 0.05,
+        worst,
+        samples,
+      };
+    });
+    await page.screenshot({ path: path.join(outDir, "hill-contact.png") });
+    await page.keyboard.up("KeyW");
+    await page.keyboard.up("Space");
+    await page.keyboard.up("ShiftLeft");
+    check("powered flight contacts the Fosse hill without entering it",
+      report.hillContact.blockedFrames > 0
+        && report.hillContact.startedInFlight
+        && report.hillContact.startedActive
+        && report.hillContact.poweredFrames >= 60
+        && report.hillContact.maxForwardProgress >= 1.0
+        && report.hillContact.minClearance >= -0.025
+        && report.hillContact.maxUpStep <= report.hillContact.climbStepLimit,
+      JSON.stringify(report.hillContact));
 
     report.slopeTakeoff = await page.evaluate(() => {
       const T = window.__SF; const p = T.player.state;
       T.teleport(-576, 332, 0);
       const ground = T.collide.groundHeight(p.x, p.z);
-      T.setJetInput(true); T.advanceTime(0.3, 1 / 60);
-      const out = { ...T.jetpackState(), ground };
+      T.setJetInput(true);
+      T.advanceTime(0.06, 1 / 60);
+      const sawTakeoffClearing = T.jetpack.state.takeoffClearing;
+      let clearFrames = 0;
+      while (T.jetpack.state.takeoffClearing && clearFrames < 60) {
+        T.advanceTime(1 / 60, 1 / 60);
+        clearFrames += 1;
+      }
+      const clearedTakeoff = !T.jetpack.state.takeoffClearing;
+      const before = [p.x, p.z];
+      T.player.input.keys.add("KeyW");
+      T.advanceTime(0.5, 1 / 60);
+      T.player.input.keys.delete("KeyW");
+      const horizontalProgress = Math.hypot(p.x - before[0], p.z - before[1]);
+      const out = {
+        ...T.jetpackState(), ground, sawTakeoffClearing,
+        clearedTakeoff, clearFrames, horizontalProgress,
+      };
       T.setJetInput(false); T.advanceTime(0.05, 1 / 60);
       return out;
     });
     check("a walking-legal slope can launch vertically",
-      report.slopeTakeoff.active && report.slopeTakeoff.y - report.slopeTakeoff.ground > 1,
+      report.slopeTakeoff.active
+        && report.slopeTakeoff.sawTakeoffClearing
+        && report.slopeTakeoff.clearedTakeoff
+        && report.slopeTakeoff.clearFrames < 60
+        && report.slopeTakeoff.y - report.slopeTakeoff.ground > 1
+        && report.slopeTakeoff.horizontalProgress >= 0.5,
       JSON.stringify(report.slopeTakeoff));
+
+    /* A strict disk capsule contacts the uphill rim before its center
+       reaches walking ground. That must hand off to terrain landing,
+       not be mistaken for a roof and drift forever. */
+    report.slopeLanding = await page.evaluate(() => {
+      const T = window.__SF; const p = T.player.state;
+      /* This point sits in the old 0.36-1.05m gap: every direction
+         passes the grounded controller's step/sustained-slope gates,
+         and ordinary KeyW traversal climbs it, but a fixed 0.36m
+         landing cutoff treated the capsule rim as a roof forever. */
+      const x = 154.5163302217;
+      const z = -68.5529218521;
+      T.player.input.clearAll();
+      T.teleport(x, z, 0);
+      const support = T.collide.groundHeight(x, z);
+      const footprintSupport = T.collide.flightGroundHeight(x, z, T.collide.radius);
+      const centerBlocked = T.collide.blocked(x, z, support);
+      p.y = support + 2;
+      p.vy = -6;
+      p.grounded = false;
+      p.speed = 0;
+      Object.assign(T.jetpack.state, {
+        inFlight: true, active: false, requested: false,
+        takeoffClearing: false, fuel: 50,
+        cooldownRemaining: 0, rechargeDelayRemaining: 0,
+      });
+      const landingsBefore = T.jetpack.state.landings;
+      let framesToGround = null;
+      let maxDownStep = 0;
+      let previousY = p.y;
+      let yAtGround = null;
+      for (let frame = 1; frame <= 720; frame += 1) {
+        T.renderOnce(1 / 60);
+        maxDownStep = Math.max(maxDownStep, previousY - p.y);
+        previousY = p.y;
+        if (p.grounded) {
+          framesToGround = frame;
+          yAtGround = p.y;
+          break;
+        }
+      }
+      const fuelAtLanding = T.jetpack.state.fuel;
+      let maxPostLandingDownStep = 0;
+      previousY = p.y;
+      for (let frame = 0; frame < 4; frame += 1) {
+        T.renderOnce(0.1);
+        maxPostLandingDownStep = Math.max(maxPostLandingDownStep, previousY - p.y);
+        previousY = p.y;
+      }
+      for (let frame = 0; frame < 300; frame += 1) T.renderOnce(1 / 60);
+      return {
+        support,
+        footprintSupport,
+        footprintRise: footprintSupport - support,
+        centerBlocked,
+        framesToGround,
+        maxDownStep,
+        maxPostLandingDownStep,
+        yAtGround,
+        footprintDropAtGround: yAtGround === null ? null : footprintSupport - yAtGround,
+        grounded: p.grounded,
+        inFlight: T.jetpack.state.inFlight,
+        y: p.y,
+        fuelAtLanding,
+        fuelAfterRecharge: T.jetpack.state.fuel,
+        landings: T.jetpack.state.landings - landingsBefore,
+      };
+    });
+    check("steep walkable slope lands and resumes recharge",
+      report.slopeLanding.footprintRise > 0.40
+        && report.slopeLanding.footprintRise < 1.05
+        && !report.slopeLanding.centerBlocked
+        && report.slopeLanding.framesToGround !== null
+        && report.slopeLanding.framesToGround < 120
+        && report.slopeLanding.maxDownStep <= 0.205
+        && report.slopeLanding.maxPostLandingDownStep <= 0.155
+        && report.slopeLanding.footprintDropAtGround <= 0.025
+        && report.slopeLanding.grounded
+        && !report.slopeLanding.inFlight
+        && Math.abs(report.slopeLanding.y - report.slopeLanding.support) <= 0.02
+        && report.slopeLanding.landings === 1
+        && report.slopeLanding.fuelAfterRecharge > report.slopeLanding.fuelAtLanding,
+      JSON.stringify(report.slopeLanding));
+
+    report.groundedUphill = await page.evaluate(() => {
+      const T = window.__SF; const p = T.player.state; const C = T.collide;
+      const x = 154.5163302217;
+      const z = -68.5529218521;
+      const startGround = C.groundHeight(x, z);
+      let best = null;
+      for (let i = 0; i < 64; i += 1) {
+        const yaw = i * Math.PI * 2 / 64;
+        const dx = Math.sin(yaw);
+        const dz = Math.cos(yaw);
+        const nearGround = C.groundHeight(x + dx * 0.45, z + dz * 0.45);
+        const farRise = C.groundHeight(x + dx * 1.6, z + dz * 1.6) - startGround;
+        const nearRise = nearGround - startGround;
+        if (nearRise > 0.05 && nearRise <= 1.05 && farRise / 1.6 < 1.7
+          && (!best || nearRise > best.nearRise)) {
+          best = { yaw, nearRise, farRise };
+        }
+      }
+      if (!best) return null;
+      T.player.input.clearAll();
+      T.teleport(x, z, best.yaw);
+      p.speed = 4.4;
+      T.player.input.keys.add("KeyW");
+      const beforeY = p.y;
+      T.renderOnce(0.1);
+      T.player.input.keys.delete("KeyW");
+      const support = C.groundHeight(p.x, p.z);
+      return {
+        ...best,
+        distance: Math.hypot(p.x - x, p.z - z),
+        supportRise: support - startGround,
+        bodyRise: p.y - beforeY,
+        remainingEase: support - p.y,
+      };
+    });
+    check("low-FPS grounded uphill motion keeps its eased vertical handoff",
+      report.groundedUphill
+        && report.groundedUphill.distance > 0.2
+        && report.groundedUphill.supportRise > 0.05
+        && report.groundedUphill.bodyRise > 0
+        && report.groundedUphill.remainingEase > 0.002,
+      JSON.stringify(report.groundedUphill));
+
+    report.extremeRimLanding = await page.evaluate(() => {
+      const T = window.__SF; const p = T.player.state; const C = T.collide;
+      const x = 597.8852967732;
+      const z = 172.1405016491;
+      T.player.input.clearAll();
+      T.teleport(x, z, 0);
+      const initialCenter = C.groundHeight(x, z);
+      const initialFootprint = C.flightGroundHeight(x, z, C.radius);
+      const initialGroundBlocked = C.blocked(x, z, initialCenter);
+      p.y = initialFootprint + 2;
+      p.vy = -6;
+      p.grounded = false;
+      p.speed = 0;
+      Object.assign(T.jetpack.state, {
+        inFlight: true, active: false, requested: false,
+        takeoffClearing: false, fuel: 50,
+        cooldownRemaining: 0, rechargeDelayRemaining: 0,
+      });
+      let previousY = p.y;
+      let maxDownStep = 0;
+      let minFlightClearance = Infinity;
+      let landingRise = null;
+      let framesToGround = null;
+      for (let frame = 1; frame <= 360; frame += 1) {
+        T.renderOnce(1 / 60);
+        maxDownStep = Math.max(maxDownStep, previousY - p.y);
+        previousY = p.y;
+        const footprint = C.flightGroundHeight(p.x, p.z, C.radius);
+        if (T.jetpack.state.inFlight) {
+          minFlightClearance = Math.min(minFlightClearance, p.y - footprint);
+        }
+        if (p.grounded) {
+          framesToGround = frame;
+          landingRise = footprint - C.groundHeight(p.x, p.z);
+          break;
+        }
+      }
+      return {
+        initialCenter,
+        initialFootprint,
+        initialRise: initialFootprint - initialCenter,
+        initialGroundBlocked,
+        maxDownStep,
+        minFlightClearance,
+        framesToGround,
+        landingRise,
+        end: { x: p.x, y: p.y, z: p.z, grounded: p.grounded },
+      };
+    });
+    check("extreme hill rim never becomes a center-support teleport",
+      report.extremeRimLanding.initialRise > 1
+        && !report.extremeRimLanding.initialGroundBlocked
+        && report.extremeRimLanding.maxDownStep <= 0.205
+        && report.extremeRimLanding.minFlightClearance >= -0.025
+        && (report.extremeRimLanding.framesToGround === null
+          || report.extremeRimLanding.landingRise <= 1.05),
+      JSON.stringify(report.extremeRimLanding));
 
     report.diagonalSweep = await page.evaluate(() => {
       const C = window.__SF.collide;

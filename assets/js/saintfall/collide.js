@@ -513,6 +513,18 @@ export function buildCollision(ctx, world) {
      ------------------------------------------------------------ */
 
   const RADIUS = 0.42;
+  /* Feet may settle into the rendered terrain by only this small skin.
+     The previous 10cm allowance was large enough to put a boot and the
+     chase ray visibly below a steep hill for a frame. */
+  const FLIGHT_TERRAIN_SKIN = 0.02;
+  const FLIGHT_TERRAIN_RING_PROBES = 64;
+  const FLIGHT_TERRAIN_UNIT_RING = Array.from(
+    { length: FLIGHT_TERRAIN_RING_PROBES },
+    (_, i) => {
+      const a = i * Math.PI * 2 / FLIGHT_TERRAIN_RING_PROBES;
+      return [Math.cos(a), Math.sin(a)];
+    }
+  );
   /* What the player can walk up without being stopped. Kerbs, steps,
      rubble, bone fragments and the causeway edge are all below this.
 
@@ -559,21 +571,36 @@ export function buildCollision(ctx, world) {
    * from imprisoning a capsule that legally stood there. */
   function flightBlocked(x, z, feetY, radius = RADIUS, height = HEAD_ROOM,
     ignoreTerrain = false) {
-    const support = groundHeight(x, z);
-    const takingOff = feetY <= support + STEP + 0.04;
+    /* Being below the support at a CANDIDATE point does not mean the
+       capsule is taking off; it is also exactly what happens when an
+       airborne player flies into a hill. The old inference therefore
+       re-enabled the 0.82m walking-step allowance on uphill contact
+       and accepted a frame with the trooper visibly under terrain.
+       Only the sweep's bounded, legal-launch exemption may classify
+       a probe as takeoff clearance. */
+    const takingOff = ignoreTerrain
+      && feetY <= groundHeight(x, z) + STEP + 0.04;
     const bottom = feetY + 0.02;
     const head = feetY + height;
+    if (!ignoreTerrain) {
+      const terrainLimit = feetY + FLIGHT_TERRAIN_SKIN;
+      /* The capsule occupies a DISK, not nine isolated columns. On a
+         steep rendered triangle, the old centre/cardinal/diagonal
+         probes missed the high point between bearings by 2.5cm.
+
+         On the rendered terrain, a linear triangle reaches its disk
+         maximum on the circular boundary unless a terrain vertex lies
+         inside it. Sample that boundary finely and include every LOD0
+         grid vertex inside the footprint. This keeps the hot authored-
+         mesh span query at its existing nine probes while making hill
+         contact match the visible terrain height field. */
+      if (flightGroundHeight(x, z, radius, terrainLimit) > terrainLimit) return true;
+    }
     const hit = (px, pz) => {
-      /* Terrain is not part of the world mesh raster, but it is still
-         a solid flight boundary. Without this test a boosted capsule
-         could cross a trench bank entirely below the destination
-         surface and then be snapped twenty metres upward by the
-         landing clamp. Preserve the ordinary step allowance while
-         the capsule is lifting from a legal support; once airborne,
-         any terrain above its foot clearance blocks the sweep. */
-      const localGround = groundHeight(px, pz);
-      const groundClearance = takingOff ? STEP + 0.04 : 0.10;
-      if (!ignoreTerrain && localGround > feetY + groundClearance) return true;
+      /* Terrain was resolved against the full footprint above. Keep
+         the local support only to distinguish low, launch-overlapped
+         mesh spans while the authoritative takeoff latch is active. */
+      const localGround = takingOff ? groundHeight(px, pz) : -Infinity;
       const spans = flightCellAt(px, pz);
       if (!spans) return false;
       for (let i = 0; i < spans.length; i += 2) {
@@ -589,6 +616,39 @@ export function buildCollision(ctx, world) {
       || hit(x, z + radius) || hit(x, z - radius)
       || hit(x + d, z + d) || hit(x + d, z - d)
       || hit(x - d, z + d) || hit(x - d, z - d);
+  }
+
+  /** Highest rendered/support surface under a circular flight capsule.
+   *  `stopAbove` lets hot overlap queries return on their first block;
+   *  landing calls omit it to classify terrain contact against roofs. */
+  function flightGroundHeight(x, z, radius = RADIUS, stopAbove = Infinity) {
+    let high = groundHeight(x, z);
+    if (high > stopAbove) return high;
+    for (const [ux, uz] of FLIGHT_TERRAIN_UNIT_RING) {
+      high = Math.max(high, groundHeight(x + ux * radius, z + uz * radius));
+      if (high > stopAbove) return high;
+    }
+    if (world.walkSurfaceMaxInCircle) {
+      high = Math.max(high, world.walkSurfaceMaxInCircle(x, z, radius));
+      if (high > stopAbove) return high;
+    }
+    const gridStep = terrain.groundSampleStep;
+    if (!Number.isFinite(gridStep) || gridStep <= 0) return high;
+    const minGX = Math.ceil((x - radius + HALF) / gridStep);
+    const maxGX = Math.floor((x + radius + HALF) / gridStep);
+    const minGZ = Math.ceil((z - radius + HALF) / gridStep);
+    const maxGZ = Math.floor((z + radius + HALF) / gridStep);
+    const radiusSq = radius * radius + 1e-9;
+    for (let gx = minGX; gx <= maxGX; gx += 1) {
+      const px = gx * gridStep - HALF;
+      for (let gz = minGZ; gz <= maxGZ; gz += 1) {
+        const pz = gz * gridStep - HALF;
+        if ((px - x) ** 2 + (pz - z) ** 2 > radiusSq) continue;
+        high = Math.max(high, groundHeight(px, pz));
+        if (high > stopAbove) return high;
+      }
+    }
+    return high;
   }
 
   /** Swept/substepped flight resolve.
@@ -617,11 +677,12 @@ export function buildCollision(ctx, world) {
     let hitX = false;
     let hitY = false;
     let hitZ = false;
-    const takeoffGround = groundHeight(x, z);
-    const legalTakeoff = allowTakeoffExit || (
-      y <= takeoffGround + STEP + 0.04
-      && !blocked(x, z, takeoffGround, radius)
-    );
+    /* Takeoff clearance is controller state, not something a sweep
+       can rediscover from proximity to its starting ground. At
+       flight speed each frame begins less than a capsule radius from
+       the last; auto-detecting here re-armed the exemption every
+       frame and let a player ratchet through an uphill bank. */
+    const legalTakeoff = !!allowTakeoffExit;
     const overlaps = (qx, qz, qy) => {
       /* A position accepted by the walking controller is a known
          legal launch origin. Ignore terrain-only rim overlap for the
@@ -937,6 +998,7 @@ export function buildCollision(ctx, world) {
     setDebugView,
     blocked,
     flightBlocked,
+    flightGroundHeight,
     sweepFlightCapsule,
     findFlightLanding,
     findOpen,

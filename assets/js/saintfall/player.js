@@ -1817,7 +1817,7 @@ async function buildTrooper(ctx) {
    INPUT
    ============================================================ */
 
-function makeInput(canvas) {
+function makeInput(canvas, captureMeleeAim = null) {
   const keys = new Set();
   const state = {
     clock: 0,
@@ -1879,7 +1879,12 @@ function makeInput(canvas) {
       state.jumpPressed = true;
       return true;
     }
-    state.events.push({ type, ...detail });
+    if (type === "melee" && !Number.isFinite(detail.aimYaw)) {
+      const aimYaw = captureMeleeAim?.();
+      state.events.push({ type, ...detail, aimYaw });
+    } else {
+      state.events.push({ type, ...detail });
+    }
     return true;
   }
 
@@ -1946,12 +1951,16 @@ function makeInput(canvas) {
        One key, one swing: main.js takes the rite over for the length
        of the animation and hands it back.
 
-       Q, and the stratagem pad moved to V to free it. Melee is the
-       panic button - it is what you hit with something already on
-       top of you - so it belongs under the finger that is nearest
-       WASD, and stratagems are the deliberate one you have time to
-       reach for. */
-    if (k === "KeyQ") state.events.push({ type: "melee" });
+       Q is the panic button - it is what you hit with something
+       already on top of you - so it belongs under the finger that
+       is nearest WASD. */
+    if (k === "KeyQ") {
+      /* Bind the swing to the reticle that existed at keydown. The
+         event is drained after player.update(), so sampling there
+         would let mouse-look during the same frame silently redirect
+         an attack the player already committed. */
+      state.events.push({ type: "melee", aimYaw: captureMeleeAim?.() });
+    }
     else if (k === "KeyV") state.events.push({ type: "stratOpen" });
     else if (k === "KeyR") state.events.push({ type: "vent" });
     else if (k === "KeyE") state.events.push({ type: "boost" });
@@ -2061,8 +2070,6 @@ export async function createPlayer(ctx, canvas) {
   const figure = await buildTrooper(ctx);
   scene.add(figure.root);
 
-  const input = makeInput(canvas);
-
   const state = {
     clock: 0,
     x: -12,
@@ -2084,6 +2091,12 @@ export async function createPlayer(ctx, canvas) {
     camDist: 5.2,
     grounded: true,
     speed: 0,
+    /* Actual horizontal travel, which may differ from body facing
+       while melee commits the shoulders to the reticle. Footfall
+       prediction reads these so a sideways/backward swing cannot
+       plant both feet along the attack bearing. */
+    travelYaw: Math.PI,
+    travelSpeed: 0,
     bob: 0,
     stride: 0,
     gait: 0,
@@ -2113,6 +2126,10 @@ export async function createPlayer(ctx, canvas) {
     aimCommit: 0,
     aimHold: 0,
   };
+
+  const input = makeInput(canvas, () => Number.isFinite(state.aimViewYaw)
+    ? state.aimViewYaw
+    : state.camYaw);
 
   const EYE = 1.62;
   const CAMERA_AIM_BIAS = Math.atan2(0.35, state.camDist);
@@ -2162,6 +2179,22 @@ export async function createPlayer(ctx, canvas) {
      clamp that stops the shoulders spinning a half-turn on stationary
      hips when the camera orbits. */
   const MAX_CHEST_TWIST = 0.95;
+  /* A melee press is a commitment to the reticle bearing captured on
+     that press. Locomotion normally owns body yaw, but letting it win
+     during the wind-up can turn a thrust 90-180 degrees away before
+     its hit window opens. This response leaves the turn visible and
+     keeps yawRate/foot prediction informed, while settling even a
+     full about-face before melee1 connects. */
+  const MELEE_TURN_RESPONSE = 20;
+  /* Walking and flight-to-ground handoff must agree about what terrain
+     the trooper can occupy. Keeping these gates in one classifier avoids
+     a middle band where a slope is freely walkable but a descending
+     jetpack capsule mistakes its uphill rim for a roof. */
+  const WALK_SLOPE_LOOK = 1.6;
+  const WALK_SLOPE_NEAR = 0.45;
+  const WALK_SLOPE_LIMIT = 1.7;
+  const WALK_MAX_STEP_UP = 1.05;
+  const GROUNDED_SETTLE_DOWN_SPEED = 1.5;
 
   const tmp = new THREE.Vector3();
   const camOffset = new THREE.Vector3();
@@ -2448,7 +2481,20 @@ export async function createPlayer(ctx, canvas) {
     },
   };
 
-  const action = { name: null, t: 0, spec: null, hitDone: false, queued: null, combo: 0, comboAt: -9 };
+  const action = {
+    name: null,
+    t: 0,
+    spec: null,
+    hitDone: false,
+    queued: null,
+    /* Horizontal reticle bearing captured for the live swing. A
+       buffered combo gets its own press-time bearing rather than
+       inheriting the first blow or sampling the camera later. */
+    aimYaw: null,
+    queuedAimYaw: null,
+    combo: 0,
+    comboAt: -9,
+  };
   const actionPose = {
     x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0,
     // Body channels. A clip that leaves these at zero animates the
@@ -2508,30 +2554,40 @@ export async function createPlayer(ctx, canvas) {
     actionPose.slide = lerp(chan(a, 13), chan(b, 13), u);
   }
 
-  function beginAction(name) {
+  function beginAction(name, aimYaw = null) {
     const spec = ACTIONS[name];
     if (!spec) return false;
     action.name = name;
     action.spec = spec;
     action.t = 0;
     action.hitDone = false;
+    action.aimYaw = name.startsWith("melee") && Number.isFinite(aimYaw)
+      ? Math.atan2(Math.sin(aimYaw), Math.cos(aimYaw))
+      : null;
     return true;
   }
 
   /** Next attack in the three-hit chain, or the first if it lapsed. */
-  function meleeSwing() {
+  function meleeSwing(capturedAimYaw = null) {
     const w = ctx.weapons && ctx.weapons.current;
     if (!w || !w.spec.melee) return false;
+    const aimYaw = Number.isFinite(capturedAimYaw)
+      ? capturedAimYaw
+      : Number.isFinite(state.aimViewYaw) ? state.aimViewYaw : state.camYaw;
     if (action.name && action.name.startsWith("melee")) {
       // Buffered: pressing during the recovery chains, which is what
       // makes a combo feel responsive rather than dropped.
-      if (action.t > action.spec.dur * 0.42) action.queued = true;
+      if (action.t > action.spec.dur * 0.42) {
+        action.queued = true;
+        action.queuedAimYaw = aimYaw;
+      }
       return false;
     }
     if (state.clock - action.comboAt > 1.15) action.combo = 0;
     action.combo = (action.combo % 3) + 1;
     action.comboAt = state.clock;
-    return beginAction(`melee${action.combo}`);
+    action.queuedAimYaw = null;
+    return beginAction(`melee${action.combo}`, aimYaw);
   }
 
   function sampleAction(dt) {
@@ -2578,15 +2634,35 @@ export async function createPlayer(ctx, canvas) {
 
     if (action.t >= action.spec.dur) {
       const chain = action.queued;
+      const chainAimYaw = action.queuedAimYaw;
       action.queued = false;
+      action.queuedAimYaw = null;
       action.name = null;
       action.spec = null;
-      if (chain) meleeSwing();
+      action.aimYaw = null;
+      if (chain) meleeSwing(chainAimYaw);
     }
   }
 
   function groundY(x, z) {
     return ctx.collide ? ctx.collide.groundHeight(x, z) : terrain.heightAt(x, z);
+  }
+
+  function walkableFrom(fromX, fromZ, dx, dz) {
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-6) return true;
+    const ux = dx / len;
+    const uz = dz / len;
+    const here = groundY(fromX, fromZ);
+    if (groundY(
+      fromX + ux * WALK_SLOPE_NEAR,
+      fromZ + uz * WALK_SLOPE_NEAR
+    ) - here > WALK_MAX_STEP_UP) return false;
+    const rise = groundY(
+      fromX + ux * WALK_SLOPE_LOOK,
+      fromZ + uz * WALK_SLOPE_LOOK
+    ) - here;
+    return rise / WALK_SLOPE_LOOK < WALK_SLOPE_LIMIT;
   }
 
   function spawn(x, z, yaw) {
@@ -2597,6 +2673,8 @@ export async function createPlayer(ctx, canvas) {
     state.grounded = true;
     state.speed = 0;
     if (yaw !== undefined) { state.yaw = yaw; state.camYaw = yaw; }
+    state.travelYaw = state.yaw;
+    state.travelSpeed = 0;
     state.stride = 0;
     state.gait = 0;
     camAnchorReady = false;
@@ -3146,14 +3224,22 @@ export async function createPlayer(ctx, canvas) {
          axis. */
       wantYaw = state.camYaw + Math.atan2(-mx, -mz);
     }
-    if (state.aimCommit > 0.002 && !state.free) {
+    const meleeFacing = action.name && action.name.startsWith("melee")
+      && Number.isFinite(action.aimYaw);
+    if (meleeFacing) {
+      /* Keep the animation and combat arc on one body frame for the
+         whole blow. Translation remains camera-relative below, so
+         turning the shoulders cannot reverse a held movement key. */
+      wantYaw = action.aimYaw;
+    } else if (state.aimCommit > 0.002 && !state.free) {
       const aimYaw = state.aimViewYaw ?? state.camYaw;
       const over = Math.abs(angleDelta(wantYaw, aimYaw)) - MAX_CHEST_TWIST;
       if (over > 0) {
         wantYaw += Math.sign(angleDelta(wantYaw, aimYaw)) * over * state.aimCommit;
       }
     }
-    const turnResponse = boostMode ? 24
+    const turnResponse = meleeFacing ? MELEE_TURN_RESPONSE
+      : boostMode ? 24
       : shieldMode ? 20
         : lerp(
           lerp(10.0, 6.4, clamp01(state.speed / SPRINT)),
@@ -3184,8 +3270,16 @@ export async function createPlayer(ctx, canvas) {
     const motionStartZ = state.z;
     if (mag > 0.01 || boostMode) {
       const step = state.speed * dt;
+      /* Melee owns the BODY bearing for its committed attack, but it
+         must not steal the movement stick. Preserve the same
+         camera-relative travel the pressed WASD direction requested;
+         otherwise S can become forward movement toward the target as
+         soon as the body turns to swing. The existing gait already
+         supports body-relative strafing during aim commitment. */
       const moveYaw = boostMode ? boostState.yaw
-        : shieldMode ? state.camYaw + Math.atan2(-mx, -mz) : state.yaw;
+        : (shieldMode || meleeFacing)
+          ? state.camYaw + Math.atan2(-mx, -mz)
+          : state.yaw;
       const nx = state.x + Math.sin(moveYaw) * step;
       const nz = state.z + Math.cos(moveYaw) * step;
 
@@ -3233,20 +3327,6 @@ export async function createPlayer(ctx, canvas) {
          while a crater wall stays steep for the whole probe and still
          stops them. The near check is what keeps that from becoming
          a licence to walk through a vertical face. */
-      const LOOK = 1.6;
-      const NEAR = 0.45;
-      const SLOPE = 1.7;
-      const MAX_STEP_UP = 1.05;
-      const walkableFrom = (fromX, fromZ, dx, dz) => {
-        const len = Math.hypot(dx, dz);
-        if (len < 1e-6) return true;
-        const ux = dx / len;
-        const uz = dz / len;
-        const here = groundY(fromX, fromZ);
-        if (groundY(fromX + ux * NEAR, fromZ + uz * NEAR) - here > MAX_STEP_UP) return false;
-        const rise = groundY(fromX + ux * LOOK, fromZ + uz * LOOK) - here;
-        return rise / LOOK < SLOPE;
-      };
       const walkable = (dx, dz) => walkableFrom(state.x, state.z, dx, dz);
       let mx2 = nx;
       let mz2 = nz;
@@ -3380,6 +3460,7 @@ export async function createPlayer(ctx, canvas) {
       }
       let landingImpactSpeed = Math.max(0, -state.vy);
       let verticalHit = false;
+      let terrainLandingContact = false;
       if (ctx.collide?.sweepFlightCapsule) {
         const attemptedVy = state.vy;
         landingImpactSpeed = Math.max(landingImpactSpeed, -attemptedVy);
@@ -3398,6 +3479,29 @@ export async function createPlayer(ctx, canvas) {
           state.x, state.z, state.y, ctx.collide.radius, 2.35
         )) jetState.takeoffClearing = false;
         verticalHit = out.hitY;
+        if (out.hitY && ctx.collide.flightGroundHeight) {
+          const footprintSupport = ctx.collide.flightGroundHeight(
+            state.x, state.z, ctx.collide.radius
+          );
+          const centerSupport = groundY(state.x, state.z);
+          /* A terrain sweep resolves within the 2cm contact skin;
+             roofs remain metres above this support footprint. Carry
+             that source distinction into the landing handoff instead
+             of guessing from center ground height. */
+          terrainLandingContact = Number.isFinite(footprintSupport)
+            && state.y <= footprintSupport + 0.04
+            /* Reuse the grounded controller's actual step and sustained-
+               slope gates. A fixed sub-step cutoff left fully walkable
+               40-60cm rim rises hovering forever, while a multi-metre
+               Fosse face still fails both the shared walkability test
+               and the authoritative near-step cap. The full capsule
+               footprint already spans the grounded controller's 0.45m
+               near probe, while `blocked` verifies the center is a
+               legal standing column without rejecting a valid contour
+               landing just because one far direction climbs sharply. */
+            && footprintSupport - centerSupport <= WALK_MAX_STEP_UP
+            && !ctx.collide.blocked(state.x, state.z, centerSupport);
+        }
         if (out.hitX || out.hitZ) {
           // Bleed speed on contact instead of continuing to drive the
           // pose and camera at 30m/s while pressed into a wall.
@@ -3412,7 +3516,8 @@ export async function createPlayer(ctx, canvas) {
              drift toward the nearest column that reaches authored
              ground instead of hovering forever on an ungroundable
              surface. The drift itself is swept, bounded and slow. */
-          if (!jetState.active && attemptedVy < 0 && state.y > gy + 0.12
+          if (!terrainLandingContact && !jetState.active
+            && attemptedVy < 0 && state.y > gy + 0.12
             && ctx.collide.findFlightLanding) {
             /* Landing-site search is the expensive part of the roof
                escape. Cache the validated static-world target across
@@ -3488,12 +3593,22 @@ export async function createPlayer(ctx, canvas) {
       }
 
       const support = groundY(state.x, state.z);
-      if (state.vy <= 0 && state.y <= support + 0.10) {
+      /* Terrain contact hands the capsule back to the walking support
+         even on a steep but legal slope. The center fallback preserves
+         the old flat-ground behavior when a collision implementation
+         does not expose footprint metadata. */
+      if (state.vy <= 0 && (terrainLandingContact || state.y <= support + 0.10)) {
         /* sweepFlightCapsule zeroes vertical velocity on contact, so
            use the pre-contact descent captured above for landing
            animation/audio intensity. */
         const impact = landingImpactSpeed;
-        state.y = support;
+        /* Do not turn a valid rim contact into a center teleport.
+           Preserve the collision-resolved height on the handoff
+           frame; ordinary grounded easing can settle the body toward
+           its walking support afterward without an under-hill pop. */
+        state.y = terrainLandingContact
+          ? Math.max(support, state.y)
+          : support;
         state.vy = 0;
         state.grounded = true;
         state.speed = Math.min(state.speed, SPRINT);
@@ -3508,8 +3623,22 @@ export async function createPlayer(ctx, canvas) {
       state.y += state.vy * dt;
       if (state.y <= gy) { state.y = gy; state.vy = 0; state.grounded = true; }
     } else {
-      state.y = damp(state.y, gy, 22, dt);
+      /* A collision-resolved landing can begin above center support on
+         a legal slope. Exponential damping alone drops almost the full
+         gap in one throttled 100ms frame; cap only the downward settle
+         so touchdown cannot visibly pop under the hill at low FPS. */
+      const easedGroundY = damp(state.y, gy, 22, dt);
+      state.y = state.y > gy
+        ? Math.max(gy, state.y - GROUNDED_SETTLE_DOWN_SPEED * dt, easedGroundY)
+        : easedGroundY;
     }
+
+    const travelX = state.x - motionStartX;
+    const travelZ = state.z - motionStartZ;
+    const travelDistance = Math.hypot(travelX, travelZ);
+    if (travelDistance > 1e-5) state.travelYaw = Math.atan2(travelX, travelZ);
+    const measuredTravelSpeed = dt > 1e-5 ? travelDistance / dt : 0;
+    state.travelSpeed = damp(state.travelSpeed, measuredTravelSpeed, 18, dt);
 
     applyFigurePose(dt);
 
@@ -3707,6 +3836,19 @@ export async function createPlayer(ctx, canvas) {
        far past where a constant-rate assumption is honest. */
     const t = clamp(tau, 0, 0.42);
     const w = clamp(state.yawRate, -3.2, 3.2);
+    const meleeTravel = action.name && action.name.startsWith("melee")
+      && Number.isFinite(action.aimYaw);
+    if (meleeTravel) {
+      /* The attack can face independently of WASD. Predict pelvis
+         translation along the motion actually resolved this frame,
+         while still predicting the body's committed turn for stance
+         orientation. */
+      const v = state.travelSpeed;
+      predictBody.x = state.x + Math.sin(state.travelYaw) * v * t;
+      predictBody.z = state.z + Math.cos(state.travelYaw) * v * t;
+      predictBody.yaw = state.yaw + w * t;
+      return predictBody;
+    }
     const v = state.speed;
     const sin = Math.sin(state.yaw);
     const cos = Math.cos(state.yaw);

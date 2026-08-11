@@ -333,7 +333,7 @@ export async function start({ boot, build } = {}) {
      long as the swing takes. That is what makes one key enough: the
      player never has to know which mode they left it in. */
   let meleeBorrowed = false;
-  function meleeStrike() {
+  function meleeStrike(aimYaw = null) {
     if (combat.player.dead) return;
     if (jetpack.state.inFlight) return;
     if (shield.state.active) return;
@@ -352,7 +352,7 @@ export async function start({ boot, build } = {}) {
        returns false for that case as well as for a refusal - so the
        rite is handed back on the ACTION ending, not on this result.
        Returning it here dropped the player out of melee mid-combo. */
-    if (!player.meleeSwing() && wasRanged && !player.action) {
+    if (!player.meleeSwing(aimYaw) && wasRanged && !player.action) {
       weapons.setMode("ranged");
       meleeBorrowed = false;
     }
@@ -444,7 +444,7 @@ export async function start({ boot, build } = {}) {
       if (ev.type === "stratOpen") mission.beginEntry();
       else if (ev.type === "dir") mission.pushDirection(ev.dir);
       else if (ev.type === "vent") weapons.vent();
-      else if (ev.type === "melee") meleeStrike();
+      else if (ev.type === "melee") meleeStrike(ev.aimYaw);
     }
     const melee = weapons.current && weapons.current.spec.melee;
     /* The trigger only ever fires now. Melee has its own key, and

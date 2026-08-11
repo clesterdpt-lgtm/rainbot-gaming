@@ -120,6 +120,7 @@ export async function buildWorld(ctx, onProgress) {
      the interpolated terrain mesh. Collision and foot IK consume this
      function after the world is complete. */
   let walkSurfaceAt = () => -Infinity;
+  let walkSurfaceMaxInCircle = () => -Infinity;
 
   const paintH = (geo, ramp, opts) => paintByHeight(THREE, geo, ramp, opts);
   const flat = (geo, hex, jit = 0.08) => paintFlat(THREE, geo, hex, jit);
@@ -542,6 +543,34 @@ export async function buildWorld(ctx, onProgress) {
       };
       for (const c of list) {
         best = Math.max(best, triY(c[0], c[2], c[1]), triY(c[0], c[3], c[2]));
+      }
+      return best;
+    };
+
+    /* Boundary samples cover the sloping face of an authored road
+       quad, but a sharp shared corner can be the maximum INSIDE a
+       flight capsule. Return every indexed quad vertex within the
+       footprint so collision can include those exact interior peaks
+       just as it does for terrain-grid vertices. */
+    walkSurfaceMaxInCircle = (x, z, radius) => {
+      const minBX = Math.floor((x - radius) / WALK_BUCKET);
+      const maxBX = Math.floor((x + radius) / WALK_BUCKET);
+      const minBZ = Math.floor((z - radius) / WALK_BUCKET);
+      const maxBZ = Math.floor((z + radius) / WALK_BUCKET);
+      const radiusSq = radius * radius + 1e-9;
+      let best = -Infinity;
+      for (let bx = minBX; bx <= maxBX; bx += 1) {
+        for (let bz = minBZ; bz <= maxBZ; bz += 1) {
+          const list = walkBuckets.get(`${bx},${bz}`);
+          if (!list) continue;
+          for (const quad of list) {
+            for (const point of quad) {
+              if ((point[0] - x) ** 2 + (point[2] - z) ** 2 <= radiusSq) {
+                best = Math.max(best, point[1]);
+              }
+            }
+          }
+        }
       }
       return best;
     };
@@ -3395,6 +3424,7 @@ export async function buildWorld(ctx, onProgress) {
     pois,
     beautyShots,
     walkSurfaceAt,
+    walkSurfaceMaxInCircle,
     getBeautyShots: () => beautyShots,
     stats() {
       let tris = 0;

@@ -246,9 +246,8 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   color: rgba(230, 219, 189, 0.45);
 }
 
-/* A rotating local tactical map. The player stays upright while the
-   world turns beneath them, so a red contact at the top is always in
-   front regardless of the compass bearing. */
+/* A fixed-orientation tactical map. Landmarks stay put while the player
+   arrow turns to show the current view heading. */
 .sf-hud__minimap {
   position: absolute;
   top: 3.7rem;

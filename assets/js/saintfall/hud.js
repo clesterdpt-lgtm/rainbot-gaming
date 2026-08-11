@@ -228,20 +228,17 @@ export function buildHud(ctx, host) {
       ? Math.max(180, Math.min(420, (event.distance || 0) * 1.18 + 26))
       : 180;
     mapRangeEl.textContent = `${Math.round(mapRange)}M`;
-    const yaw = Number.isFinite(ps.camYaw) ? ps.camYaw : ps.yaw;
-    const sy = Math.sin(yaw);
-    const cyaw = Math.cos(yaw);
+    const heading = Number.isFinite(ps.camYaw)
+      ? ps.camYaw : Number.isFinite(ps.yaw) ? ps.yaw : 0;
 
     const point = (x, z, edge = false) => {
       const dx = x - ps.x;
       const dz = z - ps.z;
-      const right = dx * cyaw - dz * sy;
-      const forward = dx * sy + dz * cyaw;
-      const dist = Math.hypot(right, forward);
+      const dist = Math.hypot(dx, dz);
       const limit = edge ? Math.min(1, (mapRange * 0.93) / Math.max(1e-4, dist)) : 1;
       return {
-        x: cx + (right * limit / mapRange) * radius,
-        y: cy - (forward * limit / mapRange) * radius,
+        x: cx + (dx * limit / mapRange) * radius,
+        y: cy - (dz * limit / mapRange) * radius,
         inside: dist <= mapRange,
         dist,
       };
@@ -336,9 +333,11 @@ export function buildHud(ctx, host) {
     }
     map2d.restore();
 
-    // Player arrow is fixed upright; the world rotates beneath it.
+    // The map keeps a fixed world orientation. Only the player arrow turns,
+    // preserving the view-heading cue without making landmarks orbit the mouse.
     map2d.save();
     map2d.translate(cx, cy);
+    map2d.rotate(heading);
     map2d.fillStyle = "#fff0bf";
     map2d.shadowColor = "rgba(255,188,75,.8)";
     map2d.shadowBlur = 5;
@@ -586,6 +585,7 @@ export function buildHud(ctx, host) {
       reticleEl.style.opacity = combat.player.dead || jet?.inFlight || boost?.active
         || shield?.active ? "0" : "1";
     },
+    redrawMinimap() { drawMinimap(ctx.player); },
     setVisible(v) { el.style.display = v ? "" : "none"; },
     flashDistrict(name) { nameEl.textContent = name; showFor = 5.2; },
     damageNumberCount() { return damageNumbers.length; },

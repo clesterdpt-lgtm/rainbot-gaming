@@ -193,7 +193,7 @@ const RB_GAME_VISUALS = {
   saintfall: {
     image: "assets/img/saintfall/card-saintfall.jpg?v=20260805-1",
     kind: "3D Adventure",
-    alt: "Saintfall cover art: a processional road crosses golden dunes toward a fallen bronze colossus and distant cathedral spire",
+    alt: "Saintfall cover art: a winged ivory reliquary knight battles a cyan-lit Bloom Matriarch on the road to a storm-wreathed desert cathedral",
   },
   blacksand: { image: "assets/img/blacksand/card-blacksand.jpg?v=20260803-1", kind: "Multiplayer FPS", alt: "BLACKSAND cover art: a desert Conquest theatre with armour on a highway and a low sun" },
   "smooth-brain-snacker": { image: "assets/img/mockup/card-smooth-brain-snacker.jpg?v=20260712-jpg", kind: "Arcade" },
@@ -223,7 +223,8 @@ const RB_OPTIMIZED_CARD_SLUGS = new Set([
 
 RB_OPTIMIZED_CARD_SLUGS.forEach((slug) => {
   if (!RB_GAME_VISUALS[slug]) return;
-  RB_GAME_VISUALS[slug].image = `assets/img/cards/${slug}.avif?v=20260806-1`;
+  const cardVersion = slug === "saintfall" ? "20260810-cover-2" : "20260806-1";
+  RB_GAME_VISUALS[slug].image = `assets/img/cards/${slug}.avif?v=${cardVersion}`;
 });
 
 const RB_SLOPWIRE_ARTICLES = [

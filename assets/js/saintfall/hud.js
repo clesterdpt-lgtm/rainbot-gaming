@@ -42,7 +42,7 @@ export function buildHud(ctx, host) {
     </aside>
     <div class="sf-hud__objective" id="sf-objective">
       <div class="sf-hud__objhead">
-        <span>PRIMARY DIRECTIVE</span>
+        <span>OBJECTIVE</span>
         <div class="sf-hud__objlabel" id="sf-objlabel"></div>
       </div>
       <div class="sf-hud__objbar"><i id="sf-objbar"></i></div>
@@ -55,14 +55,14 @@ export function buildHud(ctx, host) {
     <div class="sf-hud__hurt" id="sf-hurt"></div>
     <div class="sf-hud__numbers" id="sf-damage-numbers" aria-hidden="true"></div>
     <div class="sf-hud__vitals" id="sf-vitals">
-      <div class="sf-hud__hplabel"><span>VITALITY</span><b id="sf-hp-value">150 / 150</b></div>
+      <div class="sf-hud__hplabel"><span>VITALITY</span><b id="sf-hp-value">150</b></div>
       <div class="sf-hud__hpwrap"><div class="sf-hud__hp" id="sf-hp"></div></div>
       <div class="sf-hud__jet" id="sf-jet" role="progressbar" aria-label="Reliquary charge"
         aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
-        <div class="sf-hud__jetlabel"><span>RELIQUARY CHARGE</span><b id="sf-jet-value">100%</b></div>
+        <div class="sf-hud__jetlabel"><span>CHARGE</span><b id="sf-jet-value">100%</b></div>
         <div class="sf-hud__jettrack"><i id="sf-jet-fill"></i></div>
-        <div class="sf-hud__boost" id="sf-boost"><span><b>E</b> BOOST SLIDE</span><strong id="sf-boost-value">READY</strong></div>
-        <div class="sf-hud__shield" id="sf-shield"><span><b>X</b> AEGIS BLOCK</span><strong id="sf-shield-value">READY</strong></div>
+        <div class="sf-hud__boost" id="sf-boost"><span><b>E</b> BOOST</span><strong id="sf-boost-value">READY</strong></div>
+        <div class="sf-hud__shield" id="sf-shield"><span><b>X</b> AEGIS</span><strong id="sf-shield-value">READY</strong></div>
       </div>
       <div class="sf-hud__vitalrow">
         <span id="sf-ammo">&mdash;</span>
@@ -71,15 +71,13 @@ export function buildHud(ctx, host) {
     </div>
     <section class="sf-hud__command" id="sf-command-status" aria-label="Command availability">
       <header class="sf-hud__command-head">
-        <span>RELIQUARY COMMAND</span>
-        <strong><kbd>TAB</kbd> HOLD</strong>
+        <span>COMMAND</span>
+        <strong><kbd>TAB</kbd></strong>
       </header>
       <div class="sf-hud__strat" id="sf-strat"></div>
     </section>
     <div class="sf-hud__hint" id="sf-hint">
-      <span><kbd>TAB</kbd> <b>HOLD COMMAND WHEEL</b></span>
-      <i aria-hidden="true"></i>
-      <span><kbd>ESC</kbd> <b>FIELD MENU</b></span>
+      <span><kbd>TAB</kbd> <b>HOLD FOR COMMAND</b></span>
     </div>
   `;
 
@@ -258,7 +256,7 @@ export function buildHud(ctx, host) {
 
   let current = null;
   let showFor = 0;
-  let hintFade = 14;
+  let hintFade = 8;
   const fwdVec = new ctx.THREE.Vector3();
   const map2d = mapCanvas.getContext("2d");
   let mapTick = 0;
@@ -672,7 +670,7 @@ export function buildHud(ctx, host) {
 
       const hp = clamp01(combat.player.hp / combat.player.maxHp);
       hpEl.style.width = `${hp * 100}%`;
-      hpValueEl.textContent = `${Math.ceil(combat.player.hp)} / ${combat.player.maxHp}`;
+      hpValueEl.textContent = `${Math.ceil(combat.player.hp)}`;
       // Colour is a threshold, not a gradient. A bar that slides
       // continuously from green to red never reads as "you are in
       // trouble NOW" - it just reads as slightly different.
@@ -697,8 +695,10 @@ export function buildHud(ctx, host) {
            the number when there IS no decision left to make. */
         if (!h) {
           ammoEl.innerHTML = "&mdash;";
+          ammoEl.hidden = true;
         } else {
           const pct = Math.round(h.heat * 100);
+          ammoEl.hidden = pct <= 0 && !h.overheated && !h.venting;
           const state = h.overheated ? "OVERHEAT"
             : (h.venting ? "VENTING" : `${pct}%`);
           const cls = h.overheated ? " is-over" : (h.venting ? " is-venting" : "");
@@ -707,7 +707,8 @@ export function buildHud(ctx, host) {
             + `<u>${state}</u></span>`;
         }
       }
-      reinfEl.textContent = `REINFORCEMENTS ${mission.state.reinforcements}`;
+      reinfEl.textContent = `✦ ${mission.state.reinforcements}`;
+      reinfEl.setAttribute("aria-label", `${mission.state.reinforcements} reinforcements`);
 
       const obj = mission.objective();
       if (obj) {

@@ -117,7 +117,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
   root.id = "sf-native-ui";
   root.className = "sf-native-ui";
   root.innerHTML = `
-    <button class="sf-menu-trigger" type="button" data-menu-open aria-label="Open field menu">
+    <button class="sf-menu-trigger" type="button" data-menu-open aria-label="Open field menu"
+      title="Field menu (Esc)">
       ${ICONS.crest}<span>FIELD MENU</span><kbd>ESC</kbd>
     </button>
     <div id="sf-command-wheel" class="sf-command-wheel" role="dialog"

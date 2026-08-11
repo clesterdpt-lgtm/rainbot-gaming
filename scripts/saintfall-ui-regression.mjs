@@ -90,6 +90,70 @@ async function layoutAudit(page) {
   });
 }
 
+async function hudDensityAudit(page) {
+  return await page.evaluate(() => {
+    const stage = document.querySelector(".sf-stage");
+    if (!stage) return { stage: null, coveragePct: Infinity,
+      overlaps: ["missing .sf-stage"], readyLabels: [], largeClusters: [] };
+    const stageRect = stage.getBoundingClientRect();
+    const stageArea = Math.max(1, stageRect.width * stageRect.height);
+    const isVisible = (node) => {
+      if (!node) return false;
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden"
+        && Number(style.opacity) > 0 && rect.width > 1 && rect.height > 1;
+    };
+    const selectors = [
+      ".sf-menu-trigger", "#sf-fullscreen", "#sf-objective", "#sf-compass",
+      "#sf-minimap", "#sf-vitals", "#sf-command-status", "#sf-hint",
+    ];
+    const clusters = selectors.map((selector) => {
+      const node = document.querySelector(selector);
+      if (!isVisible(node)) return null;
+      const rect = node.getBoundingClientRect();
+      return {
+        selector,
+        left: Number((rect.left - stageRect.left).toFixed(1)),
+        top: Number((rect.top - stageRect.top).toFixed(1)),
+        right: Number((rect.right - stageRect.left).toFixed(1)),
+        bottom: Number((rect.bottom - stageRect.top).toFixed(1)),
+        width: Number(rect.width.toFixed(1)),
+        height: Number(rect.height.toFixed(1)),
+        areaPct: Number(((rect.width * rect.height / stageArea) * 100).toFixed(2)),
+      };
+    }).filter(Boolean);
+    const overlaps = [];
+    for (let i = 0; i < clusters.length; i += 1) {
+      for (let j = i + 1; j < clusters.length; j += 1) {
+        const a = clusters[i];
+        const b = clusters[j];
+        const width = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+        const height = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+        if (width * height > 4) {
+          overlaps.push(`${a.selector} x ${b.selector}: ${width.toFixed(1)}x${height.toFixed(1)}`);
+        }
+      }
+    }
+    const readyLabels = [
+      ...document.querySelectorAll(
+        "#sf-boost-value, #sf-shield-value, #sf-command-status .sf-hud__stratstatus"
+      ),
+    ].filter((node) => isVisible(node) && node.textContent.trim().toUpperCase() === "READY")
+      .map((node) => node.id || node.className);
+    return {
+      stage: { width: Number(stageRect.width.toFixed(1)),
+        height: Number(stageRect.height.toFixed(1)) },
+      coveragePct: Number(clusters.reduce((sum, cluster) => sum + cluster.areaPct, 0).toFixed(2)),
+      overlaps,
+      readyLabels,
+      largeClusters: clusters.filter((cluster) => cluster.areaPct > 6)
+        .map((cluster) => `${cluster.selector}:${cluster.areaPct}%`),
+      clusters,
+    };
+  });
+}
+
 async function touchTargetAudit(page) {
   return await page.evaluate(() => {
     const stage = document.querySelector(".sf-stage");
@@ -139,6 +203,13 @@ async function embeddedKeyboardPass(browser) {
   const { context, page } = await preparePage(browser, "embedded-keyboard", {
     viewport: { width: 1440, height: 1000 },
   }, { maximize: false });
+  await page.locator(".sf-stage").screenshot({ path: path.join(OUT, "embedded-active-play.png") });
+  const embeddedDensity = await hudDensityAudit(page);
+  evidence.embeddedDensity = embeddedDensity;
+  check("embedded HUD keeps a sparse non-overlapping hierarchy",
+    embeddedDensity.coveragePct <= 10 && embeddedDensity.overlaps.length === 0
+      && embeddedDensity.readyLabels.length === 0 && embeddedDensity.largeClusters.length === 0,
+    JSON.stringify(embeddedDensity));
   const allGames = page.locator(".game-page__header a", { hasText: "All games" });
   await page.evaluate(() => {
     const snapshot = () => {
@@ -239,6 +310,12 @@ async function desktopPass(browser) {
   });
 
   await page.locator(".sf-stage").screenshot({ path: path.join(OUT, "desktop-active-play.png") });
+  const desktopDensity = await hudDensityAudit(page);
+  evidence.desktopDensity = desktopDensity;
+  check("desktop HUD keeps a sparse non-overlapping hierarchy",
+    desktopDensity.coveragePct <= 10 && desktopDensity.overlaps.length === 0
+      && desktopDensity.readyLabels.length === 0 && desktopDensity.largeClusters.length === 0,
+    JSON.stringify(desktopDensity));
 
   const map = await page.evaluate(() => {
     const T = window.__SF;
@@ -809,6 +886,12 @@ async function mobilePass(browser) {
       && button.getBoundingClientRect().width > 0;
   }, null, { timeout: 5000 });
   await page.locator(".sf-stage").screenshot({ path: path.join(OUT, "mobile-active-play.png") });
+  const mobileDensity = await hudDensityAudit(page);
+  evidence.mobileDensity = mobileDensity;
+  check("portrait touch HUD keeps a sparse non-overlapping hierarchy",
+    mobileDensity.coveragePct <= 15 && mobileDensity.overlaps.length === 0
+      && mobileDensity.readyLabels.length === 0 && mobileDensity.largeClusters.length === 0,
+    JSON.stringify(mobileDensity));
 
   const commandBox = await page.locator("[data-touch-command]").boundingBox();
   const wheelBefore = await page.evaluate(() => {
@@ -958,6 +1041,12 @@ async function compactDesktopPass(browser) {
   await page.locator(".sf-stage").screenshot({
     path: path.join(OUT, "desktop-1280x720-active-play.png"),
   });
+  const compactDensity = await hudDensityAudit(page);
+  evidence.compactDesktopDensity = compactDensity;
+  check("1280x720 HUD keeps a sparse non-overlapping hierarchy",
+    compactDensity.coveragePct <= 11 && compactDensity.overlaps.length === 0
+      && compactDensity.readyLabels.length === 0 && compactDensity.largeClusters.length === 0,
+    JSON.stringify(compactDensity));
   const active = await layoutAudit(page);
   check("1280x720 active HUD stays inside the playfield",
     active.offenders.length === 0 && active.scrollOverflow <= 2, JSON.stringify(active));
@@ -1010,6 +1099,13 @@ async function landscapeTouchPass(browser) {
   await page.locator(".sf-stage").screenshot({
     path: path.join(OUT, "touch-844x390-active-play.png"),
   });
+  const landscapeDensity = await hudDensityAudit(page);
+  evidence.landscapeTouchDensity = landscapeDensity;
+  check("short-landscape touch HUD keeps a sparse non-overlapping hierarchy",
+    landscapeDensity.coveragePct <= 15 && landscapeDensity.overlaps.length === 0
+      && landscapeDensity.readyLabels.length === 0
+      && landscapeDensity.largeClusters.length === 0,
+    JSON.stringify(landscapeDensity));
   const active = await layoutAudit(page);
   const activeTargets = await touchTargetAudit(page);
   check("844x390 active HUD stays inside the playfield",

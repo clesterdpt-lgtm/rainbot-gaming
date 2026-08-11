@@ -119,6 +119,7 @@ export function buildTouchControls(ctx, player, host, stage) {
   let lookPointer = null;
   let lookX = 0;
   let lookY = 0;
+  let lookHintCleared = false;
   let wasDead = false;
   const holdPointers = new Map();
 
@@ -225,6 +226,10 @@ export function buildTouchControls(ctx, player, host, stage) {
     const dy = event.clientY - lookY;
     lookX = event.clientX;
     lookY = event.clientY;
+    if (!lookHintCleared && Math.hypot(dx, dy) > 2) {
+      lookHintCleared = true;
+      host.classList.add("sf-touch-looked");
+    }
     input.addTouchLook(dx * TOUCH_CONFIG.lookScaleX, dy * TOUCH_CONFIG.lookScaleY);
   }, { passive: false });
   for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {

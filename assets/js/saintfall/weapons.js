@@ -33,7 +33,10 @@ import { makeKit } from "saintfall/structures.js";
    stutter of separate discharges rather than one continuous glow. */
 const LAMP_REST_INTENSITY = 0.62;
 const LAMP_REST_DISTANCE = 2.1;
-const MUZZLE_FLASH_RATE = 1 / 0.060;
+/* 45ms, not 60. The bolt now clears the near field in a fifth of
+   the time it used to, and a flash that outlives its own shot reads
+   as the lance glowing rather than discharging. */
+const MUZZLE_FLASH_RATE = 1 / 0.045;
 const LAMP_REST_COLOR = 0xff9f3c;
 /* The discharge light matches the BOLT. It used to ionise toward a
    cool ivory-cyan, which was left over from when the bolt itself was

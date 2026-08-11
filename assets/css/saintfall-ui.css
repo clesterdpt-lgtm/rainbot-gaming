@@ -118,3 +118,27 @@ body.sf-high-contrast .sf-command-wheel__copy small,body.sf-high-contrast .sf-co
 body.sf-high-contrast .sf-menu__masthead span,body.sf-high-contrast .sf-menu__pagehead>span,body.sf-high-contrast .sf-operation-card small,body.sf-high-contrast .sf-menu__callout span,body.sf-high-contrast .sf-save-slot>header{color:#f5d88e}
 body.sf-high-contrast .sf-save-slot.has-save>header b,body.sf-high-contrast .sf-save-reason[data-ready="1"]{color:#9be7c5}body.sf-high-contrast .sf-menu__rail button[data-menu-action="restart"]{color:#ff896b}
 body.sf-reduced-motion .sf-command-wheel,body.sf-reduced-motion .sf-menu,body.sf-reduced-motion .sf-command-wheel__option,body.sf-reduced-motion .sf-command-wheel__cursor,body.sf-reduced-motion #sf-hud{animation:none!important;transition:none!important}
+
+/* Minimal in-field affordance. The full label belongs in the tooltip and
+   operation menu; the always-on playfield keeps one familiar crest button. */
+.sf-native-ui .sf-menu-trigger{
+  top:max(.72rem,calc(env(safe-area-inset-top) + .5rem));
+  left:max(.85rem,calc(env(safe-area-inset-left) + .65rem));
+  width:2.55rem;min-width:2.55rem;height:2.55rem;min-height:2.55rem;
+  padding:0;justify-content:center;border-color:rgba(245,216,142,.22);
+  border-radius:.8rem;background:rgba(7,5,6,.64);color:rgba(245,216,142,.82);
+  box-shadow:0 .35rem 1.2rem rgba(0,0,0,.2);backdrop-filter:blur(10px) saturate(.75)
+}
+.sf-native-ui .sf-menu-trigger span,.sf-native-ui .sf-menu-trigger kbd{display:none}
+.sf-native-ui .sf-menu-trigger svg{width:1.08rem;height:1.08rem}
+.sf-native-ui .sf-menu-trigger:hover{border-color:rgba(245,216,142,.58);background:rgba(30,18,17,.82)}
+
+.sf-stage:not(.sf-touch-enabled) #sf-hud .sf-hud__objective{
+  left:max(4.15rem,calc(env(safe-area-inset-left) + 3.95rem));
+  top:max(.72rem,calc(env(safe-area-inset-top) + .5rem));
+  width:min(18rem,29cqw)
+}
+
+@media (max-width:560px),(hover:none) and (pointer:coarse) and (orientation:portrait){
+ .sf-native-ui .sf-menu-trigger{top:max(.7rem,env(safe-area-inset-top));left:max(.7rem,env(safe-area-inset-left));width:2.55rem;height:2.55rem;padding:0}
+}

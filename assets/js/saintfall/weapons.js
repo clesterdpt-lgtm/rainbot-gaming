@@ -34,6 +34,8 @@ import { makeKit } from "saintfall/structures.js";
 const LAMP_REST_INTENSITY = 0.62;
 const LAMP_REST_DISTANCE = 2.1;
 const MUZZLE_FLASH_RATE = 1 / 0.060;
+const LAMP_REST_COLOR = 0xff9f3c;
+const LAMP_FLASH_COLOR = 0x8ff5e8;
 
 const IRON = makeRamp([
   [0.00, "#191412"], [0.28, "#31261f"], [0.58, "#4f4033"],
@@ -539,10 +541,12 @@ export function buildWeapons(ctx) {
     let reliquaryLight = null;
     if (isPolearm) {
       reliquaryLight = new THREE.PointLight(
-        0xff9f3c, LAMP_REST_INTENSITY, LAMP_REST_DISTANCE, 2
+        LAMP_REST_COLOR, LAMP_REST_INTENSITY, LAMP_REST_DISTANCE, 2
       );
       reliquaryLight.position.set(spec.haft * 0.675, 0, 0);
       reliquaryLight.castShadow = false;
+      reliquaryLight.userData.restColour = new THREE.Color(LAMP_REST_COLOR);
+      reliquaryLight.userData.flashColour = new THREE.Color(LAMP_FLASH_COLOR);
       root.add(reliquaryLight);
     }
 
@@ -839,6 +843,11 @@ export function buildWeapons(ctx) {
       const f = carry.flash * carry.flash;
       lamp.intensity = LAMP_REST_INTENSITY + f * 11.5;
       lamp.distance = LAMP_REST_DISTANCE + f * 7.0;
+      // The chamber stays amber at rest, then ionises toward cool
+      // ivory-cyan on discharge so the light on the trooper matches
+      // the bolt instead of looking like a separate muzzle fire.
+      lamp.color.copy(lamp.userData.restColour)
+        .lerp(lamp.userData.flashColour, f);
     }
 
     /* Sway lags the look. The weapon is heavy and the soldier is

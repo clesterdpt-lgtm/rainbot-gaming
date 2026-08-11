@@ -290,7 +290,7 @@ export function buildCombat(ctx) {
     const reach = hit ? hit.t : Math.min(range, wall);
     if (vfx && vfx.tracer) {
       vfx.tracer(origin.x, origin.y, origin.z, dir.x, dir.y, dir.z,
-        reach, opts.tracerWidth);
+        reach, opts.tracerWidth, true);
     }
 
     if (hit) {
@@ -315,7 +315,8 @@ export function buildCombat(ctx) {
         z: hit.z,
       });
       if (vfx && vfx.spark) {
-        vfx.spark(hit.x, hit.y, hit.z, hit.weak ? 2.6 : (hit.head ? 1.9 : 1.2));
+        vfx.spark(hit.x, hit.y, hit.z,
+          hit.weak ? 2.6 : (hit.head ? 1.9 : 1.2), false, true);
       }
       bus.emit("hit", {
         head: hit.head, weak: !!hit.weak, key: hit.inst.key, x: hit.x, z: hit.z,
@@ -326,7 +327,7 @@ export function buildCombat(ctx) {
       const wx = origin.x + dir.x * wall;
       const wy = origin.y + dir.y * wall;
       const wz = origin.z + dir.z * wall;
-      if (vfx && vfx.spark) vfx.spark(wx, wy, wz, 0.85, true);
+      if (vfx && vfx.spark) vfx.spark(wx, wy, wz, 0.85, true, true);
       bus.emit("wallHit", { x: wx, z: wz });
     }
     return null;
@@ -756,8 +757,8 @@ export function buildCombat(ctx) {
         tx /= n; ty /= n; tz /= n;
       }
       const blocked = collide.rayBlock(ox, oy, oz, tx, ty, tz, d);
-      vfx.tracer(ox, oy, oz, tx, ty, tz, Math.min(d, blocked), 0.055);
-      if (vfx.muzzle) vfx.muzzle(ox, oy, oz, tx, ty, tz, 0.75);
+      vfx.tracer(ox, oy, oz, tx, ty, tz, Math.min(d, blocked), 0.055, false);
+      if (vfx.muzzle) vfx.muzzle(ox, oy, oz, tx, ty, tz, 0.75, false);
     }
   }
 

@@ -316,7 +316,7 @@ export async function start({ boot, build } = {}) {
        what "the gun feels weak" was describing. */
     if (vfx.muzzle) {
       vfx.muzzle(shotOrigin.x, shotOrigin.y, shotOrigin.z,
-        shotDir.x, shotDir.y, shotDir.z, 1);
+        shotDir.x, shotDir.y, shotDir.z, 1, true);
     }
     weapons.flashMuzzle();
     player.punch(1);

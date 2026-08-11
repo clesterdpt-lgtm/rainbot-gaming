@@ -834,6 +834,8 @@ export function buildVfx(ctx, world) {
         uPixel: { value: 1 },
         uHot: { value: new THREE.Color("#ffd9a0") },
         uCold: { value: new THREE.Color("#ff7a3c") },
+        uEnergyHot: { value: new THREE.Color("#fffaf0") },
+        uEnergyCold: { value: new THREE.Color("#00dffc") },
       },
       transparent: true,
       depthWrite: false,
@@ -860,7 +862,11 @@ export function buildVfx(ctx, world) {
         "    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);",
         "    return;",
         "  }",
-        "  vec3 p = position + aVel * age - vec3(0.0, 9.0, 0.0) * age * age;",
+        // Reliquary ions hang in the wake; ordinary sparks still fall.
+        // `aTint > 1` is the pool's explicit energy style channel.
+        "  float energy = step(1.5, aTint);",
+        "  vec3 p = position + aVel * age",
+        "    - vec3(0.0, 9.0, 0.0) * age * age * (1.0 - energy);",
         "  vec4 mv = modelViewMatrix * vec4(p, 1.0);",
         "  gl_Position = projectionMatrix * mv;",
         "  gl_PointSize = aSize * uPixel * vLife / max(1.0, -mv.z * 0.06);",
@@ -870,6 +876,8 @@ export function buildVfx(ctx, world) {
       fragmentShader: [
         "uniform vec3 uHot;",
         "uniform vec3 uCold;",
+        "uniform vec3 uEnergyHot;",
+        "uniform vec3 uEnergyCold;",
         "varying float vLife;",
         "varying float vTint;",
         "void main() {",
@@ -877,7 +885,10 @@ export function buildVfx(ctx, world) {
         "  float r = dot(d, d);",
         "  if (r > 0.25) discard;",
         "  float core = smoothstep(0.25, 0.0, r);",
-        "  vec3 c = mix(uCold, uHot, vTint * vLife);",
+        "  float energy = step(1.5, vTint);",
+        "  vec3 sparkColour = mix(uCold, uHot, clamp(vTint * vLife, 0.0, 1.0));",
+        "  vec3 ionColour = mix(uEnergyCold, uEnergyHot, 0.30 + vLife * 0.70);",
+        "  vec3 c = mix(sparkColour, ionColour, energy);",
         "  gl_FragColor = vec4(c * core * (0.35 + vLife * 1.5), core * vLife);",
         "}",
       ].join("\n"),
@@ -926,7 +937,8 @@ export function buildVfx(ctx, world) {
      * `delay` is what makes this a wake rather than a streak of dust
      * laid down all at once at the muzzle.
      */
-    function emitTrail(x, y, z, dx, dy, dz, distance, speed, count, scale) {
+    function emitTrail(x, y, z, dx, dy, dz, distance, speed, count, scale,
+      tintVal = 0.85) {
       for (let i = 0; i < count; i += 1) {
         const k = cursor;
         cursor = (cursor + 1) % IMPACT_MAX;
@@ -941,7 +953,7 @@ export function buildVfx(ctx, world) {
         vel[k * 3 + 2] = (Math.random() - 0.5) * 1.1;
         birth[k] = atmos.elapsed + along / speed;
         size[k] = scale * (4 + Math.random() * 6);
-        tint[k] = 0.85;
+        tint[k] = tintVal;
       }
       geo.attributes.position.needsUpdate = true;
       geo.attributes.aVel.needsUpdate = true;
@@ -1001,11 +1013,14 @@ export function buildVfx(ctx, world) {
      in a quarter second, which is long enough to read as flight and
      short enough not to feel lobbed. */
   const TRACER_SPEED = 150;
-  /* The wake is most of what the eye catches at range. Cut to 4.2m
-     for a "cleaner" slug it became a few pixels forty metres out -
-     which is the invisible-in-flight complaint all over again, just
-     with better shape. Length is legibility. */
-  const TRACER_TAIL = 7.5;       // m of glowing wake behind the slug
+  /* The old 7.5m orange wake was longer and brighter than its head, so
+     the eye read a conventional tracer line. The separate head card
+     below now owns legibility; this is only its ion afterimage. */
+  const TRACER_TAIL = 3.0;       // m of glowing wake behind the slug
+  const HOSTILE_TRACER_TAIL = 7.5;
+  const RELIQUARY_FADE_TIME = 0.075;
+  const HOSTILE_FADE_TIME = 0.050;
+  const RELIQUARY_BOLT_WIDTH = 0.42;
   const tracers = (() => {
     const geo = new THREE.BufferGeometry();
     const pos = new Float32Array(TRACER_MAX * 4 * 3);
@@ -1013,6 +1028,7 @@ export function buildVfx(ctx, world) {
     const span = new Float32Array(TRACER_MAX * 4);
     const birth = new Float32Array(TRACER_MAX * 4).fill(-999);
     const width = new Float32Array(TRACER_MAX * 4);
+    const style = new Float32Array(TRACER_MAX * 4);
     const corner = new Float32Array(TRACER_MAX * 4 * 2);
     const index = new Uint16Array(TRACER_MAX * 6);
     for (let i = 0; i < TRACER_MAX; i += 1) {
@@ -1029,6 +1045,7 @@ export function buildVfx(ctx, world) {
     geo.setAttribute("aSpan", new THREE.BufferAttribute(span, 1));
     geo.setAttribute("aBirth", new THREE.BufferAttribute(birth, 1));
     geo.setAttribute("aWidth", new THREE.BufferAttribute(width, 1));
+    geo.setAttribute("aStyle", new THREE.BufferAttribute(style, 1));
     geo.setAttribute("aCorner", new THREE.BufferAttribute(corner, 2));
     geo.setIndex(new THREE.BufferAttribute(index, 1));
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 4000);
@@ -1038,41 +1055,74 @@ export function buildVfx(ctx, world) {
         uTime: { value: 0 },
         uSpeed: { value: TRACER_SPEED },
         uTail: { value: TRACER_TAIL },
+        uHostileTail: { value: HOSTILE_TRACER_TAIL },
+        uEnergyFade: { value: RELIQUARY_FADE_TIME },
+        uHostileFade: { value: HOSTILE_FADE_TIME },
         uHot: { value: new THREE.Color("#fffbf0") },
         uCold: { value: new THREE.Color("#ff5a06") },
+        uEnergyCore: { value: new THREE.Color("#fffaf0") },
+        uEnergyBody: { value: new THREE.Color("#00f0dc") },
+        uEnergyFringe: { value: new THREE.Color("#5b54ff") },
       },
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
+      // The camera-facing side vector can change handedness as a bolt
+      // crosses the view axis; both windings must remain visible.
+      side: THREE.DoubleSide,
       vertexShader: [
         "attribute vec3 aDir;",
         "attribute float aSpan;",
         "attribute float aBirth;",
         "attribute float aWidth;",
+        "attribute float aStyle;",
         "attribute vec2 aCorner;",
         "uniform float uTime;",
         "uniform float uSpeed;",
         "uniform float uTail;",
+        "uniform float uHostileTail;",
+        "uniform float uEnergyFade;",
+        "uniform float uHostileFade;",
         "varying float vAlong;",
         "varying float vAcross;",
         "varying float vLife;",
         "varying float vSeed;",
+        "varying float vStyle;",
+        "varying float vAge;",
         "void main() {",
         "  float age = uTime - aBirth;",
         "  float travelled = age * uSpeed;",
+        "  float tailLength = mix(uHostileTail, uTail, aStyle);",
+        "  float fadeTime = mix(uHostileFade, uEnergyFade, aStyle);",
         // The head stops at the range the ray reached; the tail keeps
         // running, so the bolt is swallowed by whatever it hit rather
         // than winking out in mid air.
         "  float head = min(travelled, aSpan);",
-        "  float tail = max(head - uTail, 0.0);",
-        "  vLife = 1.0 - clamp((travelled - aSpan) / uTail, 0.0, 1.0);",
+        // The head stops at impact, but the tail continues forward and
+        // collapses into it. Basing this on `head` froze the last 3m.
+        "  float tail = clamp(travelled - tailLength, 0.0, aSpan);",
+        "  float impactAge = max(age - aSpan / uSpeed, 0.0);",
+        "  vLife = 1.0 - clamp(impactAge / fadeTime, 0.0, 1.0);",
         "  if (age < 0.0 || vLife <= 0.0) {",
         "    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);",
         "    vAlong = 0.0; vAcross = 0.0; vSeed = 0.0;",
+        "    vStyle = 0.0; vAge = 0.0;",
         "    return;",
         "  }",
-        "  vec3 p = position + aDir * mix(tail, head, aCorner.x);",
+        "  float alongDistance = mix(tail, head, aCorner.x);",
+        "  vec3 p = position + aDir * alongDistance;",
         "  vec4 mv = modelViewMatrix * vec4(p, 1.0);",
+        /* A chase camera projects the real ray through the trooper's
+           silhouette. The ion ribbon bows toward the weapon side for
+           its early flight, starting at the real muzzle and returning
+           to the real endpoint over the final five metres. Collision,
+           damage and the stored ray remain completely unchanged. */
+        "  vec4 startMv = modelViewMatrix * vec4(position, 1.0);",
+        "  float muzzleSide = startMv.x < 0.0 ? -1.0 : 1.0;",
+        "  float endpointReturn = smoothstep(0.0, 5.0, aSpan - alongDistance);",
+        "  float silhouetteArc = smoothstep(0.25, 3.0, alongDistance)",
+        "    * (1.0 - smoothstep(30.0, 58.0, alongDistance)) * endpointReturn;",
+        "  mv.x += muzzleSide * 1.25 * silhouetteArc * aStyle;",
         "  vec3 dv = normalize((modelViewMatrix * vec4(aDir, 0.0)).xyz);",
         "  vec3 toCam = normalize(-mv.xyz);",
         "  vec3 side = cross(dv, toCam);",
@@ -1086,7 +1136,10 @@ export function buildVfx(ctx, world) {
         "  vec3 sideN = sl > 1e-3 ? side / sl : vec3(1.0, 0.0, 0.0);",
         // Teardrop: a fat round slug at the head, drawn out into a
         // thin wake. A constant-width bar reads as a laser sight.
-        "  float w = aWidth * (0.16 + 1.35 * pow(aCorner.x, 1.6)) * mix(1.7, 1.0, sl);",
+        "  float hostileShape = 0.16 + 1.35 * pow(aCorner.x, 1.6);",
+        "  float energyShape = 0.045 + 0.40 * pow(aCorner.x, 1.8);",
+        "  float w = aWidth * mix(hostileShape, energyShape, aStyle)",
+        "    * mix(1.7, 1.0, sl);",
         "  mv.xyz += sideN * (aCorner.y * w);",
         "  gl_Position = projectionMatrix * mv;",
         "  vAlong = aCorner.x;",
@@ -1094,15 +1147,22 @@ export function buildVfx(ctx, world) {
         // Per-bolt, off the launch time, so no two slugs flicker in
         // step. Cheaper than carrying another attribute for it.
         "  vSeed = fract(aBirth * 13.71);",
+        "  vStyle = aStyle;",
+        "  vAge = age;",
         "}",
       ].join("\n"),
       fragmentShader: [
         "uniform vec3 uHot;",
         "uniform vec3 uCold;",
+        "uniform vec3 uEnergyCore;",
+        "uniform vec3 uEnergyBody;",
+        "uniform vec3 uEnergyFringe;",
         "varying float vAlong;",
         "varying float vAcross;",
         "varying float vLife;",
         "varying float vSeed;",
+        "varying float vStyle;",
+        "varying float vAge;",
         "void main() {",
         "  float across = 1.0 - abs(vAcross);",
         /* TWO LOBES. A single falloff gives a hard-edged rod; a tight
@@ -1118,12 +1178,33 @@ export function buildVfx(ctx, world) {
         // it reading as extruded geometry.
         "  float flick = 0.84 + 0.16 * sin(vAlong * 31.0 + vSeed * 6.2831);",
         "  float wake = mix(0.06, 1.0, pow(vAlong, 2.2));",
-        "  float body = (core + halo) * wake * cap * flick;",
+        "  float hostileBody = (core + halo) * wake * cap * flick;",
         // White-hot through the middle, saturated at the edges - the
         // gradient runs ACROSS the bolt, not along it, which is what
         // separates a glowing object from a warm smear.
-        "  vec3 c = mix(uCold, uHot, core);",
-        "  gl_FragColor = vec4(c * body * vLife * 4.6, clamp(body * vLife, 0.0, 1.0));",
+        "  vec3 hostileColour = mix(uCold, uHot, core);",
+        /* The reliquary wake carries two moving ion filaments instead
+           of falling fire. Their asymmetry and opposing phase make the
+           ribbon look electrically unstable without turning it into a
+           regular striped laser. */
+        "  float charge = 0.78 + 0.22 * sin(vAlong * 49.0 - vAge * 82.0",
+        "    + vSeed * 6.2831);",
+        "  float coilCentre = sin(vAlong * 34.0 - vAge * 61.0",
+        "    + vSeed * 6.2831) * 0.24;",
+        "  float filamentA = pow(clamp(1.0 - abs(vAcross - coilCentre) / 0.18, 0.0, 1.0), 3.0);",
+        "  float filamentB = pow(clamp(1.0 - abs(vAcross + coilCentre * 0.72) / 0.15, 0.0, 1.0), 4.0);",
+        "  float energyWake = mix(0.012, 0.68, pow(vAlong, 2.65));",
+        "  float energyBody = (core * 0.92 + halo * 0.34",
+        "    + filamentA * 0.20 + filamentB * 0.13)",
+        "    * energyWake * cap * charge;",
+        "  vec3 energyColour = mix(uEnergyFringe, uEnergyBody, across);",
+        "  energyColour = mix(energyColour, uEnergyCore, core * 0.92",
+        "    + max(filamentA, filamentB) * 0.18);",
+        "  float body = mix(hostileBody, energyBody, vStyle);",
+        "  vec3 c = mix(hostileColour, energyColour, vStyle);",
+        "  float gain = mix(4.6, 8.2, vStyle);",
+        "  gl_FragColor = vec4(c * body * vLife * gain,",
+        "    clamp(body * vLife, 0.0, 1.0));",
         "}",
       ].join("\n"),
     });
@@ -1134,8 +1215,135 @@ export function buildVfx(ctx, world) {
     mesh.renderOrder = 6;
     group.add(mesh);
 
+    /* A ribbon cannot keep a round silhouette when its flight axis
+       points away from the chase camera: perspective crushes the head
+       into the tail. These synchronized camera-facing cards give every
+       bolt a discrete charge at the leading edge. They share all six
+       live attributes with the ribbon, so the extra draw call adds no
+       second per-shot upload and never allocates during a firefight. */
+    const headGeo = new THREE.BufferGeometry();
+    for (const name of ["position", "aDir", "aSpan", "aBirth", "aWidth", "aStyle"]) {
+      headGeo.setAttribute(name, geo.getAttribute(name));
+    }
+    const headCorner = new Float32Array(TRACER_MAX * 4 * 2);
+    for (let i = 0; i < TRACER_MAX; i += 1) {
+      const v = i * 4;
+      headCorner[(v + 0) * 2] = -1; headCorner[(v + 0) * 2 + 1] = -1;
+      headCorner[(v + 1) * 2] = -1; headCorner[(v + 1) * 2 + 1] = 1;
+      headCorner[(v + 2) * 2] = 1; headCorner[(v + 2) * 2 + 1] = 1;
+      headCorner[(v + 3) * 2] = 1; headCorner[(v + 3) * 2 + 1] = -1;
+    }
+    headGeo.setAttribute("aCorner", new THREE.BufferAttribute(headCorner, 2));
+    headGeo.setIndex(geo.index);
+    headGeo.boundingSphere = geo.boundingSphere;
+
+    const headMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: mat.uniforms.uTime,
+        uSpeed: { value: TRACER_SPEED },
+        uEnergyFade: { value: RELIQUARY_FADE_TIME },
+        uHostileFade: { value: HOSTILE_FADE_TIME },
+        uHot: mat.uniforms.uHot,
+        uCold: mat.uniforms.uCold,
+        uEnergyCore: mat.uniforms.uEnergyCore,
+        uEnergyBody: mat.uniforms.uEnergyBody,
+        uEnergyFringe: mat.uniforms.uEnergyFringe,
+      },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      // The fixed camera-card corner order is clockwise from one side;
+      // without DoubleSide the pooled head is valid but back-face culled.
+      side: THREE.DoubleSide,
+      vertexShader: [
+        "attribute vec3 aDir;",
+        "attribute float aSpan;",
+        "attribute float aBirth;",
+        "attribute float aWidth;",
+        "attribute float aStyle;",
+        "attribute vec2 aCorner;",
+        "uniform float uTime;",
+        "uniform float uSpeed;",
+        "uniform float uEnergyFade;",
+        "uniform float uHostileFade;",
+        "varying vec2 vUv;",
+        "varying float vLife;",
+        "varying float vStyle;",
+        "varying float vPulse;",
+        "void main() {",
+        "  float age = uTime - aBirth;",
+        "  float travelled = age * uSpeed;",
+        "  float head = min(travelled, aSpan);",
+        "  float fadeTime = mix(uHostileFade, uEnergyFade, aStyle);",
+        "  float impactAge = max(age - aSpan / uSpeed, 0.0);",
+        "  vLife = 1.0 - clamp(impactAge / fadeTime, 0.0, 1.0);",
+        "  vUv = aCorner;",
+        "  vStyle = aStyle;",
+        "  float seed = fract(aBirth * 13.71);",
+        "  vPulse = 0.90 + 0.10 * sin(age * 78.0 + seed * 6.2831);",
+        "  if (age < 0.0 || vLife <= 0.0) {",
+        "    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);",
+        "    return;",
+        "  }",
+        "  vec3 p = position + aDir * head;",
+        "  vec4 mv = modelViewMatrix * vec4(p, 1.0);",
+        "  vec4 startMv = modelViewMatrix * vec4(position, 1.0);",
+        "  float muzzleSide = startMv.x < 0.0 ? -1.0 : 1.0;",
+        "  float endpointReturn = smoothstep(0.0, 5.0, aSpan - head);",
+        "  float silhouetteArc = smoothstep(0.25, 3.0, head)",
+        "    * (1.0 - smoothstep(30.0, 58.0, head)) * endpointReturn;",
+        "  mv.x += muzzleSide * 1.25 * silhouetteArc * aStyle;",
+        "  float radius = aWidth * mix(0.75, 1.25, aStyle) * vPulse;",
+        // Keep distant player charges readable without inflating hostile
+        // fire or making the close profile orb any larger.
+        "  radius = max(radius, -mv.z * 0.006 * aStyle);",
+        "  mv.xy += aCorner * radius;",
+        "  gl_Position = projectionMatrix * mv;",
+        "}",
+      ].join("\n"),
+      fragmentShader: [
+        "uniform vec3 uHot;",
+        "uniform vec3 uCold;",
+        "uniform vec3 uEnergyCore;",
+        "uniform vec3 uEnergyBody;",
+        "uniform vec3 uEnergyFringe;",
+        "varying vec2 vUv;",
+        "varying float vLife;",
+        "varying float vStyle;",
+        "varying float vPulse;",
+        "void main() {",
+        "  float r = length(vUv);",
+        "  if (r > 1.0) discard;",
+        "  float halo = pow(clamp(1.0 - r, 0.0, 1.0), 1.35);",
+        "  float core = 1.0 - smoothstep(0.12, 0.34, r);",
+        "  float ring = smoothstep(0.38, 0.55, r)",
+        "    * (1.0 - smoothstep(0.60, 0.82, r));",
+        "  float ang = atan(vUv.y, vUv.x);",
+        "  float corona = pow(abs(cos(ang * 3.0 + vPulse * 5.0)), 10.0)",
+        "    * pow(clamp(1.0 - r, 0.0, 1.0), 1.8);",
+        "  float hostileBody = halo * 0.72 + core * 1.08;",
+        "  vec3 hostileColour = mix(uCold, uHot, core);",
+        "  float energyBody = halo * 0.92 + ring * 0.62 + core * 1.85",
+        "    + corona * 0.30;",
+        "  vec3 energyColour = mix(uEnergyFringe, uEnergyBody,",
+        "    1.0 - smoothstep(0.18, 0.92, r));",
+        "  energyColour = mix(energyColour, uEnergyCore, core);",
+        "  float body = mix(hostileBody, energyBody, vStyle);",
+        "  vec3 c = mix(hostileColour, energyColour, vStyle);",
+        "  float gain = mix(3.8, 9.5, vStyle);",
+        "  gl_FragColor = vec4(c * body * vLife * gain,",
+        "    clamp(body * vLife, 0.0, 1.0));",
+        "}",
+      ].join("\n"),
+    });
+    const heads = new THREE.Mesh(headGeo, headMat);
+    heads.name = "tracer-heads";
+    heads.frustumCulled = false;
+    heads.renderOrder = 7;
+    group.add(heads);
+
     let cursor = 0;
-    function emit(x, y, z, dx, dy, dz, distance, w) {
+    function emit(x, y, z, dx, dy, dz, distance, w, styleVal) {
       const i = cursor;
       cursor = (cursor + 1) % TRACER_MAX;
       for (let k = 0; k < 4; k += 1) {
@@ -1145,14 +1353,16 @@ export function buildVfx(ctx, world) {
         span[v] = distance;
         birth[v] = atmos.elapsed;
         width[v] = w;
+        style[v] = styleVal;
       }
       geo.attributes.position.needsUpdate = true;
       geo.attributes.aDir.needsUpdate = true;
       geo.attributes.aSpan.needsUpdate = true;
       geo.attributes.aBirth.needsUpdate = true;
       geo.attributes.aWidth.needsUpdate = true;
+      geo.attributes.aStyle.needsUpdate = true;
     }
-    return { mesh, mat, emit };
+    return { mesh, mat, heads, headMat, emit };
   })();
 
   /* ============================================================
@@ -1204,10 +1414,13 @@ export function buildVfx(ctx, world) {
         uTime: { value: 0 },
         uHot: { value: new THREE.Color("#fff6e2") },
         uCold: { value: new THREE.Color("#ff8a20") },
+        uEnergyHot: { value: new THREE.Color("#fffaf0") },
+        uEnergyCold: { value: new THREE.Color("#00e7ee") },
       },
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
       vertexShader: [
         "attribute float aBirth;",
         "attribute float aSize;",
@@ -1246,6 +1459,8 @@ export function buildVfx(ctx, world) {
       fragmentShader: [
         "uniform vec3 uHot;",
         "uniform vec3 uCold;",
+        "uniform vec3 uEnergyHot;",
+        "uniform vec3 uEnergyCold;",
         "varying vec2 vUv;",
         "varying float vFade;",
         "varying float vSeed;",
@@ -1258,8 +1473,18 @@ export function buildVfx(ctx, world) {
         // star rather than a ball, without looking like a decal.
         "  float ang = atan(vUv.y, vUv.x);",
         "  float star = pow(abs(cos(ang * 2.0 + vSeed * 6.2831)), 6.0);",
-        "  float burst = core + star * pow(clamp(1.0 - r, 0.0, 1.0), 1.1) * 0.85;",
-        "  vec3 c = mix(uCold, uHot, clamp(vTint * (0.35 + vFade), 0.0, 1.0));",
+        "  float starBurst = core + star * pow(clamp(1.0 - r, 0.0, 1.0), 1.1) * 0.85;",
+        "  float energy = step(1.5, vTint);",
+        // A brief expanding annulus is the discharge field; ballistic
+        // flashes keep the original four-spike star.
+        "  float ring = smoothstep(0.26, 0.48, r)",
+        "    * (1.0 - smoothstep(0.56, 0.88, r));",
+        "  float energyBurst = core * 0.82 + ring * (0.45 + (1.0 - vFade) * 0.55)",
+        "    + star * 0.20;",
+        "  float burst = mix(starBurst, energyBurst, energy);",
+        "  vec3 flashColour = mix(uCold, uHot, clamp(vTint * (0.35 + vFade), 0.0, 1.0));",
+        "  vec3 energyColour = mix(uEnergyCold, uEnergyHot, core);",
+        "  vec3 c = mix(flashColour, energyColour, energy);",
         "  float a = clamp(burst * vFade, 0.0, 1.0);",
         "  gl_FragColor = vec4(c * burst * vFade * 3.4, a);",
         "}",
@@ -1296,11 +1521,14 @@ export function buildVfx(ctx, world) {
     return { mesh, mat, emit };
   })();
 
-  /** The bolt itself, drawn along the ray the hitscan already took. */
-  function tracer(x, y, z, dx, dy, dz, distance, width = 0.235) {
+  /** The bolt itself, drawn along the ray the hitscan already took.
+   * `energy` is explicit because hostile return fire shares this pool. */
+  function tracer(x, y, z, dx, dy, dz, distance,
+    width = RELIQUARY_BOLT_WIDTH, energy = true) {
     if (!(distance > 0) || !Number.isFinite(distance)) return;
     const span = Math.min(distance, 900);
-    tracers.emit(x, y, z, dx, dy, dz, span, width);
+    const style = energy ? 1 : 0;
+    tracers.emit(x, y, z, dx, dy, dz, span, width, style);
     /* THE WAKE. The bolt itself is one quad and reads as a clean
        object; against open sky, a clean object is also a small one,
        and there is nothing around it to say how fast or how far it
@@ -1311,27 +1539,31 @@ export function buildVfx(ctx, world) {
        shot does not get the same trail as one across the basin, and
        capped so sustained fire cannot flush the pool. */
     const beads = Math.min(14, Math.max(3, Math.round(span * 0.22)));
-    impacts.emitTrail(x, y, z, dx, dy, dz, span, TRACER_SPEED, beads, 0.55);
+    impacts.emitTrail(x, y, z, dx, dy, dz, span, TRACER_SPEED, beads,
+      energy ? 0.62 : 0.55, energy ? 2.0 : 0.85);
   }
 
   /** The bloom at the muzzle, plus the gases leaving it. */
-  function muzzle(x, y, z, dx, dy, dz, scale = 1) {
-    flashes.emit(x, y, z, 0.85 * scale, 0.060, 1.0);
-    flashes.emit(x + dx * 0.34, y + dy * 0.34, z + dz * 0.34, 0.46 * scale, 0.085, 0.6);
+  function muzzle(x, y, z, dx, dy, dz, scale = 1, energy = false) {
+    const tint = energy ? 2.0 : 1.0;
+    flashes.emit(x, y, z, (energy ? 0.94 : 0.85) * scale, 0.060, tint);
+    flashes.emit(x + dx * 0.34, y + dy * 0.34, z + dz * 0.34,
+      (energy ? 0.58 : 0.46) * scale, 0.085, energy ? 2.0 : 0.6);
     impacts.emitDirected(x + dx * 0.2, y + dy * 0.2, z + dz * 0.2,
-      9, dx, dy, dz, 9.0, 0.6 * scale, 1.0);
+      energy ? 7 : 9, dx, dy, dz, energy ? 6.5 : 9.0,
+      (energy ? 0.68 : 0.6) * scale, tint);
   }
 
-  /** A bullet impact. `wall` softens it: masonry sprays, flesh does not. */
-  function spark(x, y, z, scale = 1, wall = false) {
+  /** An impact. `wall` softens it; `energy` keeps melee and debris warm. */
+  function spark(x, y, z, scale = 1, wall = false, energy = false) {
     /* Was 9 particles and nothing else, which at the far end of a
        300m shot is a few pixels of dust - the "small impact" in the
        report. A hit now reads at range as a flash first and debris
        second, because the flash is what survives the distance. */
     impacts.emit(x, y, z, wall ? 14 : 26, wall ? 3.2 : 5.2,
-      scale * (wall ? 1.0 : 1.5), wall ? 0.25 : 0.95);
+      scale * (wall ? 1.0 : 1.5), energy ? 2.0 : (wall ? 0.25 : 0.95));
     flashes.emit(x, y, z, (wall ? 0.5 : 0.78) * scale, wall ? 0.09 : 0.13,
-      wall ? 0.45 : 1.0);
+      energy ? 2.0 : (wall ? 0.45 : 1.0));
   }
 
   /** A stratagem landing. */

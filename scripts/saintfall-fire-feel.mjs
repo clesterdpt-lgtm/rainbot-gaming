@@ -227,6 +227,7 @@ async function main() {
     }, probe.home);
 
     const frames = [];
+    const frameTraces = [];
     let aimError = null;
     let landedOnTarget = null;
     for (const [label, waits, dist, burst, target, pitch] of [
@@ -299,20 +300,80 @@ async function main() {
           err,
           landed: hitsBefore === null ? null
             : (T.combatStats ? T.combatStats().hits : 0) - hitsBefore,
+          tracer: T.lastTracer(),
         };
       }, [waits, bearing.bestYaw, dist, burst, probe.home, target, pitch]);
       if (shot.err !== null) aimError = shot.err;
       if (shot.landed !== null && shot.landed !== undefined) landedOnTarget = shot.landed;
       const url = shot.url;
+      frameTraces.push({ label, tracer: shot.tracer });
       const buffer = Buffer.from(url.slice(url.indexOf(",") + 1), "base64");
       frames.push(await sharp(buffer).resize(TILE_W, TILE_H, { fit: "cover" })
         .composite([{ input: tag(TILE_W, label), left: 0, top: 0 }]).png().toBuffer());
     }
+
+    /* The chase camera is the adversarial gameplay view: the bolt flies
+       away from it and the trooper can occult the head. One profile tile
+       keeps the same real trigger, ray and projectile, then moves only
+       the QA camera so the head-versus-wake design can actually be judged. */
+    const profile = await page.evaluate(([home, yaw]) => {
+      const T = window.__SF;
+      T.clearEnemies();
+      T.releaseCamera();
+      T.weapons.setMode("ranged");
+      T.weapons.resupply();
+      T.teleport(home.x, home.z, Math.PI);
+      T.setCam(yaw, -0.02, 5.2);
+      T.setAds(1);
+      for (let i = 0; i < 60; i += 1) T.renderOnce(1 / 60);
+      T.setFiring(true);
+      T.pullTrigger();
+      T.setFiring(false);
+      const launched = T.lastTracer();
+      const start = launched.start;
+      const dir = launched.dir;
+      const sideLen = Math.hypot(dir[0], dir[2]) || 1;
+      const side = [-dir[2] / sideLen, 0, dir[0] / sideLen];
+      const target = [
+        start[0] + dir[0] * 10,
+        start[1] + dir[1] * 10,
+        start[2] + dir[2] * 10,
+      ];
+      T.lookAt([
+        target[0] + side[0] * 8,
+        target[1] + 2.6,
+        target[2] + side[2] * 8,
+      ], target, 44);
+      for (let i = 0; i < 2; i += 1) T.renderOnce(1 / 60);
+      T.renderStill();
+      return { url: T.captureDataURL(), tracer: T.lastTracer() };
+    }, [probe.home, bearing.bestYaw]);
+    const profileBuffer = Buffer.from(
+      profile.url.slice(profile.url.indexOf(",") + 1), "base64"
+    );
+    const profileProof = await sharp(profileBuffer)
+      .resize(840, 600, { fit: "cover" })
+      .composite([{
+        input: tag(840, "real trigger · profile · energy head + ion wake"),
+        left: 0,
+        top: 0,
+      }])
+      .png().toBuffer();
+    await writeFile(path.join(out, "energy-bolt-profile.png"), profileProof);
+    frames.push(await sharp(profileBuffer).resize(TILE_W, TILE_H, { fit: "cover" })
+      .composite([{ input: tag(TILE_W, "profile, energy head + wake"), left: 0, top: 0 }])
+      .png().toBuffer());
+    frameTraces.push({ label: "profile, energy head + wake", tracer: profile.tracer });
     console.log(`frames shot down bearing `
       + `${(bearing.bestYaw * 180 / Math.PI).toFixed(0)}deg, clear to `
       + `${bearing.bestClear.toFixed(1)}m`
       + (aimError === null ? "" : `; aimed at the Thresher to within ${aimError.toFixed(2)}deg`)
       + (landedOnTarget === null ? "" : `, ${landedOnTarget} of 3 rounds on it`));
+    for (const frame of frameTraces) {
+      const t = frame.tracer;
+      console.log(`  ${frame.label.padEnd(28)} head `
+        + `${t ? `${t.headDistance.toFixed(1)}m along the ray` : "missing"}`);
+    }
     if (landedOnTarget !== null && landedOnTarget < 1) {
       fails.push("the impact frame missed the target, so it shows no impact");
     }
@@ -320,9 +381,10 @@ async function main() {
       fails.push(`the frame pass had no firing line: clearest bearing reached `
         + `${bearing.bestClear.toFixed(1)}m, so the frames show nothing in flight`);
     }
+    const rows = Math.ceil(frames.length / 3);
     const sheetBuf = await sharp({
       create: {
-        width: 3 * TILE_W, height: 2 * TILE_H,
+        width: 3 * TILE_W, height: rows * TILE_H,
         channels: 3, background: { r: 18, g: 16, b: 12 },
       },
     }).composite(frames.map((input, i) => ({
@@ -354,9 +416,15 @@ async function main() {
     }
     if (p.bolt) {
       console.log(`      width ${p.bolt.width.toFixed(3)}m  `
-        + `dir length ${Math.hypot(...p.bolt.dir).toFixed(4)}  ${p.bolt.live} live slots`);
+        + `dir length ${Math.hypot(...p.bolt.dir).toFixed(4)}  ${p.bolt.live} live slots  `
+        + `energy style ${p.bolt.style.toFixed(0)}  head ${p.bolt.head ? "pooled" : "missing"}`);
       if (Math.abs(Math.hypot(...p.bolt.dir) - 1) > 1e-3) {
         fails.push("the bolt direction is not normalised");
+      }
+      if (!(p.bolt.style > 0.5)) fails.push("the player bolt did not receive the energy style");
+      if (!p.bolt.head) fails.push("the player bolt has no pooled head mesh");
+      if (!(p.bolt.width >= 0.40)) {
+        fails.push(`the player energy head is too small: ${p.bolt.width.toFixed(3)}m base width`);
       }
     } else {
       fails.push("no tracer was launched");
@@ -365,7 +433,8 @@ async function main() {
       + `-> peak ${p.peakLamp.toFixed(2)} on the shot `
       + `-> ${p.settled.lamp.intensity.toFixed(2)} at rest`);
     console.log(`wake: ${p.wake.scheduled} embers still to light, `
-      + `${p.wake.lit} alight, furthest ${p.wake.furthestAheadS}s ahead of the shot`);
+      + `${p.wake.lit} alight, ${p.wake.energy} energy-styled, `
+      + `furthest ${p.wake.furthestAheadS}s ahead of the shot`);
     console.log(`camera punch: peak ${p.peakPunch.toFixed(3)}`
       + `, ${p.settled.punch.toFixed(4)} after`);
     console.log(`aim drift over a 41-shot burst: `
@@ -381,6 +450,9 @@ async function main() {
     if (!(p.wake.scheduled >= 3)) {
       fails.push(`the bolt laid its whole wake at the muzzle: `
         + `${p.wake.scheduled} embers scheduled ahead of it`);
+    }
+    if (!(p.wake.energy >= 3)) {
+      fails.push(`the player's wake did not receive the energy style: ${p.wake.energy} ions`);
     }
     if (!(p.wake.furthestAheadS > 0.2)) {
       fails.push(`the wake does not reach downrange: furthest ember `
@@ -404,6 +476,7 @@ async function main() {
       console.log("the shot reads at both ends, and does not steer");
     }
     console.log(path.relative(root, path.join(out, "shot-frames.png")));
+    console.log(path.relative(root, path.join(out, "energy-bolt-profile.png")));
   } finally {
     if (browser) await browser.close();
     server.kill("SIGKILL");

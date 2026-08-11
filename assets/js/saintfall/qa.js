@@ -613,16 +613,19 @@ export function installQa(ctx, api) {
       if (!mesh) return null;
       const now = ctx.atmos.elapsed;
       const births = mesh.geometry.attributes.aBirth.array;
+      const tint = mesh.geometry.attributes.aTint.array;
       let scheduled = 0;
       let lit = 0;
       let furthestAhead = 0;
+      let energy = 0;
       for (let i = 0; i < births.length; i += 1) {
         if (births[i] < -900) continue;
+        if (tint[i] > 1.5) energy += 1;
         const d = births[i] - now;
         if (d > 1e-4) { scheduled += 1; furthestAhead = Math.max(furthestAhead, d); }
         else if (d > -0.62) lit += 1;
       }
-      return { scheduled, lit, furthestAheadS: Number(furthestAhead.toFixed(3)) };
+      return { scheduled, lit, energy, furthestAheadS: Number(furthestAhead.toFixed(3)) };
     },
 
     /** Where the Pilgrim's Road runs at a given northing, so a probe
@@ -661,6 +664,7 @@ export function installQa(ctx, api) {
     lastTracer() {
       const mesh = api.vfx.group.getObjectByName("tracers");
       if (!mesh) return null;
+      const headMesh = api.vfx.group.getObjectByName("tracer-heads");
       const a = mesh.geometry.attributes;
       let newest = -Infinity;
       let idx = -1;
@@ -670,12 +674,27 @@ export function installQa(ctx, api) {
         if (a.aBirth.array[v] > newest) { newest = a.aBirth.array[v]; idx = v; }
       }
       if (idx < 0) return null;
+      const start = new THREE.Vector3(
+        a.position.array[idx * 3],
+        a.position.array[idx * 3 + 1],
+        a.position.array[idx * 3 + 2]
+      );
+      const direction = new THREE.Vector3(
+        a.aDir.array[idx * 3],
+        a.aDir.array[idx * 3 + 1],
+        a.aDir.array[idx * 3 + 2]
+      );
+      const age = Math.max(0, ctx.atmos.elapsed - newest);
+      const headDistance = Math.min(age * 150, a.aSpan.array[idx]);
       return {
-        start: [a.position.array[idx * 3], a.position.array[idx * 3 + 1],
-          a.position.array[idx * 3 + 2]],
-        dir: [a.aDir.array[idx * 3], a.aDir.array[idx * 3 + 1], a.aDir.array[idx * 3 + 2]],
+        start: start.toArray(),
+        dir: direction.toArray(),
         span: a.aSpan.array[idx],
         width: a.aWidth.array[idx],
+        style: a.aStyle ? a.aStyle.array[idx] : 0,
+        head: !!headMesh,
+        age: Number(age.toFixed(4)),
+        headDistance: Number(headDistance.toFixed(2)),
         live,
       };
     },
@@ -774,7 +793,7 @@ export function installQa(ctx, api) {
     muzzleLamp() {
       const lamp = api.weapons.current && api.weapons.current.reliquaryLight;
       return lamp
-        ? { intensity: lamp.intensity, distance: lamp.distance }
+        ? { intensity: lamp.intensity, distance: lamp.distance, colour: `#${lamp.color.getHexString()}` }
         : null;
     },
 

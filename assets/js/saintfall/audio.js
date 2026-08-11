@@ -1,19 +1,17 @@
 /* ============================================================
    SAINTFALL - audio
 
-   Every sound in this file is SYNTHESISED. There is not one audio
-   asset in the project, for the same reason there is not one texture:
-   the whole game is procedural, it loads from a static host with no
-   build step, and a firefight needs dozens of overlapping one-shots
-   that would otherwise be dozens of megabytes to download before the
-   first shot is fired.
+   Gameplay sound in this file is synthesised. The drop cinematic also
+   lazy-loads a tiny set of CC0 transients from the shared Rainbot sound
+   bank, then layers them under procedural cabin, plasma and engine
+   voices. Everything still runs through this one graph and master.
 
    The engine is a small graph:
 
      one-shots -> per-voice gain -> bus gain -> master -> destination
 
-   with three buses (weapons, world, ui) so a category can be mixed
-   or ducked without touching the individual voices.
+   with category buses so a sound family can be mixed or ducked without
+   touching the individual voices.
 
    Two rules the browser imposes, both of which are load-bearing:
 
@@ -29,6 +27,18 @@
 import { clamp01, lerp } from "saintfall/core.js";
 
 const NOISE_SECONDS = 2.0;
+const CINEMATIC_NOISE_SECONDS = 4.0;
+const DROP_ASSET_ROOT = new URL("../../Sounds/shared/", import.meta.url);
+const DROP_ASSETS = Object.freeze({
+  confirm: "ui/confirm.ogg",
+  drop: "ui/drop.ogg",
+  metal: "impact/metal.ogg",
+  softHeavy: "impact/soft-heavy.ogg",
+  forceField: "sci-fi/force-field.ogg",
+  lowExplosion: "sci-fi/low-explosion.ogg",
+  metalImpact: "sci-fi/metal-impact.ogg",
+  doorOpen: "sci-fi/door-open.ogg",
+});
 
 export function buildAudio(ctx) {
   const Ctor = window.AudioContext || window.webkitAudioContext;
@@ -74,7 +84,7 @@ export function buildAudio(ctx) {
 
   const buses = {};
   for (const [name, level] of Object.entries({
-    weapon: 0.9, world: 0.75, ui: 0.6, ambience: 0.5,
+    weapon: 0.9, world: 0.75, ui: 0.6, ambience: 0.5, cinematic: 0.72,
   })) {
     const g = ac.createGain();
     g.gain.value = level;
@@ -98,14 +108,57 @@ export function buildAudio(ctx) {
     }
   }
 
+  /* The drop lasts long enough for a two-second random loop point to
+     become audible. Its noise bed is longer and deterministic: visual
+     turbulence can now drive the same sonic movement in every run,
+     while the ordinary firefight keeps the looser random texture it
+     has always used. */
+  const cinematicNoise = ac.createBuffer(
+    1, ac.sampleRate * CINEMATIC_NOISE_SECONDS, ac.sampleRate
+  );
+  {
+    const d = cinematicNoise.getChannelData(0);
+    let seed = 0x51a17fa1;
+    let last = 0;
+    for (let i = 0; i < d.length; i += 1) {
+      seed ^= seed << 13;
+      seed ^= seed >>> 17;
+      seed ^= seed << 5;
+      const w = ((seed >>> 0) / 4294967295) * 2 - 1;
+      last = (last + w * 0.045) / 1.018;
+      d[i] = w * 0.62 + last * 3.5;
+    }
+  }
+
   const state = {
     enabled: true,
     started: false,
     offline: false,
+    paused: false,
     listenerX: 0,
     listenerZ: 0,
     listenerYaw: 0,
     voices: 0,
+  };
+
+  const drop = {
+    active: false,
+    paused: false,
+    sources: new Set(),
+    buffers: new Map(),
+    loads: new Map(),
+    loadErrors: new Map(),
+    beds: null,
+    run: 0,
+    cueSerial: 0,
+    pauseQueue: Promise.resolve(true),
+    controls: {
+      heat: 0,
+      turbulence: 0,
+      retro: 0,
+      altitude: 1,
+      velocity: 0,
+    },
   };
 
   /* A hard voice cap. A garrison of thirty units firing bursts can
@@ -468,6 +521,507 @@ export function buildAudio(ctx) {
   }
 
   /* ============================================================
+     DROP CINEMATIC
+
+     The cinematic owns its long-running sources. Gameplay one-shots
+     can be fire-and-forget, but an intro can be skipped, restarted or
+     paused halfway through a burn, so every pod source must be
+     retained and stopped as a group.
+     ============================================================ */
+
+  function cinematicNoiseSource(playbackRate = 1, offset = 0) {
+    const src = ac.createBufferSource();
+    src.buffer = cinematicNoise;
+    src.loop = true;
+    src.playbackRate.value = playbackRate;
+    src.loopStart = Math.max(0, Math.min(CINEMATIC_NOISE_SECONDS - 0.5, offset));
+    src.loopEnd = CINEMATIC_NOISE_SECONDS;
+    return src;
+  }
+
+  function releaseDropRecord(record) {
+    if (!record || record.released) return;
+    record.released = true;
+    drop.sources.delete(record);
+    for (const node of record.nodes) {
+      try { node.disconnect(); } catch (_) { /* already disconnected */ }
+    }
+  }
+
+  function retainDropSource(source, nodes = [], gains = []) {
+    const record = {
+      source,
+      nodes: [source, ...nodes],
+      gains,
+      released: false,
+    };
+    drop.sources.add(record);
+    const release = () => releaseDropRecord(record);
+    if (typeof source.addEventListener === "function") {
+      source.addEventListener("ended", release, { once: true });
+    } else {
+      source.onended = release;
+    }
+    return record;
+  }
+
+  function stopDropSources(fadeSeconds = 0.055) {
+    const records = Array.from(drop.sources);
+    drop.sources.clear();
+    const t = now();
+    for (const record of records) {
+      for (const gain of record.gains) {
+        try {
+          gain.gain.cancelScheduledValues(t);
+          gain.gain.setTargetAtTime(0.0001, t, Math.max(0.006, fadeSeconds * 0.3));
+        } catch (_) { /* node may already have ended */ }
+      }
+      try { record.source.stop(t + fadeSeconds); } catch (_) { /* already stopped */ }
+      window.setTimeout(() => releaseDropRecord(record), Math.ceil(fadeSeconds * 1000) + 80);
+    }
+    drop.beds = null;
+  }
+
+  function connectDropOutput(node, pan = 0) {
+    const extra = [];
+    if (ac.createStereoPanner) {
+      const panner = ac.createStereoPanner();
+      panner.pan.value = Math.max(-0.65, Math.min(0.65, pan));
+      node.connect(panner);
+      panner.connect(buses.cinematic);
+      extra.push(panner);
+    } else {
+      node.connect(buses.cinematic);
+    }
+    return extra;
+  }
+
+  async function loadDropBuffer(id) {
+    if (!DROP_ASSETS[id] || state.offline) return null;
+    if (drop.buffers.has(id)) return drop.buffers.get(id);
+    if (drop.loads.has(id)) return drop.loads.get(id);
+    if (drop.loadErrors.has(id) || typeof window.fetch !== "function") return null;
+
+    const promise = window.fetch(new URL(DROP_ASSETS[id], DROP_ASSET_ROOT).href, {
+      cache: "force-cache",
+    }).then((response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.arrayBuffer();
+    }).then((data) => ac.decodeAudioData(data)).then((buffer) => {
+      drop.buffers.set(id, buffer);
+      return buffer;
+    }).catch((error) => {
+      drop.loadErrors.set(id, (error && error.message) || String(error));
+      return null;
+    }).finally(() => {
+      drop.loads.delete(id);
+    });
+    drop.loads.set(id, promise);
+    return promise;
+  }
+
+  function preloadDropBuffers() {
+    return Promise.all(Object.keys(DROP_ASSETS).map((id) => loadDropBuffer(id)));
+  }
+
+  async function playDropSample(id, options = {}) {
+    const run = drop.run;
+    const buffer = await loadDropBuffer(id);
+    if (!buffer || !drop.active || drop.paused || run !== drop.run) return false;
+    if (ac.state !== "running" && !state.offline) return false;
+
+    const source = ac.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = Math.max(0.5, Math.min(1.5, Number(options.rate) || 1));
+    const gain = ac.createGain();
+    gain.gain.value = Math.max(0, Math.min(0.8, Number(options.gain) || 0.2));
+    const nodes = [gain];
+    if (options.lowpass && ac.createBiquadFilter) {
+      const filter = ac.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = Math.max(120, Number(options.lowpass) || 2400);
+      source.connect(filter);
+      filter.connect(gain);
+      nodes.push(filter);
+    } else {
+      source.connect(gain);
+    }
+    nodes.push(...connectDropOutput(gain, Number(options.pan) || 0));
+    retainDropSource(source, nodes, [gain]);
+    source.start(now());
+    return true;
+  }
+
+  function dropTone(options = {}) {
+    if (!drop.active || drop.paused || (ac.state !== "running" && !state.offline)) return false;
+    const t = now() + Math.max(0, Number(options.delay) || 0);
+    const duration = Math.max(0.04, Number(options.duration) || 0.3);
+    const frequency = Math.max(18, Number(options.frequency) || 120);
+    const endFrequency = Math.max(18, Number(options.endFrequency) || frequency);
+    const peak = Math.max(0.001, Math.min(0.5, Number(options.gain) || 0.1));
+    const attack = Math.min(duration * 0.25, Math.max(0.004, Number(options.attack) || 0.018));
+
+    const osc = ac.createOscillator();
+    osc.type = options.type || "sine";
+    osc.frequency.setValueAtTime(frequency, t);
+    if (endFrequency !== frequency) {
+      osc.frequency.exponentialRampToValueAtTime(endFrequency, t + duration * 0.9);
+    }
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(peak, t + attack);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    osc.connect(gain);
+    const nodes = [gain, ...connectDropOutput(gain, Number(options.pan) || 0)];
+    retainDropSource(osc, nodes, [gain]);
+    osc.start(t);
+    osc.stop(t + duration + 0.025);
+    return true;
+  }
+
+  function dropNoiseBurst(options = {}) {
+    if (!drop.active || drop.paused || (ac.state !== "running" && !state.offline)) return false;
+    const delay = Math.max(0, Number(options.delay) || 0);
+    const t = now() + delay;
+    const duration = Math.max(0.05, Number(options.duration) || 0.4);
+    const peak = Math.max(0.001, Math.min(0.6, Number(options.gain) || 0.1));
+    const cuePhase = ((drop.cueSerial * 0.619 + (Number(options.pan) || 0) * 0.17) % 1 + 1) % 1;
+    const offset = 0.2 + cuePhase * (CINEMATIC_NOISE_SECONDS - 0.8);
+    const source = cinematicNoiseSource(Number(options.rate) || 1, offset);
+    const filter = ac.createBiquadFilter();
+    filter.type = options.filter || "bandpass";
+    const startFrequency = Math.max(40, Number(options.frequency) || 520);
+    const endFrequency = Math.max(40, Number(options.endFrequency) || startFrequency);
+    filter.frequency.setValueAtTime(startFrequency, t);
+    if (endFrequency !== startFrequency) {
+      filter.frequency.exponentialRampToValueAtTime(endFrequency, t + duration * 0.9);
+    }
+    filter.Q.value = Math.max(0.1, Number(options.q) || 0.7);
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.linearRampToValueAtTime(peak, t + Math.min(0.025, duration * 0.2));
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+    source.connect(filter);
+    filter.connect(gain);
+    const nodes = [filter, gain, ...connectDropOutput(gain, Number(options.pan) || 0)];
+    retainDropSource(source, nodes, [gain]);
+    source.start(t, offset);
+    source.stop(t + duration + 0.03);
+    return true;
+  }
+
+  function startDropBeds() {
+    if (!drop.active || drop.paused || drop.beds) return !!drop.beds;
+    if (ac.state !== "running" && !state.offline) return false;
+    const t = now();
+
+    // The sealed cabin: mono fundamentals so the floor does not swim
+    // in headphones, with a small mechanical LFO in the upper body.
+    const cabinOut = ac.createGain();
+    cabinOut.gain.value = 0.0001;
+    cabinOut.connect(buses.cinematic);
+    const cabinSub = ac.createOscillator();
+    cabinSub.type = "sine";
+    cabinSub.frequency.value = 38;
+    const cabinSubGain = ac.createGain();
+    cabinSubGain.gain.value = 0.72;
+    cabinSub.connect(cabinSubGain);
+    cabinSubGain.connect(cabinOut);
+    const cabinHarmonic = ac.createOscillator();
+    cabinHarmonic.type = "triangle";
+    cabinHarmonic.frequency.value = 79;
+    const cabinHarmonicGain = ac.createGain();
+    cabinHarmonicGain.gain.value = 0.2;
+    cabinHarmonic.connect(cabinHarmonicGain);
+    cabinHarmonicGain.connect(cabinOut);
+    const cabinLfo = ac.createOscillator();
+    cabinLfo.type = "sine";
+    cabinLfo.frequency.value = 6.2;
+    const cabinLfoGain = ac.createGain();
+    cabinLfoGain.gain.value = 0.006;
+    cabinLfo.connect(cabinLfoGain);
+    cabinLfoGain.connect(cabinOut.gain);
+
+    // Two decorrelated plasma layers keep the reentry roar wide while
+    // the sub and hull remain centred.
+    const plasmaOut = ac.createGain();
+    plasmaOut.gain.value = 0.0001;
+    plasmaOut.connect(buses.cinematic);
+    const plasmaFilters = [];
+    for (const spec of [
+      { rate: 0.87, offset: 0.47, pan: -0.28, frequency: 720 },
+      { rate: 1.11, offset: 1.93, pan: 0.28, frequency: 980 },
+    ]) {
+      const source = cinematicNoiseSource(spec.rate, spec.offset);
+      const filter = ac.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.value = spec.frequency;
+      filter.Q.value = 0.48;
+      source.connect(filter);
+      let tail = filter;
+      const nodes = [filter];
+      if (ac.createStereoPanner) {
+        const panner = ac.createStereoPanner();
+        panner.pan.value = spec.pan;
+        filter.connect(panner);
+        tail = panner;
+        nodes.push(panner);
+      }
+      tail.connect(plasmaOut);
+      retainDropSource(source, [...nodes, plasmaOut], [plasmaOut]);
+      source.start(t, spec.offset);
+      plasmaFilters.push(filter);
+    }
+
+    // Retro burn: broadband chamber exhaust over a tonal motor body.
+    const retroOut = ac.createGain();
+    retroOut.gain.value = 0.0001;
+    retroOut.connect(buses.cinematic);
+    const retroNoise = cinematicNoiseSource(0.72, 2.71);
+    const retroFilter = ac.createBiquadFilter();
+    retroFilter.type = "bandpass";
+    retroFilter.frequency.value = 180;
+    retroFilter.Q.value = 0.62;
+    retroNoise.connect(retroFilter);
+    retroFilter.connect(retroOut);
+    const retroBody = ac.createOscillator();
+    retroBody.type = "sawtooth";
+    retroBody.frequency.value = 42;
+    const retroBodyGain = ac.createGain();
+    retroBodyGain.gain.value = 0.12;
+    retroBody.connect(retroBodyGain);
+    retroBodyGain.connect(retroOut);
+
+    retainDropSource(cabinSub, [cabinSubGain, cabinOut], [cabinOut]);
+    retainDropSource(cabinHarmonic, [cabinHarmonicGain, cabinOut], [cabinOut]);
+    retainDropSource(cabinLfo, [cabinLfoGain], [cabinOut]);
+    retainDropSource(retroNoise, [retroFilter, retroOut], [retroOut]);
+    retainDropSource(retroBody, [retroBodyGain, retroOut], [retroOut]);
+    cabinSub.start(t);
+    cabinHarmonic.start(t);
+    cabinLfo.start(t);
+    retroNoise.start(t, 2.71);
+    retroBody.start(t);
+
+    cabinOut.gain.setTargetAtTime(0.058, t, 0.16);
+    drop.beds = {
+      cabinOut,
+      cabinSub,
+      cabinHarmonic,
+      plasmaOut,
+      plasmaFilters,
+      retroOut,
+      retroFilter,
+      retroBody,
+    };
+    return true;
+  }
+
+  function beginDrop() {
+    if (drop.active || drop.sources.size) stopDropSources(0.025);
+    drop.run += 1;
+    drop.active = true;
+    drop.paused = false;
+    drop.cueSerial = 0;
+    drop.controls = { heat: 0, turbulence: 0, retro: 0, altitude: 1, velocity: 0 };
+    const run = drop.run;
+    // Decoding begins with the cinematic but never delays its first
+    // procedural frame; the short files join as soon as they are warm.
+    void preloadDropBuffers();
+    return unlock({ ambience: false }).then((ready) => {
+      if (ready && drop.active && run === drop.run) startDropBeds();
+      return !!ready;
+    }).catch(() => false);
+  }
+
+  function updateDrop(values = {}) {
+    if (!drop.active) return false;
+    if (Object.prototype.hasOwnProperty.call(values, "paused")) {
+      void pauseDrop(!!values.paused);
+    }
+    if (drop.paused) return true;
+    startDropBeds();
+    if (!drop.beds) return false;
+
+    for (const key of ["heat", "turbulence", "retro", "altitude", "velocity"]) {
+      if (!Object.prototype.hasOwnProperty.call(values, key)) continue;
+      const numeric = Number(values[key]);
+      if (!Number.isFinite(numeric)) continue;
+      drop.controls[key] = clamp01(key === "velocity" ? Math.abs(numeric) : numeric);
+    }
+    const { heat, turbulence, retro, altitude, velocity } = drop.controls;
+    const landingPressure = 1 - altitude;
+    const t = now();
+    drop.beds.cabinOut.gain.setTargetAtTime(
+      0.052 + turbulence * 0.044 + velocity * 0.018 + landingPressure * 0.008,
+      t, 0.055
+    );
+    drop.beds.cabinSub.frequency.setTargetAtTime(38 + turbulence * 7 + retro * 4, t, 0.08);
+    drop.beds.cabinHarmonic.frequency.setTargetAtTime(79 + turbulence * 21, t, 0.07);
+    drop.beds.plasmaOut.gain.setTargetAtTime(heat * 0.32 + turbulence * 0.11, t, 0.055);
+    for (let i = 0; i < drop.beds.plasmaFilters.length; i += 1) {
+      drop.beds.plasmaFilters[i].frequency.setTargetAtTime(
+        lerp(i ? 880 : 620, i ? 4200 : 3300, heat) * lerp(0.9, 1.12, turbulence),
+        t, 0.065
+      );
+    }
+    drop.beds.retroOut.gain.setTargetAtTime(retro * 0.39, t, retro > 0 ? 0.038 : 0.11);
+    drop.beds.retroFilter.frequency.setTargetAtTime(lerp(150, 620, retro), t, 0.045);
+    drop.beds.retroBody.frequency.setTargetAtTime(lerp(42, 82, retro), t, 0.05);
+    return true;
+  }
+
+  function dropCue(name) {
+    if (!drop.active || drop.paused) return false;
+    const cue = String(name || "").toLowerCase().replace(/[\s_-]/g, "");
+    drop.cueSerial += 1;
+    const serial = drop.cueSerial;
+    const side = serial % 2 ? -0.32 : 0.32;
+
+    if (["armed", "confirm", "sealed"].includes(cue)) {
+      void playDropSample("confirm", { gain: 0.17, rate: 0.92 });
+      dropTone({ frequency: 880, endFrequency: 1320, duration: 0.18, gain: 0.045, type: "triangle" });
+      return true;
+    }
+    if (["drop", "release", "separation", "launch"].includes(cue)) {
+      void playDropSample("drop", { gain: 0.23, rate: 0.82 });
+      void playDropSample("metal", { gain: 0.16, rate: 0.76, lowpass: 2100 });
+      dropTone({ frequency: 84, endFrequency: 34, duration: 0.58, gain: 0.22 });
+      dropNoiseBurst({ frequency: 1300, endFrequency: 240, duration: 0.42, gain: 0.13, filter: "lowpass" });
+      return true;
+    }
+    if (["entry", "atmosphere", "reentry", "plasma"].includes(cue)) {
+      void playDropSample("forceField", { gain: 0.17, rate: 0.72, lowpass: 3200 });
+      dropNoiseBurst({ frequency: 440, endFrequency: 2200, duration: 1.15, gain: 0.12, q: 0.5 });
+      return true;
+    }
+    if (["hull", "hullstress", "stress", "buffet", "buffeting"].includes(cue)) {
+      const variants = [
+        { id: "metalImpact", rate: 0.72, gain: 0.16 },
+        { id: "metal", rate: 0.88, gain: 0.14 },
+        { id: "softHeavy", rate: 0.78, gain: 0.13 },
+      ];
+      const variant = variants[(serial - 1) % variants.length];
+      void playDropSample(variant.id, {
+        gain: variant.gain, rate: variant.rate, pan: side, lowpass: 1900,
+      });
+      dropTone({
+        frequency: 190 + (serial % 3) * 31,
+        endFrequency: 61 + (serial % 2) * 13,
+        duration: 0.72,
+        gain: 0.085,
+        type: "sawtooth",
+        pan: side,
+      });
+      dropNoiseBurst({
+        frequency: 760, endFrequency: 170, duration: 0.52,
+        gain: 0.075, filter: "lowpass", pan: side,
+      });
+      return true;
+    }
+    if (["comms", "radio", "link"].includes(cue)) {
+      void playDropSample("confirm", { gain: 0.075, rate: 1.18, lowpass: 2600 });
+      dropTone({ frequency: 1460, endFrequency: 980, duration: 0.11, gain: 0.038, type: "square" });
+      dropTone({ frequency: 1120, duration: 0.09, gain: 0.03, type: "triangle", delay: 0.13 });
+      return true;
+    }
+    if (["alert", "warning", "brace"].includes(cue)) {
+      dropTone({ frequency: 940, duration: 0.13, gain: 0.06, type: "square" });
+      dropTone({ frequency: 620, duration: 0.16, gain: 0.07, type: "square", delay: 0.17 });
+      return true;
+    }
+    if (["retro", "retroignite", "retroignition", "burn", "braking"].includes(cue)) {
+      void playDropSample("lowExplosion", { gain: 0.25, rate: 0.67, lowpass: 1800 });
+      void playDropSample("softHeavy", { gain: 0.13, rate: 0.82 });
+      dropTone({ frequency: 92, endFrequency: 31, duration: 1.1, gain: 0.22 });
+      dropNoiseBurst({ frequency: 680, endFrequency: 140, duration: 0.9, gain: 0.18, filter: "lowpass" });
+      return true;
+    }
+    if (["impact", "contact", "touchdown", "landed"].includes(cue)) {
+      void playDropSample("softHeavy", { gain: 0.34, rate: 0.72 });
+      void playDropSample("metalImpact", { gain: 0.28, rate: 0.78, lowpass: 2600 });
+      void playDropSample("lowExplosion", { gain: 0.3, rate: 0.78, lowpass: 1500 });
+      dropTone({ frequency: 76, endFrequency: 23, duration: 1.55, gain: 0.34 });
+      dropNoiseBurst({ frequency: 3100, endFrequency: 190, duration: 0.82, gain: 0.28, filter: "lowpass" });
+      dropTone({ frequency: 247, endFrequency: 180, duration: 1.8, gain: 0.055, type: "triangle", delay: 0.08 });
+      return true;
+    }
+    if (["hatch", "door", "dooropen", "vent"].includes(cue)) {
+      void playDropSample("doorOpen", { gain: 0.27, rate: 0.88, lowpass: 4200 });
+      dropNoiseBurst({
+        frequency: 3900, endFrequency: 1100, duration: 1.25,
+        gain: 0.13, filter: "highpass", q: 0.45,
+      });
+      dropTone({ frequency: 420, endFrequency: 210, duration: 0.55, gain: 0.04, type: "triangle" });
+      return true;
+    }
+    if (["handoff", "clear", "ready"].includes(cue)) {
+      void playDropSample("confirm", { gain: 0.15, rate: 1.05 });
+      dropTone({ frequency: 523, endFrequency: 784, duration: 0.28, gain: 0.045, type: "triangle" });
+      return true;
+    }
+    return false;
+  }
+
+  function pauseDrop(value = true) {
+    const paused = !!value;
+    if (!drop.active) return Promise.resolve(false);
+    if (paused === drop.paused) return Promise.resolve(true);
+    drop.paused = paused;
+    if (state.offline) return Promise.resolve(true);
+    /* Serialize context transitions. suspend()/resume() are async;
+       without a queue a rapid pause -> resume (or skip) can let an
+       older suspend resolve last and strand the whole game silent. */
+    drop.pauseQueue = drop.pauseQueue.catch(() => false).then(async () => {
+      if (!drop.active) return true;
+      if (drop.paused) {
+        if (ac.state === "running" && typeof ac.suspend === "function") {
+          try { await ac.suspend(); } catch (_) { return false; }
+        }
+        return ac.state !== "running";
+      }
+      return unlock({ ambience: false, allowPaused: true });
+    });
+    return drop.pauseQueue;
+  }
+
+  function setPaused(value = true) {
+    const paused = !!value;
+    if (paused === state.paused) return Promise.resolve(true);
+    state.paused = paused;
+    if (state.offline) return Promise.resolve(true);
+    /* Share the cinematic transition queue so a handoff resume, menu
+       suspend, and quick resume cannot finish out of order. */
+    drop.pauseQueue = drop.pauseQueue.catch(() => false).then(async () => {
+      if (state.paused) {
+        if (ac.state === "running" && typeof ac.suspend === "function") {
+          try { await ac.suspend(); } catch (_) { return false; }
+        }
+        return ac.state !== "running";
+      }
+      return unlock({ ambience: false, allowPaused: true });
+    });
+    return drop.pauseQueue;
+  }
+
+  function endDrop({ handoff = false } = {}) {
+    drop.run += 1;
+    drop.active = false;
+    drop.paused = false;
+    stopDropSources(handoff ? 0.085 : 0.035);
+    if (!handoff) return Promise.resolve(true);
+    /* Run after any in-flight suspend so the handoff resume is the
+       final context operation, never the loser of a race. */
+    drop.pauseQueue = drop.pauseQueue.catch(() => false).then(() => unlock({
+      ambience: false, allowPaused: true,
+    })).then((ready) => {
+      if (ready) startAmbience();
+      return !!ready;
+    }).catch(() => false);
+    return drop.pauseQueue;
+  }
+
+  /* ============================================================
      AMBIENCE
 
      One continuous wind bed, filtered noise with a slow LFO on the
@@ -583,15 +1137,32 @@ export function buildAudio(ctx) {
      AudioContext without one, and calling resume() before then is a
      no-op that leaves the game permanently silent if nothing calls
      it again. */
-  function unlock() {
-    if (state.started) return;
-    ac.resume().then(() => {
+  function unlock(options = {}) {
+    const wantsAmbience = options.ambience === true && !ctx.deferAmbience;
+    /* Ordinary gesture listeners must not wake looping pod beds while
+       the cinematic is paused behind the Escape menu or a hidden tab.
+       pauseDrop/endDrop opt in when a real state transition needs it. */
+    if ((state.paused || (drop.active && drop.paused)) && options.allowPaused !== true) {
+      return Promise.resolve(false);
+    }
+    if (state.offline) {
       state.started = true;
-      startAmbience();
-    }).catch(() => { /* still suspended; the next gesture will retry */ });
+      return Promise.resolve(true);
+    }
+    const resume = ac.state === "running"
+      ? Promise.resolve()
+      : (typeof ac.resume === "function" ? ac.resume() : Promise.reject(new Error("no resume")));
+    return Promise.resolve(resume).then(() => {
+      const ready = ac.state === "running";
+      if (ready) {
+        state.started = true;
+        if (wantsAmbience) startAmbience();
+      }
+      return ready;
+    }).catch(() => false); // still suspended; the next gesture will retry
   }
   for (const evt of ["pointerdown", "keydown", "touchstart"]) {
-    window.addEventListener(evt, unlock, { passive: true });
+    window.addEventListener(evt, () => { void unlock({ ambience: true }); }, { passive: true });
   }
 
   /* Footsteps are driven by the stride the gait solver already
@@ -660,6 +1231,13 @@ export function buildAudio(ctx) {
     attach,
     update,
     unlock,
+    startAmbience,
+    beginDrop,
+    updateDrop,
+    dropCue,
+    pauseDrop,
+    setPaused,
+    endDrop,
     testWith(offlineCtx) {
       state.offline = true;
       state.started = true;
@@ -675,8 +1253,16 @@ export function buildAudio(ctx) {
         state: ac.state,
         voices: state.voices,
         sampleRate: ac.sampleRate,
+        paused: state.paused,
         ambience: !!wind,
         jetLoop: !!jetLoop,
+        cinematic: {
+          active: drop.active,
+          sources: drop.sources.size,
+          buffers: drop.buffers.size,
+          loadErrors: Array.from(drop.loadErrors, ([id, message]) => `${id}: ${message}`),
+          paused: drop.paused,
+        },
       };
     },
   };
@@ -684,13 +1270,29 @@ export function buildAudio(ctx) {
 
 function makeSilentApi() {
   const noop = () => {};
+  const no = () => false;
+  const noPromise = () => Promise.resolve(false);
   return {
     context: null,
     shot: noop, impact: noop, death: noop, explosion: noop, inbound: noop,
     step: noop, hurt: noop, blip: noop, chord: noop, attach: noop,
     jetIgnite: noop, jetCutoff: noop, jetEmpty: noop, jetLand: noop,
-    update: noop, unlock: noop, setEnabled: noop,
+    update: noop, unlock: noPromise, startAmbience: noop, setEnabled: noop,
+    beginDrop: noPromise, updateDrop: no, dropCue: no,
+    pauseDrop: noPromise, setPaused: noPromise, endDrop: noPromise,
     enabled: false,
-    stats() { return { state: "unavailable", voices: 0, sampleRate: 0, ambience: false }; },
+    stats() {
+      return {
+        state: "unavailable",
+        voices: 0,
+        sampleRate: 0,
+        paused: false,
+        ambience: false,
+        jetLoop: false,
+        cinematic: {
+          active: false, sources: 0, buffers: 0, loadErrors: [], paused: false,
+        },
+      };
+    },
   };
 }

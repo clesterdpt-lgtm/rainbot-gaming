@@ -680,11 +680,11 @@ export function createRenderer(ctx, canvas) {
   // recent thing that ran.
   const sceneInfo = { calls: 0, triangles: 0, points: 0, lines: 0 };
 
-  function render(cam = camera) {
+  function render(cam = camera, sourceScene = scene) {
     frame += 1;
     renderer.setRenderTarget(sceneTarget);
     renderer.clear(true, true, false);
-    renderer.render(scene, cam);
+    renderer.render(sourceScene, cam);
     sceneInfo.calls = renderer.info.render.calls;
     sceneInfo.triangles = renderer.info.render.triangles;
     sceneInfo.points = renderer.info.render.points;

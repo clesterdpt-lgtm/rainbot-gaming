@@ -13,7 +13,7 @@ import { makeAtmosphere, makeMaterials, TIMES } from "saintfall/art.js";
 import { createRenderer } from "saintfall/render.js";
 import { buildSky } from "saintfall/sky.js";
 import {
-  buildTerrain, makeHeightField, DISTRICTS, roadPointAtZ,
+  buildTerrain, makeHeightField, DISTRICTS, DROP_SITE,
 } from "saintfall/terrain.js";
 import { buildWorld } from "saintfall/world.js";
 import { buildVfx } from "saintfall/vfx.js";
@@ -30,11 +30,20 @@ import { buildAudio } from "saintfall/audio.js";
 import { buildWeapons } from "saintfall/weapons.js";
 import { buildHud } from "saintfall/hud.js";
 import { buildTouchControls } from "saintfall/touch.js";
+import { buildDropIntro } from "saintfall/intro.js";
 import { installQa } from "saintfall/qa.js";
 
 export async function start({ boot, build } = {}) {
   const params = new URLSearchParams(window.location.search);
   const qa = params.has("qa");
+  const introParam = params.get("intro");
+  /* Existing QA harnesses expect assets-ready to mean immediately
+     playable. Normal players get the cinematic; QA opts into it
+     explicitly with ?qa=1&intro=force. */
+  const introEnabled = introParam !== "0" && introParam !== "skip"
+    && (!qa || introParam === "1" || introParam === "force");
+  // A frozen clock is a deterministic QA instrument, never a player URL mode.
+  const introManualClock = qa && params.get("introClock") === "manual";
   const quality = params.get("quality") || (qa ? "high" : "high");
   const timeKey = params.get("time") || "goldenhour";
   const seed = params.has("seed") ? (hashString(params.get("seed")) >>> 0) : 0x5a17fa11;
@@ -58,6 +67,12 @@ export async function start({ boot, build } = {}) {
     atmos,
     districts: DISTRICTS,
     qa,
+    deferAmbience: introEnabled,
+    runtime: {
+      phase: introEnabled ? "awaiting-deploy" : "playing",
+      paused: false,
+      handoffFrames: 0,
+    },
   };
 
   progress(0.22, "Opening the eye");
@@ -106,10 +121,7 @@ export async function start({ boot, build } = {}) {
      cathedral. It used to land at x -12, which is 28m off the road on
      the shoulder above it - a hillside, with the road visible below
      and a rise close enough in front to stop a shot at 13m. */
-  {
-    const drop = roadPointAtZ(DISTRICTS.threshold.z + 44);
-    player.spawn(drop.x, drop.z, drop.yaw);
-  }
+  player.spawn(DROP_SITE.x, DROP_SITE.z, DROP_SITE.yaw);
 
   const weapons = buildWeapons(ctx);
   ctx.weapons = weapons;
@@ -141,6 +153,57 @@ export async function start({ boot, build } = {}) {
   ctx.hud = hud;
   const touch = buildTouchControls(ctx, player, touchHost, stage);
   ctx.touch = touch;
+
+  const introHost = document.getElementById("sf-intro");
+  const touchEnabledAfterDrop = !!touch.enabled;
+  const runtimePauseReasons = {
+    menu: document.body.classList.contains("rb-escape-menu-open"),
+    visibility: document.hidden,
+  };
+  function syncRuntimePaused() {
+    runtimePauseReasons.menu = document.body.classList.contains("rb-escape-menu-open");
+    runtimePauseReasons.visibility = document.hidden;
+    if (ctx.runtime.phase !== "playing") return ctx.runtime.paused;
+    const next = Object.values(runtimePauseReasons).some(Boolean);
+    if (next === ctx.runtime.paused) return next;
+    ctx.runtime.paused = next;
+    if (next) player.input.clearAll?.();
+    void audio.setPaused?.(next);
+    return next;
+  }
+  if (introEnabled) {
+    hud.setVisible(false);
+    touch.setEnabled(false);
+    /* Arm the stage before the loader starts fading. This makes the canvas
+       pointer-inert during the loader -> Deploy crossfade, so an eager click
+       cannot acquire pointer lock through two translucent layers. */
+    stage?.classList.add("sf-intro-active");
+  }
+  const intro = buildDropIntro(ctx, {
+    enabled: introEnabled,
+    host: introHost,
+    stage,
+    render,
+    audio,
+    manualClock: introManualClock,
+    deferReveal: introEnabled && !!boot,
+    preserveForQa: qa,
+    onComplete() {
+      ctx.runtime.phase = "playing";
+      ctx.runtime.paused = false;
+      ctx.runtime.handoffFrames = 1;
+      ctx.deferAmbience = false;
+      player.input.clearAll?.();
+      hud.setVisible(true);
+      touch.setEnabled(touchEnabledAfterDrop);
+      audio.startAmbience?.();
+      syncRuntimePaused();
+    },
+  });
+  ctx.intro = intro;
+  const runtimeMenuObserver = new MutationObserver(syncRuntimePaused);
+  runtimeMenuObserver.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  document.addEventListener("visibilitychange", syncRuntimePaused);
 
   // Scratch vectors for the shot path, allocated once. A firefight
   // is the worst possible time to be making garbage.
@@ -174,6 +237,8 @@ export async function start({ boot, build } = {}) {
     mission,
     breaches,
     audio,
+    intro,
+    runtime: ctx.runtime,
     audioFactory: buildAudio,
     fps: 0,
     frameMs: 0,
@@ -195,6 +260,7 @@ export async function start({ boot, build } = {}) {
     const w = (stage ? stage.clientWidth : window.innerWidth) || window.innerWidth;
     const h = (stage ? stage.clientHeight : window.innerHeight) || window.innerHeight;
     render.resize(w, h);
+    intro.resize(w, h);
   }
   window.addEventListener("resize", resize);
   resize();
@@ -449,13 +515,33 @@ export async function start({ boot, build } = {}) {
     if (draw) render.render(render.camera);
   }
 
+  function frame(dt, draw = true) {
+    if (intro.isBlocking()) {
+      intro.update(dt);
+      return;
+    }
+    /* Present one exact live-world frame after the match cut before any
+       simulation, particles, or lighting advance. The following rAF then
+       becomes the first moving gameplay frame rather than a visible pop. */
+    if (ctx.runtime.handoffFrames > 0) {
+      ctx.runtime.handoffFrames -= 1;
+      if (draw) render.render(render.camera);
+      return;
+    }
+    if (ctx.runtime.paused) {
+      if (draw) render.render(render.camera);
+      return;
+    }
+    step(dt, draw);
+  }
+
   let last = performance.now();
   function loop(now) {
     requestAnimationFrame(loop);
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     const t0 = performance.now();
-    step(dt, true);
+    frame(dt, true);
     const ms = performance.now() - t0;
     frameStat.push(ms);
     api.frameMs = frameStat.mean();
@@ -466,6 +552,8 @@ export async function start({ boot, build } = {}) {
 
   const TIME_KEYS = ["goldenhour", "noon", "dusk", "night", "storm"];
   window.addEventListener("keydown", (e) => {
+    if (intro.isBlocking() && e.code !== "KeyM") return;
+    if (ctx.runtime.paused && e.code !== "KeyM") return;
     if (e.code >= "Digit1" && e.code <= "Digit5") {
       const idx = Number(e.code.slice(5)) - 1;
       if (TIME_KEYS[idx] === "storm") { setTime("goldenhour"); setStorm(1); }
@@ -510,10 +598,22 @@ export async function start({ boot, build } = {}) {
 
   // A few real frames before the loader lifts, so the first thing
   // anyone sees is a composed image rather than a black canvas.
-  for (let i = 0; i < 4; i += 1) step(1 / 60, true);
-  api.ready = true;
+  for (let i = 0; i < 4; i += 1) {
+    if (intro.isBlocking()) {
+      // Compile and cull the live basin under the loader as well as
+      // the isolated intro. The hatch match-cut must not discover 50
+      // world shaders and 193 unculled enemies on its first frame.
+      player.input.clearAll?.();
+      step(0, true);
+      intro.update(0);
+    } else step(1 / 60, true);
+  }
   progress(1, "Ready");
-  if (boot) boot.hide();
+  // Let the loading title finish its fade before the interactive
+  // Deploy card appears underneath it.
+  if (boot) await boot.hide();
+  intro.reveal?.();
+  api.ready = true;
   requestAnimationFrame(loop);
 
   return api;

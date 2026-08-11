@@ -1897,6 +1897,32 @@ function makeInput(canvas) {
     state.ads = mouse.ads;
   }
 
+  /* A modal sequence can hold the simulation while DOM listeners keep
+     collecting input. Flush every level- and edge-triggered channel at
+     handoff so the first playable frame never inherits a held fire,
+     jump or movement command from the cinematic. */
+  function clearAll() {
+    keys.clear();
+    mouse.firing = false;
+    mouse.ads = false;
+    state.injected = null;
+    state.move.x = 0;
+    state.move.y = 0;
+    state.look.x = 0;
+    state.look.y = 0;
+    state.sprint = false;
+    state.jump = false;
+    state.jumpPressed = false;
+    state.jetpack = false;
+    state.block = false;
+    state.crouch = false;
+    state.firing = false;
+    state.ads = false;
+    state.reload = false;
+    state.events.length = 0;
+    clearTouch();
+  }
+
   /* Holding the stratagem key turns the direction pad into a code
      pad. WASD keeps driving movement, so the arrows do double duty:
      free look while walking, code entry while called. */
@@ -2022,6 +2048,7 @@ function makeInput(canvas) {
     setTouchHold,
     pressTouch,
     clearTouch,
+    clearAll,
   };
 }
 
@@ -2141,6 +2168,13 @@ export async function createPlayer(ctx, canvas) {
   const camShakeAxis = new THREE.Vector3();
   // Where the chase spring has the camera, before any shake.
   const camAnchor = new THREE.Vector3();
+  /* A newly spawned trooper is hundreds of metres from the vector's
+     constructor origin. The first presentation-only update often has
+     dt=0 (load prewarm and cinematic handoff), so an ordinary damp
+     would leave the anchor at [0,0,0] and the first live frame would
+     fly across the map. Snap once after every spawn, then resume the
+     normal chase spring. */
+  let camAnchorReady = false;
   const viewForward = new THREE.Vector3();
 
   initIk(THREE);
@@ -2565,6 +2599,7 @@ export async function createPlayer(ctx, canvas) {
     if (yaw !== undefined) { state.yaw = yaw; state.camYaw = yaw; }
     state.stride = 0;
     state.gait = 0;
+    camAnchorReady = false;
     /* UNPLANT THE FEET.
 
        `spawn` moved the body and left the foot IK targets where they
@@ -3544,7 +3579,12 @@ export async function createPlayer(ctx, canvas) {
        different look direction on the very next frame. Lerping the
        camera from its own shaken position fed 0.27 degrees of drift
        per burst straight back into the aim. */
-    camAnchor.lerp(want, 1 - Math.exp(-14 * dt));
+    if (!camAnchorReady) {
+      camAnchor.copy(want);
+      camAnchorReady = true;
+    } else {
+      camAnchor.lerp(want, 1 - Math.exp(-14 * dt));
+    }
     camera.position.copy(camAnchor);
     // Look slightly above the figure's head, which puts the horizon
     // where a third-person shooter puts it.

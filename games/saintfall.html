@@ -20,9 +20,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Share+Tech+Mono&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Share+Tech+Mono&display=swap&v=20260811-9" />
   <link rel="stylesheet" href="../assets/css/styles.css?v=20260806-network-polish-1" />
-  <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260811-6" />
+  <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260811-9" />
 </head>
 <body class="rb-standalone-shell saintfall-shell">
   <nav class="nav"><div id="nav-slot"></div></nav>
@@ -45,6 +45,7 @@
             <canvas id="sf-canvas" aria-label="SAINTFALL playfield"></canvas>
             <div id="sf-hud"></div>
             <div id="sf-touch" data-touch-controls aria-label="SAINTFALL touch controls" aria-hidden="true"></div>
+            <div id="sf-intro" aria-hidden="true"></div>
 
             <div id="sf-boot">
               <a class="sf-boot__back" href="../games.html">&larr; Rainbot</a>
@@ -159,6 +160,7 @@
     (() => {
       const btn = document.getElementById("sf-fullscreen");
       const stage = document.querySelector(".sf-stage");
+      const surface = stage.closest(".rb-standalone-surface") || stage;
       const syncMaxButton = (active) => {
         btn.textContent = active ? "✕" : "⛶";
         btn.setAttribute("aria-label", active ? "Exit max screen" : "Max screen");
@@ -169,7 +171,7 @@
         document.documentElement.classList.toggle("sf-maximised", maxed);
         document.body.classList.toggle("rb-game-maxed", maxed);
         syncMaxButton(maxed);
-        if (maxed && stage.requestFullscreen) stage.requestFullscreen().catch(() => {});
+        if (maxed && surface.requestFullscreen) surface.requestFullscreen().catch(() => {});
         else if (!maxed && document.fullscreenElement) document.exitFullscreen().catch(() => {});
         window.dispatchEvent(new Event("resize"));
       });
@@ -189,7 +191,7 @@
        main.js without it throws before the nav ever renders. -->
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260806-network-polish-1"></script>
-  <script src="../assets/js/saintfall/boot.js?v=20260811-6"></script>
+  <script src="../assets/js/saintfall/boot.js?v=20260811-9"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

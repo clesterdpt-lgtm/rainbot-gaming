@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260811-6";
+  const BUILD = "20260811-9";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -24,6 +24,7 @@
   const statusEl = document.getElementById("sf-boot-status");
   const errorEl = document.getElementById("sf-boot-error");
   const tipEl = document.getElementById("sf-boot-tip");
+  let hidePromise = null;
 
   const TIPS = [
     "The Saint fell here in 811.M2. Nobody has ever found the rest of it.",
@@ -47,11 +48,16 @@
       console.error("[saintfall] boot failure:", message, detail || "");
     },
     hide() {
-      if (!bootEl) return;
+      if (!bootEl) return Promise.resolve();
+      if (hidePromise) return hidePromise;
       bootEl.classList.add("is-hidden");
-      window.setTimeout(() => {
-        if (bootEl && bootEl.parentNode) bootEl.parentNode.removeChild(bootEl);
-      }, 1100);
+      hidePromise = new Promise((resolve) => {
+        window.setTimeout(() => {
+          if (bootEl && bootEl.parentNode) bootEl.parentNode.removeChild(bootEl);
+          resolve();
+        }, 950);
+      });
+      return hidePromise;
     },
   };
   window.__SF_BOOT = boot;
@@ -95,7 +101,7 @@
   const MODULES = [
     "core", "art", "sky", "terrain", "structures", "world", "collide",
     "vfx", "render", "player", "jetpack", "boost", "shield", "enemies", "weapons", "ik", "combat",
-    "mission", "breaches", "audio", "hud", "touch", "qa", "main",
+    "mission", "breaches", "audio", "hud", "touch", "intro", "qa", "main",
   ];
 
   function installImportMap(base) {

@@ -38,7 +38,9 @@ import {
   paintByHeight, paintFlat, paintGeometry, srgbTransfer as srgb,
 } from "saintfall/art.js";
 import { makeKit, mergeGeometries, cleanGeometry } from "saintfall/structures.js";
-import { DISTRICTS, ROAD_PATH, FOSSE_PATH, MAP_HALF } from "saintfall/terrain.js";
+import {
+  DISTRICTS, ROAD_PATH, FOSSE_PATH, MAP_HALF, DROP_SITE,
+} from "saintfall/terrain.js";
 import { makeRamp } from "saintfall/core.js";
 
 /* ============================================================
@@ -651,8 +653,8 @@ export async function buildWorld(ctx, onProgress) {
   {
     const d = DISTRICTS.threshold;
     const rng = makeRng(0x7413);
-    const padX = -12;
-    const padZ = d.z + 26;
+    const padX = DROP_SITE.podX;
+    const padZ = DROP_SITE.podZ;
     const padY = H(padX, padZ);
 
     /* --- the south gate: two pylons framing the road ---
@@ -744,7 +746,9 @@ export async function buildWorld(ctx, onProgress) {
         parts.push(fin);
       }
       const g = kit.merge(parts);
-      kit.transform(g, { pos: [padX, padY - 1.5, padZ], rot: [0.13, 0.6, 0.08] });
+      kit.transform(g, {
+        pos: [padX, padY - 1.5, padZ], rot: [0.05, DROP_SITE.podYaw, 0.04],
+      });
       paintH(g, makeRamp([
         [0, "#191a1e"], [0.28, "#2f3239"], [0.62, "#4f545d"], [1, "#7e838c"],
       ]), { normalWeight: 0.5, jitter: 0.16, noise: 0.3 });

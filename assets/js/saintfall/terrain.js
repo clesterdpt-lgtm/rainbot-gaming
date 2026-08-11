@@ -113,6 +113,20 @@ export function roadPointAtZ(z) {
   };
 }
 
+/* One authoritative landfall. The player stands on the causeway while
+   the pod sits just off its west shoulder with the hatch facing the
+   road. Keeping this derived from ROAD_PATH means the cinematic, the
+   static wreck and the playable spawn cannot drift apart again. */
+const DROP_ROAD = roadPointAtZ(DISTRICTS.threshold.z + 44);
+export const DROP_SITE = Object.freeze({
+  x: DROP_ROAD.x,
+  z: DROP_ROAD.z,
+  yaw: DROP_ROAD.yaw,
+  podX: DROP_ROAD.x - 11.5,
+  podZ: DROP_ROAD.z + 1.5,
+  podYaw: -Math.PI / 2,
+});
+
 /** The old war trench, cut across the map's waist. */
 export const FOSSE_PATH = [
   [-980, 232], [-772, 286], [-560, 330], [-352, 358], [-150, 392],
@@ -343,10 +357,11 @@ export function makeHeightField(seed = 0x5a1f7) {
 
   const thresholdPadY = (() => {
     const d = DISTRICTS.threshold;
-    const dz = (d.z + 26) - d.z;
+    const dz = DROP_SITE.podZ - d.z;
     const ridge = Math.exp(-(dz * dz) / (2 * 132 * 132)) * 52;
-    const saddle = Math.exp(-((-12 + 10) ** 2) / (2 * 96 * 96)) * -11;
-    return smoothBase(-12, d.z + 26) + rimHeight(-12, d.z + 26) + ridge + saddle + 1.5;
+    const saddle = Math.exp(-((DROP_SITE.podX + 10) ** 2) / (2 * 96 * 96)) * -11;
+    return smoothBase(DROP_SITE.podX, DROP_SITE.podZ)
+      + rimHeight(DROP_SITE.podX, DROP_SITE.podZ) + ridge + saddle + 1.5;
   })();
 
   /* ------------------------ district weight ------------------------ */
@@ -414,7 +429,8 @@ export function makeHeightField(seed = 0x5a1f7) {
           + nDetail.fbm(x / 9.5, z / 9.5, 2) * 0.55
           + ridge + saddle;
         h = lerp(h, clean, k * k);
-        h = pad(h, thresholdPadY, x, z, -12, d.z + 26, 30, 40);
+        h = pad(h, thresholdPadY, x, z,
+          DROP_SITE.podX, DROP_SITE.podZ, 20, 31);
       }
     }
 

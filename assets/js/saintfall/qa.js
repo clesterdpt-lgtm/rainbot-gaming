@@ -27,12 +27,49 @@ export function installQa(ctx, api) {
   const { THREE } = ctx;
   const _auditRay = new THREE.Raycaster();
   const _wristBendQ = new THREE.Quaternion();
+  const productionIntroView = Object.freeze({
+    get scene() { return null; },
+    get camera() { return null; },
+    get done() { return !!api.intro?.done; },
+    status: () => api.intro?.status?.() || null,
+    markers: () => api.intro?.markers?.() || {},
+  });
+  const productionContextView = Object.freeze({
+    get qa() { return false; },
+    get build() { return ctx.build || "dev"; },
+    get runtime() { return Object.freeze({ ...ctx.runtime }); },
+  });
   const hook = {
     THREE,
-    ctx,
+    ctx: ctx.qa ? ctx : productionContextView,
     version: ctx.build || "dev",
 
     isReady: () => api.ready,
+
+    /* ---------------- cinematic control ----------------
+
+       The drop owns a separate scene and clock. Dedicated methods
+       keep intro QA from reaching through ctx or accidentally stepping
+       gameplay while the mission is supposed to be frozen. */
+    introState: () => api.intro?.status() || null,
+    introMarkers: () => api.intro?.markers() || {},
+    startIntroForQA: () => ctx.qa
+      ? (api.intro?.start() ?? Promise.resolve(false)) : Promise.resolve(false),
+    seekIntroForQA(markerOrSeconds) {
+      return ctx.qa ? (api.intro?.seek(markerOrSeconds) || null) : null;
+    },
+    advanceIntroForQA(seconds, dt = 1 / 60) {
+      return ctx.qa ? (api.intro?.advance(seconds, dt) || null) : null;
+    },
+    setIntroPausedForQA(paused = true) {
+      return ctx.qa ? (api.intro?.setPaused?.(paused) ?? false) : false;
+    },
+    skipIntroForQA: () => ctx.qa ? (api.intro?.skip() ?? false) : false,
+    renderIntroStill() {
+      if (!ctx.qa) return null;
+      api.intro?.render?.();
+      return api.intro?.status() || null;
+    },
 
     /* ---------------------- stage control ---------------------- */
 
@@ -1251,10 +1288,14 @@ export function installQa(ctx, api) {
 
     report() {
       const info = api.render.info();
+      const currentCamera = api.intro?.isBlocking?.() && api.intro.camera
+        ? api.intro.camera : api.render.camera;
       return {
         fps: Number(api.fps.toFixed(1)),
         frameMs: Number(api.frameMs.toFixed(2)),
         render: info,
+        runtime: { ...api.runtime },
+        intro: api.intro?.status() || null,
         terrain: api.terrain.stats(),
         world: api.world.stats(),
         enemies: api.enemies.stats(),
@@ -1267,8 +1308,8 @@ export function installQa(ctx, api) {
           exposure: ctx.atmos.exposure,
         },
         camera: {
-          position: api.render.camera.position.toArray().map((n) => Number(n.toFixed(2))),
-          fov: api.render.camera.fov,
+          position: currentCamera.position.toArray().map((n) => Number(n.toFixed(2))),
+          fov: currentCamera.fov,
         },
         player: api.player.position,
         pois: api.world.pois.length,
@@ -3153,6 +3194,7 @@ export function installQa(ctx, api) {
     get mission() { return api.mission; },
     get breaches() { return api.breaches; },
     get collide() { return api.collide; },
+    get intro() { return ctx.qa ? api.intro : productionIntroView; },
   };
 
   void clamp;

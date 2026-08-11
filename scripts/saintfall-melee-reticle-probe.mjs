@@ -85,6 +85,12 @@ async function main() {
        simulation timing still travel through the production paths. */
     const environment = await page.evaluate(() => {
       const T = window.__SF;
+      /* Production keyboard ownership requires pointer lock, explicit canvas
+         focus, or max-screen play. Headless Chromium cannot reliably grant
+         pointer lock, so make the game own Q exactly as a player does after
+         pressing the max-screen control. Without this, the probe inspects an
+         empty event queue and fails before it tests melee aiming at all. */
+      T.maximize();
       T.ctx.runtime.paused = true;
       const site = T.findFlatSite(14);
       const Q = {

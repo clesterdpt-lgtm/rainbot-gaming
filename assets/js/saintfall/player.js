@@ -2359,55 +2359,32 @@ export async function createPlayer(ctx, canvas) {
      through metres without moving the hands at all, which is the
      whole point of holding a lever. */
   const ACTIONS = {
-    /* THRUST - the opener, and the one attack a polearm is actually
-       for. It was a horizontal sweep, which is what every other
-       weapon in the genre already does and what melee2 does two
-       presses later; a lance that never points at anything is a
-       heavy stick.
-
-       A thrust cannot be built the way the sweeps are. They swing
-       the tip through metres on rotation alone, which is free -
-       the hands barely move. A point driven forward has to come
-       from translation, and translation runs into the reach
-       constraint at about 12cm. So the forward travel is pooled
-       from four places at once: the mount slides out, the chest
-       uncoils from pitched-back to pitched-into-it, the hips
-       square up, and the front foot lands (`stanceZ`). Measured on
-       the rig, that is 0.74m of forward tip travel out of 0.84m
-       total - the rest is the point settling down onto the line -
-       against 0.18m for the mount slide by itself.
-
-       `arc` is 0.85 rad rather than the sweeps' 2.3-2.6: a thrust
-       hits what it is pointed at. `lunge` pays that back as 1.34x
-       reach, so it is the attack that opens on something still out
-       of range rather than a strictly worse melee1. */
+    /* CLEAVING LUNGE - the opener has to read on the first press.
+       The old thrust travelled forward but occupied very little of
+       the screen, so increasing its collision cone made the attack
+       stronger without making the weapon look stronger. This clip
+       now coils across the rear shoulder and cuts through the reticle
+       while the front foot lands. The lunge keeps the polearm's depth
+       advantage; the authored yaw/roll gives it an unmistakable arc. */
     melee1: {
-      /* The hit window OPENS at 0.33, not at the start of the drive.
-         `hitDone` latches on the first frame inside it, so a window
-         that opens early resolves the strike while the point is
-         still travelling - the lunge scores its 1.34x reach from a
-         pose that has not reached it yet. Full extension is 0.36. */
-      dur: 0.70, hit: [0.33, 0.46], damage: 1.25, arc: 1.05, lunge: 1.34,
+      /* The hit window opens as the blade crosses centre rather than
+         on the wind-up. Full extension is near 0.36 of the clip. */
+      dur: 0.76, hit: [0.31, 0.49], damage: 1.25, arc: 1.42, lunge: 1.34,
       keys: [
         [0.00, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
-        // Cocked: weight back, point up and outboard, chest coiled,
-        // hands gathered a little forward on the haft.
-        [0.24, -0.135, 0.045, 0.030, 0.14, 0.34, 0.34, 0.40, 0.30, 0.20, 0.030, -0.16, 0.05, -0.030, "strike"],
-        /* Full extension: on the line, front foot planted, and the
-           shaft run 22cm out through both hands. 28cm was tried and
-           returned 2cm of extra point - past about 22cm the reach
-           constraint has moved on to binding somewhere else, and all
-           the extra buys is hands further down a haft. */
-        [0.36, 0.265, -0.030, -0.060, -0.08, -0.10, -0.14, -0.36, -0.40, -0.18, -0.090, 0.38, 0.15, 0.220, "settle"],
-        [0.70, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "settle"],
+        // Rear-shoulder load: blade wide left, hips resisting the chest.
+        [0.25, -0.040, 0.070, -0.045, 0.15, -0.62, -0.28, -0.52, 0.24, 0.24, 0.030, -0.17, 0.10, 0.015, "strike"],
+        // Full cut: blade crosses the reticle as the front foot drives in.
+        [0.42, 0.060, -0.035, 0.105, -0.12, 0.70, 0.30, 0.66, -0.32, -0.30, -0.065, 0.34, 0.18, 0.105, "settle"],
+        [0.76, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "settle"],
       ],
     },
     melee2: {          // rising diagonal, low left to high right
       dur: 0.78, hit: [0.28, 0.48], damage: 1.15, arc: 2.72,
       keys: [
         [0.00, 0.0, 0.0, 0.0, 0, 0, 0, "load"],
-        [0.26, 0.0252, -0.088, -0.030, 0.90, -1.12, 0.46, -0.42, 0.30, -0.19, -0.078, 0.14, 0.07, "strike"],
-        [0.50, -0.0252, 0.1764, 0.1092, -1.22, 1.04, -0.56, 0.56, -0.34, 0.25, 0.036, 0.30, 0.13, "settle"],
+        [0.26, 0.030, -0.105, -0.050, 1.02, -1.42, 0.58, -0.56, 0.36, -0.24, -0.085, 0.12, 0.10, "strike"],
+        [0.50, -0.035, 0.205, 0.135, -1.36, 1.34, -0.68, 0.70, -0.42, 0.30, 0.042, 0.33, 0.17, "settle"],
         [0.78, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
       ],
     },
@@ -2423,7 +2400,7 @@ export async function createPlayer(ctx, canvas) {
            heavy reliquary into the ground, not a mannequin moving a
            staff with its wrists. */
         [0.32, -0.042, 0.2184, -0.1428, -1.45, 0.20, 0.10, 0.42, -0.42, 0.18, 0.055, -0.07, 0.03, "strike"],
-        [0.54, 0.0672, -0.1428, 0.1932, 1.30, -0.10, -0.06, -0.58, 0.52, -0.24, -0.100, 0.29, 0.14, "settle"],
+        [0.54, 0.075, -0.160, 0.215, 1.42, -0.20, -0.10, -0.68, 0.60, -0.28, -0.110, 0.32, 0.17, "settle"],
         [0.96, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
       ],
     },
@@ -2612,7 +2589,6 @@ export async function createPlayer(ctx, canvas) {
     sampleAction(0);
     return true;
   }
-  
 
   function sampleAction(dt) {
     if (!action.spec) {

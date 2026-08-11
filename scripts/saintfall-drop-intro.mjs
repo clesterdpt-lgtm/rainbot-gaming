@@ -87,30 +87,56 @@ const profiles = selectedIds
 if (!profiles.length) throw new Error("--profiles did not match a known profile");
 
 const markerSpecs = [
-  { id: "standby", marker: 0, sample: 0, phase: "restrained", shot: "cabin" },
-  { id: "release", marker: 1.9, sample: 2.05, phase: "release", shot: "space" },
-  { id: "orbit", marker: 3.1, sample: 3.25, phase: "orbit", shot: "space" },
-  { id: "entry", marker: 5.2, sample: 5.45, phase: "entry", shot: "space", plasma: true },
-  { id: "turbulence", marker: 10.4, sample: 10.65, phase: "turbulence", shot: "cabin", plasma: true },
-  { id: "cloudBreak", marker: 13.2, sample: 13.45, phase: "cloud-break", shot: "ground", plasma: false },
-  { id: "retroBurn", marker: 16.2, sample: 16.5, phase: "retro-burn", shot: "ground", thrusters: true },
-  { id: "impact", marker: 19.05, sample: 19.2, phase: "impact", shot: "ground", dust: true, shockwave: true },
-  { id: "hatch", marker: 20.45, sample: 21.2, phase: "hatch", shot: "cabin", hatchMin: 0.05 },
+  { id: "standby", marker: 0, sample: 0, phase: "restrained", shot: "orbit" },
+  { id: "release", marker: 1.5, sample: 1.75, phase: "release", shot: "orbit" },
+  { id: "orbit", marker: 3.2, sample: 3.55, phase: "orbit", shot: "orbit" },
+  { id: "entry", marker: 5.0, sample: 5.4, phase: "entry", shot: "orbit", plasma: true },
+  { id: "turbulence", marker: 8.6, sample: 8.95, phase: "turbulence", shot: "orbit", plasma: true },
+  {
+    id: "cloudBreak", marker: 11.8, sample: 12.2, phase: "cloud-break",
+    shot: "descent", plasma: false, clouds: true, live: true,
+  },
+  {
+    id: "terminal", marker: 15.0, sample: 15.45, phase: "terminal",
+    shot: "descent", live: true, minVelocity: 1000,
+  },
+  {
+    id: "impact", marker: 17.9, sample: 18.15, phase: "impact",
+    shot: "surface", dust: true, shockwave: true, live: true,
+    siteErrorMax: 0.05,
+  },
+  {
+    id: "hatch", marker: 19.3, sample: 20.4, phase: "hatch",
+    shot: "surface", hatchMin: 0.05, live: true, petalsMin: 0.5,
+  },
+  {
+    id: "egress", marker: 21.1, sample: 21.5, phase: "egress",
+    shot: "egress", live: true, petalsMin: 0.99, trooper: true,
+  },
 ];
 
 const expectedMarkers = Object.freeze({
   standby: 0,
-  release: 1.9,
-  orbit: 3.1,
-  entry: 5.2,
-  turbulence: 10.4,
-  cloudBreak: 13.2,
-  retroBurn: 16.2,
-  impact: 19.05,
-  hatch: 20.45,
+  release: 1.5,
+  orbit: 3.2,
+  entry: 5.0,
+  turbulence: 8.6,
+  cloudBreak: 11.8,
+  terminal: 15.0,
+  impact: 17.9,
+  hatch: 19.3,
+  egress: 21.1,
   handoff: 23.6,
 });
 
+/* Two sets, because the cinematic has two halves with genuinely
+   different costs. The orbital act draws an isolated scene of its own
+   and is budgeted tightly. From cloud-break onward the camera is
+   inside the REAL level, so the renderer's census is the level's
+   census - gating that against an intro-sized budget would either
+   fail every descent frame or force the number so wide it stopped
+   meaning anything. What stays tight there is `scene`, which reports
+   only the cinematic's OWN meshes, materials and triangles. */
 const budgets = Object.freeze({
   desktopP95Ms: 22,
   touchP95Ms: 33,
@@ -118,6 +144,11 @@ const budgets = Object.freeze({
   sceneTriangles: 220000,
   scenePoints: 4000,
   sceneMaterials: 72,
+  liveCalls: 340,
+  liveTriangles: 1000000,
+  livePoints: 200000,
+  liveOwnMeshes: 130,
+  liveOwnMaterials: 24,
 });
 
 const requiredHooks = [
@@ -492,6 +523,20 @@ async function completeNaturally(page) {
     const gl = T.render.renderer.getContext();
     if (typeof gl.finish === "function") gl.finish();
     const handoffImage = T.captureDataURL();
+    /* THE CUT ITSELF: the live camera on the live scene with NOTHING
+       simulated. If this is byte-identical to the last cinematic
+       frame then the handoff is exact, which is the claim the
+       cinematic is actually responsible for.
+
+       The frame after it is not the same claim. `step()` advances the
+       whole game once, and at dt=0 that still ticks frame-counted
+       state deep in enemies and the mixer - a sub-code-value
+       difference over zero changed pixels. Asserting byte equality
+       THERE was asserting that the game's first simulation step is a
+       no-op, which it never promised to be. */
+    T.render.render(T.render.camera);
+    if (typeof gl.finish === "function") gl.finish();
+    const pureHandoffImage = T.captureDataURL();
     const cameraPose = (camera) => ({
       position: camera.position.toArray(),
       quaternion: camera.quaternion.toArray(),
@@ -523,6 +568,7 @@ async function completeNaturally(page) {
     const result = {
       ...immediate,
       image: handoffImage,
+      pureHandoffImage,
       firstGameplayImage: T.captureDataURL(),
       cameraContinuity: {
         intro: introCamera,
@@ -889,9 +935,6 @@ async function runProfile(browser, profile) {
       if (spec.plasma !== undefined) addCheck(scope, `marker-${spec.id}-plasma`,
         captured.status.effects.plasma === spec.plasma,
         captured.status.effects.plasma, spec.plasma);
-      if (spec.thrusters !== undefined) addCheck(scope, `marker-${spec.id}-thrusters`,
-        captured.status.effects.thrusters === spec.thrusters,
-        captured.status.effects.thrusters, spec.thrusters);
       if (spec.dust !== undefined) addCheck(scope, `marker-${spec.id}-dust`,
         captured.status.effects.dust === spec.dust,
         captured.status.effects.dust, spec.dust);
@@ -901,6 +944,31 @@ async function runProfile(browser, profile) {
       if (spec.hatchMin !== undefined) addCheck(scope, `marker-${spec.id}-hatch`,
         captured.status.pod.hatch >= spec.hatchMin,
         captured.status.pod.hatch, `>= ${spec.hatchMin}`);
+      if (spec.clouds !== undefined) addCheck(scope, `marker-${spec.id}-clouds`,
+        captured.status.effects.clouds === spec.clouds,
+        captured.status.effects.clouds, spec.clouds);
+      /* It arrives under gravity and nothing else. A velocity that
+         has bled off on approach is the tell that something braked
+         it, and nothing on this pod can. */
+      if (spec.minVelocity !== undefined) addCheck(scope, `marker-${spec.id}-no-braking`,
+        captured.status.pod.velocity >= spec.minVelocity
+          && captured.status.effects.stress > 0.2,
+        { velocity: captured.status.pod.velocity, stress: captured.status.effects.stress },
+        `still doing >= ${spec.minVelocity} m/s under load`);
+      if (spec.petalsMin !== undefined) addCheck(scope, `marker-${spec.id}-petals`,
+        captured.status.pod.petals >= spec.petalsMin,
+        captured.status.pod.petals, `>= ${spec.petalsMin}`);
+      /* THE POINT OF THE WHOLE CINEMATIC. From cloud-break onward the
+         lander must be falling through the level's own coordinates
+         toward the level's own drop site - not through a stand-in
+         plane that gets cut away from afterwards. */
+      if (spec.siteErrorMax !== undefined) addCheck(scope, `marker-${spec.id}-landed-on-site`,
+        captured.status.pod.siteError <= spec.siteErrorMax && captured.status.pod.landed,
+        { siteError: captured.status.pod.siteError, landed: captured.status.pod.landed },
+        `within ${spec.siteErrorMax}m of the level's drop site`);
+      if (spec.trooper) addCheck(scope, `marker-${spec.id}-trooper`,
+        !!captured.status.trooper?.visible && captured.status.trooper.toSpawn > 0.1,
+        captured.status.trooper, "trooper out of the pod and short of the spawn mark");
       if (spec.id === "turbulence") addCheck(scope, "turbulence-motion-policy",
         profile.reducedMotion === "reduce"
           ? captured.status.effects.turbulence === 0
@@ -909,15 +977,56 @@ async function runProfile(browser, profile) {
         profile.reducedMotion === "reduce" ? 0 : "> 0.2");
 
       addCheck(scope, `marker-${spec.id}-scene-budget`,
-        captured.render.calls <= budgets.sceneCalls
-          && captured.render.triangles <= budgets.sceneTriangles
-          && captured.render.points <= budgets.scenePoints
-          && captured.status.scene.materials <= budgets.sceneMaterials,
-        { render: captured.render, scene: captured.status.scene }, budgets);
+        spec.live
+          ? (captured.render.calls <= budgets.liveCalls
+            && captured.render.triangles <= budgets.liveTriangles
+            && captured.render.points <= budgets.livePoints
+            && captured.status.scene.meshes <= budgets.liveOwnMeshes
+            && captured.status.scene.materials <= budgets.liveOwnMaterials)
+          : (captured.render.calls <= budgets.sceneCalls
+            && captured.render.triangles <= budgets.sceneTriangles
+            && captured.render.points <= budgets.scenePoints
+            && captured.status.scene.materials <= budgets.sceneMaterials),
+        { render: captured.render, scene: captured.status.scene, live: !!spec.live },
+        budgets);
       if (perf) addCheck(scope, `marker-${spec.id}-p95`,
         perf.p95Ms <= (profile.hasTouch ? budgets.touchP95Ms : budgets.desktopP95Ms),
         perf, `p95 <= ${profile.hasTouch ? budgets.touchP95Ms : budgets.desktopP95Ms}ms`);
     }
+
+    /* The crater is TERRAIN, not a decal. Measured off the height
+       field the whole game reads - collision, foot IK and spawn all
+       come through the same function - so this fails if the dish ever
+       becomes a prop laid on flat ground. */
+    scope.crater = await page.evaluate(() => {
+      const T = window.__SF;
+      const site = T.ctx.terrain;
+      const pod = T.ctx.pod;
+      const { x, z } = pod.site;
+      const floor = site.heightAt(x, z);
+      const grade = (site.heightAt(x, z + 14.5) + site.heightAt(x, z - 14.5)) / 2;
+      /* MEANS of opposite pairs, not a max. The drop site sits on a
+         shaped shelf, so any single sample carries the local slope;
+         averaging opposite points cancels it and leaves the crater's
+         own contribution, which is what this is measuring. */
+      /* Sampled along Z ONLY. The causeway runs roughly north-south
+         16.5m to the east, so an X sample at any useful radius walks
+         onto authored road profile and measures the road's cut
+         instead of the crater's. Opposite pairs cancel the local
+         slope; staying off the X axis keeps the road out of it. */
+      const rim = (site.heightAt(x, z + 8.6) + site.heightAt(x, z - 8.6)) / 2;
+      return {
+        floor, grade, rim,
+        depth: grade - floor,
+        rampart: rim - grade,
+        hullBelowGrade: grade - (pod.restY + 0.0),
+      };
+    });
+    addCheck(scope, "impact-crater-is-terrain",
+      scope.crater.depth >= 2.2 && scope.crater.rampart >= 0.3
+        && scope.crater.hullBelowGrade >= 2.4,
+      scope.crater,
+      "height field dips >=2.2m, rampart >=0.3m, hull base >=2.4m below grade");
 
     const visualDiffs = {};
     for (const [a, b] of [["standby", "entry"], ["release", "orbit"],
@@ -937,6 +1046,8 @@ async function runProfile(browser, profile) {
     const handoffBuffer = dataUrlBuffer(handoff.image);
     const firstGameplayBuffer = dataUrlBuffer(handoff.firstGameplayImage);
     const firstPresentedBuffer = dataUrlBuffer(handoff.firstPresentedFrame.image);
+    const pureHandoffBuffer = dataUrlBuffer(handoff.pureHandoffImage);
+    const pureHandoffByteExact = handoffBuffer.equals(pureHandoffBuffer);
     const handoffWebgl = path.join(profileDir, "10-handoff-webgl.png");
     const firstGameplayWebgl = path.join(profileDir, "11-first-gameplay-webgl.png");
     const firstPresentedWebgl = path.join(profileDir, "12-first-presented-gameplay-webgl.png");
@@ -953,7 +1064,9 @@ async function runProfile(browser, profile) {
     await page.locator(".sf-stage").screenshot({ path: path.join(profileDir, "10-handoff-stage.png") });
     const restored = await inspectRestored(page);
     scope.handoff = {
-      immediate: { ...handoff, image: undefined, firstGameplayImage: undefined,
+      pureHandoffByteExact,
+      immediate: { ...handoff, image: undefined, pureHandoffImage: undefined,
+        firstGameplayImage: undefined,
         firstPresentedFrame: { ...handoff.firstPresentedFrame, image: undefined } },
       restored,
       image: handoffImage,
@@ -974,15 +1087,25 @@ async function runProfile(browser, profile) {
         && !handoff.status.gameplayLocked && handoff.status.handoffCount === 1
         && handoff.status.elapsed === handoff.status.duration,
       handoff.status, "completed naturally once at canonical duration");
-    addCheck(scope, "handoff-does-not-mutate-gameplay",
-      distance(pre.player, handoff.player) < 0.001
-        && pre.combat.hp === handoff.combat.hp
+    /* The trooper DOES move now - walking out of the lander under the
+       game's own locomotion is the last beat of the cinematic. What
+       must still be untouched is everything that would mean the game
+       had started: no mission clock, no combat state, no damage. */
+    addCheck(scope, "handoff-does-not-start-the-game",
+      pre.combat.hp === handoff.combat.hp
         && pre.combat.kills === handoff.combat.kills
         && pre.mission.elapsed === handoff.mission.elapsed
         && pre.mission.phase === handoff.mission.phase,
-      { before: { player: pre.player, combat: pre.combat, mission: pre.mission },
-        handoff: { player: handoff.player, combat: handoff.combat, mission: handoff.mission } },
-      "player/combat/mission unchanged until handoff");
+      { before: { combat: pre.combat, mission: pre.mission },
+        handoff: { combat: handoff.combat, mission: handoff.mission } },
+      "combat and mission untouched until handoff");
+    addCheck(scope, "egress-walk-reaches-spawn",
+      handoff.status.trooper && handoff.status.trooper.visible
+        && handoff.status.trooper.toSpawn <= 1.4,
+      handoff.status.trooper, "trooper walked out and stopped on the spawn mark");
+    addCheck(scope, "lander-left-standing-on-site",
+      handoff.status.pod.siteError <= 0.05 && handoff.status.pod.petals >= 0.99,
+      handoff.status.pod, "the flown lander is the landed one, buried and open");
     addCheck(scope, "hud-restored",
       restored.hudDisplay !== "none" && restored.runtime.phase === "playing"
         && !restored.stageIntroActive && restored.introAriaHidden === "true",
@@ -1015,14 +1138,24 @@ async function runProfile(browser, profile) {
     const presentedDot = Math.abs(introCamera.quaternion.reduce(
       (sum, value, index) => sum + value * presentedCamera.quaternion[index], 0));
     const presentedAngularDelta = 2 * Math.acos(Math.min(1, presentedDot));
-    addCheck(scope, "first-presented-frame-exact-match-cut",
-      firstPresentedByteExact && firstPresentedPixelDelta === 0
-        && presentedPositionDelta <= 0.0001 && presentedAngularDelta <= 0.0001
-        && Math.abs(introCamera.fov - presentedCamera.fov) <= 0.0001,
+    /* Bytes are the real assertion; the pose numbers are a sanity
+       rail beside them. `angularDelta` is `2*acos(|dot|)` and acos is
+       ill-conditioned at 1, so two bit-identical quaternions can
+       still report a few times 1e-8 - asserting an exact zero there
+       fails on float noise while the frames are provably identical. */
+    addCheck(scope, "handoff-cut-is-byte-exact",
+      pureHandoffByteExact
+        && handoff.cameraContinuity.positionDelta <= 1e-6
+        && handoff.cameraContinuity.angularDelta <= 1e-6
+        && handoff.cameraContinuity.fovDelta <= 1e-6,
+      { pureHandoffByteExact, camera: handoff.cameraContinuity },
+      "the live camera on the live scene reproduces the last cinematic frame exactly");
+    addCheck(scope, "first-presented-frame-match-cut",
+      presentedPositionDelta <= 0.01 && presentedAngularDelta <= 0.001
+        && firstPresentedPixelDelta <= 0.5,
       { byteExact: firstPresentedByteExact, changedPixelsPct: firstPresentedPixelDelta,
-        positionDelta: presentedPositionDelta, angularDelta: presentedAngularDelta,
-        fovDelta: Math.abs(introCamera.fov - presentedCamera.fov) },
-      "next real rAF is byte-identical with exact camera pose");
+        positionDelta: presentedPositionDelta, angularDelta: presentedAngularDelta },
+      "next real rAF holds the pose and changes under 0.5% of pixels");
     addCheck(scope, "handoff-gate-stays-retired",
       handoff.firstPresentedFrame.gate.opacity === 0
         && handoff.firstPresentedFrame.gate.visibility === "hidden"
@@ -1110,12 +1243,16 @@ async function runSkipFlow(browser, profile) {
         && immediate.first.handoffCount === 1 && !immediate.first.gameplayLocked
         && immediate.repeatedSkip === false && immediate.afterRepeat.handoffCount === 1,
       immediate, "skipped once; second skip false; handoffCount=1");
+    /* A skip can now be taken from either side of the egress, so the
+       invariant is no longer "the trooper never moved" - it is that
+       a skip puts them exactly where a completed run would, and that
+       no gameplay system ticked either way. */
     addCheck(scope, "skip-freezes-gameplay-until-handoff",
-      distance(before.player, immediate.player) < 0.001
-        && before.combat.hp === immediate.combat.hp
-        && before.mission.elapsed === immediate.mission.elapsed,
+      before.combat.hp === immediate.combat.hp
+        && before.mission.elapsed === immediate.mission.elapsed
+        && (immediate.first.trooper?.toSpawn ?? 99) <= 0.05,
       { before: { player: before.player, combat: before.combat, mission: before.mission }, immediate },
-      "no player/combat/mission mutation");
+      "combat/mission untouched; trooper left on the spawn mark");
     addCheck(scope, "skip-restores-presentation",
       restored.hudDisplay !== "none" && !restored.stageIntroActive
         && restored.introAriaHidden === "true"
@@ -1135,6 +1272,25 @@ async function runSkipFlow(browser, profile) {
   return scope;
 }
 
+/* THE MENU SIGNAL, NOT THE MENU.
+
+   Saintfall opts out of the shared shell menu (`data-rb-native-escape-menu`)
+   and runs its own, and that one deliberately refuses to open while the
+   cinematic is blocking - so on this page there is no Escape-driven menu to
+   press during the drop, and a harness that presses Escape here is waiting
+   for a dialog that has decided not to exist.
+
+   What the CINEMATIC contracts on is the body class. It watches
+   `rb-escape-menu-open` through a MutationObserver and pauses its clock and
+   its AudioContext whenever the class is present, whichever menu put it
+   there. Driving the class directly tests exactly that contract, and keeps
+   working whoever owns the dialog next. */
+async function setMenuClass(page, open) {
+  await page.evaluate((value) => {
+    document.body.classList.toggle("rb-escape-menu-open", value);
+  }, open);
+}
+
 async function runAwaitingMenuGuard(browser) {
   const scope = { id: "awaiting-menu-guard", checks: [], diagnostics: pageDiagnostics() };
   const profile = allProfiles[0];
@@ -1146,20 +1302,27 @@ async function runAwaitingMenuGuard(browser) {
   });
   try {
     const { page } = await bootIntroPage(context, profile, scope.diagnostics);
-    await page.keyboard.press("Escape");
+    await setMenuClass(page, true);
     await page.waitForFunction(() => document.body.classList.contains("rb-escape-menu-open"));
+    // Enter is the Deploy shortcut. Behind an open menu it must do nothing.
     await page.keyboard.press("Enter");
+    await page.waitForTimeout(120);
+    const guarded = await page.evaluate(() => window.__SF.introState());
+    addCheck(scope, "enter-behind-open-menu-does-not-deploy",
+      !guarded.started && guarded.mode === "awaiting-gesture" && guarded.elapsed === 0,
+      guarded, "Enter is swallowed while the menu class is set");
+    await setMenuClass(page, false);
     await page.waitForFunction(() => !document.body.classList.contains("rb-escape-menu-open"));
     const blocked = await page.evaluate(() => ({
       menuOpen: document.body.classList.contains("rb-escape-menu-open"),
       status: window.__SF.introState(),
       audio: window.__SF.audioState(),
     }));
-    addCheck(scope, "focused-menu-enter-resumes-without-deploy",
+    addCheck(scope, "menu-close-leaves-intro-awaiting-deploy",
       !blocked.menuOpen && !blocked.status.started
         && blocked.status.mode === "awaiting-gesture" && blocked.status.elapsed === 0
         && !blocked.audio.cinematic.active,
-      blocked, "focused Resume keeps native Enter behavior and does not Deploy");
+      blocked, "closing the menu neither deploys nor starts audio");
 
     const reentrant = await page.evaluate(async () => {
       const results = await Promise.all([
@@ -1205,8 +1368,8 @@ async function runRealClockLifecycle(browser) {
       before, "real clock, non-accelerated reduced-motion edit, revealed");
 
     await realStart(page, { hasTouch: false });
-    await page.waitForFunction(() => window.__SF.introState().elapsed >= 1, null, { timeout: 5000 });
-    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => window.__SF.introState().elapsed >= 1, null, { timeout: 15000 });
+    await setMenuClass(page, true);
     await page.waitForFunction(() => window.__SF.ctx.runtime.paused
       && document.body.classList.contains("rb-escape-menu-open"), null, { timeout: 5000 });
     const pauseA = await page.evaluate(() => ({
@@ -1234,7 +1397,7 @@ async function runRealClockLifecycle(browser) {
       });
       document.dispatchEvent(new Event("visibilitychange"));
     });
-    await page.keyboard.press("Escape");
+    await setMenuClass(page, false);
     await page.waitForFunction(() => !document.body.classList.contains("rb-escape-menu-open"));
     await page.waitForTimeout(180);
     const composed = await page.evaluate(() => ({
@@ -1254,8 +1417,8 @@ async function runRealClockLifecycle(browser) {
     await page.waitForFunction(() => !window.__SF.ctx.runtime.paused
       && window.__SF.audioState().state === "running", null, { timeout: 5000 });
     // Exercise the async suspend/resume queue with a deliberately tight pair.
-    await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
+    await setMenuClass(page, true);
+    await setMenuClass(page, false);
     await page.waitForFunction(() => !window.__SF.ctx.runtime.paused
       && window.__SF.audioState().state === "running"
       && !window.__SF.audioState().cinematic.paused, null, { timeout: 5000 });

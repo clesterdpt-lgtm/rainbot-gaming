@@ -31,7 +31,7 @@ export const SURVIVAL_CONFIG = Object.freeze({
 export const MELEE_CONFIG = Object.freeze({
   reachMultiplier: 1.18,
   lightEnemy: "thresher",
-  lightKnockbackSpeed: 12.5,
+  lightKnockbackSpeed: 16,
   hitSparkScale: 2.10,
   hitPunch: 1.05,
   whiffPunch: 0.24,
@@ -433,6 +433,7 @@ export function buildCombat(ctx) {
     const eyeY = ps.y + 1.4;
     let hits = 0;
     let kills = 0;
+    let knockbacks = 0;
     for (const inst of enemies.live) {
       if (inst.state === "death") continue;
       const dx = inst.x - ps.x;
@@ -462,9 +463,14 @@ export function buildCombat(ctx) {
       if (dealt <= 0) continue;
       hits += 1;
       if (wasAlive && inst.state === "death") kills += 1;
-      if (inst.key === MELEE_CONFIG.lightEnemy && enemies.knockback) {
-        enemies.knockback(inst, dx * inv, dz * inv,
-          MELEE_CONFIG.lightKnockbackSpeed * (slam ? 1.24 : 1));
+      if (inst.key === MELEE_CONFIG.lightEnemy) {
+        /* This API is part of the enemy-system contract. Keeping the call
+           direct means a missing export becomes a test-visible failure
+           instead of silently turning the feature off. */
+        if (enemies.knockback(inst, dx * inv, dz * inv,
+          MELEE_CONFIG.lightKnockbackSpeed * (slam ? 1.30 : 1))) {
+          knockbacks += 1;
+        }
       }
       /* A kill already emits the caste-sized rupture in applyDamage. Add
          the warm contact spark only to survivors; stacking both made a
@@ -481,7 +487,7 @@ export function buildCombat(ctx) {
       ? MELEE_CONFIG.slamPunch
       : hits ? MELEE_CONFIG.hitPunch : MELEE_CONFIG.whiffPunch);
     bus.emit("melee", {
-      hits, kills, slam, x: ps.x, z: ps.z, yaw: ps.yaw, reach, arc,
+      hits, kills, knockbacks, slam, x: ps.x, z: ps.z, yaw: ps.yaw, reach, arc,
     });
     if (slam) {
       // The finisher shakes the ground whether or not it connects.

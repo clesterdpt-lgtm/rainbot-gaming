@@ -826,9 +826,9 @@ export async function buildEnemies(ctx, onProgress) {
   const dyingOrNear = (inst, d2, range) =>
     inst.state === "death" || d2 < range * range;
 
-  const KNOCKBACK_DRAG = 8.5;
-  const KNOCKBACK_DURATION = 0.42;
-  const KNOCKBACK_MAX_SPEED = 17;
+  const KNOCKBACK_DRAG = 6.5;
+  const KNOCKBACK_DURATION = 0.55;
+  const KNOCKBACK_MAX_SPEED = 22;
 
   /** Add a short, collision-aware horizontal impulse. It remains active on
    *  a dying Thresher so the death clip travels with the hit instead of
@@ -1201,6 +1201,7 @@ export async function buildEnemies(ctx, onProgress) {
     restore,
     play,
     update,
+    knockback,
     kill(inst) { play(inst, "death", 0.12); },
     remove(inst) {
       const index = live.indexOf(inst);

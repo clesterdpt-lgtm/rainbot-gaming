@@ -40,6 +40,7 @@ import {
 import { makeKit, mergeGeometries, cleanGeometry } from "saintfall/structures.js";
 import {
   DISTRICTS, ROAD_PATH, FOSSE_PATH, MAP_HALF, DROP_SITE,
+  CHUNK_SIZE, LOD_CELLS,
 } from "saintfall/terrain.js";
 import { makeRamp } from "saintfall/core.js";
 
@@ -754,42 +755,127 @@ export async function buildWorld(ctx, onProgress) {
       banners.push({ geo: ban, colour: PALETTE.oxblood, accent: PALETTE.gold, district: "threshold" });
     }
 
-    /* --- the drop pod --- */
+    /* --- the drop site ---
+
+       The POD ITSELF is no longer baked here. It is a live, hinged
+       object built by pod.js and placed by main.js, because the
+       cinematic has to fly the same lander it leaves standing:
+       a merged copy in this batch meant the thing the player landed
+       in vanished at the handoff and a different, greyer hexagon
+       took its place one metre away.
+
+       What stays is the ground it landed ON - the crater, the blast
+       ejecta and the burn ring. Those are static, they are terrain,
+       and they are what makes the arrival read as violent after the
+       camera has moved on. */
     {
-      const parts = [];
-      const podH = 6.2;
-      parts.push(kit.prism({ h: podH, rBottom: 2.05, rTop: 1.72, sides: 6, segments: 3 }));
-      parts.push(kit.prism({ h: 1.1, rBottom: 1.72, rTop: 0.55, sides: 6 }).translate(0, podH, 0));
-      parts.push(kit.prism({ h: 0.9, rBottom: 2.25, rTop: 2.1, sides: 6 }).translate(0, -0.5, 0));
-      // Ribs.
-      for (let i = 0; i < 6; i += 1) {
-        const a = (i / 6) * TAU;
-        const rib = kit.slab(0.34, podH, 0.62, 0.05);
-        rib.rotateY(-a);
-        rib.translate(Math.cos(a) * 1.92, 0, Math.sin(a) * 1.92);
-        parts.push(rib);
-        // Retro fins.
-        const fin = kit.slab(0.22, 2.4, 1.5, 0.05);
-        fin.rotateY(-a);
-        fin.translate(Math.cos(a) * 2.25, -0.2, Math.sin(a) * 2.25);
-        parts.push(fin);
+      /* Scorch, draped over the crater's own dish.
+
+         The hole itself is TERRAIN - `craterProfile` is composed into
+         `heightAt` - so the ground mesh, the collision grid and the
+         trooper's soles already agree about it. This adds the burn.
+
+         Sampled off the DRAWN surface, not off `heightAt`. The
+         terrain mesh is a 4m grid that interpolates linearly between
+         its vertices, and inside a concave bowl a straight chord runs
+         ABOVE the curve it is cutting - by half a metre at this
+         depth. A skin floated a few centimetres over the analytic
+         height therefore spends the whole crater buried under the
+         very ground it is supposed to be lying on. Reproducing the
+         mesh's own bilinear read puts it back on the surface, and
+         14cm of float covers the residual: the mesh triangulates each
+         quad rather than interpolating it bilinearly, so the two
+         disagree by a few centimetres along every diagonal. */
+      const GRID = CHUNK_SIZE / LOD_CELLS[0];
+      const drawnY = (x, z) => {
+        const gx = (x + MAP_HALF) / GRID;
+        const gz = (z + MAP_HALF) / GRID;
+        const i = Math.floor(gx);
+        const j = Math.floor(gz);
+        const fx = gx - i;
+        const fz = gz - j;
+        const x0 = -MAP_HALF + i * GRID;
+        const z0 = -MAP_HALF + j * GRID;
+        return lerp(
+          lerp(H(x0, z0), H(x0 + GRID, z0), fx),
+          lerp(H(x0, z0 + GRID), H(x0 + GRID, z0 + GRID), fx),
+          fz);
+      };
+      {
+        const RINGS = [1.1, 2.6, 4.0, 5.3, 6.5, 7.6, 8.6, 9.6, 10.6];
+        const SIDES = 40;
+        const pos = [];
+        const idx = [];
+        pos.push(padX, drawnY(padX, padZ) + 0.14, padZ);
+        for (let ri = 0; ri < RINGS.length; ri += 1) {
+          const r = RINGS[ri];
+          for (let s2 = 0; s2 < SIDES; s2 += 1) {
+            const a = (s2 / SIDES) * TAU;
+            const x = padX + Math.cos(a) * r;
+            const z = padZ + Math.sin(a) * r;
+            pos.push(x, drawnY(x, z) + 0.14, z);
+          }
+        }
+        const ringStart = (ri) => 1 + ri * SIDES;
+        for (let s2 = 0; s2 < SIDES; s2 += 1) {
+          idx.push(0, ringStart(0) + ((s2 + 1) % SIDES), ringStart(0) + s2);
+        }
+        for (let ri = 0; ri < RINGS.length - 1; ri += 1) {
+          for (let s2 = 0; s2 < SIDES; s2 += 1) {
+            const a0 = ringStart(ri) + s2;
+            const a1 = ringStart(ri) + ((s2 + 1) % SIDES);
+            const b0 = ringStart(ri + 1) + s2;
+            const b1 = ringStart(ri + 1) + ((s2 + 1) % SIDES);
+            idx.push(a0, a1, b1, a0, b1, b0);
+          }
+        }
+        const scar = new THREE.BufferGeometry();
+        scar.setAttribute("position",
+          new THREE.BufferAttribute(new Float32Array(pos), 3));
+        scar.setIndex(idx);
+        scar.computeVertexNormals();
+        /* Painted by RADIUS, not by height: the bowl's floor and the
+           rampart's crest are the two extremes of the dish and would
+           otherwise take opposite ends of the ramp, putting the
+           brightest sand at the bottom of the burn. */
+        /* Scorched sand, not a void. A first pass bottomed the ramp
+           out near black and the crater stopped reading as ground at
+           all - it became a hole punched through the render, and it
+           took the lit pod down with it. Burnt sand is a dark WARM
+           grey-brown; there is still a sun on it. */
+        const SCAR = makeRamp([
+          [0, "#33281f"], [0.3, "#4a3728"], [0.62, "#6d543c"],
+          [0.85, "#8e6f51"], [1, "#a8855f"],
+        ]);
+        paintGeometry(THREE, scar, SCAR, (x, y, z) =>
+          clamp01(Math.hypot(x - padX, z - padZ) / 10.6), { jitter: 0.24 });
+        batch.add("threshold", "ash", scar, { castShadow: false });
       }
-      const g = kit.merge(parts);
-      kit.transform(g, {
-        pos: [padX, padY - 1.5, padZ], rot: [0.05, DROP_SITE.podYaw, 0.04],
-      });
-      paintH(g, makeRamp([
-        [0, "#191a1e"], [0.28, "#2f3239"], [0.62, "#4f545d"], [1, "#7e838c"],
-      ]), { normalWeight: 0.5, jitter: 0.16, noise: 0.3 });
-      batch.add("threshold", "iron", g);
 
-      // Blown hatch, lying where it fell.
-      const hatch = kit.prism({ h: 0.35, rBottom: 1.75, rTop: 1.62, sides: 6 });
-      place(hatch, padX + 5.4, padZ + 3.1, { rot: [0.2, 1.1, 0.5] });
-      flat(hatch, "#3a3d44", 0.2);
-      batch.add("threshold", "iron", hatch);
+      /* Ejecta: the crust the impact threw out, thickest on the
+         rampart and thinning outward. Kept SMALL - a first pass
+         scattered two-metre slabs and, seen from a camera down at eye
+         level looking up at the pod, the near ones projected against
+         the sky and read as debris hanging in mid-air. */
+      for (let i = 0; i < 38; i += 1) {
+        const a = rng() * TAU;
+        const r = 8.2 + Math.pow(rng(), 0.6) * 9.0;
+        const slab = kit.slab(0.36 + rng() * 0.8, 0.14 + rng() * 0.26,
+          0.34 + rng() * 0.7, 0.04);
+        place(slab, padX + Math.cos(a) * r, padZ + Math.sin(a) * r, {
+          rot: [rng() * 0.5 - 0.25, rng() * TAU, rng() * 0.5 - 0.25],
+          dy: -0.05,
+        });
+        flat(slab, i % 4 === 0 ? "#4a3a2c" : "#7d6349", 0.22);
+        batch.add("threshold", "rock", slab);
+      }
 
-      emitters.push({ kind: "smoke", x: padX, y: padY + 3.2, z: padZ, scale: 1.5, rate: 0.55 });
+      /* Still cooking. The prow is buried in the floor of its own
+         crater, so the steam comes off DOWN there, not off a skirt
+         standing clear of the sand. */
+      const craterY = H(padX, padZ);
+      emitters.push({ kind: "smoke", x: padX, y: craterY + 2.2, z: padZ, scale: 1.7, rate: 0.66 });
+      emitters.push({ kind: "smoke", x: padX + 4.4, y: craterY + 1.0, z: padZ - 3.4, scale: 1.0, rate: 0.36 });
       pois.push({ id: "threshold", name: "Landing Zone THRESHOLD", x: padX, z: padZ });
     }
 

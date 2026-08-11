@@ -35,7 +35,25 @@ const LAMP_REST_INTENSITY = 0.62;
 const LAMP_REST_DISTANCE = 2.1;
 const MUZZLE_FLASH_RATE = 1 / 0.060;
 const LAMP_REST_COLOR = 0xff9f3c;
-const LAMP_FLASH_COLOR = 0x8ff5e8;
+/* The discharge light matches the BOLT. It used to ionise toward a
+   cool ivory-cyan, which was left over from when the bolt itself was
+   cyan - so the one frame the weapon lights the trooper, it lit them
+   the colour of the thing shooting back. Gold going white-hot. */
+const LAMP_FLASH_COLOR = 0xfff0c0;
+
+/* WHERE THE LANCE ACTUALLY ENDS.
+
+   Derived from the same three numbers `buildGlaive` builds the head
+   from, so the emitter cannot drift off the needle when the head is
+   re-proportioned. The socket sits at `haft * HEAD`, the needle is
+   mounted `NEEDLE_BASE` beyond it and runs `NEEDLE_LEN` further, so
+   the point of the thing is at all three added together - 1.598m on
+   a 1.92m haft, which is 0.10m past the aim node and 0.32m past
+   where the flare used to be drawn. */
+const LANCE_HEAD = 0.59;
+const LANCE_NEEDLE_BASE = 0.18;
+const LANCE_NEEDLE_LEN = 0.285;
+const lanceTipX = (haft) => haft * LANCE_HEAD + LANCE_NEEDLE_BASE + LANCE_NEEDLE_LEN;
 
 const IRON = makeRamp([
   [0.00, "#191412"], [0.28, "#31261f"], [0.58, "#4f4033"],
@@ -372,7 +390,7 @@ export function buildWeapons(ctx) {
     brass.push(kit.prism({ h: 0.024, rBottom: 0.041, rTop: 0.037, sides: 7 })
       .rotateZ(Math.PI).translate(-L * 0.25, 0.008, 0));
 
-    const headX = L * 0.59;
+    const headX = L * LANCE_HEAD;
     // A short socket feeds an OPEN reliquary cage.  The previous
     // "hoops" were capped cylinders: three solid disks plus a cone
     // inevitably read as a missile/drill, even though the code called
@@ -394,8 +412,9 @@ export function buildWeapons(ctx) {
     amber.push(kit.prism({
       h: 0.155, rBottom: 0.024, rTop: 0.019, sides: 6, twist: 0.35,
     }).rotateZ(-Math.PI / 2).translate(headX + 0.008, 0, 0));
-    blade.push(kit.prism({ h: 0.285, rBottom: 0.022, rTop: 0.0025, sides: 6 })
-      .rotateZ(-Math.PI / 2).translate(headX + 0.18, 0, 0));
+    blade.push(kit.prism({
+      h: LANCE_NEEDLE_LEN, rBottom: 0.022, rTop: 0.0025, sides: 6,
+    }).rotateZ(-Math.PI / 2).translate(headX + LANCE_NEEDLE_BASE, 0, 0));
 
     // A clipped rear fork gives the head an asymmetric read without
     // borrowing the knight's signature crescent.
@@ -552,7 +571,30 @@ export function buildWeapons(ctx) {
       : spec.receiver.l * 0.5 + spec.barrel.l + 0.035, 0, 0);
     root.add(muzzle);
 
-    /* THE FLASH ITSELF, PARENTED TO THE MUZZLE.
+    /* WHERE THE SHOT IS SEEN TO LEAVE FROM.
+
+       Separate from `muzzle` on purpose. `muzzle` is the node the aim
+       solve is calibrated around and must not move (see the warning
+       above); this one is the physical point of the needle, and it is
+       what the bolt, the flare and the discharge light all use.
+
+       They were 32cm apart: the flare was pulled back onto the
+       reliquary cage on the theory that the spike in front of it is a
+       bayonet rather than a bore. On a weapon whose whole silhouette
+       converges on that spike, a discharge that happens behind it
+       reads as the lance leaking rather than firing.
+
+       It sits 10cm forward of the aim node along the same axis, and
+       the aim solve puts that axis on the camera ray - so the bolt
+       still leaves along the reticle line. */
+    const emitter = new THREE.Object3D();
+    emitter.name = "bolt-emitter";
+    emitter.position.set(isPolearm
+      ? lanceTipX(spec.haft)
+      : spec.receiver.l * 0.5 + spec.barrel.l + 0.035, 0, 0);
+    root.add(emitter);
+
+    /* THE FLASH ITSELF, PARENTED TO THE EMITTER.
        This is the fix for "the shot does not come from the lance",
        and it is a fix to WHERE THE EFFECT LIVES rather than to a
        number. `shoot()` reads the muzzle's world position and hands
@@ -568,7 +610,11 @@ export function buildWeapons(ctx) {
        crossed billboards rather than one, so the flare has volume
        from any bearing instead of vanishing edge-on when the camera
        swings round the shoulder. */
-    const flashGeo = new THREE.PlaneGeometry(0.34, 0.34);
+    /* Small. Seen end-on from a chase camera - the common case -
+       these crossed cards are a disc, and at 0.34 that disc covered
+       the trooper's whole chest and read as the armour glowing rather
+       than as the weapon firing. */
+    const flashGeo = new THREE.PlaneGeometry(0.20, 0.20);
     const flashMat = new THREE.MeshBasicMaterial({
       color: 0xffc24a,
       map: flareTexture(THREE),
@@ -582,21 +628,27 @@ export function buildWeapons(ctx) {
     });
     const flashRig = new THREE.Group();
     flashRig.name = "muzzle-flare";
-    /* Back onto the lit cage, which is where a player reads the
-       business end of this thing - the spike in front of it is a
-       bayonet, not a bore. The MUZZLE cannot move here (see above),
-       so the offset lives on the drawn flare instead: 0.22m back
-       along the haft puts the flare on the reliquary while the shot
-       still leaves from the node the aim solve is built around. */
-    if (isPolearm) flashRig.position.x = -0.22;
     for (let i = 0; i < 3; i += 1) {
       const quad = new THREE.Mesh(flashGeo, flashMat);
       quad.rotation.set(0, Math.PI * 0.5, (i / 3) * Math.PI);
       quad.renderOrder = 900;
       flashRig.add(quad);
     }
+    /* A LANCE of flare down the shot axis, in front of the star.
+       Crossed billboards alone are a round puff, and a round puff on
+       the end of a spike reads as a lamp switching on. The stretched
+       card gives the discharge a DIRECTION, which is the difference
+       between "it is glowing" and "it just fired". */
+    const spikeGeo = new THREE.PlaneGeometry(1.05, 0.115);
+    spikeGeo.translate(0.42, 0, 0);
+    for (let i = 0; i < 2; i += 1) {
+      const spike = new THREE.Mesh(spikeGeo, flashMat);
+      spike.rotation.x = i * Math.PI * 0.5;
+      spike.renderOrder = 901;
+      flashRig.add(spike);
+    }
     flashRig.visible = false;
-    muzzle.add(flashRig);
+    emitter.add(flashRig);
 
     /* The business end, for measuring a swing. A blow is judged on
        what the TIP does, not on what the grip does - the grip barely
@@ -632,7 +684,7 @@ export function buildWeapons(ctx) {
       reliquaryLight = new THREE.PointLight(
         LAMP_REST_COLOR, LAMP_REST_INTENSITY, LAMP_REST_DISTANCE, 2
       );
-      reliquaryLight.position.set(spec.haft * 0.675, 0, 0);
+      reliquaryLight.position.set(spec.haft * 0.74, 0, 0);
       reliquaryLight.castShadow = false;
       reliquaryLight.userData.restColour = new THREE.Color(LAMP_REST_COLOR);
       reliquaryLight.userData.flashColour = new THREE.Color(LAMP_FLASH_COLOR);
@@ -656,7 +708,7 @@ export function buildWeapons(ctx) {
 
     const record = {
       key, spec, mode: spec.mode || key, root, seal, rng,
-      gripRear, gripFront, muzzle, tip, butt, censer, reliquaryLight,
+      gripRear, gripFront, muzzle, emitter, tip, butt, censer, reliquaryLight,
       flashRig, flashMat,
       /* Where the hands sit along the haft when nothing is sliding
          them. An authored THRUST runs the shaft forward through the

@@ -16,6 +16,7 @@ import {
   buildTerrain, makeHeightField, DISTRICTS, DROP_SITE,
 } from "saintfall/terrain.js";
 import { buildWorld } from "saintfall/world.js";
+import { buildPod } from "saintfall/pod.js";
 import { buildVfx } from "saintfall/vfx.js";
 import { createPlayer } from "saintfall/player.js";
 import { buildJetpack } from "saintfall/jetpack.js";
@@ -96,6 +97,19 @@ export async function start({ boot, build } = {}) {
 
   const world = await buildWorld(ctx, (v, label) => progress(0.60 + v * 0.32, label));
   ctx.world = world;
+
+  /* The lander is built ONCE, here, in its landed pose - not by the
+     cinematic. The intro borrows it, flies it down and hands it back
+     at the same transform, so the object the player walks away from
+     is literally the object they arrived in. Building it before
+     collision is what lets the rasteriser bake it as an obstacle;
+     building it before the player is what lets the spawn be measured
+     off the real gangway instead of a guess. */
+  progress(0.923, "Setting the lander down");
+  const pod = buildPod(ctx, {
+    x: DROP_SITE.podX, z: DROP_SITE.podZ, yaw: DROP_SITE.podYaw,
+  });
+  ctx.pod = pod;
 
   progress(0.925, "Setting the stones against you");
   const collide = buildCollision(ctx, world);
@@ -202,12 +216,54 @@ export async function start({ boot, build } = {}) {
        cannot acquire pointer lock through two translucent layers. */
     stage?.classList.add("sf-intro-active");
   }
+  /* ------------------------------------------------------------
+     THE CINEMATIC'S WINDOW ONTO THE LIVE WORLD
+
+     From cloud-break onward the drop is filmed inside the real
+     basin, so the intro needs the live scene to be *presented* -
+     terrain LOD paged in, enemies culled, sky and particles moving
+     - without gameplay advancing. `combat`, `mission`, `breaches`,
+     `saves` and the HUD are deliberately absent: a cinematic that
+     ticks the mission clock has already started the game.
+
+     `figure` opts the trooper's own simulation in for the egress
+     beat. That is the whole trick behind the walk-out: it is not an
+     animation of a player, it is the player, moving under the same
+     locomotion, foot IK and camera rig that takes over a second
+     later - which is why there is nothing to cut between.
+     ------------------------------------------------------------ */
+  function cinematicStep(dt, opts = {}) {
+    const d = Math.min(Math.max(dt, 0), 0.1);
+    const cam = opts.camera || render.camera;
+    /* Deliberately the same ORDER as `step`, minus the gameplay
+       systems. Order is load-bearing here for the same reason it is
+       there - the weapon hangs off a mount the figure pose moves -
+       and a cinematic that resolved the pose in a different order
+       left the first real gameplay frame to correct the difference,
+       which is a visible pop on the one frame that must not have
+       one. */
+    if (opts.figure) player.update(d, render.camera);
+    sky.update(d, cam);
+    terrain.updateLod(cam);
+    enemies.update(d, cam);
+    if (opts.figure) {
+      weapons.update(d, player, render.camera);
+      player.postUpdate(d);
+      jetpack.updateVisual(d);
+      shield.updateVisual(d);
+    }
+    vfx.update(d, cam);
+    return true;
+  }
+
   const intro = buildDropIntro(ctx, {
     enabled: introEnabled,
     host: introHost,
     stage,
     render,
     audio,
+    pod,
+    cinematicStep,
     manualClock: introManualClock,
     deferReveal: introEnabled && !!boot,
     preserveForQa: qa,
@@ -313,11 +369,15 @@ export async function start({ boot, build } = {}) {
     if (boost.state.active) return;
     if (shield.state.active) return;
     if (!weapons.fire()) return;
-    // The muzzle, not the camera: a shot that leaves from the eye
-    // passes through cover the weapon is behind.
+    /* The POINT OF THE LANCE, not the camera and not the aim node.
+       A shot that leaves from the eye passes through cover the weapon
+       is behind; a shot that leaves from the aim node leaves from ten
+       centimetres inside the needle. `emitter` is the tip itself, and
+       it sits on the same axis the aim solve puts on the camera ray,
+       so the bolt still goes where the reticle promises. */
     const w = weapons.current;
-    const muzzle = w && w.muzzle ? w.muzzle : null;
-    if (muzzle) muzzle.getWorldPosition(shotOrigin);
+    const port = w ? (w.emitter || w.muzzle) : null;
+    if (port) port.getWorldPosition(shotOrigin);
     else shotOrigin.copy(render.camera.position);
 
     render.camera.getWorldDirection(shotDir);

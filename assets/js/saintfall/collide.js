@@ -484,14 +484,25 @@ export function buildCollision(ctx, world) {
   }
 
   const meshes = [];
-  world.group.traverse((o) => {
+  const collect = (o) => {
     if (!o.isMesh) return;
     // The raised paving is represented by world.walkSurfaceAt and is
     // therefore support, never an obstacle. Road furniture is kept in
     // a separate `road-stone` mesh and rasterised normally.
     if (o.name.startsWith("road-surface-")) return;
+    /* Additive light cards have geometry and no substance. The
+       lander's halo shaft is a 26m cone: rasterised, it becomes an
+       invisible tower standing on the drop site, and the first thing
+       the player does after the cinematic is walk into it. */
+    if (o.userData.noCollide) return;
     meshes.push(o);
-  });
+  };
+  world.group.traverse(collect);
+  /* The lander is a live, hinged object in the scene rather than a
+     merged member of the world batch, so it has to be handed to the
+     rasteriser explicitly. It is baked in its LANDED pose, which is
+     the only pose it holds while anything is walking around it. */
+  if (ctx.pod?.root) ctx.pod.root.traverse(collect);
   /* Per-mesh cell counts, kept because "something is walling off
      open desert" is unanswerable without provenance: the grid stores
      a height, not who put it there. */

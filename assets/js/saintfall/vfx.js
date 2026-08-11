@@ -1017,12 +1017,18 @@ export function buildVfx(ctx, world) {
      in a quarter second, which is long enough to read as flight and
      short enough not to feel lobbed. */
   const TRACER_SPEED = 150;
+  /* The lance fires LIGHT. At 150 m/s the player's own bolt crawled
+     the first ten metres in front of the camera and read as a thrown
+     ember; a blast has to clear the near field before the eye can
+     track it, and 520 puts a 60m shot on target inside a tenth of a
+     second while still leaving something to see. */
+  const ENERGY_TRACER_SPEED = 520;
   /* The old 7.5m orange wake was longer and brighter than its head, so
      the eye read a conventional tracer line. The separate head card
      below now owns legibility; this is only its ion afterimage. */
-  const TRACER_TAIL = 3.0;       // m of glowing wake behind the slug
+  const TRACER_TAIL = 1.15;      // m of wake behind the player's bolt
   const HOSTILE_TRACER_TAIL = 7.5;
-  const RELIQUARY_FADE_TIME = 0.075;
+  const RELIQUARY_FADE_TIME = 0.055;
   const HOSTILE_FADE_TIME = 0.050;
   const RELIQUARY_BOLT_WIDTH = 0.42;
   const tracers = (() => {
@@ -1058,6 +1064,7 @@ export function buildVfx(ctx, world) {
       uniforms: {
         uTime: { value: 0 },
         uSpeed: { value: TRACER_SPEED },
+        uEnergySpeed: { value: ENERGY_TRACER_SPEED },
         uTail: { value: TRACER_TAIL },
         uHostileTail: { value: HOSTILE_TRACER_TAIL },
         uEnergyFade: { value: RELIQUARY_FADE_TIME },
@@ -1094,6 +1101,7 @@ export function buildVfx(ctx, world) {
         "attribute vec2 aCorner;",
         "uniform float uTime;",
         "uniform float uSpeed;",
+        "uniform float uEnergySpeed;",
         "uniform float uTail;",
         "uniform float uHostileTail;",
         "uniform float uEnergyFade;",
@@ -1106,7 +1114,8 @@ export function buildVfx(ctx, world) {
         "varying float vAge;",
         "void main() {",
         "  float age = uTime - aBirth;",
-        "  float travelled = age * uSpeed;",
+        "  float speed = mix(uSpeed, uEnergySpeed, aStyle);",
+        "  float travelled = age * speed;",
         "  float tailLength = mix(uHostileTail, uTail, aStyle);",
         "  float fadeTime = mix(uHostileFade, uEnergyFade, aStyle);",
         // The head stops at the range the ray reached; the tail keeps
@@ -1116,7 +1125,7 @@ export function buildVfx(ctx, world) {
         // The head stops at impact, but the tail continues forward and
         // collapses into it. Basing this on `head` froze the last 3m.
         "  float tail = clamp(travelled - tailLength, 0.0, aSpan);",
-        "  float impactAge = max(age - aSpan / uSpeed, 0.0);",
+        "  float impactAge = max(age - aSpan / speed, 0.0);",
         "  vLife = 1.0 - clamp(impactAge / fadeTime, 0.0, 1.0);",
         "  if (age < 0.0 || vLife <= 0.0) {",
         "    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);",
@@ -1128,16 +1137,23 @@ export function buildVfx(ctx, world) {
         "  vec3 p = position + aDir * alongDistance;",
         "  vec4 mv = modelViewMatrix * vec4(p, 1.0);",
         /* A chase camera projects the real ray through the trooper's
-           silhouette. The ion ribbon bows toward the weapon side for
-           its early flight, starting at the real muzzle and returning
-           to the real endpoint over the final five metres. Collision,
-           damage and the stored ray remain completely unchanged. */
+           silhouette, so the bolt bows a little toward the weapon side
+           in MID flight and returns to the real endpoint. Collision,
+           damage and the stored ray are unchanged.
+
+           IT MUST NOT BOW NEAR THE MUZZLE. This used to ramp in from
+           0.25m and swing 1.25m across, which is most of a body width
+           in the first three metres - so however exactly the emitter
+           was placed on the needle, the bolt visibly peeled off it and
+           the shot read as coming from beside the lance. The arc now
+           starts at four metres, by which point the whole weapon is
+           out of frame anyway, and is a third of the size. */
         "  vec4 startMv = modelViewMatrix * vec4(position, 1.0);",
         "  float muzzleSide = startMv.x < 0.0 ? -1.0 : 1.0;",
         "  float endpointReturn = smoothstep(0.0, 5.0, aSpan - alongDistance);",
-        "  float silhouetteArc = smoothstep(0.25, 3.0, alongDistance)",
-        "    * (1.0 - smoothstep(30.0, 58.0, alongDistance)) * endpointReturn;",
-        "  mv.x += muzzleSide * 1.25 * silhouetteArc * aStyle;",
+        "  float silhouetteArc = smoothstep(4.0, 12.0, alongDistance)",
+        "    * (1.0 - smoothstep(26.0, 52.0, alongDistance)) * endpointReturn;",
+        "  mv.x += muzzleSide * 0.40 * silhouetteArc * aStyle;",
         "  vec3 dv = normalize((modelViewMatrix * vec4(aDir, 0.0)).xyz);",
         "  vec3 toCam = normalize(-mv.xyz);",
         "  vec3 side = cross(dv, toCam);",
@@ -1152,7 +1168,10 @@ export function buildVfx(ctx, world) {
         // Teardrop: a fat round slug at the head, drawn out into a
         // thin wake. A constant-width bar reads as a laser sight.
         "  float hostileShape = 0.16 + 1.35 * pow(aCorner.x, 1.6);",
-        "  float energyShape = 0.045 + 0.40 * pow(aCorner.x, 1.8);",
+        // Nearly parallel-sided, with the head only slightly proud: a
+        // laser bolt is a short rod of light. The old 0.045 tail
+        // tapered to a hair and turned the shot into a comet.
+        "  float energyShape = 0.30 + 0.24 * pow(aCorner.x, 3.0);",
         "  float w = aWidth * mix(hostileShape, energyShape, aStyle)",
         "    * mix(1.7, 1.0, sl);",
         "  mv.xyz += sideN * (aCorner.y * w);",
@@ -1179,7 +1198,17 @@ export function buildVfx(ctx, world) {
         "varying float vStyle;",
         "varying float vAge;",
         "void main() {",
-        "  float across = 1.0 - abs(vAcross);",
+        /* CLAMPED, and it matters. `vAcross` is interpolated from the
+           quad's own -1/+1 corners, so it can land a hair outside that
+           range at the very edge - and every `pow(across, k)` below
+           then has a NEGATIVE base, which GLSL leaves undefined and
+           this GPU returns NaN for. The composite sanitises NaN to
+           zero, so the artefact was a dashed BLACK outline traced
+           exactly around each bolt's quad: the one shape additive
+           blending is incapable of drawing, which is what said it had
+           to be a NaN rather than a shading mistake. */
+        "  float across = clamp(1.0 - abs(vAcross), 0.0, 1.0);",
+        "  float along = clamp(vAlong, 0.0, 1.0);",
         /* TWO LOBES. A single falloff gives a hard-edged rod; a tight
            core inside a wide soft halo is what makes something read as
            luminous rather than painted. The halo is also what the
@@ -1187,37 +1216,50 @@ export function buildVfx(ctx, world) {
         "  float core = pow(across, 7.0);",
         "  float halo = pow(across, 1.7) * 0.46;",
         // Round the tip off, so the quad's flat end is not the shape.
-        "  float capR = length(vec2(max(0.0, vAlong - 0.86) / 0.14, vAcross));",
+        "  float capR = length(vec2(max(0.0, along - 0.86) / 0.14, vAcross));",
         "  float cap = 1.0 - smoothstep(0.80, 1.05, capR);",
         // Plasma is unstable. A little modulation along the slug stops
         // it reading as extruded geometry.
-        "  float flick = 0.84 + 0.16 * sin(vAlong * 31.0 + vSeed * 6.2831);",
-        "  float wake = mix(0.06, 1.0, pow(vAlong, 2.2));",
+        "  float flick = 0.84 + 0.16 * sin(along * 31.0 + vSeed * 6.2831);",
+        "  float wake = mix(0.06, 1.0, pow(along, 2.2));",
         "  float hostileBody = (core + halo) * wake * cap * flick;",
         // White-hot through the middle, saturated at the edges - the
         // gradient runs ACROSS the bolt, not along it, which is what
         // separates a glowing object from a warm smear.
         "  vec3 hostileColour = mix(uCold, uHot, core);",
-        /* The reliquary wake carries two moving ion filaments instead
-           of falling fire. Their asymmetry and opposing phase make the
-           ribbon look electrically unstable without turning it into a
-           regular striped laser. */
-        "  float charge = 0.78 + 0.22 * sin(vAlong * 49.0 - vAge * 82.0",
-        "    + vSeed * 6.2831);",
-        "  float coilCentre = sin(vAlong * 34.0 - vAge * 61.0",
-        "    + vSeed * 6.2831) * 0.24;",
-        "  float filamentA = pow(clamp(1.0 - abs(vAcross - coilCentre) / 0.18, 0.0, 1.0), 3.0);",
-        "  float filamentB = pow(clamp(1.0 - abs(vAcross + coilCentre * 0.72) / 0.15, 0.0, 1.0), 4.0);",
-        "  float energyWake = mix(0.012, 0.68, pow(vAlong, 2.65));",
-        "  float energyBody = (core * 0.92 + halo * 0.34",
-        "    + filamentA * 0.20 + filamentB * 0.13)",
-        "    * energyWake * cap * charge;",
-        "  vec3 energyColour = mix(uEnergyFringe, uEnergyBody, across);",
-        "  energyColour = mix(energyColour, uEnergyCore, core * 0.92",
-        "    + max(filamentA, filamentB) * 0.18);",
+        /* A LASER, not a plasma ribbon.
+
+           The wake used to carry two counter-phased ion filaments and
+           a 82Hz charge modulation, which is a good description of
+           unstable gas and the wrong description of a shot of light:
+           it crawled, it writhed, and it read as something leaking
+           off the weapon. What is left is a hard white core inside a
+           gold sheath, held at nearly constant brightness down the
+           rod, with a bead at the head - and the tail cut clean
+           instead of trailing off into embers.
+
+           The core is much tighter than the hostile one (11 against
+           7). A laser's read is the RATIO between an almost-white
+           centre and a saturated edge; widen the core and it turns
+           into a glowing bar. */
+        "  float energyCore = pow(across, 5.5);",
+        "  float energyHalo = pow(across, 1.5);",
+        "  float energyWake = mix(0.30, 1.0, pow(along, 1.6));",
+        "  float bead = smoothstep(0.72, 1.0, along);",
+        /* The halo carries most of the ROD and the core carries the
+           white line down its middle. An earlier pass put the core at
+           exponent 11 with the halo at a fifth of this weight, which
+           meant only the middle 15% of the quad had any alpha at all:
+           the bolt rendered as a two-pixel white hair towed behind a
+           ball, and every attempt to fix it by widening the quad just
+           made the hair longer. Width is not what a rod is made of. */
+        "  float energyBody = (energyCore * 0.95 + energyHalo * 0.55",
+        "    + bead * energyCore * 0.55) * energyWake * cap;",
+        "  vec3 energyColour = mix(uEnergyFringe, uEnergyBody, pow(across, 0.55));",
+        "  energyColour = mix(energyColour, uEnergyCore, pow(across, 4.0) * 0.95);",
         "  float body = mix(hostileBody, energyBody, vStyle);",
         "  vec3 c = mix(hostileColour, energyColour, vStyle);",
-        "  float gain = mix(4.6, 8.2, vStyle);",
+        "  float gain = mix(4.6, 9.6, vStyle);",
         "  gl_FragColor = vec4(c * body * vLife * gain,",
         "    clamp(body * vLife, 0.0, 1.0));",
         "}",
@@ -1256,6 +1298,7 @@ export function buildVfx(ctx, world) {
       uniforms: {
         uTime: mat.uniforms.uTime,
         uSpeed: { value: TRACER_SPEED },
+        uEnergySpeed: { value: ENERGY_TRACER_SPEED },
         uEnergyFade: { value: RELIQUARY_FADE_TIME },
         uHostileFade: { value: HOSTILE_FADE_TIME },
         uHot: mat.uniforms.uHot,
@@ -1279,6 +1322,7 @@ export function buildVfx(ctx, world) {
         "attribute vec2 aCorner;",
         "uniform float uTime;",
         "uniform float uSpeed;",
+        "uniform float uEnergySpeed;",
         "uniform float uEnergyFade;",
         "uniform float uHostileFade;",
         "varying vec2 vUv;",
@@ -1287,15 +1331,16 @@ export function buildVfx(ctx, world) {
         "varying float vPulse;",
         "void main() {",
         "  float age = uTime - aBirth;",
-        "  float travelled = age * uSpeed;",
+        "  float speed = mix(uSpeed, uEnergySpeed, aStyle);",
+        "  float travelled = age * speed;",
         "  float head = min(travelled, aSpan);",
         "  float fadeTime = mix(uHostileFade, uEnergyFade, aStyle);",
-        "  float impactAge = max(age - aSpan / uSpeed, 0.0);",
+        "  float impactAge = max(age - aSpan / speed, 0.0);",
         "  vLife = 1.0 - clamp(impactAge / fadeTime, 0.0, 1.0);",
         "  vUv = aCorner;",
         "  vStyle = aStyle;",
         "  float seed = fract(aBirth * 13.71);",
-        "  vPulse = 0.90 + 0.10 * sin(age * 78.0 + seed * 6.2831);",
+        "  vPulse = mix(0.90 + 0.10 * sin(age * 78.0 + seed * 6.2831), 1.0, aStyle);",
         "  if (age < 0.0 || vLife <= 0.0) {",
         "    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);",
         "    return;",
@@ -1305,13 +1350,15 @@ export function buildVfx(ctx, world) {
         "  vec4 startMv = modelViewMatrix * vec4(position, 1.0);",
         "  float muzzleSide = startMv.x < 0.0 ? -1.0 : 1.0;",
         "  float endpointReturn = smoothstep(0.0, 5.0, aSpan - head);",
-        "  float silhouetteArc = smoothstep(0.25, 3.0, head)",
-        "    * (1.0 - smoothstep(30.0, 58.0, head)) * endpointReturn;",
-        "  mv.x += muzzleSide * 1.25 * silhouetteArc * aStyle;",
-        "  float radius = aWidth * mix(0.75, 1.25, aStyle) * vPulse;",
+        // Must match the ribbon exactly, or the bead separates from
+        // the rod it is supposed to be the front of.
+        "  float silhouetteArc = smoothstep(4.0, 12.0, head)",
+        "    * (1.0 - smoothstep(26.0, 52.0, head)) * endpointReturn;",
+        "  mv.x += muzzleSide * 0.40 * silhouetteArc * aStyle;",
+        "  float radius = aWidth * mix(0.75, 0.42, aStyle) * vPulse;",
         // Keep distant player charges readable without inflating hostile
         // fire or making the close profile orb any larger.
-        "  radius = max(radius, -mv.z * 0.006 * aStyle);",
+        "  radius = max(radius, -mv.z * 0.0042 * aStyle);",
         "  mv.xy += aCorner * radius;",
         "  gl_Position = projectionMatrix * mv;",
         "}",
@@ -1338,11 +1385,18 @@ export function buildVfx(ctx, world) {
         "    * pow(clamp(1.0 - r, 0.0, 1.0), 1.8);",
         "  float hostileBody = halo * 0.72 + core * 1.08;",
         "  vec3 hostileColour = mix(uCold, uHot, core);",
-        "  float energyBody = halo * 0.92 + ring * 0.62 + core * 1.85",
-        "    + corona * 0.30;",
+        /* THE HEAD IS A BEAD, NOT A STAR. The ring and the three-lobe
+           corona below belong to hostile plasma; on the player's bolt
+           they made a 70cm orange ball with a hairline towed behind
+           it - a comet, and the single loudest reason the shot did not
+           read as a laser. What the head needs is a hot white point
+           that the bloom can bleed a little gold around. */
+        "  float energyCore = 1.0 - smoothstep(0.0, 0.30, r);",
+        "  float energyHalo = pow(clamp(1.0 - r, 0.0, 1.0), 2.6);",
+        "  float energyBody = energyCore * 1.60 + energyHalo * 0.55;",
         "  vec3 energyColour = mix(uEnergyFringe, uEnergyBody,",
-        "    1.0 - smoothstep(0.18, 0.92, r));",
-        "  energyColour = mix(energyColour, uEnergyCore, core);",
+        "    pow(clamp(1.0 - r, 0.0, 1.0), 0.55));",
+        "  energyColour = mix(energyColour, uEnergyCore, energyCore);",
         "  float body = mix(hostileBody, energyBody, vStyle);",
         "  vec3 c = mix(hostileColour, energyColour, vStyle);",
         "  float gain = mix(3.8, 9.5, vStyle);",

@@ -118,14 +118,70 @@ export function roadPointAtZ(z) {
    road. Keeping this derived from ROAD_PATH means the cinematic, the
    static wreck and the playable spawn cannot drift apart again. */
 const DROP_ROAD = roadPointAtZ(DISTRICTS.threshold.z + 44);
+/* The pod stands further off the causeway than a parked lander
+   would, for two reasons that happen to agree: an impact crater
+   needs room that does not overlap authored paving, and the walk
+   out of the hole and up onto the road is the last beat of the
+   cinematic - at 11.5m it was three strides. */
+const POD_OFFSET_X = -16.5;
+const POD_OFFSET_Z = 2.0;
 export const DROP_SITE = Object.freeze({
   x: DROP_ROAD.x,
   z: DROP_ROAD.z,
   yaw: DROP_ROAD.yaw,
-  podX: DROP_ROAD.x - 11.5,
-  podZ: DROP_ROAD.z + 1.5,
-  podYaw: -Math.PI / 2,
+  podX: DROP_ROAD.x + POD_OFFSET_X,
+  podZ: DROP_ROAD.z + POD_OFFSET_Z,
+  /* Aimed at the spawn mark rather than at a cardinal direction.
+     The gangway is the path the player actually walks, so the hatch
+     has to face the causeway however the road happens to run here -
+     a hardcoded -90 degrees put the ramp 8 degrees off the walk and
+     the trooper stepped off its edge. */
+  podYaw: Math.atan2(-POD_OFFSET_X, -POD_OFFSET_Z),
+  /** Metres from the hatch mouth to the playable spawn mark. */
+  egressRun: Math.hypot(POD_OFFSET_X, POD_OFFSET_Z),
 });
+
+/* ============================================================
+   THE IMPACT CRATER
+
+   The lander has no gear and no retros. It arrives at terminal
+   velocity and buries its prow, so the hole is not decoration -
+   it is where the pod IS, and the player has to walk out of it.
+
+   That makes it TERRAIN, not a prop laid on terrain. Composed into
+   `heightAt` below, the terrain mesh, the collision grid, the foot
+   IK and `player.spawn` all agree about it for free; built as a
+   mesh instead, every one of those four would have had to be told
+   about it separately and three of them would have been wrong.
+
+   Two numbers are load-bearing.
+
+   OUTER has to clear the causeway: the road's west edge is 11.9m
+   from the pod's axis (half-width 4.6 against a 16.5m offset), and
+   terrain raised past that pushes up through authored paving that
+   sits only 22cm proud of the sand.
+
+   BOWL has to be wide enough for the terrain MESH to carry it.
+   LOD0 cells are 4m, so a 4m-radius dish is a feature smaller than
+   one quad: the field dips, the drawn ground does not, and the pod
+   sits in an invisible hole on visibly flat sand. A 7m bowl spans
+   three or four cells and reads as the faceted funnel this game's
+   surface language wants anyway.
+   ============================================================ */
+export const DROP_CRATER = Object.freeze({
+  bowl: 7.0,      // radius at which the dish returns to grade
+  depth: 2.45,    // how far the prow drove the floor down
+  lip: 0.52,      // ejecta rampart, peak height
+  outer: 11.0,    // everything is back to grade here - clear of the road
+});
+
+/** Crater displacement at radius `r` from the pod's axis, in metres. */
+export function craterProfile(r) {
+  const { bowl, depth, lip, outer } = DROP_CRATER;
+  if (r >= outer) return 0;
+  if (r <= bowl) return -depth * (0.5 + 0.5 * Math.cos(Math.PI * r / bowl));
+  return lip * Math.sin(Math.PI * (r - bowl) / (outer - bowl));
+}
 
 /** The old war trench, cut across the map's waist. */
 export const FOSSE_PATH = [
@@ -617,6 +673,20 @@ export function makeHeightField(seed = 0x5a1f7) {
         h = lerp(h, r.y + 1.35, roadCut) + ditch * (1 - bed) * mesaExit;
       }
     }
+
+    /* --- The impact crater: cut after EVERYTHING --------------------
+       Later than the road on purpose, and it is the one feature here
+       with a story reason to be: the causeway was built, and then
+       something fell on it.
+
+       Mechanically it has to be last as well. The road's graded
+       shoulder runs out to 35m and the drop site is 16.5m off the
+       centreline, so a crater cut inside the district block was
+       immediately lerped 88% of the way back to roadbed grade - an
+       authored 2.45m dish arrived on the height field as 39cm, which
+       is a dent. Nothing that is supposed to be a hole can be applied
+       before something that is supposed to be a slope. */
+    h += craterProfile(Math.hypot(x - DROP_SITE.podX, z - DROP_SITE.podZ));
 
     return h;
   }

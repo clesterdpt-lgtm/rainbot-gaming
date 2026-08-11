@@ -1597,6 +1597,27 @@ export function buildVfx(ctx, world) {
       energy ? 2.0 : (wall ? 0.45 : 1.0));
   }
 
+  /** A warm reliquary crescent that traces the physical sweep. The arc is
+   *  made from pooled impact motes rather than a transparent ribbon, so it
+   *  stays readable against sand and remains cheap when a pack is struck. */
+  function meleeArc(x, y, z, yaw, reach, arc, hits = 0, slam = false) {
+    const points = slam ? 7 : 6;
+    const radius = reach * (slam ? 0.72 : 0.84);
+    const start = yaw - arc * 0.5;
+    for (let i = 0; i < points; i += 1) {
+      const t = points > 1 ? i / (points - 1) : 0.5;
+      const a = start + arc * t;
+      const px = x + Math.sin(a) * radius;
+      const pz = z + Math.cos(a) * radius;
+      const lift = y + 0.58 + Math.sin(t * Math.PI) * (slam ? 0.46 : 0.74);
+      impacts.emit(px, lift, pz, hits ? 3 : 2, slam ? 1.8 : 1.35,
+        (hits ? 0.30 : 0.16) * (slam ? 1.15 : 1), 1.3);
+    }
+    const tipYaw = yaw + arc * 0.5;
+    flashes.emit(x + Math.sin(tipYaw) * radius, y + (slam ? 0.48 : 1.0),
+      z + Math.cos(tipYaw) * radius, hits ? 0.55 : 0.28, 0.075, 1.4);
+  }
+
   /** A stratagem landing. */
   function blast(x, y, z, radius) {
     impacts.emit(x, y + 0.6, z, 64, radius * 0.5, 2.6, 1.0);
@@ -1619,6 +1640,7 @@ export function buildVfx(ctx, world) {
     banners: bannerMesh,
     shafts,
     spark,
+    meleeArc,
     blast,
     breach,
     tracer,

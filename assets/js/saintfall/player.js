@@ -2387,7 +2387,7 @@ export async function createPlayer(ctx, canvas) {
          that opens early resolves the strike while the point is
          still travelling - the lunge scores its 1.34x reach from a
          pose that has not reached it yet. Full extension is 0.36. */
-      dur: 0.70, hit: [0.33, 0.46], damage: 1.25, arc: 0.85, lunge: 1.34,
+      dur: 0.70, hit: [0.33, 0.46], damage: 1.25, arc: 1.05, lunge: 1.34,
       keys: [
         [0.00, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
         // Cocked: weight back, point up and outboard, chest coiled,
@@ -2403,16 +2403,16 @@ export async function createPlayer(ctx, canvas) {
       ],
     },
     melee2: {          // rising diagonal, low left to high right
-      dur: 0.78, hit: [0.28, 0.48], damage: 1.15, arc: 2.3,
+      dur: 0.78, hit: [0.28, 0.48], damage: 1.15, arc: 2.72,
       keys: [
         [0.00, 0.0, 0.0, 0.0, 0, 0, 0, "load"],
-        [0.26, 0.0252, -0.088, -0.030, 0.85, -0.95, 0.40, -0.36, 0.26, -0.16, -0.070, 0.13, 0.06, "strike"],
-        [0.50, -0.0252, 0.1764, 0.1092, -1.15, 0.85, -0.50, 0.48, -0.30, 0.22, 0.030, 0.28, 0.12, "settle"],
+        [0.26, 0.0252, -0.088, -0.030, 0.90, -1.12, 0.46, -0.42, 0.30, -0.19, -0.078, 0.14, 0.07, "strike"],
+        [0.50, -0.0252, 0.1764, 0.1092, -1.22, 1.04, -0.56, 0.56, -0.34, 0.25, 0.036, 0.30, 0.13, "settle"],
         [0.78, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
       ],
     },
     melee3: {          // overhead slam, the combo finisher
-      dur: 0.96, hit: [0.34, 0.52], damage: 1.9, arc: 1.7, slam: true,
+      dur: 0.96, hit: [0.34, 0.52], damage: 1.9, arc: 2.05, slam: true,
       keys: [
         [0.00, 0.0, 0.0, 0.0, 0, 0, 0, "load"],
         /* The loaded Vesper silhouette is much broader through the

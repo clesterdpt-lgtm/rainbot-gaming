@@ -423,6 +423,51 @@ export function buildAudio(ctx) {
     src.start(t); src.stop(t + 0.18);
   }
 
+  /** The censer-lance connecting: low body, dry chitin crack and a short
+   *  reliquary ring. One voice per swing keeps pack-clearing readable. */
+  function meleeImpact(x, z, event = {}) {
+    if (!(event.hits > 0)) return;
+    const t = now();
+    const dur = event.slam ? 0.52 : 0.34;
+    const g = voice("world", dur);
+    if (!g) return;
+    const p = place(g, x, z, 18, 260);
+    if (!p) return;
+    const weight = Math.min(1.35, 0.84 + Math.max(0, event.hits - 1) * 0.10);
+    const amp = 0.46 * p.atten * weight;
+
+    const body = ac.createOscillator();
+    body.type = "triangle";
+    body.frequency.setValueAtTime(event.slam ? 105 : 142, t);
+    body.frequency.exponentialRampToValueAtTime(event.slam ? 38 : 58, t + dur);
+    const bodyGain = ac.createGain();
+    bodyGain.gain.setValueAtTime(amp, t);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    body.connect(bodyGain); bodyGain.connect(p.node);
+    body.start(t); body.stop(t + dur + 0.02);
+
+    const crack = noiseSource(1.45);
+    const crackFilter = ac.createBiquadFilter();
+    crackFilter.type = "bandpass";
+    crackFilter.frequency.value = event.slam ? 820 : 1180;
+    crackFilter.Q.value = 1.2;
+    const crackGain = ac.createGain();
+    crackGain.gain.setValueAtTime(amp * 0.88, t);
+    crackGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.105);
+    crack.connect(crackFilter); crackFilter.connect(crackGain); crackGain.connect(p.node);
+    crack.start(t); crack.stop(t + 0.13);
+
+    const ring = ac.createOscillator();
+    ring.type = "sine";
+    ring.frequency.setValueAtTime(event.slam ? 430 : 620, t + 0.012);
+    ring.frequency.exponentialRampToValueAtTime(260, t + dur * 0.8);
+    const ringGain = ac.createGain();
+    ringGain.gain.setValueAtTime(amp * 0.24, t + 0.012);
+    ringGain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    ring.connect(ringGain); ringGain.connect(p.node);
+    ring.start(t + 0.012); ring.stop(t + dur + 0.02);
+  }
+
   /** Something large stops working. */
   function death(x, z, big = false) {
     const t = now();
@@ -1141,6 +1186,7 @@ export function buildAudio(ctx) {
     const { combat, mission, breaches } = ctx;
     if (combat) {
       combat.bus.on("hit", (e) => impact(e.x, e.z, "flesh"));
+      combat.bus.on("melee", (e) => meleeImpact(e.x, e.z, e));
       /* The `big` death is now the Harrow's. It is a two-tonne animal
          and the only one whose death should be audible across the
          basin; the other two castes have to stay cheap, because a

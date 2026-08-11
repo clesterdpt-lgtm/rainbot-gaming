@@ -558,6 +558,9 @@ export async function buildEnemies(ctx, onProgress) {
       eventWave: Number.isFinite(opts.eventWave) ? opts.eventWave : null,
       stride: 0,
       current: null,
+      knockbackX: 0,
+      knockbackZ: 0,
+      knockbackTime: 0,
     };
 
     root.position.set(inst.x, inst.y, inst.z);
@@ -823,10 +826,56 @@ export async function buildEnemies(ctx, onProgress) {
   const dyingOrNear = (inst, d2, range) =>
     inst.state === "death" || d2 < range * range;
 
+  const KNOCKBACK_DRAG = 8.5;
+  const KNOCKBACK_DURATION = 0.42;
+  const KNOCKBACK_MAX_SPEED = 17;
+
+  /** Add a short, collision-aware horizontal impulse. It remains active on
+   *  a dying Thresher so the death clip travels with the hit instead of
+   *  folding in place where the lance found it. */
+  function knockback(inst, ux, uz, speed = 10) {
+    if (!inst || inst.emerging?.active) return false;
+    const length = Math.hypot(ux, uz);
+    if (length < 1e-5) return false;
+    const impulse = Math.max(0, Number(speed) || 0);
+    inst.knockbackX = clamp((inst.knockbackX || 0) + (ux / length) * impulse,
+      -KNOCKBACK_MAX_SPEED, KNOCKBACK_MAX_SPEED);
+    inst.knockbackZ = clamp((inst.knockbackZ || 0) + (uz / length) * impulse,
+      -KNOCKBACK_MAX_SPEED, KNOCKBACK_MAX_SPEED);
+    inst.knockbackTime = Math.max(inst.knockbackTime || 0, KNOCKBACK_DURATION);
+    return true;
+  }
+
+  function stepKnockback(inst, dt) {
+    if (!(inst.knockbackTime > 0)) return false;
+    const vx = Number(inst.knockbackX) || 0;
+    const vz = Number(inst.knockbackZ) || 0;
+    if (Math.hypot(vx, vz) < 0.06) {
+      inst.knockbackX = 0;
+      inst.knockbackZ = 0;
+      inst.knockbackTime = 0;
+      return false;
+    }
+    const r = inst.spec?.collisionRadius || 0.62;
+    const out = ctx.collide?.slide
+      ? ctx.collide.slide(inst.x, inst.z,
+        inst.x + vx * dt, inst.z + vz * dt, null, r * 0.8)
+      : [inst.x + vx * dt, inst.z + vz * dt];
+    const moved = Math.hypot(out[0] - inst.x, out[1] - inst.z) > 1e-5;
+    inst.x = out[0];
+    inst.z = out[1];
+    const decay = Math.exp(-KNOCKBACK_DRAG * dt);
+    inst.knockbackX = vx * decay;
+    inst.knockbackZ = vz * decay;
+    inst.knockbackTime = Math.max(0, inst.knockbackTime - dt);
+    return moved;
+  }
+
   function update(dt, camera) {
     if (camera) camera.getWorldPosition(_eye);
     for (let i = live.length - 1; i >= 0; i -= 1) {
       const inst = live[i];
+      const knocked = stepKnockback(inst, dt);
       const d2 = camera
         ? (inst.x - _eye.x) ** 2 + (inst.z - _eye.z) ** 2
         : 0;
@@ -858,10 +907,10 @@ export async function buildEnemies(ctx, onProgress) {
       if (dying || d2 < ANIM_RANGE * ANIM_RANGE) inst.mixer.update(dt);
 
       const emerging = !dying && updateEmergence(inst, dt);
-      if (inst.state !== "death" && !emerging) {
+      if (!emerging && (inst.state !== "death" || knocked)) {
         inst.y = damp(inst.y, groundY(inst.x, inst.z), 12, dt);
         inst.root.position.set(inst.x, inst.y, inst.z);
-        inst.root.rotation.y = inst.yaw;
+        if (inst.state !== "death") inst.root.rotation.y = inst.yaw;
       }
       inst.root.updateMatrixWorld(true);
 

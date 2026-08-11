@@ -25,6 +25,19 @@ export const SURVIVAL_CONFIG = Object.freeze({
   regenPerSecond: 10,
 });
 
+/* Close-combat tuning lives beside the authoritative damage path. The
+   animation supplies each move's character; these values define what the
+   censer-lance consistently means in the world. */
+export const MELEE_CONFIG = Object.freeze({
+  reachMultiplier: 1.18,
+  lightEnemy: "thresher",
+  lightKnockbackSpeed: 12.5,
+  hitSparkScale: 2.10,
+  hitPunch: 1.05,
+  whiffPunch: 0.24,
+  slamPunch: 1.35,
+});
+
 /* Body capsules in WORLD metres, taken from what
    `saintfall-bestiary-measure.mjs` measured rather than guessed - a
    hit volume that does not match the silhouette is the single
@@ -415,10 +428,11 @@ export function buildCombat(ctx) {
     const ps = ctx.player.state;
     const w = ctx.weapons && ctx.weapons.current;
     if (!w || !w.spec.melee) return 0;
-    const reach = w.spec.reach * lunge;
+    const reach = w.spec.reach * lunge * MELEE_CONFIG.reachMultiplier;
     const dmg = (w.spec.damage || 70) * mult;
     const eyeY = ps.y + 1.4;
     let hits = 0;
+    let kills = 0;
     for (const inst of enemies.live) {
       if (inst.state === "death") continue;
       const dx = inst.x - ps.x;
@@ -432,22 +446,47 @@ export function buildCombat(ctx) {
       if (Math.abs(rel) > arc * 0.5) continue;
       const inv = 1 / Math.max(1e-4, dist);
       if (collide.rayBlock(ps.x, eyeY, ps.z, dx * inv, 0, dz * inv, dist) < dist) continue;
-      applyDamage(inst, dmg, {
+      const wasAlive = inst.state !== "death";
+      /* Threshers are the light swarm caste. A clean polearm connection
+         always removes one, even if an authored encounter spawned it with a
+         little bonus health; larger castes retain their normal balance. */
+      const strikeDamage = inst.key === MELEE_CONFIG.lightEnemy
+        ? Math.max(dmg, inst.health)
+        : dmg;
+      const dealt = applyDamage(inst, strikeDamage, {
         source: "melee",
         x: inst.x,
         y: inst.y + box.y1 * 0.55,
         z: inst.z,
       });
+      if (dealt <= 0) continue;
       hits += 1;
-      if (vfx && vfx.spark) {
-        vfx.spark(inst.x, inst.y + box.y1 * 0.55, inst.z, 1.5);
+      if (wasAlive && inst.state === "death") kills += 1;
+      if (inst.key === MELEE_CONFIG.lightEnemy && enemies.knockback) {
+        enemies.knockback(inst, dx * inv, dz * inv,
+          MELEE_CONFIG.lightKnockbackSpeed * (slam ? 1.24 : 1));
+      }
+      /* A kill already emits the caste-sized rupture in applyDamage. Add
+         the warm contact spark only to survivors; stacking both made a
+         Thresher disappear inside two white flashes at the exact read. */
+      if (vfx && vfx.spark && inst.state !== "death") {
+        vfx.spark(inst.x, inst.y + box.y1 * 0.55, inst.z,
+          MELEE_CONFIG.hitSparkScale * (slam ? 1.18 : 1), false, true);
       }
     }
-    bus.emit("melee", { hits, slam, x: ps.x, z: ps.z });
+    if (vfx && vfx.meleeArc) {
+      vfx.meleeArc(ps.x, ps.y, ps.z, ps.yaw, reach, arc, hits, slam);
+    }
+    ctx.player.punch?.(slam
+      ? MELEE_CONFIG.slamPunch
+      : hits ? MELEE_CONFIG.hitPunch : MELEE_CONFIG.whiffPunch);
+    bus.emit("melee", {
+      hits, kills, slam, x: ps.x, z: ps.z, yaw: ps.yaw, reach, arc,
+    });
     if (slam) {
       // The finisher shakes the ground whether or not it connects.
-      if (vfx && vfx.blast) vfx.blast(ps.x + Math.sin(ps.yaw) * 1.6, ps.y + 0.2,
-        ps.z + Math.cos(ps.yaw) * 1.6, 4.5);
+      if (vfx && vfx.blast) vfx.blast(ps.x + Math.sin(ps.yaw) * 1.8, ps.y + 0.2,
+        ps.z + Math.cos(ps.yaw) * 1.8, 5.4);
       bus.emit("slam", { x: ps.x, z: ps.z });
     }
     return hits;

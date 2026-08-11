@@ -454,6 +454,28 @@ html.sf-maximised body {
 .sf-hud__hurt.is-hit { animation: sf-hurt .52s ease-out 1; }
 @keyframes sf-hurt { from { opacity: 1; } to { opacity: 0; } }
 
+/* Damage numbers are DOM text anchored to projected world points. The
+   heavy shadow and hairline stroke keep two digits readable against
+   both noon sand and the almost-black night preset. */
+.sf-hud__numbers {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+}
+.sf-damage-number {
+  position: absolute; left: 50%; top: 50%;
+  min-width: 2ch; text-align: center; white-space: nowrap;
+  color: #ffe5b5;
+  font: 800 clamp(.9rem, 1.45vw, 1.28rem)/1 "Share Tech Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.04em;
+  -webkit-text-stroke: .45px rgba(20, 8, 4, .92);
+  text-shadow: 0 2px 2px rgba(0, 0, 0, .96), 0 0 8px rgba(255, 139, 54, .72);
+  will-change: transform, opacity;
+}
+.sf-damage-number.is-head { color: #fff8e9; font-size: clamp(1.05rem, 1.7vw, 1.48rem); }
+.sf-damage-number.is-weak { color: #8ff4e4; text-shadow: 0 2px 2px #000, 0 0 10px rgba(74, 239, 216, .8); }
+.sf-damage-number.is-boost { color: #ffad52; font-size: clamp(1rem, 1.62vw, 1.4rem); }
+.sf-damage-number.is-kill { filter: brightness(1.3); }
+
 .sf-hud__vitals {
   /* The site-wide standalone Scores launcher occupies the first
      4rem of the viewport's lower-left corner. Keep the game vitals
@@ -500,6 +522,31 @@ html.sf-maximised body {
 .sf-hud__jet[data-state="crit"] .sf-hud__jettrack i {
   background: #a9332d; box-shadow: 0 0 7px rgba(190, 42, 35, .55);
 }
+.sf-hud__boost,
+.sf-hud__shield {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: .32rem;
+  color: rgba(255, 224, 183, .62);
+  font: 650 .54rem/1.2 ui-monospace, "SFMono-Regular", Menlo, monospace;
+  letter-spacing: .09em;
+}
+.sf-hud__boost span b,
+.sf-hud__shield span b { color: #ffe5b5; font-size: .68rem; }
+.sf-hud__boost strong,
+.sf-hud__shield strong { color: rgba(255, 224, 183, .78); font-size: .56rem; }
+.sf-hud__boost[data-state="ready"],
+.sf-hud__shield[data-state="ready"] { color: #ffe0ac; }
+.sf-hud__boost[data-state="ready"] strong,
+.sf-hud__shield[data-state="ready"] strong { color: #9ff1d8; }
+.sf-hud__boost[data-state="active"] strong { color: #ffae48; }
+.sf-hud__shield[data-state="active"] strong { color: #ffe39a; text-shadow: 0 0 8px rgba(255, 190, 70, .75); }
+.sf-hud__boost[data-state="low"] strong,
+.sf-hud__shield[data-state="low"] strong { color: #d95c48; }
+.sf-hud__shield[data-state="locked"] strong { color: #c99c73; }
+.sf-hud__jet[data-state="shield"] .sf-hud__jettrack i {
+  background: linear-gradient(90deg, #9b5a1d, #ffc34f 62%, #fff0ae);
+  filter: brightness(1.28);
+}
 .sf-hud__vitalrow {
   display: flex; justify-content: space-between; gap: 1rem;
   margin-top: .42rem;
@@ -508,6 +555,34 @@ html.sf-maximised body {
   text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
 }
 .sf-hud__vitalrow b { font-size: 1.15rem; color: #fff3e2; }
+
+/* THE HEAT LIMITER.
+   Amber while it is a number the player can act on, and it only
+   changes colour at the two points where the decision changes: hot
+   enough to be worth venting, and locked out. A gauge that reddens
+   continuously reads as decoration; one that changes twice reads as
+   a warning. */
+.sf-heat { display: inline-flex; align-items: center; gap: .46rem; }
+.sf-heat__track {
+  display: block; width: 5.2rem; height: .42rem; border-radius: .21rem;
+  background: rgba(255, 238, 220, .18);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .5);
+  overflow: hidden;
+}
+.sf-heat__track b {
+  display: block; height: 100%; border-radius: inherit; font-size: 0;
+  background: linear-gradient(90deg, #d8a441, #f6a13a 62%, #ff7a34);
+  transition: width .08s linear;
+}
+.sf-heat u {
+  text-decoration: none; font-variant-numeric: tabular-nums;
+  min-width: 3.4rem; color: rgba(255, 238, 220, .86);
+}
+.sf-heat.is-venting u { color: #8fe9d4; }
+.sf-heat.is-venting .sf-heat__track b { background: #4fd8bd; }
+.sf-heat.is-over u { color: #ff8b5e; animation: sf-heat-alarm .55s steps(2) infinite; }
+.sf-heat.is-over .sf-heat__track b { background: #ff6a2c; }
+@keyframes sf-heat-alarm { 0%, 100% { opacity: 1; } 50% { opacity: .38; } }
 
 .sf-hud__objective {
   position: absolute; left: 50%; top: 4.6rem; transform: translateX(-50%);
@@ -566,6 +641,483 @@ html.sf-maximised body {
   color: #ffd7a4; font-size: 1.1rem;
 }
 
+/* ============================================================
+   TOUCH CONTROLLER
+
+   An authored two-thumb layout: movement stays under the left thumb,
+   look owns the open right field, and every action remains in the
+   lower-right reach arc. Pointer Events are handled in touch.js; this
+   layer is presentation and hit-area geometry only.
+   ============================================================ */
+
+#sf-touch {
+  position: absolute;
+  inset: 0;
+  z-index: 32;
+  display: none;
+  overflow: hidden;
+  color: #f5dba5;
+  font-family: "Share Tech Mono", ui-monospace, Menlo, monospace;
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.sf-stage.sf-touch-enabled,
+.sf-stage.sf-touch-enabled #sf-canvas {
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+.sf-stage.sf-touch-enabled #sf-canvas { cursor: default; }
+.sf-stage.sf-touch-enabled #sf-touch { display: block; }
+
+.sf-touch__look {
+  position: absolute;
+  z-index: 1;
+  inset: max(3rem, env(safe-area-inset-top)) 0 0 32%;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.sf-touch__look span {
+  margin-bottom: 7.5rem;
+  color: rgba(255, 229, 181, .3);
+  font-size: .5rem;
+  letter-spacing: .18em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .95);
+  transition: opacity .16s ease;
+}
+
+.sf-touch__look.is-held span { opacity: 0; }
+
+.sf-touch__stick {
+  position: absolute;
+  z-index: 4;
+  left: max(.75rem, env(safe-area-inset-left));
+  bottom: max(.75rem, env(safe-area-inset-bottom));
+  width: clamp(7rem, 30vw, 8.5rem);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.sf-touch__stick::before,
+.sf-touch__stick::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.sf-touch__stick::before {
+  inset: 8%;
+  border: 1px solid rgba(226, 174, 74, .38);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(246, 213, 133, .1) 0 16%, transparent 17%),
+    conic-gradient(from 45deg,
+      rgba(216, 164, 65, .16), transparent 16%,
+      rgba(216, 164, 65, .16) 17%, transparent 33%,
+      rgba(216, 164, 65, .16) 34%, transparent 50%,
+      rgba(216, 164, 65, .16) 51%, transparent 67%,
+      rgba(216, 164, 65, .16) 68%, transparent 84%,
+      rgba(216, 164, 65, .16) 85%);
+  box-shadow:
+    inset 0 0 0 .42rem rgba(8, 5, 7, .18),
+    inset 0 0 1.8rem rgba(216, 164, 65, .08),
+    0 .7rem 1.5rem rgba(0, 0, 0, .34);
+  backdrop-filter: blur(3px);
+}
+
+.sf-touch__stick::after {
+  inset: 21%;
+  border: 1px dashed rgba(246, 213, 133, .19);
+  border-radius: 50%;
+}
+
+.sf-touch__stick-ring {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.sf-touch__stick-knob {
+  display: block;
+  width: 42%;
+  aspect-ratio: 1;
+  border: 1px solid rgba(255, 231, 177, .72);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 38% 32%, rgba(255, 240, 194, .34), transparent 28%),
+    linear-gradient(145deg, rgba(138, 34, 48, .86), rgba(46, 15, 19, .9));
+  box-shadow:
+    inset 0 0 0 3px rgba(216, 164, 65, .15),
+    0 0 0 3px rgba(8, 5, 7, .25),
+    0 .35rem .8rem rgba(0, 0, 0, .58);
+  will-change: transform;
+}
+
+.sf-touch__stick > span {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: .2rem;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: .28rem;
+  white-space: nowrap;
+  color: rgba(255, 226, 174, .74);
+  font-size: .48rem;
+  letter-spacing: .14em;
+  text-shadow: 0 1px 3px #000;
+  pointer-events: none;
+}
+
+.sf-touch__stick > span small {
+  color: rgba(255, 226, 174, .38);
+  font-size: .36rem;
+  letter-spacing: .06em;
+}
+
+.sf-touch__stick.is-held .sf-touch__stick-knob {
+  border-color: #ffe5a5;
+  box-shadow: 0 0 0 3px rgba(216, 164, 65, .24), 0 0 1.2rem rgba(216, 164, 65, .42);
+}
+
+.sf-touch__stick.is-sprinting::before {
+  border-color: rgba(255, 199, 80, .9);
+  box-shadow: inset 0 0 1.6rem rgba(255, 151, 45, .18), 0 0 1rem rgba(255, 164, 51, .22);
+}
+
+.sf-touch__stack,
+.sf-touch__strat {
+  position: absolute;
+  z-index: 5;
+  right: max(.75rem, env(safe-area-inset-right));
+  bottom: max(.75rem, env(safe-area-inset-bottom));
+  width: clamp(9.6rem, 42vw, 10.75rem);
+  pointer-events: none;
+}
+
+.sf-touch__stack {
+  display: flex;
+  flex-direction: column;
+  gap: .42rem;
+}
+
+.sf-touch__utility,
+.sf-touch__mobility,
+.sf-touch__actions {
+  display: grid;
+  gap: .32rem;
+  pointer-events: none;
+}
+
+.sf-touch__utility,
+.sf-touch__mobility { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sf-touch__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.sf-touch__button {
+  position: relative;
+  min-width: 0;
+  min-height: 3rem;
+  margin: 0;
+  padding: .2rem .08rem .18rem;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  place-items: center;
+  gap: .05rem;
+  overflow: hidden;
+  border: 1px solid rgba(222, 172, 77, .42);
+  border-radius: .25rem;
+  background:
+    linear-gradient(150deg, rgba(122, 71, 30, .28), transparent 42%),
+    rgba(12, 8, 10, .67);
+  box-shadow: inset 0 0 0 1px rgba(255, 235, 190, .035), 0 .35rem .8rem rgba(0, 0, 0, .3);
+  color: #f4d9a2;
+  font: inherit;
+  line-height: 1;
+  text-shadow: 0 1px 3px #000;
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
+  touch-action: none;
+  cursor: pointer;
+  transition: transform .08s ease, border-color .1s ease, background-color .1s ease;
+}
+
+.sf-touch__button::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(255, 226, 168, .06);
+  clip-path: polygon(0 0, 38% 0, 0 38%);
+  pointer-events: none;
+}
+
+.sf-touch__button b {
+  align-self: end;
+  color: #ffd982;
+  font-size: .95rem;
+  font-weight: 500;
+}
+
+.sf-touch__button span {
+  max-width: 100%;
+  overflow: hidden;
+  color: rgba(255, 235, 198, .88);
+  font-size: .45rem;
+  letter-spacing: .04em;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.sf-touch__button small {
+  color: rgba(255, 225, 176, .42);
+  font-size: .36rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.sf-touch__actions .sf-touch__button { min-height: 3.55rem; }
+
+.sf-touch__button--fire {
+  border-color: rgba(220, 88, 70, .72);
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 105, 61, .18), transparent 48%),
+    rgba(74, 17, 24, .82);
+}
+
+.sf-touch__button--fire b { color: #ff9a68; }
+
+.sf-touch__button.is-held,
+.sf-touch__button.is-tapped {
+  transform: scale(.94);
+  border-color: rgba(255, 225, 151, .98);
+  background-color: rgba(150, 91, 32, .68);
+  box-shadow: inset 0 0 1rem rgba(255, 196, 85, .2), 0 0 1rem rgba(216, 164, 65, .3);
+}
+
+.sf-touch__button:focus-visible {
+  outline: 2px solid #ffe09a;
+  outline-offset: 2px;
+}
+
+.sf-touch__button.is-tapped { animation: sf-touch-tap .2s ease-out 1; }
+
+.sf-touch__button[data-state="active"] {
+  border-color: rgba(255, 222, 139, .9);
+  box-shadow: inset 0 0 1rem rgba(255, 188, 64, .18), 0 0 .8rem rgba(255, 181, 53, .2);
+}
+
+.sf-touch__button[data-state="low"] {
+  border-color: rgba(155, 75, 60, .5);
+  color: rgba(228, 171, 143, .52);
+  filter: saturate(.65);
+}
+
+#sf-touch[data-dead="true"] :is(.sf-touch__button, .sf-touch__stick) {
+  opacity: .42;
+}
+
+@keyframes sf-touch-tap {
+  0% { filter: brightness(1.7); }
+  100% { filter: brightness(1); }
+}
+
+.sf-touch__strat {
+  display: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: auto repeat(3, 3rem);
+  gap: .3rem;
+  padding: .46rem;
+  border: 1px solid rgba(216, 164, 65, .28);
+  border-radius: .35rem;
+  background: rgba(8, 5, 7, .58);
+  box-shadow: 0 .8rem 2rem rgba(0, 0, 0, .42);
+  backdrop-filter: blur(5px);
+  pointer-events: auto;
+}
+
+.sf-touch__strat-title {
+  grid-column: 1 / -1;
+  color: rgba(255, 221, 157, .68);
+  font-size: .48rem;
+  letter-spacing: .16em;
+  text-align: center;
+}
+
+.sf-touch__dir { min-height: 3rem; }
+.sf-touch__dir small { display: none; }
+.sf-touch__dir--up { grid-column: 2; grid-row: 2; }
+.sf-touch__dir--left { grid-column: 1; grid-row: 3; }
+.sf-touch__dir--cancel { grid-column: 2; grid-row: 3; border-color: rgba(164, 73, 75, .62); }
+.sf-touch__dir--right { grid-column: 3; grid-row: 3; }
+.sf-touch__dir--down { grid-column: 2; grid-row: 4; }
+
+#sf-touch.is-strat-entry .sf-touch__stack { display: none; }
+#sf-touch.is-strat-entry .sf-touch__strat { display: grid; }
+#sf-touch.is-strat-entry .sf-touch__stick {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The embedded 16:9 surface is only 219px tall on a 390px phone,
+   which cannot hold a playable two-thumb controller. Touch mode gets
+   a portrait-capable viewport height while desktop keeps 16:9. */
+.saintfall-page .rb-standalone-surface.sf-touch-surface {
+  height: clamp(330px, 72svh, 680px);
+  min-height: 330px;
+  max-height: 680px;
+  aspect-ratio: auto;
+}
+
+.saintfall-page .rb-standalone-surface.sf-touch-surface .sf-stage {
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+/* Apply the mobile stage geometry before the game finishes loading,
+   too. Waiting for touch.js to boot would show a tiny 16:9 loader and
+   then jump to the playable height several seconds later. */
+@media (hover: none) and (pointer: coarse) {
+  .saintfall-page .rb-standalone-surface {
+    height: clamp(330px, 72svh, 680px);
+    min-height: 330px;
+    max-height: 680px;
+    aspect-ratio: auto;
+  }
+
+  .saintfall-page .rb-standalone-surface .sf-stage {
+    height: 100%;
+    aspect-ratio: auto;
+  }
+}
+
+.sf-stage.sf-touch-enabled.is-maxed {
+  width: 100dvw;
+  height: 100dvh;
+  min-height: 100dvh;
+}
+
+/* Keep essential telemetry in the upper-left readability band and
+   remove desktop-only prose from the thumb zones. */
+.sf-stage.sf-touch-enabled :is(.sf-hud__hint, .sf-hud__readout, .sf-hud__strat) {
+  display: none;
+}
+
+.sf-stage.sf-touch-enabled .sf-fs-btn {
+  top: max(.5rem, env(safe-area-inset-top));
+  right: max(.5rem, env(safe-area-inset-right));
+  width: 44px;
+  height: 44px;
+}
+
+.saintfall-page .sf-touch-surface > .rb-escape-btn {
+  left: max(.5rem, env(safe-area-inset-left));
+  top: max(.5rem, env(safe-area-inset-top));
+  width: 44px;
+  height: 44px;
+  z-index: 41;
+}
+
+.sf-stage.sf-touch-enabled .sf-hud__compass {
+  top: max(1rem, env(safe-area-inset-top));
+  width: min(21rem, 58%);
+}
+
+.sf-stage.sf-touch-enabled .sf-hud__objective {
+  top: max(3.45rem, calc(env(safe-area-inset-top) + 3.45rem));
+  width: min(22rem, 56%);
+}
+
+.sf-stage.sf-touch-enabled .sf-hud__objlabel {
+  overflow: hidden;
+  font-size: .59rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-stage.sf-touch-enabled .sf-hud__vitals {
+  left: max(.7rem, env(safe-area-inset-left));
+  top: max(5.75rem, calc(env(safe-area-inset-top) + 5.75rem));
+  bottom: auto;
+  width: min(12.2rem, 47%);
+  padding: .38rem .46rem .42rem;
+  border-left: 1px solid rgba(216, 164, 65, .25);
+  background: linear-gradient(90deg, rgba(8, 5, 7, .62), rgba(8, 5, 7, .08));
+}
+
+.sf-stage.sf-touch-enabled .sf-hud__hpwrap { height: 6px; }
+.sf-stage.sf-touch-enabled .sf-hud__jet { margin-top: .28rem; }
+.sf-stage.sf-touch-enabled .sf-hud__jetlabel { margin-bottom: .1rem; font-size: .48rem; }
+.sf-stage.sf-touch-enabled .sf-hud__jetlabel b { font-size: .5rem; }
+.sf-stage.sf-touch-enabled :is(.sf-hud__boost, .sf-hud__shield) {
+  margin-top: .18rem;
+  font-size: .44rem;
+}
+.sf-stage.sf-touch-enabled :is(.sf-hud__boost, .sf-hud__shield) span b { font-size: .54rem; }
+.sf-stage.sf-touch-enabled :is(.sf-hud__boost, .sf-hud__shield) strong { font-size: .46rem; }
+.sf-stage.sf-touch-enabled .sf-hud__vitalrow {
+  gap: .35rem;
+  margin-top: .24rem;
+  font-size: .54rem;
+}
+.sf-stage.sf-touch-enabled .sf-hud__vitalrow b { font-size: .72rem; }
+.sf-stage.sf-touch-enabled .sf-heat { gap: .22rem; }
+.sf-stage.sf-touch-enabled .sf-heat__track { width: min(3.4rem, 13vw); height: .3rem; }
+.sf-stage.sf-touch-enabled .sf-heat u { min-width: 2.6rem; }
+
+.sf-stage.sf-touch-strat :is(.sf-hud__objective, .sf-hud__vitals) { display: none; }
+.sf-stage.sf-touch-strat .sf-hud__code {
+  top: max(4.2rem, calc(env(safe-area-inset-top) + 4.2rem));
+  bottom: auto;
+}
+
+@media (orientation: landscape) and (max-height: 430px) {
+  .sf-touch__stick {
+    left: max(.45rem, env(safe-area-inset-left));
+    bottom: max(.4rem, env(safe-area-inset-bottom));
+    width: 7rem;
+  }
+
+  .sf-touch__stack,
+  .sf-touch__strat {
+    right: max(.45rem, env(safe-area-inset-right));
+    bottom: max(.4rem, env(safe-area-inset-bottom));
+    width: 10rem;
+  }
+
+  .sf-touch__stack { gap: .28rem; }
+  .sf-touch__utility,
+  .sf-touch__mobility,
+  .sf-touch__actions { gap: .24rem; }
+  .sf-touch__button { min-height: 2.75rem; }
+  .sf-touch__actions .sf-touch__button { min-height: 3.05rem; }
+  .sf-touch__strat {
+    grid-template-rows: auto repeat(3, 2.75rem);
+    gap: .24rem;
+  }
+  .sf-touch__dir { min-height: 2.75rem; }
+  .sf-touch__look span { margin-bottom: 3.8rem; }
+  .sf-stage.sf-touch-enabled .sf-hud__vitals { top: 5.15rem; }
+}
+
+@media (max-width: 360px) {
+  .sf-touch__stick { width: 7rem; }
+  .sf-touch__stack,
+  .sf-touch__strat { width: 9.45rem; }
+  .sf-touch__button span { font-size: .41rem; }
+  .sf-stage.sf-touch-enabled .sf-hud__vitals { width: 46%; }
+}
+
 @media (max-width: 720px) {
   .sf-hud__vitals { width: 48vw; left: 1rem; bottom: 1rem; }
   .sf-hud__strat { right: 1rem; bottom: 1rem; }
@@ -575,4 +1127,8 @@ html.sf-maximised body {
 
 @media (prefers-reduced-motion: reduce) {
   .sf-hud__jettrack i { transition: none; }
+  .sf-damage-number { will-change: auto; }
+  .sf-touch__look span,
+  .sf-touch__button { transition: none; }
+  .sf-touch__button.is-tapped { animation: none; }
 }

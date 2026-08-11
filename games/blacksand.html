@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#07090c" />
+  <title>BLACKSAND - Rainbot Network</title>
+  <link rel="manifest" href="../site.webmanifest" />
+  <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/blacksand.html" />
+  <meta name="description" content="A combined-arms multiplayer FPS. 1km of desert, five contested objectives, infantry, transports and helicopters. Conquest, in your browser." />
+  <meta property="og:title" content="BLACKSAND" />
+  <meta property="og:description" content="Combined-arms Conquest. Five objectives, ticket bleed, vehicles, and a 1km theatre of operations." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="BLACKSAND" />
+  <meta name="twitter:description" content="Combined-arms Conquest in your browser." />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2307090c'/%3E%3Cpath d='M14 66h72' stroke='%23c9a86a' stroke-width='6' stroke-linecap='round'/%3E%3Cpath d='M22 66l16-28 14 18 10-14 16 24' fill='none' stroke='%23e8c98a' stroke-width='5' stroke-linejoin='round' stroke-linecap='round'/%3E%3Ccircle cx='68' cy='28' r='9' fill='%23ffcf7a'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260806-network-polish-1" />
+  <link rel="stylesheet" href="../assets/css/blacksand.css?v=20260803-hud-2" />
+</head>
+<body class="rb-standalone-shell blacksand-shell">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page blacksand-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">BLACKSAND</h1>
+        <div class="game-page__sub">Combined-arms Conquest · 1km theatre · choose Max for full-screen play</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage rb-standalone-stage blacksand-stage">
+        <div class="canvas-wrap rb-standalone-surface blacksand-surface">
+          <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
+
+          <div id="bs-root">
+            <canvas id="bs-canvas" aria-label="BLACKSAND playfield"></canvas>
+            <div id="bs-hud"></div>
+            <div id="bs-touch"></div>
+            <div id="bs-overlay"></div>
+
+            <div id="bs-boot">
+              <a class="bs-boot__back" href="../games.html">&larr; Rainbot</a>
+              <div class="bs-boot__mark" aria-label="BLACKSAND loading">
+                <div class="bs-boot__ring"></div>
+                <div class="bs-boot__ring"></div>
+                <svg class="bs-boot__glyph" viewBox="0 0 120 120" role="img" aria-hidden="true">
+                  <circle class="bs-boot__reticle" cx="60" cy="60" r="34" />
+                  <path class="bs-boot__tick" d="M60 14v18M60 88v18M14 60h18M88 60h18" />
+                  <circle class="bs-boot__pip" cx="60" cy="60" r="3.5" />
+                </svg>
+              </div>
+              <h2 class="bs-boot__title">BLACKSAND</h2>
+              <p class="bs-boot__sub">Combined-arms Conquest</p>
+              <div class="bs-boot__bar"><div class="bs-boot__fill" id="bs-boot-fill"></div></div>
+              <div class="bs-boot__status" id="bs-boot-status">Standing by</div>
+              <div class="bs-boot__tip" id="bs-boot-tip"></div>
+              <div class="bs-boot__err" id="bs-boot-error"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <h3 class="game-side__title">DEPLOYMENT</h3>
+          <p style="margin:0;color:var(--ink-dim);font-size:13px;line-height:1.5;">
+            Pick a faction and a spawn on the deployment map, then hit <b>DEPLOY</b> to take the
+            mouse. Choose <b>Max</b> for full-screen play; <b>Esc</b> releases the mouse and pauses.
+          </p>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex;justify-content:center;"></div>
+
+        <details class="game-side__howto" open>
+          <summary>Controls</summary>
+          <ul>
+            <li><b>WASD</b> move · <b>Shift</b> sprint · <b>Ctrl</b> crouch · <b>Z</b> prone · <b>Space</b> jump</li>
+            <li><b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> aim down sights</li>
+            <li><b>R</b> reload · <b>1/2/3</b> weapons · <b>E</b> enter/exit vehicle</li>
+            <li><b>Q</b> spot the enemy you are looking at · <b>G</b> frag</li>
+            <li><b>M</b> theatre map · <b>Tab</b> scoreboard · <b>Esc</b> pause and options</li>
+            <li>On a phone: left stick moves, right half of the screen looks, thumb buttons do the rest.</li>
+          </ul>
+        </details>
+
+        <details class="game-side__howto">
+          <summary>Reading the HUD</summary>
+          <ul>
+            <li>The crosshair gap is the weapon's <b>real</b> cone. If it is wide, you will miss.</li>
+            <li>Red arcs point at whoever is shooting you, and stay pointed as you turn.</li>
+            <li>Diamonds in the world are objectives; hollow means terrain is in the way.</li>
+            <li>The bar under a ticket count is the bleed timer for that side.</li>
+          </ul>
+        </details>
+
+        <details class="game-side__howto">
+          <summary>Conquest</summary>
+          <ul>
+            <li>Five objectives. Stand inside one to capture it.</li>
+            <li>Whoever holds fewer points bleeds tickets. At zero, they lose.</li>
+            <li>Owning a point lets your side spawn on it.</li>
+            <li>Twenty minutes. Most tickets at the bell wins.</li>
+          </ul>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+      <a href="../legal/terms.html">Terms</a>
+    </div>
+    <div>&copy; 2026 Rainbot Network. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
+  <script src="../assets/js/main.js?v=20260806-network-polish-1"></script>
+  <script src="../assets/js/supabase-config.js?v=20260803-01"></script>
+  <script src="../assets/js/rb-multiplayer.js?v=20260803-01"></script>
+  <script src="../assets/js/blacksand/boot.js?v=20260804-foliage-1"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

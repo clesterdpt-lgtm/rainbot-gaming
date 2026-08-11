@@ -13,7 +13,15 @@ export const JETPACK_CONFIG = Object.freeze({
   maxFuel: 100,
   ignitionCost: 5,
   minIgnitionFuel: 10,
-  burnRate: 16,
+  /* 16 -> 10.7, which is 50% MORE GROUND per tank rather than 50%
+     more speed. The two are not the same request and only one of
+     them is what a traversal tool is for: raising `cruiseSpeed`
+     would cover more distance per second and still strand the
+     player in the same place, because the tank is what runs out.
+     Burning slower makes the same 95 usable units last 8.9s instead
+     of 5.93, and the gauge still reads 0-100 so nothing in the HUD
+     or the recharge maths has to know. */
+  burnRate: 10.7,
   rechargeDelay: 2.5,
   depletedDelay: 4.0,
   rechargeRate: 10,
@@ -745,7 +753,9 @@ export function buildJetpack(ctx, player) {
   function beginFrame(dt, playerState, inputState) {
     const dead = !!ctx.combat?.player?.dead;
     const blockedByAction = !!player.action || !!ctx.mission?.entry?.active
-      || (ctx.weapons?.carry?.reloading || 0) > 0;
+      || !!ctx.boost?.state?.active
+      || !!ctx.shield?.state?.active
+      || (ctx.weapons?.carry?.venting || 0) > 0;
     const rawRequested = !!inputState.jetpack;
     const requested = rawRequested && !playerState.free && !dead && !blockedByAction;
     state.requested = requested;
@@ -779,7 +789,8 @@ export function buildJetpack(ctx, player) {
     }
 
     state.recharging = false;
-    if (playerState.grounded && !state.inFlight && !rawRequested && !state.active) {
+    if (playerState.grounded && !state.inFlight && !rawRequested && !state.active
+      && !ctx.boost?.state?.active && !ctx.shield?.state?.requested) {
       state.rechargeDelayRemaining = Math.max(0, state.rechargeDelayRemaining - dt);
       if (state.cooldownRemaining <= 0 && state.rechargeDelayRemaining <= 0
         && state.fuel < config.maxFuel) {
@@ -837,6 +848,54 @@ export function buildJetpack(ctx, player) {
       state.rechargeDelayRemaining = Math.max(0, next.rechargeDelayRemaining);
     }
     return status(player.state);
+  }
+
+  /**
+   * Spend reliquary charge on a grounded auxiliary system.
+   *
+   * Charge belongs here even when the movement does not: writing fuel
+   * directly from the boost module would bypass recharge delay and the
+   * depleted-flight lockout, making the two jet abilities disagree
+   * about how much energy the same pack contains.
+   */
+  function spend(amount) {
+    const cost = Math.max(0, Number(amount) || 0);
+    if (cost <= 0) return true;
+    if (state.inFlight || state.active || state.cooldownRemaining > 0) return false;
+    if (state.fuel + 1e-6 < cost) return false;
+    state.fuel = Math.max(0, state.fuel - cost);
+    state.recharging = false;
+    state.rechargeDelayRemaining = Math.max(state.rechargeDelayRemaining, config.rechargeDelay);
+    if (state.fuel < config.minIgnitionFuel) state.exhausted = true;
+    return true;
+  }
+
+  /**
+   * Continuously draw from the reliquary charge for auxiliary gear.
+   * Unlike `spend`, this returns a partial final draw so a held device
+   * reaches a true zero instead of marooning a fraction of one frame's
+   * fuel in the pack. Recharge delay and depletion lockout still live
+   * here, alongside every other consumer of the same meter.
+   */
+  function drain(amount) {
+    const request = Math.max(0, Number(amount) || 0);
+    if (request <= 0) return 0;
+    if (state.inFlight || state.active || state.cooldownRemaining > 0) return 0;
+    const used = Math.min(state.fuel, request);
+    if (used <= 1e-6) return 0;
+    state.fuel = Math.max(0, state.fuel - used);
+    state.recharging = false;
+    state.rechargeDelayRemaining = Math.max(state.rechargeDelayRemaining, config.rechargeDelay);
+    if (state.fuel < config.minIgnitionFuel) state.exhausted = true;
+    if (state.fuel <= 1e-6) {
+      state.fuel = 0;
+      state.cooldownRemaining = Math.max(state.cooldownRemaining, config.depletedDelay);
+      state.rechargeDelayRemaining = Math.max(state.rechargeDelayRemaining, config.depletedDelay);
+      state.exhausted = true;
+      state.exhaustions += 1;
+      ctx.audio?.jetEmpty?.();
+    }
+    return used;
   }
 
   function spawnParticle(origin, direction, indexSeed) {
@@ -1186,6 +1245,8 @@ export function buildJetpack(ctx, player) {
     land,
     reset,
     setState,
+    spend,
+    drain,
     updateVisual,
     status,
   };

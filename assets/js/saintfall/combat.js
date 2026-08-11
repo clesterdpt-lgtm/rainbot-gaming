@@ -299,7 +299,14 @@ export function buildCombat(ctx) {
       // `head` means headshot, and only that. A weak-point hit rides
       // in the event below instead of being folded in here, so that
       // anything reading the kill feed can tell the two apart.
-      applyDamage(hit.inst, dmg, hit.head);
+      applyDamage(hit.inst, dmg, {
+        source: "shot",
+        head: hit.head,
+        weak: !!hit.weak,
+        x: hit.x,
+        y: hit.y,
+        z: hit.z,
+      });
       if (vfx && vfx.spark) {
         vfx.spark(hit.x, hit.y, hit.z, hit.weak ? 2.6 : (hit.head ? 1.9 : 1.2));
       }
@@ -318,15 +325,29 @@ export function buildCombat(ctx) {
     return null;
   }
 
-  function applyDamage(inst, dmg, head) {
-    if (inst.state === "death") return;
-    inst.health -= dmg;
+  /**
+   * The one authoritative enemy-damage path.
+   *
+   * Every source comes through here so feedback cannot claim a hit
+   * that health never received. The emitted world point is consumed by
+   * the HUD's projected damage numbers; callers may provide the exact
+   * impact, otherwise the number rises from the centre of the target.
+   */
+  function applyDamage(inst, dmg, detail = {}) {
+    if (!inst || inst.state === "death") return 0;
+    if (typeof detail === "boolean") detail = { head: detail };
+    const requested = Math.max(0, Number(dmg) || 0);
+    const before = Math.max(0, Number(inst.health) || 0);
+    const actual = Math.min(before, requested);
+    if (actual <= 0) return 0;
+    inst.health = Math.max(0, before - requested);
     inst.lastHurtAt = clock;
     // Being shot is how a garrison finds out where you are, whether
     // or not it could see you.
     inst.alerted = true;
     inst.suspicion = 1;
-    if (inst.health <= 0) {
+    const killed = inst.health <= 0;
+    if (killed) {
       enemies.kill(inst);
       inst.diedAt = clock;
       player.kills += 1;
@@ -344,11 +365,26 @@ export function buildCombat(ctx) {
         const box = HITBOX[inst.key] || HITBOX.thresher;
         vfx.spark(inst.x, inst.y + box.y1 * 0.45, inst.z, box.r * 2.4);
       }
-      bus.emit("kill", { key: inst.key, head, x: inst.x, z: inst.z });
+      bus.emit("kill", { key: inst.key, head: !!detail.head, x: inst.x, z: inst.z });
     } else if (enemies.play && clock - (inst.lastFlinchAt || -9) > 0.8) {
       inst.lastFlinchAt = clock;
       enemies.play(inst, "flinch", 0.08);
     }
+    const box = HITBOX[inst.key] || HITBOX.thresher;
+    bus.emit("enemyDamaged", {
+      key: inst.key,
+      damage: requested,
+      actual,
+      remaining: inst.health,
+      source: detail.source || "unknown",
+      head: !!detail.head,
+      weak: !!detail.weak,
+      killed,
+      x: Number.isFinite(detail.x) ? detail.x : inst.x,
+      y: Number.isFinite(detail.y) ? detail.y : inst.y + box.y1 * 0.62,
+      z: Number.isFinite(detail.z) ? detail.z : inst.z,
+    });
+    return actual;
   }
 
   /**
@@ -388,7 +424,12 @@ export function buildCombat(ctx) {
       if (Math.abs(rel) > arc * 0.5) continue;
       const inv = 1 / Math.max(1e-4, dist);
       if (collide.rayBlock(ps.x, eyeY, ps.z, dx * inv, 0, dz * inv, dist) < dist) continue;
-      applyDamage(inst, dmg, false);
+      applyDamage(inst, dmg, {
+        source: "melee",
+        x: inst.x,
+        y: inst.y + box.y1 * 0.55,
+        z: inst.z,
+      });
       hits += 1;
       if (vfx && vfx.spark) {
         vfx.spark(inst.x, inst.y + box.y1 * 0.55, inst.z, 1.5);
@@ -410,18 +451,28 @@ export function buildCombat(ctx) {
       if (inst.state === "death") continue;
       const d = Math.hypot(inst.x - x, inst.z - z, (inst.y - y) * 0.5);
       if (d > radius) continue;
-      applyDamage(inst, damage * (1 - (d / radius) * 0.65), false);
+      applyDamage(inst, damage * (1 - (d / radius) * 0.65), {
+        source: "explosion",
+        x: inst.x,
+        y: inst.y + (HITBOX[inst.key] || HITBOX.thresher).y1 * 0.55,
+        z: inst.z,
+      });
     }
     const pd = Math.hypot(
       ctx.player.state.x - x,
       ctx.player.state.y + 1.0 - y,
       ctx.player.state.z - z
     );
-    if (pd < radius) hurtPlayer(damage * 0.5 * (1 - pd / radius));
+    if (pd < radius) hurtPlayer(damage * 0.5 * (1 - pd / radius), {
+      source: "explosion",
+      x,
+      y,
+      z,
+    });
     if (vfx && vfx.blast) vfx.blast(x, y, z, radius);
   }
 
-  function hurtPlayer(amount) {
+  function hurtPlayer(amount, detail = {}) {
     /* Set only by the QA hook, and only by checks that are not about
        survival. Garrisoning the level properly made standing still in
        the Bloom lethal inside three seconds - which is the intended
@@ -429,16 +480,28 @@ export function buildCombat(ctx) {
        downstream that were testing stratagems and the mission state
        machine, because a dead player channels nothing. A test that
        fails for a reason it is not testing is worse than no test. */
-    if (player.invulnerable) return;
-    if (player.dead) return;
+    if (player.invulnerable) return 0;
+    if (player.dead) return 0;
+    if (ctx.shield?.tryBlock?.(amount, detail)) {
+      bus.emit("shieldBlock", {
+        amount,
+        source: detail.source || "attack",
+        x: detail.x,
+        y: detail.y,
+        z: detail.z,
+        hp: player.hp,
+      });
+      return 0;
+    }
     player.hp = Math.max(0, player.hp - amount);
     player.lastHitAt = clock;
-    bus.emit("playerHurt", { hp: player.hp });
+    bus.emit("playerHurt", { hp: player.hp, damage: amount, source: detail.source || "attack" });
     if (player.hp <= 0) {
       player.dead = true;
       player.respawnIn = 3.4;
       bus.emit("playerDied", {});
     }
+    return amount;
   }
 
   /* ============================================================
@@ -648,7 +711,13 @@ export function buildCombat(ctx) {
     // Machines miss; a charging xeno at arm's length does not.
     const accuracy = spec.burst ? 0.55 : 1;
     const landed = Math.random() < accuracy;
-    if (landed) hurtPlayer(spec.damage);
+    if (landed) hurtPlayer(spec.damage, {
+      source: spec.burst ? "enemy-fire" : "enemy-melee",
+      x: inst.x,
+      y: inst.y + (HITBOX[inst.key] || HITBOX.thresher).head,
+      z: inst.z,
+      enemy: inst.key,
+    });
 
     /* Return fire gets a bolt too. Not decoration for its own sake:
        with the player's shots now visible and the garrison's not, a
@@ -747,6 +816,7 @@ export function buildCombat(ctx) {
     player,
     bus,
     fire,
+    damageEnemy: applyDamage,
     meleeStrike,
     explode,
     hurtPlayer,

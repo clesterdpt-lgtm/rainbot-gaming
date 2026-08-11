@@ -104,9 +104,28 @@ export const PATTERNS = {
     recoil: { kick: 0.088, rise: 0.049, roll: 0.028, recover: 13 },
     spread: { hip: 0.055, ads: 0.008 },
     damage: 24,
-    mag: 45,
-    reserve: 225,
-    reloadTime: 2.35,
+    /* HEAT, NOT AMMUNITION.
+       The reliquary does not run out; it runs hot. Ammunition on a
+       two-kilometre map with no shops is a resource whose only real
+       effect is to send the player back to a resupply beacon, and
+       the beacon is a stratagem they have to spend anyway - so the
+       old magazine mostly punished being far from one.
+
+       The numbers are picked off the rate of fire so they mean
+       something in seconds rather than in rounds. At 9 rounds a
+       second, 0.0333 of heat per shot is 30 rounds and 3.3s of
+       held trigger before it locks - two thirds of the old 45-round
+       magazine's 5s, which is the point: the limiter has to bite
+       often enough to be a mechanic. */
+    heatPerShot: 0.0333,
+    coolDelay: 0.55,       // grace after the last shot before it cools
+    coolRate: 0.40,        // full to cold in 2.5s of not shooting
+    /* An overheat costs 0.55 + 1.9 = 2.45s, near enough the 2.35s
+       reload it replaces. A DELIBERATE vent costs 1.4s. Venting
+       early is therefore always cheaper than cooking the weapon,
+       which is the decision this mechanic exists to create. */
+    overheatReset: 0.25,
+    ventTime: 1.4,
     ornament: { skull: true, seal: true, plate: true },
   },
 
@@ -128,7 +147,10 @@ export const PATTERNS = {
     cadence: 0.52,
     recoil: { kick: 0.02, rise: 0.012, roll: 0.010, recover: 9 },
     spread: { hip: 0, ads: 0 },
-    mag: 0, reserve: 0, reloadTime: 0,
+    // A lance has no barrel to cook. Zero heat per swing, and the
+    // heat carried by the ranged rite still cools while it is out.
+    heatPerShot: 0, coolDelay: 0, coolRate: 0.40,
+    overheatReset: 0.25, ventTime: 1.4,
   },
 };
 
@@ -575,10 +597,18 @@ export function buildWeapons(ctx) {
     recoil: { back: 0, rise: 0, roll: 0 },
     // 0..1, set to 1 by a shot and decayed in update().
     flash: 0,
-    mag: 0,
-    reserve: 0,
-    ammoReady: false,
-    reloading: 0,
+    /* HEAT. `heat` is 0..1. `overheated` is the lockout that latches
+       at 1 and clears at `overheatReset` - without the latch the
+       weapon would stutter back to life for one shot the instant it
+       dipped below full and immediately re-lock, which reads as a
+       broken trigger rather than as a cooked barrel. `sinceShot`
+       drives the cooling grace, and `venting` is a deliberate purge.
+       One barrel, so this state is on the CARRY rather than the
+       record: swapping to the lance and back does not cool it. */
+    heat: 0,
+    overheated: false,
+    venting: 0,
+    sinceShot: 99,
     cooldown: 0,
     sway: new THREE.Vector2(),
     lastYaw: 0,
@@ -610,13 +640,11 @@ export function buildWeapons(ctx) {
     record.key = key;
     record.spec = spec;
     record.mode = spec.mode || key;
-    if (!carry.ammoReady) {
-      const ranged = PATTERNS.autogun;
-      carry.mag = ranged.mag || 0;
-      carry.reserve = ranged.reserve || 0;
-      carry.ammoReady = true;
-    }
-    carry.reloading = 0;
+    // Heat is NOT reset here. Switching to the lance and back was a
+    // free magazine under the old model too, and it would be a free
+    // vent under this one; the barrel does not care which rite the
+    // trooper has selected.
+    carry.venting = 0;
     carry.ads = 0;
     carry.mount = mount || carry.mount;
     if (!samePhysicalWeapon || !record.root.parent) {
@@ -637,9 +665,15 @@ export function buildWeapons(ctx) {
 
   function fire() {
     if (!carry.record || carry.cooldown > 0) return false;
-    if (carry.reloading > 0) return false;
-    if (carry.mag <= 0) { reload(); return false; }
-    carry.mag -= 1;
+    if (carry.venting > 0 || carry.overheated) return false;
+    const spec = carry.record.spec;
+    carry.heat = clamp01(carry.heat + (spec.heatPerShot || 0));
+    carry.sinceShot = 0;
+    // Latches AFTER the shot, so the round that fills the gauge
+    // still leaves the barrel. Stopping it a shot early makes the
+    // readout and the weapon disagree at exactly the moment the
+    // player is watching the readout.
+    if (carry.heat >= 1) carry.overheated = true;
     const r = carry.record.spec.recoil;
     carry.cooldown = 1 / carry.record.spec.rof;
     // Impulse, not a set: repeated shots accumulate, which is what
@@ -650,24 +684,30 @@ export function buildWeapons(ctx) {
     return true;
   }
 
-  function reload() {
-    if (!carry.record || carry.reloading > 0) return false;
-    const spec = carry.record.spec;
-    if (carry.mag >= spec.mag || carry.reserve <= 0) return false;
-    carry.reloading = spec.reloadTime;
+  /**
+   * Purge the heat deliberately. What R does now.
+   *
+   * Refused when the weapon is already cold, so a mashed key cannot
+   * be used as a free stutter-stop on the recoil, and allowed while
+   * OVERHEATED - venting is how you cut a lockout short, and being
+   * unable to touch the weapon you have just cooked would leave the
+   * player with a key that stops working exactly when they reach
+   * for it.
+   */
+  function vent() {
+    if (!carry.record || carry.venting > 0) return false;
+    if (carry.heat <= 0.001) return false;
+    const spec = carry.record.spec.polearm ? PATTERNS.autogun : carry.record.spec;
+    carry.venting = spec.ventTime || 1.4;
     return true;
   }
 
-  /** Refill from a resupply drop. */
+  /** A resupply drop cools the barrel and clears any lockout. */
   function resupply() {
     if (!carry.record) return;
-    // One physical reliquary charge feeds both rites.  Resupplying
-    // while the melee rite is selected must still refill its ranged
-    // mode rather than copying the melee mode's intentional zeros.
-    const spec = carry.record.spec.polearm ? PATTERNS.autogun : carry.record.spec;
-    carry.reserve = spec.reserve;
-    carry.mag = spec.mag;
-    carry.reloading = 0;
+    carry.heat = 0;
+    carry.overheated = false;
+    carry.venting = 0;
   }
 
   /**
@@ -757,14 +797,27 @@ export function buildWeapons(ctx) {
     const spec = carry.record.spec;
 
     carry.cooldown = Math.max(0, carry.cooldown - dt);
-    if (carry.reloading > 0) {
-      carry.reloading = Math.max(0, carry.reloading - dt);
-      if (carry.reloading === 0) {
-        const want = spec.mag - carry.mag;
-        const take = Math.min(want, carry.reserve);
-        carry.mag += take;
-        carry.reserve -= take;
-      }
+
+    /* HEAT. A vent drains the whole gauge over `ventTime` regardless
+       of how full it was, so an early vent is quick in practice and
+       a vent from nearly boiling is the full price - the rate is
+       what makes venting at 40% feel different from venting at 95%.
+       Otherwise the barrel cools on its own once the grace has
+       elapsed since the last shot. */
+    carry.sinceShot += dt;
+    const heatSpec = spec.polearm ? PATTERNS.autogun : spec;
+    if (carry.venting > 0) {
+      const ventTime = heatSpec.ventTime || 1.4;
+      carry.venting = Math.max(0, carry.venting - dt);
+      carry.heat = Math.max(0, carry.heat - dt / ventTime);
+      if (carry.venting === 0) carry.heat = 0;
+    } else if (carry.sinceShot >= (heatSpec.coolDelay || 0)) {
+      carry.heat = Math.max(0, carry.heat - (heatSpec.coolRate || 0) * dt);
+    }
+    // The lockout clears on the way DOWN, at a threshold well below
+    // full. See `carry.overheated`.
+    if (carry.overheated && carry.heat <= (heatSpec.overheatReset ?? 0.25)) {
+      carry.overheated = false;
     }
     const rec = spec.recoil.recover;
     carry.recoil.back = damp(carry.recoil.back, 0, rec, dt);
@@ -1010,21 +1063,21 @@ export function buildWeapons(ctx) {
     setMode,
     fire,
     flashMuzzle,
-    reload,
+    vent,
     resupply,
     spread,
     update,
     carry,
-    ammo() {
+    /** The limiter, for the HUD and for tests. */
+    heatState() {
       if (!carry.record) return null;
-      if (carry.record.spec.melee) {
-        return { mag: 0, reserve: 0, reloading: false, size: 0 };
-      }
       return {
-        mag: carry.mag,
-        reserve: carry.reserve,
-        reloading: carry.reloading > 0,
-        size: carry.record.spec.mag,
+        heat: Number(carry.heat.toFixed(4)),
+        overheated: carry.overheated,
+        venting: carry.venting > 0,
+        // A lance cannot cook, so the readout has nothing to say
+        // about the rite that is actually in the trooper's hands.
+        melee: !!carry.record.spec.melee,
       };
     },
     setAds(v) { carry.ads = clamp01(v); },

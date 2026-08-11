@@ -22,7 +22,7 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Share+Tech+Mono&display=swap" />
   <link rel="stylesheet" href="../assets/css/styles.css?v=20260806-network-polish-1" />
-  <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260810-6" />
+  <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260811-5" />
 </head>
 <body class="rb-standalone-shell saintfall-shell">
   <nav class="nav"><div id="nav-slot"></div></nav>
@@ -44,6 +44,7 @@
 
             <canvas id="sf-canvas" aria-label="SAINTFALL playfield"></canvas>
             <div id="sf-hud"></div>
+            <div id="sf-touch" data-touch-controls aria-label="SAINTFALL touch controls" aria-hidden="true"></div>
 
             <div id="sf-boot">
               <a class="sf-boot__back" href="../games.html">&larr; Rainbot</a>
@@ -85,7 +86,10 @@
           <ul>
             <li>Move with WASD, sprint with Shift, crouch with Ctrl, and vault with Space.</li>
             <li>Hold Shift + Space to use the jetpack; Ctrl descends while airborne.</li>
+            <li>Tap E while moving to boost-slide; forward boosts damage and deflect lighter enemies.</li>
+            <li>Hold X to project a frontal gold Aegis shield; it drains the same reliquary charge as the jetpack.</li>
             <li>Look with the mouse, fire with LMB, aim with RMB, and use Q for melee.</li>
+            <li>On touch, drag the left relic to move, swipe the right side to look, and use the labeled hold/tap controls.</li>
             <li>Use 1&ndash;5 to change the light, F to detach the camera, and H to hide the HUD.</li>
             <li>Reach the Vault-Cathedral and survive the districts between the drop and the nave.</li>
           </ul>
@@ -123,8 +127,9 @@
         <h3>Controls</h3>
         <ul>
           <li><b>WASD</b> move, <b>Shift</b> sprint, <b>Ctrl</b> crouch</li>
-          <li><b>Space</b> vault, hold <b>Shift+Space</b> for jetpack, <b>Ctrl</b> descends</li>
-          <li><b>Mouse</b> look (click to capture), <b>LMB</b> fire, <b>RMB</b> aim, <b>Q</b> melee</li>
+          <li><b>Space</b> vault, hold <b>Shift+Space</b> for jetpack, <b>E</b> boost slide, hold <b>X</b> to block, <b>Ctrl</b> descends</li>
+          <li><b>Mouse</b> look (click to capture), <b>LMB</b> fire, <b>RMB</b> aim, <b>Q</b> melee, <b>R</b> vent heat</li>
+          <li><b>Touch</b> left relic to move, swipe to look, and use the labeled hold/tap controls</li>
           <li><b>1&ndash;5</b> golden hour / high sun / vespers / night / ochre front</li>
           <li><b>F</b> detach the camera, <b>H</b> hide the HUD</li>
         </ul>
@@ -183,7 +188,7 @@
        main.js without it throws before the nav ever renders. -->
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260806-network-polish-1"></script>
-  <script src="../assets/js/saintfall/boot.js?v=20260810-6"></script>
+  <script src="../assets/js/saintfall/boot.js?v=20260811-5"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

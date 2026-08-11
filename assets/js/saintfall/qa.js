@@ -1223,9 +1223,12 @@ export function installQa(ctx, api) {
            bolt, no muzzle flash and no camera shove - so every probe
            that "fired" was photographing a gun that had not gone
            off. */
-        const before = api.weapons.carry.mag;
+        const before = api.weapons.carry.heat;
         api.shoot();
-        if (api.weapons.carry.mag !== before) fired += 1;
+        // Heat is what a discharge now spends. A shot that produced
+        // no bolt also produces no heat, which is the same signal
+        // the magazine used to give.
+        if (api.weapons.carry.heat !== before) fired += 1;
         api.step(1 / 30, false);
       }
       api.player.input.state.firing = held;
@@ -3075,6 +3078,17 @@ export function installQa(ctx, api) {
     },
     collideStats: () => api.collide.stats(),
     jetpackState: () => api.jetpack?.status(api.player.state) || null,
+    boostState: () => api.boost?.status() || null,
+    shieldState: () => api.shield?.status() || null,
+    touchState: () => api.touch?.status() || null,
+    triggerBoost(x = 0, y = -1) {
+      const triggered = !!api.boost?.trigger({ x, y });
+      return { triggered, state: api.boost?.status() || null };
+    },
+    resetBoost(full = true) {
+      api.boost?.reset(full);
+      return api.boost?.status() || null;
+    },
     /** Boundary setup only. End-to-end control tests should use real
      *  keyboard events so blur/key-release behavior remains covered. */
     setJetpackState: (next) => api.jetpack?.setState(next) || null,
@@ -3088,6 +3102,11 @@ export function installQa(ctx, api) {
       }
       return !!on;
     },
+    setShieldInput(on) {
+      if (on) api.player.input.keys.add("KeyX");
+      else api.player.input.keys.delete("KeyX");
+      return !!on;
+    },
 
     /* Direct handles, for ad-hoc probing from the console. */
     get render() { return api.render; },
@@ -3099,6 +3118,9 @@ export function installQa(ctx, api) {
     get enemies() { return api.enemies; },
     get weapons() { return api.weapons; },
     get jetpack() { return api.jetpack; },
+    get boost() { return api.boost; },
+    get shield() { return api.shield; },
+    get touch() { return api.touch; },
     get atmos() { return ctx.atmos; },
     get combat() { return api.combat; },
     get figure() { return api.player.figure; },

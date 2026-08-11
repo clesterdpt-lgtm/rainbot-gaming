@@ -1827,6 +1827,7 @@ function makeInput(canvas) {
     jump: false,
     jumpPressed: false,
     jetpack: false,
+    block: false,
     crouch: false,
     locked: false,
     injected: null,
@@ -1840,6 +1841,61 @@ function makeInput(canvas) {
        difference between an orbital lance and "CODE REJECTED". */
     events: [],
   };
+  const mouse = { firing: false, ads: false };
+  const touch = {
+    moveActive: false,
+    move: { x: 0, y: 0 },
+    sprint: false,
+    crouch: false,
+    jetpack: false,
+    block: false,
+    firing: false,
+    ads: false,
+  };
+
+  function setTouchMove(x, y, active = true) {
+    touch.moveActive = !!active;
+    touch.move.x = clamp(Number(x) || 0, -1, 1);
+    touch.move.y = clamp(Number(y) || 0, -1, 1);
+    touch.sprint = touch.moveActive && Math.hypot(touch.move.x, touch.move.y) >= 0.82;
+    return { x: touch.move.x, y: touch.move.y, sprint: touch.sprint };
+  }
+
+  function addTouchLook(x, y) {
+    state.look.x += Number(x) || 0;
+    state.look.y += Number(y) || 0;
+  }
+
+  function setTouchHold(name, held) {
+    if (!Object.prototype.hasOwnProperty.call(touch, name) || name === "move") return false;
+    touch[name] = !!held;
+    if (name === "firing") state.firing = touch.firing || mouse.firing;
+    if (name === "ads") state.ads = touch.ads || mouse.ads;
+    return touch[name];
+  }
+
+  function pressTouch(type, detail = {}) {
+    if (type === "jump") {
+      state.jumpPressed = true;
+      return true;
+    }
+    state.events.push({ type, ...detail });
+    return true;
+  }
+
+  function clearTouch() {
+    touch.moveActive = false;
+    touch.move.x = 0;
+    touch.move.y = 0;
+    touch.sprint = false;
+    touch.crouch = false;
+    touch.jetpack = false;
+    touch.block = false;
+    touch.firing = false;
+    touch.ads = false;
+    state.firing = mouse.firing;
+    state.ads = mouse.ads;
+  }
 
   /* Holding the stratagem key turns the direction pad into a code
      pad. WASD keeps driving movement, so the arrows do double duty:
@@ -1854,7 +1910,7 @@ function makeInput(canvas) {
     if (down) keys.add(k); else keys.delete(k);
     if (["KeyW", "KeyA", "KeyS", "KeyD", "Space", "ShiftLeft", "ShiftRight", "ControlLeft",
       "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyR",
-      "KeyQ", "KeyV"].includes(k)) e.preventDefault();
+      "KeyQ", "KeyV", "KeyE", "KeyX"].includes(k)) e.preventDefault();
     if (!down || held) return;                 // key REPEATS are not presses
     /* MELEE IS AN ACTION, NOT A MODE.
        This was KeyX = "swap", which toggled the lance between its
@@ -1871,7 +1927,8 @@ function makeInput(canvas) {
        reach for. */
     if (k === "KeyQ") state.events.push({ type: "melee" });
     else if (k === "KeyV") state.events.push({ type: "stratOpen" });
-    else if (k === "KeyR") state.events.push({ type: "reload" });
+    else if (k === "KeyR") state.events.push({ type: "vent" });
+    else if (k === "KeyE") state.events.push({ type: "boost" });
     else if (k === "Space") state.jumpPressed = true;
     else if (DIRS[k] && keys.has("KeyV")) {
       state.events.push({ type: "dir", dir: DIRS[k] });
@@ -1883,6 +1940,10 @@ function makeInput(canvas) {
     keys.clear();
     state.jumpPressed = false;
     state.jetpack = false;
+    clearTouch();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) clearTouch();
   });
 
   canvas.addEventListener("click", () => {
@@ -1898,17 +1959,19 @@ function makeInput(canvas) {
   });
   window.addEventListener("mousedown", (e) => {
     if (!state.locked) return;
-    if (e.button === 0) state.firing = true;
-    if (e.button === 2) state.ads = true;
+    if (e.button === 0) { mouse.firing = true; state.firing = true; }
+    if (e.button === 2) { mouse.ads = true; state.ads = true; }
   });
   window.addEventListener("mouseup", (e) => {
-    if (e.button === 0) state.firing = false;
-    if (e.button === 2) state.ads = false;
+    if (e.button === 0) { mouse.firing = false; state.firing = touch.firing; }
+    if (e.button === 2) { mouse.ads = false; state.ads = touch.ads; }
   });
   window.addEventListener("contextmenu", (e) => {
     if (state.locked) e.preventDefault();
   });
   window.addEventListener("blur", () => {
+    mouse.firing = false;
+    mouse.ads = false;
     state.firing = false;
     state.ads = false;
   });
@@ -1920,6 +1983,9 @@ function makeInput(canvas) {
       if (state.injected) {
         state.move.x = state.injected.x;
         state.move.y = state.injected.y;
+      } else if (touch.moveActive) {
+        state.move.x = touch.move.x;
+        state.move.y = touch.move.y;
       } else {
         state.move.x = (keys.has("KeyD") || keys.has("ArrowRight") ? 1 : 0)
           - (keys.has("KeyA") || keys.has("ArrowLeft") ? 1 : 0);
@@ -1929,10 +1995,12 @@ function makeInput(canvas) {
       // Arrow keys drive the code pad while the stratagem key is
       // held, so they must not also walk the trooper.
       if (keys.has("KeyV")) { state.move.x = 0; state.move.y = 0; }
-      state.sprint = keys.has("ShiftLeft") || keys.has("ShiftRight");
-      state.crouch = keys.has("ControlLeft") || keys.has("KeyC");
+      state.sprint = keys.has("ShiftLeft") || keys.has("ShiftRight") || touch.sprint;
+      state.crouch = keys.has("ControlLeft") || keys.has("KeyC") || touch.crouch;
       state.jump = keys.has("Space");
-      state.jetpack = state.jump && state.sprint;
+      state.jetpack = (state.jump && (keys.has("ShiftLeft") || keys.has("ShiftRight")))
+        || touch.jetpack;
+      state.block = keys.has("KeyX") || touch.block;
       const lx = state.look.x;
       const ly = state.look.y;
       const jumpPressed = state.jumpPressed;
@@ -1948,6 +2016,12 @@ function makeInput(canvas) {
       return out;
     },
     inject(x, y) { state.injected = (x === null ? null : { x, y }); },
+    touch,
+    setTouchMove,
+    addTouchLook,
+    setTouchHold,
+    pressTouch,
+    clearTouch,
   };
 }
 
@@ -2512,6 +2586,8 @@ export async function createPlayer(ctx, canvas) {
        foot correctly; it was never being asked to. */
     for (const leg of legs) leg.planted = false;
     ctx.jetpack?.reset?.(true);
+    ctx.boost?.reset?.(true);
+    ctx.shield?.reset?.(true);
   }
   spawn(state.x, state.z);
 
@@ -2537,6 +2613,7 @@ export async function createPlayer(ctx, canvas) {
        are body state; only the camera belongs to the camera. */
     const gait = readGaitSpec();
     const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
+    const boostPose = clamp01(ctx.boost?.state?.pose || 0);
     const groundedMotion = 1 - jetPose;
     const movingWeight = clamp01(state.speed / WALK) * groundedMotion;
     const walkLeanN = clamp01(state.speed / WALK) * groundedMotion;
@@ -2566,7 +2643,8 @@ export async function createPlayer(ctx, canvas) {
        The legs absorb it: their IK targets are world-space foot
        plants, so tipping the hips forward is a reach they solve
        against rather than a pose that drags the feet. */
-    const bodyLean = (0.045 * walkLeanN + 0.155 * sprintLeanN) * groundedMotion;
+    const bodyLean = (0.045 * walkLeanN + 0.155 * sprintLeanN) * groundedMotion
+      + boostPose * 0.075;
     const travelLean = (0.055 * walkLeanN + 0.025 * sprintLeanN) * groundedMotion
       + 0.37 * jetPose;
     // Hip height is the leg, and the root sits at the sole.
@@ -2638,7 +2716,8 @@ export async function createPlayer(ctx, canvas) {
     figure.root.position.set(
       state.x,
       state.y - (gait.bodyDrop + contactCompression - passingRise) * groundedMotion
-        - (ctx.jetpack?.state?.landPulse || 0) * 0.07,
+        - (ctx.jetpack?.state?.landPulse || 0) * 0.07
+        - boostPose * 0.13,
       state.z
     );
     /* YXZ so the pitch is taken about the body's OWN right, after the
@@ -2654,8 +2733,9 @@ export async function createPlayer(ctx, canvas) {
     // frame - posing them here would be overwritten, and posing
     // them instead of solving them is what made the hands miss the
     // grips by 15cm in every frame.
-    const crouchDrop = input.state.crouch && state.grounded && !ctx.jetpack?.state?.inFlight
-      ? 0.34 : 0;
+    const crouchDrop = state.grounded && !ctx.jetpack?.state?.inFlight
+      ? Math.max(input.state.crouch ? 0.34 : 0, boostPose * 0.30)
+      : 0;
     const baseScale = figure.baseScale || { x: 1, y: 1, z: 1 };
     figure.root.scale.set(
       baseScale.x,
@@ -2825,8 +2905,13 @@ export async function createPlayer(ctx, canvas) {
     state.clock += dt;
     sampleAction(dt);
     const { lx, ly, jumpPressed } = input.poll();
+    const shieldState = ctx.shield?.beginFrame?.(dt, state, input.state) || null;
+    const shieldMode = !!shieldState?.active;
     const jetState = ctx.jetpack?.beginFrame?.(dt, state, input.state) || null;
     const flightMode = !!jetState?.inFlight;
+    const boostState = ctx.boost?.beginFrame?.(dt, state, input.state) || null;
+    const boostMode = !!boostState?.active && !flightMode;
+    if (boostState?.justEnded) state.speed = Math.min(state.speed, SPRINT);
 
     /* The figure is hidden in free-camera mode by default, because
        beauty shots of the landscape should not have a trooper
@@ -2915,31 +3000,44 @@ export async function createPlayer(ctx, canvas) {
        main.js already refuses ADS for a melee weapon and in flight,
        and duplicating those conditions here is how the camera ends up
        zoomed while the weapon is not raised. */
-    const sightWant = clamp01(ctx.weapons?.carry?.ads || 0);
+    const sightWant = boostMode || shieldMode ? 0 : clamp01(ctx.weapons?.carry?.ads || 0);
     // Up faster than down: raising sights is a decision, lowering
     // them is a release.
     state.sighted = damp(state.sighted, sightWant,
       sightWant > state.sighted ? 11 : 8, dt);
 
-    const target = flightMode
-      ? (jetState.active ? ctx.jetpack.config.cruiseSpeed : ctx.jetpack.config.glideSpeed)
-      : (input.state.crouch ? CROUCH : (input.state.sprint ? SPRINT : WALK));
+    const target = boostMode
+      ? boostState.speed
+      : shieldMode
+        ? ctx.shield.config.moveSpeed
+        : flightMode
+          ? (jetState.active ? ctx.jetpack.config.cruiseSpeed : ctx.jetpack.config.glideSpeed)
+          : (input.state.crouch ? CROUCH : (input.state.sprint ? SPRINT : WALK));
     /* Sighted movement is a walk at best. The multiplier is applied to
        the TARGET rather than gating sprint, so it also removes the
        sprint option by arithmetic: 8.6 * 0.46 is below the 4.4 walk,
        and a player holding shift and the right button simply moves at
        aiming pace instead of getting a second speed the animation
        never expected. */
-    const sighted = flightMode ? 0 : state.sighted;
-    const wanted = mag > 0.01 ? target * lerp(1, ADS_SPEED, sighted) : 0;
-    if (flightMode) {
+    const sighted = flightMode || shieldMode ? 0 : state.sighted;
+    /* Digital keys still arrive at magnitude 1 (or sqrt(2) on a
+       diagonal), while the touch stick deliberately carries values
+       between zero and one. Preserve the keyboard pace, but let a
+       half-tilted thumbstick produce a half-speed walk instead of
+       snapping straight to full speed. Boost owns its own envelope. */
+    const inputAmount = boostMode ? 1 : clamp01(mag);
+    const wanted = (mag > 0.01 || boostMode)
+      ? target * lerp(1, ADS_SPEED, sighted) * inputAmount : 0;
+    if (boostMode) {
+      state.speed = wanted;
+    } else if (flightMode) {
       const rate = wanted > state.speed
         ? ctx.jetpack.config.acceleration
         : ctx.jetpack.config.glideDrag;
       state.speed += clamp(wanted - state.speed, -rate * dt, rate * dt);
     } else {
       const speedResponse = wanted > state.speed
-        ? (input.state.sprint ? 3.2 : 4.2)
+        ? (shieldMode ? 7.5 : (input.state.sprint ? 3.2 : 4.2))
         : 5.4;
       state.speed = damp(state.speed, wanted, speedResponse, dt);
     }
@@ -2963,7 +3061,7 @@ export async function createPlayer(ctx, canvas) {
        photograph the low-ready pose in every aimed shot. Commitment
        should follow the state of the game, not the state of a
        button. */
-    const committing = !state.free && !flightMode && (
+    const committing = !state.free && !flightMode && !boostMode && !shieldMode && (
       input.state.firing
       || input.state.ads
       || (ctx.weapons?.carry?.ads || 0) > 0.5
@@ -2992,7 +3090,11 @@ export async function createPlayer(ctx, canvas) {
        was actually about. */
     const yawBefore = state.yaw;
     let wantYaw = state.yaw;
-    if (mag > 0.01) {
+    if (boostMode) {
+      wantYaw = boostState.yaw;
+    } else if (shieldMode) {
+      wantYaw = state.camYaw;
+    } else if (mag > 0.01) {
       /* Both input axes are SCREEN axes and both need negating.
 
          `move.y` is -1 for W, the way a stick reports forward, but
@@ -3016,11 +3118,13 @@ export async function createPlayer(ctx, canvas) {
         wantYaw += Math.sign(angleDelta(wantYaw, aimYaw)) * over * state.aimCommit;
       }
     }
-    const turnResponse = lerp(
-      lerp(10.0, 6.4, clamp01(state.speed / SPRINT)),
-      12.0,
-      state.aimCommit
-    );
+    const turnResponse = boostMode ? 24
+      : shieldMode ? 20
+        : lerp(
+          lerp(10.0, 6.4, clamp01(state.speed / SPRINT)),
+          12.0,
+          state.aimCommit
+        );
     state.yaw = dampAngle(state.yaw, wantYaw, turnResponse, dt);
     /* Measure the turn rate that ACTUALLY happened rather than the
        one that was asked for; the damping above means those differ
@@ -3041,10 +3145,14 @@ export async function createPlayer(ctx, canvas) {
        second even though the real segment crosses the solid. */
     let flightWantX = state.x;
     let flightWantZ = state.z;
-    if (mag > 0.01) {
+    const motionStartX = state.x;
+    const motionStartZ = state.z;
+    if (mag > 0.01 || boostMode) {
       const step = state.speed * dt;
-      const nx = state.x + Math.sin(state.yaw) * step;
-      const nz = state.z + Math.cos(state.yaw) * step;
+      const moveYaw = boostMode ? boostState.yaw
+        : shieldMode ? state.camYaw + Math.atan2(-mx, -mz) : state.yaw;
+      const nx = state.x + Math.sin(moveYaw) * step;
+      const nz = state.z + Math.cos(moveYaw) * step;
 
       if (flightMode) {
         flightWantX = clamp(nx, -1010, 1010);
@@ -3094,16 +3202,17 @@ export async function createPlayer(ctx, canvas) {
       const NEAR = 0.45;
       const SLOPE = 1.7;
       const MAX_STEP_UP = 1.05;
-      const here = groundY(state.x, state.z);
-      const walkable = (dx, dz) => {
+      const walkableFrom = (fromX, fromZ, dx, dz) => {
         const len = Math.hypot(dx, dz);
         if (len < 1e-6) return true;
         const ux = dx / len;
         const uz = dz / len;
-        if (groundY(state.x + ux * NEAR, state.z + uz * NEAR) - here > MAX_STEP_UP) return false;
-        const rise = groundY(state.x + ux * LOOK, state.z + uz * LOOK) - here;
+        const here = groundY(fromX, fromZ);
+        if (groundY(fromX + ux * NEAR, fromZ + uz * NEAR) - here > MAX_STEP_UP) return false;
+        const rise = groundY(fromX + ux * LOOK, fromZ + uz * LOOK) - here;
         return rise / LOOK < SLOPE;
       };
+      const walkable = (dx, dz) => walkableFrom(state.x, state.z, dx, dz);
       let mx2 = nx;
       let mz2 = nz;
       if (!walkable(nx - state.x, nz - state.z)) {
@@ -3146,32 +3255,64 @@ export async function createPlayer(ctx, canvas) {
              candidate. Supplying the body's damped `state.y` here
              let a downhill step enter an obstacle before the body
              settled, after which reverse and strafe all read blocked. */
-          const out = ctx.collide.slide(
-            state.x, state.z, px, pz,
-            state.grounded ? null : state.y,
-            undefined,
-            state.grounded
-              ? (tx, tz) => walkable(tx - state.x, tz - state.z)
-              : null
-          );
-          px = out[0];
-          pz = out[1];
+          if (boostMode && state.grounded) {
+            /* Boost frames can cover multiple collision cells when a
+               tab is throttled. Sweep them in capsule-sized grounded
+               steps so a 100ms frame cannot hop a one-metre pillar. */
+            const dx = px - state.x;
+            const dz = pz - state.z;
+            const count = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.20));
+            const sx = dx / count;
+            const sz = dz / count;
+            let bx = state.x;
+            let bz = state.z;
+            for (let i = 0; i < count; i += 1) {
+              const out = ctx.collide.slide(
+                bx, bz, bx + sx, bz + sz, null, undefined,
+                (tx, tz) => walkableFrom(bx, bz, tx - bx, tz - bz)
+              );
+              const moved = Math.hypot(out[0] - bx, out[1] - bz);
+              bx = out[0];
+              bz = out[1];
+              if (moved < 1e-5) break;
+            }
+            px = bx;
+            pz = bz;
+          } else {
+            const out = ctx.collide.slide(
+              state.x, state.z, px, pz,
+              state.grounded ? null : state.y,
+              undefined,
+              state.grounded
+                ? (tx, tz) => walkable(tx - state.x, tz - state.z)
+                : null
+            );
+            px = out[0];
+            pz = out[1];
+          }
         }
         // Stride is measured on the distance ACTUALLY travelled, not
         // the distance asked for. Walking into a wall must not keep
         // driving the gait, or the legs stroll on the spot.
         const travelled = Math.hypot(px - state.x, pz - state.z);
-        state.stride += travelled;
-        state.gait += travelled / Math.max(0.55, readGaitSpec().strideLen);
+        /* A boost is a slide, not a six-metre sprint compressed into
+           four frames. Keep the planted-foot clock nearly still while
+           the crouched body skims over it; normal gait resumes on exit. */
+        const gaitTravel = boostMode ? travelled * 0.08 : travelled;
+        state.stride += gaitTravel;
+        state.gait += gaitTravel / Math.max(0.55, readGaitSpec().strideLen);
         state.x = px;
         state.z = pz;
       }
       }
     }
+    if (boostMode) {
+      ctx.boost?.noteMotion?.(motionStartX, motionStartZ, state.x, state.z, dt);
+    }
 
     /* --- vertical --- */
     const gy = groundY(flightMode ? flightWantX : state.x, flightMode ? flightWantZ : state.z);
-    if (!flightMode && state.grounded && jumpPressed && !input.state.jetpack) {
+    if (!flightMode && !shieldMode && state.grounded && jumpPressed && !input.state.jetpack) {
       state.vy = 6.4;
       state.grounded = false;
     }
@@ -3456,7 +3597,8 @@ export async function createPlayer(ctx, canvas) {
        - scaling it by the zoom would make a shot fired down the
        sights shove the view less than the same shot from the hip. */
     const targetFov = lerp(lerp(62, 69, jetPose), ADS_FOV, state.sighted)
-      + state.punch * 1.6;
+      + state.punch * 1.6
+      + clamp01(ctx.boost?.state?.pose || 0) * 4.5;
     if (Math.abs(camera.fov - targetFov) > 0.01) {
       camera.fov = targetFov;
       camera.updateProjectionMatrix();

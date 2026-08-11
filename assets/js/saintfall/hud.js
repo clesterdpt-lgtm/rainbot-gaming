@@ -28,12 +28,15 @@ export function buildHud(ctx, host) {
     <div class="sf-hud__banner" id="sf-banner"></div>
     <div class="sf-hud__reticle" id="sf-reticle"><i></i><i></i><i></i><i></i></div>
     <div class="sf-hud__hurt" id="sf-hurt"></div>
+    <div class="sf-hud__numbers" id="sf-damage-numbers" aria-hidden="true"></div>
     <div class="sf-hud__vitals" id="sf-vitals">
       <div class="sf-hud__hpwrap"><div class="sf-hud__hp" id="sf-hp"></div></div>
-      <div class="sf-hud__jet" id="sf-jet" role="progressbar" aria-label="Jetpack lift charge"
+      <div class="sf-hud__jet" id="sf-jet" role="progressbar" aria-label="Reliquary charge"
         aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
-        <div class="sf-hud__jetlabel"><span>LIFT CHARGE</span><b id="sf-jet-value">100%</b></div>
+        <div class="sf-hud__jetlabel"><span>RELIQUARY CHARGE</span><b id="sf-jet-value">100%</b></div>
         <div class="sf-hud__jettrack"><i id="sf-jet-fill"></i></div>
+        <div class="sf-hud__boost" id="sf-boost"><span><b>E</b> BOOST SLIDE</span><strong id="sf-boost-value">READY</strong></div>
+        <div class="sf-hud__shield" id="sf-shield"><span><b>X</b> AEGIS BLOCK</span><strong id="sf-shield-value">READY</strong></div>
       </div>
       <div class="sf-hud__vitalrow">
         <span id="sf-ammo">&mdash;</span>
@@ -44,9 +47,9 @@ export function buildHud(ctx, host) {
     <div class="sf-hud__code" id="sf-code"></div>
     <div class="sf-hud__hint" id="sf-hint">
       <b>WASD</b> move &middot; <b>Shift</b> sprint &middot; <b>Ctrl</b> crouch &middot;
-      <b>Space</b> vault &middot; <b>Shift+Space</b> jetpack &middot; <b>Ctrl</b> descend &middot;
+      <b>Space</b> vault &middot; <b>Shift+Space</b> jetpack &middot; <b>E</b> boost slide &middot; <b>X</b> hold shield &middot; <b>Ctrl</b> descend &middot;
       <b>LMB</b> fire &middot; <b>RMB</b> aim &middot;
-      <b>Q</b> lance rite &middot; <b>R</b> reload &middot; <b>V</b>+arrows stratagem &middot;
+      <b>Q</b> lance rite &middot; <b>R</b> vent heat &middot; <b>V</b>+arrows stratagem &middot;
       <b>M</b> mute &middot; <b>K</b> show colliders &middot; <b>1&ndash;5</b> time of day &middot; <b>F</b> free camera
     </div>
   `;
@@ -64,12 +67,48 @@ export function buildHud(ctx, host) {
   const jetEl = el.querySelector("#sf-jet");
   const jetFillEl = el.querySelector("#sf-jet-fill");
   const jetValueEl = el.querySelector("#sf-jet-value");
+  const boostEl = el.querySelector("#sf-boost");
+  const boostValueEl = el.querySelector("#sf-boost-value");
+  const shieldEl = el.querySelector("#sf-shield");
+  const shieldValueEl = el.querySelector("#sf-shield-value");
   const ammoEl = el.querySelector("#sf-ammo");
   const reinfEl = el.querySelector("#sf-reinf");
   const stratEl = el.querySelector("#sf-strat");
   const codeEl = el.querySelector("#sf-code");
   const hurtEl = el.querySelector("#sf-hurt");
   const reticleEl = el.querySelector("#sf-reticle");
+  const damageLayerEl = el.querySelector("#sf-damage-numbers");
+
+  /* Damage numbers subscribe to the health mutation itself, not to
+     weapon hit effects. If a number appears, `combat.applyDamage`
+     already changed the target's health in that same call. */
+  const damageNumbers = [];
+  const damageWorld = new ctx.THREE.Vector3();
+  let damageSequence = 0;
+  ctx.combat?.bus?.on("enemyDamaged", (event) => {
+    if (!event || !Number.isFinite(event.damage)) return;
+    while (damageNumbers.length >= 32) {
+      damageNumbers.shift().node.remove();
+    }
+    const node = document.createElement("span");
+    node.className = "sf-damage-number";
+    if (event.head) node.classList.add("is-head");
+    if (event.weak) node.classList.add("is-weak");
+    if (event.killed) node.classList.add("is-kill");
+    if (event.source === "boost") node.classList.add("is-boost");
+    node.textContent = `${event.weak ? "✦" : ""}${Math.max(1, Math.round(event.damage))}`;
+    damageLayerEl.appendChild(node);
+    damageSequence += 1;
+    damageNumbers.push({
+      node,
+      x: event.x,
+      y: event.y,
+      z: event.z,
+      age: 0,
+      life: event.killed ? 1.05 : 0.86,
+      drift: ((damageSequence % 5) - 2) * 7,
+    });
+  });
 
   // One node per stratagem, built once. Rebuilding this markup every
   // frame is the classic way to make a HUD cost more than the scene.
@@ -165,6 +204,31 @@ export function buildHud(ctx, host) {
 
       readoutEl.textContent = `${Math.round(p.x)} , ${Math.round(p.z)}   ·   ${Math.round(p.y)}m`;
 
+      /* Project world impacts after the camera has settled for this
+         frame. DOM text stays pin-sharp while its anchor follows the
+         creature and naturally disappears behind the camera. */
+      const hudW = el.clientWidth || 1;
+      const hudH = el.clientHeight || 1;
+      for (let i = damageNumbers.length - 1; i >= 0; i -= 1) {
+        const item = damageNumbers[i];
+        item.age += dt;
+        if (item.age >= item.life) {
+          item.node.remove();
+          damageNumbers.splice(i, 1);
+          continue;
+        }
+        damageWorld.set(item.x, item.y + item.age * 0.52, item.z).project(camera);
+        const visible = damageWorld.z > -1 && damageWorld.z < 1
+          && Math.abs(damageWorld.x) < 1.14 && Math.abs(damageWorld.y) < 1.14;
+        item.node.style.display = visible ? "" : "none";
+        if (!visible) continue;
+        const t = clamp01(item.age / item.life);
+        item.node.style.left = `${(damageWorld.x * 0.5 + 0.5) * hudW}px`;
+        item.node.style.top = `${(-damageWorld.y * 0.5 + 0.5) * hudH}px`;
+        item.node.style.opacity = String(clamp01((1 - t) * 1.55));
+        item.node.style.transform = `translate(-50%, -50%) translate(${item.drift * t}px, ${-30 * t}px) scale(${1 + (1 - t) * 0.18})`;
+      }
+
       const jet = ctx.jetpack?.status?.(player.state);
       if (jet) {
         const fuelN = clamp01(jet.fuel / jet.maxFuel);
@@ -180,6 +244,33 @@ export function buildHud(ctx, host) {
         jetEl.dataset.state = fuelN <= 0.18 ? "crit" : jet.mode;
         jetEl.setAttribute("aria-valuenow", String(value));
         jetEl.setAttribute("aria-valuetext", `${value} percent, ${jet.mode}`);
+      }
+      const boost = ctx.boost?.status?.();
+      if (boost) {
+        const lowCharge = jet && jet.fuel + 1e-6 < boost.fuelCost;
+        boostEl.dataset.state = boost.active ? "active"
+          : boost.cooldownRemaining > 0 ? "cooldown"
+            : lowCharge ? "low" : "ready";
+        boostValueEl.textContent = boost.active ? (boost.attack ? "IMPACT" : "SLIDE")
+          : boost.cooldownRemaining > 0 ? `${boost.cooldownRemaining.toFixed(1)}S`
+            : lowCharge ? "LOW CHARGE" : "READY";
+      }
+      const shield = ctx.shield?.status?.();
+      if (shield) {
+        const lowCharge = !jet || jet.fuel <= 1e-6;
+        const release = shield.requested && shield.needsRelease;
+        const locked = shield.requested && !shield.active && !lowCharge && !release;
+        shieldEl.dataset.state = shield.active ? "active"
+          : lowCharge ? "low" : locked ? "locked" : "ready";
+        shieldValueEl.textContent = shield.active
+          ? (shield.impact > 0.18 ? "ABSORB" : "BLOCKING")
+          : release ? "RELEASE X" : lowCharge ? "LOW CHARGE" : locked ? "LOCKED" : "READY";
+        if (shield.active && jet) {
+          const value = Math.round(clamp01(jet.fuel / jet.maxFuel) * 100);
+          jetValueEl.textContent = `${value}% · AEGIS`;
+          jetEl.dataset.state = "shield";
+          jetEl.setAttribute("aria-valuetext", `${value} percent, Aegis blocking`);
+        }
       }
 
       /* --- combat --- */
@@ -205,10 +296,23 @@ export function buildHud(ctx, host) {
 
       const weapon = ctx.weapons && ctx.weapons.current;
       if (weapon) {
-        const mag = ctx.weapons.ammo ? ctx.weapons.ammo() : null;
-        ammoEl.innerHTML = mag
-          ? `<b>${mag.mag}</b> / ${mag.reserve}${mag.reloading ? " &middot; RELOADING" : ""}`
-          : "&mdash;";
+        const h = ctx.weapons.heatState ? ctx.weapons.heatState() : null;
+        /* A percentage AND a bar. The number alone is unreadable in
+           a firefight - nobody parses two digits while being charged
+           - and the bar alone cannot say how close to the lockout
+           you are once it is nearly full. The state word replaces
+           the number when there IS no decision left to make. */
+        if (!h) {
+          ammoEl.innerHTML = "&mdash;";
+        } else {
+          const pct = Math.round(h.heat * 100);
+          const state = h.overheated ? "OVERHEAT"
+            : (h.venting ? "VENTING" : `${pct}%`);
+          const cls = h.overheated ? " is-over" : (h.venting ? " is-venting" : "");
+          ammoEl.innerHTML = `<span class="sf-heat${cls}">`
+            + `<i class="sf-heat__track"><b style="width:${pct}%"></b></i>`
+            + `<u>${state}</u></span>`;
+        }
       }
       reinfEl.textContent = `REINFORCEMENTS ${mission.state.reinforcements}`;
 
@@ -242,9 +346,11 @@ export function buildHud(ctx, host) {
       /* The lance is drawn for the airborne silhouette, but firing is
          deliberately disabled during boosted traversal. Hide the
          shooting affordance until the boots are back down. */
-      reticleEl.style.opacity = combat.player.dead || jet?.inFlight ? "0" : "1";
+      reticleEl.style.opacity = combat.player.dead || jet?.inFlight || boost?.active
+        || shield?.active ? "0" : "1";
     },
     setVisible(v) { el.style.display = v ? "" : "none"; },
     flashDistrict(name) { nameEl.textContent = name; showFor = 5.2; },
+    damageNumberCount() { return damageNumbers.length; },
   };
 }

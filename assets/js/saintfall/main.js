@@ -19,6 +19,8 @@ import { buildWorld } from "saintfall/world.js";
 import { buildVfx } from "saintfall/vfx.js";
 import { createPlayer } from "saintfall/player.js";
 import { buildJetpack } from "saintfall/jetpack.js";
+import { buildBoost } from "saintfall/boost.js";
+import { buildShield } from "saintfall/shield.js";
 import { buildEnemies } from "saintfall/enemies.js";
 import { buildCollision } from "saintfall/collide.js";
 import { buildCombat } from "saintfall/combat.js";
@@ -26,6 +28,7 @@ import { buildMission } from "saintfall/mission.js";
 import { buildAudio } from "saintfall/audio.js";
 import { buildWeapons } from "saintfall/weapons.js";
 import { buildHud } from "saintfall/hud.js";
+import { buildTouchControls } from "saintfall/touch.js";
 import { installQa } from "saintfall/qa.js";
 
 export async function start({ boot, build } = {}) {
@@ -37,6 +40,7 @@ export async function start({ boot, build } = {}) {
 
   const canvas = document.getElementById("sf-canvas");
   const hudHost = document.getElementById("sf-hud");
+  const touchHost = document.getElementById("sf-touch");
   const stage = document.querySelector(".sf-stage");
 
   const progress = (v, label) => { if (boot) boot.progress(clamp01(v), label); };
@@ -118,6 +122,10 @@ export async function start({ boot, build } = {}) {
   ctx.combat = combat;
   const mission = buildMission(ctx);
   ctx.mission = mission;
+  const shield = buildShield(ctx, player);
+  ctx.shield = shield;
+  const boost = buildBoost(ctx, player);
+  ctx.boost = boost;
 
   /* Audio subscribes to the buses combat and mission already emit,
      so it can be removed without touching either. It is built after
@@ -128,6 +136,8 @@ export async function start({ boot, build } = {}) {
 
   const hud = buildHud(ctx, hudHost);
   ctx.hud = hud;
+  const touch = buildTouchControls(ctx, player, touchHost, stage);
+  ctx.touch = touch;
 
   // Scratch vectors for the shot path, allocated once. A firefight
   // is the worst possible time to be making garbage.
@@ -151,8 +161,11 @@ export async function start({ boot, build } = {}) {
     enemies,
     weapons,
     jetpack,
+    boost,
+    shield,
     player,
     hud,
+    touch,
     collide,
     combat,
     mission,
@@ -201,6 +214,8 @@ export async function start({ boot, build } = {}) {
   function shoot() {
     if (combat.player.dead) return;
     if (jetpack.state.inFlight) return;
+    if (boost.state.active) return;
+    if (shield.state.active) return;
     if (!weapons.fire()) return;
     // The muzzle, not the camera: a shot that leaves from the eye
     // passes through cover the weapon is behind.
@@ -251,6 +266,7 @@ export async function start({ boot, build } = {}) {
   function meleeStrike() {
     if (combat.player.dead) return;
     if (jetpack.state.inFlight) return;
+    if (shield.state.active) return;
     /* Drawing first. The press has already reset the calm timer via
        `updateStow`, so this frame starts the draw and the swing waits
        for the lance to be in hand - a melee that begins with the
@@ -323,7 +339,8 @@ export async function start({ boot, build } = {}) {
        that a visible unsheathe animation rather than a pose switch,
        and keeping it drawn through glide/landing gives both arms a
        purposeful airborne silhouette. */
-    if (jetpack.state.inFlight || jetpack.state.requested) {
+    if (jetpack.state.inFlight || jetpack.state.requested
+      || boost.state.active || shield.state.active) {
       calmFor = 0;
       weapons.setStow(false);
       weapons.setAds(0);
@@ -333,7 +350,9 @@ export async function start({ boot, build } = {}) {
     const busy = player.input.state.firing
       || player.input.state.ads
       || !!player.action
-      || weapons.carry.reloading > 0
+      || boost.state.active
+      || shield.state.active
+      || weapons.carry.venting > 0
       || combat.player.dead
       || threatNearby();
     calmFor = busy ? 0 : calmFor + d;
@@ -342,10 +361,19 @@ export async function start({ boot, build } = {}) {
 
   function stepGame(d) {
     for (const ev of player.input.drain()) {
-      if (jetpack.state.inFlight || combat.player.dead) continue;
+      if (combat.player.dead) continue;
+      if (ev.type === "boost") {
+        if (!jetpack.state.inFlight) boost.trigger();
+        continue;
+      }
+      if (ev.type === "stratCancel") {
+        mission.cancelEntry();
+        continue;
+      }
+      if (jetpack.state.inFlight || boost.state.active || shield.state.active) continue;
       if (ev.type === "stratOpen") mission.beginEntry();
       else if (ev.type === "dir") mission.pushDirection(ev.dir);
-      else if (ev.type === "reload") weapons.reload();
+      else if (ev.type === "vent") weapons.vent();
       else if (ev.type === "melee") meleeStrike();
     }
     const melee = weapons.current && weapons.current.spec.melee;
@@ -358,7 +386,8 @@ export async function start({ boot, build } = {}) {
        the time this runs; refusing the shot until it lands is the
        difference between a weapon that was put away and a weapon
        that fires out of the player's back. */
-    if (player.input.state.firing && !melee && weapons.stowPhase < 0.08) shoot();
+    if (player.input.state.firing && !melee && !boost.state.active && !shield.state.active
+      && weapons.stowPhase < 0.08) shoot();
     /* Hand the rite back once the swing is over. `meleeSwing` buffers
        a press during recovery into the next combo step, so the mode
        has to survive until the whole chain has run out - which is
@@ -367,7 +396,8 @@ export async function start({ boot, build } = {}) {
       weapons.setMode("ranged");
       meleeBorrowed = false;
     }
-    weapons.setAds(!melee && !jetpack.state.inFlight && player.input.state.ads ? 1 : 0);
+    weapons.setAds(!melee && !jetpack.state.inFlight && !boost.state.active && !shield.state.active
+      && player.input.state.ads ? 1 : 0);
     updateStow(d);
     combat.update(d);
     mission.update(d);
@@ -407,7 +437,9 @@ export async function start({ boot, build } = {}) {
     weapons.update(d, player, render.camera);
     player.postUpdate(d);
     jetpack.updateVisual(d);
+    shield.updateVisual(d);
     vfx.update(d, render.camera);
+    touch.update(d);
     hud.update(d, player, render.camera);
     if (draw) render.render(render.camera);
   }

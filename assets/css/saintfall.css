@@ -1,0 +1,578 @@
+/* ============================================================
+   SAINTFALL - page chrome, loader and HUD
+
+   Typographic identity is deliberately not the site's neon:
+   engraved caps and a rationed gold/oxblood palette, so the page
+   around the game does not fight the game.
+   ============================================================ */
+
+.saintfall-shell {
+  --sf-ink: #0b0809;
+  --sf-sand: #e9ba79;
+  --sf-gold: #d8a441;
+  --sf-gold-lit: #f6d585;
+  --sf-blood: #8a2230;
+  --sf-verd: #4d8c74;
+  --sf-bone: #e6dbbd;
+  --sf-dim: rgba(230, 219, 189, 0.56);
+  background: #0b0809;
+  color: var(--sf-bone);
+}
+
+.saintfall-page {
+  max-width: 1680px;
+}
+
+.saintfall-page .game-page__title {
+  font-family: "Cinzel", Georgia, serif;
+  letter-spacing: 0.14em;
+  background: linear-gradient(170deg, var(--sf-gold-lit), var(--sf-gold) 48%, #8a601f);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 10px rgba(216, 164, 65, 0.22));
+}
+
+.saintfall-page .game-page__sub {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-style: italic;
+  font-size: 16px;
+  color: var(--sf-dim);
+  letter-spacing: 0.02em;
+}
+
+.saintfall-page .rb-standalone-surface {
+  --game-aspect: 1.7778;
+  --game-aspect-ratio: 16 / 9;
+  --game-max-width: 1520px;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  min-height: 0;
+  aspect-ratio: var(--game-aspect-ratio);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--sf-ink);
+  box-shadow: none;
+}
+
+.saintfall-page .game-side__panel--saintfall {
+  color: var(--sf-dim);
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.saintfall-page .game-side__panel--saintfall p {
+  margin: 0;
+}
+
+.saintfall-page .game-side__panel--saintfall p + p {
+  margin-top: 9px;
+}
+
+/* ------------------------------ stage ------------------------------ */
+
+.sf-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 16 / 9;
+  background: #0b0809;
+  border: 1px solid rgba(216, 164, 65, 0.16);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6), inset 0 0 90px rgba(0, 0, 0, 0.5);
+}
+
+.saintfall-page .sf-stage:not(.is-maxed) {
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.sf-stage.is-maxed {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  aspect-ratio: auto;
+  border-radius: 0;
+  border: 0;
+}
+
+html.sf-maximised,
+html.sf-maximised body {
+  overflow: hidden;
+}
+
+#sf-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.sf-fs-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 40;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  border: 1px solid rgba(216, 164, 65, 0.3);
+  background: rgba(11, 8, 9, 0.6);
+  color: var(--sf-gold);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+.sf-fs-btn:hover { background: rgba(216, 164, 65, 0.16); }
+
+/* ------------------------------- HUD ------------------------------- */
+
+#sf-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+  font-family: "Share Tech Mono", ui-monospace, Menlo, monospace;
+  color: var(--sf-bone);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.sf-hud__district {
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  transform: translateX(-50%);
+  text-align: center;
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+
+.sf-hud__eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: rgba(216, 164, 65, 0.72);
+  margin-bottom: 6px;
+}
+
+.sf-hud__name {
+  font-family: "Cinzel", Georgia, serif;
+  font-size: clamp(18px, 2.4vw, 34px);
+  letter-spacing: 0.20em;
+  text-transform: uppercase;
+  color: var(--sf-bone);
+}
+.sf-hud__name::after {
+  content: "";
+  display: block;
+  width: 62%;
+  height: 1px;
+  margin: 9px auto 0;
+  background: linear-gradient(90deg, transparent, rgba(216, 164, 65, 0.75), transparent);
+}
+
+.sf-hud__compass {
+  position: absolute;
+  left: 50%;
+  top: 18px;
+  transform: translateX(-50%);
+  width: min(560px, 62%);
+  height: 22px;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+}
+
+.sf-hud__strip { position: absolute; inset: 0; }
+
+.sf-hud__tick,
+.sf-hud__poi {
+  position: absolute;
+  top: 3px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 120ms linear;
+}
+.sf-hud__tick {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--sf-gold);
+}
+.sf-hud__poi {
+  top: 22px;
+  font-size: 9px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: rgba(230, 219, 189, 0.62);
+}
+
+.sf-hud__needle {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: 13px;
+  background: linear-gradient(180deg, var(--sf-gold-lit), transparent);
+}
+
+.sf-hud__readout {
+  position: absolute;
+  left: 16px;
+  bottom: 14px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: rgba(230, 219, 189, 0.45);
+}
+
+.sf-hud__hint {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(230, 219, 189, 0.62);
+  transition: opacity 600ms ease;
+  white-space: nowrap;
+}
+.sf-hud__hint b { color: var(--sf-gold); font-weight: 400; }
+
+/* ------------------------------ loader ------------------------------ */
+
+#sf-boot {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background:
+    radial-gradient(120% 90% at 50% 12%, rgba(216, 164, 65, 0.10), transparent 62%),
+    linear-gradient(180deg, #120c0a, #060405 68%);
+  transition: opacity 900ms ease;
+  text-align: center;
+  padding: 24px;
+}
+#sf-boot.is-hidden { opacity: 0; pointer-events: none; }
+
+.sf-boot__back {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(230, 219, 189, 0.5);
+  text-decoration: none;
+}
+.sf-boot__back:hover { color: var(--sf-gold); }
+
+.sf-boot__mark {
+  position: relative;
+  width: 118px;
+  height: 118px;
+  margin-bottom: 6px;
+}
+.sf-boot__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(216, 164, 65, 0.30);
+  border-top-color: rgba(216, 164, 65, 0.9);
+  animation: sf-spin 4.6s linear infinite;
+}
+.sf-boot__ring:nth-child(2) {
+  inset: 16px;
+  border-color: rgba(77, 140, 116, 0.22);
+  border-bottom-color: rgba(130, 189, 163, 0.8);
+  animation-duration: 7.2s;
+  animation-direction: reverse;
+}
+@keyframes sf-spin { to { transform: rotate(360deg); } }
+
+.sf-boot__glyph {
+  position: absolute;
+  inset: 26px;
+  width: calc(100% - 52px);
+  height: calc(100% - 52px);
+  fill: none;
+  stroke: rgba(246, 213, 133, 0.85);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sf-boot__title {
+  font-family: "Cinzel", Georgia, serif;
+  font-size: clamp(30px, 5vw, 56px);
+  letter-spacing: 0.28em;
+  margin: 0;
+  background: linear-gradient(170deg, #f6d585, #d8a441 46%, #7a5320);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.sf-boot__sub {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-style: italic;
+  font-size: 15px;
+  color: rgba(230, 219, 189, 0.62);
+  margin: -4px 0 10px;
+  letter-spacing: 0.06em;
+}
+
+.sf-boot__bar {
+  width: min(320px, 70%);
+  height: 2px;
+  background: rgba(230, 219, 189, 0.14);
+  overflow: hidden;
+}
+.sf-boot__fill {
+  width: 2%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--sf-blood), var(--sf-gold-lit));
+  transition: width 260ms ease;
+}
+
+.sf-boot__status {
+  font-family: "Share Tech Mono", ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(216, 164, 65, 0.8);
+}
+
+.sf-boot__tip {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-style: italic;
+  font-size: 15px;
+  color: rgba(230, 219, 189, 0.5);
+  max-width: 46ch;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+
+.sf-boot__err {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  color: #e8887a;
+  white-space: pre-wrap;
+  max-width: 62ch;
+  text-align: left;
+  margin-top: 12px;
+}
+#sf-boot:not(.has-error) .sf-boot__err { display: none; }
+
+/* ----------------------------- side panel ----------------------------- */
+
+.sf-brief {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.sf-brief__card {
+  border: 1px solid rgba(216, 164, 65, 0.16);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: linear-gradient(160deg, rgba(216, 164, 65, 0.05), rgba(0, 0, 0, 0.2));
+}
+
+.sf-brief__card h3 {
+  font-family: "Cinzel", Georgia, serif;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+  color: var(--sf-gold);
+}
+
+.sf-brief__card p {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 15px;
+  line-height: 1.55;
+  margin: 0;
+  color: rgba(230, 219, 189, 0.74);
+}
+
+.sf-brief__card ul {
+  margin: 0;
+  padding-left: 16px;
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: rgba(230, 219, 189, 0.72);
+}
+
+@media (max-width: 720px) {
+  .sf-hud__hint { font-size: 9px; }
+  .sf-hud__compass { width: 84%; }
+}
+
+/* ============================================================
+   COMBAT HUD
+   Everything here is positioned against the viewport and sized in
+   rem, so the layout survives the same ultrawide-to-phone range the
+   rest of the site does.
+   ============================================================ */
+
+.sf-hud__reticle {
+  position: absolute; left: 50%; top: 50%;
+  width: 26px; height: 26px; margin: -13px 0 0 -13px;
+  pointer-events: none; transition: opacity .2s;
+}
+.sf-hud__reticle i {
+  position: absolute; background: rgba(255, 244, 228, .82);
+  box-shadow: 0 0 4px rgba(0, 0, 0, .8);
+}
+.sf-hud__reticle i:nth-child(1) { left: 12px; top: 0; width: 2px; height: 7px; }
+.sf-hud__reticle i:nth-child(2) { left: 12px; bottom: 0; width: 2px; height: 7px; }
+.sf-hud__reticle i:nth-child(3) { top: 12px; left: 0; height: 2px; width: 7px; }
+.sf-hud__reticle i:nth-child(4) { top: 12px; right: 0; height: 2px; width: 7px; }
+
+/* The damage flash. Driven by a class toggle rather than by an
+   inline opacity ramp so the browser owns the timing - a JS-driven
+   fade competes with the frame budget exactly when the frame budget
+   is under pressure. */
+.sf-hud__hurt {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse at center,
+    rgba(180, 20, 24, 0) 42%, rgba(184, 22, 26, .62) 100%);
+}
+.sf-hud__hurt.is-hit { animation: sf-hurt .52s ease-out 1; }
+@keyframes sf-hurt { from { opacity: 1; } to { opacity: 0; } }
+
+.sf-hud__vitals {
+  /* The site-wide standalone Scores launcher occupies the first
+     4rem of the viewport's lower-left corner. Keep the game vitals
+     clear of it both embedded and maximised. */
+  position: absolute; left: 5.25rem; bottom: 1.5rem;
+  width: min(19rem, 34vw); pointer-events: none;
+}
+.sf-hud__hpwrap {
+  height: 9px; border: 1px solid rgba(255, 236, 214, .34);
+  background: rgba(12, 8, 10, .5); overflow: hidden;
+}
+.sf-hud__hp {
+  height: 100%; width: 100%;
+  transition: width .16s linear, background-color .3s;
+  background: #7fd08a;
+}
+.sf-hud__hp[data-state="warn"] { background: #e8b24a; }
+.sf-hud__hp[data-state="crit"] { background: #d8443c; }
+.sf-hud__jet {
+  margin-top: .48rem;
+  color: rgba(255, 220, 169, .82);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .92);
+}
+.sf-hud__jetlabel {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: .2rem;
+  font: 650 .58rem/1.1 ui-monospace, "SFMono-Regular", Menlo, monospace;
+  letter-spacing: .12em;
+}
+.sf-hud__jetlabel b { color: #ffe2aa; font-size: .6rem; letter-spacing: .05em; }
+.sf-hud__jettrack {
+  height: 5px; overflow: hidden;
+  border: 1px solid rgba(255, 205, 139, .28);
+  background: rgba(12, 8, 10, .58);
+}
+.sf-hud__jettrack i {
+  display: block; width: 100%; height: 100%; transform: scaleX(1);
+  transform-origin: left center;
+  background: linear-gradient(90deg, #9c4b22, #ffae48 62%, #ffe0a0);
+  box-shadow: 0 0 8px rgba(255, 148, 54, .55);
+  transition: transform .08s linear, filter .18s;
+}
+.sf-hud__jet[data-state="thrust"] .sf-hud__jettrack i { filter: brightness(1.32); }
+.sf-hud__jet[data-state="crit"] .sf-hud__jettrack i {
+  background: #a9332d; box-shadow: 0 0 7px rgba(190, 42, 35, .55);
+}
+.sf-hud__vitalrow {
+  display: flex; justify-content: space-between; gap: 1rem;
+  margin-top: .42rem;
+  font: 600 .72rem/1.2 ui-monospace, "SFMono-Regular", Menlo, monospace;
+  letter-spacing: .08em; color: rgba(255, 238, 220, .8);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
+}
+.sf-hud__vitalrow b { font-size: 1.15rem; color: #fff3e2; }
+
+.sf-hud__objective {
+  position: absolute; left: 50%; top: 4.6rem; transform: translateX(-50%);
+  width: min(30rem, 76vw); text-align: center; pointer-events: none;
+  transition: opacity .3s;
+}
+.sf-hud__objlabel {
+  font: 600 .74rem/1.3 ui-monospace, "SFMono-Regular", Menlo, monospace;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: rgba(255, 226, 190, .9); text-shadow: 0 1px 4px rgba(0, 0, 0, .95);
+}
+.sf-hud__objbar {
+  margin: .38rem auto 0; height: 3px; width: 62%;
+  background: rgba(12, 8, 10, .55);
+}
+.sf-hud__objbar i { display: block; height: 100%; width: 0; background: #ff9a44; }
+
+.sf-hud__banner {
+  position: absolute; left: 50%; top: 32%; transform: translateX(-50%);
+  font: 700 1.5rem/1.2 "Cinzel", Georgia, serif; letter-spacing: .14em;
+  color: #ffe9cf; text-shadow: 0 2px 14px rgba(0, 0, 0, .95);
+  text-align: center; white-space: nowrap; pointer-events: none;
+  transition: opacity .35s;
+}
+
+.sf-hud__strat {
+  position: absolute; right: 1.6rem; bottom: 1.5rem;
+  display: flex; flex-direction: column; gap: .34rem;
+  pointer-events: none;
+}
+.sf-hud__stratitem {
+  position: relative; overflow: hidden;
+  min-width: 11rem; padding: .3rem .55rem;
+  background: rgba(10, 7, 9, .48);
+  border-left: 2px solid rgba(255, 226, 190, .3);
+  font: 600 .66rem/1.35 ui-monospace, "SFMono-Regular", Menlo, monospace;
+  letter-spacing: .07em; color: rgba(255, 236, 214, .55);
+  display: flex; justify-content: space-between; gap: .8rem;
+}
+.sf-hud__stratitem[data-ready="1"] {
+  color: #fff1de; border-left-color: #ffb057;
+}
+.sf-hud__stratitem span { letter-spacing: .12em; }
+.sf-hud__stratitem i {
+  position: absolute; left: 0; bottom: 0; height: 2px;
+  background: rgba(255, 176, 87, .75);
+}
+
+.sf-hud__code {
+  position: absolute; left: 50%; bottom: 7.5rem; transform: translateX(-50%);
+  display: flex; gap: .5rem; pointer-events: none; transition: opacity .15s;
+}
+.sf-hud__code b {
+  width: 2rem; height: 2rem; display: grid; place-items: center;
+  background: rgba(10, 7, 9, .62); border: 1px solid rgba(255, 176, 87, .6);
+  color: #ffd7a4; font-size: 1.1rem;
+}
+
+@media (max-width: 720px) {
+  .sf-hud__vitals { width: 48vw; left: 1rem; bottom: 1rem; }
+  .sf-hud__strat { right: 1rem; bottom: 1rem; }
+  .sf-hud__stratitem { min-width: 8.4rem; font-size: .58rem; }
+  .sf-hud__banner { font-size: 1.05rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-hud__jettrack i { transition: none; }
+}

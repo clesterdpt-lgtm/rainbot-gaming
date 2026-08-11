@@ -85,6 +85,39 @@ const WOOD = makeRamp([
   [0.00, "#3a3a33"], [0.45, "#5a584c"], [0.80, "#7d7a6b"], [1.00, "#a3a08e"],
 ]);
 
+/* The muzzle flare's falloff, built once and shared.
+
+   A flat quad of solid colour is a CARD: additive or not, it has a
+   hard square edge and the eye reads the edge before the light. The
+   first version of the parented flare was exactly that and looked
+   like a gold sticky note taped to the lance. A radial ramp with a
+   hot centre is what turns the same two triangles into a glow, and
+   it costs one 64px texture for the whole game. */
+let _flareTex = null;
+function flareTexture(THREE) {
+  if (_flareTex) return _flareTex;
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  // `willReadFrequently`, because three reads this canvas back when
+  // it uploads the texture and Chrome logs a console warning for an
+  // un-hinted readback - which the gameplay suite counts as an error.
+  const g = canvas.getContext("2d", { willReadFrequently: true });
+  const grd = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  // Hot core, quick shoulder, long soft skirt - the skirt is what the
+  // bloom pass finds, and the bloom is most of what sells it.
+  grd.addColorStop(0.00, "rgba(255,255,255,1)");
+  grd.addColorStop(0.16, "rgba(255,238,190,0.92)");
+  grd.addColorStop(0.42, "rgba(255,170,60,0.38)");
+  grd.addColorStop(1.00, "rgba(255,120,20,0)");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, size, size);
+  _flareTex = new THREE.CanvasTexture(canvas);
+  _flareTex.colorSpace = THREE.SRGBColorSpace;
+  return _flareTex;
+}
+
 /* ============================================================
    PATTERNS
    Each entry is a recipe, not a mesh. Numbers are metres.
@@ -502,12 +535,68 @@ export function buildWeapons(ctx) {
     /* The muzzle. Shots leave from HERE, not from the camera: a ray
        cast from the eye starts behind the weapon and passes straight
        through whatever the barrel is poking around, so the player
-       shoots through their own cover and cannot work out why. */
+       shoots through their own cover and cannot work out why.
+
+       DO NOT MOVE THIS TO MAKE THE FLASH LOOK BETTER. It is not just
+       an emitter position: the aim solve rotates the whole weapon to
+       put THIS node on the camera ray, so the reticle's promise that
+       the bolt goes where the crosshair points is calibrated around
+       it. Sliding it back 23cm onto the censer cage - which does look
+       better - swung `saintfall-weapon-gait-proof`'s reticle sweep
+       from 0.000deg/0.00px to 29.2deg/137px of miss at 1080p. The
+       cosmetic offset belongs on the flare below, which is drawn
+       rather than aimed. */
     const muzzle = new THREE.Object3D();
     muzzle.position.set(isPolearm
       ? spec.haft * 0.78
       : spec.receiver.l * 0.5 + spec.barrel.l + 0.035, 0, 0);
     root.add(muzzle);
+
+    /* THE FLASH ITSELF, PARENTED TO THE MUZZLE.
+       This is the fix for "the shot does not come from the lance",
+       and it is a fix to WHERE THE EFFECT LIVES rather than to a
+       number. `shoot()` reads the muzzle's world position and hands
+       it to the world-space particle pool - but it reads it BEFORE
+       `weapons.update()` has applied this frame's recoil, sway and
+       carry pose, so the flash is stamped into the world at last
+       frame's muzzle position and then the weapon moves out from
+       under it. During a burst the weapon is moving every frame and
+       the flashes stay where they were put, which is why they read
+       as lights hanging in the air beside the lance.
+
+       A child of the muzzle cannot be in the wrong place. Two
+       crossed billboards rather than one, so the flare has volume
+       from any bearing instead of vanishing edge-on when the camera
+       swings round the shoulder. */
+    const flashGeo = new THREE.PlaneGeometry(0.34, 0.34);
+    const flashMat = new THREE.MeshBasicMaterial({
+      color: 0xffc24a,
+      map: flareTexture(THREE),
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: false,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+    });
+    const flashRig = new THREE.Group();
+    flashRig.name = "muzzle-flare";
+    /* Back onto the lit cage, which is where a player reads the
+       business end of this thing - the spike in front of it is a
+       bayonet, not a bore. The MUZZLE cannot move here (see above),
+       so the offset lives on the drawn flare instead: 0.22m back
+       along the haft puts the flare on the reliquary while the shot
+       still leaves from the node the aim solve is built around. */
+    if (isPolearm) flashRig.position.x = -0.22;
+    for (let i = 0; i < 3; i += 1) {
+      const quad = new THREE.Mesh(flashGeo, flashMat);
+      quad.rotation.set(0, Math.PI * 0.5, (i / 3) * Math.PI);
+      quad.renderOrder = 900;
+      flashRig.add(quad);
+    }
+    flashRig.visible = false;
+    muzzle.add(flashRig);
 
     /* The business end, for measuring a swing. A blow is judged on
        what the TIP does, not on what the grip does - the grip barely
@@ -568,6 +657,7 @@ export function buildWeapons(ctx) {
     const record = {
       key, spec, mode: spec.mode || key, root, seal, rng,
       gripRear, gripFront, muzzle, tip, butt, censer, reliquaryLight,
+      flashRig, flashMat,
       /* Where the hands sit along the haft when nothing is sliding
          them. An authored THRUST runs the shaft forward through the
          grip, so the action code writes these positions absolutely
@@ -714,6 +804,39 @@ export function buildWeapons(ctx) {
     carry.venting = 0;
   }
 
+  function snapshotState() {
+    return {
+      mode: carry.record?.spec?.melee ? "melee" : "ranged",
+      heat: Number(carry.heat.toFixed(4)),
+      overheated: carry.overheated,
+      venting: Number(carry.venting.toFixed(4)),
+      sinceShot: Number(carry.sinceShot.toFixed(4)),
+      cooldown: Number(carry.cooldown.toFixed(4)),
+    };
+  }
+
+  function restoreState(saved = {}) {
+    /* A save can be taken during the borrowed melee rite. Restore the
+       durable barrel state but normalize the physical lance to its
+       ranged carry so main.js never inherits a half-finished combo. */
+    setMode("ranged");
+    carry.heat = clamp01(Number(saved.heat) || 0);
+    carry.overheated = !!saved.overheated && carry.heat > 0;
+    carry.venting = Math.max(0, Number(saved.venting) || 0);
+    carry.sinceShot = Math.max(0, Number(saved.sinceShot) || 0);
+    carry.cooldown = Math.max(0, Number(saved.cooldown) || 0);
+    carry.ads = 0;
+    carry.flash = 0;
+    carry.recoil.back = 0;
+    carry.recoil.rise = 0;
+    carry.recoil.roll = 0;
+    carry.sway.set(0, 0);
+    carry.stowWant = 0;
+    carry.stow = 0;
+    carry.handRelease = 0;
+    return snapshotState();
+  }
+
   /**
    * Cone half-angle for this shot, in radians.
    *
@@ -848,6 +971,23 @@ export function buildWeapons(ctx) {
       // the bolt instead of looking like a separate muzzle fire.
       lamp.color.copy(lamp.userData.restColour)
         .lerp(lamp.userData.flashColour, f);
+    }
+
+    /* The flare rides the same decay as the lamp. Scaled as well as
+       faded: a flash that only fades reads as a decal being turned
+       down, while one that punches out and shrinks reads as gas
+       leaving under pressure. Hidden outright at zero so three
+       transparent quads are not in the sort every frame between
+       shots. */
+    const flare = carry.record.flashRig;
+    if (flare) {
+      const f = carry.flash;
+      const on = f > 0.02;
+      if (flare.visible !== on) flare.visible = on;
+      if (on) {
+        carry.record.flashMat.opacity = Math.min(1, f * 1.15);
+        flare.scale.setScalar(0.62 + (1 - f) * 0.55);
+      }
     }
 
     /* Sway lags the look. The weapon is heavy and the soldier is
@@ -1074,6 +1214,8 @@ export function buildWeapons(ctx) {
     flashMuzzle,
     vent,
     resupply,
+    snapshot: snapshotState,
+    restore: restoreState,
     spread,
     update,
     carry,

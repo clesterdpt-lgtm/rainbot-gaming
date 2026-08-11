@@ -264,49 +264,93 @@ export function buildAudio(ctx) {
     const out = p.node;
     const amp = (opts.gain ?? 0.5) * p.atten;
 
-    /* AN ENERGY DISCHARGE, NOT A CARTRIDGE.
+    /* AN ENERGY DISCHARGE THAT STILL HITS SOMETHING.
 
-       What made the old shot read as kinetic was its structure rather
-       than its brightness: a broadband noise crack through a bandpass
-       (the primer and the muzzle blast) over a sawtooth thump (the
-       action). Both are the sound of something mechanical happening
-       to a solid object, and no amount of level makes that electric.
+       The previous version was built on a principle that is true and
+       was taken too far: a cartridge sounds mechanical because of the
+       noise crack, so the crack was removed entirely and every layer
+       replaced with a downward pitch sweep. Everything gliding down
+       in the same direction over the same 100-150ms IS the "pew" -
+       it is the one gesture a toy ray gun makes, and with no
+       transient at all there was nothing for the ear to read as an
+       event. It sounded thin and slow.
 
-       An energy weapon is TONAL and it MOVES. The body here is a
-       fast downward pitch sweep through a resonant lowpass - the
-       filter tracking the oscillator is what gives the "pew" its
-       vowel - with a bright ringing partial above it for the arc, a
-       short noise sizzle for texture rather than for weight, and a
-       sub for the punch the tonal layers cannot carry on their own. */
+       What a punchy weapon needs is a TRANSIENT the sweeps can hang
+       off. So the structure is now:
 
-    // The arc: a bright partial, sweeping and ringing off fast.
+         0-18ms   an ignition crack, broadband and gone before it can
+                  be heard as a pitch, which is what makes the shot
+                  land at a moment rather than over a moment
+         0-70ms   a hard low thump, swept fast so it reads as impact
+                  rather than as a falling tone
+         0-90ms   the arc and the resonant body, both much faster
+                  than before so they decorate the transient instead
+                  of being the whole sound
+         tail     the basin
+
+       The crack is deliberately NOT the old primer bandpass: it is
+       highpassed well above where a cartridge lives, so it reads as
+       an arc striking rather than as a case going off. */
+
+    // Ignition: the transient. Short enough that its pitch is
+    // unresolvable, which is exactly what makes it a crack.
+    const crack = noiseSource(2.4);
+    const ch = ac.createBiquadFilter();
+    ch.type = "highpass";
+    ch.frequency.setValueAtTime(1400, t);
+    const cb = ac.createBiquadFilter();
+    cb.type = "peaking";
+    cb.frequency.setValueAtTime(3400, t);
+    cb.Q.value = 0.9;
+    cb.gain.value = 9;
+    const cg = ac.createGain();
+    cg.gain.setValueAtTime(amp * 4.6, t);
+    cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.018);
+    crack.connect(ch); ch.connect(cb); cb.connect(cg); cg.connect(out);
+    crack.start(t); crack.stop(t + 0.02);
+
+    // The arc: a bright partial, now ringing off in a third of the
+    // time so it is an edge on the transient, not a descending tone.
     const arc = ac.createOscillator();
     arc.type = "triangle";
-    arc.frequency.setValueAtTime(2950, t);
-    arc.frequency.exponentialRampToValueAtTime(760, t + 0.09);
+    arc.frequency.setValueAtTime(3400, t);
+    arc.frequency.exponentialRampToValueAtTime(1150, t + 0.032);
     const ag = ac.createGain();
-    ag.gain.setValueAtTime(amp * 1.5, t);
-    ag.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+    ag.gain.setValueAtTime(amp * 1.35, t);
+    ag.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
     arc.connect(ag); ag.connect(out);
-    arc.start(t); arc.stop(t + 0.12);
+    arc.start(t); arc.stop(t + 0.06);
 
-    // The body: sawtooth swept down through a resonant lowpass that
-    // follows it. The tracking is the whole character.
+    /* The body: sawtooth through a tracking resonant lowpass, driven
+       into a soft clip. The clipper is what puts harmonics above the
+       filter and stops the layer from being a polite sine-ish tone -
+       distortion is most of why a real weapon sounds loud on small
+       speakers, because it survives being made quiet. */
     const body = ac.createOscillator();
     body.type = "sawtooth";
-    body.frequency.setValueAtTime(1180, t);
-    body.frequency.exponentialRampToValueAtTime(120, t + 0.15);
+    body.frequency.setValueAtTime(1320, t);
+    body.frequency.exponentialRampToValueAtTime(150, t + 0.075);
     const res = ac.createBiquadFilter();
     res.type = "lowpass";
-    res.frequency.setValueAtTime(4200, t);
-    res.frequency.exponentialRampToValueAtTime(340, t + 0.15);
-    // High enough to sing, short of self-oscillating into a whistle.
-    res.Q.value = 11.5;
+    res.frequency.setValueAtTime(5200, t);
+    res.frequency.exponentialRampToValueAtTime(420, t + 0.085);
+    res.Q.value = 9.5;
+    const drive = ac.createWaveShaper();
+    {
+      const n = 1024;
+      const curve = new Float32Array(n);
+      for (let i = 0; i < n; i += 1) {
+        const x = (i / (n - 1)) * 2 - 1;
+        curve[i] = Math.tanh(x * 2.6);
+      }
+      drive.curve = curve;
+      drive.oversample = "2x";
+    }
     const bg = ac.createGain();
-    bg.gain.setValueAtTime(amp * 2.6, t);
-    bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.19);
-    body.connect(res); res.connect(bg); bg.connect(out);
-    body.start(t); body.stop(t + 0.20);
+    bg.gain.setValueAtTime(amp * 2.9, t);
+    bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.115);
+    body.connect(res); res.connect(drive); drive.connect(bg); bg.connect(out);
+    body.start(t); body.stop(t + 0.12);
 
     // Sizzle: texture only. Kept narrow and brief - widen it and the
     // cartridge comes straight back.
@@ -314,25 +358,28 @@ export function buildAudio(ctx) {
     const bp = ac.createBiquadFilter();
     bp.type = "bandpass";
     bp.frequency.setValueAtTime(5200, t);
-    bp.frequency.exponentialRampToValueAtTime(2100, t + 0.07);
+    bp.frequency.exponentialRampToValueAtTime(2100, t + 0.06);
     bp.Q.value = 2.6;
     const sg = ac.createGain();
-    sg.gain.setValueAtTime(amp * 1.7, t);
-    sg.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+    sg.gain.setValueAtTime(amp * 1.4, t);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
     sizzle.connect(bp); bp.connect(sg); sg.connect(out);
-    sizzle.start(t); sizzle.stop(t + 0.09);
+    sizzle.start(t); sizzle.stop(t + 0.08);
 
-    // Sub: the shove. Sine, so it is felt rather than heard, and none
-    // of the mechanical rattle a sawtooth would put here.
+    /* The thump. Same sine as before and twice as fast: 150->46 over
+       120ms is long enough to hear the pitch fall, which reads as a
+       descending tone. 210->40 over 55ms is heard as a hit. This is
+       the layer that carries the weight on a laptop speaker, where
+       everything below it is gone. */
     const sub = ac.createOscillator();
     sub.type = "sine";
-    sub.frequency.setValueAtTime(150, t);
-    sub.frequency.exponentialRampToValueAtTime(46, t + 0.12);
+    sub.frequency.setValueAtTime(210, t);
+    sub.frequency.exponentialRampToValueAtTime(40, t + 0.055);
     const subg = ac.createGain();
-    subg.gain.setValueAtTime(amp * 2.2, t);
-    subg.gain.exponentialRampToValueAtTime(0.0001, t + 0.15);
+    subg.gain.setValueAtTime(amp * 3.4, t);
+    subg.gain.exponentialRampToValueAtTime(0.0001, t + 0.10);
     sub.connect(subg); subg.connect(out);
-    sub.start(t); sub.stop(t + 0.16);
+    sub.start(t); sub.stop(t + 0.11);
 
     // The tail is where distance is actually heard: a far-off shot is
     // mostly its own echo off the basin.

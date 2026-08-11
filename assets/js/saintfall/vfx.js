@@ -834,8 +834,12 @@ export function buildVfx(ctx, world) {
         uPixel: { value: 1 },
         uHot: { value: new THREE.Color("#ffd9a0") },
         uCold: { value: new THREE.Color("#ff7a3c") },
-        uEnergyHot: { value: new THREE.Color("#fffaf0") },
-        uEnergyCold: { value: new THREE.Color("#00dffc") },
+        // Reliquary ions, gold like everything else the Concord
+        // fires. These are the sparks that hang in the bolt's wake,
+        // so leaving them cyan would have painted a blue trail
+        // behind a gold slug.
+        uEnergyHot: { value: new THREE.Color("#fffdf4") },
+        uEnergyCold: { value: new THREE.Color("#ff9d22") },
       },
       transparent: true,
       depthWrite: false,
@@ -1060,9 +1064,20 @@ export function buildVfx(ctx, world) {
         uHostileFade: { value: HOSTILE_FADE_TIME },
         uHot: { value: new THREE.Color("#fffbf0") },
         uCold: { value: new THREE.Color("#ff5a06") },
-        uEnergyCore: { value: new THREE.Color("#fffaf0") },
-        uEnergyBody: { value: new THREE.Color("#00f0dc") },
-        uEnergyFringe: { value: new THREE.Color("#5b54ff") },
+        /* GOLD, because everything the Concord owns is.
+           This was a cyan body (#00f0dc) inside a blue-violet fringe
+           (#5b54ff) - the only cool object in a warm game, and the
+           exact palette the BLOOM uses for its lit organs, so the
+           player's own fire read as belonging to the thing shooting
+           back at them. It also read as a toy laser, which cyan on a
+           thin quad always will.
+
+           The gradient runs white-hot core -> reliquary amber ->
+           forge orange, which is the armour's own ramp and the same
+           amber the helm's eye sockets carry. */
+        uEnergyCore: { value: new THREE.Color("#fffdf4") },
+        uEnergyBody: { value: new THREE.Color("#ffc23c") },
+        uEnergyFringe: { value: new THREE.Color("#ff6a12") },
       },
       transparent: true,
       depthWrite: false,
@@ -1414,8 +1429,11 @@ export function buildVfx(ctx, world) {
         uTime: { value: 0 },
         uHot: { value: new THREE.Color("#fff6e2") },
         uCold: { value: new THREE.Color("#ff8a20") },
-        uEnergyHot: { value: new THREE.Color("#fffaf0") },
-        uEnergyCold: { value: new THREE.Color("#00e7ee") },
+        // The slug's head, matched to the body ramp above - it was
+        // cyan too, and a gold bolt with a cyan nose is worse than
+        // either on its own.
+        uEnergyHot: { value: new THREE.Color("#fffdf4") },
+        uEnergyCold: { value: new THREE.Color("#ffab2a") },
       },
       transparent: true,
       depthWrite: false,
@@ -1546,10 +1564,23 @@ export function buildVfx(ctx, world) {
   /** The bloom at the muzzle, plus the gases leaving it. */
   function muzzle(x, y, z, dx, dy, dz, scale = 1, energy = false) {
     const tint = energy ? 2.0 : 1.0;
-    flashes.emit(x, y, z, (energy ? 0.94 : 0.85) * scale, 0.060, tint);
-    flashes.emit(x + dx * 0.34, y + dy * 0.34, z + dz * 0.34,
-      (energy ? 0.58 : 0.46) * scale, 0.085, energy ? 2.0 : 0.6);
-    impacts.emitDirected(x + dx * 0.2, y + dy * 0.2, z + dz * 0.2,
+    /* THE BRIGHT ONE GOES ON THE MUZZLE.
+       The second puff used to sit 0.34m along the shot, and from a
+       third-person camera that is not "slightly in front" - forward
+       projects toward the vanishing point, so with the lance head
+       0.7m off the aim axis the offset flash landed ~40px toward
+       screen centre and became the brightest thing in frame. The
+       result was a blob of light hanging in the air ahead of the
+       weapon with nothing under it, which is exactly what "the shot
+       does not come from the lance" describes. Measured with zero
+       simulation steps between emit and render, so this was the
+       geometry and not a one-frame lag.
+
+       0.10m still reads as gas leaving the cage and stays on it. */
+    flashes.emit(x, y, z, (energy ? 1.06 : 0.85) * scale, 0.062, tint);
+    flashes.emit(x + dx * 0.10, y + dy * 0.10, z + dz * 0.10,
+      (energy ? 0.46 : 0.46) * scale, 0.085, energy ? 2.0 : 0.6);
+    impacts.emitDirected(x + dx * 0.14, y + dy * 0.14, z + dz * 0.14,
       energy ? 7 : 9, dx, dy, dz, energy ? 6.5 : 9.0,
       (energy ? 0.68 : 0.6) * scale, tint);
   }

@@ -540,9 +540,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
       },
       {
         index: "02", kicker: "BLOOM CONTAINMENT",
-        title: breachDone ? "SIGNAL SEVERED" : breachActive
-          ? (breach?.name || "RUPTURE DETECTED") : "SIGNAL QUIET",
-        detail: breachDone ? "All breach signatures neutralized" : breach?.phase === "warning"
+        title: breachDone ? `CYCLE ${breach.cyclesCleared || 1} CLEARED` : breachActive
+          ? `CYCLE ${breach?.cycle || 1} · ${breach?.name || "RUPTURE DETECTED"}` : "SIGNAL QUIET",
+        detail: breachDone ? `Next pressure cycle in ${formatClock(breach.timer)}` : breach?.phase === "warning"
           ? `Emergence in ${Math.ceil(breach.timer || 0)} seconds` : breach?.phase === "active"
             ? `${Math.max(0, breach.remaining || 0)} hostiles remain` : "Monitoring the basin",
         progress: breachProgress,
@@ -594,16 +594,15 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     root.querySelector("[data-operation-relays]").textContent = `${state.relaysDone || 0} / ${ctx.mission.relays?.length || 3}`;
     root.querySelector("[data-operation-reinforcements]").textContent = String(Math.max(0, state.reinforcements ?? 0));
     root.querySelector("[data-operation-clock]").textContent = formatClock(state.elapsed);
-    const breachActive = !!breach && !breach.complete
-      && !["dormant", "complete"].includes(breach.phase);
-    const breachName = breach?.complete ? "BLOOM SEVERED"
-      : breachActive ? (breach.phase === "warning" ? "RUPTURE INCOMING" : `BREACH ${breach.wave || 1}`)
+    const breachActive = !!breach && ["warning", "active", "intermission"].includes(breach.phase);
+    const breachName = breach?.complete ? `CYCLE ${breach.cyclesCleared || 1} CLEARED`
+      : breachActive ? (breach.phase === "warning" ? "RUPTURE INCOMING" : `CYCLE ${breach.cycle || 1} · BREACH ${breach.wave || 1}`)
         : "SIGNAL QUIET";
     root.querySelector("[data-operation-breach]").textContent = breachName;
     root.querySelector("[data-operation-breach-detail]").textContent = breachActive
       ? (breach.phase === "warning" ? `${Math.ceil(breach.timer || 0)} seconds to emergence`
         : `${Math.max(0, breach.remaining || 0)} hostiles remain`)
-      : breach?.complete ? "Containment objective complete" : "No active rupture";
+      : breach?.complete ? `Next pressure cycle in ${formatClock(breach.timer)}` : "No active rupture";
   }
 
   function refreshSaves() {

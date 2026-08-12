@@ -248,6 +248,66 @@ try {
     + `${cost.bones} bones · ${cost.chains} IK chains`);
   check(cost.ms < 8, "the encounter renders at point-blank range",
     `${cost.ms}ms/frame`);
+
+  /* ---------------- recurrence ----------------
+     The Matriarch ends a cycle, not the ecosystem. Production holds
+     this state for three real minutes; the shortened restored timer
+     below proves both persistence and the restart boundary without
+     making the focused test idle for the full recovery window. */
+  console.log("\n=== RECURRING BLOOM CYCLE ===");
+  const recurrence = await page.evaluate(() => {
+    const T = window.__SF;
+    T.clearEnemies();
+    T.setBreachAuto(true);
+    const ps = T.playerState();
+    T.startBreachWave(4, ps.x, ps.z - 44, true);
+    T.advanceTime(0.05, 0.05);
+    const opened = T.breachState();
+    for (const inst of T.ctx.breaches.members) {
+      inst.health = 0;
+      inst.state = "death";
+    }
+    T.advanceTime(0.05, 0.05);
+    const cleared = T.breachState();
+    const restored = T.ctx.breaches.restore({ ...cleared, timer: 1.4, auto: true });
+    T.advanceTime(0.7, 0.1);
+    const resting = T.breachState();
+    T.advanceTime(0.8, 0.1);
+    const restarted = T.breachState();
+    return {
+      cooldown: T.ctx.breaches.config.cycleCooldownSeconds,
+      opened, cleared, restored, resting, restarted,
+      roster: T.ctx.breaches.members.filter((inst) => inst.state !== "death")
+        .map((inst) => inst.key),
+    };
+  });
+  console.log(`  cycle ${recurrence.cleared.cyclesCleared} cleared · `
+    + `${recurrence.cooldown}s recovery · next phase ${recurrence.restarted.phase} `
+    + `cycle ${recurrence.restarted.cycle}`);
+  check(recurrence.opened.phase === "active" && recurrence.opened.wave === 5,
+    "the Matriarch remains the final wave of each cycle",
+    `phase=${recurrence.opened.phase} wave=${recurrence.opened.wave}`);
+  check(recurrence.cooldown === 180 && recurrence.cleared.phase === "complete"
+      && recurrence.cleared.complete
+      && recurrence.cleared.cyclesCleared === recurrence.opened.cycle
+      && recurrence.cleared.timer >= 179.9,
+    "defeating the Matriarch opens a three-minute recovery window",
+    JSON.stringify({ cooldown: recurrence.cooldown, cleared: recurrence.cleared }));
+  check(recurrence.restored.phase === "complete"
+      && recurrence.restored.cycle === recurrence.cleared.cycle
+      && recurrence.restored.cyclesCleared === recurrence.cleared.cyclesCleared
+      && recurrence.resting.phase === "complete" && recurrence.resting.timer > 0,
+    "the recovery countdown survives save-state restoration and does not restart early",
+    JSON.stringify({ restored: recurrence.restored, resting: recurrence.resting }));
+  check(["warning", "active"].includes(recurrence.restarted.phase)
+      && !recurrence.restarted.complete
+      && recurrence.restarted.cycle === recurrence.cleared.cyclesCleared + 1
+      && recurrence.restarted.cyclesCleared === recurrence.cleared.cyclesCleared
+      && recurrence.restarted.wave === 1
+      && recurrence.roster.length === 4
+      && recurrence.roster.every((key) => key === "thresher"),
+    "the insect progression restarts at wave one after the recovery window",
+    JSON.stringify({ restarted: recurrence.restarted, roster: recurrence.roster }));
   check(pageErrors.length === 0, "no page or console errors",
     pageErrors.slice(0, 2).join(" | "));
 

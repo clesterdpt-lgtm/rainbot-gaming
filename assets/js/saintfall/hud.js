@@ -218,6 +218,11 @@ export function buildHud(ctx, host) {
   let lastHurt = -99;
   let breachAlertFor = 0;
 
+  function formatCountdown(seconds) {
+    const total = Math.max(0, Math.ceil(Number(seconds) || 0));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+  }
+
   function showBreachAlert(kicker, title, seconds = 3.2, boss = false) {
     breachKickerEl.textContent = kicker;
     breachTitleEl.textContent = title;
@@ -228,15 +233,16 @@ export function buildHud(ctx, host) {
 
   if (ctx.breaches?.bus) {
     ctx.breaches.bus.on("warning", (event) => showBreachAlert(
-      `BLOOM BREACH ${event.wave} / ${event.waveCount}`, event.name.toUpperCase(), 3.4));
-    ctx.breaches.bus.on("bossWarning", () => showBreachAlert(
-      "APEX SIGNATURE", "MATRIARCH ASCENDANT", 4.8, true));
+      `CYCLE ${event.cycle} · BREACH ${event.wave} / ${event.waveCount}`,
+      event.name.toUpperCase(), 3.4));
+    ctx.breaches.bus.on("bossWarning", (event) => showBreachAlert(
+      `CYCLE ${event.cycle} · APEX SIGNATURE`, "MATRIARCH ASCENDANT", 4.8, true));
     ctx.breaches.bus.on("opened", (event) => showBreachAlert(
       "BREACH OPEN", `${event.remaining} HOSTILES SURFACING`, 2.5, !!event.boss));
     ctx.breaches.bus.on("cleared", () => showBreachAlert(
       "FIELD UPDATE", "BREACH SEALED", 2.6));
-    ctx.breaches.bus.on("complete", () => showBreachAlert(
-      "VESPER COMMAND", "BLOOM SIGNAL SEVERED", 5.2));
+    ctx.breaches.bus.on("complete", (event) => showBreachAlert(
+      "BLOOM RECOILING", `BROOD CYCLE ${event.cyclesCleared} BROKEN`, 5.2));
   }
 
   /* --- compass ticks --- */
@@ -713,9 +719,9 @@ export function buildHud(ctx, host) {
     if (!event) { minimapEl.dataset.event = "0"; return; }
     mapEventEl.dataset.phase = event.phase;
     minimapEl.dataset.event = event.phase === "warning" || event.phase === "active" ? "1" : "0";
-    eventKickerEl.textContent = event.complete ? "BLOOM STATUS"
-      : event.wave > 0 ? `BREACH ${event.wave} / ${event.waveCount}` : "BLOOM PRESSURE";
-    eventNameEl.textContent = event.complete ? "SIGNAL SEVERED"
+    eventKickerEl.textContent = event.complete ? `CYCLE ${event.cyclesCleared} CLEARED`
+      : event.wave > 0 ? `CYCLE ${event.cycle} · BREACH ${event.wave} / ${event.waveCount}` : "BLOOM PRESSURE";
+    eventNameEl.textContent = event.complete ? "BLOOM RECOILING"
       : event.wave > 0 ? event.name : "SIGNAL QUIET";
     eventNameEl.title = eventNameEl.textContent;
     eventSubEl.textContent = event.subtitle;
@@ -724,6 +730,7 @@ export function buildHud(ctx, host) {
     else if (event.phase === "active") eventCountEl.textContent = event.boss
       ? `${event.boss.health} HP` : `${event.remaining} LEFT`;
     else if (event.phase === "intermission") eventCountEl.textContent = `${Math.ceil(event.timer)}S`;
+    else if (event.phase === "complete") eventCountEl.textContent = `NEXT ${formatCountdown(event.timer)}`;
     else eventCountEl.textContent = "CLEAR";
 
     let progress = 0;
@@ -731,7 +738,8 @@ export function buildHud(ctx, host) {
     else if (event.phase === "active" && event.total) progress = 1 - event.remaining / event.total;
     else if (event.phase === "warning") progress = 1 - event.timer / ctx.breaches.config.warningSeconds;
     else if (event.phase === "intermission") progress = 1 - event.timer / ctx.breaches.config.intermissionSeconds;
-    else if (event.complete) progress = 1;
+    else if (event.complete) progress = 1 - event.timer
+      / Math.max(1, ctx.breaches.config.cycleCooldownSeconds);
     eventFillEl.style.width = `${clamp01(progress) * 100}%`;
   }
 

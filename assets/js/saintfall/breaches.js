@@ -5,7 +5,9 @@
    Each stage telegraphs a rupture, raises a deliberately authored
    caste mix, and waits for every member to die before it advances.
    The final stage is the Matriarch rather than another anonymous
-   difficulty bump.
+   difficulty bump. Breaking her brood opens a long recovery window;
+   if the operation is still active when it closes, the cycle begins
+   again from its first stirring.
    ============================================================ */
 
 import { TAU, clamp, makeBus, makeRng } from "saintfall/core.js";
@@ -16,6 +18,7 @@ export const BREACH_CONFIG = Object.freeze({
   movementTrigger: 38,
   warningSeconds: 3.4,
   intermissionSeconds: 15,
+  cycleCooldownSeconds: 180,
   spawnDistanceMin: 38,
   spawnDistanceMax: 54,
   eventRadius: 92,
@@ -98,9 +101,11 @@ export function buildBreaches(ctx) {
   let eventSerial = 0;
 
   const state = {
-    phase: "dormant",       // dormant -> warning -> active -> intermission -> complete
+    phase: "dormant",       // dormant -> warning -> active -> intermission -> complete -> warning
     waveIndex: -1,
     waveCount: BREACH_WAVES.length,
+    cycle: 1,
+    cyclesCleared: 0,
     name: "Bloom pressure",
     subtitle: "Signal quiet",
     timer: BREACH_CONFIG.firstWarningAfter,
@@ -261,12 +266,15 @@ export function buildBreaches(ctx) {
   }
 
   function start(index = 0, options = {}) {
+    if (state.phase === "complete") {
+      state.cycle = Math.max(state.cycle + 1, state.cyclesCleared + 1);
+    }
     return launchWave(index, options);
   }
 
   function update(dt) {
     const missionPhase = ctx.mission?.state?.phase;
-    if (state.complete || missionPhase === "won" || missionPhase === "lost") return;
+    if (missionPhase === "won" || missionPhase === "lost") return;
 
     refreshCounts();
     if (combat.player.dead) return;
@@ -306,9 +314,10 @@ export function buildBreaches(ctx) {
       if (state.waveIndex >= BREACH_WAVES.length - 1) {
         state.phase = "complete";
         state.complete = true;
-        state.name = "Bloom severed";
-        state.subtitle = "All breach signatures extinguished";
-        state.timer = 0;
+        state.cyclesCleared = Math.max(state.cyclesCleared, state.cycle);
+        state.name = "Brood cycle broken";
+        state.subtitle = "Bloom pressure rebuilding";
+        state.timer = BREACH_CONFIG.cycleCooldownSeconds;
         bus.emit("complete", snapshot());
       } else {
         state.phase = "intermission";
@@ -322,6 +331,16 @@ export function buildBreaches(ctx) {
     if (state.phase === "intermission") {
       state.timer = Math.max(0, state.timer - dt);
       if (state.timer <= 0) launchWave(state.waveIndex + 1);
+      return;
+    }
+
+    if (state.phase === "complete") {
+      if (!state.auto) return;
+      state.timer = Math.max(0, state.timer - dt);
+      if (state.timer <= 0) {
+        state.cycle = state.cyclesCleared + 1;
+        launchWave(0);
+      }
     }
   }
 
@@ -354,6 +373,8 @@ export function buildBreaches(ctx) {
       wave: state.waveIndex + 1,
       waveIndex: state.waveIndex,
       waveCount: state.waveCount,
+      cycle: state.cycle,
+      cyclesCleared: state.cyclesCleared,
       name: state.name,
       subtitle: state.subtitle,
       timer: Number(state.timer.toFixed(2)),
@@ -384,8 +405,13 @@ export function buildBreaches(ctx) {
     const timer = Math.max(0, Number(saved.timer) || 0);
     const x = Number.isFinite(Number(saved.x)) ? Number(saved.x) : 0;
     const z = Number.isFinite(Number(saved.z)) ? Number(saved.z) : 0;
+    const savedComplete = phase === "complete" || !!saved.complete;
+    state.cyclesCleared = Math.max(0, Math.round(Number(saved.cyclesCleared)
+      || (savedComplete ? 1 : 0)));
+    state.cycle = Math.max(1, Math.round(Number(saved.cycle)
+      || (savedComplete ? state.cyclesCleared : state.cyclesCleared + 1)));
     state.auto = saved.auto === undefined ? !ctx.qa : !!saved.auto;
-    state.complete = phase === "complete" || !!saved.complete;
+    state.complete = savedComplete;
     state.waveIndex = waveIndex;
     state.timer = timer;
     state.x = x;
@@ -398,9 +424,10 @@ export function buildBreaches(ctx) {
     if (state.complete) {
       state.phase = "complete";
       state.waveIndex = BREACH_WAVES.length - 1;
-      state.name = "Bloom severed";
-      state.subtitle = "All breach signatures extinguished";
-      state.timer = 0;
+      state.cycle = Math.max(state.cycle, state.cyclesCleared);
+      state.name = saved.name || "Brood cycle broken";
+      state.subtitle = saved.subtitle || "Bloom pressure rebuilding";
+      state.timer = timer || BREACH_CONFIG.cycleCooldownSeconds;
     } else if ((phase === "warning" || phase === "active") && waveIndex >= 0) {
       const byId = new Map(enemies.live.filter((inst) => inst?.id)
         .map((inst) => [inst.id, inst]));
@@ -454,6 +481,7 @@ export function buildBreaches(ctx) {
       state.name = "Bloom pressure";
       state.subtitle = "Signal quiet";
       state.timer = timer || BREACH_CONFIG.firstWarningAfter;
+      state.cycle = Math.max(1, state.cyclesCleared + 1);
     }
 
     rng.setState?.(saved.rng);

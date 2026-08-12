@@ -146,8 +146,8 @@ export function buildSaveSystem(ctx, options = {}) {
         district: nearestDistrict(ctx, ps.x, ps.z),
         missionPhase: mission.phase,
         relays: `${mission.relaysDone}/${ctx.mission.relays.length}`,
-        breach: breach?.complete ? "Bloom severed"
-          : breach?.wave > 0 ? `Breach ${breach.wave}/${breach.waveCount}` : "Signal quiet",
+        breach: breach?.complete ? `Cycle ${breach.cyclesCleared || 1} cleared`
+          : breach?.wave > 0 ? `Cycle ${breach.cycle || 1} · Breach ${breach.wave}/${breach.waveCount}` : "Signal quiet",
         vitality: `${Math.ceil(combat.hp)}/${combat.maxHp}`,
         reinforcements: mission.reinforcements,
         elapsed: Math.max(0, Math.round(mission.elapsed)),
@@ -331,6 +331,10 @@ export function buildSaveSystem(ctx, options = {}) {
       || !(breach.boss === null || (isRecord(breach.boss)
         && isFiniteNumber(breach.boss.health) && isFiniteNumber(breach.boss.maxHealth)
         && breach.boss.health >= 0 && breach.boss.maxHealth >= breach.boss.health))) return false;
+    const hasCycleState = breach.cycle !== undefined || breach.cyclesCleared !== undefined;
+    if (hasCycleState && (!Number.isInteger(breach.cycle) || breach.cycle < 1
+      || !Number.isInteger(breach.cyclesCleared) || breach.cyclesCleared < 0
+      || breach.cycle !== breach.cyclesCleared + (breach.complete ? 0 : 1))) return false;
     const noBreachMembers = breachMembers.length === 0 && breach.remaining === 0;
     const dormantShape = breach.phase !== "dormant" || (
       breach.wave === 0 && breach.waveIndex === -1 && breach.total === 0

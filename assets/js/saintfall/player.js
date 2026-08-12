@@ -2117,6 +2117,14 @@ export async function createPlayer(ctx, canvas) {
        plant both feet along the attack bearing. */
     travelYaw: Math.PI,
     travelSpeed: 0,
+    /* Signed grade of the ground actually travelled downhill this
+       frame, plus the presentation state it drives. A steep descent
+       remains GROUNDED physics; this is not a fall, boost or jetpack
+       mode, and borrowing any of those would also borrow their fuel,
+       collision and action rules. */
+    downhillGrade: 0,
+    downhillSliding: false,
+    downhillPose: 0,
     bob: 0,
     stride: 0,
     gait: 0,
@@ -2215,6 +2223,17 @@ export async function createPlayer(ctx, canvas) {
   const WALK_SLOPE_LIMIT = 1.7;
   const WALK_MAX_STEP_UP = 1.05;
   const GROUNDED_SETTLE_DOWN_SPEED = 1.5;
+  /* The authored dune slip faces sit near the sand's angle of repose.
+     Walk normally below that band; once the directed descent reaches
+     about 36 degrees, brace and skid. Separate entry/exit grades keep
+     triangle-to-triangle noise from flickering the animation. */
+  const DOWNHILL_SLIDE_ENTER_GRADE = 0.72;
+  const DOWNHILL_SLIDE_EXIT_GRADE = 0.52;
+  /* Sand can support a visually continuous slide well beyond the
+     uphill walking limit. Past about 69 degrees it reads as a wall or
+     ledge, so gravity takes over. Fixed sub-samples below make this
+     classification stable on throttled frames. */
+  const DOWNHILL_MAX_CONTINUOUS_GRADE = 2.6;
   /* Small contour changes stay glued to the sand. A real ledge does
      not: once the whole capsule footprint is this far below the soles,
      gravity owns the body immediately. Without this handoff a fast
@@ -2668,6 +2687,45 @@ export async function createPlayer(ctx, canvas) {
     return ctx.collide ? ctx.collide.groundHeight(x, z) : terrain.heightAt(x, z);
   }
 
+  /** Update only the steep-DOWNHILL presentation latch.
+   *
+   * `rawGrade` comes from the ground delta along the displacement that
+   * collision actually allowed. It therefore cannot trigger because a
+   * hill happens to be nearby, because the body is merely facing down
+   * one, or while walking along a contour. */
+  function updateDownhill(rawGrade, eligible, dt) {
+    const targetGrade = eligible ? Math.max(0, rawGrade) : 0;
+    state.downhillGrade = damp(
+      state.downhillGrade,
+      targetGrade,
+      targetGrade > state.downhillGrade ? 20 : 8,
+      dt
+    );
+    const wasSliding = state.downhillSliding;
+    if (wasSliding) {
+      state.downhillSliding = eligible
+        && state.downhillGrade > DOWNHILL_SLIDE_EXIT_GRADE;
+    } else {
+      state.downhillSliding = eligible
+        && state.downhillGrade >= DOWNHILL_SLIDE_ENTER_GRADE;
+    }
+    if (state.downhillSliding !== wasSliding) {
+      /* A planted walk foot is fixed in world space. A skid foot rides
+         with the body. Clear the old ownership at both boundaries so
+         neither solver drags a target inherited from the other. */
+      for (const leg of legs) {
+        leg.planted = false;
+        leg.swinging = false;
+      }
+    }
+    state.downhillPose = damp(
+      state.downhillPose,
+      state.downhillSliding ? 1 : 0,
+      state.downhillSliding ? 11 : 8,
+      dt
+    );
+  }
+
   function walkableFrom(fromX, fromZ, dx, dz) {
     const len = Math.hypot(dx, dz);
     if (len < 1e-6) return true;
@@ -2685,6 +2743,32 @@ export async function createPlayer(ctx, canvas) {
     return rise / WALK_SLOPE_LOOK < WALK_SLOPE_LIMIT;
   }
 
+  /** Directed downhill grade and the sharpest local descent along an
+   *  already collision-resolved move. Sampling every 18cm prevents a
+   *  low-FPS frame from averaging a real ledge into a legal hill. */
+  function downhillAlong(fromX, fromZ, toX, toZ) {
+    const dx = toX - fromX;
+    const dz = toZ - fromZ;
+    const distance = Math.hypot(dx, dz);
+    if (distance < 1e-6) return { grade: 0, maxGrade: 0, groundDelta: 0 };
+    const steps = Math.max(1, Math.ceil(distance / 0.18));
+    const segment = distance / steps;
+    let previous = groundY(fromX, fromZ);
+    let maxGrade = 0;
+    for (let i = 1; i <= steps; i += 1) {
+      const t = i / steps;
+      const next = groundY(fromX + dx * t, fromZ + dz * t);
+      maxGrade = Math.max(maxGrade, (previous - next) / segment);
+      previous = next;
+    }
+    const groundDelta = previous - groundY(fromX, fromZ);
+    return {
+      grade: Math.max(0, -groundDelta / distance),
+      maxGrade: Math.max(0, maxGrade),
+      groundDelta,
+    };
+  }
+
   function spawn(x, z, yaw) {
     state.x = x;
     state.z = z;
@@ -2695,6 +2779,9 @@ export async function createPlayer(ctx, canvas) {
     if (yaw !== undefined) { state.yaw = yaw; state.camYaw = yaw; }
     state.travelYaw = state.yaw;
     state.travelSpeed = 0;
+    state.downhillGrade = 0;
+    state.downhillSliding = false;
+    state.downhillPose = 0;
     state.stride = 0;
     state.gait = 0;
     camAnchorReady = false;
@@ -2760,8 +2847,13 @@ export async function createPlayer(ctx, canvas) {
     const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
     const boostPose = clamp01(ctx.boost?.state?.pose || 0);
     const groundedMotion = state.grounded ? 1 - jetPose : 0;
-    const movingWeight = clamp01(state.speed / WALK) * groundedMotion;
-    const walkLeanN = clamp01(state.speed / WALK) * groundedMotion;
+    const downhillPose = clamp01(state.downhillPose) * groundedMotion;
+    /* A skid translates without stepping. Fade the cadence-derived
+       compression and run lean as the brace pose takes ownership, or
+       the body continues bobbing like it is walking above fixed feet. */
+    const gaitMotion = groundedMotion * (1 - downhillPose);
+    const movingWeight = clamp01(state.speed / WALK) * gaitMotion;
+    const walkLeanN = clamp01(state.speed / WALK);
     const sprintLeanN = clamp01(
       (state.speed - WALK) / Math.max(0.1, SPRINT - WALK)
     );
@@ -2793,10 +2885,18 @@ export async function createPlayer(ctx, canvas) {
        the body down. The root pivots at the soles, so this tips the
        whole trooper the way a diver tips rather than folding a spine. */
     const slamLean = ctx.slam?.state?.lean || 0;
-    const locomotionLean = (0.045 * walkLeanN + 0.155 * sprintLeanN) * groundedMotion
+    const ordinaryLocomotionLean = (0.045 * walkLeanN + 0.155 * sprintLeanN)
+      * gaitMotion;
+    /* Counter-lean uphill while the boots run downhill. The root is
+       pitched from the soles, so a modest negative angle puts the
+       hips behind the planted-looking brace without folding the
+       breastplate or breaking the two-handed weapon solve. */
+    const locomotionLean = ordinaryLocomotionLean
+      - downhillPose * 0.14
       + boostPose * 0.075;
     const bodyLean = locomotionLean + slamLean;
-    const travelLean = (0.055 * walkLeanN + 0.025 * sprintLeanN) * groundedMotion
+    const travelLean = (0.055 * walkLeanN + 0.025 * sprintLeanN) * gaitMotion
+      - downhillPose * 0.035
       + 0.37 * jetPose;
     // Hip height is the leg, and the root sits at the sole.
     /* Only the LOCOMOTION lean tracks the hips forward. That
@@ -2872,7 +2972,8 @@ export async function createPlayer(ctx, canvas) {
       state.x,
       state.y - (gait.bodyDrop + contactCompression - passingRise) * groundedMotion
         - (ctx.jetpack?.state?.landPulse || 0) * 0.07
-        - boostPose * 0.13,
+        - boostPose * 0.13
+        - downhillPose * (0.13 + Math.sin(state.clock * 10.5) * 0.008),
       state.z
     );
     /* YXZ so the pitch is taken about the body's OWN right, after the
@@ -2880,7 +2981,11 @@ export async function createPlayer(ctx, canvas) {
        world X and the trooper would lean north-east whatever
        direction they were running in. */
     figure.root.rotation.order = "YXZ";
-    figure.root.rotation.set(bodyLean, state.yaw + actionPose.pelvisYaw, 0);
+    figure.root.rotation.set(
+      bodyLean,
+      state.yaw + actionPose.pelvisYaw,
+      Math.sin(state.clock * 7.5) * downhillPose * 0.014
+    );
     figure.root.position.y += actionPose.drop;
     solveLegs(dt);
     // The arms are NOT posed here. They are solved onto the weapon
@@ -2889,7 +2994,7 @@ export async function createPlayer(ctx, canvas) {
     // them instead of solving them is what made the hands miss the
     // grips by 15cm in every frame.
     const crouchDrop = state.grounded && !ctx.jetpack?.state?.inFlight
-      ? Math.max(input.state.crouch ? 0.34 : 0, boostPose * 0.30)
+      ? Math.max(input.state.crouch ? 0.34 : 0, boostPose * 0.30, downhillPose * 0.40)
       : 0;
     const baseScale = figure.baseScale || { x: 1, y: 1, z: 1 };
     figure.root.scale.set(
@@ -3340,6 +3445,7 @@ export async function createPlayer(ctx, canvas) {
     let flightWantZ = state.z;
     const motionStartX = state.x;
     const motionStartZ = state.z;
+    let downhillUpdated = false;
     if ((mag > 0.01 || boostMode) && !slamMode) {
       const step = state.speed * dt;
       /* Melee owns the BODY bearing for its committed attack, but it
@@ -3482,12 +3588,39 @@ export async function createPlayer(ctx, canvas) {
         // the distance asked for. Walking into a wall must not keep
         // driving the gait, or the legs stroll on the spot.
         const travelled = Math.hypot(px - state.x, pz - state.z);
+        const descent = downhillAlong(state.x, state.z, px, pz);
+        const groundDelta = descent.groundDelta;
+        const descentGrade = descent.grade;
+        /* Carry a grounded body by the continuous surface delta BEFORE
+           asking whether support was lost. Previously XZ advanced
+           first while Y could descend only 1.5m/s; at full speed even
+           a ten-degree hill outran that settle, opened a 20cm gap, and
+           changed an ordinary walk into a fall.
+
+           Preserve a real ledge: an abrupt drop steeper than the
+           continuous-dune classifier is not ground transport, so the
+           existing support test below hands it to gravity. Any
+           pre-existing landing offset is preserved. */
+        if (state.grounded && groundDelta < 0
+          && descent.maxGrade <= DOWNHILL_MAX_CONTINUOUS_GRADE) {
+          state.y += groundDelta;
+        }
+        const slideEligible = state.grounded
+          && travelled > 1e-4
+          && descentGrade > 0
+          && descent.maxGrade <= DOWNHILL_MAX_CONTINUOUS_GRADE
+          && !boostMode && !flightMode && !shieldMode && !slamMode;
+        updateDownhill(descentGrade, slideEligible, dt);
+        downhillUpdated = true;
         /* A boost is a slide, not a six-metre sprint compressed into
            four frames. Keep the planted-foot clock nearly still while
-           the crouched body skims over it; normal gait resumes on exit. */
+           the crouched body skims over it; normal gait resumes on exit.
+           A steep downhill skid uses the same visual truth: the boots
+           move WITH the body instead of taking full walking strides. */
         const gaitTravel = !state.grounded
           ? 0
-          : boostMode ? travelled * 0.08 : travelled;
+          : boostMode ? travelled * 0.08
+            : travelled * lerp(1, 0.04, state.downhillPose);
         state.stride += gaitTravel;
         state.gait += gaitTravel / Math.max(0.55, readGaitSpec().strideLen);
         state.x = px;
@@ -3495,6 +3628,7 @@ export async function createPlayer(ctx, canvas) {
       }
       }
     }
+    if (!downhillUpdated) updateDownhill(0, false, dt);
     if (boostMode) {
       ctx.boost?.noteMotion?.(motionStartX, motionStartZ, state.x, state.z, dt);
     }
@@ -4105,6 +4239,75 @@ export async function createPlayer(ctx, canvas) {
     void dt;
   }
 
+  /** A grounded skid: wide, asymmetric boots that ride with the body.
+   *
+   * Ordinary locomotion deliberately plants each foot in world space;
+   * doing that here would make a sliding body walk past its own boots.
+   * These targets are rebuilt from the resolved travel frame instead,
+   * so the sabatons stay braced against the slope while visibly moving
+   * downhill with the hips. */
+  function solveDownhillLegs(dt, pose) {
+    const facing = Number.isFinite(state.travelYaw) ? state.travelYaw : state.yaw;
+    const sin = Math.sin(facing);
+    const cos = Math.cos(facing);
+    figure.root.updateMatrixWorld(true);
+    const slopePitch = clamp(
+      0.55 + Math.atan(Math.max(0, state.downhillGrade)) * 0.68,
+      0.55,
+      1.20
+    );
+
+    for (let i = 0; i < 2; i += 1) {
+      const leg = legs[i];
+      const lead = leg.side === LEAD_SIDE;
+      /* One boot searches ahead for purchase, the other trails as a
+         brake. Widen both beyond the walking stance so the silhouette
+         reads as balance rather than a paused mid-stride. */
+      const fore = lead ? 0.25 : -0.19;
+      const lateral = leg.side * (HIP_HALF + 0.055);
+      const x = state.x + sin * fore + cos * lateral;
+      const z = state.z + cos * fore - sin * lateral;
+      const gy = groundY(x, z);
+      footTmp.set(x, gy + figure.limb.ankle, z);
+      const follow = 1 - Math.exp(-lerp(12, 22, pose) * dt);
+      leg.foot.lerp(footTmp, follow);
+      leg.plant.copy(leg.foot);
+      leg.swinging = false;
+      leg.planted = false;
+      leg.footPitch = damp(leg.footPitch, slopePitch, 14, dt);
+
+      if (figure.legBindQuaternions && figure.kneeBindQuaternions) {
+        figure.legPivots[i].quaternion.copy(figure.legBindQuaternions[i]);
+        figure.kneePivots[i].quaternion.copy(figure.kneeBindQuaternions[i]);
+        figure.legPivots[i].updateWorldMatrix(true, true);
+      }
+      kneePole.set(
+        sin + cos * leg.side * 0.13,
+        -0.24,
+        cos - sin * leg.side * 0.13
+      ).normalize();
+      const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
+      solveTwoJoint(
+        figure.legPivots[i], figure.kneePivots[i],
+        leg.foot, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
+      );
+
+      const foot = figure.footPivots && figure.footPivots[i];
+      if (foot && foot.parent) {
+        const cp = Math.cos(leg.footPitch);
+        const sp = Math.sin(leg.footPitch);
+        footX.set(Math.cos(facing), 0, -Math.sin(facing));
+        footY.set(Math.sin(facing) * cp, -sp, Math.cos(facing) * cp);
+        footZ.crossVectors(footX, footY).normalize();
+        footBasis.makeBasis(footX, footY, footZ);
+        footWorldQuaternion.setFromRotationMatrix(footBasis);
+        foot.parent.getWorldQuaternion(footParentQuaternion).invert();
+        foot.quaternion.copy(footParentQuaternion).multiply(footWorldQuaternion);
+        foot.updateWorldMatrix(false, true);
+      }
+    }
+  }
+
   function solveLegs(dt) {
     /* Every unsupported body borrows the pack's airborne legs. A vault,
        a ledge fall and the Penitent's Fall must not advance a grounded
@@ -4112,6 +4315,11 @@ export async function createPlayer(ctx, canvas) {
     const jetPose = airbornePose();
     if (jetPose > 0.001) {
       solveJetLegs(dt, jetPose);
+      return;
+    }
+    const downhillPose = clamp01(state.downhillPose);
+    if (downhillPose > 0.025) {
+      solveDownhillLegs(dt, downhillPose);
       return;
     }
     const moving = state.speed > 0.35;

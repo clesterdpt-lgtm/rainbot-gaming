@@ -698,6 +698,37 @@ export function installQa(ctx, api) {
      *  undone to read a pose back in the space it was authored in. */
     playerState() { return api.player.state; },
 
+    /** Ground-adhesion and skid state for deterministic slope probes.
+     *  Kept separate from `grounded`: a steep slide is intentionally
+     *  supported locomotion, while a true ledge must still report air. */
+    downhillState() {
+      const p = api.player.state;
+      const ground = api.collide.groundHeight(p.x, p.z);
+      const root = api.player.figure.root;
+      const baseScale = api.player.figure.baseScale || { y: 1 };
+      return {
+        grounded: p.grounded,
+        grade: Number((p.downhillGrade || 0).toFixed(4)),
+        sliding: !!p.downhillSliding,
+        pose: Number((p.downhillPose || 0).toFixed(4)),
+        clearance: Number((p.y - ground).toFixed(4)),
+        gait: Number(p.gait.toFixed(4)),
+        stride: Number(p.stride.toFixed(4)),
+        feet: api.player.legs.map((leg) => leg.foot.toArray().map((v) => Number(v.toFixed(4)))),
+        legs: api.player.legs.map((leg) => ({
+          side: leg.side,
+          swinging: !!leg.swinging,
+          planted: !!leg.planted,
+        })),
+        root: {
+          pitch: Number(root.rotation.x.toFixed(4)),
+          roll: Number(root.rotation.z.toFixed(4)),
+          relativeY: Number((root.position.y - p.y).toFixed(4)),
+          scaleY: Number((root.scale.y / baseScale.y).toFixed(4)),
+        },
+      };
+    },
+
     /** The most recently launched tracer, straight off the GPU
      *  buffer. A screenshot can show a bolt at the wrong length or
      *  leaving from the wrong place and still look plausible; these

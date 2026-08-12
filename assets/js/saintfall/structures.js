@@ -766,7 +766,14 @@ export function makeKit(THREE) {
       webTop.push([x, lerp(pierH * 0.92, wallH, Math.pow(t, 1.55)) - thickness * 0.9]);
       webBot.push([x, lerp(pierH * 0.42, wallH * 0.62, Math.pow(t, 2.1)) - thickness * 0.9]);
     }
-    geos.push(ribbonSolid(webTop, webBot, thickness * 1.05));
+    /* Reversed: ribbonSolid's outward face depends on the direction
+       webTop/webBot are traversed, not just on top sitting above
+       bot, and this pair was wound backward - invisible from
+       outside across every buttress on the building, one wedge per
+       bay along the aisle roofline. Confirmed by disabling this
+       ribbon and watching the whole row of red drop out of the
+       facing-debug pass. */
+    geos.push(ribbonSolid(webTop.slice().reverse(), webBot.slice().reverse(), thickness * 1.05));
 
     if (pinnacle) {
       const p = prism({ h: pierH * 0.30, rBottom: thickness * 1.25, rTop: 0.06, sides: 4, twist: Math.PI / 4 });

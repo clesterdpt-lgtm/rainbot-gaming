@@ -2215,6 +2215,12 @@ export async function createPlayer(ctx, canvas) {
   const WALK_SLOPE_LIMIT = 1.7;
   const WALK_MAX_STEP_UP = 1.05;
   const GROUNDED_SETTLE_DOWN_SPEED = 1.5;
+  /* Small contour changes stay glued to the sand. A real ledge does
+     not: once the whole capsule footprint is this far below the soles,
+     gravity owns the body immediately. Without this handoff a fast
+     ground boost could carry the grounded gait several metres over a
+     drop while `y` eased down at walking-slope speed. */
+  const GROUNDED_SUPPORT_SKIN = 0.20;
 
   const tmp = new THREE.Vector3();
   const camOffset = new THREE.Vector3();
@@ -2729,6 +2735,18 @@ export async function createPlayer(ctx, canvas) {
    * subject looks like rather than a broken one. Same failure as the
    * weapon harness photographing an empty road.
    */
+  /** Flight gear is not the only way the feet can leave the ground.
+   *  A vault, fall or ledge departure uses the same tucked-leg family
+   *  without pretending the jetpack itself is active. */
+  function airbornePose() {
+    const equipment = Math.max(
+      clamp01(ctx.jetpack?.state?.pose || 0),
+      clamp01(ctx.slam?.state?.pose || 0)
+    );
+    if (state.grounded) return equipment;
+    return Math.max(equipment, clamp01(0.62 + Math.abs(state.vy) * 0.045));
+  }
+
   function applyFigurePose(dt) {
     /* Where the body IS, not just what it is doing.
        This lived below the free-camera return with the rest of the
@@ -2741,7 +2759,7 @@ export async function createPlayer(ctx, canvas) {
     const gait = readGaitSpec();
     const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
     const boostPose = clamp01(ctx.boost?.state?.pose || 0);
-    const groundedMotion = 1 - jetPose;
+    const groundedMotion = state.grounded ? 1 - jetPose : 0;
     const movingWeight = clamp01(state.speed / WALK) * groundedMotion;
     const walkLeanN = clamp01(state.speed / WALK) * groundedMotion;
     const sprintLeanN = clamp01(
@@ -3467,7 +3485,9 @@ export async function createPlayer(ctx, canvas) {
         /* A boost is a slide, not a six-metre sprint compressed into
            four frames. Keep the planted-foot clock nearly still while
            the crouched body skims over it; normal gait resumes on exit. */
-        const gaitTravel = boostMode ? travelled * 0.08 : travelled;
+        const gaitTravel = !state.grounded
+          ? 0
+          : boostMode ? travelled * 0.08 : travelled;
         state.stride += gaitTravel;
         state.gait += gaitTravel / Math.max(0.55, readGaitSpec().strideLen);
         state.x = px;
@@ -3481,6 +3501,22 @@ export async function createPlayer(ctx, canvas) {
 
     /* --- vertical --- */
     const gy = groundY(flightMode ? flightWantX : state.x, flightMode ? flightWantZ : state.z);
+    if (!flightMode && state.grounded && state.y > gy + GROUNDED_SUPPORT_SKIN) {
+      /* Ask the whole capsule footprint whether it is still supported.
+         Center-only ground is wrong at a ridge: one sabaton can still
+         be on the lip even when the pelvis has crossed it. Conversely,
+         when the complete footprint is below the soles, keeping the
+         grounded flag alive is literally walking on air. */
+      const support = ctx.collide?.flightGroundHeight
+        ? ctx.collide.flightGroundHeight(state.x, state.z, ctx.collide.radius)
+        : gy;
+      if (state.y > support + GROUNDED_SUPPORT_SKIN) {
+        state.grounded = false;
+        state.vy = Math.min(0, state.vy);
+        for (const leg of legs) leg.planted = false;
+        if (boostMode) ctx.boost?.stop?.("airborne");
+      }
+    }
     if (!flightMode && !shieldMode && state.grounded && jumpPressed && !input.state.jetpack) {
       state.vy = 6.4;
       state.grounded = false;
@@ -4070,12 +4106,10 @@ export async function createPlayer(ctx, canvas) {
   }
 
   function solveLegs(dt) {
-    /* The fall borrows the pack's airborne legs. Both are feet-off-the-
-       ground poses and the alternative was a walk cycle running in
-       mid-air under a diving body. */
-    const jetPose = Math.max(
-      clamp01(ctx.jetpack?.state?.pose || 0),
-      clamp01(ctx.slam?.state?.pose || 0));
+    /* Every unsupported body borrows the pack's airborne legs. A vault,
+       a ledge fall and the Penitent's Fall must not advance a grounded
+       walk cycle merely because the pack itself is dark. */
+    const jetPose = airbornePose();
     if (jetPose > 0.001) {
       solveJetLegs(dt, jetPose);
       return;
@@ -4476,7 +4510,7 @@ export async function createPlayer(ctx, canvas) {
   const restSwing = { fore: 0, lift: 0 };
   function restArmTarget(i, out) {
     const side = i === 0 ? 1 : -1;
-    const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
+    const jetPose = airbornePose();
     const walkN = clamp01(state.speed / WALK);
     const sprintN = clamp01((state.speed - WALK) / Math.max(0.1, SPRINT - WALK));
     // Standing still is a hang, not a swing: amplitude starts at zero.
@@ -4503,7 +4537,7 @@ export async function createPlayer(ctx, canvas) {
 
   function restArmPole(i, out) {
     const side = i === 0 ? 1 : -1;
-    const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
+    const jetPose = airbornePose();
     const sprintN = clamp01((state.speed - WALK) / Math.max(0.1, SPRINT - WALK));
     return out.set(
       lerp(side * (0.22 + 0.06 * sprintN), side * 0.25, jetPose),

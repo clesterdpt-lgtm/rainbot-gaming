@@ -631,6 +631,7 @@ export function buildJetpack(ctx, player) {
   let spawnAccumulator = 0;
   let lastRawRequested = false;
   let wingSpread = 0;
+  let boostVisualThrottle = 0;
 
   const state = {
     fuel: config.maxFuel,
@@ -695,6 +696,7 @@ export function buildJetpack(ctx, player) {
     state.landingAssistRetry = 0;
     state.takeoffClearing = false;
     state.landPulse = 0;
+    boostVisualThrottle = 0;
     wingSpread = 0;
     visual.root.userData.wingSpread = 0;
     for (const wing of visual.wings) {
@@ -921,7 +923,7 @@ export function buildJetpack(ctx, player) {
     return used;
   }
 
-  function spawnParticle(origin, direction, indexSeed) {
+  function spawnParticle(origin, direction, indexSeed, throttle = state.throttle) {
     const i = exhaust.cursor;
     exhaust.cursor = (i + 1) % exhaust.COUNT;
     const k = i * 3;
@@ -931,7 +933,7 @@ export function buildJetpack(ctx, player) {
     exhaust.positions[k] = origin.x + sx * 0.08;
     exhaust.positions[k + 1] = origin.y;
     exhaust.positions[k + 2] = origin.z + sz * 0.08;
-    const speed = 5.4 + 2.8 * state.throttle + (Math.sin(a * 0.37) * 0.5 + 0.5) * 1.5;
+    const speed = 5.4 + 2.8 * throttle + (Math.sin(a * 0.37) * 0.5 + 0.5) * 1.5;
     exhaust.velocities[k] = direction.x * speed + sx;
     exhaust.velocities[k + 1] = direction.y * speed - 0.5;
     exhaust.velocities[k + 2] = direction.z * speed + sz;
@@ -940,14 +942,23 @@ export function buildJetpack(ctx, player) {
   }
 
   function updateVisual(dt) {
-    const throttle = state.throttle;
+    /* A ground boost is propulsion from this same reliquary pack. Keep
+       flight state authoritative for physics, while the presentation
+       reads the auxiliary boost and drives the identical wings, central
+       ribbon and exhaust pool. */
+    const boostThrust = !!ctx.boost?.state?.active && !!player.state.grounded;
+    boostVisualThrottle = damp(boostVisualThrottle, boostThrust ? 1 : 0,
+      boostThrust ? 15 : 8, dt);
+    const throttle = Math.max(state.throttle, boostVisualThrottle);
+    const powered = state.active || boostThrust;
+    const deployed = state.inFlight || boostThrust;
     const stowPhase = clamp01(ctx.weapons?.stowPhase ?? 0);
     /* Let the lance clear the shoulder plane before the blades fan.
        Thrust still begins immediately; only the decorative wing sweep
        is delayed until the authored 0.42s weapon draw is complete. */
     const weaponClear = stowPhase <= 0.0001 ? 1 : 0;
-    const wingTarget = state.inFlight ? weaponClear : state.landPulse * 0.24;
-    wingSpread = damp(wingSpread, wingTarget, state.inFlight ? 12.5 : 5.5, dt);
+    const wingTarget = deployed ? weaponClear : state.landPulse * 0.24;
+    wingSpread = damp(wingSpread, wingTarget, deployed ? 12.5 : 5.5, dt);
     const clock = player.state.clock || 0;
     const spreadEase = wingSpread * wingSpread * (3 - 2 * wingSpread);
     /* The weapon clears first, then the hinges cant the folded blades
@@ -975,7 +986,7 @@ export function buildJetpack(ctx, player) {
     }
     const settleT = clamp01((slowestProgress - 0.92) / (0.99 - 0.92));
     const settleEase = settleT * settleT * (3 - 2 * settleT);
-    const deploymentCant = state.active
+    const deploymentCant = powered
       ? (14 * Math.PI / 180) * drawProgressEase * (1 - settleEase)
       : 0;
     /* The lance remains drawn for a short beat after touchdown. Its
@@ -986,7 +997,7 @@ export function buildJetpack(ctx, player) {
        existing release blend. The true fully-stowed endpoint is
        therefore unchanged. */
     const handRelease = clamp01(ctx.weapons?.carry?.handRelease ?? 0);
-    const landingCant = !state.inFlight
+    const landingCant = !deployed
       ? (5.5 * Math.PI / 180) * (1 - handRelease)
       : 0;
     const clearanceCant = deploymentCant + landingCant;
@@ -1059,7 +1070,7 @@ export function buildJetpack(ctx, player) {
       wing.visualSpread = sideSpread;
       wing.root.userData.wallTuck = wing.wallTuck;
       const modeAngleY = wing.side * (
-        state.inFlight ? (state.active ? 0.34 : 0.20) : 0.46
+        deployed ? (powered ? 0.34 : 0.20) : 0.46
       );
       const rootYawTarget = lerp(wing.side * 0.46, modeAngleY, sideSpread);
       wing.root.rotation.y = forcedWallClose
@@ -1067,7 +1078,7 @@ export function buildJetpack(ctx, player) {
         : damp(wing.root.rotation.y, rootYawTarget, 9, dt);
       const rootPitchTarget = lerp(
         0.035,
-        state.active ? -0.075 : -0.025,
+        powered ? -0.075 : -0.025,
         sideSpread
       );
       wing.root.rotation.x = forcedWallClose
@@ -1079,10 +1090,10 @@ export function buildJetpack(ctx, player) {
         const feather = wing.feathers[f];
         const delay = f * 0.038;
         const localSpread = clamp01((sideSpread - delay) / Math.max(0.01, 1 - delay));
-        const deployedAngle = state.active
+        const deployedAngle = powered
           ? feather.userData.poweredAngle
           : feather.userData.glideAngle;
-        const flutter = state.active
+        const flutter = powered
           ? Math.sin(clock * 7.4 + feather.userData.phase) * 0.012 * localSpread * throttle
           : Math.sin(clock * 2.6 + feather.userData.phase) * 0.004 * localSpread;
         const featherAngleTarget = lerp(
@@ -1094,13 +1105,13 @@ export function buildJetpack(ctx, player) {
           ? featherAngleTarget
           : damp(feather.rotation.z, featherAngleTarget, 13, dt);
         const featherYawTarget = wing.side
-          * lerp(0.08, state.active ? 0.015 : 0.055, localSpread);
+          * lerp(0.08, powered ? 0.015 : 0.055, localSpread);
         feather.rotation.y = forcedWallClose
           ? featherYawTarget
           : damp(feather.rotation.y, featherYawTarget, 11, dt);
       }
       wing.veil.scale.x = lerp(0.10, 1, sideSpread);
-      wing.veil.scale.y = lerp(0.35, state.active ? 0.92 : 1, sideSpread);
+      wing.veil.scale.y = lerp(0.35, powered ? 0.92 : 1, sideSpread);
       wing.hinge.rotation.z = clock * wing.side * 0.18;
       wing.hingeLight.rotation.z = -clock * wing.side * 0.28;
     }
@@ -1110,7 +1121,7 @@ export function buildJetpack(ctx, player) {
     if (visual.halo) visual.halo.rotation.z = Math.sin(clock * 0.72) * 0.035 * spreadEase;
     if (visual.haloLight) visual.haloLight.rotation.z = -Math.sin(clock * 0.92) * 0.055 * spreadEase;
     const energyMat = visual.wings[0]?.veil?.material;
-    if (energyMat) energyMat.opacity = lerp(0.035, state.active ? 0.24 : 0.13, spreadEase);
+    if (energyMat) energyMat.opacity = lerp(0.035, powered ? 0.24 : 0.13, spreadEase);
 
     const centralNozzle = visual.nozzles[0];
     centralNozzle.getWorldPosition(nozzlePosition[0]);
@@ -1163,13 +1174,14 @@ export function buildJetpack(ctx, player) {
     if (wallPlumeTuck > 0.02 && (exhaust.alive > 0 || spawnAccumulator > 0)) {
       clearExhaustPool();
     }
-    if (state.active && dt > 0 && flameOn && wallPlumeTuck <= 0.02) {
+    if (powered && dt > 0 && flameOn && wallPlumeTuck <= 0.02) {
       spawnAccumulator += dt * lerp(34, 82, flameThrottle);
       const count = Math.min(16, Math.floor(spawnAccumulator));
       spawnAccumulator -= count;
       for (let n = 0; n < count; n += 1) {
         plumeDirection.set(0, -1, 0).applyQuaternion(nozzleQuaternion[0]).normalize();
-        spawnParticle(nozzlePosition[0], plumeDirection, player.state.clock + n * 0.113);
+        spawnParticle(nozzlePosition[0], plumeDirection,
+          player.state.clock + n * 0.113, throttle);
       }
     }
 
@@ -1220,8 +1232,10 @@ export function buildJetpack(ctx, player) {
   }
 
   function status(playerState = player.state) {
+    const boostThrust = !!ctx.boost?.state?.active && !!playerState.grounded;
     let mode = "ready";
     if (state.active) mode = "thrust";
+    else if (boostThrust) mode = "boost";
     else if (state.inFlight) mode = state.exhausted ? "empty" : "glide";
     else if (state.cooldownRemaining > 0) mode = "cooldown";
     else if (state.recharging) mode = "recharging";
@@ -1256,6 +1270,8 @@ export function buildJetpack(ctx, player) {
       distance: Number(state.distance.toFixed(2)),
       blockedFrames: state.blockedFrames,
       exhaustParticles: exhaust.alive,
+      boostThrust,
+      flameVisible: visual.flames.some((flame) => flame.outer.visible || flame.inner.visible),
     };
   }
 

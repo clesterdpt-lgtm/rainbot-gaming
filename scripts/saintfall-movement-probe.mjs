@@ -402,20 +402,32 @@ async function main() {
       };
     });
     const glideShots = await capture("glide-firing", [70, 250]);
-    const wakeNode = await page.evaluate(() => {
+    const boostVisual = await page.evaluate(() => {
       const T = window.__SF;
       const p = T.player.state;
       T.render.scene.updateMatrixWorld(true);
-      let out = null;
+      let wake = null;
+      let footJetCount = 0;
+      let visibleFootJets = 0;
       T.render.scene.traverse((o) => {
-        if (o.name !== "glide-wake") return;
-        const w = o.getWorldPosition(new T.THREE.Vector3());
-        out = {
-          visible: o.visible,
-          offset: Math.hypot(w.x - p.x, w.z - p.z),
-        };
+        if (o.name === "glide-wake") {
+          const w = o.getWorldPosition(new T.THREE.Vector3());
+          wake = {
+            visible: o.visible,
+            offset: Math.hypot(w.x - p.x, w.z - p.z),
+          };
+        }
+        if (/^glide-jet-/.test(o.name || "")) {
+          footJetCount += 1;
+          if (o.visible) visibleFootJets += 1;
+        }
       });
-      return out;
+      return {
+        wake,
+        footJetCount,
+        visibleFootJets,
+        jetpack: T.jetpackState(),
+      };
     });
     await page.evaluate(() => window.__SF.setFiring(false));
     await page.keyboard.up("ShiftLeft");
@@ -431,14 +443,25 @@ async function main() {
       `${shotsBeforeGlide} -> ${shotsAfterGlide} shots, gliding=${glideFireState.boost.active}`);
     check("the reticle stays up while gliding",
       Number(glideFireState.reticle) > 0.5, `opacity ${glideFireState.reticle}`);
-    report.states.wakeNode = wakeNode;
+    report.states.boostVisual = boostVisual;
     /* Two and a half metres, not one: the rig is placed once a frame
        and the trooper is covering nineteen metres a second, so a
        fraction of a frame's travel is expected. The bound that matters
        is "on the trooper" versus "at twice the trooper's world
        coordinates", which is what this used to be. */
     check("the glide lays its wake under the trooper",
-      wakeNode?.visible && wakeNode.offset < 2.5, JSON.stringify(wakeNode));
+      boostVisual.wake?.visible && boostVisual.wake.offset < 2.5,
+      JSON.stringify(boostVisual.wake));
+    check("ground Shift boost burns from the reliquary jetpack",
+      boostVisual.jetpack.boostThrust
+        && boostVisual.jetpack.mode === "boost"
+        && boostVisual.jetpack.flameVisible
+        && boostVisual.jetpack.exhaustParticles > 0
+        && boostVisual.jetpack.wingSpread > 0.6,
+      JSON.stringify(boostVisual.jetpack));
+    check("ground boost has no foot-mounted jet VFX",
+      boostVisual.footJetCount === 0 && boostVisual.visibleFootJets === 0,
+      `nodes=${boostVisual.footJetCount}, visible=${boostVisual.visibleFootJets}`);
 
     /* ---------------------------------------------------------------
        6. FORWARD GLIDE DAMAGES AND THROWS
@@ -856,6 +879,59 @@ async function main() {
     check("E no longer boosts",
       !legacyE.active && legacyE.boosts === boostsBeforeE,
       `active=${legacyE.active}, boosts ${boostsBeforeE} -> ${legacyE.boosts}`);
+
+    /* A grounded flag can outlive its support for one frame at a fast
+       ridge crossing. Recreate that exact boundary deterministically:
+       two metres of empty space beneath an otherwise grounded body,
+       no pack state, and forward input still held. The controller must
+       hand the body to gravity and the legs to the airborne pose. */
+    await stage({ yaw: 0 });
+    const supportLoss = await page.evaluate(() => {
+      const T = window.__SF;
+      const p = T.player.state;
+      const support = T.collide.flightGroundHeight(p.x, p.z, T.collide.radius);
+      p.y = support + 2;
+      p.vy = 0;
+      p.grounded = true;
+      T.setGaitInput(0, -1);
+      T.advanceTime(1 / 60, 1 / 60);
+      const releasedAt = {
+        grounded: p.grounded,
+        y: p.y,
+        vy: p.vy,
+        gait: p.gait,
+      };
+      const gaitAtRelease = p.gait;
+      T.advanceTime(0.18, 1 / 60);
+      const legs = T.playerLegs().map((leg) => ({
+        planted: leg.planted,
+        swinging: leg.swinging,
+      }));
+      const out = {
+        support,
+        releasedAt,
+        end: {
+          grounded: p.grounded,
+          y: p.y,
+          vy: p.vy,
+          gaitAdvance: p.gait - gaitAtRelease,
+        },
+        legs,
+        jetpack: T.jetpackState(),
+      };
+      T.setGaitInput(null, null);
+      return out;
+    });
+    report.states.supportLoss = supportLoss;
+    check("losing ground support immediately starts an ordinary fall",
+      !supportLoss.releasedAt.grounded
+        && supportLoss.releasedAt.vy < 0
+        && !supportLoss.jetpack.inFlight,
+      JSON.stringify(supportLoss));
+    check("unsupported movement cannot keep advancing the walking gait",
+      Math.abs(supportLoss.end.gaitAdvance) < 0.001
+        && supportLoss.legs.every((leg) => !leg.planted && !leg.swinging),
+      JSON.stringify({ gaitAdvance: supportLoss.end.gaitAdvance, legs: supportLoss.legs }));
 
     /* ---------------------------------------------------------------
        11. THE SOUNDS EXIST AND MAKE SIGNAL

@@ -1715,20 +1715,9 @@ export function buildVfx(ctx, world) {
     wake.renderOrder = 5;
     glideRig.add(wake);
 
-    /* Two heel jets, angled back and out. */
-    const jets = [];
-    for (const side of [-1, 1]) {
-      const g = new THREE.ConeGeometry(0.22, 2.1, 8, 1, true);
-      g.rotateX(Math.PI / 2);
-      g.translate(0, 0, -1.05);
-      tint(g, [0.95, 0.86, 0.62], [0.42, 0.15, 0.01], "z", -2.1, 0);
-      const jet = new THREE.Mesh(g, mat);
-      jet.name = `glide-jet-${side}`;
-      jet.position.set(side * 0.28, 0.42, 0);
-      jet.visible = false;
-      glideRig.add(jet);
-      jets.push(jet);
-    }
+    /* Propulsion belongs to the reliquary on the back. The ground wake
+       remains here to describe the line carved through the sand, but
+       the former heel cones made the boost look foot-powered. */
 
     /* ---- the fall ----
        A column above the trooper while the charge builds, then rings
@@ -1777,7 +1766,7 @@ export function buildVfx(ctx, world) {
       charge: 0, chargeSeen: 0,
       burst: -1, burstRadius: 8, burstX: 0, burstY: 0, burstZ: 0,
     };
-    return { root, glideRig, mat, wake, jets, column, spike, rings, dome, live };
+    return { root, glideRig, mat, wake, column, spike, rings, dome, live };
   })();
 
   /** Ignition: the kick that starts a glide. */
@@ -1795,7 +1784,6 @@ export function buildVfx(ctx, world) {
     L.glideAttack = !!attack;
     impulse.glideRig.position.set(x, y, z);
     impulse.wake.rotation.y = Math.atan2(dx, dz);
-    for (const jet of impulse.jets) jet.rotation.y = impulse.wake.rotation.y;
     // Sand torn off the line, thrown backward and outward.
     if (Math.random() < 0.75) {
       impacts.emitDirected(x - dx * 0.6, y + 0.12, z - dz * 0.6,
@@ -1868,15 +1856,11 @@ export function buildVfx(ctx, world) {
     const showGlide = glideOn && L.glide > 0;
     if (impulse.wake.visible !== showGlide) {
       impulse.wake.visible = showGlide;
-      for (const jet of impulse.jets) jet.visible = showGlide;
     }
     if (showGlide) {
       const s = clamp01(L.glideSpeed / 22);
       impulse.wake.scale.set(0.8 + s * 0.5, 1, 0.55 + s * 0.95);
       impulse.wake.position.y = 0.06;
-      for (const jet of impulse.jets) {
-        jet.scale.set(1, 1, 0.7 + s * 0.7 + Math.random() * 0.12);
-      }
     }
 
     const chargeOn = L.charge > 0;

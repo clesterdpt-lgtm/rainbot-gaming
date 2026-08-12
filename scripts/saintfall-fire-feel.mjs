@@ -10,10 +10,11 @@
    it - fire is hitscan, so there was never anything in flight to see.
    This measures the four things that were added to put the shot back
    on screen, and photographs the first frames after the trigger so
-   the bolt can be seen travelling:
+   the discharge can be seen clearly:
 
-     BOLT    - the tracer exists, starts at the muzzle, and stops at
-               the range the ray actually reached.
+     STREAK  - one thin gold beam exists, starts at the lance tip, and
+               stops at the range the ray actually reached.
+     CLEAN   - player fire has no detached head or particle wake.
      FLASH   - the reliquary lamp spikes on the shot and is back to
                its resting output well before the next one.
      PUNCH   - the camera takes a shove, and it decays.
@@ -117,7 +118,7 @@ async function main() {
          firing line, never in the bolt. These two aims have no firing
          line to get wrong. */
       const boltCases = [];
-      let wake = null;
+      let playerTrail = null;
       for (const [name, pitch, expectClear] of [
         ["up, at open sky", -0.70, true],
         ["down, at the ground", 1.10, false],
@@ -135,15 +136,10 @@ async function main() {
         T.setFiring(true);
         T.fireWeapon(1);
         const b = T.lastTracer();
-        /* THE WAKE, read at the one aim with a proven 320m of clear
-           air. The embers behind a bolt are given births in the
-           FUTURE so each lights as the slug reaches it - dumped at the
-           muzzle in one frame they look identical in any screenshot
-           and completely wrong in motion, so this is checked rather
-           than photographed. Read anywhere else and it measures a
-           shot into the dirt: an earlier version took it wherever the
-           burst had left the trooper and got 0.35m of range. */
-        if (expectClear) wake = T.impactPool();
+        /* Player fire must not schedule any energy-styled wake motes.
+           Read on the open-sky case so an endpoint impact cannot be
+           mistaken for a projectile trail. */
+        if (expectClear) playerTrail = T.impactPool();
         T.setFiring(false);
         for (let i = 0; i < 40; i += 1) T.renderOnce(1 / 60);
         T.setAds(0);
@@ -188,7 +184,7 @@ async function main() {
       const settled = { punch: ps.punch, lamp: T.muzzleLamp() };
 
       return {
-        restLamp, peakLamp, peakPunch, settled, bolt, boltCases, home, wake,
+        restLamp, peakLamp, peakPunch, settled, bolt, boltCases, home, playerTrail,
         maxYawDriftDeg: maxYawDrift * 180 / Math.PI,
         maxPitchDriftDeg: maxPitchDrift * 180 / Math.PI,
       };
@@ -231,19 +227,12 @@ async function main() {
     let aimError = null;
     let landedOnTarget = null;
     for (const [label, waits, dist, burst, target, pitch] of [
-      ["muzzle, +16ms", 1, 2.4, 1, false, -0.02],
-      ["muzzle, +50ms", 3, 2.4, 1, false, -0.02],
-      /* A LADDER, not one guess. Shooting away from a chase camera is
-         the worst case for seeing a projectile - it is foreshortened
-         and the trooper occludes the first few metres - so where the
-         slug becomes legible has to be looked at rather than assumed.
-         At 150m/s these put it 10m and 20m out. */
-      ["one bolt, +66ms (10m)", 4, 5.2, 1, false, -0.02],
-      ["one bolt, +133ms (20m)", 8, 5.2, 1, false, -0.02],
-      /* Into open sky, where the wake has to carry the shot on its
-         own: nothing else in frame says how far or how fast it went. */
-      ["into the sky, +200ms", 12, 5.2, 1, false, -0.62],
-      ["sustained, into the sky", 10, 5.2, 4, false, -0.62],
+      ["gold streak, +16ms", 1, 2.4, 1, false, -0.02],
+      ["gold streak, +33ms", 2, 2.4, 1, false, -0.02],
+      ["gold streak, +50ms", 3, 5.2, 1, false, -0.02],
+      ["streak cleared, +66ms", 4, 5.2, 1, false, -0.02],
+      ["sky streak, +33ms", 2, 5.2, 1, false, -0.62],
+      ["sustained, distinct streaks", 2, 5.2, 4, false, -0.62],
     ]) {
       const shot = await page.evaluate(([n, yaw, d, shots, home, wantTarget, pitchRad]) => {
         const T = window.__SF;
@@ -312,10 +301,9 @@ async function main() {
         .composite([{ input: tag(TILE_W, label), left: 0, top: 0 }]).png().toBuffer());
     }
 
-    /* The chase camera is the adversarial gameplay view: the bolt flies
-       away from it and the trooper can occult the head. One profile tile
-       keeps the same real trigger, ray and projectile, then moves only
-       the QA camera so the head-versus-wake design can actually be judged. */
+    /* The chase camera sees the beam nearly end-on. One profile tile
+       keeps the same real trigger and ray, then moves only the QA camera
+       so the white-core/gold-halo streak can be judged as a line. */
     const profile = await page.evaluate(([home, yaw]) => {
       const T = window.__SF;
       T.clearEnemies();
@@ -354,16 +342,16 @@ async function main() {
     const profileProof = await sharp(profileBuffer)
       .resize(840, 600, { fit: "cover" })
       .composite([{
-        input: tag(840, "real trigger · profile · energy head + ion wake"),
+        input: tag(840, "real trigger · profile · singular gold laser"),
         left: 0,
         top: 0,
       }])
       .png().toBuffer();
-    await writeFile(path.join(out, "energy-bolt-profile.png"), profileProof);
+    await writeFile(path.join(out, "gold-laser-profile.png"), profileProof);
     frames.push(await sharp(profileBuffer).resize(TILE_W, TILE_H, { fit: "cover" })
-      .composite([{ input: tag(TILE_W, "profile, energy head + wake"), left: 0, top: 0 }])
+      .composite([{ input: tag(TILE_W, "profile, singular gold laser"), left: 0, top: 0 }])
       .png().toBuffer());
-    frameTraces.push({ label: "profile, energy head + wake", tracer: profile.tracer });
+    frameTraces.push({ label: "profile, singular gold laser", tracer: profile.tracer });
     console.log(`frames shot down bearing `
       + `${(bearing.bestYaw * 180 / Math.PI).toFixed(0)}deg, clear to `
       + `${bearing.bestClear.toFixed(1)}m`
@@ -371,8 +359,8 @@ async function main() {
       + (landedOnTarget === null ? "" : `, ${landedOnTarget} of 3 rounds on it`));
     for (const frame of frameTraces) {
       const t = frame.tracer;
-      console.log(`  ${frame.label.padEnd(28)} head `
-        + `${t ? `${t.headDistance.toFixed(1)}m along the ray` : "missing"}`);
+      console.log(`  ${frame.label.padEnd(30)} `
+        + `${t ? `${t.span.toFixed(1)}m ${t.beam ? "full beam" : "moving bolt"}` : "missing"}`);
     }
     if (landedOnTarget !== null && landedOnTarget < 1) {
       fails.push("the impact frame missed the target, so it shows no impact");
@@ -417,14 +405,16 @@ async function main() {
     if (p.bolt) {
       console.log(`      width ${p.bolt.width.toFixed(3)}m  `
         + `dir length ${Math.hypot(...p.bolt.dir).toFixed(4)}  ${p.bolt.live} live slots  `
-        + `energy style ${p.bolt.style.toFixed(0)}  head ${p.bolt.head ? "pooled" : "missing"}`);
+        + `energy style ${p.bolt.style.toFixed(0)}  beam ${p.bolt.beam ? "yes" : "no"}  `
+        + `detached head ${p.bolt.head ? "yes" : "no"}`);
       if (Math.abs(Math.hypot(...p.bolt.dir) - 1) > 1e-3) {
         fails.push("the bolt direction is not normalised");
       }
       if (!(p.bolt.style > 0.5)) fails.push("the player bolt did not receive the energy style");
-      if (!p.bolt.head) fails.push("the player bolt has no pooled head mesh");
-      if (!(p.bolt.width >= 0.40)) {
-        fails.push(`the player energy head is too small: ${p.bolt.width.toFixed(3)}m base width`);
+      if (!p.bolt.beam) fails.push("the player shot is not using the full-ray beam style");
+      if (p.bolt.head) fails.push("the player beam still has a detached head mesh");
+      if (!(p.bolt.width >= 0.04 && p.bolt.width <= 0.12)) {
+        fails.push(`the player beam is not thin: ${p.bolt.width.toFixed(3)}m half-width`);
       }
     } else {
       fails.push("no tracer was launched");
@@ -432,9 +422,8 @@ async function main() {
     console.log(`lamp: rest ${p.restLamp.intensity.toFixed(2)} `
       + `-> peak ${p.peakLamp.toFixed(2)} on the shot `
       + `-> ${p.settled.lamp.intensity.toFixed(2)} at rest`);
-    console.log(`wake: ${p.wake.scheduled} embers still to light, `
-      + `${p.wake.lit} alight, ${p.wake.energy} energy-styled, `
-      + `furthest ${p.wake.furthestAheadS}s ahead of the shot`);
+    console.log(`player trail: ${p.playerTrail.scheduled} scheduled particles, `
+      + `${p.playerTrail.lit} alight, ${p.playerTrail.energy} energy-styled`);
     console.log(`camera punch: peak ${p.peakPunch.toFixed(3)}`
       + `, ${p.settled.punch.toFixed(4)} after`);
     console.log(`aim drift over a 41-shot burst: `
@@ -447,16 +436,9 @@ async function main() {
     if (Math.abs(p.settled.lamp.intensity - p.restLamp.intensity) > 1e-3) {
       fails.push(`the lamp never came back down: ${p.settled.lamp.intensity}`);
     }
-    if (!(p.wake.scheduled >= 3)) {
-      fails.push(`the bolt laid its whole wake at the muzzle: `
-        + `${p.wake.scheduled} embers scheduled ahead of it`);
-    }
-    if (!(p.wake.energy >= 3)) {
-      fails.push(`the player's wake did not receive the energy style: ${p.wake.energy} ions`);
-    }
-    if (!(p.wake.furthestAheadS > 0.2)) {
-      fails.push(`the wake does not reach downrange: furthest ember `
-        + `${p.wake.furthestAheadS}s ahead`);
+    if (p.playerTrail.scheduled !== 0 || p.playerTrail.energy !== 0) {
+      fails.push(`the singular beam still emitted a particle wake: `
+        + `${p.playerTrail.scheduled} scheduled / ${p.playerTrail.energy} energy-styled`);
     }
     if (!(p.peakPunch > 0.2)) fails.push(`camera punch too small: ${p.peakPunch}`);
     if (!(p.settled.punch < 0.01)) fails.push(`camera punch never settled: ${p.settled.punch}`);
@@ -476,7 +458,7 @@ async function main() {
       console.log("the shot reads at both ends, and does not steer");
     }
     console.log(path.relative(root, path.join(out, "shot-frames.png")));
-    console.log(path.relative(root, path.join(out, "energy-bolt-profile.png")));
+    console.log(path.relative(root, path.join(out, "gold-laser-profile.png")));
   } finally {
     if (browser) await browser.close();
     server.kill("SIGKILL");

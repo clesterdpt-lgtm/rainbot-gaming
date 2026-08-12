@@ -314,6 +314,9 @@ export async function start({ boot, build } = {}) {
   const shotDir = new THREE.Vector3();
   const shotSide = new THREE.Vector3();
   const shotUp = new THREE.Vector3();
+  let shotQueued = false;
+  let shotPort = null;
+  let shotDamage = 22;
 
   /* ------------------------------ loop ------------------------------ */
 
@@ -406,17 +409,14 @@ export async function start({ boot, build } = {}) {
     if (slam.state.active) return;
     if (shield.state.active) return;
     if (!weapons.fire()) return;
-    /* The POINT OF THE LANCE, not the camera and not the aim node.
-       A shot that leaves from the eye passes through cover the weapon
-       is behind; a shot that leaves from the aim node leaves from ten
-       centimetres inside the needle. `emitter` is the tip itself, and
-       it sits on the same axis the aim solve puts on the camera ray,
-       so the bolt still goes where the reticle promises. */
+    /* Accept the shot now, but resolve it after the visible weapon has
+       received this frame's aim and recoil pose. Reading a world-space
+       socket here samples LAST frame's lance: `weapons.fire()` has just
+       added recoil, while `weapons.update()` has not applied it yet.
+       During a burst that left the streak 7-8cm away from the rendered
+       needle, and a fast turn could separate them much further. */
     const w = weapons.current;
-    const port = w ? (w.emitter || w.muzzle) : null;
-    if (port) port.getWorldPosition(shotOrigin);
-    else shotOrigin.copy(render.camera.position);
-
+    shotPort = w ? (w.emitter || w.muzzle) : null;
     render.camera.getWorldDirection(shotDir);
     const cone = weapons.spread();
     if (cone > 0) {
@@ -429,23 +429,34 @@ export async function start({ boot, build } = {}) {
       shotDir.addScaledVector(shotSide, Math.cos(a) * r)
         .addScaledVector(shotUp, Math.sin(a) * r).normalize();
     }
-    combat.fire(shotOrigin, shotDir, {
-      damage: (weapons.current && weapons.current.spec.damage) || 22,
-    });
-    /* The three things that make a shot land on the PLAYER rather
-       than on the target: light at the muzzle, a shove on the camera,
-       and the report. The bolt and the impact are at the far end of
-       the shot and cannot carry the near end on their own - which is
-       what "the gun feels weak" was describing. */
-    if (vfx.muzzle) {
-      vfx.muzzle(shotOrigin.x, shotOrigin.y, shotOrigin.z,
-        shotDir.x, shotDir.y, shotDir.z, 1, true);
-    }
+    shotDamage = (w && w.spec.damage) || 22;
+    shotQueued = true;
     weapons.flashMuzzle();
-    player.punch(1);
-    audio.shot(shotOrigin.x, shotOrigin.z, { gain: 0.78 });
+    return true;
   }
   api.shoot = shoot;
+
+  /** Resolve an accepted shot from the lance's FINAL posed tip.
+   *
+   * Damage remains hitscan, and `shotDir` remains the press-time camera
+   * ray (including its sampled spread). Only the near end waits: the
+   * socket is read after `weapons.update()` and `player.postUpdate()` so
+   * the singular beam begins on the needle the player actually sees in
+   * the discharge frame. */
+  function flushShot() {
+    if (!shotQueued) return;
+    shotQueued = false;
+    if (shotPort) {
+      shotPort.updateWorldMatrix(true, false);
+      shotOrigin.setFromMatrixPosition(shotPort.matrixWorld);
+    } else {
+      shotOrigin.copy(render.camera.position);
+    }
+    combat.fire(shotOrigin, shotDir, { damage: shotDamage });
+    player.punch(1);
+    audio.shot(shotOrigin.x, shotOrigin.z, { gain: 0.78 });
+    shotPort = null;
+  }
 
   /* Two rites, one physical censer-lance. `autogun` is retained as
      the ranged-mode compatibility key; setMode changes ballistics
@@ -655,6 +666,7 @@ export async function start({ boot, build } = {}) {
     stepGame(d);
     weapons.update(d, player, render.camera);
     player.postUpdate(d);
+    flushShot();
     jetpack.updateVisual(d);
     shield.updateVisual(d);
     vfx.update(d, render.camera);

@@ -726,14 +726,21 @@ export function installQa(ctx, api) {
         a.aDir.array[idx * 3 + 2]
       );
       const age = Math.max(0, ctx.atmos.elapsed - newest);
-      const headDistance = Math.min(age * 150, a.aSpan.array[idx]);
+      const style = a.aStyle ? a.aStyle.array[idx] : 0;
+      /* Hostile plasma travels at 150m/s. The player style is a
+         hitscan laser, so its visible head is the resolved endpoint
+         from the instant the streak appears. */
+      const headDistance = style > 0.5
+        ? a.aSpan.array[idx]
+        : Math.min(age * 150, a.aSpan.array[idx]);
       return {
         start: start.toArray(),
         dir: direction.toArray(),
         span: a.aSpan.array[idx],
         width: a.aWidth.array[idx],
-        style: a.aStyle ? a.aStyle.array[idx] : 0,
-        head: !!headMesh,
+        style,
+        head: style <= 0.5 && !!headMesh,
+        beam: style > 0.5,
         age: Number(age.toFixed(4)),
         headDistance: Number(headDistance.toFixed(2)),
         live,

@@ -139,13 +139,19 @@ async function main() {
        bolt climbs clear of the trooper's silhouette against open sky
        - the only way to photograph its shape and colour at all. */
     const report = {};
+    const fails = [];
     async function burst(label, aim) {
-      const { out: frames, quiet } = await page.evaluate(({ ax, ay, az }) => {
+      const { out: frames, quiet, origin } = await page.evaluate(({ ax, ay, az }) => {
         const T = window.__SF;
         T.aimAt(ax, ay, az, 14);
         const gl = T.render.renderer.getContext();
         const fin = () => { if (typeof gl.finish === "function") gl.finish(); };
         const out = [];
+        const tracerMesh = T.vfx.group.getObjectByName("tracers");
+        const births = tracerMesh.geometry.attributes.aBirth.array;
+        const beforeBirths = [];
+        for (let i = 0; i < births.length; i += 4) beforeBirths.push(births[i]);
+        const beforeImpact = T.impactPool();
         // A quiet frame first: the trooper's own visor, heart lantern
         // and reliquary lamp are emissive, so the brightest pixel in a
         // discharge frame is not necessarily the discharge. Only the
@@ -164,12 +170,34 @@ async function main() {
         T.ctx.player.input.state.firing = held;
         fin();
         out.push({ i: 0, ms: 4, image: T.captureDataURL() });
+        const trace = T.lastTracer();
+        const emitter = T.weapons.current.emitter.getWorldPosition(new T.ctx.THREE.Vector3());
+        const start = new T.ctx.THREE.Vector3(...trace.start);
+        const projected = emitter.clone().project(T.render.camera);
+        const canvas = T.render.renderer.domElement;
+        let changedSlots = 0;
+        for (let i = 0; i < births.length; i += 4) {
+          if (Math.abs(births[i] - beforeBirths[i / 4]) > 1e-7) changedSlots += 1;
+        }
+        const afterImpact = T.impactPool();
+        const origin = {
+          trace,
+          emitter: emitter.toArray(),
+          startToEmitterM: start.distanceTo(emitter),
+          changedSlots,
+          scheduledWakeDelta: Math.max(0,
+            (afterImpact?.scheduled || 0) - (beforeImpact?.scheduled || 0)),
+          emitterPx: [
+            Math.round((projected.x * 0.5 + 0.5) * canvas.width),
+            Math.round((-projected.y * 0.5 + 0.5) * canvas.height),
+          ],
+        };
         for (let i = 1; i < 8; i += 1) {
           T.renderOnce(1 / 240);
           fin();
           out.push({ i, ms: Math.round((i + 1) * (1000 / 240)), image: T.captureDataURL() });
         }
-        return { out, quiet };
+        return { out, quiet, origin };
       }, aim);
 
       /* WHERE THE FLASH LANDED, IN PIXELS.
@@ -195,25 +223,31 @@ async function main() {
           + Math.max(0, shot.data[o + 2] - base2.data[o + 2]);
         if (d > best) { best = d; bx = i % info.width; by = (i / info.width) | 0; }
       }
-      const screen = await page.evaluate(() => {
-        const T = window.__SF;
-        const THREE = T.ctx.THREE;
-        const w = T.weapons.current;
-        const p2 = w.emitter.getWorldPosition(new THREE.Vector3())
-          .project(T.render.camera);
-        const c = T.render.renderer.domElement;
-        return {
-          x: Math.round((p2.x * 0.5 + 0.5) * c.width),
-          y: Math.round((-p2.y * 0.5 + 0.5) * c.height),
-          w: c.width, h: c.height,
-        };
-      });
+      let nearest = Infinity;
+      let nx = 0;
+      let ny = 0;
+      const threshold = Math.max(24, best * 0.08);
+      for (let i = 0; i < info.width * info.height; i += 1) {
+        const o = i * info.channels;
+        const d = Math.max(0, shot.data[o] - base2.data[o])
+          + Math.max(0, shot.data[o + 1] - base2.data[o + 1])
+          + Math.max(0, shot.data[o + 2] - base2.data[o + 2]);
+        if (d < threshold) continue;
+        const x = i % info.width;
+        const y = (i / info.width) | 0;
+        const dist = Math.hypot(origin.emitterPx[0] - x, origin.emitterPx[1] - y);
+        if (dist < nearest) { nearest = dist; nx = x; ny = y; }
+      }
       report[label] = {
-        emitterPx: [screen.x, screen.y],
+        emitterPx: origin.emitterPx,
         brightestNewPx: [bx, by],
         peakDelta: best,
-        offsetPx: Math.round(Math.hypot(screen.x - bx, screen.y - by)),
-        frame: [screen.w, screen.h],
+        brightestOffsetPx: Math.round(Math.hypot(
+          origin.emitterPx[0] - bx, origin.emitterPx[1] - by)),
+        nearestNewPx: [nx, ny],
+        nearestNewOffsetPx: Number.isFinite(nearest) ? Math.round(nearest) : null,
+        frame: [info.width, info.height],
+        ...origin,
       };
 
       for (const f of frames) {
@@ -235,6 +269,38 @@ async function main() {
       return { x: ps.x, y: ps.y, z: ps.z };
     });
     await burst("level", { ax: here.x, ay: here.y + 1.6, az: here.z - 90 });
+
+    /* A fast camera change is the adversarial origin case. Before the
+       deferred-tip fix, the tracer was stamped from the old carry pose
+       and the rendered lance could finish the frame 30cm away. */
+    const stressOrigin = await page.evaluate(() => {
+      const T = window.__SF;
+      const THREE = T.ctx.THREE;
+      T.advanceTime(0.25);
+      T.weapons.resupply();
+      const mesh = T.vfx.group.getObjectByName("tracers");
+      const births = mesh.geometry.attributes.aBirth.array;
+      const before = [];
+      for (let i = 0; i < births.length; i += 4) before.push(births[i]);
+      const ps = T.playerState();
+      T.setCam(ps.camYaw + 0.85, ps.camPitch - 0.20);
+      const held = T.ctx.player.input.state.firing;
+      T.ctx.player.input.state.firing = true;
+      T.renderOnce(1 / 240);
+      T.ctx.player.input.state.firing = held;
+      const trace = T.lastTracer();
+      const emitter = T.weapons.current.emitter.getWorldPosition(new THREE.Vector3());
+      const start = new THREE.Vector3(...trace.start);
+      let changedSlots = 0;
+      for (let i = 0; i < births.length; i += 4) {
+        if (Math.abs(births[i] - before[i / 4]) > 1e-7) changedSlots += 1;
+      }
+      return {
+        startToEmitterM: start.distanceTo(emitter),
+        changedSlots,
+        trace,
+      };
+    });
 
     /* ---------------------- the side view ----------------------------
        Fired along the LANCE'S OWN AXIS rather than along the camera,
@@ -263,6 +329,10 @@ async function main() {
       const gl = T.render.renderer.getContext();
       const fin = () => { if (typeof gl.finish === "function") gl.finish(); };
       const out = [];
+      // Let the production-path stress shot clear before photographing
+      // this isolated profile. Otherwise two valid, separate triggers
+      // overlap and make the singular-beam proof itself look doubled.
+      T.advanceTime(0.10);
       T.ctx.combat.fire(org, dir, { damage: 22 });
       T.ctx.vfx.muzzle(org.x, org.y, org.z, dir.x, dir.y, dir.z, 1, true);
       T.weapons.flashMuzzle();
@@ -295,12 +365,44 @@ async function main() {
     console.log("--- where the flash landed on screen ---");
     for (const [k, r] of Object.entries(report)) {
       console.log(`${k.padEnd(6)} emitter ${JSON.stringify(r.emitterPx)}  `
-        + `brightest-new ${JSON.stringify(r.brightestNewPx)}  offset ${r.offsetPx}px `
+        + `nearest-new ${JSON.stringify(r.nearestNewPx)}  offset ${r.nearestNewOffsetPx}px `
         + `of ${r.frame[0]}x${r.frame[1]}`);
     }
+    console.log(`snap-turn origin      ${stressOrigin.startToEmitterM.toFixed(5)}m from final tip`);
     console.log("");
-    if (errors.length) console.log("ERRORS:\n" + errors.join("\n"));
-    else console.log("no console/page errors");
+    if (!(g.emitterToTip <= 0.01)) fails.push(`emitter is ${g.emitterToTip.toFixed(4)}m from rendered tip`);
+    if (!(g.flareToTip <= 0.01)) fails.push(`flare is ${g.flareToTip.toFixed(4)}m from rendered tip`);
+    if (!(g.emitterOffAxis <= 0.02)) fails.push(`emitter is ${g.emitterOffAxis.toFixed(4)}m off aim ray`);
+    for (const [label, r] of Object.entries(report)) {
+      if (!(r.startToEmitterM <= 0.01)) {
+        fails.push(`${label} streak starts ${r.startToEmitterM.toFixed(4)}m from final posed tip`);
+      }
+      if (r.changedSlots !== 1) fails.push(`${label} trigger changed ${r.changedSlots} tracer slots, not one`);
+      if (r.scheduledWakeDelta !== 0) fails.push(`${label} scheduled ${r.scheduledWakeDelta} wake particles`);
+      if (!r.trace?.beam || r.trace?.head) fails.push(`${label} is not one headless beam`);
+      if (!(r.trace?.width >= 0.04 && r.trace?.width <= 0.12)) {
+        fails.push(`${label} beam width ${r.trace?.width}m is outside the thin-laser range`);
+      }
+      if (!(r.nearestNewOffsetPx !== null && r.nearestNewOffsetPx <= 6)) {
+        fails.push(`${label} rendered discharge begins ${r.nearestNewOffsetPx}px from projected tip`);
+      }
+    }
+    if (!(stressOrigin.startToEmitterM <= 0.01)) {
+      fails.push(`snap-turn streak starts ${stressOrigin.startToEmitterM.toFixed(4)}m from final posed tip`);
+    }
+    if (stressOrigin.changedSlots !== 1) {
+      fails.push(`snap-turn trigger changed ${stressOrigin.changedSlots} tracer slots, not one`);
+    }
+    if (errors.length) fails.push(...errors);
+    const result = { geometry, report, stressOrigin, errors, failures: fails };
+    await writeFile(path.join(outDir, "report.json"), JSON.stringify(result, null, 2));
+    if (fails.length) {
+      console.log("FAIL:");
+      for (const failure of fails) console.log(`  - ${failure}`);
+      process.exitCode = 1;
+    } else {
+      console.log("PASS: one thin gold beam begins on the final posed lance tip");
+    }
     console.log(`frames -> ${outDir}`);
   } finally {
     await browser?.close();

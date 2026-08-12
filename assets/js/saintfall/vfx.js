@@ -1012,27 +1012,24 @@ export function buildVfx(ctx, world) {
      that teleports. The stretch IS the read.
      ============================================================ */
   const TRACER_MAX = 96;
-  /* AN ENERGY BOLT, NOT A BULLET STREAK. A tracer is a hot smear left
-     by something already gone; a censer-lance throws a discrete slug
-     of light that you watch travel and can lead a target with. That
-     is a slower, shorter, fatter thing: 150m/s crosses a 40m firefight
-     in a quarter second, which is long enough to read as flight and
-     short enough not to feel lobbed. */
+  /* Hostile plasma still travels so incoming fire has a direction the
+     player can read and evade. The player's censer-lance is hitscan and
+     now draws a single, brief tip-to-impact laser instead of borrowing
+     this moving-bolt timing. */
   const TRACER_SPEED = 150;
-  /* The lance fires LIGHT. At 150 m/s the player's own bolt crawled
-     the first ten metres in front of the camera and read as a thrown
-     ember; a blast has to clear the near field before the eye can
-     track it, and 520 puts a 60m shot on target inside a tenth of a
-     second while still leaving something to see. */
+  /* Retained for QA/introspection of legacy slots. Player beams do not
+     travel: their full resolved ray appears on the discharge frame. */
   const ENERGY_TRACER_SPEED = 520;
-  /* The old 7.5m orange wake was longer and brighter than its head, so
-     the eye read a conventional tracer line. The separate head card
-     below now owns legibility; this is only its ion afterimage. */
-  const TRACER_TAIL = 1.15;      // m of wake behind the player's bolt
+  const TRACER_TAIL = 1.15;
   const HOSTILE_TRACER_TAIL = 7.5;
-  const RELIQUARY_FADE_TIME = 0.055;
+  /* One distinct streak per 9Hz shot: long enough for three 60Hz frames,
+     short enough to be gone well before the next discharge. */
+  const RELIQUARY_FADE_TIME = 0.058;
   const HOSTILE_FADE_TIME = 0.050;
-  const RELIQUARY_BOLT_WIDTH = 0.42;
+  /* Half-width in world metres. The old 0.42m base plus a separate head
+     card made a comet-sized orb; this yields a tight white core inside
+     a thin gold bloom, like the cover-art streak. */
+  const RELIQUARY_BOLT_WIDTH = 0.075;
   const tracers = (() => {
     const geo = new THREE.BufferGeometry();
     const pos = new Float32Array(TRACER_MAX * 4 * 3);
@@ -1123,12 +1120,18 @@ export function buildVfx(ctx, world) {
         // The head stops at the range the ray reached; the tail keeps
         // running, so the bolt is swallowed by whatever it hit rather
         // than winking out in mid air.
-        "  float head = min(travelled, aSpan);",
+        "  float movingHead = min(travelled, aSpan);",
         // The head stops at impact, but the tail continues forward and
         // collapses into it. Basing this on `head` froze the last 3m.
-        "  float tail = clamp(travelled - tailLength, 0.0, aSpan);",
+        "  float movingTail = clamp(travelled - tailLength, 0.0, aSpan);",
+        // Hostile fire travels. The player's hitscan laser presents its
+        // entire authoritative ray for one short discharge.
+        "  float head = mix(movingHead, aSpan, aStyle);",
+        "  float tail = mix(movingTail, 0.0, aStyle);",
         "  float impactAge = max(age - aSpan / speed, 0.0);",
-        "  vLife = 1.0 - clamp(impactAge / fadeTime, 0.0, 1.0);",
+        "  float hostileLife = 1.0 - clamp(impactAge / fadeTime, 0.0, 1.0);",
+        "  float beamLife = 1.0 - clamp(age / uEnergyFade, 0.0, 1.0);",
+        "  vLife = mix(hostileLife, beamLife, aStyle);",
         "  if (age < 0.0 || vLife <= 0.0) {",
         "    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);",
         "    vAlong = 0.0; vAcross = 0.0; vSeed = 0.0;",
@@ -1138,24 +1141,8 @@ export function buildVfx(ctx, world) {
         "  float alongDistance = mix(tail, head, aCorner.x);",
         "  vec3 p = position + aDir * alongDistance;",
         "  vec4 mv = modelViewMatrix * vec4(p, 1.0);",
-        /* A chase camera projects the real ray through the trooper's
-           silhouette, so the bolt bows a little toward the weapon side
-           in MID flight and returns to the real endpoint. Collision,
-           damage and the stored ray are unchanged.
-
-           IT MUST NOT BOW NEAR THE MUZZLE. This used to ramp in from
-           0.25m and swing 1.25m across, which is most of a body width
-           in the first three metres - so however exactly the emitter
-           was placed on the needle, the bolt visibly peeled off it and
-           the shot read as coming from beside the lance. The arc now
-           starts at four metres, by which point the whole weapon is
-           out of frame anyway, and is a third of the size. */
-        "  vec4 startMv = modelViewMatrix * vec4(position, 1.0);",
-        "  float muzzleSide = startMv.x < 0.0 ? -1.0 : 1.0;",
-        "  float endpointReturn = smoothstep(0.0, 5.0, aSpan - alongDistance);",
-        "  float silhouetteArc = smoothstep(4.0, 12.0, alongDistance)",
-        "    * (1.0 - smoothstep(26.0, 52.0, alongDistance)) * endpointReturn;",
-        "  mv.x += muzzleSide * 0.40 * silhouetteArc * aStyle;",
+        /* No screen-space bow. The streak is the actual straight ray
+           from the final posed needle tip to the resolved hit point. */
         "  vec3 dv = normalize((modelViewMatrix * vec4(aDir, 0.0)).xyz);",
         "  vec3 toCam = normalize(-mv.xyz);",
         "  vec3 side = cross(dv, toCam);",
@@ -1167,13 +1154,10 @@ export function buildVfx(ctx, world) {
            matters, so the width is floored instead: end-on it reads as
            a travelling bead rather than as nothing. */
         "  vec3 sideN = sl > 1e-3 ? side / sl : vec3(1.0, 0.0, 0.0);",
-        // Teardrop: a fat round slug at the head, drawn out into a
-        // thin wake. A constant-width bar reads as a laser sight.
+        // Hostile fire keeps its teardrop; the player beam is a narrow,
+        // parallel-sided laser with a white core and gold sheath.
         "  float hostileShape = 0.16 + 1.35 * pow(aCorner.x, 1.6);",
-        // Nearly parallel-sided, with the head only slightly proud: a
-        // laser bolt is a short rod of light. The old 0.045 tail
-        // tapered to a hair and turned the shot into a comet.
-        "  float energyShape = 0.30 + 0.24 * pow(aCorner.x, 3.0);",
+        "  float energyShape = 1.0;",
         "  float w = aWidth * mix(hostileShape, energyShape, aStyle)",
         "    * mix(1.7, 1.0, sl);",
         "  mv.xyz += sideN * (aCorner.y * w);",
@@ -1229,39 +1213,17 @@ export function buildVfx(ctx, world) {
         // gradient runs ACROSS the bolt, not along it, which is what
         // separates a glowing object from a warm smear.
         "  vec3 hostileColour = mix(uCold, uHot, core);",
-        /* A LASER, not a plasma ribbon.
-
-           The wake used to carry two counter-phased ion filaments and
-           a 82Hz charge modulation, which is a good description of
-           unstable gas and the wrong description of a shot of light:
-           it crawled, it writhed, and it read as something leaking
-           off the weapon. What is left is a hard white core inside a
-           gold sheath, held at nearly constant brightness down the
-           rod, with a bead at the head - and the tail cut clean
-           instead of trailing off into embers.
-
-           The core is much tighter than the hostile one (11 against
-           7). A laser's read is the RATIO between an almost-white
-           centre and a saturated edge; widen the core and it turns
-           into a glowing bar. */
-        "  float energyCore = pow(across, 5.5);",
-        "  float energyHalo = pow(across, 1.5);",
-        "  float energyWake = mix(0.30, 1.0, pow(along, 1.6));",
-        "  float bead = smoothstep(0.72, 1.0, along);",
-        /* The halo carries most of the ROD and the core carries the
-           white line down its middle. An earlier pass put the core at
-           exponent 11 with the halo at a fifth of this weight, which
-           meant only the middle 15% of the quad had any alpha at all:
-           the bolt rendered as a two-pixel white hair towed behind a
-           ball, and every attempt to fix it by widening the quad just
-           made the hair longer. Width is not what a rod is made of. */
-        "  float energyBody = (energyCore * 0.95 + energyHalo * 0.55",
-        "    + bead * energyCore * 0.55) * energyWake * cap;",
+        /* Singular cover-art laser: constant light from the lance tip,
+           tight ivory core, saturated gold halo, and no head bead or
+           longitudinal particle-like modulation. */
+        "  float energyCore = pow(across, 7.5);",
+        "  float energyHalo = pow(across, 1.8);",
+        "  float energyBody = (energyCore * 1.05 + energyHalo * 0.44) * cap;",
         "  vec3 energyColour = mix(uEnergyFringe, uEnergyBody, pow(across, 0.55));",
         "  energyColour = mix(energyColour, uEnergyCore, pow(across, 4.0) * 0.95);",
         "  float body = mix(hostileBody, energyBody, vStyle);",
         "  vec3 c = mix(hostileColour, energyColour, vStyle);",
-        "  float gain = mix(4.6, 9.6, vStyle);",
+        "  float gain = mix(4.6, 8.4, vStyle);",
         "  gl_FragColor = vec4(c * body * vLife * gain,",
         "    clamp(body * vLife, 0.0, 1.0));",
         "}",
@@ -1343,7 +1305,8 @@ export function buildVfx(ctx, world) {
         "  vStyle = aStyle;",
         "  float seed = fract(aBirth * 13.71);",
         "  vPulse = mix(0.90 + 0.10 * sin(age * 78.0 + seed * 6.2831), 1.0, aStyle);",
-        "  if (age < 0.0 || vLife <= 0.0) {",
+        // Player fire is one streak, not a streak plus a second orb.
+        "  if (age < 0.0 || vLife <= 0.0 || aStyle > 0.5) {",
         "    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);",
         "    return;",
         "  }",
@@ -1603,22 +1566,21 @@ export function buildVfx(ctx, world) {
     const span = Math.min(distance, 900);
     const style = energy ? 1 : 0;
     tracers.emit(x, y, z, dx, dy, dz, span, width, style);
-    /* THE WAKE. The bolt itself is one quad and reads as a clean
-       object; against open sky, a clean object is also a small one,
-       and there is nothing around it to say how fast or how far it
-       went. These embers are lit as the slug reaches them and hang
-       behind it, so the shot leaves a path instead of a dot.
-
-       Counted off the distance rather than fixed, so a point-blank
-       shot does not get the same trail as one across the basin, and
-       capped so sustained fire cannot flush the pool. */
-    const beads = Math.min(14, Math.max(3, Math.round(span * 0.22)));
-    impacts.emitTrail(x, y, z, dx, dy, dz, span, TRACER_SPEED, beads,
-      energy ? 0.62 : 0.55, energy ? 2.0 : 0.85);
+    /* Hostile plasma keeps a wake so incoming fire can be tracked.
+       Player fire is deliberately ONE continuous laser with no motes. */
+    if (!energy) {
+      const beads = Math.min(14, Math.max(3, Math.round(span * 0.22)));
+      impacts.emitTrail(x, y, z, dx, dy, dz, span, TRACER_SPEED, beads, 0.55, 0.85);
+    }
   }
 
   /** The bloom at the muzzle, plus the gases leaving it. */
   function muzzle(x, y, z, dx, dy, dz, scale = 1, energy = false) {
+    /* The player already has a flare and point light parented to the
+       exact needle-tip emitter. Adding world-space cards and seven
+       directed particles here was the white puff in front of the
+       character. Keep this pool for hostile weapons only. */
+    if (energy) return;
     const tint = energy ? 2.0 : 1.0;
     /* THE BRIGHT ONE GOES ON THE MUZZLE.
        The second puff used to sit 0.34m along the shot, and from a

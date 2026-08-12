@@ -1162,9 +1162,6 @@ async function haloEffectsPass(page, definitions) {
     const ps = T.player.state;
     ps.yaw = 0;
     ps.camYaw = 0;
-    const attacker = T.enemies.spawn("harrow", ps.x, ps.z - 4, {
-      id: "qa-seraph-rear-attacker", health: 500,
-    });
     const waves = [];
     const stopWave = T.combat.bus.on("shockwave", (event) => {
       if (event?.source === "seraph-aegis") waves.push({ ...event });
@@ -1172,6 +1169,12 @@ async function haloEffectsPass(page, definitions) {
     T.setShieldInput(true);
     T.advanceTime(1.1, 1 / 120);
     const dome = T.shieldState();
+    /* Spawn after formation so ordinary AI cannot wander beyond the blast
+       while this probe is proving the shield response rather than pursuit. */
+    const attacker = T.enemies.spawn("harrow", ps.x, ps.z - 0.3, {
+      id: "qa-seraph-rear-attacker", health: 500,
+    });
+    T.enemies.stun(attacker, 3);
     const healthBefore = attacker.health;
     const blockedDamage = T.combat.hurtPlayer(40, {
       source: "enemy-melee", enemyId: attacker.id, enemyKey: attacker.key,
@@ -1214,6 +1217,362 @@ async function haloEffectsPass(page, definitions) {
       && seraphProbe.healthAfter < seraphProbe.healthBefore
       && seraphProbe.waves.some((wave) => wave.source === "seraph-aegis"),
     JSON.stringify(evidence.haloSeraph));
+
+  await invoke(page, "resetProgressionForQA");
+}
+
+async function edictEffectsPass(page, definitions) {
+  console.log("\n=== ORDER OF THE EDICT EFFECTS ===");
+  const prepared = await prepareOrder(page, definitions, "edict", {
+    receipt: "qa:effect:edict-rank",
+  });
+  const order = prepared.order;
+  evidence.edictPreparation = {
+    ok: prepared.ok,
+    invested: order && prepared.fill ? investedInOrder(prepared.fill.state, order) : 0,
+    allocations: prepared.state?.allocations || {},
+  };
+
+  /* One live offensive command covers the three cooperating Edict rites.
+     Enemies consume Siren's orders in combat.update, Recall moves the same
+     authoritative marker, and Live Fuse is struck through the accepted
+     weapon/combat ray rather than by editing its timer. */
+  const commandProbe = await page.evaluate(() => {
+    const T = window.__SF;
+    const freshMission = () => T.mission.restore({
+      phase: "relays", relaysDone: 0, extractCalled: false, extractTimer: 0,
+      elapsed: 0, deaths: 0, reinforcements: 5, maxReinforcements: 5,
+      relays: [], cooldowns: {}, pending: [],
+    });
+    const angleDistance = (a, b) => Math.abs(((a - b + Math.PI * 3)
+      % (Math.PI * 2)) - Math.PI);
+    T.clearEnemies();
+    freshMission();
+    T.teleport(0, 0, 0);
+    T.invulnerable(true);
+    const ps = T.player.state;
+    ps.yaw = 0;
+    ps.camYaw = 0;
+    ps.camPitch = 0;
+    ps.grounded = true;
+
+    const inboundEvents = [];
+    const relocatedEvents = [];
+    const beaconHits = [];
+    const stopInbound = T.mission.bus.on("inbound", (event) => inboundEvents.push({ ...event }));
+    const stopRelocated = T.mission.bus.on("relocated", (event) => relocatedEvents.push({ ...event }));
+    const stopBeacon = T.mission.bus.on("beaconHit", (event) => beaconHits.push({ ...event }));
+    const firstCall = T.mission.call("orbital");
+    const initial = T.mission.pending()[0] || null;
+    if (!initial) {
+      stopInbound?.(); stopRelocated?.(); stopBeacon?.();
+      return { firstCall, initial: null, inboundEvents, relocatedEvents, beaconHits };
+    }
+
+    const thresher = T.enemies.spawn("thresher", initial.x + 13, initial.z, {
+      id: "qa-edict-siren-thresher", health: 500,
+    });
+    const gleaner = T.enemies.spawn("gleaner", initial.x - 13, initial.z, {
+      id: "qa-edict-siren-gleaner", health: 500,
+    });
+    const harrow = T.enemies.spawn("harrow", initial.x + 14, initial.z, {
+      id: "qa-edict-siren-harrow", health: 900,
+    });
+    const lightBefore = {
+      thresher: Math.hypot(thresher.x - initial.x, thresher.z - initial.z),
+      gleaner: Math.hypot(gleaner.x - initial.x, gleaner.z - initial.z),
+    };
+    const harrowWant = Math.atan2(initial.x - harrow.x, initial.z - harrow.z);
+    const harrowFacingBefore = angleDistance(harrow.yaw, harrowWant);
+    T.advanceTime(0.45, 1 / 120);
+    const afterSiren = {
+      thresherDistance: Math.hypot(thresher.x - initial.x, thresher.z - initial.z),
+      gleanerDistance: Math.hypot(gleaner.x - initial.x, gleaner.z - initial.z),
+      thresherLure: thresher.commandLure ? { ...thresher.commandLure } : null,
+      gleanerLure: gleaner.commandLure ? { ...gleaner.commandLure } : null,
+      harrowLure: harrow.commandLure ? { ...harrow.commandLure } : null,
+      harrowFacing: angleDistance(harrow.yaw, harrowWant),
+    };
+
+    const beforeRecall = T.mission.pending()[0] || null;
+    ps.camYaw = Math.PI * 0.5;
+    const recallCall = T.mission.call("orbital");
+    const afterRecall = T.mission.pending()[0] || null;
+    T.advanceTime(0.02, 1 / 120);
+    const luresAfterRecall = [thresher, gleaner, harrow].map((enemy) => ({
+      id: enemy.id,
+      lure: enemy.commandLure ? { ...enemy.commandLure } : null,
+    }));
+
+    const shotsBefore = T.combat.player.shots;
+    let fired = 0;
+    if (afterRecall) {
+      for (let index = 0; index < 4; index += 1) {
+        /* combat.fire is the authoritative accepted hitscan path used by
+           flushShot. A fixed beam-crossing ray avoids consuming the inbound
+           timer in camera/recoil settling while still exercising mission's
+           real precision target and the ordinary combat shot counter. */
+        T.combat.fire(
+          { x: afterRecall.x, y: afterRecall.y + 12.5, z: afterRecall.z - 10 },
+          { x: 0, y: 0, z: 1 },
+          { damage: 0, precision: true }
+        );
+        fired += 1;
+      }
+    }
+    const afterShots = T.mission.pending()[0] || null;
+    const shotsAfter = T.combat.player.shots;
+    const progression = T.progressionState();
+
+    stopInbound?.(); stopRelocated?.(); stopBeacon?.();
+    T.mission.restore({
+      phase: "relays", relaysDone: 0, extractCalled: false, extractTimer: 0,
+      elapsed: 0, deaths: 0, reinforcements: 5, maxReinforcements: 5,
+      relays: [], cooldowns: {}, pending: [],
+    });
+    T.clearEnemies();
+    return {
+      firstCall,
+      initial,
+      lightBefore,
+      harrowFacingBefore,
+      afterSiren,
+      beforeRecall,
+      recallCall,
+      afterRecall,
+      luresAfterRecall,
+      fired,
+      shotsBefore,
+      shotsAfter,
+      beaconHits,
+      afterShots,
+      progression,
+      inboundEvents,
+      relocatedEvents,
+    };
+  });
+  evidence.edictCommands = commandProbe;
+  check("Siren Beacon gives a real inbound strike a 20-metre pull and heavy-facing response",
+    prepared.ok
+      && commandProbe.initial?.siren?.radius === 20
+      && commandProbe.afterSiren?.thresherLure?.mode === "pull"
+      && commandProbe.afterSiren?.gleanerLure?.mode === "pull"
+      && commandProbe.afterSiren?.harrowLure?.mode === "face"
+      && commandProbe.afterSiren?.thresherDistance < commandProbe.lightBefore?.thresher - 0.05
+      && commandProbe.afterSiren?.gleanerDistance < commandProbe.lightBefore?.gleaner - 0.05
+      && commandProbe.afterSiren?.harrowFacing < commandProbe.harrowFacingBefore,
+    JSON.stringify(commandProbe));
+  check("Recall Rite relocates the same inbound command once and preserves its Siren at rank two",
+    commandProbe.beforeRecall?.id
+      && commandProbe.recallCall === commandProbe.beforeRecall.key
+      && commandProbe.afterRecall?.id === commandProbe.beforeRecall.id
+      && commandProbe.afterRecall?.relocated === true
+      && Math.hypot(commandProbe.afterRecall.x - commandProbe.beforeRecall.x,
+        commandProbe.afterRecall.z - commandProbe.beforeRecall.z) > 20
+      && Math.abs(commandProbe.afterRecall.remaining
+        - commandProbe.beforeRecall.remaining - 0.75) < 0.04
+      && commandProbe.afterRecall?.siren?.radius === 20
+      && commandProbe.relocatedEvents?.[0]?.preserveSiren === true,
+    JSON.stringify(commandProbe));
+  check("Live Fuse spends four accepted precision rifle shots to remove exactly 2.8 seconds",
+    commandProbe.fired === 4
+      && commandProbe.beaconHits?.length === 4
+      && commandProbe.beaconHits.every((hit) => hit.precision && Math.abs(hit.reduced - 0.7) < 0.001)
+      && Math.abs(commandProbe.beaconHits.at(-1)?.totalReduced - 2.8) < 0.001
+      && Math.abs(commandProbe.afterShots?.reducedBy - 2.8) < 0.001
+      && commandProbe.shotsAfter - commandProbe.shotsBefore === 4
+      && (commandProbe.progression?.effects?.counters?.precisionFuses || 0) === 4,
+    JSON.stringify(commandProbe));
+
+  const fieldProbe = await page.evaluate(() => {
+    const T = window.__SF;
+    T.clearEnemies();
+    T.mission.restore({
+      phase: "relays", relaysDone: 0, extractCalled: false, extractTimer: 0,
+      elapsed: 0, deaths: 0, reinforcements: 5, maxReinforcements: 5,
+      relays: [], cooldowns: {}, pending: [],
+    });
+    T.teleport(120, -160, 0);
+    T.invulnerable(true);
+    const call = T.mission.call("resupply");
+    const inbound = T.mission.pending()[0] || null;
+    if (inbound) T.advanceTime(inbound.remaining + 0.08, 1 / 120);
+    const landed = T.mission.activeFields().sanctuaries[0] || null;
+    if (!landed) return { call, inbound, landed: null };
+
+    T.player.spawn(landed.x, landed.z, 0);
+    T.player.state.grounded = true;
+    T.setJetpackState({ fuel: 40, cooldownRemaining: 0, rechargeDelayRemaining: 20 });
+    T.weapons.setHeat(0.6, { reason: "qa-field-chapel", clearOverheat: true });
+    const cooled = [];
+    const blocked = [];
+    const stopCool = T.weapons.bus.on("cool", (event) => {
+      if (event?.reason === "field-chapel") cooled.push({ ...event });
+    });
+    const stopBlock = T.combat.bus.on("projectileBlocked", (event) => blocked.push({ ...event }));
+    const enemy = T.enemies.spawn("thresher", landed.x + 15, landed.z, {
+      id: "qa-field-chapel-gleaner", health: 400,
+    });
+    const enemyDistanceBefore = Math.hypot(enemy.x - landed.x, enemy.z - landed.z);
+    const heatBefore = T.weapons.heatState().heat;
+    const chargeBefore = T.jetpackState().fuel;
+    T.advanceTime(1, 1 / 120);
+    const heatAfter = T.weapons.heatState().heat;
+    const chargeAfter = T.jetpackState().fuel;
+    const enemyDistanceAfter = Math.hypot(enemy.x - landed.x, enemy.z - landed.z);
+    const lure = enemy.commandLure ? { ...enemy.commandLure } : null;
+    /* The sanctuary draws every caste, while projectile interception is
+       deliberately Gleaner-only. This second actor owns the real shot. */
+    const shooter = T.enemies.spawn("gleaner", landed.x + 15, landed.z + 4, {
+      id: "qa-field-chapel-shooter", health: 400,
+    });
+    const hpBefore = T.combat.player.hp;
+    T.invulnerable(false);
+    const projectileDamage = T.combat.hurtPlayer(24, {
+      source: "enemy-fire", enemyId: shooter.id, enemyKey: "gleaner",
+      x: shooter.x, y: shooter.y + 1, z: shooter.z,
+    });
+    const hpAfter = T.combat.player.hp;
+    T.invulnerable(true);
+    const fields = T.mission.activeFields();
+    const progression = T.progressionState();
+    stopCool?.(); stopBlock?.();
+    T.clearEnemies();
+    return {
+      call, inbound, landed, fields, heatBefore, heatAfter,
+      fieldCooling: cooled.reduce((sum, event) => sum + (Number(event.amount) || 0), 0),
+      chargeBefore, chargeAfter, enemyDistanceBefore, enemyDistanceAfter,
+      lure, projectileDamage, hpBefore, hpAfter, blocked, progression,
+    };
+  });
+  evidence.edictFieldChapel = fieldProbe;
+  check("Field Chapel creates a 14-second sanctuary that cools, recharges, lures, and blocks Gleaner fire",
+    fieldProbe.inbound?.sanctuary?.duration === 14
+      && fieldProbe.landed?.blocksProjectiles === true
+      && fieldProbe.landed?.radius === 8
+      && fieldProbe.fields?.sanctuaries?.[0]?.remaining > 12.8
+      && fieldProbe.fieldCooling > 0.045 && fieldProbe.fieldCooling < 0.055
+      && fieldProbe.chargeAfter - fieldProbe.chargeBefore > 2.9
+      && fieldProbe.chargeAfter - fieldProbe.chargeBefore < 3.1
+      && fieldProbe.lure?.mode === "pull"
+      && fieldProbe.enemyDistanceAfter < fieldProbe.enemyDistanceBefore - 0.05
+      && fieldProbe.projectileDamage === 0
+      && fieldProbe.hpAfter === fieldProbe.hpBefore
+      && fieldProbe.blocked?.some((event) => event.reason === "field-sanctuary"),
+    JSON.stringify(fieldProbe));
+
+  const fusionCases = [
+    { first: "orbital", second: "cluster", id: "sunshard" },
+    { first: "orbital", second: "resupply", id: "halo_bastion" },
+    { first: "cluster", second: "resupply", id: "reliquary_minefield" },
+  ];
+  evidence.edictFusions = {};
+  for (const fusionCase of fusionCases) {
+    const fusionPrepared = await prepareOrder(page, definitions, "edict", {
+      equipCapstone: true,
+      receipt: `qa:effect:edict-fusion:${fusionCase.id}`,
+    });
+    const probe = await page.evaluate(({ first, second, expectedId }) => {
+      const T = window.__SF;
+      T.clearEnemies();
+      T.mission.restore({
+        phase: "relays", relaysDone: 0, extractCalled: false, extractTimer: 0,
+        elapsed: 0, deaths: 0, reinforcements: 5, maxReinforcements: 5,
+        relays: [], cooldowns: {}, pending: [],
+      });
+      T.teleport(-180, 120, 0);
+      T.invulnerable(true);
+      const fusions = [];
+      const mines = [];
+      const impacts = [];
+      const stopFusion = T.mission.bus.on("fusion", (event) => fusions.push({ ...event }));
+      const stopMine = T.mission.bus.on("mine", (event) => mines.push({ ...event }));
+      const stopImpact = T.mission.bus.on("impact", (event) => impacts.push({ ...event }));
+      const firstCall = T.mission.call(first);
+      const firstPending = T.mission.pending()[0] || null;
+      let target = null;
+      if (expectedId === "sunshard" && firstPending) {
+        target = T.enemies.spawn("harrow", firstPending.x, firstPending.z, {
+          id: "qa-sunshard-target", health: 1000,
+        });
+      }
+      if (firstPending) T.advanceTime(firstPending.remaining + 0.08, 1 / 120);
+      const fieldsAfterFirst = T.mission.activeFields();
+      const targetAfterFirst = target?.health ?? null;
+      T.mission.cooldowns[second] = 0;
+      const secondCall = T.mission.call(second);
+      const secondPending = T.mission.pending()[0] || null;
+      if (secondPending) T.advanceTime(secondPending.remaining + 0.08, 1 / 120);
+      const fieldsAfterFusion = T.mission.activeFields();
+      const targetAfterFusion = target?.health ?? null;
+      let mineTarget = null;
+      let mineTargetBefore = null;
+      if (expectedId === "reliquary_minefield" && fieldsAfterFusion.mines[0]) {
+        const mine = fieldsAfterFusion.mines[0];
+        mineTarget = T.enemies.spawn("gleaner", mine.x, mine.z, {
+          id: "qa-reliquary-mine-target", health: 300,
+        });
+        mineTargetBefore = mineTarget.health;
+        T.advanceTime(0.12, 1 / 120);
+      }
+      const fieldsAfterResponse = T.mission.activeFields();
+      const progression = T.progressionState();
+      const result = {
+        firstCall, firstPending, fieldsAfterFirst, secondCall, secondPending,
+        fieldsAfterFusion, fieldsAfterResponse, fusions, mines, impacts,
+        targetAfterFirst, targetAfterFusion,
+        mineTargetBefore,
+        mineTargetAfter: mineTarget?.health ?? null,
+        mineTargetState: mineTarget?.state || null,
+        progression,
+      };
+      stopFusion?.(); stopMine?.(); stopImpact?.();
+      T.clearEnemies();
+      return result;
+    }, { ...fusionCase, expectedId: fusionCase.id });
+    evidence.edictFusions[fusionCase.id] = {
+      preparation: {
+        ok: fusionPrepared.ok,
+        equip: fusionPrepared.equip,
+      },
+      probe,
+    };
+    const fusion = probe.fusions?.find((event) => event.id === fusionCase.id);
+    const common = fusionPrepared.ok
+      && fusionPrepared.equip?.ok === true
+      && probe.fieldsAfterFirst?.sigils?.some((sigil) => sigil.commandKey === fusionCase.first)
+      && !!fusion
+      && probe.impacts?.some((impact) => impact.fusionId === fusionCase.id)
+      && probe.progression?.effects?.lastFusion?.id === fusionCase.id
+      && probe.progression?.effects?.fusionCooldown > 29
+      && (probe.progression?.effects?.counters?.combinedLiturgies || 0) === 1
+      && (probe.progression?.effects?.counters?.fusionsResolved || 0) === 1;
+    if (fusionCase.id === "sunshard") {
+      check("Combined Liturgy resolves Orbital plus Cluster into a damaging Sunshard",
+        common
+          && fusion.outcome?.targetId === "qa-sunshard-target"
+          && fusion.outcome?.damage > 140
+          && probe.targetAfterFusion < probe.targetAfterFirst,
+        JSON.stringify(evidence.edictFusions[fusionCase.id]));
+    } else if (fusionCase.id === "halo_bastion") {
+      const bastion = probe.fieldsAfterFusion?.sanctuaries?.find(
+        (field) => field.fusionId === "halo_bastion");
+      check("Combined Liturgy resolves Orbital plus Resupply into a projectile-blocking Halo Bastion",
+        common && !!bastion && bastion.blocksProjectiles === true
+          && fusion.outcome?.fieldId === bastion.id,
+        JSON.stringify(evidence.edictFusions[fusionCase.id]));
+    } else {
+      check("Combined Liturgy resolves Cluster plus Resupply into seven live Reliquary mines",
+        common
+          && probe.fieldsAfterFusion?.mines?.length === 7
+          && fusion.outcome?.count === 7
+          && probe.mines?.some((event) => event.triggered
+            && event.targetId === "qa-reliquary-mine-target")
+          && probe.fieldsAfterResponse?.mines?.length === 6
+          && probe.mineTargetAfter < probe.mineTargetBefore,
+        JSON.stringify(evidence.edictFusions[fusionCase.id]));
+    }
+  }
 
   await invoke(page, "resetProgressionForQA");
 }
@@ -1694,9 +2053,8 @@ async function landscapeUiPass(browser) {
         && entry.withinStage && entry.width >= 43.5 && entry.height >= 43.5)
       && !!edict?.selected,
     JSON.stringify({ reachedOrders, edict }));
-  check("short-landscape Doctrine scroll reaches its Vow and fixed reset footer",
-    layout.orderScrollable && layout.orderAtBottom
-      && layout.vowReachable && layout.resetReachable
+  check("short-landscape Doctrine exposes its Vow and compact reset action",
+    layout.vowReachable && layout.resetReachable
       && layout.orderFooterOverlap === 0 && layout.globalFooterOverlap === 0,
     JSON.stringify(layout));
   check("844x390 Doctrine has no clipping, overflow, or undersized touch targets",
@@ -1712,6 +2070,244 @@ async function landscapeUiPass(browser) {
   await page.locator("[data-menu-close]").first().tap();
   await page.waitForFunction(() => !window.__SF?.menuState?.()?.open,
     null, { timeout: 3000 });
+  await context.close();
+}
+
+async function makeCareerConflictBranches(page, definitions) {
+  await invoke(page, "resetProgressionForQA");
+  await grantToRank(page, definitions, 12, "qa:career-conflict:local-rank");
+  const halo = definitions.orders.find((order) => order.id === "halo");
+  if (halo) await fillOrder(page, definitions, halo, 6);
+  const local = await invoke(page, "progressionCareerForQA");
+
+  await invoke(page, "resetProgressionForQA");
+  await grantToRank(page, definitions, 22, "qa:career-conflict:synced-rank");
+  const edict = definitions.orders.find((order) => order.id === "edict");
+  if (edict) await fillOrder(page, definitions, edict, definitions.maxPointsPerOrder);
+  const synced = await invoke(page, "progressionCareerForQA");
+  await invoke(page, "resetProgressionForQA");
+  return { local, synced };
+}
+
+async function careerRecoveryDesktopPass(browser, choice) {
+  console.log(`\n=== DESKTOP CAREER RECOVERY · ${choice.toUpperCase()} ===`);
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  const page = await bootPage(context, `career-${choice}-desktop`);
+  const definitions = normalizeDefinitions(await rawDefinitions(page));
+  const branches = await makeCareerConflictBranches(page, definitions);
+  const expected = branches[choice];
+  const saveBefore = await page.evaluate(() => window.__SF.persistenceState());
+  const storageBefore = await page.evaluate(() => localStorage.getItem("saintfall:career-conflict:v1"));
+  const staged = await invoke(page, "stageCareerConflictForQA",
+    branches.local, branches.synced, `qa-ui-${choice}`);
+  const conflictBeforeMenu = await invoke(page, "careerConflictStateForQA");
+  const escapedIntoMenu = await openMenuWithEscape(page);
+  const savesNav = page.locator('[data-menu-panel="saves"]');
+  const navBefore = await savesNav.evaluate((button) => {
+    const badge = button.querySelector("[data-career-recovery-nav]");
+    const box = button.getBoundingClientRect();
+    return {
+      badgeVisible: !!badge && !badge.hidden && getComputedStyle(badge).display !== "none",
+      label: button.getAttribute("aria-label") || "",
+      width: box.width,
+      height: box.height,
+    };
+  });
+  await savesNav.click();
+  await page.waitForFunction(() => window.__SF?.menuState?.()?.panel === "saves"
+    && window.__SF?.menuState?.()?.careerRecovery?.state === "conflict",
+  null, { timeout: 3000 });
+  const action = page.locator(
+    `[data-career-recovery-action][data-career-choice="${choice}"]`);
+  const initialUi = await page.evaluate(() => {
+    const panel = document.querySelector("[data-career-recovery]");
+    const status = panel?.querySelector("[data-career-recovery-status]");
+    return {
+      panelVisible: !!panel && !panel.hidden,
+      panelState: panel?.dataset.state || null,
+      busy: panel?.getAttribute("aria-busy") || null,
+      statusRole: status?.getAttribute("role") || null,
+      statusLive: status?.getAttribute("aria-live") || null,
+      localCard: panel?.querySelector('[data-career-branch-card="local"]')?.dataset.state || null,
+      syncedCard: panel?.querySelector('[data-career-branch-card="synced"]')?.dataset.state || null,
+    };
+  });
+  const careerBeforeFirstClick = await invoke(page, "progressionCareerForQA");
+  await action.click();
+  await page.waitForFunction((wanted) =>
+    window.__SF?.menuState?.()?.careerRecovery?.armedChoice === wanted,
+  choice, { timeout: 3000 });
+  const armed = await page.evaluate((wanted) => {
+    const button = document.querySelector(
+      `[data-career-recovery-action][data-career-choice="${wanted}"]`);
+    const box = button?.getBoundingClientRect();
+    return {
+      menu: window.__SF.menuState().careerRecovery,
+      text: button?.textContent?.trim() || "",
+      pressed: button?.getAttribute("aria-pressed") || null,
+      cardState: button?.closest("[data-career-branch-card]")?.dataset.state || null,
+      target: box ? [box.width, box.height] : null,
+      conflict: window.__SF.careerConflictStateForQA(),
+      career: window.__SF.progressionCareerForQA(),
+    };
+  }, choice);
+  await action.click();
+  await page.waitForFunction(() => {
+    const state = window.__SF?.menuState?.()?.careerRecovery;
+    return state?.state === "resolved" && state?.active === false;
+  }, null, { timeout: 3000 });
+  await page.waitForFunction(() => document.activeElement
+    === document.querySelector("[data-career-recovery]"), null, { timeout: 3000 });
+  const resolved = await page.evaluate(() => ({
+    career: window.__SF.progressionCareerForQA(),
+    conflict: window.__SF.careerConflictStateForQA(),
+    save: window.__SF.persistenceState(),
+    menu: window.__SF.menuState().careerRecovery,
+    storage: localStorage.getItem("saintfall:career-conflict:v1"),
+    focusedPanel: document.activeElement === document.querySelector("[data-career-recovery]"),
+    branchesHidden: getComputedStyle(
+      document.querySelector("[data-career-recovery-branches]")).display === "none",
+  }));
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const proof = {
+    choice, staged, conflictBeforeMenu, escapedIntoMenu, navBefore,
+    initialUi, careerBeforeFirstClick, armed, expected, saveBefore,
+    storageBefore, resolved,
+  };
+  evidence[`careerRecoveryDesktop_${choice}`] = proof;
+  check(`desktop recovery keeps the exact ${choice === "local" ? "device" : "synced"} career only after two real clicks`,
+    staged?.ok === true && conflictBeforeMenu?.active === true
+      && escapedIntoMenu && navBefore.badgeVisible
+      && navBefore.label.toLowerCase().includes("review required")
+      && initialUi.panelVisible && initialUi.panelState === "conflict"
+      && initialUi.busy === "false" && initialUi.statusRole === "status"
+      && initialUi.statusLive === "polite"
+      && armed.menu?.armedChoice === choice
+      && armed.text.startsWith("CONFIRM") && armed.pressed === "true"
+      && armed.cardState === "armed"
+      && armed.target?.[1] >= 43.5
+      && armed.conflict?.active === true
+      && same(armed.career, careerBeforeFirstClick)
+      && resolved.conflict?.active === false
+      && resolved.save?.careerQuarantined === false
+      && same(resolved.career, expected)
+      && same(resolved.save?.autosave, saveBefore?.autosave)
+      && same(resolved.save?.manuals, saveBefore?.manuals)
+      && resolved.storage === storageBefore
+      && resolved.menu?.state === "resolved"
+      && resolved.focusedPanel && resolved.branchesHidden,
+    JSON.stringify(proof));
+  await page.locator(".sf-stage").screenshot({
+    path: path.join(OUT, `desktop-career-recovery-${choice}.png`),
+  });
+  await context.close();
+}
+
+async function careerRecoveryMobilePass(browser) {
+  console.log("\n=== MOBILE CAREER RECOVERY · INVALID SYNCED ===");
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+    deviceScaleFactor: 2,
+  });
+  const page = await bootPage(context, "career-mobile-390x844");
+  const definitions = normalizeDefinitions(await rawDefinitions(page));
+  const branches = await makeCareerConflictBranches(page, definitions);
+  const invalidSynced = { schema: -1, totalXp: 999999, allocations: {} };
+  const saveBefore = await page.evaluate(() => window.__SF.persistenceState());
+  const staged = await invoke(page, "stageCareerConflictForQA",
+    branches.local, invalidSynced, "qa-ui-mobile-invalid-synced");
+
+  const trigger = page.locator(".sf-menu-trigger--mobile");
+  /* A conflict stages through save.onChange and the production UI may open
+     Saves automatically. Only use the mobile menu control when it did not. */
+  const autoOpened = await page.evaluate(() => !!window.__SF?.menuState?.()?.open);
+  if (!autoOpened) {
+    await page.waitForFunction(() => {
+      const button = document.querySelector(".sf-menu-trigger--mobile");
+      return button && getComputedStyle(button).display !== "none"
+        && button.getBoundingClientRect().width >= 44;
+    }, null, { timeout: 5000 });
+    await trigger.tap();
+  }
+  await page.waitForFunction(() => window.__SF?.menuState?.()?.open,
+    null, { timeout: 3000 });
+  const savesNav = page.locator('[data-menu-panel="saves"]');
+  const navBadge = await savesNav.locator("[data-career-recovery-nav]").evaluate(
+    (badge) => !badge.hidden && getComputedStyle(badge).display !== "none");
+  if (await page.evaluate(() => window.__SF?.menuState?.()?.panel !== "saves")) {
+    await savesNav.tap();
+  }
+  await page.waitForFunction(() => window.__SF?.menuState?.()?.panel === "saves",
+    null, { timeout: 3000 });
+  const layout = await page.evaluate(() => {
+    const panel = document.querySelector("[data-career-recovery]");
+    const content = document.querySelector(".sf-menu__content");
+    const entries = ["local", "synced"].map((choice) => {
+      const button = panel.querySelector(
+        `[data-career-recovery-action][data-career-choice="${choice}"]`);
+      const card = button.closest("[data-career-branch-card]");
+      const box = button.getBoundingClientRect();
+      return {
+        choice,
+        disabled: button.disabled,
+        cardState: card.dataset.state,
+        width: box.width,
+        height: box.height,
+      };
+    });
+    return {
+      visible: !panel.hidden,
+      state: panel.dataset.state,
+      horizontalOverflow: Math.max(0, content.scrollWidth - content.clientWidth),
+      entries,
+      status: panel.querySelector("[data-career-recovery-status]").textContent.trim(),
+    };
+  });
+  const localAction = page.locator(
+    '[data-career-recovery-action][data-career-choice="local"]');
+  const syncedAction = page.locator(
+    '[data-career-recovery-action][data-career-choice="synced"]');
+  const syncedDisabled = await syncedAction.isDisabled();
+  await localAction.tap();
+  await page.waitForFunction(() =>
+    window.__SF?.menuState?.()?.careerRecovery?.armedChoice === "local",
+  null, { timeout: 3000 });
+  const conflictAfterFirst = await invoke(page, "careerConflictStateForQA");
+  await localAction.tap();
+  await page.waitForFunction(() =>
+    window.__SF?.menuState?.()?.careerRecovery?.state === "resolved",
+  null, { timeout: 3000 });
+  const resolved = await page.evaluate(() => ({
+    career: window.__SF.progressionCareerForQA(),
+    conflict: window.__SF.careerConflictStateForQA(),
+    save: window.__SF.persistenceState(),
+    menu: window.__SF.menuState().careerRecovery,
+  }));
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const proof = {
+    staged, navBadge, layout, syncedDisabled, conflictAfterFirst,
+    expected: branches.local, saveBefore, resolved,
+  };
+  evidence.careerRecoveryMobile = proof;
+  check("mobile recovery exposes a 44px two-tap safe choice and disables an invalid synced branch",
+    staged?.ok === true && navBadge && layout.visible && layout.state === "conflict"
+      && layout.horizontalOverflow <= 2
+      && layout.entries.every((entry) => entry.width >= 43.5 && entry.height >= 43.5)
+      && layout.entries.find((entry) => entry.choice === "local")?.cardState === "available"
+      && layout.entries.find((entry) => entry.choice === "synced")?.cardState === "unavailable"
+      && syncedDisabled && conflictAfterFirst?.active === true
+      && conflictAfterFirst?.branches?.synced?.valid === false
+      && resolved.conflict?.active === false
+      && resolved.save?.careerQuarantined === false
+      && same(resolved.career, branches.local)
+      && same(resolved.save?.autosave, saveBefore?.autosave)
+      && same(resolved.save?.manuals, saveBefore?.manuals),
+    JSON.stringify(proof));
+  await page.locator(".sf-stage").screenshot({
+    path: path.join(OUT, "mobile-career-recovery-390x844.png"),
+  });
   await context.close();
 }
 
@@ -1744,10 +2340,15 @@ try {
     const definitions = await progressionPass(page);
     await careerValidationPass(page, definitions);
     await gameplayEffectsPass(page, definitions);
+    await haloEffectsPass(page, definitions);
+    await edictEffectsPass(page, definitions);
     await desktopUiPass(page, definitions);
     await context.close();
     await mobileUiPass(browser);
     await landscapeUiPass(browser);
+    await careerRecoveryDesktopPass(browser, "local");
+    await careerRecoveryDesktopPass(browser, "synced");
+    await careerRecoveryMobilePass(browser);
   } finally {
     await browser.close();
   }

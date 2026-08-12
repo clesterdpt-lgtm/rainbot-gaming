@@ -9,6 +9,13 @@
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
 const SETTINGS_KEY = "saintfall:field-ui:v1";
 const PANEL_NAMES = new Set(["operation", "map", "doctrine", "saves", "controls", "settings"]);
+const DOCTRINE_SIGILS = Object.freeze({
+  censer: new URL("../../img/saintfall/doctrine/order-censer-sigil-ai-v1.jpg", import.meta.url).href,
+  procession: new URL("../../img/saintfall/doctrine/order-procession-sigil-ai-v1.jpg", import.meta.url).href,
+  wing: new URL("../../img/saintfall/doctrine/order-wing-sigil-ai-v1.jpg", import.meta.url).href,
+  halo: new URL("../../img/saintfall/doctrine/order-halo-sigil-ai-v1.jpg", import.meta.url).href,
+  edict: new URL("../../img/saintfall/doctrine/order-edict-sigil-ai-v1.jpg", import.meta.url).href,
+});
 const WHEEL_POINTS = Object.freeze([
   { x: 0, y: -1, angle: -90 },
   { x: 0.866, y: 0.5, angle: 30 },
@@ -34,6 +41,14 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[character]));
+}
+
+function doctrineSigilMarkup(orderId, role, modifier = "") {
+  const id = String(orderId || "");
+  const source = DOCTRINE_SIGILS[id];
+  if (!source) return "";
+  const classes = `sf-doctrine__sigil ${modifier}`.trim();
+  return `<img class="${classes}" data-doctrine-sigil data-sigil-role="${escapeHtml(role)}" data-order-id="${escapeHtml(id)}" src="${escapeHtml(source)}" width="512" height="512" alt="" aria-hidden="true" draggable="false" decoding="async">`;
 }
 
 function formatClock(seconds) {
@@ -153,12 +168,12 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
         <div class="sf-menu__body">
           <nav class="sf-menu__rail" aria-label="Field menu">
             <button type="button" class="sf-menu__resume" data-menu-close>${ICONS.operation}<span><strong>RESUME</strong><small>Return to the basin</small></span></button>
-            <button type="button" data-menu-panel="operation" aria-current="page">${ICONS.operation}<span data-mobile-label="OPS">OPERATION</span></button>
-            <button type="button" data-menu-panel="map">${ICONS.map}<span data-mobile-label="MAP">TACTICAL MAP</span></button>
-            <button type="button" data-menu-panel="doctrine">${ICONS.doctrine}<span data-mobile-label="RITES">DOCTRINE</span></button>
-            <button type="button" data-menu-panel="saves">${ICONS.saves}<span data-mobile-label="SAVES">SAVE / LOAD</span><b data-career-recovery-nav hidden>REVIEW</b></button>
-            <button type="button" data-menu-panel="controls">${ICONS.controls}<span data-mobile-label="CTRL">CONTROLS</span></button>
-            <button type="button" data-menu-panel="settings">${ICONS.settings}<span data-mobile-label="SET">SETTINGS</span></button>
+            <button type="button" data-menu-panel="operation" aria-label="Operation" aria-current="page">${ICONS.operation}<span data-mobile-label="OPS">OPERATION</span></button>
+            <button type="button" data-menu-panel="map" aria-label="Tactical map">${ICONS.map}<span data-mobile-label="MAP">TACTICAL MAP</span></button>
+            <button type="button" data-menu-panel="doctrine" aria-label="Field Doctrine">${ICONS.doctrine}<span data-mobile-label="RITES">DOCTRINE</span></button>
+            <button type="button" data-menu-panel="saves" aria-label="Save and load">${ICONS.saves}<span data-mobile-label="SAVES">SAVE / LOAD</span><b data-career-recovery-nav hidden>REVIEW</b></button>
+            <button type="button" data-menu-panel="controls" aria-label="Controls">${ICONS.controls}<span data-mobile-label="CTRL">CONTROLS</span></button>
+            <button type="button" data-menu-panel="settings" aria-label="Settings">${ICONS.settings}<span data-mobile-label="SET">SETTINGS</span></button>
             <div class="sf-menu__rail-spacer"></div>
             <button type="button" class="fullscreen-btn" id="sf-fullscreen"
               data-menu-action="maximize" aria-pressed="false">${ICONS.maximize}<span data-maximize-label>MAXIMIZE GAME</span></button>
@@ -206,9 +221,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
               </div>
               <p class="sf-doctrine__lock" data-doctrine-lock role="status" hidden></p>
               <div class="sf-doctrine__body">
-                <nav class="sf-doctrine__orders" data-doctrine-orders role="tablist" aria-label="Doctrine Orders"></nav>
+                <nav class="sf-doctrine__orders" data-doctrine-orders role="tablist" aria-label="Doctrine Orders" aria-orientation="horizontal"></nav>
                 <section class="sf-doctrine__order" data-doctrine-order-panel role="tabpanel" tabindex="0" aria-live="polite">
                   <header class="sf-doctrine__order-head">
+                    <img class="sf-doctrine__sigil sf-doctrine__sigil--hero" data-doctrine-sigil data-sigil-role="hero" width="512" height="512" alt="" aria-hidden="true" draggable="false" decoding="async" hidden>
                     <span><small data-doctrine-order-kicker>ORDER</small><h4 data-doctrine-order-name>Awaiting doctrine</h4><p data-doctrine-order-focus>Select an Order to inspect its rites.</p></span>
                     <b data-doctrine-invested>0 / 8</b>
                   </header>
@@ -591,11 +607,11 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     const spendLabel = !eligibility.implemented ? "FORTHCOMING"
       : rank >= maxRank ? "MAX RANK" : `INSCRIBE ${rankNumeral(rank + 1)}`;
     const reason = eligibility.reason || (rank > 0 ? `Rank ${rank} of ${maxRank} inscribed.` : "Ready to inscribe.");
-    return `<article class="sf-doctrine-talent" data-doctrine-talent data-talent-id="${escapeHtml(definition.id)}" data-state="${cardState}" data-tier="${Math.max(1, Number(definition.tier) || 1)}">
+    return `<article class="sf-doctrine-talent" data-doctrine-talent data-talent-id="${escapeHtml(definition.id)}" data-state="${cardState}" data-tier="${Math.max(1, Number(definition.tier) || 1)}" data-inspected="${inspected ? "true" : "false"}">
       <header><span><small>TIER ${Math.max(1, Number(definition.tier) || 1)}</small><strong>${escapeHtml(definition.name || "Unnamed Rite")}</strong></span><b data-talent-rank="${rank}" aria-label="Rank ${rank} of ${maxRank}">${pips}</b></header>
       <p>${escapeHtml(definition.summary || "A Reliquary rite awaiting inscription.")}</p>
       <div class="sf-doctrine-talent__actions">
-        <button type="button" data-doctrine-action="inspect" data-talent-action="inspect" data-talent-id="${escapeHtml(definition.id)}" aria-expanded="${inspected ? "true" : "false"}" aria-controls="${detailId}">${inspected ? "HIDE RITE" : "INSPECT"}</button>
+        <button type="button" data-doctrine-action="inspect" data-talent-action="inspect" data-talent-id="${escapeHtml(definition.id)}" aria-expanded="${inspected ? "true" : "false"}" aria-controls="${detailId}">${inspected ? "BACK TO RITES" : "DETAILS"}</button>
         ${rank > 0 ? `<button type="button" data-doctrine-action="refund" data-talent-action="refund" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canRefund, eligibility.refundReason)}>REFUND</button>` : ""}
         <button type="button" data-doctrine-action="spend" data-talent-action="spend" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canSpend, eligibility.reason)}>${spendLabel}</button>
       </div>
@@ -622,6 +638,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     const runtimeEligible = typeof runtime?.eligible === "boolean" ? runtime.eligible : null;
     const implementation = implementationState(definition, runtime);
     const implemented = implementation.implemented;
+    const inspected = doctrine.inspectedTalentId === definition.id;
     let reason = "";
     if (!implemented) reason = implementation.note;
     else if (!edit.allowed) reason = edit.reason;
@@ -638,12 +655,13 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     const fusions = Array.isArray(definition.fusions) && definition.fusions.length
       ? `<ul class="sf-doctrine__fusions">${definition.fusions.map((fusion) =>
         `<li><b>${escapeHtml(fusion.name)}</b><span>${escapeHtml(fusion.description)}</span></li>`).join("")}</ul>` : "";
-    host.innerHTML = `<article class="sf-doctrine__vow" data-doctrine-vow data-capstone-id="${escapeHtml(definition.id)}" data-order-id="${escapeHtml(orderDefinition.id)}" data-state="${stateName}" data-equipped="${slot >= 0 ? "true" : "false"}">
+    host.innerHTML = `<article class="sf-doctrine__vow" data-doctrine-vow data-capstone-id="${escapeHtml(definition.id)}" data-order-id="${escapeHtml(orderDefinition.id)}" data-state="${stateName}" data-equipped="${slot >= 0 ? "true" : "false"}" data-inspected="${inspected ? "true" : "false"}">
+      ${doctrineSigilMarkup(orderDefinition.id, "capstone", "sf-doctrine__sigil--capstone")}
       <header><span><small>CAPSTONE VOW</small><strong>${escapeHtml(definition.name || "Unnamed Vow")}</strong></span><b>${!implemented ? "FORTHCOMING" : slot >= 0 ? `BOUND · SEAL ${rankNumeral(slot + 1)}` : invested >= required ? "ELIGIBLE" : `${invested} / ${required}`}</b></header>
       <p>${escapeHtml(definition.summary || "The final expression of this Order.")}</p>
-      <div class="sf-doctrine__vow-detail">${escapeHtml(definition.description || "Capstone effect awaiting record.")}</div>
+      <div class="sf-doctrine__vow-detail" id="sf-capstone-detail-${safeDomId(definition.id)}" data-talent-detail${inspected ? "" : " hidden"}>${escapeHtml(definition.description || "Capstone effect awaiting record.")}</div>
       ${fusions}
-      <div class="sf-doctrine__vow-action"><small>${escapeHtml(reason || (slot >= 0 ? "This Vow occupies one of two active seals." : "An earned Vow Seal is ready."))}</small><button type="button" data-doctrine-action="vow" data-capstone-action="${action}" data-capstone-id="${escapeHtml(definition.id)}" data-order-id="${escapeHtml(orderDefinition.id)}" data-capstone-slot="${actionSlot}"${disabledAttributes(!edit.allowed || (slot < 0 && !!reason), reason)}>${label}</button></div>
+      <div class="sf-doctrine__vow-action"><small>${escapeHtml(reason || (slot >= 0 ? "This Vow occupies one of two active seals." : "An earned Vow Seal is ready."))}</small><span><button type="button" data-doctrine-action="inspect" data-talent-action="inspect" data-talent-id="${escapeHtml(definition.id)}" aria-expanded="${inspected ? "true" : "false"}" aria-controls="sf-capstone-detail-${safeDomId(definition.id)}">${inspected ? "BACK TO RITES" : "DETAILS"}</button><button type="button" data-doctrine-action="vow" data-capstone-action="${action}" data-capstone-id="${escapeHtml(definition.id)}" data-order-id="${escapeHtml(orderDefinition.id)}" data-capstone-slot="${actionSlot}"${disabledAttributes(!edit.allowed || (slot < 0 && !!reason), reason)}>${label}</button></span></div>
     </article>`;
   }
 
@@ -651,7 +669,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     if (!selector) return;
     requestAnimationFrame(() => {
       if (!destroyed && menu.open && menu.panel === "doctrine") {
-        root.querySelector(selector)?.focus?.({ preventScroll: true });
+        const target = root.querySelector(selector);
+        target?.focus?.({ preventScroll: true });
+        target?.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "auto" });
       }
     });
   }
@@ -662,6 +682,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     doctrine.orderId = orderId;
     doctrine.inspectedTalentId = null;
     refreshDoctrine();
+    const panel = root.querySelector("[data-doctrine-order-panel]");
+    if (panel) panel.scrollTop = 0;
     if (focus) focusAfterDoctrineRefresh(`[data-doctrine-order="${CSS.escape(orderId)}"]`);
     menuSfx("switch");
     return true;
@@ -728,12 +750,19 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     tabs.innerHTML = orders.map((entry) => {
       const selected = entry.id === doctrine.orderId;
       const points = orderPoints(runtimeOrder(state, entry.id));
-      return `<button type="button" id="sf-doctrine-tab-${safeDomId(entry.id)}" role="tab" data-doctrine-order="${escapeHtml(entry.id)}" data-order-id="${escapeHtml(entry.id)}" data-accent="${escapeHtml(entry.accent || "gold")}" aria-selected="${selected ? "true" : "false"}" aria-controls="sf-doctrine-order-panel" tabindex="${selected ? "0" : "-1"}"><span>${escapeHtml(entry.shortName || entry.name)}</span><small>${points} PTS</small></button>`;
+      const accessibleName = `${entry.name || entry.shortName}, ${points} Doctrine ${points === 1 ? "point" : "points"}`;
+      return `<button type="button" id="sf-doctrine-tab-${safeDomId(entry.id)}" role="tab" data-doctrine-order="${escapeHtml(entry.id)}" data-order-id="${escapeHtml(entry.id)}" data-accent="${escapeHtml(entry.accent || "gold")}" aria-label="${escapeHtml(accessibleName)}" aria-selected="${selected ? "true" : "false"}" aria-controls="sf-doctrine-order-panel" tabindex="${selected ? "0" : "-1"}">${doctrineSigilMarkup(entry.id, "tab", "sf-doctrine__sigil--tab")}<span>${escapeHtml(entry.shortName || entry.name)}</span><small>${points} PTS</small></button>`;
     }).join("");
 
     const panel = root.querySelector("[data-doctrine-order-panel]");
+    const heroSigil = root.querySelector("[data-doctrine-sigil][data-sigil-role='hero']");
     panel.id = "sf-doctrine-order-panel";
     if (!doctrine.orderId) {
+      if (heroSigil) {
+        heroSigil.hidden = true;
+        heroSigil.removeAttribute("src");
+        delete heroSigil.dataset.orderId;
+      }
       panel.removeAttribute("aria-labelledby");
       root.querySelector("[data-doctrine-order-name]").textContent = "Doctrine unavailable";
       root.querySelector("[data-doctrine-order-focus]").textContent = "No Order definitions were provided.";
@@ -745,9 +774,18 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     const orderState = runtimeOrder(state, doctrine.orderId);
     const invested = orderPoints(orderState);
     const maxOrder = Math.max(1, Math.floor(Number(definitions?.maxPointsPerOrder) || 8));
+    const heroSource = DOCTRINE_SIGILS[doctrine.orderId];
+    if (heroSigil) {
+      heroSigil.hidden = !heroSource;
+      if (heroSource) heroSigil.src = heroSource;
+      heroSigil.dataset.orderId = doctrine.orderId;
+    }
     panel.dataset.orderId = doctrine.orderId;
     panel.dataset.doctrineOrderPanel = doctrine.orderId;
     panel.dataset.accent = orderDefinition.accent || "gold";
+    const talentIds = new Set((orderDefinition.talents || []).map((talent) => talent.id));
+    panel.dataset.view = doctrine.inspectedTalentId === orderDefinition.capstone?.id
+      ? "capstone" : talentIds.has(doctrine.inspectedTalentId) ? "talent" : "overview";
     panel.setAttribute("aria-labelledby", `sf-doctrine-tab-${safeDomId(doctrine.orderId)}`);
     root.querySelector("[data-doctrine-order-kicker]").textContent = "RELIQUARY ORDER";
     root.querySelector("[data-doctrine-order-name]").textContent = orderDefinition.name || orderDefinition.shortName;
@@ -940,6 +978,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     root.querySelectorAll("[data-menu-page]").forEach((page) => {
       page.hidden = page.dataset.menuPage !== next;
     });
+    const content = root.querySelector(".sf-menu__content");
+    if (content) content.scrollTop = 0;
     if (next === "saves") refreshSaves();
     if (next === "operation") refreshOperation();
     if (next === "doctrine") refreshDoctrine();
@@ -1575,6 +1615,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     if (action === "inspect" && talentId) {
       doctrine.inspectedTalentId = doctrine.inspectedTalentId === talentId ? null : talentId;
       refreshDoctrine();
+      const panel = root.querySelector("[data-doctrine-order-panel]");
+      if (panel) panel.scrollTop = 0;
       focusAfterDoctrineRefresh(`[data-talent-action="inspect"][data-talent-id="${CSS.escape(talentId)}"]`);
       menuSfx("switch");
       return true;

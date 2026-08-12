@@ -91,6 +91,318 @@ async function layoutAudit(page) {
   });
 }
 
+async function doctrineLayoutAudit(page) {
+  return await page.evaluate(() => {
+    const pick = (selector) => document.querySelector(selector);
+    const visible = (node) => {
+      if (!node) return false;
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden"
+        && Number(style.opacity) > 0 && rect.width > 1 && rect.height > 1;
+    };
+    const rectOf = (node) => {
+      const rect = node.getBoundingClientRect();
+      return {
+        left: Number(rect.left.toFixed(1)), top: Number(rect.top.toFixed(1)),
+        right: Number(rect.right.toFixed(1)), bottom: Number(rect.bottom.toFixed(1)),
+        width: Number(rect.width.toFixed(1)), height: Number(rect.height.toFixed(1)),
+      };
+    };
+    const contains = (outer, inner, tolerance = 2) => inner.left >= outer.left - tolerance
+      && inner.top >= outer.top - tolerance && inner.right <= outer.right + tolerance
+      && inner.bottom <= outer.bottom + tolerance;
+    const overlapArea = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left))
+      * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+
+    const frameNode = pick(".sf-menu__frame");
+    const contentNode = pick(".sf-menu__content");
+    const pageNode = pick('[data-menu-page="doctrine"]:not([hidden])');
+    const tabsNode = pick(".sf-doctrine__orders");
+    const orderNode = pick("[data-doctrine-order-panel]");
+    const doctrineFooterNode = pick(".sf-doctrine__footer");
+    const globalFooterNode = pick(".sf-menu__footer");
+    if (![frameNode, contentNode, pageNode, tabsNode, orderNode].every(Boolean)) {
+      return { missing: true };
+    }
+    const frame = rectOf(frameNode);
+    const content = rectOf(contentNode);
+    const pageRect = rectOf(pageNode);
+    const tabs = rectOf(tabsNode);
+    const order = rectOf(orderNode);
+    const doctrineFooter = doctrineFooterNode ? rectOf(doctrineFooterNode) : null;
+    const globalFooter = globalFooterNode ? rectOf(globalFooterNode) : null;
+    const cardNodes = [...orderNode.querySelectorAll("[data-doctrine-talent]")]
+      .filter(visible);
+    const vowNodes = [...orderNode.querySelectorAll("[data-doctrine-vow]")]
+      .filter(visible);
+    const cards = cardNodes.map((node) => ({ id: node.dataset.talentId, ...rectOf(node) }));
+    const vows = vowNodes.map((node) => ({ id: node.dataset.capstoneId, ...rectOf(node) }));
+    const actionOverflow = [...cardNodes, ...vowNodes].flatMap((node) => {
+      const outer = rectOf(node);
+      return [...node.querySelectorAll("button")].filter(visible).map((button) => {
+        const inner = rectOf(button);
+        return contains(outer, inner) ? null : {
+          id: node.dataset.talentId || node.dataset.capstoneId,
+          label: button.textContent.replace(/\s+/g, " ").trim(), outer, inner,
+        };
+      }).filter(Boolean);
+    });
+    const cardOverlaps = [];
+    for (let i = 0; i < cards.length; i += 1) {
+      for (let j = i + 1; j < cards.length; j += 1) {
+        const area = overlapArea(cards[i], cards[j]);
+        if (area > 4) cardOverlaps.push(`${cards[i].id} x ${cards[j].id}: ${area.toFixed(1)}`);
+      }
+    }
+    const scrollNodes = [
+      ["content", contentNode], ["page", pageNode], ["tabs", tabsNode], ["order", orderNode],
+    ];
+    const scroll = Object.fromEntries(scrollNodes.map(([name, node]) => [name, {
+      x: Math.max(0, node.scrollWidth - node.clientWidth),
+      y: Math.max(0, node.scrollHeight - node.clientHeight),
+    }]));
+    const scrollOwners = scrollNodes.filter(([, node]) =>
+      node.scrollHeight - node.clientHeight > 2
+      && ["auto", "scroll"].includes(getComputedStyle(node).overflowY)).map(([name]) => name);
+    const tabButtons = [...tabsNode.querySelectorAll('[role="tab"]')].filter(visible);
+    return {
+      missing: false,
+      view: orderNode.dataset.view,
+      frame, content, page: pageRect, tabs, order, doctrineFooter, globalFooter,
+      cards, vows, actionOverflow, cardOverlaps, scroll, scrollOwners,
+      tabCount: tabButtons.length,
+      tabMinHeight: tabButtons.length
+        ? Math.min(...tabButtons.map((node) => node.getBoundingClientRect().height)) : 0,
+      allCardsInOrder: cards.every((rect) => contains(order, rect)),
+      allCardsInContent: cards.every((rect) => contains(content, rect)),
+      allVowsInOrder: vows.every((rect) => contains(order, rect)),
+      allVowsInContent: vows.every((rect) => contains(content, rect)),
+      orderHitsDoctrineFooter: !!doctrineFooter && overlapArea(order, doctrineFooter) > 4,
+      doctrineHitsGlobalFooter: !!doctrineFooter && !!globalFooter
+        && overlapArea(doctrineFooter, globalFooter) > 4,
+      ariaOrientation: tabsNode.getAttribute("aria-orientation"),
+    };
+  });
+}
+
+const DOCTRINE_ORDER_IDS = Object.freeze(["censer", "procession", "wing", "halo", "edict"]);
+const DOCTRINE_SIGIL_MAX_BYTES = 180 * 1024;
+
+async function doctrineSigilAudit(page) {
+  await page.waitForFunction((expectedOrders) => {
+    const tabs = [...document.querySelectorAll(
+      '.sf-doctrine__orders [data-doctrine-sigil][data-sigil-role="tab"]'
+    )];
+    const hero = document.querySelector('[data-doctrine-sigil][data-sigil-role="hero"]');
+    const capstone = document.querySelector(
+      '[data-doctrine-vow] [data-doctrine-sigil][data-sigil-role="capstone"]'
+    );
+    return tabs.length === expectedOrders.length && !!hero && !!capstone;
+  }, DOCTRINE_ORDER_IDS, { timeout: 5000 });
+
+  return await page.evaluate(async ({ expectedOrders, maxBytes }) => {
+    const rectOf = (node) => {
+      const box = node?.getBoundingClientRect();
+      return box ? {
+        left: Number(box.left.toFixed(1)), top: Number(box.top.toFixed(1)),
+        right: Number(box.right.toFixed(1)), bottom: Number(box.bottom.toFixed(1)),
+        width: Number(box.width.toFixed(1)), height: Number(box.height.toFixed(1)),
+      } : null;
+    };
+    const contains = (outer, inner, inset = 0, tolerance = 0.5) => !!outer && !!inner
+      && inner.left >= outer.left + inset - tolerance
+      && inner.top >= outer.top + inset - tolerance
+      && inner.right <= outer.right - inset + tolerance
+      && inner.bottom <= outer.bottom - inset + tolerance;
+    const overlapArea = (a, b) => !a || !b ? 0
+      : Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left))
+        * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+    const isVisible = (node) => {
+      if (!node || node.hidden) return false;
+      const style = getComputedStyle(node);
+      const box = node.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden"
+        && Number(style.opacity) > 0 && box.width > 1 && box.height > 1;
+    };
+    const decorative = (image) => !!image
+      && image.getAttribute("alt") === ""
+      && image.getAttribute("aria-hidden") === "true"
+      && image.getAttribute("draggable") === "false"
+      && !image.hasAttribute("tabindex")
+      && !image.getAttribute("title");
+    const decode = async (image) => {
+      try {
+        await image.decode();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    };
+
+    const tabNodes = [...document.querySelectorAll(
+      '.sf-doctrine__orders [data-doctrine-sigil][data-sigil-role="tab"]'
+    )];
+    const heroNode = document.querySelector('[data-doctrine-sigil][data-sigil-role="hero"]');
+    const capstoneNode = document.querySelector(
+      '[data-doctrine-vow] [data-doctrine-sigil][data-sigil-role="capstone"]'
+    );
+    const imageNodes = [...tabNodes, heroNode, capstoneNode].filter(Boolean);
+    const decoded = new Map(await Promise.all(imageNodes.map(async (image) =>
+      [image, await decode(image)])));
+
+    const sourceNodes = new Map();
+    for (const image of tabNodes) {
+      if (image.currentSrc && !sourceNodes.has(image.currentSrc)) {
+        sourceNodes.set(image.currentSrc, image);
+      }
+    }
+    const assets = await Promise.all([...sourceNodes].map(async ([source, image]) => {
+      let responseStatus = 0;
+      let contentType = "";
+      let contentLength = 0;
+      let responseError = "";
+      try {
+        const response = await fetch(source, { method: "HEAD", cache: "no-store" });
+        responseStatus = response.status;
+        contentType = response.headers.get("content-type") || "";
+        contentLength = Number(response.headers.get("content-length")) || 0;
+      } catch (error) {
+        responseError = error?.message || String(error);
+      }
+      return {
+        orderId: image.dataset.orderId || null,
+        source,
+        pathname: new URL(source, document.baseURI).pathname,
+        complete: image.complete,
+        decoded: decoded.get(image) === true,
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight,
+        responseStatus,
+        contentType,
+        contentLength,
+        underBudget: contentLength > 0 && contentLength <= maxBytes,
+        responseError,
+      };
+    }));
+
+    const tabs = tabNodes.map((image) => {
+      const tab = image.closest('[role="tab"][data-doctrine-order]');
+      const label = tab?.querySelector(":scope > span");
+      const points = tab?.querySelector(":scope > small");
+      const imageRect = rectOf(image);
+      const tabRect = rectOf(tab);
+      const labelRect = rectOf(label);
+      const pointsRect = rectOf(points);
+      const accessibleName = (tab?.getAttribute("aria-label")
+        || tab?.textContent || "").replace(/\s+/g, " ").trim();
+      const orderId = tab?.dataset.doctrineOrder || image.dataset.orderId || null;
+      return {
+        orderId,
+        imageOrderId: image.dataset.orderId || null,
+        source: image.currentSrc,
+        complete: image.complete,
+        decoded: decoded.get(image) === true,
+        naturalSize: [image.naturalWidth, image.naturalHeight],
+        decorative: decorative(image),
+        visible: isVisible(image),
+        imageRect, tabRect,
+        square: !!imageRect && Math.abs(imageRect.width - imageRect.height) <= 2,
+        sizeFit: !!imageRect && imageRect.width >= 18 && imageRect.width <= 30
+          && imageRect.height >= 18 && imageRect.height <= 30,
+        contained: contains(tabRect, imageRect, 2),
+        labelOverlap: Number(overlapArea(imageRect, labelRect).toFixed(2)),
+        pointsOverlap: Number(overlapArea(imageRect, pointsRect).toFixed(2)),
+        labelOverflow: label ? {
+          x: Math.max(0, label.scrollWidth - label.clientWidth),
+          y: Math.max(0, label.scrollHeight - label.clientHeight),
+        } : { x: Infinity, y: Infinity },
+        pointsOverflow: points ? {
+          x: Math.max(0, points.scrollWidth - points.clientWidth),
+          y: Math.max(0, points.scrollHeight - points.clientHeight),
+        } : { x: Infinity, y: Infinity },
+        accessibleName,
+        nameContainsOrder: !!orderId
+          && accessibleName.toLowerCase().includes(orderId.toLowerCase()),
+        nameContainsPoints: /\b\d+\s+doctrine\s+points?\b/i.test(accessibleName),
+        selected: tab?.getAttribute("aria-selected") === "true",
+        tabIndex: Number(tab?.getAttribute("tabindex")),
+      };
+    });
+
+    const selectedTab = tabs.find((entry) => entry.selected) || null;
+    const describeSupplement = (image, host) => {
+      const contained = contains(rectOf(host), rectOf(image), 0);
+      const hostOverflow = host ? getComputedStyle(host).overflow : "";
+      const clippedByHost = ["hidden", "clip"].includes(hostOverflow);
+      return {
+        orderId: image?.dataset.orderId || null,
+        source: image?.currentSrc || "",
+        complete: !!image?.complete,
+        decoded: decoded.get(image) === true,
+        naturalSize: image ? [image.naturalWidth, image.naturalHeight] : [0, 0],
+        decorative: decorative(image),
+        visible: isVisible(image),
+        contained,
+        hostOverflow,
+        visuallyContained: contained || clippedByHost,
+      };
+    };
+    const hero = describeSupplement(heroNode, heroNode?.closest(".sf-doctrine__order-head"));
+    const capstone = describeSupplement(capstoneNode,
+      capstoneNode?.closest("[data-doctrine-vow]"));
+
+    return {
+      expectedOrders,
+      expectedMaxBytes: maxBytes,
+      assets,
+      tabs,
+      hero,
+      capstone,
+      selectedOrder: selectedTab?.orderId || null,
+      uniqueTabSources: new Set(tabs.map((entry) => entry.source).filter(Boolean)).size,
+      selectedCount: tabs.filter((entry) => entry.selected).length,
+      rovingTabCount: tabs.filter((entry) => entry.tabIndex === 0).length,
+      tabOrders: tabs.map((entry) => entry.orderId),
+      heroMatchesSelected: !!selectedTab && hero.orderId === selectedTab.orderId
+        && hero.source === selectedTab.source,
+      capstoneMatchesSelected: !!selectedTab && capstone.orderId === selectedTab.orderId
+        && capstone.source === selectedTab.source,
+    };
+  }, { expectedOrders: DOCTRINE_ORDER_IDS, maxBytes: DOCTRINE_SIGIL_MAX_BYTES });
+}
+
+function doctrineSigilAssetsPass(audit) {
+  return audit.assets.length === DOCTRINE_ORDER_IDS.length
+    && audit.uniqueTabSources === DOCTRINE_ORDER_IDS.length
+    && audit.assets.every((asset) => asset.complete && asset.decoded
+      && asset.naturalWidth === 512 && asset.naturalHeight === 512
+      && asset.responseStatus >= 200 && asset.responseStatus < 300
+      && /^image\/jpeg(?:;|$)/i.test(asset.contentType)
+      && /\.jpe?g$/i.test(asset.pathname) && asset.underBudget && !asset.responseError);
+}
+
+function doctrineSigilAccessibilityPass(audit) {
+  return audit.tabs.length === DOCTRINE_ORDER_IDS.length
+    && audit.selectedCount === 1 && audit.rovingTabCount === 1
+    && audit.tabs.every((tab) => tab.decorative && tab.nameContainsOrder
+      && tab.nameContainsPoints && tab.imageOrderId === tab.orderId)
+    && audit.hero.decorative && audit.capstone.decorative;
+}
+
+function doctrineSigilFitPass(audit) {
+  return audit.tabs.length === DOCTRINE_ORDER_IDS.length
+    && audit.tabs.every((tab) => tab.visible && tab.decoded
+      && tab.naturalSize[0] === 512 && tab.naturalSize[1] === 512
+      && tab.square && tab.sizeFit && tab.contained
+      && tab.labelOverlap <= 1 && tab.pointsOverlap <= 1
+      && tab.labelOverflow.x <= 1 && tab.labelOverflow.y <= 1
+      && tab.pointsOverflow.x <= 1 && tab.pointsOverflow.y <= 1)
+    && audit.hero.visible && audit.hero.decoded && audit.hero.visuallyContained
+    && audit.capstone.visible && audit.capstone.decoded && audit.capstone.visuallyContained
+    && audit.heroMatchesSelected && audit.capstoneMatchesSelected;
+}
+
 async function hudDensityAudit(page) {
   return await page.evaluate(() => {
     const stage = document.querySelector(".sf-stage");
@@ -418,6 +730,97 @@ async function embeddedKeyboardPass(browser) {
     focusInside: document.getElementById("sf-menu")?.contains(document.activeElement),
     bodyPaused: document.body.classList.contains("rb-escape-menu-open"),
   }));
+
+  await page.locator('[data-menu-panel="doctrine"]').click();
+  await page.waitForFunction(() => window.__SF.menuState()?.panel === "doctrine",
+    null, { timeout: 3000 });
+  const embeddedDoctrineOrders = await page.locator("[data-doctrine-order]")
+    .evaluateAll((nodes) => nodes.map((node) => node.dataset.doctrineOrder));
+  const embeddedDoctrineAudits = [];
+  for (const orderId of embeddedDoctrineOrders) {
+    await page.locator(`[data-doctrine-order="${orderId}"]`).click();
+    await page.waitForFunction((id) => document.querySelector(
+      `[data-doctrine-order="${id}"]`)?.getAttribute("aria-selected") === "true",
+    orderId, { timeout: 3000 });
+    embeddedDoctrineAudits.push({
+      orderId,
+      audit: await doctrineLayoutAudit(page),
+      sigils: await doctrineSigilAudit(page),
+    });
+  }
+  await page.locator('[data-doctrine-order="censer"]').click();
+  const embeddedSigilOverview = await doctrineSigilAudit(page);
+  await page.locator(".sf-stage").screenshot({
+    path: path.join(OUT, "embedded-doctrine-overview-1008x567.png"),
+  });
+  evidence.embeddedDoctrine = embeddedDoctrineAudits;
+  evidence.embeddedDoctrineSigils = embeddedSigilOverview;
+  check("embedded Doctrine shows every Order's four rites and capstone together",
+    embeddedDoctrineAudits.length === 5 && embeddedDoctrineAudits.every(({ audit }) =>
+      !audit.missing && audit.view === "overview" && audit.cards.length === 4
+        && audit.vows.length === 1 && audit.allCardsInOrder && audit.allCardsInContent
+        && audit.allVowsInOrder && audit.allVowsInContent),
+    JSON.stringify(embeddedDoctrineAudits));
+  check("embedded Doctrine has no nested scroll, clipping, or card overlap",
+    embeddedDoctrineAudits.every(({ audit }) => audit.scrollOwners.length === 0
+      && Object.values(audit.scroll).every(({ x, y }) => x <= 2 && y <= 2)
+      && audit.actionOverflow.length === 0 && audit.cardOverlaps.length === 0
+      && !audit.orderHitsDoctrineFooter && !audit.doctrineHitsGlobalFooter),
+    JSON.stringify(embeddedDoctrineAudits));
+  check("Doctrine exposes one horizontal five-Order tablist",
+    embeddedDoctrineAudits.every(({ audit }) => audit.tabCount === 5
+      && audit.tabMinHeight >= 40 && audit.ariaOrientation === "horizontal"),
+    JSON.stringify(embeddedDoctrineAudits.map(({ orderId, audit }) => ({
+      orderId, tabCount: audit.tabCount, tabMinHeight: audit.tabMinHeight,
+      ariaOrientation: audit.ariaOrientation,
+    }))));
+  check("generated Order sigils decode as five unique budgeted 512px JPEG assets",
+    doctrineSigilAssetsPass(embeddedSigilOverview),
+    JSON.stringify(embeddedSigilOverview.assets));
+  check("Order sigils remain decorative while tabs expose unique text names and points",
+    embeddedDoctrineAudits.every(({ sigils }) => doctrineSigilAccessibilityPass(sigils))
+      && embeddedSigilOverview.tabs.every((tab) =>
+        DOCTRINE_ORDER_IDS.includes(tab.orderId))
+      && new Set(embeddedSigilOverview.tabs.map((tab) => tab.orderId)).size
+        === DOCTRINE_ORDER_IDS.length,
+    JSON.stringify(embeddedSigilOverview));
+  check("embedded 1008x567 keeps every Order sigil clear of tab text and card layout",
+    embeddedDoctrineAudits.every(({ orderId, sigils }) =>
+      doctrineSigilFitPass(sigils) && sigils.selectedOrder === orderId),
+    JSON.stringify(embeddedDoctrineAudits.map(({ orderId, sigils }) => ({
+      orderId, selectedOrder: sigils.selectedOrder, tabs: sigils.tabs,
+      hero: sigils.hero, capstone: sigils.capstone,
+    }))));
+
+  const inspectButton = page.locator('[data-talent-action="inspect"]').first();
+  const inspectedDetailId = await inspectButton.getAttribute("aria-controls");
+  await inspectButton.click();
+  await page.waitForFunction(() => document.querySelector("[data-doctrine-order-panel]")
+    ?.dataset.view === "talent", null, { timeout: 3000 });
+  await page.waitForTimeout(40);
+  const inspectedDoctrine = await page.evaluate((detailId) => {
+    const button = document.querySelector('[data-talent-action="inspect"][aria-expanded="true"]');
+    const detail = document.getElementById(detailId);
+    return {
+      expanded: button?.getAttribute("aria-expanded"),
+      controls: button?.getAttribute("aria-controls"),
+      detailVisible: !!detail && !detail.hidden && getComputedStyle(detail).display !== "none",
+      focusPreserved: document.activeElement === button,
+      view: document.querySelector("[data-doctrine-order-panel]")?.dataset.view,
+    };
+  }, inspectedDetailId);
+  await page.locator(".sf-stage").screenshot({
+    path: path.join(OUT, "embedded-doctrine-inspected-1008x567.png"),
+  });
+  check("Doctrine Details is an accessible drill-in and preserves focus",
+    inspectedDoctrine.expanded === "true" && inspectedDoctrine.controls === inspectedDetailId
+      && inspectedDoctrine.detailVisible && inspectedDoctrine.focusPreserved
+      && inspectedDoctrine.view === "talent",
+    JSON.stringify(inspectedDoctrine));
+  await page.locator('[data-talent-action="inspect"][aria-expanded="true"]').click();
+  await page.waitForFunction(() => document.querySelector("[data-doctrine-order-panel]")
+    ?.dataset.view === "overview", null, { timeout: 3000 });
+
   await page.keyboard.press("Escape");
   await page.waitForFunction(() => !window.__SF.menuState()?.open, null, { timeout: 3000 });
   const embeddedEscapeClosed = await page.evaluate(() => ({
@@ -840,6 +1243,26 @@ async function desktopPass(browser) {
   const trapped = await page.evaluate(() => document.getElementById("sf-menu")
     ?.contains(document.activeElement));
   check("Tab focus remains inside the operation menu", trapped);
+
+  await page.locator('[data-menu-panel="doctrine"]').click();
+  await page.waitForFunction(() => window.__SF.menuState()?.panel === "doctrine",
+    null, { timeout: 3000 });
+  const desktopDoctrineSigils = await doctrineSigilAudit(page);
+  const desktopDoctrineLayout = await doctrineLayoutAudit(page);
+  await page.locator(".sf-stage").screenshot({
+    path: path.join(OUT, "desktop-doctrine-sigils-1440x900.png"),
+  });
+  evidence.desktopDoctrineSigils = desktopDoctrineSigils;
+  check("desktop 1440x900 keeps decoded sigils clear without disturbing Doctrine containment",
+    doctrineSigilFitPass(desktopDoctrineSigils)
+      && desktopDoctrineLayout.cards.length === 4
+      && desktopDoctrineLayout.vows.length === 1
+      && desktopDoctrineLayout.allCardsInOrder && desktopDoctrineLayout.allCardsInContent
+      && desktopDoctrineLayout.allVowsInOrder && desktopDoctrineLayout.allVowsInContent
+      && desktopDoctrineLayout.actionOverflow.length === 0
+      && desktopDoctrineLayout.cardOverlaps.length === 0
+      && Object.values(desktopDoctrineLayout.scroll).every(({ x, y }) => x <= 2 && y <= 2),
+    JSON.stringify({ sigils: desktopDoctrineSigils, layout: desktopDoctrineLayout }));
 
   await page.locator('[data-menu-panel="map"]').click();
   await page.waitForFunction(() => window.__SF.menuState()?.panel === "map"
@@ -1344,6 +1767,29 @@ async function mobilePass(browser) {
     JSON.stringify(touchLeak));
   check("mobile operation menu owns focus", touchLeak.focusInside);
 
+  await page.locator('[data-menu-panel="doctrine"]').tap();
+  await page.waitForFunction(() => window.__SF.menuState()?.panel === "doctrine",
+    null, { timeout: 3000 });
+  const portraitDoctrineSigils = await doctrineSigilAudit(page);
+  const portraitDoctrineLayout = await doctrineLayoutAudit(page);
+  const portraitDoctrineTargets = await touchTargetAudit(page);
+  await page.locator(".sf-stage").screenshot({
+    path: path.join(OUT, "mobile-doctrine-sigils-390x844.png"),
+  });
+  evidence.portraitDoctrineSigils = portraitDoctrineSigils;
+  check("portrait 390x844 keeps Order sigils readable, decorative, and touch safe",
+    doctrineSigilFitPass(portraitDoctrineSigils)
+      && doctrineSigilAccessibilityPass(portraitDoctrineSigils)
+      && portraitDoctrineTargets.offenders.length === 0
+      && portraitDoctrineLayout.scroll.content.x <= 2
+      && portraitDoctrineLayout.scroll.page.x <= 2
+      && portraitDoctrineLayout.scroll.tabs.x <= 2
+      && portraitDoctrineLayout.scroll.order.x <= 2
+      && portraitDoctrineLayout.actionOverflow.length === 0
+      && portraitDoctrineLayout.cardOverlaps.length === 0,
+    JSON.stringify({ sigils: portraitDoctrineSigils,
+      layout: portraitDoctrineLayout, targets: portraitDoctrineTargets }));
+
   await page.locator('[data-menu-panel="map"]').click();
   await page.waitForFunction(() => window.__SF.menuState()?.panel === "map"
     && window.__SF.menuState()?.mapRange >= 420, null, { timeout: 3000 });
@@ -1543,6 +1989,90 @@ async function landscapeTouchPass(browser) {
     activeTargets.count > 10 && activeTargets.offenders.length === 0
       && menuTargets.count >= 5 && menuTargets.offenders.length === 0,
     JSON.stringify({ activeTargets, menuTargets }));
+
+  await page.locator('[data-menu-panel="doctrine"]').tap();
+  await page.waitForFunction(() => window.__SF.menuState()?.panel === "doctrine",
+    null, { timeout: 3000 });
+  const landscapeDoctrineSigils = await doctrineSigilAudit(page);
+  await page.locator(".sf-stage").screenshot({
+    path: path.join(OUT, "touch-844x390-doctrine-overview.png"),
+  });
+  const landscapeDoctrineTop = await doctrineLayoutAudit(page);
+  const landscapeDoctrineTargets = await touchTargetAudit(page);
+  evidence.landscapeDoctrineSigils = landscapeDoctrineSigils;
+  check("844x390 Doctrine keeps all four rites in one clean scan row",
+    landscapeDoctrineTop.cards.length === 4 && landscapeDoctrineTop.vows.length === 1
+      && landscapeDoctrineTop.allCardsInOrder
+      && landscapeDoctrineTop.allVowsInOrder
+      && landscapeDoctrineTop.allVowsInContent
+      && landscapeDoctrineTop.actionOverflow.length === 0
+      && landscapeDoctrineTop.cardOverlaps.length === 0
+      && landscapeDoctrineTop.scrollOwners.length === 0
+      && Object.values(landscapeDoctrineTop.scroll).every(({ x, y }) => x <= 2 && y <= 2),
+    JSON.stringify(landscapeDoctrineTop));
+  check("844x390 Doctrine actions remain 44px touch targets",
+    landscapeDoctrineTargets.offenders.length === 0,
+    JSON.stringify(landscapeDoctrineTargets));
+  check("landscape 844x390 keeps Order sigils decoded, distinct, and clear of tab copy",
+    doctrineSigilFitPass(landscapeDoctrineSigils)
+      && doctrineSigilAccessibilityPass(landscapeDoctrineSigils)
+      && doctrineSigilAssetsPass(landscapeDoctrineSigils),
+    JSON.stringify(landscapeDoctrineSigils));
+  await page.evaluate(() => {
+    const order = document.querySelector("[data-doctrine-order-panel]");
+    if (order) order.scrollTop = order.scrollHeight;
+  });
+  await page.waitForTimeout(40);
+  const landscapeDoctrineBottom = await doctrineLayoutAudit(page);
+  await page.locator(".sf-stage").screenshot({
+    path: path.join(OUT, "touch-844x390-doctrine-capstone.png"),
+  });
+  check("844x390 Doctrine capstone is reachable without leaving the menu",
+    landscapeDoctrineBottom.vows.length === 1 && landscapeDoctrineBottom.allVowsInOrder
+      && landscapeDoctrineBottom.allVowsInContent
+      && !landscapeDoctrineBottom.orderHitsDoctrineFooter
+      && !landscapeDoctrineBottom.doctrineHitsGlobalFooter,
+    JSON.stringify(landscapeDoctrineBottom));
+
+  const landscapeCapstoneDetails = page.locator(
+    '[data-doctrine-vow] [data-talent-action="inspect"]');
+  const landscapeCapstoneDetailId = await landscapeCapstoneDetails.getAttribute("aria-controls");
+  await landscapeCapstoneDetails.tap();
+  await page.waitForFunction(() => document.querySelector("[data-doctrine-order-panel]")
+    ?.dataset.view === "capstone", null, { timeout: 3000 });
+  await page.waitForTimeout(40);
+  const landscapeCapstoneExpanded = await page.evaluate((detailId) => {
+    const button = document.querySelector(
+      '[data-doctrine-vow] [data-talent-action="inspect"][aria-expanded="true"]');
+    const detail = document.getElementById(detailId);
+    const order = document.querySelector("[data-doctrine-order-panel]");
+    const buttonRect = button?.getBoundingClientRect();
+    const orderRect = order?.getBoundingClientRect();
+    const detailRect = detail?.getBoundingClientRect();
+    return {
+      expanded: button?.getAttribute("aria-expanded"),
+      controls: button?.getAttribute("aria-controls"),
+      targetExists: !!detail,
+      targetHidden: detail?.hidden,
+      targetDisplay: detail ? getComputedStyle(detail).display : null,
+      targetRect: detailRect ? [detailRect.width, detailRect.height] : [0, 0],
+      focusPreserved: document.activeElement === button,
+      focusInViewport: !!buttonRect && !!orderRect && buttonRect.top >= orderRect.top - 2
+        && buttonRect.bottom <= orderRect.bottom + 2,
+    };
+  }, landscapeCapstoneDetailId);
+  await page.locator(".sf-stage").screenshot({
+    path: path.join(OUT, "touch-844x390-doctrine-capstone-detail.png"),
+  });
+  check("844x390 capstone Details reveals its controlled panel and preserves focus",
+    landscapeCapstoneExpanded.expanded === "true"
+      && landscapeCapstoneExpanded.controls === landscapeCapstoneDetailId
+      && landscapeCapstoneExpanded.targetExists && !landscapeCapstoneExpanded.targetHidden
+      && landscapeCapstoneExpanded.targetDisplay !== "none"
+      && landscapeCapstoneExpanded.targetRect.every((value) => value > 1)
+      && landscapeCapstoneExpanded.focusPreserved
+      && landscapeCapstoneExpanded.focusInViewport,
+    JSON.stringify(landscapeCapstoneExpanded));
   await context.close();
 }
 

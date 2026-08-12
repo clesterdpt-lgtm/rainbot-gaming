@@ -786,7 +786,7 @@ export function buildMission(ctx) {
   function blocksEnemyProjectile(detail = {}) {
     if (detail.source && detail.source !== "enemy-fire") return false;
     const enemyKey = detail.enemyKey || detail.enemy || "";
-    if (enemyKey && enemyKey !== "gleaner") return false;
+    if (enemyKey !== "gleaner") return false;
     const ps = ctx.player?.state;
     if (!ps) return false;
     for (const field of sanctuaries) {

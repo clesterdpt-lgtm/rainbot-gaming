@@ -778,3 +778,484 @@ body.sf-reduced-motion .sf-doctrine__xp>i em,body.sf-reduced-motion .sf-doctrine
   .sf-stage.sf-touch-enabled .sf-doctrine__vow{margin-top:.35rem;padding:.5rem}.sf-stage.sf-touch-enabled .sf-doctrine__vow-detail,.sf-stage.sf-touch-enabled .sf-doctrine__fusions{display:none}
   .sf-stage.sf-touch-enabled .sf-doctrine__vow-action{margin-top:.35rem;padding-top:.35rem}.sf-stage.sf-touch-enabled .sf-doctrine__footer{margin-top:.3rem;padding-top:.3rem}.sf-stage.sf-touch-enabled .sf-doctrine__footer p{font-size:7px}.sf-stage.sf-touch-enabled .sf-doctrine__footer button{min-height:44px}
 }
+
+/* ======================================================================
+   FIELD MENU REFRESH · SCAN FIRST
+
+   The menu is a paused tactical instrument, not a stack of dashboards.
+   Desktop uses more of the playfield, navigation yields to the active page,
+   and Doctrine presents every rite before inviting the player into detail.
+   ====================================================================== */
+
+.sf-stage:not(.sf-touch-enabled) .sf-menu__frame{
+  width:min(80rem,calc(100% - 2rem));
+  height:min(50rem,calc(100% - 2rem));
+  border-color:rgba(216,164,65,.32);
+  border-radius:.8rem;
+  background:
+    radial-gradient(circle at 78% 6%,rgba(216,164,65,.055),transparent 34%),
+    linear-gradient(135deg,rgba(138,34,48,.055),transparent 28%),
+    rgba(8,6,7,.975);
+  box-shadow:inset .25rem 0 0 rgba(138,34,48,.68),0 2rem 7rem rgba(0,0,0,.74)
+}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__masthead{
+  min-height:4.25rem;
+  padding:.55rem .85rem .55rem 1.05rem;
+  gap:.85rem;
+  background:linear-gradient(90deg,rgba(138,34,48,.18),transparent 31%)
+}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__crest{width:3rem;height:3rem}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__crest svg{width:1.8rem;height:1.8rem}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__masthead h2{font-size:clamp(1.15rem,2vw,1.55rem);letter-spacing:.1em}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__masthead span{font-size:9px}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__masthead p{font-size:10px}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__close{
+  width:2.75rem;height:2.75rem;border-radius:.45rem;background:rgba(0,0,0,.2)
+}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__body{grid-template-columns:13.5rem minmax(0,1fr)}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__rail{
+  padding:.65rem .55rem;gap:.22rem;background:linear-gradient(180deg,rgba(138,34,48,.075),transparent 35%),rgba(4,3,4,.36)
+}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__rail button{
+  min-height:2.75rem;padding:.48rem .58rem;border-radius:.48rem;font-size:10px;letter-spacing:.075em
+}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__rail button:hover,
+.sf-stage:not(.sf-touch-enabled) .sf-menu__rail button.is-active,
+.sf-stage:not(.sf-touch-enabled) .sf-menu__rail button[aria-current="page"]{
+  border-color:rgba(216,164,65,.18);
+  background:linear-gradient(90deg,rgba(138,34,48,.28),rgba(216,164,65,.025));
+  box-shadow:inset 2px 0 0 var(--sfu-brass)
+}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__rail .sf-menu__resume{min-height:3.35rem;margin-bottom:.25rem}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__resume strong{font-size:11px}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__resume small{font-size:9px}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__rail button[data-menu-action]{min-height:2.35rem;font-size:9px}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__content{
+  background:radial-gradient(circle at 55% 12%,rgba(216,164,65,.025),transparent 46%)
+}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__page{padding:clamp(.9rem,1.6vw,1.35rem)}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__pagehead{margin-bottom:.85rem;padding-bottom:.65rem}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__pagehead h3{font-size:clamp(1.25rem,2.1vw,1.8rem)}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__pagehead p{font-size:13px}
+.sf-stage:not(.sf-touch-enabled) .sf-menu__footer{min-height:2.2rem;padding:.48rem .8rem;font-size:9px}
+
+.sf-menu[data-panel="doctrine"] .sf-menu__content{overflow:hidden}
+.sf-menu__page--doctrine{
+  position:relative;
+  display:grid;
+  grid-template-rows:auto auto auto minmax(0,1fr) auto;
+  height:100%;
+  min-height:0;
+  overflow:hidden
+}
+.sf-menu__page--doctrine[hidden]{display:none}
+.sf-menu__page--doctrine .sf-menu__pagehead{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  grid-template-areas:"kicker copy" "title copy";
+  align-items:end;
+  column-gap:1.25rem;
+  row-gap:.12rem;
+  margin-bottom:.55rem;
+  padding-bottom:.5rem
+}
+.sf-menu__page--doctrine .sf-menu__pagehead>span{grid-area:kicker;font-size:8px}
+.sf-menu__page--doctrine .sf-menu__pagehead h3{grid-area:title;font-size:1.45rem}
+.sf-menu__page--doctrine .sf-menu__pagehead p{
+  grid-area:copy;align-self:end;justify-self:end;max-width:35rem;margin:0;font-size:12px;text-align:right
+}
+
+.sf-doctrine__summary{
+  grid-row:2;
+  display:grid;
+  grid-template-columns:4.2rem minmax(9rem,1fr) 5.5rem 5.5rem minmax(11rem,.8fr);
+  align-items:stretch;
+  gap:0;
+  margin:0 0 .5rem;
+  border-block:1px solid rgba(216,164,65,.13);
+  border-radius:.5rem;
+  background:linear-gradient(100deg,rgba(216,164,65,.045),transparent 82%)
+}
+.sf-doctrine__summary>div{
+  min-width:0;min-height:3.15rem;padding:.45rem .58rem;border:0;border-right:1px solid rgba(216,164,65,.1);background:none
+}
+.sf-doctrine__summary>div:last-child{border-right:0}
+.sf-doctrine__summary small{font-size:8px;letter-spacing:.1em}
+.sf-doctrine__rank strong{font-size:1.35rem}
+.sf-doctrine__points strong,.sf-doctrine__seals strong{font-size:1rem}
+.sf-doctrine__xp{gap:.35rem}
+.sf-doctrine__vow-slots{gap:.25rem;padding:.28rem!important}
+.sf-doctrine__vow-slots>span{padding:.28rem .38rem;border-radius:.3rem}
+.sf-doctrine__lock{grid-row:3;margin:0 0 .45rem;padding:.42rem .6rem;border-radius:.35rem}
+
+.sf-doctrine__body{
+  grid-row:4;
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  grid-template-rows:44px minmax(0,1fr);
+  gap:.45rem;
+  min-width:0;
+  min-height:0
+}
+.sf-doctrine__orders{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  min-width:0;
+  min-height:44px;
+  padding:0;
+  gap:.28rem;
+  overflow:visible;
+  border:0;
+  background:transparent;
+  scrollbar-gutter:auto
+}
+.sf-doctrine__order[data-view="overview"]{grid-template-rows:auto auto auto;align-content:start}
+.sf-doctrine__orders button{
+  display:grid;
+  grid-template-columns:1.45rem minmax(0,1fr) auto;
+  grid-template-areas:"sigil label points";
+  align-items:center;
+  column-gap:.38rem;
+  min-width:0;
+  min-height:44px;
+  padding:.42rem .58rem;
+  border:1px solid rgba(216,164,65,.11);
+  border-left:1px solid rgba(216,164,65,.18);
+  border-radius:.45rem;
+  background:rgba(5,4,5,.26)
+}
+.sf-doctrine__sigil{
+  display:block;
+  aspect-ratio:1;
+  object-fit:contain;
+  mix-blend-mode:screen;
+  pointer-events:none;
+  user-select:none;
+  -webkit-user-drag:none
+}
+.sf-doctrine__sigil[hidden]{display:none}
+.sf-doctrine__sigil--tab{
+  grid-area:sigil;
+  width:1.3rem;
+  height:1.3rem;
+  justify-self:center;
+  opacity:.72;
+  filter:saturate(.82) contrast(1.06)
+}
+.sf-doctrine__orders button:hover,.sf-doctrine__orders button[aria-selected="true"]{
+  border-color:color-mix(in srgb,var(--sf-order-accent) 55%,transparent);
+  border-left-color:var(--sf-order-accent);
+  background:linear-gradient(120deg,rgba(138,34,48,.22),rgba(216,164,65,.035));
+  box-shadow:inset 0 -2px 0 var(--sf-order-accent)
+}
+.sf-doctrine__orders button:hover .sf-doctrine__sigil--tab,
+.sf-doctrine__orders button[aria-selected="true"] .sf-doctrine__sigil--tab{
+  opacity:1;
+  filter:saturate(1.08) contrast(1.08) drop-shadow(0 0 .32rem var(--sf-order-accent))
+}
+.sf-doctrine__orders button span{grid-area:label;overflow:hidden;font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.sf-doctrine__orders button small{grid-area:points;font-size:8px}
+
+.sf-doctrine__order{
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto;
+  gap:.45rem;
+  min-width:0;
+  min-height:0;
+  padding:0;
+  overflow:hidden;
+  scrollbar-gutter:auto
+}
+.sf-doctrine__order-head{
+  display:grid;
+  grid-template-columns:2.15rem minmax(0,1fr) auto;
+  align-items:center;
+  justify-content:stretch;
+  gap:.55rem;
+  min-height:2.4rem;margin:0;padding:.1rem .15rem .42rem
+}
+.sf-doctrine__sigil--hero{
+  width:2rem;
+  height:2rem;
+  opacity:.94;
+  filter:saturate(1.02) contrast(1.08) drop-shadow(0 0 .42rem color-mix(in srgb,var(--sf-order-accent) 52%,transparent))
+}
+.sf-doctrine__order-head>span{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"kicker kicker" "title focus";align-items:baseline;column-gap:.8rem}
+.sf-doctrine__order-head small{grid-area:kicker;font-size:8px}
+.sf-doctrine__order-head h4{grid-area:title;font-size:.98rem;white-space:nowrap}
+.sf-doctrine__order-head p{grid-area:focus;overflow:hidden;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+.sf-doctrine__order-head>b{padding:.3rem .42rem;border-radius:.35rem;font-size:9px}
+
+.sf-doctrine__rites{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  grid-auto-rows:minmax(0,1fr);
+  gap:.45rem;
+  min-width:0;
+  min-height:0
+}
+.sf-doctrine-talent{
+  display:grid;
+  grid-template-rows:auto minmax(1.4em,auto) auto auto;
+  min-width:0;
+  min-height:0;
+  padding:.58rem;
+  border:1px solid rgba(216,164,65,.12);
+  border-left:2px solid rgba(216,164,65,.23);
+  border-radius:.55rem;
+  background:linear-gradient(145deg,rgba(216,164,65,.035),transparent 48%),rgba(11,8,9,.5)
+}
+.sf-doctrine-talent>header strong{
+  display:-webkit-box;overflow:hidden;font-size:11px;line-height:1.2;-webkit-box-orient:vertical;-webkit-line-clamp:2
+}
+.sf-doctrine-talent>header>b i{width:.42rem;height:.42rem}
+.sf-doctrine-talent>p{
+  display:-webkit-box;min-height:0;margin:.32rem 0 .42rem;overflow:hidden;color:rgba(242,229,199,.66);font-size:10px;line-height:1.3;-webkit-box-orient:vertical;-webkit-line-clamp:2
+}
+.sf-doctrine-talent__actions{gap:.3rem}
+.sf-doctrine-talent__actions button,
+.sf-doctrine__vow-action button,
+.sf-doctrine__footer button{
+  min-height:44px;padding:.38rem .45rem;border-radius:.4rem;background:rgba(216,164,65,.045);font-size:9px
+}
+.sf-doctrine-talent__reason{
+  overflow:hidden;margin-top:.3rem;color:rgba(242,229,199,.5);font-size:8px;line-height:1.25;text-overflow:ellipsis;white-space:nowrap
+}
+.sf-doctrine-talent__detail[hidden],.sf-doctrine__vow-detail[hidden]{display:none}
+
+.sf-doctrine__order>[data-doctrine-capstone]{min-width:0}
+.sf-doctrine__vow{
+  display:grid;
+  grid-template-columns:minmax(11rem,.72fr) minmax(12rem,1fr) minmax(14rem,auto);
+  grid-template-areas:"vow-head vow-summary vow-action";
+  align-items:center;
+  gap:.75rem;
+  min-width:0;
+  min-height:4.65rem;
+  margin:0;
+  padding:.55rem .65rem;
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  border-radius:.58rem;
+  background:radial-gradient(circle at 86% 18%,rgba(216,164,65,.07),transparent 35%),rgba(9,6,7,.62)
+}
+.sf-doctrine__vow>.sf-doctrine__sigil--capstone{
+  position:absolute;
+  z-index:0;
+  top:50%;
+  right:22%;
+  width:5.35rem;
+  height:5.35rem;
+  transform:translateY(-50%);
+  opacity:.12;
+  filter:saturate(.92) contrast(1.08)
+}
+.sf-doctrine__vow>*:not(.sf-doctrine__sigil--capstone){position:relative;z-index:1}
+.sf-doctrine__vow[data-state="locked"]>.sf-doctrine__sigil--capstone{opacity:.065;filter:grayscale(.65) contrast(1.08)}
+.sf-doctrine__vow[data-state="eligible"]>.sf-doctrine__sigil--capstone{opacity:.2;filter:saturate(1.08) contrast(1.08) drop-shadow(0 0 .5rem var(--sf-order-accent))}
+.sf-doctrine__vow[data-state="equipped"]>.sf-doctrine__sigil--capstone{opacity:.24;filter:saturate(1.15) contrast(1.1) drop-shadow(0 0 .6rem var(--sfu-verd))}
+.sf-doctrine__vow>header{grid-area:vow-head;min-width:0}
+.sf-doctrine__vow>header>span{min-width:0}
+.sf-doctrine__vow>header strong{overflow:hidden;font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+.sf-doctrine__vow>header>b{font-size:8px}
+.sf-doctrine__vow>p{
+  grid-area:vow-summary;display:-webkit-box;min-width:0;margin:0;overflow:hidden;font-size:11px;line-height:1.3;-webkit-box-orient:vertical;-webkit-line-clamp:2
+}
+.sf-doctrine__vow-detail,.sf-doctrine__fusions{grid-column:1/-1}
+.sf-doctrine__vow-action{
+  grid-area:vow-action;display:grid;grid-template-columns:minmax(0,1fr);gap:.28rem;margin:0;padding:0;border:0
+}
+.sf-doctrine__vow-action>small{overflow:hidden;font-size:8px;text-align:right;text-overflow:ellipsis;white-space:nowrap}
+.sf-doctrine__vow-action>span{display:flex;justify-content:flex-end;gap:.3rem}
+.sf-doctrine__vow-action button{min-width:6.5rem}
+.sf-doctrine__order[data-view="overview"] .sf-doctrine__vow-detail,
+.sf-doctrine__order[data-view="overview"] .sf-doctrine__fusions{display:none}
+
+.sf-doctrine__order[data-view="talent"],.sf-doctrine__order[data-view="capstone"]{
+  grid-template-rows:auto minmax(0,1fr);
+  overflow:auto;
+  scrollbar-gutter:stable
+}
+.sf-doctrine__order[data-view="talent"] .sf-doctrine__rites{grid-template-columns:minmax(0,1fr)}
+.sf-doctrine__order[data-view="talent"] .sf-doctrine-talent:not([data-inspected="true"]),
+.sf-doctrine__order[data-view="talent"]>[data-doctrine-capstone]{display:none}
+.sf-doctrine__order[data-view="talent"] .sf-doctrine-talent[data-inspected="true"]{min-height:0;padding:.8rem}
+.sf-doctrine__order[data-view="talent"] .sf-doctrine-talent[data-inspected="true"]>p{-webkit-line-clamp:unset}
+.sf-doctrine__order[data-view="talent"] .sf-doctrine-talent__detail{margin-top:.7rem;padding-top:.65rem}
+.sf-doctrine__order[data-view="capstone"] .sf-doctrine__rites{display:none}
+.sf-doctrine__order[data-view="capstone"] .sf-doctrine__vow{
+  display:block;min-height:0;padding:.85rem
+}
+.sf-doctrine__order[data-view="capstone"] .sf-doctrine__vow>.sf-doctrine__sigil--capstone{
+  top:.6rem;right:.65rem;width:7rem;height:7rem;transform:none;opacity:.15
+}
+.sf-doctrine__order[data-view="capstone"] .sf-doctrine__vow>p{display:block;margin:.45rem 0}
+.sf-doctrine__order[data-view="capstone"] .sf-doctrine__vow-detail{margin-top:.5rem;padding-top:.55rem;border-top:1px solid rgba(216,164,65,.12)}
+.sf-doctrine__order[data-view="capstone"] .sf-doctrine__fusions{display:grid}
+.sf-doctrine__order[data-view="capstone"] .sf-doctrine__vow-action{margin-top:.65rem;padding-top:.55rem;border-top:1px solid rgba(216,164,65,.12)}
+
+.sf-doctrine__footer{
+  grid-row:5;min-height:2.55rem;margin-top:.42rem;padding-top:.38rem
+}
+.sf-stage:not(.sf-touch-enabled) .sf-doctrine__footer button{min-height:2.25rem}
+
+body.sf-high-contrast .sf-doctrine__summary,
+body.sf-high-contrast .sf-doctrine__orders button,
+body.sf-high-contrast .sf-doctrine-talent,
+body.sf-high-contrast .sf-doctrine__vow{border-color:rgba(245,216,142,.62);background-color:#090607}
+
+/* A maximised stage leaves the page's original playfield container behind.
+   Drop the embedded-size container name so fullscreen uses its real viewport. */
+body.rb-game-maxed .saintfall-page .rb-standalone-surface{container-name:none}
+
+/* The embedded game is sized by its playfield container, not the browser
+   around the Rainbot sidebar. This is the screenshot-sized compact tier. */
+@container saintfall-playfield (max-width:1180px){
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__frame{width:calc(100% - 1rem);height:calc(100% - 1rem);border-radius:.65rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__masthead{grid-template-columns:minmax(0,1fr) auto;min-height:3.35rem;padding:.35rem .55rem .35rem .75rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__crest{display:none}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__masthead>div:nth-child(2)>span,
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__masthead p{display:none}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__masthead h2{margin:0;font-size:1.05rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__close{width:2.75rem;height:2.75rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__body{grid-template-columns:8.25rem minmax(0,1fr)}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__rail{padding:.35rem .3rem;gap:.12rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__rail button{grid-template-columns:1.15rem minmax(0,1fr);gap:.4rem;min-height:2.2rem;padding:.28rem .38rem;font-size:9px;letter-spacing:.035em}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__rail button svg{width:1rem;height:1rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__rail .sf-menu__resume{min-height:2.65rem;margin-bottom:.12rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__resume strong{font-size:9px}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__resume small{display:none}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__rail button[data-menu-action]{min-height:2rem;font-size:8px}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__footer{min-height:1.85rem;padding:.34rem .6rem;font-size:8px}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__page--doctrine{padding:.52rem .62rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-menu__page--doctrine .sf-menu__pagehead{display:none}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__summary{grid-template-columns:3.7rem minmax(7rem,1fr) 4.8rem 4.8rem minmax(9rem,.8fr);margin-bottom:.35rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__summary>div{min-height:2.7rem;padding:.32rem .42rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__rank strong{font-size:1.15rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__summary small{font-size:8px}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__body{grid-template-rows:42px minmax(0,1fr);gap:.32rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__orders{min-height:42px;gap:.22rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__orders button{grid-template-columns:1.25rem minmax(0,1fr) auto;column-gap:.28rem;min-height:42px;padding:.3rem .4rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__sigil--tab{width:1.125rem;height:1.125rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__orders button span{font-size:10px}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__orders button small{font-size:8px}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__order{gap:.32rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__order-head{grid-template-columns:1.75rem minmax(0,1fr) auto;gap:.4rem;min-height:2rem;padding:0 .1rem .28rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__sigil--hero{width:1.6rem;height:1.6rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__order-head h4{font-size:.9rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__order-head p{font-size:10px}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__rites{gap:.32rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine-talent{padding:.42rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine-talent>header small{font-size:8px}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine-talent>header strong{font-size:11px}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine-talent>p{margin:.24rem 0 .32rem;font-size:10px;-webkit-line-clamp:2}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine-talent__actions button{min-height:36px;padding:.25rem;font-size:10px}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine-talent__reason{margin-top:.24rem;font-size:9px}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__vow{grid-template-columns:minmax(9rem,.65fr) minmax(8rem,1fr) minmax(12rem,auto);min-height:4rem;padding:.4rem .5rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__vow>header strong{font-size:11px}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__vow>p{font-size:10px;-webkit-line-clamp:1}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__vow-action button{min-width:5.5rem;min-height:36px;padding:.25rem;font-size:10px}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__vow-action>small{font-size:8px}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__footer{min-height:2rem;margin-top:.25rem;padding-top:.25rem}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__footer p{font-size:7px}
+  .sf-stage:not(.sf-touch-enabled) .sf-doctrine__footer button{min-height:32px;font-size:7px}
+}
+
+/* Portrait keeps one deliberate scroll owner: the menu content. */
+@media (orientation:portrait) and (max-width:560px){
+  .sf-stage.sf-touch-enabled .sf-menu[data-panel="doctrine"] .sf-menu__content{overflow:auto;overscroll-behavior:contain}
+  .sf-stage.sf-touch-enabled .sf-menu__page--doctrine{display:block;height:auto;min-height:100%;overflow:visible;padding:.55rem .5rem max(.8rem,env(safe-area-inset-bottom))}
+  .sf-stage.sf-touch-enabled .sf-menu__page--doctrine[hidden]{display:none}
+  .sf-stage.sf-touch-enabled .sf-menu__page--doctrine .sf-menu__pagehead{display:grid;grid-template-columns:1fr;margin-bottom:.35rem;padding-bottom:.35rem}
+  .sf-stage.sf-touch-enabled .sf-menu__page--doctrine .sf-menu__pagehead>span{grid-area:auto}
+  .sf-stage.sf-touch-enabled .sf-menu__page--doctrine .sf-menu__pagehead h3{grid-area:auto;font-size:1.2rem}
+  .sf-stage.sf-touch-enabled .sf-menu__page--doctrine .sf-menu__pagehead p{display:none}
+  .sf-stage.sf-touch-enabled .sf-doctrine__summary{grid-template-columns:3.25rem minmax(0,1fr) 4.15rem 4.15rem;grid-template-areas:"rank xp points seals" "vows vows vows vows";margin-bottom:.35rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__summary>div{min-height:2.65rem;padding:.32rem .38rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow-slots{min-height:2.5rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__body{display:block}
+  .sf-stage.sf-touch-enabled .sf-doctrine__orders{position:sticky;top:0;z-index:3;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));min-height:44px;padding:.22rem;gap:.18rem;overflow:visible;border:1px solid rgba(216,164,65,.12);border-radius:.5rem;background:rgba(8,6,7,.96);box-shadow:0 .5rem 1.25rem rgba(0,0,0,.22)}
+  .sf-stage.sf-touch-enabled .sf-doctrine__orders button{display:grid;grid-template-columns:1.2rem minmax(0,1fr);grid-template-rows:auto auto;grid-template-areas:"sigil label" "sigil points";align-items:center;justify-items:start;column-gap:.1rem;min-height:44px;padding:.22rem .06rem;text-align:left}
+  .sf-stage.sf-touch-enabled .sf-doctrine__sigil--tab{grid-row:1/3;width:1.125rem;height:1.125rem;justify-self:center}
+  .sf-stage.sf-touch-enabled .sf-doctrine__orders button span{font-size:8px;letter-spacing:0}
+  .sf-stage.sf-touch-enabled .sf-doctrine__orders button small{font-size:7px}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order{display:block;margin-top:.4rem;overflow:visible}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order-head{grid-template-columns:2.15rem minmax(0,1fr) auto;gap:.45rem;min-height:2.5rem;margin-bottom:.4rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__sigil--hero{width:1.95rem;height:1.95rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order-head>span{display:grid;grid-template-columns:1fr;grid-template-areas:"kicker" "title" "focus"}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order-head h4{white-space:normal}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order-head p{font-size:10px;white-space:normal}
+  .sf-stage.sf-touch-enabled .sf-doctrine__rites{grid-template-columns:1fr;gap:.4rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine-talent{padding:.55rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine-talent>p{min-height:0;-webkit-line-clamp:2}
+  .sf-stage.sf-touch-enabled .sf-doctrine-talent__actions button{min-height:44px}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow{display:block;min-height:0;margin-top:.45rem;padding:.6rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow>p{display:block;margin:.35rem 0}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow-action{margin-top:.45rem;padding-top:.45rem;border-top:1px solid rgba(216,164,65,.12)}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow-action>small{text-align:left;white-space:normal}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow-action>span{display:grid;grid-template-columns:1fr 1fr}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow-action button{width:100%;min-width:0;min-height:44px}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="talent"],
+  .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="capstone"]{overflow:visible}
+  .sf-stage.sf-touch-enabled .sf-doctrine__footer{grid-template-columns:1fr;margin-top:.5rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__footer button{width:100%;min-height:44px}
+}
+
+/* Short landscape keeps the complete build ledger in one glance. Rare reset
+   stays beside the summary; only an opened detail becomes scrollable. */
+@media (orientation:landscape) and (max-height:500px){
+  .sf-stage.sf-touch-enabled .sf-menu[data-panel="doctrine"] .sf-menu__content{overflow:hidden}
+  .sf-stage.sf-touch-enabled .sf-menu__page--doctrine{display:grid;grid-template-rows:auto minmax(0,1fr);height:100%;padding:.35rem .5rem;overflow:hidden}
+  .sf-stage.sf-touch-enabled .sf-menu__page--doctrine[hidden]{display:none}
+  .sf-stage.sf-touch-enabled .sf-menu__page--doctrine .sf-menu__pagehead{display:none}
+  .sf-stage.sf-touch-enabled .sf-doctrine__summary{grid-row:1;grid-template-columns:3.4rem minmax(6rem,1fr) 4.2rem 4.2rem minmax(8rem,.8fr);margin:0 7rem .22rem 0}
+  .sf-stage.sf-touch-enabled .sf-doctrine__summary>div{min-height:2.25rem;padding:.22rem .3rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__summary small{font-size:7px}
+  .sf-stage.sf-touch-enabled .sf-doctrine__rank strong{font-size:1rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow-slots{grid-column:auto;min-height:2.25rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__body{grid-row:2;display:grid;grid-template-columns:1fr;grid-template-rows:44px minmax(0,1fr);gap:.22rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__orders{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));min-height:44px;padding:0;gap:.18rem;overflow:visible}
+  .sf-stage.sf-touch-enabled .sf-doctrine__orders button{display:grid;grid-template-columns:1.2rem minmax(0,1fr) auto;grid-template-areas:"sigil label points";column-gap:.2rem;min-height:44px;padding:.2rem .28rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__sigil--tab{width:1.125rem;height:1.125rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__orders button span{font-size:8px;white-space:nowrap}
+  .sf-stage.sf-touch-enabled .sf-doctrine__orders button small{font-size:7px}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order{display:block;min-height:0;padding-right:.15rem;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order-head{grid-template-columns:1.4rem minmax(0,1fr) auto;gap:.35rem;min-height:1.5rem;margin:0;padding:0 .08rem .16rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__sigil--hero{width:1.25rem;height:1.25rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order-head>span{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"title focus";gap:.5rem;align-items:baseline}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order-head small{display:none}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order-head h4{grid-area:title;font-size:.78rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order-head p{grid-area:focus;font-size:9px}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order-head>b{padding:.18rem .3rem;font-size:8px}
+  .sf-stage.sf-touch-enabled .sf-doctrine__rites{grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:auto;gap:.22rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine-talent{grid-template-rows:auto minmax(1.15em,auto) auto;min-height:5.35rem;padding:.34rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine-talent>header small{font-size:8px}
+  .sf-stage.sf-touch-enabled .sf-doctrine-talent>header strong{font-size:9px;-webkit-line-clamp:1}
+  .sf-stage.sf-touch-enabled .sf-doctrine-talent>header>b i{width:.35rem;height:.35rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine-talent>p{margin:.14rem 0 .2rem;font-size:9px;line-height:1.15;-webkit-line-clamp:1}
+  .sf-stage.sf-touch-enabled .sf-doctrine-talent__actions{gap:.15rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine-talent__actions button{min-height:44px;padding:.16rem;font-size:9px}
+  .sf-stage.sf-touch-enabled .sf-doctrine-talent__reason{display:none}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="overview"]{overflow:hidden}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="overview"] .sf-doctrine-talent{grid-template-rows:auto auto;min-height:0}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="overview"] .sf-doctrine-talent>p{display:none}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow{grid-template-columns:minmax(8rem,.8fr) minmax(9rem,1fr) minmax(12rem,auto);min-height:4rem;margin-top:.28rem;padding:.32rem .4rem;gap:.4rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow>header strong{font-size:9px}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow>header>b{font-size:7px}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow>p{font-size:9px;-webkit-line-clamp:1}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow-action>small{display:none}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow-action>span{gap:.18rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__vow-action button{min-width:5rem;min-height:44px;padding:.16rem;font-size:9px}
+  .sf-stage.sf-touch-enabled .sf-doctrine__footer{position:absolute;top:.35rem;right:.5rem;z-index:4;display:block;width:6.5rem;min-height:44px;margin:0;padding:0;border:0}
+  .sf-stage.sf-touch-enabled .sf-doctrine__footer p{display:none}
+  .sf-stage.sf-touch-enabled .sf-doctrine__footer button{width:100%;min-width:0;min-height:44px;padding:.2rem;font-size:8px}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="talent"],
+  .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="capstone"]{overflow:auto}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="talent"] .sf-doctrine-talent>p{display:block}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="capstone"] .sf-doctrine__vow{display:block;padding:.6rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="capstone"] .sf-doctrine__vow>p{display:block;margin:.35rem 0}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="capstone"] .sf-doctrine__vow-detail{display:block;margin-top:.4rem;padding-top:.4rem}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="capstone"] .sf-doctrine__fusions{display:grid}
+  .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="capstone"] .sf-doctrine__vow-action{margin-top:.5rem;padding-top:.45rem}
+}

@@ -3042,9 +3042,10 @@ export async function createPlayer(ctx, canvas) {
     // Posed before the camera branch, so a free camera watches a
     // living figure instead of a statue.
     applyFigurePose(dt);
+    const duskLight = clamp01(ctx.atmos.duskFactor || 0);
+    const nightLight = clamp01(ctx.atmos.nightFactor || 0);
     if (figure.heartLight) {
-      const time = ctx.atmos.time;
-      const targetHeart = time === "dusk" ? 0.48 : (time === "night" ? 0.40 : 0.16);
+      const targetHeart = 0.16 + duskLight * 0.32 + nightLight * 0.24;
       figure.heartLight.intensity = damp(figure.heartLight.intensity, targetHeart, 8, dt);
     }
     /* The eyes ride the same time-of-day curve as the reliquary, so
@@ -3053,14 +3054,12 @@ export async function createPlayer(ctx, canvas) {
        has almost no lit value left, so the glow has to climb or the
        head goes dark while the chest is still lit. */
     if (figure.eyeGlow) {
-      const time = ctx.atmos.time;
-      const targetEye = time === "dusk" ? 5.6 : (time === "night" ? 6.6 : 4.2);
+      const targetEye = 4.2 + duskLight * 1.4 + nightLight * 2.4;
       figure.eyeGlow.material.emissiveIntensity =
         damp(figure.eyeGlow.material.emissiveIntensity, targetEye, 8, dt);
     }
     if (figure.readabilityMaterials) {
-      const time = ctx.atmos.time;
-      const factor = time === "dusk" ? 1.0 : (time === "night" ? 1.12 : 0.12);
+      const factor = 0.12 + duskLight * 0.88 + nightLight;
       for (const material of figure.readabilityMaterials) {
         const target = (material.userData.vesperReadability || 0.14) * factor;
         material.emissiveIntensity = damp(material.emissiveIntensity, target, 8, dt);

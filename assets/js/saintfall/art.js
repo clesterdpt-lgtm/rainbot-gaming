@@ -19,11 +19,14 @@
    banners and black basalt - colours that read as reliquary rather
    than as desert.
 
-   Lighting is deliberately minimal: one sun, one image-based sky
-   fill, and a handful of local emitters. Everything else is the
-   grade. Fill comes from `scene.environment`, so changing the sky
-   palette moves every shadow side in the world with it - note that
-   inherited IBL is scaled by `scene.environmentIntensity`, NOT by
+   Lighting is deliberately minimal: one authoritative celestial
+   key, one image-based sky fill, and a handful of local emitters.
+   The visible sky can carry Vesper's binary suns and three moons,
+   but they resolve into that single key so props never grow a forest
+   of contradictory shadows. Everything else is the grade. Fill
+   comes from `scene.environment`, so changing the sky palette moves
+   every shadow side in the world with it - note that inherited IBL
+   is scaled by `scene.environmentIntensity`, NOT by
    `material.envMapIntensity`, which does nothing without a
    per-material envMap.
    ============================================================ */
@@ -387,6 +390,20 @@ export const TIMES = {
   },
 };
 
+/* A full Vesper day is deliberately shorter than a terrestrial one:
+   one ordinary operation can cross the whole arc, while each change
+   remains slow enough to be felt as weather rather than a filter
+   switch. Phase zero is 06:00 local time. The final repeated dawn
+   stop makes the wrap mathematically and visually continuous. */
+export const DAY_CYCLE_SECONDS = 18 * 60;
+export const DAY_CYCLE_STOPS = Object.freeze([
+  Object.freeze({ phase: 0.00, key: "goldenhour", sunAzimuth: 108, sunElevation: 13.5 }),
+  Object.freeze({ phase: 0.25, key: "noon", sunAzimuth: 214, sunElevation: 62 }),
+  Object.freeze({ phase: 0.50, key: "dusk", sunAzimuth: 297, sunElevation: 2.2 }),
+  Object.freeze({ phase: 0.72, key: "night", sunAzimuth: 96, sunElevation: 16 }),
+  Object.freeze({ phase: 1.00, key: "goldenhour", sunAzimuth: 108, sunElevation: 13.5 }),
+]);
+
 /* --------------------------- grades --------------------------- */
 
 /**
@@ -511,7 +528,11 @@ export const GRADES = {
    piece of the light. Here, exactly one function writes it.
    ============================================================ */
 
-export function makeAtmosphere(THREE, timeKey = "goldenhour") {
+export function makeAtmosphere(THREE, timeKey = "goldenhour", options = {}) {
+  const initialStop = DAY_CYCLE_STOPS.find((stop) => stop.key === timeKey)
+    || DAY_CYCLE_STOPS[0];
+  const requestedPhase = Number(options.phase);
+  const cycleDuration = Math.max(60, Number(options.duration) || DAY_CYCLE_SECONDS);
   const state = {
     THREE,
     time: timeKey,
@@ -521,6 +542,23 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour") {
     windDir: new THREE.Vector2(-0.82, 0.57).normalize(),
     windSpeed: 1.0,
     elapsed: 0,
+
+    /** Natural time. Phase zero is 06:00, so 0.25/0.5/0.75 map to
+     *  noon/18:00/midnight. QA and explicit `?time=` views can freeze
+     *  it without introducing a separate lighting implementation. */
+    cyclePhase: Number.isFinite(requestedPhase)
+      ? ((requestedPhase % 1) + 1) % 1 : initialStop.phase,
+    cycleDuration,
+    cycleRunning: options.cycle !== false,
+    cycleCount: Math.max(0, Math.floor(Number(options.cycleCount) || 0)),
+    cycleFrom: timeKey,
+    cycleTo: timeKey,
+    cycleBlend: 0,
+    solarHour: 6,
+    daylightFactor: timeKey === "night" ? 0 : 1,
+    goldenFactor: timeKey === "goldenhour" ? 1 : 0,
+    duskFactor: timeKey === "dusk" ? 1 : 0,
+    nightFactor: timeKey === "night" ? 1 : 0,
 
     sunDir: new THREE.Vector3(),          // points FROM the world TOWARD the sun
     sunColor: new THREE.Color(),
@@ -545,6 +583,10 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour") {
     uniforms: null,
   };
 
+  const CYCLE_SAMPLE_SECONDS = 0.25;
+  let cycleSampleClock = 0;
+  let manualKey = TIMES[timeKey] ? timeKey : "goldenhour";
+
   state.uniforms = {
     uSunDir: { value: new THREE.Vector3(0, 1, 0) },
     uSunHalo: { value: new THREE.Color() },
@@ -560,52 +602,147 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour") {
     uStorm: { value: 0 },
   };
 
-  /** Apply a named preset, optionally blended toward the storm. */
-  function apply(key = state.time, stormMix = state.storm) {
-    const base = TIMES[key] || TIMES.goldenhour;
-    state.time = key;
-    state.preset = base;
-    state.storm = clamp01(stormMix);
-
-    const s = state.storm;
-    const st = TIMES.storm;
-    const num = (a, b) => lerp(a, b, s);
-    const col = (a, b) => mixRgb(hexToRgb(a), hexToRgb(b), s);
-
-    const azimuth = num(base.sunAzimuth, base.sunAzimuth);
-    const elevation = num(base.sunElevation, Math.max(base.sunElevation, st.sunElevation * 0.7));
-
+  const wrap01 = (value) => ((value % 1) + 1) % 1;
+  const setC = (target, rgb) => target.setRGB(
+    srgb(rgb[0]), srgb(rgb[1]), srgb(rgb[2]), THREE.LinearSRGBColorSpace
+  );
+  const direction = (target, azimuth, elevation) => {
     const az = azimuth * Math.PI / 180;
     const el = elevation * Math.PI / 180;
-    state.sunDir.set(
+    return target.set(
       Math.cos(el) * Math.sin(az),
       Math.sin(el),
       Math.cos(el) * Math.cos(az)
     ).normalize();
+  };
 
-    const setC = (target, rgb) => target.setRGB(
-      srgb(rgb[0]), srgb(rgb[1]), srgb(rgb[2]), THREE.LinearSRGBColorSpace
+  function resolve(baseA, baseB, blend, stormMix, directionA = baseA, directionB = baseB) {
+    const t = clamp01(blend);
+    const s = clamp01(stormMix);
+    const storm = TIMES.storm;
+    const num = (key) => lerp(lerp(baseA[key], baseB[key], t), storm[key], s);
+    const col = (key) => {
+      const between = mixRgb(hexToRgb(baseA[key]), hexToRgb(baseB[key]), t);
+      return mixRgb(between, hexToRgb(storm[key]), s);
+    };
+
+    /* Interpolate azimuth and elevation, not two unit vectors. The
+       dusk key and the night moon sit on opposite horizons; a great-
+       circle vector blend lifts their midpoint overhead, making the
+       shadows race through noon at 20:30. The angular path keeps the
+       handoff low across the northern sky, where a setting sun really
+       gives way to a rising moon. */
+    const azA = directionA.sunAzimuth;
+    const azB = directionB.sunAzimuth;
+    const azDelta = ((azB - azA + 540) % 360) - 180;
+    direction(state.sunDir,
+      azA + azDelta * t,
+      lerp(directionA.sunElevation, directionB.sunElevation, t));
+
+    setC(state.sunColor, col("sunColor"));
+    state.sunIntensity = num("sunIntensity");
+    setC(state.skyZenith, col("skyZenith"));
+    setC(state.skyHigh, col("skyHigh"));
+    setC(state.skyHorizon, col("skyHorizon"));
+    setC(state.skyLow, col("skyLow"));
+    setC(state.sunHalo, col("sunHalo"));
+    setC(state.groundBounce, col("groundBounce"));
+    state.haloSpread = num("haloSpread");
+    state.envIntensity = num("envIntensity");
+    state.fogDensity = num("fogDensity");
+    state.fogHeightFalloff = num("fogHeightFalloff");
+    state.fogStart = num("fogStart");
+    state.sunScatter = num("sunScatter");
+    state.exposure = num("exposure");
+    const baseGrade = blendGrade(
+      GRADES[baseA.grade] || GRADES.warm,
+      GRADES[baseB.grade] || GRADES.warm,
+      t
     );
-
-    setC(state.sunColor, col(base.sunColor, st.sunColor));
-    state.sunIntensity = num(base.sunIntensity, st.sunIntensity);
-    setC(state.skyZenith, col(base.skyZenith, st.skyZenith));
-    setC(state.skyHigh, col(base.skyHigh, st.skyHigh));
-    setC(state.skyHorizon, col(base.skyHorizon, st.skyHorizon));
-    setC(state.skyLow, col(base.skyLow, st.skyLow));
-    setC(state.sunHalo, col(base.sunHalo, st.sunHalo));
-    setC(state.groundBounce, col(base.groundBounce, st.groundBounce));
-    state.haloSpread = num(base.haloSpread, st.haloSpread);
-    state.envIntensity = num(base.envIntensity, st.envIntensity);
-    state.fogDensity = num(base.fogDensity, st.fogDensity);
-    state.fogHeightFalloff = num(base.fogHeightFalloff, st.fogHeightFalloff);
-    state.fogStart = num(base.fogStart, st.fogStart);
-    state.sunScatter = num(base.sunScatter, st.sunScatter);
-    state.exposure = num(base.exposure, st.exposure);
-    state.grade = blendGrade(GRADES[base.grade] || GRADES.warm, GRADES.storm, s);
-
+    state.grade = blendGrade(baseGrade, GRADES.storm, s);
     sync();
     return state;
+  }
+
+  function sampleCycle(phase = state.cyclePhase) {
+    const p = wrap01(phase);
+    let from = DAY_CYCLE_STOPS[0];
+    let to = DAY_CYCLE_STOPS[1];
+    for (let i = 0; i < DAY_CYCLE_STOPS.length - 1; i += 1) {
+      if (p >= DAY_CYCLE_STOPS[i].phase && p < DAY_CYCLE_STOPS[i + 1].phase) {
+        from = DAY_CYCLE_STOPS[i];
+        to = DAY_CYCLE_STOPS[i + 1];
+        break;
+      }
+    }
+    const linear = (p - from.phase) / Math.max(0.0001, to.phase - from.phase);
+    const blend = smoothstep(linear);
+    return { phase: p, from, to, blend };
+  }
+
+  function applyCycle(phase = state.cyclePhase) {
+    const sample = sampleCycle(phase);
+    state.cyclePhase = sample.phase;
+    state.cycleFrom = sample.from.key;
+    state.cycleTo = sample.to.key;
+    state.cycleBlend = sample.blend;
+    state.solarHour = (6 + sample.phase * 24) % 24;
+    state.time = sample.blend < 0.5 ? sample.from.key : sample.to.key;
+    state.preset = TIMES[state.time] || TIMES.goldenhour;
+    const weight = (key) => (sample.from.key === key ? 1 - sample.blend : 0)
+      + (sample.to.key === key ? sample.blend : 0);
+    state.duskFactor = clamp01(weight("dusk"));
+    state.nightFactor = clamp01(weight("night"));
+    state.goldenFactor = clamp01(weight("goldenhour"));
+    state.daylightFactor = clamp01(1 - state.nightFactor);
+    return resolve(
+      TIMES[sample.from.key], TIMES[sample.to.key], sample.blend, state.storm,
+      sample.from, sample.to
+    );
+  }
+
+  /** Apply a named preset as a deliberate fixed review/preview mode. */
+  function apply(key = state.time, stormMix = state.storm) {
+    const base = TIMES[key] || TIMES.goldenhour;
+    manualKey = TIMES[key] ? key : "goldenhour";
+    state.cycleRunning = false;
+    state.time = manualKey;
+    state.preset = base;
+    state.storm = clamp01(stormMix);
+    state.cycleFrom = manualKey;
+    state.cycleTo = manualKey;
+    state.cycleBlend = 0;
+    state.duskFactor = manualKey === "dusk" ? 1 : 0;
+    state.nightFactor = manualKey === "night" ? 1 : 0;
+    state.goldenFactor = manualKey === "goldenhour" ? 1 : 0;
+    state.daylightFactor = 1 - state.nightFactor;
+    const stop = DAY_CYCLE_STOPS.find((entry) => entry.key === manualKey);
+    if (stop) {
+      state.cyclePhase = stop.phase;
+      state.solarHour = (6 + stop.phase * 24) % 24;
+    }
+    return resolve(base, base, 0, state.storm);
+  }
+
+  function setCyclePhase(phase, running = state.cycleRunning, cycleCount = state.cycleCount) {
+    state.cyclePhase = wrap01(Number(phase) || 0);
+    state.cycleRunning = !!running;
+    state.cycleCount = Math.max(0, Math.floor(Number(cycleCount) || 0));
+    cycleSampleClock = 0;
+    return applyCycle(state.cyclePhase);
+  }
+
+  function setCycleRunning(running = true) {
+    state.cycleRunning = !!running;
+    if (state.cycleRunning) applyCycle(state.cyclePhase);
+    return state.cycleRunning;
+  }
+
+  function setStorm(stormMix = 0) {
+    state.storm = clamp01(stormMix);
+    return state.cycleRunning ? applyCycle(state.cyclePhase)
+      : resolve(TIMES[manualKey] || TIMES.goldenhour,
+        TIMES[manualKey] || TIMES.goldenhour, 0, state.storm);
   }
 
   /** Push state into the shared uniform block. */
@@ -626,6 +763,33 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour") {
   function update(dt) {
     state.elapsed += dt;
     state.uniforms.uTimeSF.value = state.elapsed;
+    if (!state.cycleRunning || dt <= 0) return false;
+    const turns = state.cyclePhase + dt / state.cycleDuration;
+    if (turns >= 1) state.cycleCount += Math.floor(turns);
+    state.cyclePhase = wrap01(turns);
+    cycleSampleClock += dt;
+    if (cycleSampleClock < CYCLE_SAMPLE_SECONDS) return false;
+    cycleSampleClock %= CYCLE_SAMPLE_SECONDS;
+    applyCycle(state.cyclePhase);
+    return true;
+  }
+
+  function cycleStatus() {
+    return {
+      phase: Number(state.cyclePhase.toFixed(6)),
+      duration: state.cycleDuration,
+      running: state.cycleRunning,
+      cycleCount: state.cycleCount,
+      solarHour: Number(state.solarHour.toFixed(3)),
+      from: state.cycleFrom,
+      to: state.cycleTo,
+      blend: Number(state.cycleBlend.toFixed(4)),
+      time: state.time,
+      daylight: Number(state.daylightFactor.toFixed(4)),
+      golden: Number(state.goldenFactor.toFixed(4)),
+      dusk: Number(state.duskFactor.toFixed(4)),
+      night: Number(state.nightFactor.toFixed(4)),
+    };
   }
 
   /** Linear-space sky colour for a world-space direction. The sky
@@ -659,10 +823,16 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour") {
   }
 
   state.apply = apply;
+  state.applyCycle = applyCycle;
+  state.setCyclePhase = setCyclePhase;
+  state.setCycleRunning = setCycleRunning;
+  state.setStorm = setStorm;
+  state.cycleStatus = cycleStatus;
   state.sync = sync;
   state.update = update;
   state.skyAt = skyAt;
-  apply(timeKey, 0);
+  if (state.cycleRunning && timeKey !== "storm") applyCycle(state.cyclePhase);
+  else apply(timeKey, timeKey === "storm" ? 1 : 0);
   return state;
 }
 

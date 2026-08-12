@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260811-19";
+  const BUILD = "20260811-20";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,

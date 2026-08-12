@@ -42,11 +42,16 @@ varying vec3 vDir;
 
 uniform vec3  uSunDir;
 uniform vec3  uSunHalo;
+uniform vec3  uSecondSunDir;
+uniform vec3  uMoonADir;
+uniform vec3  uMoonBDir;
+uniform vec3  uMoonCDir;
 uniform vec3  uSkyZenith;
 uniform vec3  uSkyHigh;
 uniform vec3  uSkyHorizon;
 uniform vec3  uSkyLow;
 uniform vec4  uFog;        // density, heightFalloff, start, sunScatter
+uniform vec4  uCelestial;  // primary sun, second sun, moons, cycle phase
 uniform float uSunSize;
 uniform float uStars;
 uniform float uTimeSF;
@@ -72,6 +77,62 @@ float hash13(vec3 p) {
   return fract((p.x + p.y) * p.z);
 }
 
+float sfNoise(vec2 p, float seed) {
+  vec2 cell = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = hash13(vec3(cell, seed));
+  float b = hash13(vec3(cell + vec2(1.0, 0.0), seed));
+  float c = hash13(vec3(cell + vec2(0.0, 1.0), seed));
+  float d = hash13(vec3(cell + vec2(1.0, 1.0), seed));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+float sfDisc(vec3 rd, vec3 dir, float size) {
+  return smoothstep(1.0 - size, 1.0 - size * 0.18, dot(rd, dir));
+}
+
+void sfBasis(vec3 dir, out vec3 right, out vec3 up) {
+  vec3 pole = abs(dir.y) > 0.94 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+  right = normalize(cross(pole, dir));
+  up = normalize(cross(dir, right));
+}
+
+vec3 sfMoon(vec3 base, vec3 rd, vec3 dir, float size, vec3 tint,
+            float visibility, float seed, float ringed) {
+  if (visibility <= 0.001) return base;
+  vec3 right;
+  vec3 up;
+  sfBasis(dir, right, up);
+  float radius = sqrt(size * 2.0);
+  vec2 q = vec2(dot(rd, right), dot(rd, up)) / max(radius, 0.0001);
+
+  /* The largest moon owns a thin broken ring. It is a projected
+     ellipse rather than a circular halo, which makes it read as a
+     body with an orbital plane instead of another glowing reticle. */
+  float ringRadius = length(vec2(q.x / 2.15, q.y / 0.32));
+  float ring = (1.0 - smoothstep(0.018, 0.095, abs(ringRadius - 1.0)))
+    * (1.0 - smoothstep(1.05, 2.65, length(q))) * ringed;
+  float ringAngle = atan(q.y / 0.32, q.x / 2.15);
+  float ringBreak = smoothstep(0.28, 0.62,
+    0.5 + 0.5 * sin(ringAngle * 13.0 + seed * 4.7));
+  base += mix(tint * 0.12, tint * 0.58, step(0.0, q.y))
+    * ring * ringBreak * visibility;
+
+  float r = length(q);
+  float disc = 1.0 - smoothstep(0.91, 1.0, r);
+  if (disc <= 0.001) return base;
+  float sphere = sqrt(max(0.0, 1.0 - r * r));
+  float phase = smoothstep(-0.72, 0.62, q.x * -0.78 + q.y * 0.18 + sphere * 0.62);
+  float cells = sfNoise(q * 18.0 + seed * 2.3, seed * 19.0);
+  float broad = sfNoise(q * 6.0 - seed * 1.7, seed * 7.0 + 4.0);
+  float crater = 0.48 + cells * 0.32 + broad * 0.25;
+  vec3 surface = tint * crater * (0.10 + phase * 0.46);
+  float rim = pow(max(sphere, 0.0), 0.35);
+  surface += tint * rim * 0.055;
+  return mix(base, surface, disc * visibility);
+}
+
 void main() {
   vec3 rd = normalize(vDir);
   vec3 col = sfSky(rd);
@@ -82,9 +143,10 @@ void main() {
   // terms - a bright core and a wide glare skirt - because a disc
   // with no skirt reads as a hole punched in the sky.
   float mu = dot(rd, uSunDir);
-  float disc = smoothstep(1.0 - uSunSize, 1.0 - uSunSize * 0.25, mu);
+  float disc = smoothstep(1.0 - uSunSize, 1.0 - uSunSize * 0.25, mu)
+    * uCelestial.x;
   float glare = pow(max(mu, 0.0), 900.0);
-  col += uSunHalo * (disc * 6.5 + glare * 2.2);
+  col += uSunHalo * (disc * 6.5 + glare * 2.2 * uCelestial.x);
 
   // --- stars --------------------------------------------------------
   if (uStars > 0.001) {
@@ -102,6 +164,25 @@ void main() {
     }
   }
 
+  // --- Vesper's other lights ----------------------------------------
+  // A smaller copper companion follows the daylight key. It is close
+  // enough to feel like a binary system, but separated enough that the
+  // player can resolve two silhouettes at a glance.
+  float twin = sfDisc(rd, uSecondSunDir, uSunSize * 0.34) * uCelestial.y;
+  float twinGlare = pow(max(dot(rd, uSecondSunDir), 0.0), 1200.0) * uCelestial.y;
+  col += vec3(1.0, 0.54, 0.24) * (twin * 4.4 + twinGlare * 0.72);
+
+  /* Three distinct night bodies: a ringed cathedral moon, a small
+     cyan ice moon, and a rust-red captured moon. Their material is
+     procedural and stable in sky space, so no texture fetch can turn
+     the most characteristic part of the night into a blank quad. */
+  col = sfMoon(col, rd, uMoonADir, 0.0032, vec3(0.64, 0.78, 1.0),
+    uCelestial.z, 1.7, 1.0);
+  col = sfMoon(col, rd, uMoonBDir, 0.00105, vec3(0.42, 0.94, 0.92),
+    uCelestial.z * 0.88, 4.3, 0.0);
+  col = sfMoon(col, rd, uMoonCDir, 0.00062, vec3(1.0, 0.42, 0.22),
+    uCelestial.z * 0.78, 8.9, 0.0);
+
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -118,12 +199,17 @@ export function buildSky(ctx) {
   const domeUniforms = {
     uSunDir: atmos.uniforms.uSunDir,
     uSunHalo: atmos.uniforms.uSunHalo,
+    uSecondSunDir: { value: new THREE.Vector3(0.4, 0.5, -0.7).normalize() },
+    uMoonADir: { value: new THREE.Vector3(-0.4, 0.5, 0.7).normalize() },
+    uMoonBDir: { value: new THREE.Vector3(0.7, 0.35, 0.2).normalize() },
+    uMoonCDir: { value: new THREE.Vector3(-0.7, 0.22, -0.4).normalize() },
     uSkyZenith: atmos.uniforms.uSkyZenith,
     uSkyHigh: atmos.uniforms.uSkyHigh,
     uSkyHorizon: atmos.uniforms.uSkyHorizon,
     uSkyLow: atmos.uniforms.uSkyLow,
     uFog: atmos.uniforms.uFog,
     uTimeSF: atmos.uniforms.uTimeSF,
+    uCelestial: { value: new THREE.Vector4(1, 0.82, 0, 0) },
     uSunSize: { value: 0.0016 },
     uStars: { value: 0 },
   };
@@ -165,6 +251,14 @@ export function buildSky(ctx) {
   sun.shadow.camera.updateProjectionMatrix();
   scene.add(sun);
   scene.add(sun.target);
+
+  /* Dynamic diffuse fill. The sharp/specular part of the image-based
+     sky stays on the dawn PMREM made at boot; this zero-shadow light
+     carries the slowly changing sky and ground colours without ever
+     regenerating that texture during play. */
+  const skyFill = new THREE.HemisphereLight(0xffffff, 0x453548, 0);
+  skyFill.name = "vesper-cycle-fill";
+  scene.add(skyFill);
 
   /* ============================================================
      THE HALO
@@ -437,6 +531,35 @@ export function buildSky(ctx) {
     cloudMesh = new THREE.Mesh(mergeGeometries(THREE, geoms), cloudMat);
     cloudMesh.frustumCulled = false;
     clouds.add(cloudMesh);
+    repaintClouds();
+  }
+
+  /** The geometry never changes with the hour, only the light across
+   *  its facets. Repainting one small colour buffer avoids rebuilding
+   *  twenty-six cloud shelves every few seconds as the suns move. */
+  function repaintClouds() {
+    if (!cloudMesh) return;
+    const geometry = cloudMesh.geometry;
+    const normal = geometry.attributes.normal;
+    const colors = geometry.attributes.color;
+    if (!normal || !colors) return;
+    const night = clamp01(atmos.nightFactor);
+    const storm = clamp01(atmos.storm);
+    let litRgb = mixRgb([1.0, 0.90, 0.75], [0.35, 0.46, 0.68], night);
+    let shadeRgb = mixRgb([0.39, 0.18, 0.32], [0.055, 0.085, 0.20], night);
+    litRgb = mixRgb(litRgb, [0.82, 0.58, 0.31], storm * 0.75);
+    shadeRgb = mixRgb(shadeRgb, [0.29, 0.18, 0.10], storm * 0.78);
+    for (let v = 0; v < normal.count; v += 1) {
+      const nl = clamp01(
+        (normal.getX(v) * atmos.sunDir.x + normal.getY(v) * atmos.sunDir.y
+          + normal.getZ(v) * atmos.sunDir.z) * 0.5 + 0.5
+      );
+      const up = clamp01(normal.getY(v) * 0.5 + 0.5);
+      const t = clamp01(nl * 0.62 + up * 0.38);
+      const c = mixRgb(shadeRgb, litRgb, Math.pow(t, 1.35));
+      colors.setXYZ(v, srgb(c[0]), srgb(c[1]), srgb(c[2]));
+    }
+    colors.needsUpdate = true;
   }
 
   buildClouds();
@@ -445,13 +568,41 @@ export function buildSky(ctx) {
 
   const sunOffset = new THREE.Vector3();
   const viewDir = new THREE.Vector3();
+  const celestialUp = new THREE.Vector3(0, 1, 0);
+  const moonBDir = domeUniforms.uMoonBDir.value;
+  const moonCDir = domeUniforms.uMoonCDir.value;
+  const setCelestialDirection = (target, azimuth, elevation) => {
+    const az = azimuth * Math.PI / 180;
+    const el = elevation * Math.PI / 180;
+    return target.set(
+      Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)
+    ).normalize();
+  };
   let shadowSpan = shadowHalf;
   const api = {
     group,
     sun,
+    skyFill,
     dome,
     halo,
     clouds,
+
+    status() {
+      const vec = (value) => value.toArray().map((n) => Number(n.toFixed(4)));
+      return {
+        cycle: atmos.cycleStatus?.() || null,
+        primarySun: Number(domeUniforms.uCelestial.value.x.toFixed(4)),
+        secondSun: Number(domeUniforms.uCelestial.value.y.toFixed(4)),
+        moons: Number(domeUniforms.uCelestial.value.z.toFixed(4)),
+        stars: Number(domeUniforms.uStars.value.toFixed(4)),
+        secondSunDir: vec(domeUniforms.uSecondSunDir.value),
+        moonDirs: [
+          vec(domeUniforms.uMoonADir.value),
+          vec(domeUniforms.uMoonBDir.value),
+          vec(domeUniforms.uMoonCDir.value),
+        ],
+      };
+    },
 
     /** Called every frame. The ONE place the sun's transform is
      *  written. `updateShadowCamera` deliberately re-derives the
@@ -460,7 +611,7 @@ export function buildSky(ctx) {
      *  frame is how a sun ends up integrating camera motion and
      *  sliding to a grazing angle where nothing has a shadow side. */
     update(dt, camera) {
-      atmos.update(dt);
+      const atmosphereChanged = atmos.update(dt);
 
       dome.position.copy(camera.position);
       dome.scale.setScalar(camera.far * 0.92);
@@ -469,8 +620,32 @@ export function buildSky(ctx) {
 
       sun.color.copy(atmos.sunColor);
       sun.intensity = atmos.sunIntensity;
-      domeUniforms.uStars.value = atmos.time === "night" ? 1 : 0;
+      const dynamicFill = Math.max(1 - (atmos.goldenFactor ?? 1), atmos.storm || 0);
+      skyFill.color.copy(atmos.skyHigh).lerp(atmos.skyZenith, 0.34);
+      skyFill.groundColor.copy(atmos.groundBounce);
+      skyFill.intensity = dynamicFill * atmos.envIntensity * 0.72;
+      const night = smoothstep(atmos.nightFactor);
+      const daylight = clamp01(1 - night);
+      domeUniforms.uStars.value = smoothstep(clamp01(night * 1.12));
       domeUniforms.uSunSize.value = lerp(0.0016, 0.010, atmos.storm);
+      domeUniforms.uCelestial.value.set(
+        daylight,
+        daylight * lerp(0.88, 0.54, atmos.duskFactor),
+        smoothstep(clamp01(night * 1.15)),
+        atmos.cyclePhase
+      );
+      domeUniforms.uSecondSunDir.value.copy(atmos.sunDir)
+        .applyAxisAngle(celestialUp, -0.205).normalize();
+      /* The cathedral moon is the actual night key, so its face and
+         the world's shadows agree. The smaller moons cross different
+         arcs and keep the sky from reading like duplicated decals. */
+      domeUniforms.uMoonADir.value.copy(atmos.sunDir);
+      const p = atmos.cyclePhase >= 0.58
+        ? clamp01((atmos.cyclePhase - 0.58) / 0.42)
+        : clamp01((atmos.cyclePhase + 0.42) / 0.42);
+      setCelestialDirection(moonBDir, 154 + p * 72, 34 + Math.sin(p * Math.PI) * 18);
+      setCelestialDirection(moonCDir, 326 + p * 46, 17 + Math.sin((p + 0.18) * Math.PI) * 10);
+      if (atmosphereChanged) repaintClouds();
 
       /* Shadow frustum rides with the camera, centred AHEAD of it
          along the view direction. Centred on the camera itself,
@@ -494,11 +669,12 @@ export function buildSky(ctx) {
       sunOffset.copy(atmos.sunDir).multiplyScalar(shadowSpan * 2.6);
       sun.position.copy(sun.target.position).add(sunOffset);
       sun.target.updateMatrixWorld();
+      return atmosphereChanged;
     },
 
     /** Rebuild anything that bakes the atmosphere into geometry. */
     refresh() {
-      buildClouds();
+      repaintClouds();
     },
 
     setShadowRadius(half) {

@@ -661,14 +661,26 @@ export function createRenderer(ctx, canvas) {
   /* ------------------------------ render ------------------------------ */
 
   let envTexture = null;
-  function refreshEnvironment(atmos) {
+  function refreshEnvironment(atmos, size = 64) {
     if (envTexture) envTexture.dispose();
-    envTexture = buildSkyEnvironment(THREE, renderer, atmos, 64);
+    envTexture = buildSkyEnvironment(THREE, renderer, atmos, size);
     scene.environment = envTexture;
-    scene.environmentIntensity = atmos.envIntensity;
+    syncEnvironment(atmos);
     // `material.envMapIntensity` does nothing for inherited IBL - it
     // only scales a material's OWN envMap. Scene-level intensity is
     // the knob that actually moves every shadow side in the world.
+  }
+
+  /** Cheap half of an atmosphere update. The boot-time PMREM yields as the
+   *  live sky/ground fill takes over, avoiding runtime environment-map bakes. */
+  function syncEnvironment(atmos) {
+    /* The one convolved environment map is the dawn sky made at boot.
+       It stays strong while that palette is current, then yields to
+       the live HemisphereLight owned by sky.js. Rebuilding PMREM on a
+       timer costs hundreds of milliseconds in software/WebGL fallback
+       paths; a slowly changing diffuse sky does not justify that hitch. */
+    const dynamic = Math.max(1 - (atmos.goldenFactor ?? 1), atmos.storm || 0);
+    scene.environmentIntensity = atmos.envIntensity * lerp(1, 0.18, dynamic);
   }
 
   let frame = 0;
@@ -808,6 +820,7 @@ export function createRenderer(ctx, canvas) {
     setQuality,
     applyAtmosphere,
     refreshEnvironment,
+    syncEnvironment,
     get frame() { return frame; },
     /** Blit an intermediate buffer straight to the canvas. The AO
      *  probe reported the pass changing 0% of pixels; a number that

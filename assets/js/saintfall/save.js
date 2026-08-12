@@ -169,6 +169,10 @@ export function buildSaveSystem(ctx, options = {}) {
       atmosphere: {
         time: ctx.atmos.time,
         storm: finite(ctx.atmos.storm),
+        cyclePhase: finite(ctx.atmos.cyclePhase),
+        cycleDuration: Math.max(60, finite(ctx.atmos.cycleDuration, 1080)),
+        cycleRunning: !!ctx.atmos.cycleRunning,
+        cycleCount: Math.max(0, Math.floor(finite(ctx.atmos.cycleCount))),
       },
       reliquary: {
         fuel: Math.max(0, finite(ctx.jetpack?.state?.fuel)),
@@ -385,9 +389,22 @@ export function buildSaveSystem(ctx, options = {}) {
       || reliquary.cooldownRemaining < 0 || reliquary.rechargeDelayRemaining < 0) return false;
 
     const atmosphere = snapshot.atmosphere;
-    return isRecord(atmosphere)
+    const baseAtmosphereValid = isRecord(atmosphere)
       && new Set(["goldenhour", "noon", "dusk", "night", "storm"]).has(atmosphere.time)
       && isFiniteNumber(atmosphere.storm) && atmosphere.storm >= 0 && atmosphere.storm <= 1;
+    if (!baseAtmosphereValid) return false;
+    const hasCycle = Object.prototype.hasOwnProperty.call(atmosphere, "cyclePhase")
+      || Object.prototype.hasOwnProperty.call(atmosphere, "cycleDuration")
+      || Object.prototype.hasOwnProperty.call(atmosphere, "cycleRunning")
+      || Object.prototype.hasOwnProperty.call(atmosphere, "cycleCount");
+    return !hasCycle || (
+      isFiniteNumber(atmosphere.cyclePhase)
+      && atmosphere.cyclePhase >= 0 && atmosphere.cyclePhase < 1
+      && isFiniteNumber(atmosphere.cycleDuration)
+      && atmosphere.cycleDuration >= 60 && atmosphere.cycleDuration <= 86400
+      && typeof atmosphere.cycleRunning === "boolean"
+      && Number.isInteger(atmosphere.cycleCount) && atmosphere.cycleCount >= 0
+    );
   }
 
   function writeData(data, meta = {}) {
@@ -443,8 +460,21 @@ export function buildSaveSystem(ctx, options = {}) {
     ctx.player.input.clearAll?.();
     ctx.player.cancelTransientActions?.();
     ctx.player.setFree(false);
-    if (snapshot.atmosphere?.time && typeof options.setTime === "function") {
-      options.setTime(snapshot.atmosphere.time);
+    const savedAtmosphere = snapshot.atmosphere || {};
+    if (isFiniteNumber(savedAtmosphere.cyclePhase)
+      && typeof options.setDayCycle === "function") {
+      options.setDayCycle(savedAtmosphere.cyclePhase,
+        savedAtmosphere.cycleRunning !== false, savedAtmosphere.cycleCount || 0);
+    } else if (savedAtmosphere.time && typeof options.setDayCycle === "function") {
+      /* Schema-2 saves made before the natural cycle only know a named
+         preset. Place them at the matching hour and let production
+         continue; deterministic QA restores stay fixed. */
+      const legacyPhase = {
+        goldenhour: 0, noon: 0.25, dusk: 0.5, night: 0.72, storm: 0,
+      }[savedAtmosphere.time] ?? 0;
+      options.setDayCycle(legacyPhase, !ctx.qa, 0);
+    } else if (savedAtmosphere.time && typeof options.setTime === "function") {
+      options.setTime(savedAtmosphere.time);
     }
     if (typeof options.setStorm === "function") {
       options.setStorm(clamp01(finite(snapshot.atmosphere?.storm)));

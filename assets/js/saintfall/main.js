@@ -49,6 +49,10 @@ export async function start({ boot, build } = {}) {
   const introManualClock = qa && params.get("introClock") === "manual";
   const quality = params.get("quality") || (qa ? "high" : "high");
   const timeKey = params.get("time") || "goldenhour";
+  const cycleParam = params.get("cycle");
+  const cycleEnabled = cycleParam === "1"
+    || (!qa && cycleParam !== "0" && !params.has("time"));
+  const cyclePhase = params.has("cyclePhase") ? Number(params.get("cyclePhase")) : NaN;
   const seed = params.has("seed") ? (hashString(params.get("seed")) >>> 0) : 0x5a17fa11;
 
   const canvas = document.getElementById("sf-canvas");
@@ -61,7 +65,10 @@ export async function start({ boot, build } = {}) {
   /* ----------------------------- context ----------------------------- */
 
   progress(0.18, "Reading the sky");
-  const atmos = makeAtmosphere(THREE, TIMES[timeKey] ? timeKey : "goldenhour");
+  const atmos = makeAtmosphere(THREE, TIMES[timeKey] ? timeKey : "goldenhour", {
+    cycle: cycleEnabled,
+    phase: Number.isFinite(cyclePhase) ? cyclePhase : undefined,
+  });
 
   const ctx = {
     THREE,
@@ -89,6 +96,18 @@ export async function start({ boot, build } = {}) {
   const sky = buildSky(ctx);
   ctx.sky = sky;
   render.refreshEnvironment(atmos);
+  /* The visible gradient, grade and zero-shadow sky fill follow the
+     cycle continuously. The one convolved reflection map is built at
+     boot and fades beneath that live fill; no periodic GPU bake is
+     allowed to hitch an active fight. */
+  function advanceSky(dt, camera) {
+    const changed = sky.update(dt, camera);
+    if (changed) {
+      render.applyAtmosphere(atmos);
+      render.syncEnvironment(atmos);
+    }
+    return changed;
+  }
 
   progress(0.30, "Shaping the basin");
   ctx.field = makeHeightField(seed);
@@ -175,7 +194,7 @@ export async function start({ boot, build } = {}) {
      reaches into scene graphs itself: save.js asks each domain for a
      normalized snapshot, and the command wheel confirms through the
      same mission.call() path as every other deployment. */
-  const saves = buildSaveSystem(ctx, { setTime, setStorm });
+  const saves = buildSaveSystem(ctx, { setTime, setDayCycle, setStorm });
   ctx.saves = saves;
   const gameUi = buildGameUi(ctx, { stage, canvas, save: saves, touch });
   ctx.gameUi = gameUi;
@@ -243,7 +262,7 @@ export async function start({ boot, build } = {}) {
        which is a visible pop on the one frame that must not have
        one. */
     if (opts.figure) player.update(d, render.camera);
-    sky.update(d, cam);
+    advanceSky(d, cam, true);
     terrain.updateLod(cam);
     enemies.update(d, cam);
     if (opts.figure) {
@@ -326,6 +345,7 @@ export async function start({ boot, build } = {}) {
     resize,
     step,
     setTime,
+    setDayCycle,
     setStorm,
     setQuality,
     frameOnce: null,
@@ -351,8 +371,16 @@ export async function start({ boot, build } = {}) {
     if (!TIMES[key]) return;
     atmos.apply(key, atmos.storm);
     render.applyAtmosphere(atmos);
-    render.refreshEnvironment(atmos);
+    render.syncEnvironment(atmos);
     sky.refresh();
+  }
+
+  function setDayCycle(phase = atmos.cyclePhase, running = true, cycleCount = atmos.cycleCount) {
+    atmos.setCyclePhase(phase, running, cycleCount);
+    render.applyAtmosphere(atmos);
+    render.syncEnvironment(atmos);
+    sky.refresh();
+    return atmos.cycleStatus();
   }
 
   /* ------------------------------------------------------------
@@ -587,7 +615,7 @@ export async function start({ boot, build } = {}) {
   function step(dt, draw = true) {
     const d = Math.min(dt, 0.1);
     player.update(d, render.camera);
-    sky.update(d, render.camera);
+    advanceSky(d, render.camera, draw);
     terrain.updateLod(render.camera);
     enemies.update(d, render.camera);
     stepGame(d);
@@ -651,7 +679,7 @@ export async function start({ boot, build } = {}) {
     if (!ownsKeyboard() || e.defaultPrevented || isInteractiveKeyTarget(e.target)) return;
     if (intro.isBlocking()) return;
     if (ctx.runtime.paused) return;
-    if (e.code >= "Digit1" && e.code <= "Digit5") {
+    if (qa && e.code >= "Digit1" && e.code <= "Digit5") {
       const idx = Number(e.code.slice(5)) - 1;
       if (TIME_KEYS[idx] === "storm") { setTime("goldenhour"); setStorm(1); }
       else { setStorm(0); setTime(TIME_KEYS[idx]); }

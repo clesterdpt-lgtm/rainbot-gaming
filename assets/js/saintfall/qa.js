@@ -135,6 +135,17 @@ export function installQa(ctx, api) {
       api.setTime(key);
       return key;
     },
+    dayCycleState: () => ({
+      ...(ctx.atmos.cycleStatus?.() || {}),
+      sky: api.sky?.status?.() || null,
+    }),
+    setDayCycle(phase, running = false, cycleCount = ctx.atmos.cycleCount) {
+      return api.setDayCycle?.(phase, running, cycleCount) || null;
+    },
+    setDayCycleRunning(running = true) {
+      ctx.atmos.setCycleRunning?.(running);
+      return api.setDayCycle?.(ctx.atmos.cyclePhase, running, ctx.atmos.cycleCount) || null;
+    },
     listTimes: () => Object.keys(TIMES || {}),
     setStorm(v) { api.setStorm(clamp01(v)); },
     setQuality(tier) { api.setQuality(tier); },
@@ -1352,6 +1363,7 @@ export function installQa(ctx, api) {
         atmos: {
           time: ctx.atmos.time,
           storm: Number(ctx.atmos.storm.toFixed(3)),
+          cycle: ctx.atmos.cycleStatus?.() || null,
           sunDir: ctx.atmos.sunDir.toArray().map((n) => Number(n.toFixed(4))),
           sunElevationDeg: Number((Math.asin(ctx.atmos.sunDir.y) * 180 / Math.PI).toFixed(2)),
           exposure: ctx.atmos.exposure,

@@ -233,6 +233,34 @@ export const BESTIARY = {
    LOADING
    ============================================================ */
 
+/* ============================================================
+   WHERE A CORPSE COMES TO REST
+
+   A death clip only rotates bones - nothing in this bestiary animates
+   root motion - so the body's ORIGIN stays exactly where the creature
+   was standing while the pose underneath it collapses. That is fine
+   for a Thresher, whose legs fold under a body already at ankle
+   height, and badly wrong for a Gleaner: it dies on four three-metre
+   stilts, the stilts fold, and the corpse is left hanging a metre in
+   the air with its legs tucked beneath it.
+
+   Measured rather than hand-tuned, because the number is a property of
+   the CLIP: re-author the death animation and the correction follows
+   it without anybody remembering that a constant exists. The clip is
+   posed once at load on a throwaway clone, and the skinned mesh is
+   asked where it actually ends up.
+
+   The 4th percentile rather than the true minimum. A single claw or
+   antenna tip left pointing straight down would otherwise lift the
+   whole body onto it - a corpse balanced on one spike, which is a
+   worse artefact than the one being fixed.
+   ============================================================ */
+const DEATH_REST_PERCENTILE = 0.04;
+/* And then a little further, so the body BEDS IN. A corpse whose
+   lowest point rests exactly on the surface reads as laid on the sand
+   rather than fallen into it. */
+const DEATH_BED_IN = 0.09;
+
 export async function buildEnemies(ctx, onProgress) {
   const { THREE, scene, atmos, terrain } = ctx;
   const groundY = (x, z) => ctx.collide
@@ -266,6 +294,50 @@ export async function buildEnemies(ctx, onProgress) {
   const loader = new GLTFLoader();
   const species = new Map();
   const names = Object.keys(BESTIARY);
+
+  /**
+   * Pose a throwaway clone at the last frame of its death clip and ask
+   * the skinned mesh where it ended up.
+   *
+   * Returns how far the root must move for the finished pose to rest on
+   * y=0, at scale 1. Positive lifts a body that would otherwise sink;
+   * negative drops one left hanging on folded legs.
+   */
+  function measureDeathRest(source, clip) {
+    if (!source || !clip) return 0;
+    const probe = cloneSkinned(source);
+    probe.position.set(0, 0, 0);
+    probe.rotation.set(0, 0, 0);
+    probe.scale.setScalar(1);
+
+    let mesh = null;
+    probe.traverse((o) => { if (o.isSkinnedMesh && !mesh) mesh = o; });
+    if (!mesh || typeof mesh.getVertexPosition !== "function") return 0;
+
+    const mixer = new THREE.AnimationMixer(probe);
+    const action = mixer.clipAction(clip);
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+    action.play();
+    // The last frame the player will ever see of this creature, minus
+    // an epsilon: exactly `duration` can wrap on a looping binding.
+    mixer.setTime(Math.max(0, clip.duration - 1e-3));
+    probe.updateMatrixWorld(true);
+
+    const v = new THREE.Vector3();
+    const count = mesh.geometry.attributes.position.count;
+    const heights = new Float64Array(count);
+    for (let i = 0; i < count; i += 1) {
+      mesh.getVertexPosition(i, v).applyMatrix4(mesh.matrixWorld);
+      heights[i] = v.y;
+    }
+    heights.sort();
+    const index = Math.min(count - 1,
+      Math.max(0, Math.floor(count * DEATH_REST_PERCENTILE)));
+    mixer.stopAllAction();
+    const rest = heights[index];
+    return Number.isFinite(rest) ? -rest : 0;
+  }
 
   for (let i = 0; i < names.length; i += 1) {
     const key = names[i];
@@ -348,7 +420,15 @@ export async function buildEnemies(ctx, onProgress) {
     const clips = new Map();
     for (const clip of gltf.animations) clips.set(clip.name, clip);
 
-    species.set(key, { key, spec, source: gltf.scene, clips, material: mat });
+    const death = clips.get("death");
+    species.set(key, {
+      key, spec, source: gltf.scene, clips, material: mat,
+      /* How far the root has to move for the FINISHED death pose to lie
+         on the sand, and how long the clip takes to get there. Both
+         measured off the model at load - see `measureDeathRest`. */
+      deathSettle: measureDeathRest(gltf.scene, death),
+      deathSeconds: death ? death.duration : 0,
+    });
     if (onProgress) onProgress((i + 1) / names.length, `Waking the ${key}`);
   }
 
@@ -639,6 +719,12 @@ export async function buildEnemies(ctx, onProgress) {
          here and read there, so a stunned unit cannot walk, turn,
          shoot or claw while it runs. */
       stunTime: 0,
+      /* Where this body will come to rest, and how long its clip takes
+         to fold it. Copied off the species so the settle is one
+         multiply per frame rather than a map lookup. */
+      deathSettle: sp.deathSettle || 0,
+      deathSeconds: sp.deathSeconds || 0,
+      deathElapsed: 0,
     };
 
     root.position.set(inst.x, inst.y, inst.z);
@@ -1082,6 +1168,23 @@ export async function buildEnemies(ctx, onProgress) {
   const dyingOrNear = (inst, d2, range) =>
     inst.state === "death" || d2 < range * range;
 
+  /**
+   * How far to move a body while its death clip folds it.
+   *
+   * Ramped on the CLIP'S OWN PROGRESS rather than applied at the moment
+   * of death: the legs are still holding the creature up on the frame
+   * it dies, and a correction that arrives before they fold is a
+   * corpse that jumps. The full offset lands exactly when the pose
+   * that needs it does.
+   */
+  function deathLift(inst) {
+    const span = Math.max(0.05, inst.deathSeconds || 0);
+    if (!(span > 0.05)) return 0;
+    const t = clamp01((inst.deathElapsed || 0) / span);
+    const eased = t * t * (3 - 2 * t);
+    return ((inst.deathSettle || 0) * inst.root.scale.x - DEATH_BED_IN) * eased;
+  }
+
   const KNOCKBACK_DRAG = 6.5;
   const KNOCKBACK_DURATION = 0.55;
   const KNOCKBACK_MAX_SPEED = 22;
@@ -1183,6 +1286,7 @@ export async function buildEnemies(ctx, onProgress) {
       // mid-collapse because the player walked away is worse than
       // the cost of animating it.
       const dying = inst.state === "death";
+      if (dying) inst.deathElapsed = (inst.deathElapsed || 0) + dt;
       if (!dying && d2 > poseRange * poseRange) continue;
 
       if (dying || d2 < animRange * animRange) inst.mixer.update(dt);
@@ -1198,10 +1302,20 @@ export async function buildEnemies(ctx, onProgress) {
         inst.root.position.copy(inst.body.head);
         inst.root.quaternion.copy(inst.body.quat);
         inst.root.updateMatrixWorld(true);
-      } else if (!emerging && (inst.state !== "death" || knocked)) {
-        inst.y = damp(inst.y, groundY(inst.x, inst.z), 12, dt);
+      } else if (!emerging) {
+        /* A CORPSE KEEPS FOLLOWING THE GROUND, and it follows it to a
+           different height than a standing creature does.
+
+           This branch used to be skipped entirely for the dead unless
+           a knockback was still pushing them, which froze the body at
+           whatever height it happened to be standing at - and since a
+           death clip only rotates bones, that is the height its LEGS
+           were holding it at. A Gleaner folded four three-metre stilts
+           and stayed exactly where they had put it. */
+        const want = groundY(inst.x, inst.z) + (dying ? deathLift(inst) : 0);
+        inst.y = damp(inst.y, want, 12, dt);
         inst.root.position.set(inst.x, inst.y, inst.z);
-        if (inst.state !== "death") inst.root.rotation.y = inst.yaw;
+        if (!dying) inst.root.rotation.y = inst.yaw;
       }
       if (!inst.body) inst.root.updateMatrixWorld(true);
 

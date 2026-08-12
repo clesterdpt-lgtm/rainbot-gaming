@@ -201,6 +201,13 @@ export async function start({ boot, build } = {}) {
   ctx.audio = audio;
   audio.attach();
 
+  /* The trooper falls over when killed. Subscribed here rather than
+     called from combat, for the same reason audio is: the player is
+     built before combat exists and cannot subscribe to a bus that is
+     not there yet, and combat has no business knowing that a body has
+     an animation. `spawn` puts them back on their feet. */
+  combat.bus.on("playerDied", () => player.die());
+
   const hud = buildHud(ctx, hudHost);
   ctx.hud = hud;
   const touch = buildTouchControls(ctx, player, touchHost, stage);

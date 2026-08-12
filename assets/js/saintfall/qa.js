@@ -3043,11 +3043,13 @@ export function installQa(ctx, api) {
         let shortKeys = 0;
         for (const k of spec.keys) {
           /* 8 = weapon channels only, 14 = plus the body block, 15 =
-             plus `slide`. The point of checking length at all is that
-             a channel past the end of a key is zero by construction
-             and no per-value check can see it, so this list has to
-             grow every time a channel is added. */
-          if (k.length !== 15 && k.length !== 14 && k.length !== 8) shortKeys += 1;
+             plus `slide`, 16 = plus `lean`. The point of checking
+             length at all is that a channel past the end of a key is
+             zero by construction and no per-value check can see it, so
+             this list has to grow every time a channel is added - and
+             it duly caught `lean` on the day it was. */
+          if (k.length !== 16 && k.length !== 15 && k.length !== 14
+            && k.length !== 8) shortKeys += 1;
           for (let c = 0; c < CH.length; c += 1) {
             const v = k[7 + c];
             if (typeof v === "number") peaks[c] = Math.max(peaks[c], Math.abs(v));

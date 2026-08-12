@@ -2110,6 +2110,12 @@ export async function createPlayer(ctx, canvas) {
     punchPhase: 0,
     camPitch: -0.10,
     camDist: 5.2,
+    /* Dying, and how far through the fall. `deathPose` is read by the
+       camera here and by the harness; nothing else in the file needs
+       to know, because the pose itself is carried by the `death`
+       action on the ordinary timeline. */
+    dying: false,
+    deathPose: 0,
     grounded: true,
     speed: 0,
     /* Actual horizontal travel, which may differ from body facing
@@ -2398,6 +2404,11 @@ export async function createPlayer(ctx, canvas) {
      has no arms" without isolating why. Rotation swings the blade
      through metres without moving the hands at all, which is the
      whole point of holding a lever. */
+  /* How long the fall takes to reach the ground, as distinct from how
+     long the clip is held for. The camera eases out over this and the
+     clip then sits on its last pose until a respawn clears it. */
+  const DEATH_FALL_SECONDS = 1.55;
+
   const ACTIONS = {
     /* CLEAVING LUNGE - the opener has to read on the first press.
        The old thrust travelled forward but occupied very little of
@@ -2442,6 +2453,64 @@ export async function createPlayer(ctx, canvas) {
         [0.32, -0.042, 0.2184, -0.1428, -1.45, 0.20, 0.10, 0.42, -0.42, 0.18, 0.055, -0.07, 0.03, "strike"],
         [0.54, 0.075, -0.160, 0.215, 1.42, -0.20, -0.10, -0.68, 0.60, -0.28, -0.110, 0.32, 0.17, "settle"],
         [0.96, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
+      ],
+    },
+    /* ------------------------------------------------------------
+       THE FALL.
+
+       Player death was a full stop: the trooper stood upright and
+       perfectly rigid for the whole 3.4-second respawn timer, holding
+       the lance at the ready, while the HUD said they were dead. It
+       is the one animation in the game every player is guaranteed to
+       see, and it did not exist.
+
+       Authored on the same timeline as the swings because it needs
+       exactly what they need - the weapon has to come out of line,
+       the stance has to give, the body has to go down - plus the one
+       channel none of them did: `lean` tips the figure root, and the
+       root is at the soles, so the trooper topples about their own
+       feet like a felled tree rather than sinking through the floor.
+
+       Held rather than ended. `dur` outlasts the respawn timer and
+       `spawn()` clears the pose, so the body stays down until the
+       moment the player is actually back on their feet - an action
+       that expired on its own would stand the corpse up mid-timer.
+
+       Channels:  x  y  z  |  pitch yaw roll |  chestYaw chestPitch
+                  pelvisYaw  drop  stanceZ  stanceSpread  slide  lean
+       ------------------------------------------------------------ */
+    death: {
+      dur: 9,   // held; see DEATH_FALL_SECONDS and spawn()
+      keys: [
+        [0.00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "strike"],
+        /* The hit. A short recoil BACKWARD before anything gives -
+           without it the collapse starts from a neutral pose and
+           reads as the trooper deciding to lie down. */
+        [0.16, -0.02, 0.03, -0.05, 0.16, -0.10, 0.12, 0.10, -0.12, 0.06,
+          0.02, 0, 0.05, 0, -0.10, "settle"],
+        /* The knees go. The body drops before it tips, because that
+           is the order legs fail in - but only just: the ROOT PIVOTS
+           AT THE SOLES, so the topple itself takes the head from
+           1.65m to about a third of a metre, and a `drop` sized as if
+           it had to do that work put the whole trooper half a metre
+           under the road with only the lance still showing. */
+        [0.52, -0.05, -0.10, -0.08, 0.55, -0.22, 0.30, 0.16, 0.22, 0.12,
+          -0.20, -0.10, 0.15, 0.02, 0.42, "linear"],
+        /* Over. The lance leads the body down - a two-handed weapon
+           carried across the chest is the first thing to reach the
+           ground - and the pelvis turns so the trooper lands on a
+           shoulder rather than flat on their face, which is both more
+           readable in silhouette and far kinder to the leg solver
+           than a dead-square topple. */
+        [1.05, -0.14, -0.30, -0.14, 1.05, -0.34, 0.58, 0.22, 0.30, 0.26,
+          -0.19, -0.24, 0.24, 0.05, 1.02, "settle"],
+        // The last of it, with a little slump past the resting angle.
+        [1.55, -0.18, -0.38, -0.16, 1.24, -0.38, 0.66, 0.24, 0.34, 0.30,
+          -0.24, -0.28, 0.26, 0.06, 1.28, "settle"],
+        [2.10, -0.18, -0.38, -0.16, 1.22, -0.38, 0.64, 0.23, 0.33, 0.30,
+          -0.21, -0.28, 0.26, 0.06, 1.22, "settle"],
+        [9.00, -0.18, -0.38, -0.16, 1.22, -0.38, 0.64, 0.23, 0.33, 0.30,
+          -0.21, -0.28, 0.26, 0.06, 1.22, "linear"],
       ],
     },
     reload: {
@@ -2531,6 +2600,13 @@ export async function createPlayer(ctx, canvas) {
        by translation alone stops dead there. Running the shaft
        through the grip is also simply how a spear is thrust. */
     slide: 0,
+    /* THE ONE CHANNEL THAT TIPS THE WHOLE TROOPER.
+       Everything else an action can do bends something: the weapon
+       moves, the chest turns, the stance widens. `lean` is added to
+       `bodyLean`, which rotates the figure root - and the root sits at
+       the soles - so a clip can pivot the entire body about its feet.
+       Nothing needed that until something had to fall over. */
+    lean: 0,
   };
   /* Body channels are optional so a clip that does not use them keeps
      its original 8-element keys. The ease token is read from the END
@@ -2575,6 +2651,7 @@ export async function createPlayer(ctx, canvas) {
     actionPose.stanceZ = lerp(chan(a, 11), chan(b, 11), u);
     actionPose.stanceSpread = lerp(chan(a, 12), chan(b, 12), u);
     actionPose.slide = lerp(chan(a, 13), chan(b, 13), u);
+    actionPose.lean = lerp(chan(a, 14), chan(b, 14), u);
   }
 
   function beginAction(name, aimYaw = null) {
@@ -2588,6 +2665,22 @@ export async function createPlayer(ctx, canvas) {
       ? Math.atan2(Math.sin(aimYaw), Math.cos(aimYaw))
       : null;
     return true;
+  }
+
+  /**
+   * Killed.
+   *
+   * Idempotent, because the same frame can deliver a bite, a venom
+   * tick and a fall: whichever arrives first owns the fall, and the
+   * others must not restart it from the top.
+   */
+  function die() {
+    if (state.dying) return false;
+    state.dying = true;
+    action.queued = false;
+    action.queuedAimYaw = null;
+    action.combo = 0;
+    return beginAction("death");
   }
 
   /** Next attack in the three-hit chain, or the first if it lapsed. */
@@ -2637,7 +2730,7 @@ export async function createPlayer(ctx, canvas) {
       actionPose.chestYaw = 0; actionPose.chestPitch = 0;
       actionPose.pelvisYaw = 0; actionPose.drop = 0;
       actionPose.stanceZ = 0; actionPose.stanceSpread = 0;
-      actionPose.slide = 0;
+      actionPose.slide = 0; actionPose.lean = 0;
       return;
     }
     action.t += dt;
@@ -2661,6 +2754,7 @@ export async function createPlayer(ctx, canvas) {
     actionPose.stanceZ = lerp(chan(a, 11), chan(b, 11), u);
     actionPose.stanceSpread = lerp(chan(a, 12), chan(b, 12), u);
     actionPose.slide = lerp(chan(a, 13), chan(b, 13), u);
+    actionPose.lean = lerp(chan(a, 14), chan(b, 14), u);
 
     // The hit window: one connect per swing, in the middle of it.
     const hitWin = action.spec.hit;
@@ -2809,6 +2903,13 @@ export async function createPlayer(ctx, canvas) {
     ctx.jetpack?.reset?.(true);
     ctx.boost?.reset?.(true);
     ctx.shield?.reset?.(true);
+    /* Back on their feet. The fall is held rather than expiring, so
+       this is the only thing that ends it - and it has to run after
+       the position reset, or the pose is cleared on a body that is
+       still lying where it died. */
+    state.dying = false;
+    state.deathPose = 0;
+    if (action.name === "death") cancelTransientActions();
   }
   spawn(state.x, state.z);
 
@@ -2895,7 +2996,8 @@ export async function createPlayer(ctx, canvas) {
     const locomotionLean = ordinaryLocomotionLean
       - downhillPose * 0.14
       + boostPose * 0.075;
-    const bodyLean = locomotionLean + slamLean;
+    const bodyLean = locomotionLean + slamLean
+      + (Number.isFinite(actionPose.lean) ? actionPose.lean : 0);
     const travelLean = (0.055 * walkLeanN + 0.025 * sprintLeanN) * gaitMotion
       - downhillPose * 0.035
       + 0.37 * jetPose;
@@ -3165,6 +3267,11 @@ export async function createPlayer(ctx, canvas) {
   function update(dt, camera) {
     state.clock += dt;
     sampleAction(dt);
+    /* How far through the fall, for the camera. Read off the action's
+       own clock rather than tracked separately, so there is exactly one
+       timeline and it is the one that poses the body. */
+    state.deathPose = action.name === "death"
+      ? clamp01(action.t / DEATH_FALL_SECONDS) : 0;
     const { lx, ly, jumpPressed } = input.poll();
     const shieldState = ctx.shield?.beginFrame?.(dt, state, input.state) || null;
     const shieldMode = !!shieldState?.active;
@@ -3900,9 +4007,18 @@ export async function createPlayer(ctx, canvas) {
     /* --- camera --- */
     const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
     const crouched = input.state.crouch && state.grounded && !flightMode;
+    /* THE DEATH CAMERA. Eased, not cut.
+       A third-person camera that keeps its standing anchor while the
+       body falls out from under it ends up looking at empty sand with
+       the trooper somewhere below frame - which is exactly what a
+       player does not want to be shown at the moment they most want
+       to know what happened. The boom lengthens a little and the
+       anchor comes down with the body. */
+    const dyingPose = clamp01(state.deathPose);
     const dist = state.camDist
       * lerp(1.14, 1.27, jetPose)
-      * (crouched ? 0.86 : 1);
+      * (crouched ? 0.86 : 1)
+      * (1 + dyingPose * 0.34);
     camOffset.set(
       Math.sin(state.camYaw) * Math.cos(state.camPitch),
       -Math.sin(state.camPitch),
@@ -3912,7 +4028,9 @@ export async function createPlayer(ctx, canvas) {
     // The camera's own crouch drop; the figure's lives in
     // applyFigurePose with the rest of the body state.
     const camCrouch = crouched ? 0.34 : 0;
-    tmp.set(state.x, state.y + EYE - camCrouch * 0.5 + jetPose * 0.24, state.z);
+    tmp.set(state.x,
+      state.y + EYE - camCrouch * 0.5 + jetPose * 0.24 - dyingPose * (EYE - 0.75),
+      state.z);
     const want = tmp.clone().add(camOffset);
     /* Keep the camera out of the ground by SHORTENING THE BOOM, not
        by lifting it.
@@ -5372,6 +5490,7 @@ export async function createPlayer(ctx, canvas) {
     beginAction,
     sampleActionAt,
     meleeSwing,
+    die,
     cancelTransientActions,
     listActions: () => Object.keys(ACTIONS),
     actionSpec: (n) => ACTIONS[n] || null,

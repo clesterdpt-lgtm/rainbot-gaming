@@ -244,6 +244,64 @@ an unblessed one deals 260 — and 260 again the moment it lapses.
 
 ---
 
+## Dying, fixed (same milestone, later again)
+
+Two reported bugs, both about where a body ends up.
+
+### Corpses hung in the air
+
+A death clip in this bestiary only rotates bones — nothing animates root
+motion — so the body's origin stays exactly where the creature was standing
+while the pose underneath it collapses. Fine for a Thresher, whose legs fold
+under a body already at ankle height. Not fine for a **Gleaner**, which dies on
+four three-metre stilts: the stilts fold and the corpse is left **hanging a
+metre in the air**, measured.
+
+The correction is measured, not tuned. At load, each species' death clip is
+posed to its last frame on a throwaway clone and the *skinned* mesh is asked
+where it actually ends up; the runtime then eases the root by that offset over
+the clip's own length, so the correction arrives exactly when the pose that
+needs it does. Re-author a death animation and the fix follows it.
+
+Two details that matter: the **4th percentile** rather than the true minimum
+(one claw left pointing down would otherwise balance the whole body on it), and
+the corpse now keeps following the ground — that branch used to be skipped
+entirely for the dead unless a knockback was still pushing them.
+
+| | settle | dead body, lowest 5% |
+| --- | --- | --- |
+| Thresher | +0.12m | −0.04m |
+| Gleaner | **−1.46m** | +0.05m |
+| Harrow | −0.09m | −0.06m |
+| Matriarch | −0.08m | +0.02m |
+
+### The player didn't have one
+
+Death was a full stop: the trooper stood upright and rigid, lance at the ready,
+for the whole 3.4-second respawn timer while the HUD said they were dead. It is
+the one animation every player is guaranteed to see.
+
+**The Fall** is authored on the same timeline as the swings, because it needs
+what they need — the weapon comes out of line, the stance gives, the body goes
+down — plus one channel none of them had: `lean` tips the figure root, and the
+root sits at the soles, so the trooper topples about their own feet like a
+felled tree instead of sinking through the floor. A short recoil backward, the
+knees, then over onto a shoulder. The camera's boom lengthens and its anchor
+comes down with the body, so a player watches their own death rather than a
+patch of empty sand. Held rather than expiring — `spawn()` is what stands them
+back up.
+
+One bug the frames caught: `drop` and the topple double-counted, and the first
+version buried the trooper under the road with only the lance still showing.
+The pivot at the soles already takes the head from 1.65m to about a third of a
+metre; `drop` only beds it in.
+
+`scripts/saintfall-death-shots.mjs`: 13 assertions and seven frames. The
+`figureAsserts` key-length gate caught the new channel on the day it was added,
+exactly as its own comment said it would.
+
+---
+
 ## Files
 
 ```
@@ -261,4 +319,6 @@ scripts/saintfall-coulter-shots.mjs      12 review frames
 assets/js/saintfall/mission.js           the Gilding Rite, the boon, IMPACT_LEAD
 assets/js/saintfall/vfx.js               the ordnance rig and the three commands
 scripts/saintfall-command-shots.mjs      19 assertions, 6 review frames
+assets/js/saintfall/player.js            the Fall: `lean` channel, death clip
+scripts/saintfall-death-shots.mjs        13 assertions, 7 review frames
 ```

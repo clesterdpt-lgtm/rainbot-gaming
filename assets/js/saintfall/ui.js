@@ -26,6 +26,7 @@ const ICONS = Object.freeze({
   controls: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8h10a5 5 0 0 1 4 7l-1 3a2 2 0 0 1-3 1l-3-2h-4l-3 2a2 2 0 0 1-3-1l-1-3a5 5 0 0 1 4-7Z"/><path d="M7 12h4M9 10v4M16 12h.1M18 14h.1"/></svg>`,
   settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>`,
   maximize: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M20 15v5h-5M4 15v5h5"/></svg>`,
+  menu: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg>`,
 });
 
 function escapeHtml(value) {
@@ -119,6 +120,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
   root.id = "sf-native-ui";
   root.className = "sf-native-ui";
   root.innerHTML = `
+    <button type="button" class="sf-menu-trigger sf-menu-trigger--mobile" data-menu-open
+      aria-label="Open field menu" aria-haspopup="dialog">
+      ${ICONS.menu}<span>MENU</span>
+    </button>
     <div id="sf-command-wheel" class="sf-command-wheel" role="dialog"
       aria-label="Field command wheel" aria-modal="false" aria-hidden="true" hidden
       data-open="false" data-selection="">
@@ -127,7 +132,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
         <div class="sf-command-wheel__ring" aria-hidden="true"></div>
         ${commandMarkup(order, ctx.mission)}
         <button class="sf-command-wheel__core" type="button" data-wheel-cancel>
-          ${ICONS.crest}<span data-wheel-status>DRAG TO SELECT</span><small>RELEASE TAB TO CONFIRM</small>
+          ${ICONS.crest}<span data-wheel-status>DRAG TO SELECT</span><small>RELEASE TO CONFIRM</small>
         </button>
         <i class="sf-command-wheel__cursor" aria-hidden="true"></i>
       </div>
@@ -679,8 +684,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     cancelWheel("menu");
     menu.open = true;
     menu.lastFocus = document.activeElement;
-    menu.returnToPointerLock = document.pointerLockElement === canvas
-      || document.activeElement === canvas || document.documentElement.classList.contains("sf-maximised");
+    const openedFromTouchMenu = menu.lastFocus?.matches?.(".sf-menu-trigger--mobile");
+    menu.returnToPointerLock = !openedFromTouchMenu && (document.pointerLockElement === canvas
+      || document.activeElement === canvas || document.documentElement.classList.contains("sf-maximised"));
     menuEl.hidden = false;
     menuEl.setAttribute("aria-hidden", "false");
     document.body.classList.add("rb-escape-menu-open");

@@ -630,9 +630,10 @@ export async function start({ boot, build } = {}) {
   }
 
   function setStorm(v) {
-    atmos.apply(atmos.time, v);
+    atmos.setStorm(v);
     render.applyAtmosphere(atmos);
-    render.refreshEnvironment(atmos);
+    render.syncEnvironment(atmos);
+    sky.refresh();
     vfx.setStorm(atmos.storm);
   }
 

@@ -65,7 +65,7 @@ async function layoutAudit(page) {
       "#sf-minimap", "#sf-touch", ".sf-command-wheel__dial",
       ".sf-menu__frame", ".sf-menu__content", ".sf-menu__rail",
       ".sf-map-page", "#sf-map-canvas-large", ".sf-map-page__orders",
-      "[data-touch-command]",
+      "[data-touch-command]", ".sf-menu-trigger--mobile",
     ];
     const nodes = [...new Set(selectors.flatMap((selector) =>
       [...document.querySelectorAll(selector)]))];
@@ -179,9 +179,115 @@ async function touchTargetAudit(page) {
   });
 }
 
-async function preparePage(browser, name, contextOptions, { maximize = true } = {}) {
+async function mobileChromeAudit(page) {
+  return await page.evaluate(() => {
+    const stage = document.querySelector(".sf-stage");
+    if (!stage) return { coveragePct: Infinity, items: [], reason: "missing stage" };
+    const stageRect = stage.getBoundingClientRect();
+    const stageArea = Math.max(1, stageRect.width * stageRect.height);
+    const selectors = [
+      "#sf-objective", "#sf-compass", "#sf-minimap", "#sf-vitals",
+      ".sf-menu-trigger--mobile", "[data-touch-stick]", ".sf-touch__button",
+    ];
+    const nodes = [...new Set(selectors.flatMap((selector) =>
+      [...stage.querySelectorAll(selector)]))];
+    const items = nodes.map((node) => {
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      if (style.display === "none" || style.visibility === "hidden"
+        || Number(style.opacity) === 0 || rect.width < 1 || rect.height < 1) return null;
+      return {
+        label: node.id || node.dataset.touchAction || node.className,
+        width: Number(rect.width.toFixed(1)), height: Number(rect.height.toFixed(1)),
+        areaPct: Number(((rect.width * rect.height / stageArea) * 100).toFixed(2)),
+      };
+    }).filter(Boolean);
+    return {
+      coveragePct: Number(items.reduce((sum, item) => sum + item.areaPct, 0).toFixed(2)),
+      items,
+    };
+  });
+}
+
+async function safeAreaAudit(page, insets) {
+  return await page.evaluate((safeInsets) => {
+    const stage = document.querySelector(".sf-stage");
+    if (!stage) return { offenders: ["missing stage"] };
+    const stageRect = stage.getBoundingClientRect();
+    const safe = {
+      left: stageRect.left + safeInsets.left,
+      top: stageRect.top + safeInsets.top,
+      right: stageRect.right - safeInsets.right,
+      bottom: stageRect.bottom - safeInsets.bottom,
+    };
+    const nodes = [...stage.querySelectorAll(
+      ".sf-menu-trigger--mobile,#sf-objective,#sf-compass,#sf-minimap,#sf-vitals,"
+      + "[data-touch-stick],.sf-touch__button"
+    )];
+    const offenders = [];
+    for (const node of nodes) {
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      if (style.display === "none" || style.visibility === "hidden"
+        || Number(style.opacity) === 0 || rect.width < 1 || rect.height < 1) continue;
+      if (rect.left < safe.left - 1 || rect.top < safe.top - 1
+        || rect.right > safe.right + 1 || rect.bottom > safe.bottom + 1) {
+        offenders.push({ label: node.id || node.dataset.touchAction || node.className,
+          rect: [rect.left, rect.top, rect.right, rect.bottom].map((n) => Math.round(n)) });
+      }
+    }
+    return { safe: Object.fromEntries(Object.entries(safe).map(([key, value]) =>
+      [key, Math.round(value)])), offenders };
+  }, insets);
+}
+
+async function mobileTextFitAudit(page) {
+  return await page.evaluate(async () => {
+    const objective = document.getElementById("sf-objlabel");
+    const distance = document.getElementById("sf-objdistance");
+    const before = { objective: objective?.textContent, distance: distance?.textContent };
+    if (objective) objective.textContent = "RELAY GAMMA - VAULT-CATHEDRAL";
+    if (distance) distance.textContent = "2048M";
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const selectors = [
+      "#sf-objlabel", "#sf-objdistance", "#sf-hp-value", "#sf-jet-value", "#sf-reinf",
+      ".sf-touch__button span",
+    ];
+    const offenders = [];
+    for (const node of selectors.flatMap((selector) => [...document.querySelectorAll(selector)])) {
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      if (style.display === "none" || style.visibility === "hidden" || rect.width < 1) continue;
+      if (node.scrollWidth > node.clientWidth + 1 || node.scrollHeight > node.clientHeight + 1) {
+        offenders.push({ label: node.id || node.textContent.trim(),
+          client: [node.clientWidth, node.clientHeight],
+          scroll: [node.scrollWidth, node.scrollHeight] });
+      }
+    }
+    const objectivePanel = document.getElementById("sf-objective")?.getBoundingClientRect();
+    const fontSizes = Object.fromEntries([
+      ["objective", "#sf-objlabel"],
+      ["vitality", ".sf-hud__hplabel"],
+      ["primaryAction", ".sf-touch__actions .sf-touch__button span"],
+      ["menuButton", ".sf-menu-trigger--mobile span"],
+    ].map(([key, selector]) => [key,
+      Number.parseFloat(getComputedStyle(document.querySelector(selector)).fontSize) || 0]));
+    if (objective) objective.textContent = before.objective || "";
+    if (distance) distance.textContent = before.distance || "";
+    return { offenders, objectiveHeight: Number((objectivePanel?.height || 0).toFixed(1)),
+      fontSizes };
+  });
+}
+
+async function preparePage(browser, name, contextOptions,
+  { maximize = true, safeAreaInsets = null } = {}) {
   const context = await browser.newContext(contextOptions);
   const page = await context.newPage();
+  let cdp = null;
+  if (safeAreaInsets) {
+    cdp = await context.newCDPSession(page);
+    await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: safeAreaInsets });
+  }
   page.on("pageerror", (error) => diagnostics.pageErrors.push(`${name}: ${error.message}`));
   page.on("console", (message) => {
     if (message.type() === "error") diagnostics.consoleErrors.push(`${name}: ${message.text()}`);
@@ -196,7 +302,7 @@ async function preparePage(browser, name, contextOptions, { maximize = true } = 
     boot?.remove();
   }, maximize);
   await page.waitForTimeout(180);
-  return { context, page };
+  return { context, page, cdp };
 }
 
 async function embeddedKeyboardPass(browser) {
@@ -337,12 +443,20 @@ async function embeddedKeyboardPass(browser) {
   await page.waitForFunction(() => window.__SF.menuState()?.open, null, { timeout: 3000 });
   const utilityPlacement = await page.evaluate(() => ({
     menuTriggers: document.querySelectorAll(".sf-menu-trigger").length,
+    visibleMenuTriggers: [...document.querySelectorAll(".sf-menu-trigger")]
+      .filter((node) => {
+        const style = getComputedStyle(node);
+        const rect = node.getBoundingClientRect();
+        return style.display !== "none" && style.visibility !== "hidden"
+          && Number(style.opacity) > 0 && rect.width > 1 && rect.height > 1;
+      }).length,
     stageMaxButtons: document.querySelectorAll(".sf-stage > #sf-fullscreen").length,
     menuMaxButtons: document.querySelectorAll("#sf-menu #sf-fullscreen").length,
     label: document.querySelector("[data-maximize-label]")?.textContent?.trim(),
   }));
-  check("Escape and maximize controls are absent from the always-on playfield",
-    utilityPlacement.menuTriggers === 0 && utilityPlacement.stageMaxButtons === 0
+  check("desktop keeps menu and maximize controls off the always-on playfield",
+    utilityPlacement.menuTriggers === 1 && utilityPlacement.visibleMenuTriggers === 0
+      && utilityPlacement.stageMaxButtons === 0
       && utilityPlacement.menuMaxButtons === 1 && utilityPlacement.label === "MAXIMIZE GAME",
     JSON.stringify(utilityPlacement));
   await page.locator('[data-menu-action="maximize"]').click();
@@ -985,17 +1099,20 @@ async function desktopPass(browser) {
 
 async function mobilePass(browser) {
   console.log("\n=== MOBILE COMMAND INTERFACE ===");
-  const { context, page } = await preparePage(browser, "mobile", {
+  const portraitSafeArea = { top: 47, right: 0, bottom: 34, left: 0 };
+  const { context, page, cdp } = await preparePage(browser, "mobile", {
     viewport: { width: 390, height: 844 },
     hasTouch: true,
     isMobile: true,
     deviceScaleFactor: 2,
-  });
-  const cdp = await context.newCDPSession(page);
+  }, { safeAreaInsets: portraitSafeArea });
   await page.waitForFunction(() => {
-    const button = document.querySelector("[data-touch-command]");
-    return button && getComputedStyle(button).display !== "none"
-      && button.getBoundingClientRect().width > 0;
+    const command = document.querySelector("[data-touch-command]");
+    const menu = document.querySelector(".sf-menu-trigger--mobile");
+    return command && getComputedStyle(command).display !== "none"
+      && command.getBoundingClientRect().width > 0
+      && menu && getComputedStyle(menu).display !== "none"
+      && menu.getBoundingClientRect().width >= 44;
   }, null, { timeout: 5000 });
   await page.locator(".sf-stage").screenshot({ path: path.join(OUT, "mobile-active-play.png") });
   const mobileDensity = await hudDensityAudit(page);
@@ -1004,6 +1121,68 @@ async function mobilePass(browser) {
     mobileDensity.coveragePct <= 15 && mobileDensity.overlaps.length === 0
       && mobileDensity.readyLabels.length === 0 && mobileDensity.largeClusters.length === 0,
     JSON.stringify(mobileDensity));
+  const mobileChrome = await mobileChromeAudit(page);
+  const mobileSafeArea = await safeAreaAudit(page, portraitSafeArea);
+  const mobileTextFit = await mobileTextFitAudit(page);
+  evidence.mobileChrome = { mobileChrome, mobileSafeArea, mobileTextFit };
+  check("portrait total HUD and touch chrome stays under one fifth of the view",
+    mobileChrome.coveragePct <= 20, JSON.stringify(mobileChrome));
+  check("portrait HUD and touch controls respect simulated notch safe areas",
+    mobileSafeArea.offenders.length === 0, JSON.stringify(mobileSafeArea));
+  check("portrait critical values and longest objective fit without clipping",
+    mobileTextFit.offenders.length === 0 && mobileTextFit.objectiveHeight <= 64
+      && mobileTextFit.fontSizes.objective >= 10 && mobileTextFit.fontSizes.vitality >= 9
+      && mobileTextFit.fontSizes.primaryAction >= 9 && mobileTextFit.fontSizes.menuButton >= 8,
+    JSON.stringify(mobileTextFit));
+
+  await page.evaluate(() => {
+    const T = window.__SF;
+    const player = T.playerState();
+    T.startBreachWave(0, player.x, player.z - 44, true);
+  });
+  await page.waitForFunction(() => window.__SF.breachState()?.phase === "active"
+    && document.getElementById("sf-objlabel")?.textContent?.trim(),
+    null, { timeout: 3000 });
+  await page.locator(".sf-stage").screenshot({ path: path.join(OUT, "mobile-active-breach.png") });
+  const mobileBreachDensity = await hudDensityAudit(page);
+  const mobileBreachUi = await page.evaluate(() => ({
+    objective: document.getElementById("sf-objlabel")?.textContent?.trim(),
+    duplicateEventVisible: getComputedStyle(document.getElementById("sf-map-event")).display !== "none",
+  }));
+  check("portrait Bloom state stays compact without a duplicate event card",
+    mobileBreachDensity.overlaps.length === 0 && mobileBreachDensity.coveragePct <= 15
+      && !mobileBreachUi.duplicateEventVisible,
+    JSON.stringify({ mobileBreachDensity, mobileBreachUi }));
+
+  const mobileMenuButton = page.locator(".sf-menu-trigger--mobile");
+  const mobileMenuBox = await mobileMenuButton.boundingBox();
+  await mobileMenuButton.tap();
+  await page.waitForFunction(() => window.__SF.menuState()?.open,
+    null, { timeout: 3000 });
+  const mobileMenuOpen = await page.evaluate(() => ({
+    state: window.__SF.menuState(),
+    paused: document.body.classList.contains("rb-escape-menu-open"),
+    touchInert: !!document.getElementById("sf-touch")?.inert,
+    focusInside: document.getElementById("sf-menu")?.contains(document.activeElement),
+  }));
+  check("mobile menu button is a 44px-safe authoritative pause control",
+    mobileMenuBox.width >= 43.5 && mobileMenuBox.height >= 43.5
+      && mobileMenuOpen.state?.open && mobileMenuOpen.paused
+      && mobileMenuOpen.touchInert && mobileMenuOpen.focusInside,
+    JSON.stringify({ mobileMenuBox, mobileMenuOpen }));
+  await page.locator("[data-menu-close]").first().tap();
+  await page.waitForFunction(() => !window.__SF.menuState()?.open,
+    null, { timeout: 3000 });
+  const mobileMenuClosed = await page.evaluate(() => ({
+    open: window.__SF.menuState()?.open,
+    paused: document.body.classList.contains("rb-escape-menu-open"),
+    touchInert: !!document.getElementById("sf-touch")?.inert,
+    triggerFocused: document.activeElement?.classList?.contains("sf-menu-trigger--mobile"),
+  }));
+  check("closing the mobile menu restores play controls and trigger focus",
+    !mobileMenuClosed.open && !mobileMenuClosed.paused && !mobileMenuClosed.touchInert
+      && mobileMenuClosed.triggerFocused,
+    JSON.stringify(mobileMenuClosed));
 
   const commandBox = await page.locator("[data-touch-command]").boundingBox();
   const wheelBefore = await page.evaluate(() => {
@@ -1024,6 +1203,21 @@ async function mobilePass(browser) {
   await page.waitForFunction(() => window.__SF.commandWheelState()?.selectedKey === "orbital",
     null, { timeout: 3000 });
   await page.locator(".sf-stage").screenshot({ path: path.join(OUT, "mobile-command-wheel.png") });
+  const mobileWheelComposition = await page.evaluate(() => ({
+    coreCopy: document.querySelector(".sf-command-wheel__core small")?.textContent?.trim(),
+    alertOpacity: Number.parseFloat(getComputedStyle(
+      document.getElementById("sf-breach-alert")).opacity),
+    fireOpacity: Number.parseFloat(getComputedStyle(
+      document.querySelector('[data-touch-action="fire"]')).opacity),
+    instructionVisible: getComputedStyle(
+      document.querySelector(".sf-command-wheel__instruction")).display !== "none",
+  }));
+  check("touch command wheel suppresses underlying alerts and keyboard-only copy",
+    mobileWheelComposition.coreCopy === "RELEASE TO CONFIRM"
+      && mobileWheelComposition.alertOpacity === 0
+      && mobileWheelComposition.fireOpacity <= 0.1
+      && !mobileWheelComposition.instructionVisible,
+    JSON.stringify(mobileWheelComposition));
   await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await page.waitForFunction((seq) => {
     const state = window.__SF.commandWheelState();
@@ -1219,17 +1413,20 @@ async function compactDesktopPass(browser) {
 
 async function landscapeTouchPass(browser) {
   console.log("\n=== TOUCH LANDSCAPE 844x390 ===");
-  const { context, page } = await preparePage(browser, "touch-844x390", {
+  const landscapeSafeArea = { top: 0, right: 44, bottom: 21, left: 44 };
+  const { context, page, cdp } = await preparePage(browser, "touch-844x390", {
     viewport: { width: 844, height: 390 },
     hasTouch: true,
     isMobile: true,
     deviceScaleFactor: 2,
-  });
-  const cdp = await context.newCDPSession(page);
+  }, { safeAreaInsets: landscapeSafeArea });
   await page.waitForFunction(() => {
-    const button = document.querySelector("[data-touch-command]");
-    return button && getComputedStyle(button).display !== "none"
-      && button.getBoundingClientRect().width > 0;
+    const command = document.querySelector("[data-touch-command]");
+    const menu = document.querySelector(".sf-menu-trigger--mobile");
+    return command && getComputedStyle(command).display !== "none"
+      && command.getBoundingClientRect().width > 0
+      && menu && getComputedStyle(menu).display !== "none"
+      && menu.getBoundingClientRect().width >= 44;
   }, null, { timeout: 5000 });
 
   await page.locator(".sf-stage").screenshot({
@@ -1244,8 +1441,56 @@ async function landscapeTouchPass(browser) {
     JSON.stringify(landscapeDensity));
   const active = await layoutAudit(page);
   const activeTargets = await touchTargetAudit(page);
+  const landscapeChrome = await mobileChromeAudit(page);
+  const landscapeSafe = await safeAreaAudit(page, landscapeSafeArea);
+  const landscapeTextFit = await mobileTextFitAudit(page);
+  evidence.landscapeTouchChrome = { landscapeChrome, landscapeSafe, landscapeTextFit };
   check("844x390 active HUD stays inside the playfield",
     active.offenders.length === 0 && active.scrollOverflow <= 2, JSON.stringify(active));
+  check("844x390 total HUD and touch chrome stays under one fifth of the view",
+    landscapeChrome.coveragePct <= 20, JSON.stringify(landscapeChrome));
+  check("844x390 controls respect simulated landscape safe areas",
+    landscapeSafe.offenders.length === 0, JSON.stringify(landscapeSafe));
+  check("844x390 critical values and longest objective fit without clipping",
+    landscapeTextFit.offenders.length === 0 && landscapeTextFit.objectiveHeight <= 64
+      && landscapeTextFit.fontSizes.objective >= 10 && landscapeTextFit.fontSizes.vitality >= 9
+      && landscapeTextFit.fontSizes.primaryAction >= 9
+      && landscapeTextFit.fontSizes.menuButton >= 8,
+    JSON.stringify(landscapeTextFit));
+
+  const landscapeMenuButton = page.locator(".sf-menu-trigger--mobile");
+  await landscapeMenuButton.tap();
+  await page.waitForFunction(() => window.__SF.menuState()?.open,
+    null, { timeout: 3000 });
+  const landscapeMenuOpen = await page.evaluate(() => ({
+    open: window.__SF.menuState()?.open,
+    paused: document.body.classList.contains("rb-escape-menu-open"),
+    touchInert: !!document.getElementById("sf-touch")?.inert,
+  }));
+  check("844x390 menu button opens the authoritative paused menu",
+    landscapeMenuOpen.open && landscapeMenuOpen.paused && landscapeMenuOpen.touchInert,
+    JSON.stringify(landscapeMenuOpen));
+  await page.locator("[data-menu-close]").first().tap();
+  await page.waitForFunction(() => !window.__SF.menuState()?.open,
+    null, { timeout: 3000 });
+
+  await page.evaluate(() => {
+    const T = window.__SF;
+    const player = T.playerState();
+    T.startBreachWave(0, player.x, player.z - 44, true);
+  });
+  await page.waitForFunction(() => window.__SF.breachState()?.phase === "active",
+    null, { timeout: 3000 });
+  await page.locator(".sf-stage").screenshot({
+    path: path.join(OUT, "touch-844x390-active-breach.png"),
+  });
+  const landscapeBreachDensity = await hudDensityAudit(page);
+  const landscapeBreachEventVisible = await page.evaluate(() =>
+    getComputedStyle(document.getElementById("sf-map-event")).display !== "none");
+  check("844x390 Bloom state stays compact without a duplicate event card",
+    landscapeBreachDensity.overlaps.length === 0
+      && landscapeBreachDensity.coveragePct <= 15 && !landscapeBreachEventVisible,
+    JSON.stringify({ landscapeBreachDensity, landscapeBreachEventVisible }));
 
   const command = await page.locator("[data-touch-command]").boundingBox();
   const origin = { x: command.x + command.width / 2, y: command.y + command.height / 2 };

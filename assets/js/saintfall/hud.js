@@ -78,6 +78,10 @@ export function buildHud(ctx, host) {
         <span id="sf-ammo">&mdash;</span>
         <span id="sf-reinf"></span>
       </div>
+      <div class="sf-hud__boon" id="sf-boon" data-state="off" aria-live="off">
+        <span>GILDED</span><strong id="sf-boon-value"></strong>
+        <i><em id="sf-boon-fill"></em></i>
+      </div>
     </div>
     <section class="sf-hud__command" id="sf-command-status" aria-label="Command availability">
       <header class="sf-hud__command-head">
@@ -124,6 +128,9 @@ export function buildHud(ctx, host) {
   const shieldValueEl = el.querySelector("#sf-shield-value");
   const ammoEl = el.querySelector("#sf-ammo");
   const reinfEl = el.querySelector("#sf-reinf");
+  const boonEl = el.querySelector("#sf-boon");
+  const boonValueEl = el.querySelector("#sf-boon-value");
+  const boonFillEl = el.querySelector("#sf-boon-fill");
   const stratEl = el.querySelector("#sf-strat");
   const hurtEl = el.querySelector("#sf-hurt");
   const toxinEl = el.querySelector("#sf-toxin");
@@ -994,6 +1001,23 @@ export function buildHud(ctx, host) {
       }
       reinfEl.textContent = `✦ ${mission.state.reinforcements}`;
       reinfEl.setAttribute("aria-label", `${mission.state.reinforcements} reinforcements`);
+
+      /* THE BLESSING, and it is a countdown rather than a badge. What
+         the player has to decide while it is lit is whether there is
+         time to push, so the number that matters is the one going
+         down - and the bar is what makes the last three seconds
+         readable without reading. */
+      const boon = mission.boon?.();
+      const boonOn = !!boon?.active;
+      if (boonOn !== (boonEl.dataset.state === "on")) {
+        boonEl.dataset.state = boonOn ? "on" : "off";
+      }
+      if (boonOn) {
+        const left = Math.max(0, boon.remaining);
+        boonValueEl.textContent = `${left.toFixed(1)}S`;
+        boonFillEl.style.width = `${clamp01(left / Math.max(0.001, boon.seconds)) * 100}%`;
+        boonEl.dataset.level = left < 3.5 ? "fading" : "full";
+      }
 
       const obj = mission.objective();
       if (obj) {

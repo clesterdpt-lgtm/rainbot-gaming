@@ -503,11 +503,18 @@ export function buildAudio(ctx) {
     rattle.start(t); rattle.stop(t + dur * 0.7);
   }
 
-  /** A stratagem landing. */
-  function explosion(x, z, radius = 20) {
-    const t = now();
+  /** A stratagem landing. `delay` schedules it ahead on the audio
+   *  clock rather than through a timer, so a salvo's seven reports keep
+   *  their spacing regardless of what the frame rate is doing. */
+  function explosion(x, z, radius = 20, delay = 0) {
+    const wait = Math.max(0, Math.min(4, Number(delay) || 0));
+    const t = now() + wait;
     const dur = 2.2;
-    const g = voice("world", dur);
+    /* The voice's own lifetime has to cover the WAIT as well as the
+       sound. `voice` disconnects on a wall-clock timer measured from
+       now, so a scheduled report whose gain node is torn down before it
+       starts is silence with no error attached to it. */
+    const g = voice("world", dur + wait);
     if (!g) return;
     const p = place(g, x, z, 60, 900);
     if (!p) return;
@@ -1339,7 +1346,34 @@ export function buildAudio(ctx) {
       mission.bus.on("won", () => chord([523, 659, 784, 1047], 1.4, 0.24));
       mission.bus.on("lost", () => chord([196, 147, 110], 1.6, 0.24));
       mission.bus.on("inbound", (e) => inbound(e.x, e.z, e.seconds));
-      mission.bus.on("impact", (e) => explosion(e.x, e.z, e.radius));
+      /* The ARRIVAL carries the sound now, not the resolution: the
+         picture leads the damage by up to half a second, and a bang on
+         the damage frame arrives after the flash that caused it.
+         The lance keeps the full stratagem explosion; the salvo trades
+         it for a rolling string of smaller ones, which is the whole
+         difference between the two commands in one cue. */
+      mission.bus.on("arrival", (e) => {
+        if (e.key === "cluster") {
+          for (let i = 0; i < 7; i += 1) {
+            explosion(e.x + (Math.random() - 0.5) * e.radius,
+              e.z + (Math.random() - 0.5) * e.radius,
+              e.radius * 0.5, 0.24 + i * 0.09 + Math.random() * 0.04);
+          }
+        } else if (e.heals) {
+          chord([392, 523, 659, 784], 1.1, 0.2);
+        } else {
+          explosion(e.x, e.z, e.radius);
+        }
+      });
+      /* Only commands whose picture is NOT the arrival still sound on
+         impact - which after the change above is none of the three, so
+         this stays for anything a doctrine adds later that resolves
+         without a lead. */
+      mission.bus.on("impact", (e) => {
+        if (e.key === "orbital" || e.key === "cluster" || e.heals) return;
+        explosion(e.x, e.z, e.radius);
+      });
+      mission.bus.on("boonEnded", () => chord([330, 262], 0.5, 0.12));
     }
     if (breaches) {
       breaches.bus.on("warning", () => chord([147, 196, 220], 0.72, 0.14));

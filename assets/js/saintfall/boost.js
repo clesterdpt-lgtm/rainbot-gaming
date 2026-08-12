@@ -241,7 +241,6 @@ export function buildBoost(ctx, player) {
       steerLockSeconds,
       boostIndex: state.boosts,
     });
-    ctx.vfx?.boostIgnite?.(ps.x, ps.y, ps.z, state.directionX, state.directionZ);
     ctx.audio?.boostIgnite?.(ps.x, ps.z);
     return true;
   }
@@ -326,10 +325,6 @@ export function buildBoost(ctx, player) {
       : damp(state.speed, config.glideSpeed, 6.5, dt);
     state.pose = Math.max(0.42, Math.min(1, 0.55 + Math.sin(launch * Math.PI) * 0.45));
 
-    if (ctx.vfx?.boostTrail) {
-      ctx.vfx.boostTrail(playerState.x, playerState.y, playerState.z,
-        state.directionX, state.directionZ, state.speed, state.attack);
-    }
     return state;
   }
 

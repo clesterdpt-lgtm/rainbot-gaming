@@ -229,7 +229,16 @@ export function buildCombat(ctx) {
     const candidate = Number.isFinite(result)
       ? result
       : Number.isFinite(resultDamage) ? resultDamage : requested;
-    return Math.max(0, candidate);
+    /* The Gilding Rite, applied LAST and to everything.
+       Every caller of applyDamage is the player doing something - a
+       shot, a swing, a stratagem, a glide - so a blessing on the bearer
+       is correctly a multiplier on this one path rather than something
+       each weapon has to remember. Kept outside the progression hook
+       above so a doctrine that replaces damage outright cannot silently
+       eat a command the player spent a cooldown on. */
+    const boon = ctx.mission?.boon?.();
+    const gilding = boon?.active ? Math.max(0, Number(boon.damage) || 1) : 1;
+    return Math.max(0, candidate * gilding);
   }
 
   /* ============================================================

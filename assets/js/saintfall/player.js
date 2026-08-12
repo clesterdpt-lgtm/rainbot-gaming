@@ -3616,14 +3616,15 @@ export async function createPlayer(ctx, canvas) {
           && !boostMode && !flightMode && !shieldMode && !slamMode;
         updateDownhill(descentGrade, slideEligible, dt);
         downhillUpdated = true;
-        /* A boost is a slide, not a six-metre sprint compressed into
-           four frames. Keep the planted-foot clock nearly still while
-           the crouched body skims over it; normal gait resumes on exit.
+        /* A boost is a committed lunge, not a six-metre sprint
+           compressed into four frames. Its dedicated body-relative
+           leg solve below owns the boots, so the walking clock freezes
+           until normal locomotion resumes.
            A steep downhill skid uses the same visual truth: the boots
            move WITH the body instead of taking full walking strides. */
         const gaitTravel = !state.grounded
           ? 0
-          : boostMode ? travelled * 0.08
+          : boostMode ? 0
             : travelled * lerp(1, 0.04, state.downhillPose);
         state.stride += gaitTravel;
         state.gait += gaitTravel / Math.max(0.55, readGaitSpec().strideLen);
@@ -4243,6 +4244,90 @@ export async function createPlayer(ctx, canvas) {
     void dt;
   }
 
+  /** Ground boost lunge: one boot attacks the travel line while the
+   *  other braces behind it, and both ride with the translating body.
+   *
+   * The ordinary gait deliberately leaves a stance foot planted in
+   * world space. At 19-27m/s that makes the pelvis travel past its own
+   * foot in one or two frames, so the leg stretches behind the player
+   * before snapping forward. A boost is propulsion, not a run cycle:
+   * rebuild both targets from the boost's authoritative direction on
+   * every frame and keep the stride itself frozen until the boost ends. */
+  function solveBoostLegs(dt, pose) {
+    const boost = ctx.boost?.state;
+    let dx = Number(boost?.directionX);
+    let dz = Number(boost?.directionZ);
+    const directionLength = Math.hypot(dx, dz);
+    if (!(directionLength > 1e-5)) {
+      const facing = Number.isFinite(state.travelYaw) ? state.travelYaw : state.yaw;
+      dx = Math.sin(facing);
+      dz = Math.cos(facing);
+    } else {
+      dx /= directionLength;
+      dz /= directionLength;
+    }
+    const facing = Math.atan2(dx, dz);
+    const rightX = dz;
+    const rightZ = -dx;
+    const slope = (
+      groundY(state.x + dx * 0.18, state.z + dz * 0.18)
+      - groundY(state.x - dx * 0.18, state.z - dz * 0.18)
+    ) / 0.36;
+    const groundPitch = clamp(0.55 - Math.atan(slope) * 0.68, 0.20, 1.15);
+    figure.root.updateMatrixWorld(true);
+
+    for (let i = 0; i < 2; i += 1) {
+      const leg = legs[i];
+      const lead = leg.side === LEAD_SIDE;
+      /* The blend makes ignition and release continuous while the
+         targets remain body-relative throughout. The lead sabaton is
+         visibly committed downrange; the trail leg is the long brace
+         that sells the thrust without ever being left behind. */
+      const fore = lead
+        ? lerp(0.10, 0.42, pose)
+        : lerp(-0.08, -0.34, pose);
+      const lateral = leg.side * lerp(HIP_HALF, HIP_HALF + 0.065, pose);
+      const x = state.x + dx * fore + rightX * lateral;
+      const z = state.z + dz * fore + rightZ * lateral;
+      const gy = groundY(x, z);
+      leg.foot.set(x, gy + figure.limb.ankle, z);
+      leg.plant.copy(leg.foot);
+      leg.swinging = false;
+      leg.planted = false;
+      leg.footPitch = damp(leg.footPitch, groundPitch, 18, dt);
+
+      if (figure.legBindQuaternions && figure.kneeBindQuaternions) {
+        figure.legPivots[i].quaternion.copy(figure.legBindQuaternions[i]);
+        figure.kneePivots[i].quaternion.copy(figure.kneeBindQuaternions[i]);
+        figure.legPivots[i].updateWorldMatrix(true, true);
+      }
+      kneePole.set(
+        dx + rightX * leg.side * 0.18,
+        -0.30,
+        dz + rightZ * leg.side * 0.18
+      ).normalize();
+      const lengths = figure.legLengths ? figure.legLengths[i] : figure.limb;
+      solveTwoJoint(
+        figure.legPivots[i], figure.kneePivots[i],
+        leg.foot, kneePole, lengths.thigh, lengths.shin, LEG_AXIS
+      );
+
+      const foot = figure.footPivots && figure.footPivots[i];
+      if (foot && foot.parent) {
+        const cp = Math.cos(leg.footPitch);
+        const sp = Math.sin(leg.footPitch);
+        footX.set(Math.cos(facing), 0, -Math.sin(facing));
+        footY.set(Math.sin(facing) * cp, -sp, Math.cos(facing) * cp);
+        footZ.crossVectors(footX, footY).normalize();
+        footBasis.makeBasis(footX, footY, footZ);
+        footWorldQuaternion.setFromRotationMatrix(footBasis);
+        foot.parent.getWorldQuaternion(footParentQuaternion).invert();
+        foot.quaternion.copy(footParentQuaternion).multiply(footWorldQuaternion);
+        foot.updateWorldMatrix(false, true);
+      }
+    }
+  }
+
   /** A grounded skid: wide, asymmetric boots that ride with the body.
    *
    * Ordinary locomotion deliberately plants each foot in world space;
@@ -4319,6 +4404,11 @@ export async function createPlayer(ctx, canvas) {
     const jetPose = airbornePose();
     if (jetPose > 0.001) {
       solveJetLegs(dt, jetPose);
+      return;
+    }
+    const boostPose = clamp01(ctx.boost?.state?.pose || 0);
+    if (state.grounded && boostPose > 0.025) {
+      solveBoostLegs(dt, boostPose);
       return;
     }
     const downhillPose = clamp01(state.downhillPose);

@@ -388,8 +388,29 @@ async function main() {
     await stage({ yaw: 0 });
     await page.keyboard.down("KeyW");
     await step(0.4);
+    const groundFxBefore = await page.evaluate(() => window.__SF.impactPool());
     await page.keyboard.down("ShiftLeft");
     await step(0.25);
+    const groundBoostEarly = await page.evaluate(() => {
+      const T = window.__SF;
+      const p = T.player.state;
+      const boost = T.boostState();
+      const dx = boost.direction[0];
+      const dz = boost.direction[1];
+      const feet = T.playerLegs().map((leg) => {
+        const rx = leg.foot.x - p.x;
+        const rz = leg.foot.z - p.z;
+        return {
+          fore: Number((rx * dx + rz * dz).toFixed(3)),
+          lateral: Number((rx * dz - rz * dx).toFixed(3)),
+          radius: Number(Math.hypot(rx, rz).toFixed(3)),
+          swinging: !!leg.swinging,
+          planted: !!leg.planted,
+        };
+      });
+      return { boost, feet, impacts: T.impactPool() };
+    });
+    const boostLungeShots = await capture("ground-boost-lunge", [90, 235]);
     const shotsBeforeGlide = await page.evaluate(() => window.__SF.combatStats().shots);
     await page.evaluate(() => window.__SF.setFiring(true));
     await step(1.2);
@@ -407,6 +428,7 @@ async function main() {
       const p = T.player.state;
       T.render.scene.updateMatrixWorld(true);
       let wake = null;
+      let glideRigCount = 0;
       let footJetCount = 0;
       let visibleFootJets = 0;
       T.render.scene.traverse((o) => {
@@ -417,6 +439,7 @@ async function main() {
             offset: Math.hypot(w.x - p.x, w.z - p.z),
           };
         }
+        if (o.name === "glide-rig") glideRigCount += 1;
         if (/^glide-jet-/.test(o.name || "")) {
           footJetCount += 1;
           if (o.visible) visibleFootJets += 1;
@@ -424,6 +447,7 @@ async function main() {
       });
       return {
         wake,
+        glideRigCount,
         footJetCount,
         visibleFootJets,
         jetpack: T.jetpackState(),
@@ -437,21 +461,29 @@ async function main() {
       boost: glideFireState.boost,
       reticle: glideFireState.reticle,
       shotFiles: glideShots,
+      lungeFiles: boostLungeShots,
     };
+    report.states.groundBoostEarly = groundBoostEarly;
     check("the lance fires while gliding",
       shotsAfterGlide > shotsBeforeGlide && glideFireState.boost.active,
       `${shotsBeforeGlide} -> ${shotsAfterGlide} shots, gliding=${glideFireState.boost.active}`);
     check("the reticle stays up while gliding",
       Number(glideFireState.reticle) > 0.5, `opacity ${glideFireState.reticle}`);
     report.states.boostVisual = boostVisual;
-    /* Two and a half metres, not one: the rig is placed once a frame
-       and the trooper is covering nineteen metres a second, so a
-       fraction of a frame's travel is expected. The bound that matters
-       is "on the trooper" versus "at twice the trooper's world
-       coordinates", which is what this used to be. */
-    check("the glide lays its wake under the trooper",
-      boostVisual.wake?.visible && boostVisual.wake.offset < 2.5,
-      JSON.stringify(boostVisual.wake));
+    const fore = groundBoostEarly.feet.map((foot) => foot.fore).sort((a, b) => a - b);
+    const lateral = groundBoostEarly.feet.map((foot) => foot.lateral).sort((a, b) => a - b);
+    check("ground boost legs lunge along the movement direction",
+      fore[0] <= -0.22 && fore[1] >= 0.30
+        && fore[1] - fore[0] >= 0.58
+        && lateral[1] - lateral[0] >= 0.28
+        && groundBoostEarly.feet.every((foot) => !foot.swinging && !foot.planted),
+      JSON.stringify(groundBoostEarly.feet));
+    check("ground boost leaves no wake or ignition VFX on the sand",
+      boostVisual.wake === null && boostVisual.glideRigCount === 0
+        && groundBoostEarly.impacts?.lit === groundFxBefore?.lit
+        && groundBoostEarly.impacts?.scheduled === groundFxBefore?.scheduled,
+      JSON.stringify({ before: groundFxBefore, after: groundBoostEarly.impacts,
+        wake: boostVisual.wake, glideRigCount: boostVisual.glideRigCount }));
     check("ground Shift boost burns from the reliquary jetpack",
       boostVisual.jetpack.boostThrust
         && boostVisual.jetpack.mode === "boost"

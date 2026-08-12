@@ -48,20 +48,59 @@ export const STRATAGEMS = {
     damage: 190,
     colour: "#ffbe4d",
   },
+  /* THE GILDING RITE, and it is a rewrite rather than a rename.
+     This was the Reinforcement Drop: it healed, it handed back a life,
+     and it refilled the magazine. The censer-lance has not had a
+     magazine since it became a heat weapon, so a third of what the
+     command did was already a no-op, and "+1 reinforcement" is a
+     consolation for dying rather than a reason to press anything.
+     A command costs a code entered under fire and a 74-second wait, so
+     what it buys has to change the next minute of the fight. This one
+     does: it puts the trooper back on their feet AND gilds the lance -
+     more damage out, and a barrel that takes far longer to complain -
+     for twenty seconds. It is the only command that is worth calling
+     when nothing has gone wrong yet.
+
+     The KEY stays `resupply`. It is what the doctrine fusions, the
+     command wheel, the save schema and four harnesses call this slot,
+     and none of them care what it delivers. */
   resupply: {
-    name: "Reinforcement Drop",
-    short: "Reinforce",
-    role: "Recover and rearm",
+    name: "Gilding Rite",
+    short: "Gilding",
+    role: "Consecrate the bearer",
     code: ["down", "down", "up", "right"],
     cooldown: 74,
     delay: 3.0,
     radius: 0,
     damage: 0,
-    colour: "#9df58c",
+    /* Gold, like everything else the Concord blesses. It was a sickly
+       green, which now means venom and nothing else. */
+    colour: "#ffd27a",
     heals: true,
-    reinforcements: 1,
+    reinforcements: 0,
+    boon: {
+      seconds: 20,
+      /* Chosen so the rite is felt on the shot rather than read on a
+         readout. 1.4 turns a two-shot Gleaner into one shot and a
+         Harrow from twelve rounds into nine, which is a difference the
+         player notices without being told. */
+      damage: 1.4,
+      // Heat is the lance's real limit, and halving its accumulation is
+      // what makes the window feel like permission to hold the trigger.
+      heat: 0.5,
+    },
   },
 };
+
+/* How long before a command lands its effect should be SEEN. Light and
+   the shell that carries it arrive before the ground answers; firing
+   both on the same frame is what made every stratagem read as one
+   generic thump. The authoritative damage still resolves at zero. */
+const IMPACT_LEAD = Object.freeze({
+  orbital: 0.26,
+  cluster: 0.62,
+  resupply: 0.30,
+});
 
 const RELAY_SITES = [
   { key: "censer", x: 655, z: 700, name: "Relay ALPHA - Censer Works" },
@@ -161,6 +200,12 @@ export function buildMission(ctx) {
     maxReinforcements: 5,
     banner: null,
     bannerFor: 0,
+    /* THE BOON. One timer and two multipliers, owned here because this
+       is where the command that grants it resolves and where the save
+       that has to remember it is written. Combat reads `damage` on the
+       authoritative damage path and weapons reads `heat` on the shot;
+       neither learns what a rite is. */
+    boon: { remaining: 0, seconds: 0, damage: 1, heat: 1, source: null },
   };
 
   const cooldowns = {};
@@ -652,6 +697,77 @@ export function buildMission(ctx) {
     return event;
   }
 
+  /**
+   * What the command looks like coming in.
+   *
+   * Kept separate from `resolve` on purpose: the picture and the damage
+   * are two different events at two different times, and the file that
+   * owns the timer is the only one that can space them.
+   */
+  function playArrival(shot) {
+    const vfx = ctx.vfx;
+    if (!vfx) return;
+    const spec = shot.spec;
+    if (shot.key === "orbital") vfx.orbitalLance?.(shot.x, shot.y, shot.z, spec.radius);
+    else if (shot.key === "cluster") vfx.clusterSalvo?.(shot.x, shot.y, shot.z, spec.radius);
+    else if (spec.heals) {
+      vfx.consecration?.(shot.x, shot.y, shot.z, 7,
+        Math.max(2, finite(spec.boon?.seconds, 12)));
+    }
+    bus.emit("arrival", {
+      id: shot.id, key: shot.key, x: shot.x, y: shot.y, z: shot.z,
+      radius: spec.radius, heals: !!spec.heals,
+    });
+  }
+
+  /**
+   * Light the blessing.
+   *
+   * Refreshed rather than stacked, and always to the FULL duration: two
+   * rites inside twenty seconds should not multiply into 1.96x damage,
+   * and a player who spends a 74-second cooldown to top up a fading
+   * boon should get the whole thing back.
+   */
+  function grantBoon(boon, source = "rite") {
+    if (!boon) return null;
+    const seconds = Math.max(0, finite(boon.seconds, 0));
+    if (seconds <= 0) return null;
+    state.boon.seconds = seconds;
+    state.boon.remaining = seconds;
+    state.boon.damage = Math.max(0.1, finite(boon.damage, 1));
+    state.boon.heat = clamp(finite(boon.heat, 1), 0, 4);
+    state.boon.source = String(source || "rite");
+    bus.emit("boon", boonRecord());
+    return boonRecord();
+  }
+
+  function boonRecord() {
+    const live = state.boon.remaining > 0;
+    return {
+      active: live,
+      remaining: Number(Math.max(0, state.boon.remaining).toFixed(3)),
+      seconds: state.boon.seconds,
+      damage: live ? state.boon.damage : 1,
+      heat: live ? state.boon.heat : 1,
+      source: live ? state.boon.source : null,
+    };
+  }
+
+  function updateBoon(dt) {
+    if (state.boon.remaining <= 0) return;
+    state.boon.remaining = Math.max(0, state.boon.remaining - dt);
+    const ps = ctx.player.state;
+    ctx.vfx?.gild?.(ps.x, ps.y, ps.z,
+      // Flares at the end, so the last two seconds are visibly the last
+      // two seconds rather than an effect that stops without warning.
+      state.boon.remaining < 2.2 ? 1.6 : 1);
+    if (state.boon.remaining <= 0) {
+      state.boon.source = null;
+      say("GILDING SPENT", 1.6);
+      bus.emit("boonEnded", boonRecord());
+    }
+  }
+
   function resolve(shot) {
     const resolution = ctx.progression?.modifyCommandResolution?.({
       shot: commandRecord(shot),
@@ -670,13 +786,19 @@ export function buildMission(ctx) {
     let impactTargets = [];
     if (spec.heals) {
       combat.player.hp = combat.player.maxHp;
+      /* The barrel is dumped and the pack is filled: the rite is a
+         reset of everything the trooper spends, which is what makes it
+         worth calling BEFORE a fight goes wrong as well as after. The
+         old ammunition refill is kept as the heat purge it became. */
       if (ctx.weapons && ctx.weapons.resupply) ctx.weapons.resupply();
+      ctx.jetpack?.restoreCharge?.(ctx.jetpack?.config?.maxFuel || 100, "gilding-rite");
       state.reinforcements = Math.min(
         state.maxReinforcements,
         state.reinforcements + (spec.reinforcements || 0)
       );
+      grantBoon(spec.boon, shot.key);
       if (shot.sanctuary) createSanctuary(shot, shot.sanctuary);
-      say("REINFORCEMENT DROP DELIVERED", 2.4);
+      say("GILDED", 2.4);
     } else {
       const explosion = combat.explode(shot.x, shot.y + 1, shot.z, spec.radius, spec.damage);
       impactTargets = Array.isArray(explosion?.targets) ? explosion.targets : [];
@@ -853,6 +975,7 @@ export function buildMission(ctx) {
     state.elapsed += dt;
     state.bannerFor = Math.max(0, state.bannerFor - dt);
     if (state.bannerFor <= 0) state.banner = null;
+    updateBoon(dt);
 
     for (const key of Object.keys(cooldowns)) {
       cooldowns[key] = Math.max(0, cooldowns[key] - dt);
@@ -873,6 +996,15 @@ export function buildMission(ctx) {
       shot.t -= dt;
       const pulse = 0.24 + Math.sin(state.elapsed * 9) * 0.16;
       shot.marker.beam.material.opacity = pulse;
+      /* The arrival, fired AHEAD of the resolution by its own lead so
+         the beam is already down when the ground goes, and the salvo's
+         first bomblets are walking in when the damage lands in the
+         middle of them. Guarded by a flag rather than by an exact
+         frame: a long frame must not skip it or fire it twice. */
+      if (!shot.effectPlayed && shot.t <= (IMPACT_LEAD[shot.key] || 0)) {
+        shot.effectPlayed = true;
+        playArrival(shot);
+      }
       if (shot.siren) {
         shot.siren.reacquireFor = Math.max(0, finite(shot.siren.reacquireFor) - dt);
         if (shot.siren.reacquireFor <= 0) {
@@ -1079,6 +1211,15 @@ export function buildMission(ctx) {
       })),
       cooldowns: Object.fromEntries(Object.entries(cooldowns)
         .map(([key, value]) => [key, Number(value.toFixed(3))])),
+      /* The blessing is an OUTCOME the player paid a cooldown for, so
+         it survives a load the way health and cooldowns do. Its visual
+         pulses are not saved - they are re-lit by the timer. */
+      boon: {
+        remaining: Number(Math.max(0, state.boon.remaining).toFixed(3)),
+        seconds: Number(Math.max(0, state.boon.seconds).toFixed(3)),
+        damage: Number(state.boon.damage.toFixed(4)),
+        heat: Number(state.boon.heat.toFixed(4)),
+      },
       /* Public field saves are gated while a command is inbound, so this is
          normally empty on disk. Keeping the authoritative flight data in
          snapshots also makes apply() rollback transactional if a later
@@ -1131,6 +1272,15 @@ export function buildMission(ctx) {
     state.countedDeath = false;
     state.banner = null;
     state.bannerFor = 0;
+    const savedBoon = saved.boon && typeof saved.boon === "object" ? saved.boon : null;
+    state.boon.seconds = Math.max(0, Math.min(600, Number(savedBoon?.seconds) || 0));
+    state.boon.remaining = Math.max(0, Math.min(state.boon.seconds,
+      Number(savedBoon?.remaining) || 0));
+    state.boon.damage = state.boon.remaining > 0
+      ? clamp(Number(savedBoon?.damage) || 1, 0.1, 4) : 1;
+    state.boon.heat = state.boon.remaining > 0
+      ? clamp(Number(savedBoon?.heat) || 1, 0, 4) : 1;
+    state.boon.source = state.boon.remaining > 0 ? "restored" : null;
 
     const relayState = new Map((Array.isArray(saved.relays) ? saved.relays : [])
       .filter((relay) => relay && typeof relay.key === "string")
@@ -1217,6 +1367,10 @@ export function buildMission(ctx) {
       mines: mines.map(fieldRecord),
     }),
     wheelOrder: STRATAGEM_WHEEL_ORDER,
+    /** The live blessing. Read on the damage path and on every shot, so
+     *  it returns a flat record rather than the mutable state object. */
+    boon: boonRecord,
+    grantBoon,
     announce: say,
     snapshot: snapshotState,
     restore,

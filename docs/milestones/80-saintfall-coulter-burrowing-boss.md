@@ -176,6 +176,74 @@ one of these was invisible in the code and obvious in a frame:
 
 ---
 
+## The three field commands, rebuilt (same milestone, later the same day)
+
+All three stratagems resolved to `vfx.blast()` — a hundred motes and a bang —
+so an orbital lance, a cluster salvo and a supply drop were **the same event
+with different cooldowns**. A command costs a directional code entered under
+fire and up to 95 seconds of cooldown; it has to be worth the four seconds of
+standing still.
+
+### A pooled ordnance rig (`vfx.js`)
+
+Four primitives — beam, ring, dome, ground mark — with greyscale gradients
+baked into their vertices and the colour set per use, so the whole rig is four
+geometries and every command draws from it. Plus a small scheduler (`later`),
+because the difference between these effects and the old one is almost entirely
+**timing**:
+
+- **Orbital Lance** — the beam arrives, the ground answers a beat later, the
+  pressure wave outruns its own debris, and the dust it lifted is still
+  climbing when the beam has gone. Leaves a fading scar and a dust column that
+  marks the map for ten seconds.
+- **Cluster Salvo** — the canister airbursts at 17m and eleven bomblets walk
+  outward across the radius over about a second, each with its own flash, ring
+  and dust. The name promised submunitions; now it delivers them.
+- **Gilding Rite** — no debris and no scorch, because it has to read as HELP at
+  a glance: a gold column, a ring that closes *inward* while everything else in
+  the game expands, and a pulse every 2.4s for as long as the blessing lasts.
+
+The damage is untouched and still resolves in one authoritative call. Only the
+picture moved, and it now leads the damage by a per-command `IMPACT_LEAD`.
+
+### The Reinforcement Drop became the Gilding Rite
+
+The lance has not had a magazine since it became a heat weapon, so a third of
+what that command did was already a no-op, and "+1 reinforcement" is a
+consolation for dying rather than a reason to press anything. It now:
+
+- restores vitality **and** reliquary charge and purges the barrel, and
+- **gilds the lance for 20 seconds: ×1.4 damage out, ×0.5 heat in.**
+
+It is the only command worth calling when nothing has gone wrong yet. The boon
+is one timer and two multipliers owned by mission.js; combat reads `damage` on
+the authoritative damage path and weapons reads `heat` on the shot, and neither
+learns what a rite is. The HUD gets a countdown that pulses in its last three
+seconds. The key stays `resupply` — it is what the doctrine fusions, the wheel,
+the save schema and four harnesses call this slot.
+
+### Bugs the frames earned
+
+- **A torus scaled uniformly grows its own cross-section.** The lance's
+  shockwave became a twelve-metre translucent wall standing on the sand. The
+  band now keeps a near-constant height while only the circle travels.
+- **The dust dome read as a glass dome** at half opacity, and was tinted with
+  the weapon's colour. Dust is sand, and is read from what it dims.
+- **On a normally-blended material a vertex colour of zero is black, not
+  transparent.** The scorch's "fade out at the rim" was painting the rim the
+  darkest part of it — a drawn ring. Moved to vertex alpha (a four-component
+  colour attribute), which is what three.js reads for `USE_COLOR_ALPHA`.
+- **A scheduled sound outlived its own voice.** `voice()` disconnects on a
+  wall-clock timer measured from now, so the salvo's seven delayed reports were
+  torn down before they started — silence, with no error attached.
+
+`scripts/saintfall-command-shots.mjs`: 19 assertions and six frames, including
+that the lance's beam precedes its ring, that the salvo produces eleven
+distinct detonations over 1.3 seconds, and that a gilded shot deals 364 where
+an unblessed one deals 260 — and 260 again the moment it lapses.
+
+---
+
 ## Files
 
 ```
@@ -190,4 +258,7 @@ assets/js/saintfall/{vfx,audio,hud,save,qa,main,boot}.js
 assets/css/saintfall.css                 the toxin vignette
 scripts/saintfall-coulter-fight.mjs      34 assertions
 scripts/saintfall-coulter-shots.mjs      12 review frames
+assets/js/saintfall/mission.js           the Gilding Rite, the boon, IMPACT_LEAD
+assets/js/saintfall/vfx.js               the ordnance rig and the three commands
+scripts/saintfall-command-shots.mjs      19 assertions, 6 review frames
 ```

@@ -897,7 +897,13 @@ export function buildWeapons(ctx) {
     const spec = carry.record.spec;
     const heatBefore = carry.heat;
     const overheatBefore = carry.overheated;
-    const heatAdded = addHeat(spec.heatPerShot || 0, { reason: "fire" });
+    /* A gilded lance runs cool. The multiplier is read here rather than
+       baked into the weapon spec because it is a property of the
+       BEARER, not of the pattern - the same lance overheats normally
+       thirty seconds later. */
+    const boon = ctx.mission?.boon?.();
+    const heatScale = boon?.active ? Math.max(0, Number(boon.heat) || 1) : 1;
+    const heatAdded = addHeat((spec.heatPerShot || 0) * heatScale, { reason: "fire" });
     carry.sinceShot = 0;
     // Latches AFTER the shot, so the round that fills the gauge
     // still leaves the barrel. Stopping it a shot early makes the

@@ -3255,6 +3255,32 @@ export function installQa(ctx, api) {
        which is the difference between testing the encounter and
        testing whether a boss eventually appears.
        ------------------------------------------------------------ */
+    /** The Gilding Rite's live blessing, and a way to light it without
+     *  waiting out a 74-second cooldown and a three-second flight. */
+    boonState: () => (api.mission || ctx.mission)?.boon?.() || null,
+    grantBoonForQA(seconds = 20, damage = 1.4, heat = 0.5) {
+      if (!ctx.qa) return null;
+      return (api.mission || ctx.mission)?.grantBoon?.(
+        { seconds, damage, heat }, "qa") || null;
+    },
+    /** Every ordnance mesh currently on screen, by kind. The commands
+     *  are pooled geometry, so "did the salvo draw anything" is a
+     *  question with an exact answer. */
+    ordnanceState() {
+      const rig = api.vfx?.group?.getObjectByName?.("ordnance-vfx");
+      if (!rig) return null;
+      const out = { beams: 0, rings: 0, domes: 0, scorches: 0, visible: 0 };
+      for (const child of rig.children) {
+        if (!child.visible) continue;
+        out.visible += 1;
+        const kind = child.material?.name === "sf-scorch" ? "scorches"
+          : child.geometry?.type === "CylinderGeometry" ? "beams"
+            : child.geometry?.type === "TorusGeometry" ? "rings"
+              : child.geometry?.type === "SphereGeometry" ? "domes" : null;
+        if (kind) out[kind] += 1;
+      }
+      return out;
+    },
     coulterState: () => (api.coulter || ctx.coulter)?.status?.() || null,
     /** Every live burrower's chain, in world space. The hit volumes are
      *  built off exactly these points, so a test can assert that what it

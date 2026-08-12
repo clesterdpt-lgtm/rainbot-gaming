@@ -569,6 +569,40 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
 .sf-hud__hurt.is-hit { animation: sf-hurt .52s ease-out 1; }
 @keyframes sf-hurt { from { opacity: 1; } to { opacity: 0; } }
 
+/* THE GILDING. A held state like the venom vignette, and deliberately
+   the same shape as the boost/shield rows above it so the vitals block
+   reads as one column of "what is true about me right now". Absent
+   entirely when it is not lit: a permanent empty slot for a
+   twenty-second buff is twenty seconds of information and forty of
+   furniture. */
+.sf-hud__boon {
+  display: none;
+  margin-top: .4rem;
+  padding: .28rem .5rem;
+  border: 1px solid rgba(255, 210, 122, .5);
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(120, 78, 20, .42), rgba(60, 38, 10, .22));
+  font: 600 11px/1.1 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .09em;
+  color: #ffe7b4;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .9);
+}
+.sf-hud__boon[data-state="on"] { display: block; }
+.sf-hud__boon span { opacity: .78; }
+.sf-hud__boon strong { float: right; font-weight: 700; }
+.sf-hud__boon i {
+  display: block; margin-top: .26rem; height: 2px;
+  background: rgba(255, 224, 165, .18);
+}
+.sf-hud__boon em { display: block; height: 100%; background: #ffd27a; }
+/* The last few seconds pulse. A bar that simply runs out gives the
+   player no moment to decide whether to spend what is left. */
+.sf-hud__boon[data-level="fading"] { animation: sf-boon 0.9s ease-in-out infinite; }
+@keyframes sf-boon {
+  0%, 100% { border-color: rgba(255, 210, 122, .5); }
+  50% { border-color: rgba(255, 236, 190, .95); }
+}
+
 /* VENOM. Held rather than flashed - it is a condition, not an event -
    so the opacity is driven from the toxin level in JS and only the
    creep of the inner edge is animated here. Green, because green means

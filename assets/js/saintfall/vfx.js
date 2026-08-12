@@ -1674,41 +1674,9 @@ export function buildVfx(ctx, world) {
     root.frustumCulled = false;
     group.add(root);
 
-    /* THE ROOT NEVER MOVES.
-       The glide wake rides the trooper and the slam is placed in world
-       coordinates, and those two cannot share a transform: parenting
-       both to a root that the glide dragged around put the slam's
-       rings at the player's position PLUS the player's position, which
-       for most of this map is somewhere off the edge of it. The glide
-       gets its own carrier; everything else is world-space. */
-    const glideRig = new THREE.Group();
-    glideRig.name = "glide-rig";
-    glideRig.frustumCulled = false;
-    root.add(glideRig);
-
-    /* ---- the glide wake ----
-       A flat delta laid on the ground BEHIND the trooper, not a cone
-       around them: the read the player wants is the line they have
-       just carved, and a cone centred on the body only says "there is
-       a light on me". */
-    const wakeGeo = new THREE.PlaneGeometry(1.7, 7.0, 1, 4);
-    wakeGeo.rotateX(-Math.PI / 2);
-    wakeGeo.translate(0, 0, -3.5);
-    /* These tints are BRIGHTNESSES. The material is additive, so a
-       vertex colour of 1.0 over any appreciable area does not read as
-       gold - it reads as a white card laid on the desert. Everything
-       here is deliberately well under one, and the shape does the
-       work instead. */
-    tint(wakeGeo, [0.62, 0.46, 0.17], [0.02, 0.01, 0.0], "z", -7, 0);
-    const wake = new THREE.Mesh(wakeGeo, mat);
-    wake.name = "glide-wake";
-    wake.visible = false;
-    wake.renderOrder = 5;
-    glideRig.add(wake);
-
-    /* Propulsion belongs to the reliquary on the back. The ground wake
-       remains here to describe the line carved through the sand, but
-       the former heel cones made the boost look foot-powered. */
+    /* THE ROOT NEVER MOVES. All impulse geometry is world-space.
+       Ground-boost propulsion belongs exclusively to the reliquary
+       pack, so this rig contains only the Penitent's Fall effects. */
 
     /* ---- the fall ----
        A column above the trooper while the charge builds, then rings
@@ -1753,35 +1721,11 @@ export function buildVfx(ctx, world) {
     root.add(dome);
 
     const live = {
-      glide: 0, glideSpeed: 0, glideAttack: false,
       charge: 0, chargeSeen: 0,
       burst: -1, burstRadius: 8, burstX: 0, burstY: 0, burstZ: 0,
     };
-    return { root, glideRig, mat, wake, column, spike, rings, dome, live };
+    return { root, mat, column, spike, rings, dome, live };
   })();
-
-  /** Ignition: the kick that starts a glide. */
-  function boostIgnite(x, y, z, dx, dz) {
-    impacts.emitDirected(x - dx * 0.5, y + 0.3, z - dz * 0.5,
-      22, -dx, 0.35, -dz, 9.5, 0.85, 2.0);
-    flashes.emit(x - dx * 0.4, y + 0.5, z - dz * 0.4, 1.15, 0.09, 2.0);
-  }
-
-  /** Called every frame a glide is running. */
-  function boostTrail(x, y, z, dx, dz, speed, attack) {
-    const L = impulse.live;
-    L.glide = 0.12;
-    L.glideSpeed = speed;
-    L.glideAttack = !!attack;
-    impulse.glideRig.position.set(x, y, z);
-    impulse.wake.rotation.y = Math.atan2(dx, dz);
-    // Sand torn off the line, thrown backward and outward.
-    if (Math.random() < 0.75) {
-      impacts.emitDirected(x - dx * 0.6, y + 0.12, z - dz * 0.6,
-        3, -dx + (Math.random() - 0.5) * 0.8, 0.5, -dz + (Math.random() - 0.5) * 0.8,
-        5.5, 0.72, 0.35);
-    }
-  }
 
   /** Something was rammed. */
   function boostImpact(x, y, z, dx, dz, heavy) {
@@ -1842,18 +1786,6 @@ export function buildVfx(ctx, world) {
   /** Drives both rigs. Called once a frame from `update`. */
   function updateImpulse(dt) {
     const L = impulse.live;
-    const glideOn = L.glide > 0;
-    L.glide = Math.max(0, L.glide - dt);
-    const showGlide = glideOn && L.glide > 0;
-    if (impulse.wake.visible !== showGlide) {
-      impulse.wake.visible = showGlide;
-    }
-    if (showGlide) {
-      const s = clamp01(L.glideSpeed / 22);
-      impulse.wake.scale.set(0.8 + s * 0.5, 1, 0.55 + s * 0.95);
-      impulse.wake.position.y = 0.06;
-    }
-
     const chargeOn = L.charge > 0;
     L.charge = Math.max(0, L.charge - dt);
     const showCharge = chargeOn && L.charge > 0;
@@ -1904,6 +1836,464 @@ export function buildVfx(ctx, world) {
     /* ONE opacity for the whole rig, so a glide that ends mid-slam
        cannot leave the dome at a brightness the glide chose. */
     impulse.mat.opacity = 1;
+  }
+
+  /* ============================================================
+     ORDNANCE
+
+     What a command actually looks like when it arrives.
+
+     All three used to resolve to `blast()` - a hundred motes and a
+     bang - which meant the orbital lance, the cluster salvo and the
+     supply drop were the SAME EVENT with different cooldowns. A
+     stratagem is the loudest thing the player owns and the payoff for
+     a code entered under pressure; it has to be worth the four seconds
+     of standing still.
+
+     Every piece here is pooled geometry rather than particles, for the
+     reason the glide and the fall already established: a puff has no
+     radius and no direction, and both of those are the whole point of
+     an area weapon. Particles are still used, but as the DEBRIS on top
+     of a shape rather than as the shape.
+
+     One geometry per primitive, greyscale gradients baked into the
+     vertices, and the colour set per use from the material - so a beam
+     is a beam whether it is the lance's cyan or the rite's gold, and
+     the whole rig is four geometries.
+     ============================================================ */
+  const SCORCH_RINGS_N = 3;
+  const SCORCH_SIDES_N = 26;
+
+  const ordnance = (() => {
+    const root = new THREE.Group();
+    root.name = "ordnance-vfx";
+    root.frustumCulled = false;
+    group.add(root);
+
+    /* A greyscale ramp along one axis, multiplied by the material's own
+       colour at spawn. Baking the colour in would need one geometry per
+       stratagem; baking the GRADIENT costs nothing and leaves the hue
+       free. */
+    const ramp = (geo, axis = "y", lo = 0, hi = 1, floor = 0.04) => {
+      const pos = geo.attributes.position;
+      const colours = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i += 1) {
+        const v = axis === "y" ? pos.getY(i) : pos.getZ(i);
+        const t = clamp01((v - lo) / Math.max(1e-4, hi - lo));
+        const f = floor + (1 - floor) * (1 - t * t);
+        colours[i * 3] = f;
+        colours[i * 3 + 1] = f;
+        colours[i * 3 + 2] = f;
+      }
+      geo.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+      return geo;
+    };
+
+    /* Per-mesh materials, because these fade INDEPENDENTLY - a salvo
+       lands eleven times over a second and every pop is at its own
+       opacity. They all share one program: `patchBasicMaterial` keys
+       its cache on the fade and blend mode, which are identical. */
+    const additive = () => {
+      const mat = new THREE.MeshBasicMaterial({
+        vertexColors: true, transparent: true, opacity: 0,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide, toneMapped: true,
+      });
+      mat.name = "sf-ordnance";
+      patchBasicMaterial(mat, atmos, 1.0, true);
+      return mat;
+    };
+
+    // A beam from orbit: open cylinder, hot at the base, unit height.
+    const beamGeo = new THREE.CylinderGeometry(0.62, 1, 1, 18, 1, true);
+    beamGeo.translate(0, 0.5, 0);
+    ramp(beamGeo, "y", 0, 1, 0.02);
+    // A flat pressure ring, unit radius.
+    const ringGeo = new THREE.TorusGeometry(1, 0.030, 6, 64);
+    ringGeo.rotateX(Math.PI / 2);
+    ramp(ringGeo, "y", -0.06, 0.06, 0.35);
+    // The dust hemisphere the ring leaves behind it.
+    const domeGeo = new THREE.SphereGeometry(1, 24, 10, 0, TAU, 0, Math.PI * 0.5);
+    ramp(domeGeo, "y", 0, 1, 0.05);
+
+    const make = (geo, count, order) => {
+      const out = [];
+      for (let i = 0; i < count; i += 1) {
+        const mesh = new THREE.Mesh(geo, additive());
+        mesh.frustumCulled = false;
+        mesh.visible = false;
+        mesh.renderOrder = order;
+        root.add(mesh);
+        out.push({ mesh, life: 0, span: 1, kind: null });
+      }
+      return out;
+    };
+
+    /* THE SCORCH is the only part that is not additive, and it has to
+       be: what a lance leaves is a hole that is DARKER than the sand,
+       and additive blending cannot subtract. The Glass Scar in the
+       north-east is what a big one looks like a century later. */
+    const scorches = [];
+    for (let i = 0; i < 5; i += 1) {
+      const geo = new THREE.BufferGeometry();
+      const verts = 1 + SCORCH_RINGS_N * SCORCH_SIDES_N;
+      const position = new Float32Array(verts * 3);
+      /* FOUR components, not three. This is the one surface here that
+         is not additive, and on a normally-blended material a vertex
+         colour of zero is BLACK rather than absent - so a ramp that was
+         meant to fade the mark out at its rim was painting the rim the
+         darkest part of it, which is exactly backwards and reads as a
+         drawn ring. Three.js switches to vColor.a the moment the
+         attribute has four components, so the falloff belongs there. */
+      const colour = new Float32Array(verts * 4);
+      const index = [];
+      for (let s = 0; s < SCORCH_SIDES_N; s += 1) {
+        const n = (s + 1) % SCORCH_SIDES_N;
+        index.push(0, 1 + s, 1 + n);
+        for (let r = 0; r < SCORCH_RINGS_N - 1; r += 1) {
+          const a0 = 1 + r * SCORCH_SIDES_N + s;
+          const a1 = 1 + r * SCORCH_SIDES_N + n;
+          const b0 = 1 + (r + 1) * SCORCH_SIDES_N + s;
+          const b1 = 1 + (r + 1) * SCORCH_SIDES_N + n;
+          index.push(a0, b0, b1, a0, b1, a1);
+        }
+      }
+      // Opaque in the middle, gone at the rim, so it has no edge.
+      colour[0] = colour[1] = colour[2] = colour[3] = 1;
+      for (let r = 0; r < SCORCH_RINGS_N; r += 1) {
+        const f = (1 - (r + 1) / SCORCH_RINGS_N) ** 0.8;
+        for (let s = 0; s < SCORCH_SIDES_N; s += 1) {
+          const k = (1 + r * SCORCH_SIDES_N + s) * 4;
+          colour[k] = 1; colour[k + 1] = 1; colour[k + 2] = 1;
+          colour[k + 3] = f;
+        }
+      }
+      geo.setAttribute("position", new THREE.BufferAttribute(position, 3));
+      geo.setAttribute("color", new THREE.BufferAttribute(colour, 4));
+      geo.setIndex(index);
+      geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 80);
+      const mat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color("#140a06"),
+        vertexColors: true, transparent: true, opacity: 0,
+        depthWrite: false, side: THREE.DoubleSide, toneMapped: true,
+      });
+      mat.name = "sf-scorch";
+      patchBasicMaterial(mat, atmos, 0.5, false);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.frustumCulled = false;
+      mesh.visible = false;
+      mesh.renderOrder = 4;
+      root.add(mesh);
+      scorches.push({ mesh, position, life: 0, span: 1 });
+    }
+
+    return {
+      root,
+      beams: make(beamGeo, 3, 8),
+      rings: make(ringGeo, 12, 7),
+      domes: make(domeGeo, 4, 6),
+      scorches,
+      // Deferred work: a salvo is eleven detonations spread over a
+      // second, and a lance is four beats over half of one.
+      queue: [],
+    };
+  })();
+
+  /** Oldest-first recycling, exactly like the impact pool: dropping the
+   *  stalest effect is invisible, and growing mid-strike is not. */
+  function takeFx(pool) {
+    let best = pool[0];
+    for (const slot of pool) {
+      if (slot.life <= 0) return slot;
+      if (slot.life / slot.span < best.life / best.span) best = slot;
+    }
+    return best;
+  }
+
+  /** Run `fn` in `seconds`. Driven off the same clock as everything
+   *  else here, so a paused frame does not fire a salvo early. */
+  function later(seconds, fn) {
+    ordnance.queue.push({ at: atmos.elapsed + Math.max(0, seconds), fn });
+  }
+
+  function beamFx(x, y, z, radius, height, seconds, colour) {
+    const slot = takeFx(ordnance.beams);
+    slot.life = seconds;
+    slot.span = seconds;
+    slot.radius = radius;
+    slot.height = height;
+    slot.mesh.position.set(x, y, z);
+    slot.mesh.material.color.set(colour);
+    slot.mesh.visible = true;
+    return slot;
+  }
+
+  function ringFx(x, y, z, from, to, seconds, colour, thickness = 1) {
+    const slot = takeFx(ordnance.rings);
+    slot.life = seconds;
+    slot.span = seconds;
+    slot.from = from;
+    slot.to = to;
+    slot.thickness = thickness;
+    slot.mesh.position.set(x, y, z);
+    slot.mesh.material.color.set(colour);
+    slot.mesh.visible = true;
+    return slot;
+  }
+
+  function domeFx(x, y, z, radius, seconds, colour) {
+    const slot = takeFx(ordnance.domes);
+    slot.life = seconds;
+    slot.span = seconds;
+    slot.radius = radius;
+    slot.mesh.position.set(x, y, z);
+    slot.mesh.material.color.set(colour);
+    slot.mesh.visible = true;
+    return slot;
+  }
+
+  /** A mark on the ground, with every vertex put on the sand under it.
+   *  A flat disc laid across a dune is half buried and half floating. */
+  function scorchFx(x, z, radius, seconds, colour, strength = 0.42) {
+    let slot = ordnance.scorches[0];
+    for (const item of ordnance.scorches) {
+      if (item.life <= 0) { slot = item; break; }
+      if (item.life / item.span < slot.life / slot.span) slot = item;
+    }
+    const y = terrain.heightAt(x, z);
+    const p = slot.position;
+    p[0] = 0; p[1] = 0.06; p[2] = 0;
+    for (let r = 0; r < SCORCH_RINGS_N; r += 1) {
+      const rr = radius * ((r + 1) / SCORCH_RINGS_N);
+      for (let s = 0; s < SCORCH_SIDES_N; s += 1) {
+        const a = (s / SCORCH_SIDES_N) * TAU + r * 0.19;
+        const wob = 1 - 0.16 * Math.sin(a * 3 + r * 2.1) - 0.08 * Math.cos(a * 5 + r);
+        const px = Math.cos(a) * rr * wob;
+        const pz = Math.sin(a) * rr * wob;
+        const i = (1 + r * SCORCH_SIDES_N + s) * 3;
+        p[i] = px;
+        p[i + 1] = terrain.heightAt(x + px, z + pz) - y + 0.06;
+        p[i + 2] = pz;
+      }
+    }
+    slot.mesh.position.set(x, y, z);
+    slot.mesh.geometry.attributes.position.needsUpdate = true;
+    slot.mesh.material.color.set(colour);
+    slot.mesh.visible = true;
+    slot.life = seconds;
+    slot.span = seconds;
+    slot.strength = strength;
+    return slot;
+  }
+
+  function updateOrdnance(dt) {
+    const now = atmos.elapsed;
+    for (let i = ordnance.queue.length - 1; i >= 0; i -= 1) {
+      if (ordnance.queue[i].at > now) continue;
+      const [item] = ordnance.queue.splice(i, 1);
+      item.fn();
+    }
+
+    for (const slot of ordnance.beams) {
+      if (slot.life <= 0) continue;
+      slot.life -= dt;
+      const p = 1 - clamp01(slot.life / slot.span);
+      if (slot.life <= 0) { slot.mesh.visible = false; slot.mesh.material.opacity = 0; continue; }
+      /* Flares open, then collapses to a thread. The collapse is what
+         makes it read as something that STRUCK rather than as a light
+         that was switched off: the column narrows to nothing while the
+         ground effects it caused are still expanding. */
+      const width = p < 0.10
+        ? lerp(0.42, 1, p / 0.10)
+        : lerp(1, 0.06, ((p - 0.10) / 0.90) ** 0.65);
+      slot.mesh.scale.set(slot.radius * width, slot.height, slot.radius * width);
+      slot.mesh.material.opacity = p < 0.06 ? 1 : (1 - p) ** 1.35;
+    }
+
+    for (const slot of ordnance.rings) {
+      if (slot.life <= 0) continue;
+      slot.life -= dt;
+      const p = 1 - clamp01(slot.life / slot.span);
+      if (slot.life <= 0) { slot.mesh.visible = false; slot.mesh.material.opacity = 0; continue; }
+      // Fast out of the gate and decelerating, which is how a pressure
+      // wave actually travels and the opposite of a linear tween.
+      const eased = 1 - (1 - p) ** 2.2;
+      const r = lerp(slot.from, slot.to, eased);
+      /* THE TUBE MUST NOT SCALE WITH THE RADIUS. A torus scaled
+         uniformly is a ring whose cross-section grows as it expands,
+         and at a lance's twenty-four metres that turned a 5cm band into
+         a twelve-metre vertical ribbon standing on the sand - which
+         reviewed as a translucent wall rather than as a pressure wave.
+         The band keeps a near-constant height and only the circle
+         travels. */
+      slot.mesh.scale.set(r, (0.9 + r * 0.05) * slot.thickness, r);
+      slot.mesh.material.opacity = (1 - p) ** 1.9 * 0.62;
+    }
+
+    for (const slot of ordnance.domes) {
+      if (slot.life <= 0) continue;
+      slot.life -= dt;
+      const p = 1 - clamp01(slot.life / slot.span);
+      if (slot.life <= 0) { slot.mesh.visible = false; slot.mesh.material.opacity = 0; continue; }
+      const eased = 1 - (1 - p) ** 2.6;
+      slot.mesh.scale.set(slot.radius * eased, slot.radius * eased * 0.55,
+        slot.radius * eased);
+      /* Barely there. This is the sand a blast lifts, and at half
+         opacity it rendered as a smooth glass dome sitting over the
+         crater - a hard-edged solid where the whole point is a soft
+         one. Dust is read from what it dims, not from its own surface. */
+      slot.mesh.material.opacity = (1 - p) ** 2.2 * 0.15;
+    }
+
+    for (const slot of ordnance.scorches) {
+      if (slot.life <= 0) continue;
+      slot.life -= dt;
+      const p = 1 - clamp01(slot.life / slot.span);
+      if (slot.life <= 0) { slot.mesh.visible = false; slot.mesh.material.opacity = 0; continue; }
+      /* Burned in fast, cooling slowly - sand fills a hole from the rim.
+         Deliberately well under half: a near-opaque near-black disc
+         reads as a hole cut through the terrain rather than as scorched
+         ground, and eleven of them turned a salvo's aftermath into a
+         field of ink blots. */
+      slot.mesh.material.opacity = (p < 0.05 ? p / 0.05 : (1 - p) ** 0.7)
+        * (slot.strength ?? 0.42);
+    }
+  }
+
+  /* ------------------------------------------------------------------
+     THE THREE COMMANDS
+     ------------------------------------------------------------------ */
+
+  const LANCE_HOT = "#bfe9ff";
+  // What a blast throws up is SAND. Tinting the dome with the
+  // weapon's own colour made the lance look like it left a
+  // force field behind it.
+  const DUST = "#d8a978";
+  const LANCE_COLD = "#2f9bd6";
+  const CLUSTER_HOT = "#ffd489";
+  const RITE_HOT = "#ffd98a";
+
+  /**
+   * ORBITAL LANCE. One beam, and everything the beam did.
+   *
+   * The order is the whole effect: light arrives first, the ground
+   * answers a beat later, and the dust it lifted is still spreading
+   * when the beam has gone. Fire them simultaneously and it reads as a
+   * firework - a thing that happened all at once, in one place.
+   */
+  function orbitalLance(x, y, z, radius = 26) {
+    const ground = terrain.heightAt(x, z);
+    // The strike itself: 400m of it, so the top is out of frame from
+    // any camera at head height and the player never sees it end.
+    beamFx(x, ground - 2, z, 2.6, 400, 0.62, LANCE_HOT);
+    beamFx(x, ground - 2, z, 5.4, 320, 0.90, LANCE_COLD);
+    flashes.emit(x, ground + 1.6, z, 5.4, 0.24, 1.0);
+    impacts.emit(x, ground + 0.4, z, 70, radius * 0.42, 3.2, 0.9);
+
+    later(0.06, () => {
+      ringFx(x, ground + 0.35, z, 1.5, radius * 0.92, 0.85, LANCE_HOT, 1.0);
+      domeFx(x, ground, z, radius * 0.78, 1.35, DUST);
+      impacts.emit(x, ground + 0.3, z, 60, radius * 0.30, 5.6, 0.16);
+    });
+    // The second wave, wider and slower: an air blast outruns its own
+    // debris, and two rings at different speeds are what says so.
+    later(0.20, () => {
+      ringFx(x, ground + 0.55, z, radius * 0.3, radius * 1.32, 1.25, LANCE_COLD, 0.7);
+    });
+    later(0.34, () => {
+      scorchFx(x, z, radius * 0.55, 9, "#2b1a12", 0.62);
+      impacts.emit(x, ground + 0.8, z, 34, radius * 0.5, 2.2, 0.10);
+    });
+    /* The column of dust that stands afterwards. It is the part a
+       player two districts away actually sees, and the reason a lance
+       marks the map for ten seconds rather than for one. */
+    for (let i = 1; i <= 7; i += 1) {
+      later(0.4 + i * 0.34, () => {
+        impacts.emitDirected(x + (Math.random() - 0.5) * radius * 0.45, ground + 0.5,
+          z + (Math.random() - 0.5) * radius * 0.45, 20, 0, 1, 0,
+          3.4, 2.6, 0.30);
+      });
+    }
+  }
+
+  /**
+   * CLUSTER SALVO. A canister, and then eleven of them.
+   *
+   * The name promised submunitions and the effect delivered one large
+   * bang, which is the same event as the lance at a different size. The
+   * canister now airbursts overhead and the bomblets walk across the
+   * radius over about a second - so the salvo is read as an AREA being
+   * covered rather than as a point being hit, which is also exactly the
+   * difference the player is choosing between when they pick it.
+   */
+  function clusterSalvo(x, y, z, radius = 17) {
+    const ground = terrain.heightAt(x, z);
+    const burstY = ground + 17;
+    flashes.emit(x, burstY, z, 1.5, 0.16, 0.95);
+    impacts.emit(x, burstY, z, 26, 7.5, 1.05, 0.55);
+    ringFx(x, burstY, z, 0.6, 7.5, 0.42, CLUSTER_HOT, 1.6);
+
+    const count = 11;
+    for (let i = 0; i < count; i += 1) {
+      // Square-rooted radius, or every bomblet lands in the middle:
+      // uniform r over a disc puts most of the area near the rim.
+      const angle = i * 2.3999632297 + Math.random() * 0.4;
+      const dist = Math.sqrt((i + 0.35) / count) * radius * 0.94;
+      const bx = x + Math.cos(angle) * dist;
+      const bz = z + Math.sin(angle) * dist;
+      // Rippling outward rather than in a random order, so the carpet
+      // has a direction and the player can see where it is going next.
+      later(0.22 + (dist / radius) * 0.62 + Math.random() * 0.07, () => {
+        const by = terrain.heightAt(bx, bz);
+        flashes.emit(bx, by + 0.9, bz, 1.05, 0.13, 0.95);
+        impacts.emit(bx, by + 0.35, bz, 22, 4.2, 1.25, 0.75);
+        impacts.emit(bx, by + 0.2, bz, 14, 2.6, 2.4, 0.14);
+        ringFx(bx, by + 0.28, bz, 0.5, 5.2, 0.46, CLUSTER_HOT, 0.9);
+        if (i % 3 === 0) domeFx(bx, by, bz, 5.4, 0.8, DUST);
+        if (i % 4 === 0) scorchFx(bx, bz, 3.1, 6, "#33200f", 0.30);
+      });
+    }
+  }
+
+  /**
+   * THE GILDING RITE. A consecration, not an explosion.
+   *
+   * It has to be legible as HELP at a glance - the player calls it
+   * while something is chewing on them - so it is the one command with
+   * no debris and no scorch: a gold column, a ring that closes INWARD
+   * rather than expanding, and a field that stays lit for as long as
+   * the blessing lasts.
+   */
+  function consecration(x, y, z, radius = 7, seconds = 20) {
+    const ground = terrain.heightAt(x, z);
+    beamFx(x, ground - 1, z, 4.2, 34, 1.5, RITE_HOT);
+    beamFx(x, ground - 1, z, 1.5, 26, 1.2, "#fff3d2");
+    flashes.emit(x, ground + 2.2, z, 3.2, 0.3, 2.0);
+    // Inward, and slowly: everything else in this file expands.
+    ringFx(x, ground + 0.4, z, radius * 1.9, radius * 0.55, 1.5, RITE_HOT, 1.2);
+    domeFx(x, ground, z, radius, 1.6, RITE_HOT);
+    for (let i = 0; i < 5; i += 1) {
+      later(i * 0.16, () => {
+        impacts.emitDirected(x, ground + 0.4, z, 14, 0, 1, 0, 5.5, 1.1, 2.0);
+      });
+    }
+    const pulses = Math.max(1, Math.round(seconds / 2.4));
+    for (let i = 1; i <= pulses; i += 1) {
+      later(i * 2.4, () => {
+        ringFx(x, terrain.heightAt(x, z) + 0.3, z, radius * 0.4, radius,
+          1.1, RITE_HOT, 0.55);
+      });
+    }
+  }
+
+  /** The blessing, on the body. Called every frame it is live, so it
+   *  stays cheap: a few gold ions rising off the trooper. */
+  function gild(x, y, z, strength = 1) {
+    if (Math.random() > 0.45 * clamp01(strength)) return;
+    const a = Math.random() * Math.PI * 2;
+    const r = 0.35 + Math.random() * 0.45;
+    impacts.emitDirected(x + Math.cos(a) * r, y + 0.3 + Math.random() * 1.5,
+      z + Math.sin(a) * r, 1, 0, 1, 0, 1.4, 0.55, 2.0);
   }
 
   /** An impact. `wall` softens it; `energy` keeps melee and debris warm. */
@@ -2015,10 +2405,12 @@ export function buildVfx(ctx, world) {
     sandSpray,
     venomBurst,
     venomGas,
+    orbitalLance,
+    clusterSalvo,
+    consecration,
+    gild,
     tracer,
     muzzle,
-    boostIgnite,
-    boostTrail,
     boostImpact,
     slamCharge,
     slamTrail,
@@ -2043,7 +2435,9 @@ export function buildVfx(ctx, world) {
       grit.mat.uniforms.uAnchor.value.set(anchor.x, ground + 2.2, anchor.z);
 
       const t = atmos.elapsed;
-      updateImpulse(Math.max(0, Math.min(0.1, dt)));
+      const step = Math.max(0, Math.min(0.1, dt));
+      updateImpulse(step);
+      updateOrdnance(step);
 
       for (const f of flicker) {
         const spec = f.light.userData.spec;

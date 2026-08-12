@@ -521,6 +521,19 @@ export function buildSaveSystem(ctx, options = {}) {
       if (!isFiniteNumber(mission.cooldowns[key]) || mission.cooldowns[key] < 0
         || mission.cooldowns[key] > spec.cooldown) return false;
     }
+    /* Optional, so saves written before the Gilding Rite still load.
+       The multipliers are bounded rather than merely finite: this field
+       is the one place in the schema where a hand-edited number turns
+       into damage output, and "1e9" is a valid float. */
+    if (mission.boon !== null && mission.boon !== undefined) {
+      const boon = mission.boon;
+      if (!isRecord(boon)
+        || ![boon.remaining, boon.seconds, boon.damage, boon.heat].every(isFiniteNumber)
+        || boon.remaining < 0 || boon.seconds < 0 || boon.seconds > 600
+        || boon.remaining > boon.seconds
+        || boon.damage < 0.1 || boon.damage > 4
+        || boon.heat < 0 || boon.heat > 4) return false;
+    }
     if (!Array.isArray(mission.pending) || (mission.pending.length && !allowPending)) return false;
     for (const shot of mission.pending) {
       const spec = ctx.mission.stratagems?.[shot?.key];

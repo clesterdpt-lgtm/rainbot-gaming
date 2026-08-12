@@ -608,7 +608,7 @@ export const DOCTRINE_ORDERS = deepFreeze([
         ranks: [
           {
             rank: 1,
-            description: "Reinforcement Drop leaves a 10-second sanctuary that removes 5% heat and restores 3 Reliquary charge per second while grounded inside; it draws enemies within 18 metres.",
+            description: "The Gilding Rite leaves a 10-second sanctuary that removes 5% heat and restores 3 Reliquary charge per second while grounded inside; it draws enemies within 18 metres.",
           },
           {
             rank: 2,

@@ -272,6 +272,22 @@ export function installQa(ctx, api) {
       return name;
     },
 
+    /** Hold a creature's clip at one exact second, so a review frame can
+     *  be taken of the pose a mechanic is defined at rather than of
+     *  whichever frame the run happened to land on. */
+    freezeEnemyClip(name, seconds = 0, index = 0) {
+      const inst = api.enemies.live[index];
+      if (!inst) return null;
+      api.enemies.play(inst, name, 0);
+      const action = inst.actions.get(name);
+      if (!action) return null;
+      inst.mixer.update(0);
+      action.time = Math.max(0, Number(seconds) || 0);
+      action.paused = true;
+      inst.mixer.update(0);
+      return { name, time: action.time, duration: action.getClip().duration };
+    },
+
     clearEnemies() { api.enemies.clear(); },
 
     /** Measured, not asserted: the creature's rendered height in
@@ -3228,6 +3244,89 @@ export function installQa(ctx, api) {
       api.step(1 / 60, true);
       return result;
     },
+    /* ------------------------------------------------------------
+       THE BURROWER
+
+       A four-phase cycle where three of the phases are "you cannot
+       touch it" is untestable from the outside: a harness that spawns
+       one and waits gets an animal that is somewhere under the sand.
+       These hooks expose the state machine's own view of itself and
+       let a check drive it to the phase it wants to assert about,
+       which is the difference between testing the encounter and
+       testing whether a boss eventually appears.
+       ------------------------------------------------------------ */
+    coulterState: () => (api.coulter || ctx.coulter)?.status?.() || null,
+    /** Every live burrower's chain, in world space. The hit volumes are
+     *  built off exactly these points, so a test can assert that what it
+     *  shot at is where the animal is. */
+    coulterBodies() {
+      return api.enemies.live.filter((inst) => inst.body).map((inst) => ({
+        id: inst.id,
+        key: inst.key,
+        phase: inst.body.phase,
+        hidden: !!inst.body.hidden,
+        mawOpen: Number(inst.body.mawOpen.toFixed(3)),
+        health: inst.health,
+        head: [inst.body.head.x, inst.body.head.y, inst.body.head.z]
+          .map((v) => Number(v.toFixed(3))),
+        heading: Number(inst.body.heading.toFixed(4)),
+        pitch: Number(inst.body.pitch.toFixed(4)),
+        span: Number(inst.spineLength.toFixed(3)),
+        joints: inst.body.joints.map((j) => [j.x, j.y, j.z]
+          .map((v) => Number(v.toFixed(3)))),
+        aboveGround: inst.body.joints
+          .filter((j) => j.y > api.collide.groundHeight(j.x, j.z)).length,
+      }));
+    },
+    /** Run the simulation until the first burrower reaches `phase`, or
+     *  give up. Returns the seconds it took, or -1. */
+    advanceToCoulterPhase(phase, limit = 40, dt = 1 / 60) {
+      const target = String(phase);
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const inst = api.enemies.live.find((e) => e.body);
+        if (!inst) return -1;
+        if (inst.body.phase === target) return Number(elapsed.toFixed(3));
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    /** Force a phase transition, for checks about a phase rather than
+     *  about how the animal gets into it. */
+    setCoulterPhase(phase, seconds) {
+      const inst = api.enemies.live.find((e) => e.body);
+      if (!inst) return null;
+      inst.body.phase = String(phase);
+      if (Number.isFinite(seconds)) inst.body.timer = seconds;
+      return { phase: inst.body.phase, timer: inst.body.timer };
+    },
+    /** Freeze or release the burrower's decision-making, leaving its
+     *  body still posed from its trail. For photographs. */
+    parkCoulter(on = true) {
+      const hits = api.enemies.live.filter((inst) => inst.body);
+      for (const inst of hits) inst.body.parked = !!on;
+      return hits.length;
+    },
+    venomPools() {
+      const coulter = api.coulter || ctx.coulter;
+      if (!coulter) return [];
+      return (coulter.group?.children || [])
+        .filter((child) => child.name?.startsWith("sf-venom-pool") && child.visible)
+        .map((child) => ({
+          x: Number(child.position.x.toFixed(2)),
+          y: Number(child.position.y.toFixed(2)),
+          z: Number(child.position.z.toFixed(2)),
+          fade: Number((child.material.uniforms.uFade.value || 0).toFixed(3)),
+        }));
+    },
+    spillVenom(x, z, radius, seconds) {
+      const coulter = api.coulter || ctx.coulter;
+      const pool = coulter?.spillPool?.(x, z, radius, seconds);
+      return pool ? { x: pool.x, y: pool.y, z: pool.z, radius: pool.radius } : null;
+    },
+    setToxin(v) { return (api.coulter || ctx.coulter)?.setToxin?.(v) ?? null; },
+    clearVenom() { return (api.coulter || ctx.coulter)?.clearHazards?.() ?? null; },
     minimapState() {
       const semantic = api.hud?.minimapState?.() || null;
       const map = document.getElementById("sf-minimap");
@@ -3251,6 +3350,103 @@ export function installQa(ctx, api) {
     menuState: () => (api.gameUi || ctx.gameUi)?.menuState?.() || null,
     settingsState: () => (api.gameUi || ctx.gameUi)?.settingsState?.() || null,
     persistenceState: () => (api.saves || ctx.saves)?.state?.() || null,
+    careerConflictStateForQA() {
+      if (!ctx.qa) return null;
+      return (api.saves || ctx.saves)?.conflictState?.() || null;
+    },
+    stageCareerConflictForQA(localCareer, syncedCareer, reason = "qa-career-conflict") {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      return (api.saves || ctx.saves)?.stageCareerConflictForQA?.(
+        localCareer, syncedCareer, reason
+      ) ?? { ok: false, reason: "save-unavailable" };
+    },
+    resolveCareerConflictForQA(choice) {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      return (api.saves || ctx.saves)?.resolveCareerConflict?.(choice)
+        ?? { ok: false, reason: "save-unavailable" };
+    },
+    progressionState: () => (api.progression || ctx.progression)?.state?.() || null,
+    progressionDefinitions() {
+      const progression = api.progression || ctx.progression;
+      if (!progression) return null;
+      return typeof progression.definitions === "function"
+        ? progression.definitions() : progression.definitions || null;
+    },
+    progressionCareerForQA() {
+      if (!ctx.qa) return null;
+      const progression = api.progression || ctx.progression;
+      return progression?.captureCareer?.() || null;
+    },
+    validateProgressionCareerForQA(value) {
+      if (!ctx.qa) return false;
+      const progression = api.progression || ctx.progression;
+      return progression?.validateCareer?.(value) || false;
+    },
+    progressionFieldForQA() {
+      if (!ctx.qa) return null;
+      const progression = api.progression || ctx.progression;
+      return progression?.captureField?.() || null;
+    },
+    restoreProgressionFieldForQA(value) {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.restoreFieldForQA?.(value)
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    clearProgressionFieldForQA() {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.clearFieldLoadout?.({ source: "qa" })
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    /* Career mutation remains QA-only and still travels through the
+       production progression service. These are boundary controls for the
+       deterministic regression, not alternate talent rules. */
+    grantProgressionXpForQA(amount, receipt = "qa:grant") {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.grantXp?.(amount, receipt, "qa")
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    spendTalentForQA(talentId) {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.spend?.(talentId)
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    refundTalentForQA(talentId) {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.refund?.(talentId)
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    equipCapstoneForQA(capstoneId, slot) {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return slot === undefined
+        ? progression?.equipCapstone?.(capstoneId)
+          ?? { ok: false, reason: "progression-unavailable" }
+        : progression?.equipCapstone?.(capstoneId, slot)
+          ?? { ok: false, reason: "progression-unavailable" };
+    },
+    unequipCapstoneForQA(slotOrId) {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.unequipCapstone?.(slotOrId)
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    respecProgressionForQA() {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.respec?.()
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
+    resetProgressionForQA() {
+      if (!ctx.qa) return { ok: false, reason: "qa-only" };
+      const progression = api.progression || ctx.progression;
+      return progression?.resetForQA?.()
+        ?? { ok: false, reason: "progression-unavailable" };
+    },
     openMenu(panel = "operation") {
       return (api.gameUi || ctx.gameUi)?.openMenu?.(panel) ?? false;
     },
@@ -3342,6 +3538,7 @@ export function installQa(ctx, api) {
     get weapons() { return api.weapons; },
     get jetpack() { return api.jetpack; },
     get boost() { return api.boost; },
+    get progression() { return api.progression || ctx.progression; },
     get slam() { return api.slam; },
     get shield() { return api.shield; },
     get touch() { return api.touch; },

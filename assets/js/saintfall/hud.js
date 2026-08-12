@@ -62,6 +62,7 @@ export function buildHud(ctx, host) {
     </div>
     <div class="sf-hud__reticle" id="sf-reticle"><i></i><i></i><i></i><i></i></div>
     <div class="sf-hud__hurt" id="sf-hurt"></div>
+    <div class="sf-hud__toxin" id="sf-toxin" data-state="clear"></div>
     <div class="sf-hud__numbers" id="sf-damage-numbers" aria-hidden="true"></div>
     <div class="sf-hud__vitals" id="sf-vitals">
       <div class="sf-hud__hplabel"><span>VITALITY</span><b id="sf-hp-value">150</b></div>
@@ -125,6 +126,7 @@ export function buildHud(ctx, host) {
   const reinfEl = el.querySelector("#sf-reinf");
   const stratEl = el.querySelector("#sf-strat");
   const hurtEl = el.querySelector("#sf-hurt");
+  const toxinEl = el.querySelector("#sf-toxin");
   const reticleEl = el.querySelector("#sf-reticle");
   const damageLayerEl = el.querySelector("#sf-damage-numbers");
 
@@ -216,6 +218,7 @@ export function buildHud(ctx, host) {
     }
   }
   let lastHurt = -99;
+  let lastToxin = -1;
   let breachAlertFor = 0;
 
   function formatCountdown(seconds) {
@@ -626,13 +629,46 @@ export function buildHud(ctx, host) {
           species: inst.key || "unknown",
           event: eventUnit,
           emerging: !!inst.emerging?.active,
+          submerged: !!inst.body?.hidden,
         });
       const size = (inst.key === "matriarch" ? 5.5
-        : inst.key === "harrow" ? 3.4 : inst.key === "gleaner" ? 2.5 : 1.7) * glyphScale;
+        : inst.key === "coulter" ? 5.0
+          : inst.key === "harrow" ? 3.4 : inst.key === "gleaner" ? 2.5 : 1.7) * glyphScale;
       map2d.fillStyle = inst.emerging?.active
         ? `rgba(255,172,61,${0.45 + pulse * 0.5})`
         : eventUnit ? "#ff6843" : "rgba(221,111,60,.72)";
-      if (inst.key === "matriarch") {
+      if (inst.body) {
+        /* A BURROWER GETS A BEARING, NOT A DOT.
+           The mini-map is the only instrument that can see it while it
+           is under the sand, and what the player needs from that is not
+           "it is there" but "it is coming here" - so the glyph is a
+           chevron pointing the way it is travelling, hollow while it is
+           submerged and filled once it is up.
+
+           This is deliberately the ONE place a submerged enemy is
+           legible. Take it away and the hunt phase is unreadable
+           whenever the player happens to be facing the wrong way; make
+           it a solid marker and there was never a hunt. */
+        const submerged = !!inst.body.hidden;
+        map2d.save();
+        map2d.translate(p.x, p.y);
+        map2d.rotate(-(inst.body.heading || 0));
+        map2d.beginPath();
+        map2d.moveTo(0, -size);
+        map2d.lineTo(size * 0.78, size * 0.72);
+        map2d.lineTo(0, size * 0.22);
+        map2d.lineTo(-size * 0.78, size * 0.72);
+        map2d.closePath();
+        if (submerged) {
+          map2d.strokeStyle = `rgba(184,242,62,${0.42 + pulse * 0.42})`;
+          map2d.lineWidth = 1.6;
+          map2d.stroke();
+        } else {
+          map2d.fillStyle = "#b8f23e";
+          map2d.fill();
+        }
+        map2d.restore();
+      } else if (inst.key === "matriarch") {
         map2d.save();
         map2d.translate(p.x, p.y);
         map2d.rotate(Math.PI * 0.25);
@@ -919,6 +955,19 @@ export function buildHud(ctx, host) {
         // inside its own duration - which is exactly when it matters.
         void hurtEl.offsetWidth;
         hurtEl.classList.add("is-hit");
+      }
+
+      /* VENOM. A held state rather than a flash, because that is what
+         it is: the hurt vignette says "you were hit" and this says "you
+         are still being hurt, and it will not stop until you move".
+         Driven as an inline opacity because it tracks a continuous
+         value; the flash next to it is a class toggle because it does
+         not. */
+      const toxin = ctx.coulter ? ctx.coulter.toxinLevel() : 0;
+      if (toxin !== lastToxin) {
+        lastToxin = toxin;
+        toxinEl.style.opacity = toxin > 0.001 ? (0.20 + toxin * 0.68).toFixed(3) : "0";
+        toxinEl.dataset.state = toxin > 0.6 ? "crit" : toxin > 0.001 ? "warn" : "clear";
       }
 
       const weapon = ctx.weapons && ctx.weapons.current;

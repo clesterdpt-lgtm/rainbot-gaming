@@ -536,6 +536,130 @@ export function buildAudio(ctx) {
     void radius;
   }
 
+  /* ------------------------------------------------------------------
+     THE COULTER
+
+     Its whole submerged phase is a sound. The player cannot see the
+     animal, the mini-map glyph is a hint rather than a warning, and the
+     wake is only readable if they happen to be looking the right way -
+     so what actually tells them the boss is coming is a low, rising
+     rumble that pans.
+
+     Deliberately almost all below 90Hz. Everything else on Vesper-IX
+     lives in the midrange - the wind, the lance, the brood's chittering
+     - so a register nothing else occupies is audible at a level that
+     does not fight the rest of the mix, and it reads as felt rather
+     than heard, which is the correct impression for something moving
+     under the ground you are standing on.
+     ------------------------------------------------------------------ */
+
+  /** Sand shifting somewhere under the player. `strength` 0-1. */
+  function rumble(x, z, strength = 1) {
+    const t = now();
+    const dur = 0.85;
+    const g = voice("world", dur);
+    if (!g) return;
+    const p = place(g, x, z, 45, 620);
+    if (!p) return;
+    const amp = clamp01(strength) * 0.62 * p.atten;
+    if (amp < 0.002) return;
+
+    const sub = ac.createOscillator();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(38 + Math.random() * 8, t);
+    sub.frequency.linearRampToValueAtTime(26, t + dur);
+    const sg = ac.createGain();
+    sg.gain.setValueAtTime(0.0001, t);
+    sg.gain.exponentialRampToValueAtTime(amp, t + 0.18);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    sub.connect(sg); sg.connect(p.node);
+    sub.start(t); sub.stop(t + dur + 0.02);
+
+    // Grit: the sand itself, well down and heavily filtered so it reads
+    // as material rather than as static.
+    const grit = noiseSource(0.35);
+    const lp = ac.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.setValueAtTime(220, t);
+    lp.frequency.exponentialRampToValueAtTime(90, t + dur);
+    const gg = ac.createGain();
+    gg.gain.setValueAtTime(amp * 0.42, t);
+    gg.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.8);
+    grit.connect(lp); lp.connect(gg); gg.connect(p.node);
+    grit.start(t); grit.stop(t + dur);
+  }
+
+  /** The eruption: a shovel of sand and something enormous shouting
+   *  through it. Louder and longer than a stratagem, because it is the
+   *  one sound in the game that means "it is here". */
+  function surface(x, z) {
+    explosion(x, z, 26);
+    const t = now();
+    const dur = 1.65;
+    const g = voice("world", dur);
+    if (!g) return;
+    const p = place(g, x, z, 70, 900);
+    if (!p) return;
+    const amp = 0.86 * p.atten;
+
+    /* A shriek built from two detuned saws an octave apart, swept down
+       and through a resonant band. It is not a real animal noise and
+       does not need to be - what it has to be is UNLIKE the brood's
+       chitter, so the player never mistakes the boss for a garrison. */
+    for (const [ratio, level] of [[1, 1], [2.02, 0.42]]) {
+      const osc = ac.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(126 * ratio, t + 0.05);
+      osc.frequency.exponentialRampToValueAtTime(41 * ratio, t + dur * 0.85);
+      const bp = ac.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.setValueAtTime(340, t);
+      bp.frequency.exponentialRampToValueAtTime(120, t + dur);
+      bp.Q.value = 2.6;
+      const og = ac.createGain();
+      og.gain.setValueAtTime(0.0001, t + 0.05);
+      og.gain.exponentialRampToValueAtTime(amp * level, t + 0.16);
+      og.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(bp); bp.connect(og); og.connect(p.node);
+      osc.start(t + 0.05); osc.stop(t + dur + 0.02);
+    }
+  }
+
+  /** Venom leaving a throat. High, wet, and short - the one bright
+   *  sound this animal makes, matching the one bright thing on it. */
+  function hiss(x, z) {
+    const t = now();
+    const dur = 0.62;
+    const g = voice("world", dur);
+    if (!g) return;
+    const p = place(g, x, z, 30, 480);
+    if (!p) return;
+    const amp = 0.42 * p.atten;
+
+    const src = noiseSource(1.35);
+    const bp = ac.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.setValueAtTime(2600, t);
+    bp.frequency.exponentialRampToValueAtTime(700, t + dur);
+    bp.Q.value = 1.1;
+    const ng = ac.createGain();
+    ng.gain.setValueAtTime(0.0001, t);
+    ng.gain.exponentialRampToValueAtTime(amp, t + 0.05);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bp); bp.connect(ng); ng.connect(p.node);
+    src.start(t); src.stop(t + dur);
+
+    const gulp = ac.createOscillator();
+    gulp.type = "triangle";
+    gulp.frequency.setValueAtTime(240, t);
+    gulp.frequency.exponentialRampToValueAtTime(88, t + 0.24);
+    const gg = ac.createGain();
+    gg.gain.setValueAtTime(amp * 0.5, t);
+    gg.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+    gulp.connect(gg); gg.connect(p.node);
+    gulp.start(t); gulp.stop(t + 0.28);
+  }
+
   /** The descent whistle before it lands. */
   function inbound(x, z, seconds) {
     const t = now();
@@ -1224,6 +1348,20 @@ export function buildAudio(ctx) {
       breaches.bus.on("cleared", () => chord([294, 392, 494], 0.7, 0.16));
       breaches.bus.on("complete", () => chord([392, 523, 659, 880], 1.25, 0.22));
     }
+    /* The burrower. Subscribed here like everything else, so the whole
+       encounter can be muted by not attaching - and so the module that
+       owns it never learns what an AudioContext is. */
+    const coulter = ctx.coulter;
+    if (coulter) {
+      coulter.bus.on("wake", (e) => rumble(e.x, e.z, e.strength));
+      coulter.bus.on("breach", (e) => surface(e.x, e.z));
+      coulter.bus.on("spew", (e) => hiss(e.x, e.z));
+      coulter.bus.on("bite", (e) => impact(e.x, e.z, "flesh"));
+      coulter.bus.on("dive", (e) => rumble(e.x, e.z, 1));
+      // A pool landing is a wet slap, not a hiss: the hiss belongs to
+      // the throat that threw it and would double up on the same beat.
+      coulter.bus.on("spill", (e) => impact(e.x, e.z, "flesh"));
+    }
   }
 
   /* Unlock on the first real gesture. Chrome will not start an
@@ -1508,6 +1646,9 @@ export function buildAudio(ctx) {
     death,
     explosion,
     inbound,
+    rumble,
+    surface,
+    hiss,
     step,
     hurt,
     blip,
@@ -1569,6 +1710,7 @@ function makeSilentApi() {
   return {
     context: null,
     shot: noop, impact: noop, death: noop, explosion: noop, inbound: noop,
+    rumble: noop, surface: noop, hiss: noop,
     step: noop, hurt: noop, blip: noop, chord: noop, attach: noop,
     jetIgnite: noop, jetCutoff: noop, jetEmpty: noop, jetLand: noop,
     boostIgnite: noop, boostCut: noop, boostHit: noop,

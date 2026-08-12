@@ -720,6 +720,8 @@ export function buildJetpack(ctx, player) {
   }
 
   function ignite(playerState, groundY) {
+    const wasGrounded = !!playerState.grounded;
+    const fuelBefore = state.fuel;
     state.fuel = Math.max(0, state.fuel - config.ignitionCost);
     state.active = true;
     state.inFlight = true;
@@ -733,6 +735,18 @@ export function buildJetpack(ctx, player) {
     state.ignitions += 1;
     playerState.grounded = false;
     playerState.vy = Math.max(playerState.vy, 5.2);
+    ctx.progression?.noteVerb?.("jet", {
+      verb: "jet",
+      x: playerState.x,
+      y: playerState.y,
+      z: playerState.z,
+      groundY,
+      wasGrounded,
+      fuelBefore,
+      fuel: state.fuel,
+      ignitionCost: config.ignitionCost,
+      ignitionIndex: state.ignitions,
+    });
     ctx.audio?.jetIgnite?.();
   }
 
@@ -921,6 +935,25 @@ export function buildJetpack(ctx, player) {
       ctx.audio?.jetEmpty?.();
     }
     return used;
+  }
+
+  /**
+   * Return Reliquary charge from a doctrine effect. This deliberately does
+   * not shorten cooldown or recharge delay: a refund changes the shared
+   * resource, not the timing gates owned by flight and recharge.
+   */
+  function restoreCharge(amount, reason = "external") {
+    const requested = Math.max(0, Number(amount) || 0);
+    if (requested <= 0) return 0;
+    const before = state.fuel;
+    state.fuel = clamp(before + requested, 0, config.maxFuel);
+    const restored = state.fuel - before;
+    if (state.fuel >= config.minIgnitionFuel) state.exhausted = false;
+    state.recharging = false;
+    // Exposed for diagnostics without coupling this low-level resource to a
+    // progression event bus or interpreting the refund's rule.
+    state.lastRestoreReason = String(reason || "external");
+    return restored;
   }
 
   function spawnParticle(origin, direction, indexSeed, throttle = state.throttle) {
@@ -1286,6 +1319,8 @@ export function buildJetpack(ctx, player) {
     setState,
     spend,
     drain,
+    restoreCharge,
+    restore: restoreCharge,
     updateVisual,
     status,
   };

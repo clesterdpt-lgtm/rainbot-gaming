@@ -23,7 +23,7 @@
    of what makes the silhouette readable.
    ============================================================ */
 
-import { TAU, clamp, clamp01, lerp, damp, makeRng, makeRamp } from "saintfall/core.js";
+import { TAU, clamp, clamp01, lerp, damp, makeBus, makeRng, makeRamp } from "saintfall/core.js";
 import { PALETTE, paintByHeight, paintFlat } from "saintfall/art.js";
 import { makeKit } from "saintfall/structures.js";
 
@@ -217,6 +217,7 @@ export const PATTERNS = {
 export function buildWeapons(ctx) {
   const { THREE, scene, materials } = ctx;
   const kit = makeKit(THREE);
+  const bus = makeBus();
   const group = new THREE.Group();
   group.name = "weapons";
   scene.add(group);
@@ -776,6 +777,83 @@ export function buildWeapons(ctx) {
     handRelease: 0,
   };
 
+  function currentHeatSpec() {
+    const spec = carry.record?.spec || PATTERNS.autogun;
+    return spec.polearm ? PATTERNS.autogun : spec;
+  }
+
+  function weaponEvent(extra = {}) {
+    return {
+      weaponKey: carry.key,
+      mode: carry.record?.mode || null,
+      melee: !!carry.record?.spec?.melee,
+      heat: carry.heat,
+      overheated: carry.overheated,
+      venting: carry.venting > 0,
+      ...extra,
+    };
+  }
+
+  /**
+   * Authoritative heat mutation for progression and future weapon rites.
+   * Invalid values are ignored, valid values are clamped to 0..1, and the
+   * overheat latch follows the same threshold rules as natural cooling.
+   */
+  function setHeat(value, detail = {}) {
+    if (!Number.isFinite(value)) return carry.heat;
+    const before = carry.heat;
+    const wasOverheated = carry.overheated;
+    carry.heat = clamp01(value);
+    const resetAt = currentHeatSpec().overheatReset ?? 0.25;
+    if (detail.clearOverheat === true || detail.overheated === false) {
+      carry.overheated = false;
+    } else if (detail.overheated === true || carry.heat >= 1) {
+      carry.overheated = true;
+    } else if (carry.overheated && carry.heat <= resetAt) {
+      carry.overheated = false;
+    }
+
+    if (carry.heat !== before || carry.overheated !== wasOverheated) {
+      const payload = weaponEvent({
+        reason: detail.reason || "external",
+        before,
+        after: carry.heat,
+        delta: carry.heat - before,
+        wasOverheated,
+      });
+      bus.emit("heat", payload);
+      if (!wasOverheated && carry.overheated) bus.emit("overheat", payload);
+      if (wasOverheated && !carry.overheated) bus.emit("heatReady", payload);
+    }
+    return carry.heat;
+  }
+
+  /** Add a non-negative amount of heat, returning the amount accepted. */
+  function addHeat(amount, detail = {}) {
+    if (!Number.isFinite(amount) || amount <= 0) return 0;
+    const before = carry.heat;
+    setHeat(before + amount, detail);
+    return carry.heat - before;
+  }
+
+  /** Remove a non-negative amount of heat, returning the amount removed. */
+  function coolHeat(amount, detail = {}) {
+    if (!Number.isFinite(amount) || amount < 0) return 0;
+    const before = carry.heat;
+    const wasOverheated = carry.overheated;
+    setHeat(before - amount, detail);
+    const removed = before - carry.heat;
+    if (removed > 0 || wasOverheated !== carry.overheated) {
+      bus.emit("cool", weaponEvent({
+        reason: detail.reason || "external",
+        amount: removed,
+        before,
+        after: carry.heat,
+      }));
+    }
+    return removed;
+  }
+
   function equip(key, mount) {
     const record = build(key);
     if (!record) return null;
@@ -799,6 +877,7 @@ export function buildWeapons(ctx) {
     if (!samePhysicalWeapon || !record.root.parent) {
       (carry.mount || group).add(record.root);
     }
+    bus.emit("equip", weaponEvent({ key }));
     return record;
   }
 
@@ -816,13 +895,14 @@ export function buildWeapons(ctx) {
     if (!carry.record || carry.cooldown > 0) return false;
     if (carry.venting > 0 || carry.overheated) return false;
     const spec = carry.record.spec;
-    carry.heat = clamp01(carry.heat + (spec.heatPerShot || 0));
+    const heatBefore = carry.heat;
+    const overheatBefore = carry.overheated;
+    const heatAdded = addHeat(spec.heatPerShot || 0, { reason: "fire" });
     carry.sinceShot = 0;
     // Latches AFTER the shot, so the round that fills the gauge
     // still leaves the barrel. Stopping it a shot early makes the
     // readout and the weapon disagree at exactly the moment the
     // player is watching the readout.
-    if (carry.heat >= 1) carry.overheated = true;
     const r = carry.record.spec.recoil;
     carry.cooldown = 1 / carry.record.spec.rof;
     // Impulse, not a set: repeated shots accumulate, which is what
@@ -830,6 +910,15 @@ export function buildWeapons(ctx) {
     carry.recoil.back = Math.min(carry.recoil.back + r.kick, r.kick * 2.4);
     carry.recoil.rise = Math.min(carry.recoil.rise + r.rise, r.rise * 2.8);
     carry.recoil.roll += (Math.random() - 0.5) * r.roll * 2;
+    const payload = weaponEvent({
+      heatBefore,
+      heatAfter: carry.heat,
+      heatAdded,
+      becameOverheated: !overheatBefore && carry.overheated,
+      cooldown: carry.cooldown,
+    });
+    bus.emit("fire", payload);
+    ctx.progression?.onWeaponFire?.(payload);
     return true;
   }
 
@@ -848,15 +937,28 @@ export function buildWeapons(ctx) {
     if (carry.heat <= 0.001) return false;
     const spec = carry.record.spec.polearm ? PATTERNS.autogun : carry.record.spec;
     carry.venting = spec.ventTime || 1.4;
+    const ps = ctx.player?.state;
+    const payload = weaponEvent({
+      source: "manual",
+      startHeat: carry.heat,
+      duration: carry.venting,
+      x: ps?.x,
+      y: ps?.y,
+      z: ps?.z,
+      yaw: ps?.yaw,
+    });
+    bus.emit("vent", payload);
+    ctx.progression?.onVent?.(payload);
     return true;
   }
 
   /** A resupply drop cools the barrel and clears any lockout. */
   function resupply() {
     if (!carry.record) return;
-    carry.heat = 0;
-    carry.overheated = false;
+    const before = carry.heat;
+    setHeat(0, { reason: "resupply", clearOverheat: true });
     carry.venting = 0;
+    bus.emit("resupply", weaponEvent({ before, amount: before }));
   }
 
   function snapshotState() {
@@ -988,6 +1090,7 @@ export function buildWeapons(ctx) {
        elapsed since the last shot. */
     carry.sinceShot += dt;
     const heatSpec = spec.polearm ? PATTERNS.autogun : spec;
+    const ventingBefore = carry.venting;
     if (carry.venting > 0) {
       const ventTime = heatSpec.ventTime || 1.4;
       carry.venting = Math.max(0, carry.venting - dt);
@@ -1000,6 +1103,12 @@ export function buildWeapons(ctx) {
     // full. See `carry.overheated`.
     if (carry.overheated && carry.heat <= (heatSpec.overheatReset ?? 0.25)) {
       carry.overheated = false;
+      bus.emit("heatReady", weaponEvent({ reason: "natural-cooling" }));
+    }
+    if (ventingBefore > 0 && carry.venting === 0) {
+      const payload = weaponEvent({ source: "manual" });
+      bus.emit("ventComplete", payload);
+      ctx.progression?.onVentComplete?.(payload);
     }
     const rec = spec.recoil.recover;
     carry.recoil.back = damp(carry.recoil.back, 0, rec, dt);
@@ -1261,6 +1370,7 @@ export function buildWeapons(ctx) {
 
   return {
     group,
+    bus,
     patterns: PATTERNS,
     build,
     equip,
@@ -1269,6 +1379,11 @@ export function buildWeapons(ctx) {
     flashMuzzle,
     vent,
     resupply,
+    setHeat,
+    addHeat,
+    coolHeat,
+    // Short alias for doctrine code that reads as an action.
+    cool: coolHeat,
     snapshot: snapshotState,
     restore: restoreState,
     spread,

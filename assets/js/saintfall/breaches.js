@@ -76,18 +76,59 @@ export const BREACH_WAVES = Object.freeze([
     damageScale: 1,
     clusters: 2,
     boss: true,
+    bossKey: "matriarch",
     roster: Object.freeze([
       { key: "matriarch", count: 1 },
       { key: "thresher", count: 4 },
     ]),
   }),
+  /* THE LAST WAVE, and a deliberate change of subject.
+     Every stage up to here escalates the same problem: more things
+     walking at you, and eventually a big one. Answering that five times
+     and then being handed a sixth version of it teaches nothing, so the
+     cycle ends on the one enemy in the game that cannot be solved by
+     aiming at it.
+     It arrives ALONE. A garrison would give the player something to
+     shoot during the submerged phase, and the whole point of that phase
+     is that there is nothing to shoot - the silence is the mechanic. */
+  Object.freeze({
+    name: "The Deep Furrow",
+    subtitle: "Something under the sand",
+    healthScale: 1,
+    damageScale: 1,
+    clusters: 1,
+    boss: true,
+    bossKey: "coulter",
+    roster: Object.freeze([{ key: "coulter", count: 1 }]),
+  }),
 ]);
+
+/* Which keys can hold a boss bar. A set rather than a string compare
+   against "matriarch", which is what the whole file used to do in four
+   places - and each of those was a place a second boss would have been
+   silently demoted to an ordinary member of its own wave. */
+const BOSS_KEYS = new Set(BREACH_WAVES.filter((wave) => wave.bossKey)
+  .map((wave) => wave.bossKey));
+
+/* The field order each boss gets. Named rather than generic, because
+   "SLAY THE MATRIARCH" is the line that tells a player the thing on the
+   ridge is the thing they are here for - and the Coulter's names what
+   the fight actually asks, which is not killing it but finding it. */
+const BOSS_ORDERS = Object.freeze({
+  matriarch: "SLAY THE MATRIARCH",
+  coulter: "BREAK THE COULTER",
+});
 
 const EMERGENCE = Object.freeze({
   thresher: Object.freeze({ depth: 1.35, duration: 1.18 }),
   gleaner: Object.freeze({ depth: 3.15, duration: 1.72 }),
   harrow: Object.freeze({ depth: 2.75, duration: 1.88 }),
   matriarch: Object.freeze({ depth: 5.6, duration: 2.85 }),
+  /* Ignored by the spawner - a burrower declines the shared fissure
+     telegraph, because it is already under the sand and its arrival is
+     its own wake. Kept in the table so the omission is deliberate
+     rather than an oversight that reads as one. */
+  coulter: Object.freeze({ depth: 8.0, duration: 0 }),
 });
 
 const isLiving = (inst) => !!inst && inst.state !== "death" && inst.health > 0;
@@ -126,7 +167,10 @@ export function buildBreaches(ctx) {
     }
     // The boss owns the centre and rises first. The remaining castes
     // alternate instead of surfacing as a row of identical copies.
-    if (wave.boss) return roster.sort((a, b) => (a === "matriarch" ? -1 : b === "matriarch" ? 1 : 0));
+    if (wave.boss) {
+      const boss = wave.bossKey;
+      return roster.sort((a, b) => (a === boss ? -1 : b === boss ? 1 : 0));
+    }
     const arranged = [];
     while (roster.length) {
       const last = arranged[arranged.length - 1];
@@ -189,7 +233,9 @@ export function buildBreaches(ctx) {
     const clusterAngle = (cluster / Math.max(1, clusters)) * TAU + 0.46;
     const clusterRadius = clusters > 1 ? 7.5 : 0;
     const localAngle = index * 2.3999632297 + clusterAngle * 0.37;
-    const localRadius = key === "matriarch" ? 0 : 2.8 + Math.sqrt(index + 0.4) * 2.35;
+    // A boss owns the centre of its own event; everything else is
+    // fanned out around it.
+    const localRadius = BOSS_KEYS.has(key) ? 0 : 2.8 + Math.sqrt(index + 0.4) * 2.35;
     let x = centre.x + Math.cos(clusterAngle) * clusterRadius + Math.cos(localAngle) * localRadius;
     let z = centre.z + Math.sin(clusterAngle) * clusterRadius + Math.sin(localAngle) * localRadius;
     const radius = BESTIARY[key]?.collisionRadius || 0.7;
@@ -205,7 +251,7 @@ export function buildBreaches(ctx) {
     for (const inst of members) {
       if (!enemies.live.includes(inst) || !isLiving(inst)) continue;
       remaining += 1;
-      if (inst.key === "matriarch") boss = inst;
+      if (BOSS_KEYS.has(inst.key)) boss = inst;
     }
     state.remaining = remaining;
     state.boss = boss;
@@ -250,7 +296,7 @@ export function buildBreaches(ctx) {
             + i * BREACH_CONFIG.staggerSeconds,
           duration: emerge.duration,
           depth: emerge.depth,
-          boss: key === "matriarch",
+          boss: BOSS_KEYS.has(key),
         },
       });
       if (!inst) continue;
@@ -260,7 +306,7 @@ export function buildBreaches(ctx) {
 
     state.total = members.length;
     state.remaining = members.length;
-    state.boss = members.find((inst) => inst.key === "matriarch") || null;
+    state.boss = members.find((inst) => BOSS_KEYS.has(inst.key)) || null;
     if (!options.silent) bus.emit(wave.boss ? "bossWarning" : "warning", snapshot());
     return snapshot();
   }
@@ -355,7 +401,9 @@ export function buildBreaches(ctx) {
     return {
       name: state.phase === "warning"
         ? `BLOOM BREACH ${state.waveIndex + 1} INCOMING`
-        : state.boss ? "SLAY THE MATRIARCH" : `PURGE ${state.name}`,
+        : state.boss
+          ? (BOSS_ORDERS[state.boss.key] || "SLAY THE BOSS")
+          : `PURGE ${state.name}`,
       x: state.x,
       z: state.z,
       dist,
@@ -459,7 +507,7 @@ export function buildBreaches(ctx) {
       state.name = saved.name || BREACH_WAVES[waveIndex].name;
       state.subtitle = saved.subtitle || BREACH_WAVES[waveIndex].subtitle;
       state.boss = byId.get(saved.bossId)
-        || members.find((inst) => inst.key === "matriarch") || null;
+        || members.find((inst) => BOSS_KEYS.has(inst.key)) || null;
       if (state.boss && saved.boss) {
         const maxHealth = Math.max(1, Number(saved.boss.maxHealth) || state.boss.maxHealth);
         state.boss.maxHealth = maxHealth;

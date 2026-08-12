@@ -198,6 +198,29 @@ BIO_RAMP = Ramp([
     (0.00, "#0b3a34"), (0.35, "#1f7d6c"), (0.70, "#54efd2"), (1.00, "#d6fff4"),
 ])
 
+# --------------------------------------------------------------------
+# VENOM: the one hue in SAINTFALL that is not in the palette on
+# purpose, and the only one that means a single thing.
+#
+# Everything hostile is violet chitin with a cyan lamp in it, and
+# everything the Concord fires is gold. Both of those are IDENTITY
+# colours - they say who something belongs to, and a player reads them
+# as "enemy" and "mine". A hazard needs a third kind of colour: one
+# that says what something DOES, and that is never worn by anything
+# safe.
+#
+# So green appears exactly twice in the game - inside the Coulter's
+# gullet and in what comes out of it - and nowhere else. Chartreuse
+# rather than a grass green, because it has to stay separable from the
+# cyan lamp of the brood it belongs to at the range a spew is thrown
+# from, and a green with any blue in it does not.
+# --------------------------------------------------------------------
+VENOM_RAMP = Ramp([
+    (0.00, "#22300c"), (0.32, "#4f7a12"), (0.66, "#a4d425"), (1.00, "#eaff9c"),
+])
+VENOM_CORE = "#b8f23e"
+VENOM_DEEP = "#3c5a10"
+
 
 # --------------------------------------------------------------------
 # EMISSIVE MASK
@@ -856,6 +879,20 @@ def build_armature(name: str, bones: list[dict]):
     Each entry: {name, head, tail, parent, connect}. Positions are in
     the same space as the mesh, so a part and the bone it binds to are
     authored against the same numbers.
+
+    `align_z` is the one non-obvious key. A pose is keyed in the bone's
+    LOCAL space, so which euler channel opens a jaw depends on the roll
+    Blender happened to compute - and Blender's default roll is derived
+    from the world up axis, which means five petals arranged around a
+    ring each get a different one. Keying the same euler on all five
+    then splays them in five directions.
+
+    Give `align_z` the direction the bone should hinge TOWARD (its
+    radially-outward normal, in the same Y-up space as the positions)
+    and the roll is solved so local +Z points that way. A rotation
+    about local +X then swings the bone's own axis toward that
+    direction on every bone in the ring, which is what makes an iris
+    one number instead of five measured guesses.
     """
     arm_data = bpy.data.armatures.new(f"{name}-arm")
     arm = bpy.data.objects.new(name, arm_data)
@@ -877,6 +914,12 @@ def build_armature(name: str, bones: list[dict]):
         if parent:
             created[spec["name"]].parent = created[parent]
             created[spec["name"]].use_connect = bool(spec.get("connect", False))
+    # Rolls last: align_roll works off the finished bone axis, and a
+    # bone's axis is not final until its head and tail both are.
+    for spec in bones:
+        if spec.get("align_z") is None:
+            continue
+        created[spec["name"]].align_roll(to_zup(Vector(spec["align_z"])))
     bpy.ops.object.mode_set(mode="OBJECT")
     return arm
 
@@ -926,6 +969,36 @@ def key_pose(arm_obj, frame: int, pose: dict[str, tuple[float, float, float]],
         pb.rotation_euler = Vector(rot)
         for channel in channels:
             pb.keyframe_insert(data_path=channel, frame=frame)
+
+
+def key_scale(arm_obj, frame: int, table: dict[str, float | tuple]) -> None:
+    """Key bone scale at one frame, from a scalar or a 3-tuple.
+
+    Rotation cannot express a gland filling up, and the alternative -
+    a shape key, or a second piece of geometry swapped in - costs
+    either a morph target on a skinned mesh or a second draw. A bone
+    scale is already in the glTF TRS the exporter writes, so a sac that
+    swells before a spew is free.
+    """
+    for bone_name, value in table.items():
+        pb = arm_obj.pose.bones.get(bone_name)
+        if pb is None:
+            continue
+        pb.scale = (value, value, value) if isinstance(value, (int, float)) else Vector(value)
+        pb.keyframe_insert(data_path="scale", frame=frame)
+
+
+def flip(faces):
+    """Reverse winding, so a surface faces the other way.
+
+    Needed exactly once per model and always for the same reason: an
+    interior. Nothing in SAINTFALL is double-sided - the runtime
+    material is front-side, which is what makes an enemy one draw call
+    - so the inside of a mouth built as an ordinary tapered tube is
+    back-facing, culled, and renders as a hole straight through the
+    head.
+    """
+    return [tuple(reversed(f)) for f in faces]
 
 
 def set_interpolation(act, mode: str = "BEZIER") -> None:

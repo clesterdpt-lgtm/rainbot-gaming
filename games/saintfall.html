@@ -22,8 +22,8 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Share+Tech+Mono&display=swap&v=20260811-11" />
   <link rel="stylesheet" href="../assets/css/styles.css?v=20260806-network-polish-1" />
-  <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260812-mobile-1" />
-  <link rel="stylesheet" href="../assets/css/saintfall-ui.css?v=20260812-mobile-1" />
+  <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260812-coulter-1" />
+  <link rel="stylesheet" href="../assets/css/saintfall-ui.css?v=20260812-doctrine-1" />
 </head>
 <body class="rb-standalone-shell saintfall-shell" data-rb-native-escape-menu="true">
   <nav class="nav"><div id="nav-slot"></div></nav>
@@ -74,7 +74,7 @@
 
         <div class="game-side__panel game-side__panel--saintfall">
           <h3 class="game-side__title">THE GILDED SILENCE</h3>
-          <p>Drop onto Vesper-IX and cross the basin to the Vault-Cathedral. Track Bloom breaches on the tactical map, purge each rising brood, and survive until the Matriarch surfaces.</p>
+          <p>Drop onto Vesper-IX and cross the basin to the Vault-Cathedral. Track Bloom breaches on the tactical map, purge each rising brood, and survive the Matriarch &mdash; and then whatever it is that answers from under the sand.</p>
           <p>Click the playfield to capture the mouse. Fire with LMB, aim with RMB, use Q for melee, and hold Tab for field command.</p>
         </div>
 
@@ -94,6 +94,8 @@
             <li>Press <b>Esc</b> for the operation menu, controls, settings, and field saves.</li>
             <li>On touch, drag the left relic to move, swipe the right side to look, and hold-drag the labeled <b>Call</b> control for field command.</li>
             <li>Follow the tactical mini-map when a Bloom breach opens. Every marked event brood must be defeated before the next, harder surge begins.</li>
+            <li>The last thing the Bloom sends never surfaces to be shot at. Watch the sand: a ridge of it moving toward you is the Coulter, and you cannot hurt it while it is under there. Get off the ridge before it comes up, and put your shots down its throat while it is open &mdash; that is the only time it counts double, and the only time it can spit at you.</li>
+            <li>Do not stand in the green. Venom keeps working after you leave it.</li>
             <li>Press <strong>M</strong> for the full tactical map and objective list. Press it again to resume the operation.</li>
             <li>Reach the Vault-Cathedral and survive the districts between the drop and the nave.</li>
           </ul>
@@ -125,6 +127,16 @@
           <li>The Bloom &mdash; chitin, spores, and the Throat</li>
           <li>The Fosse &mdash; the old trench line</li>
           <li>The Pilgrim's Road &mdash; the spine of the map</li>
+        </ul>
+      </div>
+      <div class="sf-brief__card">
+        <h3>The Brood</h3>
+        <ul>
+          <li>Thresher &mdash; knee-high, six legs, forty at a time</li>
+          <li>Gleaner &mdash; four stilts, three metres up, shoots from fifty</li>
+          <li>Harrow &mdash; wide, low, and the reason your cover stops working</li>
+          <li>Matriarch &mdash; nine metres of it, and it lays while you fight it</li>
+          <li>Coulter &mdash; twenty-five metres, under the sand, and it spits</li>
         </ul>
       </div>
       <div class="sf-brief__card">
@@ -163,7 +175,7 @@
        main.js without it throws before the nav ever renders. -->
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260806-network-polish-1"></script>
-  <script src="../assets/js/saintfall/boot.js?v=20260812-2"></script>
+  <script src="../assets/js/saintfall/boot.js?v=20260812-coulter-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

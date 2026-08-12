@@ -250,24 +250,51 @@ try {
     `${cost.ms}ms/frame`);
 
   /* ---------------- recurrence ----------------
-     The Matriarch ends a cycle, not the ecosystem. Production holds
-     this state for three real minutes; the shortened restored timer
-     below proves both persistence and the restart boundary without
-     making the focused test idle for the full recovery window. */
+     The Matriarch ends a WAVE, and the cycle ends one wave later. It
+     used to be the last thing the Bloom sent, and this section was
+     written against that - it opened wave five, killed it, and asserted
+     a completed cycle. Adding the Coulter behind it made all three of
+     those assertions fail while nothing was wrong, which is the usual
+     shape of a test that hard-codes a position instead of a role.
+
+     So the Matriarch's own claim is now the one worth making - it is
+     the SECOND-TO-LAST wave, and clearing it advances rather than
+     completes - and the recovery window is asserted where it actually
+     lives, on the final wave. Production holds that state for three
+     real minutes; the shortened restored timer below proves both
+     persistence and the restart boundary without idling for it. */
   console.log("\n=== RECURRING BLOOM CYCLE ===");
   const recurrence = await page.evaluate(() => {
     const T = window.__SF;
+    const kill = () => {
+      for (const inst of T.ctx.breaches.members) {
+        inst.health = 0;
+        inst.state = "death";
+      }
+      T.advanceTime(0.05, 0.05);
+    };
+    const waves = T.ctx.breaches.waves.map((wave, i) => ({
+      wave: i + 1, name: wave.name, bossKey: wave.bossKey || null,
+    }));
+    const matriarchWave = waves.find((w) => w.bossKey === "matriarch");
+    const lastWave = waves[waves.length - 1];
+
     T.clearEnemies();
     T.setBreachAuto(true);
     const ps = T.playerState();
-    T.startBreachWave(4, ps.x, ps.z - 44, true);
+    // The Matriarch's own wave: clearing it must ADVANCE the cycle.
+    T.startBreachWave(matriarchWave.wave - 1, ps.x, ps.z - 44, true);
     T.advanceTime(0.05, 0.05);
     const opened = T.breachState();
-    for (const inst of T.ctx.breaches.members) {
-      inst.health = 0;
-      inst.state = "death";
-    }
+    kill();
+    const advanced = T.breachState();
+
+    // And the final wave: clearing that one closes the cycle.
+    T.clearEnemies();
+    T.startBreachWave(lastWave.wave - 1, ps.x, ps.z - 44, true);
     T.advanceTime(0.05, 0.05);
+    const finalOpened = T.breachState();
+    kill();
     const cleared = T.breachState();
     const restored = T.ctx.breaches.restore({ ...cleared, timer: 1.4, auto: true });
     T.advanceTime(0.7, 0.1);
@@ -276,22 +303,30 @@ try {
     const restarted = T.breachState();
     return {
       cooldown: T.ctx.breaches.config.cycleCooldownSeconds,
-      opened, cleared, restored, resting, restarted,
+      waves, matriarchWave, lastWave,
+      opened, advanced, finalOpened, cleared, restored, resting, restarted,
       roster: T.ctx.breaches.members.filter((inst) => inst.state !== "death")
         .map((inst) => inst.key),
     };
   });
+  console.log(`  waves: ${recurrence.waves.map((w) => `${w.wave}.${w.name}`
+    + `${w.bossKey ? `[${w.bossKey}]` : ""}`).join(" ")}`);
   console.log(`  cycle ${recurrence.cleared.cyclesCleared} cleared · `
     + `${recurrence.cooldown}s recovery · next phase ${recurrence.restarted.phase} `
     + `cycle ${recurrence.restarted.cycle}`);
-  check(recurrence.opened.phase === "active" && recurrence.opened.wave === 5,
-    "the Matriarch remains the final wave of each cycle",
-    `phase=${recurrence.opened.phase} wave=${recurrence.opened.wave}`);
+  check(recurrence.opened.phase === "active"
+      && recurrence.opened.wave === recurrence.matriarchWave.wave
+      && recurrence.matriarchWave.wave === recurrence.waves.length - 1,
+    "the Matriarch is the second-to-last wave of each cycle",
+    `wave ${recurrence.opened.wave} of ${recurrence.waves.length}`);
+  check(recurrence.advanced.phase === "intermission" && !recurrence.advanced.complete,
+    "breaking the brood advances the cycle rather than ending it",
+    JSON.stringify({ phase: recurrence.advanced.phase, complete: recurrence.advanced.complete }));
   check(recurrence.cooldown === 180 && recurrence.cleared.phase === "complete"
       && recurrence.cleared.complete
-      && recurrence.cleared.cyclesCleared === recurrence.opened.cycle
+      && recurrence.cleared.cyclesCleared === recurrence.finalOpened.cycle
       && recurrence.cleared.timer >= 179.9,
-    "defeating the Matriarch opens a three-minute recovery window",
+    "clearing the final wave opens a three-minute recovery window",
     JSON.stringify({ cooldown: recurrence.cooldown, cleared: recurrence.cleared }));
   check(recurrence.restored.phase === "complete"
       && recurrence.restored.cycle === recurrence.cleared.cycle

@@ -11,8 +11,31 @@ cd "$(dirname "$0")/.."
 
 SPECIES=("$@")
 if [ ${#SPECIES[@]} -eq 0 ]; then
-  SPECIES=(thresher gleaner harrow matriarch)
+  SPECIES=(thresher gleaner harrow matriarch coulter)
 fi
+
+# Which bones the runtime owns, per species, and which clip is allowed
+# to take them back.
+#
+# The walkers all hand their leg chains to the IK solver and get them
+# back for `death`, because a corpse whose feet are still being solved
+# against the ground stands up again. The Coulter has no legs: its
+# whole body is a chain laid along a trail the runtime keeps, and it
+# never gets that back - not even to die, because a death clip authored
+# against a straight bind pose would snap a body that was arched eight
+# metres out of the sand.
+strip_pattern() {
+  case "$1" in
+    coulter) echo '^spine' ;;
+    *) echo '^(coxa|femur|tibia|foot)' ;;
+  esac
+}
+owns_pattern() {
+  case "$1" in
+    coulter) echo 'none' ;;
+    *) echo 'death' ;;
+  esac
+}
 
 for name in "${SPECIES[@]}"; do
   echo "=== $name ==="
@@ -25,5 +48,5 @@ for name in "${SPECIES[@]}"; do
   node scripts/saintfall-optimize-model.mjs \
     --in "assets/models/saintfall/source/$name.raw.glb" \
     --out "assets/models/saintfall/$name.glb" \
-    --leg-bones '^(coxa|femur|tibia|foot)' --own-legs death
+    --leg-bones "$(strip_pattern "$name")" --own-legs "$(owns_pattern "$name")"
 done

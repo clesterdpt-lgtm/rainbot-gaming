@@ -1595,18 +1595,35 @@ async function activeBreachCompatibilityPass(browser) {
       .map((enemy) => enemy.id);
     const afterBossObjectId = T.breaches.state.boss?.id || null;
 
-    /* Finish the restored final wave through the authoritative damage path,
+    /* Finish the restored wave through the authoritative damage path,
        then round-trip the system-produced terminal shape. This is the
-       positive companion to the impossible phase/wave/boss payloads. */
+       positive companion to the impossible phase/wave/boss payloads.
+
+       The Matriarch's wave is no longer the last one - the Coulter is -
+       so clearing it ADVANCES the cycle, and the terminal shape has to
+       be produced where it actually occurs. Written against a fixed
+       wave number this passed for one boss and then failed for the next
+       while nothing was broken. */
     T.advanceTime(7, 1 / 60);
+    const clear = (ids) => {
+      for (const id of ids) {
+        const member = T.enemies.live.find((enemy) => enemy.id === id);
+        if (member) T.combat.damageEnemy(member, member.health + 1000, {
+          source: "complete-breach-save-qa",
+        });
+      }
+    };
     const finalMemberIds = T.breachState().memberIds.slice();
-    for (const id of finalMemberIds) {
-      const member = T.enemies.live.find((enemy) => enemy.id === id);
-      if (member) T.combat.damageEnemy(member, member.health + 1000, {
-        source: "complete-breach-save-qa",
-      });
-    }
+    clear(finalMemberIds);
     const emptyFinalActive = T.breachState();
+    T.advanceTime(0.05, 1 / 60);
+    const afterBoss = T.breachState();
+    // ...and then the actual last wave, which is what closes a cycle.
+    const waveCount = T.ctx.breaches.waves.length;
+    T.startBreachWave(waveCount - 1, ps.x, ps.z - 44, true);
+    T.advanceTime(0.12, 1 / 60);
+    const lastMemberIds = T.breachState().memberIds.slice();
+    clear(lastMemberIds);
     T.advanceTime(0.05, 1 / 60);
     const completeBefore = T.breachState();
     const completeSaved = T.saves.capture();
@@ -1642,6 +1659,9 @@ async function activeBreachCompatibilityPass(browser) {
       terminal: {
         killedMemberIds: finalMemberIds,
         emptyFinalActive,
+        afterBoss,
+        waveCount,
+        lastMemberIds,
         before: completeBefore,
         saved: completeSaved?.breaches || null,
         savedEnemyCount: completeSaved?.enemies?.live?.length ?? null,
@@ -1691,24 +1711,26 @@ async function activeBreachCompatibilityPass(browser) {
       && probe.terminal?.emptyFinalActive?.phase === "active"
       && probe.terminal?.emptyFinalActive?.remaining === 0
       && probe.terminal?.emptyFinalActive?.memberIds?.length === 0
+      && probe.terminal?.afterBoss?.phase === "intermission"
+      && probe.terminal?.lastMemberIds?.length > 0
       && probe.terminal?.before?.phase === "complete"
-      && probe.terminal?.before?.wave === 5
-      && probe.terminal?.before?.waveIndex === 4
+      && probe.terminal?.before?.wave === probe.terminal?.waveCount
+      && probe.terminal?.before?.waveIndex === probe.terminal?.waveCount - 1
       && probe.terminal?.before?.remaining === 0
       && probe.terminal?.before?.memberIds?.length === 0
       && probe.terminal?.before?.complete === true
       && probe.terminal?.before?.bossId === null
       && probe.terminal?.before?.boss === null
       && probe.terminal?.saved?.phase === "complete"
-      && probe.terminal?.saved?.wave === 5
-      && probe.terminal?.saved?.waveIndex === 4
+      && probe.terminal?.saved?.wave === probe.terminal?.waveCount
+      && probe.terminal?.saved?.waveIndex === probe.terminal?.waveCount - 1
       && probe.terminal?.saved?.complete === true
       && probe.terminal?.saved?.bossId === null
       && probe.terminal?.saved?.boss === null
       && probe.terminal?.applied === true
       && probe.terminal?.after?.phase === "complete"
-      && probe.terminal?.after?.wave === 5
-      && probe.terminal?.after?.waveIndex === 4
+      && probe.terminal?.after?.wave === probe.terminal?.waveCount
+      && probe.terminal?.after?.waveIndex === probe.terminal?.waveCount - 1
       && probe.terminal?.after?.remaining === 0
       && probe.terminal?.after?.memberIds?.length === 0
       && probe.terminal?.after?.complete === true

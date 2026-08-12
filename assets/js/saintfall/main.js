@@ -28,6 +28,8 @@ import { buildCollision } from "saintfall/collide.js";
 import { buildCombat } from "saintfall/combat.js";
 import { buildMission } from "saintfall/mission.js";
 import { buildBreaches } from "saintfall/breaches.js";
+import { buildCoulter } from "saintfall/coulter.js";
+import { buildProgression } from "saintfall/progression.js";
 import { buildAudio } from "saintfall/audio.js";
 import { buildWeapons } from "saintfall/weapons.js";
 import { buildHud } from "saintfall/hud.js";
@@ -179,6 +181,18 @@ export async function start({ boot, build } = {}) {
   ctx.boost = boost;
   const slam = buildSlam(ctx, player);
   ctx.slam = slam;
+  /* The burrower owns its own behaviour, its projectiles and the venom
+     they leave. Built after combat because it damages through it, and
+     before audio because audio subscribes to its bus. */
+  const coulter = buildCoulter(ctx);
+  ctx.coulter = coulter;
+
+  /* Career rank and Doctrine choices sit above the field systems they
+     observe. Constructing progression here lets it subscribe to authoritative
+     combat/mission events while every lower-level mechanic can still query
+     `ctx.progression` lazily without creating import cycles. */
+  const progression = buildProgression(ctx);
+  ctx.progression = progression;
 
   /* Audio subscribes to the buses combat and mission already emit,
      so it can be removed without touching either. It is built after
@@ -341,6 +355,8 @@ export async function start({ boot, build } = {}) {
     combat,
     mission,
     breaches,
+    coulter,
+    progression,
     audio,
     intro,
     saves,
@@ -628,8 +644,14 @@ export async function start({ boot, build } = {}) {
       && player.input.state.ads ? 1 : 0);
     updateStow(d);
     combat.update(d);
+    /* After combat, because the burrower damages through it and reads
+       the player position combat has just resolved against - and before
+       breaches, so a Coulter that dies to its own frame's venom is
+       counted as dead by the event that is waiting for it. */
+    coulter.update(d);
     breaches.update(d);
     mission.update(d);
+    progression.update?.(d);
     audio.update(d, player, render.camera);
     if (colliderView) {
       colliderTick -= d;

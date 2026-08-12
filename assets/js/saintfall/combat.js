@@ -91,6 +91,39 @@ const HITBOX = {
        has a place to shoot, and it is on the far side of the animal. */
     weak: { y: 1.95, z: -3.30, r: 1.55, mult: 4.5 },
   },
+
+  /* ------------------------------------------------------------------
+     THE COULTER. Not a capsule, because it is not a shape - it is a
+     twenty-five metre chain that is usually mostly underground and
+     bent into an arch.
+     ------------------------------------------------------------------ */
+  coulter: {
+    /* The flag that sends every damage path in this file to the live
+       spine instead of to a vertical cylinder. A capsule sized to this
+       animal would be a 25m column standing on its head. */
+    segments: true,
+    /* Radius per body joint, front to back, matching the .glb's own
+       taper - it is thickest a third of the way back, and the tail is
+       genuinely thin enough to shoot past. The first entry is the
+       head. */
+    profile: [1.10, 1.28, 1.36, 1.34, 1.28, 1.20, 1.10, 0.99,
+      0.87, 0.74, 0.60, 0.44, 0.27, 0.12],
+    // Fallbacks, for anything that asks a burrower a capsule question.
+    r: 1.35, y0: -1.30, y1: 2.60, head: 0, headR: 0, headZ: 0,
+    /* THE MAW, and the reason this fight has a tell.
+       A live sphere in front of the head rather than a fixed offset in
+       the creature's own frame, because it is only THERE when the mouth
+       is open - and the mouth is only open while the animal is biting
+       or spitting. So the window in which the boss can be hurt properly
+       is exactly the window in which it can hurt you, which is the one
+       property that makes a damage multiplier a decision instead of a
+       bonus.
+
+       `open` is the threshold on the clip-driven aperture. Below it the
+       petals are across the throat and a shot into them is an ordinary
+       body hit. */
+    maw: { r: 1.60, forward: 1.35, mult: 4.5, open: 0.45 },
+  },
 };
 
 const SPEC = {
@@ -134,6 +167,16 @@ const SPEC = {
        into a solid floor of Threshers. */
     broodEvery: 14, broodCount: 3, broodCap: 12,
   },
+  /* The Coulter's numbers live in COULTER_CONFIG, in the module that
+     owns its behaviour, because none of the four fields this table is
+     built around describe it: its reach depends on which phase it is
+     in, its cadence is two different attacks, and its sight is
+     irrelevant to an animal that hunts by vibration through sand.
+     What is left here is what the shared systems ask of every enemy. */
+  coulter: {
+    hp: 5200, damage: 56, reach: 9.4, cadence: 2.05,
+    sight: 190, hearing: 220, aggro: 520,
+  },
 };
 
 export function buildCombat(ctx) {
@@ -154,6 +197,40 @@ export function buildCombat(ctx) {
   const eye = new THREE.Vector3();
   const tmp = new THREE.Vector3();
   let clock = 0;
+
+  /* Progression is constructed after combat, so every bridge resolves it
+     lazily from `ctx`. These helpers keep the event vocabulary stable while
+     leaving all doctrine rules in the progression service. */
+  function enemyIdentity(inst) {
+    return {
+      enemyId: typeof inst?.id === "string" ? inst.id : "",
+      enemyKey: typeof inst?.key === "string" ? inst.key : "unknown",
+    };
+  }
+
+  function modifiedEnemyDamage(inst, requested, detail, before) {
+    const identity = enemyIdentity(inst);
+    const request = {
+      ...identity,
+      key: identity.enemyKey,
+      damage: requested,
+      requested,
+      health: before,
+      maxHealth: Math.max(before, Number(inst?.maxHealth) || before),
+      source: detail.source || "unknown",
+      head: !!detail.head,
+      weak: !!detail.weak,
+      x: Number.isFinite(detail.x) ? detail.x : inst.x,
+      y: Number.isFinite(detail.y) ? detail.y : inst.y,
+      z: Number.isFinite(detail.z) ? detail.z : inst.z,
+    };
+    const result = ctx.progression?.modifyEnemyDamage?.(request);
+    const resultDamage = Number(result?.damage);
+    const candidate = Number.isFinite(result)
+      ? result
+      : Number.isFinite(resultDamage) ? resultDamage : requested;
+    return Math.max(0, candidate);
+  }
 
   /* ============================================================
      HITSCAN
@@ -220,6 +297,133 @@ export function buildCombat(ctx) {
     return Math.max(0, along - Math.sqrt(Math.max(0, w.r * w.r - perpSq)));
   }
 
+  /* ============================================================
+     BODY CHAINS
+
+     A burrower's hit volume cannot be a capsule, so it is a run of
+     them: one per vertebra, laid along the same trail the body is. The
+     maths below is the standard closest-approach between a ray and a
+     segment, and it is worth the twenty lines because every cheaper
+     approximation fails in a way the player feels - a single capsule
+     from head to tail is a fence across the arena, and one sphere per
+     joint leaves gaps a bolt slips between at range.
+     ============================================================ */
+
+  const _bodyA = new THREE.Vector3();
+  const _bodyB = new THREE.Vector3();
+  const _bodyNear = new THREE.Vector3();
+
+  /** Radius of the body at joint `i`, from the species' taper. */
+  const jointRadius = (box, i) => {
+    const p = box.profile;
+    if (!p || !p.length) return box.r || 1;
+    return p[Math.min(p.length - 1, Math.max(0, i))];
+  };
+
+  /**
+   * Closest approach between a ray and one body segment.
+   *
+   * Returns the ray parameter where it enters the segment's capsule, or
+   * -1. The entry is taken as the closest-approach point pulled back by
+   * the chord through the capsule, which is exact for a sphere and
+   * within a few centimetres for a cylinder at any angle a shot at a
+   * 2.7m-thick animal actually arrives from.
+   */
+  function segmentHit(ox, oy, oz, dx, dy, dz, a, b, radius) {
+    const ux = b.x - a.x;
+    const uy = b.y - a.y;
+    const uz = b.z - a.z;
+    const wx = ox - a.x;
+    const wy = oy - a.y;
+    const wz = oz - a.z;
+    const B = dx * ux + dy * uy + dz * uz;
+    const C = ux * ux + uy * uy + uz * uz;
+    const D = dx * wx + dy * wy + dz * wz;
+    const E = ux * wx + uy * wy + uz * wz;
+    const denom = C - B * B;
+    let t = denom > 1e-8 ? (B * E - C * D) / denom : -D;
+    let s = C > 1e-8 ? clamp((B * t + E) / C, 0, 1) : 0;
+    // One re-projection after clamping the segment parameter, which is
+    // what makes the ends of each capsule round instead of chopped.
+    t = Math.max(0, (a.x + ux * s - ox) * dx + (a.y + uy * s - oy) * dy
+      + (a.z + uz * s - oz) * dz);
+    const px = ox + dx * t - (a.x + ux * s);
+    const py = oy + dy * t - (a.y + uy * s);
+    const pz = oz + dz * t - (a.z + uz * s);
+    const distSq = px * px + py * py + pz * pz;
+    if (distSq > radius * radius) return -1;
+    return Math.max(0, t - Math.sqrt(Math.max(0, radius * radius - distSq)));
+  }
+
+  /** Where the open maw is, in world space, or null if it is shut. */
+  function mawAt(inst, box, out) {
+    const maw = box.maw;
+    const body = inst.body;
+    if (!maw || !body) return null;
+    if ((body.mawOpen || 0) < maw.open) return null;
+    out.copy(body.head).addScaledVector(body.dir, maw.forward);
+    return out;
+  }
+
+  /** Ray against a chained body: nearest vertebra, or the open maw. */
+  function bodyHit(inst, box, ox, oy, oz, dx, dy, dz, maxT) {
+    const body = inst.body;
+    if (!body) return null;
+    let bestT = maxT;
+    let weak = false;
+    let found = false;
+
+    if (mawAt(inst, box, _weak)) {
+      const mx = _weak.x - ox;
+      const my = _weak.y - oy;
+      const mz = _weak.z - oz;
+      const along = mx * dx + my * dy + mz * dz;
+      const perpSq = (mx * mx + my * my + mz * mz) - along * along;
+      const r = box.maw.r;
+      if (along > 0 && perpSq <= r * r) {
+        const entry = Math.max(0, along - Math.sqrt(Math.max(0, r * r - perpSq)));
+        if (entry <= bestT) { bestT = entry; weak = true; found = true; }
+      }
+    }
+
+    _bodyA.copy(body.head);
+    for (let i = 0; i < body.joints.length; i += 1) {
+      _bodyB.copy(body.joints[i]);
+      const radius = (jointRadius(box, i) + jointRadius(box, i + 1)) * 0.5;
+      const t = segmentHit(ox, oy, oz, dx, dy, dz, _bodyA, _bodyB, radius);
+      if (t >= 0 && t < bestT) { bestT = t; weak = false; found = true; }
+      _bodyA.copy(_bodyB);
+    }
+    if (!found) return null;
+    return { t: bestT, weak };
+  }
+
+  /** The nearest point on a creature to a world position, and how far.
+   *  A point test against a 25m animal's origin is a test against its
+   *  mouth, which would let a stratagem land on its back for nothing. */
+  function nearestBodyPoint(inst, x, z, out) {
+    const body = inst.body;
+    if (!body) {
+      out.set(inst.x, inst.y, inst.z);
+      return Math.hypot(inst.x - x, inst.z - z);
+    }
+    let best = Infinity;
+    out.copy(body.head);
+    const consider = (p) => {
+      const d = Math.hypot(p.x - x, p.z - z);
+      if (d < best) { best = d; out.copy(p); }
+    };
+    consider(body.head);
+    for (const joint of body.joints) consider(joint);
+    return best;
+  }
+
+  /** Under the sand, and therefore not there. Every damage path in
+   *  this file asks, because a boss that can be shot through a planet
+   *  has no submerged phase at all. */
+  const untouchable = (inst) => inst.state === "death"
+    || !!inst.emerging?.active || !!inst.body?.hidden;
+
   /**
    * Closest enemy hit by a ray, or null.
    *
@@ -233,8 +437,22 @@ export function buildCombat(ctx) {
     let best = null;
     let bestT = maxDist;
     for (const inst of enemies.live) {
-      if (inst.state === "death" || inst.emerging?.active) continue;
+      if (untouchable(inst)) continue;
       const box = HITBOX[inst.key] || HITBOX.thresher;
+
+      /* A chained body takes the other path entirely: there is no
+         centre to project and no head sphere to modify, only vertebrae
+         and a mouth that is sometimes open. */
+      if (box.segments) {
+        const seg = bodyHit(inst, box, ox, oy, oz, dx, dy, dz, bestT);
+        if (!seg) continue;
+        best = {
+          inst, t: seg.t, weak: seg.weak, head: false,
+          x: ox + dx * seg.t, y: oy + dy * seg.t, z: oz + dz * seg.t,
+        };
+        bestT = seg.t;
+        continue;
+      }
 
       // Project the enemy's centre onto the ray.
       const cx = inst.x - ox;
@@ -285,6 +503,12 @@ export function buildCombat(ctx) {
     player.shots += 1;
 
     dir.copy(direction).normalize();
+    /* Live Fuse rides the authoritative accepted hitscan path. It never
+       consumes the round: this opt-in command target is checked first, then
+       the same ray continues through ordinary enemy and masonry resolution. */
+    const commandHit = ctx.mission?.tryHitCommandBeacon?.(origin, dir, {
+      precision: opts.precision !== false,
+    });
     // Masonry first. A shot that reaches through a wall is the bug
     // that makes cover meaningless, and cover is most of what makes
     // a firefight a firefight.
@@ -314,12 +538,17 @@ export function buildCombat(ctx) {
          point is a designed target on one boss, and how much it is
          worth is part of that boss's design. */
       const box = HITBOX[hit.inst.key] || HITBOX.thresher;
-      const weakMult = hit.weak ? ((box.weak && box.weak.mult) || 3) : 1;
+      // Two kinds of designed target now: a fixed one on the body (the
+      // Matriarch's gaster) and a transient one (the Coulter's open
+      // maw). Both carry their own worth next to their own geometry.
+      const weakMult = hit.weak
+        ? ((box.weak && box.weak.mult) || (box.maw && box.maw.mult) || 3)
+        : 1;
       const dmg = damage * (hit.head ? 2.6 : 1) * weakMult;
       // `head` means headshot, and only that. A weak-point hit rides
       // in the event below instead of being folded in here, so that
       // anything reading the kill feed can tell the two apart.
-      applyDamage(hit.inst, dmg, {
+      const dealt = applyDamage(hit.inst, dmg, {
         source: "shot",
         head: hit.head,
         weak: !!hit.weak,
@@ -331,8 +560,19 @@ export function buildCombat(ctx) {
         vfx.spark(hit.x, hit.y, hit.z,
           hit.weak ? 2.6 : (hit.head ? 1.9 : 1.2), false, true);
       }
+      const identity = enemyIdentity(hit.inst);
       bus.emit("hit", {
-        head: hit.head, weak: !!hit.weak, key: hit.inst.key, x: hit.x, z: hit.z,
+        ...identity,
+        key: identity.enemyKey,
+        source: "shot",
+        head: hit.head,
+        weak: !!hit.weak,
+        damage: dmg,
+        actual: dealt,
+        killed: hit.inst.state === "death",
+        x: hit.x,
+        y: hit.y,
+        z: hit.z,
       });
       return hit;
     }
@@ -343,6 +583,7 @@ export function buildCombat(ctx) {
       if (vfx && vfx.spark) vfx.spark(wx, wy, wz, 0.85, true, true);
       bus.emit("wallHit", { x: wx, z: wz });
     }
+    if (commandHit) player.hits += 1;
     return null;
   }
 
@@ -355,19 +596,45 @@ export function buildCombat(ctx) {
    * impact, otherwise the number rises from the centre of the target.
    */
   function applyDamage(inst, dmg, detail = {}) {
-    if (!inst || inst.state === "death" || inst.emerging?.active) return 0;
+    /* A submerged burrower takes nothing from anything, and the gate is
+       HERE rather than only in the ray test - stratagems, shockwaves and
+       the melee arc all reach this function by other routes, and a boss
+       that can be killed by dropping ordnance on the sand above it has
+       no invulnerable phase however carefully the ray test was
+       written. */
+    if (!inst || untouchable(inst)) return 0;
     if (typeof detail === "boolean") detail = { head: detail };
     const requested = Math.max(0, Number(dmg) || 0);
     const before = Math.max(0, Number(inst.health) || 0);
-    const actual = Math.min(before, requested);
+    const damage = modifiedEnemyDamage(inst, requested, detail, before);
+    const actual = Math.min(before, damage);
     if (actual <= 0) return 0;
-    inst.health = Math.max(0, before - requested);
+    inst.health = Math.max(0, before - damage);
     inst.lastHurtAt = clock;
     // Being shot is how a garrison finds out where you are, whether
     // or not it could see you.
     inst.alerted = true;
     inst.suspicion = 1;
     const killed = inst.health <= 0;
+    const box = HITBOX[inst.key] || HITBOX.thresher;
+    const identity = enemyIdentity(inst);
+    const damageEvent = {
+      ...identity,
+      // `key` remains for established HUD/audio consumers; new systems use
+      // the unambiguous enemyKey/enemyId pair.
+      key: identity.enemyKey,
+      requested,
+      damage,
+      actual,
+      remaining: inst.health,
+      source: detail.source || "unknown",
+      head: !!detail.head,
+      weak: !!detail.weak,
+      killed,
+      x: Number.isFinite(detail.x) ? detail.x : inst.x,
+      y: Number.isFinite(detail.y) ? detail.y : inst.y + box.y1 * 0.62,
+      z: Number.isFinite(detail.z) ? detail.z : inst.z,
+    };
     if (killed) {
       enemies.kill(inst);
       inst.diedAt = clock;
@@ -383,28 +650,17 @@ export function buildCombat(ctx) {
          Harrow's death carries across the basin while a Thresher's
          stays local - which is also the correct relative importance. */
       if (vfx && vfx.spark) {
-        const box = HITBOX[inst.key] || HITBOX.thresher;
         vfx.spark(inst.x, inst.y + box.y1 * 0.45, inst.z, box.r * 2.4);
       }
-      bus.emit("kill", { key: inst.key, head: !!detail.head, x: inst.x, z: inst.z });
+      const killEvent = { ...damageEvent, x: inst.x, z: inst.z };
+      bus.emit("kill", killEvent);
+      ctx.progression?.onEnemyKilled?.(killEvent);
     } else if (enemies.play && clock - (inst.lastFlinchAt || -9) > 0.8) {
       inst.lastFlinchAt = clock;
       enemies.play(inst, "flinch", 0.08);
     }
-    const box = HITBOX[inst.key] || HITBOX.thresher;
-    bus.emit("enemyDamaged", {
-      key: inst.key,
-      damage: requested,
-      actual,
-      remaining: inst.health,
-      source: detail.source || "unknown",
-      head: !!detail.head,
-      weak: !!detail.weak,
-      killed,
-      x: Number.isFinite(detail.x) ? detail.x : inst.x,
-      y: Number.isFinite(detail.y) ? detail.y : inst.y + box.y1 * 0.62,
-      z: Number.isFinite(detail.z) ? detail.z : inst.z,
-    });
+    bus.emit("enemyDamaged", damageEvent);
+    ctx.progression?.onEnemyDamaged?.(damageEvent);
     return actual;
   }
 
@@ -424,7 +680,7 @@ export function buildCombat(ctx) {
      narrower cone - strictly worse. The clip that uses it drives
      the body forward too, so the extra reach is earned on screen
      rather than granted. */
-  function meleeStrike(mult = 1, arc = 2.4, slam = false, lunge = 1) {
+  function meleeStrike(mult = 1, arc = 2.4, slam = false, lunge = 1, comboStep = 0) {
     const ps = ctx.player.state;
     const w = ctx.weapons && ctx.weapons.current;
     if (!w || !w.spec.melee) return 0;
@@ -434,11 +690,18 @@ export function buildCombat(ctx) {
     let hits = 0;
     let kills = 0;
     let knockbacks = 0;
+    const targets = [];
     for (const inst of enemies.live) {
-      if (inst.state === "death") continue;
-      const dx = inst.x - ps.x;
-      const dz = inst.z - ps.z;
-      const dist = Math.hypot(dx, dz);
+      if (untouchable(inst)) continue;
+      /* Measured to the NEAREST part of the animal, which for
+         everything with a single capsule is its own centre and for a
+         chained body is whichever coil is in front of the player. A
+         lance swing at the twenty metres of Coulter lying across the
+         sand has to connect with the twenty metres of Coulter. */
+      const near = nearestBodyPoint(inst, ps.x, ps.z, _bodyNear);
+      const dx = _bodyNear.x - ps.x;
+      const dz = _bodyNear.z - ps.z;
+      const dist = Math.max(near, 1e-4);
       const box = HITBOX[inst.key] || HITBOX.thresher;
       if (dist > reach + box.r) continue;
       let rel = Math.atan2(dx, dz) - ps.yaw;
@@ -462,7 +725,21 @@ export function buildCombat(ctx) {
       });
       if (dealt <= 0) continue;
       hits += 1;
-      if (wasAlive && inst.state === "death") kills += 1;
+      const killed = wasAlive && inst.state === "death";
+      if (killed) kills += 1;
+      const identity = enemyIdentity(inst);
+      targets.push({
+        ...identity,
+        key: identity.enemyKey,
+        source: "melee",
+        head: false,
+        weak: false,
+        damage: dealt,
+        killed,
+        x: inst.x,
+        y: inst.y + box.y1 * 0.55,
+        z: inst.z,
+      });
       if (inst.key === MELEE_CONFIG.lightEnemy) {
         /* This API is part of the enemy-system contract. Keeping the call
            direct means a missing export becomes a test-visible failure
@@ -486,9 +763,25 @@ export function buildCombat(ctx) {
     ctx.player.punch?.(slam
       ? MELEE_CONFIG.slamPunch
       : hits ? MELEE_CONFIG.hitPunch : MELEE_CONFIG.whiffPunch);
-    bus.emit("melee", {
-      hits, kills, knockbacks, slam, x: ps.x, z: ps.z, yaw: ps.yaw, reach, arc,
-    });
+    const step = Number.isInteger(comboStep) && comboStep >= 1 && comboStep <= 3
+      ? comboStep : 0;
+    const meleeEvent = {
+      source: "melee",
+      comboStep: step,
+      targets,
+      hits,
+      kills,
+      knockbacks,
+      slam,
+      x: ps.x,
+      y: ps.y,
+      z: ps.z,
+      yaw: ps.yaw,
+      reach,
+      arc,
+    };
+    bus.emit("melee", meleeEvent);
+    ctx.progression?.onMeleeStrike?.(meleeEvent);
     if (slam) {
       // The finisher shakes the ground whether or not it connects.
       if (vfx && vfx.blast) vfx.blast(ps.x + Math.sin(ps.yaw) * 1.8, ps.y + 0.2,
@@ -500,15 +793,30 @@ export function buildCombat(ctx) {
 
   /** Area damage: stratagems, and anything else that lands hard. */
   function explode(x, y, z, radius, damage) {
+    const targets = [];
+    let kills = 0;
     for (const inst of enemies.live) {
-      if (inst.state === "death") continue;
-      const d = Math.hypot(inst.x - x, inst.z - z, (inst.y - y) * 0.5);
+      if (untouchable(inst)) continue;
+      const near = nearestBodyPoint(inst, x, z, _bodyNear);
+      const d = Math.hypot(near, (_bodyNear.y - y) * 0.5);
       if (d > radius) continue;
-      applyDamage(inst, damage * (1 - (d / radius) * 0.65), {
+      const wasAlive = inst.state !== "death";
+      const dealt = applyDamage(inst, damage * (1 - (d / radius) * 0.65), {
         source: "explosion",
-        x: inst.x,
-        y: inst.y + (HITBOX[inst.key] || HITBOX.thresher).y1 * 0.55,
-        z: inst.z,
+        x: _bodyNear.x,
+        y: _bodyNear.y + (HITBOX[inst.key] || HITBOX.thresher).y1 * 0.55,
+        z: _bodyNear.z,
+      });
+      if (dealt <= 0) continue;
+      const identity = enemyIdentity(inst);
+      const killed = wasAlive && inst.state === "death";
+      if (killed) kills += 1;
+      targets.push({
+        id: identity.enemyId,
+        key: identity.enemyKey,
+        damage: dealt,
+        health: Math.max(0, Number(inst.health) || 0),
+        killed,
       });
     }
     const pd = Math.hypot(
@@ -523,6 +831,7 @@ export function buildCombat(ctx) {
       z,
     });
     if (vfx && vfx.blast) vfx.blast(x, y, z, radius);
+    return { hits: targets.length, kills, targets };
   }
 
   /**
@@ -540,7 +849,8 @@ export function buildCombat(ctx) {
     const radius = Math.max(0.5, Number(opts.radius) || 8);
     const inner = Math.min(radius, Math.max(0, Number(opts.innerRadius) || 0));
     const peak = Math.max(0, Number(opts.damage) || 0);
-    const edge = clamp01(Number(opts.edgeFalloff) ?? 0.4);
+    const rawEdge = Number(opts.edgeFalloff);
+    const edge = clamp01(Number.isFinite(rawEdge) ? rawEdge : 0.4);
     const stunFor = Math.max(0, Number(opts.stun) || 0);
     const knock = Math.max(0, Number(opts.knockSpeed) || 0);
     const source = opts.source || "shockwave";
@@ -548,28 +858,30 @@ export function buildCombat(ctx) {
     let kills = 0;
     let stunned = 0;
     for (const inst of enemies.live) {
-      if (inst.state === "death") continue;
-      const dx = inst.x - x;
-      const dz = inst.z - z;
-      const dist = Math.hypot(dx, dz);
+      if (untouchable(inst)) continue;
+      const dist = Math.max(nearestBodyPoint(inst, x, z, _bodyNear), 1e-4);
+      const dx = _bodyNear.x - x;
+      const dz = _bodyNear.z - z;
       const box = HITBOX[inst.key] || HITBOX.thresher;
       if (dist > radius + box.r) continue;
-      const inv = 1 / Math.max(1e-4, dist);
+      const inv = 1 / dist;
       if (dist > 0.6 && collide.rayBlock(
         x, y + 0.55, z, dx * inv, 0, dz * inv, dist) < dist - 0.05) continue;
 
       const reach = clamp01((dist - inner) / Math.max(1e-3, radius - inner));
       const scale = 1 - reach * (1 - edge);
       const wasAlive = inst.state !== "death";
-      const dealt = applyDamage(inst, peak * scale, {
-        source,
-        x: inst.x,
-        y: inst.y + box.y1 * 0.4,
-        z: inst.z,
-      });
-      if (dealt <= 0) continue;
+      const dealt = peak > 0
+        ? applyDamage(inst, peak * scale, {
+          source,
+          x: _bodyNear.x,
+          y: _bodyNear.y + box.y1 * 0.4,
+          z: _bodyNear.z,
+        })
+        : 0;
+      if (peak > 0 && dealt <= 0) continue;
       hits += 1;
-      if (wasAlive && inst.state === "death") kills += 1;
+      if (dealt > 0 && wasAlive && inst.state === "death") kills += 1;
       if (inst.state !== "death") {
         if (stunFor > 0 && enemies.stun(inst, stunFor * (0.6 + 0.4 * (1 - reach)))) {
           stunned += 1;
@@ -596,14 +908,34 @@ export function buildCombat(ctx) {
        fails for a reason it is not testing is worse than no test. */
     if (player.invulnerable) return 0;
     if (player.dead) return 0;
+    /* Field Chapel's upgraded boundary intercepts only Gleaner fire. The
+       sanctuary is checked before Aegis, so a blocked projectile never drains
+       shield charge or accidentally counts as a perfect guard. */
+    if (detail.source === "enemy-fire" && ctx.mission?.blocksEnemyProjectile?.(detail)) {
+      bus.emit("projectileBlocked", {
+        source: detail.source,
+        reason: "field-sanctuary",
+        x: detail.x,
+        y: detail.y,
+        z: detail.z,
+        enemyId: detail.enemyId || "",
+        enemyKey: detail.enemyKey || detail.enemy || "",
+      });
+      return 0;
+    }
     if (ctx.shield?.tryBlock?.(amount, detail)) {
+      const block = ctx.shield.lastBlock?.() || {};
       bus.emit("shieldBlock", {
         amount,
         source: detail.source || "attack",
+        enemyId: detail.enemyId || "",
+        enemyKey: detail.enemyKey || detail.enemy || "",
         x: detail.x,
         y: detail.y,
         z: detail.z,
         hp: player.hp,
+        perfect: !!block.perfect,
+        timing: block.timing || null,
       });
       return 0;
     }
@@ -656,6 +988,14 @@ export function buildCombat(ctx) {
 
   function stepEnemy(inst, dt, px, py, pz) {
     if (inst.state === "death" || inst.emerging?.active) return;
+    /* A CHAINED BODY IS SOMEBODY ELSE'S DECISION.
+       Everything below this line assumes a creature that stands on the
+       ground, walks toward the player and is always hittable, and the
+       burrower is none of those. coulter.js runs its own loop over its
+       own instances - see main.js's step order - so the only correct
+       thing to do here is decline: the alternative is this function
+       growing a second state machine inside the first. */
+    if (inst.body) return;
     /* STUNNED CREATURES DO NOTHING. Not walk, not turn, not shoot.
        The gate lives here rather than in enemies.js because this is
        where every decision a creature makes is taken; enforcing it
@@ -685,6 +1025,32 @@ export function buildCombat(ctx) {
     if (inst.fireTimer === undefined) inst.fireTimer = 0;
     if (inst.burstLeft === undefined) inst.burstLeft = 0;
     if (!inst.home) inst.home = { x: inst.x, z: inst.z };
+
+    /* Command markers temporarily author the unit's attention. Light bodies
+       investigate the tone; heavy bodies only turn to acknowledge it. This
+       precedes ordinary player sensing on purpose: otherwise a nearby player
+       instantly overwrites Siren Beacon and the talent exists only in data. */
+    const lure = inst.commandLure;
+    if (lure && lure.owner === "mission"
+      && Number.isFinite(lure.x) && Number.isFinite(lure.z)
+      && Number.isFinite(lure.until) && lure.until >= clock) {
+      const lx = lure.x - inst.x;
+      const lz = lure.z - inst.z;
+      const ld = Math.hypot(lx, lz);
+      if (ld > 1e-4) {
+        const want = Math.atan2(lx, lz);
+        const turn = ((want - inst.yaw + Math.PI * 3) % TAU) - Math.PI;
+        inst.yaw += clamp(turn, -2.9 * dt, 2.9 * dt);
+        if (lure.mode === "pull" && ld > 2.4) {
+          approach(inst, lx / ld, lz / ld,
+            inst.spec.speed.walk * clamp(Number(lure.speedScale) || 0.72, 0.2, 1.4), dt);
+          if (inst.state !== "alert") enemies.play(inst, "alert", 0.2);
+        }
+      }
+      inst.suspicion = 1;
+      inst.alerted = true;
+      return;
+    }
 
     /* Hearing can wake a garrison and make it investigate, but only
        an unobstructed 3D ray authorises a ranged attack. Treating the
@@ -850,6 +1216,8 @@ export function buildCombat(ctx) {
       y: inst.y + (HITBOX[inst.key] || HITBOX.thresher).head,
       z: inst.z,
       enemy: inst.key,
+      enemyId: inst.id,
+      enemyKey: inst.key,
     });
 
     /* Return fire gets a bolt too. Not decoration for its own sake:
@@ -1028,6 +1396,10 @@ export function buildCombat(ctx) {
     snapshot,
     restore,
     hitbox: HITBOX,
+    /** Whether anything can currently be done to a creature at all.
+     *  Exposed because "the boss is invulnerable while submerged" is a
+     *  claim worth asserting in a test rather than trusting. */
+    targetable: (inst) => !untouchable(inst),
     stats() {
       return {
         hp: Math.round(player.hp),

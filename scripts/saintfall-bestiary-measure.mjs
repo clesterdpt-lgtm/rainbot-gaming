@@ -212,14 +212,39 @@ async function main() {
         .filter(([c]) => c !== "death")
         .reduce((a, b) => (b[1].topM > a[1].topM ? b : a));
 
+      /* Everything above and below this measures a creature that STANDS:
+         it is posed on flat ground, its height is read off the top of
+         the mesh and its capsule radius off its horizontal spread. A
+         burrower breaks every one of those assumptions - it is authored
+         lying flat along its own axis, so "widest point" comes back as
+         its LENGTH and the suggested capsule is a 24m cylinder.
+         The numbers are still worth having; the capsule suggestion is
+         not, and printing it anyway is how a wrong hit volume gets
+         copied into combat.js by someone trusting this tool. */
+      const chained = await page.evaluate(
+        () => !!window.__SF.enemies.live[0]?.spine?.length);
       console.log(`\n${key}`);
       console.log(`  rest    ${rest.heightM}m tall · ${rest.widthM}m wide `
         + `· ${rest.lengthM}m long · ${(rest.heightM / 1.85).toFixed(2)}x trooper`);
-      console.log(`  radius  body ${rest.bodyRadiusM}m · widest (feet) ${rest.maxRadiusM}m`);
-      console.log(`  tallest pose "${tallest[0]}" tops out at ${tallest[1].topM}m`);
-      const y1 = tallest[1].topM * 1.04;
-      console.log(`  suggested HITBOX  { r: ${rest.bodyRadiusM.toFixed(2)}, `
-        + `y0: 0.02, y1: ${y1.toFixed(2)}, head: ?, headR: ? }`);
+      if (chained) {
+        const chain = await page.evaluate(() => {
+          const inst = window.__SF.enemies.live[0];
+          return { vertebrae: inst.spine.length, span: +inst.spineLength.toFixed(2),
+            segment: +(inst.spineArc[1] - inst.spineArc[0]).toFixed(3) };
+        });
+        console.log(`  chain   ${chain.vertebrae} vertebrae · ${chain.span}m of body `
+          + `· ${chain.segment}m per segment`);
+        console.log("  NO CAPSULE. This species is a body chain: its hit volume is a "
+          + "run of\n            per-vertebra capsules along the live spine, and its "
+          + "radii come\n            from HITBOX.profile rather than from anything "
+          + "measurable here.");
+      } else {
+        console.log(`  radius  body ${rest.bodyRadiusM}m · widest (feet) ${rest.maxRadiusM}m`);
+        console.log(`  tallest pose "${tallest[0]}" tops out at ${tallest[1].topM}m`);
+        const y1 = tallest[1].topM * 1.04;
+        console.log(`  suggested HITBOX  { r: ${rest.bodyRadiusM.toFixed(2)}, `
+          + `y0: 0.02, y1: ${y1.toFixed(2)}, head: ?, headR: ? }`);
+      }
       out.push({ key, rest, tallest: { clip: tallest[0], ...tallest[1] }, perClip });
     }
 

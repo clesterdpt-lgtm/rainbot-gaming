@@ -164,6 +164,69 @@ export const BESTIARY = {
        the count legible instead of a thicket. */
     kneePole: { up: 1.35, out: 1.55, fwd: 0 },
   },
+
+  /* ------------------------------------------------------------------
+     THE COULTER. The fifth silhouette, and the first that is not a
+     walker - so almost everything the four entries above tune does not
+     apply to it and the two fields that replace them are new.
+
+     `spine` puts it on the OTHER procedural solver in this file. The
+     walkers keep a body the clips pose and legs the IK owns; this one
+     is the reverse - the clips own its mouth and nothing else, and its
+     entire body is laid along a trail of the points its head has
+     already travelled through. That is the only model that makes a
+     burrower work: when the head dives, the body follows it down
+     through the same hole, because the hole is literally where the
+     head was.
+
+     `burrows` is the flag every system that assumes an enemy is
+     standing on the ground checks. It is deliberately a capability
+     rather than a species test - `key === "coulter"` scattered through
+     four modules is how the next burrower becomes a rewrite.
+     ------------------------------------------------------------------ */
+  coulter: {
+    url: "assets/models/saintfall/coulter.glb",
+    faction: "bloom",
+    /* Half again the Matriarch's, and the number is a consequence of
+       the fight's shape rather than a difficulty knob. It is only
+       hittable while it is out of the sand, which is about a third of
+       the cycle, so raw health has to be read as "health per surfacing"
+       - and at 5200 with the maw multiplier it takes four good
+       surfacings to kill, which is long enough for the player to have
+       to survive the venom rather than out-damage it. */
+    health: 5200,
+    scale: 1.0,
+    /* `walk` is what it makes when surfaced and anchored - it barely
+       moves, because a reared worm is a tower and not a chase. `charge`
+       is the BURROWING speed, and it is the fastest thing in the game
+       by four metres a second: under the sand it is untouchable, so the
+       only cost it can be given for crossing ground is time, and it
+       should not be much. */
+    speed: { walk: 2.2, charge: 13.5 },
+    material: { roughness: 0.50, metalness: 0.08, rim: 1.20, bio: 1.95 },
+    legs: 0,
+    spine: 13,
+    burrows: true,
+    stance: 0,
+    stepHeight: 0,
+    /* The mesosoma is 2.7m across at the swell. This is deliberately
+       under that: it is what keeps the animal out of masonry when it
+       surfaces, and a radius sized to the widest ring would refuse
+       every courtyard on the map. */
+    collisionRadius: 2.20,
+    /* The longest in the game. It is 25m of animal that rears eight
+       metres out of open sand, and a player who watches it dive on one
+       side of the basin has to be able to see the wake coming back. */
+    cullRange: 700,
+    /* Its own tiers, because the defaults were written for creatures a
+       tenth of its length: an animal culled for animation at 190m
+       would freeze mid-arc in plain sight. */
+    ikRange: 300,
+    animRange: 420,
+    poseRange: 700,
+    shadowRange: 150,
+    clips: ["idle", "alert", "spew", "strike", "flinch", "death"],
+  },
 };
 
 /* ============================================================
@@ -539,12 +602,22 @@ export async function buildEnemies(ctx, onProgress) {
       }
     }
 
+    /* The other chain: a body, front to back. Gathered by exactly the
+       same name-driven approach as the legs and for the same reason -
+       the solver works on any rig that follows the convention, at any
+       scale, without being told the creature's proportions. */
+    const spine = [];
+    for (let i = 0; i < (sp.spec.spine || 0); i += 1) {
+      const bone = bones.get(`spine${String(i).padStart(2, "0")}`);
+      if (bone) spine.push(bone);
+    }
+
     let skin = null;
     root.traverse((o) => { if (o.isSkinnedMesh && !skin) skin = o; });
 
     const inst = {
       id: typeof opts.id === "string" && opts.id ? opts.id : `sf-enemy-${nextId++}`,
-      key, root, mixer, actions, bones, legs, skin,
+      key, root, mixer, actions, bones, legs, spine, skin,
       spec: sp.spec,
       x, z,
       y: groundY(x, z),
@@ -610,10 +683,184 @@ export async function buildEnemies(ctx, onProgress) {
       leg.forward.set(0, 0, 1).applyQuaternion(root.quaternion).normalize();
     }
 
+    /* And the body chain's arc lengths, measured the same way off the
+       same bind pose: how far behind the mouth each vertebra's TAIL
+       sits. Those distances are what the trail is sampled at, so they
+       have to come off the model - a hard-coded segment length that
+       disagrees with the .glb by a few centimetres shows up as a body
+       that either concertinas into itself or pulls apart at every
+       joint, thirteen times over. */
+    if (spine.length) {
+      measureSpine(inst);
+      // Laid out straight, underground, aimed the way it was spawned
+      // facing. Anything else starts the animal as a knot at one point.
+      seedBody(inst, inst.x, inst.y - inst.body.depth, inst.z, inst.yaw);
+    }
+
     play(inst, "idle", 0);
-    if (opts.emerge) configureEmergence(inst, opts.emerge);
+    /* A burrower does not RISE, it arrives. The fissure-and-shards
+       emergence above is built for something standing up out of a hole
+       it made where it already was, and this animal's entrance is a
+       wake crossing two hundred metres of open sand - so it declines
+       the shared telegraph and starts the fight underground. */
+    if (opts.emerge && !sp.spec.burrows) configureEmergence(inst, opts.emerge);
     live.push(inst);
     return inst;
+  }
+
+  /* ============================================================
+     THE BODY CHAIN
+
+     One function of geometry and one of posing, and the split is the
+     same one the legs use: the runtime owns where the body IS, the
+     clips own what its mouth is doing.
+     ============================================================ */
+
+  const _origin = new THREE.Vector3();
+
+  function measureSpine(inst) {
+    inst.root.updateMatrixWorld(true);
+    _origin.setFromMatrixPosition(inst.root.matrixWorld);
+    const heads = inst.spine.map((bone) => bone.getWorldPosition(new THREE.Vector3()));
+    const arcs = [];
+    for (let i = 1; i < heads.length; i += 1) arcs.push(_origin.distanceTo(heads[i]));
+    /* The last vertebra has no successor to measure against, so its
+       tail is extrapolated by the segment length in front of it. Every
+       other arc is a real measurement. */
+    const lastSeg = heads.length > 1
+      ? heads[heads.length - 1].distanceTo(heads[heads.length - 2])
+      : 1;
+    arcs.push((arcs[arcs.length - 1] ?? 0) + lastSeg);
+    inst.spineArc = arcs;
+    inst.spineLength = arcs[arcs.length - 1];
+    inst.body = {
+      /* The trail: (x, y, z, distance-from-the-front) quadruples, newest
+         first. A ring buffer would save the shifting, but the sampler
+         walks it from the front on every frame anyway and 13 lookups
+         into 96 samples is not what this animal costs. */
+      trail: [],
+      head: new THREE.Vector3(),
+      // Last frame's head, so the encounter module can measure how far
+      // the animal really moved rather than how far it meant to.
+      prev: new THREE.Vector3(),
+      dir: new THREE.Vector3(0, 0, 1),
+      quat: new THREE.Quaternion(),
+      joints: arcs.map(() => new THREE.Vector3()),
+      // Owned by coulter.js from here; declared here so a save can be
+      // written and validated without the encounter module loaded.
+      phase: "burrow",
+      /* Seconds of hunting before it may surface, and it starts full.
+         A burrower that arrives and immediately erupts has skipped the
+         only part of its cycle the player can read. */
+      timer: 6,
+      heading: inst.yaw,
+      pitch: 0,
+      depth: 6,
+      hidden: true,
+      mawOpen: 0,
+      spewsLeft: 0,
+      surfacings: 0,
+    };
+    return inst.body;
+  }
+
+  /**
+   * Lay the whole body out straight behind a head position.
+   *
+   * Used on spawn, on load, and by anything that teleports the animal.
+   * The alternative - letting the trail fill in over the first second
+   * of movement - starts every Coulter as thirteen coincident segments
+   * at one point, which is a ball rather than a worm.
+   */
+  function seedBody(inst, x, y, z, heading = inst.yaw) {
+    const body = inst.body || (inst.spine.length ? measureSpine(inst) : null);
+    if (!body) return null;
+    const sx = Math.sin(heading);
+    const sz = Math.cos(heading);
+    body.head.set(x, y, z);
+    body.prev.set(x, y, z);
+    body.dir.set(sx, 0, sz);
+    body.heading = heading;
+    body.pitch = 0;
+    body.trail.length = 0;
+    const span = inst.spineLength + 4;
+    // Front to back, so index 0 is the freshest sample.
+    for (let d = 0; d <= span; d += 1.2) {
+      body.trail.push({ x: x - sx * d, y, z: z - sz * d, d });
+    }
+    poseBody(inst);
+    return body;
+  }
+
+  /**
+   * Sample the trail at `distance` behind the head.
+   *
+   * THE HEAD IS THE FIRST POINT, and it is not in the list. Samples are
+   * only laid every 0.9m, so between them the newest recorded point is
+   * up to 0.9m stale - and the front of a body sampled from that list
+   * alone lags the mouth by up to a whole segment, which reads as the
+   * neck stretching and snapping back every few frames.
+   *
+   * The alternative that suggests itself - dragging the front sample
+   * along with the head - is worse, and was tried: a sample that moves
+   * with the head has travelled no distance relative to it, so the
+   * threshold that lays the next one is never crossed, the list stops
+   * growing, and the body concertinas into the front ten metres of a
+   * twenty-five metre path.
+   */
+  function trailAt(body, distance, out) {
+    const trail = body.trail;
+    if (!trail.length) return out.copy(body.head);
+    let ax = body.head.x;
+    let ay = body.head.y;
+    let az = body.head.z;
+    let ad = 0;
+    for (let i = 0; i < trail.length; i += 1) {
+      const b = trail[i];
+      if (b.d < distance) {
+        ax = b.x; ay = b.y; az = b.z; ad = b.d;
+        continue;
+      }
+      const span = b.d - ad;
+      const t = span > 1e-5 ? (distance - ad) / span : 0;
+      return out.set(ax + (b.x - ax) * t, ay + (b.y - ay) * t, az + (b.z - az) * t);
+    }
+    const last = trail[trail.length - 1];
+    return out.set(last.x, last.y, last.z);
+  }
+
+  /** Resolve the trail into this frame's joint targets and root frame. */
+  function poseBody(inst) {
+    const body = inst.body;
+    if (!body) return;
+    for (let i = 0; i < inst.spineArc.length; i += 1) {
+      trailAt(body, inst.spineArc[i], body.joints[i]);
+    }
+    /* The root carries the head's full orientation, PITCH INCLUDED,
+       which is the one place this differs from every walker in the
+       file. A worm coming out of the sand at fifty degrees is doing the
+       only thing it does that a yaw-only transform cannot express, and
+       it is also the frame the whole encounter is sold on. */
+    _dir.copy(body.dir);
+    if (_dir.lengthSq() < 1e-8) _dir.set(0, 0, 1);
+    _dir.normalize();
+    _b.set(0, 0, 1);
+    body.quat.setFromUnitVectors(_b, _dir);
+  }
+
+  /**
+   * Aim each vertebra at its own trail point.
+   *
+   * The whole solver, and it is three lines because the rig was
+   * authored for it: every spine bone's rest axis already runs down the
+   * body, so the rotation each one receives is the actual bend and
+   * nothing else. `aimBone` walks the chain in order, so bone i reads
+   * the world position its parent has just given it.
+   */
+  function solveSpine(inst) {
+    const joints = inst.body?.joints;
+    if (!joints) return;
+    for (let i = 0; i < inst.spine.length; i += 1) aimBone(inst.spine[i], joints[i]);
   }
 
   function play(inst, name, fade = 0.22) {
@@ -812,6 +1059,10 @@ export async function buildEnemies(ctx, onProgress) {
      an enemy that is being walked toward you by combat.js but whose
      matrices stopped updating is an enemy that slides across the sand
      in its bind pose and then snaps when it crosses the line. */
+  /* These three are the DEFAULTS. Any species may raise its own - see
+     `coulter` in the bestiary - because a tier is really a statement
+     about how many pixels the thing is worth, and a 25m animal is
+     worth more of them at 300m than a Thresher is at 80. */
   const IK_RANGE = 85;
   const ANIM_RANGE = 190;
   const POSE_RANGE = 300;
@@ -913,34 +1164,56 @@ export async function buildEnemies(ctx, onProgress) {
          pixels and a Gleaner at 250m is a recognisable silhouette on a
          ridge, and popping the second one out would be visible. */
       const cull = inst.spec.cullRange || 260;
-      const shown = dyingOrNear(inst, d2, cull);
+      const ikRange = inst.spec.ikRange || IK_RANGE;
+      const animRange = inst.spec.animRange || ANIM_RANGE;
+      const poseRange = inst.spec.poseRange || POSE_RANGE;
+      /* A fully buried Coulter is behind an opaque planet, so it is
+         taken off the draw entirely - which for a 10,000-triangle
+         skinned mesh is worth more than any of the distance tiers. It
+         comes back the instant any part of it is above the sand, so a
+         breach is never the frame the animal appears in. */
+      const shown = dyingOrNear(inst, d2, cull) && !inst.body?.hidden;
       if (inst.root.visible !== shown) inst.root.visible = shown;
       if (inst.skin) {
-        const wants = shown && d2 < SHADOW_RANGE * SHADOW_RANGE;
+        const wants = shown
+          && d2 < (inst.spec.shadowRange || SHADOW_RANGE) ** 2;
         if (inst.skin.castShadow !== wants) inst.skin.castShadow = wants;
       }
       // Dying units always finish their clip: a corpse frozen
       // mid-collapse because the player walked away is worse than
       // the cost of animating it.
       const dying = inst.state === "death";
-      if (!dying && d2 > POSE_RANGE * POSE_RANGE) continue;
+      if (!dying && d2 > poseRange * poseRange) continue;
 
-      if (dying || d2 < ANIM_RANGE * ANIM_RANGE) inst.mixer.update(dt);
+      if (dying || d2 < animRange * animRange) inst.mixer.update(dt);
 
       const emerging = !dying && updateEmergence(inst, dt);
-      if (!emerging && (inst.state !== "death" || knocked)) {
+      if (inst.body) {
+        /* The body owns its own transform, and the AI that moves it
+           runs after this loop - so what is placed here is last
+           frame's trail. That is the same one-frame contract every
+           other creature in the file already has (combat writes
+           inst.x/z, this reads it next frame) and it is invisible at
+           any speed the animal actually travels. */
+        inst.root.position.copy(inst.body.head);
+        inst.root.quaternion.copy(inst.body.quat);
+        inst.root.updateMatrixWorld(true);
+      } else if (!emerging && (inst.state !== "death" || knocked)) {
         inst.y = damp(inst.y, groundY(inst.x, inst.z), 12, dt);
         inst.root.position.set(inst.x, inst.y, inst.z);
         if (inst.state !== "death") inst.root.rotation.y = inst.yaw;
       }
-      inst.root.updateMatrixWorld(true);
+      if (!inst.body) inst.root.updateMatrixWorld(true);
 
-      /* Legs are solved AFTER `mixer.update()`, deliberately. The
-         mixer writes every bone it has a track for; anything written
-         before it is overwritten. This ordering is what makes "clips
-         own the body, the solver owns the legs" actually true rather
-         than merely intended. */
-      if (!emerging && (dying || d2 < IK_RANGE * IK_RANGE)) solveLegs(inst, dt);
+      /* Legs and body are solved AFTER `mixer.update()`, deliberately.
+         The mixer writes every bone it has a track for; anything
+         written before it is overwritten. This ordering is what makes
+         "clips own the mouth, the solver owns the body" actually true
+         rather than merely intended. */
+      if (emerging) continue;
+      if (inst.body) {
+        if (dying || d2 < ikRange * ikRange) solveSpine(inst);
+      } else if (dying || d2 < ikRange * ikRange) solveLegs(inst, dt);
     }
   }
 
@@ -1122,6 +1395,23 @@ export async function buildEnemies(ctx, onProgress) {
           broodIds: (inst.broodKids || [])
             .filter((kid) => kid?.id && kid.state !== "death" && kid.health > 0)
             .map((kid) => kid.id),
+          /* A burrower's durable state is its PHASE, not its pose. The
+             trail is thirteen interpolated points behind a head that is
+             about to move anyway, so it is re-seeded straight on load
+             and the first second of travel curves it again; what a save
+             cannot reconstruct is whether the animal was eight metres
+             underground or reared over the player, and that is what is
+             written here. */
+          body: inst.body ? {
+            phase: String(inst.body.phase || "burrow"),
+            timer: Number((inst.body.timer || 0).toFixed(3)),
+            heading: Number((inst.body.heading || 0).toFixed(5)),
+            depth: Number((inst.body.depth || 0).toFixed(3)),
+            surfacings: Math.max(0, Math.round(inst.body.surfacings || 0)),
+            x: Number(inst.body.head.x.toFixed(3)),
+            y: Number(inst.body.head.y.toFixed(3)),
+            z: Number(inst.body.head.z.toFixed(3)),
+          } : null,
           emergence: inst.emerging ? {
             active: !!inst.emerging.active,
             surfaced: !!inst.emerging.surfaced,
@@ -1188,6 +1478,19 @@ export async function buildEnemies(ctx, onProgress) {
         && Number.isFinite(Number(record.broodTimer))) {
         inst.broodTimer = Math.max(0, Number(record.broodTimer));
       }
+      if (inst.body) {
+        const saved = record.body && typeof record.body === "object" ? record.body : {};
+        const heading = Number.isFinite(Number(saved.heading))
+          ? Number(saved.heading) : inst.yaw;
+        const hy = Number.isFinite(Number(saved.y))
+          ? Number(saved.y) : groundY(x, z);
+        seedBody(inst, Number.isFinite(Number(saved.x)) ? Number(saved.x) : x,
+          hy, Number.isFinite(Number(saved.z)) ? Number(saved.z) : z, heading);
+        inst.body.phase = typeof saved.phase === "string" ? saved.phase : "burrow";
+        inst.body.timer = Math.max(0, Number(saved.timer) || 0);
+        inst.body.depth = clamp(Number(saved.depth) || 0, -20, 20);
+        inst.body.surfacings = Math.max(0, Math.round(Number(saved.surfacings) || 0));
+      }
       if (inst.emerging && emergenceRecord) {
         inst.emerging.elapsed = Math.max(0, Number(emergenceRecord.elapsed) || 0);
         inst.emerging.active = true;
@@ -1222,6 +1525,14 @@ export async function buildEnemies(ctx, onProgress) {
     restore,
     play,
     update,
+    /* The body chain's public surface, for the encounter module that
+       drives it. `seedBody` lays a worm out straight, `poseBody`
+       resolves this frame's trail into joint targets, and `trailAt`
+       answers "where was the head N metres ago" - which is what a
+       burrowing wake, a hit capsule and a dive all need. */
+    seedBody,
+    poseBody,
+    trailAt,
     knockback,
     stun,
     kill(inst) { play(inst, "death", 0.12); },

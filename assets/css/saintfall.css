@@ -569,6 +569,28 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
 .sf-hud__hurt.is-hit { animation: sf-hurt .52s ease-out 1; }
 @keyframes sf-hurt { from { opacity: 1; } to { opacity: 0; } }
 
+/* VENOM. Held rather than flashed - it is a condition, not an event -
+   so the opacity is driven from the toxin level in JS and only the
+   creep of the inner edge is animated here. Green, because green means
+   exactly one thing in this game and this is it. The vignette stays
+   well clear of the centre: a screen effect that obscures the reticle
+   punishes the player twice for the same mistake. */
+.sf-hud__toxin {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  transition: opacity .35s linear;
+  background:
+    radial-gradient(ellipse at center,
+      rgba(120, 190, 30, 0) 38%, rgba(96, 168, 24, .34) 78%,
+      rgba(52, 104, 12, .68) 100%);
+}
+.sf-hud__toxin[data-state="crit"] {
+  animation: sf-toxin 1.6s ease-in-out infinite;
+}
+@keyframes sf-toxin {
+  0%, 100% { filter: saturate(1) brightness(1); }
+  50% { filter: saturate(1.35) brightness(1.22); }
+}
+
 /* Damage numbers are DOM text anchored to projected world points. The
    heavy shadow and hairline stroke keep two digits readable against
    both noon sand and the almost-black night preset. */

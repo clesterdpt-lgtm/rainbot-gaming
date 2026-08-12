@@ -115,7 +115,8 @@ export function buildSlam(ctx, player) {
       state.lastReason = "grounded";
       return false;
     }
-    if (altitude() < config.minHeight) {
+    const startAltitude = altitude();
+    if (startAltitude < config.minHeight) {
       state.lastReason = "too-low";
       return false;
     }
@@ -125,6 +126,7 @@ export function buildSlam(ctx, player) {
        one frame after the player left the ground; and as an AIRBORNE
        spend because this is committed to mid-flight, which the pack
        otherwise treats as someone siphoning the tank it is burning. */
+    const fuelBefore = ctx.jetpack?.state?.fuel;
     if (!ctx.jetpack?.spend?.(config.fuelCost, true, true)) {
       state.lastReason = "low-charge";
       return false;
@@ -140,6 +142,17 @@ export function buildSlam(ctx, player) {
     state.slams += 1;
     state.lastHits = 0;
     state.lastReason = "hang";
+    ctx.progression?.noteVerb?.("slam", {
+      verb: "slam",
+      x: ps.x,
+      y: ps.y,
+      z: ps.z,
+      altitude: startAltitude,
+      fuelBefore,
+      fuel: ctx.jetpack?.state?.fuel,
+      fuelCost: config.fuelCost,
+      slamIndex: state.slams,
+    });
     ctx.vfx?.slamCharge?.(ps.x, ps.y, ps.z, 0);
     ctx.audio?.slamCharge?.(ps.x, ps.z);
     return true;
@@ -243,15 +256,39 @@ export function buildSlam(ctx, player) {
        top of a jetpack climb is worth the climb. Capped, because the
        map has 40m drops in it and a 20m shockwave is not a melee. */
     const drop = clamp01(state.fallen / 14);
-    const radius = config.radius * (1 + drop * 0.28);
-    const result = ctx.combat?.shockwave?.(ps.x, ps.y, ps.z, {
-      radius,
+    const baseOptions = {
+      radius: config.radius * (1 + drop * 0.28),
       innerRadius: config.innerRadius,
       damage: config.damage * (1 + drop * 0.22),
       edgeFalloff: config.edgeFalloff,
       stun: config.stun,
       knockSpeed: config.knockSpeed,
       source: "slam",
+      drop,
+      fallen: state.fallen,
+      x: ps.x,
+      y: ps.y,
+      z: ps.z,
+    };
+    const changed = ctx.progression?.modifySlam?.({ ...baseOptions });
+    const options = changed && typeof changed === "object"
+      ? { ...baseOptions, ...changed }
+      : baseOptions;
+    for (const field of ["radius", "innerRadius", "damage", "stun", "knockSpeed"]) {
+      if (!Number.isFinite(options[field])) options[field] = baseOptions[field];
+      options[field] = Math.max(0, options[field]);
+    }
+    if (!Number.isFinite(options.edgeFalloff)) options.edgeFalloff = baseOptions.edgeFalloff;
+    options.edgeFalloff = clamp01(options.edgeFalloff);
+    const radius = options.radius;
+    const result = ctx.combat?.shockwave?.(ps.x, ps.y, ps.z, {
+      radius: options.radius,
+      innerRadius: options.innerRadius,
+      damage: options.damage,
+      edgeFalloff: options.edgeFalloff,
+      stun: options.stun,
+      knockSpeed: options.knockSpeed,
+      source: options.source || "slam",
     }) || { hits: 0, kills: 0, stunned: 0 };
 
     state.hits += result.hits;

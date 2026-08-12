@@ -842,6 +842,12 @@ export function buildVfx(ctx, world) {
         // behind a gold slug.
         uEnergyHot: { value: new THREE.Color("#fffdf4") },
         uEnergyCold: { value: new THREE.Color("#ff9d22") },
+        // The Coulter's venom, and the only green in the game. See the
+        // palette note in the Blender kit: green means hazard here and
+        // nothing else, so it may not drift toward either the brood's
+        // cyan or the Concord's gold.
+        uVenomHot: { value: new THREE.Color("#eaff9c") },
+        uVenomCold: { value: new THREE.Color("#4f7a12") },
       },
       transparent: true,
       depthWrite: false,
@@ -868,11 +874,17 @@ export function buildVfx(ctx, world) {
         "    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);",
         "    return;",
         "  }",
-        // Reliquary ions hang in the wake; ordinary sparks still fall.
-        // `aTint > 1` is the pool's explicit energy style channel.
-        "  float energy = step(1.5, aTint);",
+        /* `aTint` is the pool's style channel as well as its heat, in
+           bands: under 1.5 is debris, 1.5-3.5 is a reliquary ion,
+           3.5-4.5 is a venom droplet and above that is venom gas.
+           Reliquary ions and gas hang; debris and droplets fall,
+           because a thrown liquid that floats reads as a spore. */
+        "  float venom = step(3.5, aTint);",
+        "  float gas = step(4.5, aTint);",
+        "  float energy = step(1.5, aTint) * (1.0 - venom);",
+        "  float fall = (1.0 - energy) * (1.0 - gas);",
         "  vec3 p = position + aVel * age",
-        "    - vec3(0.0, 9.0, 0.0) * age * age * (1.0 - energy);",
+        "    - vec3(0.0, 9.0, 0.0) * age * age * fall;",
         "  vec4 mv = modelViewMatrix * vec4(p, 1.0);",
         "  gl_Position = projectionMatrix * mv;",
         "  gl_PointSize = aSize * uPixel * vLife / max(1.0, -mv.z * 0.06);",
@@ -884,6 +896,8 @@ export function buildVfx(ctx, world) {
         "uniform vec3 uCold;",
         "uniform vec3 uEnergyHot;",
         "uniform vec3 uEnergyCold;",
+        "uniform vec3 uVenomHot;",
+        "uniform vec3 uVenomCold;",
         "varying float vLife;",
         "varying float vTint;",
         "void main() {",
@@ -891,10 +905,16 @@ export function buildVfx(ctx, world) {
         "  float r = dot(d, d);",
         "  if (r > 0.25) discard;",
         "  float core = smoothstep(0.25, 0.0, r);",
-        "  float energy = step(1.5, vTint);",
+        "  float venom = step(3.5, vTint);",
+        "  float energy = step(1.5, vTint) * (1.0 - venom);",
         "  vec3 sparkColour = mix(uCold, uHot, clamp(vTint * vLife, 0.0, 1.0));",
         "  vec3 ionColour = mix(uEnergyCold, uEnergyHot, 0.30 + vLife * 0.70);",
-        "  vec3 c = mix(sparkColour, ionColour, energy);",
+        /* Kept at the SATURATED end of its own ramp. Mixed toward the
+           pale hot colour the way a spark is, venom gas came out as
+           white motes - and white is what every other particle in the
+           game already is, so the one hazard colour stopped being one. */
+        "  vec3 venomColour = mix(uVenomCold, uVenomHot, 0.08 + vLife * 0.30);",
+        "  vec3 c = mix(mix(sparkColour, ionColour, energy), venomColour, venom);",
         "  gl_FragColor = vec4(c * core * (0.35 + vLife * 1.5), core * vLife);",
         "}",
       ].join("\n"),
@@ -1453,6 +1473,8 @@ export function buildVfx(ctx, world) {
         // either on its own.
         uEnergyHot: { value: new THREE.Color("#fffdf4") },
         uEnergyCold: { value: new THREE.Color("#ffab2a") },
+        uVenomHot: { value: new THREE.Color("#eaff9c") },
+        uVenomCold: { value: new THREE.Color("#5b8a12") },
       },
       transparent: true,
       depthWrite: false,
@@ -1498,6 +1520,8 @@ export function buildVfx(ctx, world) {
         "uniform vec3 uCold;",
         "uniform vec3 uEnergyHot;",
         "uniform vec3 uEnergyCold;",
+        "uniform vec3 uVenomHot;",
+        "uniform vec3 uVenomCold;",
         "varying vec2 vUv;",
         "varying float vFade;",
         "varying float vSeed;",
@@ -1511,7 +1535,8 @@ export function buildVfx(ctx, world) {
         "  float ang = atan(vUv.y, vUv.x);",
         "  float star = pow(abs(cos(ang * 2.0 + vSeed * 6.2831)), 6.0);",
         "  float starBurst = core + star * pow(clamp(1.0 - r, 0.0, 1.0), 1.1) * 0.85;",
-        "  float energy = step(1.5, vTint);",
+        "  float venom = step(3.5, vTint);",
+        "  float energy = step(1.5, vTint) * (1.0 - venom);",
         // A brief expanding annulus is the discharge field; ballistic
         // flashes keep the original four-spike star.
         "  float ring = smoothstep(0.26, 0.48, r)",
@@ -1519,9 +1544,13 @@ export function buildVfx(ctx, world) {
         "  float energyBurst = core * 0.82 + ring * (0.45 + (1.0 - vFade) * 0.55)",
         "    + star * 0.20;",
         "  float burst = mix(starBurst, energyBurst, energy);",
+        // A venom mouth-flash is a soft glow, not a star: it is light
+        // coming out of a throat rather than a discharge.
+        "  burst = mix(burst, core * 1.15, venom);",
         "  vec3 flashColour = mix(uCold, uHot, clamp(vTint * (0.35 + vFade), 0.0, 1.0));",
         "  vec3 energyColour = mix(uEnergyCold, uEnergyHot, core);",
-        "  vec3 c = mix(flashColour, energyColour, energy);",
+        "  vec3 venomColour = mix(uVenomCold, uVenomHot, 0.30 + core * 0.60);",
+        "  vec3 c = mix(mix(flashColour, energyColour, energy), venomColour, venom);",
         "  float a = clamp(burst * vFade, 0.0, 1.0);",
         "  gl_FragColor = vec4(c * burst * vFade * 3.4, a);",
         "}",
@@ -1926,6 +1955,54 @@ export function buildVfx(ctx, world) {
     flashes.emit(x, y + 0.16, z, radius * 0.22, 0.18 + power * 0.025, 0.28);
   }
 
+  /* ------------------------------------------------------------------
+     THE COULTER'S THREE EFFECTS
+
+     All three ride the existing impact pool rather than bringing their
+     own system, which is the whole reason the pool has a style channel:
+     a burrowing boss adds nine hundred particles a second at its worst
+     and it does it inside the same 512-slot budget every other impact
+     in the game already shares.
+     ------------------------------------------------------------------ */
+
+  /** Sand thrown along a heading. The wake's speed, and the only part
+   *  of a submerged animal the player can actually read. */
+  function sandSpray(x, y, z, scale = 1, dx = 0, dz = 1) {
+    const len = Math.hypot(dx, dz) || 1e-6;
+    /* MANY SMALL MOTES, not a few big ones. Same total area, completely
+       different read: a handful of large sprites on an additive pass is
+       a fireball, and a cloud of small ones is dust. The debris tint
+       these are emitted at was pushed up the pool's heat ramp for the
+       same reason - at the cold end they came out a saturated ember
+       orange that read as burning sand. */
+    const count = Math.max(4, Math.round(6 + scale * 9));
+    // Forward and UP, because sand pushed out of a furrow leaves it at
+    // the angle of repose rather than straight ahead - and thrown hard,
+    // because this plume is the only part of a submerged animal the
+    // player can see and it has to carry further than the ridge making
+    // it.
+    impacts.emitDirected(x, y, z, count, (dx / len) * 0.55, 0.94, (dz / len) * 0.55,
+      5.2 + scale * 4.4, 0.78 * scale, 0.30);
+  }
+
+  /** A thrown or landing globule coming apart. Droplets, so they fall. */
+  function venomBurst(x, y, z, scale = 1) {
+    impacts.emit(x, y, z, Math.round(10 + scale * 9), 2.8 * scale,
+      0.85 * scale, 4.0);
+    flashes.emit(x, y, z, 0.55 * scale, 0.16, 4.0);
+  }
+
+  /** What a pool gives off. Gas, so it rises and hangs. */
+  function venomGas(x, y, z, radius = 3, strength = 1) {
+    const count = Math.max(1, Math.round(2 + strength * 4));
+    for (let i = 0; i < count; i += 1) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random()) * radius;
+      impacts.emit(x + Math.cos(a) * r, y, z + Math.sin(a) * r, 1,
+        0.85, 1.35 * (0.6 + strength * 0.5), 5.0);
+    }
+  }
+
   return {
     group,
     plumes,
@@ -1935,6 +2012,9 @@ export function buildVfx(ctx, world) {
     meleeArc,
     blast,
     breach,
+    sandSpray,
+    venomBurst,
+    venomGas,
     tracer,
     muzzle,
     boostIgnite,

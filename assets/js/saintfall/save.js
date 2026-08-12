@@ -8,11 +8,26 @@
    ============================================================ */
 
 import { clamp, clamp01 } from "saintfall/core.js";
+import {
+  FIELD_RANK_CAP,
+  FIELD_RANK_XP_THRESHOLDS,
+  DOCTRINE_POINT_START_RANK,
+  DOCTRINE_POINTS_PER_RANK,
+  DOCTRINE_ORDERS,
+} from "saintfall/progression-config.js";
 
 const GAME_ID = "saintfall";
 const SAVE_VERSION = 2;
 const MANUAL_SLOTS = 3;
 const AUTOSAVE_AFTER = 42;
+const AUTOSAVE_RETRY_BASE = 5;
+const AUTOSAVE_RETRY_MAX = 120;
+const CAREER_CONFLICT_KEY = "saintfall:career-conflict:v1";
+/* The burrower's cycle, as a closed set. Kept here beside the other
+   schema constants rather than imported from coulter.js: this file's
+   job is to distrust the payload, and a validator that asks the runtime
+   what is valid has already given up its independence. */
+const BURROW_PHASES = new Set(["burrow", "rise", "crest", "dive", "dead"]);
 
 function finite(value, fallback = 0) {
   const number = Number(value);
@@ -23,12 +38,23 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function safeClone(value, fallback = null) {
+  try { return clone(value); } catch (_) { return fallback; }
+}
+
 function isRecord(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 function isFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+const ORDER_BY_TALENT = new Map();
+const CAPSTONE_NAMES = new Map();
+for (const order of DOCTRINE_ORDERS) {
+  for (const talent of order.talents) ORDER_BY_TALENT.set(talent.id, order);
+  if (order.capstone) CAPSTONE_NAMES.set(order.capstone.id, order.capstone.name);
 }
 
 function validRngState(value) {
@@ -73,17 +99,234 @@ function fallbackSlot() {
 export function buildSaveSystem(ctx, options = {}) {
   const slot = window.RBGameSaves?.create?.(GAME_ID, { version: SAVE_VERSION })
     || fallbackSlot();
-  /* Saintfall boots after the shared account synchronizer may already
-     have made its one authentication pass. Registering the slot here
-     and asking for a fresh merge prevents a newer cloud field save
-     from being missed simply because the 3D assets took longer. */
-  void window.RBGameSaves?.syncWithCloud?.();
   const listeners = new Set();
   let autosaveClock = 0;
+  let autosaveFailures = 0;
+  let autosaveRetryRemaining = 0;
   let lastResult = null;
+  let careerHydrated = false;
+  let careerBaseline = "";
+  let careerBaselineHadRecord = false;
+  const INVALID_CAREER = Symbol("invalid-career");
+  let careerQuarantined = false;
+  let careerConflictRecord = null;
+  let careerConflictLoaded = false;
 
   function emptyData() {
-    return { schema: SAVE_VERSION, autosave: null, manuals: Array(MANUAL_SLOTS).fill(null) };
+    return {
+      schema: SAVE_VERSION,
+      /* Career progression belongs to the account envelope, not any single
+         field slot. Keeping this additive lets schema-2 field saves remain
+         valid while a fresh career is created by the progression service. */
+      career: null,
+      autosave: null,
+      manuals: Array(MANUAL_SLOTS).fill(null),
+    };
+  }
+
+  function normalizeCareer(value) {
+    if (value === null || value === undefined) return null;
+    if (!isRecord(value)) return INVALID_CAREER;
+    const validate = ctx.progression?.validateCareer;
+    if (typeof validate !== "function") return clone(value);
+    const result = validate(value);
+    if (result === false || result === null || result === undefined) return INVALID_CAREER;
+    return isRecord(result) ? clone(result) : clone(value);
+  }
+
+  function sameCareer(a, b) {
+    return JSON.stringify(a || null) === JSON.stringify(b || null);
+  }
+
+  function sameCareerBuild(a, b) {
+    return !!a && !!b
+      && JSON.stringify(a.allocations || {}) === JSON.stringify(b.allocations || {})
+      && JSON.stringify(a.activeCapstones || []) === JSON.stringify(b.activeCapstones || []);
+  }
+
+  /* A scalar revision only describes ordering on one writer. It is not proof
+     that a career authored on another device descended from this one. A
+     descendant must also contain every authoritative receipt, dominate each
+     monotonic career counter, and keep the same build. Remote build edits are
+     therefore surfaced for an explicit choice instead of being silently won
+     by the numerically larger revision. */
+  function careerDominates(candidate, current, { requireSameBuild = true } = {}) {
+    if (!candidate || !current || candidate.totalXp < current.totalXp
+      || candidate.revision < current.revision
+      || (requireSameBuild && !sameCareerBuild(candidate, current))) return false;
+    const incomingReceipts = new Set(candidate.receipts || []);
+    if (!(current.receipts || []).every((receipt) => incomingReceipts.has(receipt))) return false;
+    const dominates = ["kills", "relays", "breachWaves", "breachCycles", "operations"]
+      .every((key) => (candidate.lifetime?.[key] || 0) >= (current.lifetime?.[key] || 0));
+    if (!dominates) return false;
+    if (candidate.revision === current.revision) {
+      return sameCareer(candidate, current);
+    }
+    return true;
+  }
+
+  function conflictBranch(value, source, capturedAt = Date.now()) {
+    const wrapped = isRecord(value) && Object.prototype.hasOwnProperty.call(value, "record");
+    const candidate = wrapped ? value.record : value;
+    const available = wrapped ? value.available !== false : candidate !== null && candidate !== undefined;
+    const normalized = normalizeCareer(candidate);
+    const valid = normalized !== INVALID_CAREER && normalized !== null;
+    return {
+      source,
+      capturedAt: Number.isSafeInteger(Number(wrapped ? value.capturedAt : capturedAt))
+        ? Number(wrapped ? value.capturedAt : capturedAt) : Date.now(),
+      available,
+      valid,
+      record: valid ? normalized : null,
+      invalidReason: available && !valid ? "Career record failed validation." : "",
+    };
+  }
+
+  function normalizeConflictRecord(value) {
+    if (!isRecord(value)) return null;
+    const at = Number.isSafeInteger(Number(value.at)) ? Number(value.at) : Date.now();
+    const reason = typeof value.reason === "string" && value.reason.trim()
+      ? value.reason.trim().slice(0, 160) : "career-conflict";
+    let local;
+    let synced;
+    if (value.schema === 2 && isRecord(value.branches)) {
+      local = conflictBranch(value.branches.local, "device", at);
+      synced = conflictBranch(value.branches.synced, "synced", at);
+    } else if (value.schema === 1) {
+      /* Read-only migration for conflicts created by the first progression
+         slice. The selected branch is rewritten in schema 2 on the next
+         conflict; no unvalidated legacy payload is ever exposed to callers. */
+      local = conflictBranch(value.local, "device", at);
+      synced = conflictBranch(value.incoming, "synced", at);
+    } else return null;
+    if (!local.valid && !synced.valid) return null;
+    return {
+      schema: 2,
+      active: value.active !== false,
+      at,
+      reason,
+      branches: { local, synced },
+    };
+  }
+
+  function loadCareerConflict() {
+    if (careerConflictLoaded) return careerConflictRecord;
+    careerConflictLoaded = true;
+    if (ctx.qa) return careerConflictRecord;
+    try {
+      careerConflictRecord = normalizeConflictRecord(
+        JSON.parse(localStorage.getItem(CAREER_CONFLICT_KEY) || "null")
+      );
+    } catch (_) { careerConflictRecord = null; }
+    if (careerConflictRecord?.active) careerQuarantined = true;
+    return careerConflictRecord;
+  }
+
+  function persistCareerConflict(record) {
+    careerConflictRecord = normalizeConflictRecord(record);
+    careerConflictLoaded = true;
+    if (!careerConflictRecord) return false;
+    careerQuarantined = true;
+    if (ctx.qa) return true;
+    try {
+      const serialized = JSON.stringify(careerConflictRecord);
+      localStorage.setItem(CAREER_CONFLICT_KEY, serialized);
+      return localStorage.getItem(CAREER_CONFLICT_KEY) === serialized;
+    } catch (_) { return false; }
+  }
+
+  function preserveCareerConflict(localCareer, incomingCareer, reason) {
+    const at = Date.now();
+    return persistCareerConflict({
+      schema: 2,
+      active: true,
+      at,
+      reason,
+      branches: {
+        local: conflictBranch(localCareer, "device", at),
+        synced: conflictBranch(incomingCareer, "synced", at),
+      },
+    });
+  }
+
+  function careerRank(totalXp) {
+    let rank = 1;
+    for (let index = 1; index < FIELD_RANK_XP_THRESHOLDS.length; index += 1) {
+      if (totalXp < FIELD_RANK_XP_THRESHOLDS[index]) break;
+      rank = index + 1;
+    }
+    return Math.min(FIELD_RANK_CAP, rank);
+  }
+
+  function careerSummary(record, updatedAt) {
+    const rank = careerRank(record.totalXp);
+    const earned = Math.max(0,
+      rank - DOCTRINE_POINT_START_RANK + 1) * DOCTRINE_POINTS_PER_RANK;
+    const spent = Object.values(record.allocations || {})
+      .reduce((sum, amount) => sum + Math.max(0, finite(amount)), 0);
+    const byOrder = new Map();
+    for (const [talentId, amount] of Object.entries(record.allocations || {})) {
+      const order = ORDER_BY_TALENT.get(talentId);
+      if (!order || amount <= 0) continue;
+      byOrder.set(order.id, {
+        id: order.id,
+        name: order.shortName || order.name,
+        points: (byOrder.get(order.id)?.points || 0) + amount,
+      });
+    }
+    const build = [...byOrder.values()].sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+    const activeVows = (record.activeCapstones || [])
+      .filter(Boolean)
+      .map((id) => CAPSTONE_NAMES.get(id) || id);
+    return {
+      rank,
+      totalXp: record.totalXp,
+      revision: record.revision,
+      pointsEarned: earned,
+      pointsSpent: spent,
+      pointsAvailable: Math.max(0, earned - spent),
+      doctrinePoints: {
+        earned,
+        spent,
+        available: Math.max(0, earned - spent),
+      },
+      build,
+      buildLabel: build.length ? build.map((order) => `${order.name} ${order.points}`).join(" + ") : "Uninscribed",
+      activeVows,
+      activeVowNames: activeVows,
+      receipts: record.receipts?.length || 0,
+      lifetime: { ...(record.lifetime || {}) },
+      updatedAt,
+    };
+  }
+
+  function conflictState() {
+    const record = loadCareerConflict();
+    const branchState = (branch, label) => ({
+      source: branch?.source || "",
+      label,
+      available: !!branch?.available,
+      valid: !!branch?.valid,
+      summary: branch?.valid ? careerSummary(branch.record, branch.capturedAt) : null,
+      invalidReason: branch?.invalidReason || "",
+    });
+    return {
+      active: !!record?.active,
+      at: record?.at || 0,
+      reason: record?.reason || "",
+      branches: {
+        local: branchState(record?.branches?.local, "This device"),
+        synced: branchState(record?.branches?.synced, "Synced career"),
+      },
+    };
+  }
+
+  function validFieldProgression(value) {
+    if (value === null || value === undefined) return true;
+    if (!isRecord(value)) return false;
+    const validate = ctx.progression?.validateField
+      || ctx.progression?.validateFieldState;
+    return typeof validate !== "function" || validate(value) !== false;
   }
 
   function readData() {
@@ -98,7 +341,31 @@ export function buildSaveSystem(ctx, options = {}) {
     const autosave = data.autosave?.snapshot?.schema === SAVE_VERSION
       && validSnapshot(data.autosave.snapshot)
       ? data.autosave : null;
-    return { schema: SAVE_VERSION, autosave, manuals };
+    const career = normalizeCareer(data.career);
+    if (career === INVALID_CAREER) careerQuarantined = true;
+    return {
+      schema: SAVE_VERSION,
+      career: career === INVALID_CAREER ? null : career,
+      careerStatus: career === INVALID_CAREER ? "invalid" : career ? "valid" : "missing",
+      autosave,
+      manuals,
+    };
+  }
+
+  /* Career persistence is an orthogonal account mutation. Preserve the raw
+     field slots byte-for-structure even when a slot was authored by a newer
+     build and this runtime cannot currently load it; resolving a career must
+     never double as deleting a field save. */
+  function readDataForCareerWrite() {
+    const raw = slot.read()?.data;
+    if (!isRecord(raw) || raw.schema !== SAVE_VERSION) return emptyData();
+    return {
+      schema: SAVE_VERSION,
+      career: safeClone(raw.career, null),
+      autosave: safeClone(raw.autosave, null),
+      manuals: Array.from({ length: MANUAL_SLOTS }, (_, index) =>
+        safeClone(raw.manuals?.[index], null)),
+    };
   }
 
   function notify(type, detail = {}) {
@@ -165,6 +432,11 @@ export function buildSaveSystem(ctx, options = {}) {
       mission,
       breaches: breach,
       enemies: ctx.enemies.snapshot(),
+      /* Only the venom already in the player. The pools on the ground
+         and the globules in the air are deliberately not saved - see
+         coulter.js - so a load never drops the player into a hazard
+         they never saw arrive. */
+      coulter: ctx.coulter?.snapshot?.() || null,
       weapon: ctx.weapons.snapshot?.() || null,
       boost: ctx.boost.status?.() || null,
       slam: ctx.slam?.status?.() || null,
@@ -182,6 +454,10 @@ export function buildSaveSystem(ctx, options = {}) {
         cooldownRemaining: Math.max(0, finite(ctx.jetpack?.state?.cooldownRemaining)),
         rechargeDelayRemaining: Math.max(0, finite(ctx.jetpack?.state?.rechargeDelayRemaining)),
       },
+      /* This is intentionally only the deployed/loadout state. Career XP,
+         receipts, and the authoritative talent ledger are envelope data and
+         must never be rolled backward by loading an old field save. */
+      progression: ctx.progression?.captureField?.() || null,
     };
   }
 
@@ -301,6 +577,24 @@ export function buildSaveSystem(ctx, options = {}) {
             enemy.emergence.burst, enemy.emergence.boss]
             .some((value) => typeof value !== "boolean")) return false;
       }
+      /* A burrower's cycle state. `phase` is checked against the exact
+         set the state machine can be in rather than "is a string",
+         because a bad phase does not throw - it silently strands the
+         boss in a state nothing advances, which presents as a boss that
+         never comes out of the ground. */
+      if (enemy.body !== null && enemy.body !== undefined) {
+        if (!isRecord(enemy.body)
+          || !BURROW_PHASES.has(enemy.body.phase)
+          || ![enemy.body.timer, enemy.body.heading, enemy.body.depth,
+            enemy.body.x, enemy.body.y, enemy.body.z].every(isFiniteNumber)
+          || enemy.body.timer < -2 || enemy.body.timer > 600
+          || Math.abs(enemy.body.heading) > 100
+          || Math.abs(enemy.body.depth) > 60
+          || Math.abs(enemy.body.x) > 2000 || Math.abs(enemy.body.z) > 2000
+          || Math.abs(enemy.body.y) > 2000
+          || !Number.isInteger(enemy.body.surfacings)
+          || enemy.body.surfacings < 0 || enemy.body.surfacings > 100000) return false;
+      }
       enemyIds.add(enemy.id);
       enemyById.set(enemy.id, enemy);
       maxEnemyId = Math.max(maxEnemyId, idNumber);
@@ -362,9 +656,24 @@ export function buildSaveSystem(ctx, options = {}) {
       && noBreachMembers && breach.complete
     );
     const bossPresent = breach.bossId !== null;
+    /* WHICH SPECIES MAY HOLD A BOSS BAR, from the wave table rather than
+       as a literal. This check used to read `=== "matriarch"`, which was
+       true when there was one boss and became a silent rejection of
+       every save made during the second one: the payload was structurally
+       perfect, so the load failed with "this save is incompatible" and
+       nothing said why.
+
+       The wave definitions are frozen module constants, not player data,
+       so reading them is not the validator trusting its input. The
+       literal fallback only matters if the breach module is absent
+       entirely, in which case there is no event to validate. */
+    const bossKeys = new Set((ctx.breaches?.waves || [])
+      .map((wave) => wave?.bossKey)
+      .filter((key) => typeof key === "string" && key));
+    if (!bossKeys.size) bossKeys.add("matriarch");
     const bossShape = bossPresent === (breach.boss !== null)
       && (!bossPresent || (uniqueBreachMembers.has(breach.bossId)
-        && enemyById.get(breach.bossId)?.key === "matriarch"));
+        && bossKeys.has(enemyById.get(breach.bossId)?.key)));
     if (!dormantShape || !warningShape || !activeShape || !intermissionShape
       || !completeShape || breach.complete !== (breach.phase === "complete")
       || !bossShape) return false;
@@ -399,6 +708,16 @@ export function buildSaveSystem(ctx, options = {}) {
       || Object.prototype.hasOwnProperty.call(atmosphere, "cycleDuration")
       || Object.prototype.hasOwnProperty.call(atmosphere, "cycleRunning")
       || Object.prototype.hasOwnProperty.call(atmosphere, "cycleCount");
+    if (snapshot.progression !== undefined && !validFieldProgression(snapshot.progression)) {
+      return false;
+    }
+    /* Optional, so saves written before the Coulter existed still load.
+       Present and malformed is a rejection; absent is a zero. */
+    if (snapshot.coulter !== null && snapshot.coulter !== undefined) {
+      const venom = snapshot.coulter;
+      if (!isRecord(venom) || !isFiniteNumber(venom.toxin)
+        || venom.toxin < 0 || venom.toxin > 1) return false;
+    }
     return !hasCycle || (
       isFiniteNumber(atmosphere.cyclePhase)
       && atmosphere.cyclePhase >= 0 && atmosphere.cyclePhase < 1
@@ -410,13 +729,240 @@ export function buildSaveSystem(ctx, options = {}) {
   }
 
   function writeData(data, meta = {}) {
-    const ok = slot.save(data, {
+    /* Every field write re-reads the current account career immediately
+       before committing the shared envelope. This prevents an already-open
+       tab's stale in-memory field state from carrying stale XP back over a
+       newer locally/cloud-synced career. */
+    if (!ctx.qa && careerQuarantined && !meta.repair) return false;
+    if (!ctx.qa && !meta.career) {
+      const latest = readData();
+      if (latest.careerStatus === "invalid") return false;
+      data.career = latest.career;
+    }
+    /* `careerStatus` is a read-time diagnostic, never part of the durable
+       schema. Rebuild the exact envelope shape here so recovery metadata or
+       another caller's scratch fields cannot leak into account storage. */
+    const durable = {
+      schema: SAVE_VERSION,
+      career: data.career ? clone(data.career) : null,
+      autosave: data.autosave ? clone(data.autosave) : null,
+      manuals: Array.from({ length: MANUAL_SLOTS }, (_, index) =>
+        data.manuals?.[index] ? clone(data.manuals[index]) : null),
+    };
+    const ok = slot.save(durable, {
       label: "Saintfall field command",
-      slots: data.manuals.filter(Boolean).length + (data.autosave ? 1 : 0),
+      slots: durable.manuals.filter(Boolean).length + (durable.autosave ? 1 : 0),
       ...meta,
     });
     slot.refresh?.();
     return ok;
+  }
+
+  function writeCareer(career, meta = {}) {
+    /* Deterministic QA sessions must never write into a player's real local
+       envelope. Progression also keeps an in-memory QA profile, but this
+       guard makes the persistence boundary safe on its own. */
+    if (ctx.qa) return true;
+    const normalized = normalizeCareer(career);
+    if (normalized === INVALID_CAREER) return false;
+    if (careerQuarantined && meta.repair !== true) {
+      /* Gameplay may continue while the menu is waiting for a recovery
+         choice. Keep legitimate same-device gains/build edits folded into
+         the durable device branch so choosing it never drops progress earned
+         after the conflict was detected. The write still reports paused to
+         progression; nothing touches the shared account envelope yet. */
+      const conflict = loadCareerConflict();
+      const local = conflict?.branches?.local;
+      if (conflict?.active && local?.valid
+        && !sameCareer(local.record, normalized)
+        && careerDominates(normalized, local.record, { requireSameBuild: false })) {
+        conflict.branches.local = conflictBranch(normalized, "device", Date.now());
+        persistCareerConflict(conflict);
+      }
+      return false;
+    }
+    const data = readDataForCareerWrite();
+    data.career = normalized;
+    return writeData(data, { career: true, ...meta });
+  }
+
+  function resolveCareerConflict(choice) {
+    const aliases = {
+      local: "local",
+      device: "local",
+      synced: "synced",
+      cloud: "synced",
+      incoming: "synced",
+    };
+    const selected = aliases[String(choice || "").toLowerCase()] || "";
+    const record = loadCareerConflict();
+    if (!selected) {
+      const result = {
+        ok: false,
+        reason: "invalid-choice",
+        message: "Choose this device or the synced career.",
+        choice: null,
+        conflict: conflictState(),
+      };
+      notify("career-conflict-error", result);
+      return result;
+    }
+    if (!record?.active) {
+      const result = {
+        ok: false,
+        reason: "no-conflict",
+        message: "No career conflict is waiting for recovery.",
+        choice: selected,
+        conflict: conflictState(),
+      };
+      notify("career-conflict-error", result);
+      return result;
+    }
+    const branch = record.branches[selected];
+    const normalized = branch?.valid ? normalizeCareer(branch.record) : INVALID_CAREER;
+    if (normalized === INVALID_CAREER || normalized === null) {
+      const result = {
+        ok: false,
+        reason: "invalid-branch",
+        message: `${selected === "local" ? "This device" : "The synced career"} cannot be recovered because its record is invalid.`,
+        choice: selected,
+        conflict: conflictState(),
+      };
+      notify("career-conflict-error", result);
+      return result;
+    }
+
+    /* Keep field slots from the envelope as it exists at click time. In QA,
+       exercise the same validation and runtime restore but never write the
+       shared slot or localStorage. */
+    const data = readDataForCareerWrite();
+    const previousRuntime = ctx.progression?.captureCareer?.() || null;
+    let written = true;
+    if (!ctx.qa) {
+      data.career = normalized;
+      written = writeData(data, {
+        career: true,
+        repair: true,
+        recoveryChoice: selected,
+      });
+      const verify = written ? normalizeCareer(slot.read()?.data?.career) : INVALID_CAREER;
+      written = written && verify !== INVALID_CAREER && sameCareer(verify, normalized);
+    }
+    if (!written) {
+      const result = {
+        ok: false,
+        reason: "write-failed",
+        message: "The recovered career could not be written. Both copies remain preserved.",
+        choice: selected,
+        conflict: conflictState(),
+      };
+      notify("career-conflict-error", result);
+      return result;
+    }
+
+    const restored = ctx.progression?.restoreCareer?.(normalized, {
+      source: "career-recovery",
+      persist: false,
+      preserveField: true,
+    });
+    if (restored?.ok === false) {
+      if (!ctx.qa && previousRuntime) {
+        data.career = normalizeCareer(previousRuntime) === INVALID_CAREER
+          ? normalized : normalizeCareer(previousRuntime);
+        writeData(data, { career: true, repair: true, recoveryRollback: true });
+      }
+      const result = {
+        ok: false,
+        reason: restored.reason || "restore-failed",
+        message: "The recovered career could not be activated safely. Both copies remain preserved.",
+        choice: selected,
+        conflict: conflictState(),
+      };
+      notify("career-conflict-error", result);
+      return result;
+    }
+
+    /* The backup is the final commit marker: leave it intact through every
+       validation, write, readback, and runtime-restore step. */
+    if (!ctx.qa) {
+      try {
+        localStorage.removeItem(CAREER_CONFLICT_KEY);
+        if (localStorage.getItem(CAREER_CONFLICT_KEY) !== null) {
+          throw new Error("conflict backup remained after removal");
+        }
+      } catch (_) {
+        const result = {
+          ok: false,
+          reason: "backup-clear-failed",
+          message: "The career was recovered, but its safety backup could not be cleared. Recovery remains paused.",
+          choice: selected,
+          conflict: conflictState(),
+        };
+        notify("career-conflict-error", result);
+        return result;
+      }
+    }
+    careerConflictRecord = null;
+    careerConflictLoaded = true;
+    careerQuarantined = false;
+    careerHydrated = true;
+    careerBaseline = JSON.stringify(normalized);
+    careerBaselineHadRecord = true;
+    autosaveFailures = 0;
+    autosaveRetryRemaining = 0;
+    const result = {
+      ok: true,
+      reason: "",
+      message: selected === "local" ? "This device's career was kept."
+        : "The synced career was restored.",
+      choice: selected,
+      state: careerSummary(normalized, Date.now()),
+      conflict: conflictState(),
+    };
+    notify("career-conflict-resolved", result);
+    return result;
+  }
+
+  function stageCareerConflictForQA(localCareer, syncedCareer, reason = "qa-career-conflict") {
+    if (!ctx.qa) {
+      return {
+        ok: false,
+        reason: "qa-only",
+        message: "Career conflict staging is available only in deterministic QA.",
+        choice: null,
+        conflict: conflictState(),
+      };
+    }
+    const at = Date.now();
+    const record = {
+      schema: 2,
+      active: true,
+      at,
+      reason,
+      branches: {
+        local: conflictBranch(localCareer, "device", at),
+        synced: conflictBranch(syncedCareer, "synced", at),
+      },
+    };
+    if (!record.branches.local.valid && !record.branches.synced.valid) {
+      return {
+        ok: false,
+        reason: "no-valid-branch",
+        message: "At least one staged career branch must be valid.",
+        choice: null,
+        conflict: conflictState(),
+      };
+    }
+    persistCareerConflict(record);
+    const result = {
+      ok: true,
+      reason: "",
+      message: "QA career conflict staged in memory.",
+      choice: null,
+      conflict: conflictState(),
+    };
+    notify("career-conflict", result);
+    return result;
   }
 
   function saveManual(index) {
@@ -440,13 +986,26 @@ export function buildSaveSystem(ctx, options = {}) {
   }
 
   function saveAuto(force = false) {
+    if (!force && autosaveRetryRemaining > 0) return null;
     if (!force && autosaveClock < AUTOSAVE_AFTER) return null;
     const snapshot = capture();
     if (!snapshot) return null;
     const data = readData();
     data.autosave = { id: "autosave", snapshot };
-    if (!writeData(data, { autosave: true })) return null;
+    if (!writeData(data, { autosave: true })) {
+      autosaveClock = AUTOSAVE_AFTER;
+      autosaveFailures = Math.min(8, autosaveFailures + 1);
+      autosaveRetryRemaining = Math.min(AUTOSAVE_RETRY_MAX,
+        AUTOSAVE_RETRY_BASE * (2 ** (autosaveFailures - 1)));
+      notify("autosave-deferred", {
+        message: `Autosave delayed; retrying in ${Math.ceil(autosaveRetryRemaining)} seconds.`,
+        retryIn: autosaveRetryRemaining,
+      });
+      return null;
+    }
     autosaveClock = 0;
+    autosaveFailures = 0;
+    autosaveRetryRemaining = 0;
     notify("autosaved", { snapshot: clone(snapshot) });
     return snapshot;
   }
@@ -503,6 +1062,10 @@ export function buildSaveSystem(ctx, options = {}) {
       throw new Error("Mission state restore was rejected.");
     }
     ctx.breaches?.restore?.(snapshot.breaches || {});
+    /* Restored after the enemies, because it also clears the venom on
+       the ground - and a load that left the previous session's pools
+       standing would poison the player at the new position. */
+    ctx.coulter?.restore?.(snapshot.coulter || {});
     ctx.boost?.restore?.(snapshot.boost || {});
     ctx.slam?.restore?.(snapshot.slam || {});
     ctx.shield?.reset?.(true);
@@ -517,6 +1080,14 @@ export function buildSaveSystem(ctx, options = {}) {
       });
     }
     ctx.weapons?.restore?.(snapshot.weapon || {});
+    /* Legacy schema-2 snapshots do not carry a deployed doctrine. In that
+       case retain the current career build rather than treating it as a
+       reset, while still restoring an explicitly captured field loadout. */
+    if (snapshot.progression !== null && snapshot.progression !== undefined) {
+      ctx.progression?.restoreField?.(snapshot.progression);
+    } else {
+      ctx.progression?.clearFieldLoadout?.({ source: "legacy-field-save" });
+    }
     ctx.hud?.redrawMinimap?.();
   }
 
@@ -583,6 +1154,8 @@ export function buildSaveSystem(ctx, options = {}) {
   }
 
   function update(dt) {
+    autosaveRetryRemaining = Math.max(0,
+      autosaveRetryRemaining - Math.max(0, finite(dt)));
     if (!canSave()) return;
     autosaveClock += Math.max(0, finite(dt));
     saveAuto(false);
@@ -596,6 +1169,11 @@ export function buildSaveSystem(ctx, options = {}) {
       saveReason: saveReason(),
       autosave: data.autosave ? clone(data.autosave) : null,
       manuals: clone(data.manuals),
+      career: data.career ? clone(data.career) : null,
+      careerStatus: data.careerStatus,
+      careerQuarantined,
+      careerConflict: conflictState(),
+      autosaveRetryIn: autosaveRetryRemaining,
       lastResult: lastResult ? clone(lastResult) : null,
       current: capture(),
     };
@@ -604,6 +1182,138 @@ export function buildSaveSystem(ctx, options = {}) {
   window.addEventListener("pagehide", () => {
     if (autosaveClock > 5) saveAuto(true);
   });
+
+  /* Hydrate once from the local envelope, then again after the optional cloud
+     merge finishes. The progression service owns merge/normalization rules;
+     save.js only provides the durable account record and never asks a field
+     snapshot to restore career XP. */
+  function hydrateCareer({ reconcile = false } = {}) {
+    if (ctx.qa) return;
+    const preserved = loadCareerConflict();
+    if (preserved?.active) {
+      careerQuarantined = true;
+      if (!careerHydrated) {
+        const recoveryBranch = preserved.branches.local?.valid
+          ? preserved.branches.local : preserved.branches.synced;
+        if (recoveryBranch?.valid) {
+          const restored = ctx.progression?.restoreCareer?.(recoveryBranch.record, {
+            source: "career-conflict-backup",
+            persist: false,
+            preserveField: true,
+          });
+          if (restored?.ok !== false) {
+            careerHydrated = true;
+            careerBaseline = JSON.stringify(recoveryBranch.record);
+            careerBaselineHadRecord = true;
+          }
+        }
+      }
+      if (!reconcile) {
+        notify("career-conflict", {
+          message: "Two career records are preserved. Choose which one to continue.",
+          conflict: conflictState(),
+        });
+      }
+      return;
+    }
+    const savedRecord = readData();
+    if (savedRecord.careerStatus === "invalid") {
+      careerQuarantined = true;
+      const rawStored = safeClone(slot.read()?.data?.career, null);
+      preserveCareerConflict(ctx.progression?.captureCareer?.(), rawStored,
+        "invalid-stored-career");
+      notify("career-conflict", {
+        message: "The synced career is invalid. A valid device copy is preserved for recovery.",
+        conflict: conflictState(),
+      });
+      console.error("[saintfall] invalid career progression was quarantined; the stored record was not overwritten");
+      return;
+    }
+    const saved = savedRecord.career;
+    /* A missing/corrupt cloud record must never erase a valid career that was
+       already hydrated locally or earned while the merge was in flight. */
+    const current = ctx.progression?.captureCareer?.() || null;
+    let baseline = null;
+    try { baseline = careerBaseline ? JSON.parse(careerBaseline) : null; } catch (_) { baseline = null; }
+    let result = { ok: true };
+    let adopted = current;
+
+    if (!reconcile || !careerHydrated) {
+      result = ctx.progression?.restoreCareer?.(saved, {
+        source: "save",
+        persist: false,
+        preserveField: false,
+      });
+      adopted = ctx.progression?.captureCareer?.() || saved;
+      careerBaselineHadRecord = !!saved;
+    } else if (!saved || sameCareer(saved, current)) {
+      /* A missing cloud record never erases live play. An equal record needs
+         no mutation, but still closes the reconciliation baseline. */
+      adopted = current;
+    } else {
+      const changedLocally = baseline ? !sameCareer(current, baseline) : !!current;
+      const changedRemotely = baseline ? !sameCareer(saved, baseline) : !!saved;
+      const incomingDescends = careerDominates(saved, current);
+      const localDescends = careerDominates(current, saved);
+
+      if (!careerBaselineHadRecord && !changedLocally) {
+        result = ctx.progression?.restoreCareer?.(saved, {
+          source: "cloud",
+          persist: false,
+          preserveField: true,
+        });
+        adopted = saved;
+      } else if (incomingDescends) {
+        result = ctx.progression?.restoreCareer?.(saved, {
+          source: "cloud",
+          persist: false,
+          preserveField: true,
+        });
+        adopted = saved;
+      } else if (localDescends && (changedLocally || !changedRemotely)) {
+        adopted = current;
+        if (!writeCareer(current, { reason: "career-reconcile-local" })) {
+          result = { ok: false, reason: "career-write-failed" };
+        }
+      } else {
+        /* This includes every build disagreement, even if the incoming branch
+           has a higher revision and all monotonic XP counters. A revision is
+           not ancestry; an explicit player choice is required. */
+        result = { ok: false, reason: "career-conflict" };
+      }
+    }
+    if (result?.ok === false) {
+      careerQuarantined = true;
+      preserveCareerConflict(current, saved, result.reason || "career-sync-conflict");
+      notify("career-conflict", {
+        message: "Career progress changed in two places. Both copies are preserved for recovery.",
+        conflict: conflictState(),
+      });
+      console.error("[saintfall] career sync conflict was quarantined; local progression remains active and automatic persistence is paused");
+      return;
+    }
+    careerHydrated = true;
+    careerBaseline = JSON.stringify(adopted || ctx.progression?.captureCareer?.() || null);
+    careerBaselineHadRecord = reconcile
+      ? careerBaselineHadRecord || !!saved
+      : !!saved;
+  }
+
+  hydrateCareer();
+  ctx.progression?.attachPersistence?.({
+    read: () => clone(readData().career),
+    write: writeCareer,
+    readCareer: () => clone(readData().career),
+    writeCareer,
+  });
+  /* Capture the device baseline before asking the shared synchronizer to
+     mutate its slot. Even an implementation that completes synchronously can
+     no longer replace the local branch before we have a three-way baseline.
+     Saintfall boots after the synchronizer's normal auth pass, so this fresh
+     merge still prevents a late-loading game from missing the cloud copy. */
+  const cloudSync = Promise.resolve().then(() => window.RBGameSaves?.syncWithCloud?.())
+    .catch(() => null);
+  void cloudSync.then(() => hydrateCareer({ reconcile: true }));
 
   return {
     version: SAVE_VERSION,
@@ -617,6 +1327,10 @@ export function buildSaveSystem(ctx, options = {}) {
     canSave,
     saveReason,
     read: readData,
+    writeCareer,
+    conflictState,
+    resolveCareerConflict,
+    stageCareerConflictForQA,
     update,
     state,
     onChange(listener) {

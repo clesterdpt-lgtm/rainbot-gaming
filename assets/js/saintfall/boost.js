@@ -67,9 +67,14 @@ export function buildBoost(ctx, player) {
     directionZ: 1,
     yaw: 0,
     attack: false,
+    contactEnabled: false,
     boosts: 0,
     hits: 0,
     lastHits: 0,
+    chargeSpent: 0,
+    modifierSource: "",
+    steerLockRemaining: 0,
+    impactModified: false,
     lastReason: "ready",
   };
 
@@ -82,7 +87,12 @@ export function buildBoost(ctx, player) {
     state.pose = 0;
     state.speed = 0;
     state.attack = false;
+    state.contactEnabled = false;
     state.lastHits = 0;
+    state.chargeSpent = 0;
+    state.modifierSource = "";
+    state.steerLockRemaining = 0;
+    state.impactModified = false;
     state.lastReason = "ready";
     struck.clear();
     reportedEndSerial = endSerial;
@@ -91,10 +101,25 @@ export function buildBoost(ctx, player) {
 
   function stop(reason = "complete") {
     if (!state.active) return;
+    ctx.progression?.noteVerb?.("boostEnd", {
+      verb: "boostEnd",
+      x: player.state.x,
+      y: player.state.y,
+      z: player.state.z,
+      yaw: state.yaw,
+      directionX: state.directionX,
+      directionZ: state.directionZ,
+      attack: state.attack,
+      elapsed: state.elapsed,
+      reason,
+      boostIndex: state.boosts,
+    });
     state.active = false;
     state.holding = false;
     state.remaining = 0;
     state.speed = 0;
+    state.contactEnabled = false;
+    state.steerLockRemaining = 0;
     state.justEnded = true;
     endSerial += 1;
     state.lastReason = reason;
@@ -133,18 +158,55 @@ export function buildBoost(ctx, player) {
       state.lastReason = "blocked";
       return false;
     }
-    if (!ctx.jetpack?.spend?.(config.ignitionCost, true)) {
+
+    const heading = headingFrom(mx, my, ps.camYaw);
+    const intendedYaw = heading ? heading.yaw : ps.yaw;
+    const intendedAttack = heading ? heading.forward >= config.forwardThreshold : true;
+    const changed = ctx.progression?.modifyBoostTrigger?.({
+      x: mx,
+      y: my,
+      baseYaw: ps.yaw,
+      cameraYaw: ps.camYaw,
+      intendedYaw,
+      intendedAttack,
+      baseIgnitionCost: config.ignitionCost,
+      anticipatedBoostIndex: state.boosts + 1,
+      playerX: ps.x,
+      playerY: ps.y,
+      playerZ: ps.z,
+    });
+    let ignitionCost = config.ignitionCost;
+    let yaw = intendedYaw;
+    let attack = intendedAttack;
+    let contactEnabled = false;
+    let modifierSource = "";
+    let steerLockSeconds = 0;
+    if (changed && typeof changed === "object") {
+      const cost = Number(changed.cost);
+      if (Number.isFinite(cost)) {
+        ignitionCost = Math.max(0, Math.min(config.ignitionCost, cost));
+      }
+      const changedYaw = Number(changed.yaw);
+      if (Number.isFinite(changedYaw)) yaw = changedYaw;
+      if (typeof changed.attack === "boolean") attack = changed.attack;
+      contactEnabled = changed.contactEnabled === true;
+      const steerLock = Number(changed.steerLockSeconds);
+      if (Number.isFinite(steerLock)) {
+        steerLockSeconds = Math.max(0, Math.min(config.glideMax, steerLock));
+      }
+      modifierSource = typeof changed.source === "string"
+        ? changed.source.slice(0, 48) : "";
+    }
+    if (ignitionCost > 0 && !ctx.jetpack?.spend?.(ignitionCost, true)) {
       state.lastReason = "low-charge";
       return false;
     }
 
-    const heading = headingFrom(mx, my, ps.camYaw);
-    const yaw = heading ? heading.yaw : ps.yaw;
-    const forward = heading ? heading.forward : 1;
     state.directionX = Math.sin(yaw);
     state.directionZ = Math.cos(yaw);
     state.yaw = yaw;
-    state.attack = forward >= config.forwardThreshold;
+    state.attack = attack;
+    state.contactEnabled = contactEnabled;
     state.active = true;
     state.holding = true;
     state.justEnded = false;
@@ -155,9 +217,30 @@ export function buildBoost(ctx, player) {
     state.speed = config.burstSpeed;
     state.boosts += 1;
     state.lastHits = 0;
+    state.chargeSpent = ignitionCost;
+    state.modifierSource = modifierSource;
+    state.steerLockRemaining = steerLockSeconds;
+    state.impactModified = false;
     state.lastReason = state.attack ? "forward" : "mobility";
     struck.clear();
 
+    ctx.progression?.noteVerb?.("boost", {
+      verb: "boost",
+      x: ps.x,
+      y: ps.y,
+      z: ps.z,
+      yaw,
+      directionX: state.directionX,
+      directionZ: state.directionZ,
+      attack: state.attack,
+      contactEnabled: state.contactEnabled,
+      baseIgnitionCost: config.ignitionCost,
+      ignitionCost,
+      chargeSpent: ignitionCost,
+      modifierSource,
+      steerLockSeconds,
+      boostIndex: state.boosts,
+    });
     ctx.vfx?.boostIgnite?.(ps.x, ps.y, ps.z, state.directionX, state.directionZ);
     ctx.audio?.boostIgnite?.(ps.x, ps.z);
     return true;
@@ -221,13 +304,17 @@ export function buildBoost(ctx, player) {
        what makes "hold Shift and D" a thing you can hold. */
     const heading = headingFrom(
       inputState?.move?.x ?? 0, inputState?.move?.y ?? 0, playerState.camYaw);
-    if (heading && state.elapsed >= config.burst * 0.5) {
+    if (heading && state.elapsed >= config.burst * 0.5 && state.steerLockRemaining <= 0) {
       state.yaw = dampAngle(state.yaw, heading.yaw, config.steerResponse, dt);
       state.directionX = Math.sin(state.yaw);
       state.directionZ = Math.cos(state.yaw);
       state.attack = heading.forward >= config.forwardThreshold;
       state.lastReason = state.attack ? "forward" : "mobility";
     }
+    /* Consume the lock after this frame's steering decision. Triggering
+       happens after player movement, so decrementing at frame entry would
+       make a 0.30s lock protect only 0.20s of actual boosted travel. */
+    state.steerLockRemaining = Math.max(0, state.steerLockRemaining - dt);
 
     /* Hard launch, then a settled skate. The burst delivers most of
        the ground in the first fifth of a second - that is what makes
@@ -260,8 +347,10 @@ export function buildBoost(ctx, player) {
   }
 
   /**
-   * Resolve forward contacts along the movement collision actually
-   * allowed. A creature can be caught again after `damageInterval`,
+   * Resolve armed contacts along the movement collision actually
+   * allowed. Ordinary boosts arm only their forward heading; Doctrine
+   * may explicitly authorize contact without mislabelling that heading
+   * as forward. A creature can be caught again after `damageInterval`,
    * so a long glide through a pack keeps working.
    */
   function noteMotion(fromX, fromZ, toX, toZ, dt = 0) {
@@ -270,7 +359,7 @@ export function buildBoost(ctx, player) {
     /* Stopped dead against masonry. A glide that grinds into a wall
        and keeps burning charge is a key that has stopped answering. */
     if (dt > 0 && travelled < state.speed * dt * 0.12) stop("blocked");
-    if (!state.attack || travelled < 1e-5) return 0;
+    if (!(state.attack || state.contactEnabled) || travelled < 1e-5) return 0;
 
     let hits = 0;
     for (const inst of ctx.enemies.live) {
@@ -302,6 +391,28 @@ export function buildBoost(ctx, player) {
         z: inst.z,
       });
       if (dealt <= 0) continue;
+      const firstImpact = state.lastHits === 0;
+      const identity = {
+        enemyId: typeof inst.id === "string" ? inst.id : "",
+        enemyKey: typeof inst.key === "string" ? inst.key : "unknown",
+      };
+      const changed = ctx.progression?.modifyBoostImpact?.({
+        ...identity,
+        enemy: inst,
+        firstImpact,
+        boostIndex: state.boosts,
+        source: state.modifierSource || "boost",
+        damage: dealt,
+        x: inst.x,
+        y: hitY,
+        z: inst.z,
+        directionX: state.directionX,
+        directionZ: state.directionZ,
+      });
+      const stun = Number(changed?.stun);
+      if (Number.isFinite(stun) && stun > 0 && inst.state !== "death") {
+        if (ctx.enemies.stun?.(inst, Math.min(4, stun))) state.impactModified = true;
+      }
       hits += 1;
       state.hits += 1;
       state.lastHits += 1;
@@ -341,6 +452,7 @@ export function buildBoost(ctx, player) {
       justEnded: state.justEnded,
       holding: state.holding,
       attack: state.attack,
+      contactEnabled: state.contactEnabled,
       mode: state.active ? (state.attack ? "attack" : "mobility")
         : state.cooldownRemaining > 0 ? "cooldown" : "ready",
       remaining: Number(state.remaining.toFixed(3)),
@@ -353,6 +465,10 @@ export function buildBoost(ctx, player) {
       boosts: state.boosts,
       hits: state.hits,
       lastHits: state.lastHits,
+      chargeSpent: Number(state.chargeSpent.toFixed(3)),
+      modifierSource: state.modifierSource,
+      steerLockRemaining: Number(state.steerLockRemaining.toFixed(3)),
+      impactModified: state.impactModified,
       lastReason: state.lastReason,
       fuelCost: config.ignitionCost,
     };

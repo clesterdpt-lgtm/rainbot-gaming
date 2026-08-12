@@ -2667,7 +2667,7 @@ export async function createPlayer(ctx, canvas) {
       action.hitDone = true;
       if (ctx.combat && ctx.combat.meleeStrike) {
         ctx.combat.meleeStrike(action.spec.damage, action.spec.arc,
-          !!action.spec.slam, action.spec.lunge || 1);
+          !!action.spec.slam, action.spec.lunge || 1, action.combo);
       }
     }
 
@@ -3281,7 +3281,8 @@ export async function createPlayer(ctx, canvas) {
     const target = boostMode
       ? boostState.speed
       : shieldMode
-        ? ctx.shield.config.moveSpeed
+        ? (Number.isFinite(shieldState?.moveSpeed)
+          ? shieldState.moveSpeed : ctx.shield.config.moveSpeed)
         : flightMode
           ? (jetState.active ? ctx.jetpack.config.cruiseSpeed : ctx.jetpack.config.glideSpeed)
           /* ONE ground speed now, and it is what Shift used to buy.
@@ -3308,10 +3309,12 @@ export async function createPlayer(ctx, canvas) {
        half-tilted thumbstick produce a half-speed walk instead of
        snapping straight to full speed. Boost owns its own envelope. */
     const inputAmount = boostMode ? 1 : clamp01(mag);
-    const wanted = slamMode ? 0
+    const wanted = slamMode || (shieldMode && shieldState?.movementLocked) ? 0
       : (mag > 0.01 || boostMode)
         ? target * lerp(1, ADS_SPEED, sighted) * inputAmount : 0;
-    if (boostMode) {
+    if (shieldMode && shieldState?.movementLocked) {
+      state.speed = 0;
+    } else if (boostMode) {
       state.speed = wanted;
     } else if (flightMode) {
       const rate = wanted > state.speed

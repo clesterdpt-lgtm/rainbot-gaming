@@ -8,7 +8,7 @@
 
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
 const SETTINGS_KEY = "saintfall:field-ui:v1";
-const PANEL_NAMES = new Set(["operation", "map", "saves", "controls", "settings"]);
+const PANEL_NAMES = new Set(["operation", "map", "doctrine", "saves", "controls", "settings"]);
 const WHEEL_POINTS = Object.freeze([
   { x: 0, y: -1, angle: -90 },
   { x: 0.866, y: 0.5, angle: 30 },
@@ -22,6 +22,7 @@ const ICONS = Object.freeze({
   resupply: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="m16 3 10 6v14l-10 6-10-6V9Z"/><path d="M16 9v14M9 16h14"/></svg>`,
   operation: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="m12 7 3 5-3 5-3-5Z"/></svg>`,
   map: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 5 5-2 6 2 5-2v16l-5 2-6-2-5 2Z"/><path d="M9 3v16M15 5v16"/><circle cx="15" cy="11" r="2"/></svg>`,
+  doctrine: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.4"/><path d="M12 3v6M20.6 9.2l-5.7 1.9M17.3 19l-3.5-4.9M6.7 19l3.5-4.9M3.4 9.2l5.7 1.9"/><path d="m12 3 8.6 6.2-3.3 9.8H6.7L3.4 9.2Z"/></svg>`,
   saves: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5Z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></svg>`,
   controls: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8h10a5 5 0 0 1 4 7l-1 3a2 2 0 0 1-3 1l-3-2h-4l-3 2a2 2 0 0 1-3-1l-1-3a5 5 0 0 1 4-7Z"/><path d="M7 12h4M9 10v4M16 12h.1M18 14h.1"/></svg>`,
   settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>`,
@@ -152,11 +153,12 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
         <div class="sf-menu__body">
           <nav class="sf-menu__rail" aria-label="Field menu">
             <button type="button" class="sf-menu__resume" data-menu-close>${ICONS.operation}<span><strong>RESUME</strong><small>Return to the basin</small></span></button>
-            <button type="button" data-menu-panel="operation" aria-current="page">${ICONS.operation}<span>OPERATION</span></button>
-            <button type="button" data-menu-panel="map">${ICONS.map}<span>TACTICAL MAP</span></button>
-            <button type="button" data-menu-panel="saves">${ICONS.saves}<span>SAVE / LOAD</span></button>
-            <button type="button" data-menu-panel="controls">${ICONS.controls}<span>CONTROLS</span></button>
-            <button type="button" data-menu-panel="settings">${ICONS.settings}<span>SETTINGS</span></button>
+            <button type="button" data-menu-panel="operation" aria-current="page">${ICONS.operation}<span data-mobile-label="OPS">OPERATION</span></button>
+            <button type="button" data-menu-panel="map">${ICONS.map}<span data-mobile-label="MAP">TACTICAL MAP</span></button>
+            <button type="button" data-menu-panel="doctrine">${ICONS.doctrine}<span data-mobile-label="RITES">DOCTRINE</span></button>
+            <button type="button" data-menu-panel="saves">${ICONS.saves}<span data-mobile-label="SAVES">SAVE / LOAD</span><b data-career-recovery-nav hidden>REVIEW</b></button>
+            <button type="button" data-menu-panel="controls">${ICONS.controls}<span data-mobile-label="CTRL">CONTROLS</span></button>
+            <button type="button" data-menu-panel="settings">${ICONS.settings}<span data-mobile-label="SET">SETTINGS</span></button>
             <div class="sf-menu__rail-spacer"></div>
             <button type="button" class="fullscreen-btn" id="sf-fullscreen"
               data-menu-action="maximize" aria-pressed="false">${ICONS.maximize}<span data-maximize-label>MAXIMIZE GAME</span></button>
@@ -190,8 +192,71 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
                 </aside>
               </div>
             </section>
+            <section class="sf-menu__page sf-menu__page--doctrine" data-menu-page="doctrine" hidden>
+              <div class="sf-menu__pagehead"><span>RELIQUARY FORMATION</span><h3 tabindex="-1">FIELD DOCTRINE</h3><p>Inscribe five Orders and bind at most two capstone Vows. Revise doctrine when Bloom pressure is quiet.</p></div>
+              <div class="sf-doctrine__summary" aria-label="Field rank and doctrine summary">
+                <div class="sf-doctrine__rank"><small>FIELD RANK</small><strong data-doctrine-rank>1</strong></div>
+                <div class="sf-doctrine__xp">
+                  <span><small>CAREER ASCENSION</small><b data-doctrine-xp-text>0 / 0 XP</b></span>
+                  <i data-doctrine-xp role="progressbar" aria-label="Progress to next Field Rank" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><em data-doctrine-xp-fill></em></i>
+                </div>
+                <div class="sf-doctrine__points"><small>DOCTRINE POINTS</small><strong data-doctrine-points>0</strong><span>AVAILABLE</span></div>
+                <div class="sf-doctrine__seals"><small>VOW SEALS</small><strong data-doctrine-vow-count>0 / 2</strong><span>BOUND</span></div>
+                <div class="sf-doctrine__vow-slots" data-doctrine-vows aria-label="Active capstone Vows"></div>
+              </div>
+              <p class="sf-doctrine__lock" data-doctrine-lock role="status" hidden></p>
+              <div class="sf-doctrine__body">
+                <nav class="sf-doctrine__orders" data-doctrine-orders role="tablist" aria-label="Doctrine Orders"></nav>
+                <section class="sf-doctrine__order" data-doctrine-order-panel role="tabpanel" tabindex="0" aria-live="polite">
+                  <header class="sf-doctrine__order-head">
+                    <span><small data-doctrine-order-kicker>ORDER</small><h4 data-doctrine-order-name>Awaiting doctrine</h4><p data-doctrine-order-focus>Select an Order to inspect its rites.</p></span>
+                    <b data-doctrine-invested>0 / 8</b>
+                  </header>
+                  <div class="sf-doctrine__rites" data-doctrine-talents></div>
+                  <div data-doctrine-capstone></div>
+                </section>
+              </div>
+              <footer class="sf-doctrine__footer">
+                <p data-doctrine-edit-reason>Doctrine may be revised while field pressure is quiet.</p>
+                <button type="button" data-doctrine-action="respec" data-talent-respec>RESET DOCTRINE</button>
+              </footer>
+            </section>
             <section class="sf-menu__page" data-menu-page="saves" hidden>
               <div class="sf-menu__pagehead"><span>FIELD RECORDS</span><h3>SAVE / LOAD</h3><p>Three manual reliquaries and one automatic field record.</p></div>
+              <section class="sf-career-recovery" data-career-recovery aria-labelledby="sf-career-recovery-title" aria-describedby="sf-career-recovery-copy" aria-busy="false" tabindex="-1" hidden>
+                <header class="sf-career-recovery__head">
+                  <span><small>DOCTRINE CAREER SYNC</small><h4 id="sf-career-recovery-title">Choose the career to preserve</h4></span>
+                  <b data-career-recovery-badge>REVIEW REQUIRED</b>
+                </header>
+                <p id="sf-career-recovery-copy">This device and the synced record changed separately. Both are safe until you review them and confirm one version.</p>
+                <div class="sf-career-recovery__branches" data-career-recovery-branches>
+                  <article class="sf-career-branch" data-career-branch-card="local">
+                    <header><span><small>CURRENT SESSION</small><strong>THIS DEVICE</strong></span><b data-career-branch-revision="local">REV —</b></header>
+                    <dl>
+                      <div><dt>FIELD RANK</dt><dd data-career-branch-rank="local">—</dd></div>
+                      <div><dt>CAREER XP</dt><dd data-career-branch-xp="local">—</dd></div>
+                      <div><dt>RITES</dt><dd data-career-branch-points="local">—</dd></div>
+                      <div><dt>VOWS</dt><dd data-career-branch-vows="local">—</dd></div>
+                    </dl>
+                    <p data-career-branch-build="local">No Doctrine inscriptions recorded.</p>
+                    <small data-career-branch-time="local">Recovered on this device</small>
+                    <button type="button" data-career-recovery-action="choose" data-career-choice="local" aria-describedby="sf-career-recovery-status">KEEP THIS DEVICE</button>
+                  </article>
+                  <article class="sf-career-branch" data-career-branch-card="synced">
+                    <header><span><small>CLOUD RECORD</small><strong>SYNCED CAREER</strong></span><b data-career-branch-revision="synced">REV —</b></header>
+                    <dl>
+                      <div><dt>FIELD RANK</dt><dd data-career-branch-rank="synced">—</dd></div>
+                      <div><dt>CAREER XP</dt><dd data-career-branch-xp="synced">—</dd></div>
+                      <div><dt>RITES</dt><dd data-career-branch-points="synced">—</dd></div>
+                      <div><dt>VOWS</dt><dd data-career-branch-vows="synced">—</dd></div>
+                    </dl>
+                    <p data-career-branch-build="synced">No Doctrine inscriptions recorded.</p>
+                    <small data-career-branch-time="synced">Recovered from synced storage</small>
+                    <button type="button" data-career-recovery-action="choose" data-career-choice="synced" aria-describedby="sf-career-recovery-status">USE SYNCED CAREER</button>
+                  </article>
+                </div>
+                <p class="sf-career-recovery__status" id="sf-career-recovery-status" data-career-recovery-status role="status" aria-live="polite" aria-atomic="true">Compare both records. Your field saves are not affected.</p>
+              </section>
               <div class="sf-save-grid">
                 ${slotMarkup("autosave", -1, "AUTOSAVE")}
                 ${slotMarkup("manual", 0, "FIELD SLOT I")}
@@ -236,6 +301,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
   const maximizeButton = root.querySelector('[data-menu-action="maximize"]');
   const maximizeLabel = root.querySelector("[data-maximize-label]");
   const liveEl = root.querySelector("[data-ui-live]");
+  const progression = ctx.progression;
   const surface = stage.closest(".rb-standalone-surface") || stage;
   const settings = readSettings();
   const wheel = {
@@ -246,6 +312,19 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
   const menu = {
     open: false, panel: "operation", lastFocus: null, restartUntil: 0,
     ariaRestore: null, returnToPointerLock: false,
+  };
+  const doctrine = {
+    orderId: null,
+    inspectedTalentId: null,
+    respecUntil: 0,
+    latestState: null,
+  };
+  const careerRecovery = {
+    armedChoice: null,
+    armedUntil: 0,
+    resolving: false,
+    resolvedMessage: "",
+    errorMessage: "",
   };
   const clearedUntil = new Map();
   const pendingTimers = new Set();
@@ -325,6 +404,360 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     if (enabled) menuSfx("toggle");
     announce(enabled ? "Field audio enabled" : "Field audio muted");
     return enabled;
+  }
+
+  function progressionDefinitions() {
+    let raw = {};
+    try {
+      raw = typeof progression?.definitions === "function"
+        ? progression.definitions() : progression?.definitions || {};
+    } catch (_) { raw = {}; }
+    const definitions = raw?.doctrine || raw?.progression?.doctrine || raw || {};
+    const looseTalents = Array.isArray(definitions.talents) ? definitions.talents : [];
+    const looseCapstones = Array.isArray(definitions.capstones) ? definitions.capstones : [];
+    const orders = (Array.isArray(definitions.orders) ? definitions.orders : []).map((entry) => ({
+      ...entry,
+      talents: Array.isArray(entry.talents)
+        ? entry.talents : looseTalents.filter((talent) => talent.orderId === entry.id),
+      capstone: entry.capstone
+        || looseCapstones.find((capstone) => capstone.orderId === entry.id) || null,
+    }));
+    return {
+      ...definitions,
+      maxPointsPerOrder: definitions.maxPointsPerOrder
+        ?? raw?.maxPointsPerOrder ?? raw?.rules?.maxPointsPerOrder,
+      capstoneEligibilityPoints: definitions.capstoneEligibilityPoints
+        ?? raw?.capstoneEligibilityPoints ?? raw?.rules?.capstoneEligibilityPoints,
+      vowSealRanks: definitions.vowSealRanks
+        ?? raw?.vowSealRanks ?? raw?.rules?.vowSealRanks,
+      orders,
+    };
+  }
+
+  function progressionState() {
+    try {
+      const state = progression?.state?.() || {};
+      doctrine.latestState = state;
+      return state;
+    } catch (_) {
+      const state = { editLocked: true, lockReason: "Doctrine state is unavailable." };
+      doctrine.latestState = state;
+      return state;
+    }
+  }
+
+  function asArray(value) {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === "object") return Object.values(value);
+    return [];
+  }
+
+  function runtimeOrder(state, orderId) {
+    if (Array.isArray(state?.orders)) return state.orders.find((entry) => entry?.id === orderId) || {};
+    return state?.orders?.[orderId] || {};
+  }
+
+  function runtimeTalent(state, orderState, talentId) {
+    const local = Array.isArray(orderState?.talents)
+      ? orderState.talents.find((entry) => entry?.id === talentId)
+      : orderState?.talents?.[talentId];
+    if (local) return local;
+    if (Array.isArray(state?.talents)) return state.talents.find((entry) => entry?.id === talentId) || {};
+    return state?.talents?.[talentId] || {};
+  }
+
+  function editState(state) {
+    let raw = null;
+    try { raw = progression?.canEdit?.(); } catch (_) { raw = false; }
+    const apiAllows = typeof raw === "boolean" ? raw
+      : raw && typeof raw === "object" ? !!(raw.ok ?? raw.canEdit ?? raw.allowed) : !state?.editLocked;
+    const locked = !!state?.editLocked || !apiAllows || !progression;
+    const reason = state?.lockReason || raw?.message || raw?.reason
+      || (locked ? "Doctrine cannot be revised during this deployment." : "");
+    return { allowed: !locked, reason };
+  }
+
+  function orderPoints(orderState) {
+    const explicit = Number(orderState?.points ?? orderState?.pointsSpent);
+    if (Number.isFinite(explicit)) return Math.max(0, Math.floor(explicit));
+    return asArray(orderState?.talents).reduce((sum, talent) =>
+      sum + Math.max(0, Math.floor(Number(talent?.rank) || 0)), 0);
+  }
+
+  function activeCapstones(state) {
+    const active = Array.isArray(state?.activeCapstones)
+      ? state.activeCapstones.slice(0, 2) : [];
+    while (active.length < 2) active.push(null);
+    return active;
+  }
+
+  function capstoneRecord(state, orderState, definition) {
+    if (orderState?.capstone && typeof orderState.capstone === "object") return orderState.capstone;
+    const direct = Array.isArray(state?.capstones)
+      ? state.capstones.find((entry) => entry?.id === definition.id)
+      : state?.capstones?.[definition.id];
+    if (direct) return direct;
+    return activeCapstones(state).includes(definition.id) ? { id: definition.id, equipped: true } : {};
+  }
+
+  function implementationState(definition, runtime = {}) {
+    const implemented = definition?.implemented ?? runtime?.implemented;
+    return {
+      implemented: implemented === true,
+      note: runtime?.implementationNote || definition?.implementationNote
+        || (implemented === false
+          ? "This doctrine mechanic is forthcoming."
+          : "This doctrine has not yet been confirmed field-ready."),
+    };
+  }
+
+  function sealRanks(definitions) {
+    const ranks = definitions?.vowSealRanks || definitions?.vowSeals?.ranks;
+    return Array.isArray(ranks) && ranks.length ? ranks.slice(0, 2) : [12, 22];
+  }
+
+  function earnedSeals(state, definitions) {
+    const explicit = Number(state?.vowSealsEarned ?? state?.sealsEarned);
+    if (Number.isFinite(explicit)) return clamp(Math.floor(explicit), 0, 2);
+    const rank = Math.max(1, Math.floor(Number(state?.rank) || 1));
+    return sealRanks(definitions).filter((threshold) => rank >= Number(threshold)).length;
+  }
+
+  function safeDomId(value) {
+    return String(value || "order").replace(/[^a-z0-9_-]+/gi, "-");
+  }
+
+  function rankNumeral(rank) {
+    return ["0", "I", "II", "III", "IV"][rank] || String(rank);
+  }
+
+  function disabledAttributes(disabled, reason) {
+    if (!disabled) return "";
+    const copy = escapeHtml(reason || "This rite is unavailable.");
+    return ` disabled aria-disabled="true" data-disabled-reason="${copy}" title="${copy}"`;
+  }
+
+  function talentEligibility(definition, current, state, orderState, edit, definitions) {
+    const rank = Math.max(0, Math.floor(Number(current?.rank) || 0));
+    const maxRank = Math.max(1, Math.floor(Number(definition?.maxRank) || 1));
+    const points = Math.max(0, Math.floor(Number(state?.pointsAvailable) || 0));
+    const invested = orderPoints(orderState);
+    const required = Math.max(0, Math.floor(Number(definition?.requires?.orderPoints) || 0));
+    const orderLimit = Math.max(1, Math.floor(Number(definitions?.maxPointsPerOrder) || 8));
+    const runtimeEligible = typeof current?.eligible === "boolean" ? current.eligible : null;
+    const implementation = implementationState(definition, current);
+    const implemented = implementation.implemented;
+    let reason = "";
+    if (!implemented) reason = implementation.note;
+    else if (!edit.allowed) reason = edit.reason;
+    else if (rank >= maxRank) reason = "Maximum rank reached.";
+    else if (invested < required) reason = `Requires ${required} points in this Order.`;
+    else if (invested >= orderLimit) reason = `This Order is limited to ${orderLimit} Doctrine Points.`;
+    else if (points < 1) {
+      const fieldRank = Math.max(1, Math.floor(Number(state?.rank) || 1));
+      const rankCap = Math.max(fieldRank, Math.floor(Number(definitions?.rankCap) || 25));
+      reason = fieldRank < rankCap
+        ? "Earn 1 Doctrine Point at the next Field Rank."
+        : "No Doctrine Points remain. Refund another rite to revise this Order.";
+    }
+    else if (runtimeEligible === false) reason = current?.lockReason || current?.reason
+      || current?.eligibilityReason || "This rite is not currently available.";
+    const canSpend = !reason;
+
+    let refundReason = "";
+    const runtimeRefundable = typeof current?.refundable === "boolean" ? current.refundable : null;
+    if (!edit.allowed) refundReason = edit.reason;
+    else if (rank <= 0) refundReason = "No rank has been inscribed.";
+    else if (runtimeRefundable === false) refundReason = current?.refundReason
+      || "Refund the dependent rites first.";
+    return { rank, maxRank, implemented, canSpend, reason,
+      canRefund: !refundReason, refundReason };
+  }
+
+  function renderTalent(definition, current, state, orderState, edit, definitions) {
+    const eligibility = talentEligibility(definition, current, state, orderState, edit, definitions);
+    const { rank, maxRank } = eligibility;
+    const inspected = doctrine.inspectedTalentId === definition.id;
+    const cardState = !eligibility.implemented ? "forthcoming"
+      : rank >= maxRank ? "maxed" : rank > 0 ? "owned"
+      : eligibility.canSpend ? "available" : "locked";
+    const pips = Array.from({ length: maxRank }, (_, index) =>
+      `<i data-state="${index < rank ? "owned" : "empty"}" aria-hidden="true"></i>`).join("");
+    const ranks = Array.isArray(definition.ranks) ? definition.ranks : [];
+    const detailId = `sf-talent-detail-${safeDomId(definition.id)}`;
+    const rankDetails = ranks.length ? `<ol>${ranks.map((entry, index) =>
+      `<li data-state="${index < rank ? "owned" : index === rank ? "next" : "locked"}"><b>RANK ${rankNumeral(index + 1)}</b><span>${escapeHtml(entry?.description || "Rite effect awaiting record.")}</span></li>`).join("")}</ol>`
+      : `<p>${escapeHtml(definition.description || definition.summary || "Rite effect awaiting record.")}</p>`;
+    const spendLabel = !eligibility.implemented ? "FORTHCOMING"
+      : rank >= maxRank ? "MAX RANK" : `INSCRIBE ${rankNumeral(rank + 1)}`;
+    const reason = eligibility.reason || (rank > 0 ? `Rank ${rank} of ${maxRank} inscribed.` : "Ready to inscribe.");
+    return `<article class="sf-doctrine-talent" data-doctrine-talent data-talent-id="${escapeHtml(definition.id)}" data-state="${cardState}" data-tier="${Math.max(1, Number(definition.tier) || 1)}">
+      <header><span><small>TIER ${Math.max(1, Number(definition.tier) || 1)}</small><strong>${escapeHtml(definition.name || "Unnamed Rite")}</strong></span><b data-talent-rank="${rank}" aria-label="Rank ${rank} of ${maxRank}">${pips}</b></header>
+      <p>${escapeHtml(definition.summary || "A Reliquary rite awaiting inscription.")}</p>
+      <div class="sf-doctrine-talent__actions">
+        <button type="button" data-doctrine-action="inspect" data-talent-action="inspect" data-talent-id="${escapeHtml(definition.id)}" aria-expanded="${inspected ? "true" : "false"}" aria-controls="${detailId}">${inspected ? "HIDE RITE" : "INSPECT"}</button>
+        ${rank > 0 ? `<button type="button" data-doctrine-action="refund" data-talent-action="refund" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canRefund, eligibility.refundReason)}>REFUND</button>` : ""}
+        <button type="button" data-doctrine-action="spend" data-talent-action="spend" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canSpend, eligibility.reason)}>${spendLabel}</button>
+      </div>
+      <small class="sf-doctrine-talent__reason" data-talent-reason>${escapeHtml(reason)}</small>
+      <div class="sf-doctrine-talent__detail" id="${detailId}" data-talent-detail${inspected ? "" : " hidden"}>${rankDetails}</div>
+    </article>`;
+  }
+
+  function renderCapstone(definition, orderDefinition, orderState, state, edit, definitions) {
+    const host = root.querySelector("[data-doctrine-capstone]");
+    if (!host) return;
+    if (!definition) {
+      host.innerHTML = `<article class="sf-doctrine__vow" data-state="locked"><small>CAPSTONE VOW</small><strong>SEALED RECORD</strong><p>This Order's final Vow has not been recovered.</p></article>`;
+      return;
+    }
+    const active = activeCapstones(state);
+    const slot = active.indexOf(definition.id);
+    const invested = orderPoints(orderState);
+    const required = Math.max(1, Math.floor(Number(definition?.requires?.orderPoints
+      ?? definitions?.capstoneEligibilityPoints) || 8));
+    const seals = earnedSeals(state, definitions);
+    const emptySlot = active.findIndex((entry, index) => !entry && index < seals);
+    const runtime = capstoneRecord(state, orderState, definition);
+    const runtimeEligible = typeof runtime?.eligible === "boolean" ? runtime.eligible : null;
+    const implementation = implementationState(definition, runtime);
+    const implemented = implementation.implemented;
+    let reason = "";
+    if (!implemented) reason = implementation.note;
+    else if (!edit.allowed) reason = edit.reason;
+    else if (slot < 0 && runtimeEligible === false) reason = runtime?.reason
+      || runtime?.lockReason || `Invest ${required} points in ${orderDefinition.shortName || orderDefinition.name}.`;
+    else if (slot < 0 && invested < required) reason = `Invest ${required} points in ${orderDefinition.shortName || orderDefinition.name}.`;
+    else if (slot < 0 && seals < 1) reason = `The first Vow Seal unlocks at Field Rank ${sealRanks(definitions)[0]}.`;
+    else if (slot < 0 && emptySlot < 0) reason = "Both earned Vow Seals are already bound. Unbind one first.";
+    const stateName = !implemented ? "forthcoming" : slot >= 0 ? "equipped" : reason ? "locked" : "eligible";
+    const action = slot >= 0 ? "unequip" : "equip";
+    const actionSlot = slot >= 0 ? slot : emptySlot;
+    const label = slot >= 0 ? `UNBIND VOW ${rankNumeral(slot + 1)}`
+      : emptySlot >= 0 ? `BIND VOW ${rankNumeral(emptySlot + 1)}` : "BIND VOW";
+    const fusions = Array.isArray(definition.fusions) && definition.fusions.length
+      ? `<ul class="sf-doctrine__fusions">${definition.fusions.map((fusion) =>
+        `<li><b>${escapeHtml(fusion.name)}</b><span>${escapeHtml(fusion.description)}</span></li>`).join("")}</ul>` : "";
+    host.innerHTML = `<article class="sf-doctrine__vow" data-doctrine-vow data-capstone-id="${escapeHtml(definition.id)}" data-order-id="${escapeHtml(orderDefinition.id)}" data-state="${stateName}" data-equipped="${slot >= 0 ? "true" : "false"}">
+      <header><span><small>CAPSTONE VOW</small><strong>${escapeHtml(definition.name || "Unnamed Vow")}</strong></span><b>${!implemented ? "FORTHCOMING" : slot >= 0 ? `BOUND · SEAL ${rankNumeral(slot + 1)}` : invested >= required ? "ELIGIBLE" : `${invested} / ${required}`}</b></header>
+      <p>${escapeHtml(definition.summary || "The final expression of this Order.")}</p>
+      <div class="sf-doctrine__vow-detail">${escapeHtml(definition.description || "Capstone effect awaiting record.")}</div>
+      ${fusions}
+      <div class="sf-doctrine__vow-action"><small>${escapeHtml(reason || (slot >= 0 ? "This Vow occupies one of two active seals." : "An earned Vow Seal is ready."))}</small><button type="button" data-doctrine-action="vow" data-capstone-action="${action}" data-capstone-id="${escapeHtml(definition.id)}" data-order-id="${escapeHtml(orderDefinition.id)}" data-capstone-slot="${actionSlot}"${disabledAttributes(!edit.allowed || (slot < 0 && !!reason), reason)}>${label}</button></div>
+    </article>`;
+  }
+
+  function focusAfterDoctrineRefresh(selector) {
+    if (!selector) return;
+    requestAnimationFrame(() => {
+      if (!destroyed && menu.open && menu.panel === "doctrine") {
+        root.querySelector(selector)?.focus?.({ preventScroll: true });
+      }
+    });
+  }
+
+  function selectDoctrineOrder(orderId, { focus = false } = {}) {
+    const definitions = progressionDefinitions();
+    if (!definitions.orders.some((entry) => entry.id === orderId)) return false;
+    doctrine.orderId = orderId;
+    doctrine.inspectedTalentId = null;
+    refreshDoctrine();
+    if (focus) focusAfterDoctrineRefresh(`[data-doctrine-order="${CSS.escape(orderId)}"]`);
+    menuSfx("switch");
+    return true;
+  }
+
+  function refreshDoctrine(stateOverride = null) {
+    const definitions = progressionDefinitions();
+    const state = stateOverride && typeof stateOverride === "object"
+      ? stateOverride : progressionState();
+    doctrine.latestState = state;
+    const orders = definitions.orders;
+    if (!doctrine.orderId || !orders.some((entry) => entry.id === doctrine.orderId)) {
+      doctrine.orderId = orders[0]?.id || null;
+      doctrine.inspectedTalentId = null;
+    }
+    const rank = Math.max(1, Math.floor(Number(state?.rank) || 1));
+    const xpInto = Math.max(0, Math.floor(Number(state?.xpIntoRank) || 0));
+    const xpForNext = Math.max(0, Math.floor(Number(state?.xpForNext) || 0));
+    const atCap = xpForNext <= 0;
+    const xpProgress = atCap ? 1 : clamp(xpInto / Math.max(1, xpForNext), 0, 1);
+    root.querySelector("[data-doctrine-rank]").textContent = String(rank);
+    root.querySelector("[data-doctrine-points]").textContent = String(Math.max(0,
+      Math.floor(Number(state?.pointsAvailable) || 0)));
+    root.querySelector("[data-doctrine-xp-text]").textContent = atCap
+      ? "FIELD RANK CAP" : `${xpInto} / ${xpForNext} XP`;
+    const xp = root.querySelector("[data-doctrine-xp]");
+    xp.setAttribute("aria-valuemax", String(atCap ? 1 : xpForNext));
+    xp.setAttribute("aria-valuenow", String(atCap ? 1 : Math.min(xpInto, xpForNext)));
+    root.querySelector("[data-doctrine-xp-fill]").style.width = `${(xpProgress * 100).toFixed(2)}%`;
+
+    const active = activeCapstones(state);
+    const seals = earnedSeals(state, definitions);
+    const bound = active.filter(Boolean).length;
+    root.querySelector("[data-doctrine-vow-count]").textContent = `${bound} / ${seals}`;
+    const sealCopy = root.querySelector(".sf-doctrine__seals>span");
+    if (sealCopy) sealCopy.textContent = `${seals} EARNED`;
+    const capstoneNames = new Map(orders.filter((entry) => entry.capstone)
+      .map((entry) => [entry.capstone.id, entry.capstone.name]));
+    root.querySelector("[data-doctrine-vows]").innerHTML = [0, 1].map((index) => {
+      const capstoneId = active[index];
+      const unlocked = index < seals;
+      return `<span data-state="${capstoneId ? "bound" : unlocked ? "empty" : "locked"}"><small>VOW ${rankNumeral(index + 1)}</small><strong>${escapeHtml(capstoneId ? capstoneNames.get(capstoneId) || capstoneId : unlocked ? "UNBOUND" : `RANK ${sealRanks(definitions)[index] || "—"}`)}</strong></span>`;
+    }).join("");
+
+    const edit = editState(state);
+    const lock = root.querySelector("[data-doctrine-lock]");
+    lock.hidden = edit.allowed;
+    lock.textContent = edit.allowed ? "" : edit.reason;
+    const footerReason = root.querySelector("[data-doctrine-edit-reason]");
+    footerReason.textContent = edit.allowed
+      ? "Field pressure quiet · Doctrine revision available."
+      : edit.reason;
+    const respec = root.querySelector("[data-talent-respec]");
+    const pointsSpent = Math.max(0, Math.floor(Number(state?.pointsSpent) || 0));
+    const hasChoices = pointsSpent > 0 || bound > 0;
+    const respecReason = !edit.allowed ? edit.reason : !hasChoices ? "No Doctrine choices have been made." : "";
+    respec.disabled = !!respecReason;
+    respec.setAttribute("aria-disabled", respecReason ? "true" : "false");
+    respec.dataset.disabledReason = respecReason;
+    respec.title = respecReason;
+    respec.textContent = doctrine.respecUntil > performance.now() ? "CONFIRM RESET" : "RESET DOCTRINE";
+
+    const tabs = root.querySelector("[data-doctrine-orders]");
+    tabs.innerHTML = orders.map((entry) => {
+      const selected = entry.id === doctrine.orderId;
+      const points = orderPoints(runtimeOrder(state, entry.id));
+      return `<button type="button" id="sf-doctrine-tab-${safeDomId(entry.id)}" role="tab" data-doctrine-order="${escapeHtml(entry.id)}" data-order-id="${escapeHtml(entry.id)}" data-accent="${escapeHtml(entry.accent || "gold")}" aria-selected="${selected ? "true" : "false"}" aria-controls="sf-doctrine-order-panel" tabindex="${selected ? "0" : "-1"}"><span>${escapeHtml(entry.shortName || entry.name)}</span><small>${points} PTS</small></button>`;
+    }).join("");
+
+    const panel = root.querySelector("[data-doctrine-order-panel]");
+    panel.id = "sf-doctrine-order-panel";
+    if (!doctrine.orderId) {
+      panel.removeAttribute("aria-labelledby");
+      root.querySelector("[data-doctrine-order-name]").textContent = "Doctrine unavailable";
+      root.querySelector("[data-doctrine-order-focus]").textContent = "No Order definitions were provided.";
+      root.querySelector("[data-doctrine-talents]").innerHTML = "";
+      root.querySelector("[data-doctrine-capstone]").innerHTML = "";
+      return state;
+    }
+    const orderDefinition = orders.find((entry) => entry.id === doctrine.orderId);
+    const orderState = runtimeOrder(state, doctrine.orderId);
+    const invested = orderPoints(orderState);
+    const maxOrder = Math.max(1, Math.floor(Number(definitions?.maxPointsPerOrder) || 8));
+    panel.dataset.orderId = doctrine.orderId;
+    panel.dataset.doctrineOrderPanel = doctrine.orderId;
+    panel.dataset.accent = orderDefinition.accent || "gold";
+    panel.setAttribute("aria-labelledby", `sf-doctrine-tab-${safeDomId(doctrine.orderId)}`);
+    root.querySelector("[data-doctrine-order-kicker]").textContent = "RELIQUARY ORDER";
+    root.querySelector("[data-doctrine-order-name]").textContent = orderDefinition.name || orderDefinition.shortName;
+    root.querySelector("[data-doctrine-order-focus]").textContent = orderDefinition.focus || "A recovered field doctrine.";
+    root.querySelector("[data-doctrine-invested]").textContent = `${invested} / ${maxOrder}`;
+    root.querySelector("[data-doctrine-talents]").innerHTML = (orderDefinition.talents || [])
+      .map((talent) => renderTalent(talent, runtimeTalent(state, orderState, talent.id),
+        state, orderState, edit, definitions)).join("");
+    renderCapstone(orderDefinition.capstone, orderDefinition, orderState, state, edit, definitions);
+    return state;
   }
 
   function updateCommands() {
@@ -509,6 +942,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     });
     if (next === "saves") refreshSaves();
     if (next === "operation") refreshOperation();
+    if (next === "doctrine") refreshDoctrine();
+    else doctrine.respecUntil = 0;
     if (next === "map") {
       refreshMap();
       requestAnimationFrame(() => { if (!destroyed && menu.open && menu.panel === "map") refreshMap(); });
@@ -610,8 +1045,205 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
       : breach?.complete ? `Next pressure cycle in ${formatClock(breach.timer)}` : "No active rupture";
   }
 
+  function readCareerConflict() {
+    try {
+      const direct = save?.conflictState?.();
+      if (direct && typeof direct.then !== "function") return direct;
+      return save?.state?.()?.careerConflict || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function careerRankAtXp(totalXp, explicitRank) {
+    if (Number.isFinite(Number(explicitRank))) return Math.max(1, Math.floor(Number(explicitRank)));
+    let raw = {};
+    try {
+      raw = typeof progression?.definitions === "function"
+        ? progression.definitions() : progression?.definitions || {};
+    } catch (_) { raw = {}; }
+    const thresholds = raw?.fieldRank?.xpThresholds
+      || raw?.progression?.fieldRank?.xpThresholds || [];
+    const xp = Math.max(0, Number(totalXp) || 0);
+    let rank = 1;
+    thresholds.forEach((threshold, index) => {
+      if (Number.isFinite(Number(threshold)) && xp >= Number(threshold)) rank = index + 1;
+    });
+    return rank;
+  }
+
+  function doctrinePointCount(summary = {}) {
+    if (Number.isFinite(Number(summary.pointsSpent))) {
+      return Math.max(0, Math.floor(Number(summary.pointsSpent)));
+    }
+    if (summary.doctrinePoints && typeof summary.doctrinePoints === "object") {
+      const value = summary.doctrinePoints.spent ?? summary.doctrinePoints.used;
+      if (Number.isFinite(Number(value))) return Math.max(0, Math.floor(Number(value)));
+    }
+    if (Number.isFinite(Number(summary.doctrinePoints))) {
+      return Math.max(0, Math.floor(Number(summary.doctrinePoints)));
+    }
+    if (summary.allocations && typeof summary.allocations === "object") {
+      return Object.values(summary.allocations).reduce((sum, value) =>
+        sum + (Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0), 0);
+    }
+    return 0;
+  }
+
+  function activeVowCount(summary = {}) {
+    if (Array.isArray(summary.activeVows)) return summary.activeVows.filter(Boolean).length;
+    if (Array.isArray(summary.activeCapstones)) return summary.activeCapstones.filter(Boolean).length;
+    if (Number.isFinite(Number(summary.activeVows))) {
+      return Math.max(0, Math.floor(Number(summary.activeVows)));
+    }
+    return 0;
+  }
+
+  function doctrinePointLabel(summary = {}) {
+    const spent = doctrinePointCount(summary);
+    const source = summary.doctrinePoints && typeof summary.doctrinePoints === "object"
+      ? summary.doctrinePoints : summary;
+    const earned = source.earned ?? summary.pointsEarned;
+    return Number.isFinite(Number(earned))
+      ? `${spent} / ${Math.max(spent, Math.floor(Number(earned)))}` : String(spent);
+  }
+
+  function doctrineBuildLabel(summary = {}) {
+    const authored = summary.buildLabel ?? summary.build ?? summary.doctrineBuild ?? summary.orderPoints;
+    if (typeof authored === "string" && authored.trim()) return authored.trim();
+    if (Array.isArray(authored)) {
+      const labels = authored.map((entry) => typeof entry === "string" ? entry.trim()
+        : entry?.name ? `${entry.name}${Number(entry.points) > 0 ? ` ${entry.points}` : ""}` : "").filter(Boolean);
+      if (labels.length) {
+        const vows = (summary.activeVowNames || summary.activeVows || []).filter?.(Boolean) || [];
+        return `${labels.join(" · ")}${vows.length ? ` · Vows: ${vows.join(", ")}` : ""}`;
+      }
+    }
+    const allocations = summary.allocations && typeof summary.allocations === "object"
+      ? summary.allocations : null;
+    if (allocations) {
+      const orders = progressionDefinitions().orders || [];
+      const labels = orders.map((order) => {
+        const points = (order.talents || []).reduce((sum, talent) =>
+          sum + Math.max(0, Math.floor(Number(allocations[talent.id]) || 0)), 0);
+        return points > 0 ? `${order.shortName || order.name || order.id} ${points}` : "";
+      }).filter(Boolean);
+      if (labels.length) return labels.join(" · ");
+    }
+    const points = doctrinePointCount(summary);
+    return points > 0 ? `${points} Doctrine ${points === 1 ? "point" : "points"} inscribed.`
+      : "No Doctrine inscriptions recorded.";
+  }
+
+  function formatCareerTime(value, fallback) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return formatSavedAt(numeric);
+    const parsed = typeof value === "string" ? Date.parse(value) : NaN;
+    return Number.isFinite(parsed) ? formatSavedAt(parsed) : fallback;
+  }
+
+  function refreshCareerRecovery() {
+    const panel = root.querySelector("[data-career-recovery]");
+    if (!panel) return null;
+    const conflict = readCareerConflict();
+    const active = !!conflict?.active;
+    const navBadge = root.querySelector("[data-career-recovery-nav]");
+    const navButton = navBadge?.closest("[data-menu-panel='saves']");
+    if (navBadge) navBadge.hidden = !active;
+    if (navButton) {
+      if (active) navButton.setAttribute("aria-label", "Save and load, Doctrine career review required");
+      else navButton.removeAttribute("aria-label");
+      navButton.classList.toggle("has-career-conflict", active);
+    }
+    if (!active && !careerRecovery.resolvedMessage) {
+      panel.hidden = true;
+      panel.dataset.state = "idle";
+      careerRecovery.armedChoice = null;
+      careerRecovery.armedUntil = 0;
+      careerRecovery.errorMessage = "";
+      return conflict;
+    }
+
+    panel.hidden = false;
+    const title = panel.querySelector("#sf-career-recovery-title");
+    const copy = panel.querySelector("#sf-career-recovery-copy");
+    const badge = panel.querySelector("[data-career-recovery-badge]");
+    const status = panel.querySelector("[data-career-recovery-status]");
+    if (!active) {
+      panel.dataset.state = "resolved";
+      panel.setAttribute("aria-busy", "false");
+      title.textContent = "Career recovery complete";
+      copy.textContent = "The selected Doctrine career is now authoritative.";
+      badge.textContent = "SAVING RESUMED";
+      status.textContent = careerRecovery.resolvedMessage;
+      return conflict;
+    }
+
+    if (careerRecovery.armedUntil <= performance.now()) {
+      careerRecovery.armedChoice = null;
+      careerRecovery.armedUntil = 0;
+    }
+    panel.dataset.state = careerRecovery.resolving ? "resolving" : "conflict";
+    panel.setAttribute("aria-busy", careerRecovery.resolving ? "true" : "false");
+    title.textContent = "Choose the career to preserve";
+    badge.textContent = careerRecovery.resolving ? "RECOVERING" : "REVIEW REQUIRED";
+
+    const branches = conflict.branches || {};
+    const availableChoices = ["local", "synced"].filter((choice) => {
+      const branch = branches[choice];
+      return branch && branch.available !== false && branch.valid !== false;
+    });
+    copy.textContent = availableChoices.length < 2
+      ? "A stored Doctrine career could not be verified. The verified record remains safe until you review and confirm it. Field saves are unaffected."
+      : "This device and the synced record changed separately. Both are safe until you review and confirm one version. Field saves are unaffected.";
+    for (const choice of ["local", "synced"]) {
+      const branch = branches[choice] || {};
+      const summary = branch.summary || {};
+      const available = branch.available !== false && branch.valid !== false && !!branches[choice];
+      const armed = careerRecovery.armedChoice === choice;
+      const card = panel.querySelector(`[data-career-branch-card="${choice}"]`);
+      const button = card?.querySelector("[data-career-recovery-action]");
+      if (!card || !button) continue;
+      card.dataset.state = available ? (armed ? "armed" : "available") : "unavailable";
+      card.setAttribute("aria-label", `${choice === "local" ? "This device" : "Synced career"}${available ? "" : ", unavailable"}`);
+      panel.querySelector(`[data-career-branch-rank="${choice}"]`).textContent = available
+        ? String(careerRankAtXp(summary.totalXp, summary.rank)) : "—";
+      panel.querySelector(`[data-career-branch-xp="${choice}"]`).textContent = available
+        ? Math.max(0, Math.floor(Number(summary.totalXp) || 0)).toLocaleString() : "—";
+      panel.querySelector(`[data-career-branch-points="${choice}"]`).textContent = available
+        ? doctrinePointLabel(summary) : "—";
+      panel.querySelector(`[data-career-branch-vows="${choice}"]`).textContent = available
+        ? String(activeVowCount(summary)) : "—";
+      panel.querySelector(`[data-career-branch-revision="${choice}"]`).textContent = available
+        ? `REV ${Math.max(0, Math.floor(Number(summary.revision) || 0))}` : "NOT VERIFIED";
+      panel.querySelector(`[data-career-branch-build="${choice}"]`).textContent = available
+        ? doctrineBuildLabel(summary) : "This career record did not pass validation and cannot be selected.";
+      const time = summary.updatedAt ?? branch.updatedAt ?? branch.at ?? conflict.at;
+      panel.querySelector(`[data-career-branch-time="${choice}"]`).textContent = `${choice === "local" ? "Device record" : "Synced record"} · ${formatCareerTime(time, "time unavailable")}`;
+      button.disabled = careerRecovery.resolving || !available;
+      button.textContent = armed
+        ? (choice === "local" ? "CONFIRM KEEP THIS DEVICE" : "CONFIRM USE SYNCED CAREER")
+        : (choice === "local" ? "KEEP THIS DEVICE" : "USE SYNCED CAREER");
+      button.setAttribute("aria-pressed", armed ? "true" : "false");
+    }
+
+    if (careerRecovery.resolving) {
+      status.textContent = `Recovering the ${careerRecovery.armedChoice === "synced" ? "synced" : "device"} career…`;
+    } else if (careerRecovery.errorMessage) {
+      status.textContent = careerRecovery.errorMessage;
+    } else if (careerRecovery.armedChoice) {
+      status.textContent = `${careerRecovery.armedChoice === "local" ? "This device" : "Synced career"} selected. Press its confirm button to make it authoritative.`;
+    } else {
+      status.textContent = availableChoices.length === 1
+        ? `Only the ${availableChoices[0] === "local" ? "device" : "synced"} career passed validation. Confirm it to resume career saving.`
+        : "Compare both records. Your field saves are not affected.";
+    }
+    return conflict;
+  }
+
   function refreshSaves() {
     try { saveData = save?.read?.() || saveData; } catch (_) { /* keep cache */ }
+    refreshCareerRecovery();
     root.querySelectorAll(".sf-save-slot").forEach((slotEl) => {
       const kind = slotEl.dataset.saveKind;
       const index = Number(slotEl.dataset.saveIndex);
@@ -733,6 +1365,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     }
     menu.lastFocus = null;
     menu.returnToPointerLock = false;
+    careerRecovery.armedChoice = null;
+    careerRecovery.armedUntil = 0;
+    careerRecovery.errorMessage = "";
+    if (!careerRecovery.resolving) careerRecovery.resolvedMessage = "";
     return true;
   }
 
@@ -823,12 +1459,176 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     if (ok && action === "load") closeMenu({ requestLock: true });
   }
 
+  async function handleCareerRecovery(button) {
+    const choice = button.dataset.careerChoice;
+    if (!["local", "synced"].includes(choice) || careerRecovery.resolving) return false;
+    const conflict = readCareerConflict();
+    const branch = conflict?.branches?.[choice];
+    if (!conflict?.active || !branch || branch.available === false || branch.valid === false) {
+      careerRecovery.errorMessage = "That career record is unavailable and cannot be selected.";
+      refreshCareerRecovery();
+      menuSfx("error");
+      announce(careerRecovery.errorMessage);
+      return false;
+    }
+
+    if (careerRecovery.armedChoice !== choice || careerRecovery.armedUntil <= performance.now()) {
+      careerRecovery.armedChoice = choice;
+      careerRecovery.armedUntil = performance.now() + 8000;
+      careerRecovery.errorMessage = "";
+      refreshCareerRecovery();
+      menuSfx("question");
+      const prompt = `${choice === "local" ? "This device" : "Synced career"} selected. Press confirm to make it authoritative.`;
+      announce(prompt);
+      scheduleUiTimeout(() => {
+        if (careerRecovery.armedChoice === choice
+          && careerRecovery.armedUntil <= performance.now()) {
+          careerRecovery.armedChoice = null;
+          careerRecovery.armedUntil = 0;
+          refreshCareerRecovery();
+        }
+      }, 8100);
+      return true;
+    }
+
+    if (typeof save?.resolveCareerConflict !== "function") {
+      careerRecovery.errorMessage = "Career recovery is temporarily unavailable. Both records remain preserved.";
+      careerRecovery.armedChoice = null;
+      careerRecovery.armedUntil = 0;
+      refreshCareerRecovery();
+      menuSfx("error");
+      announce(careerRecovery.errorMessage);
+      return false;
+    }
+
+    careerRecovery.resolving = true;
+    careerRecovery.errorMessage = "";
+    refreshCareerRecovery();
+    announce(`Recovering the ${choice === "local" ? "device" : "synced"} career.`);
+    let result = null;
+    try {
+      result = await Promise.resolve(save.resolveCareerConflict(choice));
+    } catch (error) {
+      result = { ok: false, message: error?.message || "Career recovery failed." };
+    }
+    careerRecovery.resolving = false;
+    careerRecovery.armedChoice = null;
+    careerRecovery.armedUntil = 0;
+    const resolved = result?.ok === true && !readCareerConflict()?.active;
+    if (resolved) {
+      careerRecovery.resolvedMessage = result.message
+        || `${choice === "local" ? "This device" : "The synced career"} is now authoritative. Automatic career saving resumed.`;
+      careerRecovery.errorMessage = "";
+      refreshSaves();
+      refreshDoctrine();
+      menuSfx("confirm");
+      announce(careerRecovery.resolvedMessage);
+      requestAnimationFrame(() => {
+        if (!destroyed && menu.open && menu.panel === "saves") {
+          root.querySelector("[data-career-recovery]")?.focus?.({ preventScroll: true });
+        }
+      });
+      return true;
+    }
+
+    careerRecovery.resolvedMessage = "";
+    careerRecovery.errorMessage = result?.message
+      || "Career recovery could not be completed. Both records remain preserved.";
+    refreshCareerRecovery();
+    menuSfx("error");
+    announce(careerRecovery.errorMessage);
+    requestAnimationFrame(() => {
+      if (!destroyed && menu.open && menu.panel === "saves") {
+        root.querySelector(`[data-career-choice="${choice}"]`)?.focus?.({ preventScroll: true });
+      }
+    });
+    return false;
+  }
+
+  function finishDoctrineMutation(result, fallbackMessage, focusSelector = null) {
+    const normalized = result && typeof result === "object"
+      ? result : { ok: result !== false, message: fallbackMessage };
+    const ok = normalized.ok !== false;
+    refreshDoctrine(normalized.state || null);
+    focusAfterDoctrineRefresh(focusSelector);
+    menuSfx(ok ? "confirm" : "error");
+    announce(normalized.message || fallbackMessage || (ok ? "Doctrine updated." : "Doctrine action unavailable."));
+    return ok;
+  }
+
+  function callDoctrine(method, args, fallbackMessage, focusSelector) {
+    if (typeof progression?.[method] !== "function") {
+      return finishDoctrineMutation({ ok: false,
+        message: "Doctrine service is unavailable." }, fallbackMessage, focusSelector);
+    }
+    try {
+      return finishDoctrineMutation(progression[method](...args), fallbackMessage, focusSelector);
+    } catch (error) {
+      return finishDoctrineMutation({ ok: false,
+        message: error?.message || "Doctrine action failed." }, fallbackMessage, focusSelector);
+    }
+  }
+
+  function handleDoctrineAction(button) {
+    const action = button.dataset.doctrineAction;
+    const talentId = button.dataset.talentId;
+    if (action === "inspect" && talentId) {
+      doctrine.inspectedTalentId = doctrine.inspectedTalentId === talentId ? null : talentId;
+      refreshDoctrine();
+      focusAfterDoctrineRefresh(`[data-talent-action="inspect"][data-talent-id="${CSS.escape(talentId)}"]`);
+      menuSfx("switch");
+      return true;
+    }
+    if (action === "spend" && talentId) {
+      return callDoctrine("spend", [talentId], "Rite inscribed.",
+        `[data-talent-action="spend"][data-talent-id="${CSS.escape(talentId)}"]`);
+    }
+    if (action === "refund" && talentId) {
+      return callDoctrine("refund", [talentId], "Rite refunded.",
+        `[data-talent-action="refund"][data-talent-id="${CSS.escape(talentId)}"], [data-talent-action="spend"][data-talent-id="${CSS.escape(talentId)}"]`);
+    }
+    if (action === "vow") {
+      const capstoneId = button.dataset.capstoneId;
+      const slot = Number(button.dataset.capstoneSlot);
+      if (button.dataset.capstoneAction === "unequip") {
+        return callDoctrine("unequipCapstone", [slot], "Capstone Vow unbound.",
+          `[data-capstone-id="${CSS.escape(capstoneId)}"] [data-doctrine-action="vow"]`);
+      }
+      return callDoctrine("equipCapstone", [capstoneId, slot], "Capstone Vow bound.",
+        `[data-capstone-id="${CSS.escape(capstoneId)}"] [data-doctrine-action="vow"]`);
+    }
+    if (action === "respec") {
+      if (doctrine.respecUntil <= performance.now()) {
+        doctrine.respecUntil = performance.now() + 4500;
+        refreshDoctrine();
+        focusAfterDoctrineRefresh("[data-talent-respec]");
+        menuSfx("question");
+        announce("Press reset doctrine again to confirm.");
+        scheduleUiTimeout(() => {
+          if (doctrine.respecUntil && doctrine.respecUntil <= performance.now()) {
+            doctrine.respecUntil = 0;
+            if (menu.open && menu.panel === "doctrine") refreshDoctrine();
+          }
+        }, 4600);
+        return true;
+      }
+      doctrine.respecUntil = 0;
+      return callDoctrine("respec", [], "Doctrine reset.", "[data-talent-respec]");
+    }
+    return false;
+  }
+
   root.addEventListener("click", (event) => {
     const target = event.target.closest("button, a");
     if (!target) return;
     if (target.matches("[data-menu-open]")) { openMenu("operation"); return; }
     if (target.matches("[data-menu-close]")) { closeMenu({ requestLock: true }); return; }
     if (target.matches("[data-menu-panel]")) { setPanel(target.dataset.menuPanel); return; }
+    if (target.matches("[data-doctrine-order]")) {
+      selectDoctrineOrder(target.dataset.doctrineOrder, { focus: true }); return;
+    }
+    if (target.matches("[data-doctrine-action]")) { handleDoctrineAction(target); return; }
+    if (target.matches("[data-career-recovery-action]")) { void handleCareerRecovery(target); return; }
     if (target.matches("[data-save-action]")) { handleSaveAction(target); return; }
     if (target.matches("[data-wheel-cancel]")) { cancelWheel("center"); return; }
     if (target.matches(".sf-command-wheel__option")) {
@@ -879,7 +1679,19 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
       const interactiveTarget = event.target instanceof Element
         && !!event.target.closest("button, a, input, select, textarea,"
           + " [role='button'], [role='switch'], [role='tab']");
-      if (event.code === "KeyM") {
+      const doctrineTab = event.target instanceof Element
+        ? event.target.closest("[data-doctrine-order][role='tab']") : null;
+      if (doctrineTab && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.code)) {
+        const tabs = Array.from(root.querySelectorAll("[data-doctrine-order][role='tab']"));
+        const current = tabs.indexOf(doctrineTab);
+        let next = current;
+        if (event.code === "Home") next = 0;
+        else if (event.code === "End") next = tabs.length - 1;
+        else if (["ArrowLeft", "ArrowUp"].includes(event.code)) next = (current - 1 + tabs.length) % tabs.length;
+        else next = (current + 1) % tabs.length;
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (!event.repeat && tabs[next]) selectDoctrineOrder(tabs[next].dataset.doctrineOrder, { focus: true });
+      } else if (event.code === "KeyM") {
         event.preventDefault(); event.stopImmediatePropagation();
         if (!event.repeat) openMap();
       } else if (event.code === "Escape") {
@@ -1028,6 +1840,15 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     applySettings();
   }
 
+  function canOpenCareerRecovery() {
+    if (destroyed || ctx.runtime?.phase !== "playing" || ctx.intro?.isBlocking?.()
+      || ctx.combat?.player?.dead) return false;
+    const breachPhase = ctx.breaches?.status?.()?.phase;
+    if (["warning", "active"].includes(breachPhase)) return false;
+    return !ctx.player?.action && !ctx.boost?.state?.active && !ctx.slam?.state?.active
+      && !ctx.shield?.state?.active && !ctx.jetpack?.state?.inFlight;
+  }
+
   window.addEventListener("keydown", onKeyDown, true);
   window.addEventListener("keyup", onKeyUp, true);
   window.addEventListener("mousemove", onMouseMove, true);
@@ -1048,6 +1869,22 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
   });
   const stopSave = save?.onChange?.((result) => {
     refreshSaves();
+    if (result?.type === "career-conflict" && readCareerConflict()?.active) {
+      let revealed = false;
+      if (menu.open) { setPanel("saves"); revealed = true; }
+      else if (canOpenCareerRecovery()) revealed = openMenu("saves");
+      else announce("Doctrine career sync needs review. Open Save and Load when the field is quiet.");
+      if (revealed) requestAnimationFrame(() => {
+        if (!destroyed && menu.open && menu.panel === "saves") {
+          root.querySelector("[data-career-recovery]")?.focus?.({ preventScroll: true });
+        }
+      });
+    }
+    if (result?.message) announce(result.message);
+  });
+  const stopProgression = progression?.onChange?.((result) => {
+    const state = result?.state || (result?.rank !== undefined ? result : null);
+    if (menu.open && menu.panel === "doctrine") refreshDoctrine(state);
     if (result?.message) announce(result.message);
   });
 
@@ -1070,6 +1907,11 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
         menu.restartUntil = 0;
         const restart = root.querySelector('[data-menu-action="restart"]');
         if (restart) restart.textContent = "RESTART OPERATION";
+      }
+      if (menu.panel === "doctrine" && doctrine.respecUntil
+        && doctrine.respecUntil < performance.now()) {
+        doctrine.respecUntil = 0;
+        refreshDoctrine();
       }
     }
   }
@@ -1100,6 +1942,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
       active.dataset.menuAction !== undefined
       || active.dataset.menuPanel !== undefined
       || active.dataset.saveAction !== undefined
+      || active.dataset.careerRecoveryAction !== undefined
+      || active.dataset.doctrineAction !== undefined
+      || active.dataset.doctrineOrder !== undefined
       || active.dataset.menuClose !== undefined
     );
     return {
@@ -1115,6 +1960,21 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
       maximizeLabel: maximizeLabel?.textContent?.trim() || null,
       mapRange: Number(largeMapRange?.textContent?.match(/\d+/)?.[0] || 0),
       mapPixels: largeMapCanvas ? [largeMapCanvas.width, largeMapCanvas.height] : null,
+      doctrine: {
+        order: doctrine.orderId,
+        rank: doctrine.latestState?.rank ?? null,
+        points: doctrine.latestState?.pointsAvailable ?? null,
+        activeVows: activeCapstones(doctrine.latestState || {}).filter(Boolean),
+        respecArmed: doctrine.respecUntil > performance.now(),
+      },
+      careerRecovery: {
+        active: !!readCareerConflict()?.active,
+        armedChoice: careerRecovery.armedChoice,
+        resolving: careerRecovery.resolving,
+        visible: !root.querySelector("[data-career-recovery]")?.hidden,
+        state: root.querySelector("[data-career-recovery]")?.dataset.state || "idle",
+        status: root.querySelector("[data-career-recovery-status]")?.textContent?.trim() || "",
+      },
     };
   }
 
@@ -1133,6 +1993,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     refreshOperation();
     refreshMap();
     refreshSaves();
+    refreshDoctrine();
     applySettings();
     syncMaximizeButton();
   }
@@ -1173,7 +2034,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
 
       touchObserver.disconnect();
       detachTouchCommands();
-      stopWon?.(); stopLost?.(); stopSave?.();
+      stopWon?.(); stopLost?.(); stopSave?.(); stopProgression?.();
 
       for (const timer of pendingTimers) window.clearTimeout(timer);
       pendingTimers.clear();
@@ -1196,6 +2057,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
       ctx.player?.input?.clearAll?.();
       touch?.releaseAll?.();
       menu.lastFocus = null;
+      doctrine.respecUntil = 0;
       clearedUntil.clear();
       root.remove();
       if (stage.__saintfallGameUi === publicApi) delete stage.__saintfallGameUi;

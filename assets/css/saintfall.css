@@ -3165,7 +3165,7 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
 }
 
 #sf-hud .sf-hud__objective {
-  left: max(4.15rem, calc(env(safe-area-inset-left) + 3.95rem));
+  left: max(.85rem, calc(env(safe-area-inset-left) + .65rem));
   top: var(--sf-hud-inset-y);
   width: min(18rem, 29cqw);
   transform: none;
@@ -3316,7 +3316,7 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
 /* Survival information is a rail, not a dashboard card. READY mobility
    labels disappear entirely and return only for actionable exceptions. */
 #sf-hud .sf-hud__vitals {
-  left: max(4.15rem, calc(env(safe-area-inset-left) + 3.95rem));
+  left: max(.85rem, calc(env(safe-area-inset-left) + .65rem));
   bottom: max(.85rem, calc(env(safe-area-inset-bottom) + .65rem));
   width: min(13.2rem, 23cqw);
   padding: .48rem .58rem .5rem .66rem;
@@ -3770,14 +3770,14 @@ body.sf-command-open #sf-hud .sf-hud__hint {
   }
 
   .sf-stage.sf-touch-enabled #sf-hud .sf-hud__objective {
-    left: max(4rem, calc(env(safe-area-inset-left) + 3.5rem));
+    left: max(.75rem, calc(env(safe-area-inset-left) + .55rem));
     top: max(.45rem, env(safe-area-inset-top));
     width: min(13.5rem, 29cqw);
   }
 
   .sf-stage.sf-touch-enabled #sf-hud .sf-hud__minimap {
     top: max(.42rem, env(safe-area-inset-top));
-    right: max(3.85rem, calc(env(safe-area-inset-right) + 3.4rem));
+    right: max(.65rem, calc(env(safe-area-inset-right) + .45rem));
     width: 4.35rem;
     padding: .18rem .2rem .22rem;
   }
@@ -3788,7 +3788,7 @@ body.sf-command-open #sf-hud .sf-hud__hint {
   }
 
   .sf-stage.sf-touch-enabled #sf-hud .sf-hud__vitals {
-    left: max(4rem, calc(env(safe-area-inset-left) + 3.5rem));
+    left: max(.75rem, calc(env(safe-area-inset-left) + .55rem));
     top: max(3.35rem, calc(env(safe-area-inset-top) + 2.9rem));
     width: min(11.5rem, 25cqw);
     padding: .34rem .44rem .36rem .5rem;

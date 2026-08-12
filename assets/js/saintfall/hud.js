@@ -8,6 +8,9 @@
    ============================================================ */
 
 import { clamp01, lerp } from "saintfall/core.js";
+import {
+  DISTRICTS, FOSSE_PATH, FOSSE_SPUR, MAP_HALF, MAP_SIZE, ROAD_PATH,
+} from "saintfall/terrain.js";
 
 export function buildHud(ctx, host) {
   const el = host;
@@ -28,8 +31,21 @@ export function buildHud(ctx, host) {
         <b id="sf-map-range">180M</b>
       </div>
       <canvas id="sf-map-canvas" width="280" height="280" aria-hidden="true"></canvas>
+      <div class="sf-minimap__expand" aria-hidden="true"><kbd>M</kbd><span>TACTICAL VIEW</span></div>
+    </aside>
+    <section class="sf-hud__objective" id="sf-objective" aria-label="Active field orders">
+      <header class="sf-objective__head">
+        <span>FIELD ORDERS</span><small><kbd>M</kbd> MAP</small>
+      </header>
+      <article class="sf-objective__item sf-objective__item--primary">
+        <i aria-hidden="true">01</i>
+        <span class="sf-objective__copy"><small>PRIORITY</small><strong id="sf-objlabel"></strong></span>
+        <b id="sf-objdistance">&mdash;</b>
+      </article>
+      <div class="sf-hud__objbar"><i id="sf-objbar"></i></div>
       <div class="sf-minimap__event" id="sf-map-event" data-phase="dormant">
         <div class="sf-minimap__event-head">
+          <i aria-hidden="true">02</i>
           <span class="sf-minimap__event-title">
             <small id="sf-event-kicker">BLOOM PRESSURE</small>
             <strong id="sf-event-name">SIGNAL QUIET</strong>
@@ -39,14 +55,7 @@ export function buildHud(ctx, host) {
         <small id="sf-event-sub">SIGNAL QUIET</small>
         <i><em id="sf-event-fill"></em></i>
       </div>
-    </aside>
-    <div class="sf-hud__objective" id="sf-objective">
-      <div class="sf-hud__objhead">
-        <span>OBJECTIVE</span>
-        <div class="sf-hud__objlabel" id="sf-objlabel"></div>
-      </div>
-      <div class="sf-hud__objbar"><i id="sf-objbar"></i></div>
-    </div>
+    </section>
     <div class="sf-hud__banner" id="sf-banner"></div>
     <div class="sf-hud__breach-alert" id="sf-breach-alert" aria-live="polite">
       <small id="sf-breach-kicker"></small><strong id="sf-breach-title"></strong>
@@ -97,6 +106,7 @@ export function buildHud(ctx, host) {
   const hintEl = el.querySelector("#sf-hint");
   const objEl = el.querySelector("#sf-objective");
   const objLabelEl = el.querySelector("#sf-objlabel");
+  const objDistanceEl = el.querySelector("#sf-objdistance");
   const objBarEl = el.querySelector("#sf-objbar");
   const bannerEl = el.querySelector("#sf-banner");
   const breachAlertEl = el.querySelector("#sf-breach-alert");
@@ -258,7 +268,6 @@ export function buildHud(ctx, host) {
   let showFor = 0;
   let hintFade = 8;
   const fwdVec = new ctx.THREE.Vector3();
-  const map2d = mapCanvas.getContext("2d");
   let mapTick = 0;
   let mapDrawSeq = 0;
   const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -270,6 +279,7 @@ export function buildHud(ctx, host) {
     cameraYaw: 0,
     arrowYaw: 0,
     arrowCanvasYaw: Math.PI,
+    range: 180,
     north: {
       axis: "-Z",
       worldYaw: Math.PI,
@@ -279,16 +289,212 @@ export function buildHud(ctx, host) {
     },
     contacts: [],
   };
+  let wholeMapBase = null;
+  let wholeMapSemantic = null;
 
-  function drawMinimap(player) {
-    const bounds = mapCanvas.getBoundingClientRect();
+  function buildWholeMapBase() {
+    if (wholeMapBase) return wholeMapBase;
+    const size = 192;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext("2d");
+    const heights = new Float32Array(size * size);
+    let minHeight = Infinity;
+    let maxHeight = -Infinity;
+    for (let y = 0; y < size; y += 1) {
+      const z = -MAP_HALF + (y / (size - 1)) * MAP_SIZE;
+      for (let x = 0; x < size; x += 1) {
+        const worldX = -MAP_HALF + (x / (size - 1)) * MAP_SIZE;
+        const height = ctx.field.heightAt(worldX, z);
+        heights[y * size + x] = height;
+        minHeight = Math.min(minHeight, height);
+        maxHeight = Math.max(maxHeight, height);
+      }
+    }
+    const districtColours = {
+      cathedral: [56, 51, 58], ossuary: [126, 112, 82], scar: [39, 88, 91],
+      censer: [68, 58, 52], choir: [80, 65, 76], bloom: [86, 43, 43],
+      threshold: [107, 74, 47], reach: [116, 78, 43], saint: [99, 65, 43],
+    };
+    const image = context.createImageData(size, size);
+    const sample = (x, y) => heights[Math.max(0, Math.min(size - 1, y)) * size
+      + Math.max(0, Math.min(size - 1, x))];
+    for (let y = 0; y < size; y += 1) {
+      const z = -MAP_HALF + (y / (size - 1)) * MAP_SIZE;
+      for (let x = 0; x < size; x += 1) {
+        const worldX = -MAP_HALF + (x / (size - 1)) * MAP_SIZE;
+        const height = heights[y * size + x];
+        const elevation = clamp01((height - minHeight) / Math.max(1, maxHeight - minHeight));
+        const slopeX = sample(x + 1, y) - sample(x - 1, y);
+        const slopeZ = sample(x, y + 1) - sample(x, y - 1);
+        const hillshade = Math.max(.48, Math.min(1.18,
+          .82 + (-slopeX * .018 - slopeZ * .012) + elevation * .16));
+        let colour = [61 + elevation * 71, 42 + elevation * 48, 31 + elevation * 34];
+        for (const [key, district] of Object.entries(DISTRICTS)) {
+          const distance = Math.hypot(worldX - district.x, z - district.z);
+          const blend = clamp01(1 - distance / (district.r * 1.05)) * .52;
+          if (blend <= 0) continue;
+          const tint = districtColours[key] || colour;
+          colour = colour.map((channel, index) => lerp(channel, tint[index], blend));
+        }
+        const contourPhase = Math.abs((((height + 500) / 18) % 1 + 1) % 1 - .5);
+        const contour = contourPhase > .465 ? .84 : 1;
+        const edge = Math.max(Math.abs(worldX), Math.abs(z)) / MAP_HALF;
+        const edgeShade = 1 - clamp01((edge - .84) / .16) * .17;
+        const offset = (y * size + x) * 4;
+        image.data[offset] = Math.round(colour[0] * hillshade * contour * edgeShade);
+        image.data[offset + 1] = Math.round(colour[1] * hillshade * contour * edgeShade);
+        image.data[offset + 2] = Math.round(colour[2] * hillshade * contour * edgeShade);
+        image.data[offset + 3] = 255;
+      }
+    }
+    context.putImageData(image, 0, 0);
+    wholeMapBase = canvas;
+    return canvas;
+  }
+
+  function drawWholeMap(player, canvas) {
+    const map2d = canvas?.getContext?.("2d");
+    const bounds = canvas?.getBoundingClientRect?.();
+    if (!map2d || !bounds || bounds.width < 2 || bounds.height < 2) return null;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const width = Math.max(1, Math.round(bounds.width * dpr));
+    const height = Math.max(1, Math.round(bounds.height * dpr));
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    map2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+    map2d.clearRect(0, 0, bounds.width, bounds.height);
+    const margin = Math.max(9, Math.min(bounds.width, bounds.height) * .035);
+    const mapSize = Math.max(20, Math.min(bounds.width, bounds.height) - margin * 2);
+    const left = (bounds.width - mapSize) * .5;
+    const top = (bounds.height - mapSize) * .5;
+    const project = (x, z) => ({
+      x: left + ((x + MAP_HALF) / MAP_SIZE) * mapSize,
+      y: top + ((z + MAP_HALF) / MAP_SIZE) * mapSize,
+    });
+    const drawPath = (path, colour, lineWidth, dash = []) => {
+      map2d.save();
+      map2d.beginPath();
+      path.forEach(([x, z], index) => {
+        const point = project(x, z);
+        if (index === 0) map2d.moveTo(point.x, point.y);
+        else map2d.lineTo(point.x, point.y);
+      });
+      map2d.setLineDash(dash);
+      map2d.lineWidth = lineWidth;
+      map2d.strokeStyle = colour;
+      map2d.stroke();
+      map2d.restore();
+    };
+
+    map2d.save();
+    map2d.beginPath();
+    map2d.rect(left, top, mapSize, mapSize);
+    map2d.clip();
+    map2d.drawImage(buildWholeMapBase(), left, top, mapSize, mapSize);
+    for (let i = 1; i < 4; i += 1) {
+      const offset = mapSize * i / 4;
+      map2d.strokeStyle = "rgba(249,222,161,.07)";
+      map2d.lineWidth = 1;
+      map2d.beginPath(); map2d.moveTo(left + offset, top); map2d.lineTo(left + offset, top + mapSize); map2d.stroke();
+      map2d.beginPath(); map2d.moveTo(left, top + offset); map2d.lineTo(left + mapSize, top + offset); map2d.stroke();
+    }
+    drawPath(ROAD_PATH, "rgba(246,206,124,.78)", Math.max(1.4, mapSize / 210));
+    drawPath(FOSSE_PATH, "rgba(26,19,20,.72)", Math.max(1.2, mapSize / 235), [4, 3]);
+    drawPath(FOSSE_SPUR, "rgba(26,19,20,.58)", Math.max(1, mapSize / 270), [3, 3]);
+
+    const majorPoiIds = new Set(Object.keys(DISTRICTS));
+    for (const poi of ctx.world.pois || []) {
+      if (majorPoiIds.has(poi.id)) continue;
+      const point = project(poi.x, poi.z);
+      map2d.fillStyle = "rgba(246,225,181,.38)";
+      map2d.fillRect(point.x - 1, point.y - 1, 2, 2);
+    }
+    const labelScale = Math.max(.82, Math.min(1.1, mapSize / 310));
+    for (const [key, district] of Object.entries(DISTRICTS)) {
+      const point = project(district.x, district.z);
+      const radius = (district.r / MAP_SIZE) * mapSize;
+      map2d.save();
+      map2d.setLineDash([2.5, 3.5]);
+      map2d.strokeStyle = "rgba(248,218,154,.18)";
+      map2d.lineWidth = 1;
+      map2d.beginPath(); map2d.arc(point.x, point.y, radius, 0, Math.PI * 2); map2d.stroke();
+      map2d.restore();
+      map2d.fillStyle = "rgba(255,239,203,.82)";
+      map2d.font = `600 ${Math.round(7 * labelScale)}px Share Tech Mono, monospace`;
+      map2d.textAlign = "center";
+      const shortName = district.name.replace(/^The /, "").toUpperCase();
+      const labelPadding = Math.max(28, mapSize * .085);
+      const labelX = Math.max(left + labelPadding,
+        Math.min(left + mapSize - labelPadding, point.x));
+      const labelY = Math.max(top + 17,
+        Math.min(top + mapSize - 9, point.y - 5));
+      map2d.fillText(shortName, labelX, labelY);
+      map2d.fillStyle = "rgba(245,205,121,.72)";
+      map2d.beginPath(); map2d.arc(point.x, point.y, 2, 0, Math.PI * 2); map2d.fill();
+    }
+
+    for (const relay of ctx.mission?.relays || []) {
+      const point = project(relay.x, relay.z);
+      map2d.save(); map2d.translate(point.x, point.y); map2d.rotate(Math.PI * .25);
+      map2d.fillStyle = relay.done ? "rgba(118,205,167,.92)" : "#f3b74e";
+      map2d.fillRect(-3, -3, 6, 6); map2d.restore();
+    }
+    const objective = ctx.mission?.objective?.();
+    if (objective && !objective.event) {
+      const point = project(objective.x, objective.z);
+      map2d.strokeStyle = "#ffe29a"; map2d.lineWidth = 1.5;
+      map2d.strokeRect(point.x - 4, point.y - 4, 8, 8);
+    }
+    const event = ctx.breaches?.status?.();
+    if (event && ["warning", "active"].includes(event.phase)) {
+      const point = project(event.x, event.z);
+      const pulse = 4 + (Math.sin(ctx.atmos.elapsed * 6) * .5 + .5) * 3;
+      map2d.strokeStyle = "rgba(255,104,67,.92)"; map2d.lineWidth = 1.5;
+      map2d.beginPath(); map2d.arc(point.x, point.y, pulse, 0, Math.PI * 2); map2d.stroke();
+    }
+    const playerPoint = project(player.state.x, player.state.z);
+    const arrowCanvasYaw = wrapAngle(Math.PI - (Number.isFinite(player.state.yaw) ? player.state.yaw : 0));
+    map2d.save(); map2d.translate(playerPoint.x, playerPoint.y); map2d.rotate(arrowCanvasYaw);
+    map2d.fillStyle = "#fff0bf"; map2d.shadowColor = "rgba(255,188,75,.9)"; map2d.shadowBlur = 6;
+    map2d.beginPath(); map2d.moveTo(0, -7); map2d.lineTo(4.5, 5); map2d.lineTo(0, 2.5); map2d.lineTo(-4.5, 5); map2d.closePath(); map2d.fill();
+    map2d.restore();
+    map2d.restore();
+
+    map2d.strokeStyle = "rgba(245,216,142,.52)";
+    map2d.lineWidth = 1;
+    map2d.strokeRect(left + .5, top + .5, mapSize - 1, mapSize - 1);
+    map2d.fillStyle = "rgba(255,231,173,.86)";
+    map2d.font = "600 9px Share Tech Mono, monospace";
+    map2d.textAlign = "center";
+    map2d.fillText("N", left + mapSize * .5, top + 10);
+    canvas.dataset.scope = "whole-basin";
+    canvas.dataset.north = "-Z";
+    wholeMapSemantic = {
+      wholeMap: true,
+      range: MAP_SIZE,
+      bounds: { minX: -MAP_HALF, maxX: MAP_HALF, minZ: -MAP_HALF, maxZ: MAP_HALF },
+      player: { x: mapNumber(player.state.x), z: mapNumber(player.state.z),
+        canvasX: mapNumber(playerPoint.x), canvasY: mapNumber(playerPoint.y) },
+      districts: Object.keys(DISTRICTS),
+    };
+    return wholeMapSemantic;
+  }
+
+  function drawMinimap(player, canvas = mapCanvas, options = {}) {
+    const map2d = canvas?.getContext?.("2d");
+    const bounds = canvas?.getBoundingClientRect?.();
+    if (!bounds) return null;
     if (!map2d || bounds.width < 2 || bounds.height < 2) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const width = Math.max(1, Math.round(bounds.width * dpr));
     const height = Math.max(1, Math.round(bounds.height * dpr));
-    if (mapCanvas.width !== width || mapCanvas.height !== height) {
-      mapCanvas.width = width;
-      mapCanvas.height = height;
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
     }
     map2d.setTransform(dpr, 0, 0, dpr, 0, 0);
     map2d.clearRect(0, 0, bounds.width, bounds.height);
@@ -301,10 +507,16 @@ export function buildHud(ctx, host) {
     const ps = player.state;
     const event = ctx.breaches?.status?.();
     const activeEvent = event && (event.phase === "warning" || event.phase === "active");
-    const mapRange = activeEvent
-      ? Math.max(180, Math.min(420, (event.distance || 0) * 1.18 + 26))
-      : 180;
-    mapRangeEl.textContent = `${Math.round(mapRange)}M`;
+    const objective = ctx.mission?.objective?.();
+    const detailed = options.detailed === true;
+    const farthestSignal = Math.max(objective?.dist || 0, activeEvent ? event.distance || 0 : 0);
+    const mapRange = Number.isFinite(options.range)
+      ? Math.max(120, Number(options.range))
+      : detailed ? Math.max(420, Math.min(1050, farthestSignal * 1.14 + 80))
+        : activeEvent ? Math.max(180, Math.min(420, (event.distance || 0) * 1.18 + 26))
+          : 180;
+    if (canvas === mapCanvas) mapRangeEl.textContent = `${Math.round(mapRange)}M`;
+    const glyphScale = detailed ? clamp01(Math.min(w, h) / 520) * 1.2 + 1 : 1;
     const bodyYaw = wrapAngle(Number.isFinite(ps.yaw) ? ps.yaw : 0);
     const cameraYaw = wrapAngle(Number.isFinite(ps.camYaw) ? ps.camYaw : bodyYaw);
     /* The glyph is authored pointing toward canvas-up. In world space yaw
@@ -364,12 +576,23 @@ export function buildHud(ctx, host) {
     // Nearby authored landmarks make this a map rather than only a
     // threat detector. Labels stay off the tiny surface; silhouettes
     // and the compass already carry their names.
-    map2d.fillStyle = "rgba(224,214,188,.36)";
+    map2d.fillStyle = detailed ? "rgba(230,218,187,.62)" : "rgba(224,214,188,.36)";
+    const labels = [];
+    const canPlaceLabel = (p) => !labels.some((placed) => Math.hypot(placed.x - p.x, placed.y - p.y) < 44);
     for (const [poiIndex, poi] of (ctx.world.pois || []).entries()) {
       const p = point(poi.x, poi.z);
       if (!p.inside) continue;
       recordContact("poi", poi.key || poi.name || poiIndex, poi.x, poi.z, p);
-      map2d.fillRect(p.x - 1, p.y - 1, 2, 2);
+      map2d.fillRect(p.x - glyphScale, p.y - glyphScale, glyphScale * 2, glyphScale * 2);
+      if (detailed && labels.length < 8 && canPlaceLabel(p)) {
+        labels.push({ x: p.x, y: p.y });
+        map2d.fillStyle = "rgba(242,229,199,.72)";
+        map2d.font = "600 9px Share Tech Mono, monospace";
+        map2d.textAlign = p.x > cx ? "right" : "left";
+        map2d.fillText(String(poi.name || poi.key || "LANDMARK").toUpperCase(),
+          p.x + (p.x > cx ? -6 : 6), p.y - 5);
+        map2d.fillStyle = "rgba(230,218,187,.62)";
+      }
     }
 
     for (const [relayIndex, relay] of (ctx.mission?.relays || []).entries()) {
@@ -382,7 +605,7 @@ export function buildHud(ctx, host) {
       map2d.translate(p.x, p.y);
       map2d.rotate(Math.PI * 0.25);
       map2d.fillStyle = relay.done ? "rgba(106,217,174,.58)" : "#f0ad4b";
-      map2d.fillRect(-2.5, -2.5, 5, 5);
+      map2d.fillRect(-2.5 * glyphScale, -2.5 * glyphScale, 5 * glyphScale, 5 * glyphScale);
       map2d.restore();
     }
 
@@ -398,8 +621,8 @@ export function buildHud(ctx, host) {
           event: eventUnit,
           emerging: !!inst.emerging?.active,
         });
-      const size = inst.key === "matriarch" ? 5.5
-        : inst.key === "harrow" ? 3.4 : inst.key === "gleaner" ? 2.5 : 1.7;
+      const size = (inst.key === "matriarch" ? 5.5
+        : inst.key === "harrow" ? 3.4 : inst.key === "gleaner" ? 2.5 : 1.7) * glyphScale;
       map2d.fillStyle = inst.emerging?.active
         ? `rgba(255,172,61,${0.45 + pulse * 0.5})`
         : eventUnit ? "#ff6843" : "rgba(221,111,60,.72)";
@@ -416,7 +639,6 @@ export function buildHud(ctx, host) {
       }
     }
 
-    const objective = ctx.mission?.objective?.();
     if (objective && !objective.event) {
       const p = point(objective.x, objective.z, true);
       recordContact("objective", objective.name || "mission", objective.x, objective.z, p, {
@@ -427,7 +649,7 @@ export function buildHud(ctx, host) {
       map2d.rotate(Math.PI * 0.25);
       map2d.strokeStyle = "#ffe29a";
       map2d.lineWidth = 1.4;
-      map2d.strokeRect(-3.5, -3.5, 7, 7);
+      map2d.strokeRect(-3.5 * glyphScale, -3.5 * glyphScale, 7 * glyphScale, 7 * glyphScale);
       map2d.restore();
     }
 
@@ -436,7 +658,7 @@ export function buildHud(ctx, host) {
       recordContact("breach", event.serial || event.name || "active",
         event.x, event.z, p, { edge: !p.inside, phase: event.phase });
       map2d.beginPath();
-      map2d.arc(p.x, p.y, 7 + pulse * 3, 0, Math.PI * 2);
+      map2d.arc(p.x, p.y, (7 + pulse * 3) * glyphScale, 0, Math.PI * 2);
       map2d.strokeStyle = `rgba(255,101,58,${0.55 + pulse * 0.35})`;
       map2d.lineWidth = 1.5;
       map2d.stroke();
@@ -452,7 +674,8 @@ export function buildHud(ctx, host) {
     map2d.shadowColor = "rgba(255,188,75,.8)";
     map2d.shadowBlur = 5;
     map2d.beginPath();
-    map2d.moveTo(0, -7); map2d.lineTo(4.2, 5); map2d.lineTo(0, 2.4); map2d.lineTo(-4.2, 5);
+    map2d.moveTo(0, -7 * glyphScale); map2d.lineTo(4.2 * glyphScale, 5 * glyphScale);
+    map2d.lineTo(0, 2.4 * glyphScale); map2d.lineTo(-4.2 * glyphScale, 5 * glyphScale);
     map2d.closePath(); map2d.fill();
     map2d.restore();
 
@@ -462,14 +685,16 @@ export function buildHud(ctx, host) {
     map2d.textAlign = "center";
     map2d.fillText("N", north.x, north.y + 3);
 
-    mapDrawSeq += 1;
-    minimapSemantic = {
-      drawSeq: mapDrawSeq,
+    if (canvas === mapCanvas) mapDrawSeq += 1;
+    const semantic = {
+      drawSeq: canvas === mapCanvas ? mapDrawSeq : minimapSemantic.drawSeq,
       worldRotation: 0,
       bodyYaw,
       cameraYaw,
       arrowYaw: bodyYaw,
       arrowCanvasYaw,
+      range: mapNumber(mapRange),
+      detailed,
       north: {
         axis: "-Z",
         worldYaw: Math.PI,
@@ -479,6 +704,8 @@ export function buildHud(ctx, host) {
       },
       contacts,
     };
+    if (canvas === mapCanvas) minimapSemantic = semantic;
+    return semantic;
   }
 
   function updateBreachReadout() {
@@ -714,11 +941,13 @@ export function buildHud(ctx, host) {
       if (obj) {
         objEl.style.opacity = "1";
         objEl.dataset.event = obj.event ? "1" : "0";
-        objLabelEl.textContent = `${obj.name}  ·  ${Math.round(obj.dist)}m`;
+        objLabelEl.textContent = obj.name;
+        objDistanceEl.textContent = `${Math.round(obj.dist)}M`;
         objBarEl.style.width = `${(obj.progress || 0) * 100}%`;
       } else {
         objEl.style.opacity = "0";
         objEl.dataset.event = "0";
+        objDistanceEl.textContent = "—";
       }
 
       bannerEl.textContent = mission.state.banner || "";
@@ -751,6 +980,15 @@ export function buildHud(ctx, host) {
       };
     },
     redrawMinimap() { drawMinimap(ctx.player); },
+    redrawTacticalMap(canvas) { return drawWholeMap(ctx.player, canvas); },
+    tacticalMapState() {
+      return wholeMapSemantic ? {
+        ...wholeMapSemantic,
+        bounds: { ...wholeMapSemantic.bounds },
+        player: { ...wholeMapSemantic.player },
+        districts: [...wholeMapSemantic.districts],
+      } : null;
+    },
     setVisible(v) { el.style.display = v ? "" : "none"; },
     flashDistrict(name) { nameEl.textContent = name; showFor = 5.2; },
     damageNumberCount() { return damageNumbers.length; },

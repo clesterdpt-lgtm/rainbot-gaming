@@ -64,6 +64,7 @@ async function layoutAudit(page) {
       "#sf-native-ui", "#sf-hud", "#sf-command-wheel", "#sf-menu",
       "#sf-minimap", "#sf-touch", ".sf-command-wheel__dial",
       ".sf-menu__frame", ".sf-menu__content", ".sf-menu__rail",
+      ".sf-map-page", "#sf-map-canvas-large", ".sf-map-page__orders",
       "[data-touch-command]",
     ];
     const nodes = [...new Set(selectors.flatMap((selector) =>
@@ -105,8 +106,8 @@ async function hudDensityAudit(page) {
         && Number(style.opacity) > 0 && rect.width > 1 && rect.height > 1;
     };
     const selectors = [
-      ".sf-menu-trigger", "#sf-fullscreen", "#sf-objective", "#sf-compass",
-      "#sf-minimap", "#sf-vitals", "#sf-command-status", "#sf-hint",
+      "#sf-objective", "#sf-compass", "#sf-minimap", "#sf-vitals",
+      "#sf-command-status", "#sf-hint",
     ];
     const clusters = selectors.map((selector) => {
       const node = document.querySelector(selector);
@@ -256,6 +257,7 @@ async function embeddedKeyboardPass(browser) {
     focusId: document.activeElement?.id || null,
     focusText: document.activeElement?.textContent?.replace(/\s+/g, " ").trim() || null,
     focusAdvanced: document.activeElement !== document.querySelector(".game-page__header a"),
+    focusOutsideStage: !document.querySelector(".sf-stage")?.contains(document.activeElement),
     wheel: window.__SF.commandWheelState(),
     menu: window.__SF.menuState(),
   }));
@@ -277,12 +279,13 @@ async function embeddedKeyboardPass(browser) {
   const outsideKeys = await page.evaluate(() => ({
     audits: window.__sfEmbeddedKeyAudit.filter((entry) => entry.code !== "Tab"),
     input: window.__sfEmbeddedInputState(),
+    menu: window.__SF.menuState(),
   }));
   await page.screenshot({ path: path.join(OUT, "embedded-page-tab-focus.png"), fullPage: false });
   evidence.embeddedKeyboard = { before, held, after, outsideKeys };
   check("embedded page Tab advances normal document focus without owning game input",
     before.focusOutsideStage && !before.maximized
-      && held.focusAdvanced && held.focusId === "sf-fullscreen"
+      && held.focusAdvanced && held.focusOutsideStage
       && !held.wheel?.open && !held.menu?.open
       && after.wheel?.dispatchSeq === before.wheel?.dispatchSeq
       && !after.wheel?.open && !after.menu?.open,
@@ -296,10 +299,80 @@ async function embeddedKeyboardPass(browser) {
       && outsideKeys.input.keys.length === 0 && outsideKeys.input.events.length === 0
       && !outsideKeys.input.jumpPressed && !outsideKeys.input.jump && !outsideKeys.input.action,
     JSON.stringify(gameplayAudits));
-  check("embedded time, debug, camera, HUD, and audio hotkeys do not mutate game state",
+  check("embedded game hotkeys do not mutate state or open the tactical map",
     ["free", "time", "storm", "audio", "hudDisplay", "debugMeshes"].every((key) =>
-      outsideKeys.input[key] === before.input[key]),
+      outsideKeys.input[key] === before.input[key]) && !outsideKeys.menu?.open,
     JSON.stringify({ before: before.input, after: outsideKeys.input }));
+
+  await allGames.focus();
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => window.__SF.menuState()?.open, null, { timeout: 3000 });
+  const embeddedEscapeOpen = await page.evaluate(() => ({
+    menu: window.__SF.menuState(),
+    focusInside: document.getElementById("sf-menu")?.contains(document.activeElement),
+    bodyPaused: document.body.classList.contains("rb-escape-menu-open"),
+  }));
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => !window.__SF.menuState()?.open, null, { timeout: 3000 });
+  const embeddedEscapeClosed = await page.evaluate(() => ({
+    menu: window.__SF.menuState(),
+    focusRestored: document.activeElement === document.querySelector(".game-page__header a"),
+  }));
+  evidence.embeddedEscape = { embeddedEscapeOpen, embeddedEscapeClosed };
+  check("embedded Escape opens the native menu and restores external focus on close",
+    embeddedEscapeOpen.menu?.open && embeddedEscapeOpen.focusInside
+      && embeddedEscapeOpen.bodyPaused && !embeddedEscapeClosed.menu?.open
+      && embeddedEscapeClosed.focusRestored,
+    JSON.stringify({ embeddedEscapeOpen, embeddedEscapeClosed }));
+
+  await page.evaluate(() => {
+    const surface = document.querySelector(".rb-standalone-surface");
+    window.__sfFullscreenRequests = 0;
+    surface.requestFullscreen = () => {
+      window.__sfFullscreenRequests += 1;
+      return Promise.reject(new Error("QA CSS max-screen fallback"));
+    };
+  });
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => window.__SF.menuState()?.open, null, { timeout: 3000 });
+  const utilityPlacement = await page.evaluate(() => ({
+    menuTriggers: document.querySelectorAll(".sf-menu-trigger").length,
+    stageMaxButtons: document.querySelectorAll(".sf-stage > #sf-fullscreen").length,
+    menuMaxButtons: document.querySelectorAll("#sf-menu #sf-fullscreen").length,
+    label: document.querySelector("[data-maximize-label]")?.textContent?.trim(),
+  }));
+  check("Escape and maximize controls are absent from the always-on playfield",
+    utilityPlacement.menuTriggers === 0 && utilityPlacement.stageMaxButtons === 0
+      && utilityPlacement.menuMaxButtons === 1 && utilityPlacement.label === "MAXIMIZE GAME",
+    JSON.stringify(utilityPlacement));
+  await page.locator('[data-menu-action="maximize"]').click();
+  await page.waitForFunction(() => document.documentElement.classList.contains("sf-maximised")
+    && !window.__SF.menuState()?.open, null, { timeout: 3000 });
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => window.__SF.menuState()?.open, null, { timeout: 3000 });
+  const maximizedState = await page.evaluate(() => ({
+    menu: window.__SF.menuState(),
+    stage: document.querySelector(".sf-stage")?.classList.contains("is-maxed"),
+    html: document.documentElement.classList.contains("sf-maximised"),
+    body: document.body.classList.contains("rb-game-maxed"),
+    requests: window.__sfFullscreenRequests,
+    label: document.querySelector("[data-maximize-label]")?.textContent?.trim(),
+  }));
+  await page.locator('[data-menu-action="maximize"]').click();
+  await page.waitForFunction(() => !document.documentElement.classList.contains("sf-maximised")
+    && !window.__SF.menuState()?.open, null, { timeout: 3000 });
+  const restoredState = await page.evaluate(() => ({
+    stage: document.querySelector(".sf-stage")?.classList.contains("is-maxed"),
+    html: document.documentElement.classList.contains("sf-maximised"),
+    body: document.body.classList.contains("rb-game-maxed"),
+  }));
+  evidence.embeddedMaximize = { utilityPlacement, maximizedState, restoredState };
+  check("menu maximize action enters and exits max screen with synced state",
+    maximizedState.menu?.open && maximizedState.stage && maximizedState.html
+      && maximizedState.body && maximizedState.requests === 1
+      && maximizedState.label === "EXIT MAX SCREEN"
+      && !restoredState.stage && !restoredState.html && !restoredState.body,
+    JSON.stringify({ maximizedState, restoredState }));
   await context.close();
 }
 
@@ -515,17 +588,18 @@ async function desktopPass(browser) {
   } catch (_) { /* Report through the check below. */ }
   const lockedAudioBefore = await page.evaluate(() => window.__SF.settingsState().audioEnabled);
   await page.keyboard.press("KeyM");
-  let lockedAudioAfter = lockedAudioBefore;
-  try {
-    await page.waitForFunction((before) => window.__SF.settingsState().audioEnabled !== before,
-      lockedAudioBefore, { timeout: 1500 });
-    lockedAudioAfter = await page.evaluate(() => window.__SF.settingsState().audioEnabled);
-  } catch (_) { /* Report through the check below. */ }
+  await page.waitForFunction(() => window.__SF.menuState()?.open
+    && window.__SF.menuState()?.panel === "map", null, { timeout: 3000 });
+  const lockedMapOpen = await page.evaluate(() => ({
+    menu: window.__SF.menuState(),
+    audio: window.__SF.settingsState().audioEnabled,
+    orders: document.querySelectorAll(".sf-map-order").length,
+    canvas: [document.getElementById("sf-map-canvas-large")?.width || 0,
+      document.getElementById("sf-map-canvas-large")?.height || 0],
+  }));
   await page.keyboard.press("KeyM");
-  try {
-    await page.waitForFunction((before) => window.__SF.settingsState().audioEnabled === before,
-      lockedAudioBefore, { timeout: 1500 });
-  } catch (_) { /* Restoration is best effort; the positive edge is graded. */ }
+  await page.waitForFunction(() => !window.__SF.menuState()?.open, null, { timeout: 3000 });
+  const lockedAudioAfter = await page.evaluate(() => window.__SF.settingsState().audioEnabled);
 
   const lockedWheelBefore = await page.evaluate(() => {
     const T = window.__SF;
@@ -547,15 +621,18 @@ async function desktopPass(browser) {
     lockedWheelBefore?.dispatchSeq || 0, { timeout: 4000 });
   const lockedWheelAfter = await page.evaluate(() => window.__SF.commandWheelState());
   evidence.pointerLockInput = {
-    pointerLocked, pointerLockProbe, lockedW, meleeStarted, lockedAudioBefore, lockedAudioAfter,
+    pointerLocked, pointerLockProbe, lockedW, meleeStarted, lockedAudioBefore, lockedAudioAfter, lockedMapOpen,
     lockedWheelBefore, lockedWheelOpen, lockedWheelAfter,
   };
   check("pointer-locked W and Q retain movement and melee gameplay input",
     lockedW.ownsPointerInput && lockedW.keyHeld && lockedW.moveY < -0.5 && meleeStarted,
     JSON.stringify({ pointerLocked, pointerLockProbe, lockedW, meleeStarted }));
-  check("pointer-locked M hotkey still toggles field audio",
-    lockedAudioAfter !== lockedAudioBefore,
-    `${lockedAudioBefore} -> ${lockedAudioAfter}`);
+  check("owned M opens the large tactical map and preserves audio",
+    lockedMapOpen.menu?.open && lockedMapOpen.menu?.panel === "map"
+      && lockedMapOpen.menu?.paused && lockedMapOpen.orders === 3
+      && lockedMapOpen.canvas.every((value) => value >= 300)
+      && lockedMapOpen.audio === lockedAudioBefore && lockedAudioAfter === lockedAudioBefore,
+    JSON.stringify({ lockedAudioBefore, lockedMapOpen, lockedAudioAfter }));
   check("pointer-locked Tab wheel still opens and dispatches exactly once",
     lockedWheelOpen.ownsPointerInput && lockedWheelOpen.wheel?.open
       && lockedWheelAfter.dispatchSeq === (lockedWheelBefore?.dispatchSeq || 0) + 1
@@ -635,6 +712,41 @@ async function desktopPass(browser) {
   const trapped = await page.evaluate(() => document.getElementById("sf-menu")
     ?.contains(document.activeElement));
   check("Tab focus remains inside the operation menu", trapped);
+
+  await page.locator('[data-menu-panel="map"]').click();
+  await page.waitForFunction(() => window.__SF.menuState()?.panel === "map"
+    && window.__SF.menuState()?.mapRange >= 420, null, { timeout: 3000 });
+  await page.locator(".sf-stage").screenshot({ path: path.join(OUT, "desktop-tactical-map-menu.png") });
+  const mapPanel = await page.evaluate(() => {
+    const mini = document.getElementById("sf-minimap");
+    const objectives = document.getElementById("sf-objective");
+    const event = document.getElementById("sf-map-event");
+    const canvas = document.getElementById("sf-map-canvas-large");
+    const rect = canvas?.getBoundingClientRect();
+    return {
+      state: window.__SF.menuState(),
+      orders: document.querySelectorAll(".sf-map-order").length,
+      eventInsideMap: !!mini?.contains(event),
+      eventInsideObjectives: !!objectives?.contains(event),
+      canvasCss: rect ? [Math.round(rect.width), Math.round(rect.height)] : [0, 0],
+      rangeText: document.querySelector("[data-map-detail-range]")?.textContent?.trim() || "",
+      scope: canvas?.dataset.scope || null,
+      whole: window.__SF.ctx.hud.tacticalMapState?.() || null,
+    };
+  });
+  const mapPanelLayout = await layoutAudit(page);
+  evidence.desktopTacticalMap = { mapPanel, layout: mapPanelLayout };
+  check("Escape menu exposes a large clean map with a separate objective list",
+    mapPanel.state?.panel === "map" && mapPanel.state?.mapRange >= 420
+      && mapPanel.orders === 3 && !mapPanel.eventInsideMap && mapPanel.eventInsideObjectives
+      && mapPanel.canvasCss[0] >= 280 && mapPanel.canvasCss[1] >= 280
+      && Math.abs(mapPanel.canvasCss[0] - mapPanel.canvasCss[1]) <= 2
+      && mapPanel.scope === "whole-basin" && mapPanel.whole?.wholeMap
+      && mapPanel.whole?.range === 2048 && mapPanel.whole?.districts?.length === 9
+      && mapPanel.whole?.bounds?.minX === -1024 && mapPanel.whole?.bounds?.maxZ === 1024
+      && /BASIN$/.test(mapPanel.rangeText)
+      && mapPanelLayout.offenders.length === 0,
+    JSON.stringify({ mapPanel, mapPanelLayout }));
 
   await page.locator('[data-menu-panel="controls"]').click();
   await page.waitForFunction(() => window.__SF.menuState()?.panel === "controls");
@@ -1023,6 +1135,30 @@ async function mobilePass(browser) {
       && touchLeak.menu?.open && touchLeak.touchInert,
     JSON.stringify(touchLeak));
   check("mobile operation menu owns focus", touchLeak.focusInside);
+
+  await page.locator('[data-menu-panel="map"]').click();
+  await page.waitForFunction(() => window.__SF.menuState()?.panel === "map"
+    && window.__SF.menuState()?.mapRange >= 420, null, { timeout: 3000 });
+  await page.locator(".sf-stage").screenshot({ path: path.join(OUT, "mobile-tactical-map-menu.png") });
+  const mobileMap = await page.evaluate(() => {
+    const canvas = document.getElementById("sf-map-canvas-large");
+    const rect = canvas?.getBoundingClientRect();
+    return {
+      state: window.__SF.menuState(),
+      orders: document.querySelectorAll(".sf-map-order").length,
+      canvasCss: rect ? [Math.round(rect.width), Math.round(rect.height)] : [0, 0],
+      scope: canvas?.dataset.scope || null,
+      contentOverflow: Math.max(0, document.querySelector(".sf-menu__content")?.scrollHeight
+        - document.querySelector(".sf-menu__content")?.clientHeight || 0),
+    };
+  });
+  check("portrait menu keeps the tactical map and objective list usable",
+    mobileMap.state?.panel === "map" && mobileMap.state?.mapRange >= 420
+      && mobileMap.orders === 3 && mobileMap.scope === "whole-basin"
+      && mobileMap.canvasCss[0] >= 160
+      && Math.abs(mobileMap.canvasCss[0] - mobileMap.canvasCss[1]) <= 2
+      && mobileMap.contentOverflow <= 4,
+    JSON.stringify(mobileMap));
 
   const mobileLayout = await layoutAudit(page);
   evidence.mobileLayout = mobileLayout;

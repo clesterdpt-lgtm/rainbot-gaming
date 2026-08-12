@@ -22,8 +22,8 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Share+Tech+Mono&display=swap&v=20260811-11" />
   <link rel="stylesheet" href="../assets/css/styles.css?v=20260806-network-polish-1" />
-  <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260811-15" />
-  <link rel="stylesheet" href="../assets/css/saintfall-ui.css?v=20260811-15" />
+  <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260811-17" />
+  <link rel="stylesheet" href="../assets/css/saintfall-ui.css?v=20260811-17" />
 </head>
 <body class="rb-standalone-shell saintfall-shell" data-rb-native-escape-menu="true">
   <nav class="nav"><div id="nav-slot"></div></nav>
@@ -41,8 +41,6 @@
       <div class="game-stage rb-standalone-stage saintfall-stage-shell">
         <div class="canvas-wrap rb-standalone-surface">
           <div class="sf-stage">
-            <button class="sf-fs-btn fullscreen-btn" id="sf-fullscreen" type="button" aria-label="Max screen" title="Max screen">&#9974;</button>
-
             <canvas id="sf-canvas" aria-label="SAINTFALL playfield"></canvas>
             <div id="sf-hud"></div>
             <div id="sf-touch" data-touch-controls aria-label="SAINTFALL touch controls" aria-hidden="true"></div>
@@ -95,6 +93,7 @@
             <li>Press <b>Esc</b> for the operation menu, controls, settings, and field saves.</li>
             <li>On touch, drag the left relic to move, swipe the right side to look, and hold-drag the labeled <b>Call</b> control for field command.</li>
             <li>Follow the tactical mini-map when a Bloom breach opens. Every marked event brood must be defeated before the next, harder surge begins.</li>
+            <li>Press <strong>M</strong> for the full tactical map and objective list. Press it again to resume the operation.</li>
             <li>Reach the Vault-Cathedral and survive the districts between the drop and the nave.</li>
           </ul>
         </details>
@@ -158,42 +157,11 @@
     <div>&copy; 2026 Rainbot Network. Parody.</div>
   </footer>
 
-  <script>
-    (() => {
-      const btn = document.getElementById("sf-fullscreen");
-      const stage = document.querySelector(".sf-stage");
-      const surface = stage.closest(".rb-standalone-surface") || stage;
-      const syncMaxButton = (active) => {
-        btn.textContent = active ? "✕" : "⛶";
-        btn.setAttribute("aria-label", active ? "Exit max screen" : "Max screen");
-        btn.setAttribute("title", active ? "Exit max screen" : "Max screen");
-      };
-      btn.addEventListener("click", () => {
-        const maxed = stage.classList.toggle("is-maxed");
-        document.documentElement.classList.toggle("sf-maximised", maxed);
-        document.body.classList.toggle("rb-game-maxed", maxed);
-        syncMaxButton(maxed);
-        if (maxed && surface.requestFullscreen) surface.requestFullscreen().catch(() => {});
-        else if (!maxed && document.fullscreenElement) document.exitFullscreen().catch(() => {});
-        window.dispatchEvent(new Event("resize"));
-      });
-      document.addEventListener("fullscreenchange", () => {
-        if (!document.fullscreenElement) {
-          stage.classList.remove("is-maxed");
-          document.documentElement.classList.remove("sf-maximised");
-          document.body.classList.remove("rb-game-maxed");
-          syncMaxButton(false);
-          window.dispatchEvent(new Event("resize"));
-        }
-      });
-    })();
-  </script>
-
   <!-- ads.js defines the RB global that main.js subscribes to; loading
        main.js without it throws before the nav ever renders. -->
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260806-network-polish-1"></script>
-  <script src="../assets/js/saintfall/boot.js?v=20260811-15"></script>
+  <script src="../assets/js/saintfall/boot.js?v=20260811-17"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

@@ -8,7 +8,7 @@
 
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
 const SETTINGS_KEY = "saintfall:field-ui:v1";
-const PANEL_NAMES = new Set(["operation", "saves", "controls", "settings"]);
+const PANEL_NAMES = new Set(["operation", "map", "saves", "controls", "settings"]);
 const WHEEL_POINTS = Object.freeze([
   { x: 0, y: -1, angle: -90 },
   { x: 0.866, y: 0.5, angle: 30 },
@@ -21,9 +21,11 @@ const ICONS = Object.freeze({
   cluster: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4v7M16 21v7M4 16h7M21 16h7M7.5 7.5l5 5M19.5 19.5l5 5M24.5 7.5l-5 5M12.5 19.5l-5 5"/><circle cx="16" cy="16" r="4"/></svg>`,
   resupply: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="m16 3 10 6v14l-10 6-10-6V9Z"/><path d="M16 9v14M9 16h14"/></svg>`,
   operation: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="m12 7 3 5-3 5-3-5Z"/></svg>`,
+  map: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 5 5-2 6 2 5-2v16l-5 2-6-2-5 2Z"/><path d="M9 3v16M15 5v16"/><circle cx="15" cy="11" r="2"/></svg>`,
   saves: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5Z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></svg>`,
   controls: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8h10a5 5 0 0 1 4 7l-1 3a2 2 0 0 1-3 1l-3-2h-4l-3 2a2 2 0 0 1-3-1l-1-3a5 5 0 0 1 4-7Z"/><path d="M7 12h4M9 10v4M16 12h.1M18 14h.1"/></svg>`,
   settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>`,
+  maximize: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M20 15v5h-5M4 15v5h5"/></svg>`,
 });
 
 function escapeHtml(value) {
@@ -104,7 +106,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     const closed = () => ({ open: false });
     return {
       update() {}, toggleAudio: () => false, openMenu: () => false,
-      closeMenu: () => false, cancelWheel: () => false, refresh() {},
+      openMap: () => false, closeMenu: () => false, cancelWheel: () => false, refresh() {},
       wheelState: closed, menuState: closed,
       settingsState: () => ({ audioEnabled: false, hudScale: "standard", reducedMotion: false, highContrast: false }),
     };
@@ -117,10 +119,6 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
   root.id = "sf-native-ui";
   root.className = "sf-native-ui";
   root.innerHTML = `
-    <button class="sf-menu-trigger" type="button" data-menu-open aria-label="Open field menu"
-      title="Field menu (Esc)">
-      ${ICONS.crest}<span>FIELD MENU</span><kbd>ESC</kbd>
-    </button>
     <div id="sf-command-wheel" class="sf-command-wheel" role="dialog"
       aria-label="Field command wheel" aria-modal="false" aria-hidden="true" hidden
       data-open="false" data-selection="">
@@ -150,10 +148,13 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
           <nav class="sf-menu__rail" aria-label="Field menu">
             <button type="button" class="sf-menu__resume" data-menu-close>${ICONS.operation}<span><strong>RESUME</strong><small>Return to the basin</small></span></button>
             <button type="button" data-menu-panel="operation" aria-current="page">${ICONS.operation}<span>OPERATION</span></button>
+            <button type="button" data-menu-panel="map">${ICONS.map}<span>TACTICAL MAP</span></button>
             <button type="button" data-menu-panel="saves">${ICONS.saves}<span>SAVE / LOAD</span></button>
             <button type="button" data-menu-panel="controls">${ICONS.controls}<span>CONTROLS</span></button>
             <button type="button" data-menu-panel="settings">${ICONS.settings}<span>SETTINGS</span></button>
             <div class="sf-menu__rail-spacer"></div>
+            <button type="button" class="fullscreen-btn" id="sf-fullscreen"
+              data-menu-action="maximize" aria-pressed="false">${ICONS.maximize}<span data-maximize-label>MAXIMIZE GAME</span></button>
             <button type="button" data-menu-action="restart"><span>RESTART OPERATION</span></button>
             <button type="button" data-menu-action="return"><span>RETURN TO ARCHIVE</span></button>
           </nav>
@@ -168,6 +169,21 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
                 <article class="sf-operation-card sf-operation-card--breach"><small>BLOOM CONTAINMENT</small><strong data-operation-breach>Signal quiet</strong><span data-operation-breach-detail>No active rupture</span></article>
               </div>
               <div class="sf-menu__callout"><span>FIELD DOCTRINE</span><p>Hold <kbd>TAB</kbd>, point toward a command sigil, then release to confirm. The basin enters command stasis while the wheel is open.</p></div>
+            </section>
+            <section class="sf-menu__page sf-menu__page--map" data-menu-page="map" hidden>
+              <div class="sf-menu__pagehead"><span>LIVE BASIN OVERVIEW</span><h3>TACTICAL MAP</h3><p>The whole two-kilometre basin, rendered from the authored terrain. North stays fixed.</p></div>
+              <div class="sf-map-page">
+                <figure class="sf-map-page__surface">
+                  <header><span><small>VESPER-IX</small><strong>WHOLE-BASIN SURVEY</strong></span><b data-map-detail-range>—</b></header>
+                  <canvas id="sf-map-canvas-large" width="720" height="720" role="img" aria-label="Large tactical map of Vesper-IX"></canvas>
+                  <figcaption class="sf-map-page__legend"><span data-kind="player">RELIQUARY</span><span data-kind="objective">OBJECTIVE</span><span data-kind="relay">RELAY</span><span data-kind="breach">BLOOM</span></figcaption>
+                </figure>
+                <aside class="sf-map-page__orders" aria-label="Objective list">
+                  <header><span>FIELD ORDERS</span><b data-map-order-count>0 / 3</b></header>
+                  <div class="sf-map-page__list" data-map-objectives></div>
+                  <p><kbd>M</kbd> CLOSE MAP · <kbd>ESC</kbd> RESUME</p>
+                </aside>
+              </div>
             </section>
             <section class="sf-menu__page" data-menu-page="saves" hidden>
               <div class="sf-menu__pagehead"><span>FIELD RECORDS</span><h3>SAVE / LOAD</h3><p>Three manual reliquaries and one automatic field record.</p></div>
@@ -184,7 +200,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
               <div class="sf-controls-grid">
                 <article><h4>MOVEMENT</h4>${controlRow("W A S D", "Move")}${controlRow("SHIFT", "Sprint")}${controlRow("CTRL / C", "Crouch", "Descend while airborne")}${controlRow("SPACE", "Vault")}${controlRow("SHIFT + SPACE", "Reliquary jetpack")}${controlRow("E", "Boost slide")}</article>
                 <article><h4>COMBAT</h4>${controlRow("MOUSE", "Look / aim")}${controlRow("LMB", "Fire")}${controlRow("RMB", "Aim down sights")}${controlRow("Q", "Censer-lance strike")}${controlRow("X", "Aegis block")}${controlRow("R", "Vent weapon heat")}</article>
-                <article><h4>COMMAND</h4>${controlRow("HOLD TAB", "Command wheel", "Point and release to confirm")}${controlRow("ESC", "Field menu")}${controlRow("M", "Toggle sound")}${controlRow("TOUCH", "Hold the command sigil", "Drag and release to confirm")}</article>
+                <article><h4>COMMAND</h4>${controlRow("HOLD TAB", "Command wheel", "Point and release to confirm")}${controlRow("ESC", "Field menu")}${controlRow("M", "Tactical map", "Press again to resume")}${controlRow("TOUCH", "Hold the command sigil", "Drag and release to confirm")}</article>
               </div>
             </section>
             <section class="sf-menu__page" data-menu-page="settings" hidden>
@@ -210,7 +226,12 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
   const wheelStatusEl = root.querySelector("[data-wheel-status]");
   const commandEls = Array.from(root.querySelectorAll(".sf-command-wheel__option"));
   const menuEl = root.querySelector("#sf-menu");
+  const largeMapCanvas = root.querySelector("#sf-map-canvas-large");
+  const largeMapRange = root.querySelector("[data-map-detail-range]");
+  const maximizeButton = root.querySelector('[data-menu-action="maximize"]');
+  const maximizeLabel = root.querySelector("[data-maximize-label]");
   const liveEl = root.querySelector("[data-ui-live]");
+  const surface = stage.closest(".rb-standalone-surface") || stage;
   const settings = readSettings();
   const wheel = {
     open: false, selectedIndex: -1, source: null, x: 0, y: 0,
@@ -219,7 +240,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
   };
   const menu = {
     open: false, panel: "operation", lastFocus: null, restartUntil: 0,
-    ariaRestore: null,
+    ariaRestore: null, returnToPointerLock: false,
   };
   const clearedUntil = new Map();
   const pendingTimers = new Set();
@@ -357,8 +378,59 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
 
   function ownsGameKeyboard() {
     return document.pointerLockElement === canvas
+      || ctx.player?.input?.state?.locked
       || document.activeElement === canvas
       || document.documentElement.classList.contains("sf-maximised");
+  }
+
+  function isMaximized() {
+    return !!document.fullscreenElement
+      || stage.classList.contains("is-maxed")
+      || document.documentElement.classList.contains("sf-maximised")
+      || document.body.classList.contains("rb-game-maxed");
+  }
+
+  function syncMaximizeButton() {
+    const active = isMaximized();
+    if (maximizeLabel) maximizeLabel.textContent = active ? "EXIT MAX SCREEN" : "MAXIMIZE GAME";
+    if (maximizeButton) {
+      maximizeButton.setAttribute("aria-label", active ? "Exit max screen" : "Maximize game");
+      maximizeButton.setAttribute("aria-pressed", active ? "true" : "false");
+      maximizeButton.dataset.state = active ? "maximized" : "embedded";
+    }
+    return active;
+  }
+
+  function setMaximized(active) {
+    stage.classList.toggle("is-maxed", active);
+    document.documentElement.classList.toggle("sf-maximised", active);
+    document.body.classList.toggle("rb-game-maxed", active);
+    syncMaximizeButton();
+    if (active && !document.fullscreenElement && surface.requestFullscreen) {
+      try { surface.requestFullscreen().catch(() => false); } catch (_) { /* CSS fallback remains active. */ }
+    } else if (!active && document.fullscreenElement && document.exitFullscreen) {
+      try { document.exitFullscreen().catch(() => false); } catch (_) { /* CSS state already restored. */ }
+    }
+    window.dispatchEvent(new Event("resize"));
+    return active;
+  }
+
+  function toggleMaximized() {
+    const active = !isMaximized();
+    closeMenu({ requestLock: false });
+    setMaximized(active);
+    announce(active ? "Max screen enabled" : "Embedded view restored");
+    return active;
+  }
+
+  function onFullscreenChange() {
+    if (!document.fullscreenElement) {
+      stage.classList.remove("is-maxed");
+      document.documentElement.classList.remove("sf-maximised");
+      document.body.classList.remove("rb-game-maxed");
+      window.dispatchEvent(new Event("resize"));
+    }
+    syncMaximizeButton();
   }
 
   function openWheel(source = "keyboard", origin = null) {
@@ -432,8 +504,68 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     });
     if (next === "saves") refreshSaves();
     if (next === "operation") refreshOperation();
+    if (next === "map") {
+      refreshMap();
+      requestAnimationFrame(() => { if (!destroyed && menu.open && menu.panel === "map") refreshMap(); });
+    }
     if (focus) root.querySelector(`[data-menu-page="${next}"] h3`)?.focus?.();
     menuSfx("switch");
+  }
+
+  function refreshMap() {
+    const state = ctx.mission.state || {};
+    const objective = ctx.mission.objective?.();
+    const breach = ctx.breaches?.status?.();
+    const relayTotal = ctx.mission.relays?.length || 3;
+    const relayDone = Math.max(0, state.relaysDone || 0);
+    const objectiveDone = !objective && state.phase === "won";
+    const breachDone = !!breach?.complete;
+    const relaysDone = relayDone >= relayTotal;
+    const completed = [objectiveDone, breachDone, relaysDone].filter(Boolean).length;
+    const breachActive = !!breach && ["warning", "active"].includes(breach.phase);
+    let breachProgress = breachDone ? 1 : 0;
+    if (breach?.boss) breachProgress = 1 - breach.boss.health / Math.max(1, breach.boss.maxHealth);
+    else if (breach?.phase === "active" && breach.total) {
+      breachProgress = 1 - Math.max(0, breach.remaining || 0) / breach.total;
+    } else if (breach?.phase === "warning") {
+      breachProgress = 1 - Math.max(0, breach.timer || 0) / Math.max(1, ctx.breaches?.config?.warningSeconds || 1);
+    }
+    const items = [
+      {
+        index: "01", kicker: "PRIORITY DIRECTIVE",
+        title: objective?.name || (objectiveDone ? "OPERATION COMPLETE" : "AWAITING FIELD ORDER"),
+        detail: objective ? `${Math.round(objective.dist || 0)}m from reliquary` : "No active destination",
+        progress: objective?.progress || (objectiveDone ? 1 : 0),
+        state: objectiveDone ? "complete" : "active",
+      },
+      {
+        index: "02", kicker: "BLOOM CONTAINMENT",
+        title: breachDone ? "SIGNAL SEVERED" : breachActive
+          ? (breach?.name || "RUPTURE DETECTED") : "SIGNAL QUIET",
+        detail: breachDone ? "All breach signatures neutralized" : breach?.phase === "warning"
+          ? `Emergence in ${Math.ceil(breach.timer || 0)} seconds` : breach?.phase === "active"
+            ? `${Math.max(0, breach.remaining || 0)} hostiles remain` : "Monitoring the basin",
+        progress: breachProgress,
+        state: breachDone ? "complete" : breachActive ? "threat" : "idle",
+      },
+      {
+        index: "03", kicker: "VOX-RELAY NETWORK",
+        title: relaysDone ? "NETWORK SILENCED" : `${relayDone} OF ${relayTotal} RELAYS SILENCED`,
+        detail: relaysDone ? "The Cathedral signal is exposed" : "Relay sites remain marked on the field",
+        progress: relayDone / Math.max(1, relayTotal),
+        state: relaysDone ? "complete" : "active",
+      },
+    ];
+    const list = root.querySelector("[data-map-objectives]");
+    if (list) list.innerHTML = items.map((item) => `<article class="sf-map-order" data-state="${item.state}" style="--sf-order-progress:${clamp(item.progress, 0, 1)}">
+      <i aria-hidden="true">${item.index}</i><span><small>${item.kicker}</small><strong>${escapeHtml(item.title)}</strong><em>${escapeHtml(item.detail)}</em></span>
+      <b aria-label="${Math.round(clamp(item.progress, 0, 1) * 100)} percent complete"></b></article>`).join("");
+    const count = root.querySelector("[data-map-order-count]");
+    if (count) count.textContent = `${completed} / 3`;
+    const semantic = ctx.hud?.redrawTacticalMap?.(largeMapCanvas);
+    if (largeMapRange) largeMapRange.textContent = semantic?.range
+      ? `${Math.round(semantic.range)}M BASIN` : "FIELD SURVEY";
+    return semantic;
   }
 
   function refreshOperation() {
@@ -548,6 +680,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     cancelWheel("menu");
     menu.open = true;
     menu.lastFocus = document.activeElement;
+    menu.returnToPointerLock = document.pointerLockElement === canvas
+      || document.activeElement === canvas || document.documentElement.classList.contains("sf-maximised");
     menuEl.hidden = false;
     menuEl.setAttribute("aria-hidden", "false");
     document.body.classList.add("rb-escape-menu-open");
@@ -558,6 +692,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     refreshOperation();
     refreshSaves();
     applySettings();
+    syncMaximizeButton();
     setPanel(panel);
     if (focusRaf) cancelAnimationFrame(focusRaf);
     focusRaf = requestAnimationFrame(() => {
@@ -582,7 +717,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     setMenuInert(false);
     ctx.player?.input?.clearAll?.();
     announce("Operation resumed");
-    if (requestLock && canvas.requestPointerLock) {
+    const shouldRequestLock = requestLock && menu.returnToPointerLock;
+    if (shouldRequestLock && canvas.requestPointerLock) {
       try {
         const lock = canvas.requestPointerLock();
         lock?.catch?.(() => false);
@@ -591,7 +727,18 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
       menu.lastFocus.focus?.({ preventScroll: true });
     }
     menu.lastFocus = null;
+    menu.returnToPointerLock = false;
     return true;
+  }
+
+  function openMap() {
+    if (destroyed) return false;
+    if (menu.open) {
+      if (menu.panel === "map") return closeMenu({ requestLock: true });
+      setPanel("map");
+      return true;
+    }
+    return openMenu("map");
   }
 
   function focusableMenuItems() {
@@ -697,6 +844,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
       settings.hudScale = target.dataset.hudScale === "large" ? "large" : "standard";
       writeSettings(settings); applySettings(); menuSfx("toggle"); return;
     }
+    if (target.matches('[data-menu-action="maximize"]')) { toggleMaximized(); return; }
     if (target.matches('[data-menu-action="restart"]')) {
       if (menu.restartUntil > performance.now()) { window.location.reload(); return; }
       menu.restartUntil = performance.now() + 4500;
@@ -726,7 +874,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
       const interactiveTarget = event.target instanceof Element
         && !!event.target.closest("button, a, input, select, textarea,"
           + " [role='button'], [role='switch'], [role='tab']");
-      if (event.code === "Escape") {
+      if (event.code === "KeyM") {
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (!event.repeat) openMap();
+      } else if (event.code === "Escape") {
         event.preventDefault(); event.stopImmediatePropagation();
         closeMenu({ requestLock: true });
       } else if (event.code === "Tab") {
@@ -761,11 +912,20 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
       }
       return;
     }
-    if ((event.code === "Escape" || event.code === "Tab") && !ownsGameKeyboard()) return;
     if (event.code === "Escape") {
-      event.preventDefault(); event.stopImmediatePropagation(); openMenu("operation"); return;
+      if (openMenu("operation", { force: true })) {
+        event.preventDefault(); event.stopImmediatePropagation();
+      }
+      return;
+    }
+    if (event.code === "KeyM") {
+      if (!ownsGameKeyboard()) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (!event.repeat) openMap();
+      return;
     }
     if (event.code === "Tab") {
+      if (!ownsGameKeyboard()) return;
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) openWheel("keyboard");
     }
@@ -872,6 +1032,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
   window.addEventListener("blur", onWindowBlur);
   document.addEventListener("visibilitychange", onVisibilityChange);
   document.addEventListener("pointerlockchange", onPointerLockChange);
+  document.addEventListener("fullscreenchange", onFullscreenChange);
   document.addEventListener("rainbot:sfx-muted", onSfxMuted);
 
   const stopWon = ctx.mission.bus?.on?.("won", () => {
@@ -896,6 +1057,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     updateCommands();
     if (menu.open) {
       refreshOperation();
+      if (menu.panel === "map") refreshMap();
       root.querySelectorAll('[data-save-action="save"]').forEach((button) => {
         button.disabled = !save?.canSave?.();
       });
@@ -944,6 +1106,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
       canLoad: !!(saveData.autosave || saveData.manuals?.some(Boolean)),
       phase: ctx.mission.state?.phase || null,
       restartArmed: menu.restartUntil > performance.now(),
+      maximized: isMaximized(),
+      maximizeLabel: maximizeLabel?.textContent?.trim() || null,
+      mapRange: Number(largeMapRange?.textContent?.match(/\d+/)?.[0] || 0),
+      mapPixels: largeMapCanvas ? [largeMapCanvas.width, largeMapCanvas.height] : null,
     };
   }
 
@@ -960,11 +1126,14 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     if (destroyed) return;
     updateCommands();
     refreshOperation();
+    refreshMap();
     refreshSaves();
     applySettings();
+    syncMaximizeButton();
   }
 
   applySettings();
+  syncMaximizeButton();
   refresh();
 
   const publicApi = {
@@ -975,6 +1144,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     refresh,
     toggleAudio,
     openMenu,
+    openMap,
     closeMenu,
     cancelWheel,
     wheelState,
@@ -993,6 +1163,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
       window.removeEventListener("blur", onWindowBlur);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       document.removeEventListener("pointerlockchange", onPointerLockChange);
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
       document.removeEventListener("rainbot:sfx-muted", onSfxMuted);
 
       touchObserver.disconnect();

@@ -26,6 +26,7 @@
 import {
   TAU, clamp, clamp01, lerp, makeRng, smootherstep, sstep,
 } from "saintfall/core.js";
+import { mergeGeometries } from "saintfall/structures.js";
 import { DROP_SITE, DROP_CRATER } from "saintfall/terrain.js";
 import { POD_LANDED_PITCH, POD_LANDED_ROLL, POD_DOOR_REACH } from "saintfall/pod.js";
 
@@ -396,10 +397,18 @@ function buildOrbitScene(ctx, reducedMotion) {
   const key = new THREE.DirectionalLight(0xfff2df, 5.2);
   key.position.copy(sunDir).multiplyScalar(400);
   scene.add(key);
-  const bounce = new THREE.DirectionalLight(0xffa768, 2.6);
+  /* The BELLY is what the whole orbital act is shot from - the pod
+     hangs under the barge and the camera is under both - so the only
+     surface that matters here is the one lit purely by planet-shine.
+     At 0xffa768 x2.6 that made five hundred metres of white ceramic
+     render solid ORANGE, and the Concord's whole identity is that it
+     is the clean white thing in a rust-coloured game. Planetshine is
+     still warm, just nowhere near that saturated, and the sky term
+     carries the rest. */
+  const bounce = new THREE.DirectionalLight(0xffdcc2, 1.30);
   bounce.position.set(-60, -320, -180);
   scene.add(bounce);
-  const fill = new THREE.HemisphereLight(0x9fb9ff, 0x6b3a1c, 0.85);
+  const fill = new THREE.HemisphereLight(0xc4d6ff, 0xb8a693, 1.55);
   scene.add(fill);
 
   /* ------------------------- Vesper-IX ------------------------- */
@@ -443,6 +452,9 @@ function buildOrbitScene(ctx, reducedMotion) {
   const darkMat = new THREE.MeshStandardMaterial({
     name: "drop-halo-dark", color: 0x2b2c33, metalness: 0.42, roughness: 0.62,
   });
+  const bayMat = new THREE.MeshBasicMaterial({
+    name: "drop-barge-bay-light", color: 0xffd79a, toneMapped: true,
+  });
 
   const halo = new THREE.Group();
   halo.name = "drop-broken-halo";
@@ -484,56 +496,269 @@ function buildOrbitScene(ctx, reducedMotion) {
      axis: parked directly overhead, the barge sat exactly between
      the lens and the pod and the opening shot was the inside of a
      hull. */
+  /* ------------------------------------------------------------
+     THE RELIQUARY BARGE
+
+     Five hundred metres of it, and every part of that number is
+     carried by REPEATED DETAIL rather than by the number itself.
+     The first version was a 74m tube with nine ribs on it, and a
+     smooth tube reads as whatever size the thing beside it implies -
+     which, with a 6.9m lander clamped to its belly, was "small tug".
+     Frames every twenty metres, window rows, bay after bay of other
+     landers and a cathedral built along its spine give the eye
+     something to count, and counting is how scale is read.
+
+     Built as MERGED geometry, five meshes for several hundred
+     pieces. The orbital act has a 140-draw-call budget and a
+     220k-triangle one; assembled as individual meshes this would
+     have spent the first on its window frames alone.
+     ------------------------------------------------------------ */
   const carrier = new THREE.Group();
   carrier.name = "drop-carrier";
-  carrier.position.set(13.5, 13.0, 3.5);
+  /* The group's ORIGIN is the cradle, so the barge can be canted off
+     the world axes - which it must be, or five hundred metres of
+     hull runs exactly parallel to the frame edge - without the
+     clamps drifting off the lander they are holding. */
+  carrier.position.set(0, 3.5, 0);
+  carrier.rotation.set(0.06, 0.21, -0.035);
   space.add(carrier);
 
-  const spine = mesh(new THREE.CylinderGeometry(3.4, 4.6, 74, 12, 1),
-    paleMat, "drop-carrier-spine", carrier);
-  spine.rotation.x = Math.PI / 2;
-  for (let i = 0; i < 9; i += 1) {
-    const rib = mesh(new THREE.TorusGeometry(4.8 + (i % 3) * 0.5, 0.34, 6, 14),
-      goldMat, `drop-carrier-rib-${i}`, carrier);
-    rib.position.z = -33 + i * 8.2;
-  }
-  /* Wings only on the far side. Sweeping them symmetrically put a
-     22m slab directly under the barge on the lens side, and the
-     opening shot became a cream plane with the lander's shadow on
-     it. Nothing structural belongs between the camera and the pod. */
-  for (const side of [1, 1.6]) {
-    const wing = mesh(new THREE.BoxGeometry(18, 1.2, 8), paleMat,
-      `drop-carrier-wing-${side}`, carrier);
-    wing.position.set(side * 11, -1.6, side * 7);
-    wing.rotation.z = 0.10;
-    const drive = mesh(new THREE.CylinderGeometry(1.9, 2.4, 12, 8), darkMat,
-      `drop-carrier-drive-${side}`, carrier);
-    drive.rotation.x = Math.PI / 2;
-    drive.position.set(side * 18, -2.2, side * 11);
-  }
-  const bayMat = new THREE.MeshBasicMaterial({ color: 0xffd79a, toneMapped: true });
-  bayMat.name = "drop-carrier-bay-light";
-  for (let i = 0; i < 10; i += 1) {
-    const lamp = mesh(new THREE.BoxGeometry(0.24, 0.24, 2.6), bayMat,
-      `drop-carrier-lamp-${i}`, carrier);
-    lamp.position.set((i % 2 ? 1 : -1) * 4.3, -3.5, -28 + i * 6.4);
+  const barge = new THREE.Group();
+  barge.name = "drop-barge-hull";
+  barge.position.set(0, 26, 0);
+  carrier.add(barge);
+
+  {
+    const pale = [];
+    const gold = [];
+    const dark = [];
+    const lamp = [];
+
+    const put = (bin, geo, x = 0, y = 0, z = 0) => {
+      geo.translate(x, y, z);
+      bin.push(geo);
+      return geo;
+    };
+    /** A hull section: a cylinder whose axis runs down the keel. */
+    const tube = (r1, r2, len, seg = 16) => {
+      const g = new THREE.CylinderGeometry(r1, r2, len, seg, 1);
+      g.rotateX(Math.PI / 2);
+      return g;
+    };
+    /* The hull's radius at a given station, so ribs, bays and lamps
+       all sit ON it instead of near it. */
+    const hullR = (z) => {
+      if (z <= -182) return lerp(13.0, 16.5, clamp01((z + 244) / 62));
+      if (z <= -62) return lerp(16.5, 17.5, clamp01((z + 182) / 120));
+      if (z <= 68) return lerp(17.5, 16.5, clamp01((z + 62) / 130));
+      if (z <= 188) return lerp(16.5, 9.5, clamp01((z - 68) / 120));
+      return lerp(9.5, 0.4, clamp01((z - 188) / 78));
+    };
+
+    /* ---- hull, stern to prow: -244 to +266 ---- */
+    put(pale, tube(13.0, 16.5, 62), 0, 0, -213);
+    put(pale, tube(16.5, 17.5, 120), 0, 0, -122);
+    put(pale, tube(17.5, 16.5, 130), 0, 0, 3);
+    put(pale, tube(16.5, 9.5, 120), 0, 0, 128);
+    const prow = new THREE.CylinderGeometry(0.4, 9.5, 78, 16, 1);
+    prow.rotateX(Math.PI / 2);
+    put(pale, prow, 0, 0, 227);
+    // A ram, because a Concord barge is a reliquary with an opinion.
+    put(gold, tube(0.35, 1.5, 46, 8), 0, 0, 288);
+
+    /* ---- frames every 19m: the main scale cue ---- */
+    for (let z = -236; z <= 246; z += 19) {
+      const r = hullR(z);
+      if (r < 1.2) continue;
+      const rib = new THREE.TorusGeometry(r + 0.35, 0.55, 5, 18);
+      rib.rotateX(Math.PI / 2);
+      put(gold, rib, 0, 0, z);
+      // Every third frame carries a heavier collar.
+      if ((Math.round((z + 236) / 19)) % 3 === 0) {
+        const collar = new THREE.TorusGeometry(r + 0.9, 1.15, 5, 18);
+        collar.rotateX(Math.PI / 2);
+        put(pale, collar, 0, 0, z);
+      }
+    }
+
+    /* ---- keel ---- */
+    put(dark, new THREE.BoxGeometry(5.5, 4.2, 470), 0, -16.4, 8);
+    put(gold, new THREE.BoxGeometry(2.2, 0.7, 470), 0, -18.4, 8);
+
+    /* ---- the nave along the spine ----
+       A cathedral welded to the top of a warship. It is what makes
+       the silhouette Concord rather than generic, and from the pod
+       it is the skyline the barge is read against. */
+    put(pale, new THREE.BoxGeometry(23, 15, 190), 0, 22, -22);
+    for (const side of [-1, 1]) {
+      const roof = new THREE.BoxGeometry(13.5, 1.6, 190);
+      roof.rotateZ(side * 0.62);
+      put(pale, roof, side * 5.6, 32.5, -22);
+      // Clerestory: a row of tall lit windows down each side.
+      for (let z = -110; z <= 66; z += 8.6) {
+        put(lamp, new THREE.BoxGeometry(0.5, 5.2, 2.4), side * 11.7, 24.5, z);
+        put(gold, new THREE.BoxGeometry(0.75, 6.6, 0.7), side * 11.9, 24.5, z - 1.9);
+      }
+      /* Flying buttresses as straight raking STRUTS. Built from
+         partial tori they rendered as thin white worms lying on the
+         hull: a 10-segment arc is a smooth curve at cathedral scale
+         and a piece of wire at ship scale. */
+      for (let z = -104; z <= 60; z += 20.5) {
+        const pier = new THREE.BoxGeometry(1.7, 14, 2.4);
+        pier.rotateZ(side * 0.42);
+        put(pale, pier, side * 17.8, 12, z);
+        const rake = new THREE.BoxGeometry(11.5, 1.5, 2.0);
+        rake.rotateZ(side * -0.62);
+        put(pale, rake, side * 15.4, 22.5, z);
+        put(gold, new THREE.BoxGeometry(2.6, 1.0, 2.6), side * 20.4, 6.5, z);
+      }
+    }
+    // Spires along the ridge, tallest amidships.
+    for (let i = 0; i < 9; i += 1) {
+      const z = -104 + i * 20.5;
+      const h = 14 + Math.cos((i - 4) * 0.55) * 9;
+      const spire = new THREE.CylinderGeometry(0.1, 2.5, h, 6);
+      put(pale, spire, 0, 34 + h * 0.5, z);
+      put(gold, new THREE.CylinderGeometry(0.1, 0.75, 4.5, 5), 0, 34 + h + 2.2, z);
+    }
+    // Rose window over the forward face of the nave.
+    const rose = new THREE.CylinderGeometry(6.2, 6.2, 0.6, 20);
+    rose.rotateX(Math.PI / 2);
+    put(lamp, rose, 0, 24, 73.6);
+    const roseRim = new THREE.TorusGeometry(6.5, 0.7, 5, 20);
+    put(gold, roseRim, 0, 24, 74);
+
+    /* ---- transepts: two great swept vanes amidships ---- */
+    for (const side of [-1, 1]) {
+      /* SWEPT BACK and shallow. A 62x34 slab held square to the hull
+         is a sail: broadside - which is the only angle the barge is
+         ever seen from - it covered a third of the ship's length with
+         one flat quad and hid everything behind it. */
+      /* VENTRAL fins, swept hard aft and hung below the hull line.
+         Held out level at mid-height they projected UPWARD from a
+         camera under the keel - which is every camera in this act -
+         and drew a diagonal plank straight across the nave. */
+      const vane = new THREE.BoxGeometry(40, 2.2, 14);
+      vane.rotateY(side * 0.95);
+      vane.rotateZ(side * 0.10);
+      put(pale, vane, side * 26, -13, -74);
+      const edge = new THREE.BoxGeometry(40, 1.1, 2.2);
+      edge.rotateY(side * 0.95);
+      edge.rotateZ(side * 0.10);
+      put(gold, edge, side * 27, -13, -80);
+      /* Ribs UNDER the vane, not banners hanging off it. Free-floating
+         cloth at this scale rendered as four grey rectangles adrift
+         beside the hull with nothing joining them to anything. */
+      for (let i = 0; i < 4; i += 1) {
+        const strut = new THREE.BoxGeometry(1.3, 3.6, 11);
+        strut.rotateY(side * 0.95);
+        strut.rotateZ(side * 0.10);
+        put(dark, strut, side * (12 + i * 9), -12, -64 - i * 8.5);
+      }
+    }
+
+    /* ---- drop bays along the belly ----
+       Nine of them. The lander the player is in is ONE, which is the
+       single most useful thing the barge can say about the operation
+       it belongs to. */
+    for (let i = -4; i <= 4; i += 1) {
+      const z = i * 26;
+      const r = hullR(z);
+      put(dark, new THREE.BoxGeometry(12, 4.5, 19), 0, -r + 1.6, z);
+      put(gold, new THREE.BoxGeometry(13.2, 0.8, 1.3), 0, -r + 3.6, z - 9.6);
+      put(gold, new THREE.BoxGeometry(13.2, 0.8, 1.3), 0, -r + 3.6, z + 9.6);
+      put(lamp, new THREE.BoxGeometry(9.2, 0.35, 15), 0, -r + 3.3, z);
+      // Every bay but the player's is still loaded.
+      if (i !== 0) {
+        /* A silhouette, not a peg. These are the reason the barge
+           reads as an operation rather than as a hull with one pod
+           stuck to it, so they have to be recognisable as the same
+           object the player is sitting in. */
+        put(pale, new THREE.CylinderGeometry(1.7, 2.05, 4.6, 9), 0, -r - 1.1, z);
+        const nose = new THREE.CylinderGeometry(0.12, 1.7, 3.0, 9);
+        put(pale, nose, 0, -r + 2.7, z);
+        put(gold, new THREE.TorusGeometry(2.1, 0.2, 4, 9), 0, -r - 3.3, z);
+        put(gold, new THREE.TorusGeometry(1.78, 0.16, 4, 9), 0, -r + 1.1, z);
+      }
+    }
+    // The player's own bay, opened: a deeper recess and a lit throat.
+    put(dark, new THREE.BoxGeometry(10, 7.5, 15), 0, -14.5, 0);
+    put(lamp, new THREE.BoxGeometry(7.6, 0.3, 12.5), 0, -11.2, 0);
+    // The pylon the cradle hangs from.
+    put(pale, new THREE.BoxGeometry(3.4, 12, 4.2), 0, -21, 0);
+    put(gold, new THREE.BoxGeometry(4.4, 0.8, 5.2), 0, -26.4, 0);
+
+    /* ---- plating, running lights and greebles ----
+       The belly is the surface every orbital shot is taken against,
+       and five hundred metres of unbroken cylinder has no scale at
+       all no matter how long it is. Seams every 5.5m give the eye
+       something to count all the way to the stern. */
+    for (let z = -238; z <= 258; z += 5.5) {
+      const r = hullR(z);
+      if (r < 1.5) continue;
+      const seam = new THREE.TorusGeometry(r + 0.06, 0.09, 3, 16);
+      seam.rotateX(Math.PI / 2);
+      put(dark, seam, 0, 0, z);
+    }
+    for (let z = -226; z <= 176; z += 11) {
+      const r = hullR(z);
+      for (const side of [-1, 1]) {
+        put(lamp, new THREE.BoxGeometry(0.4, 0.4, 2.2), side * (r - 0.6), -6.5, z);
+        /* A raised housing with a dark face, not a black rectangle
+           painted on the plating. Flat dark boxes flush to a hull
+           read as holes cut in it. */
+        put(pale, new THREE.BoxGeometry(2.4, 3.2, 6.2), side * (r - 0.9), 6, z + 3);
+        put(dark, new THREE.BoxGeometry(0.6, 2.0, 4.6), side * (r + 0.5), 6, z + 3);
+        // Lower gun-deck lights, so the flank is not bare below the ribs.
+        if ((Math.round((z + 226) / 11)) % 2 === 0) {
+          put(lamp, new THREE.BoxGeometry(0.45, 1.5, 1.5), side * (r - 0.5), -2.5, z);
+          put(gold, new THREE.BoxGeometry(0.7, 2.3, 2.3), side * (r - 0.7), -2.5, z);
+        }
+        // Belly plating: shallow raised panels, alternating.
+        put(pale, new THREE.BoxGeometry(4.2, 0.5, 7.5),
+          side * 5.4, -r + 0.5, z + (side > 0 ? 0 : 5.5));
+      }
+      put(lamp, new THREE.BoxGeometry(1.8, 0.3, 0.9), 0, -hullR(z) + 0.4, z + 5.5);
+    }
+
+    /* ---- the engines ---- */
+    for (let i = 0; i < 5; i += 1) {
+      const a = i === 4 ? 0 : (i / 4) * TAU;
+      const rr = i === 4 ? 0 : 8.6;
+      const x = Math.sin(a) * rr;
+      const y = Math.cos(a) * rr;
+      const bell = new THREE.CylinderGeometry(6.2, 3.6, 24, 12, 1, true);
+      bell.rotateX(Math.PI / 2);
+      put(pale, bell, x, y, -256);
+      const collar = new THREE.TorusGeometry(3.9, 0.9, 5, 12);
+      collar.rotateX(Math.PI / 2);
+      put(gold, collar, x, y, -244);
+      const throat = new THREE.CylinderGeometry(5.6, 5.6, 0.6, 12);
+      throat.rotateX(Math.PI / 2);
+      put(lamp, throat, x, y, -266);
+    }
+
+    const merged = (bin, material, name) => {
+      const m = new THREE.Mesh(mergeGeometries(THREE, bin), material);
+      m.name = name;
+      barge.add(m);
+      return m;
+    };
+    merged(pale, paleMat, "drop-barge-plate");
+    merged(gold, goldMat, "drop-barge-trim");
+    merged(dark, darkMat, "drop-barge-shadow");
+    merged(lamp, bayMat, "drop-barge-lights");
   }
 
-  /* The cradle the lander is clamped into. It stays with the
-     carrier when the clamps blow, which is what makes the release
-     read as a release rather than as the pod simply moving. */
+  /* The cradle the lander is clamped into. It stays with the barge
+     when the clamps blow, which is what makes the release read as a
+     release rather than as the pod simply moving. */
   const cradle = new THREE.Group();
   cradle.name = "drop-cradle";
-  cradle.position.set(-13.5, -9.4, -3.5);
   carrier.add(cradle);
-  // The outrigger back to the spine, so the cradle is carried, not floating.
-  const outrigger = mesh(new THREE.BoxGeometry(15.6, 0.72, 1.0), paleMat,
-    "drop-cradle-outrigger", cradle);
-  outrigger.position.set(7.0, 8.2, 0);
-  outrigger.rotation.z = -0.16;
-  const hanger = mesh(new THREE.CylinderGeometry(0.42, 0.55, 3.4, 8), paleMat,
+  const hanger = mesh(new THREE.CylinderGeometry(0.62, 0.75, 4.2, 8), paleMat,
     "drop-cradle-hanger", cradle);
-  hanger.position.set(0.4, 6.6, 0);
+  hanger.position.set(0, 7.4, 0);
   for (const side of [-1, 1]) {
     const arm = mesh(new THREE.BoxGeometry(0.8, 6.2, 0.8), goldMat,
       `drop-cradle-arm-${side}`, cradle);
@@ -1105,6 +1330,15 @@ export function buildDropIntro(ctx, options = {}) {
      all four beats: aimed by eye, each shot found a different piece
      of empty sky and the world the drop is aimed at was visible in
      precisely none of them. */
+  /* The barge's midships and its beam direction, in world space.
+     `carrier` is canted, so a station worked out on the world axes
+     ends up looking down the bow instead of across the hull. */
+  const BARGE_YAW = 0.21;
+  const BARGE_MID = new THREE.Vector3(
+    Math.sin(BARGE_YAW) * 8, 29.5, Math.cos(BARGE_YAW) * 8);
+  const BARGE_BEAM = new THREE.Vector3(
+    Math.cos(BARGE_YAW), 0, -Math.sin(BARGE_YAW));
+
   const DIVE = new THREE.Vector3(0.30, -0.86, -0.41).normalize();
   const VIEW = new THREE.Vector3(0.490, -0.559, -0.669).normalize();
   const divePos = new THREE.Vector3();
@@ -1156,11 +1390,26 @@ export function buildDropIntro(ctx, options = {}) {
          only "here is the object, and it is hanging off a warship" -
          and the one camera that can see both the lander's belly and
          the barge's keel is the one looking up between them. */
+      /* BROADSIDE, AND A LONG WAY OFF. A five-hundred-metre ship
+         framed from forty metres is a wall - you get plating, not a
+         vessel. This holds off the beam at a hundred and thirty so
+         the nave, the bay row and the drive cluster are all in one
+         frame, with the lander hanging off it at three per cent of
+         frame height: the whole point of the shot is that ratio.
+
+         Stationed off the hull's OWN axis rather than at fixed world
+         coordinates, so the barge can be re-canted without this
+         drifting round to a three-quarter view of its bow. */
       const p = ease(t, 0, M.release);
       if (pod) pod.setTransform(0, 0, 0, 0, 0.62, 0);
+      const beam = lerp(305, 132, p);
       aim(orbit.camera,
-        -14.6 + p * 1.4, -7.4 + p * 1.9, 15.4 - p * 1.5,
-        0, 4.2 + p * .5, 0, lerp(42, 38, p), -.02);
+        BARGE_MID.x + BARGE_BEAM.x * beam,
+        BARGE_MID.y - 118 + p * 56,
+        BARGE_MID.z + BARGE_BEAM.z * beam,
+        BARGE_MID.x - BARGE_BEAM.z * 26, BARGE_MID.y + 2.5,
+        BARGE_MID.z + BARGE_BEAM.x * 26,
+        lerp(52, 57, p), -.02);
     } else if (t < M.orbit) {
       /* The clamps blow and the lander falls straight past the lens.
          The camera stays with the BARGE, so the pod leaves frame
@@ -1177,10 +1426,13 @@ export function buildDropIntro(ctx, options = {}) {
           Math.cos(a) * (2.5 + open * 2.6));
         c.rotation.z = open * (i % 2 ? 1.1 : -0.8);
       });
+      /* In close for the clamps, and drifting aft as the lander
+         drops, so the hull runs across frame and the eye gets the
+         length of the thing at the moment the pod leaves it. */
       aim(orbit.camera,
-        -13.2 - p * 2.0, -5.5 + p * 3.4, 13.9 + p * 2.2,
-        DIVE.x * fall * .7, 4.7 + DIVE.y * fall * .7, DIVE.z * fall * .7,
-        lerp(38, 46, p), -.02 - p * .05);
+        -40 - p * 10.0, -12.5 + p * 5.0, 32 + p * 14.0,
+        DIVE.x * fall * .7, 7.5 + DIVE.y * fall * .7, DIVE.z * fall * .7,
+        lerp(51, 60, p), -.02 - p * .05);
     } else if (t < M.entry) {
       /* The long view. The lander is a bright chip on a black field,
          Vesper-IX's lit limb curving underneath it and the shattered

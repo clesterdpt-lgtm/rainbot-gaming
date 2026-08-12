@@ -649,8 +649,8 @@ export async function start({ boot, build } = {}) {
       + " [role='button'], [role='menuitem'], [role='tab']");
   window.addEventListener("keydown", (e) => {
     if (!ownsKeyboard() || e.defaultPrevented || isInteractiveKeyTarget(e.target)) return;
-    if (intro.isBlocking() && e.code !== "KeyM") return;
-    if (ctx.runtime.paused && e.code !== "KeyM") return;
+    if (intro.isBlocking()) return;
+    if (ctx.runtime.paused) return;
     if (e.code >= "Digit1" && e.code <= "Digit5") {
       const idx = Number(e.code.slice(5)) - 1;
       if (TIME_KEYS[idx] === "storm") { setTime("goldenhour"); setStorm(1); }
@@ -682,11 +682,6 @@ export async function start({ boot, build } = {}) {
       hud.flashDistrict(colliderView
         ? `Colliders shown (${r && r.boxes ? r.boxes : 0} cells)`
         : "Colliders hidden");
-    }
-    if (e.code === "KeyM") {
-      if (gameUi.toggleAudio) gameUi.toggleAudio();
-      else audio.setEnabled(!audio.enabled);
-      hud.flashDistrict(audio.enabled ? "Audio on" : "Audio muted");
     }
   });
 

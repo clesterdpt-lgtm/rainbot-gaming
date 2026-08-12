@@ -72,6 +72,17 @@ async function main() {
       { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForFunction(() => window.__SF?.isReady?.(), null, { timeout: 300000 });
 
+    /* CLAIM THE KEYBOARD.
+       The game only takes gameplay keys once the canvas owns
+       interaction - pointer lock, canvas focus, or max-screen - and
+       headless Chromium grants none of those on its own. Without this
+       every real-key check here silently tested a trooper that never
+       received the keystroke: seventeen of them failed at once, all
+       reporting a pack that had simply never been asked to light.
+       Max-screen is a real player state and the one route a test can
+       take honestly. */
+    await page.evaluate(() => document.documentElement.classList.add("sf-maximised"));
+
     await page.evaluate(() => {
       const T = window.__SF;
       T.clearEnemies();

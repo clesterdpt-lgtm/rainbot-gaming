@@ -115,7 +115,8 @@ export function buildSaveSystem(ctx, options = {}) {
     if (ctx.jetpack?.state?.inFlight || !ctx.player?.state?.grounded) {
       return "Land before creating a field save.";
     }
-    if (ctx.boost?.state?.active || ctx.shield?.state?.active || ctx.player?.action) {
+    if (ctx.boost?.state?.active || ctx.slam?.state?.active
+      || ctx.shield?.state?.active || ctx.player?.action) {
       return "Complete the current action before saving.";
     }
     if (ctx.mission?.canFieldSave?.() === false) {
@@ -166,6 +167,7 @@ export function buildSaveSystem(ctx, options = {}) {
       enemies: ctx.enemies.snapshot(),
       weapon: ctx.weapons.snapshot?.() || null,
       boost: ctx.boost.status?.() || null,
+      slam: ctx.slam?.status?.() || null,
       atmosphere: {
         time: ctx.atmos.time,
         storm: finite(ctx.atmos.storm),
@@ -502,6 +504,7 @@ export function buildSaveSystem(ctx, options = {}) {
     }
     ctx.breaches?.restore?.(snapshot.breaches || {});
     ctx.boost?.restore?.(snapshot.boost || {});
+    ctx.slam?.restore?.(snapshot.slam || {});
     ctx.shield?.reset?.(true);
     ctx.jetpack?.reset?.(true);
     if (ctx.jetpack?.state) {

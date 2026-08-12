@@ -561,6 +561,11 @@ export async function buildEnemies(ctx, onProgress) {
       knockbackX: 0,
       knockbackZ: 0,
       knockbackTime: 0,
+      /* Seconds of "on the floor". Honoured by combat's `stepEnemy`,
+         which is where every decision a creature makes lives - set
+         here and read there, so a stunned unit cannot walk, turn,
+         shoot or claw while it runs. */
+      stunTime: 0,
     };
 
     root.position.set(inst.x, inst.y, inst.z);
@@ -833,6 +838,22 @@ export async function buildEnemies(ctx, onProgress) {
   /** Add a short, collision-aware horizontal impulse. It remains active on
    *  a dying Thresher so the death clip travels with the hit instead of
    *  folding in place where the lance found it. */
+  /**
+   * Put a creature on the floor for `seconds`.
+   *
+   * Additive up to the longest pending stun rather than cumulative:
+   * two overlapping slams should not add up to five seconds of a
+   * creature standing still being shot.
+   */
+  function stun(inst, seconds = 1.5) {
+    if (!inst || inst.state === "death") return false;
+    const want = Math.max(0, Number(seconds) || 0);
+    if (want <= 0) return false;
+    inst.stunTime = Math.max(Number(inst.stunTime) || 0, want);
+    play(inst, "flinch", 0.06);
+    return true;
+  }
+
   function knockback(inst, ux, uz, speed = 10) {
     if (!inst || inst.emerging?.active) return false;
     const length = Math.hypot(ux, uz);
@@ -1202,6 +1223,7 @@ export async function buildEnemies(ctx, onProgress) {
     play,
     update,
     knockback,
+    stun,
     kill(inst) { play(inst, "death", 0.12); },
     remove(inst) {
       const index = live.indexOf(inst);

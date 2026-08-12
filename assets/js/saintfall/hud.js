@@ -70,7 +70,7 @@ export function buildHud(ctx, host) {
         aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
         <div class="sf-hud__jetlabel"><span>CHARGE</span><b id="sf-jet-value">100%</b></div>
         <div class="sf-hud__jettrack"><i id="sf-jet-fill"></i></div>
-        <div class="sf-hud__boost" id="sf-boost"><span><b>E</b> BOOST</span><strong id="sf-boost-value">READY</strong></div>
+        <div class="sf-hud__boost" id="sf-boost"><span><b>SHIFT</b> GLIDE</span><strong id="sf-boost-value">READY</strong></div>
         <div class="sf-hud__shield" id="sf-shield"><span><b>X</b> AEGIS</span><strong id="sf-shield-value">READY</strong></div>
       </div>
       <div class="sf-hud__vitalrow">
@@ -876,7 +876,8 @@ export function buildHud(ctx, host) {
         boostEl.dataset.state = boost.active ? "active"
           : boost.cooldownRemaining > 0 ? "cooldown"
             : lowCharge ? "low" : "ready";
-        boostValueEl.textContent = boost.active ? (boost.attack ? "IMPACT" : "SLIDE")
+        boostValueEl.textContent = boost.active
+          ? (boost.attack ? "IMPACT" : boost.holding ? "GLIDE" : "BOOST")
           : boost.cooldownRemaining > 0 ? `${boost.cooldownRemaining.toFixed(1)}S`
             : lowCharge ? "LOW CHARGE" : "READY";
       }
@@ -974,11 +975,13 @@ export function buildHud(ctx, host) {
         s.node.setAttribute("aria-label", `${s.spec.name}, ${ready ? "ready" : `${Math.ceil(cd)} seconds`}`);
       }
 
-      /* The lance is drawn for the airborne silhouette, but firing is
-         deliberately disabled during boosted traversal. Hide the
-         shooting affordance until the boots are back down. */
-      reticleEl.style.opacity = combat.player.dead || jet?.inFlight || boost?.active
-        || shield?.active ? "0" : "1";
+      /* The trooper can now fire mid-glide and mid-flight, so the
+         reticle stays up through both - hiding it there used to be
+         honest, and would now be a lie about what the trigger does.
+         The two things that genuinely cannot shoot are the shield and
+         the slam. */
+      reticleEl.style.opacity = combat.player.dead || shield?.active
+        || ctx.slam?.state?.active ? "0" : "1";
     },
     minimapState() {
       return {

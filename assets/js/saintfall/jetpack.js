@@ -755,6 +755,11 @@ export function buildJetpack(ctx, player) {
     const blockedByAction = !!player.action || !!ctx.mission?.entry?.active
       || !!ctx.boost?.state?.active
       || !!ctx.shield?.state?.active
+      /* Committing to the fall CUTS the pack. Both are on the same
+         reliquary charge and both want the vertical axis; leaving the
+         pack lit would have it fighting the plunge for the whole
+         descent, and the plunge would win slowly. */
+      || !!ctx.slam?.state?.active
       || (ctx.weapons?.carry?.venting || 0) > 0;
     const rawRequested = !!inputState.jetpack;
     const requested = rawRequested && !playerState.free && !dead && !blockedByAction;
@@ -858,10 +863,28 @@ export function buildJetpack(ctx, player) {
    * depleted-flight lockout, making the two jet abilities disagree
    * about how much energy the same pack contains.
    */
-  function spend(amount) {
+  /**
+   * Draw charge for something that is not flight.
+   *
+   * `ground` opts out of the post-flight lockout. That lockout exists
+   * to stop the pack being re-lit the instant it lands; it has no
+   * business stopping a GROUND boost, and once Shift became the main
+   * mobility verb an unexplained half-second where it did nothing
+   * after every landing read as the key being broken.
+   *
+   * `airborne` opts out of the in-flight refusal. That refusal is
+   * there so nothing can quietly drain the tank the pack is currently
+   * burning - but the ground slam is only ever committed to IN the
+   * air, and it CUTS the pack in the same breath, so refusing it made
+   * the one ability that has to be airborne the one ability that could
+   * never pay for itself. Cost is taken first and the pack goes out
+   * immediately after; nothing shares the tank across that frame.
+   */
+  function spend(amount, ground = false, airborne = false) {
     const cost = Math.max(0, Number(amount) || 0);
     if (cost <= 0) return true;
-    if (state.inFlight || state.active || state.cooldownRemaining > 0) return false;
+    if (!airborne && (state.inFlight || state.active)) return false;
+    if (!ground && state.cooldownRemaining > 0) return false;
     if (state.fuel + 1e-6 < cost) return false;
     state.fuel = Math.max(0, state.fuel - cost);
     state.recharging = false;

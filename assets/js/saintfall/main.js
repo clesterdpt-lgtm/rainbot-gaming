@@ -21,6 +21,7 @@ import { buildVfx } from "saintfall/vfx.js";
 import { createPlayer } from "saintfall/player.js";
 import { buildJetpack } from "saintfall/jetpack.js";
 import { buildBoost } from "saintfall/boost.js";
+import { buildSlam } from "saintfall/slam.js";
 import { buildShield } from "saintfall/shield.js";
 import { buildEnemies } from "saintfall/enemies.js";
 import { buildCollision } from "saintfall/collide.js";
@@ -176,6 +177,8 @@ export async function start({ boot, build } = {}) {
   ctx.shield = shield;
   const boost = buildBoost(ctx, player);
   ctx.boost = boost;
+  const slam = buildSlam(ctx, player);
+  ctx.slam = slam;
 
   /* Audio subscribes to the buses combat and mission already emit,
      so it can be removed without touching either. It is built after
@@ -326,6 +329,7 @@ export async function start({ boot, build } = {}) {
     weapons,
     jetpack,
     boost,
+    slam,
     shield,
     player,
     hud,
@@ -393,8 +397,13 @@ export async function start({ boot, build } = {}) {
      ------------------------------------------------------------ */
   function shoot() {
     if (combat.player.dead) return;
-    if (jetpack.state.inFlight) return;
-    if (boost.state.active) return;
+    /* AIRBORNE AND BOOSTING BOTH FIRE NOW.
+       The lance was refused in flight and during a boost, which meant
+       the two verbs that get you into and across a fight both ended
+       it - every engagement was "move, stop, shoot". What still
+       refuses is the SLAM, because that is itself an attack and the
+       lance is over the trooper's head for the whole of it. */
+    if (slam.state.active) return;
     if (shield.state.active) return;
     if (!weapons.fire()) return;
     /* The POINT OF THE LANCE, not the camera and not the aim node.
@@ -524,9 +533,13 @@ export async function start({ boot, build } = {}) {
        and keeping it drawn through glide/landing gives both arms a
        purposeful airborne silhouette. */
     if (jetpack.state.inFlight || jetpack.state.requested
-      || boost.state.active || shield.state.active) {
+      || boost.state.active || slam.state.active || shield.state.active) {
       calmFor = 0;
       weapons.setStow(false);
+      /* ADS is suppressed in flight and on a glide but FIRING is not:
+         hip fire from a moving trooper is the point of both, and
+         sights while travelling at nineteen metres a second is a
+         readability problem, not a capability the player wants. */
       weapons.setAds(0);
       return;
     }
@@ -543,6 +556,11 @@ export async function start({ boot, build } = {}) {
     weapons.setStow(calmFor > STOW_IDLE_SECONDS);
   }
 
+  /** Feet off the ground, by any route: pack, jump or a fall in progress. */
+  function airborne() {
+    return jetpack.state.inFlight || slam.state.active || !player.state.grounded;
+  }
+
   function stepGame(d) {
     for (const ev of player.input.drain()) {
       if (combat.player.dead) continue;
@@ -554,11 +572,26 @@ export async function start({ boot, build } = {}) {
         mission.cancelEntry();
         continue;
       }
-      if (jetpack.state.inFlight || boost.state.active || shield.state.active) continue;
+      /* ONE KEY, TWO ATTACKS, DECIDED BY ALTITUDE.
+         Q swings on the ground and falls in the air. Routing it here
+         rather than in the input layer keeps the decision next to the
+         systems that know what the trooper is standing on - and means
+         a slam that refuses (too low, no charge) can fall back to the
+         swing instead of eating the press. */
+      if (ev.type === "melee" && airborne()) {
+        if (slam.trigger()) continue;
+        if (jetpack.state.inFlight || slam.state.active) continue;
+      }
+      if (slam.state.active) continue;
+      if (ev.type === "stratOpen" || ev.type === "dir" || ev.type === "vent") {
+        if (jetpack.state.inFlight || boost.state.active || shield.state.active) continue;
+      }
       if (ev.type === "stratOpen") mission.beginEntry();
       else if (ev.type === "dir") mission.pushDirection(ev.dir);
       else if (ev.type === "vent") weapons.vent();
-      else if (ev.type === "melee") meleeStrike(ev.aimYaw);
+      else if (ev.type === "melee" && !boost.state.active && !shield.state.active) {
+        meleeStrike(ev.aimYaw);
+      }
     }
     const melee = weapons.current && weapons.current.spec.melee;
     /* The trigger only ever fires now. Melee has its own key, and
@@ -570,7 +603,7 @@ export async function start({ boot, build } = {}) {
        the time this runs; refusing the shot until it lands is the
        difference between a weapon that was put away and a weapon
        that fires out of the player's back. */
-    if (player.input.state.firing && !melee && !boost.state.active && !shield.state.active
+    if (player.input.state.firing && !melee && !slam.state.active && !shield.state.active
       && weapons.stowPhase < 0.08) shoot();
     /* Hand the rite back once the swing is over. `meleeSwing` buffers
        a press during recovery into the next combo step, so the mode

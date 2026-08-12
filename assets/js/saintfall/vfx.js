@@ -23,7 +23,9 @@
    ============================================================ */
 
 import { TAU, clamp01, lerp, makeRng, hexToRgb } from "saintfall/core.js";
-import { srgbTransfer as srgb, patchMaterial } from "saintfall/art.js";
+import {
+  srgbTransfer as srgb, patchMaterial, patchBasicMaterial,
+} from "saintfall/art.js";
 import { mergeGeometries } from "saintfall/structures.js";
 
 /* ============================================================
@@ -1639,6 +1641,296 @@ export function buildVfx(ctx, world) {
       (energy ? 0.68 : 0.6) * scale, tint);
   }
 
+
+  /* ============================================================
+     THE GLIDE AND THE FALL
+
+     Both verbs needed geometry rather than motes. A boost is read
+     from the SHAPE of what is behind the trooper and a slam from the
+     ring that leaves the point of impact; neither survives being
+     expressed as a puff of particles, because a puff has no
+     direction and no radius.
+
+     Everything here is pooled, additive and unlit, driven off one
+     clock, and hidden outright when idle so it costs nothing between
+     uses.
+     ============================================================ */
+  const impulse = (() => {
+    const mat = new THREE.MeshBasicMaterial({
+      name: "sf-impulse", vertexColors: true, transparent: true, opacity: 1,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide, toneMapped: true,
+    });
+    patchBasicMaterial(mat, atmos, 1.0, true);
+
+    const tint = (geo, hot, cold, axis = "y", lo = 0, hi = 1) => {
+      const pos = geo.attributes.position;
+      const colours = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i += 1) {
+        const v = axis === "y" ? pos.getY(i) : pos.getZ(i);
+        const t = clamp01((v - lo) / Math.max(1e-4, hi - lo));
+        const f = 1 - t * t;
+        colours[i * 3] = hot[0] * f + cold[0] * (1 - f);
+        colours[i * 3 + 1] = hot[1] * f + cold[1] * (1 - f);
+        colours[i * 3 + 2] = hot[2] * f + cold[2] * (1 - f);
+      }
+      geo.setAttribute("color", new THREE.BufferAttribute(colours, 3));
+      return geo;
+    };
+
+    const root = new THREE.Group();
+    root.name = "impulse-vfx";
+    root.frustumCulled = false;
+    group.add(root);
+
+    /* THE ROOT NEVER MOVES.
+       The glide wake rides the trooper and the slam is placed in world
+       coordinates, and those two cannot share a transform: parenting
+       both to a root that the glide dragged around put the slam's
+       rings at the player's position PLUS the player's position, which
+       for most of this map is somewhere off the edge of it. The glide
+       gets its own carrier; everything else is world-space. */
+    const glideRig = new THREE.Group();
+    glideRig.name = "glide-rig";
+    glideRig.frustumCulled = false;
+    root.add(glideRig);
+
+    /* ---- the glide wake ----
+       A flat delta laid on the ground BEHIND the trooper, not a cone
+       around them: the read the player wants is the line they have
+       just carved, and a cone centred on the body only says "there is
+       a light on me". */
+    const wakeGeo = new THREE.PlaneGeometry(1.7, 7.0, 1, 4);
+    wakeGeo.rotateX(-Math.PI / 2);
+    wakeGeo.translate(0, 0, -3.5);
+    /* These tints are BRIGHTNESSES. The material is additive, so a
+       vertex colour of 1.0 over any appreciable area does not read as
+       gold - it reads as a white card laid on the desert. Everything
+       here is deliberately well under one, and the shape does the
+       work instead. */
+    tint(wakeGeo, [0.62, 0.46, 0.17], [0.02, 0.01, 0.0], "z", -7, 0);
+    const wake = new THREE.Mesh(wakeGeo, mat);
+    wake.name = "glide-wake";
+    wake.visible = false;
+    wake.renderOrder = 5;
+    glideRig.add(wake);
+
+    /* Two heel jets, angled back and out. */
+    const jets = [];
+    for (const side of [-1, 1]) {
+      const g = new THREE.ConeGeometry(0.22, 2.1, 8, 1, true);
+      g.rotateX(Math.PI / 2);
+      g.translate(0, 0, -1.05);
+      tint(g, [0.95, 0.86, 0.62], [0.42, 0.15, 0.01], "z", -2.1, 0);
+      const jet = new THREE.Mesh(g, mat);
+      jet.name = `glide-jet-${side}`;
+      jet.position.set(side * 0.28, 0.42, 0);
+      jet.visible = false;
+      glideRig.add(jet);
+      jets.push(jet);
+    }
+
+    /* ---- the fall ----
+       A column above the trooper while the charge builds, then rings
+       and a dome on the ground when it lands. */
+    /* A THIN shaft, not a pillar. At the original 1.35m flare over
+       nine metres this filled a third of the screen with solid white
+       and hid the trooper it was supposed to be charging. */
+    const columnGeo = new THREE.CylinderGeometry(0.09, 0.44, 5.4, 14, 1, true);
+    columnGeo.translate(0, 2.7, 0);
+    tint(columnGeo, [0.50, 0.42, 0.22], [0.02, 0.01, 0.0], "y", 0, 5.4);
+    const column = new THREE.Mesh(columnGeo, mat);
+    column.name = "slam-column";
+    column.visible = false;
+    root.add(column);
+
+    const spikeGeo = new THREE.ConeGeometry(0.30, 2.6, 10, 1, true);
+    spikeGeo.rotateX(Math.PI);
+    spikeGeo.translate(0, -1.3, 0);
+    tint(spikeGeo, [0.80, 0.66, 0.34], [0.02, 0.01, 0.0], "y", -2.6, 0);
+    const spike = new THREE.Mesh(spikeGeo, mat);
+    spike.name = "slam-spike";
+    spike.visible = false;
+    root.add(spike);
+
+    const rings = [];
+    for (let i = 0; i < 3; i += 1) {
+      const g = new THREE.TorusGeometry(1, 0.05 + i * 0.02, 5, 60);
+      g.rotateX(Math.PI / 2);
+      tint(g, [1.0, 0.86, 0.46], [0.92, 0.44, 0.10], "y", -0.1, 0.1);
+      const ring = new THREE.Mesh(g, mat);
+      ring.name = `slam-ring-${i}`;
+      ring.visible = false;
+      ring.renderOrder = 6;
+      rings.push(ring);
+      root.add(ring);
+    }
+    const domeGeo = new THREE.SphereGeometry(1, 22, 8, 0, TAU, 0, Math.PI * 0.5);
+    tint(domeGeo, [0.86, 0.68, 0.32], [0.03, 0.01, 0.0], "y", 0, 1);
+    const dome = new THREE.Mesh(domeGeo, mat);
+    dome.name = "slam-dome";
+    dome.visible = false;
+    root.add(dome);
+
+    const live = {
+      glide: 0, glideSpeed: 0, glideAttack: false,
+      charge: 0, chargeSeen: 0,
+      burst: -1, burstRadius: 8, burstX: 0, burstY: 0, burstZ: 0,
+    };
+    return { root, glideRig, mat, wake, jets, column, spike, rings, dome, live };
+  })();
+
+  /** Ignition: the kick that starts a glide. */
+  function boostIgnite(x, y, z, dx, dz) {
+    impacts.emitDirected(x - dx * 0.5, y + 0.3, z - dz * 0.5,
+      22, -dx, 0.35, -dz, 9.5, 0.85, 2.0);
+    flashes.emit(x - dx * 0.4, y + 0.5, z - dz * 0.4, 1.15, 0.09, 2.0);
+  }
+
+  /** Called every frame a glide is running. */
+  function boostTrail(x, y, z, dx, dz, speed, attack) {
+    const L = impulse.live;
+    L.glide = 0.12;
+    L.glideSpeed = speed;
+    L.glideAttack = !!attack;
+    impulse.glideRig.position.set(x, y, z);
+    impulse.wake.rotation.y = Math.atan2(dx, dz);
+    for (const jet of impulse.jets) jet.rotation.y = impulse.wake.rotation.y;
+    // Sand torn off the line, thrown backward and outward.
+    if (Math.random() < 0.75) {
+      impacts.emitDirected(x - dx * 0.6, y + 0.12, z - dz * 0.6,
+        3, -dx + (Math.random() - 0.5) * 0.8, 0.5, -dz + (Math.random() - 0.5) * 0.8,
+        5.5, 0.72, 0.35);
+    }
+  }
+
+  /** Something was rammed. */
+  function boostImpact(x, y, z, dx, dz, heavy) {
+    flashes.emit(x, y, z, heavy ? 1.5 : 1.15, 0.11, 2.0);
+    impacts.emitDirected(x, y, z, heavy ? 30 : 22, dx, 0.55, dz,
+      heavy ? 11 : 9, heavy ? 1.5 : 1.2, 2.0);
+    impacts.emit(x, y, z, 14, 3.0, 1.1, 0.5);
+  }
+
+  /** The hang, with the charge building overhead. */
+  function slamCharge(x, y, z, charge) {
+    const L = impulse.live;
+    L.charge = 0.1;
+    L.chargeSeen = clamp01(charge);
+    /* Based at the SHOULDERS, not the waist. Rooted lower, the hot end
+       of the shaft sat over the breastplate and erased the one
+       silhouette the wind-up exists to show. */
+    impulse.column.position.set(x, y + 1.45, z);
+    impulse.spike.position.set(x, y + 0.32, z);
+    if (charge > 0.05 && Math.random() < 0.6) {
+      const a = Math.random() * TAU;
+      const r = 2.6 * (1 - charge) + 0.4;
+      impacts.emitDirected(x + Math.cos(a) * r, y + 0.2 + Math.random() * 2.4,
+        z + Math.sin(a) * r, 1, -Math.cos(a), 0.9, -Math.sin(a), 5.5, 0.55, 2.0);
+    }
+  }
+
+  /** The descent streak. */
+  function slamTrail(x, y, z) {
+    impulse.live.charge = 0.1;
+    impulse.live.chargeSeen = 1;
+    impulse.column.position.set(x, y + 1.45, z);
+    impulse.spike.position.set(x, y + 0.32, z);
+    impacts.emitDirected(x, y + 1.2, z, 2, 0, 1, 0, 7.5, 0.6, 2.0);
+  }
+
+  /** Landfall. */
+  function slamImpact(x, y, z, radius = 8, hits = 0) {
+    const L = impulse.live;
+    L.burst = 0;
+    L.burstRadius = radius;
+    L.burstX = x;
+    L.burstY = y;
+    L.burstZ = z;
+    L.charge = 0;
+    flashes.emit(x, y + 0.6, z, 2.6, 0.16, 2.0);
+    flashes.emit(x, y + 1.6, z, 1.6, 0.22, 1.0);
+    impacts.emit(x, y + 0.35, z, 70, radius * 0.34, 3.2, 0.9);
+    // A skirt of debris thrown outward along the ground.
+    for (let i = 0; i < 14; i += 1) {
+      const a = (i / 14) * TAU + Math.random() * 0.2;
+      impacts.emitDirected(x + Math.cos(a) * 0.8, y + 0.22, z + Math.sin(a) * 0.8,
+        4, Math.cos(a), 0.42, Math.sin(a), 15 + Math.random() * 7, 1.5, 0.55);
+    }
+    if (hits > 0) flashes.emit(x, y + 0.9, z, 1.9, 0.13, 2.0);
+  }
+
+  /** Drives both rigs. Called once a frame from `update`. */
+  function updateImpulse(dt) {
+    const L = impulse.live;
+    const glideOn = L.glide > 0;
+    L.glide = Math.max(0, L.glide - dt);
+    const showGlide = glideOn && L.glide > 0;
+    if (impulse.wake.visible !== showGlide) {
+      impulse.wake.visible = showGlide;
+      for (const jet of impulse.jets) jet.visible = showGlide;
+    }
+    if (showGlide) {
+      const s = clamp01(L.glideSpeed / 22);
+      impulse.wake.scale.set(0.8 + s * 0.5, 1, 0.55 + s * 0.95);
+      impulse.wake.position.y = 0.06;
+      for (const jet of impulse.jets) {
+        jet.scale.set(1, 1, 0.7 + s * 0.7 + Math.random() * 0.12);
+      }
+    }
+
+    const chargeOn = L.charge > 0;
+    L.charge = Math.max(0, L.charge - dt);
+    const showCharge = chargeOn && L.charge > 0;
+    if (impulse.column.visible !== showCharge) {
+      impulse.column.visible = showCharge;
+      impulse.spike.visible = showCharge;
+    }
+    if (showCharge) {
+      const c = L.chargeSeen;
+      impulse.column.scale.set(0.45 + c * 0.75, 0.30 + c * 1.05, 0.45 + c * 0.75);
+      impulse.column.rotation.y += dt * 5.5;
+      impulse.spike.scale.set(0.5 + c * 0.8, 0.35 + c * 1.3, 0.5 + c * 0.8);
+    }
+
+    if (L.burst >= 0) {
+      L.burst += dt;
+      const life = 0.9;
+      const p = clamp01(L.burst / life);
+      const alive = p < 1;
+      impulse.rings.forEach((ring, i) => {
+        const rp = clamp01((L.burst - i * 0.06) / (life * (0.7 + i * 0.22)));
+        const on = rp > 0 && rp < 1;
+        if (ring.visible !== on) ring.visible = on;
+        if (!on) return;
+        ring.position.set(L.burstX, L.burstY + 0.18 + i * 0.06, L.burstZ);
+        /* Eased OUT, so the ring leaves fast and then coasts. A linear
+           expansion reads as a growing circle rather than as something
+           that was thrown. */
+        const e = 1 - (1 - rp) * (1 - rp);
+        ring.scale.setScalar(0.6 + e * L.burstRadius * (1 + i * 0.16));
+      });
+      const domeOn = p < 0.62;
+      if (impulse.dome.visible !== domeOn) impulse.dome.visible = domeOn;
+      if (domeOn) {
+        const dp = clamp01(p / 0.62);
+        impulse.dome.position.set(L.burstX, L.burstY + 0.05, L.burstZ);
+        impulse.dome.scale.set(
+          0.5 + dp * L.burstRadius * 0.85,
+          0.4 + dp * L.burstRadius * 0.42,
+          0.5 + dp * L.burstRadius * 0.85);
+      }
+      if (!alive) {
+        L.burst = -1;
+        for (const ring of impulse.rings) ring.visible = false;
+        impulse.dome.visible = false;
+      }
+    }
+    /* ONE opacity for the whole rig, so a glide that ends mid-slam
+       cannot leave the dome at a brightness the glide chose. */
+    impulse.mat.opacity = 1;
+  }
+
   /** An impact. `wall` softens it; `energy` keeps melee and debris warm. */
   function spark(x, y, z, scale = 1, wall = false, energy = false) {
     /* Was 9 particles and nothing else, which at the far end of a
@@ -1699,6 +1991,12 @@ export function buildVfx(ctx, world) {
     breach,
     tracer,
     muzzle,
+    boostIgnite,
+    boostTrail,
+    boostImpact,
+    slamCharge,
+    slamTrail,
+    slamImpact,
     update(dt, camera) {
       // Snap the anchor so the wrapped systems do not slide with
       // sub-metre camera motion, which reads as the whole dust field
@@ -1719,13 +2017,14 @@ export function buildVfx(ctx, world) {
       grit.mat.uniforms.uAnchor.value.set(anchor.x, ground + 2.2, anchor.z);
 
       const t = atmos.elapsed;
+      updateImpulse(Math.max(0, Math.min(0.1, dt)));
+
       for (const f of flicker) {
         const spec = f.light.userData.spec;
         if (!spec.flicker) continue;
         const n = Math.sin(t * 11.3 + f.phase) * 0.5 + Math.sin(t * 4.1 + f.phase * 1.7) * 0.5;
         f.light.intensity = f.light.userData.baseIntensity * (1 + n * 0.16 * spec.flicker);
       }
-      void dt;
     },
     setStorm(v) {
       streamers.mat.uniforms.uOpacity.value = lerp(0.13, 0.62, v);

@@ -1295,6 +1295,201 @@ export function buildAudio(ctx) {
     void dt;
   }
 
+
+  /* ============================================================
+     THE GLIDE AND THE FALL
+
+     Both had to be recognisable with your eyes elsewhere, and both
+     had to be distinct from the pack - which is a broadband roar -
+     because all three run off the same reliquary and would otherwise
+     blur into one texture.
+
+     The glide is a PITCHED slide: a falling sawtooth over a bandpass
+     that opens, so it reads as something being released rather than
+     as more thrust. The fall is the opposite shape - a rising choir
+     while it charges, then nothing, then a very low hit. The silence
+     between them is doing most of the work.
+     ============================================================ */
+
+  /** The heel jets lighting. */
+  function boostIgnite(x, z) {
+    const t = now();
+    const dur = 0.55;
+    const g = voice("world", dur);
+    if (!g) return;
+    const p = place(g, x, z, 26, 240);
+    if (!p) return;
+    const amp = 0.42 * p.atten;
+
+    // The release: a hard downward sweep, not a boom.
+    const slide = ac.createOscillator();
+    slide.type = "sawtooth";
+    slide.frequency.setValueAtTime(660, t);
+    slide.frequency.exponentialRampToValueAtTime(112, t + 0.26);
+    const sf = ac.createBiquadFilter();
+    sf.type = "bandpass";
+    sf.Q.value = 3.2;
+    sf.frequency.setValueAtTime(520, t);
+    sf.frequency.exponentialRampToValueAtTime(2400, t + 0.22);
+    const sg = ac.createGain();
+    sg.gain.setValueAtTime(0.0001, t);
+    sg.gain.linearRampToValueAtTime(amp, t + 0.012);
+    sg.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+    slide.connect(sf); sf.connect(sg); sg.connect(p.node);
+    slide.start(t); slide.stop(t + 0.36);
+
+    // Grit under it, so it has ground contact.
+    const rush = noiseSource(1.25);
+    const rf = ac.createBiquadFilter();
+    rf.type = "highpass";
+    rf.frequency.setValueAtTime(900, t);
+    rf.frequency.exponentialRampToValueAtTime(240, t + dur);
+    const rg = ac.createGain();
+    rg.gain.setValueAtTime(amp * 0.55, t);
+    rg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    rush.connect(rf); rf.connect(rg); rg.connect(p.node);
+    rush.start(t); rush.stop(t + dur);
+  }
+
+  /** Release, or a glide cut short. */
+  function boostCut() { blip(196, 0.10, 0.055, "triangle"); }
+
+  /** Contact while ramming. */
+  function boostHit(x, z, heavy = false) {
+    const t = now();
+    const dur = 0.42;
+    const g = voice("world", dur);
+    if (!g) return;
+    const p = place(g, x, z, 24, 260);
+    if (!p) return;
+    const amp = (heavy ? 0.72 : 0.5) * p.atten;
+    const thud = ac.createOscillator();
+    thud.type = "triangle";
+    thud.frequency.setValueAtTime(heavy ? 150 : 205, t);
+    thud.frequency.exponentialRampToValueAtTime(heavy ? 44 : 68, t + 0.2);
+    const tg = ac.createGain();
+    tg.gain.setValueAtTime(amp, t);
+    tg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    thud.connect(tg); tg.connect(p.node);
+    thud.start(t); thud.stop(t + dur);
+
+    const crack = noiseSource(heavy ? 0.7 : 1.05);
+    const cf = ac.createBiquadFilter();
+    cf.type = "bandpass";
+    cf.Q.value = 1.1;
+    cf.frequency.setValueAtTime(heavy ? 700 : 1500, t);
+    cf.frequency.exponentialRampToValueAtTime(180, t + 0.24);
+    const cg = ac.createGain();
+    cg.gain.setValueAtTime(amp * 0.85, t);
+    cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+    crack.connect(cf); cf.connect(cg); cg.connect(p.node);
+    crack.start(t); crack.stop(t + 0.28);
+  }
+
+  /** The hang: a reliquary winding up over the trooper's head. */
+  function slamCharge(x, z) {
+    const t = now();
+    const dur = 0.30;
+    const g = voice("world", dur + 0.1);
+    if (!g) return;
+    const p = place(g, x, z, 30, 260);
+    if (!p) return;
+    /* Three voices STACK, so the per-voice amplitude has to be about a
+       third of what a single-oscillator cue would take: at 0.30 the
+       wind-up rendered as loud as the gunshot. */
+    const amp = 0.19 * p.atten;
+    /* A rising fifth, three voices. Deliberately CHORAL rather than
+       mechanical: the pack already owns every industrial sound the
+       trooper makes, and this is the one thing they do that the
+       game's own fiction would call a rite. */
+    for (const [mult, delay] of [[1, 0], [1.5, 0.02], [2, 0.045]]) {
+      const osc = ac.createOscillator();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(196 * mult, t + delay);
+      osc.frequency.exponentialRampToValueAtTime(392 * mult, t + dur);
+      const og = ac.createGain();
+      og.gain.setValueAtTime(0.0001, t + delay);
+      og.gain.linearRampToValueAtTime(amp / (mult * 1.2), t + dur * 0.7);
+      og.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.08);
+      osc.connect(og); og.connect(p.node);
+      osc.start(t + delay); osc.stop(t + dur + 0.1);
+    }
+  }
+
+  /** The drop itself: a short downward tear, then silence. */
+  function slamPlunge(x, z) {
+    const t = now();
+    const dur = 0.34;
+    const g = voice("world", dur);
+    if (!g) return;
+    const p = place(g, x, z, 26, 260);
+    if (!p) return;
+    const amp = 0.62 * p.atten;
+    const tear = noiseSource(1.6);
+    const tf = ac.createBiquadFilter();
+    tf.type = "bandpass";
+    tf.Q.value = 0.9;
+    tf.frequency.setValueAtTime(2600, t);
+    tf.frequency.exponentialRampToValueAtTime(300, t + dur);
+    const tg = ac.createGain();
+    tg.gain.setValueAtTime(0.0001, t);
+    tg.gain.linearRampToValueAtTime(amp, t + 0.03);
+    tg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    tear.connect(tf); tf.connect(tg); tg.connect(p.node);
+    tear.start(t); tear.stop(t + dur);
+  }
+
+  /** Landfall. The loudest thing the trooper can do. */
+  function slamImpact(x, z, drop = 0) {
+    const t = now();
+    const dur = 1.7;
+    const g = voice("world", dur);
+    if (!g) return;
+    const p = place(g, x, z, 55, 700);
+    if (!p) return;
+    const amp = (0.9 + drop * 0.25) * p.atten;
+
+    // The floor.
+    const boom = ac.createOscillator();
+    boom.type = "sine";
+    boom.frequency.setValueAtTime(78, t);
+    boom.frequency.exponentialRampToValueAtTime(23, t + 0.9);
+    const bg = ac.createGain();
+    bg.gain.setValueAtTime(amp, t);
+    bg.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    boom.connect(bg); bg.connect(p.node);
+    boom.start(t); boom.stop(t + 1.25);
+
+    // The crack of the lance arriving.
+    const hit = noiseSource(0.55);
+    const hf = ac.createBiquadFilter();
+    hf.type = "lowpass";
+    hf.frequency.setValueAtTime(6500, t);
+    hf.frequency.exponentialRampToValueAtTime(120, t + 0.65);
+    const hg = ac.createGain();
+    hg.gain.setValueAtTime(amp * 0.95, t);
+    hg.gain.exponentialRampToValueAtTime(0.0001, t + 0.75);
+    hit.connect(hf); hf.connect(hg); hg.connect(p.node);
+    hit.start(t); hit.stop(t + 0.8);
+
+    /* The ring going out. A metallic tail on a low hit is what turns
+       "an explosion" into "something struck the ground", and it is
+       the same gold the whole faction sounds like. */
+    for (const [freq, gain, delay] of [[523, 0.13, 0.02], [784, 0.09, 0.04],
+      [1046, 0.055, 0.07]]) {
+      const bell = ac.createOscillator();
+      bell.type = "triangle";
+      bell.frequency.setValueAtTime(freq, t + delay);
+      bell.frequency.exponentialRampToValueAtTime(freq * 0.92, t + 1.1);
+      const bgn = ac.createGain();
+      bgn.gain.setValueAtTime(0.0001, t + delay);
+      bgn.gain.linearRampToValueAtTime(gain * amp, t + delay + 0.01);
+      bgn.gain.exponentialRampToValueAtTime(0.0001, t + 1.15);
+      bell.connect(bgn); bgn.connect(p.node);
+      bell.start(t + delay); bell.stop(t + 1.2);
+    }
+  }
+
   function jetIgnite() {
     blip(92, 0.18, 0.16, "sawtooth");
     window.setTimeout(() => blip(184, 0.12, 0.10, "triangle"), 55);
@@ -1317,6 +1512,12 @@ export function buildAudio(ctx) {
     hurt,
     blip,
     chord,
+    boostIgnite,
+    boostCut,
+    boostHit,
+    slamCharge,
+    slamPlunge,
+    slamImpact,
     jetIgnite,
     jetCutoff,
     jetEmpty,
@@ -1370,6 +1571,8 @@ function makeSilentApi() {
     shot: noop, impact: noop, death: noop, explosion: noop, inbound: noop,
     step: noop, hurt: noop, blip: noop, chord: noop, attach: noop,
     jetIgnite: noop, jetCutoff: noop, jetEmpty: noop, jetLand: noop,
+    boostIgnite: noop, boostCut: noop, boostHit: noop,
+    slamCharge: noop, slamPlunge: noop, slamImpact: noop,
     update: noop, unlock: noPromise, startAmbience: noop, setEnabled: noop,
     beginDrop: noPromise, updateDrop: no, dropCue: no,
     pauseDrop: noPromise, setPaused: noPromise, endDrop: noPromise,

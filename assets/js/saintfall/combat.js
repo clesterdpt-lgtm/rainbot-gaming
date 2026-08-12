@@ -14,7 +14,7 @@
    walks around it.
    ============================================================ */
 
-import { clamp, damp, makeBus } from "saintfall/core.js";
+import { clamp, clamp01, damp, makeBus } from "saintfall/core.js";
 
 const TAU = Math.PI * 2;
 
@@ -525,6 +525,67 @@ export function buildCombat(ctx) {
     if (vfx && vfx.blast) vfx.blast(x, y, z, radius);
   }
 
+  /**
+   * A radial ground strike: the aerial slam's business end.
+   *
+   * Distinct from `explode` in the two ways that matter to how it
+   * reads. It STUNS, which is the point of it - the reward for
+   * committing to a fall is that everything under you stops - and it
+   * falls off from an inner plateau rather than from the centre, so
+   * a slam that lands next to something and a slam that lands on it
+   * are worth the same. Line of sight is still required: a creature
+   * on the far side of a wall is not standing on the ground you hit.
+   */
+  function shockwave(x, y, z, opts = {}) {
+    const radius = Math.max(0.5, Number(opts.radius) || 8);
+    const inner = Math.min(radius, Math.max(0, Number(opts.innerRadius) || 0));
+    const peak = Math.max(0, Number(opts.damage) || 0);
+    const edge = clamp01(Number(opts.edgeFalloff) ?? 0.4);
+    const stunFor = Math.max(0, Number(opts.stun) || 0);
+    const knock = Math.max(0, Number(opts.knockSpeed) || 0);
+    const source = opts.source || "shockwave";
+    let hits = 0;
+    let kills = 0;
+    let stunned = 0;
+    for (const inst of enemies.live) {
+      if (inst.state === "death") continue;
+      const dx = inst.x - x;
+      const dz = inst.z - z;
+      const dist = Math.hypot(dx, dz);
+      const box = HITBOX[inst.key] || HITBOX.thresher;
+      if (dist > radius + box.r) continue;
+      const inv = 1 / Math.max(1e-4, dist);
+      if (dist > 0.6 && collide.rayBlock(
+        x, y + 0.55, z, dx * inv, 0, dz * inv, dist) < dist - 0.05) continue;
+
+      const reach = clamp01((dist - inner) / Math.max(1e-3, radius - inner));
+      const scale = 1 - reach * (1 - edge);
+      const wasAlive = inst.state !== "death";
+      const dealt = applyDamage(inst, peak * scale, {
+        source,
+        x: inst.x,
+        y: inst.y + box.y1 * 0.4,
+        z: inst.z,
+      });
+      if (dealt <= 0) continue;
+      hits += 1;
+      if (wasAlive && inst.state === "death") kills += 1;
+      if (inst.state !== "death") {
+        if (stunFor > 0 && enemies.stun(inst, stunFor * (0.6 + 0.4 * (1 - reach)))) {
+          stunned += 1;
+        }
+        if (knock > 0 && dist > 1e-3) {
+          enemies.knockback(inst, dx * inv, dz * inv, knock * (1 - reach * 0.5));
+        }
+        if (vfx && vfx.spark) {
+          vfx.spark(inst.x, inst.y + box.y1 * 0.45, inst.z, 1.15, false, true);
+        }
+      }
+    }
+    bus.emit("shockwave", { x, y, z, radius, hits, kills, stunned, source });
+    return { hits, kills, stunned, radius };
+  }
+
   function hurtPlayer(amount, detail = {}) {
     /* Set only by the QA hook, and only by checks that are not about
        survival. Garrisoning the level properly made standing still in
@@ -595,6 +656,20 @@ export function buildCombat(ctx) {
 
   function stepEnemy(inst, dt, px, py, pz) {
     if (inst.state === "death" || inst.emerging?.active) return;
+    /* STUNNED CREATURES DO NOTHING. Not walk, not turn, not shoot.
+       The gate lives here rather than in enemies.js because this is
+       where every decision a creature makes is taken; enforcing it
+       at the animation layer would leave a unit that stands still
+       and still puts rounds through you, which is the version of a
+       stun nobody can read. */
+    if (inst.stunTime > 0) {
+      inst.stunTime = Math.max(0, inst.stunTime - dt);
+      /* Woken by it, though - a garrison flattened by a slam should
+         be looking for you when it gets up. */
+      inst.suspicion = 1;
+      inst.alerted = true;
+      return;
+    }
     const spec = SPEC[inst.key] || SPEC.thresher;
     const dx = px - inst.x;
     const dz = pz - inst.z;
@@ -945,6 +1020,7 @@ export function buildCombat(ctx) {
     fire,
     damageEnemy: applyDamage,
     meleeStrike,
+    shockwave,
     explode,
     hurtPlayer,
     raycastEnemies,

@@ -21,11 +21,18 @@ const HOLD_ACTIONS = Object.freeze({
   shield: "block",
   jet: "jetpack",
   crouch: "crouch",
+  /* The glide is a HYBRID on touch, exactly as it is on the keyboard:
+     the press ignites it and the hold sustains it. Anything else would
+     make the sustained glide - the whole point of the rebind - reachable
+     only with a keyboard. */
+  boost: "boostHeld",
 });
+
+/** Hold buttons that also fire a one-shot on the way down. */
+const HOLD_PRESS_EVENTS = Object.freeze({ boost: "boost" });
 
 const TAP_ACTIONS = Object.freeze({
   vault: ["jump", null],
-  boost: ["boost", null],
   melee: ["melee", null],
   vent: ["vent", null],
 });
@@ -69,7 +76,7 @@ function buildMarkup() {
       </div>
       <div class="sf-touch__mobility">
         ${actionButton("vault", "↑", "VAULT", "tap")}
-        ${actionButton("boost", "»", "BOOST", "tap")}
+        ${actionButton("boost", "»", "GLIDE", "hold")}
         ${actionButton("jet", "✦", "JET", "hold")}
       </div>
       <div class="sf-touch__actions">
@@ -246,7 +253,8 @@ export function buildTouchControls(ctx, player, host, stage) {
       holdPointers.set(action, event.pointerId);
       try { button.setPointerCapture(event.pointerId); } catch (_) { /* best effort */ }
       setHeld(button, action, true);
-      pulse();
+      if (HOLD_PRESS_EVENTS[action]) input.pressTouch(HOLD_PRESS_EVENTS[action], {});
+      pulse(HOLD_PRESS_EVENTS[action] ? 12 : 7);
     }, { passive: false });
     for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
       button.addEventListener(type, (event) => releaseHold(action, event.pointerId));
@@ -256,6 +264,7 @@ export function buildTouchControls(ctx, player, host, stage) {
       prevent(event);
       holdPointers.set(action, `key:${action}`);
       setHeld(button, action, true);
+      if (HOLD_PRESS_EVENTS[action]) input.pressTouch(HOLD_PRESS_EVENTS[action], {});
     });
     button.addEventListener("keyup", (event) => {
       if (!["Enter", " "].includes(event.key)) return;
@@ -276,7 +285,7 @@ export function buildTouchControls(ctx, player, host, stage) {
       // Restarting the class makes repeated code-pad taps visible.
       void button.offsetWidth;
       button.classList.add("is-tapped");
-      pulse(action === "boost" || action === "melee" ? 12 : 7);
+      pulse(action === "melee" ? 12 : 7);
     };
     button.addEventListener("pointerdown", press, { passive: false });
     button.addEventListener("animationend", () => button.classList.remove("is-tapped"));
@@ -347,9 +356,13 @@ export function buildTouchControls(ctx, player, host, stage) {
 
   function update() {
     const fuel = ctx.jetpack?.state?.fuel || 0;
+    /* MELEE doubles as the slam trigger in the air, so it lights up
+       for a slam - but it must never read as unavailable on the
+       ground, where it is still the swing and has no cooldown. */
+    setButtonState("melee", ctx.slam?.state?.active ? "active" : "ready");
     setButtonState("boost", ctx.boost?.state?.active
       ? "active"
-      : fuel + 1e-6 < (ctx.boost?.config?.fuelCost || 0) ? "low" : "ready");
+      : fuel + 1e-6 < (ctx.boost?.config?.ignitionCost || 0) ? "low" : "ready");
     setButtonState("jet", ctx.jetpack?.state?.active
       ? "active"
       : ctx.jetpack?.state?.inFlight ? "glide" : fuel <= 0 ? "low" : "ready");

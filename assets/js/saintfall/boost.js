@@ -1,36 +1,65 @@
 /* ============================================================
-   SAINTFALL - reliquary boost slide
+   SAINTFALL - the reliquary glide
 
-   A short, grounded burst in the direction the player is already
-   moving. The player controller still owns world collision; this
-   module owns the boost envelope, charge spend, contact damage and
-   the light-enemy deflection rule.
+   Shift. Tapped it is a burst; HELD it keeps going, and it steers -
+   hold it with A, D or S and the trooper keeps skating that way
+   until the charge runs out. Driven forward it is also a weapon:
+   contact damages, and anything light enough gets thrown off the
+   line.
+
+   The player controller still owns world collision. This module
+   owns the envelope, the charge spend, the steering and the contact
+   rules, and nothing else.
+
+   It is deliberately NOT a sprint. Sprint was removed - the trooper
+   travels at what used to be sprint speed all the time - so this
+   key had to become something a player would reach for in a fight
+   rather than a tax on crossing open ground.
    ============================================================ */
 
-import { clamp01, damp } from "saintfall/core.js";
+import { clamp01, damp, dampAngle } from "saintfall/core.js";
 
 export const BOOST_CONFIG = Object.freeze({
-  duration: 0.28,
-  cooldown: 1.05,
-  speed: 24,
-  fuelCost: 16,
-  damage: 52,
-  bodyRadius: 0.72,
+  /* The minimum a TAP buys. Releasing inside this still gets a whole
+     burst, so the verb is never punished for being pressed briefly. */
+  burst: 0.30,
+  /** Hard ceiling on one held glide, charge notwithstanding. */
+  glideMax: 3.2,
+  cooldown: 0.5,
+  burstSpeed: 27,
+  glideSpeed: 19,
+  ignitionCost: 9,
+  /** Charge per second once the burst is over and the key is held. */
+  holdDrain: 24,
+  damage: 46,
+  /* A held glide is not one attack. The same creature can be caught
+     again after this, which is what makes skating through a pack
+     read as ploughing rather than as one free hit. */
+  damageInterval: 0.42,
+  bodyRadius: 0.78,
   sidePush: 1.35,
+  knockSpeed: 15,
+  /* How far off dead-ahead still counts as ramming. Sideways and
+     backward glides are mobility only - being able to kill by
+     retreating would make the whole fight one button. */
   forwardThreshold: 0.44,
+  steerResponse: 7.0,
 });
 
 const HEAVY_KEYS = new Set(["harrow", "matriarch"]);
 
 export function buildBoost(ctx, player) {
   const config = BOOST_CONFIG;
-  const struck = new Set();
+  /** inst -> glide-clock time it was last struck. */
+  const struck = new Map();
   let endSerial = 0;
   let reportedEndSerial = 0;
   const state = {
     active: false,
     justEnded: false,
+    holding: false,
     remaining: 0,
+    elapsed: 0,
     cooldownRemaining: 0,
     pose: 0,
     speed: 0,
@@ -47,7 +76,9 @@ export function buildBoost(ctx, player) {
   function reset(full = true) {
     state.active = false;
     state.justEnded = false;
+    state.holding = false;
     state.remaining = 0;
+    state.elapsed = 0;
     state.pose = 0;
     state.speed = 0;
     state.attack = false;
@@ -61,81 +92,83 @@ export function buildBoost(ctx, player) {
   function stop(reason = "complete") {
     if (!state.active) return;
     state.active = false;
+    state.holding = false;
     state.remaining = 0;
     state.speed = 0;
     state.justEnded = true;
     endSerial += 1;
     state.lastReason = reason;
+    ctx.audio?.boostCut?.();
+  }
+
+  /** Camera-relative move input as a world heading, or null. */
+  function headingFrom(mx, my, camYaw) {
+    const mag = Math.hypot(mx, my);
+    if (mag < 0.08) return null;
+    return { yaw: camYaw + Math.atan2(-mx / mag, -my / mag), forward: -my / mag };
+  }
+
+  function blocked() {
+    const ps = player.state;
+    return ps.free || !ps.grounded || ctx.combat?.player?.dead
+      || player.action || ctx.mission?.entry?.active
+      || ctx.jetpack?.state?.inFlight || ctx.shield?.state?.active
+      || ctx.slam?.state?.active;
   }
 
   /**
-   * Lock a boost to the current camera-relative movement vector.
-   * Pure side/back boosts are mobility only; W and forward diagonals
-   * cross the attack threshold and can strike enemies.
+   * Ignite. Locked to the current camera-relative movement vector, or
+   * to the trooper's own facing when nothing is pressed - a boost
+   * that refuses to fire because the stick is centred reads as a dead
+   * key, and forward is the only thing it could sensibly mean.
    */
   function trigger(options = {}) {
     const ps = player.state;
     const input = player.input.state;
     const mx = Number.isFinite(options.x) ? options.x : input.move.x;
     const my = Number.isFinite(options.y) ? options.y : input.move.y;
-    const mag = Math.hypot(mx, my);
 
     if (state.active || state.cooldownRemaining > 0) return false;
-    if (mag < 0.08) {
-      state.lastReason = "no-direction";
-      return false;
-    }
-    if (ps.free || !ps.grounded || ctx.combat?.player?.dead
-      || player.action || ctx.mission?.entry?.active || ctx.jetpack?.state?.inFlight
-      || ctx.shield?.state?.active) {
+    if (blocked()) {
       state.lastReason = "blocked";
       return false;
     }
-    if (!ctx.jetpack?.spend?.(config.fuelCost)) {
+    if (!ctx.jetpack?.spend?.(config.ignitionCost, true)) {
       state.lastReason = "low-charge";
       return false;
     }
 
-    const nx = mx / mag;
-    const ny = my / mag;
-    const yaw = ps.camYaw + Math.atan2(-nx, -ny);
+    const heading = headingFrom(mx, my, ps.camYaw);
+    const yaw = heading ? heading.yaw : ps.yaw;
+    const forward = heading ? heading.forward : 1;
     state.directionX = Math.sin(yaw);
     state.directionZ = Math.cos(yaw);
     state.yaw = yaw;
-    state.attack = (-ny) >= config.forwardThreshold;
+    state.attack = forward >= config.forwardThreshold;
     state.active = true;
+    state.holding = true;
     state.justEnded = false;
-    state.remaining = config.duration;
-    state.cooldownRemaining = config.cooldown;
+    state.remaining = config.burst;
+    state.elapsed = 0;
+    state.cooldownRemaining = 0;
     state.pose = 0.35;
-    state.speed = config.speed;
+    state.speed = config.burstSpeed;
     state.boosts += 1;
     state.lastHits = 0;
     state.lastReason = state.attack ? "forward" : "mobility";
     struck.clear();
 
-    /* The ordinary jet flame is authored for vertical flight. A short
-       sand-level ignition spark reads correctly from every boost angle
-       without turning the folded wing pack into a sideways rocket. */
-    ctx.vfx?.spark?.(
-      ps.x - state.directionX * 0.42,
-      ps.y + 0.30,
-      ps.z - state.directionZ * 0.42,
-      0.92
-    );
+    ctx.vfx?.boostIgnite?.(ps.x, ps.y, ps.z, state.directionX, state.directionZ);
+    ctx.audio?.boostIgnite?.(ps.x, ps.z);
     return true;
   }
 
   /** Called by the player before horizontal movement is resolved. */
-  function beginFrame(dt) {
+  function beginFrame(dt, playerState, inputState) {
     state.justEnded = false;
     state.cooldownRemaining = Math.max(0, state.cooldownRemaining - dt);
 
-    if (state.active && (
-      player.state.free || !player.state.grounded || ctx.combat?.player?.dead
-      || player.action || ctx.jetpack?.state?.inFlight || ctx.shield?.state?.active
-    )) stop("interrupted");
-    if (state.active && state.remaining <= 0) stop("complete");
+    if (state.active && blocked()) stop("interrupted");
     if (endSerial !== reportedEndSerial) {
       state.justEnded = true;
       reportedEndSerial = endSerial;
@@ -144,17 +177,72 @@ export function buildBoost(ctx, player) {
     if (!state.active) {
       state.pose = damp(state.pose, 0, 15, dt);
       state.speed = 0;
+      state.holding = false;
       return state;
     }
 
-    const progress = clamp01(1 - state.remaining / config.duration);
-    /* Hard launch, slight taper. Most of the distance is delivered in
-       the first two tenths, which is what makes this read as a boost
-       rather than as a temporary sprint multiplier. */
-    state.speed = config.speed * (1 - progress * 0.18);
-    state.pose = Math.max(0.35, Math.sin(progress * Math.PI));
+    state.elapsed += dt;
     state.remaining = Math.max(0, state.remaining - dt);
-    if (state.remaining <= 0) state.lastReason = "complete";
+
+    /* ---- the hold ----
+       Past the guaranteed burst, the glide lives entirely off the
+       key and the charge. Extending `remaining` rather than running
+       on a separate flag keeps one clock for both halves, so a tap
+       and a hold cannot disagree about when the thing is over. */
+    /* The hold has to be a hold of SOMETHING. Shift with nothing on
+       the stick still buys the whole burst - a dash on facing, which
+       is what a player pressing it alone means - but it must not
+       extend into a stationary glide that quietly burns a third of
+       the reliquary while the trooper stands there. */
+    const steering = Math.hypot(
+      inputState?.move?.x ?? 0, inputState?.move?.y ?? 0) >= 0.08;
+    const held = !!(inputState?.boostHeld) && steering;
+    state.holding = held;
+    if (state.elapsed >= config.burst) {
+      if (!held) {
+        stop(inputState?.boostHeld ? "no-input" : "released");
+      } else if (state.elapsed >= config.glideMax) {
+        stop("exhausted");
+      } else if (!ctx.jetpack?.spend?.(config.holdDrain * dt, true)) {
+        stop("low-charge");
+      } else {
+        state.remaining = Math.max(state.remaining, dt);
+      }
+    }
+    if (!state.active) {
+      state.cooldownRemaining = config.cooldown;
+      return state;
+    }
+
+    /* ---- steering ----
+       A held glide follows the stick. Damped rather than snapped,
+       because an instant heading change at nineteen metres a second
+       is a teleport sideways; and re-evaluated every frame, which is
+       what makes "hold Shift and D" a thing you can hold. */
+    const heading = headingFrom(
+      inputState?.move?.x ?? 0, inputState?.move?.y ?? 0, playerState.camYaw);
+    if (heading && state.elapsed >= config.burst * 0.5) {
+      state.yaw = dampAngle(state.yaw, heading.yaw, config.steerResponse, dt);
+      state.directionX = Math.sin(state.yaw);
+      state.directionZ = Math.cos(state.yaw);
+      state.attack = heading.forward >= config.forwardThreshold;
+      state.lastReason = state.attack ? "forward" : "mobility";
+    }
+
+    /* Hard launch, then a settled skate. The burst delivers most of
+       the ground in the first fifth of a second - that is what makes
+       it read as a boost - and the hold settles to a speed that can
+       be steered and shot from. */
+    const launch = clamp01(state.elapsed / config.burst);
+    state.speed = state.elapsed < config.burst
+      ? config.burstSpeed * (1 - launch * 0.16)
+      : damp(state.speed, config.glideSpeed, 6.5, dt);
+    state.pose = Math.max(0.42, Math.min(1, 0.55 + Math.sin(launch * Math.PI) * 0.45));
+
+    if (ctx.vfx?.boostTrail) {
+      ctx.vfx.boostTrail(playerState.x, playerState.y, playerState.z,
+        state.directionX, state.directionZ, state.speed, state.attack);
+    }
     return state;
   }
 
@@ -172,28 +260,31 @@ export function buildBoost(ctx, player) {
   }
 
   /**
-   * Resolve forward-boost contacts along the movement that collision
-   * actually allowed. Each creature can be hit once per ignition.
+   * Resolve forward contacts along the movement collision actually
+   * allowed. A creature can be caught again after `damageInterval`,
+   * so a long glide through a pack keeps working.
    */
   function noteMotion(fromX, fromZ, toX, toZ, dt = 0) {
     if (!state.active) return 0;
     const travelled = Math.hypot(toX - fromX, toZ - fromZ);
-    if (dt > 0 && travelled < state.speed * dt * 0.12) {
-      stop("blocked");
-    }
+    /* Stopped dead against masonry. A glide that grinds into a wall
+       and keeps burning charge is a key that has stopped answering. */
+    if (dt > 0 && travelled < state.speed * dt * 0.12) stop("blocked");
     if (!state.attack || travelled < 1e-5) return 0;
 
     let hits = 0;
     for (const inst of ctx.enemies.live) {
-      if (!inst || inst.state === "death" || inst.emerging?.active || struck.has(inst)) continue;
+      if (!inst || inst.state === "death" || inst.emerging?.active) continue;
+      const last = struck.get(inst);
+      if (last !== undefined && state.elapsed - last < config.damageInterval) continue;
       const box = ctx.combat.hitbox[inst.key] || ctx.combat.hitbox.thresher;
       const contact = segmentDistanceSq(inst.x, inst.z, fromX, fromZ, toX, toZ);
       const reach = config.bodyRadius + box.r;
       if (contact.d2 > reach * reach) continue;
 
-      /* Contact damage obeys the same masonry rule as every other
-         attack. This matters at thin pillars, where the body can pass
-         on one side while a large hit capsule reaches around the other. */
+      /* Contact obeys the same masonry rule as every other attack.
+         This matters at thin pillars, where the body passes one side
+         while a large hit capsule reaches around the other. */
       const hitY = inst.y + Math.min(box.y1 * 0.48, 1.35);
       const rayY = Math.max(player.state.y + 0.58, hitY * 0.45 + player.state.y * 0.55);
       const dx = inst.x - contact.qx;
@@ -203,7 +294,7 @@ export function buildBoost(ctx, player) {
         contact.qx, rayY, contact.qz, dx / dist, 0, dz / dist, dist
       ) < dist - 0.04) continue;
 
-      struck.add(inst);
+      struck.set(inst, state.elapsed);
       const dealt = ctx.combat.damageEnemy(inst, config.damage, {
         source: "boost",
         x: inst.x,
@@ -215,21 +306,31 @@ export function buildBoost(ctx, player) {
       state.hits += 1;
       state.lastHits += 1;
 
+      /* Light castes are THROWN, and thrown along the glide rather
+         than merely nudged aside: the read the player wants from
+         driving a lance-armed knight through a swarm at nineteen
+         metres a second is that the swarm goes flying. */
       if (!HEAVY_KEYS.has(inst.key)) {
         const rightX = state.directionZ;
         const rightZ = -state.directionX;
         const side = ((inst.x - contact.qx) * rightX
           + (inst.z - contact.qz) * rightZ) >= 0 ? 1 : -1;
-        const wantX = inst.x + rightX * side * config.sidePush;
-        const wantZ = inst.z + rightZ * side * config.sidePush;
-        const radius = Math.max(0.34, (inst.spec?.collisionRadius || box.r) * 0.78);
-        const out = ctx.collide.slide(inst.x, inst.z, wantX, wantZ, null, radius);
-        inst.x = out[0];
-        inst.z = out[1];
-        inst.root?.position?.set(inst.x, inst.y, inst.z);
+        const ux = state.directionX * 0.72 + rightX * side * 0.69;
+        const uz = state.directionZ * 0.72 + rightZ * side * 0.69;
+        if (!ctx.enemies.knockback?.(inst, ux, uz, config.knockSpeed)) {
+          const wantX = inst.x + rightX * side * config.sidePush;
+          const wantZ = inst.z + rightZ * side * config.sidePush;
+          const radius = Math.max(0.34, (inst.spec?.collisionRadius || box.r) * 0.78);
+          const out = ctx.collide.slide(inst.x, inst.z, wantX, wantZ, null, radius);
+          inst.x = out[0];
+          inst.z = out[1];
+          inst.root?.position?.set(inst.x, inst.y, inst.z);
+        }
       }
 
-      ctx.vfx?.spark?.(inst.x, hitY, inst.z, HEAVY_KEYS.has(inst.key) ? 1.45 : 1.12);
+      ctx.vfx?.boostImpact?.(inst.x, hitY, inst.z,
+        state.directionX, state.directionZ, HEAVY_KEYS.has(inst.key));
+      ctx.audio?.boostHit?.(inst.x, inst.z, HEAVY_KEYS.has(inst.key));
     }
     return hits;
   }
@@ -238,19 +339,22 @@ export function buildBoost(ctx, player) {
     return {
       active: state.active,
       justEnded: state.justEnded,
+      holding: state.holding,
       attack: state.attack,
       mode: state.active ? (state.attack ? "attack" : "mobility")
         : state.cooldownRemaining > 0 ? "cooldown" : "ready",
       remaining: Number(state.remaining.toFixed(3)),
+      elapsed: Number(state.elapsed.toFixed(3)),
       cooldownRemaining: Number(state.cooldownRemaining.toFixed(3)),
       pose: Number(state.pose.toFixed(3)),
       speed: Number(state.speed.toFixed(3)),
+      yaw: Number(state.yaw.toFixed(4)),
       direction: [Number(state.directionX.toFixed(4)), Number(state.directionZ.toFixed(4))],
       boosts: state.boosts,
       hits: state.hits,
       lastHits: state.lastHits,
       lastReason: state.lastReason,
-      fuelCost: config.fuelCost,
+      fuelCost: config.ignitionCost,
     };
   }
 

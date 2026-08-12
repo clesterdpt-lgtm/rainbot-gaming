@@ -198,7 +198,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
             <section class="sf-menu__page" data-menu-page="controls" hidden>
               <div class="sf-menu__pagehead"><span>TACTICAL CODEX</span><h3>CONTROLS</h3><p>Every field action, grouped by intent.</p></div>
               <div class="sf-controls-grid">
-                <article><h4>MOVEMENT</h4>${controlRow("W A S D", "Move")}${controlRow("SHIFT", "Sprint")}${controlRow("CTRL / C", "Crouch", "Descend while airborne")}${controlRow("SPACE", "Vault")}${controlRow("SHIFT + SPACE", "Reliquary jetpack")}${controlRow("E", "Boost slide")}</article>
+                <article><h4>MOVEMENT</h4>${controlRow("W A S D", "Move")}${controlRow("SHIFT", "Boost", "Tap to boost, hold to keep gliding")}${controlRow("CTRL / C", "Crouch", "Descend while airborne")}${controlRow("SPACE", "Vault")}${controlRow("SHIFT + SPACE", "Reliquary jetpack")}${controlRow("Q", "Ground slam", "While airborne")}</article>
                 <article><h4>COMBAT</h4>${controlRow("MOUSE", "Look / aim")}${controlRow("LMB", "Fire")}${controlRow("RMB", "Aim down sights")}${controlRow("Q", "Censer-lance strike")}${controlRow("X", "Aegis block")}${controlRow("R", "Vent weapon heat")}</article>
                 <article><h4>COMMAND</h4>${controlRow("HOLD TAB", "Command wheel", "Point and release to confirm")}${controlRow("ESC", "Field menu")}${controlRow("M", "Tactical map", "Press again to resume")}${controlRow("TOUCH", "Hold the command sigil", "Drag and release to confirm")}</article>
               </div>

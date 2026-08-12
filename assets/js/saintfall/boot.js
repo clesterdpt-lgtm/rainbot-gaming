@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260811-20";
+  const BUILD = "20260811-21";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -100,7 +100,7 @@
   // shipped fix look like it did not work.
   const MODULES = [
     "core", "art", "sky", "terrain", "structures", "world", "collide",
-    "vfx", "render", "player", "jetpack", "boost", "shield", "enemies", "weapons", "ik", "combat",
+    "vfx", "render", "player", "jetpack", "boost", "slam", "shield", "enemies", "weapons", "ik", "combat",
     "mission", "breaches", "audio", "hud", "touch", "intro", "pod", "save", "ui", "qa", "main",
   ];
 

@@ -1823,7 +1823,13 @@ function makeInput(canvas, captureMeleeAim = null) {
     clock: 0,
     move: { x: 0, y: 0 },
     look: { x: 0, y: 0 },
+    /* `sprint` survives only as the TOUCH stick's full-tilt flag. On
+       the keyboard there is no sprint any more: the trooper travels
+       at what used to be sprint speed all the time, and Shift became
+       the boost. A separate speed for holding a key was a tax on
+       crossing two kilometres of open basin. */
     sprint: false,
+    boostHeld: false,
     jump: false,
     jumpPressed: false,
     jetpack: false,
@@ -1846,6 +1852,7 @@ function makeInput(canvas, captureMeleeAim = null) {
     moveActive: false,
     move: { x: 0, y: 0 },
     sprint: false,
+    boostHeld: false,
     crouch: false,
     jetpack: false,
     block: false,
@@ -1970,7 +1977,12 @@ function makeInput(canvas, captureMeleeAim = null) {
     }
     else if (k === "KeyV") state.events.push({ type: "stratOpen" });
     else if (k === "KeyR") state.events.push({ type: "vent" });
-    else if (k === "KeyE") state.events.push({ type: "boost" });
+    /* SHIFT IS THE BOOST. One key: tapped it is a burst, held it is a
+       glide, and held with Space it is the jetpack - which is the
+       whole reason it can also be the burst. E is free. */
+    else if (k === "ShiftLeft" || k === "ShiftRight") {
+      state.events.push({ type: "boost" });
+    }
     else if (k === "Space") state.jumpPressed = true;
   };
   window.addEventListener("keydown", (e) => onKey(e, true));
@@ -1979,6 +1991,7 @@ function makeInput(canvas, captureMeleeAim = null) {
     keys.clear();
     state.jumpPressed = false;
     state.jetpack = false;
+    state.boostHeld = false;
     clearTouch();
   });
   document.addEventListener("visibilitychange", () => {
@@ -2036,11 +2049,12 @@ function makeInput(canvas, captureMeleeAim = null) {
         state.move.y = (keys.has("KeyS") || keys.has("ArrowDown") ? 1 : 0)
           - (keys.has("KeyW") || keys.has("ArrowUp") ? 1 : 0);
       }
-      state.sprint = keys.has("ShiftLeft") || keys.has("ShiftRight") || touch.sprint;
+      const shift = keys.has("ShiftLeft") || keys.has("ShiftRight");
+      state.sprint = touch.sprint;
+      state.boostHeld = shift || touch.boostHeld;
       state.crouch = keys.has("ControlLeft") || keys.has("KeyC") || touch.crouch;
       state.jump = keys.has("Space");
-      state.jetpack = (state.jump && (keys.has("ShiftLeft") || keys.has("ShiftRight")))
-        || touch.jetpack;
+      state.jetpack = (state.jump && shift) || touch.jetpack;
       state.block = keys.has("KeyX") || touch.block;
       const lx = state.look.x;
       const ly = state.look.y;
@@ -2756,12 +2770,22 @@ export async function createPlayer(ctx, canvas) {
        The legs absorb it: their IK targets are world-space foot
        plants, so tipping the hips forward is a reach they solve
        against rather than a pose that drags the feet. */
-    const bodyLean = (0.045 * walkLeanN + 0.155 * sprintLeanN) * groundedMotion
+    /* The fall's own attitude, added on top: back over the raised
+       lance while it charges, then thrown forward so the lance leads
+       the body down. The root pivots at the soles, so this tips the
+       whole trooper the way a diver tips rather than folding a spine. */
+    const slamLean = ctx.slam?.state?.lean || 0;
+    const locomotionLean = (0.045 * walkLeanN + 0.155 * sprintLeanN) * groundedMotion
       + boostPose * 0.075;
+    const bodyLean = locomotionLean + slamLean;
     const travelLean = (0.055 * walkLeanN + 0.025 * sprintLeanN) * groundedMotion
       + 0.37 * jetPose;
     // Hip height is the leg, and the root sits at the sole.
-    leanFootShift = Math.sin(bodyLean)
+    /* Only the LOCOMOTION lean tracks the hips forward. That
+       compensation exists so a running trooper's feet stay under the
+       mass; applied to a dive it would drag the body a metre out of
+       its own collision capsule. */
+    leanFootShift = Math.sin(locomotionLean)
       * (figure.limb.thigh + figure.limb.shin + figure.limb.ankle);
     /* Turn the breastplate toward the right-side handhold.  This is
        a torso stance, not a whole-character yaw: the hips continue
@@ -3020,10 +3044,23 @@ export async function createPlayer(ctx, canvas) {
     const { lx, ly, jumpPressed } = input.poll();
     const shieldState = ctx.shield?.beginFrame?.(dt, state, input.state) || null;
     const shieldMode = !!shieldState?.active;
+    /* The fall resolves BEFORE the pack, because committing to it
+       cuts the pack: a slam that has to wait a frame for the jetpack
+       to notice spends that frame still climbing. */
+    const slamState = ctx.slam?.beginFrame?.(dt, state, input.state) || null;
+    const slamMode = !!slamState?.active;
+    /* SPACE BEATS THE GLIDE.
+       Shift ignites the glide now, so the jetpack chord - Shift held,
+       Space pressed - always arrives with a glide already running,
+       and the pack refuses to light while one is. Cutting the glide
+       here, before the pack reads its own gate, is what keeps "hold
+       Shift and press Space" meaning exactly what it always meant.
+       No cooldown: taking off is not a failed boost. */
+    if (input.state.jetpack && ctx.boost?.state?.active) ctx.boost.stop("jetpack");
     const jetState = ctx.jetpack?.beginFrame?.(dt, state, input.state) || null;
     const flightMode = !!jetState?.inFlight;
     const boostState = ctx.boost?.beginFrame?.(dt, state, input.state) || null;
-    const boostMode = !!boostState?.active && !flightMode;
+    const boostMode = !!boostState?.active && !flightMode && !slamMode;
     if (boostState?.justEnded) state.speed = Math.min(state.speed, SPRINT);
 
     /* The figure is hidden in free-camera mode by default, because
@@ -3124,7 +3161,17 @@ export async function createPlayer(ctx, canvas) {
         ? ctx.shield.config.moveSpeed
         : flightMode
           ? (jetState.active ? ctx.jetpack.config.cruiseSpeed : ctx.jetpack.config.glideSpeed)
-          : (input.state.crouch ? CROUCH : (input.state.sprint ? SPRINT : WALK));
+          /* ONE ground speed now, and it is what Shift used to buy.
+             WALK survives for two cases: crouching, and a committed
+             swing. NOBODY SPRINTS THROUGH A MELEE - and mechanically
+             they cannot, because the gait predicts foot plants from
+             the resolved travel vector, and strafing at full stride
+             while the body is locked to the swing bearing spreads the
+             plants past the point where both feet leave the ground at
+             once. That reads as scissoring, and it is what the melee
+             gait check in `saintfall-melee-reticle-probe.mjs`
+             measures. */
+          : (input.state.crouch ? CROUCH : action.name ? WALK : SPRINT);
     /* Sighted movement is a walk at best. The multiplier is applied to
        the TARGET rather than gating sprint, so it also removes the
        sprint option by arithmetic: 8.6 * 0.46 is below the 4.4 walk,
@@ -3138,8 +3185,9 @@ export async function createPlayer(ctx, canvas) {
        half-tilted thumbstick produce a half-speed walk instead of
        snapping straight to full speed. Boost owns its own envelope. */
     const inputAmount = boostMode ? 1 : clamp01(mag);
-    const wanted = (mag > 0.01 || boostMode)
-      ? target * lerp(1, ADS_SPEED, sighted) * inputAmount : 0;
+    const wanted = slamMode ? 0
+      : (mag > 0.01 || boostMode)
+        ? target * lerp(1, ADS_SPEED, sighted) * inputAmount : 0;
     if (boostMode) {
       state.speed = wanted;
     } else if (flightMode) {
@@ -3149,7 +3197,7 @@ export async function createPlayer(ctx, canvas) {
       state.speed += clamp(wanted - state.speed, -rate * dt, rate * dt);
     } else {
       const speedResponse = wanted > state.speed
-        ? (shieldMode ? 7.5 : (input.state.sprint ? 3.2 : 4.2))
+        ? (shieldMode ? 7.5 : 3.4)
         : 5.4;
       state.speed = damp(state.speed, wanted, speedResponse, dt);
     }
@@ -3173,7 +3221,14 @@ export async function createPlayer(ctx, canvas) {
        photograph the low-ready pose in every aimed shot. Commitment
        should follow the state of the game, not the state of a
        button. */
-    const committing = !state.free && !flightMode && !boostMode && !shieldMode && (
+    /* Firing commits the shoulders WHEREVER the trooper is. Flight
+       and the glide used to be excluded, which was correct while
+       neither could shoot; now that both can, excluding them would
+       leave the lance pointing down the body's line of travel while
+       the bolt left along the reticle - the exact disagreement the
+       aim solve exists to prevent. The slam keeps its exclusion: the
+       lance is overhead and committed for the whole of it. */
+    const committing = !state.free && !slamMode && !shieldMode && (
       input.state.firing
       || input.state.ads
       || (ctx.weapons?.carry?.ads || 0) > 0.5
@@ -3267,7 +3322,7 @@ export async function createPlayer(ctx, canvas) {
     let flightWantZ = state.z;
     const motionStartX = state.x;
     const motionStartZ = state.z;
-    if (mag > 0.01 || boostMode) {
+    if ((mag > 0.01 || boostMode) && !slamMode) {
       const step = state.speed * dt;
       /* Melee owns the BODY bearing for its committed attack, but it
          must not steal the movement stick. Preserve the same
@@ -3443,6 +3498,16 @@ export async function createPlayer(ctx, canvas) {
           targetVy = clamp((cfg.cruiseAltitude - agl) * 2.4, -3.5, cfg.climbSpeed);
         }
         state.vy = damp(state.vy, targetVy, 5.2, dt);
+      } else if (slamMode) {
+        /* THE FALL OWNS THE AXIS, EVEN OUT OF A FLIGHT.
+           Committing to the slam cuts the pack, but the pack stays
+           `inFlight` until it lands - so the whole descent is still
+           resolved here, by the capsule sweep, with the pack's gravity
+           and terminal-fall clamp. Left alone that turned the fastest
+           attack in the game into an ordinary drop that never struck
+           anything. The fall replaces the velocity outright rather
+           than accelerating from whatever the flight left behind. */
+        state.vy = slamState.verticalSpeed;
       } else {
         state.vy = Math.max(-cfg.terminalFall, state.vy - cfg.gravity * dt);
       }
@@ -3611,16 +3676,32 @@ export async function createPlayer(ctx, canvas) {
         state.vy = 0;
         state.grounded = true;
         state.speed = Math.min(state.speed, SPRINT);
-        ctx.jetpack.land(state, impact);
+        /* The pack still books its own landing - it is what clears
+           `inFlight` and arms the recharge - but the slam's own strike
+           is the louder event, so the pack lands silently under it. */
+        ctx.jetpack.land(state, slamMode ? 0 : impact);
         for (const leg of legs) leg.planted = false;
+        if (slamMode) ctx.slam.impact();
       } else {
         state.grounded = false;
         if (verticalHit && state.y < support) state.y = support;
       }
     } else if (!state.grounded) {
-      state.vy -= 19.6 * dt;
+      /* A committed fall replaces gravity outright rather than adding
+         to it. Accelerating a plunge from whatever vertical velocity
+         the jump happened to leave behind makes the same input take a
+         different amount of time depending on how it was entered,
+         which is the one thing a telegraphed attack must not do. */
+      if (slamMode) state.vy = slamState.verticalSpeed;
+      else state.vy -= 19.6 * dt;
       state.y += state.vy * dt;
-      if (state.y <= gy) { state.y = gy; state.vy = 0; state.grounded = true; }
+      if (state.y <= gy) {
+        state.y = gy;
+        state.vy = 0;
+        state.grounded = true;
+        for (const leg of legs) leg.planted = false;
+        if (slamMode) ctx.slam.impact();
+      }
     } else {
       /* A collision-resolved landing can begin above center support on
          a legal slope. Exponential damping alone drops almost the full
@@ -3645,7 +3726,7 @@ export async function createPlayer(ctx, canvas) {
     const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
     const crouched = input.state.crouch && state.grounded && !flightMode;
     const dist = state.camDist
-      * lerp(input.state.sprint ? 1.14 : 1, 1.27, jetPose)
+      * lerp(1.14, 1.27, jetPose)
       * (crouched ? 0.86 : 1);
     camOffset.set(
       Math.sin(state.camYaw) * Math.cos(state.camPitch),
@@ -3989,7 +4070,12 @@ export async function createPlayer(ctx, canvas) {
   }
 
   function solveLegs(dt) {
-    const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
+    /* The fall borrows the pack's airborne legs. Both are feet-off-the-
+       ground poses and the alternative was a walk cycle running in
+       mid-air under a diving body. */
+    const jetPose = Math.max(
+      clamp01(ctx.jetpack?.state?.pose || 0),
+      clamp01(ctx.slam?.state?.pose || 0));
     if (jetPose > 0.001) {
       solveJetLegs(dt, jetPose);
       return;

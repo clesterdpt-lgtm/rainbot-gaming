@@ -824,6 +824,20 @@ export function installQa(ctx, api) {
         .map((e) => ({ key: e.key, x: e.x, y: e.y, z: e.z, state: e.state }));
     },
 
+    /** Health and stun, for probing area attacks. Separate from
+     *  `enemyList` so probes pinned to that shape keep working. */
+    enemyStatus() {
+      return api.enemies.live.map((e) => ({
+        key: e.key,
+        x: Number(e.x.toFixed(3)),
+        z: Number(e.z.toFixed(3)),
+        health: Number((e.health ?? 0).toFixed(2)),
+        maxHealth: e.spec?.hp ?? null,
+        stunTime: Number((e.stunTime || 0).toFixed(3)),
+        state: e.state,
+      }));
+    },
+
     /** Shots fired and shots landed, so a probe can prove its own
      *  test actually hit the thing it photographed. */
     combatStats() {
@@ -2161,6 +2175,11 @@ export function installQa(ctx, api) {
         step: (a) => a.step(false),
         hurt: (a) => a.hurt(),
         blip: (a) => a.blip(880, 0.06, 0.2),
+        boostIgnite: (a) => a.boostIgnite(0, 0),
+        boostHit: (a) => a.boostHit(2, 2, false),
+        slamCharge: (a) => a.slamCharge(0, 0),
+        slamPlunge: (a) => a.slamPlunge(0, 0),
+        slamImpact: (a) => a.slamImpact(0, 0, 0.6),
       };
       for (const [name, play] of Object.entries(cases)) {
         const oc = new OC(2, 44100 * 2.5, 44100);
@@ -3238,6 +3257,23 @@ export function installQa(ctx, api) {
       api.boost?.reset(full);
       return api.boost?.status() || null;
     },
+    slamState: () => api.slam?.status() || null,
+    triggerSlam() {
+      const triggered = !!api.slam?.trigger();
+      return { triggered, state: api.slam?.status() || null };
+    },
+    resetSlam(full = true) {
+      api.slam?.reset(full);
+      return api.slam?.status() || null;
+    },
+    /** Altitude above the ground the trooper would land on. */
+    slamAltitude: () => api.slam?.altitude() ?? null,
+    /** Hold or release the glide without a physical Shift key. */
+    setBoostHold(on) {
+      if (on) api.player.input.keys.add("ShiftLeft");
+      else api.player.input.keys.delete("ShiftLeft");
+      return !!on;
+    },
     /** Boundary setup only. End-to-end control tests should use real
      *  keyboard events so blur/key-release behavior remains covered. */
     setJetpackState: (next) => api.jetpack?.setState(next) || null,
@@ -3268,6 +3304,7 @@ export function installQa(ctx, api) {
     get weapons() { return api.weapons; },
     get jetpack() { return api.jetpack; },
     get boost() { return api.boost; },
+    get slam() { return api.slam; },
     get shield() { return api.shield; },
     get touch() { return api.touch; },
     get atmos() { return ctx.atmos; },

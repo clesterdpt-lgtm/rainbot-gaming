@@ -82,12 +82,12 @@ export function buildHud(ctx, host) {
     <section class="sf-hud__command" id="sf-command-status" aria-label="Command availability">
       <header class="sf-hud__command-head">
         <span>COMMAND</span>
-        <strong><kbd>TAB</kbd></strong>
+        <strong><kbd>E</kbd></strong>
       </header>
       <div class="sf-hud__strat" id="sf-strat"></div>
     </section>
     <div class="sf-hud__hint" id="sf-hint">
-      <span><kbd>TAB</kbd> <b>HOLD FOR COMMAND</b></span>
+      <span><kbd>E</kbd> <b>HOLD FOR COMMAND</b></span>
     </div>
   `;
 

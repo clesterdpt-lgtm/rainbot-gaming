@@ -22,8 +22,8 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Share+Tech+Mono&display=swap&v=20260811-11" />
   <link rel="stylesheet" href="../assets/css/styles.css?v=20260806-network-polish-1" />
-  <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260812-coulter-1" />
-  <link rel="stylesheet" href="../assets/css/saintfall-ui.css?v=20260812-doctrine-1" />
+  <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260812-binds-1" />
+  <link rel="stylesheet" href="../assets/css/saintfall-ui.css?v=20260812-binds-1" />
 </head>
 <body class="rb-standalone-shell saintfall-shell" data-rb-native-escape-menu="true">
   <nav class="nav"><div id="nav-slot"></div></nav>
@@ -75,7 +75,7 @@
         <div class="game-side__panel game-side__panel--saintfall">
           <h3 class="game-side__title">THE GILDED SILENCE</h3>
           <p>Drop onto Vesper-IX and cross the basin to the Vault-Cathedral. Track Bloom breaches on the tactical map, purge each rising brood, and survive the Matriarch &mdash; and then whatever it is that answers from under the sand.</p>
-          <p>Click the playfield to capture the mouse. Fire with LMB, aim with RMB, use Q for melee, and hold Tab for field command.</p>
+          <p>Click the playfield to capture the mouse. Fire with LMB, aim with RMB, use Q for melee, press Tab for the field menu, and hold E to select a missile drop.</p>
         </div>
 
         <div id="ad-leaderboard"></div>
@@ -90,8 +90,8 @@
             <li>Press Q while airborne for the Penitent's Fall - a ground slam that damages and stuns everything around the point of impact.</li>
             <li>Hold X to project a frontal gold Aegis shield; it drains the same reliquary charge as the jetpack.</li>
             <li>Look with the mouse, fire with LMB, aim with RMB, and use Q for melee.</li>
-            <li>Hold <b>Tab</b>, point toward a field command, and release to deploy. Release in the centre to cancel.</li>
-            <li>Press <b>Esc</b> for the operation menu, controls, settings, and field saves.</li>
+            <li>Hold <b>E</b>, point toward a field command (missile drop, cluster, resupply), and release to deploy. Release in the centre to cancel.</li>
+            <li>Press <b>Tab</b> or <b>Esc</b> for the operation menu, controls, settings, and field saves.</li>
             <li>On touch, drag the left relic to move, swipe the right side to look, and hold-drag the labeled <b>Call</b> control for field command.</li>
             <li>Follow the tactical mini-map when a Bloom breach opens. Every marked event brood must be defeated before the next, harder surge begins.</li>
             <li>The last thing the Bloom sends never surfaces to be shot at. Watch the sand: a ridge of it moving toward you is the Coulter, and you cannot hurt it while it is under there. Get off the ridge before it comes up, and put your shots down its throat while it is open &mdash; that is the only time it counts double, and the only time it can spit at you.</li>
@@ -146,8 +146,8 @@
           <li><b>Shift</b> tap to boost, hold to glide (steer with A/S/D, fire while gliding)</li>
           <li>Hold <b>Shift+Space</b> for jetpack, <b>Ctrl</b> descends, <b>Q</b> airborne for the ground slam</li>
           <li><b>Mouse</b> look (click to capture), <b>LMB</b> fire, <b>RMB</b> aim, <b>Q</b> melee, hold <b>X</b> to block, <b>R</b> vent heat</li>
-          <li><b>Tab</b> hold for field command, point to select, release to deploy</li>
-          <li><b>Esc</b> operation menu, controls, settings, save and load</li>
+          <li><b>E</b> hold for field command / missile drop, point to select, release to deploy</li>
+          <li><b>Tab</b> or <b>Esc</b> operation menu, controls, settings, save and load</li>
           <li><b>Touch</b> left relic to move, swipe to look, and hold-drag <b>Call</b> for field command</li>
         </ul>
       </div>
@@ -175,7 +175,7 @@
        main.js without it throws before the nav ever renders. -->
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260806-network-polish-1"></script>
-  <script src="../assets/js/saintfall/boot.js?v=20260812-coulter-1"></script>
+  <script src="../assets/js/saintfall/boot.js?v=20260812-binds-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

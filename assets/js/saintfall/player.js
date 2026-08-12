@@ -1979,7 +1979,8 @@ function makeInput(canvas, captureMeleeAim = null) {
     else if (k === "KeyR") state.events.push({ type: "vent" });
     /* SHIFT IS THE BOOST. One key: tapped it is a burst, held it is a
        glide, and held with Space it is the jetpack - which is the
-       whole reason it can also be the burst. E is free. */
+       whole reason it can also be the burst. E is the command-wheel
+       hold, owned by ui.js, so this file only swallows the key. */
     else if (k === "ShiftLeft" || k === "ShiftRight") {
       state.events.push({ type: "boost" });
     }

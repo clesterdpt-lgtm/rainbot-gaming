@@ -865,20 +865,23 @@ async function main() {
       labels.touchBoostAria === null || /hold/i.test(labels.touchBoostAria),
       String(labels.touchBoostAria));
 
-    /* E must be inert now: it was the old boost key, and leaving it
-       live would mean the rebind never actually happened. */
+    /* E is the command-wheel hold now. A tap must never reignite the
+       old boost binding. */
     await stage({ yaw: 0 });
     await page.keyboard.down("KeyW");
     await step(0.5);
     const boostsBeforeE = await page.evaluate(() => window.__SF.boostState().boosts);
     await page.keyboard.press("KeyE");
     await step(0.2);
-    const legacyE = await page.evaluate(() => window.__SF.boostState());
+    const legacyE = await page.evaluate(() => ({
+      boost: window.__SF.boostState(),
+      wheel: window.__SF.commandWheelState?.() || window.__SF.ui?.wheelState?.() || null,
+    }));
     await page.keyboard.up("KeyW");
     report.states.legacyE = { legacyE, boostsBeforeE };
     check("E no longer boosts",
-      !legacyE.active && legacyE.boosts === boostsBeforeE,
-      `active=${legacyE.active}, boosts ${boostsBeforeE} -> ${legacyE.boosts}`);
+      !legacyE.boost.active && legacyE.boost.boosts === boostsBeforeE,
+      `active=${legacyE.boost.active}, boosts ${boostsBeforeE} -> ${legacyE.boost.boosts}`);
 
     /* A grounded flag can outlive its support for one frame at a fast
        ridge crossing. Recreate that exact boundary deterministically:

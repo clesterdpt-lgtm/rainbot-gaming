@@ -4,7 +4,7 @@
 
    This suite drives the production input listeners. QA hooks are used to
    observe state and establish deterministic boundaries, never to stand in
-   for Tab, mouse, Escape, menu clicks, or touch.
+   for Tab, E, mouse, Escape, menu clicks, or touch.
 
    Usage:
      node scripts/saintfall-ui-regression.mjs
@@ -562,7 +562,7 @@ async function desktopPass(browser) {
     return { wheel: T.commandWheelState(), camera: T.player.state.camYaw,
       body: T.player.state.yaw, cooldown: T.mission.cooldowns.cluster };
   });
-  await page.keyboard.down("Tab");
+  await page.keyboard.down("KeyE");
   await page.waitForFunction(() => window.__SF.commandWheelState()?.open,
     null, { timeout: 3000 });
   const dialBox = await page.locator(".sf-command-wheel__dial").boundingBox();
@@ -584,7 +584,7 @@ async function desktopPass(browser) {
     JSON.stringify({ dialBox, vector: await page.evaluate(() => window.__SF.commandWheelState()?.vector) }));
   await page.locator(".sf-stage").screenshot({ path: path.join(OUT, "desktop-command-wheel.png") });
   const openWheel = await page.evaluate(() => window.__SF.commandWheelState());
-  await page.keyboard.up("Tab");
+  await page.keyboard.up("KeyE");
   await page.waitForFunction((seq) => {
     const state = window.__SF.commandWheelState();
     return state && !state.open && state.dispatchSeq === seq + 1;
@@ -597,10 +597,10 @@ async function desktopPass(browser) {
     cooldown: window.__SF.mission.cooldowns.cluster,
   }));
   evidence.desktopWheel = { beforeWheel, openWheel, afterWheel };
-  check("holding Tab opens a three-choice command wheel",
+  check("holding E opens a three-choice command wheel",
     openWheel?.open && openWheel?.commands?.length === 3 && openWheel.selectedKey === "cluster",
     JSON.stringify(openWheel));
-  check("releasing Tab dispatches the highlighted command exactly once",
+  check("releasing E dispatches the highlighted command exactly once",
     afterWheel.wheel?.dispatchSeq === (beforeWheel.wheel?.dispatchSeq || 0) + 1
       && afterWheel.wheel?.lastDispatch?.key === "cluster" && afterWheel.cooldown > 0,
     JSON.stringify(afterWheel.wheel));
@@ -615,7 +615,7 @@ async function desktopPass(browser) {
       T.mission.cooldowns.orbital = 0;
       return T.commandWheelState();
     });
-    await page.keyboard.down("Tab");
+    await page.keyboard.down("KeyE");
     await page.waitForFunction(() => window.__SF.commandWheelState()?.open,
       null, { timeout: 3000 });
     const unselected = await page.evaluate(() => window.__SF.commandWheelState());
@@ -623,7 +623,7 @@ async function desktopPass(browser) {
     await page.waitForFunction(() => window.__SF.commandWheelState()?.selectedKey === "orbital",
       null, { timeout: 2000 });
     const selected = await page.evaluate(() => window.__SF.commandWheelState());
-    await page.keyboard.up("Tab");
+    await page.keyboard.up("KeyE");
     await page.waitForFunction((seq) => window.__SF.commandWheelState()?.dispatchSeq === seq + 1,
       fresh?.dispatchSeq || 0, { timeout: 4000 });
     const dispatched = await page.evaluate(() => ({
@@ -720,7 +720,7 @@ async function desktopPass(browser) {
     T.mission.cooldowns.orbital = 0;
     return T.commandWheelState();
   });
-  await page.keyboard.down("Tab");
+  await page.keyboard.down("KeyE");
   await page.waitForFunction(() => window.__SF.commandWheelState()?.open,
     null, { timeout: 3000 });
   const lockedWheelOpen = await page.evaluate(() => ({
@@ -730,7 +730,7 @@ async function desktopPass(browser) {
     wheel: window.__SF.commandWheelState(),
   }));
   await page.keyboard.press("Digit1");
-  await page.keyboard.up("Tab");
+  await page.keyboard.up("KeyE");
   await page.waitForFunction((seq) => window.__SF.commandWheelState()?.dispatchSeq === seq + 1,
     lockedWheelBefore?.dispatchSeq || 0, { timeout: 4000 });
   const lockedWheelAfter = await page.evaluate(() => window.__SF.commandWheelState());
@@ -747,7 +747,7 @@ async function desktopPass(browser) {
       && lockedMapOpen.canvas.every((value) => value >= 300)
       && lockedMapOpen.audio === lockedAudioBefore && lockedAudioAfter === lockedAudioBefore,
     JSON.stringify({ lockedAudioBefore, lockedMapOpen, lockedAudioAfter }));
-  check("pointer-locked Tab wheel still opens and dispatches exactly once",
+  check("pointer-locked E wheel still opens and dispatches exactly once",
     lockedWheelOpen.ownsPointerInput && lockedWheelOpen.wheel?.open
       && lockedWheelAfter.dispatchSeq === (lockedWheelBefore?.dispatchSeq || 0) + 1
       && lockedWheelAfter.lastDispatch?.key === "orbital",
@@ -767,7 +767,7 @@ async function desktopPass(browser) {
     if (simulated) pointerLockBoundary = "qa-document-boundary";
   }
   await page.mouse.move(100, 450);
-  await page.keyboard.down("Tab");
+  await page.keyboard.down("KeyE");
   await page.waitForFunction(() => window.__SF.commandWheelState()?.open,
     null, { timeout: 3000 });
   await page.mouse.move(900, 450);
@@ -781,6 +781,7 @@ async function desktopPass(browser) {
   await page.keyboard.press("Escape");
   await page.waitForFunction(() => !window.__SF.commandWheelState()?.open,
     null, { timeout: 2000 });
+  await page.keyboard.up("KeyE");
   if (!pointerLocked) {
     await page.evaluate(() => {
       try { delete document.pointerLockElement; } catch (_) { /* best effort */ }
@@ -822,6 +823,19 @@ async function desktopPass(browser) {
     pauseProbe.runtime?.supported && pauseProbe.runtime?.paused
       && Math.abs(pauseProbe.after - pauseProbe.before) < 1e-6,
     `${pauseProbe.before} -> ${pauseProbe.after}`);
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(() => !window.__SF.menuState()?.open, null, { timeout: 3000 });
+  await page.keyboard.press("Tab");
+  await page.waitForFunction(() => window.__SF.menuState()?.open, null, { timeout: 3000 });
+  const tabMenu = await page.evaluate(() => ({
+    open: window.__SF.menuState()?.open,
+    panel: window.__SF.menuState()?.panel,
+    paused: document.body.classList.contains("rb-escape-menu-open"),
+    focusInside: !!document.getElementById("sf-menu")?.contains(document.activeElement),
+  }));
+  check("Tab opens the native operation menu",
+    tabMenu.open && tabMenu.panel === "operation" && tabMenu.paused && tabMenu.focusInside,
+    JSON.stringify(tabMenu));
   await page.keyboard.press("Tab");
   const trapped = await page.evaluate(() => document.getElementById("sf-menu")
     ?.contains(document.activeElement));
@@ -1381,7 +1395,7 @@ async function compactDesktopPass(browser) {
   check("1280x720 active HUD stays inside the playfield",
     active.offenders.length === 0 && active.scrollOverflow <= 2, JSON.stringify(active));
 
-  await page.keyboard.down("Tab");
+  await page.keyboard.down("KeyE");
   await page.waitForFunction(() => window.__SF.commandWheelState()?.open,
     null, { timeout: 3000 });
   const dial = await page.locator(".sf-command-wheel__dial").boundingBox();
@@ -1395,7 +1409,7 @@ async function compactDesktopPass(browser) {
   const wheel = await layoutAudit(page);
   check("1280x720 command wheel stays inside the playfield",
     wheel.offenders.length === 0 && wheel.scrollOverflow <= 2, JSON.stringify(wheel));
-  await page.keyboard.up("Tab");
+  await page.keyboard.up("KeyE");
   await page.waitForFunction(() => !window.__SF.commandWheelState()?.open,
     null, { timeout: 3000 });
 

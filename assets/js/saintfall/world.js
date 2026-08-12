@@ -1111,28 +1111,58 @@ export async function buildWorld(ctx, onProgress) {
       pois.push({ id: "saint-shell", name: "The Breastplate", x: tx, z: tz });
     }
 
-    /* --- fallen halo arcs --- */
+    /* --- fallen halo arcs ---
+       Sections of the Saint's halo, snapped off and lying in the
+       basin. They are drawn on a circle of radius R about the
+       geometry's origin, which is the centre of that circle and NOT
+       anywhere on the arc - so the piece has to be brought back onto
+       its own origin before anything else is done to it.
+
+       A first pass swept the arc from a random start angle a0 and
+       then did `translate(0, -R, 0)`, which only lands on the origin
+       when a0 happens to be near zero. At the extremes it left the
+       arc up to 110m off its anchor BEFORE the placement rotation,
+       and the rotation then swung that offset into the air. Measured
+       across the four: one hung 55m above the sand beside the head -
+       a bronze rainbow floating over the Saint, visible from the
+       drop - two more hung 9m up, and the fourth was 113m
+       underground. Centre on the real bounds, then let
+       `restOnTerrain` seat what is actually there. */
     for (let i = 0; i < 4; i += 1) {
       const len = rng.range(56, 104);
-      const a0 = rng.range(-0.9, 0.9);
       const outer = [];
       const inner = [];
       const R = len * 1.35;
       const steps = 12;
+      const half = len / R / 2;
       for (let k = 0; k <= steps; k += 1) {
         const t = k / steps;
-        const a = a0 + t * (len / R);
+        const a = lerp(-half, half, t);
         const th = 5.2 * (0.4 + Math.sin(t * Math.PI) * 0.8);
         outer.push([Math.sin(a) * (R + th / 2), Math.cos(a) * (R + th / 2)]);
         inner.push([Math.sin(a) * (R - th / 2), Math.cos(a) * (R - th / 2)]);
       }
       const g = kit.ribbonSolid(outer, inner, rng.range(4, 9));
-      g.translate(0, -R, 0);
+      g.computeBoundingBox();
+      const bb = g.boundingBox;
+      g.translate(
+        -(bb.min.x + bb.max.x) / 2,
+        -(bb.min.y + bb.max.y) / 2,
+        -(bb.min.z + bb.max.z) / 2
+      );
       const ax = d.x + rng.gauss() * 190;
       const az = d.z + rng.gauss() * 190;
-      kit.transform(g, {
-        pos: [ax, H(ax, az) - rng.range(2, 14), az],
-        rot: [rng.range(-0.5, 0.5), rng() * TAU, rng.range(0.4, 1.5) * rng.sign()],
+      /* Roll kept shallow. At up to 1.5rad a 140m-radius ribbon
+         stands on its edge, and a piece of halo standing upright in
+         the sand reads as a sculpture someone installed rather than
+         as something that fell off the sky. These lie down, and the
+         bow in them lifts the middle clear of the ground on its
+         own. */
+      restOnTerrain(g, ax, az, {
+        rot: [rng.range(-0.3, 0.3), rng() * TAU, rng.range(0.18, 0.62) * rng.sign()],
+        embed: rng.range(1.2, 3.6),
+        quantile: 0.55,
+        maxGap: 2.4,
       });
       // Softened from a straight up-facing term. At `0.24 + up*0.48`
       // every arc came out gold on top and near-black underneath -
@@ -1246,6 +1276,10 @@ export async function buildWorld(ctx, onProgress) {
     const NAVE_W = 44;
     const WALL_H = 34;
     const AISLE_W = 13;
+    /* Where the north wall was breached, off the building's axis.
+       The wall reads it, the rubble fan reads it and the chandelier
+       that came down reads it, so it is one number. */
+    const BREACH_X = -6.0;
 
     /* The Cathedral's masonry. Lifted hard from the first pass,
        which bottomed out at #241c22: with the sun in the west, the
@@ -1268,8 +1302,19 @@ export async function buildWorld(ctx, onProgress) {
         for (let b = 0; b < bays; b += 1) {
           const z0 = -NAVE_L / 2 + (b / bays) * NAVE_L;
           const bl = NAVE_L / bays;
-          // North end is blown open: skip the last bay's upper wall.
-          const ruined = b >= bays - 2;
+          /* North end is blown open: the first two bays keep only a
+             stub of their upper wall.
+
+             b counts NORTH to south - b=0 is z -66 - so `b >= bays-2`
+             was knocking the top off the two bays hard against the
+             west front, under the surviving roof and behind the
+             towers where nothing can see them, and leaving the
+             breached end standing at full height with its clerestory
+             intact. Everything else in the district already agrees
+             about which end was hit: the roof covers the southern two
+             thirds, the torn rafters reach north over the open bays,
+             and the rose is in the south front. */
+          const ruined = b < 2;
           const hh = ruined ? WALL_H * rng.range(0.28, 0.55) : WALL_H;
           const w = kit.slab(2.6, hh, bl * 0.98, 0.22);
           w.translate(wx, 0, z0 + bl / 2);
@@ -1650,13 +1695,278 @@ export async function buildWorld(ctx, onProgress) {
       }
     }
 
+    /* --- the north end: what is left of the chancel wall ---
+       The nave had no north wall at all. Everything else in the
+       district says the building was breached at this end - the roof
+       stops, the rafters reach out over nothing, the vault is
+       stripped back to its ribs - but the wall those events happened
+       TO was never built, so the nave ended in a clean rectangular
+       opening and the whole thing read as an unfinished hall rather
+       than as a ruin. A hole is only legible as damage when there is
+       an edge around it.
+
+       Built as vertical strips rather than as a wall with a hole cut
+       in it. Masonry does not fail along a drawn outline: it fails
+       course by course, and what is left is a ragged crest where
+       every strip ended at a different stone. Strips also give the
+       breach a real jamb - you can see the wall's thickness through
+       it, which a single-sided panel can never do.
+
+       The middle is taken to the ground on purpose. The nave has to
+       keep a way out through its own wound, or the fix to the
+       silhouette becomes a wall across a route the player already
+       uses. */
+    {
+      const parts = [];
+      const HW = 38;                                  // out past the aisle walls
+      const DN = 4.2;                                 // wall thickness
+      const zN = -NAVE_L / 2 - DN / 2 + 1.0;          // butted to the flank walls
+      /* Off-centre on purpose: a breach centred exactly on the
+         middle of a symmetrical wall reads as an architectural
+         feature rather than as damage. */
+      const breachX = BREACH_X;
+      const breachR = 16.5;
+
+      /* Strips of varying width, walked across the span rather than
+         stepped at a fixed pitch. Equal widths give the crest a
+         picket rhythm you read as a repeat before you read it as
+         masonry; the depth jitter is what stops the inner and outer
+         faces from being two flat planes. */
+      let cursor = -HW;
+      while (cursor < HW - 0.4) {
+        const sw = Math.min(rng.range(1.7, 4.3), HW - cursor);
+        const x = cursor + sw / 2;
+        cursor += sw;
+        const u = Math.abs(x) / HW;
+        /* What survived. A wall is thickest and best buttressed at
+           its corners and thinnest in the middle of its span, so
+           the corners are what stand. */
+        let h = 5.5 + Math.pow(u, 2.3) * 26
+          + Math.sin(x * 0.43) * 2.1 + rng.range(-2.0, 2.0);
+        const dd = Math.abs(x - breachX) / breachR;
+        if (dd < 1) {
+          h = Math.min(h, 1.0 + Math.pow(dd, 1.8) * 17 - rng.range(0, 2.4));
+        }
+        if (h < 0.6) continue;
+        const dn = DN * rng.range(0.82, 1.14);
+        // Started below the pad so the base is never exposed by the
+        // paving that sits 4cm proud of it.
+        const w = kit.slab(sw * 1.06, h + 0.7, dn, 0.16);
+        w.translate(x, -0.7, zN + rng.jit(DN * 0.16));
+        parts.push(w);
+        // One capping stone per strip, tipped off true: a broken
+        // crest is a line of individual blocks, not a saw cut.
+        if (h > 1.6 && rng.chance(0.72)) {
+          const cap = kit.slab(
+            sw * rng.range(0.45, 0.92), rng.range(0.5, 1.4),
+            dn * rng.range(0.5, 0.92), 0.1
+          );
+          cap.rotateX(rng.jit(0.18));
+          cap.rotateZ(rng.jit(0.14));
+          cap.rotateY(rng.jit(0.45));
+          cap.translate(x + rng.jit(sw * 0.3), h - 0.1, zN + rng.jit(DN * 0.22));
+          parts.push(cap);
+        }
+        /* A surviving length of string course. One strong horizontal
+           is what says the crest above it used to be a designed wall
+           and not a pile. */
+        if (h > 9 && rng.chance(0.75)) {
+          parts.push(kit.slab(sw * 1.18, 0.8, dn + 0.9, 0.12)
+            .translate(x, 8.2, zN));
+        }
+      }
+
+      /* Corner jambs. Two broken teeth, and the tallest things left
+         at this end - they are what stops the crest from reading as
+         a single smooth hill of stone. */
+      for (const s of [-1, 1]) {
+        let y = 0;
+        for (const [sh, r] of [[13.5, 4.6], [8.5, 3.9], [4.5, 3.2]]) {
+          parts.push(kit.slab(r * 2, sh, r * 2, 0.3)
+            .translate(s * (HW - r + 0.8), y, zN - 0.4));
+          y += sh;
+        }
+        // The snapped top, sheared on a slant.
+        const tip = kit.slab(5.4, 3.6, 5.4, 0.24);
+        tip.rotateX(rng.range(0.12, 0.3) * s);
+        tip.rotateZ(rng.range(-0.26, -0.1) * s);
+        tip.translate(s * (HW - 3.4), y - 0.6, zN - 0.4);
+        parts.push(tip);
+      }
+
+      /* The great east window, snapped off at the springing. Two
+         curved stubs reaching in toward each other and stopping in
+         mid-air is the single clearest statement that something
+         used to be there. */
+      {
+        const SILL = 9.5;
+        const WR = 16;
+        for (const s of [-1, 1]) {
+          const pts = [];
+          const cut = rng.range(0.34, 0.46);
+          for (let k = 0; k <= 6; k += 1) {
+            const t = (k / 6) * cut;
+            const a = t * Math.PI * 0.78;
+            pts.push([
+              s * (WR - Math.sin(a) * WR * 0.62),
+              SILL + Math.sin(a) * 20 + t * 7,
+              zN + DN * 0.16,
+            ]);
+          }
+          parts.push(kit.tube(pts, 1.05, 5));
+          // The jamb below it, still standing on the sill.
+          parts.push(kit.slab(2.2, SILL, DN * 0.8, 0.16)
+            .translate(s * WR, 0, zN + DN * 0.1));
+        }
+        // A mullion, snapped at chest height above the sill.
+        parts.push(kit.slab(1.5, SILL + rng.range(3, 7), DN * 0.62, 0.14)
+          .translate(-1.5, 0, zN + DN * 0.12));
+      }
+
+      const g = kit.merge(parts);
+      kit.transform(g, { pos: [cx, plazaY, cz] });
+      paintH(g, stoneRamp, {
+        min: plazaY, max: plazaY + WALL_H, normalWeight: 0.46,
+        jitter: 0.15, noise: 0.26,
+      });
+      batch.add("cathedral", "stone", g);
+
+      /* --- what came down ---
+         Rubble is the other half of the statement. A clean-edged
+         hole with bare floor under it is a doorway; the same hole
+         with a talus of its own wall lying in front of it is
+         damage. Heaviest just inside the breach, thinning south
+         down the nave and north out onto the plateau. */
+      {
+        const rocks = [];
+        /* Inside the nave the walking surface is the flagstone
+           floor, 4cm proud of the pad `restOnTerrain` measures, so
+           interior debris is seated a touch HIGH to sit on the
+           paving instead of half-sunk through it. */
+        const seat = (geo, rx, rz, inside, opts) => restOnTerrain(geo, rx, rz, {
+          ...opts,
+          embed: opts.embed - (inside ? 0.06 : 0),
+        });
+        /* Inside, a piece of rubble is either a BLOCK you walk round
+           or a CHIP lying flush with the paving - never the
+           ankle-height lump in between, and never TILTED.
+
+           Neither rule is an aesthetic preference. The walking
+           surface in the nave is the floor, and collision discards
+           anything under 75cm as too small to stop a soldier, so a
+           20cm stone in here is one the player's boots pass straight
+           through - the same defect the paving itself was fixed for,
+           and `saintfall-collision-audit.mjs` fails the nave on it.
+           Tilt is the same defect wearing a different hat: whatever
+           its height, a tipped slab crosses the floor plane
+           somewhere, and there is always a wedge of it standing at
+           exactly boot height. Square-set blocks clear 75cm on their
+           vertical sides, so collision stores them and the player
+           walks round them instead.
+
+           Cut stone falls as cut stone, so blockiness is the right
+           answer here anyway. Outside the wall there is no floor to
+           be flush with and no such band. */
+        const INTERIOR_MIN_BLOCK = 0.9;
+        for (let i = 0; i < 96; i += 1) {
+          const inside = rng.chance(0.62);
+          // Spread along the breach mouth, fanning away from it.
+          const t = Math.pow(rng(), 1.6);
+          const spread = 9 + t * 22;
+          const rx = cx + breachX + rng.gauss() * spread * 0.5;
+          const throwZ = t * (inside ? 34 : 22);
+          const rz = cz - NAVE_L / 2 + (inside ? throwZ : -throwZ - 3);
+          const reach = inside ? 33 : HW + 16;
+          if (Math.abs(rx - cx) > reach) continue;
+          if (inside && rng.chance(0.42)) {
+            // A chip: spalled facing, laid flat like the paving.
+            const ch = rng.range(0.10, 0.18);
+            const chip = kit.slab(rng.range(0.9, 2.6), ch, rng.range(0.8, 2.2), 0.05);
+            placeOnTerrain(chip, rx, rz, {
+              yaw: rng() * TAU, sample: 1.4, dy: -ch + 0.05, maxTilt: 0.2,
+            });
+            rocks.push(chip);
+            continue;
+          }
+          const s = rng.range(0.7, 2.6) * (1 - t * 0.45);
+          const dim = (k) => (inside ? Math.max(INTERIOR_MIN_BLOCK, s * k) : s * k);
+          const block = kit.slab(
+            dim(rng.range(1.0, 2.2)), dim(rng.range(0.7, 1.3)),
+            dim(rng.range(1.0, 2.0)), 0.12
+          );
+          seat(block, rx, rz, inside, {
+            rot: inside
+              ? [0, rng() * TAU, 0]
+              : [rng.jit(0.55), rng() * TAU, rng.jit(0.55)],
+            embed: inside ? 0.02 : rng.range(0.05, 0.35),
+            maxGap: 0.12,
+          });
+          rocks.push(block);
+        }
+        /* A handful of pieces big enough to read as WALL rather than
+           as scree - a course of ashlar still stuck together, a
+           length of string course, the head of the window's arch. */
+        for (let i = 0; i < 9; i += 1) {
+          const t = rng();
+          const inside = rng.chance(0.6);
+          const rx = cx + breachX + rng.gauss() * 13;
+          const rz = cz - NAVE_L / 2 + (inside ? 4 + t * 26 : -6 - t * 18);
+          const chunk = kit.merge([
+            kit.slab(rng.range(5, 11), rng.range(1.6, 3.0), rng.range(3, 5.5), 0.2),
+            kit.slab(rng.range(3, 7), rng.range(1.2, 2.4), rng.range(2.4, 4.4), 0.18)
+              .translate(rng.jit(2.2), rng.range(1.4, 2.4), rng.jit(1.6)),
+          ]);
+          seat(chunk, rx, rz, inside, {
+            rot: inside
+              ? [0, rng() * TAU, 0]
+              : [rng.jit(0.42), rng() * TAU, rng.jit(0.42)],
+            embed: inside ? 0.05 : rng.range(0.2, 0.7),
+            maxGap: 0.2,
+          });
+          rocks.push(chunk);
+        }
+        /* Two rib sections that came down with the vault. They went
+           OUT with the wall rather than in - a 1.2m tube lying on a
+           paved floor is a ramp from nothing up to knee height, and
+           the nave has no walkable surface between those two. On
+           sand it is just a fallen rib. */
+        for (let i = 0; i < 2; i += 1) {
+          const len = rng.range(15, 24);
+          const pts = [];
+          for (let k = 0; k <= 5; k += 1) {
+            const t = k / 5;
+            pts.push([lerp(-len / 2, len / 2, t), Math.sin(t * Math.PI) * 2.2, 0]);
+          }
+          const rib = kit.tube(pts, 0.62, 5);
+          const rx = cx + breachX + rng.jit(15);
+          const rz = cz - NAVE_L / 2 - rng.range(4, 22);
+          seat(rib, rx, rz, false, {
+            rot: [rng.jit(0.3), rng() * TAU, rng.range(-0.5, 0.5)],
+            embed: 0.3, maxGap: 0.35,
+          });
+          rocks.push(rib);
+        }
+        const rg = kit.merge(rocks);
+        paintH(rg, stoneRamp, {
+          min: plazaY - 1, max: plazaY + 5, normalWeight: 0.55,
+          jitter: 0.18, noise: 0.32,
+        });
+        batch.add("cathedral", "stone", rg);
+        pois.push({
+          id: "cathedral-breach", name: "The Breach",
+          x: cx + breachX, z: cz - NAVE_L / 2 - 6,
+        });
+      }
+    }
+
     /* --- flying buttresses --- */
     {
       const parts = [];
       for (const side of [-1, 1]) {
         for (let b = 0; b < 8; b += 1) {
           const z = -NAVE_L / 2 + 10 + (b / 7) * (NAVE_L - 26);
-          const ruin = b >= 6 ? rng.range(0.35, 0.8) : 0;
+          // Counted from the north, with the rest of the ruin.
+          const ruin = b <= 1 ? rng.range(0.35, 0.8) : 0;
           const fb = kit.flyingButtress({
             reach: AISLE_W + 5.5,
             pierH: 17,
@@ -1729,12 +2039,21 @@ export async function buildWorld(ctx, onProgress) {
           parts.push(col);
         }
       }
-      // Transverse vault ribs. The roof is gone over the north
-      // third, so the ribs there stand open against the sky - the
-      // single best silhouette in the district.
+      /* Transverse vault ribs. The roof is gone over the north
+         third, so the ribs there stand open against the sky - the
+         single best silhouette in the district.
+
+         The test was `b > bays * 0.62`, and b counts from the NORTH:
+         b=0 is z -66, b=9 is z +66. So it was stripping the vault
+         out of the southern bays - the ones the surviving roof
+         covers - and roofing the breached end with an intact stone
+         ceiling. From outside the north end you were looking into a
+         finished building; from inside, the bare ribs were the ones
+         with a roof over them and could never be seen against
+         anything. Counted from the breach instead. */
       for (let b = 0; b <= bays; b += 1) {
         const z = -NAVE_L / 2 + (b / bays) * NAVE_L;
-        const open = b > bays * 0.62;
+        const open = b < bays * 0.38;
         const span = NAVE_W - 5.2;
         const pts = [];
         const steps = 9;
@@ -1791,13 +2110,37 @@ export async function buildWorld(ctx, onProgress) {
     /* --- the plaza --- */
     {
       const parts = [];
-      // Flagstone apron.
+      /* Flagstone apron.
+
+         Two rules here, and both of them are about the depth buffer
+         rather than about paving.
+
+         The apron is scattered over a 118m disc centred 34m north of
+         the front, which reaches 84m PAST the doors - so about forty
+         of these slabs were landing inside the nave and under the
+         front wall itself. The plaza sits on a dead-level pad, the
+         apron puts its top face 4cm above it and so does the nave
+         paving, which means every one of those slabs was exactly
+         coplanar with the floor it landed on. They fought for the
+         depth buffer and, being painted from a much darker ramp,
+         resolved as ragged dark blotches torn across the nave.
+         Keeping them out of the building's own footprint is the
+         fix.
+
+         The same coplanarity applies to the apron against ITSELF -
+         220 slabs on a level pad, all at +4cm, overlapping wherever
+         the scatter puts two together. A few centimetres of spread
+         costs nothing at a walking pace and means no two slabs ever
+         share a plane. */
+      const FOOTPRINT_HALF_W = NAVE_W / 2 + AISLE_W + 8;   // 43, clears the buttresses
+      const FOOTPRINT_Z = NAVE_L / 2 + 8;                  // clears the tower plinths
       for (let i = 0; i < 220; i += 1) {
         const a = rng() * TAU;
         const r = 20 + Math.pow(rng(), 0.5) * 108;
         const px = Math.cos(a) * r;
         const pz = Math.sin(a) * r + NAVE_L / 2 + 34;
         if (Math.hypot(px, pz - NAVE_L / 2 - 34) > 118) continue;
+        if (Math.abs(px) < FOOTPRINT_HALF_W && pz < FOOTPRINT_Z) continue;
         const sw = rng.range(3.4, 6.2);
         const sh = rng.range(0.25, 0.45);
         const sd = rng.range(3.4, 6.2);
@@ -1807,7 +2150,7 @@ export async function buildWorld(ctx, onProgress) {
           sample: Math.max(sw, sd) * 0.45,
           // Four centimetres of relief reads as paving without
           // putting an ankle-height non-walkable slab through boots.
-          dy: -sh + 0.04,
+          dy: -sh + rng.range(0.015, 0.075),
           maxTilt: 0.45,
         });
         parts.push(s);
@@ -1995,6 +2338,206 @@ export async function buildWorld(ctx, onProgress) {
         geo: ban, district: "cathedral",
         colour: rng.pick([PALETTE.oxblood, PALETTE.indigo, PALETTE.crimson]),
         accent: PALETTE.gold, wind: 0.35,
+      });
+    }
+
+    /* --- corona chandeliers ---
+       The nave is 44m wide and 34m to the springing, and until now
+       there was nothing at all in the volume between the floor and
+       the vault. Everything was either underfoot or overhead, so the
+       eye crossed a 30m gap of empty air in one jump and the space
+       read as a corridor with a high ceiling rather than as a room
+       with height. Something hung halfway up is what gives the
+       height a middle to be measured against - and a corona is what
+       would be hanging there.
+
+       Chains are structural here, not decoration: the eye follows
+       them up and finds the vault. A corona with no chain is a ring
+       floating in a church. */
+    {
+      const iron = [];
+      const flames = [];
+
+      /** One corona. `y` is the ring's height above the plaza. */
+      const corona = (x, y, z, opts = {}) => {
+        const R = opts.r || 4.6;
+        const tiers = opts.tiers === undefined ? 2 : opts.tiers;
+        const lit = opts.lit !== false;
+        const parts = [];
+        const flame = [];
+        const hoop = (rr, hy, band) => {
+          parts.push(kit.ringSolid([
+            { y: hy - band, r: rr, sides: 16 },
+            { y: hy + band, r: rr, sides: 16 },
+          ], { capTop: false, capBottom: false }));
+        };
+        const tier = (rr, hy, count) => {
+          hoop(rr, hy, 0.34);
+          for (let i = 0; i < count; i += 1) {
+            const a = (i / count) * TAU;
+            // Pricket and candle, as one iron spike at this scale.
+            const c = kit.prism({ h: 1.5, rBottom: 0.20, rTop: 0.11, sides: 5 });
+            c.translate(Math.cos(a) * rr, hy + 0.3, Math.sin(a) * rr);
+            parts.push(c);
+            if (lit) {
+              const f = kit.prism({ h: 0.85, rBottom: 0.21, rTop: 0.02, sides: 5 });
+              f.translate(Math.cos(a) * rr, hy + 1.85, Math.sin(a) * rr);
+              flame.push(f);
+            }
+          }
+          // Spokes back to the hub.
+          for (let i = 0; i < 4; i += 1) {
+            const a = (i / 4) * TAU + 0.4;
+            const sp = kit.slab(rr, 0.16, 0.30, 0.03);
+            sp.translate(rr / 2, 0, 0);
+            sp.rotateY(-a);
+            sp.translate(0, hy, 0);
+            parts.push(sp);
+          }
+        };
+        tier(R, 0, Math.round(R * 3));
+        if (tiers > 1) tier(R * 0.60, 1.9, Math.round(R * 1.9));
+        // Hub and the collar the stays gather to.
+        parts.push(kit.prism({ h: 1.1, rBottom: 0.55, rTop: 0.40, sides: 6 })
+          .translate(0, -0.5, 0));
+        const collarY = tiers > 1 ? 4.4 : 3.0;
+        parts.push(kit.prism({ h: 0.7, rBottom: 0.45, rTop: 0.34, sides: 6 })
+          .translate(0, collarY, 0));
+        for (let i = 0; i < 4; i += 1) {
+          const a = (i / 4) * TAU + 0.4;
+          parts.push(kit.tube([
+            [Math.cos(a) * R, 0.1, Math.sin(a) * R],
+            [Math.cos(a) * R * 0.45, collarY * 0.55, Math.sin(a) * R * 0.45],
+            [0, collarY, 0],
+          ], 0.09, 4));
+        }
+
+        const g = kit.merge(parts);
+        const fg = flame.length ? kit.merge(flame) : null;
+        if (opts.rot) {
+          kit.transform(g, { rot: opts.rot });
+          if (fg) kit.transform(fg, { rot: opts.rot });
+        }
+        g.translate(x, y, z);
+        if (fg) fg.translate(x, y, z);
+
+        // The chain up to the vault. Snapped ones keep a stub.
+        if (opts.chain !== false) {
+          const top = opts.chainTop === undefined ? plazaY + 33 : opts.chainTop;
+          const cxTop = opts.chainX === undefined ? x : opts.chainX;
+          iron.push(kit.tube([
+            [x, y + collarY, z], [cxTop, top, opts.chainZ === undefined ? z : opts.chainZ],
+          ], 0.10, 4));
+        }
+        iron.push(g);
+        if (fg) flames.push(fg);
+      };
+
+      /* Under the surviving vault: three lit, evenly spaced down
+         the bays so the row itself reads as perspective.
+
+         Hung at 10m, not the 16.5m they started at. The nave's
+         authored review pose stands at eye height at the north end
+         and looks back at the rose, and the rose is only visible
+         through a narrow slot between the vault crown and the
+         gable - a sightline that climbs at about 0.31. At 16.5 the
+         nearest corona sat dead on that line and put a ring of
+         candles across the one window the frame exists for. At 10
+         the row passes under it and the rose reads. Ten metres is
+         also where a corona belongs: they are lit by hand off a
+         ladder, and one hung five storeys up is a light nobody
+         could ever reach. */
+      for (let i = 0; i < 3; i += 1) {
+        const z = cz + 6 + i * 20;
+        corona(cx, plazaY + 9, z, { r: 4.6, lit: true });
+      }
+
+      /* At the edge of the damage, hanging off one stay. Two of its
+         four chains are gone, so it hangs 20 degrees out of true and
+         its candles are long out - the first thing that tells you,
+         from inside, which way the wall went. */
+      corona(cx + 3.5, plazaY + 12.5, cz - 26, {
+        r: 4.2, lit: false, rot: [0.34, 0.5, -0.12],
+        chainX: cx - 1.4, chainZ: cz - 27, chainTop: plazaY + 32,
+      });
+
+      /* And one that did not hold, lying in the rubble under the
+         breach with its ring buckled. */
+      {
+        const cxr = cx + BREACH_X - 4;
+        const czr = cz - NAVE_L / 2 + 15;
+        const wreck = [];
+        const R = 4.4;
+        wreck.push(kit.ringSolid([
+          { y: -0.34, r: R, sides: 16, jitter: 0.22, seed: 0x3c1 },
+          { y: 0.34, r: R, sides: 16, jitter: 0.22, seed: 0x3c2 },
+        ], { capTop: false, capBottom: false }));
+        for (let i = 0; i < 13; i += 1) {
+          const a = (i / 13) * TAU;
+          if (rng.chance(0.3)) continue;        // snapped off in the fall
+          const c = kit.prism({ h: 1.3, rBottom: 0.19, rTop: 0.10, sides: 5 });
+          c.rotateZ(rng.jit(0.5));
+          c.rotateX(rng.jit(0.5));
+          c.translate(Math.cos(a) * R, 0.3, Math.sin(a) * R);
+          wreck.push(c);
+        }
+        for (let i = 0; i < 4; i += 1) {
+          const a = (i / 4) * TAU + 0.4;
+          const sp = kit.slab(R, 0.16, 0.30, 0.03);
+          sp.translate(R / 2, 0, 0);
+          sp.rotateY(-a);
+          wreck.push(sp);
+        }
+        wreck.push(kit.prism({ h: 1.0, rBottom: 0.55, rTop: 0.40, sides: 6 })
+          .translate(0, -0.5, 0));
+        // The chain it came down with, coiled where it landed.
+        const coil = [];
+        for (let k = 0; k <= 9; k += 1) {
+          const t = k / 9;
+          coil.push([
+            Math.cos(t * 9.2) * (1.4 + t * 3.6),
+            0.25 + Math.sin(t * 5.1) * 0.2,
+            Math.sin(t * 9.2) * (1.4 + t * 3.6),
+          ]);
+        }
+        wreck.push(kit.tube(coil, 0.10, 4));
+        const wg = kit.merge(wreck);
+        // Scale flat: a ring that fell 16m onto stone does not stay
+        // round, and a perfect hoop lying in rubble reads as a prop
+        // that was placed there.
+        wg.scale(1, 0.72, 1);
+        restOnTerrain(wg, cxr, czr, {
+          rot: [0.13, 1.1, 0.08], embed: 0.02, maxGap: 0.3,
+        });
+        iron.push(wg);
+      }
+
+      const ig = kit.merge(iron);
+      paintH(ig, makeRamp([
+        [0, "#231a18"], [0.45, "#3b2c25"], [0.8, "#5a4436"], [1, "#7d6146"],
+      ]), { min: plazaY, max: plazaY + 34, normalWeight: 0.5, jitter: 0.16 });
+      batch.add("cathedral", "rust", ig);
+
+      if (flames.length) {
+        const fg = kit.merge(flames);
+        flat(fg, "#ffb45e", 0.22);
+        batch.add("cathedral", "emissive", fg,
+          { castShadow: false, receiveShadow: false });
+      }
+
+      /* One real light, on the middle corona. The nave's only other
+         light sources are the clerestory shafts and the rose, and
+         both of those are DIRECTIONAL - they wash two stripes of
+         floor and leave the columns, the vault springing and
+         everything at head height unlit. A warm point at 16m is what
+         the candles are supposed to be doing, and it is the
+         difference between a lit interior and a lit floor.
+
+         This takes the level to the twelfth and last light. */
+      lights.push({
+        x: cx, y: plazaY + 10.5, z: cz + 26,
+        colour: "#ffb264", intensity: 190, distance: 120,
+        kind: "brazier", flicker: 0.35,
       });
     }
   }

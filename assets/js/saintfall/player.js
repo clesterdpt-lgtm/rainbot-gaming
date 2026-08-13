@@ -2184,6 +2184,10 @@ export async function createPlayer(ctx, canvas) {
     heavePhase: 0,
     heaveFreq: 16,
     heaveDecay: 6.5,
+    // A hazard's ground-speed multiplier and how long it has left to
+    // run - see `applySlow` below.
+    slowFactor: 1,
+    slowFor: 0,
     camPitch: -0.10,
     camDist: 5.2,
     /* Dying, and how far through the fall. `deathPose` is read by the
@@ -3559,9 +3563,17 @@ export async function createPlayer(ctx, canvas) {
        half-tilted thumbstick produce a half-speed walk instead of
        snapping straight to full speed. Boost owns its own envelope. */
     const inputAmount = boostMode ? 1 : clamp01(mag);
+    /* A hazard's own ground-speed penalty, decaying on its own clock
+       rather than trusting whatever set it to clear it again - a
+       boss that dies mid-effect must not leave the player permanently
+       at quarter speed because nothing was left to call clearSlow(). */
+    if (state.slowFor > 0) {
+      state.slowFor = Math.max(0, state.slowFor - dt);
+      if (state.slowFor <= 0) state.slowFactor = 1;
+    }
     const wanted = slamMode || (shieldMode && shieldState?.movementLocked) ? 0
       : (mag > 0.01 || boostMode)
-        ? target * lerp(1, ADS_SPEED, sighted) * inputAmount : 0;
+        ? target * lerp(1, ADS_SPEED, sighted) * inputAmount * state.slowFactor : 0;
     if (shieldMode && shieldState?.movementLocked) {
       state.speed = 0;
     } else if (boostMode) {
@@ -5695,11 +5707,37 @@ export async function createPlayer(ctx, canvas) {
     return true;
   }
 
+  /**
+   * A ground-speed penalty from a hazard - webbing, in practice, but
+   * written against nothing more specific than "how slow" and "how
+   * long" so a second hazard can reuse it rather than growing a
+   * second multiplier field.
+   *
+   * Stacks toward whichever is stronger and refreshes toward whichever
+   * timer is longer, rather than overwriting either - a second web
+   * landing while one is already active must not read as a reprieve.
+   */
+  function applySlow(factor, seconds) {
+    const f = Number.isFinite(factor) ? clamp(factor, 0.05, 1) : 1;
+    const s = Math.max(0, Number(seconds) || 0);
+    if (s <= 0) return false;
+    state.slowFactor = state.slowFor > 0 ? Math.min(state.slowFactor, f) : f;
+    state.slowFor = Math.max(state.slowFor, s);
+    return true;
+  }
+
+  function clearSlow() {
+    state.slowFactor = 1;
+    state.slowFor = 0;
+  }
+
   return {
     state,
     punch,
     pulseDoctrine,
     doctrineKick,
+    applySlow,
+    clearSlow,
     carryElbowPole(i) { return CARRY_ELBOW_POLE[i]; },
     /* The palm roll, readable and writable, because it is the one
        part of the hold no metric can grade - see PALM_ROLL. */

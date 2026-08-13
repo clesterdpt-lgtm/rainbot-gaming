@@ -3364,6 +3364,73 @@ export function installQa(ctx, api) {
     },
     setToxin(v) { return (api.coulter || ctx.coulter)?.setToxin?.(v) ?? null; },
     clearVenom() { return (api.coulter || ctx.coulter)?.clearHazards?.() ?? null; },
+    /* ------------------------------------------------------------
+       THE DISTAFF
+
+       Proximity-driven and district-bound rather than wave-driven, so
+       the harness problem is different from the Burrower's: there is
+       no wave to launch, only a lair to walk into. These hooks put
+       the player in range without a real approach, force the phase a
+       check wants to assert about, and read the same per-leg state
+       combat.js's hit tests do - so a check can assert "leg 3 is
+       broken" against the exact array a shot would consult.
+       ------------------------------------------------------------ */
+    distaffState: () => (api.distaff)?.status?.() || null,
+    /** Teleport the player to (roughly) the lair, optionally already
+     *  inside or outside aggro range. Does not force aggro itself -
+     *  `advanceToDistaffPhase` steps the sim to let proximity do it,
+     *  which is what a check about the TRIGGER actually wants. */
+    teleportToDistaff(offset = 30) {
+      const d = api.distaff?.status?.();
+      if (!d) return null;
+      hook._teleportRaw(d.x - offset, d.z, 0);
+      hook.setBodyHeading?.(0);
+      return { x: d.x - offset, z: d.z };
+    },
+    forceDistaffPhase(phase, timer) {
+      return api.distaff?.forcePhase?.(phase, timer) ?? null;
+    },
+    /** Run the simulation until the Distaff reaches `phase`, or give
+     *  up. Returns the seconds it took, or -1. */
+    advanceToDistaffPhase(phase, limit = 40, dt = 1 / 60) {
+      const target = String(phase);
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const d = api.distaff?.status?.();
+        if (!d) return -1;
+        if (d.phase === target) return Number(elapsed.toFixed(3));
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    /** Fully drain one leg through the production damage path, not a
+     *  shortcut around it - `combat.damageLeg` is the same function a
+     *  shot or a swing calls. */
+    breakDistaffLeg(index) {
+      const inst = api.enemies.live.find((e) => e.key === "distaff");
+      if (!inst || !inst.legHp) return null;
+      return api.combat.damageLeg(inst, index, inst.legHp[index] + 1, {
+        x: inst.x, y: inst.y, z: inst.z,
+      });
+    },
+    webPools() {
+      const d = api.distaff;
+      if (!d) return [];
+      return (d.group?.children || [])
+        .filter((child) => child.name?.startsWith("sf-web-patch") && child.visible)
+        .map((child) => ({
+          x: Number(child.position.x.toFixed(2)),
+          y: Number(child.position.y.toFixed(2)),
+          z: Number(child.position.z.toFixed(2)),
+          fade: Number((child.material.uniforms.uFade.value || 0).toFixed(3)),
+        }));
+    },
+    spillWeb(x, z, radius, seconds) {
+      const patch = api.distaff?.spillPatch?.(x, z, radius, seconds);
+      return patch ? { x: patch.x, y: patch.y, z: patch.z, radius: patch.radius } : null;
+    },
+    clearWebs() { return api.distaff?.clearHazards?.() ?? null; },
     minimapState() {
       const semantic = api.hud?.minimapState?.() || null;
       const map = document.getElementById("sf-minimap");
@@ -3584,6 +3651,7 @@ export function installQa(ctx, api) {
     get figure() { return api.player.figure; },
     get mission() { return api.mission; },
     get breaches() { return api.breaches; },
+    get distaff() { return api.distaff; },
     get collide() { return api.collide; },
     get gameUi() { return api.gameUi || ctx.gameUi || null; },
     get saves() { return api.saves || ctx.saves || null; },

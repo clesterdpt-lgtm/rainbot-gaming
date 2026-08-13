@@ -245,14 +245,28 @@ export function buildHud(ctx, host) {
     ctx.breaches.bus.on("warning", (event) => showBreachAlert(
       `CYCLE ${event.cycle} · BREACH ${event.wave} / ${event.waveCount}`,
       event.name.toUpperCase(), 3.4));
+    /* Named off the wave the event actually belongs to rather than a
+       fixed string - this used to read "MATRIARCH ASCENDANT" for
+       every boss wave including the Coulter's, because the string was
+       written once for the first boss the game had and never revisited
+       when the second one arrived. */
     ctx.breaches.bus.on("bossWarning", (event) => showBreachAlert(
-      `CYCLE ${event.cycle} · APEX SIGNATURE`, "MATRIARCH ASCENDANT", 4.8, true));
+      `CYCLE ${event.cycle} · APEX SIGNATURE`,
+      `${(event.name || "APEX PREDATOR").toUpperCase()} ASCENDANT`, 4.8, true));
     ctx.breaches.bus.on("opened", (event) => showBreachAlert(
       "BREACH OPEN", `${event.remaining} HOSTILES SURFACING`, 2.5, !!event.boss));
     ctx.breaches.bus.on("cleared", () => showBreachAlert(
       "FIELD UPDATE", "BREACH SEALED", 2.6));
     ctx.breaches.bus.on("complete", (event) => showBreachAlert(
       "BLOOM RECOILING", `BROOD CYCLE ${event.cyclesCleared} BROKEN`, 5.2));
+  }
+  if (ctx.distaff?.bus) {
+    ctx.distaff.bus.on("aggro", () => showBreachAlert(
+      "THE GLASS SCAR · APEX SIGNATURE", "THE DISTAFF AWAKENS", 4.8, true));
+    ctx.distaff.bus.on("collapse", () => showBreachAlert(
+      "THE DISTAFF", "ITS FOOTING IS BROKEN", 3.2, true));
+    ctx.distaff.bus.on("defeated", () => showBreachAlert(
+      "THE GLASS SCAR", "THE DISTAFF IS UNWOUND", 5.2));
   }
 
   /* --- compass ticks --- */
@@ -757,7 +771,31 @@ export function buildHud(ctx, host) {
     return semantic;
   }
 
+  /* The Distaff is not a breach wave and carries a different shape -
+     see distaff.js's `status()` - so it is reformatted into the same
+     four fields the strip already renders rather than teaching the
+     strip two shapes. Takes priority over an ordinary Bloom breach
+     when both happen to be live at once: whichever the player is
+     standing next to is the more urgent thing on screen. */
+  function updateDistaffReadout() {
+    const d = ctx.distaff?.status?.();
+    if (!d || d.phase === "dormant" || d.dead) return false;
+    minimapEl.dataset.event = "1";
+    mapEventEl.dataset.phase = d.phase;
+    eventKickerEl.textContent = "THE GLASS SCAR · APEX SIGNATURE";
+    eventNameEl.textContent = "THE DISTAFF";
+    eventNameEl.title = eventNameEl.textContent;
+    eventSubEl.textContent = d.collapsed
+      ? "Collapsed - the body is exposed"
+      : `${d.legsBroken} / ${d.legCount} legs broken`;
+    eventCountEl.textContent = d.collapsed
+      ? "EXPOSED" : `${d.health} HP`;
+    eventFillEl.style.width = `${clamp01(1 - d.health / Math.max(1, d.maxHealth)) * 100}%`;
+    return true;
+  }
+
   function updateBreachReadout() {
+    if (updateDistaffReadout()) return;
     const event = ctx.breaches?.status?.();
     if (!event) { minimapEl.dataset.event = "0"; return; }
     mapEventEl.dataset.phase = event.phase;

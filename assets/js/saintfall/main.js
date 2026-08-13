@@ -29,6 +29,7 @@ import { buildCombat } from "saintfall/combat.js";
 import { buildMission } from "saintfall/mission.js";
 import { buildBreaches } from "saintfall/breaches.js";
 import { buildCoulter } from "saintfall/coulter.js";
+import { buildDistaff } from "saintfall/distaff.js";
 import { buildProgression } from "saintfall/progression.js";
 import { buildAudio } from "saintfall/audio.js";
 import { buildWeapons } from "saintfall/weapons.js";
@@ -186,6 +187,14 @@ export async function start({ boot, build } = {}) {
      before audio because audio subscribes to its bus. */
   const coulter = buildCoulter(ctx);
   ctx.coulter = coulter;
+  /* The Glass Scar's own guardian: a district-bound encounter rather
+     than a breach-wave one, so it is built and spawned independently
+     of both. Same ordering reasons as the burrower - after combat,
+     which it damages the player through, and before audio, which
+     subscribes to its bus. */
+  const distaff = buildDistaff(ctx);
+  ctx.distaff = distaff;
+  distaff.ensureSpawned();
 
   /* Career rank and Doctrine choices sit above the field systems they
      observe. Constructing progression here lets it subscribe to authoritative
@@ -363,6 +372,7 @@ export async function start({ boot, build } = {}) {
     mission,
     breaches,
     coulter,
+    distaff,
     progression,
     audio,
     intro,
@@ -660,6 +670,7 @@ export async function start({ boot, build } = {}) {
        breaches, so a Coulter that dies to its own frame's venom is
        counted as dead by the event that is waiting for it. */
     coulter.update(d);
+    distaff.update(d);
     breaches.update(d);
     mission.update(d);
     progression.update?.(d);

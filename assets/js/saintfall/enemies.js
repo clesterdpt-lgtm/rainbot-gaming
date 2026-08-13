@@ -227,6 +227,70 @@ export const BESTIARY = {
     shadowRange: 150,
     clips: ["idle", "alert", "spew", "strike", "flinch", "death"],
   },
+
+  /* ------------------------------------------------------------------
+     THE DISTAFF. Not a sixth silhouette in this brood - it is not the
+     Bloom at all, and its BESTIARY entry only carries the fields
+     every walker already has. `legs: 4` is the same eight-leg rig the
+     Matriarch proved; what makes it a different fight lives in
+     combat.js's per-leg hit table and in distaff.js, not here.
+     ------------------------------------------------------------------ */
+  distaff: {
+    url: "assets/models/saintfall/distaff.glb",
+    faction: "scar",
+    /* The largest pool in the game, and it is meant to be read as
+       "per leg" rather than as one number: eight legs guard it, and
+       taking the fight to any one of them is real progress before the
+       body is reachable at all. */
+    health: 9000,
+    /* Driven entirely by distaff.js, the same reason the Coulter opts
+       out via `spine`/`burrows` - combat.js's generic stepEnemy has no
+       SPEC entry for this key and would fall back to a Thresher's
+       sight/hearing/aggro numbers while trying to walk a body the leg
+       solver expects to hold still underneath it. */
+    selfDriven: true,
+    /* Each leg's own pool - 340 is two to three solid hits from a
+       decent weapon, so a single leg is a fight measured in seconds
+       and all eight together are a real second phase, not a formality
+       on the way to the body. See combat.js's HITBOX.distaff and
+       LEG_BREAK_BONUS_FRACTION for how a broken leg also pays into
+       this number. */
+    legHealth: 340,
+    scale: 1.0,
+    /* It does not chase. A stationary guardian that can run the
+       player down removes the one thing breaking a leg buys - room to
+       stand clear of it - so it plants and reaches instead. */
+    speed: { walk: 0.85, charge: 2.4 },
+    material: { roughness: 0.38, metalness: 0.10, rim: 1.30, bio: 2.4 },
+    legs: 4,                 // pairs - eight, the Matriarch's own rig
+    /* Long, high strides for a body carried nine metres up on them. A
+       stance tuned for anything else in the bestiary would have this
+       replanting a twelve-metre leg every few centimetres, which
+       reads as a shiver on something this size rather than a walk. */
+    stance: 2.35,
+    stepHeight: 1.15,
+    collisionRadius: 3.5,
+    /* A landmark from across the crater, and it has to be: this is
+       the one thing standing in the Glass Scar taller than its own
+       fulgurite spires. */
+    cullRange: 780,
+    ikRange: 340,
+    animRange: 500,
+    poseRange: 780,
+    shadowRange: 180,
+    clips: ["idle", "alert", "slam", "webCast", "collapse", "bite",
+      "recover", "flinch", "death"],
+    /* Flared hard outward and barely lifted - the tarantula stance,
+       and the opposite bend from every insect knee in the bestiary.
+       This is what puts the knees over its own back instead of tucked
+       beneath it, which is the entire silhouette. */
+    kneePole: { up: 0.85, out: 2.1, fwd: 0 },
+    /* `collapse`/`recover` bend the leg bones directly, the same
+       trick `death` uses everywhere else - see `solveLegs`. Both are
+       exported with those channels; the model pipeline's hard gate
+       fails the build if any OTHER clip leaks a leg channel. */
+    legOwnedStates: ["collapse", "recover"],
+  },
 };
 
 /* ============================================================
@@ -719,6 +783,16 @@ export async function buildEnemies(ctx, onProgress) {
          here and read there, so a stunned unit cannot walk, turn,
          shoot or claw while it runs. */
       stunTime: 0,
+      /* One HP pool per leg, for a species that declares `legHealth`.
+         `null` for everything else, so combat.js's `box.legs` check is
+         the only place that has to know this exists at all. */
+      legHp: sp.spec.legHealth ? legs.map(() => sp.spec.legHealth) : null,
+      legBroken: sp.spec.legHealth ? legs.map(() => false) : null,
+      legsBroken: 0,
+      /* Whether the body itself is currently a reachable target. Owned
+         by the creature's own boss module (see distaff.js), read
+         generically by combat.js's leg-walker hit tests. */
+      collapsed: false,
       /* Where this body will come to rest, and how long its clip takes
          to fold it. Copied off the species so the settle is one
          multiply per frame rather than a map lookup. */
@@ -1002,7 +1076,17 @@ export async function buildEnemies(ctx, onProgress) {
   const UP = new THREE.Vector3(0, 1, 0);
 
   function solveLegs(inst, dt) {
-    if (inst.state === "death") return;
+    /* `death` always owns its legs - see the model pipeline. A species
+       may claim additional clips for the same reason: the Distaff's
+       `collapse`/`recover` bend the leg bones directly, because the
+       only way to bring a standing animal's body down is to fold the
+       legs themselves - a foot-planted IK solver given a lower body
+       to serve would simply re-stretch the knee to keep holding it up
+       at exactly the height it was already at. Declared per-species
+       rather than checked by clip name here, so this file does not
+       grow a new hardcoded string every time a boss needs the same
+       trick. */
+    if (inst.state === "death" || inst.spec.legOwnedStates?.includes(inst.state)) return;
     const scale = inst.root.scale.x;
     const reach = inst.spec.stance * scale;
     const lift = inst.spec.stepHeight * scale;

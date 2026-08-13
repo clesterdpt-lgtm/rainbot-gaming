@@ -93,6 +93,14 @@ export const XP_AWARDS = deepFreeze({
     amount: 360,
     repeat: "event",
   },
+  kill_distaff: {
+    id: "kill_distaff",
+    label: "Distaff unwound",
+    event: "enemy_killed",
+    match: { enemyKey: "distaff" },
+    amount: 480,
+    repeat: "event",
+  },
   relay_silenced: {
     id: "relay_silenced",
     label: "Vox-relay silenced",

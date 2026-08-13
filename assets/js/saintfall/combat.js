@@ -142,7 +142,48 @@ const HITBOX = {
        body hit. */
     maw: { r: 1.60, forward: 1.35, mult: 4.5, open: 0.45 },
   },
+
+  /* ------------------------------------------------------------------
+     THE DISTAFF. Not a capsule and not a chain - a standing body with
+     eight independently-hittable legs under it, and nothing else in
+     the bestiary has more than one designed target on a single kill.
+
+     `legs: true` sends every damage path to `legAndBodyHit` instead of
+     the capsule/head/weak test above. `r`/`y0`/`y1`/`head`/`headR`/
+     `headZ` stay here anyway as the fallback every OTHER system that
+     asks a creature a capsule question still needs - `explode` and
+     `shockwave` in particular, which reasonably treat "near its feet"
+     as "hit it" rather than learning what a leg is. */
+  distaff: {
+    legs: true,
+    legCount: 8,
+    /* Thick enough to match the model's own bristled legs - a hair-
+       thin capsule on a leg this size would put most near-misses a
+       player calls a hit outside it. */
+    legRadius: 0.62,
+    /* THE BODY IS NOT A DESIGNED TARGET UNTIL IT IS ON THE GROUND.
+       `bodyRadius` is a sphere read off the LIVE "prosoma" bone rather
+       than a fixed offset in the creature's own frame, because
+       collapsing moves it by nine metres - a static offset would be
+       right in one state and wrong in the other. `legAndBodyHit` only
+       tests it at all while `inst.collapsed` is true. */
+    bodyRadius: 3.7,
+    /* Ranged reward for finding the collapsed body anyway; melee's is
+       larger and applied directly in `meleeStrike` - see the comment
+       there for why the two are not the same number. */
+    weak: { mult: 1.4 },
+    collapsedMeleeMult: 2.35,
+    // Fallback capsule for explode()/shockwave(), which treat this as
+    // an ordinary tall, narrow-based creature.
+    r: 3.7, y0: 0.02, y1: 13.8, head: 12.9, headR: 1.3, headZ: 2.2,
+  },
 };
+
+/* Bonus paid straight to the main pool when a leg breaks, as a
+   fraction of maxHealth. A leg fight has to be real progress toward
+   the kill or it reads as a side quest the boss ignores; too large
+   and the legs alone kill it before the body is ever reachable. */
+const LEG_BREAK_BONUS_FRACTION = 0.026;
 
 const SPEC = {
   thresher: {
@@ -442,6 +483,160 @@ export function buildCombat(ctx) {
     return { t: bestT, weak };
   }
 
+  /* ============================================================
+     LEG WALKERS WITH A DESIGNED TARGET PER LEG
+
+     The Coulter's body chain is one animal with vertebrae; this is a
+     different shape entirely - a small standing mass with eight
+     independent limbs under it, each carrying its own health and
+     its own live world position off the same bones the IK solver
+     already reads. Nothing here duplicates that solver: it is called
+     AFTER `enemies.js` has posed the frame, so every position taken
+     below is exactly what is on screen.
+     ============================================================ */
+
+  const _legA = new THREE.Vector3();
+  const _legB = new THREE.Vector3();
+  const _legC = new THREE.Vector3();
+  const _bodyLive = new THREE.Vector3();
+
+  /** Where the collapsed body actually is, read off the live bone
+   *  rather than a fixed frame offset - see the HITBOX comment on
+   *  why a static one cannot be right in both states. Null while
+   *  standing: the body is not a target that exists yet. */
+  function distaffBodyAt(inst, out) {
+    if (!inst.collapsed) return null;
+    const bone = inst.bones?.get?.("prosoma");
+    if (!bone) return null;
+    bone.updateWorldMatrix(true, false);
+    return out.setFromMatrixPosition(bone.matrixWorld);
+  }
+
+  /**
+   * Ray against every leg, then the collapsed body.
+   *
+   * Two segments per leg - hip to knee, knee to foot - so the whole
+   * limb is hittable rather than just its lower half. Returns the
+   * NEAREST thing the ray actually crosses, with `legIndex` set for a
+   * leg (`-1` for the body), so the caller can route damage to the
+   * right pool without re-deriving what was hit.
+   */
+  function legAndBodyHit(inst, box, ox, oy, oz, dx, dy, dz, maxT) {
+    let bestT = maxT;
+    let legIndex = -1;
+    let weak = false;
+    let found = false;
+    const r = box.legRadius || 0.6;
+    for (let i = 0; i < (inst.legs?.length || 0); i += 1) {
+      if (inst.legBroken?.[i]) continue;
+      const leg = inst.legs[i];
+      leg.femur.updateWorldMatrix(true, false);
+      leg.tibia.updateWorldMatrix(true, false);
+      _legA.setFromMatrixPosition(leg.femur.matrixWorld);
+      _legB.setFromMatrixPosition(leg.tibia.matrixWorld);
+      _legC.set(leg.foot.x, leg.foot.y, leg.foot.z);
+      const tUpper = segmentHit(ox, oy, oz, dx, dy, dz, _legA, _legB, r * 1.15);
+      if (tUpper >= 0 && tUpper < bestT) {
+        bestT = tUpper; legIndex = i; weak = false; found = true;
+      }
+      const tLower = segmentHit(ox, oy, oz, dx, dy, dz, _legB, _legC, r);
+      if (tLower >= 0 && tLower < bestT) {
+        bestT = tLower; legIndex = i; weak = false; found = true;
+      }
+    }
+    const body = distaffBodyAt(inst, _bodyLive);
+    if (body) {
+      const mx = body.x - ox;
+      const my = body.y - oy;
+      const mz = body.z - oz;
+      const along = mx * dx + my * dy + mz * dz;
+      const perpSq = (mx * mx + my * my + mz * mz) - along * along;
+      const br = box.bodyRadius || 3;
+      if (along > 0 && perpSq <= br * br) {
+        const entry = Math.max(0, along - Math.sqrt(Math.max(0, br * br - perpSq)));
+        if (entry < bestT) { bestT = entry; legIndex = -1; weak = true; found = true; }
+      }
+    }
+    if (!found) return null;
+    return { t: bestT, legIndex, weak };
+  }
+
+  /**
+   * The nearest MELEE-reachable point on a leg walker, and which leg
+   * (or the body) it belongs to. The horizontal-only distance test
+   * every other melee target uses is unchanged - see `meleeStrike` -
+   * this only replaces WHERE that distance is measured to.
+   */
+  function nearestLegPoint(inst, box, x, z, out) {
+    let best = Infinity;
+    let legIndex = -1;
+    for (let i = 0; i < (inst.legs?.length || 0); i += 1) {
+      if (inst.legBroken?.[i]) continue;
+      const leg = inst.legs[i];
+      leg.tibia.updateWorldMatrix(true, false);
+      _legB.setFromMatrixPosition(leg.tibia.matrixWorld);
+      const dKnee = Math.hypot(_legB.x - x, _legB.z - z);
+      if (dKnee < best) { best = dKnee; legIndex = i; out.copy(_legB); }
+      const dFoot = Math.hypot(leg.foot.x - x, leg.foot.z - z);
+      if (dFoot < best) {
+        best = dFoot; legIndex = i; out.set(leg.foot.x, leg.foot.y, leg.foot.z);
+      }
+    }
+    const body = distaffBodyAt(inst, _bodyLive);
+    if (body) {
+      const dBody = Math.hypot(body.x - x, body.z - z);
+      if (dBody < best) { best = dBody; legIndex = -1; out.copy(body); }
+    }
+    return { dist: best, legIndex };
+  }
+
+  /**
+   * Damage to ONE leg's own pool - entirely separate from
+   * `applyDamage`'s single `inst.health`, so a leg fight is real
+   * progress without being a second way to kill the animal outright.
+   * Breaking a leg pays a fixed bonus straight to the main pool (see
+   * `LEG_BREAK_BONUS_FRACTION`) and reports it through the same
+   * `applyDamage` path so the kill feed, HUD numbers and progression
+   * all see one consistent chunk of damage rather than a silent one.
+   */
+  function damageLeg(inst, legIndex, dmg, detail = {}) {
+    if (!inst || untouchable(inst)) return 0;
+    if (!Array.isArray(inst.legHp) || legIndex < 0 || legIndex >= inst.legHp.length) return 0;
+    if (inst.legBroken?.[legIndex]) return 0;
+    const requested = Math.max(0, Number(dmg) || 0);
+    const before = Math.max(0, Number(inst.legHp[legIndex]) || 0);
+    const actual = Math.min(before, requested);
+    if (actual <= 0) return 0;
+    inst.legHp[legIndex] = Math.max(0, before - requested);
+    inst.alerted = true;
+    inst.suspicion = 1;
+    const broke = inst.legHp[legIndex] <= 0;
+    if (broke) {
+      inst.legBroken[legIndex] = true;
+      inst.legsBroken = (inst.legsBroken || 0) + 1;
+      const bonus = Math.round((inst.maxHealth || 0) * LEG_BREAK_BONUS_FRACTION);
+      if (bonus > 0) {
+        applyDamage(inst, bonus, {
+          source: "leg-break", x: detail.x, y: detail.y, z: detail.z,
+        });
+      }
+    }
+    const identity = enemyIdentity(inst);
+    bus.emit("legHit", {
+      ...identity,
+      key: identity.enemyKey,
+      legIndex,
+      damage: actual,
+      legHp: inst.legHp[legIndex],
+      broke,
+      legsBroken: inst.legsBroken || 0,
+      x: Number.isFinite(detail.x) ? detail.x : inst.x,
+      y: Number.isFinite(detail.y) ? detail.y : inst.y,
+      z: Number.isFinite(detail.z) ? detail.z : inst.z,
+    });
+    return actual;
+  }
+
   /** The nearest point on a creature to a world position, and how far.
    *  A point test against a 25m animal's origin is a test against its
    *  mouth, which would let a stratagem land on its back for nothing. */
@@ -495,6 +690,19 @@ export function buildCombat(ctx) {
           x: ox + dx * seg.t, y: oy + dy * seg.t, z: oz + dz * seg.t,
         };
         bestT = seg.t;
+        continue;
+      }
+
+      // A leg walker: eight independent targets and, once collapsed,
+      // a ninth. No capsule, no head - see legAndBodyHit.
+      if (box.legs) {
+        const lb = legAndBodyHit(inst, box, ox, oy, oz, dx, dy, dz, bestT);
+        if (!lb) continue;
+        best = {
+          inst, t: lb.t, weak: lb.weak, head: false, legIndex: lb.legIndex,
+          x: ox + dx * lb.t, y: oy + dy * lb.t, z: oz + dz * lb.t,
+        };
+        bestT = lb.t;
         continue;
       }
 
@@ -589,17 +797,24 @@ export function buildCombat(ctx) {
         ? ((box.weak && box.weak.mult) || (box.maw && box.maw.mult) || 3)
         : 1;
       const dmg = damage * (hit.head ? 2.6 : 1) * weakMult;
-      // `head` means headshot, and only that. A weak-point hit rides
-      // in the event below instead of being folded in here, so that
-      // anything reading the kill feed can tell the two apart.
-      const dealt = applyDamage(hit.inst, dmg, {
-        source: "shot",
-        head: hit.head,
-        weak: !!hit.weak,
-        x: hit.x,
-        y: hit.y,
-        z: hit.z,
-      });
+      /* A leg hit never reaches `applyDamage` at all - it has its own
+         pool, and `legIndex >= 0` is how every damage path in this
+         file already tells "one of the eight" from "the body once it
+         is collapsed", so the same branch works for a shot as it will
+         for a swing below. */
+      const dealt = hit.legIndex >= 0
+        ? damageLeg(hit.inst, hit.legIndex, dmg, { x: hit.x, y: hit.y, z: hit.z })
+        // `head` means headshot, and only that. A weak-point hit rides
+        // in the event below instead of being folded in here, so that
+        // anything reading the kill feed can tell the two apart.
+        : applyDamage(hit.inst, dmg, {
+          source: "shot",
+          head: hit.head,
+          weak: !!hit.weak,
+          x: hit.x,
+          y: hit.y,
+          z: hit.z,
+        });
       if (vfx && vfx.spark) {
         vfx.spark(hit.x, hit.y, hit.z,
           hit.weak ? 2.6 : (hit.head ? 1.9 : 1.2), false, true);
@@ -737,17 +952,20 @@ export function buildCombat(ctx) {
     const targets = [];
     for (const inst of enemies.live) {
       if (untouchable(inst)) continue;
-      /* Measured to the NEAREST part of the animal, which for
-         everything with a single capsule is its own centre and for a
-         chained body is whichever coil is in front of the player. A
-         lance swing at the twenty metres of Coulter lying across the
-         sand has to connect with the twenty metres of Coulter. */
-      const near = nearestBodyPoint(inst, ps.x, ps.z, _bodyNear);
+      const box = HITBOX[inst.key] || HITBOX.thresher;
+      /* A leg walker measures reach to whichever LEG is nearest - or
+         to the body, but only once collapse has made that a target at
+         all. Everything else keeps measuring to the single nearest
+         part of the animal, unchanged. */
+      const legTarget = box.legs ? nearestLegPoint(inst, box, ps.x, ps.z, _bodyNear) : null;
+      const near = legTarget ? legTarget.dist : nearestBodyPoint(inst, ps.x, ps.z, _bodyNear);
       const dx = _bodyNear.x - ps.x;
       const dz = _bodyNear.z - ps.z;
       const dist = Math.max(near, 1e-4);
-      const box = HITBOX[inst.key] || HITBOX.thresher;
-      if (dist > reach + box.r) continue;
+      const targetRadius = !box.legs ? box.r
+        : legTarget.legIndex >= 0 ? (box.legRadius || 0.6) : (box.bodyRadius || 3);
+      if (box.legs && legTarget.legIndex < 0 && !inst.collapsed) continue;
+      if (dist > reach + targetRadius) continue;
       let rel = Math.atan2(dx, dz) - ps.yaw;
       while (rel > Math.PI) rel -= TAU;
       while (rel < -Math.PI) rel += TAU;
@@ -761,12 +979,24 @@ export function buildCombat(ctx) {
       const strikeDamage = inst.key === MELEE_CONFIG.lightEnemy
         ? Math.max(dmg, inst.health)
         : dmg;
-      const dealt = applyDamage(inst, strikeDamage, {
-        source: "melee",
-        x: inst.x,
-        y: inst.y + box.y1 * 0.55,
-        z: inst.z,
-      });
+      const hitY = box.legs ? _bodyNear.y : inst.y + box.y1 * 0.55;
+      let dealt;
+      if (box.legs && legTarget.legIndex >= 0) {
+        dealt = damageLeg(inst, legTarget.legIndex, strikeDamage,
+          { x: inst.x, y: hitY, z: inst.z });
+      } else if (box.legs) {
+        /* THE PAYOFF. A collapsed body is the one melee target in the
+           game worth more than a rifle shot at it - see the comment on
+           `collapsedMeleeMult` in the HITBOX entry for why that number
+           is bigger than the ranged one. */
+        dealt = applyDamage(inst, strikeDamage * (box.collapsedMeleeMult || 1), {
+          source: "melee", weak: true, x: inst.x, y: hitY, z: inst.z,
+        });
+      } else {
+        dealt = applyDamage(inst, strikeDamage, {
+          source: "melee", x: inst.x, y: hitY, z: inst.z,
+        });
+      }
       if (dealt <= 0) continue;
       hits += 1;
       const killed = wasAlive && inst.state === "death";
@@ -777,11 +1007,12 @@ export function buildCombat(ctx) {
         key: identity.enemyKey,
         source: "melee",
         head: false,
-        weak: false,
+        weak: box.legs && legTarget.legIndex < 0,
+        legIndex: box.legs ? legTarget.legIndex : undefined,
         damage: dealt,
         killed,
         x: inst.x,
-        y: inst.y + box.y1 * 0.55,
+        y: hitY,
         z: inst.z,
       });
       if (inst.key === MELEE_CONFIG.lightEnemy) {
@@ -797,8 +1028,10 @@ export function buildCombat(ctx) {
          the warm contact spark only to survivors; stacking both made a
          Thresher disappear inside two white flashes at the exact read. */
       if (vfx && vfx.spark && inst.state !== "death") {
-        vfx.spark(inst.x, inst.y + box.y1 * 0.55, inst.z,
-          MELEE_CONFIG.hitSparkScale * (slam ? 1.18 : 1), false, true);
+        vfx.spark(inst.x, hitY, inst.z,
+          MELEE_CONFIG.hitSparkScale * (slam ? 1.18 : 1)
+            * (box.legs && legTarget.legIndex < 0 ? 1.8 : 1),
+          false, true);
       }
     }
     if (vfx && vfx.meleeArc) {
@@ -1060,7 +1293,14 @@ export function buildCombat(ctx) {
        own instances - see main.js's step order - so the only correct
        thing to do here is decline: the alternative is this function
        growing a second state machine inside the first. */
-    if (inst.body) return;
+    /* A SELF-DRIVEN CREATURE IS SOMEBODY ELSE'S DECISION, same as a
+       chained body is. `distaff.js` runs its own loop over its own
+       instance - see main.js's step order - so falling through to
+       the generic sight/hearing/approach/attack machinery below would
+       have it acting on `SPEC.thresher`'s fallback numbers (it has no
+       entry of its own) and dragging its own root position around
+       from underneath legs that expect it to hold still. */
+    if (inst.body || inst.spec.selfDriven) return;
     /* STUNNED CREATURES DO NOTHING. Not walk, not turn, not shoot.
        The gate lives here rather than in enemies.js because this is
        where every decision a creature makes is taken; enforcing it
@@ -1746,6 +1986,7 @@ export function buildCombat(ctx) {
     bus,
     fire,
     damageEnemy: applyDamage,
+    damageLeg,
     meleeStrike,
     shockwave,
     explode,

@@ -1834,6 +1834,24 @@ export function buildAudio(ctx) {
       // the throat that threw it and would double up on the same beat.
       coulter.bus.on("spill", (e) => impact(e.x, e.z, "flesh"));
     }
+    /* The Glass Scar's guardian. Subscribed the same way as the
+       burrower and for the same reason - distaff.js never learns what
+       an AudioContext is either. */
+    const distaff = ctx.distaff;
+    if (distaff) {
+      distaff.bus.on("aggro", () => chord([110, 147, 185, 233], 1.35, 0.22));
+      distaff.bus.on("slamTelegraph", (e) => rumble(e.x, e.z, 0.6));
+      distaff.bus.on("slam", (e) => impact(e.x, e.z, "wall"));
+      distaff.bus.on("webCast", (e) => hiss(e.x, e.z));
+      distaff.bus.on("webHit", (e) => impact(e.x, e.z, "flesh"));
+      distaff.bus.on("patch", (e) => surface(e.x, e.z));
+      // Lower and longer than the aggro sting: the collapse is the
+      // fight changing shape, not a new threat announcing itself.
+      distaff.bus.on("collapse", (e) => chord([73, 98, 123], 1.1, 0.24));
+      distaff.bus.on("recover", (e) => chord([98, 130, 165], 0.6, 0.16));
+      distaff.bus.on("bite", (e) => impact(e.x, e.z, "flesh"));
+      distaff.bus.on("defeated", () => chord([196, 262, 330, 392], 1.6, 0.24));
+    }
   }
 
   /* Unlock on the first real gesture. Chrome will not start an

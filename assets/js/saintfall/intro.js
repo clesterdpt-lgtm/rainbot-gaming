@@ -455,6 +455,23 @@ function buildOrbitScene(ctx, reducedMotion) {
   const bayMat = new THREE.MeshBasicMaterial({
     name: "drop-barge-bay-light", color: 0xffd79a, toneMapped: true,
   });
+  /* A second, cleaner ceramic for the big uninterrupted surfaces.
+     The barge's flanks were one material at roughness 0.55, which at
+     this scale is a matte wall - it takes no highlight, so the eye
+     gets no sense of a curved surface and five hundred metres of hull
+     reads as a flat cutout. A tighter, slightly metallic plate gives
+     the shoulder a long specular run down the length, which is most
+     of what makes a big ship look MACHINED rather than modelled. */
+  const plateMat = new THREE.MeshStandardMaterial({
+    name: "drop-barge-plate-clean", color: 0xeae6dc, metalness: 0.22, roughness: 0.34,
+  });
+  /* The running strakes. Deliberately paler and cooler than the bay
+     amber so the two read as different SYSTEMS - habitation light
+     versus the ship's own contour lighting - which is the detail that
+     separates a lit hull from a hull with windows painted on it. */
+  const strakeMat = new THREE.MeshBasicMaterial({
+    name: "drop-barge-strake", color: 0xffeecd, toneMapped: true,
+  });
 
   const halo = new THREE.Group();
   halo.name = "drop-broken-halo";
@@ -533,6 +550,8 @@ function buildOrbitScene(ctx, reducedMotion) {
     const gold = [];
     const dark = [];
     const lamp = [];
+    const plate = [];
+    const strake = [];
 
     const put = (bin, geo, x = 0, y = 0, z = 0) => {
       geo.translate(x, y, z);
@@ -560,11 +579,44 @@ function buildOrbitScene(ctx, reducedMotion) {
     put(pale, tube(16.5, 17.5, 120), 0, 0, -122);
     put(pale, tube(17.5, 16.5, 130), 0, 0, 3);
     put(pale, tube(16.5, 9.5, 120), 0, 0, 128);
-    const prow = new THREE.CylinderGeometry(0.4, 9.5, 78, 16, 1);
-    prow.rotateX(Math.PI / 2);
-    put(pale, prow, 0, 0, 227);
+    /* THE PROW.
+       A single 78m cone read as a traffic bollard: one smooth taper
+       with no edges to catch light and nothing to say which way is
+       up. A prow is the one part of a ship the eye reads as intent,
+       so it is built as three stacked tapers of decreasing radius
+       with a hard step between each - the steps are what make it
+       look sharpened rather than moulded - and it is faceted to 10
+       sides so the facets themselves carry a highlight. */
+    const prowA = new THREE.CylinderGeometry(6.4, 9.5, 46, 10, 1);
+    prowA.rotateX(Math.PI / 2);
+    put(plate, prowA, 0, 0, 211);
+    const prowB = new THREE.CylinderGeometry(3.1, 6.4, 40, 10, 1);
+    prowB.rotateX(Math.PI / 2);
+    put(plate, prowB, 0, 0, 254);
+    const prowC = new THREE.CylinderGeometry(0.35, 3.1, 34, 8, 1);
+    prowC.rotateX(Math.PI / 2);
+    put(plate, prowC, 0, 0, 291);
+    // The steps themselves, in gold, so each break is a bright line.
+    put(gold, (() => {
+      const g = new THREE.TorusGeometry(6.5, 0.62, 5, 12);
+      g.rotateX(Math.PI / 2);
+      return g;
+    })(), 0, 0, 234);
+    put(gold, (() => {
+      const g = new THREE.TorusGeometry(3.25, 0.45, 5, 10);
+      g.rotateX(Math.PI / 2);
+      return g;
+    })(), 0, 0, 274);
+    /* A dorsal blade running out over the prow. This is the piece
+       that makes the front read as a BOW rather than as a nose cone:
+       it gives the silhouette an asymmetry that says which surface is
+       the top of the ship. */
+    const blade = new THREE.BoxGeometry(1.5, 7.0, 74);
+    put(plate, blade, 0, 5.2, 246);
+    put(gold, new THREE.BoxGeometry(0.9, 0.8, 74), 0, 8.7, 246);
+    put(strake, new THREE.BoxGeometry(0.5, 0.34, 62), 0, 8.0, 244);
     // A ram, because a Concord barge is a reliquary with an opinion.
-    put(gold, tube(0.35, 1.5, 46, 8), 0, 0, 288);
+    put(gold, tube(0.35, 1.5, 46, 8), 0, 0, 320);
 
     /* ---- frames every 19m: the main scale cue ---- */
     for (let z = -236; z <= 246; z += 19) {
@@ -589,15 +641,50 @@ function buildOrbitScene(ctx, reducedMotion) {
        A cathedral welded to the top of a warship. It is what makes
        the silhouette Concord rather than generic, and from the pod
        it is the skyline the barge is read against. */
-    put(pale, new THREE.BoxGeometry(23, 15, 190), 0, 22, -22);
+    /* THE NAVE, in three stepped tiers rather than one slab.
+       A single 23x15 box with a row of identical rectangles down it
+       is a bus shelter: it has one silhouette edge, one window
+       rhythm and no depth, and at broadside it was the flattest
+       thing in frame. Real ecclesiastical mass comes from tiers -
+       aisle, then triforium, then a narrower clerestory carrying the
+       roof - so each step back gives the profile another shadow line
+       and the whole structure reads as built rather than extruded. */
+    put(plate, new THREE.BoxGeometry(25, 9, 196), 0, 18.5, -22);   // aisle
+    put(pale, new THREE.BoxGeometry(19.5, 8, 190), 0, 26, -22);    // triforium
+    put(plate, new THREE.BoxGeometry(14.5, 7, 182), 0, 33, -22);   // clerestory
+    // The steps themselves, picked out so each tier reads separately.
+    put(gold, new THREE.BoxGeometry(25.6, 0.5, 196), 0, 23.1, -22);
+    put(gold, new THREE.BoxGeometry(20.1, 0.5, 190), 0, 30.1, -22);
+    /* The APSE: the nave now ENDS in something instead of being cut
+       off square. A half-drum plus a conical cap, aft, where the
+       cathedral meets the spine. */
+    const apse = new THREE.CylinderGeometry(9.8, 9.8, 14, 12, 1);
+    put(plate, apse, 0, 24, -120);
+    const apseCap = new THREE.CylinderGeometry(0.4, 10.4, 11, 12);
+    put(pale, apseCap, 0, 36.5, -120);
+    put(gold, (() => {
+      const g = new THREE.TorusGeometry(9.9, 0.6, 5, 14);
+      return g;
+    })(), 0, 31, -120);
     for (const side of [-1, 1]) {
-      const roof = new THREE.BoxGeometry(13.5, 1.6, 190);
+      const roof = new THREE.BoxGeometry(10.5, 1.6, 182);
       roof.rotateZ(side * 0.62);
-      put(pale, roof, side * 5.6, 32.5, -22);
-      // Clerestory: a row of tall lit windows down each side.
-      for (let z = -110; z <= 66; z += 8.6) {
-        put(lamp, new THREE.BoxGeometry(0.5, 5.2, 2.4), side * 11.7, 24.5, z);
-        put(gold, new THREE.BoxGeometry(0.75, 6.6, 0.7), side * 11.9, 24.5, z - 1.9);
+      put(pale, roof, side * 4.3, 38.5, -22);
+      /* LANCETS, not letterbox slots. The old clerestory was a 5.2m
+         box lying on its side - wider than it was tall, which is the
+         one proportion a cathedral window never has. Tall, narrow and
+         close-spaced is what makes a wall read as a nave, and it is
+         also what carries the light: a thin bright vertical repeated
+         forty times is far more legible at this distance than twenty
+         fat squares. */
+      for (let z = -108; z <= 64; z += 6.2) {
+        put(lamp, new THREE.BoxGeometry(0.5, 5.4, 1.7), side * 7.4, 33.6, z);
+        put(gold, new THREE.BoxGeometry(0.7, 6.4, 0.55), side * 7.6, 33.4, z - 1.35);
+        // Aisle windows below, on the widest tier, at half the rhythm.
+        if ((Math.round((z + 108) / 6.2)) % 2 === 0) {
+          put(lamp, new THREE.BoxGeometry(0.5, 3.6, 1.5), side * 12.6, 19.2, z);
+          put(gold, new THREE.BoxGeometry(0.7, 4.4, 0.5), side * 12.8, 19.0, z - 1.2);
+        }
       }
       /* Flying buttresses as straight raking STRUTS. Built from
          partial tori they rendered as thin white worms lying on the
@@ -613,13 +700,25 @@ function buildOrbitScene(ctx, reducedMotion) {
         put(gold, new THREE.BoxGeometry(2.6, 1.0, 2.6), side * 20.4, 6.5, z);
       }
     }
-    // Spires along the ridge, tallest amidships.
+    /* Spires along the ridge, tallest amidships. Slimmer and taller
+       than the first pass, and each one now stands on a base rather
+       than growing straight out of the roof - a cone rising from a
+       flat surface with no plinth is a traffic cone, and nine of
+       them in a row was the most toy-like thing on the ship. The
+       gold finial is carried on a thin neck so it reads as an object
+       the spire holds UP, which is the whole gesture. */
     for (let i = 0; i < 9; i += 1) {
       const z = -104 + i * 20.5;
-      const h = 14 + Math.cos((i - 4) * 0.55) * 9;
-      const spire = new THREE.CylinderGeometry(0.1, 2.5, h, 6);
-      put(pale, spire, 0, 34 + h * 0.5, z);
-      put(gold, new THREE.CylinderGeometry(0.1, 0.75, 4.5, 5), 0, 34 + h + 2.2, z);
+      const h = 20 + Math.cos((i - 4) * 0.55) * 13;
+      put(plate, new THREE.BoxGeometry(4.6, 2.2, 4.6), 0, 40.2, z);
+      put(gold, new THREE.BoxGeometry(5.2, 0.45, 5.2), 0, 41.5, z);
+      const spire = new THREE.CylinderGeometry(0.08, 1.75, h, 6);
+      put(pale, spire, 0, 41.8 + h * 0.5, z);
+      // Neck, then finial: two pieces, so the tip is a jewel on a
+      // stem instead of the cone simply continuing in gold.
+      put(gold, new THREE.CylinderGeometry(0.16, 0.16, 2.4, 5), 0, 41.8 + h + 1.2, z);
+      put(gold, new THREE.OctahedronGeometry(0.95, 0), 0, 41.8 + h + 3.0, z);
+      put(strake, new THREE.BoxGeometry(0.3, 0.3, 0.3), 0, 41.8 + h + 3.0, z);
     }
     // Rose window over the forward face of the nave.
     const rose = new THREE.CylinderGeometry(6.2, 6.2, 0.6, 20);
@@ -721,21 +820,125 @@ function buildOrbitScene(ctx, reducedMotion) {
       put(lamp, new THREE.BoxGeometry(1.8, 0.3, 0.9), 0, -hullR(z) + 0.4, z + 5.5);
     }
 
+    /* ------------------------------------------------------------
+       THE SLEEK PASS
+
+       What the hull was missing is not detail - it had plenty - but
+       CONTINUITY. Every feature on it was a repeated small object
+       (a rib, a window, a housing), and a row of identical small
+       objects reads as texture, not as length. Nothing ran the whole
+       ship, so the eye had nothing to travel along and five hundred
+       metres arrived as "a tube with stuff on it".
+
+       Three continuous elements fix that, and they are the same
+       three every believable capital ship uses:
+
+       - a CHINE: one hard raised edge along the widest line of the
+         hull, running stem to stern. It is what turns a cylinder
+         into something machined, it catches a long unbroken
+         specular, and it gives the silhouette a crease instead of
+         an outline.
+       - STRAKES: two unbroken light lines under the chine. A lit
+         line that never stops is the single strongest scale cue
+         available - the eye follows it and measures the ship by how
+         long the follow takes.
+       - a KEEL RAIL in gold, so the belly (the only surface this
+         act ever sees) has a spine of its own.
+
+       Built as long boxes following `hullR`, in segments short
+       enough to track the taper but long enough that no seam is
+       visible from the cinematic's distance.
+       ------------------------------------------------------------ */
+    {
+      const STEP = 16;
+      const Z0 = -240;
+      const Z1 = 252;
+      for (let z = Z0; z < Z1; z += STEP) {
+        const zA = z;
+        const zB = Math.min(z + STEP, Z1);
+        const rA = hullR(zA);
+        const rB = hullR(zB);
+        if (rA < 2.2 && rB < 2.2) continue;
+        const mid = (zA + zB) * 0.5;
+        const len = zB - zA;
+        const r = (rA + rB) * 0.5;
+        // The chine sits just above the widest point, angled out, so
+        // it is lit from above and shades the flank beneath it.
+        for (const side of [-1, 1]) {
+          const chine = new THREE.BoxGeometry(2.6, 1.5, len + 0.6);
+          chine.rotateZ(side * 0.34);
+          put(plate, chine, side * (r + 0.35), 2.4, mid);
+          /* The contour light. Every segment is cut LONGER than its
+             station spacing so consecutive pieces overlap: shortened
+             to fit, they left a gap at every seam and the result was
+             a dashed line, which reads as a row of windows and gives
+             back the exact scale cue the run exists to provide. A
+             strake is only worth having if it never stops.
+
+             Sized to be seen, not to be accurate. At the distance
+             this act is shot from, a metre is under two pixels, so a
+             realistic 30cm light strip is invisible and the whole
+             pass is wasted. */
+          put(strake, new THREE.BoxGeometry(0.9, 0.75, len + 0.6),
+            side * (r + 0.62), 0.7, mid);
+          // A second, dimmer line low on the flank. Two parallel runs
+          // give the hull an implied deck height between them.
+          put(strake, new THREE.BoxGeometry(0.62, 0.5, len + 0.6),
+            side * (r - 0.35), -7.6, mid);
+          // Long shadow groove between the two runs, so the flank is
+          // not one flat value from chine to keel.
+          put(dark, new THREE.BoxGeometry(0.55, 1.5, len + 0.6),
+            side * (r + 0.1), -3.2, mid);
+        }
+        // Keel rail: gold, dead centre of the belly, full length.
+        put(gold, new THREE.BoxGeometry(1.9, 0.6, len + 0.6), 0, -r - 0.12, mid);
+        put(strake, new THREE.BoxGeometry(0.95, 0.3, len + 0.6), 0, -r - 0.46, mid);
+        // Dorsal rail, which is what the nave sits astride.
+        put(plate, new THREE.BoxGeometry(3.2, 0.9, len + 0.6), 0, r - 0.2, mid);
+      }
+    }
+
     /* ---- the engines ---- */
-    for (let i = 0; i < 5; i += 1) {
-      const a = i === 4 ? 0 : (i / 4) * TAU;
-      const rr = i === 4 ? 0 : 8.6;
-      const x = Math.sin(a) * rr;
-      const y = Math.cos(a) * rr;
-      const bell = new THREE.CylinderGeometry(6.2, 3.6, 24, 12, 1, true);
+    /* The stern is the LAST thing on screen as the pod falls away, so
+       the engines are the shape the barge leaves the audience with.
+       Five small matching bells read as a rocket; a heavy centre pair
+       with lighter outboards reads as a ship whose mass sits on its
+       keel. Each bell is now a deep faceted flare with a lit throat
+       recessed inside it, so the glow is something the geometry
+       CONTAINS rather than a disc stuck on the end. */
+    const ENGINES = [
+      { x: 0, y: -3.0, s: 1.45 },
+      { x: -13.5, y: 1.5, s: 1.0 },
+      { x: 13.5, y: 1.5, s: 1.0 },
+      { x: -7.6, y: 10.0, s: 0.72 },
+      { x: 7.6, y: 10.0, s: 0.72 },
+    ];
+    for (const e of ENGINES) {
+      const s = e.s;
+      const housing = new THREE.CylinderGeometry(5.2 * s, 6.6 * s, 20 * s, 10, 1);
+      housing.rotateX(Math.PI / 2);
+      put(plate, housing, e.x, e.y, -250 - 4 * s);
+      // The flare, open so the throat inside it is visible.
+      const bell = new THREE.CylinderGeometry(8.4 * s, 5.2 * s, 17 * s, 10, 1, true);
       bell.rotateX(Math.PI / 2);
-      put(pale, bell, x, y, -256);
-      const collar = new THREE.TorusGeometry(3.9, 0.9, 5, 12);
+      put(pale, bell, e.x, e.y, -268 - 6 * s);
+      const lip = new THREE.TorusGeometry(8.3 * s, 0.75 * s, 5, 12);
+      lip.rotateX(Math.PI / 2);
+      put(gold, lip, e.x, e.y, -276 - 6 * s);
+      const collar = new THREE.TorusGeometry(6.5 * s, 1.0 * s, 5, 12);
       collar.rotateX(Math.PI / 2);
-      put(gold, collar, x, y, -244);
-      const throat = new THREE.CylinderGeometry(5.6, 5.6, 0.6, 12);
+      put(gold, collar, e.x, e.y, -256 - 4 * s);
+      // Recessed throat: sits INSIDE the bell mouth, not flush with it.
+      const throat = new THREE.CylinderGeometry(5.0 * s, 5.0 * s, 0.6, 12);
       throat.rotateX(Math.PI / 2);
-      put(lamp, throat, x, y, -266);
+      put(lamp, throat, e.x, e.y, -270 - 6 * s);
+      // Injector spokes across the throat, so it is machinery and not
+      // a glowing coin.
+      for (let k = 0; k < 4; k += 1) {
+        const spoke = new THREE.BoxGeometry(9.4 * s, 0.42 * s, 0.42 * s);
+        spoke.rotateZ((k / 4) * Math.PI);
+        put(dark, spoke, e.x, e.y, -271 - 6 * s);
+      }
     }
 
     const merged = (bin, material, name) => {
@@ -745,9 +948,11 @@ function buildOrbitScene(ctx, reducedMotion) {
       return m;
     };
     merged(pale, paleMat, "drop-barge-plate");
+    merged(plate, plateMat, "drop-barge-plate-clean");
     merged(gold, goldMat, "drop-barge-trim");
     merged(dark, darkMat, "drop-barge-shadow");
     merged(lamp, bayMat, "drop-barge-lights");
+    merged(strake, strakeMat, "drop-barge-strakes");
   }
 
   /* The cradle the lander is clamped into. It stays with the barge

@@ -68,6 +68,25 @@ try {
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
+  /* Failed requests are tracked BY URL rather than by console text.
+     The browser logs its own "Failed to load resource: ... 404" line
+     with no URL in it, so a text filter cannot tell a flaky CDN probe
+     from a genuinely missing game asset - and boot.js deliberately
+     probes jsdelivr before falling back to unpkg, so that line shows
+     up intermittently on a perfectly healthy run. Same-origin
+     failures are the ones that mean something. */
+  const assetFailures = [];
+  const sameOrigin = (url) => url.startsWith(base);
+  page.on("response", (response) => {
+    if (response.status() >= 400 && sameOrigin(response.url())) {
+      assetFailures.push(`${response.status()} ${response.url()}`);
+    }
+  });
+  page.on("requestfailed", (request) => {
+    if (sameOrigin(request.url())) {
+      assetFailures.push(`failed ${request.url()}`);
+    }
+  });
 
   await page.goto(`${base}/games/saintfall.html?qa=1&quality=high`,
     { waitUntil: "domcontentloaded", timeout: 60000 });
@@ -310,15 +329,16 @@ try {
   check("the encounter renders inside budget", cost.msPerFrame < 9,
     `${cost.msPerFrame}ms/frame, ${cost.draws.calls} draw calls`);
 
-  /* The CDN probe in boot.js tries jsdelivr before unpkg and falls
-     back cleanly - but a failed or slow first attempt still logs the
-     browser's own automatic network-failure line, which application
-     code cannot suppress. That is sandbox network flakiness, not a
-     regression this harness can do anything about. */
+  /* Console text is filtered only for the CDN probe's own noise;
+     what actually gates the run is `assetFailures`, which is
+     origin-scoped and therefore cannot be flaky. */
   const realConsoleErrors = consoleErrors.filter((message) =>
-    !/jsdelivr|unpkg|favicon/i.test(message));
+    !/jsdelivr|unpkg|favicon|Failed to load resource/i.test(message));
   check("no page errors", pageErrors.length === 0, pageErrors.join(" | "));
-  check("no console errors", realConsoleErrors.length === 0, realConsoleErrors.slice(0, 5).join(" | "));
+  check("no failed game-asset requests", assetFailures.length === 0,
+    assetFailures.slice(0, 5).join(" | "));
+  check("no console errors", realConsoleErrors.length === 0,
+    realConsoleErrors.slice(0, 5).join(" | "));
 
   await writeFile(path.join(outDir, "report.json"),
     JSON.stringify({ results, failed, cost }, null, 2));

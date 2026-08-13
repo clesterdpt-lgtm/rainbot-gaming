@@ -30,6 +30,7 @@ import { buildMission } from "saintfall/mission.js";
 import { buildBreaches } from "saintfall/breaches.js";
 import { buildCoulter } from "saintfall/coulter.js";
 import { buildDistaff } from "saintfall/distaff.js";
+import { buildWinnower } from "saintfall/winnower.js";
 import { buildProgression } from "saintfall/progression.js";
 import { buildAudio } from "saintfall/audio.js";
 import { buildWeapons } from "saintfall/weapons.js";
@@ -195,6 +196,11 @@ export async function start({ boot, build } = {}) {
   const distaff = buildDistaff(ctx);
   ctx.distaff = distaff;
   distaff.ensureSpawned();
+  /* The Censer Works' flyer. Same construction slot and the same
+     reasons as the Distaff - after combat, before audio. */
+  const winnower = buildWinnower(ctx);
+  ctx.winnower = winnower;
+  winnower.ensureSpawned();
 
   /* Career rank and Doctrine choices sit above the field systems they
      observe. Constructing progression here lets it subscribe to authoritative
@@ -373,6 +379,7 @@ export async function start({ boot, build } = {}) {
     breaches,
     coulter,
     distaff,
+    winnower,
     progression,
     audio,
     intro,
@@ -671,6 +678,7 @@ export async function start({ boot, build } = {}) {
        counted as dead by the event that is waiting for it. */
     coulter.update(d);
     distaff.update(d);
+    winnower.update(d);
     breaches.update(d);
     mission.update(d);
     progression.update?.(d);

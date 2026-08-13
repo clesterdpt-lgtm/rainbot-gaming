@@ -268,6 +268,17 @@ export function buildHud(ctx, host) {
     ctx.distaff.bus.on("defeated", () => showBreachAlert(
       "THE GLASS SCAR", "THE DISTAFF IS UNWOUND", 5.2));
   }
+  if (ctx.winnower?.bus) {
+    ctx.winnower.bus.on("aggro", () => showBreachAlert(
+      "THE CENSER WORKS · APEX SIGNATURE", "THE WINNOWER RISES", 4.8, true));
+    // The two ways it comes down read differently on purpose: one is
+    // its own decision and the other is the player's.
+    ctx.winnower.bus.on("stoke", (e) => showBreachAlert(
+      "THE WINNOWER", e.stalled ? "STALLED - IT IS DOWN" : "IT STOOPS TO THE FIRE",
+      3.0, true));
+    ctx.winnower.bus.on("defeated", () => showBreachAlert(
+      "THE CENSER WORKS", "THE WINNOWER IS GROUNDED", 5.2));
+  }
 
   /* --- compass ticks --- */
   /* Player/camera yaw zero points toward authored +Z, which is south on
@@ -794,7 +805,27 @@ export function buildHud(ctx, host) {
     return true;
   }
 
+  /* The flyer's readout carries what its fight is actually about,
+     which is not its health: whether it is up or down, and how close
+     the player is to pulling it down. */
+  function updateWinnowerReadout() {
+    const w = ctx.winnower?.status?.();
+    if (!w || w.phase === "dormant" || w.dead) return false;
+    minimapEl.dataset.event = "1";
+    mapEventEl.dataset.phase = w.phase;
+    eventKickerEl.textContent = "THE CENSER WORKS · APEX SIGNATURE";
+    eventNameEl.textContent = "THE WINNOWER";
+    eventNameEl.title = eventNameEl.textContent;
+    eventSubEl.textContent = w.grounded
+      ? (w.stalled ? "Stalled - it is down and open" : "Stoking - the gut is exposed")
+      : `Airborne · ${w.altitude}m · lift ${Math.max(0, Math.ceil(w.lift))}`;
+    eventCountEl.textContent = w.grounded ? "EXPOSED" : `${w.health} HP`;
+    eventFillEl.style.width = `${clamp01(1 - w.health / Math.max(1, w.maxHealth)) * 100}%`;
+    return true;
+  }
+
   function updateBreachReadout() {
+    if (updateWinnowerReadout()) return;
     if (updateDistaffReadout()) return;
     const event = ctx.breaches?.status?.();
     if (!event) { minimapEl.dataset.event = "0"; return; }

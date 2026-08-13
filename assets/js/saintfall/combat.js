@@ -177,6 +177,49 @@ const HITBOX = {
     // an ordinary tall, narrow-based creature.
     r: 3.7, y0: 0.02, y1: 13.8, head: 12.9, headR: 1.3, headZ: 2.2,
   },
+
+  /* ------------------------------------------------------------------
+     THE WINNOWER. A flyer, so every offset here is measured from an
+     origin that is thirty metres up rather than from the sand - which
+     costs nothing, because `y0`/`y1` were always relative to `inst.y`
+     and a flyer simply moves that.
+
+     The capsule is cut to the BODY. A hit volume sized to twenty-six
+     metres of wingspan would eat every shot that passes anywhere near
+     it, and the wings are not what the player is aiming at.
+     ------------------------------------------------------------------ */
+  winnower: {
+    r: 1.5, y0: -2.6, y1: 1.6, head: 0.4, headR: 0.85, headZ: 4.4,
+    /* THE HEAT SACS. Two live spheres on the wing roots, and the only
+       way a ranged build can shorten the wait for a landing. Unlike
+       the Matriarch's single fixed weak point these are a RESOURCE:
+       shooting them does not multiply damage much, it drains the lift
+       pool in winnower.js, and draining that pool is what brings the
+       animal down early. The reward is the window, not the number. */
+    sacs: {
+      /* The bones are authoritative; the offsets are the fallback for
+         anything asking before the rig exists. Both mirror
+         `SAC_OFFSETS` in saintfall-winnower.py. */
+      bones: ["sac_L", "sac_R"],
+      offsets: [[1.35, 0.25, 0.85], [-1.35, 0.25, 0.85]],
+      r: 0.95,
+      mult: 1.5,
+      lift: 1.0,
+    },
+    /* The furnace gut, slung under the thorax. Only a designed target
+       while it is on the ground: in the air it is nine metres over the
+       player's head and pointing away from them, and a weak point that
+       can be sniped from underneath mid-flight would delete the whole
+       reason the animal ever has to land. */
+    /* Y AND Z BOTH COME OFF THE MODEL'S OWN `HEART` VECTOR
+       (saintfall-winnower.py). This read -1.9 for one build - the
+       gut's lowest EXTENT rather than its centre - which put forty
+       per cent of the hit sphere under the sand and meant aiming at
+       the glowing furnace was aiming a metre high. The z has always
+       been right, which is what proves the y was a transcription
+       slip rather than a decision. */
+    heart: { y: -0.85, z: 0.35, r: 1.25, mult: 4.0 },
+  },
 };
 
 /* Bonus paid straight to the main pool when a leg breaks, as a
@@ -561,6 +604,115 @@ export function buildCombat(ctx) {
     return { t: bestT, legIndex, weak };
   }
 
+  /* ============================================================
+     FLYERS
+
+     A body capsule with two live sacs on it and a gut that only
+     counts while the animal is grounded. All three are placed in the
+     creature's own (yaw, forward, up) frame off an origin that
+     happens to be in the air, so nothing here needs to know how high
+     it is - which is the whole reason `y0`/`y1` were always relative.
+     ============================================================ */
+
+  const _sac = new THREE.Vector3();
+
+  /** Place an offset in the creature's own frame. */
+  function localAt(inst, ox, oy, oz, out) {
+    const s = Math.sin(inst.yaw);
+    const c = Math.cos(inst.yaw);
+    return out.set(
+      inst.x + c * ox + s * oz,
+      inst.y + oy,
+      inst.z - s * ox + c * oz
+    );
+  }
+
+  /** Ray-vs-sphere returning the ENTRY distance, or -1. */
+  function sphereEntry(px, py, pz, r, ox, oy, oz, dx, dy, dz) {
+    const mx = px - ox;
+    const my = py - oy;
+    const mz = pz - oz;
+    const along = mx * dx + my * dy + mz * dz;
+    if (along < 0) return -1;
+    const perpSq = (mx * mx + my * my + mz * mz) - along * along;
+    if (perpSq > r * r) return -1;
+    return Math.max(0, along - Math.sqrt(Math.max(0, r * r - perpSq)));
+  }
+
+  /**
+   * Ray against a flyer: body capsule, heat sacs, and the grounded
+   * gut. Returns the nearest, with `sacIndex` set when a sac was hit
+   * so the caller can drain the lift pool instead of only dealing
+   * damage - see `winnower.js`.
+   */
+  function flyerHit(inst, box, ox, oy, oz, dx, dy, dz, maxT) {
+    let bestT = maxT;
+    let sacIndex = -1;
+    let weak = false;
+    let found = false;
+
+    // Body capsule, vertical about the creature's own origin.
+    const cx = inst.x - ox;
+    const cy = inst.y + (box.y0 + box.y1) * 0.5 - oy;
+    const cz = inst.z - oz;
+    const t = cx * dx + cy * dy + cz * dz;
+    if (t >= 0 && t <= bestT) {
+      const px = ox + dx * t;
+      const py = oy + dy * t;
+      const pz = oz + dz * t;
+      const hd = Math.hypot(px - inst.x, pz - inst.z);
+      if (hd <= box.r && py >= inst.y + box.y0 && py <= inst.y + box.y1) {
+        bestT = t; found = true;
+      }
+    }
+
+    if (box.sacs) {
+      for (let i = 0; i < box.sacs.offsets.length; i += 1) {
+        if (inst.sacBurst?.[i]) continue;
+        /* READ OFF THE LIVE BONE, falling back to the authored offset.
+           The sacs hang on the thorax, which every clip rotates - so a
+           fixed offset in the creature's own frame drifts away from
+           the geometry the player is actually aiming at as soon as the
+           animal does anything, and measured over a metre out during
+           the stoke. This is the Coulter's `mawFromClip` rule applied
+           to a hit volume rather than a multiplier: what counts as the
+           target is taken from where the target IS. */
+        const bone = inst.bones?.get?.(box.sacs.bones?.[i]);
+        if (bone) {
+          bone.updateWorldMatrix(true, false);
+          _sac.setFromMatrixPosition(bone.matrixWorld);
+        } else {
+          const o = box.sacs.offsets[i];
+          localAt(inst, o[0], o[1], o[2], _sac);
+        }
+        const entry = sphereEntry(_sac.x, _sac.y, _sac.z, box.sacs.r,
+          ox, oy, oz, dx, dy, dz);
+        if (entry >= 0 && entry < bestT) {
+          bestT = entry; sacIndex = i; weak = false; found = true;
+        }
+      }
+    }
+
+    // The gut, and only once it is on the ground. Read off the live
+    // "heart" bone for the same reason the sacs are.
+    if (box.heart && inst.grounded) {
+      const hb = inst.bones?.get?.("heart");
+      if (hb) {
+        hb.updateWorldMatrix(true, false);
+        _sac.setFromMatrixPosition(hb.matrixWorld);
+      } else {
+        localAt(inst, 0, box.heart.y, box.heart.z, _sac);
+      }
+      const entry = sphereEntry(_sac.x, _sac.y, _sac.z, box.heart.r,
+        ox, oy, oz, dx, dy, dz);
+      if (entry >= 0 && entry < bestT) {
+        bestT = entry; sacIndex = -1; weak = true; found = true;
+      }
+    }
+    if (!found) return null;
+    return { t: bestT, sacIndex, weak };
+  }
+
   /**
    * The nearest MELEE-reachable point on a leg walker, and which leg
    * (or the body) it belongs to. The horizontal-only distance test
@@ -637,6 +789,55 @@ export function buildCombat(ctx) {
     return actual;
   }
 
+  /**
+   * Drain a flyer's lift pool.
+   *
+   * Deliberately NOT health: this is the resource that keeps the
+   * animal in the air, and emptying it is what forces the landing the
+   * whole encounter is built around. The pool itself lives on the
+   * instance so a save can carry it, and the creature's own module
+   * (`winnower.js`) decides what running dry means - this function
+   * only ever reports that it happened.
+   */
+  function drainLift(inst, amount, sacIndex = -1, detail = {}) {
+    if (!inst || untouchable(inst)) return 0;
+    if (!Number.isFinite(inst.lift)) return 0;
+    const before = Math.max(0, inst.lift);
+    const drained = Math.min(before, Math.max(0, Number(amount) || 0));
+    if (drained <= 0) return 0;
+    inst.lift = before - drained;
+    inst.alerted = true;
+    inst.suspicion = 1;
+    /* A sac BURSTS at a quarter of the pool each. Tracking which ones
+       have gone is what lets the model stop drawing them and the ray
+       test stop offering them - a sac that is visibly blown open but
+       still shootable is the kind of thing a player reads as the hit
+       box lying to them. */
+    let burst = false;
+    if (sacIndex >= 0 && Array.isArray(inst.sacBurst) && !inst.sacBurst[sacIndex]) {
+      const perSac = (inst.maxLift || 1) / inst.sacBurst.length;
+      if (before - drained <= (inst.maxLift || 1) - perSac * (sacIndex + 1) + 1e-6) {
+        inst.sacBurst[sacIndex] = true;
+        burst = true;
+      }
+    }
+    const identity = enemyIdentity(inst);
+    bus.emit("liftDrained", {
+      ...identity,
+      key: identity.enemyKey,
+      sacIndex,
+      drained,
+      lift: inst.lift,
+      maxLift: inst.maxLift || 0,
+      burst,
+      grounded: !!inst.grounded,
+      x: Number.isFinite(detail.x) ? detail.x : inst.x,
+      y: Number.isFinite(detail.y) ? detail.y : inst.y,
+      z: Number.isFinite(detail.z) ? detail.z : inst.z,
+    });
+    return drained;
+  }
+
   /** The nearest point on a creature to a world position, and how far.
    *  A point test against a 25m animal's origin is a test against its
    *  mouth, which would let a stratagem land on its back for nothing. */
@@ -690,6 +891,19 @@ export function buildCombat(ctx) {
           x: ox + dx * seg.t, y: oy + dy * seg.t, z: oz + dz * seg.t,
         };
         bestT = seg.t;
+        continue;
+      }
+
+      // A flyer: body capsule plus live sacs, and a gut that only
+      // exists once it is down - see flyerHit.
+      if (box.sacs) {
+        const fh = flyerHit(inst, box, ox, oy, oz, dx, dy, dz, bestT);
+        if (!fh) continue;
+        best = {
+          inst, t: fh.t, weak: fh.weak, head: false, sacIndex: fh.sacIndex,
+          x: ox + dx * fh.t, y: oy + dy * fh.t, z: oz + dz * fh.t,
+        };
+        bestT = fh.t;
         continue;
       }
 
@@ -794,14 +1008,26 @@ export function buildCombat(ctx) {
       // Matriarch's gaster) and a transient one (the Coulter's open
       // maw). Both carry their own worth next to their own geometry.
       const weakMult = hit.weak
-        ? ((box.weak && box.weak.mult) || (box.maw && box.maw.mult) || 3)
+        ? ((box.weak && box.weak.mult) || (box.maw && box.maw.mult)
+          || (box.heart && box.heart.mult) || 3)
         : 1;
-      const dmg = damage * (hit.head ? 2.6 : 1) * weakMult;
+      /* A heat sac is worth its own modest multiplier - the reward for
+         hitting one is the LIFT it drains, resolved below, not the
+         damage. Paying out a weak-point multiplier here as well would
+         make shooting the sacs the whole fight. */
+      const sacMult = hit.sacIndex >= 0 ? (box.sacs?.mult || 1) : 1;
+      const dmg = damage * (hit.head ? 2.6 : 1) * weakMult * sacMult;
       /* A leg hit never reaches `applyDamage` at all - it has its own
          pool, and `legIndex >= 0` is how every damage path in this
          file already tells "one of the eight" from "the body once it
          is collapsed", so the same branch works for a shot as it will
          for a swing below. */
+      // A sac hit still damages the animal normally; what makes it
+      // worth aiming at is the lift it drains on the way through.
+      if (hit.sacIndex >= 0 && box.sacs) {
+        drainLift(hit.inst, box.sacs.lift || 1, hit.sacIndex,
+          { x: hit.x, y: hit.y, z: hit.z });
+      }
       const dealt = hit.legIndex >= 0
         ? damageLeg(hit.inst, hit.legIndex, dmg, { x: hit.x, y: hit.y, z: hit.z })
         // `head` means headshot, and only that. A weak-point hit rides
@@ -957,6 +1183,14 @@ export function buildCombat(ctx) {
          to the body, but only once collapse has made that a target at
          all. Everything else keeps measuring to the single nearest
          part of the animal, unchanged. */
+      /* A FLYER IS ONLY MELEE-REACHABLE WHEN IT IS DOWN, and the check
+         is vertical rather than a flag: `nearestBodyPoint` returns its
+         origin, which is thirty metres up while it soars, so the
+         ordinary reach test below rejects it by arithmetic. The
+         explicit guard is here anyway because a lance swing that
+         connects with something directly overhead is the exact bug
+         this encounter cannot afford. */
+      if (box.sacs && !inst.grounded) continue;
       const legTarget = box.legs ? nearestLegPoint(inst, box, ps.x, ps.z, _bodyNear) : null;
       const near = legTarget ? legTarget.dist : nearestBodyPoint(inst, ps.x, ps.z, _bodyNear);
       const dx = _bodyNear.x - ps.x;
@@ -1987,6 +2221,7 @@ export function buildCombat(ctx) {
     fire,
     damageEnemy: applyDamage,
     damageLeg,
+    drainLift,
     meleeStrike,
     shockwave,
     explode,

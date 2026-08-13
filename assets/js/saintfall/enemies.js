@@ -291,6 +291,59 @@ export const BESTIARY = {
        fails the build if any OTHER clip leaks a leg channel. */
     legOwnedStates: ["collapse", "recover"],
   },
+
+  /* ------------------------------------------------------------------
+     THE WINNOWER. The first thing in the bestiary that leaves the
+     ground, and the only entry here whose `y` is not a terrain sample.
+
+     `flies` is a capability rather than a species test, for the same
+     reason `burrows` is: the moment a second flyer exists, every
+     system that assumes a creature stands on something needs one flag
+     to ask rather than a growing list of keys to compare against.
+     ------------------------------------------------------------------ */
+  winnower: {
+    url: "assets/models/saintfall/winnower.glb",
+    faction: "censer",
+    /* Lower than the Distaff's, and it should be: this one cannot be
+       cornered. Its defence is altitude, so raw health would only
+       lengthen the stretches where the player has nothing to do but
+       wait for it to come down. */
+    health: 6200,
+    scale: 1.0,
+    /* `walk` is its cruise on a thermal; `charge` is the dive. It is
+       the fastest thing in the game across open ground because it
+       does not touch any. */
+    speed: { walk: 8.5, charge: 22.0 },
+    material: { roughness: 0.54, metalness: 0.12, rim: 1.45, bio: 2.2 },
+    flies: true,
+    /* Driven by winnower.js. Same opt-out the Distaff takes and for
+       the same reason - there is no SPEC entry for this key, and the
+       generic walker would try to path a flying creature across
+       terrain it never touches. */
+    selfDriven: true,
+    /* How much punishment the heat sacs can absorb before the animal
+       cannot hold altitude. Four hits' worth at the sac multiplier -
+       enough that draining it is a deliberate investment of fire, and
+       little enough that it is a real alternative to waiting out the
+       timer. */
+    liftPool: 4,
+    legs: 0,
+    stance: 0,
+    stepHeight: 0,
+    /* Sized to the BODY, not the span. A radius cut to twenty-six
+       metres of wing would refuse every gap in the refinery and shove
+       the animal out of its own district the moment it landed. */
+    collisionRadius: 1.8,
+    /* The longest sightline in the game after the Coulter's, and for
+       the opposite reason: this one is usually ABOVE the horizon, so
+       it is visible from anywhere in the basin that can see sky. */
+    cullRange: 820,
+    animRange: 560,
+    poseRange: 820,
+    shadowRange: 200,
+    clips: ["idle", "alert", "bombard", "strain", "land", "stoke",
+      "launch", "flinch", "death"],
+  },
 };
 
 /* ============================================================
@@ -793,6 +846,20 @@ export async function buildEnemies(ctx, onProgress) {
          by the creature's own boss module (see distaff.js), read
          generically by combat.js's leg-walker hit tests. */
       collapsed: false,
+      /* Bank and pitch, for a species that declares `flies`. Zero and
+         unread for everything that walks - a ground creature's root
+         rotation stays yaw-only, which is what keeps its feet on the
+         terrain the IK just solved them against. */
+      pitch: 0,
+      roll: 0,
+      /* The lift pool and its burst sacs, for a species that declares
+         `liftPool`. `grounded` is read by combat.js to decide whether
+         the gut is a target and whether a lance can reach at all; it
+         is owned by the creature's own module. */
+      lift: sp.spec.liftPool || 0,
+      maxLift: sp.spec.liftPool || 0,
+      sacBurst: sp.spec.liftPool ? [false, false] : null,
+      grounded: !sp.spec.flies,
       /* Where this body will come to rest, and how long its clip takes
          to fold it. Copied off the species so the settle is one
          multiply per frame rather than a map lookup. */
@@ -1386,6 +1453,23 @@ export async function buildEnemies(ctx, onProgress) {
         inst.root.position.copy(inst.body.head);
         inst.root.quaternion.copy(inst.body.quat);
         inst.root.updateMatrixWorld(true);
+      } else if (inst.spec.flies && !emerging) {
+        /* A FLYER OWNS ITS OWN ALTITUDE.
+           Every other walker here is damped onto the terrain each
+           frame, which is right for something that stands on it and
+           fatal for something that does not: a flyer handed that
+           treatment is pinned to the sand and its whole encounter
+           stops existing. Its module writes `inst.y` directly - the
+           same contract the burrower's body chain already has, one
+           step simpler because there is no chain to pose.
+
+           Its ROLL is its own too. Yaw alone cannot express a bank,
+           and a twenty-six metre wingspan turning flat reads as a
+           table sliding sideways through the air. */
+        inst.root.position.set(inst.x, inst.y, inst.z);
+        if (!dying) {
+          inst.root.rotation.set(inst.pitch || 0, inst.yaw, inst.roll || 0);
+        }
       } else if (!emerging) {
         /* A CORPSE KEEPS FOLLOWING THE GROUND, and it follows it to a
            different height than a standing creature does.

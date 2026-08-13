@@ -3431,6 +3431,63 @@ export function installQa(ctx, api) {
       return patch ? { x: patch.x, y: patch.y, z: patch.z, radius: patch.radius } : null;
     },
     clearWebs() { return api.distaff?.clearHazards?.() ?? null; },
+    /* ------------------------------------------------------------
+       THE WINNOWER
+
+       A flyer spends most of its cycle somewhere a harness cannot
+       reach it, so these do for altitude what the Burrower's hooks do
+       for depth: read the phase machine's own view of itself, force
+       the phase under test, and drain the lift pool through the
+       PRODUCTION path rather than by writing the number directly.
+       ------------------------------------------------------------ */
+    winnowerState: () => (api.winnower)?.status?.() || null,
+    teleportToWinnower(offset = 40) {
+      const w = api.winnower?.status?.();
+      if (!w) return null;
+      hook._teleportRaw(w.x - offset, w.z, 0);
+      hook.setBodyHeading?.(0);
+      return { x: w.x - offset, z: w.z };
+    },
+    forceWinnowerPhase(phase, timer) {
+      return api.winnower?.forcePhase?.(phase, timer) ?? null;
+    },
+    advanceToWinnowerPhase(phase, limit = 60, dt = 1 / 60) {
+      const target = String(phase);
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const w = api.winnower?.status?.();
+        if (!w) return -1;
+        if (w.phase === target) return Number(elapsed.toFixed(3));
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    /** Drain one point of lift through combat's own function - the
+     *  same call a shot into a heat sac makes. */
+    drainWinnowerLift(amount = 1, sacIndex = 0) {
+      const inst = api.enemies.live.find((e) => e.key === "winnower");
+      if (!inst) return null;
+      return api.combat.drainLift(inst, amount, sacIndex,
+        { x: inst.x, y: inst.y, z: inst.z });
+    },
+    ashFields() {
+      const w = api.winnower;
+      if (!w) return [];
+      return (w.group?.children || [])
+        .filter((child) => child.name?.startsWith("sf-ash-field") && child.visible)
+        .map((child) => ({
+          x: Number(child.position.x.toFixed(2)),
+          y: Number(child.position.y.toFixed(2)),
+          z: Number(child.position.z.toFixed(2)),
+          fade: Number((child.material.uniforms.uFade.value || 0).toFixed(3)),
+        }));
+    },
+    spillAsh(x, z, radius, seconds) {
+      const f = api.winnower?.spillAsh?.(x, z, radius, seconds);
+      return f ? { x: f.x, y: f.y, z: f.z, radius: f.radius } : null;
+    },
+    clearAsh() { return api.winnower?.clearHazards?.() ?? null; },
     minimapState() {
       const semantic = api.hud?.minimapState?.() || null;
       const map = document.getElementById("sf-minimap");
@@ -3652,6 +3709,7 @@ export function installQa(ctx, api) {
     get mission() { return api.mission; },
     get breaches() { return api.breaches; },
     get distaff() { return api.distaff; },
+    get winnower() { return api.winnower; },
     get collide() { return api.collide; },
     get gameUi() { return api.gameUi || ctx.gameUi || null; },
     get saves() { return api.saves || ctx.saves || null; },

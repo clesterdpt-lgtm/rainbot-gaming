@@ -1852,6 +1852,28 @@ export function buildAudio(ctx) {
       distaff.bus.on("bite", (e) => impact(e.x, e.z, "flesh"));
       distaff.bus.on("defeated", () => chord([196, 262, 330, 392], 1.6, 0.24));
     }
+    /* The flyer. Its cues are pitched HIGHER than either ground boss -
+       a thing overhead should not share a register with a thing that
+       walks, or the player cannot tell from sound alone which one is
+       about to hurt them. */
+    const winnower = ctx.winnower;
+    if (winnower) {
+      winnower.bus.on("aggro", () => chord([196, 294, 392, 494], 1.5, 0.22));
+      winnower.bus.on("bombardTelegraph", (e) => hiss(e.x, e.z));
+      winnower.bus.on("bombard", (e) => surface(e.x, e.z));
+      winnower.bus.on("ash", (e) => explosion(e.x, e.z, e.radius * 0.8));
+      winnower.bus.on("strafeTelegraph", (e) => rumble(e.x, e.z, 0.9));
+      winnower.bus.on("strafeHit", (e) => impact(e.x, e.z, "flesh"));
+      winnower.bus.on("landing", (e) => rumble(e.x, e.z, 1));
+      // The stoke is the window opening: a low, sustained note under
+      // everything else, so a player who is looking the wrong way
+      // still knows the animal is down.
+      winnower.bus.on("stoke", (e) => chord([65, 98, 131], 1.4, 0.26));
+      winnower.bus.on("sweep", (e) => impact(e.x, e.z, "flesh"));
+      winnower.bus.on("launch", (e) => surface(e.x, e.z));
+      winnower.bus.on("crash", (e) => explosion(e.x, e.z, 16));
+      winnower.bus.on("defeated", () => chord([220, 294, 370, 440], 1.7, 0.24));
+    }
   }
 
   /* Unlock on the first real gesture. Chrome will not start an

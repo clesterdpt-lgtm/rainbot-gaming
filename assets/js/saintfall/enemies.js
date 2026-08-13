@@ -1449,7 +1449,22 @@ export async function buildEnemies(ctx, onProgress) {
            which is far more confusing than one that charges. */
         if (ctx.collide) {
           const radius = BESTIARY[g.key]?.collisionRadius || 0.42;
-          const open = ctx.collide.findOpen(x, z, groundY(x, z), 24, 9, radius);
+          /* Being outside a solid cell is not enough: the old sampler
+             accepted one-cell pockets between Cathedral ribs and Ossuary
+             stacks. Those units spawned legally but had no possible first
+             move. Require one four-metre exit lane at placement time; the
+             runtime planner can handle every larger detour from there. */
+          const hasEgress = (px, pz) => {
+            for (let bearing = 0; bearing < 16; bearing += 1) {
+              const turn = (bearing / 16) * TAU;
+              if (ctx.collide.walkClear(px, pz,
+                px + Math.cos(turn) * 4, pz + Math.sin(turn) * 4, radius)) return true;
+            }
+            return false;
+          };
+          const open = ctx.collide.findOpen(
+            x, z, groundY(x, z), 32, 12, radius, null, hasEgress
+          );
           if (!open) continue;
           x = open[0];
           z = open[1];

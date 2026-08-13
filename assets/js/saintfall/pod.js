@@ -285,6 +285,13 @@ function buildBase(THREE, mats, group) {
       { bias: 0.7, lift: 0.1 }), mats.gold);
   gold.name = "pod-lower-trim";
 
+  /* Curved hull tessellation produces triangles smaller than the
+     collision grid's clutter threshold. These are structural surfaces,
+     not brush-through trim, so collision must rasterise the complete
+     shipped mesh even though each individual facet is small. */
+  shell.userData.collisionSolid = true;
+  dark.userData.collisionSolid = true;
+
   for (const m of [shell, dark, gold]) {
     m.castShadow = true;
     m.receiveShadow = true;
@@ -352,6 +359,7 @@ function buildInterior(THREE, mats, group) {
       [0.00, "#5d4c33"], [0.40, "#a08654"], [0.75, "#d9bb80"], [1.00, "#fff2cf"],
     ]), { bias: 0.35, lift: 0.12 }), mats.lining);
   bowl.name = "pod-interior-cradle";
+  bowl.userData.collisionSolid = true;
   bowl.receiveShadow = true;
   group.add(bowl);
 
@@ -389,6 +397,7 @@ function buildPetals(THREE, mats, group) {
         { min: -HINGE_Y, max: DOOR_TOP - HINGE_Y, bias: 0.6, lift: 0.08 }),
       mats.petal);
     shell.name = `pod-petal-${i}`;
+    shell.userData.collisionSolid = true;
     shell.castShadow = true;
     shell.receiveShadow = true;
     hinge.add(shell);

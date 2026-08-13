@@ -197,6 +197,11 @@ export function buildCombat(ctx) {
   const eye = new THREE.Vector3();
   const tmp = new THREE.Vector3();
   let clock = 0;
+  /* A Cathedral-sized detour is intentionally a real search, but a
+     garrison must not make every stalled unit run it in the same frame.
+     One route request per simulation tick amortises a newly-alerted pack
+     while every other creature keeps its cheap collision-slide pursuit. */
+  let navigationBudget = 0;
 
   /* Progression is constructed after combat, so every bridge resolves it
      lazily from `ctx`. These helpers keep the event vocabulary stable while
@@ -962,27 +967,35 @@ export function buildCombat(ctx) {
   /* ============================================================
      ENEMY BEHAVIOUR
 
-     Four states, and the transitions between them are all distance
-     and line-of-sight. There is no planner and no navmesh: this
-     level is open ground, and an enemy that walks toward you while
-     refusing to walk through walls is indistinguishable from one
-     that pathfinds, right up until it meets a courtyard.
+     Four states, and the transitions between them are distance and
+     line-of-sight. Ordinary pursuit stays allocation-light and uses
+     collision sliding; a creature that genuinely stalls requests one
+     bounded route from the collision grid and follows its smoothed
+     waypoints until it has a clear chase line again.
      ============================================================ */
 
   function canSee(inst, px, py, pz) {
-    const dx = px - inst.x;
-    const dz = pz - inst.z;
-    const horizontal = Math.hypot(dx, dz);
+    const horizontal = Math.hypot(px - inst.x, pz - inst.z);
     const spec = SPEC[inst.key] || SPEC.thresher;
     if (horizontal > spec.sight) return false;
 
     const box = HITBOX[inst.key] || HITBOX.thresher;
-    const ey = inst.y + box.head;
-    const dy = py - ey;
+    /* Sight for a ranged unit starts at the socket its bolt actually
+       leaves. The old head-centre ray could pass below an overhang while
+       the higher spinneret was buried in it; damage was then applied even
+       though the visible tracer stopped on masonry seven metres away. */
+    const origin = spec.burst
+      ? muzzleAt(inst, box, _muzzle)
+      : headAt(inst, box, _head);
+    const dx = px - origin.x;
+    const dy = py - origin.y;
+    const dz = pz - origin.z;
     const distance = Math.hypot(dx, dy, dz);
     if (distance < 1e-4) return true;
-    return collide.rayBlock(inst.x, ey, inst.z,
-      dx / distance, dy / distance, dz / distance, distance) >= distance;
+    return collide.rayBlock(origin.x, origin.y, origin.z,
+      dx / distance, dy / distance, dz / distance, distance,
+      /* Player gun sockets may escape their own wall cell; a physical
+         Gleaner muzzle embedded in masonry may not. */ !spec.burst) >= distance;
   }
 
   /** Where a ranged unit's bolts leave it, in world space. */
@@ -1051,7 +1064,7 @@ export function buildCombat(ctx) {
         const turn = ((want - inst.yaw + Math.PI * 3) % TAU) - Math.PI;
         inst.yaw += clamp(turn, -2.9 * dt, 2.9 * dt);
         if (lure.mode === "pull" && ld > 2.4) {
-          approach(inst, lx / ld, lz / ld,
+          approach(inst, lure.x, lure.z,
             inst.spec.speed.walk * clamp(Number(lure.speedScale) || 0.72, 0.2, 1.4), dt);
           if (inst.state !== "alert") enemies.play(inst, "alert", 0.2);
         }
@@ -1069,7 +1082,15 @@ export function buildCombat(ctx) {
     const sees = !player.dead && canSee(inst, px, py, pz);
     const sensed = hears || sees;
     if (sensed) inst.suspicion = 1;
-    else inst.suspicion = Math.max(0, inst.suspicion - dt * 0.16);
+    else if (inst.alerted && inst.navigation?.path) {
+      /* A valid detour often begins by moving away from the player to
+         reach a courtyard exit. Letting suspicion decay during that leg
+         made the unit abandon a correct Cathedral route after six seconds,
+         turn around, and walk home. It retains the investigation only while
+         an actual route exists; once the last-known point is reached, the
+         ordinary decay resumes. */
+      inst.suspicion = Math.max(inst.suspicion, 0.12);
+    } else inst.suspicion = Math.max(0, inst.suspicion - dt * 0.16);
 
     // Alerting the neighbours. A garrison that wakes one unit at a
     // time is a shooting gallery.
@@ -1089,7 +1110,7 @@ export function buildCombat(ctx) {
       const hz = inst.home.z - inst.z;
       const hd = Math.hypot(hx, hz);
       if (hd > 3) {
-        approach(inst, hx / hd, hz / hd, inst.spec.speed.walk * 0.45, dt);
+        approach(inst, inst.home.x, inst.home.z, inst.spec.speed.walk * 0.45, dt);
         if (inst.state !== "idle") enemies.play(inst, "idle", 0.3);
       } else if (inst.state !== "idle") {
         enemies.play(inst, "idle", 0.3);
@@ -1134,25 +1155,116 @@ export function buildCombat(ctx) {
       return;
     }
 
-    const ux = dist > 1e-4 ? dx / dist : 0;
-    const uz = dist > 1e-4 ? dz / dist : 0;
     const speed = spec.reach > 8 ? inst.spec.speed.walk : inst.spec.speed.charge;
-    approach(inst, ux, uz, speed, dt);
+    approach(inst, px, pz, speed, dt);
     if (inst.state !== "alert") enemies.play(inst, "alert", 0.24);
   }
 
-  function approach(inst, ux, uz, speed, dt) {
-    const step = speed * dt;
+  /** Move toward a world-space goal, retaining a detour once collision
+   *  proves that direct wall sliding cannot make progress. */
+  function approach(inst, goalX, goalZ, speed, dt) {
+    const r = (HITBOX[inst.key] || HITBOX.thresher).r;
+    const radius = r * 0.8;
+    if (!inst.navigation) {
+      inst.navigation = {
+        path: null,
+        at: 0,
+        pathGoalX: goalX,
+        pathGoalZ: goalZ,
+        stallFor: 0,
+        repathIn: 0,
+        clearCheckIn: 0,
+      };
+    }
+    const nav = inst.navigation;
+    nav.repathIn = Math.max(0, nav.repathIn - dt);
+    nav.clearCheckIn = Math.max(0, nav.clearCheckIn - dt);
+
+    const goalShift = Math.hypot(goalX - nav.pathGoalX, goalZ - nav.pathGoalZ);
+    if (nav.path && goalShift > 7.5 && nav.repathIn <= 0) {
+      nav.path = null;
+      nav.at = 0;
+      nav.stallFor = 0.24;
+    }
+    /* Once the obstacle is behind the creature, abandon the remaining
+       stale lattice route and chase the player's live position directly. */
+    if (nav.path && nav.clearCheckIn <= 0) {
+      nav.clearCheckIn = 0.36;
+      if (collide.walkClear(inst.x, inst.z, goalX, goalZ, radius)) {
+        nav.path = null;
+        nav.at = 0;
+      }
+    }
+
+    let steerX = goalX;
+    let steerZ = goalZ;
+    if (nav.path) {
+      const reach = Math.max(radius + 0.32, speed * dt * 2.2);
+      while (nav.at < nav.path.length) {
+        const point = nav.path[nav.at];
+        if (Math.hypot(point[0] - inst.x, point[1] - inst.z) > reach) break;
+        nav.at += 1;
+      }
+      if (nav.at >= nav.path.length) {
+        nav.path = null;
+        nav.at = 0;
+      } else {
+        steerX = nav.path[nav.at][0];
+        steerZ = nav.path[nav.at][1];
+      }
+    }
+
+    const dx = steerX - inst.x;
+    const dz = steerZ - inst.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 1e-5) {
+      inst.speed = 0;
+      return;
+    }
+    const ux = dx / dist;
+    const uz = dz / dist;
+    const step = Math.min(speed * dt, dist);
     const nx = inst.x + ux * step;
     const nz = inst.z + uz * step;
-    const r = (HITBOX[inst.key] || HITBOX.thresher).r;
+    const oldX = inst.x;
+    const oldZ = inst.z;
     // Enemies are grounded walkers too. Candidate-ground collision
     // prevents the same downhill stale-Y penetration that used to
     // trap the player; their larger capsule radius is preserved.
-    const out = collide.slide(inst.x, inst.z, nx, nz, null, r * 0.8);
+    const out = collide.slide(inst.x, inst.z, nx, nz, null, radius);
     inst.x = out[0];
     inst.z = out[1];
-    inst.speed = Math.hypot(out[0] - (nx - ux * step), out[1] - (nz - uz * step)) / Math.max(dt, 1e-4);
+    const moved = Math.hypot(inst.x - oldX, inst.z - oldZ);
+    const before = Math.hypot(steerX - oldX, steerZ - oldZ);
+    const after = Math.hypot(steerX - inst.x, steerZ - inst.z);
+    const progress = before - after;
+    inst.speed = moved / Math.max(dt, 1e-4);
+
+    /* The route owns facing only while it is genuinely taking a detour.
+       Direct chase already faced the player above; overriding that every
+       frame would make ranged creatures waggle around their own muzzle. */
+    if (nav.path) {
+      const want = Math.atan2(ux, uz);
+      const turn = ((want - inst.yaw + Math.PI * 3) % TAU) - Math.PI;
+      inst.yaw += clamp(turn, -2.8 * dt, 2.8 * dt);
+    }
+
+    const stalled = moved < step * 0.28 || progress < step * 0.08;
+    nav.stallFor = stalled
+      ? nav.stallFor + dt
+      : Math.max(0, nav.stallFor - dt * 2.5);
+    if (nav.stallFor < 0.22 || nav.repathIn > 0 || !collide.findPath
+      || navigationBudget <= 0) return;
+
+    navigationBudget -= 1;
+    const path = collide.findPath(inst.x, inst.z, goalX, goalZ, radius);
+    nav.path = path && path.length ? path : null;
+    nav.pathGoalX = goalX;
+    nav.pathGoalZ = goalZ;
+    nav.at = 0;
+    nav.stallFor = 0;
+    nav.repathIn = nav.path ? 0.72 : 1.25;
+    nav.clearCheckIn = 0.24;
   }
 
   /**
@@ -1214,9 +1326,45 @@ export function buildCombat(ctx) {
       enemies.play(inst, "strike", 0.1);
     }
     bus.emit("enemyFire", { key: inst.key, x: inst.x, z: inst.z, melee: !spec.burst });
-    // Machines miss; a charging xeno at arm's length does not.
-    const accuracy = spec.burst ? 0.55 : 1;
-    const landed = Math.random() < accuracy;
+    /* Resolve ranged damage on the exact ray the player sees. Previously
+       `landed` damaged first and the tracer asked collision afterward, so
+       a bolt visibly ended on a wall while health still disappeared. */
+    let landed = !spec.burst;
+    let shot = null;
+    if (spec.burst) {
+      const box = HITBOX[inst.key] || HITBOX.thresher;
+      const ps = ctx.player.state;
+      muzzleAt(inst, box, _muzzle);
+      const ox = _muzzle.x;
+      const oy = _muzzle.y;
+      const oz = _muzzle.z;
+      let tx = ps.x - ox;
+      let ty = ps.y + 1.62 - oy;
+      let tz = ps.z - oz;
+      const distance = Math.hypot(tx, ty, tz) || 1;
+      tx /= distance;
+      ty /= distance;
+      tz /= distance;
+
+      // Gleaners miss; a charging xeno at arm's length does not.
+      const intendedHit = Math.random() < 0.55;
+      if (!intendedHit) {
+        tx += (Math.random() - 0.5) * 0.09;
+        ty += (Math.random() - 0.5) * 0.06;
+        tz += (Math.random() - 0.5) * 0.09;
+        const n = Math.hypot(tx, ty, tz) || 1;
+        tx /= n;
+        ty /= n;
+        tz /= n;
+      }
+      const blocked = collide.rayBlock(ox, oy, oz, tx, ty, tz, distance, false);
+      /* A final stepped sample may land a few centimetres beyond the
+         target. Only masonry meaningfully before the player is cover. */
+      const clear = blocked === Infinity || blocked >= distance - 0.12;
+      landed = intendedHit && clear;
+      shot = { ox, oy, oz, tx, ty, tz, distance, blocked };
+    }
+
     const incoming = spec.damage * SURVIVAL_CONFIG.enemyDamageMultiplier
       * (Number.isFinite(inst.damageScale) ? inst.damageScale : 1);
     if (landed) hurtPlayer(incoming, {
@@ -1234,28 +1382,13 @@ export function buildCombat(ctx) {
        firefight looked one-sided in the wrong way - damage arriving
        from nowhere, with no direction to turn toward. A miss is
        thrown wide so the near miss is the thing you see. */
-    if (spec.burst && vfx && vfx.tracer) {
-      const box = HITBOX[inst.key] || HITBOX.thresher;
-      const ps = ctx.player.state;
-      muzzleAt(inst, box, _muzzle);
-      const ox = _muzzle.x;
-      const oy = _muzzle.y;
-      const oz = _muzzle.z;
-      let tx = ps.x - ox;
-      let ty = ps.y + 1.15 - oy;
-      let tz = ps.z - oz;
-      const d = Math.hypot(tx, ty, tz) || 1;
-      tx /= d; ty /= d; tz /= d;
-      if (!landed) {
-        tx += (Math.random() - 0.5) * 0.09;
-        ty += (Math.random() - 0.5) * 0.06;
-        tz += (Math.random() - 0.5) * 0.09;
-        const n = Math.hypot(tx, ty, tz) || 1;
-        tx /= n; ty /= n; tz /= n;
+    if (shot && vfx && vfx.tracer) {
+      vfx.tracer(shot.ox, shot.oy, shot.oz, shot.tx, shot.ty, shot.tz,
+        Math.min(shot.distance, shot.blocked), 0.055, false);
+      if (vfx.muzzle) {
+        vfx.muzzle(shot.ox, shot.oy, shot.oz,
+          shot.tx, shot.ty, shot.tz, 0.75, false);
       }
-      const blocked = collide.rayBlock(ox, oy, oz, tx, ty, tz, d);
-      vfx.tracer(ox, oy, oz, tx, ty, tz, Math.min(d, blocked), 0.055, false);
-      if (vfx.muzzle) vfx.muzzle(ox, oy, oz, tx, ty, tz, 0.75, false);
     }
   }
 
@@ -1265,6 +1398,7 @@ export function buildCombat(ctx) {
 
   function update(dt) {
     clock += dt;
+    navigationBudget = 1;
     const ps = ctx.player.state;
 
     if (player.dead) {

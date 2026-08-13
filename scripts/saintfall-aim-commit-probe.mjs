@@ -222,6 +222,80 @@ async function main() {
           bodyYawDeg: Number((after.yaw * 180 / Math.PI).toFixed(1)),
         });
       }
+
+      /* 6. BACKPEDAL GAIT. Correct translation is only half the
+         contract: while S and fire are held, a swinging boot must
+         aim its next plant along the ACTUAL reverse travel vector.
+         If the predictor follows the aimed body instead, the feet
+         reach forward while the root slides backward. */
+      setup(0);
+      T.setGaitInput(null);
+      const backpedalSite = T.findFlatSite(45);
+      T.teleport(backpedalSite[0], backpedalSite[1], 0);
+      T.setCam(0, 0);
+      settle(90);
+      document.documentElement.classList.add("sf-maximised");
+      T.weapons.setHeat(0, { clearOverheat: true });
+      T.setFiring(true);
+      window.dispatchEvent(new KeyboardEvent("keydown", {
+        code: "KeyS", bubbles: true, cancelable: true,
+      }));
+      settle(24);
+      const backpedal = {
+        samples: 0,
+        swingFrames: [0, 0],
+        bothSwingFrames: 0,
+        minTargetLeadM: Infinity,
+        meanTargetLeadM: 0,
+        minFootSeparationM: Infinity,
+        maxBodyTravelAngleDeg: 0,
+      };
+      let targetLeadSum = 0;
+      let targetLeadSamples = 0;
+      for (let frame = 0; frame < 180; frame += 1) {
+        T.renderOnce(1 / 60);
+        const ps = T.playerState();
+        const travelYaw = ps.travelYaw;
+        const travelX = Math.sin(travelYaw);
+        const travelZ = Math.cos(travelYaw);
+        const bodySin = Math.sin(ps.yaw);
+        const bodyCos = Math.cos(ps.yaw);
+        const bodyTravelAngle = Math.abs(Math.atan2(
+          Math.sin(travelYaw - ps.yaw), Math.cos(travelYaw - ps.yaw)
+        )) * 180 / Math.PI;
+        backpedal.maxBodyTravelAngleDeg = Math.max(
+          backpedal.maxBodyTravelAngleDeg, bodyTravelAngle
+        );
+        const lateral = T.playerLegs().map((leg) => {
+          const dx = leg.foot.x - ps.x;
+          const dz = leg.foot.z - ps.z;
+          return dx * bodyCos - dz * bodySin;
+        }).sort((a, b) => a - b);
+        backpedal.minFootSeparationM = Math.min(
+          backpedal.minFootSeparationM, lateral[1] - lateral[0]
+        );
+        T.playerLegs().forEach((leg, index) => {
+          if (!leg.swinging) return;
+          backpedal.swingFrames[index] += 1;
+          const targetLead = (leg.target.x - ps.x) * travelX
+            + (leg.target.z - ps.z) * travelZ;
+          backpedal.minTargetLeadM = Math.min(backpedal.minTargetLeadM, targetLead);
+          targetLeadSum += targetLead;
+          targetLeadSamples += 1;
+        });
+        if (T.playerLegs().every((leg) => leg.swinging)) backpedal.bothSwingFrames += 1;
+        backpedal.samples += 1;
+      }
+      window.dispatchEvent(new KeyboardEvent("keyup", {
+        code: "KeyS", bubbles: true, cancelable: true,
+      }));
+      T.setFiring(false);
+      backpedal.meanTargetLeadM = targetLeadSum / Math.max(1, targetLeadSamples);
+      backpedal.minTargetLeadM = Number(backpedal.minTargetLeadM.toFixed(3));
+      backpedal.meanTargetLeadM = Number(backpedal.meanTargetLeadM.toFixed(3));
+      backpedal.minFootSeparationM = Number(backpedal.minFootSeparationM.toFixed(3));
+      backpedal.maxBodyTravelAngleDeg = Number(backpedal.maxBodyTravelAngleDeg.toFixed(1));
+      out.backpedalGait = backpedal;
       return out;
     }, TWIST_LIMIT_DEG);
 
@@ -276,6 +350,32 @@ async function main() {
       console.log(`  ${r.key.padStart(3)}${r.distanceM.toFixed(2).padStart(11)}`
         + `${r.forwardRatio.toFixed(3).padStart(10)}${r.rightRatio.toFixed(3).padStart(8)}`
         + `${r.bodyYawDeg.toFixed(1).padStart(10)}`);
+    }
+
+    const bg = result.backpedalGait;
+    console.log("\nFIRE + S GAIT - boots plant into reverse travel, not aimed-body forward");
+    console.log(`  swing frames ${bg.swingFrames.join("/")} (${bg.bothSwingFrames} both airborne), `
+      + `target lead min/mean `
+      + `${bg.minTargetLeadM}/${bg.meanTargetLeadM}m, foot separation `
+      + `${bg.minFootSeparationM}m, body/travel angle ${bg.maxBodyTravelAngleDeg}deg`);
+    if (bg.swingFrames.some((frames) => frames < 20)) {
+      fails.push(`fire + S did not animate both legs: ${bg.swingFrames.join("/")} swing frames`);
+    }
+    if (bg.bothSwingFrames > 3) {
+      fails.push(`fire + S loses its planted combat base for ${bg.bothSwingFrames} frames`);
+    }
+    /* The target begins at the toe-off foot for one frame, so its
+       instantaneous minimum may still sit behind the moving pelvis.
+       The sustained mean is the authored landing intent. */
+    if (bg.meanTargetLeadM < 0.12) {
+      fails.push(`fire + S boots aim against reverse travel: target lead `
+        + `${bg.minTargetLeadM}/${bg.meanTargetLeadM}m min/mean`);
+    }
+    if (bg.minFootSeparationM <= 0.08) {
+      fails.push(`fire + S feet cross or pinch to ${bg.minFootSeparationM}m`);
+    }
+    if (bg.maxBodyTravelAngleDeg < 90) {
+      fails.push(`fire + S never exercised a real backpedal: ${bg.maxBodyTravelAngleDeg}deg`);
     }
 
     console.log("=".repeat(70));

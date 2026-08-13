@@ -2329,6 +2329,15 @@ export async function createPlayer(ctx, canvas) {
     strideLen: 1, stance: 0.5, landing: 0.24, lift: 0.12, bodyDrop: 0,
   };
 
+  /** How completely locomotion is retreating from the aimed body.
+   *  Only committed aim can create a true backpedal; ordinary S turns
+   *  the trooper around and remains the full running gait. */
+  function backpedalWeight() {
+    if (state.aimCommit <= 0.002 || state.travelSpeed <= 0.35) return 0;
+    const travelDot = Math.cos(angleDelta(state.yaw, state.travelYaw));
+    return clamp01((-travelDot - 0.20) / 0.80) * state.aimCommit;
+  }
+
   function readGaitSpec() {
     const walkN = clamp01(state.speed / WALK);
     const sprintN = clamp01((state.speed - WALK) / Math.max(0.1, SPRINT - WALK));
@@ -2347,11 +2356,25 @@ export async function createPlayer(ctx, canvas) {
     const turnN = clamp01(Math.abs(state.yawRate) / 2.2);
     const chop = 1 - 0.42 * turnN;
     gaitSpec.strideLen = (lerp(0.78, 2.05, walkN) + 1.55 * sprintN) * chop;
-    gaitSpec.stance = lerp(0.52, 0.34, walkN) - 0.14 * sprintN + 0.10 * turnN;
+    const backpedal = backpedalWeight();
+    const forwardStance = lerp(0.52, 0.34, walkN) - 0.14 * sprintN + 0.10 * turnN;
+    /* A forward run deliberately has a flight phase. A firing
+       backpedal is a braced retreat: one sabaton must always own the
+       ground while the other reaches backward, with a short double-
+       support handoff rather than both legs cycling in the air. */
+    gaitSpec.stance = lerp(forwardStance, 0.56, backpedal);
     const stanceTravel = gaitSpec.strideLen * gaitSpec.stance;
     gaitSpec.landing = clamp(stanceTravel * 0.46, 0.18, 0.33);
-    gaitSpec.lift = lerp(0.09, 0.17, walkN) + 0.07 * sprintN;
-    gaitSpec.bodyDrop = lerp(0, 0.095, walkN) + 0.060 * sprintN;
+    gaitSpec.lift = lerp(
+      lerp(0.09, 0.17, walkN) + 0.07 * sprintN,
+      0.13,
+      backpedal
+    );
+    gaitSpec.bodyDrop = lerp(
+      lerp(0, 0.095, walkN) + 0.060 * sprintN,
+      0.055,
+      backpedal
+    );
     return gaitSpec;
   }
 
@@ -2987,8 +3010,9 @@ export async function createPlayer(ctx, canvas) {
        the body down. The root pivots at the soles, so this tips the
        whole trooper the way a diver tips rather than folding a spine. */
     const slamLean = ctx.slam?.state?.lean || 0;
+    const backpedalPose = backpedalWeight();
     const ordinaryLocomotionLean = (0.045 * walkLeanN + 0.155 * sprintLeanN)
-      * gaitMotion;
+      * gaitMotion * lerp(1, 0.42, backpedalPose);
     /* Counter-lean uphill while the boots run downhill. The root is
        pitched from the soles, so a modest negative angle puts the
        hips behind the planted-looking brace without folding the
@@ -2999,6 +3023,7 @@ export async function createPlayer(ctx, canvas) {
     const bodyLean = locomotionLean + slamLean
       + (Number.isFinite(actionPose.lean) ? actionPose.lean : 0);
     const travelLean = (0.055 * walkLeanN + 0.025 * sprintLeanN) * gaitMotion
+      * lerp(1, 0.55, backpedalPose)
       - downhillPose * 0.035
       + 0.37 * jetPose;
     // Hip height is the leg, and the root sits at the sole.
@@ -3521,9 +3546,20 @@ export async function createPlayer(ctx, canvas) {
       wantYaw = action.aimYaw;
     } else if (state.aimCommit > 0.002 && !state.free) {
       const aimYaw = state.aimViewYaw ?? state.camYaw;
-      const over = Math.abs(angleDelta(wantYaw, aimYaw)) - MAX_CHEST_TWIST;
-      if (over > 0) {
-        wantYaw += Math.sign(angleDelta(wantYaw, aimYaw)) * over * state.aimCommit;
+      const backpedalling = mz > 0.2 && Math.abs(mx) < 0.35;
+      if (backpedalling) {
+        /* A firing reverse is a backpedal, not a turn-and-run. Keep
+           the hips under the reticle so the knees can cycle straight
+           backward beneath a stable combat stance. Leaving the body
+           at the edge of the chest-twist limit made pure S a 126deg
+           crab step; even with correct translation, the feet had to
+           cross the pelvis to keep up. */
+        wantYaw = aimYaw;
+      } else {
+        const over = Math.abs(angleDelta(wantYaw, aimYaw)) - MAX_CHEST_TWIST;
+        if (over > 0) {
+          wantYaw += Math.sign(angleDelta(wantYaw, aimYaw)) * over * state.aimCommit;
+        }
       }
     }
     const turnResponse = meleeFacing ? MELEE_TURN_RESPONSE
@@ -4204,19 +4240,25 @@ export async function createPlayer(ctx, canvas) {
    * Writes into `predictBody` as {x, z, yaw}. `tau` is seconds ahead.
    */
   const predictBody = { x: 0, z: 0, yaw: 0 };
+  function aimDetachedTravel() {
+    return (action.name && action.name.startsWith("melee")
+      && Number.isFinite(action.aimYaw)) || state.aimCommit > 0.002;
+  }
+
   function predictBodyAt(tau) {
     /* Cap the look-ahead. A stalled or very slow gait can ask for
        most of a second, and a second of a hard turn is 90 degrees -
        far past where a constant-rate assumption is honest. */
     const t = clamp(tau, 0, 0.42);
     const w = clamp(state.yawRate, -3.2, 3.2);
-    const meleeTravel = action.name && action.name.startsWith("melee")
-      && Number.isFinite(action.aimYaw);
-    if (meleeTravel) {
-      /* The attack can face independently of WASD. Predict pelvis
-         translation along the motion actually resolved this frame,
-         while still predicting the body's committed turn for stance
-         orientation. */
+    if (aimDetachedTravel()) {
+      /* An attack can face independently of WASD. This was originally
+         limited to melee, but ranged aim commitment has the same split:
+         the body turns toward the reticle while A/D/S remain camera-
+         relative. Predict pelvis translation along the motion actually
+         resolved this frame, while still predicting the body's committed
+         turn for stance orientation. Otherwise a firing backpedal slides
+         backward while both boots reach toward aimed-body forward. */
       const v = state.travelSpeed;
       predictBody.x = state.x + Math.sin(state.travelYaw) * v * t;
       predictBody.z = state.z + Math.cos(state.travelYaw) * v * t;
@@ -4595,7 +4637,24 @@ export async function createPlayer(ctx, canvas) {
           const remaining = swingTravel * (1 - t);
           const tau = remaining / Math.max(0.6, state.speed);
           const body = predictBodyAt(tau);
-          footPlaceAt(leg, body.x, body.z, body.yaw, gait.landing, footTmp);
+          if (aimDetachedTravel()) {
+            /* Keep the stance under the aimed pelvis, but lead the
+               landing along actual travel. A firing trooper can face
+               the reticle while backing up or strafing, so putting
+               `landing` on body-forward makes the boot reach against
+               its own motion. The body prediction already follows the
+               measured path; this last step gives the ankle a real
+               backpedal target while the sabaton and knee remain
+               oriented with the combat stance. */
+            footPlaceAt(leg, body.x, body.z, body.yaw, 0, footTmp);
+            footTmp.x += Math.sin(state.travelYaw) * gait.landing;
+            footTmp.z += Math.cos(state.travelYaw) * gait.landing;
+            const landingGround = groundY(footTmp.x, footTmp.z);
+            footTmp.y = (Number.isFinite(landingGround) ? landingGround : state.y)
+              + figure.limb.ankle;
+          } else {
+            footPlaceAt(leg, body.x, body.z, body.yaw, gait.landing, footTmp);
+          }
           /* A reversal can still aim across the midline, because the
              predicted heading is a heading the body has not reached
              and the stick may reverse again inside the swing. */

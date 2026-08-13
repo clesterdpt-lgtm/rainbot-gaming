@@ -2173,6 +2173,17 @@ export async function createPlayer(ctx, canvas) {
     // Recoil shake amplitude, 0..1, and its oscillator phase.
     punch: 0,
     punchPhase: 0,
+    /* A SECOND shake channel, deliberately not the recoil one.
+       Recoil is a 47 rad/s buzz because that is what a shoulder-fired
+       weapon does to a helmet. A rite landing is the opposite event: a
+       single heavy shove that the body rides out over a quarter of a
+       second. Feeding doctrine through `punch` made a capstone feel
+       like an extra round going off, so it gets its own amplitude,
+       its own slow oscillator and its own decay. */
+    heave: 0,
+    heavePhase: 0,
+    heaveFreq: 16,
+    heaveDecay: 6.5,
     camPitch: -0.10,
     camDist: 5.2,
     /* Dying, and how far through the fall. `deathPose` is read by the
@@ -4276,6 +4287,23 @@ export async function createPlayer(ctx, canvas) {
       camera.rotateZ(s * a * 0.021);
     }
 
+    /* The rite shove. Same construction rule as the recoil above: it
+       may translate the camera and roll it about its own Z, and it may
+       not touch yaw or pitch, because those two are read by the aim
+       solve and the torso follow. */
+    state.heave = damp(state.heave, 0, state.heaveDecay, dt);
+    if (state.heave > 0.0015) {
+      state.heavePhase = (state.heavePhase + dt * state.heaveFreq) % TAU;
+      const a = state.heave;
+      const s = Math.sin(state.heavePhase);
+      const c = Math.cos(state.heavePhase * 0.63);
+      camShakeAxis.set(1, 0, 0).applyQuaternion(camera.quaternion);
+      camera.position.addScaledVector(camShakeAxis, s * a * 0.075);
+      camShakeAxis.set(0, 1, 0).applyQuaternion(camera.quaternion);
+      camera.position.addScaledVector(camShakeAxis, c * a * 0.096);
+      camera.rotateZ(c * a * 0.030);
+    }
+
     /* The zoom rides the EASED sight value, so it is the same curve
        the weapon comes up on. Recoil is added after the zoom rather
        than before it, because a punch is an absolute kick in degrees
@@ -4283,6 +4311,9 @@ export async function createPlayer(ctx, canvas) {
        sights shove the view less than the same shot from the hip. */
     const targetFov = lerp(lerp(62, 69, jetPose), ADS_FOV, state.sighted)
       + state.punch * 1.6
+      // A rite breathes the lens out. Small, but it is the difference
+      // between the world reacting and a decal being drawn on it.
+      + state.heave * 2.4
       + clamp01(ctx.boost?.state?.pose || 0) * 4.5;
     if (Math.abs(camera.fov - targetFov) > 0.01) {
       camera.fov = targetFov;
@@ -5640,10 +5671,35 @@ export async function createPlayer(ctx, canvas) {
     state.punch = Math.min(1, state.punch + 0.42 * amount);
   }
 
+  /**
+   * Shove the view because a rite landed. `weight` runs 0..1 from a
+   * light proc to a capstone and picks the CHARACTER of the shake, not
+   * just its size: a heavy event rings slowly and hangs, a light one
+   * is a single quick tick. Returns false when motion is reduced or
+   * the request is empty, so callers can stay silent.
+   */
+  function doctrineKick(strength = 0.5, weight = 0) {
+    const amount = Number.isFinite(strength) ? clamp(strength, 0, 1.4) : 0;
+    if (amount <= 0.001) return false;
+    const reduced = systemReducedMotion
+      || (typeof document !== "undefined"
+        && !!document.body?.classList?.contains("sf-reduced-motion"));
+    // Not zero: a reduced-motion player still needs to know the rite
+    // fired, and a tenth of the shove is under the threshold that
+    // causes trouble while staying above the one that reads.
+    const scaled = amount * (reduced ? 0.12 : 1);
+    const w = clamp(Number.isFinite(weight) ? weight : 0, 0, 1);
+    state.heave = Math.min(1, state.heave + scaled * lerp(0.30, 0.62, w));
+    state.heaveFreq = lerp(23, 11, w);
+    state.heaveDecay = lerp(9.0, 4.4, w);
+    return true;
+  }
+
   return {
     state,
     punch,
     pulseDoctrine,
+    doctrineKick,
     carryElbowPole(i) { return CARRY_ELBOW_POLE[i]; },
     /* The palm roll, readable and writable, because it is the one
        part of the hold no metric can grade - see PALM_ROLL. */

@@ -435,6 +435,15 @@ export function buildProgression(ctx) {
     bus.emit("doctrine", event);
     ctx.vfx?.doctrineCue?.(event);
     ctx.player?.pulseDoctrine?.(order, event.intensity, event.capstone ? 0.72 : 0.42);
+    /* Force feedback, keyed off the priority this event already
+       carries. A rite that changes the fight has to be felt as well as
+       seen: the arming stages stay silent on purpose, so the shove
+       always means something LANDED rather than something is pending. */
+    if (priority > 0) {
+      const weight = event.capstone ? 1 : (priority - 1) / 2;
+      ctx.player?.doctrineKick?.(
+        (0.26 + priority * 0.20) * (0.55 + event.intensity * 0.55), weight);
+    }
   }
 
   function talentRank(id) {

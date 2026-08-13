@@ -813,6 +813,102 @@ section { padding: 80px 24px; max-width: 1200px; margin: 0 auto; }
   min-width: 0;
   overflow: visible;
 }
+
+/* Shared playfield action rail: sits under the minimized screen. */
+.rb-game-chrome {
+  --rb-chrome-width: 100%;
+  align-self: center;
+  background:
+    linear-gradient(180deg, rgba(18, 17, 32, 0.98), rgba(10, 10, 18, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  display: grid;
+  flex: 0 0 auto;
+  gap: 6px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: 100%;
+  padding: 6px;
+  width: min(100%, var(--rb-chrome-width));
+  z-index: 4;
+}
+.rb-game-chrome[hidden] {
+  display: none !important;
+}
+.rb-game-chrome__btn {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-mono);
+  gap: 3px;
+  justify-content: center;
+  min-height: 44px;
+  padding: 6px 4px 5px;
+  touch-action: manipulation;
+  transition: background 0.12s, border-color 0.12s, transform 0.08s;
+  -webkit-tap-highlight-color: transparent;
+}
+.rb-game-chrome__btn:hover,
+.rb-game-chrome__btn:focus-visible {
+  background: rgba(46, 224, 255, 0.1);
+  border-color: rgba(46, 224, 255, 0.42);
+  outline: none;
+}
+.rb-game-chrome__btn:active {
+  transform: scale(0.97);
+}
+.rb-game-chrome__btn.is-active,
+.rb-game-chrome__btn[aria-pressed="true"] {
+  background: rgba(255, 212, 59, 0.1);
+  border-color: rgba(255, 212, 59, 0.4);
+  color: var(--accent-3);
+}
+.rb-game-chrome__btn[data-rb-game-chrome="favorite"][aria-pressed="true"] {
+  background: rgba(255, 46, 136, 0.12);
+  border-color: rgba(255, 46, 136, 0.46);
+  color: #ff7ab3;
+}
+.rb-game-chrome__btn[data-rb-game-chrome="favorite"][aria-pressed="true"] .rb-game-chrome__icon svg {
+  fill: currentColor;
+}
+.rb-game-chrome__icon {
+  display: grid;
+  flex: 0 0 auto;
+  height: 18px;
+  place-items: center;
+  width: 18px;
+}
+.rb-game-chrome__icon svg {
+  display: block;
+  fill: none;
+  height: 18px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  width: 18px;
+}
+.rb-game-chrome__label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+body.rb-game-maxed .rb-game-chrome,
+html.sf-maximised .rb-game-chrome,
+.game-stage.is-maxed .rb-game-chrome {
+  display: none !important;
+}
+html:not(.sf-maximised) body:not(.rb-game-maxed) .game-stage:has(.rb-game-chrome) .fs-btn,
+html:not(.sf-maximised) body:not(.rb-game-maxed) .game-stage:has(.rb-game-chrome) .fullscreen-btn {
+  display: none !important;
+}
 .hud {
   display: flex; gap: 12px; flex-wrap: wrap;
   font-family: var(--font-mono);
@@ -2027,6 +2123,19 @@ body.rb-standalone-shell {
   .game-stage {
     gap: 7px;
     padding: 7px;
+  }
+
+  .rb-game-chrome {
+    gap: 5px;
+    padding: 5px;
+  }
+  .rb-game-chrome__btn {
+    min-height: 44px;
+    padding: 6px 2px 5px;
+  }
+  .rb-game-chrome__label {
+    font-size: 8px;
+    letter-spacing: 0.06em;
   }
 
   .hud {

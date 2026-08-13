@@ -5046,6 +5046,175 @@ function bindMaxScreenButton(fsButton, surface) {
   updateButton();
 }
 
+function findPlaySurface() {
+  return document.querySelector(
+    ".game-stage .rb-standalone-surface, .game-stage .canvas-wrap, .game-stage .merge-board, .game-stage .rb-max-surface"
+  ) || document.querySelector(".game-stage");
+}
+
+function isPlayMaxed(surface) {
+  return Boolean(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.body.classList.contains("rb-game-maxed") ||
+    document.documentElement.classList.contains("sf-maximised") ||
+    surface?.classList.contains("is-maxed") ||
+    surface?.closest(".game-stage")?.classList.contains("is-maxed") ||
+    document.querySelector(".is-maxed")
+  );
+}
+
+function findExistingMaxButton() {
+  return document.querySelector(
+    "#btn-fullscreen:not([data-rb-game-chrome]), .fullscreen-btn:not([data-rb-game-chrome]), [data-menu-action='maximize']"
+  );
+}
+
+function togglePlayMax(surface) {
+  const existing = findExistingMaxButton();
+  if (existing && !existing.disabled) {
+    existing.click();
+    return;
+  }
+  if (!surface) return;
+  const next = !isPlayMaxed(surface);
+  surface.classList.toggle("is-maxed", next);
+  document.body.classList.toggle("rb-game-maxed", next);
+  scheduleGameCanvasFit();
+  try {
+    if (next) {
+      const request = surface.requestFullscreen || surface.webkitRequestFullscreen;
+      const result = request && request.call(surface);
+      if (result && typeof result.catch === "function") result.catch(() => {});
+    } else if (document.fullscreenElement || document.webkitFullscreenElement) {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      const result = exit && exit.call(document);
+      if (result && typeof result.catch === "function") result.catch(() => {});
+    }
+  } catch (error) {}
+}
+
+function initGameChromeBar() {
+  if (!location.pathname.includes("/games/")) return;
+  const stage = document.querySelector(".game-stage");
+  if (!stage || document.querySelector(".rb-game-chrome")) return;
+
+  const surface = findPlaySurface();
+  const meta = getGameMeta();
+  const icon = {
+    favorite: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-9.2-8.2C1 8.8 2.6 5.5 6 5.5c2 0 3.3 1.2 4 2.4.7-1.2 2-2.4 4-2.4 3.4 0 5 3.3 3.2 6.3C19 15.6 12 20 12 20Z"/></svg>',
+    share: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="19" r="2.4"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/></svg>',
+    maximize: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M20 15v5h-5M4 15v5h5"/></svg>',
+    muteOn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l5 4V6L7 10H4Z"/><path d="M16 9.5a4.5 4.5 0 0 1 0 5"/><path d="M18.2 7a7.5 7.5 0 0 1 0 10"/></svg>',
+    muteOff: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l5 4V6L7 10H4Z"/><path d="m16 10 6 6M22 10l-6 6"/></svg>',
+  };
+
+  const bar = document.createElement("nav");
+  bar.className = "rb-game-chrome";
+  bar.setAttribute("aria-label", "Game actions");
+  bar.innerHTML = `
+    <button type="button" class="rb-game-chrome__btn" data-rb-game-chrome="favorite" aria-pressed="false">
+      <span class="rb-game-chrome__icon">${icon.favorite}</span>
+      <span class="rb-game-chrome__label">Favorite</span>
+    </button>
+    <button type="button" class="rb-game-chrome__btn" data-rb-game-chrome="share">
+      <span class="rb-game-chrome__icon">${icon.share}</span>
+      <span class="rb-game-chrome__label">Share</span>
+    </button>
+    <button type="button" class="rb-game-chrome__btn" data-rb-game-chrome="maximize" aria-pressed="false">
+      <span class="rb-game-chrome__icon">${icon.maximize}</span>
+      <span class="rb-game-chrome__label">Maximize</span>
+    </button>
+    <button type="button" class="rb-game-chrome__btn" data-rb-game-chrome="mute" aria-pressed="false">
+      <span class="rb-game-chrome__icon" data-rb-chrome-mute-icon>${icon.muteOn}</span>
+      <span class="rb-game-chrome__label" data-rb-chrome-mute-label>Mute</span>
+    </button>
+  `;
+
+  const host = surface && surface !== stage ? surface : null;
+  if (host && host.parentElement === stage) host.insertAdjacentElement("afterend", bar);
+  else stage.append(bar);
+
+  const favoriteBtn = bar.querySelector('[data-rb-game-chrome="favorite"]');
+  const maximizeBtn = bar.querySelector('[data-rb-game-chrome="maximize"]');
+  const muteBtn = bar.querySelector('[data-rb-game-chrome="mute"]');
+  const muteIcon = bar.querySelector("[data-rb-chrome-mute-icon]");
+  const muteLabel = bar.querySelector("[data-rb-chrome-mute-label]");
+
+  const syncWidth = () => {
+    if (!host || host === stage) return;
+    const width = Math.round(host.getBoundingClientRect().width);
+    if (width > 0) bar.style.setProperty("--rb-chrome-width", `${width}px`);
+  };
+  const syncFavorite = () => {
+    const saved = RBGameActivity.isFavorite(meta.slug);
+    favoriteBtn.classList.toggle("is-active", saved);
+    favoriteBtn.setAttribute("aria-pressed", String(saved));
+    favoriteBtn.setAttribute("aria-label", saved ? `Remove ${meta.title} from favorites` : `Add ${meta.title} to favorites`);
+    favoriteBtn.querySelector(".rb-game-chrome__label").textContent = saved ? "Favorited" : "Favorite";
+  };
+  const syncMute = () => {
+    const muted = Boolean(window.RBSfx?.isMuted?.());
+    muteBtn.classList.toggle("is-active", muted);
+    muteBtn.setAttribute("aria-pressed", String(muted));
+    muteBtn.setAttribute("aria-label", muted ? "Unmute game audio" : "Mute game audio");
+    muteLabel.textContent = muted ? "Unmute" : "Mute";
+    muteIcon.innerHTML = muted ? icon.muteOff : icon.muteOn;
+  };
+  const syncMax = () => {
+    const maxed = isPlayMaxed(host || stage);
+    maximizeBtn.classList.toggle("is-active", maxed);
+    maximizeBtn.setAttribute("aria-pressed", String(maxed));
+    maximizeBtn.setAttribute("aria-label", maxed ? "Exit max screen" : "Maximize game");
+    maximizeBtn.querySelector(".rb-game-chrome__label").textContent = maxed ? "Exit" : "Maximize";
+    bar.hidden = maxed;
+  };
+  const refresh = () => {
+    syncFavorite();
+    syncMute();
+    syncMax();
+    syncWidth();
+  };
+
+  bar.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-rb-game-chrome]")?.dataset.rbGameChrome;
+    if (!action) return;
+    event.preventDefault();
+    if (action === "favorite") {
+      const saved = RBGameActivity.toggleFavorite(meta.slug);
+      syncFavorite();
+      renderGameHub();
+      if (window.RB?.toast) RB.toast(saved ? "Saved to favorites" : "Removed from favorites", saved ? "good" : "");
+    }
+    if (action === "share") handleGameHubShare(meta);
+    if (action === "maximize") {
+      togglePlayMax(host || stage);
+      syncMax();
+      window.setTimeout(syncMax, 80);
+    }
+    if (action === "mute" && window.RBSfx) {
+      window.RBSfx.toggleMuted();
+      syncMute();
+    }
+  });
+
+  window.addEventListener("rainbot:favoriteschange", syncFavorite);
+  document.addEventListener("rainbot:sfx-muted", syncMute);
+  document.addEventListener("fullscreenchange", syncMax);
+  document.addEventListener("webkitfullscreenchange", syncMax);
+  const observer = new MutationObserver(syncMax);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  if (host && host !== stage) observer.observe(host, { attributes: true, attributeFilter: ["class"] });
+  if (typeof ResizeObserver === "function" && host && host !== stage) {
+    new ResizeObserver(syncWidth).observe(host);
+  }
+  window.addEventListener("resize", syncWidth, { passive: true });
+
+  refresh();
+  scheduleGameCanvasFit();
+}
+
 function initStandaloneGameShell() {
   const surface = document.querySelector(".rb-standalone-surface");
   const fsButton = surface && surface.querySelector("#btn-fullscreen");
@@ -5257,6 +5426,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initGamesCatalog();
   initStandaloneGameShell();
   initAutoMaxScreenButtons();
+  initGameChromeBar();
   initGameEscapeMenu();
   initHomeRecentPanel();
   initHomeProgressPanel();

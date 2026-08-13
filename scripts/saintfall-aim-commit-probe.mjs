@@ -4,7 +4,7 @@
 
    Mouse-look used to drive the breastplate 1:1 and without limit, so
    orbiting the camera spun the shoulders a half-turn on stationary
-   hips. The replacement has three claims, and all three are
+   hips. The replacement has four claims, and all four are
    measurable rather than matters of taste:
 
      1. FREE LOOK MOVES NOTHING. Orbit the camera without touching a
@@ -18,6 +18,11 @@
         round until the reticle is inside that twist limit - and no
         further, so shooting at something roughly ahead does not slew
         a moving player off their path.
+
+     4. FIRING NEVER STEALS THE MOVEMENT STICK. A and D remain pure
+        camera-relative strafes, S remains reverse, and W remains
+        forward even while aim commitment turns the body toward the
+        reticle.
 
    Usage: node scripts/saintfall-aim-commit-probe.mjs [outfile.json]
    ============================================================ */
@@ -163,6 +168,60 @@ async function main() {
         maxChestTwistDeg: Number(maxTwist.toFixed(1)),
         nonFiniteFootReads: nonFinite,
       };
+
+      /* 5. FIRE + EACH MOVEMENT AXIS. Aim commitment is allowed to
+         turn the body, but translation must stay in the camera frame
+         requested by the stick. Measuring both camera-space axes
+         catches the reported failure directly: A/D used to gain a
+         forward component, while S could become mostly forward. */
+      out.fireMovement = [];
+      const moveCases = [
+        { key: "A", wantForward: 0, wantRight: -1 },
+        { key: "D", wantForward: 0, wantRight: 1 },
+        { key: "S", wantForward: -1, wantRight: 0 },
+        { key: "W", wantForward: 1, wantRight: 0 },
+      ];
+      for (const move of moveCases) {
+        setup(0);
+        T.setGaitInput(null);
+        document.documentElement.classList.add("sf-maximised");
+        T.weapons.setHeat(0, { clearOverheat: true });
+        T.setFiring(true);
+        settle(30);
+        const cameraForward = new T.THREE.Vector3();
+        T.render.camera.getWorldDirection(cameraForward);
+        cameraForward.y = 0;
+        cameraForward.normalize();
+        const cameraRight = new T.THREE.Vector3()
+          .crossVectors(cameraForward, new T.THREE.Vector3(0, 1, 0))
+          .normalize();
+        const before = T.playerState();
+        const x0 = before.x;
+        const z0 = before.z;
+        window.dispatchEvent(new KeyboardEvent("keydown", {
+          code: `Key${move.key}`, bubbles: true, cancelable: true,
+        }));
+        settle(60);
+        const after = T.playerState();
+        window.dispatchEvent(new KeyboardEvent("keyup", {
+          code: `Key${move.key}`, bubbles: true, cancelable: true,
+        }));
+        T.setFiring(false);
+        const dx = after.x - x0;
+        const dz = after.z - z0;
+        const distance = Math.hypot(dx, dz);
+        out.fireMovement.push({
+          key: move.key,
+          distanceM: Number(distance.toFixed(3)),
+          forwardRatio: Number(((dx * cameraForward.x + dz * cameraForward.z)
+            / Math.max(1e-6, distance)).toFixed(3)),
+          rightRatio: Number(((dx * cameraRight.x + dz * cameraRight.z)
+            / Math.max(1e-6, distance)).toFixed(3)),
+          wantForward: move.wantForward,
+          wantRight: move.wantRight,
+          bodyYawDeg: Number((after.yaw * 180 / Math.PI).toFixed(1)),
+        });
+      }
       return out;
     }, TWIST_LIMIT_DEG);
 
@@ -203,6 +262,21 @@ async function main() {
     if (rf.minLateralSeparationM <= 0) fails.push("legs crossed while running and firing");
     if (rf.maxChestTwistDeg > TWIST_LIMIT_DEG) fails.push("twist limit broken while running");
     if (rf.nonFiniteFootReads > 0) fails.push("non-finite foot position while running and firing");
+
+    console.log("\nFIRE + WASD - travel stays camera-relative while the body aims");
+    console.log("  key   distance   forward   right   bodyYaw");
+    for (const r of result.fireMovement) {
+      const forwardError = Math.abs(r.forwardRatio - r.wantForward);
+      const rightError = Math.abs(r.rightRatio - r.wantRight);
+      if (r.distanceM < 2) fails.push(`fire + ${r.key} did not travel far enough to measure`);
+      if (forwardError > 0.15 || rightError > 0.15) {
+        fails.push(`fire + ${r.key} travelled forward/right ${r.forwardRatio}/${r.rightRatio}`
+          + ` instead of ${r.wantForward}/${r.wantRight}`);
+      }
+      console.log(`  ${r.key.padStart(3)}${r.distanceM.toFixed(2).padStart(11)}`
+        + `${r.forwardRatio.toFixed(3).padStart(10)}${r.rightRatio.toFixed(3).padStart(8)}`
+        + `${r.bodyYawDeg.toFixed(1).padStart(10)}`);
+    }
 
     console.log("=".repeat(70));
     if (errors.length) fails.push(`${errors.length} page errors: ${errors[0]}`);

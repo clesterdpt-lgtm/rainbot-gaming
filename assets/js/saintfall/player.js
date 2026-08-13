@@ -3559,14 +3559,15 @@ export async function createPlayer(ctx, canvas) {
     let downhillUpdated = false;
     if ((mag > 0.01 || boostMode) && !slamMode) {
       const step = state.speed * dt;
-      /* Melee owns the BODY bearing for its committed attack, but it
-         must not steal the movement stick. Preserve the same
+      /* Melee and ranged aim commitment can own the BODY bearing, but
+         neither may steal the movement stick. Preserve the same
          camera-relative travel the pressed WASD direction requested;
-         otherwise S can become forward movement toward the target as
-         soon as the body turns to swing. The existing gait already
-         supports body-relative strafing during aim commitment. */
+         otherwise S can become forward movement toward the target and
+         A/D gain a forward component as the body turns to aim. The
+         existing gait already supports body-relative strafing during
+         aim commitment. */
       const moveYaw = boostMode ? boostState.yaw
-        : (shieldMode || meleeFacing)
+        : (shieldMode || meleeFacing || state.aimCommit > 0.002)
           ? state.camYaw + Math.atan2(-mx, -mz)
           : state.yaw;
       const nx = state.x + Math.sin(moveYaw) * step;

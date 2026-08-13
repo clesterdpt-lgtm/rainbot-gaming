@@ -5102,7 +5102,7 @@ function initGameChromeBar() {
   const surface = findPlaySurface();
   const meta = getGameMeta();
   const icon = {
-    favorite: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-9.2-8.2C1 8.8 2.6 5.5 6 5.5c2 0 3.3 1.2 4 2.4.7-1.2 2-2.4 4-2.4 3.4 0 5 3.3 3.2 6.3C19 15.6 12 20 12 20Z"/></svg>',
+    favorite: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.25C12 20.25 3.75 14.7 3.75 8.85 3.75 6.15 5.85 4.5 8.1 4.5 9.75 4.5 11.1 5.4 12 6.9 12.9 5.4 14.25 4.5 15.9 4.5 18.15 4.5 20.25 6.15 20.25 8.85 20.25 14.7 12 20.25 12 20.25Z"/></svg>',
     share: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="19" r="2.4"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/></svg>',
     maximize: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M20 15v5h-5M4 15v5h5"/></svg>',
     muteOn: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l5 4V6L7 10H4Z"/><path d="M16 9.5a4.5 4.5 0 0 1 0 5"/><path d="M18.2 7a7.5 7.5 0 0 1 0 10"/></svg>',

@@ -449,13 +449,21 @@ export function createRenderer(ctx, canvas) {
     antialias: false,          // MSAA lives on the HDR target instead
     alpha: false,
     powerPreference: "high-performance",
-    // The review harness reads the drawing buffer directly rather
-    // than going through page.screenshot(), which is compositor
-    // throttled and returns stale frames in headless. Players never
-    // read the buffer back, and preserving it denies the compositor
-    // its cheapest swap path on every single frame - so it is paid
-    // for only when a harness is actually attached.
-    preserveDrawingBuffer: !!ctx.qa,
+    /* The review harness reads the drawing buffer directly rather
+       than going through page.screenshot(), which is compositor
+       throttled and returns stale frames in headless.
+
+       DO NOT set this false to save the copy. It was tried, and it
+       converts every main-thread stall into a BLACK FRAME: with the
+       buffer unpreserved the contents are undefined once the
+       compositor has taken them, so any frame the page is too late to
+       redraw is composited from a cleared buffer. The canvas goes
+       black for a frame while the DOM HUD on top of it renders
+       perfectly - which reads as "the game flickers", not as "a frame
+       was late", and sent this bug hunt looking at the renderer.
+       Measured cost of preserving it here: none that showed above
+       run-to-run noise. */
+    preserveDrawingBuffer: true,
     stencil: false,
     depth: true,
   });
@@ -701,21 +709,63 @@ export function createRenderer(ctx, canvas) {
     holdUntil: 0,          // no second downscale before this
     lockUntil: 0,          // no upscale before this
     probeUntil: 0,         // a recent upscale is on probation until this
+    graceUntil: 0,         // set on the first live tick; see tickAutoScale
   };
   const autoOn = () => auto.desired && !auto.qaBlocked;
 
+  /* A scale change is APPLIED AT THE TOP OF THE NEXT render(), never
+     at the moment it is decided.
+
+     `setPixelRatio`/`setSize` resize the canvas, and resizing a canvas
+     CLEARS its drawing buffer. The controller runs after the frame has
+     been drawn, so applying the change there handed the compositor an
+     empty canvas: one hard black frame on every single resolution
+     step, with the DOM HUD still painted on top of it. That reads as
+     "the game flickers", and it is why this is deferred rather than
+     merely rate-limited. Applying it immediately before the draw means
+     the freshly-sized buffer is filled in the same frame it is
+     created, and no empty buffer is ever presented. */
+  let pendingScale = null;
+
   function setRenderScale(s) {
     const next = clamp(s, SCALE_MIN, 1);
-    if (Math.abs(next - renderScale) < 1e-3) return renderScale;
+    if (Math.abs(next - renderScale) < 1e-3) {
+      pendingScale = null;
+      return renderScale;
+    }
+    pendingScale = next;
+    return next;
+  }
+
+  /** Realise a deferred scale change. Called only from render(), and
+   *  only with the draw for that frame immediately following. */
+  function flushPendingScale() {
+    if (pendingScale === null) return;
+    const next = pendingScale;
+    pendingScale = null;
+    if (Math.abs(next - renderScale) < 1e-3) return;
     renderScale = next;
     applyPixelRatio();
     resize(width, height);
-    return renderScale;
+    // The chain was just reallocated, including the shadow map's
+    // consumers; redraw it rather than let an interleave gap sample a
+    // target that no longer exists.
+    requestShadowUpdate();
   }
 
   function tickAutoScale(dtMs) {
     if (!autoOn()) return renderScale;
     if (!(dtMs > 0) || dtMs > 250) return renderScale;   // tab switch, clock jump
+    /* The first seconds of a session are not a performance signal:
+       terrain LOD is still paging, the garrison is still being culled
+       for the first time, and any material the warm-up could not
+       reach compiles on its first draw. Measured, that noise alone
+       walked the scale down two steps inside 1.8s - so the player
+       started every session at a reduced resolution that then took
+       half a minute to earn back. Watch, do not act, until the
+       session has actually settled. */
+    if (auto.graceUntil === 0) auto.graceUntil = performance.now() + 3000;
+    if (performance.now() < auto.graceUntil) return renderScale;
     auto.ema = auto.ema === 0 ? dtMs : auto.ema + (dtMs - auto.ema) * 0.12;
     const now = performance.now();
     const dt = dtMs / 1000;
@@ -809,6 +859,9 @@ export function createRenderer(ctx, canvas) {
 
   function render(cam = camera, sourceScene = scene) {
     frame += 1;
+    // Before anything is drawn: a resized canvas is a cleared canvas,
+    // so the resize and the draw that refills it must be the same frame.
+    flushPendingScale();
     /* The flag survives every light-less quad pass below (three's
        shadow renderer returns before consuming it when the scene has
        no lights), so raising it here means exactly one shadow redraw,
@@ -958,6 +1011,32 @@ export function createRenderer(ctx, canvas) {
     requestShadowUpdate,
     setShadowEvery(n) { shadowEvery = Math.max(1, Math.floor(n) || 1); },
     get shadowEvery() { return shadowEvery; },
+    /** Compile every material in the graph, INCLUDING hidden ones.
+     *
+     * A material's program is built the first time it is drawn, and
+     * this game builds ~32 objects hidden and reveals them on first
+     * use (shield, jetpack plume, slam, the VFX pools, the Coulter).
+     * So the first Aegis block of a session compiled four shaders
+     * inside one frame: a freeze at the exact moment the player
+     * pressed a button to survive something.
+     *
+     * `compile()` walks with `traverse`, not `traverseVisible`, which
+     * is the only reason this works on hidden objects - and the
+     * reason a warm-up that just renders a few frames does not. */
+    async warmShaders(cam = camera, sourceScene = scene) {
+      const before = renderer.info.programs ? renderer.info.programs.length : 0;
+      const t0 = performance.now();
+      // Parallel compile where the driver offers it; the sync path is
+      // correct either way, just slower.
+      if (typeof renderer.compileAsync === "function") {
+        await renderer.compileAsync(sourceScene, cam);
+      } else {
+        renderer.compile(sourceScene, cam);
+      }
+      const after = renderer.info.programs ? renderer.info.programs.length : 0;
+      return { added: after - before, total: after,
+        ms: Number((performance.now() - t0).toFixed(1)) };
+    },
     get frame() { return frame; },
     /** Blit an intermediate buffer straight to the canvas. The AO
      *  probe reported the pass changing 0% of pixels; a number that

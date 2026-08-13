@@ -812,6 +812,23 @@ export async function start({ boot, build } = {}) {
 
   installQa(ctx, api);
 
+  /* WARM EVERY SHADER WHILE THE LOADER IS STILL UP.
+     Stepping frames below compiles what is VISIBLE. Everything built
+     hidden and revealed on use - the Aegis shield, the jetpack plume,
+     the slam, the VFX pools, the Coulter - would otherwise compile its
+     program inside the first frame it is used in, which is a freeze on
+     the exact input the player pressed to survive something. Measured
+     as a 60-200ms stall on first shield, first jetpack and first shot.
+     Failure here must never block the drop: a driver that refuses the
+     parallel-compile path should cost a hitch, not the game. */
+  progress(0.985, "Lighting the censers");
+  try {
+    const warmed = await render.warmShaders(render.camera, render.scene);
+    if (qa) console.info("[saintfall] shader warm-up", warmed);
+  } catch (err) {
+    console.warn("[saintfall] shader warm-up skipped:", err && err.message);
+  }
+
   // A few real frames before the loader lifts, so the first thing
   // anyone sees is a composed image rather than a black canvas.
   for (let i = 0; i < 4; i += 1) {

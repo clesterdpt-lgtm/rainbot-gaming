@@ -125,10 +125,22 @@ function buildVisual(ctx) {
   ring.renderOrder = 11;
   root.add(ring);
 
+  /* THE LIGHT HANGS OFF THE SCENE, NOT OFF THE PLATE.
+     three keys every material's compiled program on the NUMBER of
+     lights it can see, so a point light that appears when the plate
+     is revealed takes the visible count from 15 to 16 and invalidates
+     the program of every material in the level at once. Measured:
+     30 shaders recompiling inside the single frame the player raised
+     the Aegis - a 198ms freeze on the exact input pressed to survive
+     something.
+
+     Parented to the scene it is always counted, so the count never
+     changes and nothing ever recompiles. It contributes nothing while
+     idle because `updateVisual` holds its intensity at zero, and it
+     is driven to the plate's world position when the plate is up. */
   const light = new THREE.PointLight(0xffb43d, 0, 3.8, 2);
   light.name = "aegis-gold-light";
-  light.position.set(0, 0, -0.22);
-  root.add(light);
+  scene.add(light);
 
   scene.add(root);
 
@@ -190,10 +202,12 @@ function buildVisual(ctx) {
   domeRing.renderOrder = 9;
   domeRoot.add(domeRing);
 
+  // Scene-parented for the same reason as the gold light above: a
+  // stable light count is what keeps the dome from costing a second
+  // full shader recompile the first time it forms.
   const domeLight = new THREE.PointLight(0x83d8ff, 0, 7.5, 2);
   domeLight.name = "seraph-aegis-light";
-  domeLight.position.y = 1.15;
-  domeRoot.add(domeLight);
+  scene.add(domeLight);
   scene.add(domeRoot);
 
   return {
@@ -276,6 +290,9 @@ export function buildShield(ctx, player) {
     }
     visual.root.visible = false;
     visual.domeRoot.visible = false;
+    // Scene-parented lights are not carried down by those flags.
+    visual.light.intensity = 0;
+    visual.domeLight.intensity = 0;
   }
 
   function blockedReason(playerState) {
@@ -496,10 +513,24 @@ export function buildShield(ctx, player) {
       visual.runes.material.opacity = (0.20 + shimmer * 0.22 + pulse * 0.34) * p;
       visual.ring.material.opacity = (0.42 + shimmer * 0.28 + pulse * 0.26) * p;
       visual.ring.rotation.z += dt * (0.65 + pulse * 2.4);
+      /* The light is a sibling of the plate now, so it carries its own
+         world placement - the 0.22m stand-off that used to be a local
+         offset inside `root` has to be applied here. */
+      visual.light.position.set(
+        root.position.x - Math.sin(ps.yaw) * 0.22,
+        root.position.y,
+        root.position.z - Math.cos(ps.yaw) * 0.22
+      );
       visual.light.intensity = p * (0.42 + shimmer * 0.18 + pulse * 1.15);
       root.userData.active = state.active;
       root.userData.pose = Number(p.toFixed(3));
       root.userData.impact = Number(pulse.toFixed(3));
+    } else {
+      /* The light no longer hides with the plate, so lowering it is
+         now this function's job - a scene-parented light left at its
+         last intensity is a gold glow following the player around
+         with no shield under it. */
+      visual.light.intensity = 0;
     }
 
     const domeP = state.domePose;
@@ -513,10 +544,13 @@ export function buildShield(ctx, player) {
       visual.domeGrid.material.opacity = domeP * (0.075 + shimmer * 0.045 + pulse * 0.12);
       visual.domeRing.material.opacity = domeP * (0.58 + shimmer * 0.26 + pulse * 0.14);
       visual.domeRing.rotation.z += dt * (0.16 + pulse * 0.35);
+      visual.domeLight.position.set(ps.x, ps.y + 0.035 + 1.15, ps.z);
       visual.domeLight.intensity = domeP * (0.70 + shimmer * 0.28 + pulse * 1.35);
       domeRoot.userData.active = state.active && state.dome;
       domeRoot.userData.pose = Number(domeP.toFixed(3));
       domeRoot.userData.impact = Number(pulse.toFixed(3));
+    } else {
+      visual.domeLight.intensity = 0;
     }
   }
 

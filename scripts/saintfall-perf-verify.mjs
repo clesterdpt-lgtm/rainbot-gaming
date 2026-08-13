@@ -130,19 +130,33 @@ async function main() {
 
     /* ---------------- 3. controller mechanics ---------------- */
     console.log("--- dynamic resolution controller ---");
+    /* A scale decision is APPLIED at the top of the next render (a
+       resized canvas is a cleared canvas, so the resize and the draw
+       that refills it have to be the same frame). Every read below
+       therefore renders one frame first - which is also what the live
+       loop does, so the test exercises the real sequence. */
+    const settle = `
+      T.render.tickAutoScale(33);
+      T.renderStill();
+    `;
     const qaForced = await qa.page.evaluate(() => {
       const T = window.__SF;
       T.render.setAutoScale(true, { force: true });
-      // Feed a sustained 30fps signal: 40 ticks x 33ms = 1.3s over budget.
-      for (let i = 0; i < 40; i += 1) T.render.tickAutoScale(33);
+      // Past the startup grace window before any of this counts.
+      T.render.tickAutoScale(16);
+      const t0 = performance.now();
+      while (performance.now() - t0 < 3100) { /* spin past grace */ }
+      // Sustained 30fps signal, each decision realised by a draw.
+      for (let i = 0; i < 40; i += 1) { T.render.tickAutoScale(33); T.renderStill(); }
       return T.render.renderScale;
     });
+    void settle;
     check("over-budget walks scale down", qaForced < 1, `scale=${qaForced.toFixed(3)}`);
 
     await delay(1100); // let holdUntil lapse
     const second = await qa.page.evaluate(() => {
       const T = window.__SF;
-      for (let i = 0; i < 40; i += 1) T.render.tickAutoScale(33);
+      for (let i = 0; i < 40; i += 1) { T.render.tickAutoScale(33); T.renderStill(); }
       return T.render.renderScale;
     });
     check("second step after cooldown", second < qaForced, `scale=${second.toFixed(3)}`);
@@ -151,7 +165,7 @@ async function main() {
     const recovered = await qa.page.evaluate(async () => {
       const T = window.__SF;
       // Healthy cadence for >4s of accumulated under-budget time.
-      for (let i = 0; i < 300; i += 1) T.render.tickAutoScale(15);
+      for (let i = 0; i < 300; i += 1) { T.render.tickAutoScale(15); T.renderStill(); }
       return T.render.renderScale;
     });
     check("healthy cadence probes back up", recovered > second, `scale=${recovered.toFixed(3)}`);
@@ -159,9 +173,44 @@ async function main() {
     const restored = await qa.page.evaluate(() => {
       const T = window.__SF;
       T.render.setAutoScale(false);
+      T.renderStill();
       return T.render.renderScale;
     });
     check("disable restores native", restored === 1, `scale=${restored}`);
+
+    /* THE REGRESSION THAT SHIPPED: a scale change used to be applied
+       the moment it was decided, which is after the frame was drawn -
+       and resizing a canvas clears it, so the compositor was handed an
+       empty buffer and the player saw a black flash on every step.
+       Assert the canvas holds an image on the very frame a step lands. */
+    const stepFrame = await qa.page.evaluate(() => {
+      const T = window.__SF;
+      T.render.setAutoScale(false);
+      T.render.setRenderScale(1);
+      T.renderStill();
+      const gl = T.render.renderer.getContext();
+      const px = new Uint8Array(4 * 64);
+      const readMean = () => {
+        gl.readPixels(gl.drawingBufferWidth >> 1, gl.drawingBufferHeight >> 1,
+          8, 8, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        let s = 0;
+        for (let i = 0; i < 64; i += 1) {
+          s += px[i * 4] * 0.2126 + px[i * 4 + 1] * 0.7152 + px[i * 4 + 2] * 0.0722;
+        }
+        return s / 64;
+      };
+      const before = readMean();
+      T.render.setRenderScale(0.7);   // queue a step
+      T.renderStill();                 // the frame that applies AND draws it
+      return { before, onStepFrame: readMean(), scale: T.render.renderScale };
+    });
+    check("canvas is not black on a resolution-step frame",
+      stepFrame.onStepFrame > 4 && stepFrame.scale < 1,
+      `mean ${stepFrame.onStepFrame.toFixed(1)} at scale ${stepFrame.scale.toFixed(2)}`);
+    await qa.page.evaluate(() => {
+      window.__SF.render.setRenderScale(1);
+      window.__SF.renderStill();
+    });
     await qa.page.close();
 
     /* ---------------- 4. player-path defaults ---------------- */
@@ -175,7 +224,12 @@ async function main() {
     });
     check("player: shadows interleaved", pInfo.shadowEvery === 2, `shadowEvery=${pInfo.shadowEvery}`);
     check("player: autoscale armed", pInfo.autoScale === true);
-    check("player: buffer not preserved", pInfo.preserve === false);
+    /* Deliberately preserved on the player path too. Setting it false
+       saved nothing measurable and turned every late frame into a
+       black flash: with the buffer unpreserved its contents are
+       undefined once the compositor has taken them, so any frame the
+       page is late to redraw composites from a cleared buffer. */
+    check("player: drawing buffer preserved", pInfo.preserve === true);
     check("player: boots clean", player.errors.length === 0, player.errors[0] || "");
     await player.page.close();
   } finally {

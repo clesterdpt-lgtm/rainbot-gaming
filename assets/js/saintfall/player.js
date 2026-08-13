@@ -2091,6 +2091,71 @@ export async function createPlayer(ctx, canvas) {
   const figure = await buildTrooper(ctx);
   scene.add(figure.root);
 
+  /* Doctrine owns one additive presentation channel on the figure.
+     It deliberately borrows the reliquary light and the emissive
+     materials that are already updated below: no extra point lights,
+     no transient meshes and, most importantly, no transforms that can
+     fight locomotion, IK, recoil or authored action poses.
+
+     Colours follow the five Orders' menu accents, but are pulled back
+     from full neon so a proc reads as the same lamp changing character,
+     rather than as a different effect pasted over the trooper. */
+  const doctrineColours = {
+    censer: new THREE.Color(0xf0b84c),
+    procession: new THREE.Color(0xdf8542),
+    wing: new THREE.Color(0x58b8c9),
+    halo: new THREE.Color(0x7898d5),
+    edict: new THREE.Color(0x76ad78),
+  };
+  const doctrineGlow = {
+    colour: new THREE.Color(0xf0b84c),
+    level: 0,
+    peak: 0,
+    attackRemaining: 0,
+    decayRate: 12,
+    reducedMotion: false,
+  };
+  const doctrineHeartBase = figure.heartLight?.color?.clone() || null;
+  const doctrineEyeBase = figure.eyeGlow?.material?.emissive?.clone() || null;
+  const doctrineReadabilityBase = figure.readabilityMaterials
+    ? figure.readabilityMaterials.map((material) => material.emissive?.clone() || null)
+    : [];
+  const systemReducedMotion = typeof window !== "undefined"
+    && !!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+  /**
+   * Briefly key the trooper's existing emissive rig to a Doctrine Order.
+   * `duration` controls the visible decay rather than gameplay timing.
+   * Returns false for an unknown Order or a zero-strength request.
+   */
+  function pulseDoctrine(order, strength = 0.7, duration = 0.42) {
+    if (!Object.hasOwn(doctrineColours, order)) return false;
+    const colour = doctrineColours[order];
+    const numericStrength = Number.isFinite(strength) ? strength : 0;
+    const numericDuration = Number.isFinite(duration) ? duration : 0.42;
+    if (!Number.isFinite(numericStrength) || numericStrength <= 0) return false;
+
+    const reducedMotion = systemReducedMotion
+      || (typeof document !== "undefined"
+        && !!document.body?.classList?.contains("sf-reduced-motion"));
+    const safeDuration = clamp(
+      numericDuration,
+      0.12,
+      1.2
+    );
+    const requestedPeak = clamp(numericStrength, 0, 1);
+    const accessiblePeak = reducedMotion ? requestedPeak * 0.32 : requestedPeak;
+
+    doctrineGlow.colour.copy(colour);
+    doctrineGlow.peak = Math.max(doctrineGlow.level, accessiblePeak);
+    doctrineGlow.attackRemaining = reducedMotion
+      ? Math.min(0.14, safeDuration * 0.32)
+      : Math.min(0.07, safeDuration * 0.18);
+    doctrineGlow.decayRate = (reducedMotion ? 3.2 : 5.5) / safeDuration;
+    doctrineGlow.reducedMotion = reducedMotion;
+    return true;
+  }
+
   const state = {
     clock: 0,
     x: -12,
@@ -3337,9 +3402,28 @@ export async function createPlayer(ctx, canvas) {
     applyFigurePose(dt);
     const duskLight = clamp01(ctx.atmos.duskFactor || 0);
     const nightLight = clamp01(ctx.atmos.nightFactor || 0);
+    const doctrineAttacking = doctrineGlow.attackRemaining > 0;
+    if (doctrineAttacking) {
+      doctrineGlow.attackRemaining = Math.max(0, doctrineGlow.attackRemaining - dt);
+    }
+    const doctrineTarget = doctrineAttacking ? doctrineGlow.peak : 0;
+    const doctrineResponse = doctrineAttacking
+      ? (doctrineGlow.reducedMotion ? 14 : 36)
+      : doctrineGlow.decayRate;
+    doctrineGlow.level = damp(doctrineGlow.level, doctrineTarget, doctrineResponse, dt);
+    if (!doctrineAttacking && doctrineGlow.level < 0.001) {
+      doctrineGlow.level = 0;
+      doctrineGlow.peak = 0;
+    }
+    const doctrineLevel = doctrineGlow.level;
     if (figure.heartLight) {
-      const targetHeart = 0.16 + duskLight * 0.32 + nightLight * 0.24;
+      const targetHeart = 0.16 + duskLight * 0.32 + nightLight * 0.24
+        + doctrineLevel * 0.92;
       figure.heartLight.intensity = damp(figure.heartLight.intensity, targetHeart, 8, dt);
+      if (doctrineHeartBase) {
+        figure.heartLight.color.copy(doctrineHeartBase)
+          .lerp(doctrineGlow.colour, doctrineLevel * 0.68);
+      }
     }
     /* The eyes ride the same time-of-day curve as the reliquary, so
        the two read as one lamp burning inside one suit. The night
@@ -3347,15 +3431,27 @@ export async function createPlayer(ctx, canvas) {
        has almost no lit value left, so the glow has to climb or the
        head goes dark while the chest is still lit. */
     if (figure.eyeGlow) {
-      const targetEye = 4.2 + duskLight * 1.4 + nightLight * 2.4;
+      const targetEye = 4.2 + duskLight * 1.4 + nightLight * 2.4
+        + doctrineLevel * 2.1;
       figure.eyeGlow.material.emissiveIntensity =
         damp(figure.eyeGlow.material.emissiveIntensity, targetEye, 8, dt);
+      if (doctrineEyeBase) {
+        figure.eyeGlow.material.emissive.copy(doctrineEyeBase)
+          .lerp(doctrineGlow.colour, doctrineLevel * 0.54);
+      }
     }
     if (figure.readabilityMaterials) {
       const factor = 0.12 + duskLight * 0.88 + nightLight;
-      for (const material of figure.readabilityMaterials) {
-        const target = (material.userData.vesperReadability || 0.14) * factor;
+      for (let i = 0; i < figure.readabilityMaterials.length; i += 1) {
+        const material = figure.readabilityMaterials[i];
+        const target = (material.userData.vesperReadability || 0.14) * factor
+          + doctrineLevel * 0.18;
         material.emissiveIntensity = damp(material.emissiveIntensity, target, 8, dt);
+        const baseEmissive = doctrineReadabilityBase[i];
+        if (baseEmissive && material.emissive) {
+          material.emissive.copy(baseEmissive)
+            .lerp(doctrineGlow.colour, doctrineLevel * 0.34);
+        }
       }
     }
 
@@ -5537,6 +5633,7 @@ export async function createPlayer(ctx, canvas) {
   return {
     state,
     punch,
+    pulseDoctrine,
     carryElbowPole(i) { return CARRY_ELBOW_POLE[i]; },
     /* The palm roll, readable and writable, because it is the one
        part of the hold no metric can grade - see PALM_ROLL. */

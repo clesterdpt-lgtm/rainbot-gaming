@@ -84,7 +84,8 @@ export function buildAudio(ctx) {
 
   const buses = {};
   for (const [name, level] of Object.entries({
-    weapon: 0.9, world: 0.75, ui: 0.6, ambience: 0.5, cinematic: 0.72,
+    weapon: 0.9, world: 0.75, doctrine: 0.62, ui: 0.6,
+    ambience: 0.5, cinematic: 0.72,
   })) {
     const g = ac.createGain();
     g.gain.value = level;
@@ -139,6 +140,7 @@ export function buildAudio(ctx) {
     listenerZ: 0,
     listenerYaw: 0,
     voices: 0,
+    doctrineVoices: 0,
   };
 
   const drop = {
@@ -233,6 +235,336 @@ export function buildAudio(ctx) {
     src.loopStart = Math.random() * (NOISE_SECONDS - 0.5);
     src.loopEnd = NOISE_SECONDS;
     return src;
+  }
+
+  /* ============================================================
+     DOCTRINE SIGNATURES
+
+     Talent effects happen inside familiar actions, so reusing the shot,
+     shield or boost sound leaves the player unable to tell whether a rite
+     actually fired. These five compact signatures sit above the ordinary
+     action without replacing it. They share one deliberately restrained bus,
+     a four-voice sub-cap, and per-cue debounce so a crowd-control pulse cannot
+     turn a successful build into an audio storm.
+
+     Event contract:
+       { order, cue, x?, z?, intensity?, capstone? }
+
+     `kind` aliases `cue` and `strength` aliases `intensity` for callers that
+     already use those field names. Coordinates are optional; player-state
+     feedback remains centred when they are absent.
+     ============================================================ */
+
+  const DOCTRINE_ORDERS = new Set(["censer", "procession", "wing", "halo", "edict"]);
+  const doctrineLastCue = new Map();
+  const doctrineCurrentOrder = new Map();
+  const doctrineActive = new Set();
+  const doctrineCueCounts = Object.create(null);
+  let doctrineCueSerial = 0;
+  let doctrineLastPlayed = null;
+  const DOCTRINE_VOICE_CAP = 4;
+
+  function doctrineEvent(raw = {}) {
+    const order = typeof raw.order === "string" ? raw.order.toLowerCase() : "";
+    if (!DOCTRINE_ORDERS.has(order)) return null;
+    const cueValue = raw.cue ?? raw.kind ?? "proc";
+    const cue = String(cueValue).trim().toLowerCase().slice(0, 64) || "proc";
+    const stage = String(raw.stage || "proc").trim().toLowerCase().slice(0, 32) || "proc";
+    const prep = /^(arm|segment|store|inbound|channel|form|pulse)$/.test(stage);
+    const resolves = /^(consume|complete|resolve|release|impact)$/.test(stage);
+    const namedCapstone = /capstone|furnace|martyr|litany|circuit|seraph|liturgy|fusion/.test(cue);
+    const explicitPriority = Number(raw.priority);
+    const semanticPriority = (raw.capstone === true || namedCapstone) && !prep
+      ? 3
+      : resolves || /break|parry|toll|blast/.test(cue) ? 2
+        : prep ? 0 : 1;
+    /* Presentation publishers normally supply priority, but the recognisable
+       finisher names remain a safety floor. This prevents a generic `proc`
+       stage from accidentally ranking Third Toll or Votive Parry alongside a
+       routine refund and reinstating first-wins suppression. */
+    const priority = Number.isFinite(explicitPriority)
+      ? Math.max(semanticPriority, Math.max(0, Math.min(3, Math.floor(explicitPriority))))
+      : semanticPriority;
+    const emphatic = priority >= 3;
+    let fallback = /tick|pulse|store|arm|brand|feather|wake|sigil|beacon/.test(cue)
+      ? 0.42
+      : /break|consume|release|rupture|complete|resolve|impact|blast|fuse/.test(cue)
+        ? 0.76 : 0.58;
+    if (emphatic) fallback = 1;
+    const rawIntensity = Number(raw.intensity ?? raw.strength);
+    const intensity = clamp01(Number.isFinite(rawIntensity) ? rawIntensity : fallback);
+    const x = raw.x == null ? NaN : Number(raw.x);
+    const z = raw.z == null ? NaN : Number(raw.z);
+    return {
+      order,
+      cue,
+      stage,
+      priority,
+      intensity,
+      capstone: emphatic,
+      x: Number.isFinite(x) ? x : null,
+      z: Number.isFinite(z) ? z : null,
+    };
+  }
+
+  function doctrinePitch(cue) {
+    let hash = 0;
+    for (let i = 0; i < cue.length; i += 1) hash = ((hash * 31) + cue.charCodeAt(i)) | 0;
+    return 2 ** ([0, 2, -2][Math.abs(hash) % 3] / 12);
+  }
+
+  function doctrineVoice(event, duration) {
+    if (state.paused) return null;
+    const t = now();
+    const repeated = /tick|pulse|wake/.test(event.cue);
+    const cueGap = repeated ? 0.34 : event.capstone ? 0.16 : 0.09;
+    const orderGap = 0.07;
+    /* Different rites are allowed to speak on the same authoritative action.
+       A perfect guard can legitimately store Wrath, arm Reversal and proc a
+       Parry together; an Order-wide debounce silenced the most important cue
+       simply because a quieter one happened to be published first. Stage is
+       part of the key so an arm immediately followed by its capstone release
+       remains audible, while repeated wake pulses are still controlled. */
+    const cueKey = `${event.order}:${event.cue}:${event.stage}`;
+    if (t - (doctrineLastCue.get(cueKey) ?? -Infinity) < cueGap) return null;
+    const prior = doctrineCurrentOrder.get(event.order);
+    if (prior && t - prior.at < orderGap) {
+      /* A consume is the player's follow-through, not another layer of the
+         same proc. If it lands immediately after an equal-priority release
+         (shield release -> reversal boost is the real example), let the
+         follow-through own the audible beat. Equal-priority duplicates and
+         unrelated routine cues remain suppressed. */
+      const consumeFollowThrough = event.priority === prior.priority
+        && event.stage === "consume" && prior.stage !== "consume";
+      if (event.priority < prior.priority
+        || (event.priority === prior.priority && !consumeFollowThrough)) return null;
+      /* Synchronous talent stacks publish in mechanic order, not importance
+         order. Fade the already-started prep voice when a finisher/capstone
+         follows in the same action; this is true preemption rather than just
+         allowing both sounds to fight for the limiter. */
+      prior.release(true);
+    }
+    if (state.doctrineVoices >= DOCTRINE_VOICE_CAP) {
+      let weakest = null;
+      for (const candidate of doctrineActive) {
+        if (!weakest || candidate.priority < weakest.priority) weakest = candidate;
+      }
+      if (!weakest || event.priority <= weakest.priority) return null;
+      weakest.release(true);
+    }
+    const g = voice("doctrine", duration);
+    if (!g) return null;
+    const placed = event.x === null || event.z === null
+      ? { node: g, atten: 1 }
+      : place(g, event.x, event.z, 32, 340);
+    if (!placed) return null;
+    doctrineLastCue.set(cueKey, t);
+    if (doctrineLastCue.size > 96) {
+      const oldest = doctrineLastCue.keys().next().value;
+      doctrineLastCue.delete(oldest);
+    }
+    state.doctrineVoices += 1;
+    const record = {
+      at: t,
+      priority: event.priority,
+      stage: event.stage,
+      released: false,
+      release(fade = false) {
+        if (record.released) return;
+        record.released = true;
+        doctrineActive.delete(record);
+        state.doctrineVoices = Math.max(0, state.doctrineVoices - 1);
+        if (fade) {
+          try {
+            g.gain.cancelScheduledValues(now());
+            g.gain.setTargetAtTime(0.0001, now(), 0.012);
+          } catch (_) { /* context is already closing */ }
+        }
+        if (doctrineCurrentOrder.get(event.order) === record) {
+          doctrineCurrentOrder.delete(event.order);
+        }
+      },
+    };
+    doctrineActive.add(record);
+    doctrineCurrentOrder.set(event.order, record);
+    window.setTimeout(() => record.release(false), Math.ceil(duration * 1000) + 70);
+    return { ...placed, t };
+  }
+
+  /** Hot brass and an ash exhale: precision armed, then pressure released. */
+  function censerDoctrine(event) {
+    const power = 0.62 + event.intensity * 0.58;
+    const dur = event.capstone ? 0.88 : 0.34 + event.intensity * 0.22;
+    const out = doctrineVoice(event, dur);
+    if (!out) return false;
+    const pitch = doctrinePitch(event.cue);
+    const amp = 0.13 * power * out.atten;
+    const partials = event.capstone ? [[1, 1], [1.5, 0.58], [2.03, 0.34]]
+      : [[1, 1], [1.5, 0.48]];
+    for (const [ratio, gain] of partials) {
+      const bell = ac.createOscillator();
+      bell.type = ratio === 1 ? "triangle" : "sine";
+      bell.frequency.setValueAtTime(392 * pitch * ratio, out.t);
+      bell.frequency.exponentialRampToValueAtTime(310 * pitch * ratio, out.t + dur * 0.82);
+      const bg = ac.createGain();
+      bg.gain.setValueAtTime(0.0001, out.t);
+      bg.gain.linearRampToValueAtTime(amp * gain, out.t + 0.008);
+      bg.gain.exponentialRampToValueAtTime(0.0001, out.t + dur);
+      bell.connect(bg); bg.connect(out.node);
+      bell.start(out.t); bell.stop(out.t + dur + 0.02);
+    }
+    const ash = noiseSource(0.72);
+    const af = ac.createBiquadFilter();
+    af.type = "bandpass";
+    af.Q.value = 0.65;
+    af.frequency.setValueAtTime(680, out.t);
+    af.frequency.exponentialRampToValueAtTime(2100, out.t + dur * 0.55);
+    const ag = ac.createGain();
+    ag.gain.setValueAtTime(amp * 0.38, out.t);
+    ag.gain.exponentialRampToValueAtTime(0.0001, out.t + dur * 0.72);
+    ash.connect(af); af.connect(ag); ag.connect(out.node);
+    ash.start(out.t); ash.stop(out.t + dur * 0.75);
+    return true;
+  }
+
+  /** Three measured tolls: the Order always speaks in combo cadence. */
+  function processionDoctrine(event) {
+    const dur = event.capstone ? 0.98 : 0.68;
+    const out = doctrineVoice(event, dur);
+    if (!out) return false;
+    const pitch = doctrinePitch(event.cue);
+    const amp = (0.095 + event.intensity * 0.045) * out.atten;
+    const gap = event.capstone ? 0.105 : 0.082;
+    for (let i = 0; i < 3; i += 1) {
+      const start = out.t + i * gap;
+      const bell = ac.createOscillator();
+      bell.type = "triangle";
+      const base = [196, 247, 294][i] * pitch;
+      bell.frequency.setValueAtTime(base, start);
+      bell.frequency.exponentialRampToValueAtTime(base * 0.76, start + dur * 0.58);
+      const filter = ac.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = 1300 + event.intensity * 900;
+      const gain = ac.createGain();
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.linearRampToValueAtTime(amp * (0.82 + i * 0.09), start + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + dur * 0.62);
+      bell.connect(filter); filter.connect(gain); gain.connect(out.node);
+      bell.start(start); bell.stop(start + dur * 0.65);
+    }
+    return true;
+  }
+
+  /** Air through a reliquary vane, resolving into an ascending wingbeat. */
+  function wingDoctrine(event) {
+    const dur = event.capstone ? 0.86 : 0.46 + event.intensity * 0.18;
+    const out = doctrineVoice(event, dur);
+    if (!out) return false;
+    const pitch = doctrinePitch(event.cue);
+    const amp = (0.11 + event.intensity * 0.055) * out.atten;
+    const lift = ac.createOscillator();
+    lift.type = "sawtooth";
+    lift.frequency.setValueAtTime(150 * pitch, out.t);
+    lift.frequency.exponentialRampToValueAtTime((event.capstone ? 980 : 680) * pitch,
+      out.t + dur * 0.72);
+    const lf = ac.createBiquadFilter();
+    lf.type = "bandpass";
+    lf.Q.value = 2.2;
+    lf.frequency.setValueAtTime(520, out.t);
+    lf.frequency.exponentialRampToValueAtTime(3100, out.t + dur * 0.74);
+    const lg = ac.createGain();
+    lg.gain.setValueAtTime(0.0001, out.t);
+    lg.gain.linearRampToValueAtTime(amp, out.t + 0.028);
+    lg.gain.exponentialRampToValueAtTime(0.0001, out.t + dur);
+    lift.connect(lf); lf.connect(lg); lg.connect(out.node);
+    lift.start(out.t); lift.stop(out.t + dur + 0.02);
+
+    const air = noiseSource(1.45);
+    const af = ac.createBiquadFilter();
+    af.type = "highpass";
+    af.frequency.setValueAtTime(700, out.t);
+    af.frequency.exponentialRampToValueAtTime(3600, out.t + dur * 0.8);
+    const ag = ac.createGain();
+    ag.gain.setValueAtTime(amp * 0.48, out.t);
+    ag.gain.exponentialRampToValueAtTime(0.0001, out.t + dur * 0.84);
+    air.connect(af); af.connect(ag); ag.connect(out.node);
+    air.start(out.t); air.stop(out.t + dur * 0.86);
+    return true;
+  }
+
+  /** A glass guard transient and a stable perfect fifth. */
+  function haloDoctrine(event) {
+    const dur = event.capstone ? 1.02 : 0.5 + event.intensity * 0.2;
+    const out = doctrineVoice(event, dur);
+    if (!out) return false;
+    const pitch = doctrinePitch(event.cue);
+    const amp = (0.105 + event.intensity * 0.05) * out.atten;
+    const tones = event.capstone ? [[440, 1], [660, 0.72], [880, 0.42]]
+      : [[440, 1], [660, 0.66]];
+    for (const [frequency, gain] of tones) {
+      const ring = ac.createOscillator();
+      ring.type = "sine";
+      ring.frequency.setValueAtTime(frequency * pitch, out.t);
+      const rg = ac.createGain();
+      rg.gain.setValueAtTime(0.0001, out.t);
+      rg.gain.linearRampToValueAtTime(amp * gain, out.t + 0.004);
+      rg.gain.exponentialRampToValueAtTime(0.0001, out.t + dur);
+      ring.connect(rg); rg.connect(out.node);
+      ring.start(out.t); ring.stop(out.t + dur + 0.02);
+    }
+    const guard = noiseSource(1.9);
+    const gf = ac.createBiquadFilter();
+    gf.type = "highpass";
+    gf.frequency.value = 2800;
+    const gg = ac.createGain();
+    gg.gain.setValueAtTime(amp * 0.45, out.t);
+    gg.gain.exponentialRampToValueAtTime(0.0001, out.t + 0.075);
+    guard.connect(gf); gf.connect(gg); gg.connect(out.node);
+    guard.start(out.t); guard.stop(out.t + 0.09);
+    return true;
+  }
+
+  /** A terse command cipher; capstones close it with a low authorization tone. */
+  function edictDoctrine(event) {
+    const dur = event.capstone ? 0.78 : 0.42;
+    const out = doctrineVoice(event, dur);
+    if (!out) return false;
+    const pitch = doctrinePitch(event.cue);
+    const amp = (0.09 + event.intensity * 0.045) * out.atten;
+    const notes = event.capstone ? [330, 494, 740, 247] : [330, 494, 740];
+    for (let i = 0; i < notes.length; i += 1) {
+      const start = out.t + i * 0.052;
+      const osc = ac.createOscillator();
+      osc.type = i === notes.length - 1 && event.capstone ? "triangle" : "square";
+      osc.frequency.setValueAtTime(notes[i] * pitch, start);
+      const filter = ac.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = i === notes.length - 1 && event.capstone ? 1100 : 2600;
+      const gain = ac.createGain();
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.linearRampToValueAtTime(amp * (i === 3 ? 1.25 : 1), start + 0.003);
+      gain.gain.exponentialRampToValueAtTime(0.0001,
+        start + (i === 3 ? 0.42 : 0.095));
+      osc.connect(filter); filter.connect(gain); gain.connect(out.node);
+      osc.start(start); osc.stop(start + (i === 3 ? 0.45 : 0.11));
+    }
+    return true;
+  }
+
+  function doctrineCue(raw = {}) {
+    const event = doctrineEvent(raw);
+    if (!event) return false;
+    const played = event.order === "censer" ? censerDoctrine(event)
+      : event.order === "procession" ? processionDoctrine(event)
+        : event.order === "wing" ? wingDoctrine(event)
+          : event.order === "halo" ? haloDoctrine(event) : edictDoctrine(event);
+    if (played) {
+      doctrineCueSerial += 1;
+      const id = `${event.order}:${event.cue}`;
+      doctrineCueCounts[id] = (doctrineCueCounts[id] || 0) + 1;
+      doctrineLastPlayed = { ...event, serial: doctrineCueSerial };
+    }
+    return played;
   }
 
   /* ============================================================
@@ -1313,8 +1645,14 @@ export function buildAudio(ctx) {
      without touching combat.
      ============================================================ */
 
+  let doctrineAttached = false;
+  let doctrineStop = null;
   function attach() {
     const { combat, mission, breaches } = ctx;
+    if (!doctrineAttached) {
+      doctrineAttached = true;
+      doctrineStop = ctx.progression?.bus?.on?.("doctrine", doctrineCue) || null;
+    }
     if (combat) {
       combat.bus.on("hit", (e) => impact(e.x, e.z, "flesh"));
       combat.bus.on("melee", (e) => meleeImpact(e.x, e.z, e));
@@ -1693,6 +2031,12 @@ export function buildAudio(ctx) {
     slamCharge,
     slamPlunge,
     slamImpact,
+    doctrineCue,
+    detachDoctrine() {
+      doctrineStop?.();
+      doctrineStop = null;
+      doctrineAttached = false;
+    },
     jetIgnite,
     jetCutoff,
     jetEmpty,
@@ -1721,6 +2065,12 @@ export function buildAudio(ctx) {
       return {
         state: ac.state,
         voices: state.voices,
+        doctrineVoices: state.doctrineVoices,
+        doctrine: {
+          serial: doctrineCueSerial,
+          lastCue: doctrineLastPlayed ? { ...doctrineLastPlayed } : null,
+          cueCounts: { ...doctrineCueCounts },
+        },
         sampleRate: ac.sampleRate,
         paused: state.paused,
         ambience: !!wind,
@@ -1749,6 +2099,7 @@ function makeSilentApi() {
     jetIgnite: noop, jetCutoff: noop, jetEmpty: noop, jetLand: noop,
     boostIgnite: noop, boostCut: noop, boostHit: noop,
     slamCharge: noop, slamPlunge: noop, slamImpact: noop,
+    doctrineCue: no, detachDoctrine: noop,
     update: noop, unlock: noPromise, startAmbience: noop, setEnabled: noop,
     beginDrop: noPromise, updateDrop: no, dropCue: no,
     pauseDrop: noPromise, setPaused: noPromise, endDrop: noPromise,
@@ -1757,6 +2108,7 @@ function makeSilentApi() {
       return {
         state: "unavailable",
         voices: 0,
+        doctrineVoices: 0,
         sampleRate: 0,
         paused: false,
         ambience: false,

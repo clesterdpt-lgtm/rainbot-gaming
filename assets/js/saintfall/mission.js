@@ -443,6 +443,7 @@ export function buildMission(ctx) {
         addedDelay,
         remaining: shot.t,
         preserveSiren: !!directive.preserveSiren,
+        shot: commandRecord(shot),
       };
       say(`${shot.spec.name.toUpperCase()} RELOCATED`, 1.8);
       bus.emit("relocated", event);
@@ -516,6 +517,7 @@ export function buildMission(ctx) {
       seconds: spec.delay,
       cooldown: cooldowns[key],
       modified: Object.keys(change).length > 0,
+      shot: commandRecord(shot),
     };
     bus.emit("stratagem", event);
     bus.emit("inbound", event);
@@ -621,8 +623,12 @@ export function buildMission(ctx) {
     const fusion = shot.fusion;
     if (!fusion?.id) return null;
     let outcome = {};
+    let effectPoint = { x: shot.x, y: shot.y, z: shot.z };
+    let effectRadius = 9;
     if (fusion.id === "sunshard") {
       const orbital = fusionPoint(shot, "orbital") || { x: shot.x, y: shot.y, z: shot.z };
+      effectPoint = { ...orbital };
+      effectRadius = 5.5;
       const identities = shot.key === "orbital"
         ? (Array.isArray(shot.impactTargets) ? shot.impactTargets : [])
         : (Array.isArray(fusion.anchor?.impactTargets) ? fusion.anchor.impactTargets : []);
@@ -645,6 +651,7 @@ export function buildMission(ctx) {
           z: target.z,
         });
         ctx.vfx?.blast?.(target.x, target.y + 0.8, target.z, 5.5);
+        effectPoint = { x: target.x, y: target.y + 0.8, z: target.z };
         outcome = {
           targetId: target.id || null,
           targetKey: target.key,
@@ -660,6 +667,7 @@ export function buildMission(ctx) {
         field.remaining = Math.max(field.remaining, 10);
         field.fusionId = fusion.id;
         field.marker.fill.material.opacity = Math.max(field.marker.fill.material.opacity, 0.12);
+        bus.emit("sanctuary", fieldRecord(field));
       } else {
         field = createSanctuary(shot, { radius: 10 }, {
           ...recovery,
@@ -668,10 +676,14 @@ export function buildMission(ctx) {
           fusionId: fusion.id,
         });
       }
+      effectPoint = { x: field.x, y: field.y, z: field.z };
+      effectRadius = field.radius;
       outcome = { fieldId: field.id, radius: field.radius, duration: field.remaining };
     } else if (fusion.id === "reliquary_minefield") {
       const recovery = fusionPoint(shot, "resupply") || { x: shot.x, y: shot.y, z: shot.z };
       const created = createMinefield(shot, recovery.x, recovery.z);
+      effectPoint = { x: recovery.x, y: groundY(recovery.x, recovery.z), z: recovery.z };
+      effectRadius = 9.8;
       outcome = { mineIds: created.map((field) => field.id), count: created.length };
     }
     const event = {
@@ -690,6 +702,8 @@ export function buildMission(ctx) {
       x: shot.x,
       y: shot.y,
       z: shot.z,
+      effectPoint,
+      effectRadius,
       outcome,
     };
     bus.emit("fusion", event);
@@ -898,6 +912,7 @@ export function buildMission(ctx) {
       y: best.y,
       z: best.z,
       point,
+      shot: commandRecord(best),
     };
     best.marker.beam.material.opacity = 0.92;
     ctx.vfx?.spark?.(point.x, point.y, point.z, 1.25, false, true);

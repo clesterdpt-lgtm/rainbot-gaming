@@ -848,6 +848,14 @@ export function buildVfx(ctx, world) {
         // cyan or the Concord's gold.
         uVenomHot: { value: new THREE.Color("#eaff9c") },
         uVenomCold: { value: new THREE.Color("#4f7a12") },
+        // Doctrine cues share this pool, but each Order keeps a hue
+        // that survives sand, bloom and distance. Values 6-10 on the
+        // style channel are reserved for these five colours.
+        uDoctrineCenser: { value: new THREE.Color("#ffbd3e") },
+        uDoctrineProcession: { value: new THREE.Color("#ff7045") },
+        uDoctrineWing: { value: new THREE.Color("#08d4ff") },
+        uDoctrineHalo: { value: new THREE.Color("#6684ff") },
+        uDoctrineEdict: { value: new THREE.Color("#20e0a6") },
       },
       transparent: true,
       depthWrite: false,
@@ -876,13 +884,15 @@ export function buildVfx(ctx, world) {
         "  }",
         /* `aTint` is the pool's style channel as well as its heat, in
            bands: under 1.5 is debris, 1.5-3.5 is a reliquary ion,
-           3.5-4.5 is a venom droplet and above that is venom gas.
-           Reliquary ions and gas hang; debris and droplets fall,
-           because a thrown liquid that floats reads as a spore. */
-        "  float venom = step(3.5, aTint);",
-        "  float gas = step(4.5, aTint);",
-        "  float energy = step(1.5, aTint) * (1.0 - venom);",
-        "  float fall = (1.0 - energy) * (1.0 - gas);",
+           3.5-4.5 is a venom droplet, 4.5-5.5 is venom gas, and
+           6-10 are the five Doctrine Orders. Energy, gas and Doctrine
+           motes hang; debris and droplets fall, because a thrown
+           liquid that floats reads as a spore. */
+        "  float doctrine = step(5.5, aTint);",
+        "  float venom = step(3.5, aTint) * (1.0 - doctrine);",
+        "  float gas = step(4.5, aTint) * (1.0 - doctrine);",
+        "  float energy = step(1.5, aTint) * (1.0 - venom) * (1.0 - doctrine);",
+        "  float fall = (1.0 - energy) * (1.0 - gas) * (1.0 - doctrine);",
         "  vec3 p = position + aVel * age",
         "    - vec3(0.0, 9.0, 0.0) * age * age * fall;",
         "  vec4 mv = modelViewMatrix * vec4(p, 1.0);",
@@ -898,6 +908,11 @@ export function buildVfx(ctx, world) {
         "uniform vec3 uEnergyCold;",
         "uniform vec3 uVenomHot;",
         "uniform vec3 uVenomCold;",
+        "uniform vec3 uDoctrineCenser;",
+        "uniform vec3 uDoctrineProcession;",
+        "uniform vec3 uDoctrineWing;",
+        "uniform vec3 uDoctrineHalo;",
+        "uniform vec3 uDoctrineEdict;",
         "varying float vLife;",
         "varying float vTint;",
         "void main() {",
@@ -905,8 +920,9 @@ export function buildVfx(ctx, world) {
         "  float r = dot(d, d);",
         "  if (r > 0.25) discard;",
         "  float core = smoothstep(0.25, 0.0, r);",
-        "  float venom = step(3.5, vTint);",
-        "  float energy = step(1.5, vTint) * (1.0 - venom);",
+        "  float doctrine = step(5.5, vTint);",
+        "  float venom = step(3.5, vTint) * (1.0 - doctrine);",
+        "  float energy = step(1.5, vTint) * (1.0 - venom) * (1.0 - doctrine);",
         "  vec3 sparkColour = mix(uCold, uHot, clamp(vTint * vLife, 0.0, 1.0));",
         "  vec3 ionColour = mix(uEnergyCold, uEnergyHot, 0.30 + vLife * 0.70);",
         /* Kept at the SATURATED end of its own ramp. Mixed toward the
@@ -914,7 +930,16 @@ export function buildVfx(ctx, world) {
            white motes - and white is what every other particle in the
            game already is, so the one hazard colour stopped being one. */
         "  vec3 venomColour = mix(uVenomCold, uVenomHot, 0.08 + vLife * 0.30);",
+        "  vec3 doctrineColour = uDoctrineCenser;",
+        "  doctrineColour = mix(doctrineColour, uDoctrineProcession, step(6.5, vTint));",
+        "  doctrineColour = mix(doctrineColour, uDoctrineWing, step(7.5, vTint));",
+        "  doctrineColour = mix(doctrineColour, uDoctrineHalo, step(8.5, vTint));",
+        "  doctrineColour = mix(doctrineColour, uDoctrineEdict, step(9.5, vTint));",
+        // Doctrine particles keep their Order hue through bloom. The
+        // old white-core mix made Wing and Edict both read as sparks.
+        "  doctrineColour = mix(doctrineColour, vec3(1.0), clamp(core * 0.16 + vLife * 0.05, 0.0, 0.22));",
         "  vec3 c = mix(mix(sparkColour, ionColour, energy), venomColour, venom);",
+        "  c = mix(c, doctrineColour, doctrine);",
         "  gl_FragColor = vec4(c * core * (0.35 + vLife * 1.5), core * vLife);",
         "}",
       ].join("\n"),
@@ -1475,11 +1500,19 @@ export function buildVfx(ctx, world) {
         uEnergyCold: { value: new THREE.Color("#ffab2a") },
         uVenomHot: { value: new THREE.Color("#eaff9c") },
         uVenomCold: { value: new THREE.Color("#5b8a12") },
+        uDoctrineCenser: { value: new THREE.Color("#ffbd3e") },
+        uDoctrineProcession: { value: new THREE.Color("#ff7045") },
+        uDoctrineWing: { value: new THREE.Color("#08d4ff") },
+        uDoctrineHalo: { value: new THREE.Color("#6684ff") },
+        uDoctrineEdict: { value: new THREE.Color("#20e0a6") },
       },
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
+      // Additive quads are order-independent. A single double-sided
+      // pass avoids paying twice for the whole fixed flash buffer.
+      forceSinglePass: true,
       vertexShader: [
         "attribute float aBirth;",
         "attribute float aSize;",
@@ -1522,6 +1555,11 @@ export function buildVfx(ctx, world) {
         "uniform vec3 uEnergyCold;",
         "uniform vec3 uVenomHot;",
         "uniform vec3 uVenomCold;",
+        "uniform vec3 uDoctrineCenser;",
+        "uniform vec3 uDoctrineProcession;",
+        "uniform vec3 uDoctrineWing;",
+        "uniform vec3 uDoctrineHalo;",
+        "uniform vec3 uDoctrineEdict;",
         "varying vec2 vUv;",
         "varying float vFade;",
         "varying float vSeed;",
@@ -1535,22 +1573,35 @@ export function buildVfx(ctx, world) {
         "  float ang = atan(vUv.y, vUv.x);",
         "  float star = pow(abs(cos(ang * 2.0 + vSeed * 6.2831)), 6.0);",
         "  float starBurst = core + star * pow(clamp(1.0 - r, 0.0, 1.0), 1.1) * 0.85;",
-        "  float venom = step(3.5, vTint);",
-        "  float energy = step(1.5, vTint) * (1.0 - venom);",
+        "  float doctrine = step(5.5, vTint);",
+        "  float venom = step(3.5, vTint) * (1.0 - doctrine);",
+        "  float energy = step(1.5, vTint) * (1.0 - venom) * (1.0 - doctrine);",
         // A brief expanding annulus is the discharge field; ballistic
         // flashes keep the original four-spike star.
         "  float ring = smoothstep(0.26, 0.48, r)",
         "    * (1.0 - smoothstep(0.56, 0.88, r));",
         "  float energyBurst = core * 0.82 + ring * (0.45 + (1.0 - vFade) * 0.55)",
         "    + star * 0.20;",
+        "  float doctrineBurst = core * 0.76",
+        "    + ring * (0.64 + (1.0 - vFade) * 0.52) + star * 0.26;",
         "  float burst = mix(starBurst, energyBurst, energy);",
+        "  burst = mix(burst, doctrineBurst, doctrine);",
         // A venom mouth-flash is a soft glow, not a star: it is light
         // coming out of a throat rather than a discharge.
         "  burst = mix(burst, core * 1.15, venom);",
         "  vec3 flashColour = mix(uCold, uHot, clamp(vTint * (0.35 + vFade), 0.0, 1.0));",
         "  vec3 energyColour = mix(uEnergyCold, uEnergyHot, core);",
         "  vec3 venomColour = mix(uVenomCold, uVenomHot, 0.30 + core * 0.60);",
+        "  vec3 doctrineColour = uDoctrineCenser;",
+        "  doctrineColour = mix(doctrineColour, uDoctrineProcession, step(6.5, vTint));",
+        "  doctrineColour = mix(doctrineColour, uDoctrineWing, step(7.5, vTint));",
+        "  doctrineColour = mix(doctrineColour, uDoctrineHalo, step(8.5, vTint));",
+        "  doctrineColour = mix(doctrineColour, uDoctrineEdict, step(9.5, vTint));",
+        // A coloured core still blooms; pushing it more than halfway
+        // to white erased the Order hue and produced hot white orbs.
+        "  doctrineColour = mix(doctrineColour, vec3(1.0), core * 0.20);",
         "  vec3 c = mix(mix(flashColour, energyColour, energy), venomColour, venom);",
+        "  c = mix(c, doctrineColour, doctrine);",
         "  float a = clamp(burst * vFade, 0.0, 1.0);",
         "  gl_FragColor = vec4(c * burst * vFade * 3.4, a);",
         "}",
@@ -1899,6 +1950,10 @@ export function buildVfx(ctx, world) {
         depthWrite: false, blending: THREE.AdditiveBlending,
         side: THREE.DoubleSide, toneMapped: true,
       });
+      // Back/front ordering is irrelevant under additive blending.
+      // Three's default two-pass transparent DoubleSide path otherwise
+      // doubles every active ring, dome and beam render call.
+      mat.forceSinglePass = true;
       mat.name = "sf-ordnance";
       patchBasicMaterial(mat, atmos, 1.0, true);
       return mat;
@@ -2036,6 +2091,10 @@ export function buildVfx(ctx, world) {
     slot.to = to;
     slot.thickness = thickness;
     slot.mesh.position.set(x, y, z);
+    // Wing cues borrow this ring as a vertical loop. Every ordinary
+    // spawn resets it so a recycled loop can never tip a later
+    // pressure wave onto its side.
+    slot.mesh.rotation.set(0, 0, 0);
     slot.mesh.material.color.set(colour);
     slot.mesh.visible = true;
     return slot;
@@ -2296,6 +2355,604 @@ export function buildVfx(ctx, world) {
       z + Math.sin(a) * r, 1, 0, 1, 0, 1.4, 0.55, 2.0);
   }
 
+  /* ------------------------------------------------------------------
+     DOCTRINE CUES
+
+     Gameplay publishes one small, normalized event when a talent
+     actually changes the fight. This dispatcher turns that event into
+     an unmistakable Order signature using ONLY the pools already owned
+     by this module. It deliberately creates no geometry, materials,
+     timers or per-frame objects: a busy shield block and a capstone can
+     land in the same frame without turning feedback into a hitch.
+
+     Style-channel reservation:
+       6 Censer      gold / furnace column
+       7 Procession  vermilion / rhythmic rings
+       8 Wing        cyan / lifted wakes
+       9 Halo        periwinkle / counter-domes
+      10 Edict       emerald / command seals
+     ------------------------------------------------------------------ */
+  const DOCTRINE_STYLES = Object.freeze(Object.assign(Object.create(null), {
+    censer: Object.freeze({ id: 6, colour: "#ffad2f", accent: "#ffd56a" }),
+    procession: Object.freeze({ id: 7, colour: "#ff7045", accent: "#ffb25f" }),
+    wing: Object.freeze({ id: 8, colour: "#08d4ff", accent: "#70efff" }),
+    halo: Object.freeze({ id: 9, colour: "#6684ff", accent: "#a4b9ff" }),
+    edict: Object.freeze({ id: 10, colour: "#20e0a6", accent: "#70ffd0" }),
+  }));
+  const doctrineReducedQuery = typeof window !== "undefined" && window.matchMedia
+    ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+  const doctrineCoarseQuery = typeof window !== "undefined" && window.matchMedia
+    ? window.matchMedia("(hover: none) and (pointer: coarse)") : null;
+  const doctrineStats = {
+    accepted: 0,
+    rejected: 0,
+    fallbacks: 0,
+    reduced: 0,
+    capstones: 0,
+    censer: 0,
+    procession: 0,
+    wing: 0,
+    halo: 0,
+    edict: 0,
+    lastOrder: "",
+    lastKind: "",
+    lastTalentId: "",
+    lastSource: "",
+    lastStage: "",
+    lastX: 0,
+    lastY: 0,
+    lastZ: 0,
+    lastYaw: 0,
+    lastRadius: 0,
+    lastIntensity: 0,
+    lastRank: 1,
+    lastCapstone: false,
+    lastReduced: false,
+    lastFallback: false,
+    lastAt: 0,
+  };
+
+  function doctrineDefaultRadius(kind, capstone) {
+    switch (kind) {
+      case "brand": return 2.2;
+      case "brand-break": return 3.4;
+      case "vent": return 3.8;
+      case "heatless": return 2.1;
+      case "reprieve": return 2.8;
+      case "martyr": return 6;
+      case "hook": return 4;
+      case "toll": return 6;
+      case "expose": return 3.2;
+      case "mercy": return 3;
+      case "litany": return 5;
+      case "conversion": return 3;
+      case "feather": return 3.2;
+      case "wake": return 3.5;
+      case "ram": return 4;
+      case "circuit": return capstone ? 6 : 2.8;
+      case "parry": return 3.5;
+      case "wrath-store": return 2.4;
+      case "reversal": return 3;
+      case "wrath-release": return 5;
+      case "dome": return 8;
+      case "seraph": return 8;
+      case "siren": return 12;
+      case "fuse": return 3.2;
+      case "recall": return 6;
+      case "chapel": return 8;
+      case "sigil": return 9;
+      case "fusion": return 9;
+      case "capstone": return 7;
+      default: return capstone ? 6 : 3;
+    }
+  }
+
+  function doctrineActive(pool) {
+    let active = 0;
+    for (const slot of pool) if (slot.life > 0 && slot.mesh.visible) active += 1;
+    return active;
+  }
+
+  /** Paired cyan fans rise from either side of the Reliquary. Unlike a
+   * white column, the mirrored lateral origin reads as WINGS even when
+   * the camera is close and the ground ring falls below frame. */
+  function doctrineWingRise(x, y, z, yaw, intensity, scale, style, compact, strong = false) {
+    const sideX = Math.cos(yaw);
+    const sideZ = -Math.sin(yaw);
+    const backX = -Math.sin(yaw);
+    const backZ = -Math.cos(yaw);
+    const offset = strong ? 0.76 : 0.48;
+    const motes = Math.max(3, Math.round((strong ? 11 : 7)
+      * (compact ? 0.52 : 1) * intensity));
+    const speed = (strong ? 8.2 : 6.1) * scale;
+    const moteScale = (strong ? 0.66 : 0.48) * scale;
+    impacts.emitDirected(x + sideX * offset, y + 0.28, z + sideZ * offset, motes,
+      sideX * 0.66 + backX * 0.20, 0.88, sideZ * 0.66 + backZ * 0.20,
+      speed, moteScale, style);
+    impacts.emitDirected(x - sideX * offset, y + 0.28, z - sideZ * offset, motes,
+      -sideX * 0.66 + backX * 0.20, 0.88, -sideZ * 0.66 + backZ * 0.20,
+      speed, moteScale, style);
+  }
+
+  /**
+   * Render one authoritative talent event. Required fields are
+   * `{ order, kind, x, z }`; `y`, `yaw`, `radius`, `intensity` (or
+   * `strength`), `rank`, `capstone`, `talentId`, `source`, `stage` and
+   * `count` are optional. Returns false only for a malformed position
+   * or unknown Order. An unknown kind still receives a safe Order pulse.
+   */
+  function doctrineCue(event) {
+    if (!event || typeof event !== "object") {
+      doctrineStats.rejected += 1;
+      return false;
+    }
+    const order = typeof event.order === "string" ? event.order : "";
+    const palette = DOCTRINE_STYLES[order];
+    const x = Number(event.x);
+    const z = Number(event.z);
+    if (!palette || !Number.isFinite(x) || !Number.isFinite(z)) {
+      doctrineStats.rejected += 1;
+      return false;
+    }
+
+    const rawY = Number(event.y);
+    const ground = terrain.heightAt(x, z);
+    const y = Number.isFinite(rawY) ? rawY : ground;
+    const ringY = ground + 0.22;
+    const visualY = Math.max(ground + 0.55, y + 0.45);
+    const kind = typeof event.kind === "string" && event.kind
+      ? event.kind : typeof event.cue === "string" && event.cue ? event.cue : "pulse";
+    const capstone = !!event.capstone;
+    const rawRadius = Number(event.radius);
+    const radius = Number.isFinite(rawRadius) && rawRadius > 0
+      ? Math.min(24, Math.max(0.75, rawRadius))
+      : doctrineDefaultRadius(kind, capstone);
+    const rawIntensity = Number(event.intensity ?? event.strength);
+    const intensity = Number.isFinite(rawIntensity)
+      ? Math.min(1.25, Math.max(0.18, rawIntensity)) : 0.7;
+    const rawRank = Number(event.rank);
+    const rank = Number.isFinite(rawRank)
+      ? Math.min(2, Math.max(1, Math.floor(rawRank))) : 1;
+    const rawYaw = Number(event.yaw);
+    const yaw = Number.isFinite(rawYaw) ? rawYaw : 0;
+    const dx = Math.sin(yaw);
+    const dz = Math.cos(yaw);
+    const stage = typeof event.stage === "string" ? event.stage : "proc";
+    const rawCount = Number(event.count);
+    const count = Number.isFinite(rawCount) ? Math.max(0, Math.floor(rawCount)) : 0;
+    const body = typeof document !== "undefined" ? document.body : null;
+    const reduced = typeof event.reducedMotion === "boolean"
+      ? event.reducedMotion
+      : !!(doctrineReducedQuery?.matches
+        || body?.classList?.contains("sf-reduced-motion")
+        || body?.classList?.contains("sf-ui-reduced-motion")
+        || body?.dataset?.sfMotion === "reduced");
+    const compact = reduced || !!doctrineCoarseQuery?.matches;
+    const particleScale = compact ? 0.48 : 1;
+    const scale = 0.76 + intensity * 0.52 + (rank - 1) * 0.10 + (capstone ? 0.10 : 0);
+    const style = palette.id;
+    const colour = palette.colour;
+    const accent = palette.accent;
+    let handled = true;
+
+    // Generic event vocabulary lets a future talent remain visible
+    // before it receives a bespoke signature below.
+    switch (kind) {
+      case "arm":
+        ringFx(x, ringY, z, radius, radius * 0.34, reduced ? 0.32 : 0.54,
+          colour, 0.9);
+        flashes.emit(x, visualY, z, 0.42 * scale, 0.13, style);
+        break;
+      case "pulse":
+        ringFx(x, ringY, z, 0.35, radius, reduced ? 0.34 : 0.58, colour, 0.8);
+        flashes.emit(x, visualY, z, 0.50 * scale, 0.14, style);
+        break;
+      case "release":
+        ringFx(x, ringY, z, 0.35, radius, reduced ? 0.36 : 0.62, accent, 1.05);
+        flashes.emit(x, visualY, z, 0.76 * scale, 0.16, style);
+        impacts.emitDirected(x, visualY, z,
+          Math.max(4, Math.round(12 * particleScale * intensity)),
+          dx * 0.55, 0.48, dz * 0.55, 6.8 * scale, 0.68 * scale, style);
+        break;
+      case "capstone":
+        beamFx(x, ground - 0.4, z, 0.9 * scale, 24, 0.52, accent);
+        ringFx(x, ringY, z, 0.4, radius, 0.64, colour, 1.25);
+        if (!reduced) domeFx(x, ground, z, radius * 0.9, 0.82, colour);
+        flashes.emit(x, visualY + 0.7, z, 1.35 * scale, 0.22, style);
+        impacts.emitDirected(x, ringY, z,
+          Math.max(7, Math.round(22 * particleScale * intensity)),
+          0, 1, 0, 8.4, 0.90 * scale, style);
+        break;
+      default:
+        handled = false;
+    }
+
+    if (!handled && order === "censer") {
+      handled = true;
+      switch (kind) {
+        case "brand":
+          ringFx(x, ringY, z, radius * 1.18, radius * 0.30,
+            reduced ? 0.30 : 0.52, accent, 0.78);
+          flashes.emit(x, visualY, z, 0.40 * scale, 0.14, style);
+          impacts.emitDirected(x, ringY, z,
+            Math.max(3, Math.round(8 * particleScale * intensity)),
+            0, 1, 0, 4.2, 0.46 * scale, style);
+          break;
+        case "brand-break":
+          ringFx(x, ringY, z, 0.35, radius, 0.48, colour, 1.15);
+          if (!compact) ringFx(x, ringY + 0.08, z, radius * 0.30,
+            radius * 1.28, 0.68, accent, 0.62);
+          flashes.emit(x, visualY, z, 0.85 * scale, 0.17, style);
+          impacts.emit(x, visualY, z,
+            Math.max(6, Math.round(18 * particleScale * intensity)),
+            radius * 0.65, 0.66 * scale, style);
+          break;
+        case "vent":
+          ringFx(x, ringY, z, 0.45, radius, 0.52, colour, 1.0);
+          flashes.emit(x, visualY, z, 0.72 * scale, 0.16, style);
+          impacts.emitDirected(x, ringY + 0.25, z,
+            Math.max(5, Math.round(19 * particleScale * intensity)),
+            dx * 0.68, 0.42, dz * 0.68, 8.4 * scale, 0.72 * scale, style);
+          break;
+        case "heatless": {
+          const consumed = stage === "consume";
+          ringFx(x, ringY, z, radius * (consumed ? 1.25 : 0.95),
+            radius * 0.24, consumed ? 0.38 : 0.52, accent, consumed ? 1.1 : 0.7);
+          flashes.emit(x, visualY, z, (consumed ? 0.72 : 0.42) * scale,
+            consumed ? 0.16 : 0.11, style);
+          break;
+        }
+        case "reprieve":
+          ringFx(x, ringY, z, radius * 1.25, radius * 0.38, 0.64, colour, 0.86);
+          flashes.emit(x, visualY, z, 0.58 * scale, 0.17, style);
+          impacts.emitDirected(x, ringY, z,
+            Math.max(4, Math.round(13 * particleScale * intensity)),
+            0, 1, 0, 5.4, 0.58 * scale, style);
+          break;
+        case "martyr":
+          ringFx(x, ringY, z, 0.45, radius, 0.58, colour, 1.35);
+          if (!compact) {
+            ringFx(x, ringY + 0.10, z, radius * 0.28, radius * 1.25,
+              0.82, accent, 0.7);
+            domeFx(x, ground, z, radius * 0.9, 0.88, colour);
+          }
+          // A low furnace mouth and thrown embers, not another tall
+          // objective/command column behind the player.
+          flashes.emit(x, visualY + 0.22, z, 1.18 * scale, 0.22, style);
+          impacts.emitDirected(x, ringY, z,
+            Math.max(8, Math.round(28 * particleScale * intensity)),
+            0, 1, 0, 9.0, 0.95 * scale, style);
+          break;
+        default:
+          handled = false;
+      }
+    } else if (!handled && order === "procession") {
+      handled = true;
+      switch (kind) {
+        case "hook":
+          ringFx(x, ringY, z, radius * 1.12, radius * 0.28,
+            reduced ? 0.32 : 0.56, colour, 1.0);
+          flashes.emit(x, visualY, z, 0.50 * scale, 0.14, style);
+          impacts.emit(x, visualY, z,
+            Math.max(3, Math.round(9 * particleScale * intensity)),
+            radius * 0.34, 0.42 * scale, style);
+          break;
+        case "toll":
+          ringFx(x, ringY, z, 0.35, radius * 0.72, 0.38, accent, 1.15);
+          if (!reduced) ringFx(x, ringY + 0.07, z, 0.45, radius,
+            0.56, colour, 0.92);
+          if (!compact) ringFx(x, ringY + 0.14, z, 0.60, radius * 1.20,
+            0.74, accent, 0.62);
+          flashes.emit(x, visualY, z, 0.92 * scale, 0.18, style);
+          impacts.emit(x, visualY, z,
+            Math.max(5, Math.round(16 * particleScale * intensity)),
+            radius * 0.42, 0.62 * scale, style);
+          break;
+        case "expose":
+          ringFx(x, ringY, z, radius * 1.12, radius * 0.26, 0.52, colour, 0.88);
+          if (!reduced) beamFx(x, ground - 0.25, z, 0.36 * scale,
+            5.2 * scale, 0.34, accent);
+          flashes.emit(x, visualY, z, 0.62 * scale, 0.16, style);
+          impacts.emitDirected(x, ringY, z,
+            Math.max(3, Math.round(8 * particleScale * intensity)),
+            0, 1, 0, 4.6, 0.48 * scale, style);
+          break;
+        case "mercy":
+          ringFx(x, ringY, z, radius * 1.2, radius * 0.34, 0.62, accent, 0.82);
+          flashes.emit(x, visualY, z, 0.55 * scale, 0.16, style);
+          impacts.emitDirected(x, ringY, z,
+            Math.max(4, Math.round(12 * particleScale * intensity)),
+            0, 1, 0, 5.0, 0.52 * scale, style);
+          break;
+        case "litany": {
+          const armed = stage === "arm";
+          ringFx(x, ringY, z, armed ? radius : 0.45,
+            armed ? radius * 0.34 : radius * 0.82,
+            armed ? 0.58 : 0.42, colour, armed ? 0.74 : 1.28);
+          if (!armed && !reduced) ringFx(x, ringY + 0.08, z, 0.55,
+            radius * 1.16, 0.64, accent, 0.82);
+          if (!armed && !compact) beamFx(x, ground - 0.35, z,
+            0.58 * scale, 12, 0.42, accent);
+          flashes.emit(x, visualY, z, (armed ? 0.55 : 1.12) * scale,
+            armed ? 0.14 : 0.21, style);
+          impacts.emitDirected(x, ringY, z,
+            Math.max(4, Math.round((armed ? 9 : 22) * particleScale * intensity)),
+            0, 1, 0, armed ? 4.4 : 7.2, (armed ? 0.48 : 0.82) * scale, style);
+          break;
+        }
+        default:
+          handled = false;
+      }
+    } else if (!handled && order === "wing") {
+      handled = true;
+      switch (kind) {
+        case "conversion":
+          ringFx(x, ringY, z, radius * 0.28, radius, 0.48, colour, 0.82);
+          flashes.emit(x, visualY, z, 0.48 * scale, 0.15, style);
+          doctrineWingRise(x, visualY, z, yaw, intensity, scale, style, compact);
+          break;
+        case "feather": {
+          const feathers = Math.min(3, Math.max(1, count || 1));
+          if (stage === "consume") ringFx(x, ringY, z, 0.35, radius, 0.58,
+            colour, 0.92);
+          flashes.emit(x, visualY + 0.35, z, (0.42 + feathers * 0.13) * scale,
+            0.16, style);
+          doctrineWingRise(x, visualY, z, yaw,
+            Math.min(1.25, intensity + feathers * 0.08), scale, style, compact,
+            feathers >= 3 || stage === "consume");
+          break;
+        }
+        case "wake":
+          ringFx(x, ringY, z, 0.38, radius, reduced ? 0.42 : 0.68, colour, 0.62);
+          flashes.emit(x, ringY + 0.35, z, 0.42 * scale, 0.13, style);
+          impacts.emitDirected(x, ringY, z,
+            Math.max(3, Math.round(11 * particleScale * intensity)),
+            -dx * 0.42, 0.45, -dz * 0.42, 4.8, 0.46 * scale, style);
+          break;
+        case "ram":
+          ringFx(x, ringY, z, 0.35, radius, 0.48, accent, 1.0);
+          if (stage === "consume" && !reduced) domeFx(x, ground, z,
+            radius * 0.68, 0.58, colour);
+          flashes.emit(x, visualY, z, (stage === "consume" ? 0.92 : 0.68) * scale,
+            0.17, style);
+          impacts.emitDirected(x, visualY, z,
+            Math.max(5, Math.round(17 * particleScale * intensity)),
+            dx * 0.82, 0.30, dz * 0.82, 8.0 * scale, 0.66 * scale, style);
+          break;
+        case "circuit": {
+          // The third segment is followed immediately by one explicit
+          // `complete` event. Key only off that stage or the capstone
+          // would fire its full VFX twice on the same frame.
+          const complete = stage === "complete" || (stage === "proc" && capstone);
+          if (complete) {
+            ringFx(x, ringY, z, 0.40, radius, 0.58, colour, 1.18);
+            if (!compact) {
+              ringFx(x, ringY + 0.10, z, radius * 0.30,
+                radius * 1.24, 0.82, accent, 0.65);
+              domeFx(x, ground, z, radius * 0.88, 0.82, colour);
+            }
+            doctrineWingRise(x, visualY, z, yaw, intensity, scale, style,
+              compact, true);
+          } else {
+            const segments = Math.min(3, Math.max(1, count || 1));
+            ringFx(x, ringY, z, radius * (0.18 + segments * 0.13), radius,
+              0.46 + segments * 0.06, colour, 0.58 + segments * 0.14);
+            doctrineWingRise(x, visualY, z, yaw,
+              Math.min(0.82, intensity), scale * 0.82, style, compact);
+          }
+          flashes.emit(x, visualY, z, (complete ? 0.88 : 0.38) * scale,
+            complete ? 0.22 : 0.13, style);
+          break;
+        }
+        default:
+          handled = false;
+      }
+    } else if (!handled && order === "halo") {
+      handled = true;
+      switch (kind) {
+        case "parry":
+          ringFx(x, ringY, z, 0.35, radius, 0.38, accent, 1.25);
+          if (!reduced) domeFx(x, ground, z, Math.min(4.2, radius * 0.52),
+            0.46, colour);
+          flashes.emit(x, visualY, z, 0.66 * scale, 0.15, style);
+          impacts.emitDirected(x, visualY, z,
+            Math.max(4, Math.round(13 * particleScale * intensity)),
+            -dx * 0.45, 0.55, -dz * 0.45, 6.6 * scale, 0.58 * scale, style);
+          break;
+        case "wrath-store":
+          ringFx(x, ringY, z, radius, radius * 0.38, 0.46, colour, 0.66);
+          flashes.emit(x, visualY, z, 0.40 * scale, 0.12, style);
+          break;
+        case "reversal": {
+          const consumed = stage === "consume";
+          ringFx(x, ringY, z, consumed ? 0.35 : radius,
+            consumed ? radius : radius * 0.34, consumed ? 0.42 : 0.54,
+            consumed ? accent : colour, consumed ? 1.0 : 0.66);
+          flashes.emit(x, visualY, z, (consumed ? 0.76 : 0.42) * scale,
+            consumed ? 0.16 : 0.12, style);
+          if (consumed) impacts.emitDirected(x, visualY, z,
+            Math.max(4, Math.round(12 * particleScale * intensity)),
+            -dx * 0.74, 0.38, -dz * 0.74, 7.2 * scale, 0.54 * scale, style);
+          break;
+        }
+        case "wrath-release": {
+          const cx = x + dx * radius * 0.42;
+          const cz = z + dz * radius * 0.42;
+          const cy = terrain.heightAt(cx, cz) + 0.24;
+          ringFx(cx, cy, cz, 0.35, radius * 0.62, 0.46, accent, 1.15);
+          if (!reduced) domeFx(cx, cy - 0.24, cz,
+            Math.min(4.4, radius * 0.42), 0.56, colour);
+          flashes.emit(cx, cy + 0.8, cz, 0.68 * scale, 0.17, style);
+          impacts.emitDirected(x, visualY, z,
+            Math.max(5, Math.round(18 * particleScale * intensity)),
+            dx * 0.90, 0.24, dz * 0.90, 8.6 * scale, 0.68 * scale, style);
+          break;
+        }
+        case "mercy":
+          ringFx(x, ringY, z, radius * 1.06, radius * 0.48, 0.62, accent, 0.58);
+          if (!compact) domeFx(x, ground, z, Math.min(4.2, radius * 0.48),
+            0.64, colour);
+          flashes.emit(x, visualY, z, 0.32 * scale, 0.12, style);
+          break;
+        case "dome":
+          ringFx(x, ringY, z, radius * 0.38, radius, 0.48, accent, 0.72);
+          // The full gameplay radius remains in the ground ring. A
+          // camera-height eight-metre hemisphere became a broad white
+          // plane, so the readable shield shell stays close to Vesper.
+          if (!compact) domeFx(x, ground, z, Math.min(4.8, radius * 0.54),
+            0.60, colour);
+          flashes.emit(x, visualY, z, 0.38 * scale, 0.13, style);
+          break;
+        case "seraph":
+          ringFx(x, ringY, z, 0.40, radius, 0.58, accent, 1.32);
+          if (!compact) {
+            ringFx(x, ringY + 0.10, z, radius * 0.28,
+              radius * 1.20, 0.80, colour, 0.68);
+            domeFx(x, ground, z, Math.min(4.8, radius * 0.58), 0.82, colour);
+          }
+          flashes.emit(x, visualY + 0.42, z, 0.84 * scale, 0.21, style);
+          impacts.emitDirected(x, ringY, z,
+            Math.max(7, Math.round(21 * particleScale * intensity)),
+            0, 1, 0, 7.2, 0.72 * scale, style);
+          break;
+        default:
+          handled = false;
+      }
+    } else if (!handled && order === "edict") {
+      handled = true;
+      switch (kind) {
+        case "siren":
+          beamFx(x, ground - 0.4, z, 0.42 * scale, 25, 0.62, colour);
+          ringFx(x, ringY, z, radius, radius * 0.34, 0.72, colour, 0.86);
+          flashes.emit(x, visualY + 0.8, z, 0.52 * scale, 0.17, style);
+          impacts.emitDirected(x, ringY, z,
+            Math.max(4, Math.round(13 * particleScale * intensity)),
+            0, 1, 0, 6.8, 0.58 * scale, style);
+          break;
+        case "fuse":
+          ringFx(x, ringY, z, radius * 0.28, radius, 0.42, accent, 0.92);
+          flashes.emit(x, visualY, z, 0.58 * scale, 0.14, style);
+          impacts.emitDirected(x, visualY, z,
+            Math.max(4, Math.round(12 * particleScale * intensity)),
+            0, 1, 0, 5.4, 0.55 * scale, style);
+          break;
+        case "recall":
+          beamFx(x, ground - 0.3, z, 0.38 * scale, 10, 0.40, colour);
+          ringFx(x, ringY, z, radius * 1.10, radius * 0.26, 0.58, colour, 0.82);
+          if (!compact) ringFx(x, ringY + 0.08, z, radius * 0.24,
+            radius * 0.86, 0.62, accent, 0.58);
+          flashes.emit(x, visualY, z, 0.54 * scale, 0.16, style);
+          break;
+        case "chapel":
+          ringFx(x, ringY, z, radius * 1.12, radius * 0.94, 0.78, accent, 0.62);
+          if (!reduced) domeFx(x, ground, z, radius, 1.05, colour);
+          if (!compact) beamFx(x, ground - 0.25, z, 0.36 * scale, 12, 0.46, colour);
+          flashes.emit(x, visualY, z, 0.58 * scale, 0.17, style);
+          impacts.emitDirected(x, ringY, z,
+            Math.max(5, Math.round(17 * particleScale * intensity)),
+            0, 1, 0, 5.8, 0.60 * scale, style);
+          break;
+        case "sigil":
+          ringFx(x, ringY, z, radius * 0.22, radius, 0.72, colour, 0.86);
+          if (!compact) ringFx(x, ringY + 0.08, z, radius,
+            radius * 0.46, 0.82, accent, 0.48);
+          flashes.emit(x, ringY + 0.65, z, 0.50 * scale, 0.16, style);
+          break;
+        case "fusion":
+          beamFx(x, ground - 0.5, z, 0.82 * scale, 28, 0.64, colour);
+          ringFx(x, ringY, z, 0.45, radius, 0.64, colour, 1.34);
+          if (!compact) {
+            ringFx(x, ringY + 0.09, z, radius * 0.30,
+              radius * 1.24, 0.88, accent, 0.72);
+            domeFx(x, ground, z, radius, 1.02, colour);
+          }
+          flashes.emit(x, visualY + 0.72, z, 0.98 * scale, 0.22, style);
+          impacts.emitDirected(x, ringY, z,
+            Math.max(9, Math.round(30 * particleScale * intensity)),
+            0, 1, 0, 9.2, 0.98 * scale, style);
+          break;
+        default:
+          handled = false;
+      }
+    }
+
+    if (!handled) {
+      doctrineStats.fallbacks += 1;
+      ringFx(x, ringY, z, 0.35, radius, reduced ? 0.34 : 0.56, colour, 0.82);
+      flashes.emit(x, visualY, z, 0.58 * scale, 0.15, style);
+      impacts.emitDirected(x, ringY, z,
+        Math.max(3, Math.round(8 * particleScale * intensity)),
+        0, 1, 0, 4.8, 0.48 * scale, style);
+    }
+
+    doctrineStats.accepted += 1;
+    doctrineStats[order] += 1;
+    if (reduced) doctrineStats.reduced += 1;
+    if (capstone) doctrineStats.capstones += 1;
+    doctrineStats.lastOrder = order;
+    doctrineStats.lastKind = kind;
+    doctrineStats.lastTalentId = typeof event.talentId === "string" ? event.talentId : "";
+    doctrineStats.lastSource = typeof event.source === "string" ? event.source : "";
+    doctrineStats.lastStage = stage;
+    doctrineStats.lastX = x;
+    doctrineStats.lastY = y;
+    doctrineStats.lastZ = z;
+    doctrineStats.lastYaw = yaw;
+    doctrineStats.lastRadius = radius;
+    doctrineStats.lastIntensity = intensity;
+    doctrineStats.lastRank = rank;
+    doctrineStats.lastCapstone = capstone;
+    doctrineStats.lastReduced = reduced;
+    doctrineStats.lastFallback = !handled;
+    doctrineStats.lastAt = atmos.elapsed;
+    return true;
+  }
+
+  /** Snapshot allocation is diagnostic-only; the live dispatcher and
+   * update loop retain fixed storage. */
+  function doctrineState() {
+    return {
+      accepted: doctrineStats.accepted,
+      rejected: doctrineStats.rejected,
+      fallbacks: doctrineStats.fallbacks,
+      reduced: doctrineStats.reduced,
+      capstones: doctrineStats.capstones,
+      byOrder: {
+        censer: doctrineStats.censer,
+        procession: doctrineStats.procession,
+        wing: doctrineStats.wing,
+        halo: doctrineStats.halo,
+        edict: doctrineStats.edict,
+      },
+      last: {
+        order: doctrineStats.lastOrder,
+        kind: doctrineStats.lastKind,
+        talentId: doctrineStats.lastTalentId,
+        source: doctrineStats.lastSource,
+        stage: doctrineStats.lastStage,
+        x: doctrineStats.lastX,
+        y: doctrineStats.lastY,
+        z: doctrineStats.lastZ,
+        yaw: doctrineStats.lastYaw,
+        radius: doctrineStats.lastRadius,
+        intensity: doctrineStats.lastIntensity,
+        rank: doctrineStats.lastRank,
+        capstone: doctrineStats.lastCapstone,
+        reducedMotion: doctrineStats.lastReduced,
+        fallback: doctrineStats.lastFallback,
+        at: doctrineStats.lastAt,
+      },
+      pools: {
+        beams: { active: doctrineActive(ordnance.beams), capacity: ordnance.beams.length },
+        rings: { active: doctrineActive(ordnance.rings), capacity: ordnance.rings.length },
+        domes: { active: doctrineActive(ordnance.domes), capacity: ordnance.domes.length },
+        impacts: { capacity: IMPACT_MAX },
+        flashes: { capacity: FLASH_MAX },
+        deferred: ordnance.queue.length,
+      },
+    };
+  }
+
   /** An impact. `wall` softens it; `energy` keeps melee and debris warm. */
   function spark(x, y, z, scale = 1, wall = false, energy = false) {
     /* Was 9 particles and nothing else, which at the far end of a
@@ -2415,6 +3072,8 @@ export function buildVfx(ctx, world) {
     slamCharge,
     slamTrail,
     slamImpact,
+    doctrineCue,
+    doctrineState,
     update(dt, camera) {
       // Snap the anchor so the wrapped systems do not slide with
       // sub-metre camera motion, which reads as the whole dust field

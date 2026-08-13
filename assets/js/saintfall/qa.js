@@ -2234,6 +2234,11 @@ export function installQa(ctx, api) {
         slamCharge: (a) => a.slamCharge(0, 0),
         slamPlunge: (a) => a.slamPlunge(0, 0),
         slamImpact: (a) => a.slamImpact(0, 0, 0.6),
+        doctrineCenser: (a) => a.doctrineCue({ order: "censer", cue: "brand-break", x: 0, z: 0, intensity: 0.8 }),
+        doctrineProcession: (a) => a.doctrineCue({ order: "procession", cue: "toll", x: 0, z: 0, intensity: 0.8 }),
+        doctrineWing: (a) => a.doctrineCue({ order: "wing", cue: "circuit", x: 0, z: 0, intensity: 1, capstone: true }),
+        doctrineHalo: (a) => a.doctrineCue({ order: "halo", cue: "parry", x: 0, z: 0, intensity: 0.8 }),
+        doctrineEdict: (a) => a.doctrineCue({ order: "edict", cue: "fusion", x: 0, z: 0, intensity: 1, capstone: true }),
       };
       for (const [name, play] of Object.entries(cases)) {
         const oc = new OC(2, 44100 * 2.5, 44100);
@@ -3283,6 +3288,7 @@ export function installQa(ctx, api) {
       }
       return out;
     },
+    doctrineFeedbackState: () => api.vfx?.doctrineState?.() || null,
     coulterState: () => (api.coulter || ctx.coulter)?.status?.() || null,
     /** Every live burrower's chain, in world space. The hit volumes are
      *  built off exactly these points, so a test can assert that what it

@@ -20,6 +20,7 @@ import {
   CAPSTONE_ELIGIBILITY_POINTS,
   MAX_ACTIVE_CAPSTONES,
 } from "saintfall/progression-config.js";
+import { makeBus } from "saintfall/core.js";
 
 const FIELD_SCHEMA_VERSION = 1;
 const RECEIPT_LIMIT = 12000;
@@ -337,6 +338,7 @@ export function buildProgression(ctx) {
   let clock = 0;
   let disposed = false;
   const listeners = new Set();
+  const bus = makeBus();
   const stops = [];
   const operationBase = ctx.qa ? `qa-${ctx.seed}` : `op-${ctx.seed.toString(16)}-${Date.now().toString(36)}`;
   const field = {
@@ -370,6 +372,7 @@ export function buildProgression(ctx) {
       domeStored: 0,
       domeBlocks: 0,
       lastDomeBlast: 0,
+      mercyCueAt: 0,
     },
     edict: {
       beacons: new Map(),
@@ -378,6 +381,7 @@ export function buildProgression(ctx) {
       fusionReadyAt: 0,
       lastFusion: null,
     },
+    feedback: { serial: 0, last: null, counts: {} },
     counters: {},
   };
 
@@ -386,6 +390,51 @@ export function buildProgression(ctx) {
 
   function bump(name, amount = 1) {
     effects.counters[name] = (effects.counters[name] || 0) + amount;
+  }
+
+  /* Doctrine effects deliberately publish one normalized presentation event
+     after their authoritative gameplay mutation succeeds. VFX, animation and
+     audio consume this independently, so a muted or low-quality renderer can
+     never change damage, cooldowns or progression state. */
+  function cue(order, kind, detail = {}) {
+    if (disposed) return;
+    const ps = ctx.player?.state || {};
+    const stage = detail.stage || "proc";
+    const prepStage = ["arm", "store", "segment", "inbound", "form", "channel", "pulse"]
+      .includes(stage);
+    const resolvedStage = ["consume", "complete", "release", "resolve"].includes(stage);
+    const priority = Number.isFinite(Number(detail.priority))
+      ? Math.max(0, Math.min(3, Math.floor(Number(detail.priority))))
+      : prepStage ? 0
+        : (detail.capstone && (resolvedStage || stage === "proc")) ? 3
+          : (resolvedStage || stage === "finisher" || stage === "precision") ? 2 : 1;
+    const event = {
+      order,
+      kind,
+      cue: kind,
+      x: finite(detail.x, ps.x),
+      y: finite(detail.y, ps.y),
+      z: finite(detail.z, ps.z),
+      yaw: finite(detail.yaw, ps.yaw),
+      radius: Math.max(0, finite(detail.radius)),
+      intensity: Math.max(0, Math.min(1, finite(detail.intensity ?? detail.strength, 0.7))),
+      rank: Math.max(1, Math.floor(finite(detail.rank, 1))),
+      capstone: !!detail.capstone,
+      talentId: detail.talentId || "",
+      source: detail.source || detail.talentId || kind,
+      stage,
+      priority,
+      count: Math.max(0, Math.floor(finite(detail.count))),
+      value: Math.max(0, finite(detail.value)),
+      targetId: typeof detail.targetId === "string" ? detail.targetId : "",
+    };
+    effects.feedback.serial += 1;
+    effects.feedback.last = { ...event, serial: effects.feedback.serial };
+    const feedbackId = event.talentId || `${order}:${kind}`;
+    effects.feedback.counts[feedbackId] = (effects.feedback.counts[feedbackId] || 0) + 1;
+    bus.emit("doctrine", event);
+    ctx.vfx?.doctrineCue?.(event);
+    ctx.player?.pulseDoctrine?.(order, event.intensity, event.capstone ? 0.72 : 0.42);
   }
 
   function talentRank(id) {
@@ -440,6 +489,30 @@ export function buildProgression(ctx) {
     const spent = pointsSpent(allocations);
     const sealsEarned = sealsEarnedForRank(rank);
     const edit = editStatus();
+    const remaining = (until) => Number(Math.max(0, finite(until) - clock).toFixed(3));
+    const targetRecord = (targetId, effect = {}) => {
+      const target = (ctx.enemies?.live || []).find((enemy) => enemy?.id === targetId
+        && enemy.state !== "death");
+      return {
+        targetId,
+        rank: Math.max(1, Math.floor(finite(effect.rank, 1))),
+        remaining: remaining(effect.until),
+        x: finite(target?.x, effect.x),
+        y: finite(target?.y, effect.y),
+        z: finite(target?.z, effect.z),
+      };
+    };
+    const brandTargets = [...effects.brands.entries()]
+      .map(([targetId, effect]) => targetRecord(targetId, effect))
+      .filter((effect) => effect.remaining > 0);
+    const exposedTargets = [...effects.exposed.entries()]
+      .map(([targetId, effect]) => targetRecord(targetId, effect))
+      .filter((effect) => effect.remaining > 0);
+    const circuitSegments = [...effects.circuit.verbs.entries()].map(([verb, at]) => ({
+      verb,
+      remaining: Number(Math.max(0, 8 - (clock - finite(at))).toFixed(3)),
+    })).filter((segment) => segment.remaining > 0);
+    const wakeRemaining = effects.wake ? remaining(effects.wake.until) : 0;
     const orders = DOCTRINE_ORDERS.map((order) => {
       const invested = pointsInOrder(allocations, order.id);
       const talentStates = order.talents.map((talent) => {
@@ -514,9 +587,44 @@ export function buildProgression(ctx) {
       lifetime: { ...career.lifetime },
       effects: {
         feathers: effects.feathers,
-        brands: effects.brands.size,
-        exposed: effects.exposed.size,
-        circuitVerbs: [...effects.circuit.verbs.keys()],
+        brands: brandTargets.length,
+        brandTargets,
+        exposed: exposedTargets.length,
+        exposedTargets,
+        armed: {
+          goldNail: {
+            active: remaining(effects.goldNailUntil) > 0,
+            remaining: remaining(effects.goldNailUntil),
+          },
+          wingbeatShot: {
+            active: remaining(effects.wingShotUntil) > 0,
+            remaining: remaining(effects.wingShotUntil),
+          },
+          endlessLitany: {
+            active: remaining(effects.litanyUntil) > 0,
+            remaining: remaining(effects.litanyUntil),
+          },
+          ramsHalo: {
+            active: remaining(effects.ramPrimeUntil) > 0,
+            remaining: remaining(effects.ramPrimeUntil),
+          },
+          pilgrimsReversal: {
+            active: effects.halo.reversalPending && remaining(effects.halo.reversalUntil) > 0,
+            remaining: remaining(effects.halo.reversalUntil),
+          },
+        },
+        wake: wakeRemaining > 0 ? {
+          x: finite(effects.wake.x),
+          y: finite(effects.wake.y),
+          z: finite(effects.wake.z),
+          rank: Math.max(1, Math.floor(finite(effects.wake.rank, 1))),
+          remaining: wakeRemaining,
+          nextPulseIn: Math.max(0, finite(effects.wake.nextPulse) - clock),
+        } : null,
+        circuitVerbs: circuitSegments.map((segment) => segment.verb),
+        circuitSegments,
+        circuitWindowRemaining: circuitSegments.length
+          ? Math.min(...circuitSegments.map((segment) => segment.remaining)) : 0,
         circuitCooldown: Math.max(0, effects.circuit.readyAt - clock),
         storedWrath: Number(effects.halo.storedWrath.toFixed(2)),
         reversalUntil: Math.max(0, effects.halo.reversalUntil - clock),
@@ -535,7 +643,16 @@ export function buildProgression(ctx) {
         activeSigils: [...effects.edict.sigils.values()].map((sigil) => ({ ...sigil })),
         sigils: [...effects.edict.sigils.values()].map((sigil) => ({ ...sigil })),
         fusionCooldown: Math.max(0, effects.edict.fusionReadyAt - clock),
-        lastFusion: effects.edict.lastFusion ? { ...effects.edict.lastFusion } : null,
+        lastFusion: effects.edict.lastFusion ? {
+          ...effects.edict.lastFusion,
+          effectPoint: effects.edict.lastFusion.effectPoint
+            ? { ...effects.edict.lastFusion.effectPoint } : null,
+        } : null,
+        feedback: {
+          serial: effects.feedback.serial,
+          last: effects.feedback.last ? { ...effects.feedback.last } : null,
+          counts: { ...effects.feedback.counts },
+        },
         counters: { ...effects.counters },
       },
     };
@@ -920,11 +1037,15 @@ export function buildProgression(ctx) {
     effects.halo.domeStored = 0;
     effects.halo.domeBlocks = 0;
     effects.halo.lastDomeBlast = 0;
+    effects.halo.mercyCueAt = 0;
     effects.edict.beacons.clear();
     effects.edict.sanctuaries.clear();
     effects.edict.sigils.clear();
     effects.edict.fusionReadyAt = 0;
     effects.edict.lastFusion = null;
+    effects.feedback.serial = 0;
+    effects.feedback.last = null;
+    effects.feedback.counts = {};
     effects.counters = counters;
   }
 
@@ -969,13 +1090,22 @@ export function buildProgression(ctx) {
       ctx.weapons?.coolHeat?.(precision && reprieve >= 2 ? 0.16 : 0.08, { reason: "furnace-reprieve" });
       effects.furnaceReadyAt = clock + 2;
       bump("furnaceReprieves");
+      cue("censer", "reprieve", {
+        ...event, rank: reprieve, intensity: precision && reprieve >= 2 ? 0.82 : 0.62,
+        talentId: "censer_furnace_reprieve",
+      });
     }
 
     const gospel = talentRank("wing_falling_gospel");
     const airborne = ctx.jetpack?.state?.inFlight || !ctx.player?.state?.grounded;
-    if (gospel > 0 && airborne && event.source === "shot") {
+    if (gospel > 0 && airborne && event.source === "shot" && effects.feathers < 3) {
       effects.feathers = Math.min(3, effects.feathers + 1);
       bump("feathersEarned");
+      cue("wing", "feather", {
+        ...event, rank: gospel, count: effects.feathers,
+        intensity: 0.42 + effects.feathers * 0.14,
+        talentId: "wing_falling_gospel",
+      });
     }
     return event;
   }
@@ -994,12 +1124,21 @@ export function buildProgression(ctx) {
         });
       }
       bump("brandsBroken");
+      cue("censer", "brand-break", {
+        ...event, rank: brand.rank, radius: brand.rank >= 2 ? 4 : 2.5,
+        intensity: brand.rank >= 2 ? 0.9 : 0.7,
+        talentId: "censer_rite_of_censure", targetId: id,
+      });
     }
     const exposed = id ? effects.exposed.get(id) : null;
     if (event.source === "shot" && exposed && exposed.until >= clock) {
       damage *= 1.4;
       effects.exposed.delete(id);
       bump("exposuresRuptured");
+      cue("procession", "expose", {
+        ...event, radius: 2.6, intensity: 0.8,
+        talentId: "procession_executioners_measure", targetId: id, stage: "consume",
+      });
     }
     return damage;
   }
@@ -1007,10 +1146,29 @@ export function buildProgression(ctx) {
   function onEnemyDamaged(event = {}) {
     const precision = event.source === "shot" && (event.head || event.weak);
     if (precision && event.enemyId) {
-      if (talentRank("censer_gold_nail") > 0) effects.goldNailUntil = clock + 4;
+      const nail = talentRank("censer_gold_nail");
+      if (nail > 0) {
+        effects.goldNailUntil = clock + 4;
+        cue("censer", "heatless", {
+          ...event, rank: nail, intensity: 0.54,
+          talentId: "censer_gold_nail", stage: "arm", targetId: event.enemyId,
+        });
+      }
       if (!event.killed) {
         const censure = talentRank("censer_rite_of_censure");
-        if (censure > 0) effects.brands.set(event.enemyId, { until: clock + 5, rank: censure });
+        if (censure > 0) {
+          effects.brands.set(event.enemyId, {
+            until: clock + 5,
+            rank: censure,
+            x: finite(event.x),
+            y: finite(event.y),
+            z: finite(event.z),
+          });
+          cue("censer", "brand", {
+            ...event, rank: censure, intensity: 0.56,
+            talentId: "censer_rite_of_censure", stage: "arm", targetId: event.enemyId,
+          });
+        }
       }
     }
     return event;
@@ -1023,10 +1181,18 @@ export function buildProgression(ctx) {
       if (talentRank("censer_gold_nail") >= 2) ctx.weapons?.coolHeat?.(0.06, { reason: "gold-nail-rank-2" });
       effects.goldNailUntil = 0;
       bump("goldNailsFired");
+      cue("censer", "heatless", {
+        ...event, intensity: 0.84, rank: talentRank("censer_gold_nail"),
+        talentId: "censer_gold_nail", stage: "consume",
+      });
     } else if (effects.wingShotUntil >= clock && talentRank("wing_wingbeat_conversion") >= 2) {
       ctx.weapons?.coolHeat?.(heatAdded, { reason: "wingbeat-shot", clearOverheat: true });
       effects.wingShotUntil = 0;
       bump("wingbeatShots");
+      cue("wing", "conversion", {
+        ...event, intensity: 0.7, rank: 2,
+        talentId: "wing_wingbeat_conversion", stage: "shot",
+      });
     }
     return event;
   }
@@ -1046,6 +1212,10 @@ export function buildProgression(ctx) {
         source: "ashen-rebuke",
       });
       bump("ashenRebukes");
+      cue("censer", "vent", {
+        ...event, x, z, radius: hot ? 4.8 : 3.4, rank,
+        intensity: hot ? 0.9 : 0.68, talentId: "censer_ashen_rebuke",
+      });
     }
     if (capstoneActive("censer_martyrs_furnace") && event.startHeat >= 0.8) {
       const x = finite(event.x) + Math.sin(finite(event.yaw)) * 2.8;
@@ -1056,6 +1226,10 @@ export function buildProgression(ctx) {
       });
       ctx.jetpack?.restoreCharge?.(8, "martyrs-furnace");
       bump("martyrsFurnaceBlasts");
+      cue("censer", "martyr", {
+        ...event, x, z, radius: 6, intensity: 1, capstone: true,
+        talentId: "censer_martyrs_furnace",
+      });
     }
     return event;
   }
@@ -1078,6 +1252,10 @@ export function buildProgression(ctx) {
         });
         ctx.jetpack?.restoreCharge?.(8, "endless-litany");
         bump("litanyVerses");
+        cue("procession", "litany", {
+          ...event, radius: 5, intensity: 1, capstone: true,
+          talentId: "procession_endless_litany", stage: "consume",
+        });
       }
     } else {
       effects.comboConnected = effects.comboConnected && connected;
@@ -1094,6 +1272,11 @@ export function buildProgression(ctx) {
         knockSpeed: 4, source: "hooking-step",
       });
       bump("hookingSteps");
+      cue("procession", "hook", {
+        ...event, radius: hook >= 2 ? 5 : 3, rank: hook,
+        intensity: hook >= 2 ? 0.78 : 0.62,
+        talentId: "procession_hooking_step", stage: "second-strike",
+      });
     }
 
     const mercy = talentRank("procession_processional_mercy");
@@ -1101,18 +1284,40 @@ export function buildProgression(ctx) {
       ctx.jetpack?.restoreCharge?.(step === 3 && mercy >= 2 ? 12 : 6, "processional-mercy");
       effects.comboMercyUsed = true;
       bump("processionalMercies");
+      cue("procession", "mercy", {
+        ...event, rank: mercy, intensity: mercy >= 2 ? 0.82 : 0.62,
+        talentId: "procession_processional_mercy",
+      });
     }
 
     if (step === 3) {
       const measure = talentRank("procession_executioners_measure");
       if (measure > 0 && effects.comboConnected) {
         const current = new Set((event.targets || []).map((target) => target.enemyId));
-        for (const id of effects.comboTargets) {
-          if (current.has(id)) effects.exposed.set(id, { until: clock + (measure >= 2 ? 6 : 4) });
+        const armedTargets = (event.targets || []).filter((target) =>
+          !target.killed && effects.comboTargets.has(target.enemyId) && current.has(target.enemyId));
+        for (const target of armedTargets) {
+          effects.exposed.set(target.enemyId, {
+            until: clock + (measure >= 2 ? 6 : 4),
+            rank: measure,
+            x: finite(target.x),
+            y: finite(target.y),
+            z: finite(target.z),
+          });
         }
-        if (measure >= 2 && effects.comboTargets.size) {
+        if (measure >= 2 && armedTargets.length) {
           ctx.combat?.shockwave?.(event.x, event.y, event.z, {
             radius: 4, damage: 0, stun: 0.75, knockSpeed: 5, source: "executioners-measure",
+          });
+        }
+        if (armedTargets.length) {
+          const primary = armedTargets[0];
+          cue("procession", "expose", {
+            ...event, x: primary.x, y: primary.y, z: primary.z,
+            radius: 4, rank: measure, count: armedTargets.length,
+            intensity: measure >= 2 ? 0.82 : 0.62,
+            talentId: "procession_executioners_measure", stage: "arm",
+            targetId: primary.enemyId,
           });
         }
       }
@@ -1122,16 +1327,29 @@ export function buildProgression(ctx) {
           radius: 6, damage: 48, edgeFalloff: 0.42, stun: 0.5, knockSpeed: 7,
           source: "third-toll",
         });
-        if (thirdToll >= 2 && (first?.hits || 0) >= 3) {
+        const echoed = thirdToll >= 2 && (first?.hits || 0) >= 3;
+        if (echoed) {
           ctx.combat?.shockwave?.(event.x, event.y, event.z, {
             radius: 6, damage: 24, edgeFalloff: 0.5, stun: 0.25, knockSpeed: 4,
             source: "third-toll-echo",
           });
         }
         bump("thirdTolls");
+        cue("procession", "toll", {
+          ...event, radius: 6, rank: thirdToll,
+          intensity: echoed ? 1 : 0.82,
+          talentId: "procession_third_toll", count: echoed ? 2 : 1,
+          stage: "finisher",
+        });
       }
       effects.litanyUntil = connected && capstoneActive("procession_endless_litany")
         ? clock + 1.5 : 0;
+      if (effects.litanyUntil) {
+        cue("procession", "litany", {
+          ...event, radius: 2.8, intensity: 0.62, capstone: true,
+          talentId: "procession_endless_litany", stage: "arm",
+        });
+      }
     }
     if (!connected) {
       effects.comboTargets.clear();
@@ -1142,11 +1360,24 @@ export function buildProgression(ctx) {
 
   function onShieldBlock(event = {}) {
     const amount = Math.max(0, finite(event.amount ?? event.absorbed));
+    const ps = ctx.player?.state || {};
+    const guardOrigin = {
+      x: finite(event.playerX, ps.x),
+      y: finite(event.playerY, ps.y),
+      z: finite(event.playerZ, ps.z),
+      yaw: finite(event.yaw, ps.yaw),
+    };
     if (event.dome && capstoneActive("halo_seraph_aegis")) {
       effects.halo.domeActive = true;
       effects.halo.domeStored = Math.min(150, effects.halo.domeStored + amount);
       effects.halo.domeBlocks += 1;
       bump("seraphBlocks");
+      cue("halo", "dome", {
+        ...event, ...guardOrigin,
+        radius: Math.max(0.75, finite(ctx.shield?.config?.domeRadius, 2.62)),
+        intensity: Math.min(0.78, 0.3 + effects.halo.domeStored / 260),
+        capstone: true, talentId: "halo_seraph_aegis", stage: "store",
+      });
     } else {
       const storedRank = talentRank("halo_stored_wrath");
       if (storedRank > 0) {
@@ -1155,6 +1386,11 @@ export function buildProgression(ctx) {
         effects.halo.storedWrath = Math.min(cap, effects.halo.storedWrath + amount * portion);
         effects.halo.storedWrathBlocks += 1;
         bump("wrathBlocks");
+        cue("halo", "wrath-store", {
+          ...event, ...guardOrigin, rank: storedRank, value: effects.halo.storedWrath,
+          intensity: Math.min(0.74, 0.28 + effects.halo.storedWrath / 150),
+          talentId: "halo_stored_wrath", stage: "store",
+        });
       }
     }
 
@@ -1164,6 +1400,10 @@ export function buildProgression(ctx) {
       effects.halo.reversalYaw = finite(event.yaw, ctx.player?.state?.yaw);
       effects.halo.reversalPending = true;
       bump("reversalsArmed");
+      cue("halo", "reversal", {
+        ...event, ...guardOrigin, rank: reversal, intensity: 0.52,
+        talentId: "halo_pilgrims_reversal", stage: "arm",
+      });
     }
 
     const rank = talentRank("halo_votive_parry");
@@ -1196,6 +1436,11 @@ export function buildProgression(ctx) {
       }
     }
     bump("perfectGuards");
+    cue("halo", "parry", {
+      ...event, ...guardOrigin, rank, radius: rank >= 2 ? 4 : 3,
+      intensity: rank >= 2 ? 0.95 : 0.78,
+      talentId: "halo_votive_parry",
+    });
     return event;
   }
 
@@ -1238,6 +1483,10 @@ export function buildProgression(ctx) {
           source: "seraph-aegis",
         });
         bump("seraphBlasts");
+        cue("halo", "seraph", {
+          x, y, z, yaw, radius: 8, value: force, intensity: Math.min(1, 0.55 + force / 300),
+          capstone: true, talentId: "halo_seraph_aegis", stage: "release",
+        });
       }
       effects.halo.lastDomeBlast = force;
       effects.halo.domeStored = 0;
@@ -1270,6 +1519,11 @@ export function buildProgression(ctx) {
         }
       );
       bump("wrathBashes");
+      cue("halo", "wrath-release", {
+        x, y, z, yaw, radius: reach, rank, value: force,
+        intensity: Math.min(1, 0.5 + force / 160),
+        talentId: "halo_stored_wrath", stage: "release",
+      });
     }
     effects.halo.storedWrath = 0;
     effects.halo.storedWrathBlocks = 0;
@@ -1290,11 +1544,22 @@ export function buildProgression(ctx) {
     effects.halo.reversalUntil = 0;
     effects.halo.reversalBoostSerial = serial;
     bump("reversalsUsed");
+    const boostYaw = rank >= 2
+      ? finite(event.intendedYaw, event.baseYaw)
+      : finite(event.baseYaw, effects.halo.reversalYaw) + Math.PI;
+    const cueYaw = boostYaw + Math.PI;
+    cue("halo", "reversal", {
+      ...event,
+      x: finite(event.playerX, ctx.player?.state?.x),
+      y: finite(event.playerY, ctx.player?.state?.y),
+      z: finite(event.playerZ, ctx.player?.state?.z),
+      yaw: cueYaw,
+      rank, intensity: rank >= 2 ? 0.86 : 0.7,
+      talentId: "halo_pilgrims_reversal", stage: "consume",
+    });
     return {
       cost: 0,
-      yaw: rank >= 2
-        ? finite(event.intendedYaw, event.baseYaw)
-        : finite(event.baseYaw, effects.halo.reversalYaw) + Math.PI,
+      yaw: boostYaw,
       attack: rank >= 2 ? !!event.intendedAttack : false,
       contactEnabled: rank >= 2,
       steerLockSeconds: rank >= 2 ? 0 : 0.3,
@@ -1316,6 +1581,13 @@ export function buildProgression(ctx) {
     if (!shielded) return { progressMultiplier: 1, source: "unshielded" };
     const mercy = talentRank("halo_mercy_circuit");
     if (mercy <= 0) return { progressMultiplier: 0, source: "aegis-paused" };
+    if (clock >= effects.halo.mercyCueAt) {
+      effects.halo.mercyCueAt = clock + 0.85;
+      cue("halo", "mercy", {
+        ...event, rank: mercy, intensity: 0.42,
+        talentId: "halo_mercy_circuit", stage: "channel",
+      });
+    }
     return {
       progressMultiplier: mercy >= 2 ? 0.75 : 0.5,
       source: "mercy-circuit",
@@ -1324,6 +1596,13 @@ export function buildProgression(ctx) {
 
   function noteVerb(verb, event = {}) {
     const wingbeat = talentRank("wing_wingbeat_conversion");
+    const circuitEvent = verb === "perfectGuard" ? {
+      ...event,
+      x: finite(event.playerX, ctx.player?.state?.x),
+      y: finite(event.playerY, ctx.player?.state?.y),
+      z: finite(event.playerZ, ctx.player?.state?.z),
+      yaw: finite(event.yaw, ctx.player?.state?.yaw),
+    } : event;
     if (verb === "boost") {
       const reversal = event.modifierSource === "pilgrims-reversal";
       if (!reversal && talentRank("wing_gravitic_wake") > 0 && !event.attack) {
@@ -1333,6 +1612,11 @@ export function buildProgression(ctx) {
           rank: talentRank("wing_gravitic_wake"),
         };
         bump("graviticWakes");
+        cue("wing", "wake", {
+          ...event, radius: talentRank("wing_gravitic_wake") >= 2 ? 4 : 2.5,
+          rank: talentRank("wing_gravitic_wake"), intensity: 0.58,
+          talentId: "wing_gravitic_wake", stage: "arm",
+        });
       }
       const ram = talentRank("wing_rams_halo");
       if (!reversal && ram > 0 && event.attack) {
@@ -1342,6 +1626,10 @@ export function buildProgression(ctx) {
           source: "rams-halo",
         });
         bump("ramsHalos");
+        cue("wing", "ram", {
+          ...event, radius: 4, rank: ram, intensity: ram >= 2 ? 0.84 : 0.68,
+          talentId: "wing_rams_halo", stage: "arm",
+        });
       }
     } else if (verb === "boostEnd") {
       effects.lastBoostAt = clock;
@@ -1352,6 +1640,10 @@ export function buildProgression(ctx) {
         ctx.jetpack?.restoreCharge?.(finite(event.ignitionCost), "wingbeat-conversion");
         if (wingbeat >= 2) effects.wingShotUntil = clock + 4;
         bump("wingbeatConversions");
+        cue("wing", "conversion", {
+          ...event, rank: wingbeat, intensity: wingbeat >= 2 ? 0.86 : 0.68,
+          talentId: "wing_wingbeat_conversion", stage: "convert",
+        });
       }
     }
 
@@ -1359,7 +1651,15 @@ export function buildProgression(ctx) {
       for (const [key, at] of effects.circuit.verbs) {
         if (clock - at > 8) effects.circuit.verbs.delete(key);
       }
+      const circuitSize = effects.circuit.verbs.size;
       effects.circuit.verbs.set(verb, clock);
+      if (effects.circuit.verbs.size > circuitSize && effects.circuit.verbs.size < 3) {
+        cue("wing", "circuit", {
+          ...circuitEvent, count: effects.circuit.verbs.size, radius: 2.2,
+          intensity: 0.4 + Math.min(3, effects.circuit.verbs.size) * 0.12,
+          capstone: true, talentId: "wing_unbroken_circuit", stage: "segment",
+        });
+      }
       if (effects.circuit.verbs.size >= 3) {
         ctx.jetpack?.restoreCharge?.(25, "unbroken-circuit");
         const ps = ctx.player?.state || event;
@@ -1370,6 +1670,10 @@ export function buildProgression(ctx) {
         effects.circuit.verbs.clear();
         effects.circuit.readyAt = clock + 12;
         bump("circuitsCompleted");
+        cue("wing", "circuit", {
+          ...ps, radius: 6, count: 3, intensity: 1, capstone: true,
+          talentId: "wing_unbroken_circuit", stage: "complete",
+        });
       }
     }
     return event;
@@ -1385,6 +1689,11 @@ export function buildProgression(ctx) {
       if (gospel >= 2 && feathers >= 3) ctx.jetpack?.restoreCharge?.(15, "falling-gospel");
       effects.feathers = 0;
       bump("featherFalls");
+      cue("wing", "feather", {
+        ...(ctx.player?.state || options), radius: changed.radius, count: feathers,
+        rank: gospel, intensity: Math.min(1, 0.58 + feathers * 0.13),
+        talentId: "wing_falling_gospel", stage: "consume",
+      });
     }
     if (talentRank("wing_rams_halo") > 0 && effects.ramPrimeUntil >= clock) {
       const ram = talentRank("wing_rams_halo");
@@ -1392,6 +1701,11 @@ export function buildProgression(ctx) {
       changed.damage = finite(changed.damage, options.damage) * (ram >= 2 ? 1.2 : 1.1);
       effects.ramPrimeUntil = 0;
       bump("ramPrimedFalls");
+      cue("wing", "ram", {
+        ...(ctx.player?.state || options), radius: changed.radius, rank: ram,
+        intensity: ram >= 2 ? 0.95 : 0.78,
+        talentId: "wing_rams_halo", stage: "consume",
+      });
     }
     return changed;
   }
@@ -1536,6 +1850,12 @@ export function buildProgression(ctx) {
         && talentRank("edict_live_fuse") > 0),
     });
     bump("edictBeaconsCalled");
+    if (effects.edict.beacons.get(id)?.siren) {
+      cue("edict", "siren", {
+        ...shot, radius: shot.siren?.radius || 12, intensity: 0.62,
+        talentId: "edict_siren_beacon", stage: "inbound",
+      });
+    }
     return event;
   }
 
@@ -1553,6 +1873,10 @@ export function buildProgression(ctx) {
       relocated: true,
       siren: shot.siren === undefined ? !!prior.siren : !!shot.siren,
     });
+    cue("edict", "recall", {
+      ...shot, intensity: 0.76, rank: talentRank("edict_recall_rite"),
+      talentId: "edict_recall_rite", stage: "relocate",
+    });
     return event;
   }
 
@@ -1567,6 +1891,11 @@ export function buildProgression(ctx) {
       prior.reducedBy = Math.max(0, finite(shot.reducedBy,
         event.totalReduced ?? event.reducedBy ?? prior.reducedBy));
     }
+    cue("edict", "fuse", {
+      ...shot, intensity: event.precision ? 0.86 : 0.66,
+      rank: talentRank("edict_live_fuse"),
+      talentId: "edict_live_fuse", stage: event.precision ? "precision" : "hit",
+    });
     return event;
   }
 
@@ -1588,8 +1917,19 @@ export function buildProgression(ctx) {
       radius: Math.max(0, finite(fieldState.radius, 8)),
       remaining: Math.max(0, finite(fieldState.remaining, fieldState.duration)),
       blocksProjectiles: !!fieldState.blocksProjectiles,
+      fusionId: typeof fieldState.fusionId === "string" ? fieldState.fusionId : "",
     });
-    bump("fieldChapels");
+    const chapelRank = talentRank("edict_field_chapel");
+    const fieldChapel = chapelRank > 0 && !fieldState.fusionId;
+    if (fieldChapel) {
+      bump("fieldChapels");
+      cue("edict", "chapel", {
+        ...fieldState, radius: Math.max(0, finite(fieldState.radius, 8)),
+        intensity: chapelRank >= 2 ? 0.82 : 0.64,
+        rank: chapelRank,
+        talentId: "edict_field_chapel", stage: "form",
+      });
+    }
     return event;
   }
 
@@ -1607,6 +1947,10 @@ export function buildProgression(ctx) {
       radius: Math.max(0, finite(sigil.radius, 9)),
       remaining: Math.max(0, finite(sigil.remaining, sigil.duration)),
     });
+    cue("edict", "sigil", {
+      ...sigil, radius: Math.max(0, finite(sigil.radius, 9)), intensity: 0.62,
+      capstone: true, talentId: "edict_combined_liturgy", stage: "form",
+    });
     return event;
   }
 
@@ -1614,6 +1958,13 @@ export function buildProgression(ctx) {
     const fusion = event.fusion || event;
     const id = typeof fusion.id === "string" ? fusion.id : "";
     if (!id) return event;
+    const effectPoint = fusion.effectPoint && typeof fusion.effectPoint === "object"
+      ? fusion.effectPoint : fusion;
+    const point = {
+      x: finite(effectPoint.x, fusion.anchor?.x),
+      y: finite(effectPoint.y, fusion.anchor?.y),
+      z: finite(effectPoint.z, fusion.anchor?.z),
+    };
     effects.edict.lastFusion = {
       id,
       at: clock,
@@ -1623,9 +1974,16 @@ export function buildProgression(ctx) {
             : id === "reliquary_minefield"
               ? (fusion.commandKey === "cluster" ? "resupply" : "cluster") : ""),
       second: fusion.second || fusion.key || fusion.commandKey || "",
+      effectPoint: point,
     };
     effects.edict.fusionReadyAt = Math.max(effects.edict.fusionReadyAt, clock + 30);
     bump("fusionsResolved");
+    cue("edict", "fusion", {
+      ...fusion, ...point,
+      radius: Math.max(0.75, finite(fusion.effectRadius, fusion.outcome?.radius || 9)),
+      intensity: 1, capstone: true, talentId: "edict_combined_liturgy",
+      source: id, stage: "resolve",
+    });
     return event;
   }
 
@@ -1660,8 +2018,15 @@ export function buildProgression(ctx) {
           knockSpeed: 2,
           source: "gravitic-wake",
         });
+        cue("wing", "wake", {
+          ...effects.wake, radius: effects.wake.rank >= 2 ? 4 : 2.5,
+          intensity: 0.38, talentId: "wing_gravitic_wake", stage: "pulse",
+        });
         effects.wake.nextPulse = clock + 0.48;
       }
+    }
+    for (const [verb, at] of effects.circuit.verbs) {
+      if (clock - at > 8) effects.circuit.verbs.delete(verb);
     }
   }
 
@@ -1713,6 +2078,7 @@ export function buildProgression(ctx) {
   window.addEventListener("pagehide", flushPersistence);
 
   return {
+    bus,
     state,
     definitions: () => clone(DEFINITIONS),
     onChange(listener) {
@@ -1779,6 +2145,7 @@ export function buildProgression(ctx) {
       }
       for (const stop of stops) stop?.();
       listeners.clear();
+      bus.clear();
       window.removeEventListener("pagehide", flushPersistence);
     },
   };

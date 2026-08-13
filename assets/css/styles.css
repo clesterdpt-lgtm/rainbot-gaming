@@ -905,8 +905,8 @@ html.sf-maximised .rb-game-chrome,
 .game-stage.is-maxed .rb-game-chrome {
   display: none !important;
 }
-html:not(.sf-maximised) body:not(.rb-game-maxed) .game-stage:has(.rb-game-chrome) .fs-btn,
-html:not(.sf-maximised) body:not(.rb-game-maxed) .game-stage:has(.rb-game-chrome) .fullscreen-btn {
+html:not(.sf-maximised) body:not(.rb-game-maxed) .game-stage:has(.rb-game-chrome) .fs-btn:not([role="dialog"] *),
+html:not(.sf-maximised) body:not(.rb-game-maxed) .game-stage:has(.rb-game-chrome) .fullscreen-btn:not([role="dialog"] *) {
   display: none !important;
 }
 .hud {

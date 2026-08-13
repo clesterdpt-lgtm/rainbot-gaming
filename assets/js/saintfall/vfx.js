@@ -823,11 +823,18 @@ export function buildVfx(ctx, world) {
     const birth = new Float32Array(IMPACT_MAX).fill(-999);
     const size = new Float32Array(IMPACT_MAX);
     const tint = new Float32Array(IMPACT_MAX);
+    /* Per-particle lifetime. The pool ran on one hardcoded 0.62s span
+       for every emitter in the game, which is right for the dust off a
+       bullet and wrong for anything that is supposed to leave an
+       AFTERMATH: a capstone's embers died in the same two-thirds of a
+       second as a ricochet, so no rite ever had a settling phase. */
+    const span = new Float32Array(IMPACT_MAX).fill(0.62);
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     geo.setAttribute("aVel", new THREE.BufferAttribute(vel, 3));
     geo.setAttribute("aBirth", new THREE.BufferAttribute(birth, 1));
     geo.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
     geo.setAttribute("aTint", new THREE.BufferAttribute(tint, 1));
+    geo.setAttribute("aSpan", new THREE.BufferAttribute(span, 1));
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 4000);
 
     const mat = new THREE.ShaderMaterial({
@@ -868,13 +875,15 @@ export function buildVfx(ctx, world) {
         "attribute float aBirth;",
         "attribute float aSize;",
         "attribute float aTint;",
+        "attribute float aSpan;",
         "uniform float uTime;",
         "uniform float uPixel;",
         "varying float vLife;",
         "varying float vTint;",
         "void main() {",
         "  float age = uTime - aBirth;",
-        "  vLife = clamp(1.0 - age / 0.62, 0.0, 1.0);",
+        "  float span = max(0.08, aSpan);",
+        "  vLife = clamp(1.0 - age / span, 0.0, 1.0);",
         "  vTint = aTint;",
         /* Not yet born. Particles can be scheduled ahead of time so a
            bolt sheds its wake AS IT PASSES rather than laying the
@@ -896,8 +905,21 @@ export function buildVfx(ctx, world) {
         "  float gas = step(4.5, aTint) * (1.0 - doctrine);",
         "  float energy = step(1.5, aTint) * (1.0 - venom) * (1.0 - doctrine);",
         "  float fall = (1.0 - energy) * (1.0 - gas) * (1.0 - doctrine);",
-        "  vec3 p = position + aVel * age",
-        "    - vec3(0.0, 9.0, 0.0) * age * age * fall;",
+        /* Doctrine motes DECELERATE. Integrating a constant velocity for
+           the whole span is what made the Wing feathers read as escaping
+           soap bubbles: they left at 8m/s and were still doing 8m/s when
+           they faded out past the horizon line. The eye only accepts a
+           mote as something the world threw once it watches the throw
+           die. Steam keeps its climb - a vent plume rises - so only the
+           five Orders get the settle term underneath it. */
+        "  float steamV = step(10.5, aTint);",
+        "  float rite = doctrine * (1.0 - steamV);",
+        "  float drag = 3.0 * doctrine;",
+        "  float travel = mix(age, (1.0 - exp(-drag * age)) / max(0.0001, drag),",
+        "    doctrine);",
+        "  vec3 p = position + aVel * travel",
+        "    - vec3(0.0, 9.0, 0.0) * age * age * fall",
+        "    - vec3(0.0, 1.15, 0.0) * age * age * rite;",
         "  vec4 mv = modelViewMatrix * vec4(p, 1.0);",
         "  gl_Position = projectionMatrix * mv;",
         "  gl_PointSize = aSize * uPixel * vLife / max(1.0, -mv.z * 0.06);",
@@ -968,7 +990,20 @@ export function buildVfx(ctx, world) {
     group.add(points);
 
     let cursor = 0;
-    function emit(x, y, z, count, spread, scale, tintVal) {
+    /** Flag every attribute at once. Five call sites were maintaining
+     *  the same list by hand, and adding `aSpan` to four of five is the
+     *  kind of omission that shows up as one emitter's particles
+     *  inheriting whatever lifetime the ring buffer last held. */
+    function flush() {
+      geo.attributes.position.needsUpdate = true;
+      geo.attributes.aVel.needsUpdate = true;
+      geo.attributes.aBirth.needsUpdate = true;
+      geo.attributes.aSize.needsUpdate = true;
+      geo.attributes.aTint.needsUpdate = true;
+      geo.attributes.aSpan.needsUpdate = true;
+    }
+
+    function emit(x, y, z, count, spread, scale, tintVal, life = 0.62) {
       for (let i = 0; i < count; i += 1) {
         const k = cursor;
         cursor = (cursor + 1) % IMPACT_MAX;
@@ -981,12 +1016,11 @@ export function buildVfx(ctx, world) {
         birth[k] = atmos.elapsed;
         size[k] = scale * (7 + Math.random() * 9);
         tint[k] = tintVal;
+        // Spread the span across the burst so a cloud thins out from
+        // its edges instead of switching off on one frame.
+        span[k] = life * (0.72 + Math.random() * 0.56);
       }
-      geo.attributes.position.needsUpdate = true;
-      geo.attributes.aVel.needsUpdate = true;
-      geo.attributes.aBirth.needsUpdate = true;
-      geo.attributes.aSize.needsUpdate = true;
-      geo.attributes.aTint.needsUpdate = true;
+      flush();
     }
 
     /**
@@ -1006,7 +1040,7 @@ export function buildVfx(ctx, world) {
      * laid down all at once at the muzzle.
      */
     function emitTrail(x, y, z, dx, dy, dz, distance, speed, count, scale,
-      tintVal = 0.85) {
+      tintVal = 0.85, life = 0.62) {
       for (let i = 0; i < count; i += 1) {
         const k = cursor;
         cursor = (cursor + 1) % IMPACT_MAX;
@@ -1022,15 +1056,13 @@ export function buildVfx(ctx, world) {
         birth[k] = atmos.elapsed + along / speed;
         size[k] = scale * (4 + Math.random() * 6);
         tint[k] = tintVal;
+        span[k] = life * (0.72 + Math.random() * 0.56);
       }
-      geo.attributes.position.needsUpdate = true;
-      geo.attributes.aVel.needsUpdate = true;
-      geo.attributes.aBirth.needsUpdate = true;
-      geo.attributes.aSize.needsUpdate = true;
-      geo.attributes.aTint.needsUpdate = true;
+      flush();
     }
 
-    function emitDirected(x, y, z, count, dx, dy, dz, speed, scale, tintVal) {
+    function emitDirected(x, y, z, count, dx, dy, dz, speed, scale, tintVal,
+      life = 0.62) {
       for (let i = 0; i < count; i += 1) {
         const k = cursor;
         cursor = (cursor + 1) % IMPACT_MAX;
@@ -1044,14 +1076,46 @@ export function buildVfx(ctx, world) {
         birth[k] = atmos.elapsed;
         size[k] = scale * (7 + Math.random() * 9);
         tint[k] = tintVal;
+        span[k] = life * (0.72 + Math.random() * 0.56);
       }
-      geo.attributes.position.needsUpdate = true;
-      geo.attributes.aVel.needsUpdate = true;
-      geo.attributes.aBirth.needsUpdate = true;
-      geo.attributes.aSize.needsUpdate = true;
-      geo.attributes.aTint.needsUpdate = true;
+      flush();
     }
-    return { points, mat, emit, emitDirected, emitTrail };
+
+    /**
+     * Motes seeded around a ring rather than at a point, each thrown
+     * along its own outward bearing and delayed by its angle.
+     *
+     * A rite that expands as a WAVE cannot be built from a point
+     * emitter: everything leaves the centre at once, so the fastest
+     * mote is always the leading edge and the shape reads as a
+     * fountain. Seeding the circle makes the wave itself the emitter.
+     */
+    function emitRing(x, y, z, count, radius, speed, rise, scale, tintVal,
+      life = 0.62, sweep = 0, phase = 0) {
+      for (let i = 0; i < count; i += 1) {
+        const k = cursor;
+        cursor = (cursor + 1) % IMPACT_MAX;
+        const a = phase + (i / count) * TAU + (Math.random() - 0.5) * 0.22;
+        const ca = Math.cos(a);
+        const sa = Math.sin(a);
+        const r = radius * (0.86 + Math.random() * 0.28);
+        pos[k * 3] = x + ca * r;
+        pos[k * 3 + 1] = y + Math.random() * 0.18;
+        pos[k * 3 + 2] = z + sa * r;
+        const s = speed * (0.6 + Math.random() * 0.7);
+        vel[k * 3] = ca * s;
+        vel[k * 3 + 1] = rise * (0.45 + Math.random() * 1.0);
+        vel[k * 3 + 2] = sa * s;
+        // A non-zero sweep lets the circle IGNITE around instead of
+        // all at once, which is what makes a toll read as rotating.
+        birth[k] = atmos.elapsed + sweep * (i / count);
+        size[k] = scale * (6 + Math.random() * 9);
+        tint[k] = tintVal;
+        span[k] = life * (0.72 + Math.random() * 0.56);
+      }
+      flush();
+    }
+    return { points, mat, emit, emitDirected, emitTrail, emitRing };
   })();
 
   /* ============================================================
@@ -1100,6 +1164,7 @@ export function buildVfx(ctx, world) {
     const birth = new Float32Array(TRACER_MAX * 4).fill(-999);
     const width = new Float32Array(TRACER_MAX * 4);
     const style = new Float32Array(TRACER_MAX * 4);
+    const speed = new Float32Array(TRACER_MAX * 4).fill(TRACER_SPEED);
     const corner = new Float32Array(TRACER_MAX * 4 * 2);
     const index = new Uint16Array(TRACER_MAX * 6);
     for (let i = 0; i < TRACER_MAX; i += 1) {
@@ -1117,6 +1182,7 @@ export function buildVfx(ctx, world) {
     geo.setAttribute("aBirth", new THREE.BufferAttribute(birth, 1));
     geo.setAttribute("aWidth", new THREE.BufferAttribute(width, 1));
     geo.setAttribute("aStyle", new THREE.BufferAttribute(style, 1));
+    geo.setAttribute("aSpeed", new THREE.BufferAttribute(speed, 1));
     geo.setAttribute("aCorner", new THREE.BufferAttribute(corner, 2));
     geo.setIndex(new THREE.BufferAttribute(index, 1));
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 4000);
@@ -1124,8 +1190,6 @@ export function buildVfx(ctx, world) {
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
-        uSpeed: { value: TRACER_SPEED },
-        uEnergySpeed: { value: ENERGY_TRACER_SPEED },
         uTail: { value: TRACER_TAIL },
         uHostileTail: { value: HOSTILE_TRACER_TAIL },
         uEnergyFade: { value: RELIQUARY_FADE_TIME },
@@ -1159,10 +1223,9 @@ export function buildVfx(ctx, world) {
         "attribute float aBirth;",
         "attribute float aWidth;",
         "attribute float aStyle;",
+        "attribute float aSpeed;",
         "attribute vec2 aCorner;",
         "uniform float uTime;",
-        "uniform float uSpeed;",
-        "uniform float uEnergySpeed;",
         "uniform float uTail;",
         "uniform float uHostileTail;",
         "uniform float uEnergyFade;",
@@ -1175,8 +1238,8 @@ export function buildVfx(ctx, world) {
         "varying float vAge;",
         "void main() {",
         "  float age = uTime - aBirth;",
-        "  float speed = mix(uSpeed, uEnergySpeed, aStyle);",
-        "  float travelled = age * speed;",
+        "  float travelSpeed = aSpeed;",
+        "  float travelled = age * travelSpeed;",
         "  float tailLength = mix(uHostileTail, uTail, aStyle);",
         "  float fadeTime = mix(uHostileFade, uEnergyFade, aStyle);",
         // The head stops at the range the ray reached; the tail keeps
@@ -1190,7 +1253,7 @@ export function buildVfx(ctx, world) {
         // entire authoritative ray for one short discharge.
         "  float head = mix(movingHead, aSpan, aStyle);",
         "  float tail = mix(movingTail, 0.0, aStyle);",
-        "  float impactAge = max(age - aSpan / speed, 0.0);",
+        "  float impactAge = max(age - aSpan / travelSpeed, 0.0);",
         "  float hostileLife = 1.0 - clamp(impactAge / fadeTime, 0.0, 1.0);",
         "  float beamLife = 1.0 - clamp(age / uEnergyFade, 0.0, 1.0);",
         "  vLife = mix(hostileLife, beamLife, aStyle);",
@@ -1301,11 +1364,11 @@ export function buildVfx(ctx, world) {
     /* A ribbon cannot keep a round silhouette when its flight axis
        points away from the chase camera: perspective crushes the head
        into the tail. These synchronized camera-facing cards give every
-       bolt a discrete charge at the leading edge. They share all six
+       bolt a discrete charge at the leading edge. They share all seven
        live attributes with the ribbon, so the extra draw call adds no
        second per-shot upload and never allocates during a firefight. */
     const headGeo = new THREE.BufferGeometry();
-    for (const name of ["position", "aDir", "aSpan", "aBirth", "aWidth", "aStyle"]) {
+    for (const name of ["position", "aDir", "aSpan", "aBirth", "aWidth", "aStyle", "aSpeed"]) {
       headGeo.setAttribute(name, geo.getAttribute(name));
     }
     const headCorner = new Float32Array(TRACER_MAX * 4 * 2);
@@ -1323,8 +1386,6 @@ export function buildVfx(ctx, world) {
     const headMat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: mat.uniforms.uTime,
-        uSpeed: { value: TRACER_SPEED },
-        uEnergySpeed: { value: ENERGY_TRACER_SPEED },
         uEnergyFade: { value: RELIQUARY_FADE_TIME },
         uHostileFade: { value: HOSTILE_FADE_TIME },
         uHot: mat.uniforms.uHot,
@@ -1345,10 +1406,9 @@ export function buildVfx(ctx, world) {
         "attribute float aBirth;",
         "attribute float aWidth;",
         "attribute float aStyle;",
+        "attribute float aSpeed;",
         "attribute vec2 aCorner;",
         "uniform float uTime;",
-        "uniform float uSpeed;",
-        "uniform float uEnergySpeed;",
         "uniform float uEnergyFade;",
         "uniform float uHostileFade;",
         "varying vec2 vUv;",
@@ -1357,11 +1417,11 @@ export function buildVfx(ctx, world) {
         "varying float vPulse;",
         "void main() {",
         "  float age = uTime - aBirth;",
-        "  float speed = mix(uSpeed, uEnergySpeed, aStyle);",
-        "  float travelled = age * speed;",
+        "  float travelSpeed = aSpeed;",
+        "  float travelled = age * travelSpeed;",
         "  float head = min(travelled, aSpan);",
         "  float fadeTime = mix(uHostileFade, uEnergyFade, aStyle);",
-        "  float impactAge = max(age - aSpan / speed, 0.0);",
+        "  float impactAge = max(age - aSpan / travelSpeed, 0.0);",
         "  vLife = 1.0 - clamp(impactAge / fadeTime, 0.0, 1.0);",
         "  vUv = aCorner;",
         "  vStyle = aStyle;",
@@ -1439,7 +1499,7 @@ export function buildVfx(ctx, world) {
     group.add(heads);
 
     let cursor = 0;
-    function emit(x, y, z, dx, dy, dz, distance, w, styleVal) {
+    function emit(x, y, z, dx, dy, dz, distance, w, styleVal, speedVal) {
       const i = cursor;
       cursor = (cursor + 1) % TRACER_MAX;
       for (let k = 0; k < 4; k += 1) {
@@ -1450,6 +1510,7 @@ export function buildVfx(ctx, world) {
         birth[v] = atmos.elapsed;
         width[v] = w;
         style[v] = styleVal;
+        speed[v] = speedVal;
       }
       geo.attributes.position.needsUpdate = true;
       geo.attributes.aDir.needsUpdate = true;
@@ -1457,6 +1518,7 @@ export function buildVfx(ctx, world) {
       geo.attributes.aBirth.needsUpdate = true;
       geo.attributes.aWidth.needsUpdate = true;
       geo.attributes.aStyle.needsUpdate = true;
+      geo.attributes.aSpeed.needsUpdate = true;
     }
     return { mesh, mat, heads, headMat, emit };
   })();
@@ -1655,19 +1717,23 @@ export function buildVfx(ctx, world) {
     return { mesh, mat, emit };
   })();
 
-  /** The bolt itself, drawn along the ray the hitscan already took.
-   * `energy` is explicit because hostile return fire shares this pool. */
+  /** The bolt itself, drawn along the path the authoritative shot takes.
+   * `energy` is explicit because hostile return fire shares this pool;
+   * travelling projectiles pass their gameplay speed so the visible head
+   * and swept collision reach every point on the same frame. */
   function tracer(x, y, z, dx, dy, dz, distance,
-    width = RELIQUARY_BOLT_WIDTH, energy = true) {
+    width = RELIQUARY_BOLT_WIDTH, energy = true, travelSpeed = null) {
     if (!(distance > 0) || !Number.isFinite(distance)) return;
     const span = Math.min(distance, 900);
     const style = energy ? 1 : 0;
-    tracers.emit(x, y, z, dx, dy, dz, span, width, style);
+    const speed = Number.isFinite(travelSpeed) && travelSpeed > 0
+      ? travelSpeed : energy ? ENERGY_TRACER_SPEED : TRACER_SPEED;
+    tracers.emit(x, y, z, dx, dy, dz, span, width, style, speed);
     /* Hostile plasma keeps a wake so incoming fire can be tracked.
        Player fire is deliberately ONE continuous laser with no motes. */
     if (!energy) {
       const beads = Math.min(14, Math.max(3, Math.round(span * 0.22)));
-      impacts.emitTrail(x, y, z, dx, dy, dz, span, TRACER_SPEED, beads, 0.55, 0.85);
+      impacts.emitTrail(x, y, z, dx, dy, dz, span, speed, beads, 0.55, 0.85);
     }
   }
 

@@ -288,7 +288,10 @@ export function installQa(ctx, api) {
       return { name, time: action.time, duration: action.getClip().duration };
     },
 
-    clearEnemies() { api.enemies.clear(); },
+    clearEnemies() {
+      api.enemies.clear();
+      api.combat?.clearProjectiles?.();
+    },
 
     /** Measured, not asserted: the creature's rendered height in
      *  world units next to the trooper's known 1.85m. */

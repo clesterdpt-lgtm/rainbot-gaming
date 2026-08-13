@@ -1,10 +1,10 @@
 /* ============================================================
    SAINTFALL - combat
 
-   Hitscan fire, damage, enemy behaviour, and the player's own
-   health. Everything here is deliberately readable rather than
-   physical: a shot is a ray, a hit is a capsule test, and an enemy
-   decides what to do from four numbers.
+   Player hitscan fire, hostile projectiles, damage, enemy behaviour,
+   and the player's own health. Everything here is deliberately
+   readable rather than physical: a shot is a swept ray, a hit is a
+   capsule test, and an enemy decides what to do from four numbers.
 
    The rule that shapes the whole file: NOTHING may reach through
    masonry. A shot, a sight line and a charge all ask
@@ -29,13 +29,31 @@ export const SURVIVAL_CONFIG = Object.freeze({
    animation supplies each move's character; these values define what the
    censer-lance consistently means in the world. */
 export const MELEE_CONFIG = Object.freeze({
-  reachMultiplier: 1.18,
+  reachMultiplier: 1.24,
   lightEnemy: "thresher",
   lightKnockbackSpeed: 16,
+  chargeOnHit: 3,
+  chargeOnKill: 3,
+  maxChargeRestore: 9,
   hitSparkScale: 2.10,
   hitPunch: 1.05,
   whiffPunch: 0.24,
   slamPunch: 1.35,
+});
+
+/* The Gleaner is the one ordinary ranged enemy, so this is the player's
+   complete incoming-fire reaction window. Its bolt is authoritative now:
+   damage is resolved when this travelling point reaches the player's
+   capsule, not when the muzzle flashes. */
+export const GLEANER_PROJECTILE_CONFIG = Object.freeze({
+  speed: 105,
+  directAimChance: 0.42,
+  horizontalSpread: 0.14,
+  verticalSpread: 0.09,
+  playerRadius: 0.52,
+  playerCapsuleBottom: 0.28,
+  playerCapsuleTop: 1.58,
+  maxRange: 60,
 });
 
 /* Body capsules in WORLD metres, taken from what
@@ -202,6 +220,18 @@ export function buildCombat(ctx) {
      One route request per simulation tick amortises a newly-alerted pack
      while every other creature keeps its cheap collision-slide pursuit. */
   let navigationBudget = 0;
+  const hostileProjectiles = [];
+  const projectileTotals = {
+    launched: 0,
+    contacts: 0,
+    damagingHits: 0,
+    intercepted: 0,
+    misses: 0,
+    coverStops: 0,
+  };
+  let projectileSerial = 0;
+  const _playerCapsuleA = new THREE.Vector3();
+  const _playerCapsuleB = new THREE.Vector3();
 
   /* Progression is constructed after combat, so every bridge resolves it
      lazily from `ctx`. These helpers keep the event vocabulary stable while
@@ -779,6 +809,17 @@ export function buildCombat(ctx) {
       : hits ? MELEE_CONFIG.hitPunch : MELEE_CONFIG.whiffPunch);
     const step = Number.isInteger(comboStep) && comboStep >= 1 && comboStep <= 3
       ? comboStep : 0;
+    /* Close combat now feeds the same Reliquary reserve that powers Aegis.
+       The return is per connected sweep, capped before a dense Thresher pack
+       can turn one wide swing into a full tank. A dedicated Procession build
+       layers Processional Mercy on top of this baseline reclaim. */
+    const chargeRequested = hits > 0
+      ? Math.min(MELEE_CONFIG.maxChargeRestore,
+        hits * MELEE_CONFIG.chargeOnHit + kills * MELEE_CONFIG.chargeOnKill)
+      : 0;
+    const chargeRestored = chargeRequested > 0
+      ? (ctx.jetpack?.restoreCharge?.(chargeRequested, "melee-reclaim") || 0)
+      : 0;
     const meleeEvent = {
       source: "melee",
       comboStep: step,
@@ -786,6 +827,8 @@ export function buildCombat(ctx) {
       hits,
       kills,
       knockbacks,
+      chargeRequested,
+      chargeRestored,
       slam,
       x: ps.x,
       y: ps.y,
@@ -1312,6 +1355,218 @@ export function buildCombat(ctx) {
     }
   }
 
+  function clearEnemyProjectiles() {
+    const cleared = hostileProjectiles.length;
+    hostileProjectiles.length = 0;
+    return cleared;
+  }
+
+  function projectileState() {
+    return {
+      config: { ...GLEANER_PROJECTILE_CONFIG },
+      active: hostileProjectiles.length,
+      launched: projectileTotals.launched,
+      contacts: projectileTotals.contacts,
+      damagingHits: projectileTotals.damagingHits,
+      intercepted: projectileTotals.intercepted,
+      misses: projectileTotals.misses,
+      coverStops: projectileTotals.coverStops,
+      flights: hostileProjectiles.map((projectile) => ({
+        id: projectile.id,
+        enemyId: projectile.enemyId,
+        age: Number(projectile.age.toFixed(4)),
+        travelled: Number(projectile.travelled.toFixed(3)),
+        span: Number(projectile.span.toFixed(3)),
+        speed: projectile.speed,
+        directAim: projectile.directAim,
+      })),
+    };
+  }
+
+  /** Advance every hostile bolt as a swept segment.
+   *
+   * A 105m/s point moves up to 10.5m in the largest accepted game step;
+   * checking only its new position would let it tunnel completely through a
+   * trooper. The same capsule/ray helper used for enemy bodies makes every
+   * intervening centimetre authoritative. Static cover already shortened the
+   * bolt's span at launch, so it can never reach a player behind masonry. */
+  function updateEnemyProjectiles(dt, ps) {
+    if (!(dt > 0) || hostileProjectiles.length === 0) return;
+    _playerCapsuleA.set(ps.x, ps.y + GLEANER_PROJECTILE_CONFIG.playerCapsuleBottom, ps.z);
+    _playerCapsuleB.set(ps.x, ps.y + GLEANER_PROJECTILE_CONFIG.playerCapsuleTop, ps.z);
+
+    for (let i = hostileProjectiles.length - 1; i >= 0; i -= 1) {
+      const projectile = hostileProjectiles[i];
+      const remaining = Math.max(0, projectile.span - projectile.travelled);
+      const step = Math.min(remaining, projectile.speed * dt);
+      if (step <= 1e-6) {
+        const reason = projectile.endsAtCover ? "cover" : "miss";
+        projectileTotals[reason === "cover" ? "coverStops" : "misses"] += 1;
+        bus.emit("enemyProjectileResolved", {
+          id: projectile.id,
+          enemyId: projectile.enemyId,
+          enemyKey: projectile.enemyKey,
+          reason,
+          flightSeconds: projectile.age,
+          travelled: projectile.travelled,
+          directAim: projectile.directAim,
+        });
+        hostileProjectiles.splice(i, 1);
+        continue;
+      }
+
+      const hitT = segmentHit(
+        projectile.x, projectile.y, projectile.z,
+        projectile.dx, projectile.dy, projectile.dz,
+        _playerCapsuleA, _playerCapsuleB,
+        GLEANER_PROJECTILE_CONFIG.playerRadius
+      );
+      if (hitT >= 0 && hitT <= step + 1e-5) {
+        projectile.x += projectile.dx * hitT;
+        projectile.y += projectile.dy * hitT;
+        projectile.z += projectile.dz * hitT;
+        projectile.travelled += hitT;
+        projectile.age += hitT / projectile.speed;
+        projectileTotals.contacts += 1;
+        const dealt = hurtPlayer(projectile.damage, {
+          source: "enemy-fire",
+          x: projectile.ox,
+          y: projectile.oy,
+          z: projectile.oz,
+          projectileX: projectile.x,
+          projectileY: projectile.y,
+          projectileZ: projectile.z,
+          enemy: projectile.enemyKey,
+          enemyId: projectile.enemyId,
+          enemyKey: projectile.enemyKey,
+        });
+        if (dealt > 0) projectileTotals.damagingHits += 1;
+        else projectileTotals.intercepted += 1;
+        bus.emit("enemyProjectileResolved", {
+          id: projectile.id,
+          enemyId: projectile.enemyId,
+          enemyKey: projectile.enemyKey,
+          reason: dealt > 0 ? "hit" : "intercepted",
+          damage: dealt,
+          flightSeconds: projectile.age,
+          travelled: projectile.travelled,
+          directAim: projectile.directAim,
+          x: projectile.x,
+          y: projectile.y,
+          z: projectile.z,
+        });
+        hostileProjectiles.splice(i, 1);
+        if (player.dead) {
+          clearEnemyProjectiles();
+          return;
+        }
+        continue;
+      }
+
+      projectile.x += projectile.dx * step;
+      projectile.y += projectile.dy * step;
+      projectile.z += projectile.dz * step;
+      projectile.travelled += step;
+      projectile.age += step / projectile.speed;
+      if (projectile.travelled + 1e-5 >= projectile.span) {
+        const reason = projectile.endsAtCover ? "cover" : "miss";
+        projectileTotals[reason === "cover" ? "coverStops" : "misses"] += 1;
+        bus.emit("enemyProjectileResolved", {
+          id: projectile.id,
+          enemyId: projectile.enemyId,
+          enemyKey: projectile.enemyKey,
+          reason,
+          flightSeconds: projectile.age,
+          travelled: projectile.travelled,
+          directAim: projectile.directAim,
+          x: projectile.x,
+          y: projectile.y,
+          z: projectile.z,
+        });
+        hostileProjectiles.splice(i, 1);
+      }
+    }
+  }
+
+  function launchEnemyProjectile(inst, spec) {
+    const config = GLEANER_PROJECTILE_CONFIG;
+    const box = HITBOX[inst.key] || HITBOX.thresher;
+    const ps = ctx.player.state;
+    muzzleAt(inst, box, _muzzle);
+    const ox = _muzzle.x;
+    const oy = _muzzle.y;
+    const oz = _muzzle.z;
+    let tx = ps.x - ox;
+    let ty = ps.y + 1.62 - oy;
+    let tz = ps.z - oz;
+    const targetDistance = Math.hypot(tx, ty, tz) || 1;
+    tx /= targetDistance;
+    ty /= targetDistance;
+    tz /= targetDistance;
+
+    /* Fewer bolts are pin-perfect, and even those are committed to the
+       player's launch-time position. Movement after the muzzle flash is a
+       real dodge rather than an animation played after damage was decided. */
+    const directAim = Math.random() < config.directAimChance;
+    if (!directAim) {
+      tx += (Math.random() - 0.5) * config.horizontalSpread;
+      ty += (Math.random() - 0.5) * config.verticalSpread;
+      tz += (Math.random() - 0.5) * config.horizontalSpread;
+      const n = Math.hypot(tx, ty, tz) || 1;
+      tx /= n;
+      ty /= n;
+      tz /= n;
+    }
+
+    /* End at the launch-time aim point. On a stationary contact the GPU
+       head therefore dies inside the player/shield volume instead of flying
+       several metres through it; on an evasion it visibly crosses the old
+       position and expires as a clean miss. */
+    const pathRange = Math.min(config.maxRange, targetDistance);
+    const blocked = collide.rayBlock(ox, oy, oz, tx, ty, tz, pathRange, false);
+    const span = Math.min(pathRange, blocked);
+    const incoming = spec.damage * SURVIVAL_CONFIG.enemyDamageMultiplier
+      * (Number.isFinite(inst.damageScale) ? inst.damageScale : 1);
+    const projectile = {
+      id: `gleaner-bolt-${++projectileSerial}`,
+      enemyId: inst.id,
+      enemyKey: inst.key,
+      ox, oy, oz,
+      x: ox, y: oy, z: oz,
+      dx: tx, dy: ty, dz: tz,
+      speed: config.speed,
+      span: Math.max(0, span),
+      travelled: 0,
+      age: 0,
+      damage: incoming,
+      directAim,
+      targetDistance,
+      endsAtCover: Number.isFinite(blocked) && blocked < pathRange - 0.05,
+    };
+    hostileProjectiles.push(projectile);
+    projectileTotals.launched += 1;
+    bus.emit("enemyProjectileLaunched", {
+      id: projectile.id,
+      enemyId: inst.id,
+      enemyKey: inst.key,
+      x: ox,
+      y: oy,
+      z: oz,
+      speed: config.speed,
+      span: projectile.span,
+      targetDistance,
+      directAim,
+      damage: incoming,
+    });
+
+    if (vfx?.tracer) {
+      vfx.tracer(ox, oy, oz, tx, ty, tz,
+        projectile.span, 0.055, false, config.speed);
+    }
+    if (vfx?.muzzle) vfx.muzzle(ox, oy, oz, tx, ty, tz, 0.75, false);
+    return projectile;
+  }
+
   function attack(inst, spec, dt) {
     inst.fireTimer -= dt;
     if (inst.fireTimer > 0) return;
@@ -1326,49 +1581,15 @@ export function buildCombat(ctx) {
       enemies.play(inst, "strike", 0.1);
     }
     bus.emit("enemyFire", { key: inst.key, x: inst.x, z: inst.z, melee: !spec.burst });
-    /* Resolve ranged damage on the exact ray the player sees. Previously
-       `landed` damaged first and the tracer asked collision afterward, so
-       a bolt visibly ended on a wall while health still disappeared. */
-    let landed = !spec.burst;
-    let shot = null;
     if (spec.burst) {
-      const box = HITBOX[inst.key] || HITBOX.thresher;
-      const ps = ctx.player.state;
-      muzzleAt(inst, box, _muzzle);
-      const ox = _muzzle.x;
-      const oy = _muzzle.y;
-      const oz = _muzzle.z;
-      let tx = ps.x - ox;
-      let ty = ps.y + 1.62 - oy;
-      let tz = ps.z - oz;
-      const distance = Math.hypot(tx, ty, tz) || 1;
-      tx /= distance;
-      ty /= distance;
-      tz /= distance;
-
-      // Gleaners miss; a charging xeno at arm's length does not.
-      const intendedHit = Math.random() < 0.55;
-      if (!intendedHit) {
-        tx += (Math.random() - 0.5) * 0.09;
-        ty += (Math.random() - 0.5) * 0.06;
-        tz += (Math.random() - 0.5) * 0.09;
-        const n = Math.hypot(tx, ty, tz) || 1;
-        tx /= n;
-        ty /= n;
-        tz /= n;
-      }
-      const blocked = collide.rayBlock(ox, oy, oz, tx, ty, tz, distance, false);
-      /* A final stepped sample may land a few centimetres beyond the
-         target. Only masonry meaningfully before the player is cover. */
-      const clear = blocked === Infinity || blocked >= distance - 0.12;
-      landed = intendedHit && clear;
-      shot = { ox, oy, oz, tx, ty, tz, distance, blocked };
+      launchEnemyProjectile(inst, spec);
+      return;
     }
 
     const incoming = spec.damage * SURVIVAL_CONFIG.enemyDamageMultiplier
       * (Number.isFinite(inst.damageScale) ? inst.damageScale : 1);
-    if (landed) hurtPlayer(incoming, {
-      source: spec.burst ? "enemy-fire" : "enemy-melee",
+    hurtPlayer(incoming, {
+      source: "enemy-melee",
       x: inst.x,
       y: inst.y + (HITBOX[inst.key] || HITBOX.thresher).head,
       z: inst.z,
@@ -1376,20 +1597,6 @@ export function buildCombat(ctx) {
       enemyId: inst.id,
       enemyKey: inst.key,
     });
-
-    /* Return fire gets a bolt too. Not decoration for its own sake:
-       with the player's shots now visible and the garrison's not, a
-       firefight looked one-sided in the wrong way - damage arriving
-       from nowhere, with no direction to turn toward. A miss is
-       thrown wide so the near miss is the thing you see. */
-    if (shot && vfx && vfx.tracer) {
-      vfx.tracer(shot.ox, shot.oy, shot.oz, shot.tx, shot.ty, shot.tz,
-        Math.min(shot.distance, shot.blocked), 0.055, false);
-      if (vfx.muzzle) {
-        vfx.muzzle(shot.ox, shot.oy, shot.oz,
-          shot.tx, shot.ty, shot.tz, 0.75, false);
-      }
-    }
   }
 
   /* ============================================================
@@ -1402,10 +1609,17 @@ export function buildCombat(ctx) {
     const ps = ctx.player.state;
 
     if (player.dead) {
+      clearEnemyProjectiles();
       player.respawnIn -= dt;
       if (player.respawnIn <= 0) respawn();
       return;
     }
+
+    /* Existing bolts move before this frame's enemy decisions. A Gleaner
+       that fires below is therefore born at the muzzle on both the logical
+       and rendered timelines, then advances on the next simulation step. */
+    updateEnemyProjectiles(dt, ps);
+    if (player.dead) return;
 
     // Regeneration, but only well after the last hit - long enough
     // that it never rewards standing in the open.
@@ -1436,6 +1650,7 @@ export function buildCombat(ctx) {
   function respawn() {
     player.dead = false;
     player.hp = player.maxHp;
+    clearEnemyProjectiles();
     // Back at the drop point, which is the only place on the map
     // guaranteed not to have been overrun.
     let x = ctx.mission ? ctx.mission.spawn.x : 0;
@@ -1482,6 +1697,7 @@ export function buildCombat(ctx) {
 
   function restore(saved) {
     if (!saved || typeof saved !== "object") return false;
+    clearEnemyProjectiles();
 
     // These generous ceilings make corrupt/untrusted local saves safe
     // without constraining any value normal play can produce.
@@ -1535,6 +1751,9 @@ export function buildCombat(ctx) {
     explode,
     hurtPlayer,
     raycastEnemies,
+    projectileState,
+    clearProjectiles: clearEnemyProjectiles,
+    projectileConfig: GLEANER_PROJECTILE_CONFIG,
     update,
     snapshot,
     restore,

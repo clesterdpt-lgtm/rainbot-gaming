@@ -217,11 +217,10 @@ export function buildCoulter(ctx) {
   /* ============================================================
      GLOBULES
 
-     A travelling projectile, which is the only one in the game: every
-     other shot on Vesper-IX is hitscan with a decorative bolt drawn
-     after the fact. Venom has to actually fly, because the whole point
-     of it is that it can be walked out from under - a hitscan spew
-     would be a Gleaner that does more damage.
+     A travelling ballistic projectile, distinct from the Gleaner's
+     straight swept bolt. Venom has to arc and actually fly, because the
+     whole point of it is that it can be walked out from under - a
+     hitscan spew would just be a stronger Gleaner attack.
      ============================================================ */
   const globuleGeo = new THREE.IcosahedronGeometry(0.42, 1);
   const globuleMat = new THREE.MeshStandardMaterial({

@@ -2496,6 +2496,10 @@ export async function createPlayer(ctx, canvas) {
      long the clip is held for. The camera eases out over this and the
      clip then sits on its last pose until a respawn clears it. */
   const DEATH_FALL_SECONDS = 1.55;
+  /* Time after a completed strike in which the next press keeps the chain.
+     Melee players need enough room to guard, sidestep, or reacquire a target
+     between committed animations without losing the entire procession. */
+  const MELEE_COMBO_GRACE_SECONDS = 1.35;
 
   const ACTIONS = {
     /* CLEAVING LUNGE - the opener has to read on the first press.
@@ -2787,7 +2791,7 @@ export async function createPlayer(ctx, canvas) {
       }
       return false;
     }
-    if (state.clock - action.comboAt > 1.15) action.combo = 0;
+    if (state.clock - action.comboAt > MELEE_COMBO_GRACE_SECONDS) action.combo = 0;
     action.combo = (action.combo % 3) + 1;
     action.comboAt = state.clock;
     action.queuedAimYaw = null;
@@ -2857,11 +2861,17 @@ export async function createPlayer(ctx, canvas) {
     if (action.t >= action.spec.dur) {
       const chain = action.queued;
       const chainAimYaw = action.queuedAimYaw;
+      const finishedMelee = !!action.name && action.name.startsWith("melee");
       action.queued = false;
       action.queuedAimYaw = null;
       action.name = null;
       action.spec = null;
       action.aimYaw = null;
+      /* The grace period begins after recovery, not at the first wind-up.
+         Starting it when the strike began consumed most of the nominal
+         window inside the authored animation and left only a few tenths for
+         an actual defensive decision. */
+      if (finishedMelee) action.comboAt = state.clock;
       if (chain) meleeSwing(chainAimYaw);
     }
   }

@@ -129,8 +129,8 @@ const MVP_COPY = Object.freeze({
   procession_processional_mercy: {
     summary: "Let one decisive melee kill sustain each combo.",
     ranks: [
-      "The first melee-combo kill restores 6 Reliquary charge, once per combo.",
-      "A third-strike kill restores 12 charge instead.",
+      "The first melee-combo kill restores 8 Reliquary charge, once per combo.",
+      "A third-strike kill restores 16 charge instead.",
     ],
   },
   wing_wingbeat_conversion: {
@@ -1281,7 +1281,7 @@ export function buildProgression(ctx) {
 
     const mercy = talentRank("procession_processional_mercy");
     if (mercy > 0 && event.kills > 0 && !effects.comboMercyUsed) {
-      ctx.jetpack?.restoreCharge?.(step === 3 && mercy >= 2 ? 12 : 6, "processional-mercy");
+      ctx.jetpack?.restoreCharge?.(step === 3 && mercy >= 2 ? 16 : 8, "processional-mercy");
       effects.comboMercyUsed = true;
       bump("processionalMercies");
       cue("procession", "mercy", {

@@ -1140,13 +1140,15 @@ async function haloEffectsPass(page, definitions) {
   evidence.haloMercyCircuit = mercyProbe;
   const mercyProgress = mercyProbe.progressAfter - mercyProbe.progressBefore;
   const mercyDrain = mercyProbe.fuelBefore - mercyProbe.fuelAfter;
+  const expectedMercyDrain = Number(mercyProbe.shield?.drainRate);
   check("Mercy Circuit advances a protected relay at rank-two pace without extra drain",
     mercyProbe.channelling
       && mercyProbe.shield?.active === true
       && mercyProbe.shield?.drainMultiplier === 1
       && mercyProgress > 0.085 && mercyProgress < 0.115
-      && mercyDrain > 17.5 && mercyDrain < 18.5,
-    JSON.stringify({ ...mercyProbe, mercyProgress, mercyDrain }));
+      && Number.isFinite(expectedMercyDrain)
+      && Math.abs(mercyDrain - expectedMercyDrain) < 0.5,
+    JSON.stringify({ ...mercyProbe, mercyProgress, mercyDrain, expectedMercyDrain }));
 
   const capstoneEquip = order?.capstone
     ? await invoke(page, "equipCapstoneForQA", order.capstone.id) : null;

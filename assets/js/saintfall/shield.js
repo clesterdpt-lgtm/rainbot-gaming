@@ -9,7 +9,10 @@
 import { clamp01, damp } from "saintfall/core.js";
 
 export const SHIELD_CONFIG = Object.freeze({
-  drainRate: 18,
+  /* A full Reliquary now sustains an ordinary plate for 8.33 seconds.
+     The former 5.56-second tank made guarding an approach consume nearly
+     everything before a melee player could begin a combo. */
+  drainRate: 12,
   moveSpeed: 3.0,
   frontDot: 0.42,
   distance: 0.94,

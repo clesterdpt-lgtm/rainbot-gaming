@@ -72,9 +72,14 @@ function readSettings() {
       hudScale: saved.hudScale === "large" ? "large" : "standard",
       reducedMotion: !!saved.reducedMotion,
       highContrast: !!saved.highContrast,
+      // Default ON: it only ever acts when the frame is over budget.
+      dynamicRes: saved.dynamicRes !== false,
     };
   } catch (_) {
-    return { hudScale: "standard", reducedMotion: false, highContrast: false };
+    return {
+      hudScale: "standard", reducedMotion: false, highContrast: false,
+      dynamicRes: true,
+    };
   }
 }
 
@@ -118,14 +123,14 @@ function controlRow(key, action, detail = "") {
   return `<div class="sf-control-row"><kbd>${key}</kbd><span><strong>${action}</strong>${detail ? `<small>${detail}</small>` : ""}</span></div>`;
 }
 
-export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
+export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
   if (!stage || !canvas || !ctx?.mission) {
     const closed = () => ({ open: false });
     return {
       update() {}, toggleAudio: () => false, openMenu: () => false,
       openMap: () => false, closeMenu: () => false, cancelWheel: () => false, refresh() {},
       wheelState: closed, menuState: closed,
-      settingsState: () => ({ audioEnabled: false, hudScale: "standard", reducedMotion: false, highContrast: false }),
+      settingsState: () => ({ audioEnabled: false, hudScale: "standard", reducedMotion: false, highContrast: false, dynamicRes: true }),
     };
   }
 
@@ -296,6 +301,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
                 <div class="sf-setting"><span><strong id="sf-hud-scale-label">HUD SCALE</strong><small>Increase tactical instrument size</small></span><div class="sf-setting__segments" role="group" aria-labelledby="sf-hud-scale-label"><button type="button" data-hud-scale="standard" aria-label="Standard HUD scale">STANDARD</button><button type="button" data-hud-scale="large" aria-label="Large HUD scale">LARGE</button></div></div>
                 <div class="sf-setting"><span><strong>REDUCED MOTION</strong><small>Calmer interface transitions and pulses</small></span><button type="button" role="switch" data-setting="reduced-motion" aria-label="Reduced motion" aria-checked="false">OFF</button></div>
                 <div class="sf-setting"><span><strong>HIGH CONTRAST</strong><small>Stronger text, panel, and instrument separation</small></span><button type="button" role="switch" data-setting="high-contrast" aria-label="High contrast" aria-checked="false">OFF</button></div>
+                <div class="sf-setting"><span><strong>DYNAMIC RESOLUTION</strong><small>Trims render resolution only while the frame rate is suffering, and restores it when it recovers</small></span><button type="button" role="switch" data-setting="dynamic-res" aria-label="Dynamic resolution" aria-checked="true">ON</button></div>
               </div>
             </section>
           </div>
@@ -398,7 +404,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     ctx.audio?.setEnabled?.(enabled);
     sound.setAttribute("aria-checked", enabled ? "true" : "false");
     sound.textContent = enabled ? "ON" : "OFF";
-    for (const [name, value] of [["reduced-motion", settings.reducedMotion], ["high-contrast", settings.highContrast]]) {
+    for (const [name, value] of [["reduced-motion", settings.reducedMotion],
+      ["high-contrast", settings.highContrast], ["dynamic-res", settings.dynamicRes]]) {
       const button = root.querySelector(`[data-setting="${name}"]`);
       button.setAttribute("aria-checked", value ? "true" : "false");
       button.textContent = value ? "ON" : "OFF";
@@ -1687,6 +1694,14 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
       settings.highContrast = !settings.highContrast;
       writeSettings(settings); applySettings(); menuSfx("toggle"); return;
     }
+    if (target.matches('[data-setting="dynamic-res"]')) {
+      settings.dynamicRes = !settings.dynamicRes;
+      /* Applied on the CLICK, not in applySettings: applySettings runs
+         on every menu refresh, and a `?dynres=0` session override must
+         survive those. An explicit press still wins over the URL. */
+      render?.setAutoScale?.(settings.dynamicRes);
+      writeSettings(settings); applySettings(); menuSfx("toggle"); return;
+    }
     if (target.matches("[data-hud-scale]")) {
       settings.hudScale = target.dataset.hudScale === "large" ? "large" : "standard";
       writeSettings(settings); applySettings(); menuSfx("toggle"); return;
@@ -2043,6 +2058,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
       hudScale: settings.hudScale,
       reducedMotion: settings.reducedMotion,
       highContrast: settings.highContrast,
+      dynamicRes: settings.dynamicRes,
     };
   }
 
@@ -2056,6 +2072,11 @@ export function buildGameUi(ctx, { stage, canvas, save, touch } = {}) {
     applySettings();
     syncMaximizeButton();
   }
+
+  /* One construction-time sync of the stored preference onto the
+     renderer. main.js applies any `?dynres` URL override AFTER this,
+     so the param wins for the session without a fight over refresh(). */
+  render?.setAutoScale?.(settings.dynamicRes);
 
   applySettings();
   syncMaximizeButton();

@@ -451,16 +451,38 @@ export function createRenderer(ctx, canvas) {
     powerPreference: "high-performance",
     // The review harness reads the drawing buffer directly rather
     // than going through page.screenshot(), which is compositor
-    // throttled and returns stale frames in headless.
-    preserveDrawingBuffer: true,
+    // throttled and returns stale frames in headless. Players never
+    // read the buffer back, and preserving it denies the compositor
+    // its cheapest swap path on every single frame - so it is paid
+    // for only when a harness is actually attached.
+    preserveDrawingBuffer: !!ctx.qa,
     stencil: false,
     depth: true,
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  /* The DEVICE ratio (capped at 2) is one of three factors in the
+     real buffer size; the quality tier and the dynamic-resolution
+     scale are the others. All three meet in applyPixelRatio(), the
+     only caller of setPixelRatio - a second caller is how a quality
+     switch silently discards the dynamic scale, or vice versa. */
+  const deviceRatio = () => Math.min(window.devicePixelRatio || 1, 2);
+  let tierPixelRatio = 1;
+  let renderScale = 1;
+  function applyPixelRatio() {
+    renderer.setPixelRatio(deviceRatio() * tierPixelRatio * renderScale);
+  }
+  applyPixelRatio();
   renderer.setSize(canvas.clientWidth || 1280, canvas.clientHeight || 720, false);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.shadowMap.autoUpdate = true;
+  /* The sun map is NOT redrawn every frame. The world it contains is
+     almost entirely static, the sun of a ninety-hour day moves by
+     nothing per frame, and redrawing 4096 texels of it measured 4-7ms
+     of every frame at high tier. render() raises needsUpdate on its
+     own cadence (every other frame; see shadowEvery), and anything
+     that moves the sun in a step - setTime, a storm, a quality change
+     - forces the next frame through requestShadowUpdate(). What a
+     player can perceive is a moving shadow arriving 16ms late. */
+  renderer.shadowMap.autoUpdate = false;
   // The scene half of the pipeline is linear from end to end. The
   // composite pass does the encode.
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
@@ -637,6 +659,93 @@ export function createRenderer(ctx, canvas) {
     }
   }
 
+  /* ------------------------------------------------------------------
+     DYNAMIC RESOLUTION
+
+     The frame is fill-bound: at device ratio 2 the scene+post chain
+     alone costs the whole 60fps budget on the hardware this was
+     measured on, before shadows or AO spend anything. No fixed
+     pixel ratio is right for every machine, so the buffer scale is a
+     control loop: full size while the frame fits its budget, trimmed
+     in steps while it does not, probed back up when there is
+     headroom. Everything the frame renders - scene, MSAA, AO, bloom,
+     composite - scales together, so the picture keeps exactly its
+     look and loses only raw pixel count, and only under load.
+
+     The loop feeds on REAL rAF cadence (tickAutoScale is called from
+     the live loop only, never from QA stepping): presented frame
+     time is the one number that already includes GPU backpressure.
+     Two subtleties, both learned from the literature rather than
+     repeated here the hard way:
+
+     - A 60Hz display pins healthy dt at ~16.7ms, so "comfortably
+       under budget" is unmeasurable at vsync. Recovery is therefore
+       a PROBE: step up, watch for 8s, and if the step was too far,
+       step back and lock upward moves for 25s. Without the lock the
+       controller ping-pongs across the budget line forever.
+
+     - Every step reallocates the whole target chain, which is itself
+       a hitch - so steps are rate-limited, and the dt average is
+       reset to neutral after one so the controller resamples instead
+       of reacting twice to the same congestion.
+     ------------------------------------------------------------------ */
+
+  const SCALE_MIN = 0.62;
+  const auto = {
+    desired: true,
+    qaBlocked: !!ctx.qa,   // deterministic stills unless a probe opts in
+    budgetMs: 16.9,
+    ema: 0,
+    overFor: 0,
+    underFor: 0,
+    holdUntil: 0,          // no second downscale before this
+    lockUntil: 0,          // no upscale before this
+    probeUntil: 0,         // a recent upscale is on probation until this
+  };
+  const autoOn = () => auto.desired && !auto.qaBlocked;
+
+  function setRenderScale(s) {
+    const next = clamp(s, SCALE_MIN, 1);
+    if (Math.abs(next - renderScale) < 1e-3) return renderScale;
+    renderScale = next;
+    applyPixelRatio();
+    resize(width, height);
+    return renderScale;
+  }
+
+  function tickAutoScale(dtMs) {
+    if (!autoOn()) return renderScale;
+    if (!(dtMs > 0) || dtMs > 250) return renderScale;   // tab switch, clock jump
+    auto.ema = auto.ema === 0 ? dtMs : auto.ema + (dtMs - auto.ema) * 0.12;
+    const now = performance.now();
+    const dt = dtMs / 1000;
+    const over = auto.ema > auto.budgetMs * 1.16;
+    auto.overFor = over ? auto.overFor + dt : 0;
+    auto.underFor = auto.ema < auto.budgetMs * 1.06 ? auto.underFor + dt : 0;
+    if (over && auto.overFor > 0.7 && now >= auto.holdUntil && renderScale > SCALE_MIN) {
+      if (now < auto.probeUntil) auto.lockUntil = now + 25000;
+      setRenderScale(renderScale * 0.85);
+      auto.holdUntil = now + 900;
+      auto.overFor = 0;
+      auto.ema = auto.budgetMs;
+    } else if (!over && auto.underFor > 4 && now >= auto.lockUntil && renderScale < 1) {
+      const next = renderScale * 1.06;
+      setRenderScale(next > 0.97 ? 1 : next);
+      auto.probeUntil = now + 8000;
+      auto.lockUntil = now + 3000;
+      auto.underFor = 0;
+      auto.ema = auto.budgetMs;
+    }
+    return renderScale;
+  }
+
+  function setAutoScale(on, { force = false } = {}) {
+    auto.desired = !!on;
+    if (force) auto.qaBlocked = false;
+    if (!autoOn()) setRenderScale(1);
+    return autoOn();
+  }
+
   /* ------------------------------ grade ------------------------------ */
 
   const v3 = (arr) => new THREE.Vector3(arr[0], arr[1], arr[2]);
@@ -685,6 +794,12 @@ export function createRenderer(ctx, canvas) {
 
   let frame = 0;
   let aoEnabled = true;
+  /* QA renders stills and compares them to goldens; a shadow map that
+     is one frame stale depending on call parity would make every
+     capture a coin flip, so harness runs redraw it every frame. */
+  let shadowEvery = ctx.qa ? 1 : 2;
+  let shadowForce = true;   // the first frame has no map to be stale
+  function requestShadowUpdate() { shadowForce = true; }
   // `renderer.info` auto-resets at the start of every render() call,
   // and the LAST call each frame is the composite quad - so reading
   // it afterwards reports one draw call and one triangle for the
@@ -694,6 +809,14 @@ export function createRenderer(ctx, canvas) {
 
   function render(cam = camera, sourceScene = scene) {
     frame += 1;
+    /* The flag survives every light-less quad pass below (three's
+       shadow renderer returns before consuming it when the scene has
+       no lights), so raising it here means exactly one shadow redraw,
+       in the scene pass of THIS call. */
+    if (shadowForce || shadowEvery <= 1 || frame % shadowEvery === 0) {
+      renderer.shadowMap.needsUpdate = true;
+      shadowForce = false;
+    }
     renderer.setRenderTarget(sceneTarget);
     renderer.clear(true, true, false);
     renderer.render(sourceScene, cam);
@@ -796,7 +919,8 @@ export function createRenderer(ctx, canvas) {
 
   function setQuality(tier, sky) {
     const q = QUALITY[tier] || QUALITY.high;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2) * q.pixelRatio);
+    tierPixelRatio = q.pixelRatio;
+    applyPixelRatio();
     bloomScale = tier === "low" ? 0.35 : 0.5;
     aoEnabled = q.ao > 0;
     compMat.uniforms.uAo.value.x = q.ao;
@@ -808,6 +932,9 @@ export function createRenderer(ctx, canvas) {
       }
       sky.setShadowRadius(q.shadowRadius);
     }
+    // The old map was just disposed; without a forced redraw the next
+    // interleave gap would present one frame of shadowless world.
+    requestShadowUpdate();
     resize(width, height);
   }
 
@@ -821,6 +948,16 @@ export function createRenderer(ctx, canvas) {
     applyAtmosphere,
     refreshEnvironment,
     syncEnvironment,
+    /* Dynamic resolution + shadow cadence. tickAutoScale is fed by
+       the LIVE loop only - QA stepping must never move the scale. */
+    tickAutoScale,
+    setAutoScale,
+    setRenderScale,
+    get renderScale() { return renderScale; },
+    get autoScale() { return autoOn(); },
+    requestShadowUpdate,
+    setShadowEvery(n) { shadowEvery = Math.max(1, Math.floor(n) || 1); },
+    get shadowEvery() { return shadowEvery; },
     get frame() { return frame; },
     /** Blit an intermediate buffer straight to the canvas. The AO
      *  probe reported the pass changing 0% of pixels; a number that
@@ -861,6 +998,10 @@ export function createRenderer(ctx, canvas) {
         programs: renderer.info.programs ? renderer.info.programs.length : 0,
         geometries: renderer.info.memory.geometries,
         textures: renderer.info.memory.textures,
+        renderScale: Number(renderScale.toFixed(3)),
+        autoScale: autoOn(),
+        shadowEvery,
+        pixelRatio: Number(renderer.getPixelRatio().toFixed(3)),
       };
     },
   };

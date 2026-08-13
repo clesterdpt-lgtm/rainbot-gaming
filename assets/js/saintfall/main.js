@@ -220,7 +220,7 @@ export async function start({ boot, build } = {}) {
      same mission.call() path as every other deployment. */
   const saves = buildSaveSystem(ctx, { setTime, setDayCycle, setStorm });
   ctx.saves = saves;
-  const gameUi = buildGameUi(ctx, { stage, canvas, save: saves, touch });
+  const gameUi = buildGameUi(ctx, { stage, canvas, save: saves, touch, render });
   ctx.gameUi = gameUi;
 
   const introHost = document.getElementById("sf-intro");
@@ -403,6 +403,9 @@ export async function start({ boot, build } = {}) {
     render.applyAtmosphere(atmos);
     render.syncEnvironment(atmos);
     sky.refresh();
+    // The sun just moved in a step; a shadow map from before the step
+    // must not survive into the next interleave gap.
+    render.requestShadowUpdate();
   }
 
   function setDayCycle(phase = atmos.cyclePhase, running = true, cycleCount = atmos.cycleCount) {
@@ -410,6 +413,7 @@ export async function start({ boot, build } = {}) {
     render.applyAtmosphere(atmos);
     render.syncEnvironment(atmos);
     sky.refresh();
+    render.requestShadowUpdate();
     return atmos.cycleStatus();
   }
 
@@ -674,6 +678,7 @@ export async function start({ boot, build } = {}) {
     render.applyAtmosphere(atmos);
     render.syncEnvironment(atmos);
     sky.refresh();
+    render.requestShadowUpdate();
     vfx.setStorm(atmos.storm);
   }
 
@@ -682,6 +687,14 @@ export async function start({ boot, build } = {}) {
     resize();
   }
   setQuality(quality);
+
+  /* `?dynres=0` pins native resolution for a player who wants it;
+     `?dynres=1` opts a QA run INTO the controller, which is otherwise
+     held at scale 1 so goldens stay deterministic. The settings menu
+     drives the same switch through gameUi. */
+  const dynresParam = params.get("dynres");
+  if (dynresParam === "0") render.setAutoScale(false);
+  else if (dynresParam === "1") render.setAutoScale(true, { force: true });
 
   /** One simulation + render step. `draw` false steps the world
    *  without drawing, which is what lets the harness settle three
@@ -731,7 +744,8 @@ export async function start({ boot, build } = {}) {
   let last = performance.now();
   function loop(now) {
     requestAnimationFrame(loop);
-    const dt = Math.min(0.1, (now - last) / 1000);
+    const rawMs = now - last;
+    const dt = Math.min(0.1, rawMs / 1000);
     last = now;
     const t0 = performance.now();
     frame(dt, true);
@@ -739,6 +753,12 @@ export async function start({ boot, build } = {}) {
     frameStat.push(ms);
     api.frameMs = frameStat.mean();
     api.fps = api.frameMs > 0 ? 1000 / Math.max(api.frameMs, 1e-3) : 0;
+    /* Presented cadence, not CPU work time: a fill-bound frame spends
+       its overrun in the compositor where performance.now() straddling
+       frame() never sees it, and rAF spacing is the one signal that
+       does. A hidden tab's rAF starvation is excluded by the
+       controller's own outlier guard. */
+    if (!document.hidden) render.tickAutoScale(rawMs);
   }
 
   /* -------------------------- keyboard extras -------------------------- */

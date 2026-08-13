@@ -241,7 +241,22 @@ function auditInPage(only) {
       T.setShieldInput(true); adv(1.3); T.setShieldInput(false); adv(0.7);
     },
 
-    halo_votive_parry() { blockHits(3.6); },
+    /* A PERFECT guard, not a held one: shield.js marks a block perfect
+       only when it lands within `perfectWindow` (0.25s) of the guard
+       going up. Holding X - which is what an earlier version of this
+       harness did - can never produce one, and made a working talent
+       look dead across 43 registered blocks. Tap the guard repeatedly
+       so some incoming hit lands inside a fresh window. */
+    halo_votive_parry() {
+      ring("thresher", 10, 1.7);
+      for (let i = 0; i < 14; i += 1) {
+        T.setShieldInput(true);
+        adv(0.20);
+        T.setShieldInput(false);
+        adv(0.14);
+      }
+      adv(0.6);
+    },
     halo_stored_wrath() { blockHits(4.0); },
     halo_pilgrims_reversal() {
       ring("thresher", 9, 1.9);

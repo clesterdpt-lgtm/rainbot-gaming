@@ -848,6 +848,9 @@ export function buildVfx(ctx, world) {
         // cyan or the Concord's gold.
         uVenomHot: { value: new THREE.Color("#eaff9c") },
         uVenomCold: { value: new THREE.Color("#4f7a12") },
+        // Cool, barely-blue vapour. Kept close to neutral so it reads
+        // as steam against warm sand rather than as a magic effect.
+        uSteam: { value: new THREE.Color("#cfe4ec") },
         // Doctrine cues share this pool, but each Order keeps a hue
         // that survives sand, bloom and distance. Values 6-10 on the
         // style channel are reserved for these five colours.
@@ -913,6 +916,7 @@ export function buildVfx(ctx, world) {
         "uniform vec3 uDoctrineWing;",
         "uniform vec3 uDoctrineHalo;",
         "uniform vec3 uDoctrineEdict;",
+        "uniform vec3 uSteam;",
         "varying float vLife;",
         "varying float vTint;",
         "void main() {",
@@ -940,7 +944,20 @@ export function buildVfx(ctx, world) {
         "  doctrineColour = mix(doctrineColour, vec3(1.0), clamp(core * 0.16 + vLife * 0.05, 0.0, 0.22));",
         "  vec3 c = mix(mix(sparkColour, ionColour, energy), venomColour, venom);",
         "  c = mix(c, doctrineColour, doctrine);",
-        "  gl_FragColor = vec4(c * core * (0.35 + vLife * 1.5), core * vLife);",
+        /* STEAM sits above the Doctrine band and is applied last, so
+           it wins outright. Every other band in this pool is a HOT
+           colour - ember, ion, venom, Order gold - and a weapon vent
+           borrowing any of them reads as the gun catching fire, which
+           is the exact opposite of what venting does. It is also
+           deliberately dimmed rather than mixed toward white: vapour
+           scatters light, it does not emit it, and at this pool's
+           additive-ish output an undimmed steam plume blows straight
+           through the bloom threshold and becomes a flare. */
+        "  float steam = step(10.5, vTint);",
+        "  vec3 steamColour = uSteam * (0.55 + vLife * 0.45);",
+        "  c = mix(c, steamColour, steam);",
+        "  float bright = mix(0.35 + vLife * 1.5, 0.18 + vLife * 0.62, steam);",
+        "  gl_FragColor = vec4(c * core * bright, core * vLife * mix(1.0, 0.72, steam));",
         "}",
       ].join("\n"),
     });
@@ -3050,9 +3067,56 @@ export function buildVfx(ctx, world) {
     }
   }
 
+  /* ============================================================
+     WEAPON VENT
+
+     Pressing R put the trooper in 1.4 seconds of deliberate
+     vulnerability and showed nothing for it but a gauge in the
+     corner - which in a firefight is the one place nobody is
+     looking. The purge now happens where the player IS looking:
+     on the weapon in their hands.
+
+     Emitted as directed jets rather than a puff, because the ports
+     are on the sides of the barrel shroud and steam under pressure
+     leaves in a direction. Two opposed side jets plus a weaker
+     upward bleed reads as machinery relieving itself; a radial
+     cloud reads as the gun being on fire, which is the opposite of
+     the message (the vent is the thing that PREVENTS that).
+
+     `strength` is the heat that was dumped, so a vent from redline
+     is visibly a bigger event than topping off at 30%.
+     ============================================================ */
+  function weaponVent(x, y, z, yaw = 0, strength = 1) {
+    const s = Math.max(0.15, Math.min(1, strength));
+    const sy = Math.sin(yaw);
+    const cy = Math.cos(yaw);
+    // Barrel axis is (sy, 0, cy); the ports face along its normal.
+    const rx = cy;
+    const rz = -sy;
+    const count = Math.round(3 + s * 5);
+    for (const side of [1, -1]) {
+      impacts.emitDirected(
+        x + rx * 0.12 * side, y, z + rz * 0.12 * side,
+        count,
+        rx * side * 0.92 + sy * 0.18, 0.30, rz * side * 0.92 + cy * 0.18,
+        2.6 + s * 3.4,
+        0.62 + s * 0.5,
+        // The pool's STEAM band. Anything under 1.5 is the ember
+        // ramp, which is what an earlier pass used by mistake - the
+        // vent came out looking like the weapon was on fire.
+        11.0
+      );
+    }
+    // A slower bleed straight up, which is what makes it hang and
+    // read as vapour rather than as a spray of particles.
+    impacts.emitDirected(x, y + 0.05, z, Math.round(2 + s * 3),
+      sy * 0.12, 1, cy * 0.12, 1.1 + s * 1.2, 0.9 + s * 0.7, 11.0);
+  }
+
   return {
     group,
     plumes,
+    weaponVent,
     banners: bannerMesh,
     shafts,
     spark,

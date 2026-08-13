@@ -1050,6 +1050,9 @@ export function buildWeapons(ctx) {
    * attitude with anywhere to be. */
   const STOW_POS = { x: -0.492, y: -0.450, z: 0.270 };
   const STOW_ROT = { x: 0.0, y: 0.0, z: Math.PI / 2 };
+  // Scratch for the vent emitter's world position; a firefight is no
+  // place to be allocating a Vector3 every frame.
+  const _ventAt = new THREE.Vector3();
   const _aimPivotBefore = new THREE.Vector3();
   const _aimPivotAfter = new THREE.Vector3();
   const _aimButt = new THREE.Vector3();
@@ -1102,6 +1105,21 @@ export function buildWeapons(ctx) {
       carry.venting = Math.max(0, carry.venting - dt);
       carry.heat = Math.max(0, carry.heat - dt / ventTime);
       if (carry.venting === 0) carry.heat = 0;
+      /* Steam for as long as the purge actually lasts, from the
+         weapon's own emitter socket, so the effect ends exactly when
+         the lance becomes usable again. A one-shot puff at the key
+         press would be over long before the vulnerability window is,
+         which is the part the player needs to be able to see. The
+         jet thins as the gauge falls, so the picture reports how far
+         through the purge it is. */
+      const port = carry.record?.emitter || carry.record?.muzzle;
+      if (port && ctx.vfx?.weaponVent) {
+        port.updateWorldMatrix(true, false);
+        _ventAt.setFromMatrixPosition(port.matrixWorld);
+        const remaining = carry.venting / ventTime;
+        ctx.vfx.weaponVent(_ventAt.x, _ventAt.y, _ventAt.z,
+          ctx.player?.state?.yaw || 0, 0.25 + remaining * 0.75);
+      }
     } else if (carry.sinceShot >= (heatSpec.coolDelay || 0)) {
       carry.heat = Math.max(0, carry.heat - (heatSpec.coolRate || 0) * dt);
     }

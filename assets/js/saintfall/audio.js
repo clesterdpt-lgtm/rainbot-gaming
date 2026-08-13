@@ -999,6 +999,97 @@ export function buildAudio(ctx) {
     gulp.start(t); gulp.stop(t + 0.28);
   }
 
+  /* ============================================================
+     VENTING
+
+     Pressing R had no sound and no picture. The heat gauge moved,
+     which is the one part of the screen a player in a firefight is
+     not looking at, so a deliberate 1.4-second vulnerability read as
+     "nothing happened" and the input felt unbound.
+
+     Built as three parts, because a single hiss reads as a leak
+     rather than as a machine doing something on purpose:
+       - the CRACK of the ports opening,
+       - a bright steam jet that falls in pitch and thins out as the
+         pressure drops, held for the real vent duration so the sound
+         ends exactly when the trooper is ready again,
+       - a low body resonance, so it has mass.
+     `startHeat` scales all three: venting at 30% should sound like
+     much less of an event than venting at 95%.
+     ============================================================ */
+  function vent(x, z, opts = {}) {
+    const t = now();
+    const dur = Math.max(0.35, Math.min(3, Number(opts.duration) || 1.4));
+    const heat = Math.max(0, Math.min(1, Number(opts.startHeat) ?? 0.6));
+    const g = voice("world", dur + 0.25);
+    if (!g) return;
+    const p = place(g, x, z, 26, 420);
+    if (!p) return;
+    // A near-empty vent is a short sigh; a redline vent is the event.
+    const amp = (0.26 + heat * 0.40) * p.atten * (Number(opts.gain) || 1);
+
+    // 1. The ports crack open.
+    const crack = noiseSource(2.1);
+    const cbp = ac.createBiquadFilter();
+    cbp.type = "highpass";
+    cbp.frequency.value = 1800;
+    const cg = ac.createGain();
+    cg.gain.setValueAtTime(amp * 0.9, t);
+    cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+    crack.connect(cbp); cbp.connect(cg); cg.connect(p.node);
+    crack.start(t); crack.stop(t + 0.15);
+
+    // 2. The jet itself, falling as the pressure goes.
+    const jet = noiseSource(1.5);
+    const bp = ac.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.setValueAtTime(3200 + heat * 1400, t);
+    bp.frequency.exponentialRampToValueAtTime(520, t + dur);
+    bp.Q.value = 0.9;
+    const jg = ac.createGain();
+    jg.gain.setValueAtTime(0.0001, t);
+    jg.gain.exponentialRampToValueAtTime(amp, t + 0.07);
+    jg.gain.setValueAtTime(amp, t + dur * 0.55);
+    jg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    jet.connect(bp); bp.connect(jg); jg.connect(p.node);
+    jet.start(t); jet.stop(t + dur + 0.05);
+
+    // 3. Body resonance, so the lance has mass behind the steam.
+    const body = ac.createOscillator();
+    body.type = "sine";
+    body.frequency.setValueAtTime(150 + heat * 60, t);
+    body.frequency.exponentialRampToValueAtTime(62, t + dur * 0.8);
+    const bg = ac.createGain();
+    bg.gain.setValueAtTime(amp * 0.42, t);
+    bg.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.85);
+    body.connect(bg); bg.connect(p.node);
+    body.start(t); body.stop(t + dur);
+  }
+
+  /** The lance is cool and ready again. Deliberately a clean, short
+   *  interval rather than another noise burst: it is information the
+   *  player is waiting for, and it has to cut through a firefight. */
+  function ventReady(x, z) {
+    const t = now();
+    const g = voice("world", 0.4);
+    if (!g) return;
+    const p = place(g, x, z, 26, 300);
+    if (!p) return;
+    const amp = 0.20 * p.atten;
+    for (const [i, f] of [523.25, 784].entries()) {
+      const osc = ac.createOscillator();
+      osc.type = "triangle";
+      osc.frequency.value = f;
+      const og = ac.createGain();
+      const at = t + i * 0.055;
+      og.gain.setValueAtTime(0.0001, at);
+      og.gain.exponentialRampToValueAtTime(amp, at + 0.012);
+      og.gain.exponentialRampToValueAtTime(0.0001, at + 0.26);
+      osc.connect(og); og.connect(p.node);
+      osc.start(at); osc.stop(at + 0.28);
+    }
+  }
+
   /** The descent whistle before it lands. */
   function inbound(x, z, seconds) {
     const t = now();
@@ -1653,6 +1744,15 @@ export function buildAudio(ctx) {
       doctrineAttached = true;
       doctrineStop = ctx.progression?.bus?.on?.("doctrine", doctrineCue) || null;
     }
+    /* The weapons bus had no audio consumer at all, so a manual vent -
+       a deliberate 1.4s of vulnerability the player chose - made no
+       sound whatsoever. */
+    if (ctx.weapons?.bus?.on) {
+      ctx.weapons.bus.on("vent", (e = {}) => {
+        vent(e.x ?? 0, e.z ?? 0, { duration: e.duration, startHeat: e.startHeat });
+      });
+      ctx.weapons.bus.on("ventComplete", (e = {}) => ventReady(e.x ?? 0, e.z ?? 0));
+    }
     if (combat) {
       combat.bus.on("hit", (e) => impact(e.x, e.z, "flesh"));
       combat.bus.on("melee", (e) => meleeImpact(e.x, e.z, e));
@@ -2014,6 +2114,8 @@ export function buildAudio(ctx) {
   return {
     context: ac,
     shot,
+    vent,
+    ventReady,
     impact,
     death,
     explosion,

@@ -12,16 +12,21 @@
 
 import { TAU, clamp, makeBus, makeRng } from "saintfall/core.js";
 import { BESTIARY } from "saintfall/enemies.js";
+import { DISTAFF_CONFIG } from "saintfall/distaff.js";
+import { WINNOWER_CONFIG } from "saintfall/winnower.js";
+import { DISTRICTS } from "saintfall/terrain.js";
 
 export const BREACH_CONFIG = Object.freeze({
-  firstWarningAfter: 11,
-  movementTrigger: 38,
+  firstWarningAfter: 180,
   warningSeconds: 3.4,
-  intermissionSeconds: 15,
+  intermissionSeconds: 60,
   cycleCooldownSeconds: 180,
   spawnDistanceMin: 38,
   spawnDistanceMax: 54,
-  eventRadius: 92,
+  eventRadius: 110,
+  retreatGraceSeconds: 4,
+  recoverySeconds: 60,
+  bossArenaPadding: 18,
   staggerSeconds: 0.14,
 });
 
@@ -138,7 +143,7 @@ export function buildBreaches(ctx) {
   const bus = makeBus();
   const rng = makeRng((ctx.seed ^ 0xb10f0) >>> 0 || 17);
   const members = [];
-  const startPoint = { x: ctx.player.state.x, z: ctx.player.state.z };
+  const buriedRoster = [];
   let eventSerial = 0;
 
   const state = {
@@ -158,7 +163,39 @@ export function buildBreaches(ctx) {
     boss: null,
     serial: 0,
     auto: !ctx.qa,
+    recovering: false,
+    retreatFor: 0,
+    recoveries: 0,
+    blockedByBoss: null,
   };
+
+  /** Undefeated district bosses own their arenas. A roaming Bloom wave
+   *  can wait outside, but it cannot turn a boss introduction into an
+   *  accidental two-encounter pile-up. The padding catches the arena
+   *  threshold before a pursuing creature crosses it behind the player. */
+  function protectedBossAreaAt(x, z) {
+    const distaffDead = ctx.distaff?.status?.()?.dead === true;
+    const distaffRadius = DISTAFF_CONFIG.arenaRadius + BREACH_CONFIG.bossArenaPadding;
+    if (!distaffDead && Math.hypot(x - DISTAFF_CONFIG.lairX,
+      z - DISTAFF_CONFIG.lairZ) <= distaffRadius) {
+      return { key: "distaff", name: "Glass Scar" };
+    }
+
+    const winnowerDead = ctx.winnower?.status?.()?.dead === true;
+    const winnowerRadius = WINNOWER_CONFIG.aggroRadius + BREACH_CONFIG.bossArenaPadding;
+    if (!winnowerDead && Math.hypot(x - DISTRICTS.censer.x,
+      z - DISTRICTS.censer.z) <= winnowerRadius) {
+      return { key: "winnower", name: "Censer Works" };
+    }
+    return null;
+  }
+
+  function currentBossArea() {
+    const ps = ctx.player.state;
+    const area = protectedBossAreaAt(ps.x, ps.z);
+    state.blockedByBoss = area?.key || null;
+    return area;
+  }
 
   function expandRoster(wave) {
     const roster = [];
@@ -218,14 +255,19 @@ export function buildBreaches(ctx) {
     if (Number.isFinite(options.x) && Number.isFinite(options.z)) {
       return { x: options.x, z: options.z };
     }
-    const distance = BREACH_CONFIG.spawnDistanceMin
-      + rng() * (BREACH_CONFIG.spawnDistanceMax - BREACH_CONFIG.spawnDistanceMin);
-    // Usually forward, sometimes on a flank. The warning has to be in
-    // the player's visual problem space or the emergence is wasted.
-    const angle = ps.camYaw + (rng() - 0.5) * 1.55;
-    let x = clamp(ps.x + Math.sin(angle) * distance, -955, 955);
-    let z = clamp(ps.z + Math.cos(angle) * distance, -955, 955);
-    return flattenCentre(x, z, !!wave?.boss);
+    // Usually forward, sometimes on a flank. If that direction would
+    // rupture inside protected boss ground, walk the candidate around
+    // the player until the event has an arena of its own.
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const distance = BREACH_CONFIG.spawnDistanceMin
+        + rng() * (BREACH_CONFIG.spawnDistanceMax - BREACH_CONFIG.spawnDistanceMin);
+      const angle = ps.camYaw + (rng() - 0.5) * 1.55 + attempt * 2.3999632297;
+      const x = clamp(ps.x + Math.sin(angle) * distance, -955, 955);
+      const z = clamp(ps.z + Math.cos(angle) * distance, -955, 955);
+      const centre = flattenCentre(x, z, !!wave?.boss);
+      if (!protectedBossAreaAt(centre.x, centre.z)) return centre;
+    }
+    return null;
   }
 
   function spawnPoint(index, total, clusters, key, centre) {
@@ -258,11 +300,65 @@ export function buildBreaches(ctx) {
     return remaining;
   }
 
+  function rosterRecord(inst) {
+    return {
+      key: inst.key,
+      health: Math.max(1, Number(inst.health) || 1),
+      maxHealth: Math.max(1, Number(inst.maxHealth) || Number(inst.health) || 1),
+      damageScale: Number.isFinite(inst.damageScale) ? inst.damageScale : 1,
+    };
+  }
+
+  /** Pull a pursuing wave out of the simulation while the player gets
+   *  breathing room. Remaining health is retained; this is a respite,
+   *  not a free heal or a silently discarded encounter. */
+  function submergeWave(reason = "distance") {
+    if (state.phase !== "warning" && state.phase !== "active") return false;
+    buriedRoster.length = 0;
+    const remove = new Set();
+    for (const inst of members) {
+      if (!enemies.live.includes(inst) || !isLiving(inst)) continue;
+      buriedRoster.push(rosterRecord(inst));
+      remove.add(inst);
+      for (const kid of inst.broodKids || []) {
+        if (enemies.live.includes(kid) && isLiving(kid)) remove.add(kid);
+      }
+    }
+    if (!buriedRoster.length) return false;
+
+    for (const inst of remove) {
+      const radius = Math.max(2.4, (inst.spec?.collisionRadius || 0.7) * 3.2);
+      ctx.vfx?.breach?.(inst.x, inst.y, inst.z, radius, 0.75);
+      enemies.remove?.(inst);
+    }
+    members.length = 0;
+    combat.clearProjectiles?.();
+    if (buriedRoster.some((record) => record.key === "coulter")) {
+      ctx.coulter?.clearHazards?.();
+    }
+
+    state.phase = "intermission";
+    state.recovering = true;
+    state.retreatFor = 0;
+    state.recoveries += 1;
+    state.timer = BREACH_CONFIG.recoverySeconds;
+    state.remaining = 0;
+    state.boss = null;
+    state.subtitle = reason === "boss"
+      ? "Brood submerged beyond protected territory"
+      : "Brood submerged — recovery window";
+    bus.emit("withdrew", snapshot());
+    return true;
+  }
+
   function launchWave(index, options = {}) {
     const nextIndex = clamp(Math.round(index), 0, BREACH_WAVES.length - 1);
     const wave = BREACH_WAVES[nextIndex];
     const centre = chooseCentre(options, wave);
-    const roster = expandRoster(wave);
+    if (!centre) return null;
+    const roster = Array.isArray(options.roster) && options.roster.length
+      ? options.roster.map((record) => ({ ...record }))
+      : expandRoster(wave).map((key) => ({ key }));
     const id = `breach-${++eventSerial}`;
 
     members.length = 0;
@@ -278,17 +374,25 @@ export function buildBreaches(ctx) {
     state.complete = false;
     state.boss = null;
     state.serial = eventSerial;
+    state.recovering = false;
+    state.retreatFor = 0;
+    state.blockedByBoss = null;
+    buriedRoster.length = 0;
 
     const ps = ctx.player.state;
     for (let i = 0; i < roster.length; i += 1) {
-      const key = roster[i];
+      const record = roster[i];
+      const key = record.key;
       const point = spawnPoint(i, roster.length, wave.clusters, key, centre);
       const emerge = EMERGENCE[key] || EMERGENCE.thresher;
       const baseHealth = BESTIARY[key]?.health || 100;
+      const maxHealth = Math.max(1, Number(record.maxHealth)
+        || Math.round(baseHealth * wave.healthScale));
       const inst = enemies.spawn(key, point.x, point.z, {
         yaw: Math.atan2(ps.x - point.x, ps.z - point.z),
-        health: Math.round(baseHealth * wave.healthScale),
-        damageScale: wave.damageScale,
+        health: maxHealth,
+        damageScale: Number.isFinite(record.damageScale)
+          ? record.damageScale : wave.damageScale,
         eventId: id,
         eventWave: nextIndex,
         emerge: {
@@ -300,11 +404,14 @@ export function buildBreaches(ctx) {
         },
       });
       if (!inst) continue;
+      inst.maxHealth = maxHealth;
+      inst.health = Math.max(1, Math.min(maxHealth,
+        Number(record.health) || maxHealth));
       inst.home = { x: centre.x, z: centre.z };
       members.push(inst);
     }
 
-    state.total = members.length;
+    state.total = Math.max(members.length, Math.round(Number(options.total) || 0));
     state.remaining = members.length;
     state.boss = members.find((inst) => BOSS_KEYS.has(inst.key)) || null;
     if (!options.silent) bus.emit(wave.boss ? "bossWarning" : "warning", snapshot());
@@ -324,19 +431,17 @@ export function buildBreaches(ctx) {
 
     refreshCounts();
     if (combat.player.dead) return;
+    const bossArea = currentBossArea();
 
     if (state.phase === "dormant") {
       if (!state.auto) return;
       state.timer = Math.max(0, state.timer - dt);
-      const moved = Math.hypot(
-        ctx.player.state.x - startPoint.x,
-        ctx.player.state.z - startPoint.z
-      );
-      if (state.timer <= 0 || moved >= BREACH_CONFIG.movementTrigger) launchWave(0);
+      if (state.timer <= 0 && !bossArea) launchWave(0);
       return;
     }
 
     if (state.phase === "warning") {
+      if (bossArea && submergeWave("boss")) return;
       state.timer = Math.max(0, state.timer - dt);
       if (state.timer <= 0) {
         state.phase = "active";
@@ -346,6 +451,17 @@ export function buildBreaches(ctx) {
     }
 
     if (state.phase === "active") {
+      if (bossArea && submergeWave("boss")) return;
+      const crossedBossBoundary = members.some((inst) => isLiving(inst)
+        && protectedBossAreaAt(inst.x, inst.z));
+      if (crossedBossBoundary && submergeWave("boss")) return;
+      const distance = Math.hypot(ctx.player.state.x - state.x,
+        ctx.player.state.z - state.z);
+      if (distance > BREACH_CONFIG.eventRadius) state.retreatFor += dt;
+      else state.retreatFor = Math.max(0, state.retreatFor - dt * 2);
+      if (state.retreatFor >= BREACH_CONFIG.retreatGraceSeconds
+        && submergeWave("distance")) return;
+
       // Event units remain committed to the player even if a static
       // garrison nearby loses interest. The event is a fight, not a POI.
       for (const inst of members) {
@@ -367,6 +483,7 @@ export function buildBreaches(ctx) {
         bus.emit("complete", snapshot());
       } else {
         state.phase = "intermission";
+        state.recovering = false;
         state.name = "Breach sealed";
         state.subtitle = "Next pressure front forming";
         state.timer = BREACH_CONFIG.intermissionSeconds;
@@ -376,14 +493,22 @@ export function buildBreaches(ctx) {
 
     if (state.phase === "intermission") {
       state.timer = Math.max(0, state.timer - dt);
-      if (state.timer <= 0) launchWave(state.waveIndex + 1);
+      if (state.timer > 0 || bossArea) return;
+      if (state.recovering) {
+        launchWave(state.waveIndex, {
+          roster: buriedRoster,
+          total: state.total,
+        });
+      } else {
+        launchWave(state.waveIndex + 1);
+      }
       return;
     }
 
     if (state.phase === "complete") {
       if (!state.auto) return;
       state.timer = Math.max(0, state.timer - dt);
-      if (state.timer <= 0) {
+      if (state.timer <= 0 && !bossArea) {
         state.cycle = state.cyclesCleared + 1;
         launchWave(0);
       }
@@ -434,6 +559,16 @@ export function buildBreaches(ctx) {
       complete: state.complete,
       auto: state.auto,
       serial: state.serial,
+      recovering: state.recovering,
+      retreatFor: Number(state.retreatFor.toFixed(2)),
+      recoveries: state.recoveries,
+      blockedByBoss: state.blockedByBoss,
+      buried: buriedRoster.map((record) => ({
+        key: record.key,
+        health: Number(record.health.toFixed(3)),
+        maxHealth: Number(record.maxHealth.toFixed(3)),
+        damageScale: Number(record.damageScale.toFixed(4)),
+      })),
       memberIds: members.filter((inst) => isLiving(inst) && inst.id).map((inst) => inst.id),
       bossId: boss?.id || null,
       rng: rng.getState?.() || null,
@@ -446,10 +581,13 @@ export function buildBreaches(ctx) {
 
   function restore(saved = {}) {
     members.length = 0;
+    buriedRoster.length = 0;
     const phase = ["dormant", "warning", "active", "intermission", "complete"]
       .includes(saved.phase) ? saved.phase : "dormant";
     const waveIndex = clamp(Math.round((Number(saved.wave) || 0) - 1),
       -1, BREACH_WAVES.length - 1);
+    const hasSavedTimer = saved.timer !== null && saved.timer !== undefined
+      && Number.isFinite(Number(saved.timer));
     const timer = Math.max(0, Number(saved.timer) || 0);
     const x = Number.isFinite(Number(saved.x)) ? Number(saved.x) : 0;
     const z = Number.isFinite(Number(saved.z)) ? Number(saved.z) : 0;
@@ -467,6 +605,25 @@ export function buildBreaches(ctx) {
     state.total = 0;
     state.remaining = 0;
     state.boss = null;
+    state.recovering = !!saved.recovering && phase === "intermission";
+    state.retreatFor = Math.max(0, Number(saved.retreatFor) || 0);
+    state.recoveries = Math.max(0, Math.round(Number(saved.recoveries) || 0));
+    state.blockedByBoss = typeof saved.blockedByBoss === "string"
+      ? saved.blockedByBoss : null;
+    if (state.recovering && Array.isArray(saved.buried)) {
+      for (const record of saved.buried) {
+        if (!record || !BESTIARY[record.key]) continue;
+        const maxHealth = Math.max(1, Number(record.maxHealth)
+          || BESTIARY[record.key].health || 1);
+        buriedRoster.push({
+          key: record.key,
+          health: Math.max(1, Math.min(maxHealth, Number(record.health) || maxHealth)),
+          maxHealth,
+          damageScale: Number.isFinite(Number(record.damageScale))
+            ? Number(record.damageScale) : 1,
+        });
+      }
+    }
     eventSerial = Math.max(eventSerial, Math.round(Number(saved.serial) || 0));
 
     if (state.complete) {
@@ -475,7 +632,7 @@ export function buildBreaches(ctx) {
       state.cycle = Math.max(state.cycle, state.cyclesCleared);
       state.name = saved.name || "Brood cycle broken";
       state.subtitle = saved.subtitle || "Bloom pressure rebuilding";
-      state.timer = timer || BREACH_CONFIG.cycleCooldownSeconds;
+      state.timer = hasSavedTimer ? timer : BREACH_CONFIG.cycleCooldownSeconds;
     } else if ((phase === "warning" || phase === "active") && waveIndex >= 0) {
       const byId = new Map(enemies.live.filter((inst) => inst?.id)
         .map((inst) => [inst.id, inst]));
@@ -517,18 +674,19 @@ export function buildBreaches(ctx) {
     } else if (phase === "intermission" && waveIndex >= 0) {
       const wave = BREACH_WAVES[waveIndex];
       state.phase = "intermission";
-      state.name = saved.name || "Breach sealed";
-      state.subtitle = saved.subtitle || "Next pressure front forming";
+      state.name = saved.name || (state.recovering ? wave.name : "Breach sealed");
+      state.subtitle = saved.subtitle || (state.recovering
+        ? "Brood submerged — recovery window" : "Next pressure front forming");
       state.timer = timer;
       state.total = Math.max(0, Math.round(Number(saved.total) || 0));
       state.remaining = 0;
-      if (wave?.boss) state.waveIndex = Math.max(0, waveIndex - 1);
+      if (!state.recovering && wave?.boss) state.waveIndex = Math.max(0, waveIndex - 1);
     } else {
       state.phase = "dormant";
       state.waveIndex = -1;
       state.name = "Bloom pressure";
       state.subtitle = "Signal quiet";
-      state.timer = timer || BREACH_CONFIG.firstWarningAfter;
+      state.timer = hasSavedTimer ? timer : BREACH_CONFIG.firstWarningAfter;
       state.cycle = Math.max(1, state.cyclesCleared + 1);
     }
 

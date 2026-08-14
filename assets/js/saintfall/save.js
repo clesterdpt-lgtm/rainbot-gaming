@@ -621,6 +621,8 @@ export function buildSaveSystem(ctx, options = {}) {
     const breachPhases = new Set(["dormant", "warning", "active", "intermission", "complete"]);
     const breachMembers = Array.isArray(breach?.memberIds) ? breach.memberIds : [];
     const uniqueBreachMembers = new Set(breachMembers);
+    const buriedBreachMembers = Array.isArray(breach?.buried) ? breach.buried : [];
+    const breachRecovering = breach?.recovering === true;
     const waveCount = ctx.breaches?.waves?.length || Number(breach?.waveCount) || 0;
     if (!isRecord(breach)
       || !breachPhases.has(breach.phase)
@@ -633,8 +635,16 @@ export function buildSaveSystem(ctx, options = {}) {
       || breach.timer < 0 || breach.total < 0 || breach.remaining < 0
       || breach.remaining > breach.total || breach.serial < 0
       || typeof breach.complete !== "boolean" || typeof breach.auto !== "boolean"
+      || (breach.recovering !== undefined && typeof breach.recovering !== "boolean")
+      || (breach.retreatFor !== undefined
+        && (!isFiniteNumber(breach.retreatFor) || breach.retreatFor < 0))
+      || (breach.recoveries !== undefined
+        && (!Number.isInteger(breach.recoveries) || breach.recoveries < 0))
+      || !(breach.blockedByBoss === undefined || breach.blockedByBoss === null
+        || breach.blockedByBoss === "distaff" || breach.blockedByBoss === "winnower")
       || !validRngState(breach.rng)
       || !Array.isArray(breach.memberIds)
+      || (breach.buried !== undefined && !Array.isArray(breach.buried))
       || uniqueBreachMembers.size !== breachMembers.length
       || breachMembers.some((id) => typeof id !== "string" || !enemyIds.has(id))
       || ((breach.phase === "warning" || breach.phase === "active")
@@ -644,6 +654,13 @@ export function buildSaveSystem(ctx, options = {}) {
       || !(breach.boss === null || (isRecord(breach.boss)
         && isFiniteNumber(breach.boss.health) && isFiniteNumber(breach.boss.maxHealth)
         && breach.boss.health >= 0 && breach.boss.maxHealth >= breach.boss.health))) return false;
+    const waveSpecies = new Set((ctx.breaches?.waves || [])
+      .flatMap((wave) => wave?.roster || []).map((entry) => entry?.key)
+      .filter((key) => typeof key === "string" && key));
+    if (buriedBreachMembers.some((record) => !isRecord(record)
+      || !waveSpecies.has(record.key)
+      || ![record.health, record.maxHealth, record.damageScale].every(isFiniteNumber)
+      || record.health <= 0 || record.maxHealth < record.health || record.damageScale <= 0)) return false;
     const hasCycleState = breach.cycle !== undefined || breach.cyclesCleared !== undefined;
     if (hasCycleState && (!Number.isInteger(breach.cycle) || breach.cycle < 1
       || !Number.isInteger(breach.cyclesCleared) || breach.cyclesCleared < 0
@@ -661,8 +678,12 @@ export function buildSaveSystem(ctx, options = {}) {
       breach.wave >= 1 && breach.waveIndex >= 0 && !breach.complete
     );
     const intermissionShape = breach.phase !== "intermission" || (
-      breach.wave >= 1 && breach.wave < waveCount && breach.waveIndex >= 0
+      breach.wave >= 1 && (breachRecovering || breach.wave < waveCount) && breach.waveIndex >= 0
       && noBreachMembers && !breach.complete
+    );
+    const recoveryShape = !breachRecovering || (
+      breach.phase === "intermission" && buriedBreachMembers.length > 0
+      && buriedBreachMembers.length <= breach.total
     );
     const completeShape = breach.phase !== "complete" || (
       breach.wave === waveCount && breach.waveIndex === waveCount - 1
@@ -687,7 +708,7 @@ export function buildSaveSystem(ctx, options = {}) {
     const bossShape = bossPresent === (breach.boss !== null)
       && (!bossPresent || (uniqueBreachMembers.has(breach.bossId)
         && bossKeys.has(enemyById.get(breach.bossId)?.key)));
-    if (!dormantShape || !warningShape || !activeShape || !intermissionShape
+    if (!dormantShape || !warningShape || !activeShape || !intermissionShape || !recoveryShape
       || !completeShape || breach.complete !== (breach.phase === "complete")
       || !bossShape) return false;
 

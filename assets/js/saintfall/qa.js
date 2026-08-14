@@ -3510,6 +3510,52 @@ export function installQa(ctx, api) {
       return f ? { x: f.x, y: f.y, z: f.z, radius: f.radius } : null;
     },
     clearAsh() { return api.winnower?.clearHazards?.() ?? null; },
+    /* ------------------------------------------------------------
+       THE APOSTATE
+
+       The final encounter is gated by mission progression as well as
+       proximity. These hooks arm that real gate, then leave reveal and
+       damage to the production paths so QA can prove nothing leaks early.
+       ------------------------------------------------------------ */
+    apostateState: () => api.apostate?.status?.() || null,
+    armApostateFight() {
+      const saved = api.mission.snapshot();
+      saved.phase = "cathedralBoss";
+      saved.extractCalled = false;
+      saved.extractTimer = 0;
+      saved.relays = saved.relays.map((relay) => ({
+        ...relay, done: true, progress: 1,
+      }));
+      saved.relaysDone = saved.relays.length;
+      api.mission.restore(saved);
+      api.apostate?.reset?.();
+      return { mission: api.mission.stats(), apostate: api.apostate?.status?.() || null };
+    },
+    teleportToApostate(offset = 18) {
+      const a = api.apostate?.status?.();
+      if (!a) return null;
+      hook._teleportRaw(a.x - offset, a.z, 0);
+      hook.setBodyHeading?.(0);
+      return { x: a.x - offset, z: a.z };
+    },
+    advanceToApostatePhase(phase, limit = 20, dt = 1 / 60) {
+      const target = String(phase);
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const a = api.apostate?.status?.();
+        if (!a) return -1;
+        if (a.phase === target) return Number(elapsed.toFixed(3));
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    forceApostateAction(name) {
+      return api.apostate?.forceAction?.(String(name)) ?? false;
+    },
+    forceApostateSummon() {
+      return api.apostate?.forceSummon?.() ?? 0;
+    },
     minimapState() {
       const semantic = api.hud?.minimapState?.() || null;
       const map = document.getElementById("sf-minimap");
@@ -3732,6 +3778,7 @@ export function installQa(ctx, api) {
     get breaches() { return api.breaches; },
     get distaff() { return api.distaff; },
     get winnower() { return api.winnower; },
+    get apostate() { return api.apostate; },
     get collide() { return api.collide; },
     get gameUi() { return api.gameUi || ctx.gameUi || null; },
     get saves() { return api.saves || ctx.saves || null; },

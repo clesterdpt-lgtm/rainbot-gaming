@@ -24,7 +24,9 @@
    ============================================================ */
 
 import { TAU, clamp, clamp01, lerp, damp, makeBus, makeRng, makeRamp } from "saintfall/core.js";
-import { PALETTE, paintByHeight, paintFlat } from "saintfall/art.js";
+import {
+  PALETTE, paintByHeight, paintFlat, patchMaterial, patchBasicMaterial,
+} from "saintfall/art.js";
 import { makeKit } from "saintfall/structures.js";
 
 /* The reliquary lamp at rest, and how fast a shot's flash decays off
@@ -516,6 +518,8 @@ export function buildWeapons(ctx) {
        for recoil or aiming. */
     const gripRear = new THREE.Object3D();
     const gripFront = new THREE.Object3D();
+    gripRear.name = "grip-rear";
+    gripFront.name = "grip-front";
     if (isPolearm) {
       /* The rear hand takes the dedicated under-haft fire-control grip.
 
@@ -570,6 +574,7 @@ export function buildWeapons(ctx) {
        cosmetic offset belongs on the flare below, which is drawn
        rather than aimed. */
     const muzzle = new THREE.Object3D();
+    muzzle.name = "aim-muzzle";
     muzzle.position.set(isPolearm
       ? spec.haft * 0.78
       : spec.receiver.l * 0.5 + spec.barrel.l + 0.035, 0, 0);
@@ -659,6 +664,7 @@ export function buildWeapons(ctx) {
        what the TIP does, not on what the grip does - the grip barely
        moves in a good swing, which is the whole point of leverage. */
     const tip = new THREE.Object3D();
+    tip.name = "weapon-tip";
     /* A ranged weapon's tip sat at (0,0,0) - the weapon's own origin,
        which is the mount. Any probe that measured a rifle animation
        therefore measured a lever of zero length and reported that
@@ -677,6 +683,7 @@ export function buildWeapons(ctx) {
     // prove that the complete haft stays beside the torso rather
     // than checking only the glowing head.
     const butt = new THREE.Object3D();
+    butt.name = "weapon-butt";
     butt.position.set(isPolearm ? -spec.haft * 0.40 : -spec.receiver.l * 0.75, 0, 0);
     root.add(butt);
 
@@ -880,6 +887,62 @@ export function buildWeapons(ctx) {
     }
     bus.emit("equip", weaponEvent({ key }));
     return record;
+  }
+
+  /** A presentation-only copy for a character that carries the same rite.
+   *  Geometry remains shared; mutable materials, lights and transforms do not.
+   *  Nothing in the returned record is connected to player heat/recoil state. */
+  function cloneVisual(key = "autogun") {
+    const source = build(key);
+    if (!source) return null;
+    const root = source.root.clone(true);
+    root.name = `weapon-${key}-replica`;
+    root.position.set(0, 0, 0);
+    root.rotation.set(0, 0, 0);
+    root.scale.set(1, 1, 1);
+    root.traverse((node) => {
+      if (node.material) {
+        const cloneMaterial = (sourceMaterial) => {
+          if (!sourceMaterial?.clone) return sourceMaterial;
+          const material = sourceMaterial.clone();
+          const sf = sourceMaterial.userData || {};
+          if (sf.sfPatched) {
+            material.userData = { ...material.userData };
+            delete material.userData.sfPatched;
+            delete material.userData.sfShader;
+            delete material.onBeforeCompile;
+            delete material.customProgramCacheKey;
+            if (sf.sfBasic || sourceMaterial.isMeshBasicMaterial) {
+              patchBasicMaterial(material, ctx.atmos,
+                Number.isFinite(sf.sfFade) ? sf.sfFade : 0.7,
+                sf.sfAdditive ?? sourceMaterial.blending === THREE.AdditiveBlending);
+            } else {
+              patchMaterial(material, ctx.atmos, {
+                rim: sf.sfRim, glitter: sf.sfGlitter,
+                bio: sf.sfBio, dunes: sf.sfDunes,
+              });
+            }
+          }
+          return material;
+        };
+        node.material = Array.isArray(node.material)
+          ? node.material.map(cloneMaterial) : cloneMaterial(node.material);
+      }
+      if (node.isLight) {
+        node.color = node.color.clone();
+        node.intensity *= 0.78;
+      }
+    });
+    return {
+      root,
+      gripRear: root.getObjectByName("grip-rear"),
+      gripFront: root.getObjectByName("grip-front"),
+      muzzle: root.getObjectByName("aim-muzzle"),
+      emitter: root.getObjectByName("bolt-emitter"),
+      tip: root.getObjectByName("weapon-tip"),
+      butt: root.getObjectByName("weapon-butt"),
+      flash: root.getObjectByName("muzzle-flare"),
+    };
   }
 
   function setMode(mode) {
@@ -1401,6 +1464,7 @@ export function buildWeapons(ctx) {
     bus,
     patterns: PATTERNS,
     build,
+    cloneVisual,
     equip,
     setMode,
     fire,

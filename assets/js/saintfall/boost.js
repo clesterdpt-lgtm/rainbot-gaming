@@ -46,7 +46,7 @@ export const BOOST_CONFIG = Object.freeze({
   steerResponse: 7.0,
 });
 
-const HEAVY_KEYS = new Set(["harrow", "matriarch", "distaff"]);
+const HEAVY_KEYS = new Set(["harrow", "matriarch", "distaff", "apostate"]);
 
 export function buildBoost(ctx, player) {
   const config = BOOST_CONFIG;
@@ -359,6 +359,8 @@ export function buildBoost(ctx, player) {
     let hits = 0;
     for (const inst of ctx.enemies.live) {
       if (!inst || inst.state === "death" || inst.emerging?.active) continue;
+      if (inst.spec?.flies && !inst.grounded
+        && Math.abs(inst.y - player.state.y) > 2.4) continue;
       const last = struck.get(inst);
       if (last !== undefined && state.elapsed - last < config.damageInterval) continue;
       const box = ctx.combat.hitbox[inst.key] || ctx.combat.hitbox.thresher;
@@ -384,6 +386,8 @@ export function buildBoost(ctx, player) {
         x: inst.x,
         y: hitY,
         z: inst.z,
+        originX: contact.qx,
+        originZ: contact.qz,
       });
       if (dealt <= 0) continue;
       const firstImpact = state.lastHits === 0;

@@ -461,7 +461,11 @@ async function repeatedLoadPass(page, setup) {
         rechargeDelayRemaining: 0 });
       const beforeLoad = { extraId: extra?.id || null, count: T.enemies.live.length };
       const loaded = T.loadSlot(0);
-      const ids = T.enemies.live.map((enemy) => enemy.id);
+      /* Domain-owned encounters (currently the Apostate) intentionally live
+         beside the generic roster but are persisted by their own controller.
+         This assertion is about replacement of the generic snapshot only. */
+      const ids = T.enemies.live.filter((enemy) => !enemy.spec?.durableDomain)
+        .map((enemy) => enemy.id);
       return {
         iteration,
         loaded,
@@ -1596,7 +1600,8 @@ async function activeBreachCompatibilityPass(browser) {
 
     const loaded = T.loadSlot(0);
     const after = T.breachState();
-    const idsAfter = T.enemies.live.map((enemy) => enemy.id);
+    const idsAfter = T.enemies.live.filter((enemy) => !enemy.spec?.durableDomain)
+      .map((enemy) => enemy.id);
     const emergingAfter = T.enemies.live.filter((enemy) => enemy.emerging?.active)
       .map((enemy) => enemy.id);
     const afterBossObjectId = T.breaches.state.boss?.id || null;
@@ -1758,7 +1763,8 @@ async function coldReloadPass(context, firstPage, setup) {
     const T = window.__SF;
     const slotBefore = T.persistenceState()?.manuals?.[0] || null;
     const loaded = T.loadSlot(0);
-    const ids = T.enemies.live.map((enemy) => enemy.id);
+    const ids = T.enemies.live.filter((enemy) => !enemy.spec?.durableDomain)
+      .map((enemy) => enemy.id);
     return {
       slotBefore: slotBefore ? {
         id: slotBefore.id,

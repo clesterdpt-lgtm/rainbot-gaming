@@ -441,24 +441,32 @@ try {
     return { ...s, extractCalled: T.mission.state.extractCalled };
   });
   console.log(`  after: phase=${after.phase} relays=${after.relays}`);
-  check("silencing all relays opens extraction", after.phase === "extract",
+  check("silencing all relays opens the Cathedral finale", after.phase === "cathedralBoss",
     `phase=${after.phase}`);
 
-  const extract = await page.evaluate(() => {
+  const finale = await page.evaluate(() => {
     const T = window.__SF;
-    T.teleport(T.mission.extract.x, T.mission.extract.z, 0);
-    T.advanceTime(2.0, 1 / 60);
+    T.teleportToApostate(18);
+    const revealSeconds = T.advanceToApostatePhase("duel", 10);
+    const inst = T.enemies.live.find((enemy) => enemy.key === "apostate");
+    const targetable = !!inst && T.combat.targetable(inst);
+    const dealt = inst
+      ? T.combat.damageEnemy(inst, inst.health + 1, { source: "qa-finale" }) : 0;
+    T.advanceTime(2.4, 1 / 60);
     return {
-      called: T.mission.state.extractCalled,
-      timer: Math.round(T.mission.state.extractTimer),
-      alerted: T.enemies.live.filter((e) => e.suspicion > 0.5).length,
+      revealSeconds,
+      targetable,
+      dealt,
+      phase: T.mission.state.phase,
+      defeated: T.apostateState()?.defeated,
     };
   });
-  console.log(`  extraction called=${extract.called} timer=${extract.timer}s `
-    + `· ${extract.alerted} units converging`);
-  check("reaching the pad calls the shuttle", extract.called);
-  check("calling extraction wakes the map", extract.alerted > 0,
-    `${extract.alerted} units alerted`);
+  console.log(`  Apostate reveal=${finale.revealSeconds}s targetable=${finale.targetable} `
+    + `defeated=${finale.defeated} phase=${finale.phase}`);
+  check("the Cathedral reveal hands off to a targetable final boss",
+    finale.revealSeconds >= 0 && finale.targetable, JSON.stringify(finale));
+  check("defeating the Apostate completes the operation",
+    finale.dealt > 0 && finale.defeated && finale.phase === "won", JSON.stringify(finale));
 
   /* ---------------------------------------------------------- */
   console.log("\n=== STABILITY ===");

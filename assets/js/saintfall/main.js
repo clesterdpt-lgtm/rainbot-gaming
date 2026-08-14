@@ -31,6 +31,7 @@ import { buildBreaches } from "saintfall/breaches.js";
 import { buildCoulter } from "saintfall/coulter.js";
 import { buildDistaff } from "saintfall/distaff.js";
 import { buildWinnower } from "saintfall/winnower.js";
+import { buildApostate } from "saintfall/apostate.js";
 import { buildProgression } from "saintfall/progression.js";
 import { buildAudio } from "saintfall/audio.js";
 import { buildWeapons } from "saintfall/weapons.js";
@@ -201,6 +202,12 @@ export async function start({ boot, build } = {}) {
   const winnower = buildWinnower(ctx);
   ctx.winnower = winnower;
   winnower.ensureSpawned();
+  /* The Cathedral's false saint borrows the authored player figure but owns
+     an entirely separate combat brain. It is asynchronous because the same
+     GLB/fallback figure contract is loaded for a second, corrupted body. */
+  const apostate = await buildApostate(ctx);
+  ctx.apostate = apostate;
+  apostate.ensureSpawned();
 
   /* Career rank and Doctrine choices sit above the field systems they
      observe. Constructing progression here lets it subscribe to authoritative
@@ -388,6 +395,7 @@ export async function start({ boot, build } = {}) {
     coulter,
     distaff,
     winnower,
+    apostate,
     progression,
     audio,
     intro,
@@ -636,7 +644,8 @@ export async function start({ boot, build } = {}) {
       // `state === "death"` is how enemies.js marks a corpse mid-clip;
       // there is no `dead` flag, and testing for one silently treated
       // every body on the field as a live threat.
-      if (inst.state === "death" || inst.emerging?.active) continue;
+      if (inst.state === "death" || inst.emerging?.active
+        || inst.encounterHidden || inst.encounterLocked) continue;
       const dx = inst.root.position.x - px;
       const dz = inst.root.position.z - pz;
       if (dx * dx + dz * dz < STOW_THREAT_RANGE * STOW_THREAT_RANGE) return true;
@@ -754,6 +763,7 @@ export async function start({ boot, build } = {}) {
     coulter.update(d);
     distaff.update(d);
     winnower.update(d);
+    apostate.update(d);
     breaches.update(d);
     mission.update(d);
     progression.update?.(d);

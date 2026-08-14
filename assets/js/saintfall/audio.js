@@ -1881,6 +1881,31 @@ export function buildAudio(ctx) {
       winnower.bus.on("crash", (e) => explosion(e.x, e.z, 16));
       winnower.bus.on("defeated", () => chord([220, 294, 370, 440], 1.7, 0.24));
     }
+    /* The false saint uses the player's mechanical vocabulary in the
+       Bloom register: familiar lance/boost transients under violet shell
+       movement and a brood-call chord where a command confirmation belongs. */
+    const apostate = ctx.apostate;
+    if (apostate) {
+      apostate.bus.on("aggro", () => chord([69, 92, 138, 185], 1.9, 0.28));
+      apostate.bus.on("engaged", () => chord([82, 110, 165, 247], 1.1, 0.22));
+      apostate.bus.on("shot", (e) => shot(e.x, e.z, { gain: 0.44 }));
+      apostate.bus.on("meleeTelegraph", (e) => hiss(e.x, e.z));
+      apostate.bus.on("melee", (e) => {
+        if (e.hit) impact(e.x, e.z, "flesh");
+      });
+      apostate.bus.on("boost", (e) => rumble(e.x, e.z, 0.52));
+      apostate.bus.on("boostHit", (e) => impact(e.x, e.z, "wall"));
+      apostate.bus.on("jet", (e) => rumble(e.x, e.z, 0.72));
+      apostate.bus.on("slam", (e) => explosion(e.x, e.z, e.radius));
+      apostate.bus.on("call", (e) => chord([65, 98, 131, 196], 1.55, 0.25));
+      apostate.bus.on("summoned", (e) => surface(e.x, e.z));
+      apostate.bus.on("shield", (e) => {
+        if (e.active) chord([147, 220, 294], 0.72, 0.14);
+      });
+      apostate.bus.on("shieldBlock", (e) => impact(e.x, e.z, "wall"));
+      apostate.bus.on("vent", (e) => hiss(e.x, e.z));
+      apostate.bus.on("defeated", () => chord([196, 262, 330, 494], 2.2, 0.30));
+    }
   }
 
   /* Unlock on the first real gesture. Chrome will not start an

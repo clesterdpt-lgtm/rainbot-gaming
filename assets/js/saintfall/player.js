@@ -1408,7 +1408,10 @@ function buildProceduralTrooper(ctx) {
    skinned mesh and named humanoid bones.
    ============================================================ */
 
-async function buildVesperTrooper(ctx) {
+/* Public only as a FIGURE factory. Encounter modules may borrow the same
+   authored Reliquary silhouette without constructing a second player
+   controller (and therefore without installing another input/camera stack). */
+export async function buildVesperTrooper(ctx) {
   const { THREE, atmos } = ctx;
   const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
   const loader = new GLTFLoader();
@@ -1811,6 +1814,14 @@ async function buildTrooper(ctx) {
     fallback.baseScale = fallback.root.scale.clone();
     return fallback;
   }
+}
+
+/* Encounter-safe public figure factory. Unlike `createPlayer`, this installs
+   no input, camera, movement or targeting systems; unlike the raw GLB helper,
+   it preserves the procedural fallback that keeps the game playable when the
+   authored asset cannot be fetched. */
+export async function buildReliquaryFigure(ctx) {
+  return buildTrooper(ctx);
 }
 
 /* ============================================================

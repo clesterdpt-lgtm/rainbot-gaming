@@ -109,6 +109,14 @@ export const XP_AWARDS = deepFreeze({
     amount: 420,
     repeat: "event",
   },
+  kill_apostate: {
+    id: "kill_apostate",
+    label: "Apostate broken",
+    event: "enemy_killed",
+    match: { enemyKey: "apostate" },
+    amount: 640,
+    repeat: "event",
+  },
   relay_silenced: {
     id: "relay_silenced",
     label: "Vox-relay silenced",

@@ -1158,6 +1158,7 @@ totalEmissiveRadiance += sfBio;
 export function patchMaterial(material, atmos, opts = {}) {
   if (!material || material.userData.sfPatched) return material;
   material.userData.sfPatched = true;
+  material.userData.sfBasic = false;
 
   const rimScale = opts.rim === undefined ? 1 : opts.rim;
   const glitter = opts.glitter || 0;
@@ -1247,6 +1248,13 @@ export function patchMaterial(material, atmos, opts = {}) {
 export function patchBasicMaterial(material, atmos, fade = 0.7, additive = false) {
   if (!material || material.userData.sfPatched) return material;
   material.userData.sfPatched = true;
+  /* Material.clone() does not preserve onBeforeCompile in every pinned Three
+     build. Record which atmosphere path authored the material so presentation
+     clones can restore the unlit shader instead of feeding MeshBasicMaterial
+     through the lit normal/rim patch. */
+  material.userData.sfBasic = true;
+  material.userData.sfFade = fade;
+  material.userData.sfAdditive = !!additive;
   const prev = material.onBeforeCompile;
   material.onBeforeCompile = (shader, renderer) => {
     if (prev) prev(shader, renderer);

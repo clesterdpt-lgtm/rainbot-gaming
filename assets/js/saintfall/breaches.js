@@ -14,6 +14,7 @@ import { TAU, clamp, makeBus, makeRng } from "saintfall/core.js";
 import { BESTIARY } from "saintfall/enemies.js";
 import { DISTAFF_CONFIG } from "saintfall/distaff.js";
 import { WINNOWER_CONFIG } from "saintfall/winnower.js";
+  import { APOSTATE_CONFIG } from "saintfall/apostate.js";
 import { DISTRICTS } from "saintfall/terrain.js";
 
 export const BREACH_CONFIG = Object.freeze({
@@ -186,6 +187,13 @@ export function buildBreaches(ctx) {
     if (!winnowerDead && Math.hypot(x - DISTRICTS.censer.x,
       z - DISTRICTS.censer.z) <= winnowerRadius) {
       return { key: "winnower", name: "Censer Works" };
+    }
+
+    const apostateDead = ctx.apostate?.status?.()?.defeated === true;
+    const apostateRadius = APOSTATE_CONFIG.arenaRadius + BREACH_CONFIG.bossArenaPadding;
+    if (!apostateDead && Math.hypot(x - APOSTATE_CONFIG.arenaX,
+      z - APOSTATE_CONFIG.arenaZ) <= apostateRadius) {
+      return { key: "apostate", name: "Vault-Cathedral" };
     }
     return null;
   }

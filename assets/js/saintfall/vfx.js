@@ -22,7 +22,7 @@
    Getting that wrong is subtle and instantly wrong-looking.
    ============================================================ */
 
-import { TAU, clamp01, lerp, makeRng, hexToRgb } from "saintfall/core.js";
+import { TAU, clamp, clamp01, lerp, sstep, makeRng, hexToRgb } from "saintfall/core.js";
 import {
   srgbTransfer as srgb, patchMaterial, patchBasicMaterial,
 } from "saintfall/art.js";
@@ -592,78 +592,283 @@ uniform float uStorm;`)
 
 /* ============================================================
    LIGHT SHAFTS
+
+   Every shaft in the level is a cone SHELL, and a shell is the
+   wrong primitive for a volume. Three things hide that; take any
+   one of them away and the shafts stop being light and start being
+   drawn polygons hanging in the air.
+
+   1. THE CHORD TERM, in the fragment shader. How bright a volume
+      looks at a point is how far the view ray travels inside it,
+      which for a point on a cone shell is |dot(radial, view)| -
+      full through the middle of the cone, zero at its rim. A shell
+      without it is brightest exactly ALONG ITS OWN OUTLINE, because
+      that is where the near and far sheets meet and both add. That
+      is not a subtlety: it is the whole reason the Choir Spires
+      shafts read as pale bars ruled across the sky, with edges
+      straight enough to look like a rendering fault.
+
+   2. BOTH ENDS DIE. The old profile started at full brightness at
+      t=0, so the top of every cone was a hard lit ring floating in
+      open air - a cut end. Light has to arrive from somewhere and
+      land on something; the window fades it in under the slot and
+      out again into the floor.
+
+   3. IT HAS TO LAND. A shaft that stops in mid-air is a bar. Sun
+      shafts get their length from the terrain under where they
+      actually fall, so the cone always reaches the sand.
+
+   Sun-tracked shafts also FOLLOW THE SUN. The direction used to be
+   baked from `atmos.sunDir` at build time, but the day cycle turns
+   the sun through a full circle every eighteen minutes, so within a
+   couple of minutes of play every outdoor shaft was pointing
+   somewhere the light was not - and they were still there, warm and
+   bright, at midnight.
    ============================================================ */
 
+/* 22, not 10. The chord term goes to zero exactly ON the rim, but
+   between the rim vertex and the next one round it climbs by
+   sin(360/sides) - at ten sides that is 0.59 in a single facet, and
+   a shell that goes from nothing to two thirds brightness across one
+   triangle has a ruled edge again. The whole point of the term is a
+   rim you cannot find, and that needs the ring finely enough divided
+   to fade across several triangles. Tessellation is free here: the
+   cost of an additive volume is overdraw, and overdraw does not
+   change when you cut the same cone into more pieces. */
+const SHAFT_SIDES = 22;
+const SHAFT_STEPS = 6;
+/* A sun shaft takes its BEARING from the sun and only borrows its
+   pitch. Dusk puts the sun 2.2 degrees up and golden hour 13.5, and
+   a shaft raked to match is not a shaft: it is a hundred metres of
+   cone lying across the district like a fallen column. Floored at 44
+   degrees, which still leans visibly with the hour between here and
+   the 62 of noon. */
+const SHAFT_MIN_PITCH = 58 * Math.PI / 180;
+/* And a hard stop, because the needles differ by 44m in height. */
+const SHAFT_MAX_LEN = 78;
+
+/** Additive glow with the chord term. See (1) above. */
+function shaftMaterial(ctx) {
+  const { THREE, atmos } = ctx;
+  const m = new THREE.MeshBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 1,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide, toneMapped: true,
+  });
+  m.name = "sf-shaft";
+  // Additive, so it fades to black with distance rather than toward
+  // the sky - and it gets the near fade that stops a cone the camera
+  // has walked inside from painting itself over the whole frame.
+  patchBasicMaterial(m, atmos, 1.0, true);
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (shader, renderer) => {
+    prev.call(m, shader, renderer);
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", `#include <common>
+attribute vec3 aRadial;
+varying vec3 vShaftRadial;`)
+      .replace("#include <project_vertex>", `#include <project_vertex>
+  vShaftRadial = aRadial;`)
+      /* The radial is authored in world space by the builder, which
+         also owns the only transform these ever get (none - the mesh
+         sits at the origin), so there is no normal matrix to apply
+         and nothing to renormalise. */;
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", `#include <common>
+varying vec3 vShaftRadial;`)
+      .replace("#include <opaque_fragment>", `#include <opaque_fragment>
+{
+  vec3 sfView = normalize(cameraPosition - vSFWorld);
+  // 1.5, not 1.0. The true chord is linear in |dot|, but a cone shell
+  // is a lie about a volume and the lie shows at the edges; leaning
+  // on the rim buys a wider, softer boundary for a core that is
+  // barely touched.
+  gl_FragColor.rgb *= pow(abs(dot(normalize(vShaftRadial), sfView)), 1.5);
+}`);
+    m.userData.sfShader = shader;
+  };
+  m.customProgramCacheKey = () => "sf-shaft";
+  m.needsUpdate = true;
+  return m;
+}
+
+/**
+ * One mesh for every shaft in the level, rewritten in place when the
+ * sun moves. All the cones share a topology, so the buffers are
+ * allocated once and `follow` only ever overwrites floats - no
+ * allocation, no geometry merge, nothing for the GC to find.
+ */
 function buildShafts(ctx, specs) {
-  const { THREE, materials } = ctx;
+  const { THREE, terrain, atmos } = ctx;
   if (!specs.length) return null;
-  const geos = [];
-  for (const spec of specs) {
-    const dir = new THREE.Vector3(...(spec.dir || [0, -1, 0])).normalize();
-    const len = spec.length || 40;
-    const r0 = (spec.radius || 4) * 0.55;
-    const r1 = (spec.radius || 4) * 1.5;
-    const SIDES = 9;
-    const pos = [];
-    const col = [];
-    const idx = [];
-    const c = hexToRgb(spec.colour || "#ffd9a0");
-    const push = (v, bright) => {
-      pos.push(v.x, v.y, v.z);
-      col.push(srgb(c[0]) * bright, srgb(c[1]) * bright, srgb(c[2]) * bright);
-    };
-    // Build a cone along `dir` with a local frame.
-    const up = Math.abs(dir.y) > 0.94 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
-    const right = new THREE.Vector3().crossVectors(dir, up).normalize();
-    const fwd = new THREE.Vector3().crossVectors(right, dir).normalize();
-    const origin = new THREE.Vector3(spec.x, spec.y, spec.z);
-    const STEPS = 4;
-    for (let s = 0; s <= STEPS; s += 1) {
-      const t = s / STEPS;
-      const rr = lerp(r0, r1, t);
-      // Additive: black is invisible, so the fade IS the vertex
-      // colour. No alpha channel is involved anywhere.
-      //
-      // 0.22, not 0.9. A shaft of light is a small amount of dust
-      // catching a lot of sun; at 0.9 these rendered as solid pale
-      // wedges you could see from the far side of the map.
-      const bright = (1 - t) * (1 - t) * 0.22 * (spec.gain ?? 1);
-      for (let i = 0; i < SIDES; i += 1) {
-        const a = (i / SIDES) * TAU;
-        const v = origin.clone()
-          .addScaledVector(dir, t * len)
-          .addScaledVector(right, Math.cos(a) * rr)
-          .addScaledVector(fwd, Math.sin(a) * rr);
-        /* Azimuthal falloff, deepened from 0.55+0.45 to 0.22+0.78.
-           It is the only lever a static additive shell has against
-           its own silhouette: the sides of the cone that face across
-           the shaft go nearly dark, so the outline reads as a soft
-           column of air rather than as a cut-out wedge. */
-        push(v, bright * (0.22 + 0.78 * Math.abs(Math.cos(a))));
-      }
-    }
-    for (let s = 0; s < STEPS; s += 1) {
-      for (let i = 0; i < SIDES; i += 1) {
-        const n = (i + 1) % SIDES;
-        const a0 = s * SIDES + i;
-        const a1 = s * SIDES + n;
-        const b0 = (s + 1) * SIDES + i;
-        const b1 = (s + 1) * SIDES + n;
+
+  const RING = SHAFT_SIDES * (SHAFT_STEPS + 1);
+  const total = specs.length * RING;
+  const pos = new Float32Array(total * 3);
+  const col = new Float32Array(total * 3);
+  const rad = new Float32Array(total * 3);
+  const idx = [];
+  for (let s = 0; s < specs.length; s += 1) {
+    const base = s * RING;
+    for (let k = 0; k < SHAFT_STEPS; k += 1) {
+      for (let i = 0; i < SHAFT_SIDES; i += 1) {
+        const n = (i + 1) % SHAFT_SIDES;
+        const a0 = base + k * SHAFT_SIDES + i;
+        const a1 = base + k * SHAFT_SIDES + n;
+        const b0 = base + (k + 1) * SHAFT_SIDES + i;
+        const b1 = base + (k + 1) * SHAFT_SIDES + n;
         idx.push(a0, b0, b1, a0, b1, a1);
       }
     }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
-    g.setIndex(idx);
-    g.computeVertexNormals();
-    geos.push(g);
   }
-  const mesh = new THREE.Mesh(mergeGeometries(THREE, geos), materials.glow);
+
+  const geo = new THREE.BufferGeometry();
+  const posAttr = new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage);
+  const colAttr = new THREE.BufferAttribute(col, 3).setUsage(THREE.DynamicDrawUsage);
+  const radAttr = new THREE.BufferAttribute(rad, 3).setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute("position", posAttr);
+  geo.setAttribute("color", colAttr);
+  geo.setAttribute("aRadial", radAttr);
+  geo.setIndex(idx);
+
+  const dir = new THREE.Vector3();
+  const right = new THREE.Vector3();
+  const fwd = new THREE.Vector3();
+  const axis = new THREE.Vector3();
+  const origin = new THREE.Vector3();
+
+  /* Prepared per shaft so `follow` never touches a string or an
+     object literal: the tint in linear space, and the side of the
+     needle the light comes past, alternating so a district of them
+     is not all lit from the same flank. */
+  const prep = specs.map((spec, i) => {
+    const c = hexToRgb(spec.colour || "#ffd9a0");
+    return {
+      spec,
+      r: srgb(c[0]), g: srgb(c[1]), b: srgb(c[2]),
+      side: i % 2 ? 1 : -1,
+    };
+  });
+
+  function writeShaft(slot, p) {
+    const { spec } = p;
+    const sun = spec.sun === true;
+
+    if (sun) {
+      // Down-sun in bearing, floored in pitch.
+      const flat = Math.hypot(atmos.sunDir.x, atmos.sunDir.z) || 1;
+      const pitch = Math.max(SHAFT_MIN_PITCH, Math.atan2(atmos.sunDir.y, flat));
+      const c = Math.cos(pitch);
+      dir.set(-atmos.sunDir.x / flat * c, -Math.sin(pitch), -atmos.sunDir.z / flat * c);
+      /* Offset across the sun, not along it. The shaft is the lit air
+         BESIDE the needle's shadow, so as the sun swings round the
+         slot swings with it and the light keeps grazing rock instead
+         of drifting off into open sky. */
+      right.set(-atmos.sunDir.z / flat, 0, atmos.sunDir.x / flat);
+      origin.set(spec.x, spec.y, spec.z)
+        .addScaledVector(right, (spec.offset || 0) * p.side);
+    } else {
+      dir.set(...(spec.dir || [0, -1, 0])).normalize();
+      origin.set(spec.x, spec.y, spec.z);
+    }
+
+    let len = spec.length || 40;
+    if (sun) {
+      /* Land it. Sampled twice because where the shaft falls is not
+         where it starts, and on this terrain those differ by more
+         than the shaft is wide. */
+      const fall = Math.max(0.2, -dir.y);
+      let ground = terrain.heightAt(origin.x, origin.z);
+      len = (origin.y - ground) / fall;
+      ground = terrain.heightAt(origin.x + dir.x * len, origin.z + dir.z * len);
+      len = clamp((origin.y - ground) / fall + 3, 18, SHAFT_MAX_LEN);
+    }
+
+    const r0 = (spec.radius || 4) * 0.55;
+    const r1 = (spec.radius || 4) * 1.5;
+    // A local frame for the cone. Any perpendicular pair will do.
+    axis.set(0, 1, 0);
+    if (Math.abs(dir.y) > 0.94) axis.set(1, 0, 0);
+    right.crossVectors(dir, axis).normalize();
+    fwd.crossVectors(right, dir).normalize();
+
+    const gain = (spec.gain ?? 1) * (sun ? clamp01(atmos.daylightFactor ?? 1) : 1);
+    let w = slot * RING * 3;
+    for (let k = 0; k <= SHAFT_STEPS; k += 1) {
+      const t = k / SHAFT_STEPS;
+      const rr = lerp(r0, r1, t);
+      /* 0.26 peak, not 0.9. A shaft of light is a small amount of
+         dust catching a lot of sun; at 0.9 these rendered as solid
+         pale wedges visible from the far side of the map. Both ends
+         are windowed to nothing - see (2) - and the middle thins as
+         the cone spreads, because the same light is being shared
+         out over more air. */
+      const bright = sstep(0, 0.26, t) * (1 - sstep(0.52, 1, t))
+        * (1 - t * 0.55) * 0.26 * gain;
+      const cx = origin.x + dir.x * t * len;
+      const cy = origin.y + dir.y * t * len;
+      const cz = origin.z + dir.z * t * len;
+      for (let i = 0; i < SHAFT_SIDES; i += 1) {
+        const a = (i / SHAFT_SIDES) * TAU;
+        const ca = Math.cos(a);
+        const sa = Math.sin(a);
+        const rx = right.x * ca + fwd.x * sa;
+        const ry = right.y * ca + fwd.y * sa;
+        const rz = right.z * ca + fwd.z * sa;
+        pos[w] = cx + rx * rr;
+        pos[w + 1] = cy + ry * rr;
+        pos[w + 2] = cz + rz * rr;
+        rad[w] = rx;
+        rad[w + 1] = ry;
+        rad[w + 2] = rz;
+        col[w] = p.r * bright;
+        col[w + 1] = p.g * bright;
+        col[w + 2] = p.b * bright;
+        w += 3;
+      }
+    }
+  }
+
+  const tracked = specs.some((s) => s.sun === true);
+  let sunKey = "";
+
+  /** Rewrite the sun-tracked cones if the sun has actually moved.
+   *  Cheap, but not free, and the sun crosses the sky in eighteen
+   *  minutes - two decimals on a unit vector is under a degree of
+   *  slack, which comes out at a rebuild every couple of seconds. */
+  function follow() {
+    if (!tracked) return false;
+    const s = atmos.sunDir;
+    const key = `${s.x.toFixed(2)},${s.y.toFixed(2)},${s.z.toFixed(2)},`
+      + `${(atmos.daylightFactor ?? 1).toFixed(2)}`;
+    if (key === sunKey) return false;
+    sunKey = key;
+    for (let i = 0; i < prep.length; i += 1) {
+      if (prep[i].spec.sun === true) writeShaft(i, prep[i]);
+    }
+    posAttr.needsUpdate = true;
+    colAttr.needsUpdate = true;
+    radAttr.needsUpdate = true;
+    return true;
+  }
+
+  for (let i = 0; i < prep.length; i += 1) writeShaft(i, prep[i]);
+  follow();
+  geo.computeBoundingSphere();
+  /* Pinned, because the sun-tracked cones move every few seconds and
+     a bounding sphere recomputed per rewrite is both a cost and a
+     source of frustum-cull popping. The basin is 2km across; one
+     sphere over the whole thing culls nothing and never lies. */
+  geo.boundingSphere.radius = Math.max(geo.boundingSphere.radius, 1800);
+
+  const mesh = new THREE.Mesh(geo, shaftMaterial(ctx));
   mesh.name = "shafts";
   mesh.renderOrder = 7;
   mesh.castShadow = false;
   mesh.receiveShadow = false;
+  mesh.matrixAutoUpdate = false;
+  mesh.updateMatrix();
+  mesh.userData.follow = follow;
   return mesh;
 }
 
@@ -711,31 +916,17 @@ export function buildVfx(ctx, world) {
     plumes.push(p);
   }
 
-  /* Extra light shafts, authored rather than emitted: slots between
-     the Choir Spires, and the clerestory of the nave. These are the
-     frames that make those two districts photograph. */
+  /* Extra light shafts, authored rather than emitted: the clerestory
+     of the nave. The Choir Spires' shafts are emitted instead, from
+     world.js, because only the spire loop knows where the spires
+     are - and a shaft that is not anchored to one is just a bar.
+
+     The scatter that used to live here is the whole reason this was
+     reported as broken. It dropped six cones at a random bearing and
+     a random height over a 320m district, which put most of them in
+     open sky with no rock within a hundred metres, pointing along a
+     sun direction frozen at world-build time. */
   {
-    const rng = makeRng(0x54af7);
-    /* Slots of light between the spires. Fewer, narrower and lower
-       than they were: at nine of them, up to 9m across and starting
-       90m up, most of each cone stood ABOVE the spires against open
-       sky, where a light shaft has nothing to be a shaft THROUGH and
-       reads as a pale translucent wedge hanging in the air. A shaft
-       needs a slot to come through and a floor to land on, and both
-       of those are in the bottom 40m of this district. */
-    const choir = ctx.districts.choir;
-    for (let i = 0; i < 6; i += 1) {
-      const a = rng() * TAU;
-      const r = rng.range(30, 220);
-      const x = choir.x + Math.cos(a) * r;
-      const z = choir.z + Math.sin(a) * r;
-      shaftSpecs.push({
-        x, y: terrain.heightAt(x, z) + rng.range(28, 52), z,
-        dir: [atmos.sunDir.x * -1, -0.85, atmos.sunDir.z * -1],
-        length: rng.range(34, 58), radius: rng.range(2.4, 5.0),
-        colour: "#ffe0ae",
-      });
-    }
     /* Clerestory shafts, raking down the nave from both sides.
        Higher gain than the outdoor shafts because these are the only
        light in an interior - outside, a shaft competes with a lit
@@ -1230,6 +1421,11 @@ export function buildVfx(ctx, world) {
         uEnergyCore: { value: new THREE.Color("#fffdf4") },
         uEnergyBody: { value: new THREE.Color("#ffc23c") },
         uEnergyFringe: { value: new THREE.Color("#ff6a12") },
+        /* The Apostate's stolen lance keeps hostile travel/readability but
+           replaces forge-orange plasma with the Bloom's cyan-violet organs. */
+        uBloomCore: { value: new THREE.Color("#efffff") },
+        uBloomBody: { value: new THREE.Color("#42e6df") },
+        uBloomFringe: { value: new THREE.Color("#9558d8") },
       },
       transparent: true,
       depthWrite: false,
@@ -1260,8 +1456,9 @@ export function buildVfx(ctx, world) {
         "  float age = uTime - aBirth;",
         "  float travelSpeed = aSpeed;",
         "  float travelled = age * travelSpeed;",
-        "  float tailLength = mix(uHostileTail, uTail, aStyle);",
-        "  float fadeTime = mix(uHostileFade, uEnergyFade, aStyle);",
+        "  float energyStyle = 1.0 - step(0.5, abs(aStyle - 1.0));",
+        "  float tailLength = mix(uHostileTail, uTail, energyStyle);",
+        "  float fadeTime = mix(uHostileFade, uEnergyFade, energyStyle);",
         // The head stops at the range the ray reached; the tail keeps
         // running, so the bolt is swallowed by whatever it hit rather
         // than winking out in mid air.
@@ -1271,12 +1468,12 @@ export function buildVfx(ctx, world) {
         "  float movingTail = clamp(travelled - tailLength, 0.0, aSpan);",
         // Hostile fire travels. The player's hitscan laser presents its
         // entire authoritative ray for one short discharge.
-        "  float head = mix(movingHead, aSpan, aStyle);",
-        "  float tail = mix(movingTail, 0.0, aStyle);",
+        "  float head = mix(movingHead, aSpan, energyStyle);",
+        "  float tail = mix(movingTail, 0.0, energyStyle);",
         "  float impactAge = max(age - aSpan / travelSpeed, 0.0);",
         "  float hostileLife = 1.0 - clamp(impactAge / fadeTime, 0.0, 1.0);",
         "  float beamLife = 1.0 - clamp(age / uEnergyFade, 0.0, 1.0);",
-        "  vLife = mix(hostileLife, beamLife, aStyle);",
+        "  vLife = mix(hostileLife, beamLife, energyStyle);",
         "  if (age < 0.0 || vLife <= 0.0) {",
         "    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);",
         "    vAlong = 0.0; vAcross = 0.0; vSeed = 0.0;",
@@ -1303,7 +1500,7 @@ export function buildVfx(ctx, world) {
         // parallel-sided laser with a white core and gold sheath.
         "  float hostileShape = 0.16 + 1.35 * pow(aCorner.x, 1.6);",
         "  float energyShape = 1.0;",
-        "  float w = aWidth * mix(hostileShape, energyShape, aStyle)",
+        "  float w = aWidth * mix(hostileShape, energyShape, energyStyle)",
         "    * mix(1.7, 1.0, sl);",
         "  mv.xyz += sideN * (aCorner.y * w);",
         "  gl_Position = projectionMatrix * mv;",
@@ -1322,6 +1519,9 @@ export function buildVfx(ctx, world) {
         "uniform vec3 uEnergyCore;",
         "uniform vec3 uEnergyBody;",
         "uniform vec3 uEnergyFringe;",
+        "uniform vec3 uBloomCore;",
+        "uniform vec3 uBloomBody;",
+        "uniform vec3 uBloomFringe;",
         "varying float vAlong;",
         "varying float vAcross;",
         "varying float vLife;",
@@ -1357,7 +1557,12 @@ export function buildVfx(ctx, world) {
         // White-hot through the middle, saturated at the edges - the
         // gradient runs ACROSS the bolt, not along it, which is what
         // separates a glowing object from a warm smear.
+        "  float energyStyle = 1.0 - step(0.5, abs(vStyle - 1.0));",
+        "  float bloomStyle = step(1.5, vStyle);",
         "  vec3 hostileColour = mix(uCold, uHot, core);",
+        "  vec3 bloomColour = mix(uBloomFringe, uBloomBody, pow(across, 0.55));",
+        "  bloomColour = mix(bloomColour, uBloomCore, pow(across, 4.0) * 0.95);",
+        "  hostileColour = mix(hostileColour, bloomColour, bloomStyle);",
         /* Singular cover-art laser: constant light from the lance tip,
            tight ivory core, saturated gold halo, and no head bead or
            longitudinal particle-like modulation. */
@@ -1366,9 +1571,9 @@ export function buildVfx(ctx, world) {
         "  float energyBody = (energyCore * 1.05 + energyHalo * 0.44) * cap;",
         "  vec3 energyColour = mix(uEnergyFringe, uEnergyBody, pow(across, 0.55));",
         "  energyColour = mix(energyColour, uEnergyCore, pow(across, 4.0) * 0.95);",
-        "  float body = mix(hostileBody, energyBody, vStyle);",
-        "  vec3 c = mix(hostileColour, energyColour, vStyle);",
-        "  float gain = mix(4.6, 8.4, vStyle);",
+        "  float body = mix(hostileBody, energyBody, energyStyle);",
+        "  vec3 c = mix(hostileColour, energyColour, energyStyle);",
+        "  float gain = mix(4.6, 8.4, energyStyle);",
         "  gl_FragColor = vec4(c * body * vLife * gain,",
         "    clamp(body * vLife, 0.0, 1.0));",
         "}",
@@ -1413,6 +1618,9 @@ export function buildVfx(ctx, world) {
         uEnergyCore: mat.uniforms.uEnergyCore,
         uEnergyBody: mat.uniforms.uEnergyBody,
         uEnergyFringe: mat.uniforms.uEnergyFringe,
+        uBloomCore: mat.uniforms.uBloomCore,
+        uBloomBody: mat.uniforms.uBloomBody,
+        uBloomFringe: mat.uniforms.uBloomFringe,
       },
       transparent: true,
       depthWrite: false,
@@ -1440,15 +1648,16 @@ export function buildVfx(ctx, world) {
         "  float travelSpeed = aSpeed;",
         "  float travelled = age * travelSpeed;",
         "  float head = min(travelled, aSpan);",
-        "  float fadeTime = mix(uHostileFade, uEnergyFade, aStyle);",
+        "  float energyStyle = 1.0 - step(0.5, abs(aStyle - 1.0));",
+        "  float fadeTime = mix(uHostileFade, uEnergyFade, energyStyle);",
         "  float impactAge = max(age - aSpan / travelSpeed, 0.0);",
         "  vLife = 1.0 - clamp(impactAge / fadeTime, 0.0, 1.0);",
         "  vUv = aCorner;",
         "  vStyle = aStyle;",
         "  float seed = fract(aBirth * 13.71);",
-        "  vPulse = mix(0.90 + 0.10 * sin(age * 78.0 + seed * 6.2831), 1.0, aStyle);",
+        "  vPulse = mix(0.90 + 0.10 * sin(age * 78.0 + seed * 6.2831), 1.0, energyStyle);",
         // Player fire is one streak, not a streak plus a second orb.
-        "  if (age < 0.0 || vLife <= 0.0 || aStyle > 0.5) {",
+        "  if (age < 0.0 || vLife <= 0.0 || energyStyle > 0.5) {",
         "    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);",
         "    return;",
         "  }",
@@ -1461,11 +1670,11 @@ export function buildVfx(ctx, world) {
         // the rod it is supposed to be the front of.
         "  float silhouetteArc = smoothstep(4.0, 12.0, head)",
         "    * (1.0 - smoothstep(26.0, 52.0, head)) * endpointReturn;",
-        "  mv.x += muzzleSide * 0.40 * silhouetteArc * aStyle;",
-        "  float radius = aWidth * mix(0.75, 0.42, aStyle) * vPulse;",
+        "  mv.x += muzzleSide * 0.40 * silhouetteArc * energyStyle;",
+        "  float radius = aWidth * mix(0.75, 0.42, energyStyle) * vPulse;",
         // Keep distant player charges readable without inflating hostile
         // fire or making the close profile orb any larger.
-        "  radius = max(radius, -mv.z * 0.0042 * aStyle);",
+        "  radius = max(radius, -mv.z * 0.0042 * energyStyle);",
         "  mv.xy += aCorner * radius;",
         "  gl_Position = projectionMatrix * mv;",
         "}",
@@ -1476,6 +1685,9 @@ export function buildVfx(ctx, world) {
         "uniform vec3 uEnergyCore;",
         "uniform vec3 uEnergyBody;",
         "uniform vec3 uEnergyFringe;",
+        "uniform vec3 uBloomCore;",
+        "uniform vec3 uBloomBody;",
+        "uniform vec3 uBloomFringe;",
         "varying vec2 vUv;",
         "varying float vLife;",
         "varying float vStyle;",
@@ -1491,7 +1703,13 @@ export function buildVfx(ctx, world) {
         "  float corona = pow(abs(cos(ang * 3.0 + vPulse * 5.0)), 10.0)",
         "    * pow(clamp(1.0 - r, 0.0, 1.0), 1.8);",
         "  float hostileBody = halo * 0.72 + core * 1.08;",
+        "  float energyStyle = 1.0 - step(0.5, abs(vStyle - 1.0));",
+        "  float bloomStyle = step(1.5, vStyle);",
         "  vec3 hostileColour = mix(uCold, uHot, core);",
+        "  vec3 bloomColour = mix(uBloomFringe, uBloomBody,",
+        "    pow(clamp(1.0 - r, 0.0, 1.0), 0.55));",
+        "  bloomColour = mix(bloomColour, uBloomCore, core);",
+        "  hostileColour = mix(hostileColour, bloomColour, bloomStyle);",
         /* THE HEAD IS A BEAD, NOT A STAR. The ring and the three-lobe
            corona below belong to hostile plasma; on the player's bolt
            they made a 70cm orange ball with a hairline towed behind
@@ -1504,9 +1722,9 @@ export function buildVfx(ctx, world) {
         "  vec3 energyColour = mix(uEnergyFringe, uEnergyBody,",
         "    pow(clamp(1.0 - r, 0.0, 1.0), 0.55));",
         "  energyColour = mix(energyColour, uEnergyCore, energyCore);",
-        "  float body = mix(hostileBody, energyBody, vStyle);",
-        "  vec3 c = mix(hostileColour, energyColour, vStyle);",
-        "  float gain = mix(3.8, 9.5, vStyle);",
+        "  float body = mix(hostileBody, energyBody, energyStyle);",
+        "  vec3 c = mix(hostileColour, energyColour, energyStyle);",
+        "  float gain = mix(3.8, 9.5, energyStyle);",
         "  gl_FragColor = vec4(c * body * vLife * gain,",
         "    clamp(body * vLife, 0.0, 1.0));",
         "}",
@@ -1759,15 +1977,17 @@ export function buildVfx(ctx, world) {
     width = RELIQUARY_BOLT_WIDTH, energy = true, travelSpeed = null) {
     if (!(distance > 0) || !Number.isFinite(distance)) return;
     const span = Math.min(distance, 900);
-    const style = energy ? 1 : 0;
+    const style = energy === "bloom" ? 2 : energy ? 1 : 0;
+    const playerEnergy = style === 1;
     const speed = Number.isFinite(travelSpeed) && travelSpeed > 0
-      ? travelSpeed : energy ? ENERGY_TRACER_SPEED : TRACER_SPEED;
+      ? travelSpeed : playerEnergy ? ENERGY_TRACER_SPEED : TRACER_SPEED;
     tracers.emit(x, y, z, dx, dy, dz, span, width, style, speed);
     /* Hostile plasma keeps a wake so incoming fire can be tracked.
        Player fire is deliberately ONE continuous laser with no motes. */
-    if (!energy) {
+    if (!playerEnergy) {
       const beads = Math.min(14, Math.max(3, Math.round(span * 0.22)));
-      impacts.emitTrail(x, y, z, dx, dy, dz, span, speed, beads, 0.55, 0.85);
+      impacts.emitTrail(x, y, z, dx, dy, dz, span, speed, beads, 0.55,
+        style === 2 ? 8.0 : 0.85);
     }
   }
 
@@ -4049,6 +4269,10 @@ export function buildVfx(ctx, world) {
       streamers.mat.uniforms.uGround.value = ground;
       dust.mat.uniforms.uAnchor.value.set(anchor.x, ground + 14, anchor.z);
       grit.mat.uniforms.uAnchor.value.set(anchor.x, ground + 2.2, anchor.z);
+
+      // Re-aims the outdoor shafts when the sun has actually moved,
+      // and no-ops on every other frame.
+      if (shafts) shafts.userData.follow();
 
       const t = atmos.elapsed;
       const step = Math.max(0, Math.min(0.1, dt));

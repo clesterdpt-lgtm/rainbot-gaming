@@ -245,6 +245,15 @@ const HITBOX = {
        slip rather than a decision. */
     heart: { y: -0.85, z: 0.35, r: 1.25, mult: 4.0 },
   },
+
+  /* The Apostate is the player's own silhouette made hostile. Its capsule is
+     deliberately close to the trooper's visible plate instead of receiving a
+     boss-sized invisible volume; the extra insect limbs are readable armour,
+     not metres of free target around the body. */
+  apostate: {
+    r: 0.72, y0: 0.02, y1: 2.08, head: 1.75, headR: 0.34, headZ: 0.08,
+    muzzle: 1.32, muzzleZ: 0.72,
+  },
 };
 
 /* Bonus paid straight to the main pool when a leg breaks, as a
@@ -367,6 +376,8 @@ export function buildCombat(ctx) {
       x: Number.isFinite(detail.x) ? detail.x : inst.x,
       y: Number.isFinite(detail.y) ? detail.y : inst.y,
       z: Number.isFinite(detail.z) ? detail.z : inst.z,
+      originX: Number.isFinite(detail.originX) ? detail.originX : null,
+      originZ: Number.isFinite(detail.originZ) ? detail.originZ : null,
     };
     const result = ctx.progression?.modifyEnemyDamage?.(request);
     const resultDamage = Number(result?.damage);
@@ -382,7 +393,14 @@ export function buildCombat(ctx) {
        eat a command the player spent a cooldown on. */
     const boon = ctx.mission?.boon?.();
     const gilding = boon?.active ? Math.max(0, Number(boon.damage) || 1) : 1;
-    return Math.max(0, candidate * gilding);
+    let finalDamage = Math.max(0, candidate * gilding);
+    /* Capability hook, resolved lazily because the encounter is built after
+       combat. This is the one authoritative place for the mirrored Aegis:
+       shots, melee, shockwaves and command explosions all pass through it. */
+    if (inst?.key === "apostate" && ctx.apostate?.modifyIncomingDamage) {
+      finalDamage = ctx.apostate.modifyIncomingDamage(inst, request, finalDamage);
+    }
+    return Math.max(0, Number(finalDamage) || 0);
   }
 
   /* ============================================================
@@ -1191,6 +1209,8 @@ export function buildCombat(ctx) {
           x: hit.x,
           y: hit.y,
           z: hit.z,
+          originX: origin.x,
+          originZ: origin.z,
         });
       if (vfx && vfx.spark) {
         vfx.spark(hit.x, hit.y, hit.z,
@@ -1341,7 +1361,7 @@ export function buildCombat(ctx) {
          explicit guard is here anyway because a lance swing that
          connects with something directly overhead is the exact bug
          this encounter cannot afford. */
-      if (box.sacs && !inst.grounded) continue;
+      if (inst.spec?.flies && !inst.grounded) continue;
       const legTarget = box.legs
         ? nearestLegPoint(inst, box, ps.x, ps.z, ps.y, _bodyNear) : null;
       const near = legTarget ? legTarget.dist : nearestBodyPoint(inst, ps.x, ps.z, _bodyNear);
@@ -1385,10 +1405,12 @@ export function buildCombat(ctx) {
            is bigger than the ranged one. */
         dealt = applyDamage(inst, strikeDamage * (box.collapsedMeleeMult || 1), {
           source: "melee", weak: true, x: inst.x, y: hitY, z: inst.z,
+          originX: ps.x, originZ: ps.z,
         });
       } else {
         dealt = applyDamage(inst, strikeDamage, {
           source: "melee", x: inst.x, y: hitY, z: inst.z,
+          originX: ps.x, originZ: ps.z,
         });
       }
       if (dealt <= 0) continue;
@@ -1490,6 +1512,8 @@ export function buildCombat(ctx) {
         x: _bodyNear.x,
         y: _bodyNear.y + (HITBOX[inst.key] || HITBOX.thresher).y1 * 0.55,
         z: _bodyNear.z,
+        originX: x,
+        originZ: z,
       });
       if (dealt <= 0) continue;
       const identity = enemyIdentity(inst);
@@ -1543,6 +1567,8 @@ export function buildCombat(ctx) {
     let stunned = 0;
     for (const inst of enemies.live) {
       if (untouchable(inst)) continue;
+      if (source === "slam" && inst.spec?.flies && !inst.grounded
+        && inst.y > y + 3) continue;
       const dist = Math.max(nearestBodyPoint(inst, x, z, _bodyNear), 1e-4);
       const dx = _bodyNear.x - x;
       const dz = _bodyNear.z - z;
@@ -1561,6 +1587,8 @@ export function buildCombat(ctx) {
           x: _bodyNear.x,
           y: _bodyNear.y + box.y1 * 0.4,
           z: _bodyNear.z,
+          originX: x,
+          originZ: z,
         })
         : 0;
       if (peak > 0 && dealt <= 0) continue;
@@ -1989,9 +2017,16 @@ export function buildCombat(ctx) {
     }
   }
 
-  function clearEnemyProjectiles() {
-    const cleared = hostileProjectiles.length;
-    hostileProjectiles.length = 0;
+  function clearEnemyProjectiles(enemyId = null) {
+    const before = hostileProjectiles.length;
+    if (typeof enemyId !== "string" || !enemyId) {
+      hostileProjectiles.length = 0;
+    } else {
+      for (let i = hostileProjectiles.length - 1; i >= 0; i -= 1) {
+        if (hostileProjectiles[i].enemyId === enemyId) hostileProjectiles.splice(i, 1);
+      }
+    }
+    const cleared = before - hostileProjectiles.length;
     return cleared;
   }
 
@@ -2063,7 +2098,7 @@ export function buildCombat(ctx) {
         projectile.age += hitT / projectile.speed;
         projectileTotals.contacts += 1;
         const dealt = hurtPlayer(projectile.damage, {
-          source: "enemy-fire",
+          source: projectile.source || "enemy-fire",
           x: projectile.ox,
           y: projectile.oy,
           z: projectile.oz,
@@ -2122,17 +2157,33 @@ export function buildCombat(ctx) {
     }
   }
 
-  function launchEnemyProjectile(inst, spec) {
-    const config = GLEANER_PROJECTILE_CONFIG;
+  function launchEnemyProjectile(inst, spec = {}, options = {}) {
+    const config = {
+      ...GLEANER_PROJECTILE_CONFIG,
+      speed: Number.isFinite(options.speed) ? options.speed : GLEANER_PROJECTILE_CONFIG.speed,
+      directAimChance: Number.isFinite(options.directAimChance)
+        ? clamp01(options.directAimChance) : GLEANER_PROJECTILE_CONFIG.directAimChance,
+      horizontalSpread: Number.isFinite(options.horizontalSpread)
+        ? Math.max(0, options.horizontalSpread) : GLEANER_PROJECTILE_CONFIG.horizontalSpread,
+      verticalSpread: Number.isFinite(options.verticalSpread)
+        ? Math.max(0, options.verticalSpread) : GLEANER_PROJECTILE_CONFIG.verticalSpread,
+      maxRange: Number.isFinite(options.maxRange)
+        ? Math.max(1, options.maxRange) : GLEANER_PROJECTILE_CONFIG.maxRange,
+    };
     const box = HITBOX[inst.key] || HITBOX.thresher;
     const ps = ctx.player.state;
-    muzzleAt(inst, box, _muzzle);
+    if (options.origin?.isVector3) _muzzle.copy(options.origin);
+    else if (options.origin && Number.isFinite(options.origin.x)
+      && Number.isFinite(options.origin.y) && Number.isFinite(options.origin.z)) {
+      _muzzle.set(options.origin.x, options.origin.y, options.origin.z);
+    } else muzzleAt(inst, box, _muzzle);
     const ox = _muzzle.x;
     const oy = _muzzle.y;
     const oz = _muzzle.z;
-    let tx = ps.x - ox;
-    let ty = ps.y + 1.62 - oy;
-    let tz = ps.z - oz;
+    const target = options.target || ps;
+    let tx = (Number.isFinite(target.x) ? target.x : ps.x) - ox;
+    let ty = (Number.isFinite(target.y) ? target.y : ps.y + 1.62) - oy;
+    let tz = (Number.isFinite(target.z) ? target.z : ps.z) - oz;
     const targetDistance = Math.hypot(tx, ty, tz) || 1;
     tx /= targetDistance;
     ty /= targetDistance;
@@ -2159,10 +2210,13 @@ export function buildCombat(ctx) {
     const pathRange = Math.min(config.maxRange, targetDistance);
     const blocked = collide.rayBlock(ox, oy, oz, tx, ty, tz, pathRange, false);
     const span = Math.min(pathRange, blocked);
-    const incoming = spec.damage * SURVIVAL_CONFIG.enemyDamageMultiplier
-      * (Number.isFinite(inst.damageScale) ? inst.damageScale : 1);
+    const baseDamage = Number.isFinite(options.damage)
+      ? Math.max(0, options.damage)
+      : Math.max(0, Number(spec.damage) || 0) * SURVIVAL_CONFIG.enemyDamageMultiplier
+        * (Number.isFinite(inst.damageScale) ? inst.damageScale : 1);
+    const incoming = baseDamage;
     const projectile = {
-      id: `gleaner-bolt-${++projectileSerial}`,
+      id: `${options.idPrefix || `${inst.key}-bolt`}-${++projectileSerial}`,
       enemyId: inst.id,
       enemyKey: inst.key,
       ox, oy, oz,
@@ -2173,6 +2227,7 @@ export function buildCombat(ctx) {
       travelled: 0,
       age: 0,
       damage: incoming,
+      source: options.source || "enemy-fire",
       directAim,
       targetDistance,
       endsAtCover: Number.isFinite(blocked) && blocked < pathRange - 0.05,
@@ -2195,9 +2250,11 @@ export function buildCombat(ctx) {
 
     if (vfx?.tracer) {
       vfx.tracer(ox, oy, oz, tx, ty, tz,
-        projectile.span, 0.055, false, config.speed);
+        projectile.span, Number.isFinite(options.tracerWidth) ? options.tracerWidth : 0.055,
+        options.tracerStyle === "bloom" ? "bloom" : false, config.speed);
     }
-    if (vfx?.muzzle) vfx.muzzle(ox, oy, oz, tx, ty, tz, 0.75, false);
+    if (options.muzzle !== false && vfx?.muzzle) vfx.muzzle(ox, oy, oz, tx, ty, tz,
+      Number.isFinite(options.muzzleScale) ? options.muzzleScale : 0.75, false);
     return projectile;
   }
 
@@ -2274,7 +2331,12 @@ export function buildCombat(ctx) {
     // does not leave the field carpeted in bodies at full cost.
     for (let i = enemies.live.length - 1; i >= 0; i -= 1) {
       const inst = enemies.live[i];
-      if (inst.state === "death" && clock - (inst.diedAt || 0) > 26) {
+      /* Restored domain-owned deaths have no session-clock timestamp. Give
+         them a fresh corpse lifetime instead of interpreting zero as an
+         ancient death and removing the actor before its controller can
+         finish a short mission handoff. */
+      if (inst.state === "death" && !Number.isFinite(inst.diedAt)) inst.diedAt = clock;
+      if (inst.state === "death" && clock - inst.diedAt > 26) {
         enemies.group.remove(inst.root);
         enemies.live.splice(i, 1);
       }
@@ -2387,6 +2449,7 @@ export function buildCombat(ctx) {
     explode,
     hurtPlayer,
     raycastEnemies,
+    launchEnemyProjectile,
     projectileState,
     clearProjectiles: clearEnemyProjectiles,
     projectileConfig: GLEANER_PROJECTILE_CONFIG,

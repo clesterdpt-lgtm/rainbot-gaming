@@ -1064,14 +1064,17 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     const heading = root.querySelector("[data-operation-heading]");
     const copy = root.querySelector("[data-operation-copy]");
     if (phase === "won") {
-      heading.textContent = "EXTRACTION COMPLETE";
-      copy.textContent = "The standing order is broken. Vesper-IX releases you.";
+      heading.textContent = "OPERATION COMPLETE";
+      copy.textContent = "The standing order and the false saint are broken. Vesper-IX releases you.";
     } else if (phase === "lost") {
       heading.textContent = "OPERATION FAILED";
       copy.textContent = "The reliquary is dark. Restart the operation to return.";
     } else if (phase === "extract") {
       heading.textContent = "REACH EXTRACTION";
       copy.textContent = "Hold the Fallen Saint until the shuttle can lift.";
+    } else if (phase === "cathedralBoss") {
+      heading.textContent = "RETURN TO THE CATHEDRAL";
+      copy.textContent = "The final signal is wearing your reliquary. Destroy the Apostate.";
     } else {
       heading.textContent = "THE GILDED SILENCE";
       copy.textContent = "Silence every vox-relay and contain the Bloom.";

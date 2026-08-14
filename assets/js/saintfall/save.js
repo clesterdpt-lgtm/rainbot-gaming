@@ -432,6 +432,10 @@ export function buildSaveSystem(ctx, options = {}) {
       mission,
       breaches: breach,
       enemies: ctx.enemies.snapshot(),
+      /* The corrupted Reliquary figure is domain-owned rather than rebuilt by
+         the generic bestiary restore. Its summoned insects remain ordinary
+         enemies and are rebound to this record by their stable IDs. */
+      apostate: ctx.apostate?.snapshot?.() || null,
       /* Only the venom already in the player. The pools on the ground
          and the globules in the air are deliberately not saved - see
          coulter.js - so a load never drops the player into a hazard
@@ -494,7 +498,7 @@ export function buildSaveSystem(ctx, options = {}) {
       || combat.hits > combat.shots || combat.regenLockRemaining < 0) return false;
 
     const mission = snapshot.mission;
-    const phases = new Set(["relays", "extract", "won", "lost"]);
+    const phases = new Set(["relays", "cathedralBoss", "extract", "won", "lost"]);
     const relayKeys = new Set(ctx.mission.relays.map((relay) => relay.key));
     if (!isRecord(mission) || !phases.has(mission.phase)
       || !Array.isArray(mission.relays)
@@ -617,6 +621,54 @@ export function buildSaveSystem(ctx, options = {}) {
       if (enemy.broodIds.some((id) => !enemyIds.has(id))) return false;
     }
 
+    /* Optional for pre-Apostate field saves. New Cathedral-boss saves carry
+       an independent lifecycle record because a generic enemy restore would
+       otherwise replace the figure behind its AI controller's closure. */
+    const apostate = snapshot.apostate;
+    if (apostate !== null && apostate !== undefined) {
+      const apostatePhases = new Set(["dormant", "reveal", "duel", "dead"]);
+      const apostateActions = new Set([
+        null, "ranged", "shield", "boost", "summon", "vent", "jet",
+        "melee1", "melee2", "melee3",
+      ]);
+      const cooldownKeys = ["summon", "shot", "melee", "boost", "shield", "jet"];
+      if (!isRecord(apostate)
+        || apostate.instanceId !== "sf-enemy-apostate"
+        || !apostatePhases.has(apostate.phase)
+        || !apostateActions.has(apostate.action ?? null)
+        || ![apostate.timer, apostate.actionFor, apostate.actionElapsed,
+          apostate.actionYaw, apostate.shotIndex, apostate.meleeStep, apostate.heat,
+          apostate.sinceShot, apostate.shieldBlocks, apostate.altitude,
+          apostate.deathStartAltitude, apostate.actionSerial, apostate.disengageFor,
+          apostate.health, apostate.maxHealth, apostate.x, apostate.z,
+          apostate.yaw].every(isFiniteNumber)
+        || apostate.timer < 0 || apostate.actionFor < 0 || apostate.actionElapsed < 0
+        || !Number.isInteger(apostate.shotIndex) || apostate.shotIndex < 0
+        || apostate.shotIndex > 6
+        || !Number.isInteger(apostate.meleeStep) || apostate.meleeStep < 0
+        || apostate.meleeStep > 2
+        || apostate.heat < 0 || apostate.heat > 1 || apostate.sinceShot < 0
+        || !Number.isInteger(apostate.shieldBlocks) || apostate.shieldBlocks < 0
+        || apostate.altitude < 0 || apostate.altitude > 12
+        || apostate.deathStartAltitude < 0 || apostate.deathStartAltitude > 12
+        || !Number.isInteger(apostate.actionSerial) || apostate.actionSerial < 0
+        || apostate.disengageFor < 0 || apostate.disengageFor > 600
+        || apostate.maxHealth < 1 || apostate.maxHealth > 10_000_000
+        || apostate.health < 0 || apostate.health > apostate.maxHealth
+        || Math.abs(apostate.x) > 2000 || Math.abs(apostate.z) > 2000
+        || [apostate.actionHit, apostate.overheated, apostate.jetImpacted,
+          apostate.victoryReported, apostate.revealed, apostate.defeated]
+          .some((value) => typeof value !== "boolean")
+        || !isRecord(apostate.cooldowns)
+        || cooldownKeys.some((key) => !isFiniteNumber(apostate.cooldowns[key])
+          || apostate.cooldowns[key] < -600 || apostate.cooldowns[key] > 600)
+        || !Array.isArray(apostate.summonIds)
+        || new Set(apostate.summonIds).size !== apostate.summonIds.length
+        || apostate.summonIds.some((id) => typeof id !== "string" || !enemyIds.has(id))) {
+        return false;
+      }
+    } else if (mission.phase === "cathedralBoss") return false;
+
     const breach = snapshot.breaches;
     const breachPhases = new Set(["dormant", "warning", "active", "intermission", "complete"]);
     const breachMembers = Array.isArray(breach?.memberIds) ? breach.memberIds : [];
@@ -641,7 +693,8 @@ export function buildSaveSystem(ctx, options = {}) {
       || (breach.recoveries !== undefined
         && (!Number.isInteger(breach.recoveries) || breach.recoveries < 0))
       || !(breach.blockedByBoss === undefined || breach.blockedByBoss === null
-        || breach.blockedByBoss === "distaff" || breach.blockedByBoss === "winnower")
+        || breach.blockedByBoss === "distaff" || breach.blockedByBoss === "winnower"
+        || breach.blockedByBoss === "apostate")
       || !validRngState(breach.rng)
       || !Array.isArray(breach.memberIds)
       || (breach.buried !== undefined && !Array.isArray(breach.buried))
@@ -1088,6 +1141,15 @@ export function buildSaveSystem(ctx, options = {}) {
     const restoredEnemies = ctx.enemies.restore(snapshot.enemies);
     if (!restoredEnemies || restoredEnemies.restored !== snapshot.enemies.live.length) {
       throw new Error("Enemy roster restore was incomplete.");
+    }
+    if (snapshot.apostate) {
+      if (ctx.apostate?.restore?.(snapshot.apostate, restoredEnemies) === false) {
+        throw new Error("Apostate encounter restore was rejected.");
+      }
+    } else {
+      /* Legacy field saves predate the encounter. They keep their original
+         extraction/win semantics while the new figure remains dormant. */
+      ctx.apostate?.reset?.();
     }
     if (ctx.combat.restore?.(snapshot.combat) === false) {
       throw new Error("Combat state restore was rejected.");

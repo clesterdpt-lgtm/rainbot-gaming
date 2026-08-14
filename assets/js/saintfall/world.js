@@ -3132,6 +3132,7 @@ export async function buildWorld(ctx, onProgress) {
     /* --- the needles --- */
     {
       const parts = [];
+      const standing = [];
       const COUNT = 54;
       for (let i = 0; i < COUNT; i += 1) {
         // A loose spiral, densest and tallest at the centre.
@@ -3200,12 +3201,61 @@ export async function buildWorld(ctx, onProgress) {
           embed: fallen ? rad * 0.36 : rad * 0.14,
           maxGap: 0.08,
         });
+        if (!fallen) standing.push({ x, z, h, rad, baseY: g.userData.restY });
         parts.push(g);
       }
       const g = kit.merge(parts);
       paintH(g, spireRamp, { normalWeight: 0.40, jitter: 0.14, noise: 0.24 });
       batch.add("choir", "rock", g);
       pois.push({ id: "choir", name: "The Choir Spires", x: d.x, z: d.z });
+
+      /* --- the light between them ---
+
+         These are the district's whole picture, and they have to be
+         chosen by the SPIRES. The previous set was scattered by the
+         vfx module's own RNG - a random bearing and a random height
+         somewhere inside a 320m circle - which put most of the cones
+         in open sky with no rock near enough to cast one, and gave
+         each of them a direction frozen from the sun at world-build
+         time. Standing in the district you got pale, hard-edged bars
+         ruled across the sky at every hour including midnight.
+
+         Tallest first, then spaced apart, so the light picks out the
+         crowns that already carry the silhouette rather than landing
+         in the flats between them. The cone itself is aimed, offset
+         and cut to length against the live sun by `buildShafts`; all
+         that is fixed here is which needle it belongs to. */
+      const lit = standing.filter((n) => n.h > 62).sort((a, b) => b.h - a.h);
+      const chosen = [];
+      for (const n of lit) {
+        if (chosen.length >= 5) break;
+        if (chosen.some((c) => Math.hypot(c.x - n.x, c.z - n.z) < 115)) continue;
+        chosen.push(n);
+      }
+      for (const n of chosen) {
+        emitters.push({
+          kind: "shaft", sun: true,
+          /* Not from the crown. These needles stand 84m to 128m, and
+             a cone from the top of one down to the sand is a hundred
+             metres of object lying across the district - a fallen
+             column, not a shaft. Entering at two fifths of the way up
+             puts the head of the cone against the needle's own rock,
+             which is the slot, and leaves a 45m fall to the floor. */
+          x: n.x, y: n.baseY + n.h * 0.42, z: n.z,
+          offset: n.rad * 1.6, radius: clamp(n.rad * 0.46, 2.4, 4.8),
+          /* Pale, and only just warm. Saturated warm additive over a
+             desert sky has one channel already at the ceiling, so the
+             extra light lands in the other two and the shaft arrives
+             white anyway - with a hard edge where it clipped. */
+          /* 0.34, and the district is better for it. Outside, a shaft
+             competes with a fully lit desert and has to be almost
+             nothing; the number that matters is not how it reads
+             against the sky but what it does when it crosses a spire,
+             because unlit rock here sits near black and ANY additive
+             of size turns it into a flat grey blade. */
+          colour: "#ffeacb", gain: 0.34,
+        });
+      }
     }
 
     /* --- shattered ground plates --- */

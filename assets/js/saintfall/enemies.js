@@ -1687,7 +1687,11 @@ export async function buildEnemies(ctx, onProgress) {
     return {
       rng: rng.getState?.() || null,
       nextId,
-      live: live.filter((inst) => inst && inst.state !== "death" && inst.health > 0)
+      /* Domain-owned figures (the Apostate is the first) carry their own
+         lifecycle snapshot. Persisting them here as well would make restore
+         replace the instance behind their controller's closure. */
+      live: live.filter((inst) => inst && !inst.spec?.durableDomain
+        && inst.state !== "death" && inst.health > 0)
         .map((inst) => ({
           id: inst.id,
           key: inst.key,
@@ -1853,7 +1857,12 @@ export async function buildEnemies(ctx, onProgress) {
     trailAt,
     knockback,
     stun,
-    kill(inst) { play(inst, "death", 0.12); },
+    kill(inst) {
+      play(inst, "death", 0.12);
+      /* A domain-owned humanoid can use a procedural fall instead of a GLB
+         death clip. The authoritative combat state still has to become dead. */
+      if (inst && inst.health <= 0 && inst.state !== "death") inst.state = "death";
+    },
     remove(inst) {
       const index = live.indexOf(inst);
       if (index < 0) return false;

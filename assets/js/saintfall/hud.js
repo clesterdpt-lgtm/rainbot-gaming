@@ -285,6 +285,22 @@ export function buildHud(ctx, host) {
     ctx.winnower.bus.on("defeated", () => showBreachAlert(
       "THE CENSER WORKS", "THE WINNOWER IS GROUNDED", 5.2));
   }
+  if (ctx.apostate?.bus) {
+    ctx.apostate.bus.on("aggro", () => showBreachAlert(
+      "VAULT-CATHEDRAL · FALSE SAINT", "THE APOSTATE AWAKENS", 5.2, true));
+    ctx.apostate.bus.on("engaged", () => showBreachAlert(
+      "FINAL DIRECTIVE", "DESTROY WHAT IS WEARING YOU", 3.4, true));
+    ctx.apostate.bus.on("call", () => showBreachAlert(
+      "THE APOSTATE", "BROOD CALL - THE FLOOR IS MOVING", 2.8, true));
+    ctx.apostate.bus.on("shield", (event) => {
+      if (event.active) showBreachAlert(
+        "THE APOSTATE", "AEGIS RAISED - BREAK ITS ANGLE", 2.3, true);
+    });
+    ctx.apostate.bus.on("slam", () => showBreachAlert(
+      "THE APOSTATE", "RELIQUARY IMPACT", 1.8, true));
+    ctx.apostate.bus.on("defeated", () => showBreachAlert(
+      "VAULT-CATHEDRAL", "THE FALSE SAINT IS BROKEN", 6.0, true));
+  }
 
   /* --- compass ticks --- */
   /* Player/camera yaw zero points toward authored +Z, which is south on
@@ -676,10 +692,11 @@ export function buildHud(ctx, host) {
           emerging: !!inst.emerging?.active,
           submerged: !!inst.body?.hidden,
         });
-      const size = (inst.key === "matriarch" ? 5.5
+      const size = (inst.key === "apostate" ? 5.8
+        : inst.key === "matriarch" ? 5.5
         : inst.key === "coulter" ? 5.0
           : inst.key === "harrow" ? 3.4 : inst.key === "gleaner" ? 2.5 : 1.7) * glyphScale;
-      map2d.fillStyle = inst.emerging?.active
+      map2d.fillStyle = inst.key === "apostate" ? "#b568f5" : inst.emerging?.active
         ? `rgba(255,172,61,${0.45 + pulse * 0.5})`
         : eventUnit ? "#ff6843" : "rgba(221,111,60,.72)";
       if (inst.body) {
@@ -712,6 +729,16 @@ export function buildHud(ctx, host) {
           map2d.fillStyle = "#b8f23e";
           map2d.fill();
         }
+        map2d.restore();
+      } else if (inst.key === "apostate") {
+        /* A doubled lozenge: the player's objective diamond, corrupted into
+           the Bloom's violet shell and cyan living core. */
+        map2d.save();
+        map2d.translate(p.x, p.y);
+        map2d.rotate(Math.PI * 0.25);
+        map2d.fillRect(-size, -size, size * 2, size * 2);
+        map2d.fillStyle = "#54efd2";
+        map2d.fillRect(-size * 0.34, -size * 0.34, size * 0.68, size * 0.68);
         map2d.restore();
       } else if (inst.key === "matriarch") {
         map2d.save();
@@ -845,7 +872,34 @@ export function buildHud(ctx, host) {
     return true;
   }
 
+  function updateApostateReadout() {
+    const a = ctx.apostate?.status?.();
+    if (!a || a.phase === "dormant" || a.dead) return false;
+    minimapEl.dataset.event = "1";
+    mapEventEl.dataset.phase = a.phase;
+    eventKickerEl.textContent = "VAULT-CATHEDRAL · FINAL SIGNATURE";
+    eventNameEl.textContent = "THE APOSTATE";
+    eventNameEl.title = eventNameEl.textContent;
+    eventSubEl.textContent = a.phase === "reveal"
+      ? "Your reliquary answers from inside the Bloom"
+      : a.action === "shield"
+        ? "AEGIS ACTIVE - flank the false saint"
+        : a.action === "summon"
+          ? "Calling the brood through the nave floor"
+          : a.action === "jet"
+            ? `Airborne · ${a.altitude}m · impact imminent`
+            : a.action === "vent"
+              ? "Venting the corrupted Censer-Lance"
+              : a.overheated
+                ? "Weapon overheated"
+                : `${a.summons} / ${a.summonCap} summoned insects · heat ${Math.round(a.heat * 100)}%`;
+    eventCountEl.textContent = a.phase === "reveal" ? "LOCKED" : `${a.health} HP`;
+    eventFillEl.style.width = `${clamp01(1 - a.health / Math.max(1, a.maxHealth)) * 100}%`;
+    return true;
+  }
+
   function updateBreachReadout() {
+    if (updateApostateReadout()) return;
     if (updateWinnowerReadout()) return;
     if (updateDistaffReadout()) return;
     const event = ctx.breaches?.status?.();

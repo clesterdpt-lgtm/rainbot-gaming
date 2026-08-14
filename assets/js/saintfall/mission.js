@@ -4,7 +4,7 @@
    OPERATION: SAINTFALL. Three vox-relays on Vesper-IX still carry
    the Concord's standing order, and the order is why the servitors
    in the Cathedral are still walking their round. Silence all three,
-   call the shuttle, hold the pad until it lifts.
+   return to the Cathedral, and destroy what the signal was hiding.
 
    The structure is deliberately Helldivers-shaped: objectives are
    spread far enough apart that crossing between them IS the game,
@@ -18,7 +18,7 @@
    ============================================================ */
 
 import { clamp, clamp01, makeBus, makeRng } from "saintfall/core.js";
-import { roadPointAtZ } from "saintfall/terrain.js";
+import { DISTRICTS, roadPointAtZ } from "saintfall/terrain.js";
 
 /* Codes are entered on the arrow keys / WASD-adjacent direction
    pad. Short enough to be muscle memory, long enough that entering
@@ -189,7 +189,7 @@ export function buildMission(ctx) {
      ------------------------------------------------------------ */
 
   const state = {
-    phase: "relays",          // relays -> extract -> won | lost
+    phase: "relays",          // relays -> cathedralBoss -> won | lost (legacy: extract)
     relaysDone: 0,
     channelling: null,
     extractCalled: false,
@@ -923,7 +923,7 @@ export function buildMission(ctx) {
   function blocksEnemyProjectile(detail = {}) {
     if (detail.source && detail.source !== "enemy-fire") return false;
     const enemyKey = detail.enemyKey || detail.enemy || "";
-    if (enemyKey !== "gleaner") return false;
+    if (enemyKey !== "gleaner" && enemyKey !== "apostate") return false;
     const ps = ctx.player?.state;
     if (!ps) return false;
     for (const field of sanctuaries) {
@@ -973,6 +973,21 @@ export function buildMission(ctx) {
       inst.home = { x: EXTRACT.x + (Math.random() - 0.5) * 90,
         z: EXTRACT.z + (Math.random() - 0.5) * 90 };
     }
+  }
+
+  /** Authoritative final-operation transition. The encounter reports only
+   *  the identity it defeated; mission state decides whether that death can
+   *  actually complete the operation. This prevents a debug spawn or stale
+   *  corpse from skipping the relay objective. */
+  function completeFinalBoss(key) {
+    if (key !== "apostate" || state.phase !== "cathedralBoss") return false;
+    state.phase = "won";
+    state.channelling = null;
+    pad.group.visible = false;
+    say("THE FALSE SAINT IS BROKEN - OPERATION COMPLETE", 99);
+    bus.emit("finalBossDone", { key });
+    bus.emit("won", { finalBoss: key });
+    return true;
   }
 
   /* ------------------------------------------------------------
@@ -1158,9 +1173,10 @@ export function buildMission(ctx) {
           say(`${relay.name.toUpperCase()} SILENCED`, 3.4);
           bus.emit("relayDone", { key: relay.key, done: state.relaysDone });
           if (state.relaysDone >= relays.length) {
-            state.phase = "extract";
-            pad.group.visible = true;
-            say("ALL RELAYS SILENCED - REACH THE PAD", 6);
+            state.phase = "cathedralBoss";
+            pad.group.visible = false;
+            say("ALL RELAYS SILENCED - RETURN TO THE CATHEDRAL", 6);
+            bus.emit("finalBossReady", { key: "apostate" });
           }
         }
       } else {
@@ -1273,7 +1289,7 @@ export function buildMission(ctx) {
     clearPending();
     clearFields();
     cancelEntry();
-    const phases = new Set(["relays", "extract", "won", "lost"]);
+    const phases = new Set(["relays", "cathedralBoss", "extract", "won", "lost"]);
     state.phase = phases.has(saved.phase) ? saved.phase : "relays";
     state.extractCalled = !!saved.extractCalled && state.phase === "extract";
     state.extractTimer = Math.max(0, Number(saved.extractTimer) || 0);
@@ -1313,7 +1329,7 @@ export function buildMission(ctx) {
       }
     }
     state.relaysDone = done;
-    if (state.phase === "relays" && done >= relays.length) state.phase = "extract";
+    if (state.phase === "relays" && done >= relays.length) state.phase = "cathedralBoss";
     if (state.phase !== "relays" && done < relays.length) {
       for (const relay of relays) {
         relay.done = true;
@@ -1386,6 +1402,7 @@ export function buildMission(ctx) {
      *  it returns a flat record rather than the mutable state object. */
     boon: boonRecord,
     grantBoon,
+    completeFinalBoss,
     announce: say,
     snapshot: snapshotState,
     restore,
@@ -1395,6 +1412,17 @@ export function buildMission(ctx) {
     /** Compass bearing and range to whatever matters right now. */
     objective() {
       const ps = ctx.player.state;
+      if (state.phase === "won" || state.phase === "lost") return null;
+      if (state.phase === "cathedralBoss") {
+        return ctx.apostate?.objective?.() || {
+          name: "RETURN TO THE VAULT-CATHEDRAL",
+          x: DISTRICTS.cathedral.x,
+          z: DISTRICTS.cathedral.z,
+          dist: Math.hypot(ps.x - DISTRICTS.cathedral.x, ps.z - DISTRICTS.cathedral.z),
+          progress: 0,
+          event: true,
+        };
+      }
       const breach = ctx.breaches?.objective?.();
       if (breach) return breach;
       if (state.phase === "relays") {

@@ -55,6 +55,42 @@ try {
     args: ["--use-angle=default", "--enable-gpu", "--ignore-gpu-blocklist",
       "--enable-unsafe-swiftshader", "--disable-frame-rate-limit", "--mute-audio"],
   });
+
+  /* ---- TEMPORARY DIRECT-ENCOUNTER ENTRY ----------------------------
+     This is the player-facing shortcut used for hands-on testing. Prove the
+     URL itself performs the progression arm, spawn and isolation; the main
+     encounter suite below continues to exercise the normal dormant gate. */
+  const shortcutPage = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  await shortcutPage.goto(`${base}/games/saintfall.html?boss=apostate&quality=high`,
+    { waitUntil: "domcontentloaded", timeout: 60000 });
+  await shortcutPage.waitForFunction(() => window.__SF?.isReady?.(), null,
+    { timeout: 300000 });
+  const shortcut = await shortcutPage.evaluate(() => {
+    const T = window.__SF;
+    T.renderOnce(1 / 60);
+    const boss = T.apostateState();
+    const player = T.playerState();
+    const nearbyOrdinary = T.enemies.live.filter((enemy) => enemy.key !== "apostate"
+      && Math.hypot(enemy.x - boss.x, enemy.z - boss.z) <= 96).length;
+    return {
+      missionPhase: T.mission.stats().phase,
+      bossPhase: boss.phase,
+      bossHidden: boss.hidden,
+      distance: Math.hypot(player.x - boss.x, player.z - boss.z),
+      nearbyOrdinary,
+    };
+  });
+  check("boss shortcut arms the Cathedral finale",
+    shortcut.missionPhase === "cathedralBoss", shortcut.missionPhase);
+  check("boss shortcut starts inside the reveal radius",
+    shortcut.distance > 10 && shortcut.distance < 54, shortcut.distance.toFixed(2));
+  check("boss shortcut enters the authored reveal",
+    shortcut.bossPhase === "reveal" && shortcut.bossHidden === false,
+    `${shortcut.bossPhase}/hidden=${shortcut.bossHidden}`);
+  check("boss shortcut clears nearby garrison interference",
+    shortcut.nearbyOrdinary === 0, shortcut.nearbyOrdinary);
+  await shortcutPage.close();
+
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   const pageErrors = [];
   const consoleErrors = [];

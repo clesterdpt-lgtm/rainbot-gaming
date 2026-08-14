@@ -44,7 +44,11 @@ import { installQa } from "saintfall/qa.js";
 
 export async function start({ boot, build } = {}) {
   const params = new URLSearchParams(window.location.search);
-  const qa = params.has("qa");
+  /* Temporary encounter shortcut for hands-on Apostate testing. Treat it as
+     QA even without `?qa=1`, so the isolated fight cannot overwrite a real
+     field save or award durable career progress. */
+  const apostateTestStart = params.get("boss") === "apostate";
+  const qa = params.has("qa") || apostateTestStart;
   const introParam = params.get("intro");
   /* Existing QA harnesses expect assets-ready to mean immediately
      playable. Normal players get the cinematic; QA opts into it
@@ -208,6 +212,32 @@ export async function start({ boot, build } = {}) {
   const apostate = await buildApostate(ctx);
   ctx.apostate = apostate;
   apostate.ensureSpawned();
+
+  if (apostateTestStart) {
+    const armed = mission.snapshot();
+    armed.phase = "cathedralBoss";
+    armed.extractCalled = false;
+    armed.extractTimer = 0;
+    armed.relays = armed.relays.map((relay) => ({
+      ...relay,
+      done: true,
+      progress: 1,
+    }));
+    armed.relaysDone = armed.relays.length;
+    mission.restore(armed);
+    apostate.reset();
+
+    const boss = apostate.status();
+    const bossInst = apostate.instance();
+    /* The Cathedral garrison belongs to the full operation, but it obscures
+       a direct boss test and can kill the player during the reveal. Keep the
+       Apostate itself; its Call ability still creates its authored brood. */
+    for (const enemy of [...enemies.live]) {
+      if (enemy === bossInst) continue;
+      if (Math.hypot(enemy.x - boss.x, enemy.z - boss.z) <= 96) enemies.remove(enemy);
+    }
+    player.spawn(boss.x - 18, boss.z, 0);
+  }
 
   /* Career rank and Doctrine choices sit above the field systems they
      observe. Constructing progression here lets it subscribe to authoritative

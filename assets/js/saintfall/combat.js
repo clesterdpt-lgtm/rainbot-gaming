@@ -82,6 +82,13 @@ const HITBOX = {
   thresher: {
     r: 0.80, y0: 0.02, y1: 1.30, head: 0.70, headR: 0.34, headZ: 0.52,
   },
+  precentor: {
+    r: 1.95, y0: 0.02, y1: 3.24, head: 1.74, headR: 0.84, headZ: 1.28,
+  },
+  cantor: {
+    r: 1.18, y0: 0.02, y1: 3.48, head: 2.72, headR: 0.48, headZ: 0.10,
+    muzzle: 2.08, muzzleZ: 0.72,
+  },
   gleaner: {
     // Tall and thin: nearly all of the capsule is leg, which is
     // correct - shooting the stilts out from under it should work.
@@ -124,8 +131,8 @@ const HITBOX = {
        taper - it is thickest a third of the way back, and the tail is
        genuinely thin enough to shoot past. The first entry is the
        head. */
-    profile: [1.10, 1.28, 1.36, 1.34, 1.28, 1.20, 1.10, 0.99,
-      0.87, 0.74, 0.60, 0.44, 0.27, 0.12],
+    profile: [1.28, 1.48, 1.58, 1.55, 1.48, 1.39, 1.28, 1.15,
+      1.01, 0.86, 0.70, 0.51, 0.31, 0.14],
     // Fallbacks, for anything that asks a burrower a capsule question.
     r: 1.35, y0: -1.30, y1: 2.60, head: 0, headR: 0, headZ: 0,
     /* THE MAW, and the reason this fight has a tell.
@@ -266,6 +273,14 @@ const SPEC = {
   thresher: {
     hp: 60, damage: 14, reach: 2.6, cadence: 1.15,
     sight: 78, hearing: 26, aggro: 130,
+  },
+  precentor: {
+    hp: 3200, damage: 54, reach: 6.2, cadence: 1.85,
+    sight: 140, hearing: 55, aggro: 280,
+  },
+  cantor: {
+    hp: 3000, damage: 16, reach: 58, cadence: 0.24, burst: 5, burstGap: 2.9,
+    sight: 170, hearing: 55, aggro: 300,
   },
   gleaner: {
     /* Tougher than the machine it replaces and slower to shoot. It is
@@ -1708,6 +1723,10 @@ export function buildCombat(ctx) {
 
   function stepEnemy(inst, dt, px, py, pz) {
     if (inst.state === "death" || inst.emerging?.active) return;
+    /* District guardians exist from load so their asset and durable identity
+       are stable, but dormant/reveal-locked actors do not perceive, move or
+       attack. Damage already honours the same gate in targetable(). */
+    if (inst.encounterHidden || inst.encounterLocked) return;
     /* A CHAINED BODY IS SOMEBODY ELSE'S DECISION.
        Everything below this line assumes a creature that stands on the
        ground, walks toward the player and is always hittable, and the

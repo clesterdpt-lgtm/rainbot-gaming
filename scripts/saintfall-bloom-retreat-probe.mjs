@@ -190,7 +190,7 @@ try {
   check(result.enemyBoundaryBlocked.recovering
       && result.enemyBoundaryBlocked.blockedByBoss === null,
     "a pursuing enemy cannot cut across an undefeated boss arena");
-  check(result.bossBlocked.recovering && result.bossBlocked.blockedByBoss === "distaff",
+  check(result.bossBlocked.recovering && result.bossBlocked.blockedByBoss === "scar",
     "an undefeated boss arena forces the Bloom underground");
   check(result.recoveryLoaded && result.recoverySave?.recovering
       && result.restoredRecovery.recovering
@@ -205,7 +205,7 @@ try {
   check(result.afterBossDefeat.phase === "warning" && !result.afterBossDefeat.recovering,
     "defeating the arena boss releases the Bloom gate");
   check(result.winnowerBlocked.recovering
-      && result.winnowerBlocked.blockedByBoss === "winnower",
+      && result.winnowerBlocked.blockedByBoss === "censer",
     "the undefeated Censer Works boss arena is protected too");
 
   console.log("\n=== INTER-WAVE RECOVERY ===");

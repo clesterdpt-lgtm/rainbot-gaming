@@ -4,18 +4,15 @@
    A breach is a compulsory field event that follows the player.
    Each stage telegraphs a rupture, raises a deliberately authored
    caste mix, and waits for every member to die before it advances.
-   The final stage is the Matriarch rather than another anonymous
-   difficulty bump. Breaking her brood opens a long recovery window;
-   if the operation is still active when it closes, the cycle begins
-   again from its first stirring.
+   Waves are intermittent pressure between the six district hunts. Bosses
+   live permanently in their own arenas now, so the roaming cycle contains
+   only field castes and rebuilds after a long recovery window.
    ============================================================ */
 
 import { TAU, clamp, makeBus, makeRng } from "saintfall/core.js";
 import { BESTIARY } from "saintfall/enemies.js";
-import { DISTAFF_CONFIG } from "saintfall/distaff.js";
-import { WINNOWER_CONFIG } from "saintfall/winnower.js";
-  import { APOSTATE_CONFIG } from "saintfall/apostate.js";
-import { DISTRICTS } from "saintfall/terrain.js";
+import { APOSTATE_CONFIG } from "saintfall/apostate.js";
+import { DISTRICT_BOSS_SITES } from "saintfall/district-bosses.js";
 
 export const BREACH_CONFIG = Object.freeze({
   firstWarningAfter: 180,
@@ -76,36 +73,28 @@ export const BREACH_WAVES = Object.freeze([
     ]),
   }),
   Object.freeze({
-    name: "The Broodmother",
-    subtitle: "Matriarch ascendant",
-    healthScale: 1,
-    damageScale: 1,
+    name: "Raptor Front",
+    subtitle: "Fast caste pressure",
+    healthScale: 1.02,
+    damageScale: 0.96,
     clusters: 2,
-    boss: true,
-    bossKey: "matriarch",
     roster: Object.freeze([
-      { key: "matriarch", count: 1 },
-      { key: "thresher", count: 4 },
+      { key: "thresher", count: 8 },
+      { key: "gleaner", count: 2 },
+      { key: "harrow", count: 2 },
     ]),
   }),
-  /* THE LAST WAVE, and a deliberate change of subject.
-     Every stage up to here escalates the same problem: more things
-     walking at you, and eventually a big one. Answering that five times
-     and then being handed a sixth version of it teaches nothing, so the
-     cycle ends on the one enemy in the game that cannot be solved by
-     aiming at it.
-     It arrives ALONE. A garrison would give the player something to
-     shoot during the submerged phase, and the whole point of that phase
-     is that there is nothing to shoot - the silence is the mechanic. */
   Object.freeze({
-    name: "The Deep Furrow",
-    subtitle: "Something under the sand",
-    healthScale: 1,
+    name: "Last Pressure",
+    subtitle: "Brood front at full strength",
+    healthScale: 1.06,
     damageScale: 1,
-    clusters: 1,
-    boss: true,
-    bossKey: "coulter",
-    roster: Object.freeze([{ key: "coulter", count: 1 }]),
+    clusters: 3,
+    roster: Object.freeze([
+      { key: "thresher", count: 10 },
+      { key: "gleaner", count: 3 },
+      { key: "harrow", count: 2 },
+    ]),
   }),
 ]);
 
@@ -113,28 +102,21 @@ export const BREACH_WAVES = Object.freeze([
    against "matriarch", which is what the whole file used to do in four
    places - and each of those was a place a second boss would have been
    silently demoted to an ordinary member of its own wave. */
-const BOSS_KEYS = new Set(BREACH_WAVES.filter((wave) => wave.bossKey)
-  .map((wave) => wave.bossKey));
+/* Legacy field saves can contain either former wave boss. New cycles never
+   spawn them, but retaining their identities lets an in-progress schema-2
+   fight finish cleanly instead of invalidating the save. */
+const BOSS_KEYS = new Set(["matriarch", "coulter"]);
 
 /* The field order each boss gets. Named rather than generic, because
    "SLAY THE MATRIARCH" is the line that tells a player the thing on the
    ridge is the thing they are here for - and the Coulter's names what
    the fight actually asks, which is not killing it but finding it. */
-const BOSS_ORDERS = Object.freeze({
-  matriarch: "SLAY THE MATRIARCH",
-  coulter: "BREAK THE COULTER",
-});
+const BOSS_ORDERS = Object.freeze({});
 
 const EMERGENCE = Object.freeze({
   thresher: Object.freeze({ depth: 1.35, duration: 1.18 }),
   gleaner: Object.freeze({ depth: 3.15, duration: 1.72 }),
   harrow: Object.freeze({ depth: 2.75, duration: 1.88 }),
-  matriarch: Object.freeze({ depth: 5.6, duration: 2.85 }),
-  /* Ignored by the spawner - a burrower declines the shared fissure
-     telegraph, because it is already under the sand and its arrival is
-     its own wake. Kept in the table so the omission is deliberate
-     rather than an oversight that reads as one. */
-  coulter: Object.freeze({ depth: 8.0, duration: 0 }),
 });
 
 const isLiving = (inst) => !!inst && inst.state !== "death" && inst.health > 0;
@@ -175,18 +157,16 @@ export function buildBreaches(ctx) {
    *  accidental two-encounter pile-up. The padding catches the arena
    *  threshold before a pursuing creature crosses it behind the player. */
   function protectedBossAreaAt(x, z) {
-    const distaffDead = ctx.distaff?.status?.()?.dead === true;
-    const distaffRadius = DISTAFF_CONFIG.arenaRadius + BREACH_CONFIG.bossArenaPadding;
-    if (!distaffDead && Math.hypot(x - DISTAFF_CONFIG.lairX,
-      z - DISTAFF_CONFIG.lairZ) <= distaffRadius) {
-      return { key: "distaff", name: "Glass Scar" };
-    }
-
-    const winnowerDead = ctx.winnower?.status?.()?.dead === true;
-    const winnowerRadius = WINNOWER_CONFIG.aggroRadius + BREACH_CONFIG.bossArenaPadding;
-    if (!winnowerDead && Math.hypot(x - DISTRICTS.censer.x,
-      z - DISTRICTS.censer.z) <= winnowerRadius) {
-      return { key: "winnower", name: "Censer Works" };
+    for (const site of DISTRICT_BOSS_SITES) {
+      const missionBoss = ctx.mission?.bosses?.find((boss) => boss.key === site.key);
+      const runtime = site.key === "scar" ? ctx.distaff?.status?.()
+        : site.key === "censer" ? ctx.winnower?.status?.()
+          : ctx.districtBosses?.status?.(site.key);
+      if (missionBoss?.done || runtime?.dead || runtime?.defeated || runtime?.phase === "dead") continue;
+      const radius = site.arenaRadius + BREACH_CONFIG.bossArenaPadding;
+      if (Math.hypot(x - site.x, z - site.z) <= radius) {
+        return { key: site.key, name: site.district };
+      }
     }
 
     const apostateDead = ctx.apostate?.status?.()?.defeated === true;

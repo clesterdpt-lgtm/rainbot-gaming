@@ -1,15 +1,14 @@
 /* ============================================================
    SAINTFALL - the mission
 
-   OPERATION: SAINTFALL. Three vox-relays on Vesper-IX still carry
-   the Concord's standing order, and the order is why the servitors
-   in the Cathedral are still walking their round. Silence all three,
-   return to the Cathedral, and destroy what the signal was hiding.
+   OPERATION: SAINTFALL. Six districts hold six apex signatures.
+   Break every guardian, survive the intermittent Bloom pressure on
+   the roads between them, then return to the Cathedral and destroy
+   the corrupted reliquary waiting inside.
 
-   The structure is deliberately Helldivers-shaped: objectives are
-   spread far enough apart that crossing between them IS the game,
-   and the extraction timer is the part that turns a cleared map back
-   into a fight.
+   The objectives are spread far enough apart that crossing between
+   them IS the game. Roaming breaches turn those crossings back into
+   fights without replacing the authored boss encounters.
 
    Stratagems are the signature mechanic and they are implemented as
    the real thing: a directional code entered under pressure, then a
@@ -19,6 +18,7 @@
 
 import { clamp, clamp01, makeBus, makeRng } from "saintfall/core.js";
 import { DISTRICTS, roadPointAtZ } from "saintfall/terrain.js";
+import { DISTRICT_BOSS_SITES } from "saintfall/district-bosses.js";
 
 /* Codes are entered on the arrow keys / WASD-adjacent direction
    pad. Short enough to be muscle memory, long enough that entering
@@ -180,6 +180,11 @@ export function buildMission(ctx) {
       beacon: makeBeacon(ox, oz, "#ff8a3c", 62),
     };
   });
+  /* Retained only as a schema-2 migration surface. The operation is now a
+     boss hunt, so the old relay beams never enter the live objective layer. */
+  for (const relay of relays) relay.beacon.group.visible = false;
+
+  const bosses = DISTRICT_BOSS_SITES.map((site) => ({ ...site, done: false }));
 
   const pad = makeBeacon(EXTRACT.x, EXTRACT.z, "#7fd4ff", 46);
   pad.group.visible = false;
@@ -189,8 +194,9 @@ export function buildMission(ctx) {
      ------------------------------------------------------------ */
 
   const state = {
-    phase: "relays",          // relays -> cathedralBoss -> won | lost (legacy: extract)
+    phase: "districtBosses",  // districtBosses -> cathedralBoss -> won | lost
     relaysDone: 0,
+    bossesDone: 0,
     channelling: null,
     extractCalled: false,
     extractTimer: 0,
@@ -955,6 +961,70 @@ export function buildMission(ctx) {
     return { relay: best, dist: bestD };
   }
 
+  function nearestBoss(x, z) {
+    let best = null;
+    let bestD = Infinity;
+    for (const boss of bosses) {
+      if (boss.done) continue;
+      const d = Math.hypot(boss.x - x, boss.z - z);
+      if (d < bestD) { bestD = d; best = boss; }
+    }
+    return { boss: best, dist: bestD };
+  }
+
+  function bossRuntimeStatus(key) {
+    if (key === "scar") return ctx.distaff?.status?.() || null;
+    if (key === "censer") return ctx.winnower?.status?.() || null;
+    return ctx.districtBosses?.status?.(key) || null;
+  }
+
+  function bossObjective(boss) {
+    const ps = ctx.player.state;
+    const status = bossRuntimeStatus(boss.key);
+    const x = Number.isFinite(status?.x) ? status.x : boss.x;
+    const z = Number.isFinite(status?.z) ? status.z : boss.z;
+    const maxHealth = Math.max(0, Number(status?.maxHealth) || 0);
+    const health = Math.max(0, Number(status?.health) || 0);
+    const engaged = status && !status.hidden
+      && !["dormant", "return", "returning"].includes(status.phase);
+    return {
+      name: engaged ? boss.order
+        : `HUNT ${boss.boss.toUpperCase()} — ${boss.district.toUpperCase()}`,
+      x,
+      z,
+      dist: Math.hypot(ps.x - x, ps.z - z),
+      progress: maxHealth > 0 ? 1 - health / maxHealth : 0,
+      event: !!engaged,
+      bossKey: boss.key,
+    };
+  }
+
+  function completeDistrictBoss(key) {
+    const boss = bosses.find((entry) => entry.key === key);
+    if (!boss || boss.done || state.phase !== "districtBosses") return false;
+    boss.done = true;
+    state.bossesDone = bosses.filter((entry) => entry.done).length;
+    say(`${boss.boss.toUpperCase()} DEFEATED — ${state.bossesDone}/${bosses.length}`, 4.2);
+    bus.emit("districtBossDone", { key, done: state.bossesDone, total: bosses.length });
+    if (state.bossesDone >= bosses.length) {
+      state.phase = "cathedralBoss";
+      say("ALL DISTRICT GUARDIANS BROKEN — THE CATHEDRAL IS OPEN", 6);
+      bus.emit("finalBossReady", { key: "apostate" });
+    }
+    return true;
+  }
+
+  function syncBossVictories() {
+    if (state.phase !== "districtBosses") return;
+    for (const boss of bosses) {
+      if (boss.done) continue;
+      const status = bossRuntimeStatus(boss.key);
+      if (status?.dead || status?.defeated || status?.phase === "dead") {
+        completeDistrictBoss(boss.key);
+      }
+    }
+  }
+
   function callExtraction() {
     if (state.extractCalled || state.phase !== "extract" || combat.player.dead) return;
     state.extractCalled = true;
@@ -1138,53 +1208,9 @@ export function buildMission(ctx) {
       }
     }
 
-    // Beacon pulse, so an objective reads as live from across a dune.
-    for (const r of relays) {
-      if (r.done) continue;
-      r.beacon.beam.material.opacity = 0.18
-        + Math.sin(state.elapsed * 1.9 + r.x) * 0.09;
-    }
-
-    if (state.phase === "relays") {
-      const { relay, dist } = nearestRelay(ps.x, ps.z);
-      if (relay && dist < CHANNEL_RADIUS && ps.grounded && !combat.player.dead) {
-        const shieldActive = !!ctx.shield?.state?.active;
-        const baseRate = shieldActive ? 0 : 1;
-        const objectiveChange = ctx.progression?.modifyObjectiveChannel?.({
-          kind: "relay",
-          baseRate,
-          shieldActive,
-          shieldRequested: !!ctx.shield?.state?.requested,
-          grounded: !!ps.grounded,
-          dt,
-          objective: { key: relay.key, x: relay.x, z: relay.z, progress: relay.progress },
-          player: { x: ps.x, y: ps.y, z: ps.z },
-        });
-        const channelRate = Number.isFinite(objectiveChange)
-          ? Math.max(0, objectiveChange)
-          : Math.max(0, finite(objectiveChange?.progressMultiplier, baseRate));
-        state.channelling = channelRate > 0 ? relay : null;
-        relay.progress = clamp01(relay.progress + dt * channelRate / CHANNEL_TIME);
-        if (relay.progress >= 1) {
-          relay.done = true;
-          state.channelling = null;
-          state.relaysDone += 1;
-          group.remove(relay.beacon.group);
-          say(`${relay.name.toUpperCase()} SILENCED`, 3.4);
-          bus.emit("relayDone", { key: relay.key, done: state.relaysDone });
-          if (state.relaysDone >= relays.length) {
-            state.phase = "cathedralBoss";
-            pad.group.visible = false;
-            say("ALL RELAYS SILENCED - RETURN TO THE CATHEDRAL", 6);
-            bus.emit("finalBossReady", { key: "apostate" });
-          }
-        }
-      } else {
-        // Channelling is interrupted, not paused. Walking away from a
-        // relay under fire has to cost something.
-        if (state.channelling) state.channelling.progress *= 0.35;
-        state.channelling = null;
-      }
+    if (state.phase === "districtBosses") {
+      state.channelling = null;
+      syncBossVictories();
     } else if (state.phase === "extract") {
       pad.beam.material.opacity = 0.2 + Math.sin(state.elapsed * 3.1) * 0.1;
       const d = Math.hypot(ps.x - EXTRACT.x, ps.z - EXTRACT.z);
@@ -1229,6 +1255,7 @@ export function buildMission(ctx) {
     return {
       phase: state.phase,
       relaysDone: state.relaysDone,
+      bossesDone: state.bossesDone,
       extractCalled: state.extractCalled,
       extractTimer: Number(Math.max(0, state.extractTimer).toFixed(3)),
       elapsed: Number(state.elapsed.toFixed(3)),
@@ -1240,6 +1267,7 @@ export function buildMission(ctx) {
         done: relay.done,
         progress: Number(relay.progress.toFixed(4)),
       })),
+      bosses: bosses.map((boss) => ({ key: boss.key, done: boss.done })),
       cooldowns: Object.fromEntries(Object.entries(cooldowns)
         .map(([key, value]) => [key, Number(value.toFixed(3))])),
       /* The blessing is an OUTCOME the player paid a cooldown for, so
@@ -1289,8 +1317,11 @@ export function buildMission(ctx) {
     clearPending();
     clearFields();
     cancelEntry();
-    const phases = new Set(["relays", "cathedralBoss", "extract", "won", "lost"]);
-    state.phase = phases.has(saved.phase) ? saved.phase : "relays";
+    const phases = new Set([
+      "districtBosses", "relays", "cathedralBoss", "extract", "won", "lost",
+    ]);
+    state.phase = phases.has(saved.phase) ? saved.phase : "districtBosses";
+    if (state.phase === "relays") state.phase = "districtBosses";
     state.extractCalled = !!saved.extractCalled && state.phase === "extract";
     state.extractTimer = Math.max(0, Number(saved.extractTimer) || 0);
     state.elapsed = Math.max(0, Number(saved.elapsed) || 0);
@@ -1329,14 +1360,30 @@ export function buildMission(ctx) {
       }
     }
     state.relaysDone = done;
-    if (state.phase === "relays" && done >= relays.length) state.phase = "cathedralBoss";
-    if (state.phase !== "relays" && done < relays.length) {
+    if (state.phase !== "districtBosses" && done < relays.length) {
       for (const relay of relays) {
         relay.done = true;
         relay.progress = 1;
         group.remove(relay.beacon.group);
       }
       state.relaysDone = relays.length;
+    }
+    const savedBosses = new Map((Array.isArray(saved.bosses) ? saved.bosses : [])
+      .filter((boss) => boss && typeof boss.key === "string")
+      .map((boss) => [boss.key, boss]));
+    const legacyFinalUnlocked = saved.phase === "cathedralBoss"
+      || saved.phase === "won" || saved.phase === "lost";
+    for (const boss of bosses) boss.done = legacyFinalUnlocked
+      || !!savedBosses.get(boss.key)?.done;
+    state.bossesDone = bosses.filter((boss) => boss.done).length;
+    if (state.phase === "cathedralBoss" && state.bossesDone < bosses.length) {
+      /* A legacy three-relay save had already earned its Cathedral entry.
+         Preserve that contract while all new operations use six victories. */
+      for (const boss of bosses) boss.done = true;
+      state.bossesDone = bosses.length;
+    }
+    if (state.phase === "districtBosses" && state.bossesDone >= bosses.length) {
+      state.phase = "cathedralBoss";
     }
     pad.group.visible = state.phase === "extract";
 
@@ -1380,6 +1427,7 @@ export function buildMission(ctx) {
     bus,
     state,
     relays,
+    bosses,
     cooldowns,
     stratagems: STRATAGEMS,
     spawn: SPAWN,
@@ -1402,6 +1450,7 @@ export function buildMission(ctx) {
      *  it returns a flat record rather than the mutable state object. */
     boon: boonRecord,
     grantBoon,
+    completeDistrictBoss,
     completeFinalBoss,
     announce: say,
     snapshot: snapshotState,
@@ -1409,6 +1458,7 @@ export function buildMission(ctx) {
     canFieldSave,
     update,
     nearestRelay,
+    nearestBoss,
     /** Compass bearing and range to whatever matters right now. */
     objective() {
       const ps = ctx.player.state;
@@ -1425,10 +1475,13 @@ export function buildMission(ctx) {
       }
       const breach = ctx.breaches?.objective?.();
       if (breach) return breach;
-      if (state.phase === "relays") {
-        const { relay, dist } = nearestRelay(ps.x, ps.z);
-        if (!relay) return null;
-        return { name: relay.name, x: relay.x, z: relay.z, dist, progress: relay.progress };
+      if (state.phase === "districtBosses") {
+        const active = bosses.find((boss) => !boss.done
+          && ["alert", "active", "standing", "collapsed", "recovering", "soar",
+            "strafe", "land", "stoke", "launch"].includes(bossRuntimeStatus(boss.key)?.phase));
+        if (active) return bossObjective(active);
+        const { boss } = nearestBoss(ps.x, ps.z);
+        return boss ? bossObjective(boss) : null;
       }
       const dist = Math.hypot(ps.x - EXTRACT.x, ps.z - EXTRACT.z);
       return { name: "EXTRACTION - The Fallen Saint", x: EXTRACT.x, z: EXTRACT.z, dist, progress: 0 };
@@ -1437,6 +1490,7 @@ export function buildMission(ctx) {
       return {
         phase: state.phase,
         relays: `${state.relaysDone}/${relays.length}`,
+        bosses: `${state.bossesDone}/${bosses.length}`,
         reinforcements: state.reinforcements,
         elapsed: Math.round(state.elapsed),
       };

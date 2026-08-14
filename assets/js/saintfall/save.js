@@ -414,6 +414,7 @@ export function buildSaveSystem(ctx, options = {}) {
         district: nearestDistrict(ctx, ps.x, ps.z),
         missionPhase: mission.phase,
         relays: `${mission.relaysDone}/${ctx.mission.relays.length}`,
+        bosses: `${mission.bossesDone || 0}/${ctx.mission.bosses?.length || 6}`,
         breach: breach?.complete ? `Cycle ${breach.cyclesCleared || 1} cleared`
           : breach?.wave > 0 ? `Cycle ${breach.cycle || 1} · Breach ${breach.wave}/${breach.waveCount}` : "Signal quiet",
         vitality: `${Math.ceil(combat.hp)}/${combat.maxHp}`,
@@ -436,6 +437,9 @@ export function buildSaveSystem(ctx, options = {}) {
          the generic bestiary restore. Its summoned insects remain ordinary
          enemies and are rebound to this record by their stable IDs. */
       apostate: ctx.apostate?.snapshot?.() || null,
+      distaff: ctx.distaff?.snapshot?.() || null,
+      winnower: ctx.winnower?.snapshot?.() || null,
+      districtBosses: ctx.districtBosses?.snapshot?.() || null,
       /* Only the venom already in the player. The pools on the ground
          and the globules in the air are deliberately not saved - see
          coulter.js - so a load never drops the player into a hazard
@@ -498,7 +502,9 @@ export function buildSaveSystem(ctx, options = {}) {
       || combat.hits > combat.shots || combat.regenLockRemaining < 0) return false;
 
     const mission = snapshot.mission;
-    const phases = new Set(["relays", "cathedralBoss", "extract", "won", "lost"]);
+    const phases = new Set([
+      "districtBosses", "relays", "cathedralBoss", "extract", "won", "lost",
+    ]);
     const relayKeys = new Set(ctx.mission.relays.map((relay) => relay.key));
     if (!isRecord(mission) || !phases.has(mission.phase)
       || !Array.isArray(mission.relays)
@@ -520,6 +526,23 @@ export function buildSaveSystem(ctx, options = {}) {
         || typeof relay.done !== "boolean" || !isFiniteNumber(relay.progress)
         || relay.progress < 0 || relay.progress > 1) return false;
       savedRelayKeys.add(relay.key);
+    }
+    if (mission.bosses !== undefined) {
+      const bossKeys = new Set((ctx.mission.bosses || []).map((boss) => boss.key));
+      if (!Array.isArray(mission.bosses) || mission.bosses.length !== bossKeys.size
+        || !Number.isInteger(mission.bossesDone)
+        || mission.bossesDone < 0 || mission.bossesDone > bossKeys.size) return false;
+      const savedBossKeys = new Set();
+      let bossesDone = 0;
+      for (const boss of mission.bosses) {
+        if (!isRecord(boss) || typeof boss.key !== "string"
+          || !bossKeys.has(boss.key) || savedBossKeys.has(boss.key)
+          || typeof boss.done !== "boolean") return false;
+        savedBossKeys.add(boss.key);
+        if (boss.done) bossesDone += 1;
+      }
+      if (bossesDone !== mission.bossesDone
+        || (mission.phase === "cathedralBoss" && bossesDone !== bossKeys.size)) return false;
     }
     for (const [key, spec] of Object.entries(ctx.mission.stratagems || {})) {
       if (!isFiniteNumber(mission.cooldowns[key]) || mission.cooldowns[key] < 0
@@ -621,6 +644,50 @@ export function buildSaveSystem(ctx, options = {}) {
       if (enemy.broodIds.some((id) => !enemyIds.has(id))) return false;
     }
 
+    const validateDistrictEncounter = (record, phases) => {
+      if (record === null || record === undefined) return true;
+      if (!isRecord(record) || !phases.has(record.phase)
+        || ![record.timer, record.health, record.x, record.z, record.yaw]
+          .every(isFiniteNumber)
+        || record.timer < 0 || record.timer > 600
+        || record.health < 0 || record.health > 10_000_000
+        || Math.abs(record.x) > 2000 || Math.abs(record.z) > 2000
+        || typeof record.defeated !== "boolean") return false;
+      if (record.instanceId !== null && record.instanceId !== undefined
+        && (typeof record.instanceId !== "string" || !enemyIds.has(record.instanceId))) return false;
+      return true;
+    };
+    if (!validateDistrictEncounter(snapshot.distaff,
+      new Set(["dormant", "alert", "standing", "collapsed", "recovering", "returning", "dead"]))) {
+      return false;
+    }
+    if (!validateDistrictEncounter(snapshot.winnower,
+      new Set(["dormant", "alert", "soar", "strafe", "land", "stoke", "launch", "return", "dead"]))) {
+      return false;
+    }
+    if (snapshot.districtBosses !== null && snapshot.districtBosses !== undefined) {
+      const domain = snapshot.districtBosses;
+      const expected = new Set(["ossuary", "bloom", "choir", "reach"]);
+      if (!isRecord(domain) || !Array.isArray(domain.bosses)
+        || domain.bosses.length !== expected.size) return false;
+      const found = new Set();
+      for (const record of domain.bosses) {
+        if (!isRecord(record) || !expected.has(record.key) || found.has(record.key)
+          || ![record.timer, record.disengageFor, record.health, record.maxHealth,
+            record.x, record.z, record.yaw].every(isFiniteNumber)
+          || !new Set(["dormant", "alert", "active", "dead"]).has(record.phase)
+          || record.timer < 0 || record.timer > 600
+          || record.disengageFor < 0 || record.disengageFor > 600
+          || record.health < 0 || record.maxHealth < record.health
+          || record.maxHealth > 10_000_000
+          || Math.abs(record.x) > 2000 || Math.abs(record.z) > 2000
+          || typeof record.defeated !== "boolean"
+          || !(record.instanceId === null
+            || (typeof record.instanceId === "string" && enemyIds.has(record.instanceId)))) return false;
+        found.add(record.key);
+      }
+    }
+
     /* Optional for pre-Apostate field saves. New Cathedral-boss saves carry
        an independent lifecycle record because a generic enemy restore would
        otherwise replace the figure behind its AI controller's closure. */
@@ -676,6 +743,9 @@ export function buildSaveSystem(ctx, options = {}) {
     const buriedBreachMembers = Array.isArray(breach?.buried) ? breach.buried : [];
     const breachRecovering = breach?.recovering === true;
     const waveCount = ctx.breaches?.waves?.length || Number(breach?.waveCount) || 0;
+    const allowedBlockedBosses = new Set([
+      ...(ctx.mission?.bosses || []).map((boss) => boss.key), "apostate",
+    ]);
     if (!isRecord(breach)
       || !breachPhases.has(breach.phase)
       || ![breach.wave, breach.timer, breach.x, breach.z, breach.total,
@@ -693,8 +763,7 @@ export function buildSaveSystem(ctx, options = {}) {
       || (breach.recoveries !== undefined
         && (!Number.isInteger(breach.recoveries) || breach.recoveries < 0))
       || !(breach.blockedByBoss === undefined || breach.blockedByBoss === null
-        || breach.blockedByBoss === "distaff" || breach.blockedByBoss === "winnower"
-        || breach.blockedByBoss === "apostate")
+        || allowedBlockedBosses.has(breach.blockedByBoss))
       || !validRngState(breach.rng)
       || !Array.isArray(breach.memberIds)
       || (breach.buried !== undefined && !Array.isArray(breach.buried))
@@ -757,7 +826,10 @@ export function buildSaveSystem(ctx, options = {}) {
     const bossKeys = new Set((ctx.breaches?.waves || [])
       .map((wave) => wave?.bossKey)
       .filter((key) => typeof key === "string" && key));
-    if (!bossKeys.size) bossKeys.add("matriarch");
+    if (!bossKeys.size) {
+      bossKeys.add("matriarch");
+      bossKeys.add("coulter");
+    }
     const bossShape = bossPresent === (breach.boss !== null)
       && (!bossPresent || (uniqueBreachMembers.has(breach.bossId)
         && bossKeys.has(enemyById.get(breach.bossId)?.key)));
@@ -1156,6 +1228,23 @@ export function buildSaveSystem(ctx, options = {}) {
     }
     if (!ctx.mission.restore(snapshot.mission)) {
       throw new Error("Mission state restore was rejected.");
+    }
+    if (snapshot.distaff) {
+      if (ctx.distaff?.restore?.(snapshot.distaff, restoredEnemies) === false) {
+        throw new Error("Distaff encounter restore was rejected.");
+      }
+    } else if (ctx.mission.bosses?.find((boss) => boss.key === "scar")?.done) {
+      ctx.distaff?.restore?.({ phase: "dead", health: 0, defeated: true }, restoredEnemies);
+    }
+    if (snapshot.winnower) {
+      if (ctx.winnower?.restore?.(snapshot.winnower, restoredEnemies) === false) {
+        throw new Error("Winnower encounter restore was rejected.");
+      }
+    } else if (ctx.mission.bosses?.find((boss) => boss.key === "censer")?.done) {
+      ctx.winnower?.restore?.({ phase: "dead", health: 0, defeated: true }, restoredEnemies);
+    }
+    if (ctx.districtBosses?.restore?.(snapshot.districtBosses || {}, restoredEnemies) === false) {
+      throw new Error("District boss restore was rejected.");
     }
     ctx.breaches?.restore?.(snapshot.breaches || {});
     /* Restored after the enemies, because it also clears the venom on

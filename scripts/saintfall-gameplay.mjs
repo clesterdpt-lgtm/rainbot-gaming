@@ -363,7 +363,7 @@ try {
     const T = window.__SF;
     T.invulnerable(true);
     const s = T.mission.state;
-    s.phase = "relays";
+    s.phase = "districtBosses";
     s.deaths = 0;
     s.reinforcements = 5;
     s.countedDeath = false;
@@ -416,23 +416,30 @@ try {
   /* ---------------------------------------------------------- */
   console.log("\n=== MISSION ===");
   const before = await page.evaluate(() => window.__SF.missionState());
-  console.log(`  start: phase=${before.phase} relays=${before.relays}`);
+  console.log(`  start: phase=${before.phase} bosses=${before.bosses}`);
 
-  // Proximity alone must not complete an objective.
+  // Proximity may reveal an arena guardian, but never awards the victory.
   const brush = await page.evaluate(() => {
-    const r = window.__SF.mission.relays[0];
-    window.__SF.teleport(r.x + 2, r.z + 2, 0);
-    window.__SF.advanceTime(1.2, 1 / 60);
-    return { progress: Number(r.progress.toFixed(2)), done: r.done };
+    const T = window.__SF;
+    const boss = T.mission.bosses.find((entry) => entry.key === "choir");
+    T.teleport(boss.x + 2, boss.z + 2, 0);
+    T.advanceTime(1.2, 1 / 60);
+    return { done: boss.done, phase: T.ctx.districtBosses.status("choir")?.phase };
   });
-  check("a relay is not completed by walking past it",
-    !brush.done && brush.progress > 0 && brush.progress < 1,
-    `progress ${brush.progress} after 1.2s of a 7.5s channel`);
+  check("entering a boss arena does not award the victory",
+    !brush.done && ["alert", "active"].includes(brush.phase),
+    `done=${brush.done} encounter=${brush.phase}`);
 
-  for (let i = 0; i < 3; i += 1) {
-    const rel = await page.evaluate((n) => window.__SF.channelRelay(n), i);
-    console.log(`  ${rel.name}: done=${rel.done} (${rel.relaysDone}) phase=${rel.phase}`);
-    check(`relay ${i + 1} can be silenced`, rel.done);
+  for (let i = 0; i < 6; i += 1) {
+    const result = await page.evaluate((n) => {
+      const T = window.__SF;
+      const boss = T.mission.bosses[n];
+      const accepted = T.mission.completeDistrictBoss(boss.key);
+      return { name: boss.boss, done: boss.done, bossesDone: T.mission.state.bossesDone,
+        phase: T.mission.state.phase, accepted };
+    }, i);
+    console.log(`  ${result.name}: done=${result.done} (${result.bossesDone}/6) phase=${result.phase}`);
+    check(`district boss ${i + 1} can record a victory`, result.accepted && result.done);
   }
 
   const after = await page.evaluate(() => {
@@ -440,8 +447,8 @@ try {
     const s = T.missionState();
     return { ...s, extractCalled: T.mission.state.extractCalled };
   });
-  console.log(`  after: phase=${after.phase} relays=${after.relays}`);
-  check("silencing all relays opens the Cathedral finale", after.phase === "cathedralBoss",
+  console.log(`  after: phase=${after.phase} bosses=${after.bosses}`);
+  check("defeating all six district bosses opens the Cathedral finale", after.phase === "cathedralBoss",
     `phase=${after.phase}`);
 
   const finale = await page.evaluate(() => {

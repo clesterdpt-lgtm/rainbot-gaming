@@ -1120,6 +1120,11 @@ export function buildCoulter(ctx) {
     const ps = ctx.player?.state;
     for (const inst of enemies.live) {
       if (!inst.body) continue;
+      if (inst.encounterHidden || inst.encounterLocked) {
+        hideWake(inst);
+        if (inst.root) inst.root.visible = !inst.encounterHidden;
+        continue;
+      }
       if (ps) {
         const far = (inst.x - ps.x) ** 2 + (inst.z - ps.z) ** 2
           > C.simRange * C.simRange;

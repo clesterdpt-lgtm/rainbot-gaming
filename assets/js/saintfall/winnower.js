@@ -1133,6 +1133,8 @@ export function buildWinnower(ctx) {
   /** The hard variant - QA and save-restore only: snaps home rather
    *  than flying, because a restore has no business animating. */
   function resetToPerch() {
+    state.defeated = false;
+    if (!inst) ensureSpawned();
     if (!inst) return;
     inst.health = inst.maxHealth;
     inst.lift = inst.maxLift;
@@ -1171,9 +1173,13 @@ export function buildWinnower(ctx) {
   }
 
   function ensureSpawned() {
+    if (state.defeated) return null;
     if (inst) return inst;
     const perch = perchPoint();
-    inst = enemies.spawn("winnower", perch.x, perch.z, { yaw: Math.PI * 0.6 });
+    inst = enemies.spawn("winnower", perch.x, perch.z, {
+      yaw: Math.PI * 0.6,
+      eventId: "district-boss:censer",
+    });
     if (inst) {
       inst.y = groundAt(perch.x, perch.z) + C.cruiseHeight;
       inst.grounded = false;
@@ -1198,9 +1204,14 @@ export function buildWinnower(ctx) {
   }
 
   function status() {
-    if (!inst) return null;
+    if (!inst) return state.defeated ? {
+      phase: "dead", dead: true, defeated: true,
+      health: 0, maxHealth: 6200,
+      x: C.stacks[0].x, y: 0, z: C.stacks[0].z,
+    } : null;
     return {
       phase: state.phase,
+      instanceId: state.defeated || inst.state === "death" ? null : inst.id,
       health: Math.max(0, Math.round(inst.health)),
       maxHealth: Math.round(inst.maxHealth),
       lift: Number((inst.lift ?? 0).toFixed(2)),
@@ -1225,9 +1236,16 @@ export function buildWinnower(ctx) {
   }
 
   function snapshot() {
-    if (!inst) return null;
+    if (!inst) return state.defeated ? {
+      phase: "dead", timer: 0, instanceId: null,
+      fuel: 0, health: 0, lift: 0, sacBurst: null,
+      stalled: false, stunFor: 0, revealed: true,
+      x: C.stacks[0].x, y: 0, z: C.stacks[0].z, yaw: 0,
+      defeated: true,
+    } : null;
     return {
       phase: state.phase,
+      instanceId: state.defeated || inst.state === "death" ? null : inst.id,
       timer: Number(state.timer.toFixed(2)),
       fuel: Number(state.fuel.toFixed(2)),
       health: Math.round(inst.health),
@@ -1241,8 +1259,22 @@ export function buildWinnower(ctx) {
     };
   }
 
-  function restore(saved) {
+  function restore(saved, restoredEnemies = {}) {
     if (!saved || typeof saved !== "object") return false;
+    const byId = restoredEnemies?.byId instanceof Map ? restoredEnemies.byId : new Map();
+    const rebound = (typeof saved.instanceId === "string" && byId.get(saved.instanceId))
+      || enemies.live.find((candidate) => candidate.eventId === "district-boss:censer")
+      || enemies.live.find((candidate) => candidate.key === "winnower"
+        && Math.hypot(candidate.x - C.stacks[0].x, candidate.z - C.stacks[0].z) < 140);
+    state.defeated = !!saved.defeated || saved.phase === "dead" || saved.health <= 0;
+    if (state.defeated) {
+      if (rebound) enemies.remove?.(rebound);
+      inst = null;
+      state.phase = "dead";
+      clearHazards();
+      return true;
+    }
+    inst = rebound || null;
     ensureSpawned();
     if (!inst) return false;
     const phase = ["dormant", "alert", "soar", "strafe", "land", "stoke",
@@ -1254,7 +1286,7 @@ export function buildWinnower(ctx) {
     state.stunFor = Math.max(0, Number(saved.stunFor) || 0);
     state.revealed = saved.revealed !== undefined
       ? !!saved.revealed : phase !== "dormant";
-    state.defeated = !!saved.defeated;
+    state.defeated = false;
     state.disengageFor = 0;
     state.releaseCameraAt = undefined;
     inst.x = Number.isFinite(saved.x) ? saved.x : inst.x;

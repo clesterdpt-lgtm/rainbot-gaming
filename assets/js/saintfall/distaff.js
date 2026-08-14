@@ -883,6 +883,8 @@ export function buildDistaff(ctx) {
   /** The hard variant - QA and save-restore only: snaps home rather
    *  than walking, because a restore has no business animating. */
   function resetToLair() {
+    state.defeated = false;
+    if (!inst) ensureSpawned();
     if (!inst) return;
     healToFull();
     inst.x = C.lairX;
@@ -898,10 +900,14 @@ export function buildDistaff(ctx) {
   }
 
   function ensureSpawned() {
+    if (state.defeated) return null;
     if (inst) return inst;
     const x = C.lairX;
     const z = C.lairZ;
-    inst = enemies.spawn("distaff", x, z, { yaw: Math.PI * 0.15 });
+    inst = enemies.spawn("distaff", x, z, {
+      yaw: Math.PI * 0.15,
+      eventId: "district-boss:scar",
+    });
     if (inst) {
       state.legHealthRef = inst.legHp?.[0] || 340;
       setEncounterGate(true, true);
@@ -950,9 +956,14 @@ export function buildDistaff(ctx) {
   }
 
   function status() {
-    if (!inst) return null;
+    if (!inst) return state.defeated ? {
+      phase: "dead", dead: true, defeated: true,
+      health: 0, maxHealth: 9000,
+      x: C.lairX, z: C.lairZ,
+    } : null;
     return {
       phase: state.phase,
+      instanceId: state.defeated || inst.state === "death" ? null : inst.id,
       health: Math.max(0, Math.round(inst.health)),
       maxHealth: Math.round(inst.maxHealth),
       legsBroken: inst.legsBroken || 0,
@@ -971,9 +982,15 @@ export function buildDistaff(ctx) {
   }
 
   function snapshot() {
-    if (!inst) return null;
+    if (!inst) return state.defeated ? {
+      phase: "dead", timer: 0, instanceId: null,
+      legsAtLastCollapse: 0, health: 0, maxHealth: 9000,
+      legHp: null, legBroken: null, legsBroken: 0,
+      x: C.lairX, z: C.lairZ, yaw: 0, defeated: true,
+    } : null;
     return {
       phase: state.phase,
+      instanceId: state.defeated || inst.state === "death" ? null : inst.id,
       timer: Number(state.timer.toFixed(2)),
       legsAtLastCollapse: state.legsAtLastCollapse,
       health: Math.round(inst.health),
@@ -986,8 +1003,22 @@ export function buildDistaff(ctx) {
     };
   }
 
-  function restore(saved) {
+  function restore(saved, restoredEnemies = {}) {
     if (!saved || typeof saved !== "object") return false;
+    const byId = restoredEnemies?.byId instanceof Map ? restoredEnemies.byId : new Map();
+    const rebound = (typeof saved.instanceId === "string" && byId.get(saved.instanceId))
+      || enemies.live.find((candidate) => candidate.eventId === "district-boss:scar")
+      || enemies.live.find((candidate) => candidate.key === "distaff"
+        && Math.hypot(candidate.x - C.lairX, candidate.z - C.lairZ) < C.arenaRadius);
+    state.defeated = !!saved.defeated || saved.phase === "dead" || saved.health <= 0;
+    if (state.defeated) {
+      if (rebound) enemies.remove?.(rebound);
+      inst = null;
+      state.phase = "dead";
+      clearHazards();
+      return true;
+    }
+    inst = rebound || null;
     ensureSpawned();
     if (!inst) return false;
     const phase = ["dormant", "alert", "standing", "collapsed", "recovering",
@@ -998,7 +1029,7 @@ export function buildDistaff(ctx) {
     state.revealed = phase !== "dormant";
     state.timer = Math.max(0, Number(saved.timer) || 0);
     state.legsAtLastCollapse = Math.max(0, Math.round(Number(saved.legsAtLastCollapse) || 0));
-    state.defeated = !!saved.defeated;
+    state.defeated = false;
     state.disengageFor = 0;
     state.recollapseFor = 0;
     state.releaseCameraAt = undefined;

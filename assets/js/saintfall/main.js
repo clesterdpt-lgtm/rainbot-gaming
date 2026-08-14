@@ -31,6 +31,7 @@ import { buildBreaches } from "saintfall/breaches.js";
 import { buildCoulter } from "saintfall/coulter.js";
 import { buildDistaff } from "saintfall/distaff.js";
 import { buildWinnower } from "saintfall/winnower.js";
+import { buildDistrictBosses } from "saintfall/district-bosses.js";
 import { buildApostate } from "saintfall/apostate.js";
 import { buildProgression } from "saintfall/progression.js";
 import { buildAudio } from "saintfall/audio.js";
@@ -206,6 +207,10 @@ export async function start({ boot, build } = {}) {
   const winnower = buildWinnower(ctx);
   ctx.winnower = winnower;
   winnower.ensureSpawned();
+  /* Shared lifecycle for the four district guardians that use the ordinary
+     enemy simulation (Matriarch, Coulter, Precentor and Cantor). */
+  const districtBosses = buildDistrictBosses(ctx);
+  ctx.districtBosses = districtBosses;
   /* The Cathedral's false saint borrows the authored player figure but owns
      an entirely separate combat brain. It is asynchronous because the same
      GLB/fallback figure contract is loaded for a second, corrupted body. */
@@ -793,6 +798,7 @@ export async function start({ boot, build } = {}) {
     coulter.update(d);
     distaff.update(d);
     winnower.update(d);
+    districtBosses.update(d);
     apostate.update(d);
     breaches.update(d);
     mission.update(d);

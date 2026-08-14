@@ -77,6 +77,22 @@ export const XP_AWARDS = deepFreeze({
     amount: 32,
     repeat: "event",
   },
+  kill_precentor: {
+    id: "kill_precentor",
+    label: "Precentor silenced",
+    event: "enemy_killed",
+    match: { enemyKey: "precentor" },
+    amount: 300,
+    repeat: "event",
+  },
+  kill_cantor: {
+    id: "kill_cantor",
+    label: "Gilded Cantor toppled",
+    event: "enemy_killed",
+    match: { enemyKey: "cantor" },
+    amount: 320,
+    repeat: "event",
+  },
   kill_matriarch: {
     id: "kill_matriarch",
     label: "Matriarch purged",

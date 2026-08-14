@@ -285,6 +285,14 @@ export function buildHud(ctx, host) {
     ctx.winnower.bus.on("defeated", () => showBreachAlert(
       "THE CENSER WORKS", "THE WINNOWER IS GROUNDED", 5.2));
   }
+  if (ctx.districtBosses?.bus) {
+    ctx.districtBosses.bus.on("aggro", (event) => showBreachAlert(
+      `${event.district.toUpperCase()} · APEX SIGNATURE`, event.boss.toUpperCase(), 4.2, true));
+    ctx.districtBosses.bus.on("engaged", (event) => showBreachAlert(
+      "WEAPONS FREE", event.order, 2.8, true));
+    ctx.districtBosses.bus.on("defeated", (event) => showBreachAlert(
+      "DISTRICT SECURED", `${event.boss.toUpperCase()} DESTROYED`, 4.0, true));
+  }
   if (ctx.apostate?.bus) {
     ctx.apostate.bus.on("aggro", () => showBreachAlert(
       "VAULT-CATHEDRAL · FALSE SAINT", "THE APOSTATE AWAKENS", 5.2, true));
@@ -500,10 +508,10 @@ export function buildHud(ctx, host) {
       map2d.beginPath(); map2d.arc(point.x, point.y, 2, 0, Math.PI * 2); map2d.fill();
     }
 
-    for (const relay of ctx.mission?.relays || []) {
-      const point = project(relay.x, relay.z);
+    for (const boss of ctx.mission?.bosses || []) {
+      const point = project(boss.x, boss.z);
       map2d.save(); map2d.translate(point.x, point.y); map2d.rotate(Math.PI * .25);
-      map2d.fillStyle = relay.done ? "rgba(118,205,167,.92)" : "#f3b74e";
+      map2d.fillStyle = boss.done ? "rgba(118,205,167,.92)" : "#f3b74e";
       map2d.fillRect(-3, -3, 6, 6); map2d.restore();
     }
     const objective = ctx.mission?.objective?.();
@@ -658,16 +666,17 @@ export function buildHud(ctx, host) {
       }
     }
 
-    for (const [relayIndex, relay] of (ctx.mission?.relays || []).entries()) {
-      const p = point(relay.x, relay.z);
+    for (const [bossIndex, boss] of (ctx.mission?.bosses || []).entries()) {
+      const p = point(boss.x, boss.z);
       if (!p.inside) continue;
-      recordContact("relay", relay.key || relayIndex, relay.x, relay.z, p, {
-        done: !!relay.done,
+      recordContact("boss", boss.key || bossIndex, boss.x, boss.z, p, {
+        done: !!boss.done,
+        name: boss.boss,
       });
       map2d.save();
       map2d.translate(p.x, p.y);
       map2d.rotate(Math.PI * 0.25);
-      map2d.fillStyle = relay.done ? "rgba(106,217,174,.58)" : "#f0ad4b";
+      map2d.fillStyle = boss.done ? "rgba(106,217,174,.58)" : "#f0ad4b";
       map2d.fillRect(-2.5 * glyphScale, -2.5 * glyphScale, 5 * glyphScale, 5 * glyphScale);
       map2d.restore();
     }
@@ -695,6 +704,8 @@ export function buildHud(ctx, host) {
       const size = (inst.key === "apostate" ? 5.8
         : inst.key === "matriarch" ? 5.5
         : inst.key === "coulter" ? 5.0
+          : inst.key === "precentor" ? 4.8
+            : inst.key === "cantor" ? 4.3
           : inst.key === "harrow" ? 3.4 : inst.key === "gleaner" ? 2.5 : 1.7) * glyphScale;
       map2d.fillStyle = inst.key === "apostate" ? "#b568f5" : inst.emerging?.active
         ? `rgba(255,172,61,${0.45 + pulse * 0.5})`
@@ -898,10 +909,33 @@ export function buildHud(ctx, host) {
     return true;
   }
 
+  function updateDistrictBossReadout() {
+    const boss = ctx.districtBosses?.activeBoss?.();
+    if (!boss || boss.defeated) return false;
+    minimapEl.dataset.event = "1";
+    mapEventEl.dataset.phase = boss.phase;
+    eventKickerEl.textContent = `${boss.district.toUpperCase()} · APEX SIGNATURE`;
+    eventNameEl.textContent = boss.boss.toUpperCase();
+    eventNameEl.title = eventNameEl.textContent;
+    eventSubEl.textContent = boss.phase === "alert"
+      ? "Signature resolving — weapons lock pending"
+      : boss.enemyKey === "coulter"
+        ? "Track the furrow — strike when it surfaces"
+        : boss.enemyKey === "matriarch"
+          ? "Circle the armour — break the rear sac"
+          : boss.enemyKey === "precentor"
+            ? "Oversized raptorial caste — evade the scythes"
+            : "Armoured Concord engine — break its firing line";
+    eventCountEl.textContent = boss.phase === "alert" ? "LOCKED" : `${boss.health} HP`;
+    eventFillEl.style.width = `${clamp01(1 - boss.health / Math.max(1, boss.maxHealth)) * 100}%`;
+    return true;
+  }
+
   function updateBreachReadout() {
     if (updateApostateReadout()) return;
     if (updateWinnowerReadout()) return;
     if (updateDistaffReadout()) return;
+    if (updateDistrictBossReadout()) return;
     const event = ctx.breaches?.status?.();
     if (!event) { minimapEl.dataset.event = "0"; return; }
     mapEventEl.dataset.phase = event.phase;

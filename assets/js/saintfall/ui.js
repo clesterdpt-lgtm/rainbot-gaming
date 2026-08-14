@@ -161,7 +161,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     </div>
     <div id="sf-menu" class="sf-menu" role="dialog" aria-modal="true" tabindex="-1"
       aria-labelledby="sf-menu-title" aria-describedby="sf-menu-subtitle"
-      aria-hidden="true" data-panel="operation" data-phase="relays" hidden>
+      aria-hidden="true" data-panel="operation" data-phase="districtBosses" hidden>
       <div class="sf-menu__veil"></div>
       <div class="sf-menu__frame">
         <header class="sf-menu__masthead">
@@ -187,10 +187,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
           </nav>
           <div class="sf-menu__content">
             <section class="sf-menu__page" data-menu-page="operation">
-              <div class="sf-menu__pagehead"><span>ACTIVE DIRECTIVE</span><h3 data-operation-heading>THE GILDED SILENCE</h3><p data-operation-copy>Silence the vox-relays and contain the Bloom.</p></div>
+              <div class="sf-menu__pagehead"><span>ACTIVE DIRECTIVE</span><h3 data-operation-heading>THE SIXFOLD HUNT</h3><p data-operation-copy>Break every district guardian, then enter the Cathedral.</p></div>
               <div class="sf-operation-grid">
                 <article class="sf-operation-card sf-operation-card--objective"><small>PRIORITY OBJECTIVE</small><strong data-operation-objective>Reading field order…</strong><span data-operation-distance>—</span></article>
-                <article class="sf-operation-card"><small>VOX-RELAYS</small><strong data-operation-relays>0 / 3</strong><span>Silenced</span></article>
+                <article class="sf-operation-card"><small>DISTRICT BOSSES</small><strong data-operation-relays>0 / 6</strong><span>Defeated</span></article>
                 <article class="sf-operation-card"><small>REINFORCEMENTS</small><strong data-operation-reinforcements>5</strong><span>Available</span></article>
                 <article class="sf-operation-card"><small>MISSION CLOCK</small><strong data-operation-clock>00:00</strong><span>Elapsed</span></article>
                 <article class="sf-operation-card sf-operation-card--breach"><small>BLOOM CONTAINMENT</small><strong data-operation-breach>Signal quiet</strong><span data-operation-breach-detail>No active rupture</span></article>
@@ -203,7 +203,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
                 <figure class="sf-map-page__surface">
                   <header><span><small>VESPER-IX</small><strong>WHOLE-BASIN SURVEY</strong></span><b data-map-detail-range>—</b></header>
                   <canvas id="sf-map-canvas-large" width="720" height="720" role="img" aria-label="Large tactical map of Vesper-IX"></canvas>
-                  <figcaption class="sf-map-page__legend"><span data-kind="player">RELIQUARY</span><span data-kind="objective">OBJECTIVE</span><span data-kind="relay">RELAY</span><span data-kind="breach">BLOOM</span></figcaption>
+                  <figcaption class="sf-map-page__legend"><span data-kind="player">RELIQUARY</span><span data-kind="objective">OBJECTIVE</span><span data-kind="relay">BOSS</span><span data-kind="breach">BLOOM</span></figcaption>
                 </figure>
                 <aside class="sf-map-page__orders" aria-label="Objective list">
                   <header><span>FIELD ORDERS</span><b data-map-order-count>0 / 3</b></header>
@@ -1003,12 +1003,12 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     const state = ctx.mission.state || {};
     const objective = ctx.mission.objective?.();
     const breach = ctx.breaches?.status?.();
-    const relayTotal = ctx.mission.relays?.length || 3;
-    const relayDone = Math.max(0, state.relaysDone || 0);
+    const bossTotal = ctx.mission.bosses?.length || 6;
+    const bossDone = Math.max(0, state.bossesDone || 0);
     const objectiveDone = !objective && state.phase === "won";
     const breachDone = !!breach?.complete;
-    const relaysDone = relayDone >= relayTotal;
-    const completed = [objectiveDone, breachDone, relaysDone].filter(Boolean).length;
+    const bossesDone = bossDone >= bossTotal;
+    const completed = [objectiveDone, breachDone, bossesDone].filter(Boolean).length;
     const breachActive = !!breach && ["warning", "active"].includes(breach.phase);
     let breachProgress = breachDone ? 1 : 0;
     if (breach?.boss) breachProgress = 1 - breach.boss.health / Math.max(1, breach.boss.maxHealth);
@@ -1036,11 +1036,11 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
         state: breachDone ? "complete" : breachActive ? "threat" : "idle",
       },
       {
-        index: "03", kicker: "VOX-RELAY NETWORK",
-        title: relaysDone ? "NETWORK SILENCED" : `${relayDone} OF ${relayTotal} RELAYS SILENCED`,
-        detail: relaysDone ? "The Cathedral signal is exposed" : "Relay sites remain marked on the field",
-        progress: relayDone / Math.max(1, relayTotal),
-        state: relaysDone ? "complete" : "active",
+        index: "03", kicker: "DISTRICT GUARDIANS",
+        title: bossesDone ? "ALL SIX SIGNATURES BROKEN" : `${bossDone} OF ${bossTotal} BOSSES DEFEATED`,
+        detail: bossesDone ? "The Cathedral confrontation is unlocked" : "Undefeated arenas remain marked on the field",
+        progress: bossDone / Math.max(1, bossTotal),
+        state: bossesDone ? "complete" : "active",
       },
     ];
     const list = root.querySelector("[data-map-objectives]");
@@ -1059,7 +1059,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     const state = ctx.mission.state || {};
     const objective = ctx.mission.objective?.();
     const breach = ctx.breaches?.status?.();
-    const phase = state.phase || "relays";
+    const phase = state.phase || "districtBosses";
     menuEl.dataset.phase = phase;
     const heading = root.querySelector("[data-operation-heading]");
     const copy = root.querySelector("[data-operation-copy]");
@@ -1076,12 +1076,12 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
       heading.textContent = "RETURN TO THE CATHEDRAL";
       copy.textContent = "The final signal is wearing your reliquary. Destroy the Apostate.";
     } else {
-      heading.textContent = "THE GILDED SILENCE";
-      copy.textContent = "Silence every vox-relay and contain the Bloom.";
+      heading.textContent = "THE SIXFOLD HUNT";
+      copy.textContent = "Defeat the six district guardians while intermittent Bloom waves pursue you.";
     }
     root.querySelector("[data-operation-objective]").textContent = objective?.name || "Awaiting field order";
     root.querySelector("[data-operation-distance]").textContent = objective ? `${Math.round(objective.dist || 0)}m from current position` : "No active directive";
-    root.querySelector("[data-operation-relays]").textContent = `${state.relaysDone || 0} / ${ctx.mission.relays?.length || 3}`;
+    root.querySelector("[data-operation-relays]").textContent = `${state.bossesDone || 0} / ${ctx.mission.bosses?.length || 6}`;
     root.querySelector("[data-operation-reinforcements]").textContent = String(Math.max(0, state.reinforcements ?? 0));
     root.querySelector("[data-operation-clock]").textContent = formatClock(state.elapsed);
     const breachActive = !!breach && ["warning", "active", "intermission"].includes(breach.phase);
@@ -1303,7 +1303,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
       slotEl.querySelector("[data-slot-state]").textContent = snapshot ? "RECORDED" : "EMPTY";
       slotEl.querySelector("[data-slot-district]").textContent = snapshot?.summary?.district || "No field record";
       slotEl.querySelector("[data-slot-progress]").textContent = snapshot
-        ? `${snapshot.summary?.relays || "0/3"} relays · ${snapshot.summary?.breach || "Signal quiet"} · Vitality ${snapshot.summary?.vitality || "—"}`
+        ? `${snapshot.summary?.bosses || "0/6"} bosses · ${snapshot.summary?.breach || "Signal quiet"} · Vitality ${snapshot.summary?.vitality || "—"}`
         : "Awaiting deployment state";
       slotEl.querySelector("[data-slot-time]").textContent = snapshot
         ? `${formatSavedAt(snapshot.timestamp)} · ${formatClock(snapshot.summary?.elapsed)}` : "—";

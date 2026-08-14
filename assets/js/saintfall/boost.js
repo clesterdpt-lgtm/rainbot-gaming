@@ -46,7 +46,10 @@ export const BOOST_CONFIG = Object.freeze({
   steerResponse: 7.0,
 });
 
-const HEAVY_KEYS = new Set(["harrow", "matriarch", "distaff", "apostate"]);
+const HEAVY_KEYS = new Set([
+  "harrow", "precentor", "cantor", "matriarch", "coulter",
+  "distaff", "winnower", "apostate",
+]);
 
 export function buildBoost(ctx, player) {
   const config = BOOST_CONFIG;

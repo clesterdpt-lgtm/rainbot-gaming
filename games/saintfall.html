@@ -9,7 +9,7 @@
   <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/saintfall.html" />
   <meta name="description" content="Drop onto Vesper-IX. A two-kilometre desert basin where a colossal reliquary fell out of orbit, and eleven districts of gilded low-poly wreckage between you and the Vault-Cathedral." />
   <meta property="og:title" content="SAINTFALL" />
-  <meta property="og:description" content="Operation THE GILDED SILENCE. A large-scale low-poly warzone: the Fallen Saint, the Ossuary, the Glass Scar, the Choir Spires and the Censer Works." />
+  <meta property="og:description" content="Hunt six district bosses across Vesper-IX, survive intermittent Bloom waves, then face the Apostate in the Vault-Cathedral." />
   <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/saintfall/card-saintfall.jpg?v=20260810-cover-2" />
   <meta property="og:type" content="website" />
   <meta name="twitter:card" content="summary_large_image" />
@@ -74,7 +74,7 @@
 
         <div class="game-side__panel game-side__panel--saintfall">
           <h3 class="game-side__title">THE GILDED SILENCE</h3>
-          <p>Drop onto Vesper-IX and cross the basin to the Vault-Cathedral. Track Bloom breaches on the tactical map, purge each rising brood, and survive the Matriarch &mdash; and then whatever it is that answers from under the sand.</p>
+          <p>Hunt the guardian of Censer Works, Glass Scar, the Ossuary, the Bloom, Choir Spires, and the Gilded Reach. Survive intermittent Bloom waves between arenas; only six victories open the Vault-Cathedral and its Apostate.</p>
           <p>Click the playfield to capture the mouse. Fire with LMB, aim with RMB, use Q for melee, press Tab for the field menu, and hold F + left click to select a missile drop.</p>
         </div>
 
@@ -93,11 +93,12 @@
             <li>Hold <b>F</b>, hover toward a field command (missile drop, cluster, resupply), and <b>left click</b> to deploy. Releasing F or clicking the centre cancels.</li>
             <li>Press <b>Tab</b> or <b>Esc</b> for the operation menu, controls, settings, and field saves.</li>
             <li>On touch, drag the left relic to move, swipe the right side to look, and hold-drag the labeled <b>Call</b> control for field command.</li>
-            <li>Follow the tactical mini-map when a Bloom breach opens. Every marked event brood must be defeated before the next, harder surge begins.</li>
-            <li>The last thing the Bloom sends never surfaces to be shot at. Watch the sand: a ridge of it moving toward you is the Coulter, and you cannot hurt it while it is under there. Get off the ridge before it comes up, and put your shots down its throat while it is open &mdash; that is the only time it counts double, and the only time it can spit at you.</li>
+            <li>Use the six gold boss markers to choose your route. Defeat every district guardian before returning to the Vault-Cathedral for the Apostate.</li>
+            <li>Bloom waves arrive intermittently on the roads between hunts. If you outrun a wave it burrows and returns near you after a recovery window; it will not enter an undefeated boss arena.</li>
+            <li>The Ossuary's Coulter never surfaces to be shot at on demand. Watch the sand: a ridge moving toward you is the worm, and you cannot hurt it while it is under there. Get off the ridge before it comes up, then put your shots down its throat while it is open.</li>
             <li>Do not stand in the green. Venom keeps working after you leave it.</li>
             <li>Press <strong>M</strong> for the full tactical map and objective list. Press it again to resume the operation.</li>
-            <li>Reach the Vault-Cathedral and survive the districts between the drop and the nave.</li>
+            <li>The Cathedral confrontation stays sealed until the field order reads 6 / 6 district bosses defeated.</li>
           </ul>
         </details>
       </aside>
@@ -117,14 +118,14 @@
         <h3>The Districts</h3>
         <ul>
           <li>The Threshold &mdash; landing zone, south gate</li>
-          <li>The Gilded Reach &mdash; dune sea and singing vanes</li>
+          <li>The Gilded Reach &mdash; dune sea, singing vanes, and the iron Cantor</li>
           <li>The Fallen Saint &mdash; the reliquary, and what is left of it</li>
           <li>Vault-Cathedral &mdash; nave, rose window, open ribs</li>
-          <li>The Ossuary &mdash; one animal, ninety metres of it</li>
-          <li>The Glass Scar &mdash; an orbital strike, vitrified</li>
-          <li>The Censer Works &mdash; promethium, and three flare stacks</li>
-          <li>The Choir Spires &mdash; wind-carved needles</li>
-          <li>The Bloom &mdash; chitin, spores, and the Throat</li>
+          <li>The Ossuary &mdash; bone courtyards and the buried Coulter</li>
+          <li>The Glass Scar &mdash; an orbital strike, vitrified, guarded by the Distaff</li>
+          <li>The Censer Works &mdash; promethium, three flare stacks, and the Winnower</li>
+          <li>The Choir Spires &mdash; wind-carved needles and an oversized mantis Precentor</li>
+          <li>The Bloom &mdash; chitin, spores, the Throat, and the Matriarch</li>
           <li>The Fosse &mdash; the old trench line</li>
           <li>The Pilgrim's Road &mdash; the spine of the map</li>
         </ul>
@@ -137,6 +138,8 @@
           <li>Harrow &mdash; wide, low, and the reason your cover stops working</li>
           <li>Matriarch &mdash; nine metres of it, and it lays while you fight it</li>
           <li>Coulter &mdash; twenty-five metres, under the sand, and it spits</li>
+          <li>Precentor &mdash; a Choir mantis two and a half times the roaming caste</li>
+          <li>Cantor &mdash; an iron Concord engine holding the Gilded Reach</li>
         </ul>
       </div>
       <div class="sf-brief__card">
@@ -175,7 +178,7 @@
        main.js without it throws before the nav ever renders. -->
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260814-apostate-direct-start-1"></script>
-  <script src="../assets/js/saintfall/boot.js?v=20260814-controls-2"></script>
+  <script src="../assets/js/saintfall/boot.js?v=20260814-district-hunt-1"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

@@ -107,6 +107,56 @@ export const BESTIARY = {
     kneePole: { up: 1.8, out: 0.85, fwd: 0 },
   },
 
+  /* The Choir Spires' district guardian uses the same authored mantis
+     anatomy as a Thresher, but it is a separate species contract so its
+     boss scale, health and hit volumes never leak into the roaming caste.
+     At 1.55 against the ordinary Thresher's 0.62 this silhouette is exactly
+     two and a half times taller and wider, which reads as an individual
+     guardian rather than a randomly enlarged wave member. */
+  precentor: {
+    url: "assets/models/saintfall/thresher.glb",
+    faction: "bloom",
+    health: 3200,
+    scale: 1.55,
+    speed: { walk: 1.35, charge: 4.25 },
+    material: { roughness: 0.46, metalness: 0.10, rim: 1.35, bio: 2.2 },
+    legs: 3,
+    stance: 1.35,
+    stepHeight: 0.68,
+    collisionRadius: 1.9,
+    cullRange: 620,
+    ikRange: 300,
+    animRange: 440,
+    poseRange: 620,
+    shadowRange: 150,
+    clips: ["idle", "alert", "strike", "flinch", "death"],
+    kneePole: { up: 1.8, out: 0.85, fwd: 0 },
+  },
+
+  /* The iron servitor-engine already had an authored model and animation
+     set but no runtime role. It now guards the Gilded Reach: a ranged,
+     armoured district boss whose Concord palette distinguishes that hunt
+     from the five insect encounters. */
+  cantor: {
+    url: "assets/models/saintfall/cantor.glb",
+    faction: "concord",
+    health: 3000,
+    scale: 1.28,
+    speed: { walk: 1.55, charge: 2.8 },
+    material: { roughness: 0.48, metalness: 0.34, rim: 1.2, bio: 0.25 },
+    legs: 1,
+    stance: 0.92,
+    stepHeight: 0.44,
+    collisionRadius: 1.15,
+    cullRange: 620,
+    ikRange: 260,
+    animRange: 400,
+    poseRange: 620,
+    shadowRange: 150,
+    clips: ["idle", "alert", "fire", "flinch", "death"],
+    kneePole: { up: 2.0, out: 0.25, fwd: 1.35 },
+  },
+
   harrow: {
     url: "assets/models/saintfall/harrow.glb",
     faction: "bloom",
@@ -195,7 +245,11 @@ export const BESTIARY = {
        surfacings to kill, which is long enough for the player to have
        to survive the venom rather than out-damage it. */
     health: 5200,
-    scale: 1.0,
+    /* The Ossuary guardian is now a permanent district boss rather than a
+       late wave surprise. The extra sixteen percent takes the already long
+       animal to a landmark-sized silhouette without making its surfacing
+       circle too large for the bone courtyards. */
+    scale: 1.16,
     /* `walk` is what it makes when surfaced and anchored - it barely
        moves, because a reared worm is a tower and not a chase. `charge`
        is the BURROWING speed, and it is the fastest thing in the game
@@ -213,7 +267,7 @@ export const BESTIARY = {
        under that: it is what keeps the animal out of masonry when it
        surfaces, and a radius sized to the widest ring would refuse
        every courtyard on the map. */
-    collisionRadius: 2.20,
+    collisionRadius: 2.55,
     /* The longest in the game. It is 25m of animal that rears eight
        metres out of open sand, and a player who watches it dive on one
        side of the basin has to be able to see the wake coming back. */

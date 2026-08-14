@@ -897,7 +897,7 @@ async function main() {
       labels.touchBoostAria === null || /hold/i.test(labels.touchBoostAria),
       String(labels.touchBoostAria));
 
-    /* E is the command-wheel hold now. A tap must never reignite the
+    /* E is Aegis block and F is the command-wheel hold now. A tap must never reignite the
        old boost binding. */
     await stage({ yaw: 0 });
     await page.keyboard.down("KeyW");

@@ -72,7 +72,7 @@ export function buildHud(ctx, host) {
         <div class="sf-hud__jetlabel"><span>CHARGE</span><b id="sf-jet-value">100%</b></div>
         <div class="sf-hud__jettrack"><i id="sf-jet-fill"></i></div>
         <div class="sf-hud__boost" id="sf-boost"><span><b>SHIFT</b> GLIDE</span><strong id="sf-boost-value">READY</strong></div>
-        <div class="sf-hud__shield" id="sf-shield"><span><b>X</b> AEGIS</span><strong id="sf-shield-value">READY</strong></div>
+        <div class="sf-hud__shield" id="sf-shield"><span><b>E</b> AEGIS</span><strong id="sf-shield-value">READY</strong></div>
       </div>
       <div class="sf-hud__vitalrow">
         <span id="sf-ammo">&mdash;</span>
@@ -86,12 +86,12 @@ export function buildHud(ctx, host) {
     <section class="sf-hud__command" id="sf-command-status" aria-label="Command availability">
       <header class="sf-hud__command-head">
         <span>COMMAND</span>
-        <strong><kbd>E</kbd></strong>
+        <strong><kbd>F</kbd></strong>
       </header>
       <div class="sf-hud__strat" id="sf-strat"></div>
     </section>
     <div class="sf-hud__hint" id="sf-hint">
-      <span><kbd>E</kbd> <b>HOLD FOR COMMAND</b></span>
+      <span><kbd>F</kbd> <b>HOLD FOR COMMAND</b></span>
     </div>
   `;
 

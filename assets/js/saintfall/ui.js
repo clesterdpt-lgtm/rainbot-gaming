@@ -195,7 +195,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
                 <article class="sf-operation-card"><small>MISSION CLOCK</small><strong data-operation-clock>00:00</strong><span>Elapsed</span></article>
                 <article class="sf-operation-card sf-operation-card--breach"><small>BLOOM CONTAINMENT</small><strong data-operation-breach>Signal quiet</strong><span data-operation-breach-detail>No active rupture</span></article>
               </div>
-              <div class="sf-menu__callout"><span>FIELD DOCTRINE</span><p>Hold <kbd>E</kbd>, point toward a command sigil, then release to confirm. The basin enters command stasis while the wheel is open.</p></div>
+              <div class="sf-menu__callout"><span>FIELD DOCTRINE</span><p>Hold <kbd>F</kbd>, point toward a command sigil, then release to confirm. The basin enters command stasis while the wheel is open.</p></div>
             </section>
             <section class="sf-menu__page sf-menu__page--map" data-menu-page="map" hidden>
               <div class="sf-menu__pagehead"><span>LIVE BASIN OVERVIEW</span><h3>TACTICAL MAP</h3><p>The whole two-kilometre basin, rendered from the authored terrain. North stays fixed.</p></div>
@@ -289,9 +289,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
             <section class="sf-menu__page" data-menu-page="controls" hidden>
               <div class="sf-menu__pagehead"><span>TACTICAL CODEX</span><h3>CONTROLS</h3><p>Every field action, grouped by intent.</p></div>
               <div class="sf-controls-grid">
-                <article><h4>MOVEMENT</h4>${controlRow("W A S D", "Move")}${controlRow("SHIFT", "Boost", "Tap to boost, hold to keep gliding")}${controlRow("CTRL / C", "Crouch", "Descend while airborne")}${controlRow("SPACE", "Vault")}${controlRow("SHIFT + SPACE", "Reliquary jetpack")}${controlRow("Q", "Ground slam", "While airborne")}</article>
-                <article><h4>COMBAT</h4>${controlRow("MOUSE", "Look / aim")}${controlRow("LMB", "Fire")}${controlRow("RMB", "Aim down sights")}${controlRow("Q", "Censer-lance strike")}${controlRow("X", "Aegis block")}${controlRow("R", "Vent weapon heat")}</article>
-                <article><h4>COMMAND</h4>${controlRow("HOLD E", "Command wheel", "Missile drop and field support — point and release to confirm")}${controlRow("TAB", "Field menu")}${controlRow("ESC", "Field menu", "Also resumes")}${controlRow("M", "Tactical map", "Press again to resume")}${controlRow("TOUCH", "Hold the command sigil", "Drag and release to confirm")}</article>
+                <article><h4>MOVEMENT</h4>${controlRow("W A S D", "Move")}${controlRow("SHIFT", "Boost", "Tap to boost, hold to keep gliding")}${controlRow("SPACE", "Vault")}${controlRow("SHIFT + SPACE", "Reliquary jetpack")}${controlRow("Q", "Ground slam", "While airborne")}</article>
+                <article><h4>COMBAT</h4>${controlRow("MOUSE", "Look / aim")}${controlRow("LMB", "Fire")}${controlRow("RMB", "Aim down sights")}${controlRow("Q", "Censer-lance strike")}${controlRow("E", "Aegis block")}${controlRow("R", "Vent weapon heat")}</article>
+                <article><h4>COMMAND</h4>${controlRow("HOLD F", "Command wheel", "Missile drop and field support — point and release to confirm")}${controlRow("TAB", "Field menu")}${controlRow("ESC", "Field menu", "Also resumes")}${controlRow("M", "Tactical map", "Press again to resume")}${controlRow("TOUCH", "Hold the command sigil", "Drag and release to confirm")}</article>
               </div>
             </section>
             <section class="sf-menu__page" data-menu-page="settings" hidden>
@@ -1761,7 +1761,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
         trapFocus(event);
         event.stopImmediatePropagation();
       } else if (!interactiveTarget
-        && ["KeyW", "KeyA", "KeyS", "KeyD", "Space", "KeyQ", "KeyE", "KeyR", "KeyX"].includes(event.code)) {
+        && ["KeyW", "KeyA", "KeyS", "KeyD", "Space", "KeyQ", "KeyE", "KeyF", "KeyR"].includes(event.code)) {
         event.preventDefault(); event.stopImmediatePropagation();
       }
       return;
@@ -1770,7 +1770,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
       if (event.code === "Escape") {
         event.preventDefault(); event.stopImmediatePropagation(); cancelWheel("escape"); return;
       }
-      if (event.code === "KeyE") { event.preventDefault(); event.stopImmediatePropagation(); return; }
+      if (event.code === "KeyF") { event.preventDefault(); event.stopImmediatePropagation(); return; }
       if (event.code === "Tab") {
         event.preventDefault(); event.stopImmediatePropagation();
         if (!event.repeat) {
@@ -1816,7 +1816,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
       }
       return;
     }
-    if (event.code === "KeyE") {
+    if (event.code === "KeyF") {
       if (!ownsGameKeyboard()) return;
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) openWheel("keyboard");
@@ -1825,12 +1825,12 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
 
   function onKeyUp(event) {
     if (menu.open) {
-      if (event.code === "Tab" || event.code === "Escape" || event.code === "KeyE") {
+      if (event.code === "Tab" || event.code === "Escape" || event.code === "KeyF" || event.code === "KeyE") {
         event.preventDefault(); event.stopImmediatePropagation();
       }
       return;
     }
-    if (event.code === "KeyE" && wheel.open && wheel.source === "keyboard") {
+    if (event.code === "KeyF" && wheel.open && wheel.source === "keyboard") {
       event.preventDefault(); event.stopImmediatePropagation();
       closeWheel({ confirm: wheel.selectedIndex >= 0, reason: "hold-release" });
     }

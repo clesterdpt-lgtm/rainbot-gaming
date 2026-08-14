@@ -1060,7 +1060,7 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   pointer-events: none;
 }
 
-.sf-touch__utility,
+.sf-touch__utility { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .sf-touch__mobility { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .sf-touch__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 

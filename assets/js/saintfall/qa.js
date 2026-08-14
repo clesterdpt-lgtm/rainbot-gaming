@@ -3751,8 +3751,8 @@ export function installQa(ctx, api) {
       return !!on;
     },
     setShieldInput(on) {
-      if (on) api.player.input.keys.add("KeyX");
-      else api.player.input.keys.delete("KeyX");
+      if (on) api.player.input.keys.add("KeyE");
+      else api.player.input.keys.delete("KeyE");
       return !!on;
     },
 

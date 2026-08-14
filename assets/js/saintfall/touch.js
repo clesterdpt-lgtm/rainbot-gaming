@@ -20,7 +20,6 @@ const HOLD_ACTIONS = Object.freeze({
   aim: "ads",
   shield: "block",
   jet: "jetpack",
-  crouch: "crouch",
   /* The glide is a HYBRID on touch, exactly as it is on the keyboard:
      the press ignites it and the hold sustains it. Anything else would
      make the sustained glide - the whole point of the rebind - reachable
@@ -64,7 +63,6 @@ function buildMarkup() {
 
     <div class="sf-touch__stack" data-touch-actions aria-label="Combat controls">
       <div class="sf-touch__utility">
-        ${actionButton("crouch", "⌄", "CROUCH", "hold")}
         ${actionButton("vent", "↻", "VENT", "tap")}
         <button class="sf-touch__button sf-touch__button--command" type="button"
           data-touch-command aria-label="Hold and drag to select battlefield support"
@@ -392,7 +390,6 @@ export function buildTouchControls(ctx, player, host, stage) {
         aim: input.touch.ads,
         shield: input.touch.block,
         jet: input.touch.jetpack,
-        crouch: input.touch.crouch,
       },
       pointers: {
         stick: stickPointer,

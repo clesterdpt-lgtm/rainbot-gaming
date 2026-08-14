@@ -914,7 +914,7 @@ export async function start({ boot, build } = {}) {
       else { setStorm(0); setTime(TIME_KEYS[idx]); }
       hud.flashDistrict(atmos.preset.label);
     }
-    if (e.code === "KeyF") {
+    if (qa && e.code === "KeyP") {
       const free = player.state.free;
       if (free) player.setFree(false);
       else {

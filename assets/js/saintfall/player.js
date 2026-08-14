@@ -1911,7 +1911,6 @@ function makeInput(canvas, captureMeleeAim = null) {
     touch.move.x = 0;
     touch.move.y = 0;
     touch.sprint = false;
-    touch.crouch = false;
     touch.jetpack = false;
     touch.block = false;
     touch.firing = false;
@@ -1964,15 +1963,11 @@ function makeInput(canvas, captureMeleeAim = null) {
        key above, but only claimed keyup when that key was actually ours. */
     if (!down && (!held || e.defaultPrevented || isInteractiveKeyTarget(e.target))) return;
     if (!down && !ownsKeyboard()) return;
-    if (["KeyW", "KeyA", "KeyS", "KeyD", "Space", "ShiftLeft", "ShiftRight", "ControlLeft",
+    if (["KeyW", "KeyA", "KeyS", "KeyD", "Space", "ShiftLeft", "ShiftRight",
       "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyR",
-      "KeyQ", "KeyE", "KeyX"].includes(k)) e.preventDefault();
+      "KeyQ", "KeyE", "KeyF"].includes(k)) e.preventDefault();
     if (!down || held) return;                 // key REPEATS are not presses
     /* MELEE IS AN ACTION, NOT A MODE.
-       This was KeyX = "swap", which toggled the lance between its
-       ranged and melee rites and left you in whichever one you last
-       chose - so a melee needed two presses and a mental note about
-       which mode you were in, and forgetting cost you the fight.
        One key, one swing: main.js takes the rite over for the length
        of the animation and hands it back.
 
@@ -1990,8 +1985,9 @@ function makeInput(canvas, captureMeleeAim = null) {
     else if (k === "KeyR") state.events.push({ type: "vent" });
     /* SHIFT IS THE BOOST. One key: tapped it is a burst, held it is a
        glide, and held with Space it is the jetpack - which is the
-       whole reason it can also be the burst. E is the command-wheel
-       hold, owned by ui.js, so this file only swallows the key. */
+       whole reason it can also be the burst. F is the command-wheel
+       hold, owned by ui.js, so this file only swallows the key.
+       E is the Aegis block. */
     else if (k === "ShiftLeft" || k === "ShiftRight") {
       state.events.push({ type: "boost" });
     }
@@ -2064,10 +2060,10 @@ function makeInput(canvas, captureMeleeAim = null) {
       const shift = keys.has("ShiftLeft") || keys.has("ShiftRight");
       state.sprint = touch.sprint;
       state.boostHeld = shift || touch.boostHeld;
-      state.crouch = keys.has("ControlLeft") || keys.has("KeyC") || touch.crouch;
+      state.crouch = false;
       state.jump = keys.has("Space");
       state.jetpack = (state.jump && shift) || touch.jetpack;
-      state.block = keys.has("KeyX") || touch.block;
+      state.block = keys.has("KeyE") || touch.block;
       const lx = state.look.x;
       const ly = state.look.y;
       const jumpPressed = state.jumpPressed;
@@ -2298,7 +2294,6 @@ export async function createPlayer(ctx, canvas) {
      the leg geometry exactly, and is also what a leaning runner
      does - the feet land under the mass, not behind it. */
   let leanFootShift = 0;
-  const CROUCH = 2.4;
   /* How far the breastplate may lead the hips. 54 degrees is about
      what a person in a cuirass can hold with a weapon up; past it the
      legs have to come round, which is the whole point. It is also the
@@ -3222,13 +3217,13 @@ export async function createPlayer(ctx, canvas) {
     // frame - posing them here would be overwritten, and posing
     // them instead of solving them is what made the hands miss the
     // grips by 15cm in every frame.
-    const crouchDrop = state.grounded && !ctx.jetpack?.state?.inFlight
-      ? Math.max(input.state.crouch ? 0.34 : 0, boostPose * 0.30, downhillPose * 0.40)
+    const groundPoseDrop = state.grounded && !ctx.jetpack?.state?.inFlight
+      ? Math.max(boostPose * 0.30, downhillPose * 0.40)
       : 0;
     const baseScale = figure.baseScale || { x: 1, y: 1, z: 1 };
     figure.root.scale.set(
       baseScale.x,
-      baseScale.y * (1 - crouchDrop * 0.28),
+      baseScale.y * (1 - groundPoseDrop * 0.28),
       baseScale.z
     );
 
@@ -3551,16 +3546,15 @@ export async function createPlayer(ctx, canvas) {
         : flightMode
           ? (jetState.active ? ctx.jetpack.config.cruiseSpeed : ctx.jetpack.config.glideSpeed)
           /* ONE ground speed now, and it is what Shift used to buy.
-             WALK survives for two cases: crouching, and a committed
-             swing. NOBODY SPRINTS THROUGH A MELEE - and mechanically
-             they cannot, because the gait predicts foot plants from
-             the resolved travel vector, and strafing at full stride
-             while the body is locked to the swing bearing spreads the
-             plants past the point where both feet leave the ground at
-             once. That reads as scissoring, and it is what the melee
-             gait check in `saintfall-melee-reticle-probe.mjs`
-             measures. */
-          : (input.state.crouch ? CROUCH : action.name ? WALK : SPRINT);
+             WALK survives for a committed swing. NOBODY SPRINTS THROUGH
+             A MELEE - and mechanically they cannot, because the gait
+             predicts foot plants from the resolved travel vector, and
+             strafing at full stride while the body is locked to the
+             swing bearing spreads the plants past the point where both
+             feet leave the ground at once. That reads as scissoring, and
+             it is what the melee gait check in
+             `saintfall-melee-reticle-probe.mjs` measures. */
+          : (action.name ? WALK : SPRINT);
     /* Sighted movement is a walk at best. The multiplier is applied to
        the TARGET rather than gating sprint, so it also removes the
        sprint option by arithmetic: 8.6 * 0.46 is below the 4.4 walk,
@@ -3950,8 +3944,7 @@ export async function createPlayer(ctx, canvas) {
       const ceiling = Math.min(gy + cfg.maxAltitude, jetState.takeoffGround + cfg.maxRiseFromLaunch);
       if (jetState.active) {
         let targetVy;
-        if (input.state.crouch) targetVy = -cfg.descendSpeed;
-        else if (state.y >= ceiling - 0.12 || agl >= cfg.softAltitude) {
+        if (state.y >= ceiling - 0.12 || agl >= cfg.softAltitude) {
           targetVy = clamp((cfg.softAltitude - agl) * 2.4, -cfg.descendSpeed, 0);
         } else {
           targetVy = clamp((cfg.cruiseAltitude - agl) * 2.4, -3.5, cfg.climbSpeed);
@@ -4183,7 +4176,6 @@ export async function createPlayer(ctx, canvas) {
 
     /* --- camera --- */
     const jetPose = clamp01(ctx.jetpack?.state?.pose || 0);
-    const crouched = input.state.crouch && state.grounded && !flightMode;
     /* THE DEATH CAMERA. Eased, not cut.
        A third-person camera that keeps its standing anchor while the
        body falls out from under it ends up looking at empty sand with
@@ -4194,7 +4186,6 @@ export async function createPlayer(ctx, canvas) {
     const dyingPose = clamp01(state.deathPose);
     const dist = state.camDist
       * lerp(1.14, 1.27, jetPose)
-      * (crouched ? 0.86 : 1)
       * (1 + dyingPose * 0.34);
     camOffset.set(
       Math.sin(state.camYaw) * Math.cos(state.camPitch),
@@ -4202,11 +4193,8 @@ export async function createPlayer(ctx, canvas) {
       Math.cos(state.camYaw) * Math.cos(state.camPitch)
     ).multiplyScalar(-dist);
 
-    // The camera's own crouch drop; the figure's lives in
-    // applyFigurePose with the rest of the body state.
-    const camCrouch = crouched ? 0.34 : 0;
     tmp.set(state.x,
-      state.y + EYE - camCrouch * 0.5 + jetPose * 0.24 - dyingPose * (EYE - 0.75),
+      state.y + EYE + jetPose * 0.24 - dyingPose * (EYE - 0.75),
       state.z);
     const want = tmp.clone().add(camOffset);
     /* Keep the camera out of the ground by SHORTENING THE BOOM, not

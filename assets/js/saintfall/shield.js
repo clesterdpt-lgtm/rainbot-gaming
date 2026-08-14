@@ -264,8 +264,8 @@ export function buildShield(ctx, player) {
   function reset(full = true) {
     /* Both keyboard and touch share the same software-gated state. A touch
        guard held through respawn/load must be released before it can raise
-       Aegis again, exactly like a physically held X key. */
-    const held = !!player.input?.state?.block || !!player.input?.keys?.has("KeyX");
+       Aegis again, exactly like a physically held E key. */
+    const held = !!player.input?.state?.block || !!player.input?.keys?.has("KeyE");
     state.requested = false;
     state.active = false;
     state.needsRelease = held;

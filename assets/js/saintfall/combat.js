@@ -942,11 +942,13 @@ export function buildCombat(ctx) {
     return best;
   }
 
-  /** Under the sand, and therefore not there. Every damage path in
-   *  this file asks, because a boss that can be shot through a planet
-   *  has no submerged phase at all. */
+  /** Not physically available to the player. Every damage path in
+   *  this file asks, because a boss hidden below the sand or held
+   *  behind an encounter reveal is not protected if only hitscan
+   *  remembers the rule and stratagems/melee do not. */
   const untouchable = (inst) => inst.state === "death"
-    || !!inst.emerging?.active || !!inst.body?.hidden;
+    || !!inst.emerging?.active || !!inst.body?.hidden
+    || !!inst.encounterHidden || !!inst.encounterLocked;
 
   /**
    * Closest enemy hit by a ray, or null.

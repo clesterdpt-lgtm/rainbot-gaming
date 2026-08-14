@@ -65,7 +65,9 @@ export const WINNOWER_CONFIG = Object.freeze({
   disengageRadius: 300,
   disengageSeconds: 16,
 
-  alertSeconds: 2.6,
+  // Long enough to establish the silhouette, altitude and arena;
+  // the previous threshold released the camera after only 0.42s.
+  alertSeconds: 4.8,
 
   /* CRUISE ALTITUDE. High enough to be unmistakably out of reach,
      low enough that it is still a creature rather than a dot - and
@@ -222,6 +224,17 @@ export function buildWinnower(ctx) {
     landTo: null,
   };
   let inst = null;
+
+  /** Keep the dormant encounter allocated but absent from both the
+   *  renderer and every authoritative damage path. Alert reveals the
+   *  animal while keeping it protected; combat clears the lock only
+   *  when the camera returns. */
+  function setEncounterGate(hidden, locked = hidden) {
+    if (!inst) return;
+    inst.encounterHidden = !!hidden;
+    inst.encounterLocked = !!locked;
+    if (inst.root) inst.root.visible = !inst.encounterHidden;
+  }
 
   /* ============================================================
      EMBER SHOT - a lobbed coal from the censers. Ballistic, exactly
@@ -597,6 +610,7 @@ export function buildWinnower(ctx) {
   function beginAlert() {
     state.phase = "alert";
     state.timer = C.alertSeconds;
+    setEncounterGate(false, true);
     enemies.play(inst, "alert", 0.25);
     bus.emit("aggro", { x: inst.x, y: inst.y, z: inst.z });
     /* Same reveal mechanism the Distaff uses - player.setFree, which
@@ -614,7 +628,7 @@ export function buildWinnower(ctx) {
       const camY = groundAt(camX, camZ) + 2.0;
       ctx.player.setFree(true, [camX, camY, camZ],
         [inst.x, inst.y, inst.z], 52);
-      state.releaseCameraAt = state.timer - 0.4;
+      state.releaseCameraAt = 0;
     }
   }
 
@@ -1048,7 +1062,11 @@ export function buildWinnower(ctx) {
         state.releaseCameraAt = undefined;
       }
       // The first tank. Every later one comes from a stoke.
-      if (state.timer <= 0) { state.fuel = C.soarSeconds; beginSoar(); }
+      if (state.timer <= 0) {
+        setEncounterGate(false, false);
+        state.fuel = C.soarSeconds;
+        beginSoar();
+      }
       return;
     }
 
@@ -1078,6 +1096,7 @@ export function buildWinnower(ctx) {
     state.stunFor = 0;
     state.disengageFor = 0;
     state.action = 0;
+    setEncounterGate(false, false);
     enemies.play(inst, "idle", 0.4);
     bus.emit("returning", { x: inst.x, z: inst.z });
   }
@@ -1099,6 +1118,7 @@ export function buildWinnower(ctx) {
     if (home < 8) {
       state.phase = "dormant";
       state.revealed = false;
+      setEncounterGate(true, true);
       enemies.play(inst, "idle", 0.5);
       bus.emit("reset", { x: inst.x, z: inst.z });
       return;
@@ -1129,6 +1149,8 @@ export function buildWinnower(ctx) {
     state.stunFor = 0;
     state.revealed = false;
     state.disengageFor = 0;
+    state.releaseCameraAt = undefined;
+    setEncounterGate(true, true);
     enemies.play(inst, "idle", 0.4);
     bus.emit("reset", { x: inst.x, z: inst.z });
   }
@@ -1156,6 +1178,7 @@ export function buildWinnower(ctx) {
       inst.y = groundAt(perch.x, perch.z) + C.cruiseHeight;
       inst.grounded = false;
       inst.root.position.set(inst.x, inst.y, inst.z);
+      setEncounterGate(true, true);
     }
     return inst;
   }
@@ -1196,6 +1219,8 @@ export function buildWinnower(ctx) {
       timer: Number(state.timer.toFixed(2)),
       ashFields: fields.filter((f) => f.life > 0).length,
       embers: embers.filter((e) => e.live).length,
+      hidden: !!inst.encounterHidden,
+      locked: !!inst.encounterLocked,
     };
   }
 
@@ -1231,6 +1256,7 @@ export function buildWinnower(ctx) {
       ? !!saved.revealed : phase !== "dormant";
     state.defeated = !!saved.defeated;
     state.disengageFor = 0;
+    state.releaseCameraAt = undefined;
     inst.x = Number.isFinite(saved.x) ? saved.x : inst.x;
     inst.z = Number.isFinite(saved.z) ? saved.z : inst.z;
     inst.y = Number.isFinite(saved.y) ? saved.y : inst.y;
@@ -1247,6 +1273,7 @@ export function buildWinnower(ctx) {
     inst.grounded = phase === "stoke" || phase === "land";
     inst.root.position.set(inst.x, inst.y, inst.z);
     inst.root.rotation.set(0, inst.yaw, 0);
+    setEncounterGate(phase === "dormant", phase === "dormant" || phase === "alert");
     if (state.defeated || phase === "dead") {
       enemies.play(inst, "death", 0);
       inst.health = 0;
@@ -1286,6 +1313,7 @@ export function buildWinnower(ctx) {
       const next = String(phase);
       state.phase = next;
       if (Number.isFinite(timer)) state.timer = timer;
+      setEncounterGate(next === "dormant", next === "dormant" || next === "alert");
       if (next === "stoke") {
         inst.grounded = true;
         inst.y = groundAt(inst.x, inst.z) + C.landedLift;

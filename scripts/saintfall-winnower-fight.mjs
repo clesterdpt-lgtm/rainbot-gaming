@@ -141,21 +141,85 @@ try {
   const far = await page.evaluate(() => {
     const T = window.__SF;
     const w = T.winnowerState();
-    T._teleportRaw(w.x - 220, w.z, 0);
+    const inst = T.enemies.live.find((e) => e.key === "winnower");
+    // Outside the 78m arena gate but inside the 180m minimap range.
+    T._teleportRaw(w.x - 110, w.z, 0);
     T.setBodyHeading(0);
     for (let i = 0; i < 120; i += 1) T.renderOnce(1 / 60);
-    return T.winnowerState().phase;
+    const healthBefore = inst.health;
+    const dealt = T.combat.damageEnemy(inst, 100, { source: "qa-pre-fight" });
+    const minimapContacts = T.minimapState()?.contacts || [];
+    return {
+      phase: T.winnowerState().phase,
+      hidden: !inst.root.visible,
+      minimapHidden: !minimapContacts.some((contact) => contact.species === "winnower"),
+      targetable: T.combat.targetable(inst),
+      dealt,
+      healthBefore,
+      healthAfter: inst.health,
+    };
   });
-  check("ignores the player outside the aggro radius", far === "dormant", `phase=${far}`);
+  check("ignores the player outside the aggro radius", far.phase === "dormant",
+    `phase=${far.phase}`);
+  check("the dormant boss cannot be seen before the Censer Works arena",
+    far.hidden && far.minimapHidden, JSON.stringify(far));
+  check("the dormant boss cannot be damaged before the Censer Works arena",
+    !far.targetable && far.dealt === 0 && far.healthAfter === far.healthBefore,
+    JSON.stringify(far));
 
-  const aggro = await page.evaluate(() => {
+  const aggroStart = await page.evaluate(() => {
     const T = window.__SF;
     T.teleportToWinnower(40);
-    const secs = T.advanceToWinnowerPhase("soar", 20);
-    return { secs, state: T.winnowerState() };
+    const secs = T.advanceToWinnowerPhase("alert", 5);
+    const inst = T.enemies.live.find((e) => e.key === "winnower");
+    const visibleAtReveal = inst.root.visible;
+    const healthBefore = inst.health;
+    const revealDamage = T.combat.damageEnemy(inst, 100, { source: "qa-reveal" });
+    const protectedAtReveal = !T.combat.targetable(inst)
+      && revealDamage === 0 && inst.health === healthBefore;
+    // Draw the authored reveal camera before Playwright captures it.
+    T.renderOnce(1 / 60);
+    return {
+      secs,
+      visibleAtReveal,
+      protectedAtReveal,
+      revealBudget: T.winnower.config.alertSeconds,
+    };
   });
+  await page.screenshot({ path: path.join(outDir, "winnower-reveal.png") });
+  const aggroEnd = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "winnower");
+    let revealSeconds = 0;
+    let cameraSeconds = 0;
+    let cameraStayedOn = true;
+    while (T.winnowerState().phase === "alert" && revealSeconds < 10) {
+      if (T.player.state.free) cameraSeconds += 1 / 60;
+      else cameraStayedOn = false;
+      T.renderOnce(1 / 60);
+      revealSeconds += 1 / 60;
+    }
+    return {
+      revealSeconds: Number(revealSeconds.toFixed(2)),
+      cameraSeconds: Number(cameraSeconds.toFixed(2)),
+      cameraStayedOn,
+      state: T.winnowerState(),
+      freeAfter: !!T.player.state.free,
+      targetableAfter: T.combat.targetable(inst),
+      visibleAfter: inst.root.visible,
+    };
+  });
+  const aggro = { ...aggroStart, ...aggroEnd };
   check("crossing the aggro radius wakes it into flight",
     aggro.secs >= 0 && aggro.state.phase === "soar", `${aggro.secs}s`);
+  check("the reveal shows the boss but protects it until combat begins",
+    aggro.visibleAtReveal && aggro.protectedAtReveal, JSON.stringify(aggro));
+  check("the Censer Works reveal holds the cinematic camera for at least four seconds",
+    aggro.revealBudget >= 4 && aggro.cameraStayedOn && aggro.cameraSeconds > 0,
+    `${aggro.revealBudget}s reveal; camera held through ${aggro.cameraSeconds}s after capture`);
+  check("the reveal hands back a visible, targetable soaring fight",
+    !aggro.freeAfter && aggro.targetableAfter && aggro.visibleAfter,
+    JSON.stringify(aggro));
 
   /* ---- UNREACHABLE WHILE AIRBORNE ------------------------------------ */
   const unreachable = await page.evaluate(() => {

@@ -1431,12 +1431,13 @@ export async function buildEnemies(ctx, onProgress) {
       const ikRange = inst.spec.ikRange || IK_RANGE;
       const animRange = inst.spec.animRange || ANIM_RANGE;
       const poseRange = inst.spec.poseRange || POSE_RANGE;
-      /* A fully buried Coulter is behind an opaque planet, so it is
-         taken off the draw entirely - which for a 10,000-triangle
-         skinned mesh is worth more than any of the distance tiers. It
-         comes back the instant any part of it is above the sand, so a
-         breach is never the frame the animal appears in. */
-      const shown = dyingOrNear(inst, d2, cull) && !inst.body?.hidden;
+      /* A fully buried Coulter is behind an opaque planet, and a
+         district boss whose arena has not been entered does not exist
+         in the player's picture yet. Both stay spawned for stable
+         save/animation state, but neither pays a skinned draw or leaks
+         its silhouette before its own reveal. */
+      const shown = dyingOrNear(inst, d2, cull)
+        && !inst.body?.hidden && !inst.encounterHidden;
       if (inst.root.visible !== shown) inst.root.visible = shown;
       if (inst.skin) {
         const wants = shown

@@ -128,26 +128,89 @@ try {
   const farCheck = await page.evaluate(() => {
     const T = window.__SF;
     const d0 = T.distaffState();
-    T._teleportRaw(d0.x - 200, d0.z, 0);
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    // Outside the 52m arena gate but inside the 180m minimap range.
+    T._teleportRaw(d0.x - 70, d0.z, 0);
     T.setBodyHeading(0);
     for (let i = 0; i < 120; i += 1) T.renderOnce(1 / 60);
-    return T.distaffState().phase;
+    const healthBefore = inst.health;
+    const dealt = T.combat.damageEnemy(inst, 100, { source: "qa-pre-fight" });
+    const minimapContacts = T.minimapState()?.contacts || [];
+    return {
+      phase: T.distaffState().phase,
+      hidden: !inst.root.visible,
+      minimapHidden: !minimapContacts.some((contact) => contact.species === "distaff"),
+      targetable: T.combat.targetable(inst),
+      dealt,
+      healthBefore,
+      healthAfter: inst.health,
+    };
   });
-  check("ignores the player far outside the aggro radius", farCheck === "dormant",
-    `phase=${farCheck}`);
+  check("ignores the player far outside the aggro radius", farCheck.phase === "dormant",
+    `phase=${farCheck.phase}`);
+  check("the dormant boss cannot be seen before the Glass Scar arena",
+    farCheck.hidden && farCheck.minimapHidden, JSON.stringify(farCheck));
+  check("the dormant boss cannot be damaged before the Glass Scar arena",
+    !farCheck.targetable && farCheck.dealt === 0 && farCheck.healthAfter === farCheck.healthBefore,
+    JSON.stringify(farCheck));
 
-  const aggro = await page.evaluate(() => {
+  const aggroStart = await page.evaluate(() => {
     const T = window.__SF;
     T.teleportToDistaff(30);
     const secs = T.advanceToDistaffPhase("alert", 5);
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
     const alertPhase = T.distaffState().phase;
-    const secs2 = T.advanceToDistaffPhase("standing", 5);
-    return { secs, alertPhase, secs2, standing: T.distaffState().phase };
+    const visibleAtReveal = inst.root.visible;
+    const healthBefore = inst.health;
+    const revealDamage = T.combat.damageEnemy(inst, 100, { source: "qa-reveal" });
+    const protectedAtReveal = !T.combat.targetable(inst)
+      && revealDamage === 0 && inst.health === healthBefore;
+    // Draw the authored reveal camera before Playwright captures it.
+    T.renderOnce(1 / 60);
+    return {
+      secs,
+      alertPhase,
+      visibleAtReveal,
+      protectedAtReveal,
+      revealBudget: T.distaff.config.alertSeconds,
+    };
   });
+  await page.screenshot({ path: path.join(outDir, "distaff-reveal.png") });
+  const aggroEnd = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    let revealSeconds = 0;
+    let cameraSeconds = 0;
+    let cameraStayedOn = true;
+    while (T.distaffState().phase === "alert" && revealSeconds < 10) {
+      if (T.player.state.free) cameraSeconds += 1 / 60;
+      else cameraStayedOn = false;
+      T.renderOnce(1 / 60);
+      revealSeconds += 1 / 60;
+    }
+    const standing = T.distaffState().phase;
+    return {
+      revealSeconds: Number(revealSeconds.toFixed(2)),
+      cameraSeconds: Number(cameraSeconds.toFixed(2)),
+      cameraStayedOn,
+      standing,
+      freeAfter: !!T.player.state.free,
+      targetableAfter: T.combat.targetable(inst),
+      visibleAfter: inst.root.visible,
+    };
+  });
+  const aggro = { ...aggroStart, ...aggroEnd };
   check("crossing the aggro radius reveals it", aggro.secs >= 0 && aggro.alertPhase === "alert",
     `${aggro.secs}s to alert`);
-  check("the reveal resolves into the standing fight", aggro.secs2 >= 0 && aggro.standing === "standing",
-    `${aggro.secs2}s to standing`);
+  check("the reveal shows the boss but protects it until combat begins",
+    aggro.visibleAtReveal && aggro.protectedAtReveal, JSON.stringify(aggro));
+  check("the Glass Scar reveal holds the cinematic camera for at least four seconds",
+    aggro.revealBudget >= 4 && aggro.cameraStayedOn && aggro.cameraSeconds > 0,
+    `${aggro.revealBudget}s reveal; camera held through ${aggro.cameraSeconds}s after capture`);
+  check("the reveal resolves into a visible, targetable standing fight",
+    aggro.standing === "standing" && !aggro.freeAfter
+      && aggro.targetableAfter && aggro.visibleAfter,
+    JSON.stringify(aggro));
 
   /* ---- STANDING ATTACKS ---------------------------------------------- */
   const standingAttacks = await page.evaluate(() => {

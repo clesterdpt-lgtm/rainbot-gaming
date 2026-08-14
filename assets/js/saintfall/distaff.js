@@ -62,7 +62,9 @@ export const DISTAFF_CONFIG = Object.freeze({
   disengageRadius: 240,
   disengageSeconds: 14,
 
-  alertSeconds: 2.2,
+  // A real boss introduction, not the 0.37-second camera flash the
+  // old release threshold accidentally produced.
+  alertSeconds: 4.8,
 
   /* ------------------------------------------------------------
      LOCOMOTION. It walks now - the original shipped as a planted
@@ -188,6 +190,20 @@ export function buildDistaff(ctx) {
     footfallGap: 0,
   };
   let inst = null;
+
+  /** Dormant district bosses remain spawned so their rig, save id and
+   *  performance footprint are stable, but are neither rendered nor
+   *  targetable. Alert reveals the figure while retaining the damage
+   *  lock; the fight clears both gates when it hands control back.
+   *  `root.visible` is written immediately because enemies.js already
+   *  ran earlier in the frame that detects the arena crossing. */
+  function setEncounterGate(hidden, locked = hidden) {
+    if (!inst) return;
+    inst.encounterHidden = !!hidden;
+    inst.encounterLocked = !!locked;
+    if (inst.root) inst.root.visible = !inst.encounterHidden;
+  }
+
   /* Last known plant per leg, for footfall detection - the solver
      replants feet on its own schedule and this module just watches
      for the moment each one lands. */
@@ -471,6 +487,7 @@ export function buildDistaff(ctx) {
   function beginAlert() {
     state.phase = "alert";
     state.timer = C.alertSeconds;
+    setEncounterGate(false, true);
     enemies.play(inst, "alert", 0.25);
     bus.emit("aggro", { x: inst.x, z: inst.z });
     /* The reveal camera is a review tool's own trick, not a new
@@ -491,7 +508,7 @@ export function buildDistaff(ctx) {
       const camY = groundAt(camX, camZ) + 5.5;
       ctx.player.setFree(true, [camX, camY, camZ],
         [inst.x, inst.y + 9, inst.z], 46);
-      state.releaseCameraAt = state.timer - 0.35;
+      state.releaseCameraAt = 0;
     }
   }
 
@@ -736,6 +753,7 @@ export function buildDistaff(ctx) {
     if (home < 3) {
       state.phase = "dormant";
       state.revealed = false;
+      setEncounterGate(true, true);
       enemies.play(inst, "idle", 0.5);
       bus.emit("reset", { x: inst.x, z: inst.z });
       return;
@@ -818,6 +836,7 @@ export function buildDistaff(ctx) {
         state.releaseCameraAt = undefined;
       }
       if (state.timer <= 0) {
+        setEncounterGate(false, false);
         state.phase = "standing";
         enemies.play(inst, "alert", 0.3);
       }
@@ -854,6 +873,7 @@ export function buildDistaff(ctx) {
   function beginReturn() {
     healToFull();
     clearHazards();
+    setEncounterGate(false, false);
     state.phase = "returning";
     state.disengageFor = 0;
     enemies.play(inst, "alert", 0.4);
@@ -871,6 +891,8 @@ export function buildDistaff(ctx) {
     state.phase = "dormant";
     state.revealed = false;
     state.disengageFor = 0;
+    state.releaseCameraAt = undefined;
+    setEncounterGate(true, true);
     enemies.play(inst, "idle", 0.4);
     bus.emit("reset", { x: inst.x, z: inst.z });
   }
@@ -880,7 +902,10 @@ export function buildDistaff(ctx) {
     const x = C.lairX;
     const z = C.lairZ;
     inst = enemies.spawn("distaff", x, z, { yaw: Math.PI * 0.15 });
-    if (inst) state.legHealthRef = inst.legHp?.[0] || 340;
+    if (inst) {
+      state.legHealthRef = inst.legHp?.[0] || 340;
+      setEncounterGate(true, true);
+    }
     return inst;
   }
 
@@ -936,6 +961,8 @@ export function buildDistaff(ctx) {
       collapsed: !!inst.collapsed,
       bodyDrop: Number((inst.bodyDrop || 0).toFixed(2)),
       lunging: state.lungeFor > 0,
+      hidden: !!inst.encounterHidden,
+      locked: !!inst.encounterLocked,
       homeDist: Number(Math.hypot(inst.x - C.lairX, inst.z - C.lairZ).toFixed(1)),
       dead: inst.state === "death",
       x: Number(inst.x.toFixed(2)),
@@ -974,11 +1001,13 @@ export function buildDistaff(ctx) {
     state.defeated = !!saved.defeated;
     state.disengageFor = 0;
     state.recollapseFor = 0;
+    state.releaseCameraAt = undefined;
     inst.x = Number.isFinite(saved.x) ? saved.x : inst.x;
     inst.z = Number.isFinite(saved.z) ? saved.z : inst.z;
     inst.yaw = Number.isFinite(saved.yaw) ? saved.yaw : inst.yaw;
     inst.root.position.set(inst.x, inst.y, inst.z);
     inst.root.rotation.y = inst.yaw;
+    setEncounterGate(phase === "dormant", phase === "dormant" || phase === "alert");
     if (Number.isFinite(saved.health)) inst.health = clamp(saved.health, 0, inst.maxHealth);
     if (Array.isArray(saved.legHp) && inst.legHp) {
       for (let i = 0; i < inst.legHp.length; i += 1) {
@@ -1025,6 +1054,8 @@ export function buildDistaff(ctx) {
       state.phase = String(phase);
       if (Number.isFinite(timer)) state.timer = timer;
       inst.collapsed = state.phase === "collapsed";
+      setEncounterGate(state.phase === "dormant",
+        state.phase === "dormant" || state.phase === "alert");
       return { phase: state.phase, timer: state.timer };
     },
     /** Instance accessor. QA-facing rather than gameplay-facing - the

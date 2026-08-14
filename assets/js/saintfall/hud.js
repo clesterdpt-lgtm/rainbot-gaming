@@ -656,7 +656,14 @@ export function buildHud(ctx, host) {
 
     const pulse = 0.5 + Math.sin(ctx.atmos.elapsed * 6.4) * 0.5;
     for (const [enemyIndex, inst] of ctx.enemies.live.entries()) {
-      if (!inst || inst.state === "death") continue;
+      /* A district boss hidden behind its arena-entry reveal must not
+         leak through the tactical picture either. The instance stays
+         alive for save and rig stability, but it does not become a
+         contact until the same reveal that makes its world figure
+         visible. Coulter's submerged chevron is deliberately separate:
+         that encounter is already active and the bearing is its hunt
+         mechanic. */
+      if (!inst || inst.state === "death" || inst.encounterHidden) continue;
       const p = point(inst.x, inst.z);
       if (!p.inside) continue;
       const eventUnit = !!inst.eventId;

@@ -125,6 +125,121 @@
       100% { transform: scale(1.15); opacity: 1; }
     }
 
+    /* Start / Pause Menu Overlay Styling */
+    .strait-page .overlay {
+      background: rgba(3, 8, 16, 0.88);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      padding: 20px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .strait-page .overlay--show {
+      display: flex;
+    }
+
+    .strait-menu-card {
+      background: rgba(8, 18, 32, 0.94);
+      border: 2px solid rgba(46, 224, 255, 0.35);
+      border-radius: 14px;
+      padding: clamp(18px, 4vw, 26px);
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 30px rgba(46, 224, 255, 0.15);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .strait-menu-tag {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      color: var(--strait-cyan);
+      background: rgba(46, 224, 255, 0.12);
+      border: 1px solid rgba(46, 224, 255, 0.3);
+      padding: 4px 10px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .strait-menu-title {
+      font-family: var(--font-display);
+      font-size: clamp(20px, 4.5vw, 26px);
+      color: #ffffff;
+      margin: 0 0 12px;
+      line-height: 1.15;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 0 20px rgba(46, 224, 255, 0.3);
+    }
+
+    .strait-brief-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      width: 100%;
+      margin: 0 0 18px;
+      text-align: left;
+    }
+
+    .strait-brief-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      line-height: 1.35;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .strait-brief-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .strait-brief-item strong {
+      color: var(--ink);
+    }
+
+    .strait-start-btn {
+      width: 100%;
+      font-size: 16px;
+      padding: 13px 28px;
+      border-radius: 8px;
+      font-family: var(--font-display);
+      letter-spacing: 0.5px;
+      background: linear-gradient(180deg, #2ee0ff, #0a8fb3);
+      color: #030810;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(46, 224, 255, 0.4);
+      transition: all 0.15s ease;
+    }
+
+    .strait-start-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 22px rgba(46, 224, 255, 0.6);
+    }
+
+    .strait-start-btn:active {
+      transform: translateY(1px);
+    }
+
+    .strait-controls-hint {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-top: 12px;
+    }
+
     /* Sector Banner Notification */
     .sector-banner {
       position: absolute;
@@ -472,14 +587,44 @@
           <div class="sector-banner" id="sector-banner">SECTOR 1: GULF APPROACH</div>
           <div class="combo-toast" id="combo-toast">⚡ NEAR MISS! +150</div>
 
-          <!-- Start / Pause / Ready Overlay -->
+          <!-- Redesigned Tactical Start / Pause / Ready Overlay -->
           <div class="overlay overlay--show" id="overlay">
-            <h2 class="overlay__title" id="overlay-title">⛴ STRAIT OF HORMUZ</h2>
-            <p class="overlay__sub" id="overlay-sub">
-              Steer the supertanker through hostile waters. Dodge incoming <strong style="color:var(--strait-red)">anti-ship missiles</strong>, floating <strong style="color:var(--strait-amber)">naval mines</strong>, and aggressive <strong style="color:var(--strait-red)">terrorist speedboats</strong>. Collect <strong style="color:var(--strait-green)">oil barrels</strong> to multiply your score and grab <strong style="color:var(--strait-cyan)">repair crates</strong> to patch the hull!
-            </p>
-            <div class="overlay__score" id="overlay-score"></div>
-            <button class="btn btn--primary" id="btn-primary" style="font-size:16px;padding:12px 28px;">Start Voyage</button>
+            <div class="strait-menu-card">
+              <span class="strait-menu-tag">OPERATION: HORMUZ RUN</span>
+              <h2 class="strait-menu-title" id="overlay-title">⛴ ESCAPE THE STRAIGHT</h2>
+              
+              <div class="strait-brief-grid">
+                <div class="strait-brief-item">
+                  <span class="strait-brief-icon">🚀</span>
+                  <div>
+                    <strong style="color:var(--strait-red);">Anti-Ship Missiles & Mines:</strong>
+                    Red laser targeting lines warn you before missiles strike. Steer clear or blast flares!
+                  </div>
+                </div>
+                <div class="strait-brief-item">
+                  <span class="strait-brief-icon">🚤</span>
+                  <div>
+                    <strong style="color:var(--strait-amber);">Hostile Terrorist Skiffs:</strong>
+                    Armed militia attack boats flank and fire tracer bursts.
+                  </div>
+                </div>
+                <div class="strait-brief-item">
+                  <span class="strait-brief-icon">🛢️</span>
+                  <div>
+                    <strong style="color:var(--strait-green);">Oil Barrels & Repair Buoys:</strong>
+                    Collect crude oil to multiply score frenzy up to 5x. Grab green buoys to patch hull!
+                  </div>
+                </div>
+              </div>
+
+              <div id="overlay-score" style="display:none;font-family:var(--font-mono);font-size:13px;margin-bottom:12px;color:var(--strait-cyan);"></div>
+
+              <button class="strait-start-btn" id="btn-primary">START VOYAGE</button>
+
+              <div class="strait-controls-hint">
+                Controls: <strong>WASD / Arrow Keys</strong> to steer · <strong>Space / HORN</strong> for Countermeasure Flares
+              </div>
+            </div>
           </div>
 
           <!-- End of Voyage / Wipeout Card Mount -->
@@ -582,7 +727,7 @@
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260813-apop3d-1"></script>
-  <script src="../assets/js/strait-of-hormuz.js?v=20260814-v5-pro"></script>
+  <script src="../assets/js/strait-of-hormuz.js?v=20260814-v5-pro2"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
   </script>

@@ -4,6 +4,7 @@
    Definitive tactical naval dodger:
    - Steer an oil tanker through the hostile Strait of Hormuz.
    - Continuous Swept-Ray Collision Detection (CCD) for 100% reliable hits.
+   - Advance Laser Lock-On Warnings (1.5-1.8s) for fair, readable missile dodging.
    - 3 Core Threat Families: Naval Mines, Anti-Ship Missiles, Terrorist Skiffs.
    - Helpful Pickups: Oil Barrels (score multiplier frenzy), Repair Buoys,
      Deflector Shields, Turbo Propellers.
@@ -29,20 +30,19 @@
   const NAUTICAL_MILE_UNITS = 800;     // 800 world units = 1.0 Nautical Mile
   const VISIBLE_AHEAD = 580;           // Forward render distance
   const VISIBLE_BEHIND = 240;          // Aft render distance
-  const BASE_LANE_HALF_WIDTH = 220;    // Navigational channel width (+/- centerline)
 
-  // Ship Physics
-  const SHIP_BASE_THRUST = 210;        // Forward acceleration (u/s²)
-  const SHIP_BASE_STRAFE = 175;        // Lateral rudder acceleration (u/s²)
-  const SHIP_BASE_MAX_SPEED = 175;     // Cruising speed cap (u/s)
-  const SHIP_LINEAR_DAMP = 0.88;       // Water drag (lower = driftier)
-  const SHIP_RUDDER_RESPONSE = 5.0;    // Visual heading interpolation rate
-  const SHIP_COLLISION_W = 16;         // Hitbox half-width (32px total)
-  const SHIP_COLLISION_L = 40;         // Hitbox half-length (80px total)
+  // Ship Physics & Controls
+  const SHIP_BASE_THRUST = 220;        // Forward acceleration (u/s²)
+  const SHIP_BASE_STRAFE = 230;        // Lateral rudder acceleration (u/s² - responsive dodging)
+  const SHIP_BASE_MAX_SPEED = 185;     // Cruising speed cap (u/s)
+  const SHIP_LINEAR_DAMP = 0.86;       // Water drag (responsive yet floaty)
+  const SHIP_RUDDER_RESPONSE = 6.0;    // Visual heading interpolation rate
+  const SHIP_COLLISION_W = 15;         // Hitbox half-width (30px total)
+  const SHIP_COLLISION_L = 38;         // Hitbox half-length (76px total)
   const HULL_MAX = 3;                  // Standard hull segments
   const IFRAME_DURATION = 1.6;         // Seconds of post-hit invulnerability
-  const HORN_COOLDOWN = 1.4;           // Cooldown between horn/flare blasts
-  const HORN_RADIUS = 140;             // Blast clearing radius
+  const HORN_COOLDOWN = 1.2;           // Cooldown between horn/flare blasts
+  const HORN_RADIUS = 160;             // Generous countermeasure blast clearing radius
 
   // Progressive Sectors
   const SECTOR_DEFS = [
@@ -52,7 +52,9 @@
       tagline: "Calm Waters · Mine Reconnaissance",
       width: 220,
       threat: 1.0,
-      spawnInterval: 1.60,
+      spawnInterval: 1.70,
+      missileWarningTime: 1.8,
+      missileSpeed: 230,
       mix: { mine: 0.80, missile: 0.20, terrorist: 0.00 },
       waterTop: "#0a4b64",
       waterMid: "#063045",
@@ -66,8 +68,10 @@
       name: "KISH & QESHM",
       tagline: "Channel Narrows · Terrorist Skiffs Sighted",
       width: 195,
-      threat: 1.35,
-      spawnInterval: 1.30,
+      threat: 1.30,
+      spawnInterval: 1.35,
+      missileWarningTime: 1.6,
+      missileSpeed: 255,
       mix: { mine: 0.55, missile: 0.25, terrorist: 0.20 },
       waterTop: "#0d5568",
       waterMid: "#083748",
@@ -81,8 +85,10 @@
       name: "THE NARROWS",
       tagline: "Hostile Chokepoint · Missile Batteries Active",
       width: 170,
-      threat: 1.75,
-      spawnInterval: 1.05,
+      threat: 1.65,
+      spawnInterval: 1.10,
+      missileWarningTime: 1.4,
+      missileSpeed: 280,
       mix: { mine: 0.40, missile: 0.35, terrorist: 0.25 },
       waterTop: "#123c52",
       waterMid: "#092434",
@@ -96,8 +102,10 @@
       name: "NIGHT BLOCKADE",
       tagline: "Stormy Waters · Gunboat Wolfpacks",
       width: 155,
-      threat: 2.20,
-      spawnInterval: 0.85,
+      threat: 2.10,
+      spawnInterval: 0.90,
+      missileWarningTime: 1.3,
+      missileSpeed: 305,
       mix: { mine: 0.32, missile: 0.38, terrorist: 0.30 },
       waterTop: "#091c2c",
       waterMid: "#05111c",
@@ -111,8 +119,10 @@
       name: "WARZONE HORIZON",
       tagline: "Total Blockade · Maximum Evasion",
       width: 140,
-      threat: 2.75,
-      spawnInterval: 0.70,
+      threat: 2.60,
+      spawnInterval: 0.75,
+      missileWarningTime: 1.2,
+      missileSpeed: 330,
       mix: { mine: 0.30, missile: 0.40, terrorist: 0.30 },
       waterTop: "#1a162b",
       waterMid: "#0d0a17",
@@ -139,7 +149,6 @@
     threat: 1.0,
     multiplier: 1.0,
     cargoCombo: 0,            // Barrels collected for combo
-    comboDecay: 0,
 
     // Ship
     ship: {
@@ -166,19 +175,17 @@
     },
 
     // Active entities
-    hazards: [],              // Mines, Missiles, Terrorist Skiffs
+    hazards: [],              // Mines, In-flight Missiles, Terrorist Skiffs
+    pendingMissiles: [],      // Missiles in laser lock-on warning phase
     projectiles: [],          // Bullets fired by terrorists
     pickups: [],              // Oil barrels, Repair kits, Shields, Turbos
     particles: [],            // Fire, smoke, water splashes, sparkles
     wakes: [],                // Dynamic trailing boat wake ripples
     shockwaves: [],           // Horn / explosion distortion rings
-    telegraphs: [],           // Laser missile targeting lines
 
-    // Near miss notifications
+    // Notifications
     nearMissText: "",
     nearMissUntil: 0,
-
-    // Banner notifications
     bannerText: "",
     bannerUntil: 0,
 
@@ -195,7 +202,6 @@
   };
 
   const saveSlot = window.RBGameSaves && window.RBGameSaves.create("hormuz", { version: 2 });
-  let saveMenu = null;
 
   // =========================================================================
   // 3. PROCEDURAL WEB AUDIO ENGINE
@@ -234,7 +240,6 @@
 
       audio.engineFilter.type = "lowpass";
       audio.engineFilter.frequency.value = 160;
-
       audio.engineGain.gain.value = 0;
 
       audio.engineOsc1.connect(audio.engineFilter);
@@ -322,14 +327,20 @@
         playTone(97,  0.60, "square",   0.14, 0.04);
         break;
 
+      case "lock_on":
+        // Tactical missile lock-on warning chirp
+        playTone(880, 0.08, "square", 0.12);
+        playTone(1200, 0.10, "square", 0.14, 0.06);
+        break;
+
       case "explosion":
         playNoise(0.65, 0.38, 420);
         playTone(65, 0.5, "sawtooth", 0.32);
         break;
 
       case "missile_launch":
-        playTone(280, 0.18, "sawtooth", 0.12);
-        playTone(620, 0.28, "sine", 0.14, 0.04);
+        playTone(280, 0.18, "sawtooth", 0.14);
+        playTone(620, 0.28, "sine", 0.16, 0.04);
         playNoise(0.25, 0.15, 1200);
         break;
 
@@ -346,7 +357,6 @@
         break;
 
       case "repair":
-        // Positive recovery chime
         playTone(440, 0.10, "triangle", 0.15);
         playTone(554.37, 0.12, "triangle", 0.18, 0.08);
         playTone(659.25, 0.14, "triangle", 0.20, 0.16);
@@ -412,8 +422,8 @@
     const sectorDef = SECTOR_DEFS[sectorIdx];
     const sectorStart = sectorIdx * SECTOR_LENGTH;
     const progress = clamp((dist - sectorStart) / SECTOR_LENGTH, 0, 1);
-    const threat = sectorDef.threat + progress * 0.35;
-    const laneWidth = Math.max(120, sectorDef.width - progress * 15);
+    const threat = sectorDef.threat + progress * 0.30;
+    const laneWidth = Math.max(125, sectorDef.width - progress * 15);
     return {
       sectorNumber: sectorIdx + 1,
       sectorDef,
@@ -424,7 +434,6 @@
   }
 
   function worldToScreen(wx, wy) {
-    // Camera is pinned horizontally in center, vertically at lower-middle (y: 62% of H)
     const camY = state.ship.y;
     return {
       x: W * 0.5 + wx,
@@ -432,15 +441,6 @@
     };
   }
 
-  function screenToWorld(sx, sy) {
-    const camY = state.ship.y;
-    return {
-      x: sx - W * 0.5,
-      y: camY + (H * 0.65 - sy)
-    };
-  }
-
-  // Point to line segment distance squared (for Swept Ray CCD)
   function distSqToSegment(px, py, x1, y1, x2, y2) {
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -457,10 +457,8 @@
     return rx * rx + ry * ry;
   }
 
-  // Check collision between an oriented boat capsule and a Swept Ray segment
   function checkSweptCapsuleCollision(prevX, prevY, currX, currY, projRadius) {
     const s = state.ship;
-    // Approximating ship as 3 overlapping circles along its longitudinal axis
     const rad = SHIP_COLLISION_W;
     const offsets = [-SHIP_COLLISION_L * 0.65, 0, SHIP_COLLISION_L * 0.65];
     const cosH = Math.cos(s.heading + Math.PI / 2);
@@ -477,7 +475,6 @@
     return false;
   }
 
-  // Point inside boat capsule check (for mines & pickups)
   function isInsideBoat(px, py, extraRadius = 0) {
     const s = state.ship;
     const rad = SHIP_COLLISION_W + extraRadius;
@@ -590,9 +587,9 @@
       }
     }
 
-    // Accelerations
+    // Accelerations (Responsive Rudder & Throttle)
     const turboMult = s.turboTimer > 0 ? 1.45 : 1.0;
-    const forwardAcc = (state.input.throttle * SHIP_BASE_THRUST + 120) * turboMult; // Forward momentum
+    const forwardAcc = (state.input.throttle * SHIP_BASE_THRUST + 130) * turboMult;
     const lateralAcc = state.input.steer * SHIP_BASE_STRAFE * turboMult;
 
     s.vy += forwardAcc * dt;
@@ -631,7 +628,7 @@
     // Visual heading & roll tilt
     let targetHeading = 0;
     if (currentSpeed > 10) {
-      targetHeading = Math.atan2(s.vx, s.vy); // 0 = pointing forward +Y
+      targetHeading = Math.atan2(s.vx, s.vy);
     }
     s.heading += (targetHeading - s.heading) * Math.min(1, dt * SHIP_RUDDER_RESPONSE);
     s.roll += ((state.input.steer * 0.18) - s.roll) * Math.min(1, dt * 6.0);
@@ -687,8 +684,9 @@
 
     state.camShake = Math.max(state.camShake, 0.25);
 
-    // Deflect & destroy hazards in range
     let clearedCount = 0;
+
+    // 1. Deflect in-flight hazards
     for (let i = state.hazards.length - 1; i >= 0; i--) {
       const h = state.hazards[i];
       const d = Math.hypot(s.x - h.x, s.y - h.y);
@@ -706,7 +704,17 @@
       }
     }
 
-    // Destroy incoming tracer bullets
+    // 2. Clear pending locked-on missiles targeting near ship
+    for (let i = state.pendingMissiles.length - 1; i >= 0; i--) {
+      const m = state.pendingMissiles[i];
+      if (distSqToSegment(s.x, s.y, m.startX, m.startY, m.targetX, m.targetY) <= HORN_RADIUS * HORN_RADIUS) {
+        state.pendingMissiles.splice(i, 1);
+        spawnExplosion(m.startX, m.startY, 25, "#ffd43b");
+        clearedCount++;
+      }
+    }
+
+    // 3. Destroy incoming tracer bullets
     for (let i = state.projectiles.length - 1; i >= 0; i--) {
       const p = state.projectiles[i];
       if (Math.hypot(s.x - p.x, s.y - p.y) <= HORN_RADIUS) {
@@ -731,7 +739,6 @@
     const laneHalf = sectorData.laneHalfWidth;
     const mix = sectorData.sectorDef.mix;
 
-    // Pick weighted type
     const roll = Math.random();
     let type = "mine";
     if (roll < mix.mine) type = "mine";
@@ -746,80 +753,65 @@
         x: rand(-laneHalf + 18, laneHalf - 18),
         y: aheadY,
         vx: rand(-8, 8),
-        vy: rand(-15, -35),
-        radius: 13,
+        vy: rand(-12, -28),
+        radius: 12,
         bobPhase: Math.random() * TAU,
         spikes: randi(7, 10),
         dead: false
       });
     } else if (type === "missile") {
-      // Incoming cruise missile (can spawn from sides or high ahead)
-      const fromSide = Math.random() < 0.6;
-      let startX, startY, targetX, targetY, speed;
+      // Advance Laser Lock-On Telegraph (fair warning)
+      const fromSide = Math.random() < 0.65;
+      let startX, startY, targetX, targetY;
+      const missileSpeed = sectorData.sectorDef.missileSpeed || 250;
 
       if (fromSide) {
         const side = Math.random() < 0.5 ? -1 : 1;
-        startX = side * (laneHalf + rand(160, 240));
-        startY = s.y + rand(60, VISIBLE_AHEAD * 0.85);
-        targetX = -side * (laneHalf + 100);
-        targetY = startY + rand(-120, -220);
-        speed = rand(360, 480) * (0.9 + sectorData.threat * 0.15);
+        startX = side * (laneHalf + rand(120, 180));
+        startY = s.y + rand(40, VISIBLE_AHEAD * 0.75);
+        targetX = -side * (laneHalf + 120);
+        targetY = startY + rand(-100, -180);
       } else {
-        startX = rand(-laneHalf * 0.8, laneHalf * 0.8);
-        startY = s.y + VISIBLE_AHEAD + 140;
-        targetX = s.x + rand(-60, 60);
-        targetY = s.y - 200;
-        speed = rand(420, 540) * (0.9 + sectorData.threat * 0.15);
+        startX = rand(-laneHalf * 0.75, laneHalf * 0.75);
+        startY = s.y + VISIBLE_AHEAD + 120;
+        targetX = s.x + rand(-50, 50);
+        targetY = s.y - 180;
       }
 
       const angle = Math.atan2(targetY - startY, targetX - startX);
-      const vx = Math.cos(angle) * speed;
-      const vy = Math.sin(angle) * speed;
+      const vx = Math.cos(angle) * missileSpeed;
+      const vy = Math.sin(angle) * missileSpeed;
+      const warningTime = sectorData.sectorDef.missileWarningTime || 1.6;
 
-      // Register laser telegraph line
-      state.telegraphs.push({
-        x1: startX,
-        y1: startY,
-        x2: startX + vx * 2.5,
-        y2: startY + vy * 2.5,
-        life: 1.1,
-        maxLife: 1.1
-      });
+      playSfx("lock_on");
 
-      playSfx("missile_launch");
-
-      state.hazards.push({
-        type: "missile",
-        x: startX,
-        y: startY,
-        prevX: startX,
-        prevY: startY,
+      state.pendingMissiles.push({
+        startX,
+        startY,
+        targetX,
+        targetY,
         vx,
         vy,
-        speed,
         angle,
-        radius: 8,
-        smokeClock: 0,
-        nearMissChecked: false,
-        dead: false
+        speed: missileSpeed,
+        lockTimer: warningTime,
+        maxTimer: warningTime
       });
     } else if (type === "terrorist") {
-      // Armed Hostile Skiff / Gunboat
       const side = Math.random() < 0.5 ? -1 : 1;
       state.hazards.push({
         type: "terrorist",
-        x: side * (laneHalf + rand(30, 80)),
+        x: side * (laneHalf + rand(30, 70)),
         y: aheadY,
         prevX: 0,
         prevY: 0,
-        vx: -side * rand(60, 100),
-        vy: rand(-30, -60),
+        vx: -side * rand(50, 85),
+        vy: rand(-25, -45),
         heading: 0,
         hp: 2,
         width: 14,
-        length: 32,
-        shootClock: rand(0.6, 1.4),
-        burstCount: 0,
+        length: 30,
+        shootClock: rand(0.8, 1.6),
         dead: false
       });
     }
@@ -828,6 +820,35 @@
   function updateHazards(dt) {
     const s = state.ship;
 
+    // 1. Process Pending Missiles (Laser Lock-On Phase)
+    for (let i = state.pendingMissiles.length - 1; i >= 0; i--) {
+      const m = state.pendingMissiles[i];
+      m.lockTimer -= dt;
+
+      if (m.lockTimer <= 0) {
+        state.pendingMissiles.splice(i, 1);
+        playSfx("missile_launch");
+
+        // Launch in-flight missile
+        state.hazards.push({
+          type: "missile",
+          x: m.startX,
+          y: m.startY,
+          prevX: m.startX,
+          prevY: m.startY,
+          vx: m.vx,
+          vy: m.vy,
+          speed: m.speed,
+          angle: m.angle,
+          radius: 5,
+          smokeClock: 0,
+          nearMissChecked: false,
+          dead: false
+        });
+      }
+    }
+
+    // 2. Process Active In-flight Hazards
     for (let i = state.hazards.length - 1; i >= 0; i--) {
       const h = state.hazards[i];
 
@@ -836,10 +857,8 @@
         h.x += h.vx * dt;
         h.y += h.vy * dt;
 
-        // Despawn far behind
         if (h.y < s.y - VISIBLE_BEHIND) h.dead = true;
 
-        // Direct collision check
         if (!h.dead && isInsideBoat(h.x, h.y, h.radius)) {
           detonateMine(h, false);
           takeHullDamage("Naval Contact Mine");
@@ -858,7 +877,7 @@
         }
 
         // Near Miss Detection
-        if (!h.nearMissChecked && distSqToSegment(s.x, s.y, h.prevX, h.prevY, h.x, h.y) < 55 * 55) {
+        if (!h.nearMissChecked && distSqToSegment(s.x, s.y, h.prevX, h.prevY, h.x, h.y) < 45 * 45) {
           h.nearMissChecked = true;
           triggerNearMiss("Anti-Ship Missile");
         }
@@ -869,36 +888,27 @@
           takeHullDamage("Anti-Ship Missile Strike");
         }
 
-        // Despawn if way past camera
         if (h.y < s.y - VISIBLE_BEHIND - 100 || Math.abs(h.x) > W * 0.8) {
           h.dead = true;
         }
       } else if (h.type === "terrorist") {
-        // AI Steering: Skiff maneuvers to track player's flank and shoot
         const dx = s.x - h.x;
-        const dy = s.y - h.y;
-        const dist = Math.hypot(dx, dy);
-
-        // Steering toward engagement zone
-        h.vx += clamp(dx * 0.8, -120, 120) * dt;
+        h.vx += clamp(dx * 0.6, -100, 100) * dt;
         h.vx *= Math.max(0, 1 - 0.7 * dt);
         h.y += h.vy * dt;
         h.x += h.vx * dt;
         h.heading = Math.atan2(h.vx, h.vy);
 
-        // Skiff water wake
-        if (Math.random() < 0.4) {
+        if (Math.random() < 0.35) {
           spawnWaterSplash(h.x, h.y - 12, 1, "rgba(255, 255, 255, 0.6)", 25);
         }
 
-        // Shooting machine gun tracer rounds
         h.shootClock -= dt;
         if (h.shootClock <= 0 && h.y > s.y + 40 && h.y < s.y + VISIBLE_AHEAD) {
-          h.shootClock = rand(1.2, 2.2);
+          h.shootClock = rand(1.4, 2.4);
           fireTerroristBurst(h);
         }
 
-        // Skiff ramming collision check
         if (!h.dead && isInsideBoat(h.x, h.y, h.width)) {
           damageTerrorist(h, 99, false);
           takeHullDamage("Hostile Skiff Ramming");
@@ -917,12 +927,11 @@
     const s = state.ship;
     const dx = s.x - skiff.x;
     const dy = s.y - skiff.y;
-    const angle = Math.atan2(dy, dx) + rand(-0.12, 0.12);
-    const speed = 360;
+    const angle = Math.atan2(dy, dx) + rand(-0.10, 0.10);
+    const speed = 320;
 
     playSfx("gunfire");
 
-    // Spawn 2 tracer rounds in tight succession
     state.projectiles.push({
       x: skiff.x,
       y: skiff.y - 10,
@@ -935,7 +944,6 @@
       dead: false
     });
 
-    // Muzzle flash
     spawnFireSpark(skiff.x, skiff.y - 10, "#ffd43b");
   }
 
@@ -948,7 +956,6 @@
       p.y += p.vy * dt;
       p.life -= dt;
 
-      // CCD collision against ship
       if (checkSweptCapsuleCollision(p.prevX, p.prevY, p.x, p.y, p.radius)) {
         p.dead = true;
         spawnFireSpark(p.x, p.y, "#ff3b56");
@@ -1031,7 +1038,6 @@
         p.dead = true;
       }
 
-      // Pickup collection
       if (!p.dead && isInsideBoat(p.x, p.y, 16)) {
         p.dead = true;
         collectPickup(p);
@@ -1080,14 +1086,13 @@
   }
 
   // =========================================================================
-  // 10. DAMAGE, DESTRUCTION & GAME OVER
+  // 10. DAMAGE & GAME OVER
   // =========================================================================
 
   function takeHullDamage(sourceLabel) {
     const s = state.ship;
     if (s.iframe > 0) return;
 
-    // Deflector shield check
     if (s.hasShield) {
       s.hasShield = false;
       s.iframe = 0.8;
@@ -1128,14 +1133,12 @@
     const finalDistance = (state.distance / NAUTICAL_MILE_UNITS).toFixed(2);
     const finalSector = getSectorData().sectorNumber;
 
-    // Massive final explosion
     spawnExplosion(state.ship.x, state.ship.y, 90, "#ff3b56");
     spawnExplosion(state.ship.x + 15, state.ship.y - 20, 75, "#ff8c1a");
     spawnExplosion(state.ship.x - 15, state.ship.y + 20, 65, "#ffd43b");
     state.camShake = 0.9;
     state.screenFlash = 0.95;
 
-    // Record score
     const isHigh = RB.recordScore("hormuz", state.score);
     if (isHigh) RB.toast("🏆 NEW HIGH SCORE!", "good");
 
@@ -1302,7 +1305,6 @@
       p.size = Math.max(1, p.size * (1 - dt * 0.5));
     }
 
-    // Update Boat Wakes
     for (let i = state.wakes.length - 1; i >= 0; i--) {
       const w = state.wakes[i];
       w.life -= dt;
@@ -1315,7 +1317,6 @@
       w.width += dt * 45;
     }
 
-    // Update Shockwaves
     for (let i = state.shockwaves.length - 1; i >= 0; i--) {
       const sw = state.shockwaves[i];
       sw.life -= dt;
@@ -1324,15 +1325,6 @@
         continue;
       }
       sw.radius += (sw.maxRadius - sw.radius) * (dt * 7.0);
-    }
-
-    // Update Telegraph Lines
-    for (let i = state.telegraphs.length - 1; i >= 0; i--) {
-      const t = state.telegraphs[i];
-      t.life -= dt;
-      if (t.life <= 0) {
-        state.telegraphs.splice(i, 1);
-      }
     }
   }
 
@@ -1344,7 +1336,6 @@
     const sectorData = getSectorData();
     const sectorDef = sectorData.sectorDef;
 
-    // Apply Camera Shake
     const shake = state.camShake;
     const sx = (Math.random() - 0.5) * shake * 14;
     const sy = (Math.random() - 0.5) * shake * 14;
@@ -1361,8 +1352,8 @@
     // 3. Distance & Milestone Markers
     drawMilestoneMarkers();
 
-    // 4. Missile Warning Telegraph Lines
-    drawTelegraphs();
+    // 4. Missile Laser Lock-On Telegraph Lines (Pre-launch Warnings)
+    drawLaserTelegraphs();
 
     // 5. Boat Wake Ripples
     drawWakes();
@@ -1370,7 +1361,7 @@
     // 6. Helpful Pickups
     drawPickups();
 
-    // 7. Hazards (Mines, Missiles, Terrorists)
+    // 7. Hazards (Mines, In-Flight Missiles, Terrorists)
     drawHazards();
 
     // 8. Tracer Projectiles
@@ -1402,7 +1393,6 @@
   }
 
   function drawOcean(sectorDef, sectorData) {
-    // Dynamic Gradient Ocean
     const grad = ctx.createLinearGradient(0, 0, 0, H);
     grad.addColorStop(0, sectorDef.waterTop);
     grad.addColorStop(0.5, sectorDef.waterMid);
@@ -1410,7 +1400,6 @@
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, W, H);
 
-    // Procedural animated wave caustic lines
     const time = performance.now() * 0.0015;
     ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
     ctx.lineWidth = 1.5;
@@ -1438,9 +1427,7 @@
     const leftScreenX = worldToScreen(-laneHalf, 0).x;
     const rightScreenX = worldToScreen(laneHalf, 0).x;
 
-    // Arid Desert Coastline Mountains (Oman & Iran Cliffs)
     const cliffColor = "#1a1824";
-    const cliffEdgeColor = "#2d273a";
 
     // Left Shore
     ctx.fillStyle = cliffColor;
@@ -1456,7 +1443,6 @@
     ctx.closePath();
     ctx.fill();
 
-    // Left Shoreline Foam
     ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -1482,7 +1468,6 @@
     ctx.closePath();
     ctx.fill();
 
-    // Right Shoreline Foam
     ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -1494,7 +1479,7 @@
     }
     ctx.stroke();
 
-    // Navigational Buoy Lane Demarcation
+    // Navigational Buoy Lane
     ctx.strokeStyle = "rgba(46, 224, 255, 0.22)";
     ctx.lineWidth = 2;
     ctx.setLineDash([12, 14]);
@@ -1523,26 +1508,38 @@
     }
   }
 
-  function drawTelegraphs() {
-    for (const t of state.telegraphs) {
-      const p1 = worldToScreen(t.x1, t.y1);
-      const p2 = worldToScreen(t.x2, t.y2);
-      const alpha = (t.life / t.maxLife) * 0.7;
+  function drawLaserTelegraphs() {
+    const now = performance.now();
+    for (const m of state.pendingMissiles) {
+      const p1 = worldToScreen(m.startX, m.startY);
+      const p2 = worldToScreen(m.targetX, m.targetY);
 
+      const pulse = 0.5 + 0.5 * Math.sin(now * 0.02);
+      const alpha = 0.35 + pulse * 0.45;
+
+      // Laser Trajectory Beam
       ctx.strokeStyle = `rgba(255, 59, 86, ${alpha})`;
-      ctx.lineWidth = 2.5;
-      ctx.setLineDash([8, 6]);
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 8]);
       ctx.beginPath();
       ctx.moveTo(p1.x, p1.y);
       ctx.lineTo(p2.x, p2.y);
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Warning Reticle
-      ctx.fillStyle = `rgba(255, 59, 86, ${alpha * 0.9})`;
-      ctx.font = "800 10px JetBrains Mono, monospace";
+      // Pulsing Warning Crosshair on Target Point
+      const midPoint = worldToScreen(
+        (m.startX + m.targetX) * 0.5,
+        (m.startY + m.targetY) * 0.5
+      );
+
+      ctx.fillStyle = `rgba(255, 59, 86, ${alpha * 0.95})`;
+      ctx.font = "800 11px JetBrains Mono, monospace";
       ctx.textAlign = "center";
-      ctx.fillText("⚠️ MISSILE TRAJECTORY", p2.x, p2.y - 8);
+      ctx.shadowColor = "#ff3b56";
+      ctx.shadowBlur = 8;
+      ctx.fillText("⚠️ MISSILE INCOMING", midPoint.x, midPoint.y - 12);
+      ctx.shadowBlur = 0;
     }
   }
 
@@ -1568,13 +1565,11 @@
       const bobY = Math.sin(p.bob) * 3;
 
       if (p.type === "oil") {
-        // Floating Golden Crude Oil Barrel
         ctx.fillStyle = "rgba(255, 212, 59, 0.25)";
         ctx.beginPath();
         ctx.arc(sp.x, sp.y + bobY, 18, 0, TAU);
         ctx.fill();
 
-        // Barrel Body
         ctx.fillStyle = "#1e1b18";
         ctx.beginPath();
         ctx.roundRect(sp.x - 10, sp.y - 13 + bobY, 20, 26, 4);
@@ -1583,7 +1578,6 @@
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Golden Steel Bands
         ctx.strokeStyle = "#ffd43b";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
@@ -1593,13 +1587,11 @@
         ctx.lineTo(sp.x + 10, sp.y + 5 + bobY);
         ctx.stroke();
 
-        // Oil Drop Icon
         ctx.fillStyle = "#ffd43b";
         ctx.font = "12px sans-serif";
         ctx.textAlign = "center";
         ctx.fillText("🛢️", sp.x, sp.y + 4 + bobY);
       } else if (p.type === "repair") {
-        // Green Marine Repair Buoy
         ctx.fillStyle = "rgba(74, 222, 128, 0.3)";
         ctx.beginPath();
         ctx.arc(sp.x, sp.y + bobY, 20, 0, TAU);
@@ -1613,12 +1605,10 @@
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Medical Cross
         ctx.fillStyle = "#4ade80";
         ctx.fillRect(sp.x - 3, sp.y - 8 + bobY, 6, 16);
         ctx.fillRect(sp.x - 8, sp.y - 3 + bobY, 16, 6);
       } else if (p.type === "shield") {
-        // Shield Orb
         ctx.fillStyle = "rgba(46, 224, 255, 0.35)";
         ctx.beginPath();
         ctx.arc(sp.x, sp.y + bobY, 16, 0, TAU);
@@ -1631,7 +1621,6 @@
         ctx.textAlign = "center";
         ctx.fillText("🛡️", sp.x, sp.y + 5 + bobY);
       } else if (p.type === "turbo") {
-        // Turbo Propeller
         ctx.fillStyle = "rgba(255, 46, 136, 0.35)";
         ctx.beginPath();
         ctx.arc(sp.x, sp.y + bobY, 16, 0, TAU);
@@ -1653,17 +1642,14 @@
       if (sp.y < -50 || sp.y > H + 50) continue;
 
       if (h.type === "mine") {
-        // 1. Spiked Naval Contact Mine
         const bob = Math.sin(h.bobPhase) * 2.5;
-
-        // Warning Glow Aura
         const pulse = 0.5 + 0.5 * Math.sin(h.bobPhase * 2.0);
+
         ctx.fillStyle = `rgba(255, 59, 86, ${0.15 + pulse * 0.15})`;
         ctx.beginPath();
         ctx.arc(sp.x, sp.y + bob, h.radius * 2.0, 0, TAU);
         ctx.fill();
 
-        // Tether Chain beneath
         ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -1671,7 +1657,6 @@
         ctx.lineTo(sp.x, sp.y + bob + 26);
         ctx.stroke();
 
-        // Mine Spikes
         ctx.strokeStyle = "#1a0b0b";
         ctx.lineWidth = 3;
         for (let i = 0; i < h.spikes; i++) {
@@ -1682,7 +1667,6 @@
           ctx.stroke();
         }
 
-        // Spherical Mine Body
         const mineGrad = ctx.createRadialGradient(sp.x - 3, sp.y + bob - 3, 2, sp.x, sp.y + bob, h.radius);
         mineGrad.addColorStop(0, "#5a2d2d");
         mineGrad.addColorStop(0.7, "#2b1010");
@@ -1695,18 +1679,15 @@
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Pulsing Warning LED on top
         ctx.fillStyle = `rgba(255, 59, 86, ${0.4 + pulse * 0.6})`;
         ctx.beginPath();
         ctx.arc(sp.x, sp.y + bob, 3, 0, TAU);
         ctx.fill();
       } else if (h.type === "missile") {
-        // 2. Anti-Ship Cruise Missile
         ctx.save();
         ctx.translate(sp.x, sp.y);
         ctx.rotate(h.angle + Math.PI / 2);
 
-        // Rocket Exhaust Fire
         const exhaustGrad = ctx.createLinearGradient(0, 8, 0, 32);
         exhaustGrad.addColorStop(0, "rgba(255, 212, 59, 0.95)");
         exhaustGrad.addColorStop(0.4, "rgba(255, 92, 59, 0.8)");
@@ -1714,12 +1695,11 @@
         ctx.fillStyle = exhaustGrad;
         ctx.beginPath();
         ctx.moveTo(-5, 8);
-        ctx.lineTo(0, 32 + Math.random() * 8);
+        ctx.lineTo(0, 30 + Math.random() * 8);
         ctx.lineTo(5, 8);
         ctx.closePath();
         ctx.fill();
 
-        // Missile Fuselage
         ctx.fillStyle = "#e8edf5";
         ctx.beginPath();
         ctx.roundRect(-4, -14, 8, 22, 3);
@@ -1728,7 +1708,6 @@
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Red Nosecone
         ctx.fillStyle = "#ff3b56";
         ctx.beginPath();
         ctx.moveTo(-4, -14);
@@ -1737,7 +1716,6 @@
         ctx.closePath();
         ctx.fill();
 
-        // Delta Tailfins
         ctx.fillStyle = "#ff3b56";
         ctx.beginPath();
         ctx.moveTo(-4, 2);
@@ -1750,12 +1728,10 @@
 
         ctx.restore();
       } else if (h.type === "terrorist") {
-        // 3. Terrorist Armed Speedboat / Skiff
         ctx.save();
         ctx.translate(sp.x, sp.y);
         ctx.rotate(h.heading + Math.PI / 2);
 
-        // Skiff Hull
         ctx.fillStyle = "#1e222d";
         ctx.beginPath();
         ctx.moveTo(-h.width * 0.5, h.length * 0.4);
@@ -1769,18 +1745,15 @@
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Twin Outboard Motors
         ctx.fillStyle = "#0a0c10";
         ctx.fillRect(-h.width * 0.4, h.length * 0.38, 4, 6);
         ctx.fillRect(h.width * 0.4 - 4, h.length * 0.38, 4, 6);
 
-        // Armed Crew / Gunner
         ctx.fillStyle = "#e0a96d";
         ctx.beginPath();
-        ctx.arc(0, -2, 3.5, 0, TAU); // Gunner Head
+        ctx.arc(0, -2, 3.5, 0, TAU);
         ctx.fill();
 
-        // Machine Gun Barrel
         ctx.strokeStyle = "#8b9bb4";
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -1816,12 +1789,10 @@
     ctx.translate(sp.x, sp.y);
     ctx.rotate(s.heading + s.roll);
 
-    // Invulnerability Flashing
     if (s.iframe > 0 && Math.floor(performance.now() / 80) % 2 === 0) {
       ctx.globalAlpha = 0.4;
     }
 
-    // Deflector Shield Bubble
     if (s.hasShield) {
       ctx.strokeStyle = "rgba(46, 224, 255, 0.85)";
       ctx.fillStyle = "rgba(46, 224, 255, 0.15)";
@@ -1835,7 +1806,6 @@
       ctx.shadowBlur = 0;
     }
 
-    // High-Resolution Oil Tanker Hull
     const hullGrad = ctx.createLinearGradient(-SHIP_COLLISION_W, 0, SHIP_COLLISION_W, 0);
     hullGrad.addColorStop(0, "#d94814");
     hullGrad.addColorStop(0.3, "#ff6b2b");
@@ -1847,7 +1817,7 @@
     ctx.moveTo(-SHIP_COLLISION_W, SHIP_COLLISION_L * 0.85);
     ctx.lineTo(SHIP_COLLISION_W, SHIP_COLLISION_L * 0.85);
     ctx.lineTo(SHIP_COLLISION_W * 0.95, -SHIP_COLLISION_L * 0.6);
-    ctx.lineTo(0, -SHIP_COLLISION_L * 0.95); // Bow
+    ctx.lineTo(0, -SHIP_COLLISION_L * 0.95);
     ctx.lineTo(-SHIP_COLLISION_W * 0.95, -SHIP_COLLISION_L * 0.6);
     ctx.closePath();
     ctx.fill();
@@ -1856,13 +1826,11 @@
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Dark Tanker Deck
     ctx.fillStyle = "#222a36";
     ctx.beginPath();
     ctx.roundRect(-SHIP_COLLISION_W * 0.75, -SHIP_COLLISION_L * 0.5, SHIP_COLLISION_W * 1.5, SHIP_COLLISION_L * 1.1, 4);
     ctx.fill();
 
-    // Oil Pipe Manifold Deck Lines
     ctx.strokeStyle = "#ffd43b";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -1874,7 +1842,6 @@
     ctx.lineTo(SHIP_COLLISION_W * 0.6, SHIP_COLLISION_L * 0.2);
     ctx.stroke();
 
-    // Superstructure / Bridge Tower (Aft)
     ctx.fillStyle = "#ffffff";
     ctx.beginPath();
     ctx.roundRect(-SHIP_COLLISION_W * 0.65, SHIP_COLLISION_L * 0.45, SHIP_COLLISION_W * 1.3, 16, 3);
@@ -1883,17 +1850,15 @@
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Bridge Windows
     ctx.fillStyle = "#2ee0ff";
     ctx.fillRect(-SHIP_COLLISION_W * 0.45, SHIP_COLLISION_L * 0.48, SHIP_COLLISION_W * 0.9, 4);
 
-    // Navigational Lights (Starboard Green, Port Red)
-    ctx.fillStyle = "#4ade80"; // Starboard Green
+    ctx.fillStyle = "#4ade80";
     ctx.beginPath();
     ctx.arc(SHIP_COLLISION_W * 0.8, -SHIP_COLLISION_L * 0.5, 2.5, 0, TAU);
     ctx.fill();
 
-    ctx.fillStyle = "#ff3b56"; // Port Red
+    ctx.fillStyle = "#ff3b56";
     ctx.beginPath();
     ctx.arc(-SHIP_COLLISION_W * 0.8, -SHIP_COLLISION_L * 0.5, 2.5, 0, TAU);
     ctx.fill();
@@ -1954,7 +1919,6 @@
   function drawInGameNotifications() {
     const now = performance.now();
 
-    // Near Miss Toast
     if (state.nearMissText && now < state.nearMissUntil) {
       const el = document.getElementById("combo-toast");
       if (el) {
@@ -1966,7 +1930,6 @@
       if (el) el.classList.remove("is-active");
     }
 
-    // Sector Transition Banner
     if (state.bannerText && now < state.bannerUntil) {
       const el = document.getElementById("sector-banner");
       if (el) {
@@ -2010,7 +1973,7 @@
 
       // Spawning Clocks
       state.spawnClock += dt;
-      const currentSpawnInterval = Math.max(0.48, sectorData.sectorDef.spawnInterval / (0.8 + state.threat * 0.2));
+      const currentSpawnInterval = Math.max(0.50, sectorData.sectorDef.spawnInterval / (0.8 + state.threat * 0.2));
       if (state.spawnClock >= currentSpawnInterval) {
         state.spawnClock = 0;
         spawnHazard();
@@ -2039,10 +2002,8 @@
       updateParticles(dt);
       updateEngineAudio();
 
-      // Score increment based on distance and speed
       state.score += Math.round(dt * (18 + state.threat * 12) * state.multiplier);
 
-      // Camera shake decay
       if (state.camShake > 0) state.camShake = Math.max(0, state.camShake - dt * 2.8);
     }
 
@@ -2083,12 +2044,12 @@
     };
 
     state.hazards = [];
+    state.pendingMissiles = [];
     state.projectiles = [];
     state.pickups = [];
     state.particles = [];
     state.wakes = [];
     state.shockwaves = [];
-    state.telegraphs = [];
     state.spawnClock = 0;
     state.pickupClock = 0;
 
@@ -2126,7 +2087,6 @@
     const ov = document.getElementById("overlay");
     if (!ov) return;
     document.getElementById("overlay-title").textContent = title;
-    document.getElementById("overlay-sub").innerHTML = sub;
     ov.classList.add("overlay--show");
   }
 
@@ -2242,10 +2202,7 @@
   document.getElementById("btn-pause").addEventListener("click", togglePause);
   document.getElementById("btn-sound").addEventListener("click", () => setSoundEnabled(!audio.enabled));
   document.getElementById("btn-restart").addEventListener("click", () => {
-    showOverlay(
-      "⛴ RESTART VOYAGE?",
-      "Abort the current mission and re-enter the Strait of Hormuz from Sector 1?"
-    );
+    showOverlay("⛴ RESTART VOYAGE?");
   });
 
   setupTouchControls();

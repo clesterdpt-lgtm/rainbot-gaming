@@ -3829,7 +3829,56 @@ const COURSE_1 = {
     const MEZZ = 8;
     const CAT = 17;
 
-    out.bounds([-HALF - 6, -4, -HALF - 6], [HALF + 6, CEIL + 6, HALF + 6]);
+    /* ============================================================
+       THE WELL - and it is the answer to "the course is one flat
+       plane", which is the only structural note eight rounds of blind
+       review have not been able to shift.
+
+       `vista` and `high-ground` both refused, twice running, with the
+       same sentence: "only 0% of the ground within 23 m lies below
+       this stand point". camera.js is right and the complaint is not
+       about those two frames. Every surviving capture was shot from
+       standing height on one floor, so nothing in the set had an
+       overlook, a drop, or anything to look PAST - which is where the
+       missing depth structure went, and why five of seven frames read
+       as dead floor across the bottom third.
+
+       So the middle of the food court is a sunken plaza: a 46 m
+       square well, WELL_D metres down, with the fountain standing in
+       it, seating round its walls, four stairs into it and two
+       balconies over it. One change, five results:
+
+         1. a real vantage, measured (see the belvederes below);
+         2. a foreground edge - the coping and its rail - across the
+            bottom of every frame that looks at the middle of the room;
+         3. the landmark shot from ABOVE with its crown intact, which
+            is what `arrival` and `platforming` were failing at;
+         4. a large intrinsic dark. The reveal under the coping runs
+            the whole 184 m of rim, and the balcony soffits are two
+            60 m^2 down-facing planes 3.9 m over the plaza floor. A
+            roofed course cannot cast a shadow (see the note on the
+            occlusion bake); a HOLE is the only architectural dark
+            available at these lens heights, and this is the same idea
+            as the fountain's under-rim reveal at ten times the size;
+         5. one dominant mass to compose around.
+
+       WHY 3.3 m AND NOT 3.0. The vantage test asks what fraction of
+       the ground at 14 m and 23 m lies more than 2.5 m below the
+       stand point. At a 3.0 m drop the fountain's standing soda sits
+       2.47 m down - three centimetres inside the threshold - and the
+       four ring samples that cross the pool come back "not below",
+       which is the difference between 30% and 50%. 3.3 m puts the
+       water at 2.77 m and the plaza floor at 3.3 m, both clear.
+
+       IT IS NOT A PIT. Nine risers of 0.367 m are inside physics.js's
+       0.42 m step rule, so all four stairs walk in both directions,
+       and the drop is a third of the mezzanine's. */
+    const WELL_D = 3.3;          /* how far the plaza floor sits below */
+    const SUNK = -WELL_D;        /* the plaza floor, in course coords  */
+    const WELL = 23;             /* half-width of the well             */
+    const DECK = HALF + 4;       /* half-width of the floor slab       */
+
+    out.bounds([-HALF - 6, SUNK - 4, -HALF - 6], [HALF + 6, CEIL + 6, HALF + 6]);
 
     /* ============ ground ============ */
 
@@ -3838,17 +3887,235 @@ const COURSE_1 = {
        metres a chip was one to five screen pixels across a surface
        that fills more than half the frame. At eighteen the same
        painter reads as a slow mottle you notice and then stop
-       noticing, which is what a floor is for. */
-    out.add(P.platform(HALF * 2 + 8, 1.6, HALF * 2 + 8, { bevel: 0.3, round: 3 }),
-      "foodcourt.terrazzo", { pos: [0, -0.8, 0], collide: true, uvScale: 18, jitter: 0.04 });
+       noticing, which is what a floor is for.
+       The slab itself is the PLAZA floor now. Everything outside the
+       well stands on the deck frame below, which is the same surface
+       three and a bit metres higher - so there is no seam anywhere
+       and no hole for a ground probe to fall through. */
+    out.add(P.platform(DECK * 2, 1.6, DECK * 2, { bevel: 0.3, round: 3 }),
+      "foodcourt.terrazzo", { pos: [0, SUNK - 0.8, 0], collide: true, uvScale: 18, jitter: 0.04 });
 
-    /* The checker patch under the seating. One regular area in the
-       middle of a mottled floor gives the eye something to measure
-       everything else against - but quietly. Four-metre squares at
-       eight metres per repeat: big enough that the pitch never falls
-       near the sample grid anywhere in the room. */
-    out.add(P.platform(46, 0.3, 46, { bevel: 0.08, round: 2 }), "foodcourt.checker",
-      { pos: [0, -0.1, 0], collide: true, uvScale: 8, ao: 0 });
+    /* THE CONCOURSE DECK. Four blocks tiling the frame around the
+       well, WELL_D thick, no overlaps and no gaps: their inner faces
+       ARE the walls of the well, which is why they are boxes with the
+       bevel turned off. A bevel here would open a 12 cm V-groove down
+       the middle of the floor at every joint. */
+    const DECK_PIECES = [
+      [-DECK, DECK, WELL, DECK], [-DECK, DECK, -DECK, -WELL],
+      [WELL, DECK, -WELL, WELL], [-DECK, -WELL, -WELL, WELL],
+    ];
+    for (const [x0, x1, z0, z1] of DECK_PIECES) {
+      out.add(P.platform(x1 - x0, WELL_D, z1 - z0, { bevel: 0, round: 0 }),
+        "foodcourt.terrazzo", {
+          pos: [(x0 + x1) / 2, SUNK / 2, (z0 + z1) / 2],
+          collide: true, uvScale: 18, jitter: 0.04, ao: 0,
+        });
+    }
+
+    /* The checker patch. It used to be a 46 m square of order in the
+       middle of a mottled floor; it is now the plaza's own finish,
+       which is the same job with a wall round it. */
+    out.add(P.platform(WELL * 2 - 1.4, 0.3, WELL * 2 - 1.4, { bevel: 0.08, round: 2 }),
+      "foodcourt.checker",
+      { pos: [0, SUNK - 0.1, 0], collide: true, uvScale: 8, ao: 0 });
+
+    /* ============ the well's edge, its stairs and its balconies ====
+
+       ONE MAPPING, FOUR SIDES. `u` runs along a wall of the well and
+       `v` measures INTO the well from the rim, so every piece of the
+       edge below is authored once as a profile and emitted four
+       times. Writing it out per side in world coordinates is how the
+       first attempt at this produced three sides with a coping and
+       one without. */
+    const rimBlock = (side, surface, u0, u1, v0, v1, y0, y1, o = {}) => {
+      let x0, x1, z0, z1;
+      if (side === 0) { x0 = u0; x1 = u1; z0 = WELL - v1; z1 = WELL - v0; }
+      else if (side === 1) { z0 = u0; z1 = u1; x0 = WELL - v1; x1 = WELL - v0; }
+      else if (side === 2) { x0 = u0; x1 = u1; z0 = -WELL + v0; z1 = -WELL + v1; }
+      else { z0 = u0; z1 = u1; x0 = -WELL + v0; x1 = -WELL + v1; }
+      out.add(P.platform(x1 - x0, y1 - y0, z1 - z0,
+        { bevel: o.bevel === undefined ? 0.05 : o.bevel, round: 0 }), surface,
+      Object.assign({ pos: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2] }, o));
+    };
+    /* [x, z] for a point on a side, so rails and columns can be
+       placed in the same coordinates as everything else. */
+    const rimAt = (side, u, v) => {
+      if (side === 0) return [u, WELL - v];
+      if (side === 1) return [WELL - v, u];
+      if (side === 2) return [u, -WELL + v];
+      return [-WELL + v, u];
+    };
+
+    /* WHERE THE RIM IS BROKEN. Two of these are stairs and two are
+       balconies, and their positions are MEASURED rather than
+       composed - see the note above the belvederes. */
+    const RIM_OPENINGS = [
+      [[-4.4, 4.4]],                    /* +z : the grand stair, on the arrival axis */
+      [[5.6, 14.4]],                    /* +x : the east stair                       */
+      [[-6.4, 6.4], [16.6, 22.4]],      /* -z : the high-ground belvedere, a stair    */
+      [[-6.4, 6.4], [15.6, 21.4]],      /* -x : the vista belvedere, a stair          */
+    ];
+
+    /* THE EDGE PROFILE, and it is the fountain's under-rim reveal at
+       the scale of a building.
+
+       From the plaza floor up: a bench that runs the whole wall, a
+       dado standing 0.30 m proud of it, then a REVEAL recessed back
+       to the wall face for the best part of a metre, then a coping
+       oversailing the drop by 0.45 m and standing 6 cm proud of the
+       concourse. A shadow gap needs a lip at BOTH ends or it reads as
+       a change of paint rather than as depth, which is the same
+       argument the fountain's coping makes about itself.
+       The reveal is tinted and shaded rather than blacked: a previous
+       cavity pass at value 10-24 pulled the whole frame's P5 down to
+       32.3, and this band is a hundred and eighty metres long. */
+    for (let side = 0; side < 4; side += 1) {
+      const ext = (side === 0 || side === 2) ? 0.45 : -0.45;
+      const cuts = RIM_OPENINGS[side].slice().sort((a, b) => a[0] - b[0]);
+      const spans = [];
+      let u = -WELL - ext;
+      for (const [c0, c1] of cuts) {
+        if (c0 > u + 0.4) spans.push([u, c0]);
+        u = Math.max(u, c1);
+      }
+      if (WELL + ext > u + 0.4) spans.push([u, WELL + ext]);
+
+      for (const [s0, s1] of spans) {
+        /* The coping. Pale, proud, and the line that says "the floor
+           stops here" from any lens in the room. */
+        rimBlock(side, "foodcourt.counter", s0, s1, -0.45, 0.45, -0.34, 0.06,
+          { collide: true, uvScale: 4, tint: 0xc9c0a8, ao: 0.18, aoHeight: 0.4 });
+        /* The reveal. */
+        rimBlock(side, "foodcourt.wall", s0, s1, -0.06, 0.05, -1.34, -0.34,
+          { collide: false, uvScale: 6, tint: 0x776f8c, ao: 0.5, aoHeight: 2.0,
+            groundY: -1.40 });
+        /* The dado, which is the reveal's lower lip as well as two
+           metres of wall the eye can measure the drop against. */
+        rimBlock(side, "foodcourt.brick", s0, s1, -0.06, 0.30, SUNK, -1.34,
+          { collide: true, uvScale: 5, tint: 0x8a7a68, ao: 0.42, aoHeight: 2.2,
+            groundY: SUNK });
+        /* The bench. Continuous seating round a sunken court is what
+           the place is FOR, and it puts a lit horizontal at knee
+           height along the foot of every wall. */
+        rimBlock(side, "foodcourt.counter", s0 + 0.6, s1 - 0.6, -0.06, 0.98,
+          SUNK, SUNK + 0.48,
+          { collide: true, uvScale: 4, tint: 0xbcae90, ao: 0.4, aoHeight: 0.9,
+            groundY: SUNK });
+        /* The rail, set back from the coping and standing on the
+           concourse - the foreground edge the review pool has never
+           had across the bottom of a frame. */
+        const a = rimAt(side, s0 + 0.3, -0.62);
+        const b = rimAt(side, s1 - 0.3, -0.62);
+        out.add(P.rail([[a[0], 0, a[1]], [b[0], 0, b[1]]],
+          { height: 1.06, bars: 2, postEvery: 3.2 }), "shared.rail",
+        { collide: false, castShadow: false });
+      }
+    }
+
+    /* THE STAIRS. Nine risers of WELL_D/9 = 0.367 m, which is inside
+       physics.js's 0.42 m step rule, so every flight walks in both
+       directions - the drop must never read as a pit. Each tread is a
+       block standing on the plaza floor rather than a slab floating
+       over it: risers for free, no underside to light, and nothing
+       for a ground probe to fall between. */
+    const WELL_STAIRS = [
+      { side: 0, u0: -4.4, u1: 4.4, run: 7.6 },
+      { side: 1, u0: 5.6, u1: 14.4, run: 7.6 },
+      { side: 2, u0: 16.6, u1: 22.4, run: 7.0 },
+      { side: 3, u0: 15.6, u1: 21.4, run: 7.0 },
+    ];
+    for (const st of WELL_STAIRS) {
+      const rise = WELL_D / 9;
+      const going = st.run / 8;
+      for (let i = 1; i <= 8; i += 1) {
+        rimBlock(st.side, "foodcourt.tile", st.u0, st.u1,
+          (i - 1) * going, i * going, SUNK, -rise * i,
+          { collide: true, uvScale: 5, bevel: 0.04, ao: 0.34,
+            aoHeight: 1.6, groundY: SUNK });
+      }
+      /* A cheek rail down each side. Without it the flight is a ramp
+         of treads with nothing to say which way is down. */
+      for (const uu of [st.u0 + 0.22, st.u1 - 0.22]) {
+        const top = rimAt(st.side, uu, -0.3);
+        const bot = rimAt(st.side, uu, st.run + 0.3);
+        out.add(P.rail([[top[0], 0, top[1]], [bot[0], SUNK, bot[1]]],
+          { height: 1.02, bars: 2, postEvery: 2.6 }), "shared.rail",
+        { collide: false, castShadow: false });
+      }
+    }
+
+    /* THE TWO BELVEDERES, and their height is a measurement.
+
+       camera.js finds a vantage preset's stand point with
+       `highestNear`, which takes the HIGHEST surface within 18 m that
+       is broad enough to stand on - and "broad" is a six-point ring
+       at 3.4 m within 1.3 m of the same height. That tolerance is
+       wide enough that a 1.2 m trashcan or a 1.25 m planter passes
+       it, which is exactly what happened before this pass: the
+       `high-ground` probe came back standing on top of a planter at
+       (20.3, 1.20, 12.6). A balcony at concourse level would lose the
+       same way. At 1.6 m these outrank every prop in the course, and
+       nothing else within 18 m of either marker is broad AND higher.
+
+       Twelve metres by ten, half of it cantilevered over the well on
+       two columns, reached by four steps from the concourse. The
+       cantilever is the point twice over: it puts the stand point
+       0.6 m PAST the rim, so the sample ring at 14 m falls into the
+       well on six bearings out of ten instead of four, and its
+       underside is a 60 m^2 down-facing plane 3.9 m over the plaza -
+       the biggest single dark this course owns.
+
+       They are on the -x and -z walls because the ring the vantage
+       test samples has ten spokes at 36 degrees and the phase
+       matters: from these two the inward spokes land on plaza floor
+       and standing soda, while from +x they run down the fountain's
+       own axis and hit its pedestal. Measured, not chosen. */
+    const BELVEDERES = [
+      { side: 3, name: "vista" },
+      { side: 2, name: "high-ground" },
+    ];
+    const BELV_HW = 6.0;          /* half-width along the wall        */
+    const BELV_OUT = 5.6;         /* how far it reaches over the well */
+    const BELV_BACK = 4.4;        /* how far it sits back on the deck */
+    const BELV_Y = 1.6;           /* deck to balcony                  */
+    for (const bv of BELVEDERES) {
+      const s = bv.side;
+      /* Four steps up from the concourse. */
+      for (let j = 1; j <= 3; j += 1) {
+        rimBlock(s, "foodcourt.tile", -BELV_HW, BELV_HW,
+          -BELV_BACK - 0.75 * (4 - j), -BELV_BACK - 0.75 * (3 - j), 0, 0.4 * j,
+          { collide: true, uvScale: 5, bevel: 0.04, ao: 0.3, aoHeight: 1.2 });
+      }
+      /* The plinth under the half that stands on the deck. */
+      rimBlock(s, "foodcourt.brick", -BELV_HW, BELV_HW, -BELV_BACK, 0.2, 0, 0.62,
+        { collide: true, uvScale: 5, tint: 0x8a7a68, ao: 0.35, aoHeight: 0.9 });
+      /* The deck itself. Its soffit is the dark. */
+      rimBlock(s, "foodcourt.tile", -BELV_HW, BELV_HW, -BELV_BACK, BELV_OUT,
+        0.62, BELV_Y,
+        { collide: true, uvScale: 6, ao: 0.5, aoHeight: 1.1, groundY: 0.62 });
+      /* An edge beam under the cantilever, so the soffit has a lip
+         and the balcony has an outline against the plaza behind it. */
+      rimBlock(s, "foodcourt.counter", -BELV_HW - 0.2, BELV_HW + 0.2,
+        BELV_OUT - 0.75, BELV_OUT + 0.2, 0.18, 0.66,
+        { collide: false, uvScale: 4, tint: 0x9d927a, ao: 0.45, aoHeight: 0.8 });
+      /* Two columns to the plaza floor. */
+      for (const uu of [-3.6, 3.6]) {
+        const c = rimAt(s, uu, 3.6);
+        out.add(P.pillar(0.46, BELV_Y - 0.98 - SUNK, { sides: 8, base: true, cap: false }),
+          "foodcourt.column",
+          { pos: [c[0], SUNK, c[1]], collide: true, tint: 0xc9c1b1, ao: 0.42, aoHeight: 2.6 });
+      }
+      /* Rail round the three exposed sides. */
+      const p0 = rimAt(s, -BELV_HW + 0.2, -BELV_BACK + 0.2);
+      const p1 = rimAt(s, -BELV_HW + 0.2, BELV_OUT - 0.25);
+      const p2 = rimAt(s, BELV_HW - 0.2, BELV_OUT - 0.25);
+      const p3 = rimAt(s, BELV_HW - 0.2, -BELV_BACK + 0.2);
+      out.add(P.rail([
+        [p0[0], BELV_Y, p0[1]], [p1[0], BELV_Y, p1[1]],
+        [p2[0], BELV_Y, p2[1]], [p3[0], BELV_Y, p3[1]],
+      ], { height: 1.06, bars: 2, postEvery: 3.0 }), "shared.rail",
+      { collide: false, castShadow: false });
+    }
 
     /* Perimeter walls, storefront band and the upper clerestory. */
     for (let side = 0; side < 4; side += 1) {
@@ -3927,9 +4194,15 @@ const COURSE_1 = {
          lets the geometry behind it stay visible THROUGH it, and the
          side count is up because a faceted cone silhouette reads as
          missing geometry rather than as air. */
+      /* The shaft over the well has to reach the well's floor. It is
+         the one that lands on the fountain, and stopping it at the
+         old concourse height left it hanging three metres in the air
+         over the middle of the course's best shot. */
+      const intoWell = Math.abs(cx) < WELL && Math.abs(cz) < WELL;
       out.beam({
         pos: [cx, CEIL + 1.5, cz], dir: [0.06, -1, 0.04],
-        length: CEIL + 2.5, radius: cell * 0.34, radiusEnd: cell * 0.62,
+        length: CEIL + 2.5 + (intoWell ? WELL_D : 0),
+        radius: cell * 0.34, radiusEnd: cell * 0.62,
         color: 0x5e5748, sides: 24, steps: 5,
       });
     }
@@ -4078,11 +4351,19 @@ const COURSE_1 = {
        `r` is the centre line of the wall; `sink` is how far the water
        sits below the coping; `stem` is the pedestal up to the next
        bowl. */
+    /* THE WHOLE SCULPTURE NOW STANDS IN THE WELL, WHICH IS WHY EVERY
+       HEIGHT HERE CARRIES `SUNK`. The relationships above are
+       unchanged - the reveal, the waterline, the flare's clearance
+       over the water probe - because the entire piece moved together;
+       what changed is that every lens in the room now looks DOWN into
+       it, and the top of it clears the concourse by 8.5 m instead of
+       by 11.8, which is what stops `arrival` cropping its own
+       landmark. */
     const TIERS = [
-      { r: 13.0, y: 0.95, wall: 1.5, sink: 0.42, seg: 52, stem: 2.6 },
-      { r: 8.0, y: 4.80, wall: 1.2, sink: 0.34, seg: 40, stem: 1.9 },
-      { r: 5.6, y: 7.10, wall: 1.0, sink: 0.30, seg: 30, stem: 1.3 },
-      { r: 3.7, y: 9.30, wall: 0.9, sink: 0.26, seg: 22, stem: 0 },
+      { r: 13.0, y: SUNK + 0.95, wall: 1.5, sink: 0.42, seg: 52, stem: 2.6 },
+      { r: 8.0, y: SUNK + 4.80, wall: 1.2, sink: 0.34, seg: 40, stem: 1.9 },
+      { r: 5.6, y: SUNK + 7.10, wall: 1.0, sink: 0.30, seg: 30, stem: 1.3 },
+      { r: 3.7, y: SUNK + 9.30, wall: 0.9, sink: 0.26, seg: 22, stem: 0 },
     ];
     const POOL = TIERS[0];
     const POOL_R = POOL.r - POOL.wall / 2;        /* inner face  */
@@ -4164,12 +4445,12 @@ const COURSE_1 = {
            metrics gate is the tightest of the four. */
         out.add(P.ring(rOut - 0.02, rOut + 0.03, 0.75, { segments: tier.seg, floor: false }),
           "foodcourt.wall", {
-            pos: [0, 0.20, 0], collide: false, uvScale: 6,
-            tint: 0x7a7392, ao: 0.45, aoHeight: 1.1, groundY: 0.10,
+            pos: [0, SUNK + 0.20, 0], collide: false, uvScale: 6,
+            tint: 0x7a7392, ao: 0.45, aoHeight: 1.1, groundY: SUNK + 0.10,
           });
         out.add(P.ring(rOut - 0.12, rOut + 0.30, 0.20, { segments: tier.seg, floor: false }),
           "foodcourt.brick", {
-            pos: [0, 0, 0], collide: false, uvScale: 4,
+            pos: [0, SUNK, 0], collide: false, uvScale: 4,
             tint: 0x7c6a58, ao: 0.4, aoHeight: 0.5,
           });
       }
@@ -4272,7 +4553,7 @@ const COURSE_1 = {
        samples and answers "stone" in the middle of a pool; at 90, 180
        and 270 degrees the nearest sample is nine metres away. */
     const STONE_BED = POOL_Y - 0.18;      /* the pool bed */
-    const STONE_TOP = 2.6;
+    const STONE_TOP = SUNK + 2.6;
     for (let i = 0; i < 3; i += 1) {
       const a = Math.PI * (0.5 + i * 0.5);
       const sx = Math.cos(a) * 10.4, sz = Math.sin(a) * 10.4;

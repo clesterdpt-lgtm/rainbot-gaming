@@ -4335,10 +4335,16 @@
     durationSeconds: 2,
     maximumTimerStepSeconds: 0.1,
     reducedMotionScale: 0.18,
+    desktopPixelRatioCap: 1.75,
+    mobilePixelRatioCap: 1.35,
+    assetVersion: "20260813-clean-closeup-1",
     catchers: Object.freeze({
       "mr-feast": Object.freeze({
         label: "Mr. Feast",
         reasons: Object.freeze(["witnessed", "recorded", "feast-hunt-eliminated", "victory-feast-caught"]),
+        closeupModelPath: "../models/mr-feast/processed/mr-feast-master.glb",
+        closeupModelId: "mr-feast-closeup-2k",
+        closeupYaw: 0,
         cameraFov: 43,
         cameraDistanceHeightRatio: 0.34,
         focusHeightRatio: 0.88,
@@ -4348,29 +4354,38 @@
         shakePositionHeightRatio: 0.0075,
         shakeRotationRadians: 0.034,
         keyColor: 0xffd4a2,
-        keyIntensity: 3.2,
+        keyIntensity: 2.35,
+        fillColor: 0x8fa6c4,
+        fillIntensity: 0.72,
         rimColor: 0xa51418,
-        rimIntensity: 2.6,
-        ambientColor: 0x3b2220,
-        ambientIntensity: 0.34,
+        rimIntensity: 1.45,
+        ambientColor: 0x5a3b38,
+        ambientIntensity: 0.62,
+        exposure: 1.12,
       }),
       "feast-father": Object.freeze({
         label: "the Feast Father",
         reasons: Object.freeze(["victory-feast-saint"]),
-        cameraFov: 39,
-        cameraDistanceHeightRatio: 0.3,
-        focusHeightRatio: 0.77,
-        cameraLiftHeightRatio: 0.025,
-        startDepthHeightRatio: -0.12,
-        lungeDepthHeightRatio: 0.2,
+        closeupModelPath: "../models/mr-feast/scares/feast-father-closeup.glb",
+        closeupModelId: "feast-father-closeup-2k",
+        closeupYaw: 0,
+        cameraFov: 40,
+        cameraDistanceHeightRatio: 0.47,
+        focusHeightRatio: 0.82,
+        cameraLiftHeightRatio: 0.012,
+        startDepthHeightRatio: -0.1,
+        lungeDepthHeightRatio: 0.1,
         shakePositionHeightRatio: 0.006,
         shakeRotationRadians: 0.028,
         keyColor: 0xd6b7a2,
-        keyIntensity: 2.15,
+        keyIntensity: 1.9,
+        fillColor: 0x71809b,
+        fillIntensity: 0.88,
         rimColor: 0x6f0711,
-        rimIntensity: 3.4,
-        ambientColor: 0x17070a,
-        ambientIntensity: 0.12,
+        rimIntensity: 1.7,
+        ambientColor: 0x453234,
+        ambientIntensity: 0.72,
+        exposure: 1.18,
       }),
     }),
     audio: Object.freeze({
@@ -21849,6 +21864,12 @@
       this.modelSource = null;
       this.modelHeight = 1;
       this.modelBaseZ = 0;
+      this.modelBaseYaw = 0;
+      this.usingHighDetailSource = false;
+      this.closeupSources = new Map();
+      this.assetErrors = {};
+      this.assetStatus = "loading";
+      this.materialStats = this.emptyMaterialStats();
       this.qaManualClock = false;
       this.qaStepping = false;
       this.scene = new THREE.Scene();
@@ -21857,12 +21878,88 @@
       this.cameraBasePosition = new THREE.Vector3();
       this.cameraFocus = new THREE.Vector3();
       this.focusProjected = new THREE.Vector3();
-      this.keyLight = new THREE.PointLight(0xffd4a2, 0, 8, 2);
-      this.rimLight = new THREE.PointLight(0x8f0b16, 0, 9, 2);
+      this.lightTarget = new THREE.Object3D();
+      this.keyLight = new THREE.DirectionalLight(0xffd4a2, 0);
+      this.fillLight = new THREE.DirectionalLight(0x71809b, 0);
+      this.rimLight = new THREE.DirectionalLight(0x8f0b16, 0);
       this.ambientLight = new THREE.HemisphereLight(0x2c1517, 0x020002, 0);
-      this.scene.add(this.keyLight, this.rimLight, this.ambientLight);
+      this.keyLight.target = this.lightTarget;
+      this.fillLight.target = this.lightTarget;
+      this.rimLight.target = this.lightTarget;
+      this.scene.add(
+        this.lightTarget,
+        this.keyLight,
+        this.fillLight,
+        this.rimLight,
+        this.ambientLight,
+      );
+      this.assetPromise = this.preloadCloseupAssets();
       this.resize(dom.stage?.clientWidth || 1, dom.stage?.clientHeight || 1);
       this.syncState();
+    }
+
+    emptyMaterialStats() {
+      return {
+        materialsCloned: 0,
+        texturesEnhanced: 0,
+        normalsRecomputed: 0,
+        maximumTextureSize: 0,
+        anisotropy: 0,
+      };
+    }
+
+    loadCloseupAsset(catcherId, catcher) {
+      return new Promise((resolve, reject) => {
+        if (typeof THREE.GLTFLoader !== "function") {
+          reject(new Error("THREE.GLTFLoader is unavailable"));
+          return;
+        }
+        const url = new URL(catcher.closeupModelPath, SCRIPT_URL);
+        url.searchParams.set("v", CATCH_SCARE.assetVersion);
+        const loader = new THREE.GLTFLoader();
+        loader.load(
+          url.href,
+          (gltf) => {
+            if (!gltf?.scene) {
+              reject(new Error(`${catcherId} close-up has no scene`));
+              return;
+            }
+            gltf.scene.name = `${catcherId}-clean-closeup-source`;
+            gltf.scene.updateMatrixWorld(true);
+            this.closeupSources.set(catcherId, gltf.scene);
+            resolve(gltf.scene);
+          },
+          undefined,
+          (error) => reject(new Error(error?.message || `Could not load ${url.href}`)),
+        );
+      });
+    }
+
+    async preloadCloseupAssets() {
+      this.assetStatus = "loading";
+      const results = await Promise.allSettled(
+        Object.entries(CATCH_SCARE.catchers).map(async ([catcherId, catcher]) => {
+          try {
+            await this.loadCloseupAsset(catcherId, catcher);
+          } catch (error) {
+            this.assetErrors[catcherId] = error.message;
+            throw error;
+          }
+        }),
+      );
+      const readyCount = results.filter((result) => result.status === "fulfilled").length;
+      this.assetStatus = readyCount === results.length
+        ? "ready"
+        : readyCount > 0
+          ? "partial"
+          : "error";
+      this.syncState();
+      return this.assetStatus;
+    }
+
+    async awaitAssets() {
+      await this.assetPromise;
+      return this.getDiagnostics();
     }
 
     catcherForReason(reason) {
@@ -21877,12 +21974,96 @@
     }
 
     sourceForCatcher(catcherId) {
-      if (catcherId === "feast-father") return demonPrototypePatrol?.saintEntry()?.root || null;
-      return mrFeastNpc?.root || null;
+      const closeup = this.closeupSources.get(catcherId);
+      if (closeup) {
+        return {
+          root: closeup,
+          id: CATCH_SCARE.catchers[catcherId].closeupModelId,
+          highDetail: true,
+          yaw: CATCH_SCARE.catchers[catcherId].closeupYaw,
+        };
+      }
+      const fallback = catcherId === "feast-father"
+        ? demonPrototypePatrol?.saintEntry()?.root || null
+        : mrFeastNpc?.root || null;
+      return fallback ? {
+        root: fallback,
+        id: catcherId === "feast-father" ? "banquet-saint" : "mr-feast",
+        highDetail: false,
+        yaw: 0,
+      } : null;
+    }
+
+    enhancedTexture(sourceTexture, textureCache) {
+      if (!sourceTexture) return null;
+      if (textureCache.has(sourceTexture.uuid)) return textureCache.get(sourceTexture.uuid);
+      const texture = sourceTexture.clone();
+      const maximumAnisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy?.() || 1);
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.anisotropy = maximumAnisotropy;
+      texture.generateMipmaps = true;
+      texture.userData = { ...texture.userData, catchScareClone: true };
+      texture.needsUpdate = true;
+      const width = Number(texture.image?.width || texture.image?.videoWidth || 0);
+      const height = Number(texture.image?.height || texture.image?.videoHeight || 0);
+      this.materialStats.texturesEnhanced += 1;
+      this.materialStats.maximumTextureSize = Math.max(
+        this.materialStats.maximumTextureSize,
+        width,
+        height,
+      );
+      this.materialStats.anisotropy = maximumAnisotropy;
+      textureCache.set(sourceTexture.uuid, texture);
+      return texture;
+    }
+
+    polishedMaterial(sourceMaterial, textureCache) {
+      if (!sourceMaterial) return sourceMaterial;
+      const material = sourceMaterial.clone();
+      this.materialStats.materialsCloned += 1;
+      for (const property of [
+        "map",
+        "normalMap",
+        "roughnessMap",
+        "metalnessMap",
+        "aoMap",
+        "alphaMap",
+      ]) {
+        if (sourceMaterial[property]) {
+          material[property] = this.enhancedTexture(sourceMaterial[property], textureCache);
+        }
+      }
+      // Meshy commonly reuses the color texture as an emissive map. That is
+      // useful for distant readability but makes a close-up look painted-on.
+      material.emissiveMap = null;
+      if (material.emissive) material.emissive.setHex(0x000000);
+      material.emissiveIntensity = 0;
+      material.flatShading = false;
+      material.dithering = true;
+      material.roughness = Math.max(
+        Number(material.roughness) || 0,
+        this.catcherId === "feast-father" ? 0.58 : 0.7,
+      );
+      material.metalness = Math.min(
+        Number(material.metalness) || 0,
+        this.catcherId === "feast-father" ? 0.34 : 0.12,
+      );
+      if (material.normalScale) {
+        material.normalScale.multiplyScalar(this.catcherId === "feast-father" ? 0.38 : 0.52);
+      }
+      if (Number.isFinite(material.bumpScale)) material.bumpScale *= 0.25;
+      if (Number.isFinite(material.displacementScale)) material.displacementScale = 0;
+      if (Number.isFinite(material.aoMapIntensity)) material.aoMapIntensity = 0.68;
+      material.userData = { ...material.userData, catchScareClone: true };
+      material.needsUpdate = true;
+      return material;
     }
 
     cloneCatcher(source) {
       if (!source) return null;
+      this.materialStats = this.emptyMaterialStats();
+      const textureCache = new Map();
       const clone = THREE.SkeletonUtils?.clone
         ? THREE.SkeletonUtils.clone(source)
         : source.clone(true);
@@ -21890,10 +22071,54 @@
       clone.position.set(0, 0, 0);
       clone.rotation.set(0, 0, 0);
       clone.visible = true;
+      const helperMeshes = [];
       clone.traverse((object) => {
         object.frustumCulled = false;
+        if (!object.isMesh) return;
+        // Raw Meshy rig downloads contain preview Cube/Icosphere meshes beside
+        // the skinned character. They are authoring helpers, not scare art.
+        if (this.usingHighDetailSource && !object.isSkinnedMesh) {
+          helperMeshes.push(object);
+          return;
+        }
+        if (object.geometry) {
+          object.geometry = object.geometry.clone();
+          if (object.geometry.attributes?.position) {
+            object.geometry.computeVertexNormals();
+            object.geometry.normalizeNormals();
+            this.materialStats.normalsRecomputed += 1;
+          }
+        }
+        object.material = Array.isArray(object.material)
+          ? object.material.map((material) => this.polishedMaterial(material, textureCache))
+          : this.polishedMaterial(object.material, textureCache);
+        object.castShadow = false;
+        object.receiveShadow = false;
       });
+      for (const helper of helperMeshes) helper.parent?.remove(helper);
       return clone;
+    }
+
+    disposeModel(model) {
+      if (!model) return;
+      model.traverse((object) => {
+        if (!object.isMesh) return;
+        object.geometry?.dispose?.();
+        for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+          if (!material) continue;
+          for (const property of [
+            "map",
+            "normalMap",
+            "roughnessMap",
+            "metalnessMap",
+            "aoMap",
+            "alphaMap",
+          ]) {
+            if (material[property]?.userData?.catchScareClone) material[property].dispose();
+          }
+          if (material.userData?.catchScareClone) material.dispose();
+        }
+      });
     }
 
     stageModel() {
@@ -21927,21 +22152,27 @@
         cameraDistance,
       );
       this.cameraFocus.set(0, focusY, 0);
+      this.lightTarget.position.copy(this.cameraFocus);
       this.keyLight.color.setHex(this.catcher.keyColor);
       this.keyLight.intensity = this.catcher.keyIntensity;
-      this.keyLight.distance = this.modelHeight * 3.2;
       this.keyLight.position.set(
-        this.modelHeight * 0.34,
-        focusY + this.modelHeight * 0.18,
-        cameraDistance * 0.55,
+        this.modelHeight * 0.55,
+        focusY + this.modelHeight * 0.28,
+        cameraDistance * 1.4,
+      );
+      this.fillLight.color.setHex(this.catcher.fillColor);
+      this.fillLight.intensity = this.catcher.fillIntensity;
+      this.fillLight.position.set(
+        -this.modelHeight * 0.62,
+        focusY + this.modelHeight * 0.04,
+        cameraDistance * 1.05,
       );
       this.rimLight.color.setHex(this.catcher.rimColor);
       this.rimLight.intensity = this.catcher.rimIntensity;
-      this.rimLight.distance = this.modelHeight * 3.6;
       this.rimLight.position.set(
-        -this.modelHeight * 0.42,
-        focusY + this.modelHeight * 0.08,
-        -this.modelHeight * 0.32,
+        -this.modelHeight * 0.48,
+        focusY + this.modelHeight * 0.22,
+        -this.modelHeight * 0.68,
       );
       this.ambientLight.color.setHex(this.catcher.ambientColor);
       this.ambientLight.groundColor.setHex(0x010001);
@@ -21957,20 +22188,24 @@
       const catcherEntry = this.catcherForReason(details.reason);
       if (!catcherEntry || this.isActive()) return false;
       const [catcherId, catcher] = catcherEntry;
-      const source = this.sourceForCatcher(catcherId);
-      if (!source) return false;
+      const sourceEntry = this.sourceForCatcher(catcherId);
+      if (!sourceEntry?.root) return false;
       this.catcherId = catcherId;
       this.catcher = catcher;
       this.details = { ...details };
       this.elapsed = 0;
-      this.modelSource = catcherId === "feast-father" ? "banquet-saint" : "mr-feast";
-      this.model = this.cloneCatcher(source);
+      this.modelSource = sourceEntry.id;
+      this.usingHighDetailSource = sourceEntry.highDetail;
+      this.modelBaseYaw = sourceEntry.yaw || 0;
+      this.model = this.cloneCatcher(sourceEntry.root);
+      if (this.model) this.model.rotation.y = this.modelBaseYaw;
       if (!this.model || !this.stageModel()) {
         if (this.model) this.scene.remove(this.model);
         this.model = null;
         return false;
       }
       this.phase = "active";
+      resize();
       clearMovementInput();
       speechSystem?.dismiss();
       flashlightSystem?.setEnabled?.(false, { source: "catch-scare" });
@@ -21999,9 +22234,9 @@
       const eased = 1 - Math.pow(1 - progress, this.catcherId === "mr-feast" ? 3.4 : 2.15);
       this.model.position.z = this.modelBaseZ
         + this.modelHeight * this.catcher.lungeDepthHeightRatio * eased;
-      this.model.rotation.y = this.catcherId === "mr-feast"
+      this.model.rotation.y = this.modelBaseYaw + (this.catcherId === "mr-feast"
         ? Math.sin(progress * Math.PI * 1.4) * 0.045
-        : Math.sin(progress * Math.PI * 0.8) * 0.025;
+        : Math.sin(progress * Math.PI * 0.8) * 0.025);
       this.model.rotation.z = this.catcherId === "mr-feast"
         ? Math.sin(progress * Math.PI * 2.1) * 0.018
         : -0.012 + Math.sin(progress * Math.PI) * 0.01;
@@ -22028,6 +22263,7 @@
       if (this.catcherId === "feast-father") {
         const reveal = 0.12 + eased * 0.88;
         this.keyLight.intensity = this.catcher.keyIntensity * reveal;
+        this.fillLight.intensity = this.catcher.fillIntensity * (0.72 + eased * 0.28);
         this.rimLight.intensity = this.catcher.rimIntensity * (0.58 + eased * 0.42);
       }
       this.model.updateMatrixWorld(true);
@@ -22063,7 +22299,10 @@
     }
 
     clear() {
-      if (this.model) this.scene.remove(this.model);
+      if (this.model) {
+        this.scene.remove(this.model);
+        this.disposeModel(this.model);
+      }
       this.model = null;
       this.phase = "inactive";
       this.elapsed = 0;
@@ -22071,6 +22310,9 @@
       this.catcherId = null;
       this.catcher = null;
       this.modelSource = null;
+      this.usingHighDetailSource = false;
+      this.modelBaseYaw = 0;
+      this.materialStats = this.emptyMaterialStats();
       this.qaManualClock = false;
       this.qaStepping = false;
       if (dom.stage) dom.stage.dataset.catchScare = "inactive";
@@ -22080,6 +22322,7 @@
         dom.catchScare.setAttribute("aria-hidden", "true");
       }
       if (dom.catchScareAnnouncement) dom.catchScareAnnouncement.textContent = "";
+      resize();
       this.syncState();
       return this.getDiagnostics();
     }
@@ -22092,7 +22335,7 @@
     render(targetRenderer) {
       if (!this.isActive()) return false;
       const previousExposure = targetRenderer.toneMappingExposure;
-      targetRenderer.toneMappingExposure = this.catcherId === "feast-father" ? 0.98 : 1.08;
+      targetRenderer.toneMappingExposure = this.catcher.exposure;
       targetRenderer.render(this.scene, this.camera);
       targetRenderer.toneMappingExposure = previousExposure;
       return true;
@@ -22153,9 +22396,17 @@
         overlayVisible: Boolean(dom.catchScare && !dom.catchScare.hidden),
         modelCloned: Boolean(this.model),
         modelSource: this.modelSource,
+        highDetailSource: this.usingHighDetailSource,
+        assetStatus: this.assetStatus,
+        assetErrors: { ...this.assetErrors },
         modelHeight: Number(this.modelHeight.toFixed(3)),
         modelVisible: Boolean(this.model?.visible),
         framing: "live-3d-close-up",
+        cleanPresentation: {
+          animatedGrain: false,
+          pixelRatio: Number(renderer.getPixelRatio().toFixed(2)),
+          ...this.materialStats,
+        },
         camera: {
           fov: this.camera.fov,
           distanceHeightRatio: this.catcher?.cameraDistanceHeightRatio || null,
@@ -48781,7 +49032,14 @@
     // A Retina DPR of 1.6 made the stable full-floor light set shade roughly
     // 64% more pixels than 1.25. Keep the CSS canvas crisp while bounding the
     // fragment-light workload on laptops and mobile GPUs.
-    const preferredDpr = mobile ? 1.0 : 1.25;
+    const scareActive = Boolean(catchScareSystem?.isActive());
+    const preferredDpr = scareActive
+      ? mobile
+        ? CATCH_SCARE.mobilePixelRatioCap
+        : CATCH_SCARE.desktopPixelRatioCap
+      : mobile
+        ? 1.0
+        : 1.25;
     const reducedDpr = mobile ? 0.8 : 1.0;
     const dprCap = state.renderQuality === "reduced" ? reducedDpr : preferredDpr;
     const pixelRatio = Math.min(window.devicePixelRatio || 1, dprCap);
@@ -52985,6 +53243,9 @@
     );
     window.MrFeastFresh.getSpeechState = () => speechSystem?.getDiagnostics() || null;
     window.MrFeastFresh.getCatchScareState = () => catchScareSystem?.getDiagnostics() || { ...state.catchScare };
+    window.MrFeastFresh.awaitCatchScareAssetsForQA = () => (
+      state.qa ? catchScareSystem?.awaitAssets() || null : null
+    );
     window.MrFeastFresh.triggerCatchScareForQA = (catcher = "mr-feast") => {
       if (!state.qa) return null;
       if (state.gameOver) clearMansionGameOver();

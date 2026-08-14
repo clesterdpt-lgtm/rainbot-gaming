@@ -434,8 +434,8 @@ def main() -> None:
         raise ValueError("--target-height must be positive and finite")
     if args.target_triangles < 1_000:
         raise ValueError("--target-triangles must be at least 1000")
-    if args.texture_size < 128 or args.texture_size > 1024:
-        raise ValueError("--texture-size must be between 128 and 1024")
+    if args.texture_size < 128 or args.texture_size > 2048:
+        raise ValueError("--texture-size must be between 128 and 2048")
 
     reset_scene()
     before = set(bpy.context.scene.objects)

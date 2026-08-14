@@ -50,6 +50,12 @@ async function bootPage(browser, errors) {
     { timeout: 180000 },
   );
   await page.waitForFunction(() => window.MrFeastFresh?.state?.started, null, { timeout: 15000 });
+  await page.evaluate(() => window.MrFeastFresh.awaitCatchScareAssetsForQA());
+  await page.waitForFunction(
+    () => window.MrFeastFresh.getCatchScareState()?.assetStatus === "ready",
+    null,
+    { timeout: 180000 },
+  );
   if (!await page.evaluate(() => window.MrFeastFresh.getAudioStateForQA()?.enabled)) {
     await page.keyboard.press("KeyM");
     await page.waitForFunction(
@@ -73,10 +79,13 @@ async function assertSourceContract() {
   assert(/reasons:[\s\S]{0,180}?witnessed[\s\S]{0,180}?recorded[\s\S]{0,180}?feast-hunt-eliminated/.test(runtime), "Mr. Feast physical catch reasons are not explicit");
   assert(/"feast-father"[\s\S]{0,220}?reasons:[\s\S]{0,80}?victory-feast-saint/.test(runtime), "Feast Father physical catch reason is not explicit");
   assert(/cloneCatcher\(source\)[\s\S]{0,260}?SkeletonUtils/.test(runtime), "the close-up must clone the live 3D catcher model");
+  assert(/mr-feast-master\.glb/.test(runtime) && /feast-father-closeup\.glb/.test(runtime), "the scares must use the retained 2K close-up sources");
+  assert(/maximumTextureSize/.test(runtime) && /LinearMipmapLinearFilter/.test(runtime), "the close-up texture-quality pass is missing");
   assert(/catchScare\(catcherId/.test(runtime), "the catch flow needs a dedicated character-specific SFX entrypoint");
   assert(/confirmedCatchOnly:\s*true/.test(runtime) && /unskippable:\s*true/.test(runtime), "confirmed-only and unskippable contracts must be diagnostic");
   assert(/flashing:\s*false/.test(runtime) && /reducedMotionScale:\s*0\.18/.test(runtime), "no-flash and reduced-motion contracts must be explicit");
   assert(/data-catch-scare="inactive"/.test(html) && /mansion-catch-scare/.test(html), "the page needs a dedicated noninteractive scare presentation layer");
+  assert(!/mansion-catch-scare-grain/.test(html), "the artificial grain animation must not dirty the character close-ups");
   assert(/prefers-reduced-motion:\s*reduce/.test(html), "the page must retain reduced-motion CSS handling");
 }
 
@@ -103,40 +112,39 @@ async function run() {
     const initial = await page.evaluate(() => window.MrFeastFresh.getCatchScareState());
     assert(initial.phase === "inactive" && !initial.overlayVisible, `scare must be dormant before a catch: ${JSON.stringify(initial)}`);
 
-    await page.evaluate(() => {
+    const cameraSpot = await page.evaluate(() => {
       window.MrFeastFresh.resetCameraSecurityForQA("show");
       const cameraId = window.MrFeastFresh.getCameraSecurityState().cameras.details[0].id;
-      window.MrFeastFresh.setCameraSoloForQA(cameraId);
-      window.MrFeastFresh.placePlayerInCameraLaneForQA(cameraId, { distance: 4 });
-      window.MrFeastFresh.setCameraPolicyForQA("lockdown");
-    });
-    await page.waitForFunction(() => {
-      window.MrFeastFresh.advanceCameraSecurityForQA(0.4);
-      return window.MrFeastFresh.getCameraSecurityState().recordingPlayer === true;
-    }, null, { timeout: 20000 });
-    const cameraSpot = await page.evaluate(() => {
-      const pursuit = window.MrFeastFresh.reportInfractionForQA("portrait");
+      const alarm = window.MrFeastFresh.triggerCameraAlarmForQA(cameraId, "qa-camera-spot-only");
       return {
-        recording: window.MrFeastFresh.getCameraSecurityState().recordingPlayer,
-        pursuit: Boolean(pursuit),
+        alarmTriggered: Boolean(alarm?.alarm?.last),
         gameOver: window.MrFeastFresh.state.gameOver,
         scare: window.MrFeastFresh.getCatchScareState(),
       };
     });
-    assert(cameraSpot.recording && cameraSpot.pursuit, `camera setup must create a pursuit: ${JSON.stringify(cameraSpot)}`);
+    assert(cameraSpot.alarmTriggered, `camera setup must create a real alarm: ${JSON.stringify(cameraSpot)}`);
     assert(cameraSpot.gameOver === null && cameraSpot.scare.phase === "inactive", `camera spotting alone must not trigger the scare: ${JSON.stringify(cameraSpot)}`);
     await page.evaluate(() => {
       window.MrFeastFresh.resetMrFeastWandererForQA();
       window.MrFeastFresh.resetCameraSecurityForQA(null);
     });
 
+    await page.evaluate(() => {
+      Object.defineProperty(window, "devicePixelRatio", { configurable: true, value: 2 });
+      window.dispatchEvent(new Event("resize"));
+    });
+    await page.waitForFunction(
+      () => window.MrFeastFresh.getCatchScareState().cleanPresentation.pixelRatio === 1.25,
+    );
     const mrCatch = await page.evaluate(() => window.MrFeastFresh.triggerCatchScareForQA("mr-feast"));
     assert(mrCatch?.reason === "witnessed", `Mr. Feast QA catch must use a confirmed physical reason: ${JSON.stringify(mrCatch)}`);
     let scare = await page.evaluate(() => window.MrFeastFresh.getCatchScareState());
     assert(
       scare.phase === "active"
         && scare.catcher === "mr-feast"
-        && scare.modelSource === "mr-feast"
+        && scare.modelSource === "mr-feast-closeup-2k"
+        && scare.highDetailSource
+        && scare.assetStatus === "ready"
         && scare.modelCloned
         && scare.modelVisible
         && scare.framing === "live-3d-close-up"
@@ -144,7 +152,12 @@ async function run() {
         && scare.durationSeconds === 2
         && scare.confirmedCatchOnly
         && scare.unskippable
-        && !scare.flashing,
+        && !scare.flashing
+        && !scare.cleanPresentation.animatedGrain
+        && scare.cleanPresentation.maximumTextureSize === 2048
+        && scare.cleanPresentation.texturesEnhanced > 0
+        && scare.cleanPresentation.normalsRecomputed > 0
+        && scare.cleanPresentation.pixelRatio === 1.75,
       `Mr. Feast scare contract failed: ${JSON.stringify(scare)}`,
     );
     await page.keyboard.press("Escape");
@@ -193,10 +206,14 @@ async function run() {
     assert(
       scare.phase === "active"
         && scare.catcher === "feast-father"
-        && scare.modelSource === "banquet-saint"
+        && scare.modelSource === "feast-father-closeup-2k"
+        && scare.highDetailSource
         && scare.modelCloned
         && scare.modelVisible
-        && scare.camera.focusOnScreen,
+        && scare.camera.focusOnScreen
+        && !scare.cleanPresentation.animatedGrain
+        && scare.cleanPresentation.maximumTextureSize === 2048
+        && scare.cleanPresentation.pixelRatio === 1.75,
       `Feast Father scare contract failed: ${JSON.stringify(scare)}`,
     );
     const fatherScreenshot = path.join(artifactDir, "feast-father-catch-scare.png");
@@ -247,6 +264,7 @@ async function run() {
         && phoneLayout.scare.camera.focusOnScreen
         && phoneLayout.stage.width === phoneLayout.overlay.width
         && phoneLayout.stage.height === phoneLayout.overlay.height
+        && phoneLayout.scare.cleanPresentation.pixelRatio === 1.35
         && phoneLayout.gameOverHidden,
       `phone scare must fill the game surface without exposing recovery controls: ${JSON.stringify(phoneLayout)}`,
     );

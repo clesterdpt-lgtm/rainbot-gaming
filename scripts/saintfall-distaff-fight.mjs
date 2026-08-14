@@ -212,6 +212,118 @@ try {
       && aggro.targetableAfter && aggro.visibleAfter,
     JSON.stringify(aggro));
 
+  /* ---- COMPLETE LIVE LEG COVERAGE ------------------------------------
+     Isolate one leg at a time so overlapping limbs cannot make a
+     lucky hit look like coverage. Nine real shots per leg sample the
+     body-to-hip, hip-to-knee and knee-to-foot spans near both ends and
+     at the middle; every shot must drain the intended leg's own pool. */
+  const standingLegCoverage = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    const V3 = () => new (Object.getPrototypeOf(inst.root.position).constructor)();
+    const world = (bone) => {
+      bone.updateWorldMatrix(true, false);
+      return bone.getWorldPosition(V3());
+    };
+    const original = {
+      hp: inst.health,
+      legHp: inst.legHp.slice(),
+      broken: inst.legBroken.slice(),
+      legsBroken: inst.legsBroken,
+    };
+    const misses = [];
+    let samples = 0;
+    for (let i = 0; i < inst.legs.length; i += 1) {
+      inst.legBroken.fill(true);
+      inst.legBroken[i] = false;
+      const leg = inst.legs[i];
+      const points = [world(leg.coxa), world(leg.femur), world(leg.tibia), world(leg.toe)];
+      for (let segment = 0; segment < 3; segment += 1) {
+        for (const fraction of [0.15, 0.5, 0.85]) {
+          samples += 1;
+          const target = V3().copy(points[segment]).lerp(points[segment + 1], fraction);
+          const outward = V3().set(target.x - inst.x, 0, target.z - inst.z);
+          if (outward.lengthSq() < 0.01) outward.set(1, 0, 0);
+          outward.normalize();
+          const origin = V3().copy(target).addScaledVector(outward, 3);
+          const direction = V3().copy(outward).multiplyScalar(-1);
+          const before = inst.legHp[i];
+          const hit = T.combat.fire(origin, direction, { damage: 1, range: 6 });
+          if (hit?.inst !== inst || hit?.legIndex !== i || inst.legHp[i] !== before - 1) {
+            misses.push({ i, segment, fraction, hitLeg: hit?.legIndex ?? null,
+              damage: before - inst.legHp[i] });
+          }
+        }
+      }
+    }
+    inst.health = original.hp;
+    inst.legHp.splice(0, inst.legHp.length, ...original.legHp);
+    inst.legBroken.splice(0, inst.legBroken.length, ...original.broken);
+    inst.legsBroken = original.legsBroken;
+    return { samples, misses };
+  });
+  check("shooting damages all three spans of all eight standing legs",
+    standingLegCoverage.samples === 72 && standingLegCoverage.misses.length === 0,
+    standingLegCoverage.misses.length
+      ? JSON.stringify(standingLegCoverage.misses.slice(0, 4))
+      : `${standingLegCoverage.samples}/72 aimed spans damaged their own leg`);
+
+  /* A melee point just ABOVE the legal height on each sloped shin is
+     the regression for the old all-or-nothing height check. The point
+     itself must be refused, while the adjacent lower piece of the same
+     segment remains inside the lance's horizontal reach. */
+  const standingMeleeCoverage = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    const V3 = () => new (Object.getPrototypeOf(inst.root.position).constructor)();
+    const world = (bone) => {
+      bone.updateWorldMatrix(true, false);
+      return bone.getWorldPosition(V3());
+    };
+    const original = {
+      legHp: inst.legHp.slice(),
+      broken: inst.legBroken.slice(),
+      legsBroken: inst.legsBroken,
+      collapsed: inst.collapsed,
+    };
+    const misses = [];
+    T.equipWeapon("glaive");
+    inst.collapsed = false;
+    for (let i = 0; i < inst.legs.length; i += 1) {
+      inst.legBroken.fill(true);
+      inst.legBroken[i] = false;
+      inst.legHp[i] = 1000;
+      const knee = world(inst.legs[i].tibia);
+      const foot = world(inst.legs[i].toe);
+      let crossing = 0.72;
+      let strikeAt = V3();
+      for (let settle = 0; settle < 3; settle += 1) {
+        const highSide = Math.max(0.02, crossing - 0.035);
+        strikeAt.copy(knee).lerp(foot, highSide);
+        T._teleportRaw(strikeAt.x, strikeAt.z, 0);
+        const reachY = T.player.state.y + T.combat.hitbox.distaff.meleeReachY;
+        const lowerDy = foot.y - knee.y;
+        crossing = Math.max(0, Math.min(1,
+          (reachY - knee.y) / (Math.abs(lowerDy) < 0.001 ? -0.001 : lowerDy)));
+      }
+      const before = inst.legHp[i];
+      const hits = T.combat.meleeStrike(1, Math.PI * 2, false, 1, 0);
+      if (hits < 1 || inst.legHp[i] >= before) {
+        misses.push({ i, hits, before, after: inst.legHp[i], crossing });
+      }
+    }
+    inst.legHp.splice(0, inst.legHp.length, ...original.legHp);
+    inst.legBroken.splice(0, inst.legBroken.length, ...original.broken);
+    inst.legsBroken = original.legsBroken;
+    inst.collapsed = original.collapsed;
+    return { tested: inst.legs.length, misses };
+  });
+  check("melee reaches the lower portion of every sloped leg",
+    standingMeleeCoverage.tested === 8 && standingMeleeCoverage.misses.length === 0,
+    standingMeleeCoverage.misses.length
+      ? JSON.stringify(standingMeleeCoverage.misses)
+      : "8/8 legs damaged from the reachable side of the height boundary");
+
   /* ---- STANDING ATTACKS ---------------------------------------------- */
   const standingAttacks = await page.evaluate(() => {
     const T = window.__SF;
@@ -462,6 +574,57 @@ try {
   check("the collapsed body is genuinely DOWN, not just leg-folded",
     sink.headY < 4.5 && sink.bodyDrop > 4,
     `head ${sink.headY}m above ground, drop ${sink.bodyDrop}m`);
+
+  /* The authored collapse owns the bones, so the walking IK target is
+     intentionally stale here. This is the exact pose that used to
+     leave the lower hitboxes standing several metres from the visible
+     legs. Aim at each live-bone span with every other leg disabled and
+     require the intended remaining leg to win the raycast. */
+  const collapsedLegCoverage = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    const V3 = () => new (Object.getPrototypeOf(inst.root.position).constructor)();
+    const world = (bone) => {
+      bone.updateWorldMatrix(true, false);
+      return bone.getWorldPosition(V3());
+    };
+    const original = inst.legBroken.slice();
+    const targets = original.map((broken, i) => (broken ? -1 : i)).filter((i) => i >= 0);
+    const misses = [];
+    let samples = 0;
+    let maxIkDrift = 0;
+    for (const i of targets) {
+      inst.legBroken.fill(true);
+      inst.legBroken[i] = false;
+      const leg = inst.legs[i];
+      const points = [world(leg.coxa), world(leg.femur), world(leg.tibia), world(leg.toe)];
+      maxIkDrift = Math.max(maxIkDrift, points[3].distanceTo(leg.foot));
+      for (let segment = 0; segment < 3; segment += 1) {
+        for (const fraction of [0.15, 0.5, 0.85]) {
+          samples += 1;
+          const target = V3().copy(points[segment]).lerp(points[segment + 1], fraction);
+          const outward = V3().set(target.x - inst.x, 0, target.z - inst.z);
+          if (outward.lengthSq() < 0.01) outward.set(1, 0, 0);
+          outward.normalize();
+          const origin = V3().copy(target).addScaledVector(outward, 3);
+          const direction = V3().copy(outward).multiplyScalar(-1);
+          const hit = T.combat.raycastEnemies(
+            origin.x, origin.y, origin.z, direction.x, direction.y, direction.z, 6);
+          if (hit?.inst !== inst || hit?.legIndex !== i) {
+            misses.push({ i, segment, fraction, hitLeg: hit?.legIndex ?? null });
+          }
+        }
+      }
+    }
+    inst.legBroken.splice(0, inst.legBroken.length, ...original);
+    return { targets: targets.length, samples, maxIkDrift: Number(maxIkDrift.toFixed(2)), misses };
+  });
+  check("folded leg hitboxes follow every live rendered segment, not the stale IK feet",
+    collapsedLegCoverage.targets === 4 && collapsedLegCoverage.samples === 36
+      && collapsedLegCoverage.maxIkDrift > 2 && collapsedLegCoverage.misses.length === 0,
+    collapsedLegCoverage.misses.length
+      ? JSON.stringify(collapsedLegCoverage.misses.slice(0, 4))
+      : `${collapsedLegCoverage.samples}/36 spans aligned through ${collapsedLegCoverage.maxIkDrift}m IK drift`);
 
   const collapsedMelee = await page.evaluate(() => {
     const T = window.__SF;

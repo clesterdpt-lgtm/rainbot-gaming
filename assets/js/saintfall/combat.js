@@ -163,6 +163,12 @@ const HITBOX = {
        the visual legs carry bristle fringes well past their core, and
        shots that look on-target were falling outside the old radius. */
     legRadius: 0.85,
+    /* The foot bone is the centre of a visible tarsus and three
+       outward claws, not the very end of the rendered limb. The
+       lower-leg capsule already rounds over the joint; this slightly
+       wider live-bone sphere carries that coverage through the claw
+       silhouette instead of ending damage at an invisible pivot. */
+    footRadius: 1.10,
     /* THE BODY IS A CAPSULE BETWEEN TWO LIVE BONES - "abdomen2" at
        the rear, "head" at the front - because those are the two rig
        origins that actually sit inside the visual mass. (The
@@ -560,9 +566,31 @@ export function buildCombat(ctx) {
   const _legA = new THREE.Vector3();
   const _legB = new THREE.Vector3();
   const _legC = new THREE.Vector3();
+  const _legD = new THREE.Vector3();
   const _bodyLive = new THREE.Vector3();
 
   const _bodyLive2 = new THREE.Vector3();
+
+  /** Read all four live leg joints from the rendered skeleton.
+   *
+   * `leg.foot` is the walking IK's requested plant point. It matches
+   * the rendered foot while IK owns the pose, but deliberately stops
+   * updating while authored collapse/recover clips own the bones. A
+   * hitbox built to that target therefore stayed standing while the
+   * visible lower legs folded several metres away. The foot bone is
+   * authoritative in every phase because it is what skins the mesh. */
+  function distaffLegSpan(leg, outCoxa, outFemur, outTibia, outFoot) {
+    if (!leg?.coxa || !leg.femur || !leg.tibia || !leg.toe) return false;
+    leg.coxa.updateWorldMatrix(true, false);
+    leg.femur.updateWorldMatrix(true, false);
+    leg.tibia.updateWorldMatrix(true, false);
+    leg.toe.updateWorldMatrix(true, false);
+    outCoxa.setFromMatrixPosition(leg.coxa.matrixWorld);
+    outFemur.setFromMatrixPosition(leg.femur.matrixWorld);
+    outTibia.setFromMatrixPosition(leg.tibia.matrixWorld);
+    outFoot.setFromMatrixPosition(leg.toe.matrixWorld);
+    return true;
+  }
 
   /** The body capsule's two live endpoints, read off the bones the
    *  HITBOX entry names. True in every phase by construction: the
@@ -602,12 +630,7 @@ export function buildCombat(ctx) {
     for (let i = 0; i < (inst.legs?.length || 0); i += 1) {
       if (inst.legBroken?.[i]) continue;
       const leg = inst.legs[i];
-      leg.coxa.updateWorldMatrix(true, false);
-      leg.femur.updateWorldMatrix(true, false);
-      leg.tibia.updateWorldMatrix(true, false);
-      _legC.setFromMatrixPosition(leg.coxa.matrixWorld);
-      _legA.setFromMatrixPosition(leg.femur.matrixWorld);
-      _legB.setFromMatrixPosition(leg.tibia.matrixWorld);
+      if (!distaffLegSpan(leg, _legC, _legA, _legB, _legD)) continue;
       const tCoxa = segmentHit(ox, oy, oz, dx, dy, dz, _legC, _legA, r * 1.25);
       if (tCoxa >= 0 && tCoxa < bestT) {
         bestT = tCoxa; legIndex = i; weak = false; found = true;
@@ -616,10 +639,14 @@ export function buildCombat(ctx) {
       if (tUpper >= 0 && tUpper < bestT) {
         bestT = tUpper; legIndex = i; weak = false; found = true;
       }
-      _legC.set(leg.foot.x, leg.foot.y, leg.foot.z);
-      const tLower = segmentHit(ox, oy, oz, dx, dy, dz, _legB, _legC, r);
+      const tLower = segmentHit(ox, oy, oz, dx, dy, dz, _legB, _legD, r);
       if (tLower >= 0 && tLower < bestT) {
         bestT = tLower; legIndex = i; weak = false; found = true;
+      }
+      const tFoot = sphereEntry(_legD.x, _legD.y, _legD.z,
+        box.footRadius || r, ox, oy, oz, dx, dy, dz);
+      if (tFoot >= 0 && tFoot < bestT) {
+        bestT = tFoot; legIndex = i; weak = false; found = true;
       }
     }
     if (distaffBodySpan(inst, box, _bodyLive, _bodyLive2)) {
@@ -777,38 +804,70 @@ export function buildCombat(ctx) {
   }
 
   const _legCand = new THREE.Vector3();
+  const _legClipA = new THREE.Vector3();
+  const _legClipB = new THREE.Vector3();
+
+  /** Clip a segment to the portion no higher than `maxY`.
+   *
+   * Melee used to find the horizontally-nearest point first and then
+   * reject it when that one point was too high. On a sloped shin this
+   * discarded the entire limb even when its lower half was beside the
+   * player. Clipping first makes every physically reachable portion a
+   * candidate without granting swings against the overhead coxa. */
+  function clipSegmentBelowY(a, b, maxY, outA, outB) {
+    if (a.y > maxY && b.y > maxY) return false;
+    outA.copy(a);
+    outB.copy(b);
+    if (a.y > maxY) {
+      const t = (maxY - a.y) / (b.y - a.y);
+      outA.lerpVectors(a, b, clamp(t, 0, 1));
+    } else if (b.y > maxY) {
+      const t = (maxY - a.y) / (b.y - a.y);
+      outB.lerpVectors(a, b, clamp(t, 0, 1));
+    }
+    return true;
+  }
 
   function nearestLegPoint(inst, box, x, z, py, out) {
     let best = Infinity;
+    let bestSurface = Infinity;
+    let bestRadius = box.legRadius || 0.6;
     let legIndex = -1;
     /* Swings land where a swing can physically go. Point-based
        targeting (knee and foot only) shipped for one build and made
        melee on the legs a coin toss: a player square against a shin
        was often out of reach of BOTH points while the limb itself
-       crossed their swing. Every segment is tested now, and a
-       candidate above `meleeReachY` is refused so the reachable band
-       is exactly the part of the leg a person could actually strike. */
+       crossed their swing. Every segment is tested now and clipped at
+       `meleeReachY`, so the reachable band is exactly the part of the
+       leg a person could actually strike. */
     const reachY = py + (box.meleeReachY || 3.6);
+    const r = box.legRadius || 0.6;
     for (let i = 0; i < (inst.legs?.length || 0); i += 1) {
       if (inst.legBroken?.[i]) continue;
       const leg = inst.legs[i];
-      leg.coxa.updateWorldMatrix(true, false);
-      leg.femur.updateWorldMatrix(true, false);
-      leg.tibia.updateWorldMatrix(true, false);
-      _legC.setFromMatrixPosition(leg.coxa.matrixWorld);
-      _legA.setFromMatrixPosition(leg.femur.matrixWorld);
-      _legB.setFromMatrixPosition(leg.tibia.matrixWorld);
+      if (!distaffLegSpan(leg, _legC, _legA, _legB, _legD)) continue;
       const segs = [
-        [_legC.x, _legC.y, _legC.z, _legA.x, _legA.y, _legA.z],
-        [_legA.x, _legA.y, _legA.z, _legB.x, _legB.y, _legB.z],
-        [_legB.x, _legB.y, _legB.z, leg.foot.x, leg.foot.y, leg.foot.z],
+        [_legC, _legA, r * 1.25],
+        [_legA, _legB, r * 1.15],
+        [_legB, _legD, r],
       ];
       for (const s of segs) {
-        const d = nearestOnSegmentXZ(s[0], s[1], s[2], s[3], s[4], s[5],
-          x, z, _legCand);
-        if (d < best && _legCand.y <= reachY) {
-          best = d; legIndex = i; out.copy(_legCand);
+        if (!clipSegmentBelowY(s[0], s[1], reachY, _legClipA, _legClipB)) continue;
+        const d = nearestOnSegmentXZ(
+          _legClipA.x, _legClipA.y, _legClipA.z,
+          _legClipB.x, _legClipB.y, _legClipB.z, x, z, _legCand);
+        const surface = d - s[2];
+        if (surface < bestSurface) {
+          best = d; bestSurface = surface; bestRadius = s[2];
+          legIndex = i; out.copy(_legCand);
         }
+      }
+      const footRadius = box.footRadius || r;
+      const footDist = Math.hypot(_legD.x - x, _legD.z - z);
+      const footSurface = footDist - footRadius;
+      if (_legD.y <= reachY && footSurface < bestSurface) {
+        best = footDist; bestSurface = footSurface; bestRadius = footRadius;
+        legIndex = i; out.copy(_legD);
       }
     }
     /* The body joins the candidate list only while collapsed - same
@@ -816,14 +875,20 @@ export function buildCombat(ctx) {
        reaches it; collapsed, the capsule is genuinely down where the
        reach gate passes it. */
     if (inst.collapsed && distaffBodySpan(inst, box, _bodyLive, _bodyLive2)) {
-      const d = nearestOnSegmentXZ(
-        _bodyLive.x, _bodyLive.y, _bodyLive.z,
-        _bodyLive2.x, _bodyLive2.y, _bodyLive2.z, x, z, _legCand);
-      if (d < best && _legCand.y <= reachY + 1.6) {
-        best = d; legIndex = -1; out.copy(_legCand);
+      const bodyRadius = box.bodyRadius || 3;
+      if (clipSegmentBelowY(_bodyLive, _bodyLive2, reachY + 1.6,
+        _legClipA, _legClipB)) {
+        const d = nearestOnSegmentXZ(
+          _legClipA.x, _legClipA.y, _legClipA.z,
+          _legClipB.x, _legClipB.y, _legClipB.z, x, z, _legCand);
+        const surface = d - bodyRadius;
+        if (surface < bestSurface) {
+          best = d; bestSurface = surface; bestRadius = bodyRadius;
+          legIndex = -1; out.copy(_legCand);
+        }
       }
     }
-    return { dist: best, legIndex };
+    return { dist: best, legIndex, radius: bestRadius };
   }
 
   /**
@@ -1284,7 +1349,7 @@ export function buildCombat(ctx) {
       const dz = _bodyNear.z - ps.z;
       const dist = Math.max(near, 1e-4);
       const targetRadius = !box.legs ? box.r
-        : legTarget.legIndex >= 0 ? (box.legRadius || 0.6) : (box.bodyRadius || 3);
+        : legTarget.radius;
       if (box.legs && legTarget.legIndex < 0 && !inst.collapsed) continue;
       if (dist > reach + targetRadius) continue;
       /* TOUCHING RANGE IS ITS OWN CASE. A collapsed boss's body is a
@@ -1312,7 +1377,7 @@ export function buildCombat(ctx) {
       let dealt;
       if (box.legs && legTarget.legIndex >= 0) {
         dealt = damageLeg(inst, legTarget.legIndex, strikeDamage,
-          { x: inst.x, y: hitY, z: inst.z });
+          { x: _bodyNear.x, y: hitY, z: _bodyNear.z });
       } else if (box.legs) {
         /* THE PAYOFF. A collapsed body is the one melee target in the
            game worth more than a rifle shot at it - see the comment on

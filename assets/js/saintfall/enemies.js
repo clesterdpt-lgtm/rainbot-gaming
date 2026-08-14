@@ -341,8 +341,13 @@ export const BESTIARY = {
     animRange: 560,
     poseRange: 820,
     shadowRange: 200,
+    /* "sweep" was authored into the model and played by winnower.js
+       but missing from this list for one build - and this list is
+       what decides which clips get actions at all, so the grounded
+       attack animated NOTHING and the miss was silent. The fight
+       harness now asserts the module's own attack clips exist. */
     clips: ["idle", "alert", "bombard", "strain", "land", "stoke",
-      "launch", "flinch", "death"],
+      "launch", "sweep", "sprawl", "flinch", "death"],
   },
 };
 
@@ -852,6 +857,11 @@ export async function buildEnemies(ctx, onProgress) {
          terrain the IK just solved them against. */
       pitch: 0,
       roll: 0,
+      /* How far below its normal ride height the creature is holding
+         itself. The ground-follow subtracts it - see the update loop -
+         and the creature's module animates it (the Distaff's collapse
+         is its one current writer). */
+      bodyDrop: 0,
       /* The lift pool and its burst sacs, for a species that declares
          `liftPool`. `grounded` is read by combat.js to decide whether
          the gut is a target and whether a lance can reach at all; it
@@ -1480,7 +1490,17 @@ export async function buildEnemies(ctx, onProgress) {
            death clip only rotates bones, that is the height its LEGS
            were holding it at. A Gleaner folded four three-metre stilts
            and stayed exactly where they had put it. */
-        const want = groundY(inst.x, inst.z) + (dying ? deathLift(inst) : 0);
+        /* `bodyDrop` is the standing counterpart of a corpse's
+           deathLift: a creature holding itself BELOW its own ride
+           height. The Distaff's collapse needs it because a clip can
+           only rotate bones - folding the legs moves the FEET, not
+           the body, so without the root actually sinking the animal
+           "collapses" at exactly the altitude it stood at and the
+           whole read is lost. The creature's module animates the
+           value; the damp below is what makes the sink a settle
+           rather than a snap. */
+        const want = groundY(inst.x, inst.z)
+          + (dying ? deathLift(inst) : -(inst.bodyDrop || 0));
         inst.y = damp(inst.y, want, 12, dt);
         inst.root.position.set(inst.x, inst.y, inst.z);
         if (!dying) inst.root.rotation.y = inst.yaw;

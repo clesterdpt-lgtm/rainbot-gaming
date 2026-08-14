@@ -64,6 +64,44 @@ export const DISTAFF_CONFIG = Object.freeze({
 
   alertSeconds: 2.2,
 
+  /* ------------------------------------------------------------
+     LOCOMOTION. It walks now - the original shipped as a planted
+     turret and read as furniture with a health bar. It stalks a
+     preferred ring around the player: outside the band it advances,
+     inside it backs away (a thing this size giving ground is worth
+     more menace than any charge), and inside the band it drifts
+     sideways so the legs are never still. Everything stops while an
+     attack is winding up: a slam thrown mid-stride would smear the
+     telegraph. */
+  walkSpeed: 3.0,
+  backSpeed: 1.7,
+  strafeSpeed: 0.9,
+  holdBand: Object.freeze([10.5, 16]),
+  /* THE LUNGE. The answer to standing at 25m plinking legs: a rear-up
+     read, then a sprint that ends in the ordinary slam. It converts
+     the existing telegraph vocabulary into a gap-closer instead of
+     adding a new unreadable one. */
+  lungeCadence: 9.0,
+  lungeSeconds: 1.8,
+  lungeSpeed: 9.5,
+  lungeMinRange: 16,
+  lungeMaxRange: 34,
+
+  /* Its territory. It will not be kited out of the Scar: movement is
+     clamped to this ring around the lair, and a player who leaves
+     (see disengageRadius) sends it WALKING home at full health
+     rather than teleporting - the reset is diegetic. */
+  arenaRadius: 74,
+  returnSpeed: 5.2,
+
+  /* How far the body sinks below its standing ride height while
+     collapsed - the runtime half of the collapse read. The clip folds
+     the legs, but a clip only rotates bones: folding legs moves the
+     FEET, and without the root itself coming down the animal
+     "collapsed" at exactly its standing altitude. enemies.js's
+     ground-follow subtracts `inst.bodyDrop`; this module animates it. */
+  collapseDrop: 6.1,
+
   // Legs broken before it buckles - half of eight - and how long the
   // body stays a target once it has.
   collapseThreshold: 4,
@@ -121,7 +159,7 @@ export function buildDistaff(ctx) {
   scene.add(group);
 
   const state = {
-    phase: "dormant",       // dormant, alert, standing, collapsed, recovering, dead
+    phase: "dormant",       // dormant, alert, standing, collapsed, recovering, returning, dead
     timer: 0,
     legsAtLastCollapse: 0,
     slamTimer: C.slamCadence * 0.55,
@@ -138,8 +176,22 @@ export function buildDistaff(ctx) {
     // Read off the instance's own leg pool at spawn, since
     // DISTAFF_CONFIG is frozen and cannot carry it - see resetToLair.
     legHealthRef: 340,
+    /* The reveal camera plays once per encounter, not once per
+       re-aggro: a player who has already been shown the animal is
+       mid-fight, and stealing the camera again is a punishment. A
+       full reset (walking home, or the hard QA reset) re-arms it. */
+    revealed: false,
+    // Locomotion.
+    lungeFor: 0,
+    lungeTimer: C.lungeCadence * 0.6,
+    strafeDir: 1,
+    footfallGap: 0,
   };
   let inst = null;
+  /* Last known plant per leg, for footfall detection - the solver
+     replants feet on its own schedule and this module just watches
+     for the moment each one lands. */
+  const plantMemo = [];
 
   /* ============================================================
      WEB BOLTS - a fast, near-straight shot rather than a lobbed
@@ -425,6 +477,8 @@ export function buildDistaff(ctx) {
        system - see player.setFree, already used for the free-cam key
        and every scripted QA shot. Handed back the instant the beat
        ends; combat and mission time never stop for it. */
+    if (state.revealed) return;
+    state.revealed = true;
     if (ctx.player?.setFree && !ctx.player.state.free) {
       const px = ctx.player.state.x;
       const pz = ctx.player.state.z;
@@ -545,6 +599,52 @@ export function buildDistaff(ctx) {
     else if (state.actionKind === "bite") landBite();
   }
 
+  /** Advance the body by (vx, vz), clamped to the arena and steered
+   *  around masonry. The leg solver does the rest: feet replant on
+   *  their own once the body has dragged their rest pose far enough,
+   *  which is the entire reason walking costs this module three lines
+   *  of physics and no animation. */
+  function moveBody(vx, vz, dt) {
+    const speed = Math.hypot(vx, vz);
+    if (speed < 1e-4) return;
+    const ux = vx / speed;
+    const uz = vz / speed;
+    // A body-height probe ahead; a spire in the way turns the step
+    // along its tangent rather than walking the animal into it.
+    if (ctx.collide?.rayBlock) {
+      const gy = groundAt(inst.x, inst.z);
+      const ahead = ctx.collide.rayBlock(inst.x, gy + 4.2, inst.z, ux, 0, uz, 7);
+      if (ahead < 7) {
+        const side = state.strafeDir;
+        const tx = -uz * side;
+        const tz = ux * side;
+        inst.x += tx * speed * dt;
+        inst.z += tz * speed * dt;
+        return;
+      }
+    }
+    let nx = inst.x + vx * dt;
+    let nz = inst.z + vz * dt;
+    // Its territory has an edge and it respects it - see arenaRadius.
+    const hx = nx - C.lairX;
+    const hz = nz - C.lairZ;
+    const home = Math.hypot(hx, hz);
+    if (home > C.arenaRadius) {
+      nx = C.lairX + (hx / home) * C.arenaRadius;
+      nz = C.lairZ + (hz / home) * C.arenaRadius;
+    }
+    inst.x = nx;
+    inst.z = nz;
+  }
+
+  function beginLunge() {
+    state.lungeFor = C.lungeSeconds;
+    state.lungeTimer = C.lungeCadence;
+    enemies.play(inst, "alert", 0.10);
+    ctx.player?.doctrineKick?.(0.5, 0.4);
+    bus.emit("lungeTelegraph", { x: inst.x, z: inst.z });
+  }
+
   function stepStanding(dt, dist) {
     /* THE TRIGGER. Standing only - a leg broken mid-collapse (the
        body is already the target) or mid-recovery does not restart
@@ -553,26 +653,95 @@ export function buildDistaff(ctx) {
     if (inst.legsBroken >= C.collapseThreshold
       && inst.legsBroken > state.legsAtLastCollapse
       && state.recollapseFor <= 0) {
+      state.lungeFor = 0;
       beginCollapse();
       return;
     }
     state.slamTimer -= dt;
     state.webTimer -= dt;
     state.patchTimer -= dt;
+    state.lungeTimer -= dt;
     state.action = Math.max(0, state.action - dt);
+    const ps = ctx.player.state;
+
+    /* THE LUNGE, mid-flight. A short rear (the first 0.4s of the
+       alert clip) and then the sprint; it cashes out into the
+       ordinary slam the moment the player is inside its arc, so the
+       payoff is a telegraph the player has already learned. */
+    if (state.lungeFor > 0) {
+      state.lungeFor -= dt;
+      if (state.lungeFor > C.lungeSeconds - 0.4) return;    // the rear-up beat
+      const dx = ps.x - inst.x;
+      const dz = ps.z - inst.z;
+      const d = Math.hypot(dx, dz) || 1;
+      moveBody((dx / d) * C.lungeSpeed, (dz / d) * C.lungeSpeed, dt);
+      if (d < C.slamRadius * 0.85 || state.lungeFor <= 0) {
+        state.lungeFor = 0;
+        beginSlam();
+      }
+      return;
+    }
+
     if (state.action > 0) { resolveAction(dt); return; }
 
+    if (state.lungeTimer <= 0 && dist > C.lungeMinRange && dist < C.lungeMaxRange) {
+      beginLunge();
+      return;
+    }
     if (state.slamTimer <= 0 && dist < C.slamRadius * 1.3) { beginSlam(); return; }
     if (state.webTimer <= 0) { beginWebCast(); return; }
     if (state.patchTimer <= 0) {
       state.patchTimer = C.patchCadence;
-      const ps = ctx.player.state;
       const ang = Math.random() * TAU;
       const r = 3 + Math.random() * 6;
       spillPatch(ps.x + Math.cos(ang) * r, ps.z + Math.sin(ang) * r);
       return;
     }
+
+    /* THE STALK. Outside the band it closes, inside it gives ground,
+       and held in the band it side-steps - the drift flips direction
+       on a slow random clock so the orbit never reads as mechanical. */
+    if (Math.random() < dt * 0.15) state.strafeDir = -state.strafeDir;
+    const dx = ps.x - inst.x;
+    const dz = ps.z - inst.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const ux = dx / d;
+    const uz = dz / d;
+    if (dist > C.holdBand[1]) {
+      moveBody(ux * C.walkSpeed, uz * C.walkSpeed, dt);
+    } else if (dist < C.holdBand[0] - 2) {
+      moveBody(-ux * C.backSpeed, -uz * C.backSpeed, dt);
+    } else {
+      moveBody(-uz * C.strafeSpeed * state.strafeDir,
+        ux * C.strafeSpeed * state.strafeDir, dt);
+    }
     if (inst.state !== "alert") enemies.play(inst, "alert", 0.3);
+  }
+
+  /** Walking home. Health is already back - the reset happened the
+   *  moment it gave up (see the disengage block) - so this phase is
+   *  pure presentation: the animal turns, crosses its own arena, and
+   *  folds down where it started. Crossing its aggro radius on the
+   *  way home re-engages it without a second camera steal. */
+  function stepReturning(dt, dist) {
+    if (dist <= C.aggroRadius) {
+      state.phase = "standing";
+      enemies.play(inst, "alert", 0.25);
+      bus.emit("aggro", { x: inst.x, z: inst.z });
+      return;
+    }
+    const dx = C.lairX - inst.x;
+    const dz = C.lairZ - inst.z;
+    const home = Math.hypot(dx, dz);
+    if (home < 3) {
+      state.phase = "dormant";
+      state.revealed = false;
+      enemies.play(inst, "idle", 0.5);
+      bus.emit("reset", { x: inst.x, z: inst.z });
+      return;
+    }
+    faceTowards(C.lairX, C.lairZ, 1.6, dt);
+    moveBody((dx / home) * C.returnSpeed, (dz / home) * C.returnSpeed, dt);
   }
 
   function stepCollapsed(dt) {
@@ -627,13 +796,16 @@ export function buildDistaff(ctx) {
     const dist = Math.hypot(ps.x - inst.x, ps.z - inst.z);
 
     if (state.phase === "dormant") { stepDormantCheck(dist); return; }
+    if (state.phase === "returning") { stepReturning(dt, dist); return; }
 
     /* A boss that can be permanently ground out of reach by a
        player who simply leaves is a boss that can be soft-locked -
-       full health, no way back to it, in whatever run this is. */
+       full health, no way back to it, in whatever run this is. The
+       reset itself is immediate (health, legs, hazards); the walk
+       home is presentation on top of it. */
     if (dist > C.disengageRadius && state.phase !== "collapsed") {
       state.disengageFor += dt;
-      if (state.disengageFor > C.disengageSeconds) { resetToLair(); return; }
+      if (state.disengageFor > C.disengageSeconds) { beginReturn(); return; }
     } else {
       state.disengageFor = 0;
     }
@@ -659,11 +831,10 @@ export function buildDistaff(ctx) {
     else if (state.phase === "recovering") stepRecovering(dt);
   }
 
-  /** Put it back to sleep at full strength - broken legs regrow with
-   *  it, because there is no honest way to leave the fight half-won
-   *  and still call the encounter repeatable. */
-  function resetToLair() {
-    if (!inst) return;
+  /** Full strength again - health, legs, everything. Broken legs
+   *  regrow, because there is no honest way to leave the fight
+   *  half-won and still call the encounter repeatable. */
+  function healToFull() {
     inst.health = inst.maxHealth;
     if (inst.legHp) {
       for (let i = 0; i < inst.legHp.length; i += 1) inst.legHp[i] = state.legHealthRef;
@@ -671,8 +842,34 @@ export function buildDistaff(ctx) {
     if (inst.legBroken) inst.legBroken.fill(false);
     inst.legsBroken = 0;
     inst.collapsed = false;
-    state.phase = "dormant";
     state.legsAtLastCollapse = 0;
+    state.lungeFor = 0;
+    state.action = 0;
+    state.pending = 0;
+  }
+
+  /** The player left. Heal NOW - the reset the leash promises must
+   *  not depend on the walk home completing - then walk home and
+   *  fold up. */
+  function beginReturn() {
+    healToFull();
+    clearHazards();
+    state.phase = "returning";
+    state.disengageFor = 0;
+    enemies.play(inst, "alert", 0.4);
+    bus.emit("returning", { x: inst.x, z: inst.z });
+  }
+
+  /** The hard variant - QA and save-restore only: snaps home rather
+   *  than walking, because a restore has no business animating. */
+  function resetToLair() {
+    if (!inst) return;
+    healToFull();
+    inst.x = C.lairX;
+    inst.z = C.lairZ;
+    inst.root.position.set(inst.x, inst.y, inst.z);
+    state.phase = "dormant";
+    state.revealed = false;
     state.disengageFor = 0;
     enemies.play(inst, "idle", 0.4);
     bus.emit("reset", { x: inst.x, z: inst.z });
@@ -687,10 +884,42 @@ export function buildDistaff(ctx) {
     return inst;
   }
 
+  /** Watch the solver replant feet and turn each landing into dust
+   *  and a report. The solver owns WHEN a foot lands; this only
+   *  notices that it has - throttled, because eight legs at a sprint
+   *  can land two feet in one frame and the second puff buys nothing. */
+  function watchFootfalls(dt) {
+    state.footfallGap = Math.max(0, state.footfallGap - dt);
+    if (!inst.legs) return;
+    const running = state.lungeFor > 0 || state.phase === "returning";
+    for (let i = 0; i < inst.legs.length; i += 1) {
+      const plant = inst.legs[i].plant;
+      const memo = plantMemo[i] || (plantMemo[i] = { x: plant.x, z: plant.z });
+      const moved = Math.hypot(plant.x - memo.x, plant.z - memo.z);
+      if (moved < 0.8) continue;
+      memo.x = plant.x;
+      memo.z = plant.z;
+      if (inst.legBroken?.[i] || state.footfallGap > 0) continue;
+      state.footfallGap = 0.12;
+      ctx.vfx?.sandSpray?.(plant.x, plant.y + 0.2, plant.z,
+        running ? 1.5 : 0.9, 0, 1);
+      bus.emit("footfall", { x: plant.x, y: plant.y, z: plant.z, running });
+    }
+  }
+
   function update(dt) {
     const d = Math.min(0.1, Math.max(0, dt));
     if (!inst) { ensureSpawned(); return; }
     stepInstance(d);
+    /* The collapse sink. The clip folds the legs; this brings the
+       body down with them, and brings it back up through recovery.
+       enemies.js damps inst.y toward (ground - bodyDrop), so the
+       change here is a target, not a teleport. */
+    const wantDrop = state.phase === "collapsed"
+      ? C.collapseDrop
+      : state.phase === "recovering" ? C.collapseDrop * 0.35 : 0;
+    inst.bodyDrop = damp(inst.bodyDrop || 0, wantDrop, 2.4, d);
+    watchFootfalls(d);
     updateBolts(d);
     updatePatches(d);
   }
@@ -705,6 +934,9 @@ export function buildDistaff(ctx) {
       legCount: inst.legHp ? inst.legHp.length : 8,
       legBroken: inst.legBroken ? [...inst.legBroken] : [],
       collapsed: !!inst.collapsed,
+      bodyDrop: Number((inst.bodyDrop || 0).toFixed(2)),
+      lunging: state.lungeFor > 0,
+      homeDist: Number(Math.hypot(inst.x - C.lairX, inst.z - C.lairZ).toFixed(1)),
       dead: inst.state === "death",
       x: Number(inst.x.toFixed(2)),
       z: Number(inst.z.toFixed(2)),
@@ -731,9 +963,12 @@ export function buildDistaff(ctx) {
     if (!saved || typeof saved !== "object") return false;
     ensureSpawned();
     if (!inst) return false;
-    const phase = ["dormant", "alert", "standing", "collapsed", "recovering", "dead"]
-      .includes(saved.phase) ? saved.phase : "dormant";
+    const phase = ["dormant", "alert", "standing", "collapsed", "recovering",
+      "returning", "dead"].includes(saved.phase) ? saved.phase : "dormant";
     state.phase = phase;
+    /* A restore mid-return finishes the walk; a restore into any
+       live phase has, by definition, already seen the animal. */
+    state.revealed = phase !== "dormant";
     state.timer = Math.max(0, Number(saved.timer) || 0);
     state.legsAtLastCollapse = Math.max(0, Math.round(Number(saved.legsAtLastCollapse) || 0));
     state.defeated = !!saved.defeated;
@@ -795,6 +1030,10 @@ export function buildDistaff(ctx) {
     /** Instance accessor. QA-facing rather than gameplay-facing - the
      *  encounter itself only ever needs `status()`. */
     instance() { return inst; },
+    /** The hard reset - QA and checks about the leash's PROMISE
+     *  (full health, home, dormant) rather than the walk that
+     *  delivers it. */
+    resetToLair,
     dispose() { scene.remove(group); },
   };
 }

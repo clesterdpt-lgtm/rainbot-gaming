@@ -159,20 +159,33 @@ const HITBOX = {
     legCount: 8,
     /* Thick enough to match the model's own bristled legs - a hair-
        thin capsule on a leg this size would put most near-misses a
-       player calls a hit outside it. */
-    legRadius: 0.62,
-    /* THE BODY IS NOT A DESIGNED TARGET UNTIL IT IS ON THE GROUND.
-       `bodyRadius` is a sphere read off the LIVE "prosoma" bone rather
-       than a fixed offset in the creature's own frame, because
-       collapsing moves it by nine metres - a static offset would be
-       right in one state and wrong in the other. `legAndBodyHit` only
-       tests it at all while `inst.collapsed` is true. */
-    bodyRadius: 3.7,
+       player calls a hit outside it. Raised from 0.62 after playtest:
+       the visual legs carry bristle fringes well past their core, and
+       shots that look on-target were falling outside the old radius. */
+    legRadius: 0.85,
+    /* THE BODY IS A CAPSULE BETWEEN TWO LIVE BONES - "abdomen2" at
+       the rear, "head" at the front - because those are the two rig
+       origins that actually sit inside the visual mass. (The
+       "prosoma" bone's origin is at the armature ROOT, ground level;
+       an earlier build centred the collapsed hit sphere on it and put
+       the target at the animal's feet while the visible body hung
+       nine metres up.) Shootable in EVERY phase - a boss you can see
+       but cannot damage reads as a bug, not a mechanic - but only a
+       WEAK target while collapsed, so the leg fight is still what
+       buys the bonus window rather than the only way to hurt it. */
+    bodyBones: ["abdomen2", "head"],
+    bodyRadius: 3.1,
     /* Ranged reward for finding the collapsed body anyway; melee's is
        larger and applied directly in `meleeStrike` - see the comment
        there for why the two are not the same number. */
     weak: { mult: 1.4 },
     collapsedMeleeMult: 2.35,
+    /* How far above the player's feet a melee swing can honestly
+       claim to land. Without this gate the xz-only reach test lets a
+       ground-level swing "hit" a coxa nine metres overhead, and with
+       it the reachable band is exactly what it looks like: feet,
+       shins, and whatever the collapse brings down. */
+    meleeReachY: 3.6,
     // Fallback capsule for explode()/shockwave(), which treat this as
     // an ordinary tall, narrow-based creature.
     r: 3.7, y0: 0.02, y1: 13.8, head: 12.9, headR: 1.3, headZ: 2.2,
@@ -190,6 +203,12 @@ const HITBOX = {
      ------------------------------------------------------------------ */
   winnower: {
     r: 1.5, y0: -2.6, y1: 1.6, head: 0.4, headR: 0.85, headZ: 4.4,
+    /* The gaster. The insect rebuild hung seven metres of glowing
+       abdomen behind a body whose hit capsule is VERTICAL at the
+       origin - without this, the biggest lit surface on the animal
+       would eat shots and report nothing. A fore-aft capsule in the
+       creature's frame, matching the authored curl. */
+    tail: { a: [0, 0.1, -2.0], b: [0, -1.5, -6.9], r: 1.15 },
     /* THE HEAT SACS. Two live spheres on the wing roots, and the only
        way a ranged build can shorten the wait for a landing. Unlike
        the Matriarch's single fixed weak point these are a RESOURCE:
@@ -543,26 +562,36 @@ export function buildCombat(ctx) {
   const _legC = new THREE.Vector3();
   const _bodyLive = new THREE.Vector3();
 
-  /** Where the collapsed body actually is, read off the live bone
-   *  rather than a fixed frame offset - see the HITBOX comment on
-   *  why a static one cannot be right in both states. Null while
-   *  standing: the body is not a target that exists yet. */
-  function distaffBodyAt(inst, out) {
-    if (!inst.collapsed) return null;
-    const bone = inst.bones?.get?.("prosoma");
-    if (!bone) return null;
-    bone.updateWorldMatrix(true, false);
-    return out.setFromMatrixPosition(bone.matrixWorld);
+  const _bodyLive2 = new THREE.Vector3();
+
+  /** The body capsule's two live endpoints, read off the bones the
+   *  HITBOX entry names. True in every phase by construction: the
+   *  bones ride the same root the collapse sinks, so "where the body
+   *  is" and "where the body can be shot" cannot drift apart the way
+   *  a fixed offset let them. Returns false if the rig is not up yet. */
+  function distaffBodySpan(inst, box, outA, outB) {
+    const names = box.bodyBones;
+    if (!names) return false;
+    const a = inst.bones?.get?.(names[0]);
+    const b = inst.bones?.get?.(names[1]);
+    if (!a || !b) return false;
+    a.updateWorldMatrix(true, false);
+    b.updateWorldMatrix(true, false);
+    outA.setFromMatrixPosition(a.matrixWorld);
+    outB.setFromMatrixPosition(b.matrixWorld);
+    return true;
   }
 
   /**
-   * Ray against every leg, then the collapsed body.
+   * Ray against every leg, then the body.
    *
-   * Two segments per leg - hip to knee, knee to foot - so the whole
-   * limb is hittable rather than just its lower half. Returns the
-   * NEAREST thing the ray actually crosses, with `legIndex` set for a
-   * leg (`-1` for the body), so the caller can route damage to the
-   * right pool without re-deriving what was hit.
+   * Three segments per leg - body attach to hip, hip to knee, knee to
+   * foot - so the WHOLE limb is hittable: the coxa stretch nearest
+   * the body went untested for one build, and what looked like
+   * coverage in a probe was rays luckily crossing other legs. The
+   * body capsule is tested in every phase (plain damage standing,
+   * weak while collapsed). Returns the NEAREST thing the ray actually
+   * crosses, with `legIndex` set for a leg (`-1` for the body).
    */
   function legAndBodyHit(inst, box, ox, oy, oz, dx, dy, dz, maxT) {
     let bestT = maxT;
@@ -573,31 +602,31 @@ export function buildCombat(ctx) {
     for (let i = 0; i < (inst.legs?.length || 0); i += 1) {
       if (inst.legBroken?.[i]) continue;
       const leg = inst.legs[i];
+      leg.coxa.updateWorldMatrix(true, false);
       leg.femur.updateWorldMatrix(true, false);
       leg.tibia.updateWorldMatrix(true, false);
+      _legC.setFromMatrixPosition(leg.coxa.matrixWorld);
       _legA.setFromMatrixPosition(leg.femur.matrixWorld);
       _legB.setFromMatrixPosition(leg.tibia.matrixWorld);
-      _legC.set(leg.foot.x, leg.foot.y, leg.foot.z);
+      const tCoxa = segmentHit(ox, oy, oz, dx, dy, dz, _legC, _legA, r * 1.25);
+      if (tCoxa >= 0 && tCoxa < bestT) {
+        bestT = tCoxa; legIndex = i; weak = false; found = true;
+      }
       const tUpper = segmentHit(ox, oy, oz, dx, dy, dz, _legA, _legB, r * 1.15);
       if (tUpper >= 0 && tUpper < bestT) {
         bestT = tUpper; legIndex = i; weak = false; found = true;
       }
+      _legC.set(leg.foot.x, leg.foot.y, leg.foot.z);
       const tLower = segmentHit(ox, oy, oz, dx, dy, dz, _legB, _legC, r);
       if (tLower >= 0 && tLower < bestT) {
         bestT = tLower; legIndex = i; weak = false; found = true;
       }
     }
-    const body = distaffBodyAt(inst, _bodyLive);
-    if (body) {
-      const mx = body.x - ox;
-      const my = body.y - oy;
-      const mz = body.z - oz;
-      const along = mx * dx + my * dy + mz * dz;
-      const perpSq = (mx * mx + my * my + mz * mz) - along * along;
-      const br = box.bodyRadius || 3;
-      if (along > 0 && perpSq <= br * br) {
-        const entry = Math.max(0, along - Math.sqrt(Math.max(0, br * br - perpSq)));
-        if (entry < bestT) { bestT = entry; legIndex = -1; weak = true; found = true; }
+    if (distaffBodySpan(inst, box, _bodyLive, _bodyLive2)) {
+      const tBody = segmentHit(ox, oy, oz, dx, dy, dz, _bodyLive, _bodyLive2,
+        box.bodyRadius || 3);
+      if (tBody >= 0 && tBody < bestT) {
+        bestT = tBody; legIndex = -1; weak = !!inst.collapsed; found = true;
       }
     }
     if (!found) return null;
@@ -615,6 +644,7 @@ export function buildCombat(ctx) {
      ============================================================ */
 
   const _sac = new THREE.Vector3();
+  const _tail = new THREE.Vector3();
 
   /** Place an offset in the creature's own frame. */
   function localAt(inst, ox, oy, oz, out) {
@@ -693,6 +723,20 @@ export function buildCombat(ctx) {
       }
     }
 
+    // The gaster: a fore-aft capsule behind the body. Plain damage -
+    // the lit abdomen is an honest target, not a weak point.
+    if (box.tail) {
+      const ta = box.tail.a;
+      const tb = box.tail.b;
+      localAt(inst, ta[0], ta[1], ta[2], _sac);
+      _tail.copy(_sac);
+      localAt(inst, tb[0], tb[1], tb[2], _sac);
+      const tTail = segmentHit(ox, oy, oz, dx, dy, dz, _tail, _sac, box.tail.r);
+      if (tTail >= 0 && tTail < bestT) {
+        bestT = tTail; sacIndex = -1; weak = false; found = true;
+      }
+    }
+
     // The gut, and only once it is on the ground. Read off the live
     // "heart" bone for the same reason the sacs are.
     if (box.heart && inst.grounded) {
@@ -719,25 +763,65 @@ export function buildCombat(ctx) {
    * every other melee target uses is unchanged - see `meleeStrike` -
    * this only replaces WHERE that distance is measured to.
    */
-  function nearestLegPoint(inst, box, x, z, out) {
+  /** Nearest point on the xz-projection of segment ab to (x, z),
+   *  written to `out` as the full 3D point at that parameter. Returns
+   *  the horizontal distance. */
+  function nearestOnSegmentXZ(ax, ay, az, bx, by, bz, x, z, out) {
+    const ex = bx - ax;
+    const ez = bz - az;
+    const lenSq = ex * ex + ez * ez;
+    const t = lenSq < 1e-8 ? 0
+      : clamp(((x - ax) * ex + (z - az) * ez) / lenSq, 0, 1);
+    out.set(ax + ex * t, ay + (by - ay) * t, az + ez * t);
+    return Math.hypot(out.x - x, out.z - z);
+  }
+
+  const _legCand = new THREE.Vector3();
+
+  function nearestLegPoint(inst, box, x, z, py, out) {
     let best = Infinity;
     let legIndex = -1;
+    /* Swings land where a swing can physically go. Point-based
+       targeting (knee and foot only) shipped for one build and made
+       melee on the legs a coin toss: a player square against a shin
+       was often out of reach of BOTH points while the limb itself
+       crossed their swing. Every segment is tested now, and a
+       candidate above `meleeReachY` is refused so the reachable band
+       is exactly the part of the leg a person could actually strike. */
+    const reachY = py + (box.meleeReachY || 3.6);
     for (let i = 0; i < (inst.legs?.length || 0); i += 1) {
       if (inst.legBroken?.[i]) continue;
       const leg = inst.legs[i];
+      leg.coxa.updateWorldMatrix(true, false);
+      leg.femur.updateWorldMatrix(true, false);
       leg.tibia.updateWorldMatrix(true, false);
+      _legC.setFromMatrixPosition(leg.coxa.matrixWorld);
+      _legA.setFromMatrixPosition(leg.femur.matrixWorld);
       _legB.setFromMatrixPosition(leg.tibia.matrixWorld);
-      const dKnee = Math.hypot(_legB.x - x, _legB.z - z);
-      if (dKnee < best) { best = dKnee; legIndex = i; out.copy(_legB); }
-      const dFoot = Math.hypot(leg.foot.x - x, leg.foot.z - z);
-      if (dFoot < best) {
-        best = dFoot; legIndex = i; out.set(leg.foot.x, leg.foot.y, leg.foot.z);
+      const segs = [
+        [_legC.x, _legC.y, _legC.z, _legA.x, _legA.y, _legA.z],
+        [_legA.x, _legA.y, _legA.z, _legB.x, _legB.y, _legB.z],
+        [_legB.x, _legB.y, _legB.z, leg.foot.x, leg.foot.y, leg.foot.z],
+      ];
+      for (const s of segs) {
+        const d = nearestOnSegmentXZ(s[0], s[1], s[2], s[3], s[4], s[5],
+          x, z, _legCand);
+        if (d < best && _legCand.y <= reachY) {
+          best = d; legIndex = i; out.copy(_legCand);
+        }
       }
     }
-    const body = distaffBodyAt(inst, _bodyLive);
-    if (body) {
-      const dBody = Math.hypot(body.x - x, body.z - z);
-      if (dBody < best) { best = dBody; legIndex = -1; out.copy(body); }
+    /* The body joins the candidate list only while collapsed - same
+       height honesty: standing, it is nine metres up and no swing
+       reaches it; collapsed, the capsule is genuinely down where the
+       reach gate passes it. */
+    if (inst.collapsed && distaffBodySpan(inst, box, _bodyLive, _bodyLive2)) {
+      const d = nearestOnSegmentXZ(
+        _bodyLive.x, _bodyLive.y, _bodyLive.z,
+        _bodyLive2.x, _bodyLive2.y, _bodyLive2.z, x, z, _legCand);
+      if (d < best && _legCand.y <= reachY + 1.6) {
+        best = d; legIndex = -1; out.copy(_legCand);
+      }
     }
     return { dist: best, legIndex };
   }
@@ -1191,7 +1275,8 @@ export function buildCombat(ctx) {
          connects with something directly overhead is the exact bug
          this encounter cannot afford. */
       if (box.sacs && !inst.grounded) continue;
-      const legTarget = box.legs ? nearestLegPoint(inst, box, ps.x, ps.z, _bodyNear) : null;
+      const legTarget = box.legs
+        ? nearestLegPoint(inst, box, ps.x, ps.z, ps.y, _bodyNear) : null;
       const near = legTarget ? legTarget.dist : nearestBodyPoint(inst, ps.x, ps.z, _bodyNear);
       const dx = _bodyNear.x - ps.x;
       const dz = _bodyNear.z - ps.z;
@@ -1200,12 +1285,20 @@ export function buildCombat(ctx) {
         : legTarget.legIndex >= 0 ? (box.legRadius || 0.6) : (box.bodyRadius || 3);
       if (box.legs && legTarget.legIndex < 0 && !inst.collapsed) continue;
       if (dist > reach + targetRadius) continue;
-      let rel = Math.atan2(dx, dz) - ps.yaw;
-      while (rel > Math.PI) rel -= TAU;
-      while (rel < -Math.PI) rel += TAU;
-      if (Math.abs(rel) > arc * 0.5) continue;
+      /* TOUCHING RANGE IS ITS OWN CASE. A collapsed boss's body is a
+         capsule the player can stand inside the footprint of - the
+         nearest point is then at or under their feet, the bearing to
+         it is atan2(0,0)-noise, and a zero-length LOS ray reports
+         itself blocked. Inside 1.2m none of those questions mean
+         anything: you are against the target, the swing lands. */
       const inv = 1 / Math.max(1e-4, dist);
-      if (collide.rayBlock(ps.x, eyeY, ps.z, dx * inv, 0, dz * inv, dist) < dist) continue;
+      if (dist > 1.2) {
+        let rel = Math.atan2(dx, dz) - ps.yaw;
+        while (rel > Math.PI) rel -= TAU;
+        while (rel < -Math.PI) rel += TAU;
+        if (Math.abs(rel) > arc * 0.5) continue;
+        if (collide.rayBlock(ps.x, eyeY, ps.z, dx * inv, 0, dz * inv, dist) < dist) continue;
+      }
       const wasAlive = inst.state !== "death";
       /* Threshers are the light swarm caste. A clean polearm connection
          always removes one, even if an authored encounter spawned it with a

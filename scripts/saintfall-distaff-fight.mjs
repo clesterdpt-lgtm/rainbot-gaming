@@ -5,8 +5,14 @@
    Proves the player-facing promises of the Glass Scar's guardian:
      - it ignores the player until they cross the aggro radius, and
        reveals itself once they do;
+     - it STALKS: the standing fight walks, holds a preferred ring
+       around the player, and telegraphs a lunge that closes it;
      - each of the eight legs is its own target with its own pool,
-       reachable by both a shot and a swing;
+       reachable by a shot ANYWHERE along the limb and by a swing at
+       anything below shoulder height - and the body is a ranged
+       target in every phase, weak only while collapsed;
+     - walking away leashes it: full heal on the spot, a walk home,
+       and a fresh fight for the next approach;
      - breaking a leg pays real damage to the main pool and, once
        enough are gone, buckles the body down to where melee actually
        lands - and lands harder there than a rifle would;
@@ -217,11 +223,12 @@ try {
     T.setBodyHeading(0);
     for (let i = 0; i < 150; i += 1) T.renderOnce(1 / 60);
 
-    // NOW find whichever leg is nearest, teleport onto it, and swing
-    // on the very next frame. Any further waiting here is exactly
-    // what goes stale: the creature is still turning to track the
-    // player, so a leg's position is only trustworthy for as long as
-    // the player has not just moved relative to it.
+    /* The boss WALKS now, so a single frame-perfect swing at a foot
+       read a moment ago is a coin toss by design - real players track
+       a moving leg continuously. The honest assertion is a short
+       combo: stand against the nearest limb and swing three times;
+       segment-based targeting means at least one connects. */
+    T.equipWeapon("glaive");
     let leg = inst.legs.reduce((best, l, i) => {
       const d = Math.hypot(l.foot.x - T.player.state.x, l.foot.z - T.player.state.z);
       return d < best.d ? { i, d, x: l.foot.x, z: l.foot.z } : best;
@@ -230,11 +237,14 @@ try {
     T.setBodyHeading(0);
     T.renderOnce(1 / 60);
     const legIndex = leg.i;
+    const legTotalBefore = inst.legHp.reduce((a, b) => a + b, 0);
     const legBefore = inst.legHp[legIndex];
-    T.pressMelee();
-    T.renderOnce(1 / 60);
-    for (let i = 0; i < 35; i += 1) T.renderOnce(1 / 60);
-    const legAfter = inst.legHp[legIndex];
+    for (let sw = 0; sw < 3; sw += 1) {
+      T.pressMelee();
+      for (let i = 0; i < 26; i += 1) T.renderOnce(1 / 60);
+    }
+    const legAfter = legBefore
+      - (legTotalBefore - inst.legHp.reduce((a, b) => a + b, 0));
 
     const prosoma = inst.bones.get("prosoma");
     const bodyPos = V3(prosoma);
@@ -255,6 +265,104 @@ try {
   check("the body is not a melee target while standing", meleeStanding.bodyDealt === 0,
     `${meleeStanding.bodyDealt} dealt`);
 
+  /* ---- IT STALKS ----------------------------------------------------- */
+  const stalk = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    T._teleportRaw(inst.x + 34, inst.z, 0);
+    T.setBodyHeading(0);
+    const d0 = Math.hypot(T.player.state.x - inst.x, T.player.state.z - inst.z);
+    let footfalls = 0;
+    const off = T.distaff.bus.on("footfall", () => { footfalls += 1; });
+    for (let i = 0; i < 480; i += 1) T.renderOnce(1 / 60);
+    off();
+    const d1 = Math.hypot(T.player.state.x - inst.x, T.player.state.z - inst.z);
+    return { d0: Number(d0.toFixed(1)), d1: Number(d1.toFixed(1)), footfalls };
+  });
+  check("it walks: the gap closes toward its preferred ring",
+    stalk.d1 < stalk.d0 - 8 && stalk.d1 > 6,
+    `${stalk.d0}m -> ${stalk.d1}m`);
+  check("every step lands as a footfall report", stalk.footfalls > 6,
+    `${stalk.footfalls} footfalls in 8s`);
+
+  /* ---- RANGED COVERAGE: WHOLE LEG, WHOLE BODY ------------------------ */
+  const coverage = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    const V3 = (bone) => {
+      bone.updateWorldMatrix(true, false);
+      return bone.getWorldPosition(
+        new (Object.getPrototypeOf(bone.position).constructor)());
+    };
+    // A shot at the coxa stretch - the segment nearest the body,
+    // untested for one build.
+    const leg = inst.legs.find((l, i) => !inst.legBroken[i]);
+    const cox = V3(leg.coxa);
+    const fem = V3(leg.femur);
+    const m = { x: cox.x * 0.5 + fem.x * 0.5, y: cox.y * 0.5 + fem.y * 0.5,
+      z: cox.z * 0.5 + fem.z * 0.5 };
+    /* PERPENDICULAR to the limb, in the horizontal plane - a ray
+       fired "outward from the body centre" tilts along the limb and
+       meets the body capsule first, which is the game being honest
+       about geometry, not the coxa being unhittable. */
+    const seg = { x: fem.x - cox.x, z: fem.z - cox.z };
+    const sl = Math.hypot(seg.x, seg.z) || 1;
+    const px = -seg.z / sl;
+    const pz = seg.x / sl;
+    /* The coxa root lives INSIDE the body capsule now, so a shot
+       there may honestly land as body damage rather than leg damage -
+       what the player is owed is that it LANDS. The leg-pool-specific
+       assertion belongs to the femur-tibia stretch, which is clear of
+       the body. */
+    const legHpBefore = inst.legHp.reduce((a, b) => a + b, 0);
+    const hpBefore0 = inst.health;
+    const hitLeg = T.combat.fire({ x: m.x + px * 24, y: m.y, z: m.z + pz * 24 },
+      { x: -px, y: 0, z: -pz }, { damage: 40 });
+    const legDamaged = inst.legHp.reduce((a, b) => a + b, 0) < legHpBefore
+      || inst.health < hpBefore0;
+    // A shot at the STANDING body - plain damage, no weak bonus.
+    const ab = V3(inst.bones.get("abdomen1"));
+    const hpBefore = inst.health;
+    const o2 = { x: ab.x + 30, z: ab.z };
+    const d2 = Math.hypot(ab.x - o2.x, ab.z - o2.z);
+    const hitBody = T.combat.fire({ x: o2.x, y: ab.y, z: o2.z },
+      { x: (ab.x - o2.x) / d2, y: 0, z: (ab.z - o2.z) / d2 }, { damage: 100 });
+    return {
+      hitLeg: !!hitLeg, legDamaged,
+      hitBody: !!hitBody,
+      bodyWeak: hitBody ? hitBody.weak : null,
+      bodyDealt: Number((hpBefore - inst.health).toFixed(0)),
+    };
+  });
+  check("a shot at the coxa stretch lands - no dead zone against the body",
+    coverage.hitLeg && coverage.legDamaged);
+  check("the STANDING body is a ranged target for plain damage",
+    coverage.hitBody && coverage.bodyDealt > 0 && coverage.bodyWeak === false,
+    `${coverage.bodyDealt} dealt, weak=${coverage.bodyWeak}`);
+
+  /* ---- THE LUNGE ------------------------------------------------------ */
+  const lunge = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    T._teleportRaw(inst.x + 24, inst.z, 0);
+    T.setBodyHeading(0);
+    let telegraphed = 0;
+    let slams = 0;
+    const offs = [
+      T.distaff.bus.on("lungeTelegraph", () => { telegraphed += 1; }),
+      T.distaff.bus.on("slamTelegraph", () => { slams += 1; }),
+    ];
+    for (let i = 0; i < 60 * 14; i += 1) {
+      T.renderOnce(1 / 60);
+      if (telegraphed && slams) break;
+    }
+    offs.forEach((f) => f());
+    return { telegraphed, slams };
+  });
+  check("held at range, it telegraphs a lunge and cashes it into the slam",
+    lunge.telegraphed > 0 && lunge.slams > 0,
+    `${lunge.telegraphed} lunges, ${lunge.slams} slams`);
+
   /* ---- COLLAPSE ------------------------------------------------------ */
   const collapse = await page.evaluate(() => {
     const T = window.__SF;
@@ -270,13 +378,42 @@ try {
     collapse.after.phase === "collapsed" && collapse.after.collapsed,
     `legsBroken=${collapse.after.legsBroken}`);
 
+  /* THE SINK. A clip can only rotate bones - folding the legs moves
+     the feet, not the body - so the collapse read lives or dies on
+     `bodyDrop` actually lowering the root. Head bone under 4.5m is
+     "down at eye level"; it stood at 9.7m. */
+  const sink = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    for (let i = 0; i < 260; i += 1) T.renderOnce(1 / 60);
+    const head = inst.bones.get("head");
+    head.updateWorldMatrix(true, false);
+    const w = head.getWorldPosition(
+      new (Object.getPrototypeOf(head.position).constructor)());
+    const g = T.collide.groundHeight(inst.x, inst.z);
+    return {
+      headY: Number((w.y - g).toFixed(2)),
+      bodyDrop: Number((inst.bodyDrop || 0).toFixed(2)),
+    };
+  });
+  check("the collapsed body is genuinely DOWN, not just leg-folded",
+    sink.headY < 4.5 && sink.bodyDrop > 4,
+    `head ${sink.headY}m above ground, drop ${sink.bodyDrop}m`);
+
   const collapsedMelee = await page.evaluate(() => {
     const T = window.__SF;
     const inst = T.enemies.live.find((e) => e.key === "distaff");
-    const prosoma = inst.bones.get("prosoma");
-    const V3 = () => new (Object.getPrototypeOf(prosoma.position).constructor)();
-    const bodyPos = prosoma.getWorldPosition(V3());
-    T._teleportRaw(bodyPos.x, bodyPos.z - 2.0, 0);
+    /* The HEAD bone, not "prosoma": the prosoma bone's origin is the
+       armature root at ground level and its xz is the body centre -
+       standing there puts the player INSIDE the collapsed capsule's
+       footprint, which is exactly the touching-range case, but the
+       head end frames the swing the way a player approaching it
+       would. */
+    const headBone = inst.bones.get("head");
+    const V3 = () => new (Object.getPrototypeOf(headBone.position).constructor)();
+    headBone.updateWorldMatrix(true, false);
+    const bodyPos = headBone.getWorldPosition(V3());
+    T._teleportRaw(bodyPos.x, bodyPos.z - 2.4, 0);
     T.setBodyHeading(0);
     for (let i = 0; i < 8; i += 1) T.renderOnce(1 / 60);
     const before = inst.health;
@@ -301,6 +438,44 @@ try {
     `${recover.secs}s`);
   check("legs broken before the collapse are still broken after",
     JSON.stringify(recover.before) === JSON.stringify(recover.after.legBroken));
+
+  /* ---- THE LEASH ------------------------------------------------------ */
+  const leash = await page.evaluate(() => {
+    const T = window.__SF;
+    T._teleportRaw(T.distaffState().x + 400, T.distaffState().z, 0);
+    let sawReturning = false;
+    let healedAtStart = false;
+    for (let f = 0; f < 60 * 60; f += 1) {
+      T.renderOnce(1 / 60);
+      const st = T.distaffState();
+      if (st.phase === "returning" && !sawReturning) {
+        sawReturning = true;
+        healedAtStart = st.health === st.maxHealth && st.legsBroken === 0;
+      }
+      if (sawReturning && st.phase === "dormant") {
+        return {
+          sawReturning, healedAtStart, done: true,
+          homeDist: st.homeDist, secs: Number((f / 60).toFixed(1)),
+        };
+      }
+    }
+    const st = T.distaffState();
+    return { sawReturning, healedAtStart, done: false, phase: st.phase, homeDist: st.homeDist };
+  });
+  check("abandoned, it heals to full ON THE SPOT - legs regrown - and walks home",
+    leash.sawReturning && leash.healedAtStart, JSON.stringify(leash));
+  check("the walk home ends folded at the lair, ready to re-aggro",
+    leash.done && leash.homeDist < 4,
+    `home in ${leash.secs}s`);
+
+  /* Re-aggro after the reset: same encounter, no second camera steal. */
+  const reaggro = await page.evaluate(() => {
+    const T = window.__SF;
+    T.teleportToDistaff(30);
+    const secs = T.advanceToDistaffPhase("standing", 12);
+    return { secs, free: !!T.player.state.free };
+  });
+  check("a fresh approach wakes it again", reaggro.secs >= 0 && !reaggro.free);
 
   /* ---- DEATH ----------------------------------------------------------- */
   const death = await page.evaluate(() => {

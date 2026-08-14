@@ -71,6 +71,14 @@ export const WINNOWER_CONFIG = Object.freeze({
      low enough that it is still a creature rather than a dot - and
      well under the stacks it circles, so it reads as flying BETWEEN
      them rather than over the whole district. */
+  /* ITS TERRITORY. The soar orbits the PLAYER - which, unclamped,
+     means it will follow them across the entire map and the leash
+     below can never fire, because its distance to the player never
+     grows. The orbit anchor is clamped inside this ring around the
+     works: chase a player who leaves and it patrols the boundary
+     nearest them instead, they keep walking, the distance opens, and
+     the disengage finally counts. */
+  territoryRadius: 230,
   cruiseHeight: 26,
   orbitRadius: 34,
   orbitSpeed: 0.34,
@@ -87,6 +95,16 @@ export const WINNOWER_CONFIG = Object.freeze({
   /* A stall is worse for it than a chosen landing - it hits hard and
      takes longer to get back up. */
   stallStokeSeconds: 13.5,
+  /* THE CRASH IS THE REWARD. A stall landing opens with this many
+     seconds of the animal simply DOWN - no sweeps, no tracking, no
+     answer at all - because the player just spent a whole lift pool
+     buying this moment and an immediate counter-attack would refund
+     none of it. The grace spends out of the stall window rather than
+     extending it: stallStokeSeconds already prices the total. */
+  crashStunSeconds: 4.0,
+  /* Flying home after a disengage. Presentation speed only - the
+     heal has already happened when the flight starts. */
+  returnSpeed: 12.0,
 
   landSeconds: 1.9,
   launchSeconds: 1.3,
@@ -144,6 +162,10 @@ export const WINNOWER_CONFIG = Object.freeze({
 });
 
 const EMBER_MAX = 12;
+/* The territory's centre: the stacks' own centroid, computed once -
+   the animal patrols the works, not the map. */
+const TERRITORY_X = WINNOWER_CONFIG.stacks.reduce((a, s2) => a + s2.x, 0) / 3;
+const TERRITORY_Z = WINNOWER_CONFIG.stacks.reduce((a, s2) => a + s2.z, 0) / 3;
 /* Mirrors BESTIARY.winnower.collisionRadius. Used before the
    instance exists, which is why it is not read off `inst.spec`. */
 const BESTIARY_RADIUS = 1.8;
@@ -188,6 +210,8 @@ export function buildWinnower(ctx) {
     pending: 0,
     stackIndex: 0,
     stalled: false,
+    stunFor: 0,
+    revealed: false,
     disengageFor: 0,
     defeated: false,
     releaseCameraAt: undefined,
@@ -578,7 +602,11 @@ export function buildWinnower(ctx) {
     /* Same reveal mechanism the Distaff uses - player.setFree, which
        is the engine's existing review camera. Framed from BELOW here,
        looking up: the whole point of this animal is the angle it is
-       seen at, and the reveal should teach that in one shot. */
+       seen at, and the reveal should teach that in one shot. Once per
+       encounter - re-aggroing out of a return flight is mid-fight,
+       and stealing the camera twice punishes the player for staying. */
+    if (state.revealed) return;
+    state.revealed = true;
     if (ctx.player?.setFree && !ctx.player.state.free) {
       const ps = ctx.player.state;
       const camX = ps.x;
@@ -650,11 +678,30 @@ export function buildWinnower(ctx) {
     inst.y = groundAt(inst.x, inst.z) + C.landedLift;
     inst.pitch = 0;
     inst.roll = 0;
-    enemies.play(inst, "stoke", 0.2);
-    ctx.player?.doctrineKick?.(1.0, 1);
     const y = groundAt(inst.x, inst.z);
-    ctx.vfx?.blast?.(inst.x, y + 0.4, inst.z, 7);
-    ctx.vfx?.sandSpray?.(inst.x, y + 0.5, inst.z, 2.4, 0, 1);
+    if (state.stalled) {
+      /* SHOT DOWN. It arrives as a knockout: the strain clip keeps
+         it sprawled rather than tented, the impact is dust and shake
+         only - the crash never damages the player; it is their prize,
+         not a trade - and `stunFor` holds every attack off long
+         enough to spend melee into it freely. */
+      state.stunFor = C.crashStunSeconds;
+      state.sweepTimer = C.crashStunSeconds + 1.0;
+      /* Its own clip: "strain" is an airborne pose whose chains hang
+         straight down, which put the thuribles underground for the
+         whole knockout. The sprawl throws them forward onto the sand. */
+      enemies.play(inst, "sprawl", 0.10);
+      ctx.player?.doctrineKick?.(1.3, 1);
+      ctx.vfx?.blast?.(inst.x, y + 0.4, inst.z, 9);
+      ctx.vfx?.sandSpray?.(inst.x, y + 0.5, inst.z, 3.4, 0, 1);
+      bus.emit("stunned", { x: inst.x, z: inst.z, seconds: C.crashStunSeconds });
+    } else {
+      state.stunFor = 0;
+      enemies.play(inst, "stoke", 0.2);
+      ctx.player?.doctrineKick?.(1.0, 1);
+      ctx.vfx?.blast?.(inst.x, y + 0.4, inst.z, 7);
+      ctx.vfx?.sandSpray?.(inst.x, y + 0.5, inst.z, 2.4, 0, 1);
+    }
     bus.emit("stoke", {
       x: inst.x, z: inst.z, stalled: state.stalled, seconds: state.timer,
     });
@@ -782,10 +829,27 @@ export function buildWinnower(ctx) {
     const ps = ctx.player.state;
     /* Orbits the PLAYER rather than a fixed point. A boss that circles
        the middle of its arena while the player stands at the edge is a
-       boss that has stopped being in the fight. */
+       boss that has stopped being in the fight.
+
+       ...clamped to its own territory. Unclamped, "orbit the player"
+       is "follow the player anywhere", the distance between them
+       never opens, and the leash can never fire. A player who walks
+       out watches it wheel at the boundary instead - still in the
+       fight to look at, no longer in the fight to chase. */
     state.orbit += dt * C.orbitSpeed;
-    const tx = ps.x + Math.cos(state.orbit) * C.orbitRadius;
-    const tz = ps.z + Math.sin(state.orbit) * C.orbitRadius;
+    let ax = ps.x;
+    let az = ps.z;
+    const hx = ax - TERRITORY_X;
+    const hz = az - TERRITORY_Z;
+    const hd = Math.hypot(hx, hz);
+    const anchorMax = C.territoryRadius - C.orbitRadius;
+    const playerInside = hd < C.territoryRadius;
+    if (hd > anchorMax) {
+      ax = TERRITORY_X + (hx / hd) * anchorMax;
+      az = TERRITORY_Z + (hz / hd) * anchorMax;
+    }
+    const tx = ax + Math.cos(state.orbit) * C.orbitRadius;
+    const tz = az + Math.sin(state.orbit) * C.orbitRadius;
     const speed = inst.spec.speed.walk;
     const dx = tx - inst.x;
     const dz = tz - inst.z;
@@ -811,6 +875,11 @@ export function buildWinnower(ctx) {
 
     state.bombardTimer -= dt;
     state.strafeTimer -= dt;
+    /* It does not attack ground it does not own. A bombardment
+       thrown 200m past the boundary at a leaving player is both
+       unreadable and unfair - and mechanically it would reset the
+       leash fight the player is choosing to walk away from. */
+    if (!playerInside) return;
     if (state.strafeTimer <= 0) { beginStrafe(); return; }
     if (state.bombardTimer <= 0) { beginBombard(); return; }
   }
@@ -882,6 +951,17 @@ export function buildWinnower(ctx) {
     state.timer -= dt;
     inst.y = groundAt(inst.x, inst.z) + C.landedLift;
     const ps = ctx.player.state;
+    /* Knocked out cold: no tracking, no sweeps, nothing - the free
+       window the stall bought. It comes to with the stoke clip (the
+       drag up onto its own limbs) and only then starts answering. */
+    if (state.stunFor > 0) {
+      state.stunFor -= dt;
+      if (state.stunFor <= 0) {
+        enemies.play(inst, "stoke", 0.3);
+        bus.emit("stokeRecover", { x: inst.x, z: inst.z });
+      }
+      return;
+    }
     // Turns to keep the player in front of it, slowly - a grounded
     // Winnower is reachable, not passive.
     faceTravel(dt, ps.x, ps.z, 0.9);
@@ -950,9 +1030,11 @@ export function buildWinnower(ctx) {
       return;
     }
 
+    if (state.phase === "return") { stepReturn(dt, dist); return; }
+
     if (dist > C.disengageRadius && state.phase !== "stoke") {
       state.disengageFor += dt;
-      if (state.disengageFor > C.disengageSeconds) { resetToPerch(); return; }
+      if (state.disengageFor > C.disengageSeconds) { beginReturn(); return; }
     } else {
       state.disengageFor = 0;
     }
@@ -984,9 +1066,52 @@ export function buildWinnower(ctx) {
     else if (state.phase === "launch") stepLaunch(dt);
   }
 
-  /** Back to its perch at full strength, for the same reason the
-   *  Distaff resets: a boss a player can walk away from mid-fight and
-   *  never reach again is a soft-lock wearing a health bar. */
+  /** The player left. Heal NOW - the leash's promise must not depend
+   *  on the flight home completing - then fly back and circle down. */
+  function beginReturn() {
+    inst.health = inst.maxHealth;
+    inst.lift = inst.maxLift;
+    if (Array.isArray(inst.sacBurst)) inst.sacBurst.fill(false);
+    inst.grounded = false;
+    state.phase = "return";
+    state.stalled = false;
+    state.stunFor = 0;
+    state.disengageFor = 0;
+    state.action = 0;
+    enemies.play(inst, "idle", 0.4);
+    bus.emit("returning", { x: inst.x, z: inst.z });
+  }
+
+  function stepReturn(dt, dist) {
+    /* Crossing its aggro ring on the way home re-engages it - full
+       strength, no second camera steal, fuel topped for the fresh
+       fight. */
+    if (dist <= C.aggroRadius) {
+      state.fuel = C.soarSeconds;
+      beginSoar();
+      bus.emit("aggro", { x: inst.x, y: inst.y, z: inst.z });
+      return;
+    }
+    const perch = perchPoint();
+    const dx = perch.x - inst.x;
+    const dz = perch.z - inst.z;
+    const home = Math.hypot(dx, dz);
+    if (home < 8) {
+      state.phase = "dormant";
+      state.revealed = false;
+      enemies.play(inst, "idle", 0.5);
+      bus.emit("reset", { x: inst.x, z: inst.z });
+      return;
+    }
+    const step = Math.min(C.returnSpeed, home / Math.max(dt, 1e-4));
+    inst.x += (dx / home) * step * dt;
+    inst.z += (dz / home) * step * dt;
+    inst.y = damp(inst.y, cruiseY(inst.x, inst.z), 1.4, dt);
+    faceTravel(dt, perch.x, perch.z, 1.8);
+  }
+
+  /** The hard variant - QA and save-restore only: snaps home rather
+   *  than flying, because a restore has no business animating. */
   function resetToPerch() {
     if (!inst) return;
     inst.health = inst.maxHealth;
@@ -1001,6 +1126,8 @@ export function buildWinnower(ctx) {
     inst.roll = 0;
     state.phase = "dormant";
     state.stalled = false;
+    state.stunFor = 0;
+    state.revealed = false;
     state.disengageFor = 0;
     enemies.play(inst, "idle", 0.4);
     bus.emit("reset", { x: inst.x, z: inst.z });
@@ -1058,6 +1185,8 @@ export function buildWinnower(ctx) {
       sacBurst: Array.isArray(inst.sacBurst) ? [...inst.sacBurst] : [],
       grounded: !!inst.grounded,
       stalled: !!state.stalled,
+      stunned: state.stunFor > 0,
+      stunFor: Number(Math.max(0, state.stunFor).toFixed(2)),
       fuel: Number(state.fuel.toFixed(2)),
       dead: inst.state === "death",
       altitude: Number((inst.y - groundAt(inst.x, inst.z)).toFixed(2)),
@@ -1080,6 +1209,8 @@ export function buildWinnower(ctx) {
       lift: inst.lift,
       sacBurst: Array.isArray(inst.sacBurst) ? [...inst.sacBurst] : null,
       stalled: !!state.stalled,
+      stunFor: Number(Math.max(0, state.stunFor).toFixed(2)),
+      revealed: state.revealed,
       x: inst.x, y: inst.y, z: inst.z, yaw: inst.yaw,
       defeated: state.defeated,
     };
@@ -1090,11 +1221,14 @@ export function buildWinnower(ctx) {
     ensureSpawned();
     if (!inst) return false;
     const phase = ["dormant", "alert", "soar", "strafe", "land", "stoke",
-      "launch", "dead"].includes(saved.phase) ? saved.phase : "dormant";
+      "launch", "return", "dead"].includes(saved.phase) ? saved.phase : "dormant";
     state.phase = phase;
     state.timer = Math.max(0, Number(saved.timer) || 0);
     state.fuel = clamp(Number(saved.fuel) || 0, 0, C.soarSeconds);
     state.stalled = !!saved.stalled;
+    state.stunFor = Math.max(0, Number(saved.stunFor) || 0);
+    state.revealed = saved.revealed !== undefined
+      ? !!saved.revealed : phase !== "dormant";
     state.defeated = !!saved.defeated;
     state.disengageFor = 0;
     inst.x = Number.isFinite(saved.x) ? saved.x : inst.x;
@@ -1155,6 +1289,9 @@ export function buildWinnower(ctx) {
       if (next === "stoke") {
         inst.grounded = true;
         inst.y = groundAt(inst.x, inst.z) + C.landedLift;
+        // The real pose, not whatever clip was last playing - a QA
+        // force is a claim about the phase, chains drawn up included.
+        enemies.play(inst, "stoke", 0.2);
         enemies.play(inst, "stoke", 0);
       } else if (next === "soar") {
         inst.grounded = false;

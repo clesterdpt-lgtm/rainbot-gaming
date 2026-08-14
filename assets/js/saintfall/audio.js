@@ -1841,6 +1841,11 @@ export function buildAudio(ctx) {
     if (distaff) {
       distaff.bus.on("aggro", () => chord([110, 147, 185, 233], 1.35, 0.22));
       distaff.bus.on("slamTelegraph", (e) => rumble(e.x, e.z, 0.6));
+      /* Eight legs walking is the sound of this fight now. Small per
+         step, doubled for the lunge - the footfall event is already
+         throttled at the source. */
+      distaff.bus.on("footfall", (e) => rumble(e.x, e.z, e.running ? 0.5 : 0.22));
+      distaff.bus.on("lungeTelegraph", (e) => chord([87, 110, 147], 0.7, 0.2));
       distaff.bus.on("slam", (e) => impact(e.x, e.z, "wall"));
       distaff.bus.on("webCast", (e) => hiss(e.x, e.z));
       distaff.bus.on("webHit", (e) => impact(e.x, e.z, "flesh"));
@@ -1869,6 +1874,8 @@ export function buildAudio(ctx) {
       // everything else, so a player who is looking the wrong way
       // still knows the animal is down.
       winnower.bus.on("stoke", (e) => chord([65, 98, 131], 1.4, 0.26));
+      winnower.bus.on("stunned", (e) => explosion(e.x, e.z, 12));
+      winnower.bus.on("stokeRecover", (e) => chord([82, 110, 138], 0.8, 0.2));
       winnower.bus.on("sweep", (e) => impact(e.x, e.z, "flesh"));
       winnower.bus.on("launch", (e) => surface(e.x, e.z));
       winnower.bus.on("crash", (e) => explosion(e.x, e.z, 16));

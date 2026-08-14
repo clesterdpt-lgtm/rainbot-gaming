@@ -112,9 +112,18 @@ try {
       airborne: w?.altitude,
       grounded: w?.grounded,
       bones: ["thorax", "head", "heart", "wing0_L", "wing2_R",
-        "censer0", "censer2"].every((n) => inst?.bones?.has(n)),
+        "censer0", "censer2",
+        // The insect anatomy: second wing pair, gaster, antennae, a
+        // third leg pair. Their absence is the difference between an
+        // insect and an aircraft.
+        "hindwing_L", "hindwing_R", "abdomen1", "abdomen2",
+        "antenna_L", "antenna_R", "perch2_L", "perch2b_R",
+      ].every((n) => inst?.bones?.has(n)),
+      /* "sweep" is listed because it once existed in the model and
+         NOT here - and this list is what makes clips into actions, so
+         the grounded attack animated nothing and nothing failed. */
       clips: ["idle", "alert", "bombard", "strain", "land", "stoke",
-        "launch", "flinch", "death"].every((c) => inst?.actions?.has(c)),
+        "launch", "sweep", "flinch", "death"].every((c) => inst?.actions?.has(c)),
       lift: w?.lift,
       // No leg chains: a flyer's limbs are owned by its clips.
       legs: inst?.legs?.length,
@@ -226,12 +235,39 @@ try {
     const secs = T.advanceToWinnowerPhase("stoke", 25);
     off();
     const w = T.winnowerState();
-    return { beforeLift, secs, stalled: w.stalled, grounded: w.grounded, burstEvents };
+    /* THE CRASH IS THE REWARD: it arrives KNOCKED OUT. Stand right
+       beside it through the whole grace window and count what it does
+       back - the answer must be nothing: no sweeps, no damage. */
+    T._teleportRaw(w.x + 4, w.z, 0);
+    T.setBodyHeading(0);
+    let sweepsDuringStun = 0;
+    let stunFrames = 0;
+    const offSweep = T.winnower.bus.on("sweepTelegraph", () => {
+      if (T.winnowerState().stunned) sweepsDuringStun += 1;
+    });
+    const hpAtCrash = T.combat.player.hp;
+    for (let i = 0; i < 60 * 6; i += 1) {
+      T.renderOnce(1 / 60);
+      if (T.winnowerState().stunned) stunFrames += 1;
+    }
+    offSweep();
+    return {
+      beforeLift, secs, stalled: w.stalled, grounded: w.grounded, burstEvents,
+      stunnedAtLanding: w.stunned,
+      stunSecs: Number((stunFrames / 60).toFixed(2)),
+      sweepsDuringStun,
+      hpLost: hpAtCrash - T.combat.player.hp,
+    };
   });
   check("draining the lift pool forces an early landing",
     stall.secs >= 0 && stall.secs < 18 && stall.grounded,
     `${stall.secs}s after a full drain`);
   check("a forced landing is a STALL, not a chosen stoke", stall.stalled);
+  check("the crash arrives knocked out - a free window, not a trade",
+    stall.stunnedAtLanding && stall.stunSecs > 3.2 && stall.sweepsDuringStun === 0,
+    `${stall.stunSecs}s stunned, ${stall.sweepsDuringStun} sweeps`);
+  check("the crash itself never damages the player", stall.hpLost === 0,
+    `${stall.hpLost} hp lost standing beside it`);
   check("heat sacs burst as the pool empties", stall.burstEvents > 0,
     `${stall.burstEvents} bursts`);
 
@@ -244,25 +280,6 @@ try {
   check("it re-lights and repairs its sacs only after taking off again",
     refuel.secs >= 0 && refuel.lift > 0 && refuel.sacBurst.every((b) => !b),
     `lift=${refuel.lift}, fuel=${refuel.fuel}`);
-
-  /* ---- DEATH ------------------------------------------------------------ */
-  const death = await page.evaluate(() => {
-    const T = window.__SF;
-    T.forceWinnowerPhase("soar", 60);
-    for (let i = 0; i < 60; i += 1) T.renderOnce(1 / 60);
-    const airborne = T.winnowerState().altitude;
-    const inst = T.enemies.live.find((e) => e.key === "winnower");
-    let crashed = null;
-    const off = T.winnower.bus.on("crash", (e) => { crashed = e; });
-    T.combat.damageEnemy(inst, 999999, { source: "qa" });
-    for (let i = 0; i < 240; i += 1) T.renderOnce(1 / 60);
-    off();
-    const w = T.winnowerState();
-    return { airborne, finalAltitude: w.altitude, dead: w.dead, crashed: !!crashed };
-  });
-  check("a kill in the air brings the body down", death.dead && death.finalAltitude < 1.5,
-    `${death.airborne}m -> ${death.finalAltitude}m`);
-  check("the impact is reported", death.crashed);
 
   /* ---- GEOMETRY CONTRACTS --------------------------------------------
      Three defects shipped in one build because nothing asserted that
@@ -287,17 +304,28 @@ try {
       const bone = inst.bones.get(`censer${k}c`);
       if (bone) lowestCenser = Math.min(lowestCenser, V3(bone).y - ground);
     }
-    // The heart's hit sphere against the heart BONE it is meant to be on.
+    /* The heart check is FUNCTIONAL now: the game reads the hit
+       sphere off the live bone, so the only honest assertion is to
+       fire at the visible furnace and require the weak hit. */
     const heartBone = inst.bones.get("heart");
     const heartWorld = heartBone ? V3(heartBone) : null;
-    const s = Math.sin(inst.yaw);
-    const c = Math.cos(inst.yaw);
-    const hitY = inst.y + box.heart.y;
+    /* From the FRONT - the angle a player in the window actually
+       has. Fired from behind, the ray crosses seven metres of gaster
+       first and the gaster correctly wins; that is the game being
+       right, not the heart being wrong. */
+    let heartHit = null;
+    if (heartWorld) {
+      const fx = Math.sin(inst.yaw);
+      const fz = Math.cos(inst.yaw);
+      heartHit = T.combat.raycastEnemies(
+        heartWorld.x + fx * 24, heartWorld.y, heartWorld.z + fz * 24,
+        -fx, 0, -fz, 60);
+    }
     return {
       lowestCenser: Number(lowestCenser.toFixed(2)),
-      heartHitAboveGround: Number((hitY - ground).toFixed(2)),
       heartBoneAboveGround: heartWorld ? Number((heartWorld.y - ground).toFixed(2)) : null,
-      heartError: heartWorld ? Number(Math.abs(hitY - heartWorld.y).toFixed(2)) : 999,
+      heartHit: !!heartHit,
+      heartWeak: heartHit ? heartHit.weak : null,
     };
   });
 
@@ -334,9 +362,88 @@ try {
 
   check("the censers stay above ground while it is landed",
     contracts.lowestCenser > -0.4, `lowest bowl ${contracts.lowestCenser}m`);
-  check("the heart hit sphere sits on the visible furnace",
-    contracts.heartError < 0.6,
-    `hit ${contracts.heartHitAboveGround}m vs bone ${contracts.heartBoneAboveGround}m`);
+  check("a shot at the visible furnace lands as the weak hit",
+    contracts.heartHit && contracts.heartWeak === true,
+    `bone ${contracts.heartBoneAboveGround}m up`);
+
+  /* The gaster: seven metres of glowing abdomen must be shootable. */
+  const gaster = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "winnower");
+    T.forceWinnowerPhase("soar", 40);
+    for (let i = 0; i < 30; i += 1) T.renderOnce(1 / 60);
+    const bone = inst.bones.get("abdomen2");
+    bone.updateWorldMatrix(true, false);
+    const w = bone.getWorldPosition(
+      new (Object.getPrototypeOf(bone.position).constructor)());
+    const hpBefore = inst.health;
+    const hit = T.combat.fire({ x: w.x, y: w.y + 40, z: w.z },
+      { x: 0, y: -1, z: 0 }, { damage: 60 });
+    return {
+      hit: !!hit, weak: hit ? hit.weak : null, sacIndex: hit ? hit.sacIndex : null,
+      dealt: Number((hpBefore - inst.health).toFixed(0)),
+    };
+  });
+  check("a shot at the glowing gaster lands as plain body damage",
+    gaster.hit && gaster.dealt > 0 && gaster.weak === false && gaster.sacIndex < 0,
+    JSON.stringify(gaster));
+
+  /* ---- THE LEASH AND THE TERRITORY ----------------------------------- */
+  const leash = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "winnower");
+    inst.health = inst.maxHealth * 0.35;
+    T.forceWinnowerPhase("soar", 30);
+    const start = { x: inst.x, z: inst.z };
+    T._teleportRaw(inst.x + 600, inst.z, 0);
+    let sawReturn = false;
+    let healedAtStart = false;
+    let maxChase = 0;
+    for (let f = 0; f < 60 * 60; f += 1) {
+      T.renderOnce(1 / 60);
+      const st = T.winnowerState();
+      const chase = Math.hypot(T.player.state.x - st.x, T.player.state.z - st.z);
+      maxChase = Math.max(maxChase, 600 - chase);
+      if (st.phase === "return" && !sawReturn) {
+        sawReturn = true;
+        healedAtStart = st.health === st.maxHealth && st.lift === st.maxLift;
+      }
+      if (sawReturn && st.phase === "dormant") {
+        return {
+          sawReturn, healedAtStart, done: true,
+          secs: Number((f / 60).toFixed(1)), maxChase: Number(maxChase.toFixed(0)),
+        };
+      }
+    }
+    void start;
+    return { sawReturn, healedAtStart, done: false,
+      phase: T.winnowerState().phase, maxChase: Number(maxChase.toFixed(0)) };
+  });
+  check("it will not follow a leaving player out of its territory",
+    leash.maxChase < 420, `closed at most ${leash.maxChase}m of a 600m retreat`);
+  check("abandoned, it heals in the air and flies home",
+    leash.sawReturn && leash.healedAtStart, JSON.stringify(leash));
+  check("the flight home ends dormant at the perch", leash.done === true,
+    `${leash.secs}s`);
+
+  /* ---- DEATH ------------------------------------------------------------ */
+  const death = await page.evaluate(() => {
+    const T = window.__SF;
+    T.forceWinnowerPhase("soar", 60);
+    for (let i = 0; i < 60; i += 1) T.renderOnce(1 / 60);
+    const airborne = T.winnowerState().altitude;
+    const inst = T.enemies.live.find((e) => e.key === "winnower");
+    let crashed = null;
+    const off = T.winnower.bus.on("crash", (e) => { crashed = e; });
+    T.combat.damageEnemy(inst, 999999, { source: "qa" });
+    for (let i = 0; i < 240; i += 1) T.renderOnce(1 / 60);
+    off();
+    const w = T.winnowerState();
+    return { airborne, finalAltitude: w.altitude, dead: w.dead, crashed: !!crashed };
+  });
+  check("a kill in the air brings the body down", death.dead && death.finalAltitude < 1.5,
+    `${death.airborne}m -> ${death.finalAltitude}m`);
+  check("the impact is reported", death.crashed);
 
   /* ---- COST -------------------------------------------------------------- */
   const cost = await page.evaluate(() => {

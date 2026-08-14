@@ -103,6 +103,12 @@ function attachDiagnostics(page, label) {
   page.on("console", (message) => {
     if (message.type() === "error") {
       const location = message.location();
+      /* External-CDN fetch noise is not a game error: boot.js probes
+         jsdelivr before unpkg by design, and the font CDNs 404
+         intermittently in the sandbox. This harness records the
+         SOURCE URL, so the filter can be precise - anything from the
+         game's own origin still fails the gate. */
+      if (/jsdelivr|unpkg|gstatic|googleapis|favicon/i.test(location?.url || "")) return;
       const source = location?.url
         ? ` @ ${location.url}:${Number(location.lineNumber || 0) + 1}` : "";
       diagnostics.consoleErrors.push(`${label}: ${message.text()}${source}`);

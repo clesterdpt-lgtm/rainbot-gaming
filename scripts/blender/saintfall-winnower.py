@@ -116,7 +116,17 @@ def parse_args() -> argparse.Namespace:
 BODY_NOSE = Vector((0.0, 0.30, 5.40))
 BODY_HEAD = Vector((0.0, 0.34, 4.30))
 BODY_MID = Vector((0.0, 0.00, 0.60))
-BODY_TAIL = Vector((0.0, 0.62, -5.20))
+# The THORAX ends here now. The first build ran one long fuselage from
+# nose to z -5.2 and the animal read as an aircraft; an insect is a
+# THREE-PART body - head, thorax, gaster - and the pinch between the
+# last two is most of what says "insect" at any distance.
+BODY_TAIL = Vector((0.0, 0.42, -2.05))
+
+# The wasp waist and the gaster behind it: annulated, drooping, and
+# carrying the furnace-light between its plates.
+PETIOLE = Vector((0.0, 0.30, -1.90))
+ABD_MID = Vector((0.0, -0.16, -4.30))
+ABD_TIP = Vector((0.0, -1.72, -7.30))
 
 # Three bones a side. The joint positions are what the fold is built
 # on: the outer two thirds hinge up and back, so a landed Winnower is
@@ -125,6 +135,21 @@ WING_ROOT = Vector((0.95, 0.18, 0.90))
 WING_ELBOW = Vector((4.60, 1.35, 0.35))
 WING_WRIST = Vector((8.90, 1.85, -1.30))
 WING_TIP = Vector((13.10, 1.40, -3.60))
+
+# THE SECOND PAIR. One membrane a side is a bat or a manta; insects
+# fly on two pairs, and the gap of sky between forewing and hindwing
+# is the single strongest insect read the underneath view can carry.
+# Shorter, broader, swept back, on one bone - the pair BEATS OUT OF
+# PHASE with the forewing in every clip, which is the other half of
+# the read.
+HIND_ROOT = Vector((0.85, 0.02, -0.62))
+HIND_MIDA = Vector((3.60, 0.55, -1.85))
+HIND_MIDB = Vector((6.30, 0.80, -3.30))
+HIND_TIP = Vector((8.60, 0.55, -5.10))
+
+# Antennae, swept back along the body in flight.
+ANT_ROOT = Vector((0.16, 0.55, 4.92))
+ANT_TIP = Vector((1.95, 1.55, 2.35))
 
 # The furnace gut, slung under the thorax. This is what the fight is
 # actually about once it is on the ground.
@@ -180,9 +205,11 @@ def body_radii():
     # Deepest where the wings load into it and pinched hard at both
     # ends: the mass has to be visibly BETWEEN the wings, or a flyer
     # reads as two sails with a stick through them.
-    return [(0.34, 0.30), (0.58, 0.46), (0.86, 0.62), (1.02, 0.72),
-            (1.10, 0.78), (1.04, 0.74), (0.88, 0.64), (0.66, 0.50),
-            (0.44, 0.36), (0.24, 0.20)]
+    # Stockier than the first build: the thorax is the flight motor of
+    # an insect and it should look like one - deep, muscled, and short.
+    return [(0.62, 0.52), (0.88, 0.70), (1.06, 0.84), (1.18, 0.92),
+            (1.22, 0.94), (1.14, 0.88), (0.96, 0.76), (0.72, 0.58),
+            (0.48, 0.40), (0.26, 0.22)]
 
 
 # ----------------------------------------------------------------------
@@ -228,6 +255,80 @@ def build_body(parts) -> None:
                         (c.x + sx * 1.05, c.y - 0.16, c.z))
             parts.append(Part(f"spiracle{k}_{side}", "thorax", v, f,
                               kit.flat(v, EMBER_DIM, kit.GLOW_FAINT)))
+
+
+def build_abdomen(parts) -> None:
+    """The gaster: the rear two thirds of an insect, hung off a waist.
+
+    Annulated - kit.annulate is the same pinch the Matriarch's belly
+    uses - and CURLING, because a straight abdomen is a tail and a
+    curled one is a wasp. The furnace shows between the plates: lit
+    intersegment rings sit recessed into every pinch, so from below
+    the gaster reads as banded fire barely held in by chitin, which
+    is this animal's whole thesis in one piece of anatomy.
+
+    Two sweeps rather than one, split at ABD_MID: a Part rides ONE
+    bone, and the curl needs two - fore-gaster on abdomen1, aft on
+    abdomen2 - with the seam landed on an annulation pinch where the
+    silhouette already breaks."""
+    # The waist first. Thin, bare, and dark - the pinch only works if
+    # there is visibly less of it than of what it joins.
+    v, f, p = kit.tube([Vector((0.0, 0.36, -1.45)), Vector((0.0, 0.28, -2.40))],
+                       [(0.40, 0.34), (0.34, 0.29)], sides=8, mode="transport",
+                       cap_start=False, cap_end=False)
+    add(parts, "petiole", "thorax", (v, f), char_t(p, 0.10, 0.26))
+
+    fore = kit.bezier(PETIOLE, Vector((0.0, 0.28, -3.05)),
+                      Vector((0.0, 0.10, -3.75)), ABD_MID, n=6)
+    aft = kit.bezier(ABD_MID, Vector((0.0, -0.52, -5.35)),
+                     Vector((0.0, -1.18, -6.45)), ABD_TIP, n=7)
+    fore_r = [(0.52, 0.46), (0.86, 0.76), (1.10, 0.96), (1.22, 1.06),
+              (1.26, 1.10), (1.24, 1.08)]
+    aft_r = [(1.24, 1.08), (1.16, 1.00), (1.00, 0.86), (0.80, 0.68),
+             (0.58, 0.48), (0.36, 0.30), (0.16, 0.13)]
+    for name, bone, path, radii, ann in (
+        ("gasterfore", "abdomen1", fore, fore_r, 2),
+        ("gasteraft", "abdomen2", aft, aft_r, 3),
+    ):
+        v, f, p = kit.tube(path, radii, sides=9, mode="up", phase=0.08,
+                           profile=kit.annulate(ann, 0.060))
+        add(parts, name, bone, (v, f), char_t(p, 0.10, 0.44, 1.3))
+        # Tergite shell over the top of each sweep - the plates.
+        v, f, p = kit.shell(path, radii, arc=(-0.30, 0.30), steps=5,
+                            thick=0.05, lift=0.040,
+                            profile=lambda t, u: 1.0 + 0.06 * math.sin(t * PI))
+        add(parts, f"{name}plates", bone, (v, f), char_t(p, 0.24, 0.52, 1.1))
+
+    # THE FIRE BETWEEN THE PLATES. One lit ring per annulation pinch,
+    # slightly inside the chitin so the glow reads as escaping rather
+    # than worn. This is the gaster's ventseam.
+    stations = ((fore, fore_r, "abdomen1", (0.30, 0.62, 0.92)),
+                (aft, aft_r, "abdomen2", (0.22, 0.55, 0.86)))
+    ring_i = 0
+    for path, radii, bone, ts in stations:
+        for t in ts:
+            i = min(len(path) - 2, int(t * (len(path) - 1)))
+            c = path[i]
+            w = radii[i][0] * 0.94
+            h = radii[i][1] * 0.94
+            ring = [c + Vector((0.0, 0.0, -0.09)), c + Vector((0.0, 0.0, 0.09))]
+            v, f, p = kit.tube(ring, [(w, h), (w, h)], sides=10, mode="up",
+                               cap_start=False, cap_end=False)
+            add(parts, f"gasterring{ring_i}", bone, (v, f),
+                kit.paint_t(p, EMBER, lambda t2, a, u: 0.42 + 0.40 * (1.0 - u),
+                            glow=lambda t2, a, u: kit.GLOW_SEAM * (0.9 + 0.8 * (1.0 - u))))
+            ring_i += 1
+
+    # The sting. Nothing in the fight uses it - it is silhouette
+    # punctuation, the way the Distaff's spinneret is.
+    v, f, p = spike(ABD_TIP, ABD_TIP + Vector((0.0, -0.62, -1.15)),
+                    r0=0.15, r1=0.010, sides=5, bow=(0.0, -0.16, 0.0), seed=261)
+    add(parts, "sting", "abdomen2", (v, f), char_t(p, 0.30, 0.36, along=0.3))
+    v, f = kit.dome(0.075, 0.06, rings=1, sides=5, cut=0.9)
+    tip = ABD_TIP + Vector((0.0, -0.55, -1.02))
+    v = kit.transform(v, translate=tuple(tip))
+    parts.append(Part("stingtip", "abdomen2", v, f,
+                      kit.flat(v, EMBER_DIM, kit.GLOW_FAINT)))
 
 
 def build_heart(parts) -> None:
@@ -338,6 +439,40 @@ def build_head(parts) -> None:
         parts.append(Part(f"ocellus{k}", "head", v, f,
                           kit.flat(v, EMBER_CORE, kit.GLOW_EYE)))
 
+    # COMPOUND EYES. Two big faceted hemispheres on the head's flanks -
+    # flat-shaded, so every facet catches the light separately, which
+    # is what "compound" looks like at this poly budget. Dim ember
+    # rather than bright: eyes that outshine the furnace would make
+    # the head the read, and the head is not the read.
+    for side, sx in (("L", 1.0), ("R", -1.0)):
+        c = Vector((sx * 0.40, 0.36, 4.52))
+        v, f = kit.blob(0.30, sides=9, rings=4, squash=0.88, seed=271, jitter=0.03)
+        v = kit.transform(v, translate=tuple(c), scale=(1.0, 1.05, 1.25))
+        parts.append(Part(f"eye_{side}", "head", v, f,
+                          kit.paint(v, EMBER,
+                                    lambda q, cc=c, s2=sx: 0.30 + 0.42 * max(
+                                        0.0, s2 * (q.x - cc.x) / 0.3),
+                                    glow=kit.GLOW_EYE * 0.55)))
+
+    # ANTENNAE. Two long feelers swept back over the body - the last
+    # unarguably-insect line in the silhouette, and the one that costs
+    # least. Segmented by bead knuckles; on their own bones so the
+    # clips can lag them behind every turn the head makes.
+    for side, sx in (("L", 1.0), ("R", -1.0)):
+        bone = f"antenna_{side}"
+        root = Vector((sx * ANT_ROOT.x, ANT_ROOT.y, ANT_ROOT.z))
+        tip = Vector((sx * ANT_TIP.x, ANT_TIP.y, ANT_TIP.z))
+        path = kit.arc_path(root, tip, (sx * 0.55, 0.85, 0.4), n=7)
+        v, f, p = kit.tube(path, [0.055, 0.048, 0.042, 0.036, 0.028, 0.020, 0.010],
+                           sides=5, mode="transport", cap_end=False)
+        add(parts, f"antenna_{side}", bone, (v, f), char_t(p, 0.30, 0.36, along=0.2))
+        for j, t in enumerate((0.25, 0.5, 0.75)):
+            i = int(t * (len(path) - 1))
+            v, f = kit.blob(0.065 - 0.012 * j, sides=5, rings=2, seed=281 + j)
+            v = kit.transform(v, translate=tuple(path[i]))
+            parts.append(Part(f"antbead{j}_{side}", bone, v, f,
+                              kit.paint(v, CHAR, lambda q: 0.38)))
+
     # Mandible rakes, swept back along the jaw. Small - this animal
     # kills with what it drops, not with its mouth.
     for side, sx in (("L", 1.0), ("R", -1.0)):
@@ -369,7 +504,10 @@ def build_wings(parts) -> None:
         radii = []
         for i in range(n):
             t = i / (n - 1)
-            chord = 2.90 * (1.0 - t) ** 0.55 + 0.34
+            # Slimmer than the first build: the hindwing behind it
+            # carries the area now, and the GAP between the two pairs
+            # is the read being bought.
+            chord = 2.38 * (1.0 - t) ** 0.55 + 0.30
             thick = 0.24 * (1.0 - t) ** 1.4 + 0.030
             # (THICKNESS, CHORD), and the order is the whole difference
             # between a wing and a sail. `kit.tube` in "up" mode runs
@@ -442,6 +580,23 @@ def build_wings(parts) -> None:
             parts.append(Part(f"{name}_{side}", bone, v, f,
                               kit.paint(v, CHAR, lambda q: 0.36)))
 
+        # CROSS-VEINS. Thin struts bridging adjacent spars at two
+        # chord stations - the lattice is the wing-read every insect
+        # field guide is drawn from, and it costs eight tubes.
+        for k in range(4):
+            tA = 0.10 + k * 0.185
+            tB = 0.10 + (k + 1) * 0.185
+            iA = min(n - 2, int(tA * (n - 1)))
+            iB = min(n - 2, int(tB * (n - 1)))
+            for station, lift in ((0.42, 0.14), (-0.38, 0.10)):
+                a = path[iA] + Vector((0.0, lift, radii[iA][1] * station))
+                b = path[iB] + Vector((0.0, lift, radii[iB][1] * station))
+                v, f, p = kit.tube([a, b], [0.055, 0.048], sides=4,
+                                   mode="transport", cap_start=False, cap_end=False)
+                bone = f"wing{min(2, k // 2)}_{side}"
+                add(parts, f"vein{k}{'a' if station > 0 else 'b'}_{side}", bone,
+                    (v, f), char_t(p, 0.30, 0.34))
+
         # Trailing fringe. Ragged rather than a clean edge - a smooth
         # trailing edge reads as a manufactured sail.
         for k in range(7):
@@ -454,6 +609,67 @@ def build_wings(parts) -> None:
             bone = f"wing{min(2, k // 3)}_{side}"
             v, f, p = spike(root, tip, r0=0.115, r1=0.008, sides=4, seed=231 + k)
             add(parts, f"fringe{k}_{side}", bone, (v, f), char_t(p, 0.30, 0.34))
+
+
+def build_hindwings(parts) -> None:
+    """The second pair. See HIND_ROOT's comment for why they exist.
+
+    Everything the forewing taught applies: (thickness, chord) order,
+    scalloped trailing edge, proud spars, a lit leading edge - just
+    smaller, broader for their length, and swept back so the pair
+    reads as a wasp's stacked planes rather than one long slab."""
+    for side, sx in (("L", 1.0), ("R", -1.0)):
+        path = kit.bezier(mirror(HIND_ROOT, sx), mirror(HIND_MIDA, sx),
+                          mirror(HIND_MIDB, sx), mirror(HIND_TIP, sx), n=8)
+        n = len(path)
+        radii = []
+        for i in range(n):
+            t = i / (n - 1)
+            chord = 1.92 * (1.0 - t) ** 0.62 + 0.26
+            thick = 0.15 * (1.0 - t) ** 1.3 + 0.024
+            radii.append((thick, chord))
+
+        def hind_profile(t, a):
+            behind = max(0.0, -math.sin(a * TAU))
+            scallop = 0.5 + 0.5 * math.cos(t * PI * 7.0)
+            return 1.0 - 0.26 * behind * scallop
+
+        bone = f"hindwing_{side}"
+        v, f, p = kit.tube(path, radii, sides=9, mode="up", phase=0.25,
+                           profile=hind_profile)
+        add(parts, f"hindmembrane_{side}", bone, (v, f),
+            char_t(p, 0.12, 0.38, 1.5, along=0.16))
+
+        for k in range(4):
+            t = 0.12 + k * 0.22
+            i = min(n - 2, int(t * (n - 1)))
+            c = path[i]
+            chord = radii[i][1]
+            v, f, p = kit.tube([c + Vector((0.0, 0.14, chord * 0.90)),
+                                c + Vector((0.0, 0.17, 0.0)),
+                                c + Vector((0.0, 0.02, -chord * 0.94))],
+                               [0.16, 0.14, 0.040], sides=5, mode="transport",
+                               cap_end=False)
+            add(parts, f"hindspar{k}_{side}", bone, (v, f),
+                char_t(p, 0.34, 0.40, along=-0.14))
+
+        leading = [c + Vector((0.0, 0.05, radii[i][1] * 0.86))
+                   for i, c in enumerate(path)]
+        v, f, p = kit.tube(leading, [0.060] * n, sides=5, mode="transport",
+                           cap_start=False, cap_end=False)
+        add(parts, f"hindleading_{side}", bone, (v, f),
+            kit.paint_t(p, EMBER, lambda t, a, u: 0.30 + 0.40 * (1.0 - t),
+                        glow=lambda t, a, u: kit.GLOW_SEAM * (0.55 - t * 0.35)))
+
+        for k in range(5):
+            t = 0.18 + k * 0.17
+            i = min(n - 2, int(t * (n - 1)))
+            c = path[i]
+            chord = radii[i][1]
+            root = c + Vector((0.0, -0.02, -chord * 0.9))
+            tip = root + Vector((sx * 0.10, -0.24, -0.75 - 0.18 * (k % 2)))
+            v, f, p = spike(root, tip, r0=0.095, r1=0.008, sides=4, seed=291 + k)
+            add(parts, f"hindfringe{k}_{side}", bone, (v, f), char_t(p, 0.30, 0.32))
 
 
 def build_censers(parts) -> None:
@@ -516,7 +732,9 @@ def build_perches(parts) -> None:
     terrain every frame. A flyer's limbs are owned by its clips from
     end to end - there is nothing to solve while it is in the air, and
     the landed pose is authored rather than derived."""
-    for i, (fz, sx_out) in enumerate(((2.30, 0.92), (-1.60, 1.05))):
+    # THREE PAIRS. Four limbs is a mammal count; an insect stands on
+    # six, and the landed silhouette is where the count is read.
+    for i, (fz, sx_out) in enumerate(((2.55, 0.90), (0.65, 1.08), (-1.30, 1.02))):
         for side, sx in (("L", 1.0), ("R", -1.0)):
             # TWO BONES, because the stoke is the one phase the player
             # stands underneath this animal and a landing limb that
@@ -550,10 +768,12 @@ def build_perches(parts) -> None:
 def build_parts() -> list[Part]:
     parts: list[Part] = []
     build_body(parts)
+    build_abdomen(parts)
     build_heart(parts)
     build_sacs(parts)
     build_head(parts)
     build_wings(parts)
+    build_hindwings(parts)
     build_censers(parts)
     build_perches(parts)
     return parts
@@ -582,6 +802,19 @@ def build_bone_table() -> list[dict]:
         bones.append({"name": f"wing2_{side}", "head": tuple(mirror(WING_WRIST, sx)),
                       "tail": tuple(mirror(WING_TIP, sx)),
                       "parent": f"wing1_{side}", "connect": True})
+    # The gaster's two segments, chained off the thorax at the waist.
+    bones.append({"name": "abdomen1", "head": tuple(PETIOLE),
+                  "tail": tuple(ABD_MID), "parent": "thorax"})
+    bones.append({"name": "abdomen2", "head": tuple(ABD_MID),
+                  "tail": tuple(ABD_TIP), "parent": "abdomen1", "connect": True})
+    for side, sx in (("L", 1.0), ("R", -1.0)):
+        bones.append({"name": f"hindwing_{side}",
+                      "head": tuple(mirror(HIND_ROOT, sx)),
+                      "tail": tuple(mirror(HIND_TIP, sx)), "parent": "thorax"})
+        bones.append({"name": f"antenna_{side}",
+                      "head": (sx * ANT_ROOT.x, ANT_ROOT.y, ANT_ROOT.z),
+                      "tail": (sx * ANT_TIP.x, ANT_TIP.y, ANT_TIP.z),
+                      "parent": "head"})
     for i, off in enumerate(SAC_OFFSETS):
         side = "L" if off.x > 0 else "R"
         bones.append({"name": f"sac_{side}", "head": tuple(off),
@@ -599,9 +832,8 @@ def build_bone_table() -> list[dict]:
                 "parent": "thorax" if j == 0 else f"censer{k}{'b' if j == 2 else ''}",
                 "connect": j > 0,
             })
-    for i, fz in enumerate((2.30, -1.60)):
+    for i, (fz, sx_out) in enumerate(((2.55, 0.90), (0.65, 1.08), (-1.30, 1.02))):
         for side, sx in (("L", 1.0), ("R", -1.0)):
-            sx_out = 0.92 if i == 0 else 1.05
             bones.append({"name": f"perch{i}_{side}",
                           "head": (sx * 0.62 * sx_out, -0.42, fz),
                           "tail": (sx * 1.42 * sx_out, -1.10, fz + 0.30),
@@ -618,9 +850,11 @@ def build_bone_table() -> list[dict]:
 # ----------------------------------------------------------------------
 
 BODY_BONES = (["thorax", "head", "heart", "sac_L", "sac_R",
+               "abdomen1", "abdomen2",
+               "hindwing_L", "hindwing_R", "antenna_L", "antenna_R",
                "wing0_L", "wing0_R", "wing1_L", "wing1_R", "wing2_L", "wing2_R"]
               + [f"censer{k}{suffix}" for k in range(3) for suffix in ("", "b", "c")]
-              + [f"perch{i}{suffix}_{side}" for i in (0, 1)
+              + [f"perch{i}{suffix}_{side}" for i in (0, 1, 2)
                  for suffix in ("", "b") for side in ("L", "R")])
 
 
@@ -652,11 +886,30 @@ def build_actions(arm) -> list[str]:
         """Landing gear. Folded flat against the belly at t=0, reaching
         at t=1 - shared by every airborne clip so the limbs are never
         left hanging in a glide. The lower segment counter-rotates, so
-        a reaching limb straightens instead of jack-knifing."""
+        a reaching limb straightens instead of jack-knifing. Three
+        pairs now; the middle pair reaches a beat less than the outer
+        two, which stops six legs reading as one comb."""
         sym(pose, "perch0", -1.15 * (1 - t), 0.0, 0.0)
-        sym(pose, "perch1", -1.05 * (1 - t), 0.0, 0.0)
+        sym(pose, "perch1", -1.08 * (1 - t), 0.0, 0.0)
+        sym(pose, "perch2", -1.02 * (1 - t), 0.0, 0.0)
         sym(pose, "perch0b", -0.95 * (1 - t) + 0.34 * t, 0.0, 0.0)
-        sym(pose, "perch1b", -0.88 * (1 - t) + 0.30 * t, 0.0, 0.0)
+        sym(pose, "perch1b", -0.90 * (1 - t) + 0.26 * t, 0.0, 0.0)
+        sym(pose, "perch2b", -0.86 * (1 - t) + 0.30 * t, 0.0, 0.0)
+
+    def insect(pose, wing=0.0, lag=1.3, abd=0.0, abd2=None, ant=0.0, sway=0.0):
+        """The insect half of every pose, in one call per clip.
+
+        `wing` mirrors the forewing's beat onto the hindwings scaled a
+        touch LARGER and offset a touch DOWN - two planes moving out
+        of phase is the strongest airborne insect read there is.
+        `abd` curls the gaster under (its resting droop is authored
+        into the bones, so zero is already alive); `ant` sweeps the
+        antennae, negative forward; `sway` is a lateral gaster swing
+        for asymmetric actions."""
+        sym(pose, "hindwing", wing * lag - 0.05, 0.0, 0.09)
+        pose["abdomen1"] = (abd * 0.55, sway, 0.0)
+        pose["abdomen2"] = ((abd if abd2 is None else abd2), sway * 0.6, 0.0)
+        sym(pose, "antenna", ant, 0.0, 0.10 * ant)
 
     def bake(name, frames, length):
         act = kit.new_action(arm, name)
@@ -684,6 +937,11 @@ def build_actions(arm) -> list[str]:
         # a beat behind whatever the animal does.
         for k in range(3):
             swing(pose, k, 0.16 * math.sin(t * PI - 0.6))
+        # The hindwings beat AGAINST the forewings (note the sign) and
+        # the gaster breathes a half-cycle behind both - three planes
+        # of motion where the first build had one.
+        insect(pose, wing=0.18 * t - 0.09, abd=0.10 * math.sin(t * PI),
+               ant=0.06 * t)
         tuck(pose, 0.0)
         frames.append((frame, pose))
     bake("idle", frames, 80)
@@ -700,6 +958,7 @@ def build_actions(arm) -> list[str]:
         sym(pose, "wing2", 0.14 * t, 0.0, 0.0)
         for k in range(3):
             swing(pose, k, -0.24 * t)
+        insect(pose, wing=0.22 * t, abd=-0.16 * t, ant=-0.34 * t)
         tuck(pose, 0.0)
         frames.append((frame, pose))
     bake("alert", frames, 48)
@@ -722,6 +981,7 @@ def build_actions(arm) -> list[str]:
             lag = 1.0 - k * 0.18
             swing(pose, k, -0.95 * t * lag, trail=0.55,
                   z=0.10 * t * (1 if k == 1 else -1))
+        insect(pose, wing=0.12 * abs(t), abd=0.22 * t, ant=-0.10 * max(0.0, t))
         tuck(pose, 0.0)
         frames.append((frame, pose))
     bake("bombard", frames, 52)
@@ -745,6 +1005,9 @@ def build_actions(arm) -> list[str]:
         pose["wing2_R"] = (-0.24 * t, 0.0, 0.0)
         for k in range(3):
             swing(pose, k, 0.34 * t, trail=0.7, y=0.12 * t * (1 if k % 2 else -1))
+        insect(pose, wing=0, abd=0.30 * t, ant=0.28 * t, sway=0.10 * t)
+        pose["hindwing_L"] = (-0.52 * t - 0.05, 0.0, 0.09)
+        pose["hindwing_R"] = (-0.22 * t - 0.05, 0.0, -0.09)
         tuck(pose, 0.12)
         frames.append((frame, pose))
     bake("strain", frames, 30)
@@ -764,6 +1027,7 @@ def build_actions(arm) -> list[str]:
         # moment the animal is on its feet.
         for k in range(3):
             swing(pose, k, 1.55 * t, trail=1.0)
+        insect(pose, wing=0.60 * t, abd=0.34 * t, ant=-0.16 * t)
         tuck(pose, t)
         frames.append((frame, pose))
     bake("land", frames, 34)
@@ -791,6 +1055,13 @@ def build_actions(arm) -> list[str]:
         # phase the player is standing next to them.
         for k in range(3):
             swing(pose, k, 1.62 * t, trail=1.05)
+        # The bellows: the gaster pumps while the furnace drinks, one
+        # slow cycle per keyed station, out of phase with the heart's
+        # own scale pulse below.
+        bellow = math.sin((frame / 126.0) * TAU * 2.0)
+        insect(pose, wing=-0.20 * t, lag=1.0, abd=0.30 * t + 0.16 * bellow * t,
+               ant=0.18 * t)
+        sym(pose, "hindwing", -0.85 * t, 0.0, 0.14 * t)
         tuck(pose, 1.0)
         frames.append((frame, pose))
     act = bake("stoke", frames, 126)
@@ -811,6 +1082,9 @@ def build_actions(arm) -> list[str]:
         sym(pose, "wing2", -1.35 * t if t > 0 else 0.75 * -t, 0.0, 0.0)
         for k in range(3):
             swing(pose, k, 1.62 * max(0.0, t) + 0.30 * max(0.0, -t), trail=1.05)
+        insect(pose, wing=(-0.85 * t) if t > 0 else (0.55 * -t), lag=1.0,
+               abd=0.30 * max(0.0, t) - 0.24 * max(0.0, -t),
+               ant=0.18 * max(0.0, t) - 0.20 * max(0.0, -t))
         tuck(pose, max(0.0, t))
         frames.append((frame, pose))
     bake("launch", frames, 38)
@@ -840,9 +1114,43 @@ def build_actions(arm) -> list[str]:
         # mid-swing would put the thuribles back underground.
         for k in range(3):
             swing(pose, k, 1.62 - 0.22 * t, trail=1.05)
+        insect(pose, wing=-0.70, lag=1.0, abd=0.30, ant=0.12,
+               sway=-0.14 * t)
+        pose["hindwing_L"] = (0.44 * t - 0.70, 0.0, -0.20 * t)
         tuck(pose, 1.0)
         frames.append((frame, pose))
     bake("sweep", frames, 40)
+
+    # ---- sprawl: THE KNOCKOUT. Played for the crash-stun grace after
+    # a stall - "strain" was reused here for one build, and strain is
+    # an AIRBORNE clip: its chains hang straight down, which on the
+    # ground put every thurible two metres under the sand for the
+    # whole window. A crashed censer LIES on the ground - the chains
+    # are thrown forward and the bowls rest in front of the animal -
+    # and everything else about the pose says the lights went out:
+    # wings dropped flat and asymmetric, gaster flat, antennae in the
+    # dust, limbs half-folded under it where it fell.
+    frames = []
+    for frame, t in ((0, 0.0), (6, 1.0), (60, 1.0), (96, 0.94), (120, 1.0)):
+        pose = rest()
+        pose["thorax"] = (0.20 * t, 0.05 * t, 0.10 * t)
+        pose["head"] = (0.34 * t, 0.12 * t, 0.0)
+        pose["wing0_L"] = (0.55 * t, 0.0, -0.34 * t)
+        pose["wing0_R"] = (0.40 * t, 0.0, 0.30 * t)
+        pose["wing1_L"] = (0.30 * t, 0.0, 0.0)
+        pose["wing1_R"] = (0.52 * t, 0.0, 0.0)
+        pose["wing2_L"] = (0.38 * t, 0.0, 0.0)
+        pose["wing2_R"] = (0.60 * t, 0.0, 0.0)
+        for k in range(3):
+            # Thrown FORWARD, hard - past horizontal, so the bowls sit
+            # on the sand ahead of the animal rather than under it.
+            swing(pose, k, 1.85 * t, trail=0.92, z=0.16 * t * (1 if k % 2 else -1))
+        insect(pose, wing=0.45 * t, lag=0.85, abd=0.30 * t, abd2=0.10 * t,
+               ant=0.55 * t, sway=0.10 * t)
+        pose["hindwing_R"] = (0.30 * t - 0.05, 0.0, -0.09)
+        tuck(pose, 0.55 * t)
+        frames.append((frame, pose))
+    bake("sprawl", frames, 120)
 
     # ---- flinch -------------------------------------------------------
     frames = []
@@ -854,6 +1162,7 @@ def build_actions(arm) -> list[str]:
         pose["wing0_R"] = (-0.09 * t, 0.0, 0.0)
         for k in range(3):
             swing(pose, k, 0.20 * t)
+        insect(pose, wing=-0.10 * t, abd=-0.14 * t, ant=0.20 * t)
         tuck(pose, 0.0)
         frames.append((frame, pose))
     bake("flinch", frames, 20)
@@ -874,6 +1183,9 @@ def build_actions(arm) -> list[str]:
         pose["wing2_R"] = (0.80 * t, 0.0, 0.0)
         for k in range(3):
             swing(pose, k, 0.55 * t, trail=0.8, y=0.20 * t * (1 if k % 2 else -1))
+        insect(pose, wing=0.55 * t, lag=0.8, abd=0.65 * t, abd2=1.35 * t,
+               ant=0.65 * t, sway=0.12 * t)
+        pose["hindwing_R"] = (0.38 * t - 0.05, 0.0, -0.09)
         tuck(pose, 0.30 * t)
         frames.append((frame, pose))
     act = bake("death", frames, 76)

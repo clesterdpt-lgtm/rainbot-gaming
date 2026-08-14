@@ -265,12 +265,16 @@ export function buildHud(ctx, host) {
       "THE GLASS SCAR · APEX SIGNATURE", "THE DISTAFF AWAKENS", 4.8, true));
     ctx.distaff.bus.on("collapse", () => showBreachAlert(
       "THE DISTAFF", "ITS FOOTING IS BROKEN", 3.2, true));
+    ctx.distaff.bus.on("lungeTelegraph", () => showBreachAlert(
+      "THE DISTAFF", "IT LUNGES", 1.6, true));
     ctx.distaff.bus.on("defeated", () => showBreachAlert(
       "THE GLASS SCAR", "THE DISTAFF IS UNWOUND", 5.2));
   }
   if (ctx.winnower?.bus) {
     ctx.winnower.bus.on("aggro", () => showBreachAlert(
       "THE CENSER WORKS · APEX SIGNATURE", "THE WINNOWER RISES", 4.8, true));
+    ctx.winnower.bus.on("stunned", () => showBreachAlert(
+      "THE WINNOWER", "IT IS DOWN - STRIKE NOW", 3.6, true));
     // The two ways it comes down read differently on purpose: one is
     // its own decision and the other is the player's.
     ctx.winnower.bus.on("stoke", (e) => showBreachAlert(
@@ -796,9 +800,13 @@ export function buildHud(ctx, host) {
     eventKickerEl.textContent = "THE GLASS SCAR · APEX SIGNATURE";
     eventNameEl.textContent = "THE DISTAFF";
     eventNameEl.title = eventNameEl.textContent;
-    eventSubEl.textContent = d.collapsed
-      ? "Collapsed - the body is exposed"
-      : `${d.legsBroken} / ${d.legCount} legs broken`;
+    eventSubEl.textContent = d.phase === "returning"
+      ? "Withdrawing - it is going home"
+      : d.collapsed
+        ? "Collapsed - the body is exposed"
+        : d.lunging
+          ? "IT IS COMING"
+          : `${d.legsBroken} / ${d.legCount} legs broken`;
     eventCountEl.textContent = d.collapsed
       ? "EXPOSED" : `${d.health} HP`;
     eventFillEl.style.width = `${clamp01(1 - d.health / Math.max(1, d.maxHealth)) * 100}%`;
@@ -816,9 +824,13 @@ export function buildHud(ctx, host) {
     eventKickerEl.textContent = "THE CENSER WORKS · APEX SIGNATURE";
     eventNameEl.textContent = "THE WINNOWER";
     eventNameEl.title = eventNameEl.textContent;
-    eventSubEl.textContent = w.grounded
-      ? (w.stalled ? "Stalled - it is down and open" : "Stoking - the gut is exposed")
-      : `Airborne · ${w.altitude}m · lift ${Math.max(0, Math.ceil(w.lift))}`;
+    eventSubEl.textContent = w.phase === "return"
+      ? "Withdrawing - it is flying home"
+      : w.grounded
+        ? (w.stunned
+          ? "DOWN - strike it freely"
+          : w.stalled ? "Stalled - it is down and open" : "Stoking - the gut is exposed")
+        : `Airborne · ${w.altitude}m · lift ${Math.max(0, Math.ceil(w.lift))}`;
     eventCountEl.textContent = w.grounded ? "EXPOSED" : `${w.health} HP`;
     eventFillEl.style.width = `${clamp01(1 - w.health / Math.max(1, w.maxHealth)) * 100}%`;
     return true;

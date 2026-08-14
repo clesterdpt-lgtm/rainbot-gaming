@@ -562,9 +562,9 @@ export function buildWeapons(ctx) {
 
        DO NOT MOVE THIS TO MAKE THE FLASH LOOK BETTER. It is not just
        an emitter position: the aim solve rotates the whole weapon to
-       put THIS node on the camera ray, so the reticle's promise that
-       the bolt goes where the crosshair points is calibrated around
-       it. Sliding it back 23cm onto the censer cage - which does look
+       keep THIS node parallel to the camera ray, while main.js uses it
+       as the near end of the converged reticle shot. Sliding it back
+       23cm onto the censer cage - which does look
        better - swung `saintfall-weapon-gait-proof`'s reticle sweep
        from 0.000deg/0.00px to 29.2deg/137px of miss at 1080p. The
        cosmetic offset belongs on the flare below, which is drawn
@@ -588,9 +588,10 @@ export function buildWeapons(ctx) {
        converges on that spike, a discharge that happens behind it
        reads as the lance leaking rather than firing.
 
-       It sits 10cm forward of the aim node along the same axis, and
-       the aim solve puts that axis on the camera ray - so the bolt
-       still leaves along the reticle line. */
+       It sits 10cm forward of the aim node along the same axis. The
+       visible shaft stays close to the reticle line, while ballistics
+       converges this physical tip onto the reticle-selected world
+       point so the lower third-person origin cannot pass under it. */
     const emitter = new THREE.Object3D();
     emitter.name = "bolt-emitter";
     emitter.position.set(isPolearm
@@ -1252,10 +1253,12 @@ export function buildWeapons(ctx) {
        left support-arm pose exactly: only the weapon rotates around its
        support-hand contact, then the right-arm IK follows the rear grip.
 
-       The shaft is parallel to the live camera ray because ballistics
-       also leave the muzzle along that ray.  This keeps the visible bore,
-       reticle and projectile honest instead of making the model converge
-       on a point the shot itself would miss. */
+       The shaft stays parallel to the live camera ray as the stable
+       two-hand visual solve. Ballistics independently converges the
+       physical emitter onto the reticle-selected world point; at normal
+       combat distances that correction is only a few degrees, while
+       avoiding the much larger lie of a parallel low-origin shot passing
+       under the reticle or entering the ground. */
     if (sideCarry && camera && root.parent) {
       root.updateWorldMatrix(true, true);
       carry.record.gripFront.getWorldPosition(_aimPivotBefore);
@@ -1292,9 +1295,10 @@ export function buildWeapons(ctx) {
 
            Below full commitment the shaft eases back to a low-ready
            carry along the BODY's own facing, tipped slightly down.
-           Ballistics are unaffected: shots leave along the camera ray
-           either way, and by the time a shot exists the commitment is
-           1 and the shaft is on the ray. */
+           Ballistics are unaffected: shots resolve the camera reticle
+           target and converge from the emitter either way, and by the
+           time a shot exists the commitment is 1 and the shaft is close
+           to that ray. */
         /* A stowed lance does not chase the reticle. Without this the
            weapon would still swing to the camera ray while slung on
            the back, which is both nonsense and a clipping hazard. */

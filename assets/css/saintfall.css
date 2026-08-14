@@ -545,17 +545,36 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
 
 .sf-hud__reticle {
   position: absolute; left: 50%; top: 50%;
-  width: 26px; height: 26px; margin: -13px 0 0 -13px;
+  width: 112px; height: 112px; margin: -56px 0 0 -56px;
+  --sf-reticle-gap: 30px;
+  --sf-reticle-arm: 9px;
   pointer-events: none; transition: opacity .2s;
 }
 .sf-hud__reticle i {
   position: absolute; background: rgba(255, 244, 228, .82);
   box-shadow: 0 0 4px rgba(0, 0, 0, .8);
+  transition: left .11s ease-out, top .11s ease-out;
 }
-.sf-hud__reticle i:nth-child(1) { left: 12px; top: 0; width: 2px; height: 7px; }
-.sf-hud__reticle i:nth-child(2) { left: 12px; bottom: 0; width: 2px; height: 7px; }
-.sf-hud__reticle i:nth-child(3) { top: 12px; left: 0; height: 2px; width: 7px; }
-.sf-hud__reticle i:nth-child(4) { top: 12px; right: 0; height: 2px; width: 7px; }
+.sf-hud__reticle i:nth-child(1) {
+  left: calc(50% - 1px);
+  top: calc(50% - var(--sf-reticle-gap) - var(--sf-reticle-arm));
+  width: 2px; height: var(--sf-reticle-arm);
+}
+.sf-hud__reticle i:nth-child(2) {
+  left: calc(50% - 1px);
+  top: calc(50% + var(--sf-reticle-gap));
+  width: 2px; height: var(--sf-reticle-arm);
+}
+.sf-hud__reticle i:nth-child(3) {
+  top: calc(50% - 1px);
+  left: calc(50% - var(--sf-reticle-gap) - var(--sf-reticle-arm));
+  height: 2px; width: var(--sf-reticle-arm);
+}
+.sf-hud__reticle i:nth-child(4) {
+  top: calc(50% - 1px);
+  left: calc(50% + var(--sf-reticle-gap));
+  height: 2px; width: var(--sf-reticle-arm);
+}
 
 /* The damage flash. Driven by a class toggle rather than by an
    inline opacity ramp so the browser owns the timing - a JS-driven

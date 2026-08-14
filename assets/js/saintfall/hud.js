@@ -136,6 +136,8 @@ export function buildHud(ctx, host) {
   const toxinEl = el.querySelector("#sf-toxin");
   const reticleEl = el.querySelector("#sf-reticle");
   const damageLayerEl = el.querySelector("#sf-damage-numbers");
+  let reticleGapPx = 30;
+  let reticleConeRad = 0;
 
   /* Damage numbers subscribe to the health mutation itself, not to
      weapon hit effects. If a number appears, `combat.applyDamage`
@@ -1141,8 +1143,27 @@ export function buildHud(ctx, host) {
          honest, and would now be a lie about what the trigger does.
          The two things that genuinely cannot shoot are the shield and
          the slam. */
+      /* The four arms describe the weapon's ACTUAL half-angle instead
+         of promising rifle precision at hip fire. Project the cone
+         through the live camera FOV so the wide state grows on screen,
+         then collapses to a small sight picture while RMB is held. */
+      reticleConeRad = Math.max(0, ctx.weapons?.spread?.() || 0);
+      const canvas = ctx.render?.renderer?.domElement;
+      const height = Math.max(1, canvas?.clientHeight || canvas?.height || 720);
+      const fov = Math.max(1, camera?.fov || 60) * Math.PI / 180;
+      const conePx = Math.tan(reticleConeRad) * (height * 0.5) / Math.tan(fov * 0.5);
+      reticleGapPx = Math.min(44, Math.max(6, conePx));
+      reticleEl.style.setProperty("--sf-reticle-gap", `${reticleGapPx.toFixed(2)}px`);
+      reticleEl.dataset.aiming = ctx.weapons?.carry?.ads > 0.5 ? "1" : "0";
       reticleEl.style.opacity = combat.player.dead || shield?.active
         || ctx.slam?.state?.active ? "0" : "1";
+    },
+    reticleState() {
+      return {
+        gapPx: Number(reticleGapPx.toFixed(2)),
+        coneRad: Number(reticleConeRad.toFixed(5)),
+        aiming: reticleEl.dataset.aiming === "1",
+      };
     },
     minimapState() {
       return {

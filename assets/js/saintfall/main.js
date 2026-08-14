@@ -348,11 +348,19 @@ export async function start({ boot, build } = {}) {
   let colliderTick = 0;
   const shotOrigin = new THREE.Vector3();
   const shotDir = new THREE.Vector3();
+  const shotCameraOrigin = new THREE.Vector3();
+  const shotCameraDir = new THREE.Vector3();
+  const shotAimPoint = new THREE.Vector3();
   const shotSide = new THREE.Vector3();
   const shotUp = new THREE.Vector3();
+  const SHOT_RANGE = 320;
   let shotQueued = false;
   let shotPort = null;
   let shotDamage = 22;
+  let shotAimKind = "range";
+  let shotAimEnemy = null;
+  let shotAimReach = SHOT_RANGE;
+  let lastShotSolution = null;
 
   /* ------------------------------ loop ------------------------------ */
 
@@ -389,6 +397,14 @@ export async function start({ boot, build } = {}) {
     audioFactory: buildAudio,
     fps: 0,
     frameMs: 0,
+    shotSolution: () => lastShotSolution ? {
+      ...lastShotSolution,
+      cameraOrigin: [...lastShotSolution.cameraOrigin],
+      cameraDirection: [...lastShotSolution.cameraDirection],
+      aimPoint: [...lastShotSolution.aimPoint],
+      origin: [...lastShotSolution.origin],
+      direction: [...lastShotSolution.direction],
+    } : null,
     resize,
     step,
     setTime,
@@ -461,18 +477,50 @@ export async function start({ boot, build } = {}) {
        needle, and a fast turn could separate them much further. */
     const w = weapons.current;
     shotPort = w ? (w.emitter || w.muzzle) : null;
-    render.camera.getWorldDirection(shotDir);
+    render.camera.updateWorldMatrix(true, false);
+    shotCameraOrigin.setFromMatrixPosition(render.camera.matrixWorld);
+    render.camera.getWorldDirection(shotCameraDir);
     const cone = weapons.spread();
     if (cone > 0) {
       // Cone, not a square: adding independent jitter per axis
       // concentrates shots at the diagonals.
       const a = Math.random() * Math.PI * 2;
       const r = Math.sqrt(Math.random()) * cone;
-      shotSide.set(shotDir.z, 0, -shotDir.x).normalize();
-      shotUp.crossVectors(shotSide, shotDir).normalize();
-      shotDir.addScaledVector(shotSide, Math.cos(a) * r)
+      shotSide.set(shotCameraDir.z, 0, -shotCameraDir.x).normalize();
+      shotUp.crossVectors(shotSide, shotCameraDir).normalize();
+      shotCameraDir.addScaledVector(shotSide, Math.cos(a) * r)
         .addScaledVector(shotUp, Math.sin(a) * r).normalize();
     }
+
+    /* THIRD-PERSON CONVERGENCE.
+
+       The camera owns the reticle, but the lance owns the physical
+       origin. Casting a ray from that lower emitter PARALLEL to the
+       camera ray makes a target under the reticle sit above the bolt.
+       On level ground the parallel ray can enter the sand several
+       metres in front of the trooper even though the camera has a
+       clear view of an enemy.
+
+       First resolve what the spread-adjusted reticle ray points at,
+       then converge the posed emitter onto that world point in
+       `flushShot`. Cover is still resolved a second time from the
+       emitter by `combat.fire`, so a camera peeking over a wall does
+       not let the lance shoot through it. */
+    const cameraWall = collide.rayBlock(
+      shotCameraOrigin.x, shotCameraOrigin.y, shotCameraOrigin.z,
+      shotCameraDir.x, shotCameraDir.y, shotCameraDir.z, SHOT_RANGE
+    );
+    const cameraEnemy = combat.raycastEnemies(
+      shotCameraOrigin.x, shotCameraOrigin.y, shotCameraOrigin.z,
+      shotCameraDir.x, shotCameraDir.y, shotCameraDir.z,
+      Math.min(SHOT_RANGE, cameraWall)
+    );
+    shotAimKind = cameraEnemy ? "enemy" : (cameraWall !== Infinity ? "cover" : "range");
+    shotAimEnemy = cameraEnemy ? cameraEnemy.inst.key : null;
+    shotAimReach = cameraEnemy
+      ? cameraEnemy.t
+      : Math.min(SHOT_RANGE, cameraWall);
+    shotAimPoint.copy(shotCameraOrigin).addScaledVector(shotCameraDir, shotAimReach);
     shotDamage = (w && w.spec.damage) || 22;
     shotQueued = true;
     weapons.flashMuzzle();
@@ -482,11 +530,11 @@ export async function start({ boot, build } = {}) {
 
   /** Resolve an accepted shot from the lance's FINAL posed tip.
    *
-   * Damage remains hitscan, and `shotDir` remains the press-time camera
-   * ray (including its sampled spread). Only the near end waits: the
-   * socket is read after `weapons.update()` and `player.postUpdate()` so
-   * the singular beam begins on the needle the player actually sees in
-   * the discharge frame. */
+   * Damage remains hitscan. The spread-adjusted reticle target is frozen
+   * at press time, while the near end waits: the socket is read after
+   * `weapons.update()` and `player.postUpdate()` so the singular beam
+   * begins on the needle the player actually sees in the discharge
+   * frame. */
   function flushShot() {
     if (!shotQueued) return;
     shotQueued = false;
@@ -496,7 +544,34 @@ export async function start({ boot, build } = {}) {
     } else {
       shotOrigin.copy(render.camera.position);
     }
-    combat.fire(shotOrigin, shotDir, { damage: shotDamage });
+    shotDir.subVectors(shotAimPoint, shotOrigin);
+    if (shotDir.lengthSq() < 1e-8) shotDir.copy(shotCameraDir);
+    else shotDir.normalize();
+
+    /* Retain the old parallel-ray clearance as a diagnostic. It makes
+       the exact regression measurable: in the failing ground-level
+       case this stops before the camera-selected enemy, while the
+       converged ray lands on it. */
+    const parallelBlock = collide.rayBlock(
+      shotOrigin.x, shotOrigin.y, shotOrigin.z,
+      shotCameraDir.x, shotCameraDir.y, shotCameraDir.z, SHOT_RANGE
+    );
+    const hit = combat.fire(shotOrigin, shotDir, { damage: shotDamage });
+    lastShotSolution = {
+      aimKind: shotAimKind,
+      aimEnemy: shotAimEnemy,
+      resolvedEnemy: hit ? hit.inst.key : null,
+      cameraReach: Number(shotAimReach.toFixed(4)),
+      emitterToAim: Number(shotOrigin.distanceTo(shotAimPoint).toFixed(4)),
+      legacyParallelClear: parallelBlock === Infinity
+        ? SHOT_RANGE : Number(parallelBlock.toFixed(4)),
+      convergenceDeg: Number((shotDir.angleTo(shotCameraDir) * 180 / Math.PI).toFixed(4)),
+      cameraOrigin: shotCameraOrigin.toArray(),
+      cameraDirection: shotCameraDir.toArray(),
+      aimPoint: shotAimPoint.toArray(),
+      origin: shotOrigin.toArray(),
+      direction: shotDir.toArray(),
+    };
     player.punch(1);
     audio.shot(shotOrigin.x, shotOrigin.z, { gain: 0.78 });
     shotPort = null;

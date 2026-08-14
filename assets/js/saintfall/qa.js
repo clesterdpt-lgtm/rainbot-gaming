@@ -821,12 +821,10 @@ export function installQa(ctx, api) {
     aimAt(x, y, z, settle = 12) {
       const ps = api.player.state;
       const want = new THREE.Vector3(x, y, z);
-      const muzzle = new THREE.Vector3();
+      const eye = new THREE.Vector3();
       for (let i = 0; i < 6; i += 1) {
-        const w = api.weapons.current;
-        if (w && w.muzzle) w.muzzle.getWorldPosition(muzzle);
-        else muzzle.set(ps.x, ps.y + 1.5, ps.z);
-        const to = want.clone().sub(muzzle).normalize();
+        api.render.camera.getWorldPosition(eye);
+        const to = want.clone().sub(eye).normalize();
         const wantYaw = Math.atan2(to.x, to.z);
         const wantPitch = Math.asin(clamp(to.y, -1, 1));
         const dir = new THREE.Vector3();
@@ -840,7 +838,8 @@ export function installQa(ctx, api) {
       api.step(1 / 60, true);
       const dir = new THREE.Vector3();
       api.render.camera.getWorldDirection(dir);
-      const to = want.clone().sub(muzzle).normalize();
+      api.render.camera.getWorldPosition(eye);
+      const to = want.clone().sub(eye).normalize();
       return { errorDeg: Math.acos(clamp(dir.dot(to), -1, 1)) * 180 / Math.PI };
     },
 
@@ -859,10 +858,27 @@ export function installQa(ctx, api) {
       const muzzle = new THREE.Vector3();
       const w = api.weapons.current;
       const ps = api.player.state;
-      if (w && w.muzzle) w.muzzle.getWorldPosition(muzzle);
+      if (w && (w.emitter || w.muzzle)) (w.emitter || w.muzzle).getWorldPosition(muzzle);
       else muzzle.set(ps.x, ps.y + 1.5, ps.z);
+      const camera = api.render.camera;
+      const eye = new THREE.Vector3();
+      const cameraDir = new THREE.Vector3();
+      const aimPoint = new THREE.Vector3();
       const dir = new THREE.Vector3();
-      api.render.camera.getWorldDirection(dir);
+      camera.getWorldPosition(eye);
+      camera.getWorldDirection(cameraDir);
+      const cameraWall = api.collide.rayBlock(
+        eye.x, eye.y, eye.z, cameraDir.x, cameraDir.y, cameraDir.z, maxDist
+      );
+      const cameraEnemy = api.combat.raycastEnemies(
+        eye.x, eye.y, eye.z, cameraDir.x, cameraDir.y, cameraDir.z,
+        Math.min(maxDist, cameraWall)
+      );
+      const aimDistance = cameraEnemy
+        ? cameraEnemy.t
+        : Math.min(maxDist, cameraWall);
+      aimPoint.copy(eye).addScaledVector(cameraDir, aimDistance);
+      dir.subVectors(aimPoint, muzzle).normalize();
       const d = api.collide.rayBlock(
         muzzle.x, muzzle.y, muzzle.z, dir.x, dir.y, dir.z, maxDist
       );
@@ -870,8 +886,14 @@ export function installQa(ctx, api) {
         clearM: d === Infinity ? maxDist : d,
         muzzle: muzzle.toArray(),
         dir: dir.toArray(),
+        cameraDir: cameraDir.toArray(),
+        aimPoint: aimPoint.toArray(),
+        aimKind: cameraEnemy ? "enemy" : (cameraWall !== Infinity ? "cover" : "range"),
       };
     },
+
+    shotSolution() { return api.shotSolution?.() || null; },
+    reticleState() { return api.hud?.reticleState?.() || null; },
 
     /** Live enemy positions. `spawnEnemy` returns a snapshot, and a
      *  creature that charges has left it by the time a probe aims. */

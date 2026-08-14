@@ -2023,7 +2023,7 @@ function makeInput(canvas, captureMeleeAim = null) {
     state.look.y += e.movementY;
   });
   window.addEventListener("mousedown", (e) => {
-    if (!state.locked) return;
+    if (!state.locked || e.defaultPrevented) return;
     if (e.button === 0) { mouse.firing = true; state.firing = true; }
     if (e.button === 2) { mouse.ads = true; state.ads = true; }
   });

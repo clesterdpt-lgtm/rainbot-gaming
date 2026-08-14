@@ -153,7 +153,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
         <div class="sf-command-wheel__ring" aria-hidden="true"></div>
         ${commandMarkup(order, ctx.mission)}
         <button class="sf-command-wheel__core" type="button" data-wheel-cancel>
-          ${ICONS.crest}<span data-wheel-status>DRAG TO SELECT</span><small>RELEASE TO CONFIRM</small>
+          ${ICONS.crest}<span data-wheel-status>HOVER TO SELECT</span><small>CLICK TO CONFIRM</small>
         </button>
         <i class="sf-command-wheel__cursor" aria-hidden="true"></i>
       </div>
@@ -195,7 +195,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
                 <article class="sf-operation-card"><small>MISSION CLOCK</small><strong data-operation-clock>00:00</strong><span>Elapsed</span></article>
                 <article class="sf-operation-card sf-operation-card--breach"><small>BLOOM CONTAINMENT</small><strong data-operation-breach>Signal quiet</strong><span data-operation-breach-detail>No active rupture</span></article>
               </div>
-              <div class="sf-menu__callout"><span>FIELD DOCTRINE</span><p>Hold <kbd>F</kbd>, point toward a command sigil, then release to confirm. The basin enters command stasis while the wheel is open.</p></div>
+              <div class="sf-menu__callout"><span>FIELD DOCTRINE</span><p>Hold <kbd>F</kbd>, hover toward a command sigil, and left click to confirm. Releasing <kbd>F</kbd> cancels.</p></div>
             </section>
             <section class="sf-menu__page sf-menu__page--map" data-menu-page="map" hidden>
               <div class="sf-menu__pagehead"><span>LIVE BASIN OVERVIEW</span><h3>TACTICAL MAP</h3><p>The whole two-kilometre basin, rendered from the authored terrain. North stays fixed.</p></div>
@@ -291,7 +291,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
               <div class="sf-controls-grid">
                 <article><h4>MOVEMENT</h4>${controlRow("W A S D", "Move")}${controlRow("SHIFT", "Boost", "Tap to boost, hold to keep gliding")}${controlRow("SPACE", "Vault")}${controlRow("SHIFT + SPACE", "Reliquary jetpack")}${controlRow("Q", "Ground slam", "While airborne")}</article>
                 <article><h4>COMBAT</h4>${controlRow("MOUSE", "Look / aim")}${controlRow("LMB", "Fire")}${controlRow("RMB", "Aim down sights")}${controlRow("Q", "Censer-lance strike")}${controlRow("E", "Aegis block")}${controlRow("R", "Vent weapon heat")}</article>
-                <article><h4>COMMAND</h4>${controlRow("HOLD F", "Command wheel", "Missile drop and field support — point and release to confirm")}${controlRow("TAB", "Field menu")}${controlRow("ESC", "Field menu", "Also resumes")}${controlRow("M", "Tactical map", "Press again to resume")}${controlRow("TOUCH", "Hold the command sigil", "Drag and release to confirm")}</article>
+                <article><h4>COMMAND</h4>${controlRow("HOLD F + LMB", "Command wheel", "Hover a field support sigil and left click to deploy; release F to cancel")}${controlRow("TAB", "Field menu")}${controlRow("ESC", "Field menu", "Also resumes")}${controlRow("M", "Tactical map", "Press again to resume")}${controlRow("TOUCH", "Hold the command sigil", "Drag and release to confirm")}</article>
               </div>
             </section>
             <section class="sf-menu__page" data-menu-page="settings" hidden>
@@ -827,7 +827,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
       button.classList.toggle("is-selected", selected);
       button.setAttribute("aria-pressed", selected ? "true" : "false");
     });
-    wheelStatusEl.textContent = key ? (ctx.mission.stratagems?.[key]?.short || key).toUpperCase() : "DRAG TO SELECT";
+    wheelStatusEl.textContent = key ? (ctx.mission.stratagems?.[key]?.short || key).toUpperCase() : "HOVER TO SELECT";
     if (next >= 0 && sound) wheelSfx("select", next);
   }
 
@@ -937,7 +937,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     ctx.player?.input?.clearAll?.();
     touch?.releaseAll?.();
     wheelSfx("open");
-    announce("Command wheel open. Point to a command and release to confirm.");
+    announce("Command wheel open. Hover over a command and click to confirm.");
     return true;
   }
 
@@ -1832,7 +1832,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     }
     if (event.code === "KeyF" && wheel.open && wheel.source === "keyboard") {
       event.preventDefault(); event.stopImmediatePropagation();
-      closeWheel({ confirm: wheel.selectedIndex >= 0, reason: "hold-release" });
+      cancelWheel("hold-release");
     }
   }
 
@@ -1844,6 +1844,41 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     } else {
       const rect = dialEl.getBoundingClientRect();
       selectFromVector(event.clientX - (rect.left + rect.width / 2), event.clientY - (rect.top + rect.height / 2));
+    }
+  }
+
+  function onMouseDown(event) {
+    if (!wheel.open || wheel.source !== "keyboard") return;
+    if (event.button === 0) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      const cancelTarget = event.target instanceof Element && event.target.closest("[data-wheel-cancel]");
+      if (cancelTarget) {
+        cancelWheel("center");
+        return;
+      }
+      const optionTarget = event.target instanceof Element && event.target.closest(".sf-command-wheel__option");
+      if (optionTarget) {
+        setWheelSelection(Number(optionTarget.dataset.index));
+        closeWheel({ confirm: true, reason: "pointer-click" });
+        return;
+      }
+      if (wheel.selectedIndex >= 0) {
+        closeWheel({ confirm: true, reason: "pointer-click" });
+      } else {
+        cancelWheel("center");
+      }
+    }
+  }
+
+  function onMouseClick(event) {
+    if (wheel.open && wheel.source === "keyboard" && event.button === 0) {
+      event.preventDefault(); event.stopImmediatePropagation();
+    }
+  }
+
+  function onMouseUp(event) {
+    if (wheel.open && wheel.source === "keyboard" && event.button === 0) {
+      event.preventDefault(); event.stopImmediatePropagation();
     }
   }
 
@@ -1929,6 +1964,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
   window.addEventListener("keydown", onKeyDown, true);
   window.addEventListener("keyup", onKeyUp, true);
   window.addEventListener("mousemove", onMouseMove, true);
+  window.addEventListener("mousedown", onMouseDown, true);
+  window.addEventListener("mouseup", onMouseUp, true);
+  window.addEventListener("click", onMouseClick, true);
   window.addEventListener("pointermove", onPointerMove, { capture: true, passive: false });
   window.addEventListener("pointerup", onPointerEnd, { capture: true, passive: false });
   window.addEventListener("pointercancel", onPointerEnd, { capture: true, passive: false });
@@ -2106,6 +2144,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
       window.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("keyup", onKeyUp, true);
       window.removeEventListener("mousemove", onMouseMove, true);
+      window.removeEventListener("mousedown", onMouseDown, true);
+      window.removeEventListener("mouseup", onMouseUp, true);
+      window.removeEventListener("click", onMouseClick, true);
       window.removeEventListener("pointermove", onPointerMove, true);
       window.removeEventListener("pointerup", onPointerEnd, true);
       window.removeEventListener("pointercancel", onPointerEnd, true);

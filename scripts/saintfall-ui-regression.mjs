@@ -987,11 +987,32 @@ async function desktopPass(browser) {
     JSON.stringify({ dialBox, vector: await page.evaluate(() => window.__SF.commandWheelState()?.vector) }));
   await page.locator(".sf-stage").screenshot({ path: path.join(OUT, "desktop-command-wheel.png") });
   const openWheel = await page.evaluate(() => window.__SF.commandWheelState());
+  
+  // Releasing F without clicking must cancel without dispatching
   await page.keyboard.up("KeyF");
+  await page.waitForFunction(() => !window.__SF.commandWheelState()?.open,
+    null, { timeout: 4000 });
+  const cancelledWheel = await page.evaluate(() => ({
+    wheel: window.__SF.commandWheelState(),
+    cooldown: window.__SF.mission.cooldowns.cluster,
+  }));
+  check("releasing F without clicking cancels the command wheel without dispatching",
+    cancelledWheel.wheel?.dispatchSeq === (beforeWheel.wheel?.dispatchSeq || 0) && cancelledWheel.cooldown === 0,
+    JSON.stringify(cancelledWheel));
+
+  // Reopen and left-click to dispatch
+  await page.keyboard.down("KeyF");
+  await page.waitForFunction(() => window.__SF.commandWheelState()?.open,
+    null, { timeout: 3000 });
+  await page.mouse.move(dialBox.x + dialBox.width / 2 + 0.866 * 132,
+    dialBox.y + dialBox.height / 2 + 0.5 * 132, { steps: 5 });
+  await page.mouse.down({ button: "left" });
+  await page.mouse.up({ button: "left" });
   await page.waitForFunction((seq) => {
     const state = window.__SF.commandWheelState();
     return state && !state.open && state.dispatchSeq === seq + 1;
   }, beforeWheel.wheel?.dispatchSeq || 0, { timeout: 4000 });
+  await page.keyboard.up("KeyF");
   await page.waitForTimeout(180);
   const afterWheel = await page.evaluate(() => ({
     wheel: window.__SF.commandWheelState(),
@@ -999,11 +1020,11 @@ async function desktopPass(browser) {
     body: window.__SF.player.state.yaw,
     cooldown: window.__SF.mission.cooldowns.cluster,
   }));
-  evidence.desktopWheel = { beforeWheel, openWheel, afterWheel };
+  evidence.desktopWheel = { beforeWheel, openWheel, cancelledWheel, afterWheel };
   check("holding F opens a three-choice command wheel",
     openWheel?.open && openWheel?.commands?.length === 3 && openWheel.selectedKey === "cluster",
     JSON.stringify(openWheel));
-  check("releasing F dispatches the highlighted command exactly once",
+  check("left clicking hovered sector dispatches the highlighted command exactly once",
     afterWheel.wheel?.dispatchSeq === (beforeWheel.wheel?.dispatchSeq || 0) + 1
       && afterWheel.wheel?.lastDispatch?.key === "cluster" && afterWheel.cooldown > 0,
     JSON.stringify(afterWheel.wheel));
@@ -1026,6 +1047,8 @@ async function desktopPass(browser) {
     await page.waitForFunction(() => window.__SF.commandWheelState()?.selectedKey === "orbital",
       null, { timeout: 2000 });
     const selected = await page.evaluate(() => window.__SF.commandWheelState());
+    await page.mouse.down({ button: "left" });
+    await page.mouse.up({ button: "left" });
     await page.keyboard.up("KeyF");
     await page.waitForFunction((seq) => window.__SF.commandWheelState()?.dispatchSeq === seq + 1,
       fresh?.dispatchSeq || 0, { timeout: 4000 });
@@ -1133,6 +1156,8 @@ async function desktopPass(browser) {
     wheel: window.__SF.commandWheelState(),
   }));
   await page.keyboard.press("Digit1");
+  await page.mouse.down({ button: "left" });
+  await page.mouse.up({ button: "left" });
   await page.keyboard.up("KeyF");
   await page.waitForFunction((seq) => window.__SF.commandWheelState()?.dispatchSeq === seq + 1,
     lockedWheelBefore?.dispatchSeq || 0, { timeout: 4000 });

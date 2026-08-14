@@ -10,7 +10,7 @@ A static HTML5 + vanilla JS gaming site. No build step, no backend required to p
 | --- | --- | --- |
 | ✅ Live | **The Drowned Orrery** | Original cinematic third-person action-adventure vertical slice. Wake three meridian lenses, master the prism bracer, and still the Hollow Astronomer in a celestial-botany Three.js world. `/games/drowned-orrery.html` |
 | ✅ Live | **AI Slop Factory** | Conveyor-belt content moderation panic. Sort cursed AI thumbnails, bot floods, scams, misinformation, and ragebait before the feed overloads. `/games/ai-slop-factory.html` |
-| ✅ Live | **Escape the Strait of Hormuz** | Frogger-style. You're a VLCC oil tanker. `/games/strait-of-hormuz.html` |
+| ✅ Live | **Escape the Strait of Hormuz** | Tactical maritime dodger. Steer a VLCC oil tanker through hostile waters while dodging anti-ship missiles, contact mines, and terrorist skiffs. `/games/strait-of-hormuz.html` |
 | ✅ Live | **Mr Feast's Mansion** | First-person architectural exploration through a furnished three-floor estate in a lightning storm. `/games/mr-feast-mansion.html` |
 | ✅ Live | **Looksmaxxing Grindset** | Clicker parody. Wake up sadge, become gigachad. `/games/looksmaxxing-grindset.html` |
 | ✅ Live | **DoorCrash: No Tip Nitro** | 3D food-delivery lane runner. Keep the fries hot, dodge city chaos, and survive the no-tip economy. `/games/doorcrash-no-tip-nitro.html` |

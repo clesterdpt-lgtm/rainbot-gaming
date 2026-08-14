@@ -1,0 +1,1132 @@
+/* ============================================================
+   APOP DEMON MOGGERS 3D - page chrome
+
+   Only the shell lives here: the stage box, the boot overlay and
+   the positioning frames the HUD draws into. hud.js owns everything
+   inside .ap-hud and .ap-overlay.
+   ============================================================ */
+
+.canvas-wrap--ar-16-9 {
+  --game-aspect: 1.7778;
+  --game-aspect-ratio: 16 / 9;
+  --game-max-width: 1280px;
+}
+
+.ap-stage {
+  background: #05060d;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.ap-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  /* The renderer manages the drawing buffer; never let the browser
+     smooth a downscaled buffer into mush on the way up. */
+  image-rendering: auto;
+}
+
+/* ---------- boot overlay ---------- */
+
+.ap-boot {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+  background:
+    radial-gradient(120% 90% at 50% 20%, rgba(236, 26, 94, 0.22), transparent 62%),
+    radial-gradient(100% 80% at 50% 100%, rgba(46, 224, 255, 0.14), transparent 60%),
+    #05060d;
+  transition: opacity 0.55s ease, visibility 0.55s ease;
+}
+
+.ap-boot.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.ap-boot__logo {
+  font-family: "Bungee", var(--font-display, sans-serif);
+  font-size: clamp(20px, 3.4vw, 40px);
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow:
+    0 0 24px rgba(236, 26, 94, 0.75),
+    0 3px 0 rgba(0, 0, 0, 0.55);
+}
+
+.ap-boot__logo span {
+  color: #2ee0ff;
+  text-shadow: 0 0 22px rgba(46, 224, 255, 0.8);
+}
+
+.ap-boot__bar {
+  width: min(420px, 70%);
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.ap-boot__fill {
+  height: 100%;
+  width: 2%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #ec1a5e, #ff5c8a 55%, #f7d716);
+  box-shadow: 0 0 18px rgba(236, 26, 94, 0.8);
+  transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ap-boot__status {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.ap-boot__tip {
+  max-width: 46ch;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+}
+
+.ap-boot__error {
+  display: none;
+  max-width: 60ch;
+  max-height: 40%;
+  overflow: auto;
+  margin: 0;
+  padding: 12px 14px;
+  text-align: left;
+  white-space: pre-wrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #ffd9e2;
+  background: rgba(120, 8, 34, 0.42);
+  border: 1px solid rgba(236, 26, 94, 0.5);
+  border-radius: 10px;
+}
+
+.ap-boot.has-error .ap-boot__error { display: block; }
+.ap-boot.has-error .ap-boot__fill {
+  background: #ef4444;
+  box-shadow: none;
+}
+
+/* ---------- HUD frames ---------- */
+
+.ap-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  /* HUD text must survive being drawn over a bright sky. */
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55), 0 0 14px rgba(0, 0, 0, 0.4);
+}
+
+.ap-hud.is-hidden { display: none; }
+
+.ap-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: none;
+  pointer-events: none;
+}
+
+.ap-overlay.is-open {
+  display: block;
+  pointer-events: auto;
+}
+
+/* ============================================================
+   HUD - hud.js owns every element below
+
+   Sized from --ap-hs, which hud.js computes from the stage width
+   rather than from vw/vh: the game normally sits in a 1280px panel
+   inside the page chrome and only fills the viewport in fullscreen,
+   so viewport units would size the HUD for the wrong rectangle.
+
+   Every readout carries its own dark plate. The courses are neon and
+   the sky is bright, and a glyph that relies on the scene behind it
+   being dark is a glyph that disappears on the rooftop course.
+   ============================================================ */
+
+.ap-hud {
+  --ap-hs: 1;
+  --ap-pink: #ec1a5e;
+  --ap-cyan: #2ee0ff;
+  --ap-gold: #ffd23f;
+  --ap-plat: #e4ecf7;
+  --ap-ink: #ffffff;
+  --ap-plate: rgba(8, 6, 16, 0.58);
+  --ap-plate-edge: rgba(255, 255, 255, 0.16);
+  font-family: "Inter", system-ui, sans-serif;
+  color: var(--ap-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.ap-hud * { box-sizing: border-box; }
+
+/* ---------- shared plate ---------- */
+
+.ap-count,
+.ap-beat,
+.ap-mog,
+.ap-timer,
+.ap-prompt,
+.ap-deal {
+  background: var(--ap-plate);
+  border: calc(1px * var(--ap-hs)) solid var(--ap-plate-edge);
+  box-shadow:
+    0 calc(4px * var(--ap-hs)) calc(18px * var(--ap-hs)) rgba(0, 0, 0, 0.45),
+    inset 0 calc(1px * var(--ap-hs)) 0 rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(calc(6px * var(--ap-hs))) saturate(1.2);
+}
+
+/* ============================================================
+   COLLECTION READOUTS
+   ============================================================ */
+
+.ap-counters {
+  position: absolute;
+  top: calc(18px * var(--ap-hs));
+  left: calc(20px * var(--ap-hs));
+  display: flex;
+  flex-direction: column;
+  gap: calc(9px * var(--ap-hs));
+  align-items: flex-start;
+}
+
+.ap-count {
+  --punch: 0;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: calc(10px * var(--ap-hs));
+  padding: calc(7px * var(--ap-hs)) calc(15px * var(--ap-hs)) calc(7px * var(--ap-hs)) calc(9px * var(--ap-hs));
+  border-radius: calc(999px * var(--ap-hs));
+  transform: scale(calc(1 + var(--punch) * 0.09));
+  transform-origin: left center;
+}
+
+.ap-count__glyph {
+  width: calc(38px * var(--ap-hs));
+  height: calc(38px * var(--ap-hs));
+  flex: none;
+  filter: drop-shadow(0 calc(2px * var(--ap-hs)) calc(4px * var(--ap-hs)) rgba(0, 0, 0, 0.6));
+}
+
+.ap-count__read {
+  display: flex;
+  align-items: baseline;
+  gap: calc(3px * var(--ap-hs));
+  line-height: 1;
+}
+
+.ap-count__num {
+  font-family: "Bungee", "Arial Black", sans-serif;
+  font-size: calc(30px * var(--ap-hs));
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+/* <s> carries a line-through by default, and a struck slash or times
+   sign reads as a glyph nobody recognises. */
+.ap-count__slash {
+  font-family: "Bungee", "Arial Black", sans-serif;
+  font-size: calc(17px * var(--ap-hs));
+  text-decoration: none;
+  opacity: 0.6;
+}
+
+/* Bungee draws its multiplication sign as a starburst, which reads as
+   decoration rather than as "times". Inter draws a plain one. */
+.ap-count__x {
+  font-family: "Inter", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: calc(16px * var(--ap-hs));
+  text-decoration: none;
+  opacity: 0.55;
+}
+
+.ap-count__total {
+  font-family: "Bungee", "Arial Black", sans-serif;
+  font-size: calc(19px * var(--ap-hs));
+  font-style: normal;
+  opacity: 0.78;
+}
+
+.ap-count--record .ap-count__num { color: var(--ap-plat); }
+.ap-count--clout .ap-count__num { color: var(--ap-gold); }
+
+/* The vinyl glyph. Concentric strokes read as grooves at 38px where a
+   texture would turn to mush. */
+.ap-disc__body { fill: #cfd9e8; stroke: #6b7a91; stroke-width: 1.2; }
+.ap-disc__groove { fill: none; stroke: rgba(48, 62, 84, 0.55); stroke-width: 1; }
+.ap-disc__label { fill: var(--ap-pink); }
+.ap-disc__hole { fill: #2b1420; }
+.ap-disc__shine {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  opacity: 0.7;
+}
+
+.ap-coin__body { fill: var(--ap-gold); stroke: #a06c05; stroke-width: 1.4; }
+.ap-coin__rim { fill: none; stroke: rgba(120, 74, 4, 0.55); stroke-width: 1.6; }
+.ap-coin__mark {
+  fill: #8a5a02;
+  font-family: "Bungee", "Arial Black", sans-serif;
+  font-size: 19px;
+}
+
+/* Inline with the number, inside the plate. Hung below it, the pips
+   landed on top of the Clout counter in the stack underneath. */
+.ap-pips {
+  display: flex;
+  align-items: center;
+  gap: calc(3.5px * var(--ap-hs));
+  margin-left: calc(4px * var(--ap-hs));
+  padding-left: calc(9px * var(--ap-hs));
+  border-left: calc(1px * var(--ap-hs)) solid rgba(255, 255, 255, 0.16);
+}
+
+.ap-pips__pip {
+  width: calc(8.5px * var(--ap-hs));
+  height: calc(8.5px * var(--ap-hs));
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 0 0 calc(1px * var(--ap-hs)) rgba(0, 0, 0, 0.5);
+  transition: background 0.22s ease, box-shadow 0.22s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ap-pips__pip.is-on {
+  background: var(--ap-plat);
+  box-shadow:
+    inset 0 0 0 calc(1px * var(--ap-hs)) rgba(0, 0, 0, 0.55),
+    0 0 calc(9px * var(--ap-hs)) rgba(228, 236, 247, 0.85);
+  transform: scale(1.12);
+}
+
+.ap-pips__pip.is-hidden { display: none; }
+
+/* The +N floater. One-shot, restarted from JS by re-adding the class. */
+/* Outside the plate, not over the number it is describing. */
+.ap-count__gain {
+  position: absolute;
+  left: calc(100% + 8px * var(--ap-hs));
+  top: 50%;
+  white-space: nowrap;
+  font-family: "Bungee", "Arial Black", sans-serif;
+  font-size: calc(15px * var(--ap-hs));
+  font-style: normal;
+  text-decoration: none;
+  color: var(--ap-gold);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ap-count__gain.is-pop { animation: apGain 0.75s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes apGain {
+  0% { opacity: 0; transform: translate(calc(-10px * var(--ap-hs)), -50%) scale(0.7); }
+  22% { opacity: 1; transform: translate(0, -90%) scale(1.2); }
+  100% { opacity: 0; transform: translate(0, -210%) scale(1); }
+}
+
+/* ============================================================
+   THE POWER METER
+   ============================================================ */
+
+.ap-power {
+  --open: 0;
+  --hurt: 0;
+  position: absolute;
+  top: calc(18px * var(--ap-hs));
+  right: calc(20px * var(--ap-hs));
+  width: calc(112px * var(--ap-hs));
+  height: calc(112px * var(--ap-hs));
+  display: none;
+  /* Spins in as it appears. A dial that fades in reads as a bug; one
+     that rotates into place reads as a mechanism. */
+  transform:
+    scale(calc(0.62 + var(--open) * 0.38))
+    rotate(calc((1 - var(--open)) * -32deg));
+  opacity: var(--open);
+}
+
+.ap-power.is-up { display: block; }
+
+.ap-power__dial {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 calc(4px * var(--ap-hs)) calc(12px * var(--ap-hs)) rgba(0, 0, 0, 0.6));
+}
+
+.ap-power__plate { fill: rgba(8, 6, 16, 0.72); }
+.ap-power__rim { fill: none; stroke: rgba(255, 255, 255, 0.22); stroke-width: 2; }
+.ap-power__corerim { fill: none; stroke: rgba(255, 255, 255, 0.28); stroke-width: 1.6; }
+.ap-power__slot { fill: rgba(255, 255, 255, 0.07); }
+
+.ap-power__wedge {
+  fill: var(--ap-pink);
+  filter: drop-shadow(0 0 calc(4px * var(--ap-hs)) rgba(236, 26, 94, 0.8));
+  transition: fill 0.25s ease;
+}
+
+.ap-power.is-low .ap-power__wedge {
+  fill: #ff3b30;
+  animation: apLowPulse 0.62s ease-in-out infinite alternate;
+}
+
+.ap-power.is-water .ap-power__wedge {
+  fill: var(--ap-cyan);
+  filter: drop-shadow(0 0 calc(5px * var(--ap-hs)) rgba(46, 224, 255, 0.9));
+}
+
+@keyframes apLowPulse {
+  from { opacity: 1; }
+  to { opacity: 0.45; }
+}
+
+.ap-power__value {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: "Bungee", "Arial Black", sans-serif;
+  font-size: calc(26px * var(--ap-hs));
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 calc(2px * var(--ap-hs)) 0 rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+}
+
+.ap-timer__label,
+.ap-menu__kicker,
+.ap-stat__label,
+.ap-toast__sub,
+.ap-menu__count,
+.ap-deal__time,
+.ap-card__kicker,
+.ap-power__caption { text-decoration: none; }
+
+.ap-power__caption {
+  position: absolute;
+  left: 50%;
+  bottom: calc(-14px * var(--ap-hs));
+  transform: translateX(-50%);
+  font-family: var(--font-mono, monospace);
+  font-size: calc(9.5px * var(--ap-hs));
+  letter-spacing: 0.24em;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+/* ---------- Record Deal timers ---------- */
+
+.ap-deals {
+  position: absolute;
+  top: calc(178px * var(--ap-hs));
+  right: calc(20px * var(--ap-hs));
+  width: calc(210px * var(--ap-hs));
+  display: flex;
+  flex-direction: column;
+  gap: calc(6px * var(--ap-hs));
+}
+
+.ap-deal {
+  --deal: var(--ap-gold);
+  padding: calc(6px * var(--ap-hs)) calc(9px * var(--ap-hs)) calc(7px * var(--ap-hs));
+  border-radius: calc(9px * var(--ap-hs));
+  border-left: calc(3px * var(--ap-hs)) solid var(--deal);
+  animation: apDealIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes apDealIn {
+  from { opacity: 0; transform: translateX(calc(22px * var(--ap-hs))); }
+  to { opacity: 1; transform: none; }
+}
+
+.ap-deal__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(8px * var(--ap-hs));
+}
+
+.ap-deal__name {
+  font-family: "Bungee", "Arial Black", sans-serif;
+  font-size: calc(9.5px * var(--ap-hs));
+  letter-spacing: 0.02em;
+  color: var(--deal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ap-deal__time {
+  font-family: var(--font-mono, monospace);
+  font-size: calc(10px * var(--ap-hs));
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.ap-deal__track {
+  margin-top: calc(4px * var(--ap-hs));
+  height: calc(4px * var(--ap-hs));
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.ap-deal__fill {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  background: var(--deal);
+  box-shadow: 0 0 calc(8px * var(--ap-hs)) var(--deal);
+  transform-origin: left center;
+}
+
+.ap-deal.is-ending { animation: apDealEnd 0.42s ease-in-out infinite alternate; }
+
+@keyframes apDealEnd {
+  from { opacity: 1; }
+  to { opacity: 0.45; }
+}
+
+/* ============================================================
+   BEAT + MOG
+   ============================================================ */
+
+.ap-rhythm {
+  position: absolute;
+  left: calc(20px * var(--ap-hs));
+  bottom: calc(20px * var(--ap-hs));
+  display: flex;
+  align-items: flex-end;
+  gap: calc(12px * var(--ap-hs));
+}
+
+.ap-beat {
+  position: relative;
+  width: calc(96px * var(--ap-hs));
+  height: calc(96px * var(--ap-hs));
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+
+/* The ring closes on the core across the beat. The player reads the
+   window by watching the gap shrink, not by reacting to a flash that
+   has already happened. */
+.ap-beat__ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(38px * var(--ap-hs));
+  height: calc(38px * var(--ap-hs));
+  margin: 0;
+  border-radius: 50%;
+  border: calc(2.5px * var(--ap-hs)) solid var(--ap-cyan);
+  box-shadow: 0 0 calc(12px * var(--ap-hs)) rgba(46, 224, 255, 0.7);
+}
+
+.ap-beat__core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(30px * var(--ap-hs));
+  height: calc(30px * var(--ap-hs));
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #fff, var(--ap-pink) 62%, #8c0b34);
+  box-shadow: 0 0 calc(14px * var(--ap-hs)) rgba(236, 26, 94, 0.75);
+}
+
+.ap-beat.is-hot .ap-beat__core {
+  background: radial-gradient(circle at 34% 30%, #fff, var(--ap-cyan) 58%, #0b6d8e);
+  box-shadow: 0 0 calc(20px * var(--ap-hs)) rgba(46, 224, 255, 0.95);
+}
+
+.ap-beat__pips {
+  position: absolute;
+  left: 50%;
+  bottom: calc(11px * var(--ap-hs));
+  transform: translateX(-50%);
+  display: flex;
+  gap: calc(4px * var(--ap-hs));
+}
+
+.ap-beat__pip {
+  width: calc(5px * var(--ap-hs));
+  height: calc(5px * var(--ap-hs));
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.ap-beat__pip.is-on {
+  background: var(--ap-cyan);
+  box-shadow: 0 0 calc(7px * var(--ap-hs)) var(--ap-cyan);
+}
+
+.ap-beat__label {
+  position: absolute;
+  left: 50%;
+  top: calc(11px * var(--ap-hs));
+  transform: translateX(-50%);
+  font-family: var(--font-mono, monospace);
+  font-size: calc(8.5px * var(--ap-hs));
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+}
+
+.ap-beat.is-hot .ap-beat__label { color: var(--ap-cyan); }
+
+.ap-mog {
+  position: relative;
+  padding: calc(8px * var(--ap-hs)) calc(12px * var(--ap-hs));
+  border-radius: calc(10px * var(--ap-hs));
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--ap-hs));
+}
+
+.ap-mog__label {
+  font-family: "Bungee", "Arial Black", sans-serif;
+  font-size: calc(11px * var(--ap-hs));
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ap-mog__track {
+  width: calc(132px * var(--ap-hs));
+  height: calc(9px * var(--ap-hs));
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.13);
+  overflow: hidden;
+  box-shadow: inset 0 calc(1px * var(--ap-hs)) calc(3px * var(--ap-hs)) rgba(0, 0, 0, 0.5);
+}
+
+.ap-mog__fill {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  transform-origin: left center;
+  background: linear-gradient(90deg, #ff5c8a, var(--ap-pink) 45%, var(--ap-gold));
+  box-shadow: 0 0 calc(10px * var(--ap-hs)) rgba(236, 26, 94, 0.8);
+}
+
+.ap-mog.is-full .ap-mog__fill { animation: apMogFull 0.5s ease-in-out infinite alternate; }
+
+@keyframes apMogFull {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.55); }
+}
+
+.ap-mog__key {
+  font-family: var(--font-mono, monospace);
+  font-size: calc(10px * var(--ap-hs));
+  padding: calc(2px * var(--ap-hs)) calc(6px * var(--ap-hs));
+  border-radius: calc(5px * var(--ap-hs));
+  background: rgba(255, 255, 255, 0.12);
+  border: calc(1px * var(--ap-hs)) solid rgba(255, 255, 255, 0.24);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.ap-mog__key.is-ready {
+  background: var(--ap-gold);
+  border-color: #fff;
+  color: #3a2600;
+  text-shadow: none;
+}
+
+/* ============================================================
+   TIMER, TOASTS, PROMPT
+   ============================================================ */
+
+.ap-timer {
+  position: absolute;
+  top: calc(18px * var(--ap-hs));
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: baseline;
+  gap: calc(9px * var(--ap-hs));
+  padding: calc(6px * var(--ap-hs)) calc(16px * var(--ap-hs));
+  border-radius: calc(999px * var(--ap-hs));
+}
+
+.ap-timer.is-up { display: flex; }
+
+.ap-timer__label {
+  font-family: var(--font-mono, monospace);
+  font-size: calc(10px * var(--ap-hs));
+  letter-spacing: 0.2em;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.ap-timer__value {
+  font-family: "Bungee", "Arial Black", sans-serif;
+  font-size: calc(22px * var(--ap-hs));
+  font-variant-numeric: tabular-nums;
+  color: var(--ap-cyan);
+}
+
+.ap-timer.is-urgent .ap-timer__value {
+  color: #ff3b30;
+  animation: apLowPulse 0.35s ease-in-out infinite alternate;
+}
+
+.ap-toasts {
+  position: absolute;
+  top: calc(80px * var(--ap-hs));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(7px * var(--ap-hs));
+  width: max-content;
+  max-width: 70%;
+}
+
+.ap-toast {
+  --toast-tint: var(--ap-pink);
+  padding: calc(8px * var(--ap-hs)) calc(18px * var(--ap-hs));
+  border-radius: calc(999px * var(--ap-hs));
+  text-align: center;
+  background: linear-gradient(180deg, rgba(20, 12, 28, 0.86), rgba(8, 6, 16, 0.86));
+  border: calc(1.5px * var(--ap-hs)) solid var(--toast-tint);
+  box-shadow:
+    0 calc(6px * var(--ap-hs)) calc(22px * var(--ap-hs)) rgba(0, 0, 0, 0.5),
+    0 0 calc(18px * var(--ap-hs)) color-mix(in srgb, var(--toast-tint) 45%, transparent);
+  animation: apToastIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: opacity 0.38s ease, transform 0.38s ease;
+}
+
+.ap-toast--gold { --toast-tint: var(--ap-gold); }
+.ap-toast--red { --toast-tint: #ff4d6d; }
+.ap-toast--blue { --toast-tint: var(--ap-cyan); }
+.ap-toast--platinum { --toast-tint: var(--ap-plat); }
+.ap-toast--deal { --toast-tint: var(--ap-cyan); }
+.ap-toast--warn { --toast-tint: #ff9f1c; }
+
+.ap-toast__text {
+  display: block;
+  font-family: "Bungee", "Arial Black", sans-serif;
+  font-size: calc(17px * var(--ap-hs));
+  letter-spacing: 0.03em;
+  color: var(--toast-tint);
+}
+
+.ap-toast.is-small .ap-toast__text { font-size: calc(12.5px * var(--ap-hs)); }
+
+.ap-toast__sub {
+  display: block;
+  margin-top: calc(2px * var(--ap-hs));
+  font-size: calc(11.5px * var(--ap-hs));
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ap-toast.is-out { opacity: 0; transform: translateY(calc(-10px * var(--ap-hs))); }
+
+@keyframes apToastIn {
+  from { opacity: 0; transform: translateY(calc(-16px * var(--ap-hs))) scale(0.9); }
+  to { opacity: 1; transform: none; }
+}
+
+.ap-prompt {
+  --open: 0;
+  position: absolute;
+  left: 50%;
+  bottom: calc(26px * var(--ap-hs));
+  display: none;
+  align-items: center;
+  gap: calc(10px * var(--ap-hs));
+  padding: calc(9px * var(--ap-hs)) calc(18px * var(--ap-hs));
+  border-radius: calc(999px * var(--ap-hs));
+  transform: translate(-50%, calc((1 - var(--open)) * 14px)) scale(calc(0.9 + var(--open) * 0.1));
+  opacity: var(--open);
+}
+
+.ap-prompt.is-up { display: flex; }
+
+.ap-prompt__key {
+  font-family: var(--font-mono, monospace);
+  font-size: calc(11px * var(--ap-hs));
+  font-weight: 700;
+  padding: calc(3px * var(--ap-hs)) calc(9px * var(--ap-hs));
+  border-radius: calc(6px * var(--ap-hs));
+  background: #fff;
+  color: #12080f;
+  text-shadow: none;
+  box-shadow: 0 calc(2px * var(--ap-hs)) 0 rgba(0, 0, 0, 0.45);
+}
+
+.ap-prompt__text {
+  font-size: calc(14.5px * var(--ap-hs));
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* ============================================================
+   COURSE TITLE CARD
+   ============================================================ */
+
+.ap-card {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  width: min(88%, calc(880px * var(--ap-hs)));
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.ap-card.is-up { opacity: 1; }
+
+.ap-card__kicker {
+  display: block;
+  font-family: var(--font-mono, monospace);
+  font-size: calc(13px * var(--ap-hs));
+  letter-spacing: 0.42em;
+  text-decoration: none;
+  color: var(--ap-cyan);
+  text-shadow: 0 0 calc(18px * var(--ap-hs)) rgba(46, 224, 255, 0.9), 0 calc(2px * var(--ap-hs)) 0 rgba(0, 0, 0, 0.7);
+}
+
+.ap-card__title {
+  display: block;
+  margin-top: calc(6px * var(--ap-hs));
+  font-family: "Bungee", "Arial Black", sans-serif;
+  font-size: calc(58px * var(--ap-hs));
+  line-height: 0.98;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-shadow:
+    0 calc(5px * var(--ap-hs)) 0 rgba(0, 0, 0, 0.55),
+    0 0 calc(36px * var(--ap-hs)) rgba(236, 26, 94, 0.85);
+}
+
+.ap-card__sub {
+  display: block;
+  margin-top: calc(10px * var(--ap-hs));
+  font-size: calc(16px * var(--ap-hs));
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+/* The slam. Overshoot and hard stop; a linear fade would read as a
+   web page rather than as a course intro. */
+.ap-card.is-in .ap-card__title { animation: apSlam 0.62s cubic-bezier(0.16, 1, 0.28, 1) both; }
+.ap-card.is-in .ap-card__kicker { animation: apWipe 0.5s 0.1s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.ap-card.is-in .ap-card__sub { animation: apWipe 0.5s 0.24s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes apSlam {
+  0% { opacity: 0; transform: scale(2.35); letter-spacing: 0.3em; filter: blur(calc(6px * var(--ap-hs))); }
+  55% { opacity: 1; filter: blur(0); }
+  75% { transform: scale(0.97); }
+  100% { opacity: 1; transform: scale(1); letter-spacing: 0.02em; filter: blur(0); }
+}
+
+@keyframes apWipe {
+  from { opacity: 0; transform: translateY(calc(14px * var(--ap-hs))); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ============================================================
+   OVERLAY MENUS
+   ============================================================ */
+
+.ap-overlay {
+  --ap-hs: 1;
+  --ap-pink: #ec1a5e;
+  --ap-cyan: #2ee0ff;
+  --ap-gold: #ffd23f;
+  --ap-plat: #e4ecf7;
+  font-family: "Inter", system-ui, sans-serif;
+  color: #fff;
+  text-shadow: 0 calc(2px * var(--ap-hs)) 0 rgba(0, 0, 0, 0.5);
+}
+
+/* Cinematic overlays sit on top of live gameplay and must not swallow
+   the pointer the way a real modal does. */
+.ap-overlay--passive { pointer-events: none; }
+
+.ap-menu__scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 50% 15%, rgba(236, 26, 94, 0.2), transparent 60%),
+    rgba(4, 4, 10, 0.62);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.ap-overlay.is-open .ap-menu__scrim { opacity: 1; }
+.ap-overlay--passive .ap-menu__scrim { opacity: 0; }
+
+.ap-menu {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.94);
+  width: min(86%, calc(560px * var(--ap-hs)));
+  padding: calc(26px * var(--ap-hs)) calc(30px * var(--ap-hs)) calc(24px * var(--ap-hs));
+  border-radius: calc(20px * var(--ap-hs));
+  text-align: center;
+  opacity: 0;
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(236, 26, 94, 0.24), transparent 62%),
+    linear-gradient(180deg, rgba(22, 14, 30, 0.95), rgba(8, 6, 14, 0.96));
+  border: calc(1.5px * var(--ap-hs)) solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 calc(24px * var(--ap-hs)) calc(70px * var(--ap-hs)) rgba(0, 0, 0, 0.65),
+    inset 0 calc(1px * var(--ap-hs)) 0 rgba(255, 255, 255, 0.18);
+  transition: opacity 0.28s ease, transform 0.34s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ap-menu.is-in { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+.ap-menu__kicker {
+  display: block;
+  font-family: var(--font-mono, monospace);
+  font-size: calc(11px * var(--ap-hs));
+  letter-spacing: 0.34em;
+  text-decoration: none;
+  color: var(--ap-cyan);
+}
+
+.ap-menu__title {
+  display: block;
+  margin-top: calc(6px * var(--ap-hs));
+  font-family: "Bungee", "Arial Black", sans-serif;
+  font-size: calc(38px * var(--ap-hs));
+  line-height: 1.02;
+  color: #fff;
+  text-shadow: 0 calc(4px * var(--ap-hs)) 0 rgba(0, 0, 0, 0.5), 0 0 calc(30px * var(--ap-hs)) rgba(236, 26, 94, 0.7);
+}
+
+.ap-menu__name {
+  display: block;
+  margin-top: calc(8px * var(--ap-hs));
+  font-size: calc(15px * var(--ap-hs));
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.ap-menu__count {
+  display: block;
+  margin-top: calc(12px * var(--ap-hs));
+  font-family: var(--font-mono, monospace);
+  font-size: calc(11.5px * var(--ap-hs));
+  letter-spacing: 0.18em;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.ap-menu__stats {
+  margin: calc(20px * var(--ap-hs)) 0 calc(6px * var(--ap-hs));
+  display: flex;
+  flex-direction: column;
+  gap: calc(2px * var(--ap-hs));
+}
+
+.ap-stat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(14px * var(--ap-hs));
+  padding: calc(8px * var(--ap-hs)) calc(12px * var(--ap-hs));
+  border-radius: calc(9px * var(--ap-hs));
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ap-stat:nth-child(odd) { background: rgba(255, 255, 255, 0.08); }
+
+.ap-stat__label {
+  font-family: var(--font-mono, monospace);
+  font-size: calc(11px * var(--ap-hs));
+  letter-spacing: 0.16em;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.ap-stat__value {
+  font-family: "Bungee", "Arial Black", sans-serif;
+  font-size: calc(19px * var(--ap-hs));
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.ap-stat--platinum .ap-stat__value { color: var(--ap-plat); }
+.ap-stat--gold .ap-stat__value { color: var(--ap-gold); }
+.ap-stat--cyan .ap-stat__value { color: var(--ap-cyan); }
+
+.ap-menu__actions {
+  margin-top: calc(20px * var(--ap-hs));
+  display: flex;
+  flex-direction: column;
+  gap: calc(9px * var(--ap-hs));
+}
+
+.ap-btn {
+  font-family: "Bungee", "Arial Black", sans-serif;
+  font-size: calc(15px * var(--ap-hs));
+  letter-spacing: 0.05em;
+  padding: calc(13px * var(--ap-hs)) calc(18px * var(--ap-hs));
+  border-radius: calc(12px * var(--ap-hs));
+  border: calc(1.5px * var(--ap-hs)) solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  text-shadow: 0 calc(2px * var(--ap-hs)) 0 rgba(0, 0, 0, 0.45);
+  transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s ease, border-color 0.2s ease;
+}
+
+.ap-btn:hover { transform: translateY(calc(-2px * var(--ap-hs))); background: rgba(255, 255, 255, 0.14); }
+.ap-btn:active { transform: translateY(calc(1px * var(--ap-hs))); }
+
+.ap-btn--primary {
+  background: linear-gradient(180deg, #ff4d7e, var(--ap-pink));
+  border-color: #ff9ab8;
+  box-shadow: 0 calc(5px * var(--ap-hs)) calc(20px * var(--ap-hs)) rgba(236, 26, 94, 0.5);
+}
+
+.ap-btn--ghost {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: calc(12.5px * var(--ap-hs));
+}
+
+.ap-menu__foot {
+  display: block;
+  margin-top: calc(14px * var(--ap-hs));
+  font-family: var(--font-mono, monospace);
+  font-size: calc(10.5px * var(--ap-hs));
+  font-style: normal;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.ap-menu__badges {
+  margin-top: calc(14px * var(--ap-hs));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: calc(6px * var(--ap-hs));
+}
+
+.ap-badge {
+  padding: calc(4px * var(--ap-hs)) calc(10px * var(--ap-hs));
+  border-radius: calc(999px * var(--ap-hs));
+  font-family: var(--font-mono, monospace);
+  font-size: calc(10.5px * var(--ap-hs));
+  letter-spacing: 0.1em;
+  background: rgba(255, 210, 63, 0.14);
+  border: calc(1px * var(--ap-hs)) solid rgba(255, 210, 63, 0.5);
+  color: var(--ap-gold);
+}
+
+/* ---------- the ceremony card ---------- */
+
+.ap-menu--record {
+  background:
+    radial-gradient(110% 70% at 50% 4%, rgba(228, 236, 247, 0.16), transparent 56%),
+    linear-gradient(180deg, rgba(18, 11, 24, 0.96), rgba(5, 4, 10, 0.97));
+  border-color: rgba(228, 236, 247, 0.42);
+}
+
+.ap-menu--record .ap-menu__title {
+  color: var(--ap-plat);
+  text-shadow: 0 calc(4px * var(--ap-hs)) 0 rgba(0, 0, 0, 0.5), 0 0 calc(38px * var(--ap-hs)) rgba(228, 236, 247, 0.9);
+}
+
+.ap-menu--record .ap-menu__kicker { color: rgba(255, 255, 255, 0.6); }
+
+.ap-bigdisc {
+  width: calc(150px * var(--ap-hs));
+  height: calc(150px * var(--ap-hs));
+  margin: 0 auto calc(12px * var(--ap-hs));
+  filter: drop-shadow(0 calc(10px * var(--ap-hs)) calc(26px * var(--ap-hs)) rgba(0, 0, 0, 0.6));
+  animation: apDiscSpin 6s linear infinite;
+}
+
+.ap-bigdisc svg { width: 100%; height: 100%; display: block; }
+.ap-bigdisc__groove { fill: none; stroke: rgba(52, 66, 88, 0.42); stroke-width: 1.1; }
+.ap-bigdisc__label { fill: var(--ap-pink); stroke: rgba(255, 255, 255, 0.5); stroke-width: 1.4; }
+.ap-bigdisc__hole { fill: #2b1420; }
+.ap-bigdisc__shine { fill: rgba(255, 255, 255, 0.55); }
+
+@keyframes apDiscSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.ap-menu__tally {
+  margin-top: calc(14px * var(--ap-hs));
+  display: flex;
+  justify-content: center;
+  gap: calc(6px * var(--ap-hs));
+}
+
+.ap-menu__tally .ap-pips__pip {
+  width: calc(13px * var(--ap-hs));
+  height: calc(13px * var(--ap-hs));
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.ap-menu__tally .ap-pips__pip.is-on {
+  background: var(--ap-plat);
+  box-shadow: 0 0 calc(12px * var(--ap-hs)) rgba(228, 236, 247, 0.9);
+}
+
+.ap-menu--locked {
+  border-color: rgba(255, 159, 28, 0.5);
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(255, 159, 28, 0.2), transparent 62%),
+    linear-gradient(180deg, rgba(24, 16, 12, 0.95), rgba(8, 6, 10, 0.96));
+}
+
+.ap-menu--locked .ap-menu__title { color: #ff9f1c; text-shadow: 0 calc(4px * var(--ap-hs)) 0 rgba(0, 0, 0, 0.5); }
+
+/* ---------- reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .ap-card.is-in .ap-card__title,
+  .ap-card.is-in .ap-card__kicker,
+  .ap-card.is-in .ap-card__sub,
+  .ap-count__gain.is-pop,
+  .ap-toast,
+  .ap-deal { animation-duration: 0.01ms; animation-iteration-count: 1; }
+  .ap-bigdisc,
+  .ap-power.is-low .ap-power__wedge,
+  .ap-mog.is-full .ap-mog__fill,
+  .ap-deal.is-ending,
+  .ap-timer.is-urgent .ap-timer__value { animation: none; }
+}

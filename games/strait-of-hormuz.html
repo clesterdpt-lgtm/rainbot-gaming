@@ -2,162 +2,259 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Escape the Straight — Rainbot Network</title>
   <link rel="manifest" href="../site.webmanifest" />
-  <meta name="theme-color" content="#05070d" />
+  <meta name="theme-color" content="#050a14" />
   <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/strait-of-hormuz.html" />
   <meta property="og:title" content="Escape the Straight — Rainbot Network" />
-  <meta property="og:description" content="Steer an overmatched tanker through endless Strait sectors where hazards unlock one level at a time, from mines to boss walls, with extremely questionable maritime audio." />
+  <meta property="og:description" content="Steer an oil tanker through the hostile Strait of Hormuz. Dodge anti-ship missiles, naval contact mines, and armed terrorist speedboats while collecting oil barrels!" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/strait-of-hormuz.html" />
   <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Escape the Straight — Rainbot Network" />
-  <meta name="twitter:description" content="Steer an overmatched tanker through endless Strait sectors where hazards unlock one level at a time, from mines to boss walls, with extremely questionable maritime audio." />
+  <meta name="twitter:description" content="Steer an oil tanker through the hostile Strait of Hormuz. Dodge anti-ship missiles, naval contact mines, and armed terrorist speedboats while collecting oil barrels!" />
   <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
-  <meta name="description" content="Steer an overmatched tanker through endless Strait sectors where hazards unlock one level at a time, from mines to boss walls, with extremely questionable maritime audio." />
+  <meta name="description" content="Steer an oil tanker through the hostile Strait of Hormuz. Dodge anti-ship missiles, naval contact mines, and armed terrorist speedboats while collecting oil barrels!" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
   <link rel="stylesheet" href="../assets/css/styles.css?v=20260812-game-chrome-2" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%231e3a5f'/%3E%3Ctext x='50' y='70' font-family='Arial Black' font-size='50' fill='%23fff' text-anchor='middle'%3E%E2%9B%B4%3C/text%3E%3C/svg%3E" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230a1c2e'/%3E%3Ctext x='50' y='70' font-family='Arial Black' font-size='50' fill='%232ee0ff' text-anchor='middle'%3E%E2%9B%B4%3C/text%3E%3C/svg%3E" />
   <style>
-    /* ===== New game-specific styles for the continuous-dodger ===== */
-    .hull-pips { display:inline-flex; gap:4px; }
-    .hull-pip {
-      width: 14px; height: 14px; border-radius: 50%;
-      background: var(--good); box-shadow: 0 0 6px rgba(107,255,125,0.6);
-      transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
-    }
-    .hull-pip[data-state="damaged"] { background: var(--accent-3); box-shadow: 0 0 4px rgba(247,215,22,0.4); }
-    .hull-pip[data-state="critical"] { background: var(--bad); box-shadow: 0 0 6px rgba(255,92,92,0.7); animation: pipPulse 0.6s infinite; }
-    .hull-pip[data-state="lost"]   { background: #333; box-shadow: none; transform: scale(0.7); }
-    @keyframes pipPulse { 50% { transform: scale(1.2); } }
-
-    .wipeout-card {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      background: var(--bg-soft);
-      border: 3px solid var(--accent);
-      border-radius: var(--r);
-      padding: 28px;
-      max-width: 520px; width: 92%;
-      box-shadow: 0 0 60px rgba(255,46,136,0.5);
-      z-index: 10;
-      text-align: center;
-    }
-    .wipeout-card__death {
-      font-family: var(--font-display);
-      font-size: 22px; line-height: 1.2;
-      color: var(--accent); margin: 0 0 12px;
-      text-shadow: 2px 2px 0 #000;
-    }
-    .wipeout-card__stats {
-      font-family: var(--font-mono);
-      font-size: 13px; color: var(--ink-dim);
-      margin: 0 0 18px;
-    }
-    .wipeout-card__stats strong { color: var(--accent-3); font-size: 18px; }
-    .wipeout-card__caption {
-      font-family: var(--font-display);
-      font-size: 16px; color: var(--ink);
-      background: var(--panel);
-      padding: 10px 14px; border-radius: 6px;
-      margin: 0 0 18px;
-      border-left: 4px solid var(--accent-2);
-    }
-    .wipeout-card__actions {
-      display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+    /* ==========================================================================
+       TACTICAL MARITIME STYLES — ESCAPE THE STRAIT OF HORMUZ
+       ========================================================================== */
+    .strait-page {
+      --strait-blue: #09546f;
+      --strait-cyan: #2ee0ff;
+      --strait-amber: #ffd43b;
+      --strait-red: #ff3b56;
+      --strait-green: #4ade80;
+      --strait-dark: #050a14;
     }
 
-    .gate-card {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(10,10,20,0.95);
-      border: 3px solid var(--accent-3);
-      border-radius: var(--r);
-      padding: clamp(14px, 3vw, 22px);
-      max-width: 560px; width: min(94%, 560px);
-      max-height: calc(100% - 24px);
-      overflow-y: auto;
-      overscroll-behavior: contain;
-      box-shadow: 0 0 50px rgba(247,215,22,0.4);
-      z-index: 9;
-      text-align: center;
+    .strait-page .game-stage {
+      background: radial-gradient(circle at 50% 30%, rgba(14, 43, 68, 0.45), rgba(3, 8, 16, 0.95)), #030810;
+      border-color: rgba(46, 224, 255, 0.25);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 60px rgba(9, 84, 111, 0.15);
     }
-    .gate-card__title {
-      font-family: var(--font-display);
-      font-size: clamp(16px, 3vw, 21px); color: var(--accent-3);
-      line-height: 1.12;
-      margin: 0 0 6px; letter-spacing: 0;
-    }
-    .gate-card__sub {
-      font-size: 13px; color: var(--ink-dim);
-      margin: 0 0 12px;
-    }
-    .gate-card__grid {
+
+    /* Tactical HUD */
+    .strait-hud {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 10px;
-      margin: 12px 0 14px;
+      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      gap: 6px;
+      padding: 10px 14px;
+      background: rgba(5, 12, 22, 0.92);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(46, 224, 255, 0.22);
+      border-radius: var(--r);
+      margin-bottom: 10px;
     }
-    .gate-card__option {
-      background: var(--panel);
-      border: 2px solid var(--panel-2);
-      border-radius: 8px;
-      padding: 11px;
-      cursor: pointer;
-      transition: all 0.15s ease;
-      text-align: left;
-    }
-    .gate-card__option:hover {
-      border-color: var(--accent-2);
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(46,224,255,0.3);
-    }
-    .gate-card__option-icon { font-size: 26px; display: block; margin-bottom: 5px; }
-    .gate-card__option-name {
-      font-family: var(--font-display);
-      font-size: 13px; color: var(--accent-3);
-      margin: 0 0 4px; letter-spacing: 0.5px;
-      line-height: 1.15;
-    }
-    .gate-card__option-desc {
-      font-size: 11px; color: var(--ink-dim);
-      line-height: 1.3; margin: 0;
-    }
-    .gate-card__ad-hint {
-      font-size: 11px; color: var(--ink-dim); margin-bottom: 10px;
-    }
-    .gate-card__skip {
-      font-size: 12px; color: var(--ink-dim);
-      background: none; border: none;
-      cursor: pointer; text-decoration: underline;
-      font-family: var(--font-body);
-    }
-    .gate-card__skip:hover { color: var(--accent); }
 
-    .boss-honkhud {
-      position: absolute; top: 12px; left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.7);
-      border: 2px solid var(--accent-2);
-      border-radius: 8px;
-      padding: 8px 16px;
+    .strait-hud__item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 6px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+    }
+
+    .strait-hud__label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: rgba(255, 255, 255, 0.55);
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .strait-hud__value {
       font-family: var(--font-mono);
       font-size: 14px;
-      color: var(--accent-2);
+      font-weight: 800;
+      color: var(--ink);
+    }
+
+    .strait-hud__value--cyan { color: var(--strait-cyan); text-shadow: 0 0 10px rgba(46, 224, 255, 0.4); }
+    .strait-hud__value--amber { color: var(--strait-amber); text-shadow: 0 0 10px rgba(255, 212, 59, 0.4); }
+    .strait-hud__value--green { color: var(--strait-green); }
+
+    /* Hull Health Pips */
+    .hull-pips {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .hull-pip {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      background: var(--strait-green);
+      box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      transition: all 0.2s ease;
+    }
+
+    .hull-pip[data-state="damaged"] {
+      background: var(--strait-amber);
+      box-shadow: 0 0 6px rgba(255, 212, 59, 0.5);
+    }
+
+    .hull-pip[data-state="critical"] {
+      background: var(--strait-red);
+      box-shadow: 0 0 10px rgba(255, 59, 86, 0.8);
+      animation: pipWarn 0.6s infinite alternate;
+    }
+
+    .hull-pip[data-state="lost"] {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
+      box-shadow: none;
+      transform: scale(0.85);
+    }
+
+    @keyframes pipWarn {
+      0% { transform: scale(1); opacity: 0.7; }
+      100% { transform: scale(1.15); opacity: 1; }
+    }
+
+    /* Sector Banner Notification */
+    .sector-banner {
+      position: absolute;
+      top: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(3, 9, 18, 0.9);
+      border: 2px solid var(--strait-cyan);
+      border-radius: 8px;
+      padding: 10px 24px;
+      font-family: var(--font-display);
+      font-size: clamp(14px, 3.5vw, 20px);
+      letter-spacing: 1.5px;
+      color: var(--strait-cyan);
+      text-shadow: 0 0 14px rgba(46, 224, 255, 0.7);
+      box-shadow: 0 0 30px rgba(46, 224, 255, 0.25);
       z-index: 5;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -20px) scale(0.9);
+      transition: all 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
     }
 
-    .strait-sound-btn[aria-pressed="false"] {
-      border-color: var(--bad);
-      color: var(--bad);
+    .sector-banner.is-active {
+      opacity: 1;
+      transform: translate(-50%, 0) scale(1);
     }
 
+    /* Near Miss / Score Popup */
+    .combo-toast {
+      position: absolute;
+      top: 110px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: var(--font-display);
+      font-size: 15px;
+      color: var(--strait-amber);
+      text-shadow: 0 2px 4px #000, 0 0 12px rgba(255, 212, 59, 0.8);
+      z-index: 5;
+      pointer-events: none;
+      opacity: 0;
+      transition: all 0.3s ease;
+    }
+
+    .combo-toast.is-active {
+      opacity: 1;
+      transform: translate(-50%, -8px);
+    }
+
+    /* Tactical Debrief / Wipeout Card */
+    .wipeout-card {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(4, 10, 20, 0.96);
+      border: 2px solid var(--strait-red);
+      border-radius: var(--r);
+      padding: 24px 20px;
+      max-width: 480px;
+      width: min(92%, 480px);
+      box-shadow: 0 0 60px rgba(255, 59, 86, 0.35), 0 12px 36px rgba(0, 0, 0, 0.8);
+      z-index: 10;
+      text-align: center;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .wipeout-card__title {
+      font-family: var(--font-display);
+      font-size: clamp(18px, 4vw, 24px);
+      color: var(--strait-red);
+      margin: 0 0 6px;
+      text-shadow: 0 0 12px rgba(255, 59, 86, 0.5);
+    }
+
+    .wipeout-card__cause {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.8);
+      margin: 0 0 16px;
+      background: rgba(255, 59, 86, 0.12);
+      border: 1px solid rgba(255, 59, 86, 0.3);
+      padding: 6px 12px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+
+    .wipeout-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 0 0 18px;
+      text-align: left;
+    }
+
+    .wipeout-grid__item {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+
+    .wipeout-grid__label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 800;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+    }
+
+    .wipeout-grid__val {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--ink);
+    }
+
+    .wipeout-card__actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* Mini HUD (Mobile / Fullscreen) */
     .strait-mini-hud {
       position: absolute;
-      left: 58px;
-      right: 58px;
+      left: 12px;
+      right: 54px;
       top: 10px;
       z-index: 6;
       display: none;
@@ -166,164 +263,241 @@
       gap: 6px;
       pointer-events: none;
     }
+
     .strait-mini-hud span {
-      background: rgba(5, 7, 15, 0.52);
-      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(4, 10, 20, 0.85);
+      border: 1px solid rgba(46, 224, 255, 0.3);
       border-radius: 999px;
       color: var(--ink);
       font-family: var(--font-mono);
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 800;
-      padding: 5px 8px;
-      text-shadow: 0 1px 0 rgba(0,0,0,0.65);
-      white-space: nowrap;
+      padding: 4px 10px;
+      backdrop-filter: blur(4px);
     }
+
     .strait-mini-hud b {
-      color: var(--accent-3);
-      font-weight: 800;
+      color: var(--strait-cyan);
     }
+
     @media (max-width: 900px) {
       .strait-mini-hud { display: flex; }
+      .strait-hud { display: none; }
     }
     .canvas-wrap.is-maxed .strait-mini-hud { display: flex; }
+    .canvas-wrap.is-maxed .strait-hud { display: none; }
 
-    @media (max-width: 520px), (max-height: 620px) {
-      .gate-card {
-        width: calc(100% - 20px);
-        max-height: calc(100% - 20px);
-        padding: 12px;
-      }
-      .gate-card__sub,
-      .gate-card__ad-hint,
-      .gate-card__option-desc {
-        display: none;
-      }
-      .gate-card__grid {
-        grid-template-columns: 1fr;
-        gap: 8px;
-        margin: 10px 0;
-      }
-      .gate-card__option {
-        display: grid;
-        grid-template-columns: 34px 1fr;
-        align-items: center;
-        gap: 8px;
-        min-height: 48px;
-      }
-      .gate-card__option-icon {
-        margin: 0;
-        text-align: center;
-      }
+    /* Touch Controls */
+    .rb-touch-layer--strait {
+      display: none;
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 8;
     }
 
-    .rb-touch-layer--strait .rb-touch-cluster--right {
-      align-items: flex-end;
-      flex-direction: column;
+    @media (hover: none) and (pointer: coarse) {
+      .rb-touch-layer--strait { display: flex; }
     }
+    .canvas-wrap.is-maxed .rb-touch-layer--strait { display: flex; }
 
-    .rb-touch-layer--strait .rb-touch-btn {
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      text-shadow: 0 1px 0 rgba(0,0,0,0.45);
-    }
-
-    .phase-banner {
-      position: absolute; top: 60px; left: 50%;
-      transform: translateX(-50%);
-      font-family: var(--font-display);
-      font-size: 28px; letter-spacing: 2px;
-      color: var(--accent); text-shadow: 3px 3px 0 #000;
-      z-index: 4; pointer-events: none;
-      opacity: 0; transition: opacity 0.5s;
-    }
-    .phase-banner--show { opacity: 1; animation: bannerPulse 2s ease-out; }
-    @keyframes bannerPulse {
-      0% { opacity: 0; transform: translateX(-50%) scale(0.7); }
-      20% { opacity: 1; transform: translateX(-50%) scale(1.1); }
-      80% { opacity: 1; }
-      100% { opacity: 0; transform: translateX(-50%) scale(1); }
-    }
-
-    .dpad--continuous {
+    .strait-touch-dpad {
+      position: absolute;
+      left: 14px;
+      bottom: 14px;
       display: grid;
-      grid-template-columns: 60px 60px 60px;
-      grid-template-rows: 60px 60px;
-      gap: 4px;
-      justify-content: center;
+      grid-template-columns: 56px 56px 56px;
+      grid-template-rows: 56px 56px;
+      gap: 6px;
+      pointer-events: auto;
     }
-    .dpad--continuous button {
-      background: var(--panel); color: var(--ink);
-      border: 2px solid var(--panel-2);
-      border-radius: 8px;
-      font-size: 22px; cursor: pointer;
-      touch-action: none;
+
+    .strait-touch-actions {
+      position: absolute;
+      right: 14px;
+      bottom: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: flex-end;
+      pointer-events: auto;
     }
-    .dpad--continuous button[data-ctrl="horn"] {
+
+    .strait-touch-btn {
+      background: rgba(7, 18, 32, 0.82);
+      border: 2px solid rgba(46, 224, 255, 0.35);
+      border-radius: 12px;
+      color: var(--ink);
       font-family: var(--font-display);
-      font-size: 12px;
-      letter-spacing: 0;
-      overflow: hidden;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      transition: all 0.1s ease;
     }
-    .dpad--continuous button:active { background: var(--accent-2); color: var(--bg); }
+
+    .strait-touch-btn:active {
+      background: rgba(46, 224, 255, 0.3);
+      border-color: var(--strait-cyan);
+      transform: scale(0.95);
+    }
+
+    .strait-touch-btn--flare {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255, 212, 59, 0.3), rgba(255, 59, 86, 0.2));
+      border: 2px solid var(--strait-amber);
+      color: var(--strait-amber);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      box-shadow: 0 0 16px rgba(255, 212, 59, 0.35);
+    }
+
+    .strait-touch-btn--flare:active {
+      background: var(--strait-amber);
+      color: #000;
+    }
+
+    /* Powerups Tray */
+    .strait-powerups {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .strait-pitem {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    .strait-pitem__left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .strait-pitem__icon {
+      font-size: 16px;
+    }
+
+    .strait-pitem__status {
+      font-weight: 800;
+      color: var(--strait-cyan);
+    }
+
+    .strait-pitem--inactive {
+      opacity: 0.5;
+    }
   </style>
 </head>
-<body>
+<body class="strait-page">
   <nav class="nav"><div id="nav-slot"></div></nav>
 
   <main class="game-page">
     <div class="game-page__header">
       <div>
         <h1 class="game-page__title">⛴ Escape the Straight</h1>
-        <div class="game-page__sub">Arrow keys / WASD · Hold to steer · Space = horn · New hazard each sector</div>
+        <div class="game-page__sub">Steer through the Strait of Hormuz · Dodge missiles, mines & terrorists · Collect oil barrels</div>
       </div>
       <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
     </div>
 
     <div class="game-layout">
       <div class="game-stage" style="position:relative;">
-        <div class="hud">
-          <div class="hud__item"><span class="hud__label">SCORE</span><span class="hud__value" id="hud-score">0</span></div>
-          <div class="hud__item"><span class="hud__label">RUN</span><span class="hud__value" id="hud-dist">0.0 NM</span></div>
-          <div class="hud__item"><span class="hud__label">SECTOR</span><span class="hud__value" id="hud-sector">1</span></div>
-          <div class="hud__item"><span class="hud__label">HULL</span><span class="hud__value hull-pips" id="hud-hull"></span></div>
-          <div class="hud__item"><span class="hud__label">PHASE</span><span class="hud__value" id="hud-phase">1</span></div>
-          <div class="hud__item"><span class="hud__label">THREAT</span><span class="hud__value" id="hud-threat">1.0x</span></div>
-          <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">0</span></div>
+        
+        <!-- Desktop Tactical HUD -->
+        <div class="strait-hud">
+          <div class="strait-hud__item">
+            <span class="strait-hud__label">SCORE</span>
+            <span class="strait-hud__value strait-hud__value--cyan" id="hud-score">0</span>
+          </div>
+          <div class="strait-hud__item">
+            <span class="strait-hud__label">DISTANCE</span>
+            <span class="strait-hud__value" id="hud-dist">0.0 NM</span>
+          </div>
+          <div class="strait-hud__item">
+            <span class="strait-hud__label">SECTOR</span>
+            <span class="strait-hud__value strait-hud__value--amber" id="hud-sector">1</span>
+          </div>
+          <div class="strait-hud__item">
+            <span class="strait-hud__label">HULL INTEGRITY</span>
+            <span class="strait-hud__value hull-pips" id="hud-hull">
+              <span class="hull-pip"></span>
+              <span class="hull-pip"></span>
+              <span class="hull-pip"></span>
+            </span>
+          </div>
+          <div class="strait-hud__item">
+            <span class="strait-hud__label">CARGO MULTIPLIER</span>
+            <span class="strait-hud__value strait-hud__value--green" id="hud-multiplier">1.0x</span>
+          </div>
+          <div class="strait-hud__item">
+            <span class="strait-hud__label">THREAT</span>
+            <span class="strait-hud__value" id="hud-threat">DEFCON 5</span>
+          </div>
+          <div class="strait-hud__item">
+            <span class="strait-hud__label">HIGH SCORE</span>
+            <span class="strait-hud__value" id="hud-high">0</span>
+          </div>
         </div>
 
         <div class="canvas-wrap canvas-wrap--ar-585-720">
-          <canvas id="gameCanvas" width="585" height="720" tabindex="0"></canvas>
+          <canvas id="gameCanvas" width="585" height="720" tabindex="0" aria-label="Escape the Straight game canvas"></canvas>
           <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
+          
+          <!-- Compact Mini HUD for Mobile & Max Screen -->
           <div class="strait-mini-hud" id="strait-mini-hud" aria-hidden="true">
-            <span>SC <b id="mini-score">0</b></span>
-            <span>S <b id="mini-sector">1</b></span>
-            <span>HL <b id="mini-hull">3</b></span>
+            <span>SCORE <b id="mini-score">0</b></span>
+            <span>SEC <b id="mini-sector">1</b></span>
+            <span>DIST <b id="mini-dist">0.0 NM</b></span>
+            <span>HULL <b id="mini-hull">3/3</b></span>
           </div>
 
-          <div class="phase-banner" id="phase-banner">PHASE 1 · OPEN WATER</div>
-          <div class="boss-honkhud" id="boss-honkhud" style="display:none;">HONK! <span id="honk-count">0/5</span></div>
+          <!-- Sector & Combo Notifications -->
+          <div class="sector-banner" id="sector-banner">SECTOR 1: GULF APPROACH</div>
+          <div class="combo-toast" id="combo-toast">⚡ NEAR MISS! +150</div>
 
+          <!-- Start / Pause / Ready Overlay -->
           <div class="overlay overlay--show" id="overlay">
-            <h2 class="overlay__title" id="overlay-title">⛴ READY?</h2>
-            <p class="overlay__sub" id="overlay-sub">You're the <strong style="color:var(--accent-3)">SST Patience</strong> — a 2-million-barrel VLCC held together by gaffer tape and prayers. Sector 1 starts with mines; later sectors unlock nastier hazards, then boss walls.</p>
+            <h2 class="overlay__title" id="overlay-title">⛴ STRAIT OF HORMUZ</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              Steer the supertanker through hostile waters. Dodge incoming <strong style="color:var(--strait-red)">anti-ship missiles</strong>, floating <strong style="color:var(--strait-amber)">naval mines</strong>, and aggressive <strong style="color:var(--strait-red)">terrorist speedboats</strong>. Collect <strong style="color:var(--strait-green)">oil barrels</strong> to multiply your score and grab <strong style="color:var(--strait-cyan)">repair crates</strong> to patch the hull!
+            </p>
             <div class="overlay__score" id="overlay-score"></div>
-            <button class="btn btn--primary" id="btn-primary">Start voyage</button>
+            <button class="btn btn--primary" id="btn-primary" style="font-size:16px;padding:12px 28px;">Start Voyage</button>
           </div>
 
+          <!-- End of Voyage / Wipeout Card Mount -->
           <div id="wipeout-mount"></div>
-          <div id="gate-mount"></div>
 
-          <div class="rb-touch-layer rb-touch-layer--strait" id="strait-touch-layer" data-strait-controls aria-label="Touch controls">
-            <div class="rb-touch-dpad">
-              <button class="rb-touch-btn" data-ctrl="thrust" aria-label="Throttle">▲</button>
-              <button class="rb-touch-btn" data-ctrl="left" aria-label="Left">◀</button>
-              <button class="rb-touch-btn rb-touch-btn--yellow" data-ctrl="horn" aria-label="Horn">HORN</button>
-              <button class="rb-touch-btn" data-ctrl="right" aria-label="Right">▶</button>
-              <button class="rb-touch-btn" data-ctrl="brake" aria-label="Brake">▼</button>
+          <!-- Mobile On-Screen Touch Controls -->
+          <div class="rb-touch-layer--strait" id="strait-touch-layer" data-strait-controls aria-label="Touch controls">
+            <div class="strait-touch-dpad">
+              <div></div>
+              <button class="strait-touch-btn" data-ctrl="thrust" aria-label="Forward throttle">▲</button>
+              <div></div>
+              <button class="strait-touch-btn" data-ctrl="left" aria-label="Steer left">◀</button>
+              <button class="strait-touch-btn" data-ctrl="brake" aria-label="Brake or reverse">▼</button>
+              <button class="strait-touch-btn" data-ctrl="right" aria-label="Steer right">▶</button>
             </div>
-            <div class="rb-touch-cluster rb-touch-cluster--right">
-              <button class="rb-touch-btn rb-touch-btn--wide rb-touch-btn--accent" data-ctrl="pause" aria-label="Pause">PAUSE</button>
-              <button class="rb-touch-btn rb-touch-btn--wide rb-touch-btn--primary" data-ctrl="sound" aria-label="Sound">SOUND</button>
+            <div class="strait-touch-actions">
+              <button class="strait-touch-btn strait-touch-btn--flare" data-ctrl="horn" aria-label="Horn and counter-flares">HORN<br/><span style="font-size:9px;">FLARES</span></button>
+              <button class="strait-touch-btn" data-ctrl="pause" aria-label="Pause game" style="width:76px;height:40px;font-size:12px;">PAUSE</button>
             </div>
           </div>
         </div>
@@ -333,41 +507,64 @@
       <aside class="game-side">
         <div class="game-side__panel">
           <h3 class="game-side__title">CONTROLS</h3>
-          <div class="controls-row" style="margin-bottom: 8px;">
+          <div class="controls-row" style="margin-bottom: 10px;">
             <button class="btn btn--secondary" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
             <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
             <button class="btn btn--ghost strait-sound-btn" id="btn-sound" aria-pressed="true" style="font-size:13px;padding:8px 12px;">Sound on</button>
           </div>
-          <!-- Continuous d-pad (mobile) — left side steer, right side throttle/horn -->
           <div class="dpad dpad--continuous" id="dpad" data-strait-controls aria-label="Controls" style="margin: 0 auto;">
             <div></div>
-            <button data-ctrl="thrust" aria-label="Throttle">▲</button>
+            <button class="strait-touch-btn" data-ctrl="thrust" aria-label="Throttle" style="height:48px;font-size:18px;">▲</button>
             <div></div>
-            <button data-ctrl="left" aria-label="Left">◀</button>
-            <button data-ctrl="horn" aria-label="Horn" style="background:var(--accent);color:var(--bg);">HORN</button>
-            <button data-ctrl="right" aria-label="Right">▶</button>
+            <button class="strait-touch-btn" data-ctrl="left" aria-label="Left" style="height:48px;font-size:18px;">◀</button>
+            <button class="strait-touch-btn" data-ctrl="horn" aria-label="Horn and flares" style="height:48px;background:var(--accent);color:#000;font-size:11px;font-weight:900;">HORN</button>
+            <button class="strait-touch-btn" data-ctrl="right" aria-label="Right" style="height:48px;font-size:18px;">▶</button>
             <div></div>
-            <button data-ctrl="brake" aria-label="Brake">▼</button>
+            <button class="strait-touch-btn" data-ctrl="brake" aria-label="Brake" style="height:48px;font-size:18px;">▼</button>
             <div></div>
           </div>
         </div>
 
         <div class="game-side__panel">
-          <h3 class="game-side__title">POWER-UPS</h3>
-          <div class="powerups" id="powerups"></div>
+          <h3 class="game-side__title">SHIP STATUS & POWERUPS</h3>
+          <div class="strait-powerups" id="powerups">
+            <div class="strait-pitem strait-pitem--inactive" id="pitem-shield">
+              <div class="strait-pitem__left">
+                <span class="strait-pitem__icon">🛡️</span>
+                <span>Naval Deflector</span>
+              </div>
+              <span class="strait-pitem__status" id="pstat-shield">OFFLINE</span>
+            </div>
+            <div class="strait-pitem strait-pitem--inactive" id="pitem-turbo">
+              <div class="strait-pitem__left">
+                <span class="strait-pitem__icon">⚡</span>
+                <span>Turbo Propeller</span>
+              </div>
+              <span class="strait-pitem__status" id="pstat-turbo">OFFLINE</span>
+            </div>
+            <div class="strait-pitem strait-pitem--inactive" id="pitem-flares">
+              <div class="strait-pitem__left">
+                <span class="strait-pitem__icon">✨</span>
+                <span>Countermeasure Flares</span>
+              </div>
+              <span class="strait-pitem__status" id="pstat-flares">READY</span>
+            </div>
+          </div>
         </div>
 
         <div id="ad-leaderboard"></div>
 
-        <details class="game-side__howto">
-          <summary>How to play</summary>
+        <details class="game-side__howto" open>
+          <summary>Mission Briefing</summary>
           <ul>
-            <li><strong style="color:var(--ink);">Steer</strong> with A/D or ←/→ — hold for continuous turning.</li>
-            <li><strong style="color:var(--ink);">Throttle</strong> with W/↑, brake with S/↓.</li>
-            <li><strong style="color:var(--ink);">Horn</strong> (Space) clears nearby hazards and forces boss ships to move.</li>
-            <li><strong style="color:var(--ink);">Take 3 hits</strong> and you explode. Share the wipeout card.</li>
-            <li><strong style="color:var(--ink);">Survive sectors</strong> that unlock one new hazard family at a time.</li>
-            <li><strong style="color:var(--ink);">Ad walls</strong> later in each sector offer temporary upgrades.</li>
+            <li><strong style="color:var(--ink);">Steer Boat</strong>: Use <strong>A / D</strong> or <strong>← / →</strong> (hold to steer into turns).</li>
+            <li><strong style="color:var(--ink);">Throttle & Brake</strong>: Use <strong>W / ↑</strong> to accelerate, <strong>S / ↓</strong> to brake/reverse.</li>
+            <li><strong style="color:var(--ink);">Horn & Flares</strong>: Press <strong>Spacebar</strong> or the <strong>HORN</strong> button to trigger acoustic shockwaves that clear mines and deflect incoming missiles.</li>
+            <li><strong style="color:var(--strait-red);">Naval Contact Mines</strong>: Floating spiked mines bobbing in water. Direct hit causes hull explosion.</li>
+            <li><strong style="color:var(--strait-amber);">Anti-Ship Missiles</strong>: Fast coastal missiles. Watch for red laser targeting beams on the water before impact!</li>
+            <li><strong style="color:var(--strait-red);">Terrorist Speedboats</strong>: Fast hostile skiffs that flank and fire tracer bursts. Dodge their fire or blast them with flares.</li>
+            <li><strong style="color:var(--strait-green);">Oil Barrels (🛢️)</strong>: Collect floating barrels to boost score and charge your Cargo Multiplier!</li>
+            <li><strong style="color:var(--strait-cyan);">Repair Kits (🧰)</strong>: Restores 1 lost Hull pip.</li>
           </ul>
         </details>
       </aside>
@@ -380,12 +577,12 @@
       <a href="../games.html">All games</a>
       <a href="../legal/privacy.html">Privacy</a>
     </div>
-    <div>© 2026 Rainbot Network. Parody. No real tankers were harmed.</div>
+    <div>© 2026 Rainbot Network. Tactical Maritime Simulation.</div>
   </footer>
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
-  <script src="../assets/js/main.js?v=20260812-game-chrome-1"></script>
-  <script src="../assets/js/strait-of-hormuz.js?v=20260717-max-ui"></script>
+  <script src="../assets/js/main.js?v=20260813-apop3d-1"></script>
+  <script src="../assets/js/strait-of-hormuz.js?v=20260814-v5-pro"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
   </script>

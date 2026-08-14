@@ -155,7 +155,7 @@ const RB_SCORE_TITLE_OVERRIDES = {
 const RB_GAME_VISUALS = {
   "again": { image: "assets/img/mockup/card-again.jpg?v=20260712-jpg", kind: "Horror" },
   "ai-slop-factory": { image: "assets/img/mockup/card-ai-slop-factory.jpg?v=20260712-jpg", kind: "Arcade" },
-  "apop-demon-hunters": { image: "assets/img/mockup/card-apop-moggers-v3.jpg?v=20260712-jpg", kind: "Side-scroller" },
+  "apop-demon-hunters": { image: "assets/img/mockup/card-apop-moggers-v3.jpg?v=20260712-jpg", kind: "3D Platformer" },
   "big-baby-bum": { image: "assets/img/mockup/card-big-baby-bum-ai-v4.jpg?v=20260712-jpg", kind: "3D Katamari", alt: "Big Baby Bum cover art — a realistic cartoon diapered baby rolls through a sunny neighborhood while broccoli flees" },
   "billionaire-space-race": { image: "assets/img/mockup/card-billionaire-space-race.jpg?v=20260712-jpg", kind: "Lander" },
   "boomer-monopoly": { image: "assets/img/mockup/card-boomer-monopoly.jpg?v=20260712-jpg", kind: "Board" },
@@ -271,7 +271,7 @@ const RB_GAME_SEARCH_TEXT = {
   "mr-feast-mansion": "Mr Feast Last to Leave reality show competition stealth horror mansion investigation sabotage cameras",
   "looksmaxxing-grindset": "Looksmaxxing Grindset idle sim gym mewing water",
   "boomer-monopoly": "Boomer Monopoly housing board game parody",
-  "apop-demon-hunters": "Apop Demon Moggers side-scroller platformer pop action boyz ii hell",
+  "apop-demon-hunters": "Apop Demon Moggers 3D platformer collectathon pop action boyz ii hell moggadonna lucifer lipsync",
   "skibidi-toilet-tower-defense": "Skibidi Toilet Tower Defense toilets towers camera speaker plunger",
   saintfall: "Saintfall Vesper IX gilded silence open level third person desert pilgrimage cathedral reliquary fallen colossus gothic sci fi action exploration",
   "dont-look-gym-girl": "Don't Look at the Gym Girl stealth awkward parody",

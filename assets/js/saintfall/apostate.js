@@ -124,6 +124,81 @@ function segment(THREE, a, b, r0, r1, material, sides = 7) {
   return mesh;
 }
 
+/** A thin, tapered wasp wing with a readable chitin vein structure. */
+function makeWaspWing(THREE, side, length, width, lift, membrane, vein, index) {
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 0);
+  shape.bezierCurveTo(
+    side * length * 0.22, lift + width * 0.55,
+    side * length * 0.72, lift + width * 0.42,
+    side * length, lift
+  );
+  shape.bezierCurveTo(
+    side * length * 0.88, lift - width * 0.62,
+    side * length * 0.36, lift - width * 0.76,
+    0, 0
+  );
+  const group = new THREE.Group();
+  group.name = `apostate-wasp-wing-${side < 0 ? "left" : "right"}-${index}`;
+  group.userData.apostateFeature = "wasp-wing";
+
+  const sail = new THREE.Mesh(new THREE.ShapeGeometry(shape, 8), membrane);
+  sail.name = `${group.name}-membrane`;
+  sail.position.z = -0.012 * index;
+  sail.castShadow = false;
+  sail.receiveShadow = false;
+  group.add(sail);
+
+  const veinTargets = [
+    [side * length * 0.92, lift + width * 0.02, 0.008],
+    [side * length * 0.66, lift + width * 0.30, 0.009],
+    [side * length * 0.62, lift - width * 0.40, 0.009],
+  ];
+  for (const target of veinTargets) {
+    const rib = segment(THREE, [0, 0, 0.010], target, 0.008, 0.003, vein, 5);
+    rib.castShadow = false;
+    rib.receiveShadow = false;
+    group.add(rib);
+  }
+  return group;
+}
+
+/** Repaint a cloned, vertex-painted prop without flattening its authored
+ *  value variation. cloneVisual shares geometry with the player, so the
+ *  geometry copy is mandatory: the Apostate's corruption must never recolour
+ *  Vesper's own Censer-Lance. */
+function repaintVertexRamp(THREE, node, darkHex, lightHex, family) {
+  const source = node.geometry?.getAttribute?.("color");
+  if (!source || source.count === 0) return false;
+
+  node.geometry = node.geometry.clone();
+  const colour = node.geometry.getAttribute("color");
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let i = 0; i < colour.count; i += 1) {
+    const value = colour.getX(i) * 0.2126
+      + colour.getY(i) * 0.7152 + colour.getZ(i) * 0.0722;
+    lo = Math.min(lo, value);
+    hi = Math.max(hi, value);
+  }
+
+  const dark = new THREE.Color(darkHex);
+  const light = new THREE.Color(lightHex);
+  const sample = new THREE.Color();
+  const span = Math.max(1e-5, hi - lo);
+  for (let i = 0; i < colour.count; i += 1) {
+    const value = colour.getX(i) * 0.2126
+      + colour.getY(i) * 0.7152 + colour.getZ(i) * 0.0722;
+    const raw = (value - lo) / span;
+    const t = raw * raw * (3 - 2 * raw);
+    sample.copy(dark).lerp(light, t);
+    colour.setXYZ(i, sample.r, sample.g, sample.b);
+  }
+  colour.needsUpdate = true;
+  node.userData.apostatePalette = family;
+  return true;
+}
+
 function makeCorruption(ctx, figure) {
   const { THREE, atmos } = ctx;
   const chitin = new THREE.MeshStandardMaterial({
@@ -153,9 +228,22 @@ function makeCorruption(ctx, figure) {
     metalness: 0.02,
     flatShading: true,
   });
+  const wingMembrane = new THREE.MeshStandardMaterial({
+    name: "sf-apostate-wasp-membrane",
+    color: PALETTE.chitinLit,
+    emissive: 0x24142f,
+    emissiveIntensity: 0.26,
+    transparent: true,
+    opacity: 0.43,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    roughness: 0.24,
+    metalness: 0.0,
+  });
   patchMaterial(chitin, atmos, { rim: 1.55, glitter: 0, bio: 0.25 });
   patchMaterial(flesh, atmos, { rim: 0.82, glitter: 0, bio: 0.18 });
   patchMaterial(bio, atmos, { rim: 1.1, glitter: 0, bio: 1.9 });
+  patchMaterial(wingMembrane, atmos, { rim: 2.1, glitter: 0, bio: 0.28 });
 
   /* Repaint independent copies of the player materials. Ivory becomes deep
      violet chitin, gold becomes bruised shell, and every holy amber source is
@@ -219,82 +307,82 @@ function makeCorruption(ctx, figure) {
   root.userData.apostateFeature = "corruption-root";
   figure.root.add(root);
 
-  /* Paired elytra preserve the reliquary outline while turning the back into
-     the split shell of a beetle. They open during jet flight. */
-  const elytra = [];
+  /* Four translucent, veined wasp wings. Their narrow membranes keep the
+     Reliquary silhouette dominant at rest, then flare during Call and jet
+     actions instead of reading as two bulky beetle-shell balloons. */
+  const wingPivots = [];
+  const wings = [];
   for (const side of [-1, 1]) {
     const pivot = new THREE.Group();
-    pivot.name = side < 0 ? "apostate-elytron-left" : "apostate-elytron-right";
-    pivot.userData.apostateFeature = "elytron";
-    pivot.position.set(side * 0.11, 1.20, -0.17);
-    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.26, 9, 7), chitin);
-    shell.scale.set(0.72, 1.52, 0.38);
-    shell.position.set(side * 0.07, 0.03, -0.04);
-    shell.rotation.set(-0.16, side * 0.14, side * 0.10);
-    shell.castShadow = true;
-    pivot.add(shell);
+    pivot.name = side < 0 ? "apostate-wing-root-left" : "apostate-wing-root-right";
+    pivot.userData.apostateFeature = "wing-root";
+    pivot.position.set(side * 0.13, 1.42, -0.22);
+    const fore = makeWaspWing(THREE, side, 0.82, 0.24, 0.10,
+      wingMembrane, chitin, 0);
+    const hind = makeWaspWing(THREE, side, 0.58, 0.19, -0.12,
+      wingMembrane, chitin, 1);
+    hind.position.z = -0.025;
+    pivot.add(fore, hind);
     root.add(pivot);
-    elytra.push(pivot);
+    wingPivots.push({ node: pivot, side });
+    wings.push(fore, hind);
   }
 
-  /* Segmented abdomen breaking the human waist silhouette. */
+  /* Close-fitting back plates imply a segmented thorax without hanging a
+     bulbous insect abdomen off the otherwise disciplined armour silhouette. */
   const abdomen = new THREE.Group();
-  abdomen.name = "apostate-abdomen";
-  abdomen.userData.apostateFeature = "abdomen";
-  for (let i = 0; i < 4; i += 1) {
-    const plate = new THREE.Mesh(new THREE.SphereGeometry(0.19 - i * 0.015, 8, 6),
-      i === 3 ? flesh : chitin);
-    plate.scale.set(1.05, 0.72, 1.26);
-    plate.position.set(0, 0.98 - i * 0.13, -0.24 - i * 0.075);
-    plate.rotation.x = -0.18 - i * 0.05;
+  abdomen.name = "apostate-carapace-plates";
+  abdomen.userData.apostateFeature = "carapace-plates";
+  for (let i = 0; i < 3; i += 1) {
+    const plate = new THREE.Mesh(new THREE.SphereGeometry(0.14 - i * 0.012, 8, 6),
+      i === 2 ? flesh : chitin);
+    plate.scale.set(0.90, 0.42, 0.74);
+    plate.position.set(0, 1.11 - i * 0.10, -0.20 - i * 0.035);
+    plate.rotation.x = -0.10 - i * 0.04;
     plate.castShadow = true;
     abdomen.add(plate);
   }
-  const abdomenGlow = new THREE.Mesh(new THREE.SphereGeometry(0.075, 7, 5), bio);
-  abdomenGlow.position.set(0, 0.57, -0.50);
+  const abdomenGlow = new THREE.Mesh(new THREE.SphereGeometry(0.035, 7, 5), bio);
+  abdomenGlow.position.set(0, 0.90, -0.28);
   abdomen.add(abdomenGlow);
   root.add(abdomen);
 
-  /* Four articulated vestigial limbs. They are too small to be confused with
-     attack hitboxes, but large enough to destroy the ordinary human outline. */
-  const limbs = [];
-  for (const side of [-1, 1]) {
-    for (let row = 0; row < 2; row += 1) {
-      const limb = new THREE.Group();
-      limb.name = `apostate-limb-${side < 0 ? "left" : "right"}-${row}`;
-      limb.userData.apostateFeature = "insect-limb";
-      limb.position.set(side * 0.19, 1.28 - row * 0.30, -0.12);
-      const a = [0, 0, 0];
-      const b = [side * (0.34 + row * 0.04), 0.05 - row * 0.03, -0.18];
-      const c = [side * (0.56 + row * 0.04), -0.13 - row * 0.04, -0.04];
-      limb.add(segment(THREE, a, b, 0.055, 0.040, chitin));
-      limb.add(segment(THREE, b, c, 0.041, 0.017, chitin));
-      const joint = new THREE.Mesh(new THREE.IcosahedronGeometry(0.065, 0), flesh);
-      joint.position.set(...b);
-      limb.add(joint);
-      root.add(limb);
-      limbs.push({ node: limb, side, row, bindZ: limb.rotation.z });
-    }
-  }
+  /* Low-profile carapace spikes replace the face growths and vestigial arms.
+     They sharpen the shoulder/collar armour while leaving the player's mask
+     completely clean and recognisable. */
+  const armorSpikes = new THREE.Group();
+  armorSpikes.name = "apostate-armor-spikes";
+  armorSpikes.userData.apostateFeature = "armor-spikes";
+  const spikeSpecs = [
+    [[-0.16, 1.46, -0.020], [-0.48, 1.57, -0.08], 0.045],
+    [[0.16, 1.46, -0.020], [0.48, 1.57, -0.08], 0.045],
+    [[-0.07, 1.53, -0.045], [-0.23, 1.78, -0.15], 0.038],
+    [[0.07, 1.53, -0.045], [0.23, 1.78, -0.15], 0.038],
+    [[-0.14, 1.20, -0.030], [-0.39, 1.15, -0.13], 0.032],
+    [[0.14, 1.20, -0.030], [0.39, 1.15, -0.13], 0.032],
+  ];
+  const spikeRoots = [];
+  const spikes = spikeSpecs.map(([base, tip, radius], index) => {
+    /* The short cone overlaps the shell, while this faceted socket makes that
+       overlap readable when an arm or wing hides the exact join. It is small
+       enough to remain armour language, not another insect growth. */
+    const socket = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.45, 6, 4), chitin);
+    socket.name = `apostate-armor-spike-root-${index + 1}`;
+    socket.userData.apostateFeature = "armor-spike-root";
+    socket.position.set(...base);
+    socket.scale.set(1.35, 0.72, 1.12);
+    socket.castShadow = true;
+    socket.receiveShadow = true;
+    armorSpikes.add(socket);
+    spikeRoots.push(socket);
 
-  /* Mandibles and antennae frame the existing mask instead of replacing it,
-     keeping the boss unmistakably the player at first glance. */
-  const face = new THREE.Group();
-  face.name = "apostate-face-growths";
-  face.userData.apostateFeature = "mandibles";
-  for (const side of [-1, 1]) {
-    face.add(segment(THREE,
-      [side * 0.055, 1.68, 0.17], [side * 0.18, 1.61, 0.27],
-      0.048, 0.012, chitin, 6));
-    face.add(segment(THREE,
-      [side * 0.075, 1.84, 0.06], [side * 0.20, 2.06, 0.10],
-      0.022, 0.006, flesh, 5));
-    const eye = new THREE.Mesh(new THREE.IcosahedronGeometry(0.035, 1), bio);
-    eye.position.set(side * 0.095, 1.77, 0.155);
-    eye.scale.set(1.4, 1.0, 0.55);
-    face.add(eye);
-  }
-  root.add(face);
+    const spike = segment(THREE, base, tip, radius, 0.004, chitin, 6);
+    spike.name = `apostate-armor-spike-${index + 1}`;
+    spike.userData.apostateFeature = "armor-spike";
+    armorSpikes.add(spike);
+    return spike;
+  });
+  root.add(armorSpikes);
 
   const jetGlow = new THREE.Group();
   jetGlow.name = "apostate-jet-plumes";
@@ -310,15 +398,17 @@ function makeCorruption(ctx, figure) {
   root.add(jetGlow);
 
   /* Preserve the authored root-space placement while handing motion to the
-     living rig. The mask growths now follow Head aim; shell, abdomen, extra
-     limbs and jet organs follow Spine lean instead of hovering through it. */
+     living rig. Wings, plates, spikes and jet organs follow Spine lean; the
+     head intentionally receives no insect geometry. */
   figure.root.updateMatrixWorld(true);
-  for (const node of [...elytra, abdomen, ...limbs.map((limb) => limb.node), jetGlow]) {
+  for (const node of [...wingPivots.map((wing) => wing.node), abdomen, armorSpikes, jetGlow]) {
     figure.chest.attach(node);
   }
-  figure.head?.attach?.(face);
 
-  return { root, chitin, flesh, bio, elytra, abdomen, limbs, face, jetGlow };
+  return {
+    root, chitin, flesh, bio, wingMembrane, wingPivots, wings,
+    abdomen, armorSpikes, spikeRoots, spikes, jetGlow,
+  };
 }
 
 function makeAegis(ctx, figure) {
@@ -383,10 +473,38 @@ export async function buildApostate(ctx) {
     const materials = Array.isArray(node.material) ? node.material : [node.material];
     for (const material of materials) {
       if (!material) continue;
-      material.color?.lerp?.(new THREE.Color(PALETTE.chitinLit), 0.58);
+      const name = String(material.name || "").toLowerCase();
+      const isFlash = node.parent?.name === "muzzle-flare";
+      /* The weapon's surface detail is vertex-painted into its iron, brass
+         and haft geometry. A strong cyan emissive on every Standard material
+         flattened those ramps into the untextured neon shape seen in play.
+         Rebuild those painted values in the hostile cast's violet-chitin
+         ramp instead of multiplying the original gold/verdigris ramps by a
+         pale tint (which left the shaft green). Cyan is reserved for living
+         chambers and the momentary muzzle flare. */
+      if (!isFlash && node.isMesh) {
+        if (name === "sf-emissive") {
+          repaintVertexRamp(THREE, node, 0x1f7d6c, 0xa9ffe8, "bio-cyan");
+        } else if (name === "sf-gold" || name === "sf-bronze") {
+          repaintVertexRamp(THREE, node, PALETTE.chitinDeep, 0xb18ec6,
+            "chitin-ornament");
+        } else if (name === "sf-cloth") {
+          repaintVertexRamp(THREE, node, 0x4b243d, PALETTE.fleshy,
+            "fleshy-cloth");
+        } else {
+          repaintVertexRamp(THREE, node, 0x1d1326, PALETTE.chitinLit,
+            "chitin-structure");
+        }
+      }
+      if (material.color) {
+        if (isFlash) material.color.set(PALETTE.bioCyan);
+        else if (node.userData.apostatePalette) material.color.set(0xffffff);
+        else if (name === "sf-emissive") material.color.set(PALETTE.bioCyan);
+        else material.color.set(PALETTE.chitin);
+      }
       if (material.emissive) {
-        material.emissive.lerp(new THREE.Color(PALETTE.bioCyan), 0.72);
-        material.emissiveIntensity = Math.max(Number(material.emissiveIntensity) || 0, 1.35);
+        material.emissive.set(0x1c1026);
+        material.emissiveIntensity = 0.10;
       }
       material.needsUpdate = true;
     }
@@ -1314,15 +1432,14 @@ export async function buildApostate(ctx) {
         lengths.upper * C.bodyScale, lengths.fore * C.bodyScale, figure.armAxis);
     }
 
-    const wing = action === "jet" ? 0.88 : action === "summon" ? 0.38 : 0.08;
-    corruption.elytra[0].rotation.y = damp(corruption.elytra[0].rotation.y, wing, 10, dt);
-    corruption.elytra[1].rotation.y = damp(corruption.elytra[1].rotation.y, -wing, 10, dt);
-    corruption.abdomen.rotation.x = Math.sin(state.elapsed * 2.2) * 0.035;
-    for (const limb of corruption.limbs) {
-      limb.node.rotation.z = limb.bindZ
-        + limb.side * (0.12 + Math.sin(state.elapsed * (3.1 + limb.row * 0.7)) * 0.08);
-      limb.node.rotation.x = Math.sin(state.elapsed * 2.4 + limb.row * 1.7) * 0.08;
+    const wingOpen = action === "jet" ? 0.76 : action === "summon" ? 0.46 : 0.14;
+    const flutter = action === "jet" ? Math.sin(state.elapsed * 36) * 0.075
+      : action === "summon" ? Math.sin(state.elapsed * 18) * 0.035 : 0;
+    for (const wing of corruption.wingPivots) {
+      const targetYaw = wing.side * (wingOpen + flutter);
+      wing.node.rotation.y = damp(wing.node.rotation.y, targetYaw, 12, dt);
     }
+    corruption.abdomen.rotation.x = Math.sin(state.elapsed * 2.2) * 0.035;
     if (aegis.group.visible) {
       aegis.group.scale.setScalar(0.96 + Math.sin(state.elapsed * 8.2) * 0.035);
       aegis.faceMat.opacity = 0.11 + Math.sin(state.elapsed * 6.4) * 0.035;
@@ -1495,7 +1612,7 @@ export async function buildApostate(ctx) {
       model: {
         asset: figure.assetSource,
         corrupted: true,
-        featureCount: 2 + 1 + corruption.limbs.length + 1 + 1,
+        featureCount: corruption.wings.length + corruption.spikes.length + 3,
       },
     };
   }

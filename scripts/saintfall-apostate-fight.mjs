@@ -89,6 +89,207 @@ try {
     `${shortcut.bossPhase}/hidden=${shortcut.bossHidden}`);
   check("boss shortcut clears nearby garrison interference",
     shortcut.nearbyOrdinary === 0, shortcut.nearbyOrdinary);
+
+  /* ---- EIGHT-BEARING MODEL AUDIT ---------------------------------
+     The boss is a third-person target, so a flattering front frame is not a
+     sufficient visual gate. Capture every 45 degrees, then prove the new
+     armour pieces remain bound to the animated chest in attack and flight
+     poses. A separate lineup puts the same materials beside two core Bloom
+     castes instead of judging the palette in isolation. */
+  const turntable = await shortcutPage.evaluate(() => {
+    const T = window.__SF;
+    T.maximize();
+    document.getElementById("sf-boot")?.remove();
+    T.invulnerable(true);
+    T.hideHud(true);
+    T.hideVfx(true);
+    T.hidePlayer(true);
+    T.advanceToApostatePhase("duel", 8, 1 / 60);
+    const inst = T.apostate.instance();
+    for (const enemy of [...T.enemies.live]) {
+      if (enemy !== inst) T.enemies.remove(enemy);
+    }
+    /* Hold one stationary combat pose for the full turntable. Left to its
+       duel AI, the boss can begin a boost between bearings and leave the
+       camera orbiting yesterday's coordinates. */
+    T.forceApostateAction("ranged");
+    /* Freeze rAF simulation between screenshots without opening the visible
+       field menu. Explicit QA steps still run, but wall-clock capture time can
+       no longer finish the pose or let AI locomotion move the subject. */
+    document.body.classList.add("rb-escape-menu-open");
+    T.renderStill();
+    return { x: inst.x, y: inst.y, z: inst.z };
+  });
+  const angleFiles = [];
+  const angleCenters = [];
+  for (let bearing = 0; bearing < 360; bearing += 45) {
+    const radians = bearing * Math.PI / 180;
+    const framing = await shortcutPage.evaluate(({ anchor, angle }) => {
+      const T = window.__SF;
+      const radius = 5.6;
+      T.lookAt([
+        anchor.x + Math.sin(angle) * radius,
+        anchor.y + 2.15,
+        anchor.z + Math.cos(angle) * radius,
+      ], [anchor.x, anchor.y + 1.06, anchor.z], 36);
+      const inst = T.apostate.instance();
+      inst.x = anchor.x;
+      inst.y = anchor.y;
+      inst.z = anchor.z;
+      inst.speed = 0;
+      inst.root.position.set(anchor.x, anchor.y, anchor.z);
+      T.renderStill();
+      const centre = inst.root.position.clone();
+      inst.root.getWorldPosition(centre);
+      centre.y += 1.06;
+      centre.project(T.render.camera);
+      return { ndcX: centre.x, ndcY: centre.y };
+    }, { anchor: turntable, angle: radians });
+    angleCenters.push({ bearing, ...framing });
+    const filename = `apostate-angle-${String(bearing).padStart(3, "0")}.png`;
+    angleFiles.push(filename);
+    await shortcutPage.screenshot({ path: path.join(outDir, filename) });
+  }
+
+  const lineup = await shortcutPage.evaluate((anchor) => {
+    const T = window.__SF;
+    const before = new Set(T.enemies.live.map((enemy) => enemy.id));
+    T.spawnEnemy("gleaner", anchor.x - 2.05, anchor.z + 0.35,
+      { yaw: Math.PI, health: 9999 });
+    T.spawnEnemy("thresher", anchor.x + 2.25, anchor.z + 0.30,
+      { yaw: Math.PI, health: 9999 });
+    window.__apostatePaletteLineup = T.enemies.live
+      .filter((enemy) => !before.has(enemy.id)).map((enemy) => enemy.id);
+    T.lookAt([anchor.x, anchor.y + 2.65, anchor.z + 8.1],
+      [anchor.x, anchor.y + 1.03, anchor.z], 40);
+    T.renderStill();
+    return window.__apostatePaletteLineup.length;
+  }, turntable);
+  await shortcutPage.screenshot({
+    path: path.join(outDir, "apostate-bloom-palette-lineup.png"),
+  });
+  await shortcutPage.evaluate(() => {
+    const T = window.__SF;
+    const ids = new Set(window.__apostatePaletteLineup || []);
+    for (const enemy of [...T.enemies.live]) {
+      if (ids.has(enemy.id)) T.enemies.remove(enemy);
+    }
+  });
+
+  const visualAudit = await shortcutPage.evaluate(() => {
+    const T = window.__SF;
+    const figure = T.apostate.figure;
+    const corruption = T.apostate.corruption;
+    const chest = figure.chest;
+    const armour = corruption.armorSpikes;
+    const spikeRoots = corruption.spikeRoots;
+    const spikes = corruption.spikes;
+
+    const signature = () => {
+      figure.root.updateMatrixWorld(true);
+      const inverseChest = chest.matrixWorld.clone().invert();
+      return spikes.map((spike) => {
+        const point = spike.position.clone();
+        spike.getWorldPosition(point);
+        point.applyMatrix4(inverseChest);
+        return [point.x, point.y, point.z];
+      });
+    };
+    const baseline = signature();
+    let maxChestLocalDrift = 0;
+    const actionPoses = [];
+    for (const [action, seconds] of [["melee1", 0.28], ["boost", 0.18], ["jet", 0.85]]) {
+      const forced = T.forceApostateAction(action);
+      T.advanceTime(seconds, 1 / 60);
+      const posed = signature();
+      for (let i = 0; i < baseline.length; i += 1) {
+        maxChestLocalDrift = Math.max(maxChestLocalDrift, Math.hypot(
+          posed[i][0] - baseline[i][0],
+          posed[i][1] - baseline[i][1],
+          posed[i][2] - baseline[i][2]
+        ));
+      }
+      actionPoses.push({ action, forced, spikeCount: posed.length });
+    }
+
+    const lance = {
+      taggedMeshes: 0, vertices: 0, violetVertices: 0, greenVertices: 0,
+      families: new Set(),
+    };
+    T.apostate.weapon.root.traverse((node) => {
+      const family = String(node.userData?.apostatePalette || "");
+      if (!node.isMesh || !family.startsWith("chitin")) return;
+      lance.taggedMeshes += 1;
+      lance.families.add(family);
+      const colours = node.geometry?.getAttribute?.("color");
+      if (!colours) return;
+      for (let i = 0; i < colours.count; i += 1) {
+        const r = colours.getX(i);
+        const g = colours.getY(i);
+        const b = colours.getZ(i);
+        lance.vertices += 1;
+        if (b > r && b > g) lance.violetVertices += 1;
+        if (g > r * 1.08 && g > b * 1.08) lance.greenVertices += 1;
+      }
+    });
+
+    const palette = {
+      chitin: corruption.chitin.color.getHexString(),
+      flesh: corruption.flesh.color.getHexString(),
+      bio: corruption.bio.emissive.getHexString(),
+      wing: corruption.wingMembrane.color.getHexString(),
+      lanceFamilies: [...lance.families],
+      lanceStructuralVioletPct: lance.vertices
+        ? Number((lance.violetVertices / lance.vertices * 100).toFixed(2)) : 0,
+      lanceStructuralGreenPct: lance.vertices
+        ? Number((lance.greenVertices / lance.vertices * 100).toFixed(2)) : 0,
+      lanceTaggedMeshes: lance.taggedMeshes,
+    };
+    return {
+      palette,
+      attachments: {
+        armourParent: armour.parent?.name || null,
+        chestName: chest.name || null,
+        armourOnChest: armour.parent === chest,
+        spikeCount: spikes.length,
+        spikeRootCount: spikeRoots.length,
+        everySpikeOnArmour: spikes.every((spike) => spike.parent === armour),
+        everyRootOnArmour: spikeRoots.every((root) => root.parent === armour),
+        headContainsSpikes: spikes.some((spike) => figure.head?.getObjectById?.(spike.id)),
+        maxChestLocalDrift,
+        actionPoses,
+      },
+    };
+  });
+  check("captures the boss from all eight gameplay bearings",
+    angleFiles.length === 8
+      && angleCenters.every((frame) => Math.abs(frame.ndcX) < 0.08),
+    JSON.stringify({ files: angleFiles, centres: angleCenters }));
+  check("the Apostate uses the hostile violet-chitin, flesh and cyan-bio palette",
+    visualAudit.palette.chitin === "43304f"
+      && visualAudit.palette.flesh === "8d4a63"
+      && visualAudit.palette.bio === "54efd2"
+      && visualAudit.palette.wing === "7a5a90",
+    JSON.stringify(visualAudit.palette));
+  check("the lance texture is repainted into the Bloom chitin family without green metal",
+    visualAudit.palette.lanceTaggedMeshes >= 3
+      && visualAudit.palette.lanceStructuralVioletPct >= 99
+      && visualAudit.palette.lanceStructuralGreenPct === 0,
+    JSON.stringify(visualAudit.palette));
+  check("all six armour spikes are attached to the animated chest, never the head",
+    visualAudit.attachments.armourOnChest
+      && visualAudit.attachments.spikeCount === 6
+      && visualAudit.attachments.spikeRootCount === 6
+      && visualAudit.attachments.everySpikeOnArmour
+      && visualAudit.attachments.everyRootOnArmour
+      && !visualAudit.attachments.headContainsSpikes,
+    JSON.stringify(visualAudit.attachments));
+  check("the attached spikes hold their chest-space placement through melee, boost and jet",
+    visualAudit.attachments.maxChestLocalDrift < 0.001
+      && visualAudit.attachments.actionPoses.every((pose) => pose.forced),
+    JSON.stringify(visualAudit.attachments));
+  check("the palette comparison lineup contains two core Bloom castes",
+    lineup === 2, String(lineup));
   await shortcutPage.close();
 
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
@@ -138,6 +339,26 @@ try {
         if (material?.name) materialNames.add(material.name);
       }
     });
+    const headFeatures = [];
+    T.apostate.figure.head?.traverse?.((node) => {
+      if (node.userData?.apostateFeature) headFeatures.push(node.userData.apostateFeature);
+    });
+    const lanceMaterials = [];
+    const seenLanceMaterials = new Set();
+    T.apostate.weapon?.root?.traverse?.((node) => {
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      for (const material of materials) {
+        if (!material || seenLanceMaterials.has(material.uuid)) continue;
+        seenLanceMaterials.add(material.uuid);
+        lanceMaterials.push({
+          name: material.name || "",
+          vertexColors: !!material.vertexColors,
+          color: material.color?.getHexString?.() || null,
+          emissive: material.emissive?.getHexString?.() || null,
+          emissiveIntensity: Number(material.emissiveIntensity) || 0,
+        });
+      }
+    });
     const status = T.apostateState();
     return {
       count: T.enemies.live.filter((enemy) => enemy.key === "apostate").length,
@@ -150,7 +371,9 @@ try {
       playerAsset: T.figure.assetSource,
       abilities: status.abilities,
       tags,
+      headFeatures,
       materialNames: [...materialNames],
+      lanceMaterials,
       hasReliquaryWeapon: T.apostate.weapon?.root?.name === "apostate-censer-lance",
     };
   });
@@ -168,10 +391,24 @@ try {
     rig.model.corrupted === true && rig.model.featureCount >= 9
       && rig.tags.length >= 9 && rig.hasReliquaryWeapon,
     `${rig.model.featureCount} declared / ${rig.tags.length} tagged features`);
+  check("the corrupted head keeps the player's clean masked silhouette",
+    rig.headFeatures.length === 0, JSON.stringify(rig.headFeatures));
+  check("subtle armour spikes and four wasp wings replace the goofy appendages",
+    rig.tags.filter((tag) => tag === "armor-spike").length === 6
+      && rig.tags.filter((tag) => tag === "wasp-wing").length === 4
+      && !rig.tags.some((tag) => ["mandibles", "insect-limb", "elytron"].includes(tag)),
+    JSON.stringify(rig.tags));
   check("chitin, flesh and bioluminescent insect materials are present",
     ["sf-apostate-chitin", "sf-apostate-flesh", "sf-apostate-bio"]
       .every((name) => rig.materialNames.includes(name)),
     rig.materialNames.filter((name) => name.startsWith("sf-apostate")).join(", "));
+  const paintedLanceSurfaces = rig.lanceMaterials.filter((material) =>
+    material.vertexColors && ["sf-iron", "sf-gold", "sf-bronze"].includes(material.name));
+  const overlitLanceSurfaces = rig.lanceMaterials.filter((material) =>
+    material.emissive && material.emissive !== "000000" && material.emissiveIntensity > 0.25);
+  check("the Apostate lance preserves its vertex-painted surface texture",
+    paintedLanceSurfaces.length >= 3 && overlitLanceSurfaces.length === 0,
+    JSON.stringify({ painted: paintedLanceSurfaces, overlit: overlitLanceSurfaces }));
   check("begins dormant, hidden and locked", rig.phase === "dormant" && rig.hidden && rig.locked);
 
   const dormant = await page.evaluate(() => {
@@ -396,6 +633,14 @@ try {
     };
   });
   await page.screenshot({ path: path.join(outDir, "apostate-duel.png") });
+  await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.apostate.instance();
+    T.lookAt([inst.x + 4.4, inst.y + 2.8, inst.z + 5.6],
+      [inst.x, inst.y + 1.25, inst.z], 38);
+    T.renderStill();
+  });
+  await page.screenshot({ path: path.join(outDir, "apostate-detail.png") });
   await page.evaluate(() => window.__SF.releaseCamera());
   check("the reveal holds a free camera for its full four-plus-second beat",
     revealStart.revealBudget >= 4 && revealEnd.held && revealEnd.cameraSeconds > 0,
@@ -1222,7 +1467,8 @@ try {
     realConsoleErrors.slice(0, 5).join(" | "));
 
   await writeFile(path.join(outDir, "report.json"), JSON.stringify({
-    results, failed, rig, dormantAutoStow, ranged, melee, boost, jetRise, jetEnd,
+    results, failed, angleFiles, angleCenters, visualAudit, rig, dormantAutoStow,
+    ranged, melee, boost, jetRise, jetEnd,
     deadEntry, revealDeathRearm, coronaLanding, shield, boostVsShield, vent, summons,
     saveRestore, zeroHealthRestore, longDisengageSave, cost, deathStart, deathEnd,
   }, null, 2));

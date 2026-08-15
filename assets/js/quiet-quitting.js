@@ -657,6 +657,10 @@
       this.state = "PLAYING";
       this.hideOverlay();
       this.updateHud();
+      this.canvas.focus({ preventScroll: true });
+      if (this.player && this.player.dir === DIRECTIONS.NONE) {
+        this.player.setNextDir(DIRECTIONS.LEFT);
+      }
       this.addOfficeFeed("📋 Clocked in. Minimized browser, opened fake spreadsheet.");
     }
 
@@ -667,12 +671,16 @@
       this.state = "PLAYING";
       this.hideOverlay();
       this.updateHud();
+      this.canvas.focus({ preventScroll: true });
+      if (this.player && this.player.dir === DIRECTIONS.NONE) {
+        this.player.setNextDir(DIRECTIONS.LEFT);
+      }
       this.sound.playLevelClear();
       this.addOfficeFeed(`📈 Shift survived! Promoted to Level ${this.level}. More syncs inbound!`);
     }
 
     initRound() {
-      this.player = new Player(this, 13.5, 23);
+      this.player = new Player(this, 14, 23);
 
       this.ghosts = [
         new Ghost(this, "MICROMANAGER", "#ff3344", 13.5, 11, { x: COLS - 2, y: 0 }, 0),
@@ -1157,24 +1165,40 @@
       if (this.dir.x === -dir.x && this.dir.y === -dir.y && dir !== DIRECTIONS.NONE) {
         this.dir = dir;
       }
+      if (this.dir === DIRECTIONS.NONE) this.tryCommitDir(dir);
+    }
+
+    tryCommitDir(dir) {
+      if (!dir || dir === DIRECTIONS.NONE) return false;
+      const isAlignedX = Math.abs(this.x - Math.round(this.x)) < 0.18;
+      const isAlignedY = Math.abs(this.y - Math.round(this.y)) < 0.18;
+      const movingOnX = dir.x !== 0;
+      if (movingOnX ? !isAlignedY : !isAlignedX) return false;
+      const nextCol = Math.round(this.x) + dir.x;
+      const nextRow = Math.round(this.y) + dir.y;
+      if (this.game.isWall(nextCol, nextRow)) return false;
+      if (movingOnX) this.y = Math.round(this.y);
+      else this.x = Math.round(this.x);
+      this.dir = dir;
+      return true;
     }
 
     update(dt) {
       const speedMultiplier = this.game.frightenedTimer > 0 ? 1.25 : 1.0;
       const currentSpeed = this.speed * speedMultiplier;
 
-      // Try turning if aligned with grid
-      const isAlignedX = Math.abs(this.x - Math.round(this.x)) < 0.14;
-      const isAlignedY = Math.abs(this.y - Math.round(this.y)) < 0.14;
+      const isAlignedX = Math.abs(this.x - Math.round(this.x)) < 0.18;
+      const isAlignedY = Math.abs(this.y - Math.round(this.y)) < 0.18;
 
-      if (this.nextDir !== this.dir && isAlignedX && isAlignedY) {
-        const nextCol = Math.round(this.x) + this.nextDir.x;
-        const nextRow = Math.round(this.y) + this.nextDir.y;
-
-        if (!this.game.isWall(nextCol, nextRow)) {
-          this.x = Math.round(this.x);
-          this.y = Math.round(this.y);
-          this.dir = this.nextDir;
+      if (this.nextDir !== this.dir) {
+        if (this.dir === DIRECTIONS.NONE) {
+          this.tryCommitDir(this.nextDir);
+        } else if (isAlignedX && isAlignedY) {
+          this.tryCommitDir(this.nextDir);
+          if (this.dir === this.nextDir) {
+            this.x = Math.round(this.x);
+            this.y = Math.round(this.y);
+          }
         }
       }
 

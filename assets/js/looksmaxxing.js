@@ -10,10 +10,16 @@
   const ctx = canvas.getContext("2d");
   const W = canvas.width;
   const H = canvas.height;
-  const STAT_CAP = 240;
-  const WIN_LOOKSMAX = 100;
-  const DAY_LENGTH = 10;
+  const STAT_CAP = 500;
+  const WIN_LOOKSMAX = 96;
+  const WIN_MIN_DAY = 26;
+  const DAY_LENGTH = 16;
   const TOTAL_DAYS = 30;
+  const FOCUSED_GAIN = 1.28;
+  const UNFOCUSED_GAIN = 0.16;
+  const SOFTCAP_RATIO = 0.72;
+  const SOFTCAP_CURVE = 0.55;
+  const GRIND_MIN_INTERVAL = 0.12;
   const IDLE_DRAIN_DELAY = 2.2;
   const IDLE_STAT_DRAIN = 1.05;
   const IDLE_SCORE_DRAIN = 42;
@@ -29,6 +35,7 @@
     clicks: 0,
     combo: 0,
     lastClickTime: 0,
+    lastDayAnnounced: 1,
     comboWindow: 1.5,
     score: 0,                  // total tier-up score
     stats: { gym: 0, mewing: 0, jawline: 0, skincare: 0, sleep: 0, nofap: 0 },
@@ -120,30 +127,50 @@
     return Math.max(0, Math.min(STAT_CAP, value));
   }
 
+  function currentRoutine() {
+    return ROUTINES[(Math.max(1, state.day) - 1) % ROUTINES.length];
+  }
+
+  function grindGain(current, raw) {
+    const t = current / STAT_CAP;
+    if (t <= SOFTCAP_RATIO) return raw;
+    const u = (t - SOFTCAP_RATIO) / Math.max(0.001, 1 - SOFTCAP_RATIO);
+    return raw * (1 - SOFTCAP_CURVE * u * u);
+  }
+
+  function currentDecayRate() {
+    const looks = getLooksmax() / 100;
+    return state.baseDecay * (0.9 + looks * 0.7);
+  }
+
+  function canUnlockFinalForm() {
+    return getLooksmax() >= WIN_LOOKSMAX && state.day >= WIN_MIN_DAY;
+  }
+
   function getDayProgress() {
     return Math.min(1, (state.day - 1) / (TOTAL_DAYS - 1));
   }
 
   // ----- Event templates -----
   const EVENTS = [
-    { tone: "good", icon: "😊", text: "She said you have a nice smile", impact: "+stats", effect: () => { bumpAll(2); addScore(80); } },
-    { tone: "bad", icon: "😴", text: "Your mom said you look tired", impact: "-stats -score", effect: () => { bumpAll(-3); damageScore(130); } },
-    { tone: "good", icon: "💊", text: "You discovered creatine", impact: "+gym", effect: () => { state.stats.gym = clampStat(state.stats.gym + 8); addScore(60); } },
-    { tone: "bad", icon: "🤡", text: "You forgot your supplements", impact: "-stats -score", effect: () => { bumpAll(-4); damageScore(180); } },
-    { tone: "good", icon: "💪", text: "Someone called you gigachad", impact: "+stats", effect: () => { bumpAll(3); addScore(90); } },
-    { tone: "bad", icon: "📱", text: "You stayed up late on TikTok", impact: "-sleep -score", effect: () => { hitStats(["sleep", "nofap"], 12); damageScore(220); } },
-    { tone: "bad", icon: "🍕", text: "You ate a whole pizza standing up", impact: "-stats -score", effect: () => { bumpAll(-5); damageScore(190); } },
-    { tone: "good", icon: "💕", text: "You went on a date", impact: "+stats", effect: () => { bumpAll(2); addScore(70); } },
-    { tone: "bad", icon: "📸", text: "Bad lighting front camera incident", impact: "-jaw -skin -score", effect: () => { hitStats(["jawline", "skincare"], 14); damageScore(260); } },
-    { tone: "good", icon: "🎥", text: "You saw a video of a man yelling", impact: "+mewing +jaw", effect: () => { state.stats.mewing = clampStat(state.stats.mewing + 8); state.stats.jawline = clampStat(state.stats.jawline + 5); addScore(60); } },
-    { tone: "good", icon: "💇", text: "You tried a new haircut", impact: "+jaw +skin", effect: () => { state.stats.jawline = clampStat(state.stats.jawline + 5); state.stats.skincare = clampStat(state.stats.skincare + 5); addScore(70); } },
+    { tone: "good", icon: "😊", text: "She said you have a nice smile", impact: "+stats", effect: () => { bumpAll(1); addScore(80); } },
+    { tone: "bad", icon: "😴", text: "Your mom said you look tired", impact: "-stats -score", effect: () => { bumpAll(-4); damageScore(130); } },
+    { tone: "good", icon: "💊", text: "You discovered creatine", impact: "+gym", effect: () => { state.stats.gym = clampStat(state.stats.gym + 5); addScore(60); } },
+    { tone: "bad", icon: "🤡", text: "You forgot your supplements", impact: "-stats -score", effect: () => { bumpAll(-5); damageScore(180); } },
+    { tone: "good", icon: "💪", text: "Someone called you gigachad", impact: "+stats", effect: () => { bumpAll(2); addScore(90); } },
+    { tone: "bad", icon: "📱", text: "You stayed up late on TikTok", impact: "-sleep -score", effect: () => { hitStats(["sleep", "nofap"], 16); damageScore(220); } },
+    { tone: "bad", icon: "🍕", text: "You ate a whole pizza standing up", impact: "-stats -score", effect: () => { bumpAll(-6); damageScore(190); } },
+    { tone: "good", icon: "💕", text: "You went on a date", impact: "+stats", effect: () => { bumpAll(1); addScore(70); } },
+    { tone: "bad", icon: "📸", text: "Bad lighting front camera incident", impact: "-jaw -skin -score", effect: () => { hitStats(["jawline", "skincare"], 18); damageScore(260); } },
+    { tone: "good", icon: "🎥", text: "You saw a video of a man yelling", impact: "+mewing +jaw", effect: () => { state.stats.mewing = clampStat(state.stats.mewing + 5); state.stats.jawline = clampStat(state.stats.jawline + 3); addScore(60); } },
+    { tone: "good", icon: "💇", text: "You tried a new haircut", impact: "+jaw +skin", effect: () => { state.stats.jawline = clampStat(state.stats.jawline + 3); state.stats.skincare = clampStat(state.stats.skincare + 3); addScore(70); } },
     { tone: "good", icon: "😂", text: "She laughed at your joke", impact: "+stats", effect: () => { bumpAll(1); addScore(45); } },
-    { tone: "bad", icon: "📷", text: "Your friend took a better photo", impact: "-stats -score", effect: () => { bumpAll(-3); damageScore(160); } },
-    { tone: "good", icon: "🥶", text: "You took a cold shower", impact: "+sleep +gym", effect: () => { state.stats.sleep = clampStat(state.stats.sleep + 6); state.stats.gym = clampStat(state.stats.gym + 4); addScore(55); } },
-    { tone: "good", icon: "🧘", text: "You tried meditating", impact: "+sleep +mewing", effect: () => { state.stats.sleep = clampStat(state.stats.sleep + 7); state.stats.mewing = clampStat(state.stats.mewing + 3); addScore(65); } },
-    { tone: "good", icon: "👑", text: "You walked into a room and people noticed", impact: "+stats", effect: () => { bumpAll(4); addScore(120); } },
-    { tone: "good", icon: "🪞", text: "The mirror finally respected you", impact: "+stats", effect: () => { bumpAll(5); addScore(150); } },
-    { tone: "good", icon: "🧃", text: "You drank exactly enough water", impact: "+skin +sleep", effect: () => { state.stats.skincare = clampStat(state.stats.skincare + 8); state.stats.sleep = clampStat(state.stats.sleep + 3); addScore(55); } },
+    { tone: "bad", icon: "📷", text: "Your friend took a better photo", impact: "-stats -score", effect: () => { bumpAll(-4); damageScore(160); } },
+    { tone: "good", icon: "🥶", text: "You took a cold shower", impact: "+sleep +gym", effect: () => { state.stats.sleep = clampStat(state.stats.sleep + 4); state.stats.gym = clampStat(state.stats.gym + 3); addScore(55); } },
+    { tone: "good", icon: "🧘", text: "You tried meditating", impact: "+sleep +mewing", effect: () => { state.stats.sleep = clampStat(state.stats.sleep + 4); state.stats.mewing = clampStat(state.stats.mewing + 2); addScore(65); } },
+    { tone: "good", icon: "👑", text: "You walked into a room and people noticed", impact: "+stats", effect: () => { bumpAll(2); addScore(120); } },
+    { tone: "good", icon: "🪞", text: "The mirror finally respected you", impact: "+stats", effect: () => { bumpAll(3); addScore(150); } },
+    { tone: "good", icon: "🧃", text: "You drank exactly enough water", impact: "+skin +sleep", effect: () => { state.stats.skincare = clampStat(state.stats.skincare + 5); state.stats.sleep = clampStat(state.stats.sleep + 2); addScore(55); } },
     { tone: "bad", icon: "🧢", text: "Hat phase delayed the glow-up", impact: "-jaw -score", effect: () => { hitStats(["jawline"], 12); damageScore(150); } },
     { tone: "bad", icon: "🧂", text: "Salt bloat jumpscare", impact: "-skin -jaw -score", effect: () => { hitStats(["skincare", "jawline"], 11); damageScore(210); } },
     { tone: "bad", icon: "💤", text: "Three-hour nap became nine hours", impact: "-gym -score", effect: () => { hitStats(["gym", "nofap"], 13); damageScore(170); } },
@@ -186,7 +213,14 @@
 
     if (!state.paused && !state.gameOver) {
       state.playTime += dt;
-      state.day = Math.min(TOTAL_DAYS, 1 + Math.floor(state.playTime / DAY_LENGTH));
+      state.day = 1 + Math.floor(state.playTime / DAY_LENGTH);
+      if (state.day !== state.lastDayAnnounced) {
+        state.lastDayAnnounced = state.day;
+        state.recentRoutine = currentRoutine();
+        if (window.RB?.toast) {
+          RB.toast(`DAY ${state.day} · ${currentRoutine().label.toUpperCase()}`, "");
+        }
+      }
 
       // Combo decay
       if (now - state.lastClickTime > state.comboWindow * 1000) {
@@ -199,8 +233,12 @@
         state.idleDrain = 0;
         state.idleWarning = Math.max(0, state.idleWarning - dt * 2.5);
       } else {
+        const decay = currentDecayRate();
+        const today = currentRoutine();
         for (const k of Object.keys(state.stats)) {
-          state.stats[k] = Math.max(0, state.stats[k] - state.baseDecay * dt);
+          const focused = today.stats.includes(k);
+          const rate = focused ? decay * 0.12 : decay * 0.38;
+          state.stats[k] = Math.max(0, state.stats[k] - rate * dt);
         }
         applyIdleDrain(now, dt);
       }
@@ -232,8 +270,8 @@
         p.vy += 200 * dt;
       }
 
-      // Check win
-      if (getLooksmax() >= WIN_LOOKSMAX && !state.ending) {
+      // Check win. Peak looks without the calendar is just a pump.
+      if (canUnlockFinalForm() && !state.ending) {
         beginWinReveal();
       }
     }
@@ -268,9 +306,14 @@
 
   function triggerRandomEvent() {
     if (state.currentEvent) return;
-    const ev = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+    const looks = getLooksmax();
+    const preferBad = looks >= 70 ? 0.68 : looks >= 45 ? 0.52 : 0.42;
+    const pool = Math.random() < preferBad
+      ? EVENTS.filter((event) => event.tone === "bad")
+      : EVENTS;
+    const ev = pool[Math.floor(Math.random() * pool.length)];
     state.currentEvent = ev;
-    state.eventCooldown = 4;
+    state.eventCooldown = 5;
   }
 
   function dismissEvent() {
@@ -291,6 +334,7 @@
   function grind() {
     if (!state.running || state.paused || state.gameOver || state.ending) return;
     const now = performance.now();
+    if (now - state.lastClickTime < GRIND_MIN_INTERVAL * 1000) return;
     if (now - state.lastClickTime < state.comboWindow * 1000) {
       state.combo = Math.min(99, state.combo + 1);
     } else {
@@ -303,17 +347,19 @@
     state.idleWarning = 0;
     state.comboPulse = Math.min(1, state.combo / 28);
 
-    const routine = ROUTINES[state.routineIndex % ROUTINES.length];
-    state.routineIndex += 1;
+    const routine = currentRoutine();
     state.recentRoutine = routine;
 
-    // Combo bonus
-    const bonus = state.combo >= 80 ? 2 : state.combo >= 35 ? 1 : 0;
-    const power = state.clickPower + bonus;
+    // Combo is momentum, not a skip button. High combos add a little
+    // extra to today's focus stats only.
+    const bonus = state.combo >= 80 ? 0.28 : state.combo >= 35 ? 0.14 : 0;
+    const power = state.clickPower;
     for (const k of Object.keys(state.stats)) {
       const focused = routine.stats.includes(k);
-      const delta = focused ? power + 1 : Math.max(0.32, power * 0.42);
-      state.stats[k] = clampStat(state.stats[k] + delta);
+      const raw = focused
+        ? (FOCUSED_GAIN + bonus) * power
+        : UNFOCUSED_GAIN * Math.max(0.55, power * 0.5);
+      state.stats[k] = clampStat(state.stats[k] + grindGain(state.stats[k], raw));
     }
 
     // Combo score
@@ -364,7 +410,7 @@
       ? "👑 MIRROR FINAL BOSS"
       : `💪 ${tier.title.toUpperCase()}`;
     const sub = won
-      ? `You did it. 10/10. The mirror blinked first. Final day: ${state.day}/${TOTAL_DAYS}.`
+      ? `You did it. 10/10 after ${state.day} days. The mirror blinked first.`
       : `Click RESTART to grind again.`;
     showOverlay(title, sub, "Grind again", `Final tier: <strong style="color:${tier.color}">${tier.title} ${tier.num}/10</strong> · Score: <strong style="color:var(--accent-3)">${finalScore.toLocaleString()}</strong> · High: <strong>${high.toLocaleString()}</strong>`);
   }
@@ -398,6 +444,7 @@
     drawMirrorRoom(tier, time);
     drawTopHud(tier);
     drawIdleWarning();
+    drawLockInWarning();
 
     // Avatar
     const ax = W / 2;
@@ -579,7 +626,7 @@
     ctx.fillStyle = "#fff";
     ctx.font = "bold 11px JetBrains Mono, monospace";
     ctx.textAlign = "right";
-    ctx.fillText(`DAY ${state.day}/${TOTAL_DAYS}`, W - 16, 20);
+    ctx.fillText(state.day <= TOTAL_DAYS ? `DAY ${state.day}/${TOTAL_DAYS}` : `DAY ${state.day}`, W - 16, 20);
     ctx.fillText(`SCORE ${Math.floor(state.score).toLocaleString()}`, W - 16, 38);
 
     ctx.fillStyle = "rgba(255,255,255,0.12)";
@@ -617,6 +664,24 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("IDLE DRAIN - SCORE FALLING", W / 2, 79);
+    ctx.restore();
+  }
+
+  function drawLockInWarning() {
+    if (state.ending || state.idleWarning > 0.2) return;
+    if (getLooksmax() < WIN_LOOKSMAX || state.day >= WIN_MIN_DAY) return;
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.72)";
+    roundRect(ctx, 46, 64, W - 92, 30, 8);
+    ctx.fill();
+    ctx.strokeStyle = "#f7d716";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = "#f7d716";
+    ctx.font = "bold 11px Bungee, Impact, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`LOCK IT IN · DAY ${WIN_MIN_DAY}`, W / 2, 79);
     ctx.restore();
   }
 
@@ -1105,7 +1170,7 @@
     const bw = W - 60;
     const bh = 78;
     const pulse = state.grindPulse;
-    const routine = state.recentRoutine || ROUTINES[0];
+    const routine = currentRoutine();
 
     // Glow
     ctx.fillStyle = hexToRgba(routine.color, 0.18 + pulse * 0.22);
@@ -1201,7 +1266,7 @@
     document.getElementById("hud-tier").textContent = tier.num + "/10";
     document.getElementById("hud-tier").style.color = tier.color;
     const dayEl = document.getElementById("hud-day");
-    if (dayEl) dayEl.textContent = state.day + "/" + TOTAL_DAYS;
+    if (dayEl) dayEl.textContent = state.day <= TOTAL_DAYS ? `${state.day}/${TOTAL_DAYS}` : String(state.day);
     const scoreEl = document.getElementById("hud-score");
     if (scoreEl) scoreEl.textContent = Math.floor(state.score).toLocaleString();
     document.getElementById("hud-combo").textContent = state.combo + "x";
@@ -1215,7 +1280,7 @@
     const s = RB.state;
     const items = [
       { key: "shield", icon: "📚", label: "Mewing Masterclass", desc: "2x click power for 45s" },
-      { key: "boost",  icon: "🧠", label: "Looksmaxx Guru",     desc: "+18 to all stats" },
+      { key: "boost",  icon: "🧠", label: "Looksmaxx Guru",     desc: "+7 to all stats" },
       { key: "nuke",   icon: "🛡", label: "Cope Harder",         desc: "45s immunity to decay" },
     ];
     slot.innerHTML = items.map((it) => {
@@ -1254,11 +1319,11 @@
       RB.toast("📚 Mewing Masterclass active — 2x click power for 45s", "good");
       setTimeout(() => { state.clickPower = 1; }, 45000);
     } else if (key === "boost") {
-      bumpAll(18);
+      bumpAll(7);
       state.flash = 0.5;
       state.shake = 0.4;
       spawnParticles(W / 2, 200, "#f7d716", 40, 320);
-      RB.toast("🧠 Looksmaxx Guru: +18 to ALL stats", "good");
+      RB.toast("🧠 Looksmaxx Guru: +7 to ALL stats", "good");
     } else if (key === "nuke") {
       state.decayImmune = 45;
       spawnParticles(W / 2, H / 2, "#2ee0ff", 30, 280);
@@ -1327,6 +1392,7 @@
     state.clicks = 0;
     state.combo = 0;
     state.lastClickTime = performance.now();
+    state.lastDayAnnounced = 1;
     state.score = 0;
     state.maxTier = 0;
     state.stats = { gym: 0, mewing: 0, jawline: 0, skincare: 0, sleep: 0, nofap: 0 };
@@ -1339,7 +1405,7 @@
     state.playTime = 0;
     state.day = 1;
     state.routineIndex = 0;
-    state.recentRoutine = ROUTINES[0];
+    state.recentRoutine = currentRoutine();
     state.grindPulse = 0;
     state.comboPulse = 0;
     state.idleDrain = 0;

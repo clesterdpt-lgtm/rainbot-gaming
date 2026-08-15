@@ -1946,23 +1946,24 @@
     ctx.lineTo(W, barH);
     ctx.stroke();
 
-    // 1. LEFT: SCORE & HIGH SCORE
+    // 1. LEFT: SCORE & HIGH SCORE (Offset past hamburger button at x = 8..46)
+    const leftX = 58;
     ctx.textAlign = "left";
     ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
     ctx.font = "800 9px JetBrains Mono, monospace";
-    ctx.fillText("SCORE", 14, 16);
+    ctx.fillText("SCORE", leftX, 16);
 
     ctx.fillStyle = "#2ee0ff";
     ctx.font = "800 16px JetBrains Mono, monospace";
     ctx.shadowColor = "rgba(46, 224, 255, 0.6)";
     ctx.shadowBlur = 8;
-    ctx.fillText(state.score.toLocaleString(), 14, 34);
+    ctx.fillText(state.score.toLocaleString(), leftX, 34);
     ctx.shadowBlur = 0;
 
     const hiScore = RB.getHighScore("hormuz");
     ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
     ctx.font = "700 9px JetBrains Mono, monospace";
-    ctx.fillText(`HI ${hiScore.toLocaleString()}`, 14, 48);
+    ctx.fillText(`HI ${hiScore.toLocaleString()}`, leftX, 48);
 
     // 2. CENTER: SECTOR & DISTANCE
     ctx.textAlign = "center";
@@ -1975,17 +1976,18 @@
     ctx.font = "800 14px JetBrains Mono, monospace";
     ctx.fillText(nmDist, W * 0.5, 38);
 
-    // 3. RIGHT: HULL INTEGRITY & CARGO MULTIPLIER
+    // 3. RIGHT: HULL INTEGRITY & CARGO MULTIPLIER (Offset left of fs-btn at x = W-46..W-8)
+    const rightX = W - 58;
     ctx.textAlign = "right";
     ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
     ctx.font = "800 9px JetBrains Mono, monospace";
-    ctx.fillText("HULL INTEGRITY", W - 14, 16);
+    ctx.fillText("HULL INTEGRITY", rightX, 16);
 
     // Hull Pips (Right-aligned)
     const pipW = 16;
     const pipH = 11;
     const pipGap = 4;
-    const startPipX = W - 14 - (s.maxHull * (pipW + pipGap) - pipGap);
+    const startPipX = rightX - (s.maxHull * (pipW + pipGap) - pipGap);
 
     for (let i = 0; i < s.maxHull; i++) {
       const px = startPipX + i * (pipW + pipGap);
@@ -2024,16 +2026,16 @@
     ctx.textAlign = "right";
     ctx.fillStyle = state.multiplier > 1.0 ? "#4ade80" : "rgba(255, 255, 255, 0.6)";
     ctx.font = "800 10px JetBrains Mono, monospace";
-    ctx.fillText(`🛢️ ${state.multiplier.toFixed(1)}x CARGO`, W - 14, 48);
+    ctx.fillText(`🛢️ ${state.multiplier.toFixed(1)}x CARGO`, rightX, 48);
 
     // 4. FLOATING ACTIVE POWERUP BADGES (Top-Right under HUD bar)
     let badgeY = 66;
     if (s.hasShield) {
-      drawHUDPill(W - 14, badgeY, "🛡️ DEFLECTOR ACTIVE", "#2ee0ff", "rgba(46, 224, 255, 0.18)");
+      drawHUDPill(rightX, badgeY, "🛡️ DEFLECTOR ACTIVE", "#2ee0ff", "rgba(46, 224, 255, 0.18)");
       badgeY += 24;
     }
     if (s.turboTimer > 0) {
-      drawHUDPill(W - 14, badgeY, `⚡ TURBO ${Math.ceil(s.turboTimer)}S`, "#ff2e88", "rgba(255, 46, 136, 0.18)");
+      drawHUDPill(rightX, badgeY, `⚡ TURBO ${Math.ceil(s.turboTimer)}S`, "#ff2e88", "rgba(255, 46, 136, 0.18)");
       badgeY += 24;
     }
   }

@@ -33,12 +33,14 @@
       --game-max-width: 672px;
       aspect-ratio: 28 / 31;
       max-width: 672px;
+      width: min(100%, 672px);
       margin: 0 auto;
       background: #060913;
       border: 2px solid rgba(35, 223, 242, 0.35);
       border-radius: 8px;
       box-shadow: 0 14px 44px rgba(0, 0, 0, 0.7), 0 0 24px rgba(35, 223, 242, 0.12);
       overflow: hidden;
+      position: relative;
     }
 
     .canvas-wrap--pac #gameCanvas {
@@ -241,7 +243,7 @@
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260813-apop3d-1"></script>
-  <script src="../assets/js/quiet-quitting.js?v=20260815-v1"></script>
+  <script src="../assets/js/quiet-quitting.js?v=20260815-fix2"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

@@ -282,7 +282,7 @@
       this.canvas.width = this.gridWidth;
       this.canvas.height = this.gridHeight;
 
-      this.state = "INIT"; // INIT, READY, PLAYING, PAUSED, DYING, LEVEL_CLEAR, GAME_OVER
+      this.state = "INIT"; // INIT, PLAYING, PAUSED, DYING, LEVEL_CLEAR, GAME_OVER
       this.score = 0;
       this.bestScore = parseInt(localStorage.getItem("quiet-quitting-best") || "0", 10);
       this.level = 1;
@@ -306,6 +306,10 @@
       // Entities
       this.player = null;
       this.ghosts = [];
+
+      // Pre-initialize round so game board renders immediately
+      this.resetMaze();
+      this.initRound();
 
       this.initEvents();
       this.updateHud();
@@ -340,11 +344,6 @@
           }
         }
 
-        if (this.state === "READY") {
-          this.state = "PLAYING";
-          this.hideOverlay();
-        }
-
         if (!this.player) return;
 
         switch (e.key) {
@@ -376,9 +375,8 @@
         btn.addEventListener("click", (e) => {
           e.preventDefault();
           this.sound.init();
-          if (this.state === "READY") {
-            this.state = "PLAYING";
-            this.hideOverlay();
+          if (this.state === "INIT") {
+            this.handlePrimaryClick();
           }
           if (!this.player) return;
           const dir = btn.getAttribute("data-mobile-dir");
@@ -397,9 +395,8 @@
         touchStartX = e.touches[0].clientX;
         touchStartY = e.touches[0].clientY;
         this.sound.init();
-        if (this.state === "READY") {
-          this.state = "PLAYING";
-          this.hideOverlay();
+        if (this.state === "INIT") {
+          this.handlePrimaryClick();
         }
       }, { passive: true });
 
@@ -451,9 +448,6 @@
         this.startNextLevel();
       } else if (this.state === "PAUSED") {
         this.togglePause();
-      } else if (this.state === "READY") {
-        this.state = "PLAYING";
-        this.hideOverlay();
       }
     }
 
@@ -540,12 +534,8 @@
       this.lives = 3;
       this.resetMaze();
       this.initRound();
-      this.state = "READY";
-      this.showOverlay(
-        `💼 LEVEL ${this.level} — ONBOARDING`,
-        "Swipe or press any direction key to start dodging meetings!",
-        "Start Working"
-      );
+      this.state = "PLAYING";
+      this.hideOverlay();
       this.updateHud();
       this.addOfficeFeed("📋 Clocked in for shift. Minimizing browser tabs.");
     }
@@ -554,12 +544,8 @@
       this.level++;
       this.resetMaze();
       this.initRound();
-      this.state = "READY";
-      this.showOverlay(
-        `📈 PROMOTED TO LEVEL ${this.level}`,
-        "Management added more syncs and shorter coffee breaks. Stay sharp!",
-        "Next Shift"
-      );
+      this.state = "PLAYING";
+      this.hideOverlay();
       this.updateHud();
       this.sound.playLevelClear();
       this.addOfficeFeed(`🏆 Survived level ${this.level - 1}. Title changed to 'Senior Associate'.`);
@@ -719,8 +705,7 @@
       setTimeout(() => {
         if (this.lives > 0) {
           this.initRound();
-          this.state = "READY";
-          this.showOverlay("☕ COFFEE BREAK RESTART", `Remaining coffee breaks: ${this.lives}`, "Back to Work");
+          this.state = "PLAYING";
           this.updateHud();
         } else {
           this.state = "GAME_OVER";
@@ -1367,7 +1352,17 @@
     }
   }
 
-  window.addEventListener("DOMContentLoaded", () => {
-    window.quietQuittingGame = new QuietQuittingGame();
-  });
+  function boot() {
+    if (!window.quietQuittingGame) {
+      window.quietQuittingGame = new QuietQuittingGame();
+    }
+  }
+
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", boot, { once: true });
+    } else {
+      boot();
+    }
+  }
 })();

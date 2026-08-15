@@ -82,17 +82,18 @@ try {
     /* Camera heights are ABSOLUTE world Y, and the Ossuary pan sits at
        about zero - so a shot "on the rim" is a few metres up and a shot
        "into the pit" is aimed nine metres below that. */
-    ["01-approach", [-70, 9, -52], [0, -6, 0], 55, (T) => {
+    /* The pit alone first, with the player parked well clear - the
+       limbs surface next to whoever is standing there, and a
+       photograph of the hole should not have one across the lens. */
+    ["01-pit", [-62, 22, -44], [0, -9, 0], 52, (T) => {
       const c = T.garner.config;
       T.forceGarnerPhase("feeding");
-      T._teleportRaw(c.pitX - 30, c.pitZ - 22, 0);
-      T.advanceTime(1 / 60, 1 / 60);
-      for (let i = 0; i < 3; i += 1) T.forceGarnerLash(i);
-      T.advanceTime(1.1, 1 / 60);
+      T._teleportRaw(c.pitX + 62, c.pitZ + 48, 0);
+      T.advanceTime(0.4, 1 / 60);
     }],
-    // Standing on the funnel's rim, looking down into it.
-    ["02-rim", [-32, 3, -22], [0, -7, 0], 62, (T) => {
-      T.advanceTime(0.5, 1 / 60);
+    // Standing on the funnel's outer rim, looking down into it.
+    ["02-rim", [-40, 5, -28], [0, -8, 0], 60, (T) => {
+      T.advanceTime(0.3, 1 / 60);
     }],
     ["03-lash", [-44, 10, -36], [-16, 4, -12], 60, (T) => {
       const c = T.garner.config;
@@ -109,7 +110,16 @@ try {
       T.advanceTime(1.0, 1 / 60);
     }],
     // At the mouth's own rim, where a polearm reaches the gullet.
-    ["05-gorge", [-15, -4, -11], [0, -8, 0], 62, (T) => {
+    /* From a clean state: the limbs come up next to the player and the
+       preceding shots leave several of them lying across this camera. */
+    ["05-gorge", [-16, -4, -12], [0, -7, 0], 62, (T) => {
+      const c = T.garner.config;
+      T.resetGarner();
+      /* Clear of this camera, and INSIDE the 112m arena: park the
+         trooper any further out and the boundary check seals the pit
+         while the photograph is being taken. */
+      T._teleportRaw(c.pitX + 58, c.pitZ + 44, 0);
+      T.advanceTime(0.2, 1 / 60);
       T.forceGarnerPhase("gorge", 11);
       T.advanceTime(2.2, 1 / 60);
     }],

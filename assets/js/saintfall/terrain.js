@@ -591,7 +591,15 @@ export function makeHeightField(seed = 0x5a1f7) {
           const bowl = -g.depth * (1 - sstep(g.floorRadius, g.rimRadius, gd));
           const lip = g.lipHeight
             * Math.exp(-((gd - (g.rimRadius + 5)) ** 2) / (2 * 8 * 8));
-          h += (bowl + lip) * k;
+          /* Terraces down the funnel wall - the same trick the Glass
+             Scar uses on its own bowl. A cone of sand this smooth reads
+             as a dish however deep it is; strata give the eye something
+             to measure the descent against, and at 4m sample spacing
+             they are the only surface detail the grid can express. */
+          const terrace = Math.sin(gd * 0.42) * 0.85
+            * (1 - sstep(g.floorRadius, g.rimRadius + 6, gd))
+            * sstep(g.floorRadius - 6, g.floorRadius + 2, gd);
+          h += (bowl + lip + terrace) * k;
         }
       }
     }

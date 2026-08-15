@@ -27,7 +27,9 @@ const OUT = path.resolve(root, args.out || "output/saintfall/ui-regression");
 const PORT = 51000 + (process.pid % 8000);
 const BASE = `http://127.0.0.1:${PORT}`;
 const results = [];
-const diagnostics = { pageErrors: [], consoleErrors: [] };
+const diagnostics = {
+  pageErrors: [], consoleErrors: [], networkErrors: [], requestFailures: [],
+};
 const evidence = {};
 let failed = 0;
 
@@ -120,6 +122,7 @@ async function doctrineLayoutAudit(page) {
     const pageNode = pick('[data-menu-page="doctrine"]:not([hidden])');
     const tabsNode = pick(".sf-doctrine__orders");
     const orderNode = pick("[data-doctrine-order-panel]");
+    const previewNode = pick("[data-doctrine-preview]");
     const doctrineFooterNode = pick(".sf-doctrine__footer");
     const globalFooterNode = pick(".sf-menu__footer");
     if (![frameNode, contentNode, pageNode, tabsNode, orderNode].every(Boolean)) {
@@ -130,6 +133,7 @@ async function doctrineLayoutAudit(page) {
     const pageRect = rectOf(pageNode);
     const tabs = rectOf(tabsNode);
     const order = rectOf(orderNode);
+    const preview = visible(previewNode) ? rectOf(previewNode) : null;
     const doctrineFooter = doctrineFooterNode ? rectOf(doctrineFooterNode) : null;
     const globalFooter = globalFooterNode ? rectOf(globalFooterNode) : null;
     const cardNodes = [...orderNode.querySelectorAll("[data-doctrine-talent]")]
@@ -138,7 +142,8 @@ async function doctrineLayoutAudit(page) {
       .filter(visible);
     const cards = cardNodes.map((node) => ({ id: node.dataset.talentId, ...rectOf(node) }));
     const vows = vowNodes.map((node) => ({ id: node.dataset.capstoneId, ...rectOf(node) }));
-    const actionOverflow = [...cardNodes, ...vowNodes].flatMap((node) => {
+    const actionOverflow = [...cardNodes, ...vowNodes,
+      ...(visible(previewNode) ? [previewNode] : [])].flatMap((node) => {
       const outer = rectOf(node);
       return [...node.querySelectorAll("button")].filter(visible).map((button) => {
         const inner = rectOf(button);
@@ -169,7 +174,7 @@ async function doctrineLayoutAudit(page) {
     return {
       missing: false,
       view: orderNode.dataset.view,
-      frame, content, page: pageRect, tabs, order, doctrineFooter, globalFooter,
+      frame, content, page: pageRect, tabs, order, preview, doctrineFooter, globalFooter,
       cards, vows, actionOverflow, cardOverlaps, scroll, scrollOwners,
       tabCount: tabButtons.length,
       tabMinHeight: tabButtons.length
@@ -178,6 +183,8 @@ async function doctrineLayoutAudit(page) {
       allCardsInContent: cards.every((rect) => contains(content, rect)),
       allVowsInOrder: vows.every((rect) => contains(order, rect)),
       allVowsInContent: vows.every((rect) => contains(content, rect)),
+      previewInOrder: !preview || contains(order, preview),
+      previewInContent: !preview || contains(content, preview),
       orderHitsDoctrineFooter: !!doctrineFooter && overlapArea(order, doctrineFooter) > 4,
       doctrineHitsGlobalFooter: !!doctrineFooter && !!globalFooter
         && overlapArea(doctrineFooter, globalFooter) > 4,
@@ -467,6 +474,43 @@ async function hudDensityAudit(page) {
   });
 }
 
+async function hardCornerAudit(page) {
+  return await page.evaluate(() => {
+    const selectors = [
+      ".sf-fs-btn", "#sf-objective", "#sf-minimap", "#sf-vitals", "#sf-charge",
+      ".sf-hud__command-head kbd", ".sf-hud__stratitem", ".sf-hud__hint",
+      ".sf-menu-trigger--mobile", ".sf-touch__button", ".sf-menu__frame",
+      ".sf-menu__close", ".sf-menu__rail button", ".sf-operation-card",
+      ".sf-map-page__surface", ".sf-map-page__orders", ".sf-map-order",
+      ".sf-doctrine__summary", ".sf-doctrine__orders", ".sf-doctrine__orders button",
+      ".sf-doctrine-talent", ".sf-doctrine__preview", ".sf-doctrine__vow",
+      ".sf-doctrine-talent__actions button", ".sf-doctrine__preview-foot button",
+    ];
+    const visible = (node) => {
+      const style = getComputedStyle(node);
+      const rect = node.getBoundingClientRect();
+      return style.display !== "none" && style.visibility !== "hidden"
+        && Number(style.opacity) > 0 && rect.width > 1 && rect.height > 1;
+    };
+    const measured = [...new Set(selectors.flatMap((selector) =>
+      [...document.querySelectorAll(selector)]))].filter(visible).map((node) => {
+      const style = getComputedStyle(node);
+      const radii = [style.borderTopLeftRadius, style.borderTopRightRadius,
+        style.borderBottomRightRadius, style.borderBottomLeftRadius]
+        .map((value) => Number.parseFloat(value) || 0);
+      return {
+        label: node.id || node.dataset.talentId || node.dataset.menuPanel
+          || node.dataset.touchAction || node.className,
+        radii,
+      };
+    });
+    return {
+      count: measured.length,
+      offenders: measured.filter((item) => item.radii.some((value) => value > 0.1)),
+    };
+  });
+}
+
 async function touchTargetAudit(page) {
   return await page.evaluate(() => {
     const stage = document.querySelector(".sf-stage");
@@ -610,6 +654,26 @@ async function preparePage(browser, name, contextOptions,
       console.error(`CONSOLE ERROR (${name}):`, message.text());
     }
   });
+  page.on("response", (response) => {
+    try {
+      const url = new URL(response.url());
+      if (url.origin === BASE && response.status() >= 400) {
+        diagnostics.networkErrors.push(`${name}: ${response.status()} ${url.pathname}`);
+      }
+    } catch (_) { /* non-URL response */ }
+  });
+  page.on("requestfailed", (request) => {
+    try {
+      const url = new URL(request.url());
+      const errorText = request.failure()?.errorText || "failed";
+      // Re-rendering the Order strip can retire an image element after its
+      // cached replacement has already decoded. Chromium reports that benign
+      // cancellation as ERR_ABORTED; HTTP failures are covered separately.
+      if (url.origin === BASE && errorText !== "net::ERR_ABORTED") {
+        diagnostics.requestFailures.push(`${name}: ${url.pathname} - ${errorText}`);
+      }
+    } catch (_) { /* non-URL request */ }
+  });
   await page.goto(`${BASE}/games/saintfall.html?qa=1&quality=high&intro=skip`,
     { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForFunction(() => window.__SF?.isReady?.(), null, { timeout: 300000 });
@@ -635,6 +699,11 @@ async function embeddedKeyboardPass(browser) {
     embeddedDensity.coveragePct <= 10 && embeddedDensity.overlaps.length === 0
       && embeddedDensity.readyLabels.length === 0 && embeddedDensity.largeClusters.length === 0,
     JSON.stringify(embeddedDensity));
+  const embeddedCorners = await hardCornerAudit(page);
+  evidence.embeddedCorners = embeddedCorners;
+  check("embedded HUD uses hard rectangular instrument corners",
+    embeddedCorners.count >= 8 && embeddedCorners.offenders.length === 0,
+    JSON.stringify(embeddedCorners));
   const allGames = page.locator(".game-page__header a", { hasText: "All games" });
   await page.evaluate(() => {
     const snapshot = () => {
@@ -765,6 +834,7 @@ async function embeddedKeyboardPass(browser) {
     embeddedDoctrineAudits.length === 5 && embeddedDoctrineAudits.every(({ audit }) =>
       !audit.missing && audit.view === "overview" && audit.cards.length === 4
         && audit.vows.length === 1 && audit.allCardsInOrder && audit.allCardsInContent
+        && !!audit.preview && audit.previewInOrder && audit.previewInContent
         && audit.allVowsInOrder && audit.allVowsInContent),
     JSON.stringify(embeddedDoctrineAudits));
   check("embedded Doctrine has no nested scroll, clipping, or card overlap",
@@ -798,34 +868,103 @@ async function embeddedKeyboardPass(browser) {
       hero: sigils.hero, capstone: sigils.capstone,
     }))));
 
-  const inspectButton = page.locator('[data-talent-action="inspect"]').first();
-  const inspectedDetailId = await inspectButton.getAttribute("aria-controls");
-  await inspectButton.click();
-  await page.waitForFunction(() => document.querySelector("[data-doctrine-order-panel]")
-    ?.dataset.view === "talent", null, { timeout: 3000 });
+  const doctrineCards = page.locator("[data-doctrine-talent]");
+  const hoverCard = doctrineCards.nth(1);
+  await hoverCard.hover();
+  await page.waitForFunction(() => document.querySelector("[data-doctrine-preview]")
+    ?.dataset.talentId === document.querySelectorAll("[data-doctrine-talent]")[1]?.dataset.talentId,
+  null, { timeout: 3000 });
+  const hoverPreview = await page.evaluate(() => ({
+    talentId: document.querySelector("[data-doctrine-preview]")?.dataset.talentId,
+    text: document.querySelector("[data-doctrine-preview]")?.textContent
+      ?.replace(/\s+/g, " ").trim(),
+    cardPreviewed: document.querySelectorAll("[data-doctrine-talent]")[1]
+      ?.dataset.previewed,
+  }));
+  await hoverCard.focus();
   await page.waitForTimeout(40);
-  const inspectedDoctrine = await page.evaluate((detailId) => {
-    const button = document.querySelector('[data-talent-action="inspect"][aria-expanded="true"]');
-    const detail = document.getElementById(detailId);
-    return {
-      expanded: button?.getAttribute("aria-expanded"),
-      controls: button?.getAttribute("aria-controls"),
-      detailVisible: !!detail && !detail.hidden && getComputedStyle(detail).display !== "none",
-      focusPreserved: document.activeElement === button,
-      view: document.querySelector("[data-doctrine-order-panel]")?.dataset.view,
-    };
-  }, inspectedDetailId);
+  const focusPreview = await page.evaluate(() => ({
+    talentId: document.querySelector("[data-doctrine-preview]")?.dataset.talentId,
+    text: document.querySelector("[data-doctrine-preview]")?.textContent
+      ?.replace(/\s+/g, " ").trim(),
+    focusedCard: document.activeElement?.dataset.talentId || null,
+    controls: document.activeElement?.getAttribute("aria-controls") || null,
+    visibleCards: [...document.querySelectorAll("[data-doctrine-talent]")]
+      .filter((node) => getComputedStyle(node).display !== "none").length,
+    view: document.querySelector("[data-doctrine-order-panel]")?.dataset.view,
+  }));
   await page.locator(".sf-stage").screenshot({
-    path: path.join(OUT, "embedded-doctrine-inspected-1008x567.png"),
+    path: path.join(OUT, "embedded-doctrine-hover-focus-1008x567.png"),
   });
-  check("Doctrine Details is an accessible drill-in and preserves focus",
-    inspectedDoctrine.expanded === "true" && inspectedDoctrine.controls === inspectedDetailId
-      && inspectedDoctrine.detailVisible && inspectedDoctrine.focusPreserved
-      && inspectedDoctrine.view === "talent",
-    JSON.stringify(inspectedDoctrine));
-  await page.locator('[data-talent-action="inspect"][aria-expanded="true"]').click();
-  await page.waitForFunction(() => document.querySelector("[data-doctrine-order-panel]")
-    ?.dataset.view === "overview", null, { timeout: 3000 });
+  check("Doctrine hover and keyboard focus share one stable inspector without reflow",
+    hoverPreview.talentId === focusPreview.talentId
+      && hoverPreview.text === focusPreview.text
+      && hoverPreview.cardPreviewed === "true"
+      && focusPreview.focusedCard === focusPreview.talentId
+      && focusPreview.controls === "sf-doctrine-preview"
+      && focusPreview.visibleCards === 4 && focusPreview.view === "overview",
+    JSON.stringify({ hoverPreview, focusPreview }));
+
+  await hoverCard.press("Enter");
+  await page.waitForTimeout(40);
+  const clickPreview = await page.evaluate(() => ({
+    talentId: document.querySelector("[data-doctrine-preview]")?.dataset.talentId,
+    visibleCards: [...document.querySelectorAll("[data-doctrine-talent]")]
+      .filter((node) => getComputedStyle(node).display !== "none").length,
+    view: document.querySelector("[data-doctrine-order-panel]")?.dataset.view,
+    focusMovedToInspectorAction: document.activeElement
+      ?.closest("[data-doctrine-preview]")?.matches("[data-doctrine-preview]") || false,
+  }));
+  check("desktop keyboard activation targets the inspector and preserves the comparison grid",
+    clickPreview.talentId === hoverPreview.talentId && clickPreview.visibleCards === 4
+      && clickPreview.view === "overview" && clickPreview.focusMovedToInspectorAction,
+    JSON.stringify(clickPreview));
+
+  await page.evaluate(() => {
+    const T = window.__SF;
+    T.resetProgressionForQA();
+    const definitions = T.progressionDefinitions();
+    const state = T.progressionState();
+    const rankTwoXp = Number(definitions?.thresholds?.[1]) || 125;
+    T.grantProgressionXpForQA(Math.max(0, rankTwoXp - (Number(state?.xp) || 0)),
+      "qa:ui-focus-mutation");
+  });
+  const starterCard = page.locator("[data-doctrine-talent]").first();
+  await page.waitForFunction(() => document.querySelector("[data-doctrine-talent]")
+    ?.dataset.state === "available", null, { timeout: 3000 });
+  const starterId = await starterCard.getAttribute("data-talent-id");
+  await starterCard.focus();
+  await starterCard.press("Enter");
+  await page.waitForFunction((talentId) => {
+    const preview = document.querySelector("[data-doctrine-preview]");
+    return preview?.dataset.talentId === talentId
+      && preview.contains(document.activeElement)
+      && !preview.querySelector('[data-talent-action="spend"]')?.disabled;
+  }, starterId, { timeout: 3000 });
+  await page.keyboard.press("Enter");
+  await page.waitForFunction((talentId) => Number(document.querySelector(
+    `[data-doctrine-talent][data-talent-id="${CSS.escape(talentId)}"] [data-talent-rank]`
+  )?.dataset.talentRank) === 1, starterId, { timeout: 3000 });
+  await page.waitForTimeout(60);
+  const mutationFocus = await page.evaluate((talentId) => {
+    const preview = document.querySelector("[data-doctrine-preview]");
+    const active = document.activeElement;
+    return {
+      talentId,
+      rank: Number(document.querySelector(
+        `[data-doctrine-talent][data-talent-id="${CSS.escape(talentId)}"] [data-talent-rank]`
+      )?.dataset.talentRank),
+      activeAction: active?.dataset?.talentAction || null,
+      activeTalent: active?.dataset?.talentId || null,
+      focusInPreview: !!preview?.contains(active),
+      focusOnBody: active === document.body,
+    };
+  }, starterId);
+  check("inscribing from the inspector restores focus inside the rebuilt inspector",
+    mutationFocus.rank === 1 && mutationFocus.focusInPreview && !mutationFocus.focusOnBody
+      && mutationFocus.activeTalent === starterId
+      && ["refund", "spend"].includes(mutationFocus.activeAction),
+    JSON.stringify(mutationFocus));
 
   await page.keyboard.press("Escape");
   await page.waitForFunction(() => !window.__SF.menuState()?.open, null, { timeout: 3000 });
@@ -1246,6 +1385,11 @@ async function desktopPass(browser) {
   check("Escape opens the native operation menu", await openMenuWithEscape(page));
   await page.waitForSelector('#sf-menu[aria-modal="true"]');
   await page.locator(".sf-stage").screenshot({ path: path.join(OUT, "desktop-operation-menu.png") });
+  const desktopMenuCorners = await hardCornerAudit(page);
+  evidence.desktopMenuCorners = desktopMenuCorners;
+  check("desktop operation menu keeps every conventional surface square",
+    desktopMenuCorners.count >= 20 && desktopMenuCorners.offenders.length === 0,
+    JSON.stringify(desktopMenuCorners));
   const pauseProbe = await page.evaluate(() => {
     const T = window.__SF;
     const before = T.mission.state.elapsed;
@@ -1294,11 +1438,18 @@ async function desktopPass(browser) {
     path: path.join(OUT, "desktop-doctrine-sigils-1440x900.png"),
   });
   evidence.desktopDoctrineSigils = desktopDoctrineSigils;
+  const desktopDoctrineCorners = await hardCornerAudit(page);
+  evidence.desktopDoctrineCorners = desktopDoctrineCorners;
+  check("desktop Doctrine grid, inspector, and actions keep hard corners",
+    desktopDoctrineCorners.count >= 30 && desktopDoctrineCorners.offenders.length === 0,
+    JSON.stringify(desktopDoctrineCorners));
   check("desktop 1440x900 keeps decoded sigils clear without disturbing Doctrine containment",
     doctrineSigilFitPass(desktopDoctrineSigils)
       && desktopDoctrineLayout.cards.length === 4
       && desktopDoctrineLayout.vows.length === 1
       && desktopDoctrineLayout.allCardsInOrder && desktopDoctrineLayout.allCardsInContent
+      && !!desktopDoctrineLayout.preview && desktopDoctrineLayout.previewInOrder
+      && desktopDoctrineLayout.previewInContent
       && desktopDoctrineLayout.allVowsInOrder && desktopDoctrineLayout.allVowsInContent
       && desktopDoctrineLayout.actionOverflow.length === 0
       && desktopDoctrineLayout.cardOverlaps.length === 0
@@ -1374,7 +1525,54 @@ async function desktopPass(browser) {
   check("accessibility settings apply through real menu input",
     contrastAfter.setting !== contrastBefore && contrastAfter.bodyClass === contrastAfter.setting,
     JSON.stringify({ contrastBefore, contrastAfter }));
-  await page.keyboard.press("Space");
+  if (!contrastAfter.setting) {
+    await contrastSwitch.focus();
+    await page.keyboard.press("Space");
+    await page.waitForFunction(() => window.__SF.settingsState().highContrast === true);
+  }
+  await page.locator('[data-menu-panel="doctrine"]').click();
+  await page.waitForFunction(() => window.__SF.menuState()?.panel === "doctrine"
+    && !!document.querySelector("[data-doctrine-preview] .sf-doctrine__preview-summary"));
+  const contrastVisual = await page.evaluate(() => {
+    const style = (selector) => {
+      const node = document.querySelector(selector);
+      const computed = node ? getComputedStyle(node) : null;
+      return computed ? {
+        color: computed.color,
+        backgroundColor: computed.backgroundColor,
+        borderTopColor: computed.borderTopColor,
+      } : null;
+    };
+    return {
+      enabled: window.__SF.settingsState().highContrast,
+      frame: style(".sf-menu__frame"),
+      mastheadCopy: style(".sf-menu__masthead p"),
+      talent: style("[data-doctrine-talent]"),
+      talentCopy: style("[data-doctrine-talent] > p"),
+      preview: style("[data-doctrine-preview]"),
+      previewCopy: style("[data-doctrine-preview] .sf-doctrine__preview-summary"),
+    };
+  });
+  await page.locator(".sf-stage").screenshot({
+    path: path.join(OUT, "desktop-high-contrast-doctrine.png"),
+  });
+  evidence.highContrastVisual = contrastVisual;
+  check("high contrast visibly overrides the hardline menu and Doctrine palette",
+    contrastVisual.enabled
+      && contrastVisual.frame?.backgroundColor === "rgb(1, 3, 4)"
+      && contrastVisual.mastheadCopy?.color === "rgb(255, 255, 255)"
+      && contrastVisual.talentCopy?.color === "rgb(255, 255, 255)"
+      && contrastVisual.previewCopy?.color === "rgb(255, 255, 255)"
+      && /195, 246, 255/.test(contrastVisual.talent?.borderTopColor || "")
+      && /195, 246, 255/.test(contrastVisual.preview?.borderTopColor || ""),
+    JSON.stringify(contrastVisual));
+  await page.locator('[data-menu-panel="settings"]').click();
+  await page.waitForFunction(() => window.__SF.menuState()?.panel === "settings");
+  if (await page.evaluate(() => window.__SF.settingsState().highContrast)) {
+    await contrastSwitch.focus();
+    await page.keyboard.press("Space");
+    await page.waitForFunction(() => window.__SF.settingsState().highContrast === false);
+  }
 
   console.log("\n=== FIELD SAVE ROUND TRIP ===");
   await page.locator('[data-menu-panel="saves"]').click();
@@ -1599,6 +1797,11 @@ async function mobilePass(browser) {
     mobileDensity.coveragePct <= 15 && mobileDensity.overlaps.length === 0
       && mobileDensity.readyLabels.length === 0 && mobileDensity.largeClusters.length === 0,
     JSON.stringify(mobileDensity));
+  const mobileCorners = await hardCornerAudit(page);
+  evidence.mobileCorners = mobileCorners;
+  check("portrait HUD, menu trigger, and touch actions use hard corners",
+    mobileCorners.count >= 12 && mobileCorners.offenders.length === 0,
+    JSON.stringify(mobileCorners));
   const mobileChrome = await mobileChromeAudit(page);
   const mobileSafeArea = await safeAreaAudit(page, portraitSafeArea);
   const mobileTextFit = await mobileTextFitAudit(page);
@@ -1643,11 +1846,16 @@ async function mobilePass(browser) {
     touchInert: !!document.getElementById("sf-touch")?.inert,
     focusInside: document.getElementById("sf-menu")?.contains(document.activeElement),
   }));
+  const mobileMenuCorners = await hardCornerAudit(page);
+  evidence.mobileMenuCorners = mobileMenuCorners;
   check("mobile menu button is a 44px-safe authoritative pause control",
     mobileMenuBox.width >= 43.5 && mobileMenuBox.height >= 43.5
       && mobileMenuOpen.state?.open && mobileMenuOpen.paused
       && mobileMenuOpen.touchInert && mobileMenuOpen.focusInside,
     JSON.stringify({ mobileMenuBox, mobileMenuOpen }));
+  check("portrait operation menu keeps hard-edged navigation and panels",
+    mobileMenuCorners.count >= 18 && mobileMenuCorners.offenders.length === 0,
+    JSON.stringify(mobileMenuCorners));
   await page.locator("[data-menu-close]").first().tap();
   await page.waitForFunction(() => !window.__SF.menuState()?.open,
     null, { timeout: 3000 });
@@ -2043,6 +2251,8 @@ async function landscapeTouchPass(browser) {
   evidence.landscapeDoctrineSigils = landscapeDoctrineSigils;
   check("844x390 Doctrine keeps all four rites in one clean scan row",
     landscapeDoctrineTop.cards.length === 4 && landscapeDoctrineTop.vows.length === 1
+      && Math.max(...landscapeDoctrineTop.cards.map((card) => card.top))
+        - Math.min(...landscapeDoctrineTop.cards.map((card) => card.top)) <= 2
       && landscapeDoctrineTop.allCardsInOrder
       && landscapeDoctrineTop.allVowsInOrder
       && landscapeDoctrineTop.allVowsInContent
@@ -2059,6 +2269,47 @@ async function landscapeTouchPass(browser) {
       && doctrineSigilAccessibilityPass(landscapeDoctrineSigils)
       && doctrineSigilAssetsPass(landscapeDoctrineSigils),
     JSON.stringify(landscapeDoctrineSigils));
+
+  const touchRiteCard = page.locator("[data-doctrine-talent]").first();
+  const touchRiteDetails = touchRiteCard.locator('[data-talent-action="inspect"]');
+  const touchCardSemantics = await touchRiteCard.evaluate((card) => ({
+    tabIndex: card.tabIndex,
+    controls: card.getAttribute("aria-controls"),
+    detailsLabel: card.querySelector('[data-talent-action="inspect"]')
+      ?.getAttribute("aria-label") || "",
+  }));
+  await touchRiteDetails.focus();
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.querySelector("[data-doctrine-order-panel]")
+    ?.dataset.view === "talent", null, { timeout: 3000 });
+  const hybridRiteDetail = await page.evaluate(() => {
+    const button = document.activeElement;
+    const detail = button?.getAttribute("aria-controls")
+      ? document.getElementById(button.getAttribute("aria-controls")) : null;
+    const preview = document.querySelector("[data-doctrine-preview]");
+    return {
+      activeAction: button?.dataset?.talentAction || null,
+      expanded: button?.getAttribute("aria-expanded"),
+      detailVisible: !!detail && !detail.hidden && getComputedStyle(detail).display !== "none",
+      previewDisplay: preview ? getComputedStyle(preview).display : null,
+      focusInHiddenPreview: !!preview?.contains(button),
+    };
+  });
+  await page.locator(".sf-stage").screenshot({
+    path: path.join(OUT, "touch-844x390-doctrine-rite-detail.png"),
+  });
+  check("hybrid touch and keyboard use the visible rite Details flow",
+    touchCardSemantics.tabIndex < 0 && !touchCardSemantics.controls
+      && /^Details for /i.test(touchCardSemantics.detailsLabel)
+      && hybridRiteDetail.activeAction === "inspect"
+      && hybridRiteDetail.expanded === "true" && hybridRiteDetail.detailVisible
+      && hybridRiteDetail.previewDisplay === "none"
+      && !hybridRiteDetail.focusInHiddenPreview,
+    JSON.stringify({ touchCardSemantics, hybridRiteDetail }));
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.querySelector("[data-doctrine-order-panel]")
+    ?.dataset.view === "overview", null, { timeout: 3000 });
+
   await page.evaluate(() => {
     const order = document.querySelector("[data-doctrine-order-panel]");
     if (order) order.scrollTop = order.scrollHeight;
@@ -2152,6 +2403,10 @@ try {
     diagnostics.pageErrors.slice(0, 4).join(" | "));
   check("no console errors", diagnostics.consoleErrors.length === 0,
     diagnostics.consoleErrors.slice(0, 4).join(" | "));
+  check("no same-origin HTTP errors", diagnostics.networkErrors.length === 0,
+    diagnostics.networkErrors.slice(0, 4).join(" | "));
+  check("no same-origin request failures", diagnostics.requestFailures.length === 0,
+    diagnostics.requestFailures.slice(0, 4).join(" | "));
 
   await writeFile(path.join(OUT, "report.json"), JSON.stringify({
     viewportPasses: ["embedded-page-1440x1000", "desktop-1440x900", "mobile-390x844",

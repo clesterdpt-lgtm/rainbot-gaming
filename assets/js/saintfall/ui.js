@@ -227,13 +227,19 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
               <p class="sf-doctrine__lock" data-doctrine-lock role="status" hidden></p>
               <div class="sf-doctrine__body">
                 <nav class="sf-doctrine__orders" data-doctrine-orders role="tablist" aria-label="Doctrine Orders" aria-orientation="horizontal"></nav>
-                <section class="sf-doctrine__order" data-doctrine-order-panel role="tabpanel" tabindex="0" aria-live="polite">
+                <section class="sf-doctrine__order" data-doctrine-order-panel role="tabpanel" tabindex="0">
                   <header class="sf-doctrine__order-head">
                     <img class="sf-doctrine__sigil sf-doctrine__sigil--hero" data-doctrine-sigil data-sigil-role="hero" width="512" height="512" alt="" aria-hidden="true" draggable="false" decoding="async" hidden>
                     <span><small data-doctrine-order-kicker>ORDER</small><h4 data-doctrine-order-name>Awaiting doctrine</h4><p data-doctrine-order-focus>Select an Order to inspect its rites.</p></span>
                     <b data-doctrine-invested>0 / 8</b>
                   </header>
-                  <div class="sf-doctrine__rites" data-doctrine-talents></div>
+                  <div class="sf-doctrine__workspace">
+                    <div class="sf-doctrine__rites" data-doctrine-talents></div>
+                  <aside class="sf-doctrine__preview" id="sf-doctrine-preview" data-doctrine-preview
+                    tabindex="-1" aria-label="Rite details">
+                      <span class="sf-doctrine__preview-empty">HOVER OR FOCUS A RITE TO INSPECT</span>
+                    </aside>
+                  </div>
                   <div data-doctrine-capstone></div>
                 </section>
               </div>
@@ -338,6 +344,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
   const doctrine = {
     orderId: null,
     inspectedTalentId: null,
+    previewTalentId: null,
+    hoverTalentId: null,
     respecUntil: 0,
     latestState: null,
   };
@@ -614,17 +622,91 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     const spendLabel = !eligibility.implemented ? "FORTHCOMING"
       : rank >= maxRank ? "MAX RANK" : `INSCRIBE ${rankNumeral(rank + 1)}`;
     const reason = eligibility.reason || (rank > 0 ? `Rank ${rank} of ${maxRank} inscribed.` : "Ready to inscribe.");
-    return `<article class="sf-doctrine-talent" data-doctrine-talent data-talent-id="${escapeHtml(definition.id)}" data-state="${cardState}" data-tier="${Math.max(1, Number(definition.tier) || 1)}" data-inspected="${inspected ? "true" : "false"}">
+    const previewed = doctrine.previewTalentId === definition.id;
+    const desktopCardInteraction = stage.classList.contains("sf-touch-enabled")
+      ? "" : ' tabindex="0" aria-controls="sf-doctrine-preview"';
+    const accessibleName = `${definition.name || "Unnamed Rite"}. Tier ${Math.max(1,
+      Number(definition.tier) || 1)}. Rank ${rank} of ${maxRank}. ${definition.summary || ""} ${reason}`;
+    return `<article class="sf-doctrine-talent" data-doctrine-talent data-talent-id="${escapeHtml(definition.id)}" data-state="${cardState}" data-tier="${Math.max(1, Number(definition.tier) || 1)}" data-inspected="${inspected ? "true" : "false"}" data-previewed="${previewed ? "true" : "false"}"${desktopCardInteraction} aria-label="${escapeHtml(accessibleName)}">
       <header><span><small>TIER ${Math.max(1, Number(definition.tier) || 1)}</small><strong>${escapeHtml(definition.name || "Unnamed Rite")}</strong></span><b data-talent-rank="${rank}" aria-label="Rank ${rank} of ${maxRank}">${pips}</b></header>
       <p>${escapeHtml(definition.summary || "A Reliquary rite awaiting inscription.")}</p>
       <div class="sf-doctrine-talent__actions">
-        <button type="button" data-doctrine-action="inspect" data-talent-action="inspect" data-talent-id="${escapeHtml(definition.id)}" aria-expanded="${inspected ? "true" : "false"}" aria-controls="${detailId}">${inspected ? "BACK TO RITES" : "DETAILS"}</button>
+        <button type="button" data-doctrine-action="inspect" data-talent-action="inspect" data-talent-id="${escapeHtml(definition.id)}" aria-label="${inspected ? "Back to rites" : `Details for ${escapeHtml(definition.name || "Unnamed Rite")}`}" aria-expanded="${inspected ? "true" : "false"}" aria-controls="${detailId}">${inspected ? "BACK TO RITES" : "DETAILS"}</button>
         ${rank > 0 ? `<button type="button" data-doctrine-action="refund" data-talent-action="refund" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canRefund, eligibility.refundReason)}>REFUND</button>` : ""}
         <button type="button" data-doctrine-action="spend" data-talent-action="spend" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canSpend, eligibility.reason)}>${spendLabel}</button>
       </div>
       <small class="sf-doctrine-talent__reason" data-talent-reason>${escapeHtml(reason)}</small>
       <div class="sf-doctrine-talent__detail" id="${detailId}" data-talent-detail${inspected ? "" : " hidden"}>${rankDetails}</div>
     </article>`;
+  }
+
+  function renderDoctrinePreview(orderDefinition, orderState, state, edit, definitions) {
+    const host = root.querySelector("[data-doctrine-preview]");
+    if (!host) return false;
+    const talents = orderDefinition?.talents || [];
+    const definition = talents.find((talent) => talent.id === doctrine.previewTalentId)
+      || talents[0] || null;
+    if (!definition) {
+      doctrine.previewTalentId = null;
+      host.dataset.state = "empty";
+      host.innerHTML = '<span class="sf-doctrine__preview-empty">NO RITES RECOVERED</span>';
+      return false;
+    }
+
+    doctrine.previewTalentId = definition.id;
+    const current = runtimeTalent(state, orderState, definition.id);
+    const eligibility = talentEligibility(definition, current, state, orderState, edit, definitions);
+    const { rank, maxRank } = eligibility;
+    const stateName = !eligibility.implemented ? "forthcoming"
+      : rank >= maxRank ? "maxed" : rank > 0 ? "owned"
+      : eligibility.canSpend ? "available" : "locked";
+    const stateLabel = !eligibility.implemented ? "FORTHCOMING"
+      : rank >= maxRank ? "MASTERED" : rank > 0 ? "INSCRIBED"
+      : eligibility.canSpend ? "AVAILABLE" : "LOCKED";
+    const reason = eligibility.reason
+      || (rank > 0 ? `Rank ${rank} of ${maxRank} inscribed.` : "Ready to inscribe.");
+    const ranks = Array.isArray(definition.ranks) ? definition.ranks : [];
+    const rankDetails = ranks.length ? ranks.map((entry, index) => {
+      const rankState = index < rank ? "owned" : index === rank ? "next" : "locked";
+      return `<li data-state="${rankState}"><b>${String(index + 1).padStart(2, "0")}</b><span><small>RANK ${rankNumeral(index + 1)}</small><strong>${escapeHtml(entry?.description || "Rite effect awaiting record.")}</strong></span></li>`;
+    }).join("") : `<li data-state="${rank > 0 ? "owned" : "next"}"><b>01</b><span><small>RITE EFFECT</small><strong>${escapeHtml(definition.description || definition.summary || "Rite effect awaiting record.")}</strong></span></li>`;
+    const required = Math.max(0, Math.floor(Number(definition?.requires?.orderPoints) || 0));
+    const spendLabel = !eligibility.implemented ? "FORTHCOMING"
+      : rank >= maxRank ? "MAX RANK" : `INSCRIBE RANK ${rankNumeral(rank + 1)}`;
+    const actionButtons = `${rank > 0
+      ? `<button type="button" data-doctrine-action="refund" data-talent-action="refund" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canRefund, eligibility.refundReason)}>REFUND RANK</button>` : ""}
+      <button type="button" data-doctrine-action="spend" data-talent-action="spend" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canSpend, eligibility.reason)}>${spendLabel}</button>`;
+
+    host.dataset.state = stateName;
+    host.dataset.talentId = definition.id;
+    host.innerHTML = `<header class="sf-doctrine__preview-head">
+        <span><small>${escapeHtml(orderDefinition.shortName || orderDefinition.name || "ORDER")} · TIER ${Math.max(1, Number(definition.tier) || 1)}</small><h5>${escapeHtml(definition.name || "Unnamed Rite")}</h5></span>
+        <b data-state="${stateName}">${stateLabel}</b>
+      </header>
+      <p class="sf-doctrine__preview-summary">${escapeHtml(definition.summary || "A Reliquary rite awaiting inscription.")}</p>
+      <div class="sf-doctrine__preview-meta" aria-label="Rite requirements">
+        <span><small>CURRENT RANK</small><strong>${rank} / ${maxRank}</strong></span>
+        <span><small>ORDER GATE</small><strong>${required ? `${required} PTS` : "OPEN"}</strong></span>
+      </div>
+      <ol class="sf-doctrine__preview-ranks">${rankDetails}</ol>
+      <footer class="sf-doctrine__preview-foot">
+        <small>${escapeHtml(reason)}</small>
+        <div>${actionButtons}</div>
+      </footer>`;
+    root.querySelectorAll("[data-doctrine-talent]").forEach((card) => {
+      card.dataset.previewed = card.dataset.talentId === definition.id ? "true" : "false";
+    });
+    return true;
+  }
+
+  function setDoctrinePreview(talentId) {
+    const definitions = progressionDefinitions();
+    const orderDefinition = definitions.orders.find((entry) => entry.id === doctrine.orderId);
+    if (!orderDefinition?.talents?.some((talent) => talent.id === talentId)) return false;
+    const state = doctrine.latestState || progressionState();
+    const orderState = runtimeOrder(state, doctrine.orderId);
+    doctrine.previewTalentId = talentId;
+    return renderDoctrinePreview(orderDefinition, orderState, state, editState(state), definitions);
   }
 
   function renderCapstone(definition, orderDefinition, orderState, state, edit, definitions) {
@@ -672,11 +754,12 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     </article>`;
   }
 
-  function focusAfterDoctrineRefresh(selector) {
+  function focusAfterDoctrineRefresh(selector, fallbackSelector = null) {
     if (!selector) return;
     requestAnimationFrame(() => {
       if (!destroyed && menu.open && menu.panel === "doctrine") {
-        const target = root.querySelector(selector);
+        const target = root.querySelector(selector)
+          || (fallbackSelector ? root.querySelector(fallbackSelector) : null);
         target?.focus?.({ preventScroll: true });
         target?.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "auto" });
       }
@@ -688,6 +771,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     if (!definitions.orders.some((entry) => entry.id === orderId)) return false;
     doctrine.orderId = orderId;
     doctrine.inspectedTalentId = null;
+    doctrine.previewTalentId = null;
+    doctrine.hoverTalentId = null;
     refreshDoctrine();
     const panel = root.querySelector("[data-doctrine-order-panel]");
     if (panel) panel.scrollTop = 0;
@@ -705,6 +790,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     if (!doctrine.orderId || !orders.some((entry) => entry.id === doctrine.orderId)) {
       doctrine.orderId = orders[0]?.id || null;
       doctrine.inspectedTalentId = null;
+      doctrine.previewTalentId = null;
     }
     const rank = Math.max(1, Math.floor(Number(state?.rank) || 1));
     const xpInto = Math.max(0, Math.floor(Number(state?.xpIntoRank) || 0));
@@ -774,6 +860,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
       root.querySelector("[data-doctrine-order-name]").textContent = "Doctrine unavailable";
       root.querySelector("[data-doctrine-order-focus]").textContent = "No Order definitions were provided.";
       root.querySelector("[data-doctrine-talents]").innerHTML = "";
+      const preview = root.querySelector("[data-doctrine-preview]");
+      if (preview) preview.innerHTML = '<span class="sf-doctrine__preview-empty">NO RITES RECOVERED</span>';
       root.querySelector("[data-doctrine-capstone]").innerHTML = "";
       return state;
     }
@@ -791,6 +879,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     panel.dataset.doctrineOrderPanel = doctrine.orderId;
     panel.dataset.accent = orderDefinition.accent || "gold";
     const talentIds = new Set((orderDefinition.talents || []).map((talent) => talent.id));
+    if (!talentIds.has(doctrine.previewTalentId)) {
+      doctrine.previewTalentId = orderDefinition.talents?.[0]?.id || null;
+    }
     panel.dataset.view = doctrine.inspectedTalentId === orderDefinition.capstone?.id
       ? "capstone" : talentIds.has(doctrine.inspectedTalentId) ? "talent" : "overview";
     panel.setAttribute("aria-labelledby", `sf-doctrine-tab-${safeDomId(doctrine.orderId)}`);
@@ -801,6 +892,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     root.querySelector("[data-doctrine-talents]").innerHTML = (orderDefinition.talents || [])
       .map((talent) => renderTalent(talent, runtimeTalent(state, orderState, talent.id),
         state, orderState, edit, definitions)).join("");
+    renderDoctrinePreview(orderDefinition, orderState, state, edit, definitions);
     renderCapstone(orderDefinition.capstone, orderDefinition, orderState, state, edit, definitions);
     return state;
   }
@@ -1604,35 +1696,60 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     return false;
   }
 
-  function finishDoctrineMutation(result, fallbackMessage, focusSelector = null) {
+  function finishDoctrineMutation(result, fallbackMessage, focusSelector = null,
+    focusFallbackSelector = null) {
     const normalized = result && typeof result === "object"
       ? result : { ok: result !== false, message: fallbackMessage };
     const ok = normalized.ok !== false;
     refreshDoctrine(normalized.state || null);
-    focusAfterDoctrineRefresh(focusSelector);
+    focusAfterDoctrineRefresh(focusSelector, focusFallbackSelector);
     menuSfx(ok ? "confirm" : "error");
     announce(normalized.message || fallbackMessage || (ok ? "Doctrine updated." : "Doctrine action unavailable."));
     return ok;
   }
 
-  function callDoctrine(method, args, fallbackMessage, focusSelector) {
+  function callDoctrine(method, args, fallbackMessage, focusSelector,
+    focusFallbackSelector = null) {
     if (typeof progression?.[method] !== "function") {
       return finishDoctrineMutation({ ok: false,
-        message: "Doctrine service is unavailable." }, fallbackMessage, focusSelector);
+        message: "Doctrine service is unavailable." }, fallbackMessage, focusSelector,
+      focusFallbackSelector);
     }
     try {
-      return finishDoctrineMutation(progression[method](...args), fallbackMessage, focusSelector);
+      return finishDoctrineMutation(progression[method](...args), fallbackMessage,
+        focusSelector, focusFallbackSelector);
     } catch (error) {
       return finishDoctrineMutation({ ok: false,
-        message: error?.message || "Doctrine action failed." }, fallbackMessage, focusSelector);
+        message: error?.message || "Doctrine action failed." }, fallbackMessage,
+      focusSelector, focusFallbackSelector);
     }
   }
 
   function handleDoctrineAction(button) {
     const action = button.dataset.doctrineAction;
     const talentId = button.dataset.talentId;
+    const talentFocusSurface = talentId
+      ? button.closest("[data-doctrine-preview]")
+        ? "[data-doctrine-preview]"
+        : `[data-doctrine-talent][data-talent-id="${CSS.escape(talentId)}"]`
+      : "";
+    const nextTalentAction = talentId
+      ? `${talentFocusSurface} [data-talent-action="refund"]:not(:disabled), `
+        + `${talentFocusSurface} [data-talent-action="spend"]:not(:disabled)`
+      : "";
     if (action === "inspect" && talentId) {
+      const orderDefinition = progressionDefinitions().orders
+        .find((entry) => entry.id === doctrine.orderId);
+      const isRankedTalent = !!orderDefinition?.talents?.some((talent) => talent.id === talentId);
+      if (!stage.classList.contains("sf-touch-enabled") && isRankedTalent) {
+        doctrine.inspectedTalentId = null;
+        setDoctrinePreview(talentId);
+        menuSfx("switch");
+        announce(`${button.closest("[data-doctrine-talent]")?.querySelector("strong")?.textContent || "Rite"} details shown.`);
+        return true;
+      }
       doctrine.inspectedTalentId = doctrine.inspectedTalentId === talentId ? null : talentId;
+      doctrine.previewTalentId = talentId;
       refreshDoctrine();
       const panel = root.querySelector("[data-doctrine-order-panel]");
       if (panel) panel.scrollTop = 0;
@@ -1642,11 +1759,11 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     }
     if (action === "spend" && talentId) {
       return callDoctrine("spend", [talentId], "Rite inscribed.",
-        `[data-talent-action="spend"][data-talent-id="${CSS.escape(talentId)}"]`);
+        nextTalentAction, talentFocusSurface);
     }
     if (action === "refund" && talentId) {
       return callDoctrine("refund", [talentId], "Rite refunded.",
-        `[data-talent-action="refund"][data-talent-id="${CSS.escape(talentId)}"], [data-talent-action="spend"][data-talent-id="${CSS.escape(talentId)}"]`);
+        nextTalentAction, talentFocusSurface);
     }
     if (action === "vow") {
       const capstoneId = button.dataset.capstoneId;
@@ -1737,6 +1854,26 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     if (target.matches('[data-menu-action="return"]')) window.location.assign("../games.html");
   });
 
+  root.addEventListener("pointermove", (event) => {
+    if (menu.panel !== "doctrine") return;
+    const card = event.target instanceof Element
+      ? event.target.closest("[data-doctrine-talent]") : null;
+    if (!card) {
+      doctrine.hoverTalentId = null;
+      return;
+    }
+    if (card.dataset.talentId === doctrine.hoverTalentId) return;
+    doctrine.hoverTalentId = card.dataset.talentId;
+    setDoctrinePreview(card.dataset.talentId);
+  });
+
+  root.addEventListener("focusin", (event) => {
+    if (menu.panel !== "doctrine") return;
+    const card = event.target instanceof Element
+      ? event.target.closest("[data-doctrine-talent]") : null;
+    if (card) setDoctrinePreview(card.dataset.talentId);
+  });
+
   commandEls.forEach((button) => {
     button.addEventListener("pointerenter", () => {
       if (wheel.open) setWheelSelection(Number(button.dataset.index));
@@ -1750,7 +1887,22 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
           + " [role='button'], [role='switch'], [role='tab']");
       const doctrineTab = event.target instanceof Element
         ? event.target.closest("[data-doctrine-order][role='tab']") : null;
-      if (doctrineTab && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.code)) {
+      const doctrineCard = event.target instanceof Element
+        ? event.target.closest("[data-doctrine-talent]") : null;
+      if (doctrineCard && event.target === doctrineCard && ["Enter", "Space"].includes(event.code)) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        if (!event.repeat && setDoctrinePreview(doctrineCard.dataset.talentId)) {
+          requestAnimationFrame(() => {
+            const primary = root.querySelector(
+              '[data-doctrine-preview] [data-talent-action="spend"]:not(:disabled),'
+              + ' [data-doctrine-preview] [data-talent-action="refund"]:not(:disabled),'
+              + " [data-doctrine-preview] button:not(:disabled)"
+            );
+            (primary || root.querySelector("[data-doctrine-preview]"))
+              ?.focus?.({ preventScroll: true });
+          });
+        }
+      } else if (doctrineTab && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.code)) {
         const tabs = Array.from(root.querySelectorAll("[data-doctrine-order][role='tab']"));
         const current = tabs.indexOf(doctrineTab);
         let next = current;
@@ -2086,6 +2238,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
       mapPixels: largeMapCanvas ? [largeMapCanvas.width, largeMapCanvas.height] : null,
       doctrine: {
         order: doctrine.orderId,
+        preview: doctrine.previewTalentId,
         rank: doctrine.latestState?.rank ?? null,
         points: doctrine.latestState?.pointsAvailable ?? null,
         activeVows: activeCapstones(doctrine.latestState || {}).filter(Boolean),

@@ -280,15 +280,24 @@ const SHARD_MAX = 22;
    the rim of the pan at night. */
 const BONE_PALE = [0.86, 0.81, 0.68];
 const BONE_DARK = [0.36, 0.32, 0.24];
-/* Wet muscle, and DARK. The first pass ran a pale salmon that lit up
-   to near-white on a sunlit pan and turned fifteen metres of limb into
-   a party streamer. Meat under a desert sun is a deep oxblood that only
-   opens up on the rim; everything bright about this creature has to
-   come from the gullet, or the one warm light source in the district
-   stops being the mouth. */
-const FLESH_DARK = [0.075, 0.030, 0.040];
-const FLESH_MID = [0.30, 0.10, 0.10];
-const FLESH_LIT = [0.44, 0.145, 0.125];
+/* Wet muscle, and DARK - far darker than these numbers look on paper.
+
+   They are LINEAR ALBEDO under a desert noon. The sun here runs well
+   above 1, so a value multiplies rather than caps: an oxblood 0.44 red
+   came back at 0.87 in sRGB after lighting and tone mapping, which is
+   coral, and eighteen metres of limb rendered as a party streamer. Two
+   successive halvings later these read as meat. The rule the district
+   sets is that only bone and sand are allowed to be mid-value, so the
+   animal has to sit under both - and everything bright about it comes
+   from the gullet, or the one warm light source in the Ossuary stops
+   being the mouth. */
+const FLESH_DARK = [0.040, 0.014, 0.018];
+const FLESH_MID = [0.130, 0.042, 0.042];
+const FLESH_LIT = [0.215, 0.065, 0.058];
+/* The collar. Deeper and more saturated than the limbs - see the note
+   where it is painted. */
+const COLLAR_DARK = [0.016, 0.004, 0.007];
+const COLLAR_LIT = [0.085, 0.020, 0.026];
 const GULLET_HOT = "#ffb347";
 const GULLET_DEEP = "#48120a";
 
@@ -411,7 +420,34 @@ export function buildGarner(ctx) {
      top of itself, and fifteen metres of oxblood muscle came out as a
      pale pink streamer in daylight. Enough to make the rings read at
      night, and not enough to be visible against the sun. */
-  patchMaterial(fleshMat, atmos, { rim: 1.35, glitter: 0, bio: 0.85 });
+  /* And the RIM low too, for a related reason. A strong rim term on a
+     ring of thin outward-splayed flaps catches on every one of them at
+     every angle, which is not a highlight - it is a second, paler
+     albedo. The collar and its fringe came back the colour of the sand
+     they are set in with the rim at the tentacles' own 1.35. */
+  patchMaterial(fleshMat, atmos, { rim: 0.55, glitter: 0, bio: 0.85 });
+
+  /* THE COLLAR'S OWN MATERIAL, and it exists because of a measurement
+     rather than a preference.
+
+     The collar reads at 16m against sunlit sand, and at that range the
+     atmosphere patch's sky-tinted rim is ADDITIVE and independent of
+     albedo. Painted black and photographed, the ring came back the same
+     khaki as the dune behind it - so no amount of darkening the paint
+     was ever going to make it read as meat. What the rim cannot flatten
+     is FACETING: flat shading gives every muscle segment its own normal
+     and therefore its own rim strength, and the ring goes from a smooth
+     cone washed to one tone into alternating lit and shadowed staves.
+     The rim is then dropped to a third of the limbs', because on a
+     surface this dark it is the whole of what is being seen. */
+  const collarMat = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    flatShading: true,
+    roughness: 0.66,
+    metalness: 0.0,
+  });
+  collarMat.name = "sf-garner-collar-mat";
+  patchMaterial(collarMat, atmos, { rim: 0.34, glitter: 0, bio: 1.1 });
 
   /* ============================================================
      THE CRATER
@@ -731,26 +767,103 @@ export function buildGarner(ctx) {
       const x = pos.getX(i);
       const z = pos.getZ(i);
       const a = Math.atan2(z, x);
-      const bite = 1 - 0.15 * Math.abs(Math.sin(a * 9)) - 0.08 * Math.cos(a * 13);
+      /* Deep enough to facet hard under flat shading. A shallow bite on
+         a 36-segment tube is a barrel with grain; this is a ring of
+         separate swallowing muscles that happen to be joined. */
+      const bite = 1 - 0.22 * Math.abs(Math.sin(a * 9)) - 0.10 * Math.cos(a * 13);
       pos.setX(i, x * bite);
       pos.setZ(i, z * bite);
       const t = clamp01(pos.getY(i) / height + 0.5);
       const shade = lerp(0.05, 1.0, Math.pow(t, 1.6))
         * (0.85 + Math.abs(Math.sin(a * 5)) * 0.2);
-      colour[i * 4] = lerp(FLESH_DARK[0], FLESH_MID[0], shade);
-      colour[i * 4 + 1] = lerp(FLESH_DARK[1], FLESH_MID[1], shade);
-      colour[i * 4 + 2] = lerp(FLESH_DARK[2], FLESH_MID[2], shade);
+      /* DARKER THAN THE TENTACLES, and by a lot. This surface is lit by
+         a low warm sun bouncing off orange sand on every side of it, and
+         at the tentacles' own oxblood it came back tan - a wooden barrel
+         set in a dune. The rule that fixes it is not a hue change: it is
+         that the only things in this district allowed to be MID-VALUE
+         are bone and sand, so the animal has to sit below both. */
+      colour[i * 4] = lerp(COLLAR_DARK[0], COLLAR_LIT[0], shade);
+      colour[i * 4 + 1] = lerp(COLLAR_DARK[1], COLLAR_LIT[1], shade);
+      colour[i * 4 + 2] = lerp(COLLAR_DARK[2], COLLAR_LIT[2], shade);
       // Only the very lip catches the gullet's own light.
       colour[i * 4 + 3] = Math.pow(t, 7) * 0.55;
     }
     geo.setAttribute("color", new THREE.BufferAttribute(colour, 4));
     geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, fleshMat);
+    const mesh = new THREE.Mesh(geo, collarMat);
     mesh.name = "sf-garner-collar";
     // Its lip a metre above the tooth roots, its foot deep in the shaft.
     mesh.position.y = -(height * 0.5) + 1.2;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    maw.add(mesh);
+  }
+
+  /* ------------------------------------------------------------
+     THE FRINGE
+
+     A ring of short muscular palps hanging around the outside of the
+     collar, splayed onto the sand it rises from.
+
+     Purely a silhouette job, and the cheapest one available: a
+     truncated cone is a truncated cone however it is shaded, and from
+     the pit floor - which is where the whole fight happens - the mouth
+     was reading as a drum somebody had left there. Twenty flaps breaking
+     its bottom edge turn the join between animal and ground from a rim
+     into something that grew out of it.
+
+     Static. It never poses, so it costs one merge at construction and
+     nothing per frame.
+     ------------------------------------------------------------ */
+  {
+    const N = 20;
+    const perFlap = 5;
+    const position = new Float32Array(N * perFlap * 3);
+    const colour = new Float32Array(N * perFlap * 4);
+    const index = [];
+    const base = C.craterInner * 1.30;
+    for (let i = 0; i < N; i += 1) {
+      const b = i * perFlap;
+      index.push(b, b + 1, b + 4, b + 1, b + 2, b + 4,
+        b + 2, b + 3, b + 4, b, b + 2, b + 1, b, b + 3, b + 2);
+      const a = (i / N) * TAU + rng() * 0.06;
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const w = (base * TAU / N) * 0.44;
+      const drop = 2.2 + rng() * 2.6;
+      const out = 1.1 + rng() * 1.5;
+      // The four roots, set into the collar's lower flank...
+      const rootY = -(11 * 0.5) + 1.2 + 2.4 + rng() * 1.2;
+      const set = (v, x, y, z) => {
+        position[(b + v) * 3] = x;
+        position[(b + v) * 3 + 1] = y;
+        position[(b + v) * 3 + 2] = z;
+      };
+      set(0, ca * base - sa * w, rootY, sa * base + ca * w);
+      set(1, ca * (base - 0.5), rootY + w * 0.7, sa * (base - 0.5));
+      set(2, ca * base + sa * w, rootY, sa * base - ca * w);
+      set(3, ca * (base + 0.6), rootY - w * 0.5, sa * (base + 0.6));
+      // ...and the tip, splayed out and down onto the floor.
+      set(4, ca * (base + out), rootY - drop, sa * (base + out));
+      for (let v = 0; v < perFlap; v += 1) {
+        const k = (b + v) * 4;
+        const tip = v === 4 ? 1 : 0;
+        const shade = (tip ? 0.25 : 1) * (0.8 + rng() * 0.4);
+        colour[k] = lerp(COLLAR_DARK[0], COLLAR_LIT[0], shade);
+        colour[k + 1] = lerp(COLLAR_DARK[1], COLLAR_LIT[1], shade);
+        colour[k + 2] = lerp(COLLAR_DARK[2], COLLAR_LIT[2], shade);
+        colour[k + 3] = tip ? 0.30 : 0.05;
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(position, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(colour, 4));
+    geo.setIndex(index);
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, collarMat);
+    mesh.name = "sf-garner-fringe";
+    mesh.frustumCulled = false;
+    mesh.castShadow = true;
     maw.add(mesh);
   }
 
@@ -2555,6 +2668,14 @@ export function buildGarner(ctx) {
       if (Number.isFinite(timer)) state.timer = timer;
       if (state.phase === "dormant" || state.phase === "sealing") state.open = 0;
       else if (state.phase !== "breach") state.open = 1;
+      /* Re-laid HERE, because `open` has just moved discontinuously and
+         the per-frame path only re-poses the lid while it is changing -
+         a deliberate saving, since a sealed pan and a fully open pit
+         both cost nothing to hold. Forcing a phase skips the change, so
+         without this the geometry keeps whatever the previous phase
+         left it as: a boss forced to `gorge` for a check gaped at the
+         underside of a lid that was still shut over it. */
+      poseLid();
       inst.collapsed = state.phase === "gorge";
       setEncounterGate(state.phase === "dormant",
         state.phase === "dormant" || state.phase === "breach");

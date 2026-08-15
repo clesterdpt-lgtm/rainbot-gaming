@@ -1771,7 +1771,10 @@ async function desktopUiPass(page, definitions) {
       && homeSelection.selected === homeSelection.first,
     JSON.stringify({ endSelection, homeSelection }));
 
-  const spend = page.locator('button[data-doctrine-action="spend"][data-talent-id]:not([disabled])').first();
+  const spend = page.locator(
+    '[data-doctrine-preview] button[data-doctrine-action="spend"][data-talent-id]:not([disabled])'
+  ).first();
+  await spend.waitFor({ state: "visible", timeout: 3000 });
   const spendId = await spend.getAttribute("data-talent-id");
   const beforeSpend = await state(page, definitions);
   await spend.click();

@@ -18,8 +18,8 @@ place rather than a tool.
 
 | phase | what it is |
 | --- | --- |
-| `dormant` | A bone-white pan with a ring of settled dust on it. Hidden and untouchable until the player crosses 64m. |
-| `breach` | 5.2s. The ground domes, cracks in a ring fifty-two metres across, and falls in. The maw rises out of the hole. The camera is borrowed for it, once per encounter. |
+| `dormant` | A wide sand funnel in the pan with a plate of fused bone at the bottom of it. Hidden and untouchable until the player crosses 64m. |
+| `breach` | 5.2s. The floor of the funnel domes, cracks, and drops away into the mouth underneath it. The camera is borrowed for it, once per encounter. |
 | `feeding` | The fight. Three clocks: the lash, the inhale, the volley. |
 | `gorge` | 11s. Cut three limbs and it recoils — the mouth gapes, the gullet comes up, and it does nothing but be a target. The limbs regrow on the way out. |
 | `sealing` | The leash. The pan closes over it at full health. |
@@ -68,8 +68,8 @@ species loads as an empty root with no clips; `garner.js` builds and
 poses every vertex. Both halves of this creature are things a baked rig
 cannot do:
 
-- the pit has to **open** — per-vertex motion across seventy-eight
-  hinged plates, not a rotation of a skeleton;
+- the pit has to **open** — per-vertex motion across a hundred and four
+  hinged slabs, not a rotation of a skeleton;
 - a tentacle has to **miss** — and where it lands is a function of where
   the player dodged to and what the terrain does there.
 
@@ -103,28 +103,49 @@ minimum span across the four hit nodes so it cannot come back.
 
 ---
 
-## Two things the terrain would not let us have
+## The pit is terrain, and that took three tries
 
-**`groundHeight` is a max over terrain and authored surfaces, so nothing
-in this engine can lower the ground a player walks on.** A pit is
-therefore a hole in the picture and not in the collision grid, and a
-player strolling across open air over one is a worse artefact than any
-amount of missing depth. Two consequences, both deliberate:
+**The mouth is below the desert and you climb down to it.** Getting
+there meant three passes, each of which was wrong in an instructive way.
 
-1. **The depth is all inside the mouth.** The broken pan slumps 3.4m —
-   walkable — and the collar plunges into a shaft the player can see down
-   but never stand over. A ring of slabs is levered *up* at the break
-   line, because a slump is a shape you can only read from above and the
-   player is 1.7m off the sand. Only some of them, and only on the outer
-   band: a solid raised lip would be a wall they walk through.
-2. **The animal holds them off itself.** Inside the collar they are
-   devoured and thrown; short of that they are held at the pit's inner
-   lip. That distance is an arithmetic contract with `HITBOX.garner`'s
-   `bodyRadius` — the player has to be able to reach the open gullet with
-   a polearm from where they are stopped, or the gorge window is
-   ranged-only and the whole limb fight buys nothing.
+**First: build the pit out of scene geometry.** It looked like a hole
+and was not one. `collide.groundHeight` is a max over terrain and
+authored surfaces, so nothing created at runtime can lower the ground a
+player walks on — they strolled straight across the middle of it.
 
----
+**Second: keep the pan flat and stand the mouth five metres proud of
+it.** That gives a silhouette from across the district, and it makes the
+wrong creature: a mouth standing on the desert is a tower. This is a
+sarlacc.
+
+**Third, and shipped: carve the funnel into `heightAt` itself**, next to
+the districts, as `GARNER_PIT`. Twelve metres deep, a thirteen-metre
+floor, a thirty-six-metre rim and a low spoil lip, terraced down the
+wall so the descent has something to measure itself against. The
+collision grid, the walking plane and the visible ground all come out of
+that one function, so the pit is simply real — the player walks down
+into it with ground under their boots the whole way.
+
+Two consequences worth writing down, because both are properties of a
+height field rather than choices:
+
+- **The throat cannot be a hole in the terrain.** There is no radius at
+  which the ground is absent, so a mouth flush with the sand has sand
+  across the bottom of it. The beak therefore stands five metres proud
+  of the **funnel floor** — which still leaves the whole animal seven
+  metres under the pan — and a black disc laid just above the sand
+  inside the collar turns those five metres into something with no
+  bottom. This is exactly the Return-of-the-Jedi arrangement, arrived at
+  by arithmetic rather than by homage.
+- **Runtime geometry is never in the collision grid.** So the ring of
+  slabs the collapse levers up around the hole is deliberately mostly
+  gaps — a solid lip would be a wall the player walks through — and the
+  animal keeps them out of its own throat itself, by writing
+  `player.state.x/z`. That distance is an arithmetic contract with
+  `HITBOX.garner`'s `bodyRadius`: the player has to be able to reach the
+  open gullet with a polearm from where they are stopped, or the gorge
+  window is ranged-only and the limb fight buys nothing. The harness
+  checks it.
 
 ## Placement
 
@@ -143,26 +164,57 @@ in.
 
 ## Art notes
 
-- **The collar is flesh, not bone.** A bone collar under bone teeth on a
-  bone-white pan is a single pale mass with no silhouette; the first
-  build's mouth read as an architectural drum with a crown on it.
+- **Albedo is linear, under a desert noon.** The sun runs well above 1,
+  so a value multiplies rather than caps: an oxblood `0.44` red came back
+  at `0.87` sRGB after lighting and tone mapping — coral — and eighteen
+  metres of limb rendered as a party streamer. Two successive halvings
+  later they read as meat. The district's rule is that only bone and sand
+  are allowed to be mid-value.
+- **The collar needed a material, not a colour.** Painted pure black and
+  photographed, it still came back the khaki of the dune behind it: at
+  16m the atmosphere patch's sky-tinted rim is additive and independent
+  of albedo. What the rim cannot flatten is faceting — flat shading gives
+  every muscle segment its own normal and therefore its own rim strength,
+  and the ring went from a smooth cone washed to one tone into
+  alternating lit and shadowed staves.
 - **Nine tusks, not fifty-four teeth.** Three rings of eighteen came out
   as a bed of nails — a fringed texture rather than something countable,
   and a silhouette the player can count is one they can tell "open" from
-  "shut" at forty metres.
-- **`bio` at 0.85, and it was 2.4.** The emissive mask multiplies the
-  surface's own colour, so a strong one on a limb whose alpha carries
-  sucker rings up its whole underside does not add glowing detail — it
-  adds two and a half times the diffuse back on top of itself. Eighteen
-  metres of oxblood muscle came out as a pale pink streamer in daylight.
+  "shut" at forty metres. Their length is capped by a hard constraint
+  rather than chosen by eye: a gaping tusk swings up by about its own
+  length, and the tip of the longest has to stay several metres under
+  the pan.
 - **The tooth fold was inverted for one build** and the animal spent it
   as a sea anemone: a closed Garner splayed its fangs at the sky and an
   open one folded them politely across its own throat.
+- **A ring of palps around the collar's base** is a pure silhouette job
+  and the cheapest one available — a truncated cone is a truncated cone
+  however it is shaded, and from the pit floor the mouth was reading as a
+  drum somebody had left there.
 
-Four materials, five draw calls, and the whole encounter measures
-**4.1ms/frame with all six limbs live and a volley in the air**.
+## Audit against the other bosses
 
----
+Measured in one session by `scripts/saintfall-boss-audit.mjs`, each boss
+with its fight actually live:
+
+| boss | ms/frame | draw calls | triangles | max HP |
+| --- | --- | --- | --- | --- |
+| Distaff | 6.99 | 147 | 507k | 9000 |
+| Winnower | 6.01 | 120 | 506k | 6200 |
+| **Garner** | **7.61** | **181** | **570k** | **7400** |
+| Coulter | 5.79 | 177 | 560k | 5200 |
+
+It is the most expensive of the four and by the smallest margin that
+still matters — six meshes rather than one skinned draw — and it is
+inside the 9ms gate every boss harness asserts, on a scene that is
+already the heaviest in the game before the animal is added.
+
+On design surface it is at the top of the range: six independently
+pooled limb targets plus a mouth that is a ranged target in every phase
+and a melee target in one, five phases, four attacks, and eighteen
+distinct audio cues. The Distaff has eight limb targets and four
+attacks; the Winnower has two sacs, a gut and three; the Coulter has one
+transient weak point and two.
 
 ## Verification
 

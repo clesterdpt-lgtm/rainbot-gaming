@@ -1012,7 +1012,7 @@ body.sf-reduced-motion .sf-doctrine__xp>i em,body.sf-reduced-motion .sf-doctrine
   align-items:center;
   justify-content:stretch;
   gap:.55rem;
-  min-height:2.4rem;margin:0;padding:.1rem .15rem .42rem
+  min-height:2.4rem;margin:0;padding:.1rem .15rem .42rem;
 }
 .sf-doctrine__sigil--hero{
   width:2rem;
@@ -1299,3 +1299,585 @@ body.rb-game-maxed .saintfall-page .rb-standalone-surface{container-name:none}
   .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="capstone"] .sf-doctrine__fusions{display:grid}
   .sf-stage.sf-touch-enabled .sf-doctrine__order[data-view="capstone"] .sf-doctrine__vow-action{margin-top:.5rem;padding-top:.45rem}
 }
+
+/* ======================================================================
+   HARDLINE FIELD INTERFACE
+
+   A final, intentionally authoritative cascade for the modern Saintfall
+   command surface. Rectangular instrument geometry, cool signal lines and
+   stable information density replace the soft card treatment above.
+   The radial command selector remains round because its shape communicates
+   direction; every conventional HUD/menu surface is hard-edged.
+   ====================================================================== */
+
+#sf-native-ui{
+  --sfu-ink:#030609;
+  --sfu-panel:rgba(5,10,14,.965);
+  --sfu-bone:#edf3f2;
+  --sfu-dim:rgba(225,236,236,.64);
+  --sfu-brass:#c9a457;
+  --sfu-gold:#f0d58c;
+  --sfu-blood:#9d3040;
+  --sfu-threat:#ff6b45;
+  --sfu-verd:#75ddb4;
+  --sfu-cyan:#73d8ed;
+  --sfu-line:rgba(115,216,237,.22);
+  --sfu-line-strong:rgba(115,216,237,.58)
+}
+
+#sf-native-ui :is(
+  .sf-menu-trigger,.sf-menu__frame,.sf-menu__close,.sf-menu__rail button,
+  .sf-operation-card,.sf-menu__callout,.sf-save-slot,.sf-save-slot__actions button,
+  .sf-save-reason,.sf-career-recovery,.sf-career-branch,.sf-career-branch>button,
+  .sf-controls-grid article,.sf-setting,.sf-setting>button,.sf-setting__segments button,
+  .sf-map-page__surface,#sf-map-canvas-large,.sf-map-page__orders,.sf-map-order,
+  .sf-doctrine__summary,.sf-doctrine__summary>div,.sf-doctrine__vow-slots>span,
+  .sf-doctrine__lock,.sf-doctrine__orders,.sf-doctrine__orders button,
+  .sf-doctrine__order-head>b,.sf-doctrine-talent,.sf-doctrine-talent__actions button,
+  .sf-doctrine__preview,.sf-doctrine__preview-meta>span,.sf-doctrine__preview-foot button,
+  .sf-doctrine__vow,.sf-doctrine__vow-action button,.sf-doctrine__footer button
+){border-radius:0!important}
+
+#sf-native-ui .sf-menu__veil{
+  background:
+    linear-gradient(90deg,rgba(1,4,7,.96),rgba(3,7,10,.82) 58%,rgba(2,5,8,.94)),
+    radial-gradient(circle at 76% 18%,rgba(115,216,237,.06),transparent 36%);
+  backdrop-filter:blur(12px) saturate(.42) brightness(.48)
+}
+
+#sf-native-ui .sf-menu__frame,
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-menu__frame{
+  border:1px solid rgba(115,216,237,.28);
+  border-left:3px solid rgba(157,48,64,.82);
+  border-radius:0;
+  background:
+    linear-gradient(rgba(115,216,237,.018) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(115,216,237,.014) 1px,transparent 1px),
+    linear-gradient(135deg,rgba(115,216,237,.025),transparent 28%),
+    rgba(3,7,10,.985);
+  background-size:32px 32px,32px 32px,auto,auto;
+  box-shadow:inset 0 1px 0 rgba(237,243,242,.035),0 2rem 7rem rgba(0,0,0,.78)
+}
+
+#sf-native-ui .sf-menu__frame:before,
+#sf-native-ui .sf-menu__frame:after{
+  width:2rem;height:2rem;border-color:var(--sfu-cyan);opacity:.8
+}
+
+#sf-native-ui .sf-menu__masthead,
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-menu__masthead{
+  min-height:4.1rem;
+  border-bottom:1px solid var(--sfu-line);
+  background:linear-gradient(90deg,rgba(157,48,64,.16),transparent 32%)
+}
+
+#sf-native-ui .sf-menu__crest{
+  width:2.75rem;height:2.75rem;border-color:rgba(115,216,237,.42);
+  color:var(--sfu-cyan);transform:none
+}
+#sf-native-ui .sf-menu__crest svg{width:1.65rem;height:1.65rem;transform:none}
+#sf-native-ui .sf-menu__masthead span{color:rgba(115,216,237,.72);font-size:10px;letter-spacing:.18em}
+#sf-native-ui .sf-menu__masthead h2{
+  color:#f2f5f3;font:600 clamp(1.15rem,2vw,1.55rem)/1 "Share Tech Mono",ui-monospace,monospace;
+  letter-spacing:.1em;text-shadow:none
+}
+#sf-native-ui .sf-menu__masthead p{color:rgba(225,236,236,.46);font-size:10px}
+#sf-native-ui .sf-menu__close{
+  border-color:rgba(115,216,237,.34);background:rgba(5,12,16,.75);color:var(--sfu-cyan)
+}
+#sf-native-ui .sf-menu__close:hover{border-color:var(--sfu-cyan);background:rgba(115,216,237,.1)}
+
+#sf-native-ui .sf-menu__body{grid-template-columns:12.75rem minmax(0,1fr)}
+#sf-native-ui .sf-menu__rail,
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-menu__rail{
+  padding:.7rem .55rem;gap:.18rem;border-right:1px solid var(--sfu-line);
+  background:linear-gradient(180deg,rgba(115,216,237,.025),transparent 45%),rgba(1,4,7,.54)
+}
+#sf-native-ui .sf-menu__rail button,
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-menu__rail button{
+  min-height:2.85rem;padding:.52rem .62rem;border:1px solid transparent;
+  border-left:2px solid transparent;background:transparent;color:rgba(225,236,236,.62);
+  font-size:11px;letter-spacing:.075em
+}
+#sf-native-ui .sf-menu__rail button svg{color:rgba(115,216,237,.68)}
+#sf-native-ui .sf-menu__rail button:hover{
+  border-color:rgba(115,216,237,.18);border-left-color:rgba(115,216,237,.55);
+  background:rgba(115,216,237,.045);color:#f1f5f4;box-shadow:none
+}
+#sf-native-ui .sf-menu__rail button:is(.is-active,[aria-selected="true"],[aria-current="page"]){
+  border-color:rgba(115,216,237,.26);border-left-color:var(--sfu-cyan);
+  background:linear-gradient(90deg,rgba(115,216,237,.11),rgba(115,216,237,.025));
+  color:#f6fbfa;box-shadow:inset 3px 0 0 var(--sfu-cyan)
+}
+#sf-native-ui .sf-menu__rail .sf-menu__resume{
+  min-height:3.45rem;border-color:rgba(240,213,140,.3);border-left-color:var(--sfu-gold);
+  background:linear-gradient(90deg,rgba(157,48,64,.38),rgba(115,216,237,.025));
+  box-shadow:inset 3px 0 0 var(--sfu-gold)
+}
+#sf-native-ui .sf-menu__resume strong{font-family:"Share Tech Mono",ui-monospace,monospace;font-size:12px}
+#sf-native-ui .sf-menu__resume small{font-size:10px}
+#sf-native-ui .sf-menu__rail button[data-menu-action="maximize"]{border-color:rgba(115,216,237,.2);color:var(--sfu-cyan)}
+
+#sf-native-ui .sf-menu__content{
+  background:linear-gradient(180deg,rgba(115,216,237,.015),transparent 38%);
+  scrollbar-color:rgba(115,216,237,.48) rgba(0,0,0,.2)
+}
+#sf-native-ui .sf-menu__page{padding:clamp(1rem,2vw,1.55rem)}
+#sf-native-ui .sf-menu__pagehead{margin-bottom:1rem;padding-bottom:.72rem;border-bottom:1px solid var(--sfu-line)}
+#sf-native-ui .sf-menu__pagehead>span{color:rgba(115,216,237,.78);font-size:10px}
+#sf-native-ui .sf-menu__pagehead h3{
+  color:#f1f5f4;font:600 clamp(1.35rem,2.35vw,1.95rem)/1.05 "Share Tech Mono",ui-monospace,monospace;
+  letter-spacing:.075em
+}
+#sf-native-ui .sf-menu__pagehead p{
+  color:rgba(225,236,236,.66);font:400 13px/1.45 "Share Tech Mono",ui-monospace,monospace
+}
+#sf-native-ui .sf-menu__footer{border-top:1px solid var(--sfu-line);color:rgba(225,236,236,.42)}
+
+#sf-native-ui .sf-operation-grid{gap:.65rem}
+#sf-native-ui .sf-operation-card{
+  min-height:7.5rem;padding:.85rem;border-color:rgba(115,216,237,.16);
+  border-top:2px solid rgba(115,216,237,.34);background:rgba(4,10,14,.58);box-shadow:none
+}
+#sf-native-ui .sf-operation-card small{color:rgba(115,216,237,.72);font-size:10px}
+#sf-native-ui .sf-operation-card strong{
+  font-family:"Share Tech Mono",ui-monospace,monospace;font-size:14px;line-height:1.35
+}
+#sf-native-ui .sf-operation-card>span{color:rgba(225,236,236,.5);font-size:11px}
+#sf-native-ui .sf-menu__callout{
+  border:1px solid rgba(115,216,237,.14);border-left:2px solid var(--sfu-cyan);
+  background:rgba(115,216,237,.035)
+}
+#sf-native-ui .sf-menu__callout span{color:var(--sfu-cyan)}
+#sf-native-ui .sf-menu__callout p{color:rgba(225,236,236,.68);font-size:11px}
+
+/* Doctrine uses a comparison grid plus one stable inspector. */
+#sf-native-ui .sf-menu__page--doctrine .sf-menu__pagehead{margin-bottom:.6rem;padding-bottom:.5rem}
+#sf-native-ui .sf-doctrine__summary{
+  margin-bottom:.5rem;border:1px solid rgba(115,216,237,.14);
+  background:linear-gradient(90deg,rgba(115,216,237,.035),transparent 78%)
+}
+#sf-native-ui .sf-doctrine__summary>div{border-right-color:rgba(115,216,237,.12)}
+#sf-native-ui .sf-doctrine__summary small{color:rgba(115,216,237,.7);font-size:9px}
+#sf-native-ui .sf-doctrine__xp>i{height:3px;background:rgba(225,236,236,.1)}
+#sf-native-ui .sf-doctrine__xp>i em{background:linear-gradient(90deg,#477f8c,var(--sfu-cyan));box-shadow:none}
+#sf-native-ui .sf-doctrine__vow-slots>span{border-left-color:rgba(115,216,237,.25);background:rgba(115,216,237,.025)}
+
+#sf-native-ui .sf-doctrine__orders{gap:.35rem}
+#sf-native-ui .sf-doctrine__orders button{
+  min-height:46px;padding:.45rem .55rem;border-color:rgba(115,216,237,.12);
+  border-left:2px solid rgba(115,216,237,.16);background:rgba(3,8,11,.58)
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__orders button{min-height:42px}
+#sf-native-ui .sf-doctrine__orders button span{font-family:"Share Tech Mono",ui-monospace,monospace;font-size:11px}
+#sf-native-ui .sf-doctrine__orders button small{font-size:9px}
+#sf-native-ui .sf-doctrine__orders button:hover,
+#sf-native-ui .sf-doctrine__orders button[aria-selected="true"]{
+  border-color:color-mix(in srgb,var(--sf-order-accent) 58%,transparent);
+  border-left-color:var(--sf-order-accent);background:rgba(115,216,237,.055);
+  box-shadow:inset 0 -2px 0 var(--sf-order-accent)
+}
+
+#sf-native-ui .sf-doctrine__order{grid-template-rows:auto minmax(0,1fr) auto;gap:.5rem}
+#sf-native-ui .sf-doctrine__order-head{
+  min-height:2.75rem;padding:.12rem .1rem .45rem;border-bottom-color:rgba(115,216,237,.16)
+}
+#sf-native-ui .sf-doctrine__order-head h4{
+  font-family:"Share Tech Mono",ui-monospace,monospace;font-size:1rem;letter-spacing:.055em
+}
+#sf-native-ui .sf-doctrine__order-head p{color:rgba(225,236,236,.58);font-family:"Share Tech Mono",ui-monospace,monospace;font-size:11px}
+#sf-native-ui .sf-doctrine__order-head>b{border-color:rgba(115,216,237,.25);font-size:10px}
+
+#sf-native-ui .sf-doctrine__workspace{
+  display:grid;grid-template-columns:minmax(25rem,1.45fr) minmax(17rem,.8fr);
+  gap:.7rem;min-width:0;min-height:0;overflow:hidden
+}
+#sf-native-ui .sf-doctrine__rites{
+  grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));
+  gap:.5rem;min-height:0
+}
+#sf-native-ui .sf-doctrine-talent{
+  grid-template-rows:auto minmax(2.6em,auto);align-content:start;
+  min-height:0;padding:.68rem;border:1px solid rgba(115,216,237,.13);
+  border-left:2px solid rgba(115,216,237,.2);background:rgba(4,10,14,.58);
+  cursor:default;transition:border-color .12s ease,background-color .12s ease,box-shadow .12s ease,transform .12s ease
+}
+#sf-native-ui .sf-doctrine-talent:hover,
+#sf-native-ui .sf-doctrine-talent:focus-visible,
+#sf-native-ui .sf-doctrine-talent[data-previewed="true"]{
+  border-color:color-mix(in srgb,var(--sf-order-accent) 58%,rgba(115,216,237,.25));
+  border-left-color:var(--sf-order-accent);background:rgba(10,18,22,.9);
+  box-shadow:inset 3px 0 0 var(--sf-order-accent),inset 0 1px 0 rgba(237,243,242,.035)
+}
+#sf-native-ui .sf-doctrine-talent:focus-visible{outline:1px solid var(--sfu-cyan);outline-offset:2px}
+#sf-native-ui .sf-doctrine-talent>header small{color:var(--sf-order-accent);font-size:9px}
+#sf-native-ui .sf-doctrine-talent>header strong{
+  color:#edf3f2;font-family:"Share Tech Mono",ui-monospace,monospace;font-size:13px;line-height:1.25
+}
+#sf-native-ui .sf-doctrine-talent>p{
+  margin:.38rem 0 .45rem;color:rgba(225,236,236,.66);font-size:12px;line-height:1.35;-webkit-line-clamp:2
+}
+#sf-native-ui .sf-doctrine-talent__actions button{font-size:10px}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent__actions,
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent__reason{display:none}
+#sf-native-ui .sf-doctrine-talent__reason{color:rgba(225,236,236,.48);font-size:9px}
+
+#sf-native-ui .sf-doctrine__preview{
+  position:relative;display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto;
+  gap:.55rem;min-width:0;min-height:0;padding:.8rem;border:1px solid rgba(115,216,237,.22);
+  border-top:2px solid var(--sf-order-accent,var(--sfu-cyan));
+  background:linear-gradient(145deg,rgba(115,216,237,.055),transparent 42%),rgba(2,7,10,.92);
+  overflow:hidden
+}
+#sf-native-ui .sf-doctrine__preview:after{
+  content:"";position:absolute;right:0;top:0;width:2.4rem;height:1px;background:var(--sfu-cyan);opacity:.68
+}
+#sf-native-ui .sf-doctrine__preview:focus-visible{
+  outline:1px solid var(--sfu-cyan);outline-offset:-3px
+}
+#sf-native-ui .sf-doctrine__preview-empty{
+  align-self:center;justify-self:center;color:rgba(115,216,237,.48);font-size:10px;letter-spacing:.14em;text-align:center
+}
+#sf-native-ui .sf-doctrine__preview-head{display:flex;align-items:start;justify-content:space-between;gap:.65rem;padding-bottom:.55rem;border-bottom:1px solid var(--sfu-line)}
+#sf-native-ui .sf-doctrine__preview-head>span{display:grid;gap:.15rem;min-width:0}
+#sf-native-ui .sf-doctrine__preview-head small{color:var(--sf-order-accent);font-size:9px;letter-spacing:.12em}
+#sf-native-ui .sf-doctrine__preview-head h5{
+  margin:0;color:#f4f7f6;font:600 15px/1.2 "Share Tech Mono",ui-monospace,monospace;letter-spacing:.04em
+}
+#sf-native-ui .sf-doctrine__preview-head>b{
+  flex:none;padding:.22rem .34rem;border:1px solid rgba(115,216,237,.24);
+  color:var(--sfu-cyan);font-size:8px;font-weight:500;letter-spacing:.08em
+}
+#sf-native-ui .sf-doctrine__preview-head>b[data-state="owned"],
+#sf-native-ui .sf-doctrine__preview-head>b[data-state="maxed"]{border-color:rgba(117,221,180,.4);color:var(--sfu-verd)}
+#sf-native-ui .sf-doctrine__preview-head>b[data-state="locked"],
+#sf-native-ui .sf-doctrine__preview-head>b[data-state="forthcoming"]{color:rgba(225,236,236,.46)}
+#sf-native-ui .sf-doctrine__preview-summary{margin:0;color:rgba(225,236,236,.7);font-size:12px;line-height:1.4}
+#sf-native-ui .sf-doctrine__preview-meta{display:grid;grid-template-columns:1fr 1fr;border-block:1px solid rgba(115,216,237,.12)}
+#sf-native-ui .sf-doctrine__preview-meta>span{display:grid;gap:.12rem;padding:.45rem .5rem;border-right:1px solid rgba(115,216,237,.12)}
+#sf-native-ui .sf-doctrine__preview-meta>span:last-child{border-right:0}
+#sf-native-ui .sf-doctrine__preview-meta small{color:rgba(115,216,237,.58);font-size:8px;letter-spacing:.09em}
+#sf-native-ui .sf-doctrine__preview-meta strong{color:#eff5f3;font-size:12px;font-weight:500;font-variant-numeric:tabular-nums}
+#sf-native-ui .sf-doctrine__preview-ranks{display:grid;align-content:start;gap:.45rem;margin:0;padding:0;overflow:auto;list-style:none}
+#sf-native-ui .sf-doctrine__preview-ranks li{
+  display:grid;grid-template-columns:1.65rem minmax(0,1fr);gap:.55rem;padding:.45rem 0;border-bottom:1px solid rgba(115,216,237,.09)
+}
+#sf-native-ui .sf-doctrine__preview-ranks li>b{color:rgba(115,216,237,.38);font-size:12px;font-weight:500}
+#sf-native-ui .sf-doctrine__preview-ranks li>span{display:grid;gap:.14rem}
+#sf-native-ui .sf-doctrine__preview-ranks small{color:rgba(115,216,237,.6);font-size:8px;letter-spacing:.09em}
+#sf-native-ui .sf-doctrine__preview-ranks strong{color:rgba(225,236,236,.68);font-size:11px;font-weight:400;line-height:1.38}
+#sf-native-ui .sf-doctrine__preview-ranks li[data-state="owned"]>b,
+#sf-native-ui .sf-doctrine__preview-ranks li[data-state="owned"] small{color:var(--sfu-verd)}
+#sf-native-ui .sf-doctrine__preview-ranks li[data-state="next"]>b,
+#sf-native-ui .sf-doctrine__preview-ranks li[data-state="next"] small{color:var(--sfu-cyan)}
+#sf-native-ui .sf-doctrine__preview-foot{display:grid;gap:.45rem;padding-top:.55rem;border-top:1px solid var(--sfu-line)}
+#sf-native-ui .sf-doctrine__preview-foot>small{color:rgba(225,236,236,.54);font-size:10px;line-height:1.35}
+#sf-native-ui .sf-doctrine__preview-foot>div{display:flex;gap:.4rem}
+#sf-native-ui .sf-doctrine__preview-foot button{
+  flex:1;min-height:42px;padding:.45rem;border:1px solid rgba(115,216,237,.3);
+  background:rgba(115,216,237,.055);color:var(--sfu-cyan);font:500 10px/1.2 "Share Tech Mono",ui-monospace,monospace;
+  letter-spacing:.05em;cursor:pointer
+}
+#sf-native-ui .sf-doctrine__preview-foot button[data-talent-action="spend"]{border-color:rgba(117,221,180,.38);color:var(--sfu-verd)}
+#sf-native-ui .sf-doctrine__preview-foot button:hover:not(:disabled){border-color:var(--sfu-cyan);background:rgba(115,216,237,.12)}
+#sf-native-ui .sf-doctrine__preview-foot button:disabled{opacity:.36;cursor:not-allowed}
+
+#sf-native-ui .sf-doctrine__vow{
+  border-color:rgba(115,216,237,.16);border-left-color:rgba(240,213,140,.44);
+  background:linear-gradient(90deg,rgba(240,213,140,.035),transparent 55%),rgba(3,8,11,.72)
+}
+#sf-native-ui .sf-doctrine__vow>header strong{font-family:"Share Tech Mono",ui-monospace,monospace}
+
+/* Desktop Details targets the stable inspector; the comparison grid never
+   disappears or stretches into a mostly-empty single card. */
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order[data-view="talent"]{
+  grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order[data-view="talent"] .sf-doctrine__workspace{display:grid}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order[data-view="talent"] .sf-doctrine__rites{grid-template-columns:repeat(2,minmax(0,1fr))}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order[data-view="talent"] .sf-doctrine-talent:not([data-inspected="true"]){display:grid}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order[data-view="talent"]>[data-doctrine-capstone]{display:block}
+
+@container saintfall-playfield (max-width:1180px){
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-menu__frame{border-radius:0}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-menu__body{grid-template-columns:9.25rem minmax(0,1fr)}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-menu__rail button{min-height:2.35rem;font-size:10px}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-menu__rail .sf-menu__resume{min-height:2.8rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-menu__page--doctrine{padding:.58rem .7rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__summary small{font-size:8px}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__workspace{grid-template-columns:minmax(22rem,1.35fr) minmax(15rem,.82fr);gap:.5rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent{padding:.38rem .48rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent>header strong{font-size:11px}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent>p{
+    min-height:0;margin:.22rem 0 0;font-size:10px;line-height:1.25;-webkit-line-clamp:1
+  }
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview{
+    grid-template-rows:auto auto minmax(0,1fr) auto;padding:.48rem;gap:.25rem
+  }
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-head{padding-bottom:.28rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-head h5{font-size:13px}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-summary{
+    display:-webkit-box;overflow:hidden;font-size:10px;-webkit-box-orient:vertical;-webkit-line-clamp:2
+  }
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-meta{display:none}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-ranks{gap:.15rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-ranks li{gap:.35rem;padding:.12rem 0}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-ranks strong{
+    display:-webkit-box;overflow:hidden;font-size:9px;-webkit-box-orient:vertical;-webkit-line-clamp:2
+  }
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-foot{gap:.18rem;padding-top:.25rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-foot>small{
+    overflow:hidden;font-size:9px;text-overflow:ellipsis;white-space:nowrap
+  }
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-foot button{min-height:34px;padding:.3rem}
+}
+
+/* Touch cannot depend on hover. Its explicit Details action keeps the
+   established drill-in flow, while every control remains at least 44px. */
+.sf-stage.sf-touch-enabled #sf-native-ui :is(
+  .sf-menu-trigger,.sf-menu__frame,.sf-menu__close,.sf-menu__rail button,
+  .sf-map-page__surface,.sf-map-page__orders,.sf-map-order,
+  .sf-doctrine__summary,.sf-doctrine__orders,.sf-doctrine__orders button,
+  .sf-doctrine-talent,.sf-doctrine-talent__actions button,.sf-doctrine__vow,
+  .sf-doctrine__vow-action button,.sf-doctrine__footer button
+){border-radius:0!important}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__workspace{display:block;overflow:visible}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__preview{display:none}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent>header strong{font-family:"Share Tech Mono",ui-monospace,monospace}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent__actions button{font-size:9px}
+
+@media (orientation:portrait) and (max-width:560px){
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-menu__masthead h2{font-size:1rem}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-menu__rail{border-right:0;border-bottom:1px solid var(--sfu-line)}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-menu__rail button{font-size:9px}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__orders{border-radius:0;background:rgba(3,8,11,.98)}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__rites{grid-template-columns:1fr}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent{padding:.62rem}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent>header strong{font-size:12px}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent>p{font-size:11px;line-height:1.35}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent__reason{display:block;font-size:9px}
+}
+
+@media (orientation:landscape) and (max-height:500px){
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-menu__body{grid-template-columns:8.5rem minmax(0,1fr)}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-menu__rail button{font-size:9px}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-menu__page--doctrine{padding:.35rem .5rem}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__summary{margin:0 7rem .22rem 0}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__orders button{
+    box-sizing:border-box;height:44px;min-height:44px
+  }
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__orders button span{font-size:8px;letter-spacing:0}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__orders button small{font-size:7px}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__order-head{
+    grid-template-columns:1.15rem minmax(0,1fr) auto;gap:.3rem;min-height:1.15rem;
+    margin:0;padding:0 .08rem .08rem
+  }
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__sigil--hero{width:1rem;height:1rem}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__order-head h4{font-size:.78rem}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__order-head p{font-size:9px}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__rites{
+    grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:auto;grid-auto-rows:auto
+  }
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent{
+    grid-template-rows:auto minmax(1.15em,auto) auto;min-height:5.35rem;padding:.34rem
+  }
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__order[data-view="overview"] .sf-doctrine-talent{
+    grid-template-rows:auto auto;min-height:0
+  }
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__order[data-view="talent"] .sf-doctrine__rites{
+    grid-template-columns:1fr
+  }
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent>header strong{font-size:9px}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent>p{display:-webkit-box;font-size:9px;-webkit-line-clamp:1}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__order[data-view="overview"] .sf-doctrine-talent>p{display:none}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent__actions button{font-size:9px}
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__order[data-view="overview"] .sf-doctrine__vow{margin-top:.03rem}
+}
+
+@media (min-height:800px){
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__rites{
+    grid-template-rows:repeat(2,minmax(8.5rem,11rem));align-content:center
+  }
+}
+
+/* ----------------------- hardline gameplay HUD ----------------------- */
+.sf-fs-btn,
+#sf-hud :is(
+  .sf-hud__minimap,.sf-minimap__head b,.sf-minimap__expand kbd,
+  .sf-hud__objective,.sf-objective__head kbd,.sf-hud__vitals,.sf-hud__charge,
+  .sf-hud__hpwrap,.sf-hud__hp,.sf-hud__jettrack,.sf-hud__jettrack i,
+  .sf-hud__command,.sf-hud__command-head kbd,.sf-hud__stratitem,
+  .sf-hud__stratstatus,.sf-hud__hint,.sf-hud__hint kbd
+),
+.sf-stage.sf-touch-enabled :is(.sf-menu-trigger--mobile,.sf-touch__button,.sf-touch__actions .sf-touch__button){
+  border-radius:0!important
+}
+
+.sf-fs-btn{
+  border-color:rgba(115,216,237,.28);background:rgba(3,9,13,.7);color:rgba(115,216,237,.86);
+  box-shadow:inset 0 -2px 0 rgba(115,216,237,.22),0 .35rem 1.2rem rgba(0,0,0,.22)
+}
+.sf-fs-btn:hover{border-color:rgba(115,216,237,.68);background:rgba(8,21,27,.88)}
+
+#sf-hud .sf-hud__compass{width:min(18rem,29cqw);height:1.5rem}
+#sf-hud .sf-hud__tick{color:rgba(219,239,241,.78);font-size:10px;text-shadow:0 1px 5px #000}
+#sf-hud .sf-hud__needle{
+  width:2px;background:linear-gradient(180deg,#e8fbff 0 20%,#73d8ed 21% 72%,transparent 100%);
+  box-shadow:0 0 .45rem rgba(115,216,237,.45)
+}
+
+#sf-hud .sf-hud__objective{
+  width:min(23rem,35cqw);padding:.36rem .5rem .38rem .62rem;
+  border:1px solid rgba(115,216,237,.13);border-left:2px solid rgba(115,216,237,.68);
+  background:linear-gradient(90deg,rgba(3,9,13,.82),rgba(3,9,13,.32) 72%,transparent);
+  box-shadow:inset 0 1px 0 rgba(237,243,242,.025);backdrop-filter:blur(5px) saturate(.6)
+}
+#sf-hud .sf-objective__head{margin-bottom:.18rem;color:rgba(115,216,237,.82);font-size:9px}
+#sf-hud .sf-objective__head small{color:rgba(219,239,241,.52);font-size:8px}
+#sf-hud .sf-objective__item{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:.7rem}
+#sf-hud .sf-objective__copy small{display:none}
+#sf-hud .sf-objective__copy strong{
+  display:-webkit-box;overflow:hidden;color:#f0f5f3;font:600 13px/1.25 "Share Tech Mono",ui-monospace,monospace;
+  letter-spacing:.025em;white-space:normal;text-overflow:clip;-webkit-box-orient:vertical;-webkit-line-clamp:2
+}
+#sf-hud .sf-objective__item>b{color:#dff7fb;font-size:12px;font-variant-numeric:tabular-nums}
+#sf-hud .sf-hud__objective[data-event="1"]{border-left-color:#ff6b45;background:linear-gradient(90deg,rgba(62,15,15,.82),rgba(3,9,13,.3) 76%,transparent)}
+
+#sf-hud .sf-hud__minimap{
+  border-color:rgba(115,216,237,.5);background:rgba(3,9,13,.12);
+  box-shadow:inset 0 0 0 1px rgba(3,9,13,.3),0 0 1.1rem rgba(0,0,0,.12)
+}
+#sf-hud .sf-minimap__head b{background:rgba(3,9,13,.82);color:rgba(194,239,247,.82)}
+#sf-hud #sf-map-canvas{filter:drop-shadow(0 0 .45rem rgba(115,216,237,.12))}
+
+#sf-hud .sf-hud__vitals,
+#sf-hud .sf-hud__charge{
+  width:min(12rem,20cqw);padding:.34rem .48rem .38rem;
+  border:1px solid rgba(115,216,237,.12);background:linear-gradient(90deg,rgba(3,9,13,.82),rgba(3,9,13,.36));
+  box-shadow:inset 0 1px 0 rgba(237,243,242,.025);backdrop-filter:blur(5px) saturate(.65)
+}
+#sf-hud .sf-hud__vitals{border-left:2px solid rgba(117,221,180,.72)}
+#sf-hud .sf-hud__charge{border-right:2px solid rgba(115,216,237,.72)}
+#sf-hud .sf-hud__hplabel,
+#sf-hud .sf-hud__jetlabel{
+  display:flex;align-items:baseline;justify-content:space-between;margin-bottom:.22rem;
+  font:500 10px/1 "Share Tech Mono",ui-monospace,monospace;letter-spacing:.12em;text-shadow:0 1px 4px #000
+}
+#sf-hud .sf-hud__hplabel>span,
+#sf-hud .sf-hud__jetlabel>span{display:block;color:rgba(219,239,241,.58);font-size:9px}
+#sf-hud .sf-hud__hplabel b,
+#sf-hud .sf-hud__jetlabel b{font-size:14px;font-variant-numeric:tabular-nums}
+#sf-hud .sf-hud__jetlabel b{color:#bcecf4;text-shadow:0 1px 4px #000,0 0 10px rgba(115,216,237,.35)}
+#sf-hud .sf-hud__hpwrap,
+#sf-hud .sf-hud__jettrack{
+  height:6px;border-color:rgba(219,239,241,.2);
+  background:repeating-linear-gradient(90deg,rgba(219,239,241,.08) 0 calc(10% - 1px),rgba(3,9,13,.72) calc(10% - 1px) 10%);
+  box-shadow:none
+}
+#sf-hud .sf-hud__hp{background:linear-gradient(90deg,#3c8a65,#75ddb4);box-shadow:0 0 7px rgba(117,221,180,.34)}
+#sf-hud .sf-hud__jettrack i{background:linear-gradient(90deg,#397b8a,#73d8ed);box-shadow:0 0 7px rgba(115,216,237,.34)}
+#sf-hud .sf-hud__vitalrow{min-height:.72rem;margin-top:.2rem;color:rgba(219,239,241,.68);font-size:9px}
+
+#sf-hud .sf-hud__command{
+  bottom:max(4.25rem,calc(env(safe-area-inset-bottom) + 4.05rem));
+  flex-direction:row;align-items:center;gap:.35rem
+}
+#sf-hud .sf-hud__command-head kbd{
+  width:2.65rem;min-width:2.65rem;height:3rem;min-height:3rem;
+  border-color:rgba(115,216,237,.25);background:rgba(3,9,13,.76);color:rgba(194,239,247,.76);
+  box-shadow:inset 0 -2px 0 rgba(115,216,237,.22)
+}
+#sf-hud .sf-hud__strat{flex-direction:row;gap:.3rem}
+#sf-hud .sf-hud__stratitem{
+  grid-template-columns:1fr;grid-template-rows:1.8rem auto;align-items:center;
+  width:3.5rem;min-width:3.5rem;height:3rem;min-height:3rem;padding:.12rem .2rem .2rem;
+  border-color:rgba(115,216,237,.16);border-top:1px solid color-mix(in srgb,var(--sf-command-colour) 72%,transparent);
+  background:rgba(3,9,13,.76);box-shadow:inset 0 -2px 0 rgba(115,216,237,.1),0 .35rem 1rem rgba(0,0,0,.2)
+}
+#sf-hud .sf-hud__stratglyph{width:1.7rem;height:1.7rem}
+#sf-hud .sf-hud__stratglyph svg{width:1.1rem;height:1.1rem}
+#sf-hud .sf-hud__stratcopy{display:block;min-width:0;text-align:center}
+#sf-hud .sf-hud__stratcopy b{
+  display:block;overflow:hidden;color:rgba(219,239,241,.68);font:500 7px/1.05 "Share Tech Mono",ui-monospace,monospace;
+  letter-spacing:.015em;text-overflow:ellipsis;white-space:nowrap
+}
+#sf-hud .sf-hud__stratcopy small{display:none}
+#sf-hud .sf-hud__stratstatus{background:rgba(3,9,13,.88);color:#dff7fb;font-size:8px}
+#sf-hud .sf-hud__hint{
+  padding:.14rem .32rem;border:1px solid rgba(115,216,237,.12);background:rgba(3,9,13,.56);
+  color:rgba(219,239,241,.58);font-size:7px;letter-spacing:.015em
+}
+
+.sf-stage.sf-touch-enabled .sf-menu-trigger--mobile{
+  border-color:rgba(115,216,237,.36);background:rgba(3,9,13,.76);color:var(--sfu-cyan);
+  box-shadow:inset 0 -2px 0 rgba(115,216,237,.28),0 .4rem 1.1rem rgba(0,0,0,.24)
+}
+.sf-stage.sf-touch-enabled .sf-menu-trigger--mobile span{color:rgba(194,239,247,.78)}
+.sf-stage.sf-touch-enabled :is(.sf-touch__button,.sf-touch__actions .sf-touch__button){
+  border-color:rgba(115,216,237,.26);background:rgba(3,9,13,.62);
+  box-shadow:inset 0 -2px 0 rgba(115,216,237,.12),0 .3rem .9rem rgba(0,0,0,.18)
+}
+.sf-stage.sf-touch-enabled .sf-touch__button--fire{
+  border-color:rgba(255,107,69,.56)!important;background:rgba(68,17,18,.7)!important;
+  box-shadow:inset 0 -2px 0 rgba(255,107,69,.28)!important
+}
+.sf-stage.sf-touch-enabled #sf-hud :is(.sf-hud__vitals,.sf-hud__charge){padding:.36rem .42rem .4rem}
+.sf-stage.sf-touch-enabled #sf-hud :is(.sf-hud__hplabel,.sf-hud__jetlabel)>span{display:block;font-size:7px}
+.sf-stage.sf-touch-enabled #sf-hud :is(.sf-hud__hplabel,.sf-hud__jetlabel) b{font-size:13px}
+
+@container saintfall-playfield (max-width:1180px){
+  .sf-stage:not(.sf-touch-enabled) #sf-hud .sf-hud__objective{width:min(14.25rem,25.5cqw)}
+  #sf-hud .sf-hud__minimap{width:5rem}
+  #sf-hud .sf-hud__vitals,#sf-hud .sf-hud__charge{width:min(11rem,21cqw)}
+  #sf-hud .sf-hud__stratitem{width:3.2rem;min-width:3.2rem}
+}
+
+@media (orientation:portrait) and (max-width:560px){
+  .sf-stage.sf-touch-enabled #sf-hud .sf-hud__objective{
+    padding:.2rem 0 0 .45rem;border:0;border-left:2px solid rgba(115,216,237,.62);background:linear-gradient(90deg,rgba(3,9,13,.52),transparent)
+  }
+  .sf-stage.sf-touch-enabled #sf-hud .sf-objective__copy strong{font-size:12px;-webkit-line-clamp:2}
+  .sf-stage.sf-touch-enabled #sf-hud :is(.sf-hud__vitals,.sf-hud__charge){width:min(9.2rem,42cqw)}
+}
+
+@media (orientation:landscape) and (max-height:500px){
+  .sf-stage.sf-touch-enabled #sf-hud .sf-hud__objective{padding:.24rem .35rem .28rem .45rem}
+  .sf-stage.sf-touch-enabled #sf-hud :is(.sf-hud__vitals,.sf-hud__charge){padding:.28rem .36rem .32rem}
+}
+
+/* High contrast must remain authoritative after the hardline cascade. */
+body.sf-high-contrast #sf-native-ui .sf-menu__veil{background:rgba(0,0,0,.96)}
+body.sf-high-contrast #sf-native-ui .sf-menu__frame{
+  border-color:#c3f6ff!important;border-left-color:#ffe39a!important;
+  background:#010304!important;box-shadow:0 0 0 1px #000
+}
+body.sf-high-contrast #sf-native-ui :is(
+  .sf-menu__masthead,.sf-menu__rail,.sf-menu__pagehead,.sf-menu__footer,
+  .sf-operation-card,.sf-menu__callout,.sf-save-slot,.sf-controls-grid article,.sf-setting,
+  .sf-doctrine__summary,.sf-doctrine__orders,.sf-doctrine__orders button,
+  .sf-doctrine-talent,.sf-doctrine__preview,.sf-doctrine__vow
+){border-color:rgba(195,246,255,.72);background-color:#010304}
+body.sf-high-contrast #sf-native-ui :is(
+  .sf-menu__masthead p,.sf-menu__pagehead p,.sf-operation-card>span,.sf-menu__callout p,
+  .sf-save-slot__summary span,.sf-control-row small,.sf-setting small,
+  .sf-doctrine__order-head p,.sf-doctrine-talent>p,.sf-doctrine-talent__reason,
+  .sf-doctrine__preview-summary,.sf-doctrine__preview-ranks strong,
+  .sf-doctrine__preview-foot>small,.sf-doctrine__vow>p
+){color:#fff}
+body.sf-high-contrast #sf-native-ui :is(
+  .sf-menu__masthead span,.sf-menu__pagehead>span,.sf-operation-card small,
+  .sf-doctrine__summary small,.sf-doctrine__preview-head small,
+  .sf-doctrine__preview-ranks small
+){color:#bff5ff}
+body.sf-high-contrast #sf-native-ui .sf-menu__rail button{color:#fff}
+body.sf-high-contrast #sf-native-ui .sf-menu__rail button:is(:hover,.is-active,[aria-selected="true"],[aria-current="page"]){
+  border-color:#c3f6ff;background:#07151a;color:#fff
+}
+body.sf-high-contrast #sf-hud :is(
+  .sf-hud__objective,.sf-hud__minimap,.sf-hud__vitals,.sf-hud__charge,
+  .sf-hud__command-head kbd,.sf-hud__stratitem,.sf-hud__hint
+){border-color:#c3f6ff;background-color:rgba(0,0,0,.92)}
+body.sf-high-contrast #sf-hud :is(
+  .sf-objective__copy strong,.sf-hud__hplabel>span,.sf-hud__jetlabel>span,
+  .sf-hud__vitalrow,.sf-hud__stratcopy b,.sf-hud__hint
+){color:#fff}

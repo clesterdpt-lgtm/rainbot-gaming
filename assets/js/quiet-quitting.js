@@ -358,6 +358,7 @@
       // Entities
       this.player = null;
       this.ghosts = [];
+      this.held = { up: false, down: false, left: false, right: false };
 
       // Pre-initialize round so game board renders immediately
       this.resetMaze();
@@ -371,13 +372,57 @@
       requestAnimationFrame((t) => this.loop(t));
     }
 
+    dirFromKey(key) {
+      if (key === "ArrowUp" || key === "w" || key === "W") return "up";
+      if (key === "ArrowDown" || key === "s" || key === "S") return "down";
+      if (key === "ArrowLeft" || key === "a" || key === "A") return "left";
+      if (key === "ArrowRight" || key === "d" || key === "D") return "right";
+      return null;
+    }
+
+    directionFromName(name) {
+      if (name === "up") return DIRECTIONS.UP;
+      if (name === "down") return DIRECTIONS.DOWN;
+      if (name === "left") return DIRECTIONS.LEFT;
+      if (name === "right") return DIRECTIONS.RIGHT;
+      return DIRECTIONS.NONE;
+    }
+
+    heldDirection() {
+      if (this.held.up) return DIRECTIONS.UP;
+      if (this.held.down) return DIRECTIONS.DOWN;
+      if (this.held.left) return DIRECTIONS.LEFT;
+      if (this.held.right) return DIRECTIONS.RIGHT;
+      return null;
+    }
+
+    applySteer(dir) {
+      if (!dir || dir === DIRECTIONS.NONE) return;
+      if (this.state === "INIT" || this.state === "GAME_OVER") this.startNewGame();
+      if (this.state === "PAUSED") this.togglePause();
+      if (!this.player) return;
+      this.player.setNextDir(dir);
+    }
+
     initEvents() {
-      // 1. Keyboard Controls
-      window.addEventListener("keydown", (e) => {
-        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", " "].includes(e.key)) {
-          e.preventDefault();
+      // 1. Keyboard Controls — held keys are reapplied every frame in update().
+      const onKey = (e, down) => {
+        const target = e.target;
+        if (target && target.closest && target.closest("input, textarea, select, [contenteditable='true']")) return;
+
+        const steer = this.dirFromKey(e.key);
+        if (steer || [" ", "Space", "Enter"].includes(e.key)) e.preventDefault();
+
+        if (steer) {
+          this.held[steer] = down;
+          if (down) {
+            this.sound.init();
+            this.applySteer(this.directionFromName(steer));
+          }
+          return;
         }
 
+        if (!down) return;
         this.sound.init();
 
         if (e.key === "p" || e.key === "P") {
@@ -392,34 +437,14 @@
         if (this.state === "INIT" || this.state === "GAME_OVER" || this.state === "LEVEL_CLEAR") {
           if (e.key === "Enter" || e.key === " " || e.key === "Space") {
             this.handlePrimaryClick();
-            return;
           }
         }
+      };
 
-        if (!this.player) return;
-
-        switch (e.key) {
-          case "ArrowUp":
-          case "w":
-          case "W":
-            this.player.setNextDir(DIRECTIONS.UP);
-            break;
-          case "ArrowDown":
-          case "s":
-          case "S":
-            this.player.setNextDir(DIRECTIONS.DOWN);
-            break;
-          case "ArrowLeft":
-          case "a":
-          case "A":
-            this.player.setNextDir(DIRECTIONS.LEFT);
-            break;
-          case "ArrowRight":
-          case "d":
-          case "D":
-            this.player.setNextDir(DIRECTIONS.RIGHT);
-            break;
-        }
+      window.addEventListener("keydown", (e) => onKey(e, true));
+      window.addEventListener("keyup", (e) => onKey(e, false));
+      window.addEventListener("blur", () => {
+        this.held.up = this.held.down = this.held.left = this.held.right = false;
       });
 
       // 2. Direct On-Screen Touch Controls (Mobile D-Pad)
@@ -427,15 +452,8 @@
         const triggerDir = (e) => {
           if (e.cancelable) e.preventDefault();
           this.sound.init();
-          if (this.state === "INIT") {
-            this.startNewGame();
-          }
-          if (!this.player) return;
           const dir = btn.getAttribute("data-mobile-dir");
-          if (dir === "up") this.player.setNextDir(DIRECTIONS.UP);
-          if (dir === "down") this.player.setNextDir(DIRECTIONS.DOWN);
-          if (dir === "left") this.player.setNextDir(DIRECTIONS.LEFT);
-          if (dir === "right") this.player.setNextDir(DIRECTIONS.RIGHT);
+          this.applySteer(this.directionFromName(dir));
         };
 
         btn.addEventListener("pointerdown", triggerDir);
@@ -452,10 +470,7 @@
 
       const handleTouchStart = (clientX, clientY) => {
         this.sound.init();
-        if (this.state === "INIT") {
-          this.startNewGame();
-          return;
-        }
+        if (this.state === "INIT" || this.state === "GAME_OVER") this.startNewGame();
         touchActive = true;
         startX = clientX;
         startY = clientY;
@@ -657,10 +672,7 @@
       this.state = "PLAYING";
       this.hideOverlay();
       this.updateHud();
-      this.canvas.focus({ preventScroll: true });
-      if (this.player && this.player.dir === DIRECTIONS.NONE) {
-        this.player.setNextDir(DIRECTIONS.LEFT);
-      }
+      try { this.btnPrimary?.blur(); this.canvas.focus({ preventScroll: true }); } catch (_) {}
       this.addOfficeFeed("📋 Clocked in. Minimized browser, opened fake spreadsheet.");
     }
 
@@ -671,10 +683,7 @@
       this.state = "PLAYING";
       this.hideOverlay();
       this.updateHud();
-      this.canvas.focus({ preventScroll: true });
-      if (this.player && this.player.dir === DIRECTIONS.NONE) {
-        this.player.setNextDir(DIRECTIONS.LEFT);
-      }
+      try { this.canvas.focus({ preventScroll: true }); } catch (_) {}
       this.sound.playLevelClear();
       this.addOfficeFeed(`📈 Shift survived! Promoted to Level ${this.level}. More syncs inbound!`);
     }
@@ -1154,8 +1163,8 @@
       this.game = game;
       this.x = col;
       this.y = row;
-      this.dir = DIRECTIONS.NONE;
-      this.nextDir = DIRECTIONS.NONE;
+      this.dir = DIRECTIONS.LEFT;
+      this.nextDir = DIRECTIONS.LEFT;
       this.speed = 10.5;
       this.walkTimer = 0;
     }
@@ -1186,16 +1195,15 @@
     update(dt) {
       const speedMultiplier = this.game.frightenedTimer > 0 ? 1.25 : 1.0;
       const currentSpeed = this.speed * speedMultiplier;
+      const held = this.game.heldDirection?.();
+      if (held) this.nextDir = held;
 
-      const isAlignedX = Math.abs(this.x - Math.round(this.x)) < 0.18;
-      const isAlignedY = Math.abs(this.y - Math.round(this.y)) < 0.18;
+      const isAlignedX = Math.abs(this.x - Math.round(this.x)) < 0.22;
+      const isAlignedY = Math.abs(this.y - Math.round(this.y)) < 0.22;
 
       if (this.nextDir !== this.dir) {
-        if (this.dir === DIRECTIONS.NONE) {
-          this.tryCommitDir(this.nextDir);
-        } else if (isAlignedX && isAlignedY) {
-          this.tryCommitDir(this.nextDir);
-          if (this.dir === this.nextDir) {
+        if (this.dir === DIRECTIONS.NONE || (isAlignedX && isAlignedY)) {
+          if (this.tryCommitDir(this.nextDir) && isAlignedX && isAlignedY) {
             this.x = Math.round(this.x);
             this.y = Math.round(this.y);
           }

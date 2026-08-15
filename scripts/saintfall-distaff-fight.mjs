@@ -11,8 +11,8 @@
        reachable by a shot ANYWHERE along the limb and by a swing at
        anything below shoulder height - and the body is a ranged
        target in every phase, weak only while collapsed;
-     - walking away leashes it: full heal on the spot, a walk home,
-       and a fresh fight for the next approach;
+     - leaving the shared boss arena immediately restores, re-hides, and
+       re-arms it for a fresh approach;
      - breaking a leg pays real damage to the main pool and, once
        enough are gone, buckles the body down to where melee actually
        lands - and lands harder there than a rifle would;
@@ -115,14 +115,24 @@ try {
       legHpLength: inst?.legHp?.length,
       bones: ["prosoma", "abdomen1", "abdomen2", "spinneret", "head",
         "fang_L", "fang_R"].every((n) => inst?.bones?.has(n)),
-      clips: ["idle", "alert", "slam", "webCast", "collapse", "bite",
-        "recover", "flinch", "death"].every((c) => inst?.actions?.has(c)),
+      clips: ["idle", "alert", "walk", "lunge", "slam", "webCast",
+        "collapse", "bite", "recover", "flinch", "death"]
+        .every((c) => inst?.actions?.has(c)),
+      pbr: (() => {
+        let material = null;
+        inst?.root?.traverse?.((child) => {
+          if (!material && child.isSkinnedMesh) material = child.material;
+        });
+        return !!(material?.map && material?.normalMap
+          && material?.roughnessMap && material?.emissiveMap);
+      })(),
     };
   });
   check("spawns once, dormant, at the lair", rig.spawned && rig.phase === "dormant");
   check("eight legs, each with its own pool", rig.legCount === 8 && rig.legHpLength === 8);
   check("named body/leg bones resolve", rig.bones);
   check("every authored clip loaded", rig.clips);
+  check("the remodel retains its authored PBR atlas in game", rig.pbr);
 
   /* ---- DORMANT / AGGRO ---------------------------------------------- */
   const farCheck = await page.evaluate(() => {
@@ -460,6 +470,90 @@ try {
   check("every step lands as a footfall report", stalk.footfalls > 6,
     `${stalk.footfalls} footfalls in 8s`);
 
+  /* ---- SLAM -> WALK LEG-OWNERSHIP HANDOFF ---------------------------
+     The stalk above is real gait prep: every foot has acquired a
+     terrain plant through the production locomotion path. Finish any
+     step already in flight, then let the authored slam own its declared
+     front/rear pairs. On the first blended walk frame, no toe may jump
+     far enough to read as a teleport, while the middle pairs that stay
+     under terrain IK must remain effectively nailed to their plants. */
+  const slamWalkHandoff = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    const V3 = () => new (Object.getPrototypeOf(inst.root.position).constructor)();
+    const worldToe = (leg) => {
+      leg.toe.updateWorldMatrix(true, false);
+      return leg.toe.getWorldPosition(V3());
+    };
+    const dt = 1 / 60;
+
+    /* Controller movement has stopped for this focused mixer/solver
+       sample. Give the last production gait step time to land before
+       recording its plant, so the assertion cannot confuse an honest
+       swing phase with attack ownership. */
+    /* Route through idle first so `play()` cannot take its same-action
+       early return: every run starts this sample at walk time zero with
+       no crossfade weight inherited from the earlier combat checks. */
+    T.enemies.play(inst, "idle", 0);
+    T.enemies.play(inst, "walk", 0);
+    let settleFrames = 0;
+    for (; settleFrames < 120; settleFrames += 1) {
+      T.enemies.update(dt, T.render.camera);
+      if (settleFrames >= 30 && inst.legs.every((leg) => leg.stepping <= 0)) break;
+    }
+    const settled = inst.legs.every((leg) => leg.stepping <= 0);
+    const plants = inst.legs.map((leg) => leg.plant.clone());
+    const maxPlantDrift = inst.legs.map(() => 0);
+
+    T.enemies.play(inst, "slam", 0);
+    for (let frame = 0; frame < 119; frame += 1) {
+      T.enemies.update(dt, T.render.camera);
+      inst.legs.forEach((leg, index) => {
+        maxPlantDrift[index] = Math.max(maxPlantDrift[index],
+          worldToe(leg).distanceTo(plants[index]));
+      });
+    }
+
+    const slamEnd = inst.legs.map(worldToe);
+    T.enemies.play(inst, "walk", 0.22);
+    T.enemies.update(dt, T.render.camera);
+    const handoff = inst.legs.map((leg, index) =>
+      worldToe(leg).distanceTo(slamEnd[index]));
+    const authoredPairs = new Set(inst.spec.legOwnedPairsByState?.slam || []);
+    const pairs = [...new Set(inst.legs.map((leg) => leg.i))].map((pair) => {
+      const indexes = inst.legs.map((leg, index) => ({ leg, index }))
+        .filter(({ leg }) => leg.i === pair).map(({ index }) => index);
+      return {
+        pair,
+        authored: authoredPairs.has(pair),
+        handoff: Math.max(...indexes.map((index) => handoff[index])),
+        plantDrift: Math.max(...indexes.map((index) => maxPlantDrift[index])),
+      };
+    });
+    const plantedPairs = pairs.filter((pair) => !pair.authored);
+    return {
+      settled,
+      toes: handoff.length,
+      maxHandoff: Math.max(...handoff),
+      maxPlantedDrift: Math.max(...plantedPairs.map((pair) => pair.plantDrift)),
+      pairs,
+    };
+  });
+  const handoffPairs = slamWalkHandoff.pairs
+    .map((pair) => `${pair.pair}:${pair.handoff.toFixed(3)}m`).join(", ");
+  const plantedPairs = slamWalkHandoff.pairs.filter((pair) => !pair.authored)
+    .map((pair) => `${pair.pair}:${pair.plantDrift.toFixed(6)}m`).join(", ");
+  check("slam-to-walk keeps every toe below a 25cm one-frame displacement",
+    slamWalkHandoff.settled && slamWalkHandoff.toes === 8
+      && Number.isFinite(slamWalkHandoff.maxHandoff)
+      && slamWalkHandoff.maxHandoff < 0.25,
+    `max=${slamWalkHandoff.maxHandoff.toFixed(3)}m; pairs ${handoffPairs}`);
+  check("the terrain-IK middle pairs stay planted throughout the slam",
+    slamWalkHandoff.pairs.filter((pair) => !pair.authored).length === 2
+      && Number.isFinite(slamWalkHandoff.maxPlantedDrift)
+      && slamWalkHandoff.maxPlantedDrift < 0.002,
+    `max=${slamWalkHandoff.maxPlantedDrift.toFixed(6)}m; pairs ${plantedPairs}`);
+
   /* ---- RANGED COVERAGE: WHOLE LEG, WHOLE BODY ------------------------ */
   const coverage = await page.evaluate(() => {
     const T = window.__SF;
@@ -665,33 +759,28 @@ try {
   check("legs broken before the collapse are still broken after",
     JSON.stringify(recover.before) === JSON.stringify(recover.after.legBroken));
 
-  /* ---- THE LEASH ------------------------------------------------------ */
+  /* ---- SHARED BOSS-ARENA EXIT RESET ---------------------------------- */
   const leash = await page.evaluate(() => {
     const T = window.__SF;
     T._teleportRaw(T.distaffState().x + 400, T.distaffState().z, 0);
-    let sawReturning = false;
-    let healedAtStart = false;
-    for (let f = 0; f < 60 * 60; f += 1) {
+    for (let f = 0; f < 120; f += 1) {
       T.renderOnce(1 / 60);
       const st = T.distaffState();
-      if (st.phase === "returning" && !sawReturning) {
-        sawReturning = true;
-        healedAtStart = st.health === st.maxHealth && st.legsBroken === 0;
-      }
-      if (sawReturning && st.phase === "dormant") {
+      if (st.phase === "dormant") {
         return {
-          sawReturning, healedAtStart, done: true,
+          done: true, healed: st.health === st.maxHealth && st.legsBroken === 0,
+          hidden: st.hidden, locked: st.locked,
           homeDist: st.homeDist, secs: Number((f / 60).toFixed(1)),
         };
       }
     }
     const st = T.distaffState();
-    return { sawReturning, healedAtStart, done: false, phase: st.phase, homeDist: st.homeDist };
+    return { done: false, phase: st.phase, homeDist: st.homeDist };
   });
-  check("abandoned, it heals to full ON THE SPOT - legs regrown - and walks home",
-    leash.sawReturning && leash.healedAtStart, JSON.stringify(leash));
-  check("the walk home ends folded at the lair, ready to re-aggro",
-    leash.done && leash.homeDist < 4,
+  check("leaving the boss arena immediately restores every leg and all health",
+    leash.done && leash.healed, JSON.stringify(leash));
+  check("the arena reset returns it hidden and locked at the lair",
+    leash.done && leash.hidden && leash.locked && leash.homeDist < 4,
     `home in ${leash.secs}s`);
 
   /* Re-aggro after the reset: same encounter, no second camera steal. */

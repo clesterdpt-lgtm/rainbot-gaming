@@ -1,0 +1,11 @@
+{
+  "taskId": "01a00334-db6a-70f1-8f5e-476495cd10f2",
+  "taskType": "text-to-3d-refine",
+  "previewTaskId": "01a00333-4b1a-77b0-825a-edc7858cdc00",
+  "request": {
+    "mode": "refine",
+    "preview_task_id": "01a00333-4b1a-77b0-825a-edc7858cdc00",
+    "enable_pbr": true,
+    "texture_prompt": "Near-black obsidian teal chitin with layered rough armored plates, restrained cold cyan bioluminescent cracks and eye glow, glass-scar abrasions, low metallic response, high roughness, threatening premium dark sci-fi palette, no bright rainbow colors"
+  }
+}

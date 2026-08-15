@@ -35,7 +35,9 @@ import { readFileSync, statSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { NodeIO } from "@gltf-transform/core";
-import { dedup, prune } from "@gltf-transform/functions";
+import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
+import { dedup, prune, textureCompress } from "@gltf-transform/functions";
+import sharp from "sharp";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -60,7 +62,10 @@ const LEG_RE = new RegExp(String(args["leg-bones"] || "^(coxa|femur|tibia|foot)"
 const OWN_LEGS = new Set(String(args["own-legs"] || "death").split(",").map((s) => s.trim()));
 
 async function main() {
-  const io = new NodeIO();
+  /* Blender exports clearcoat and emissive-strength for the authored Distaff
+     material. Register every standard extension so the post-process never
+     silently discards an authored material feature it does not itself edit. */
+  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
   const doc = await io.read(IN);
   const rootNode = doc.getRoot();
   const before = statSync(IN).size;
@@ -89,7 +94,20 @@ async function main() {
     summary.push({ name, keptChannels: kept, removedLegChannels: removed, ownsLegs: keepLegs });
   }
 
-  await doc.transform(dedup(), prune());
+  const transforms = [dedup(), prune()];
+  if (args["texture-format"] === "webp") {
+    transforms.push(textureCompress({
+      encoder: sharp,
+      targetFormat: "webp",
+      quality: Number(args["texture-quality"] || 92),
+      effort: Number(args["texture-effort"] || 6),
+      slots: /^(?!normalTexture).*$/,
+    }));
+    /* Normal maps encode directions, not colour. They are excluded above and
+       remain lossless PNG: lossy block/chroma errors visibly roughen the
+       specular highlights running along this boss's long glass legs. */
+  }
+  await doc.transform(...transforms);
 
   mkdirSync(path.dirname(OUT), { recursive: true });
   await io.write(OUT, doc);

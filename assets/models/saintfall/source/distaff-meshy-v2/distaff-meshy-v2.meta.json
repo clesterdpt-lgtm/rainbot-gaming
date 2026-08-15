@@ -1,0 +1,47 @@
+{
+  "source": "Meshy text-to-3d",
+  "preview": {
+    "id": "01a00333-4b1a-77b0-825a-edc7858cdc00",
+    "type": "text-to-3d-preview",
+    "status": "SUCCEEDED",
+    "progress": 100,
+    "createdAt": 1786760089666,
+    "startedAt": 1786760089674,
+    "finishedAt": 1786760185457,
+    "consumedCredits": 20,
+    "taskError": null
+  },
+  "refine": {
+    "id": "01a00334-db6a-70f1-8f5e-476495cd10f2",
+    "type": "text-to-3d-refine",
+    "status": "SUCCEEDED",
+    "progress": 100,
+    "createdAt": 1786760192007,
+    "startedAt": 1786760192011,
+    "finishedAt": 1786760390261,
+    "consumedCredits": 10,
+    "taskError": null
+  },
+  "masterFile": "distaff-meshy-v2-master.glb",
+  "thumbnails": [
+    "distaff-meshy-v2-preview.png"
+  ],
+  "request": {
+    "preview": {
+      "mode": "preview",
+      "prompt": "Single colossal alien glass-widow spider boss, full body in a neutral high-stilt standing pose, exactly eight clearly separated long articulated legs splayed in a broad oval, compact armored cephalothorax, heavy smooth abdomen, intimidating angular fangs and low eye cluster, obsidian and near-black teal vitrified chitin, thin cyan luminous fracture veins, subtle scarred crystal spines, premium stylized dark sci-fi action-game creature, clean game-ready topology, symmetrical, isolated, no ground, no web, no extra objects, no wings, not cartoonish",
+      "ai_model": "meshy-6",
+      "model_type": "standard",
+      "topology": "triangle",
+      "target_polycount": 40000,
+      "symmetry_mode": "on",
+      "pose_mode": ""
+    },
+    "refine": {
+      "mode": "refine",
+      "preview_task_id": "01a00333-4b1a-77b0-825a-edc7858cdc00",
+      "enable_pbr": true,
+      "texture_prompt": "Near-black obsidian teal chitin with layered rough armored plates, restrained cold cyan bioluminescent cracks and eye glow, glass-scar abrasions, low metallic response, high roughness, threatening premium dark sci-fi palette, no bright rainbow colors"
+    }
+  }
+}

@@ -294,6 +294,11 @@ export const BESTIARY = {
   distaff: {
     url: "assets/models/saintfall/distaff.glb",
     faction: "scar",
+    /* This unique boss carries a single Meshy/Blender PBR atlas. The
+       ordinary bestiary deliberately replaces imported materials with
+       one vertex-colour material, but doing that here would throw away
+       the remodel's normal, roughness and emissive fracture maps. */
+    authoredPbr: true,
     /* The largest pool in the game, and it is meant to be read as
        "per leg" rather than as one number: eight legs guard it, and
        taking the fight to any one of them is real progress before the
@@ -317,7 +322,7 @@ export const BESTIARY = {
        player down removes the one thing breaking a leg buys - room to
        stand clear of it - so it plants and reaches instead. */
     speed: { walk: 0.85, charge: 2.4 },
-    material: { roughness: 0.38, metalness: 0.10, rim: 1.30, bio: 2.4 },
+    material: { roughness: 0.56, metalness: 0.22, rim: 1.18, bio: 1.45 },
     legs: 4,                 // pairs - eight, the Matriarch's own rig
     /* Long, high strides for a body carried nine metres up on them. A
        stance tuned for anything else in the bestiary would have this
@@ -334,8 +339,8 @@ export const BESTIARY = {
     animRange: 500,
     poseRange: 780,
     shadowRange: 180,
-    clips: ["idle", "alert", "slam", "webCast", "collapse", "bite",
-      "recover", "flinch", "death"],
+    clips: ["idle", "alert", "walk", "lunge", "slam", "webCast", "collapse",
+      "bite", "recover", "flinch", "death"],
     /* Flared hard outward and barely lifted - the tarantula stance,
        and the opposite bend from every insect knee in the bestiary.
        This is what puts the knees over its own back instead of tucked
@@ -346,6 +351,14 @@ export const BESTIARY = {
        exported with those channels; the model pipeline's hard gate
        fails the build if any OTHER clip leaks a leg channel. */
     legOwnedStates: ["collapse", "recover"],
+    /* The slam animates the striking front pair and weight-bearing rear
+       pair. The two middle pairs stay terrain-planted through IK instead of
+       snapping back to the level bind pose while the body pitches. */
+    legOwnedPairsByState: { slam: [0, 3] },
+    coordinatedGait: true,
+    gaitRate: 1.65,
+    gaitLead: 0.48,
+    gaitStepSpeed: 6.4,
   },
 
   /* ------------------------------------------------------------------
@@ -537,28 +550,32 @@ export async function buildEnemies(ctx, onProgress) {
       continue;
     }
 
-    /* One material per species, built here rather than taken from
-       the file. Also flat-shaded: everything in SAINTFALL above the
-       sand is faceted, and a smooth-shaded enemy reads as belonging
-       to another game. */
-    const mat = new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      flatShading: true,
-      roughness: spec.material.roughness,
-      metalness: spec.material.metalness,
-    });
-    mat.name = `sf-enemy-${key}`;
-    /* `bio` reads COLOR_0's alpha as an emissive mask - see art.js.
-       The bestiary paints eyes, glands and the membrane between plates
-       into that channel, so a creature lights its own detail without
-       a second material and therefore without a second draw call per
-       instance. Above 1 it clears the bloom chain's bright threshold,
-       which is what makes an eye read at night. */
-    patchMaterial(mat, atmos, {
-      rim: spec.material.rim,
-      glitter: 0,
-      bio: spec.material.bio ?? 0,
-    });
+    /* Most species share the intentionally lean vertex-colour path.
+       A unique authored-PBR boss may opt out without opening that cost
+       to the whole garrison: its one imported material/primitive stays
+       one draw, while retaining the atlas that actually models its
+       scars, plate normals and emissive glass fractures. */
+    let mat = null;
+    if (!spec.authoredPbr) {
+      mat = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        flatShading: true,
+        roughness: spec.material.roughness,
+        metalness: spec.material.metalness,
+      });
+      mat.name = `sf-enemy-${key}`;
+      /* `bio` reads COLOR_0's alpha as an emissive mask - see art.js.
+         The bestiary paints eyes, glands and the membrane between plates
+         into that channel, so a creature lights its own detail without
+         a second material and therefore without a second draw call per
+         instance. Above 1 it clears the bloom chain's bright threshold,
+         which is what makes an eye read at night. */
+      patchMaterial(mat, atmos, {
+        rim: spec.material.rim,
+        glitter: 0,
+        bio: spec.material.bio ?? 0,
+      });
+    }
 
     let sourceMesh = null;
     gltf.scene.traverse((child) => {
@@ -566,10 +583,38 @@ export async function buildEnemies(ctx, onProgress) {
       // COLOR_0 is linear per the glTF spec, and the level's own
       // vertex colours are linear too - so no conversion here. If
       // this ever needs one, the bug is in the exporter.
-      if (!child.geometry.attributes.color) {
+      if (!spec.authoredPbr && !child.geometry.attributes.color) {
         console.warn(`[saintfall] enemy "${key}" has no COLOR_0; it will render white`);
       }
-      child.material = mat;
+      if (spec.authoredPbr) {
+        const authored = Array.isArray(child.material)
+          ? child.material : [child.material];
+        for (const material of authored) {
+          if (!material) continue;
+          material.name = `sf-enemy-${key}-pbr`;
+          material.vertexColors = false;
+          material.flatShading = false;
+          material.roughness = spec.material.roughness;
+          material.metalness = spec.material.metalness;
+          material.emissiveIntensity = spec.material.bio ?? 1;
+          for (const texture of [material.map, material.normalMap,
+            material.roughnessMap, material.metalnessMap, material.emissiveMap]) {
+            if (texture) texture.anisotropy = Math.min(4, ctx.render?.renderer?.capabilities
+              ?.getMaxAnisotropy?.() || 1);
+          }
+          /* bio=0 deliberately preserves the glTF emissive map. The
+             vertex-alpha patch replaces <emissivemap_fragment>, which is
+             correct for procedural creatures and destructive here. */
+          patchMaterial(material, atmos, {
+            rim: spec.material.rim,
+            glitter: 0,
+            bio: 0,
+          });
+          if (!mat) mat = material;
+        }
+      } else {
+        child.material = mat;
+      }
       child.castShadow = true;
       child.receiveShadow = true;
 
@@ -888,6 +933,9 @@ export async function buildEnemies(ctx, onProgress) {
       eventId: opts.eventId || null,
       eventWave: Number.isFinite(opts.eventWave) ? opts.eventWave : null,
       stride: 0,
+      gaitX: x,
+      gaitZ: z,
+      gaitClock: 0,
       current: null,
       knockbackX: 0,
       knockbackZ: 0,
@@ -1225,18 +1273,61 @@ export async function buildEnemies(ctx, onProgress) {
        rather than checked by clip name here, so this file does not
        grow a new hardcoded string every time a boss needs the same
        trick. */
-    if (inst.state === "death" || inst.spec.legOwnedStates?.includes(inst.state)) return;
+    const ownsAll = inst.state === "death"
+      || inst.spec.legOwnedStates?.includes(inst.state);
+    const ownedPairs = ownsAll
+      ? inst.legs.map((leg) => leg.i)
+      : (inst.spec.legOwnedPairsByState?.[inst.state] || null);
+
+    /* When an authored attack hands a leg back to terrain IK, start the
+       solver from the toe's CURRENT rendered contact. Reusing the plant from
+       before the clip makes the solver overwrite a crossfade in one frame —
+       the rear slam brace used to jump 2.47m when locomotion resumed. */
+    const previousOwned = inst.legOwnedPairs || [];
+    if (previousOwned.length) {
+      for (const leg of inst.legs) {
+        if (!previousOwned.includes(leg.i) || ownedPairs?.includes(leg.i)) continue;
+        leg.toe.getWorldPosition(_a);
+        _a.y = groundY(_a.x, _a.z);
+        leg.plant.copy(_a);
+        leg.target.copy(_a);
+        leg.foot.copy(_a);
+        leg.stepping = 0;
+      }
+    }
+    inst.legOwnedPairs = ownedPairs ? [...new Set(ownedPairs)] : [];
+    if (ownsAll) return;
     const scale = inst.root.scale.x;
     const reach = inst.spec.stance * scale;
     const lift = inst.spec.stepHeight * scale;
+    const movedX = inst.root.position.x - (Number.isFinite(inst.gaitX) ? inst.gaitX : inst.root.position.x);
+    const movedZ = inst.root.position.z - (Number.isFinite(inst.gaitZ) ? inst.gaitZ : inst.root.position.z);
+    const travelled = Math.hypot(movedX, movedZ);
+    inst.gaitX = inst.root.position.x;
+    inst.gaitZ = inst.root.position.z;
+    const coordinated = !!inst.spec.coordinatedGait
+      && travelled > 1e-4 && travelled < reach * 2;
+    if (coordinated) {
+      inst.gaitClock = (inst.gaitClock + dt * (inst.spec.gaitRate || 1.5)) % 1;
+    }
+    const activeGroup = inst.gaitClock < 0.5 ? 0 : 0.5;
+    const moveX = coordinated ? movedX / travelled : 0;
+    const moveZ = coordinated ? movedZ / travelled : 0;
 
     for (const leg of inst.legs) {
+      if (ownedPairs?.includes(leg.i)) continue;
       // Where this foot WANTS to be right now, in world space.
       _a.copy(leg.rest).applyMatrix4(inst.root.matrixWorld);
+      if (coordinated) {
+        const lead = (inst.spec.gaitLead || 0) * scale;
+        _a.x += moveX * lead;
+        _a.z += moveZ * lead;
+      }
       _a.y = groundY(_a.x, _a.z);
 
       if (leg.stepping > 0) {
-        leg.stepping = Math.max(0, leg.stepping - dt * 5.5);
+        leg.stepping = Math.max(0,
+          leg.stepping - dt * (inst.spec.gaitStepSpeed || 5.5));
         const t = 1 - leg.stepping;
         _b.copy(leg.plant).lerp(leg.target, t);
         // A parabola over the step, so the foot clears the ground
@@ -1245,7 +1336,10 @@ export async function buildEnemies(ctx, onProgress) {
         leg.foot.copy(_b);
         if (leg.stepping <= 0) leg.plant.copy(leg.target);
       } else {
-        if (leg.plant.distanceTo(_a) > reach) {
+        const lag = leg.plant.distanceTo(_a);
+        const groupReady = !inst.spec.coordinatedGait
+          || Math.abs(leg.phase - activeGroup) < 0.1;
+        if (lag > reach && (groupReady || lag > reach * 1.55)) {
           leg.target.copy(_a);
           leg.stepping = 1;
         }

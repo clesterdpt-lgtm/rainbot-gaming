@@ -503,11 +503,18 @@ export function buildDistaff(ctx) {
       const dz = inst.z - pz;
       const d = Math.hypot(dx, dz) || 1;
       const side = { x: -dz / d, z: dx / d };
-      const camX = px + (dx / d) * Math.min(d * 0.35, 14) + side.x * 6;
-      const camZ = pz + (dz / d) * Math.min(d * 0.35, 14) + side.z * 6;
-      const camY = groundAt(camX, camZ) + 5.5;
+      /* The remodel is a true 26m-wide stilt spider rather than the old
+         wire-thin silhouette. Keep this reveal outside its front-leg arc so
+         all eight limbs and the glass shell read in one establishing frame. */
+      const standOff = 38.5;
+      const lateral = 10;
+      const axial = Math.sqrt(standOff * standOff - lateral * lateral);
+      const approach = d - axial;
+      const camX = px + (dx / d) * approach + side.x * lateral;
+      const camZ = pz + (dz / d) * approach + side.z * lateral;
+      const camY = groundAt(camX, camZ) + 9.0;
       ctx.player.setFree(true, [camX, camY, camZ],
-        [inst.x, inst.y + 9, inst.z], 46);
+        [inst.x, inst.y + 7.6, inst.z], 54);
       state.releaseCameraAt = 0;
     }
   }
@@ -657,7 +664,7 @@ export function buildDistaff(ctx) {
   function beginLunge() {
     state.lungeFor = C.lungeSeconds;
     state.lungeTimer = C.lungeCadence;
-    enemies.play(inst, "alert", 0.10);
+    enemies.play(inst, "lunge", 0.10);
     ctx.player?.doctrineKick?.(0.5, 0.4);
     bus.emit("lungeTelegraph", { x: inst.x, z: inst.z });
   }
@@ -732,7 +739,7 @@ export function buildDistaff(ctx) {
       moveBody(-uz * C.strafeSpeed * state.strafeDir,
         ux * C.strafeSpeed * state.strafeDir, dt);
     }
-    if (inst.state !== "alert") enemies.play(inst, "alert", 0.3);
+    if (inst.state !== "walk") enemies.play(inst, "walk", 0.22);
   }
 
   /** Walking home. Health is already back - the reset happened the
@@ -760,6 +767,7 @@ export function buildDistaff(ctx) {
     }
     faceTowards(C.lairX, C.lairZ, 1.6, dt);
     moveBody((dx / home) * C.returnSpeed, (dz / home) * C.returnSpeed, dt);
+    if (inst.state !== "walk") enemies.play(inst, "walk", 0.18);
   }
 
   function stepCollapsed(dt) {

@@ -1,0 +1,643 @@
+#!/usr/bin/env python3
+"""Fit the Meshy glass-widow base to Distaff's canonical gameplay rig.
+
+Meshy supplies the high-detail PBR anatomy. Blender keeps the exact bone names,
+world envelope, hit anchors, and authored combat timing required by Saintfall.
+
+Usage:
+  blender --background --factory-startup \
+    --python scripts/blender/saintfall-distaff-meshy.py -- \
+    --input assets/models/saintfall/source/distaff-meshy-v2/distaff-meshy-v2-remeshed.glb \
+    --output assets/models/saintfall/source/distaff-meshy-v2.rigged.raw.glb \
+    --report output/saintfall/models/distaff-meshy-v2.json \
+    --save-blend assets/models/saintfall/source/distaff-meshy-v2.blend
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import math
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+import bpy
+import numpy as np
+from mathutils import Vector
+
+
+ROOT = Path(__file__).resolve().parent
+
+
+def load_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+kit = load_module("saintfall_kit", ROOT / "saintfall-kit.py")
+legacy = load_module("saintfall_distaff_legacy", ROOT / "saintfall-distaff.py")
+
+PI = math.pi
+TARGET_WIDTH = 26.569
+TARGET_FRONT = -6.10       # Blender -Y is game +Z / the face.
+TARGET_REAR = 9.35
+TARGET_HEIGHT = 13.80
+
+
+def parse_args() -> argparse.Namespace:
+    argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input", required=True, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--report", type=Path)
+    parser.add_argument("--save-blend", type=Path)
+    parser.add_argument("--texture-size", type=int, default=1024)
+    return parser.parse_args(argv)
+
+
+def world_bounds(obj: bpy.types.Object) -> tuple[Vector, Vector]:
+    points = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+    low = Vector((min(p.x for p in points), min(p.y for p in points), min(p.z for p in points)))
+    high = Vector((max(p.x for p in points), max(p.y for p in points), max(p.z for p in points)))
+    return low, high
+
+
+def flatten_imported_mesh(obj: bpy.types.Object) -> None:
+    world = obj.matrix_world.copy()
+    obj.parent = None
+    obj.matrix_world = world
+    bpy.context.view_layer.objects.active = obj
+    obj.select_set(True)
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+    obj.select_set(False)
+
+
+def smoothstep(edge0: float, edge1: float, value: float) -> float:
+    if edge1 <= edge0:
+        return 0.0
+    t = max(0.0, min(1.0, (value - edge0) / (edge1 - edge0)))
+    return t * t * (3.0 - 2.0 * t)
+
+
+def reshape_to_canonical_envelope(obj: bpy.types.Object) -> None:
+    """Map Meshy's normalized pose into the proven Distaff combat envelope.
+
+    The vertical power curve turns Meshy's low natural spider pose into the
+    high-stilt silhouette the leg-first encounter requires while keeping every
+    foot on the floor. A centerline-only width compression prevents the larger
+    PBR abdomen from drifting outside the authoritative body capsule.
+    """
+    low, high = world_bounds(obj)
+    span = high - low
+    for vertex in obj.data.vertices:
+        point = vertex.co
+        nx = (point.x - (low.x + high.x) * 0.5) / max(span.x * 0.5, 1e-6)
+        ny = (point.y - low.y) / max(span.y, 1e-6)
+        nz = (point.z - low.z) / max(span.z, 1e-6)
+
+        center_blend = smoothstep(0.22, 0.58, abs(nx))
+        center_width = 0.70 + 0.30 * center_blend
+        point.x = nx * (TARGET_WIDTH * 0.5) * center_width
+        point.y = TARGET_FRONT + ny * (TARGET_REAR - TARGET_FRONT)
+        point.z = max(0.0, nz) ** 0.58 * TARGET_HEIGHT
+
+    # Meshy carries baked tangent/custom-normal data from its original low
+    # stance. The non-linear stilt fit invalidates that data, so discard it
+    # and let Blender rebuild normals/tangents from the final geometry + UVs.
+    obj.data.validate(clean_customdata=True)
+    obj.data.update(calc_edges=True)
+    obj.name = "distaff"
+    obj.data.name = "distaff"
+    for polygon in obj.data.polygons:
+        polygon.use_smooth = True
+
+
+def face_eye_uvs(obj: bpy.types.Object) -> list[dict]:
+    """Find UV samples for eight eye points on the final fitted face.
+
+    Meshy's atlas is densely packed and its face islands are not placed at a
+    predictable location. Resolve small arachnid eye marks from their actual
+    3D facial positions, then paint only those UV neighborhoods below. This
+    keeps the eyes attached to the skinned head without adding a material,
+    primitive, or floating geometry.
+    """
+    uv_layer = obj.data.uv_layers.active
+    if not uv_layer:
+        return []
+    # Target coordinates are expressed in Saintfall's Y-up frame. The fitted
+    # Meshy face sits around z=3.5 and y=8.0-8.6 in that frame.
+    targets = [
+        (-0.55, 8.05, 3.65, 1.35), (0.55, 8.05, 3.65, 1.35),
+        (-0.28, 8.45, 3.55, 1.00), (0.28, 8.45, 3.55, 1.00),
+        (-0.82, 8.20, 3.50, 0.78), (0.82, 8.20, 3.50, 0.78),
+        (-0.84, 7.85, 3.50, 0.72), (0.84, 7.85, 3.50, 0.72),
+    ]
+    resolved = []
+    for tx, ty, tz, scale in targets:
+        # Blender is Z-up and its -Y becomes Saintfall +Z.
+        target = Vector((tx, -tz, ty))
+        ranked = [((vertex.co - target).length_squared, vertex.index)
+                  for vertex in obj.data.vertices]
+        if not ranked:
+            continue
+        best_distance_sq = min(distance for distance, _ in ranked)
+        # Meshy splits a geometric seam point into several vertices carrying
+        # different UVs. Blender's import order for those equal-distance
+        # duplicates is not stable, so collect every exact winning vertex
+        # instead of letting `min()` choose a different eye island per build.
+        winners = {index for distance, index in ranked
+                   if abs(distance - best_distance_sq) <= 1e-10}
+        distance = math.sqrt(best_distance_sq)
+        local = []
+        for loop in obj.data.loops:
+            if loop.vertex_index not in winners:
+                continue
+            uv = uv_layer.data[loop.index].uv
+            sample = (float(uv.x % 1.0), float(uv.y % 1.0))
+            if any(math.hypot(sample[0] - prior[0], sample[1] - prior[1]) < 1e-4
+                   for prior in local):
+                continue
+            local.append(sample)
+        for sample in sorted(local):
+            resolved.append({"uv": sample, "scale": scale, "distance": distance})
+    return resolved
+
+
+def resize_and_grade_images(texture_size: int, eye_uvs: list[dict]) -> list[dict]:
+    """Art-direct Meshy's silver PBR into fractured Glass Scar black-teal."""
+    report = []
+    images = [image for image in bpy.data.images
+              if image.source not in {"VIEWER", "RENDER_RESULT"}
+              and image.size[0] > 0 and image.size[1] > 0]
+    for image in images:
+        if max(image.size) > texture_size:
+            scale = texture_size / max(image.size)
+            image.scale(max(1, round(image.size[0] * scale)),
+                        max(1, round(image.size[1] * scale)))
+
+    pixel_data = {}
+    for image in images:
+        expected_pixels = image.size[0] * image.size[1] * 4
+        if len(image.pixels) != expected_pixels:
+            continue
+        pixels = np.empty(len(image.pixels), dtype=np.float32)
+        image.pixels.foreach_get(pixels)
+        rgba = pixels.reshape((-1, 4))
+        np.nan_to_num(rgba, copy=False, nan=0.0, posinf=1.0, neginf=0.0)
+        np.clip(rgba, 0.0, 1.0, out=rgba)
+        pixel_data[image] = rgba
+
+    # Thin irregular emission follows high-frequency plate boundaries in the
+    # authored base atlas. Selecting the top 4.5% of gradients creates cracks
+    # and edge glints without turning whole armour panels into neon ribbons.
+    crack_mask = None
+    base_image = next((image for image in images
+                       if "base" in image.name.lower() or "color" in image.name.lower()), None)
+    if base_image in pixel_data:
+        rgba = pixel_data[base_image]
+        h, w = base_image.size[1], base_image.size[0]
+        rgb = rgba[:, :3]
+        lum = (rgb[:, 0] * 0.2126 + rgb[:, 1] * 0.7152
+               + rgb[:, 2] * 0.0722).reshape((h, w))
+        edge = np.maximum.reduce([
+            np.abs(lum - np.roll(lum, 1, axis=0)),
+            np.abs(lum - np.roll(lum, -1, axis=0)),
+            np.abs(lum - np.roll(lum, 1, axis=1)),
+            np.abs(lum - np.roll(lum, -1, axis=1)),
+        ])
+        edge[[0, -1], :] = 0
+        edge[:, [0, -1]] = 0
+        low = float(np.quantile(edge, 0.955))
+        high = float(np.quantile(edge, 0.995))
+        crack_mask = np.clip((edge - low) / max(high - low, 1e-6), 0.0, 1.0) ** 0.72
+
+    for image in images:
+        if image.source in {"VIEWER", "RENDER_RESULT"} or image.size[0] <= 0 or image.size[1] <= 0:
+            continue
+        name = image.name.lower()
+        rgba = pixel_data.get(image)
+        if rgba is None:
+            continue
+        rgb = rgba[:, :3]
+        active_pct = None
+        hot_pct = None
+
+        if "base" in name or "color" in name:
+            luminance = np.clip(rgb[:, 0] * 0.2126 + rgb[:, 1] * 0.7152
+                                + rgb[:, 2] * 0.0722, 0.0, 1.0)
+            cyan_detail = np.clip((rgb[:, 1] + rgb[:, 2]) * 0.5 - rgb[:, 0], 0.0, 1.0)
+            rgba[:, 0] = 0.018 + luminance * 0.240
+            rgba[:, 1] = 0.045 + luminance * 0.420 + cyan_detail * 0.030
+            rgba[:, 2] = 0.055 + luminance * 0.470 + cyan_detail * 0.055
+        elif "emit" in name:
+            luminance = np.clip(rgb[:, 0] * 0.2126 + rgb[:, 1] * 0.7152
+                                + rgb[:, 2] * 0.0722, 0.0, 1.0)
+            mask = np.clip((luminance - 0.28) / 0.50, 0.0, 1.0) ** 1.7
+            h, w = image.size[1], image.size[0]
+            mask = mask.reshape((h, w))
+            if crack_mask is not None and crack_mask.shape == mask.shape:
+                mask = np.maximum(mask, crack_mask * 0.68)
+
+            # Eight small cyan eye pools make the face readable at combat
+            # distance. Gaussian falloff keeps them glassy, not sticker-like.
+            yy, xx = np.ogrid[:h, :w]
+            for eye in eye_uvs:
+                cx = int(round(eye["uv"][0] * (w - 1)))
+                cy = int(round(eye["uv"][1] * (h - 1)))
+                sigma = max(2.2, w * 0.0035 * eye["scale"])
+                glow = np.exp(-((xx - cx) ** 2 + (yy - cy) ** 2)
+                              / (2.0 * sigma * sigma))
+                mask = np.maximum(mask, glow)
+
+            flat_mask = np.clip(mask.reshape(-1), 0.0, 1.0)
+            rgba[:, 0] = flat_mask * 0.035
+            rgba[:, 1] = flat_mask * 0.82
+            rgba[:, 2] = flat_mask * 0.94
+            active_pct = round(float(np.mean(flat_mask > 0.025) * 100), 2)
+            hot_pct = round(float(np.mean(flat_mask > 0.55) * 100), 2)
+
+        image.pixels.foreach_set(rgba.reshape(-1))
+        image.update()
+        image.pack()
+        entry = {"name": image.name, "width": image.size[0], "height": image.size[1]}
+        if active_pct is not None:
+            entry.update({"activePct": active_pct, "hotPct": hot_pct})
+        report.append(entry)
+    return report
+
+
+def tune_materials(obj: bpy.types.Object) -> list[str]:
+    names = []
+    for slot in obj.material_slots:
+        material = slot.material
+        if not material:
+            continue
+        material.name = "distaff-glass-pbr"
+        material.use_nodes = True
+        # The base-color image has already been art-directed above. Keep the
+        # glTF factor white or it gets multiplied dark a second time.
+        material.diffuse_color = (1.0, 1.0, 1.0, 1.0)
+        material.use_backface_culling = True
+        bsdf = material.node_tree.nodes.get("Principled BSDF")
+        if bsdf:
+            bsdf.inputs["Base Color"].default_value = (1.0, 1.0, 1.0, 1.0)
+            bsdf.inputs["Roughness"].default_value = 0.46
+            bsdf.inputs["Metallic"].default_value = 0.18
+            if "Coat Weight" in bsdf.inputs:
+                bsdf.inputs["Coat Weight"].default_value = 0.22
+                bsdf.inputs["Coat Roughness"].default_value = 0.34
+            if "Emission Strength" in bsdf.inputs:
+                bsdf.inputs["Emission Strength"].default_value = 1.55
+        names.append(material.name)
+    return names
+
+
+def point_segment_distance(point: Vector, head: Vector, tail: Vector) -> float:
+    segment = tail - head
+    denom = segment.length_squared
+    if denom < 1e-8:
+        return (point - head).length
+    t = max(0.0, min(1.0, (point - head).dot(segment) / denom))
+    return (point - (head + segment * t)).length
+
+
+def create_weights(mesh_obj: bpy.types.Object, bones: list[dict]) -> dict:
+    """Rigid-weight leg plates and smoothly blend the central body chain."""
+    specs = {entry["name"]: entry for entry in bones}
+    groups = {name: mesh_obj.vertex_groups.new(name=name) for name in specs}
+    leg_names = [name for name in specs if name.startswith(("coxa", "femur", "tibia", "foot"))]
+    body_names = ["prosoma", "abdomen1", "abdomen2", "spinneret", "head", "fang_L", "fang_R", "palp_L", "palp_R"]
+    segments = {
+        name: (Vector(specs[name]["head"]), Vector(specs[name]["tail"]))
+        for name in specs
+    }
+    counts = {name: 0 for name in specs}
+
+    for vertex in mesh_obj.data.vertices:
+        # Blender Z-up -> Saintfall/glTF Y-up.
+        point = Vector((vertex.co.x, vertex.co.z, -vertex.co.y))
+        side = "L" if point.x >= 0 else "R"
+        side_legs = [name for name in leg_names if name.endswith(f"_{side}")]
+
+        # Meshy's plated hips begin close to the shell. The adaptive boundary
+        # keeps them on the leg chain while retaining a compact body capsule.
+        leg_likelihood = abs(point.x) > (2.55 + max(0.0, 8.0 - point.y) * 0.055)
+        candidates = side_legs if leg_likelihood else body_names
+        ranked = sorted(
+            ((point_segment_distance(point, *segments[name]), name) for name in candidates),
+            key=lambda item: item[0],
+        )
+
+        if leg_likelihood or len(ranked) == 1:
+            name = ranked[0][1]
+            groups[name].add([vertex.index], 1.0, "REPLACE")
+            counts[name] += 1
+        else:
+            # Two-bone blend keeps the abdomen's normal-mapped shell bending
+            # as one volume instead of sliding its details off a rigid sac.
+            first, second = ranked[0], ranked[1]
+            inv_a = 1.0 / max(first[0], 0.08)
+            inv_b = 1.0 / max(second[0], 0.08)
+            total = inv_a + inv_b
+            groups[first[1]].add([vertex.index], inv_a / total, "REPLACE")
+            groups[second[1]].add([vertex.index], inv_b / total, "REPLACE")
+            counts[first[1]] += 1
+            counts[second[1]] += 1
+
+    return counts
+
+
+BODY_BONES = ["prosoma", "abdomen1", "abdomen2", "spinneret", "head", "fang_L", "fang_R", "palp_L", "palp_R"]
+
+
+def build_actions(arm: bpy.types.Object) -> list[str]:
+    scene = bpy.context.scene
+    names: list[str] = []
+
+    def rest() -> dict[str, tuple[float, float, float]]:
+        return {name: (0.0, 0.0, 0.0) for name in BODY_BONES}
+
+    def sym(pose, stem, x, y, z):
+        pose[f"{stem}_L"] = (x, y, z)
+        pose[f"{stem}_R"] = (x, -y, -z)
+
+    def leg(pose, index, side, coxa=(0, 0, 0), femur=(0, 0, 0), tibia=(0, 0, 0)):
+        pose[f"coxa{index}_{side}"] = coxa
+        pose[f"femur{index}_{side}"] = femur
+        pose[f"tibia{index}_{side}"] = tibia
+
+    def bake(name, frames, length):
+        action = kit.new_action(arm, name)
+        scene.frame_start = 0
+        scene.frame_end = length
+        for frame, pose in frames:
+            kit.key_pose(arm, frame, pose)
+        kit.set_interpolation(action)
+        names.append(name)
+
+    # Slow abdominal breathing with non-mirrored mouth feelers.
+    frames = []
+    for frame in (0, 28, 56, 84, 112):
+        phase = frame / 112 * PI * 2
+        pose = rest()
+        pose["prosoma"] = (0.012 * math.sin(phase), 0.0, 0.007 * math.sin(phase * 0.5))
+        pose["abdomen1"] = (-0.028 * math.sin(phase), 0.012 * math.sin(phase * 0.5), 0.0)
+        pose["abdomen2"] = (-0.020 * math.sin(phase + 0.35), -0.015 * math.sin(phase * 0.5), 0.0)
+        pose["head"] = (0.018 * math.sin(phase + 0.8), 0.022 * math.sin(phase * 1.5), 0.0)
+        pose["palp_L"] = (0.0, 0.11 * math.sin(phase + 0.3), 0.025 * math.sin(phase * 2.0))
+        pose["palp_R"] = (0.0, -0.09 * math.sin(phase + 1.1), -0.020 * math.sin(phase * 1.7))
+        frames.append((frame, pose))
+    bake("idle", frames, 112)
+
+    # Full 4.8-second reveal: snap upright, hold the threat, then settle.
+    frames = []
+    for frame, t, shudder in ((0, 0.0, 0.0), (10, 0.38, 0.06), (23, 1.16, -0.04),
+                              (38, 1.0, 0.025), (72, 1.0, -0.018), (98, 0.42, 0.01),
+                              (115, 0.0, 0.0)):
+        pose = rest()
+        pose["prosoma"] = (-0.34 * t, 0.0, shudder)
+        pose["abdomen1"] = (0.16 * t, 0.0, -shudder * 0.45)
+        pose["abdomen2"] = (0.11 * t, 0.0, shudder * 0.3)
+        pose["head"] = (0.28 * t, shudder * 1.7, 0.0)
+        sym(pose, "fang", 0.0, 0.58 * t, 0.06 * t)
+        sym(pose, "palp", -0.34 * t, 0.24 * t, -0.08 * t)
+        frames.append((frame, pose))
+    bake("alert", frames, 115)
+
+    # Body-only locomotion. Terrain IK owns the eight planted feet.
+    frames = []
+    for frame in (0, 8, 16, 24, 32):
+        phase = frame / 32 * PI * 2
+        pose = rest()
+        pose["prosoma"] = (0.026 * math.sin(phase * 2), 0.014 * math.sin(phase), 0.035 * math.sin(phase))
+        pose["abdomen1"] = (-0.038 * math.sin(phase * 2 + 0.45), -0.018 * math.sin(phase), -0.025 * math.sin(phase))
+        pose["abdomen2"] = (-0.025 * math.sin(phase * 2 + 0.75), -0.025 * math.sin(phase), -0.018 * math.sin(phase))
+        pose["head"] = (0.035 * math.sin(phase * 2 + 0.3), 0.028 * math.sin(phase), 0.0)
+        sym(pose, "palp", -0.04 * max(0.0, math.sin(phase)), 0.09 * math.sin(phase), 0.0)
+        frames.append((frame, pose))
+    bake("walk", frames, 32)
+
+    # Telegraph compression followed by a predatory forward spear.
+    frames = []
+    for frame, crouch, thrust in ((0, 0.0, 0.0), (7, 0.55, 0.0), (10, 1.0, 0.0),
+                                  (16, 0.70, 0.38), (28, 0.25, 1.0), (43, 0.0, 0.35)):
+        pose = rest()
+        pose["prosoma"] = (-0.20 * crouch + 0.18 * thrust, 0.0, 0.0)
+        pose["abdomen1"] = (0.13 * crouch - 0.10 * thrust, 0.0, 0.0)
+        pose["abdomen2"] = (0.09 * crouch - 0.06 * thrust, 0.0, 0.0)
+        pose["head"] = (-0.12 * crouch + 0.26 * thrust, 0.0, 0.0)
+        sym(pose, "fang", 0.0, 0.22 * crouch + 0.34 * thrust, 0.0)
+        sym(pose, "palp", -0.18 * crouch, 0.13 * thrust, 0.0)
+        frames.append((frame, pose))
+    bake("lunge", frames, 43)
+
+    # Both front legs visibly lift and strike at frame 22 / 0.92s.
+    frames = []
+    for frame, lift, impact in ((0, 0.0, 0.0), (8, 0.45, 0.0), (13, 1.0, 0.0),
+                                (18, 0.32, 0.58), (22, 0.0, 1.0), (29, 0.0, 0.55),
+                                (40, 0.0, 0.12), (48, 0.0, 0.0)):
+        pose = rest()
+        pose["prosoma"] = (-0.16 * lift + 0.36 * impact, 0.0, 0.0)
+        pose["abdomen1"] = (0.10 * lift - 0.14 * impact, 0.0, 0.0)
+        pose["head"] = (-0.08 * lift + 0.30 * impact, 0.0, 0.0)
+        sym(pose, "fang", 0.0, 0.22 * lift + 0.38 * impact, 0.0)
+        for side, sign in (("L", 1.0), ("R", -1.0)):
+            leg(pose, 0, side,
+                coxa=(0.0, 0.0, sign * (0.10 * lift + 0.08 * impact)),
+                femur=(-0.52 * lift + 0.58 * impact, 0.0, 0.0),
+                tibia=(0.78 * lift - 0.92 * impact, 0.0, 0.0))
+            # Rear pair braces asymmetrically so the body has weight.
+            leg(pose, 3, side,
+                coxa=(0.0, 0.0, -sign * 0.055 * impact),
+                femur=(0.10 * impact, 0.0, 0.0),
+                tibia=(-0.12 * impact, 0.0, 0.0))
+        frames.append((frame, pose))
+    bake("slam", frames, 48)
+
+    frames = []
+    for frame, t, snap in ((0, 0.0, 0.0), (7, 0.18, 0.0), (13, 0.62, 0.0),
+                           (19, 1.0, 0.10), (24, 0.88, -0.08), (34, 0.34, 0.0),
+                           (46, 0.0, 0.0)):
+        pose = rest()
+        pose["abdomen1"] = (0.38 * t, snap, 0.0)
+        pose["abdomen2"] = (0.56 * t, -snap * 0.6, 0.0)
+        pose["spinneret"] = (0.34 * t, 0.0, snap * 0.5)
+        pose["prosoma"] = (-0.07 * t, 0.0, 0.0)
+        pose["head"] = (-0.05 * t, 0.0, 0.0)
+        frames.append((frame, pose))
+    bake("webCast", frames, 46)
+
+    # Independent leg buckling prevents the crouch reading like a lift platform.
+    frames = []
+    for frame, t in ((0, 0.0), (6, 0.18), (13, 0.46), (22, 0.78), (29, 0.94), (34, 1.0)):
+        pose = rest()
+        pose["prosoma"] = (0.12 * t, 0.05 * t, 0.025 * t)
+        pose["abdomen1"] = (-0.12 * t, -0.02 * t, -0.02 * t)
+        pose["abdomen2"] = (-0.08 * t, 0.02 * t, 0.015 * t)
+        pose["head"] = (0.18 * t, 0.0, 0.0)
+        sym(pose, "fang", 0.0, 0.22 * t, 0.0)
+        for index in range(4):
+            for side, sign in (("L", 1.0), ("R", -1.0)):
+                offset = 1.0 + 0.07 * math.sin(index * 2.3 + (0.4 if side == "R" else 0.0))
+                leg(pose, index, side,
+                    coxa=(0.0, 0.0, sign * 0.17 * t * offset),
+                    femur=((0.46 + 0.055 * index) * t * offset, 0.0, 0.0),
+                    tibia=(-0.76 * t * offset, 0.0, 0.0))
+        frames.append((frame, pose))
+    bake("collapse", frames, 34)
+
+    frames = []
+    for frame, recoil, strike in ((0, 0.0, 0.0), (5, 0.55, 0.0), (8, 1.0, 0.0),
+                                  (12, 0.28, 1.0), (16, 0.0, 0.70), (23, 0.0, 0.22),
+                                  (32, 0.0, 0.0)):
+        pose = rest()
+        pose["prosoma"] = (-0.18 * recoil + 0.24 * strike, 0.0, 0.0)
+        pose["head"] = (-0.24 * recoil + 0.36 * strike, 0.0, 0.0)
+        sym(pose, "fang", 0.0, 0.24 * recoil + 0.68 * strike, 0.0)
+        sym(pose, "palp", -0.22 * recoil, 0.18 * strike, 0.0)
+        frames.append((frame, pose))
+    bake("bite", frames, 32)
+
+    frames = []
+    for frame, t in ((0, 1.0), (8, 0.96), (18, 0.72), (28, 0.36), (36, 0.10), (42, 0.0)):
+        pose = rest()
+        pose["prosoma"] = (0.12 * t, 0.05 * t, 0.025 * t)
+        pose["abdomen1"] = (-0.12 * t, -0.02 * t, -0.02 * t)
+        pose["abdomen2"] = (-0.08 * t, 0.02 * t, 0.015 * t)
+        pose["head"] = (0.18 * t, 0.0, 0.0)
+        for index in range(4):
+            for side, sign in (("L", 1.0), ("R", -1.0)):
+                offset = 1.0 + 0.07 * math.sin(index * 2.3 + (0.4 if side == "R" else 0.0))
+                leg(pose, index, side,
+                    coxa=(0.0, 0.0, sign * 0.17 * t * offset),
+                    femur=((0.46 + 0.055 * index) * t * offset, 0.0, 0.0),
+                    tibia=(-0.76 * t * offset, 0.0, 0.0))
+        frames.append((frame, pose))
+    bake("recover", frames, 42)
+
+    frames = []
+    for frame, t, side in ((0, 0.0, 0.0), (3, 0.72, 0.6), (5, 1.0, -0.4),
+                           (9, 0.52, 0.25), (14, 0.18, -0.1), (20, 0.0, 0.0)):
+        pose = rest()
+        pose["prosoma"] = (-0.10 * t, 0.07 * side, 0.08 * side)
+        pose["abdomen1"] = (0.12 * t, -0.05 * side, -0.04 * side)
+        pose["abdomen2"] = (0.09 * t, -0.08 * side, -0.06 * side)
+        pose["head"] = (-0.22 * t, 0.10 * side, 0.0)
+        frames.append((frame, pose))
+    bake("flinch", frames, 20)
+
+    frames = []
+    for frame, t in ((0, 0.0), (7, 0.12), (14, 0.32), (25, 0.63),
+                     (38, 0.86), (52, 1.0), (70, 1.0)):
+        pose = rest()
+        pose["prosoma"] = (0.50 * t, 0.12 * t, 0.11 * t)
+        pose["abdomen1"] = (0.29 * t, -0.18 * t, -0.03 * t)
+        pose["abdomen2"] = (0.24 * t, -0.25 * t, 0.04 * t)
+        pose["head"] = (0.58 * t, 0.18 * t, -0.07 * t)
+        sym(pose, "fang", 0.0, 0.27 * t, 0.0)
+        for index in range(4):
+            for side, sign in (("L", 1.0), ("R", -1.0)):
+                wob = 1.0 + 0.16 * math.sin(index * 2.1 + (0.0 if side == "L" else 1.7))
+                delay = max(0.0, min(1.0, t * (1.18 - 0.04 * index)))
+                leg(pose, index, side,
+                    coxa=(0.0, 0.0, sign * 0.29 * delay * wob),
+                    femur=((0.68 + 0.085 * index) * delay * wob, 0.0, 0.0),
+                    tibia=(-1.08 * delay * wob, 0.0, 0.0))
+        frames.append((frame, pose))
+    bake("death", frames, 70)
+
+    return names
+
+
+def export_glb(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    bpy.ops.export_scene.gltf(
+        filepath=str(path.resolve()),
+        export_format="GLB",
+        export_apply=False,
+        export_yup=True,
+        export_skins=True,
+        export_animations=True,
+        export_animation_mode="ACTIONS",
+        export_bake_animation=False,
+        export_optimize_animation_size=True,
+        export_materials="EXPORT",
+        export_image_format="AUTO",
+        export_texcoords=True,
+        export_normals=True,
+        export_tangents=True,
+        export_cameras=False,
+        export_lights=False,
+        export_extras=False,
+    )
+
+
+def main() -> None:
+    args = parse_args()
+    kit.reset_scene()
+    bpy.ops.import_scene.gltf(filepath=str(args.input.resolve()))
+    meshes = [obj for obj in bpy.context.scene.objects if obj.type == "MESH"]
+    if len(meshes) != 1:
+        raise RuntimeError(f"expected one Meshy mesh, found {len(meshes)}")
+    mesh_obj = meshes[0]
+    flatten_imported_mesh(mesh_obj)
+    reshape_to_canonical_envelope(mesh_obj)
+    eye_uvs = face_eye_uvs(mesh_obj)
+    images = resize_and_grade_images(args.texture_size, eye_uvs)
+    materials = tune_materials(mesh_obj)
+
+    bones = legacy.build_bone_table()
+    armature = kit.build_armature("distaff-rig", bones)
+    weight_counts = create_weights(mesh_obj, bones)
+    kit.bind(mesh_obj, armature)
+    # The Armature modifier is the skin link; an object parent is redundant.
+    # Keeping the skinned mesh parented to the armature produces glTF's
+    # NODE_SKINNED_MESH_NON_ROOT warning and makes parent-transform behavior
+    # implementation-dependent. Export both as identity scene roots instead.
+    mesh_world = mesh_obj.matrix_world.copy()
+    mesh_obj.parent = None
+    mesh_obj.matrix_world = mesh_world
+    bpy.context.view_layer.objects.active = armature
+    clips = build_actions(armature)
+
+    if args.save_blend:
+        args.save_blend.parent.mkdir(parents=True, exist_ok=True)
+        bpy.ops.wm.save_as_mainfile(filepath=str(args.save_blend.resolve()))
+
+    export_glb(args.output)
+    low, high = world_bounds(mesh_obj)
+    triangles = sum(len(poly.vertices) - 2 for poly in mesh_obj.data.polygons)
+    report = {
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "pipeline": "Meshy 6 PBR -> Meshy remesh -> Blender canonical rig and animation",
+        "input": str(args.input),
+        "output": str(args.output),
+        "bytes": args.output.stat().st_size,
+        "triangles": triangles,
+        "vertices": len(mesh_obj.data.vertices),
+        "bones": len(bones),
+        "clips": clips,
+        "legOwnedClips": ["slam", "collapse", "recover", "death"],
+        "dimensions": {
+            "widthM": round(high.x - low.x, 3),
+            "lengthM": round(high.y - low.y, 3),
+            "heightM": round(high.z - low.z, 3),
+        },
+        "materials": materials,
+        "textures": images,
+        "faceEyeUvs": eye_uvs,
+        "weightedGroups": {name: count for name, count in weight_counts.items() if count},
+    }
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps(report, indent=2) + "\n")
+    print(json.dumps(report, indent=2))
+
+
+if __name__ == "__main__":
+    main()

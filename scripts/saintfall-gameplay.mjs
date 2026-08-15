@@ -430,26 +430,41 @@ try {
     !brush.done && ["alert", "active"].includes(brush.phase),
     `done=${brush.done} encounter=${brush.phase}`);
 
-  for (let i = 0; i < 6; i += 1) {
+  const districtBosses = await page.evaluate(() => window.__SF.mission.bosses
+    .filter((boss) => boss.stage !== "penultimate").map((boss) => boss.key));
+  for (let i = 0; i < districtBosses.length; i += 1) {
     const result = await page.evaluate((n) => {
       const T = window.__SF;
-      const boss = T.mission.bosses[n];
+      const boss = T.mission.bosses.find((entry) => entry.key === n);
       const accepted = T.mission.completeDistrictBoss(boss.key);
       return { name: boss.boss, done: boss.done, bossesDone: T.mission.state.bossesDone,
         phase: T.mission.state.phase, accepted };
-    }, i);
-    console.log(`  ${result.name}: done=${result.done} (${result.bossesDone}/6) phase=${result.phase}`);
+    }, districtBosses[i]);
+    console.log(`  ${result.name}: done=${result.done} (${result.bossesDone}/7) phase=${result.phase}`);
     check(`district boss ${i + 1} can record a victory`, result.accepted && result.done);
   }
 
-  const after = await page.evaluate(() => {
+  const saintGate = await page.evaluate(() => {
     const T = window.__SF;
     const s = T.missionState();
-    return { ...s, extractCalled: T.mission.state.extractCalled };
+    return { ...s, objective: T.mission.objective(),
+      saint: T.ctx.districtBosses.status("saint") };
   });
-  console.log(`  after: phase=${after.phase} bosses=${after.bosses}`);
-  check("defeating all six district bosses opens the Cathedral finale", after.phase === "cathedralBoss",
-    `phase=${after.phase}`);
+  console.log(`  district gate: phase=${saintGate.phase} bosses=${saintGate.bosses}`);
+  check("defeating all six district bosses unlocks the Fallen Saint Coulter",
+    saintGate.phase === "saintBoss" && saintGate.objective?.bossKey === "saint"
+      && saintGate.saint?.available,
+    `phase=${saintGate.phase} objective=${saintGate.objective?.bossKey}`);
+
+  const after = await page.evaluate(() => {
+    const T = window.__SF;
+    const accepted = T.mission.completeDistrictBoss("saint");
+    const s = T.missionState();
+    return { ...s, accepted, extractCalled: T.mission.state.extractCalled };
+  });
+  console.log(`  after Coulter: phase=${after.phase} bosses=${after.bosses}`);
+  check("defeating the penultimate Coulter opens the Cathedral finale",
+    after.accepted && after.phase === "cathedralBoss", `phase=${after.phase}`);
 
   const finale = await page.evaluate(() => {
     const T = window.__SF;

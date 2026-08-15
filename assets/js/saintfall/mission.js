@@ -3,8 +3,8 @@
 
    OPERATION: SAINTFALL. Six districts hold six apex signatures.
    Break every guardian, survive the intermittent Bloom pressure on
-   the roads between them, then return to the Cathedral and destroy
-   the corrupted reliquary waiting inside.
+   the roads between them, then face the colossal Coulter beneath the
+   Fallen Saint before returning to the Cathedral and its Apostate.
 
    The objectives are spread far enough apart that crossing between
    them IS the game. Roaming breaches turn those crossings back into
@@ -194,7 +194,7 @@ export function buildMission(ctx) {
      ------------------------------------------------------------ */
 
   const state = {
-    phase: "districtBosses",  // districtBosses -> cathedralBoss -> won | lost
+    phase: "districtBosses",  // districtBosses -> saintBoss -> cathedralBoss -> won | lost
     relaysDone: 0,
     bossesDone: 0,
     channelling: null,
@@ -965,11 +965,22 @@ export function buildMission(ctx) {
     let best = null;
     let bestD = Infinity;
     for (const boss of bosses) {
-      if (boss.done) continue;
+      if (boss.done || !bossAvailable(boss)) continue;
       const d = Math.hypot(boss.x - x, boss.z - z);
       if (d < bestD) { bestD = d; best = boss; }
     }
     return { boss: best, dist: bestD };
+  }
+
+  function bossAvailable(boss) {
+    if (!boss || boss.done) return false;
+    return boss.stage === "penultimate"
+      ? state.phase === "saintBoss" : state.phase === "districtBosses";
+  }
+
+  function districtProgress() {
+    const roster = bosses.filter((boss) => boss.stage !== "penultimate");
+    return { done: roster.filter((boss) => boss.done).length, total: roster.length };
   }
 
   function bossRuntimeStatus(key) {
@@ -1001,23 +1012,30 @@ export function buildMission(ctx) {
 
   function completeDistrictBoss(key) {
     const boss = bosses.find((entry) => entry.key === key);
-    if (!boss || boss.done || state.phase !== "districtBosses") return false;
+    if (!boss || boss.done || !bossAvailable(boss)) return false;
     boss.done = true;
     state.bossesDone = bosses.filter((entry) => entry.done).length;
-    say(`${boss.boss.toUpperCase()} DEFEATED — ${state.bossesDone}/${bosses.length}`, 4.2);
+    const districts = districtProgress();
+    const count = boss.stage === "penultimate"
+      ? `${state.bossesDone}/${bosses.length}` : `${districts.done}/${districts.total}`;
+    say(`${boss.boss.toUpperCase()} DEFEATED — ${count}`, 4.2);
     bus.emit("districtBossDone", { key, done: state.bossesDone, total: bosses.length });
-    if (state.bossesDone >= bosses.length) {
+    if (boss.stage !== "penultimate" && districts.done >= districts.total) {
+      state.phase = "saintBoss";
+      say("SIX DISTRICTS SECURED — THE COULTER STIRS BENEATH THE FALLEN SAINT", 6);
+      bus.emit("penultimateBossReady", { key: "saint" });
+    } else if (boss.stage === "penultimate") {
       state.phase = "cathedralBoss";
-      say("ALL DISTRICT GUARDIANS BROKEN — THE CATHEDRAL IS OPEN", 6);
+      say("THE COULTER IS BROKEN — THE CATHEDRAL IS OPEN", 6);
       bus.emit("finalBossReady", { key: "apostate" });
     }
     return true;
   }
 
   function syncBossVictories() {
-    if (state.phase !== "districtBosses") return;
+    if (state.phase !== "districtBosses" && state.phase !== "saintBoss") return;
     for (const boss of bosses) {
-      if (boss.done) continue;
+      if (boss.done || !bossAvailable(boss)) continue;
       const status = bossRuntimeStatus(boss.key);
       if (status?.dead || status?.defeated || status?.phase === "dead") {
         completeDistrictBoss(boss.key);
@@ -1208,7 +1226,7 @@ export function buildMission(ctx) {
       }
     }
 
-    if (state.phase === "districtBosses") {
+    if (state.phase === "districtBosses" || state.phase === "saintBoss") {
       state.channelling = null;
       syncBossVictories();
     } else if (state.phase === "extract") {
@@ -1318,7 +1336,7 @@ export function buildMission(ctx) {
     clearFields();
     cancelEntry();
     const phases = new Set([
-      "districtBosses", "relays", "cathedralBoss", "extract", "won", "lost",
+      "districtBosses", "relays", "saintBoss", "cathedralBoss", "extract", "won", "lost",
     ]);
     state.phase = phases.has(saved.phase) ? saved.phase : "districtBosses";
     if (state.phase === "relays") state.phase = "districtBosses";
@@ -1378,11 +1396,18 @@ export function buildMission(ctx) {
     state.bossesDone = bosses.filter((boss) => boss.done).length;
     if (state.phase === "cathedralBoss" && state.bossesDone < bosses.length) {
       /* A legacy three-relay save had already earned its Cathedral entry.
-         Preserve that contract while all new operations use six victories. */
+         Preserve that contract while new operations use six district
+         victories followed by the Fallen Saint. */
       for (const boss of bosses) boss.done = true;
       state.bossesDone = bosses.length;
     }
-    if (state.phase === "districtBosses" && state.bossesDone >= bosses.length) {
+    const districts = districtProgress();
+    const saint = bosses.find((boss) => boss.stage === "penultimate");
+    if (state.phase === "districtBosses" && districts.done >= districts.total) {
+      state.phase = saint?.done ? "cathedralBoss" : "saintBoss";
+    } else if (state.phase === "saintBoss" && districts.done < districts.total) {
+      state.phase = "districtBosses";
+    } else if (state.phase === "saintBoss" && saint?.done) {
       state.phase = "cathedralBoss";
     }
     pad.group.visible = state.phase === "extract";
@@ -1475,8 +1500,9 @@ export function buildMission(ctx) {
       }
       const breach = ctx.breaches?.objective?.();
       if (breach) return breach;
-      if (state.phase === "districtBosses") {
+      if (state.phase === "districtBosses" || state.phase === "saintBoss") {
         const active = bosses.find((boss) => !boss.done
+          && bossAvailable(boss)
           && ["alert", "active", "standing", "collapsed", "recovering", "soar",
             "strafe", "land", "stoke", "launch"].includes(bossRuntimeStatus(boss.key)?.phase));
         if (active) return bossObjective(active);
@@ -1491,6 +1517,7 @@ export function buildMission(ctx) {
         phase: state.phase,
         relays: `${state.relaysDone}/${relays.length}`,
         bosses: `${state.bossesDone}/${bosses.length}`,
+        districts: `${districtProgress().done}/${districtProgress().total}`,
         reinforcements: state.reinforcements,
         elapsed: Math.round(state.elapsed),
       };

@@ -245,11 +245,13 @@ export const BESTIARY = {
        surfacings to kill, which is long enough for the player to have
        to survive the venom rather than out-damage it. */
     health: 5200,
-    /* The Ossuary guardian is now a permanent district boss rather than a
-       late wave surprise. The extra sixteen percent takes the already long
-       animal to a landmark-sized silhouette without making its surfacing
-       circle too large for the bone courtyards. */
-    scale: 1.16,
+    /* The Coulter is the penultimate boss beneath the Fallen Saint. It is
+       four times the former Ossuary silhouette in every dimension; because
+       the spine arc is measured from the scaled rig, this also turns its
+       twenty-five-metre body into a roughly hundred-metre sand leviathan. */
+    scale: 4.64,
+    bodyHitScale: 4,
+    bodyScale: 4,
     /* `walk` is what it makes when surfaced and anchored - it barely
        moves, because a reared worm is a tower and not a chase. `charge`
        is the BURROWING speed, and it is the fastest thing in the game
@@ -267,7 +269,7 @@ export const BESTIARY = {
        under that: it is what keeps the animal out of masonry when it
        surfaces, and a radius sized to the widest ring would refuse
        every courtyard on the map. */
-    collisionRadius: 2.55,
+    collisionRadius: 7.5,
     /* The longest in the game. It is 25m of animal that rears eight
        metres out of open sand, and a player who watches it dive on one
        side of the basin has to be able to see the wake coming back. */
@@ -985,7 +987,8 @@ export async function buildEnemies(ctx, onProgress) {
       measureSpine(inst);
       // Laid out straight, underground, aimed the way it was spawned
       // facing. Anything else starts the animal as a knot at one point.
-      seedBody(inst, inst.x, inst.y - inst.body.depth, inst.z, inst.yaw);
+      seedBody(inst, inst.x, inst.y - inst.body.depth, inst.z, inst.yaw,
+        inst.body.depth);
     }
 
     play(inst, "idle", 0);
@@ -1063,13 +1066,15 @@ export async function buildEnemies(ctx, onProgress) {
    * of movement - starts every Coulter as thirteen coincident segments
    * at one point, which is a ball rather than a worm.
    */
-  function seedBody(inst, x, y, z, heading = inst.yaw) {
+  function seedBody(inst, x, y, z, heading = inst.yaw, terrainDepth = null) {
     const body = inst.body || (inst.spine.length ? measureSpine(inst) : null);
     if (!body) return null;
     const sx = Math.sin(heading);
     const sz = Math.cos(heading);
-    body.head.set(x, y, z);
-    body.prev.set(x, y, z);
+    const conform = Number.isFinite(terrainDepth) && terrainDepth > 0;
+    const headY = conform ? groundY(x, z) - terrainDepth : y;
+    body.head.set(x, headY, z);
+    body.prev.set(x, headY, z);
     body.dir.set(sx, 0, sz);
     body.heading = heading;
     body.pitch = 0;
@@ -1077,7 +1082,10 @@ export async function buildEnemies(ctx, onProgress) {
     const span = inst.spineLength + 4;
     // Front to back, so index 0 is the freshest sample.
     for (let d = 0; d <= span; d += 1.2) {
-      body.trail.push({ x: x - sx * d, y, z: z - sz * d, d });
+      const px = x - sx * d;
+      const pz = z - sz * d;
+      body.trail.push({ x: px, y: conform ? groundY(px, pz) - terrainDepth : y,
+        z: pz, d });
     }
     poseBody(inst);
     return body;
@@ -1860,11 +1868,14 @@ export async function buildEnemies(ctx, onProgress) {
           ? Number(saved.heading) : inst.yaw;
         const hy = Number.isFinite(Number(saved.y))
           ? Number(saved.y) : groundY(x, z);
+        const phase = typeof saved.phase === "string" ? saved.phase : "burrow";
+        const depth = clamp(Number(saved.depth) || 0, -20, 20);
         seedBody(inst, Number.isFinite(Number(saved.x)) ? Number(saved.x) : x,
-          hy, Number.isFinite(Number(saved.z)) ? Number(saved.z) : z, heading);
-        inst.body.phase = typeof saved.phase === "string" ? saved.phase : "burrow";
+          hy, Number.isFinite(Number(saved.z)) ? Number(saved.z) : z, heading,
+          phase === "burrow" && depth > 0 ? depth : null);
+        inst.body.phase = phase;
         inst.body.timer = Math.max(0, Number(saved.timer) || 0);
-        inst.body.depth = clamp(Number(saved.depth) || 0, -20, 20);
+        inst.body.depth = depth;
         inst.body.surfacings = Math.max(0, Math.round(Number(saved.surfacings) || 0));
       }
       if (inst.emerging && emergenceRecord) {

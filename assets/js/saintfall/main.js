@@ -207,8 +207,8 @@ export async function start({ boot, build } = {}) {
   const winnower = buildWinnower(ctx);
   ctx.winnower = winnower;
   winnower.ensureSpawned();
-  /* Shared lifecycle for the four district guardians that use the ordinary
-     enemy simulation (Matriarch, Coulter, Precentor and Cantor). */
+  /* Shared lifecycle for the ordinary-simulation district guardians plus
+     the penultimate giant Coulter beneath the Fallen Saint. */
   const districtBosses = buildDistrictBosses(ctx);
   ctx.districtBosses = districtBosses;
   /* The Cathedral's false saint borrows the authored player figure but owns

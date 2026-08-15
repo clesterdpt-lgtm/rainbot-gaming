@@ -1,12 +1,12 @@
 /* ============================================================
    SAINTFALL - district boss hunt
 
-   Four encounters can use the shared enemy simulation while still
+   Five encounters can use the shared enemy simulation while still
    needing the lifecycle guarantees of a boss: a fixed home, a hidden
-   reveal gate, a leash/reset, durable identity, an objective marker,
+   reveal gate, an arena reset, durable identity, an objective marker,
    and exactly one mission victory. The Distaff and Winnower retain
-   their bespoke controllers; mission.js folds their status into the
-   same six-target operation.
+   their bespoke controllers. Six districts unlock the giant Coulter
+   beneath the Fallen Saint; killing it unlocks the Apostate.
    ============================================================ */
 
 import { clamp, makeBus } from "saintfall/core.js";
@@ -26,10 +26,11 @@ export const DISTRICT_BOSS_SITES = Object.freeze([
     arenaRadius: 92, domain: "distaff",
   }),
   Object.freeze({
-    key: "ossuary", district: "The Ossuary", boss: "The Coulter",
-    order: "BREAK THE COULTER", enemyKey: "coulter",
+    key: "ossuary", district: "The Ossuary", boss: "The Bone Warden",
+    order: "BREAK THE BONE WARDEN", enemyKey: "harrow",
     x: DISTRICTS.ossuary.x + 8, z: DISTRICTS.ossuary.z + 4,
-    arenaRadius: 112, aggroRadius: 72, domain: "district",
+    arenaRadius: 112, aggroRadius: 72, spawnScale: 1.35, health: 2600,
+    placeholder: true, domain: "district", stage: "district",
   }),
   Object.freeze({
     key: "bloom", district: "The Bloom", boss: "The Matriarch",
@@ -49,12 +50,22 @@ export const DISTRICT_BOSS_SITES = Object.freeze([
     x: DISTRICTS.reach.x + 18, z: DISTRICTS.reach.z - 12,
     arenaRadius: 102, aggroRadius: 66, domain: "district",
   }),
+  Object.freeze({
+    key: "saint", district: "The Fallen Saint", boss: "The Coulter",
+    order: "BREAK THE COULTER", enemyKey: "coulter",
+    x: DISTRICTS.saint.x, z: DISTRICTS.saint.z,
+    spawnX: DISTRICTS.saint.x + 105, spawnZ: DISTRICTS.saint.z - 125,
+    arenaRadius: 285, warningRadius: 330, aggroRadius: 215,
+    openSearchRadius: 64, openRadius: 7.5, burrowDepth: 16,
+    yaw: Math.PI * 0.76, domain: "district", stage: "penultimate",
+  }),
 ]);
 
 const GENERIC_SITES = DISTRICT_BOSS_SITES.filter((site) => site.domain === "district");
 const ALERT_SECONDS = 2.8;
 const DISENGAGE_SECONDS = 13;
-const DISENGAGE_RADIUS = 255;
+const APPROACH_PADDING = 48;
+const EXIT_WARNING_BAND = 24;
 
 export function buildDistrictBosses(ctx) {
   const { enemies, combat } = ctx;
@@ -66,6 +77,11 @@ export function buildDistrictBosses(ctx) {
     disengageFor: 0,
     defeated: false,
     instance: null,
+  }]));
+  const boundary = new Map(DISTRICT_BOSS_SITES.map((site) => [site.key, {
+    approachWarned: false,
+    exitWarned: false,
+    inside: false,
   }]));
 
   const eventId = (key) => `district-boss:${key}`;
@@ -84,11 +100,19 @@ export function buildDistrictBosses(ctx) {
     // A generic radial search can otherwise choose a flat point underneath
     // one of the giant visual shafts, hiding the enlarged mantis inside it.
     if (site.key === "choir") return { x: site.x, z: site.z };
-    const y = ctx.collide?.groundHeight?.(site.x, site.z)
-      ?? ctx.terrain.heightAt(site.x, site.z);
-    const open = ctx.collide?.findOpen?.(site.x, site.z, y, 34, 14,
-      site.enemyKey === "coulter" ? 3.1 : 2.4);
-    return open ? { x: open[0], z: open[1] } : { x: site.x, z: site.z };
+    const x = site.spawnX ?? site.x;
+    const z = site.spawnZ ?? site.z;
+    const y = ctx.collide?.groundHeight?.(x, z)
+      ?? ctx.terrain.heightAt(x, z);
+    const open = ctx.collide?.findOpen?.(x, z, y,
+      site.openSearchRadius || 34, 14, site.openRadius
+        || (site.enemyKey === "coulter" ? 3.1 : 2.4));
+    return open ? { x: open[0], z: open[1] } : { x, z };
+  }
+
+  function siteAvailable(site) {
+    const phase = ctx.mission?.state?.phase;
+    return site.stage === "penultimate" ? phase === "saintBoss" : phase === "districtBosses";
   }
 
   function configure(record, inst, phase = record.phase) {
@@ -109,13 +133,25 @@ export function buildDistrictBosses(ctx) {
     if (record.instance && enemies.live.includes(record.instance)) return record.instance;
     const found = enemies.live.find((inst) => inst.eventId === eventId(key)
       && inst.state !== "death");
-    if (found) return configure(record, found);
+    if (found?.key === record.site.enemyKey) return configure(record, found);
+    if (found) enemies.remove?.(found);
     const point = openPoint(record.site);
     const inst = enemies.spawn(record.site.enemyKey, point.x, point.z, {
-      yaw: Math.PI * (0.18 + GENERIC_SITES.indexOf(record.site) * 0.27),
+      yaw: Number.isFinite(record.site.yaw) ? record.site.yaw
+        : Math.PI * (0.18 + GENERIC_SITES.indexOf(record.site) * 0.27),
+      scale: record.site.spawnScale || 1,
+      health: record.site.health,
       eventId: eventId(key),
     });
     if (!inst) return null;
+    if (inst.body) {
+      const ground = ctx.collide?.groundHeight?.(point.x, point.z)
+        ?? ctx.terrain.heightAt(point.x, point.z);
+      const depth = record.site.burrowDepth || 6;
+      enemies.seedBody?.(inst, point.x, ground - depth, point.z, inst.yaw, depth);
+      inst.body.depth = depth;
+      inst.body.hidden = true;
+    }
     inst.home = { x: point.x, z: point.z };
     return configure(record, inst);
   }
@@ -136,12 +172,13 @@ export function buildDistrictBosses(ctx) {
     const inst = ensureSpawned(record.site.key);
     if (!inst) return;
     removeOwnedBrood(record);
+    if (record.site.enemyKey === "coulter") ctx.coulter?.clearHazards?.();
     const point = openPoint(record.site);
     inst.x = point.x;
     inst.z = point.z;
     inst.y = ctx.collide?.groundHeight?.(point.x, point.z)
       ?? ctx.terrain.heightAt(point.x, point.z);
-    inst.yaw = 0;
+    inst.yaw = Number.isFinite(record.site.yaw) ? record.site.yaw : 0;
     inst.root.position.set(inst.x, inst.y, inst.z);
     inst.root.rotation.set(0, inst.yaw, 0);
     inst.health = inst.maxHealth;
@@ -154,12 +191,13 @@ export function buildDistrictBosses(ctx) {
     if (inst.body) {
       const ground = ctx.collide?.groundHeight?.(point.x, point.z)
         ?? ctx.terrain.heightAt(point.x, point.z);
-      enemies.seedBody?.(inst, point.x, ground - Math.max(6, inst.body.depth || 6),
-        point.z, inst.yaw);
+      const depth = record.site.burrowDepth || Math.max(6, inst.body.depth || 6);
+      enemies.seedBody?.(inst, point.x, ground - depth,
+        point.z, inst.yaw, depth);
       inst.body.phase = "burrow";
       inst.body.timer = 6;
       inst.body.hidden = true;
-      inst.body.depth = 6;
+      inst.body.depth = depth;
     }
     record.phase = "dormant";
     record.timer = 0;
@@ -213,6 +251,9 @@ export function buildDistrictBosses(ctx) {
       boss: record.site.boss,
       order: record.site.order,
       enemyKey: record.site.enemyKey,
+      stage: record.site.stage || "district",
+      available: siteAvailable(record.site),
+      placeholder: !!record.site.placeholder,
       phase: record.phase,
       defeated: record.defeated,
       hidden: !!inst?.encounterHidden,
@@ -221,6 +262,9 @@ export function buildDistrictBosses(ctx) {
       maxHealth: inst ? Math.round(inst.maxHealth) : 0,
       x: inst?.x ?? record.site.x,
       z: inst?.z ?? record.site.z,
+      arenaX: record.site.x,
+      arenaZ: record.site.z,
+      arenaRadius: record.site.arenaRadius,
       dist: Math.hypot(ctx.player.state.x - (inst?.x ?? record.site.x),
         ctx.player.state.z - (inst?.z ?? record.site.z)),
     };
@@ -232,6 +276,19 @@ export function buildDistrictBosses(ctx) {
       if (record.defeated) continue;
       const inst = ensureSpawned(record.site.key);
       if (!inst) continue;
+      const missionDone = ctx.mission?.bosses?.find?.((boss) => boss.key === record.site.key)?.done;
+      if (missionDone) {
+        record.defeated = true;
+        record.phase = "dead";
+        enemies.remove?.(inst);
+        record.instance = null;
+        continue;
+      }
+      if (!siteAvailable(record.site)) {
+        if (record.phase !== "dormant") resetRecord(record, { silent: true });
+        else setGate(record, true, true);
+        continue;
+      }
       if (inst.state === "death" || inst.health <= 0) {
         finishDefeat(record);
         continue;
@@ -251,15 +308,99 @@ export function buildDistrictBosses(ctx) {
         continue;
       }
       if (record.phase !== "active") continue;
-      if (dist > DISENGAGE_RADIUS) record.disengageFor += d;
-      else record.disengageFor = Math.max(0, record.disengageFor - d * 2);
-      if (record.disengageFor >= DISENGAGE_SECONDS) resetRecord(record);
+      record.disengageFor = 0;
+    }
+    updateArenaBoundaries();
+  }
+
+  function runtimeStatus(site) {
+    if (site.key === "scar") return ctx.distaff?.status?.() || null;
+    if (site.key === "censer") return ctx.winnower?.status?.() || null;
+    const record = records.get(site.key);
+    return record ? publicRecord(record) : null;
+  }
+
+  function fightActive(status) {
+    if (!status || status.defeated || status.dead) return false;
+    return !["dormant", "dead", "return", "returning"].includes(status.phase);
+  }
+
+  function siteEvent(site, status = runtimeStatus(site)) {
+    return {
+      key: site.key,
+      district: site.district,
+      boss: site.boss,
+      order: site.order,
+      phase: status?.phase || "dormant",
+      arenaRadius: site.arenaRadius,
+      x: site.x,
+      z: site.z,
+    };
+  }
+
+  function resetArena(site) {
+    if (site.domain === "distaff") ctx.distaff?.resetToLair?.();
+    else if (site.domain === "winnower") ctx.winnower?.resetToPerch?.();
+    else {
+      const record = records.get(site.key);
+      if (record) resetRecord(record, { silent: true });
+    }
+  }
+
+  function updateArenaBoundaries() {
+    const ps = ctx.player?.state;
+    if (!ps) return;
+    for (const site of DISTRICT_BOSS_SITES) {
+      const state = boundary.get(site.key);
+      const missionBoss = ctx.mission?.bosses?.find?.((boss) => boss.key === site.key);
+      if (!state || missionBoss?.done || !siteAvailable(site)) {
+        if (state) {
+          state.approachWarned = false;
+          state.exitWarned = false;
+          state.inside = false;
+        }
+        continue;
+      }
+      const dist = Math.hypot(ps.x - site.x, ps.z - site.z);
+      const warningRadius = site.warningRadius || site.arenaRadius + APPROACH_PADDING;
+      const status = runtimeStatus(site);
+      const active = fightActive(status);
+
+      if (!active && dist > site.arenaRadius && dist <= warningRadius
+        && !state.approachWarned) {
+        state.approachWarned = true;
+        const event = siteEvent(site, status);
+        ctx.mission?.announce?.(`WARNING — ${site.boss.toUpperCase()} TERRITORY AHEAD`, 3.4);
+        bus.emit("approach", event);
+      } else if (!active && dist > warningRadius + 18) {
+        state.approachWarned = false;
+      }
+
+      if (active && dist >= site.arenaRadius - EXIT_WARNING_BAND
+        && dist <= site.arenaRadius && !state.exitWarned) {
+        state.exitWarned = true;
+        const event = siteEvent(site, status);
+        ctx.mission?.announce?.("WARNING — LEAVING BOSS AREA. FIGHT WILL RESET", 3.2);
+        bus.emit("exitWarning", event);
+      }
+      if (active && dist > site.arenaRadius) {
+        const event = siteEvent(site, status);
+        resetArena(site);
+        ctx.mission?.announce?.(`${site.boss.toUpperCase()} RESET — RE-ENTER THE ARENA`, 4.0);
+        bus.emit("arenaReset", event);
+        state.approachWarned = false;
+        state.exitWarned = false;
+        state.inside = false;
+        continue;
+      }
+      if (!active) state.exitWarned = false;
+      state.inside = dist <= site.arenaRadius;
     }
   }
 
   function objective(key) {
     const record = records.get(key);
-    if (!record || record.defeated) return null;
+    if (!record || record.defeated || !siteAvailable(record.site)) return null;
     const status = publicRecord(record);
     return {
       name: record.phase === "active" || record.phase === "alert"
@@ -308,7 +449,7 @@ export function buildDistrictBosses(ctx) {
       .filter((entry) => entry && records.has(entry.key))
       .map((entry) => [entry.key, entry]));
     for (const record of records.values()) {
-      const entry = savedByKey.get(record.site.key);
+      let entry = savedByKey.get(record.site.key);
       const missionDone = ctx.mission?.bosses?.find?.((boss) => boss.key === record.site.key)?.done;
       record.defeated = entry ? !!entry.defeated : !!missionDone;
       record.phase = record.defeated ? "dead"
@@ -317,6 +458,14 @@ export function buildDistrictBosses(ctx) {
       record.disengageFor = clamp(Number(entry?.disengageFor) || 0, 0, DISENGAGE_SECONDS);
       let inst = (entry?.instanceId && byId.get(entry.instanceId))
         || enemies.live.find((candidate) => candidate.eventId === eventId(record.site.key));
+      if (inst && inst.key !== record.site.enemyKey) {
+        enemies.remove?.(inst);
+        inst = null;
+        entry = null;
+        record.phase = "dormant";
+        record.timer = 0;
+        record.disengageFor = 0;
+      }
       if (record.defeated) {
         if (inst) enemies.remove?.(inst);
         record.instance = null;
@@ -333,6 +482,9 @@ export function buildDistrictBosses(ctx) {
         inst.root.rotation.y = inst.yaw;
         if (Number.isFinite(entry.maxHealth) && entry.maxHealth > 0) inst.maxHealth = entry.maxHealth;
         if (Number.isFinite(entry.health)) inst.health = clamp(entry.health, 1, inst.maxHealth);
+      }
+      if (!siteAvailable(record.site) && record.phase !== "dormant") {
+        resetRecord(record, { silent: true });
       }
     }
     return true;

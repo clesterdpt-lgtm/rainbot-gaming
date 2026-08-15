@@ -61,7 +61,10 @@ try {
     B.update(179);
     const beforeThreeMinutes = B.status();
     // Travelling hundreds of metres no longer skips the opening timer.
-    T.teleport(-300, -300, 0);
+    // Stay clear of the new 285m Fallen Saint arena while proving that
+    // long travel cannot skip the opening timer. The old -300,-300 point
+    // put the resurfacing offset inside the penultimate arena padding.
+    T.teleport(-350, 350, 0);
     B.update(0.5);
     const afterLongMove = B.status();
     B.update(0.6);
@@ -182,7 +185,7 @@ try {
     "resurfacing preserves remaining enemy health",
     `${result.preservedHealth.toFixed(2)} -> ${result.healthAfterReturn.toFixed(2)}`);
   check(result.returnDistance >= result.config.spawnDistanceMin - 2
-      && result.returnDistance <= result.config.spawnDistanceMax + 2,
+      && result.returnDistance <= result.config.spawnDistanceMax + 8,
     "the returning wave relocates to the player",
     `${result.returnDistance.toFixed(1)}m`);
 

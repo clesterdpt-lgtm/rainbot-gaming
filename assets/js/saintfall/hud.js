@@ -286,6 +286,14 @@ export function buildHud(ctx, host) {
       "THE CENSER WORKS", "THE WINNOWER IS GROUNDED", 5.2));
   }
   if (ctx.districtBosses?.bus) {
+    ctx.districtBosses.bus.on("approach", (event) => showBreachAlert(
+      `${event.district.toUpperCase()} · BOSS TERRITORY`,
+      `${event.boss.toUpperCase()} AHEAD`, 3.4, true));
+    ctx.districtBosses.bus.on("exitWarning", () => showBreachAlert(
+      "ARENA BOUNDARY", "TURN BACK — LEAVING WILL RESET THE FIGHT", 3.2, true));
+    ctx.districtBosses.bus.on("arenaReset", (event) => showBreachAlert(
+      `${event.district.toUpperCase()} · ENCOUNTER RESET`,
+      `${event.boss.toUpperCase()} RESTORED TO FULL STRENGTH`, 4.0, true));
     ctx.districtBosses.bus.on("aggro", (event) => showBreachAlert(
       `${event.district.toUpperCase()} · APEX SIGNATURE`, event.boss.toUpperCase(), 4.2, true));
     ctx.districtBosses.bus.on("engaged", (event) => showBreachAlert(
@@ -509,6 +517,7 @@ export function buildHud(ctx, host) {
     }
 
     for (const boss of ctx.mission?.bosses || []) {
+      if (boss.stage === "penultimate" && ctx.mission?.state?.phase === "districtBosses") continue;
       const point = project(boss.x, boss.z);
       map2d.save(); map2d.translate(point.x, point.y); map2d.rotate(Math.PI * .25);
       map2d.fillStyle = boss.done ? "rgba(118,205,167,.92)" : "#f3b74e";
@@ -920,7 +929,9 @@ export function buildHud(ctx, host) {
     eventSubEl.textContent = boss.phase === "alert"
       ? "Signature resolving — weapons lock pending"
       : boss.enemyKey === "coulter"
-        ? "Track the furrow — strike when it surfaces"
+        ? "Hundred-metre sand leviathan — track the furrow and strike when it surfaces"
+        : boss.placeholder
+          ? "Provisional Ossuary guardian — break the armoured line"
         : boss.enemyKey === "matriarch"
           ? "Circle the armour — break the rear sac"
           : boss.enemyKey === "precentor"

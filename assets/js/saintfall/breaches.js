@@ -4,9 +4,10 @@
    A breach is a compulsory field event that follows the player.
    Each stage telegraphs a rupture, raises a deliberately authored
    caste mix, and waits for every member to die before it advances.
-   Waves are intermittent pressure between the six district hunts. Bosses
-   live permanently in their own arenas now, so the roaming cycle contains
-   only field castes and rebuilds after a long recovery window.
+   Waves are intermittent pressure between the six district hunts and the
+   Fallen Saint confrontation. Bosses live permanently in their own arenas,
+   so the roaming cycle contains only field castes and rebuilds after a long
+   recovery window.
    ============================================================ */
 
 import { TAU, clamp, makeBus, makeRng } from "saintfall/core.js";

@@ -325,7 +325,7 @@ const SPEC = {
      irrelevant to an animal that hunts by vibration through sand.
      What is left here is what the shared systems ask of every enemy. */
   coulter: {
-    hp: 5200, damage: 56, reach: 9.4, cadence: 2.05,
+    hp: 5200, damage: 56, reach: 28, cadence: 2.05,
     sight: 190, hearing: 220, aggro: 520,
   },
 };
@@ -506,6 +506,9 @@ export function buildCombat(ctx) {
     return p[Math.min(p.length - 1, Math.max(0, i))];
   };
 
+  const bodyHitScale = (inst) => Math.max(0.25,
+    Number(inst?.spec?.bodyHitScale) || 1);
+
   /**
    * Closest approach between a ray and one body segment.
    *
@@ -547,7 +550,7 @@ export function buildCombat(ctx) {
     const body = inst.body;
     if (!maw || !body) return null;
     if ((body.mawOpen || 0) < maw.open) return null;
-    out.copy(body.head).addScaledVector(body.dir, maw.forward);
+    out.copy(body.head).addScaledVector(body.dir, maw.forward * bodyHitScale(inst));
     return out;
   }
 
@@ -565,7 +568,7 @@ export function buildCombat(ctx) {
       const mz = _weak.z - oz;
       const along = mx * dx + my * dy + mz * dz;
       const perpSq = (mx * mx + my * my + mz * mz) - along * along;
-      const r = box.maw.r;
+      const r = box.maw.r * bodyHitScale(inst);
       if (along > 0 && perpSq <= r * r) {
         const entry = Math.max(0, along - Math.sqrt(Math.max(0, r * r - perpSq)));
         if (entry <= bestT) { bestT = entry; weak = true; found = true; }
@@ -575,7 +578,8 @@ export function buildCombat(ctx) {
     _bodyA.copy(body.head);
     for (let i = 0; i < body.joints.length; i += 1) {
       _bodyB.copy(body.joints[i]);
-      const radius = (jointRadius(box, i) + jointRadius(box, i + 1)) * 0.5;
+      const radius = (jointRadius(box, i) + jointRadius(box, i + 1)) * 0.5
+        * bodyHitScale(inst);
       const t = segmentHit(ox, oy, oz, dx, dy, dz, _bodyA, _bodyB, radius);
       if (t >= 0 && t < bestT) { bestT = t; weak = false; found = true; }
       _bodyA.copy(_bodyB);
@@ -1383,7 +1387,7 @@ export function buildCombat(ctx) {
       const dx = _bodyNear.x - ps.x;
       const dz = _bodyNear.z - ps.z;
       const dist = Math.max(near, 1e-4);
-      const targetRadius = !box.legs ? box.r
+      const targetRadius = !box.legs ? box.r * (box.segments ? bodyHitScale(inst) : 1)
         : legTarget.radius;
       if (box.legs && legTarget.legIndex < 0 && !inst.collapsed) continue;
       if (dist > reach + targetRadius) continue;
@@ -1588,7 +1592,8 @@ export function buildCombat(ctx) {
       const dx = _bodyNear.x - x;
       const dz = _bodyNear.z - z;
       const box = HITBOX[inst.key] || HITBOX.thresher;
-      if (dist > radius + box.r) continue;
+      const targetRadius = box.r * (box.segments ? bodyHitScale(inst) : 1);
+      if (dist > radius + targetRadius) continue;
       const inv = 1 / dist;
       if (dist > 0.6 && collide.rayBlock(
         x, y + 0.55, z, dx * inv, 0, dz * inv, dist) < dist - 0.05) continue;

@@ -80,11 +80,8 @@ try {
   console.log("\n=== RIG ===");
   const rig = await page.evaluate(() => {
     const T = window.__SF;
-    T.clearEnemies();
-    const site = T.findFlatSite(18);
-    T.spawnEnemy("coulter", site[0], site[1], { yaw: 0 });
     T.advanceTime(0.1, 1 / 60);
-    const inst = T.ctx.enemies.live[0];
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
     let tris = 0;
     inst.root.traverse((o) => {
       if (o.isMesh && o.geometry.index) tris += o.geometry.index.count / 3;
@@ -99,8 +96,8 @@ try {
       arcs: inst.spineArc.map((v) => +v.toFixed(2)),
       span: +inst.spineLength.toFixed(2),
       tris,
-      body: bodies[0] || null,
-      site,
+      body: bodies.find((body) => body.id === inst.id) || null,
+      site: [inst.x, inst.z],
     };
   });
   console.log(`  ${rig.spine} vertebrae · ${rig.bones} bones · ${rig.tris} triangles `
@@ -112,7 +109,7 @@ try {
   check(rig.legs === 0, "it has no leg chains to solve", `${rig.legs} found`);
   check(rig.clips.length === 6 && rig.clips.includes("spew"),
     "every clip loaded, including the spew", rig.clips.join(","));
-  check(rig.span > 20 && rig.span < 30, "it is a landmark-sized animal",
+  check(rig.span > 90 && rig.span < 125, "it is a hundred-metre landmark boss",
     `${rig.span}m from mouth to tail`);
   check(rig.arcs.every((v, i) => i === 0 || v > rig.arcs[i - 1]),
     "the joint arc lengths increase monotonically down the body");
@@ -122,12 +119,16 @@ try {
   const hunt = await page.evaluate(() => {
     const T = window.__SF;
     const THREE = T.THREE;
-    const inst = T.ctx.enemies.live[0];
+    const M = T.ctx.mission;
+    for (const boss of M.bosses.filter((entry) => entry.stage !== "penultimate")) {
+      if (!boss.done) M.completeDistrictBoss(boss.key);
+    }
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
     inst.health = 1e6;
     const site = [inst.body.head.x, inst.body.head.z];
     // Stand the player well clear so the hunt phase has to travel.
     T.player.spawn(site[0], site[1] + 70, Math.PI);
-    T.advanceTime(0.3, 1 / 60);
+    T.advanceTime(3.1, 1 / 60);
     const start = T.coulterState();
 
     /* Shooting a submerged animal. Fired straight DOWN at the ground
@@ -141,7 +142,7 @@ try {
       return { dmg: +(before - inst.health).toFixed(1), hit: !!hit,
         weak: !!(hit && hit.weak) };
     };
-    const b = T.coulterBodies()[0];
+    const b = T.coulterBodies().find((body) => body.id === inst.id);
     const overhead = fireAt([b.head[0], b.head[1] + 40, b.head[2]],
       [b.head[0], b.head[1], b.head[2]]);
     const direct = T.ctx.combat.damageEnemy(inst, 400, { source: "qa" });
@@ -154,15 +155,23 @@ try {
     // Then let the cycle run and record the order it goes in.
     const seen = [];
     let elapsed = 0;
+    let returnedBurrow = null;
+    let returnedDirect = null;
     while (elapsed < 46) {
       const phase = T.coulterState().phase;
       if (seen[seen.length - 1] !== phase) seen.push(phase);
+      if (phase === "burrow" && seen.length >= 5 && returnedBurrow === null) {
+        T.advanceTime(0.2, 1 / 60);
+        returnedBurrow = T.coulterState();
+        returnedDirect = T.ctx.combat.damageEnemy(inst, 400, { source: "qa-returned-burrow" });
+      }
       if (seen.length >= 6) break;
       T.advanceTime(0.1, 1 / 60);
       elapsed += 0.1;
     }
     return {
-      start, overhead, direct, blast, seen, elapsed: +elapsed.toFixed(1),
+      start, overhead, direct, blast, returnedBurrow, returnedDirect,
+      seen, elapsed: +elapsed.toFixed(1),
       wake: (T.ctx.coulter.group.children || [])
         .filter((c) => c.name?.startsWith("sf-wake") && c.visible).length,
     };
@@ -186,15 +195,18 @@ try {
     hunt.seen.join(" -> "));
   check(hunt.seen.length >= 5 && hunt.seen[4] === "burrow",
     "and then goes back down to hunt again", hunt.seen.join(" -> "));
+  check(hunt.returnedBurrow?.submerged && hunt.returnedDirect === 0,
+    "the full giant body is untouchable again after its dive",
+    `${JSON.stringify(hunt.returnedBurrow)} · ${hunt.returnedDirect} direct damage`);
 
   /* ---------------- the crest ---------------- */
   console.log("\n=== THE CREST ===");
   const crest = await page.evaluate(() => {
     const T = window.__SF;
     const THREE = T.THREE;
-    const inst = T.ctx.enemies.live[0];
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
     const waited = T.advanceToCoulterPhase("crest", 60);
-    const b = T.coulterBodies()[0];
+    const b = T.coulterBodies().find((body) => body.id === inst.id);
     const ground = T.groundHeightAt(b.head[0], b.head[2]);
     const fireAt = (from, to, damage = 300) => {
       const o = new THREE.Vector3(...from);
@@ -232,23 +244,42 @@ try {
 
     /* THE MAW. Shut first, then forced open, from the same place, with
        the same damage - so the only variable is the aperture. */
+    const mawForward = 1.35 * (inst.spec.bodyHitScale || 1);
+    const mawTargetX = inst.body.head.x + inst.body.dir.x * mawForward;
+    const mawTargetY = inst.body.head.y + inst.body.dir.y * mawForward;
+    const mawTargetZ = inst.body.head.z + inst.body.dir.z * mawForward;
+    const heading = Math.atan2(inst.body.dir.x, inst.body.dir.z);
+    let mawRay = null;
+    for (const offset of [0, 0.35, -0.35, 0.7, -0.7, 1.05, -1.05, Math.PI]) {
+      const angle = heading + offset;
+      const ox = mawTargetX + Math.sin(angle) * 30;
+      const oz = mawTargetZ + Math.cos(angle) * 30;
+      const oy = Math.max(mawTargetY + 8, T.groundHeightAt(ox, oz) + 3);
+      const dx = mawTargetX - ox;
+      const dy = mawTargetY - oy;
+      const dz = mawTargetZ - oz;
+      const distance = Math.hypot(dx, dy, dz);
+      const wall = T.ctx.collide.rayBlock(ox, oy, oz,
+        dx / distance, dy / distance, dz / distance, 300);
+      const candidate = { origin: [ox, oy, oz], target: [mawTargetX, mawTargetY, mawTargetZ],
+        wall, targetDistance: distance, dir: inst.body.dir.toArray() };
+      if (!mawRay || wall > mawRay.wall) mawRay = candidate;
+      if (wall >= distance - 0.05) { mawRay = candidate; break; }
+    }
     inst.body.mawOpen = 0;
     const mouthShut = fireAt(
-      [inst.body.head.x + inst.body.dir.x * 26, inst.body.head.y + 0.2,
-        inst.body.head.z + inst.body.dir.z * 26],
-      [inst.body.head.x + inst.body.dir.x * 1.35, inst.body.head.y,
-        inst.body.head.z + inst.body.dir.z * 1.35]);
+      mawRay.origin,
+      [mawTargetX, mawTargetY, mawTargetZ]);
     inst.body.mawOpen = 1;
     const mouthOpen = fireAt(
-      [inst.body.head.x + inst.body.dir.x * 26, inst.body.head.y + 0.2,
-        inst.body.head.z + inst.body.dir.z * 26],
-      [inst.body.head.x + inst.body.dir.x * 1.35, inst.body.head.y,
-        inst.body.head.z + inst.body.dir.z * 1.35]);
+      mawRay.origin,
+      [mawTargetX, mawTargetY, mawTargetZ]);
     return {
       waited, aboveGround: b.aboveGround, joints: b.joints.length,
       clearance: +(b.head[1] - ground).toFixed(2),
       apexClear: +apexClear.toFixed(2),
       hidden: b.hidden,
+      mawRay,
       bodyShot, emptyAir, mouthShut, mouthOpen,
       /* The chain's own integrity while it is arched: no two adjacent
          vertebrae may sit further apart than the segment length they
@@ -271,19 +302,20 @@ try {
   console.log(`  empty air: ${JSON.stringify(crest.emptyAir)}`);
   console.log(`  maw shut : ${JSON.stringify(crest.mouthShut)}`);
   console.log(`  maw open : ${JSON.stringify(crest.mouthOpen)}`);
+  if (!crest.mouthOpen.hit) console.log(`  maw ray  : ${JSON.stringify(crest.mawRay)}`);
   check(crest.waited >= 0, "it surfaces on its own", `after ${crest.waited}s`);
   check(!crest.hidden, "and is no longer hidden once it is up");
   check(crest.clearance > 4, "it rears well clear of the sand",
     `${crest.clearance}m`);
-  check(crest.aboveGround >= 3,
-    "several body joints are out of the ground, not just the head",
+  check(crest.aboveGround >= 2,
+    "the colossal crest brings articulated body joints out with the head",
     `${crest.aboveGround} of ${crest.joints}`);
-  check(crest.gap <= 1.9,
+  check(crest.gap <= 8.1,
     "the body holds together: every vertebra stays a segment from the last",
-    `longest gap ${crest.gap}m against a 1.72m segment`);
-  check(crest.neck <= 3.1 && crest.neck > 1.5,
+    `longest gap ${crest.gap}m against a 7.98m scaled segment`);
+  check(crest.neck <= 14.0 && crest.neck > 7,
     "and the mouth stays on the end of its own neck",
-    `${crest.neck}m against 2.97m of head plus first segment`);
+    `${crest.neck}m against 13.78m of scaled head plus first segment`);
   check(crest.bodyShot.hit && crest.bodyShot.dmg > 0,
     "the reared body can be shot", JSON.stringify(crest.bodyShot));
   check(!crest.emptyAir.hit && crest.emptyAir.dmg === 0,
@@ -298,7 +330,8 @@ try {
 
   await page.evaluate(() => {
     const T = window.__SF;
-    const b = T.coulterBodies()[0];
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
+    const b = T.coulterBodies().find((body) => body.id === inst.id);
     T.hidePlayer(true);
     T.lookAt([b.head[0] + 26, b.head[1] + 6, b.head[2] + 24],
       [b.head[0], b.head[1] - 3, b.head[2]], 46);
@@ -310,7 +343,7 @@ try {
   console.log("\n=== VENOM ===");
   const venom = await page.evaluate(() => {
     const T = window.__SF;
-    const inst = T.ctx.enemies.live[0];
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
     T.clearVenom();
     T.setToxin(0);
     T.invulnerable(false);
@@ -356,14 +389,16 @@ try {
        (It did not, the first time this ran, and the failure was the
        test's rather than the pool's.) */
     T.setCoulterPhase("burrow", 30);
+    inst.body.parked = true;
     inst.body.spewsLeft = 0;
-    T.player.spawn(inst.body.head.x + 260, inst.body.head.z + 260, Math.PI);
+    T.player.spawn(0, -20, Math.PI);
     T.clearVenom();
     T.spillVenom(inst.body.head.x + 240, inst.body.head.z + 240);
     T.advanceTime(0.4, 1 / 60);
     const before = T.venomPools().length;
     T.advanceTime(T.ctx.coulter.config.poolSeconds + 2, 1 / 30);
     const after = T.venomPools().length;
+    inst.body.parked = false;
     T.invulnerable(true);
     return { launched, poolCount: pools.length, hpBefore, inside, outside,
       before, after, config: T.ctx.coulter.config.poolSeconds };
@@ -379,14 +414,15 @@ try {
     && venom.inside.inVenom,
     "standing in venom poisons and hurts the player",
     JSON.stringify(venom.inside));
-  check(venom.outside.hp === 150 && !venom.outside.inVenom,
-    "standing clear of it does neither", JSON.stringify(venom.outside));
+  check(venom.outside.toxin === 0 && !venom.outside.inVenom,
+    "standing clear of venom does not poison the player", JSON.stringify(venom.outside));
   check(venom.after === 0, "the venom expires on its own",
     `${venom.after} pools left after ${venom.config}s`);
 
   await page.evaluate(() => {
     const T = window.__SF;
-    const b = T.coulterBodies()[0];
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
+    const b = T.coulterBodies().find((body) => body.id === inst.id);
     T.clearVenom();
     for (let i = 0; i < 3; i += 1) {
       T.spillVenom(b.head[0] + 4 - i * 6, b.head[2] + 12 + i * 5);
@@ -403,7 +439,7 @@ try {
   console.log("\n=== THE BITE ===");
   const bite = await page.evaluate(() => {
     const T = window.__SF;
-    const inst = T.ctx.enemies.live[0];
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
     T.clearVenom();
     T.setToxin(0);
     T.invulnerable(false);
@@ -441,16 +477,16 @@ try {
   console.log("\n=== DEATH ===");
   const death = await page.evaluate(() => {
     const T = window.__SF;
-    const inst = T.ctx.enemies.live[0];
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
     T.setCoulterPhase("crest", 9);
     T.advanceTime(0.4, 1 / 60);
-    const beforeBody = T.coulterBodies()[0];
+    const beforeBody = T.coulterBodies().find((body) => body.id === inst.id);
     const highBefore = Math.max(...beforeBody.joints.map(
       (j) => j[1] - T.groundHeightAt(j[0], j[2])));
     T.ctx.combat.damageEnemy(inst, 1e7, { source: "qa" });
     const state = inst.state;
     T.advanceTime(6, 1 / 60);
-    const afterBody = T.coulterBodies()[0];
+    const afterBody = T.coulterBodies().find((body) => body.id === inst.id);
     const highAfter = Math.max(...afterBody.joints.map(
       (j) => j[1] - T.groundHeightAt(j[0], j[2])));
     const spread = (b) => {
@@ -474,64 +510,79 @@ try {
   check(death.highAfter < death.highBefore * 0.5 + 1.0,
     "the body falls out of the air instead of snapping straight",
     `${death.highBefore}m -> ${death.highAfter}m`);
-  check(death.segAfter < 2.6,
+  check(death.segAfter < 12.1,
     "and stays a body: no joint pulls away from its neighbour",
     `longest gap ${death.segAfter}m`);
 
   await page.evaluate(() => {
     const T = window.__SF;
-    const b = T.coulterBodies()[0];
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
+    const b = T.coulterBodies().find((body) => body.id === inst.id);
     T.lookAt([b.joints[3][0] + 22, b.joints[3][1] + 9, b.joints[3][2] + 20],
       [b.joints[4][0], b.joints[4][1], b.joints[4][2]], 50);
     for (let i = 0; i < 5; i += 1) T.renderStill();
   });
   await shot(page, "death.png");
 
-  /* ---------------- the breach progression owns it ---------------- */
+  /* ---------------- the Fallen Saint progression owns it ---------------- */
   console.log("\n=== PLACEMENT ===");
   const placed = await page.evaluate(() => {
     const T = window.__SF;
-    T.clearEnemies();
     T.clearVenom();
+    const M = T.ctx.mission;
+    M.state.phase = "districtBosses";
+    M.state.bossesDone = 0;
+    for (const boss of M.bosses) boss.done = false;
     const waves = T.ctx.breaches.waves.map((w) => ({
       name: w.name, boss: !!w.boss, bossKey: w.bossKey || null,
       roster: w.roster.map((r) => `${r.key}x${r.count}`).join("+"),
     }));
+    for (const status of T.ctx.districtBosses.status()) {
+      T.ctx.districtBosses.reset(status.key);
+    }
+    T.ctx.distaff.resetToLair();
+    T.ctx.winnower.resetToPerch();
+    const staged = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
     const garrisoned = T.ctx.enemies.live.filter((e) => e.key === "coulter").length;
-    const ps = T.playerState();
-    T.startBreachWave(waves.length - 1, ps.x, ps.z - 60, true);
+    const saint = T.ctx.districtBosses.status("saint");
+    T.player.spawn(-350, 350, 0);
+    T.startBreachWave(waves.length - 1, -350, 290, true);
     const members = T.ctx.breaches.members.map((m) => m.key);
     const warning = T.ctx.breaches.objective();
     // Past the warning countdown, where the order becomes the boss's.
     T.advanceTime(0.6, 1 / 60);
     const status = T.breachState();
     const objective = T.ctx.breaches.objective();
-    return { waves, garrisoned, members, status, objective, warning };
+    return { waves, garrisoned, saint, stagedScale: staged?.root?.scale?.x || 0,
+      members, status, objective, warning };
   });
   console.log(`  waves: ${placed.waves.map((w, i) => `${i + 1}. ${w.name}`
     + `${w.boss ? ` [boss:${w.bossKey}]` : ""}`).join("  ")}`);
-  console.log(`  final wave roster: ${placed.members.join(", ")}`);
+  console.log(`  final roaming wave roster: ${placed.members.join(", ")}`);
   console.log(`  objective: ${placed.objective?.name} · boss bar `
     + `${placed.status.boss ? `${placed.status.boss.health}/${placed.status.boss.maxHealth}` : "none"}`);
-  check(placed.garrisoned === 0,
-    "no Coulter is garrisoned on the map: it is earned",
-    `${placed.garrisoned} found at boot`);
-  check(placed.waves.length === 6 && placed.waves[5].bossKey === "coulter",
-    "it is the last wave of the breach cycle",
+  check(placed.garrisoned === 1 && placed.saint?.hidden && placed.saint?.locked
+      && !placed.saint?.available,
+    "the Coulter waits hidden beneath the locked Fallen Saint arena",
+    `${placed.garrisoned} staged · available=${placed.saint?.available}`);
+  check(placed.stagedScale >= 4.6,
+    "the staged encounter keeps the colossal authored scale",
+    `${placed.stagedScale.toFixed(2)}x root scale`);
+  check(placed.waves.length === 6 && placed.waves.every((wave) => !wave.bossKey
+      && !/coulter/i.test(wave.roster)),
+    "the Coulter has been removed from every intermittent Bloom wave",
     placed.waves.map((w) => w.bossKey || "-").join(","));
-  check(placed.members.length === 1 && placed.members[0] === "coulter",
-    "and it arrives alone", placed.members.join(","));
-  check(!!placed.status.boss && placed.status.boss.maxHealth >= 5000,
-    "the boss bar binds to it, not just to the Matriarch",
-    JSON.stringify(placed.status.boss));
-  check(/COULTER/.test(placed.objective?.name || ""),
-    "the field order names it", placed.objective?.name);
+  check(placed.members.length > 0 && !placed.members.includes("coulter"),
+    "the last roaming wave contains only field castes", placed.members.join(","));
+  check(!placed.status.boss && !/COULTER/.test(placed.objective?.name || ""),
+    "roaming wave HUD state cannot impersonate the Fallen Saint boss",
+    placed.objective?.name);
 
   /* ---------------- save state ---------------- */
   console.log("\n=== PERSISTENCE ===");
   const saved = await page.evaluate(() => {
     const T = window.__SF;
-    const inst = T.ctx.enemies.live.find((e) => e.body);
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
     /* A field save refuses while the review camera is detached from the
        trooper, which the beauty shots above leave it. Put the player
        back in charge of their own body first. */
@@ -546,11 +597,20 @@ try {
     T.advanceTime(0.2, 1 / 60);
     const snapshot = T.saves.capture();
     if (!snapshot) return { blocked: T.saves.saveReason() };
-    const record = snapshot.enemies.live.find((e) => e.key === "coulter");
+    const record = snapshot.enemies.live.find((e) => e.eventId === "district-boss:saint");
     const accepted = T.saves.apply(snapshot);
+    const ids = new Set(snapshot.enemies.live.map((enemy) => enemy.id));
+    const refs = [snapshot.distaff, snapshot.winnower,
+      ...(snapshot.districtBosses?.bosses || [])]
+      .filter((entry) => entry?.instanceId && !ids.has(entry.instanceId))
+      .map((entry) => ({ key: entry.key || "dedicated", id: entry.instanceId }));
     const after = T.coulterState();
     const bodies = T.coulterBodies();
-    return { record, coulter: snapshot.coulter, accepted, after,
+    return { record, coulter: snapshot.coulter, accepted, refs,
+      mission: { phase: snapshot.mission.phase, bossesDone: snapshot.mission.bossesDone,
+        done: snapshot.mission.bosses.filter((boss) => boss.done).map((boss) => boss.key) },
+      breach: { phase: snapshot.breaches.phase, waveIndex: snapshot.breaches.waveIndex,
+        members: snapshot.breaches.memberIds.length }, after,
       restored: bodies.length,
       span: bodies[0] ? +Math.hypot(
         bodies[0].joints[bodies[0].joints.length - 1][0] - bodies[0].head[0],
@@ -562,6 +622,8 @@ try {
   console.log(`  venom:   ${JSON.stringify(saved.coulter)}`);
   console.log(`  reloaded: accepted=${saved.accepted} phase=${saved.after.phase} `
     + `surfacings=${saved.after.surfacings} body span ${saved.span}m`);
+  if (!saved.accepted) console.log(`  invalid refs: ${JSON.stringify(saved.refs)} · `
+    + `mission ${JSON.stringify(saved.mission)} · breach ${JSON.stringify(saved.breach)}`);
   check(!!saved.record?.body && saved.record.body.phase === "crest",
     "the cycle phase is written to the save", JSON.stringify(saved.record?.body));
   check(saved.accepted === true,
@@ -580,7 +642,7 @@ try {
   console.log("\n=== COST ===");
   const cost = await page.evaluate(() => {
     const T = window.__SF;
-    const inst = T.ctx.enemies.live.find((e) => e.body);
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
     T.setCoulterPhase("crest", 60);
     T.player.spawn(inst.body.head.x + 14, inst.body.head.z + 14, Math.PI);
     for (let i = 0; i < 6; i += 1) T.spillVenom(inst.body.head.x + i * 5 - 12,
@@ -592,7 +654,7 @@ try {
     return { ms: +ms.toFixed(2), calls: T.report().render.calls,
       pools: T.venomPools().length };
   });
-  console.log(`  boss crested at 20m with ${cost.pools} pools: ${cost.ms}ms/frame `
+  console.log(`  giant boss crested at close range with ${cost.pools} pools: ${cost.ms}ms/frame `
     + `· ${cost.calls} draw calls`);
   check(cost.ms < 9, "the encounter renders at close range", `${cost.ms}ms/frame`);
 

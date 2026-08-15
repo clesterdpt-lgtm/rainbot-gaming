@@ -414,7 +414,7 @@ export function buildSaveSystem(ctx, options = {}) {
         district: nearestDistrict(ctx, ps.x, ps.z),
         missionPhase: mission.phase,
         relays: `${mission.relaysDone}/${ctx.mission.relays.length}`,
-        bosses: `${mission.bossesDone || 0}/${ctx.mission.bosses?.length || 6}`,
+        bosses: `${mission.bossesDone || 0}/${ctx.mission.bosses?.length || 7}`,
         breach: breach?.complete ? `Cycle ${breach.cyclesCleared || 1} cleared`
           : breach?.wave > 0 ? `Cycle ${breach.cycle || 1} · Breach ${breach.wave}/${breach.waveCount}` : "Signal quiet",
         vitality: `${Math.ceil(combat.hp)}/${combat.maxHp}`,
@@ -503,7 +503,7 @@ export function buildSaveSystem(ctx, options = {}) {
 
     const mission = snapshot.mission;
     const phases = new Set([
-      "districtBosses", "relays", "cathedralBoss", "extract", "won", "lost",
+      "districtBosses", "relays", "saintBoss", "cathedralBoss", "extract", "won", "lost",
     ]);
     const relayKeys = new Set(ctx.mission.relays.map((relay) => relay.key));
     if (!isRecord(mission) || !phases.has(mission.phase)
@@ -529,9 +529,12 @@ export function buildSaveSystem(ctx, options = {}) {
     }
     if (mission.bosses !== undefined) {
       const bossKeys = new Set((ctx.mission.bosses || []).map((boss) => boss.key));
-      if (!Array.isArray(mission.bosses) || mission.bosses.length !== bossKeys.size
+      const districtBossKeys = new Set((ctx.mission.bosses || [])
+        .filter((boss) => boss.stage !== "penultimate").map((boss) => boss.key));
+      if (!Array.isArray(mission.bosses)
+        || ![bossKeys.size, districtBossKeys.size].includes(mission.bosses.length)
         || !Number.isInteger(mission.bossesDone)
-        || mission.bossesDone < 0 || mission.bossesDone > bossKeys.size) return false;
+        || mission.bossesDone < 0 || mission.bossesDone > mission.bosses.length) return false;
       const savedBossKeys = new Set();
       let bossesDone = 0;
       for (const boss of mission.bosses) {
@@ -541,8 +544,18 @@ export function buildSaveSystem(ctx, options = {}) {
         savedBossKeys.add(boss.key);
         if (boss.done) bossesDone += 1;
       }
-      if (bossesDone !== mission.bossesDone
-        || (mission.phase === "cathedralBoss" && bossesDone !== bossKeys.size)) return false;
+      const fullRoster = savedBossKeys.size === bossKeys.size
+        && [...bossKeys].every((key) => savedBossKeys.has(key));
+      const legacyRoster = savedBossKeys.size === districtBossKeys.size
+        && [...districtBossKeys].every((key) => savedBossKeys.has(key));
+      const districtsDone = [...districtBossKeys]
+        .filter((key) => mission.bosses.find((boss) => boss.key === key)?.done).length;
+      const saintDone = mission.bosses.find((boss) => boss.key === "saint")?.done === true;
+      if ((!fullRoster && !legacyRoster) || bossesDone !== mission.bossesDone
+        || (mission.phase === "saintBoss"
+          && (!fullRoster || districtsDone !== districtBossKeys.size || saintDone))
+        || (mission.phase === "cathedralBoss"
+          && (districtsDone !== districtBossKeys.size || (fullRoster && !saintDone)))) return false;
     }
     for (const [key, spec] of Object.entries(ctx.mission.stratagems || {})) {
       if (!isFiniteNumber(mission.cooldowns[key]) || mission.cooldowns[key] < 0
@@ -667,9 +680,10 @@ export function buildSaveSystem(ctx, options = {}) {
     }
     if (snapshot.districtBosses !== null && snapshot.districtBosses !== undefined) {
       const domain = snapshot.districtBosses;
-      const expected = new Set(["ossuary", "bloom", "choir", "reach"]);
+      const expected = new Set((ctx.districtBosses?.status?.() || []).map((boss) => boss.key));
+      const legacy = new Set([...expected].filter((key) => key !== "saint"));
       if (!isRecord(domain) || !Array.isArray(domain.bosses)
-        || domain.bosses.length !== expected.size) return false;
+        || ![expected.size, legacy.size].includes(domain.bosses.length)) return false;
       const found = new Set();
       for (const record of domain.bosses) {
         if (!isRecord(record) || !expected.has(record.key) || found.has(record.key)
@@ -686,6 +700,11 @@ export function buildSaveSystem(ctx, options = {}) {
             || (typeof record.instanceId === "string" && enemyIds.has(record.instanceId)))) return false;
         found.add(record.key);
       }
+      const fullRoster = found.size === expected.size
+        && [...expected].every((key) => found.has(key));
+      const legacyRoster = found.size === legacy.size
+        && [...legacy].every((key) => found.has(key));
+      if (!fullRoster && !legacyRoster) return false;
     }
 
     /* Optional for pre-Apostate field saves. New Cathedral-boss saves carry

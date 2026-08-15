@@ -50,7 +50,7 @@ export const COULTER_CONFIG = Object.freeze({
   /* Deep enough that the body is unambiguously gone - a worm you can
      see the top of is a worm the player will try to shoot - and
      shallow enough that the ridge it pushes up is a strong read. */
-  burrowDepth: 5.6,
+  burrowDepth: 16,
   /* The submerged window, and the difficulty curve. It is the only
      value the boss escalates on, because it is the one the player
      feels: a wounded Coulter gives you less time to reposition
@@ -64,25 +64,27 @@ export const COULTER_CONFIG = Object.freeze({
      chosen: the rise carries the head about eighteen metres forward, so
      committing at this range puts the mouth over the player rather than
      leaving it towering politely in the middle distance. */
-  riseRange: 22,
-  riseSeconds: 1.95,
-  riseSpeed: 12.5,
+  riseRange: 54,
+  riseSeconds: 3.8,
+  riseSpeed: 28,
   /* How high the head has to get before the rise is called done. Raised
      from 7.2 with the arc: the animal was cutting its own eruption short
      and standing up like a post, with three vertebrae out of the sand
      and the rest of the body buried directly underneath them. */
-  riseClearance: 10.8,
-  crestSeconds: 9.5,
-  diveSpeed: 14.0,
-  diveDepth: 7.0,
+  riseClearance: 32,
+  crestSeconds: 12.5,
+  diveSpeed: 26,
+  diveDepth: 18,
   turnRate: { burrow: 0.95, rise: 0.35, crest: 1.15, dive: 0.45 },
   /* The eruption. Survivable at full health and only just - it is the
      price of ignoring a ridge of sand travelling toward you. */
   breachDamage: 42,
-  breachRadius: 6.4,
-  breachKnock: 13,
+  breachRadius: 18,
+  breachKnock: 16,
   biteDamage: 56,
-  biteReach: 9.4,
+  biteReach: 28,
+  biteVertical: 34,
+  biteSlack: 6,
   biteCadence: 2.05,
   /* The contact frame of the `strike` clip. Authored at frame 10 of
      32 - see the Blender script - so the damage lands as the petals
@@ -97,7 +99,7 @@ export const COULTER_CONFIG = Object.freeze({
   spewSpread: 0.085,
   spewDirect: 16,
   spewsPerCrest: [2, 4],
-  poolRadius: 4.4,
+  poolRadius: 7.0,
   poolSeconds: 9.0,
   poolMax: 12,
   /* Venom is not burst damage, it is a DENIAL. Standing in a pool for
@@ -110,7 +112,7 @@ export const COULTER_CONFIG = Object.freeze({
   /* Simulated far past combat.js's own 240m horizon. It is a landmark
      with a wake, and a boss that stops moving because the player
      walked away is a boss that is never where they left it. */
-  simRange: 520,
+  simRange: 620,
 });
 
 const GLOBULES = 18;
@@ -121,6 +123,7 @@ export function buildCoulter(ctx) {
   const { THREE, scene, atmos, enemies } = ctx;
   const bus = makeBus();
   const C = COULTER_CONFIG;
+  const bodyScale = (inst) => Math.max(1, Number(inst?.spec?.bodyScale) || 1);
   const groundAt = (x, z) => (ctx.collide
     ? ctx.collide.groundHeight(x, z)
     : ctx.terrain.heightAt(x, z));
@@ -538,9 +541,10 @@ export function buildCoulter(ctx) {
   function submergedFully(inst) {
     const b = inst.body;
     const surface = groundAt(b.head.x, b.head.z);
-    if (b.head.y > surface - 1.2) return false;
+    const hideDepth = 1.2 * bodyScale(inst);
+    if (b.head.y > surface - hideDepth) return false;
     for (const joint of b.joints) {
-      if (joint.y > groundAt(joint.x, joint.z) - 1.2) return false;
+      if (joint.y > groundAt(joint.x, joint.z) - hideDepth) return false;
     }
     return true;
   }
@@ -574,7 +578,7 @@ export function buildCoulter(ctx) {
        metres ahead, rather than at where it is now. Chasing the
        current height makes the animal climb dune faces in steps; a
        lookahead makes it swim. */
-    const ahead = 11;
+    const ahead = 11 * bodyScale(inst);
     const wantY = groundAt(b.head.x + Math.sin(b.heading) * ahead,
       b.head.z + Math.cos(b.heading) * ahead) - C.burrowDepth;
     b.pitch = clamp(Math.atan2(wantY - b.head.y, ahead), -0.5, 0.5);
@@ -604,7 +608,8 @@ export function buildCoulter(ctx) {
     const combat = ctx.combat;
     enemies.play(inst, "alert", 0.08);
     ctx.vfx?.breach?.(b.head.x, surface, b.head.z, C.breachRadius * 1.5, 2.2);
-    ctx.vfx?.sandSpray?.(b.head.x, surface + 0.4, b.head.z, 2.6,
+    ctx.vfx?.sandSpray?.(b.head.x, surface + 0.4, b.head.z,
+      2.6 * Math.sqrt(bodyScale(inst)),
       Math.sin(b.heading), Math.cos(b.heading));
     bus.emit("breach", { x: b.head.x, y: surface, z: b.head.z, id: inst.id });
 
@@ -695,7 +700,7 @@ export function buildCoulter(ctx) {
 
     // Keep the head out of the sand: a crane-down that drives the
     // mouth into a dune would bury the weak point.
-    const floor = groundAt(b.head.x, b.head.z) + 3.4;
+    const floor = groundAt(b.head.x, b.head.z) + 3.4 * bodyScale(inst);
     if (b.head.y < floor) b.head.y = damp(b.head.y, floor, 6, dt);
 
     b.fireTimer = (b.fireTimer || 0) - dt;
@@ -707,7 +712,7 @@ export function buildCoulter(ctx) {
       resolveAction(inst, dt, target);
     } else if (b.fireTimer <= 0) {
       const vertical = Math.abs(target.y - b.head.y);
-      if (flat < C.biteReach && vertical < 11) beginBite(inst);
+      if (flat < C.biteReach && vertical < C.biteVertical) beginBite(inst);
       else if (b.spewsLeft > 0) beginSpew(inst, target);
       else b.fireTimer = 0.6;
     }
@@ -778,7 +783,8 @@ export function buildCoulter(ctx) {
     // Re-tested at the contact frame, not at the wind-up: the mouth
     // closing on where the player WAS is what makes backing out of
     // reach a real answer.
-    if (flat > C.biteReach + 1.6 || Math.abs(target.y - b.head.y) > 12) {
+    if (flat > C.biteReach + C.biteSlack
+      || Math.abs(target.y - b.head.y) > C.biteVertical + 2) {
       bus.emit("biteMiss", { x: b.head.x, z: b.head.z });
       return;
     }
@@ -797,22 +803,24 @@ export function buildCoulter(ctx) {
     // Out of the mouth, not out of the origin: the mouth is 1.5m in
     // front of the head joint and it is where the player is looking.
     const cp = Math.cos(b.pitch);
-    const mx = b.head.x + Math.sin(b.heading) * cp * 1.5;
-    const my = b.head.y + Math.sin(b.pitch) * 1.5;
-    const mz = b.head.z + Math.cos(b.heading) * cp * 1.5;
+    const size = bodyScale(inst);
+    const mouth = 1.5 * size;
+    const mx = b.head.x + Math.sin(b.heading) * cp * mouth;
+    const my = b.head.y + Math.sin(b.pitch) * mouth;
+    const mz = b.head.z + Math.cos(b.heading) * cp * mouth;
     const count = C.spewGlobules;
     for (let i = 0; i < count; i += 1) {
       const spread = count > 1 ? (i / (count - 1) - 0.5) * 2 : 0;
-      const tx = aim.x + spread * 3.6;
-      const tz = aim.z + spread * 2.4;
+      const tx = aim.x + spread * 3.6 * Math.sqrt(size);
+      const tz = aim.z + spread * 2.4 * Math.sqrt(size);
       const v = ballistic(mx, my, mz, tx, aim.y, tz, C.spewSpeed);
       launchGlobule(mx, my, mz,
         v.x + (Math.random() - 0.5) * C.spewSpread * C.spewSpeed,
         v.y + (Math.random() - 0.5) * C.spewSpread * C.spewSpeed,
         v.z + (Math.random() - 0.5) * C.spewSpread * C.spewSpeed,
-        0.85 + Math.random() * 0.4);
+        (0.85 + Math.random() * 0.4) * Math.sqrt(size));
     }
-    ctx.vfx?.venomBurst?.(mx, my, mz, 1.5);
+    ctx.vfx?.venomBurst?.(mx, my, mz, 1.5 * Math.sqrt(size));
     bus.emit("spew", { x: mx, y: my, z: mz, id: inst.id, count });
   }
 
@@ -981,22 +989,24 @@ export function buildCoulter(ctx) {
     const depth = surface - b.head.y;
     // Only while it is shallow enough to be pushing sand up. Deeper
     // than this and the ridge would be a lie.
-    const showing = b.phase !== "dead" && depth > 0.4 && depth < 9.5;
+    const size = bodyScale(inst);
+    const showing = b.phase !== "dead" && depth > 0.4 && depth < 9.5 * size;
     if (rig.root.visible !== showing) rig.root.visible = showing;
     if (!showing) return;
-    const strength = clamp01((9.5 - depth) / 6.5);
+    const strength = clamp01((9.5 * size - depth) / (6.5 * size));
     /* Parked a little BEHIND the head. The animal's shoulders are what
        displace the most sand, not its mouth, and a ridge centred on the
        head puts the crest ahead of the thing making it - which reads as
        the ground bulging in front of a hole rather than around one. */
     rig.root.position.set(
-      b.head.x - Math.sin(b.heading) * 2.4,
+      b.head.x - Math.sin(b.heading) * 2.4 * size,
       surface + 0.05,
-      b.head.z - Math.cos(b.heading) * 2.4
+      b.head.z - Math.cos(b.heading) * 2.4 * size
     );
     rig.root.rotation.y = b.heading;
-    rig.root.scale.set(0.70 + strength * 0.50, 0.72 + strength * 0.46,
-      0.80 + strength * 0.40);
+    rig.root.scale.set((0.70 + strength * 0.50) * size,
+      (0.72 + strength * 0.46) * Math.sqrt(size),
+      (0.80 + strength * 0.40) * size);
 
     /* The wake's own voice, on its own clock. A shallow Coulter is
        audible before it is visible and from any direction, which is
@@ -1024,10 +1034,12 @@ export function buildCoulter(ctx) {
        it, which says how big it is. */
     const sx = Math.sin(b.heading);
     const sz = Math.cos(b.heading);
-    const power = 0.9 + strength * 1.5;
-    ctx.vfx?.sandSpray?.(b.head.x + sx * 3.4, surface + 0.30, b.head.z + sz * 3.4,
+    const power = (0.9 + strength * 1.5) * Math.sqrt(size);
+    ctx.vfx?.sandSpray?.(b.head.x + sx * 3.4 * size, surface + 0.30,
+      b.head.z + sz * 3.4 * size,
       power, sx, sz);
-    ctx.vfx?.sandSpray?.(b.head.x - sx * 2.2, surface + 0.55, b.head.z - sz * 2.2,
+    ctx.vfx?.sandSpray?.(b.head.x - sx * 2.2 * size, surface + 0.55,
+      b.head.z - sz * 2.2 * size,
       power * 0.72, -sx * 0.35, -sz * 0.35);
   }
 

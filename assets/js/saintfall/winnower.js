@@ -1336,6 +1336,7 @@ export function buildWinnower(ctx) {
     clearHazards,
     spillAsh,
     ensureSpawned,
+    resetToPerch,
     inAsh() { return burn.standing; },
     instance() { return inst; },
     /** Force a phase, for checks about a phase rather than about how

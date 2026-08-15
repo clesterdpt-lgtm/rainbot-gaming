@@ -187,10 +187,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
           </nav>
           <div class="sf-menu__content">
             <section class="sf-menu__page" data-menu-page="operation">
-              <div class="sf-menu__pagehead"><span>ACTIVE DIRECTIVE</span><h3 data-operation-heading>THE SIXFOLD HUNT</h3><p data-operation-copy>Break every district guardian, then enter the Cathedral.</p></div>
+              <div class="sf-menu__pagehead"><span>ACTIVE DIRECTIVE</span><h3 data-operation-heading>THE SEVENFOLD HUNT</h3><p data-operation-copy>Break six district guardians, then face the Coulter beneath the Fallen Saint.</p></div>
               <div class="sf-operation-grid">
                 <article class="sf-operation-card sf-operation-card--objective"><small>PRIORITY OBJECTIVE</small><strong data-operation-objective>Reading field order…</strong><span data-operation-distance>—</span></article>
-                <article class="sf-operation-card"><small>DISTRICT BOSSES</small><strong data-operation-relays>0 / 6</strong><span>Defeated</span></article>
+                <article class="sf-operation-card"><small>APEX BOSSES</small><strong data-operation-relays>0 / 7</strong><span>Defeated</span></article>
                 <article class="sf-operation-card"><small>REINFORCEMENTS</small><strong data-operation-reinforcements>5</strong><span>Available</span></article>
                 <article class="sf-operation-card"><small>MISSION CLOCK</small><strong data-operation-clock>00:00</strong><span>Elapsed</span></article>
                 <article class="sf-operation-card sf-operation-card--breach"><small>BLOOM CONTAINMENT</small><strong data-operation-breach>Signal quiet</strong><span data-operation-breach-detail>No active rupture</span></article>
@@ -1003,7 +1003,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     const state = ctx.mission.state || {};
     const objective = ctx.mission.objective?.();
     const breach = ctx.breaches?.status?.();
-    const bossTotal = ctx.mission.bosses?.length || 6;
+    const bossTotal = ctx.mission.bosses?.length || 7;
     const bossDone = Math.max(0, state.bossesDone || 0);
     const objectiveDone = !objective && state.phase === "won";
     const breachDone = !!breach?.complete;
@@ -1036,9 +1036,11 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
         state: breachDone ? "complete" : breachActive ? "threat" : "idle",
       },
       {
-        index: "03", kicker: "DISTRICT GUARDIANS",
-        title: bossesDone ? "ALL SIX SIGNATURES BROKEN" : `${bossDone} OF ${bossTotal} BOSSES DEFEATED`,
-        detail: bossesDone ? "The Cathedral confrontation is unlocked" : "Undefeated arenas remain marked on the field",
+        index: "03", kicker: "APEX GUARDIANS",
+        title: bossesDone ? "ALL SEVEN SIGNATURES BROKEN" : `${bossDone} OF ${bossTotal} BOSSES DEFEATED`,
+        detail: bossesDone ? "The Cathedral confrontation is unlocked"
+          : state.phase === "saintBoss" ? "The Coulter is awake beneath the Fallen Saint"
+            : "Six district victories awaken the penultimate boss",
         progress: bossDone / Math.max(1, bossTotal),
         state: bossesDone ? "complete" : "active",
       },
@@ -1075,13 +1077,16 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     } else if (phase === "cathedralBoss") {
       heading.textContent = "RETURN TO THE CATHEDRAL";
       copy.textContent = "The final signal is wearing your reliquary. Destroy the Apostate.";
+    } else if (phase === "saintBoss") {
+      heading.textContent = "THE FALLEN SAINT STIRS";
+      copy.textContent = "Enter the central sand basin and break the colossal Coulter.";
     } else {
-      heading.textContent = "THE SIXFOLD HUNT";
+      heading.textContent = "THE SEVENFOLD HUNT";
       copy.textContent = "Defeat the six district guardians while intermittent Bloom waves pursue you.";
     }
     root.querySelector("[data-operation-objective]").textContent = objective?.name || "Awaiting field order";
     root.querySelector("[data-operation-distance]").textContent = objective ? `${Math.round(objective.dist || 0)}m from current position` : "No active directive";
-    root.querySelector("[data-operation-relays]").textContent = `${state.bossesDone || 0} / ${ctx.mission.bosses?.length || 6}`;
+    root.querySelector("[data-operation-relays]").textContent = `${state.bossesDone || 0} / ${ctx.mission.bosses?.length || 7}`;
     root.querySelector("[data-operation-reinforcements]").textContent = String(Math.max(0, state.reinforcements ?? 0));
     root.querySelector("[data-operation-clock]").textContent = formatClock(state.elapsed);
     const breachActive = !!breach && ["warning", "active", "intermission"].includes(breach.phase);
@@ -1303,7 +1308,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
       slotEl.querySelector("[data-slot-state]").textContent = snapshot ? "RECORDED" : "EMPTY";
       slotEl.querySelector("[data-slot-district]").textContent = snapshot?.summary?.district || "No field record";
       slotEl.querySelector("[data-slot-progress]").textContent = snapshot
-        ? `${snapshot.summary?.bosses || "0/6"} bosses · ${snapshot.summary?.breach || "Signal quiet"} · Vitality ${snapshot.summary?.vitality || "—"}`
+        ? `${snapshot.summary?.bosses || "0/7"} bosses · ${snapshot.summary?.breach || "Signal quiet"} · Vitality ${snapshot.summary?.vitality || "—"}`
         : "Awaiting deployment state";
       slotEl.querySelector("[data-slot-time]").textContent = snapshot
         ? `${formatSavedAt(snapshot.timestamp)} · ${formatClock(snapshot.summary?.elapsed)}` : "—";

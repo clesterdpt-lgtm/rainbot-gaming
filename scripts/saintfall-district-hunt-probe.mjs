@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Focused proof for the six-boss operation and intermittent wave contract. */
+/* Focused proof for the seven-boss operation, arena boundaries, and wave contract. */
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -55,59 +55,94 @@ try {
     T.invulnerable(true);
     const mission = T.ctx.mission;
     const hunt = T.ctx.districtBosses;
-    const byKey = Object.fromEntries(T.ctx.enemies.live.map((inst) => [inst.eventId, inst]));
+    const byEvent = Object.fromEntries(T.ctx.enemies.live.map((inst) => [inst.eventId, inst]));
+    const saint = mission.bosses.find((boss) => boss.key === "saint");
+    const previous = mission.bosses.filter((boss) => boss.stage !== "penultimate");
+    const isolation = previous.map((boss) => ({
+      key: boss.key,
+      gap: Math.hypot(saint.x - boss.x, saint.z - boss.z)
+        - saint.arenaRadius - boss.arenaRadius,
+    }));
+    const worm = byEvent["district-boss:saint"];
     return {
       phase: mission.state.phase,
       bossesDone: mission.state.bossesDone,
-      sites: mission.bosses.map((boss) => ({ key: boss.key, done: boss.done })),
+      sites: mission.bosses.map((boss) => ({
+        key: boss.key,
+        stage: boss.stage || "district",
+        done: boss.done,
+        arenaRadius: boss.arenaRadius,
+      })),
       waves: T.ctx.breaches.waves.map((wave) => ({
         bossKey: wave.bossKey || null,
         roster: wave.roster.map((entry) => entry.key),
       })),
       generic: hunt.status(),
       scales: {
-        coulter: byKey["district-boss:ossuary"]?.root?.scale?.x || 0,
-        precentor: byKey["district-boss:choir"]?.root?.scale?.x || 0,
+        coulter: worm?.root?.scale?.x || 0,
+        coulterSpan: worm?.spineLength || 0,
+        coulterHitScale: worm?.spec?.bodyHitScale || 0,
+        precentor: byEvent["district-boss:choir"]?.root?.scale?.x || 0,
         ordinaryThresher: T.ctx.enemies.species.get("thresher")?.spec?.scale || 0,
       },
       dedicated: {
         scar: T.ctx.distaff.instance()?.eventId,
         censer: T.ctx.winnower.instance()?.eventId,
       },
+      isolation,
+      saintStatus: hunt.status("saint"),
       objective: mission.objective(),
     };
   });
 
   console.log("\n=== OPERATION CONTRACT ===");
-  check(initial.phase === "districtBosses", "a new operation starts in the district-boss phase",
+  check(initial.phase === "districtBosses", "a new operation starts in the six-district phase",
     `phase=${initial.phase}`);
-  check(initial.sites.length === 6 && initial.sites.every((boss) => !boss.done),
-    "all six district guardians begin undefeated", initial.sites.map((boss) => boss.key).join(", "));
-  check(initial.bossesDone === 0, "the hunt counter starts at 0 / 6");
-  check(initial.objective?.bossKey && initial.sites.some((boss) => boss.key === initial.objective.bossKey),
-    "field orders point to an undefeated district boss", initial.objective?.name || "no objective");
+  check(initial.sites.length === 7
+    && initial.sites.filter((boss) => boss.stage === "district").length === 6
+    && initial.sites.filter((boss) => boss.stage === "penultimate").length === 1
+    && initial.sites.every((boss) => !boss.done),
+  "six district bosses and the penultimate Fallen Saint boss begin undefeated",
+  initial.sites.map((boss) => `${boss.key}:${boss.stage}`).join(" · "));
+  check(initial.bossesDone === 0, "the complete hunt counter starts at 0 / 7");
+  check(initial.objective?.bossKey !== "saint"
+    && initial.sites.some((boss) => boss.key === initial.objective?.bossKey),
+  "field orders point to an available district boss", initial.objective?.name || "no objective");
 
   console.log("\n=== BOSS ROSTER ===");
-  check(initial.generic.length === 4,
-    "four shared-simulation guardians join the Distaff and Winnower",
+  const ossuary = initial.generic.find((boss) => boss.key === "ossuary");
+  const saint = initial.generic.find((boss) => boss.key === "saint");
+  check(initial.generic.length === 5,
+    "five shared-simulation bosses join the Distaff and Winnower",
     initial.generic.map((boss) => `${boss.key}:${boss.enemyKey}`).join(" · "));
+  check(ossuary?.enemyKey === "harrow" && ossuary.placeholder
+    && ossuary.maxHealth === 2600,
+  "the Ossuary now uses a durable Bone Warden placeholder",
+  `${ossuary?.enemyKey} · ${ossuary?.maxHealth} HP · placeholder=${ossuary?.placeholder}`);
+  check(saint?.enemyKey === "coulter" && saint.stage === "penultimate"
+    && saint.arenaRadius === 285 && !saint.available,
+  "the Coulter moved to a locked 285m Fallen Saint arena",
+  `${saint?.stage} · radius ${saint?.arenaRadius}m · available=${saint?.available}`);
   check(initial.generic.every((boss) => boss.phase === "dormant" && boss.hidden && boss.locked),
-    "shared district bosses are hidden and damage-locked before arena entry");
+    "shared bosses are hidden and damage-locked before their arena entry");
   check(initial.dedicated.scar === "district-boss:scar"
     && initial.dedicated.censer === "district-boss:censer",
-  "bespoke Glass Scar and Censer bosses carry durable district identities");
-  check(initial.scales.coulter >= 1.15,
-    "the Ossuary Coulter is larger than its former wave silhouette",
-    `root scale ${initial.scales.coulter.toFixed(2)}`);
+  "bespoke Glass Scar and Censer bosses retain durable district identities");
+  check(initial.scales.coulter >= 4.6 && initial.scales.coulterSpan >= 80
+    && initial.scales.coulterHitScale === 4,
+  "the Fallen Saint Coulter is roughly four times wider and longer",
+  `scale ${initial.scales.coulter.toFixed(2)} · span ${initial.scales.coulterSpan.toFixed(1)}m · hit scale ${initial.scales.coulterHitScale}`);
   check(initial.scales.precentor / initial.scales.ordinaryThresher >= 2.45,
-    "the Choir mantis is at least 2.45x an ordinary Thresher",
+    "the Choir mantis remains at least 2.45x an ordinary Thresher",
     `${initial.scales.precentor.toFixed(2)} vs ${initial.scales.ordinaryThresher.toFixed(2)}`);
+  check(initial.isolation.every((entry) => entry.gap > 300),
+    "the giant sand arena is isolated from every previous boss area",
+    initial.isolation.map((entry) => `${entry.key}:${entry.gap.toFixed(0)}m`).join(" · "));
 
-  console.log("\n=== INTERMITTENT WAVES ===");
+  console.log("\n=== INTERMITTENT WAVES AND LOCKED SAINT ===");
   const waveBosses = initial.waves.flatMap((wave) => [wave.bossKey, ...wave.roster])
     .filter((key) => key === "matriarch" || key === "coulter");
-  check(waveBosses.length === 0,
-    "roaming wave cycles no longer spawn district bosses");
+  check(waveBosses.length === 0, "roaming wave cycles no longer spawn encounter bosses");
   const arenaBlocks = await page.evaluate(() => {
     const T = window.__SF;
     const out = [];
@@ -124,103 +159,273 @@ try {
     return out;
   });
   check(arenaBlocks.every((entry) => entry.blocked === entry.key),
-    "waves hold outside all six undefeated district arenas",
+    "waves hold outside all seven undefeated boss arenas",
     arenaBlocks.map((entry) => `${entry.key}:${entry.blocked}`).join(" · "));
 
-  const engagement = await page.evaluate(() => {
+  const lockedSaint = await page.evaluate(() => {
     const T = window.__SF;
     const H = T.ctx.districtBosses;
-    const choir = T.ctx.mission.bosses.find((boss) => boss.key === "choir");
-    T.teleport(choir.x, choir.z, 0);
+    const site = T.ctx.mission.bosses.find((boss) => boss.key === "saint");
+    let approaches = 0;
+    const off = H.bus.on("approach", (event) => { if (event.key === "saint") approaches += 1; });
+    T.ctx.player.state.x = site.x;
+    T.ctx.player.state.z = site.z;
     H.update(0.05);
-    const alert = H.status("choir");
+    off?.();
+    return { status: H.status("saint"), approaches, phase: T.ctx.mission.state.phase };
+  });
+  check(lockedSaint.phase === "districtBosses" && lockedSaint.approaches === 0
+    && !lockedSaint.status.available && lockedSaint.status.phase === "dormant"
+    && lockedSaint.status.hidden && lockedSaint.status.locked,
+  "the Coulter cannot reveal or warn before the six districts are secured",
+  `${lockedSaint.phase} · approaches=${lockedSaint.approaches}`);
+
+  console.log("\n=== BOUNDARY WARNINGS AND RESET ===");
+  const boundary = await page.evaluate(() => {
+    const T = window.__SF;
+    const H = T.ctx.districtBosses;
+    const site = T.ctx.mission.bosses.find((boss) => boss.key === "ossuary");
+    const events = [];
+    const offs = [
+      H.bus.on("approach", (event) => events.push(`approach:${event.key}`)),
+      H.bus.on("exitWarning", (event) => events.push(`exit:${event.key}`)),
+      H.bus.on("arenaReset", (event) => events.push(`reset:${event.key}`)),
+    ];
+    const ps = T.ctx.player.state;
+    ps.x = site.x + site.arenaRadius + 20;
+    ps.z = site.z;
+    H.update(0.05);
+    const boss = H.status("ossuary");
+    ps.x = boss.x + 8;
+    ps.z = boss.z;
+    H.update(0.05);
     for (let i = 0; i < 30; i += 1) H.update(0.1);
-    const active = H.status("choir");
-    return { alert, active };
-  });
-  await page.evaluate(() => {
-    const T = window.__SF;
-    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:choir");
-    T.lookAt([inst.x, inst.y + 34, inst.z],
-      [inst.x, inst.y + 1.2, inst.z], 38);
-  });
-  await page.screenshot({ path: path.join(out, "choir-active.png"), fullPage: false });
-  await page.evaluate(() => window.__SF.releaseCamera());
-  const defeat = await page.evaluate(() => {
-    const T = window.__SF;
-    const H = T.ctx.districtBosses;
-    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:choir");
-    const dealt = T.ctx.combat.damageEnemy(inst, inst.maxHealth + 1, { source: "qa-hunt" });
+    const active = H.status("ossuary");
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:ossuary");
+    T.ctx.combat.damageEnemy(inst, 500, { source: "qa-boundary" });
+    const damaged = H.status("ossuary");
+    ps.x = site.x + site.arenaRadius - 10;
+    ps.z = site.z;
     H.update(0.05);
-    T.ctx.mission.update(0.05);
+    ps.x = site.x + site.arenaRadius + 2;
+    H.update(0.05);
+    const reset = H.status("ossuary");
+    for (const off of offs) off?.();
+    return { events, active, damaged, reset, missionDone: site.done };
+  });
+  check(boundary.events.includes("approach:ossuary"),
+    "approaching a boss area emits an advance warning", boundary.events.join(" · "));
+  check(boundary.active.phase === "active" && !boundary.active.locked
+    && boundary.damaged.health < boundary.damaged.maxHealth,
+  "entering the area begins a targetable fight whose damage is tracked");
+  check(boundary.events.includes("exit:ossuary"),
+    "the inner boundary warns that leaving will reset the fight", boundary.events.join(" · "));
+  check(boundary.events.includes("reset:ossuary") && boundary.reset.phase === "dormant"
+    && boundary.reset.hidden && boundary.reset.locked
+    && boundary.reset.health === boundary.reset.maxHealth && !boundary.missionDone,
+  "crossing the boundary restores and re-hides the undefeated boss",
+  `${boundary.reset.health}/${boundary.reset.maxHealth} HP · ${boundary.events.join(" · ")}`);
+
+  console.log("\n=== SIX-DISTRICT GATE ===");
+  const districtGate = await page.evaluate(() => {
+    const T = window.__SF;
+    const M = T.ctx.mission;
+    const districtKeys = M.bosses.filter((boss) => boss.stage !== "penultimate")
+      .map((boss) => boss.key);
+    const prematureSaint = M.completeDistrictBoss("saint");
+    const steps = [];
+    for (const key of districtKeys) {
+      steps.push({ key, accepted: M.completeDistrictBoss(key), phase: M.state.phase,
+        done: M.state.bossesDone });
+    }
+    T.ctx.districtBosses.update(0.05);
     return {
-      dealt,
-      after: H.status("choir"),
-      mission: T.ctx.mission.snapshot(),
+      prematureSaint,
+      steps,
+      phase: M.state.phase,
+      done: M.state.bossesDone,
+      saint: T.ctx.districtBosses.status("saint"),
+      apostate: T.ctx.apostate.status(),
+      objective: M.objective(),
     };
   });
-  console.log("\n=== ARENA HANDOFF ===");
-  check(engagement.alert.phase === "alert" && !engagement.alert.hidden && engagement.alert.locked,
-    "arena entry reveals the giant mantis while retaining the damage lock");
-  check(engagement.active.phase === "active" && !engagement.active.locked,
-    "the reveal hands off to a targetable boss fight");
-  check(defeat.dealt > 0 && defeat.after.defeated,
-    "killing the promoted mantis records a district victory");
-  check(defeat.mission.bossesDone === 1
-    && defeat.mission.bosses.find((boss) => boss.key === "choir")?.done,
-  "the authoritative mission counter advances to 1 / 6");
-
-  await page.screenshot({ path: path.join(out, "choir-defeated.png"), fullPage: false });
+  check(!districtGate.prematureSaint
+    && districtGate.steps.slice(0, -1).every((step) => step.phase === "districtBosses")
+    && districtGate.steps.every((step) => step.accepted),
+  "the Fallen Saint victory cannot be recorded before every district boss falls");
+  check(districtGate.phase === "saintBoss" && districtGate.done === 6
+    && districtGate.saint.available,
+  "the sixth district victory awakens the penultimate Coulter",
+  `${districtGate.done}/7 · ${districtGate.phase}`);
+  check(districtGate.apostate?.phase === "dormant"
+    && districtGate.objective?.bossKey === "saint",
+  "the Apostate remains locked while orders redirect to the Fallen Saint",
+  districtGate.objective?.name || "no objective");
 
   const persistence = await page.evaluate(() => {
     const T = window.__SF;
+    T.releaseCamera();
+    T.ctx.player.state.grounded = true;
+    T.ctx.player.state.free = false;
+    T.ctx.player.action = null;
+    T.ctx.jetpack.state.inFlight = false;
+    T.ctx.boost.state.active = false;
+    T.ctx.slam.state.active = false;
+    T.ctx.shield.state.active = false;
+    const reason = T.saves.saveReason();
     const snapshot = T.saves.capture();
-    if (!snapshot) return { captured: false, accepted: false };
+    if (!snapshot) return { captured: false, accepted: false, reason };
+    const legacy = structuredClone(snapshot);
+    legacy.mission.phase = "cathedralBoss";
+    legacy.mission.bosses = legacy.mission.bosses.filter((boss) => boss.key !== "saint");
+    legacy.mission.bossesDone = legacy.mission.bosses.filter((boss) => boss.done).length;
+    legacy.districtBosses.bosses = legacy.districtBosses.bosses
+      .filter((boss) => boss.key !== "saint");
+    legacy.enemies.live = legacy.enemies.live
+      .filter((enemy) => enemy.eventId !== "district-boss:saint");
+    window.__SF_LEGACY_SIX_BOSS_SAVE = legacy;
+    T.ctx.mission.state.phase = "districtBosses";
     T.ctx.mission.state.bossesDone = 0;
     for (const boss of T.ctx.mission.bosses) boss.done = false;
     const accepted = T.saves.apply(snapshot);
     return {
       captured: true,
       accepted,
+      reason,
       phase: T.ctx.mission.state.phase,
       bossesDone: T.ctx.mission.state.bossesDone,
-      choirDone: T.ctx.mission.bosses.find((boss) => boss.key === "choir")?.done,
-      choir: T.ctx.districtBosses.status("choir"),
+      saintDone: T.ctx.mission.bosses.find((boss) => boss.key === "saint")?.done,
+      saint: T.ctx.districtBosses.status("saint"),
     };
   });
-  console.log("\n=== SAVE AND FINAL GATE ===");
   check(persistence.captured && persistence.accepted,
-    "a mid-hunt field snapshot validates and reloads");
-  check(persistence.bossesDone === 1 && persistence.choirDone && persistence.choir?.defeated,
-    "district victory and boss lifecycle survive reload");
+    "a pre-Coulter field snapshot validates and reloads", persistence.reason || "save allowed");
+  check(persistence.phase === "saintBoss" && persistence.bossesDone === 6
+    && !persistence.saintDone && persistence.saint?.available,
+  "the six-district gate and undefeated Coulter survive reload",
+  `${persistence.bossesDone}/7 · ${persistence.phase}`);
+
+  console.log("\n=== GIANT COULTER ARENA ===");
+  const saintFight = await page.evaluate(() => {
+    const T = window.__SF;
+    const H = T.ctx.districtBosses;
+    const site = T.ctx.mission.bosses.find((boss) => boss.key === "saint");
+    const events = [];
+    const offs = [
+      H.bus.on("approach", (event) => events.push(`approach:${event.key}`)),
+      H.bus.on("exitWarning", (event) => events.push(`exit:${event.key}`)),
+      H.bus.on("arenaReset", (event) => events.push(`reset:${event.key}`)),
+    ];
+    const ps = T.ctx.player.state;
+    ps.x = site.x + site.arenaRadius + 25;
+    ps.z = site.z;
+    H.update(0.05);
+    let boss = H.status("saint");
+    ps.x = boss.x + 18;
+    ps.z = boss.z;
+    H.update(0.05);
+    for (let i = 0; i < 30; i += 1) H.update(0.1);
+    T.setCoulterPhase("crest", 9);
+    T.advanceTime(0.8, 1 / 60);
+    boss = H.status("saint");
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
+    const body = T.coulterBodies().find((entry) => entry.id === inst.id)
+      || T.coulterBodies()[0];
+    T.ctx.combat.damageEnemy(inst, 700, { source: "qa-saint-boundary" });
+    const damaged = H.status("saint");
+    ps.x = site.x + site.arenaRadius - 10;
+    ps.z = site.z;
+    H.update(0.05);
+    ps.x = site.x + site.arenaRadius + 2;
+    H.update(0.05);
+    const reset = H.status("saint");
+    for (const off of offs) off?.();
+    return { events, boss, damaged, reset, body };
+  });
+  check(saintFight.events.includes("approach:saint")
+    && saintFight.events.includes("exit:saint")
+    && saintFight.events.includes("reset:saint"),
+  "the large sand arena uses the same approach, exit, and reset contract",
+  saintFight.events.join(" · "));
+  check(saintFight.damaged.health < saintFight.damaged.maxHealth
+    && saintFight.reset.phase === "dormant"
+    && saintFight.reset.health === saintFight.reset.maxHealth,
+  "leaving the Fallen Saint fully restarts the Coulter fight",
+  `${saintFight.damaged.health} damaged -> ${saintFight.reset.health} reset`);
+  check(saintFight.body?.joints?.length === 13,
+    "the enlarged worm still exposes its complete articulated body",
+    `${saintFight.body?.joints?.length || 0} visible joints`);
+
+  const capture = await page.evaluate(() => {
+    const T = window.__SF;
+    const H = T.ctx.districtBosses;
+    const boss = H.status("saint");
+    T.ctx.player.state.x = boss.x + 24;
+    T.ctx.player.state.z = boss.z + 8;
+    H.update(0.05);
+    for (let i = 0; i < 30; i += 1) H.update(0.1);
+    T.setCoulterPhase("crest", 9);
+    T.advanceTime(1.1, 1 / 60);
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
+    const body = T.coulterBodies().find((entry) => entry.id === inst.id)
+      || T.coulterBodies()[0];
+    return { head: body?.head || [inst.x, inst.y + 8, inst.z], span: inst.spineLength };
+  });
+  await page.evaluate(({ head }) => {
+    const T = window.__SF;
+    T.lookAt([head[0] + 135, head[1] + 54, head[2] + 135],
+      [head[0], head[1] + 8, head[2]], 55);
+  }, capture);
+  await page.screenshot({ path: path.join(out, "fallen-saint-coulter.png"), fullPage: false });
+  await page.evaluate(() => window.__SF.releaseCamera());
 
   const finalGate = await page.evaluate(() => {
     const T = window.__SF;
+    const H = T.ctx.districtBosses;
     const M = T.ctx.mission;
-    const remaining = M.bosses.filter((boss) => !boss.done).map((boss) => boss.key);
-    const before = [];
-    for (const key of remaining) {
-      before.push({ key, accepted: M.completeDistrictBoss(key), phase: M.state.phase });
-    }
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
+    inst.body.hidden = false;
+    inst.encounterHidden = false;
+    inst.encounterLocked = false;
+    const dealt = T.ctx.combat.damageEnemy(inst, inst.maxHealth + 1, { source: "qa-hunt" });
+    H.update(0.05);
+    M.update(0.05);
     return {
-      before,
+      dealt,
       phase: M.state.phase,
       done: M.state.bossesDone,
-      apostate: T.ctx.apostate.status(),
+      saintDone: M.bosses.find((boss) => boss.key === "saint")?.done,
       objective: M.objective(),
     };
   });
-  check(finalGate.before.slice(0, -1).every((step) => step.phase === "districtBosses"),
-    "the Apostate remains gated while any district boss survives");
-  check(finalGate.phase === "cathedralBoss" && finalGate.done === 6,
-    "the sixth victory unlocks the Cathedral and Apostate", `${finalGate.done}/6 · ${finalGate.phase}`);
-  check(finalGate.objective?.name?.includes("CATHEDRAL") || finalGate.objective?.name?.includes("APOSTATE"),
-    "field orders switch from district hunt to the Cathedral finale",
-    finalGate.objective?.name || "no objective");
+  check(finalGate.dealt > 0 && finalGate.saintDone
+    && finalGate.phase === "cathedralBoss" && finalGate.done === 7,
+  "defeating the Coulter records victory seven and opens the Cathedral",
+  `${finalGate.done}/7 · ${finalGate.phase}`);
+  check(finalGate.objective?.name?.includes("CATHEDRAL")
+    || finalGate.objective?.name?.includes("APOSTATE"),
+  "field orders switch from the hunt to the Apostate finale",
+  finalGate.objective?.name || "no objective");
+
+  const legacyMigration = await page.evaluate(() => {
+    const T = window.__SF;
+    const accepted = T.saves.apply(window.__SF_LEGACY_SIX_BOSS_SAVE);
+    return {
+      accepted,
+      phase: T.ctx.mission.state.phase,
+      done: T.ctx.mission.state.bossesDone,
+      saintDone: T.ctx.mission.bosses.find((boss) => boss.key === "saint")?.done,
+    };
+  });
+  check(legacyMigration.accepted && legacyMigration.phase === "cathedralBoss"
+    && legacyMigration.done === 7 && legacyMigration.saintDone,
+  "a live six-boss Cathedral save migrates without losing final access",
+  `${legacyMigration.done}/7 · ${legacyMigration.phase}`);
 
   check(errors.length === 0, "the focused browser run has no page or console errors",
     errors.join(" | "));
-  const report = { checks: results.length, passed: results.filter((r) => r.ok).length, failures, results };
+  const report = { checks: results.length, passed: results.filter((r) => r.ok).length,
+    failures, capture, results };
   await fs.writeFile(path.join(out, "report.json"), `${JSON.stringify(report, null, 2)}\n`);
   console.log(`\n${report.passed}/${report.checks} checks passed`);
 } finally {

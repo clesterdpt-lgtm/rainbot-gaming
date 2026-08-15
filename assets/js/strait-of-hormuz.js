@@ -2,9 +2,11 @@
    ESCAPE THE STRAIGHT (STRAIT OF HORMUZ) — HIGH-OCTANE MARITIME DODGER
    --------------------------------------------------------------------------
    Definitive tactical naval dodger:
+   - In-Game HUD: Score, Distance, Sector, Hull, Multiplier & Powerups
+     rendered directly within the gameplay screen.
    - Steer an oil tanker through the hostile Strait of Hormuz.
    - Continuous Swept-Ray Collision Detection (CCD) for 100% reliable hits.
-   - Advance Laser Lock-On Warnings (1.5-1.8s) for fair, readable missile dodging.
+   - Advance Laser Lock-On Warnings (1.4-1.8s) for fair, readable missile dodging.
    - 3 Core Threat Families: Naval Mines, Anti-Ship Missiles, Terrorist Skiffs.
    - Helpful Pickups: Oil Barrels (score multiplier frenzy), Repair Buoys,
      Deflector Shields, Turbo Propellers.
@@ -1082,7 +1084,7 @@
       updatePowerupUI();
     }
 
-    updateHUD();
+    updatePowerupUI();
   }
 
   // =========================================================================
@@ -1120,7 +1122,6 @@
       triggerGameOver();
     } else {
       RB.toast(`💥 Direct Hit from ${sourceLabel}! Hull: ${s.hull}/${s.maxHull}`, "bad");
-      updateHUD();
     }
   }
 
@@ -1381,14 +1382,17 @@
 
     ctx.restore();
 
-    // 13. Screen Damage / Lightning Flash
+    // 13. In-Game Screen HUD (Score, Dist, Sector, Hull, Multiplier, Powerups)
+    drawInGameHUD();
+
+    // 14. Screen Damage / Lightning Flash
     if (state.screenFlash > 0) {
       ctx.fillStyle = `rgba(255, 255, 255, ${state.screenFlash * 0.7})`;
       ctx.fillRect(0, 0, W, H);
       state.screenFlash = Math.max(0, state.screenFlash - 0.04);
     }
 
-    // 14. UI Overlays (Near Miss, Sector Banners)
+    // 15. UI Overlays (Near Miss, Sector Banners)
     drawInGameNotifications();
   }
 
@@ -1916,6 +1920,145 @@
     }
   }
 
+  // =========================================================================
+  // 13. IN-SCREEN TACTICAL HUD (Rendered within the gameplay screen)
+  // =========================================================================
+
+  function drawInGameHUD() {
+    const s = state.ship;
+    const sectorData = getSectorData();
+    const sectorDef = sectorData.sectorDef;
+
+    // Top HUD Bar Glassmorphism Backdrop
+    const barH = 56;
+    const grad = ctx.createLinearGradient(0, 0, 0, barH + 12);
+    grad.addColorStop(0, "rgba(4, 10, 20, 0.94)");
+    grad.addColorStop(0.75, "rgba(4, 10, 20, 0.82)");
+    grad.addColorStop(1, "rgba(4, 10, 20, 0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, barH + 12);
+
+    // Accent Hairline
+    ctx.strokeStyle = "rgba(46, 224, 255, 0.25)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, barH);
+    ctx.lineTo(W, barH);
+    ctx.stroke();
+
+    // 1. LEFT: SCORE & HIGH SCORE
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+    ctx.font = "800 9px JetBrains Mono, monospace";
+    ctx.fillText("SCORE", 14, 16);
+
+    ctx.fillStyle = "#2ee0ff";
+    ctx.font = "800 16px JetBrains Mono, monospace";
+    ctx.shadowColor = "rgba(46, 224, 255, 0.6)";
+    ctx.shadowBlur = 8;
+    ctx.fillText(state.score.toLocaleString(), 14, 34);
+    ctx.shadowBlur = 0;
+
+    const hiScore = RB.getHighScore("hormuz");
+    ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+    ctx.font = "700 9px JetBrains Mono, monospace";
+    ctx.fillText(`HI ${hiScore.toLocaleString()}`, 14, 48);
+
+    // 2. CENTER: SECTOR & DISTANCE
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#ffd43b";
+    ctx.font = "800 11px Inter, sans-serif";
+    ctx.fillText(`SECTOR ${sectorData.sectorNumber}: ${sectorDef.name}`, W * 0.5, 20);
+
+    const nmDist = (state.distance / NAUTICAL_MILE_UNITS).toFixed(1) + " NM";
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 14px JetBrains Mono, monospace";
+    ctx.fillText(nmDist, W * 0.5, 38);
+
+    // 3. RIGHT: HULL INTEGRITY & CARGO MULTIPLIER
+    ctx.textAlign = "right";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+    ctx.font = "800 9px JetBrains Mono, monospace";
+    ctx.fillText("HULL INTEGRITY", W - 14, 16);
+
+    // Hull Pips (Right-aligned)
+    const pipW = 16;
+    const pipH = 11;
+    const pipGap = 4;
+    const startPipX = W - 14 - (s.maxHull * (pipW + pipGap) - pipGap);
+
+    for (let i = 0; i < s.maxHull; i++) {
+      const px = startPipX + i * (pipW + pipGap);
+      const py = 22;
+
+      let color = "#4ade80";
+      let glow = "rgba(74, 222, 128, 0.5)";
+
+      if (i >= s.hull) {
+        color = "rgba(255, 255, 255, 0.1)";
+        glow = "transparent";
+      } else if (s.hull === 1) {
+        color = (Math.floor(performance.now() / 250) % 2 === 0) ? "#ff3b56" : "#ffd43b";
+        glow = "rgba(255, 59, 86, 0.8)";
+      } else if (i === s.hull - 1 && s.hull < s.maxHull) {
+        color = "#ffd43b";
+        glow = "rgba(255, 212, 59, 0.5)";
+      }
+
+      ctx.fillStyle = color;
+      if (glow !== "transparent") {
+        ctx.shadowColor = glow;
+        ctx.shadowBlur = 6;
+      }
+      ctx.beginPath();
+      ctx.roundRect(px, py, pipW, pipH, 2.5);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Cargo Multiplier Tag below pips
+    ctx.textAlign = "right";
+    ctx.fillStyle = state.multiplier > 1.0 ? "#4ade80" : "rgba(255, 255, 255, 0.6)";
+    ctx.font = "800 10px JetBrains Mono, monospace";
+    ctx.fillText(`🛢️ ${state.multiplier.toFixed(1)}x CARGO`, W - 14, 48);
+
+    // 4. FLOATING ACTIVE POWERUP BADGES (Top-Right under HUD bar)
+    let badgeY = 66;
+    if (s.hasShield) {
+      drawHUDPill(W - 14, badgeY, "🛡️ DEFLECTOR ACTIVE", "#2ee0ff", "rgba(46, 224, 255, 0.18)");
+      badgeY += 24;
+    }
+    if (s.turboTimer > 0) {
+      drawHUDPill(W - 14, badgeY, `⚡ TURBO ${Math.ceil(s.turboTimer)}S`, "#ff2e88", "rgba(255, 46, 136, 0.18)");
+      badgeY += 24;
+    }
+  }
+
+  function drawHUDPill(rightX, y, text, color, bg) {
+    ctx.font = "800 10px JetBrains Mono, monospace";
+    const textW = ctx.measureText(text).width;
+    const pillW = textW + 16;
+    const pillH = 19;
+    const x = rightX - pillW;
+
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.roundRect(x, y, pillW, pillH, 999);
+    ctx.fill();
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = color;
+    ctx.textAlign = "left";
+    ctx.fillText(text, x + 8, y + 13);
+  }
+
   function drawInGameNotifications() {
     const now = performance.now();
 
@@ -1943,7 +2086,7 @@
   }
 
   // =========================================================================
-  // 13. GAME LOOP & STATE MANAGEMENT
+  // 14. GAME LOOP & STATE MANAGEMENT
   // =========================================================================
 
   let rafId = null;
@@ -2008,7 +2151,7 @@
     }
 
     draw();
-    updateHUD();
+    updatePowerupUI();
     rafId = requestAnimationFrame(loop);
   }
 
@@ -2064,7 +2207,6 @@
     state.bannerText = "SECTOR 1: GULF APPROACH";
     state.bannerUntil = performance.now() + 2500;
 
-    updateHUD();
     updatePowerupUI();
     canvas.focus();
 
@@ -2096,56 +2238,8 @@
   }
 
   // =========================================================================
-  // 14. HUD & UI BINDINGS
+  // 15. POWERUP SIDEBAR UI BINDINGS
   // =========================================================================
-
-  function updateHUD() {
-    const s = state.ship;
-    const sectorData = getSectorData();
-    const nmDist = (state.distance / NAUTICAL_MILE_UNITS).toFixed(1) + " NM";
-
-    const scoreEl = document.getElementById("hud-score");
-    if (scoreEl) scoreEl.textContent = state.score.toLocaleString();
-
-    const distEl = document.getElementById("hud-dist");
-    if (distEl) distEl.textContent = nmDist;
-
-    const secEl = document.getElementById("hud-sector");
-    if (secEl) secEl.textContent = `${sectorData.sectorNumber}: ${sectorData.sectorDef.name}`;
-
-    const multEl = document.getElementById("hud-multiplier");
-    if (multEl) multEl.textContent = `${state.multiplier.toFixed(1)}x`;
-
-    const threatEl = document.getElementById("hud-threat");
-    if (threatEl) threatEl.textContent = `DEFCON ${Math.max(1, 6 - sectorData.sectorNumber)}`;
-
-    const highEl = document.getElementById("hud-high");
-    if (highEl) highEl.textContent = RB.getHighScore("hormuz").toLocaleString();
-
-    // Mobile Mini-HUD
-    const miniScore = document.getElementById("mini-score");
-    if (miniScore) miniScore.textContent = state.score.toLocaleString();
-    const miniSector = document.getElementById("mini-sector");
-    if (miniSector) miniSector.textContent = sectorData.sectorNumber;
-    const miniDist = document.getElementById("mini-dist");
-    if (miniDist) miniDist.textContent = nmDist;
-    const miniHull = document.getElementById("mini-hull");
-    if (miniHull) miniHull.textContent = `${s.hull}/${s.maxHull}`;
-
-    // Hull Pips
-    const hullContainer = document.getElementById("hud-hull");
-    if (hullContainer) {
-      let pips = "";
-      for (let i = 0; i < s.maxHull; i++) {
-        let stateAttr = "good";
-        if (i >= s.hull) stateAttr = "lost";
-        else if (s.hull === 1) stateAttr = "critical";
-        else if (i === s.hull - 1) stateAttr = "damaged";
-        pips += `<span class="hull-pip" data-state="${stateAttr}"></span>`;
-      }
-      hullContainer.innerHTML = pips;
-    }
-  }
 
   function updatePowerupUI() {
     const s = state.ship;
@@ -2195,7 +2289,7 @@
   }
 
   // =========================================================================
-  // 15. INITIALIZATION & PLATFORM BINDINGS
+  // 16. INITIALIZATION & PLATFORM BINDINGS
   // =========================================================================
 
   document.getElementById("btn-primary").addEventListener("click", startNewGame);
@@ -2208,9 +2302,8 @@
   setupTouchControls();
   bindFullscreen();
   updateSoundButton();
-  updateHUD();
   updatePowerupUI();
 
-  // Initial render of water background
+  // Initial render of water background and in-game HUD
   draw();
 })();

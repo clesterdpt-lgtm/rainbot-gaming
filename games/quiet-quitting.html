@@ -117,6 +117,54 @@
       border-radius: 50%;
       flex-shrink: 0;
     }
+    .stage-dpad {
+      display: none;
+      grid-template-columns: repeat(3, 58px);
+      grid-template-rows: repeat(2, 54px);
+      gap: 8px;
+      justify-content: center;
+      margin: 14px auto 4px;
+      touch-action: none;
+      user-select: none;
+    }
+
+    @media (max-width: 900px) {
+      .stage-dpad {
+        display: grid;
+      }
+      .merge-hint {
+        display: none;
+      }
+    }
+
+    .stage-dpad .dpad-btn {
+      background: #162036;
+      border: 2px solid #38bdf8;
+      border-radius: 10px;
+      color: #ffffff;
+      font-size: 24px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    }
+
+    .stage-dpad .dpad-btn:active {
+      background: #38bdf8;
+      color: #090d1a;
+      transform: scale(0.92);
+    }
+
+    .dpad-btn--up    { grid-column: 2; grid-row: 1; }
+    .dpad-btn--left  { grid-column: 1; grid-row: 2; }
+    .dpad-btn--down  { grid-column: 2; grid-row: 2; }
+    .dpad-btn--right { grid-column: 3; grid-row: 2; }
   </style>
 </head>
 <body class="arcade-page">
@@ -134,8 +182,8 @@
     <div class="game-layout">
       <div class="game-stage office-stage" style="position:relative;">
         <div class="hud">
-          <div class="hud__item"><span class="hud__label">PAYOUT</span><span class="hud__value" id="hud-score">0</span></div>
-          <div class="hud__item"><span class="hud__label">RECORD</span><span class="hud__value" id="hud-best">0</span></div>
+          <div class="hud__item"><span class="hud__label">PAYOUT</span><span class="hud__value" id="hud-score">$0</span></div>
+          <div class="hud__item"><span class="hud__label">RECORD</span><span class="hud__value" id="hud-best">$0</span></div>
           <div class="hud__item"><span class="hud__label">LEVEL</span><span class="hud__value" id="hud-level">1</span></div>
           <div class="hud__item"><span class="hud__label">BREAKS</span><span class="hud__value" id="hud-lives">☕☕☕</span></div>
           <div class="hud__item"><span class="hud__label">MODE</span><span class="hud__value hud__status" id="hud-status">QUIET QUITTING</span></div>
@@ -148,7 +196,7 @@
           <div class="overlay overlay--show" id="overlay">
             <h2 class="overlay__title" id="overlay-title">💼 QUIET QUITTING</h2>
             <p class="overlay__sub" id="overlay-sub">
-              You're a burned-out remote worker trying to survive the 9-to-5. Navigate the cubicle farm, collect paycheck cents, and avoid getting dragged into pointless syncs.
+              You're a burned-out remote worker trying to survive the 9-to-5. Navigate the cubicle farm, collect paycheck envelopes, and avoid getting dragged into pointless syncs.
               <br><br>
               Grab a glowing <strong>$350/hr Consultant Badge</strong> to turn all managers into panicked bootlickers and bill them for severance!
             </p>
@@ -157,8 +205,16 @@
           </div>
         </div>
 
+        <!-- On-screen mobile thumb controls directly under canvas -->
+        <div class="stage-dpad" aria-label="Touch Direction Controls">
+          <button type="button" class="dpad-btn dpad-btn--up" data-mobile-dir="up" aria-label="Move Up">↑</button>
+          <button type="button" class="dpad-btn dpad-btn--left" data-mobile-dir="left" aria-label="Move Left">←</button>
+          <button type="button" class="dpad-btn dpad-btn--down" data-mobile-dir="down" aria-label="Move Down">↓</button>
+          <button type="button" class="dpad-btn dpad-btn--right" data-mobile-dir="right" aria-label="Move Right">→</button>
+        </div>
+
         <p class="merge-hint">
-          Steer with <kbd>WASD</kbd> / <kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> or swipe. Press <kbd>P</kbd> to pause, <kbd>M</kbd> for sound.
+          Steer with <kbd>WASD</kbd> / <kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> or swipe / tap anywhere on the office floor. Press <kbd>P</kbd> to pause, <kbd>M</kbd> for sound.
         </p>
       </div>
 
@@ -243,7 +299,7 @@
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260813-apop3d-1"></script>
-  <script src="../assets/js/quiet-quitting.js?v=20260815-fix2"></script>
+  <script src="../assets/js/quiet-quitting.js?v=20260815-theme-v3"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

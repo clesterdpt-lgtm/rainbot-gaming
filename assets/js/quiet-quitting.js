@@ -1,15 +1,16 @@
 /**
  * Quiet Quitting - Rainbot Gaming
- * Satirical Pac-Man arcade maze chaser
- * 
- * You're a burned-out worker dodging micromanagers, HR bots, and calendar blockers.
- * Grab coffee, snatch paychecks, and become a $350/hr Consultant to fire the bosses.
+ * Satirical Corporate Pac-Man Maze Chaser
+ *
+ * Full thematic visual overhaul: Office cubicle floor plan, custom office worker sprite,
+ * 4 distinct corporate bosses, paycheck/coffee collectibles, consultant surge mode,
+ * and rock-solid mobile touch/swipe controls.
  */
 
 (function () {
   "use strict";
 
-  // --- AUDIO SYNTHESIS (Zero external audio dependency) ---
+  // --- PROCEDURAL AUDIO SYNTHESIZER ---
   class SoundManager {
     constructor() {
       this.ctx = null;
@@ -50,20 +51,20 @@
       const now = this.ctx.currentTime;
 
       this.lastChompTone = this.lastChompTone === 0 ? 1 : 0;
-      const freq = this.lastChompTone === 0 ? 280 : 380;
+      const freq = this.lastChompTone === 0 ? 320 : 420;
 
       osc.type = "triangle";
       osc.frequency.setValueAtTime(freq, now);
-      osc.frequency.exponentialRampToValueAtTime(freq * 0.6, now + 0.08);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.5, now + 0.07);
 
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      gain.gain.setValueAtTime(0.1, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
 
       osc.start(now);
-      osc.stop(now + 0.08);
+      osc.stop(now + 0.07);
     }
 
     playPowerPellet() {
@@ -72,14 +73,14 @@
       if (!this.ctx || this.ctx.state !== "running") return;
 
       const now = this.ctx.currentTime;
-      [440, 554, 659, 880].forEach((freq, i) => {
+      [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         const t = now + i * 0.06;
 
         osc.type = "square";
         osc.frequency.setValueAtTime(freq, t);
-        gain.gain.setValueAtTime(0.15, t);
+        gain.gain.setValueAtTime(0.14, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
 
         osc.connect(gain);
@@ -100,17 +101,17 @@
       const gain = this.ctx.createGain();
 
       osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(300, now);
-      osc.frequency.exponentialRampToValueAtTime(1200, now + 0.25);
+      osc.frequency.setValueAtTime(400, now);
+      osc.frequency.exponentialRampToValueAtTime(1400, now + 0.22);
 
       gain.gain.setValueAtTime(0.2, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
 
       osc.start(now);
-      osc.stop(now + 0.25);
+      osc.stop(now + 0.22);
     }
 
     playEatBonus() {
@@ -119,21 +120,21 @@
       if (!this.ctx || this.ctx.state !== "running") return;
 
       const now = this.ctx.currentTime;
-      [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+      [440, 554.37, 659.25, 880, 1108.73].forEach((freq, i) => {
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
-        const t = now + i * 0.05;
+        const t = now + i * 0.04;
 
         osc.type = "sine";
         osc.frequency.setValueAtTime(freq, t);
-        gain.gain.setValueAtTime(0.2, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
 
         osc.connect(gain);
         gain.connect(this.ctx.destination);
 
         osc.start(t);
-        osc.stop(t + 0.18);
+        osc.stop(t + 0.14);
       });
     }
 
@@ -147,17 +148,17 @@
       const gain = this.ctx.createGain();
 
       osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(600, now);
-      osc.frequency.linearRampToValueAtTime(80, now + 0.7);
+      osc.frequency.setValueAtTime(550, now);
+      osc.frequency.linearRampToValueAtTime(70, now + 0.65);
 
-      gain.gain.setValueAtTime(0.25, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+      gain.gain.setValueAtTime(0.22, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
 
       osc.start(now);
-      osc.stop(now + 0.7);
+      osc.stop(now + 0.65);
     }
 
     playLevelClear() {
@@ -166,12 +167,12 @@
       if (!this.ctx || this.ctx.state !== "running") return;
 
       const notes = [
-        { f: 523.25, d: 0.1 },
-        { f: 659.25, d: 0.1 },
-        { f: 783.99, d: 0.1 },
-        { f: 1046.5, d: 0.25 },
-        { f: 880.0, d: 0.1 },
-        { f: 1046.5, d: 0.4 }
+        { f: 523.25, d: 0.08 },
+        { f: 659.25, d: 0.08 },
+        { f: 783.99, d: 0.08 },
+        { f: 1046.5, d: 0.2 },
+        { f: 880.0, d: 0.08 },
+        { f: 1046.5, d: 0.35 }
       ];
 
       let t = this.ctx.currentTime;
@@ -181,7 +182,7 @@
 
         osc.type = "square";
         osc.frequency.setValueAtTime(n.f, t);
-        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.setValueAtTime(0.16, t);
         gain.gain.exponentialRampToValueAtTime(0.001, t + n.d);
 
         osc.connect(gain);
@@ -195,9 +196,9 @@
   }
 
   // --- MAZE DEFINITION ---
-  // 28 cols x 31 rows (Authentic arcade layout)
-  // 1: Wall, 2: Dot (Paycheck/Coffee), 3: Energizer (Consultant Badge),
-  // 0: Empty path, 4: Ghost House interior, 5: Ghost Door, 6: Warp Tunnel, 7: Fruit spawn
+  // 28 cols x 31 rows
+  // 1: Cubicle Wall, 2: Paycheck/Coffee, 3: Consultant Lanyard Badge,
+  // 0: Office Hallway, 4: Management Pen / Breakroom, 5: Security Gate, 6: Smoke Break Warp Tunnel, 7: Fruit Desk
   const COLS = 28;
   const ROWS = 31;
 
@@ -251,7 +252,7 @@
     { name: "Golden Parachute", emoji: "🪂", pts: 3000, desc: "Executive severance package!" }
   ];
 
-  // --- GAME ENGINE ---
+  // --- MAIN GAME ENGINE ---
   class QuietQuittingGame {
     constructor() {
       this.canvas = document.getElementById("gameCanvas");
@@ -320,7 +321,7 @@
     }
 
     initEvents() {
-      // Keyboard Controls
+      // 1. Keyboard Controls
       window.addEventListener("keydown", (e) => {
         if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", " "].includes(e.key)) {
           e.preventDefault();
@@ -370,13 +371,13 @@
         }
       });
 
-      // Mobile D-pad & Buttons
-      document.querySelectorAll("[data-mobile-dir]").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
-          e.preventDefault();
+      // 2. Direct On-Screen Touch Controls (Mobile D-Pad)
+      const bindDirButton = (btn) => {
+        const triggerDir = (e) => {
+          if (e.cancelable) e.preventDefault();
           this.sound.init();
           if (this.state === "INIT") {
-            this.handlePrimaryClick();
+            this.startNewGame();
           }
           if (!this.player) return;
           const dir = btn.getAttribute("data-mobile-dir");
@@ -384,34 +385,102 @@
           if (dir === "down") this.player.setNextDir(DIRECTIONS.DOWN);
           if (dir === "left") this.player.setNextDir(DIRECTIONS.LEFT);
           if (dir === "right") this.player.setNextDir(DIRECTIONS.RIGHT);
-        });
-      });
+        };
 
-      // Swipe Gestures on Canvas
-      let touchStartX = 0;
-      let touchStartY = 0;
-      this.canvas.addEventListener("touchstart", (e) => {
-        if (!e.touches[0]) return;
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
+        btn.addEventListener("pointerdown", triggerDir);
+        btn.addEventListener("touchstart", triggerDir, { passive: false });
+        btn.addEventListener("click", triggerDir);
+      };
+
+      document.querySelectorAll("[data-mobile-dir]").forEach(bindDirButton);
+
+      // 3. Fluid Canvas Touch Swipe & Drag & Tap Controls
+      let touchActive = false;
+      let startX = 0;
+      let startY = 0;
+
+      const handleTouchStart = (clientX, clientY) => {
         this.sound.init();
         if (this.state === "INIT") {
-          this.handlePrimaryClick();
+          this.startNewGame();
+          return;
         }
-      }, { passive: true });
+        touchActive = true;
+        startX = clientX;
+        startY = clientY;
+      };
+
+      const handleTouchMove = (clientX, clientY) => {
+        if (!touchActive || !this.player) return;
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+        const threshold = 18; // responsive drag threshold
+
+        if (Math.hypot(dx, dy) >= threshold) {
+          if (Math.abs(dx) > Math.abs(dy)) {
+            this.player.setNextDir(dx > 0 ? DIRECTIONS.RIGHT : DIRECTIONS.LEFT);
+          } else {
+            this.player.setNextDir(dy > 0 ? DIRECTIONS.DOWN : DIRECTIONS.UP);
+          }
+          // Reset anchor for fluid continuous steering
+          startX = clientX;
+          startY = clientY;
+        }
+      };
+
+      const handleTouchEnd = (clientX, clientY) => {
+        if (!touchActive) return;
+        touchActive = false;
+
+        // If tap without significant drag, steer towards tapped quadrant relative to player
+        if (this.player && startX && startY) {
+          const rect = this.canvas.getBoundingClientRect();
+          const tapCanvasX = (clientX - rect.left) * (this.canvas.width / rect.width);
+          const tapCanvasY = (clientY - rect.top) * (this.canvas.height / rect.height);
+          const playerCanvasX = (this.player.x + 0.5) * this.tileSize;
+          const playerCanvasY = (this.player.y + 0.5) * this.tileSize;
+
+          const dx = tapCanvasX - playerCanvasX;
+          const dy = tapCanvasY - playerCanvasY;
+
+          if (Math.abs(dx) > Math.abs(dy)) {
+            this.player.setNextDir(dx > 0 ? DIRECTIONS.RIGHT : DIRECTIONS.LEFT);
+          } else {
+            this.player.setNextDir(dy > 0 ? DIRECTIONS.DOWN : DIRECTIONS.UP);
+          }
+        }
+      };
+
+      // Pointer Events on Canvas
+      this.canvas.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        handleTouchStart(e.clientX, e.clientY);
+      });
+      window.addEventListener("pointermove", (e) => {
+        handleTouchMove(e.clientX, e.clientY);
+      });
+      window.addEventListener("pointerup", (e) => {
+        handleTouchEnd(e.clientX, e.clientY);
+      });
+
+      // Touch fallback for older webviews
+      this.canvas.addEventListener("touchstart", (e) => {
+        if (!e.touches[0]) return;
+        e.preventDefault();
+        handleTouchStart(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: false });
+
+      this.canvas.addEventListener("touchmove", (e) => {
+        if (!e.touches[0]) return;
+        e.preventDefault();
+        handleTouchMove(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: false });
 
       this.canvas.addEventListener("touchend", (e) => {
-        if (!e.changedTouches[0] || !this.player) return;
-        const dx = e.changedTouches[0].clientX - touchStartX;
-        const dy = e.changedTouches[0].clientY - touchStartY;
-        if (Math.hypot(dx, dy) < 20) return;
-
-        if (Math.abs(dx) > Math.abs(dy)) {
-          this.player.setNextDir(dx > 0 ? DIRECTIONS.RIGHT : DIRECTIONS.LEFT);
-        } else {
-          this.player.setNextDir(dy > 0 ? DIRECTIONS.DOWN : DIRECTIONS.UP);
-        }
-      }, { passive: true });
+        if (!e.changedTouches[0]) return;
+        e.preventDefault();
+        handleTouchEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+      }, { passive: false });
 
       // Buttons
       if (this.btnPrimary) {
@@ -454,7 +523,7 @@
     togglePause() {
       if (this.state === "PLAYING") {
         this.state = "PAUSED";
-        this.showOverlay("⏸️ BREAK TIME (PAUSED)", "Slack status set to 'Away'. Press P or Resume to get back to quiet quitting.", "Resume");
+        this.showOverlay("⏸️ BREAK TIME (PAUSED)", "Slack status set to 'Focus Time'. Press Resume to keep dodging syncs.", "Resume Shift");
         if (this.btnPause) this.btnPause.textContent = "Resume";
       } else if (this.state === "PAUSED") {
         this.state = "PLAYING";
@@ -479,9 +548,9 @@
     showStartOverlay() {
       this.showOverlay(
         "💼 QUIET QUITTING",
-        "Dodge micromanagers, avoid calendar blockers, and grab paychecks while doing the bare minimum.<br><br>" +
-        "Grab the <strong>$350/hr Consultant Badge</strong> to flip the hierarchy and bill the bosses into oblivion!<br><br>" +
-        "<strong>Controls:</strong> <kbd>WASD</kbd> or <kbd>Arrow Keys</kbd> / Swipe.",
+        "Navigate the cubicle maze, collect paycheck envelopes, and avoid managers trying to assign extra work.<br><br>" +
+        "Grab the <strong>$350/hr Consultant Badge</strong> to bill the bosses for severance!<br><br>" +
+        "<strong>Controls:</strong> Touch swipe / On-screen D-Pad or <kbd>WASD</kbd> / <kbd>Arrows</kbd>.",
         "Clock In"
       );
     }
@@ -490,7 +559,7 @@
       if (this.overlayTitle) this.overlayTitle.innerHTML = title;
       if (this.overlaySub) this.overlaySub.innerHTML = sub;
       if (this.btnPrimary) this.btnPrimary.textContent = btnText;
-      if (this.overlayScore) this.overlayScore.innerHTML = `Score: <strong>${this.score}</strong> · Best: <strong>${this.bestScore}</strong>`;
+      if (this.overlayScore) this.overlayScore.innerHTML = `Payout: <strong>$${this.score}</strong> · Best Record: <strong>$${this.bestScore}</strong>`;
       if (this.overlay) this.overlay.classList.add("overlay--show");
     }
 
@@ -537,7 +606,7 @@
       this.state = "PLAYING";
       this.hideOverlay();
       this.updateHud();
-      this.addOfficeFeed("📋 Clocked in for shift. Minimizing browser tabs.");
+      this.addOfficeFeed("📋 Clocked in. Minimized browser, opened fake spreadsheet.");
     }
 
     startNextLevel() {
@@ -548,17 +617,17 @@
       this.hideOverlay();
       this.updateHud();
       this.sound.playLevelClear();
-      this.addOfficeFeed(`🏆 Survived level ${this.level - 1}. Title changed to 'Senior Associate'.`);
+      this.addOfficeFeed(`📈 Shift survived! Promoted to Level ${this.level}. More syncs inbound!`);
     }
 
     initRound() {
       this.player = new Player(this, 13.5, 23);
 
       this.ghosts = [
-        new Ghost(this, "MICROMANAGER", "#ff3366", 13.5, 11, { x: COLS - 2, y: 0 }, 0),
-        new Ghost(this, "CALENDAR_BLOCKER", "#ff77aa", 13.5, 14, { x: 1, y: 0 }, 3.0),
-        new Ghost(this, "INTERN", "#2ee0ff", 11.5, 14, { x: COLS - 1, y: ROWS - 1 }, 7.0),
-        new Ghost(this, "HR_BOT", "#ff9933", 15.5, 14, { x: 0, y: ROWS - 1 }, 12.0),
+        new Ghost(this, "MICROMANAGER", "#ff3344", 13.5, 11, { x: COLS - 2, y: 0 }, 0),
+        new Ghost(this, "CALENDAR_BLOCKER", "#ff66aa", 13.5, 14, { x: 1, y: 0 }, 3.0),
+        new Ghost(this, "INTERN", "#00d4ff", 11.5, 14, { x: COLS - 1, y: ROWS - 1 }, 7.0),
+        new Ghost(this, "HR_BOT", "#ff9922", 15.5, 14, { x: 0, y: ROWS - 1 }, 12.0),
       ];
 
       this.fruit = null;
@@ -569,7 +638,7 @@
     }
 
     isWall(col, row, isGhost = false, ghostEaten = false) {
-      if (col < 0 || col >= COLS) return false; // tunnels wrap
+      if (col < 0 || col >= COLS) return false;
       if (row < 0 || row >= ROWS) return true;
 
       const cell = this.maze[row][col];
@@ -594,8 +663,8 @@
         }
       });
 
-      this.addOfficeFeed("⭐ PROMOTED TO CONSULTANT! Billing $350/hr — Chase the managers!");
-      this.spawnFloatText(this.player.x * this.tileSize, this.player.y * this.tileSize, "CONSULTANT!", "#ffd700");
+      this.addOfficeFeed("⭐ PROMOTED TO $350/HR CONSULTANT! Bill the managers for severance!");
+      this.spawnFloatText(this.player.x * this.tileSize, this.player.y * this.tileSize, "CONSULTANT SURGE!", "#ffd700");
     }
 
     spawnFruit() {
@@ -607,7 +676,7 @@
         ...fruitData,
       };
       this.fruitLifeTimer = 9.0;
-      this.addOfficeFeed(`🎁 ${fruitData.emoji} ${fruitData.name} appeared in the Breakroom!`);
+      this.addOfficeFeed(`🎁 ${fruitData.emoji} ${fruitData.name} in the Breakroom!`);
     }
 
     eatFruit() {
@@ -615,8 +684,8 @@
       const pts = this.fruit.pts;
       this.addScore(pts);
       this.sound.playEatBonus();
-      this.spawnFloatText(this.fruit.col * this.tileSize, this.fruit.row * this.tileSize, `+${pts}`, "#00ffcc");
-      this.addOfficeFeed(`😋 Ate ${this.fruit.name}! (+${pts} pts)`);
+      this.spawnFloatText(this.fruit.col * this.tileSize, this.fruit.row * this.tileSize, `+$${pts}`, "#00ffcc");
+      this.addOfficeFeed(`😋 Grabbed ${this.fruit.name}! (+$${pts})`);
       this.fruit = null;
     }
 
@@ -629,15 +698,15 @@
 
       ghost.setEaten();
 
-      const names = {
+      const titles = {
         MICROMANAGER: "Micromanager",
         CALENDAR_BLOCKER: "Calendar Blocker",
         INTERN: "Intern",
         HR_BOT: "HR Bot"
       };
 
-      this.spawnFloatText(ghost.x * this.tileSize, ghost.y * this.tileSize, `+$${pts}`, "#ffff00");
-      this.addOfficeFeed(`💼 Invoiced ${names[ghost.type] || "Boss"} for $${pts} severance!`);
+      this.spawnFloatText(ghost.x * this.tileSize, ghost.y * this.tileSize, `+$${pts} INVOICED`, "#ffd700");
+      this.addOfficeFeed(`💼 Billed ${titles[ghost.type] || "Boss"} $${pts} severance!`);
     }
 
     addScore(pts) {
@@ -650,8 +719,8 @@
     }
 
     updateHud() {
-      if (this.hudScore) this.hudScore.textContent = this.score.toLocaleString();
-      if (this.hudBest) this.hudBest.textContent = this.bestScore.toLocaleString();
+      if (this.hudScore) this.hudScore.textContent = `$${this.score.toLocaleString()}`;
+      if (this.hudBest) this.hudBest.textContent = `$${this.bestScore.toLocaleString()}`;
       if (this.hudLevel) this.hudLevel.textContent = this.level.toString();
       if (this.hudLives) {
         this.hudLives.innerHTML = "☕".repeat(Math.max(0, this.lives));
@@ -673,15 +742,15 @@
         y: y,
         text: text,
         color: color || "#fff",
-        life: 1.0,
-        maxLife: 1.0,
+        life: 1.1,
+        maxLife: 1.1,
       });
     }
 
-    spawnCoffeeParticles(x, y, count = 12) {
+    spawnCoffeeParticles(x, y, count = 14) {
       for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 80 + 20;
+        const speed = Math.random() * 90 + 25;
         this.particles.push({
           x: x,
           y: y,
@@ -689,7 +758,7 @@
           vy: Math.sin(angle) * speed,
           life: 0.6 + Math.random() * 0.4,
           maxLife: 0.8,
-          color: Math.random() > 0.4 ? "#8b4513" : "#d2b48c",
+          color: Math.random() > 0.4 ? "#78350f" : "#d97706",
           size: Math.random() * 4 + 2,
         });
       }
@@ -699,7 +768,7 @@
       this.state = "DYING";
       this.lives--;
       this.sound.playDeath();
-      this.spawnCoffeeParticles(this.player.x * this.tileSize, this.player.y * this.tileSize, 25);
+      this.spawnCoffeeParticles(this.player.x * this.tileSize, this.player.y * this.tileSize, 28);
       this.addOfficeFeed("🛑 Caught slacking! Placed on Performance Improvement Plan (PIP).");
 
       setTimeout(() => {
@@ -711,12 +780,12 @@
           this.state = "GAME_OVER";
           this.showOverlay(
             "💥 TERMINATED",
-            `Your lack of synergy was noticed. You reached Level <strong>${this.level}</strong> with a final payout of <strong>$${this.score}</strong>.`,
+            `Your lack of synergy was noticed. You survived to Level <strong>${this.level}</strong> with a total payout of <strong>$${this.score.toLocaleString()}</strong>.`,
             "Apply Again"
           );
           this.updateHud();
         }
-      }, 1500);
+      }, 1400);
     }
 
     checkLevelClear() {
@@ -748,7 +817,7 @@
       for (let i = this.popups.length - 1; i >= 0; i--) {
         const p = this.popups[i];
         p.life -= dt;
-        p.y -= 25 * dt;
+        p.y -= 24 * dt;
         if (p.life <= 0) this.popups.splice(i, 1);
       }
 
@@ -757,13 +826,13 @@
         p.life -= dt;
         p.x += p.vx * dt;
         p.y += p.vy * dt;
-        p.vy += 80 * dt;
+        p.vy += 70 * dt;
         if (p.life <= 0) this.particles.splice(i, 1);
       }
 
       if (this.state !== "PLAYING") return;
 
-      // Consultant Power Mode timer
+      // Consultant Timer
       if (this.frightenedTimer > 0) {
         this.frightenedTimer -= dt;
         if (this.frightenedTimer <= 0) {
@@ -771,12 +840,12 @@
           this.ghosts.forEach((g) => {
             if (g.mode === "FRIGHTENED") g.mode = "CHASE";
           });
-          this.addOfficeFeed("⌛ Consultant contract expired. Back to hiding!");
+          this.addOfficeFeed("⌛ Consultant billing expired. Back to pretending to type!");
         }
         this.updateHud();
       }
 
-      // Fruit Spawner (at ~70% dots and ~30% dots)
+      // Fruit Spawner
       if (!this.fruit && (this.dotsLeft === Math.floor(this.totalDots * 0.7) || this.dotsLeft === Math.floor(this.totalDots * 0.3))) {
         this.spawnFruit();
       }
@@ -822,33 +891,50 @@
     render() {
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-      // 1. Draw Maze
-      this.renderMaze();
+      // 1. Draw Office Carpet & Maze
+      this.renderOfficeMap();
 
-      // 2. Draw Fruit
+      // 2. Draw Breakroom Bonus Fruit
       if (this.fruit) {
         const fx = (this.fruit.col + 0.5) * this.tileSize;
         const fy = (this.fruit.row + 0.5) * this.tileSize;
-        this.ctx.font = "20px sans-serif";
+
+        // Desk plate
+        this.ctx.fillStyle = "rgba(0, 240, 255, 0.2)";
+        this.ctx.beginPath();
+        this.ctx.arc(fx, fy, 14, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        this.ctx.font = "18px sans-serif";
         this.ctx.textAlign = "center";
         this.ctx.textBaseline = "middle";
         this.ctx.fillText(this.fruit.emoji, fx, fy);
       }
 
-      // 3. Draw Entities
+      // 3. Draw Entities (Player & Bosses)
       if (this.player && this.state !== "DYING") {
         this.player.render(this.ctx);
       }
 
       this.ghosts.forEach((g) => g.render(this.ctx));
 
-      // 4. Draw Particles & Popups
+      // 4. Draw Particles & Score Popups
       this.renderEffects();
     }
 
-    renderMaze() {
+    renderOfficeMap() {
       const ts = this.tileSize;
       const t = this.globalTimer;
+
+      // Dark Commercial Office Carpet base
+      this.ctx.fillStyle = "#0a0e1a";
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+      // Micro carpet grid pattern
+      this.ctx.fillStyle = "rgba(255, 255, 255, 0.015)";
+      for (let y = 0; y < this.canvas.height; y += 8) {
+        this.ctx.fillRect(0, y, this.canvas.width, 1);
+      }
 
       for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
@@ -857,54 +943,105 @@
           const y = r * ts;
 
           if (cell === 1) {
-            // Cubicle Wall
-            this.ctx.fillStyle = "#111625";
+            // --- CUBICLE PARTITION WALL ---
+            // Wall body
+            this.ctx.fillStyle = "#162036";
             this.ctx.fillRect(x, y, ts, ts);
 
-            // Neon top-edge cubicle border
-            this.ctx.strokeStyle = "#23dff2";
-            this.ctx.lineWidth = 1.5;
+            // Fabric panel inlay
+            this.ctx.fillStyle = "#1e293b";
+            this.ctx.fillRect(x + 2, y + 2, ts - 4, ts - 4);
+
+            // Top aluminum / cyan trim
+            this.ctx.strokeStyle = "#38bdf8";
+            this.ctx.lineWidth = 1.2;
             this.ctx.strokeRect(x + 1, y + 1, ts - 2, ts - 2);
 
-            // Subtle inner partition accent
-            this.ctx.fillStyle = "rgba(35, 223, 242, 0.08)";
-            this.ctx.fillRect(x + 3, y + 3, ts - 6, ts - 6);
+            // Corner desk computer monitors on select wall clusters
+            if ((r + c) % 5 === 0) {
+              this.ctx.fillStyle = "#0f172a";
+              this.ctx.fillRect(x + 4, y + 4, ts - 8, ts - 8);
+              this.ctx.fillStyle = "#22d3ee";
+              this.ctx.fillRect(x + 6, y + 6, ts - 12, 4); // glowing screen
+            }
+          } else if (cell === 4) {
+            // --- MANAGEMENT BREAKROOM PEN ---
+            this.ctx.fillStyle = "#1c1917";
+            this.ctx.fillRect(x, y, ts, ts);
+            // Tile grid
+            this.ctx.strokeStyle = "rgba(217, 119, 6, 0.15)";
+            this.ctx.lineWidth = 1;
+            this.ctx.strokeRect(x, y, ts, ts);
           } else if (cell === 5) {
-            // Ghost Door (Security turnstile)
-            this.ctx.strokeStyle = "#ff77aa";
-            this.ctx.lineWidth = 3;
+            // --- SECURITY KEYCARD TURNSTILE GATE ---
+            this.ctx.strokeStyle = "#f43f5e";
+            this.ctx.lineWidth = 2.5;
             this.ctx.beginPath();
             this.ctx.moveTo(x, y + ts / 2);
             this.ctx.lineTo(x + ts, y + ts / 2);
             this.ctx.stroke();
+
+            // Blinking laser status
+            this.ctx.fillStyle = Math.sin(t * 8) > 0 ? "#f43f5e" : "#fda4af";
+            this.ctx.beginPath();
+            this.ctx.arc(x + ts / 2, y + ts / 2, 2.5, 0, Math.PI * 2);
+            this.ctx.fill();
+          } else if (cell === 6) {
+            // --- SMOKE BREAK WARP TUNNEL ---
+            this.ctx.fillStyle = "#059669";
+            this.ctx.font = "bold 9px 'JetBrains Mono', monospace";
+            this.ctx.textAlign = "center";
+            this.ctx.textBaseline = "middle";
+            this.ctx.fillText("EXIT", x + ts / 2, y + ts / 2);
           } else if (cell === 2) {
-            // Normal Dot (Paycheck coin / coffee bean)
+            // --- PAYCHECK ENVELOPE / COFFEE DOTS ---
             const cx = x + ts / 2;
             const cy = y + ts / 2;
-            this.ctx.fillStyle = "#f7d924";
-            this.ctx.beginPath();
-            this.ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
-            this.ctx.fill();
+
+            if ((r + c) % 2 === 0) {
+              // Miniature Paycheck Envelope ✉️
+              this.ctx.fillStyle = "#f8fafc";
+              this.ctx.fillRect(cx - 4, cy - 3, 8, 6);
+              this.ctx.strokeStyle = "#16a34a";
+              this.ctx.lineWidth = 1;
+              this.ctx.strokeRect(cx - 4, cy - 3, 8, 6);
+              this.ctx.fillStyle = "#15803d";
+              this.ctx.fillRect(cx - 1, cy - 1.5, 2, 3);
+            } else {
+              // Miniature Coffee Cup ☕
+              this.ctx.fillStyle = "#ffffff";
+              this.ctx.fillRect(cx - 3, cy - 3, 6, 6);
+              this.ctx.fillStyle = "#78350f";
+              this.ctx.fillRect(cx - 2, cy - 2, 4, 3); // coffee liquid
+              this.ctx.strokeStyle = "#cbd5e1";
+              this.ctx.lineWidth = 1;
+              this.ctx.strokeRect(cx - 3, cy - 3, 6, 6);
+            }
           } else if (cell === 3) {
-            // Consultant Power Badge (Energizer)
+            // --- CONSULTANT VIP LANYARD BADGE (POWER PELLET) ---
             const cx = x + ts / 2;
             const cy = y + ts / 2;
             const pulse = (Math.sin(t * 8) + 1) * 0.5;
-            const radius = 7 + pulse * 2.5;
 
-            this.ctx.fillStyle = "#ff007f";
-            this.ctx.shadowColor = "#ff007f";
-            this.ctx.shadowBlur = 8;
+            // Radiant golden aura
+            this.ctx.fillStyle = "rgba(250, 204, 21, 0.25)";
             this.ctx.beginPath();
-            this.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            this.ctx.arc(cx, cy, 9 + pulse * 3, 0, Math.PI * 2);
             this.ctx.fill();
 
-            // Inner badge star
-            this.ctx.fillStyle = "#fff";
-            this.ctx.beginPath();
-            this.ctx.arc(cx, cy, radius * 0.45, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.shadowBlur = 0;
+            // VIP Lanyard Badge
+            this.ctx.fillStyle = "#f59e0b";
+            this.ctx.fillRect(cx - 6, cy - 6, 12, 12);
+            this.ctx.strokeStyle = "#ffd700";
+            this.ctx.lineWidth = 1.5;
+            this.ctx.strokeRect(cx - 6, cy - 6, 12, 12);
+
+            // Inner VIP star
+            this.ctx.fillStyle = "#ffffff";
+            this.ctx.font = "bold 9px sans-serif";
+            this.ctx.textAlign = "center";
+            this.ctx.textBaseline = "middle";
+            this.ctx.fillText("★", cx, cy + 0.5);
           }
         }
       }
@@ -923,7 +1060,7 @@
 
       // Popups
       for (const pop of this.popups) {
-        this.ctx.font = "bold 13px 'JetBrains Mono', monospace";
+        this.ctx.font = "bold 12px 'JetBrains Mono', monospace";
         this.ctx.fillStyle = pop.color;
         this.ctx.textAlign = "center";
         this.ctx.shadowColor = "#000";
@@ -934,7 +1071,7 @@
     }
   }
 
-  // --- PLAYER (The Quiet Quitter) ---
+  // --- THE QUIET QUITTER (OFFICE WORKER SPRITE) ---
   class Player {
     constructor(game, col, row) {
       this.game = game;
@@ -943,8 +1080,7 @@
       this.dir = DIRECTIONS.NONE;
       this.nextDir = DIRECTIONS.NONE;
       this.speed = 10.5;
-      this.mouthAngle = 0.2;
-      this.mouthDir = 1;
+      this.walkTimer = 0;
     }
 
     setNextDir(dir) {
@@ -955,12 +1091,12 @@
     }
 
     update(dt) {
-      const speedMultiplier = this.game.frightenedTimer > 0 ? 1.2 : 1.0;
+      const speedMultiplier = this.game.frightenedTimer > 0 ? 1.25 : 1.0;
       const currentSpeed = this.speed * speedMultiplier;
 
       // Try turning if aligned with grid
-      const isAlignedX = Math.abs(this.x - Math.round(this.x)) < 0.12;
-      const isAlignedY = Math.abs(this.y - Math.round(this.y)) < 0.12;
+      const isAlignedX = Math.abs(this.x - Math.round(this.x)) < 0.14;
+      const isAlignedY = Math.abs(this.y - Math.round(this.y)) < 0.14;
 
       if (this.nextDir !== this.dir && isAlignedX && isAlignedY) {
         const nextCol = Math.round(this.x) + this.nextDir.x;
@@ -988,22 +1124,13 @@
         } else {
           this.x = nextX;
           this.y = nextY;
+          this.walkTimer += dt * 12;
         }
       }
 
       // Handle Warp Tunnels
       if (this.x < -0.5) this.x = COLS - 0.5;
       if (this.x > COLS - 0.5) this.x = -0.5;
-
-      // Mouth animation
-      this.mouthAngle += this.mouthDir * dt * 8;
-      if (this.mouthAngle > 0.45) {
-        this.mouthAngle = 0.45;
-        this.mouthDir = -1;
-      } else if (this.mouthAngle < 0.05) {
-        this.mouthAngle = 0.05;
-        this.mouthDir = 1;
-      }
 
       // Eat Pellets
       const currentCol = Math.round(this.x);
@@ -1030,11 +1157,12 @@
       const ts = this.game.tileSize;
       const px = (this.x + 0.5) * ts;
       const py = (this.y + 0.5) * ts;
-      const r = ts * 0.44;
+      const isConsultant = this.game.frightenedTimer > 0;
 
       ctx.save();
       ctx.translate(px, py);
 
+      // Rotate based on direction
       let angle = 0;
       if (this.dir === DIRECTIONS.RIGHT) angle = 0;
       else if (this.dir === DIRECTIONS.DOWN) angle = Math.PI * 0.5;
@@ -1042,52 +1170,102 @@
       else if (this.dir === DIRECTIONS.UP) angle = -Math.PI * 0.5;
       ctx.rotate(angle);
 
-      // Consultant Aura
-      if (this.game.frightenedTimer > 0) {
-        ctx.strokeStyle = "#ffd700";
-        ctx.lineWidth = 3;
-        ctx.shadowColor = "#ffd700";
-        ctx.shadowBlur = 10;
+      // 1. Consultant Aura & Dollars
+      if (isConsultant) {
+        ctx.fillStyle = "rgba(250, 204, 21, 0.25)";
         ctx.beginPath();
-        ctx.arc(0, 0, r + 4, 0, Math.PI * 2);
+        ctx.arc(0, 0, 16, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#ffd700";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 14, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.shadowBlur = 0;
       }
 
-      // Pac-Man Body (Golden/Yellow Worker)
-      ctx.fillStyle = this.game.frightenedTimer > 0 ? "#ffd700" : "#ffea00";
+      // 2. Animated Feet (Walking)
+      const legSwing = Math.sin(this.walkTimer) * 4;
+      ctx.fillStyle = "#334155"; // shoes
+      ctx.fillRect(-8 + legSwing, -10, 5, 3);
+      ctx.fillRect(-8 - legSwing, 7, 5, 3);
+
+      // 3. Worker Body (Blue Oxford Shirt / Executive Blazer)
+      ctx.fillStyle = isConsultant ? "#0f172a" : "#2563eb";
       ctx.beginPath();
-      ctx.arc(0, 0, r, this.mouthAngle * Math.PI, (2 - this.mouthAngle) * Math.PI, false);
-      ctx.lineTo(0, 0);
-      ctx.closePath();
+      ctx.roundRect(-8, -7, 16, 14, 4);
       ctx.fill();
 
-      // Eye
-      ctx.fillStyle = "#05070d";
+      // White collar
+      ctx.fillStyle = "#ffffff";
       ctx.beginPath();
-      ctx.arc(r * 0.15, -r * 0.5, r * 0.18, 0, Math.PI * 2);
+      ctx.moveTo(2, -3);
+      ctx.lineTo(6, 0);
+      ctx.lineTo(2, 3);
       ctx.fill();
 
-      // Headphones Arc (Blue band)
-      ctx.strokeStyle = "#23dff2";
+      // 4. Head & Messy Hair
+      ctx.fillStyle = "#fbcfe8"; // Skin tone
+      ctx.beginPath();
+      ctx.arc(0, 0, 6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Messy Brown Hair
+      ctx.fillStyle = "#5c3a21";
+      ctx.beginPath();
+      ctx.arc(-2, 0, 5.5, Math.PI * 0.5, Math.PI * 1.5);
+      ctx.fill();
+
+      // 5. Noise-Cancelling Headphones (Blue band + Pink earcups)
+      ctx.strokeStyle = "#22d3ee";
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.arc(0, 0, r + 1.5, Math.PI * 0.9, Math.PI * 2.1);
+      ctx.arc(0, 0, 7.5, Math.PI * 0.8, Math.PI * 2.2);
       ctx.stroke();
 
-      // Headphone Cup
-      ctx.fillStyle = "#ff1490";
-      ctx.fillRect(-r * 0.3, -r - 3, r * 0.6, 3);
+      ctx.fillStyle = "#ec4899";
+      ctx.fillRect(-2, -8.5, 4, 3);
+      ctx.fillRect(-2, 5.5, 4, 3);
+
+      // 6. Right Hand: Coffee Mug with Steam / Consultant Briefcase
+      if (isConsultant) {
+        // Golden Briefcase
+        ctx.fillStyle = "#f59e0b";
+        ctx.fillRect(4, -8, 6, 5);
+        ctx.strokeStyle = "#ffd700";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(4, -8, 6, 5);
+      } else {
+        // Coffee Mug with Steam
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(5, -6, 5, 5);
+        ctx.fillStyle = "#78350f";
+        ctx.fillRect(6, -5, 3, 3); // dark roast
+
+        // Steam curl
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(7, -8);
+        ctx.lineTo(8, -11 + Math.sin(this.game.globalTimer * 6) * 1.5);
+        ctx.stroke();
+      }
+
+      // 7. Left Hand: Secret Phone Scroll
+      ctx.fillStyle = "#1e293b";
+      ctx.fillRect(4, 3, 5, 4);
+      ctx.fillStyle = "#38bdf8";
+      ctx.fillRect(5, 4, 3, 2); // screen glow
 
       ctx.restore();
     }
   }
 
-  // --- GHOST (The Office Bosses) ---
+  // --- THE 4 CORPORATE BOSSES ---
   class Ghost {
     constructor(game, type, color, startCol, startRow, scatterTarget, releaseDelay = 0) {
       this.game = game;
-      this.type = type;
+      this.type = type; // MICROMANAGER, CALENDAR_BLOCKER, INTERN, HR_BOT
       this.color = color;
       this.startCol = startCol;
       this.startRow = startRow;
@@ -1100,6 +1278,7 @@
       this.mode = "IN_HOUSE";
       this.speed = 9.0;
       this.houseTimer = releaseDelay;
+      this.walkTimer = 0;
     }
 
     setFrightened() {
@@ -1143,6 +1322,7 @@
 
       this.x = nextX;
       this.y = nextY;
+      this.walkTimer += dt * 10;
 
       if (this.x < -0.5) this.x = COLS - 0.5;
       if (this.x > COLS - 0.5) this.x = -0.5;
@@ -1233,118 +1413,118 @@
       const ts = this.game.tileSize;
       const gx = (this.x + 0.5) * ts;
       const gy = (this.y + 0.5) * ts;
-      const r = ts * 0.44;
 
       ctx.save();
       ctx.translate(gx, gy);
 
+      // Rotate based on direction
+      let angle = 0;
+      if (this.dir === DIRECTIONS.RIGHT) angle = 0;
+      else if (this.dir === DIRECTIONS.DOWN) angle = Math.PI * 0.5;
+      else if (this.dir === DIRECTIONS.LEFT) angle = Math.PI;
+      else if (this.dir === DIRECTIONS.UP) angle = -Math.PI * 0.5;
+      ctx.rotate(angle);
+
       if (this.mode === "EATEN") {
-        ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.arc(-r * 0.35, -r * 0.2, r * 0.28, 0, Math.PI * 2);
-        ctx.arc(r * 0.35, -r * 0.2, r * 0.28, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = "#0044ff";
-        const pupilDx = this.dir.x * 2;
-        const pupilDy = this.dir.y * 2;
-        ctx.beginPath();
-        ctx.arc(-r * 0.35 + pupilDx, -r * 0.2 + pupilDy, r * 0.14, 0, Math.PI * 2);
-        ctx.arc(r * 0.35 + pupilDx, -r * 0.2 + pupilDy, r * 0.14, 0, Math.PI * 2);
-        ctx.fill();
-
+        // --- EATEN: EMPTY WINGTIP SHOES FLEEING ---
+        ctx.fillStyle = "#0f172a";
+        ctx.fillRect(-6, -6, 12, 4);
+        ctx.fillRect(-6, 2, 12, 4);
         ctx.restore();
         return;
       }
 
-      let fillColor = this.color;
-      if (this.mode === "FRIGHTENED") {
-        const isExpiring = this.game.frightenedTimer < 2.5;
-        const flash = Math.sin(this.game.globalTimer * 16) > 0;
-        fillColor = isExpiring && flash ? "#ffffff" : "#1e40af";
+      const isFrightened = this.mode === "FRIGHTENED";
+      const isExpiring = this.game.frightenedTimer < 2.5;
+      const flash = Math.sin(this.game.globalTimer * 16) > 0;
+
+      // 1. Boss Suit / Body
+      let bodyColor = this.color;
+      if (isFrightened) {
+        bodyColor = isExpiring && flash ? "#ffffff" : "#3b82f6";
       }
 
-      ctx.fillStyle = fillColor;
-
+      ctx.fillStyle = bodyColor;
       ctx.beginPath();
-      ctx.arc(0, -r * 0.2, r, Math.PI, 0, false);
-      ctx.lineTo(r, r * 0.8);
-
-      const waveCount = 3;
-      const waveWidth = (r * 2) / waveCount;
-      for (let i = 0; i < waveCount; i++) {
-        const startX = r - i * waveWidth;
-        const endX = startX - waveWidth;
-        const midX = (startX + endX) / 2;
-        const bottomY = (i % 2 === 0 ? r * 0.6 : r * 1.0) + Math.sin(this.game.globalTimer * 10 + i) * 1.5;
-        ctx.quadraticCurveTo(midX, bottomY, endX, r * 0.8);
-      }
-
-      ctx.closePath();
+      ctx.roundRect(-8, -7, 16, 14, 4);
       ctx.fill();
 
-      if (this.mode === "FRIGHTENED") {
-        ctx.fillStyle = "#ffdddd";
-        ctx.fillRect(-r * 0.4, -r * 0.3, r * 0.25, r * 0.25);
-        ctx.fillRect(r * 0.15, -r * 0.3, r * 0.25, r * 0.25);
+      // 2. Boss Head & Face
+      ctx.fillStyle = isFrightened ? "#bfdbfe" : "#fed7aa"; // pale blue if panicking, else skin
+      ctx.beginPath();
+      ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+      ctx.fill();
 
-        ctx.strokeStyle = "#ff4444";
-        ctx.lineWidth = 1.5;
+      if (isFrightened) {
+        // Panicked Sweat Droplets & White Surrender Flag
+        ctx.fillStyle = "#38bdf8";
         ctx.beginPath();
-        ctx.moveTo(-r * 0.5, r * 0.3);
-        ctx.lineTo(-r * 0.2, r * 0.15);
-        ctx.lineTo(0.1, r * 0.3);
-        ctx.lineTo(r * 0.4, r * 0.15);
-        ctx.stroke();
-      } else {
+        ctx.arc(-4, -6, 1.5, 0, Math.PI * 2);
+        ctx.arc(4, -6, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Surrender White Flag
         ctx.fillStyle = "#ffffff";
-        ctx.beginPath();
-        ctx.arc(-r * 0.35, -r * 0.25, r * 0.26, 0, Math.PI * 2);
-        ctx.arc(r * 0.35, -r * 0.25, r * 0.26, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = "#05070d";
-        const pupilDx = this.dir.x * 2.5;
-        const pupilDy = this.dir.y * 2.5;
-        ctx.beginPath();
-        ctx.arc(-r * 0.35 + pupilDx, -r * 0.25 + pupilDy, r * 0.14, 0, Math.PI * 2);
-        ctx.arc(r * 0.35 + pupilDx, -r * 0.25 + pupilDy, r * 0.14, 0, Math.PI * 2);
-        ctx.fill();
-
+        ctx.fillRect(4, -8, 6, 4);
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(4, -8, 6, 4);
+      } else {
+        // Specific Character Details
         if (this.type === "MICROMANAGER") {
-          ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 1.5;
+          // Balding Hair + Red Angry Tie + Smartphone
+          ctx.fillStyle = "#78350f";
           ctx.beginPath();
-          ctx.moveTo(-r * 0.6, -r * 0.55);
-          ctx.lineTo(-r * 0.1, -r * 0.35);
-          ctx.moveTo(r * 0.6, -r * 0.55);
-          ctx.lineTo(r * 0.1, -r * 0.35);
-          ctx.stroke();
-
-          ctx.fillStyle = "#ff0033";
-          ctx.beginPath();
-          ctx.moveTo(-2, r * 0.1);
-          ctx.lineTo(2, r * 0.1);
-          ctx.lineTo(4, r * 0.7);
-          ctx.lineTo(0, r * 0.9);
-          ctx.lineTo(-4, r * 0.7);
-          ctx.closePath();
+          ctx.arc(-2, 0, 5.5, Math.PI * 0.6, Math.PI * 1.4);
           ctx.fill();
+
+          // Red Tie
+          ctx.fillStyle = "#dc2626";
+          ctx.beginPath();
+          ctx.moveTo(3, -2);
+          ctx.lineTo(8, 0);
+          ctx.lineTo(3, 2);
+          ctx.fill();
+
+          // Angry Phone Pinging
+          ctx.fillStyle = "#0f172a";
+          ctx.fillRect(4, -7, 5, 4);
+          ctx.fillStyle = "#ef4444";
+          ctx.fillRect(5, -6, 3, 2); // red notification dot
         } else if (this.type === "CALENDAR_BLOCKER") {
+          // Pink Bob Hair + 30m Calendar Tablet
+          ctx.fillStyle = "#fde047"; // Blonde
+          ctx.beginPath();
+          ctx.arc(-1, 0, 5.8, Math.PI * 0.4, Math.PI * 1.6);
+          ctx.fill();
+
+          // Pink Calendar Tablet
           ctx.fillStyle = "#ffffff";
-          ctx.fillRect(-r * 0.3, r * 0.15, r * 0.6, r * 0.45);
-          ctx.fillStyle = "#ff1490";
-          ctx.fillRect(-r * 0.2, r * 0.22, r * 0.4, r * 0.12);
+          ctx.fillRect(3, -6, 6, 5);
+          ctx.fillStyle = "#ec4899";
+          ctx.fillRect(4, -5, 4, 3);
         } else if (this.type === "INTERN") {
-          ctx.strokeStyle = "#00ffff";
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(-r * 0.55, -r * 0.45, r * 0.4, r * 0.35);
-          ctx.strokeRect(r * 0.15, -r * 0.45, r * 0.4, r * 0.35);
+          // Backwards Cyan Cap + Energy Drink
+          ctx.fillStyle = "#06b6d4";
+          ctx.beginPath();
+          ctx.arc(-1, 0, 6, Math.PI * 0.4, Math.PI * 1.6);
+          ctx.fill();
+
+          // Neon Energy Drink Can
+          ctx.fillStyle = "#10b981";
+          ctx.fillRect(4, 3, 5, 4);
         } else if (this.type === "HR_BOT") {
-          ctx.fillStyle = "#d2b48c";
-          ctx.fillRect(-r * 0.25, r * 0.1, r * 0.5, r * 0.6);
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(-r * 0.18, r * 0.2, r * 0.36, r * 0.4);
+          // Gray Bun Hair + Yellow Compliance Clipboard
+          ctx.fillStyle = "#64748b";
+          ctx.beginPath();
+          ctx.arc(-3, 0, 4, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Yellow Legal Clipboard
+          ctx.fillStyle = "#fef08a";
+          ctx.fillRect(3, -6, 6, 6);
+          ctx.fillStyle = "#ef4444";
+          ctx.fillRect(5, -4, 2, 2); // violation checkmark
         }
       }
 
@@ -1352,6 +1532,7 @@
     }
   }
 
+  // --- BOOTSTRAP ---
   function boot() {
     if (!window.quietQuittingGame) {
       window.quietQuittingGame = new QuietQuittingGame();

@@ -98,10 +98,6 @@ export async function start({ boot, build } = {}) {
 
   progress(0.22, "Opening the eye");
   const render = createRenderer(ctx, canvas);
-  /* Asset loaders run before the final public API object exists. Keep the
-     renderer on the shared context immediately so authored textures can read
-     device capabilities (notably anisotropy) during bestiary preload. */
-  ctx.render = render;
   ctx.scene = render.scene;
   ctx.camera = render.camera;
   ctx.materials = makeMaterials(THREE, atmos);

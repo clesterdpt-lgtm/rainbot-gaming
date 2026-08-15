@@ -4832,6 +4832,13 @@ export async function createPlayer(ctx, canvas) {
           if (leg.swinging) {
             leg.swinging = false;
             leg.plant.copy(leg.target);
+            /* Touchdown, and the only frame that is one. Driving the
+               print off accumulated stride instead - the way the
+               footstep audio does - puts it under the PELVIS, half a
+               stride from either boot, and on a turn it walks a line
+               the trooper never took. */
+            ctx.vfx?.footprint?.(leg.plant.x, leg.plant.z, state.travelYaw,
+              leg.side, clamp01(state.speed / SPRINT));
           }
           /* PLANTED: the body moves over it, and on a straight line
              it is not touched at all - which is the claim

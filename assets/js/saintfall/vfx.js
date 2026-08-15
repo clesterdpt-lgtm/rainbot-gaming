@@ -65,8 +65,16 @@ void main() {
   float phase = h11(aSeed + 7.7);
   float t = fract(uTime / life + phase);
 
-  vec3 origin = uAnchor + vec3(sx * uRange, 0.0, sz * uRange);
+  /* World-anchored, then folded into the box around the camera - see
+     the long note in POINT_VERT. The fold is computed from the HEAD
+     of the strip, which every vertex agrees on, and applied as one
+     shared offset: fold each vertex on its own and a ribbon whose
+     ends straddle the boundary is stretched right across the field. */
+  vec3 origin = vec3(sx * uRange, 0.0, sz * uRange);
   float travel = t * speed * life;
+  vec2 head = origin.xz + wind * travel;
+  vec2 rel = head - uAnchor.xz;
+  vec2 fold = (mod(rel + uRange, uRange * 2.0) - uRange) - rel;
 
   vec3 p = origin;
   // Shorter than the first pass by half. Long straight ribbons read
@@ -86,11 +94,13 @@ void main() {
   p.xz += side * aSide * w;
   p.y += aSide * w * 0.35;
 
+  p.xz += fold;
+
   // Fade at birth, at death, and with distance from the camera.
   float ends = smoothstep(0.0, 0.18, t) * (1.0 - smoothstep(0.62, 1.0, t));
   float d = length(p.xz - uAnchor.xz);
   float near = smoothstep(2.0, 9.0, d);
-  float far = 1.0 - smoothstep(uRange * 0.55, uRange, d);
+  float far = 1.0 - smoothstep(uRange * 0.5, uRange * 0.92, d);
   vFade = ends * near * far * sin(aT * 3.14159);
   vT = aT;
 
@@ -215,22 +225,43 @@ void main() {
   float life = (4.0 + h11(aSeed + 1.7) * 8.0) * uLifeScale;
   float t = fract(uTime / life + h11(aSeed + 4.4));
 
-  vec3 base = uAnchor + vec3(
+  /* THE MOTE LIVES IN THE WORLD, NOT ON THE CAMERA.
+     Its horizontal position used to be uAnchor + hash * uBox - the
+     field measured from the viewer - and uAnchor was SNAPPED to 8m
+     to stop that sliding. Which it did, by trading a slide for a
+     JUMP: between boundaries the field held still, and every eight
+     metres of travel the anchor stepped and all nine hundred motes
+     moved eight metres sideways in one frame. Standing still the
+     anchor never steps and none of it happens, which is how it
+     survived every still review in the project.
+
+     Now the mote has a fixed world position and is folded into the
+     box around the camera by whole box-widths. The fold moves
+     nothing: it is a multiple of the box, so a mote's drawn position
+     only changes when it crosses the boundary - and that is out
+     where the distance fade has already taken it to zero. */
+  vec3 p = vec3(
     (h11(aSeed) * 2.0 - 1.0) * uBox.x,
-    (h11(aSeed + 2.3) * 2.0 - 1.0) * uBox.y,
+    uAnchor.y + (h11(aSeed + 2.3) * 2.0 - 1.0) * uBox.y,
     (h11(aSeed + 5.9) * 2.0 - 1.0) * uBox.z
   );
-  vec3 p = base;
   p.xz += wind * t * life * uDrift;
   p.y += t * life * uRise;
   // A little wander, so a field of motes does not move as a block.
   p.x += sin(uTime * 0.7 + aSeed * 4.0) * 0.9;
   p.z += cos(uTime * 0.62 + aSeed * 6.0) * 0.9;
 
+  vec2 span = uBox.xz * 2.0;
+  vec2 rel = p.xz - uAnchor.xz;
+  p.xz += (mod(rel + uBox.xz, span) - uBox.xz) - rel;
+
   vec4 mv = viewMatrix * vec4(p, 1.0);
   float d = -mv.z;
+  /* Out by 0.95 of the half-box, because that is where the fold is.
+     At the old 1.05 a mote was still at 3% opacity when it wrapped,
+     and one in every few hundred blinked across the field. */
   vFade = smoothstep(0.0, 0.2, t) * (1.0 - smoothstep(0.55, 1.0, t))
-        * (1.0 - smoothstep(uBox.x * 0.55, uBox.x * 1.05, length(p.xz - uAnchor.xz)))
+        * (1.0 - smoothstep(uBox.x * 0.45, uBox.x * 0.95, length(p.xz - uAnchor.xz)))
         * smoothstep(0.6, 4.0, d);
   vSeed = aSeed;
   gl_Position = projectionMatrix * mv;
@@ -873,6 +904,240 @@ function buildShafts(ctx, specs) {
 }
 
 /* ============================================================
+   GROUND MARKS
+
+   Boot prints and the scar a boosted glide cuts through the sand.
+   One pooled quad buffer for both: they differ only in proportion
+   and in how hard they bite, and a mark laid on sand is the same
+   object either way - a depression that holds shadow, ringed by the
+   sand it displaced.
+
+   THE HEIGHT IS THE WHOLE PROBLEM. `heightAt` is the authoring
+   field; the terrain MESH samples it on a 4m grid and interpolates,
+   and the drawn ground therefore runs up to 12cm above the analytic
+   value. A mark laid at `heightAt + epsilon` sinks under its own
+   ground about half the time - which reads as marks that appear on
+   some steps and not others, for no reason a player could name.
+   `terrain.groundHeightAt` reproduces the drawn triangles exactly,
+   including their alternating diagonals, and is the only correct
+   source here.
+
+   And they lie in the TANGENT PLANE, not flat. A 0.9m skid quad held
+   horizontal has each end 25cm out of the ground on a 30-degree
+   face, so half of every mark on a dune flank would be buried and
+   the other half would hover.
+   ============================================================ */
+
+const DECAL_VERT = /* glsl */`
+precision highp float;
+attribute vec2 aCorner;     // -1..1 across, -1..1 along
+attribute vec3 aMeta;       // birth, life, bite
+
+uniform float uTime;
+
+varying vec2  vCorner;
+varying float vFade;
+varying float vBite;
+varying vec3  vWorld;
+
+void main() {
+  float age = (uTime - aMeta.x) / max(0.001, aMeta.y);
+  /* Cut instantly, fill in slowly. Sand is displaced in the moment
+     the boot lands; what takes time is the wind putting it back. */
+  vFade = smoothstep(0.0, 0.05, age) * (1.0 - smoothstep(0.35, 1.0, age));
+  if (age < 0.0 || age > 1.0) vFade = 0.0;
+  vCorner = aCorner;
+  vBite = aMeta.z;
+  vWorld = position;
+  gl_Position = projectionMatrix * viewMatrix * vec4(position, 1.0);
+}
+`;
+
+const DECAL_FRAG = /* glsl */`
+precision highp float;
+varying vec2  vCorner;
+varying float vFade;
+varying float vBite;
+varying vec3  vWorld;
+
+uniform vec3  uDark;
+uniform vec3  uLight;
+uniform float uOpacity;
+uniform float uRange;
+
+float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+
+void main() {
+  if (vFade <= 0.003) discard;
+
+  /* A capsule, not an ellipse: a boot and a skid are both a straight
+     run with rounded ends, and an ellipse reads as a stamped decal. */
+  float along = max(abs(vCorner.y) - 0.42, 0.0) / 0.58;
+  float d = length(vec2(vCorner.x, along));
+  /* Broken up on a world-space lattice so no two marks carry the
+     same outline and none of them is a clean oval. */
+  vec2 cell = floor(vWorld.xz * 6.0);
+  d *= 0.90 + 0.20 * h21(cell);
+  if (d > 1.0) discard;
+
+  /* The hollow, and the sand pushed out of it. The ridge is kept
+     THIN and WEAK on purpose: at equal strength the two terms make a
+     closed bright ellipse round a dark middle, and a closed outline
+     is the one shape that reads as a decal stamped on the ground
+     rather than as a dent in it. */
+  float core = 1.0 - smoothstep(0.0, 0.78, d);
+  float rim  = smoothstep(0.66, 0.88, d) * (1.0 - smoothstep(0.88, 1.0, d));
+
+  float ink = core * 0.88 + rim * 0.20;
+  vec3 col = mix(uDark, uLight, rim / max(rim + core, 1e-3));
+
+  /* Out by 90m. Closer than the terrain LOD switch, because a mark
+     is a few pixels by then and a few pixels of high-contrast noise
+     crawling over a dune is the one thing worse than no mark. */
+  float far = 1.0 - smoothstep(uRange * 0.6, uRange, length(cameraPosition - vWorld));
+
+  gl_FragColor = vec4(col, ink * vFade * vBite * uOpacity * far);
+}
+`;
+
+function buildDecals(ctx, opts = {}) {
+  const { THREE, terrain, atmos } = ctx;
+  const MAX = opts.max || 168;
+  const pos = new Float32Array(MAX * 4 * 3);
+  const corner = new Float32Array(MAX * 4 * 2);
+  const meta = new Float32Array(MAX * 4 * 3);
+  const idx = [];
+  for (let s = 0; s < MAX; s += 1) {
+    const b = s * 4;
+    corner.set([-1, -1, 1, -1, 1, 1, -1, 1], s * 8);
+    idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+    // A life of zero divides; park every unused slot far in the past.
+    for (let v = 0; v < 4; v += 1) {
+      meta[(b + v) * 3] = -1e5;
+      meta[(b + v) * 3 + 1] = 1;
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  const posAttr = new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage);
+  const metaAttr = new THREE.BufferAttribute(meta, 3).setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute("position", posAttr);
+  geo.setAttribute("aCorner", new THREE.BufferAttribute(corner, 2));
+  geo.setAttribute("aMeta", metaAttr);
+  geo.setIndex(idx);
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
+
+  const dark = hexToRgb(opts.dark || "#2c1c12");
+  const light = hexToRgb(opts.light || "#f0d3a6");
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: atmos.uniforms.uTimeSF,
+      uDark: { value: new THREE.Vector3(srgb(dark[0]), srgb(dark[1]), srgb(dark[2])) },
+      uLight: { value: new THREE.Vector3(srgb(light[0]), srgb(light[1]), srgb(light[2])) },
+      uOpacity: { value: opts.opacity ?? 0.42 },
+      uRange: { value: opts.range ?? 90 },
+    },
+    vertexShader: DECAL_VERT,
+    fragmentShader: DECAL_FRAG,
+    transparent: true,
+    depthWrite: false,
+    toneMapped: false,
+    /* The corner order (-1,-1),(1,-1),(1,1),(-1,1) about a +Y normal
+       winds CLOCKWISE seen from above, so every mark faced the
+       ground and was culled: twenty-eight live decals contributing
+       exactly zero pixels, with no error anywhere to say so. Winding
+       is also not stable here - `wide` and `long` come from callers -
+       so this is DoubleSide rather than a flipped index, and the
+       backfaces are behind opaque terrain either way. */
+    side: THREE.DoubleSide,
+    /* Pulled toward the eye on top of the 3cm lift. The lift alone
+       handles the sample error; this handles the depth buffer, which
+       has no precision to spare for two surfaces 3cm apart at 90m. */
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -4,
+  });
+
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 6;
+  mesh.name = "ground-marks";
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+
+  let cursor = 0;
+
+  /** The height the ground is DRAWN at, which is not `heightAt`. */
+  const ground = terrain.groundHeightAt
+    ? (x, z) => { const y = terrain.groundHeightAt(x, z); return Number.isFinite(y) ? y : null; }
+    : (x, z) => { const y = terrain.heightAt(x, z); return Number.isFinite(y) ? y : null; };
+
+  /* Authored floors - the Pilgrim's Road, plazas, the nave - stand
+     ABOVE the terrain and are not part of the height field. A mark
+     laid from the terrain there is buried under the paving, which
+     would read as prints that stop working on the one surface the
+     player spends the most time crossing. Nothing is displaced when
+     you walk on stone, so nothing is laid. */
+  const paved = typeof opts.walkSurfaceAt === "function"
+    ? (x, z, g) => opts.walkSurfaceAt(x, z) > g + 0.06
+    : () => false;
+
+  /**
+   * Lay one mark. `yaw` is the direction of travel; `wide`/`long` are
+   * half-extents in metres across and along it.
+   */
+  const cornerY = [0, 0, 0, 0];
+  const cornerX = [0, 0, 0, 0];
+  const cornerZ = [0, 0, 0, 0];
+
+  function mark(x, z, yaw, wide, long, bite = 1, life = 5) {
+    /* EACH CORNER TAKES ITS OWN GROUND HEIGHT. The obvious build - a
+       flat quad in the terrain's tangent plane, lifted clear - cannot
+       work: the normal is an average of triangles the quad spans, so
+       the plane matches the ground at the centre and diverges from it
+       outward. Lifting it far enough that no corner is buried put the
+       far corner 14cm in the air.
+       Reading the drawn height at each corner makes the quad a patch
+       that hugs the mesh instead, and the two triangles it is drawn
+       as follow the two the ground is drawn as. */
+    const centre = ground(x, z);
+    if (centre === null || paved(x, z, centre)) return;
+
+    const sy = Math.sin(yaw);
+    const cy = Math.cos(yaw);
+    for (let v = 0; v < 4; v += 1) {
+      const u = corner[v * 2] * wide;
+      const w = corner[v * 2 + 1] * long;
+      // Across is (cos, -sin) to yaw's (sin, cos).
+      cornerX[v] = x + cy * u + sy * w;
+      cornerZ[v] = z - sy * u + cy * w;
+      const g = ground(cornerX[v], cornerZ[v]);
+      // Off the map, or over something with no ground under it.
+      if (g === null) return;
+      cornerY[v] = g + 0.03;
+    }
+
+    const slot = cursor;
+    cursor = (cursor + 1) % MAX;
+    const base = slot * 4;
+    const birth = atmos.elapsed;
+    for (let v = 0; v < 4; v += 1) {
+      const o = (base + v) * 3;
+      pos[o] = cornerX[v];
+      pos[o + 1] = cornerY[v];
+      pos[o + 2] = cornerZ[v];
+      meta[o] = birth;
+      meta[o + 1] = life;
+      meta[o + 2] = bite;
+    }
+    posAttr.needsUpdate = true;
+    metaAttr.needsUpdate = true;
+  }
+
+  return { mesh, mat, mark };
+}
+
+/* ============================================================
    ASSEMBLY
    ============================================================ */
 
@@ -982,6 +1247,9 @@ export function buildVfx(ctx, world) {
 
   const shafts = buildShafts(ctx, shaftSpecs);
   if (shafts) group.add(shafts);
+
+  const marks = buildDecals(ctx, { max: 168, walkSurfaceAt: world.walkSurfaceAt });
+  group.add(marks.mesh);
 
   const bannerMesh = buildBanners(ctx, world.banners);
   if (bannerMesh) group.add(bannerMesh);
@@ -4146,6 +4414,54 @@ export function buildVfx(ctx, world) {
       5.2 + scale * 4.4, 0.78 * scale, 0.30);
   }
 
+  /* ------------------------- ground marks ------------------------- */
+
+  /**
+   * One boot going down. `side` is -1 left / +1 right so the print
+   * sits under the foot rather than under the pelvis, and `weight`
+   * scales both the mark and the sand it throws with how hard the
+   * trooper is travelling.
+   *
+   * A print is TWO things and needs both: the mark, which is what you
+   * see when you turn round, and a puff, which is what you see at the
+   * moment it lands. Neither alone reads as a footfall.
+   */
+  function footprint(x, z, yaw, side = 0, weight = 1) {
+    const w = clamp01(weight);
+    marks.mark(x, z, yaw, 0.15 + w * 0.03, 0.27 + w * 0.06,
+      0.55 + w * 0.45, 4.5 + w * 1.5);
+    if (w < 0.12) return;
+    /* Sand leaves a boot BACKWARD and low - it is squeezed out behind
+       the sole, not kicked forward. Thrown forward it reads as the
+       trooper scuffing through a puddle. */
+    const y = terrain.heightAt(x, z);
+    impacts.emitDirected(x, y + 0.06, z, Math.round(2 + w * 5),
+      -Math.sin(yaw) * 0.5 + side * 0.16, 0.82, -Math.cos(yaw) * 0.5,
+      1.5 + w * 2.2, 0.34 + w * 0.22, 0.30, 0.5 + w * 0.35);
+  }
+
+  /**
+   * A metre of boosted glide, cut into the sand. Called with the
+   * distance actually travelled since the last one so the scar is
+   * continuous at any speed rather than dashed at high ones.
+   */
+  function skidMark(x, z, yaw, strength = 1, span = 0.5) {
+    const s = clamp01(strength);
+    /* Each segment is nearly TWICE the step it covers, so consecutive
+       ones overlap by half their length. Cut to the step exactly they
+       merely abut, and the scar came out a chain of beads - every
+       joint showing as a waist because both capsules taper to nothing
+       at their ends. Overlapping means the bite has to come down to
+       match, or the doubled middle is twice as dark as a footprint. */
+    marks.mark(x, z, yaw, 0.22 + s * 0.10, Math.max(0.34, span * 0.95),
+      0.30 + s * 0.26, 5);
+    if (Math.random() > 0.34 + s * 0.4) return;
+    const y = terrain.heightAt(x, z);
+    impacts.emitDirected(x, y + 0.10, z, 2 + Math.round(s * 3),
+      -Math.sin(yaw) * 0.72, 0.7, -Math.cos(yaw) * 0.72,
+      2.6 + s * 3.4, 0.42 + s * 0.3, 0.30, 0.62);
+  }
+
   /** A thrown or landing globule coming apart. Droplets, so they fall. */
   function venomBurst(x, y, z, scale = 1) {
     impacts.emit(x, y, z, Math.round(10 + scale * 9), 2.8 * scale,
@@ -4216,6 +4532,9 @@ export function buildVfx(ctx, world) {
     weaponVent,
     banners: bannerMesh,
     shafts,
+    marks: marks.mesh,
+    footprint,
+    skidMark,
     spark,
     meleeArc,
     blast,
@@ -4252,14 +4571,13 @@ export function buildVfx(ctx, world) {
       },
     },
     update(dt, camera) {
-      // Snap the anchor so the wrapped systems do not slide with
-      // sub-metre camera motion, which reads as the whole dust field
-      // sticking to the camera.
-      anchor.set(
-        Math.round(camera.position.x / 8) * 8,
-        camera.position.y,
-        Math.round(camera.position.z / 8) * 8
-      );
+      /* NOT SNAPPED. The 8m snap was here to stop the wrapped systems
+         sliding with sub-metre camera motion - but that sliding was
+         the anchor-relative origin, which is now gone, and the cure
+         was worse: every eight metres of travel the anchor jumped,
+         and with it the whole dust field, the ground height it is
+         hung from, and the radius each mote fades on. */
+      anchor.copy(camera.position);
       const ground = terrain.heightAt(anchor.x, anchor.z);
       impacts.mat.uniforms.uTime.value = atmos.elapsed;
       impacts.mat.uniforms.uPixel.value = Math.min(2, window.devicePixelRatio || 1) * 2.2;

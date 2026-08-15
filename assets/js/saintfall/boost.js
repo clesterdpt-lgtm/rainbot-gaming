@@ -80,6 +80,8 @@ export function buildBoost(ctx, player) {
     steerLockRemaining: 0,
     impactModified: false,
     lastReason: "ready",
+    /** Metres of ground travel since the last scar was cut. */
+    scarDebt: 0,
   };
 
   function reset(full = true) {
@@ -98,6 +100,7 @@ export function buildBoost(ctx, player) {
     state.steerLockRemaining = 0;
     state.impactModified = false;
     state.lastReason = "ready";
+    state.scarDebt = 0;
     struck.clear();
     reportedEndSerial = endSerial;
     if (full) state.cooldownRemaining = 0;
@@ -358,6 +361,36 @@ export function buildBoost(ctx, player) {
     /* Stopped dead against masonry. A glide that grinds into a wall
        and keeps burning charge is a key that has stopped answering. */
     if (dt > 0 && travelled < state.speed * dt * 0.12) stop("blocked");
+
+    /* The scar the glide cuts, laid by DISTANCE rather than per frame.
+       At nineteen metres a second a per-frame mark is a dashed line
+       whose dashes get longer as the frame rate drops, so the effect
+       would read as stuttering exactly when the machine is struggling.
+       Stepping along the segment also keeps it continuous through a
+       long frame instead of leaving a gap the length of that frame. */
+    if (state.active && player.state.grounded && travelled > 1e-4) {
+      const STEP = 0.55;
+      state.scarDebt += travelled;
+      if (state.scarDebt >= STEP) {
+        const yaw = Math.atan2(toX - fromX, toZ - fromZ);
+        const bite = clamp01(state.speed / config.glideSpeed);
+        let laid = 0;
+        while (state.scarDebt >= STEP && laid < 6) {
+          state.scarDebt -= STEP;
+          const k = 1 - (state.scarDebt / travelled);
+          ctx.vfx?.skidMark?.(
+            fromX + (toX - fromX) * clamp01(k),
+            fromZ + (toZ - fromZ) * clamp01(k),
+            yaw, bite, STEP
+          );
+          laid += 1;
+        }
+        // A single frame long enough to owe seven marks is a hitch,
+        // not a glide; drop the backlog rather than paying it later.
+        if (laid >= 6) state.scarDebt = 0;
+      }
+    }
+
     if (!(state.attack || state.contactEnabled) || travelled < 1e-5) return 0;
 
     let hits = 0;

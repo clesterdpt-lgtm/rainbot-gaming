@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."
 
 SPECIES=("$@")
 if [ ${#SPECIES[@]} -eq 0 ]; then
-  SPECIES=(thresher gleaner harrow matriarch coulter distaff)
+  SPECIES=(thresher gleaner harrow matriarch coulter distaff precentor)
 fi
 
 # Which bones the runtime owns, per species, and which clip is allowed
@@ -48,6 +48,14 @@ for name in "${SPECIES[@]}"; do
       --report output/saintfall/models/distaff.json \
       --save-blend assets/models/saintfall/source/distaff-meshy-v2.blend 2>&1 \
       | sed -E "/^(INFO|[0-9]{2}:[0-9]{2}:[0-9]{2} \||Blender |\/Volumes|  res = )/d"
+  elif [ "$name" = precentor ]; then
+    blender --background --factory-startup \
+      --python scripts/blender/saintfall-precentor-meshy.py -- \
+      --input assets/models/saintfall/source/precentor-meshy-v1/precentor-meshy-v1-remeshed.glb \
+      --output assets/models/saintfall/source/precentor.raw.glb \
+      --report output/saintfall/models/precentor.json \
+      --save-blend assets/models/saintfall/source/precentor-meshy-v1.blend 2>&1 \
+      | sed -E "/^(INFO|[0-9]{2}:[0-9]{2}:[0-9]{2} \||Blender |\/Volumes|  res = )/d"
   else
     blender --background --factory-startup \
       --python "scripts/blender/saintfall-$name.py" -- \
@@ -57,7 +65,7 @@ for name in "${SPECIES[@]}"; do
   fi
 
   texture_args=()
-  if [ "$name" = distaff ]; then
+  if [ "$name" = distaff ] || [ "$name" = precentor ]; then
     texture_args=(--texture-format webp --texture-quality 92 --texture-effort 6)
   fi
   node scripts/saintfall-optimize-model.mjs \

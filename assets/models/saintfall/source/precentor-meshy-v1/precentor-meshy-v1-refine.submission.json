@@ -1,0 +1,11 @@
+{
+  "taskId": "01a00595-59ab-7251-8be8-bfb4b5adff68",
+  "taskType": "text-to-3d-refine",
+  "previewTaskId": "01a00594-59b4-7ed9-9326-a3ce6d6b1dc3",
+  "request": {
+    "mode": "refine",
+    "preview_task_id": "01a00594-59b4-7ed9-9326-a3ce6d6b1dc3",
+    "enable_pbr": true,
+    "texture_prompt": "Saintfall Bloom enemy palette: near-black violet chitin, deep plum armor, pale lilac worn plate edges, restrained cyan bioluminescent compound eyes and thin joint seams, scorched wind-worn Choir Spires surface, rough organic shell with subtle metallic mineral flecks, no bright green, no cartoon colors"
+  }
+}

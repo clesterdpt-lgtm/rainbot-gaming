@@ -107,22 +107,26 @@ export const BESTIARY = {
     kneePole: { up: 1.8, out: 0.85, fwd: 0 },
   },
 
-  /* The Choir Spires' district guardian uses the same authored mantis
-     anatomy as a Thresher, but it is a separate species contract so its
-     boss scale, health and hit volumes never leak into the roaming caste.
-     At 1.55 against the ordinary Thresher's 0.62 this silhouette is exactly
-     two and a half times taller and wider, which reads as an individual
-     guardian rather than a randomly enlarged wave member. */
+  /* The Choir Spires' district guardian has its own Meshy/Blender mantis,
+     rather than reading as one roaming Thresher scaled up.  Its authored
+     envelope deliberately stays compatible with the proven arena/collision
+     dimensions, while the anatomy is corrected to four walking legs plus
+     two raptorial forelimbs. */
   precentor: {
-    url: "assets/models/saintfall/thresher.glb",
+    url: "assets/models/saintfall/precentor.glb",
     faction: "bloom",
+    authoredPbr: true,
     health: 3200,
     scale: 1.55,
     speed: { walk: 1.35, charge: 4.25 },
     material: { roughness: 0.46, metalness: 0.10, rim: 1.35, bio: 2.2 },
-    legs: 3,
-    stance: 1.35,
-    stepHeight: 0.68,
+    legs: 2,
+    /* The new legs are long, but waiting 2.09 world metres before a
+       replant lets a turning hip pull the planted toe beyond the two-bone
+       chain.  Replant at roughly half the measured leg reach instead so
+       the visible claw stays on the Choir terrain through a pivot. */
+    stance: 0.82,
+    stepHeight: 0.42,
     collisionRadius: 1.9,
     cullRange: 620,
     ikRange: 300,
@@ -131,6 +135,14 @@ export const BESTIARY = {
     shadowRange: 150,
     clips: ["idle", "alert", "strike", "flinch", "death"],
     kneePole: { up: 1.8, out: 0.85, fwd: 0 },
+    /* Alternating diagonals keep a four-footed mantis supported while its
+       much taller body turns through the tight Choir arena. */
+    coordinatedGait: true,
+    gaitRate: 1.45,
+    gaitLead: 0.34,
+    gaitStepSpeed: 5.8,
+    unreachablePlantGuard: true,
+    projectUnreachableGroundTargets: true,
   },
 
   /* The iron servitor-engine already had an authored model and animation
@@ -1338,7 +1350,43 @@ export async function buildEnemies(ctx, onProgress) {
       }
       _a.y = groundY(_a.x, _a.z);
 
+      /* The Choir can drop sharply across one stride. A desired point below
+         the two-bone reach makes the analytic solver stop above the floor,
+         so this opt-in gait finds the furthest reachable point on the same
+         ground line instead. Other species retain their authored targets. */
+      if (inst.spec.projectUnreachableGroundTargets) {
+        leg.femur.updateWorldMatrix(true, false);
+        leg.femur.getWorldPosition(_head);
+        const chainLimit = leg.femurLen + leg.tibiaLen
+          - Math.max(0.04, scale * 0.06);
+        const chainLimitSq = chainLimit * chainLimit;
+        if (_head.distanceToSquared(_a) > chainLimitSq) {
+          const desiredX = _a.x;
+          const desiredZ = _a.z;
+          const dx = desiredX - _head.x;
+          const dz = desiredZ - _head.z;
+          let fit = 0;
+          let miss = 1;
+          let fitY = groundY(_head.x, _head.z);
+          if ((_head.y - fitY) * (_head.y - fitY) <= chainLimitSq) {
+            for (let iteration = 0; iteration < 8; iteration += 1) {
+              const test = (fit + miss) * 0.5;
+              _b.set(_head.x + dx * test, 0, _head.z + dz * test);
+              _b.y = groundY(_b.x, _b.z);
+              if (_head.distanceToSquared(_b) <= chainLimitSq) {
+                fit = test;
+                fitY = _b.y;
+              } else miss = test;
+            }
+            _a.set(_head.x + dx * fit, fitY, _head.z + dz * fit);
+          }
+        }
+      }
+
       if (leg.stepping > 0) {
+        /* Follow the current reachable point during the swing; otherwise a
+           turning body can make a once-valid landing stale before contact. */
+        if (inst.spec.projectUnreachableGroundTargets) leg.target.copy(_a);
         leg.stepping = Math.max(0,
           leg.stepping - dt * (inst.spec.gaitStepSpeed || 5.5));
         const t = 1 - leg.stepping;
@@ -1352,7 +1400,21 @@ export async function buildEnemies(ctx, onProgress) {
         const lag = leg.plant.distanceTo(_a);
         const groupReady = !inst.spec.coordinatedGait
           || Math.abs(leg.phase - activeGroup) < 0.1;
-        if (lag > reach && (groupReady || lag > reach * 1.30)) {
+        /* A diagonal gait may ask this leg to wait for the other pair, but
+           never let that rhythm pull an anchored toe beyond the measured
+           two-bone chain.  Once the old plant is physically unreachable it
+           is already a moving foot, even if its cosmetic gait phase has not
+           come around; starting the recovery step here prevents the ankle
+           from hovering or tunnelling while the solver clamps the knee. */
+        let cannotHoldPlant = false;
+        if (inst.spec.unreachablePlantGuard) {
+          leg.femur.updateWorldMatrix(true, false);
+          leg.femur.getWorldPosition(_b);
+          const chainLimit = leg.femurLen + leg.tibiaLen
+            - Math.max(0.04, scale * 0.06);
+          cannotHoldPlant = _b.distanceTo(leg.plant) > chainLimit;
+        }
+        if (cannotHoldPlant || (lag > reach && (groupReady || lag > reach * 1.30))) {
           leg.target.copy(_a);
           leg.stepping = 1;
         }

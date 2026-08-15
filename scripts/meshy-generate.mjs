@@ -12,7 +12,7 @@ const HELP = `Meshy model pipeline
 
 Usage:
   node scripts/meshy-generate.mjs --mode balance
-  node scripts/meshy-generate.mjs --mode status --task-type TYPE --task-id ID
+  node scripts/meshy-generate.mjs --mode status --task-type TYPE --task-id ID [--output DIR --slug NAME]
   node scripts/meshy-generate.mjs --mode text-to-3d --prompt TEXT --output DIR --slug NAME [--polycount 12000] [--texture-prompt TEXT]
   node scripts/meshy-generate.mjs --mode image-to-3d --image FILE --output DIR --slug NAME [--polycount 100000]
   node scripts/meshy-generate.mjs --mode remesh --task-id MODEL_TASK_ID --output DIR --slug NAME [--polycount 80000]
@@ -379,6 +379,63 @@ async function main() {
     const taskId = required(args, "task-id");
     const task = await apiRequest(apiKey, endpointForTaskType(taskType, taskId));
     console.log(JSON.stringify(taskSummary(task), null, 2));
+    /* A long Meshy job may finish successfully just as the final asset
+       download loses its connection.  Let status double as a resumable
+       download rather than submitting a second paid generation whose shape
+       would no longer match the completed preview/refine task. */
+    if (args.output || args.slug) {
+      const output = path.resolve(required(args, "output"));
+      const slug = required(args, "slug");
+      if (task.status !== "SUCCEEDED") {
+        throw new Error(`${taskType} task ${taskId} is ${task.status || "UNKNOWN"}, not SUCCEEDED`);
+      }
+      const resumedFile = {
+        "text-to-3d": `${slug}-master.glb`,
+        "image-to-3d": `${slug}-master.glb`,
+        remesh: `${slug}-remeshed.glb`,
+        rigging: `${slug}-rigged.glb`,
+        animations: `${slug}.glb`,
+      }[taskType];
+      const metadataFile = {
+        remesh: `${slug}-remesh.meta.json`,
+        rigging: `${slug}-rig.meta.json`,
+      }[taskType] || `${slug}.meta.json`;
+      const modelUrl = taskType === "rigging"
+        ? task.result?.rigged_character_glb_url
+        : taskType === "animations"
+          ? task.result?.animation_glb_url
+          : task.model_urls?.glb;
+      await download(modelUrl, path.join(output, resumedFile));
+      const rigFiles = taskType === "rigging" ? {
+        rigged: resumedFile,
+        walking: `${slug}-walk.glb`,
+        running: `${slug}-run.glb`,
+      } : null;
+      if (rigFiles) {
+        await downloadOptional(task.result?.basic_animations?.walking_glb_url,
+          path.join(output, rigFiles.walking));
+        await downloadOptional(task.result?.basic_animations?.running_glb_url,
+          path.join(output, rigFiles.running));
+      }
+      const thumbnailEntries = Object.entries(task.thumbnail_urls || {});
+      if (!thumbnailEntries.length && task.thumbnail_url) {
+        thumbnailEntries.push(["preview", task.thumbnail_url]);
+      }
+      for (const [view, url] of thumbnailEntries) {
+        await downloadOptional(url, path.join(output, `${slug}-${view}.png`));
+      }
+      const fileContract = taskType === "text-to-3d" || taskType === "image-to-3d"
+        ? { masterFile: resumedFile }
+        : taskType === "rigging"
+          ? { files: rigFiles }
+          : { file: resumedFile };
+      await writeMetadata(path.join(output, metadataFile), {
+        source: `Meshy ${taskType} resumed download`,
+        task: taskSummary(task),
+        ...fileContract,
+        thumbnails: thumbnailEntries.map(([view]) => `${slug}-${view}.png`),
+      });
+    }
     return;
   }
   if (mode === "text-to-3d") return runTextTo3d(apiKey, args);

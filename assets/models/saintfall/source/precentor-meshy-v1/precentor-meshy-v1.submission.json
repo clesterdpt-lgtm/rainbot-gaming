@@ -1,0 +1,14 @@
+{
+  "taskId": "01a00594-59b4-7ed9-9326-a3ce6d6b1dc3",
+  "taskType": "text-to-3d-preview",
+  "request": {
+    "mode": "preview",
+    "prompt": "Single colossal alien cathedral praying mantis boss, full body in a neutral wide standing pose, exactly four long articulated walking legs plus exactly two massive folded raptorial scythe forelimbs, no extra limbs, towering upright predatory silhouette, narrow armored thorax, angular triangular head, long segmented abdomen, serrated sickle blades, swept antennae, folded wing cases, restrained crownlike dorsal spines, premium stylized dark sci-fi action-game creature, intimidating not cute, isolated, no ground, bilateral symmetry",
+    "ai_model": "meshy-6",
+    "model_type": "standard",
+    "topology": "triangle",
+    "target_polycount": 45000,
+    "symmetry_mode": "on",
+    "pose_mode": ""
+  }
+}

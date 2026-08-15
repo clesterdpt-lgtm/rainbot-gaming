@@ -83,7 +83,45 @@ const HITBOX = {
     r: 0.80, y0: 0.02, y1: 1.30, head: 0.70, headR: 0.34, headZ: 0.52,
   },
   precentor: {
-    r: 1.95, y0: 0.02, y1: 3.24, head: 1.74, headR: 0.84, headZ: 1.28,
+    /* The remodel is a broad, articulated mantis rather than the old
+       scaled-up Thresher silhouette. Opt this one species into fitted,
+       bone-driven mesh volumes so its abdomen, four walking legs and two
+       folded scythes remain shootable wherever the animation puts them,
+       without turning the empty air between those parts into body. */
+    meshVolumes: {
+      bones: [
+        "thorax", "pronotum", "head", "abdomen", "abdomen2",
+        "mandible_L", "mandible_R",
+        "antenna_L", "antenna_R",
+        "scythe_L", "claw_L", "scythe_R", "claw_R",
+        "coxa0_L", "femur0_L", "tibia0_L", "foot0_L",
+        "coxa0_R", "femur0_R", "tibia0_R", "foot0_R",
+        "coxa1_L", "femur1_L", "tibia1_L", "foot1_L",
+        "coxa1_R", "femur1_R", "tibia1_R", "foot1_R",
+      ],
+      headBones: ["head", "mandible_L", "mandible_R"],
+      /* The remesh contains a few disconnected feeler slivers weighted to
+         `head`. Only broad geometry near the actual skull is a headshot;
+         named mandibles remain head-owned, while antennae/feelers are still
+         hittable for ordinary body damage. Values are in GLB-local metres. */
+      headCore: { x: 0, y: 1.40, z: 0.98, r: 0.74 },
+      mandibleZone: {
+        maxX: 0.44, minY: 1.16, maxY: 1.52, minZ: 0.98, maxZ: 1.54,
+      },
+      feelerWidth: 0.16,
+      feelerAspect: 3.2,
+      padding: 0.10,
+      meleePadding: 0.24,
+      meleeReachY: 3.2,
+      broadPadding: 1.05,
+      splitRadius: 0.46,
+      minRadius: 0.035,
+    },
+    /* Non-ray systems still need a conventional world-space envelope.
+       `headBone` keeps their head marker on the animated skull; the static
+       offsets remain a safe fallback while a model is still loading. */
+    r: 1.95, y0: 0.02, y1: 3.24,
+    head: 2.08, headR: 1.20, headZ: 0.93, headBone: "head",
   },
   cantor: {
     r: 1.18, y0: 0.02, y1: 3.48, head: 2.72, headR: 0.48, headZ: 0.10,
@@ -352,6 +390,7 @@ export function buildCombat(ctx) {
   const eye = new THREE.Vector3();
   const tmp = new THREE.Vector3();
   let clock = 0;
+  let meshLivePrewarmIn = 0;
   /* A Cathedral-sized detour is intentionally a real search, but a
      garrison must not make every stalled unit run it in the same frame.
      One route request per simulation tick amortises a newly-alerted pack
@@ -435,6 +474,11 @@ export function buildCombat(ctx) {
    * way the animal is facing, which is worse than no offset at all.
    */
   function headAt(inst, box, out) {
+    const liveHead = box.headBone && inst.bones?.get?.(box.headBone);
+    if (liveHead) {
+      liveHead.updateWorldMatrix(true, false);
+      return out.setFromMatrixPosition(liveHead.matrixWorld);
+    }
     const s = Math.sin(inst.yaw);
     const c = Math.cos(inst.yaw);
     const fz = box.headZ || 0;
@@ -590,6 +634,408 @@ export function buildCombat(ctx) {
     }
     if (!found) return null;
     return { t: bestT, weak };
+  }
+
+  /* ============================================================
+     OPT-IN SKINNED-MESH HIT VOLUMES
+
+     A tall capsule is a useful approximation for the ordinary castes,
+     but not for the Precentor remodel: most of its readable silhouette is
+     four legs, two scythes and a long abdomen separated by open air. The
+     GLB already assigns every disconnected armour shell to the bone that
+     moves it, so this path fits compact capsules to those visible shells
+     once, then poses the capsules with the same bones on every shot.
+
+     This is deliberately separate from the Distaff's leg-health system
+     below. A Precentor proxy is only a body/head hit; it never acquires a
+     breakable-leg index and cannot change any Distaff behaviour.
+     ============================================================ */
+
+  const _meshLocalVertex = new THREE.Vector3();
+  const _meshProxyA = new THREE.Vector3();
+  const _meshProxyB = new THREE.Vector3();
+  const _meshBroadCenter = new THREE.Vector3();
+  const _meshWorldScale = new THREE.Vector3();
+  const meshVolumeTemplates = new WeakMap();
+  let prewarmedMeshTemplates = 0;
+
+  /** Build compact, connected visual-shell proxies once per skinned mesh. */
+  function skinnedMeshHitCache(inst, box) {
+    const config = box.meshVolumes;
+    const skin = inst?.skin;
+    const geometry = skin?.geometry;
+    const skeleton = skin?.skeleton;
+    const position = geometry?.getAttribute?.("position");
+    const skinIndex = geometry?.getAttribute?.("skinIndex");
+    const skinWeight = geometry?.getAttribute?.("skinWeight");
+    if (!config || !skin || !position || !skinIndex || !skinWeight || !skeleton) {
+      return null;
+    }
+    if (inst.skinnedMeshHitCache?.skin === skin
+      && inst.skinnedMeshHitCache?.geometry === geometry
+      && inst.skinnedMeshHitCache?.config === config) {
+      return inst.skinnedMeshHitCache;
+    }
+
+    /* SkeletonUtils clones share immutable geometry. Reuse the expensive
+       connected-shell fit prepared from the loaded species source; attaching
+       a spawned instance then costs one tiny object rather than a 31k-vertex
+       scan on the player's first shot. */
+    const prepared = meshVolumeTemplates.get(geometry);
+    if (prepared?.config === config) {
+      inst.skinnedMeshHitCache = {
+        ...prepared, skin, rayTests: 0, broadRejects: 0, proxyTests: 0,
+      };
+      return inst.skinnedMeshHitCache;
+    }
+
+    const included = new Set(config.bones || []);
+    const headBones = new Set(config.headBones || []);
+    const owner = new Int16Array(position.count);
+    owner.fill(-1);
+    const parent = new Int32Array(position.count);
+    parent.fill(-1);
+    const readLane = ["getX", "getY", "getZ", "getW"];
+
+    /* Classify by the strongest authored skin weight. Do not fall through to
+       a weaker included influence: that would turn excluded antenna trim
+       into a generous headshot volume merely because it brushes the skull. */
+    for (let vertex = 0; vertex < position.count; vertex += 1) {
+      let bestWeight = -1;
+      let bestBone = -1;
+      for (let lane = 0; lane < 4; lane += 1) {
+        const weight = skinWeight[readLane[lane]](vertex);
+        if (weight <= bestWeight) continue;
+        bestWeight = weight;
+        bestBone = Math.round(skinIndex[readLane[lane]](vertex));
+      }
+      const boneName = skeleton.bones[bestBone]?.name || "";
+      if (!included.has(boneName)) continue;
+      owner[vertex] = bestBone;
+      parent[vertex] = vertex;
+    }
+
+    const find = (value) => {
+      let root = value;
+      while (parent[root] !== root) root = parent[root];
+      while (parent[value] !== value) {
+        const next = parent[value];
+        parent[value] = root;
+        value = next;
+      }
+      return root;
+    };
+    const unite = (left, right) => {
+      if (left < 0 || right < 0 || parent[left] < 0 || parent[right] < 0
+        || owner[left] !== owner[right]) return;
+      const a = find(left);
+      const b = find(right);
+      if (a !== b) parent[b] = a;
+    };
+
+    /* Preserve disconnected Meshy shells as disconnected hit volumes. A
+       bone-wide fit around every plate it owns would truthfully contain all
+       vertices while also filling the gaps between legs and armour fins. */
+    const index = geometry.getIndex?.();
+    const cornerCount = index ? index.count : position.count;
+    const vertexAt = index ? (corner) => index.getX(corner) : (corner) => corner;
+    for (let corner = 0; corner + 2 < cornerCount; corner += 3) {
+      const a = vertexAt(corner);
+      const b = vertexAt(corner + 1);
+      const c = vertexAt(corner + 2);
+      unite(a, b); unite(b, c); unite(c, a);
+    }
+
+    const buckets = new Map();
+    for (let vertex = 0; vertex < position.count; vertex += 1) {
+      if (parent[vertex] < 0) continue;
+      const root = find(vertex);
+      let bucket = buckets.get(root);
+      if (!bucket) {
+        const boneIndex = owner[vertex];
+        const boneName = skeleton.bones[boneIndex]?.name || "";
+        bucket = {
+          boneIndex,
+          boneName,
+          head: false,
+          vertices: [],
+        };
+        buckets.set(root, bucket);
+      }
+      bucket.vertices.push(vertex);
+    }
+
+    const proxies = [];
+    const point = (vertex, out = new THREE.Vector3()) => out.set(
+      position.getX(vertex), position.getY(vertex), position.getZ(vertex));
+    const splitRadius = Math.max(0.08, Number(config.splitRadius) || 0.46);
+    const minRadius = Math.max(0.01, Number(config.minRadius) || 0.035);
+    let originRadius = 0;
+    const classifyBucket = (bucket) => {
+      const low = [Infinity, Infinity, Infinity];
+      const high = [-Infinity, -Infinity, -Infinity];
+      const centre = new THREE.Vector3();
+      for (const vertex of bucket.vertices) {
+        const p = point(vertex, _meshLocalVertex);
+        low[0] = Math.min(low[0], p.x); high[0] = Math.max(high[0], p.x);
+        low[1] = Math.min(low[1], p.y); high[1] = Math.max(high[1], p.y);
+        low[2] = Math.min(low[2], p.z); high[2] = Math.max(high[2], p.z);
+        originRadius = Math.max(originRadius, p.length());
+      }
+      centre.set(
+        (low[0] + high[0]) * 0.5,
+        (low[1] + high[1]) * 0.5,
+        (low[2] + high[2]) * 0.5
+      );
+      const spans = [high[0] - low[0], high[1] - low[1], high[2] - low[2]]
+        .sort((left, right) => left - right);
+      const middle = Math.max(0.01, spans[1]);
+      const feeler = spans[2] >= 0.28
+        && middle <= (Number(config.feelerWidth) || 0.16)
+        && spans[2] / middle >= (Number(config.feelerAspect) || 3.2);
+      const core = config.headCore;
+      const inHeadCore = !core || centre.distanceTo(_meshProxyA.set(
+        Number(core.x) || 0, Number(core.y) || 0, Number(core.z) || 0
+      )) <= (Number(core.r) || 0.7);
+      const mandible = bucket.boneName.startsWith("mandible_");
+      const namedAntenna = bucket.boneName.startsWith("antenna_");
+      const mz = config.mandibleZone;
+      /* Some Meshy mouth blades were coherently reassigned to `head` with
+         nearby face plates. Their low, forward location distinguishes them
+         from the high/rear feelers even when both are slender components. */
+      const visualMandible = !!mz && bucket.boneName === "head"
+        && Math.abs(centre.x) <= (Number(mz.maxX) || 0.44)
+        && centre.y >= (Number(mz.minY) || 1.16)
+        && centre.y <= (Number(mz.maxY) || 1.52)
+        && centre.z >= (Number(mz.minZ) || 0.98)
+        && centre.z <= (Number(mz.maxZ) || 1.54);
+      /* Shape alone is ambiguous in this Meshy remesh: a legitimate narrow
+         midline facial plate is more slender than one small antenna-base
+         ring. Anatomical placement resolves both. Feelers leave the skull
+         high and laterally; narrow geometry on the lower centreline remains
+         part of the face. The mandible zone wins first at their shared base. */
+      const lateral = Math.abs(centre.x) >= 0.10;
+      const anatomicalFeeler = namedAntenna || (!visualMandible && (
+        (lateral && centre.y >= 1.54)
+        || (Math.abs(centre.x) >= 0.14 && feeler)
+      ));
+      bucket.head = mandible || visualMandible || (headBones.has(bucket.boneName)
+        && inHeadCore && !anatomicalFeeler);
+      bucket.region = bucket.head ? "head"
+        : (anatomicalFeeler ? "antenna" : "body");
+    };
+    for (const bucket of buckets.values()) classifyBucket(bucket);
+
+    const fitProxy = (bucket, vertices, depth = 0) => {
+      if (!vertices.length) return;
+      let a = point(vertices[0]);
+      let farthest = -1;
+      for (const vertex of vertices) {
+        const d2 = point(vertex, _meshLocalVertex).distanceToSquared(a);
+        if (d2 > farthest) { farthest = d2; a = _meshLocalVertex.clone(); }
+      }
+      let b = a.clone();
+      farthest = -1;
+      for (const vertex of vertices) {
+        const d2 = point(vertex, _meshLocalVertex).distanceToSquared(a);
+        if (d2 > farthest) { farthest = d2; b = _meshLocalVertex.clone(); }
+      }
+      const axis = b.clone().sub(a);
+      const axisLengthSq = Math.max(1e-8, axis.lengthSq());
+      let radius = 0;
+      for (const vertex of vertices) {
+        const p = point(vertex, _meshLocalVertex);
+        const t = clamp(p.clone().sub(a).dot(axis) / axisLengthSq, 0, 1);
+        radius = Math.max(radius,
+          p.distanceTo(_meshProxyA.copy(a).addScaledVector(axis, t)));
+      }
+
+      /* Connected does not necessarily mean compact: a hooked scythe plate
+         can bend far away from its farthest-point chord. Recursively split
+         only those oversized fits, keeping each final capsule close to the
+         visible surface rather than claiming the hook's empty interior. */
+      if (radius > splitRadius && vertices.length > 18 && depth < 6) {
+        const bounds = [
+          [Infinity, -Infinity], [Infinity, -Infinity], [Infinity, -Infinity],
+        ];
+        for (const vertex of vertices) {
+          const p = point(vertex, _meshLocalVertex);
+          bounds[0][0] = Math.min(bounds[0][0], p.x);
+          bounds[0][1] = Math.max(bounds[0][1], p.x);
+          bounds[1][0] = Math.min(bounds[1][0], p.y);
+          bounds[1][1] = Math.max(bounds[1][1], p.y);
+          bounds[2][0] = Math.min(bounds[2][0], p.z);
+          bounds[2][1] = Math.max(bounds[2][1], p.z);
+        }
+        const widest = [0, 1, 2].sort((left, right) =>
+          (bounds[right][1] - bounds[right][0])
+          - (bounds[left][1] - bounds[left][0]))[0];
+        const sorted = [...vertices].sort((left, right) => {
+          const lp = widest === 0 ? position.getX(left) : widest === 1
+            ? position.getY(left) : position.getZ(left);
+          const rp = widest === 0 ? position.getX(right) : widest === 1
+            ? position.getY(right) : position.getZ(right);
+          return lp - rp || left - right;
+        });
+        const middle = Math.floor(sorted.length * 0.5);
+        fitProxy(bucket, sorted.slice(0, middle), depth + 1);
+        fitProxy(bucket, sorted.slice(middle), depth + 1);
+        return;
+      }
+
+      proxies.push({
+        representative: vertices[0],
+        a, b,
+        radius: Math.max(minRadius, radius),
+        head: bucket.head,
+        region: bucket.region,
+        boneName: bucket.boneName,
+      });
+    };
+    for (const bucket of buckets.values()) fitProxy(bucket, bucket.vertices);
+
+    const template = {
+      geometry,
+      config,
+      proxies,
+      originRadius,
+      headProxies: proxies.filter((proxy) => proxy.head).length,
+      antennaProxies: proxies.filter((proxy) => proxy.region === "antenna").length,
+      prepared: false,
+    };
+    meshVolumeTemplates.set(geometry, template);
+    inst.skinnedMeshHitCache = {
+      ...template, skin, rayTests: 0, broadRejects: 0, proxyTests: 0,
+    };
+    return inst.skinnedMeshHitCache;
+  }
+
+  /** Fit every opted-in species source during combat construction. */
+  function prewarmMeshHitboxTemplates() {
+    for (const [key, species] of enemies.species || []) {
+      const box = HITBOX[key];
+      if (!box?.meshVolumes || !species?.source) continue;
+      let skin = null;
+      species.source.traverse?.((node) => {
+        if (!skin && node.isSkinnedMesh) skin = node;
+      });
+      if (!skin) continue;
+      const holder = { skin };
+      const cache = skinnedMeshHitCache(holder, box);
+      const template = skin.geometry && meshVolumeTemplates.get(skin.geometry);
+      if (!cache || !template || template.prepared) continue;
+      template.prepared = true;
+      prewarmedMeshTemplates += 1;
+    }
+  }
+
+  /** Attach prepared immutable proxy data to a live clone. */
+  function prepareMeshHitbox(inst) {
+    const box = HITBOX[inst?.key];
+    return !!(box?.meshVolumes && skinnedMeshHitCache(inst, box)?.proxies?.length);
+  }
+
+  function prepareLiveMeshHitboxes() {
+    for (const inst of enemies.live) {
+      if (!inst.skinnedMeshHitCache && HITBOX[inst.key]?.meshVolumes) {
+        prepareMeshHitbox(inst);
+      }
+    }
+  }
+
+  /** Small read-only diagnostic used by the focused asset/fight gate. */
+  function meshHitboxStatus(inst) {
+    const box = HITBOX[inst?.key];
+    const geometry = inst?.skin?.geometry;
+    const template = geometry && meshVolumeTemplates.get(geometry);
+    const cache = inst?.skinnedMeshHitCache;
+    return {
+      enabled: !!box?.meshVolumes,
+      templateReady: !!template?.proxies?.length,
+      templatePrewarmed: !!template?.prepared,
+      instanceReady: !!cache?.proxies?.length,
+      proxyCount: template?.proxies?.length || 0,
+      headProxyCount: template?.headProxies || 0,
+      antennaProxyCount: template?.antennaProxies || 0,
+      templatesPrewarmed: prewarmedMeshTemplates,
+      rayTests: cache?.rayTests || 0,
+      broadRejects: cache?.broadRejects || 0,
+      proxyTests: cache?.proxyTests || 0,
+    };
+  }
+
+  function skinnedProxyWorld(cache, proxy, outA, outB) {
+    outA.copy(proxy.a);
+    outB.copy(proxy.b);
+    cache.skin.applyBoneTransform(proxy.representative, outA);
+    cache.skin.applyBoneTransform(proxy.representative, outB);
+    cache.skin.localToWorld(outA);
+    cache.skin.localToWorld(outB);
+  }
+
+  const meshRootScale = (inst) => Math.max(
+    Math.abs(inst?.root?.scale?.x || 1),
+    Math.abs(inst?.root?.scale?.y || 1),
+    Math.abs(inst?.root?.scale?.z || 1)
+  );
+
+  /** Cheap conservative reject before refreshing bones or testing proxies. */
+  function meshRayBroadPhase(inst, box, cache,
+    ox, oy, oz, dx, dy, dz, maxT) {
+    const radius = cache.originRadius * meshRootScale(inst)
+      + Math.max(0, Number(box.meshVolumes.broadPadding) || 1);
+    const mx = inst.x - ox;
+    const my = inst.y - oy;
+    const mz = inst.z - oz;
+    const along = clamp(mx * dx + my * dy + mz * dz, 0, maxT);
+    const px = ox + dx * along - inst.x;
+    const py = oy + dy * along - inst.y;
+    const pz = oz + dz * along - inst.z;
+    return px * px + py * py + pz * pz <= radius * radius;
+  }
+
+  /** IK edits child-bone quaternions after the normal scene walk. Refresh the
+   *  complete rig hierarchy before Skeleton.update consumes those matrices;
+   *  updating only the skin node leaves a just-moved foot proxy one frame
+   *  behind the foot players can see. */
+  function refreshSkinnedProxyPose(inst, cache) {
+    inst.root?.updateWorldMatrix?.(true, true);
+    cache.skin.updateWorldMatrix(true, false);
+    cache.skin.skeleton.update();
+    cache.skin.getWorldScale(_meshWorldScale);
+    return Math.max(
+      Math.abs(_meshWorldScale.x),
+      Math.abs(_meshWorldScale.y),
+      Math.abs(_meshWorldScale.z)
+    );
+  }
+
+  /** Nearest fitted visual shell along a ray, retaining head ownership. */
+  function skinnedMeshRayHit(inst, box, ox, oy, oz, dx, dy, dz, maxT) {
+    const cache = skinnedMeshHitCache(inst, box);
+    if (!cache?.proxies?.length) return null;
+    cache.rayTests += 1;
+    if (!meshRayBroadPhase(inst, box, cache,
+      ox, oy, oz, dx, dy, dz, maxT)) {
+      cache.broadRejects += 1;
+      return null;
+    }
+    const scale = refreshSkinnedProxyPose(inst, cache);
+    const padding = Math.max(0, Number(box.meshVolumes.padding) || 0);
+    let bestT = maxT;
+    let head = false;
+    let found = false;
+    cache.proxyTests += cache.proxies.length;
+    for (const proxy of cache.proxies) {
+      skinnedProxyWorld(cache, proxy, _meshProxyA, _meshProxyB);
+      const t = segmentHit(ox, oy, oz, dx, dy, dz,
+        _meshProxyA, _meshProxyB, proxy.radius * scale + padding);
+      if (t < 0 || t >= bestT) continue;
+      bestT = t;
+      head = proxy.head;
+      found = true;
+    }
+    return found ? { t: bestT, head } : null;
   }
 
   /* ============================================================
@@ -1034,6 +1480,69 @@ export function buildCombat(ctx) {
     return true;
   }
 
+  /** Nearest posed visual surface the lance can physically reach. */
+  function nearestMeshVolumePoint(inst, box, x, z, py, maxReach,
+    yaw, arc, eyeY, out) {
+    const cache = skinnedMeshHitCache(inst, box);
+    if (!cache?.proxies?.length) return null;
+    const config = box.meshVolumes;
+    const broadRadius = cache.originRadius * meshRootScale(inst)
+      + Math.max(0, Number(config.broadPadding) || 1);
+    if (Math.hypot(inst.x - x, inst.z - z) > maxReach + broadRadius) return null;
+
+    const scale = refreshSkinnedProxyPose(inst, cache);
+    const padding = Math.max(0, Number(config.meleePadding) || 0.24);
+    const reachY = py + Math.max(0.5, Number(config.meleeReachY) || 3.2);
+    let bestDistance = Infinity;
+    let bestSurface = Infinity;
+    let bestRadius = 0;
+    let bestRegion = "body";
+    for (const proxy of cache.proxies) {
+      skinnedProxyWorld(cache, proxy, _meshProxyA, _meshProxyB);
+      const radius = proxy.radius * scale + padding;
+      /* A thick plate whose centreline is just above the swing is still
+         reachable at its lower edge, hence the radius added to the clip. */
+      if (!clipSegmentBelowY(_meshProxyA, _meshProxyB, reachY + radius,
+        _legClipA, _legClipB)) continue;
+      const distance = nearestOnSegmentXZ(
+        _legClipA.x, _legClipA.y, _legClipA.z,
+        _legClipB.x, _legClipB.y, _legClipB.z,
+        x, z, _legCand);
+      const surface = distance - radius;
+      if (surface > maxReach) continue;
+      if (surface >= bestSurface) continue;
+      /* Choose among what THIS swing can reach, not globally first. A rear
+         foot is often physically closer to the player than a raised front
+         scythe; selecting it and applying the arc afterwards made that rear
+         miss mask the valid target in front. Preserve the established
+         touching exception and masonry LOS semantics per candidate. */
+      if (distance > 1.2) {
+        const dx = _legCand.x - x;
+        const dz = _legCand.z - z;
+        let rel = Math.atan2(dx, dz) - yaw;
+        while (rel > Math.PI) rel -= TAU;
+        while (rel < -Math.PI) rel += TAU;
+        if (Math.abs(rel) > arc * 0.5) continue;
+        const inv = 1 / Math.max(1e-4, distance);
+        if (collide.rayBlock(x, eyeY, z,
+          dx * inv, 0, dz * inv, distance) < distance) continue;
+      }
+      bestDistance = distance;
+      bestSurface = surface;
+      bestRadius = radius;
+      bestRegion = proxy.region;
+      out.copy(_legCand);
+      if (out.y > reachY) out.y = reachY;
+    }
+    if (!Number.isFinite(bestDistance)) return null;
+    return {
+      dist: bestDistance,
+      surface: bestSurface,
+      radius: bestRadius,
+      region: bestRegion,
+    };
+  }
+
   function nearestLegPoint(inst, box, x, z, py, out) {
     let best = Infinity;
     let bestSurface = Infinity;
@@ -1301,6 +1810,29 @@ export function buildCombat(ctx) {
         };
         bestT = lb.t;
         continue;
+      }
+
+      /* A remodel whose readable silhouette is mostly articulated limbs
+         uses its fitted visual shells instead of the old centre capsule.
+         Fall through only while the skin is genuinely unavailable (for
+         example during a failed/unfinished asset load), preserving the
+         ordinary envelope as a graceful fallback rather than adding it on
+         top and filling every intentional gap in the mantis silhouette. */
+      if (box.meshVolumes) {
+        const cache = skinnedMeshHitCache(inst, box);
+        if (cache?.proxies?.length) {
+          const meshHit = skinnedMeshRayHit(
+            inst, box, ox, oy, oz, dx, dy, dz, bestT);
+          if (!meshHit) continue;
+          best = {
+            inst, t: meshHit.t, weak: false, head: meshHit.head,
+            x: ox + dx * meshHit.t,
+            y: oy + dy * meshHit.t,
+            z: oz + dz * meshHit.t,
+          };
+          bestT = meshHit.t;
+          continue;
+        }
       }
 
       // Project the enemy's centre onto the ray.
@@ -1578,12 +2110,18 @@ export function buildCombat(ctx) {
       if (inst.spec?.flies && !inst.grounded) continue;
       const legTarget = box.legs
         ? nearestLegPoint(inst, box, ps.x, ps.z, ps.y, _bodyNear) : null;
-      const near = legTarget ? legTarget.dist : nearestBodyPoint(inst, ps.x, ps.z, _bodyNear);
+      const meshTarget = box.meshVolumes
+        ? nearestMeshVolumePoint(inst, box, ps.x, ps.z, ps.y, reach,
+          ps.yaw, arc, eyeY, _bodyNear)
+        : null;
+      if (box.meshVolumes && !meshTarget) continue;
+      const near = legTarget ? legTarget.dist : meshTarget ? meshTarget.dist
+        : nearestBodyPoint(inst, ps.x, ps.z, _bodyNear);
       const dx = _bodyNear.x - ps.x;
       const dz = _bodyNear.z - ps.z;
       const dist = Math.max(near, 1e-4);
-      const targetRadius = !box.legs ? box.r * (box.segments ? bodyHitScale(inst) : 1)
-        : legTarget.radius;
+      const targetRadius = box.legs ? legTarget.radius : meshTarget
+        ? meshTarget.radius : box.r * (box.segments ? bodyHitScale(inst) : 1);
       if (box.legs && legTarget.legIndex < 0 && !inst.collapsed) continue;
       if (dist > reach + targetRadius) continue;
       /* TOUCHING RANGE IS ITS OWN CASE. A collapsed boss's body is a
@@ -1607,7 +2145,8 @@ export function buildCombat(ctx) {
       const strikeDamage = inst.key === MELEE_CONFIG.lightEnemy
         ? Math.max(dmg, inst.health)
         : dmg;
-      const hitY = box.legs ? _bodyNear.y : inst.y + box.y1 * 0.55;
+      const hitY = box.legs || box.meshVolumes
+        ? _bodyNear.y : inst.y + box.y1 * 0.55;
       let dealt;
       if (box.legs && legTarget.legIndex >= 0) {
         dealt = damageLeg(inst, legTarget.legIndex, strikeDamage,
@@ -2516,6 +3055,11 @@ export function buildCombat(ctx) {
   function update(dt) {
     clock += dt;
     navigationBudget = 1;
+    meshLivePrewarmIn -= dt;
+    if (meshLivePrewarmIn <= 0) {
+      meshLivePrewarmIn = 0.75;
+      prepareLiveMeshHitboxes();
+    }
     const ps = ctx.player.state;
 
     if (player.dead) {
@@ -2654,6 +3198,14 @@ export function buildCombat(ctx) {
     return true;
   }
 
+  /* Species GLBs are loaded before combat is built, so perform the expensive
+     visual-shell fit under the loading screen. District bosses spawn later in
+     the same initialization turn; the microtask cheaply attaches that ready
+     template before the first playable frame, while update handles later
+     restore/spawn clones. */
+  prewarmMeshHitboxTemplates();
+  if (typeof queueMicrotask === "function") queueMicrotask(prepareLiveMeshHitboxes);
+
   void eye; void tmp; void damp;
 
   return {
@@ -2679,6 +3231,8 @@ export function buildCombat(ctx) {
     // Prepared while the dormant boss is hidden so the first player shot does
     // not pay the one-time visual-proxy fit on its firing frame.
     prepareLegHitbox: (inst) => !!distaffHitCache(inst),
+    prepareMeshHitbox,
+    meshHitboxStatus,
     /** Whether anything can currently be done to a creature at all.
      *  Exposed because "the boss is invulnerable while submerged" is a
      *  claim worth asserting in a test rather than trusting. */

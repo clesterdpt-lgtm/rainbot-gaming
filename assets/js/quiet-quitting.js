@@ -1,10 +1,9 @@
 /**
  * Quiet Quitting - Rainbot Gaming
- * Satirical Corporate Pac-Man Maze Chaser
+ * Satirical office maze. Pac-Man rules, cubicle-farm look.
  *
- * Full thematic visual overhaul: Office cubicle floor plan, custom office worker sprite,
- * 4 distinct corporate bosses, paycheck/coffee collectibles, consultant surge mode,
- * and rock-solid mobile touch/swipe controls.
+ * 8-bit office floor plan: beige carpet, fabric partitions, desks and
+ * monitors, upright worker/boss sprites. Mechanics stay maze-chase.
  */
 
 (function () {
@@ -252,12 +251,64 @@
     { name: "Golden Parachute", emoji: "🪂", pts: 3000, desc: "Executive severance package!" }
   ];
 
+  /* NES-ish office swatch. No neon cyan maze tubes. */
+  const P = {
+    carpet: "#b7a57a",
+    carpetAlt: "#a89468",
+    carpetLine: "#8f7d55",
+    aisleShadow: "#8a7852",
+    cubicle: "#6e7d70",
+    cubicleDark: "#556358",
+    cubicleLite: "#879488",
+    trim: "#d4c6a3",
+    trimDark: "#b3a37d",
+    desk: "#8a5a2b",
+    deskDark: "#6a4320",
+    monitor: "#2b3340",
+    screen: "#7ec87a",
+    screenDim: "#3d6b42",
+    plant: "#3f7a3a",
+    plantDark: "#2c5a29",
+    pot: "#8b4d2a",
+    conference: "#cfc0a0",
+    table: "#6b4634",
+    tableLite: "#8a5e46",
+    chair: "#4a5560",
+    glass: "#9db8bc",
+    glassLite: "#c5d6d8",
+    elevator: "#5a6570",
+    elevatorDark: "#3d4650",
+    paper: "#f3ead4",
+    ink: "#2d4a32",
+    coffee: "#5a3318",
+    mug: "#eee6d4",
+    gold: "#d4a017",
+    goldLite: "#f0c94d",
+    skin: "#e6c29a",
+    skinDark: "#c9a07a",
+    hair: "#5a3a22",
+    shirt: "#3d5c86",
+    pants: "#2c3540",
+    shoe: "#2a2018",
+    collar: "#efe8d8",
+    phone: "#1c2430",
+    phoneGlow: "#7ec87a",
+    shadow: "rgba(40, 32, 18, 0.28)",
+    fluoro: "rgba(255, 248, 220, 0.04)",
+  };
+
+  function px(ctx, x, y, w, h, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(Math.round(x), Math.round(y), w, h);
+  }
+
   // --- MAIN GAME ENGINE ---
   class QuietQuittingGame {
     constructor() {
       this.canvas = document.getElementById("gameCanvas");
       if (!this.canvas) return;
       this.ctx = this.canvas.getContext("2d");
+      this.ctx.imageSmoothingEnabled = false;
       this.sound = new SoundManager();
 
       // UI Elements
@@ -896,19 +947,7 @@
 
       // 2. Draw Breakroom Bonus Fruit
       if (this.fruit) {
-        const fx = (this.fruit.col + 0.5) * this.tileSize;
-        const fy = (this.fruit.row + 0.5) * this.tileSize;
-
-        // Desk plate
-        this.ctx.fillStyle = "rgba(0, 240, 255, 0.2)";
-        this.ctx.beginPath();
-        this.ctx.arc(fx, fy, 14, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        this.ctx.font = "18px sans-serif";
-        this.ctx.textAlign = "center";
-        this.ctx.textBaseline = "middle";
-        this.ctx.fillText(this.fruit.emoji, fx, fy);
+        this.drawPerk(this.fruit);
       }
 
       // 3. Draw Entities (Player & Bosses)
@@ -922,18 +961,63 @@
       this.renderEffects();
     }
 
+    isCubicle(row, col) {
+      if (row < 0 || col < 0 || row >= ROWS || col >= COLS) return true;
+      return this.maze[row][col] === 1;
+    }
+
+    drawPerk(fruit) {
+      const ts = this.tileSize;
+      const x = Math.round(fruit.col * ts);
+      const y = Math.round(fruit.row * ts);
+      const ctx = this.ctx;
+      px(ctx, x + 4, y + 16, 16, 3, P.shadow);
+      px(ctx, x + 5, y + 8, 14, 8, P.desk);
+      px(ctx, x + 6, y + 9, 12, 2, P.deskDark);
+      const kind = fruit.name;
+      if (kind === "Free Pizza") {
+        px(ctx, x + 8, y + 4, 8, 8, "#c45c2a");
+        px(ctx, x + 9, y + 5, 6, 6, "#e8c86a");
+        px(ctx, x + 10, y + 6, 2, 2, "#b83a2a");
+        px(ctx, x + 13, y + 8, 2, 2, "#b83a2a");
+      } else if (kind === "Cold Brew") {
+        px(ctx, x + 9, y + 3, 6, 8, P.mug);
+        px(ctx, x + 10, y + 4, 4, 5, P.coffee);
+        px(ctx, x + 15, y + 5, 2, 3, P.mug);
+      } else if (kind === "Standing Desk") {
+        px(ctx, x + 7, y + 5, 10, 2, P.desk);
+        px(ctx, x + 8, y + 7, 2, 5, P.deskDark);
+        px(ctx, x + 14, y + 7, 2, 5, P.deskDark);
+      } else if (kind === "Stock Options") {
+        px(ctx, x + 8, y + 4, 8, 8, P.paper);
+        px(ctx, x + 9, y + 9, 2, 2, P.ink);
+        px(ctx, x + 11, y + 7, 2, 4, P.ink);
+        px(ctx, x + 13, y + 5, 2, 6, "#2f6b3a");
+      } else {
+        px(ctx, x + 8, y + 3, 8, 10, P.gold);
+        px(ctx, x + 9, y + 4, 6, 2, P.goldLite);
+        px(ctx, x + 10, y + 7, 4, 4, P.paper);
+      }
+    }
+
     renderOfficeMap() {
       const ts = this.tileSize;
       const t = this.globalTimer;
+      const ctx = this.ctx;
+      ctx.imageSmoothingEnabled = false;
 
-      // Dark Commercial Office Carpet base
-      this.ctx.fillStyle = "#0a0e1a";
-      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-      // Micro carpet grid pattern
-      this.ctx.fillStyle = "rgba(255, 255, 255, 0.015)";
       for (let y = 0; y < this.canvas.height; y += 8) {
-        this.ctx.fillRect(0, y, this.canvas.width, 1);
+        for (let x = 0; x < this.canvas.width; x += 8) {
+          ctx.fillStyle = ((x + y) / 8) % 2 === 0 ? P.carpet : P.carpetAlt;
+          ctx.fillRect(x, y, 8, 8);
+        }
+      }
+      ctx.fillStyle = P.carpetLine;
+      for (let y = 0; y < this.canvas.height; y += 24) {
+        ctx.fillRect(0, y, this.canvas.width, 1);
+      }
+      for (let x = 0; x < this.canvas.width; x += 24) {
+        ctx.fillRect(x, 0, 1, this.canvas.height);
       }
 
       for (let r = 0; r < ROWS; r++) {
@@ -941,110 +1025,96 @@
           const cell = this.maze[r][c];
           const x = c * ts;
           const y = r * ts;
+          const n = this.isCubicle(r - 1, c);
+          const s = this.isCubicle(r + 1, c);
+          const e = this.isCubicle(r, c + 1);
+          const w = this.isCubicle(r, c - 1);
 
           if (cell === 1) {
-            // --- CUBICLE PARTITION WALL ---
-            // Wall body
-            this.ctx.fillStyle = "#162036";
-            this.ctx.fillRect(x, y, ts, ts);
+            px(ctx, x, y, ts, ts, P.cubicle);
+            px(ctx, x + 2, y + 2, ts - 4, ts - 4, P.cubicleDark);
+            if (!n) px(ctx, x, y, ts, 3, P.trim);
+            if (!s) px(ctx, x, y + ts - 3, ts, 3, P.trimDark);
+            if (!w) px(ctx, x, y, 3, ts, P.trim);
+            if (!e) px(ctx, x + ts - 3, y, 3, ts, P.trimDark);
 
-            // Fabric panel inlay
-            this.ctx.fillStyle = "#1e293b";
-            this.ctx.fillRect(x + 2, y + 2, ts - 4, ts - 4);
-
-            // Top aluminum / cyan trim
-            this.ctx.strokeStyle = "#38bdf8";
-            this.ctx.lineWidth = 1.2;
-            this.ctx.strokeRect(x + 1, y + 1, ts - 2, ts - 2);
-
-            // Corner desk computer monitors on select wall clusters
-            if ((r + c) % 5 === 0) {
-              this.ctx.fillStyle = "#0f172a";
-              this.ctx.fillRect(x + 4, y + 4, ts - 8, ts - 8);
-              this.ctx.fillStyle = "#22d3ee";
-              this.ctx.fillRect(x + 6, y + 6, ts - 12, 4); // glowing screen
+            if (!s) {
+              px(ctx, x + 3, y + 10, ts - 6, 8, P.desk);
+              px(ctx, x + 4, y + 11, ts - 8, 2, P.deskDark);
+              if ((r + c) % 3 === 0) {
+                px(ctx, x + 6, y + 4, 12, 8, P.monitor);
+                px(ctx, x + 8, y + 6, 8, 4, Math.sin(t * 3 + c) > 0 ? P.screen : P.screenDim);
+                px(ctx, x + 10, y + 12, 4, 3, P.deskDark);
+              } else if ((r + c) % 3 === 1) {
+                px(ctx, x + 7, y + 6, 10, 6, P.paper);
+                px(ctx, x + 8, y + 7, 8, 1, P.ink);
+                px(ctx, x + 8, y + 9, 6, 1, P.ink);
+              }
+            } else if (!n && (r + c) % 7 === 0) {
+              px(ctx, x + 8, y + 4, 8, 6, P.plant);
+              px(ctx, x + 10, y + 2, 4, 4, P.plantDark);
+              px(ctx, x + 9, y + 10, 6, 4, P.pot);
+            } else if (!w && (c + r) % 6 === 2) {
+              px(ctx, x + 4, y + 6, 8, 12, P.chair);
+              px(ctx, x + 5, y + 8, 6, 3, P.cubicleLite);
             }
           } else if (cell === 4) {
-            // --- MANAGEMENT BREAKROOM PEN ---
-            this.ctx.fillStyle = "#1c1917";
-            this.ctx.fillRect(x, y, ts, ts);
-            // Tile grid
-            this.ctx.strokeStyle = "rgba(217, 119, 6, 0.15)";
-            this.ctx.lineWidth = 1;
-            this.ctx.strokeRect(x, y, ts, ts);
+            px(ctx, x, y, ts, ts, P.conference);
+            px(ctx, x, y, ts, 1, P.trimDark);
+            px(ctx, x, y, 1, ts, P.trimDark);
+            if (c >= 12 && c <= 16 && r >= 13 && r <= 14) {
+              px(ctx, x + 2, y + 6, ts - 4, 10, P.table);
+              px(ctx, x + 3, y + 7, ts - 6, 2, P.tableLite);
+            }
+            if ((c === 11 || c === 17) && (r === 13 || r === 14)) {
+              px(ctx, x + 8, y + 10, 8, 8, P.chair);
+            }
           } else if (cell === 5) {
-            // --- SECURITY KEYCARD TURNSTILE GATE ---
-            this.ctx.strokeStyle = "#f43f5e";
-            this.ctx.lineWidth = 2.5;
-            this.ctx.beginPath();
-            this.ctx.moveTo(x, y + ts / 2);
-            this.ctx.lineTo(x + ts, y + ts / 2);
-            this.ctx.stroke();
-
-            // Blinking laser status
-            this.ctx.fillStyle = Math.sin(t * 8) > 0 ? "#f43f5e" : "#fda4af";
-            this.ctx.beginPath();
-            this.ctx.arc(x + ts / 2, y + ts / 2, 2.5, 0, Math.PI * 2);
-            this.ctx.fill();
+            px(ctx, x, y + 8, ts, 8, P.glass);
+            px(ctx, x, y + 8, ts, 2, P.glassLite);
+            px(ctx, x + 10, y + 10, 4, 4, Math.sin(t * 6) > 0 ? "#c45c4a" : "#7a8a6a");
           } else if (cell === 6) {
-            // --- SMOKE BREAK WARP TUNNEL ---
-            this.ctx.fillStyle = "#059669";
-            this.ctx.font = "bold 9px 'JetBrains Mono', monospace";
-            this.ctx.textAlign = "center";
-            this.ctx.textBaseline = "middle";
-            this.ctx.fillText("EXIT", x + ts / 2, y + ts / 2);
+            px(ctx, x + 4, y + 2, 16, 20, P.elevatorDark);
+            px(ctx, x + 6, y + 4, 6, 16, P.elevator);
+            px(ctx, x + 12, y + 4, 6, 16, P.elevator);
+            px(ctx, x + 11, y + 4, 2, 16, P.elevatorDark);
+            px(ctx, x + 8, y + 12, 2, 2, P.gold);
           } else if (cell === 2) {
-            // --- PAYCHECK ENVELOPE / COFFEE DOTS ---
-            const cx = x + ts / 2;
-            const cy = y + ts / 2;
-
-            if ((r + c) % 2 === 0) {
-              // Miniature Paycheck Envelope ✉️
-              this.ctx.fillStyle = "#f8fafc";
-              this.ctx.fillRect(cx - 4, cy - 3, 8, 6);
-              this.ctx.strokeStyle = "#16a34a";
-              this.ctx.lineWidth = 1;
-              this.ctx.strokeRect(cx - 4, cy - 3, 8, 6);
-              this.ctx.fillStyle = "#15803d";
-              this.ctx.fillRect(cx - 1, cy - 1.5, 2, 3);
+            const cx = x + 8;
+            const cy = y + 9;
+            const kind = (r * 3 + c) % 4;
+            if (kind === 0) {
+              px(ctx, cx, cy, 8, 6, P.paper);
+              px(ctx, cx + 1, cy + 1, 6, 1, P.ink);
+              px(ctx, cx + 3, cy + 3, 2, 2, "#2f6b3a");
+            } else if (kind === 1) {
+              px(ctx, cx + 1, cy, 6, 7, P.mug);
+              px(ctx, cx + 2, cy + 1, 4, 4, P.coffee);
+              px(ctx, cx + 7, cy + 2, 2, 3, P.mug);
+            } else if (kind === 2) {
+              px(ctx, cx, cy, 8, 6, "#e8d36a");
+              px(ctx, cx + 1, cy + 2, 6, 1, "#6a5420");
             } else {
-              // Miniature Coffee Cup ☕
-              this.ctx.fillStyle = "#ffffff";
-              this.ctx.fillRect(cx - 3, cy - 3, 6, 6);
-              this.ctx.fillStyle = "#78350f";
-              this.ctx.fillRect(cx - 2, cy - 2, 4, 3); // coffee liquid
-              this.ctx.strokeStyle = "#cbd5e1";
-              this.ctx.lineWidth = 1;
-              this.ctx.strokeRect(cx - 3, cy - 3, 6, 6);
+              px(ctx, cx + 1, cy + 2, 7, 2, "#8a8f96");
+              px(ctx, cx + 5, cy, 2, 6, "#8a8f96");
             }
           } else if (cell === 3) {
-            // --- CONSULTANT VIP LANYARD BADGE (POWER PELLET) ---
-            const cx = x + ts / 2;
-            const cy = y + ts / 2;
-            const pulse = (Math.sin(t * 8) + 1) * 0.5;
-
-            // Radiant golden aura
-            this.ctx.fillStyle = "rgba(250, 204, 21, 0.25)";
-            this.ctx.beginPath();
-            this.ctx.arc(cx, cy, 9 + pulse * 3, 0, Math.PI * 2);
-            this.ctx.fill();
-
-            // VIP Lanyard Badge
-            this.ctx.fillStyle = "#f59e0b";
-            this.ctx.fillRect(cx - 6, cy - 6, 12, 12);
-            this.ctx.strokeStyle = "#ffd700";
-            this.ctx.lineWidth = 1.5;
-            this.ctx.strokeRect(cx - 6, cy - 6, 12, 12);
-
-            // Inner VIP star
-            this.ctx.fillStyle = "#ffffff";
-            this.ctx.font = "bold 9px sans-serif";
-            this.ctx.textAlign = "center";
-            this.ctx.textBaseline = "middle";
-            this.ctx.fillText("★", cx, cy + 0.5);
+            const pulse = Math.sin(t * 6) > 0;
+            px(ctx, x + 8, y + 4, 8, 10, pulse ? P.goldLite : P.gold);
+            px(ctx, x + 9, y + 5, 6, 8, P.paper);
+            px(ctx, x + 10, y + 6, 4, 3, P.skin);
+            px(ctx, x + 10, y + 10, 4, 2, P.shirt);
+            px(ctx, x + 11, y + 2, 2, 3, "#6a2424");
+          } else if (cell === 0 || cell === 7) {
+            if ((r + c) % 11 === 0) {
+              px(ctx, x + 18, y + 2, 4, 6, P.aisleShadow);
+            }
           }
         }
       }
+
+      ctx.fillStyle = P.fluoro;
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
 
     renderEffects() {
@@ -1052,9 +1122,8 @@
       for (const p of this.particles) {
         this.ctx.fillStyle = p.color;
         this.ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
-        this.ctx.beginPath();
-        this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        this.ctx.fill();
+        const s = Math.max(2, Math.round(p.size));
+        this.ctx.fillRect(Math.round(p.x), Math.round(p.y), s, s);
       }
       this.ctx.globalAlpha = 1.0;
 
@@ -1155,107 +1224,52 @@
 
     render(ctx) {
       const ts = this.game.tileSize;
-      const px = (this.x + 0.5) * ts;
-      const py = (this.y + 0.5) * ts;
+      const ox = Math.round((this.x + 0.5) * ts);
+      const oy = Math.round((this.y + 0.5) * ts);
       const isConsultant = this.game.frightenedTimer > 0;
+      const faceLeft = this.dir === DIRECTIONS.LEFT;
+      const step = Math.sin(this.walkTimer) > 0 ? 1 : 0;
 
       ctx.save();
-      ctx.translate(px, py);
+      ctx.translate(ox, oy);
+      if (faceLeft) ctx.scale(-1, 1);
+      ctx.imageSmoothingEnabled = false;
 
-      // Rotate based on direction
-      let angle = 0;
-      if (this.dir === DIRECTIONS.RIGHT) angle = 0;
-      else if (this.dir === DIRECTIONS.DOWN) angle = Math.PI * 0.5;
-      else if (this.dir === DIRECTIONS.LEFT) angle = Math.PI;
-      else if (this.dir === DIRECTIONS.UP) angle = -Math.PI * 0.5;
-      ctx.rotate(angle);
+      px(ctx, -6, 9, 12, 2, P.shadow);
 
-      // 1. Consultant Aura & Dollars
       if (isConsultant) {
-        ctx.fillStyle = "rgba(250, 204, 21, 0.25)";
-        ctx.beginPath();
-        ctx.arc(0, 0, 16, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = "#ffd700";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(0, 0, 14, 0, Math.PI * 2);
-        ctx.stroke();
+        px(ctx, -9, -12, 18, 2, P.gold);
+        px(ctx, -8, -11, 16, 1, P.goldLite);
       }
 
-      // 2. Animated Feet (Walking)
-      const legSwing = Math.sin(this.walkTimer) * 4;
-      ctx.fillStyle = "#334155"; // shoes
-      ctx.fillRect(-8 + legSwing, -10, 5, 3);
-      ctx.fillRect(-8 - legSwing, 7, 5, 3);
+      px(ctx, -5 + step, 6, 4, 3, P.shoe);
+      px(ctx, 1 - step, 6, 4, 3, P.shoe);
+      px(ctx, -4, 1, 3, 6, P.pants);
+      px(ctx, 1, 1, 3, 6, P.pants);
 
-      // 3. Worker Body (Blue Oxford Shirt / Executive Blazer)
-      ctx.fillStyle = isConsultant ? "#0f172a" : "#2563eb";
-      ctx.beginPath();
-      ctx.roundRect(-8, -7, 16, 14, 4);
-      ctx.fill();
+      px(ctx, -5, -5, 10, 8, isConsultant ? "#1e2430" : P.shirt);
+      px(ctx, -1, -5, 2, 4, P.collar);
 
-      // White collar
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.moveTo(2, -3);
-      ctx.lineTo(6, 0);
-      ctx.lineTo(2, 3);
-      ctx.fill();
+      px(ctx, -4, -12, 8, 7, P.skin);
+      px(ctx, -4, -14, 8, 3, P.hair);
+      px(ctx, -5, -12, 2, 3, P.hair);
+      px(ctx, 1, -10, 2, 2, "#2a2018");
 
-      // 4. Head & Messy Hair
-      ctx.fillStyle = "#fbcfe8"; // Skin tone
-      ctx.beginPath();
-      ctx.arc(0, 0, 6, 0, Math.PI * 2);
-      ctx.fill();
+      px(ctx, -6, -11, 2, 4, "#2c3a4a");
+      px(ctx, 4, -11, 2, 4, "#2c3a4a");
+      px(ctx, -5, -14, 10, 2, "#2c3a4a");
 
-      // Messy Brown Hair
-      ctx.fillStyle = "#5c3a21";
-      ctx.beginPath();
-      ctx.arc(-2, 0, 5.5, Math.PI * 0.5, Math.PI * 1.5);
-      ctx.fill();
-
-      // 5. Noise-Cancelling Headphones (Blue band + Pink earcups)
-      ctx.strokeStyle = "#22d3ee";
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.arc(0, 0, 7.5, Math.PI * 0.8, Math.PI * 2.2);
-      ctx.stroke();
-
-      ctx.fillStyle = "#ec4899";
-      ctx.fillRect(-2, -8.5, 4, 3);
-      ctx.fillRect(-2, 5.5, 4, 3);
-
-      // 6. Right Hand: Coffee Mug with Steam / Consultant Briefcase
       if (isConsultant) {
-        // Golden Briefcase
-        ctx.fillStyle = "#f59e0b";
-        ctx.fillRect(4, -8, 6, 5);
-        ctx.strokeStyle = "#ffd700";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(4, -8, 6, 5);
+        px(ctx, 5, -4, 6, 5, P.gold);
+        px(ctx, 6, -3, 4, 3, P.goldLite);
       } else {
-        // Coffee Mug with Steam
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(5, -6, 5, 5);
-        ctx.fillStyle = "#78350f";
-        ctx.fillRect(6, -5, 3, 3); // dark roast
-
-        // Steam curl
-        ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(7, -8);
-        ctx.lineTo(8, -11 + Math.sin(this.game.globalTimer * 6) * 1.5);
-        ctx.stroke();
+        px(ctx, 5, -3, 5, 5, P.mug);
+        px(ctx, 6, -2, 3, 3, P.coffee);
+        if (Math.sin(this.game.globalTimer * 8) > 0) px(ctx, 7, -6, 1, 2, P.collar);
       }
 
-      // 7. Left Hand: Secret Phone Scroll
-      ctx.fillStyle = "#1e293b";
-      ctx.fillRect(4, 3, 5, 4);
-      ctx.fillStyle = "#38bdf8";
-      ctx.fillRect(5, 4, 3, 2); // screen glow
+      px(ctx, 5, 2, 4, 4, P.phone);
+      px(ctx, 6, 3, 2, 2, P.phoneGlow);
 
       ctx.restore();
     }
@@ -1411,121 +1425,64 @@
 
     render(ctx) {
       const ts = this.game.tileSize;
-      const gx = (this.x + 0.5) * ts;
-      const gy = (this.y + 0.5) * ts;
+      const ox = Math.round((this.x + 0.5) * ts);
+      const oy = Math.round((this.y + 0.5) * ts);
+      const faceLeft = this.dir === DIRECTIONS.LEFT;
+      const step = Math.sin(this.walkTimer) > 0 ? 1 : 0;
 
       ctx.save();
-      ctx.translate(gx, gy);
-
-      // Rotate based on direction
-      let angle = 0;
-      if (this.dir === DIRECTIONS.RIGHT) angle = 0;
-      else if (this.dir === DIRECTIONS.DOWN) angle = Math.PI * 0.5;
-      else if (this.dir === DIRECTIONS.LEFT) angle = Math.PI;
-      else if (this.dir === DIRECTIONS.UP) angle = -Math.PI * 0.5;
-      ctx.rotate(angle);
+      ctx.translate(ox, oy);
+      if (faceLeft) ctx.scale(-1, 1);
+      ctx.imageSmoothingEnabled = false;
 
       if (this.mode === "EATEN") {
-        // --- EATEN: EMPTY WINGTIP SHOES FLEEING ---
-        ctx.fillStyle = "#0f172a";
-        ctx.fillRect(-6, -6, 12, 4);
-        ctx.fillRect(-6, 2, 12, 4);
+        px(ctx, -6 + step, 6, 5, 3, P.shoe);
+        px(ctx, 1 - step, 6, 5, 3, P.shoe);
         ctx.restore();
         return;
       }
 
       const isFrightened = this.mode === "FRIGHTENED";
       const isExpiring = this.game.frightenedTimer < 2.5;
-      const flash = Math.sin(this.game.globalTimer * 16) > 0;
+      const flash = Math.sin(this.game.globalTimer * 14) > 0;
+      let suit = this.color;
+      if (isFrightened) suit = isExpiring && flash ? "#efe8d8" : "#5a6a8a";
 
-      // 1. Boss Suit / Body
-      let bodyColor = this.color;
-      if (isFrightened) {
-        bodyColor = isExpiring && flash ? "#ffffff" : "#3b82f6";
-      }
+      px(ctx, -6, 9, 12, 2, P.shadow);
+      px(ctx, -5 + step, 6, 4, 3, P.shoe);
+      px(ctx, 1 - step, 6, 4, 3, P.shoe);
+      px(ctx, -4, 1, 3, 6, "#2a2430");
+      px(ctx, 1, 1, 3, 6, "#2a2430");
+      px(ctx, -5, -5, 10, 8, suit);
+      px(ctx, -1, -4, 2, 5, isFrightened ? P.paper : "#7a1f1f");
 
-      ctx.fillStyle = bodyColor;
-      ctx.beginPath();
-      ctx.roundRect(-8, -7, 16, 14, 4);
-      ctx.fill();
-
-      // 2. Boss Head & Face
-      ctx.fillStyle = isFrightened ? "#bfdbfe" : "#fed7aa"; // pale blue if panicking, else skin
-      ctx.beginPath();
-      ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
-      ctx.fill();
+      px(ctx, -4, -12, 8, 7, isFrightened ? "#c9d4dc" : P.skin);
+      px(ctx, 1, -10, 2, 2, "#2a2018");
 
       if (isFrightened) {
-        // Panicked Sweat Droplets & White Surrender Flag
-        ctx.fillStyle = "#38bdf8";
-        ctx.beginPath();
-        ctx.arc(-4, -6, 1.5, 0, Math.PI * 2);
-        ctx.arc(4, -6, 1.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Surrender White Flag
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(4, -8, 6, 4);
-        ctx.strokeStyle = "#94a3b8";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(4, -8, 6, 4);
-      } else {
-        // Specific Character Details
-        if (this.type === "MICROMANAGER") {
-          // Balding Hair + Red Angry Tie + Smartphone
-          ctx.fillStyle = "#78350f";
-          ctx.beginPath();
-          ctx.arc(-2, 0, 5.5, Math.PI * 0.6, Math.PI * 1.4);
-          ctx.fill();
-
-          // Red Tie
-          ctx.fillStyle = "#dc2626";
-          ctx.beginPath();
-          ctx.moveTo(3, -2);
-          ctx.lineTo(8, 0);
-          ctx.lineTo(3, 2);
-          ctx.fill();
-
-          // Angry Phone Pinging
-          ctx.fillStyle = "#0f172a";
-          ctx.fillRect(4, -7, 5, 4);
-          ctx.fillStyle = "#ef4444";
-          ctx.fillRect(5, -6, 3, 2); // red notification dot
-        } else if (this.type === "CALENDAR_BLOCKER") {
-          // Pink Bob Hair + 30m Calendar Tablet
-          ctx.fillStyle = "#fde047"; // Blonde
-          ctx.beginPath();
-          ctx.arc(-1, 0, 5.8, Math.PI * 0.4, Math.PI * 1.6);
-          ctx.fill();
-
-          // Pink Calendar Tablet
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(3, -6, 6, 5);
-          ctx.fillStyle = "#ec4899";
-          ctx.fillRect(4, -5, 4, 3);
-        } else if (this.type === "INTERN") {
-          // Backwards Cyan Cap + Energy Drink
-          ctx.fillStyle = "#06b6d4";
-          ctx.beginPath();
-          ctx.arc(-1, 0, 6, Math.PI * 0.4, Math.PI * 1.6);
-          ctx.fill();
-
-          // Neon Energy Drink Can
-          ctx.fillStyle = "#10b981";
-          ctx.fillRect(4, 3, 5, 4);
-        } else if (this.type === "HR_BOT") {
-          // Gray Bun Hair + Yellow Compliance Clipboard
-          ctx.fillStyle = "#64748b";
-          ctx.beginPath();
-          ctx.arc(-3, 0, 4, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Yellow Legal Clipboard
-          ctx.fillStyle = "#fef08a";
-          ctx.fillRect(3, -6, 6, 6);
-          ctx.fillStyle = "#ef4444";
-          ctx.fillRect(5, -4, 2, 2); // violation checkmark
-        }
+        px(ctx, 5, -14, 6, 4, P.paper);
+        px(ctx, 5, -10, 1, 5, P.chair);
+        px(ctx, -6, -8, 2, 2, "#8ab4c8");
+      } else if (this.type === "MICROMANAGER") {
+        px(ctx, -4, -14, 8, 2, "#4a2e18");
+        px(ctx, -5, -12, 2, 3, "#4a2e18");
+        px(ctx, 5, -6, 5, 4, P.phone);
+        px(ctx, 6, -5, 3, 2, "#c45c4a");
+      } else if (this.type === "CALENDAR_BLOCKER") {
+        px(ctx, -5, -14, 10, 4, "#d4b45a");
+        px(ctx, -5, -11, 2, 3, "#d4b45a");
+        px(ctx, 5, -5, 6, 5, P.paper);
+        px(ctx, 6, -4, 4, 3, "#c45a7a");
+      } else if (this.type === "INTERN") {
+        px(ctx, -5, -15, 10, 4, "#3d6b62");
+        px(ctx, 3, -14, 5, 2, "#3d6b62");
+        px(ctx, 5, 2, 4, 5, "#3f7a3a");
+        px(ctx, 6, 3, 2, 3, "#7ec87a");
+      } else if (this.type === "HR_BOT") {
+        px(ctx, -4, -14, 8, 3, "#6a7080");
+        px(ctx, -2, -16, 4, 3, "#6a7080");
+        px(ctx, 5, -5, 6, 6, "#e8d36a");
+        px(ctx, 7, -3, 2, 2, "#c45c4a");
       }
 
       ctx.restore();

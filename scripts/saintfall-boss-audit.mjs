@@ -83,6 +83,16 @@ try {
     T.advanceTime(0.8, 1 / 60);
     return (${cost})(T, "garner");`));
 
+  await measure("Abbess", new Function("T", `
+    T.teleportToAbbess(34);
+    T.advanceToAbbessPhase("seated", 20);
+    T.forceAbbessClutch();
+    T.advanceTime(5.4, 1 / 60);
+    T.forceAbbessClutch();
+    T.forceAbbessSlam();
+    T.advanceTime(0.9, 1 / 60);
+    return (${cost})(T, "abbess");`));
+
   await measure("Coulter", new Function("T", `
     const s = T.ctx.mission.bosses.find((b) => b.key === "saint");
     T._teleportRaw(s.x + 60, s.z, 0);

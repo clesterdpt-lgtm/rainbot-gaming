@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260815-centered-wide-hud-1";
+  const BUILD = "20260815-bloom-abbess-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -101,7 +101,7 @@
   const MODULES = [
     "core", "art", "sky", "terrain", "structures", "world", "collide",
     "vfx", "render", "player", "jetpack", "boost", "slam", "shield", "enemies", "weapons", "ik", "combat",
-    "mission", "breaches", "coulter", "distaff", "garner", "winnower", "district-bosses", "apostate", "progression-config", "progression", "audio", "hud", "touch", "intro", "pod", "save", "ui", "qa", "main",
+    "mission", "breaches", "abbess", "coulter", "distaff", "garner", "winnower", "district-bosses", "apostate", "progression-config", "progression", "audio", "hud", "touch", "intro", "pod", "save", "ui", "qa", "main",
   ];
 
   function installImportMap(base) {

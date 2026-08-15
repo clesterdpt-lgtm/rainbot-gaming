@@ -3383,6 +3383,7 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
    Modern and minimal: wide sleek bars with bold tabular readouts, no background boxes or text headers. */
 #sf-hud .sf-hud__vitals {
   position: absolute;
+  left: auto;
   right: calc(50% + .75rem);
   bottom: max(1.15rem, calc(env(safe-area-inset-bottom) + .95rem));
   width: min(15rem, 24cqw);
@@ -3452,6 +3453,7 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
 #sf-hud .sf-hud__charge {
   position: absolute;
   left: calc(50% + .75rem);
+  right: auto;
   bottom: max(1.15rem, calc(env(safe-area-inset-bottom) + .95rem));
   width: min(15rem, 24cqw);
   padding: 0;
@@ -3553,7 +3555,7 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  bottom: max(3.7rem, calc(env(safe-area-inset-bottom) + 3.5rem));
+  bottom: max(4.25rem, calc(env(safe-area-inset-bottom) + 4.05rem));
   display: flex;
   width: max-content;
   max-width: 90cqw;
@@ -3690,7 +3692,8 @@ body.sf-command-open #sf-hud .sf-hud__hint {
   #sf-hud .sf-hud__compass { width: min(13.5rem, 25cqw); }
   #sf-hud .sf-hud__objective { width: min(16rem, 28cqw); }
   #sf-hud .sf-hud__minimap { width: 6.55rem; }
-  #sf-hud .sf-hud__vitals { width: min(12rem, 24cqw); }
+  #sf-hud .sf-hud__vitals,
+  #sf-hud .sf-hud__charge { width: min(15rem, 24cqw); }
   #sf-hud .sf-hud__command-head kbd,
   #sf-hud .sf-hud__stratitem { width: 2.15rem; min-width: 2.15rem; height: 2.15rem; min-height: 2.15rem; }
 }

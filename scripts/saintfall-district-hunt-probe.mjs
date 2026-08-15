@@ -111,9 +111,10 @@ try {
 
   console.log("\n=== BOSS ROSTER ===");
   const ossuary = initial.generic.find((boss) => boss.key === "ossuary");
+  const bloom = initial.generic.find((boss) => boss.key === "bloom");
   const saint = initial.generic.find((boss) => boss.key === "saint");
-  check(initial.generic.length === 4,
-    "four shared-simulation bosses join the Distaff, Winnower and Garner",
+  check(initial.generic.length === 3,
+    "three shared-simulation bosses join the four bespoke encounters",
     initial.generic.map((boss) => `${boss.key}:${boss.enemyKey}`).join(" · "));
   /* The Ossuary left the shared roster when its placeholder became a
      real encounter - it is `domain: "garner"` now, driven by its own
@@ -122,6 +123,13 @@ try {
   check(!ossuary && initial.sites.some((boss) => boss.key === "ossuary"),
     "the Ossuary is a bespoke encounter rather than a shared-simulation one",
     `still a mission objective, no longer in the generic roster (generic=${!!ossuary})`);
+  /* The Bloom left the shared roster when the Abbess replaced the
+     Matriarch. The Matriarch is still in the bestiary - the queen lays
+     one under a third health - it is simply no longer a district boss
+     in its own right. */
+  check(!bloom && initial.sites.some((boss) => boss.key === "bloom"),
+    "the Bloom is a bespoke encounter rather than a shared-simulation one",
+    `generic=${!!bloom}`);
   check(saint?.enemyKey === "coulter" && saint.stage === "penultimate"
     && saint.arenaRadius === 285 && !saint.available,
   "the Coulter moved to a locked 285m Fallen Saint arena",
@@ -184,15 +192,16 @@ try {
   `${lockedSaint.phase} · approaches=${lockedSaint.approaches}`);
 
   console.log("\n=== BOUNDARY WARNINGS AND RESET ===");
-  /* Measured on the BLOOM rather than the Ossuary. This block is about
-     the shared boundary machinery in district-bosses.js, and the
-     Ossuary stopped being one of its customers when the Garner replaced
-     the placeholder there - `H.status("ossuary")` correctly returns
-     null now. The Matriarch is the same shared lifecycle, still on it. */
+  /* Measured on the CHOIR. This block is about the shared boundary
+     machinery in district-bosses.js, and the roster of encounters still
+     using it keeps shrinking: the Ossuary left when the Garner replaced
+     its placeholder, and the Bloom left when the Abbess replaced the
+     Matriarch. `H.status()` correctly returns null for both. The
+     Precentor is the same shared lifecycle, still on it. */
   const boundary = await page.evaluate(() => {
     const T = window.__SF;
     const H = T.ctx.districtBosses;
-    const site = T.ctx.mission.bosses.find((boss) => boss.key === "bloom");
+    const site = T.ctx.mission.bosses.find((boss) => boss.key === "choir");
     const events = [];
     const offs = [
       H.bus.on("approach", (event) => events.push(`approach:${event.key}`)),
@@ -203,32 +212,32 @@ try {
     ps.x = site.x + site.arenaRadius + 20;
     ps.z = site.z;
     H.update(0.05);
-    const boss = H.status("bloom");
+    const boss = H.status("choir");
     ps.x = boss.x + 8;
     ps.z = boss.z;
     H.update(0.05);
     for (let i = 0; i < 30; i += 1) H.update(0.1);
-    const active = H.status("bloom");
-    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:bloom");
+    const active = H.status("choir");
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:choir");
     T.ctx.combat.damageEnemy(inst, 500, { source: "qa-boundary" });
-    const damaged = H.status("bloom");
+    const damaged = H.status("choir");
     ps.x = site.x + site.arenaRadius - 10;
     ps.z = site.z;
     H.update(0.05);
     ps.x = site.x + site.arenaRadius + 2;
     H.update(0.05);
-    const reset = H.status("bloom");
+    const reset = H.status("choir");
     for (const off of offs) off?.();
     return { events, active, damaged, reset, missionDone: site.done };
   });
-  check(boundary.events.includes("approach:bloom"),
+  check(boundary.events.includes("approach:choir"),
     "approaching a boss area emits an advance warning", boundary.events.join(" · "));
   check(boundary.active.phase === "active" && !boundary.active.locked
     && boundary.damaged.health < boundary.damaged.maxHealth,
   "entering the area begins a targetable fight whose damage is tracked");
-  check(boundary.events.includes("exit:bloom"),
+  check(boundary.events.includes("exit:choir"),
     "the inner boundary warns that leaving will reset the fight", boundary.events.join(" · "));
-  check(boundary.events.includes("reset:bloom") && boundary.reset.phase === "dormant"
+  check(boundary.events.includes("reset:choir") && boundary.reset.phase === "dormant"
     && boundary.reset.hidden && boundary.reset.locked
     && boundary.reset.health === boundary.reset.maxHealth && !boundary.missionDone,
   "crossing the boundary restores and re-hides the undefeated boss",

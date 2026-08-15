@@ -1924,6 +1924,39 @@ export function buildAudio(ctx) {
       garner.bus.on("sealing", (e) => rumble(e.x, e.z, 0.8));
       garner.bus.on("defeated", () => chord([147, 196, 247, 294], 1.9, 0.26));
     }
+    /* The Bloom's queen. Her register sits between the Garner's pedal
+       and the Distaff's mid - she is underground-adjacent rather than
+       underground - and every cue she has is about POPULATION rather
+       than about damage, because that is what her fight is. The two
+       that matter most are the ones a player facing the wrong way has
+       to hear: a clutch going down behind them, and a child getting
+       home. */
+    const abbess = ctx.abbess;
+    if (abbess) {
+      abbess.bus.on("aggro", () => chord([55, 73, 110, 147], 2.2, 0.28));
+      abbess.bus.on("engaged", () => chord([65, 98, 131], 1.1, 0.20));
+      abbess.bus.on("clutchTelegraph", (e) => hiss(e.x, e.z));
+      abbess.bus.on("clutch", (e) => surface(e.x, e.z));
+      // One per egg would be a rattle; the clutch already sounded.
+      abbess.bus.on("hatch", (e) => impact(e.x, e.z, "flesh"));
+      abbess.bus.on("eggKilled", (e) => impact(e.x, e.z, "flesh"));
+      abbess.bus.on("stillborn", (e) => hiss(e.x, e.z));
+      /* THE FEED, and it is the one cue in this set the player must
+         never miss: it is the sound of the fight going backwards.
+         Pitched UP against everything else she does, because a rising
+         figure is what the ear reads as something being given. */
+      abbess.bus.on("feed", (e) => chord([147, 196, 262], 0.5, 0.20));
+      abbess.bus.on("recall", (e) => hiss(e.x, e.z));
+      abbess.bus.on("slamTelegraph", (e) => rumble(e.x, e.z, 0.85));
+      abbess.bus.on("slam", (e) => {
+        explosion(e.x, e.z, 20);
+        rumble(e.x, e.z, 1);
+      });
+      abbess.bus.on("royal", () => chord([41, 55, 82, 110], 2.6, 0.30));
+      abbess.bus.on("royalHatch", (e) => explosion(e.x, e.z, 22));
+      abbess.bus.on("retiring", (e) => rumble(e.x, e.z, 0.7));
+      abbess.bus.on("defeated", () => chord([165, 220, 277, 330], 1.9, 0.26));
+    }
     /* The false saint uses the player's mechanical vocabulary in the
        Bloom register: familiar lance/boost transients under violet shell
        movement and a brood-call chord where a command confirmation belongs. */

@@ -1,15 +1,16 @@
 /* ============================================================
    SAINTFALL - district boss hunt
 
-   Four encounters can use the shared enemy simulation while still
+   Three encounters can use the shared enemy simulation while still
    needing the lifecycle guarantees of a boss: a fixed home, a hidden
    reveal gate, an arena reset, durable identity, an objective marker,
-   and exactly one mission victory. The Distaff, the Winnower and the
-   Garner retain their bespoke controllers, and this file reaches them
-   through `domain` rather than by key. Six districts unlock the giant
+   and exactly one mission victory. The Distaff, the Winnower, the
+   Garner and the Abbess retain their bespoke controllers, and this file
+   reaches them through `domain` rather than by key. Six districts unlock the giant
    Coulter beneath the Fallen Saint; killing it unlocks the Apostate.
    ============================================================ */
 
+import { ABBESS_CONFIG } from "saintfall/abbess.js";
 import { clamp, makeBus } from "saintfall/core.js";
 import { GARNER_CONFIG } from "saintfall/garner.js";
 import { DISTRICTS } from "saintfall/terrain.js";
@@ -40,10 +41,15 @@ export const DISTRICT_BOSS_SITES = Object.freeze([
     domain: "garner", stage: "district",
   }),
   Object.freeze({
-    key: "bloom", district: "The Bloom", boss: "The Matriarch",
-    order: "SLAY THE MATRIARCH", enemyKey: "matriarch",
-    x: DISTRICTS.bloom.x + 10, z: DISTRICTS.bloom.z - 4,
-    arenaRadius: 104, aggroRadius: 68, domain: "district",
+    key: "bloom", district: "The Bloom", boss: "The Abbess",
+    order: "UNSEAT THE ABBESS", enemyKey: "abbess",
+    /* The Throat - the clearing world.js keeps free of spires at the
+       Bloom's centre, ringed by sixteen of them leaning inward over it.
+       Taken from the encounter rather than restated so the arena centre
+       and the queen cannot drift apart. */
+    x: ABBESS_CONFIG.lairX, z: ABBESS_CONFIG.lairZ,
+    arenaRadius: 104, aggroRadius: ABBESS_CONFIG.aggroRadius,
+    domain: "abbess",
   }),
   Object.freeze({
     key: "choir", district: "Choir Spires", boss: "The Precentor",
@@ -323,6 +329,7 @@ export function buildDistrictBosses(ctx) {
     if (site.key === "scar") return ctx.distaff?.status?.() || null;
     if (site.key === "censer") return ctx.winnower?.status?.() || null;
     if (site.key === "ossuary") return ctx.garner?.status?.() || null;
+    if (site.key === "bloom") return ctx.abbess?.status?.() || null;
     const record = records.get(site.key);
     return record ? publicRecord(record) : null;
   }
@@ -332,7 +339,7 @@ export function buildDistrictBosses(ctx) {
     // "sealing" is the Garner's own withdrawal, and it belongs on this
     // list for the same reason "returning" does: a boss that is going
     // back to sleep must not trip the arena-exit reset on the way.
-    return !["dormant", "dead", "return", "returning", "sealing"]
+    return !["dormant", "dead", "return", "returning", "sealing", "retire"]
       .includes(status.phase);
   }
 
@@ -359,6 +366,10 @@ export function buildDistrictBosses(ctx) {
        is a much better answer to "why did the fight stop" than a
        mouth that was there a frame ago and is not now. */
     else if (site.domain === "garner") ctx.garner?.seal?.();
+    /* She folds back down rather than snapping home, for the Garner's
+       reason: a queen who cannot move has nowhere to be teleported to,
+       so the reset IS the animation. */
+    else if (site.domain === "abbess") ctx.abbess?.retire?.();
     else {
       const record = records.get(site.key);
       if (record) resetRecord(record, { silent: true });

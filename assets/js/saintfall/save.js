@@ -443,6 +443,14 @@ export function buildSaveSystem(ctx, options = {}) {
          things that ARE its state instead: how far open it is, and what
          each of the six limbs was doing. See `validateGarner`. */
       garner: ctx.garner?.snapshot?.() || null,
+      /* The queen's record carries no position either - she cannot
+         move - and deliberately no eggs or live brood: those are
+         seconds-long consequences of an attack, and restoring into a
+         chamber full of hatchlings the player never saw laid is worse
+         than losing them. `royalDone` IS saved; repeating a
+         once-per-encounter beat on every load would hand out unlimited
+         Matriarchs. */
+      abbess: ctx.abbess?.snapshot?.() || null,
       winnower: ctx.winnower?.snapshot?.() || null,
       districtBosses: ctx.districtBosses?.snapshot?.() || null,
       /* Only the venom already in the player. The pools on the ground
@@ -715,6 +723,27 @@ export function buildSaveSystem(ctx, options = {}) {
       return true;
     };
     if (!validateGarner(snapshot.garner)) return false;
+    const validateAbbess = (record) => {
+      if (record === null || record === undefined) return true;
+      const phases = new Set(["dormant", "rouse", "seated", "royal",
+        "retire", "dead"]);
+      if (!isRecord(record) || !phases.has(record.phase)
+        || ![record.timer, record.health].every(isFiniteNumber)
+        || record.timer < 0 || record.timer > 600
+        || record.health < 0 || record.health > 10_000_000
+        || typeof record.royalDone !== "boolean"
+        || typeof record.defeated !== "boolean") return false;
+      if (record.instanceId !== null && record.instanceId !== undefined
+        && (typeof record.instanceId !== "string"
+          || !enemyIds.has(record.instanceId))) return false;
+      for (const field of ["fed", "laid"]) {
+        const v = record[field];
+        if (v === null || v === undefined) continue;
+        if (!isFiniteNumber(v) || v < 0 || v > 100000) return false;
+      }
+      return true;
+    };
+    if (!validateAbbess(snapshot.abbess)) return false;
     if (snapshot.districtBosses !== null && snapshot.districtBosses !== undefined) {
       const domain = snapshot.districtBosses;
       const expected = new Set((ctx.districtBosses?.status?.() || []).map((boss) => boss.key));
@@ -1298,6 +1327,20 @@ export function buildSaveSystem(ctx, options = {}) {
       }
     } else if (ctx.mission.bosses?.find((boss) => boss.key === "censer")?.done) {
       ctx.winnower?.restore?.({ phase: "dead", health: 0, defeated: true }, restoredEnemies);
+    }
+    if (snapshot.abbess) {
+      if (ctx.abbess?.restore?.(snapshot.abbess, restoredEnemies) === false) {
+        throw new Error("Abbess encounter restore was rejected.");
+      }
+    } else if (ctx.mission.bosses?.find((boss) => boss.key === "bloom")?.done) {
+      ctx.abbess?.restore?.({ phase: "dead", health: 0, royalDone: true,
+        defeated: true }, restoredEnemies);
+    } else {
+      /* A save written before the Bloom queen existed still names the
+         district; the Matriarch that used to stand there was an
+         ordinary record in `districtBosses`. Seat her rather than
+         leaving whatever the constructor built. */
+      ctx.abbess?.resetToSeat?.();
     }
     if (snapshot.garner) {
       if (ctx.garner?.restore?.(snapshot.garner, restoredEnemies) === false) {

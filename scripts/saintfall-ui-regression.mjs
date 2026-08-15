@@ -474,6 +474,93 @@ async function hudDensityAudit(page) {
   });
 }
 
+function meterWidthDelta(audit) {
+  const vitality = audit?.clusters?.find((cluster) => cluster.selector === "#sf-vitals");
+  const charge = audit?.clusters?.find((cluster) => cluster.selector === "#sf-charge");
+  return vitality && charge ? Math.abs(vitality.width - charge.width) : Infinity;
+}
+
+async function minimalHudAudit(page) {
+  return await page.evaluate(() => {
+    const stage = document.querySelector(".sf-stage");
+    const vitals = document.getElementById("sf-vitals");
+    const charge = document.getElementById("sf-charge");
+    const objective = document.getElementById("sf-objective");
+    const command = document.getElementById("sf-command-status");
+    if (!stage || !vitals || !charge || !objective || !command) {
+      return { missing: true };
+    }
+    const stageRect = stage.getBoundingClientRect();
+    const vitalsRect = vitals.getBoundingClientRect();
+    const chargeRect = charge.getBoundingClientRect();
+    const commandRect = command.getBoundingClientRect();
+    const style = (node) => getComputedStyle(node);
+    const transparent = (node) => {
+      const css = style(node);
+      return css.backgroundImage === "none"
+        && (css.backgroundColor === "rgba(0, 0, 0, 0)" || css.backgroundColor === "transparent");
+    };
+    const borderless = (node) => {
+      const css = style(node);
+      return [css.borderTopWidth, css.borderRightWidth,
+        css.borderBottomWidth, css.borderLeftWidth].every((width) => Number.parseFloat(width) === 0);
+    };
+    const unpadded = (node) => {
+      const css = style(node);
+      return [css.paddingTop, css.paddingRight,
+        css.paddingBottom, css.paddingLeft].every((width) => Number.parseFloat(width) === 0);
+    };
+    const hidden = (selector) => [...document.querySelectorAll(selector)]
+      .every((node) => style(node).display === "none");
+    const stageCenter = stageRect.left + stageRect.width / 2;
+    const icons = [...command.querySelectorAll(".sf-hud__stratitem")];
+    const glyphs = icons.map((node) => node.querySelector(".sf-hud__stratglyph"));
+    const fills = icons.map((node) => node.querySelector(".sf-hud__stratfill"));
+    const chargeFill = style(document.getElementById("sf-jet-fill"));
+    return {
+      missing: false,
+      stageWidth: Number(stageRect.width.toFixed(1)),
+      meters: {
+        width: [Number(vitalsRect.width.toFixed(1)), Number(chargeRect.width.toFixed(1))],
+        widthDelta: Number(Math.abs(vitalsRect.width - chargeRect.width).toFixed(2)),
+        centerGapDelta: Number(Math.abs((stageCenter - vitalsRect.right)
+          - (chargeRect.left - stageCenter)).toFixed(2)),
+        bottomDelta: Number(Math.abs(vitalsRect.bottom - chargeRect.bottom).toFixed(2)),
+        transparent: transparent(vitals) && transparent(charge),
+        borderless: borderless(vitals) && borderless(charge),
+        unpadded: unpadded(vitals) && unpadded(charge),
+        labelsHidden: hidden(".sf-hud__hplabel,.sf-hud__jetlabel"),
+        chargeGold: chargeFill.backgroundImage.includes("255, 174, 72")
+          && !chargeFill.backgroundImage.includes("115, 216, 237"),
+        chargeOrigin: chargeFill.transformOrigin,
+        chargeOriginX: Number.parseFloat(chargeFill.transformOrigin) || 0,
+      },
+      objective: {
+        transparent: transparent(objective),
+        borderless: borderless(objective),
+        unpadded: unpadded(objective),
+      },
+      command: {
+        centerDelta: Number(Math.abs(commandRect.left + commandRect.width / 2 - stageCenter).toFixed(2)),
+        transparent: transparent(command),
+        borderless: borderless(command),
+        unpadded: unpadded(command),
+        fButtonHidden: hidden(".sf-hud__command-head"),
+        hintHidden: hidden(".sf-hud__hint"),
+        copyHidden: hidden(".sf-hud__stratcopy,.sf-hud__stratstatus"),
+        iconCount: icons.length,
+        iconSurfacesClear: icons.every((node) => transparent(node) && borderless(node))
+          && glyphs.every((node) => node && transparent(node) && borderless(node)),
+        cooldownFills: fills.map((node) => ({
+          display: node ? style(node).display : "missing",
+          width: node ? Number(node.getBoundingClientRect().width.toFixed(1)) : -1,
+          opacity: node ? Number(style(node).opacity) : -1,
+        })),
+      },
+    };
+  });
+}
+
 async function hardCornerAudit(page) {
   return await page.evaluate(() => {
     const selectors = [
@@ -1051,6 +1138,44 @@ async function desktopPass(browser) {
     desktopDensity.coveragePct <= 10 && desktopDensity.overlaps.length === 0
       && desktopDensity.readyLabels.length === 0 && desktopDensity.largeClusters.length === 0,
     JSON.stringify(desktopDensity));
+
+  await page.evaluate(() => {
+    const T = window.__SF;
+    T.mission.cooldowns.cluster = T.mission.stratagems.cluster.cooldown * .5;
+  });
+  await page.waitForFunction(() => {
+    const node = document.querySelector('[data-command="cluster"]');
+    const fill = node?.querySelector(".sf-hud__stratfill");
+    return node?.dataset.ready === "0" && fill?.getBoundingClientRect().width > 4;
+  }, null, { timeout: 3000 });
+  await page.locator(".sf-stage").screenshot({ path: path.join(OUT, "desktop-minimal-hud-cooldown.png") });
+  const desktopMinimalHud = await minimalHudAudit(page);
+  evidence.desktopMinimalHud = desktopMinimalHud;
+  check("desktop vitality and charge are wide, centered, mirrored, label-free, and gold",
+    !desktopMinimalHud.missing
+      && desktopMinimalHud.meters.width.every((width) => width >= 190)
+      && desktopMinimalHud.meters.widthDelta <= 1
+      && desktopMinimalHud.meters.centerGapDelta <= 1
+      && desktopMinimalHud.meters.bottomDelta <= 1
+      && desktopMinimalHud.meters.transparent && desktopMinimalHud.meters.borderless
+      && desktopMinimalHud.meters.unpadded && desktopMinimalHud.meters.labelsHidden
+      && desktopMinimalHud.meters.chargeGold
+      && desktopMinimalHud.meters.chargeOriginX >= desktopMinimalHud.meters.width[1] - 4,
+    JSON.stringify(desktopMinimalHud.meters));
+  check("field orders float without a panel surface",
+    desktopMinimalHud.objective.transparent && desktopMinimalHud.objective.borderless
+      && desktopMinimalHud.objective.unpadded,
+    JSON.stringify(desktopMinimalHud.objective));
+  check("call actions show only centered icons and a visual cooldown",
+    desktopMinimalHud.command.centerDelta <= 1
+      && desktopMinimalHud.command.transparent && desktopMinimalHud.command.borderless
+      && desktopMinimalHud.command.unpadded && desktopMinimalHud.command.fButtonHidden
+      && desktopMinimalHud.command.hintHidden && desktopMinimalHud.command.copyHidden
+      && desktopMinimalHud.command.iconCount === 3 && desktopMinimalHud.command.iconSurfacesClear
+      && desktopMinimalHud.command.cooldownFills.some((fill) => fill.display !== "none"
+        && fill.width > 4 && fill.opacity > 0),
+    JSON.stringify(desktopMinimalHud.command));
+  await page.evaluate(() => { window.__SF.mission.cooldowns.cluster = 0; });
 
   const map = await page.evaluate(() => {
     const T = window.__SF;
@@ -1795,7 +1920,8 @@ async function mobilePass(browser) {
   evidence.mobileDensity = mobileDensity;
   check("portrait touch HUD keeps a sparse non-overlapping hierarchy",
     mobileDensity.coveragePct <= 15 && mobileDensity.overlaps.length === 0
-      && mobileDensity.readyLabels.length === 0 && mobileDensity.largeClusters.length === 0,
+      && mobileDensity.readyLabels.length === 0 && mobileDensity.largeClusters.length === 0
+      && meterWidthDelta(mobileDensity) <= 1,
     JSON.stringify(mobileDensity));
   const mobileCorners = await hardCornerAudit(page);
   evidence.mobileCorners = mobileCorners;
@@ -2146,7 +2272,8 @@ async function landscapeTouchPass(browser) {
   check("short-landscape touch HUD keeps a sparse non-overlapping hierarchy",
     landscapeDensity.coveragePct <= 15 && landscapeDensity.overlaps.length === 0
       && landscapeDensity.readyLabels.length === 0
-      && landscapeDensity.largeClusters.length === 0,
+      && landscapeDensity.largeClusters.length === 0
+      && meterWidthDelta(landscapeDensity) <= 1,
     JSON.stringify(landscapeDensity));
   const active = await layoutAudit(page);
   const activeTargets = await touchTargetAudit(page);

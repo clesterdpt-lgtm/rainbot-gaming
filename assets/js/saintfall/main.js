@@ -28,6 +28,7 @@ import { buildCollision } from "saintfall/collide.js";
 import { buildCombat } from "saintfall/combat.js";
 import { buildMission } from "saintfall/mission.js";
 import { buildBreaches } from "saintfall/breaches.js";
+import { buildAbbess } from "saintfall/abbess.js";
 import { buildCoulter } from "saintfall/coulter.js";
 import { buildDistaff } from "saintfall/distaff.js";
 import { buildGarner } from "saintfall/garner.js";
@@ -216,6 +217,13 @@ export async function start({ boot, build } = {}) {
   const garner = buildGarner(ctx);
   ctx.garner = garner;
   garner.ensureSpawned();
+  /* The Bloom's queen. Same construction slot and the same reasons -
+     after combat, which she damages the player through and whose egg
+     tests call back into her, and before audio, which subscribes to
+     her bus. */
+  const abbess = buildAbbess(ctx);
+  ctx.abbess = abbess;
+  abbess.ensureSpawned();
   /* Shared lifecycle for the ordinary-simulation district guardians plus
      the penultimate giant Coulter beneath the Fallen Saint. */
   const districtBosses = buildDistrictBosses(ctx);
@@ -436,6 +444,7 @@ export async function start({ boot, build } = {}) {
     combat,
     mission,
     breaches,
+    abbess,
     coulter,
     distaff,
     garner,
@@ -808,6 +817,7 @@ export async function start({ boot, build } = {}) {
     coulter.update(d);
     distaff.update(d);
     garner.update(d);
+    abbess.update(d);
     winnower.update(d);
     districtBosses.update(d);
     apostate.update(d);

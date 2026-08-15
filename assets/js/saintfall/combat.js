@@ -317,6 +317,42 @@ const HITBOX = {
     r: 6.8, y0: -2.0, y1: 6.5, head: 3.5, headR: 2.0, headZ: 0,
   },
 
+  /* ------------------------------------------------------------------
+     THE ABBESS. A queen: four metres of armoured thorax in front and
+     twenty metres of egg sac behind, and the hit table is that sentence
+     rendered as arithmetic.
+
+     `sac: true` sends every damage path to the LIVE spine the encounter
+     publishes on `inst.sacSpine`, one capsule per segment at its own
+     current radius. It has to be live rather than authored because the
+     sac breathes, swells when she lays, and heaves nine metres into the
+     air when she slams - a fixed volume would be wrong in all three
+     states and most wrong in the one that matters.
+     ------------------------------------------------------------------ */
+  abbess: {
+    sac: true,
+    /* The thorax: a short capsule at the origin, in front of the sac,
+       and the ONE part of her that resists. Everything the player can
+       see from the chamber's mouth is this; everything worth shooting
+       is behind it. Turning her armour toward the door is the whole of
+       her positional design. */
+    r: 3.1, y0: 0.02, y1: 5.6, head: 4.2, headR: 1.9, headZ: 4.6,
+    /* Armour, expressed as a discount rather than as immunity. A player
+       who empties a magazine into her face should see numbers - just
+       bad ones - or they will read it as a broken hitbox rather than as
+       a wrong target. */
+    thoraxMult: 0.34,
+    /* THE UNDERSIDE, and the reason the fight has a decision in it.
+
+       Only present while `inst.raised` is past the aperture, which is
+       exactly the window in which she is winding up the slam. The most
+       dangerous ground on the map and the only place her one weak point
+       can be shot are the same two metres, and the player chooses every
+       nine seconds whether to be standing there. Worth more than any
+       other weak point in the game because it costs more to take. */
+    ventral: { mult: 5.0, open: 0.5 },
+  },
+
   /* The Apostate is the player's own silhouette made hostile. Its capsule is
      deliberately close to the trooper's visible plate instead of receiving a
      boss-sized invisible volume; the extra insect limbs are readable armour,
@@ -773,6 +809,65 @@ export function buildCombat(ctx) {
   }
 
   /* ============================================================
+     QUEENS
+
+     A thorax capsule that resists, and a live segmented sac behind it
+     that does not. The sac's geometry is published by the encounter
+     every frame (`inst.sacSpine` / `inst.sacRadius`), so this walks the
+     actual pose - including the nine metres of arc it makes at the top
+     of a slam.
+
+     The ventral weak point is not a separate primitive. It is the SAME
+     capsules, scored differently: while the abdomen is raised past the
+     aperture, a ray that arrives from below the segment it hits has
+     found the underside. Testing direction rather than adding a sphere
+     is what keeps it honest - there is no invisible bonus volume to
+     find, only the actual belly of the thing, actually exposed.
+     ============================================================ */
+  function queenHit(inst, box, ox, oy, oz, dx, dy, dz, maxT) {
+    let bestT = maxT;
+    let weak = false;
+    let thorax = false;
+    let found = false;
+
+    // The thorax, a vertical capsule at the origin.
+    const cx = inst.x - ox;
+    const cy = inst.y + (box.y0 + box.y1) * 0.5 - oy;
+    const cz = inst.z - oz;
+    const t = cx * dx + cy * dy + cz * dz;
+    if (t >= 0 && t <= bestT) {
+      const py = oy + dy * t;
+      const hd = Math.hypot(ox + dx * t - inst.x, oz + dz * t - inst.z);
+      if (hd <= box.r && py >= inst.y + box.y0 && py <= inst.y + box.y1) {
+        bestT = t; thorax = true; found = true;
+      }
+    }
+
+    const spine = inst.sacSpine;
+    const radii = inst.sacRadius;
+    if (Array.isArray(spine) && spine.length > 1 && radii) {
+      const open = (inst.raised || 0) >= (box.ventral?.open ?? 0.5);
+      for (let i = 0; i < spine.length - 1; i += 1) {
+        const r = Math.max(radii[i], radii[i + 1]);
+        const st = segmentHit(ox, oy, oz, dx, dy, dz, spine[i], spine[i + 1], r);
+        if (st < 0 || st >= bestT) continue;
+        bestT = st;
+        thorax = false;
+        found = true;
+        /* Underneath, and only while it is up. The hit point's height
+           against the segment's own centreline is the test: a shot that
+           lands on the top of a raised abdomen is an ordinary body hit,
+           and one that lands under it is the belly. */
+        const hy = oy + dy * st;
+        const mid = (spine[i].y + spine[i + 1].y) * 0.5;
+        weak = open && hy < mid;
+      }
+    }
+    if (!found) return null;
+    return { t: bestT, weak, thorax };
+  }
+
+  /* ============================================================
      FLYERS
 
      A body capsule with two live sacs on it and a gut that only
@@ -1104,6 +1199,21 @@ export function buildCombat(ctx) {
    *  mouth, which would let a stratagem land on its back for nothing. */
   function nearestBodyPoint(inst, x, z, out) {
     const body = inst.body;
+    /* A published sac is the same question as a body chain and gets the
+       same answer: the nearest of its live segments. Without this every
+       melee swing, explosion and shockwave measures a twenty-metre
+       queen from her thorax, so a player standing against the middle of
+       her abdomen is told they are eleven metres away from her. */
+    const spine = inst.sacSpine;
+    if (!body && Array.isArray(spine) && spine.length) {
+      let near = Math.hypot(inst.x - x, inst.z - z);
+      out.set(inst.x, inst.y, inst.z);
+      for (const p of spine) {
+        const d = Math.hypot(p.x - x, p.z - z);
+        if (d < near) { near = d; out.copy(p); }
+      }
+      return near;
+    }
     if (!body) {
       out.set(inst.x, inst.y, inst.z);
       return Math.hypot(inst.x - x, inst.z - z);
@@ -1154,6 +1264,19 @@ export function buildCombat(ctx) {
           x: ox + dx * seg.t, y: oy + dy * seg.t, z: oz + dz * seg.t,
         };
         bestT = seg.t;
+        continue;
+      }
+
+      // A queen: an armoured thorax and a live egg sac behind it that
+      // is only soft while she is holding it up - see queenHit.
+      if (box.sac) {
+        const qh = queenHit(inst, box, ox, oy, oz, dx, dy, dz, bestT);
+        if (!qh) continue;
+        best = {
+          inst, t: qh.t, weak: qh.weak, head: false, thorax: qh.thorax,
+          x: ox + dx * qh.t, y: oy + dy * qh.t, z: oz + dz * qh.t,
+        };
+        bestT = qh.t;
         continue;
       }
 
@@ -1247,6 +1370,25 @@ export function buildCombat(ctx) {
     const hit = raycastEnemies(
       origin.x, origin.y, origin.z, dir.x, dir.y, dir.z, Math.min(range, wall)
     );
+    /* THE ABBESS'S EGGS, which are not enemies.
+       They have no rig, no brain and no place in `enemies.live`, so
+       `raycastEnemies` cannot see them - but they are the one thing in
+       her fight the player most needs to be able to shoot. The
+       encounter publishes a sphere test instead, and every damage path
+       in this file that can reach the ground calls it. Resolved along
+       the shot's accepted length so a round cannot pass through a wall
+       and still burst a clutch behind it. */
+    const eggReach = hit ? hit.t : Math.min(range, wall);
+    if (ctx.abbess?.hitEggs) {
+      /* Marched rather than sphere-tested at a point: a clutch is small
+         and a rifle round is long, so the only honest way to ask "did
+         this shot cross an egg" is to walk the accepted length of it. */
+      const step = 1.4;
+      for (let m = 0; m <= eggReach; m += step) {
+        if (ctx.abbess.hitEggs(origin.x + dir.x * m, origin.y + dir.y * m,
+          origin.z + dir.z * m, 1.6, damage)) break;
+      }
+    }
 
     /* The bolt is drawn to WHERE THE RAY STOPPED, which is why this
        is worked out here rather than at the call site: only this
@@ -1272,14 +1414,19 @@ export function buildCombat(ctx) {
       // maw). Both carry their own worth next to their own geometry.
       const weakMult = hit.weak
         ? ((box.weak && box.weak.mult) || (box.maw && box.maw.mult)
-          || (box.heart && box.heart.mult) || 3)
+          || (box.heart && box.heart.mult) || (box.ventral && box.ventral.mult) || 3)
         : 1;
+      /* Armour, as a discount. A queen's thorax is the part facing the
+         door and the part that resists; the player has to see bad
+         numbers there rather than none, or a wrong target reads as a
+         broken hit volume. */
+      const thoraxMult = hit.thorax ? (box.thoraxMult || 1) : 1;
       /* A heat sac is worth its own modest multiplier - the reward for
          hitting one is the LIFT it drains, resolved below, not the
          damage. Paying out a weak-point multiplier here as well would
          make shooting the sacs the whole fight. */
       const sacMult = hit.sacIndex >= 0 ? (box.sacs?.mult || 1) : 1;
-      const dmg = damage * (hit.head ? 2.6 : 1) * weakMult * sacMult;
+      const dmg = damage * (hit.head ? 2.6 : 1) * weakMult * sacMult * thoraxMult;
       /* A leg hit never reaches `applyDamage` at all - it has its own
          pool, and `legIndex >= 0` is how every damage path in this
          file already tells "one of the eight" from "the body once it
@@ -1544,6 +1691,15 @@ export function buildCombat(ctx) {
           false, true);
       }
     }
+    /* A swing clears a clutch. The arc is approximated by one sphere a
+       little in front of the trooper rather than by re-deriving the
+       cone - an egg is 2m across and the whole swing is 3.4m long, so
+       the two differ by less than the target. */
+    if (ctx.abbess?.hitEggs) {
+      hits += ctx.abbess.hitEggs(ps.x + Math.sin(ps.yaw) * reach * 0.6,
+        ps.y + 0.9, ps.z + Math.cos(ps.yaw) * reach * 0.6,
+        reach * 0.8, dmg);
+    }
     if (vfx && vfx.meleeArc) {
       vfx.meleeArc(ps.x, ps.y, ps.z, ps.yaw, reach, arc, hits, slam);
     }
@@ -1632,6 +1788,7 @@ export function buildCombat(ctx) {
       y,
       z,
     });
+    ctx.abbess?.hitEggs?.(x, y, z, radius, damage);
     if (vfx && vfx.blast) vfx.blast(x, y, z, radius);
     return { hits: targets.length, kills, targets };
   }
@@ -1701,6 +1858,7 @@ export function buildCombat(ctx) {
         }
       }
     }
+    if (peak > 0) ctx.abbess?.hitEggs?.(x, y, z, radius, peak);
     bus.emit("shockwave", { x, y, z, radius, hits, kills, stunned, source });
     return { hits, kills, stunned, radius };
   }
@@ -1821,7 +1979,15 @@ export function buildCombat(ctx) {
        have it acting on `SPEC.thresher`'s fallback numbers (it has no
        entry of its own) and dragging its own root position around
        from underneath legs that expect it to hold still. */
-    if (inst.body || inst.spec.selfDriven) return;
+    /* ...and the same opt-out is available PER INSTANCE, not only per
+       species. An encounter can take temporary ownership of an ordinary
+       creature: the Abbess's brood are Threshers in every other
+       respect, and for the last few seconds of their lives they walk
+       home to feed her instead of fighting. Releasing their aggro is
+       not enough to do that - the sensing block above re-detects a
+       player standing in the same room on the very next frame - so the
+       encounter drives them, and this is where it says so. */
+    if (inst.body || inst.spec.selfDriven || inst.selfDriven) return;
     /* STUNNED CREATURES DO NOTHING. Not walk, not turn, not shoot.
        The gate lives here rather than in enemies.js because this is
        where every decision a creature makes is taken; enforcing it

@@ -304,6 +304,24 @@ export function buildHud(ctx, host) {
     ctx.garner.bus.on("defeated", () => showBreachAlert(
       "THE OSSUARY", "THE GARNER IS CLOSED", 5.2));
   }
+  if (ctx.abbess?.bus) {
+    ctx.abbess.bus.on("aggro", () => showBreachAlert(
+      "THE BLOOM · APEX SIGNATURE", "THE ABBESS WAKES", 4.8, true));
+    /* The strip is spent on the three beats the world does not announce
+       loudly enough by itself: she is about to lay, she is about to
+       drop twenty metres of abdomen, and - the one that decides
+       fights - her brood is walking home. */
+    ctx.abbess.bus.on("clutchTelegraph", () => showBreachAlert(
+      "THE ABBESS", "SHE IS LAYING — BURN THE CLUTCH", 2.4, true));
+    ctx.abbess.bus.on("slamTelegraph", () => showBreachAlert(
+      "THE ABBESS", "SHE RISES — GET OUT, OR GET UNDER HER", 2.2, true));
+    ctx.abbess.bus.on("feed", () => showBreachAlert(
+      "THE ABBESS", "SHE IS BEING FED", 1.8, true));
+    ctx.abbess.bus.on("royal", () => showBreachAlert(
+      "THE ABBESS", "A ROYAL CELL", 3.4, true));
+    ctx.abbess.bus.on("defeated", () => showBreachAlert(
+      "THE BLOOM", "THE ABBESS IS UNSEATED", 5.2));
+  }
   if (ctx.districtBosses?.bus) {
     ctx.districtBosses.bus.on("approach", (event) => showBreachAlert(
       `${event.district.toUpperCase()} · BOSS TERRITORY`,
@@ -948,6 +966,34 @@ export function buildHud(ctx, host) {
     return true;
   }
 
+  /* Her readout is a POPULATION count, because that is what her fight
+     is: eggs on the ground, children in the room, and how many of them
+     have already reached her. Health is the least interesting number
+     she has and is relegated to the bar. */
+  function updateAbbessReadout() {
+    const a = ctx.abbess?.status?.();
+    if (!a || a.phase === "dormant" || a.dead) return false;
+    minimapEl.dataset.event = "1";
+    mapEventEl.dataset.phase = a.phase;
+    eventKickerEl.textContent = "THE BLOOM · APEX SIGNATURE";
+    eventNameEl.textContent = "THE ABBESS";
+    eventNameEl.title = eventNameEl.textContent;
+    eventSubEl.textContent = a.phase === "retire"
+      ? "Settling - she is folding back down"
+      : a.phase === "rouse"
+        ? "The chamber is lighting"
+        : a.phase === "royal"
+          ? "A ROYAL CELL - something bigger is coming"
+          : a.exposed
+            ? "UNDERSIDE EXPOSED - strike the belly"
+            : a.eggs > 0
+              ? `${a.eggs} egg${a.eggs > 1 ? "s" : ""} swelling · ${a.brood} hatched`
+              : `${a.brood} / ${a.broodCap} brood · ${a.fed} fed her`;
+    eventCountEl.textContent = a.exposed ? "EXPOSED" : `${a.health} HP`;
+    eventFillEl.style.width = `${clamp01(1 - a.health / Math.max(1, a.maxHealth)) * 100}%`;
+    return true;
+  }
+
   function updateApostateReadout() {
     const a = ctx.apostate?.status?.();
     if (!a || a.phase === "dormant" || a.dead) return false;
@@ -1001,6 +1047,7 @@ export function buildHud(ctx, host) {
     if (updateWinnowerReadout()) return;
     if (updateDistaffReadout()) return;
     if (updateGarnerReadout()) return;
+    if (updateAbbessReadout()) return;
     if (updateDistrictBossReadout()) return;
     const event = ctx.breaches?.status?.();
     if (!event) { minimapEl.dataset.event = "0"; return; }

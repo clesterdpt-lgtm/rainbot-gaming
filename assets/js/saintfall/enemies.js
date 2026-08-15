@@ -467,6 +467,54 @@ export const BESTIARY = {
     shadowRange: 180,
     clips: [],
   },
+
+  /* ------------------------------------------------------------------
+     THE ABBESS. The Bloom's queen, and the second entry here with no
+     .glb - the Garner having established that a creature whose whole
+     surface deforms is better served by a module than by a rig.
+
+     What deforms: twenty metres of egg sac that breathes at rest, runs
+     a peristaltic wave down its length every time she lays, and heaves
+     bodily off the chamber floor to slam. Three superimposed radial and
+     axial deformations, which a skeleton can only approximate with
+     enough bones to cost more than the mesh does.
+
+     She also has no `legs` and no `spine`: she does not walk and she
+     has no chain to follow. What she publishes instead is
+     `inst.sacSpine`, read by combat.js's `queenHit`.
+     ------------------------------------------------------------------ */
+  abbess: {
+    procedural: true,
+    faction: "bloom",
+    /* The largest pool in the game after the Distaff's, and for a
+       reason that is the opposite of the Distaff's: hers is not guarded
+       by sub-targets, it is REFILLED. Every child that walks home feeds
+       her, so the number the player has to out-damage depends on how
+       well they hold the room rather than on how well they aim. At 12000
+       a fight that ignores the brood entirely does not converge. */
+    health: 12000,
+    scale: 1.0,
+    speed: { walk: 0, charge: 0 },
+    material: { roughness: 0.44, metalness: 0.02, rim: 1.05, bio: 1.35 },
+    selfDriven: true,
+    legs: 0,
+    stance: 0,
+    stepHeight: 0,
+    /* Sized to the THORAX, not the animal. A radius cut to twenty-six
+       metres of queen would refuse her own chamber and shove every
+       Thresher she lays out through the spire ring. */
+    collisionRadius: 3.4,
+    /* She is a landmark inside a walled clearing rather than across the
+       basin, so this is shorter than the Garner's - but her sac is the
+       brightest object in the district at night and has to survive the
+       walk in from the Bloom's edge. */
+    cullRange: 560,
+    ikRange: 300,
+    animRange: 420,
+    poseRange: 560,
+    shadowRange: 170,
+    clips: [],
+  },
 };
 
 /* ============================================================

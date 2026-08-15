@@ -3586,6 +3586,51 @@ export function installQa(ctx, api) {
     },
     resetGarner() { return api.garner?.resetToPit?.() ?? null; },
     /* ------------------------------------------------------------
+       THE ABBESS
+
+       Her fight is a population, so these hooks are about getting a
+       KNOWN population into the room: lay a clutch now, age the brood
+       past its hunting window so trophallaxis can be observed without
+       waiting eleven seconds per child, and read the egg field as data
+       rather than as pixels.
+
+       Eggs are deliberately not enemies, so nothing in `enemies.live`
+       describes them - `abbessEggs` is the only way a check can see
+       them, and `combat.fire`/`meleeStrike` are still the only way to
+       damage them.
+       ------------------------------------------------------------ */
+    abbessState: () => (api.abbess)?.status?.() || null,
+    teleportToAbbess(offset = 40) {
+      const c = api.abbess?.config;
+      if (!c) return null;
+      hook._teleportRaw(c.lairX - offset, c.lairZ, 0);
+      hook.setBodyHeading?.(0);
+      return { x: c.lairX - offset, z: c.lairZ };
+    },
+    forceAbbessPhase(phase, timer) {
+      return api.abbess?.forcePhase?.(phase, timer) ?? null;
+    },
+    advanceToAbbessPhase(phase, limit = 60, dt = 1 / 60) {
+      const target = String(phase);
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const a = api.abbess?.status?.();
+        if (!a) return -1;
+        if (a.phase === target) return Number(elapsed.toFixed(3));
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    forceAbbessClutch() { return api.abbess?.forceClutch?.() ?? null; },
+    forceAbbessSlam() { return api.abbess?.forceSlam?.() ?? null; },
+    /** Age every living child past `feedAfterSeconds`, so the walk home
+     *  starts on the next frame instead of eleven seconds later. */
+    recallAbbessBrood() { return api.abbess?.recallBrood?.() ?? null; },
+    abbessEggs() { return api.abbess?.eggs?.() ?? []; },
+    abbessBrood() { return api.abbess?.brood?.() ?? []; },
+    resetAbbess() { return api.abbess?.resetToSeat?.() ?? null; },
+    /* ------------------------------------------------------------
        THE APOSTATE
 
        The final encounter is gated by mission progression as well as
@@ -3851,6 +3896,7 @@ export function installQa(ctx, api) {
     get figure() { return api.player.figure; },
     get mission() { return api.mission; },
     get breaches() { return api.breaches; },
+    get abbess() { return api.abbess; },
     get distaff() { return api.distaff; },
     get garner() { return api.garner; },
     get winnower() { return api.winnower; },

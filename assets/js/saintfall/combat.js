@@ -830,16 +830,35 @@ export function buildCombat(ctx) {
     let thorax = false;
     let found = false;
 
-    // The thorax, a vertical capsule at the origin.
-    const cx = inst.x - ox;
-    const cy = inst.y + (box.y0 + box.y1) * 0.5 - oy;
-    const cz = inst.z - oz;
-    const t = cx * dx + cy * dy + cz * dz;
-    if (t >= 0 && t <= bestT) {
-      const py = oy + dy * t;
-      const hd = Math.hypot(ox + dx * t - inst.x, oz + dz * t - inst.z);
-      if (hd <= box.r && py >= inst.y + box.y0 && py <= inst.y + box.y1) {
-        bestT = t; thorax = true; found = true;
+    /* THE THORAX, as a ray-vs-cylinder ENTRY distance rather than a
+       closest-approach one - and the distinction is not academic here.
+
+       Projecting the capsule's centre onto the ray, which is what the
+       walkers' own body test does, answers "how far along the ray is
+       the point nearest the middle of the target". On an isolated
+       creature that is close enough to the entry point to sort
+       correctly against everything else. On this one it is not: the
+       thorax reported ~26m for a shot fired from 26m away, the sac
+       segment behind it reported its true entry at ~22m, and the sac
+       therefore won EVERY comparison. Shooting her in the face scored
+       the abdomen, at full damage instead of armoured - and while she
+       was mid-slam it scored the ventral weak point, so her most
+       protected surface was also her softest. */
+    {
+      const a = dx * dx + dz * dz;
+      const rx = ox - inst.x;
+      const rz = oz - inst.z;
+      const b = 2 * (rx * dx + rz * dz);
+      const cc = rx * rx + rz * rz - box.r * box.r;
+      const disc = b * b - 4 * a * cc;
+      if (a > 1e-9 && disc >= 0) {
+        const root = Math.sqrt(disc);
+        // The near root, floored at zero for an origin already inside.
+        const t = Math.max(0, (-b - root) / (2 * a));
+        const py = oy + dy * t;
+        if (t <= bestT && py >= inst.y + box.y0 && py <= inst.y + box.y1) {
+          bestT = t; thorax = true; found = true;
+        }
       }
     }
 
@@ -847,7 +866,13 @@ export function buildCombat(ctx) {
     const radii = inst.sacRadius;
     if (Array.isArray(spine) && spine.length > 1 && radii) {
       const open = (inst.raised || 0) >= (box.ventral?.open ?? 0.5);
-      for (let i = 0; i < spine.length - 1; i += 1) {
+      /* FROM THE SECOND SEGMENT. The sac's first ring is tucked inside
+         the collar plate, and it is fatter than the thorax capsule that
+         covers the same volume - so a shot at her FACE reached the sac
+         first, scored it as body, and while she was mid-slam scored it
+         as the ventral weak point. Her front is armour; the part of the
+         abdomen that is underneath the armour has to be armour too. */
+      for (let i = 1; i < spine.length - 1; i += 1) {
         const r = Math.max(radii[i], radii[i + 1]);
         const st = segmentHit(ox, oy, oz, dx, dy, dz, spine[i], spine[i + 1], r);
         if (st < 0 || st >= bestT) continue;

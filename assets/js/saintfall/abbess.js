@@ -71,7 +71,7 @@
    ============================================================ */
 
 import {
-  TAU, clamp, clamp01, damp, dampAngle, lerp, makeBus, makeRng,
+  TAU, clamp, clamp01, damp, dampAngle, lerp, makeBus, makeRng, smoothstep,
 } from "saintfall/core.js";
 import { patchMaterial } from "saintfall/art.js";
 import { DISTRICTS } from "saintfall/terrain.js";
@@ -345,9 +345,18 @@ export function buildAbbess(ctx) {
     const t = i / (segs - 1);
     rings.push({
       t,
-      /* Fat and forward. A symmetric bulge reads as an egg on its side;
-         a queen's mass sits toward her waist and drains away behind. */
-      swell: Math.pow(Math.sin(Math.pow(t, 0.62) * Math.PI * 0.90 + 0.20), 0.72),
+      /* Fat and forward, and THICK AT THE WAIST.
+
+         Two explicit pieces rather than one sine, because the first
+         version's curve started at 0.31 of full radius - a 1.4m stalk
+         emerging from a 4.3m collar plate, which read as an abdomen
+         somebody had parked behind the animal rather than one growing
+         out of it. It has to leave the thorax at roughly the collar's
+         own width, swell to full a third of the way back, and only then
+         drain away to the ovipositor. */
+      swell: t < 0.38
+        ? lerp(0.86, 1.0, smoothstep(t / 0.38))
+        : lerp(1.0, 0.16, Math.pow(smoothstep((t - 0.38) / 0.62), 0.9)),
       /* A constriction on every second ring. This is cheaper and reads
          better than modelling separate tergites: the eye takes the
          narrow rings as the joints between plates. */
@@ -368,18 +377,30 @@ export function buildAbbess(ctx) {
     const normal = new Float32Array(sacVerts * 3);
     const colour = new Float32Array(sacVerts * 4);
     const index = [];
+    /* WOUND OUTWARD, and the first build was not.
+       Every ring is laid in the frame (n1, n2, tangent), which is
+       right-handed - so walking s forward around the ring turns
+       POSITIVELY about the tangent, and the naive `a+s, b+s, b+n` order
+       puts the face normal on the inside. All three hundred triangles
+       faced inward, and with front-face culling that renders as the
+       near wall vanishing and the inside of the far wall showing
+       through it: the animal was see-through from half the angles in
+       the chamber. The vertex normals were analytic and outward the
+       whole time, so it lit correctly and only the silhouette betrayed
+       it. `saintfall-abbess-fight.mjs` now audits the winding against
+       those normals so it cannot come back. */
     for (let i = 0; i < segs - 1; i += 1) {
       for (let s = 0; s < SAC_SIDES; s += 1) {
         const n = (s + 1) % SAC_SIDES;
         const a = i * SAC_SIDES;
         const b = (i + 1) * SAC_SIDES;
-        index.push(a + s, b + s, b + n, a + s, b + n, a + n);
+        index.push(a + s, b + n, b + s, a + s, a + n, b + n);
       }
     }
     const tip = segs * SAC_SIDES;
     const last = (segs - 1) * SAC_SIDES;
     for (let s = 0; s < SAC_SIDES; s += 1) {
-      index.push(last + s, tip, last + ((s + 1) % SAC_SIDES));
+      index.push(last + s, last + ((s + 1) % SAC_SIDES), tip);
     }
     for (let i = 0; i < segs; i += 1) {
       const ring = rings[i];
@@ -389,12 +410,24 @@ export function buildAbbess(ctx) {
            queen is lit from below by her own chamber and the belly is
            where the eggs show through, so the value gradient runs the
            opposite way to every other creature in the game. */
-        const under = clamp01(-Math.cos((s / SAC_SIDES) * TAU) * 0.5 + 0.5);
+        /* SIN, NOT COS - the ring frame's `n1` is horizontal and `n2`
+           points DOWN (see `poseAbdomen`), so the cosine term runs
+           across her flanks and the sine term runs belly-to-back. Built
+           on cosine, this whole ramp painted one side of her pale and
+           the other dark, and the animal read as flat because its only
+           value gradient was at ninety degrees to the light. */
+        const under = clamp01(Math.sin((s / SAC_SIDES) * TAU) * 0.5 + 0.5);
         /* Hard contrast between belly and back. She is lit from below by
            her own chamber and from above by nothing, and a gentle ramp
            across that reads as a smooth object rather than as a body. */
-        const pale = (0.14 + under * 0.86) * (0.88 + rng() * 0.24)
-          * lerp(1.0, 0.72, ring.t);
+        /* The floor is high enough that her BACK is a mid tone rather
+           than a silhouette. It was 0.14 while the ramp was accidentally
+           running across her flanks, where the darkest value only ever
+           landed on a side the light was already catching; pointed
+           correctly at the top of her it made twenty metres of animal
+           read as a hole in the chamber. */
+        const pale = (0.38 + under * 0.62) * (0.88 + rng() * 0.24)
+          * lerp(1.0, 0.78, ring.t);
         /* A band is chitin; everything else is membrane. Two ramps
            rather than one, so the plates read as armour laid over the
            sac instead of as shadow on it. */
@@ -461,9 +494,14 @@ export function buildAbbess(ctx) {
     const sz = Math.cos(yaw);
     const wake = clamp01(state.woken);
     const lift = state.raised;
-    // The waist, just behind the thorax.
-    const wx = C.lairX - sx * 3.2;
-    const wz = C.lairZ - sz * 3.2;
+    /* The waist, and it sits INSIDE the collar rather than behind it.
+       At 3.2m back the sac's first ring started a metre and a half
+       clear of the collar plate's rear face, so the two halves of the
+       animal were visibly separate objects with a gap of chamber floor
+       between them. Tucked to 1.5 it emerges from under the plate,
+       which is what a join looks like. */
+    const wx = C.lairX - sx * 1.5;
+    const wz = C.lairZ - sz * 1.5;
     const wy = floorY + C.abdomenClearance + 2.1 * wake;
 
     for (let i = 0; i < segs; i += 1) {
@@ -511,7 +549,8 @@ export function buildAbbess(ctx) {
         /* Flattened underneath. She rests on this: a circular section
            reads as a balloon, and the belly of something this heavy
            spreads where it meets the floor. */
-        const squash = 1 - 0.22 * clamp01(-Math.cos(ang));
+        // Same axis correction as the colour ramp: `n2` is down.
+        const squash = 1 - 0.22 * clamp01(Math.sin(ang));
         const cx = (_n1.x * ca + _n2.x * sa) * squash;
         const cy = (_n1.y * ca + _n2.y * sa) * squash;
         const cz = (_n1.z * ca + _n2.z * sa) * squash;
@@ -595,11 +634,15 @@ export function buildAbbess(ctx) {
     thorax.rotateX(Math.PI / 2);
     thorax.translate(0, 2.7, 1.8);
     parts.push(paint(thorax, 0.75));
-    // A collar plate where the thorax meets the sac, which is what
-    // stops the join reading as two objects pushed together.
-    const collar = new THREE.CylinderGeometry(4.3, 3.6, 1.5, 9, 1, false);
+    /* A collar plate where the thorax meets the sac. Longer and wider
+       at its rear than the first pass so it OVERLAPS the abdomen's
+       first two rings: the sac's own radius varies with her breath and
+       with the laying wave, and a butt joint between two surfaces that
+       both move opens and closes a seam every second. A skirt that
+       swallows the join cannot. */
+    const collar = new THREE.CylinderGeometry(4.9, 3.7, 3.4, 9, 1, false);
     collar.rotateX(Math.PI / 2);
-    collar.translate(0, 2.7, -0.9);
+    collar.translate(0, 2.7, -1.5);
     parts.push(paint(collar, 0.5));
     // Head: forward and down.
     const skull = new THREE.SphereGeometry(2.5, 11, 8);
@@ -720,12 +763,17 @@ export function buildAbbess(ctx) {
     const index = [];
     for (let e = 0; e < C.eggMax; e += 1) {
       const base = e * eggVerts;
+      /* Outward, same correction as the sac's - the rings run down the
+         egg while the angle runs positively about that axis, so the
+         obvious order faces inward. The caps below were already right,
+         which is exactly how a half-inverted mesh gets shipped: the
+         ends look correct and only the walls are wrong. */
       for (let r = 0; r < EGG_RINGS - 1; r += 1) {
         for (let s = 0; s < EGG_SIDES; s += 1) {
           const n = (s + 1) % EGG_SIDES;
           const a = base + r * EGG_SIDES;
           const b = base + (r + 1) * EGG_SIDES;
-          index.push(a + s, b + s, b + n, a + s, b + n, a + n);
+          index.push(a + s, b + n, b + s, a + s, a + n, b + n);
         }
       }
       const top = base + EGG_RINGS * EGG_SIDES;
@@ -1006,6 +1054,86 @@ export function buildAbbess(ctx) {
     state.clutchWind = C.clutchWindup;
     state.clutchTimer = C.clutchCadence;
     bus.emit("clutchTelegraph", { x: C.lairX, z: C.lairZ });
+  }
+
+  /* ============================================================
+     KEEPING THE PLAYER OUT OF HER
+
+     Twenty-six metres of animal that the player could walk straight
+     through, because none of it exists as far as the collision grid is
+     concerned - that grid is rasterised once, at load, from the
+     authored world, and everything in this file is built at runtime.
+     The Garner's mouth had the same problem and the same answer: the
+     creature holds them off itself.
+
+     Tested against the LIVE sac, one capsule per segment, so it agrees
+     with what is on screen at every moment of her breath, her laying
+     wave and her slam. Which also means the one place the fight wants
+     the player to be stays open by construction: while the abdomen is
+     raised, its capsules are nine metres up and the ground underneath
+     them is free. Getting under her is supposed to be possible - it is
+     where her weak point is - and nothing here has to special-case
+     that, because the volume simply is not there any more.
+
+     Horizontal pushes only. A vertical correction on a creature that
+     heaves would launch or bury the trooper; being eased sideways out
+     of a wall of flesh is what the rest of the game does.
+     ============================================================ */
+  const PLAYER_RADIUS = 1.05;
+
+  /** Shove the player out of one capsule, in XZ. Returns true if it
+   *  moved them, so the caller can settle overlapping segments. */
+  function shoveOut(ps, ax, ay, az, bx, by, bz, ra, rb) {
+    const dx = bx - ax;
+    const dz = bz - az;
+    const len2 = dx * dx + dz * dz;
+    const t = len2 > 1e-6
+      ? clamp01(((ps.x - ax) * dx + (ps.z - az) * dz) / len2) : 0;
+    const cx = ax + dx * t;
+    const cz = az + dz * t;
+    const cy = ay + (by - ay) * t;
+    const r = lerp(ra, rb, t);
+    /* Vertical gate first. A segment the player is standing well under
+       or well over is not in their way, and this is the whole reason a
+       raised abdomen can be walked beneath. */
+    if (Math.abs((ps.y + 0.95) - cy) > r + 1.15) return false;
+    const want = r + PLAYER_RADIUS;
+    let ox = ps.x - cx;
+    let oz = ps.z - cz;
+    const d = Math.hypot(ox, oz);
+    if (d >= want) return false;
+    if (d < 1e-4) {
+      // Dead on the axis: pick a bearing rather than divide by zero.
+      ox = Math.cos(atmos.elapsed * 3.1);
+      oz = Math.sin(atmos.elapsed * 3.1);
+    } else {
+      ox /= d;
+      oz /= d;
+    }
+    ps.x = cx + ox * want;
+    ps.z = cz + oz * want;
+    return true;
+  }
+
+  function keepOut() {
+    const ps = ctx.player?.state;
+    if (!ps || state.woken < 0.25 || ctx.combat?.player?.dead) return;
+    /* Two passes. Shoving clear of one segment can push the player into
+       the next one along a body that curves, and a single pass leaves
+       them standing inside her with the correction fighting itself. */
+    for (let pass = 0; pass < 2; pass += 1) {
+      let moved = false;
+      // The thorax and its collar, as one upright capsule at her seat.
+      moved = shoveOut(ps, C.lairX, floorY + 2.7, C.lairZ,
+        C.lairX, floorY + 4.4, C.lairZ, 4.3, 3.4) || moved;
+      for (let i = 0; i < segs - 1; i += 1) {
+        moved = shoveOut(ps,
+          spine[i].x, spine[i].y, spine[i].z,
+          spine[i + 1].x, spine[i + 1].y, spine[i + 1].z,
+          spineRadius[i], spineRadius[i + 1]) || moved;
+      }
+      if (!moved) break;
+    }
   }
 
   function layClutch() {
@@ -1328,6 +1456,10 @@ export function buildAbbess(ctx) {
     head.position.set(C.lairX, floorY, C.lairZ);
     head.visible = state.woken > 0.02;
     head.updateMatrixWorld(true);
+    /* AFTER the pose, never before: the capsules the player is being
+       held out of have to be the ones that were just drawn, or the
+       correction is a frame behind a body that breathes and heaves. */
+    keepOut();
 
     updateEggs(d);
     updateBrood(d);

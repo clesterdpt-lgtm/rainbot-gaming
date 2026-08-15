@@ -144,6 +144,50 @@ Other art notes:
 
 ---
 
+## Three bugs found in play, and what they taught
+
+**She had no collision.** Nothing in this file is in the collision grid
+— that is rasterised once at load from the authored world — so the
+player walked through twenty-six metres of animal. The Garner's mouth
+had the same problem and gets the same answer: the creature holds them
+off itself, tested against the **live** sac so it agrees with what is on
+screen through her breath, her laying wave and her slam. Which also
+means the one place the fight wants the player to be stays open by
+construction: a raised abdomen's capsules are nine metres up, and the
+ground under them is simply free.
+
+**The sac was see-through.** All 300 triangles were wound **inward**.
+The rings are laid in a right-handed frame, so the obvious index order
+faces every face inside, and with front-face culling that renders as the
+near wall vanishing and the inside of the far wall showing through it.
+Lighting was no guard — the vertex normals are analytic and were correct
+throughout — so only the silhouette betrayed it, from about half the
+angles in the chamber. The eggs had it too, on their walls but not their
+caps, which is exactly how a half-inverted mesh ships. The harness now
+audits winding against those normals.
+
+**The body was detached at both ends.** The waist sat 3.2m behind the
+collar plate and started at 0.31 of full radius — a 1.4m stalk emerging
+from a 4.3m plate with a gap of chamber floor between them. Tucked to
+1.5m, given a profile that leaves the thorax at 0.86 of full width, and
+the collar lengthened into a skirt that swallows the join: two surfaces
+that both move cannot share a butt joint without opening a seam every
+time she breathes.
+
+Fixing the winding then exposed a fourth: the belly-to-back colour ramp
+was built on `cos` when the ring frame's second axis points **down**, so
+it ran across her flanks. One side of her was pale and the other dark,
+and she read as flat because her only value gradient was at ninety
+degrees to the light.
+
+And a fifth, in `queenHit`: the thorax used a **closest-approach**
+distance while every other capsule test in `combat.js` returns an
+**entry** distance. It reported ~26m for a shot fired from 26m away, the
+sac behind it reported its true entry at ~22m, and the sac won every
+comparison — so shooting her in the face scored the abdomen at full
+damage, and mid-slam scored it as the ventral weak point. Her most
+protected surface was also her softest.
+
 ## Audit against the other bosses
 
 Measured in one session by `scripts/saintfall-boss-audit.mjs`, each with
@@ -172,7 +216,10 @@ seventeen distinct audio cues.
 
 ## Verification
 
-- `node scripts/saintfall-abbess-fight.mjs` — 31 checks, all passing.
+- `node scripts/saintfall-abbess-fight.mjs` — 36 checks, all passing.
+  Includes a winding audit per mesh and a solidity check in both
+  directions: the player cannot walk through her, and can stand under
+  the raised abdomen.
 - `node scripts/saintfall-abbess-shots.mjs` — six framed stills.
 - `node scripts/saintfall-boss-audit.mjs` — the table above.
 

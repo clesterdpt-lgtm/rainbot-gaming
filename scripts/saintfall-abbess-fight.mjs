@@ -113,9 +113,112 @@ try {
   check("the dormant queen cannot be seen or damaged",
     rig.hidden && !rig.targetable);
 
+  /* ---- THE MESH ITSELF -------------------------------------------------- */
+  /* Winding, audited against the analytic vertex normals the encounter
+     already writes. Both the sac and the eggs shipped inside-out once:
+     the rings are laid in a right-handed frame, so the obvious index
+     order faces every triangle inward, and with front-face culling that
+     renders as the near wall vanishing and the inside of the far wall
+     showing through it. Lighting is no guard - the vertex normals were
+     correct the whole time - so only the silhouette betrayed it, from
+     about half the angles in the chamber. */
+  const winding = await page.evaluate(() => {
+    const T = window.__SF;
+    T.teleportToAbbess(40);
+    T.advanceToAbbessPhase("seated", 20);
+    T.forceAbbessClutch();
+    T.advanceTime(2, 1 / 60);
+    const audit = (mesh) => {
+      const g = mesh.geometry;
+      const pos = g.attributes.position;
+      const nrm = g.attributes.normal;
+      const idx = g.index;
+      let inward = 0;
+      let outward = 0;
+      for (let f = 0; f < idx.count; f += 3) {
+        const i = [idx.getX(f), idx.getX(f + 1), idx.getX(f + 2)];
+        const p = i.map((v) => [pos.getX(v), pos.getY(v), pos.getZ(v)]);
+        const e1 = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
+        const e2 = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
+        const n = [e1[1] * e2[2] - e1[2] * e2[1],
+          e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+        if (Math.hypot(n[0], n[1], n[2]) < 1e-7) continue;   // a spent egg
+        const vn = [0, 0, 0];
+        for (const v of i) {
+          vn[0] += nrm.getX(v); vn[1] += nrm.getY(v); vn[2] += nrm.getZ(v);
+        }
+        if (n[0] * vn[0] + n[1] * vn[1] + n[2] * vn[2] > 0) outward += 1;
+        else inward += 1;
+      }
+      return { outward, inward };
+    };
+    const out = {};
+    T.abbess.group.traverse((o) => { if (o.isMesh && o.name) out[o.name] = audit(o); });
+    return out;
+  });
+  for (const [name, w] of Object.entries(winding)) {
+    check(`${name.replace("sf-abbess-", "")} faces outward`, w.inward === 0,
+      `${w.outward} outward, ${w.inward} inward`);
+  }
+
+  /* ---- SHE IS SOLID ---------------------------------------------------- */
+  /* None of her is in the collision grid - that is rasterised once from
+     the authored world - so the encounter holds the player off itself.
+     Two claims, and the second matters more than the first: they cannot
+     walk through her, and they CAN stand under a raised abdomen, which
+     is where her weak point is. */
+  const solid = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "abbess");
+    const c = T.abbess.config;
+    const ps = T.player.state;
+    const walkInto = () => {
+      // Aim at the middle of the sac and drive straight at it.
+      const mid = inst.sacSpine[Math.floor(inst.sacSpine.length / 2)];
+      T._teleportRaw(mid.x - 26, mid.z, 0);
+      T.advanceTime(0.2, 1 / 60);
+      let closest = Infinity;
+      for (let i = 0; i < 260; i += 1) {
+        ps.x += 0.14;
+        T.advanceTime(1 / 60, 1 / 60);
+        const m = inst.sacSpine[Math.floor(inst.sacSpine.length / 2)];
+        closest = Math.min(closest, Math.hypot(ps.x - m.x, ps.z - m.z));
+      }
+      const m = inst.sacSpine[Math.floor(inst.sacSpine.length / 2)];
+      return {
+        closest: Number(closest.toFixed(2)),
+        radius: Number(inst.sacRadius[Math.floor(inst.sacSpine.length / 2)].toFixed(2)),
+        crossed: ps.x > m.x + 2,
+      };
+    };
+    T.forceAbbessPhase("seated");
+    T.advanceTime(0.4, 1 / 60);
+    const seated = walkInto();
+    // ...and again with the abdomen in the air.
+    T.forceAbbessSlam();
+    T.advanceTime(1.42, 1 / 60);
+    const mid = inst.sacSpine[Math.floor(inst.sacSpine.length / 2)];
+    T._teleportRaw(mid.x, mid.z, 0);
+    T.advanceTime(2 / 60, 1 / 60);
+    const underneath = {
+      dist: Number(Math.hypot(ps.x - mid.x, ps.z - mid.z).toFixed(2)),
+      sacAbove: Number((mid.y - ps.y).toFixed(2)),
+      raised: T.abbessState().raised,
+    };
+    return { seated, underneath };
+  });
+  check("the player cannot walk through her body",
+    solid.seated.closest >= solid.seated.radius && !solid.seated.crossed,
+    `held at ${solid.seated.closest}m against a ${solid.seated.radius}m sac`);
+  check("...but CAN stand under the raised abdomen",
+    solid.underneath.dist < 1.5 && solid.underneath.sacAbove > 4,
+    `${solid.underneath.dist}m off axis, sac ${solid.underneath.sacAbove}m overhead`);
+
   /* ---- ROUSE ----------------------------------------------------------- */
   const rouse = await page.evaluate(() => {
     const T = window.__SF;
+    // The mesh and collision blocks above leave her seated.
+    T.resetAbbess();
     T.teleportToAbbess(40);
     const r = T.advanceToAbbessPhase("rouse", 8);
     const mid = T.abbessState();
@@ -300,18 +403,25 @@ try {
     const under = shootSac(-4);
     const over = shootSac(9);
     /* ...and her thorax, approached FROM THE FRONT and with the abdomen
-       back down. From any other bearing there are twenty metres of egg
-       sac in the way, which is the entire point of how she is seated -
-       so a test that shoots her from behind measures the sac and calls
-       it armour. */
-    T.forceAbbessPhase("seated");
-    T.advanceTime(0.4, 1 / 60);
+       genuinely back down. From any other bearing there are twenty
+       metres of egg sac in the way, which is the entire point of how
+       she is seated - so a test that shoots her from behind measures
+       the sac and calls it armour. And forcing the phase does not end a
+       slam already in flight, so the reset is what actually puts the
+       abdomen on the floor. */
+    T.resetAbbess();
+    T.teleportToAbbess(40);
+    T.advanceToAbbessPhase("seated", 16);
     const sx = Math.sin(inst.yaw);
     const sz = Math.cos(inst.yaw);
     const o = { x: inst.x + sx * 26, y: inst.y + 3.0, z: inst.z + sz * 26 };
     const hp = inst.health;
     const hit = T.combat.fire(o, { x: -sx, y: 0, z: -sz }, { damage: 40, range: 60 });
-    const thorax = { hit: !!hit?.thorax, dealt: Number((hp - inst.health).toFixed(1)) };
+    const thorax = {
+      hit: !!hit?.thorax, weak: !!hit?.weak,
+      raisedNow: T.abbessState().raised,
+      dealt: Number((hp - inst.health).toFixed(1)),
+    };
     return { seatedHit, raised, under, over, thorax };
   });
   check("the sac is an ordinary target while she is seated",
@@ -329,7 +439,7 @@ try {
   check("her thorax is armour, not immunity",
     ventral.thorax.hit && ventral.thorax.dealt > 0
     && ventral.thorax.dealt < ventral.seatedHit.dealt,
-    `${ventral.thorax.dealt} on the thorax vs ${ventral.seatedHit.dealt} on the sac`);
+    JSON.stringify(ventral.thorax));
 
   /* ---- THE ROYAL CELL -------------------------------------------------- */
   const royal = await page.evaluate(() => {

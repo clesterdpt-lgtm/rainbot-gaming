@@ -356,6 +356,27 @@ export function buildSky(ctx) {
     paintGeometry(THREE, merged, ramp, (x, y, z, i) => {
       const radial = (x * nrm.getX(i) + z * nrm.getZ(i)) / Math.max(1, Math.hypot(x, z));
       const up = nrm.getY(i);
+      /* MEASURED, NOT FIXED - left as it was on purpose.
+
+         The ring still reads as a pale bar rather than as wreckage,
+         and an attempt to give it tone along the arc (three
+         incommensurate runs of sine on atan2(z,x), plus a width
+         swell) was reverted: it moved 14.7% of the ring's pixels and
+         moved the spine's luma spread not at all (sd 28.87 -> 29.46
+         on the vista-east pose), i.e. it changed the picture without
+         improving the thing it was aimed at, and its width term had
+         a mean of 0.70 so it quietly made the band THINNER - the
+         opposite of the complaint.
+
+         Two facts for whoever picks this up. The haze is NOT the
+         cause: worked through, the aerial-perspective mix at 6.2km
+         and 620m of altitude comes out at f = 0.022, and times the
+         0.68 fade that is a 1.5% pull toward the sky. And the
+         existing `jitter: 0.14` is the same order as any vertex-tone
+         variation added here, so per-vertex paint is probably the
+         wrong lever - the band subtends under 3 degrees and is seen
+         nearly edge-on, so what a viewer can resolve is its
+         SILHOUETTE, not its shading. */
       return clamp01(0.42 + radial * 0.34 + up * 0.22);
     }, { jitter: 0.14 });
 
@@ -504,8 +525,13 @@ export function buildSky(ctx) {
 
       // Bake the sun into the vertex colours. These are unlit, so
       // this is the only thing giving them form.
+      /* FOUR components, not three. The shelves are opaque slabs and
+         want alpha 1 everywhere, but they share a mesh and a material
+         with the cirrus below, which is only readable if its edges
+         can fade out - and a merge cannot mix a vec3 colour buffer
+         with a vec4 one. */
       const n = g.attributes.normal;
-      const colors = new Float32Array(g.attributes.position.count * 3);
+      const colors = new Float32Array(g.attributes.position.count * 4);
       for (let v = 0; v < g.attributes.position.count; v += 1) {
         const nl = clamp01(
           (n.getX(v) * sunDir.x + n.getY(v) * sunDir.y + n.getZ(v) * sunDir.z) * 0.5 + 0.5
@@ -513,11 +539,12 @@ export function buildSky(ctx) {
         const up = clamp01(n.getY(v) * 0.5 + 0.5);
         const t = clamp01(nl * 0.62 + up * 0.38);
         const c = mixRgb(shadeRgb, litRgb, Math.pow(t, 1.35));
-        colors[v * 3] = srgb(c[0]);
-        colors[v * 3 + 1] = srgb(c[1]);
-        colors[v * 3 + 2] = srgb(c[2]);
+        colors[v * 4] = srgb(c[0]);
+        colors[v * 4 + 1] = srgb(c[1]);
+        colors[v * 4 + 2] = srgb(c[2]);
+        colors[v * 4 + 3] = 1;
       }
-      g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      g.setAttribute("color", new THREE.BufferAttribute(colors, 4));
 
       const m = new THREE.Matrix4().compose(
         new THREE.Vector3(Math.cos(a) * dist, y, Math.sin(a) * dist),
@@ -525,6 +552,208 @@ export function buildSky(ctx) {
         new THREE.Vector3(1, 1, 1)
       );
       g.applyMatrix4(m);
+      geoms.push(g);
+    }
+
+    /* ============================================================
+       HIGH CIRRUS
+
+       The 26 shelves above all sit between about 4 and 30 degrees of
+       elevation - 330-1250m of altitude at 2.2-5.2km out - so they
+       hug the horizon, and every frame in the review set has an
+       EMPTY upper sky above them: a bare gradient over the top third
+       to half of the picture. On a level whose camera spends most of
+       its time looking up a road at a cathedral, that is the single
+       largest piece of screen carrying no information.
+
+       What it costs, measured against the same build with it removed
+       (scripts/saintfall-perf-probe.mjs, quality=high):
+       - draw calls: UNCHANGED (190/114/144/223 across the four
+         scenarios). It is merged into the same geometry as the
+         shelves, so it shares their draw call and their material
+         rather than adding a second transparent pass over the sky.
+       - triangles: +19,208, i.e. about +3% of a 620k frame. Flat
+         sheets, not volumes.
+       - GPU time: no measurable increase; the after-run measured
+         FASTER on two of four scenarios, which is run-to-run noise
+         on this machine rather than a speed-up.
+       - the day cycle is free: `repaintClouds` already walks every
+         cloud vertex, and these ride along in it.
+
+       Placed by ELEVATION on a virtual sphere rather than by picking
+       an altitude and a distance separately - picking those two
+       independently is exactly how the shelves ended up confined to
+       a band near the horizon.
+
+       Built as FILAMENTS, and the filaments must be SOFT. The first
+       cut used opaque double-tapered strips and they came out as
+       pale blades - hard-edged lozenges with points at both ends,
+       read on sight as flying wreckage rather than as cloud. Two
+       things fix that and both are structural, not tuning: a
+       three-vertex cross-section so alpha can fall to zero at each
+       edge instead of ending at a polygon boundary, and an
+       ASYMMETRIC profile - a rounded head drawn out into a long
+       tail, which is what a mare's tail is and what makes the wind
+       direction legible.
+       ============================================================ */
+    /* A DECK AT ALTITUDE, not a shell at fixed radius.
+
+       Two earlier cuts placed bands on a sphere of radius 4200 and
+       picked an elevation. Both failed, and the second failure is the
+       instructive one: dropping the band to 15-55 degrees put the
+       geometry where the camera looks and it STILL did not appear,
+       because a horizontal sheet seen at 18 degrees is foreshortened
+       by sin(18) = 0.31, and a 100m filament at 4.2km then subtends
+       0.4 degrees. It was drawing a hairline.
+
+       Cirrus is a deck: one altitude, running out to the horizon. Fix
+       the altitude and scatter the HORIZONTAL distance log-uniformly,
+       and the elevation range falls out of the geometry for free -
+       near ones sit high overhead, far ones compress toward the
+       horizon and converge, which is what a real cirrus field does
+       and is worth more than any of it being authored.
+
+       Then size each band by the angle it should SUBTEND rather than
+       by metres, and divide the width by sin(elevation) to undo the
+       foreshortening. That is the step both earlier cuts were
+       missing: at this range, world-space dimensions say nothing
+       about whether a thing will be visible. */
+    /* 30 bands, and raising it is NOT the lever - measured.
+
+       Several review poses show no cirrus at all, and the obvious
+       reading is "too few bands, they are scattered over 360 degrees
+       and the camera sees 60". That was tried: 30 -> 44 moved overall
+       upper-sky coverage 4.6% -> 5.6% for 39% more triangles, and the
+       poses showing none still showed none.
+
+       The real cause is geometric and worth knowing before anyone
+       tries again. This deck's reachable elevation is 23.8 to 70.8
+       degrees, bounded below by the FAR PLANE: at 2800m of altitude a
+       band at 10 degrees would have to sit 15,880m out, and
+       camera.far is 11,000m. So cirrus is structurally a
+       high-sky feature here, and the poses that show none are the
+       ones whose frame contains no sky above ~24 degrees - which is
+       also what a real sky does, since looking at the horizon shows
+       you the low shelves and not the ice deck overhead.
+
+       If low-elevation cirrus is ever wanted, the lever is a LOWER
+       deck altitude (or a farther far plane), not more bands. */
+    for (let i = 0; i < 30; i += 1) {
+      const alt = rng.range(2800, 4600);
+      /* 1600m to 6400m out, log-uniform so the far half of the range
+         does not swallow everything.
+
+         The ceiling is set by the FAR PLANE, and the band's own
+         length is what decides it - not its centre. camera.far is
+         11km; at a multiplier of 5.4 the centre stayed well inside
+         that, but a band is up to 36 degrees long, so a band whose
+         random yaw pointed its long axis radially away reached
+         12,486m at the tip and got sliced by the far plane - a hard
+         straight cut across a cloud, at whatever azimuth that band
+         happened to land. Solved for the worst case (centre + half
+         the longest band, at the highest altitude): 4.0 puts the
+         farthest reachable point at 9,926m. */
+      const ground = 1600 * Math.pow(4.0, rng());
+      const az = rng() * TAU;
+      const dist = Math.hypot(ground, alt);
+      const sinEl = Math.max(0.20, alt / dist);
+      const centre = new THREE.Vector3(
+        Math.cos(az) * ground, alt, Math.sin(az) * ground
+      );
+
+      const pos = [];
+      const idx = [];
+      const nrm = [];
+      const alpha = [];
+      const filaments = rng.int(4, 9);
+      // Angular targets, converted to world units at this distance.
+      const bandLen = (12 + rng() * 24) * Math.PI / 180 * dist;
+      /* Half-width in DEGREES of subtended angle. Work the chain
+         through before picking this: a filament ends up at roughly
+         0.2x the band's half-width once its own fraction and its
+         taper are applied, so a band asking for 1 degree draws a
+         3-pixel thread at 1600x900. Asking for 3-7 puts the filament
+         at 25-60 pixels across, which is a cloud. */
+      const bandHW = (3.0 + rng() * 4.0) * Math.PI / 180 * dist / sinEl;
+      // Thin overall. These sit over the brightest part of the sky
+      // and any solidity at all reads as a hole punched in it.
+      const bandAlpha = rng.range(0.38, 0.70);
+      for (let f = 0; f < filaments; f += 1) {
+        const segs = rng.int(9, 15);
+        const len = bandLen * rng.range(0.55, 1.0);
+        const x0 = rng.gauss() * bandLen * 0.16;
+        // Filaments spread ACROSS the band, so their spacing has to
+        // scale with the band's own width - a fixed 210m offset put
+        // every filament of a far band on top of its neighbours.
+        const z0 = rng.gauss() * bandHW * 0.85;
+        // Every filament in a band shears the same way - they were
+        // combed by one wind - but each keeps its own bow.
+        const shear = rng.range(0.10, 0.34);
+        const hw = bandHW * rng.range(0.34, 0.72);
+        const base = pos.length / 3;
+        for (let s = 0; s <= segs; s += 1) {
+          const t = s / segs;
+          /* Head at t~0.15, tail drawn out to t=1. The `pow(1-t,1.5)`
+             is the whole silhouette: a long concave decay, so the
+             filament thins fast at first and then trails, instead of
+             coming to a symmetrical point like a leaf. */
+          const head = smoothstep(clamp01(t / 0.16));
+          const taper = head * Math.pow(1 - t, 1.5);
+          const w = hw * taper * (0.72 + 0.28 * Math.sin(t * 9.1 + f));
+          const px = x0 + (t - 0.5) * len;
+          const pz = z0 + (t - 0.5) * len * shear
+            + Math.sin(t * 2.3 + f * 1.7) * bandHW * 0.35;
+          const py = Math.sin(t * 1.9 + f) * 26;
+          /* Normals forced UPWARD, with a small tilt for tone along
+             the fibre. The shared repaint reads the normal, and a
+             thin ice sheet seen from underneath is BRIGHT - given a
+             geometric downward normal it would bake at the shadow
+             end of the ramp and hang up there as a dark smear. */
+          const tilt = 0.30 * Math.sin(t * 5.3 + f * 2.1);
+          const nl = Math.hypot(tilt, 1, tilt * 0.6);
+          const nx = tilt / nl, ny = 1 / nl, nz = tilt * 0.6 / nl;
+          // left edge, spine, right edge - alpha 0 / full / 0
+          const a = bandAlpha * taper * (0.55 + 0.45 * Math.sin(t * 6.7 + f * 2.9));
+          nrm.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
+          alpha.push(0, a, 0);
+          pos.push(px, py, pz - w);
+          pos.push(px, py, pz);
+          pos.push(px, py, pz + w);
+        }
+        for (let s = 0; s < segs; s += 1) {
+          const b = base + s * 3;
+          const n2 = b + 3;
+          idx.push(b, b + 1, n2 + 1, b, n2 + 1, n2);
+          idx.push(b + 1, b + 2, n2 + 2, b + 1, n2 + 2, n2 + 1);
+        }
+      }
+
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3));
+      g.setIndex(idx);
+
+      const n = g.attributes.normal;
+      const colors = new Float32Array(g.attributes.position.count * 4);
+      for (let v = 0; v < g.attributes.position.count; v += 1) {
+        const nl = clamp01(
+          (n.getX(v) * sunDir.x + n.getY(v) * sunDir.y + n.getZ(v) * sunDir.z) * 0.5 + 0.5
+        );
+        const up = clamp01(n.getY(v) * 0.5 + 0.5);
+        const t = clamp01(nl * 0.62 + up * 0.38);
+        const c = mixRgb(shadeRgb, litRgb, Math.pow(t, 1.35));
+        colors[v * 4] = srgb(c[0]);
+        colors[v * 4 + 1] = srgb(c[1]);
+        colors[v * 4 + 2] = srgb(c[2]);
+        colors[v * 4 + 3] = alpha[v];
+      }
+      g.setAttribute("color", new THREE.BufferAttribute(colors, 4));
+
+      g.applyMatrix4(new THREE.Matrix4().compose(
+        centre,
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, rng() * TAU, 0)),
+        new THREE.Vector3(1, 1, 1)
+      ));
       geoms.push(g);
     }
 

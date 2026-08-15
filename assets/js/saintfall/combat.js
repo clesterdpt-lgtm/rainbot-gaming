@@ -176,6 +176,10 @@ const HITBOX = {
        wider live-bone sphere carries that coverage through the claw
        silhouette instead of ending damage at an invisible pivot. */
     footRadius: 1.10,
+    // Extra forgiveness around the fitted visual-plate capsules for shots.
+    meshRayPadding: 0.18,
+    // Extra sweep thickness around live armour proxies for the lance's arc.
+    meshMeleePadding: 0.38,
     /* THE BODY IS A CAPSULE BETWEEN TWO LIVE BONES - "abdomen2" at
        the rear, "head" at the front - because those are the two rig
        origins that actually sit inside the visual mass. (The
@@ -607,6 +611,168 @@ export function buildCombat(ctx) {
   const _bodyLive = new THREE.Vector3();
 
   const _bodyLive2 = new THREE.Vector3();
+  const _distaffLocalVertex = new THREE.Vector3();
+  const _distaffWorldScale = new THREE.Vector3();
+  const DISTAFF_LEG_BONE_RE = /^(?:coxa|femur|tibia|foot)(\d+)_(L|R)$/;
+
+  /** Build the visual-mesh-to-gameplay map once per spawned Distaff.
+   *
+   * The old hit volume followed four joint origins.  That is a useful IK
+   * skeleton and a poor description of the Meshy remodel: its broad armour
+   * shells often sit more than a metre to one side of those lines, especially
+   * in the rear fan.  Skin weights already say exactly which logical leg owns
+   * every visible vertex, so reuse that authored truth for both bullets and
+   * melee instead of maintaining a second hand-tuned silhouette. */
+  function distaffHitCache(inst) {
+    const skin = inst?.skin;
+    const geometry = skin?.geometry;
+    const skeleton = skin?.skeleton;
+    const position = geometry?.getAttribute?.("position");
+    const skinIndex = geometry?.getAttribute?.("skinIndex");
+    const skinWeight = geometry?.getAttribute?.("skinWeight");
+    if (!skin || !position || !skinIndex || !skinWeight || !skeleton) return null;
+    if (inst.distaffHitCache?.skin === skin
+      && inst.distaffHitCache?.geometry === geometry) return inst.distaffHitCache;
+
+    const boneToLeg = new Int8Array(skeleton.bones.length);
+    boneToLeg.fill(-1);
+    for (let i = 0; i < skeleton.bones.length; i += 1) {
+      const match = DISTAFF_LEG_BONE_RE.exec(skeleton.bones[i]?.name || "");
+      if (!match) continue;
+      const pair = Number(match[1]);
+      const side = match[2] === "R" ? 1 : 0;
+      const logical = pair * 2 + side;
+      if (logical >= 0 && logical < (inst.legs?.length || 0)) boneToLeg[i] = logical;
+    }
+
+    const buckets = new Map();
+    const readIndex = ["getX", "getY", "getZ", "getW"];
+    for (let vertex = 0; vertex < position.count; vertex += 1) {
+      let bestWeight = -1;
+      let bestLeg = -1;
+      let bestBone = -1;
+      for (let lane = 0; lane < 4; lane += 1) {
+        const weight = skinWeight[readIndex[lane]](vertex);
+        if (weight <= bestWeight) continue;
+        const bone = Math.round(skinIndex[readIndex[lane]](vertex));
+        bestWeight = weight;
+        bestLeg = boneToLeg[bone] ?? -1;
+        bestBone = bone;
+      }
+      if (bestLeg < 0) continue;
+      let bucket = buckets.get(bestBone);
+      if (!bucket) {
+        bucket = { boneIndex: bestBone, legIndex: bestLeg, vertices: [] };
+        buckets.set(bestBone, bucket);
+      }
+      bucket.vertices.push(vertex);
+    }
+
+    /* One fitted capsule per deforming bone, derived from the vertices that
+       bone actually carries.  A farthest-point chord supplies the axis and
+       the furthest vertex supplies the radius. Oversized multi-plate fits are
+       split below, yielding roughly 130 compact tests for the whole boss; exact
+       41k-triangle CPU raycasts measured 11.7ms each and caused a visible
+       hitch on automatic fire. */
+    const proxies = [];
+    const point = (vertex) => new THREE.Vector3(
+      position.getX(vertex), position.getY(vertex), position.getZ(vertex));
+    const fitProxy = (bucket, vertices, depth = 0) => {
+      if (!vertices.length) return;
+      let a = point(vertices[0]);
+      let far = -1;
+      for (const vertex of vertices) {
+        const p = point(vertex);
+        const d2 = p.distanceToSquared(a);
+        if (d2 > far) { far = d2; a = p; }
+      }
+      let b = a.clone();
+      far = -1;
+      for (const vertex of vertices) {
+        const p = point(vertex);
+        const d2 = p.distanceToSquared(a);
+        if (d2 > far) { far = d2; b = p; }
+      }
+      const ab = b.clone().sub(a);
+      const ab2 = Math.max(1e-8, ab.lengthSq());
+      let radius = 0;
+      for (const vertex of vertices) {
+        const p = point(vertex);
+        const t = clamp(p.clone().sub(a).dot(ab) / ab2, 0, 1);
+        radius = Math.max(radius, p.distanceTo(_distaffLocalVertex.copy(a)
+          .addScaledVector(ab, t)));
+      }
+      /* A single bone may carry several disconnected hard plates. One capsule
+         around all of them can honestly cover the vertices and still fill six
+         metres of empty air between them. Split oversized fits along their
+         widest local axis until each proxy describes one compact piece. */
+      if (radius > 1.35 && vertices.length > 40 && depth < 6) {
+        const bounds = [
+          [Infinity, -Infinity], [Infinity, -Infinity], [Infinity, -Infinity],
+        ];
+        for (const vertex of vertices) {
+          const p = point(vertex);
+          bounds[0][0] = Math.min(bounds[0][0], p.x); bounds[0][1] = Math.max(bounds[0][1], p.x);
+          bounds[1][0] = Math.min(bounds[1][0], p.y); bounds[1][1] = Math.max(bounds[1][1], p.y);
+          bounds[2][0] = Math.min(bounds[2][0], p.z); bounds[2][1] = Math.max(bounds[2][1], p.z);
+        }
+        const axis = [0, 1, 2].sort((left, right) =>
+          (bounds[right][1] - bounds[right][0]) - (bounds[left][1] - bounds[left][0]))[0];
+        const sorted = [...vertices].sort((left, right) => {
+          const lp = axis === 0 ? position.getX(left) : axis === 1
+            ? position.getY(left) : position.getZ(left);
+          const rp = axis === 0 ? position.getX(right) : axis === 1
+            ? position.getY(right) : position.getZ(right);
+          return lp - rp || left - right;
+        });
+        const middle = Math.floor(sorted.length / 2);
+        fitProxy(bucket, sorted.slice(0, middle), depth + 1);
+        fitProxy(bucket, sorted.slice(middle), depth + 1);
+        return;
+      }
+      proxies.push({
+        legIndex: bucket.legIndex,
+        representative: vertices[0],
+        a, b,
+        radius: Math.max(0.12, radius),
+      });
+    };
+    for (const bucket of buckets.values()) fitProxy(bucket, bucket.vertices);
+    inst.distaffHitCache = { skin, geometry, proxies };
+    return inst.distaffHitCache;
+  }
+
+  function distaffProxyWorld(cache, proxy, outA, outB) {
+    outA.copy(proxy.a);
+    outB.copy(proxy.b);
+    cache.skin.applyBoneTransform(proxy.representative, outA);
+    cache.skin.applyBoneTransform(proxy.representative, outB);
+    cache.skin.localToWorld(outA);
+    cache.skin.localToWorld(outB);
+  }
+
+  /** Current visual armour represented by fitted, bone-driven capsules. */
+  function distaffMeshRayHit(inst, box, ox, oy, oz, dx, dy, dz, maxT) {
+    const cache = distaffHitCache(inst);
+    if (!cache?.proxies?.length) return null;
+    cache.skin.updateWorldMatrix(true, false);
+    cache.skin.skeleton.update();
+    cache.skin.getWorldScale(_distaffWorldScale);
+    const scale = Math.max(_distaffWorldScale.x, _distaffWorldScale.y, _distaffWorldScale.z);
+    let bestT = maxT;
+    let legIndex = -1;
+    for (const proxy of cache.proxies) {
+      if (inst.legBroken?.[proxy.legIndex]) continue;
+      distaffProxyWorld(cache, proxy, _legC, _legD);
+      const radius = proxy.radius * scale + (box.meshRayPadding || 0.16);
+      const t = segmentHit(ox, oy, oz, dx, dy, dz, _legC, _legD, radius);
+      if (t >= 0 && t < bestT) {
+        bestT = t;
+        legIndex = proxy.legIndex;
+      }
+    }
+    return legIndex >= 0 ? { t: bestT, legIndex, weak: false } : null;
+  }
 
   /** Read all four live leg joints from the rendered skeleton.
    *
@@ -659,12 +825,15 @@ export function buildCombat(ctx) {
    * crosses, with `legIndex` set for a leg (`-1` for the body).
    */
   function legAndBodyHit(inst, box, ox, oy, oz, dx, dy, dz, maxT) {
-    let bestT = maxT;
-    let legIndex = -1;
+    const cache = distaffHitCache(inst);
+    const meshHit = distaffMeshRayHit(inst, box, ox, oy, oz, dx, dy, dz, maxT);
+    let bestT = meshHit?.t ?? maxT;
+    let legIndex = meshHit?.legIndex ?? -1;
     let weak = false;
-    let found = false;
+    let found = !!meshHit;
     const r = box.legRadius || 0.6;
-    for (let i = 0; i < (inst.legs?.length || 0); i += 1) {
+    /* Safe fallback for a legacy/procedural rig without skin attributes. */
+    for (let i = 0; !cache?.proxies?.length && i < (inst.legs?.length || 0); i += 1) {
       if (inst.legBroken?.[i]) continue;
       const leg = inst.legs[i];
       if (!distaffLegSpan(leg, _legC, _legA, _legB, _legD)) continue;
@@ -879,7 +1048,33 @@ export function buildCombat(ctx) {
        leg a person could actually strike. */
     const reachY = py + (box.meleeReachY || 3.6);
     const r = box.legRadius || 0.6;
-    for (let i = 0; i < (inst.legs?.length || 0); i += 1) {
+    /* The same fitted visual proxies used by bullets are the melee surface.
+       Clip each live capsule to swing height, then measure its xz surface. */
+    const cache = distaffHitCache(inst);
+    if (cache?.proxies?.length) {
+      cache.skin.updateWorldMatrix(true, false);
+      cache.skin.skeleton.update();
+      cache.skin.getWorldScale(_distaffWorldScale);
+      const scale = Math.max(_distaffWorldScale.x, _distaffWorldScale.y, _distaffWorldScale.z);
+      const padding = box.meshMeleePadding || 0.78;
+      for (const proxy of cache.proxies) {
+        if (inst.legBroken?.[proxy.legIndex]) continue;
+        distaffProxyWorld(cache, proxy, _legC, _legD);
+        if (!clipSegmentBelowY(_legC, _legD, reachY, _legClipA, _legClipB)) continue;
+        const radius = proxy.radius * scale + padding;
+        const d = nearestOnSegmentXZ(
+          _legClipA.x, _legClipA.y, _legClipA.z,
+          _legClipB.x, _legClipB.y, _legClipB.z, x, z, _legCand);
+        const surface = d - radius;
+        if (surface >= bestSurface) continue;
+        best = d;
+        bestSurface = surface;
+        bestRadius = radius;
+        legIndex = proxy.legIndex;
+        out.copy(_legCand);
+      }
+    }
+    for (let i = 0; !cache?.proxies?.length && i < (inst.legs?.length || 0); i += 1) {
       if (inst.legBroken?.[i]) continue;
       const leg = inst.legs[i];
       if (!distaffLegSpan(leg, _legC, _legA, _legB, _legD)) continue;
@@ -2481,6 +2676,9 @@ export function buildCombat(ctx) {
     snapshot,
     restore,
     hitbox: HITBOX,
+    // Prepared while the dormant boss is hidden so the first player shot does
+    // not pay the one-time visual-proxy fit on its firing frame.
+    prepareLegHitbox: (inst) => !!distaffHitCache(inst),
     /** Whether anything can currently be done to a creature at all.
      *  Exposed because "the boss is invulnerable while submerged" is a
      *  claim worth asserting in a test rather than trusting. */

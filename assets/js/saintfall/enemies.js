@@ -935,6 +935,7 @@ export async function buildEnemies(ctx, onProgress) {
       stride: 0,
       gaitX: x,
       gaitZ: z,
+      gaitYaw: Number.isFinite(opts.yaw) ? opts.yaw : null,
       gaitClock: 0,
       current: null,
       knockbackX: 0,
@@ -1302,17 +1303,29 @@ export async function buildEnemies(ctx, onProgress) {
     const lift = inst.spec.stepHeight * scale;
     const movedX = inst.root.position.x - (Number.isFinite(inst.gaitX) ? inst.gaitX : inst.root.position.x);
     const movedZ = inst.root.position.z - (Number.isFinite(inst.gaitZ) ? inst.gaitZ : inst.root.position.z);
-    const travelled = Math.hypot(movedX, movedZ);
+    const translated = Math.hypot(movedX, movedZ);
     inst.gaitX = inst.root.position.x;
     inst.gaitZ = inst.root.position.z;
+    let turned = inst.yaw - (Number.isFinite(inst.gaitYaw) ? inst.gaitYaw : inst.yaw);
+    while (turned > Math.PI) turned -= TAU;
+    while (turned < -Math.PI) turned += TAU;
+    inst.gaitYaw = inst.yaw;
+    /* Turning in place moves an outer foot just as surely as translating the
+       body does.  Ignoring yaw let one tripod remain planted through a broad
+       pivot until the chain was several metres beyond its reach; the rear
+       legs were the first to turn into long spikes.  Convert that angular
+       travel into an equivalent arc at the authored stance radius so the
+       coordinated gait keeps alternating while the Distaff turns. */
+    const turnTravel = Math.abs(turned) * reach;
+    const travelled = Math.max(translated, turnTravel);
     const coordinated = !!inst.spec.coordinatedGait
       && travelled > 1e-4 && travelled < reach * 2;
     if (coordinated) {
       inst.gaitClock = (inst.gaitClock + dt * (inst.spec.gaitRate || 1.5)) % 1;
     }
     const activeGroup = inst.gaitClock < 0.5 ? 0 : 0.5;
-    const moveX = coordinated ? movedX / travelled : 0;
-    const moveZ = coordinated ? movedZ / travelled : 0;
+    const moveX = translated > 1e-4 ? movedX / translated : 0;
+    const moveZ = translated > 1e-4 ? movedZ / translated : 0;
 
     for (const leg of inst.legs) {
       if (ownedPairs?.includes(leg.i)) continue;
@@ -1339,7 +1352,7 @@ export async function buildEnemies(ctx, onProgress) {
         const lag = leg.plant.distanceTo(_a);
         const groupReady = !inst.spec.coordinatedGait
           || Math.abs(leg.phase - activeGroup) < 0.1;
-        if (lag > reach && (groupReady || lag > reach * 1.55)) {
+        if (lag > reach && (groupReady || lag > reach * 1.30)) {
           leg.target.copy(_a);
           leg.stepping = 1;
         }
@@ -1378,6 +1391,11 @@ export async function buildEnemies(ctx, onProgress) {
     // whole leg becomes non-finite for the rest of the session.
     d = clamp(d, Math.abs(L1 - L2) + 1e-4, L1 + L2 - 1e-4);
     _dir.normalize();
+    /* The scalar was always clamped for acos, but the tibia was still aimed
+       at the original, unreachable plant.  That left the visual chain free
+       to flatten and tear even though the law-of-cosines calculation itself
+       was finite.  Both bones now solve to the same reachable end point. */
+    _b.copy(_head).addScaledVector(_dir, d);
 
     /* Pole: which way the joint bends, and it is per species.
 
@@ -1409,7 +1427,7 @@ export async function buildEnemies(ctx, onProgress) {
       .multiplyScalar(L1).add(_head);
 
     aimBone(femur, _knee);
-    aimBone(tibia, leg.foot);
+    aimBone(tibia, _b);
   }
 
   /** Point a bone's local +Y at a world-space target. */

@@ -88,6 +88,11 @@ export const DISTAFF_CONFIG = Object.freeze({
   lungeSpeed: 9.5,
   lungeMinRange: 16,
   lungeMaxRange: 34,
+  /* Once any leg is destroyed the spider loses the planted support needed to
+     pivot its full mass.  It keeps the heading it had at the break and can
+     only threaten the broad frontal cone; getting behind it is therefore a
+     real, readable reward instead of another radial-damage trap. */
+  crippledFrontArc: Math.PI * 0.90,
 
   /* Its territory. It will not be kited out of the Scar: movement is
      clamped to this ring around the lair, and a player who leaves
@@ -188,6 +193,7 @@ export function buildDistaff(ctx) {
     lungeTimer: C.lungeCadence * 0.6,
     strafeDir: 1,
     footfallGap: 0,
+    turnLocked: false,
   };
   let inst = null;
 
@@ -484,6 +490,36 @@ export function buildDistaff(ctx) {
     inst.root.rotation.y = inst.yaw;
   }
 
+  function playerInCrippledFront() {
+    if (!state.turnLocked) return true;
+    const ps = ctx.player.state;
+    const dx = ps.x - inst.x;
+    const dz = ps.z - inst.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 1e-3) return true;
+    const forwardDot = (Math.sin(inst.yaw) * dx + Math.cos(inst.yaw) * dz) / d;
+    return forwardDot >= Math.cos(C.crippledFrontArc * 0.5);
+  }
+
+  /** A broken leg changes the fight immediately.  Cancel any attack that was
+   * authored while all eight supports were available, preserve the current
+   * yaw, and let the player earn a genuinely safe rear flank. */
+  function updateTurnLock() {
+    const locked = (inst.legsBroken || 0) > 0;
+    if (locked === state.turnLocked) return;
+    state.turnLocked = locked;
+    if (!locked) return;
+    state.lungeFor = 0;
+    state.action = 0;
+    state.actionKind = null;
+    state.pending = 0;
+    clearHazards();
+    enemies.play(inst, "flinch", 0.06);
+    bus.emit("turnLocked", {
+      x: inst.x, z: inst.z, yaw: inst.yaw, legsBroken: inst.legsBroken,
+    });
+  }
+
   function beginAlert() {
     state.phase = "alert";
     state.timer = C.alertSeconds;
@@ -570,7 +606,7 @@ export function buildDistaff(ctx) {
     const dist = Math.hypot(ps.x - inst.x, ps.z - inst.z);
     const y = groundAt(inst.x, inst.z);
     ctx.vfx?.blast?.(inst.x, y + 0.3, inst.z, C.slamRadius * 0.55);
-    if (dist > C.slamRadius || ctx.combat?.player?.dead) {
+    if (dist > C.slamRadius || ctx.combat?.player?.dead || !playerInCrippledFront()) {
       bus.emit("slamMiss", { x: inst.x, z: inst.z });
       return;
     }
@@ -584,6 +620,10 @@ export function buildDistaff(ctx) {
   }
 
   function launchWebBolt() {
+    if (ctx.combat?.player?.dead || !playerInCrippledFront()) {
+      bus.emit("webCastMiss", { x: inst.x, z: inst.z });
+      return;
+    }
     const bone = inst.bones.get("spinneret");
     if (!bone) return;
     bone.updateWorldMatrix(true, false);
@@ -602,7 +642,8 @@ export function buildDistaff(ctx) {
   function landBite() {
     const ps = ctx.player.state;
     const dist = Math.hypot(ps.x - inst.x, ps.z - inst.z);
-    if (dist > C.biteReach + 1.2 || ctx.combat?.player?.dead) {
+    if (dist > C.biteReach + 1.2 || ctx.combat?.player?.dead
+      || !playerInCrippledFront()) {
       bus.emit("biteMiss", { x: inst.x, z: inst.z });
       return;
     }
@@ -687,6 +728,18 @@ export function buildDistaff(ctx) {
     state.lungeTimer -= dt;
     state.action = Math.max(0, state.action - dt);
     const ps = ctx.player.state;
+
+    /* No tracking, lunging, radial slam, web cast or patch placement through
+       the safe rear cone after a leg break.  Cooldowns continue to count down
+       so stepping back into its front remains dangerous immediately. */
+    if (state.turnLocked && !playerInCrippledFront()) {
+      state.lungeFor = 0;
+      state.action = 0;
+      state.actionKind = null;
+      state.pending = 0;
+      if (inst.state !== "idle") enemies.play(inst, "idle", 0.18);
+      return;
+    }
 
     /* THE LUNGE, mid-flight. A short rear (the first 0.4s of the
        alert clip) and then the sprint; it cashes out into the
@@ -776,7 +829,8 @@ export function buildDistaff(ctx) {
     if (state.action > 0) resolveAction(dt);
     else if (state.biteTimer === undefined || state.biteTimer <= 0) {
       const ps = ctx.player.state;
-      if (Math.hypot(ps.x - inst.x, ps.z - inst.z) < C.biteReach) {
+      if (playerInCrippledFront()
+        && Math.hypot(ps.x - inst.x, ps.z - inst.z) < C.biteReach) {
         beginBite();
         state.biteTimer = C.biteCadence;
       }
@@ -820,6 +874,7 @@ export function buildDistaff(ctx) {
     }
     const ps = ctx.player.state;
     const dist = Math.hypot(ps.x - inst.x, ps.z - inst.z);
+    updateTurnLock();
 
     if (state.phase === "dormant") { stepDormantCheck(dist); return; }
     if (state.phase === "returning") { stepReturning(dt, dist); return; }
@@ -851,7 +906,9 @@ export function buildDistaff(ctx) {
       return;
     }
 
-    faceTowards(ps.x, ps.z, state.phase === "collapsed" ? 0.5 : 1.5, dt);
+    if (!state.turnLocked) {
+      faceTowards(ps.x, ps.z, state.phase === "collapsed" ? 0.5 : 1.5, dt);
+    }
 
     if (state.phase === "standing") stepStanding(dt, dist);
     else if (state.phase === "collapsed") stepCollapsed(dt);
@@ -868,6 +925,7 @@ export function buildDistaff(ctx) {
     }
     if (inst.legBroken) inst.legBroken.fill(false);
     inst.legsBroken = 0;
+    state.turnLocked = false;
     inst.collapsed = false;
     state.legsAtLastCollapse = 0;
     state.lungeFor = 0;
@@ -918,6 +976,7 @@ export function buildDistaff(ctx) {
     });
     if (inst) {
       state.legHealthRef = inst.legHp?.[0] || 340;
+      ctx.combat?.prepareLegHitbox?.(inst);
       setEncounterGate(true, true);
     }
     return inst;
@@ -975,6 +1034,7 @@ export function buildDistaff(ctx) {
       health: Math.max(0, Math.round(inst.health)),
       maxHealth: Math.round(inst.maxHealth),
       legsBroken: inst.legsBroken || 0,
+      turnLocked: state.turnLocked,
       legCount: inst.legHp ? inst.legHp.length : 8,
       legBroken: inst.legBroken ? [...inst.legBroken] : [],
       collapsed: !!inst.collapsed,
@@ -1057,6 +1117,7 @@ export function buildDistaff(ctx) {
       for (let i = 0; i < inst.legBroken.length; i += 1) inst.legBroken[i] = !!saved.legBroken[i];
     }
     inst.legsBroken = Math.max(0, Math.round(Number(saved.legsBroken) || 0));
+    state.turnLocked = inst.legsBroken > 0;
     inst.collapsed = phase === "collapsed";
     if (state.defeated || phase === "dead") {
       enemies.play(inst, "death", 0);

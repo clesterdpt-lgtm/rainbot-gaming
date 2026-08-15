@@ -130,7 +130,11 @@ export function buildBoost(ctx, player) {
     state.justEnded = true;
     endSerial += 1;
     state.lastReason = reason;
-    ctx.audio?.boostCut?.();
+    if (reason === "exhausted" || reason === "low-charge") {
+      ctx.audio?.jetEmpty?.();
+    } else {
+      ctx.audio?.boostCut?.();
+    }
   }
 
   /** Camera-relative move input as a world heading, or null. */

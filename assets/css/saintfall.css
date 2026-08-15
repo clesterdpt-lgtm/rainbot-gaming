@@ -252,27 +252,18 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   position: absolute;
   top: 3.7rem;
   right: 1.15rem;
-  width: 10.4rem;
-  padding: .48rem .5rem .55rem;
-  border: 1px solid rgba(216, 164, 65, .28);
-  border-radius: .35rem;
-  background:
-    linear-gradient(135deg, rgba(216, 164, 65, .08), transparent 34%),
-    rgba(7, 5, 7, .68);
-  box-shadow: inset 0 0 0 1px rgba(255, 237, 203, .035), 0 .45rem 1.5rem rgba(0, 0, 0, .28);
-  backdrop-filter: blur(3px);
+  width: 7rem;
+  padding: 0;
+  border: 1px solid rgba(216, 164, 65, .55);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 .sf-hud__minimap::before,
 .sf-hud__minimap::after {
-  content: "";
-  position: absolute;
-  width: 1rem;
-  height: 1rem;
-  border-color: rgba(246, 196, 102, .64);
-  pointer-events: none;
+  display: none;
 }
-.sf-hud__minimap::before { left: -.18rem; top: -.18rem; border-left: 2px solid; border-top: 2px solid; }
-.sf-hud__minimap::after { right: -.18rem; bottom: -.18rem; border-right: 2px solid; border-bottom: 2px solid; }
 .sf-minimap__head {
   display: flex;
   justify-content: space-between;
@@ -287,8 +278,9 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   display: block;
   width: 100%;
   aspect-ratio: 1;
-  border-radius: 50%;
-  filter: drop-shadow(0 0 .4rem rgba(216, 164, 65, .12));
+  border-radius: 0;
+  background: transparent;
+  filter: none;
 }
 .sf-minimap__event {
   margin-top: .38rem;
@@ -2896,12 +2888,9 @@ body[data-sf-hud-scale="large"] #sf-hud {
   font-size: 18px;
 }
 
-body.sf-hud-large .sf-hud__vitals,
-body.sf-hud-scale-large .sf-hud__vitals,
-body[data-sf-hud-scale="large"] .sf-hud__vitals,
-body.sf-hud-large .sf-hud__command,
-body.sf-hud-scale-large .sf-hud__command,
-body[data-sf-hud-scale="large"] .sf-hud__command {
+body.sf-hud-large :is(.sf-hud__vitals, .sf-hud__charge, .sf-hud__command),
+body.sf-hud-scale-large :is(.sf-hud__vitals, .sf-hud__charge, .sf-hud__command),
+body[data-sf-hud-scale="large"] :is(.sf-hud__vitals, .sf-hud__charge, .sf-hud__command) {
   transform: scale(1.08);
 }
 
@@ -2909,13 +2898,13 @@ body.sf-hud-large .sf-hud__vitals,
 body.sf-hud-scale-large .sf-hud__vitals,
 body[data-sf-hud-scale="large"] .sf-hud__vitals { transform-origin: left bottom; }
 
-body.sf-hud-large .sf-hud__command,
-body.sf-hud-scale-large .sf-hud__command,
-body[data-sf-hud-scale="large"] .sf-hud__command { transform-origin: right bottom; }
+body.sf-hud-large :is(.sf-hud__charge, .sf-hud__command),
+body.sf-hud-scale-large :is(.sf-hud__charge, .sf-hud__command),
+body[data-sf-hud-scale="large"] :is(.sf-hud__charge, .sf-hud__command) { transform-origin: right bottom; }
 
-body.sf-hud-large .sf-stage.sf-touch-enabled .sf-hud__vitals,
-body.sf-hud-scale-large .sf-stage.sf-touch-enabled .sf-hud__vitals,
-body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__vitals {
+body.sf-hud-large .sf-stage.sf-touch-enabled :is(.sf-hud__vitals, .sf-hud__charge),
+body.sf-hud-scale-large .sf-stage.sf-touch-enabled :is(.sf-hud__vitals, .sf-hud__charge),
+body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled :is(.sf-hud__vitals, .sf-hud__charge) {
   transform: none;
 }
 
@@ -2930,9 +2919,9 @@ body[data-sf-contrast="high"] .sf-stage {
   --sf-ui-verdigris: #8cebc2;
 }
 
-body.sf-high-contrast :is(.sf-hud__minimap, .sf-hud__vitals, .sf-hud__command),
-body.sf-ui-high-contrast :is(.sf-hud__minimap, .sf-hud__vitals, .sf-hud__command),
-body[data-sf-contrast="high"] :is(.sf-hud__minimap, .sf-hud__vitals, .sf-hud__command) {
+body.sf-high-contrast :is(.sf-hud__minimap, .sf-hud__vitals, .sf-hud__charge, .sf-hud__command),
+body.sf-ui-high-contrast :is(.sf-hud__minimap, .sf-hud__vitals, .sf-hud__charge, .sf-hud__command),
+body[data-sf-contrast="high"] :is(.sf-hud__minimap, .sf-hud__vitals, .sf-hud__charge, .sf-hud__command) {
   border-color: rgba(255, 227, 154, .72);
   background: rgba(3, 3, 3, .94);
   backdrop-filter: none;
@@ -3277,18 +3266,16 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
   background: linear-gradient(90deg, rgba(77, 18, 16, .48), transparent 88%);
 }
 
-/* The tactical map remains measurable at all times for its renderer and QA,
-   but the case is reduced to the map plus one concise event line. */
 #sf-hud .sf-hud__minimap {
   top: max(3.55rem, calc(env(safe-area-inset-top) + 3.1rem));
   right: max(.85rem, calc(env(safe-area-inset-right) + .65rem));
   width: 7.15rem;
-  padding: .3rem .34rem .36rem;
-  border: 0;
-  border-radius: .9rem;
-  background: linear-gradient(180deg, rgba(7, 5, 6, .68), rgba(7, 5, 6, .42));
-  box-shadow: 0 .7rem 1.8rem rgba(0, 0, 0, .2);
-  backdrop-filter: blur(8px) saturate(.7);
+  padding: 0;
+  border: 1px solid rgba(216, 164, 65, .55);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 #sf-hud .sf-hud__minimap::before,
@@ -3388,109 +3375,152 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
   box-shadow: 0 0 1.15rem rgba(151, 41, 22, .2);
 }
 
-/* Survival information is a rail, not a dashboard card. READY mobility
-   labels disappear entirely and return only for actionable exceptions. */
+/* Survival & Energy: Vitality on bottom-left, Charge on bottom-right.
+   Modern and minimal: clean sleek bars with bold tabular readouts, no text headers. */
 #sf-hud .sf-hud__vitals {
+  position: absolute;
   left: max(.85rem, calc(env(safe-area-inset-left) + .65rem));
   bottom: max(.85rem, calc(env(safe-area-inset-bottom) + .65rem));
-  width: min(13.2rem, 23cqw);
-  padding: .48rem .58rem .5rem .66rem;
+  width: min(12rem, 19cqw);
+  padding: 0;
   border: 0;
-  border-left: 2px solid rgba(216, 164, 65, .44);
-  border-radius: 0;
-  background: linear-gradient(90deg, rgba(7, 5, 6, .68), rgba(7, 5, 6, .18) 76%, transparent);
+  background: transparent;
   box-shadow: none;
-  backdrop-filter: blur(7px) saturate(.72);
+  backdrop-filter: none;
+  pointer-events: none;
 }
 
 #sf-hud .sf-hud__vitals::before {
   display: none;
 }
 
-#sf-hud .sf-hud__hplabel,
-#sf-hud .sf-hud__jetlabel {
-  margin-bottom: .2rem;
-  color: rgba(242, 229, 199, .56);
-  font: 600 9px/1.1 "Share Tech Mono", ui-monospace, monospace;
-  letter-spacing: .075em;
+#sf-hud .sf-hud__hplabel {
+  display: flex;
+  justify-content: flex-start;
+  align-items: baseline;
+  margin-bottom: .22rem;
+  color: #8fe9a4;
+  font: 700 20px/1 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .95), 0 0 12px rgba(127, 208, 138, .45);
 }
 
-#sf-hud .sf-hud__hplabel b,
-#sf-hud .sf-hud__jetlabel b {
-  min-width: 4ch;
-  color: rgba(247, 237, 216, .88);
-  font-size: 9px;
-  font-weight: 600;
+#sf-hud .sf-hud__hplabel > span {
+  display: none;
+}
+
+#sf-hud .sf-hud__hplabel b {
+  color: #8fe9a4;
+  font-size: 20px;
+  font-weight: 700;
   letter-spacing: .02em;
-  text-align: right;
+  text-align: left;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .95), 0 0 12px rgba(127, 208, 138, .45);
 }
 
 #sf-hud .sf-hud__hpwrap {
-  height: 5px;
-  border: 0;
-  border-radius: 3px;
-  background: rgba(242, 229, 199, .13);
+  height: 8px;
+  border: 1px solid rgba(216, 164, 65, .38);
+  border-radius: 2px;
+  background: rgba(7, 5, 6, .65);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .4);
+  overflow: hidden;
 }
 
 #sf-hud .sf-hud__hp {
-  border-radius: inherit;
+  border-radius: 1px;
+  background: linear-gradient(90deg, #328340, #67c773 65%, #a4f5af);
+  box-shadow: 0 0 8px rgba(103, 199, 115, .5);
+  transition: width .16s linear, background-color .3s;
+}
+
+#sf-hud .sf-hud__hp[data-state="warn"] {
+  background: linear-gradient(90deg, #9c6c18, #e8b24a 65%, #ffe18b);
+  box-shadow: 0 0 8px rgba(232, 178, 74, .5);
+}
+
+#sf-hud .sf-hud__hp[data-state="crit"] {
+  background: linear-gradient(90deg, #8a241e, #d8443c 65%, #ff8982);
+  box-shadow: 0 0 8px rgba(216, 68, 60, .55);
+}
+
+#sf-hud .sf-hud__charge {
+  position: absolute;
+  right: max(.85rem, calc(env(safe-area-inset-right) + .65rem));
+  bottom: max(.85rem, calc(env(safe-area-inset-bottom) + .65rem));
+  width: min(12rem, 19cqw);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  pointer-events: none;
 }
 
 #sf-hud .sf-hud__jet {
-  margin-top: .42rem;
+  margin-top: 0;
+}
+
+#sf-hud .sf-hud__jetlabel {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  margin-bottom: .22rem;
+  color: #ffe2aa;
+  font: 700 20px/1 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .95), 0 0 12px rgba(255, 174, 72, .45);
+}
+
+#sf-hud .sf-hud__jetlabel > span {
+  display: none;
+}
+
+#sf-hud .sf-hud__jetlabel b {
+  color: #ffe2aa;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-align: right;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .95), 0 0 12px rgba(255, 174, 72, .45);
 }
 
 #sf-hud .sf-hud__jettrack {
-  height: 3px;
-  border: 0;
+  height: 8px;
+  border: 1px solid rgba(216, 164, 65, .38);
   border-radius: 2px;
-  background: rgba(242, 229, 199, .11);
+  background: rgba(7, 5, 6, .65);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .4);
+  overflow: hidden;
 }
 
 #sf-hud .sf-hud__jettrack i {
-  border-radius: inherit;
+  border-radius: 1px;
+  background: linear-gradient(90deg, #9c4b22, #ffae48 60%, #ffe8b5);
+  box-shadow: 0 0 8px rgba(255, 174, 72, .5);
+  transition: transform .08s linear, filter .18s;
+}
+
+#sf-hud .sf-hud__jet[data-state="crit"] .sf-hud__jettrack i {
+  background: linear-gradient(90deg, #781c17, #c43229 60%, #ff7c73);
+  box-shadow: 0 0 8px rgba(196, 50, 41, .55);
 }
 
 #sf-hud .sf-hud__boost,
 #sf-hud .sf-hud__shield {
-  min-height: 1.35rem;
-  margin-top: .28rem;
-  padding: .12rem .22rem;
-  align-items: center;
-  border-left: 1px solid rgba(239, 99, 62, .54);
-  background: linear-gradient(90deg, rgba(88, 25, 20, .35), transparent);
-  color: rgba(242, 229, 199, .72);
-  font-size: 8px;
-  letter-spacing: .035em;
-}
-
-#sf-hud .sf-hud__boost[data-state="ready"],
-#sf-hud .sf-hud__shield[data-state="ready"] {
   display: none;
-}
-
-#sf-hud .sf-hud__boost span b,
-#sf-hud .sf-hud__shield span b {
-  display: inline;
-  min-width: 0;
-  min-height: 0;
-  margin-right: .22rem;
-  border: 0;
-  color: rgba(245, 216, 142, .82);
-  font-size: 8px;
-}
-
-#sf-hud .sf-hud__boost strong,
-#sf-hud .sf-hud__shield strong {
-  font-size: 8px;
 }
 
 #sf-hud .sf-hud__vitalrow {
   min-height: .9rem;
-  margin-top: .36rem;
-  color: rgba(242, 229, 199, .62);
-  font: 600 8px/1.1 "Share Tech Mono", ui-monospace, monospace;
-  letter-spacing: .025em;
+  margin-top: .32rem;
+  color: rgba(242, 229, 199, .72);
+  font: 600 10px/1.1 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .03em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
 }
 
 #sf-hud .sf-heat {
@@ -3517,7 +3547,7 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
    which three channels are ready and overlays a number while one cools. */
 #sf-hud .sf-hud__command {
   right: max(.85rem, calc(env(safe-area-inset-right) + .65rem));
-  bottom: max(.85rem, calc(env(safe-area-inset-bottom) + .65rem));
+  bottom: max(3.55rem, calc(env(safe-area-inset-bottom) + 3.35rem));
   display: flex;
   width: auto;
   padding: 0;

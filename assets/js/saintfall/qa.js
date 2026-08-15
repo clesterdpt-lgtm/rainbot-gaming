@@ -3511,6 +3511,81 @@ export function installQa(ctx, api) {
     },
     clearAsh() { return api.winnower?.clearHazards?.() ?? null; },
     /* ------------------------------------------------------------
+       THE GARNER
+
+       The pit's whole encounter is limbs that come and go, so these
+       hooks are about getting one into a KNOWN state and then leaving
+       damage to production. `forceGarnerArmDown` in particular exists
+       because the melee window is only reachable through a lash that
+       missed, and a check about melee should not have to first arrange
+       for the animal to miss.
+
+       Its per-limb pools are `inst.legHp`, the same array a Distaff leg
+       lives in - so `breakDistaffLeg` above already works on it, and
+       `breakGarnerArm` is the same call with the right key. That is not
+       duplication, it is the contract being exercised twice.
+       ------------------------------------------------------------ */
+    garnerState: () => (api.garner)?.status?.() || null,
+    teleportToGarner(offset = 40) {
+      const g = api.garner?.status?.() || api.garner?.config;
+      if (!g) return null;
+      const x = Number.isFinite(g.x) ? g.x : g.pitX;
+      const z = Number.isFinite(g.z) ? g.z : g.pitZ;
+      hook._teleportRaw(x - offset, z, 0);
+      hook.setBodyHeading?.(0);
+      return { x: x - offset, z };
+    },
+    forceGarnerPhase(phase, timer) {
+      return api.garner?.forcePhase?.(phase, timer) ?? null;
+    },
+    advanceToGarnerPhase(phase, limit = 60, dt = 1 / 60) {
+      const target = String(phase);
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const g = api.garner?.status?.();
+        if (!g) return -1;
+        if (g.phase === target) return Number(elapsed.toFixed(3));
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    /** Send one limb up now, through the same entry the attack clock
+     *  uses - so the erupt/rear/lash sequence a check observes is the
+     *  production one. */
+    forceGarnerLash(index = 0) { return api.garner?.forceLash?.(index) ?? null; },
+    /** ...and put one straight on the sand, which is the state a check
+     *  about the melee window wants without having to dodge first. */
+    forceGarnerArmDown(index = 0) { return api.garner?.forceArmDown?.(index) ?? null; },
+    forceGarnerInhale() { return api.garner?.inhale?.() ?? null; },
+    forceGarnerVolley() { return api.garner?.volley?.() ?? null; },
+    /** Fully drain one limb through the production damage path. */
+    breakGarnerArm(index) {
+      const inst = api.enemies.live.find((e) => e.key === "garner");
+      if (!inst || !inst.legHp) return null;
+      return api.combat.damageLeg(inst, index, inst.legHp[index] + 1, {
+        x: inst.x, y: inst.y, z: inst.z,
+      });
+    },
+    /** Where each limb's four hit nodes actually are this frame. The
+     *  same four points combat.js measures against, so a check can
+     *  assert that a downed limb is genuinely inside melee reach
+     *  rather than trusting that it looks like it. */
+    garnerArmNodes(index = 0) {
+      const inst = api.enemies.live.find((e) => e.key === "garner");
+      const leg = inst?.legs?.[index];
+      if (!leg?.chain) return null;
+      return leg.chain.map((node) => {
+        node.updateWorldMatrix(true, false);
+        return {
+          x: Number(node.matrixWorld.elements[12].toFixed(3)),
+          y: Number(node.matrixWorld.elements[13].toFixed(3)),
+          z: Number(node.matrixWorld.elements[14].toFixed(3)),
+        };
+      });
+    },
+    resetGarner() { return api.garner?.resetToPit?.() ?? null; },
+    /* ------------------------------------------------------------
        THE APOSTATE
 
        The final encounter is gated by mission progression as well as
@@ -3777,6 +3852,7 @@ export function installQa(ctx, api) {
     get mission() { return api.mission; },
     get breaches() { return api.breaches; },
     get distaff() { return api.distaff; },
+    get garner() { return api.garner; },
     get winnower() { return api.winnower; },
     get apostate() { return api.apostate; },
     get collide() { return api.collide; },

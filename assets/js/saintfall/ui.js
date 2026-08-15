@@ -926,6 +926,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     wheel.touchOrigin = origin ? { x: origin.x, y: origin.y } : null;
     wheel.openedLocked = document.pointerLockElement === canvas;
     wheel.cancelReason = null;
+    const coreHintEl = wheelEl.querySelector(".sf-command-wheel__core small");
+    if (coreHintEl) {
+      coreHintEl.textContent = source === "touch" ? "RELEASE TO CONFIRM" : "CLICK TO CONFIRM";
+    }
     setWheelSelection(-1, { sound: false });
     cursorEl.style.setProperty("--sf-command-x", "0px");
     cursorEl.style.setProperty("--sf-command-y", "0px");

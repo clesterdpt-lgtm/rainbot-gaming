@@ -648,6 +648,19 @@ export function create(ctx) {
       const r = invoke(ctx.vfx, ["setGroundCast"], [!!on]);
       return r.found && !r.threw;
     },
+    /* The specular sheen injected onto Lambert level surfaces, and the
+       roof-lid exclusion that lets the key reach the floor at all in a
+       roofed course. Both are on their modules but a probe had to reach
+       through __APOP3D_CTX to get at them, which is a debug handle
+       rather than a contract. */
+    setKeySheen(v) {
+      const r = invoke(ctx.vfx, ["setKeySheen"], [v]);
+      return r.found && !r.threw;
+    },
+    setLid(v) {
+      const r = invoke(ctx.sky, ["setLid"], [v]);
+      return r.found && !r.threw;
+    },
     setGroundPatches(on) {
       const r = invoke(ctx.vfx, ["setGroundPatches"], [!!on]);
       return r.found && !r.threw;

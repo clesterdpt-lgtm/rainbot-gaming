@@ -419,7 +419,7 @@ async function hudDensityAudit(page) {
     };
     const selectors = [
       "#sf-objective", "#sf-compass", "#sf-minimap", "#sf-vitals",
-      "#sf-command-status", "#sf-hint",
+      "#sf-charge", "#sf-command-status", "#sf-hint",
     ];
     const clusters = selectors.map((selector) => {
       const node = document.querySelector(selector);
@@ -499,7 +499,7 @@ async function mobileChromeAudit(page) {
     const stageArea = Math.max(1, stageRect.width * stageRect.height);
     const selectors = [
       "#sf-objective", "#sf-compass", "#sf-minimap", "#sf-vitals",
-      ".sf-menu-trigger--mobile", "[data-touch-stick]", ".sf-touch__button",
+      "#sf-charge", ".sf-menu-trigger--mobile", "[data-touch-stick]", ".sf-touch__button",
     ];
     const nodes = [...new Set(selectors.flatMap((selector) =>
       [...stage.querySelectorAll(selector)]))];
@@ -533,7 +533,7 @@ async function safeAreaAudit(page, insets) {
       bottom: stageRect.bottom - safeInsets.bottom,
     };
     const nodes = [...stage.querySelectorAll(
-      ".sf-menu-trigger--mobile,#sf-objective,#sf-compass,#sf-minimap,#sf-vitals,"
+      ".sf-menu-trigger--mobile,#sf-objective,#sf-compass,#sf-minimap,#sf-vitals,#sf-charge,"
       + "[data-touch-stick],.sf-touch__button"
     )];
     const offenders = [];
@@ -600,9 +600,15 @@ async function preparePage(browser, name, contextOptions,
     cdp = await context.newCDPSession(page);
     await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets: safeAreaInsets });
   }
-  page.on("pageerror", (error) => diagnostics.pageErrors.push(`${name}: ${error.message}`));
+  page.on("pageerror", (error) => {
+    diagnostics.pageErrors.push(`${name}: ${error.message}`);
+    console.error(`PAGE ERROR (${name}):`, error.message);
+  });
   page.on("console", (message) => {
-    if (message.type() === "error") diagnostics.consoleErrors.push(`${name}: ${message.text()}`);
+    if (message.type() === "error") {
+      diagnostics.consoleErrors.push(`${name}: ${message.text()}`);
+      console.error(`CONSOLE ERROR (${name}):`, message.text());
+    }
   });
   await page.goto(`${BASE}/games/saintfall.html?qa=1&quality=high&intro=skip`,
     { waitUntil: "domcontentloaded", timeout: 60000 });
@@ -1144,6 +1150,8 @@ async function desktopPass(browser) {
   const lockedWheelBefore = await page.evaluate(() => {
     const T = window.__SF;
     T.mission.cooldowns.orbital = 0;
+    T.mission.cooldowns.cluster = 0;
+    T.mission.cooldowns.resupply = 0;
     return T.commandWheelState();
   });
   await page.keyboard.down("KeyF");
@@ -1156,6 +1164,14 @@ async function desktopPass(browser) {
     wheel: window.__SF.commandWheelState(),
   }));
   await page.keyboard.press("Digit1");
+  const lockedDialBox = await page.evaluate(() => {
+    const dial = document.querySelector(".sf-command-wheel__dial");
+    const rect = dial?.getBoundingClientRect();
+    return rect ? { x: rect.left, y: rect.top, width: rect.width, height: rect.height } : null;
+  });
+  if (lockedDialBox) {
+    await page.mouse.move(lockedDialBox.x + lockedDialBox.width * 0.5, lockedDialBox.y + lockedDialBox.height * 0.2);
+  }
   await page.mouse.down({ button: "left" });
   await page.mouse.up({ button: "left" });
   await page.keyboard.up("KeyF");

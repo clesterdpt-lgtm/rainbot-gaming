@@ -70,6 +70,51 @@ export const DISTRICTS = {
   bloom: { x: -655, z: -655, r: 310, name: "The Bloom" },
 };
 
+/* ============================================================
+   THE GARNER'S PIT
+
+   A funnel in the Ossuary pan, and it is CARVED INTO THE TERRAIN
+   rather than built on top of it.
+
+   That is the whole reason it is declared here, next to the districts,
+   instead of inside garner.js with the rest of the encounter. The
+   collision grid, the walking plane and the visible ground all come out
+   of `heightAt`; nothing added at runtime reaches any of them. A pit
+   built as scene geometry is therefore a picture of a hole that the
+   player walks straight across - and this creature's entire read is
+   that its mouth is BELOW the desert and you have to go down to it.
+
+   Sized against a 4m sample grid. A sharp-edged shaft would alias into
+   a lumpy dent at that resolution; a broad, gentle sand funnel is both
+   what the resolution can express and what the thing actually is. The
+   shaft itself, which does need hard edges, is scene geometry inside
+   the mouth where the collar occludes the join.
+
+   `floor` is where the player stands to fight it: real ground, nine
+   metres under the pan, with the mouth set into the middle of it. */
+export const GARNER_PIT = Object.freeze({
+  /* A hundred and eight metres out from the ribcage's spine, square to
+     it - see the axis in world.js. Dead centre put a fifty-metre pit
+     among rib bases up to 78m tall and 50m across, which blocked every
+     shot and swallowed the silhouette. Out here the pan is flat and
+     unbroken to 150m and the ribcage is a backdrop instead of a set. */
+  x: DISTRICTS.ossuary.x + Math.sin(0.62) * 108,
+  z: DISTRICTS.ossuary.z + Math.cos(0.62) * 108,
+  depth: 12.0,
+  /* A FLAT FLOOR at the bottom, and it is a gameplay surface rather
+     than a shape: it is the ring of ground the player stands on to
+     fight the mouth, and a floor that kept sloping would slide them
+     into it while they were swinging. */
+  floorRadius: 13,
+  /* Where the funnel meets untouched pan. The slope between is about
+     twenty degrees - a walk down, not a fall. */
+  rimRadius: 36,
+  /* Spoil thrown out of the hole. Low enough to walk over, high enough
+     that the pit reads from the far side of the pan as something with
+     an edge rather than as a shadow on flat ground. */
+  lipHeight: 1.7,
+});
+
 /** The processional causeway, south gate to cathedral steps. */
 export const ROAD_PATH = [
   [24, 962], [16, 880], [8, 742], [2, 596], [-4, 448], [-8, 300],
@@ -536,6 +581,18 @@ export function makeHeightField(seed = 0x5a1f7) {
         h = lerp(h, lerp(h, panY, t), k);
         const crackN = Math.abs(nDetail.fbm(x / 21, z / 21, 2));
         h -= (1 - sstep(0.0, 0.055, crackN)) * 0.85 * t * k;
+
+        /* --- and the Garner's funnel sunk into it --- */
+        const g = GARNER_PIT;
+        const gd = Math.hypot(x - g.x, z - g.z);
+        if (gd < g.rimRadius + 26) {
+          /* The same bowl-plus-rim shape the Glass Scar uses, at a
+             twentieth of the size and run all the way to the middle. */
+          const bowl = -g.depth * (1 - sstep(g.floorRadius, g.rimRadius, gd));
+          const lip = g.lipHeight
+            * Math.exp(-((gd - (g.rimRadius + 5)) ** 2) / (2 * 8 * 8));
+          h += (bowl + lip) * k;
+        }
       }
     }
 

@@ -112,13 +112,16 @@ try {
   console.log("\n=== BOSS ROSTER ===");
   const ossuary = initial.generic.find((boss) => boss.key === "ossuary");
   const saint = initial.generic.find((boss) => boss.key === "saint");
-  check(initial.generic.length === 5,
-    "five shared-simulation bosses join the Distaff and Winnower",
+  check(initial.generic.length === 4,
+    "four shared-simulation bosses join the Distaff, Winnower and Garner",
     initial.generic.map((boss) => `${boss.key}:${boss.enemyKey}`).join(" · "));
-  check(ossuary?.enemyKey === "harrow" && ossuary.placeholder
-    && ossuary.maxHealth === 2600,
-  "the Ossuary now uses a durable Bone Warden placeholder",
-  `${ossuary?.enemyKey} · ${ossuary?.maxHealth} HP · placeholder=${ossuary?.placeholder}`);
+  /* The Ossuary left the shared roster when its placeholder became a
+     real encounter - it is `domain: "garner"` now, driven by its own
+     module, so it must NOT be in the generic set. Its own promises are
+     covered by scripts/saintfall-garner-fight.mjs. */
+  check(!ossuary && initial.sites.some((boss) => boss.key === "ossuary"),
+    "the Ossuary is a bespoke encounter rather than a shared-simulation one",
+    `still a mission objective, no longer in the generic roster (generic=${!!ossuary})`);
   check(saint?.enemyKey === "coulter" && saint.stage === "penultimate"
     && saint.arenaRadius === 285 && !saint.available,
   "the Coulter moved to a locked 285m Fallen Saint arena",
@@ -181,10 +184,15 @@ try {
   `${lockedSaint.phase} · approaches=${lockedSaint.approaches}`);
 
   console.log("\n=== BOUNDARY WARNINGS AND RESET ===");
+  /* Measured on the BLOOM rather than the Ossuary. This block is about
+     the shared boundary machinery in district-bosses.js, and the
+     Ossuary stopped being one of its customers when the Garner replaced
+     the placeholder there - `H.status("ossuary")` correctly returns
+     null now. The Matriarch is the same shared lifecycle, still on it. */
   const boundary = await page.evaluate(() => {
     const T = window.__SF;
     const H = T.ctx.districtBosses;
-    const site = T.ctx.mission.bosses.find((boss) => boss.key === "ossuary");
+    const site = T.ctx.mission.bosses.find((boss) => boss.key === "bloom");
     const events = [];
     const offs = [
       H.bus.on("approach", (event) => events.push(`approach:${event.key}`)),
@@ -195,32 +203,32 @@ try {
     ps.x = site.x + site.arenaRadius + 20;
     ps.z = site.z;
     H.update(0.05);
-    const boss = H.status("ossuary");
+    const boss = H.status("bloom");
     ps.x = boss.x + 8;
     ps.z = boss.z;
     H.update(0.05);
     for (let i = 0; i < 30; i += 1) H.update(0.1);
-    const active = H.status("ossuary");
-    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:ossuary");
+    const active = H.status("bloom");
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:bloom");
     T.ctx.combat.damageEnemy(inst, 500, { source: "qa-boundary" });
-    const damaged = H.status("ossuary");
+    const damaged = H.status("bloom");
     ps.x = site.x + site.arenaRadius - 10;
     ps.z = site.z;
     H.update(0.05);
     ps.x = site.x + site.arenaRadius + 2;
     H.update(0.05);
-    const reset = H.status("ossuary");
+    const reset = H.status("bloom");
     for (const off of offs) off?.();
     return { events, active, damaged, reset, missionDone: site.done };
   });
-  check(boundary.events.includes("approach:ossuary"),
+  check(boundary.events.includes("approach:bloom"),
     "approaching a boss area emits an advance warning", boundary.events.join(" · "));
   check(boundary.active.phase === "active" && !boundary.active.locked
     && boundary.damaged.health < boundary.damaged.maxHealth,
   "entering the area begins a targetable fight whose damage is tracked");
-  check(boundary.events.includes("exit:ossuary"),
+  check(boundary.events.includes("exit:bloom"),
     "the inner boundary warns that leaving will reset the fight", boundary.events.join(" · "));
-  check(boundary.events.includes("reset:ossuary") && boundary.reset.phase === "dormant"
+  check(boundary.events.includes("reset:bloom") && boundary.reset.phase === "dormant"
     && boundary.reset.hidden && boundary.reset.locked
     && boundary.reset.health === boundary.reset.maxHealth && !boundary.missionDone,
   "crossing the boundary restores and re-hides the undefeated boss",

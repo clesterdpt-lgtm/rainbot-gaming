@@ -405,6 +405,68 @@ export const BESTIARY = {
     clips: ["idle", "alert", "bombard", "strain", "land", "stoke",
       "launch", "sweep", "sprawl", "flinch", "death"],
   },
+
+  /* ------------------------------------------------------------------
+     THE GARNER. The Ossuary's own animal, and the first entry here with
+     no .glb behind it at all.
+
+     `procedural` is why. Every other creature in this bestiary is a
+     skinned mesh with authored clips, which is the right pipeline for
+     anything with a skeleton and a walk cycle - and the wrong one for
+     this. The Garner is a mouth in the ground with six tentacles, and
+     both halves of that are things a baked rig cannot do: the pit has
+     to OPEN, which is per-vertex motion on seventy-eight separate
+     plates, and a tentacle has to whip, miss, fall limp across the sand
+     and drag itself home, which is a chain solved against live terrain
+     rather than a clip that was correct on the day it was exported.
+
+     So the species loads as an empty root and garner.js builds and
+     poses everything inside it. Declared as a capability rather than
+     tested by key for the same reason `flies`, `burrows` and
+     `selfDriven` are: this file should never learn what a tentacle is.
+     ------------------------------------------------------------------ */
+  garner: {
+    procedural: true,
+    faction: "bloom",
+    /* Between the Distaff's and the Winnower's, and the shape of the
+       fight is why it sits there rather than higher. Six tentacles
+       guard it, each with its own pool, and every one that breaks pays
+       into this - so the number the player actually chews through is
+       half again this figure. */
+    health: 7400,
+    scale: 1.0,
+    /* One pool per tentacle. Deliberately softer than a Distaff leg:
+       a tentacle is only reachable while it is DOWN, and that window
+       is about five seconds long, so a limb that took three of them to
+       cut would make the whole melee mechanic theoretical. */
+    legHealth: 260,
+    /* It does not go anywhere. Speed is here because the shared systems
+       read it, not because anything uses it. */
+    speed: { walk: 0, charge: 0 },
+    material: { roughness: 0.62, metalness: 0.04, rim: 1.15, bio: 2.2 },
+    selfDriven: true,
+    /* The tentacles live in `inst.legs` so that combat.js's existing
+       per-limb hit table, melee reach gate and break bonus all apply
+       unchanged - see HITBOX.garner. They are NOT legs, though, and the
+       walking solver must never touch them: it would replant six
+       fifteen-metre limbs onto the terrain as feet. */
+    legs: 0,
+    selfPosedLegs: true,
+    stance: 0,
+    stepHeight: 0,
+    /* The maw's own bulk. Nothing should be able to walk through the
+       mouth, and this is what keeps spawned brood out of it. */
+    collisionRadius: 7.0,
+    /* A landmark inside the ribcage, and it has to draw from the rim of
+       the pan - the whole point of the district is that you can see
+       what is waiting in the middle of it. */
+    cullRange: 700,
+    ikRange: 320,
+    animRange: 480,
+    poseRange: 700,
+    shadowRange: 180,
+    clips: [],
+  },
 };
 
 /* ============================================================
@@ -520,6 +582,29 @@ export async function buildEnemies(ctx, onProgress) {
   for (let i = 0; i < names.length; i += 1) {
     const key = names[i];
     const spec = BESTIARY[key];
+
+    /* A creature with no .glb behind it. The species is registered as an
+       empty root with no clips, and the module that owns the creature
+       builds its geometry into `inst.root` after spawning it.
+
+       Registered HERE rather than skipped so that everything downstream
+       is unchanged: it gets an id, a health pool, a save entry, a cull
+       range and a place in `enemies.live`, and `spawn` does not grow a
+       second path. An AnimationMixer over an empty group and a `play`
+       that finds no action are both already no-ops, and `kill` already
+       sets the authoritative combat state for a creature with no death
+       clip - see the Apostate, which uses a procedural fall. */
+    if (spec.procedural) {
+      const root = new THREE.Group();
+      root.name = `sf-enemy-${key}`;
+      species.set(key, {
+        key, spec, source: root, clips: new Map(), material: null,
+        deathSettle: 0, deathSeconds: 0,
+      });
+      if (onProgress) onProgress((i + 1) / names.length, `Waking the ${key}`);
+      continue;
+    }
+
     let gltf = null;
     try {
       /* Versioned like every other asset on the site. The .glb was
@@ -1226,6 +1311,13 @@ export async function buildEnemies(ctx, onProgress) {
        grow a new hardcoded string every time a boss needs the same
        trick. */
     if (inst.state === "death" || inst.spec.legOwnedStates?.includes(inst.state)) return;
+    /* A creature whose limbs are posed by its own module. `inst.legs` is
+       the hit-table contract combat.js reads - three segments and a tip
+       per limb - and a species can satisfy it without those limbs being
+       legs at all. The Garner's six tentacles are the first: handed to
+       this solver they would be replanted as feet on the terrain, at
+       which point the animal is standing on its own tentacles. */
+    if (inst.spec.selfPosedLegs) return;
     const scale = inst.root.scale.x;
     const reach = inst.spec.stance * scale;
     const lift = inst.spec.stepHeight * scale;

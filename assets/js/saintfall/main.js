@@ -30,6 +30,7 @@ import { buildMission } from "saintfall/mission.js";
 import { buildBreaches } from "saintfall/breaches.js";
 import { buildCoulter } from "saintfall/coulter.js";
 import { buildDistaff } from "saintfall/distaff.js";
+import { buildGarner } from "saintfall/garner.js";
 import { buildWinnower } from "saintfall/winnower.js";
 import { buildDistrictBosses } from "saintfall/district-bosses.js";
 import { buildApostate } from "saintfall/apostate.js";
@@ -207,6 +208,14 @@ export async function start({ boot, build } = {}) {
   const winnower = buildWinnower(ctx);
   ctx.winnower = winnower;
   winnower.ensureSpawned();
+  /* The Ossuary's pit. Same construction slot and the same reasons
+     again - after combat, before audio - with one addition of its own:
+     it builds its entire body procedurally at construction time, so it
+     must not be created before the collision grid exists. Every plate
+     of the crater is laid against `collide.groundHeight`. */
+  const garner = buildGarner(ctx);
+  ctx.garner = garner;
+  garner.ensureSpawned();
   /* Shared lifecycle for the ordinary-simulation district guardians plus
      the penultimate giant Coulter beneath the Fallen Saint. */
   const districtBosses = buildDistrictBosses(ctx);
@@ -429,6 +438,7 @@ export async function start({ boot, build } = {}) {
     breaches,
     coulter,
     distaff,
+    garner,
     winnower,
     apostate,
     progression,
@@ -797,6 +807,7 @@ export async function start({ boot, build } = {}) {
        counted as dead by the event that is waiting for it. */
     coulter.update(d);
     distaff.update(d);
+    garner.update(d);
     winnower.update(d);
     districtBosses.update(d);
     apostate.update(d);

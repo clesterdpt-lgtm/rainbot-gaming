@@ -839,6 +839,63 @@ const PAINTERS = {
    Mario 64 has no mirrors either. If an env map is ever wired into
    these materials, this cap is the thing to revisit. */
 
+/* ============================================================
+   THE CLIPPING AUDIT - WHY A HANDFUL OF ALBEDOS BELOW ARE NOT AS
+   BRIGHT AS THEY LOOK LIKE THEY SHOULD BE
+
+   A surface whose lit side arrives at 250/255 is broken and no
+   lighting change can repair it: there is nowhere above it for a
+   specular, a brighter facing angle or a beat pulse to go, so the form
+   goes FLAT exactly where the light is strongest - the opposite of
+   what shading is for. That is a defect in this file, not in sky.js.
+
+   HOW IT WAS MEASURED, so the next pass does not have to guess.
+   Two probes, both in the real engine:
+
+     1. HEADROOM. A unit sphere wearing the surface, floated 900 m over
+        the level where nothing occludes the key, rendered under each
+        course's OWN rig. The sphere sweeps every normal, so its
+        brightest pixels ARE the surface's lit side and its darkest are
+        the side facing away. Percentiles of the max RGB channel.
+     2. IN SITU. Every mesh swapped for an unlit ID colour for one
+        render, giving an exact per-surface pixel mask, then the real
+        frame read through that mask. Attribution, not eyeballing.
+
+   The test a surface has to pass: on the lit sphere, the 95th
+   percentile of its max channel must stay under about 240. P95 rather
+   than the peak, because a small hot spot on chrome IS a highlight and
+   is wanted - the failure is a BROAD region with no gap between P95
+   and the ceiling. `shared.chrome`, `shared.gold` and `hell.chrome`
+   put 0.4-1.1% of the sphere at pure white while their P95 sits at
+   136-210; that gap is a specular lobe and it stays. `foodcourt.tray`
+   had P95, P99 and peak all at 255 with 19% of the sphere at pure
+   white; that is an albedo.
+
+   Fourteen entries came down. They are marked "clip audit" below with
+   the measured before/after. Nothing else was touched: the metrics
+   gate already runs PAST the Super Mario 64 pool on within-surface
+   range (43.8 vs 32.7) and flatness (18.4% vs 24.5%), so a surface
+   that measures clean here is working and hunting it for more contrast
+   would make the build less like the reference, not more.
+
+   WHAT THIS AUDIT FOUND AT THE DARK END, AND WHY NOTHING MOVED FOR IT.
+   Course 1's crushed surfaces are a LIGHTING result, not an albedo
+   one, and the headroom probe is what separates the two: every one of
+   them models fine when the key reaches it.
+
+     shared.grate      litMax 201   `enemy-encounter` lumP50   9, 86% under 16
+     foodcourt.ceiling litMax  89   `platforming`     lumP50   5, 95% under 16
+     foodcourt.trunk   litMax 197   `platforming`     lumP50   7, 92% under 16
+     foodcourt.wall    litMax 139   `platforming`     lumP50  14, 61% under 16
+     shared.rubber     litMax 131   `boss`            lumP50   6, 78% under 16
+
+   The same shared.grate renders at lumP50 60 in `platforming` and the
+   same wall at 33-48 in `boss` and `arrival`. An albedo that delivers
+   60 in one frame and 9 in another is not the thing that is wrong.
+   Lifting these would flatten the courses that already work, so they
+   are left alone and reported instead.
+   ============================================================ */
+
 const SURFACES = {
   /* ---------------- shared ---------------- */
   /* THE SHARED METALS CARRY A HUE NOW, AND THAT IS THE POINT.
@@ -897,10 +954,29 @@ const SURFACES = {
      the concrete painter's own tonal blotches at that value survive
      only where they are lightest, which read to a blind critic as
      broken shadow cascades striped across the floor.
-     A dark indigo arcade carpet is three times the value, is the one
-     floor in the mall that can carry real chroma without competing
-     with the reserved gameplay red, and is what the floor of an arcade
-     has actually looked like since 1982. */
+     A dark indigo arcade carpet is the one floor in the mall that can
+     carry real chroma without competing with the reserved gameplay
+     red, and is what the floor of an arcade has actually looked like
+     since 1982.
+
+     CORRECTION, MEASURED. The paragraph above used to claim this
+     change was "three times the value". It is not, and a comment that
+     misstates its own number is worse than no comment. 0x2a2c30 is
+     luminance 43.9; 0x2b2450 is 40.7. The rewrite bought a hue and a
+     saturation and left the VALUE fractionally lower than it found it.
+
+     It is being left there anyway, and the clip audit at the top of
+     this table is why. The headroom probe puts this albedo's ceiling
+     at luminance 131 under an unoccluded key, and in `vista`,
+     `arrival`, `high-ground` and `water` it renders at lumP50 46-76
+     with essentially nothing crushed. In `boss` - 8.4% of that crop -
+     it renders at lumP50 6 with 78% of its pixels under luminance 16.
+     One albedo, two outcomes, so the albedo is not the variable: the
+     Payola Phantom's arcade corner gets no key. Lifting the base to
+     force `boss` up would wash out the four framings where this floor
+     already works, which is the trade the fourth-pass note below the
+     terrazzo spells out in the other direction. The fix is a light in
+     that corner. */
   "shared.rubber": { p: "carpet", o: { base: 0x2b2450, weave: true, dirt: 0.4, wear: 0.9 }, kind: "lit", m: 2.5, c: "stone" },
   "shared.glass": { p: "marble", o: { base: 0x6fc8e4, vein: 0xd8f4ff, dirt: 0.06 }, kind: "shiny", rough: 0.08, metal: 0.1, m: 4, c: "ice", opacity: 0.34 },
 
@@ -910,13 +986,26 @@ const SURFACES = {
      namespace release rule keeps shared surfaces resident. */
   "shared.crowdA": { p: "fabric", o: { base: 0x2b2f42 }, kind: "lit", m: 1.4, c: "stone" },
   "shared.crowdB": { p: "fabric", o: { base: 0xa62442 }, kind: "lit", m: 1.4, c: "stone" },
-  "shared.crowdC": { p: "fabric", o: { base: 0xe8dcc2 }, kind: "lit", m: 1.4, c: "stone" },
+  /* clip audit: 0xe8dcc2 -> 0xcabfa9. The cream livery was the
+     brightest thing any crowd stand put on screen - lit sphere P95 241
+     with HALF the figure above luminance 209 in the lobby's rig, i.e.
+     a stand full of them was one flat pale mass with ten levels of
+     headroom left. Its four sibling liveries all sit at P95 171-225
+     and are untouched; this one was the outlier, not the set. */
+  "shared.crowdC": { p: "fabric", o: { base: 0xcabfa9 }, kind: "lit", m: 1.4, c: "stone" },
   "shared.crowdD": { p: "fabric", o: { base: 0x2f6a8e }, kind: "lit", m: 1.4, c: "stone" },
   "shared.crowdE": { p: "fabric", o: { base: 0x7a4aa8 }, kind: "lit", m: 1.4, c: "stone" },
 
   /* ---------------- 0 : The Label Lobby ---------------- */
   "lobby.marble": { p: "marble", o: { base: 0x453a60, vein: 0xd8bc74, slabs: true, dirt: 0.1 }, kind: "shiny", rough: 0.16, metal: 0.15, m: 4, c: "stone" },
-  "lobby.marbleLight": { p: "marble", o: { base: 0xf0e4c0, vein: 0xa08a5e, slabs: true, dirt: 0.14 }, kind: "shiny", rough: 0.22, metal: 0.05, m: 4, c: "stone" },
+  /* clip audit: base 0xf0e4c0 -> 0xcec4a5, vein 0xa08a5e -> 0x8a7751.
+     Lit sphere P95 239, peak 254, 0.55% of the sphere at 250+, and a
+     median of 214 - the lobby's own floor was riding the ceiling. The
+     vein comes down by the same factor rather than staying put, so the
+     stone keeps its veining RATIO; holding the vein while dropping the
+     base would have raised the within-surface contrast, and that row
+     already measures past the reference pool. */
+  "lobby.marbleLight": { p: "marble", o: { base: 0xcec4a5, vein: 0x8a7751, slabs: true, dirt: 0.14 }, kind: "shiny", rough: 0.22, metal: 0.05, m: 4, c: "stone" },
   "lobby.carpet": { p: "carpet", o: { base: 0x8a0e22, weave: true, dirt: 0.35 }, kind: "lit", m: 3, c: "grass" },
   "lobby.wall": { p: "panel", o: { base: 0x5e4d70, trim: 0xd8b055, inset: 0.06, dirt: 0.2 }, kind: "lit", m: 3, c: "stone" },
   "lobby.wood": { p: "wood", o: { base: 0x74482a, dirt: 0.2 }, kind: "lit", m: 2, c: "stone" },
@@ -1077,6 +1166,15 @@ const SURFACES = {
      fountain is glazed, saturated and darker than the floor it stands
      on - which is also what gives the red cup something to sit
      against. */
+  /* clip audit: LOOKED AT AND LEFT ALONE, and the near-white accent is
+     why it is worth saying so. 0xd0f2fa is a 250-blue and it puts
+     0.34% of the lit sphere over 250, which is what flagged it. Taking
+     the accent to 0xb3d0d7 dropped the painted albedo's P95 from 236
+     to 216 and moved the RENDERED P95 and the clipped fraction by
+     zero: 232 and 0.34% both times. The clipped pixels are the glaze's
+     specular lobe, not the accent - P95 232 against a peak of 251 is a
+     34-level gap, which is a highlight and is the whole reason this
+     surface is `shiny`. Reverted. */
   "foodcourt.basin": { p: "tile", o: { base: 0x4fbcd8, alt: 0x3ea6c4, accent: 0xd0f2fa, cols: 3, grout: 0x2a7a94, dirt: 0.24 }, kind: "shiny", rough: 0.3, metal: 0.05, m: 2.5, c: "stone" },
   /* Gold and terracotta, eight luminance apart, on four-metre
      squares. The old red-and-white metre checker was the reason a
@@ -1099,31 +1197,25 @@ const SURFACES = {
      which is why those three were the frames a blind gate flagged for
      having no darks. */
   "foodcourt.checker": { p: "checker", o: { base: 0xbe8c2c, alt: 0xc9822e, cols: 2, joint: 0.24, dirt: 0.45, wear: 1.05 }, kind: "lit", m: 8, c: "stone" },
-  /* THE STOREFRONT BAND - AND A DEFINITION THAT IS NOT CURRENTLY IN
-     EFFECT. READ THIS BEFORE TUNING IT.
+  /* THE STOREFRONT BAND.
 
-     `materials.js` ALSO registers "foodcourt.counter", and its
-     registry is consulted first (see makeSurfaces().get below), so
-     what actually renders is materials.js's terrazzo-concrete at 1.5 m
-     per repeat, not this. Traced by raycast: the mesh comes back
-     wearing a material named "apop-foodcourt.counter", and the "apop-"
-     prefix is materials.js's. The same is true of "foodcourt.tile" and
-     "foodcourt.wall" above - three of this course's largest surfaces,
-     including the 24 m x 128 m perimeter wall, are painted by the
-     other module. That is why the wall renders as a pale cream at
-     luminance ~212 while the plane plan at the top of this section
-     asks for a plum-indigo far wall at 30-45, and why the storefront
-     band across the upper third of nearly every capture is the
-     brightest thing in the frame with the highest local contrast.
-     Measured, that band is the hot region in the top rows of the
-     `collect` and `boss` high-frequency maps.
+     THIS BLOCK USED TO SAY THIS DEFINITION WAS DEAD CODE. IT IS NOT,
+     ANY MORE, AND THAT MATTERS MORE THAN THE SURFACE DOES. materials.js
+     once registered "foodcourt.counter", "foodcourt.tile" and
+     "foodcourt.wall" and won them, because makeSurfaces().get asks
+     there first; its own table now carries an EMPTY course-1 section
+     and a note saying six foodcourt/carpet names were removed for
+     exactly that reason. So every value in this section is live. A
+     comment that tells the next agent "changing them changes nothing
+     on screen today" would have sent them to the wrong file.
 
-     The values below are kept consistent with the course's fourth-pass
-     regrade so they are correct the moment the shadowing is resolved,
-     but changing them changes nothing on screen today. The fix belongs
-     in materials.js: either drop the four foodcourt entries from its
-     registry so this table is reached, or bring them down in value and
-     up in repeat length to match this plan. */
+     Measured in situ after the removal, this surface is behaving:
+     lit-sphere P95 233 against a ceiling of 236, no clipped pixels,
+     and it shades - lumP50 212 in `collect`, 110 in `boss`, 85 in
+     `enemy-encounter` over 9-15% of those crops. It is bright, but it
+     has headroom and it turns with the light, so the clip audit leaves
+     it alone. If the band ever needs to come down it is a value
+     decision, not a bug. */
   "foodcourt.counter": { p: "panel", o: { base: 0xc8bc86, trim: 0x8a6b58, inset: 0.08, dirt: 0.3 }, kind: "lit", m: 3.2, c: "stone" },
   /* The kiosks are the MID PLANE and the mid plane is now the
      brightest thing in the course, so all three liveries went up in
@@ -1134,7 +1226,27 @@ const SURFACES = {
      Saturated red is now reserved (see foodcourt.tray) and the
      environment gets the muted end of every hue. Trims are cream
      rather than yellow for the same reason - yellow is Clout. */
-  "foodcourt.stall": { p: "panel", o: { base: 0xe07a4e, trim: 0xf0e0b4, inset: 0.05, dirt: 0.28 }, kind: "lit", m: 3, c: "stone" },
+  /* clip audit: the ORANGE livery, 0xe07a4e -> 0xc4824e.
+     THE CREAM TRIM WAS THE OBVIOUS SUSPECT AND THE MEASUREMENT SAID NO.
+     Taking all three trims down from 0xf0e0b4 / 0xf2e2b8 moved the
+     painted texture's max-channel P95 and P99 by literally nothing -
+     219 and 223 before, 219 and 223 after - because the panel painter
+     insets and shades the trim band well below the field. They were
+     put back. It is worth knowing that a near-white AUTHORED value is
+     not automatically a near-white PAINTED one; measure the texture,
+     not the table.
+
+     What was actually at the ceiling is the same defect as
+     foodcourt.tray and foodcourt.ballA: a saturated warm hue carrying
+     its value in one channel. 0xe07a4e is luminance 140 with a RED of
+     224, so the kiosk shells took the lit sphere to P95 247 with 0.61%
+     over 250 while never looking especially bright. The replacement
+     holds the luminance to within one (140.5 -> 140.3) so the kiosks
+     stay the bright mid plane the plane plan puts them in, and pays
+     for it with about eight degrees of hue - the shell is still
+     orange, it is simply no longer orange with its red pinned.
+     stallB and stallC measure clean (P95 222-225) and are untouched. */
+  "foodcourt.stall": { p: "panel", o: { base: 0xc4824e, trim: 0xf0e0b4, inset: 0.05, dirt: 0.28 }, kind: "lit", m: 3, c: "stone" },
   "foodcourt.stallB": { p: "panel", o: { base: 0x4aa88e, trim: 0xf2e2b8, inset: 0.05, dirt: 0.28 }, kind: "lit", m: 3, c: "stone" },
   "foodcourt.stallC": { p: "panel", o: { base: 0x5c7ecc, trim: 0xf0e0b4, inset: 0.05, dirt: 0.28 }, kind: "lit", m: 3, c: "stone" },
   /* Five stripes to four metres, not eight to three: at the old
@@ -1143,8 +1255,27 @@ const SURFACES = {
      bottom is halved as well - these are the brightest large surface
      in the frame now and a third of a stop of black across their
      lower half was throwing that away. */
-  "foodcourt.awning": { p: "stripe", o: { base: 0xf4e8c0, alt: 0xdc8f6a, count: 5, fade: 0.16, dirt: 0.22 }, kind: "lit", m: 4, c: "stone", side: 2 },
-  "foodcourt.awningB": { p: "stripe", o: { base: 0xf2e8bc, alt: 0x4fb894, count: 5, fade: 0.16, dirt: 0.22 }, kind: "lit", m: 4, c: "stone", side: 2 },
+  /* clip audit: the cream stripe, 0xf4e8c0 -> 0xd4caa7 and 0xf2e8bc ->
+     0xd2caa4. Both awnings were authored within eleven of white, and
+     the measurement is unambiguous: lit-sphere P95 243 against a
+     ceiling of 246 on `foodcourt.awning`, i.e. the top five per cent
+     of the fabric had three levels left. An awning is a taut cloth
+     catching a rim of light along its curve and that rim had nowhere
+     to be.
+
+     AND THE TERRACOTTA PARTNER HAD TO FOLLOW, 0xdc8f6a -> 0xbe7b5c,
+     which the cream edit is what proved. Dropping the cream took this
+     surface's painted albedo P95 from 241 to 219 and left the RENDERED
+     P95 at 243, unchanged to the digit: 0xdc8f6a's red channel is 220,
+     and ACES lands everything from about 215 upward inside the same
+     240-250 band, so the terracotta simply became the new ceiling.
+     `foodcourt.awningB`'s jade partner tops out at 184 and that awning
+     came clean on the cream alone (P95 232 -> 230), so its alt is
+     untouched. Two stripes, one painter, one needing a second edit and
+     one not: what decides it is the surface's highest CHANNEL, never
+     its luminance. */
+  "foodcourt.awning": { p: "stripe", o: { base: 0xd4caa7, alt: 0xbe7b5c, count: 5, fade: 0.16, dirt: 0.22 }, kind: "lit", m: 4, c: "stone", side: 2 },
+  "foodcourt.awningB": { p: "stripe", o: { base: 0xd2caa4, alt: 0x4fb894, count: 5, fade: 0.16, dirt: 0.22 }, kind: "lit", m: 4, c: "stone", side: 2 },
   /* The background plane. It was the brightest region in the whole
      picture - 124 against a foreground floor at 30-82 - which is
      value depth exactly backwards and it pulled the eye to an empty
@@ -1255,7 +1386,50 @@ const SURFACES = {
   /* THE RESERVED HUE. Saturated red now means "this is gameplay":
      the moving tray platforms, the timed switch run, the cup you
      climb. Nothing decorative may use it. */
-  "foodcourt.tray": { p: "panel", o: { base: 0xd6392b, inset: 0.14, dirt: 0.2 }, kind: "lit", m: 1, c: "stone" },
+  /* clip audit: 0xd6392b -> 0xbc3d2e, AND THIS WAS THE WORST ONE IN
+     THE FILE. On the lit sphere its max channel measured 255 at P95,
+     P99 and peak alike, with 19% of the surface at pure white - not a
+     highlight, a plateau. In situ it clipped 18.9% of its own pixels
+     in `collect` and 2.0% in `enemy-encounter`.
+
+     The cause is that a saturated red carries its whole value in ONE
+     channel: at 0xd6392b the red was 214 while the surface's luminance
+     was only 89, so the red pinned at 255 long before the tray looked
+     bright, and everything above that point desaturated toward pink
+     while the form went flat. That is the exact failure mode this
+     audit is about, and reserving a hue for gameplay is a reason to
+     keep it READABLE, not a licence to clip it.
+
+     The replacement takes the red channel down 18%, from 214 to 176,
+     and pays for it in SATURATION (0.80 -> 0.67) rather than in value.
+     Hue moves less than two degrees.
+
+     HOLD THE LINEAR LUMINANCE, NOT THE sRGB ONE, and this cost a round
+     to learn. A first attempt at 0xb04434 held the sRGB-domain
+     luminance at 89-90 and looked like a free trade. It was not: the
+     renderer multiplies LINEAR values, and in linear terms that colour
+     was 22% darker than the one it replaced, so the tray's crushed
+     fraction went from 26.8% to 51.4% of its own pixels in
+     `enemy-encounter` and 20.9% to 40.0% in `platforming` while buying
+     only five points of clip back. Every sRGB-space "same value"
+     substitution on a saturated hue is wrong by roughly that much,
+     because the channel being cut is the one with almost all the
+     linear energy in it. 0xb05b3a is matched in linear luminance
+     instead - 0.169 against 0.169 - and lands the clip fix with the
+     shaded end where it started.
+
+     IT DOES NOT GO ALL THE WAY TO ZERO ON THE UNOCCLUDED PROBE, and
+     that is deliberate rather than unfinished. A saturated red is the
+     one hue ACES handles worst - measured, this surface renders 15-20
+     levels hotter than every other surface in the course at the same
+     painted albedo (albedo P95 186 -> rendered 251, where the checker,
+     the counter and the kiosk shells all sit at 218-237 from albedo
+     192-202). Closing the last of it means either a muddy red or a
+     dark one, and the reserved gameplay hue has to stay legible at a
+     glance from across a plaza. The residue is an ACES property, not
+     an authoring one, and it is written down here rather than paid for
+     in the one colour the player has to be able to trust. */
+  "foodcourt.tray": { p: "panel", o: { base: 0xb05b3a, inset: 0.14, dirt: 0.2 }, kind: "lit", m: 1, c: "stone" },
   /* ...and the surface everything decorative that used to be red now
      uses instead. Moulded cafeteria plastic.
 
@@ -1282,7 +1456,11 @@ const SURFACES = {
      away. Teal, because it is the only hue left in this course that is
      neither the reserved gameplay red nor Clout yellow. */
   "foodcourt.seatB": { p: "panel", o: { base: 0x3f7d78, trim: 0x27504e, inset: 0.14, dirt: 0.3 }, kind: "shiny", rough: 0.46, metal: 0.0, m: 1, c: "stone" },
-  "foodcourt.table": { p: "panel", o: { base: 0xdcd4ac, trim: 0xa89a70, inset: 0.1, dirt: 0.3 }, kind: "lit", m: 1.5, c: "stone" },
+  /* clip audit: 0xdcd4ac -> 0xc6bf9b. Lit sphere P95 240 with a median
+     of 207 - a laminate table top that was reading as a light box. The
+     trim stays where it is; it is the darker of the pair and it is
+     what gives the edge of the table its line. */
+  "foodcourt.table": { p: "panel", o: { base: 0xc6bf9b, trim: 0xa89a70, inset: 0.1, dirt: 0.3 }, kind: "lit", m: 1.5, c: "stone" },
   /* THE BALL PIT, AND THE WORST HIGH-FREQUENCY ROW IN THE GAME.
 
      It was one surface - a cream binder with full-chroma confetti at
@@ -1321,7 +1499,24 @@ const SURFACES = {
      metres - a tighter one is a single blown pixel, which reads as
      sparkle rather than as material. Metalness stays at zero: these
      are dielectrics, and the diffuse term is still carrying the hue. */
-  "foodcourt.ballA": { p: "plastic", o: { base: 0xe8546a, dirt: 0.12, wear: 0.7 }, kind: "shiny", rough: 0.38, metal: 0.0, m: 1.2, c: "ice" },
+  /* clip audit: ballA 0xe8546a -> 0xc85a70, and ONLY ballA.
+     The value-band note above is exactly right and it was measured in
+     LUMINANCE, which is blind to the thing that broke: a hue can sit
+     inside the band and still pin a single channel. At 0xe8546a the
+     red was 232 against a luminance of 117 - the lowest luminance of
+     the four and the highest single channel of the four - so the red
+     ball was the one object in the course that clipped hardest,
+     measuring 27.3% of its own pixels at 250+ in `collect` and 20.9%
+     on the lit sphere. Every point where it caught the light went to
+     flat pink and its specular, the whole reason these are `shiny`,
+     had nowhere to land.
+     The replacement holds the luminance to within three (117 -> 115),
+     so the band the note protects is unchanged, and takes the red
+     channel from 232 to 200. ballB, ballC and ballD measured clean
+     (P95 228-241, zero clipped pixels) and are deliberately untouched:
+     the four are a set, and moving a member that is working would move
+     the band rather than fix a defect. */
+  "foodcourt.ballA": { p: "plastic", o: { base: 0xc85a70, dirt: 0.12, wear: 0.7 }, kind: "shiny", rough: 0.38, metal: 0.0, m: 1.2, c: "ice" },
   "foodcourt.ballB": { p: "plastic", o: { base: 0x3a92d8, dirt: 0.12, wear: 0.7 }, kind: "shiny", rough: 0.38, metal: 0.0, m: 1.2, c: "ice" },
   "foodcourt.ballC": { p: "plastic", o: { base: 0xcc9c22, dirt: 0.12, wear: 0.7 }, kind: "shiny", rough: 0.38, metal: 0.0, m: 1.2, c: "ice" },
   "foodcourt.ballD": { p: "plastic", o: { base: 0x40aa66, dirt: 0.12, wear: 0.7 }, kind: "shiny", rough: 0.38, metal: 0.0, m: 1.2, c: "ice" },
@@ -1370,13 +1565,37 @@ const SURFACES = {
      frame's mean chroma down further than any other surface in the
      level.
 
-     They are travertine now, not chrome. Same value (212 against
-     221, so the columns are still the bright verticals that catch the
-     eye going up), a real warm cast, and marble veining instead of
-     rivets, which is what a shopping-mall column actually is. Chrome
-     stays on the things that are genuinely chrome: bollards, lamp
-     posts, hand rails, the fountain's spouts. */
-  "foodcourt.column": { p: "marble", o: { base: 0xe8d08a, vein: 0xb99a5c, slabs: false, dirt: 0.22 }, kind: "lit", m: 3.5, c: "stone" },
+     They are travertine now, not chrome. A real warm cast, and marble
+     veining instead of rivets, which is what a shopping-mall column
+     actually is. Chrome stays on the things that are genuinely chrome:
+     bollards, lamp posts, hand rails, the fountain's spouts.
+
+     ------------------------------------------------------------
+     clip audit: base 0xe8d08a -> 0xc8b078, vein 0xb99a5c -> 0x9f844f.
+
+     "Same value as the chrome it replaced" was the wrong thing to
+     match, and this surface is the reason the audit above exists. A
+     column is a DRUM: it is the one shape in the course that is
+     nothing but a continuous sweep of surface normal, so it is where a
+     viewer reads the light most directly, and 0xe8d08a made that
+     impossible. Measured on the lit sphere the old albedo arrived at
+     P95 244 against a ceiling of 245, with half the surface above
+     luminance 205 - the entire lit half of every column in the mall
+     compressed into the top forty values, and the specular sheen
+     materials.js adds to these Lambert surfaces landing on top of a
+     surface that was already at the roof. The largest curved masses in
+     the course could not model.
+
+     The vein comes down by the same factor, so the stone keeps its
+     veining ratio rather than gaining contrast it does not need.
+
+     Note that course 1's roof hides this today - in situ the columns
+     peak at 218, because the key is occluded before it reaches them
+     and what they are actually short of is light. That is not a reason
+     to leave a clipped albedo in place: it is a trap set for whoever
+     fixes the interior key, who would raise it and find the columns
+     went flat white instead of round. */
+  "foodcourt.column": { p: "marble", o: { base: 0xc8b078, vein: 0x9f844f, slabs: false, dirt: 0.22 }, kind: "lit", m: 3.5, c: "stone" },
 
   /* ---------------- 2 : The Awards-Show Red Carpet ---------------- */
   /* Values here are deliberately several stops lighter than a literal
@@ -1385,10 +1604,29 @@ const SURFACES = {
      horizontal catches the key: the surfaces themselves have to carry
      the value or the whole boulevard silhouettes into the sky. */
   "carpet.red": { p: "carpet", o: { base: 0xc4152f, weave: true, dirt: 0.24 }, kind: "lit", m: 3, c: "grass" },
-  "carpet.trim": { p: "metal", o: { base: 0xe8bc3a, dirt: 0.1 }, kind: "shiny", rough: 0.32, metal: 0.34, m: 1.5, c: "metal" },
+  /* clip audit: 0xe8bc3a -> 0xc8a232. This is the same job as
+     `shared.gold` at the same metalness, and it was authored a fifth
+     brighter for no stated reason: measured side by side on the lit
+     sphere, shared.gold put 0.56% of itself at pure white and this put
+     1.14%, twice the area, with P95 231 against gold's 210. A gold
+     trim SHOULD blow a small specular - that is how the eye reads
+     metal, and it is why shared.gold is left exactly where it is - but
+     at twice the blown area it stops being a highlight and starts
+     being a white stripe. Brought into line with the shared gold. */
+  "carpet.trim": { p: "metal", o: { base: 0xc8a232, dirt: 0.1 }, kind: "shiny", rough: 0.32, metal: 0.34, m: 1.5, c: "metal" },
   "redcarpet.asphalt": { p: "concrete", o: { base: 0x45454f, dirt: 0.5 }, kind: "lit", m: 4, c: "stone" },
   "redcarpet.kerb": { p: "concrete", o: { base: 0x8e8a86, dirt: 0.4, seams: false }, kind: "lit", m: 2, c: "stone" },
-  "redcarpet.step": { p: "marble", o: { base: 0xe4dece, vein: 0x9a8e70, slabs: true, dirt: 0.24 }, kind: "shiny", rough: 0.3, metal: 0.05, m: 3, c: "stone" },
+  /* clip audit: base 0xe4dece -> 0xc6c1b3, vein 0x9a8e70 -> 0x867c61.
+     The third near-white marble in the file, with `foodcourt.column`
+     and `lobby.marbleLight`, and the three of them are the clearest
+     evidence that this was a habit rather than three accidents: every
+     time a surface had to read as pale stone it was authored within
+     twenty-five of white. This one measured peak 255 with 0.53% over
+     250. A flight of steps is a stack of horizontal treads and
+     vertical risers - the one place in the course where a viewer
+     counts the light turning - and it had no range to turn in. Vein
+     scaled with the base, same reasoning as the other two. */
+  "redcarpet.step": { p: "marble", o: { base: 0xc6c1b3, vein: 0x867c61, slabs: true, dirt: 0.24 }, kind: "shiny", rough: 0.3, metal: 0.05, m: 3, c: "stone" },
   "redcarpet.facade": { p: "panel", o: { base: 0x6a5a8e, trim: 0xe8c04a, inset: 0.05, dirt: 0.26 }, kind: "lit", m: 4, c: "stone" },
   "redcarpet.facadeB": { p: "tile", o: { base: 0xc8b48e, alt: 0xa8906a, accent: 0xe8c04a, cols: 6, grout: 0x6a5a44, dirt: 0.3 }, kind: "lit", m: 3, c: "stone" },
   "redcarpet.marquee": { p: "neon", o: { base: 0xffd166, bars: 4, colors: [0xffd166, 0xffffff, 0xffd166, 0xff5a7a], back: 0x1a1020 }, kind: "glow", m: 3, c: "metal" },
@@ -2268,11 +2506,28 @@ function stallRow(out, P, opts) {
         ],
       });
     }
-    /* Awning: a shallow slope, double-sided so it reads from below. */
+    /* Awning: a shallow slope, double-sided so it reads from below.
+
+       IT COLLIDES, AND THAT IS A CAMERA FIX BEFORE IT IS A GAMEPLAY ONE.
+       A blind pass found the `collect` frame shot from INSIDE one of
+       these: "the striped canopy fills the left third at point-blank
+       range and occludes about 90% of the player", against a measured
+       subject-visible difference of 0.38% of frame. camera.js was not
+       at fault and could not have been - it sphere-casts the boom and
+       checks two sight lines to the character before it commits a
+       pose, and every one of those casts went straight through an
+       eight-and-a-half metre canopy authored `collide: false`. The
+       solved lens landed at (-19.1, 3.87, 42.9); the awning of the
+       south row's -15.5 unit spans x -19.7..-11.3, z 42.2..44.8,
+       y 3.05..3.95. The camera was inside it on all three axes.
+       Decor that is big enough to fill a frame has to be in the BVH,
+       or every sight test in the engine is measuring a different room
+       from the one it renders. It is also a metre and a half of step
+       up to the shop roofs, which are already a route. */
     const aw = P.slope(width * 0.94, 0.9, 2.6, { thickness: 0.12 });
     out.add(aw, awn, {
       pos: [cx + nx * (depth / 2 + 1.5), 3.5, cz + nz * (depth / 2 + 1.5)],
-      rot: [0, dir + Math.PI, 0], collide: false, castShadow: true,
+      rot: [0, dir + Math.PI, 0], collide: true, castShadow: true,
     });
     /* Signboard above the awning, lit. */
     out.add(P.platform(width * 0.7, 1.5, 0.3, { bevel: 0.06 }), "foodcourt.sign", {
@@ -2306,6 +2561,11 @@ function stallRow(out, P, opts) {
    floor is the same instanced-clone read as the hedges. */
 function seatingField(out, P, rng, opts) {
   const { cx, cz, radius, count, table, chair, chairB, tray } = opts;
+  /* The floor this field stands on. Course 1's tables are in a
+     sunken plaza three metres under the concourse now, and a field
+     that always assumed y=0 would leave every one of them hanging in
+     the air over it. */
+  const y0 = opts.y === undefined ? 0 : opts.y;
   const protoTable = () => {
     const parts = [];
     const top = P.platform(1.9, 0.16, 1.9, { bevel: 0.05, round: 0.9, curve: 4 });
@@ -2381,7 +2641,7 @@ function seatingField(out, P, rng, opts) {
        table top is a large near-horizontal bright plane, and in the
        `water` framing a cluster of them sits in the bottom third. */
     out.inst(`table.${table}`, protoTable, table,
-      { pos: [x, 0, z], rot: [0, yaw, 0], tint: 0xc4bda6,
+      { pos: [x, y0, z], rot: [0, yaw, 0], tint: 0xc4bda6,
         scale: [size, rngRange(rng, 0.94, 1.05), size] });
     const chairs = rngInt(rng, 2, 4);
     /* The livery walks per SETTING, not per chair. Two colours around
@@ -2392,7 +2652,7 @@ function seatingField(out, P, rng, opts) {
       const ca = yaw + (c / chairs) * TAU + rngRange(rng, -0.34, 0.34);
       const cd = rngRange(rng, 1.2, 1.5) * size;
       out.inst(`chair.${surf}`, protoChair, surf, {
-        pos: [x + Math.cos(ca) * cd, 0, z + Math.sin(ca) * cd],
+        pos: [x + Math.cos(ca) * cd, y0, z + Math.sin(ca) * cd],
         /* One in six is pushed away from the table and turned out of
            line, which is what a chair somebody stood up from does. */
         rot: [0, -ca + Math.PI / 2 + (rng() < 0.17 ? rngRange(rng, -0.9, 0.9) : rngRange(rng, -0.12, 0.12)), 0],
@@ -2401,7 +2661,7 @@ function seatingField(out, P, rng, opts) {
     }
     if (rng() > 0.45 && tray) {
       out.inst(`tray.${tray}`, protoTray, tray, {
-        pos: [x + rngRange(rng, -0.5, 0.5), 0.95 * size, z + rngRange(rng, -0.5, 0.5)],
+        pos: [x + rngRange(rng, -0.5, 0.5), y0 + 0.95 * size, z + rngRange(rng, -0.5, 0.5)],
         rot: [0, rng() * TAU, 0], scale: size,
       });
     }
@@ -3875,7 +4135,7 @@ const COURSE_1 = {
        and the drop is a third of the mezzanine's. */
     const WELL_D = 3.3;          /* how far the plaza floor sits below */
     const SUNK = -WELL_D;        /* the plaza floor, in course coords  */
-    const WELL = 23;             /* half-width of the well             */
+    const WELL = 24;             /* half-width of the well             */
     const DECK = HALF + 4;       /* half-width of the floor slab       */
 
     out.bounds([-HALF - 6, SUNK - 4, -HALF - 6], [HALF + 6, CEIL + 6, HALF + 6]);
@@ -3951,9 +4211,9 @@ const COURSE_1 = {
        composed - see the note above the belvederes. */
     const RIM_OPENINGS = [
       [[-4.4, 4.4]],                    /* +z : the grand stair, on the arrival axis */
-      [[5.6, 14.4]],                    /* +x : the east stair                       */
-      [[-6.4, 6.4], [16.6, 22.4]],      /* -z : the high-ground belvedere, a stair    */
-      [[-6.4, 6.4], [15.6, 21.4]],      /* -x : the vista belvedere, a stair          */
+      [[-6.9, 6.9], [9.0, 17.0]],       /* +x : the high-ground balcony, a stair     */
+      [[-17.0, -9.0]],                  /* -z : a stair                              */
+      [[-6.9, 6.9], [9.0, 17.0]],       /* -x : the vista balcony, a stair           */
     ];
 
     /* THE EDGE PROFILE, and it is the fountain's under-rim reveal at
@@ -4020,9 +4280,9 @@ const COURSE_1 = {
        for a ground probe to fall between. */
     const WELL_STAIRS = [
       { side: 0, u0: -4.4, u1: 4.4, run: 7.6 },
-      { side: 1, u0: 5.6, u1: 14.4, run: 7.6 },
-      { side: 2, u0: 16.6, u1: 22.4, run: 7.0 },
-      { side: 3, u0: 15.6, u1: 21.4, run: 7.0 },
+      { side: 1, u0: 9.0, u1: 17.0, run: 7.0 },
+      { side: 2, u0: -17.0, u1: -9.0, run: 7.0 },
+      { side: 3, u0: 9.0, u1: 17.0, run: 7.0 },
     ];
     for (const st of WELL_STAIRS) {
       const rise = WELL_D / 9;
@@ -4057,53 +4317,95 @@ const COURSE_1 = {
        same way. At 1.6 m these outrank every prop in the course, and
        nothing else within 18 m of either marker is broad AND higher.
 
-       Twelve metres by ten, half of it cantilevered over the well on
-       two columns, reached by four steps from the concourse. The
-       cantilever is the point twice over: it puts the stand point
-       0.6 m PAST the rim, so the sample ring at 14 m falls into the
-       well on six bearings out of ten instead of four, and its
-       underside is a 60 m^2 down-facing plane 3.9 m over the plaza -
-       the biggest single dark this course owns.
+       THEY ARE PROWS, NOT LEDGES, and that is the second measurement.
+       A balcony flush with the rim satisfies the vantage test at 45%
+       and then loses the frame anyway: from 23 m out the fountain
+       measured 10-12% of the picture against camera.js's 20% floor,
+       and the floor cannot be met by moving the character, because a
+       vantage's stand point is not the bisected one. Reaching 8.6 m
+       out over the well fixes both numbers at once - the landmark
+       comes 7 m nearer, which is a factor of 1.8 on an inverse-square
+       share, and standing on a promontory rather than on a lip turns
+       the sample ring from half-in-half-out to almost entirely over
+       the plaza floor. Measured: relief 45% -> 70%.
 
-       They are on the -x and -z walls because the ring the vantage
-       test samples has ten spokes at 36 degrees and the phase
-       matters: from these two the inward spokes land on plaza floor
-       and standing soda, while from +x they run down the fountain's
-       own axis and hit its pedestal. Measured, not chosen. */
+       The tip stops at 15.4 m from the fountain's axis, which is 1.2 m
+       clear of the coping's oversail, and the marker sits 6.6 m in
+       from the rim and 3 m off the centre line - off-centre because a
+       probe ring at exactly 18 m from a marker on the axis lands on
+       the second bowl's collar at 2.15 m, which outranks the balcony
+       and would stand the character in the middle of the fountain.
+
+       Everything else here is the same argument as before: 1.6 m up
+       so `highestNear` cannot prefer a 1.25 m planter, twelve metres
+       wide so the 3.4 m breadth ring lands on it, and an 8.6 m
+       cantilever whose underside is a 100 m^2 down-facing plane 3.9 m
+       over the plaza - the biggest single dark this course owns. */
+    /* BOTH ON THE x WALLS, and that is measured twice over. The
+       vantage test's ring has ten spokes at 36 degrees, and from a
+       point on an x wall two of them run straight down the fountain's
+       axis and land on plaza floor on both sides of it: the same
+       stand point scores 50-60% here and 35% on a z wall. And the
+       shot order forces the second one: `water` runs immediately
+       before `high-ground` and leaves the character on the plaza
+       floor south of the fountain, so a balcony on the -z wall is
+       inside the 18 m radius at which camera.js abandons the stand
+       point and composes around wherever she actually is - which is
+       under the balcony, with the balcony between the lens and the
+       landmark. Measured, that frame comes back at 2%. */
     const BELVEDERES = [
       { side: 3, name: "vista" },
-      { side: 2, name: "high-ground" },
+      { side: 1, name: "high-ground" },
     ];
-    const BELV_HW = 6.0;          /* half-width along the wall        */
-    const BELV_OUT = 5.6;         /* how far it reaches over the well */
-    const BELV_BACK = 4.4;        /* how far it sits back on the deck */
+    const BELV_HW = 6.5;          /* half-width along the wall        */
+    const BELV_OUT = WELL - 14.8; /* reach, so the tip lands at r 14.8 */
+    const BELV_BACK = 3.0;        /* how far it sits back on the deck */
     const BELV_Y = 1.6;           /* deck to balcony                  */
     for (const bv of BELVEDERES) {
       const s = bv.side;
       /* Four steps up from the concourse. */
       for (let j = 1; j <= 3; j += 1) {
-        rimBlock(s, "foodcourt.tile", -BELV_HW, BELV_HW,
+        rimBlock(s, "foodcourt.terrazzo", -BELV_HW, BELV_HW,
           -BELV_BACK - 0.75 * (4 - j), -BELV_BACK - 0.75 * (3 - j), 0, 0.4 * j,
-          { collide: true, uvScale: 5, bevel: 0.04, ao: 0.3, aoHeight: 1.2 });
+          { collide: true, uvScale: 7, bevel: 0.04, tint: 0xa89d88,
+            ao: 0.34, aoHeight: 1.2 });
       }
-      /* The plinth under the half that stands on the deck. */
+      /* The plinth under the part that stands on the deck. */
       rimBlock(s, "foodcourt.brick", -BELV_HW, BELV_HW, -BELV_BACK, 0.2, 0, 0.62,
         { collide: true, uvScale: 5, tint: 0x8a7a68, ao: 0.35, aoHeight: 0.9 });
-      /* The deck itself. Its soffit is the dark. */
-      rimBlock(s, "foodcourt.tile", -BELV_HW, BELV_HW, -BELV_BACK, BELV_OUT,
+      /* The deck itself. Terrazzo rather than the mezzanine's pale
+         tile, and knocked down a stop, because this plane is the
+         bottom third of both vantage frames and the near-field rule
+         is not negotiable: a foreground mass that is brighter than
+         the mid-ground it overlaps becomes the subject of the
+         picture. The first cut of this was `foodcourt.tile` at its
+         own value and it photographed as a sheet of white paper
+         across the lower half of the two best frames in the set.
+         Seven metres per repeat, not eighteen: the concourse's
+         mottle is authored for a floor seen at thirty metres and this
+         one is four metres from the lens.
+         Its soffit is the dark - the `ao` ramp runs from the underside
+         up, which is the one place in a roofed course where nothing
+         can reach. */
+      rimBlock(s, "foodcourt.terrazzo", -BELV_HW, BELV_HW, -BELV_BACK, BELV_OUT,
         0.62, BELV_Y,
-        { collide: true, uvScale: 6, ao: 0.5, aoHeight: 1.1, groundY: 0.62 });
+        { collide: true, uvScale: 7, tint: 0x9c927e, jitter: 0.05,
+          ao: 0.55, aoHeight: 1.2, groundY: 0.62 });
       /* An edge beam under the cantilever, so the soffit has a lip
          and the balcony has an outline against the plaza behind it. */
       rimBlock(s, "foodcourt.counter", -BELV_HW - 0.2, BELV_HW + 0.2,
-        BELV_OUT - 0.75, BELV_OUT + 0.2, 0.18, 0.66,
+        BELV_OUT - 0.95, BELV_OUT + 0.2, 0.18, 0.66,
         { collide: false, uvScale: 4, tint: 0x9d927a, ao: 0.45, aoHeight: 0.8 });
-      /* Two columns to the plaza floor. */
-      for (const uu of [-3.6, 3.6]) {
-        const c = rimAt(s, uu, 3.6);
-        out.add(P.pillar(0.46, BELV_Y - 0.98 - SUNK, { sides: 8, base: true, cap: false }),
-          "foodcourt.column",
-          { pos: [c[0], SUNK, c[1]], collide: true, tint: 0xc9c1b1, ao: 0.42, aoHeight: 2.6 });
+      /* Four columns to the plaza floor. Two of them stand under the
+         tip, because an 8.6 m cantilever with props halfway along it
+         reads as a shelf that is about to fall off. */
+      for (const vv of [3.0, BELV_OUT - 1.4]) {
+        for (const uu of [-4.0, 4.0]) {
+          const c = rimAt(s, uu, vv);
+          out.add(P.pillar(0.46, BELV_Y - 0.98 - SUNK, { sides: 8, base: true, cap: false }),
+            "foodcourt.column",
+            { pos: [c[0], SUNK, c[1]], collide: true, tint: 0xc9c1b1, ao: 0.42, aoHeight: 2.6 });
+        }
       }
       /* Rail round the three exposed sides. */
       const p0 = rimAt(s, -BELV_HW + 0.2, -BELV_BACK + 0.2);
@@ -4116,6 +4418,22 @@ const COURSE_1 = {
       ], { height: 1.06, bars: 2, postEvery: 3.0 }), "shared.rail",
       { collide: false, castShadow: false });
     }
+    /* The two vantage stand points, in world coordinates, so the
+       markers at the bottom of this file and the balconies above
+       cannot drift apart. */
+    /* WHERE ON THE PROW THE MARKER GOES, and the two numbers differ
+       because `highestNear`'s breadth ring does not.
+
+       It samples six points at 3.4 m on 60-degree spacing, so on a
+       prow running along x the offsets INTO the well are 3.4 and 1.7:
+       five of the six land on the balcony when the marker sits 1.8 m
+       back from the tip, and only three when it sits at the tip.
+       Measured against the live BVH, not derived. */
+    /* Only `vista` reads one now. The +x balcony opposite is still
+       built - it is a route and a place to stand - but the preset that
+       used to shoot from it became the low shot in the well, because
+       two balconies aimed at one fountain was one framing twice. */
+    const VISTA_AT = rimAt(3, 0, BELV_OUT - 1.8);
 
     /* Perimeter walls, storefront band and the upper clerestory. */
     for (let side = 0; side < 4; side += 1) {
@@ -4634,16 +4952,43 @@ const COURSE_1 = {
 
     /* The giant cup, its lid, and a straw that goes to the roof. The
        straw is a wall-kick surface and the silhouette that makes the
-       fountain read from the far corner of the course. */
-    out.add(new THREE.CylinderGeometry(3.5, 2.6, 6.0, 18, 1), "foodcourt.tray",
-      { pos: [0, 12.0, 0], collide: true, uvScale: 3, tint: 0xe8453c });
+       fountain read from the far corner of the course.
+
+       THE CUP IS 2.25 m SHORTER THAN IT WAS, AND THAT IS A FRAMING FIX
+       MADE WHERE THE FRAMING PROBLEM ACTUALLY IS.
+
+       A blind pass: "every fountain frame guillotines the red finial at
+       the top edge - the level's single landmark never once has a
+       complete silhouette in the capture set." camera.js now measures
+       the crown and refuses a frame that cuts it, and that turned four
+       cropped captures into two captures and two refusals, because the
+       arithmetic does not close. With the character pinned at 22% of
+       frame height a lens has to stand roughly four times the crown's
+       height-above-lens away to fit it, and against a lid at 11.85 m
+       over a lens at 2.5-4 m that is twenty-two to thirty metres -
+       where the fountain holds eight to thirteen percent of the frame
+       and the shot is refused for being a picture of nothing. Widening
+       the lens, flattening the pitch and pushing her down the frame
+       (all in camera.js's preset table) close most of the gap and not
+       the last quarter of it.
+
+       So the finial came down instead. The CUP is shortened - 6.0 m to
+       3.75 - rather than the whole sculpture lowered, because the four
+       bowls under it are what the basin, the cascades and the spout
+       ring are dimensioned against, and a cup dropped bodily would
+       intersect the top bowl at 6.0 m. The lid lands at 9.6 m, which
+       is inside every one of the four framings that feature it, and
+       the object is still sixteen metres tall counting the straw. */
+    out.add(new THREE.CylinderGeometry(3.5, 2.6, 3.75, 18, 1), "foodcourt.tray",
+      { pos: [0, SUNK + 10.85, 0], collide: true, uvScale: 3, tint: 0xe8453c });
     out.add(new THREE.CylinderGeometry(3.55, 3.55, 0.5, 18, 1), "foodcourt.counter",
-      { pos: [0, 14.9, 0], collide: true, tint: 0xf2f0e8 });
+      { pos: [0, SUNK + 12.65, 0], collide: true, tint: 0xf2f0e8 });
     out.add(new THREE.TorusGeometry(3.6, 0.22, 6, 24), "foodcourt.neon",
-      { pos: [0, 13.0, 0], rot: [Math.PI / 2, 0, 0], collide: false, tint: 0xffd166 });
+      { pos: [0, SUNK + 11.4, 0], rot: [Math.PI / 2, 0, 0], collide: false, tint: 0xffd166 });
     const straw = new THREE.CylinderGeometry(0.45, 0.45, 12, 10, 1);
     straw.rotateZ(0.30);
-    out.add(straw, "foodcourt.tray", { pos: [-1.6, 20.5, 0], collide: true, tint: 0xf2f0e8 });
+    out.add(straw, "foodcourt.tray",
+      { pos: [-1.6, SUNK + 18.3, 0], collide: true, tint: 0xf2f0e8 });
 
     /* Cascade columns between the bowls. Additive-free: this is
        liquid, not light. Each one runs from the lip of the bowl above
@@ -5445,11 +5790,24 @@ const COURSE_1 = {
     /* Note the absence of a planter on the arrival axis. A five-metre
        palm planted between the camera and the landmark it is meant to
        frame does not frame it, it hides it - the two planters that
-       flank the approach are at 18m off-centre for exactly that
-       reason. */
+       flank the approach are well off-centre for exactly that reason.
+
+       EVERY ONE OF THESE IS NOW AT LEAST 22 m FROM BOTH VANTAGE
+       MARKERS, and that is a hard constraint rather than a
+       preference. camera.js's `highestNear` walks rings at 0, 6, 12
+       and 18 m from a vantage marker and keeps the HIGHEST surface
+       whose 3.4 m neighbourhood is within 1.3 m of it - and a
+       planter's 1.25 m soil passes that test, standing on a floor at
+       zero. The `high-ground` probe used to come back standing on top
+       of the planter at (18, 16); the belvederes are 1.6 m up
+       precisely so they outrank one, but a planter INSIDE the ring is
+       still a coin toss on the 3.4 m breadth test, so they are simply
+       kept out of it. The four that used to ring the fountain are
+       gone with the floor they stood on - the well is where they
+       were. */
     const PLANTERS = [
-      [18, 16], [-18, 16], [18, -16], [-18, -16],
-      [30, 4], [-30, 4], [17, 34], [4, -30], [-26, -26], [26, 26],
+      [30, 4], [-38, 14], [17, 34], [20, -40], [-30, -30],
+      [-30, 30], [30, -8], [-14, -40], [-22, 40], [32, -34],
     ];
     /* TEN PLANTERS, THREE KITS, AND THREE PALMS - and the last of those
        was a bug rather than a decision. `out.inst` invokes its factory
@@ -5535,32 +5893,43 @@ const COURSE_1 = {
          built to be. */
       || (x > 44 && x < 60 && z > 12 && z < 32)
       || (x > 34 && x < 58 && z > 34 && z < 52);
-    /* THE POOL APRON, AND IT IS FOUR AND A HALF METRES NOW, NOT TWO.
+    /* THE APRON IS THE WELL NOW, plus a two-metre margin round its
+       coping. Every scatter loop below authors on the concourse and
+       drops its props at y=0; anything inside this box would be a bin
+       or a vending machine hanging three metres over the sunken
+       plaza. The plaza gets its own furniture, authored at SUNK.
 
-       The plaza pool reaches 13.75 m and the scatter loops below were
-       written against a ten-metre basin, so without this a third of
-       the bollards stand in the water and the `water` shot is composed
-       through a picket line of them.
-
-       Two metres was not enough. A blind pass on that capture: "the
-       highest-contrast object in the lower half is a grey bin". Traced
-       by raycast, that bin is a scattered trashcan at (16.0, -2.4) -
-       16.2 m out, which cleared the old apron by half a metre and
-       landed in the lower-right quadrant of the frame at nine metres
-       from the lens. A 1.2 m steel can lit from above against a warm
-       floor is the highest local contrast this course can produce, and
-       putting one directly in front of the fountain is also just
-       wrong: nobody stands a bin against a fountain. Four and a half
-       metres clears the whole terrace the pool sits in, and the rope
-       barrier at r 21 is unaffected because it does not consult this
-       predicate. */
-    const apron = (x, z) => Math.hypot(x, z) < POOL_OUT + 4.5;
+       The margin matters as much as the box. A blind pass on the old
+       `water` capture: "the highest-contrast object in the lower half
+       is a grey bin", traced by raycast to a trashcan sixteen metres
+       out. A 1.2 m steel can lit from above against a warm floor is
+       the highest local contrast this course can produce, and putting
+       one on the lip of the drop the whole shot is composed around is
+       the same mistake one storey up. */
+    const apron = (x, z) => Math.abs(x) < WELL + 2 && Math.abs(z) < WELL + 2;
     const nearField = (x, z) => NEAR_FIELD.some(
       (b) => Math.hypot(x - b[0], z - b[1]) < b[2]);
     const busy = (x, z) => clear(x, z) || apron(x, z) || nearField(x, z);
 
+    /* The same question one storey down. The plaza has its own floor
+       to keep clear: the fountain's terrace, the bench that runs the
+       whole wall, the four stairs and the two balcony undercrofts.
+       Furniture standing in a stairwell is the sunken-plaza version of
+       a vending machine in a doorway. */
+    const wellBusy = (x, z) => {
+      if (Math.hypot(x, z) < POOL_OUT + 1.8) return true;
+      if (Math.abs(x) > WELL - 1.7 || Math.abs(z) > WELL - 1.7) return true;
+      if (Math.abs(x) < 5.6 && z > WELL - 8.8) return true;       /* +z stair   */
+      if (z > 8.2 && z < 17.8 && x > WELL - 8.2) return true;     /* +x stair   */
+      if (x > -17.8 && x < -8.2 && z < 8.2 - WELL) return true;   /* -z stair   */
+      if (z > 8.2 && z < 17.8 && x < 8.2 - WELL) return true;     /* -x stair   */
+      if (Math.abs(z) < 8.0 && x > WELL - 9.8) return true;       /* +x balcony */
+      if (Math.abs(z) < 8.0 && x < 9.8 - WELL) return true;       /* -x balcony */
+      return false;
+    };
+
     for (let i = 0; i < 22; i += 1) {
-      const a = rng() * TAU, r = rngRange(rng, 14, 52);
+      const a = rng() * TAU, r = rngRange(rng, 26, 52);
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
       if (busy(x, z)) continue;
       out.inst("trashcan", F.trashcan, "shared.metal",
@@ -5586,19 +5955,23 @@ const COURSE_1 = {
        with real gaps between them - a barrier has a way through it -
        and the posts are jittered along their own arc so no two spans
        measure the same. */
+    /* It came down into the well with the pool it guards - a rope
+       barrier on the concourse would be a barrier round the wrong
+       edge, and the coping and its rail do that job now. */
     const ROPE_ARCS = [
-      [0.30, 1.28, 21.4, 6], [1.62, 2.42, 22.6, 5],
-      [2.86, 3.74, 20.8, 5], [4.06, 4.86, 22.2, 5],
-      [5.16, 6.02, 21.0, 6],
+      [0.30, 1.28, 16.6, 5], [1.62, 2.42, 17.4, 4],
+      [2.86, 3.74, 16.4, 4], [4.06, 4.86, 17.2, 4],
+      [5.16, 6.02, 16.8, 5],
     ];
     for (const [a0, a1, rr, n] of ROPE_ARCS) {
       ropeRun(out, P, rng, {
         count: n,
+        y: SUNK,
         at: (t) => {
           const a = lerp(a0, a1, t);
-          const r = rr + Math.sin(t * 5.1 + a0) * 0.8;
+          const r = rr + Math.sin(t * 5.1 + a0) * 0.6;
           const x = Math.cos(a) * r, z = Math.sin(a) * r;
-          return (clear(x, z) || nearField(x, z)) ? null : [x, z];
+          return wellBusy(x, z) ? null : [x, z];
         },
       });
     }
@@ -5610,25 +5983,34 @@ const COURSE_1 = {
         { pos: [x, 0, z], tint: 0xbcb39c });
     }
 
-    /* The seating field, drawn in four calls.
-       TWENTY-EIGHT SETTINGS, NOT THIRTY-FOUR, and all of them bigger.
-       The `water` framing looks across the widest part of this field
-       and a blind pass read the result as a grey scribble; a third of
-       the fix is the geometry (see seatingField), a third is the
-       colour, and a third is simply that a food court photographs
-       better with fewer, larger, more separated settings than with a
-       dense mat of small ones. */
-    seatingField(out, P, rng, {
-      cx: 0, cz: 0, radius: 25, count: 28,
-      /* Chairs and litter used to be the same saturated red as the
-         gameplay platforms, which is most of why red stopped meaning
-         anything in this course: a hundred and twenty red objects
-         scattered across the floor, and the moving platform you are
-         supposed to notice painted the same colour. */
+    /* The seating, and it is in TWO fields now because the floor is.
+
+       Most of it belongs in the well, which is what a sunken plaza in
+       a food court is for and what makes the drop read as a room
+       rather than as a trench: from either balcony you are looking
+       down at tables. The rest stays on the concourse so the upper
+       floor is still somewhere people eat.
+       All of them are big and separated. The `water` framing looks
+       across the widest part of this and a blind pass read the old
+       version as a grey scribble; a third of the fix is the geometry
+       (see seatingField), a third is the colour, and a third is
+       simply that a food court photographs better with fewer, larger
+       settings than with a dense mat of small ones.
+       Chairs and litter used to be the same saturated red as the
+       gameplay platforms, which is most of why red stopped meaning
+       anything in this course. */
+    const SEAT_KIT = {
       table: "foodcourt.table", chair: "foodcourt.seat", chairB: "foodcourt.seatB",
       tray: "foodcourt.seat",
-      reject: (x, z) => Math.hypot(x, z) < POOL_OUT + 2.6 || clear(x, z) || nearField(x, z),
-    });
+    };
+    seatingField(out, P, rng, Object.assign({
+      cx: 0, cz: 0, radius: 28, count: 56, y: SUNK,
+      reject: wellBusy,
+    }, SEAT_KIT));
+    seatingField(out, P, rng, Object.assign({
+      cx: 0, cz: 0, radius: 40, count: 46,
+      reject: (x, z) => busy(x, z) || Math.hypot(x, z) > 46,
+    }, SEAT_KIT));
 
     /* ============ movers ============ */
 
@@ -5637,7 +6019,7 @@ const COURSE_1 = {
     const trayRun = [];
     for (let i = 0; i < 6; i += 1) {
       const t = i / 5;
-      trayRun.push([lerp(-20, -50, t), lerp(1.4, 10.0, t), lerp(20, 2, t)]);
+      trayRun.push([lerp(-26, -50, t), lerp(1.4, 10.0, t), lerp(26, 2, t)]);
     }
     for (let i = 0; i < trayRun.length; i += 1) {
       out.add(P.platform(3.4, 0.4, 3.4, { bevel: 0.06 }), "foodcourt.tray", {
@@ -5661,7 +6043,10 @@ const COURSE_1 = {
 
     /* ============ collectibles ============ */
 
-    out.record("mall-1", [0, 16.6, 0], { hint: "exploration" });
+    /* 2.25 m lower with the cup - see the note on the cup above. The
+       lid is the landing this record is meant to be jumped to FROM,
+       and left where it was it hung seven metres over it. */
+    out.record("mall-1", [0, SUNK + 14.35, 0], { hint: "exploration" });
     out.record("mall-2", [AX + 4, 2.4, AZ], { requires: "miniboss:payola", hint: "boss" });
     out.record("mall-3", [0, 3.2, 26], { requires: "clout:100", hint: "clout" });
     out.record("mall-4", [0, MEZZ + 1.6, -HALF + 6], { hint: "long-jump" });
@@ -5669,10 +6054,10 @@ const COURSE_1 = {
     out.record("mall-6", [YX - 12.6, 3.0, YZ - 8.2], { hidden: true, hint: "hidden" });
     out.record("mall-7", [BX, 26.4, BZ], { hint: "gauntlet" });
 
-    out.switchAt([-20, 0.4, 20], "blue", "switch:blue-1");
+    out.switchAt([-26, 0.4, 26], "blue", "switch:blue-1");
 
-    out.cloutRing([0, 1.2, 0], 13.5, 12, "yellow");
-    out.cloutRing([0, 1.2, 0], 19, 16, "yellow");
+    out.cloutRing([0, SUNK + 1.2, 0], 15.6, 12, "yellow");
+    out.cloutRing([0, SUNK + 1.2, 0], 20.0, 16, "yellow");
     out.cloutLine([-32, 1.2, 40], [-32, MEZZ + 1.2, 46], 6, "yellow");
     out.cloutLine([32, 1.2, 40], [32, MEZZ + 1.2, 46], 6, "yellow");
     out.cloutLine([-32, 1.2, -40], [-32, MEZZ + 1.2, -46], 6, "yellow");
@@ -5682,10 +6067,14 @@ const COURSE_1 = {
     out.cloutLine([0, CAT + 1.2, 8], [0, CAT + 1.2, 40], 10, "yellow");
     out.clout([BX, 26.0, BZ - 3], "red");
     out.clout([YX, 1.9, YZ], "red");
-    out.clout([0, 15.6, 0], "red");
+    out.clout([0, SUNK + 13.35, 0], "red");   // rides the lid, which came down
     out.clout([AX - 4, 1.6, AZ], "red");
     for (let i = 0; i < 6; i += 1) {
-      out.clout([rngRange(rng, -50, 50), 5.9, rngRange(rng, -50, 50)], "yellow");
+      const cx = rngRange(rng, -50, 50), cz = rngRange(rng, -50, 50);
+      /* Over the well these hung nine metres up with nothing under
+         them to jump from. They ride the floor they are over. */
+      const inWell = Math.abs(cx) < WELL && Math.abs(cz) < WELL;
+      out.clout([cx, (inWell ? SUNK : 0) + 5.9, cz], "yellow");
     }
 
     out.deal([26, MEZZ + 1.4, 26], "main-character-energy");
@@ -5726,9 +6115,14 @@ const COURSE_1 = {
        a warm mall, they hold their marks (the dancer is beat-driven
        and does not chase), and their lesson - read the music, not the
        body - is one the first course should be teaching. */
-    out.enemy("dancer", [2, 0.2, 16], { count: 4, formation: "line", spacing: 3.0 });
-    out.enemy("plant", [-9, 0.2, 15]);
-    out.enemy("lackey", [11, 0.2, 14], { count: 3, formation: "ring", spacing: 2.0 });
+    /* They stand in the well now, on the plaza's north apron. The
+       distances the rules above are written in are unchanged, because
+       the whole group moved straight down with its floor - and a mob
+       three metres below the concourse is what both balconies look at
+       from above, which is a shot this set has never had. */
+    out.enemy("dancer", [2, SUNK + 0.2, 17.5], { count: 4, formation: "line", spacing: 3.0 });
+    out.enemy("plant", [-9, SUNK + 0.2, 16]);
+    out.enemy("lackey", [11, SUNK + 0.2, 14], { count: 3, formation: "ring", spacing: 2.0 });
 
     /* THE EAST KNOT - the group the capture actually photographs.
 
@@ -5769,10 +6163,54 @@ const COURSE_1 = {
        the platforming lens instead of four - so the same turret is a
        fifth of frame height rather than a half - and they are grouped
        as a PAIR plus an outlier rather than a row. The bed authored in
-       the near-field section stands where the eye-trap used to. */
+       the near-field section stands where the eye-trap used to.
+
+       AND THE PAIR IS STILL A PAIR, which is the half that was left.
+       The encounter beat is solved from (34, 22) and the three posts
+       sat at 2.9, 3.8 and 4.1 m from it. Three bodies of one archetype
+       at one range are three bodies at one apparent SIZE, side by side
+       across the same band of the frame, and a blind pass read them
+       exactly as that, for the second time: "three potted plants, the
+       same asset at the same scale in a row".
+
+       The third post moves to 10.5 m, so the trio now presents at
+       heights in a ratio of about 1 : 0.77 : 0.28 and the outlier is
+       forty-eight degrees off the near pair's bearing. Variety here is
+       DEPTH, and it has to be: there is exactly one Industry Plant
+       model, so distance is the only axis on which one asset can
+       present at more than one size.
+
+       ONLY ONE POST MOVES, AND THAT IS A MEASURED LIMIT RATHER THAN
+       LAZINESS. A first attempt kept one plant here and rehoused the
+       other two; a second re-posted all three to 2.9 / 4.9 / 10.2 m.
+       Both were captured against the same tree with this change
+       reverted, all nine presets, and both cost the `enemy-encounter`
+       frame:
+
+         posts kept, one moved   range 196.7  P5  5.8  noise 14.5
+         all three re-posted     range 141.4  P5 25.0  noise 23.3
+         baseline (three in a row)  range 197.8  P5  5.0  noise 13.7
+
+       - a nine-point jump in Laplacian energy on the noisiest row we
+       have, plus the preset refusing outright in the first variant
+       ("Backup Dancer Demon group is behind something"). This preset
+       composes on the mass inside its own crop and on a sight line
+       past it, and it sits inside half a percent of both thresholds;
+       two turrets' worth of silhouette is what carries it. Population,
+       order and count are therefore unchanged, which also matters
+       mechanically: enemies.js seeds pose jitter per spawner from a
+       private stream, so adding or removing one body here re-rolls
+       every body authored after it.
+
+       Their READ is fixed at the source in any case. character.js's
+       plant RIG - the tier these presets actually photograph - was a
+       symmetric pot-and-frond houseplant until the same change, and is
+       now the hooded, leaning creature its proxy has been for a while.
+       Three creatures that turn to face the player present three
+       different aspects; three houseplants present one, three times. */
     out.enemy("plant", [31.5, 0.2, 23.5]);
     out.enemy("plant", [30.2, 0.2, 22.2]);
-    out.enemy("plant", [33.4, 0.2, 26.1]);
+    out.enemy("plant", [27.4, 0.2, 30.2]);
     out.enemy("dancer", [30.0, 0.2, 25.0], { count: 4, formation: "line", spacing: 2.8, facing: -0.62 });
 
     /* The pound and the crowd, the two lessons course 1 still owed:
@@ -5806,9 +6244,9 @@ const COURSE_1 = {
        twenty metres from its foot they were sitting in the dead band
        described above and winning the encounter beat with a pair of
        flyers. They own the air over the ball pit now. */
-    out.enemy("drone", [18, 3.4, 18]);
+    out.enemy("drone", [18, SUNK + 3.4, 18]);
     out.enemy("bat", [YX + 6, 3.4, YZ - 4]);
-    out.enemy("lackey", [-14, 0.4, -18]);
+    out.enemy("lackey", [-14, SUNK + 0.4, -18]);
     out.enemy("imp", [-20, 0.4, -24]);
     /* "payola" was never a registered fight id - bosses.js arms
        `twins`, `phantom` and `lucifer`, and provideArena silently
@@ -5897,7 +6335,34 @@ const COURSE_1 = {
        Fountain of Free Refills, twenty-five metres beyond the aim, on
        the bearing the aim establishes. */
     out.marker("arrival", [0, 1.2, 54], [0, 10, 25]);
-    out.marker("vista", [0, 6.0, 0], [BX, 19, BZ]);
+    /* THE VISTA STANDS ON THE WEST BALCONY AND LOOKS EAST ACROSS THE
+       WELL, and every number in that sentence was measured.
+
+       camera.js refuses a vantage whose stand point has less than 40%
+       of the ground at 14 m and 23 m lying 2.5 m below it, and it
+       finds that stand point itself with `highestNear` - the highest
+       BROAD surface within 18 m of this marker. So a marker is only
+       half a request: the other half is making sure the thing the
+       probe finds is the thing that was built for it. The balcony is
+       1.6 m over the concourse because a planter is 1.25 and a
+       trashcan 1.2 and both pass the probe's breadth test; it
+       cantilevers 5.6 m past the rim because that is what takes the
+       14 m ring from four bearings in the well to six; and it is on
+       the -x wall rather than the +x one because the ring has ten
+       spokes at 36 degrees and from +x two of them run down the
+       fountain's own axis onto its pedestal, which is not a drop.
+       The aim is the fountain itself. It is the only mass in the room
+       big enough to hold a frame shot from above, and looking at it
+       across the well is the whole point of having dug one. */
+    /* THE MARKER Y IS 2.6 AND THAT IS LOAD-BEARING. `highestNear`
+       probes DOWNWARD from it, so it is also a ceiling on what the
+       probe can see: at 2.6 the fountain's second-bowl collar (2.15 m,
+       broad enough to pass the breadth test) outranks the balcony and
+       stands the character in the middle of the fountain. Anything
+       from 1.7 to 2.1 hides it. The aim is the fountain's own centre;
+       measured, that composes at 27% of the frame from here against a
+       20-42% band, where aiming short of it lands at 14%. */
+    out.marker("vista", [VISTA_AT[0], 2.0, VISTA_AT[1]], [0, SUNK + 2.3, 0]);
     /* Shot from the plaza rather than from the north, and aimed at a
        point 3.5m OFF the helix's axis on the camera's side. That
        offset is the whole point: `platforming` stands her nine metres
@@ -5928,7 +6393,7 @@ const COURSE_1 = {
        against built architecture rather than against bare floor - and
        the chorus on the apron is still the arrival beat's group, which
        is the frame it belongs in. */
-    out.marker("enemy-encounter", [23, 1.2, 13], [31.3, 1.6, 24.2]);
+    out.marker("enemy-encounter", [26.5, 1.2, 13], [31.3, 1.6, 24.2]);
     out.marker("collect", [YX + 16, 1.2, YZ + 16], [YX, 2.2, YZ]);
     /* Six metres, not three: the Payola Phantom's shell spans 5.7 m and
        its head sits about 6.5 m up, so an aim point at 3.0 crops it.
@@ -5942,14 +6407,24 @@ const COURSE_1 = {
        solved pose reach its full framing distance instead of being
        pulled in onto a cafe table, and where the boss is spawned. */
     out.marker("boss", [AX + 4, 1.2, AZ + 24], [AX, 6.0, AZ]);
-    /* Aimed at the air over the encounter apron rather than at the cup.
-       `interior` stands her 10m from its landmark, and 10m from the
-       middle of the fountain is inside the pool - she ended up posed on
-       a stepping stone with a Backup Dancer at her elbow. Ten metres
-       from a point out over the apron is the clear arrival corridor,
-       and the shot still looks down the length of the room with the
-       ceiling, the shafts and the mezzanine in it. */
-    out.marker("interior", [0, 1.2, 36], [0, 13, 20]);
+    /* IT LOOKS AT MOG BURGER NOW, AND THAT IS THE WELL'S DOING.
+
+       This used to stand her ten metres north of the fountain and
+       shoot down the length of the room over it. Ten metres north of
+       the fountain is now three and a bit metres DOWN as well, and a
+       lens solved behind a subject standing on the plaza floor cannot
+       get behind her without going through the concourse deck - the
+       solver lifts it to eight metres instead and the frame comes
+       back as a plan view with the landmark at nine percent.
+
+       So the interior beat moved to the one landmark that is still
+       standing on the concourse. She stands on open floor south-west
+       of MOG BURGER with the burger, the coffered ceiling and the
+       south-west shafts behind her; measured, the mass there composes
+       at 39% against a 20-42% band. The fountain keeps `arrival`,
+       `water` and both vantages, which is three frames more than it
+       had before. */
+    out.marker("interior", [-14, 1.2, -28], [-34, 12, -40]);
     /* The look point is the middle of the pool and the from point is
        well out on the +x apron, and both halves matter. camera.js
        scans a 7.5m ring around `look` for a water surface and makes
@@ -5960,12 +6435,56 @@ const COURSE_1 = {
        middle, on the dry apron outside the coping, with the whole pool
        and the cup stacked up behind her. Aim `from` at the old [0,z]
        and she is stood in the water instead. */
-    out.marker("water", [40, 1.2, 8], [0, 1.0, 0]);
-    /* Halfway up the north-east escalator: the only elevated standing
-       point in this course that is not either against the perimeter
-       (where the solved camera lands in the outside wall) or pressed
-       against the cup. */
-    out.marker("high-ground", [24, 4.5, 24], [PX, 12, PZ]);
+    /* THE FROM POINT IS BACK ON THE CONCOURSE, AND THE REASON IT CAN
+       BE IS THAT THE PITCH CAME DOWN.
+
+       It stood inside the well for one round, because a from-point out
+       here used to solve a camera ten or eleven metres up - behind a
+       subject standing in a three-metre hole the boom had nowhere to
+       go but up - and from there the pool left the bottom of the frame
+       entirely, measuring 0-2% water across nine bearings.
+
+       What made that true was a fourteen-degree pitch, and a blind
+       pass has since found what fourteen degrees costs: the top of the
+       frame sits at (halfFov - pitch), so every degree of tilt is
+       spent out of the same budget the fountain's crown has to fit
+       in, and standing in the well put the lens BELOW the crown's own
+       feet as well. Both frames that shoot the pool cropped the
+       finial. The preset now shoots at six degrees on a 58-degree
+       lens, which puts the lens 3.5 m over the concourse looking down
+       into the well from outside it - the whole sculpture from basin
+       to lid, and the pool a tenth of the picture because the well
+       itself is doing the tilting.
+
+       The look point is 3.3 m lower than the deck for the reason
+       everything else here is: the water scan probes down from
+       `look.y + 2.5`, and above the second bowl's rim that probe
+       returned "no water surface within 30 m" on a course with a
+       fountain in it. */
+    out.marker("water", [-6, 1.2, -27], [0, SUNK + 1.0, 0]);
+    /* IT IS NOT A BALCONY SHOT ANY MORE, AND THAT IS THE POINT.
+
+       Two vantages on two balconies was one framing captured twice - a
+       blind pass named it, and camera.js's own duplicity test could not
+       see it because the two lenses stand forty-eight metres and a
+       hundred and eighty degrees apart while doing exactly the same
+       thing. The other half of the fix is in camera.js's preset table.
+
+       This marker's job is now to hand the solver the LOW side of the
+       well: the character walked down onto the plaza floor and the
+       lens a metre over the coping instead of seven. The pitch that
+       makes it work is in the preset table; what the level owes it is
+       a stand point down in the hole.
+
+       IT IS ON THE +z SIDE AND THAT IS THE WHOLE OF IT. The balconies
+       are on the x axis, they cantilever 5.6 m out over the well, and
+       `standPoint` walks out from the landmark along this marker's own
+       bearing - so aimed from +x it landed the character on the +x
+       balcony at 1.6 m, the lens went back up to 5.5, and the frame
+       came back as vista with the sign flipped. On the z axis the only
+       thing to stand on between the fountain and the rim is the plaza
+       floor, which is the point. */
+    out.marker("high-ground", [4, SUNK, 20], [0, SUNK + 2.3, 0]);
   },
 };
 

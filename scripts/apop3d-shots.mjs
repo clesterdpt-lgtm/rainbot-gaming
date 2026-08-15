@@ -35,6 +35,17 @@
       row come back byte-identical, showing whatever the compositor
       last held. We read the WebGL drawing buffer instead, which is
       exactly the surface the last renderOnce() drew into.
+
+   ------------------------------------------------------------
+   AND ONE THING IT DELIBERATELY DOES NOT DO
+
+   It does not decide where the character stands. camera.js exposes a
+   subject seam - `subjectWant` to ask, `setSubjectPlacer` to be driven
+   - and this file registers a placer and gets out of the way. Three
+   previous attempts to solve subject placement here fought the camera
+   module for the same job and lost, the last one taking the set from
+   8/9 to 6/9. The rig owns the search state; the search state is where
+   the iteration belongs.
    ============================================================ */
 
 import { spawn } from "node:child_process";
@@ -68,18 +79,17 @@ const COURSE = Number(args.course ?? 1);
 const WARM_SECONDS = Number(args.warm ?? 2);
 const KEEP_HUD = Boolean(args.hud);
 const HEADED = Boolean(args.headed);
-/* ON by default: the review pool must contain a character.
-   camera.js solves WHERE the camera goes relative to the subject, but
-   nothing moves the subject, so without this every default capture is
-   an empty room - and "no character in frame" has been the losing
-   verdict in every blind review so far.
-   This was briefly disabled after it relocated whole captures onto the
-   building's roof. That turned out to be the same trap camera.js hit:
-   groundAt returns the first UP-FACING surface below the probe, and
-   the top of a ceiling slab is up-facing, so probing from above the
-   roof grounds you on the roof. The probe below starts just above the
-   player instead and rejects any surface well above her.
-   --no-subject captures the bare level. */
+/* ON by default: the review pool must contain a character. "No
+   character in frame" has been the losing verdict in every blind review
+   so far, and Mario is in essentially every real SM64 screenshot.
+   With this on, the harness registers a SUBJECT PLACER with camera.js
+   and that module drives the whole placement - see the seam block in
+   main(). This file no longer probes for a floor, chooses a stand
+   point, or decides which way she faces; every one of those was a
+   guess made against the camera's own search, and every one of them
+   was wrong at least once (a rooftop, a walkway 23 m over the enemies,
+   a half-turn of yaw).
+   --no-subject registers nothing and captures the bare level. */
 const PLACE_SUBJECT = !args["no-subject"];
 /* Port is chosen at runtime by actually binding one, not guessed.
    This used to be `43000 + pid % 9000`. Concurrent sessions leave
@@ -253,6 +263,60 @@ async function main() {
     await waitForFrames(page, 4);
     await page.evaluate((s) => window.__APOP3D?.advance?.(s), WARM_SECONDS);
 
+    /* THE SUBJECT SEAM.
+       This harness used to pose the camera, walk the player onto the
+       ground under the view axis, and pose again - and nothing walked
+       her a third time, so the second solve could legitimately compose
+       around a point she never reached. Measured: `enemy-encounter`
+       verified at truthOff 6.5-15.7 m with a subject-hidden control
+       that differed from the real frame by 0.05% of the crop. No
+       character at all, in the shot named after a confrontation.
+
+       Three harness-side fixes fought camera.js for the same job and
+       lost. The last, a corrective walk plus a re-solve, took the set
+       from 8/9 to 6/9 because the solver had already chosen the best
+       bearing for her OLD position. The layer was the lesson: the
+       camera says where she belongs, this file puts her there, and the
+       camera verifies against where she really is.
+
+       So the placer is registered ONCE and camera.js drives it. It
+       moves her every time its stand-distance bracket steps, re-places
+       her for whichever round's pose it finally commits, and turns her
+       to face the shot at the end. This file no longer decides where
+       she stands, which floor she lands on, or which way she looks -
+       all three were guesses, and all three were wrong at least once.
+       Nothing here probes the ground any more either: camera.js's own
+       stand-point solve already grounds the want, from the landmark's
+       height rather than from above the roof.
+
+       --no-subject skips registration entirely, which restores the
+       bare-level capture exactly. */
+    const seam = !PLACE_SUBJECT ? false : await page.evaluate(() => {
+      const ctx = window.__APOP3D_CTX;
+      const rig = ctx && ctx.cameraRig;
+      if (!rig || typeof rig.setSubjectPlacer !== "function") return false;
+      window.__APOP3D_PLACED = [];
+      return rig.setSubjectPlacer((want) => {
+        const pl = ctx.player;
+        if (!pl || typeof pl.teleport !== "function") return false;
+        /* 5 cm of air, so she settles onto the floor rather than
+           starting a frame interpenetrating it. camera.js grounds the
+           want; this does not second-guess it. */
+        pl.teleport(want.x, want.y + 0.05, want.z,
+          want.yaw === null || want.yaw === undefined ? undefined : want.yaw);
+        window.__APOP3D_PLACED.push([want.name, want.round, +want.stand.toFixed(1)]);
+        return true;
+      });
+    });
+    if (PLACE_SUBJECT && !seam) {
+      throw new Error(
+        "camera.js does not expose setSubjectPlacer, so the capture would fall back to "
+        + "posing around a point the character never reaches. Refusing to write frames "
+        + "whose verification is against an assumption. Pass --no-subject for a bare level."
+      );
+    }
+    diagnostics.seam = seam;
+
     for (const preset of PRESETS) {
       const applied = await page.evaluate((name) => {
         const q = window.__APOP3D;
@@ -272,97 +336,15 @@ async function main() {
         continue;
       }
 
-      /* Put the subject in the shot.
-         Two rounds of blind comparison against real Super Mario 64
-         frames returned the same verdict for the same reason: our
-         panels were characterless. That is not a rendering gap, it is
-         a framing one - the capture presets aim at level features and
-         the player is left wherever she spawned, usually off screen.
-         Mario is in essentially every real SM64 screenshot, and a
-         frame with no subject has no focal hierarchy to judge.
-         So after the camera is posed, the player is moved to the
-         ground under the point the camera is actually looking at. */
-      if (PLACE_SUBJECT) {
-        await page.evaluate(() => {
-          const q = window.__APOP3D;
-          const ctx = window.__APOP3D_CTX;
-          if (!q || !ctx || !ctx.camera) return;
-          const THREE = ctx.THREE;
-          const dir = new THREE.Vector3();
-          ctx.camera.getWorldDirection(dir);
-          const from = ctx.camera.position.clone();
-          // Aim a little ahead of the camera, then drop onto the floor.
-          const target = from.clone().add(dir.multiplyScalar(7.5));
-
-          /* Drop onto the floor the player is ALREADY on, not simply
-             the first surface under the camera's aim point.
-             These courses have roofs. Aiming a preset upward or across
-             a building and dropping from the aim point lands on the
-             roof slab, and the whole capture silently relocates to a
-             bare rooftop - which is exactly what happened: two food
-             court presets came back as an empty white roof.
-             So probe from just above her current height first, and
-             only fall back to the aim point if there is nothing there. */
-          const cur = ctx.player?.position;
-          const startY = cur ? cur.y + 3 : target.y + 6;
-          let hit = ctx.collision?.groundAt?.(target.x, target.z, startY, 12);
-          if (!hit) hit = ctx.collision?.groundAt?.(target.x, target.z, target.y + 6, 40);
-          /* Reject a surface OUTSIDE the course, not merely above her.
-             This used to be `hit.y > cur.y + 4`, which was aimed at the
-             building's roof but also blocked every legitimate raised
-             vantage - a mezzanine or terrace more than ~4.4 m up left
-             her behind while camera.js composed and *verified* a frame
-             around a point she never reached, committing a capture with
-             no character in it. Worse than a skip.
-             The real distinction is inside-the-course versus on top of
-             it, so test the course bounds. camera.js separately
-             verifies she is visible and refuses if not, which is the
-             backstop that makes this safe to relax. */
-          const b = ctx.world?.current?.bounds;
-          if (hit && b && Array.isArray(b.max) && hit.y > b.max[1] - 1.5) hit = null;
-          if (!hit) return;   // leave her where she is rather than relocate the shot
-          /* Face the camera, so the silhouette reads rather than
-             showing the back of her head in every frame.
-             This must go through player.teleport's yaw argument.
-             It previously called `player.setYaw`, which does not exist
-             - the optional chain silently no-opped - and then wrote
-             rig.root.rotation.y directly, which player.update()
-             overwrites on the very next step. The whole face-the-camera
-             step was doing nothing. */
-          const yaw = Math.atan2(from.x - target.x, from.z - target.z);
-          if (typeof ctx.player?.teleport === "function") {
-            ctx.player.teleport(target.x, hit.y + 0.05, target.z, yaw);
-          } else {
-            q.teleport?.(target.x, hit.y + 0.05, target.z);
-          }
-        });
-        await page.evaluate(() => window.__APOP3D?.advance?.(0.45));
-
-        /* Re-pose after moving the subject, and RESPECT THE ANSWER.
-           This return used to be discarded. camera.js verifies a solved
-           pose before committing - subject scale, both sight lines,
-           composition - and can legitimately refuse once the subject
-           has moved. Ignoring that wrote a PNG from the stale earlier
-           pose, so a frame the camera had explicitly rejected entered
-           the blind review as a normal capture. */
-        const reposed = await page.evaluate((name) => {
-          const q = window.__APOP3D;
-          if (!q || typeof q.setCamera !== "function") return true;
-          return q.setCamera(name) !== false;
-        }, preset);
-        if (!reposed) {
-          const why = await page.evaluate(() => {
-            const rig = window.__APOP3D_CTX?.cameraRig;
-            return (rig && rig.getState && rig.getState().presetWhy) || "camera refused after subject placement";
-          });
-          diagnostics.shots.push({ preset, skipped: why });
-          process.stdout.write(`  skipped ${preset} (${why})\n`);
-          continue;
-        }
-      }
-
-      // Let the pose settle, then force the exact frame we want.
+      /* Settle, then FREEZE the cast before the shutter.
+         The composition was verified at the pose above; anything that
+         keeps moving afterwards invalidates it. A Lackey at 5.4 m/s
+         crosses a metre in the settle alone. Short, because the placer
+         put her 5 cm over the floor and nothing else has to happen -
+         the old 0.45 s existed to let a teleport-then-repose sequence
+         settle between two solves, and there is only one solve now. */
       await page.evaluate(() => window.__APOP3D?.advance?.(0.2));
+      await page.evaluate(() => window.__APOP3D_CTX.enemies?.setFrozen?.(true));
       await page.evaluate(() => window.__APOP3D?.renderOnce?.());
 
       const file = path.join(OUT_DIR, `${preset}.png`);
@@ -376,6 +358,41 @@ async function main() {
          a frame passed every aggregate row while having a black bottom
          half and a subject hidden behind a crate. Cheap: one extra
          draw of an already-posed scene. */
+      /* CHECK BEFORE TOUCHING ANYTHING.
+         Every capability test this pass depends on runs here, while the
+         world is still pristine. That ordering is the whole point: the
+         old code set `rig.visible = false` first and only then tested
+         its hooks, so a missing method returned early - or, once the
+         test became a throw, threw - with the player already hidden,
+         her shadow already stripped and the actors already frozen. The
+         restore lives in a plain `if (hid)` further down, outside any
+         finally, so none of it was ever put back and EVERY LATER PRESET
+         in that run captured an invisible subject. That is the shape of
+         the order-dependence measured across full-set runs: identical
+         code scoring -65.5 in one 9-preset run and -32.2 in another,
+         while one-preset-per-process reproduced exactly. A control pass
+         must be all-or-nothing, and it is cheaper to be sure it can
+         finish than to unwind it halfway. */
+      const ready = await page.evaluate(() => {
+        const ctx = window.__APOP3D_CTX;
+        if (!ctx?.player?.rig?.root) return { ok: false, why: "no player rig" };
+        const missing = [];
+        if (typeof ctx.anim?.setFrozen !== "function") missing.push("anim.setFrozen");
+        if (typeof ctx.vfx?.setFrozen !== "function") missing.push("vfx.setFrozen");
+        if (typeof ctx.vfx?.removeShadow !== "function") missing.push("vfx.removeShadow");
+        if (typeof ctx.vfx?.addShadow !== "function") missing.push("vfx.addShadow");
+        if (typeof ctx.vfx?.lateUpdate !== "function") missing.push("vfx.lateUpdate");
+        return { ok: missing.length === 0, missing };
+      });
+      if (!ready.ok && ready.why === "no player rig") {
+        throw new Error("control frame: no player rig to hide");
+      }
+      if (!ready.ok) {
+        throw new Error(
+          `control frame needs QA hooks that do not exist: ${ready.missing.join(", ")}. `
+          + "Add them, or delete the control pass - do not let it run half-applied."
+        );
+      }
       const hid = await page.evaluate(() => {
         const ctx = window.__APOP3D_CTX;
         const rig = ctx?.player?.rig?.root;
@@ -398,13 +415,32 @@ async function main() {
            and it is meant to answer "does this picture work without
            her", not "without grounding". removeShadow targets one
            caster. */
-        if (!ctx.vfx || typeof ctx.vfx.removeShadow !== "function") return null;
+        /* No capability test here any more - it moved above, where it
+           can refuse before the world has been touched. */
         /* The caster is registered against whichever object CARRIES the
            declaration, and character.js puts `userData.contactShadow`
            on the SkinnedMesh, not on the rig group - vfx scans meshes.
            Passing the group here matched nothing and left her shadow
            in the control frame. Walk the subtree and remove every
            declared caster under her. */
+        /* Freeze animated actors for the control pass.
+           The control differs from the real capture by the subject, but
+           sparkle particles and NPC idle advance between the two
+           renders, so 4-6% of changed pixels were scattered weak diffs
+           across the frame. Harmless at the current threshold and a
+           trap the moment anything measures below it.
+
+           ASSERTED, not optional-chained. `ctx.vfx?.setFrozen?.(true)`
+           sat here for several rounds against a vfx.js that never
+           defined the method, and `?.` turned the whole control
+           protocol into a no-op without a single error - the same
+           silent miss as `setContactShadows` before it, which cost
+           three review rounds. A hook this pass DEPENDS on must fail
+           loudly when it goes missing: the cost of a hard throw is one
+           obvious run, the cost of the quiet version is every metric
+           downstream measuring drifting dust and nobody knowing. */
+        ctx.anim.setFrozen(true);
+        ctx.vfx.setFrozen(true);
         const removed = [];
         rig.traverse((o) => {
           if (o.userData && o.userData.contactShadow) {
@@ -419,13 +455,15 @@ async function main() {
         window.__APOP3D_HIDDEN = removed;
         return removed.length > 0;
       });
-      if (hid === null) {
-        throw new Error(
-          "vfx.setContactShadows is missing, so the subject-hidden control frame "
-          + "would still contain the player's contact shadow. Refusing to write a "
-          + "control that does not control."
-        );
-      }
+      /* From here the world IS mutated, so every path back out has to
+         restore it - including the ones taken by a throw. Before this
+         try/finally the restore sat in a bare `if (hid)`, so a failure
+         anywhere in the control pass left the player hidden, her
+         shadow declarations deleted and anim/vfx frozen for the whole
+         REST of the run, and the presets after it captured an empty
+         world while reporting success. */
+      let restored = false;
+      try {
       if (hid) {
         /* Re-run VFX ONLY, not the whole simulation.
            removeShadow updates the caster LIST, but the instanced blob
@@ -459,6 +497,12 @@ async function main() {
           if (rig) rig.visible = true;
           // vfx re-adopts a caster on its next scan, but do it now so
           // the very next captured frame is not missing her shadow.
+          // Direct calls: the freeze above already asserted both exist,
+          // and a silently-skipped UNfreeze is the worse half of the
+          // bug - it would leave every following preset in the run
+          // rendering a stopped world, which looks like nothing at all.
+          ctx.anim.setFrozen(false);
+          ctx.vfx.setFrozen(false);
           const back = window.__APOP3D_HIDDEN || [];
           for (const e of back) {
             e.obj.userData.contactShadow = e.decl;
@@ -469,11 +513,56 @@ async function main() {
           window.__APOP3D_HIDDEN = null;
           ctx.render.renderOnce();
         });
+        restored = true;
       }
+      } finally {
+        /* Idempotent, and deliberately tolerant: this is the unwind
+           path, so it must not be able to throw a SECOND error over
+           the first one and hide it. Optional chaining is correct HERE
+           - the assert above already proved the hooks exist, and if we
+           are unwinding because the page died there is nothing to call
+           anyway. */
+        if (hid && !restored) {
+          await page.evaluate(() => {
+            const ctx = window.__APOP3D_CTX;
+            const rig = ctx?.player?.rig?.root;
+            if (rig) rig.visible = true;
+            ctx?.anim?.setFrozen?.(false);
+            ctx?.vfx?.setFrozen?.(false);
+            const back = window.__APOP3D_HIDDEN || [];
+            for (const e of back) {
+              e.obj.userData.contactShadow = e.decl;
+              ctx?.vfx?.addShadow?.(e.obj, e.decl || {});
+            }
+            window.__APOP3D_HIDDEN = null;
+          }).catch(() => {});
+        }
+      }
+      await page.evaluate(() => window.__APOP3D_CTX.enemies?.setFrozen?.(false));
       const stats = await page.evaluate(() => window.__APOP3D?.stats?.() || null);
+      // Record the solver's own verdict so a future round can be
+      // measured without writing a bespoke probe for it.
+      const presetCheck = await page.evaluate(() => {
+        const rig = window.__APOP3D_CTX?.cameraRig;
+        const st = rig && rig.getState ? rig.getState() : null;
+        if (!st) return null;
+        const placed = window.__APOP3D_PLACED || [];
+        window.__APOP3D_PLACED = [];
+        return {
+          why: st.presetWhy || null, check: st.presetCheck || null, sight: st.sight || null,
+          /* The seam's own audit trail: where camera.js asked her to
+             stand, how far the placement missed by, and how many times
+             the search moved her getting there. `off` must be zero -
+             a non-zero one means a pose was verified against a request
+             rather than against a result, which is the whole defect
+             this seam closes. */
+          want: st.presetWant || null,
+          placements: placed.length,
+        };
+      });
       diagnostics.shots.push({
         preset, file: path.relative(root, file), bytes: buf.length,
-        blank: looksBlank(buf), stats,
+        blank: looksBlank(buf), stats, presetCheck,
       });
       process.stdout.write(`  captured ${preset} (${(buf.length / 1024).toFixed(0)} KB)\n`);
     }

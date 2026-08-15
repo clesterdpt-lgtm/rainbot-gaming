@@ -19,6 +19,34 @@
       the end of the chain; colour textures are tagged SRGBColorSpace
       on load. Anything that renders to an intermediate target
       renders in linear and only the final pass encodes.
+
+   ------------------------------------------------------------
+   THE TONE MAPPER IS ACES, AND IT WAS TESTED RATHER THAN INHERITED.
+
+   A blind review found that nothing in this game changes value with
+   its orientation, and one plausible culprit was this line: the food
+   court's lit deck was rendering at 238 of 255, which is deep in the
+   ACES shoulder, where the curve's slope is roughly a fifth of what it
+   is at 190. A shadow removing sixty per cent of the light was
+   arriving on screen as a 28-point step. That is real, and it is a
+   symptom rather than the cause.
+
+   Both mappers were run through the Lambert response analytically at a
+   MATCHED lit-floor value of 190 - which is the only fair comparison,
+   since an unmatched one just measures exposure - and the orientation
+   span of a vertical surface came out:
+
+     ACES     77 open / 12 inside a shadow
+     Neutral  70 open / 11 inside a shadow
+
+   The Khronos neutral mapper is very nearly linear below 0.76 and so
+   looks like it should preserve mid-tone contrast better; at a matched
+   exposure it does not, because the light being spread over that
+   linear segment is the same light either way. The scene was simply
+   over-lit, which is a sky.js problem and is fixed there (see THE
+   KEY/FILL RATIO in that file). Do not swap this line to chase a
+   value-range finding without re-running that comparison - it costs
+   every course its authored exposure and buys nothing.
    ============================================================ */
 
 import * as THREE from "three";

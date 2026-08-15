@@ -403,6 +403,77 @@ void main() {
    working space by THREE.Color, because everything downstream -
    the dome shader, the light rig, the fog - operates in linear and
    render.js encodes exactly once at the end of the chain.
+
+   ------------------------------------------------------------
+   THE KEY/FILL RATIO, AND WHY EVERY COURSE HAD IT WRONG
+
+   A blind art director's strongest cross-frame finding was that
+   nothing in this game is allowed to go dark: "a surface's value does
+   not change with its orientation. Vertical faces and horizontal faces
+   of the same material return the same brightness, unlit sides of
+   objects are as bright as lit sides." Curved masses read as flat
+   coloured regions with a bevel because there is no falloff across
+   them, and the material craft underneath is invisible because nothing
+   shades.
+
+   That was not a guess and it was not fixed by guessing. It was
+   measured in one process, from one solved pose, by writing light
+   INTENSITIES only - which recompiles nothing - and re-rendering:
+
+     preset      key carries   hemisphere carries   ambient
+     vista            14.3%          26.0%            0.4%
+     arrival          12.8%          25.2%            0.4%
+     collect          26.5%          23.4%            0.4%
+     interior         18.3%          57.5%            0.9%
+
+   (share of each frame's display value that vanishes when that one
+   light is set to zero.)
+
+   The hemisphere was carrying about twice what the key carried, and a
+   HemisphereLight is `mix(ground, sky, 0.5*n.y + 0.5)` - it varies with
+   the normal's HEIGHT and with nothing else. Every vertical face in the
+   game, at every azimuth, received exactly the same fill. So the
+   largest single source of light on every wall, drum, crate and column
+   was a constant, and the one term that could distinguish one side of
+   an object from the other was outvoted two to one. Turning the key off
+   and looking at the result settles it: the plaza is one flat red drum,
+   one flat teal wall and one flat grey rail, and that image is 86 per
+   cent of the shipped frame.
+
+   The fix is arithmetic, not taste. On a vertical face:
+
+     key   = keyIntensity * cos(keyElevation)     <- turns with azimuth
+     fill  = 0.5*(hemiSky + hemiGround)*hemiIntensity + ambient
+                                                  <- constant, always
+
+   `fill / key` is the number. It was 0.45 in the food court, 0.50 in
+   the hub and on the rooftop, and 12.0 in the basement, whose key sits
+   at elevation 80 where a vertical surface receives almost none of it.
+   Every preset below is now aimed at roughly 0.20, and the light the
+   fill gives up is bought back as a DIRECTIONAL fill - the rim light,
+   raised and dropped to a low elevation on the far side of the key, so
+   the shaded side of an object is lit by something that still knows
+   which way the object is facing.
+
+   TOTAL LIGHT IS HELD, THE RANGE IS NOT. Cutting fill alone would just
+   make a dimmer picture, which is not what was asked for: the top and
+   bottom of the value range were both unused. So each course's exposure
+   is raised by the amount needed to leave its LIT surfaces where they
+   already were, and the whole change lands in the shaded ones. For the
+   food court, at a fixed lit floor of 190:
+
+     before   floor lit/shaded 190/126   vertical face span  77 open, 12 shaded
+     after    floor lit/shaded 190/ 84   vertical face span 108 open, 43 shaded
+
+   THE TONE CURVE WAS CHECKED AND IS NOT THE CULPRIT, which is worth
+   recording because it looks like one. The food court's lit deck was
+   sitting at display 238 of 255 - deep in the ACES shoulder, where the
+   curve's slope is about a fifth of its slope at 190 - so a shadow
+   removing 60 per cent of the light was arriving as a 28-point step.
+   Swapping ACES for the Khronos neutral mapper at a MATCHED lit-floor
+   value moves the vertical span from 77 to 70: slightly worse, not
+   better. The shoulder was a symptom of the scene being over-lit, not
+   the cause, and render.js keeps ACES.
    ============================================================ */
 
 const PRESETS = {
@@ -425,10 +496,20 @@ const PRESETS = {
        starts at eighteen metres rather than twenty-six so the drum's
        far wall is inside the knockdown at all. */
     fog: { color: 0x55415c, near: 18, far: 130 },
-    key: { color: 0xffe0ae, intensity: 2.05 },
+    /* 4.10. See THE KEY/FILL RATIO in the preset header. The hemisphere
+       carried more of this course than the key did, and a hemisphere
+       cannot tell one vertical face from another; the light it gives
+       up goes to the key (which turns with the surface) and to the rim
+       (which now arrives from the far side as a directional fill).
+       Solved to leave an up-facing surface on the value it already had,
+       so the rotunda is no dimmer and only its shaded sides moved. */
+    key: { color: 0xffe0ae, intensity: 4.10 },
     /* Glass dome overhead: the key is shadowed off the marble for the
        same structural reason as the food court's. */
-    shadowStrength: 0.40,
+    /* 0.72. At 0.40 a shadow removed a third of a key that was itself
+       a third of the light, which is a tint. With the key carrying the
+       course it can be a value again. */
+    shadowStrength: 0.72,
     /* See THE BAKED CAST below. A roofed course, so the shadow map is
        a blanket and the only shapes on this floor are baked ones. The
        hub's sun is at 26 degrees, which would throw shadows twice the
@@ -437,7 +518,10 @@ const PRESETS = {
        reason - the presets stand on the +Z side of a course and shade
        falling away from them is shade nobody ever sees. */
     cast: { azimuth: 135, elevation: 44, strength: 0.42, maxLength: 8 },
-    rim: { color: 0x9a7fd0, intensity: 0.55, azimuth: 214, elevation: 24 },
+    /* Raised to a fill and dropped to a bounce elevation, 202 degrees
+       round from the key rather than 180 so an object reads with three
+       values rather than two. */
+    rim: { color: 0x9a7fd0, intensity: 1.05, azimuth: 236, elevation: 14 },
     /* Interior under a glass dome, so the same rule as every other
        roofed course in this game: the key is shadowed off the whole
        floor by the lid and the fill has to carry the room. At 0.72 /
@@ -462,8 +546,10 @@ const PRESETS = {
        shaded wall rather than a uniformly grey room. Exposure follows
        so the marble walkways reach a real white and give the frame
        something at the top of the ladder. */
-    hemi: { sky: 0xc7a6e4, ground: 0x8f5340, intensity: 2.85 },
-    ambient: { color: 0x584264, intensity: 0.38 },
+    /* 2.85 -> 1.10 and 0.38 -> 0.16: fill/key on a vertical face goes
+       from 0.50 to 0.10, and the vertical span from 63 to 128. */
+    hemi: { sky: 0xc7a6e4, ground: 0x8f5340, intensity: 1.10 },
+    ambient: { color: 0x584264, intensity: 0.16 },
     exposure: 1.26,
   },
 
@@ -560,14 +646,73 @@ const PRESETS = {
   1: {
     name: "The Mall Food Court",
     low: 0xe8eef2, horizon: 0xcfe2f2, high: 0x69a8e8, zenith: 0x2c68c8,
+    /* 63 AND IT WAS TESTED AT 52, which is worth recording because the
+       arithmetic argues for the lower one: this pair aims the
+       shadow-casting key, and a VERTICAL face receives cos(elevation)
+       of it - 0.45 at 63, 0.62 at 52 - so a lower sun should model the
+       course's walls better and lay longer shadows while it is at it.
+       Measured, it does the opposite. At 52 the mezzanine and the
+       catwalk rig start shadowing the plaza itself, so the extra key
+       lands on surfaces that the shadow map has just taken it back
+       from: within-surface range 38.9 -> 34.4, squint range 161.7 ->
+       156.0, highlights 7.7% -> 6.4%. Shadowing a surface is not the
+       same as modelling it. Do not re-derive this. */
     sunAzimuth: 38, sunElevation: 63,
     sunTint: 0xfff4d8, sunSize: 0.0075, sunGain: 5.0, sunGlare: 1.8, moonPhase: 0,
     cloud: [0.44, 0.42, 0.010, 0.92], cloudLit: 0xfffaf0, cloudShade: 0x8aa4c4,
     stars: 0,
     haze: 0.30, hazeTint: 0xffeec8,
     fog: { color: 0x163348, near: 18, far: 78 },
-    key: { color: 0xfff2d2, intensity: 4.20 },
-    /* 0.55 was too generous and it is the other half of the missing
+    /* THE LID DOES NOT CAST - see the block comment of that name. This
+       is the number that turns the paragraphs below from a description
+       of a trap into a description of a key light.
+
+       Eighteen metres, not sixteen. The bake's occluderCap is 16
+       because it wants the whole sixteen-metre fountain to cast and the
+       catwalk rig not to; this wants the ceiling coffers at 22-23 to
+       stop casting and the catwalks at 17 to carry on, because a
+       service catwalk laying a four-metre stripe across the plaza is a
+       shadow with a shape and the roof is not. The two numbers bracket
+       the same gap from opposite sides. */
+    lid: 18,
+    /* Raised with the lid, and this is the whole trade. Before, the key
+       reached nothing: the ceiling took it and `shadowStrength` handed
+       a uniform fraction back to every square metre of floor, so 4.20
+       was not a key light, it was the brightness of the flat. With the
+       roof out of the map the same number lands on open deck and is
+       absent from shaded deck, which is what a key is for, and the
+       course can afford a real one.
+
+       AND 6.60, BECAUSE THE FILL BELOW GAVE UP ITS SHARE. See THE
+       KEY/FILL RATIO in the preset header: the hemisphere comes down
+       from 2.20 to 0.85, which takes about a fifth of the light off an
+       up-facing deck. That fifth is handed to the KEY rather than to
+       the exposure, and the difference matters twice over. Exposure
+       multiplies emissive signage, beams and the dome along with the
+       floor, so paying that way would brighten every neon in the course
+       to hold one deck steady; and exposure is applied after the shadow
+       and after N dot L, so it lifts a shaded surface exactly as much
+       as a lit one - which is the flattening this entire change exists
+       to undo. Solved rather than dialled: 6.60 is the intensity at
+       which an up-facing surface lands on the value it had at 5.40 with
+       the old fill under it. */
+    key: { color: 0xfff2d2, intensity: 6.60 },
+    /* AND THIS NUMBER CHANGES MEANING WITH IT.
+       Everything below was written when the shadow map was a blanket,
+       and it is all true of that build: at 0.55 the leak was 45% of the
+       key added uniformly to the entire ground plane, 0.72 was the
+       sweep's answer, and both were choosing how bright the flat was.
+       With the lid out of the map the shadow is a set of shapes again,
+       so the leak is now the value INSIDE a cast shadow rather than the
+       value of the floor - and the rule from SM64's interiors that
+       drove it up (shadows lighter and bluer than the lit surface,
+       never near black) is served by a much smaller number, because
+       there is a fill and an airlight underneath it now. 0.90 puts a
+       column's shadow at roughly half its lit floor, which is where the
+       reference pool sits.
+
+       --- kept, because the reasoning still applies to the leak ---
+       0.55 was too generous and it is the other half of the missing
        darks. This course has the most complete lid in the game, so its
        shadow map is a blanket over the entire floor rather than a set
        of shapes on it (see DEFAULT_SHADOW_STRENGTH) - which means that
@@ -585,8 +730,44 @@ const PRESETS = {
        0.85 took the squint RANGE down with them (the leak is the only
        light on most of the floor, so past a point removing it removes
        the frame's midtones rather than its highlights). 0.72 is where
-       darks fall and range does not. */
-    shadowStrength: 0.72,
+       darks fall and range did not - on a build where the leak was the
+       only light on the floor.
+
+       0.95, NOT 0.88, NOW THAT THERE IS A DIRECTIONAL FILL UNDER IT.
+       Every argument above for keeping the leak generous is really an
+       argument for the shadow not being the only thing standing between
+       this floor and black. That job now belongs to the rim, which is
+       aimed at the far side of the key and reaches a shaded floor
+       whether the shadow map bites there or not - so the leak can go
+       back to being a leak. Measured at a fixed lit floor of 190, the
+       shadowed floor goes 126 -> 84: still lighter and bluer than the
+       lit surface, which is the SM64 rule, but a VALUE rather than a
+       tint, which is what the blind review asked for. */
+    shadowStrength: 0.95,
+    /* THE KEY SHEEN. See materials.sheen() for what it is; this is
+       where it points.
+
+       Not the sun's 38/63: the sun is behind a ceiling, and what this
+       floor reflects is the room. 38 degrees up is roughly the angle a
+       capture camera sees its own near deck at, which is what puts the
+       pool out on the plaza in front of the subject instead of in a hot
+       spot under her feet, and 150 leans it the same way as the baked
+       cast so the highlight and the shade agree about where the light
+       in this room is.
+
+       Warm, because the ceiling here is fluorescent and the shafts are
+       daylight through dusty glass; a neutral white pool on a warm
+       terrazzo floor reads as a blown exposure rather than as polish.
+
+       AND CHROMATIC, WHICH IS FREE. Adding light to a coloured surface
+       desaturates it, and saturation is a scored row. Swept in one
+       process over five framings: 0xffd79a at gain 1.6 and 0xffc46a at
+       gain 2.0 land on the same highlight fraction (13.5 against 13.4)
+       and the same pixel noise (13.4 against 13.3), and the chromatic
+       one comes back 0.016 of saturation ahead. The same trade the fog
+       already makes - a more chromatic term at a higher gain is the
+       cheaper way to buy the same value. */
+    sheen: { azimuth: 150, elevation: 38, skew: 26, follow: true, color: 0xffc46a, gain: 2.0 },
     /* The course this whole mechanism exists for. Nothing in the food
        court lays a shadow with a shape, because the lid takes the key
        off the floor before it ever gets there - so 40-55% of every
@@ -630,7 +811,29 @@ const PRESETS = {
       azimuth: 135, elevation: 40, strength: 0.55,
       maxLength: 22, occluderCap: 16,
     },
-    rim: { color: 0x8fc4ff, intensity: 0.42, azimuth: 220, elevation: 30 },
+    /* THE RIM IS NOW THIS COURSE'S FILL, AND THAT IS THE POINT.
+       See THE KEY/FILL RATIO in the preset header. The hemisphere below
+       used to carry twice what the key carried, and a hemisphere cannot
+       tell one vertical face from another - so the room was lit and
+       nothing in it was modelled. The light taken off the hemisphere is
+       given back here, where it arrives from a DIRECTION and therefore
+       still distinguishes one side of a drum from the other.
+
+       Aimed 202 degrees off the key rather than 180: at dead opposite,
+       the face that receives no key receives all of the fill and an
+       object collapses back to two values. Twenty-two degrees round,
+       and the same object reads with a lit side, a turned side and a
+       shaded side. Swept against the orientation table - az 240 / el 16
+       gives a vertical span of 108 in the open and 43 inside a shadow,
+       against 105/33 at 220 and 90/39 at 200.
+
+       Elevation 16, not 30, because this is a bounce off a floor and a
+       far wall, not a second sun: at 30 degrees a quarter of it lands
+       on the up-facing surfaces that already have the key, which is
+       exactly the flattening the hemisphere was doing. Still the cool
+       blue it always was - SM64's shade side is blue-violet against a
+       warm key, and that relationship is most of the look. */
+    rim: { color: 0x8fc4ff, intensity: 1.25, azimuth: 240, elevation: 16 },
     /* Warm fluorescent from the ceiling, terracotta bounce off the
        tile. Grey ambient is the sixth tell in the contract; the
        ground half of this hemisphere is the food court's own floor.
@@ -690,10 +893,60 @@ const PRESETS = {
        enough to model her on its own. Most of the floor lift comes
        from the shadow, which touches only the shaded surfaces; this
        is the small remainder, and it was measured to move the squint
-       range UP rather than down. */
-    hemi: { sky: 0xffeec4, ground: 0x2a211c, intensity: 2.75 },
-    ambient: { color: 0x3d5068, intensity: 0.20 },
-    exposure: 1.16,
+       range UP rather than down.
+
+       AND THEN THE LID CAME OUT OF THE SHADOW MAP, and the guard rail
+       above is finally the only thing holding this number up rather
+       than the room. Every paragraph here is an account of paying for
+       modelling with fill because the key could not reach the floor;
+       with the key reaching it, the same total light buys a lit side
+       and a shaded side instead of one flat value, so the fill comes
+       down and stays down. It is still far higher than an exterior's,
+       because there is still a roof and the shaded floor is still lit
+       by this and nothing else - it is no longer the ONLY thing lighting
+       the course. The character rail was re-checked with her in frame
+       and it is not the binding constraint at this level.
+
+       AND THIS IS WHERE IT ENDS. Everything above is an account of
+       buying modelling with fill, and the last round of it was
+       measured: with the key at 5.40 and this at 2.20, killing the key
+       cost the frame 14% of its display value and killing the
+       hemisphere cost 26%. The fill was not helping the key, it was
+       outvoting it - and because a hemisphere is a function of the
+       normal's HEIGHT alone, the light it was winning with could not
+       tell one vertical face from another at any azimuth. That is
+       precisely the "uniform ambient bath" the blind review named.
+
+       0.85 puts fill/key at 0.16 on a vertical face where it was 0.45.
+       The room does not go dark with it, because the light comes back
+       as the rim above and as the exposure below: at a fixed lit floor
+       of 190 the vertical span goes from 77 to 108 in the open and from
+       12 to 43 inside a shadow. The character guard rail from the
+       paragraphs above is unchanged and it is now the LEAST binding it
+       has ever been - less fill is exactly what stops a cel-shaded
+       figure saturating to flat white. */
+    hemi: { sky: 0xffeec4, ground: 0x2a211c, intensity: 0.85 },
+    /* Halved with the hemisphere and for the same reason. Ambient is
+       the purest form of the defect - it is added to every fragment in
+       the scene regardless of normal, position or occlusion, so every
+       unit of it is a unit that cannot describe anything. It is kept at
+       all only because a cel ramp with literally nothing under its
+       darkest band renders that band as pure black, and SM64's
+       interiors never do. */
+    ambient: { color: 0x3d5068, intensity: 0.10 },
+    /* MOST of the fill cut is paid for by the key above and not here -
+       see the note on it - because exposure lifts a shaded surface as
+       much as a lit one and would undo the change. This ten per cent is
+       the part that is genuinely exposure's job. Both ends of the
+       histogram were measured against the reference pool: paying purely
+       with the key put the squinted darks at 27.9 against the pool's
+       45.7 and the highlights at 6.6% against 9.5%, i.e. the frame
+       cleared the bottom of the range and then fell off it. ACES has a
+       toe as well as a shoulder, so the last stop of shadow detail
+       compresses at the bottom exactly the way the deck was compressing
+       at the top, and a tenth of a stop of exposure is the cheapest way
+       to hold that detail inside the curve's usable middle. */
+    exposure: 1.30,
   },
 
   /* ---- 2 : The Awards-Show Red Carpet ----------------------------------
@@ -728,16 +981,26 @@ const PRESETS = {
     fog: { color: 0x6e2a44, near: 22, far: 165 },
     search: 0.55,
     flashes: 4,
-    key: { color: 0xffc9a0, intensity: 1.9 },
+    /* 3.60. See THE KEY/FILL RATIO in the preset header. The hemisphere
+       carried more of this course than the key did, and a hemisphere
+       cannot tell one vertical face from another; the light it gives
+       up goes to the key (which turns with the surface) and to the rim
+       (which now arrives from the far side as a directional fill).
+       Not fully compensated: this key grazes at seven degrees, so
+       holding the carpet's value exactly would have taken 7.35 and put
+       every wall facing the venue into the top of the curve. */
+    key: { color: 0xffc9a0, intensity: 3.60 },
     /* The rim was at 1.05 and it was painting the entire course
        magenta - a rim that strong stops being an edge and becomes the
        key. It is an accent on the crowd and the statue, nothing more. */
-    rim: { color: 0xff5a90, intensity: 0.55, azimuth: 88, elevation: 16 },
+    /* The press-flash pink, now doing the fill's job from the far side
+       of the searchlights. */
+    rim: { color: 0xff5a90, intensity: 0.95, azimuth: 110, elevation: 12 },
     /* Open sky. A cast shadow out here is a real shape on the ground
        and most of it is kept - but the sun is seven degrees up, so
        the shadows are enormous and a black one would swallow half
        the carpet. */
-    shadowStrength: 0.78,
+    shadowStrength: 0.86,
     /* NO BAKED CAST. Out here the shadow map is not a blanket - it is
        a set of real shapes on the carpet - and a second, baked cast
        laid over the top of it would be a second shadow from the same
@@ -751,9 +1014,10 @@ const PRESETS = {
        searchlights, ground half is bounce off a hundred metres of red
        carpet. Tuned with a character in frame - past hemi 1.7 the
        cel-shaded costume flattens out before the asphalt does. */
-    hemi: { sky: 0xffbe9a, ground: 0xa8283e, intensity: 1.35 },
-    ambient: { color: 0x6a4050, intensity: 0.46 },
-    exposure: 1.04,
+    /* fill/key 0.35 -> 0.12; vertical span 63 -> 109. */
+    hemi: { sky: 0xffbe9a, ground: 0xa8283e, intensity: 0.90 },
+    ambient: { color: 0x6a4050, intensity: 0.22 },
+    exposure: 1.10,
   },
 
   /* ---- 3 : The Streaming Farm Basement ---------------------------------
@@ -765,7 +1029,13 @@ const PRESETS = {
   3: {
     name: "The Streaming Farm Basement",
     low: 0x070c12, horizon: 0x08111c, high: 0x050a12, zenith: 0x02040a,
-    sunAzimuth: 0, sunElevation: 80,
+    /* 54 degrees, not 80. There is no sun in a sealed basement - this
+       pair only aims the key, because sunGain is 0 and the dome draws
+       no disc - and at 80 the key was effectively overhead, so it
+       described the floor and nothing else. Every rack, duct and pillar
+       in the room is a vertical face, and a vertical face receives
+       cos(elevation) of a key: 0.17 at 80 degrees, 0.59 at 54. */
+    sunAzimuth: 0, sunElevation: 54,
     sunTint: 0x000000, sunSize: 0.001, sunGain: 0, sunGlare: 0, moonPhase: 0,
     cloud: [0, 0, 0, 0], cloudLit: 0x000000, cloudShade: 0x000000,
     stars: 0,
@@ -782,12 +1052,24 @@ const PRESETS = {
        123. It is still by far the weakest key in the game - this is a
        sealed room lit by its own hardware - but it is now enough to
        tell a floor from a wall. */
-    key: { color: 0x9fd8ff, intensity: 0.58 },
-    rim: { color: 0x2bffb0, intensity: 0.34, azimuth: 200, elevation: 8 },
+    /* THE WORST CASE IN THE GAME, and the clearest. See THE KEY/FILL RATIO in the preset header. The hemisphere
+       carried more of this course than the key did, and a hemisphere
+       cannot tell one vertical face from another; the light it gives
+       up goes to the key (which turns with the surface) and to the rim
+       (which now arrives from the far side as a directional fill).
+       Here the ratio was 12.0: the fill was twelve times the key on a
+       vertical face, so nothing in the basement was modelled by
+       anything at all - the orientation table gave the same 13-point
+       span whether a surface was in the open or inside a shadow.
+       The elevation above is half the fix. A key at 80 degrees is
+       overhead, and an overhead key describes floors and nothing else;
+       at 54 a rack, a duct and a pillar all turn with it. */
+    key: { color: 0x9fd8ff, intensity: 1.90 },
+    rim: { color: 0x2bffb0, intensity: 0.80, azimuth: 202, elevation: 12 },
     /* A lid and almost no key to lose: the shadow here was removing a
        quarter of nothing, and what it removed was the only directional
        modelling in the room. */
-    shadowStrength: 0.44,
+    shadowStrength: 0.80,
     /* A lid, so the bake is the only thing that can put a shape on
        this floor - but the key here is a ceiling strip almost directly
        overhead and the racks are lit by their own hardware, so the
@@ -821,8 +1103,10 @@ const PRESETS = {
        end; the racks are unlit Basic materials and do not follow it,
        so the gap between the aisle and the cabinets opens rather
        than sliding up together. */
-    hemi: { sky: 0x86b4d0, ground: 0x2e7460, intensity: 2.50 },
-    ambient: { color: 0x33454e, intensity: 0.70 },
+    /* fill/key 12.0 -> 0.39; vertical span 13 -> 50 open, 13 -> 35
+       inside a shadow. The floor holds its value exactly. */
+    hemi: { sky: 0x86b4d0, ground: 0x2e7460, intensity: 0.90 },
+    ambient: { color: 0x33454e, intensity: 0.24 },
     exposure: 1.22,
   },
 
@@ -846,17 +1130,22 @@ const PRESETS = {
        touched. */
     fog: { color: 0x241844, near: 20, far: 150 },
     bokeh: [0.95, 0.40], bokehWarm: 0xffb46a, bokehCool: 0x7ad4ff,
-    key: { color: 0xc6d0ff, intensity: 0.95 },
+    /* 1.20. See THE KEY/FILL RATIO in the preset header. The hemisphere
+       carried more of this course than the key did, and a hemisphere
+       cannot tell one vertical face from another; the light it gives
+       up goes to the key (which turns with the surface) and to the rim
+       (which now arrives from the far side as a directional fill). */
+    key: { color: 0xc6d0ff, intensity: 1.20 },
     /* Open roof deck, and the moon is the only directional light in
        the course; a full-strength shadow removes all of it. */
-    shadowStrength: 0.70,
+    shadowStrength: 0.84,
     /* Open sky again, so the shadow map casts for real - same
        reasoning as the red carpet. */
     cast: null,
     /* 1.25 of saturated magenta rim was not an edge light, it was a
        second key, and it turned every surface in the course the same
        colour as the DJ booth. */
-    rim: { color: 0xff5ad2, intensity: 0.62, azimuth: 118, elevation: 12 },
+    rim: { color: 0xff5ad2, intensity: 0.75, azimuth: 142, elevation: 12 },
     /* Moonlight from above, sodium city glow from below - and both
        several times an ordinary night exterior, because the moon at
        42 degrees is the only directional light in the course and the
@@ -872,9 +1161,12 @@ const PRESETS = {
        everything else and the measured range went DOWN - so the extra
        light was being spent on flattening the course rather than on
        opening it. This is where the trade stops paying. */
-    hemi: { sky: 0x5a4aa8, ground: 0xc47a44, intensity: 1.58 },
-    ambient: { color: 0x2e2856, intensity: 0.46 },
-    exposure: 1.12,
+    /* fill/key 0.49 -> 0.21. Held back from the 0.10 the other courses
+       take: this is a night exterior whose deck already renders in the
+       forties, and past this the shaded sides reach single figures. */
+    hemi: { sky: 0x5a4aa8, ground: 0xc47a44, intensity: 0.85 },
+    ambient: { color: 0x2e2856, intensity: 0.20 },
+    exposure: 1.14,
   },
 
   /* ---- 5 : Boyz II Hell - Final Livestream ------------------------------
@@ -921,13 +1213,22 @@ const PRESETS = {
        degrees IS that truss, and at 2.2 it puts a lit deck under the
        player without touching the underlight, which still owns every
        vertical face and every chin in the course. */
-    key: { color: 0xffd6e8, intensity: 2.20 },
+    /* 2.75. See THE KEY/FILL RATIO in the preset header. The hemisphere
+       carried more of this course than the key did, and a hemisphere
+       cannot tell one vertical face from another; the light it gives
+       up goes to the key (which turns with the surface) and to the rim
+       (which now arrives from the far side as a directional fill).
+       The rim is untouched here: it is the hellfire underlight from
+       twelve degrees BELOW the horizon, it was already the strongest
+       directional fill in the game, and it is why this course had the
+       best orientation span of the six before any of this. */
+    key: { color: 0xffd6e8, intensity: 2.75 },
     rim: { color: 0xff4a18, intensity: 1.45, azimuth: 0, elevation: -12 },
     /* There is a truss over this arena and the key is that truss, so
        the deck is shadowed the same way a roofed course's floor is -
        and this course has already been round the loop once for
        exactly that reason (see the key note above). */
-    shadowStrength: 0.48,
+    shadowStrength: 0.72,
     /* The truss is the lid, so the same argument as every other roofed
        course - but gently. This deck is lit from BELOW by the lake of
        fire, and a strong downward cast would fight the underlight that
@@ -943,8 +1244,11 @@ const PRESETS = {
        anyway. The sky half stays deep and cold so the underlight still
        wins - the ratio between the two halves is the effect, not the
        absolute level of either. */
-    hemi: { sky: 0x8a68a6, ground: 0xff6a2e, intensity: 2.00 },
-    ambient: { color: 0x46202c, intensity: 0.56 },
+    /* fill/key 0.24 -> 0.09. The hot orange lower hemisphere is kept
+       as the underlight's colour; it is its MAGNITUDE that was
+       flattening the stage. */
+    hemi: { sky: 0x8a68a6, ground: 0xff6a2e, intensity: 0.95 },
+    ambient: { color: 0x46202c, intensity: 0.22 },
     exposure: 1.12,
   },
 };
@@ -1142,6 +1446,67 @@ const CAST_PITCHES = [0, -8, 8];
  * against the number the search prints.
  */
 const CAST_TARGET = { lo: 0.10, hi: 0.26 };
+
+/**
+ * THE LID DOES NOT CAST.
+ *
+ * Everything above about the baked cast begins from one fact - "the
+ * ceiling gets the key first" - and treats it as immovable. It is not.
+ * It was measured, in one process, by standing the food court's ceiling
+ * mesh down as a shadow caster and changing nothing else: the deck in
+ * `high-ground` went from luminance 96 to 115 and the fraction of that
+ * frame above luminance 200 went from 0.7 per cent to 4.4. Nothing else
+ * in nine rounds has moved that row by that much.
+ *
+ * WHAT WAS ACTUALLY WRONG. With a full lid in the shadow map the key
+ * reaches nothing, so `shadowStrength` - the fraction of the key a
+ * shadow is allowed to remove - stops being a shadow at all and becomes
+ * a GLOBAL DIMMER: whatever leaks through is added uniformly to every
+ * square metre of floor in the course. That is the flat overcast a
+ * blind art director named, arrived at from the inside. Measured with
+ * the fill switched off, the whole plaza sat at one value whether the
+ * shadow was at 0.72 or at 0 - the only difference was how bright the
+ * one value was. A room lit that way cannot have a lit side and a
+ * shadow side, and this course has spent four rounds trying to buy
+ * value structure with fill instead, which is the one thing that
+ * cannot supply it.
+ *
+ * WHY IT IS SAFE. The lid is exactly the occluder that `occluderCap`
+ * already excludes from the baked cast, and for exactly the reason
+ * given there: a ceiling stands over every cell equally, so letting it
+ * into the test does not draw a shadow, it draws a dimmer. The two
+ * rules are now the same rule applied to the same course by the same
+ * module - one to the bake, one to the map.
+ *
+ * WHY IT IS PER-COURSE AND OPT-IN. Courses 0, 3 and most of 5 have the
+ * same geometry and almost certainly the same trap, but "almost
+ * certainly" is how this file acquired most of the notes above. A lid
+ * height is a measured property of a built course, so it is authored
+ * next to that course's other measured numbers and nowhere else.
+ *
+ * THE MAJORITY TEST is what the merged statics force. world.js merges
+ * every static wearing one surface into a single mesh, and three culls
+ * shadow casters per OBJECT, so there is no per-triangle answer
+ * available. `foodcourt.ceiling` spans 4.3 m to 23 m because the same
+ * painted panel dresses the kiosk canopies as well as the coffers; a
+ * bounding-box test therefore says "not the roof" and does nothing at
+ * all. Sampling the geometry says what the mesh mostly IS, which for
+ * that mesh is twenty-two coffers against three canopies. The canopies
+ * lose their cast and keep their grounding - an overhang four metres up
+ * is exactly what vfx.js's occlusion patch pass is for.
+ *
+ * TRANSPARENT CASTERS GO WITH IT, and that is not a side quest: the
+ * three glass pyramids standing over this course's three skylight
+ * openings were casting solid black into the map. The one course whose
+ * whole lighting story is "light comes down through the skylights" had
+ * glazed them shut.
+ */
+const LID_MAJORITY = 0.80;
+/** Vertices between samples. A merged static runs to tens of thousands
+ *  and the question - "is this mesh mostly roof" - does not need every
+ *  one of them. Prime, so it cannot land in step with a repeating
+ *  vertex order and sample only one corner of every box. */
+const LID_STRIDE = 53;
 
 /** Signed a - b, folded to -180..180. */
 function angDelta(a, b) {
@@ -1443,9 +1808,16 @@ export function create(ctx) {
     ledBase: 0,
     flashRng: makeRng(0x5EA7),
     flashClock: [0, 0, 0, 0],
+    lid: null,
+    lidStats: { height: null, meshes: 0, glass: 0 },
+    sheen: null,
+    /* The azimuth aimSheen last wrote, so a settled camera does not pay
+       for a re-aim every frame. */
+    sheenAz: null,
   };
 
   const tmpVec = new THREE.Vector3();
+  const tmpDir = new THREE.Vector3();
 
   function applyPreset(p, overrides) {
     const o = overrides || {};
@@ -1500,6 +1872,15 @@ export function create(ctx) {
     /* ---- lights: written, never added ------------------------------- */
     key.color.setHex(p.key.color);
     key.intensity = p.key.intensity;
+    /* Tell materials.js what the key is actually worth.
+       The cel ramp normalises the banded diffuse against `uKeyLum`,
+       and nothing in the engine ever called setKeyIntensity - so it
+       sat at its hardcoded 2.6 while this course's key climbed to
+       5.40 once the roof stopped casting. A ramp normalised against
+       less than half the real key clamps its banding into the top
+       step, which flattens exactly the modelling the key was raised
+       to provide. */
+    ctx.materials?.setKeyIntensity?.(p.key.intensity);
     /* A property write on a light that already exists - no material
        sees a different light COUNT, so nothing recompiles. */
     key.shadow.intensity = o.shadowStrength !== undefined
@@ -1515,10 +1896,94 @@ export function create(ctx) {
     ambient.intensity = p.ambient.intensity;
 
     resolveCast(p, o);
+    resolveSheen(p, o);
 
     if (ctx.render && typeof ctx.render.setExposure === "function") {
       ctx.render.setExposure(p.exposure || 1);
     }
+  }
+
+  /**
+   * Aim the key sheen. See the block comment on materials.sheen() for
+   * what the term is and why a Lambert level cannot have one otherwise.
+   *
+   * The direction is authored per course and is DELIBERATELY NOT THE
+   * SUN, for the reason the baked cast is not the sun either: on a
+   * roofed course the sun is behind a ceiling, and what a polished floor
+   * in there reflects is the room. Aiming it at the disc in the skylight
+   * would put the pool where nothing is standing.
+   *
+   * It lives here because this module already owns every direction in a
+   * course - the sun, the rim, the beams, the cast - and a highlight
+   * that disagrees with all four is worse than no highlight.
+   */
+  function resolveSheen(p, o) {
+    const s = (o && o.sheen !== undefined) ? o.sheen : p.sheen;
+    state.sheen = s || null;
+    state.sheenAz = null;
+    const mats = ctx.materials;
+    if (!mats || typeof mats.setSheen !== "function") return;
+    if (!s || !(s.gain > 0)) { mats.setSheen({ gain: 0 }); return; }
+    mats.setSheen({ color: s.color === undefined ? 0xffffff : s.color, gain: s.gain });
+    aimSheen(true);
+  }
+
+  /**
+   * THE SHEEN FOLLOWS THE LENS, AND IT IS THE ONLY DIRECTION HERE THAT CAN.
+   *
+   * Measured with a fixed azimuth of 150: `vista` gained nine points on
+   * the highlight row and `high-ground` and `interior` gained one tenth
+   * of a point between them. That is the same arithmetic that defeated a
+   * constant cast azimuth - course 1's preset bearings are spread over
+   * 213 degrees - but arrived at through the mirror rule rather than the
+   * horizon one, and it is much harsher: a shadow past 90 degrees off
+   * axis is merely behind its caster, while a specular more than a few
+   * degrees off the mirror direction is simply not there.
+   *
+   * Unlike the cast, which costs a quarter-second bake and therefore
+   * only re-aims when a capture pose is committed, this costs one
+   * normalize and one uniform write, so it can follow continuously.
+   *
+   * THE LIGHT IS BEYOND THE SUBJECT, WHICH IS THE SAME PLACE THE CAST
+   * PUTS IT. A floor mirrors about the vertical, so the reflected ray
+   * for a light at horizontal bearing B leaves along B reversed - which
+   * is toward a camera looking along B. In other words the highlight of
+   * something ahead of you lands on the floor ahead of you, and the
+   * sheen azimuth IS the view bearing, not its opposite. Measured the
+   * wrong way round first: aimed at bearing + 180 the whole term moved
+   * every row of the gate by a tenth of a point, because the pool it
+   * draws was behind the lens.
+   *
+   * So this and the baked cast agree about where the light in the room
+   * is, which is the only reason both are allowed to exist: the cast
+   * throws shade back toward the lens and the sheen lays the reflection
+   * out ahead of it, off the same light.
+   *
+   * The skew is off-axis for the same reason CAST_SKEW is: a highlight
+   * laid exactly down the view axis is a symmetrical stripe pointing at
+   * the lens, which reads as a runway.
+   *
+   * The ELEVATION decides how far out the pool sits and it is a
+   * property of the lens, not of the room: the mirror condition puts
+   * the highlight where the deck's own view elevation matches the
+   * light's, so at a capture height of three to five metres, 38 degrees
+   * lands it about five metres out - the bottom third of the frame -
+   * and every degree lower pushes it further toward the horizon.
+   */
+  function aimSheen(force) {
+    const s = state.sheen;
+    const mats = ctx.materials;
+    if (!s || !(s.gain > 0) || !mats || typeof mats.setSheen !== "function") return;
+    let az = s.azimuth;
+    if (s.follow !== false && ctx.camera) {
+      ctx.camera.getWorldDirection(tmpDir);
+      const bearing = Math.atan2(tmpDir.x, tmpDir.z) * 180 / Math.PI;
+      az = bearing + (s.skew || 0);
+    }
+    if (!force && state.sheenAz !== null && Math.abs(angDelta(az, state.sheenAz)) < 1.5) return;
+    state.sheenAz = az;
+    dirFrom(az, s.elevation, tmpVec);
+    mats.setSheen({ dir: tmpVec });
   }
 
   /** Turn a preset's `cast` block into the numbers vfx.js's bake wants:
@@ -1590,6 +2055,73 @@ export function create(ctx) {
     out.azimuth = Math.atan2(out.x, out.z);
     out.elevation = el;
     out.tan = Math.tan(el * Math.PI / 180);
+  }
+
+  /* ------------------------------------------------------------------
+     The lid. See THE LID DOES NOT CAST above.
+     ------------------------------------------------------------------ */
+
+  const lidStoodDown = [];
+  const lidBox = new THREE.Box3();
+  const lidVec = new THREE.Vector3();
+
+  /** True when this mesh is mostly roof - see LID_MAJORITY. */
+  function mostlyAbove(mesh, lidY) {
+    const geo = mesh.geometry;
+    const pos = geo && geo.attributes && geo.attributes.position;
+    if (!pos) return false;
+    /* An InstancedMesh's vertices are in prototype space and the copies
+       are anywhere; only its world bounding box means anything, and the
+       box test above has already had its say. */
+    if (mesh.isInstancedMesh) return false;
+    let above = 0;
+    let total = 0;
+    for (let i = 0; i < pos.count; i += LID_STRIDE) {
+      lidVec.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+      if (lidVec.y > lidY) above += 1;
+      total += 1;
+    }
+    return total > 0 && above / total >= LID_MAJORITY;
+  }
+
+  /**
+   * Stand the roof down as a shadow caster, so the key reaches the floor.
+   *
+   * Called from setCourse, after world.js has built the statics and
+   * before the first frame of the course is drawn. `castShadow` is a
+   * plain property write - no material sees a different light count, so
+   * nothing recompiles - and it can only ever REMOVE triangles from the
+   * shadow pass, so it is free in both budgets.
+   */
+  function applyLid(lidY) {
+    for (const m of lidStoodDown) m.castShadow = true;
+    lidStoodDown.length = 0;
+    state.lidStats = { height: null, meshes: 0, glass: 0 };
+    if (!(lidY > 0)) return;
+    const root = ctx.world && ctx.world.current && ctx.world.current.group;
+    if (!root) return;
+    root.updateMatrixWorld(true);
+    let glass = 0;
+    root.traverse((o) => {
+      if (!o.isMesh || !o.castShadow || !o.geometry) return;
+      const mat = o.material;
+      /* A pane that light passes through must not put an opaque hole in
+         the shadow map. This is the glazing over the skylights. */
+      const clear = !!mat && !Array.isArray(mat)
+        && (mat.transparent === true || (mat.opacity !== undefined && mat.opacity < 0.98));
+      if (!clear) {
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        if (!o.geometry.boundingBox) return;
+        lidBox.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+        if (!(lidBox.max.y > lidY)) return;
+        if (lidBox.min.y <= lidY && !mostlyAbove(o, lidY)) return;
+      } else {
+        glass += 1;
+      }
+      o.castShadow = false;
+      lidStoodDown.push(o);
+    });
+    state.lidStats = { height: lidY, meshes: lidStoodDown.length, glass };
   }
 
   /** Fit the single shadow map to the course. Called once per load, so
@@ -1813,6 +2345,12 @@ export function create(ctx) {
         fitShadow(tmpVec.set(0, 0, 0), o.radius || 90);
       }
 
+      /* After fitShadow, because that is what places the key, and
+         before anything draws: this only ever clears castShadow flags
+         on meshes world.js has already built. */
+      state.lid = o.lid !== undefined ? o.lid : (preset.lid ?? null);
+      applyLid(state.lid);
+
       setBeams(o.beams || preset.beams || []);
       beamUniforms.uGain.value = o.beamGain !== undefined ? o.beamGain : 1;
 
@@ -1841,6 +2379,36 @@ export function create(ctx) {
     setBeams,
     fitShadow,
 
+    /**
+     * The lid's stand-down, on or off, without re-entering the course.
+     *
+     * The A/B seam for it, and the only honest one: several agents edit
+     * this course at once, so a capture from before an edit and one from
+     * after are not a controlled pair. Passing a number re-applies at a
+     * different height, which is how the height itself was swept.
+     */
+    setLid(on) {
+      if (typeof on === "number") { state.lid = on; applyLid(on); }
+      else if (on === false) applyLid(0);
+      else applyLid(state.lid);
+      return state.lidStats;
+    },
+
+    /** Override the sheen without re-entering the course - the sweep
+     *  seam for its direction and gain, same argument as setCast. */
+    setSheen(opts) {
+      if (!opts) return state.sheen;
+      const s = state.sheen ? { ...state.sheen } : { azimuth: 0, elevation: 45, gain: 0 };
+      if (opts.azimuth !== undefined) s.azimuth = opts.azimuth;
+      if (opts.elevation !== undefined) s.elevation = opts.elevation;
+      if (opts.color !== undefined) s.color = opts.color;
+      if (opts.gain !== undefined) s.gain = opts.gain;
+      if (opts.skew !== undefined) s.skew = opts.skew;
+      if (opts.follow !== undefined) s.follow = opts.follow !== false;
+      resolveSheen({ sheen: s }, null);
+      return state.sheen;
+    },
+
     /** Nudge one accent without re-entering the course - used by the
      *  boss fights to swing the stage lighting. */
     setAccent(index, opts) {
@@ -1864,6 +2432,12 @@ export function create(ctx) {
       dome.scale.setScalar(cam.far * 0.94);
       dome.updateMatrix();
       dome.updateMatrixWorld(true);
+
+      /* Re-point the sheen at whatever the camera is now looking at.
+         See aimSheen: this is a normalize and a uniform write, not a
+         bake, which is exactly why it may run every frame where the
+         cast may not. */
+      aimSheen(false);
 
       /* Beat reaction. The whole game runs at 124 BPM and the lights
          are part of the music, not decoration on top of it. */
@@ -1941,6 +2515,8 @@ export function create(ctx) {
           hemi: hemi.intensity, ambient: ambient.intensity,
           accents: accents.map((a) => Number(a.intensity.toFixed(2))),
         },
+        lid: state.lidStats,
+        sheen: state.sheen,
         beams: beamDefs.length,
       };
     },

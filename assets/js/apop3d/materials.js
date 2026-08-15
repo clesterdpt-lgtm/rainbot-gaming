@@ -228,6 +228,9 @@ export function create(ctx) {
   const waterList = [];         // liquids whose ripple clock we drive
   const warned = new Set();
   let disposed = false;
+  /* Kept apart from the live uniform so setSheenEnabled(false) can be
+     undone without the caller having to remember the course's number. */
+  let sheenAuthoredGain = 0;
 
   /* Shared uniforms. Every cel material references THESE OBJECTS, not
      copies, so sky.js changing the bounce for a course is one write
@@ -960,6 +963,208 @@ export function create(ctx) {
     return material;
   }
 
+  /* ------------------------------------------------------------
+     The key sheen
+     ------------------------------------------------------------ */
+
+  /**
+   * THE SPECULAR A LAMBERT LEVEL CANNOT HAVE.
+   *
+   * A blind art director scored nine framings and found the one lens
+   * where the Super Mario 64 references measurably beat us: "no value
+   * structure - the whole set is lit by flat overcast. There are no
+   * whites and no blacks anywhere." No frame put more than 2.9% of its
+   * pixels above luminance 200; two references reach 10.5% and 4.9%.
+   * The two of our own frames that scored at all - `boss` at 5.3 and
+   * `collect` at 12.8 - were named as "the only two frames with real
+   * speculars", which turned out to be the whole diagnosis.
+   *
+   * It is not a lighting balance. levels.js paints its own surface
+   * vocabulary (materials.surface() deliberately returns null for those
+   * names) and builds `kind: "lit"` as a **MeshLambertMaterial**. Every
+   * large mass in course 1 - terrazzo, checker, tile, column, wall,
+   * brick, counter, ceiling - is Lambert, and Lambert's outgoing light
+   * is `directDiffuse + indirectDiffuse + emissive`: there is no
+   * specular term in the shader at all. Those surfaces are physically
+   * incapable of producing a highlight at any exposure, from any light,
+   * which is exactly why the whole set reads as tinted flats. The
+   * handful of `kind: "shiny"` surfaces are MeshStandardMaterial and do
+   * have a GGX lobe - and they are precisely the two frames that
+   * scored.
+   *
+   * WHY A PATCH AND NOT A SURFACE ENTRY - the same argument as water()
+   * above, one layer along: those materials carry levels.js's albedo,
+   * its vertex colours and its authored opacity. Claiming the names
+   * here would take all of that over and throw it away. This ADDS a
+   * term to whatever was built and changes nothing else.
+   *
+   * WHY IT IS ADDED TO `outgoingLight` AND NOT TO reflectedLight.
+   * `reflectedLight.indirectSpecular` is where the rim and the fake env
+   * live in patchCel, and it is the right home on a MeshStandardMaterial
+   * - but Lambert never reads that field. `#include <opaque_fragment>`
+   * is the one seam every lit material in three shares, it sits after
+   * the whole accumulation and before tone mapping and the output
+   * encode, so the term is graded and encoded exactly once like
+   * everything else in the frame.
+   *
+   * WHY IT IS NOT SHADOWED, and this is load-bearing rather than lazy.
+   * Course 1 is a roofed interior: the directional key is occluded by
+   * the ceiling before it reaches most of the floor, which is the fact
+   * the whole grounding bake in vfx.js exists because of. A specular
+   * that waited for the key would wait forever in exactly the course
+   * that needs it most. water() already made this call for the same
+   * reason and says so: this is the light the room reflects, not the
+   * disc in the skylight, so it is an indirect term and the shadow map
+   * has no claim on it.
+   *
+   * WHY IT IS CHEAP ON THE NOISE METRIC, which is the row this project
+   * has least headroom on. These surfaces carry no normal map, so N is
+   * constant across a face and the lobe varies only with the VIEW
+   * vector - a smooth, low-frequency pool that slides across a floor
+   * rather than a field of glittering texels. The `fwidth` window is
+   * kept anyway (see uSheenFade) for the same reason water() has one:
+   * once a surface is far enough away that its faces are pixel-sized,
+   * a tight lobe is an aliasing generator whatever its normals do.
+   *
+   *   amount    per-surface gloss. 0 stands the term down entirely
+   *   power     Blinn exponent. Low is a broad sheen across a whole
+   *             floor, high is a small hot spot on a rail
+   *   fresnel   0 = the lobe alone, 1 = the lobe fully weighted by
+   *             grazing angle. A floor is nearly always seen at a
+   *             grazing angle and a wall is not, which is what makes
+   *             this the knob that decides WHERE the highlight lands
+   *   rough     metres per pixel at which the term hands back to a
+   *             smooth surface
+   */
+  const SHEEN_DEFAULTS = {
+    amount: 1.0,
+    power: 26,
+    fresnel: 0.55,
+    fade: [0.05, 0.34],
+  };
+
+  /* Written per course by sky.js, shared BY REFERENCE with every
+     patched material - the same arrangement as `shared` above, and for
+     the same reason: a course change is one write, not a walk of the
+     scene graph. uSheenGain at 0 is the pass switched off, which is
+     what setSheenEnabled toggles for the A/B. */
+  const sheenShared = {
+    uSheenDir: { value: new THREE.Vector3(0.42, 0.72, 0.55).normalize() },
+    uSheenColor: { value: new THREE.Color(0xffffff) },
+    uSheenGain: { value: 0 },
+  };
+  const sheenList = [];
+
+  function sheen(material, opts = {}) {
+    if (!material || !material.isMaterial) return material;
+    if (material.userData.apopSheen) {
+      /* Idempotent and re-enrolled, exactly like water(): the "shared"
+         namespace survives a course unload, so a shared surface is
+         patched once and re-found by every later scan. */
+      if (!sheenList.includes(material)) sheenList.push(material);
+      return material;
+    }
+    const cfg = { ...SHEEN_DEFAULTS, ...opts };
+    const uniforms = {
+      uSheenAmount: { value: Math.max(0, cfg.amount) },
+      uSheenPower: { value: Math.max(1, cfg.power) },
+      uSheenFresnel: { value: clamp01(cfg.fresnel) },
+      uSheenFade: { value: new THREE.Vector2(cfg.fade[0], cfg.fade[1]) },
+    };
+    material.userData.apopSheen = uniforms;
+
+    const prior = material.onBeforeCompile;
+    material.onBeforeCompile = (shader, renderer) => {
+      if (typeof prior === "function") prior(shader, renderer);
+      Object.assign(shader.uniforms, sheenShared, uniforms);
+
+      /* World position, for the anti-shimmer window only. Named apart
+         from the water patch's varying so a surface that is somehow
+         both does not redeclare it. */
+      let vs = shader.vertexShader;
+      vs = vs.replace("#include <common>", [
+        "#include <common>",
+        "varying vec3 vApopSheenW;",
+      ].join("\n"));
+      vs = vs.replace("#include <project_vertex>", [
+        "#include <project_vertex>",
+        "vec4 apopSWP = vec4( transformed, 1.0 );",
+        "#ifdef USE_BATCHING",
+        "  apopSWP = batchingMatrix * apopSWP;",
+        "#endif",
+        "#ifdef USE_INSTANCING",
+        "  apopSWP = instanceMatrix * apopSWP;",
+        "#endif",
+        "vApopSheenW = ( modelMatrix * apopSWP ).xyz;",
+      ].join("\n"));
+      shader.vertexShader = vs;
+
+      let fs = shader.fragmentShader;
+      fs = fs.replace("#include <common>", [
+        "#include <common>",
+        "varying vec3 vApopSheenW;",
+        "uniform vec3 uSheenDir;",
+        "uniform vec3 uSheenColor;",
+        "uniform float uSheenGain;",
+        "uniform float uSheenAmount;",
+        "uniform float uSheenPower;",
+        "uniform float uSheenFresnel;",
+        "uniform vec2 uSheenFade;",
+      ].join("\n"));
+
+      /* `geometryNormal` and `geometryViewDir` are declared by
+         <lights_fragment_begin>, which every lit material in three
+         includes - Lambert, Phong and Standard alike - and they are
+         plain locals in main(), so they are still in scope here. Using
+         them rather than re-deriving from `normal` and vViewPosition
+         keeps this agreeing with patchCel's rim, which reads the same
+         two. */
+      fs = fs.replace("#include <opaque_fragment>", [
+        "{",
+        "  float apopSA = uSheenAmount * uSheenGain;",
+        "  if ( apopSA > 0.0005 ) {",
+        "    float apopSPx = max( fwidth( vApopSheenW.x ), fwidth( vApopSheenW.z ) );",
+        "    float apopSD = 1.0 - smoothstep( uSheenFade.x, uSheenFade.y, apopSPx );",
+        "    vec3 apopSL = normalize( ( viewMatrix * vec4( uSheenDir, 0.0 ) ).xyz );",
+        "    vec3 apopSH = normalize( apopSL + geometryViewDir );",
+        "    float apopSS = pow( saturate( dot( geometryNormal, apopSH ) ), uSheenPower );",
+        /* Grazing weight. Without it the pool sits wherever the mirror
+           angle happens to fall and a wall catches as much as a floor;
+           with it the term is strongest exactly where a polished floor
+           is seen from, which is nearly all of the lower half of every
+           one of these framings. */
+        "    float apopSF = mix( 1.0, pow( 1.0 - saturate( dot( geometryNormal, geometryViewDir ) ), 4.0 ), uSheenFresnel );",
+        /* Only an actually-lit fragment may glint. A specular on a
+           surface the light cannot see is the "sourceless streak"
+           failure this repo has already diagnosed once, and on an
+           interior it would put a highlight inside every cast shadow.
+           directDiffuse carries the shadow term, so its own magnitude
+           is the cheapest available answer to "is this lit"; the floor
+           keeps a little of the term everywhere so a shaded floor is
+           still polished, just not sunlit. */
+        "    vec3 apopSDD = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse;",
+        "    float apopSLit = 0.35 + 0.65 * saturate( ( apopSDD.r + apopSDD.g + apopSDD.b ) * 1.6 );",
+        "    outgoingLight += uSheenColor * ( apopSS * apopSF * apopSD * apopSLit * apopSA );",
+        "  }",
+        "}",
+        "#include <opaque_fragment>",
+      ].join("\n"));
+      shader.fragmentShader = fs;
+      material.userData.apopSheenShader = shader;
+    };
+
+    /* Without this three hands back whichever program it already
+       compiled for this material class and the term silently does
+       nothing - the same trap water() and patchCel() both carry a note
+       about. */
+    const priorKey = material.customProgramCacheKey;
+    material.customProgramCacheKey = () =>
+      `apop-sheen|${typeof priorKey === "function" ? priorKey.call(material) : ""}`;
+    material.needsUpdate = true;
+    sheenList.push(material);
+    return material;
+  }
+
   /**
    * The grounded contact shadow.
    *
@@ -1126,6 +1331,73 @@ export function create(ctx) {
     additive,
     blobShadow,
     water,
+    sheen,
+
+    /**
+     * Aim the key sheen. sky.js owns this the way it owns every other
+     * direction in a course, and it is deliberately NOT the sun: on a
+     * roofed course the sun is behind a ceiling, and what a polished
+     * floor reflects there is the room. See the block comment on
+     * sheen().
+     *
+     *   dir    array or Vector3, world space, TOWARD the light
+     *   color  sRGB hex
+     *   gain   global multiplier; 0 stands the whole pass down
+     */
+    setSheen({ dir, color, gain } = {}) {
+      if (dir) {
+        const x = dir.isVector3 ? dir.x : dir[0];
+        const y = dir.isVector3 ? dir.y : dir[1];
+        const z = dir.isVector3 ? dir.z : dir[2];
+        if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)
+          && (x || y || z)) sheenShared.uSheenDir.value.set(x, y, z).normalize();
+      }
+      if (color !== undefined) sheenShared.uSheenColor.value.setHex(color);
+      if (gain !== undefined) {
+        sheenShared.uSheenGain.value = Math.max(0, gain);
+        sheenAuthoredGain = sheenShared.uSheenGain.value;
+      }
+      /* THE POOLS GLINT THE SAME WAY THE FLOOR DOES.
+         water() has carried its own `glintDir` since it was written, as
+         an authored constant, and it was authored before there was any
+         other specular in the course to disagree with. Two highlights
+         in one frame off two different lights is the tell that says
+         neither is a light - and the fountain sits in the middle of the
+         plaza whose sheen this is aiming. So the pool's Blinn lobe
+         takes the same direction; everything else about it - the
+         ripple, the fresnel, the anti-shimmer window - is its own. */
+      if (dir) {
+        for (let i = 0; i < waterList.length; i += 1) {
+          const u = waterList[i].userData.apopWater;
+          if (u && u.uWaterGlintDir) u.uWaterGlintDir.value.copy(sheenShared.uSheenDir.value);
+        }
+      }
+      return sheenShared.uSheenGain.value;
+    },
+
+    /** How many surfaces carry the sheen, for the QA stats block. */
+    sheenCount() { return sheenList.length; },
+
+    /** The course's authored gain, so the scan that enrols surfaces can
+     *  skip a course that never asked for the term. */
+    sheenGain() { return sheenAuthoredGain; },
+
+    /** Same contract as resetWater(): levels.js disposes its own
+     *  surfaces on unload, so holding them past that is a leak. */
+    resetSheen() { sheenList.length = 0; },
+
+    /**
+     * The sheen on or off, without losing the course's authored gain.
+     *
+     * A MEASUREMENT hook, for the reason setWaterEnabled carries: while
+     * several agents edit this course at once, a shot from before an
+     * edit and one from after are not a controlled pair. One process,
+     * one build, one camera pose, one toggle.
+     */
+    setSheenEnabled(on) {
+      sheenShared.uSheenGain.value = on !== false ? sheenAuthoredGain : 0;
+      return sheenList.length;
+    },
 
     /**
      * Advance every liquid's ripple clock.
@@ -1306,7 +1578,12 @@ export function create(ctx) {
     },
 
     stats() {
-      return { materials: registry.length, cached: cache.size, beatReactive: beatList.length };
+      return {
+        materials: registry.length, cached: cache.size, beatReactive: beatList.length,
+        water: waterList.length,
+        sheen: sheenList.length,
+        sheenGain: Number(sheenShared.uSheenGain.value.toFixed(3)),
+      };
     },
 
     /** Present so the spine can drive the beat decay if it is ever
@@ -1325,8 +1602,9 @@ export function create(ctx) {
       registry.length = 0;
       beatList.length = 0;
       // NOT disposed: every entry is a material levels.js built and
-      // owns. This list only ever held a reference.
+      // owns. These lists only ever held references.
       waterList.length = 0;
+      sheenList.length = 0;
       cache.clear();
       // Clones are NOT disposed: they share their source with the
       // cached original, and freeing one would pull the upload out from

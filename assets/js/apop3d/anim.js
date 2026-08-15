@@ -121,8 +121,12 @@ function addC(out, sd, bone, x, y, z, w = 1) {
 
    `broad` is that difference as one number, measured off the rig:
    how far the arm reaches compared to how far the shoulder already
-   sits from the centre line. Long arms on narrow shoulders (a lackey
-   at 5.06, a dancer at 3.96, Moggadonna at 4.2) put every gesture
+   sits from the centre line. Every ratio quoted here is read from the
+   BUILT skeleton, never recomputed from a spec's `mods.arm`/`mods.wide`
+   - several forms move the shoulder or the arm with their own numbers,
+   so those knobs give an answer that looks plausible and is wrong. See
+   shapeBroad's caller for the same warning at the point of use. Long arms on narrow shoulders (a lackey
+   at 3.62, a dancer at 3.96, Moggadonna at 4.2) put every gesture
    clear of the body; short arms on a wide chest (a bouncer at 2.16, a
    Pay-Pig at 1.92) leave the same gesture inside the figure's own
    width, where it does not read at all.
@@ -1961,11 +1965,21 @@ export function create(ctx) {
     }
   }
 
+  let frozen = false;
+
   return {
     attach,
     clips: CLIPS,
 
+    /** Hold every controller still.
+     *  The screenshot harness renders a control frame with the subject
+     *  removed and diffs it against the real capture; any actor that
+     *  advances between the two renders shows up in that difference as
+     *  though it were the subject. */
+    setFrozen(on) { frozen = !!on; return frozen; },
+
     lateUpdate(ctx) {
+      if (frozen) return;
       const dt = Math.min(ctx.clock.dt, 1 / 20);
       if (dt <= 0) return;
       for (const c of controllers) {

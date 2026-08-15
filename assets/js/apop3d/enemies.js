@@ -163,6 +163,55 @@ const BROOD_FORMATION = Object.freeze({
   lackey: "ring", dancer: "ring", bat: "line",
 });
 
+/* ------------------------------------------------------------
+   THE CHORUS - what a line of Backup Dancers is shaped like
+
+   Measured, on the one capture preset named after a confrontation:
+   the Backup Dancer group owned 1.7% of the frame against a 2.8-9.5%
+   band, and the character read only 22 luma against the field around
+   her where every other preset in the set separates by 50 to 164.
+   Both numbers come out of the same defect and it is a LAYOUT one.
+
+   A `line` used to be laid out along the spawner's own +X axis while
+   the members were turned to `facing`, and those two are not the same
+   direction - worse, the offset frame rotated by +facing while a yaw
+   rotates forward by -facing, so the two were MIRRORED and the error
+   grew with the angle. Course 1's encounter post faces -0.62 rad,
+   which put the rank within 19 degrees of the axis it was being
+   photographed down: four dancers standing in single file behind one
+   another. A queue seen end-on is one body wide - which is the 1.7% -
+   and the nearest member of it stands exactly where the camera puts
+   the character, which is the 22.
+
+   So a rank now runs ACROSS its facing (shoulder to shoulder, all
+   looking the same way, which is the only thing "a chorus line" can
+   mean), and a beat-driven one is laid out as a chorus rather than as
+   a picket fence:
+
+   POCKET. The centre of the line is empty. It is the star's mark -
+   the place a backup line exists to leave open - and it is also the
+   only formation change that can fix the separation number, because
+   the capture harness stands the character on the group's own centre
+   line. The art direction note is "a hero not touching or overlapped
+   by any other actor"; a gap three times her width, at the range this
+   shot is taken from, is that note expressed in metres.
+
+   RAKE. Outer pairs stand further back, so the rank has depth, the
+   silhouettes overlap from any bearing that is not dead-on, and every
+   member of the group is further from the lens than she is - which is
+   also what keeps them out of the camera's near-actor veto.
+
+   The scale is deliberately tighter than the spacing a level author
+   writes: a post says how wide the knot is, not how a chorus stands
+   in it, and at the 2.8 m course 1 asks for, four dancers spread over
+   8.4 m and stop being one subject at all (the group search treats
+   bodies more than 6.5 m apart as two groups). These numbers hold the
+   whole rank inside that radius.
+   ------------------------------------------------------------ */
+const CHORUS_POCKET = 0.86;   // the empty centre, in units of spacing
+const CHORUS_SPREAD = 0.62;   // rank-to-rank step, same units
+const CHORUS_RAKE = 0.55;     // how far each outer pair stands back
+
 const STATE = Object.freeze({
   IDLE: "idle",
   PATROL: "patrol",
@@ -295,13 +344,62 @@ export const ROSTER = Object.freeze({
     label: "Backup Dancer Demon",
     spec: "dancer",
     capacity: 18,
-    radius: 0.4, height: 1.65, mass: 40, gravityScale: 1,
+    /* 1.78, which is character.js's `specs.dancer.height` to the
+       centimetre, and it used to be 1.65. Two tiers of the same
+       creature may not be two sizes: the proxy geometry is authored
+       at its true height and never scaled, so the rig stood 8% taller
+       than the proxy standing next to it in the same rank, and
+       heroGroup - which sizes the confrontation shot off
+       `spec.height` - under-reported every dancer's silhouette by the
+       same 8%. */
+    radius: 0.4, height: 1.78, mass: 40, gravityScale: 1,
     hp: 1,
     walk: 0, run: 0,                    // it does not walk; it steps, on the beat
     sight: { range: 18, halfAngle: 3.2, memory: 8 },
     stomp: "kill",
     clout: 4,
-    palette: { base: 0x3ad7ff, trim: 0x08283a, telegraph: 0xffffff },
+    /* ONE ARCHETYPE, ONE COLOUR, ACROSS TWO RENDERING PATHS.
+       These three hexes are the Backup Dancer's identity and
+       `character.js specs.dancer` carries the same identity in its own
+       palette - teal body, near-black limbs, pale-teal crest and
+       hands. It did not: the rig was gold and the proxy was teal, and
+       because RIG_BUDGET puts at most three rigs of a kind on a course
+       a chorus line of four showed both. Two colours of one creature
+       standing in one rank reads as a bug, not as variety.
+       The two paths do NOT share hex values, and cannot: this tier
+       draws unlit, so its authored colour IS its screen value, while
+       the rig's is albedo that the key light, the atlas and the rim
+       all get a say in. What they share is the SCREEN value and the
+       hue: measured on one captured frame with a proxy and a rig
+       standing at the same distance, torso median 77.0 here against
+       76.4 on the rig, mean RGB (39,85,94) against (53,93,95).
+       Value stays UNDER the concourse it stands on (floor median 181
+       in the same frame) and well over the character (28), so the
+       crowd is a mid step and she is still the only true dark in the
+       picture.
+
+       base IS NOT 0x3ad7ff ANY MORE, and the reason is a measurement
+       rather than a preference. At full value that cyan is the highest
+       chroma and the highest VALUE surface in the game: the proxy tier
+       draws through an unlit MeshBasicMaterial, so the scene's lights
+       cannot pull it down, and mergeParts' bake tops out at 1.14 - so a
+       key-facing face of a 0xff blue channel arrives clipped at 255 in
+       every frame, in every room, at any time of day. Against course
+       1's tan concourse a blind pass called it "an untextured
+       placeholder" and, in the two frames named after a subject, it
+       out-punched the character it was supposed to be threatening.
+       Value * 0.75 with hue and saturation held, so the archetype's
+       identity colour is unchanged and only its punch moves.
+       `crest` is this archetype's extra key - the bat already carries
+       two - because the accent on its head must NOT be `telegraph`.
+       Telegraph is a white windup FLASH that the tint channel drives
+       per frame; baking it into the geometry gave every dancer a
+       permanent white disc wider than its own skull, which reads as a
+       bar and not as a head. */
+    palette: {
+      base: 0x2ca1bf, trim: 0x08283a, telegraph: 0xffffff,
+      crest: 0xa9dbe8,
+    },
     /* One bar is four beats. The strike always lands on beat 4 and the
        crouch always sits on beat 3, so the telegraph is the music -
        a player who hears the bar knows where the hit is before the
@@ -446,6 +544,46 @@ export function mergeParts(parts) {
   return out;
 }
 
+/** A limb that is ATTACHED, by construction.
+ *
+ *  Every proxy in this file authors its arms as a position plus an
+ *  Euler triple, and the two are maintained by hand. A blind pass on
+ *  the Backup Dancer called out "a detached rectangle arm" and it was
+ *  reading the asset correctly: pose two's left arm sat at z -0.22
+ *  against a torso whose back face is at -0.14, so a 0.13 m stick was
+ *  floating 0.015 m clear of the body with nothing joining them, and
+ *  no pose had a shoulder at all. A limb described by the JOINT it
+ *  hangs from and the DIRECTION it points cannot come off, because its
+ *  centre is derived from the joint rather than typed next to it.
+ *
+ *  The Euler is derived too. THREE composes an "XYZ" euler as
+ *  Rx*Ry*Rz, so with rotY held at zero it takes the box's own +Y axis
+ *  to (-sin z, cos z cos x, cos z sin x); that inverts exactly, to
+ *  z = asin(-dx) and x = atan2(dz, dy). Solving it rather than
+ *  eyeballing it is what lets a pose be authored as "where the hand
+ *  goes", which is the only way three counts of one routine stay
+ *  recognisably the same routine. */
+function limbPart(joint, dir, len, thick, colour) {
+  const l = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+  const dx = dir[0] / l, dy = dir[1] / l, dz = dir[2] / l;
+  return {
+    geo: new THREE.BoxGeometry(thick, len, thick),
+    colour,
+    pos: [joint[0] + dx * len * 0.5, joint[1] + dy * len * 0.5, joint[2] + dz * len * 0.5],
+    rot: [Math.atan2(dz, dy), 0, Math.asin(clamp(-dx, -1, 1))],
+  };
+}
+
+/** Where that limb ends - the hand or the foot. */
+function limbTip(joint, dir, len) {
+  const l = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+  return [
+    joint[0] + (dir[0] / l) * len,
+    joint[1] + (dir[1] / l) * len,
+    joint[2] + (dir[2] / l) * len,
+  ];
+}
+
 /* Every proxy is authored with its origin at the FEET, because that is
    where a physics body's position sits and because a shape whose
    pivot is its own contact point can be squashed toward the ground
@@ -533,20 +671,83 @@ const PROXY_BUILDERS = {
     ]);
   },
 
+  /* THE INDUSTRY PLANT, REBUILT AS A CREATURE IN A POT.
+
+     A blind pass on the frame named after a confrontation: "the enemies
+     are potted plants at the right edge - the frame reads as a
+     furniture showroom." It was a fair reading of the asset. The old
+     proxy was a pot, a straight stem, a ball and a cone, symmetric
+     about its own axis, with two flat leaves at matching angles: from
+     any bearing that is a houseplant, and a houseplant is set dressing
+     however it behaves.
+
+     The pot stays - it is the joke, and it is what says "rooted" - but
+     nothing above it is symmetric any more. The stem LEANS at the
+     player in two segments, so the head is carried forward of its own
+     base and the shape has a front. The head is a hood over a JAW with
+     a dark mouth line between them, which is the one detail that turns
+     a ball into a face at 240p. The leaf arms are at different heights,
+     different angles and different lengths, and one of them is raised
+     like an arm about to come down.
+
+     Judged as a pure black shape - CONTRACT 2.3 - it now has a clear
+     top (the hood), a clear front (the jaw and the lean) and no axis of
+     symmetry at all. */
   plant(p) {
     const Cy = THREE.CylinderGeometry, S = THREE.SphereGeometry, C = THREE.ConeGeometry;
+    const B = THREE.BoxGeometry;
+    const leaf = 0x1d6b3f;
     return mergeParts([
-      // A planted pot. It never moves, so the shape says "furniture
-      // with a gun" rather than "creature that will chase you".
-      { geo: new Cy(0.66, 0.52, 0.62, 10), colour: p.trim, pos: [0, 0.31, 0] },
-      { geo: new Cy(0.72, 0.72, 0.10, 10), colour: 0x0a1c12, pos: [0, 0.64, 0] },
-      { geo: new Cy(0.16, 0.20, 0.70, 6), colour: 0x1d6b3f, pos: [0, 1.00, 0] },
-      { geo: new S(0.52, 10, 8), colour: p.base, pos: [0, 1.52, 0], scale: [1, 0.85, 1] },
-      { geo: new C(0.36, 0.62, 8), colour: p.base, pos: [0, 1.62, -0.42], rot: [-1.35, 0, 0] },
-      { geo: new S(0.20, 7, 6), colour: p.telegraph, pos: [0, 1.66, -0.70], emissive: 0.5 },
-      // Leaves, flat and wide, to break the cylinder up in silhouette.
-      { geo: new S(0.34, 6, 4), colour: 0x1d6b3f, pos: [-0.52, 1.28, 0.18], scale: [1.4, 0.2, 0.8], rot: [0, 0.4, 0.5] },
-      { geo: new S(0.34, 6, 4), colour: 0x1d6b3f, pos: [0.52, 1.28, 0.18], scale: [1.4, 0.2, 0.8], rot: [0, -0.4, -0.5] },
+      // The pot, and a rim that overhangs it - a hard horizontal under
+      // everything else, which is what keeps the base reading as
+      // furniture the creature is planted IN rather than as its feet.
+      { geo: new Cy(0.62, 0.50, 0.60, 10), colour: p.trim, pos: [0, 0.30, 0] },
+      { geo: new Cy(0.70, 0.70, 0.11, 10), colour: 0x0a1c12, pos: [0, 0.63, 0] },
+      // Soil, so the pot is not an open tube seen from above.
+      { geo: new Cy(0.60, 0.60, 0.06, 10), colour: 0x241a10, pos: [0, 0.66, 0] },
+
+      /* The stem, in two leaning segments. The lower one rakes forward
+         and a little to one side; the upper one straightens as it
+         carries the head out over the rim. A curve reads as a neck; a
+         cylinder reads as a stake. */
+      { geo: new Cy(0.17, 0.22, 0.62, 6), colour: leaf,
+        pos: [0.05, 0.94, -0.10], rot: [-0.30, 0, -0.13] },
+      { geo: new Cy(0.15, 0.18, 0.52, 6), colour: leaf,
+        pos: [0.10, 1.36, -0.34], rot: [-0.62, 0, -0.10] },
+
+      /* The head: a hood over a jaw, with the mouth between them. The
+         hood overhangs the jaw at the front, which is what makes the
+         gap read as a mouth rather than as a seam. */
+      { geo: new S(0.50, 10, 7), colour: p.base,
+        pos: [0.12, 1.66, -0.46], scale: [1, 0.80, 1.12], rot: [-0.34, 0.16, 0] },
+      { geo: new S(0.40, 9, 6), colour: p.base,
+        pos: [0.13, 1.42, -0.56], scale: [0.92, 0.55, 1.05], rot: [-0.20, 0.16, 0] },
+      { geo: new B(0.62, 0.07, 0.44), colour: 0x07160d,
+        pos: [0.13, 1.55, -0.62], rot: [-0.26, 0.16, 0] },
+      // The throat, which is the gun. It sits INSIDE the mouth rather
+      // than on the end of a snout: the telegraph now lights up a face.
+      { geo: new C(0.20, 0.34, 7), colour: p.telegraph,
+        pos: [0.13, 1.55, -0.70], rot: [-1.75, 0, 0], emissive: 0.5 },
+      // Two eyes under the hood, uneven - a pair of matching dots is a
+      // logo, and one lower than the other is a face.
+      { geo: new S(0.085, 6, 5), colour: p.telegraph,
+        pos: [-0.10, 1.76, -0.72], emissive: 0.7 },
+      { geo: new S(0.070, 6, 5), colour: p.telegraph,
+        pos: [0.31, 1.73, -0.68], emissive: 0.7 },
+
+      /* THE ARMS. Different heights, lengths and angles, and the raised
+         one is nearly vertical - the shape a thing makes just before it
+         swings. Flattened across the width so each is a leaf seen
+         broadside and not a bat. */
+      { geo: new S(0.40, 6, 4), colour: leaf,
+        pos: [-0.62, 1.34, -0.06], scale: [1.55, 0.20, 0.75], rot: [0.10, 0.35, 0.85] },
+      { geo: new S(0.30, 6, 4), colour: p.base,
+        pos: [0.58, 1.06, 0.12], scale: [1.35, 0.20, 0.70], rot: [-0.15, -0.5, -0.42] },
+      // ...and one dead leaf hanging off the back, low. A hanging mass
+      // is the cheapest asymmetry there is, and it stops the base of
+      // the silhouette being a clean cone.
+      { geo: new S(0.26, 6, 4), colour: 0x2f6b33,
+        pos: [0.30, 0.84, 0.44], scale: [0.9, 0.22, 1.3], rot: [0.85, -0.2, 0.2] },
     ]);
   },
 
@@ -685,51 +886,112 @@ const PROXY_BUILDERS = {
      Poses are also a beat apart in the same choreography rather than
      three unrelated stances, so a line of them reads as a routine
      caught mid-count instead of as three different creatures. */
+  /* ...and what round fifteen changed, which is the SHAPE and not the
+     choreography. Blind, in the two frames named after a subject:
+     "a flat cyan slab, a white bar head, a detached rectangle arm -
+     it reads as an untextured placeholder". Three defects, three
+     separate causes, all of them in the parts list rather than in the
+     poses:
+
+     SLAB. The torso was one Box(0.46, 0.72, 0.28) in the base colour.
+     A box has no waist and no shoulders, so the largest, brightest
+     surface of the whole crowd was a rectangle - and at the distance
+     this creature is actually framed from, a rectangle is the entire
+     read. It is now a hip drum in the DARK trim under a chest that
+     tapers the other way, wide at the shoulder and narrow at the
+     waist, which halves the bright area as a side effect of fixing
+     the silhouette.
+
+     BAR HEAD. The crest was a Cylinder(0.30, 0.34) - 0.68 m across a
+     0.52 m skull - in `telegraph`, which is pure white, at emissive
+     0.4. Wider than the head it sits on, flat, and the brightest thing
+     in the frame: that is a bar, not a head. Telegraph belongs to the
+     tint channel that flashes during a windup, not to the geometry; the
+     crest is now a swept fin in `crest`, narrower than the skull, and
+     it gives the silhouette a FRONT.
+
+     DETACHED ARM. See limbPart. Arms and legs now hang off named
+     joints, with shoulder caps over the joints and hands and feet at
+     the ends, so no pose can leave a stick floating beside the body. */
   dancer(p, v) {
-    const B = THREE.BoxGeometry, S = THREE.SphereGeometry, Cy = THREE.CylinderGeometry;
+    const B = THREE.BoxGeometry, S = THREE.SphereGeometry;
+    const Cy = THREE.CylinderGeometry, C = THREE.ConeGeometry;
+    /* The three counts, re-authored as WHERE THE HAND GOES. Same
+       routine, same beats, same lopsidedness - a hand direction is
+       simply the honest way to say a pose when the limb is built from
+       its joint outward. */
     const POSES = [
-      /* ONE: hands up, but not level. The old pose with one arm driven
-         higher than the other and the weight on the left leg. */
+      /* ONE: hands up, but not level. One arm driven higher than the
+         other, the weight on the left leg. */
       {
-        armL: { pos: [-0.40, 1.40, -0.04], rot: [0.10, 0, 1.15] },
-        armR: { pos: [0.36, 1.16, 0.06], rot: [-0.15, 0, -0.55] },
-        legL: { pos: [-0.15, 0.31, 0], rot: [0, 0, 0] },
-        legR: { pos: [0.16, 0.32, -0.06], rot: [-0.16, 0, -0.05] },
-        hip: -0.05, tilt: 0.09, head: [0.04, 1.50, 0.02],
+        armL: [-0.66, 0.74, -0.06], armR: [0.62, 0.32, 0.14],
+        legL: [-0.08, -0.99, 0.03], legR: [0.20, -0.95, -0.22],
+        hip: -0.05, tilt: 0.09, headAt: [0.04, 1.53, 0.02], crest: 0.34,
       },
       /* TWO: mid-turn. One arm sweeps across the chest, the other
-         trails out low behind - the pose with the strongest diagonal
-         and the one that least resembles a standing figure. */
+         trails out low behind - the strongest diagonal of the three and
+         the one that least resembles a standing figure. */
       {
-        armL: { pos: [-0.10, 1.18, -0.22], rot: [0.35, 0.5, -0.55] },
-        armR: { pos: [0.46, 0.92, 0.20], rot: [-0.30, -0.3, -1.35] },
-        legL: { pos: [-0.18, 0.32, -0.10], rot: [-0.20, 0, 0.06] },
-        legR: { pos: [0.13, 0.31, 0.10], rot: [0.22, 0, -0.04] },
-        hip: 0.07, tilt: -0.12, head: [-0.03, 1.49, -0.04],
+        armL: [0.34, 0.30, -0.62], armR: [0.72, -0.44, 0.46],
+        legL: [-0.24, -0.93, -0.26], legR: [0.15, -0.96, 0.22],
+        hip: 0.07, tilt: -0.12, headAt: [-0.03, 1.52, -0.04], crest: -0.22,
       },
       /* THREE: the clap. Arms up and IN over the head, hands nearly
          meeting - a lambda where pose one is a V, which is the clearest
          possible separation between two arms-up shapes at 240p. */
       {
-        armL: { pos: [-0.19, 1.46, 0], rot: [0, 0, 0.24] },
-        armR: { pos: [0.17, 1.44, 0.02], rot: [0, 0, -0.30] },
-        legL: { pos: [-0.13, 0.31, 0.04], rot: [0.10, 0, 0] },
-        legR: { pos: [0.17, 0.31, -0.04], rot: [-0.10, 0, -0.08] },
-        hip: 0.03, tilt: 0.05, head: [0, 1.51, 0.03],
+        armL: [-0.30, 0.94, 0.07], armR: [0.26, 0.95, 0.09],
+        legL: [-0.11, -0.98, 0.13], legR: [0.19, -0.96, -0.10],
+        hip: 0.03, tilt: 0.05, headAt: [0, 1.55, 0.03], crest: 0.10,
       },
     ];
     const q = POSES[v % POSES.length];
+    const hd = q.headAt;
+    // Named joints. Every limb below leaves one of these, so the pose
+    // table cannot author a gap.
+    const shL = [q.hip * 0.6 - 0.23, 1.30, 0];
+    const shR = [q.hip * 0.6 + 0.23, 1.29, 0];
+    const hipL = [q.hip - 0.13, 0.70, 0];
+    const hipR = [q.hip + 0.14, 0.70, 0];
+    const ARM = 0.60, LEG = 0.66;
+    const handL = limbTip(shL, q.armL, ARM);
+    const handR = limbTip(shR, q.armR, ARM);
+    const footL = limbTip(hipL, q.legL, LEG);
+    const footR = limbTip(hipR, q.legR, LEG);
     return mergeParts([
-      { geo: new B(0.46, 0.72, 0.28), colour: p.base, pos: [q.hip, 0.96, 0], rot: [0, 0, q.tilt] },
-      { geo: new S(0.26, 8, 7), colour: p.base, pos: q.head },
-      { geo: new B(0.13, 0.62, 0.13), colour: p.trim, pos: q.armL.pos, rot: q.armL.rot },
-      { geo: new B(0.13, 0.62, 0.13), colour: p.trim, pos: q.armR.pos, rot: q.armR.rot },
-      { geo: new B(0.16, 0.62, 0.16), colour: p.trim, pos: q.legL.pos, rot: q.legL.rot },
-      { geo: new B(0.16, 0.62, 0.16), colour: p.trim, pos: q.legR.pos, rot: q.legR.rot },
-      { geo: new Cy(0.30, 0.34, 0.10, 8), colour: p.telegraph,
-        pos: [q.head[0], q.head[1] + 0.24, q.head[2]], emissive: 0.4 },
-      { geo: new B(0.5, 0.14, 0.05), colour: 0x061520,
-        pos: [q.head[0], q.head[1] + 0.02, q.head[2] - 0.22] },
+      // Hips: a dark drum, narrower than the shoulders above it.
+      { geo: new Cy(0.20, 0.17, 0.32, 7), colour: p.trim,
+        pos: [q.hip, 0.74, 0], rot: [0, 0, q.tilt] },
+      // Chest: wide at the top, pinched at the waist. The taper is the
+      // whole difference between a figure and a crate.
+      { geo: new Cy(0.27, 0.17, 0.52, 7), colour: p.base,
+        pos: [q.hip * 0.6, 1.06, 0], rot: [0, 0, q.tilt] },
+      { geo: new S(0.135, 6, 5), colour: p.base, pos: shL },
+      { geo: new S(0.135, 6, 5), colour: p.base, pos: shR },
+      // The neck pinch. Without it the head is a bump on the torso and
+      // the silhouette has no join to read.
+      { geo: new Cy(0.085, 0.095, 0.14, 6), colour: p.trim,
+        pos: [q.hip * 0.5, 1.36, 0] },
+      { geo: new S(0.23, 8, 7), colour: p.base, pos: hd },
+      /* The crest, swept back over the skull. A cone lying down has a
+         point, so the head reads as facing somewhere - which is the one
+         thing a disc could never do, and the reason four of these in a
+         ring used to read as four identical lamps. */
+      { geo: new C(0.115, 0.36, 5), colour: p.crest,
+        pos: [hd[0], hd[1] + 0.17, hd[2] + 0.10], rot: [-1.15 + q.crest * 0.25, 0, q.crest],
+        emissive: 0.18 },
+      // Visor: narrower than the skull now, so it is a face and not a
+      // band across the whole head.
+      { geo: new B(0.30, 0.10, 0.06), colour: 0x061520,
+        pos: [hd[0], hd[1] + 0.02, hd[2] - 0.20] },
+      limbPart(shL, q.armL, ARM, 0.115, p.trim),
+      limbPart(shR, q.armR, ARM, 0.115, p.trim),
+      { geo: new S(0.075, 5, 4), colour: p.crest, pos: handL },
+      { geo: new S(0.075, 5, 4), colour: p.crest, pos: handR },
+      limbPart(hipL, q.legL, LEG, 0.145, p.trim),
+      limbPart(hipR, q.legR, LEG, 0.145, p.trim),
+      { geo: new B(0.15, 0.07, 0.24), colour: p.trim, pos: footL },
+      { geo: new B(0.15, 0.07, 0.24), colour: p.trim, pos: footR },
     ]);
   },
 
@@ -1069,7 +1331,7 @@ export function create(ctx) {
         dashX: 0, dashZ: 0, dashT: 0, dashTravel: 0,
         laneT: 0, laneDir: 1, laneX: 0, laneZ: 0, laneBaseY: 0,
         packN: 0, packT: 0,
-        flipT: 0, dazeT: 0,
+        flipT: 0, dazeT: 0, spinT: 0,
         beatSeen: -1, bar: 0, beatInBar: 0,
         fromX: 0, fromZ: 0, toX: 0, toZ: 0, hopT: 0, hopSpan: 0,
         aimYaw: 0, retreat: 0, charge: 0,
@@ -2149,42 +2411,85 @@ export function create(ctx) {
      lands a full beat before it does. It is also the cheapest way to
      make a course feel choreographed rather than populated.
      --------------------------------------------------------------- */
+  /* A BAR IS A CLOSED LOOP AND IT ENDS ON THE DANCER'S OWN MARK.
+
+     Every entry below is a MARK - where the body stands at the end of
+     that beat, in formation space, in units of step.distance, relative
+     to `e.home`. It used to be a DELTA applied to wherever the body
+     happened to be, which is a random walk: the four bars sum to a net
+     translation, so the whole rank marched 1.6 m a beat away from the
+     post the level author placed it on, and the strike added another
+     1.28 m in whatever direction the last spin had left it pointing.
+     Two measured consequences. `heroGroup` scores the dancer 1.00 on a
+     "holds its mark" axis it did not hold, so the confrontation shot
+     was composed on a group that had left; and the harness stands the
+     character on the group's centre line about two thirds of a second
+     before the shutter, so a rank walking forward walks onto her -
+     which is the frame we have, with a dancer touching the hero.
+
+     x is along the rank, +z is behind it. Every bar starts from (0,0)
+     and returns there before its strike, so the routine reads as a
+     routine - it repeats - and the formation is still the formation
+     four bars later. */
   const CHOREO = [
-    // dx, dz per beat in formation space (metres, x = along the line)
-    [[0, -1], [0, 1], [0, -1], "strike"],
-    [[-1, 0], [-1, 0], [1, 0], "strike"],
-    ["spin", "spin", [0, -1], "strike"],
-    [[1, 0], [0, -1], [-1, 0], "strike"],
+    [[0, 0.55], [0, 0], [0, 0.55], "strike"],
+    [[-0.8, 0], [-0.8, 0.4], [0, 0], "strike"],
+    ["spin", [0.8, 0], [0, 0], "strike"],
+    [[0.8, -0.3], [0, 0.5], [0, 0], "strike"],
   ];
+  /* The lunge, and it is FORWARD. `p + (sin yaw, cos yaw) * d` is the
+     reverse of forward - a yaw t takes forward to (-sin t, -cos t) -
+     so the strike used to step the dancer backwards out of its own
+     attack. */
+  const CHOREO_STRIKE = [0, -0.8];
+  const CHOREO_SPIN = [0, 0];
 
   function stepDancer(e, dt, beatFired) {
     const spec = e.spec;
     const p = e.body.position;
     if (beatFired) {
-      e.k.beatInBar = (e.k.beatInBar + 1) % 4;
-      if (e.k.beatInBar === 0) e.k.bar = (e.k.bar + 1) % CHOREO.length;
+      /* THE COUNT IS THE MUSIC'S, NOT THE DANCER'S.
+         These were per-enemy counters started at spawn and advanced
+         one per beat, so "the strike always lands on beat 4" was only
+         ever true of each dancer's own private bar: two that woke a
+         beat apart, or one that broke off into an ALERT and came back,
+         counted different fours forever. A rank whose members are on
+         different counts is four soloists - which is what the
+         confrontation frame showed, bodies at four depths where the
+         formation puts them in two - and a player listening for the
+         hit gets a different answer from each of them.
+         Reading the bar off ctx.clock.beatIndex costs nothing and
+         makes the claim true across the whole course: every dancer
+         alive is on the same count, and one rejoining the routine
+         rejoins it in step. */
+      const idx = ctx.clock ? (ctx.clock.beatIndex | 0) : 0;
+      e.k.beatInBar = ((idx % 4) + 4) % 4;
+      e.k.bar = ((Math.floor(idx / 4) % CHOREO.length) + CHOREO.length) % CHOREO.length;
       const move = CHOREO[e.k.bar][e.k.beatInBar];
       e.k.fromX = p.x; e.k.fromZ = p.z;
       e.k.hopT = 0;
       e.k.hopSpan = spec.step.seconds;
+      const mark = move === "spin" ? CHOREO_SPIN
+        : move === "strike" ? CHOREO_STRIKE : move;
+      /* Formation space, anchored on the mark: the whole line moves as
+         one body, so a row of five reads as choreography and not as
+         five enemies that happen to be near each other. */
+      const ax = Math.cos(e.homeYaw), az = -Math.sin(e.homeYaw);
+      e.k.toX = e.home.x + (ax * mark[0] - az * mark[1]) * spec.step.distance;
+      e.k.toZ = e.home.z + (az * mark[0] + ax * mark[1]) * spec.step.distance;
       if (move === "spin") {
-        e.k.toX = p.x; e.k.toZ = p.z;
-        e.homeYaw += Math.PI / 2;
+        /* A WHOLE turn, not a quarter one. `homeYaw += PI/2` was
+           permanent and cumulative: it re-aimed the formation basis
+           every fourth bar, so a rank posed to face the camera was
+           side-on to it eight seconds later and its marks had rotated
+           with it. This spins the body and puts it back. */
+        e.k.spinT = spec.step.seconds;
       } else if (move === "strike") {
-        e.k.toX = p.x + Math.sin(e.yaw) * spec.step.distance * 0.8;
-        e.k.toZ = p.z + Math.cos(e.yaw) * spec.step.distance * 0.8;
         setState(e, STATE.STRIKE);
         e.k.timer = spec.attack.active;
         play(e, "strike", 0.04);
         ctx.audio?.play?.("enemy.attack.dancer", { pos: p });
         ctx.vfx?.burst?.("landRing", p, { color: spec.palette.base, radius: spec.attack.range });
-      } else {
-        // Formation space: the whole line moves as one body, so a
-        // row of five reads as choreography and not as five enemies
-        // that happen to be near each other.
-        const ax = Math.cos(e.homeYaw), az = -Math.sin(e.homeYaw);
-        e.k.toX = p.x + (ax * move[0] - az * move[1]) * spec.step.distance;
-        e.k.toZ = p.z + (az * move[0] + ax * move[1]) * spec.step.distance;
       }
       // Beat 3 is the crouch. Always. That is the telegraph.
       if (e.k.beatInBar === 2) {
@@ -2207,7 +2512,14 @@ export function create(ctx) {
     v.x = (wantX - p.x) / Math.max(dt, 1e-4);
     v.z = (wantZ - p.z) / Math.max(dt, 1e-4);
     if (e.body.grounded && t < 0.5 && spec.step.hop > 0) v.y = spec.step.hop * 6;
-    e.yaw = dampAngle(e.yaw, e.homeYaw, 9, dt);
+    if (e.k.spinT > 0) {
+      // Driven, not damped: a damped yaw takes the short way round and
+      // a whole turn has no short way round, so it would stand still.
+      e.k.spinT = Math.max(0, e.k.spinT - dt);
+      e.yaw = e.homeYaw + TAU * (1 - e.k.spinT / Math.max(1e-4, spec.step.seconds));
+    } else {
+      e.yaw = dampAngle(e.yaw, e.homeYaw, 9, dt);
+    }
     const air = Math.sin(t * Math.PI);
     e.squashY = 1 + air * 0.14 - (e.k.beatInBar === 2 ? 0.22 * (1 - t) : 0);
     e.squashX = 1 - air * 0.09 + (e.k.beatInBar === 2 ? 0.16 * (1 - t) : 0);
@@ -2605,7 +2917,7 @@ export function create(ctx) {
     k.dashX = 0; k.dashZ = 0; k.dashT = 0; k.dashTravel = 0;
     k.laneT = rng() * TAU; k.laneDir = 1;
     k.packN = 0; k.packT = 0;
-    k.flipT = 0; k.dazeT = 0;
+    k.flipT = 0; k.dazeT = 0; k.spinT = 0;
     k.beatSeen = -1; k.bar = 0; k.beatInBar = 3;
     k.fromX = x; k.fromZ = z; k.toX = x; k.toZ = z; k.hopT = 1; k.hopSpan = 1;
     k.aimYaw = e.yaw; k.retreat = 0; k.charge = 0;
@@ -2694,9 +3006,21 @@ export function create(ctx) {
          ring still surrounds what it is meant to surround. rng() is
          the course's seeded generator, so two runs of a build still
          place every body identically. */
+      /* `ox` runs along the rank's shoulder axis and `oz` runs along
+         its facing, negative being forward. See the CHORUS block: they
+         used to be the spawner's own axes, which is a different frame
+         and, past a few degrees, a different picture. */
       let ox = 0, oz = 0;
       let faceYaw = s.facing;
-      if (s.formation === "line") {
+      if (s.formation === "line" && ROSTER[s.kind].beatDriven) {
+        /* Pairs, out from an empty centre. i 0,1 are the inner pair,
+           2,3 the next one out and a step further back. */
+        const rank = Math.floor(i / 2);
+        const side = (i % 2) ? 1 : -1;
+        ox = side * (s.spacing * CHORUS_POCKET * 0.5 + rank * s.spacing * CHORUS_SPREAD)
+          * (0.94 + rng() * 0.12);
+        oz = rank * s.spacing * CHORUS_RAKE + rng() * s.spacing * 0.10;
+      } else if (s.formation === "line") {
         ox = (i - (s.count - 1) / 2) * s.spacing * (0.86 + rng() * 0.28);
         oz = (rng() - 0.5) * s.spacing * 0.34;
       } else if (s.formation === "grid") {
@@ -2713,14 +3037,25 @@ export function create(ctx) {
            whose members all share one facing is a rank standing in a
            circle; one that faces outward is a chorus around something,
            which is what a ring formation is for. The AI overrides this
-           the moment any of them sees the player. */
-        faceYaw = s.facing + a;
+           the moment any of them sees the player.
+           `facing + a` is not that yaw and never was. -Z is forward, so
+           a yaw t takes forward to (-sin t, -cos t) - a quarter turn
+           and a reflection away from the (cos, sin) the offset above is
+           built from. Solved rather than eyeballed, an outward radius
+           at local angle `a` is yaw `facing - a - TAU/4`. */
+        faceYaw = s.facing - a - TAU * 0.25;
       } else if (s.count > 1) {
         ox = (rng() - 0.5) * s.spacing * 2;
         oz = (rng() - 0.5) * s.spacing * 2;
       }
-      const ca = Math.cos(s.facing), sa = Math.sin(s.facing);
-      scratch.v1.set(s.x + ox * ca - oz * sa, s.y, s.z + ox * sa + oz * ca);
+      /* THE FORMATION FRAME IS THE FACING FRAME.
+         This used to rotate the offsets by +facing while a yaw rotates
+         forward by -facing, so the two disagreed by twice the angle and
+         a rank turned to face the camera was laid out running away from
+         it. Both axes are now derived from the same forward vector the
+         yaw produces: `ox` along the shoulders, `oz` behind. */
+      const fx = -Math.sin(s.facing), fz = -Math.cos(s.facing);
+      scratch.v1.set(s.x + ox * -fz + oz * -fx, s.y, s.z + ox * fx + oz * -fz);
       spawnOpts.yaw = faceYaw;
       spawnOpts.patrol = s.patrol;
       spawnOpts.spawner = s;
@@ -3007,7 +3342,16 @@ export function create(ctx) {
      -------------------------------------------------------------- */
   let frameCount = 0;
 
+  let frozen = false;
+
   function update() {
+    /* Hold the cast still for a capture.
+       The shot harness verifies a composition and then advances 0.2 s
+       before the shutter; a Lip-Sync Lackey covers 5.4 m/s, so it can
+       walk to within two metres of the lens AFTER the frame was
+       checked and stand beside the character. No camera-side test can
+       see that, because it happens after the test. */
+    if (frozen) return;
     const dt = ctx.clock ? ctx.clock.dt : 0;
     frameCount += 1;
     readPlayer();
@@ -3040,6 +3384,21 @@ export function create(ctx) {
 
     syncedFrame = ctx.clock ? ctx.clock.frame : frameCount;
     syncPresentation(Math.max(dt, 1 / 240));
+  }
+
+  /* The pool behind api.actors(). Entries are reused across calls, so
+     a caller that wants to keep one past the next call must copy it -
+     the same contract every pooled result in this engine carries. */
+  const actorList = [];
+  const actorPool = [];
+
+  function actorSlot(i) {
+    let a = actorPool[i];
+    if (!a) {
+      a = { x: 0, y: 0, z: 0, height: 0, width: 0, kind: "", label: "" };
+      actorPool[i] = a;
+    }
+    return a;
   }
 
   /* --------------------------------------------------------------
@@ -3178,6 +3537,7 @@ export function create(ctx) {
     clear,
 
     update,
+    setFrozen(on) { frozen = !!on; return frozen; },
     /** Not in main.js's LATE_ORDER today. Guarded so that if the spine
      *  ever adds us, presentation runs once per frame and not twice. */
     lateUpdate() {
@@ -3188,6 +3548,236 @@ export function create(ctx) {
     },
 
     /* --- introspection: qa.js and the harness -------------------- */
+
+    /**
+     * WHICH ENEMIES MAKE A PICTURE - the answer camera.js's
+     * `enemy-encounter` preset needs and could not previously get.
+     *
+     * It used to take the NEAREST body, through a generic accessor
+     * probe that returns a bare {x,y,z}. Two things follow from that
+     * and a blind review named both: course 1's east knot is three
+     * rooted Industry Plants and a line of four Backup Dancers, the
+     * plants stand two metres nearer, so the frame named after a
+     * confrontation was fronted by a potted plant - "the enemies are
+     * potted plants at the right edge, one cropped, and the frame reads
+     * as a furniture showroom". And a single body cannot be the subject
+     * of a frame at all: camera.js now sizes a subject by the AREA of
+     * its silhouette, and one 1.8 m enemy at a distance that also holds
+     * the character at a sixth of frame height covers half a percent of
+     * the picture. A line of four covers six.
+     *
+     * So the question asked here is the composition's, not the
+     * proximity test's: which GROUP of enemies, taken together, reads
+     * as a creature encounter - and how big is it. Returns the group's
+     * centre at FOOT height (camera.js lifts by half the height
+     * itself), its extent, and how much of that extent is actually
+     * body, or null when there is nothing alive to photograph.
+     */
+    heroGroup(origin, opts) {
+      const o = opts || {};
+      const maxD = o.maxDist || 140;
+      const ox = origin ? origin.x : 0;
+      const oz = origin ? origin.z : 0;
+      /* An optional veto on SEEDS, supplied by the caller, because the
+         one thing this function cannot know is what the picture looks
+         like. camera.js passes a sight test through its own drawn-mesh
+         soup: course 1's best-scoring knot of dancers stands behind an
+         escalator truss, and a shot named after a confrontation cannot
+         be built on a mob nobody can see. Seeds only - a group chosen
+         on a body in the open may still have members behind a pillar,
+         which is a normal picture and not a defect. */
+      const accept = typeof o.accept === "function" ? o.accept : null;
+      /* HOW MUCH OF A CREATURE each archetype reads as, as one number.
+         It is a silhouette judgement and it is the critic's, not a
+         gameplay weight: a Backup Dancer has a head, two arms and two
+         legs in a lopsided pose and holds its mark on the beat; an
+         Industry Plant is a pot with a bulb in it, is rooted by design,
+         and is the single least creature-like thing on the roster.
+         A body that CHARGES is discounted as well as a body that reads
+         badly - the harness advances two thirds of a second between
+         posing the camera and taking the frame, and a Lackey mob covers
+         three and a half metres in that time, which is how four of them
+         arrived stacked on top of the character. */
+      const PHOTOGENIC = {
+        dancer: 1.00,   // humanoid, three poses, holds its mark
+        bouncer: 0.90,  // a slab with shoulders, and it guards a post
+        imp: 0.74,      // horns and a mic
+        pig: 0.72,      // a real mass
+        lackey: 0.70,   // humanoid
+        bat: 0.50,      // small, and it is usually above the frame
+        drone: 0.30,    // a machine, and a small one
+        plant: 0.24,    // a pot. This is the one that lost the round.
+      };
+      /* ...AND WHETHER IT WILL STILL BE THERE WHEN THE SHUTTER FALLS,
+         which is a separate fact and had to be measured to be believed.
+         The harness advances two thirds of a second between posing the
+         camera and taking the frame. A Lip-Sync Lackey runs at 5.4 m/s,
+         so it covers three and a half metres in that window: a group
+         chosen and framed at nine metres arrived at point-blank range,
+         standing between the lens and the character with its shoulders
+         across her chest. No camera check can catch that - every one of
+         them ran before the enemy moved - so the only defence is not to
+         build the shot on a body that is about to leave. */
+      const HOLDS = {
+        dancer: 1.00,   // beat-driven; the routine runs whether or not you watch
+        plant: 1.00,    // rooted, by design
+        drone: 0.90,    // holds a standoff and backs away, never closes
+        bouncer: 0.85,  // guards a post until the route is crossed
+        bat: 0.80,      // patrols a lane overhead
+        imp: 0.55,
+        pig: 0.55,
+        lackey: 0.45,   // the fastest thing on the floor
+      };
+      /* Bodies further apart than this are two groups, not one subject.
+         6.5 rather than the 8.5 this started at, measured: at 8.5 the
+         seed picked up strays two rooms away and reported a group
+         FOURTEEN METRES wide, whose bounding ellipse is almost entirely
+         air - camera.js sized the shot off that and stood the lens
+         three times too far back. */
+      const GROUP_RADIUS = 6.5;
+
+      let best = null;
+      for (let i = 0; i < live.length; i += 1) {
+        const seed = live[i];
+        if (seed.state === STATE.DEAD) continue;
+        const sp = seed.body.position;
+        const seedD = Math.hypot(sp.x - ox, sp.z - oz);
+        if (seedD > maxD) continue;
+        if (accept && !accept(sp.x, sp.y, sp.z, seed.spec.height)) continue;
+
+        let n = 0, sx = 0, sy = 0, sz = 0, weight = 0, area = 0, solid = 0;
+        let lox = Infinity, hix = -Infinity, loz = Infinity, hiz = -Infinity;
+        let tallest = 0, widestBody = 0, top = null;
+        for (let j = 0; j < live.length; j += 1) {
+          const e = live[j];
+          if (e.state === STATE.DEAD) continue;
+          const p = e.body.position;
+          if (Math.hypot(p.x - sp.x, p.z - sp.z) > GROUP_RADIUS) continue;
+          /* A flyer four metres up is not standing with the group even
+             when its shadow is: it belongs to a different band of the
+             picture and averaging it into the centre drags the aim off
+             every body on the floor. */
+          if (Math.abs(p.y - sp.y) > 2.5) continue;
+          const w = (PHOTOGENIC[e.kind] === undefined ? 0.5 : PHOTOGENIC[e.kind])
+            * (HOLDS[e.kind] === undefined ? 0.6 : HOLDS[e.kind]);
+          /* THE CENTRE IS WEIGHTED BY THE SAME TASTE THE GROUP WAS
+             CHOSEN WITH. `weight` was accumulated here and never read;
+             the centre was a plain mean, so a knot ranked as a chorus
+             line on the strength of its dancers was AIMED at wherever
+             its rooted pots happened to be. That is not a cosmetic
+             half-metre: camera.js stands the character a solved
+             distance in front of this point, and measured over two
+             otherwise identical captures, 0.35 m of centre drift put
+             an Industry Plant directly behind her and took the field
+             she reads against from 116 to 92. A pot that is worth a
+             quarter of a dancer to the ranking is worth a quarter of
+             one to the aim. */
+          n += 1; weight += w;
+          sx += p.x * w; sy += p.y * w; sz += p.z * w;
+          if (p.x < lox) lox = p.x; if (p.x > hix) hix = p.x;
+          if (p.z < loz) loz = p.z; if (p.z > hiz) hiz = p.z;
+          const eh = e.spec.height * 1.12;      // proxy tops out over the capsule
+          const ew = e.spec.radius * 2;
+          /* How much PICTURE this body is worth, which is the quantity
+             the shot is chosen on. A VIP Bouncer is three times the
+             silhouette of a Lackey and an Industry Plant is a wide
+             short pot; ranking a group by headcount treats those three
+             as the same enemy. */
+          area += w * eh * ew;
+          /* ...and the same sum WITHOUT the taste weighting, which is
+             the one camera.js needs: how many square metres of creature
+             this group actually puts on screen. */
+          solid += eh * ew * (Math.PI / 4);
+          if (eh > tallest) tallest = eh;
+          if (ew > widestBody) widestBody = ew;
+          if (!top || w > top.w) top = { w, kind: e.kind, label: e.spec.label };
+        }
+        if (!n) continue;
+
+        /* The group's own reach, taken as the diagonal of its footprint
+           rather than either axis: the camera has not chosen a bearing
+           yet, so the honest answer is the largest width it could be
+           asked to frame. */
+        const spread = Math.hypot(hix - lox, hiz - loz);
+        const span = spread + widestBody;
+        /* THE WIDTH CAMERA.JS IS GIVEN IS NOT THAT SPAN, and the
+           difference was measured at three times: an ellipse drawn round
+           four bodies scattered over nine metres is nearly all air, so
+           sizing the shot by it stood the lens far enough back to put
+           the whole mob at one and a half percent of the picture.
+           What camera.js needs is the width of an ellipse of the same
+           AREA as the bodies themselves - so the share it computes is
+           the sum of the silhouettes and not the size of the gaps. The
+           real span still travels, separately, because "is the group
+           inside the frame" is a question about the gaps too. */
+        const width = (4 / Math.PI) * solid / Math.max(0.5, tallest);
+        const fill = clamp01((n * widestBody) / Math.max(0.5, span));
+        const wsum = Math.max(1e-3, weight);
+        const cx = sx / wsum, cy = sy / wsum, cz = sz / wsum;
+        const centreD = Math.hypot(cx - ox, cz - oz);
+        /* SILHOUETTE AREA first, then proximity - and proximity last on
+           purpose. A nearer knot of plants beat a line of dancers two
+           metres behind it under the old rule, which is the whole
+           defect, and headcount alone would have ranked four Paparazzi
+           Drones over a Pay-Pig and its escort.
+           Tightness is worth a little on top: the same four bodies in a
+           three-metre knot and in a nine-metre ring hold the same area
+           and only the knot reads as a group. */
+        const score = (area / (1 + centreD / 22)) * (0.75 + 0.45 * fill);
+        if (!best || score > best.score) {
+          best = {
+            score,
+            x: cx, y: cy, z: cz,
+            /* `width` is the area-equivalent one; `span` is how far the
+               group really reaches, which is what has to fit inside the
+               frame. `fill` is 1 because the area is already exact. */
+            height: tallest, width, span, fill: 1, tightness: fill,
+            count: n, kind: top ? top.kind : seed.kind,
+            label: top ? top.label : seed.spec.label,
+          };
+        }
+      }
+      return best;
+    },
+
+    /**
+     * EVERY LIVE BODY, AS A THING THAT CAN STAND IN FRONT OF THE HERO.
+     *
+     * `heroGroup` answers "which enemies make a picture". This answers
+     * the opposite question, and nothing could ask it before: which
+     * enemies are in the picture WITHOUT having been chosen for it.
+     * Round fourteen lost two frames to that gap - a Backup Dancer
+     * happened to be standing between the lens and the character in
+     * both, nearer than her and covering more of the crop, and every
+     * composition test in camera.js was measuring architecture. The AI
+     * is frozen before the shutter, which does not help at all: the
+     * body was already standing there when the composition was checked.
+     *
+     * Pooled. camera.js's veto asks once per candidate pose, several
+     * hundred times per capture, and a fresh object per body per
+     * candidate is a guaranteed GC saw-tooth in the middle of a solve.
+     * The entries are therefore only valid until the NEXT call.
+     */
+    actors(out) {
+      const list = out || actorList;
+      list.length = 0;
+      for (let i = 0; i < live.length; i += 1) {
+        const e = live[i];
+        if (e.state === STATE.DEAD) continue;
+        const p = e.body.position;
+        const a = actorSlot(list.length);
+        a.x = p.x; a.y = p.y; a.z = p.z;
+        // The same two numbers heroGroup reports, so a member of the
+        // named group measures identically whichever side asks.
+        a.height = e.spec.height * 1.12;
+        a.width = e.spec.radius * 2;
+        a.kind = e.kind;
+        a.label = e.spec.label;
+        list.push(a);
+      }
+      return list;
+    },
+
     count() { return live.length; },
     countOf(kind) { let n = 0; for (const e of live) if (e.kind === kind) n += 1; return n; },
     stats() {

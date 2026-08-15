@@ -986,6 +986,7 @@ export function buildMission(ctx) {
   function bossRuntimeStatus(key) {
     if (key === "scar") return ctx.distaff?.status?.() || null;
     if (key === "censer") return ctx.winnower?.status?.() || null;
+    if (key === "ossuary") return ctx.garner?.status?.() || null;
     return ctx.districtBosses?.status?.(key) || null;
   }
 
@@ -997,7 +998,7 @@ export function buildMission(ctx) {
     const maxHealth = Math.max(0, Number(status?.maxHealth) || 0);
     const health = Math.max(0, Number(status?.health) || 0);
     const engaged = status && !status.hidden
-      && !["dormant", "return", "returning"].includes(status.phase);
+      && !["dormant", "return", "returning", "sealing"].includes(status.phase);
     return {
       name: engaged ? boss.order
         : `HUNT ${boss.boss.toUpperCase()} — ${boss.district.toUpperCase()}`,

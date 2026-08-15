@@ -1521,6 +1521,22 @@ export function create(ctx) {
      character removed, and the blob is drawn from a pooled instanced
      mesh that does not care whether its caster is visible. */
   const blobState = { enabled: true };
+  /* Freezes TIME in this module without freezing PLACEMENT.
+     The harness captures every shot twice - once real, once with the
+     subject deleted - and diffs the two to prove she was in the frame
+     at all. That only works if nothing else moved between them. Motes,
+     trails and the punch light are all integrators, so a live dt walks
+     them a little further in the control frame and the diff picks up
+     the difference as "subject". Measured on one encounter frame: 89
+     mask components, of which 82 were dust specks totalling 256 px,
+     and their dilation swamped the annulus badly enough that the
+     preset's subject-vs-field number was mostly reporting the
+     neighbourhood of the dust rather than the character.
+     Freezing sets dt to 0 rather than skipping the pass, so billboards,
+     blobs and the subject key still resolve against the final camera
+     and body transforms - a control frame must still be a correct
+     render of everything that is left. */
+  const freezeState = { on: false };
   /* Its own flag, not skirtState's. The cast and the skirt answer
      different questions and the only honest way to attribute either is
      to toggle one against itself inside one process. */
@@ -2755,6 +2771,120 @@ export function create(ctx) {
       waterState.pools += 1;
     });
     waterState.ms = Number((((typeof performance !== "undefined" && performance.now)
+      ? performance.now() : 0) - t0).toFixed(1));
+  }
+
+  /* ---------------------------- key sheen ---------------------------- */
+
+  /**
+   * The other half of materials.sheen() - finding what to put it on.
+   *
+   * Same split as the pools above and for the same reason: materials.js
+   * owns the shading model, this module is the one that walks a built
+   * course. Read the block comment on materials.sheen() first; it
+   * carries the measurement and the reason a Lambert level cannot
+   * produce a highlight at any exposure.
+   *
+   * THE SELECTION RULE IS THE MATERIAL CLASS, NOT A TABLE. levels.js
+   * builds `kind: "shiny"` as MeshStandardMaterial - those surfaces
+   * already have a GGX lobe, and they are exactly the frames that
+   * scored on the highlight row. It builds `kind: "lit"` as
+   * MeshLambertMaterial, which has no specular term in its shader at
+   * all, and `kind: "glow"` as MeshBasicMaterial, which has no lighting
+   * and no `geometryNormal` for the patch to read. So the rule is
+   * simply "Lambert", which needs no per-course authoring, cannot
+   * double up on a surface that already glints, and cannot reach a
+   * material whose shader would not compile with the patch in it.
+   *
+   * WHAT THE TABLE IS FOR is the two surfaces where the class rule
+   * gives the wrong answer, and both are measured failures this repo
+   * has already paid for once: a near-field prop must be DARKER than
+   * the midground it overlaps, and bark mulch and crowd fabric are
+   * near-field props. A grazing-angle sheen on a metre-wide band of
+   * mulch across the bottom of five captures would put the brightest
+   * edge in the frame on the quietest thing in it.
+   */
+  const SHEEN_DEFAULT = { amount: 0.30, power: 22, fresnel: 0.62 };
+  const SHEEN_SURFACES = {
+    /* The plaza floor, and the reason this pass exists. Terrazzo is
+       polished stone under a glass roof; it is 40-55% of every frame in
+       this course and it was rendering as one flat value. Broad and
+       strongly grazing-weighted, so the pool lands out across the deck
+       rather than as a hot spot underfoot. */
+    "foodcourt.terrazzo": { amount: 0.62, power: 15, fresnel: 0.72 },
+    "foodcourt.checker": { amount: 0.52, power: 16, fresnel: 0.70 },
+    "foodcourt.tile": { amount: 0.50, power: 18, fresnel: 0.68 },
+    /* Marble columns and counters. Tighter, because these are vertical
+       and a broad lobe on a cylinder is a wash rather than a highlight
+       - what reads on a column is a bright stripe down one side. */
+    "foodcourt.column": { amount: 0.55, power: 42, fresnel: 0.34 },
+    "foodcourt.counter": { amount: 0.40, power: 34, fresnel: 0.40 },
+    "foodcourt.table": { amount: 0.42, power: 30, fresnel: 0.45 },
+    "foodcourt.tray": { amount: 0.45, power: 40, fresnel: 0.35 },
+    "foodcourt.cabinet": { amount: 0.34, power: 46, fresnel: 0.30 },
+    "foodcourt.cabinetB": { amount: 0.34, power: 44, fresnel: 0.32 },
+    "foodcourt.stall": { amount: 0.30, power: 36, fresnel: 0.38 },
+    "foodcourt.stallB": { amount: 0.30, power: 36, fresnel: 0.38 },
+    "foodcourt.stallC": { amount: 0.30, power: 36, fresnel: 0.38 },
+    /* Awnings are canvas, and canvas is the one fabric that catches a
+       highlight - it is a taut curved sheet. `collect` already scores
+       12.8 on this row and the awning is why. */
+    "foodcourt.awning": { amount: 0.34, power: 20, fresnel: 0.50 },
+    "foodcourt.awningB": { amount: 0.34, power: 20, fresnel: 0.50 },
+    "shared.grate": { amount: 0.45, power: 34, fresnel: 0.45 },
+    /* Painted brick and plaster: matte, and they are the background
+       plane. Enough to model the wall, not enough to compete. */
+    "foodcourt.brick": { amount: 0.18, power: 30, fresnel: 0.45 },
+    "foodcourt.planter": { amount: 0.18, power: 30, fresnel: 0.45 },
+    "foodcourt.wall": { amount: 0.14, power: 26, fresnel: 0.50 },
+    /* The lid is the top third of every interior frame and the frame's
+       only real dark. It does not get to shine. */
+    "foodcourt.ceiling": { amount: 0.06, power: 30, fresnel: 0.40 },
+    /* Off. See the note above the table. */
+    "foodcourt.soil": { amount: 0 },
+    "foodcourt.trunk": { amount: 0 },
+    "shared.rubber": { amount: 0 },
+    "shared.crowdA": { amount: 0 },
+    "shared.crowdB": { amount: 0 },
+    "shared.crowdC": { amount: 0 },
+    "shared.crowdD": { amount: 0 },
+    "shared.crowdE": { amount: 0 },
+  };
+
+  const sheenState = { surfaces: 0, ms: 0 };
+
+  /** Find this course's matte surfaces and hand each one to materials.js. */
+  function scanForSheen() {
+    const root = ctx.world?.current?.group;
+    const mats = ctx.materials;
+    if (!root || !mats || typeof mats.sheen !== "function") return;
+    /* A course that authored no `sheen` block pays nothing. Patching a
+       material sets needsUpdate, and while the measured cost here is
+       two extra Lambert programs (43 -> 45, because they share defines)
+       rather than twenty, a recompile a course cannot use is a
+       recompile that should not happen. sky.setCourse has already run
+       by the time this does, so the gain is the course's own answer. */
+    if (typeof mats.sheenGain === "function" && !(mats.sheenGain() > 0)) return;
+    const t0 = (typeof performance !== "undefined" && performance.now) ? performance.now() : 0;
+    mats.resetSheen?.();
+    sheenState.surfaces = 0;
+    const seen = new Set();
+    root.traverse((o) => {
+      if (!o.isMesh || !o.material) return;
+      const material = o.material;
+      /* Lambert only - the class rule above. An array material is a
+         multi-material mesh, which world.js does not build. */
+      if (!material.isMeshLambertMaterial) return;
+      if (seen.has(material)) return;
+      seen.add(material);
+      const name = typeof o.name === "string" && o.name.startsWith("static.")
+        ? o.name.slice(7) : null;
+      const spec = (name && SHEEN_SURFACES[name]) || SHEEN_DEFAULT;
+      if (!(spec.amount > 0)) return;
+      mats.sheen(material, spec);
+      sheenState.surfaces += 1;
+    });
+    sheenState.ms = Number((((typeof performance !== "undefined" && performance.now)
       ? performance.now() : 0) - t0).toFixed(1));
   }
 
@@ -4403,6 +4533,83 @@ export function create(ctx) {
   const _patchBox = new THREE.Box3();
   const _patchSize = new THREE.Vector3();
 
+  /**
+   * THE BOSS HAD NO GROUND CONTACT AT ALL.
+   *
+   * A blind art director called the Payola Phantom's armillary shell
+   * "the best hero prop in the project, floating in a beige lobby with
+   * no ground contact - the arcade cabinets have harder shadows than
+   * the boss does", and the probe agrees for a blunter reason than
+   * anyone assumed: bosses.js declares no `userData.contactShadow`
+   * anywhere, and the Phantom's shell is drawn by the untextured PROXY
+   * path (there is no `specs.phantom`, so attachRig fails), which has
+   * no names and no declarations on it either. Twelve metres of hero
+   * geometry standing 1.2 to 8.2 m over an arena floor was registered
+   * with this pass as nothing at all.
+   *
+   * The declaration belongs in bosses.js and is one line there. What
+   * this does in the meantime is what the pass already does for moving
+   * platforms two functions down - adopt something the scene cannot be
+   * asked to declare - and it is written so that it STANDS ITSELF DOWN
+   * the moment a real declaration appears: if any registered caster is
+   * already sitting under the fight, this does nothing. The rigged
+   * fights (the Twins, Lucifer) go through character.js and so already
+   * have one, which is exactly the case that test is for.
+   *
+   * It rides on `bosses.nearest()`, which reports the fight's arena
+   * FLOOR with the chest height and the fight's full extent alongside
+   * it, and rebuilds a plain object every call - so the proxy below is
+   * persistent and only its numbers are copied across, or the caster
+   * map would gain an entry per frame.
+   */
+  const bossCaster = {
+    proxy: { position: new THREE.Vector3(), name: "vfx.bossGround" },
+    entry: null,
+  };
+
+  function syncBossCaster() {
+    const near = ctx.bosses && typeof ctx.bosses.nearest === "function"
+      ? ctx.bosses.nearest(ctx.player && ctx.player.position) : null;
+    if (!near || !Number.isFinite(near.x) || !Number.isFinite(near.z)) {
+      if (bossCaster.entry) { api.removeShadow(bossCaster.proxy); bossCaster.entry = null; }
+      return;
+    }
+    const extent = Number.isFinite(near.extent) && near.extent > 0 ? near.extent : 5;
+    /* Already grounded by somebody else - stand down. The radius scale
+       keeps this from tripping on an unrelated enemy standing next to
+       the boss while still catching the boss's own declaration. */
+    const near2 = Math.max(1.5, extent * 0.35) ** 2;
+    for (let i = 0; i < casters.length; i += 1) {
+      const c = casters[i];
+      if (c === bossCaster.entry) continue;
+      if (!readPosition(c.object, _v)) continue;
+      const dx = _v.x - near.x; const dz = _v.z - near.z;
+      if (dx * dx + dz * dz < near2) {
+        if (bossCaster.entry) { api.removeShadow(bossCaster.proxy); bossCaster.entry = null; }
+        return;
+      }
+    }
+    /* Placed at the chest rather than at the floor, because everything
+       below reads a caster's HEIGHT over the ground it probes and a
+       caster sitting on the floor would draw a hard, full-strength
+       contact patch under a body that is hovering four metres up. */
+    const chest = Number.isFinite(near.chestY) ? near.chestY : near.y + extent * 0.5;
+    bossCaster.proxy.position.set(near.x, chest, near.z);
+    if (!bossCaster.entry) {
+      bossCaster.entry = api.addShadow(bossCaster.proxy, {
+        radius: 1, strength: 0.6, important: true,
+      });
+      if (!bossCaster.entry) return;
+    }
+    /* Written every frame rather than frozen at creation: a fight's
+       extent tracks its phase - Lucifer stalking the deck needs half
+       the shadow he does in the air - and makeCaster only ever sees
+       the first frame of it. */
+    bossCaster.entry.radius = clamp(extent * 0.42, 0.8, 6);
+    bossCaster.entry.fadeHeight = Math.max(8, extent * 1.8);
+    bossCaster.entry.maxDrop = Math.max(14, extent * 2.5);
+  }
+
   function scanForCasters() {
     const col = ctx.collision;
     scene.traverse((obj) => {
@@ -5225,6 +5432,22 @@ export function create(ctx) {
     },
 
     /**
+     * Stop time in this module, for the capture harness's control frame.
+     *
+     * The harness has called `ctx.vfx?.setFrozen?.(...)` for several
+     * rounds against a module that did not define it, and optional
+     * chaining made that a silent no-op - the same failure, in the same
+     * file, as the `setContactShadows` call that shipped before the
+     * method existed and cost three review rounds. Both were invisible
+     * for exactly the same reason, so the harness now asserts these
+     * hooks are present rather than asking politely.
+     */
+    setFrozen(on) {
+      freezeState.on = on === true;
+      return freezeState.on;
+    },
+
+    /**
      * The contact skirt, separately.
      *
      * Kept apart from setGroundPatches because the two answer
@@ -5281,6 +5504,34 @@ export function create(ctx) {
       }
       if (!patchState.pending) api.rebakeGround();
       return want;
+    },
+
+    /**
+     * The key sheen, on or off.
+     *
+     * Fourth member of the setGroundSkirt / setGroundCast / setCastAim
+     * family, and the same argument: while several agents edit this
+     * course at once, cross-run numbers are worthless and the only
+     * honest attribution is toggling one pass inside one process from
+     * one solved pose. This one answers "is the specular what put the
+     * whites in the frame", which nothing else can separate from the
+     * lighting rebalance it shipped alongside.
+     */
+    setKeySheen(on) {
+      const want = on !== false;
+      ctx.materials?.setSheenEnabled?.(want);
+      return want;
+    },
+
+    /** Re-run the material scans without re-entering the course. */
+    rescanSurfaces() {
+      try { scanForWater(); } catch (error) {
+        console.warn("[apop3d] vfx liquid scan failed", error);
+      }
+      try { scanForSheen(); } catch (error) {
+        console.warn("[apop3d] vfx sheen scan failed", error);
+      }
+      return { pools: waterState.pools, sheen: sheenState.surfaces };
     },
 
     /** Atmosphere overrides. Any omitted field keeps its course value. */
@@ -5355,6 +5606,7 @@ export function create(ctx) {
           cells: castState.cells,
         },
         liquid: { pools: waterState.pools, verts: waterState.verts, ms: waterState.ms },
+        sheen: { surfaces: sheenState.surfaces, ms: sheenState.ms },
         casters: casters.length,
         trails: trails.reduce((n, t) => n + (t.active ? 1 : 0), 0),
         shafts: shaftMesh.count,
@@ -5404,6 +5656,7 @@ export function create(ctx) {
       // baked patch lying on a floor that has been unloaded.
       casters.length = 0;
       casterByObject.clear();
+      bossCaster.entry = null;
       patchMesh.count = 0;
       patchState.pending = false;
       // A skirt lying on a floor that has been unloaded is the same
@@ -5415,6 +5668,8 @@ export function create(ctx) {
       waterState.due = false;
       waterState.pools = 0;
       ctx.materials?.resetWater?.();
+      sheenState.surfaces = 0;
+      ctx.materials?.resetSheen?.();
       sparkleEmitters.length = 0;
       shafts.length = 0;
       for (let i = 0; i < trails.length; i += 1) {
@@ -5441,7 +5696,7 @@ export function create(ctx) {
     },
 
     update(context) {
-      const dt = context.clock.dt;
+      const dt = freezeState.on ? 0 : context.clock.dt;
       if (!(dt > 0)) return;
 
       // Integration only. Anything that needs a final transform - the
@@ -5458,7 +5713,7 @@ export function create(ctx) {
     },
 
     lateUpdate(context) {
-      const dt = context.clock.dt;
+      const dt = freezeState.on ? 0 : context.clock.dt;
 
       camera.updateMatrixWorld();
       _camRight.setFromMatrixColumn(camera.matrixWorld, 0).normalize();
@@ -5495,6 +5750,11 @@ export function create(ctx) {
         // cadence; a per-frame traverse of a full course is wasteful
         // and half a second of latency on a blob is invisible.
         if (context.clock.frame % 20 === 0) scanForCasters();
+        /* Every frame, not on the scan cadence: a fight's extent and
+           its hover change with its phase, and this is the one caster
+           in the game whose own size is animated. It is three reads and
+           a distance test. */
+        syncBossCaster();
         stepShadows();
         // Ahead of the bake test, so a re-aim lands in the same frame's
         // queue rather than waiting a whole extra bake cadence.
@@ -5522,6 +5782,16 @@ export function create(ctx) {
         } catch (error) {
           // A pool that will not measure loses its ripple, not the frame.
           console.warn("[apop3d] vfx liquid scan failed", error);
+        }
+        /* Same frame as the pools, and deliberately not inside their
+           try: a scan that throws must not take the other one with it.
+           Both are pure material patches on a course that has just
+           loaded, so this is the last frame before anything is drawn
+           with the old program and no material recompiles twice. */
+        try {
+          scanForSheen();
+        } catch (error) {
+          console.warn("[apop3d] vfx sheen scan failed", error);
         }
       }
       /* From ctx.clock, never from wall time: the shot harness steps

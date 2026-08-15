@@ -67,13 +67,6 @@ export function buildHud(ctx, host) {
     <div class="sf-hud__vitals" id="sf-vitals">
       <div class="sf-hud__hplabel"><span>VITALITY</span><b id="sf-hp-value">150</b></div>
       <div class="sf-hud__hpwrap"><div class="sf-hud__hp" id="sf-hp"></div></div>
-      <div class="sf-hud__jet" id="sf-jet" role="progressbar" aria-label="Reliquary charge"
-        aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
-        <div class="sf-hud__jetlabel"><span>CHARGE</span><b id="sf-jet-value">100%</b></div>
-        <div class="sf-hud__jettrack"><i id="sf-jet-fill"></i></div>
-        <div class="sf-hud__boost" id="sf-boost"><span><b>SHIFT</b> GLIDE</span><strong id="sf-boost-value">READY</strong></div>
-        <div class="sf-hud__shield" id="sf-shield"><span><b>E</b> AEGIS</span><strong id="sf-shield-value">READY</strong></div>
-      </div>
       <div class="sf-hud__vitalrow">
         <span id="sf-ammo">&mdash;</span>
         <span id="sf-reinf"></span>
@@ -81,6 +74,15 @@ export function buildHud(ctx, host) {
       <div class="sf-hud__boon" id="sf-boon" data-state="off" aria-live="off">
         <span>GILDED</span><strong id="sf-boon-value"></strong>
         <i><em id="sf-boon-fill"></em></i>
+      </div>
+    </div>
+    <div class="sf-hud__charge" id="sf-charge">
+      <div class="sf-hud__jet" id="sf-jet" role="progressbar" aria-label="Reliquary charge"
+        aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+        <div class="sf-hud__jetlabel"><span>CHARGE</span><b id="sf-jet-value">100%</b></div>
+        <div class="sf-hud__jettrack"><i id="sf-jet-fill"></i></div>
+        <div class="sf-hud__boost" id="sf-boost"><span><b>SHIFT</b> GLIDE</span><strong id="sf-boost-value">READY</strong></div>
+        <div class="sf-hud__shield" id="sf-shield"><span><b>E</b> AEGIS</span><strong id="sf-shield-value">READY</strong></div>
       </div>
     </div>
     <section class="sf-hud__command" id="sf-command-status" aria-label="Command availability">
@@ -284,6 +286,23 @@ export function buildHud(ctx, host) {
       3.0, true));
     ctx.winnower.bus.on("defeated", () => showBreachAlert(
       "THE CENSER WORKS", "THE WINNOWER IS GROUNDED", 5.2));
+  }
+  if (ctx.garner?.bus) {
+    ctx.garner.bus.on("aggro", () => showBreachAlert(
+      "THE OSSUARY · APEX SIGNATURE", "THE GROUND IS GIVING WAY", 4.8, true));
+    /* The two alerts that are not threats. Everything else this boss
+       does is announced by the world itself - a fifteen-metre limb
+       standing up is not a thing that needs a banner - so the strip is
+       spent only on the two moments the player could otherwise miss:
+       a limb is on the sand, and the mouth is open. */
+    ctx.garner.bus.on("lashMiss", () => showBreachAlert(
+      "THE GARNER", "A LIMB IS DOWN — CUT IT", 2.4, true));
+    ctx.garner.bus.on("inhaleTelegraph", () => showBreachAlert(
+      "THE GARNER", "IT DRAWS BREATH — GET CLEAR OF THE PIT", 2.6, true));
+    ctx.garner.bus.on("gorge", () => showBreachAlert(
+      "THE GARNER", "THE GULLET IS OPEN", 3.4, true));
+    ctx.garner.bus.on("defeated", () => showBreachAlert(
+      "THE OSSUARY", "THE GARNER IS CLOSED", 5.2));
   }
   if (ctx.districtBosses?.bus) {
     ctx.districtBosses.bus.on("approach", (event) => showBreachAlert(
@@ -583,7 +602,10 @@ export function buildHud(ctx, host) {
     const h = bounds.height;
     const cx = w * 0.5;
     const cy = h * 0.5;
-    const radius = Math.max(12, Math.min(w, h) * 0.455);
+    const mapSize = Math.max(12, Math.min(w, h));
+    const half = mapSize * 0.5;
+    const mapLeft = cx - half;
+    const mapTop = cy - half;
     const ps = player.state;
     const event = ctx.breaches?.status?.();
     const activeEvent = event && (event.phase === "warning" || event.phase === "active");
@@ -609,11 +631,11 @@ export function buildHud(ctx, host) {
       const dx = x - ps.x;
       const dz = z - ps.z;
       const dist = Math.hypot(dx, dz);
-      const limit = edge ? Math.min(1, (mapRange * 0.93) / Math.max(1e-4, dist)) : 1;
+      const limit = edge ? Math.min(1, (mapRange * 0.90) / Math.max(1e-4, dist)) : 1;
       return {
-        x: cx + (dx * limit / mapRange) * radius,
+        x: cx + (dx * limit / mapRange) * half,
         // Authored north is -Z, so negative Z belongs at canvas-up.
-        y: cy + (dz * limit / mapRange) * radius,
+        y: cy + (dz * limit / mapRange) * half,
         inside: dist <= mapRange,
         dist,
       };
@@ -633,25 +655,24 @@ export function buildHud(ctx, host) {
 
     map2d.save();
     map2d.beginPath();
-    map2d.arc(cx, cy, radius, 0, Math.PI * 2);
+    map2d.rect(mapLeft, mapTop, mapSize, mapSize);
     map2d.clip();
-    const bg = map2d.createRadialGradient(cx, cy, 2, cx, cy, radius);
-    bg.addColorStop(0, "rgba(28,20,17,.78)");
-    bg.addColorStop(0.68, "rgba(14,10,11,.86)");
-    bg.addColorStop(1, "rgba(5,4,6,.96)");
-    map2d.fillStyle = bg;
-    map2d.fillRect(0, 0, w, h);
 
+    // No dark background fill (transparent map).
+
+    // Clean subtle square grid and crosshairs in thin gold
     map2d.lineWidth = 1;
-    for (const fraction of [0.33, 0.66, 1]) {
-      map2d.beginPath();
-      map2d.arc(cx, cy, radius * fraction, 0, Math.PI * 2);
-      map2d.strokeStyle = fraction === 1 ? "rgba(225,169,73,.50)" : "rgba(225,169,73,.13)";
-      map2d.stroke();
+    map2d.strokeStyle = "rgba(216,164,65,.14)";
+    map2d.beginPath();
+    map2d.moveTo(cx, mapTop); map2d.lineTo(cx, mapTop + mapSize);
+    map2d.moveTo(mapLeft, cy); map2d.lineTo(mapLeft + mapSize, cy);
+    map2d.stroke();
+
+    for (const fraction of [0.5]) {
+      const innerHalf = half * fraction;
+      map2d.strokeStyle = "rgba(216,164,65,.10)";
+      map2d.strokeRect(cx - innerHalf, cy - innerHalf, innerHalf * 2, innerHalf * 2);
     }
-    map2d.strokeStyle = "rgba(225,169,73,.11)";
-    map2d.beginPath(); map2d.moveTo(cx, cy - radius); map2d.lineTo(cx, cy + radius); map2d.stroke();
-    map2d.beginPath(); map2d.moveTo(cx - radius, cy); map2d.lineTo(cx + radius, cy); map2d.stroke();
 
     // Nearby authored landmarks make this a map rather than only a
     // threat detector. Labels stay off the tiny surface; silhouettes
@@ -799,6 +820,11 @@ export function buildHud(ctx, host) {
     }
     map2d.restore();
 
+    // Thin gold square border
+    map2d.strokeStyle = "rgba(216, 164, 65, 0.72)";
+    map2d.lineWidth = 1;
+    map2d.strokeRect(mapLeft + 0.5, mapTop + 0.5, mapSize - 1, mapSize - 1);
+
     // The map keeps a fixed, true north-up world orientation. Only the player
     // body arrow turns; orbiting the camera cannot rotate either layer.
     map2d.save();
@@ -814,7 +840,7 @@ export function buildHud(ctx, host) {
     map2d.restore();
 
     const north = point(ps.x, ps.z - mapRange * 0.82, true);
-    map2d.fillStyle = "rgba(255,224,159,.68)";
+    map2d.fillStyle = "rgba(255,224,159,.82)";
     map2d.font = "600 8px Share Tech Mono, monospace";
     map2d.textAlign = "center";
     map2d.fillText("N", north.x, north.y + 3);
@@ -892,6 +918,36 @@ export function buildHud(ctx, host) {
     return true;
   }
 
+  /* The pit's readout carries the two counts the player is actually
+     playing to: how many limbs are up and threatening, and how many
+     are down and worth crossing the pan for. Its health is the least
+     interesting number in the fight and is relegated to the bar. */
+  function updateGarnerReadout() {
+    const g = ctx.garner?.status?.();
+    if (!g || g.phase === "dormant" || g.dead) return false;
+    minimapEl.dataset.event = "1";
+    mapEventEl.dataset.phase = g.phase;
+    eventKickerEl.textContent = "THE OSSUARY · APEX SIGNATURE";
+    eventNameEl.textContent = "THE GARNER";
+    eventNameEl.title = eventNameEl.textContent;
+    eventSubEl.textContent = g.phase === "sealing"
+      ? "Sealing - the pan is closing over it"
+      : g.phase === "breach"
+        ? "The ground is falling in"
+        : g.exposed
+          ? "GULLET OPEN - strike into the mouth"
+          : g.seized
+            ? "SEIZED - it is winding you in"
+            : g.inhaling
+              ? "IT DRAWS - hold the rim"
+              : g.armsDown > 0
+                ? `${g.armsDown} limb${g.armsDown > 1 ? "s" : ""} down - cut them`
+                : `${g.armsUp} limbs raised · ${g.armsSevered} cut`;
+    eventCountEl.textContent = g.exposed ? "EXPOSED" : `${g.health} HP`;
+    eventFillEl.style.width = `${clamp01(1 - g.health / Math.max(1, g.maxHealth)) * 100}%`;
+    return true;
+  }
+
   function updateApostateReadout() {
     const a = ctx.apostate?.status?.();
     if (!a || a.phase === "dormant" || a.dead) return false;
@@ -930,8 +986,6 @@ export function buildHud(ctx, host) {
       ? "Signature resolving — weapons lock pending"
       : boss.enemyKey === "coulter"
         ? "Hundred-metre sand leviathan — track the furrow and strike when it surfaces"
-        : boss.placeholder
-          ? "Provisional Ossuary guardian — break the armoured line"
         : boss.enemyKey === "matriarch"
           ? "Circle the armour — break the rear sac"
           : boss.enemyKey === "precentor"
@@ -946,6 +1000,7 @@ export function buildHud(ctx, host) {
     if (updateApostateReadout()) return;
     if (updateWinnowerReadout()) return;
     if (updateDistaffReadout()) return;
+    if (updateGarnerReadout()) return;
     if (updateDistrictBossReadout()) return;
     const event = ctx.breaches?.status?.();
     if (!event) { minimapEl.dataset.event = "0"; return; }

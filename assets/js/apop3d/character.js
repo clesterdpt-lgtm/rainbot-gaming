@@ -1930,24 +1930,78 @@ const DEMON_FORMS = {
   /* --- Lip-Sync Lackey ----------------------------------------------
      A lollipop head that is nothing but mouth, and a headset boom to
      name the joke. Long arms that hang past the knees keep the body
-     from competing with the head. */
+     from competing with the head.
+
+     REBUILT AGAINST ITS OWN PROXY, which measured better than the rig
+     it stands in for. Player, rig and proxy were placed in a row at
+     one distance under one light against a neutral card, and each was
+     isolated by hide-and-diff:
+
+       silhouette   proxy 9672 px      rig 3689 px
+       luma p10/p25/p50
+                    proxy  98/150/199
+                    rig     58/ 81/124
+                    player   7/ 15/ 45
+
+     MASS was the first half. The proxy is exactly what the paragraph
+     above describes - a fat cylinder under a head half as wide as the
+     figure is tall - and the rig was a wire armature wearing the same
+     joke: a 0.27 m head on a 0.21 m torso with 5.6 cm arms. At the
+     eleven metres the capture presets actually frame from, that is
+     not a small figure, it is a figure with no shape. The head is the
+     whole read on this archetype, so it grows through `headScale`,
+     which takes the mouth, the teeth, the headset and the boom with
+     it as one shape rather than leaving a big skull wearing a small
+     face.
+
+     VALUE was the second half, and the worse one. Every colour on it
+     was the same saturated orange - body 0xfb923c over limb 0xe07322 -
+     so the figure was one bright chroma mass with no internal ladder,
+     and it arrived on screen BRIGHTER than the player it is meant to
+     threaten, on a mall floor that sits at 150-190. That inverts the
+     one relationship the whole set is composed around: she is the
+     dark cold silhouette and the level is the warm field. The orange
+     stays, because colour is this roster's identity cue and the 2D
+     game used it - but it is the HEAD alone now, at half its old
+     value, over a dark stagehand's uniform. Four value bands where
+     there was one, and the brightest of them still sits under the
+     floor it stands on. */
   lackey(api, spec) {
     const { part, P } = api;
     const C = spec.palette;
-    demonBase(api, spec, { arms: "noodle", legs: "spindle", armR: 0.042, legR: 0.046,
-      skinTile: "denim", limbTile: "fuzz", waistFlare: 0.95, footL: 1.1 });
+    /* The flares are mass that `wide` cannot buy. `wide` also moves the
+       shoulder BONES, and past a shoulder offset of 0.163 m this build
+       trips anim.js's shapeBroad and its documented gesture numbers
+       stop being true; the flares only scale the torso boxes, so the
+       silhouette gets its shoulders back for nothing. */
+    demonBase(api, spec, { arms: "noodle", legs: "spindle", armR: 0.050, legR: 0.056,
+      skinTile: "denim", limbTile: "fuzz", waistFlare: 1.12, shoulderFlare: 1.28,
+      footL: 1.1, footW: 1.15 });
 
-    part("head", ballGeo(0.135, 0.155, 0.130, 14, 10), C.body,
+    part("head", ballGeo(0.135, 0.155, 0.130, 14, 10), C.skull,
       { y: 0.028, tile: "fuzz", zone: ZONES.skin, uv: 0.8 });
-    // The mouth wraps the front as a band rather than sitting on it,
-    // so the shape survives being seen from three-quarters on.
-    part("head", ballGeo(0.118, 0.072, 0.055, 14, 6), C.lips,
-      { y: -0.012, z: -0.100, tile: "flat", zone: ZONES.skin, uv: 0.4 });
-    part("head", boxGeo(0.170, 0.034, 0.030), C.dark,
-      { y: -0.012, z: -0.132, tile: "flat", zone: ZONES.hard, uv: 0.2 });
+    /* THE MOUTH IN THREE LAYERS, because at this head size two was not
+       enough. The lip ring wraps the front as a band rather than
+       sitting on it, so the shape survives being seen from
+       three-quarters on; the interior behind it is near-black, which
+       is the only thing that makes a mouth read as an OPENING rather
+       than as a stripe painted on a ball; the teeth sit in front of
+       both. Taking all three down to one dark value - the first
+       attempt at getting this figure's brightness under control -
+       turned the whole joke into a shadow under the head, and the
+       mouth is the archetype. */
+    part("head", ballGeo(0.124, 0.080, 0.058, 14, 6), C.lips,
+      { y: -0.012, z: -0.098, tile: "flat", zone: ZONES.skin, uv: 0.4 });
+    part("head", ballGeo(0.098, 0.054, 0.044, 12, 6), C.dark,
+      { y: -0.012, z: -0.118, tile: "flat", zone: ZONES.hard, uv: 0.2 });
+    /* Teeth, and NOT at 0xfdfbff any more. Five pure-white blocks were
+       tolerable on a 0.27 m head; on a head 1.7x that they are a
+       220-luma band across the brightest part of the figure, which is
+       precisely the highlight the player's gold trim is supposed to
+       own. Bone white keeps the read and gives the highlight back. */
     for (let i = 0; i < 5; i += 1) {
-      part("head", boxGeo(0.024, 0.026, 0.016), 0xfdfbff,
-        { x: -0.062 + i * 0.031, y: 0.006, z: -0.140, tile: "flat", zone: ZONES.hard, uv: 0.15 });
+      part("head", boxGeo(0.024, 0.026, 0.016), C.teeth,
+        { x: -0.062 + i * 0.031, y: 0.002, z: -0.168, tile: "flat", zone: ZONES.hard, uv: 0.15 });
     }
     demonEyes(api, { r: 0.020, spread: 0.052, y: 0.098, z: -0.112,
       sclera: col(C.eye), pupil: col(C.dark) });
@@ -1968,58 +2022,175 @@ const DEMON_FORMS = {
   },
 
   /* --- Industry Plant -------------------------------------------------
-     A pot with a fan of leaves over it. Stationary, so the silhouette
-     has to work with no motion at all - which is why the leaf crown
-     spreads wider than any other enemy in the game. */
+     A CREATURE IN A POT, and it used to be a houseplant.
+
+     This rig was the reason a blind pass named a confrontation frame
+     "three potted plants at equal spacing" and, before that, "the
+     frame reads as a furniture showroom". Both readings were fair,
+     because what stood there was scenery: a terracotta pot, a
+     straight stem, a ball, and a wheel of seven fronds radiating from
+     it at even angles. Symmetric about its own axis from every
+     bearing, so it had no front, no top and nothing to tell it apart
+     from the planters twelve metres behind it.
+
+     enemies.js rebuilt the PROXY for exactly this and could not touch
+     the rig, so the two halves of one enemy disagreed - and the rig is
+     the half the capture presets photograph. Measured side by side at
+     one distance against a neutral card, they were not even the same
+     creature:
+
+       silhouette   proxy 41221 px   rig 6965 px
+       height       proxy ~2.0 m     rig  1.20 m to the crown
+
+     A six-fold area gap between two tiers of one enemy is a visible
+     pop at the swap distance on its own; that the small one also
+     reads as furniture is what lost the frames. So this now follows
+     the proxy's construction, at the proxy's size, in the proxy's
+     colours:
+
+       - the pot stays, because it is the joke and it is the contact
+         patch, but it is a DARK planter rather than terracotta. That
+         is what pulls the bottom of this figure's value ladder down
+         (the proxy measures p10 11 against this rig's 22) and it is
+         also what stops it reading as a garden-centre pot;
+       - the stem LEANS, in three short segments up the spine, chest
+         and neck, so the head is carried forward of its own base and
+         the shape has a front. A curve reads as a neck; a cylinder
+         reads as a stake;
+       - the head is a HOOD over a JAW with a dark mouth line between
+         them, which is the one detail that turns a ball into a face
+         at 240p, and the throat inside the mouth is the gun;
+       - the leaf arms are at different heights, different lengths and
+         different angles, and the raised one is nearly vertical.
+
+     The muzzle is a fix as well as a shape. enemies.js launches this
+     archetype's arc from `position + (0, 1.66, 0)` and 0.7 m forward,
+     which is authored against the proxy; the old rig's trumpet sat at
+     1.12 m and 0.1 m forward, so a rigged plant fired out of thin air
+     half a metre above its own head. The hood, jaw and throat below
+     are placed to put the aperture on that point. */
   plant(api, spec) {
-    const { part, pair, P } = api;
+    const { part, P } = api;
     const C = spec.palette;
-    demonBase(api, spec, { arms: "noodle", legs: "stub", armR: 0.034, legR: 0.050,
-      torso: "none", skinTile: "leaf", limbTile: "leaf", footW: 1.2, footL: 0.7 });
+    /* No leg geometry. It is rooted - `walk: 0`, a turret - and the
+       whole lower body is now a 1.3 m pot, so stub feet would be four
+       hundred triangles buried inside an opaque lathe. The BONES are
+       still there; only the geometry is skipped. */
+    demonBase(api, spec, { arms: "noodle", legs: "none", armR: 0.045,
+      torso: "none", skinTile: "leaf", limbTile: "leaf" });
 
-    // The pot is the whole lower body and the legs live inside it.
-    // The pot reaches the ground on purpose: it is the figure's
-    // contact patch and the shadow sits under it. Sized so the stub
-    // feet just peek out of the base, which is what stops it looking
-    // like a plant that was placed rather than one that walks.
+    /* The pot, and a rim that overhangs it. The rim is the point: one
+       hard horizontal under everything else is what keeps the base
+       reading as furniture the creature is planted IN rather than as
+       its feet. */
     part("hips", latheGeo([
-      [0.155, -P.hipY], [0.190, -P.hipY + 0.05], [0.225, -0.10], [0.245, 0.04],
-      [0.265, 0.09], [0.258, 0.125], [0.222, 0.125],
-    ], 16), C.pot, { tile: "grime", zone: ZONES.hard, uv: 1, occ: 0.2 });
-    part("hips", latheGeo([[0.222, 0.105], [0.212, 0.145], [0.150, 0.165]], 16), C.soil,
-      { tile: "grime", zone: ZONES.cloth, uv: 0.5, occ: 0.5 });
+      [0.37, -P.hipY], [0.44, -P.hipY + 0.07], [0.50, -0.30], [0.535, -0.08],
+      [0.555, 0.00], [0.590, 0.025], [0.583, 0.062], [0.520, 0.062],
+    ], 16), C.pot, { tile: "grime", zone: ZONES.hard, uv: 0.35, occ: 0.06 });
+    // Soil, so the pot is not an open tube seen from above.
+    part("hips", latheGeo([[0.520, 0.050], [0.500, 0.082], [0.360, 0.096]], 16), C.soil,
+      { tile: "grime", zone: ZONES.cloth, uv: 0.3, occ: 0.16 });
 
-    part("spine", tubeGeo(0.062, 0.090, P.chestY + 0.10, 10, { pivot: "bottom" }), C.body,
-      { y: -0.06, tile: "leaf", zone: ZONES.cloth, uv: 0.6, occ: 0.24 });
-    part("chest", ballGeo(0.125, 0.145, 0.125, 12, 8), C.body,
-      { y: 0.010, tile: "leaf", zone: ZONES.cloth, uv: 0.7 });
+    /* The stem. Three segments, each leaning further than the last and
+       each on the next bone up, so anim.js's spine chain bends the
+       whole curve instead of swinging a rigid mast. The lean is off
+       the centre line as well as forward - a plant that leans straight
+       at the camera is still symmetric from where the camera stands.
+       `fuzz` rather than `leaf` on every round surface here: the leaf
+       tile is a 2x30 weave, i.e. thirty vein lines, and wrapping that
+       round a 0.4 m tube renders as corduroy. Veins belong on the
+       blades, where they run the length of a leaf. */
+    part("spine", tubeGeo(0.155, 0.205, 0.40, 8, { pivot: "bottom" }), C.body,
+      { y: -0.10, rx: -0.24, rz: -0.10, tile: "fuzz", zone: ZONES.cloth, uv: 0.45, occ: 0.14 });
+    part("chest", tubeGeo(0.130, 0.165, 0.40, 8, { pivot: "bottom" }), C.body,
+      { y: -0.06, z: -0.09, rx: -0.46, rz: -0.07, tile: "fuzz", zone: ZONES.cloth, uv: 0.45, occ: 0.10 });
+    part("neck", tubeGeo(0.105, 0.140, 0.30, 8, { pivot: "bottom" }), C.body,
+      { y: -0.09, z: -0.21, rx: -0.62, tile: "fuzz", zone: ZONES.cloth, uv: 0.45, occ: 0.04 });
 
-    // Seven fronds, alternating length so the fan is not a wheel.
-    for (let i = 0; i < 7; i += 1) {
-      const a = (i / 7) * TAU + 0.22;
-      const long = i % 2 === 0 ? 1 : 0.72;
-      const dx = Math.sin(a); const dz = Math.cos(a);
-      part("chest", bladeGeo([
-        [dx * 0.06, 0.09, dz * 0.06, 0.030, 0.010],
-        [dx * 0.24, 0.30 * long + 0.06, dz * 0.24, 0.085, 0.014],
-        [dx * 0.40, 0.40 * long + 0.02, dz * 0.40, 0.070, 0.011],
-        [dx * 0.50, 0.36 * long - 0.04, dz * 0.50, 0.020, 0.006],
-      ], { ref: [0, 1, 0], sides: 5 }), i % 2 === 0 ? C.leaf : C.leafDark,
-      { tile: "leaf", zone: ZONES.cloth, uv: 0.9, occ: 0.05 });
-    }
+    /* THE HEAD: hood, jaw, mouth. The hood overhangs the jaw at the
+       front, which is what makes the gap between them read as a mouth
+       rather than as a seam. Sized off the proxy's own 1.0 m skull:
+       this is the shape that has to carry the figure at range, and a
+       neat little bud on a big pot is a houseplant however it moves. */
+    part("head", ballGeo(0.410, 0.320, 0.440, 12, 8), C.bud,
+      { x: 0.03, y: 0.135, z: -0.360, rx: -0.34, ry: 0.16, tile: "fuzz", zone: ZONES.cloth, uv: 0.55 });
+    part("head", ballGeo(0.335, 0.180, 0.360, 12, 6), C.leafDark,
+      { x: 0.03, y: -0.105, z: -0.430, rx: -0.20, ry: 0.16, tile: "fuzz", zone: ZONES.cloth, uv: 0.45, occ: 0.16 });
+    part("head", boxGeo(0.500, 0.055, 0.320), C.dark,
+      { x: 0.03, y: 0.006, z: -0.470, rx: -0.26, ry: 0.16, tile: "flat", zone: ZONES.hard, uv: 0.2 });
 
-    // The head is a trumpet mouth. It is where the projectile leaves
-    // from, so it has to be unmistakable and it has to glow.
+    /* The throat, which is the gun. It sits INSIDE the mouth rather
+       than on the end of a snout, so the telegraph lights up a face,
+       and its aperture is on the muzzle enemies.js actually fires
+       from - root-local (0, 1.66, -0.70).
+       The aperture is small and RECESSED. A first pass had it at 0.13
+       and flush with the lip, where a pale disc dead centre on a green
+       face stopped being a throat and became a clown's nose. */
     part("head", latheGeo([
-      [0.030, -0.06], [0.058, 0.00], [0.078, 0.05], [0.125, 0.11], [0.118, 0.125],
-    ], 14), C.bud, { rx: -1.15, z: -0.02, tile: "leaf", zone: ZONES.cloth, uv: 0.7 });
-    part("head", discGeo(0.096, 0.096, 14), C.glowCol,
-      { y: 0.108, z: -0.098, rx: -1.15 + Math.PI * 0.5, tile: "flat", zone: ZONES.glow, glow: 0.8 });
-    demonEyes(api, { r: 0.026, spread: 0.050, y: 0.020, z: -0.070,
-      sclera: col(C.eye), pupil: col(C.dark) });
-    pair("hand", () => bladeGeo([
-      [0, 0, 0, 0.028, 0.010], [0, -0.070, -0.020, 0.048, 0.012], [0, -0.120, -0.040, 0.014, 0.005],
-    ], { ref: [0, 0, 1], sides: 5 }), C.leaf, () => ({ tile: "leaf", zone: ZONES.cloth, uv: 0.4 }));
+      [0.030, -0.10], [0.060, -0.02], [0.080, 0.04], [0.098, 0.10], [0.092, 0.115],
+    ], 14), C.leafDark,
+      { x: 0.03, y: 0.010, z: -0.440, rx: -1.30, tile: "leaf", zone: ZONES.cloth, uv: 0.4 });
+    part("head", discGeo(0.070, 0.070, 12), C.glowCol,
+      { x: 0.03, y: 0.036, z: -0.545, rx: -1.30 + Math.PI * 0.5, tile: "flat", zone: ZONES.glow, glow: 0.8 });
+
+    /* Two eyes under the hood, UNEVEN. A pair of matching dots is a
+       logo; one lower and smaller than the other is a face. Authored
+       by hand rather than through demonEyes for that reason. */
+    part("head", ballGeo(0.085, 0.092, 0.048, 10, 6), C.eye,
+      { x: -0.145, y: 0.250, z: -0.610, tile: "flat", zone: ZONES.eye, occ: -0.1 });
+    part("head", discGeo(0.047, 0.062, 10), C.dark,
+      { x: -0.142, y: 0.250, z: -0.642, ry: Math.PI, tile: "flat", zone: ZONES.eye });
+    part("head", ballGeo(0.068, 0.074, 0.042, 10, 6), C.eye,
+      { x: 0.215, y: 0.204, z: -0.575, tile: "flat", zone: ZONES.eye, occ: -0.1 });
+    part("head", discGeo(0.037, 0.050, 10), C.dark,
+      { x: 0.212, y: 0.204, z: -0.604, ry: Math.PI, tile: "flat", zone: ZONES.eye });
+
+    /* THE ARMS. Flattened across their width so each is a leaf seen
+       broadside and not a bat wing, and deliberately NOT a mirror
+       pair: the left is long and raised nearly to vertical - the shape
+       a thing makes just before it swings - and the right is short,
+       low and swept back. `pair` is not used here precisely because
+       these two are different objects. */
+    part("armL", bladeGeo([
+      [0, -0.02, 0, 0.055, 0.020],
+      [-0.115, -0.30, -0.055, 0.190, 0.030],
+      [-0.180, -0.56, -0.090, 0.150, 0.024],
+      [-0.205, -0.72, -0.100, 0.030, 0.010],
+    ], { ref: [0, 0, 1], sides: 5 }), C.leaf,
+    { tile: "leaf", zone: ZONES.cloth, uv: 0.18, occ: 0.05 });
+    part("armR", bladeGeo([
+      [0, -0.02, 0, 0.048, 0.018],
+      [0.135, -0.22, 0.075, 0.155, 0.026],
+      [0.235, -0.40, 0.145, 0.105, 0.018],
+      [0.270, -0.50, 0.180, 0.024, 0.008],
+    ], { ref: [0, 0, 1], sides: 5 }), C.leafDark,
+    { tile: "leaf", zone: ZONES.cloth, uv: 0.18, occ: 0.05 });
+
+    /* Two more leaves off the stem itself, at different heights and on
+       different bearings, plus one DEAD one hanging low off the back.
+       The hanging mass is the cheapest asymmetry there is and it stops
+       the base of the silhouette being a clean cone. */
+    part("chest", bladeGeo([
+      [0.04, 0.05, 0.02, 0.045, 0.016],
+      [0.30, 0.30, 0.16, 0.165, 0.026],
+      [0.46, 0.40, 0.26, 0.110, 0.018],
+      [0.52, 0.36, 0.31, 0.024, 0.008],
+    ], { ref: [0, 1, 0], sides: 5 }), C.leaf,
+    { tile: "leaf", zone: ZONES.cloth, uv: 0.18, occ: 0.05 });
+    part("spine", bladeGeo([
+      [-0.04, 0.06, 0.03, 0.040, 0.014],
+      [-0.26, 0.14, 0.26, 0.140, 0.022],
+      [-0.38, 0.10, 0.44, 0.095, 0.016],
+      [-0.42, 0.02, 0.52, 0.022, 0.008],
+    ], { ref: [0, 1, 0], sides: 5 }), C.leafDark,
+    { tile: "leaf", zone: ZONES.cloth, uv: 0.18, occ: 0.12 });
+    part("hips", bladeGeo([
+      [0.20, 0.09, 0.42, 0.036, 0.012],
+      [0.28, 0.02, 0.62, 0.130, 0.020],
+      [0.31, -0.14, 0.78, 0.085, 0.014],
+      [0.30, -0.26, 0.85, 0.020, 0.007],
+    ], { ref: [0, 1, 0], sides: 5 }), C.leafDead,
+    { tile: "leaf", zone: ZONES.cloth, uv: 0.18, occ: 0.18 });
   },
 
   /* --- Pay-Pig Demon --------------------------------------------------
@@ -2219,19 +2390,22 @@ const DEMON_FORMS = {
     ], { ref: [0, 0, 1], sides: 6 }), C.hair, { tile: "hair", zone: ZONES.hair, uv: 0.8 });
 
     /* ---- the sprung cloth ----
-       Hot pink on a gold costume, and it is the only place on the
-       figure that colour appears apart from the visor bar - so the
-       three chunks read as one prop rather than as three accidents,
-       and they carry the eye down the exclamation mark instead of
-       breaking it. Value-wise the sash is the mid step between the
-       near-black legs and the gold jacket, which is what stops the
-       figure ending in one unbroken bright mass at the waist. */
+       Burnt amber on a teal costume, and it is the only place on the
+       figure any colour but teal appears - so the three chunks read as
+       one prop rather than as three accidents, and they carry the eye
+       down the exclamation mark instead of breaking it. Value-wise the
+       sash is the mid step between the near-black legs and the bright
+       jacket, which is what stops the figure ending in one unbroken
+       bright mass at the waist.
+       It has its own palette key rather than borrowing `glowCol`: that
+       key is the visor bar, which is emissive and therefore the one
+       part of the figure whose value is not free to be a mid step. */
     part("sash", bladeGeo([
       [0, 0.015, 0.000, 0.062, 0.018],
       [-0.038, -0.170, -0.012, 0.082, 0.020],
       [-0.062, -0.350, -0.030, 0.070, 0.017],
       [-0.074, -0.470, -0.046, 0.028, 0.010],
-    ], { ref: [0, 0, 1], sides: 6 }), C.glowCol,
+    ], { ref: [0, 0, 1], sides: 6 }), C.sash,
     { tile: "satin", zone: ZONES.cloth, uv: 1, occ: 0.12 });
     // A pale stripe down the panel. A single flat satin plane is the
     // first tell in CONTRACT section 2 and this is the cheapest answer.
@@ -2249,7 +2423,7 @@ const DEMON_FORMS = {
         [s * 0.012, -0.110, 0.014, 0.038, 0.011],
         [s * 0.020, -0.215, 0.036, 0.030, 0.009],
         [s * 0.024, -0.290, 0.056, 0.010, 0.005],
-      ], { ref: [0, 0, 1], sides: 5 }), C.glowCol,
+      ], { ref: [0, 0, 1], sides: 5 }), C.sash,
       { tile: "satin", zone: ZONES.cloth, uv: 0.8 });
     }
 
@@ -2501,21 +2675,71 @@ export const specs = {
   lackey: {
     id: "lackey", name: "Lip-Sync Lackey", kind: "demon", form: "lackey",
     height: 1.5, seed: 0x1102, tint: 0xfb923c,
-    mods: { arm: 1.28, leg: 1.02, wide: 0.80, limb: 0.74 },
+    /* `headScale` and `neck` are ONE move, not two: the head grows to
+       the lollipop the form is named for and the shortened neck gives
+       back exactly the height it added, so the crown still lands at
+       1.51 m against a 1.5 m spec rather than poking out of the
+       archetype's own physics capsule.
+       `wide` stops at 0.98 deliberately. anim.js's shapeBroad switches
+       on below an arm-reach-to-shoulder ratio of 3.4; this build sits
+       at 3.62 (it was 5.06), so it still scores zero there and the
+       lackey gesture numbers documented in that file are unchanged. */
+    mods: { arm: 1.28, leg: 1.02, wide: 1.12, limb: 1.05, headScale: 1.62, neck: 0.80 },
+    /* `body` is the uniform, `skull` is the lollipop. They used to be
+       the same key and therefore the same colour, which is how the
+       whole figure ended up one flat chroma.
+       `lips` stays genuinely chromatic on purpose. A first pass took
+       the mouth down with everything else and the joke disappeared:
+       a dark band on a dark head next to a dark torso is not a mouth,
+       it is a shadow, and the mouth is the entire archetype. It is the
+       one saturated note on the figure and it is 0.4 m of a 1.5 m
+       body - big enough to read at range, small enough not to be the
+       mass the eye lands on first. */
     palette: {
-      body: 0xfb923c, limb: 0xe07322, claw: 0x7c3a10, dark: 0x2a1206,
-      eye: 0xfff6ea, lips: 0xd6265c, glowCol: 0x22c55e,
+      body: 0x5f3d2c, limb: 0x4a3128, claw: 0x2b1c18, dark: 0x140c0c,
+      skull: 0xa25a26, eye: 0xf7e3cf, lips: 0xa32a4a, teeth: 0xd9c9b4,
+      glowCol: 0x22c55e,
     },
   },
 
   plant: {
     id: "plant", name: "Industry Plant", kind: "demon", form: "plant",
-    height: 1.55, seed: 0x1103, tint: 0x22c55e, rooted: true,
-    mods: { leg: 0.55, arm: 0.92, wide: 1.0, limb: 0.9 },
+    /* 1.9 m, which is what enemies.js has always said this archetype
+       is - `ROSTER.plant.height` - and what its proxy is built to. The
+       rig was authored at 1.55 and, with a 0.55 leg mod under a
+       one-scale torso, reached 1.20 m at the crown: the two tiers of
+       the same enemy differed by 40% of its height and by six times
+       its silhouette area. The torso mod carries the extra: this
+       creature is stem, so length belongs between the hips and the
+       head rather than in a leg that lives inside a pot. */
+    height: 1.9, seed: 0x1103, tint: 0x22c55e, rooted: true,
+    mods: { leg: 0.55, arm: 1.0, wide: 1.05, limb: 1.0, torso: 1.5 },
+    /* The pot is the footprint, not the hips. Without this the blob
+       under a 1.3 m planter is 0.29 m across and the whole thing
+       hovers. */
+    shadowRadius: 0.74,
+    /* Re-valued toward its own proxy's ladder, NOT copied from it. The
+       proxy is an unlit MeshBasicMaterial, so its albedo IS its screen
+       value; everything here is cel-shaded and occluded, and lands at
+       roughly three quarters of its albedo in the lit bands and far
+       under that in the creases. Lifting the proxy's exact hexes
+       across produced a figure measuring p10 0.8 / p25 3.6 - darker
+       than the player, which is its own kind of wrong. These are that
+       set opened up about a stop.
+       The pot is the one deliberate departure from bright: it is the
+       bottom of this figure's value range, and terracotta 0xb45f2b was
+       simultaneously the brightest thing on the model and the single
+       strongest "this is a houseplant" signal in the frame. It is
+       opened one more stop than the rest for a reason that only shows
+       up in a measurement: at 0x2c4f38 the pot's shaded flank and
+       interior put this figure's p10 at 5.8 against the PLAYER's 7.9,
+       and she has to be the darkest thing in any frame she is in.
+       A dark planter is allowed to be dark; it is not allowed to be
+       darker than her. */
     palette: {
-      body: 0x22c55e, limb: 0x16a34a, claw: 0x3ddc7a, dark: 0x0d2b18,
-      eye: 0xfdfff6, leaf: 0x3ddc7a, leafDark: 0x15803d, bud: 0x86efac,
-      pot: 0xb45f2b, soil: 0x3a2416, glowCol: 0xd9f99d,
+      body: 0x1d6b3f, limb: 0x1a5c37, claw: 0x123f27, dark: 0x08160e,
+      eye: 0xeafff0, leaf: 0x39965a, leafDark: 0x256b3f, leafDead: 0x4c6330,
+      bud: 0x3aa862, pot: 0x3a6448, soil: 0x4a3a28, glowCol: 0xc8f06a,
     },
   },
 
@@ -2553,12 +2777,45 @@ export const specs = {
 
   dancer: {
     id: "dancer", name: "Backup Dancer Demon", kind: "demon", form: "dancer",
-    height: 1.78, seed: 0x1106, tint: 0xfacc15,
+    height: 1.78, seed: 0x1106, tint: 0x2ca1bf,
     mods: { leg: 1.08, arm: 1.10, wide: 0.88, limb: 0.80 },
+    /* THE SAME CREATURE AS THE PROXY IN enemies.js, WHICH IT WAS NOT.
+       This palette was gold and amber; the cheap non-rigged stand-in
+       for the same archetype is teal. RIG_BUDGET allows three rigs of
+       a kind on a course and a chorus line is four, so both tiers are
+       on screen together in the confrontation frame - a viewer sees
+       two colours of one creature standing in one rank, which reads as
+       a bug rather than as variety.
+
+       Teal rather than gold because the proxy is the constrained side:
+       it draws through an unlit MeshBasicMaterial, so its authored
+       colour IS its screen value and no lighting change can move it,
+       while this side is albedo and can be aimed anywhere. Course 1's
+       concourse is also a warm tan floor at luma ~205, which a gold
+       figure merges into by hue AND value, and the roster already
+       spends amber on the Pay-Pig.
+
+       The two paths therefore do NOT share hex values - the same hex
+       through a lit toon material, a 512px atlas and an additive rim
+       is a different pixel - they share HUE and SCREEN VALUE. Measured
+       off one captured frame with both tiers in it at the same
+       distance: proxy torso median 77.0, this rig's 76.4; mean RGB
+       (39,85,94) against (53,93,95). The jacket was authored two steps
+       lighter than the proxy's base for exactly that reason - a
+       saturated cyan cannot reach the proxy's value once a key light
+       multiplies it, so matching the swatch would have missed the
+       screen by 16 luma.
+
+       Structure is matched too, because a colour match with the
+       lightness inverted is still two creatures: bright torso and
+       head, near-black limbs, pale-teal crest and hands, dark visor.
+       The one warm note left is the sash - the only place any colour
+       but teal appears on the figure, which is what keeps it from
+       being one unbroken mass and what carries the eye down it. */
     palette: {
-      body: 0x8a5a2a, limb: 0xfacc15, claw: 0xfff0b0, dark: 0x231705,
-      eye: 0xfff8e0, jacket: 0xfacc15, pants: 0xf5b400, hair: 0x1b1206,
-      glowCol: 0xff5c8a,
+      body: 0x4fb6ce, limb: 0x123a4a, claw: 0xbfe4ef, dark: 0x061520,
+      eye: 0xe6fbff, jacket: 0x8ee0f2, pants: 0x0e2f3d, hair: 0xa9dbe8,
+      sash: 0xb4623a, glowCol: 0x8fe4f7,
     },
     extras: DANCER_BONES,
     /* It dances on the beat and only on the beat, so what has to read
@@ -2779,8 +3036,15 @@ export function build(spec) {
      rather than each of them remembering to ask.
      The radius comes off the figure's own hip width so a 1.05m imp
      does not get the same footprint as a three-metre boss. */
+  /* `shadowRadius` is an override for a figure whose FOOTPRINT is not
+     its hips. Hip width is the right default on a biped because that
+     is what the feet are under, and it is wrong by a factor of four
+     on the Industry Plant, whose entire lower body is a 1.3 m pot
+     standing flat on the floor - a 0.29 m blob under that leaves the
+     pot hovering, which is the failure this whole system exists to
+     prevent. */
   const contactShadowDecl = {
-    radius: Math.max(0.28, P.hipX * 2.6),
+    radius: S.shadowRadius || Math.max(0.28, P.hipX * 2.6),
     strength: S.kind === "hero" ? 0.62 : 0.5,
   };
 

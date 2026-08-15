@@ -438,6 +438,11 @@ export function buildSaveSystem(ctx, options = {}) {
          enemies and are rebound to this record by their stable IDs. */
       apostate: ctx.apostate?.snapshot?.() || null,
       distaff: ctx.distaff?.snapshot?.() || null,
+      /* The pit does not have a position to save - it is the only boss
+         in the game that cannot move - so its record carries the two
+         things that ARE its state instead: how far open it is, and what
+         each of the six limbs was doing. See `validateGarner`. */
+      garner: ctx.garner?.snapshot?.() || null,
       winnower: ctx.winnower?.snapshot?.() || null,
       districtBosses: ctx.districtBosses?.snapshot?.() || null,
       /* Only the venom already in the player. The pools on the ground
@@ -678,6 +683,38 @@ export function buildSaveSystem(ctx, options = {}) {
       new Set(["dormant", "alert", "soar", "strafe", "land", "stoke", "launch", "return", "dead"]))) {
       return false;
     }
+    /* The Garner's own validator rather than a loosened shared one. It
+       has no x/z/yaw to check and six limb pools that do, and widening
+       `validateDistrictEncounter` to make those optional would stop it
+       catching a truncated Distaff record - which is the whole job. */
+    const validateGarner = (record) => {
+      if (record === null || record === undefined) return true;
+      const phases = new Set(["dormant", "breach", "feeding", "gorge",
+        "sealing", "dead"]);
+      if (!isRecord(record) || !phases.has(record.phase)
+        || ![record.timer, record.open, record.health].every(isFiniteNumber)
+        || record.timer < 0 || record.timer > 600
+        || record.open < 0 || record.open > 1
+        || record.health < 0 || record.health > 10_000_000
+        || typeof record.defeated !== "boolean") return false;
+      if (record.instanceId !== null && record.instanceId !== undefined
+        && (typeof record.instanceId !== "string"
+          || !enemyIds.has(record.instanceId))) return false;
+      const limbPhases = new Set(["sheathed", "erupt", "rear", "lash",
+        "seize", "limp", "drag", "severed"]);
+      for (const field of ["armHp", "armRegrow"]) {
+        const list = record[field];
+        if (list === null || list === undefined) continue;
+        if (!Array.isArray(list) || list.length > 16
+          || !list.every((v) => isFiniteNumber(v) && v >= 0 && v <= 100000)) return false;
+      }
+      if (record.armPhases !== null && record.armPhases !== undefined) {
+        if (!Array.isArray(record.armPhases) || record.armPhases.length > 16
+          || !record.armPhases.every((p) => limbPhases.has(p))) return false;
+      }
+      return true;
+    };
+    if (!validateGarner(snapshot.garner)) return false;
     if (snapshot.districtBosses !== null && snapshot.districtBosses !== undefined) {
       const domain = snapshot.districtBosses;
       const expected = new Set((ctx.districtBosses?.status?.() || []).map((boss) => boss.key));
@@ -1261,6 +1298,20 @@ export function buildSaveSystem(ctx, options = {}) {
       }
     } else if (ctx.mission.bosses?.find((boss) => boss.key === "censer")?.done) {
       ctx.winnower?.restore?.({ phase: "dead", health: 0, defeated: true }, restoredEnemies);
+    }
+    if (snapshot.garner) {
+      if (ctx.garner?.restore?.(snapshot.garner, restoredEnemies) === false) {
+        throw new Error("Garner encounter restore was rejected.");
+      }
+    } else if (ctx.mission.bosses?.find((boss) => boss.key === "ossuary")?.done) {
+      ctx.garner?.restore?.({ phase: "dead", health: 0, defeated: true }, restoredEnemies);
+    } else {
+      /* A save written before the Ossuary boss existed still names the
+         district in its mission record, and the placeholder that used
+         to stand there was an ordinary enemy in `districtBosses`. Snap
+         the pit shut rather than leaving it in whatever state the
+         constructor happened to build it in. */
+      ctx.garner?.resetToPit?.();
     }
     if (ctx.districtBosses?.restore?.(snapshot.districtBosses || {}, restoredEnemies) === false) {
       throw new Error("District boss restore was rejected.");

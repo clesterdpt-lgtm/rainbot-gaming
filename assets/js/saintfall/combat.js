@@ -253,6 +253,70 @@ const HITBOX = {
     heart: { y: -0.85, z: 0.35, r: 1.25, mult: 4.0 },
   },
 
+  /* ------------------------------------------------------------------
+     THE GARNER. The same primitive as the Distaff - independent limbs
+     plus a body - reached from the opposite direction, which is exactly
+     why `legs: true` is a hit-table flavour rather than a species test.
+
+     The Distaff carries its body nine metres above eight legs, and the
+     fight is about cutting the legs until the body comes DOWN. The
+     Garner's body never moves: it is a mouth set in the ground, always
+     within reach, and the six tentacles are the thing that leaves. So
+     the two numbers that shape the encounter are inverted. `meleeReachY`
+     is low, because a tentacle is only a melee target while it is lying
+     on the sand and a raised one must not be swingable at; and the maw
+     is a real ranged target in every phase, which is the reason the
+     player has something to do while all six limbs are in the air.
+     ------------------------------------------------------------------ */
+  garner: {
+    legs: true,
+    legCount: 6,
+    /* Thicker than a Distaff leg because a tentacle IS thicker - the
+       rendered tube is 1.8m through at the root and tapers to a pad -
+       and the three capsules below are laid along its spline rather
+       than along a straight bone. A radius cut to the tip would make
+       the root, which is most of the visible limb, nearly unhittable. */
+    legRadius: 0.95,
+    /* The tip, and it is a designed target: the grasping pad is the
+       fattest part of a tentacle's last two metres and it is what lands
+       next to the player when a lash misses. */
+    footRadius: 1.35,
+    /* THE MAW, as a capsule between two live nodes garner.js drives -
+       the throat's floor and its lip. Both move: the mouth rises out of
+       the ground on the reveal and sinks back into it on the leash, and
+       a fixed offset would leave the hit volume standing in open air
+       above a closed pit. */
+    bodyBones: ["garner_throat", "garner_lip"],
+    /* Sized so that a player held off at the pit's lip can still swing
+       into the mouth, and no larger. The arithmetic is a contract with
+       garner.js's `keepOutScale`: the animal stops them at the inner
+       edge of the broken pan, 14m from the throat axis, and the lance
+       reaches 3.4m - so anything under 10.6m here would make the gorge
+       window ranged-only and the melee payoff a lie. It is still
+       narrower than the mouth, which is 19m across at the collar, so
+       shots wide of the tusks genuinely miss. */
+    bodyRadius: 6.8,
+    /* Ranged reward for shooting a gullet that is actually open. Modest,
+       for the same reason the Distaff's is: the limb fight has to stay
+       worth doing. */
+    weak: { mult: 1.5 },
+    /* And melee's, which is larger and applied in `meleeStrike`. A
+       player standing at the lip of an open mouth swinging a polearm
+       into it has earned more than a rifle shot from forty metres. */
+    collapsedMeleeMult: 2.6,
+    /* Low, and it is the whole tentacle mechanic. A lash that misses
+       falls across the sand and drags home along it; a lash that is
+       still winding up is eleven metres overhead. This one number is
+       what makes those two states different to a swing without either
+       of them needing to tell combat.js which it is. */
+    meleeReachY: 3.0,
+    /* Fallback capsule for explode()/shockwave(), which reasonably
+       treat "near it" as "hit it". Cut to the maw's collar rather than
+       to the crater: ordnance dropped on the rim of the pit should not
+       resolve on the animal at the bottom of it. */
+    r: 6.8, y0: -2.0, y1: 6.5, head: 3.5, headR: 2.0, headZ: 0,
+  },
+
   /* The Apostate is the player's own silhouette made hostile. Its capsule is
      deliberately close to the trooper's visible plate instead of receiving a
      boss-sized invisible volume; the extra insect limbs are readable armour,
@@ -608,24 +672,35 @@ export function buildCombat(ctx) {
 
   const _bodyLive2 = new THREE.Vector3();
 
-  /** Read all four live leg joints from the rendered skeleton.
+  /** Read all four live joints of one limb from the rendered scene.
    *
-   * `leg.foot` is the walking IK's requested plant point. It matches
-   * the rendered foot while IK owns the pose, but deliberately stops
-   * updating while authored collapse/recover clips own the bones. A
-   * hitbox built to that target therefore stayed standing while the
-   * visible lower legs folded several metres away. The foot bone is
+   * A LIMB IS FOUR NODES, root to tip, and deliberately nothing more
+   * specific than that. Two species satisfy this contract from
+   * completely different rigs: the Distaff's eight legs name their
+   * skeleton bones (coxa/femur/tibia/foot), and the Garner's six
+   * tentacles hand over a `chain` of four plain Object3Ds their own
+   * module re-places along a spline every frame. Everything below -
+   * three capsules and a tip sphere, the melee reach gate, the per-limb
+   * pool - is the same question in both cases, so it is asked once.
+   *
+   * `leg.foot` on the walkers is the IK's requested plant point. It
+   * matches the rendered foot while IK owns the pose, but deliberately
+   * stops updating while authored collapse/recover clips own the bones.
+   * A hitbox built to that target therefore stayed standing while the
+   * visible lower legs folded several metres away. The foot BONE is
    * authoritative in every phase because it is what skins the mesh. */
-  function distaffLegSpan(leg, outCoxa, outFemur, outTibia, outFoot) {
-    if (!leg?.coxa || !leg.femur || !leg.tibia || !leg.toe) return false;
-    leg.coxa.updateWorldMatrix(true, false);
-    leg.femur.updateWorldMatrix(true, false);
-    leg.tibia.updateWorldMatrix(true, false);
-    leg.toe.updateWorldMatrix(true, false);
-    outCoxa.setFromMatrixPosition(leg.coxa.matrixWorld);
-    outFemur.setFromMatrixPosition(leg.femur.matrixWorld);
-    outTibia.setFromMatrixPosition(leg.tibia.matrixWorld);
-    outFoot.setFromMatrixPosition(leg.toe.matrixWorld);
+  function limbSpan(leg, outA, outB, outC, outD) {
+    const chain = leg?.chain
+      || (leg?.coxa && leg.femur && leg.tibia && leg.toe
+        ? [leg.coxa, leg.femur, leg.tibia, leg.toe] : null);
+    if (!chain) return false;
+    const outs = [outA, outB, outC, outD];
+    for (let i = 0; i < 4; i += 1) {
+      const node = chain[i];
+      if (!node) return false;
+      node.updateWorldMatrix(true, false);
+      outs[i].setFromMatrixPosition(node.matrixWorld);
+    }
     return true;
   }
 
@@ -667,7 +742,7 @@ export function buildCombat(ctx) {
     for (let i = 0; i < (inst.legs?.length || 0); i += 1) {
       if (inst.legBroken?.[i]) continue;
       const leg = inst.legs[i];
-      if (!distaffLegSpan(leg, _legC, _legA, _legB, _legD)) continue;
+      if (!limbSpan(leg, _legC, _legA, _legB, _legD)) continue;
       const tCoxa = segmentHit(ox, oy, oz, dx, dy, dz, _legC, _legA, r * 1.25);
       if (tCoxa >= 0 && tCoxa < bestT) {
         bestT = tCoxa; legIndex = i; weak = false; found = true;
@@ -882,7 +957,7 @@ export function buildCombat(ctx) {
     for (let i = 0; i < (inst.legs?.length || 0); i += 1) {
       if (inst.legBroken?.[i]) continue;
       const leg = inst.legs[i];
-      if (!distaffLegSpan(leg, _legC, _legA, _legB, _legD)) continue;
+      if (!limbSpan(leg, _legC, _legA, _legB, _legD)) continue;
       const segs = [
         [_legC, _legA, r * 1.25],
         [_legA, _legB, r * 1.15],

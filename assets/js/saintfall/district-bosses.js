@@ -1,15 +1,17 @@
 /* ============================================================
    SAINTFALL - district boss hunt
 
-   Five encounters can use the shared enemy simulation while still
+   Four encounters can use the shared enemy simulation while still
    needing the lifecycle guarantees of a boss: a fixed home, a hidden
    reveal gate, an arena reset, durable identity, an objective marker,
-   and exactly one mission victory. The Distaff and Winnower retain
-   their bespoke controllers. Six districts unlock the giant Coulter
-   beneath the Fallen Saint; killing it unlocks the Apostate.
+   and exactly one mission victory. The Distaff, the Winnower and the
+   Garner retain their bespoke controllers, and this file reaches them
+   through `domain` rather than by key. Six districts unlock the giant
+   Coulter beneath the Fallen Saint; killing it unlocks the Apostate.
    ============================================================ */
 
 import { clamp, makeBus } from "saintfall/core.js";
+import { GARNER_CONFIG } from "saintfall/garner.js";
 import { DISTRICTS } from "saintfall/terrain.js";
 
 export const DISTRICT_BOSS_SITES = Object.freeze([
@@ -26,11 +28,16 @@ export const DISTRICT_BOSS_SITES = Object.freeze([
     arenaRadius: 92, domain: "distaff",
   }),
   Object.freeze({
-    key: "ossuary", district: "The Ossuary", boss: "The Bone Warden",
-    order: "BREAK THE BONE WARDEN", enemyKey: "harrow",
-    x: DISTRICTS.ossuary.x + 8, z: DISTRICTS.ossuary.z + 4,
-    arenaRadius: 112, aggroRadius: 72, spawnScale: 1.35, health: 2600,
-    placeholder: true, domain: "district", stage: "district",
+    key: "ossuary", district: "The Ossuary", boss: "The Garner",
+    order: "CLOSE THE GARNER", enemyKey: "garner",
+    /* Taken from the encounter rather than restated. The arena centre
+       and the mouth have to be the same point - the boundary check
+       measures from one and the fight happens at the other - and a
+       pit that moved without this following it would put the reset
+       ring a hundred metres off the thing it is supposed to contain. */
+    x: GARNER_CONFIG.pitX, z: GARNER_CONFIG.pitZ,
+    arenaRadius: 112, aggroRadius: GARNER_CONFIG.aggroRadius,
+    domain: "garner", stage: "district",
   }),
   Object.freeze({
     key: "bloom", district: "The Bloom", boss: "The Matriarch",
@@ -253,7 +260,6 @@ export function buildDistrictBosses(ctx) {
       enemyKey: record.site.enemyKey,
       stage: record.site.stage || "district",
       available: siteAvailable(record.site),
-      placeholder: !!record.site.placeholder,
       phase: record.phase,
       defeated: record.defeated,
       hidden: !!inst?.encounterHidden,
@@ -316,13 +322,18 @@ export function buildDistrictBosses(ctx) {
   function runtimeStatus(site) {
     if (site.key === "scar") return ctx.distaff?.status?.() || null;
     if (site.key === "censer") return ctx.winnower?.status?.() || null;
+    if (site.key === "ossuary") return ctx.garner?.status?.() || null;
     const record = records.get(site.key);
     return record ? publicRecord(record) : null;
   }
 
   function fightActive(status) {
     if (!status || status.defeated || status.dead) return false;
-    return !["dormant", "dead", "return", "returning"].includes(status.phase);
+    // "sealing" is the Garner's own withdrawal, and it belongs on this
+    // list for the same reason "returning" does: a boss that is going
+    // back to sleep must not trip the arena-exit reset on the way.
+    return !["dormant", "dead", "return", "returning", "sealing"]
+      .includes(status.phase);
   }
 
   function siteEvent(site, status = runtimeStatus(site)) {
@@ -341,6 +352,13 @@ export function buildDistrictBosses(ctx) {
   function resetArena(site) {
     if (site.domain === "distaff") ctx.distaff?.resetToLair?.();
     else if (site.domain === "winnower") ctx.winnower?.resetToPerch?.();
+    /* The pit CLOSES rather than snapping. Every other reset here is a
+       teleport home because the animal has somewhere to go; this one
+       has nowhere, so the reset is the animation - and a boss whose
+       arena you just left visibly swallowing itself back into the pan
+       is a much better answer to "why did the fight stop" than a
+       mouth that was there a frame ago and is not now. */
+    else if (site.domain === "garner") ctx.garner?.seal?.();
     else {
       const record = records.get(site.key);
       if (record) resetRecord(record, { silent: true });

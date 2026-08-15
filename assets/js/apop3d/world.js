@@ -272,11 +272,31 @@ export function create(ctx) {
       },
 
       /** A named camera framing. camera.js reads these for its presets. */
-      marker(name, pos, lookAt) {
-        markers.set(name, {
+      /**
+       * A named camera framing.
+       *
+       * `opts` is passed through to camera.js's solver, which reads
+       * `yaw`, `pitch`, `dist` and `fov` off a marker and previously
+       * could never receive any of them - this builder silently dropped
+       * everything past `lookAt`. That left a course with no way to say
+       * "this shot needs to stand further back", which is exactly what
+       * the sunken plaza needed: its rim occludes the fountain from a
+       * distant lens, the solver bisects inward, and the arrival shot
+       * ends up a close-up from inside the basin with the landmark
+       * cropped. A per-marker `dist` fixes that from the level, where
+       * the knowledge is.
+       */
+      marker(name, pos, lookAt, opts) {
+        const m = {
           pos: new THREE.Vector3(pos[0], pos[1], pos[2]),
           lookAt: lookAt ? new THREE.Vector3(lookAt[0], lookAt[1], lookAt[2]) : null,
-        });
+        };
+        if (opts) {
+          for (const k of ["yaw", "pitch", "dist", "fov"]) {
+            if (typeof opts[k] === "number") m[k] = opts[k];
+          }
+        }
+        markers.set(name, m);
       },
 
       spawn(index, pos, yaw) {

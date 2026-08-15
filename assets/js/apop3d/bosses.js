@@ -349,6 +349,9 @@ function buildTwinBody(palette) {
   return {
     root, material, parts: { torso, head, armL, armR },
     height: 1.85, top: 0.72 + 1.12 + 0.12 + 0.62 + 0.075,
+    // Shoulder to shoulder, arms included - the width camera.js sizes
+    // the subject's share of the picture from.
+    width: 1.30,
   };
 }
 
@@ -362,8 +365,57 @@ function buildTwinBody(palette) {
    framing that surplus was the part of the boss the top of the screen
    cut off - the shield was cropping the character it belongs to.
    ------------------------------------------------------------ */
-const SHIELD_R = 2.10;          // shell radius, authored units
-const SHIELD_Y = 1.81;          // shell centre, in the actor's root space
+/* ---- WHY THE SHELL NO LONGER SWALLOWS THE FIGURE ----
+
+   Ten blind rounds, and the one on the boss frame was flat: "the boss
+   is a pale blue-grey caged sphere, no head, no limbs. It reads as a
+   disco ball." That is not a lighting note and it is not fixable by
+   adding hardware to the outside - which was the last attempt, and the
+   record ring it produced is worth keeping but did not answer it.
+
+   The arithmetic. At 2.10 of radius centred 1.81 up, the shell covered
+   y -0.29 to 3.91 and 2.10 of half-width, and every part of the figure
+   sat inside that: brim 3.87, collar 3.87, shoulder bar 0.99 of
+   half-width, the pen arm deliberately held a hair inside the cage.
+   A sphere that contains the whole subject IS the subject's
+   silhouette, from every angle a camera can find. Bumps on it cannot
+   help; the sphere sets the scale.
+
+   So the cage now HUGS THE COAT and stops at the shoulders. Head, brim,
+   collar fan and shoulder bar stand clear above it, both arms break
+   its side - the long one with the contract pen is the diagonal the
+   whole figure was built around - and the torn hem hangs below its
+   south pole. Rendered as a pure black shape that is a head, a pair of
+   shoulders, an outstretched arm and a bell: a creature carrying a
+   cage, rather than a cage.
+
+   1.15 AND NOT 1.52, AND THE FIRST NUMBER WAS MEASURED WRONG.
+   A first pass at this took the radius from 2.10 to 1.52, which put
+   the figure's head 0.74 m clear of the shell on paper. Captured and
+   differenced against a boss-hidden control - the black-shape test,
+   run at the size a reviewer actually sees - the result was still a
+   ball with a stick through it. The arithmetic had left out the gold
+   record: it is authored at 1.42 of the shell's radius plus its tube,
+   so the RETAINER, not the shell, is the widest thing here, and at
+   1.52 the assembly measured 9.4 m across against a 3.4 m figure. A
+   head standing 0.74 m over a mass nine metres wide is a bump.
+   At 1.15 the whole retainer spans about 5 m, the shell itself stops
+   at the shoulder line, and everything from the chest up - shoulder
+   bar, both arms, brim, collar fan - is outside it.
+
+   THE ONE THING THIS COSTS. The pen arm used to be held a hair inside
+   the cage, on the argument that a pen through a sealed shell says the
+   shell is not sealed. It now reaches out between the ribs, and that
+   trade is deliberate: the arm is the figure's only long diagonal and
+   a diagonal is the first thing an eye finds in a still. The cage
+   reads as clamped around the coat rather than as a sealed bubble,
+   which is what a cage looks like anyway.
+
+   The fight is unchanged. The shell still closes and opens on the same
+   lift and tip, and `extentOf` is now the figure's own collar rather
+   than the shell's north pole. */
+const SHIELD_R = 1.15;          // shell radius, authored units
+const SHIELD_Y = 1.00;          // shell centre, in the actor's root space
 const SHIELD_LIFT = 0.62;       // how far the lid rises when it unlocks
 const SHIELD_TIP = 0.34;        // and how far it tips while it does
 const SHIELD_IDLE_GLOW = 0.85;  // membrane strength with the contract closed
@@ -874,17 +926,24 @@ function buildPhantomBody(palette) {
     root, material, shieldMat, shieldFrameMat, shieldTop, shieldBottom,
     parts: { torso, head, armL, armR, shield, shieldTop, shieldBottom, shieldField },
     height: 3.9,
-    /* The shell, not the figure. The brim tops out at 3.87 and the
-       collar fan at 3.87, so the north pole of the retainer is the
-       highest thing on this boss by four centimetres.
+    /* THE FIGURE, not the shell - which is the other way round from
+       what it was, and only because the shell moved. The brim tops out
+       at 3.87 and the collar fan at 3.87; the retainer's north pole is
+       now 2.15 and well under both.
        SHIELD_LIFT is deliberately NOT added. The lid does rise by that
        much while the contract window is open, but it is open for a
        beat and a half out of eight, and measured, budgeting for it
-       cost the `boss` capture outright: at 1.35 scale it adds 0.84 m
-       to the fight's extent, camera.js lifts its aim by half of
-       whatever this returns, and the boss left the top of the frame.
+       cost the `boss` capture outright: camera.js lifts its aim by half
+       of whatever this returns, and the boss left the top of the frame.
        The steady silhouette is what a still is framed on. */
-    top: SHIELD_Y + SHIELD_R,
+    top: 3.90,
+    /* Across the lens: the gold record ring is the widest thing here at
+       1.42 of the shell's radius plus its tube and counterweight, and
+       it is canted, so it reads as an ellipse crossing the cage from
+       any bearing. camera.js sizes the subject's share of the picture
+       from this. Re-derive it if SHIELD_R moves - it did, and the ring
+       is why the first correction did not work. */
+    width: 2 * (SHIELD_R * 1.42 + 0.44),
   };
 }
 
@@ -948,6 +1007,8 @@ function buildLuciferBody(palette) {
   return {
     root, material, parts: { torso, head, armL, armR, mic },
     height: 2.55, top: 3.42,
+    // Collar fan to collar fan, which is wider than the shoulders.
+    width: 2.70,
   };
 }
 
@@ -1014,6 +1075,25 @@ export function create(ctx) {
   const group = new NS.Group();
   group.name = "apop-bosses";
   ctx.scene.add(group);
+
+  /* Let a fight lay a real shadow on its own arena floor.
+     Nothing in this module ever set castShadow, so twelve metres of
+     hero geometry threw nothing - a blind reviewer noted the arcade
+     cabinets had harder shadows than the boss did. It could not have
+     worked before in any case: course 1 is roofed and its ceiling was
+     in the shadow map, so the key never reached the floor. Now that
+     the lid is excluded, the flag is worth setting. Applied on add
+     rather than in each body builder, so every fight gets it however
+     its geometry was assembled. */
+  const origAdd = group.add.bind(group);
+  group.add = (...objs) => {
+    for (const o of objs) {
+      if (o && typeof o.traverse === "function") {
+        o.traverse((m) => { if (m.isMesh || m.isInstancedMesh) m.castShadow = true; });
+      }
+    }
+    return origAdd(...objs);
+  };
 
   const player = makePlayerProbe(NS);
 
@@ -1212,6 +1292,12 @@ export function create(ctx) {
          that difference is precisely what crops off the top of a boss
          screenshot. See `extentOf`. */
       top: (built.top || built.height) * scale,
+      /* ...and how far it reaches ACROSS, which is the other half of
+         how much picture the fight can hold. camera.js sizes a subject
+         by the area of its silhouette now, not by its height, and on a
+         16:9 frame a subject as broad as it is tall covers nearly twice
+         the picture that its height alone predicts. */
+      width: (built.width || built.girth || (built.height || 1) * 0.8) * scale,
       girth: (opts.girth || 0.55) * scale,
       pos: new NS.Vector3(),
       home: new NS.Vector3(),
@@ -3321,6 +3407,24 @@ export function create(ctx) {
     return null;
   }
 
+  /** Which fight does a caller mean? An id, a course's booking id, the
+   *  string "boss" (camera.js passes its own preset name), or nothing
+   *  at all - all four mean "the fight this course is about". Shared by
+   *  `extentOf` and `widthOf` so the two can never disagree about which
+   *  boss they are describing. */
+  function fightFor(name) {
+    const key = String(name === undefined || name === null ? "" : name);
+    let f = null;
+    if (key && key !== "boss") {
+      f = fights.get(key) || null;
+      if (!f) {
+        const booking = resolveBooking(key, ctx.state ? ctx.state.course : undefined);
+        if (booking) f = fights.get(booking.fight) || null;
+      }
+    }
+    return f || activeFight() || courseFight();
+  }
+
   /** Route an incoming hit to whichever actor is nearest the source.
    *  Every player verb funnels through here so the per-fight damage
    *  gate cannot be bypassed. */
@@ -3631,10 +3735,19 @@ export function create(ctx) {
             // see the note above - with the chest and the fight's full
             // extent alongside it, so a caller that wants either can
             // take it without guessing at the proportion.
+            const floorY = arenaFloor(f, a.pos.x, a.pos.z);
             best = {
-              x: a.pos.x, y: arenaFloor(f, a.pos.x, a.pos.z), z: a.pos.z, id: a.id,
+              x: a.pos.x, y: floorY, z: a.pos.z, id: a.id,
               chestY: a.pos.y + a.height * 0.55,
               extent,
+              /* HOW MUCH OF THAT EXTENT IS AIR. Two of these three
+                 fights hover, and `extent` is measured from the arena
+                 floor, so a caller that treats it as the body's own
+                 height is composing a frame around a metre and a half
+                 of empty floor under the boss. camera.js sizes and
+                 CONTAINS a subject by its visible band now, and that
+                 band starts here. */
+              lift: Math.max(0, a.pos.y - floorY),
             };
           }
         }
@@ -3672,18 +3785,41 @@ export function create(ctx) {
      * "boss" (camera.js passes its own preset name), or nothing at
      * all - all four mean "the fight this course is about".
      */
-    extentOf(name) {
-      const key = String(name === undefined || name === null ? "" : name);
-      let f = null;
-      if (key && key !== "boss") {
-        f = fights.get(key) || null;
-        if (!f) {
-          const booking = resolveBooking(key,
-            ctx.state ? ctx.state.course : undefined);
-          if (booking) f = fights.get(booking.fight) || null;
-        }
+    /**
+     * How WIDE the fight is, in metres, at its widest visible course.
+     *
+     * The companion to `extentOf`, and it exists because camera.js
+     * stopped sizing a subject by frame height. A subject's share of a
+     * 16:9 picture is an area, and a shape that is as broad as it is
+     * tall holds nearly twice the picture its height alone predicts -
+     * so a boss sized by height came in at a third of the size the
+     * blind reviews have been asking for. Same resolution rules as
+     * `extentOf`: an id, a booking, "boss", or nothing at all.
+     */
+    widthOf(name) {
+      const f = fightFor(name);
+      if (!f || !f.actors.length) return 0;
+      let best = 0;
+      for (const a of f.actors) best = Math.max(best, a.width || 0);
+      /* Two actors abreast are one subject in the picture - the
+         Algorithm Twins are a mirror match and framing one of them is
+         framing half the fight. Spread is measured only between LIVE
+         actors, so a dormant pair reports one body's width and the
+         camera does not compose around a gap that is not there yet. */
+      let lo = Infinity, hi = -Infinity, live = 0;
+      for (const a of f.actors) {
+        const node = a.rig ? a.rig.root : a.root;
+        if (!node || !node.visible) continue;
+        live += 1;
+        lo = Math.min(lo, a.pos.x, a.pos.z);
+        hi = Math.max(hi, a.pos.x, a.pos.z);
       }
-      if (!f) f = activeFight() || courseFight();
+      if (live > 1 && hi > lo) best = Math.max(best, (hi - lo) * 0.7 + best * 0.5);
+      return +best.toFixed(2);
+    },
+
+    extentOf(name) {
+      const f = fightFor(name);
       if (!f || !f.actors.length) return 0;
 
       /* The steady hover each fight sits at when it is not being

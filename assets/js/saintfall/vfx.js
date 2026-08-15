@@ -883,14 +883,14 @@ function buildShafts(ctx, specs) {
     return true;
   }
 
-  for (let i = 0; i < prep.length; i += 1) writeShaft(i, prep[i]);
-  follow();
-  geo.computeBoundingSphere();
-  /* Pinned, because the sun-tracked cones move every few seconds and
-     a bounding sphere recomputed per rewrite is both a cost and a
-     source of frustum-cull popping. The basin is 2km across; one
-     sphere over the whole thing culls nothing and never lies. */
-  geo.boundingSphere.radius = Math.max(geo.boundingSphere.radius, 1800);
+  try {
+    geo.computeBoundingSphere();
+  } catch (_) {}
+  if (!geo.boundingSphere || !Number.isFinite(geo.boundingSphere.radius)) {
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1800);
+  } else {
+    geo.boundingSphere.radius = Math.max(geo.boundingSphere.radius, 1800);
+  }
 
   const mesh = new THREE.Mesh(geo, shaftMaterial(ctx));
   mesh.name = "shafts";

@@ -1881,6 +1881,49 @@ export function buildAudio(ctx) {
       winnower.bus.on("crash", (e) => explosion(e.x, e.z, 16));
       winnower.bus.on("defeated", () => chord([220, 294, 370, 440], 1.7, 0.24));
     }
+    /* The Ossuary's pit. Pitched LOWER than any other boss in the game
+       and deliberately so: the Distaff walks, the Winnower flies, and
+       this one is underneath the player. A cue that shares a register
+       with either of the others would put the sound of the fight in
+       the wrong place in the mix, and where the sound is coming from
+       is the only thing this animal's audio has to say. */
+    const garner = ctx.garner;
+    if (garner) {
+      // Not a sting. Two octaves of pedal under a fifth, held long
+      // enough to still be sounding when the plates finish falling.
+      garner.bus.on("aggro", () => chord([41, 55, 82, 110], 2.6, 0.30));
+      garner.bus.on("engaged", () => chord([49, 73, 98], 1.2, 0.20));
+      /* THE LIMB CUES ARE THE FIGHT, and the ordering of them is what
+         a player who is facing the wrong way listens to: a hard
+         positional surface as it breaks ground, a rising note while it
+         cocks back, and a wall impact when it lands on the pan. */
+      garner.bus.on("erupt", (e) => surface(e.x, e.z));
+      garner.bus.on("rear", (e) => hiss(e.x, e.z));
+      garner.bus.on("lash", (e) => rumble(e.x, e.z, 0.55));
+      garner.bus.on("lashMiss", (e) => impact(e.x, e.z, "wall"));
+      garner.bus.on("seize", (e) => impact(e.x, e.z, "flesh"));
+      garner.bus.on("sweep", (e) => impact(e.x, e.z, "flesh"));
+      garner.bus.on("sever", (e) => {
+        impact(e.x, e.z, "flesh");
+        chord([58, 87, 116], 0.7, 0.18);
+      });
+      // The draw. A long swell rather than a hit, because the inhale is
+      // four seconds of pressure and the player has to be able to hear
+      // it start from anywhere on the pan.
+      garner.bus.on("inhaleTelegraph", (e) => chord([37, 49, 74], 1.7, 0.26));
+      garner.bus.on("inhale", (e) => rumble(e.x, e.z, 1));
+      garner.bus.on("devour", (e) => explosion(e.x, e.z, 18));
+      garner.bus.on("spitTelegraph", (e) => hiss(e.x, e.z));
+      garner.bus.on("spit", (e) => surface(e.x, e.z));
+      garner.bus.on("shard", (e) => impact(e.x, e.z, e.direct ? "flesh" : "wall"));
+      // The window, and it is the one cue in this set that goes UP -
+      // everything else the Garner does is a threat, and this is the
+      // only thing it does that is an opportunity.
+      garner.bus.on("gorge", () => chord([98, 147, 196, 262], 1.5, 0.26));
+      garner.bus.on("gorgeEnd", () => chord([62, 82, 110], 0.8, 0.18));
+      garner.bus.on("sealing", (e) => rumble(e.x, e.z, 0.8));
+      garner.bus.on("defeated", () => chord([147, 196, 247, 294], 1.9, 0.26));
+    }
     /* The false saint uses the player's mechanical vocabulary in the
        Bloom register: familiar lance/boost transients under violet shell
        movement and a brood-call chord where a command confirmation belongs. */
@@ -1965,7 +2008,9 @@ export function buildAudio(ctx) {
         }
       }
     }
-    const throttle = clamp01(ctx.jetpack?.state?.throttle || 0);
+    const jetThrottle = clamp01(ctx.jetpack?.state?.throttle || 0);
+    const boostThrottle = ctx.boost?.state?.active ? (ctx.boost?.state?.holding ? 0.88 : 1.0) : 0;
+    const throttle = clamp01(Math.max(jetThrottle, boostThrottle));
     if (state.started && (throttle > 0.001 || jetLoop)) {
       startJetLoop();
       if (jetLoop) {
@@ -1981,60 +2026,20 @@ export function buildAudio(ctx) {
   /* ============================================================
      THE GLIDE AND THE FALL
 
-     Both had to be recognisable with your eyes elsewhere, and both
-     had to be distinct from the pack - which is a broadband roar -
-     because all three run off the same reliquary and would otherwise
-     blur into one texture.
-
-     The glide is a PITCHED slide: a falling sawtooth over a bandpass
-     that opens, so it reads as something being released rather than
-     as more thrust. The fall is the opposite shape - a rising choir
-     while it charges, then nothing, then a very low hit. The silence
-     between them is doing most of the work.
+     The glide/boost shares the same propulsion sfx as jetpack flight
+     (ignition burst, jet engine roar while held, and clean cutoff).
+     The fall uses its rising choir charge and heavy landing slam.
      ============================================================ */
 
-  /** The heel jets lighting. */
+  /** The heel jets lighting (matches flying ignition). */
   function boostIgnite(x, z) {
-    const t = now();
-    const dur = 0.55;
-    const g = voice("world", dur);
-    if (!g) return;
-    const p = place(g, x, z, 26, 240);
-    if (!p) return;
-    const amp = 0.42 * p.atten;
-
-    // The release: a hard downward sweep, not a boom.
-    const slide = ac.createOscillator();
-    slide.type = "sawtooth";
-    slide.frequency.setValueAtTime(660, t);
-    slide.frequency.exponentialRampToValueAtTime(112, t + 0.26);
-    const sf = ac.createBiquadFilter();
-    sf.type = "bandpass";
-    sf.Q.value = 3.2;
-    sf.frequency.setValueAtTime(520, t);
-    sf.frequency.exponentialRampToValueAtTime(2400, t + 0.22);
-    const sg = ac.createGain();
-    sg.gain.setValueAtTime(0.0001, t);
-    sg.gain.linearRampToValueAtTime(amp, t + 0.012);
-    sg.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
-    slide.connect(sf); sf.connect(sg); sg.connect(p.node);
-    slide.start(t); slide.stop(t + 0.36);
-
-    // Grit under it, so it has ground contact.
-    const rush = noiseSource(1.25);
-    const rf = ac.createBiquadFilter();
-    rf.type = "highpass";
-    rf.frequency.setValueAtTime(900, t);
-    rf.frequency.exponentialRampToValueAtTime(240, t + dur);
-    const rg = ac.createGain();
-    rg.gain.setValueAtTime(amp * 0.55, t);
-    rg.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    rush.connect(rf); rf.connect(rg); rg.connect(p.node);
-    rush.start(t); rush.stop(t + dur);
+    jetIgnite();
   }
 
-  /** Release, or a glide cut short. */
-  function boostCut() { blip(196, 0.10, 0.055, "triangle"); }
+  /** Release, or a glide cut short (matches flying cutoff). */
+  function boostCut() {
+    jetCutoff();
+  }
 
   /** Contact while ramming. */
   function boostHit(x, z, heavy = false) {

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quiet Quitting — Rainbot Network</title>
+  <link rel="manifest" href="../site.webmanifest" />
+  <meta name="theme-color" content="#05070d" />
+  <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/quiet-quitting.html" />
+  <meta name="description" content="A Pac-Man arcade parody. You're a burned-out remote worker dodging micromanagers and HR bots in a cubicle maze. Grab coffee, snatch paychecks, and become a $350/hr Consultant to fire the bosses." />
+  <meta property="og:title" content="Quiet Quitting — Rainbot Network" />
+  <meta property="og:description" content="Dodge micromanagers, avoid calendar blockers, and snatch paychecks in this satirical Pac-Man maze chaser." />
+  <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mockup/card-quiet-quitting.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Quiet Quitting — Rainbot Network" />
+  <meta name="twitter:description" content="Dodge micromanagers, avoid calendar blockers, and snatch paychecks in this satirical Pac-Man maze chaser." />
+  <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/mockup/card-quiet-quitting.jpg" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;600;800;900&family=JetBrains+Mono:wght@400;700;800&family=Press+Start+2P&display=swap" />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260812-game-chrome-2" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%2305070d'/%3E%3Ccircle cx='50' cy='50' r='34' fill='%23ffd700'/%3E%3Cpath d='M50 50 L84 32 A34 34 0 0 0 84 68 Z' fill='%2305070d'/%3E%3Ccircle cx='50' cy='32' r='5' fill='%2305070d'/%3E%3Cpath d='M20 50 A30 30 0 0 1 80 50' stroke='%2323dff2' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <style>
+    .office-stage {
+      background:
+        radial-gradient(circle at 20% 10%, rgba(35, 223, 242, 0.08), transparent 30%),
+        radial-gradient(circle at 80% 90%, rgba(255, 0, 127, 0.08), transparent 30%),
+        linear-gradient(180deg, #090d1a, #05070d);
+      border-color: rgba(35, 223, 242, 0.25);
+    }
+
+    .canvas-wrap--pac {
+      --game-aspect: 0.903;
+      --game-aspect-ratio: 28 / 31;
+      --game-max-width: 672px;
+      aspect-ratio: 28 / 31;
+      max-width: 672px;
+      margin: 0 auto;
+      background: #060913;
+      border: 2px solid rgba(35, 223, 242, 0.35);
+      border-radius: 8px;
+      box-shadow: 0 14px 44px rgba(0, 0, 0, 0.7), 0 0 24px rgba(35, 223, 242, 0.12);
+      overflow: hidden;
+    }
+
+    .canvas-wrap--pac #gameCanvas {
+      background: #060913;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+    }
+
+    .hud__status {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      color: var(--ink-dim);
+    }
+
+    .hud__status--consultant {
+      color: #ffd700 !important;
+      font-weight: 800;
+      animation: pulseConsultant 0.8s ease-in-out infinite alternate;
+    }
+
+    @keyframes pulseConsultant {
+      from { opacity: 0.8; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1.02); }
+    }
+
+    .office-feed {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .feed-item {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--ink-dim);
+      background: #070a14;
+      border-left: 3px solid var(--panel-2);
+      border-radius: 0 6px 6px 0;
+      padding: 6px 10px;
+      line-height: 1.35;
+    }
+
+    .feed-item--fresh {
+      color: var(--ink) !important;
+      border-left-color: var(--accent) !important;
+    }
+
+    .boss-guide {
+      display: grid;
+      gap: 8px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--ink-dim);
+    }
+
+    .boss-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #070a14;
+      padding: 6px 10px;
+      border-radius: 6px;
+    }
+
+    .boss-badge {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body class="arcade-page">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">💼 Quiet Quitting</h1>
+        <div class="game-page__sub">Dodge bosses · Snatch paychecks · Bill $350/hr as a Consultant</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">← All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage office-stage" style="position:relative;">
+        <div class="hud">
+          <div class="hud__item"><span class="hud__label">PAYOUT</span><span class="hud__value" id="hud-score">0</span></div>
+          <div class="hud__item"><span class="hud__label">RECORD</span><span class="hud__value" id="hud-best">0</span></div>
+          <div class="hud__item"><span class="hud__label">LEVEL</span><span class="hud__value" id="hud-level">1</span></div>
+          <div class="hud__item"><span class="hud__label">BREAKS</span><span class="hud__value" id="hud-lives">☕☕☕</span></div>
+          <div class="hud__item"><span class="hud__label">MODE</span><span class="hud__value hud__status" id="hud-status">QUIET QUITTING</span></div>
+        </div>
+
+        <div class="canvas-wrap canvas-wrap--pac">
+          <button class="fs-btn" id="btn-fullscreen" type="button" data-rb-auto-fs="1" aria-label="Max screen" title="Max screen">⛶</button>
+          <canvas id="gameCanvas" width="672" height="744" tabindex="0" aria-label="Quiet Quitting cubicle maze"></canvas>
+
+          <div class="overlay overlay--show" id="overlay">
+            <h2 class="overlay__title" id="overlay-title">💼 QUIET QUITTING</h2>
+            <p class="overlay__sub" id="overlay-sub">
+              You're a burned-out remote worker trying to survive the 9-to-5. Navigate the cubicle farm, collect paycheck cents, and avoid getting dragged into pointless syncs.
+              <br><br>
+              Grab a glowing <strong>$350/hr Consultant Badge</strong> to turn all managers into panicked bootlickers and bill them for severance!
+            </p>
+            <div class="overlay__score" id="overlay-score"></div>
+            <button class="btn btn--primary" id="btn-primary">Clock In</button>
+          </div>
+        </div>
+
+        <p class="merge-hint">
+          Steer with <kbd>WASD</kbd> / <kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> or swipe. Press <kbd>P</kbd> to pause, <kbd>M</kbd> for sound.
+        </p>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel">
+          <img class="game-side__poster" src="../assets/img/mockup/card-quiet-quitting.jpg" alt="Quiet Quitting arcade key art — worker fleeing corporate managers through neon cubicles" />
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">CONTROLS</h3>
+          <div class="controls-row">
+            <button class="btn btn--secondary" id="btn-new" type="button" style="font-size:13px;padding:8px 12px;">New game</button>
+            <button class="btn btn--ghost" id="btn-pause" type="button" style="font-size:13px;padding:8px 12px;">Pause</button>
+            <button class="btn btn--ghost" id="btn-sound" type="button" aria-pressed="true" style="font-size:13px;padding:8px 12px;">Sound On</button>
+          </div>
+          <div class="mobile-controls" aria-label="Direction controls">
+            <div class="mobile-controls__dpad">
+              <button class="btn btn--ghost" data-mobile-dir="up" aria-label="Move up">↑</button>
+              <button class="btn btn--ghost" data-mobile-dir="left" aria-label="Move left">←</button>
+              <button class="btn btn--ghost" data-mobile-dir="right" aria-label="Move right">→</button>
+              <button class="btn btn--ghost" data-mobile-dir="down" aria-label="Move down">↓</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">OFFICE ROGUES GALLERY</h3>
+          <div class="boss-guide">
+            <div class="boss-row">
+              <span class="boss-badge" style="background:#ff3366;"></span>
+              <div><strong style="color:#fff;">Micromanager:</strong> Directly tracks you down to ask for updates.</div>
+            </div>
+            <div class="boss-row">
+              <span class="boss-badge" style="background:#ff77aa;"></span>
+              <div><strong style="color:#fff;">Calendar Blocker:</strong> Aims 4 tiles ahead to drop 30m invites.</div>
+            </div>
+            <div class="boss-row">
+              <span class="boss-badge" style="background:#2ee0ff;"></span>
+              <div><strong style="color:#fff;">Intern:</strong> Chaotic flanker using vector pincer tactics.</div>
+            </div>
+            <div class="boss-row">
+              <span class="boss-badge" style="background:#ff9933;"></span>
+              <div><strong style="color:#fff;">HR Compliance Bot:</strong> Paces breakroom; stalks if far away.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="game-side__panel">
+          <h3 class="game-side__title">LIVE SLACK FEED</h3>
+          <ul class="office-feed" id="office-feed">
+            <li class="feed-item feed-item--fresh">👋 Welcome to the team! Remember our core value: Extreme Synergy.</li>
+          </ul>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li><strong style="color:var(--ink);">Clear the Cubicles:</strong> Chomp all paycheck cents and coffee beans on the floor to finish the shift and earn a promotion.</li>
+            <li><strong style="color:var(--ink);">Promoted to Consultant:</strong> Eat a flashing pink badge to reverse the power balance. Chasing down a manager awards <strong>200, 400, 800, and 1600 pts</strong> in a single surge!</li>
+            <li><strong style="color:var(--ink);">Breakroom Perks:</strong> Grab periodic spawns like 🍕 Free Pizza, ☕ Cold Brew, and 🪂 Golden Parachutes for massive bonus cash.</li>
+            <li><strong style="color:var(--ink);">Warp Tunnels:</strong> Slip through the left and right server closet vents to quickly loop across the floor plan.</li>
+          </ul>
+          <p style="color: var(--ink-dim); font-size: 11px; margin-top: 10px; font-style: italic;">
+            <strong>Parody.</strong> A satirical homage to corporate work culture and classic 1980 arcade maze games. No actual interns or micromanagers were harmed during development.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>© 2026 Rainbot Network. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
+  <script src="../assets/js/main.js?v=20260813-apop3d-1"></script>
+  <script src="../assets/js/quiet-quitting.js?v=20260815-v1"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

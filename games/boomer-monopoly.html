@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Boomer Monopoly - Rainbot Network</title>
+  <title>Boomer Monopoly — Rainbot Network</title>
   <link rel="manifest" href="../site.webmanifest" />
   <meta name="theme-color" content="#05070d" />
   <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/boomer-monopoly.html" />
-  <meta property="og:title" content="Boomer Monopoly - Rainbot Network" />
+  <meta property="og:title" content="Boomer Monopoly — Rainbot Network" />
   <meta property="og:description" content="Boomer Monopoly - a loud satirical housing board game where equity glows, rent spikes, and every cul-de-sac is a personality test." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/boomer-monopoly.html" />
   <meta property="og:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Boomer Monopoly - Rainbot Network" />
+  <meta name="twitter:title" content="Boomer Monopoly — Rainbot Network" />
   <meta name="twitter:description" content="Boomer Monopoly - a loud satirical housing board game where equity glows, rent spikes, and every cul-de-sac is a personality test." />
   <meta name="twitter:image" content="https://clesterdpt-lgtm.github.io/rainbot-gaming/assets/img/rainbot-network-social-v1.png" />
   <meta name="description" content="Boomer Monopoly - a loud satirical housing board game where equity glows, rent spikes, and every cul-de-sac is a personality test." />
@@ -32,11 +32,13 @@
       background:
         radial-gradient(circle at 50% 50%, rgba(255, 212, 59, 0.2), transparent 35%),
         linear-gradient(145deg, #102018, #07100d 58%, #1e1208);
-      border-color: rgba(255, 212, 59, 0.52);
+      border: 2px solid rgba(255, 212, 59, 0.52);
       box-shadow:
         0 0 0 1px rgba(46, 224, 255, 0.18),
-        0 18px 45px rgba(0, 0, 0, 0.42),
-        0 0 42px rgba(255, 46, 136, 0.13);
+        0 18px 45px rgba(0, 0, 0, 0.5),
+        0 0 42px rgba(255, 212, 59, 0.15);
+      border-radius: 14px;
+      overflow: hidden;
     }
 
     .boomer-page .game-page {
@@ -46,25 +48,28 @@
 
     .boomer-page .game-layout {
       gap: 12px;
-      grid-template-columns: minmax(0, 1fr) minmax(248px, 300px);
+      grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
     }
 
     .boomer-page .game-stage {
       gap: 8px;
-      padding: 8px;
+      padding: 10px;
       background:
         linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)),
-        rgba(8, 10, 20, 0.88);
+        rgba(8, 10, 20, 0.9);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 212, 59, 0.2);
     }
 
     .boomer-page .hud {
-      border-color: rgba(255, 212, 59, 0.26);
-      padding: 7px 10px;
+      border-color: rgba(255, 212, 59, 0.35);
+      padding: 7px 12px;
+      background: rgba(8, 14, 22, 0.95);
     }
 
     .boomer-page .hud__value {
       color: #ffd43b;
-      text-shadow: 0 0 14px rgba(255, 212, 59, 0.25);
+      text-shadow: 0 0 14px rgba(255, 212, 59, 0.3);
     }
 
     .boomer-page .canvas-wrap--boomer {
@@ -77,12 +82,103 @@
       }
     }
 
+    /* Start / End Game Overlay */
+    .boomer-page .overlay {
+      background: rgba(4, 8, 16, 0.92);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      padding: 24px;
+    }
+
+    .boomer-menu-card {
+      background: rgba(12, 20, 32, 0.96);
+      border: 2px solid rgba(255, 212, 59, 0.5);
+      border-radius: 14px;
+      padding: clamp(18px, 4vw, 26px);
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(255, 212, 59, 0.2);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .boomer-menu-tag {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      color: #ffd43b;
+      background: rgba(255, 212, 59, 0.12);
+      border: 1px solid rgba(255, 212, 59, 0.35);
+      padding: 4px 10px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .boomer-menu-title {
+      font-family: var(--font-display);
+      font-size: clamp(20px, 4.5vw, 26px);
+      color: #ffffff;
+      margin: 0 0 12px;
+      text-shadow: 0 0 16px rgba(255, 212, 59, 0.4);
+    }
+
+    .boomer-brief-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+      margin: 0 0 16px;
+      text-align: left;
+    }
+
+    .boomer-brief-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 12px;
+      line-height: 1.35;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .boomer-brief-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .boomer-start-btn {
+      width: 100%;
+      font-size: 16px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-family: var(--font-display);
+      letter-spacing: 0.5px;
+      background: linear-gradient(180deg, #ffd43b, #d97706);
+      color: #030810;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(255, 212, 59, 0.4);
+      transition: all 0.15s ease;
+    }
+
+    .boomer-start-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 22px rgba(255, 212, 59, 0.6);
+    }
+
     .boomer-decision {
       width: 100%;
       background:
         linear-gradient(135deg, rgba(255, 212, 59, 0.08), transparent 40%),
-        rgba(8, 8, 16, 0.92);
-      border: 1px solid rgba(255, 212, 59, 0.24);
+        rgba(8, 12, 22, 0.95);
+      border: 1px solid rgba(255, 212, 59, 0.35);
       border-radius: 8px;
       color: var(--ink-dim);
       display: grid;
@@ -125,19 +221,21 @@
       align-items: center;
       background:
         linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)),
-        rgba(7, 10, 20, 0.9);
+        rgba(7, 12, 22, 0.9);
       border: 1px solid rgba(255,255,255,0.11);
       border-radius: 8px;
       display: grid;
       gap: 8px;
-      grid-template-columns: 12px minmax(0, 1fr) auto;
+      grid-template-columns: 14px minmax(0, 1fr) auto;
       padding: 9px 10px;
+      transition: all 0.2s ease;
     }
 
     .boomer-player__chip {
       border-radius: 999px;
-      height: 12px;
-      width: 12px;
+      height: 14px;
+      width: 14px;
+      box-shadow: 0 0 8px currentColor;
     }
 
     .boomer-player strong {
@@ -160,8 +258,8 @@
     .boomer-player.is-active {
       border-color: #ffd43b;
       box-shadow:
-        0 0 0 1px rgba(247, 215, 22, 0.18),
-        0 0 24px rgba(247, 215, 22, 0.12);
+        0 0 0 1px rgba(255, 212, 59, 0.3),
+        0 0 20px rgba(255, 212, 59, 0.2);
     }
 
     .boomer-log {
@@ -175,7 +273,7 @@
     .boomer-log li {
       background:
         linear-gradient(90deg, rgba(46, 224, 255, 0.07), transparent 38%),
-        rgba(8, 8, 16, 0.78);
+        rgba(8, 12, 22, 0.85);
       border-left: 3px solid var(--panel-2);
       border-radius: 4px;
       color: var(--ink-dim);
@@ -185,7 +283,7 @@
     }
 
     .boomer-log li:first-child {
-      border-left-color: #ff2e88;
+      border-left-color: #ffd43b;
       color: var(--ink);
     }
 
@@ -203,20 +301,6 @@
       border-radius: 4px;
       color: var(--accent-3);
       padding: 1px 5px;
-    }
-
-    @media (max-width: 520px) {
-      .boomer-decision__text {
-        font-size: 13px;
-      }
-
-      .boomer-player {
-        grid-template-columns: 10px minmax(0, 1fr);
-      }
-
-      .boomer-player em {
-        grid-column: 2;
-      }
     }
   </style>
 </head>
@@ -241,20 +325,40 @@
           <div class="hud__item"><span class="hud__label">HIGH</span><span class="hud__value" id="hud-high">$0</span></div>
         </div>
 
-        <div class="canvas-wrap canvas-wrap--ar-640-640 canvas-wrap--boomer">
+        <div class="canvas-wrap canvas-wrap--ar-640-640 canvas-wrap--boomer" data-fit="fill">
           <button class="fs-btn" id="btn-fullscreen" type="button" data-rb-auto-fs="1" aria-label="Max screen" title="Max screen">⛶</button>
           <canvas id="gameCanvas" width="720" height="720" tabindex="0"></canvas>
 
           <div class="overlay overlay--show" id="overlay">
-            <h2 class="overlay__title" id="overlay-title">🏘 BOOMER MONOPOLY</h2>
-            <p class="overlay__sub" id="overlay-sub">
-              Buy the neighborhood before anyone younger than you can qualify for a mortgage.
-              <br><br>
-              Roll through the equity casino, collect absurd rent, and turn every starter home
-              into a cautionary listing.
-            </p>
-            <div class="overlay__score" id="overlay-score"></div>
-            <button class="btn btn--primary" id="btn-primary">Start buying</button>
+            <div class="boomer-menu-card">
+              <span class="boomer-menu-tag">DELUXE EDITION</span>
+              <h2 class="boomer-menu-title" id="overlay-title">🏘 BOOMER MONOPOLY</h2>
+              
+              <div class="boomer-brief-grid">
+                <div class="boomer-brief-item">
+                  <span class="boomer-brief-icon">🎲</span>
+                  <div>
+                    <strong>Roll for Equity:</strong> Roll the tumbling dice to advance through suburban cul-de-sacs.
+                  </div>
+                </div>
+                <div class="boomer-brief-item">
+                  <span class="boomer-brief-icon">🏡</span>
+                  <div>
+                    <strong>Hoard & Renovate:</strong> Buy starter homes, upgrade to luxury McMansions, and extract massive rent.
+                  </div>
+                </div>
+                <div class="boomer-brief-item">
+                  <span class="boomer-brief-icon">📈</span>
+                  <div>
+                    <strong>Survive 16 Rounds:</strong> Watch out for HOA notices, rate hikes, and property taxes to finish #1!
+                  </div>
+                </div>
+              </div>
+
+              <div id="overlay-score" style="display:none;font-family:var(--font-mono);font-size:13px;margin-bottom:12px;color:var(--strait-cyan);"></div>
+
+              <button class="boomer-start-btn" id="btn-primary">START BUYING</button>
+            </div>
           </div>
         </div>
 
@@ -271,6 +375,7 @@
           <div class="controls-row">
             <button class="btn btn--secondary" id="btn-pause" style="font-size:13px;padding:8px 12px;">Pause</button>
             <button class="btn btn--ghost" id="btn-restart" style="font-size:13px;padding:8px 12px;">Restart</button>
+            <button class="btn btn--ghost" id="btn-sound" aria-pressed="true" style="font-size:13px;padding:8px 12px;">Sound on</button>
           </div>
           <p class="boomer-hotkeys">
             <kbd>Space</kbd> or <kbd>R</kbd> roll · <kbd>B</kbd> buy/renovate · <kbd>P</kbd> pass
@@ -329,7 +434,7 @@
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260813-apop3d-1"></script>
-  <script src="../assets/js/boomer-monopoly.js?v=20260616-save-1"></script>
+  <script src="../assets/js/boomer-monopoly.js?v=20260814-v2-pro"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

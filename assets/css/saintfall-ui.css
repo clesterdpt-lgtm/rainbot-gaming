@@ -1785,9 +1785,62 @@ body.rb-game-maxed .saintfall-page .rb-standalone-surface{container-name:none}
   position:absolute;left:0;right:0;top:calc(100% + .25rem);height:.8rem;min-height:0;margin:0;
   color:rgba(219,239,241,.68);font-size:9px;pointer-events:none
 }
-#sf-hud .sf-hud__vitalrow #sf-ammo{position:absolute;left:0;top:0}
 #sf-hud .sf-hud__vitalrow #sf-reinf{
   position:absolute;right:0;top:0;color:#f5d88e;text-shadow:0 1px 4px rgba(0,0,0,.95);white-space:nowrap
+}
+
+/* Weapon heat sits directly above the three call sigils. The pair of equal
+   half-paths fills outward from the centre, preserving a deliberate
+   symmetrical silhouette without creating another HUD panel. */
+#sf-hud .sf-hud__heat.sf-heat{
+  position:absolute;z-index:5;left:50%;bottom:calc(max(4.25rem,calc(env(safe-area-inset-bottom) + 4.05rem)) + 2.55rem);
+  display:block;width:clamp(4.7rem,8cqw,6.25rem);height:1.8rem;
+  margin:0;transform:translateX(-50%);pointer-events:none;overflow:visible;
+  opacity:.3;filter:none;transition:opacity .18s ease,filter .18s ease
+}
+#sf-hud .sf-heat__crescent{display:block;width:100%;height:100%;overflow:visible}
+#sf-hud .sf-heat__track,
+#sf-hud .sf-heat__fill{
+  fill:none;stroke-linecap:round;stroke-linejoin:round
+}
+#sf-hud .sf-heat__track{
+  stroke:rgba(239,224,185,.18);stroke-width:2.4
+}
+#sf-hud .sf-heat__fill{
+  stroke:#d8a441;stroke-width:3.2;stroke-dasharray:0 100;
+  filter:drop-shadow(0 0 2.5px rgba(216,164,65,.46));
+  transition:stroke-dasharray .08s linear,stroke .18s ease,filter .18s ease
+}
+#sf-hud .sf-heat__core{
+  fill:#e8c66e;opacity:.42;filter:drop-shadow(0 0 2px rgba(216,164,65,.5))
+}
+#sf-hud .sf-hud__heat[data-state="heating"]{opacity:.58}
+#sf-hud .sf-hud__heat[data-state="warm"]{opacity:.78}
+#sf-hud .sf-hud__heat[data-state="hot"]{opacity:.94}
+#sf-hud .sf-hud__heat[data-state="hot"] .sf-heat__fill{
+  stroke:#f09a3d;filter:drop-shadow(0 0 3.5px rgba(240,112,45,.62))
+}
+#sf-hud .sf-hud__heat.is-over{
+  opacity:1;animation:sf-heat-crescent-alarm .72s ease-in-out infinite
+}
+#sf-hud .sf-hud__heat.is-over .sf-heat__fill{
+  stroke:#ff683d;filter:drop-shadow(0 0 4.5px rgba(255,75,42,.8))
+}
+#sf-hud .sf-hud__heat.is-venting{opacity:.88}
+#sf-hud .sf-hud__heat.is-venting .sf-heat__fill{
+  stroke:#65d8c1;filter:drop-shadow(0 0 3.5px rgba(79,216,189,.65));
+  animation:sf-heat-crescent-vent .64s ease-in-out infinite alternate
+}
+#sf-hud .sf-hud__heat u{
+  position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;
+  padding:0!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;
+  clip-path:inset(50%)!important;white-space:nowrap!important;border:0!important
+}
+@keyframes sf-heat-crescent-alarm{
+  0%,100%{filter:brightness(1)}50%{filter:brightness(1.22)}
+}
+@keyframes sf-heat-crescent-vent{
+  from{opacity:.58}to{opacity:1}
 }
 
 #sf-hud .sf-hud__command{
@@ -1826,6 +1879,7 @@ body.rb-game-maxed .saintfall-page .rb-standalone-surface{container-name:none}
   border-color:rgba(115,216,237,.36);background:rgba(3,9,13,.76);color:var(--sfu-cyan);
   box-shadow:inset 0 -2px 0 rgba(115,216,237,.28),0 .4rem 1.1rem rgba(0,0,0,.24)
 }
+.sf-stage.sf-touch-enabled #sf-hud .sf-hud__heat.sf-heat{width:4.55rem;height:1.7rem}
 .sf-stage.sf-touch-enabled .sf-menu-trigger--mobile span{color:rgba(194,239,247,.78)}
 .sf-stage.sf-touch-enabled :is(.sf-touch__button,.sf-touch__actions .sf-touch__button){
   border-color:rgba(115,216,237,.26);background:rgba(3,9,13,.62);
@@ -1895,3 +1949,11 @@ body.sf-high-contrast #sf-hud :is(
   .sf-objective__copy strong,.sf-hud__hplabel>span,.sf-hud__jetlabel>span,
   .sf-hud__vitalrow,.sf-hud__stratcopy b,.sf-hud__hint
 ){color:#fff}
+body.sf-high-contrast #sf-hud .sf-hud__heat.sf-heat{opacity:1}
+body.sf-high-contrast #sf-hud .sf-heat__track{stroke:rgba(255,255,255,.64)}
+body.sf-high-contrast #sf-hud .sf-heat__fill{stroke:#ffe16a;filter:none}
+
+@media (prefers-reduced-motion:reduce){
+  #sf-hud .sf-hud__heat.is-over,
+  #sf-hud .sf-hud__heat.is-venting .sf-heat__fill{animation:none}
+}

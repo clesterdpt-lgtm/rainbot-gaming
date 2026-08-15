@@ -68,7 +68,6 @@ export function buildHud(ctx, host) {
       <div class="sf-hud__hplabel"><span>VITALITY</span><b id="sf-hp-value">150</b></div>
       <div class="sf-hud__hpwrap"><div class="sf-hud__hp" id="sf-hp"></div></div>
       <div class="sf-hud__vitalrow">
-        <span id="sf-ammo">&mdash;</span>
         <span id="sf-reinf"></span>
       </div>
       <div class="sf-hud__boon" id="sf-boon" data-state="off" aria-live="off">
@@ -84,6 +83,17 @@ export function buildHud(ctx, host) {
         <div class="sf-hud__boost" id="sf-boost"><span><b>SHIFT</b> GLIDE</span><strong id="sf-boost-value">READY</strong></div>
         <div class="sf-hud__shield" id="sf-shield"><span><b>E</b> AEGIS</span><strong id="sf-shield-value">READY</strong></div>
       </div>
+    </div>
+    <div class="sf-hud__heat sf-heat" id="sf-ammo" role="progressbar"
+      aria-label="Weapon heat" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"
+      aria-valuetext="Weapon cool" data-state="cold">
+      <svg class="sf-heat__crescent" viewBox="0 0 104 30" focusable="false" aria-hidden="true">
+        <path class="sf-heat__track" pathLength="100" d="M8 7 Q52 35 96 7" />
+        <path class="sf-heat__fill sf-heat__fill--left" pathLength="100" d="M52 25 Q30 24 8 7" />
+        <path class="sf-heat__fill sf-heat__fill--right" pathLength="100" d="M52 25 Q74 24 96 7" />
+        <circle class="sf-heat__core" cx="52" cy="25" r="1.7" />
+      </svg>
+      <u>0%</u>
     </div>
     <section class="sf-hud__command" id="sf-command-status" aria-label="Command availability">
       <header class="sf-hud__command-head">
@@ -129,6 +139,8 @@ export function buildHud(ctx, host) {
   const shieldEl = el.querySelector("#sf-shield");
   const shieldValueEl = el.querySelector("#sf-shield-value");
   const ammoEl = el.querySelector("#sf-ammo");
+  const heatFillEls = [...ammoEl.querySelectorAll(".sf-heat__fill")];
+  const heatStateEl = ammoEl.querySelector("u");
   const reinfEl = el.querySelector("#sf-reinf");
   const boonEl = el.querySelector("#sf-boon");
   const boonValueEl = el.querySelector("#sf-boon-value");
@@ -1271,24 +1283,32 @@ export function buildHud(ctx, host) {
       const weapon = ctx.weapons && ctx.weapons.current;
       if (weapon) {
         const h = ctx.weapons.heatState ? ctx.weapons.heatState() : null;
-        /* A percentage AND a bar. The number alone is unreadable in
-           a firefight - nobody parses two digits while being charged
-           - and the bar alone cannot say how close to the lockout
-           you are once it is nearly full. The state word replaces
-           the number when there IS no decision left to make. */
         if (!h) {
-          ammoEl.innerHTML = "&mdash;";
           ammoEl.hidden = true;
         } else {
-          const pct = Math.round(h.heat * 100);
-          ammoEl.hidden = pct <= 0 && !h.overheated && !h.venting;
-          const state = h.overheated ? "OVERHEAT"
-            : (h.venting ? "VENTING" : `${pct}%`);
-          const cls = h.overheated ? " is-over" : (h.venting ? " is-venting" : "");
-          ammoEl.innerHTML = `<span class="sf-heat${cls}">`
-            + `<i class="sf-heat__track"><b style="width:${pct}%"></b></i>`
-            + `<u>${state}</u></span>`;
+          const heat = clamp01(h.heat);
+          const pct = Math.round(heat * 100);
+          const state = h.overheated ? "over"
+            : h.venting ? "venting"
+              : heat >= 0.82 ? "hot"
+                : heat >= 0.55 ? "warm"
+                  : heat > 0.015 ? "heating" : "cold";
+          const stateText = h.overheated ? "OVERHEAT"
+            : h.venting ? "VENTING" : `${pct}%`;
+          ammoEl.hidden = heat <= 0.001 && !h.overheated && !h.venting;
+          ammoEl.dataset.state = state;
+          ammoEl.classList.toggle("is-over", h.overheated);
+          ammoEl.classList.toggle("is-venting", h.venting);
+          ammoEl.setAttribute("aria-valuenow", String(pct));
+          ammoEl.setAttribute("aria-valuetext", h.overheated
+            ? `Weapon overheated at ${pct} percent`
+            : h.venting ? `Weapon venting at ${pct} percent`
+              : heat <= 0.015 ? "Weapon cool" : `Weapon heat ${pct} percent`);
+          heatStateEl.textContent = stateText;
+          for (const fill of heatFillEls) fill.style.strokeDasharray = `${pct} 100`;
         }
+      } else {
+        ammoEl.hidden = true;
       }
       reinfEl.textContent = `✦ ${mission.state.reinforcements}`;
       reinfEl.setAttribute("aria-label", `${mission.state.reinforcements} reinforcements`);

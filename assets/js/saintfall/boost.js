@@ -18,6 +18,7 @@
    ============================================================ */
 
 import { clamp01, damp, dampAngle } from "saintfall/core.js";
+import { JETPACK_CONFIG } from "saintfall/jetpack.js";
 
 export const BOOST_CONFIG = Object.freeze({
   /* The minimum a TAP buys. Releasing inside this still gets a whole
@@ -29,8 +30,8 @@ export const BOOST_CONFIG = Object.freeze({
   burstSpeed: 27,
   glideSpeed: 19,
   ignitionCost: 9,
-  /** Charge per second once the burst is over and the key is held. */
-  holdDrain: 24,
+  /** Charge per second once the burst is over and the key is held. Drains at the same rate as flight (10.7). */
+  holdDrain: JETPACK_CONFIG.burnRate,
   damage: 46,
   /* A held glide is not one attack. The same creature can be caught
      again after this, which is what makes skating through a pack

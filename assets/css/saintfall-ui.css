@@ -190,8 +190,7 @@ body.sf-reduced-motion .sf-command-wheel,body.sf-reduced-motion .sf-menu,body.sf
   letter-spacing:.14em;
   text-shadow:0 1px 4px rgba(0,0,0,.95),0 0 8px rgba(0,0,0,.8)
 }
-#sf-hud .sf-objective__head small{display:inline-flex;align-items:center;gap:.25rem;color:rgba(242,229,199,.5);font-size:8px;letter-spacing:.08em}
-#sf-hud .sf-objective__head kbd{padding:.05rem .2rem;border:1px solid rgba(216,164,65,.28);border-radius:.15rem;background:rgba(0,0,0,.35);color:rgba(245,216,142,.85);font:7px/1 "Share Tech Mono",monospace}
+#sf-hud .sf-objective__head small,#sf-hud .sf-objective__head kbd{display:none}
 #sf-hud .sf-objective__item{display:flex;align-items:baseline;justify-content:flex-start;gap:.55rem;min-width:0}
 #sf-hud .sf-objective__item>i,#sf-hud .sf-minimap__event-head>i{display:none}
 #sf-hud .sf-objective__copy{display:flex;flex-direction:column;gap:.08rem;min-width:0}

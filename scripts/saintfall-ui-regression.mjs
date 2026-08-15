@@ -477,8 +477,8 @@ async function hudDensityAudit(page) {
 async function hardCornerAudit(page) {
   return await page.evaluate(() => {
     const selectors = [
-      ".sf-fs-btn", "#sf-objective", "#sf-minimap", "#sf-vitals", "#sf-charge",
-      ".sf-hud__command-head kbd", ".sf-hud__stratitem", ".sf-hud__hint",
+      ".sf-fs-btn", "#sf-objective", "#sf-compass", "#sf-minimap", "#sf-vitals", "#sf-charge",
+      "#sf-command-status", ".sf-hud__stratitem",
       ".sf-menu-trigger--mobile", ".sf-touch__button", ".sf-menu__frame",
       ".sf-menu__close", ".sf-menu__rail button", ".sf-operation-card",
       ".sf-map-page__surface", ".sf-map-page__orders", ".sf-map-order",

@@ -2888,19 +2888,26 @@ body[data-sf-hud-scale="large"] #sf-hud {
   font-size: 18px;
 }
 
-body.sf-hud-large :is(.sf-hud__vitals, .sf-hud__charge, .sf-hud__command),
-body.sf-hud-scale-large :is(.sf-hud__vitals, .sf-hud__charge, .sf-hud__command),
-body[data-sf-hud-scale="large"] :is(.sf-hud__vitals, .sf-hud__charge, .sf-hud__command) {
+body.sf-hud-large :is(.sf-hud__vitals, .sf-hud__charge),
+body.sf-hud-scale-large :is(.sf-hud__vitals, .sf-hud__charge),
+body[data-sf-hud-scale="large"] :is(.sf-hud__vitals, .sf-hud__charge) {
   transform: scale(1.08);
+}
+
+body.sf-hud-large .sf-hud__command,
+body.sf-hud-scale-large .sf-hud__command,
+body[data-sf-hud-scale="large"] .sf-hud__command {
+  transform: translateX(-50%) scale(1.08);
+  transform-origin: center bottom;
 }
 
 body.sf-hud-large .sf-hud__vitals,
 body.sf-hud-scale-large .sf-hud__vitals,
-body[data-sf-hud-scale="large"] .sf-hud__vitals { transform-origin: left bottom; }
+body[data-sf-hud-scale="large"] .sf-hud__vitals { transform-origin: right bottom; }
 
-body.sf-hud-large :is(.sf-hud__charge, .sf-hud__command),
-body.sf-hud-scale-large :is(.sf-hud__charge, .sf-hud__command),
-body[data-sf-hud-scale="large"] :is(.sf-hud__charge, .sf-hud__command) { transform-origin: right bottom; }
+body.sf-hud-large .sf-hud__charge,
+body.sf-hud-scale-large .sf-hud__charge,
+body[data-sf-hud-scale="large"] .sf-hud__charge { transform-origin: left bottom; }
 
 body.sf-hud-large .sf-stage.sf-touch-enabled :is(.sf-hud__vitals, .sf-hud__charge),
 body.sf-hud-scale-large .sf-stage.sf-touch-enabled :is(.sf-hud__vitals, .sf-hud__charge),
@@ -3238,9 +3245,9 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
 
 #sf-hud .sf-hud__objhead {
   gap: 0;
-  padding: .2rem 0 .18rem .56rem;
-  border-left: 1px solid rgba(216, 164, 65, .72);
-  background: linear-gradient(90deg, rgba(7, 5, 6, .46), transparent 88%);
+  padding: 0;
+  border: none;
+  background: transparent;
 }
 
 #sf-hud .sf-hud__objhead > span {
@@ -3255,15 +3262,12 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
 }
 
 #sf-hud .sf-hud__objbar {
-  width: 72%;
-  height: 2px;
-  margin: .22rem 0 0 .56rem;
-  background: rgba(242, 229, 199, .11);
+  display: none;
 }
 
 #sf-hud .sf-hud__objective[data-event="1"] .sf-hud__objhead {
-  border-left-color: var(--sf-ui-threat);
-  background: linear-gradient(90deg, rgba(77, 18, 16, .48), transparent 88%);
+  border: none;
+  background: transparent;
 }
 
 #sf-hud .sf-hud__minimap {
@@ -3375,13 +3379,13 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
   box-shadow: 0 0 1.15rem rgba(151, 41, 22, .2);
 }
 
-/* Survival & Energy: Vitality on bottom-left, Charge on bottom-right.
-   Modern and minimal: clean sleek bars with bold tabular readouts, no text headers. */
+/* Survival & Energy: Vitality on bottom-center-left, Charge on bottom-center-right.
+   Modern and minimal: wide sleek bars with bold tabular readouts, no background boxes or text headers. */
 #sf-hud .sf-hud__vitals {
   position: absolute;
-  left: max(.85rem, calc(env(safe-area-inset-left) + .65rem));
-  bottom: max(.85rem, calc(env(safe-area-inset-bottom) + .65rem));
-  width: min(12rem, 19cqw);
+  right: calc(50% + .75rem);
+  bottom: max(1.15rem, calc(env(safe-area-inset-bottom) + .95rem));
+  width: min(15rem, 24cqw);
   padding: 0;
   border: 0;
   background: transparent;
@@ -3447,9 +3451,9 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
 
 #sf-hud .sf-hud__charge {
   position: absolute;
-  right: max(.85rem, calc(env(safe-area-inset-right) + .65rem));
-  bottom: max(.85rem, calc(env(safe-area-inset-bottom) + .65rem));
-  width: min(12rem, 19cqw);
+  left: calc(50% + .75rem);
+  bottom: max(1.15rem, calc(env(safe-area-inset-bottom) + .95rem));
+  width: min(15rem, 24cqw);
   padding: 0;
   border: 0;
   background: transparent;
@@ -3543,60 +3547,40 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
   text-align: right;
 }
 
-/* Command names and roles live in the Tab wheel. The passive HUD only says
-   which three channels are ready and overlays a number while one cools. */
+/* Call actions dock: icons with cooldown visual, centered cleanly above the dual bars.
+   No background boxes, no text labels, and no on-screen F button. */
 #sf-hud .sf-hud__command {
-  right: max(.85rem, calc(env(safe-area-inset-right) + .65rem));
-  bottom: max(3.55rem, calc(env(safe-area-inset-bottom) + 3.35rem));
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: max(3.7rem, calc(env(safe-area-inset-bottom) + 3.5rem));
   display: flex;
-  width: auto;
+  width: max-content;
+  max-width: 90cqw;
   padding: 0;
   align-items: center;
-  gap: .32rem;
+  justify-content: center;
+  gap: .38rem;
   border: 0;
   border-radius: 0;
   background: none;
   box-shadow: none;
   backdrop-filter: none;
+  pointer-events: none;
 }
 
 #sf-hud .sf-hud__command-head {
-  display: block;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-#sf-hud .sf-hud__command-head > span {
-  display: none;
-}
-
-#sf-hud .sf-hud__command-head strong {
-  display: block;
-  font-size: 0;
-}
-
-#sf-hud .sf-hud__command-head kbd {
-  width: 2.3rem;
-  min-width: 2.3rem;
-  height: 2.3rem;
-  min-height: 2.3rem;
-  box-sizing: border-box;
-  padding: 0;
-  border-color: rgba(245, 216, 142, .22);
-  border-radius: .65rem;
-  background: rgba(7, 5, 6, .58);
-  color: rgba(245, 216, 142, .7);
-  font: 600 8px/1 "Share Tech Mono", ui-monospace, monospace;
-  box-shadow: none;
+  display: none !important;
 }
 
 #sf-hud .sf-hud__strat {
   display: flex;
-  gap: .28rem;
+  gap: .38rem;
+  align-items: center;
 }
 
 #sf-hud .sf-hud__stratitem {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr;
   width: 2.3rem;
@@ -3605,22 +3589,25 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
   min-height: 2.3rem;
   padding: 0;
   place-items: center;
-  border: 1px solid rgba(242, 229, 199, .1);
-  border-left-width: 1px;
-  border-radius: .65rem;
-  background: rgba(7, 5, 6, .58);
-  box-shadow: 0 .35rem 1rem rgba(0, 0, 0, .18);
+  border: none;
+  border-radius: .45rem;
+  background: transparent;
+  box-shadow: none;
 }
 
 #sf-hud .sf-hud__stratglyph {
-  width: 1.9rem;
-  height: 1.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
   border: 0;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, .95));
 }
 
 #sf-hud .sf-hud__stratglyph svg {
-  width: 1.2rem;
-  height: 1.2rem;
+  width: 1.45rem;
+  height: 1.45rem;
 }
 
 #sf-hud .sf-hud__stratcopy {
@@ -3633,10 +3620,10 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
   z-index: 2;
   display: grid;
   place-items: center;
-  border-radius: inherit;
+  border-radius: .35rem;
   background: rgba(7, 5, 6, .78);
-  color: rgba(245, 216, 142, .9);
-  font-size: 8px;
+  color: #ffe2aa;
+  font: 700 9px/1 "Share Tech Mono", ui-monospace, monospace;
   letter-spacing: 0;
 }
 
@@ -3645,25 +3632,15 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
 }
 
 #sf-hud .sf-hud__stratitem:not([data-ready="1"]) .sf-hud__stratglyph {
-  opacity: .24;
+  opacity: .22;
 }
 
 #sf-hud .sf-hud__stratfill {
-  height: 2px;
-  opacity: .7;
+  display: none;
 }
 
 #sf-hud .sf-hud__hint {
-  bottom: max(.85rem, calc(env(safe-area-inset-bottom) + .65rem));
-  min-height: 0;
-  padding: .18rem .42rem;
-  border: 0;
-  border-radius: .3rem;
-  background: rgba(7, 5, 6, .42);
-  color: rgba(242, 229, 199, .58);
-  font-size: 8px;
-  letter-spacing: .025em;
-  backdrop-filter: blur(5px);
+  display: none !important;
 }
 
 #sf-hud .sf-hud__hint kbd {

@@ -37,64 +37,93 @@
       background: radial-gradient(circle at 50% 30%, rgba(14, 43, 68, 0.45), rgba(3, 8, 16, 0.95)), #030810;
       border-color: rgba(46, 224, 255, 0.25);
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 60px rgba(9, 84, 111, 0.15);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 14px 14px;
     }
 
-    /* Tactical HUD */
+    /* Fixed Aspect Ratio Container (Never Squishes) */
+    .strait-page .canvas-wrap {
+      --game-max-width: 585px;
+      --game-aspect: 0.8125;
+      --game-aspect-ratio: 585 / 720;
+      width: min(100%, 585px) !important;
+      max-width: 585px !important;
+      aspect-ratio: 585 / 720 !important;
+      height: auto !important;
+      max-height: 720px;
+      margin: 0 auto;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(46, 224, 255, 0.1);
+      position: relative;
+    }
+
+    .strait-page .canvas-wrap.is-maxed {
+      width: 100% !important;
+      max-width: 100% !important;
+      height: 100% !important;
+      max-height: 100% !important;
+      border-radius: 0;
+    }
+
+    .strait-page #gameCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      aspect-ratio: 585 / 720;
+    }
+
+    /* Tactical Compact HUD */
     .strait-hud {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-      gap: 6px;
-      padding: 10px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px 14px;
+      width: 100%;
+      max-width: 585px;
+      padding: 7px 12px;
       background: rgba(5, 12, 22, 0.92);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
       border: 1px solid rgba(46, 224, 255, 0.22);
       border-radius: var(--r);
-      margin-bottom: 10px;
-    }
-
-    .strait-hud__item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 4px 6px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 6px;
-    }
-
-    .strait-hud__label {
+      margin-bottom: 8px;
       font-family: var(--font-mono);
-      font-size: 9px;
+      font-size: 11.5px;
+    }
+
+    .strait-hud .hud__item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .strait-hud .hud__label {
+      color: rgba(255, 255, 255, 0.55);
+      font-size: 10px;
       font-weight: 800;
       letter-spacing: 1px;
-      color: rgba(255, 255, 255, 0.55);
-      text-transform: uppercase;
-      margin-bottom: 2px;
     }
 
-    .strait-hud__value {
-      font-family: var(--font-mono);
-      font-size: 14px;
+    .strait-hud .hud__value {
       font-weight: 800;
       color: var(--ink);
+      font-size: 13px;
     }
-
-    .strait-hud__value--cyan { color: var(--strait-cyan); text-shadow: 0 0 10px rgba(46, 224, 255, 0.4); }
-    .strait-hud__value--amber { color: var(--strait-amber); text-shadow: 0 0 10px rgba(255, 212, 59, 0.4); }
-    .strait-hud__value--green { color: var(--strait-green); }
 
     /* Hull Health Pips */
     .hull-pips {
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
     }
 
     .hull-pip {
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       border-radius: 3px;
       background: var(--strait-green);
       box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
@@ -127,13 +156,16 @@
 
     /* Start / Pause Menu Overlay Styling */
     .strait-page .overlay {
+      position: absolute;
+      inset: 0;
       background: rgba(3, 8, 16, 0.88);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      padding: 20px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 16px;
       display: none;
       align-items: center;
       justify-content: center;
+      z-index: 10;
     }
 
     .strait-page .overlay--show {
@@ -141,13 +173,13 @@
     }
 
     .strait-menu-card {
-      background: rgba(8, 18, 32, 0.94);
-      border: 2px solid rgba(46, 224, 255, 0.35);
-      border-radius: 14px;
-      padding: clamp(18px, 4vw, 26px);
-      max-width: 480px;
+      background: rgba(8, 18, 32, 0.96);
+      border: 2px solid rgba(46, 224, 255, 0.4);
+      border-radius: 12px;
+      padding: clamp(14px, 3.5vw, 20px);
+      max-width: 440px;
       width: 100%;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 30px rgba(46, 224, 255, 0.15);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8), 0 0 24px rgba(46, 224, 255, 0.15);
       text-align: center;
       display: flex;
       flex-direction: column;
@@ -163,27 +195,27 @@
       color: var(--strait-cyan);
       background: rgba(46, 224, 255, 0.12);
       border: 1px solid rgba(46, 224, 255, 0.3);
-      padding: 4px 10px;
+      padding: 3px 8px;
       border-radius: 999px;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       text-transform: uppercase;
     }
 
     .strait-menu-title {
       font-family: var(--font-display);
-      font-size: clamp(20px, 4.5vw, 26px);
+      font-size: clamp(18px, 4vw, 24px);
       color: #ffffff;
-      margin: 0 0 12px;
+      margin: 0 0 10px;
       line-height: 1.15;
-      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 0 20px rgba(46, 224, 255, 0.3);
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 0 16px rgba(46, 224, 255, 0.3);
     }
 
     .strait-brief-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
       width: 100%;
-      margin: 0 0 18px;
+      margin: 0 0 14px;
       text-align: left;
     }
 
@@ -191,28 +223,24 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      background: rgba(255, 255, 255, 0.035);
+      background: rgba(255, 255, 255, 0.04);
       border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 8px;
-      padding: 8px 12px;
-      font-size: 12px;
-      line-height: 1.35;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 11.5px;
+      line-height: 1.3;
       color: rgba(255, 255, 255, 0.85);
     }
 
     .strait-brief-icon {
-      font-size: 20px;
+      font-size: 18px;
       flex-shrink: 0;
-    }
-
-    .strait-brief-item strong {
-      color: var(--ink);
     }
 
     .strait-start-btn {
       width: 100%;
-      font-size: 16px;
-      padding: 13px 28px;
+      font-size: 15px;
+      padding: 11px 24px;
       border-radius: 8px;
       font-family: var(--font-display);
       letter-spacing: 0.5px;
@@ -235,9 +263,9 @@
 
     .strait-controls-hint {
       font-family: var(--font-mono);
-      font-size: 10px;
-      color: rgba(255, 255, 255, 0.5);
-      margin-top: 12px;
+      font-size: 9.5px;
+      color: rgba(255, 255, 255, 0.55);
+      margin-top: 10px;
     }
 
     /* Sector Banner Notification */
@@ -249,9 +277,9 @@
       background: rgba(3, 9, 18, 0.9);
       border: 2px solid var(--strait-cyan);
       border-radius: 8px;
-      padding: 10px 24px;
+      padding: 8px 20px;
       font-family: var(--font-display);
-      font-size: clamp(14px, 3.5vw, 20px);
+      font-size: clamp(14px, 3.5vw, 18px);
       letter-spacing: 1.5px;
       color: var(--strait-cyan);
       text-shadow: 0 0 14px rgba(46, 224, 255, 0.7);
@@ -271,7 +299,7 @@
     /* Near Miss / Score Popup */
     .combo-toast {
       position: absolute;
-      top: 110px;
+      top: 100px;
       left: 50%;
       transform: translateX(-50%);
       font-family: var(--font-display);
@@ -298,9 +326,9 @@
       background: rgba(4, 10, 20, 0.96);
       border: 2px solid var(--strait-red);
       border-radius: var(--r);
-      padding: 24px 20px;
-      max-width: 480px;
-      width: min(92%, 480px);
+      padding: 22px 18px;
+      max-width: 440px;
+      width: min(92%, 440px);
       box-shadow: 0 0 60px rgba(255, 59, 86, 0.35), 0 12px 36px rgba(0, 0, 0, 0.8);
       z-index: 10;
       text-align: center;
@@ -310,7 +338,7 @@
 
     .wipeout-card__title {
       font-family: var(--font-display);
-      font-size: clamp(18px, 4vw, 24px);
+      font-size: clamp(18px, 4vw, 22px);
       color: var(--strait-red);
       margin: 0 0 6px;
       text-shadow: 0 0 12px rgba(255, 59, 86, 0.5);
@@ -318,12 +346,12 @@
 
     .wipeout-card__cause {
       font-family: var(--font-mono);
-      font-size: 13px;
+      font-size: 12px;
       color: rgba(255, 255, 255, 0.8);
-      margin: 0 0 16px;
+      margin: 0 0 14px;
       background: rgba(255, 59, 86, 0.12);
       border: 1px solid rgba(255, 59, 86, 0.3);
-      padding: 6px 12px;
+      padding: 5px 10px;
       border-radius: 6px;
       display: inline-block;
     }
@@ -331,8 +359,8 @@
     .wipeout-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin: 0 0 18px;
+      gap: 6px;
+      margin: 0 0 16px;
       text-align: left;
     }
 
@@ -340,12 +368,12 @@
       background: rgba(255, 255, 255, 0.04);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 6px;
-      padding: 8px 10px;
+      padding: 6px 8px;
     }
 
     .wipeout-grid__label {
       font-family: var(--font-mono);
-      font-size: 9px;
+      font-size: 8.5px;
       font-weight: 800;
       color: rgba(255, 255, 255, 0.5);
       text-transform: uppercase;
@@ -353,14 +381,14 @@
 
     .wipeout-grid__val {
       font-family: var(--font-mono);
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 800;
       color: var(--ink);
     }
 
     .wipeout-card__actions {
       display: flex;
-      gap: 10px;
+      gap: 8px;
       justify-content: center;
       flex-wrap: wrap;
     }
@@ -368,9 +396,9 @@
     /* Mini HUD (Mobile / Fullscreen) */
     .strait-mini-hud {
       position: absolute;
-      left: 12px;
-      right: 54px;
-      top: 10px;
+      left: 10px;
+      right: 50px;
+      top: 8px;
       z-index: 6;
       display: none;
       align-items: center;
@@ -385,9 +413,9 @@
       border-radius: 999px;
       color: var(--ink);
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 800;
-      padding: 4px 10px;
+      padding: 3px 8px;
       backdrop-filter: blur(4px);
     }
 
@@ -418,33 +446,33 @@
 
     .strait-touch-dpad {
       position: absolute;
-      left: 14px;
-      bottom: 14px;
+      left: 12px;
+      bottom: 12px;
       display: grid;
-      grid-template-columns: 56px 56px 56px;
-      grid-template-rows: 56px 56px;
-      gap: 6px;
+      grid-template-columns: 52px 52px 52px;
+      grid-template-rows: 52px 52px;
+      gap: 5px;
       pointer-events: auto;
     }
 
     .strait-touch-actions {
       position: absolute;
-      right: 14px;
-      bottom: 14px;
+      right: 12px;
+      bottom: 12px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
       align-items: flex-end;
       pointer-events: auto;
     }
 
     .strait-touch-btn {
-      background: rgba(7, 18, 32, 0.82);
+      background: rgba(7, 18, 32, 0.85);
       border: 2px solid rgba(46, 224, 255, 0.35);
-      border-radius: 12px;
+      border-radius: 10px;
       color: var(--ink);
       font-family: var(--font-display);
-      font-size: 18px;
+      font-size: 16px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -464,13 +492,13 @@
     }
 
     .strait-touch-btn--flare {
-      width: 76px;
-      height: 76px;
+      width: 70px;
+      height: 70px;
       border-radius: 50%;
       background: radial-gradient(circle, rgba(255, 212, 59, 0.3), rgba(255, 59, 86, 0.2));
       border: 2px solid var(--strait-amber);
       color: var(--strait-amber);
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 900;
       letter-spacing: 0.5px;
       box-shadow: 0 0 16px rgba(255, 212, 59, 0.35);
@@ -485,14 +513,14 @@
     .strait-powerups {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
     }
 
     .strait-pitem {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 8px 10px;
+      padding: 7px 10px;
       background: rgba(255, 255, 255, 0.03);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 6px;
@@ -507,7 +535,7 @@
     }
 
     .strait-pitem__icon {
-      font-size: 16px;
+      font-size: 15px;
     }
 
     .strait-pitem__status {
@@ -537,41 +565,37 @@
         
         <!-- Desktop Tactical HUD -->
         <div class="strait-hud">
-          <div class="strait-hud__item">
-            <span class="strait-hud__label">SCORE</span>
-            <span class="strait-hud__value strait-hud__value--cyan" id="hud-score">0</span>
+          <div class="hud__item">
+            <span class="hud__label">SCORE</span>
+            <span class="hud__value" id="hud-score" style="color:var(--strait-cyan)">0</span>
           </div>
-          <div class="strait-hud__item">
-            <span class="strait-hud__label">DISTANCE</span>
-            <span class="strait-hud__value" id="hud-dist">0.0 NM</span>
+          <div class="hud__item">
+            <span class="hud__label">DIST</span>
+            <span class="hud__value" id="hud-dist">0.0 NM</span>
           </div>
-          <div class="strait-hud__item">
-            <span class="strait-hud__label">SECTOR</span>
-            <span class="strait-hud__value strait-hud__value--amber" id="hud-sector">1</span>
+          <div class="hud__item">
+            <span class="hud__label">SECTOR</span>
+            <span class="hud__value" id="hud-sector" style="color:var(--strait-amber)">1</span>
           </div>
-          <div class="strait-hud__item">
-            <span class="strait-hud__label">HULL INTEGRITY</span>
-            <span class="strait-hud__value hull-pips" id="hud-hull">
+          <div class="hud__item">
+            <span class="hud__label">HULL</span>
+            <span class="hud__value hull-pips" id="hud-hull">
               <span class="hull-pip"></span>
               <span class="hull-pip"></span>
               <span class="hull-pip"></span>
             </span>
           </div>
-          <div class="strait-hud__item">
-            <span class="strait-hud__label">CARGO MULTIPLIER</span>
-            <span class="strait-hud__value strait-hud__value--green" id="hud-multiplier">1.0x</span>
+          <div class="hud__item">
+            <span class="hud__label">CARGO</span>
+            <span class="hud__value" id="hud-multiplier" style="color:var(--strait-green)">1.0x</span>
           </div>
-          <div class="strait-hud__item">
-            <span class="strait-hud__label">THREAT</span>
-            <span class="strait-hud__value" id="hud-threat">DEFCON 5</span>
-          </div>
-          <div class="strait-hud__item">
-            <span class="strait-hud__label">HIGH SCORE</span>
-            <span class="strait-hud__value" id="hud-high">0</span>
+          <div class="hud__item">
+            <span class="hud__label">HIGH</span>
+            <span class="hud__value" id="hud-high">0</span>
           </div>
         </div>
 
-        <div class="canvas-wrap canvas-wrap--ar-585-720">
+        <div class="canvas-wrap canvas-wrap--ar-585-720" data-fit="fill">
           <canvas id="gameCanvas" width="585" height="720" tabindex="0" aria-label="Escape the Straight game canvas"></canvas>
           <button class="fs-btn" id="btn-fullscreen" type="button" aria-label="Max screen" title="Max screen">⛶</button>
           
@@ -597,22 +621,19 @@
                 <div class="strait-brief-item">
                   <span class="strait-brief-icon">🚀</span>
                   <div>
-                    <strong style="color:var(--strait-red);">Anti-Ship Missiles & Mines:</strong>
-                    Red laser targeting lines warn you before missiles strike. Steer clear or blast flares!
+                    <strong style="color:var(--strait-red);">Missiles & Mines:</strong> Watch red laser lock-on beams & steer clear!
                   </div>
                 </div>
                 <div class="strait-brief-item">
                   <span class="strait-brief-icon">🚤</span>
                   <div>
-                    <strong style="color:var(--strait-amber);">Hostile Terrorist Skiffs:</strong>
-                    Armed militia attack boats flank and fire tracer bursts.
+                    <strong style="color:var(--strait-amber);">Hostile Skiffs:</strong> Dodge tracer bursts or blast them with the horn.
                   </div>
                 </div>
                 <div class="strait-brief-item">
                   <span class="strait-brief-icon">🛢️</span>
                   <div>
-                    <strong style="color:var(--strait-green);">Oil Barrels & Repair Buoys:</strong>
-                    Collect crude oil to multiply score frenzy up to 5x. Grab green buoys to patch hull!
+                    <strong style="color:var(--strait-green);">Oil Barrels:</strong> Collect crude for 5x score frenzy & grab repair buoys!
                   </div>
                 </div>
               </div>
@@ -622,7 +643,7 @@
               <button class="strait-start-btn" id="btn-primary">START VOYAGE</button>
 
               <div class="strait-controls-hint">
-                Controls: <strong>WASD / Arrow Keys</strong> to steer · <strong>Space / HORN</strong> for Countermeasure Flares
+                <strong>WASD / Arrows</strong>: Steer & Throttle · <strong>Space / HORN</strong>: Countermeasure Flares
               </div>
             </div>
           </div>
@@ -642,7 +663,7 @@
             </div>
             <div class="strait-touch-actions">
               <button class="strait-touch-btn strait-touch-btn--flare" data-ctrl="horn" aria-label="Horn and counter-flares">HORN<br/><span style="font-size:9px;">FLARES</span></button>
-              <button class="strait-touch-btn" data-ctrl="pause" aria-label="Pause game" style="width:76px;height:40px;font-size:12px;">PAUSE</button>
+              <button class="strait-touch-btn" data-ctrl="pause" aria-label="Pause game" style="width:70px;height:38px;font-size:11px;">PAUSE</button>
             </div>
           </div>
         </div>
@@ -727,7 +748,7 @@
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260813-apop3d-1"></script>
-  <script src="../assets/js/strait-of-hormuz.js?v=20260814-v5-pro2"></script>
+  <script src="../assets/js/strait-of-hormuz.js?v=20260814-v5-pro3"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
   </script>

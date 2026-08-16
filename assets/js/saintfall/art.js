@@ -391,11 +391,14 @@ export const TIMES = {
 };
 
 /* A full Vesper day is deliberately shorter than a terrestrial one:
-   one ordinary operation can cross the whole arc, while each change
-   remains slow enough to be felt as weather rather than a filter
-   switch. Phase zero is 06:00 local time. The final repeated dawn
-   stop makes the wrap mathematically and visually continuous. */
-export const DAY_CYCLE_SECONDS = 18 * 60;
+   one ordinary operation can still cross the whole arc, but each
+   lighting state has to last long enough to feel like weather rather
+   than a filter switch. Eighteen minutes turned the basin over twice
+   in a hunt; thirty-six keeps dawn-to-night inside a long session
+   without yanking the sun during a fight. Phase zero is 06:00 local
+   time. The final repeated dawn stop makes the wrap mathematically
+   and visually continuous. */
+export const DAY_CYCLE_SECONDS = 36 * 60;
 export const DAY_CYCLE_STOPS = Object.freeze([
   Object.freeze({ phase: 0.00, key: "goldenhour", sunAzimuth: 108, sunElevation: 13.5 }),
   Object.freeze({ phase: 0.25, key: "noon", sunAzimuth: 214, sunElevation: 62 }),

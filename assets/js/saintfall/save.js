@@ -7,6 +7,7 @@
    scene graphs or replays transient effects.
    ============================================================ */
 
+import { DAY_CYCLE_SECONDS } from "saintfall/art.js";
 import { clamp, clamp01 } from "saintfall/core.js";
 import {
   FIELD_RANK_CAP,
@@ -471,7 +472,7 @@ export function buildSaveSystem(ctx, options = {}) {
         time: ctx.atmos.time,
         storm: finite(ctx.atmos.storm),
         cyclePhase: finite(ctx.atmos.cyclePhase),
-        cycleDuration: Math.max(60, finite(ctx.atmos.cycleDuration, 1080)),
+        cycleDuration: Math.max(60, finite(ctx.atmos.cycleDuration, DAY_CYCLE_SECONDS)),
         cycleRunning: !!ctx.atmos.cycleRunning,
         cycleCount: Math.max(0, Math.floor(finite(ctx.atmos.cycleCount))),
       },

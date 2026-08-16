@@ -2961,6 +2961,18 @@ export async function createPlayer(ctx, canvas) {
     return rise / WALK_SLOPE_LOOK < WALK_SLOPE_LIMIT;
   }
 
+  function boostWalkableFrom(fromX, fromZ, dx, dz) {
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-6) return true;
+    const destX = fromX + dx;
+    const destZ = fromZ + dz;
+    const here = groundY(fromX, fromZ);
+    const dest = groundY(destX, destZ);
+    if (ctx.collide?.blocked?.(destX, destZ, dest)) return false;
+    const grade = Math.abs(dest - here) / len;
+    return grade < 3.8;
+  }
+
   /** Directed downhill grade and the sharpest local descent along an
    *  already collision-resolved move. Sampling every 18cm prevents a
    *  low-FPS frame from averaging a real ledge into a legal hill. */
@@ -3791,7 +3803,9 @@ export async function createPlayer(ctx, canvas) {
          while a crater wall stays steep for the whole probe and still
          stops them. The near check is what keeps that from becoming
          a licence to walk through a vertical face. */
-      const walkable = (dx, dz) => walkableFrom(state.x, state.z, dx, dz);
+      const walkable = (dx, dz) => (boostMode
+        ? boostWalkableFrom(state.x, state.z, dx, dz)
+        : walkableFrom(state.x, state.z, dx, dz));
       let mx2 = nx;
       let mz2 = nz;
       if (!walkable(nx - state.x, nz - state.z)) {
@@ -3848,7 +3862,9 @@ export async function createPlayer(ctx, canvas) {
             for (let i = 0; i < count; i += 1) {
               const out = ctx.collide.slide(
                 bx, bz, bx + sx, bz + sz, null, undefined,
-                (tx, tz) => walkableFrom(bx, bz, tx - bx, tz - bz)
+                (tx, tz) => (boostMode
+                  ? boostWalkableFrom(bx, bz, tx - bx, tz - bz)
+                  : walkableFrom(bx, bz, tx - bx, tz - bz))
               );
               const moved = Math.hypot(out[0] - bx, out[1] - bz);
               bx = out[0];
@@ -3890,6 +3906,10 @@ export async function createPlayer(ctx, canvas) {
         if (state.grounded && groundDelta < 0
           && descent.maxGrade <= DOWNHILL_MAX_CONTINUOUS_GRADE) {
           state.y += groundDelta;
+        }
+        if (boostMode) {
+          const hereGy = groundY(px, pz);
+          state.y = Math.max(state.y, hereGy);
         }
         const slideEligible = state.grounded
           && travelled > 1e-4
@@ -3935,7 +3955,6 @@ export async function createPlayer(ctx, canvas) {
         state.grounded = false;
         state.vy = Math.min(0, state.vy);
         for (const leg of legs) leg.planted = false;
-        if (boostMode) ctx.boost?.stop?.("airborne");
       }
     }
     if (!flightMode && !shieldMode && state.grounded && jumpPressed && !input.state.jetpack) {
@@ -3945,15 +3964,30 @@ export async function createPlayer(ctx, canvas) {
     if (flightMode) {
       const cfg = ctx.jetpack.config;
       const agl = state.y - gy;
-      const ceiling = Math.min(gy + cfg.maxAltitude, jetState.takeoffGround + cfg.maxRiseFromLaunch);
+      const ceiling = gy + cfg.maxAltitude;
       if (jetState.active) {
+        // Lookahead along flight path to detect rising terrain / steep hills
+        const speed = Math.max(15, state.speed);
+        const lookDist = Math.max(3.0, speed * 0.45);
+        const lookYaw = (Math.abs(mx) > 0.01 || Math.abs(mz) > 0.01)
+          ? (state.camYaw + Math.atan2(-mx, -mz))
+          : state.yaw;
+        const lookX = clamp(state.x + Math.sin(lookYaw) * lookDist, -1010, 1010);
+        const lookZ = clamp(state.z + Math.cos(lookYaw) * lookDist, -1010, 1010);
+        const lookGy = groundY(lookX, lookZ);
+        const aheadRise = Math.max(0, lookGy - gy);
+        const effGround = Math.max(gy, lookGy);
+        const effAgl = state.y - effGround;
+
         let targetVy;
-        if (state.y >= ceiling - 0.12 || agl >= cfg.softAltitude) {
-          targetVy = clamp((cfg.softAltitude - agl) * 2.4, -cfg.descendSpeed, 0);
+        if (state.y >= ceiling - 0.12 || (state.y - gy) >= cfg.softAltitude) {
+          targetVy = clamp((cfg.softAltitude - (state.y - gy)) * 2.4, -cfg.descendSpeed, 0);
         } else {
-          targetVy = clamp((cfg.cruiseAltitude - agl) * 2.4, -3.5, cfg.climbSpeed);
+          const altitudeNeed = clamp((cfg.cruiseAltitude - effAgl) * 3.5, -3.5, 24.0);
+          const terrainNeed = aheadRise > 0 ? (aheadRise / 0.40) : 0;
+          targetVy = Math.max(altitudeNeed, clamp(terrainNeed + 3.0, 0, 24.0));
         }
-        state.vy = damp(state.vy, targetVy, 5.2, dt);
+        state.vy = damp(state.vy, targetVy, 9.0, dt);
       } else if (slamMode) {
         /* THE FALL OWNS THE AXIS, EVEN OUT OF A FLIGHT.
            Committing to the slam cuts the pack, but the pack stays
@@ -3969,6 +4003,9 @@ export async function createPlayer(ctx, canvas) {
       }
 
       let nextY = state.y + state.vy * dt;
+      if (jetState.active) {
+        nextY = Math.max(nextY, gy + 0.35);
+      }
       /* A terrain drop can move the local ceiling far below the
          current body in one horizontal frame. Max altitude limits
          ascent; it must never teleport an already-airborne player
@@ -4023,10 +4060,15 @@ export async function createPlayer(ctx, canvas) {
             && !ctx.collide.blocked(state.x, state.z, centerSupport);
         }
         if (out.hitX || out.hitZ) {
-          // Bleed speed on contact instead of continuing to drive the
-          // pose and camera at 30m/s while pressed into a wall.
-          state.speed = Math.min(state.speed, Math.max(2.5, travelled / Math.max(dt, 1e-4)));
-          jetState.horizontalSpeed = state.speed;
+          const localGround = groundY(state.x, state.z);
+          const isTerrainContact = state.y <= localGround + 1.2;
+          if (isTerrainContact && jetState.active) {
+            state.y = Math.max(state.y, localGround + 0.35);
+            state.vy = Math.max(state.vy, 10.0);
+          } else {
+            state.speed = Math.min(state.speed, Math.max(2.5, travelled / Math.max(dt, 1e-4)));
+            jetState.horizontalSpeed = state.speed;
+          }
         }
         ctx.jetpack.noteMotion(travelled, out.hitX || out.hitZ);
         if (out.hitY) {
@@ -4149,14 +4191,26 @@ export async function createPlayer(ctx, canvas) {
          different amount of time depending on how it was entered,
          which is the one thing a telegraphed attack must not do. */
       if (slamMode) state.vy = slamState.verticalSpeed;
-      else state.vy -= 19.6 * dt;
-      state.y += state.vy * dt;
-      if (state.y <= gy) {
-        state.y = gy;
-        state.vy = 0;
-        state.grounded = true;
-        for (const leg of legs) leg.planted = false;
-        if (slamMode) ctx.slam.impact();
+      else if (boostMode) {
+        // Skimming / airborne glide: smooth gravity while thrusters maintain forward propulsion over terrain
+        state.vy = Math.max(-12, state.vy - 14.0 * dt);
+        state.y += state.vy * dt;
+        if (state.y <= gy) {
+          state.y = gy;
+          state.vy = 0;
+          state.grounded = true;
+          for (const leg of legs) leg.planted = false;
+        }
+      } else {
+        state.vy -= 19.6 * dt;
+        state.y += state.vy * dt;
+        if (state.y <= gy) {
+          state.y = gy;
+          state.vy = 0;
+          state.grounded = true;
+          for (const leg of legs) leg.planted = false;
+          if (slamMode) ctx.slam.impact();
+        }
       }
     } else {
       /* A collision-resolved landing can begin above center support on
@@ -4164,9 +4218,11 @@ export async function createPlayer(ctx, canvas) {
          gap in one throttled 100ms frame; cap only the downward settle
          so touchdown cannot visibly pop under the hill at low FPS. */
       const easedGroundY = damp(state.y, gy, 22, dt);
-      state.y = state.y > gy
-        ? Math.max(gy, state.y - GROUNDED_SETTLE_DOWN_SPEED * dt, easedGroundY)
-        : easedGroundY;
+      state.y = boostMode
+        ? Math.max(state.y, gy)
+        : (state.y > gy
+          ? Math.max(gy, state.y - GROUNDED_SETTLE_DOWN_SPEED * dt, easedGroundY)
+          : easedGroundY);
     }
 
     const travelX = state.x - motionStartX;

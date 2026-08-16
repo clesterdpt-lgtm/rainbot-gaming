@@ -158,7 +158,7 @@ export function buildBoost(ctx, player) {
 
   function blocked() {
     const ps = player.state;
-    return ps.free || !ps.grounded || ctx.combat?.player?.dead
+    return ps.free || ctx.combat?.player?.dead
       || player.action || ctx.mission?.entry?.active
       || ctx.jetpack?.state?.inFlight || ctx.shield?.state?.active
       || ctx.slam?.state?.active;
@@ -376,7 +376,12 @@ export function buildBoost(ctx, player) {
     const travelled = Math.hypot(toX - fromX, toZ - fromZ);
     /* Stopped dead against masonry. A glide that grinds into a wall
        and keeps burning charge is a key that has stopped answering. */
-    if (dt > 0 && travelled < state.speed * dt * 0.12) stop("blocked");
+    if (dt > 0 && travelled < state.speed * dt * 0.08) {
+      state.blockedFrames = (state.blockedFrames || 0) + 1;
+      if (state.blockedFrames >= 3) stop("blocked");
+    } else {
+      state.blockedFrames = 0;
+    }
 
     /* The scar the glide cuts, laid by DISTANCE rather than per frame.
        At nineteen metres a second a per-frame mark is a dashed line

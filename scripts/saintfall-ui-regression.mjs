@@ -1550,9 +1550,12 @@ async function desktopPass(browser) {
     tabMenu.open && tabMenu.panel === "operation" && tabMenu.paused && tabMenu.focusInside,
     JSON.stringify(tabMenu));
   await page.keyboard.press("Tab");
-  const trapped = await page.evaluate(() => document.getElementById("sf-menu")
-    ?.contains(document.activeElement));
-  check("Tab focus remains inside the operation menu", trapped);
+  await page.waitForFunction(() => !window.__SF.menuState()?.open, null, { timeout: 3000 });
+  const closedByTab = await page.evaluate(() => !window.__SF.menuState()?.open);
+  check("Tab exits the operation menu", closedByTab);
+
+  await page.keyboard.press("Tab");
+  await page.waitForFunction(() => window.__SF.menuState()?.open, null, { timeout: 3000 });
 
   await page.locator('[data-menu-panel="doctrine"]').click();
   await page.waitForFunction(() => window.__SF.menuState()?.panel === "doctrine",

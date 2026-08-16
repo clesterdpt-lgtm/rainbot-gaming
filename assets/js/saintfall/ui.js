@@ -1962,12 +1962,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
       } else if (event.code === "KeyM") {
         event.preventDefault(); event.stopImmediatePropagation();
         if (!event.repeat) openMap();
-      } else if (event.code === "Escape") {
+      } else if (event.code === "Escape" || event.code === "Tab") {
         event.preventDefault(); event.stopImmediatePropagation();
         closeMenu({ requestLock: true });
-      } else if (event.code === "Tab") {
-        trapFocus(event);
-        event.stopImmediatePropagation();
       } else if (!interactiveTarget
         && ["KeyW", "KeyA", "KeyS", "KeyD", "Space", "KeyQ", "KeyE", "KeyF", "KeyR"].includes(event.code)) {
         event.preventDefault(); event.stopImmediatePropagation();

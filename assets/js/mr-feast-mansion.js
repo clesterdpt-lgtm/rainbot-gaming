@@ -14,7 +14,7 @@
   // Page/runtime cache identity is deliberately separate from the large NPC
   // asset bundle so a JS-only mansion update does not re-fetch the GLB and
   // motion files.
-  const MANSION_RUNTIME_VERSION = "20260808-no-service-stair-cam-hide-location-hud-1-device-aggro-piano-audio-1-hedge-maze-haunt-restore-bulbs-1-tool-and-patron-models-1-storm-run-maze-blackout-until-exit-1-mobile-called-tools-1-saint-floor-acoustics-1-camera-search-and-throw-audio-1-maze-bulb-blackout-and-patron-ramp-1-key-call-and-archive-display-1-archive-records-return-1-locked-growing-saint-static-1-model-baked-saint-shadow-2-called-game-flashlight-1-archive-center-drop-1-confirmed-catch-scare-1";
+  const MANSION_RUNTIME_VERSION = "20260815-house-direction-clues-1";
   // One local, license-audited sound manifest keeps every mansion cue behind
   // MansionAudio's single master gain. The first step in each material set is
   // the original shared Kenney clip; the extra variants prevent the familiar
@@ -2430,6 +2430,42 @@
       }),
     ]),
   });
+  /* Soft in-world pointers, not HUD trail steps. The wardrobe carving only
+     names stacks and a marked page; the bedside slip only names the atelier
+     and the backs of pictures. Players still have to find the XIII book and
+     tilt the Painting Room frames themselves. */
+  const HOUSE_DIRECTION_CLUES = Object.freeze({
+    closetCarving: Object.freeze({
+      closetName: "west front walk-in closet",
+      door: "left",
+      lines: Object.freeze(["ONE PAGE", "WAS MARKED", "IN THE", "QUIET STACKS"]),
+      local: Object.freeze({ x: 0.64, y: 1.48, z: -0.058, width: 0.46, height: 0.4 }),
+      approach: Object.freeze({ x: -12.8, y: FLOOR.UPPER, z: 5.72, yaw: Math.PI, pitch: -0.08 }),
+      look: Object.freeze({ x: -12.45, y: FLOOR.UPPER, z: 4.05, yaw: -Math.PI / 2, pitch: 0.12 }),
+    }),
+    nightstandNote: Object.freeze({
+      x: -9.04,
+      y: FLOOR.UPPER + 0.568,
+      z: -10.77,
+      yaw: 0.22,
+      paperWidth: 0.18,
+      paperDepth: 0.13,
+      hitWidth: 0.38,
+      hitHeight: 0.24,
+      hitDepth: 0.34,
+      lines: Object.freeze([
+        "If the house",
+        "starts asking",
+        "for numbers,",
+        "the atelier",
+        "keeps them",
+        "behind the",
+        "pictures.",
+      ]),
+      approach: Object.freeze({ x: -9.04, y: FLOOR.UPPER, z: -10.12, yaw: Math.PI, pitch: -0.78 }),
+    }),
+    flashlightLinePattern: /flashlight|torch|lamp|kitchens hide tools|wardrobe/i,
+  });
   const BATHROOM_CURTAINS = Object.freeze({
     panelBottom: 0.16,
     panelHeight: 2.02,
@@ -3140,6 +3176,16 @@
         id: "contestant-13-book",
         title: "XIII's handwritten margin note",
         body: CONTESTANT_13_CLUE_BOOK.annotation.replace(/\n+/g, " "),
+      }),
+      closetCarving: Object.freeze({
+        id: "closet-carving-stacks",
+        title: "Inside a closet door",
+        body: "Someone scored a message into the inside of a bedroom wardrobe: one page was marked in the quiet stacks.",
+      }),
+      nightstandNote: Object.freeze({
+        id: "nightstand-atelier-note",
+        title: "Bedside slip",
+        body: "A folded scrap left by a bed says the atelier keeps its numbers behind the pictures, not on them.",
       }),
       shovel: Object.freeze({
         id: "faceless-fountain-shovel",
@@ -4693,6 +4739,8 @@
     yardFrontOuterStep: [0, YARD_LAYOUT.groundY, 16.55, 0, -0.08],
     yardRearOuterStep: [0, YARD_LAYOUT.groundY, -16.55, Math.PI, -0.08],
     yardMazeCenterLamp: [25, YARD_LAYOUT.groundY, -10.8, Math.PI, -0.1],
+    houseDirectionClosetCarving: [-12.8, FLOOR.UPPER, 5.72, Math.PI, -0.08],
+    houseDirectionNightstandNote: [-9.05, FLOOR.UPPER, -9.55, Math.PI, -0.46],
     contestant13LibraryBook: [-12.6, FLOOR.MAIN, 8.1, Math.PI / 2, -0.08],
     contestant13GardenShovel: [-22.28, YARD_LAYOUT.groundY, -4.05, 0, -0.75],
     contestant13DigSite: [29.65, YARD_LAYOUT.groundY, 5.75, -Math.PI / 2, -0.93],
@@ -5023,6 +5071,8 @@
       actionInProgress: null,
       inventory: [],
       journalEntries: [],
+      closetCarvingRead: false,
+      nightstandNoteRead: false,
       kipClothingFound: false,
       maraClothingFound: false,
       juniperClothingFound: false,
@@ -5303,6 +5353,7 @@
     })),
   };
   let contestant13Quest = null;
+  let houseDirectionClues = null;
   let readableBookSystem = null;
   let mrFeastNpc = null;
   let mansionContestants = null;
@@ -15621,7 +15672,12 @@
     converse(id) {
       const entry = this.entryById(id);
       if (!entry || entry.status !== "ready" || this.eliminatedIds.has(id) || !speechSystem || !entry.speaker) return null;
-      const pool = entry.spec.dialogue;
+      const ownedFlashlight = Boolean(contestant13Quest?.hasItem?.(FLASHLIGHT.itemId));
+      const authored = Array.isArray(entry.spec.dialogue) ? entry.spec.dialogue : [];
+      const filtered = ownedFlashlight
+        ? authored.filter((line) => !HOUSE_DIRECTION_CLUES.flashlightLinePattern.test(line))
+        : authored;
+      const pool = filtered.length ? filtered : authored;
       const stormRunPostGameLine = stormRunSystem?.consumePostGameContestantLine(id) || null;
       const feastSaysPostGameLine = stormRunPostGameLine
         ? null
@@ -21024,6 +21080,8 @@
         kipClothingFound: Boolean(this.story.kipClothingFound),
         maraClothingFound: Boolean(this.story.maraClothingFound),
         juniperClothingFound: Boolean(this.story.juniperClothingFound),
+        closetCarvingRead: Boolean(this.story.closetCarvingRead),
+        nightstandNoteRead: Boolean(this.story.nightstandNoteRead),
         workroomUnlocked: Boolean(state.workroom.unlocked),
         workroomScratches: workroomCodeClue ? workroomCodeClue.getSnapshot() : [],
         inventory: this.story.inventory.slice(),
@@ -21036,6 +21094,7 @@
         "bookRead", "shovelTaken", "digSiteExcavated", "basementKeyFound", "mazeLockInTriggered", "mazeKeyScareSeen", "basementUnlocked",
         "badgeFound", "tapeFound", "archiveCageUnlocked", "recordingPlayed", "relaySabotaged", "threatEscalated",
         "kipClothingFound", "maraClothingFound", "juniperClothingFound",
+        "closetCarvingRead", "nightstandNoteRead",
       ];
       hedgeMazeKeyScareSystem?.reset({ reason: "quest-restore" });
       for (const field of booleanFields) this.story[field] = Boolean(snapshot[field]);
@@ -21166,6 +21225,8 @@
         recordingPlayed: this.story.recordingPlayed,
         relaySabotaged: this.story.relaySabotaged,
         threatEscalated: this.story.threatEscalated,
+        closetCarvingRead: Boolean(this.story.closetCarvingRead),
+        nightstandNoteRead: Boolean(this.story.nightstandNoteRead),
         actionInProgress: this.story.actionInProgress ? { ...this.story.actionInProgress } : null,
         phase: this.getPhase(),
         completed: this.story.relaySabotaged,
@@ -43582,6 +43643,255 @@
     });
   }
 
+  class HouseDirectionClueSystem {
+    constructor() {
+      this.carving = null;
+      this.note = null;
+    }
+
+    install() {
+      this.installClosetCarving();
+      this.installNightstandNote();
+    }
+
+    closetCabinet() {
+      return animatedObjects.find((object) => (
+        object instanceof Cabinet && object.name === HOUSE_DIRECTION_CLUES.closetCarving.closetName
+      )) || null;
+    }
+
+    makeHandTexture(name, lines, options = {}) {
+      const width = options.width || 512;
+      const height = options.height || 512;
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, width, height);
+      if (options.paper) {
+        ctx.fillStyle = "#d8c49a";
+        ctx.fillRect(0, 0, width, height);
+        ctx.fillStyle = "rgba(92, 68, 38, 0.08)";
+        for (let i = 0; i < 18; i += 1) {
+          ctx.fillRect(24 + (i * 37) % (width - 48), 18 + (i * 53) % (height - 36), 18, 2);
+        }
+      }
+      ctx.save();
+      ctx.translate(width / 2, height / 2);
+      ctx.rotate(options.tilt || -0.035);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const fontSize = options.fontSize || 54;
+      ctx.font = `600 ${fontSize}px "Bradley Hand", "Segoe Print", "Palatino Linotype", serif`;
+      const lineHeight = fontSize * (options.lineHeight || 1.12);
+      lines.forEach((line, index) => {
+        const y = (index - (lines.length - 1) / 2) * lineHeight + (options.paper ? -8 : 0);
+        if (options.paper) {
+          ctx.fillStyle = "rgba(48, 34, 22, 0.88)";
+          ctx.fillText(line, 0, y);
+        } else {
+          ctx.strokeStyle = "rgba(214, 196, 154, 0.22)";
+          ctx.lineWidth = 7;
+          ctx.strokeText(line, 0, y);
+          ctx.fillStyle = "rgba(228, 214, 176, 0.9)";
+          ctx.fillText(line, 0, y);
+        }
+      });
+      ctx.restore();
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.name = name;
+      texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.magFilter = THREE.LinearFilter;
+      texture.minFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      texture.encoding = THREE.sRGBEncoding;
+      return texture;
+    }
+
+    installClosetCarving() {
+      const cabinet = this.closetCabinet();
+      const spec = HOUSE_DIRECTION_CLUES.closetCarving;
+      if (!cabinet?.leftPivot || !cabinet.rightPivot) return;
+      const pivot = spec.door === "right" ? cabinet.rightPivot : cabinet.leftPivot;
+      const texture = this.makeHandTexture("west-front-closet-inner-carving", spec.lines, {
+        width: 512,
+        height: 448,
+        fontSize: 58,
+        tilt: -0.04,
+      });
+      const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(spec.local.width, spec.local.height),
+        material,
+      );
+      mesh.name = "west-front-closet-inner-carving";
+      mesh.position.set(spec.local.x, spec.local.y, spec.local.z);
+      mesh.rotation.y = Math.PI;
+      mesh.renderOrder = 6;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      pivot.add(mesh);
+      const hit = box({
+        name: "west-front-closet-inner-carving-hit",
+        w: spec.local.width + 0.08,
+        h: spec.local.height + 0.12,
+        d: 0.08,
+        x: spec.local.x,
+        y: spec.local.y,
+        z: spec.local.z - 0.01,
+        material: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+        parent: pivot,
+        cast: false,
+        receive: false,
+      });
+      hit.visible = false;
+      this.carving = { mesh, hit, cabinet };
+      contestant13Quest?.registerInteraction(
+        "closet-carving",
+        [mesh, hit],
+        () => (state.contestant13.closetCarvingRead ? "Reread closet carving" : "Examine closet carving"),
+        () => this.inspectCarving(),
+      );
+    }
+
+    installNightstandNote() {
+      const spec = HOUSE_DIRECTION_CLUES.nightstandNote;
+      const root = new THREE.Group();
+      root.name = "primary-suite-nightstand-note";
+      root.position.set(spec.x, spec.y, spec.z);
+      root.rotation.y = spec.yaw;
+      scene.add(root);
+      const texture = this.makeHandTexture("primary-suite-nightstand-note-page", spec.lines, {
+        width: 384,
+        height: 512,
+        fontSize: 36,
+        lineHeight: 1.18,
+        tilt: 0.018,
+        paper: true,
+      });
+      const paper = new THREE.Mesh(
+        new THREE.PlaneGeometry(spec.paperWidth, spec.paperDepth),
+        new THREE.MeshStandardMaterial({
+          map: texture,
+          roughness: 0.92,
+          metalness: 0,
+          color: 0xffffff,
+        }),
+      );
+      paper.name = "primary-suite-nightstand-note-paper";
+      paper.rotation.x = -Math.PI / 2;
+      paper.position.y = 0.006;
+      paper.castShadow = false;
+      paper.receiveShadow = true;
+      root.add(paper);
+      const fold = box({
+        name: "primary-suite-nightstand-note-fold",
+        w: spec.paperWidth * 0.22,
+        h: 0.004,
+        d: spec.paperDepth,
+        x: -spec.paperWidth * 0.38,
+        y: 0.008,
+        material: M.canvasLinen,
+        parent: root,
+        cast: false,
+      });
+      const hit = box({
+        name: "primary-suite-nightstand-note-hit",
+        w: spec.hitWidth,
+        h: spec.hitHeight,
+        d: spec.hitDepth,
+        x: 0,
+        y: 0.08,
+        z: 0,
+        material: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
+        parent: root,
+        cast: false,
+        receive: false,
+      });
+      hit.visible = false;
+      this.note = { root, paper, fold, hit };
+      contestant13Quest?.registerInteraction(
+        "nightstand-note",
+        [paper, fold, hit],
+        () => (state.contestant13.nightstandNoteRead ? "Reread bedside note" : "Read bedside note"),
+        () => this.inspectNote(),
+      );
+    }
+
+    inspectCarving() {
+      if (competitionBlocksInvestigation()) {
+        notifyCompetitionHold();
+        return false;
+      }
+      const entry = CONTESTANT_13.journal.closetCarving;
+      const first = contestant13Quest?.addJournalEntry(entry);
+      state.contestant13.closetCarvingRead = true;
+      contestant13Quest?.updateUI();
+      contestant13Quest?.showDiscovery(entry.title, entry.body, 8800);
+      if (first && audioSystem) audioSystem.ping(116, 0.3, 0.02, "sine");
+      return true;
+    }
+
+    inspectNote() {
+      if (competitionBlocksInvestigation()) {
+        notifyCompetitionHold();
+        return false;
+      }
+      const entry = CONTESTANT_13.journal.nightstandNote;
+      const first = contestant13Quest?.addJournalEntry(entry);
+      state.contestant13.nightstandNoteRead = true;
+      contestant13Quest?.updateUI();
+      contestant13Quest?.showDiscovery(entry.title, entry.body, 9200);
+      if (first && audioSystem) audioSystem.ping(128, 0.28, 0.018, "sine");
+      return true;
+    }
+
+    stageForQA(id) {
+      if (!state.qa) return null;
+      if (id === "closet-carving") {
+        const cabinet = this.closetCabinet();
+        cabinet?.setOpen?.(true, true);
+        const pose = HOUSE_DIRECTION_CLUES.closetCarving.look;
+        teleport(pose.x, pose.y, pose.z, pose.yaw, pose.pitch);
+        cabinet?.update?.(1);
+        return { id, staged: true, closetOpen: Boolean(cabinet?.open) };
+      }
+      if (id === "nightstand-note") {
+        const pose = HOUSE_DIRECTION_CLUES.nightstandNote.approach;
+        teleport(pose.x, pose.y, pose.z, pose.yaw, pose.pitch);
+        return { id, staged: true };
+      }
+      return { id, staged: false };
+    }
+
+    getDiagnostics() {
+      const cabinet = this.closetCabinet();
+      return {
+        closetCarving: {
+          installed: Boolean(this.carving?.mesh),
+          closet: HOUSE_DIRECTION_CLUES.closetCarving.closetName,
+          closetOpen: Boolean(cabinet?.open),
+          read: Boolean(state.contestant13.closetCarvingRead),
+          lines: [...HOUSE_DIRECTION_CLUES.closetCarving.lines],
+        },
+        nightstandNote: {
+          installed: Boolean(this.note?.paper),
+          read: Boolean(state.contestant13.nightstandNoteRead),
+          position: {
+            x: HOUSE_DIRECTION_CLUES.nightstandNote.x,
+            y: HOUSE_DIRECTION_CLUES.nightstandNote.y,
+            z: HOUSE_DIRECTION_CLUES.nightstandNote.z,
+          },
+        },
+      };
+    }
+  }
+
   function buildContestantThirteenQuest() {
     contestant13Quest = new ContestantThirteenQuest();
     addContestantThirteenLibraryBook();
@@ -43590,6 +43900,8 @@
     addContestantThirteenArchiveCage();
     addContestantThirteenCameraRelay();
     addBasementHauntStoryProps();
+    houseDirectionClues = new HouseDirectionClueSystem();
+    houseDirectionClues.install();
     contestant13Quest.updateUI();
   }
 
@@ -52263,6 +52575,7 @@
         active: null,
       },
       contestant13: contestant13Quest?.getDiagnostics() || null,
+      houseDirectionClues: houseDirectionClues?.getDiagnostics() || null,
       basementHaunt: basementHauntSystem?.getDiagnostics() || null,
       mrFeast: mrFeastNpc?.getDiagnostics() || null,
       contestants: mansionContestants?.getDiagnostics() || null,
@@ -52646,6 +52959,13 @@
         ? bathroomMirrorScareSystem.frameForQA(String(roomId || "main-hall-bathroom"))
         : null
     );
+    window.MrFeastFresh.getHouseDirectionClueState = () => houseDirectionClues?.getDiagnostics() || null;
+    window.MrFeastFresh.stageHouseDirectionClueForQA = (id) => houseDirectionClues?.stageForQA(id) || null;
+    window.MrFeastFresh.inspectHouseDirectionClueForQA = (id) => {
+      if (id === "closet-carving") return houseDirectionClues?.inspectCarving() || false;
+      if (id === "nightstand-note") return houseDirectionClues?.inspectNote() || false;
+      return false;
+    };
     window.MrFeastFresh.getBedroomHidingState = getBedroomHidingDiagnostics;
     window.MrFeastFresh.getFurnitureTextileState = getFurnitureTextileDiagnostics;
     window.MrFeastFresh.placePlayerNearBedroomHideForQA = (id) => {

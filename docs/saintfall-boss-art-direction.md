@@ -186,6 +186,32 @@ too — and then corrupted, or the fight has no image.
 - **Motion:** it mirrors player timings on purpose. Keep that, but let the
   corruption cost it something — a hitch, a drag, a limb that answers late.
 
+## Two things the reference does that we do not
+
+Look at `output/reference/halo/halo-02.jpg` — the Halo 2 Scarab, and the best
+boss frame in the pool. Two of the reasons it reads as a boss have nothing to
+do with the model:
+
+**1. The camera is BELOW it.** The lens is at knee height looking up, the
+animal's head is against the sky, and its legs leave the frame. Every one of
+our gallery portraits is shot from eye level or above, which is the angle you
+photograph a prop from. A boss shot from below is a boss; a boss shot from
+above is a diorama. Portrait framing should sit low and look up wherever the
+encounter allows it.
+
+**2. It has an ACCENT LANGUAGE.** The Scarab is not one colour. It is cool
+blue-grey plate, and then a small number of hot orange-gold panels carrying
+black hazard striping, and then one cyan core. Three families, deliberately
+unequal in area: a lot of the neutral, a little of the warm, a spot of the
+saturated. That is what stops a big model reading as one undifferentiated mass.
+
+Every boss here needs its own version of that: a dominant material, a secondary
+accent that appears on a minority of the surface in a repeating designed
+pattern, and one saturated focal element — which for most of ours is already
+the weak point, and should be. Marking, banding, striping and plate-edge trim
+are all available in-shader through the surface kit's material families, and
+they cost nothing extra.
+
 ## What every boss owes the frame
 
 1. A **contact shadow** where it meets the ground. Nothing looks placed

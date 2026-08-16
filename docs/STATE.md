@@ -2,6 +2,24 @@
 
 ## Current milestone
 
+**86 — SAINTFALL Boss AAA Pass** is in progress. The shared creature-surface kit
+(`boss-surface.js`) gives every boss sub-facet grain, gloss breakup, cavity, edge
+wear and a damage response on models that carry no UVs and no textures at all —
+object-space triplanar, 0 texture fetches, +0.08 ms and +0 draw calls. The
+frame's value range was fixed at its actual cause: the grade carried a hard black
+floor at sRGB 30, so every frame ever captured reported a 1st-percentile
+luminance of 27–29 whatever was in it; it now reads 4–16 against a measured Halo
+mean of 7.56, with `darkPct` up from 0.3% to 14–39%. The ambient-occlusion pass
+grew from a single 0.55 m radius to a 0.15→3.2 m geometric ladder across the same
+12 taps, so a nine-metre animal finally has dark underneath it. Two real bugs
+were found and fixed on the way: `districtBosses.status(key)` returned null for
+five of seven sites, so a defeated Stylite kept its arena protected against
+breach waves; and the save validator rejected files the game itself writes,
+taking `saintfall-save-integrity` from 39/62 to 62/62. Gameplay is 55/55 and
+every boss is inside the 5.6 ms / +24-draw budget. The per-boss round is
+incomplete — the Garner, Stylite and Apostate have had one pass, the Abbess and
+the four rigged bosses have not, and no blind critic verdict has been scored yet.
+
 **81 — SAINTFALL Boss Entry Gates and Longer Reveals** has implementation and automated acceptance complete; normal-play reveal pacing awaits user playtest. The dormant Distaff and Winnower now stay out of both the world view and minimap and remain untargetable before their arena boundaries, reveal visibly while every authoritative damage route remains locked, hold their authored cameras for the full `4.8s`, and unlock damage on the same frame control returns. Reset, restore, leash, forced-phase, Coulter, Matriarch, and ordinary gameplay contracts remain regression-covered.
 
 **33 — Mr. Feast Face Retopology** is paused after the current visual result was rejected. A release-safety follow-up restores the original rigged model as the active, cache-busted runtime; the experimental appliance, reports, and Blender scripts remain dormant reference material only.

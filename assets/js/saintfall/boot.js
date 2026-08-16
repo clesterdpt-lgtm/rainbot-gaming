@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260816-day-cycle-2";
+  const BUILD = "20260816-lance-ram-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -100,7 +100,7 @@
   // shipped fix look like it did not work.
   const MODULES = [
     "core", "art", "sky", "terrain", "structures", "world", "collide",
-    "vfx", "render", "player", "jetpack", "boost", "slam", "shield", "enemies", "weapons", "ik", "combat",
+    "vfx", "render", "player", "jetpack", "boost", "slam", "shield", "boss-surface", "enemies", "weapons", "ik", "combat",
     "mission", "breaches", "abbess", "coulter", "distaff", "garner", "stylite", "winnower", "district-bosses", "apostate", "progression-config", "progression", "audio", "hud", "touch", "intro", "pod", "save", "ui", "qa", "main",
   ];
 

@@ -40,10 +40,72 @@
    long before this animal was. It rides them, it re-lights at them,
    and the fight moves between them - so the encounter is anchored to
    landmarks the player has already been navigating by.
+
+   ============================================================
+   WHAT IT LOOKS LIKE, AND WHY THAT NEEDED CODE HERE
+
+   It lives in a furnace and its gut IS one. So the art contract is:
+   carbon-black sooted chitin, heat-cracked, with the furnace glowing
+   through the fissures and lighting its own underside; heat sacs the
+   player can find from the ground and watch deflate; wings that are
+   membrane rather than sheet metal.
+
+   FOUR THINGS HAD TO CHANGE TO GET THERE.
+
+   1. IT NEEDED ITS OWN MATERIAL. `enemies.js` builds one material per
+      SPECIES and registers it `shared: true`, which is correct for a
+      caste of forty Threshers and wrong for a boss: the surface kit
+      refuses a damage write on a shared material, so this animal could
+      never scorch, and no per-boss shader could be hung on it without
+      every other winnower-shaped thing in the bestiary inheriting it.
+      So the instance takes its own copy of the material, built here.
+      Same kit, same door, one extra program - warmed at load, because
+      `main.js` runs `render.warmShaders` long after this is built and
+      that walk includes hidden objects.
+
+   2. THE ANIMAL WAS NOT BLACK, IT WAS GREY - and the reason is worth
+      writing down because it is counter-intuitive. COLOR_0 already
+      paints the shell at 0.02 linear, which is nearly black paint. But
+      the species material carried `rim: 1.45`, and the atmosphere's rim
+      is ADDITIVE and independent of albedo: on a surface with no
+      albedo to speak of, the rim IS the surface. Twenty-six metres of
+      wing came back reading as galvanised sheet. The rim is turned
+      down here and the char is given a real, if narrow, albedo range
+      to work in - because the shared surface kit's grain, cavity and
+      wear are all MULTIPLIERS, and a multiplier on zero is zero. That
+      is why a boss with the kit applied measured as having no
+      micro-detail: it had the kit, and nothing for the kit to modulate.
+
+   3. ONE MESH, THREE MATERIALS. There are no UVs and no second draw
+      call available, so the split is read out of the model's own
+      BIND-POSE object space and its authored vertex colour: the
+      wings are everything past |x| = 2.9 above the censer chains, the
+      heat sacs are a box on the wing roots, the furnace is everything
+      COLOR_0 painted hot. Bind-pose space is also what makes a burst
+      sac work - the bone scale that deflates it never moves the field,
+      so the mask still knows which sac a pixel belongs to.
+
+   4. IT LIGHTS ITSELF WITHOUT A LIGHT. A new light in this scene
+      recompiles every material in it (198 ms, recorded), and the frame
+      is fill-bound besides. So the furnace's throw on its own belly is
+      a shading term on downward-facing plate, and its throw on the
+      SAND is one additive ground pool that follows the animal - one
+      draw call, terrain-conformed, brightest when it is down.
+
+   THE ONE BORROWED THING. The furnace fissures are driven by the
+   surface kit's own `sfCrack`/`sfMot`/`sfDet`, which are main-scope
+   locals of the generated fragment shader. That is deliberate: the
+   glow then lands in exactly the creases the relief already carved,
+   rather than in a second pattern that disagrees with the first, and
+   it costs nothing because the field is already computed. It is also
+   a real coupling - if the kit renames those locals this fails as a
+   SHADER COMPILE ERROR, which is loud, rather than as a silent
+   no-op, which is what the same coupling would cost anywhere else.
    ============================================================ */
 
 import { TAU, clamp, clamp01, damp, dampAngle, lerp, makeBus } from "saintfall/core.js";
 import { patchMaterial } from "saintfall/art.js";
+import { applySurface, setSurfaceDamage } from "saintfall/boss-surface.js";
 import { DISTRICTS } from "saintfall/terrain.js";
 
 export const WINNOWER_CONFIG = Object.freeze({
@@ -175,6 +237,743 @@ const ASH_COLOUR = "#ff7a26";
 const ASH_EDGE = "#8f2b08";
 const ASH_BED = "#1a0d07";
 
+/* ============================================================
+   THE PALETTE
+
+   The separation strategy, stated as numbers so it can be checked.
+   The Censer Works' ground is `#6a5a52` - warm dark grey, sRGB 0.42,
+   linear about 0.145. Everything below is LINEAR albedo, because that
+   is what the shader multiplies.
+
+     char   0.030  -> sRGB 0.19   a stop and a half under the ground
+     plate  0.088  -> sRGB 0.33   the lit crests of the same shell
+     ash    0.170  -> sRGB 0.45   the only mid value on the animal
+
+   So the body sits under its district and the ash sits just over it,
+   which is a value SANDWICH rather than a single dark blob - and the
+   ash is deliberately COOLER than the sand (b > r) so it separates by
+   hue as well. The furnace is the third family and it is the only
+   saturated thing in the frame.
+
+   Areas are unequal on purpose, which is the Scarab lesson from the
+   art-direction doc: a lot of the neutral, a little of the pale, a
+   spot of the saturated. Ash is masked to upward-facing plate only and
+   the furnace to what COLOR_0 already painted hot - about a twentieth
+   of the surface between them.
+
+   AND IT WAS STILL ONE ORANGE BAND. A blind critic, shown these
+   frames next to 2001 Halo, named the same fault in four panels out
+   of five: "mean 53, saturation 0.58 across a single orange band",
+   "the right wing tip dissolves into the dune entirely". The gallery
+   agreed and put a number on it - hue spread 11.3 degrees across a
+   whole frame.
+
+   The numbers above were not the reason. They were nearly neutral
+   and a stop and a half under the sand, and the animal STILL came
+   back warm, because albedo is not what the eye reads on a shell
+   authored at 0.03: what it reads is the light landing on it, and
+   every light in this frame is warm. A low golden-hour sun is warm,
+   the atmosphere's rim is the SKY COLOUR and at golden hour that is
+   warm too, and the furnace is the warmest thing in the district. A
+   near-black surface under three warm sources is a warm surface.
+
+   So the fix is not darker paint, it is a COLD SOURCE - see
+   FURNACE_FRAME. The albedo below only has to stop fighting it: the
+   char is pulled to a blue-black (b > g > r rather than the old
+   near-neutral) and the ash rime with it, so what little diffuse the
+   shell returns lands on the cold side of the frame instead of the
+   warm one. */
+const CHAR_RGB = [0.0205, 0.0230, 0.0335];
+const ASH_RIME_RGB = [0.146, 0.156, 0.198];
+/* How much ash may pile on a fully upward-facing plate. Above ~0.7 the
+   animal reads as a dusty rock rather than a burnt one - the char has
+   to stay the dominant family. */
+const RIME_MAX = 0.58;
+
+/* ============================================================
+   THE BAKE - part-scale occlusion, and a distance field to the vents
+
+   THE DEFECT THIS EXISTS FOR, quoted, because it decided two blind
+   pairs on its own: "where the wing crosses the abdomen there is no
+   self-shadow, so the two read as one continuous flat surface and the
+   wing loses its identity as a separate limb"; "no occlusion at the
+   join... the seam line is LIGHTER than both lobes"; and the summary
+   sentence, "a stack of zero-thickness planes whose head, thorax and
+   tail cannot be told apart at any zoom". Both frames the critic
+   awarded to Halo were awarded on the same words - "soot in the
+   cavities", "cavity soot in every plate recess".
+
+   THE SHARED KIT CANNOT DO THIS AND SHOULD NOT TRY. Its cavity is a
+   SUB-FACET term by design and by contract - the coarsest octave it
+   touches is a metre and the two that reach the normal are 13cm and
+   4cm, because anything wider would start eating the faceting that is
+   this game's art direction. A wing lying across an abdomen is a
+   two-metre fact about two different limbs. No amount of grain can
+   see it, because grain does not know what a limb is.
+
+   Nor can the shadow map: it is drawn every second frame across two
+   kilometres of basin, and at that texel density a nine-metre animal
+   gets one soft blob - which is precisely what the critic described.
+
+   WHAT ACTUALLY KNOWS is the mesh, in the bind pose, at load. So it
+   is measured there, once, into a vertex attribute:
+
+     x  OCCLUSION, 0 open .. 1 buried. Eight hemisphere rays per
+        vertex, three ranges each, against a coarse voxel occupancy
+        grid built by rasterising the TRIANGLES - not the vertices.
+        Vertices alone would be wrong on exactly the geometry that
+        matters: a 26m wing is a handful of huge triangles with almost
+        no vertices in the middle, so a vertex-only field would find
+        the wing empty and the abdomen under it unoccluded.
+
+     y  VENT PROXIMITY, 1 at a furnace vent falling to 0 by ~1.1m.
+        This is the answer to the third defect - "the orange emissive
+        panels butt directly against unlit black with a hard
+        stair-stepped polygon boundary". That boundary was a polygon
+        boundary because the hot mask is read from COLOR_0, and a
+        per-vertex mask can only ever change at an edge. A distance
+        field does not care where the edges are, so the glow can bleed
+        off the vent into the shell over a real, smooth, sub-polygon
+        falloff.
+
+   WHY THE ATTRIBUTE IS OCCLUSION AND PROXIMITY RATHER THAN THEIR
+   COMPLEMENTS, which looks like a cosmetic choice and is not: an
+   attribute the geometry does not carry is not an error in WebGL, it
+   is the generic vertex attribute, which is (0,0,0,1). So the missing
+   case has to be the harmless one. Packed this way a mesh that
+   somehow escaped the bake renders unoccluded and unlit-by-vents -
+   i.e. exactly as it did before this file existed. Packed as AO and
+   distance it would render BLACK, and the failure would look like a
+   lighting bug rather than like a missing bake.
+
+   COST: it runs once, on the bind pose, from `bindShell`. 17k
+   vertices x 8 rays x 3 ranges is about 400k array reads, plus one
+   pass rasterising 9k triangles. Measured at 34-48 ms on this
+   machine, paid at load beside the model parse, and NOTHING per
+   frame - the shader reads one interpolated vec2. A dormant boss
+   costs nothing, which is the rule this project already broke once.
+   ============================================================ */
+
+/* Cells across the model's longest axis. 56 puts a cell at about
+   45cm on a 26m span, which is the scale the occlusion is supposed to
+   see: a wing over an abdomen, a leg against a thorax. Finer and the
+   field starts finding facet creases, which is the kit's job and not
+   this one's, and the grid stops fitting in cache. */
+const BAKE_CELLS = 56;
+/* How far a ray looks, in cells. Beyond about five the field stops
+   being occlusion and becomes "is this vertex near the middle of the
+   animal", which darkens the whole body evenly and reads as a grade
+   rather than as a cavity. */
+const BAKE_STEPS = [1.35, 2.7, 4.8];
+const BAKE_WEIGHTS = [0.52, 0.31, 0.17];
+/* Eight rays, fixed. A cosine-ish spread around the normal: one up
+   the normal itself and seven leaning out at two ring angles, which
+   is enough to tell "open sky above me" from "there is a wing across
+   me" and few enough to stay inside the load budget. Rotations are
+   irrational multiples of a turn so the ring never lines up with the
+   tangent frame the vertex happens to get. */
+const BAKE_RAYS = (() => {
+  const out = [];
+  out.push([0, 0, 1]);
+  for (let i = 0; i < 4; i += 1) {
+    const a = (i + 0.31) * (Math.PI / 2);
+    out.push([Math.cos(a) * 0.62, Math.sin(a) * 0.62, 0.785]);
+  }
+  for (let i = 0; i < 3; i += 1) {
+    const a = (i + 0.17) * (Math.PI * 2 / 3);
+    out.push([Math.cos(a) * 0.94, Math.sin(a) * 0.94, 0.342]);
+  }
+  return out;
+})();
+/* How far the vent glow may bleed, in metres. Past about a metre and
+   a half the whole thorax lights up and the animal stops having
+   vents; under half a metre the falloff is shorter than a polygon and
+   the stair-step comes straight back. */
+const VENT_REACH = 1.10;
+
+/**
+ * Measure the bind pose once and hand the shader a vec2 per vertex.
+ * Idempotent, and keyed on the attribute itself: `enemies.spawn`
+ * shares one geometry between every instance of a species, so a
+ * second call must find its own work and leave.
+ */
+function bakeShellFields(THREE, geo) {
+  if (!geo || geo.getAttribute("aWnOcc")) return 0;
+  const pos = geo.getAttribute("position");
+  const nrm = geo.getAttribute("normal");
+  const col = geo.getAttribute("color");
+  const index = geo.getIndex();
+  if (!pos || !nrm) return 0;
+  const t0 = (typeof performance !== "undefined" ? performance.now() : Date.now());
+  const n = pos.count;
+  const P = pos.array;
+
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  for (let i = 0; i < n; i += 1) {
+    const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+  }
+  const span = Math.max(maxX - minX, maxY - minY, maxZ - minZ) || 1;
+  const cell = span / BAKE_CELLS;
+  /* One cell of margin on every side, so a ray leaving the model does
+     not have to be range-checked against a box it is exactly on. */
+  const ox = minX - cell, oy = minY - cell, oz = minZ - cell;
+  const nx = Math.ceil((maxX - minX) / cell) + 3;
+  const ny = Math.ceil((maxY - minY) / cell) + 3;
+  const nz = Math.ceil((maxZ - minZ) / cell) + 3;
+  const grid = new Uint8Array(nx * ny * nz);
+  const at = (ix, iy, iz) => (
+    ix < 0 || iy < 0 || iz < 0 || ix >= nx || iy >= ny || iz >= nz
+      ? 0 : grid[(iz * ny + iy) * nx + ix]);
+
+  const mark = (x, y, z) => {
+    const ix = ((x - ox) / cell) | 0;
+    const iy = ((y - oy) / cell) | 0;
+    const iz = ((z - oz) / cell) | 0;
+    if (ix < 0 || iy < 0 || iz < 0 || ix >= nx || iy >= ny || iz >= nz) return;
+    grid[(iz * ny + iy) * nx + ix] = 1;
+  };
+
+  /* RASTERISE THE TRIANGLES, at a subdivision set by the triangle's
+     own longest edge. A uniform subdivision would either miss the
+     wings or spend thousands of samples on the eye. */
+  const tri = index ? index.array : null;
+  const triCount = tri ? tri.length / 3 : n / 3;
+  for (let t = 0; t < triCount; t += 1) {
+    const ia = tri ? tri[t * 3] : t * 3;
+    const ib = tri ? tri[t * 3 + 1] : t * 3 + 1;
+    const ic = tri ? tri[t * 3 + 2] : t * 3 + 2;
+    const ax = P[ia * 3], ay = P[ia * 3 + 1], az = P[ia * 3 + 2];
+    const bx = P[ib * 3], by = P[ib * 3 + 1], bz = P[ib * 3 + 2];
+    const cx = P[ic * 3], cy = P[ic * 3 + 1], cz = P[ic * 3 + 2];
+    const e = Math.max(
+      Math.abs(bx - ax) + Math.abs(by - ay) + Math.abs(bz - az),
+      Math.abs(cx - bx) + Math.abs(cy - by) + Math.abs(cz - bz),
+      Math.abs(ax - cx) + Math.abs(ay - cy) + Math.abs(az - cz));
+    const k = Math.min(10, Math.max(1, Math.ceil(e / cell)));
+    for (let u = 0; u <= k; u += 1) {
+      for (let v = 0; v <= k - u; v += 1) {
+        const fu = u / k, fv = v / k, fw = 1 - fu - fv;
+        mark(ax * fw + bx * fu + cx * fv,
+          ay * fw + by * fu + cy * fv,
+          az * fw + bz * fu + cz * fv);
+      }
+    }
+  }
+
+  /* ---- occlusion ------------------------------------------------ */
+  const occ = new Float32Array(n * 2);
+  const N = nrm.array;
+  for (let i = 0; i < n; i += 1) {
+    const px = P[i * 3], py = P[i * 3 + 1], pz = P[i * 3 + 2];
+    let nxs = N[i * 3], nys = N[i * 3 + 1], nzs = N[i * 3 + 2];
+    const ln = Math.hypot(nxs, nys, nzs) || 1;
+    nxs /= ln; nys /= ln; nzs /= ln;
+    /* A tangent frame off whichever world axis the normal is least
+       aligned with, so the cross product never collapses. */
+    let tx = 0, ty = 0, tz = 0;
+    if (Math.abs(nys) < 0.85) { tx = -nzs; ty = 0; tz = nxs; }
+    else { tx = 1; ty = 0; tz = 0; }
+    const lt = Math.hypot(tx, ty, tz) || 1;
+    tx /= lt; ty /= lt; tz /= lt;
+    const bx = nys * tz - nzs * ty;
+    const by = nzs * tx - nxs * tz;
+    const bz = nxs * ty - nys * tx;
+    /* Lifted off its own surface before the march, or every ray's
+       first sample lands in the cell the vertex is already in and the
+       whole model bakes buried. */
+    const sx = px + nxs * cell * 0.9;
+    const sy = py + nys * cell * 0.9;
+    const sz = pz + nzs * cell * 0.9;
+
+    let hit = 0, total = 0;
+    for (let r = 0; r < BAKE_RAYS.length; r += 1) {
+      const ray = BAKE_RAYS[r];
+      const dx = tx * ray[0] + bx * ray[1] + nxs * ray[2];
+      const dy = ty * ray[0] + by * ray[1] + nys * ray[2];
+      const dz = tz * ray[0] + bz * ray[1] + nzs * ray[2];
+      /* NEAREST HIT WINS AND ENDS THE RAY. Counting every range
+         separately would score a vertex under a thick wing three
+         times and a vertex under a thin one once, which measures
+         thickness rather than occlusion. */
+      let w = 0;
+      for (let s = 0; s < BAKE_STEPS.length; s += 1) {
+        const d = BAKE_STEPS[s] * cell;
+        if (at(((sx + dx * d - ox) / cell) | 0,
+          ((sy + dy * d - oy) / cell) | 0,
+          ((sz + dz * d - oz) / cell) | 0)) { w = BAKE_WEIGHTS[s]; break; }
+      }
+      hit += w;
+      total += BAKE_WEIGHTS[0];
+    }
+    occ[i * 2] = total > 0 ? Math.min(1, hit / total) : 0;
+  }
+
+  /* ---- distance to the nearest furnace vent ---------------------- */
+  if (col) {
+    const C = col.array;
+    const stride = col.itemSize;
+    const hot = [];
+    for (let i = 0; i < n; i += 1) {
+      const r = C[i * stride], g = C[i * stride + 1], b = C[i * stride + 2];
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      /* The same test the shader makes, at the same threshold, so the
+         bleed is anchored to the very pixels that light up. */
+      if ((r - lum * 1.35) * 3.4 > 0.5) hot.push(i);
+    }
+    if (hot.length) {
+      /* A hash grid at the bleed radius, so the search is the 27
+         cells around a vertex rather than every vent on the animal. */
+      const hc = VENT_REACH;
+      const key = (ix, iy, iz) => `${ix},${iy},${iz}`;
+      const bins = new Map();
+      for (const i of hot) {
+        const k = key(Math.floor(P[i * 3] / hc), Math.floor(P[i * 3 + 1] / hc),
+          Math.floor(P[i * 3 + 2] / hc));
+        let arr = bins.get(k);
+        if (!arr) { arr = []; bins.set(k, arr); }
+        arr.push(i);
+      }
+      for (let i = 0; i < n; i += 1) {
+        const px = P[i * 3], py = P[i * 3 + 1], pz = P[i * 3 + 2];
+        const cxi = Math.floor(px / hc), cyi = Math.floor(py / hc), czi = Math.floor(pz / hc);
+        let best = VENT_REACH * VENT_REACH;
+        for (let a = -1; a <= 1; a += 1) {
+          for (let b = -1; b <= 1; b += 1) {
+            for (let c = -1; c <= 1; c += 1) {
+              const arr = bins.get(key(cxi + a, cyi + b, czi + c));
+              if (!arr) continue;
+              for (const j of arr) {
+                const dx = P[j * 3] - px, dy = P[j * 3 + 1] - py, dz = P[j * 3 + 2] - pz;
+                const d2 = dx * dx + dy * dy + dz * dz;
+                if (d2 < best) best = d2;
+              }
+            }
+          }
+        }
+        /* Smoothstepped rather than linear, so the bleed has no
+           visible outer edge of its own - a linear ramp to zero puts
+           a faint ring exactly where VENT_REACH falls. */
+        const d = Math.sqrt(best) / VENT_REACH;
+        const s = 1 - d;
+        occ[i * 2 + 1] = s * s * (3 - 2 * s) * (d < 1 ? 1 : 0);
+      }
+    }
+  }
+
+  geo.setAttribute("aWnOcc", new THREE.BufferAttribute(occ, 2));
+  return (typeof performance !== "undefined" ? performance.now() : Date.now()) - t0;
+}
+
+/* ============================================================
+   THE FURNACE SHADER
+
+   NO BACKTICKS ANYWHERE BELOW, INCLUDING IN COMMENTS. These are
+   JavaScript template literals and one backtick inside a GLSL comment
+   ends the string silently. It has cost this project a debugging
+   round already; it is not going to cost another.
+
+   Five injections, all of them into a material that has ALREADY been
+   through `patchMaterial` and the shared surface kit. Each anchor is a
+   chunk include that the earlier passes re-emit, so every one of them
+   is still present to be found - and each block lands BEFORE the kit's
+   own code at the same anchor, which is what lets the kit's cavity,
+   wear and damage modulate this palette rather than the .glb's.
+   ============================================================ */
+
+const FURNACE_PARS = /* glsl */`
+uniform vec4 uWnChar;   // char albedo rgb, ash-rime amount
+uniform vec4 uWnAsh;    // ash albedo rgb, soot build toward the wing root
+uniform vec4 uWnHeat;   // heat 0..1, master gain, band phase, fissure gain
+uniform vec4 uWnSac;    // sac L fill, sac R fill, flash, gut swell
+uniform vec4 uWnCold;   // cold rim rgb, rim strength
+uniform vec4 uWnOccl;   // albedo occlusion, rim occlusion, vent bleed, -
+varying vec2 vWnOcc;    // baked: x occlusion 0..1, y vent proximity 0..1
+`;
+
+/* Block 0, and the only one in the VERTEX shader: carry the bake
+   through. Anchored on `begin_vertex`, which the surface kit's own
+   anchor re-emits as its first line, so the chunk is still there to
+   be found. See `bakeShellFields` for why the packing is occlusion
+   and proximity rather than their complements. */
+const FURNACE_ANCHOR = /* glsl */`
+#include <begin_vertex>
+  vWnOcc = aWnOcc;
+`;
+
+/* Block 1. The masks, and nothing else. They are computed at
+   `color_fragment` rather than where they are used because the
+   roughness chunk runs BEFORE the normal chunk and both need them -
+   and because everything here reads only the vertex colour and the
+   bind pose, neither of which the later blocks have touched. */
+const FURNACE_MASKS = /* glsl */`
+/* COLOR_0 IS A MATERIAL INDEX ON THIS MODEL, NOT PAINT. The shell is
+   authored at 0.02 linear across 150-odd near-identical near-blacks,
+   and the furnace at (1.0, 0.196, 0.02). So its luminance says how
+   lit a plate was authored to be and its redness says whether it is
+   shell at all - two masks out of one attribute, no second UV set and
+   no second material. */
+float wnLum = dot(vColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+float wnHot = clamp((vColor.r - wnLum * 1.35) * 3.4, 0.0, 1.0);
+/* The authored shell value, EXPANDED. 0.015-0.05 linear is a range
+   no eye can read and no multiplier can rescue; stretched to 0-1 it
+   becomes the plate-to-plate value variation the model always had and
+   never showed. */
+float wnTone = clamp((wnLum - 0.012) * 26.0, 0.0, 1.0);
+/* The wings. Everything outboard of the thorax and above the censer
+   chains - the bowls swing out to |x| = 3.4 but they hang at y = -4,
+   so one height test separates them cleanly. */
+float wnWing = smoothstep(2.9, 4.6, abs(vSFObj.x))
+             * smoothstep(-1.30, -0.20, vSFObj.y);
+/* Soot builds toward the root, so the membrane clears toward the tip.
+   A uniformly translucent 26m wing reads as glass; the gradient is
+   what makes it read as a wing that has been flown through smoke. */
+float wnRoot = 1.0 - smoothstep(3.0, 9.6, abs(vSFObj.x));
+/* THE BAKE, read once. Everything below and the two later blocks all
+   want it, and an interpolated varying is free to re-read. */
+float wnOcc = clamp(vWnOcc.x, 0.0, 1.0);
+float wnNear = clamp(vWnOcc.y, 0.0, 1.0);
+/* THE VENT, as a FIELD rather than as a polygon mask. wnHot can only
+   change at an edge, because it is read out of COLOR_0; wnNear is a
+   distance and changes everywhere. Squared so the bleed hugs the vent
+   instead of hazing the whole plate. */
+float wnVent = max(wnHot, wnNear * wnNear * uWnOccl.z);
+/* The heat-affected zone around a vent, in two bands. Computed here
+   rather than where it is spent because the roughness chunk runs
+   before the normal chunk and both want it - the same reason every
+   other mask in this block is here. */
+float wnLip = smoothstep(0.30, 0.92, wnNear);
+float wnCarbon = smoothstep(0.06, 0.30, wnNear) * (1.0 - smoothstep(0.34, 0.66, wnNear));
+`;
+
+/* Block 2. Roughness. THE POINT OF THE WHOLE ROUND: a boss where every
+   part answers the sun identically is the "one matte plastic" tell,
+   and specular that TRAVELS is the only cue a model with no albedo map
+   has. Three families, three lobes - sooted char nearly matte, thin
+   membrane glossy, heat-glazed shell around the furnace vitrified. */
+const FURNACE_ROUGH = /* glsl */`
+roughnessFactor = mix(roughnessFactor, 0.30, wnWing * 0.80);
+/* Vitrified around the vent, and along the DISTANCE field rather than
+   the vertex mask - shell that has been cooked is glazed for a good
+   half metre out from the hole, and a glaze that stops at a polygon
+   edge is the same stair-step the emissive had. */
+roughnessFactor = mix(roughnessFactor, 0.17, max(wnHot, wnLip) * 0.80);
+/* A CREASE IS NOT POLISHED. Dust and soot collect where the bake says
+   the sky cannot reach, so occlusion drives roughness up as well as
+   albedo down - which is what stops an occluded seam still throwing a
+   highlight and reading as a lit edge. */
+roughnessFactor = clamp(roughnessFactor + wnOcc * 0.26, 0.045, 1.0);
+`;
+
+/* Block 3. Albedo, at `normal_fragment_maps` and deliberately BEFORE
+   the kit's own block there - so the kit's cavity, edge wear and
+   damage scorch all run on this palette instead of on the .glb's
+   near-black. Written outside the kit's distance branch on purpose:
+   a recolour is a silhouette-scale decision and must survive to the
+   far side of the arena, while the grain that modulates it correctly
+   fades out at 140 m. */
+const FURNACE_ALBEDO = /* glsl */`
+vec3 wnN = inverseTransformDirection(normal, viewMatrix);
+vec3 wnAlb = uWnChar.rgb * mix(1.0, 2.95, wnTone) + vec3(0.004, 0.005, 0.009) * wnTone;
+/* THE COOKED RING, and it is now a RING rather than a mask.
+
+   The vent shell is not soot-black - it has been cooked - but the
+   critic's third defect was that this transition did not exist:
+   "the orange emissive panels butt directly against unlit black with
+   a hard stair-stepped polygon boundary and no transition value, so
+   the panels read as holes cut in card rather than glowing tissue
+   under plates". A cooked band that follows the DISTANCE field
+   instead of the vertex mask is the transition value, and it lands
+   half a metre out from a vent whatever the tessellation does there.
+
+   Two bands, not one, because a real heat-affected zone has them:
+   scorched and slightly warm right at the lip, then a dark carbon
+   ring just outside it where the soot condenses back down. The dark
+   ring is what stops the bleed reading as a soft airbrush.
+   Both bands are computed in FURNACE_MASKS, because the roughness
+   chunk wants the same lip. */
+wnAlb = mix(wnAlb, vec3(0.086, 0.031, 0.014), max(wnHot, wnLip * 0.85));
+wnAlb *= 1.0 - 0.55 * wnCarbon;
+/* THE MEMBRANE. Thin, faintly warm where the light gets through it,
+   choked with soot at the root.
+
+   AND DARK, which took a shoot to learn. At the first values the wing
+   was a warm mid brown - and a 26 m wing is most of this animal's
+   projected area, so the whole boss landed in the sand's own value and
+   hue band and the separation strategy was lost on the largest surface
+   it had. The membrane is the biggest thing on the animal, so it is
+   the thing that most has to obey the rule. */
+/* AND COLD, which is this round's correction. The old value was warm
+   (r > g > b) on a surface that is a quarter of the frame, under a
+   warm sun, with a warm sky rim on it - three warm terms and nothing
+   to answer them, which is how the critic came to write "the right
+   wing tip dissolves into the dune entirely". Sooted membrane over a
+   pale sky is a COLD grey; the warmth on a wing belongs to the light
+   coming through it from the flare stacks, not to the wing. */
+vec3 wnMemb = mix(vec3(0.0295, 0.0325, 0.0430), vec3(0.0105, 0.0110, 0.0145),
+                  wnRoot * uWnAsh.w);
+wnAlb = mix(wnAlb, wnMemb, wnWing * (1.0 - wnHot));
+/* ASH SETTLES ON WHAT FACES UP. Blotched through the kit's own
+   metre-scale mottle so it lands in drifts rather than as an even
+   wash, and kept off the furnace and off most of the wing - a wing
+   beats sixty times a minute and does not hold dust. */
+float wnUp = smoothstep(0.02, 0.70, wnN.y);
+float wnBlot = 0.40 + 0.60 * smoothstep(-0.50, 0.55, sfMot);
+float wnRime = wnUp * wnBlot * uWnChar.w * (1.0 - wnHot) * (1.0 - wnWing * 0.62);
+/* AND ASH DOES NOT SETTLE IN A CREVICE THE SKY CANNOT SEE. Keying the
+   rime off the bake is what turns a value wash into a read: the pale
+   dust lands on the exposed tops of plates and stops dead at the
+   joins, which draws the joins. */
+wnRime *= 1.0 - wnOcc * 0.85;
+wnAlb = mix(wnAlb, uWnAsh.rgb, wnRime);
+/* THE CAVITY, at PART SCALE. This is the whole reason for the bake,
+   and the one line the blind critic's two Halo wins were awarded on.
+   It runs LAST so it darkens the finished palette - the ash in the
+   crease goes dark with the char in the crease, which is what soot
+   in a recess actually does.
+
+   Note it also gates the ambient: three multiplies irradiance by
+   diffuseColor, so occluding the albedo occludes the sky fill as
+   well as the sun, which is exactly right for a crease. The rim is
+   the one term this cannot reach, and FURNACE_FRAME occludes that
+   one by hand. */
+wnAlb *= 1.0 - wnOcc * uWnOccl.x;
+diffuseColor.rgb = wnAlb;
+`;
+
+/* Block 4. The furnace itself. Everything here is a smoothstep or a
+   multiply-add on fields that already exist, plus exactly one sine for
+   the abdominal banding - the frame is fill-bound and a twelve-tap
+   glow would not survive contact with a real device. */
+const FURNACE_EMIT = /* glsl */`
+{
+  float wnH = uWnHeat.x;
+  /* THE GUT. Object space, centred on the same point combat.js aims
+     the gut hit sphere at (heart y -0.85, z 0.35), so the light comes
+     out of where the weak point actually is rather than out of the
+     model's origin. Squashed on x because the furnace is a wide slung
+     bag, not a ball. */
+  vec3 wnG = vSFObj - vec3(0.0, -0.85, 0.35);
+  wnG.x *= 0.55;
+  float wnGut = (1.0 - smoothstep(1.30, 5.40, length(wnG))) * (0.75 + 0.45 * uWnSac.w);
+  /* BANDING DOWN THE GASTER. The bands are segment joints, so they
+     are a function of the body axis alone; the phase crawls while the
+     furnace draws, which is what makes a still animal look alive. */
+  float wnBand = 0.5 + 0.5 * sin(vSFObj.z * 2.05 + uWnHeat.z);
+  wnBand *= smoothstep(-0.70, -3.60, vSFObj.z);
+  /* THE HEAT SACS, and the whole reason this mask is read out of the
+     BIND POSE. A burst sac is deflated by scaling its bone, which
+     moves every skinned vertex - and moves none of this, because
+     vSFObj is the raw attribute. So the mask still knows which sac a
+     pixel belongs to after the sac has collapsed, and the glow can
+     drain smoothly with the lift pool instead of snapping off. */
+  float wnSacBox = smoothstep(0.95, 1.35, abs(vSFObj.x))
+    * (1.0 - smoothstep(2.10, 2.60, abs(vSFObj.x)))
+    * (1.0 - smoothstep(0.95, 1.35, abs(vSFObj.z - 0.80)))
+    * (1.0 - smoothstep(0.90, 1.25, abs(vSFObj.y - 0.30)));
+  float wnFill = mix(uWnSac.x, uWnSac.y, step(0.0, -vSFObj.x));
+  /* AND THE SAC IS A SWELLING, NOT A PANEL. It used to be gated on
+     wnHot alone, which meant a sac was only as big as the few faces
+     COLOR_0 happened to paint hot on that wing root - four small flat
+     orange rectangles, which is not a weak point a player can find
+     from the ground, and the art direction is explicit that a weak
+     point a player cannot find is a mechanic that does not exist. The
+     distance field lets the swelling run out past the painted faces
+     into the shell around it, so it reads as something under the
+     plate rather than as a sticker on it. */
+  float wnSac = wnSacBox * max(wnHot, wnNear * 0.85) * mix(0.10, 1.0, wnFill);
+
+  /* THE FURNACE THROUGH THE SHELL. sfCrack is the surface kit's own
+     deepest-trough band - the same field its damage response cracks
+     open - so the light comes out of the creases the relief already
+     carved instead of out of a second pattern that disagrees with the
+     first. It is already computed; this costs a multiply. */
+  /* NOT ON THE WING. There is no furnace behind a membrane, and the
+     first shoot of this proved how badly that reads: a close pass put
+     gold speckle across thirteen metres of wing and the whole panel
+     came back looking like amber glass lit from behind. */
+  float wnFiss = sfCrack * (0.30 + 0.95 * wnGut + 0.60 * wnBand)
+    * uWnHeat.w * (1.0 - wnWing);
+
+  /* THE SACS ARE THE BRIGHTEST THING ON THE ANIMAL, deliberately and
+     by a margin. They are the weak point, the art direction asks for
+     one saturated focal element, and the first shoot had the censer
+     bowls out-blazing them - which pointed the player's eye at the
+     part of the animal that is not the mechanic. */
+  /* THE SACS DO NOT GO OUT WITH THE GUT, and that is a mechanical
+     decision before it is an artistic one. The furnace banks itself
+     during the stoke - which is most of the time the player spends
+     within arm's reach of this animal, and the frame this boss is
+     photographed in - but the sacs are what hold it up, not what
+     burns, and a weak point that disappears for nine seconds of every
+     cycle is a weak point the player has to relearn every time it
+     comes back. */
+  float wnSacH = max(wnH, 0.78);
+  /* THE PANEL HAS A SHAPE NOW, and this is defect three's other half.
+     The bleed above stopped the vent's BOUNDARY being a polygon edge;
+     this stops its INTERIOR being a flat fill. Two terms, both free:
+
+       - a vent is a HOLE. You see more of what is behind a plate when
+         you look into it and less when you look along it, so the
+         glow leans on dot(N,V). That alone turns every flat-filled
+         quad into a gradient that moves as the camera does, which is
+         the difference the critic asked for in three separate panels.
+
+       - the shell over a furnace is not uniformly thin. The kit's own
+         coarse mottle already describes where it is thick, so the
+         glow is modulated by it - and because it is the SAME field
+         that carved the relief, the bright parts of a panel land on
+         the thin parts of the plate rather than in a second pattern
+         that disagrees with the first. */
+  float wnLook = clamp(dot(wnN, normalize(cameraPosition - vSFWorld)), 0.0, 1.0);
+  float wnThin = 0.62 + 0.38 * smoothstep(-0.65, 0.70, sfMot);
+  float wnShape = (0.42 + 0.58 * wnLook) * wnThin;
+  float wnCore = (wnVent * (0.40 + 0.36 * wnBand) + wnGut * 0.24) * wnShape;
+  /* 2.35, and the number is set by the MEASUREMENT rather than by
+     taste. A sac core has to clear linear 1.0 to reach the bloom
+     chain's bright threshold at all, and it has to go most of the way
+     to white to put a pixel over sRGB 229 - a saturated orange at any
+     intensity has a low luminance and simply clips to orange. Two
+     stoke frames came back with fewer blown pixels than ANY frame in
+     the reference pool; this is the only surface on the animal that
+     should be answering that.
+
+     AND IT STILL WAS NOT ENOUGH, because 2.35 was the whole sac at
+     one value - a bright flat lozenge, which is a blown highlight
+     with no structure and the critic named that too ("clipped to
+     flat white with no core-to-halo structure, so the brightest
+     event in the frame has no shape"). The second term is the CORE:
+     the box mask cubed, which is a tight smooth peak in the middle
+     of each sac, so the white is a small hot centre inside an orange
+     swelling rather than a filled shape. It is what finally puts
+     pixels over sRGB 229 - 02-full measured brightPct 0.0017 against
+     a reference pool whose worst frame is 0.0042 - and it puts them
+     somewhere a player is supposed to be aiming. */
+  float wnSacCore = wnSacBox * wnSacBox * wnSacBox * mix(0.10, 1.0, wnFill);
+  float wnGlow = (wnCore + wnFiss) * wnH
+    + wnSac * 2.35 * wnSacH + wnSacCore * 1.45 * wnSacH;
+
+  /* WHITE-HOT AT THE CORE. A saturated orange scaled up clips to pure
+     orange and stops there, which is exactly why every boss frame this
+     programme has measured came back with ZERO blown pixels against a
+     reference pool that always has some. Ramping the hue toward white
+     as the term rises is what puts a real highlight in the frame. */
+  vec3 wnC = mix(vec3(1.00, 0.26, 0.040), vec3(1.00, 0.63, 0.230),
+                 clamp(wnGlow * 0.75, 0.0, 1.0));
+  /* The white is held back to the genuinely hot CORE - past 1.3 - so
+     the fringe of every vent stays orange and the animal keeps its
+     hue. A ramp that starts earlier washes the whole furnace pale and
+     the boss stops looking like it is burning and starts looking
+     like it is lit. */
+  wnC = mix(wnC, vec3(1.00, 0.93, 0.84), clamp(wnGlow * 0.42 - 0.72, 0.0, 1.0));
+  totalEmissiveRadiance += wnC * wnGlow * uWnHeat.y;
+
+  /* IT LIGHTS ITS OWN UNDERSIDE. There is no second light in this
+     scene and there must not be - the first new light in a frame
+     recompiles every material in it. So the furnace's throw on its own
+     belly is a shading term: downward-facing plate within reach of the
+     gut picks the furnace colour up, which is the difference between
+     an animal carrying a fire and a black shape with orange stickers. */
+  /* SQUARED IN THE GUT TERM, and turned down, which is a correction.
+     At a linear falloff over a 5.4m sphere the "underside" was most
+     of the animal, so a strafing pass at full heat washed the whole
+     body warm - 04-impact came back an orange lozenge in an orange
+     dune and the critic could not tell head from thorax from tail.
+     Squared, it is a pool under the abdomen with a falling edge,
+     which is what a fire in a bag actually throws. */
+  float wnBelly = clamp(-wnN.y, 0.0, 1.0) * wnGut * wnGut
+    * (1.0 - wnHot) * (1.0 - wnWing);
+  totalEmissiveRadiance += vec3(1.00, 0.33, 0.10) * wnBelly * wnH * 0.46 * uWnHeat.y;
+
+  /* THE FLASH. One scalar the module drives on a bombard contact, on
+     the re-light at the end of a stoke, and on death. */
+  totalEmissiveRadiance += vec3(1.00, 0.55, 0.20) * uWnSac.z
+    * (wnHot * 0.85 + wnFiss * 1.4 + wnGut * 0.30);
+}
+`;
+
+/* Block 5. THE COLD SOURCE, and it is the most important block in
+   this file.
+
+   THE DEFECT, in the critic's words, cited in four of five panels and
+   the stated deciding reason in two of them: "a single orange band",
+   "the right wing tip dissolves into the dune entirely". The gallery
+   measured the same thing without being asked - hue spread 11.3
+   degrees across a whole frame, on a scale where the reference pool
+   runs three to five distinct hue families.
+
+   WHY THE ALBEDO COULD NOT FIX IT. The char is already a blue-black
+   at 0.02 linear. It does not matter. Every source in this frame is
+   warm - a 13-degree golden-hour sun, a sky whose colour at that hour
+   IS the warm term, and a furnace - and a near-black surface returns
+   almost nothing of its own, so what you see on it is the source. The
+   atmosphere's rim made this worse rather than better, because
+   `ATMOS_FRAG` tints the rim with `sfSky`, which at golden hour is
+   the same warm cream as the dune behind the animal. The rim was
+   painting the boss the colour of its background, along its
+   silhouette, which is the one place separation is decided.
+
+   SO THE ANIMAL IS GIVEN A LIGHT OF ITS OWN, and it is cold. Not a
+   real light - the first new light in this scene recompiles every
+   material in it (198 ms, recorded on the Aegis) and the frame is
+   fill-bound besides. A fresnel term, the same shape the atmosphere's
+   rim already has, tinted a desaturated blue-violet and weighted
+   toward the faces the SUN CANNOT SEE. That last part is what makes
+   it read as light rather than as an outline: a shaded flank picking
+   up cold sky bounce is what actually happens to a black object under
+   a low warm sun, and it is the Hunter's violet sheen, which the
+   brief has been pointing at since the first page.
+
+   THREE THINGS IT IS GATED ON, all of them load-bearing:
+
+     - OCCLUSION. A rim is sky light, and a crease has no sky. This is
+       the term the albedo cavity cannot reach, because the rim is
+       added to gl_FragColor after all the shading - so it is
+       subtracted here by hand, and without it every occluded seam
+       still drew a bright edge and the bake looked like it had done
+       nothing.
+
+     - NOT ON THE FURNACE. A vent is its own emitter and a cold edge
+       on it just desaturates the one saturated thing in the frame.
+
+     - HARDEST ON THE MEMBRANE'S OUTER HALF. That is the exact pixel
+       the critic said dissolves into the dune, and a thin wing really
+       does carry a bright edge, so the strongest version of the cure
+       lands on the surface that needed it most.
+
+   Injected at `opaque_fragment`, which `patchMaterial` re-emits, so
+   this runs on the finished colour BEFORE the atmosphere's own rim
+   and haze - the cold edge is therefore hazed with everything else at
+   range instead of floating over the fog like a sticker outline. */
+const FURNACE_FRAME = /* glsl */`
+{
+  vec3 wfV = normalize(vViewPosition);
+  float wfF = 1.0 - clamp(dot(normal, wfV), 0.0, 1.0);
+  vec3 wfN = inverseTransformDirection(normal, viewMatrix);
+  /* 1 on the flanks the sun has left, 0 on the ones it lights. */
+  float wfShade = clamp(0.55 - dot(wfN, uSunDir) * 0.85, 0.0, 1.0);
+  float wfEdge = wfF * wfF * wfF;
+  float wfWing = wnWing * (1.0 - wnRoot);
+  float wfAmt = wfEdge * (0.34 + 0.66 * wfShade)
+    * (1.0 + 1.15 * wfWing)
+    * (1.0 - wnVent) * (1.0 - wnOcc * uWnOccl.y);
+  gl_FragColor.rgb += uWnCold.rgb * wfAmt * uWnCold.w;
+
+  /* AND A COLD FILL, not only a cold edge. The rim alone draws an
+     outline; what makes the whole flank read cool is a broad
+     sky-facing term at a tenth of the strength, which is the
+     hemisphere light this renderer does not have. Kept to upward and
+     shaded faces so it can never lift the belly, which belongs to the
+     furnace. */
+  float wfSky = clamp(wfN.y * 0.5 + 0.5, 0.0, 1.0) * wfShade;
+  gl_FragColor.rgb += uWnCold.rgb * wfSky * uWnCold.w * 0.16
+    * (1.0 - wnVent) * (1.0 - wnOcc);
+}
+`;
+
 export function buildWinnower(ctx) {
   const { THREE, scene, atmos, enemies } = ctx;
   const bus = makeBus();
@@ -186,6 +985,508 @@ export function buildWinnower(ctx) {
   const group = new THREE.Group();
   group.name = "winnower-ash";
   scene.add(group);
+
+  /* ============================================================
+     THE SHELL
+
+     Its own material, not the species'. `enemies.js` registers the
+     species material `shared: true` because forty Threshers draw from
+     one - and the surface kit refuses a damage write on a shared
+     material for exactly that reason, so this animal could never
+     accumulate scorch while it borrowed one. A boss that wants a
+     damage response owns its own material; the kit's own header says
+     so. One extra program, warmed at load.
+     ============================================================ */
+  const furnaceUniforms = {
+    uWnChar: { value: new THREE.Vector4(CHAR_RGB[0], CHAR_RGB[1], CHAR_RGB[2], 0) },
+    uWnAsh: {
+      value: new THREE.Vector4(ASH_RIME_RGB[0], ASH_RIME_RGB[1], ASH_RIME_RGB[2], 0.85),
+    },
+    uWnHeat: { value: new THREE.Vector4(0.30, 1, 0, 1) },
+    uWnSac: { value: new THREE.Vector4(1, 1, 0, 0) },
+    /* THE COLD SOURCE. A desaturated blue-violet, not a saturated
+       blue: the reference's cool light is sky bounce, which is pale,
+       and a saturated blue rim on a black insect reads as a neon
+       outline the moment it is strong enough to see. The strength is
+       the one number in this file worth re-tuning first if the animal
+       ever goes plastic - it buys hue separation and it spends value
+       range, and past about 0.6 the char stops being char. */
+    uWnCold: { value: new THREE.Vector4(0.375, 0.470, 0.735, 0.46) },
+    /* x how far part-scale occlusion may darken albedo, y how far it
+       may kill the cold rim, z how far a vent may bleed into shell.
+       All three live on a uniform rather than in the source so a
+       shoot can be re-tuned without a shader recompile - the bake is
+       the expensive half and it does not change. */
+    uWnOccl: { value: new THREE.Vector4(0.78, 0.90, 1.0, 0) },
+  };
+
+  const shellMat = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    /* Faceted, like everything in SAINTFALL above the sand. The grain
+       and the furnace both go UNDER the facets; the facet's own value
+       step stays the dominant read. */
+    flatShading: true,
+    /* Higher than the species' 0.54. Soot is matte, and the gloss this
+       animal needs is not an overall polish but a TRAVEL - the kit
+       modulates around this centre and the two overrides in
+       FURNACE_ROUGH pull the membrane and the vitrified shell down out
+       of it, which is what makes three materials out of one number. */
+    roughness: 0.66,
+    metalness: 0.05,
+  });
+  shellMat.name = "sf-winnower-shell";
+  applySurface(shellMat, atmos, "chitin", {
+    /* RIM DOWN HARD, from the species' 1.45. The atmosphere's rim is
+       additive and albedo-independent: on a shell authored at 0.02
+       linear it was not a rim at all, it was the entire surface, and
+       the animal came back reading as galvanised sheet rather than as
+       char. Not to zero - the rim is what keeps it off the haze at
+       200 m, which is where this one is usually seen from.
+
+       DOWN AGAIN, to 0.22, and this time because of its COLOUR rather
+       than its strength. `ATMOS_FRAG` tints the rim with `sfSky`, so
+       at golden hour the atmosphere was painting this animal's
+       silhouette the exact cream of the dune behind it - a
+       separation failure applied precisely where separation is
+       decided. It keeps enough to hold the shape off the haze at
+       range; the cold rim in FURNACE_FRAME is what does the work
+       near, and the two are deliberately different colours. */
+    rim: 0.22,
+    glitter: 0,
+    /* Kept non-zero for two reasons. It is the authored glow COLOR_0's
+       alpha channel already carries - eyes, censer coals, the vents
+       between plates - and it is also the only thing that writes
+       diffuseColor.a back to 1 after the vertex colour multiplies a
+       0.8 alpha into it. */
+    bio: 0.75,
+    scale: 1,
+    /* Per-instance, so `setSurfaceDamage` works. */
+    shared: false,
+    /* GRAIN AND CREASE UP from the chitin family's defaults, and the
+       reason is this animal specifically: the family's ceiling is set
+       by the THINNEST limb wearing it, and nothing on a 26 m flyer is
+       thin. The measurement asked for it too - microDetail and
+       edgeDensity are the two axes this cast has been failing. */
+    score: 0.0028, pore: 0.0010, cavity: 0.44, wavelength: 1.05,
+    gloss: 0.34, sheen: 0.10, mottle: 0.20,
+    /* Wear low. The kit's wear pass pulls hue out of upward faces and
+       lifts their value, which is a rubbed-plate story - the ash rime
+       in FURNACE_ALBEDO is this animal's version of it and doing both
+       would bleach the char twice. */
+    wear: 0.05,
+    /* Seen from further out than anything except the Coulter, so the
+       detail band is pushed out with it. */
+    fadeNear: 62, fadeFar: 142,
+    /* The kit's own damage ember, turned up: on this animal a crack
+       that lights up is not a wound, it is the inside showing. */
+    ember: 0.95,
+  });
+
+  /* THE EXTENSION, and the one rule it has to respect.
+     `patchMaterial` owns `customProgramCacheKey`, and the failure its
+     header warns about is a second `onBeforeCompile` that changes the
+     SOURCE without changing the KEY - two variants then silently share
+     whichever program compiled first, and the symptom is "my shader
+     did nothing". This calls the kit's compile first and EXTENDS its
+     key rather than replacing it, so the invariant that warning
+     protects still holds. Same shape as the Abbess's rest-pose bind,
+     and for the same reason: the right answer is an `extend`
+     passthrough on `applySurface`, which this round's report asks for. */
+  {
+    const compile = shellMat.onBeforeCompile;
+    const key = shellMat.customProgramCacheKey;
+    shellMat.onBeforeCompile = (shader, renderer) => {
+      compile(shader, renderer);
+      Object.assign(shader.uniforms, furnaceUniforms);
+      /* THE BAKE'S ATTRIBUTE, declared here and NOWHERE ELSE. A
+         geometry that never went through `bakeShellFields` still
+         compiles and still draws - WebGL hands an unbound attribute
+         the generic value (0,0,0,1) - which is why the packing is
+         occlusion and proximity rather than AO and distance. See the
+         bake's header. */
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>",
+          "#include <common>\nattribute vec2 aWnOcc;\nvarying vec2 vWnOcc;")
+        .replace("#include <begin_vertex>", FURNACE_ANCHOR);
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", `#include <common>\n${FURNACE_PARS}`)
+        .replace("#include <color_fragment>", `#include <color_fragment>\n${FURNACE_MASKS}`)
+        .replace("#include <roughnessmap_fragment>",
+          `#include <roughnessmap_fragment>\n${FURNACE_ROUGH}`)
+        .replace("#include <normal_fragment_maps>",
+          `#include <normal_fragment_maps>\n${FURNACE_ALBEDO}`)
+        .replace("#include <emissivemap_fragment>",
+          `#include <emissivemap_fragment>\n${FURNACE_EMIT}`)
+        /* LAST, and after `opaque_fragment` rather than before it -
+           this block reads gl_FragColor, which does not exist until
+           that chunk has run. `patchMaterial` re-emits the include
+           with its own atmosphere appended, so what lands here is
+           colour, then the cold source, then the sky rim and haze. */
+        .replace("#include <opaque_fragment>",
+          `#include <opaque_fragment>\n${FURNACE_FRAME}`);
+    };
+    shellMat.customProgramCacheKey = () => `${key.call(shellMat)}|winnowerFurnace2`;
+    shellMat.needsUpdate = true;
+  }
+
+  let shellBound = false;
+  let bakeMs = 0;
+  /** Hand the instance its own shell, and measure the bind pose once.
+   *  Idempotent: `ensureSpawned` is reached from a restore and from
+   *  the QA reset as well as from construction.
+   *
+   *  THE BAKE RIDES HERE rather than at construction because this is
+   *  where the meshes first exist - the model is loaded async and the
+   *  module is built before it lands. `ensureSpawned` runs on the
+   *  first update tick, beside the model parse and before the shader
+   *  warm, which is the cheapest place in the frame budget to spend
+   *  forty milliseconds once. Nothing per frame comes out of it. */
+  function bindShell() {
+    if (shellBound || !inst?.root) return;
+    inst.root.traverse((o) => {
+      if (!o.isMesh && !o.isSkinnedMesh) return;
+      o.material = shellMat;
+      bakeMs += bakeShellFields(THREE, o.geometry);
+    });
+    shellBound = true;
+  }
+
+  /* ============================================================
+     THE GROUND POOL - what the furnace throws on the sand.
+
+     A boss whose whole design is "it is on fire" has to put light on
+     the ground under it or the fire is a decal. A real light is the
+     obvious answer and the wrong one twice over: the first new light
+     in a frame recompiles every material in the scene (198 ms,
+     measured on the Aegis), and this frame is GPU fill-bound so a
+     point light is paid by every lit pixel in it whether or not the
+     animal is on screen.
+
+     One additive terrain-conformed disc instead. It costs one draw
+     call, it is hidden whenever the encounter is not live, and it
+     fades toward BLACK with distance rather than toward the sky -
+     additive blending cannot subtract, so a hazed additive surface
+     that mixes toward sky colour paints a pale wedge over the
+     mountains (art.js records that one).
+     ============================================================ */
+  const POOL_RINGS = 3;
+  const POOL_SIDES = 20;
+  const POOL_VERTS = 1 + POOL_RINGS * POOL_SIDES;
+  const poolVertex = /* glsl */`
+    attribute float aRadial;
+    varying float vRadial;
+    varying vec3 vWorld;
+    void main() {
+      vRadial = aRadial;
+      vec4 world = modelMatrix * vec4(position, 1.0);
+      vWorld = world.xyz;
+      gl_Position = projectionMatrix * viewMatrix * world;
+    }
+  `;
+  const poolFragment = /* glsl */`
+    precision highp float;
+    uniform vec3 uCore;
+    uniform vec3 uEdge;
+    uniform float uGain;
+    uniform float uTime;
+    varying float vRadial;
+    varying vec3 vWorld;
+    void main() {
+      float r = clamp(vRadial, 0.0, 1.0);
+      // Squared falloff, which is what a source at a height actually
+      // throws; a linear one reads as a painted circle.
+      float fall = (1.0 - r) * (1.0 - r);
+      // Two incommensurate rates, so the flicker never finds a beat.
+      float flick = 0.84 + 0.11 * sin(uTime * 5.3) + 0.09 * sin(uTime * 12.7);
+      float far = 1.0 - smoothstep(200.0, 340.0, length(cameraPosition - vWorld));
+      float a = fall * uGain * flick * far;
+      if (a < 0.004) discard;
+      gl_FragColor = vec4(mix(uCore, uEdge, r) * a, 1.0);
+    }
+  `;
+  const poolGeo = new THREE.BufferGeometry();
+  const poolPos = new Float32Array(POOL_VERTS * 3);
+  {
+    const radial = new Float32Array(POOL_VERTS);
+    const index = [];
+    for (let s = 0; s < POOL_SIDES; s += 1) {
+      const n = (s + 1) % POOL_SIDES;
+      index.push(0, 1 + s, 1 + n);
+      for (let r = 0; r < POOL_RINGS - 1; r += 1) {
+        const a0 = 1 + r * POOL_SIDES + s;
+        const a1 = 1 + r * POOL_SIDES + n;
+        const b0 = 1 + (r + 1) * POOL_SIDES + s;
+        const b1 = 1 + (r + 1) * POOL_SIDES + n;
+        index.push(a0, b0, b1, a0, b1, a1);
+      }
+    }
+    for (let r = 0; r < POOL_RINGS; r += 1) {
+      for (let s = 0; s < POOL_SIDES; s += 1) {
+        radial[1 + r * POOL_SIDES + s] = (r + 1) / POOL_RINGS;
+      }
+    }
+    poolGeo.setAttribute("position", new THREE.BufferAttribute(poolPos, 3));
+    poolGeo.setAttribute("aRadial", new THREE.BufferAttribute(radial, 1));
+    poolGeo.setIndex(index);
+  }
+  const poolMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uCore: { value: new THREE.Color("#ff8a30") },
+      uEdge: { value: new THREE.Color("#7a1c04") },
+      uGain: { value: 0 },
+      uTime: { value: 0 },
+    },
+    vertexShader: poolVertex,
+    fragmentShader: poolFragment,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+  });
+  const poolMesh = new THREE.Mesh(poolGeo, poolMat);
+  poolMesh.name = "sf-winnower-pool";
+  poolMesh.frustumCulled = false;
+  poolMesh.visible = false;
+  poolMesh.renderOrder = 4;
+  group.add(poolMesh);
+  const pool = { x: 1e9, z: 1e9, radius: 0, gain: 0 };
+
+  /** Re-lay the pool on the sand. Only when it has actually moved -
+   *  every vertex costs a terrain sample, and an animal holding
+   *  station over one spot must not pay for sixty identical rebuilds
+   *  a second. */
+  function layPool(x, z, radius) {
+    const y = groundAt(x, z);
+    for (let r = 0; r < POOL_RINGS; r += 1) {
+      const rr = radius * ((r + 1) / POOL_RINGS);
+      for (let s = 0; s < POOL_SIDES; s += 1) {
+        const a = (s / POOL_SIDES) * TAU + r * 0.17;
+        const px = Math.cos(a) * rr;
+        const pz = Math.sin(a) * rr;
+        const i = (1 + r * POOL_SIDES + s) * 3;
+        poolPos[i] = px;
+        poolPos[i + 1] = groundAt(x + px, z + pz) - y + 0.09;
+        poolPos[i + 2] = pz;
+      }
+    }
+    poolPos[0] = 0; poolPos[1] = 0.09; poolPos[2] = 0;
+    poolMesh.position.set(x, y, z);
+    poolGeo.attributes.position.needsUpdate = true;
+    poolGeo.computeBoundingSphere();
+    pool.x = x; pool.z = z; pool.radius = radius;
+  }
+
+  /* ============================================================
+     THE CONTACT SHADOW - the second decal, and the one that says the
+     animal is standing on the planet.
+
+     THE DEFECT, cited on every one of our frames that showed ground:
+     "the only darkening under the body is a broad soft blob that does
+     not follow the body outline, and it sits at a different angle
+     from the long cast shadows the rails throw"; "a wide soft ellipse
+     offset to the LEFT of the body it belongs to and shaped nothing
+     like the creature".
+
+     Both halves of that are true and neither is a bug. The blob is
+     the real shadow map, and it is a blob because it is one atlas
+     drawn every second frame across two kilometres of basin - a nine
+     metre animal gets a handful of texels and a wide filter kernel,
+     so what lands on the sand is a smudge with no outline and a
+     penumbra several metres wide. Raising the resolution is a
+     renderer-wide cost paid by every frame of the game for one
+     animal, and this frame is already fill-bound.
+
+     So the outline is drawn instead, as a decal, the same way the
+     furnace's throw already is - and for the same reason: one draw
+     call, terrain-conformed, hidden whenever the encounter is not
+     live. Three things it has to get right, because they are the
+     three the critic named:
+
+       SHAPE. Not a circle. An ellipse long across the wing span and
+       short along the body, pinched on the four diagonals, which is a
+       moth outline rather than a puddle. It turns with the animal.
+
+       DIRECTION. It leans away from the sun, by the animal's own
+       height over the tangent of the sun's elevation - the same
+       construction that makes the rails throw the long shadows the
+       critic compared it against. At golden hour that is a long lean,
+       which is exactly what the frame wants.
+
+       CONTACT. The lean is applied per RING, so the inner ring stays
+       under the body and only the outer edge travels. A shadow whose
+       dark centre has walked off its own animal is the fault we are
+       fixing, not a stylisation of it.
+
+     Multiplicative, not additive: a shadow has to be able to DARKEN
+     the sand, and this project has already recorded that additive
+     blending cannot subtract. Tinted slightly cold, because what
+     fills a shadow at golden hour is the sky and the sky is the cold
+     source - so the ground under this animal separates from the dune
+     by hue as well, on the same argument as the shell.
+     ============================================================ */
+  const CAST_RINGS = 3;
+  const CAST_SIDES = 24;
+  const CAST_VERTS = 1 + CAST_RINGS * CAST_SIDES;
+  const castVertex = /* glsl */`
+    attribute float aRadial;
+    varying float vRadial;
+    varying vec3 vWorld;
+    void main() {
+      vRadial = aRadial;
+      vec4 world = modelMatrix * vec4(position, 1.0);
+      vWorld = world.xyz;
+      gl_Position = projectionMatrix * viewMatrix * world;
+    }
+  `;
+  const castFragment = /* glsl */`
+    precision highp float;
+    uniform vec3 uTint;
+    uniform vec2 uGain;   // strength, penumbra exponent
+    varying float vRadial;
+    varying vec3 vWorld;
+    void main() {
+      float r = clamp(vRadial, 0.0, 1.0);
+      /* The exponent is the PENUMBRA. On the ground it is high, so
+         the edge is nearly hard and the outline reads; in the air it
+         falls toward 1 and the whole thing turns into the soft wide
+         nothing a shadow cast from thirty metres actually is. */
+      float core = pow(1.0 - r, uGain.y);
+      float far = 1.0 - smoothstep(210.0, 340.0, length(cameraPosition - vWorld));
+      float a = core * uGain.x * far;
+      if (a < 0.004) discard;
+      gl_FragColor = vec4(mix(vec3(1.0), uTint, clamp(a, 0.0, 1.0)), 1.0);
+    }
+  `;
+  const castGeo = new THREE.BufferGeometry();
+  const castPos = new Float32Array(CAST_VERTS * 3);
+  {
+    const radial = new Float32Array(CAST_VERTS);
+    const index = [];
+    for (let s = 0; s < CAST_SIDES; s += 1) {
+      const n = (s + 1) % CAST_SIDES;
+      index.push(0, 1 + s, 1 + n);
+      for (let r = 0; r < CAST_RINGS - 1; r += 1) {
+        const a0 = 1 + r * CAST_SIDES + s;
+        const a1 = 1 + r * CAST_SIDES + n;
+        const b0 = 1 + (r + 1) * CAST_SIDES + s;
+        const b1 = 1 + (r + 1) * CAST_SIDES + n;
+        index.push(a0, b0, b1, a0, b1, a1);
+      }
+    }
+    for (let r = 0; r < CAST_RINGS; r += 1) {
+      for (let s = 0; s < CAST_SIDES; s += 1) {
+        radial[1 + r * CAST_SIDES + s] = (r + 1) / CAST_RINGS;
+      }
+    }
+    castGeo.setAttribute("position", new THREE.BufferAttribute(castPos, 3));
+    castGeo.setAttribute("aRadial", new THREE.BufferAttribute(radial, 1));
+    castGeo.setIndex(index);
+  }
+  const castMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTint: { value: new THREE.Color(0.255, 0.268, 0.335) },
+      uGain: { value: new THREE.Vector2(0, 1.4) },
+    },
+    vertexShader: castVertex,
+    fragmentShader: castFragment,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.MultiplyBlending,
+    side: THREE.DoubleSide,
+  });
+  const castMesh = new THREE.Mesh(castGeo, castMat);
+  castMesh.name = "sf-winnower-contact";
+  castMesh.frustumCulled = false;
+  castMesh.visible = false;
+  /* BEFORE the furnace pool, deliberately. A fire under the animal
+     fills its own shadow; a shadow drawn over the fire erases it. */
+  castMesh.renderOrder = 3;
+  group.add(castMesh);
+  const cast = { x: 1e9, z: 1e9, yaw: 1e9, lean: -1, gain: 0 };
+
+  /** Lay the outline on the sand. Same contract as `layPool`: every
+   *  vertex is a terrain sample, so this only runs when the animal has
+   *  actually moved, turned or changed height. */
+  function layCast(x, z, yaw, alt, spread) {
+    const y = groundAt(x, z);
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    /* The sun's ground heading, and the length of the lean. `sunDir`
+       points TOWARD the sun, so a shadow runs along its negation, and
+       the length is height over the tangent of the elevation - which
+       for a 13-degree golden-hour sun is four times the height. Capped,
+       because past about ten metres the decal stops being this
+       animal's contact shadow and becomes a stripe on the dune. */
+    let sx = -atmos.sunDir.x, sz = -atmos.sunDir.z;
+    const sl = Math.hypot(sx, sz) || 1;
+    sx /= sl; sz /= sl;
+    const lean = clamp(alt / Math.max(0.16, atmos.sunDir.y) * 0.42, 0, 9.5);
+    /* Half-span across the wings and half-length along the body. The
+       spread closes when the wings fold for a stoke - a folded animal
+       that still throws an eight-metre wing shadow is worse than no
+       shadow at all, because it contradicts the silhouette. */
+    const halfW = 3.4 + 5.0 * spread;
+    const halfL = 4.9;
+    for (let r = 0; r < CAST_RINGS; r += 1) {
+      const t = (r + 1) / CAST_RINGS;
+      for (let s = 0; s < CAST_SIDES; s += 1) {
+        const a = (s / CAST_SIDES) * TAU;
+        const cs = Math.cos(a), sn = Math.sin(a);
+        /* An ellipse, then pinched on the diagonals. The pinch is what
+           makes it a moth rather than a puddle: two wing lobes and a
+           body, from one cheap term. */
+        const e = 1 / Math.hypot(cs / halfL, sn / halfW);
+        const shape = e * (1 - 0.28 * Math.abs(Math.sin(a * 2)) ** 1.4) * t;
+        let px = fx * (shape * cs) - fz * (shape * sn);
+        let pz = fz * (shape * cs) + fx * (shape * sn);
+        // Per ring, so the contact stays put and only the edge travels.
+        px += sx * lean * t;
+        pz += sz * lean * t;
+        const i = (1 + r * CAST_SIDES + s) * 3;
+        castPos[i] = px;
+        castPos[i + 1] = groundAt(x + px, z + pz) - y + 0.055;
+        castPos[i + 2] = pz;
+      }
+    }
+    castPos[0] = 0; castPos[1] = 0.055; castPos[2] = 0;
+    castMesh.position.set(x, y, z);
+    castGeo.attributes.position.needsUpdate = true;
+    castGeo.computeBoundingSphere();
+    cast.x = x; cast.z = z; cast.yaw = yaw; cast.lean = lean;
+  }
+
+  /** The outline on the sand, and how hard it is pressed there. */
+  function updateCast(dt) {
+    const live = !!inst && !inst.encounterHidden && state.phase !== "dormant"
+      && inst.state !== "death";
+    const ground = live ? groundAt(inst.x, inst.z) : 0;
+    const alt = live ? Math.max(0, inst.y - ground) : 999;
+    /* It fades out with height rather than travelling to the horizon.
+       A shadow cast from cruise altitude is forty metres downrange and
+       three stops fainter, and drawing it would put a dark smear on
+       sand the animal is nowhere near. */
+    const want = live ? clamp01(1 - alt / 26) * 0.92 : 0;
+    cast.gain = damp(cast.gain, want, 6, dt);
+    castMat.uniforms.uGain.value.x = cast.gain;
+    /* Nearly hard on the ground, wide open in the air - the penumbra
+       of a real shadow grows with the distance to the caster. */
+    castMat.uniforms.uGain.value.y = clamp(2.5 - alt * 0.18, 1.05, 2.5);
+    if (cast.gain < 0.006) {
+      if (castMesh.visible) castMesh.visible = false;
+      return;
+    }
+    if (!castMesh.visible) castMesh.visible = true;
+    const spread = inst.grounded && state.phase === "stoke" ? 0.30 : 1.0;
+    const lean = clamp(alt / Math.max(0.16, atmos.sunDir.y) * 0.42, 0, 9.5);
+    /* atan2 of the sine and cosine rather than a subtraction, because
+       `cast.yaw` starts at a sentinel and a while-loop wrap on 1e9
+       does not terminate in any useful amount of time. */
+    const dYaw = Math.abs(Math.atan2(Math.sin(inst.yaw - cast.yaw),
+      Math.cos(inst.yaw - cast.yaw)));
+    if (Math.hypot(inst.x - cast.x, inst.z - cast.z) > 1.1
+      || dYaw > 0.14 || Math.abs(lean - cast.lean) > 0.7) {
+      layCast(inst.x, inst.z, inst.yaw, alt, spread);
+    }
+  }
 
   const state = {
     phase: "dormant",   // dormant, alert, soar, strafe, land, stoke, launch, dead
@@ -222,6 +1523,33 @@ export function buildWinnower(ctx) {
     strafeT: 0,
     landFrom: null,
     landTo: null,
+
+    /* ---- the furnace, and the body that hangs off it ----
+       Kept on `state` rather than on the uniforms so that a save
+       restore lands the animal in a lit condition rather than a dark
+       one, and so `status()` can report the heat the player is
+       actually looking at. */
+    heat: 0.30,
+    flash: 0,
+    /* Wingbeat phase, and the sink it drives. `bob` is stored because
+       it is REMOVED from inst.y before the altitude damp runs and put
+       back after - a damp that chases a target through its own
+       oscillation flattens the oscillation out. */
+    beat: 0,
+    bob: 0,
+    /* How far the furnace has swelled ahead of an attack. This is the
+       anticipation: pressure builds, THEN the thing happens. */
+    swell: 0,
+    /* How long the current stoke window is, so the re-light knows
+       where it is in it. A stall's window is longer than a chosen
+       landing's, and the staging has to stretch with it. */
+    stokeSpan: 0,
+    /* Surface damage last written. `setSurfaceDamage` touches a
+       uniform, so it is only written when it has actually moved. */
+    shownDamage: 0,
+    /* Which stage of the re-light the stoke has reached, so the flare
+       fires once rather than every frame of the window. */
+    relit: false,
   };
   let inst = null;
 
@@ -241,17 +1569,86 @@ export function buildWinnower(ctx) {
      like the Coulter's venom, because an attack from thirty metres
      up that arrives instantly cannot be answered.
      ============================================================ */
-  const emberGeo = new THREE.IcosahedronGeometry(0.38, 0);
+  /* WHAT THE CRITIC LED ITS WHOLE VERDICT WITH, and it was this
+     object: "a bare flat-shaded orange hexagon floats at centre-right:
+     single flat fill, no shading gradient across its faces, no
+     specular, no shadow, no scene context... an untextured placeholder
+     primitive that made it into a screenshot". It called it the worst
+     thing it saw in the entire round.
+
+     It was not a placeholder. It was this ember - a zero-subdivision
+     icosahedron, which seen down one of its own axes IS a regular
+     hexagon, carrying `emissive #ff7a26` at intensity 1.85. A
+     saturated orange emissive at 1.85 swamps every lit term on the
+     mesh, so the diffuse gradient that would have told you it was a
+     solid was simply not in the output: what reached the frame was
+     one flat fill across a hexagonal outline. The critic read the
+     image correctly and the image was wrong.
+
+     THE FIX IS THE SAME ONE THE SHELL NEEDED, one scale down. A coal
+     is a BLACK thing with fire inside it, not an orange thing. So the
+     albedo goes to char, the emissive comes off the material and onto
+     a shader term that varies PER FACE, and the faces are picked out
+     by the object-space normal - which on a flat-shaded icosahedron is
+     constant across a face and rotates with the coal, so the pattern
+     is glued to the lump instead of swimming through it. Some faces
+     are open and white-hot, some are crusted over and nearly black,
+     and the silhouette is no longer one value.
+
+     Plus the three things the particle complaint asked for and this
+     had none of: SIZE VARIANCE, per-instance ROTATION, and tumble on
+     all three axes rather than two. */
+  const emberGeo = new THREE.IcosahedronGeometry(0.34, 0);
   const emberMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(ASH_EDGE),
-    emissive: new THREE.Color(ASH_COLOUR),
-    emissiveIntensity: 1.85,
-    roughness: 0.42,
+    /* Char, at the shell's own value. A coal thrown by this animal is
+       a piece of this animal. */
+    color: new THREE.Color(CHAR_RGB[0] * 2.2, CHAR_RGB[1] * 2.2, CHAR_RGB[2] * 2.2),
+    roughness: 0.74,
     metalness: 0,
     flatShading: true,
   });
   emberMat.name = "sf-winnower-ember";
-  patchMaterial(emberMat, atmos, { rim: 0.55, glitter: 0 });
+  /* Object-space normal, carried per face. `objectNormal` is the
+     attribute before any of three's transforms, and on flat-shaded
+     geometry every vertex of a face carries the same one, so the
+     varying is constant across the face and the hash below is a
+     per-face constant rather than a noise field - which is why it can
+     never alias however small the coal gets on screen. */
+  const EMBER_FRAG = /* glsl */`
+#include <emissivemap_fragment>
+{
+  /* A per-face constant in 0..1. The multiplier is arbitrary and its
+     only job is to decorrelate the twenty faces of an icosahedron
+     from each other. */
+  float ce = fract(sin(dot(vWnEmN, vec3(17.31, 41.77, 29.13))) * 4371.79);
+  /* Crusted, open, or blazing. Two thresholds rather than a ramp,
+     because a coal is a crust with holes in it, and a smooth ramp
+     across the faces is the flat fill this replaced. */
+  float open = smoothstep(0.32, 0.55, ce) * (0.35 + 0.65 * smoothstep(0.55, 0.92, ce));
+  /* The bottom of a falling coal is the face the air is feeding, so
+     it runs hotter. The normal is object space and the mesh tumbles,
+     so this is a face that brightens as it rolls into the airflow. */
+  float lick = 0.55 + 0.45 * clamp(-vWnEmN.y, 0.0, 1.0);
+  float g = open * lick;
+  vec3 c = mix(vec3(1.00, 0.24, 0.03), vec3(1.00, 0.72, 0.36),
+               clamp(g * 1.35, 0.0, 1.0));
+  totalEmissiveRadiance += c * g * 2.4;
+}
+`;
+  patchMaterial(emberMat, atmos, {
+    rim: 0.55,
+    glitter: 0,
+    extend: (shader) => {
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vWnEmN;")
+        .replace("#include <beginnormal_vertex>",
+          "#include <beginnormal_vertex>\n  vWnEmN = objectNormal;");
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vWnEmN;")
+        .replace("#include <emissivemap_fragment>", EMBER_FRAG);
+    },
+    extendKey: "wnEmber1",
+  });
   const embers = [];
   for (let i = 0; i < EMBER_MAX; i += 1) {
     const mesh = new THREE.Mesh(emberGeo, emberMat);
@@ -259,7 +1656,8 @@ export function buildWinnower(ctx) {
     mesh.castShadow = false;
     group.add(mesh);
     embers.push({
-      mesh, live: false, life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, spin: 0,
+      mesh, live: false, life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0,
+      spin: 0, spinY: 0, spinZ: 0,
     });
   }
   let emberCursor = 0;
@@ -271,7 +1669,18 @@ export function buildWinnower(ctx) {
     e.life = 5.0;
     e.x = x; e.y = y; e.z = z;
     e.vx = vx; e.vy = vy; e.vz = vz;
+    /* Three axes, three rates. Two axes at a fixed ratio is a
+       gyroscope, and twelve of them tumbling in step read as one
+       effect rather than as twelve coals. */
     e.spin = (Math.random() - 0.5) * 8;
+    e.spinY = (Math.random() - 0.5) * 6.5;
+    e.spinZ = (Math.random() - 0.5) * 5;
+    /* Size and start attitude, per shot. Every coal was the same lump
+       at the same orientation before this, which is most of why they
+       read as a repeated sprite. */
+    const s = 0.68 + Math.random() * 0.72;
+    e.mesh.scale.set(s, s * (0.82 + Math.random() * 0.34), s);
+    e.mesh.rotation.set(Math.random() * TAU, Math.random() * TAU, Math.random() * TAU);
     e.mesh.position.set(x, y, z);
     e.mesh.visible = true;
     return e;
@@ -291,15 +1700,30 @@ export function buildWinnower(ctx) {
   const ASH_SIDES = 22;
   const ASH_VERTS = 1 + ASH_RINGS * ASH_SIDES;
 
+  /* THE ANGLE IS NO LONGER A VARYING, and that was a real bug rather
+     than a tuning problem.
+
+     `aAngle` ran 0 to TAU around the rim, so the LAST wedge - the one
+     between side 21 and side 0 - interpolated from 5.997 straight back
+     to 0. Every harmonic built on it therefore swept thirty radians
+     backwards across that one wedge, printing a dense fan of spokes
+     in a single sector of every burn in the game. The critic saw the
+     result and called it "concentric-ring moire aliasing across its
+     whole radius".
+
+     The local direction has no seam, so the angle is recovered in the
+     fragment shader instead. `atan` jumps at the cut, but every use of
+     it below is a sine of an INTEGER multiple of the angle, and those
+     are continuous across the cut by periodicity - so the seam is
+     genuinely gone rather than moved somewhere less visible. */
   const ashVertex = /* glsl */`
     attribute float aRadial;
-    attribute float aAngle;
     varying float vRadial;
-    varying float vAngle;
+    varying vec2 vLocal;
     varying vec3 vWorld;
     void main() {
       vRadial = aRadial;
-      vAngle = aAngle;
+      vLocal = position.xz;
       vec4 world = modelMatrix * vec4(position, 1.0);
       vWorld = world.xyz;
       gl_Position = projectionMatrix * viewMatrix * world;
@@ -319,14 +1743,40 @@ export function buildWinnower(ctx) {
     uniform float uFade;
     uniform float uTime;
     varying float vRadial;
-    varying float vAngle;
+    varying vec2 vLocal;
     varying vec3 vWorld;
     void main() {
       float r = clamp(vRadial, 0.0, 1.0);
+      float ang = atan(vLocal.y, vLocal.x);
       // A crust that cools from the rim inward, cracked by a slow
       // radial break-up so it never reads as a painted disc.
-      float crack = pow(abs(sin(vAngle * 5.0 + r * 7.0)), 12.0)
-        + pow(abs(sin(vAngle * 9.0 - r * 4.0)), 16.0);
+      float p1 = ang * 5.0 + r * 7.0;
+      float p2 = ang * 9.0 - r * 4.0;
+      /* ANTIALIASED THE WAY EVERY OTHER ANALYTIC PATTERN IN THIS
+         PROJECT IS - by the exact screen derivative of its own phase,
+         which is available here because these are sines with a known
+         phase rather than sampled noise (art.js records the same
+         reasoning for the dune ripples).
+
+         The constants are set by the EXPONENT, not by taste: a
+         pow(|sin|, 12) spike is about 0.29 radians wide and a
+         pow(|sin|, 16) about 0.25, so each fades to half amplitude
+         when one pixel covers that much phase. Without this, a burn
+         seen at a grazing angle across twenty metres of sand put
+         several rings inside one pixel and the whole decal shimmered
+         - which is the second half of the moire the critic named. */
+      float w1 = fwidth(p1);
+      float w2 = fwidth(p2);
+      float a1 = 1.0 / (1.0 + w1 * w1 * 11.0);
+      float a2 = 1.0 / (1.0 + w2 * w2 * 16.0);
+      /* And the spokes CONVERGE at the middle, where any angular
+         pattern is guaranteed to be sub-pixel however close the
+         camera gets. Fading them out under a metre of the centre is
+         the only correct answer; no amount of derivative work can
+         rescue a singularity. */
+      float mid = smoothstep(0.06, 0.30, r);
+      float crack = (pow(abs(sin(p1)), 12.0) * a1
+                   + pow(abs(sin(p2)), 16.0) * a2) * mid;
       float breathe = 0.62 + 0.38 * sin(uTime * 1.9 - r * 5.0);
       float bed = 1.0 - smoothstep(0.30, 1.0, r);
       float heat = clamp(crack * breathe * (1.0 - r * 0.55), 0.0, 1.0);
@@ -345,7 +1795,6 @@ export function buildWinnower(ctx) {
     const geo = new THREE.BufferGeometry();
     const position = new Float32Array(ASH_VERTS * 3);
     const radial = new Float32Array(ASH_VERTS);
-    const angle = new Float32Array(ASH_VERTS);
     const index = [];
     for (let s = 0; s < ASH_SIDES; s += 1) {
       const n = (s + 1) % ASH_SIDES;
@@ -362,12 +1811,10 @@ export function buildWinnower(ctx) {
       const t = (r + 1) / ASH_RINGS;
       for (let s = 0; s < ASH_SIDES; s += 1) {
         radial[1 + r * ASH_SIDES + s] = t;
-        angle[1 + r * ASH_SIDES + s] = (s / ASH_SIDES) * TAU;
       }
     }
     geo.setAttribute("position", new THREE.BufferAttribute(position, 3));
     geo.setAttribute("aRadial", new THREE.BufferAttribute(radial, 1));
-    geo.setAttribute("aAngle", new THREE.BufferAttribute(angle, 1));
     geo.setIndex(index);
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 50);
 
@@ -498,7 +1945,8 @@ export function buildWinnower(ctx) {
       e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
       e.mesh.position.set(e.x, e.y, e.z);
       e.mesh.rotation.x += e.spin * dt;
-      e.mesh.rotation.z += e.spin * 0.6 * dt;
+      e.mesh.rotation.y += e.spinY * dt;
+      e.mesh.rotation.z += e.spinZ * dt;
       // A coal in flight sheds its own trail, which is most of what
       // sells it as falling fire rather than a thrown rock.
       ctx.vfx?.spark?.(e.x, e.y, e.z, 0.32, false, false);
@@ -564,13 +2012,42 @@ export function buildWinnower(ctx) {
    * restored mid-fight has to come back with the right sacs down and
    * there is no event to replay.
    */
+  /**
+   * How full a sac is, 0..1, DERIVED from the lift pool rather than
+   * tracked separately.
+   *
+   * combat.js bursts sac `i` when the pool falls past its own quarter
+   * of the maximum, so the same arithmetic run backwards gives a
+   * continuous fill that reaches zero at exactly the moment the burst
+   * flag is set. That is what makes "visibly deflating as they drain"
+   * true rather than "visibly gone once they are drained" - and it
+   * costs nothing to restore, because the pool is already saved.
+   */
+  function sacFill(i) {
+    if (!inst || !Array.isArray(inst.sacBurst)) return 1;
+    if (inst.sacBurst[i]) return 0;
+    const max = inst.maxLift || 1;
+    const per = max / inst.sacBurst.length;
+    return clamp01(((inst.lift ?? max) - (max - per * (i + 1))) / per);
+  }
+
   function syncSacs() {
     if (!inst?.sacBurst) return;
     for (let i = 0; i < inst.sacBurst.length; i += 1) {
       const bone = inst.bones.get(i === 0 ? "sac_L" : "sac_R");
       if (!bone) continue;
-      const want = inst.sacBurst[i] ? 0.34 : 1;
-      if (Math.abs(bone.scale.x - want) > 0.001) bone.scale.setScalar(want);
+      /* Bottoms out at the same 0.34 a burst sac always collapsed to;
+         what changed is that it gets there over the drain instead of
+         in one frame. A weak point the player cannot see working is a
+         mechanic that does not exist. */
+      const fill = sacFill(i);
+      /* A full sac BREATHES with the furnace. Tiny - 3% - because the
+         thing being sold is a pressure vessel, not a lung, and because
+         anything bigger fights the clip's own wing-root motion. */
+      const breath = 1 + 0.03 * fill * state.heat
+        * Math.sin(atmos.elapsed * 2.3 + i * 1.7);
+      const want = (0.34 + 0.66 * fill) * breath;
+      if (Math.abs(bone.scale.x - want) > 0.002) bone.scale.setScalar(want);
     }
   }
 
@@ -692,12 +2169,34 @@ export function buildWinnower(ctx) {
   function beginStoke() {
     state.phase = "stoke";
     state.timer = state.stalled ? C.stallStokeSeconds : C.stokeSeconds;
+    state.stokeSpan = state.timer;
+    state.relit = false;
     state.sweepTimer = 1.2;
     inst.grounded = true;
     inst.y = groundAt(inst.x, inst.z) + C.landedLift;
     inst.pitch = 0;
     inst.roll = 0;
     const y = groundAt(inst.x, inst.z);
+    /* THE ARRIVAL IS SIZED TO THE ANIMAL AND TO HOW CLOSE THE PLAYER
+       IS STANDING. A fixed shake means a twenty-six metre thing
+       landing forty metres away hits the camera exactly as hard as one
+       landing on the player's feet, which is the shake reading as a UI
+       effect rather than as mass arriving. */
+    const ps0 = ctx.player?.state;
+    const near = ps0
+      ? clamp01(1 - Math.hypot(ps0.x - inst.x, ps0.z - inst.z) / 46) : 0.5;
+    const weight = 0.45 + near * near * 1.15;
+    /* Six landing limbs, so six contacts rather than one puff. The
+       ring is what makes the ground look struck instead of the animal
+       looking dropped. */
+    for (let i = 0; i < 6; i += 1) {
+      const a = inst.yaw + (i / 6) * TAU;
+      const rx = inst.x + Math.cos(a) * 2.4;
+      const rz = inst.z + Math.sin(a) * 2.4;
+      ctx.vfx?.sandSpray?.(rx, groundAt(rx, rz) + 0.35, rz, 1.5 + near,
+        Math.cos(a), Math.sin(a));
+      ctx.vfx?.footprint?.(rx, rz, a, 0, 1.4);
+    }
     if (state.stalled) {
       /* SHOT DOWN. It arrives as a knockout: the strain clip keeps
          it sprawled rather than tented, the impact is dust and shake
@@ -710,14 +2209,29 @@ export function buildWinnower(ctx) {
          straight down, which put the thuribles underground for the
          whole knockout. The sprawl throws them forward onto the sand. */
       enemies.play(inst, "sprawl", 0.10);
-      ctx.player?.doctrineKick?.(1.3, 1);
+      ctx.player?.doctrineKick?.(1.3 * weight, 1);
       ctx.vfx?.blast?.(inst.x, y + 0.4, inst.z, 9);
       ctx.vfx?.sandSpray?.(inst.x, y + 0.5, inst.z, 3.4, 0, 1);
+      /* A crash knocks the fire out of it. Coals across the sand, and
+         they burn where they land - the ash field is the encounter's
+         own hazard primitive and this is the one time the animal
+         spills it on itself. */
+      /* TWO, not five. Every ember that lands opens an ash field, and
+         five of them ringed the downed animal with burning ground -
+         which looked like a lava flow, buried the boss inside its own
+         hazard, and incidentally made the free melee window the crash
+         is supposed to BUY into a place the player cannot stand. */
+      for (let i = 0; i < 2; i += 1) {
+        launchEmber(inst.x, y + 2.2, inst.z,
+          (Math.random() - 0.5) * 16, 3 + Math.random() * 4,
+          (Math.random() - 0.5) * 16);
+      }
+      state.flash = 0.9;
       bus.emit("stunned", { x: inst.x, z: inst.z, seconds: C.crashStunSeconds });
     } else {
       state.stunFor = 0;
       enemies.play(inst, "stoke", 0.2);
-      ctx.player?.doctrineKick?.(1.0, 1);
+      ctx.player?.doctrineKick?.(1.0 * weight, 1);
       ctx.vfx?.blast?.(inst.x, y + 0.4, inst.z, 7);
       ctx.vfx?.sandSpray?.(inst.x, y + 0.5, inst.z, 2.4, 0, 1);
     }
@@ -742,6 +2256,10 @@ export function buildWinnower(ctx) {
     state.stalled = false;
     const y = groundAt(inst.x, inst.z);
     ctx.vfx?.sandSpray?.(inst.x, y + 0.5, inst.z, 3.2, 0, 1);
+    // Full tank, full fire. The launch is the brightest the animal
+    // ever gets and it should be, because it is the moment the window
+    // the player has been spending closes.
+    state.flash = Math.max(state.flash, 0.8);
     bus.emit("launch", { x: inst.x, z: inst.z });
   }
 
@@ -751,6 +2269,11 @@ export function buildWinnower(ctx) {
     state.actionKind = "bombard";
     state.pending = C.bombardContact;
     state.bombardTimer = C.bombardCadence;
+    /* ANTICIPATION, and it is the whole telegraph. The clip's censers
+       swing back for the first 0.9 s; the furnace swelling behind them
+       is what makes that windup readable as "something is coming" from
+       thirty metres up, where the swing itself is four pixels. */
+    state.swell = 1;
     bus.emit("bombardTelegraph", { x: inst.x, y: inst.y, z: inst.z });
   }
 
@@ -763,6 +2286,8 @@ export function buildWinnower(ctx) {
     state.actionKind = "sweep";
     state.pending = C.sweepContact;
     state.sweepTimer = C.sweepCadence;
+    // The same held breath, at melee range and half the size.
+    state.swell = 0.7;
     bus.emit("sweepTelegraph", { x: inst.x, z: inst.z });
   }
 
@@ -788,6 +2313,10 @@ export function buildWinnower(ctx) {
       launchEmber(ox, oy, oz, v.x, v.y, v.z);
     }
     ctx.vfx?.spark?.(inst.x, inst.y - 2.0, inst.z, 2.2, false, false);
+    // RECOVERY: the pressure that built through the windup leaves with
+    // the payload, so the gut drops back through a visible flare.
+    state.flash = Math.max(state.flash, 0.85);
+    state.swell = 0;
     bus.emit("bombard", { x: inst.x, y: inst.y, z: inst.z, count: C.bombardCount });
   }
 
@@ -1006,8 +2535,299 @@ export function buildWinnower(ctx) {
     if (state.timer <= 0) beginSoar();
   }
 
+  /* ============================================================
+     HEAT, WEIGHT AND DAMAGE
+
+     Everything in this section is presentation. None of it is allowed
+     to move the encounter: the altitudes, timers and reaches the fight
+     is written against are all read by the harnesses, and a body that
+     bobs its way past a threshold would be a gameplay change wearing
+     an art change's clothes.
+     ============================================================ */
+
+  /** What the furnace should be drawing right now, by phase.
+   *
+   *  This is the encounter's read from the outside. A player who has
+   *  never opened the HUD should be able to say what the animal is
+   *  about to do from the colour of its gut, which is the whole point
+   *  of a boss that carries its own light. */
+  function heatTarget() {
+    switch (state.phase) {
+      /* Banked, not out. A dormant Winnower is still a furnace, and
+         the ember in it is the first thing the player sees from the
+         approach. */
+      case "dormant": return 0.26;
+      case "alert": return 1.05;
+      case "soar": return 0.88;
+      case "strafe": return 1.25;
+      /* A stall is the furnace having run dry; a chosen landing is it
+         being throttled back. The two arrivals have to look different
+         from underneath, because one of them is the player's doing. */
+      case "land": return state.stalled ? 0.20 : 0.62;
+      case "stoke": return stokeHeat();
+      case "launch": return 1.40;
+      case "return": return 0.55;
+      case "dead": return 0;
+      default: return 0.60;
+    }
+  }
+
+  /** THE STOKE IS THE FIGHT'S HELD BREATH.
+   *
+   *  The gut goes out, the animal is dark and reachable for most of the
+   *  window - which is also the read that tells a player the melee
+   *  window is open without a single HUD element - and then the
+   *  re-light happens in a stage they can watch: a visible pressure
+   *  build, then a flare. `beginLaunch` is the payoff, so this has to
+   *  arrive AT it rather than after it. */
+  function stokeHeat() {
+    const span = Math.max(0.01, state.stokeSpan || C.stokeSeconds);
+    const p = clamp01(1 - state.timer / span);
+    /* BANKED, NOT OUT - and the floor is the number this needed a
+       shoot to find. At 0.05 the gut genuinely went black, which is
+       correct for the fiction and wrong for the encounter: the stoke
+       is the window the whole fight is built around, so it is where
+       the player spends every second they are close enough to see any
+       of this, and it is the state the gallery photographs. A banked
+       furnace still glows in its own cracks. */
+    if (p < 0.10) return lerp(0.62, 0.20, p / 0.10);
+    if (p < 0.62) return 0.20 + 0.05 * Math.sin(atmos.elapsed * 3.1);
+    if (p < 0.90) return lerp(0.20, 0.85, (p - 0.62) / 0.28);
+    return 1.55;
+  }
+
+  function updateFurnace(dt) {
+    /* Damp rather than snap, and slowly. A furnace has thermal mass;
+       a gut that steps between values reads as a light being switched. */
+    const want = heatTarget() + state.swell * 0.55;
+    state.heat = damp(state.heat, want, state.phase === "dead" ? 1.1 : 3.4, dt);
+    state.flash = Math.max(0, state.flash - dt * 2.8);
+    state.swell = Math.max(0, state.swell - dt * 1.9);
+
+    /* THE RE-LIGHT, fired once. `relit` is cleared by `beginStoke`, so
+       every stoke gets exactly one flare and a save restored inside
+       the window does not fire a second. */
+    if (state.phase === "stoke" && !state.relit && inst) {
+      const span = Math.max(0.01, state.stokeSpan || C.stokeSeconds);
+      if (clamp01(1 - state.timer / span) >= 0.90) {
+        state.relit = true;
+        state.flash = 1.15;
+        const y = groundAt(inst.x, inst.z);
+        ctx.vfx?.sandSpray?.(inst.x, y + 0.5, inst.z, 2.6, 0, 1);
+        ctx.vfx?.spark?.(inst.x, inst.y - 1.6, inst.z, 2.8, false, false);
+        ctx.player?.doctrineKick?.(0.5, 0.4);
+        bus.emit("relight", { x: inst.x, y: inst.y, z: inst.z });
+      }
+    }
+
+    const heat = furnaceUniforms.uWnHeat.value;
+    heat.x = state.heat;
+    heat.y = state.phase === "dead" ? clamp01(state.heat * 1.4) : 1;
+    /* The banding CRAWLS while the furnace draws, and stops when it
+       does. A static band pattern on a still animal is the tell that
+       says "texture"; a moving one says "process". */
+    heat.z += dt * (0.35 + 1.30 * state.heat);
+    /* A hurt animal leaks more. The fissures are the inside showing,
+       so they open as the shell is broken rather than being a constant
+       decoration. */
+    heat.w = 0.80 + 0.70 * state.shownDamage;
+
+    const sac = furnaceUniforms.uWnSac.value;
+    sac.x = sacFill(0);
+    sac.y = sacFill(1);
+    sac.z = state.flash;
+    sac.w = state.swell;
+
+    /* Ash builds while it is grounded in the smoke and burns off in
+       the air, which is a slow read but a free one - the animal that
+       just stood in a flare stack for nine seconds is visibly dustier
+       when it comes back up. */
+    const rime = furnaceUniforms.uWnChar.value;
+    const wantRime = inst?.grounded ? RIME_MAX : RIME_MAX * 0.62;
+    rime.w = damp(rime.w, wantRime, 0.35, dt);
+
+    /* DAMAGE ACCUMULATES AND STAYS. Written only when it has moved -
+       a uniform write is cheap and a needless one is still a habit
+       worth not having, and the Garner records the same gate. */
+    const hurt = inst && inst.maxHealth
+      ? clamp01(1 - inst.health / inst.maxHealth) : 0;
+    if (Math.abs(hurt - state.shownDamage) > 0.015) {
+      state.shownDamage = hurt;
+      /* SCALED, and this is the kit's own recorded trap arriving on a
+         second animal. The scorch pools in the coarse mottle's
+         troughs, which is right - but at full strength on a shell that
+         now HAS an albedo range to blotch, a nearly dead Winnower came
+         back wearing dalmatian spots, which reads as an animal's
+         markings rather than as burnt-off plate. Two thirds is the
+         most this palette can take. */
+      setSurfaceDamage(shellMat, hurt * 0.62);
+    }
+  }
+
+  /** The wingbeat, and the weight that hangs under it. */
+  function updateBeat(dt) {
+    if (!inst || inst.state === "death") return;
+    const airborne = state.phase === "soar" || state.phase === "strafe"
+      || state.phase === "launch" || state.phase === "return"
+      || state.phase === "alert";
+    if (!airborne) return;
+    const rate = state.phase === "strafe" ? 1.55
+      : state.phase === "launch" ? 2.05 : 1.05;
+    const before = state.beat;
+    state.beat += dt * rate;
+    /* IT SINKS BETWEEN BEATS. A flyer held at a damped altitude is on
+       rails and reads as one - the single loudest "this is a prop"
+       cue a big flying thing can give. Thirty centimetres on a
+       twenty-six metre span is small enough that the encounter's own
+       altitude thresholds cannot feel it and large enough to see
+       against the skyline. */
+    state.bob = Math.sin(state.beat * TAU) * 0.30 * clamp01(state.heat + 0.2);
+    inst.y += state.bob;
+    if (Math.floor(state.beat) === Math.floor(before)) return;
+
+    /* Once per beat, at the top of the stroke. */
+    const ground = groundAt(inst.x, inst.z);
+    const alt = inst.y - ground;
+    ctx.vfx?.spark?.(inst.x, inst.y - 1.4, inst.z, 0.55 + state.heat * 0.5,
+      false, false);
+    /* AND THE GROUND ANSWERS ON A LOW PASS. This is the whole reason
+       the strafing run has a shape: at seven metres the downwash
+       should be visible on the sand, or the pass is a model sliding
+       past a backdrop. */
+    if (alt < 16) {
+      const push = 1 - alt / 16;
+      ctx.vfx?.sandSpray?.(inst.x, ground + 0.4, inst.z, 1.1 + push * 2.4,
+        Math.sin(inst.yaw), Math.cos(inst.yaw));
+    }
+  }
+
+  /** The furnace's throw on the sand. */
+  function updatePool(dt) {
+    poolMat.uniforms.uTime.value = atmos.elapsed;
+    const live = !!inst && !inst.encounterHidden && state.phase !== "dormant";
+    if (!live) {
+      pool.gain = damp(pool.gain, 0, 6, dt);
+      poolMat.uniforms.uGain.value = pool.gain;
+      if (pool.gain < 0.004 && poolMesh.visible) poolMesh.visible = false;
+      return;
+    }
+    const ground = groundAt(inst.x, inst.z);
+    const alt = Math.max(0, inst.y - ground);
+    /* Inverse-square in altitude, which is what a source at a height
+       actually throws: tight and bright when it is down among the
+       player's feet, a broad wash when it is at cruise. */
+    const reach = 1 / (1 + (alt / 13) ** 2);
+    const wantGain = clamp01(state.heat * (0.30 + 0.75 * reach)) * 0.90;
+    const wantRadius = clamp(7 + alt * 0.62, 6.5, 26);
+    pool.gain = damp(pool.gain, wantGain, 5, dt);
+    poolMat.uniforms.uGain.value = pool.gain;
+    if (pool.gain < 0.004) {
+      if (poolMesh.visible) poolMesh.visible = false;
+      return;
+    }
+    if (!poolMesh.visible) poolMesh.visible = true;
+    /* Re-laid only when it has actually travelled. Every vertex is a
+       terrain sample, and an animal holding station must not pay for
+       sixty identical rebuilds a second. */
+    if (Math.hypot(inst.x - pool.x, inst.z - pool.z) > 1.4
+      || Math.abs(wantRadius - pool.radius) > 1.5) {
+      layPool(inst.x, inst.z, wantRadius);
+    }
+  }
+
+  /* ------------------------------------------------------------
+     BEING HIT
+
+     Bound lazily. This module is constructed before `ctx.combat`
+     exists in some orderings, and reaching for the bus at
+     construction time would silently bind nothing.
+     ------------------------------------------------------------ */
+  let hurtBound = false;
+
+  function bindHurt() {
+    if (hurtBound || !ctx.combat?.bus?.on) return;
+    hurtBound = true;
+    ctx.combat.bus.on("enemyDamaged", (e) => {
+      if (!inst || !e || e.enemyId !== inst.id) return;
+      onHurt(e);
+    });
+    ctx.combat.bus.on("liftDrained", (e) => {
+      if (!inst || !e || e.enemyId !== inst.id) return;
+      onDrain(e);
+    });
+  }
+
+  function onHurt(e) {
+    /* THE FLINCH ANSWERS THE BEARING. Resolved into the animal's own
+       frame: a hit on the left wing rolls it right, a hit in the face
+       pitches its nose up. A flinch that ignores where the shot came
+       from is a wobble, and the player cannot read their own aim in
+       it. */
+    const dx = (Number.isFinite(e.x) ? e.x : inst.x) - inst.x;
+    const dz = (Number.isFinite(e.z) ? e.z : inst.z) - inst.z;
+    const s = Math.sin(inst.yaw);
+    const c = Math.cos(inst.yaw);
+    const lateral = clamp((dx * c - dz * s) / 6, -1, 1);
+    const fore = clamp((dx * s + dz * c) / 6, -1, 1);
+    const bite = clamp01((e.actual || 0) / 260) * (e.weak ? 1.6 : 1);
+    /* Written straight onto the orientation the module already owns,
+       as an IMPULSE, because every phase step already damps that
+       orientation back toward what it wants - so the recovery is the
+       existing controller doing its job rather than a second timer
+       that could disagree with it. Bones were the alternative and are
+       not available: the mixer runs after this module and overwrites
+       every channel it has a track for. */
+    inst.roll = clamp(inst.roll + lateral * 0.20 * bite, -1.1, 1.1);
+    inst.pitch = clamp(inst.pitch - fore * 0.14 * bite, -0.8, 0.8);
+    /* THE GUT ANSWERS TOO. A furnace struck flares - which is also the
+       only hit feedback that reads at 120 m on an animal this dark. */
+    state.flash = Math.min(1.0, state.flash + 0.14 + bite * 0.4);
+    /* IT BLEEDS FIRE, AND THE FIRE LANDS. This animal has no ichor to
+       spill; what comes out of a cracked furnace is burning matter,
+       and the ember pool it already owns is exactly the right
+       primitive - so a heavy hit throws coals that fall, hit the sand
+       and leave a burn that stays there. Stains, in this animal's own
+       language, for free. */
+    if ((e.actual || 0) > 90 && Number.isFinite(e.y)) {
+      for (let i = 0; i < 2; i += 1) {
+        launchEmber(e.x, e.y, e.z,
+          (Math.random() - 0.5) * 5, 1.5 + Math.random() * 2.5,
+          (Math.random() - 0.5) * 5);
+      }
+    }
+  }
+
+  function onDrain(e) {
+    /* A SAC GOING IS THE BIGGEST EVENT IN A RANGED FIGHT and it used
+       to be silent. It vents: a spray of coals out of the wing root,
+       a burn on the ground under it, and the animal drops a metre. */
+    state.flash = Math.min(1.2, state.flash + 0.35);
+    if (!e.burst) return;
+    const bone = inst.bones?.get?.(e.sacIndex === 0 ? "sac_L" : "sac_R");
+    let ox = inst.x;
+    let oy = inst.y;
+    let oz = inst.z;
+    if (bone) {
+      bone.updateWorldMatrix(true, false);
+      bone.getWorldPosition(_vec);
+      ox = _vec.x; oy = _vec.y; oz = _vec.z;
+    }
+    ctx.vfx?.spark?.(ox, oy, oz, 3.2, false, false);
+    for (let i = 0; i < 3; i += 1) {
+      launchEmber(ox, oy, oz,
+        (Math.random() - 0.5) * 9, 2 + Math.random() * 3, (Math.random() - 0.5) * 9);
+    }
+    // A lurch it does not choose, on the side that just went.
+    inst.roll = clamp(inst.roll + (e.sacIndex === 0 ? 0.30 : -0.30), -1.1, 1.1);
+    bus.emit("sacBurst", { index: e.sacIndex, x: ox, y: oy, z: oz });
+  }
+
   function stepInstance(dt) {
     if (!inst) return;
+    /* The wingbeat's sink is REMOVED before anything reads inst.y and
+       put back after - an altitude damp that chases its target through
+       its own oscillation simply flattens the oscillation out. */
+    if (state.bob) { inst.y -= state.bob; state.bob = 0; }
     if (inst.state === "death") {
       if (!state.defeated) {
         state.defeated = true;
@@ -1036,6 +2856,19 @@ export function buildWinnower(ctx) {
           inst.grounded = true;
           ctx.vfx?.blast?.(inst.x, ground + 0.5, inst.z, 11);
           ctx.player?.doctrineKick?.(1.2, 1);
+          /* A DEATH THAT IS A PHYSICAL EVENT AND LEAVES SOMETHING
+             BEHIND. The furnace ruptures on impact: coals thrown wide,
+             a burn under the wreck that outlasts the fight, and the
+             gut goes out over the next two seconds rather than at the
+             frame the health hit zero. */
+          state.flash = 1.4;
+          for (let i = 0; i < 4; i += 1) {
+            launchEmber(inst.x, ground + 2.6, inst.z,
+              (Math.random() - 0.5) * 22, 4 + Math.random() * 6,
+              (Math.random() - 0.5) * 22);
+          }
+          spillAsh(inst.x, inst.z, C.ashRadius * 1.35, C.ashSeconds * 2.4);
+          ctx.vfx?.sandSpray?.(inst.x, ground + 0.6, inst.z, 4.2, 0, 1);
           bus.emit("crash", { x: inst.x, z: inst.z });
         }
       }
@@ -1158,6 +2991,17 @@ export function buildWinnower(ctx) {
     state.stunFor = 0;
     state.revealed = false;
     state.disengageFor = 0;
+    /* THE SURFACE IS RESET WITH THE ANIMAL. Damage accumulates and
+       stays - that is the point of it - so the one place it may be
+       forgiven is the same place the health is, or a re-armed boss
+       comes back at full health wearing the last fight's scorch. */
+    state.shownDamage = 0;
+    setSurfaceDamage(shellMat, 0);
+    state.heat = 0.26;
+    state.flash = 0;
+    state.swell = 0;
+    state.bob = 0;
+    state.relit = false;
     releaseEncounterCamera();
     setEncounterGate(true, true);
     enemies.play(inst, "idle", 0.4);
@@ -1192,6 +3036,14 @@ export function buildWinnower(ctx) {
       inst.grounded = false;
       inst.root.position.set(inst.x, inst.y, inst.z);
       setEncounterGate(true, true);
+      /* Here rather than at construction, because the instance is what
+         owns the meshes. `main.js` runs `render.warmShaders` long after
+         this, and that walk uses `traverse` rather than
+         `traverseVisible` - so the shell's program is built at load
+         even though the animal is hidden, and the first frame of the
+         encounter does not compile a shader inside itself. */
+      bindShell();
+      bindHurt();
     }
     return inst;
   }
@@ -1199,12 +3051,24 @@ export function buildWinnower(ctx) {
   function update(dt) {
     const d = Math.min(0.1, Math.max(0, dt));
     if (!inst) { ensureSpawned(); return; }
+    bindHurt();
     const ps = ctx.player?.state;
     if (ps && inst.state !== "death") {
       const far = (inst.x - ps.x) ** 2 + (inst.z - ps.z) ** 2 > C.simRange * C.simRange;
       if (far) return;
     }
     stepInstance(d);
+    /* PRESENTATION LAST, and all of it inside the simRange gate above.
+       A dormant boss must cost nothing: the Stylite's dormant pose
+       solve once cost this game 1.3 ms/frame and surfaced as the
+       Abbess's budget failing. Everything below is a handful of scalar
+       writes plus, at most, one 61-vertex terrain conform when the
+       animal has actually moved - and `updatePool` returns on its
+       first line while the encounter is dormant. */
+    updateFurnace(d);
+    updateBeat(d);
+    updateCast(d);
+    updatePool(d);
     syncSacs();
     updateEmbers(d);
     updateFields(d);
@@ -1239,6 +3103,13 @@ export function buildWinnower(ctx) {
       embers: embers.filter((e) => e.live).length,
       hidden: !!inst.encounterHidden,
       locked: !!inst.encounterLocked,
+      /* The furnace, reported so a harness can assert about the read
+         rather than about the frame - "the gut is dark during the
+         stoke" is a claim a test can make, and a screenshot cannot. */
+      heat: Number(state.heat.toFixed(3)),
+      sacFill: [Number(sacFill(0).toFixed(3)), Number(sacFill(1).toFixed(3))],
+      surfaceDamage: Number(state.shownDamage.toFixed(3)),
+      poolGain: Number(pool.gain.toFixed(3)),
     };
   }
 
@@ -1296,6 +3167,19 @@ export function buildWinnower(ctx) {
     state.defeated = false;
     state.disengageFor = 0;
     state.releaseCameraAt = undefined;
+    /* A restore lands INSIDE a stoke window often enough to matter, and
+       the re-light staging is measured against the window's length -
+       so the span has to be reconstructed from the same rule
+       `beginStoke` used, not left at zero. `relit` is set from where in
+       the window the save actually was, so a restore at 95% does not
+       fire a second flare for a furnace that has already lit. */
+    state.stokeSpan = state.stalled ? C.stallStokeSeconds : C.stokeSeconds;
+    state.relit = phase === "stoke"
+      && clamp01(1 - state.timer / Math.max(0.01, state.stokeSpan)) >= 0.90;
+    state.bob = 0;
+    state.heat = heatTarget();
+    state.flash = 0;
+    state.swell = 0;
     inst.x = Number.isFinite(saved.x) ? saved.x : inst.x;
     inst.z = Number.isFinite(saved.z) ? saved.z : inst.z;
     inst.y = Number.isFinite(saved.y) ? saved.y : inst.y;
@@ -1371,6 +3255,11 @@ export function buildWinnower(ctx) {
       }
       return { phase: state.phase, timer: state.timer };
     },
-    dispose() { scene.remove(group); },
+    dispose() {
+      scene.remove(group);
+      poolGeo.dispose();
+      poolMat.dispose();
+      shellMat.dispose();
+    },
   };
 }

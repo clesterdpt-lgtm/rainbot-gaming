@@ -44,9 +44,25 @@
       and JPEG round-tripped by saintfall-blind-compare.mjs so that
       resolution and compression cannot identify a side. A 200px
       thumbnail cannot survive that; 480px+ can.
+
+   5. NOT CHOSEN FOR A BUG. A wiki hosts frames captured to document
+      a glitch - a Jackal rendered in the wrong shader, geometry
+      inside a wall. Real frames, but nobody lit or framed them, and
+      beating one flatters us.
+
+   ------------------------------------------------------------
+   WHAT NAME FILTERING CANNOT DO
+
+   None of the above can see what is on screen. Filenames do not say
+   "this is the Anniversary renderer at 4K" or "this is a photo of a
+   television", and both got through into the first pool. So the
+   pool is vetted by eye afterwards, and the verdict is written to
+   output/reference/halo-rejected/_rejected.json. This script reads
+   that file back and skips those titles - otherwise every re-run
+   silently re-downloads the frames a human already threw out.
    ============================================================ */
 
-import { mkdir, writeFile, readdir } from "node:fs/promises";
+import { mkdir, writeFile, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
@@ -88,9 +104,29 @@ const REJECT_GAME = /(anniversary|\bmcc\b|master chief collection|reach|\bodst\b
 
 const REJECT_KIND = /(concept|artwork|\brender\b|box ?art|cover|logo|icon|medal|emblem|menu|map\b|texture|font|title|credit|storyboard|sketch|cinematic ?still|poster|patch|avatar|achievement|banner|wallpaper|scan|magazine|manual|disc|case)/i;
 
+/* Frames captured to document something broken, or to document an
+   asset that never shipped. The first pool held two "BlueJackal
+   Glitch" frames: genuine Xbox output, but chosen for a bug, and a
+   critic scoring us against a mis-shaded Jackal tells us nothing. */
+const REJECT_GLITCH = /(glitch|\bbug\b|\bbeta\b|\bcut\b|unused|unreleased|debug|out ?of ?bounds|clipping|error)/i;
+
 /* Sorted to the front: the comparison that matters is a creature
    against a creature, not a corridor against a corridor. */
 const CREATURE = /(hunter|elite|brute|jackal|grunt|flood|sentinel|drone|prophet|gravemind|scarab|juggernaut|infection|carrier|combat ?form|lekgolo|unggoy|sangheili|kig-yar|enforcer|guilty ?spark|monitor|arbiter|tartarus|regret|boss)/i;
+
+/* The by-eye verdicts, keyed on the wiki title because the local
+   filenames are just a counter and carry no identity - halo-05 is a
+   different picture after every fetch. Missing file is not an error:
+   a pool that has never been vetted simply rejects nothing. */
+async function loadVetoes() {
+  const file = path.join(path.dirname(OUT_DIR), "halo-rejected", "_rejected.json");
+  try {
+    const data = JSON.parse(await readFile(file, "utf8"));
+    return new Set((data.items || []).map((i) => i.title).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
 
 async function api(params) {
   const url = new URL(API);
@@ -167,6 +203,9 @@ async function download(item, file) {
 async function main() {
   await mkdir(OUT_DIR, { recursive: true });
 
+  const vetoed = await loadVetoes();
+  if (vetoed.size) process.stdout.write(`Honouring ${vetoed.size} by-eye rejection(s) from the last vetting pass.\n`);
+
   process.stdout.write("Listing original-Xbox Halo screenshot categories...\n");
   const seen = new Set();
   const titles = [];
@@ -176,7 +215,8 @@ async function main() {
     for (const t of found) {
       if (seen.has(t)) continue;
       seen.add(t);
-      if (REJECT_GAME.test(t) || REJECT_KIND.test(t)) continue;
+      if (REJECT_GAME.test(t) || REJECT_KIND.test(t) || REJECT_GLITCH.test(t)) continue;
+      if (vetoed.has(t)) continue;
       titles.push(t);
     }
   }

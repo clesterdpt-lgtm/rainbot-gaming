@@ -20,6 +20,7 @@
 
 import { TAU, clamp, clamp01, lerp, damp, makeRng } from "saintfall/core.js";
 import { patchMaterial } from "saintfall/art.js";
+import { applySurface } from "saintfall/boss-surface.js";
 
 /* Which bones the IK solver owns. Must agree with the `--leg-bones`
    pattern the model optimiser strips channels against; if these two
@@ -565,6 +566,48 @@ export const BESTIARY = {
 };
 
 /* ============================================================
+   WHAT EACH SPECIES IS MADE OF
+
+   Kept HERE rather than as a `surface:` key inside each BESTIARY
+   entry, for a coordination reason rather than a design one: the
+   bestiary table is where seven other modules' authors go to tune
+   their own boss, and the surface kit is one owner's contract. One
+   table, one edit, no merge fight over a hundred-line species block.
+
+   A boss agent that wants to argue for a different family may still
+   set `material.surface` on its own entry - that wins over this map.
+
+   The Concord's servitor-engine is the only thing in the bestiary
+   that is NOT an animal, and it must not read as one: it gets the
+   corroded-bronze family, which is the whole reason "different parts
+   read as different materials" is a testable claim rather than a
+   slogan. Stand a Cantor next to a Precentor and the machine should
+   look pitted and rubbed where the insect looks pored and wet.
+
+   ONLY THE .glb SPECIES ARE REACHED FROM HERE. The Garner, the
+   Stylite and the Abbess are `procedural: true` - the loader hands
+   their modules an empty root and they build and surface their own
+   materials - so those three opt in with the same one-line call in
+   their own files. They are absent from this map on purpose, so it
+   cannot claim credit for a surface it does not apply.
+   ============================================================ */
+const SPECIES_SURFACE = {
+  thresher: "chitin",
+  gleaner: "chitin",
+  precentor: "chitin",
+  harrow: "chitin",
+  matriarch: "chitin",
+  coulter: "chitin",
+  distaff: "chitin",
+  winnower: "chitin",
+  cantor: "bronze",
+};
+
+function surfaceFamily(key, spec) {
+  return (spec.material && spec.material.surface) || SPECIES_SURFACE[key] || "chitin";
+}
+
+/* ============================================================
    LOADING
    ============================================================ */
 
@@ -733,11 +776,29 @@ export async function buildEnemies(ctx, onProgress) {
        into that channel, so a creature lights its own detail without
        a second material and therefore without a second draw call per
        instance. Above 1 it clears the bloom chain's bright threshold,
-       which is what makes an eye read at night. */
-    patchMaterial(mat, atmos, {
+       which is what makes an eye read at night.
+
+       `applySurface` REPLACES the old `patchMaterial` call rather than
+       sitting next to it - it goes through the same door and takes the
+       same rim and bio, and calling both would trip the patch path's
+       already-patched early return and leave the surface silently off.
+
+       `scale` is what makes the grain world-sized. These models are
+       authored at 1:1 and drawn at whatever `spec.scale` says, so
+       without it a Thresher at 0.62 would wear a grain 60% too fine
+       and a Precentor at 1.55 one half again too coarse - the same
+       animal, in two different materials, standing next to each other.
+
+       `shared: true` because this is ONE material for every instance
+       of the caste. Forty Threshers share it, so it must never take a
+       per-instance damage write; the kit refuses one. A boss that
+       wants a damage response owns its own material. */
+    applySurface(mat, atmos, surfaceFamily(key, spec), {
       rim: spec.material.rim,
       glitter: 0,
       bio: spec.material.bio ?? 0,
+      scale: spec.scale ?? 1,
+      shared: true,
     });
 
     let sourceMesh = null;

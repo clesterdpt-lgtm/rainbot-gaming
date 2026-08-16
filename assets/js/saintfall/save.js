@@ -64,6 +64,33 @@ function validRngState(value) {
     && (value.spare === null || isFiniteNumber(value.spare));
 }
 
+/* EVERY BOSS RECORD'S `instanceId` IS A REBINDING HINT, NOT DURABLE STATE.
+   Each encounter's restore() reads it as
+   `byId.get(id) || <find by eventId> || ensureSpawned()`, so an id that
+   resolves to nothing takes the identical branch to the `null` this
+   validator has always accepted for the same field.
+
+   This check used to demand the id appear in `snapshot.enemies.live`, and
+   it was aimed exactly backwards. The durable roster deliberately OMITS
+   instances (`enemies.js` snapshot() drops domain-owned, dying, and
+   removed ones), so the game writes unresolvable hints itself - and one
+   of them rejected the entire file as "missing or incompatible" over a
+   field no restore() needs. Same class as the Abbess's one-frame negative
+   phase timer: a structurally perfect payload refused by its own writer.
+
+   Meanwhile an id that DID resolve was waved through without asking WHAT
+   it resolved to, and the encounters bind `byId.get(id)` straight onto
+   their controller with no species test of their own (`distaff.js`
+   restore). A hand-edited save could hand the Distaff a thresher. So the
+   rule is now the one that matters: absent or unresolvable is fine,
+   resolving to the wrong creature is not. */
+function validInstanceRef(instanceId, species, enemyById) {
+  if (instanceId === null || instanceId === undefined) return true;
+  if (typeof instanceId !== "string" || !instanceId || instanceId.length > 80) return false;
+  const found = enemyById.get(instanceId);
+  return !found || !species || found.key === species;
+}
+
 function nearestDistrict(ctx, x, z) {
   let best = null;
   let distance = Infinity;
@@ -594,8 +621,19 @@ export function buildSaveSystem(ctx, options = {}) {
         || boon.damage < 0.1 || boon.damage > 4
         || boon.heat < 0 || boon.heat > 4) return false;
     }
-    if (!Array.isArray(mission.pending) || (mission.pending.length && !allowPending)) return false;
-    for (const shot of mission.pending) {
+    /* ABSENT MEANS "NOTHING IN FLIGHT", which is the only thing it can
+       mean: canFieldSave() refuses to write a manual save while a strike
+       is airborne, so a file without this key is a file from before the
+       key existed. Every other field added since - bosses, boon, coulter,
+       apostate, districtBosses, the atmosphere cycle - carries its own
+       "so older saves still load" clause; this one was required outright,
+       while `mission.restore()` has always read it as
+       `Array.isArray(saved.pending) ? saved.pending : []`. The validator
+       was refusing files its own restore path handles. Present-and-wrong
+       is still a rejection: `{}` is not an array. */
+    const pending = mission.pending === undefined ? [] : mission.pending;
+    if (!Array.isArray(pending) || (pending.length && !allowPending)) return false;
+    for (const shot of pending) {
       const spec = ctx.mission.stratagems?.[shot?.key];
       if (!isRecord(shot) || !spec
         || ![shot.x, shot.z, shot.remaining].every(isFiniteNumber)
@@ -677,7 +715,28 @@ export function buildSaveSystem(ctx, options = {}) {
       if (enemy.broodIds.some((id) => !enemyIds.has(id))) return false;
     }
 
-    const validateDistrictEncounter = (record, phases) => {
+    /* WHICH CREATURE EACH BOSS RECORD MAY NAME, read off the frozen site
+       table rather than restated as literals here. The Matriarch has
+       already moved once - she guarded the Bloom before the Abbess took
+       it and now holds the Gilded Reach - and a `reach -> "matriarch"`
+       spelled out in this file is precisely the `=== "matriarch"` that
+       silently rejected every save made during the second boss.
+
+       The table is a frozen module constant, not player data, so reading
+       it is not the validator trusting its input; it is the same call
+       already made for the breach wave definitions below. Absent module,
+       no species constraint - there is then no encounter to validate. */
+    const bossSpecies = new Map();
+    for (const site of ctx.districtBosses?.sites || []) {
+      bossSpecies.set(site.key, site.enemyKey);
+      /* Bespoke encounters own a top-level snapshot field named for their
+         `domain`; the two the shared controller drives share "district". */
+      if (site.domain && site.domain !== "district") {
+        bossSpecies.set(site.domain, site.enemyKey);
+      }
+    }
+
+    const validateDistrictEncounter = (record, phases, species) => {
       if (record === null || record === undefined) return true;
       if (!isRecord(record) || !phases.has(record.phase)
         || ![record.timer, record.health, record.x, record.z, record.yaw]
@@ -686,16 +745,17 @@ export function buildSaveSystem(ctx, options = {}) {
         || record.health < 0 || record.health > 10_000_000
         || Math.abs(record.x) > 2000 || Math.abs(record.z) > 2000
         || typeof record.defeated !== "boolean") return false;
-      if (record.instanceId !== null && record.instanceId !== undefined
-        && (typeof record.instanceId !== "string" || !enemyIds.has(record.instanceId))) return false;
+      if (!validInstanceRef(record.instanceId, species, enemyById)) return false;
       return true;
     };
     if (!validateDistrictEncounter(snapshot.distaff,
-      new Set(["dormant", "alert", "standing", "collapsed", "recovering", "returning", "dead"]))) {
+      new Set(["dormant", "alert", "standing", "collapsed", "recovering", "returning", "dead"]),
+      bossSpecies.get("distaff"))) {
       return false;
     }
     if (!validateDistrictEncounter(snapshot.winnower,
-      new Set(["dormant", "alert", "soar", "strafe", "land", "stoke", "launch", "return", "dead"]))) {
+      new Set(["dormant", "alert", "soar", "strafe", "land", "stoke", "launch", "return", "dead"]),
+      bossSpecies.get("winnower"))) {
       return false;
     }
     /* The Garner's own validator rather than a loosened shared one. It
@@ -712,9 +772,7 @@ export function buildSaveSystem(ctx, options = {}) {
         || record.open < 0 || record.open > 1
         || record.health < 0 || record.health > 10_000_000
         || typeof record.defeated !== "boolean") return false;
-      if (record.instanceId !== null && record.instanceId !== undefined
-        && (typeof record.instanceId !== "string"
-          || !enemyIds.has(record.instanceId))) return false;
+      if (!validInstanceRef(record.instanceId, bossSpecies.get("garner"), enemyById)) return false;
       const limbPhases = new Set(["sheathed", "erupt", "rear", "lash",
         "seize", "limp", "drag", "severed"]);
       for (const field of ["armHp", "armRegrow"]) {
@@ -740,9 +798,7 @@ export function buildSaveSystem(ctx, options = {}) {
         || record.health < 0 || record.health > 10_000_000
         || typeof record.royalDone !== "boolean"
         || typeof record.defeated !== "boolean") return false;
-      if (record.instanceId !== null && record.instanceId !== undefined
-        && (typeof record.instanceId !== "string"
-          || !enemyIds.has(record.instanceId))) return false;
+      if (!validInstanceRef(record.instanceId, bossSpecies.get("abbess"), enemyById)) return false;
       for (const field of ["fed", "laid"]) {
         const v = record[field];
         if (v === null || v === undefined) continue;
@@ -759,9 +815,7 @@ export function buildSaveSystem(ctx, options = {}) {
         || record.timer < 0 || record.timer > 600
         || record.health < 0 || record.health > 10_000_000
         || typeof record.defeated !== "boolean") return false;
-      if (record.instanceId !== null && record.instanceId !== undefined
-        && (typeof record.instanceId !== "string"
-          || !enemyIds.has(record.instanceId))) return false;
+      if (!validInstanceRef(record.instanceId, bossSpecies.get("stylite"), enemyById)) return false;
       for (const field of ["perch", "grip", "falls"]) {
         const n = record[field];
         if (n === null || n === undefined) continue;
@@ -788,8 +842,7 @@ export function buildSaveSystem(ctx, options = {}) {
           || record.maxHealth > 10_000_000
           || Math.abs(record.x) > 2000 || Math.abs(record.z) > 2000
           || typeof record.defeated !== "boolean"
-          || !(record.instanceId === null
-            || (typeof record.instanceId === "string" && enemyIds.has(record.instanceId)))) return false;
+          || !validInstanceRef(record.instanceId, bossSpecies.get(record.key), enemyById)) return false;
         found.add(record.key);
       }
       const fullRoster = found.size === expected.size

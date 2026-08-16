@@ -40,10 +40,16 @@
    The wake is visible for seconds before the eruption, the eruption is
    avoidable by moving off the ridge, and the spew is telegraphed by
    the sacs filling and the mouth opening green.
+
+   AND THE ANIMAL ITSELF - see THE HIDE, below. The .glb is one skinned
+   mesh with one material, so everything that makes a wet segmented
+   burrower look different from a matte black slab is done in the
+   fragment shader off the BIND POSE, on top of the shared surface kit.
    ============================================================ */
 
 import { TAU, clamp, clamp01, damp, dampAngle, lerp, makeBus } from "saintfall/core.js";
 import { patchMaterial } from "saintfall/art.js";
+import { applySurface, setSurfaceDamage } from "saintfall/boss-surface.js";
 import { SURVIVAL_CONFIG } from "saintfall/combat.js";
 
 export const COULTER_CONFIG = Object.freeze({
@@ -119,6 +125,339 @@ const GLOBULES = 18;
 const VENOM_COLOUR = "#4f7a12";
 const VENOM_EMISSIVE = "#b8f23e";
 
+/* ============================================================
+   THE HIDE
+
+   What the animal is made of, and it is one material because the
+   model is one skinned mesh: POSITION, NORMAL, COLOR_0, JOINTS_0,
+   WEIGHTS_0, no UVs, no images. So every distinction below - wet
+   flank against dry crust, hide against jaw plate against gullet -
+   is zoned in the fragment shader off the BIND POSE, which does not
+   move when the animal does.
+
+   THE THREE THINGS THIS ANIMAL IS, in the Scarab's proportions: a
+   lot of the neutral, a little of the warm, a spot of the saturated.
+
+     SLICK HIDE   the dominant surface. Cold near-black, gradient from
+                  belly to back, and its whole read is SPECULAR - a
+                  small hard highlight that travels as the camera
+                  moves. Wet is a highlight that MOVES, not a
+                  highlight that is bright.
+     SAND CRUST   a minority, on the dorsal facets that still point
+                  at the sky, packed hardest into the segment grooves.
+                  Dry, pale, desaturated and utterly matte - the one
+                  place on the animal with no specular at all, which
+                  is what makes the rest of it read as wet.
+     THE GULLET   the weak point, and the only saturated thing in the
+                  silhouette: warm coral gum, the wettest roughness on
+                  the model, lit from inside by the venom it is about
+                  to throw.
+
+   FOUR TRAPS THIS COST.
+
+   1. THE SHARED KIT FADES ITSELF OUT AT 108 METRES. Every number in
+      `SURFACES` was tuned against a three-metre Thresher, and this
+      animal is a hundred and eighteen metres long: the gallery's own
+      portrait framing stands the camera about a hundred metres back,
+      which is exactly where `fadeFar` has already faded the grain to
+      nothing. The surface was not weak, it was ABSENT in every frame
+      anyone had looked at. `fadeNear`/`fadeFar` are overridden here
+      to 220/520 m. That is safe because the distance fade is a COST
+      control, not the antialiasing: each octave already fades itself
+      out on its own screen footprint.
+
+   2. THE SEGMENTS ARE A HEIGHT FIELD, NOT A TEXTURE. A worm's read is
+      its rings, so they perturb the normal for real - one sine of the
+      bind-pose Z, its 3x harmonic through the triple-angle identity,
+      and Mikkelsen's surface-gradient form for the normal. It reuses
+      the kit's own `sfSigX`/`sfSigY` world derivatives, so the whole
+      thing costs ONE extra derivative pair and two transcendentals.
+      Painted rings would light from a direction the surface does not
+      have, which reads as "the bump map is a bit off" forever.
+
+   3. THE MOUTH HAS TO BE FOUND WITHOUT UVs. The jaws are a tube, and
+      the inside of a tube is exactly the facets whose BIND-POSE normal
+      points at the body axis. That test needs the un-skinned normal,
+      which is one extra varying (`vCoObjN`, taken at
+      `beginnormal_vertex` before skinning touches it) and cannot be
+      derived from the shading normal, because by then the jaw has
+      rotated.
+
+   4. `customProgramCacheKey` IS A PROPERTY, NOT A CHAIN. `patchMaterial`
+      says so in its own header: chaining a second `onBeforeCompile`
+      composes, because it calls the previous one first - but whoever
+      writes the cache key LAST wins, and the loser's variants collapse
+      into one program. So both are wrapped here, explicitly, and the
+      wrapper appends to the key the kit's patch already built. Getting
+      it wrong looks exactly like "my shader did nothing".
+   ============================================================ */
+const COULTER_SKIN = Object.freeze({
+  /* Metres between segment rings, in WORLD space. At the gallery's
+     ~100m portrait distance this lands a ring about every 45 screen
+     pixels, which is a macro read; the 3x harmonic under it lands at
+     15px, which is the micro one. */
+  /* 5.2 rather than the 3.8 the first pass used. At 3.8 the rings
+     landed about ten screen pixels apart at fighting distance and the
+     animal came back reading as a BARCODE - a corrugated ribbon
+     rather than a segmented body. The segment has to be big enough
+     that the eye counts vertebrae rather than stripes; the 3x
+     harmonic underneath it is what carries the fine detail. */
+  ringMetres: 5.2,
+  /* SOFTENED ONCE AND PUT BACK. The close-range frames read a little
+     like chain-link, so the ring contrast was taken down about twenty
+     per cent - and the measurement said no: microDetail fell from 7.29
+     to 5.94, out of the pool's band, while rmsContrast did not move at
+     all, because the frame-wide contrast this animal is being marked
+     on is the SAND, not the boss. The banding is the surface. */
+  ringRelief: 0.13,
+  /* THREE OCTAVES, not two, and the third is what the metric asked
+     for. `microDetail` measures high-frequency energy and at the
+     distance this animal is photographed from, every octave the
+     shared kit owns is already sub-pixel and antialiased away - its
+     finest cell is 6cm on a body photographed from a hundred metres.
+     So the only sub-facet detail that survives has to be MINE, and it
+     is a third harmonic of the ring train at 58cm: about seven screen
+     pixels at fighting distance, which is exactly the band the
+     measurement is looking in. It costs no transcendental at all -
+     the triple-angle recursion produces it from the sine already
+     taken for the segments. */
+  ringFine: 0.075,
+  ringMicro: 0.022,
+  /* How long the topside stays caked after it comes up. The crust is
+     the phase read: full while it is under the sand, sheeting off
+     through the rise, and only a residue by the time the player is
+     shooting at it. */
+  /* Drained to NOTHING, not to a residue. Two reasons and they agree:
+     the shed is the drama - the crust belongs to the rise, which is
+     the frame the eruption is sold on - and a floor above zero would
+     hold the crust's shader branch open for the whole fight on an
+     animal that fills the screen. */
+  sandDrain: 0.45,
+  sandFloor: 0.0,
+  /* Wet is the whole animal. It never fully dries in one surfacing -
+     eleven metres of it are still in the ground. */
+  dryRate: 0.16,
+  wetFloor: 0.62,
+  /* AUTHORED IN sRGB AND THEN RAISED, twice. The first pass used
+     #0d1416 on the reasoning that a slick black animal is black -
+     which in linear light is 0.0055, a value no amount of relief and
+     no specular lobe can be seen against. The animal came back from
+     the gallery as an unbroken silhouette with the segment rings
+     invisible ON it. Dark has to mean "much darker than the sand",
+     not "zero": the sand sits near 0.4 linear and these two sit at
+     0.023 and 0.12, which is a quarter of it and still leaves the
+     rings a stop and a half to work in. */
+  /* AND THEY HAD TO GO COLD, which is the third pass on these two
+     numbers. Neutral grey was the obvious choice for a slick black
+     animal that needed lifting - and a neutral albedo under a
+     golden-hour key is an ORANGE animal. The gallery came back with
+     the segment rings finally reading and the whole boss wearing the
+     Fallen Saint's own sand, which is the one thing the art direction
+     forbids outright. The albedo has to fight the light: a dark teal
+     under a warm sun lands as a cold grey-green, and that is the
+     separation. */
+  hide: "#26383c",
+  back: "#5c7370",
+  crust: "#c2ad8f",
+  gum: "#cf7f70",
+  venom: "#8fe33a",
+});
+
+/* NO BACKTICKS ANYWHERE IN THE GLSL BELOW, comments included. One
+   backtick ends the template literal silently and this project has
+   already paid for that lesson once. */
+const HIDE_PARS = /* glsl */`
+uniform vec4 uCoSkin;   // sand load, wetness, maw open, venom fill
+uniform vec4 uCoRing;   // wavenumber (1/object unit), relief, 3x relief, 9x relief (m)
+uniform vec3 uCoHide;
+uniform vec3 uCoBack;
+uniform vec3 uCoCrust;
+uniform vec3 uCoGum;
+uniform vec3 uCoVenom;
+varying vec3 vCoObjN;
+`;
+
+/* Injected before `lights_physical_fragment`, and the anchor is worth
+   a paragraph because the obvious one is wrong in a way that looks
+   like the shader is not running.
+
+   `lights_fragment_begin` reads as the natural "last moment before the
+   lighting" - the surface kit's own header says as much about
+   `normal`. It is one chunk too late for everything else.
+   `lights_physical_fragment` sits immediately above it and is where
+   three FOLDS the writable terms into the material struct:
+
+       material.roughness     = max(roughnessFactor, 0.0525);
+       material.diffuseColor  = diffuseColor.rgb * (1.0 - metalnessFactor);
+       material.specularColor = mix(vec3(0.04), diffuseColor.rgb, metalnessFactor);
+
+   Written after that, a new albedo and a new roughness are dead
+   stores. The first version of this block anchored there and the
+   gallery came back with the venom glow correct - emissive is summed
+   later, so THAT half worked - and a hide that was still authored
+   black, still matte, with the segment relief lighting nothing. An
+   hour was spent looking for the bug in the colour remap.
+
+   `lights_physical_fragment` is also free: neither `patchMaterial`
+   nor the kit anchors on it, so nothing is displaced. */
+const HIDE_FRAG = /* glsl */`
+  /* --- where on the animal are we, in the pose it was modelled in ---
+     vSFObj is the raw position attribute (the kit's varying) and
+     vCoObjN the raw normal: both are the bind pose, so nothing below
+     swims when the animal coils. Object Z runs +1.4 at the jaws to
+     -24 at the tail. */
+  vec3  coWN   = inverseTransformDirection(normal, viewMatrix);
+  vec3  coObjN = normalize(vCoObjN);
+  float coZ    = vSFObj.z;
+  float coDors = coObjN.y;                      // -1 belly .. +1 back
+
+  /* --- the segment rings -------------------------------------------
+     One sine and its 3x and 9x harmonics through the triple-angle
+     identity, so three octaves cost two transcendentals. The screen
+     derivative of the PHASE is taken once and does two jobs: it
+     antialiases every octave on its own exact footprint, and it is
+     the d(phase)/d(screen) the surface gradient needs.
+
+     BOTH DERIVATIVES ARE ABOVE EVERY BRANCH BELOW, for the reason the
+     shared kit records: a derivative taken in non-uniform control
+     flow is undefined, and the failure mode is one flickering row of
+     pixels at a boundary. */
+  float coPhase = coZ * uCoRing.x;
+  float coDx = dFdx(coPhase);
+  float coDy = dFdy(coPhase);
+  float coW  = abs(coDx) + abs(coDy);
+  float coAA1 = 1.0 / (1.0 + coW * coW * 0.55);
+  float coAA2 = 1.0 / (1.0 + coW * coW * 4.95);
+  float coAA3 = 1.0 / (1.0 + coW * coW * 44.6);
+
+  float coS1 = sin(coPhase);
+  float coC1 = cos(coPhase);
+  float coS2 = coS1 * (3.0 - 4.0 * coS1 * coS1);
+  float coC2 = coC1 * (4.0 * coC1 * coC1 - 3.0);
+  float coS3 = coS2 * (3.0 - 4.0 * coS2 * coS2);
+  float coC3 = coC2 * (4.0 * coC2 * coC2 - 3.0);
+
+  /* Varied along the body on a much longer wave, because a ring train
+     of constant amplitude is a machined thread. Four zones over
+     twenty-five model units - swollen where the animal is thick,
+     tight where it tapers - for one extra sine. */
+  float coVar = 0.78 + 0.22 * sin(coZ * 0.9 + 1.3);
+  /* A narrow deep groove and a broad crest, and the crest is skewed
+     to the leading side of it - a symmetric ripple reads as a
+     corrugation, and an overlapping plate is what a segmented animal
+     actually has. */
+  float coTrough = smoothstep(-0.15, -0.92, coS1) * coAA1 * coVar;
+  float coLip    = clamp(coS1, 0.0, 1.0) * (0.55 + 0.45 * coC1) * coAA1 * coVar;
+
+  /* --- which material is this facet --------------------------------
+     COLOR_0 is the authored mask and it is already a two-band
+     painting: the body is authored at luminance under 0.1 and the jaw
+     plates between 0.3 and 0.8. Splitting on value is therefore
+     reading the author's own intent rather than inventing a mask. */
+  float coLum  = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+  float coHide = 1.0 - smoothstep(0.045, 0.17, coLum);
+
+  /* 1. THE HIDE. Authored flat black, which is a value the lighting
+        cannot do anything with: no specular sits on zero and no
+        cavity can darken it. Remapped to a cold near-black with a
+        belly-to-back gradient, the ring relief driving it, and both
+        harmonics TINTING as well as tilting - relief alone only shows
+        where a light happens to rake it, and half this animal is
+        turned away from the sun at any moment. */
+  vec3 coSlick = mix(uCoHide, uCoBack, clamp(0.5 + 0.5 * coDors, 0.0, 1.0));
+  coSlick *= 1.0 + 0.34 * coLip - 0.42 * coTrough
+    + (0.16 * coS2 * coAA2 + 0.09 * coS3 * coAA3) * coVar;
+  vec3 coAlb = mix(diffuseColor.rgb, coSlick, coHide * 0.92);
+
+  /* 2. THE JAW PLATES go cold and grey. They were the same warm tan
+        as the dune behind them, which is the one thing the art
+        direction forbids outright. */
+  coAlb = mix(coAlb, vec3(coLum) * vec3(0.80, 0.93, 1.06), (1.0 - coHide) * 0.72);
+
+  /* 3. THE RELIEF, through Mikkelsen's surface gradient on the kit's
+        own world derivatives. The height is in METRES and its
+        derivative is analytic, which is the same distinction the kit
+        turns on: a finite difference of an aliased height is an
+        aliased normal. */
+  float coDh = uCoRing.y * coC1 * coAA1 + 3.0 * uCoRing.z * coC2 * coAA2
+    + 9.0 * uCoRing.w * coC3 * coAA3;
+  vec3  coR1 = cross(sfSigY, coWN);
+  vec3  coR2 = cross(coWN, sfSigX);
+  float coJ  = dot(sfSigX, coR1);
+  vec3  coSG = clamp((coDh * coDx * coR1 + coDh * coDy * coR2)
+                     * (sign(coJ) / max(abs(coJ), 1e-9)), vec3(-3.0), vec3(3.0));
+  vec3  coN2 = normalize(coWN - coSG);
+
+  /* 4. WET, which is a roughness story and nothing else. 0.14 rather
+        than a mirror-smooth 0.10: a tighter lobe is not a stronger
+        read, and at 0.10 the sun's highlight was a couple of pixels
+        wide on a hundred-metre animal. Wet is a highlight with AREA
+        that moves. */
+  float coRough = mix(roughnessFactor, 0.14, uCoSkin.y * (0.66 + 0.34 * coLip));
+
+  /* 5. THE SAND CRUST, and it is BEHIND A UNIFORM BRANCH. Every pixel
+        of a hundred-metre animal pays for this block, and for most of
+        the fight there is no crust left on it to pay for - it sheets
+        off through the rise. A branch on a uniform is coherent across
+        every quad in the draw, so this costs nothing when it is off.
+        Dorsal facets that still point at the sky, packed hardest into
+        the grooves where sand actually lodges, with the edge washed
+        by the kit's metre-scale mottle - a hard gate on the cell
+        field turned the jaw plates into houndstooth. */
+  if (uCoSkin.x > 0.02) {
+    float coUp = smoothstep(-0.05, 0.55, coN2.y);
+    float coCrust = clamp(uCoSkin.x * smoothstep(-0.10, 0.80, coDors) * coUp
+      * (0.62 + 0.38 * coTrough)
+      * (0.55 + 0.45 * smoothstep(-0.90, 0.60, sfMot + 0.5 * sfCav)), 0.0, 1.0);
+    coAlb = mix(coAlb, uCoCrust * (0.94 + 0.12 * sfMot), coCrust);
+    coRough = mix(coRough, 0.97, coCrust);
+    metalnessFactor = mix(metalnessFactor, 0.0, coCrust);
+  }
+
+  /* 6. THE GULLET - the weak point, and the only saturated thing in
+        the silhouette. It is a tube, and it has to be masked like
+        one: forward of the jaw hinge, facing the axis, AND inside the
+        throat's own radius. The first mask had only the first two, so
+        it also caught the inward face of every palp - four fronds
+        standing over the head, which came back from the gallery lit
+        flat venom green and reading as foliage.
+
+        Branched on Z, which is a VARYING and not a uniform - but the
+        jaws are one contiguous region at one end of a very long
+        animal, so the branch is coherent across every quad except the
+        few on its boundary, and it takes this whole block off the
+        other ninety per cent of the body. */
+  if (coZ > -2.4) {
+    float coR  = max(length(vSFObj.xy), 1e-3);
+    float coIn = -dot(vSFObj.xy / coR, coObjN.xy);
+    float coGullet = smoothstep(-2.2, -0.2, coZ) * smoothstep(0.30, 0.85, coIn)
+      * (1.0 - smoothstep(0.9, 1.5, coR));
+    coAlb = mix(coAlb, uCoGum, coGullet * 0.88);
+    coRough = mix(coRough, 0.075, coGullet * (0.5 + 0.5 * uCoSkin.y));
+    totalEmissiveRadiance += uCoVenom * coGullet
+      * (0.06 + 0.44 * uCoSkin.w) * (0.25 + 0.75 * uCoSkin.z);
+  }
+
+  /* 7. THE TELEGRAPH. sfBio is the kit's vertex-alpha emission - the
+        glands are painted into COLOR_0's alpha as a ramp - so the
+        sacs are DIMMED between spews and overcharged as one fills. A
+        telegraph that is always on is not a telegraph. */
+  totalEmissiveRadiance += sfBio * (uCoSkin.w * 0.85 - 0.30);
+  /* And the wounds weep the same green. The kit's own damage ember is
+     turned nearly off in the options for this material: an orange
+     glow in the cracks reads as a furnace, and this animal is a wet
+     thing full of venom. Uniform branch again - an undamaged boss
+     pays nothing for its damage response. */
+  if (uSfWear.z > 0.0) {
+    totalEmissiveRadiance += uCoVenom * 0.55 * uSfWear.z * uSfWear.z * sfCrack;
+  }
+
+  roughnessFactor = clamp(coRough, 0.045, 1.0);
+  diffuseColor.rgb = coAlb;
+  normal = normalize((viewMatrix * vec4(coN2, 0.0)).xyz);
+#include <lights_physical_fragment>
+`;
+
 export function buildCoulter(ctx) {
   const { THREE, scene, atmos, enemies } = ctx;
   const bus = makeBus();
@@ -132,6 +471,191 @@ export function buildCoulter(ctx) {
   group.name = "coulter-venom";
   group.matrixWorldAutoUpdate = true;
   scene.add(group);
+
+  /* ------------------------------------------------------------
+     THE HIDE, in JavaScript. The GLSL is at the top of the file.
+
+     Built LAZILY, at the first frame a burrower is alive, for two
+     reasons. It needs `inst.spec.scale` to size the grain and the
+     rings in world metres, and a dormant boss must cost nothing -
+     a material built at load is a program compiled at load for an
+     animal that may never be armed this session.
+     ------------------------------------------------------------ */
+  const skin = {
+    mat: null,
+    uniforms: null,
+    sand: 1,
+    wet: 1,
+    fill: 0,
+    damage: 0,
+  };
+
+  function colour(hex) {
+    return new THREE.Color().setStyle(hex, THREE.SRGBColorSpace);
+  }
+
+  function hideMaterial(spec) {
+    if (skin.mat) return skin.mat;
+    const scale = Number(spec?.scale) || 1;
+    const mat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      flatShading: true,
+      /* Under the species value of 0.50, because the shader above only
+         ever pulls roughness DOWN toward wet - the authored centre has
+         to leave room for the crust to push it back up to 0.97. */
+      roughness: 0.44,
+      metalness: 0.06,
+      /* WET IS A REFLECTION OF THE SKY, and at 4% dielectric F0 a dark
+         hide reflects almost none of it. Pushing the environment term
+         is the one lever that puts an actual highlight on a
+         low-albedo surface without lying about its metalness - and a
+         highlight is the axis the whole cast was measured as failing:
+         a creature with no blown pixel anywhere on it has no wet, no
+         polish and no metal. */
+      envMapIntensity: 1.25,
+    });
+    mat.name = "sf-coulter-hide";
+
+    skin.uniforms = {
+      uCoSkin: { value: new THREE.Vector4(1, 1, 0, 0) },
+      uCoRing: {
+        value: new THREE.Vector4(
+          (TAU * scale) / COULTER_SKIN.ringMetres,
+          COULTER_SKIN.ringRelief, COULTER_SKIN.ringFine, COULTER_SKIN.ringMicro),
+      },
+      uCoHide: { value: colour(COULTER_SKIN.hide) },
+      uCoBack: { value: colour(COULTER_SKIN.back) },
+      uCoCrust: { value: colour(COULTER_SKIN.crust) },
+      uCoGum: { value: colour(COULTER_SKIN.gum) },
+      uCoVenom: { value: colour(COULTER_SKIN.venom) },
+    };
+
+    /* THROUGH the kit, which goes through `patchMaterial`: one
+       onBeforeCompile and one cache key so far. The overrides are all
+       consequences of the animal's SIZE - a hundred-and-eighteen-metre
+       burrower photographed from a hundred metres - except `ember`,
+       which is a colour decision recorded in the header. */
+    applySurface(mat, atmos, "chitin", {
+      rim: spec?.material?.rim ?? 1.2,
+      bio: spec?.material?.bio ?? 1.95,
+      glitter: 0,
+      scale,
+      /* THE GRAIN HAD TO COME DOWN WHEN THE FADE WENT OUT. Extending
+         fadeFar to 520m means the kit's cell field is now at FULL
+         strength on plates that used to receive a third of it, and a
+         quasi-periodic field at full contrast across a flat jaw petal
+         four metres wide still reads as woven cloth. Coarser cells and
+         about two thirds of the cavity and mottle: the macro read on
+         this animal is its segment rings, which are mine, so the kit
+         is carrying texture and not pattern. */
+      wavelength: 1.6,
+      score: 0.0024,
+      pore: 0.0008,
+      cavity: 0.28,
+      gloss: 0.32,
+      sheen: 0.10,
+      wear: 0.06,
+      mottle: 0.10,
+      ember: 0.08,
+      /* 130/260 rather than the kit's 46/108, and rather than the
+         220/520 the first pass used. The kit's default assumes a
+         three-metre creature; at 108m this animal's grain was already
+         gone in every frame anyone had looked at. But 520 made the
+         WHOLE hundred-and-eighteen metres of it pay the kit's six
+         transcendentals at every range, and a paired measurement put
+         that at most of a millisecond on a frame that is fill-bound.
+         130 covers the band the fight and the gallery both live in
+         and lets the far half of a very long animal go cheap. */
+      fadeNear: 130,
+      fadeFar: 260,
+    });
+
+    /* And now the Coulter's own half, wrapped around what the kit
+       left. BOTH halves are wrapped: `onBeforeCompile` composes by
+       calling the previous one first, and `customProgramCacheKey`
+       does not compose at all unless it is done by hand. */
+    const prevCompile = mat.onBeforeCompile;
+    const prevKey = mat.customProgramCacheKey;
+    mat.onBeforeCompile = (shader, renderer) => {
+      if (prevCompile) prevCompile(shader, renderer);
+      Object.assign(shader.uniforms, skin.uniforms);
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vCoObjN;")
+        /* The BIND-POSE normal, before skinning rotates it. Taken here
+           because `objectNormal` is what `beginnormal_vertex` has just
+           declared and the skinning chunk is the very next one to
+           touch it. */
+        .replace("#include <beginnormal_vertex>",
+          "#include <beginnormal_vertex>\n  vCoObjN = objectNormal;");
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", `#include <common>\n${HIDE_PARS}`)
+        .replace("#include <lights_physical_fragment>", HIDE_FRAG);
+    };
+    mat.customProgramCacheKey = () =>
+      `${prevKey ? prevKey.call(mat) : ""}|coulter1`;
+    mat.needsUpdate = true;
+    skin.mat = mat;
+    return mat;
+  }
+
+  /** Put the Coulter's own material on the Coulter.
+   *
+   *  enemies.js builds ONE material per species and registers it
+   *  `shared: true`, which is correct for forty Threshers and wrong
+   *  for a boss: the kit refuses a per-instance damage write on a
+   *  shared material, so a shared boss can never accumulate damage.
+   *  This is the same material family through the same door, owned by
+   *  one animal. */
+  function adoptSkin(inst) {
+    if (inst.coulterSkin || !inst.root) return;
+    inst.coulterSkin = true;
+    const mat = hideMaterial(inst.spec);
+    inst.root.traverse((child) => {
+      if (child.isMesh || child.isSkinnedMesh) child.material = mat;
+    });
+  }
+
+  /** Drive the skin from the phase the animal is actually in. */
+  function updateSkin(inst, dt) {
+    if (!skin.uniforms) return;
+    const b = inst.body;
+    /* Caked while it is in the ground, and it SHEETS OFF as it comes
+       out - which is the one thing the art direction asks this animal
+       to do that no other boss does. Driven off the phase rather than
+       off a timer so a forced phase in QA looks the same as a fought
+       one. */
+    const buried = b.phase === "burrow" || b.phase === "dive";
+    const want = buried ? 1 : COULTER_SKIN.sandFloor;
+    skin.sand = buried
+      ? Math.min(1, skin.sand + dt * 1.4)
+      : Math.max(want, skin.sand - dt * COULTER_SKIN.sandDrain);
+    skin.wet = buried
+      ? Math.min(1, skin.wet + dt * 1.6)
+      : Math.max(COULTER_SKIN.wetFloor, skin.wet - dt * COULTER_SKIN.dryRate);
+
+    /* The sacs fill against the same clock the spew fires on, so what
+       the player watches swell IS the cooldown. Dumped the instant it
+       launches. */
+    let fill = 0;
+    if (b.phase === "crest" && b.spewsLeft > 0) {
+      fill = clamp01(1 - Math.max(0, b.fireTimer || 0) / C.spewCadence);
+    }
+    if (b.actionKind === "spew" && b.action > 0 && !(b.pending > 0)) fill = 0;
+    skin.fill = damp(skin.fill, fill, 7, dt);
+
+    const u = skin.uniforms.uCoSkin.value;
+    u.set(skin.sand, skin.wet, clamp01(b.mawOpen || 0), skin.fill);
+
+    /* Damage accumulates and STAYS: the kit's soot, cracking and wet
+       breaks all key on one uniform, and it is written from health
+       rather than from hit events so a save that loads at 20% health
+       loads an animal that looks it. */
+    const hurt = 1 - clamp01(inst.health / Math.max(1, inst.maxHealth));
+    if (Math.abs(hurt - skin.damage) > 0.004) {
+      skin.damage = hurt;
+      setSurfaceDamage(skin.mat, hurt);
+    }
+  }
 
   /* ============================================================
      THE WAKE
@@ -200,7 +724,7 @@ export function buildCoulter(ctx) {
     root.add(mound, crack);
     root.visible = false;
     group.add(root);
-    rig = { root, mound, crack, spray: 0, rumble: 0 };
+    rig = { root, mound, crack, spray: 0, rumble: 0, markX: 1e9, markZ: 1e9 };
     wakes.set(inst.id, rig);
     return rig;
   }
@@ -215,6 +739,164 @@ export function buildCoulter(ctx) {
     if (!rig) return;
     group.remove(rig.root);
     wakes.delete(id);
+  }
+
+  /* ============================================================
+     THE COLLAR
+
+     Where twenty metres of animal goes into the ground, and until now
+     that was a hard polygon intersection: the body met the dune on a
+     clean mathematical line with nothing displaced, no rim, no
+     shadow, which is the single loudest "this is a model standing in
+     a heightfield" tell in the whole gallery. Nothing looks placed
+     without a contact.
+
+     ONE MESH, POSITIONED, NOT ONE PER SURFACING. It is a lathe of four
+     rings - inner lip, crest, slump, feather - and every vertex is put
+     on the sand under it exactly the way a venom pool is, because a
+     flat ring laid across a dune slip face is half buried and half
+     floating and reads as a decal from another game.
+
+     Rebuilt on a THROTTLE and on MOVEMENT, not every frame. The
+     crossing point creeps at half a metre a second during a crest,
+     and seventy-two height lookups a frame for a shape that has not
+     changed is exactly the kind of cost a dormant boss is not allowed
+     to have.
+     ============================================================ */
+  const COLLAR_SIDES = 18;
+  // radius multiple, height multiple. The lip stands proud, the slump
+  // runs out to nothing: the angle of repose, not a wall.
+  const COLLAR_PROFILE = [[0.80, 0.34], [1.10, 0.62], [1.62, 0.22], [2.30, 0.0]];
+  const COLLAR_VERTS = COLLAR_SIDES * COLLAR_PROFILE.length;
+
+  const collarGeo = new THREE.BufferGeometry();
+  {
+    const position = new Float32Array(COLLAR_VERTS * 3);
+    const index = [];
+    for (let r = 0; r < COLLAR_PROFILE.length - 1; r += 1) {
+      for (let s = 0; s < COLLAR_SIDES; s += 1) {
+        const n = (s + 1) % COLLAR_SIDES;
+        const a0 = r * COLLAR_SIDES + s;
+        const a1 = r * COLLAR_SIDES + n;
+        const b0 = (r + 1) * COLLAR_SIDES + s;
+        const b1 = (r + 1) * COLLAR_SIDES + n;
+        index.push(a0, b0, b1, a0, b1, a1);
+      }
+    }
+    collarGeo.setAttribute("position",
+      new THREE.BufferAttribute(position, 3));
+    collarGeo.setIndex(index);
+  }
+  const collarMat = new THREE.MeshStandardMaterial({
+    color: 0xd7a973,
+    roughness: 0.98,
+    metalness: 0,
+    /* NOT flat-shaded, and that is the one place this disagrees with
+       the rest of the animal: it is sand, and sand in this game is the
+       documented exception to faceting (see art.js's `sand`). A
+       faceted collar reads as debris rather than as ground. */
+    flatShading: false,
+  });
+  collarMat.name = "sf-coulter-collar";
+  /* The same ripple train the terrain wears, at nearly full strength.
+     Freshly turned sand is the same material with the wind pattern
+     knocked off it, so it takes the dune shader and a little less of
+     the ripple, not a tint of its own. */
+  patchMaterial(collarMat, atmos, { rim: 0.5, glitter: 0.10, dunes: 0.8 });
+
+  const collar = new THREE.Mesh(collarGeo, collarMat);
+  collar.name = "sf-coulter-collar";
+  collar.castShadow = false;
+  collar.receiveShadow = true;
+  collar.visible = false;
+  collar.frustumCulled = false;
+  group.add(collar);
+  const collarState = { x: 0, z: 0, radius: 0, tick: 0, shed: 0 };
+
+  /** Where the body crosses the sand, walking the chain from the head
+   *  back until a joint goes under. Returns null while it is entirely
+   *  above or entirely below. */
+  function crossing(inst) {
+    const joints = inst.body.joints;
+    let px = inst.body.head.x;
+    let pz = inst.body.head.z;
+    let pAbove = inst.body.head.y - groundAt(px, pz);
+    for (let i = 0; i < joints.length; i += 1) {
+      const j = joints[i];
+      const above = j.y - groundAt(j.x, j.z);
+      if (pAbove > 0 && above <= 0) {
+        const t = pAbove / Math.max(1e-4, pAbove - above);
+        return { x: px + (j.x - px) * t, z: pz + (j.z - pz) * t, index: i };
+      }
+      px = j.x; pz = j.z; pAbove = above;
+    }
+    return null;
+  }
+
+  function rebuildCollar(x, z, radius) {
+    const y = groundAt(x, z);
+    const p = collarGeo.attributes.position.array;
+    for (let r = 0; r < COLLAR_PROFILE.length; r += 1) {
+      const [rf, hf] = COLLAR_PROFILE[r];
+      for (let s = 0; s < COLLAR_SIDES; s += 1) {
+        const a = (s / COLLAR_SIDES) * TAU;
+        /* Wobbled per ring and per side. A circle is a decal; a
+           collar thrown up by an animal forcing through a surface is
+           lobed, and the lobes have to disagree between rings or the
+           whole thing reads as one scaled circle. */
+        const wob = 1 - 0.14 * Math.sin(a * 3 + r * 1.9) - 0.08 * Math.cos(a * 5 - r);
+        const px = Math.cos(a) * radius * rf * wob;
+        const pz = Math.sin(a) * radius * rf * wob;
+        const i = (r * COLLAR_SIDES + s) * 3;
+        p[i] = px;
+        p[i + 1] = groundAt(x + px, z + pz) - y
+          + radius * hf * (0.82 + 0.36 * Math.sin(a * 4 + r));
+        p[i + 2] = pz;
+      }
+    }
+    collar.position.set(x, y + 0.05, z);
+    collarGeo.attributes.position.needsUpdate = true;
+    collarGeo.computeVertexNormals();
+    collarGeo.computeBoundingSphere();
+    collarState.x = x;
+    collarState.z = z;
+    collarState.radius = radius;
+  }
+
+  function updateCollar(inst, dt) {
+    const b = inst.body;
+    const live = b.phase !== "dead" && !b.hidden;
+    const hit = live ? crossing(inst) : null;
+    if (!hit) {
+      if (collar.visible) collar.visible = false;
+      return;
+    }
+    const size = bodyScale(inst);
+    /* Sized off the animal, not off the arena: the body is 2.2 model
+       units across and drawn at `scale`, so the hole it makes is about
+       ten metres wide and a collar smaller than that is a ring the
+       animal is standing outside of. */
+    const radius = 2.35 * size * 1.16;
+    collarState.tick -= dt;
+    const moved = Math.hypot(hit.x - collarState.x, hit.z - collarState.z);
+    if (!collar.visible || collarState.tick <= 0 || moved > 1.1) {
+      collarState.tick = 0.18;
+      rebuildCollar(hit.x, hit.z, radius);
+      collar.visible = true;
+    }
+
+    /* And it SHEDS. The crust the shader is draining off the animal's
+       back has to land somewhere, or the topside simply gets cleaner
+       for no reason the player can see. */
+    collarState.shed -= dt;
+    if (collarState.shed > 0) return;
+    collarState.shed = b.phase === "rise" ? 0.07 : 0.30;
+    const power = (0.7 + skin.sand * 1.9) * Math.sqrt(size);
+    const a = Math.random() * TAU;
+    ctx.vfx?.sandSpray?.(hit.x + Math.cos(a) * radius * 0.55,
+      groundAt(hit.x, hit.z) + 0.5,
+      hit.z + Math.sin(a) * radius * 0.55,
+      power, Math.cos(a) * 0.5, Math.sin(a) * 0.5);
   }
 
   /* ============================================================
@@ -479,6 +1161,99 @@ export function buildCoulter(ctx) {
   }
 
   /* ============================================================
+     BEING SHOT
+
+     A flinch has to say WHERE it was hit or it is a wince, and a
+     twenty-metre animal winces in one place at a time.
+
+     IMPLEMENTED AS A DECAYING OFFSET ON THE JOINTS, not as a push on
+     the trail, and the difference is the whole reason this is written
+     down. Pushing the trail is the obvious answer - the body is laid
+     along it, so a shove there ripples down the animal exactly the way
+     flesh does. It also never comes back: every shove is away from the
+     shooter, an automatic weapon lands eight a second, and after one
+     crest the boss has walked thirty metres sideways out of its own
+     fight. The offset below rings and dies, is bounded by its own
+     decay, and leaves the trail - which is the animal's actual path -
+     untouched.
+     ============================================================ */
+  function hurtSkin(inst, ev, strength) {
+    const b = inst.body;
+    /* Nearest joint to the impact, because that is the piece of the
+       animal that has to move; the head is included by hand because it
+       is not in the joint list. */
+    let bx = b.head.x;
+    let by = b.head.y;
+    let bz = b.head.z;
+    let bd = (bx - ev.x) ** 2 + (by - ev.y) ** 2 + (bz - ev.z) ** 2;
+    for (const j of b.joints) {
+      const d = (j.x - ev.x) ** 2 + (j.y - ev.y) ** 2 + (j.z - ev.z) ** 2;
+      if (d < bd) { bd = d; bx = j.x; by = j.y; bz = j.z; }
+    }
+    let nx = bx - ev.x;
+    let ny = by - ev.y;
+    let nz = bz - ev.z;
+    const n = Math.hypot(nx, ny, nz) || 1;
+    nx /= n; ny /= n; nz /= n;
+    const cap = 0.9 * Math.sqrt(bodyScale(inst));
+    const prev = b.flinch && b.flinch.mag > 0.01 ? b.flinch.mag : 0;
+    b.flinch = {
+      x: ev.x, y: ev.y, z: ev.z, nx, ny, nz, t: 0,
+      mag: Math.min(cap, prev + 0.26 * strength * Math.sqrt(bodyScale(inst))),
+    };
+  }
+
+  function applyFlinch(inst, dt) {
+    const b = inst.body;
+    const f = b.flinch;
+    if (!f || f.mag < 0.012) return;
+    f.t += dt;
+    f.mag *= Math.exp(-5.5 * dt);
+    /* Rings rather than simply relaxing. Meat that takes a hit
+       oscillates once or twice; a pure exponential return reads as the
+       animal being pushed and then dragged back on a rail. */
+    const swing = Math.sin(f.t * 19) * f.mag;
+    const reach = 8.5 * bodyScale(inst);
+    for (const j of b.joints) {
+      const d = Math.hypot(j.x - f.x, j.y - f.y, j.z - f.z);
+      if (d > reach) continue;
+      const w = (1 - d / reach) ** 2 * swing;
+      j.x += f.nx * w;
+      j.y += f.ny * w;
+      j.z += f.nz * w;
+    }
+  }
+
+  /** Ichor: what a wet animal does when it is opened. Rate-limited
+   *  because an automatic weapon would otherwise ask for a burst every
+   *  eighth of a second and the impact pool has other customers. */
+  let ichorTick = 0;
+
+  function onDamaged(ev) {
+    const key = ev.enemyKey || ev.key;
+    if (key !== "coulter") return;
+    const inst = enemies.live.find((e) => e.body && e.state !== "death");
+    if (!inst) return;
+    const strength = clamp01((ev.actual || 0) / Math.max(1, inst.maxHealth * 0.02));
+    hurtSkin(inst, ev, strength);
+    if (atmos.elapsed - ichorTick < 0.12) return;
+    ichorTick = atmos.elapsed;
+    /* The weak point bleeds harder, which is the only feedback in the
+       fight that says the mouth was worth aiming at. */
+    ctx.vfx?.venomBurst?.(ev.x, ev.y, ev.z,
+      (ev.weak || ev.head ? 1.5 : 0.75) * (0.6 + strength * 0.7));
+    /* And it LANDS. A stain under the animal is the difference between
+       damage that happened and damage that happened here. */
+    const ground = groundAt(ev.x, ev.z);
+    if (ev.y - ground < 26 && Math.random() < 0.35) {
+      ctx.vfx?.skidMark?.(ev.x + (Math.random() - 0.5) * 9, ev.z + (Math.random() - 0.5) * 9,
+        Math.random() * TAU, 0.55 + strength * 0.4, 1.6);
+    }
+  }
+
+  const offDamaged = ctx.combat?.bus?.on?.("enemyDamaged", onDamaged) || null;
+
+  /* ============================================================
      BEHAVIOUR
      ============================================================ */
 
@@ -613,6 +1388,26 @@ export function buildCoulter(ctx) {
       Math.sin(b.heading), Math.cos(b.heading));
     bus.emit("breach", { x: b.head.x, y: surface, z: b.head.z, id: inst.id });
 
+    /* THE GROUND ANSWERS, whether or not the player was standing on
+       it. A hundred metres of animal coming out of a dune is felt from
+       the far side of the basin, and a shake that only fires when the
+       damage lands teaches the player that a breach they dodged did
+       not happen. Falls off over 190m, which is most of the arena. */
+    const watcher = ctx.player?.state;
+    if (watcher) {
+      const far = Math.hypot(watcher.x - b.head.x, watcher.z - b.head.z);
+      ctx.player.punch?.(clamp(2.1 * (1 - far / 190), 0, 2.1));
+    }
+    /* Sand thrown outward on eight bearings rather than one. The
+       single directional spray it had reads as a jet; an eruption
+       throws a curtain. */
+    for (let i = 0; i < 8; i += 1) {
+      const a = (i / 8) * TAU + Math.random() * 0.3;
+      ctx.vfx?.sandSpray?.(b.head.x + Math.sin(a) * C.breachRadius * 0.55,
+        surface + 0.5, b.head.z + Math.cos(a) * C.breachRadius * 0.55,
+        1.9 * Math.sqrt(bodyScale(inst)), Math.sin(a), Math.cos(a));
+    }
+
     const ps = ctx.player?.state;
     if (!combat || !ps || combat.player.dead) return;
     const d = Math.hypot(ps.x - b.head.x, ps.z - b.head.z);
@@ -673,6 +1468,40 @@ export function buildCoulter(ctx) {
     }
   }
 
+  /**
+   * ANTICIPATION, THRUST, RECOVERY - as a speed along the heading,
+   * which is the only way to animate this animal's body.
+   *
+   * The clips own the mouth and nothing else: the body is laid along
+   * the path the head took, so a strike that is only a jaw clip is a
+   * jaw clip on a post. Driving the HEAD instead writes the whole
+   * motion into the trail, and twenty metres of body follow it a beat
+   * later for free - which is the secondary motion this animal was
+   * missing.
+   *
+   * The curve is pinned to the clip's own contact frame: the mouth
+   * closes at `biteContact` (0.17s of 0.53), so the coil has to be
+   * finished and the drive has to be at full speed by then, or the
+   * damage lands while the head is still travelling backwards.
+   */
+  function strikeSurge(inst) {
+    const b = inst.body;
+    if (!(b.action > 0)) return 0;
+    const size = bodyScale(inst) * 0.55;
+    if (b.actionKind === "bite") {
+      const el = 0.53 - b.action;
+      if (el < 0.11) return -16 * (el / 0.11) * size;
+      if (el < 0.20) return 30 * ((el - 0.11) / 0.09) * size;
+      return 30 * Math.exp(-5 * (el - 0.20)) * size;
+    }
+    /* The spew is the mirror image: it rears BACK to fill, and heaves
+       forward on the launch frame. The recoil is what makes a
+       telegraph readable from sixty metres without a UI element. */
+    const el = 0.90 - b.action;
+    if (el < C.spewLaunch) return -7 * (el / C.spewLaunch) * size;
+    return 13 * Math.exp(-4.5 * (el - C.spewLaunch)) * size;
+  }
+
   function stepCrest(inst, dt, target) {
     const b = inst.body;
     b.hidden = false;
@@ -686,7 +1515,16 @@ export function buildCoulter(ctx) {
     const dx = target.x - b.head.x;
     const dz = target.z - b.head.z;
     const flat = Math.hypot(dx, dz);
-    b.heading = dampAngle(b.heading, Math.atan2(dx, dz), C.turnRate.crest, dt);
+    /* THE WEAVE. Aimed a few degrees either side of the player on a
+       slow clock rather than exactly at them: a boss that holds a
+       perfect bearing for twelve seconds is a turret, and because the
+       heading writes into the trail the whole reared column sways with
+       a lag that gets longer the further down the body you look. It is
+       an offset on the TARGET, never on the heading itself - added to
+       the state it would integrate into a slow spin. */
+    const weave = Math.sin(atmos.elapsed * 0.63) * 0.11;
+    b.heading = dampAngle(b.heading, Math.atan2(dx, dz) + weave,
+      C.turnRate.crest, dt);
     /* Crane over toward the player: pitch down as they get closer, so
        the animal is looking AT them rather than at the horizon. The
        floor of the clamp is steep enough to reach a player standing
@@ -696,7 +1534,12 @@ export function buildCoulter(ctx) {
     const wantPitch = clamp(Math.atan2(target.y - b.head.y, Math.max(3, flat)),
       -0.95, 0.30);
     b.pitch = damp(b.pitch, wantPitch, 2.4, dt);
-    travel(inst, dt, inst.spec.speed.walk * 0.24);
+    travel(inst, dt, inst.spec.speed.walk * 0.24 + strikeSurge(inst));
+    /* And it BREATHES. A cosine velocity integrates to a bounded sine
+       of displacement, so this heaves the head about two metres up and
+       down without any state to drift - and, again, the body reads it
+       out of the trail a beat behind. */
+    b.head.y += Math.cos(atmos.elapsed * 0.71) * 1.45 * Math.sqrt(bodyScale(inst)) * dt;
 
     // Keep the head out of the sand: a crane-down that drives the
     // mouth into a dune would bury the weak point.
@@ -778,6 +1621,21 @@ export function buildCoulter(ctx) {
   function landBite(inst, target) {
     const b = inst.body;
     const combat = ctx.combat;
+    /* THE JAWS CLOSING IS A PHYSICAL EVENT, and it happens whether or
+       not they closed on anybody. Resolved before the hit test for
+       exactly that reason: a strike the player dodged has to look and
+       feel like a strike that missed, not like nothing. */
+    const ground = groundAt(b.head.x, b.head.z);
+    const low = b.head.y - ground;
+    if (low < 14 * bodyScale(inst)) {
+      ctx.vfx?.sandSpray?.(b.head.x, ground + 0.4, b.head.z,
+        2.2 * Math.sqrt(bodyScale(inst)), Math.sin(b.heading), Math.cos(b.heading));
+    }
+    const watcher = ctx.player?.state;
+    if (watcher) {
+      const far = Math.hypot(watcher.x - b.head.x, watcher.z - b.head.z);
+      ctx.player.punch?.(clamp(1.0 * (1 - far / 90), 0, 1.0));
+    }
     if (!combat || combat.player.dead) return;
     const flat = Math.hypot(target.x - b.head.x, target.z - b.head.z);
     // Re-tested at the contact frame, not at the wind-up: the mouth
@@ -903,6 +1761,22 @@ export function buildCoulter(ctx) {
       b.hidden = false;
       b.mawOpen = 0.8;
       hideWake(inst);
+      /* A DEATH IS A PHYSICAL EVENT, and the collapse below is only
+         the geometry of one. What makes it read is what it leaves: the
+         animal opens along its length, the venom it was holding goes
+         onto the sand as real pools with the real hazard behind them,
+         and the ground says so once. */
+      const size = bodyScale(inst);
+      ctx.player?.punch?.(1.8);
+      ctx.vfx?.venomBurst?.(b.head.x, b.head.y, b.head.z, 4.2 * Math.sqrt(size));
+      const sampled = b.trail.filter((s, i) => i % 6 === 0).slice(0, 4);
+      for (const s of sampled) {
+        ctx.vfx?.sandSpray?.(s.x, groundAt(s.x, s.z) + 0.5, s.z,
+          2.0 * Math.sqrt(size), Math.sin(b.heading), Math.cos(b.heading));
+        spillPool(s.x, s.z, C.poolRadius * (1.1 + Math.random() * 0.5),
+          C.poolSeconds * 1.6);
+      }
+      bus.emit("died", { x: b.head.x, y: b.head.y, z: b.head.z, id: inst.id });
     }
     b.timer += dt;
     const settle = Math.min(1, b.timer * 0.5);
@@ -931,6 +1805,10 @@ export function buildCoulter(ctx) {
   function stepInstance(inst, dt) {
     const b = inst.body;
     if (!b) return;
+    /* Before anything decides anything: the first frame this module
+       sees a burrower is the frame it stops wearing the shared caste
+       material. */
+    adoptSkin(inst);
     /* Parked: the pose is still resolved from the trail, but nothing
        decides anything. Set only by review harnesses, which need the
        animal to hold a pose for a photograph - a boss that swims out of
@@ -944,9 +1822,16 @@ export function buildCoulter(ctx) {
       // on the sand somewhere it no longer is.
       b.hidden = submergedFully(inst);
       updateWake(inst, dt);
+      updateSkin(inst, dt);
+      updateCollar(inst, dt);
       return;
     }
-    if (inst.state === "death") { stepDeath(inst, dt); return; }
+    if (inst.state === "death") {
+      stepDeath(inst, dt);
+      updateSkin(inst, dt);
+      updateCollar(inst, dt);
+      return;
+    }
     if (inst.stunTime > 0) {
       /* A slam can stagger it, and while it is staggered it holds
          position - but it does NOT hold its breath: a stunned animal
@@ -956,6 +1841,9 @@ export function buildCoulter(ctx) {
       if (b.phase === "crest") {
         b.timer = Math.max(b.timer, 0.6);
         enemies.poseBody(inst);
+        applyFlinch(inst, dt);
+        updateSkin(inst, dt);
+        updateCollar(inst, dt);
         return;
       }
     }
@@ -979,7 +1867,13 @@ export function buildCoulter(ctx) {
     inst.suspicion = 1;
     layTrail(inst);
     enemies.poseBody(inst);
+    /* After the pose, because it is an offset ON the pose: poseBody
+       rewrites every joint from the trail, so a flinch applied before
+       it is a flinch that was thrown away. */
+    applyFlinch(inst, dt);
     updateWake(inst, dt);
+    updateSkin(inst, dt);
+    updateCollar(inst, dt);
   }
 
   function updateWake(inst, dt) {
@@ -1018,6 +1912,18 @@ export function buildCoulter(ctx) {
       bus.emit("wake", {
         x: b.head.x, z: b.head.z, strength: 0.35 + strength * 0.65, id: inst.id,
       });
+    }
+
+    /* THE FURROW IT LEAVES. The ridge says where the animal is; the
+       scar behind it says where it has BEEN, which is the half of the
+       read that survives the animal turning away. It rides the shared
+       ground-decal pool, so a hundred metres of furrow costs no draw
+       call of its own. */
+    if (Math.hypot(b.head.x - rig.markX, b.head.z - rig.markZ) > 5.5 * size) {
+      rig.markX = b.head.x;
+      rig.markZ = b.head.z;
+      ctx.vfx?.skidMark?.(b.head.x, b.head.z, b.heading,
+        0.55 + strength * 0.45, 6.5 * size);
     }
 
     rig.spray -= dt;
@@ -1176,6 +2082,13 @@ export function buildCoulter(ctx) {
       maxHealth: inst ? Math.round(inst.maxHealth) : 0,
       toxin: Number(toxin.level.toFixed(3)),
       inVenom: toxin.inPool,
+      /* The skin, so a harness can assert the crust sheets off and the
+         sacs fill rather than photographing it and hoping. */
+      sand: Number(skin.sand.toFixed(3)),
+      wet: Number(skin.wet.toFixed(3)),
+      venomFill: Number(skin.fill.toFixed(3)),
+      skinDamage: Number(skin.damage.toFixed(3)),
+      collar: collar.visible,
       pools: pools.filter((p) => p.life > 0).length,
       globules: globules.filter((g) => g.live).length,
     };
@@ -1225,6 +2138,7 @@ export function buildCoulter(ctx) {
     setToxin(v) { toxin.level = clamp01(Number(v) || 0); return toxin.level; },
     dispose() {
       for (const id of [...wakes.keys()]) disposeWake(id);
+      if (offDamaged) offDamaged();
       scene.remove(group);
     },
   };

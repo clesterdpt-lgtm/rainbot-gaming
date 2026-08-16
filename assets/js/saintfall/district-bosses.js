@@ -343,6 +343,39 @@ export function buildDistrictBosses(ctx) {
     return record ? publicRecord(record) : null;
   }
 
+  /* A bespoke controller answers about its own animal and nothing
+     else: `ctx.stylite.status()` knows grip and altitude but has never
+     heard of the Choir Spires, the order text or the mission gate. So
+     the site's own identity is laid UNDER it, and the two fields every
+     caller derives - is it finished, how far away is it - are
+     normalised on top, because the six controllers spell "finished"
+     three different ways (`defeated`, `dead`, phase "dead"). */
+  function siteStatus(site) {
+    const record = records.get(site.key);
+    if (record) return publicRecord(record);
+    const runtime = runtimeStatus(site);
+    if (!runtime) return null;
+    const x = Number.isFinite(runtime.x) ? runtime.x : site.x;
+    const z = Number.isFinite(runtime.z) ? runtime.z : site.z;
+    return {
+      key: site.key,
+      district: site.district,
+      boss: site.boss,
+      order: site.order,
+      enemyKey: site.enemyKey,
+      stage: site.stage || "district",
+      available: siteAvailable(site),
+      arenaX: site.x,
+      arenaZ: site.z,
+      arenaRadius: site.arenaRadius,
+      ...runtime,
+      x,
+      z,
+      defeated: !!runtime.defeated || !!runtime.dead || runtime.phase === "dead",
+      dist: Math.hypot(ctx.player.state.x - x, ctx.player.state.z - z),
+    };
+  }
+
   function fightActive(status) {
     if (!status || status.defeated || status.dead) return false;
     // Intro beats (alert / rouse / reveal / breach) are not a fight
@@ -547,8 +580,31 @@ export function buildDistrictBosses(ctx) {
     update,
     objective,
     activeBoss,
+    /* status(key) answers for ANY of the seven sites, through the
+       bespoke controller where there is one. It used to read `records`
+       directly, which holds only the two sites the shared enemy
+       simulation drives - so `status("choir")` went null the day the
+       Stylite took the Choir Spires, and with it every caller that
+       asks a site how its fight is going. `mission.js` and
+       `breaches.js` had each grown their own private copy of the
+       controller lookup to work around it; this is the one they can
+       both use.
+
+       THE NO-ARGUMENT FORM IS NOT THE SAME QUESTION and must not be
+       widened to match. `status()` is the roster this module SAVES -
+       it pairs with snapshot()/restore(), and save.js validates a
+       loaded file by checking that its boss array is exactly this long
+       (`save.js`, "expected"/"legacy"). Returning seven entries from a
+       snapshot that writes two rejects every existing save file, which
+       is the same class of failure as the Abbess's negative phase
+       timer. `saintfall-stylite-fight.mjs` asserts on it for the
+       matching reason: it is how that harness proves the Choir LEFT
+       the shared simulation. */
     status(key) {
-      if (key) return records.has(key) ? publicRecord(records.get(key)) : null;
+      if (key) {
+        const site = DISTRICT_BOSS_SITES.find((entry) => entry.key === key);
+        return site ? siteStatus(site) : null;
+      }
       return [...records.values()].map(publicRecord);
     },
     snapshot,

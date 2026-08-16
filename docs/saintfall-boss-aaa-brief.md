@@ -71,6 +71,27 @@ geometry.
   the whole game 1.3 ms/frame and surfaced as the *Abbess's* budget failing.
   Gate expensive work on the fight actually being live.
 
+### Do not trust an absolute millisecond under load
+
+`saintfall-boss-audit.mjs` prints wall-clock milliseconds, and this programme
+runs six or more agents at once, each driving its own headless Chromium. The
+audit's own numbers drift 8–10% between sessions on *identical code*, and under
+a saturated machine they drift much further — one gate agent measured `HEAD`
+itself 0.15–0.28 ms slower than the brief's table simply because the machine was
+busy.
+
+So before you believe a budget failure:
+
+1. Run `uptime`. If the load average is at or above the core count, every
+   millisecond you just measured is inflated and none of it is your change.
+2. Prefer `saintfall-surface-cost.mjs`, which measures both halves **in one
+   session** with the feature toggled — a paired difference survives load that
+   an absolute number does not.
+3. If you must have an absolute figure, re-measure when the machine is quiet,
+   and re-measure `HEAD` at the same time so you are comparing like with like.
+
+Never strip working art because a loaded machine printed a large number.
+
 ## The shared surface kit
 
 `assets/js/saintfall/boss-surface.js` is the one place creature surface is

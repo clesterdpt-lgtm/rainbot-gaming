@@ -32,14 +32,21 @@ export const BOOST_CONFIG = Object.freeze({
   ignitionCost: 9,
   /** Charge per second once the burst is over and the key is held. Drains at the same rate as flight (10.7). */
   holdDrain: JETPACK_CONFIG.burnRate,
-  damage: 46,
+  /** Heavy damage when boosting forward with the lance (much more than regular melee swing 78 or ranged 24). */
+  frontalDamage: 145,
+  /** Small damage when boosting sideways or backwards. */
+  glanceDamage: 25,
+  /** Base damage fallback */
+  damage: 145,
+  /** Instant stun duration in seconds applied to enemies hit by a frontal lance ram. */
+  frontalStun: 1.8,
   /* A held glide is not one attack. The same creature can be caught
      again after this, which is what makes skating through a pack
      read as ploughing rather than as one free hit. */
   damageInterval: 0.42,
-  bodyRadius: 0.78,
-  sidePush: 1.35,
-  knockSpeed: 15,
+  bodyRadius: 0.82,
+  sidePush: 1.5,
+  knockSpeed: 18,
   /* How far off dead-ahead still counts as ramming. Sideways and
      backward glides are mobility only - being able to kill by
      retreating would make the whole fight one button. */
@@ -49,8 +56,13 @@ export const BOOST_CONFIG = Object.freeze({
 
 const HEAVY_KEYS = new Set([
   "harrow", "precentor", "cantor", "matriarch", "coulter",
-  "distaff", "winnower", "apostate",
+  "distaff", "winnower", "apostate", "abbess",
 ]);
+
+function isHeavyEnemy(inst) {
+  if (!inst) return false;
+  return HEAVY_KEYS.has(inst.key) || !!inst.spec?.boss || !!inst.isBoss;
+}
 
 export function buildBoost(ctx, player) {
   const config = BOOST_CONFIG;
@@ -395,7 +407,7 @@ export function buildBoost(ctx, player) {
       }
     }
 
-    if (!(state.attack || state.contactEnabled) || travelled < 1e-5) return 0;
+    if (travelled < 1e-5) return 0;
 
     let hits = 0;
     for (const inst of ctx.enemies.live) {
@@ -422,8 +434,15 @@ export function buildBoost(ctx, player) {
       ) < dist - 0.04) continue;
 
       struck.set(inst, state.elapsed);
-      const dealt = ctx.combat.damageEnemy(inst, config.damage, {
+
+      const isFrontal = state.attack || state.contactEnabled;
+      const baseDamage = isFrontal
+        ? (config.frontalDamage || config.damage)
+        : (config.glanceDamage || 25);
+
+      const dealt = ctx.combat.damageEnemy(inst, baseDamage, {
         source: "boost",
+        frontal: isFrontal,
         x: inst.x,
         y: hitY,
         z: inst.z,
@@ -431,6 +450,15 @@ export function buildBoost(ctx, player) {
         originZ: contact.qz,
       });
       if (dealt <= 0) continue;
+
+      const isHeavy = isHeavyEnemy(inst);
+
+      /* Frontal lance attacks instantly stun the enemy so they cannot attack. */
+      if (isFrontal && inst.state !== "death") {
+        const stunSec = config.frontalStun || 1.8;
+        ctx.enemies.stun?.(inst, stunSec);
+      }
+
       const firstImpact = state.lastHits === 0;
       const identity = {
         enemyId: typeof inst.id === "string" ? inst.id : "",
@@ -440,6 +468,7 @@ export function buildBoost(ctx, player) {
         ...identity,
         enemy: inst,
         firstImpact,
+        frontal: isFrontal,
         boostIndex: state.boosts,
         source: state.modifierSource || "boost",
         damage: dealt,
@@ -457,18 +486,18 @@ export function buildBoost(ctx, player) {
       state.hits += 1;
       state.lastHits += 1;
 
-      /* Light castes are THROWN, and thrown along the glide rather
-         than merely nudged aside: the read the player wants from
-         driving a lance-armed knight through a swarm at nineteen
-         metres a second is that the swarm goes flying. */
-      if (!HEAVY_KEYS.has(inst.key)) {
+      /* Pushback: Larger enemies are NOT pushed back. Threshers and light
+         caste enemies are pushed back on both frontal rams and glancing skates
+         so the player can clear paths or escape. */
+      if (!isHeavy) {
         const rightX = state.directionZ;
         const rightZ = -state.directionX;
         const side = ((inst.x - contact.qx) * rightX
           + (inst.z - contact.qz) * rightZ) >= 0 ? 1 : -1;
+        const pushSpeed = isFrontal ? config.knockSpeed : (config.knockSpeed * 0.85);
         const ux = state.directionX * 0.72 + rightX * side * 0.69;
         const uz = state.directionZ * 0.72 + rightZ * side * 0.69;
-        if (!ctx.enemies.knockback?.(inst, ux, uz, config.knockSpeed)) {
+        if (!ctx.enemies.knockback?.(inst, ux, uz, pushSpeed)) {
           const wantX = inst.x + rightX * side * config.sidePush;
           const wantZ = inst.z + rightZ * side * config.sidePush;
           const radius = Math.max(0.34, (inst.spec?.collisionRadius || box.r) * 0.78);
@@ -480,8 +509,8 @@ export function buildBoost(ctx, player) {
       }
 
       ctx.vfx?.boostImpact?.(inst.x, hitY, inst.z,
-        state.directionX, state.directionZ, HEAVY_KEYS.has(inst.key));
-      ctx.audio?.boostHit?.(inst.x, inst.z, HEAVY_KEYS.has(inst.key));
+        state.directionX, state.directionZ, isHeavy || isFrontal);
+      ctx.audio?.boostHit?.(inst.x, inst.z, isHeavy || isFrontal);
     }
     return hits;
   }

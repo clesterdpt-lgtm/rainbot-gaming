@@ -414,6 +414,33 @@ export const DAY_CYCLE_STOPS = Object.freeze([
  * split-tone. Applied in the composite pass, after tone mapping,
  * which is where a grade belongs - a curve applied before the
  * highlight rolloff just moves the clipping point around.
+ *
+ * `toe` is the GT tone curve's shadow exponent, and it is a GRADE
+ * property rather than a constant in the composite shader because
+ * the five presets do not agree about what a black is. A sandstorm
+ * is a kilometre-wide softbox and genuinely has no black in it;
+ * golden hour, with a 13-degree key, has nothing BUT black on the
+ * far side of every ridge. One number in the shader made those two
+ * the same picture.
+ *
+ * READ THIS BEFORE RAISING `lift` AGAIN. Lift is the black FLOOR:
+ * `c = lift + (gain - lift) * pow(c, gamma)` cannot return anything
+ * below it, so it is an absolute wall across the bottom of every
+ * frame the game will ever draw. At the previous [0.013, 0.011,
+ * 0.015] that wall decoded to sRGB 30, and the measured consequence
+ * was that all eighteen boss gallery frames - six framings, three
+ * bosses, wildly different content, one lit by a bioluminescent
+ * abdomen and one shot at 120 m - reported a 1st-percentile
+ * luminance of 27, 28 or 29. A statistic that does not move when
+ * the picture changes completely is not measuring the picture. The
+ * Halo pool reaches 7.6.
+ *
+ * The floors below are the same HUE as the old ones (the channel
+ * ratios are preserved to within a percent, so shade stays cool
+ * rather than becoming the key's own hue at low value) at roughly a
+ * sixth of the level. Everything above sRGB 100 moves by less than
+ * one code value; the entire change lands in the bottom fifth of
+ * the range, which is the part that was missing.
  */
 export const GRADES = {
   warm: {
@@ -433,8 +460,51 @@ export const GRADES = {
        percentile landed no matter how dark its vertex colours went -
        the plate junctions had nowhere to go. The reference reaches
        L2. Kept very slightly cool and very slightly lifted off zero
-       so shadows read as air rather than as holes. */
-    lift: [0.013, 0.011, 0.015],
+       so shadows read as air rather than as holes.
+
+       AND IT WAS STILL SIX TIMES TOO HIGH. L17 was the diagnosis of
+       a figure; the floor is a property of the FRAME, and the frame
+       measured 27-29 on every capture ever taken. See the block
+       comment above GRADES. Kept off zero for the same reason as
+       before - desert shade is air, not a hole - just at the level
+       air actually sits at. */
+    lift: [0.0022, 0.0018, 0.0030],
+    /* A real toe. The GT curve's shadow exponent only has authority
+       below its linear midpoint (m = 0.22), so this darkens the
+       bottom half of the range and leaves the sand, the sky and
+       every highlight untouched - which is exactly the half of the
+       histogram the brief says is missing. At 1.24 the toe was
+       within a few percent of straight and the shadow band was
+       merely COMPRESSED into the midtones instead of falling away
+       from them. */
+    toe: 1.34,
+    /* Deep shade on Vesper-IX is lit by the sky and by nothing else,
+       so it desaturates and goes violet - it does NOT go to a darker
+       version of the sunlit hue. That rule was previously carried
+       entirely by SAND_RAMP's vertex colours and by the lift's blue
+       bias, and the lift has just been taken away. Without this the
+       new dark end inherits the key's orange at low value, which is
+       maroon, which is the mud the ramp comment warns about. The
+       second number is the knee: full strength at luma 0, gone by
+       0.24. That knee is higher than it looks like it should be for
+       a MEASURED reason - see the composite's own comment in
+       render.js, where binning a frame by luma showed the 60-100
+       band getting MORE saturated when the lift came down. A knee at
+       0.10 left that band untouched and the term measured as inert. */
+    shade: [0.46, 0.24],
+    shadeHue: "#6a5f86",
+    /* EMISSIVE BOUNCE - gain, then the receiver knee in linear scene
+       units. See the composite pass in render.js for what the term
+       is; this is why it is a grade property and not a constant.
+       A one-bounce fill is a RATIO against the key light, so the same
+       glowing gut is nearly invisible against sunlit sand and is the
+       only thing lighting the plate beside it at night. One number in
+       the shader would have to be tuned for one of those two and be
+       wrong for the other - which is the same mistake `toe` was
+       carrying before it became a grade property.
+       Golden hour has a 13-degree key and real black behind every
+       ridge, so a bounce reads: this is the middle of the range. */
+    bounce: [0.34, 1.6],
     gamma: [1.0, 1.015, 1.06],
     gain: [1.06, 1.005, 0.94],
     /* Re-measured. The "plates' 16.4" this was cut against came from
@@ -474,7 +544,13 @@ export const GRADES = {
     contrast: 1.04,
   },
   bleach: {
-    lift: [0.010, 0.010, 0.018],
+    lift: [0.0018, 0.0018, 0.0032],
+    toe: 1.34,
+    shade: [0.30, 0.18],
+    shadeHue: "#5e6a90",
+    // Noon. The key is overhead and enormous; a bounce that shows up
+    // against it would have to be brighter than the thing bouncing.
+    bounce: [0.18, 2.4],
     gamma: [1.0, 1.0, 1.02],
     gain: [1.02, 1.0, 0.98],
     saturation: 0.96,
@@ -484,7 +560,13 @@ export const GRADES = {
     contrast: 1.10,
   },
   dusk: {
-    lift: [0.022, 0.008, 0.036],
+    lift: [0.0040, 0.0015, 0.0066],
+    toe: 1.38,
+    shade: [0.40, 0.22],
+    shadeHue: "#4a3a70",
+    // Vespers: the key is nearly gone and the Bloom's emitters are
+    // becoming the light in the frame rather than decoration on it.
+    bounce: [0.52, 1.1],
     gamma: [0.98, 1.02, 1.05],
     gain: [1.10, 0.985, 0.96],
     /* Vespers used to push every armour material into the same
@@ -498,7 +580,22 @@ export const GRADES = {
     contrast: 1.02,
   },
   night: {
-    lift: [0.008, 0.012, 0.030],
+    /* Cut by a factor of two and a half, not by six. "Moonlight,
+       not blackout" (see TIMES.night): the Bloom's bioluminescence
+       is the best thing night has, and an emitter needs a readable
+       ground to sit on. Night keeps the highest floor and the
+       gentlest toe of the five on purpose. */
+    lift: [0.0032, 0.0048, 0.0120],
+    toe: 1.12,
+    shade: [0.14, 0.16],
+    shadeHue: "#2a3a66",
+    /* The highest of the five, and the one the term exists for.
+       "Moonlight, not blackout" - at night an emitter IS the local
+       light source, and a bioluminescent abdomen that leaves the
+       chitin beside it at moonlight value is the sticker the review
+       named. The knee comes down with it so the bounce survives on
+       surfaces a moon has already lifted. */
+    bounce: [0.78, 0.75],
     gamma: [1.05, 1.02, 0.96],
     gain: [0.92, 0.97, 1.10],
     saturation: 1.05,
@@ -508,7 +605,19 @@ export const GRADES = {
     contrast: 1.12,
   },
   storm: {
-    lift: [0.030, 0.020, 0.012],
+    /* An ochre front is a kilometre-wide softbox. It really has no
+       black in it, so this floor stays comparatively high and the
+       toe stays near straight - crushing a sandstorm would be the
+       histogram driving the art. */
+    lift: [0.0120, 0.0080, 0.0048],
+    toe: 1.10,
+    shade: [0.08, 0.14],
+    shadeHue: "#6a5240",
+    /* An ochre front is a kilometre-wide softbox, so there is nothing
+       for a bounce to be a ratio against - and the haze between the
+       emitter and the wall it would light scatters most of it away
+       before it arrives. Near zero on purpose. */
+    bounce: [0.10, 2.0],
     gamma: [1.0, 1.01, 1.03],
     gain: [1.06, 1.0, 0.90],
     saturation: 0.88,
@@ -857,6 +966,17 @@ function blendGrade(a, b, t) {
     highlightTint: hex(a.highlightTint, b.highlightTint),
     tint: lerp(a.tint, b.tint, t),
     contrast: lerp(a.contrast, b.contrast, t),
+    /* Every grade field has to be listed here or the day cycle
+       silently drops it: applyAtmosphere reads the BLENDED grade,
+       and a field this function forgets arrives as undefined, which
+       three writes into the uniform as NaN. One NaN in the composite
+       is the whole frame. The fallbacks are the values these three
+       had before they were parameters, so an unmigrated grade object
+       still renders. */
+    toe: lerp(a.toe ?? 1.24, b.toe ?? 1.24, t),
+    shade: arr(a.shade || [0, 0.2], b.shade || [0, 0.2]),
+    shadeHue: hex(a.shadeHue || "#808080", b.shadeHue || "#808080"),
+    bounce: arr(a.bounce || [0.34, 1.6], b.bounce || [0.34, 1.6]),
   };
 }
 
@@ -1157,6 +1277,21 @@ totalEmissiveRadiance += sfBio;
  * above 1 the emitter clears the bloom chain's bright threshold and
  * actually blooms, which is the whole point of a lit eye.
  * `opts.dunes` scales the aeolian ripple relief; 0 turns it off.
+ *
+ * `opts.extend` is THE ONLY SUPPORTED WAY TO ADD MORE SHADER to a
+ * material, and it exists because the obvious alternative is a silent
+ * trap. Chaining a second `onBeforeCompile` on afterwards works - this
+ * function calls the previous one first, so that direction composes -
+ * but `customProgramCacheKey` is a single overwritten property, not a
+ * chain. Whoever sets it last wins, and the loser's variants collapse
+ * into one compiled program: two materials that differ only in the
+ * bolted-on half then silently share whichever shader compiled first.
+ * That failure looks exactly like "my shader did nothing".
+ *
+ * So an extension goes THROUGH here instead. `extend(shader, renderer,
+ * material)` runs last inside this compile, after every injection
+ * below, and `opts.extendKey` is folded into the cache key so the
+ * extended variant stays distinct. One onBeforeCompile, one key.
  */
 export function patchMaterial(material, atmos, opts = {}) {
   if (!material || material.userData.sfPatched) return material;
@@ -1167,10 +1302,16 @@ export function patchMaterial(material, atmos, opts = {}) {
   const glitter = opts.glitter || 0;
   const bio = opts.bio || 0;
   const dunes = opts.dunes || 0;
+  const extend = typeof opts.extend === "function" ? opts.extend : null;
+  const extendKey = opts.extendKey ? String(opts.extendKey) : "";
   material.userData.sfRim = rimScale;
   material.userData.sfGlitter = glitter;
   material.userData.sfBio = bio;
   material.userData.sfDunes = dunes;
+  /* Recorded so a clone can be re-patched into the same shader rather
+     than quietly losing half of it - see `transparentOf`. */
+  material.userData.sfExtend = extend;
+  material.userData.sfExtendKey = extendKey;
 
   const prev = material.onBeforeCompile;
   material.onBeforeCompile = (shader, renderer) => {
@@ -1223,6 +1364,14 @@ export function patchMaterial(material, atmos, opts = {}) {
     frag = frag.replace("#include <opaque_fragment>", `#include <opaque_fragment>${ATMOS_FRAG}`);
     shader.fragmentShader = frag;
 
+    /* LAST, deliberately. An extension anchored on a chunk this
+       function has already consumed would otherwise find nothing to
+       replace and fail by doing nothing at all. Every block above
+       either re-emits its own #include (the dune and bio blocks both
+       open with theirs) or anchors on `opaque_fragment`, so the chunk
+       names an extension reaches for are all still present here. */
+    if (extend) extend(shader, renderer, material);
+
     material.userData.sfShader = shader;
   };
 
@@ -1230,7 +1379,7 @@ export function patchMaterial(material, atmos, opts = {}) {
   // recompile; forcing the key keeps variants distinct.
   material.customProgramCacheKey = () =>
     `sf:${rimScale.toFixed(3)}:${glitter.toFixed(3)}:${bio.toFixed(3)}`
-    + `:${dunes.toFixed(3)}`;
+    + `:${dunes.toFixed(3)}${extendKey ? `|${extendKey}` : ""}`;
   material.needsUpdate = true;
   return material;
 }
@@ -1473,7 +1622,18 @@ export function makeMaterials(THREE, atmos) {
     delete m.onBeforeCompile;
     delete m.customProgramCacheKey;
     m.userData = { ...src.userData, sfPatched: false };
-    patchMaterial(m, atmos, { rim: src.userData.sfRim ?? 1, glitter: 0 });
+    /* The extension is carried across too. It was not, and the bug
+       that would have caused is the quiet kind: an alpha variant of a
+       surfaced material would come back with the atmosphere intact and
+       the surface silently missing, so one boss part would read as
+       plastic and nothing would be logged. */
+    patchMaterial(m, atmos, {
+      rim: src.userData.sfRim ?? 1,
+      glitter: 0,
+      bio: src.userData.sfBio ?? 0,
+      extend: src.userData.sfExtend || undefined,
+      extendKey: src.userData.sfExtendKey || undefined,
+    });
     made.set(key, m);
     return m;
   };

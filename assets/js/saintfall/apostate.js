@@ -7,12 +7,81 @@
    call. It is intentionally a self-driven enemy. Player systems own input,
    camera, fuel and enemy-facing damage; this module mirrors their readable
    timings while keeping independent boss state and player-facing damage.
+
+   ------------------------------------------------------------
+   SURFACE: THE RECOLOUR WAS THE BUG.
+
+   Vesper's figure is not one of the untextured boss .glb files. It
+   carries a 2048 baseColour ATLAS - ivory reliquary plate, gold-leaf
+   panels, blackened iron straps, with cracks, chips and panel lines
+   painted into all of it - which is the richest single surface in
+   the game. The Apostate then threw the whole thing away in one
+   line: `material.color.lerp(chitin, 0.78)` multiplies that atlas by
+   a dark violet whose linear value is about 0.05, so every painted
+   crack, chip and gold panel came out at a twentieth of its authored
+   value and the boss measured 3.47 microDetail against a Halo pool
+   band of 6.07-13.9. It was not that the mirror had no surface; it
+   was that the corruption pass was a near-black multiply over it.
+
+   So the corruption is now a REPALETTE, not a wash, and it is
+   ordered exactly the way the Scarab's is (see the art-direction
+   doc): a lot of the neutral, a little of the warm, a spot of the
+   saturated.
+
+     - a lot   blackened reliquary iron, the atlas at full detail
+               under a cool dark multiplier. Value DOWN and hue COOL
+               against the Cathedral's warm grey-taupe #bfa88c, which
+               is this boss's assigned separation strategy.
+     - a little the SAME gold leaf the player wears, kept warm and
+               kept bright. It is the one thing that says this is the
+               player's own armour, and it is where the frame's
+               highlights come from.
+     - a spot  Bloom growth at the seams and the reliquary lamps,
+               violet-cyan, above the bloom threshold.
+
+   Which triangle is which is not guessed from bind-pose geometry -
+   it is READ OFF THE ATLAS. The texture is sampled back at 512, each
+   triangle is classified at its UV centroid, and the index buffer is
+   re-sorted into three geometry groups. That is why the split lands
+   on real armour parts (gold panel, plate, strap) rather than on a
+   height band, and it costs +2 draw calls and one canvas readback at
+   build time. If the readback fails - no 2D context, a tainted
+   canvas - the whole thing degrades to a single plate zone rather
+   than throwing, because a boss that does not exist is worse than a
+   boss with one material.
+
+   Each zone then takes a DIFFERENT family from the shared surface
+   kit, because "different parts must read as different materials" is
+   the first axis in the brief: plate is `bone` (fired reliquary
+   ceramic - chalky, no gloss travel, high wear on the rubbed upward
+   faces), leaf is `bronze` (gold over metal - pitted, rubbed high
+   points, a real specular lobe), strap is `hide`, the Bloom growth
+   is `chitin` and the wings are `membrane`. Five families in one
+   silhouette.
+
+   `applySurface` REPLACES `patchMaterial`; it goes through the same
+   door and calling both trips the patch path's already-patched early
+   return and leaves the surface silently off. Every material here
+   arrives already patched (the figure loader patches, and
+   `cloneVisual` re-patches its clones), so `resurface` below strips
+   the prior patch first and is the only way into a material in this
+   file.
+
+   METALNESS IS CAPPED, and art.js already paid for the lesson twice:
+   past about 0.6 the albedo becomes the specular F0, the diffuse
+   term vanishes, and the surface renders as a blurred warm
+   reflection of the environment - a gold at 0.72 measured TERRACOTTA
+   and a bronze head rendered orange-red. The blown highlights this
+   boss needs come from ROUGHNESS instead: a tight lobe on the leaf
+   at 0.24 concentrates a 13-degree sun into something that clips,
+   which is what the pool has and we did not.
    ============================================================ */
 
 import {
   TAU, clamp, clamp01, damp, dampAngle, lerp, makeBus,
 } from "saintfall/core.js";
-import { PALETTE, patchMaterial, patchBasicMaterial } from "saintfall/art.js";
+import { PALETTE, patchBasicMaterial } from "saintfall/art.js";
+import { applySurface, setSurfaceDamage } from "saintfall/boss-surface.js";
 import { DISTRICTS } from "saintfall/terrain.js";
 import { buildReliquaryFigure } from "saintfall/player.js";
 import { initIk, solveTwoJoint } from "saintfall/ik.js";
@@ -155,7 +224,11 @@ function makeWaspWing(THREE, side, length, width, lift, membrane, vein, index) {
     [side * length * 0.62, lift - width * 0.40, 0.009],
   ];
   for (const target of veinTargets) {
-    const rib = segment(THREE, [0, 0, 0.010], target, 0.008, 0.003, vein, 5);
+    /* Halved. At 8mm the ribs were thicker than the membrane could
+       carry and they were the only part of the wing that read at
+       fighting distance. A vein is a line ON a sheet, not a strut
+       holding one up. */
+    const rib = segment(THREE, [0, 0, 0.010], target, 0.0045, 0.0018, vein, 5);
     rib.castShadow = false;
     rib.receiveShadow = false;
     group.add(rib);
@@ -199,6 +272,217 @@ function repaintVertexRamp(THREE, node, darkHex, lightHex, family) {
   return true;
 }
 
+/* ============================================================
+   THE CORRUPTED RELIQUARY PALETTE
+
+   These are MULTIPLIERS over the authored atlas, not flat colours,
+   so every crack, chip and panel line the texture already carries
+   survives underneath them. The value story is the whole point:
+   the Cathedral's floor is warm grey-taupe #bfa88c, and a boss may
+   not wear its district's sand.
+   ============================================================ */
+const SKIN = Object.freeze({
+  /* The dominant. Cool and dark enough that ivory plate lands about
+     two stops under the flagstones it stands on, while the atlas's
+     own cracks fall to near-black and give the creases the brief
+     asks for. Slightly blue so it reads as blackened metal rather
+     than as dirty white. */
+  plate: 0x767c92,
+  /* The accent, and the one warm hue family on the animal. Barely
+     darkened, because this is where the frame's highlights have to
+     come from - the pool always has some blown pixels and the
+     baseline measured a 99th percentile of 96 against a band that
+     starts at 130. */
+  leaf: 0xf0d49a,
+  /* Boots, gauntlet webbing, undersuit. The darkest band on the
+     figure and the one that separates the limbs from the plate. */
+  strap: 0x40465a,
+});
+
+/* How far the corruption has advanced, from the health pool. Kept as
+   a named curve because three separate systems read it - the growth
+   scale, the surface damage uniform and the brood light - and a
+   phase that means something different in each of them is not a
+   phase. */
+function corruptionOf(inst) {
+  return clamp01(1 - inst.health / Math.max(1, inst.maxHealth));
+}
+
+/** Undo a prior `patchMaterial` so the surface kit can go in through
+ *  the same door. Every material this module touches has already been
+ *  patched by the figure loader or by `cloneVisual`, and the patch
+ *  path early-returns on `sfPatched`, so without this the kit would
+ *  silently do nothing and the boss would come back as plastic with
+ *  no error anywhere. Assigning `undefined` to the hooks instead of
+ *  deleting them shadows Material's prototype no-op and crashes the
+ *  program builder - art.js records the same thing. */
+function stripPatch(material) {
+  material.userData = { ...material.userData };
+  delete material.userData.sfPatched;
+  delete material.userData.sfShader;
+  delete material.userData.sfSurface;
+  delete material.onBeforeCompile;
+  delete material.customProgramCacheKey;
+  return material;
+}
+
+function resurface(material, atmos, family, opts = {}) {
+  if (!material || material.isMeshBasicMaterial) return material;
+  stripPatch(material);
+  return applySurface(material, atmos, family, opts);
+}
+
+/**
+ * Read a loaded texture back as an RGBA byte grid.
+ *
+ * 512 rather than the atlas's native 2048: this is only ever asked
+ * which ARMOUR PART a texel belongs to, and the islands are tens of
+ * texels across at that size, so a sixteenth of the pixels answers
+ * the same question for a sixteenth of the readback. The full-size
+ * read was 4.2M pixels of getImageData on the boot path.
+ *
+ * Returns null rather than throwing on every failure mode - no 2D
+ * context, a decode that has not landed, a tainted canvas - because
+ * the caller's fallback is a working boss with one material and the
+ * alternative is no Cathedral at all.
+ */
+function sampleTexture(texture, size = 512) {
+  const image = texture && texture.image;
+  if (!image) return null;
+  const width = image.width || image.naturalWidth || 0;
+  const height = image.height || image.naturalHeight || 0;
+  if (!width || !height) return null;
+  try {
+    const canvas = typeof OffscreenCanvas === "function"
+      ? new OffscreenCanvas(size, size)
+      : Object.assign(document.createElement("canvas"), { width: size, height: size });
+    const g = canvas.getContext("2d", { willReadFrequently: true });
+    if (!g) return null;
+    g.drawImage(image, 0, 0, size, size);
+    return { size, data: g.getImageData(0, 0, size, size).data, flipY: !!texture.flipY };
+  } catch (error) {
+    console.warn("[saintfall] the Apostate could not read the reliquary atlas back", error);
+    return null;
+  }
+}
+
+/* Which of the three armour materials a painted texel belongs to.
+   Thresholds read off the authored atlas rather than invented: the
+   gold panels sit around (200,160,60) so their red-minus-blue is
+   over half, the ivory plate is a near-neutral 0.85, and the straps,
+   boots and gauntlet webbing are the only neutrals under 0.38. */
+const ZONE_PLATE = 0;
+const ZONE_LEAF = 1;
+const ZONE_STRAP = 2;
+
+function zoneOfTexel(r, g, b) {
+  const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  if (r - b > 34 && r > 64) return ZONE_LEAF;
+  /* 78, not 96. At 96 the atlas's mid-grey plate fell into the strap
+     bucket as well as the boots and webbing - 45% of the figure - and
+     the strap tint is the darkest of the three, on a boss whose whole
+     measured failure is that nothing in its frame is bright. Below 78
+     it is only the genuinely black leather. */
+  return luma < 78 ? ZONE_STRAP : ZONE_PLATE;
+}
+
+/**
+ * Re-sort a textured mesh's index buffer into one geometry group per
+ * armour zone, so each can take a different material.
+ *
+ * The geometry is CLONED first. `cloneVisual` shares geometry with
+ * the player by design and the figure loader is one cache setting
+ * away from doing the same; re-sorting an index the player is also
+ * drawing from is the kind of edit that shows up as a bug in a file
+ * nobody touched.
+ *
+ * @returns {number[]|null} triangle counts per zone, or null if the
+ *          mesh cannot be split (no UVs, no index, no atlas read).
+ */
+function splitArmourZones(THREE, mesh, atlas) {
+  if (!atlas) return null;
+  const source = mesh.geometry;
+  const uv = source.getAttribute("uv");
+  const index = source.getIndex();
+  if (!uv || !index) return null;
+
+  const geo = source.clone();
+  mesh.geometry = geo;
+  const src = geo.getIndex().array;
+  const tris = (src.length / 3) | 0;
+  const { size, data, flipY } = atlas;
+  const buckets = [[], [], []];
+  for (let t = 0; t < tris; t += 1) {
+    let u = 0;
+    let v = 0;
+    for (let k = 0; k < 3; k += 1) {
+      const vi = src[t * 3 + k];
+      u += uv.getX(vi);
+      v += uv.getY(vi);
+    }
+    u = (((u / 3) % 1) + 1) % 1;
+    v = (((v / 3) % 1) + 1) % 1;
+    /* glTF textures load with flipY false, so v runs DOWN the image
+       exactly as a canvas row does. Honouring the flag anyway costs
+       one branch and stops a future loader change from classifying
+       the boots as gold leaf. */
+    const px = Math.min(size - 1, (u * size) | 0);
+    const py = Math.min(size - 1, ((flipY ? 1 - v : v) * size) | 0);
+    const o = (py * size + px) * 4;
+    buckets[zoneOfTexel(data[o], data[o + 1], data[o + 2])].push(t);
+  }
+
+  const out = new src.constructor(src.length);
+  let cursor = 0;
+  geo.clearGroups();
+  for (let zone = 0; zone < buckets.length; zone += 1) {
+    const list = buckets[zone];
+    if (!list.length) continue;
+    const start = cursor;
+    for (let i = 0; i < list.length; i += 1) {
+      const t = list[i] * 3;
+      out[cursor] = src[t];
+      out[cursor + 1] = src[t + 1];
+      out[cursor + 2] = src[t + 2];
+      cursor += 3;
+    }
+    geo.addGroup(start, cursor - start, zone);
+  }
+  geo.setIndex(new THREE.BufferAttribute(out, 1));
+  return buckets.map((list) => list.length);
+}
+
+/**
+ * Corrupt one of the player's own materials.
+ *
+ * `family`, `tint`, `rough` and `metal` are the whole art direction:
+ * the atlas stays, the multiplier takes it cool and dark (or warm and
+ * bright, for the leaf), and the kit supplies the grain, the cavity
+ * and the specular travel that no amount of albedo can.
+ */
+function corruptMaterial(THREE, atmos, material, spec) {
+  material.name = spec.name;
+  /* The atlas is bound as the EMISSIVE map too, and the player nulls
+     it for the same reason: a full-strength emissive copy of the
+     albedo is a self-lit sticker, and it is exactly what stops a
+     crease from ever going dark. */
+  material.emissiveMap = null;
+  if (material.color) material.color.set(spec.tint);
+  if (material.emissive) material.emissive.set(spec.emissive ?? 0x120d18);
+  material.emissiveIntensity = spec.emissiveIntensity ?? 0.05;
+  material.roughness = spec.rough;
+  material.metalness = spec.metal;
+  material.envMapIntensity = spec.env ?? 1.12;
+  material.needsUpdate = true;
+  resurface(material, atmos, spec.family, {
+    rim: spec.rim,
+    bio: spec.bio ?? 0,
+    scale: spec.scale,
+    ...(spec.surface || {}),
+  });
+  return material;
+}
+
 function makeCorruption(ctx, figure) {
   const { THREE, atmos } = ctx;
   const chitin = new THREE.MeshStandardMaterial({
@@ -210,12 +494,17 @@ function makeCorruption(ctx, figure) {
     metalness: 0.16,
     flatShading: true,
   });
+  /* PALETTE.fleshy is a pink, and on three flattened spheres hung off
+     the hip it came back as a row of jelly beans stuck to the
+     armour - the single most toy-like thing in the close-up. Wet
+     bruised violet at a fraction of the value reads as tissue under
+     a shell, which is what these are. */
   const flesh = new THREE.MeshStandardMaterial({
     name: "sf-apostate-flesh",
-    color: PALETTE.fleshy,
-    emissive: 0x2a1223,
-    emissiveIntensity: 0.12,
-    roughness: 0.64,
+    color: 0x46203a,
+    emissive: 0x1c0a18,
+    emissiveIntensity: 0.10,
+    roughness: 0.52,
     metalness: 0.02,
     flatShading: true,
   });
@@ -228,68 +517,152 @@ function makeCorruption(ctx, figure) {
     metalness: 0.02,
     flatShading: true,
   });
+  /* Smoked, not pink. The membrane was PALETTE.chitinLit at 0.43
+     opacity, which over a warm nave came back as four pale pink
+     petals and read as a fairy costume from every framing in the
+     gallery. Wet-black with a hot rim is what an insect wing does:
+     the value lives in the rim term, not in the sheet. */
   const wingMembrane = new THREE.MeshStandardMaterial({
     name: "sf-apostate-wasp-membrane",
-    color: PALETTE.chitinLit,
-    emissive: 0x24142f,
-    emissiveIntensity: 0.26,
+    color: 0x2a1c33,
+    emissive: 0x1a0c24,
+    emissiveIntensity: 0.18,
     transparent: true,
-    opacity: 0.43,
+    /* 0.88, not 0.66. At two thirds the sheet all but vanished
+       against a sunlit flagstone floor and only the three chitin ribs
+       survived, so the wings read as the spokes of a broken umbrella.
+       A membrane you can see through is one you have to be able to
+       SEE - the transparency has to be the last 12%, not the first
+       third. */
+    opacity: 0.88,
     depthWrite: false,
     side: THREE.DoubleSide,
-    roughness: 0.24,
-    metalness: 0.0,
+    roughness: 0.26,
+    metalness: 0.02,
   });
-  patchMaterial(chitin, atmos, { rim: 1.55, glitter: 0, bio: 0.25 });
-  patchMaterial(flesh, atmos, { rim: 0.82, glitter: 0, bio: 0.18 });
-  patchMaterial(bio, atmos, { rim: 1.1, glitter: 0, bio: 1.9 });
-  patchMaterial(wingMembrane, atmos, { rim: 2.1, glitter: 0, bio: 0.28 });
+  /* Five families in one silhouette, which is axis 1 of the brief.
+     `scale` is the figure's own world scale so the grain is sized in
+     WORLD metres on geometry the encounter draws 18% larger than it
+     was authored - without it the corruption wears a finer grain
+     than the armour it grows out of. */
+  const grainScale = APOSTATE_CONFIG.bodyScale * (figure.baseScale?.x ?? 1);
+  resurface(chitin, atmos, "chitin", { rim: 1.55, bio: 0.25, scale: grainScale });
+  resurface(flesh, atmos, "membrane", { rim: 0.82, bio: 0.18, scale: grainScale });
+  resurface(bio, atmos, "membrane", { rim: 1.1, bio: 1.9, scale: grainScale });
+  resurface(wingMembrane, atmos, "membrane",
+    { rim: 2.1, bio: 0.28, scale: grainScale, wear: 0.02, cavity: 0.18 });
 
-  /* Repaint independent copies of the player materials. Ivory becomes deep
-     violet chitin, gold becomes bruised shell, and every holy amber source is
-     inverted to the Bloom's cyan/violet bioluminescence. */
+  /* ------------------------------------------------------------
+     REPALETTE THE PLAYER'S OWN ARMOUR.
+
+     Independent copies, always: `cloneVisual` and the figure loader
+     both hand back materials that may be shared with Vesper, and the
+     Apostate's corruption must never recolour the trooper the player
+     is looking through.
+     ------------------------------------------------------------ */
+  const armour = { plate: null, leaf: null, strap: null };
+  let zoneCounts = null;
   const cloned = new Map();
   figure.root.traverse((node) => {
     if (!node.isMesh && !node.isSkinnedMesh) return;
+    const sources = Array.isArray(node.material) ? node.material : [node.material];
+    const first = sources[0];
+    const rootName = String(first?.name || "").toLowerCase();
+
+    /* The atlas mesh is 20,817 of the figure's 21,000 triangles and
+       carries the only painted surface on it. It is the one that gets
+       split; everything else is a few dozen triangles of trim. */
+    if (rootName.includes("atlas") && !armour.plate) {
+      const atlas = sampleTexture(first.map, 512);
+      zoneCounts = splitArmourZones(THREE, node, atlas);
+      const base = () => {
+        const m = first.clone();
+        m.userData = { ...first.userData };
+        return m;
+      };
+      armour.plate = corruptMaterial(THREE, atmos, base(), {
+        name: "sf-apostate-plate", family: "bone", tint: SKIN.plate,
+        rough: 0.58, metal: 0.14, rim: 1.05, scale: grainScale,
+        /* Wear keys on upward-facing facets and goes pale AND
+           desaturated - which on a blackened plate is the pewter
+           rub along every shoulder and brow edge, and is most of
+           what puts edges back into the frame. */
+        /* Amplitudes above the family default, and the ceiling the
+           kit records is set by the THINNEST limb on the animal -
+           a cell field wrapped round a 30cm cylinder reads as cord.
+           Nothing in this zone is thinner than a greave, and the
+           frame's measured deficit is sub-facet grain, so the score
+           and pore go up rather than the albedo going lighter.
+           Gloss well above bone's 0.09 as well: a chalky family with
+           no specular travel on the one boss whose highlight
+           headroom was measured at 96 out of 255 is the wrong half
+           of the trade. */
+        surface: {
+          wear: 0.22, cavity: 0.42, gloss: 0.24, mottle: 0.19,
+          score: 0.0026, pore: 0.0016, wavelength: 0.70,
+        },
+      });
+      armour.leaf = corruptMaterial(THREE, atmos, base(), {
+        name: "sf-apostate-leaf", family: "bronze", tint: SKIN.leaf,
+        /* The tight lobe. This is where the blown pixels come from,
+           and it is roughness that buys them - metalness past 0.6
+           would turn the leaf terracotta (art.js records it twice). */
+        rough: 0.24, metal: 0.34, rim: 1.30, scale: grainScale, env: 1.35,
+        surface: {
+          wear: 0.20, gloss: 0.32, sheen: 0.18,
+          score: 0.0034, pore: 0.0015, wavelength: 1.10,
+        },
+      });
+      armour.strap = corruptMaterial(THREE, atmos, base(), {
+        name: "sf-apostate-strap", family: "hide", tint: SKIN.strap,
+        rough: 0.78, metal: 0.04, rim: 0.85, scale: grainScale,
+        surface: { cavity: 0.36, score: 0.0020, pore: 0.0011, gloss: 0.18 },
+      });
+      node.material = zoneCounts
+        ? [armour.plate, armour.leaf, armour.strap]
+        : armour.plate;
+      return;
+    }
+
     const recolour = (source) => {
       if (!source) return source;
       if (cloned.has(source.uuid)) return cloned.get(source.uuid);
       const material = source.clone();
       const sf = source.userData || {};
-      if (sf.sfPatched) {
-        material.userData = { ...material.userData };
-        delete material.userData.sfPatched;
-        delete material.userData.sfShader;
-        delete material.onBeforeCompile;
-        delete material.customProgramCacheKey;
-        if (sf.sfBasic || source.isMeshBasicMaterial) {
-          patchBasicMaterial(material, atmos,
-            Number.isFinite(sf.sfFade) ? sf.sfFade : 0.7,
-            sf.sfAdditive ?? source.blending === THREE.AdditiveBlending);
-        } else {
-          patchMaterial(material, atmos, {
-            rim: sf.sfRim, glitter: sf.sfGlitter,
-            bio: sf.sfBio, dunes: sf.sfDunes,
-          });
-        }
-      }
       const name = String(material.name || "").toLowerCase();
-      const target = name.includes("amber") || name.includes("eye")
-        ? new THREE.Color(PALETTE.bioCyan)
-        : name.includes("gold")
-          ? new THREE.Color(PALETTE.chitinLit)
-          : name.includes("dark")
-            ? new THREE.Color(PALETTE.chitinDeep)
-            : new THREE.Color(PALETTE.chitin);
-      material.color?.lerp?.(target, name.includes("atlas") ? 0.78 : 0.68);
-      if (material.emissive) {
-        material.emissive.set(name.includes("amber") || name.includes("eye")
-          ? PALETTE.bioCyan : 0x24142f);
-        material.emissiveIntensity = name.includes("amber") || name.includes("eye") ? 3.2 : 0.12;
+      const holy = name.includes("amber") || name.includes("eye");
+      material.userData = { ...material.userData };
+      if (sf.sfBasic || source.isMeshBasicMaterial) {
+        stripPatch(material);
+        patchBasicMaterial(material, atmos,
+          Number.isFinite(sf.sfFade) ? sf.sfFade : 0.7,
+          sf.sfAdditive ?? source.blending === THREE.AdditiveBlending);
+        if (material.color) material.color.set(holy ? PALETTE.bioCyan : SKIN.plate);
+        cloned.set(source.uuid, material);
+        return material;
       }
-      material.roughness = clamp(Number(material.roughness) || 0.48, 0.32, 0.68);
-      material.metalness = clamp(Number(material.metalness) || 0.16, 0.02, 0.30);
-      material.needsUpdate = true;
+      if (holy) {
+        /* The mask lamps and the reliquary amber: the saturated focal
+           the art direction asks every boss for, and the only place
+           on this one that clears the bloom chain's bright threshold.
+           Diffuse stays nearly black so the socket reads as a hole
+           that light comes out of rather than a plate stuck on. */
+        corruptMaterial(THREE, atmos, material, {
+          name: "sf-apostate-lamp", family: "membrane", tint: 0x1a2b30,
+          emissive: PALETTE.bioCyan, emissiveIntensity: 4.6,
+          rough: 0.30, metal: 0.0, rim: 1.2, bio: 1.6, scale: grainScale,
+        });
+      } else if (name.includes("dark")) {
+        corruptMaterial(THREE, atmos, material, {
+          name: "sf-apostate-dark-iron", family: "hide", tint: SKIN.strap,
+          rough: 0.70, metal: 0.18, rim: 0.9, scale: grainScale,
+        });
+      } else {
+        corruptMaterial(THREE, atmos, material, {
+          name: "sf-apostate-trim", family: "bronze", tint: SKIN.leaf,
+          rough: 0.30, metal: 0.30, rim: 1.25, scale: grainScale, env: 1.3,
+        });
+      }
       cloned.set(source.uuid, material);
       return material;
     };
@@ -384,6 +757,60 @@ function makeCorruption(ctx, figure) {
   });
   root.add(armorSpikes);
 
+  /* ------------------------------------------------------------
+     BLOOM GROWTH AT THE SEAMS.
+
+     The art direction asks for chitin growing where the armour joins
+     and for the corruption to ADVANCE VISIBLY as the phases progress,
+     and neither was true: every insect part was authored at final
+     size and never moved again, so the fight's second half looked
+     exactly like its first.
+
+     Seams, specifically - collar, spine, pauldron, hip - because
+     that is where a growth would find a gap, and because a nodule
+     sitting in the middle of a plate reads as a barnacle. Each one
+     carries its own threshold so they do not all bloom on the same
+     frame; the collar is first because it is nearest the head and
+     therefore nearest the camera in every framing that matters.
+     ------------------------------------------------------------ */
+  const growth = new THREE.Group();
+  growth.name = "apostate-seam-growth";
+  growth.userData.apostateFeature = "seam-growth";
+  const growthNodes = [];
+  const seamSpecs = [
+    // [base, tip, radius, threshold]
+    [[-0.115, 1.505, 0.020], [-0.175, 1.610, 0.075], 0.030, 0.00],
+    [[0.115, 1.505, 0.020], [0.175, 1.610, 0.075], 0.030, 0.00],
+    [[0.0, 1.470, -0.115], [0.0, 1.600, -0.185], 0.034, 0.05],
+    [[-0.205, 1.395, -0.045], [-0.300, 1.455, -0.130], 0.032, 0.22],
+    [[0.205, 1.395, -0.045], [0.300, 1.455, -0.130], 0.032, 0.22],
+    [[0.0, 1.245, -0.140], [0.0, 1.225, -0.245], 0.030, 0.34],
+    [[0.0, 1.075, -0.135], [0.035, 1.030, -0.240], 0.028, 0.48],
+    [[-0.135, 0.960, -0.075], [-0.230, 0.905, -0.150], 0.026, 0.62],
+    [[0.135, 0.960, -0.075], [0.230, 0.905, -0.150], 0.026, 0.62],
+    [[-0.150, 1.330, 0.075], [-0.235, 1.310, 0.150], 0.024, 0.74],
+    [[0.150, 1.330, 0.075], [0.235, 1.310, 0.150], 0.024, 0.74],
+  ];
+  for (let i = 0; i < seamSpecs.length; i += 1) {
+    const [base, tip, radius, threshold] = seamSpecs[i];
+    const node = new THREE.Group();
+    node.name = `apostate-seam-growth-${i + 1}`;
+    node.position.set(...base);
+    const bud = new THREE.Mesh(new THREE.IcosahedronGeometry(radius * 1.5, 0), flesh);
+    bud.castShadow = true;
+    node.add(bud);
+    const horn = segment(THREE,
+      [0, 0, 0],
+      [tip[0] - base[0], tip[1] - base[1], tip[2] - base[2]],
+      radius, 0.004, chitin, 5);
+    node.add(horn);
+    node.userData.apostateThreshold = threshold;
+    node.scale.setScalar(0.0001);
+    growth.add(node);
+    growthNodes.push(node);
+  }
+  root.add(growth);
+
   const jetGlow = new THREE.Group();
   jetGlow.name = "apostate-jet-plumes";
   jetGlow.userData.apostateFeature = "jet-plumes";
@@ -401,13 +828,409 @@ function makeCorruption(ctx, figure) {
      living rig. Wings, plates, spikes and jet organs follow Spine lean; the
      head intentionally receives no insect geometry. */
   figure.root.updateMatrixWorld(true);
-  for (const node of [...wingPivots.map((wing) => wing.node), abdomen, armorSpikes, jetGlow]) {
+  for (const node of [...wingPivots.map((wing) => wing.node), abdomen, armorSpikes,
+    growth, jetGlow]) {
     figure.chest.attach(node);
   }
+
+  /* Every material that carries a damage response, gathered once.
+     The kit refuses a write on a shared caste material; all of these
+     are per-instance clones, so all of them accept one - and a boss
+     whose plate scorches while its straps stay clean has a damage
+     state that reads as a decal. */
+  const hurtMaterials = [chitin, flesh, wingMembrane,
+    armour.plate, armour.leaf, armour.strap].filter(Boolean);
 
   return {
     root, chitin, flesh, bio, wingMembrane, wingPivots, wings,
     abdomen, armorSpikes, spikeRoots, spikes, jetGlow,
+    growth, growthNodes, armour, zoneCounts, hurtMaterials,
+  };
+}
+
+/* ============================================================
+   THE BROKEN VAULT
+
+   "It is fought in the nave, under a broken vault. That is the best
+   light in the game - shafts through a hole in the roof. Use them:
+   stage the fight so it moves through light and shadow."
+
+   Three apertures, not one, and that is the whole staging: one pool
+   at the arena's centre where the boss holds, two off-centre where
+   it strafes to. The fight crosses them.
+
+   FOUR THINGS THIS FILE HAD TO GET RIGHT, ALL OF THEM ALREADY
+   RECORDED IN vfx.js AT SOMEBODY ELSE'S EXPENSE:
+
+   1. AN ADDITIVE CONE IS BRIGHTEST AT ITS SILHOUETTE, because that
+      is where the ray runs longest through the shell. Push one and
+      its outline becomes a drawn shape - the nave review frame came
+      back with a hard-edged white chevron across the floor and was
+      read as a rendering fault every time. So the cones are faint
+      and the FLOOR POOL carries the brightness: a pool has no
+      silhouette to harden.
+
+   2. THEY MUST NOT CONVERGE. Ten clerestory shafts raked inward met
+      on the centreline and rendered as one wedge. These three are
+      raked apart and land in three separate places.
+
+   3. NEARLY VERTICAL, NOT ALONG THE SUN. A real 13.5-degree
+      golden-hour sun puts a shaft's foot ninety metres from its
+      aperture, which is outside the building. The nave's existing
+      clerestory light already made this compromise for the same
+      reason and this matches it rather than arguing with it.
+
+   4. IT COSTS NOTHING WHEN DORMANT. Everything here is one merged
+      geometry per layer - three draw calls total - hung off the
+      scene with `visible = false` until the duel is live. A dormant
+      boss's scenery once cost this game 1.3ms a frame.
+   ============================================================ */
+function makeVaultLight(ctx, floorY) {
+  const { THREE, atmos } = ctx;
+  const C = APOSTATE_CONFIG;
+  const group = new THREE.Group();
+  group.name = "apostate-broken-vault";
+  group.visible = false;
+
+  /* Aperture, rake and size per shaft. Offsets are inside the hold
+     range so the boss is genuinely in one of them most of the time
+     rather than lit by scenery it never reaches. */
+  const APERTURES = [
+    { x: 0, z: 0, r: 6.6, rake: [0.10, 0.16], gain: 1.00, seed: 11 },
+    { x: -14.5, z: 10.5, r: 5.0, rake: [-0.22, -0.10], gain: 0.82, seed: 29 },
+    { x: 12.5, z: -13.0, r: 4.4, rake: [0.20, -0.22], gain: 0.74, seed: 47 },
+    { x: 3.0, z: 17.0, r: 4.0, rake: [-0.14, 0.24], gain: 0.66, seed: 63 },
+  ];
+  const HEIGHT = 27;
+
+  /**
+   * One patch of floor the vault let light onto.
+   *
+   * NOT a circle with a smooth falloff. A hole in a roof lit by a
+   * point source ninety million miles away throws a patch with the
+   * hole's own ragged shape and a penumbra a few centimetres wide -
+   * so the outline is irregular and the rim is nearly hard, and both
+   * of those are the whole point. A soft disc adds brightness to a
+   * frame; a shaped patch with a rim adds brightness AND an edge.
+   *
+   * Built as a triangle fan by hand rather than from CircleGeometry
+   * because the radius has to vary per vertex and the bright core
+   * needs its own ring - a two-ring fan is what makes the falloff
+   * land as a plateau and a lip rather than as a cone.
+   */
+  const pool = (gain, radius, seed, cx, cz) => {
+    const SIDES = 22;
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array((1 + SIDES * 2) * 3);
+    const col = new Float32Array((1 + SIDES * 2) * 3);
+    const idx = [];
+    const jitter = (n) => {
+      /* Deterministic and seeded, like everything else procedural in
+         this project - two runs of the gallery have to photograph the
+         same floor or the diff measures the noise. */
+      const s = Math.sin(seed * 12.9898 + n * 78.233) * 43758.5453;
+      return s - Math.floor(s);
+    };
+    const put = (i, x, z, v) => {
+      pos[i * 3] = x; pos[i * 3 + 1] = 0; pos[i * 3 + 2] = z;
+      col[i * 3] = v; col[i * 3 + 1] = v * 0.90; col[i * 3 + 2] = v * 0.70;
+    };
+    /* 0.56 at the core. At 0.86 the pool was measurably OVER the
+       reference: mean luminance 113 against a Halo pool whose
+       brightest frame is 108, a 99th percentile of 242 against a
+       band ending at 234, and 2.3% blown against 1.1%. A boss frame
+       that fails for being too bright is still a boss frame that
+       fails, and the fix is the light's level rather than the
+       animal's - the armour under it was already reading.
+
+       AND NOT TRIMMED AGAIN. A further cut to 0.49 was tried and
+       measured, and it bought four RMS-contrast points at the cost
+       of the two metrics that were actually failing: edge density
+       6.96 -> 6.51 and micro detail 4.61 -> 4.27. Mean luminance did
+       not move at all (94.2 -> 95.4), which is the useful part of
+       that result - between runs the boss stands somewhere slightly
+       different and the frame's exposure moves more from THAT than
+       from this number. Past this point the pool is not the lever
+       and the round was reverted. */
+    put(0, 0, 0, gain * 0.56);
+    const shape = [];
+    for (let i = 0; i < SIDES; i += 1) {
+      const a = (i / SIDES) * TAU;
+      /* Elongated as well as ragged: a rib gap is a slot, not a hole,
+         and a row of round patches reads as spotlights. */
+      const r = radius * (0.58 + jitter(i) * 0.42)
+        * (1 + 0.42 * Math.cos(a * 2 + seed));
+      shape.push([Math.cos(a) * r, Math.sin(a) * r]);
+    }
+    for (let i = 0; i < SIDES; i += 1) {
+      /* Inner ring at 0.80 carries the plateau; the outer is the lip,
+         and the gap between them is the penumbra.
+
+         THE PLATEAU IS THE MEASUREMENT. The first version of this
+         function put the plateau at 0.72 of a radius that had also
+         shrunk, and the gallery came straight back with meanLuma
+         46 and a 99th percentile of 94 - the exact numbers the
+         BASELINE had, before any of this work. A large soft pool was
+         doing almost all of the frame's brightness and nobody had
+         said so out loud. The lit AREA is the lever; the ragged rim
+         is only what stops it reading as a spotlight. */
+      put(1 + i, shape[i][0] * 0.80, shape[i][1] * 0.80, gain * 0.46);
+      put(1 + SIDES + i, shape[i][0], shape[i][1], 0);
+      /* WOUND FOR AN UPWARD FACE, and this cost a whole gallery
+         round. The ring is generated as (cos a, sin a) and dropped
+         into (x, z) - and in a right-handed frame a sequence
+         increasing in angle across the XZ plane is CLOCKWISE seen
+         from above, so the obvious index order builds a floor decal
+         whose front face points at the basement. The whole pool set
+         rendered as nothing, the frame came back at exactly its
+         pre-work luminance, and the change looked inert rather than
+         inverted. This project has the same note about a ground quad
+         in the ground-FX work; it is apparently a lesson per author. */
+      const j = (i + 1) % SIDES;
+      idx.push(0, 1 + j, 1 + i);
+      idx.push(1 + i, 1 + SIDES + j, 1 + SIDES + i);
+      idx.push(1 + i, 1 + j, 1 + SIDES + j);
+    }
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    geo.setIndex(idx);
+    geo.translate(cx, floorY + 0.06, cz);
+    return geo;
+  };
+
+  const shaftGeos = [];
+  const poolGeos = [];
+  for (const a of APERTURES) {
+    /* 22 sides. Fewer and the shell's own polygon edges are visible
+       against a dark nave, which is the tell that says "cone" - the
+       Choir shaft work landed on the same number for the same
+       reason. */
+    const cone = new THREE.CylinderGeometry(a.r * 0.34, a.r, HEIGHT, 22, 1, true);
+    cone.translate(0, HEIGHT * 0.5, 0);
+    /* Vertex alpha carried in COLOUR, because this is one merged
+       mesh and a per-shaft opacity would need a per-shaft material
+       and therefore a per-shaft draw call. */
+    {
+      const count = cone.attributes.position.count;
+      const colour = new Float32Array(count * 3);
+      const pos = cone.attributes.position;
+      for (let i = 0; i < count; i += 1) {
+        const t = clamp01(pos.getY(i) / HEIGHT);
+        /* Brightest a third of the way up and fading at BOTH ends:
+           the top is where the aperture is and would otherwise end
+           in a hard disc against the sky, and the bottom has to hand
+           over to the pool without a seam. */
+        /* 0.030, after two passes down from 0.135. A cone shell has
+           no way to hide its own straight edges without a view-
+           dependent chord term in a shader, and this encounter is
+           not spending a program on scenery - so the shaft is taken
+           to the brightness at which its outline stops being a drawn
+           shape, and the FLOOR POOL below carries the light instead.
+           The extra factor of t squared takes the wide bottom edge -
+           the longest straight line in the whole thing - to nothing
+           before it ever meets the floor. */
+        const v = a.gain * 0.030 * t * t
+          * (0.25 + 0.75 * Math.sin(Math.PI * clamp01(t * 0.9 + 0.05)));
+        colour[i * 3] = v;
+        colour[i * 3 + 1] = v * 0.93;
+        colour[i * 3 + 2] = v * 0.80;
+      }
+      cone.setAttribute("color", new THREE.BufferAttribute(colour, 3));
+    }
+    const tilt = new THREE.Matrix4().makeRotationFromEuler(
+      new THREE.Euler(a.rake[1], 0, -a.rake[0]));
+    cone.applyMatrix4(tilt);
+    cone.translate(C.arenaX + a.x, floorY, C.arenaZ + a.z);
+    shaftGeos.push(cone);
+
+    /* 2.05 rather than 1.55, because the ragged outline averages 0.79
+       of its nominal radius and the area has to come back to where a
+       plain disc of 1.55 had it. */
+    poolGeos.push(pool(a.gain, a.r * 2.05, a.seed,
+      C.arenaX + a.x + a.rake[0] * 2.5, C.arenaZ + a.z - a.rake[1] * 2.5));
+  }
+
+  /* Light through the CRACKS between the ribs, which is most of what
+     a broken vault actually throws on a floor: a scatter of small
+     hard-edged slivers, not four clean discs. Two reasons to have
+     them, and the second is measured rather than aesthetic.
+
+     The first is that a ruined roof does not have four holes in it.
+
+     The second is edge density. The gallery frames are shot from
+     three metres at a ten-degree pitch, so between a third and a
+     half of every one of them is nave flagstone - which is untextured
+     merged geometry a metre across and contributes nothing at all to
+     the frame's mean gradient. Our baseline measured 5.71 edge
+     density against a Halo band that starts at 8.63, and no amount of
+     work on a boss occupying a tenth of the frame closes that. A
+     scattered light pattern is the one thing this encounter can
+     legitimately put on that floor, and each sliver's rim is a real
+     luminance step in a place the picture currently has none. */
+  const SLIVERS = 15;
+  for (let i = 0; i < SLIVERS; i += 1) {
+    const ang = (i * 2.399963) % TAU;
+    const rr = 6 + ((i * 0.618034) % 1) * 21;
+    poolGeos.push(pool(0.36 + ((i * 0.7548) % 1) * 0.28,
+      1.5 + ((i * 0.4142) % 1) * 2.6, i * 7 + 3,
+      C.arenaX + Math.cos(ang) * rr, C.arenaZ + Math.sin(ang) * rr));
+  }
+
+  const merge = (list) => {
+    const out = new THREE.BufferGeometry();
+    const total = list.reduce((n, g) => n + g.attributes.position.count, 0);
+    const pos = new Float32Array(total * 3);
+    const col = new Float32Array(total * 3);
+    const idx = [];
+    let base = 0;
+    for (const g of list) {
+      pos.set(g.attributes.position.array, base * 3);
+      col.set(g.attributes.color.array, base * 3);
+      const gi = g.getIndex();
+      if (gi) for (let i = 0; i < gi.count; i += 1) idx.push(gi.getX(i) + base);
+      else for (let i = 0; i < g.attributes.position.count; i += 1) idx.push(i + base);
+      base += g.attributes.position.count;
+      g.dispose();
+    }
+    out.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    out.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    out.setIndex(idx);
+    out.computeBoundingSphere();
+    return out;
+  };
+
+  const makeMat = (name, side) => {
+    const m = new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side,
+      toneMapped: true,
+    });
+    m.name = name;
+    /* Additive, so it fades to BLACK with distance rather than
+       toward the sky - fading a light shaft toward the sky colour is
+       how it ends up brightest a kilometre away. The near fade in
+       the same block is what stops the shell painting itself across
+       the frame when the player walks inside it. */
+    patchBasicMaterial(m, atmos, 1.0, true);
+    return m;
+  };
+
+  /* BACK FACES ONLY. On DoubleSide the camera adds the near shell to
+     the far one, which doubles the gain exactly where the cone is
+     already brightest - at its silhouette - and the first pass came
+     back with four pale trapezoids standing in the nave with visible
+     straight edges. That is the "hard-edged white chevron" this
+     project has already rejected once. One shell is a volume; two is
+     a wall. */
+  const shafts = new THREE.Mesh(merge(shaftGeos),
+    makeMat("sf-apostate-vault-shaft", THREE.BackSide));
+  shafts.name = "apostate-vault-shafts";
+  shafts.renderOrder = 3;
+  shafts.userData.noCollide = true;
+  shafts.frustumCulled = true;
+  group.add(shafts);
+
+  /* DoubleSide as well as the corrected winding. A pool is one flat
+     layer lying on a floor, so only one of its faces can ever be
+     visible and the second costs no fill - and the alternative is a
+     silent disappearance that reads as "the change did nothing". */
+  const pools = new THREE.Mesh(merge(poolGeos),
+    makeMat("sf-apostate-vault-pool", THREE.DoubleSide));
+  pools.name = "apostate-vault-pools";
+  pools.renderOrder = 2;
+  pools.userData.noCollide = true;
+  group.add(pools);
+
+  /* Motes. The one cheap thing on this list that adds real
+     sub-facet detail to the FRAME rather than to the animal, and
+     the reason a shaft reads as air rather than as a cone: 260
+     points, one draw, animated on the CPU because 260 sine
+     evaluations a frame is cheaper than a shader that has to be
+     compiled, warmed and cache-keyed. */
+  /* 620, up from 260, and spread over the whole arena rather than
+     only inside the four cones. Two thirds of them are still in a
+     shaft - that is where dust is visible - but the rest carry a
+     faint suspension across the nave, and the reason is the same
+     measured one as the slivers: a mote is a two-pixel luminance
+     spike, which is exactly what a mean-|laplacian| detail metric
+     counts, and the nave floor supplies none. */
+  const MOTES = 620;
+  const motes = (() => {
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(MOTES * 3);
+    const seed = new Float32Array(MOTES);
+    for (let i = 0; i < MOTES; i += 1) {
+      const a = APERTURES[i % APERTURES.length];
+      const ang = (i * 2.399963) % TAU;
+      const inShaft = i % 3 !== 2;
+      const rr = Math.sqrt(((i * 0.618034) % 1)) * (inShaft ? a.r * 1.1 : 30);
+      const ox = inShaft ? a.x : 0;
+      const oz = inShaft ? a.z : 0;
+      pos[i * 3] = C.arenaX + ox + Math.cos(ang) * rr;
+      pos[i * 3 + 1] = floorY + 0.6 + ((i * 0.7548) % 1) * (HEIGHT * 0.62);
+      pos[i * 3 + 2] = C.arenaZ + oz + Math.sin(ang) * rr;
+      seed[i] = (i * 1.618034) % TAU;
+    }
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.boundingSphere = new THREE.Sphere(
+      new THREE.Vector3(C.arenaX, floorY + HEIGHT * 0.4, C.arenaZ), 60);
+    const mat = new THREE.PointsMaterial({
+      color: 0xffe6c2,
+      size: 0.055,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0.62,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: true,
+    });
+    mat.name = "sf-apostate-vault-motes";
+    const points = new THREE.Points(geo, mat);
+    points.name = "apostate-vault-motes";
+    points.userData.noCollide = true;
+    return { points, geo, pos, seed, base: pos.slice() };
+  })();
+  group.add(motes.points);
+
+  ctx.scene.add(group);
+
+  return {
+    group,
+    /** Which of the apertures a world position stands in, 0..1. The
+     *  encounter reads this so the boss's own rim can answer the
+     *  light it is standing in instead of ignoring it. */
+    litAt(x, z) {
+      let best = 0;
+      for (const a of APERTURES) {
+        const d = Math.hypot(x - (C.arenaX + a.x), z - (C.arenaZ + a.z));
+        best = Math.max(best, a.gain * (1 - clamp01(d / (a.r * 1.62))));
+      }
+      return best;
+    },
+    setLive(live) {
+      if (group.visible === live) return;
+      group.visible = live;
+    },
+    update(elapsed) {
+      if (!group.visible) return;
+      const p = motes.pos;
+      const b = motes.base;
+      for (let i = 0; i < MOTES; i += 1) {
+        const s = motes.seed[i];
+        const t = elapsed * 0.11 + s;
+        p[i * 3] = b[i * 3] + Math.sin(t * 1.7) * 0.42;
+        /* Drifting DOWN and wrapping, because dust in a shaft falls.
+           Rising motes read as embers, which is the Censer Works'
+           language and not this one. */
+        p[i * 3 + 1] = b[i * 3 + 1]
+          - ((elapsed * 0.22 + s * 3.3) % (HEIGHT * 0.62));
+        p[i * 3 + 2] = b[i * 3 + 2] + Math.cos(t * 1.31) * 0.42;
+      }
+      motes.geo.attributes.position.needsUpdate = true;
+    },
   };
 }
 
@@ -439,7 +1262,7 @@ function makeAegis(ctx, figure) {
 }
 
 export async function buildApostate(ctx) {
-  const { THREE, enemies, collide } = ctx;
+  const { THREE, atmos, enemies, collide } = ctx;
   const C = APOSTATE_CONFIG;
   const bus = makeBus();
   initIk(THREE);
@@ -461,10 +1284,16 @@ export async function buildApostate(ctx) {
   figure.root.scale.multiplyScalar(C.bodyScale);
   const corruption = makeCorruption(ctx, figure);
   const aegis = makeAegis(ctx, figure);
+  const vault = makeVaultLight(ctx, groundAt(C.arenaX, C.arenaZ));
   const weapon = ctx.weapons?.cloneVisual?.("autogun");
   if (!weapon?.root) throw new Error("The Apostate could not mirror the Censer-Lance visual.");
   weapon.root.name = "apostate-censer-lance";
   figure.weaponMount.add(weapon.root);
+  /* `cloneVisual` hands back one material per archetype shared across
+     every mesh that uses it, and the traversal below visits each mesh.
+     Without this the kit would be applied to the same material five
+     times, and the second call would warn and early-return. */
+  const weaponSurfaced = new Set();
   weapon.root.traverse((node) => {
     if (node.isLight) {
       node.color.set(PALETTE.bioCyan);
@@ -477,36 +1306,64 @@ export async function buildApostate(ctx) {
       const isFlash = node.parent?.name === "muzzle-flare";
       /* The weapon's surface detail is vertex-painted into its iron, brass
          and haft geometry. A strong cyan emissive on every Standard material
-         flattened those ramps into the untextured neon shape seen in play.
-         Rebuild those painted values in the hostile cast's violet-chitin
-         ramp instead of multiplying the original gold/verdigris ramps by a
-         pale tint (which left the shaft green). Cyan is reserved for living
-         chambers and the momentary muzzle flare. */
+         flattened those ramps into the untextured neon shape seen in play,
+         so the painted values are rebuilt through a ramp instead of being
+         multiplied by a pale tint (which left the shaft green).
+
+         THE RAMPS ARE NO LONGER VIOLET. The lance is the largest single
+         object in every gallery framing - it spans nearly half the frame -
+         so painting it the same chitin as the body made the whole picture
+         one hue and one value, which is the failure the art direction names
+         first. It is the PLAYER'S censer-lance, and it keeps the player's
+         material language: blackened iron structure, tarnished gold brass,
+         cyan only in the living chambers and the muzzle flare. That is
+         where a third of the frame's warm accent now comes from. */
       if (!isFlash && node.isMesh) {
         if (name === "sf-emissive") {
           repaintVertexRamp(THREE, node, 0x1f7d6c, 0xa9ffe8, "bio-cyan");
         } else if (name === "sf-gold" || name === "sf-bronze") {
-          repaintVertexRamp(THREE, node, PALETTE.chitinDeep, 0xb18ec6,
-            "chitin-ornament");
+          repaintVertexRamp(THREE, node, 0x3a2a10, 0xf7d998, "tarnished-leaf");
         } else if (name === "sf-cloth") {
-          repaintVertexRamp(THREE, node, 0x4b243d, PALETTE.fleshy,
-            "fleshy-cloth");
+          repaintVertexRamp(THREE, node, 0x2a1522, 0x7d4f68, "fleshy-cloth");
         } else {
-          repaintVertexRamp(THREE, node, 0x1d1326, PALETTE.chitinLit,
-            "chitin-structure");
+          repaintVertexRamp(THREE, node, 0x0e1014, 0x9aa2b6, "blackened-iron");
         }
       }
       if (material.color) {
         if (isFlash) material.color.set(PALETTE.bioCyan);
         else if (node.userData.apostatePalette) material.color.set(0xffffff);
         else if (name === "sf-emissive") material.color.set(PALETTE.bioCyan);
-        else material.color.set(PALETTE.chitin);
+        else material.color.set(SKIN.plate);
       }
       if (material.emissive) {
-        material.emissive.set(0x1c1026);
-        material.emissiveIntensity = 0.10;
+        material.emissive.set(0x140f1a);
+        material.emissiveIntensity = 0.06;
       }
       material.needsUpdate = true;
+      /* The lance goes through the kit too, and it is the best
+         showcase in the encounter: a haft is a long cylinder held
+         across the frame, which is the one shape a travelling
+         specular lobe is unmistakable on. Basic materials (the
+         emissive chambers, the flare) are skipped - the kit's blocks
+         read `normal` and `roughnessFactor`, neither of which a
+         MeshBasicMaterial declares, and it would not compile. */
+      if (!isFlash && !material.isMeshBasicMaterial && !weaponSurfaced.has(material.uuid)) {
+        weaponSurfaced.add(material.uuid);
+        if (name === "sf-gold" || name === "sf-bronze") {
+          material.roughness = 0.26;
+          material.metalness = 0.32;
+          material.envMapIntensity = 1.3;
+          resurface(material, atmos, "bronze", { rim: 1.25 });
+        } else if (name === "sf-cloth") {
+          material.roughness = 0.86;
+          material.metalness = 0.02;
+          resurface(material, atmos, "hide", { rim: 0.6 });
+        } else {
+          material.roughness = 0.44;
+          material.metalness = 0.26;
+          resurface(material, atmos, "bronze", { rim: 1.05, wear: 0.20 });
+        }
+      }
     }
   });
   const weaponFlashMaterials = [];
@@ -654,7 +1511,93 @@ export async function buildApostate(ctx) {
     releaseCameraAt: undefined,
     disengageFor: 0,
     blockedRelayHinted: false,
+
+    /* --- presentation only, and deliberately NOT in the snapshot ---
+       Every field below decays to rest inside a second and none of
+       them changes a hit, a timing or a position. A save that carried
+       them would be a save that can fail validation over a flinch. */
+    corrupt: 0,          // 0..1, how far the Bloom has taken the armour
+    surfaced: -1,        // last damage value written to the kit
+    flinch: 0,           // amplitude of the current hit reaction
+    flinchX: 0,          // where it came from, in body space
+    flinchZ: 0,
+    flinchY: 0,          // high hit or low hit
+    recoil: 0,           // lance kick, per shot
+    landAbsorb: 0,       // knees taking a landing
+    strideParity: 0,     // which foot the last plant was
+    stridePhase: 0,
+    deathImpact: false,
   };
+
+  /* Ichor. "Blood that lands and stains" is axis 4 of the brief, and
+     the shared impact pool has no violet in it - its tint bands are
+     the Concord's gold, the Coulter's green and five doctrine hues,
+     none of which is the Bloom. Rather than ask for an eighth band in
+     a file six other agents are editing, the encounter carries its
+     own: ONE InstancedMesh, twenty-four stains, one draw call.
+
+     They do not fade. A stain that fades is a decal with a timer; the
+     brief asks for damage that accumulates and STAYS, and the pool
+     recycling oldest-first is the only limit that should exist. */
+  const ichor = (() => {
+    const MAX = 24;
+    const geo = new THREE.PlaneGeometry(1, 1);
+    geo.rotateX(-Math.PI / 2);
+    const canvas = typeof OffscreenCanvas === "function"
+      ? new OffscreenCanvas(64, 64)
+      : Object.assign(document.createElement("canvas"), { width: 64, height: 64 });
+    const g2d = canvas.getContext && canvas.getContext("2d");
+    let map = null;
+    if (g2d) {
+      const grad = g2d.createRadialGradient(32, 32, 2, 32, 32, 31);
+      grad.addColorStop(0, "rgba(255,255,255,0.95)");
+      grad.addColorStop(0.45, "rgba(255,255,255,0.55)");
+      grad.addColorStop(1, "rgba(255,255,255,0)");
+      g2d.fillStyle = grad;
+      g2d.fillRect(0, 0, 64, 64);
+      map = new THREE.CanvasTexture(canvas);
+      map.colorSpace = THREE.SRGBColorSpace;
+    }
+    const mat = new THREE.MeshBasicMaterial({
+      name: "sf-apostate-ichor",
+      color: 0x2a0f36,
+      map,
+      transparent: true,
+      opacity: 0.82,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -4,
+    });
+    patchBasicMaterial(mat, atmos, 0.72, false);
+    const mesh = new THREE.InstancedMesh(geo, mat, MAX);
+    mesh.name = "apostate-ichor-stains";
+    mesh.userData.noCollide = true;
+    mesh.frustumCulled = false;
+    mesh.count = 0;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.visible = false;
+    ctx.scene.add(mesh);
+    const m4 = new THREE.Matrix4();
+    let cursor = 0;
+    let placed = 0;
+    return {
+      mesh,
+      clear() { placed = 0; cursor = 0; mesh.count = 0; mesh.visible = false; },
+      stain(x, z, scale = 1) {
+        const y = groundAt(x, z) + 0.035;
+        m4.makeRotationY((cursor * 2.399963) % TAU);
+        m4.scale(new THREE.Vector3(scale, 1, scale));
+        m4.setPosition(x, y, z);
+        mesh.setMatrixAt(cursor, m4);
+        cursor = (cursor + 1) % MAX;
+        placed = Math.min(MAX, placed + 1);
+        mesh.count = placed;
+        mesh.visible = true;
+        mesh.instanceMatrix.needsUpdate = true;
+      },
+    };
+  })();
 
   const up = new THREE.Vector3(0, 1, 0);
   const right = new THREE.Vector3();
@@ -692,6 +1635,97 @@ export async function buildApostate(ctx) {
       light.intensity = visible
         ? Number(light.userData.apostateRequestedIntensity) || 0 : 0;
     }
+  }
+
+  /* ============================================================
+     THE BODY'S ANSWER TO BEING HIT
+
+     Three separate things the brief asks for and this encounter did
+     not have: a flinch that respects WHERE it was hit, damage that
+     accumulates and STAYS, and ichor that lands.
+     ============================================================ */
+
+  /**
+   * Advance the corruption and the surface damage together.
+   *
+   * They are one number on purpose. The Bloom growing out of the
+   * seams and the plate cracking open are the same event seen from
+   * two sides, and the moment they were driven by two curves the
+   * boss had horns at 40% health and clean armour at 10%.
+   *
+   * Written only when it has actually moved. `setSurfaceDamage` is a
+   * uniform write and a cheap one, but the growth loop underneath is
+   * eleven matrix updates and there is no reason to spend them on a
+   * frame where nothing changed.
+   */
+  function advanceCorruption(force = false) {
+    const want = state.phase === "dead" ? 1 : corruptionOf(inst);
+    state.corrupt = want;
+    if (!force && Math.abs(want - state.surfaced) < 0.01) return;
+    state.surfaced = want;
+    for (const material of corruption.hurtMaterials) setSurfaceDamage(material, want);
+    for (const node of corruption.growthNodes) {
+      const threshold = node.userData.apostateThreshold || 0;
+      /* Each bud opens over its own 30% of the pool, so the growth
+         creeps across the armour through the fight instead of the
+         whole set inflating together. */
+      const t = clamp01((want - threshold) / 0.30);
+      const eased = t * t * (3 - 2 * t);
+      node.scale.setScalar(Math.max(0.0001, 0.22 + eased * 1.05));
+    }
+    /* The brood light in the thorax answers the same curve. It is a
+       prewarmed scene light, so this is an intensity write and not a
+       new light entering the scene - which would recompile every
+       material in the Cathedral on the frame the boss got hurt. */
+    if (figure.heartLight) {
+      figure.heartLight.userData.apostateRequestedIntensity = 0.28 + want * 1.35;
+    }
+    if (corruption.bio) corruption.bio.emissiveIntensity = 2.8 + want * 2.6;
+  }
+
+  /**
+   * Record a hit so the body can answer it.
+   *
+   * The direction is stored in BODY space, not world space, because
+   * the flinch is applied to the chest and head after the yaw has
+   * been written - a world-space shove would slide around the torso
+   * as the boss turned to face the player mid-reaction.
+   */
+  function noteHit(request, damage) {
+    const hx = Number(request.x);
+    const hy = Number(request.y);
+    const hz = Number(request.z);
+    if (!Number.isFinite(hx) || !Number.isFinite(hz)) return;
+    const ox = Number.isFinite(request.originX) ? request.originX : hx;
+    const oz = Number.isFinite(request.originZ) ? request.originZ : hz;
+    let dx = hx - ox;
+    let dz = hz - oz;
+    const length = Math.hypot(dx, dz);
+    if (length < 1e-4) { dx = Math.sin(inst.yaw); dz = Math.cos(inst.yaw); }
+    else { dx /= length; dz /= length; }
+    const s = Math.sin(inst.yaw);
+    const c = Math.cos(inst.yaw);
+    state.flinchZ = dx * s + dz * c;          // along the boss's forward
+    state.flinchX = dx * c - dz * s;          // across it
+    state.flinchY = Number.isFinite(hy)
+      ? clamp((hy - (inst.y + 1.05)) / 0.8, -1, 1) : 0;
+    /* Scaled by the BITE, not by the raw request: a chip does not
+       stagger a boss and a rite should. Capped well under 1 so the
+       reaction never fights the action pose it lands during. */
+    const bite = clamp01(damage / Math.max(1, inst.maxHealth * 0.012));
+    state.flinch = Math.min(0.85, state.flinch * 0.55 + 0.22 + bite * 0.5);
+    /* Only a real bite gets its own spray. Combat already emits an
+       impact for every hit, so an unconditional second one here
+       doubles the particle count of a six-round burst for no read at
+       all - and the pool is 512 slots recycled oldest-first, so the
+       cost of that is other people's effects disappearing. */
+    if (Number.isFinite(hy) && bite > 0.25) {
+      ctx.vfx?.spark?.(hx, hy, hz, 0.45 + bite * 0.6, false, false);
+    }
+    /* Ichor drops where the hit was, not where the boss is: a stain
+       under a body that has since walked away is what makes the
+       floor read as a record of the fight. */
+    if (bite > 0.35) ichor.stain(hx + state.flinchX * 0.3, hz, 0.55 + bite * 0.7);
   }
 
   function ensureSpawned() {
@@ -1031,6 +2065,11 @@ export async function buildApostate(ctx) {
     state.sinceShot = 0;
     state.overheated ||= state.heat >= 0.999;
     state.muzzleFor = 0.065;
+    /* Every round moves the weapon and the shoulder. A six-round
+       burst fired from a lance that does not move is the single
+       clearest "this is a prop" tell in the encounter, and the
+       player's own lance has had recoil since it was built. */
+    state.recoil = Math.min(1, state.recoil + 0.72);
     setMuzzleFlash(1);
     bus.emit("shot", {
       x: emitter.x, y: emitter.y, z: emitter.z,
@@ -1136,6 +2175,9 @@ export async function buildApostate(ctx) {
         z: startZ,
       });
       ctx.vfx?.blast?.(contactX, groundAt(contactX, contactZ) + 0.45, contactZ, 3.2);
+      ctx.vfx?.boostImpact?.(contactX, groundAt(contactX, contactZ) + 0.9, contactZ,
+        Math.sin(inst.yaw), Math.cos(inst.yaw), true);
+      ctx.player?.doctrineKick?.(0.34, 0.4);
       bus.emit("boostHit", { x: contactX, z: contactZ, damage });
     }
     if (state.actionElapsed >= C.boostSeconds || moved < C.boostSpeed * dt * 0.12) {
@@ -1186,6 +2228,15 @@ export async function buildApostate(ctx) {
           ? hurtPlayer(C.slamDamage * (1 - 0.45 * distance / C.slamRadius),
             "apostate-slam", { x: inst.x, y: impactY + 0.32, z: inst.z }) : 0;
         ctx.vfx?.blast?.(inst.x, impactY + 0.15, inst.z, C.slamRadius);
+        /* THE encounter's heaviest footfall, and the one place the
+           shake budget is spent. Scaled by range so a slam across the
+           nave is a rumble and a slam at the player's feet is a
+           blow - a fixed amplitude reads as a scripted camera. */
+        {
+          const range = Math.hypot(ps.x - inst.x, ps.z - inst.z);
+          ctx.player?.doctrineKick?.(0.85 * (1 - clamp01(range / (C.slamRadius * 2.4))), 1);
+          state.landAbsorb = 1;
+        }
         bus.emit("slam", {
           x: inst.x, y: impactY, z: inst.z, radius: C.slamRadius,
           hit: damage > 0, damage,
@@ -1328,39 +2379,162 @@ export async function buildApostate(ctx) {
     inst.y = baseY + state.altitude;
     const speedN = clamp01(inst.speed / Math.max(1, C.walkSpeed));
     const walk = Math.sin(inst.stride * 2.9) * 0.48 * speedN;
+
+    /* --- the death, staged as a physical event -------------------
+       It was one linear rotation to -0.47pi over 2.2 seconds, which
+       is a body being turned rather than a body falling. A fall has
+       three beats and the brief asks for all of them: the knees go
+       first, the mass topples after them and accelerates, and then it
+       LANDS - once, audibly, with the floor answering - and settles.
+       The landing is fired exactly once from `deathImpact`, because a
+       restore into a dead phase re-enters this function and a second
+       shockwave from a corpse is worse than none. */
+    const dead = state.phase === "dead";
+    const deathAge = dead ? state.timer : 0;
+    const buckle = dead ? clamp01(deathAge / 0.40) : 0;
+    const topple = dead ? clamp01((deathAge - 0.30) / 0.58) : 0;
+    const landed = dead ? clamp01((deathAge - 0.88) / 0.55) : 0;
+    if (dead && !state.deathImpact && deathAge >= 0.86 && state.altitude <= 0.6) {
+      state.deathImpact = true;
+      const y = groundAt(inst.x, inst.z);
+      ctx.vfx?.blast?.(inst.x, y + 0.18, inst.z, 2.6);
+      ctx.vfx?.skidMark?.(inst.x, inst.z, inst.yaw + Math.PI * 0.5, 0.9, 1.3);
+      ichor.stain(inst.x, inst.z, 1.5);
+      ichor.stain(inst.x + Math.sin(inst.yaw) * 0.8, inst.z + Math.cos(inst.yaw) * 0.8, 1.0);
+      const range = Math.hypot(ctx.player.state.x - inst.x, ctx.player.state.z - inst.z);
+      ctx.player?.doctrineKick?.(0.55 * (1 - clamp01(range / 26)), 1);
+      bus.emit("corpseLanded", { x: inst.x, y, z: inst.z });
+    }
+
+    /* --- decay the presentation channels -------------------------
+       All of them are first-order and all of them are frame-rate
+       independent through `damp`, because the gallery steps this at
+       a fixed 1/60 and the game does not. */
+    state.recoil = damp(state.recoil, 0, 11, dt);
+    state.flinch = damp(state.flinch, 0, 7.5, dt);
+    state.landAbsorb = damp(state.landAbsorb, 0, 8, dt);
+
+    /* --- footfalls -----------------------------------------------
+       The walk cycle is a sine on distance travelled, so a foot
+       plants every time it crosses a half-period. Detecting it off
+       the PHASE rather than off a timer is what keeps the dust under
+       the boot when the boss strafes, boosts and walks at three
+       different speeds inside one action.
+
+       Two metres of armoured trooper is not a nine-metre animal, so
+       the camera answer is deliberately small and it is scaled by
+       range: at ten metres a footstep is a texture, not an event.
+       The slam and the boost impact are where this encounter spends
+       its shake. */
+    if (speedN > 0.18 && state.altitude <= 0.05 && state.phase === "duel") {
+      const phase = inst.stride * 2.9;
+      const half = Math.floor(phase / Math.PI);
+      if (half !== state.stridePhase) {
+        state.stridePhase = half;
+        state.strideParity ^= 1;
+        const side = state.strideParity ? 1 : -1;
+        const px = inst.x + Math.cos(inst.yaw) * side * 0.19;
+        const pz = inst.z - Math.sin(inst.yaw) * side * 0.19;
+        ctx.vfx?.footprint?.(px, pz, inst.yaw, state.strideParity, 0.34 + speedN * 0.5);
+        const range = Math.hypot(ctx.player.state.x - inst.x, ctx.player.state.z - inst.z);
+        if (range < 11) {
+          ctx.player?.doctrineKick?.(0.05 * speedN * (1 - range / 11), 0.85);
+        }
+      }
+    }
+
     for (let i = 0; i < 2; i += 1) {
       figure.legPivots[i].quaternion.copy(bind.legs[i]);
       figure.kneePivots[i].quaternion.copy(bind.knees[i]);
       q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), (i ? -walk : walk));
       figure.legPivots[i].quaternion.multiply(q);
-      q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.max(0, (i ? walk : -walk)) * 0.55);
+      /* Knees also take the landing absorb, which is what makes a
+         plunge land instead of stopping. */
+      q.setFromAxisAngle(new THREE.Vector3(1, 0, 0),
+        Math.max(0, (i ? walk : -walk)) * 0.55 + state.landAbsorb * 0.55
+        + buckle * 0.95);
       figure.kneePivots[i].quaternion.multiply(q);
     }
     figure.chest.quaternion.copy(bind.chest);
     figure.head.quaternion.copy(bind.head);
-    const lean = action === "boost" ? -0.34 : action === "jet" ? -0.10
-      : action?.startsWith("melee") ? 0.10 : 0;
-    q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), lean);
+
+    /* --- anticipation and recovery -------------------------------
+       The simulation has no windup phase and must not grow one: the
+       cadences, reaches and hit frames are balanced and a fight-timing
+       change is a gameplay change. So the anticipation is carved out
+       of the action's OWN window, purely in the pose.
+
+       A melee swing was `sin(t * PI)`, which is symmetric - it has
+       neither a wind-back nor a follow-through, and a symmetric
+       swing is the thing that reads as an animation loop rather than
+       as a blow. It is now three-phase against the authored hit
+       frame: load back, strike through it, and hang in the
+       follow-through while the body catches up. */
+    let coil = 0;
+    let lean = 0;
+    if (action === "boost") {
+      coil = 1 - clamp01(state.actionElapsed / 0.14);
+      lean = -0.34 * (1 - coil * 0.4);
+    } else if (action === "jet") {
+      coil = 1 - clamp01(state.actionElapsed / 0.16);
+      lean = -0.10;
+    } else if (action?.startsWith("melee")) {
+      const spec = C.melee[state.meleeStep];
+      const t = clamp01(state.actionElapsed / Math.max(0.01, spec.duration));
+      const hit = clamp01(spec.hit / Math.max(0.01, spec.duration));
+      lean = t < hit ? -0.16 * (t / Math.max(0.01, hit)) : 0.22 * (1 - (t - hit) / (1 - hit));
+    } else if (action === "summon" || action === "vent") {
+      lean = 0.08;
+    }
+    lean -= state.landAbsorb * 0.24;
+    /* Recoil sits on the chest as well as on the lance. A weapon
+       that kicks on a body that does not is a prop being waggled. */
+    lean += state.recoil * 0.09;
+    q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), lean - coil * 0.20);
     figure.chest.quaternion.multiply(q);
+    /* The hit reaction, in body space: a shot in the chest folds it,
+       a shot from the side twists it, a headshot snaps the head. */
+    if (state.flinch > 0.002) {
+      q.setFromEuler(euler.set(
+        state.flinch * (0.16 + state.flinchY * 0.10) * state.flinchZ,
+        state.flinch * -0.20 * state.flinchX,
+        state.flinch * 0.12 * state.flinchX));
+      figure.chest.quaternion.multiply(q);
+    }
 
     const ps = ctx.player.state;
     const dy = ps.y + 1.25 - (inst.y + 1.70);
     const horizontal = Math.max(1, Math.hypot(ps.x - inst.x, ps.z - inst.z));
     q.setFromEuler(euler.set(clamp(-Math.atan2(dy, horizontal), -0.32, 0.32), 0, 0));
     figure.head.quaternion.multiply(q);
+    if (state.flinch > 0.002) {
+      q.setFromEuler(euler.set(
+        state.flinch * 0.34 * Math.max(0, state.flinchY) * state.flinchZ,
+        state.flinch * -0.26 * state.flinchX, 0));
+      figure.head.quaternion.multiply(q);
+    }
 
     /* The player carry pose, then authored deltas for the mirrored actions.
        The weapon drives both hands through the same two-joint IK solver. */
     weapon.root.position.set(0.050, -0.225, 0.185);
     weapon.root.rotation.set(0.02, -0.03, 0.22);
+    /* Straight back along the haft and a muzzle rise, which is the
+       shape of a recoil and not a shake. */
+    weapon.root.position.z -= state.recoil * 0.085;
+    weapon.root.rotation.z += state.recoil * 0.11;
     if (action?.startsWith("melee")) {
       const spec = C.melee[state.meleeStep];
       const t = clamp01(state.actionElapsed / Math.max(0.01, spec.duration));
-      const swing = Math.sin(t * Math.PI);
-      weapon.root.position.x += lerp(-0.10, 0.26, t) * swing;
-      weapon.root.position.y += 0.18 * swing;
-      weapon.root.rotation.y += (state.meleeStep === 1 ? -1.35 : 1.0) * swing;
-      weapon.root.rotation.z += (state.meleeStep === 2 ? -1.0 : 0.56) * swing;
+      const hit = clamp01(spec.hit / Math.max(0.01, spec.duration));
+      /* -1 loaded, 0 at the hit frame, +1 fully followed through. */
+      const swept = t < hit
+        ? -((1 - (t / Math.max(0.01, hit))) ** 2)
+        : Math.sin(clamp01((t - hit) / (1 - hit)) * Math.PI * 0.62);
+      const reach = Math.max(0, swept);
+      weapon.root.position.x += lerp(-0.14, 0.30, t) * (0.35 + reach);
+      weapon.root.position.y += 0.20 * reach - 0.10 * Math.max(0, -swept);
+      weapon.root.rotation.y += (state.meleeStep === 1 ? -1.35 : 1.0) * (swept * 0.5 + 0.5);
+      weapon.root.rotation.z += (state.meleeStep === 2 ? -1.0 : 0.56) * (swept * 0.5 + 0.5);
     } else if (action === "shield") {
       weapon.root.position.y -= 0.18;
       weapon.root.rotation.z -= 0.36;
@@ -1373,13 +2547,21 @@ export async function buildApostate(ctx) {
     }
 
     inst.root.position.set(inst.x, inst.y, inst.z);
-    const deathT = state.phase === "dead" ? clamp01(state.timer / 2.2) : 0;
+    /* Accelerating, then arrested: a topple squared reads as mass,
+       a topple linear reads as a hinge. The small negative on the
+       settle is the shoulder rocking back once after contact. */
+    const toppled = dead
+      ? -Math.PI * 0.47 * (topple * topple * (3 - 2 * topple))
+        + Math.sin(landed * Math.PI) * 0.055
+      : 0;
     inst.root.rotation.set(
       action === "jet" ? clamp(-state.altitude * 0.018, -0.14, 0) : 0,
       inst.yaw,
-      state.phase === "dead" ? -Math.PI * 0.47 * deathT
-        : action === "boost" ? -0.10 : 0
+      dead ? toppled : action === "boost" ? -0.10 : 0
     );
+    /* The knees taking the body down before it falls. Without this
+       the figure pivots about its boots and the fall has no weight. */
+    if (dead) inst.root.position.y -= buckle * 0.28 * (1 - topple * 0.5);
     if (state.phase === "reveal") {
       const reveal = 1 - clamp01(state.timer / C.revealSeconds);
       inst.root.scale.copy(figure.baseScale).multiplyScalar(C.bodyScale * (0.88 + reveal * 0.12));
@@ -1432,14 +2614,33 @@ export async function buildApostate(ctx) {
         lengths.upper * C.bodyScale, lengths.fore * C.bodyScale, figure.armAxis);
     }
 
-    const wingOpen = action === "jet" ? 0.76 : action === "summon" ? 0.46 : 0.14;
-    const flutter = action === "jet" ? Math.sin(state.elapsed * 36) * 0.075
-      : action === "summon" ? Math.sin(state.elapsed * 18) * 0.035 : 0;
+    /* Wings. They open on the airborne verbs and, once the corruption
+       is well advanced, they no longer fully close - the Bloom has
+       taken the shoulder and the plates cannot lie flat over it. On
+       death they collapse, which is most of what makes the corpse
+       read as a corpse from behind. */
+    const wingOpen = dead ? 0.06
+      : (action === "jet" ? 0.76 : action === "summon" ? 0.46 : 0.14)
+        + state.corrupt * 0.18;
+    const flutter = dead ? 0
+      : action === "jet" ? Math.sin(state.elapsed * 36) * 0.075
+        : action === "summon" ? Math.sin(state.elapsed * 18) * 0.035
+          /* Secondary motion at rest. A wing that is perfectly still
+             on a breathing body is a decal; this is small enough that
+             it is never the read and large enough that it is never
+             frozen. */
+          : Math.sin(state.elapsed * 1.7) * 0.012;
     for (const wing of corruption.wingPivots) {
       const targetYaw = wing.side * (wingOpen + flutter);
-      wing.node.rotation.y = damp(wing.node.rotation.y, targetYaw, 12, dt);
+      /* Slower than the body on purpose. Lag IS the secondary motion:
+         at the old rate of 12 the wings arrived with the shoulder and
+         four rigid plates moved as one object. */
+      wing.node.rotation.y = damp(wing.node.rotation.y, targetYaw, 6.5, dt);
+      wing.node.rotation.z = damp(wing.node.rotation.z,
+        dead ? wing.side * -0.5 : -state.recoil * 0.12 - state.flinch * 0.10, 5.0, dt);
     }
-    corruption.abdomen.rotation.x = Math.sin(state.elapsed * 2.2) * 0.035;
+    corruption.abdomen.rotation.x = Math.sin(state.elapsed * 2.2) * 0.035
+      + state.flinch * 0.16 * state.flinchZ + (dead ? buckle * 0.22 : 0);
     if (aegis.group.visible) {
       aegis.group.scale.setScalar(0.96 + Math.sin(state.elapsed * 8.2) * 0.035);
       aegis.faceMat.opacity = 0.11 + Math.sin(state.elapsed * 6.4) * 0.035;
@@ -1487,6 +2688,7 @@ export async function buildApostate(ctx) {
       state.timer = 0;
       state.deathStartAltitude = state.altitude;
       state.victoryReported = false;
+      state.deathImpact = false;
       clearAction({ preserveAltitude: true });
       inst.grounded = state.deathStartAltitude <= 0.05;
       setEncounterGate(false, true);
@@ -1506,6 +2708,14 @@ export async function buildApostate(ctx) {
     }
     const d = Math.min(0.1, Math.max(0, dt));
     state.elapsed += d;
+    /* The vault light is scenery and it is GATED. A dormant boss must
+       cost nothing - the Stylite's dormant pose solve once cost this
+       game 1.3ms a frame and surfaced as a different boss failing its
+       budget - so nothing here is drawn, and the motes are not
+       stepped, until the encounter is actually live. */
+    vault.setLive(state.phase !== "dormant");
+    vault.update(state.elapsed);
+    advanceCorruption();
     updateHeat(d);
     if (inst.state === "death" || inst.health <= 0) {
       finishDeath();
@@ -1556,7 +2766,16 @@ export async function buildApostate(ctx) {
   }
 
   function modifyIncomingDamage(targetInst, request, damage) {
-    if (targetInst !== inst || !state.shieldActive || state.phase !== "duel") return damage;
+    if (targetInst !== inst) return damage;
+    /* This is combat's ONE authoritative entry for a hit on the
+       Apostate, which makes it the only place that can see every
+       shot, swing, shockwave and command blast in one signature.
+       The flinch is recorded here rather than in the aegis branch
+       below, because a blocked hit still shoves the body - it was
+       previously invisible that the shield had eaten anything. */
+    if (state.phase !== "duel") return damage;
+    noteHit(request, damage);
+    if (!state.shieldActive) return damage;
     const attackX = Number.isFinite(request.originX) ? request.originX : Number(request.x);
     const attackZ = Number.isFinite(request.originZ) ? request.originZ : Number(request.z);
     const hx = attackX - inst.x;
@@ -1609,10 +2828,18 @@ export async function buildApostate(ctx) {
       y: Number(inst.y.toFixed(2)),
       z: Number(inst.z.toFixed(2)),
       abilities: ["lance", "melee", "boost", "jet", "slam", "aegis", "summon"],
+      corruption: Number(state.corrupt.toFixed(3)),
+      lit: Number(vault.litAt(inst.x, inst.z).toFixed(3)),
       model: {
         asset: figure.assetSource,
         corrupted: true,
         featureCount: corruption.wings.length + corruption.spikes.length + 3,
+        /* Triangle counts per armour zone, so a harness can tell a
+           successful atlas read from the single-material fallback
+           without opening a screenshot. */
+        zones: corruption.zoneCounts || null,
+        surfaces: corruption.hurtMaterials.map(
+          (m) => m.userData?.sfSurface?.family || "unsurfaced"),
       },
     };
   }
@@ -1725,6 +2952,17 @@ export async function buildApostate(ctx) {
     inst.broodKids = (Array.isArray(saved.summonIds) ? saved.summonIds : [])
       .map((id) => byId.get(id)).filter(Boolean);
     if (state.defeated) finishDeath({ emit: false, reason: "restored-defeat" });
+    /* Presentation channels are not serialized, so they are re-derived
+       here rather than restored. A load must never arrive mid-flinch,
+       and the corrupted armour must match the health that came back
+       with the save - `force` because `surfaced` still holds the
+       abandoned future's value and would suppress the write. */
+    state.flinch = 0;
+    state.recoil = 0;
+    state.landAbsorb = 0;
+    state.deathImpact = state.defeated;
+    vault.setLive(state.phase !== "dormant");
+    advanceCorruption(true);
     setEncounterGate(state.phase === "dormant", state.phase === "dormant" || state.phase === "reveal"
       || state.defeated);
     poseFigure(0);
@@ -1772,6 +3010,17 @@ export async function buildApostate(ctx) {
     inst.z = spawnZ;
     inst.yaw = Math.PI;
     inst.broodKids = [];
+    state.flinch = 0;
+    state.recoil = 0;
+    state.landAbsorb = 0;
+    state.deathImpact = false;
+    state.stridePhase = 0;
+    /* The stains are the record of ONE fight. Re-arming the encounter
+       has to wipe the floor or the second run starts standing in the
+       first one's blood. */
+    ichor.clear();
+    vault.setLive(false);
+    advanceCorruption(true);
     ensureSpawned();
     setEncounterGate(true, true);
     poseFigure(0);
@@ -1780,6 +3029,7 @@ export async function buildApostate(ctx) {
   }
 
   ensureSpawned();
+  advanceCorruption(true);
   poseFigure(0);
 
   return {
@@ -1789,6 +3039,7 @@ export async function buildApostate(ctx) {
     figure,
     weapon,
     corruption,
+    vault,
     update,
     status,
     snapshot,

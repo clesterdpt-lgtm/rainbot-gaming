@@ -39,6 +39,20 @@
      An eye-adaptation damper makes every captured frame depend on
      what the camera was looking at a moment earlier, which makes
      the review harness measure its own history.
+
+   - THE BOTTOM OF THE RANGE IS NOT A CONSTANT. Three of the knobs
+     in the composite - the tone curve's toe, the grade's black
+     floor and the deep-shade hue - used to be either literals in
+     this shader or a single lifted number in the grade, and between
+     them they put an absolute wall across the bottom of every frame
+     the game drew. Measured: eighteen boss captures across three
+     animals, six framings and two districts all reported a
+     1st-percentile luminance of 27, 28 or 29. Content varied
+     completely; the statistic did not move, because it was not
+     measuring content. They are grade parameters now (see GRADES in
+     art.js), and the parameters are read here with explicit
+     fallbacks because an undefined reaching a uniform is a NaN and
+     one NaN in this pass is the whole picture.
    ============================================================ */
 
 import { clamp, clamp01, lerp, hexToRgb } from "saintfall/core.js";
@@ -147,6 +161,75 @@ void main() {
    blurred before use. This renderer has no temporal resolve, so an
    unblurred AO term would leave its sampling noise in the final
    frame permanently.
+
+   ONE DISC IS ONE SCALE, AND THIS PASS OWES THE FRAME TWO.
+
+   The radius used to be a single 0.55 m. That number resolves the
+   gap between two armour plates and literally nothing else: a
+   nine-metre animal standing on sand is two orders of magnitude
+   outside it, so every boss in the game had cavity in its creases
+   and NOTHING under its feet. The art direction asks for both by
+   name - "a contact shadow where it meets the ground" and
+   "self-occlusion where plate meets plate" - and they are 20x apart
+   in world scale.
+
+   Why this pass rather than the alternatives, on cost:
+
+   - A shadow-map improvement cannot answer it at all. A shadow map
+     occludes the SUN. The dark under a creature is missing SKY: at
+     golden hour the fill is most of the light on any surface the
+     key is not hitting, and no amount of shadow-map work removes
+     light the shadow map does not carry.
+   - A grounded AO disc per boss is a draw call and a material per
+     boss, authored eight times, and it only ever works for the boss
+     - not for its legs against its own body, not for a rock, not
+     for the player. It also cannot be authored here: the boss
+     modules belong to other agents.
+   - Extending THIS pass costs zero extra taps. The sample count is
+     unchanged at 12; only the radius each sample uses changes, from
+     a constant to a geometric ladder spanning near..far. Half the
+     ladder lands where the old disc did and does the same work; the
+     other half reaches out to creature scale. The measured cost is
+     in the report - it is texture-cache locality, not arithmetic.
+
+   The ladder position is jittered per pixel alongside the rotation.
+   Without that, every pixel samples the same twelve radii and the
+   error is a set of concentric rings that survives the blur as
+   banding; jittered, it is noise, which is what the blur is for.
+
+   A LADDER AVERAGED AS ONE DISC DILUTES EVERY SCALE IT COVERS.
+
+   The ladder above was correct about geometry and wrong about
+   statistics, and the review that followed it is the proof: with the
+   ladder in and running at high tier, the AO buffer over a boss
+   fight measured a MEDIAN of 0.99 and a 1st percentile of 0.81.
+   Nothing in a frame containing a nine-metre animal standing on sand
+   was more than a fifth occluded. The critic's words for that were
+   "no occlusion darkening at contact - at any scale".
+
+   The arithmetic says exactly why. Occlusion was one mean over all
+   twelve taps, but a contact only occupies a thin ANNULUS of the
+   disc: a foot 0.5 m from sand is seen by the two or three taps whose
+   radius happens to land near 0.5 m, and averaged against nine taps
+   that are metres away in open air and correctly return zero. The
+   wider the ladder, the harder it dilutes - so widening the radius
+   made the term cover more scales and get WEAKER at every one of
+   them. That is not a tuning error, and no intensity multiplier fixes
+   it: raising the gain to compensate for the empty taps also
+   multiplies the noise from the two that fired.
+
+   So the taps are BANKED. Twelve taps, three banks of four, each bank
+   spanning one third of the near..far range in log space and each
+   normalised BY ITS OWN FOUR. A crease at 0.2 m is now estimated from
+   four taps that can all see it instead of from two-in-twelve; a body
+   against the ground at 2 m likewise. Sample count, texture traffic
+   and arithmetic are unchanged - only the divisor and the combine.
+
+   The banks combine MULTIPLICATIVELY (visibility, not occlusion),
+   because that is what independent occluders at different scales
+   actually do to the light reaching a point, and because it is the
+   only combine that keeps an open plane at exactly 1.0. A sum would
+   have to be divided by three again and would put the dilution back.
    ------------------------------------------------------------------ */
 
 const AO_FRAG = /* glsl */`
@@ -156,7 +239,8 @@ uniform sampler2D tDepth;
 uniform vec2 uTexel;
 uniform vec2 uNearFar;
 uniform mat4 uInvProj;
-uniform vec3 uParams;      // world radius (m), intensity, bias
+uniform vec4 uParams;      // near radius (m), intensity, bias, far radius (m)
+uniform vec2 uBank;        // far-bank gain, contact power
 uniform float uProjScale;  // pixels per world unit at unit depth
 
 float viewZ(vec2 uv) {
@@ -174,6 +258,30 @@ vec3 viewPos(vec2 uv) {
   return (eye.xyz / eye.z) * z;
 }
 
+/* A MEASURED NULL RESULT, recorded so the next reader does not spend
+   the run this cost.
+
+   The occlusion buffer carries faint horizontal and vertical BANDS at
+   fixed screen positions. The obvious suspect is this hash: the
+   composite pass's own dither comment says a fract-multiply-dot hash
+   loses precision at large screen coordinates and prints a regular
+   pattern, and that is exactly the symptom. It was swapped for
+   interleaved gradient noise - the same construction the dither uses -
+   and the buffer came back byte-for-byte the same character: buffer
+   mean 208.81 against 208.82, and the bands in the identical places.
+
+   The pixel-size clamp on the sample radius was the second suspect,
+   for the better reason that the clamp is a function of DEPTH and so
+   quantises along iso-depth lines. Fading the tap out instead of
+   clamping it in is a real improvement and it stayed (see below), but
+   it did not move the bands either.
+
+   What the bands are worth, measured on the composited frame rather
+   than on the amplified debug blit: 0.78 code values of row-to-row
+   ripple across a flat sand wash, peak 3.4. The half-code dither is
+   already the same order. That is why this is a note and not a third
+   round of shader work - the thing this pass was failing at was
+   contact, by a factor of three, and that is what the budget went on. */
 float hash12(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
   p3 += dot(p3, p3.yzx + 33.33);
@@ -197,36 +305,146 @@ void main() {
      several metres away, the range term collapsed, and the whole
      buffer came back white. It was not that the pass failed - it ran
      perfectly and computed almost zero. */
-  float radiusPx = clamp(uParams.x * uProjScale / -z, 2.0, 44.0);
+  float pxPerM = uProjScale / -z;
+  // log of the near..far ratio, hoisted so the ladder is one exp2
+  // per sample rather than a pow.
+  float span = log2(max(uParams.w, uParams.x * 1.001) / uParams.x);
 
   float rot = hash12(gl_FragCoord.xy) * 6.2831853;
-  const int SAMPLES = 12;
-  float occ = 0.0;
-  for (int i = 0; i < SAMPLES; i++) {
-    float fi = float(i);
-    float a = fi * 2.39996323 + rot;          // golden-angle spiral
-    float r = sqrt((fi + 0.5) / float(SAMPLES));
-    vec2 suv = vUv + vec2(cos(a), sin(a)) * r * radiusPx * uTexel;
-    if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) continue;
+  // Second, decorrelated hash for the ladder offset. Reusing the
+  // rotation hash would tie a pixel's radius to its angle and
+  // reprint the rings this jitter exists to break.
+  // (No backticks in this comment: it is inside a template literal.)
+  float lad = hash12(gl_FragCoord.yx + 17.31);
+  const int BANKS = 3;
+  const int PER_BANK = 4;
+  float vis = 1.0;
+  for (int b = 0; b < BANKS; b++) {
+    float fb = float(b);
+    float occ = 0.0;
+    float wsum = 0.0;
+    for (int j = 0; j < PER_BANK; j++) {
+      float fj = float(j);
+      float fi = fb * float(PER_BANK) + fj;
+      float a = fi * 2.39996323 + rot;          // golden-angle spiral
+      /* GEOMETRIC, not sqrt-of-index. sqrt spaces samples uniformly by
+         AREA, which puts almost all of them in the outer annulus - fine
+         for one scale, useless across twenty. Each step here is a fixed
+         RATIO of the last, so the twelve samples cover near..far evenly
+         in log space and both ends get the same number of them.
 
-    vec3 sp = viewPos(suv);
-    vec3 diff = sp - p;
-    float dist = length(diff);
-    if (dist < 1e-4) continue;
-    float ndl = max(0.0, dot(n, diff / dist) - uParams.z);
-    // A silhouette far in front of this pixel is not touching it;
-    // counting it draws dark haloes around every foreground object.
-    float range = clamp(uParams.x / dist, 0.0, 1.0);
-    occ += ndl * range * range;
+         The position is now built from the BANK and the tap within it,
+         so the four taps of a bank stay inside their own third of the
+         ladder however the jitter falls. Jittering across the whole
+         ladder would let a bank's taps wander into its neighbour's
+         range and put the dilution straight back. */
+      float t = (fb + (fj + 0.5 + lad) / float(PER_BANK)) / float(BANKS);
+      float ri = uParams.x * exp2(span * t);
+      /* A TAP IS FADED OUT OF RANGE, NEVER CLAMPED INTO IT.
+
+         This clamped to [1, 72] pixels, and that clamp is what put
+         long horizontal and vertical BANDS across every occlusion
+         buffer this pass has ever produced. They sat at fixed screen
+         positions and did not move when the world did, which sent two
+         rounds of diagnosis at the sample hash - swapping it for
+         interleaved gradient noise changed the buffer by nothing
+         measurable, twice.
+
+         The mechanism is that the clamp is a function of DEPTH.
+         radiusPx is ri * pixels-per-metre, so on a ground plane every
+         ladder step crosses the one-pixel floor at its own particular
+         screen row: below that row the tap measures ri, above it the
+         tap measures one texel, and the number of taps on each side of
+         the boundary changes by exactly one. That is a step in the
+         estimator's value along an iso-depth line - a band, one per
+         ladder step, running the width of the frame. The 72-pixel
+         ceiling does the same thing in the near field.
+
+         So the weight goes to zero instead. A tap narrower than a
+         texel genuinely cannot resolve anything and must not vote;
+         the difference is that it stops voting SMOOTHLY, and it stops
+         voting for its own scale rather than lying about a different
+         one. The wide end fades for the same reason plus a practical
+         one - a 200-pixel tap is a texture-cache miss measuring
+         something that is not contact at all. */
+      float radiusPx = ri * pxPerM;
+      float wPx = smoothstep(0.7, 1.7, radiusPx)
+        * (1.0 - smoothstep(54.0, 78.0, radiusPx));
+      if (wPx < 0.004) continue;
+      vec2 suv = vUv + vec2(cos(a), sin(a)) * min(radiusPx, 78.0) * uTexel;
+      if (suv.x < 0.0 || suv.x > 1.0 || suv.y < 0.0 || suv.y > 1.0) continue;
+
+      vec3 sp = viewPos(suv);
+      vec3 diff = sp - p;
+      float dist = length(diff);
+      if (dist < 1e-4) continue;
+      float ndl = max(0.0, dot(n, diff / dist) - uParams.z);
+      /* The range term uses the SAMPLE's own radius, not one global
+         one. With a single radius that distinction did not exist; with
+         a ladder, using the far radius for a near sample would let a
+         0.15 m tap accept an occluder three metres away and the whole
+         ladder would collapse back into one coarse scale. A silhouette
+         far in front of this pixel is still not touching it - that is
+         what stops dark haloes round every foreground object. */
+      float range = clamp(ri / dist, 0.0, 1.0);
+      occ += ndl * range * range * wPx;
+      wsum += wPx;
+    }
+    /* uBank.x fades the gain across the ladder: full strength on the
+       near bank, uBank.x on the far one. The far bank is the one that
+       reaches creature scale, and at that radius it also starts to see
+       the large-scale concavity of the dune field - which terrain.js
+       already carries as baked vertex occlusion and would be darkened
+       twice. Trimming the far bank keeps the contact and gives the
+       double-darkening back. */
+    float gain = uParams.y * mix(1.0, uBank.x, fb / float(BANKS - 1));
+    /* The divisor is the WEIGHT this bank actually cast, floored at
+       three quarters of one tap. Dividing by the raw weight would let
+       a bank whose taps are nearly all sub-texel amplify its single
+       surviving vote into a full-strength occlusion, which is a bright
+       speckle in the one place the pass has the least information.
+       The floor biases a half-resolved bank toward OPEN, which is the
+       safe direction: a missing contact is invisible, an invented one
+       is a hole in the picture. */
+    vis *= clamp(1.0 - (occ / max(wsum, 0.75)) * gain, 0.0, 1.0);
   }
-  occ = clamp(1.0 - (occ / float(SAMPLES)) * uParams.y, 0.0, 1.0);
-  gl_FragColor = vec4(occ, occ, occ, 1.0);
+  /* A contact curve, applied to VISIBILITY. Values near 1 (the open
+     plane, most of the frame) are almost untouched by a power > 1;
+     values already down at 0.6 fall further. That is the shape the
+     term wants - the complaint is never that a lit dune is too bright,
+     it is that the dark under a foot is not dark. */
+  float occOut = clamp(pow(vis, uBank.y), 0.0, 1.0);
+  gl_FragColor = vec4(occOut, occOut, occOut, 1.0);
 }
 `;
 
 /* Bilateral blur: wide enough to kill the sampling noise, but it
    will not cross a depth discontinuity, so the AO stops at a
-   silhouette instead of smearing over it. */
+   silhouette instead of smearing over it.
+
+   THE TOLERANCE IS A GRADIENT, NOT A DISTANCE, and the frames that
+   forced that are in the review: every dune face in the Choir Spires
+   captures had horizontal and vertical STREAKS laid across it, in a
+   place where the picture should have been a smooth wash.
+
+   The mechanism is the old absolute tolerance, `exp(-|zi - z0| *
+   1.4)`, which is about 0.7 m of slack. Vesper-IX at golden hour is
+   almost entirely raking ground: a dune seen at a grazing angle
+   changes depth by METRES from one pixel to the next, so every
+   off-centre tap scored a weight of essentially zero, the sum
+   collapsed to the centre tap alone, and the pass handed the frame
+   its own raw twelve-tap sampling noise - along one axis, because the
+   blur is separable and each axis failed independently. A blur that
+   silently turns itself off is worse than no blur, because the noise
+   it was supposed to remove is now the only thing it contributed.
+
+   The fix is to compare each tap against the PLANE the centre pixel
+   is on rather than against its depth: measure how fast depth is
+   changing per pixel along the blur axis, and allow that much per
+   pixel of travel. A grazing plane then blurs fully, and a silhouette
+   - where the depth step is far larger than the local gradient
+   predicts - still stops the filter dead, which is the whole point of
+   a bilateral. */
 const AO_BLUR_FRAG = /* glsl */`
 precision highp float;
 varying vec2 vUv;
@@ -245,6 +463,16 @@ float viewZ(vec2 uv) {
 
 void main() {
   float z0 = viewZ(vUv);
+  /* Depth change per pixel ALONG THE BLUR AXIS. The pass is
+     separable, so only the gradient in uDir is relevant; taking the
+     full gradient magnitude would hand a vertical pass the slack it
+     needs for a horizontal slope and let it blur through silhouettes
+     it should have stopped at. The floor keeps a face-on surface from
+     ending up with a zero tolerance, and the ceiling stops a pixel on
+     a silhouette edge - where the derivative is a cliff, not a slope -
+     from claiming unlimited slack and smearing over the very
+     discontinuity this filter exists to preserve. */
+  float gz = clamp(abs(dot(vec2(dFdx(z0), dFdy(z0)), uDir)), 0.02, 1.2);
   float sum = texture2D(tAo, vUv).r * 0.25;
   float wsum = 0.25;
   for (int i = 1; i <= 4; i++) {
@@ -253,7 +481,9 @@ void main() {
     for (int s = -1; s <= 1; s += 2) {
       vec2 uv = vUv + uDir * uTexel * fi * float(s);
       float zi = viewZ(uv);
-      float dw = w * exp(-abs(zi - z0) * 1.4);
+      // Slack scales with how far this tap travelled, because that is
+      // how much depth a flat surface is ENTITLED to have changed.
+      float dw = w * exp(-abs(zi - z0) / (gz * fi * 2.2 + 0.06));
       sum += texture2D(tAo, uv).r * dw;
       wsum += dw;
     }
@@ -291,14 +521,20 @@ varying vec2 vUv;
 uniform sampler2D tScene;
 uniform sampler2D tBloom;
 uniform sampler2D tAo;
+uniform sampler2D tDepth;
+uniform vec2 uNearFar;
 uniform float uExposure;
 uniform float uBloom;
-uniform vec2 uAo;          // strength, sky-tint amount
+uniform vec3 uAo;          // strength, sky-tint amount, key knee (linear)
+uniform vec2 uBounce;      // gain, receiver knee (linear scene luma)
 uniform vec3  uLift;
 uniform vec3  uGamma;
 uniform vec3  uGain;
 uniform float uSaturation;
 uniform float uContrast;
+uniform float uToe;        // GT shadow exponent, per grade
+uniform vec3  uShadeHue;   // hue deep shade desaturates toward
+uniform vec2  uShade;      // amount 0..1, knee (luma the term dies at)
 uniform vec3  uShadowTint;
 uniform vec3  uHighlightTint;
 uniform float uTintAmount;
@@ -327,11 +563,18 @@ float gt(float x, float P, float a, float m, float l, float c, float b) {
   return T * w0 + L * w1 + S * w2;
 }
 
+/* The toe exponent is a uniform, not the literal 1.24 it used to be.
+   It is the one curve parameter that touches ONLY the shadows: the
+   toe segment is weighted by 1 - smoothstep(0, m, x), so it has no
+   authority at all above the linear midpoint m = 0.22 and cannot
+   move the sand, the sky or a highlight. Raising it is how the
+   bottom of the range gets its separation back without the frame
+   losing a single code value of exposure anywhere else. */
 vec3 tonemap(vec3 x) {
   return vec3(
-    gt(x.r, 1.0, 1.06, 0.22, 0.36, 1.24, 0.0),
-    gt(x.g, 1.0, 1.06, 0.22, 0.36, 1.24, 0.0),
-    gt(x.b, 1.0, 1.06, 0.22, 0.36, 1.24, 0.0)
+    gt(x.r, 1.0, 1.06, 0.22, 0.36, uToe, 0.0),
+    gt(x.g, 1.0, 1.06, 0.22, 0.36, uToe, 0.0),
+    gt(x.b, 1.0, 1.06, 0.22, 0.36, uToe, 0.0)
   );
 }
 
@@ -354,7 +597,33 @@ void main() {
      toward grey. Multiplying to grey is what makes baked occlusion
      look like dirt; the level's own terrain AO does the same thing
      for the same reason. */
-  float ao = mix(1.0, texture2D(tAo, vUv).r, uAo.x);
+  /* OCCLUSION OCCLUDES THE SKY, NOT THE KEY - and that is this pass's
+     own argument, made at the top of the AO block: the dark under a
+     creature is missing SKY, because at golden hour the fill is most
+     of the light on any surface the sun is not hitting. The corollary
+     was not being applied. A plate top taking a 13-degree key at full
+     strength does not get darker because there is a crease under it;
+     the sun either reaches it or it does not, and that is the shadow
+     map's job.
+
+     Applying the term flat to the composited scene therefore taxed
+     the highlights as hard as the shade, and it is measurable: with
+     the banked estimator in and applied flat, the Garner gallery's
+     blown fraction fell from 0.039% to 0.0063% and the metric harness
+     flagged brightPct LOW - "nothing blows out, no specular hit, no
+     rim catching light" - which is one of the five axes the whole
+     programme is scored on. Occlusion that eats specular is occlusion
+     applied in the wrong place.
+
+     So the term's AUTHORITY falls off as the pixel gets bright in
+     linear scene units. Measured on the same frame, the scene buffer
+     runs p50 0.165 and 99.2% below 0.78, so a knee at uAo.z with the
+     roll finishing at 2.2x it hands back the top two or three percent
+     of the picture and leaves every contact in the frame untouched.
+     Not to zero: some of a bright pixel is still sky. */
+  float keyLuma = dot(scene, vec3(0.2126, 0.7152, 0.0722));
+  float keyed = smoothstep(uAo.z, uAo.z * 2.2, keyLuma);
+  float ao = mix(1.0, texture2D(tAo, vUv).r, uAo.x * (1.0 - 0.7 * keyed));
   /* The violet tint scales with the OCCLUSION, not with the pixel.
      Applied flat it multiplied every unoccluded surface in the frame
      by about 0.9 and cooled it - so switching AO on desaturated and
@@ -366,6 +635,64 @@ void main() {
   scene *= aoTint;
 
   vec3 bloom = sfSanitise(texture2D(tBloom, vUv).rgb);
+
+  /* ---------------------------------------------------------------
+     EMISSIVE BOUNCE - a fake-GI term, and the cheapest of the three
+     things the review asked for.
+
+     The finding was that every glowing element in the game - joint
+     caps, weak points, an acid pool, plasma bolts, strip lights -
+     contributes exactly zero illumination to its neighbourhood, so
+     "they are all stickers". That was literally true: an emissive
+     material writes its own colour and nothing else in the scene ever
+     reads it. Bloom does not fix it, because bloom ADDS a veil IN
+     FRONT of the neighbouring surface - the same amount whether that
+     surface is white marble or black chitin - and a veil that ignores
+     what it is landing on is exactly what a sticker looks like.
+
+     Bounced light is MULTIPLICATIVE: a surface returns the incoming
+     light times its own reflectance. So the term is scene * gi, not
+     scene + gi, and the difference is the whole read. A dark plate beside
+     an orange gut picks up a little orange; a pale bone rim beside
+     the same gut picks up a lot. That is the relationship the eye
+     uses to decide something is being LIT rather than pasted over.
+
+     There is no new pass and no new light. tBloom is already a
+     wide, energy-weighted blur of everything bright in the frame -
+     which is precisely the irradiance map a one-bounce approximation
+     wants - and it is already fetched on the line above, so this
+     costs arithmetic and nothing else. A real THREE light per emitter
+     would be correct and unaffordable: adding one light recompiles
+     every material in the scene, and this project has already eaten a
+     198 ms freeze that way.
+
+     Applied AFTER the occlusion, deliberately. A cavity next to a
+     glowing weak point is exactly where bounced light goes, and
+     relighting it is what stops the new AO from reading as dirt.
+
+     Two gates, and both are load-bearing:
+
+     - DEPTH. The sky is the brightest thing in the frame and it is
+       not a surface. Multiplying it by its own bloom would blow the
+       horizon and the sun disc, which reads as "the exposure broke".
+       The far plane is an exact test and costs one fetch.
+     - A LUMA KNEE. An emitter must not bounce off itself, or every
+       glow gains a hard bright core and the term becomes a second,
+       worse bloom. Above the knee the bounce is gone.
+     --------------------------------------------------------------- */
+  if (uBounce.x > 0.0) {
+    float d = texture2D(tDepth, vUv).x;
+    float zc = (2.0 * uNearFar.x * uNearFar.y)
+      / (uNearFar.y + uNearFar.x - (d * 2.0 - 1.0) * (uNearFar.y - uNearFar.x));
+    float isWorld = step(zc, uNearFar.y * 0.98);
+    float sceneLuma = dot(scene, vec3(0.2126, 0.7152, 0.0722));
+    float recv = 1.0 - smoothstep(uBounce.y * 0.45, uBounce.y, sceneLuma);
+    // Clamped: an HDR emitter can carry hundreds of units and an
+    // unbounded multiplier would turn one bolt into a white frame.
+    vec3 gi = min(bloom, vec3(6.0));
+    scene += scene * gi * (uBounce.x * recv * isWorld);
+  }
+
   vec3 c = scene + bloom * uBloom;
 
   c *= uExposure;
@@ -389,6 +716,45 @@ void main() {
   vec3 tint = mix(uShadowTint, uHighlightTint, smoothstep(0.02, 0.62, luma));
   tint /= max(dot(tint, vec3(0.2126, 0.7152, 0.0722)), 1e-4);
   c = mix(c, c * tint, uTintAmount);
+
+  /* DEEP SHADE IS NOT A DARKER VERSION OF THE KEY.
+
+     SAND_RAMP's header states the rule and paid for it: shadowed
+     sand is lit almost entirely by the sky, so it desaturates and
+     goes violet; an earlier build that bottomed out at a saturated
+     maroon turned the impact basin to mud. That rule used to be
+     carried by the vertex ramp plus the grade's blue-biased LIFT -
+     and the lift has just been reduced by a factor of six, which
+     means the frame now has a real dark end that nothing is
+     steering. Left alone, the bottom of the range simply inherits
+     the key's orange at low value, and the key's orange at low value
+     is that maroon.
+
+     So it is steered here instead, and DELIBERATELY as a hue
+     rotation with no level change: the target is normalised by its
+     own luma before it is mixed, so this pulls chroma out and turns
+     it violet without darkening the picture by a single code value.
+     A term that both darkened and desaturated would be impossible to
+     tune, because the two effects would alibi each other.
+
+     THE KNEE IS HIGHER THAN IT LOOKS LIKE IT SHOULD BE, and this is
+     the measured reason. Binning a frame by luma before and after
+     the lift came down: the 60-100 band went from rgb(132,73,40) at
+     saturation 0.70 to rgb(137,71,22) at 0.84. The shadows did not
+     merely darken, they got MORE saturated - because the old lift's
+     blue channel was a pedestal worth a third of a shadow pixel's
+     blue, and removing it clipped the blue out of the whole lower
+     half of the range. Shade was ending up more chromatic than the
+     sunlight, which is backwards, and the direction it was heading
+     in is the saturated maroon the sand ramp's header calls mud.
+     A knee that only reached the bottom eighth left that band
+     untouched and the term measured as inert. */
+  if (uShade.x > 0.0) {
+    float sl = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    float deep = 1.0 - smoothstep(0.0, uShade.y, sl);
+    vec3 hue = uShadeHue / max(dot(uShadeHue, vec3(0.2126, 0.7152, 0.0722)), 1e-4);
+    c = mix(c, mix(vec3(sl), hue * sl, 0.6), deep * uShade.x);
+  }
 
   c = (c - 0.5) * uContrast + 0.5;
   c = uLift + (uGain - uLift) * pow(max(c, vec3(0.0)), uGamma);
@@ -588,7 +954,24 @@ export function createRenderer(ctx, canvas) {
     uTexel: { value: new THREE.Vector2() },
     uNearFar: { value: new THREE.Vector2(camera.near, camera.far) },
     uInvProj: { value: new THREE.Matrix4() },
-    uParams: { value: new THREE.Vector3(0.55, 2.0, 0.03) },
+    /* near 0.15 m, intensity, bias, far 3.2 m. The near end is the
+       old disc's job (plate against plate, a claw against rock); the
+       far end is a creature against the ground it is standing on.
+       3.2 m is deliberately not larger: past that the samples stop
+       being about contact and start shading the large-scale
+       concavity of the dune field, which the terrain already carries
+       as baked occlusion and would be double-darkened. */
+    uParams: { value: new THREE.Vector4(0.15, 2.0, 0.03, 3.2) },
+    /* Far-bank gain, then the contact power.
+       0.62: the outermost of the three banks is the one that reaches
+       creature scale, and it is also the only one that can see the
+       dune field's own large-scale concavity, which terrain.js
+       already carries baked into its vertex colours. At 1.0 the two
+       stack and the basins go muddy; at 0.62 the contact under a boss
+       survives and the landscape is left to the bake.
+       1.6: applied to visibility, so it is nearly inert above 0.9 and
+       roughly doubles the depth of anything already below 0.6. */
+    uBank: { value: new THREE.Vector2(0.62, 1.6) },
     uProjScale: { value: 500 },
   });
   const aoBlurMat = mkPass(AO_BLUR_FRAG, {
@@ -610,14 +993,30 @@ export function createRenderer(ctx, canvas) {
     tScene: { value: null },
     tBloom: { value: null },
     tAo: { value: null },
+    tDepth: { value: null },
+    uNearFar: { value: new THREE.Vector2(camera.near, camera.far) },
     uExposure: { value: 1.0 },
     uBloom: { value: 0.62 },
-    uAo: { value: new THREE.Vector2(0.85, 0.7) },
+    /* Strength, sky-tint amount, and the key knee in LINEAR SCENE
+       units - this runs before the exposure multiply, so 0.55 is a
+       scene-referred number and not a display one. Measured against
+       the scene buffer of a live boss frame: p50 0.165, 99.2% under
+       0.78. See the key-exemption comment in the composite. */
+    uAo: { value: new THREE.Vector3(0.85, 0.7, 0.55) },
+    /* Gain, then the receiver knee in LINEAR SCENE units - this runs
+       before the exposure multiply and before the tone curve, so the
+       knee is a scene-referred number and not a display one. Both are
+       overwritten per time-of-day from the grade; see GRADES.bounce
+       in art.js. */
+    uBounce: { value: new THREE.Vector2(0.34, 1.6) },
     uLift: { value: new THREE.Vector3(0, 0, 0) },
     uGamma: { value: new THREE.Vector3(1, 1, 1) },
     uGain: { value: new THREE.Vector3(1, 1, 1) },
     uSaturation: { value: 1.1 },
     uContrast: { value: 1.05 },
+    uToe: { value: 1.24 },
+    uShadeHue: { value: new THREE.Vector3(0.42, 0.37, 0.53) },
+    uShade: { value: new THREE.Vector2(0, 0.2) },
     uShadowTint: { value: new THREE.Vector3(0.3, 0.2, 0.4) },
     uHighlightTint: { value: new THREE.Vector3(1, 0.9, 0.75) },
     uTintAmount: { value: 0.3 },
@@ -807,6 +1206,27 @@ export function createRenderer(ctx, canvas) {
     compMat.uniforms.uGain.value.set(g.gain[0], g.gain[1], g.gain[2]);
     compMat.uniforms.uSaturation.value = g.saturation;
     compMat.uniforms.uContrast.value = g.contrast;
+    /* Defaulted, not assumed. applyAtmosphere is called with grades
+       that other code paths assemble (blendGrade, the storm mix, and
+       anything a review harness hands in); an undefined here would
+       reach the uniform as NaN and one NaN in the composite is the
+       entire frame, black. */
+    compMat.uniforms.uToe.value = Number.isFinite(g.toe) ? g.toe : 1.24;
+    const sd = Array.isArray(g.shade) ? g.shade : [0, 0.2];
+    compMat.uniforms.uShade.value.set(
+      Number.isFinite(sd[0]) ? sd[0] : 0, Number.isFinite(sd[1]) ? sd[1] : 0.2
+    );
+    /* Same defaulting rule as `toe` and `shade` above, and for the
+       same reason: an undefined reaching a uniform is a NaN, and one
+       NaN in this pass is the entire frame. The fallback is the value
+       the term shipped with, so a grade object assembled by an older
+       code path still renders with the bounce on. */
+    const bo = Array.isArray(g.bounce) ? g.bounce : [0.34, 1.6];
+    compMat.uniforms.uBounce.value.set(
+      Number.isFinite(bo[0]) ? bo[0] : 0.34, Number.isFinite(bo[1]) ? bo[1] : 1.6
+    );
+    const sh = hexToRgb(g.shadeHue || "#808080");
+    compMat.uniforms.uShadeHue.value.set(sh[0], sh[1], sh[2]);
     const st = hexToRgb(g.shadowTint);
     const ht = hexToRgb(g.highlightTint);
     compMat.uniforms.uShadowTint.value.set(st[0], st[1], st[2]);
@@ -951,6 +1371,13 @@ export function createRenderer(ctx, canvas) {
     compMat.uniforms.tScene.value = sceneTarget.texture;
     compMat.uniforms.tBloom.value = bloomUp[0].texture;
     compMat.uniforms.tAo.value = aoTarget.texture;
+    /* The bounce gate needs to know what is sky. Taken from the
+       CAMERA this call was handed, not from the module's own, because
+       the review harness renders stills through a free camera with a
+       different fov and the near/far it carries is the one the depth
+       buffer was written against. */
+    compMat.uniforms.tDepth.value = sceneTarget.depthTexture;
+    compMat.uniforms.uNearFar.value.set(cam.near, cam.far);
     quad.material = compMat;
     renderer.setRenderTarget(null);
     renderer.clear(true, true, false);
@@ -1060,8 +1487,45 @@ export function createRenderer(ctx, canvas) {
       compMat.uniforms.uAo.value.x = strength;
       if (tint !== undefined) compMat.uniforms.uAo.value.y = tint;
     },
-    setAoParams(radius, intensity, bias) {
-      aoMat.uniforms.uParams.value.set(radius, intensity, bias);
+    /** The key knee, in linear scene luma. Exposed so a probe can
+     *  prove the exemption is doing what its comment claims rather
+     *  than the reader having to take it on faith. */
+    setAoKeyKnee(v) {
+      if (Number.isFinite(v)) compMat.uniforms.uAo.value.z = Math.max(1e-3, v);
+    },
+    get aoKeyKnee() { return compMat.uniforms.uAo.value.z; },
+    /* `far` is optional so the three-argument callers that predate
+       the radius ladder keep working; omitting it holds whatever far
+       radius is currently set rather than silently zeroing it, which
+       would collapse the ladder to a single scale and undo the
+       contact term without any error. */
+    setAoParams(radius, intensity, bias, far) {
+      const v = aoMat.uniforms.uParams.value;
+      v.set(radius, intensity, bias, Number.isFinite(far) ? far : v.w);
+    },
+    /** Far-bank gain and the contact power. Exposed so an A/B probe
+     *  can sweep the banked estimator without editing the shader -
+     *  the previous ladder shipped with no way to measure it and
+     *  measured 0.99 median in the frames that mattered. */
+    setAoBank(farGain, power) {
+      const v = aoMat.uniforms.uBank.value;
+      v.set(Number.isFinite(farGain) ? farGain : v.x,
+        Number.isFinite(power) ? power : v.y);
+    },
+    get aoBank() {
+      const v = aoMat.uniforms.uBank.value;
+      return [v.x, v.y];
+    },
+    /** Emissive bounce gain and receiver knee. Setting the gain to 0
+     *  removes the term entirely (the shader branches on it), which
+     *  is what an isolation probe needs. */
+    setBounce(gain, knee) {
+      const v = compMat.uniforms.uBounce.value;
+      v.set(Number.isFinite(gain) ? gain : v.x, Number.isFinite(knee) ? knee : v.y);
+    },
+    get bounce() {
+      const v = compMat.uniforms.uBounce.value;
+      return [v.x, v.y];
     },
     get aoStrength() { return compMat.uniforms.uAo.value.x; },
     setExposureScale(v) { compMat.uniforms.uExposure.value = v; },

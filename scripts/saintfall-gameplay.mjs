@@ -418,17 +418,46 @@ try {
   const before = await page.evaluate(() => window.__SF.missionState());
   console.log(`  start: phase=${before.phase} bosses=${before.bosses}`);
 
-  // Proximity may reveal an arena guardian, but never awards the victory.
+  /* Every site must be answerable through the one lookup. Five of the
+     seven are driven by bespoke controllers rather than by the shared
+     enemy simulation, and `districtBosses.status(key)` used to read
+     only the shared records - so the Choir went null the day the
+     Stylite took it and the reveal check below could not see the
+     encounter it was asserting on. A site that cannot be asked its
+     phase is a site nothing can gate on. */
+  const roster = await page.evaluate(() => Object.fromEntries(
+    window.__SF.ctx.districtBosses.sites.map((site) => [site.key,
+      window.__SF.ctx.districtBosses.status(site.key)?.phase ?? null])));
+  const unanswered = Object.entries(roster).filter(([, phase]) => phase === null);
+  console.log(`  encounter phases: ${Object.entries(roster)
+    .map(([k, p]) => `${k}=${p}`).join(" · ")}`);
+  check("every district boss site answers districtBosses.status(key)",
+    unanswered.length === 0, `no status for: ${unanswered.map(([k]) => k).join(", ")}`);
+
+  /* Proximity may reveal an arena guardian, but never awards the
+     victory. Asserted on the two things that are true of ALL SIX
+     controllers rather than on a list of phase names: the encounter
+     gate opened (`hidden` false is the reveal, and it is set at the
+     same beat by every controller - `setGate` for the shared records,
+     `setEncounterGate` for the bespoke ones) and the animal left
+     dormant. The old list was ["alert", "active"], which are the
+     shared simulation's own two names; the Stylite wakes through
+     "rouse" and the check failed on a boss that was behaving
+     correctly. Naming more phases would only push the same mistake
+     onto whoever writes the seventh controller. */
   const brush = await page.evaluate(() => {
     const T = window.__SF;
     const boss = T.mission.bosses.find((entry) => entry.key === "choir");
     T.teleport(boss.x + 2, boss.z + 2, 0);
     T.advanceTime(1.2, 1 / 60);
-    return { done: boss.done, phase: T.ctx.districtBosses.status("choir")?.phase };
+    const status = T.ctx.districtBosses.status("choir");
+    return { done: boss.done, phase: status?.phase, hidden: status?.hidden,
+      defeated: status?.defeated };
   });
-  check("entering a boss arena does not award the victory",
-    !brush.done && ["alert", "active"].includes(brush.phase),
-    `done=${brush.done} encounter=${brush.phase}`);
+  check("entering a boss arena reveals the guardian without awarding the victory",
+    !brush.done && !brush.defeated && brush.hidden === false
+      && !!brush.phase && brush.phase !== "dormant",
+    `done=${brush.done} encounter=${brush.phase} hidden=${brush.hidden}`);
 
   const districtBosses = await page.evaluate(() => window.__SF.mission.bosses
     .filter((boss) => boss.stage !== "penultimate").map((boss) => boss.key));

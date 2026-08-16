@@ -135,6 +135,34 @@ async function bootPage(context, label) {
   });
   await page.waitForFunction(() => window.__SF?.menuState?.()?.open
     && window.__SF?.persistenceState?.(), null, { timeout: 5000 });
+  await page.evaluate(() => {
+    /* CLEAR THE GENERIC ROSTER, NOT THE WORLD'S FIXTURES.
+       These passes want a small deterministic battlefield, and they used
+       to get one from `T.clearEnemies()` - which also evicts the Apostate
+       and all seven district-boss figures. Those are not battlefield
+       enemies: each is owned by an encounter controller that persists it
+       in its own record and RE-CREATES it on restore. Deleting them
+       produces a world the game cannot reach, and it made the first
+       restore of a scenario take the ensureSpawned() path while the
+       second took the rebind path, so "load twice, compare exactly" was
+       comparing two different code paths and reporting a save bug.
+       Everything below this line is a battlefield enemy. */
+    window.__SFisFixture = (enemy) => !!enemy?.spec?.durableDomain
+      || (typeof enemy?.eventId === "string" && enemy.eventId.startsWith("district-boss:"));
+    window.__SFclearField = () => {
+      for (const enemy of [...window.__SF.enemies.live]) {
+        if (window.__SFisFixture(enemy)) continue;
+        window.__SF.enemies.remove(enemy);
+      }
+      window.__SF.combat?.clearProjectiles?.();
+    };
+    /* The same question asked of a saved record, which has `eventId` but
+       no `spec`. The Apostate's id is its own name, by contract. */
+    window.__SFisFixtureRecord = (record) => record?.id === "sf-enemy-apostate"
+      || (typeof record?.eventId === "string" && record.eventId.startsWith("district-boss:"));
+    window.__SFfieldIds = (records) => (records || [])
+      .filter((record) => !window.__SFisFixtureRecord(record)).map((record) => record.id);
+  });
   return page;
 }
 
@@ -308,7 +336,36 @@ async function createDurableScenario(page) {
   const setup = await page.evaluate(() => {
     const T = window.__SF;
     T.invulnerable(true);
-    const relay = T.channelRelay(0);
+    /* A SILENCED RELAY, THROUGH THE ONLY DOOR THAT IS STILL OPEN.
+       This used to stand on the beacon and channel it (`T.channelRelay`).
+       The operation is district-boss driven now: `mission.js` assigns
+       `state.channelling` nothing but `null`, and the districtBosses
+       phase - the phase every boot starts in - clears it every frame, so
+       no amount of standing there advances a relay. The check was quietly
+       measuring a retired mechanic rather than the save service.
+
+       What this scenario actually needs is a relay that IS done, so the
+       flag has to survive capture and restore. Set it the authoritative
+       way, through mission.restore(), exactly as the dead-state rollback
+       pass builds its own mission target. Note the phase: restore() maps
+       the legacy "relays" phase onto districtBosses BEFORE it reads the
+       relay list, so a done flag set here is preserved rather than
+       overwritten by the force-complete branch that catches old saves. */
+    const relayTarget = T.mission.snapshot();
+    relayTarget.phase = "relays";
+    relayTarget.relays = relayTarget.relays.map((entry, index) => ({
+      ...entry,
+      done: index === 0 ? true : entry.done,
+      progress: index === 0 ? 1 : entry.progress,
+    }));
+    relayTarget.relaysDone = relayTarget.relays.filter((entry) => entry.done).length;
+    T.mission.restore(relayTarget);
+    const relay = {
+      done: T.mission.relays[0]?.done === true,
+      progress: T.mission.relays[0]?.progress ?? null,
+      relaysDone: T.mission.state.relaysDone,
+      phase: T.mission.state.phase,
+    };
     const victim = T.enemies.live.find((enemy) => enemy?.id && enemy.health > 0
       && enemy.key !== "matriarch" && !enemy.emerging?.active);
     const victimRecord = victim ? { id: victim.id, key: victim.key, hp: victim.health } : null;
@@ -351,8 +408,10 @@ async function createDurableScenario(page) {
     };
   });
   evidence.scenario = setup;
-  check("field scenario is saveable after the relay channel completes",
-    setup.reason === "" && setup.relay?.done && setup.relay?.advanced,
+  check("field scenario with a silenced relay is saveable",
+    setup.reason === "" && setup.relay?.done === true
+      && setup.relay?.progress === 1 && setup.relay?.relaysDone >= 1
+      && setup.relay?.phase === "districtBosses",
     JSON.stringify({ reason: setup.reason, relay: setup.relay }));
   check("manual slot captures a versioned durable snapshot",
     setup.saved?.schema === 2 && setup.envelope?.snapshot?.schema === 2
@@ -737,7 +796,7 @@ async function deadStateRollbackPass(browser) {
 
     T.player.cancelTransientActions();
     T.weapons.setMode("ranged");
-    T.clearEnemies();
+    window.__SFclearField();
     T.enemies.spawn("thresher", 850, 850, { yaw: 0.35 });
     T.enemies.spawn("gleaner", -850, 850, { yaw: -0.45 });
     T.shield.reset(true);
@@ -847,8 +906,8 @@ async function deadStateRollbackPass(browser) {
     return {
       setup: {
         normalised,
-        rosterCount: before.enemies.live.length,
-        rosterIds: before.enemies.live.map((enemy) => enemy.id),
+        rosterCount: window.__SFfieldIds(before.enemies.live).length,
+        rosterIds: window.__SFfieldIds(before.enemies.live),
       },
       budgetBeforeDeath,
       killed,
@@ -937,7 +996,7 @@ async function pendingCommandRollbackPass(browser) {
     };
 
     T.invulnerable(true);
-    T.clearEnemies();
+    window.__SFclearField();
     T.setBreachAuto(false);
     T.player.cancelTransientActions();
     T.weapons.setMode("ranged");
@@ -1094,7 +1153,7 @@ async function emptyActiveBreachRoundtripPass(browser) {
   const probe = await page.evaluate(() => {
     const T = window.__SF;
     T.invulnerable(true);
-    T.clearEnemies();
+    window.__SFclearField();
     T.setBreachAuto(false);
     const control = T.enemies.spawn("gleaner", -850, -850, { yaw: 0.4 });
     const ps = T.player.state;
@@ -1130,7 +1189,7 @@ async function emptyActiveBreachRoundtripPass(browser) {
     }
     const restoredEnemy = T.enemies.snapshot();
     const restoredBreach = T.breachState();
-    const restoredIds = restoredEnemy.live.map((enemy) => enemy.id);
+    const restoredIds = window.__SFfieldIds(restoredEnemy.live);
     T.advanceTime(0.05, 1 / 60);
     const advancedEnemy = T.enemies.snapshot();
     const advancedBreach = T.breachState();
@@ -1144,8 +1203,8 @@ async function emptyActiveBreachRoundtripPass(browser) {
       killedMemberIds: memberIds,
       boundary,
       saved: {
-        enemyCount: savedEnemy.live.length,
-        enemyIds: savedEnemy.live.map((enemy) => enemy.id),
+        enemyCount: window.__SFfieldIds(savedEnemy.live).length,
+        enemyIds: window.__SFfieldIds(savedEnemy.live),
         nextId: savedEnemy.nextId,
         enemyRng: savedEnemy.rng,
         breach: savedBreach,
@@ -1153,7 +1212,7 @@ async function emptyActiveBreachRoundtripPass(browser) {
       applied,
       fallbackSpawnCalls,
       restored: {
-        enemyCount: restoredEnemy.live.length,
+        enemyCount: restoredIds.length,
         enemyIds: restoredIds,
         unique: new Set(restoredIds).size,
         nextId: restoredEnemy.nextId,
@@ -1161,19 +1220,19 @@ async function emptyActiveBreachRoundtripPass(browser) {
         breach: restoredBreach,
       },
       advanced: {
-        enemyCount: advancedEnemy.live.length,
-        enemyIds: advancedEnemy.live.map((enemy) => enemy.id),
+        enemyCount: window.__SFfieldIds(advancedEnemy.live).length,
+        enemyIds: window.__SFfieldIds(advancedEnemy.live),
         nextId: advancedEnemy.nextId,
         enemyRng: advancedEnemy.rng,
         breach: advancedBreach,
       },
       intermission: {
         saved: intermissionSaved?.breaches || null,
-        savedEnemyCount: intermissionSaved?.enemies?.live?.length ?? null,
+        savedEnemyCount: window.__SFfieldIds(intermissionSaved?.enemies?.live).length,
         applied: intermissionApplied,
         restored: intermissionRestored,
-        restoredEnemyCount: intermissionEnemy.live.length,
-        restoredUnique: new Set(intermissionEnemy.live.map((enemy) => enemy.id)).size,
+        restoredEnemyCount: window.__SFfieldIds(intermissionEnemy.live).length,
+        restoredUnique: new Set(window.__SFfieldIds(intermissionEnemy.live)).size,
         lastResult: T.persistenceState()?.lastResult?.type || null,
       },
       lastResult: T.persistenceState()?.lastResult || null,
@@ -1243,13 +1302,22 @@ async function emptyActiveBreachRoundtripPass(browser) {
 }
 
 async function emergenceLifecycleRoundtripPass(browser) {
-  console.log("\n=== MATRIARCH EMERGENCE LIFECYCLE ROUNDTRIPS ===");
+  console.log("\n=== BREACH EMERGENCE LIFECYCLE ROUNDTRIPS ===");
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await bootPage(context, "emergence-lifecycle");
   const probe = await page.evaluate(() => {
     const T = window.__SF;
     const clone = (value) => JSON.parse(JSON.stringify(value));
-    const bossObject = () => T.enemies.live.find((enemy) => enemy.key === "matriarch") || null;
+    /* THE SUBJECT IS AN EMERGING BREACH MEMBER, FOLLOWED BY ID.
+       It used to be `find(enemy => enemy.key === "matriarch")`, from when
+       the Matriarch led wave 4. She holds the Gilded Reach now and no
+       wave carries a boss, so that lookup silently retargeted onto the
+       district-boss fixture standing in her lair - a creature that never
+       emerges - and the whole pass measured an animation that was not
+       playing. Enemy ids survive a restore, which is what makes the
+       subject followable across the round trips below. */
+    let subjectId = null;
+    const bossObject = () => T.enemies.live.find((enemy) => enemy.id === subjectId) || null;
     const recordFor = (id, snapshot = T.enemies.snapshot()) =>
       snapshot.live.find((record) => record.id === id) || null;
     const poseName = (inst) => {
@@ -1311,6 +1379,12 @@ async function emergenceLifecycleRoundtripPass(browser) {
           kid && kid.state !== "death" && kid.health > 0).length,
         rootScale: [inst.root.scale.x, inst.root.scale.y, inst.root.scale.z],
         baseScale,
+        /* The authored record scale the durable roster is supposed to
+           carry: baseScale is the emergence's memory of it, and dividing
+           the spec back out is exactly what enemies.js snapshot() does.
+           Compared against the saved record rather than against 1, which
+           was only ever true because the Matriarch is a 1.0-scale spec. */
+        specScale: inst.spec.scale,
         rootY: inst.root.position.y,
         groundY: inst.y,
         rootRotation: [inst.root.rotation.x, inst.root.rotation.y, inst.root.rotation.z],
@@ -1333,22 +1407,26 @@ async function emergenceLifecycleRoundtripPass(browser) {
         enemyRng: clone(enemySnapshot.rng),
         breach: clone(T.breachState()),
         roster: {
-          count: enemySnapshot.live.length,
-          unique: new Set(enemySnapshot.live.map((enemy) => enemy.id)).size,
-          ids: enemySnapshot.live.map((enemy) => enemy.id),
+          count: window.__SFfieldIds(enemySnapshot.live).length,
+          unique: new Set(window.__SFfieldIds(enemySnapshot.live)).size,
+          ids: window.__SFfieldIds(enemySnapshot.live),
         },
       };
     };
 
     T.invulnerable(true);
-    T.clearEnemies();
+    window.__SFclearField();
     T.setBreachAuto(false);
     const control = T.enemies.spawn("thresher", -850, -850, { yaw: 0.25 });
     const controlId = control?.id || null;
     const ps = T.player.state;
-    const launched = T.startBreachWave(4, ps.x, ps.z - 44, false);
+    const WAVE = 4;
+    const waveRoster = (T.ctx.breaches.waves[WAVE]?.roster || [])
+      .reduce((total, entry) => total + (entry.count || 0), 0);
+    const launched = T.startBreachWave(WAVE, ps.x, ps.z - 44, false);
+    subjectId = T.breachState().memberIds[0] || null;
     const launchedBoss = bossObject();
-    if (!launchedBoss || !controlId) return { setupError: "final-wave launch failed" };
+    if (!launchedBoss || !controlId) return { setupError: "wave launch produced no member" };
 
     const warningBefore = inspectBoss(controlId);
     const warningSnapshot = T.saves.capture();
@@ -1417,6 +1495,9 @@ async function emergenceLifecycleRoundtripPass(browser) {
     return {
       launched,
       controlId,
+      subjectId,
+      wave: WAVE,
+      waveRoster,
       warning: {
         before: warningBefore,
         savedRecord: warningSavedRecord,
@@ -1454,14 +1535,19 @@ async function emergenceLifecycleRoundtripPass(browser) {
     };
   });
   evidence.emergenceLifecycleRoundtrip = probe;
-  check("warning Matriarch snapshot keeps authored scale and null lifecycle metadata",
+  const authoredScale = (state) => (state ? state.baseScale / state.specScale : null);
+  check("warning breach snapshot keeps authored scale and null lifecycle metadata",
     !probe.setupError
       && probe.warning?.before?.breach?.phase === "warning"
       && probe.warning?.before?.emergence?.active === true
       && probe.warning?.before?.broodTimerDefined === false
-      && probe.warning?.savedRecord?.scale === 1
+      /* The authored size, NOT the underground squash the root is wearing
+         while this frame is saved - the whole reason enemies.js divides
+         the spec back out before writing the record. */
+      && closeEnough(probe.warning?.savedRecord?.scale,
+        authoredScale(probe.warning?.before), 0.0005)
       && probe.warning?.savedRecord?.broodTimer === null
-      && probe.warning?.savedRecord?.eventWave === 4
+      && probe.warning?.savedRecord?.eventWave === probe.wave
       && probe.warning?.savedControl?.eventWave === null
       && probe.warning?.savedEnemyRng?.spare === null
       && probe.warning?.savedBreachRng?.spare === null,
@@ -1471,28 +1557,33 @@ async function emergenceLifecycleRoundtripPass(browser) {
   check("warning roundtrip reconstructs the authored base at the initial emergence scale",
     probe.warning?.applied === true
       && probe.warning?.restored?.emergence?.active === true
-      && closeEnough(probe.warning?.restored?.emergence?.baseScale, 1, 0.0001)
-      && closeEnough(probe.warning?.restored?.rootScale?.[0], 0.68, 0.0001)
-      && closeEnough(probe.warning?.restored?.rootScale?.[1], 0.68, 0.0001)
-      && closeEnough(probe.warning?.restored?.rootScale?.[2], 0.68, 0.0001)
+      /* Against the base measured before the save rather than a literal
+         1.0, which held only while this pass followed a 1.0-scale spec. */
+      && closeEnough(probe.warning?.restored?.emergence?.baseScale,
+        probe.warning?.before?.baseScale, 0.0001)
+      && [0, 1, 2].every((axis) => closeEnough(probe.warning?.restored?.rootScale?.[axis],
+        probe.warning?.before?.baseScale * 0.68, 0.0001))
       && probe.warning?.restored?.progressionError < 0.0001
       && probe.warning?.restored?.broodTimerDefined === false
-      && probe.warning?.restored?.eventWave === 4
+      && probe.warning?.restored?.eventWave === probe.wave
       && probe.warning?.restored?.controlEventWave === null
       && probe.warning?.restored?.enemyRng?.spare === null
       && probe.warning?.restored?.breach?.rng?.spare === null,
-    JSON.stringify({ applied: probe.warning?.applied, restored: probe.warning?.restored }));
+    JSON.stringify({ applied: probe.warning?.applied, before: probe.warning?.before,
+      restored: probe.warning?.restored }));
   check("active-rise roundtrip resumes the authored emergence scale curve",
     probe.active?.before?.breach?.phase === "active"
       && probe.active?.before?.emergence?.active === true
       && probe.active?.before?.progressionError < 0.0001
-      && probe.active?.savedRecord?.scale === 1
+      && closeEnough(probe.active?.savedRecord?.scale,
+        authoredScale(probe.active?.before), 0.0005)
       && probe.active?.savedRecord?.broodTimer === null
-      && probe.active?.savedRecord?.eventWave === 4
+      && probe.active?.savedRecord?.eventWave === probe.wave
       && probe.active?.savedEnemyRng?.spare === null
       && probe.active?.savedBreachRng?.spare === null
       && probe.active?.applied === true
-      && closeEnough(probe.active?.restoredImmediate?.emergence?.baseScale, 1, 0.0001)
+      && closeEnough(probe.active?.restoredImmediate?.emergence?.baseScale,
+        probe.active?.before?.baseScale, 0.0001)
       && probe.active?.restoredImmediate?.broodTimerDefined === false
       && probe.active?.restoredImmediate?.state === probe.active?.before?.state
       && probe.active?.restoredImmediate?.pose === probe.active?.before?.pose
@@ -1515,49 +1606,51 @@ async function emergenceLifecycleRoundtripPass(browser) {
       applied: probe.active?.applied, restoreEffects: probe.active?.restoreEffects,
       immediate: probe.active?.restoredImmediate,
       stepped: probe.active?.restoredStep }));
-  check("loaded Matriarch surfaces at authored scale with the initial brood delay",
+  /* The brood-delay half of this assertion is gone with its subject: the
+     wave rosters are thresher/gleaner/harrow and none of them lays. What
+     survives - and is the part the save service owns - is that a member
+     restored mid-rise still finishes the rise, lands at its authored size,
+     and creates nothing on the way. */
+  check("loaded breach member surfaces at its authored scale, spawning nothing",
     probe.surface?.frames > 0 && probe.surface?.frames < 360
       && probe.surface?.state?.emergence?.active === false
       && probe.surface?.state?.emergence?.surfaced === true
-      && closeEnough(probe.surface?.state?.rootScale?.[0], 1, 0.0001)
-      && closeEnough(probe.surface?.state?.rootScale?.[1], 1, 0.0001)
-      && closeEnough(probe.surface?.state?.rootScale?.[2], 1, 0.0001)
-      && probe.surface?.state?.broodTimerDefined === true
-      && probe.surface?.state?.broodTimer > 7.5
-      && probe.surface?.state?.broodTimer < 7.7
+      && [0, 1, 2].every((axis) => closeEnough(probe.surface?.state?.rootScale?.[axis],
+        probe.surface?.state?.baseScale, 0.0001))
+      && probe.surface?.state?.broodTimerDefined === false
       && probe.surface?.state?.broodCount === 0
       && probe.surface?.broodEvents === 0
-      && probe.surface?.state?.roster?.count === 6,
+      && probe.surface?.state?.roster?.count === probe.waveRoster + 1,
     JSON.stringify(probe.surface));
   check("inactive post-surface tail reloads as a full-scale upright alert pose",
     probe.tail?.savedRecord?.emergence?.active === false
       && probe.tail?.savedRecord?.emergence?.surfaced === true
-      && probe.tail?.savedRecord?.scale === 1
+      && closeEnough(probe.tail?.savedRecord?.scale,
+        authoredScale(probe.surface?.state), 0.0005)
       && probe.tail?.applied === true
       && probe.tail?.restored?.emergence === null
       && probe.tail?.restored?.state === "alert"
       && probe.tail?.restored?.pose === "alert"
       && probe.tail?.restored?.alerted === true
-      && closeEnough(probe.tail?.restored?.rootScale?.[0], 1, 0.0001)
-      && closeEnough(probe.tail?.restored?.rootScale?.[1], 1, 0.0001)
-      && closeEnough(probe.tail?.restored?.rootScale?.[2], 1, 0.0001)
+      && [0, 1, 2].every((axis) => closeEnough(probe.tail?.restored?.rootScale?.[axis],
+        probe.tail?.restored?.baseScale, 0.0001))
       && closeEnough(probe.tail?.restored?.rootY, probe.tail?.restored?.groundY, 0.0001)
       && closeEnough(probe.tail?.restored?.rootRotation?.[0], 0, 0.0001)
       && closeEnough(probe.tail?.restored?.rootRotation?.[2], 0, 0.0001),
     JSON.stringify({ savedRecord: probe.tail?.savedRecord, applied: probe.tail?.applied,
-      restored: probe.tail?.restored }));
-  check("post-surface tail roundtrip preserves roster metadata without brood replay",
-    probe.tail?.restored?.eventWave === 4
+      surface: probe.surface?.state, restored: probe.tail?.restored }));
+  check("post-surface tail roundtrip preserves roster metadata without lifecycle replay",
+    probe.tail?.restored?.eventWave === probe.wave
       && probe.tail?.restored?.controlEventWave === null
       && probe.tail?.restored?.enemyRng?.spare === null
       && probe.tail?.restored?.breach?.rng?.spare === null
-      && probe.tail?.restored?.roster?.count === 6
-      && probe.tail?.restored?.roster?.unique === 6
-      && probe.tail?.advanced?.rootScale?.every((scale) => closeEnough(scale, 1, 0.0001))
+      && probe.tail?.restored?.roster?.count === probe.waveRoster + 1
+      && probe.tail?.restored?.roster?.unique === probe.waveRoster + 1
+      && probe.tail?.advanced?.rootScale?.every((scale) =>
+        closeEnough(scale, probe.tail?.advanced?.baseScale, 0.0001))
       && probe.tail?.advanced?.state === "alert"
       && probe.tail?.advanced?.pose === "alert"
       && probe.tail?.advanced?.broodCount === 0
-      && probe.tail?.advanced?.broodTimer > 7
       && probe.tail?.broodEvents === 0
       && probe.lastResult?.type === "loaded",
     JSON.stringify({ restored: probe.tail?.restored, advanced: probe.tail?.advanced,
@@ -1567,23 +1660,32 @@ async function emergenceLifecycleRoundtripPass(browser) {
 }
 
 async function activeBreachCompatibilityPass(browser) {
-  console.log("\n=== ACTIVE MATRIARCH BREACH SAVE COMPATIBILITY ===");
+  console.log("\n=== ACTIVE BREACH SAVE COMPATIBILITY ===");
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await bootPage(context, "active-breach");
   const probe = await page.evaluate(() => {
     const T = window.__SF;
     T.invulnerable(true);
-    T.clearEnemies();
+    window.__SFclearField();
     T.setBreachAuto(false);
     const ps = T.player.state;
-    const launched = T.startBreachWave(4, ps.x, ps.z - 44, true);
+    const WAVE = 4;
+    /* THE WAVE'S SIZE, ASKED OF THE WAVE. This pass used to require five
+       members and a boss bar, because wave 4 was the Matriarch's. She is
+       the Gilded Reach's district boss now and no wave in BREACH_WAVES
+       carries a `bossKey` at all, so a literal count here measured the
+       roster the harness was written against rather than the one the
+       game builds. The wave definitions are frozen module constants. */
+    const waveRoster = (T.ctx.breaches.waves[WAVE]?.roster || [])
+      .reduce((total, entry) => total + (entry.count || 0), 0);
+    const launched = T.startBreachWave(WAVE, ps.x, ps.z - 44, true);
     T.advanceTime(0.12, 1 / 60);
 
     const before = T.breachState();
     const emergingBefore = T.enemies.live.filter((enemy) => enemy.emerging?.active)
       .map((enemy) => enemy.id);
     const saved = T.saveSlot(0);
-    const savedEnemyIds = (saved?.enemies?.live || []).map((enemy) => enemy.id);
+    const savedEnemyIds = window.__SFfieldIds(saved?.enemies?.live);
     const savedEmergingIds = (saved?.enemies?.live || [])
       .filter((enemy) => enemy.emergence?.active).map((enemy) => enemy.id);
 
@@ -1600,7 +1702,7 @@ async function activeBreachCompatibilityPass(browser) {
 
     const loaded = T.loadSlot(0);
     const after = T.breachState();
-    const idsAfter = T.enemies.live.filter((enemy) => !enemy.spec?.durableDomain)
+    const idsAfter = T.enemies.live.filter((enemy) => !window.__SFisFixture(enemy))
       .map((enemy) => enemy.id);
     const emergingAfter = T.enemies.live.filter((enemy) => enemy.emerging?.active)
       .map((enemy) => enemy.id);
@@ -1615,7 +1717,6 @@ async function activeBreachCompatibilityPass(browser) {
        be produced where it actually occurs. Written against a fixed
        wave number this passed for one boss and then failed for the next
        while nothing was broken. */
-    T.advanceTime(7, 1 / 60);
     const clear = (ids) => {
       for (const id of ids) {
         const member = T.enemies.live.find((enemy) => enemy.id === id);
@@ -1624,8 +1725,29 @@ async function activeBreachCompatibilityPass(browser) {
         });
       }
     };
-    const finalMemberIds = T.breachState().memberIds.slice();
-    clear(finalMemberIds);
+    /* KILL THE WAVE, HOWEVER LONG ITS RISE TAKES. Damage is rejected while
+       a member is still emerging, and the delay is staggered per member,
+       so a single swing after a fixed wait leaves whoever was still
+       underground alive - a fifteen-strong wave kept eight of them and the
+       terminal "complete" shape this check round-trips was never produced.
+       Swing, step, repeat until the roster is empty, bounded so a genuine
+       failure to die reports as an unfinished wave rather than a hang. */
+    const clearWave = () => {
+      const killed = [];
+      /* Restoring a save re-establishes authoritative combat state, so the
+         QA invulnerability set at the top of this pass does not survive the
+         load above. Re-arm it: this loop stands in the middle of a full
+         wave. It is a QA knob and is not part of any captured snapshot. */
+      T.invulnerable(true);
+      for (let step = 0; step < 240 && T.breachState().remaining > 0; step += 1) {
+        const ids = T.breachState().memberIds.slice();
+        clear(ids);
+        for (const id of ids) if (!killed.includes(id)) killed.push(id);
+        if (T.breachState().remaining > 0) T.advanceTime(0.25, 1 / 60);
+      }
+      return killed;
+    };
+    const finalMemberIds = clearWave();
     const emptyFinalActive = T.breachState();
     T.advanceTime(0.05, 1 / 60);
     const afterBoss = T.breachState();
@@ -1633,8 +1755,7 @@ async function activeBreachCompatibilityPass(browser) {
     const waveCount = T.ctx.breaches.waves.length;
     T.startBreachWave(waveCount - 1, ps.x, ps.z - 44, true);
     T.advanceTime(0.12, 1 / 60);
-    const lastMemberIds = T.breachState().memberIds.slice();
-    clear(lastMemberIds);
+    const lastMemberIds = clearWave();
     T.advanceTime(0.05, 1 / 60);
     const completeBefore = T.breachState();
     const completeSaved = T.saves.capture();
@@ -1643,6 +1764,8 @@ async function activeBreachCompatibilityPass(browser) {
     const completeEnemies = T.enemies.snapshot();
     return {
       launched,
+      wave: WAVE,
+      waveRoster,
       before,
       emergingBefore,
       saved: saved ? {
@@ -1675,11 +1798,11 @@ async function activeBreachCompatibilityPass(browser) {
         lastMemberIds,
         before: completeBefore,
         saved: completeSaved?.breaches || null,
-        savedEnemyCount: completeSaved?.enemies?.live?.length ?? null,
+        savedEnemyCount: window.__SFfieldIds(completeSaved?.enemies?.live).length,
         applied: completeApplied,
         after: completeAfter,
-        enemyCount: completeEnemies.live.length,
-        unique: new Set(completeEnemies.live.map((enemy) => enemy.id)).size,
+        enemyCount: window.__SFfieldIds(completeEnemies.live).length,
+        unique: new Set(window.__SFfieldIds(completeEnemies.live)).size,
         lastResult: T.persistenceState()?.lastResult?.type || null,
       },
       lastResult: T.persistenceState()?.lastResult || null,
@@ -1688,16 +1811,18 @@ async function activeBreachCompatibilityPass(browser) {
   evidence.activeBreachCompatibility = probe;
   const sorted = (values) => (values || []).slice().sort();
   const same = (a, b) => JSON.stringify(sorted(a)) === JSON.stringify(sorted(b));
-  check("active Matriarch emergence produces a legitimate field snapshot",
-    probe.before?.phase === "active" && probe.before?.waveIndex === 4
-      && probe.before?.bossId && probe.before?.memberIds?.length === 5
-      && probe.emergingBefore.length > 0
+  check("active breach emergence produces a legitimate field snapshot",
+    probe.before?.phase === "active" && probe.before?.waveIndex === probe.wave
+      && probe.waveRoster > 0
+      && probe.before?.memberIds?.length === probe.waveRoster
+      && probe.before?.total === probe.waveRoster
+      && probe.emergingBefore.length === probe.waveRoster
       && probe.saved?.schema === 2 && probe.saved?.phase === "active"
       && probe.saved?.bossId === probe.before.bossId
       && same(probe.saved?.memberIds, probe.before?.memberIds)
       && same(probe.saved?.emergingIds, probe.emergingBefore),
-    JSON.stringify({ before: probe.before, emergingBefore: probe.emergingBefore,
-      saved: probe.saved }));
+    JSON.stringify({ wave: probe.wave, waveRoster: probe.waveRoster, before: probe.before,
+      emergingBefore: probe.emergingBefore, saved: probe.saved }));
   check("validated active-breach snapshot loads with phase, wave, members, and boss intact",
     probe.loaded && probe.lastResult?.type === "loaded"
       && probe.after?.phase === probe.saved?.phase
@@ -1718,7 +1843,7 @@ async function activeBreachCompatibilityPass(browser) {
     JSON.stringify({ savedCount: probe.saved?.enemyCount, mutated: probe.mutated,
       after: probe.enemiesAfter }));
   check("legitimate complete breach shape loads successfully",
-    probe.terminal?.killedMemberIds?.length === 5
+    probe.terminal?.killedMemberIds?.length === probe.waveRoster
       && probe.terminal?.emptyFinalActive?.phase === "active"
       && probe.terminal?.emptyFinalActive?.remaining === 0
       && probe.terminal?.emptyFinalActive?.memberIds?.length === 0

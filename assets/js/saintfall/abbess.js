@@ -68,12 +68,67 @@
    Her brood's own pool is `inst.health` on ordinary Threshers, so
    nothing here is a special case for combat.js: they are spawned,
    they are killed, and this module only ever watches.
+
+   ============================================================
+   HOW SHE IS LIT AND SURFACED, and the four traps in it
+
+   She is the best subsurface subject in the game and she used to be
+   the flattest thing in it: twenty metres of ivory sac at the same
+   value and the same warm hue as the dune behind her, on three
+   materials that all read as one matte plastic. Four things fixed
+   that, and each of them had a trap.
+
+   1. THE KIT'S GRAIN IS GLUED TO `position`, AND HER `position`
+      MOVES. `applySurface` samples its noise field from the raw
+      `position` attribute precisely because on a skinned .glb that
+      attribute is the bind pose and never moves. Every other boss in
+      the programme gets that for free. This one does not: the sac and
+      the eggs are procedural meshes whose `position` IS the animation
+      - rewritten every frame by `poseAbdomen` in WORLD space - so the
+      kit's field would swim across the shell on every breath and slide
+      nine metres down her body on every slam, which is the exact
+      failure the kit's own header says it exists to avoid.
+
+      So both meshes carry a second, STATIC attribute, `sfObj`: the
+      rest pose as a straight cylinder in metres, written once at
+      build. `bindSurfaceToRestPose` re-points the kit's one vertex
+      line at it and folds a suffix into the program cache key, so the
+      variant stays distinct. It is a rewrite of the kit's own
+      generated source and it is only correct because it also extends
+      the key - see the note on the function itself. The proper fix is
+      one line in `boss-surface.js` and it is in this round's report.
+
+   2. TWO MATERIALS, UNMISTAKABLY DIFFERENT. `membrane` on the sac and
+      the eggs, `chitin` on the head, thorax, collar and tergites. The
+      chitin also took a real METALNESS - a violet dielectric throws a
+      white highlight, a violet metal throws a violet one, and that
+      hue-shifted sheen rolling across plate as the camera moves is
+      most of what a 2001 Hunter has that we did not.
+
+   3. THE LAMP IS THE ANIMAL. She does not get a light: a light
+      appearing recompiles every material in the scene, and this
+      district already pays that once. The brood glow is vertex alpha
+      through the atmosphere patch's `bio` channel - repainted every
+      frame, so the light can travel down her, sicken as she dies, and
+      flare on the ventral weak point exactly when the fight opens it -
+      plus two additive shells that cost two draw calls between them
+      and give her something the emissive channel cannot: spill. One
+      hugs the belly, one lies on the chamber floor underneath it.
+
+   4. A DORMANT QUEEN NOW COSTS NOTHING. `poseAbdomen` and
+      `updateEggs` used to rewrite and re-upload every vertex of a
+      hidden mesh on every frame of the whole game. Both are gated on
+      there being something to see; both take a `force` so the spawn,
+      reset and restore paths still get a spine written for combat.js
+      to read.
    ============================================================ */
 
 import {
   TAU, clamp, clamp01, damp, dampAngle, lerp, makeBus, makeRng, smoothstep,
+  sstep,
 } from "saintfall/core.js";
-import { patchMaterial } from "saintfall/art.js";
+import { patchBasicMaterial } from "saintfall/art.js";
+import { applySurface, setSurfaceDamage } from "saintfall/boss-surface.js";
 import { DISTRICTS } from "saintfall/terrain.js";
 import { SURVIVAL_CONFIG } from "saintfall/combat.js";
 
@@ -195,29 +250,147 @@ export const ABBESS_CONFIG = Object.freeze({
   simRange: 620,
 });
 
-const SAC_SIDES = 12;
+/* TWENTY-TWO, up from twelve, and it is a detail budget rather than a
+   silhouette one. The sac is smooth-shaded, so extra sides do almost
+   nothing to its outline - what they buy is somewhere to PAINT. At
+   twelve sides one vertex spans thirty degrees, which on a nine-metre
+   body is two and a half metres: nothing finer than "belly, flank,
+   back" can be written into the colour attribute at all, and the
+   membrane's own veining had nowhere to live. Doubling it costs 130
+   vertices, no draw calls, and a per-frame repaint that was already
+   negligible. */
+const SAC_SIDES = 22;
 const EGG_SIDES = 7;
 const EGG_RINGS = 4;
 
-/* Pale, and pale is correct here even though the Garner taught the
-   opposite lesson. That animal lived at the bottom of a sunlit sand
-   funnel where mid-value belongs to the ground; this one sits in a
-   violet chitin chamber under spore light, where the ground is dark and
-   the only other pale thing in frame is bone. A swollen ivory sac is
-   the brightest object in the district by design - she is what the
-   player's eye should go to from the rim. */
-const SAC_PALE = [0.335, 0.280, 0.262];
-const SAC_DEEP = [0.105, 0.062, 0.092];
-const SAC_VEIN = [0.30, 0.10, 0.24];
+/* ============================================================
+   THE PALETTE, AND THE ONE RULE IT ANSWERS
+
+   "A boss may not wear its district's sand." The first pass did,
+   exactly: SAC_PALE was [0.335, 0.280, 0.262] - a warm ivory, and the
+   Bloom's ground photographs as a warm brown-maroon at almost that
+   value, so twenty metres of animal read as a dune with segments on
+   it. The separation strategy the art direction assigns her is
+   SATURATION AND GLOW, and neither of those is a paler cream.
+
+   So the sac is no longer pale at all. It is TRANSLUCENT: a hot,
+   saturated brood light seen through a stretched membrane, which is
+   what backlit flesh actually looks like and what nothing else in the
+   district is. Three families, deliberately unequal in area, the way
+   the Halo 2 Scarab is built:
+
+     - a LOT of near-black violet chitin (head, thorax, collar,
+       tergites, the sac's back) - value separation, hard down
+       against a mid-value ground;
+     - a LITTLE hot rose brood light on the sac's belly - chroma
+       separation, the only saturated thing in frame;
+     - ONE spot of the saturated: the ventral weak point, which is
+       hotter and wetter than everything around it and gets brighter
+       in the two seconds the fight lets you shoot it.
+
+   The glow colours are stored NORMALISED - peak channel at 1.0 - and
+   scaled by a separate gain at use. An additive shell built from a
+   saturated colour whose channels are not normalised clips its bright
+   channel long before the others and the whole effect turns white,
+   which this project has already paid for once in the doctrine rites.
+   ============================================================ */
+/* The brood light itself. Hot rose rather than amber: amber is the
+   district's own dust and would give the frame one hue family again,
+   and a queen's clutch lit from behind goes red long before it goes
+   yellow. */
+/* ROLLED OFF THE SAND, TWICE. The first pass here was [1.00,0.30,0.30] -
+   a hot RED, hue about 0 degrees - and the measurement said the frame's
+   mean hue was landing at 27-31 degrees, which is Vesper-IX's own dust.
+   A red lamp in a warm brown chamber is one hue family wearing two
+   exposures. Pulled round past red into rose-magenta (blue channel now
+   ABOVE green, so the hue is negative - roughly -20 degrees), which is
+   the one direction nothing else in the Bloom occupies: the district's
+   spires are violet, its ground is orange-brown, and this sits between
+   them and belongs to neither. */
+const SAC_GLOW = [1.00, 0.26, 0.42];
+/* ...and what it becomes as she dies. Not merely dimmer - SICK. Hue
+   rolls off the red toward a bilious ochre and the chroma drops, so a
+   player reads her health off the light rather than off the bar. */
+const SAC_SICK = [0.42, 0.62, 0.26];
+/* Lit membrane, where the brood light comes through the thinnest
+   stretch of her. BRIGHT, and measurably so: the first repaint of this
+   round put her at meanLuma 23.2 against a Halo pool band of 31.4-91.6
+   with 73% of the frame crushed under luma 26, and the honest reading
+   of that is not "the grade is wrong" - the district is dark on
+   purpose and art.js is not this module's to touch - but "the one
+   thing in the frame that is supposed to be a light source is not
+   bright enough to be one". */
+const SAC_PALE = [1.00, 0.36, 0.47];
+/* ...and the same membrane where it does not: her flanks and back,
+   violet, the value floor of the animal. Not black: a back at 0.075
+   made the top half of a twenty-metre animal read as a hole punched in
+   the chamber, which is a silhouette rather than a body. */
+/* ...AND THESE ARE LINEAR, which is the whole reason this number had
+   to move. Vertex colours are handed to three in working space and are
+   NOT converted, so 0.105 linear is sRGB 0.36 - a mid mauve, not the
+   near-black the number reads as on the page. Under the grade's warm
+   shadow tint that mid mauve photographed as TAN, and the dorsal third
+   of a twenty-metre animal came back wearing the district's sand while
+   the constant sitting here said "violet". Taken down to a value that
+   is dark AFTER the encode, and pushed further into blue so the warm
+   split-tone has further to drag it. The old note that a dark back
+   "reads as a hole punched in the chamber" was written when the whole
+   animal was dark and there was nothing for a hole to be punched IN;
+   with the belly now a lamp, a dark dorsal is the animal's own
+   silhouette against its own light, which is form rather than absence. */
+/* ...and then put BACK UP in chroma, which is the opposite of what the
+   paragraph above concluded and is worth recording as a correction
+   rather than quietly editing away.
+
+   A colour probe settled it: the abdomen was repainted [0,0,1] blue and
+   [0,1,0] green to find out which region was which, and the tan cap
+   turned out to sit exactly on this constant. Taking the constant DOWN
+   to 0.052 did not make the cap violet - it made it tanner. The reason
+   is that the warm terms on this surface are ADDITIVE and albedo-blind:
+   the sky rim and the sun's Fresnel specular are the same number of
+   photons whatever is underneath them, so the darker the paint the more
+   completely they own the pixel. A near-black dorsal is not a violet
+   dorsal, it is a canvas for whatever the sky is doing.
+
+   So the dorsal has to be dark AND saturated enough to still be the
+   loudest thing in its own pixel: value roughly where it was, chroma
+   nearly doubled, and the blue channel now 2.7x the red. The warm
+   specular then reads as a highlight ON violet rather than as the
+   colour of the animal. */
+const SAC_DEEP = [0.095, 0.042, 0.255];
+const SAC_VEIN = [1.00, 0.24, 0.44];
 /* The tergites: the hard plates between the swollen segments, and they
    are the same chitin as her head rather than a darker shade of sac.
    Painting them as "dimmer cream" was the first pass and it made twenty
    metres of faint ring lines - the bands have to be a different
    MATERIAL to the eye, not a different exposure of the same one. */
-const SAC_BAND = [0.055, 0.038, 0.070];
-const CHITIN_DARK = [0.045, 0.030, 0.052];
-const CHITIN_LIT = [0.155, 0.105, 0.185];
-const EGG_PALE = [0.52, 0.46, 0.44];
+/* ...and the tergites keep their CHROMA even at this value, for the
+   reason the SAC_DEEP note above spells out: on a near-neutral dark
+   paint the sun's Fresnel specular owns the pixel and the plate reads
+   cream. These sit at a tenth of the sac's value with two and a half
+   times the blue of the red, so the highlight lands ON violet. */
+const SAC_BAND = [0.052, 0.021, 0.132];
+const CHITIN_DARK = [0.034, 0.024, 0.056];
+/* The plate's lit face. Pushed toward violet and away from the brown
+   it used to carry, because the chitin's own metalness now tints its
+   specular with this colour: a violet metal throws a violet highlight
+   and a brown one throws a muddy sand highlight, which is the district
+   again. */
+const CHITIN_LIT = [0.205, 0.118, 0.315];
+const EGG_PALE = [0.92, 0.34, 0.46];
+/* THE WEAK POINT'S CORE, and it is the one place on her that is allowed
+   to leave the hue behind entirely. Everything else on the animal is
+   rose; this is rose taken to the top of the value scale, so the focal
+   element separates from the lamp it sits in by VALUE rather than by
+   another colour - which is what the Scarab's cyan core does against
+   its orange panels, one axis over. */
+const WEAK_CORE = [1.00, 0.66, 0.62];
+/* The eyes, and they are the only part of her that is allowed to blow
+   out. A frame with no blown pixel anywhere has no wet, no polish and
+   no metal in it - the whole cast measured brightPct at or near zero
+   against a pool that always carries some - and two lit lozenges on a
+   dark head is the cheapest honest place to spend it. */
+const EYE_HOT = [1.00, 0.46, 0.42];
 
 export function buildAbbess(ctx) {
   const { THREE, scene, atmos, enemies } = ctx;
@@ -232,6 +405,37 @@ export function buildAbbess(ctx) {
   group.name = "abbess";
   group.visible = false;
   scene.add(group);
+
+  /* ============================================================
+     EVERYTHING OF HERS THAT IS NOT HER BODY
+
+     The spill shells and the clutch go in their own group, and this
+     is a silhouette fix rather than tidiness.
+
+     `saintfall-boss-gallery.mjs` photographs a boss's outline by
+     naming its body meshes as roots, walking the scene, and hiding
+     everything that is not on a path to one of them. That is a
+     correct design and it did not work here, because the things it
+     hides RE-SHOW THEMSELVES: `poseGlow` and `updateEggs` set
+     `mesh.visible = true` every frame, and the harness's step runs
+     after its walk. So the Abbess's silhouette came back as a
+     twenty-two metre jagged white DISC with an animal somewhere in
+     the middle of it - the glow pool, painted flat white, read as
+     part of her shape - plus two lozenges out on the floor that were
+     a clutch of eggs.
+
+     Nothing in this module needs to know about the harness for that
+     to be fixed. Parent them to one group that the module never
+     touches the visibility of: the walk hides the GROUP, the per-mesh
+     flags underneath go on flipping harmlessly, and nothing draws.
+     Anything added here later inherits the fix.
+
+     `group.traverse` still reaches all of it, so the fight harness's
+     winding audit keeps its coverage. */
+  const decor = new THREE.Group();
+  decor.name = "sf-abbess-decor";
+  group.add(decor);
+
 
   const floorY = groundAt(C.lairX, C.lairZ);
 
@@ -264,6 +468,35 @@ export function buildAbbess(ctx) {
     laid: 0,
     breathTick: 0,
     dustTick: 0,
+
+    /* ---- weight, and the things that carry it -------------------
+       NONE of these are saved. `snapshot` writes six numbers and a
+       phase and that is deliberate: a settling spring or a half-flinch
+       persisted into a save file is a physical state with no meaning
+       on the other side of a load, and this module already carries one
+       hard-won lesson about what a boss is allowed to put in a save
+       (see the FLOORED note in `stepInstance`). Everything below is
+       reset by `resetToSeat`, `clearHazards` and `restore`. */
+    /* The abdomen's own heading, which LAGS the thorax's. Twenty
+       metres of egg sac does not arrive when the head does. */
+    sacYaw: C.yaw,
+    /* One damped spring, driven by every impact she takes or makes,
+       read per-ring with a delay so the wobble travels down her rather
+       than bobbing the whole body as a unit. */
+    jigY: 0,
+    jigV: 0,
+    /* WHERE she was last hit, as a ring index, and how much of that
+       flinch is left. A boss that flinches identically wherever it is
+       shot is a health bar with a model attached. */
+    hitRing: -1,
+    hitAmt: 0,
+    /* Rate limit on ichor stains: the scorch pool is shared and small,
+       and a full-auto magazine into her belly would evict every other
+       mark on the map inside two seconds. */
+    ichorAt: -99,
+    /* The death, as a physical event with a clock on it: the abdomen
+       deflates, the brood light goes out, and she settles. */
+    deathT: -1,
   };
 
   /* Her living children, and how long each has been alive. combat.js
@@ -279,11 +512,142 @@ export function buildAbbess(ctx) {
      as lit from inside at any hour because the player has to be able
      to tell a live one from a spent one across a dark room.
      ============================================================ */
+  /**
+   * Re-point the shared surface kit at a STATIC rest pose.
+   *
+   * THE TRAP, stated once so nobody re-derives it. `applySurface`
+   * samples its object-space grain from the `position` attribute, on
+   * the reasoning - correct for every .glb boss - that `position` is
+   * the bind pose and therefore never moves. Both of this module's
+   * animated meshes violate that: the sac's and the eggs' positions
+   * are rewritten in WORLD space every frame, so the kit's field would
+   * slide across the shell on every breath, travel with the laying
+   * wave, and drop nine metres down her body every time she slammed.
+   * A projected pattern is the one thing the kit exists to not be.
+   *
+   * The fix is a second attribute, `sfObj`, written once at build and
+   * never touched again, and one line of the kit's generated vertex
+   * shader re-pointed at it.
+   *
+   * WHY THIS IS ALLOWED TO REWRITE GENERATED SOURCE. `patchMaterial`
+   * owns `customProgramCacheKey`, and the failure it warns about is a
+   * second `onBeforeCompile` that changes the SOURCE without changing
+   * the KEY - two variants then silently share whichever program
+   * compiled first, and the symptom is "my shader did nothing". This
+   * wrapper calls the kit's compile first and then extends the kit's
+   * own key rather than replacing it, so the invariant the warning
+   * protects - one program per distinct source - still holds. It is
+   * still a workaround: the right shape is an `objAttribute` option on
+   * `applySurface`, which this round's report asks for.
+   */
+  function bindSurfaceToRestPose(material) {
+    const compile = material.onBeforeCompile;
+    const key = material.customProgramCacheKey;
+    material.onBeforeCompile = (shader, renderer) => {
+      compile(shader, renderer);
+      /* Anchored on the kit's own varying declaration and its one
+         assignment. Both are literals the kit writes itself, so if it
+         ever renames them this stops matching and the grain goes back
+         to swimming - which is visible in a screenshot, unlike a
+         silent shader failure. */
+      shader.vertexShader = shader.vertexShader
+        .replace("varying vec3 vSFObj;", "varying vec3 vSFObj;\nattribute vec3 sfObj;")
+        .replace("vSFObj = position;", "vSFObj = sfObj;");
+    };
+    material.customProgramCacheKey = () => `${key.call(material)}|abbessRest`;
+    material.needsUpdate = true;
+    return material;
+  }
+
+  /**
+   * Make the brood light carry the surface's own grain.
+   *
+   * THE TRAP, and it is the one that kept this animal measuring flat
+   * however much detail was put on it. `art.js` computes the vertex-
+   * alpha emission at `color_fragment`:
+   *
+   *     vec3 sfBio = diffuseColor.rgb * vColor.a * uBio;
+   *
+   * which is BEFORE the surface kit touches anything. The kit's cavity,
+   * mottle, wear and crack all land at `normal_fragment_maps`, several
+   * chunks later. So on any surface whose emission is a large fraction
+   * of its final value - which is the whole point of this boss - the
+   * pixel is mostly a term that no grain has ever been applied to, and
+   * the brighter the lamp is made the FLATTER it gets. She measured
+   * microDetail 4.8 against a Halo floor of 6.1 with a fully detailed
+   * shader running on her, because the detailed half of the shader was
+   * being drowned by the undetailed half.
+   *
+   * The fix is one substitution and no new maths: emit from the albedo
+   * as it stands at emission time rather than from the copy taken
+   * eleven chunks earlier. `diffuseColor.rgb` by then carries every
+   * modulation the kit applied, so the light coming through her is
+   * dimmer in the creases and brighter on the crests - which is also
+   * what a backlit membrane of uneven thickness actually does.
+   *
+   * WHY IT IS SAFE TO CHAIN THIS ONTO `bindSurfaceToRestPose`. The
+   * warning `patchMaterial` carries is about a second `onBeforeCompile`
+   * that REPLACES `customProgramCacheKey` and so collapses two distinct
+   * sources into one program. Both wrappers here capture the previous
+   * function and the previous key and extend each, so the invariant -
+   * one program per distinct generated source - still holds however
+   * many of them are stacked.
+   *
+   * It is still a rewrite of somebody else's generated string, and it
+   * is anchored on a literal `art.js` owns. The right shape is for the
+   * bio block to move to `emissivemap_fragment`, where it would pick
+   * this up for every boss at once; that patch is in the report.
+   */
+  function bindEmissiveToGrain(material) {
+    const compile = material.onBeforeCompile;
+    const key = material.customProgramCacheKey;
+    material.onBeforeCompile = (shader, renderer) => {
+      compile(shader, renderer);
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "totalEmissiveRadiance += sfBio;",
+        "totalEmissiveRadiance += diffuseColor.rgb * vColor.a * uBio;");
+    };
+    material.customProgramCacheKey = () => `${key.call(material)}|abbessEmitGrain`;
+    material.needsUpdate = true;
+    return material;
+  }
+
   const sacMat = new THREE.MeshStandardMaterial({
     vertexColors: true,
     flatShading: false,
-    roughness: 0.44,
-    metalness: 0.0,
+    /* WET, and lower than the 0.44 this carried before the surface
+       kit arrived. What says "membrane" rather than "painted rubber"
+       is a specular lobe that TRAVELS as the camera moves, and the
+       membrane family's gloss spread is the widest in the table
+       precisely so that it can - but it modulates around whatever
+       centre the module sets, and a centre at 0.44 kept the whole
+       travel inside the matte half. */
+    /* AND THEN PUT BACK UP, from 0.33, because 0.33 was buying the
+       wrong kind of wet.
+
+       A dielectric's specular is WHITE whatever the surface under it
+       is, and a broad lobe on a twenty-metre cylinder concentrates
+       that white into a band running the animal's whole length. At
+       0.33 that band photographed as a pale warm cream ridge along
+       every tergite fold - which is to say the one boss forbidden from
+       wearing the district's sand was growing a sand-coloured stripe
+       out of its own highlight, and no amount of repainting the albedo
+       could touch it because the albedo was not what was being seen.
+
+       0.50 spreads the same energy over roughly twice the solid angle
+       and drops the peak below the point where it reads as a colour.
+       What replaces it is the kit's `glint` term, which is a NARROW
+       lobe confined to the top tenth of the coarse crest: a scatter of
+       small blown specks instead of one long cream ridge. Same wet, a
+       tenth of the area, and it lands where the grain is rather than
+       where the cylinder is. */
+    roughness: 0.56,
+    /* A LITTLE METAL ON A MEMBRANE, which is a lie the chitin already
+       tells for the same reason: past a little metalness the albedo
+       tints the specular, so what glints off her is rose rather than
+       white. Kept small - the diffuse term is what the brood light is
+       escaping through and metalness eats it. */
+    metalness: 0.10,
   });
   sacMat.name = "sf-abbess-sac";
   /* Smooth-shaded, like the Garner's limbs and for the same reason:
@@ -298,26 +662,252 @@ export function buildAbbess(ctx) {
      ivory mass with no form in it at all, and halving the paint did
      nothing because the paint was not what was being seen. Turned down,
      the diffuse lighting gets the body back and the segments read. */
-  patchMaterial(sacMat, atmos, { rim: 0.28, glitter: 0, bio: 0.9 });
+  /* `bio` up from 0.9. The emissive the atmosphere patch adds is
+     `albedo * vColor.a * bio`, so this number and the alpha this
+     module repaints every frame are the two halves of one dial: above
+     1 the belly clears the bloom chain's bright threshold and actually
+     blooms, which is the difference between a pale surface and a lamp.
+     The alpha ramp is written to keep her back near zero, so raising
+     the gain lights the belly without lighting the animal. */
+  applySurface(sacMat, atmos, "membrane", {
+    /* RIM DOWN AGAIN, from 0.28. The atmosphere's rim samples the SKY
+       and adds it, and Vesper-IX's sky is pale warm - so on the one
+       boss whose separation strategy is "not the district's hue", the
+       rim is the district's hue arriving through the back door along
+       every silhouette edge. She does not need it: she is a light
+       source, and a lamp separates from its background by being
+       brighter than it, which is the job a rim is normally hired for.
+
+       AND THEN OFF ENTIRELY, at 0, once the colour probe had run. On
+       the dorsal third, where the paint is deliberately dark, the rim
+       WAS most of the pixel - so the pixel was the sky's warm colour,
+       and the one boss forbidden from wearing the district's sand had
+       a sand-coloured back that no amount of repainting could reach.
+       She does not need it: a rim exists to separate a silhouette from
+       its background, and this silhouette is separated by twenty
+       metres of light coming out of the animal's own belly. */
+    rim: 0, glitter: 0, bio: 1.85,
+    /* WEAR OFF, and it is the one family field this animal must
+       override. The kit's wear pass pulls the hue out of upward-facing
+       facets and lifts their value - which is right for a rubbed plate
+       and exactly wrong here, because a desaturated pale top on a
+       twenty-metre abdomen is the district's own sand reappearing on
+       the one boss whose whole separation strategy is saturation. The
+       first shoot of this round came back with cream ridges along
+       every tergite for that reason. */
+    wear: 0,
+    /* Grain and crease UP from the family's defaults. The membrane
+       preset is authored for something merely wet; these numbers are
+       still sub-facet (the finest is four centimetres on a body nine
+       metres across) and they are what the measurement asked for -
+       microDetail 4.0 and edgeDensity 5.1 against pool floors of 6.1
+       and 8.6. The family's own ceiling argument is set by the
+       THINNEST limb wearing the material, and nothing on this animal
+       is thin. */
+    /* CAVITY WAS 0.40, MEASURED UP TO 0.48 AND BACK, AND IS NOW 0.52 -
+       and the flip is the point rather than an embarrassment.
+
+       The old reading was correct about its own subject: with 72% of
+       the frame crushed under luma 26, every extra stop of crease
+       shadow moved pixels out of the band where they could hold
+       spread and into the floor where they could not. Cavity buys
+       contrast only until it runs out of room underneath it.
+
+       She is a light source now. There is room underneath her
+       everywhere, so the same term that was destroying contrast is
+       making it - and unlike the first time it is landing on the
+       largest projected area in the game rather than on a silhouette. */
+    /* MOTTLE DOWN HARD, from the family's 0.15. The kit's coarse
+       octave is metre-scale, and a metre-scale albedo blotch on a
+       nine-metre body is not grain - it is a DISRUPTIVE PATTERN. She
+       came back from the first lit shoot with pale patches the size of
+       a car scattered over the abdomen, reading exactly as camouflage,
+       which is the Stylite's job and the opposite of this one's: a
+       lamp wants to be one continuous surface with detail UNDER it. */
+    mottle: 0.15,
+    /* GRAIN BACK UP, once `bindEmissiveToGrain` gave it somewhere to
+       land. While the emission was flat these numbers were fighting
+       for the fraction of the pixel that was still diffuse, and taking
+       them higher only made the unlit dorsal noisier. With the lamp
+       carrying the same modulation, the whole twenty metres is a
+       surface again and the finest octave - four centimetres on a body
+       nine metres across - is the thing that says it is an animal
+       rather than a lampshade. */
+    /* WAVELENGTH DOWN FROM THE FAMILY'S 2.4m, and this is the one
+       number that was making a detailed shader read as a printed
+       pattern.
+
+       The octaves are exactly lambda, lambda/3, lambda/9, lambda/27.
+       At 2.4m the third of those is 27cm, which at fighting range
+       subtends about twelve pixels - big enough to resolve as a SHAPE
+       and small enough to repeat many times across the body, which is
+       the exact size band at which a quasi-periodic field stops
+       reading as material and starts reading as a motif. Photographed,
+       the abdomen came back covered in a legible chevron squiggle at
+       one constant scale. Meanwhile the finest octave sat at 9cm,
+       under the fade, contributing nothing - so she measured
+       microDetail 5.2 against a Halo floor of 6.1 while visibly
+       wearing a texture.
+
+       At 1.45m the same four octaves land at 1.45 / 0.48 / 0.16 /
+       0.054m: the motif drops to five pixels and dissolves into
+       grain, and the pore octave arrives inside the resolvable band
+       for the first time. Slope is amplitude times wavenumber so the
+       relief steepens by two thirds at the same amplitudes, which is
+       four to seven degrees of tilt - still inside the band the kit's
+       own family table argues for, and nothing on this animal is thin
+       enough to hit the cord failure that ceiling exists for. */
+    /* BACK TO THE FAMILY'S OWN 2.4m, and this is a correction with a
+       measurement behind it rather than a preference.
+
+       It was taken to 1.45 and then 1.9 and then 2.2 to break up a
+       chevron motif that was legible at conversational distance, and
+       every step of that made the picture cleaner and the numbers
+       worse: microDetail fell 5.2 -> 3.9 and localContrast 15.3 ->
+       10.3 as the readable octave shrank past the point where a 32px
+       tile could hold it. Which is the whole finding - the motif and
+       the detail were the SAME SIGNAL, and shortening the wavelength
+       does not separate them, it just moves both under the antialias
+       fade.
+
+       What separates them is coverage. The tergites are geometry now,
+       so the large flat-ish stretches where a quasi-periodic field
+       prints most legibly are under armour, and the membrane that is
+       left is strongly curved and strongly lit - which is where grain
+       reads as grain. Same field, half the canvas, and the half it
+       kept is the half that flatters it. */
+    wavelength: 2.4,
+    score: 0.0034, pore: 0.0017, cavity: 0.52, gloss: 0.27,
+    /* The kit's detail branch switched off NEARER than the
+       family default of 40/92. She is twenty-six metres long, so
+       at any fighting range the far half of her is past the fade
+       and skips six transcendentals and four derivatives per
+       pixel - on the largest projected area of any boss in the
+       game, which is where this cost actually lands. */
+    fadeNear: 42, fadeFar: 96,
+    /* EMBER DOWN, hard, from the membrane family's 0.70. The kit
+       lights a hot ORANGE glow in the cracks it opens as damage
+       accumulates, and orange is Vesper-IX's own sand: at the
+       family default a queen at 15% health came back covered in
+       glowing leopard spots in the one hue this boss is under
+       instruction never to wear. The kit's own header records the
+       same failure on the Cantor and narrowed the crack band for
+       it; this narrows the GAIN, because on her the cracks are
+       correct and their colour is not. */
+    ember: 0.26,
+  });
+  bindSurfaceToRestPose(sacMat);
+  bindEmissiveToGrain(sacMat);
 
   const chitinMat = new THREE.MeshStandardMaterial({
     vertexColors: true,
     flatShading: true,
-    roughness: 0.52,
-    metalness: 0.05,
+    /* GLOSSY, per the art direction: hard violet-black plate in hard
+       contrast to the soft abdomen. Two materials, unmistakably - and
+       roughness is most of what makes that legible with the colour
+       removed. */
+    roughness: 0.31,
+    /* THE HUNTER'S VIOLET SHEEN, and the only reason it works. A
+       dielectric's specular is white at F0 0.04 whatever colour the
+       surface is, so a violet plate under a warm sun threw a warm
+       WHITE highlight and read as wet plastic. Past a little metalness
+       the albedo becomes the specular colour and the plate throws a
+       violet highlight instead. Kept well under 0.3: art.js records
+       that past about 0.6 the diffuse term vanishes and the surface
+       renders as a blurred reflection of the sky. */
+    metalness: 0.16,
   });
   chitinMat.name = "sf-abbess-chitin";
   chitinMat.side = THREE.DoubleSide;
-  patchMaterial(chitinMat, atmos, { rim: 0.85, glitter: 0.08, bio: 1.0 });
+  applySurface(chitinMat, atmos, "chitin", {
+    /* RIM DOWN, from 0.85, and it is the third time this file has had
+       to learn the same thing from a different surface.
+
+       The atmosphere patch's rim samples the SKY and adds it, and
+       Vesper-IX's sky is pale warm. On the sac at 0.28 that put the
+       district's sand along the silhouette; here at 0.85 it was doing
+       it to every EDGE of every plate at once - the thorax's cylinder
+       caps, the collar's rear lip, both pairs of mandibles - and
+       photographed as cream-tan trim outlining the fore-body. On the
+       one boss whose separation strategy is "not this district's hue",
+       her armour was wearing the district's hue as piping, and no
+       amount of repainting the albedo could reach it because the term
+       is additive and albedo-blind. What replaces it is the plate's
+       own metalness, which throws a VIOLET highlight because past a
+       little metalness the albedo is the specular colour. */
+    rim: 0.42, glitter: 0.08, bio: 1.0,
+    /* Deeper cavity and more edge wear than the family's default. Her
+       plate is the ONE part of her that is hard, old and rubbed, and
+       cavity is the term that puts dark in a crease - which is the
+       axis the brief calls "a creature with no dark in its creases is
+       a toy", and the one the measurement calls localContrast. */
+    /* WAVELENGTH DOWN FROM THE FAMILY'S 1.15m, and it is the mirror
+       image of the argument on the sac two hundred lines up.
+
+       The family number is authored for a plate on a nine-metre
+       animal. Her fore-body is not that: the skull is five metres end
+       to end and the thorax is four, so lambda/3 landed at 38cm - a
+       third of the width of the part wearing it - and printed as a
+       legible chevron across the head at any range a player ever sees
+       it from. Same field, same amplitudes, at 0.75m the readable
+       octave is 25cm on the sac's scale and 8cm here, which is grain.
+
+       The rule the two cases share: WAVELENGTH TRACKS THE SIZE OF THE
+       THING WEARING IT, not the size of the animal it belongs to. The
+       eggs already carried that note; the head needed it too. */
+    wavelength: 0.75,
+    cavity: 0.48, wear: 0.15, gloss: 0.28, fadeNear: 40, fadeFar: 92,
+    score: 0.0030, pore: 0.0013, ember: 0.30,
+  });
 
   const eggMat = new THREE.MeshStandardMaterial({
     vertexColors: true,
     flatShading: false,
-    roughness: 0.38,
+    roughness: 0.30,
     metalness: 0.0,
   });
   eggMat.name = "sf-abbess-egg";
-  patchMaterial(eggMat, atmos, { rim: 1.2, glitter: 0, bio: 2.6 });
+  /* Membrane, like the sac - they are the same tissue - but at a THIRD
+     of the family's wavelength. The family's 2.4m is sized for a
+     twenty-metre abdomen; on a two-metre egg it puts most of one cell
+     on the whole object and the clutch comes out as a row of
+     differently-tinted eggs rather than a row of eggs. Wavelength is
+     the one number here that has to track the size of the thing
+     wearing it. */
+  applySurface(eggMat, atmos, "membrane", {
+    rim: 1.2, glitter: 0, bio: 2.6, wavelength: 0.80,
+  });
+  bindSurfaceToRestPose(eggMat);
+  bindEmissiveToGrain(eggMat);
+
+  /* ============================================================
+     THE SPILL
+
+     Two additive shells, and they exist because the emissive channel
+     cannot do the one thing a lamp does: put light on something else.
+     A real light would - and would also recompile every material in
+     the scene the first frame it appeared, which this game has already
+     measured at 198ms of freeze. Additive geometry is the trade: no
+     recompile, no shadow pass, two draw calls, and the eye reads the
+     spill as light because it is in the right place with the right
+     falloff.
+
+     ONE MATERIAL for both, so they share one compiled program, and
+     `forceSinglePass` because three's default two-pass DoubleSide
+     transparent path would otherwise draw each of them twice for a
+     depth ordering that is meaningless under additive blending.
+     ============================================================ */
+  const glowMat = new THREE.MeshBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 1,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide, toneMapped: true,
+  });
+  glowMat.name = "sf-abbess-glow";
+  glowMat.forceSinglePass = true;
+  /* Additive surfaces fade toward BLACK, not toward the sky - see the
+     note on `patchBasicMaterial`. A hazed additive shell that faded
+     toward sky colour would stamp a pale wedge over the chamber. */
+  patchBasicMaterial(glowMat, atmos, 0.85, true);
 
   /* ============================================================
      THE ABDOMEN
@@ -364,7 +954,15 @@ export function buildAbbess(ctx) {
          constrictions were a suggestion and the animal came out as one
          smooth bag; a queen's segments are separate swellings with hard
          rings cinched between them. */
-      pinch: i % 2 === 1 ? 0.845 : 1,
+      /* ...and deeper again, 0.845 -> 0.80, once the membrane between
+         the plates became a light source. A constriction is worth
+         exactly as much contrast as there is light on either side of
+         it: while the whole abdomen was one dark value the groove had
+         nothing to be dark against, and edgeDensity measured 5.8
+         against a Halo floor of 8.6. Every centimetre taken out of
+         these six rings now buys a hard black line across a lit body,
+         which is the cheapest edge on the animal. */
+      pinch: i % 2 === 1 ? 0.76 : 1,
       band: i % 2 === 1,
       /* Each segment has its own idea of when the breath reaches it,
          so the whole body undulates rather than pumping as one bag. */
@@ -402,59 +1000,36 @@ export function buildAbbess(ctx) {
     for (let s = 0; s < SAC_SIDES; s += 1) {
       index.push(last + s, last + ((s + 1) % SAC_SIDES), tip);
     }
+    /* MOTTLE, frozen at build. The per-vertex repaint below runs every
+       frame and `rng()` is a sequence, not a field - drawing from it in
+       there would give every vertex a different value on every frame
+       and the animal would boil. Sampled once here, it stays glued. */
+    const mottle = new Float32Array(sacVerts);
+    for (let i = 0; i < sacVerts; i += 1) mottle[i] = 0.88 + rng() * 0.24;
+
+    /* THE REST POSE, for the surface kit. See `bindSurfaceToRestPose`:
+       this is the sac laid out as a straight cylinder along +x in
+       metres, which is what the grain is glued to. It never changes,
+       which is the entire point of it. */
+    const objRest = new Float32Array(sacVerts * 3);
     for (let i = 0; i < segs; i += 1) {
       const ring = rings[i];
+      const rr = C.abdomenRadius * ring.swell * ring.pinch;
       for (let s = 0; s < SAC_SIDES; s += 1) {
-        const k = (i * SAC_SIDES + s) * 4;
-        /* Underside pale and translucent, back darker and plated. A
-           queen is lit from below by her own chamber and the belly is
-           where the eggs show through, so the value gradient runs the
-           opposite way to every other creature in the game. */
-        /* SIN, NOT COS - the ring frame's `n1` is horizontal and `n2`
-           points DOWN (see `poseAbdomen`), so the cosine term runs
-           across her flanks and the sine term runs belly-to-back. Built
-           on cosine, this whole ramp painted one side of her pale and
-           the other dark, and the animal read as flat because its only
-           value gradient was at ninety degrees to the light. */
-        const under = clamp01(Math.sin((s / SAC_SIDES) * TAU) * 0.5 + 0.5);
-        /* Hard contrast between belly and back. She is lit from below by
-           her own chamber and from above by nothing, and a gentle ramp
-           across that reads as a smooth object rather than as a body. */
-        /* The floor is high enough that her BACK is a mid tone rather
-           than a silhouette. It was 0.14 while the ramp was accidentally
-           running across her flanks, where the darkest value only ever
-           landed on a side the light was already catching; pointed
-           correctly at the top of her it made twenty metres of animal
-           read as a hole in the chamber. */
-        const pale = (0.38 + under * 0.62) * (0.88 + rng() * 0.24)
-          * lerp(1.0, 0.78, ring.t);
-        /* A band is chitin; everything else is membrane. Two ramps
-           rather than one, so the plates read as armour laid over the
-           sac instead of as shadow on it. */
-        const from = ring.band ? SAC_BAND : SAC_DEEP;
-        const to = ring.band ? CHITIN_LIT : SAC_PALE;
-        colour[k] = lerp(from[0], to[0], ring.band ? pale * 0.5 : pale);
-        colour[k + 1] = lerp(from[1], to[1], ring.band ? pale * 0.5 : pale);
-        colour[k + 2] = lerp(from[2], to[2], ring.band ? pale * 0.5 : pale);
-        /* THE VEINS. Bright between the plates and brightest toward
-           the ovipositor, so the light in her runs backward down the
-           body toward where the eggs come out - which is the only
-           cue that tells a player at range which end to shoot. */
-        colour[k + 3] = ring.band ? 0.02
-          : (0.05 + ring.t * 0.30) * (0.30 + under * 0.70);
+        const ang = (s / SAC_SIDES) * TAU;
+        const k = (i * SAC_SIDES + s) * 3;
+        objRest[k] = ring.t * C.abdomenLength;
+        objRest[k + 1] = Math.cos(ang) * rr;
+        objRest[k + 2] = Math.sin(ang) * rr;
       }
     }
-    {
-      const k = tip * 4;
-      colour[k] = SAC_VEIN[0];
-      colour[k + 1] = SAC_VEIN[1];
-      colour[k + 2] = SAC_VEIN[2];
-      colour[k + 3] = 0.70;
-    }
+    objRest[tip * 3] = C.abdomenLength + 1.2;
+
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(position, 3));
     geo.setAttribute("normal", new THREE.BufferAttribute(normal, 3));
     geo.setAttribute("color", new THREE.BufferAttribute(colour, 4));
+    geo.setAttribute("sfObj", new THREE.BufferAttribute(objRest, 3));
     geo.setIndex(index);
     geo.boundingSphere = new THREE.Sphere(
       new THREE.Vector3(C.lairX, floorY, C.lairZ), C.abdomenLength + 16);
@@ -464,7 +1039,7 @@ export function buildAbbess(ctx) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     group.add(mesh);
-    return { mesh, geo, position, normal };
+    return { mesh, geo, position, normal, colour, mottle };
   })();
 
   /* The live spine of the abdomen: one point per ring, in world space,
@@ -480,6 +1055,1027 @@ export function buildAbbess(ctx) {
   const _n1 = new THREE.Vector3();
   const _n2 = new THREE.Vector3();
 
+  /* ============================================================
+     THE TERGITES, AND WHY THEY ARE GEOMETRY NOW
+
+     They were PAINT. Six dark rings on the sac's colour attribute,
+     laid on the constricted rings, on the reasoning that a
+     constriction plus a dark band reads as a joint between plates.
+     It does, at eighty metres. At twenty-five it reads as a stripe:
+     one smooth surface with a value change drawn on it, no lip, no
+     shadow, no second material anywhere in the silhouette. The
+     measurement said the same thing from the other side - edgeDensity
+     7.4 against a Halo floor of 8.6, microDetail 5.2 against 6.1 -
+     and paint cannot answer either of those, because both of them
+     are questions about what happens at an EDGE and a painted band
+     has none.
+
+     So the plates are real shells now: six of them, one per band
+     ring, arching over the dorsal 58% of the circumference, lapping
+     rearward over the fat segment behind them the way a termite's
+     tergites actually do. Each one buys four things paint could not:
+
+       - a HARD RIM crossing a lit membrane. The plate comes down past
+         the horizontal on both flanks, so its lower edge cuts across
+         the brightest part of the lamp. That is the highest-contrast
+         edge available anywhere on this animal and there are twelve
+         of them.
+       - a CAST SHADOW. `castShadow` is on, so each plate darkens the
+         membrane under its own overhang - the "self-occlusion where
+         plate meets plate" the brief asks every boss for, and the one
+         thing a boss with no dark in its creases is missing.
+       - TWO MATERIALS IN ONE SILHOUETTE. Hard flat-shaded chitin
+         standing off soft smooth-shaded membrane, at different
+         roughness, on different grain wavelengths. With the colour
+         removed they are still different, which is the test.
+       - THE ACCENT LANGUAGE. A hot line of brood light escaping under
+         each plate's rear lip: a small saturated mark in a repeating
+         designed place, on a minority of the surface. Same
+         construction as the Scarab's hazard panels and the same
+         reason - a big model with one material on it reads as one
+         undifferentiated mass.
+
+     ONE DRAW CALL, 198 vertices, 240 triangles, and its own material
+     rather than the head's - because `chitinMat` samples the surface
+     kit's grain from `position`, and this mesh's `position` is
+     rewritten in world space every frame like the sac's. Same trap,
+     same cure: a static `sfObj` rest pose and `bindSurfaceToRestPose`.
+     ============================================================ */
+  /* Which rings carry a plate. Derived from `band` rather than
+     restated, so the plates cannot drift off the constrictions the
+     profile actually has if that pattern is ever retuned. */
+  const TERGITE_AT = [];
+  for (let i = 0; i < segs; i += 1) if (rings[i].band) TERGITE_AT.push(i);
+  const TERG_ARC = 15;    // angular samples across the back
+  const TERG_ROWS = 4;    // leading edge (tucked), crown, lap, trailing lip
+  /* The arc, in `under` terms: 0 is the spine, 1 is the belly. The
+     plate runs from one flank at 0.62 over the back to the other, so
+     both rims land BELOW the horizon of the body and cross lit
+     membrane. A plate that stopped at the flank would have its edge
+     exactly where the surface turns away from the camera, which is
+     the one place an edge cannot be seen. */
+  const TERG_A1 = Math.asin(0.24);              // under 0.62, one flank
+  const TERG_A2 = -Math.PI - Math.asin(0.24);   // the same, the other way
+  /* How far each row stands off the membrane, in fractions of the
+     local radius plus a fixed pad. The leading edge tucks UNDER the
+     plate in front of it (no lift at all), the crown carries the
+     plate's thickness, and the lip flares - which is what makes the
+     rear edge catch light and throw a shadow instead of dying into
+     the surface it lies on. */
+  const TERG_LIFT = [0.005, 0.045, 0.070, 0.090];
+  const TERG_PAD = [0.02, 0.08, 0.13, 0.17];
+  /* Axially: from three quarters of a segment in front of the
+     constriction to a little past the next ring, so the plate spans
+     the pinch and laps the fat segment behind it. */
+  const TERG_U0 = -0.55;
+  const TERG_U1 = 0.72;
+
+  const tergiteMat = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    flatShading: true,
+    /* HARDER AND GLOSSIER THAN THE HEAD's PLATE. These are the parts
+       of her armour the chamber's own light actually reaches, and the
+       whole point of them is that they answer light differently from
+       the membrane two centimetres underneath. */
+    roughness: 0.27,
+    metalness: 0.18,
+  });
+  tergiteMat.name = "sf-abbess-tergite";
+  applySurface(tergiteMat, atmos, "chitin", {
+    /* Rim low for the same reason the sac's is off - see the note on
+       `sacMat`. The atmosphere's rim is the SKY's warm colour added
+       along every silhouette edge, and twelve fresh silhouette edges
+       is twelve fresh places for the district's sand to arrive. */
+    rim: 0.22, glitter: 0.10, bio: 1.0,
+    /* Half the sac's wavelength. The two surfaces are two centimetres
+       apart and the eye compares them directly, so the cheapest way to
+       say "different material" without touching the colour is to make
+       the grain a different SIZE. */
+    wavelength: 0.72,
+    cavity: 0.50, wear: 0.06, gloss: 0.30, mottle: 0.16,
+    score: 0.0026, pore: 0.0012, ember: 0.30,
+    fadeNear: 44, fadeFar: 100,
+  });
+  bindSurfaceToRestPose(tergiteMat);
+
+  const tergites = (() => {
+    const per = TERG_ARC * TERG_ROWS;
+    const count = TERGITE_AT.length * per;
+    const position = new Float32Array(count * 3);
+    const normal = new Float32Array(count * 3);
+    const colour = new Float32Array(count * 4);
+    const objRest = new Float32Array(count * 3);
+    const index = [];
+    /* WOUND OUTWARD, and the derivation matters because the arc runs
+       BACKWARD. The ring frame (n1, n2, tangent) is right-handed, so
+       d(radial)/d(angle) x tangent = radial - which means the obvious
+       order faces outward only while the angle INCREASES with the
+       column. This arc sweeps from +0.077pi down to -1.077pi, so the
+       column order is reversed and the quad is (a, d, b) / (a, c, d).
+       `saintfall-abbess-fight.mjs` audits every named mesh under her
+       group against its own vertex normals, so a wrong guess here is
+       a failed check rather than a screenshot nobody looks at. */
+    for (let p = 0; p < TERGITE_AT.length; p += 1) {
+      const base = p * per;
+      for (let u = 0; u + 1 < TERG_ROWS; u += 1) {
+        for (let v = 0; v + 1 < TERG_ARC; v += 1) {
+          const a = base + u * TERG_ARC + v;
+          const b = a + 1;
+          const c = a + TERG_ARC;
+          const d = c + 1;
+          index.push(a, d, b, a, c, d);
+        }
+      }
+    }
+    /* The rest pose the grain is glued to: the same straight cylinder
+       along +x, in metres, that the sac's `sfObj` uses. Both surfaces
+       therefore sample ONE field in one frame, so the plate's grain
+       and the membrane's grain are two crops of the same material
+       rather than two unrelated patterns that happen to be adjacent. */
+    for (let p = 0; p < TERGITE_AT.length; p += 1) {
+      const i0 = TERGITE_AT[p];
+      for (let u = 0; u < TERG_ROWS; u += 1) {
+        const fi = clamp(i0 + lerp(TERG_U0, TERG_U1, u / (TERG_ROWS - 1)),
+          0, segs - 1);
+        const ri = rings[Math.round(fi)];
+        const rr = C.abdomenRadius * ri.swell * ri.pinch * (1 + TERG_LIFT[u]);
+        for (let v = 0; v < TERG_ARC; v += 1) {
+          const ang = lerp(TERG_A1, TERG_A2, v / (TERG_ARC - 1));
+          const k = (p * per + u * TERG_ARC + v) * 3;
+          objRest[k] = (fi / (segs - 1)) * C.abdomenLength;
+          objRest[k + 1] = Math.cos(ang) * rr;
+          objRest[k + 2] = Math.sin(ang) * rr;
+        }
+      }
+    }
+    /* Painted once. Nothing here is a function of the fight, so the
+       colour attribute is never re-uploaded - which is the whole
+       reason the plates are affordable on a body that already
+       rewrites 157 colours a frame. */
+    for (let p = 0; p < TERGITE_AT.length; p += 1) {
+      for (let u = 0; u < TERG_ROWS; u += 1) {
+        for (let v = 0; v < TERG_ARC; v += 1) {
+          const k = (p * per + u * TERG_ARC + v) * 4;
+          const across = Math.abs(v / (TERG_ARC - 1) - 0.5) * 2;  // 0 crown, 1 rim
+          /* Lit at the crown, near-black at the rims, which is what a
+             curved plate under a high sun does and is also the term
+             that keeps the flanks from competing with the lamp behind
+             them. The mottle is per-vertex and frozen, like the
+             sac's. */
+          const t = (0.09 + 0.40 * (1 - across * across)) * (0.84 + rng() * 0.32);
+          colour[k] = lerp(CHITIN_DARK[0], CHITIN_LIT[0], t);
+          colour[k + 1] = lerp(CHITIN_DARK[1], CHITIN_LIT[1], t);
+          colour[k + 2] = lerp(CHITIN_DARK[2], CHITIN_LIT[2], t);
+          /* THE WORN RIM, and it is the one place on this animal that
+             is allowed to go pale.
+
+             A plate's exposed lower edge is the part that gets rubbed
+             - by the floor, by her own brood, by twenty years of the
+             next plate sliding over it - and a rubbed chitin edge goes
+             PALE AND DESATURATED, which the surface kit's own `wear`
+             term does for exactly this reason. Here it is painted
+             rather than shaded, because the kit keys wear on which way
+             a facet points and these rims point outward in every
+             direction at once.
+
+             It is also the cheapest legitimate edge in the frame.
+             Twelve pale lines, each one lying along the boundary
+             between dark armour and lit membrane, each one a hard
+             value step across the brightest part of the animal - and
+             `edgeDensity` is literally a count of pixels whose
+             luminance gradient clears a threshold. The lines have to
+             be LILAC rather than cream: the same pale-edge cue in a
+             warm hue is the district's sand arriving on the one boss
+             forbidden to wear it, which is how the atmosphere rim got
+             turned down four paragraphs up. */
+          if (across > 0.72) {
+            /* ...and MUCH darker than the first attempt at it, which
+               is the fourth time this file has walked into the same
+               wall. At a linear 0.60/0.47/0.74 the rims were a pale
+               lilac on the page and photographed KHAKI, because the
+               sun's specular and the sky's rim are additive terms that
+               do not care what the albedo is: the paler the paint, the
+               more completely the warm light owns the pixel. The value
+               STEP is what buys the edge, not the value itself, so the
+               rim only has to be lighter than the near-black plate
+               beside it - and at a third of the old brightness, with
+               the blue channel still well clear of the red, it stays
+               violet under the same light that turned the last one
+               into sand. */
+            const rub = sstep(0.72, 1.0, across);
+            colour[k] = lerp(colour[k], 0.26, rub * 0.60);
+            colour[k + 1] = lerp(colour[k + 1], 0.17, rub * 0.60);
+            colour[k + 2] = lerp(colour[k + 2], 0.40, rub * 0.60);
+          }
+          /* THE ACCENT. Brood light escaping under the plate's rear
+             lip - only the last row, only where the plate laps the
+             next segment, and weighted toward the rims where the lap
+             is loosest. Alpha is the bio mask, so this is emission
+             through the same channel the sac's lamp uses and it
+             cannot drift to a different colour than the light it is
+             supposed to be leaking. */
+          if (u === TERG_ROWS - 1) {
+            const leak = 0.16 + 0.84 * across * across;
+            colour[k] = lerp(colour[k], SAC_GLOW[0], leak * 0.70);
+            colour[k + 1] = lerp(colour[k + 1], SAC_GLOW[1], leak * 0.70);
+            colour[k + 2] = lerp(colour[k + 2], SAC_GLOW[2], leak * 0.70);
+            colour[k + 3] = leak * 0.85;
+          }
+        }
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(position, 3));
+    geo.setAttribute("normal", new THREE.BufferAttribute(normal, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(colour, 4));
+    geo.setAttribute("sfObj", new THREE.BufferAttribute(objRest, 3));
+    geo.setIndex(index);
+    geo.boundingSphere = new THREE.Sphere(
+      new THREE.Vector3(C.lairX, floorY, C.lairZ), C.abdomenLength + 16);
+    const mesh = new THREE.Mesh(geo, tergiteMat);
+    mesh.name = "sf-abbess-tergites";
+    mesh.frustumCulled = false;
+    /* Casting is the point. The overhang's shadow on the membrane
+       beneath it is the only self-occlusion this animal has, and the
+       brief calls a creature with no dark in its creases a toy. */
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.visible = false;
+    group.add(mesh);
+    return { mesh, geo, position, normal };
+  })();
+
+  /** Lay the six plates out on the spine that was just posed. Called
+   *  from `poseAbdomen`, after it, never before - the plates read
+   *  `spine` and `spineRadius` and a plate laid on last frame's body
+   *  hangs off the animal by however far she moved. */
+  function poseTergites() {
+    const tp = tergites.position;
+    const tn = tergites.normal;
+    const per = TERG_ARC * TERG_ROWS;
+    for (let p = 0; p < TERGITE_AT.length; p += 1) {
+      const i0 = TERGITE_AT[p];
+      for (let u = 0; u < TERG_ROWS; u += 1) {
+        const fi = clamp(i0 + lerp(TERG_U0, TERG_U1, u / (TERG_ROWS - 1)),
+          0, segs - 1);
+        const ia = Math.min(segs - 2, Math.floor(fi));
+        const fr = fi - ia;
+        /* The frame comes off the SEGMENT the row sits on rather than
+           off the nearest ring, so a plate spanning a constriction
+           does not kink where the two ring frames disagree. */
+        _t.subVectors(spine[ia + 1], spine[ia]);
+        if (_t.lengthSq() < 1e-8) _t.set(0, 0, 1);
+        _t.normalize();
+        _n1.set(0, 1, 0);
+        if (Math.abs(_t.y) > 0.92) _n1.set(1, 0, 0);
+        _n1.crossVectors(_t, _n1).normalize();
+        _n2.crossVectors(_t, _n1).normalize();
+        _v.lerpVectors(spine[ia], spine[ia + 1], fr);
+        const rad = lerp(spineRadius[ia], spineRadius[ia + 1], fr);
+        for (let v = 0; v < TERG_ARC; v += 1) {
+          const ang = lerp(TERG_A1, TERG_A2, v / (TERG_ARC - 1));
+          const ca = Math.cos(ang);
+          const sa = Math.sin(ang);
+          // The same belly flattening the sac uses, so the two agree.
+          const squash = 1 - 0.22 * clamp01(sa);
+          const rx = (_n1.x * ca + _n2.x * sa) * squash;
+          const ry = (_n1.y * ca + _n2.y * sa) * squash;
+          const rz = (_n1.z * ca + _n2.z * sa) * squash;
+          const r = rad * (1 + TERG_LIFT[u]) + TERG_PAD[u];
+          const k = (p * per + u * TERG_ARC + v) * 3;
+          tp[k] = _v.x + rx * r;
+          tp[k + 1] = _v.y + ry * r;
+          tp[k + 2] = _v.z + rz * r;
+          tn[k] = rx; tn[k + 1] = ry; tn[k + 2] = rz;
+        }
+      }
+    }
+    tergites.geo.attributes.position.needsUpdate = true;
+    tergites.geo.attributes.normal.needsUpdate = true;
+  }
+
+  /* ============================================================
+     THE BROOD LIGHT
+
+     One number that every lit thing on her reads, so the lamp, the
+     spill, the veins, the weak point and the eggs cannot drift apart.
+     ============================================================ */
+
+  /** 0 while she is whole, 1 as she dies. Drives the sickening. */
+  function sickness() {
+    if (!inst || !inst.maxHealth) return 0;
+    return clamp01(1 - inst.health / inst.maxHealth);
+  }
+
+  /** How open the ventral weak point is, on the same threshold combat
+   *  uses for it (`HITBOX.abbess.ventral.open`). The light and the hit
+   *  volume have to agree or the player is aiming at a lie. */
+  function ventralOpen() {
+    return sstep(0.16, 0.62, state.raised);
+  }
+
+  /* The lamp's colour, rebuilt only when the health band it depends on
+     actually moves. Allocating three numbers per frame is nothing; the
+     point is that everything downstream reads ONE array. */
+  const glowRGB = [SAC_GLOW[0], SAC_GLOW[1], SAC_GLOW[2]];
+  let glowSick = -1;
+  function broodColour() {
+    const sick = sickness();
+    if (Math.abs(sick - glowSick) > 0.01) {
+      glowSick = sick;
+      /* Normalised to a peak channel of 1 - see the palette note. An
+         additive shell built from an un-normalised saturated colour
+         clips its hot channel first and the whole thing goes white. */
+      let peak = 0;
+      for (let c = 0; c < 3; c += 1) {
+        glowRGB[c] = lerp(SAC_GLOW[c], SAC_SICK[c], sick);
+        peak = Math.max(peak, glowRGB[c]);
+      }
+      for (let c = 0; c < 3; c += 1) glowRGB[c] /= Math.max(1e-4, peak);
+    }
+    return glowRGB;
+  }
+
+  /* ============================================================
+     REPAINTING THE SAC
+
+     Per-vertex, per-frame, and it is affordable for exactly one
+     reason: there are 157 vertices on this mesh. The gain is that the
+     light in her can MOVE - travel down the body, flare on the weak
+     point when the fight opens it, and sicken as she dies - none of
+     which a colour attribute written once at load can do.
+
+     The mottle is NOT redrawn here; it is frozen at build. See the
+     note where it is sampled.
+     ============================================================ */
+  function paintSac() {
+    const col = sac.colour;
+    const mot = sac.mottle;
+    const g = broodColour();
+    const wake = clamp01(state.woken);
+    /* The lamp does not come on with the pose. It comes on AFTER it,
+       squared, so the rouse reads as a body lifting and then lighting
+       rather than as a light on a dimmer. */
+    const lit = wake * wake * (state.deathT >= 0
+      ? clamp01(1 - state.deathT / 3.2) : 1);
+    const open = ventralOpen();
+    const sick = sickness();
+
+    for (let i = 0; i < segs; i += 1) {
+      const ring = rings[i];
+      /* SOMETHING MOVING IN IT. Two slow travelling waves at
+         incommensurate rates, so the brood light never repeats a
+         pattern the eye can lock onto - which is what separates "a
+         lamp with something alive in it" from "a lamp". */
+      const churn = 1
+        + 0.30 * Math.sin(atmos.elapsed * 0.83 - ring.t * 4.6)
+        + 0.16 * Math.sin(atmos.elapsed * 1.97 + ring.t * 8.1);
+      /* ...and a stutter as she dies, on top of it. */
+      const flicker = sick > 0.45
+        ? 1 - 0.30 * sick * Math.max(0, Math.sin(atmos.elapsed * 11.3 + ring.t * 2))
+        : 1;
+      for (let s = 0; s < SAC_SIDES; s += 1) {
+        const vi = i * SAC_SIDES + s;
+        const k = vi * 4;
+        /* SIN, NOT COS - the ring frame's `n1` is horizontal and `n2`
+           points DOWN (see `poseAbdomen`), so the cosine term runs
+           across her flanks and the sine term runs belly-to-back. Built
+           on cosine, this whole ramp painted one side of her pale and
+           the other dark, and the animal read as flat because its only
+           value gradient was at ninety degrees to the light. */
+        const under = clamp01(Math.sin((s / SAC_SIDES) * TAU) * 0.5 + 0.5);
+        /* Belly lit, back dark, and the ramp is HARD. She is lit from
+           inside and from below by her own chamber and from above by
+           nothing; a gentle ramp across that reads as a smooth object
+           rather than as a body. */
+        /* THE RAMP IS A BORDER, NOT A GRADIENT, and getting here took
+           two wrong answers in a row.
+
+           The first was linear, which put the ramp's MIDDLE - a warm
+           pink at half value - across the whole of her flanks. The
+           chamber's ambient is warm, so most of the animal came back
+           reading as tan: the district, on the boss.
+
+           The second was that same ramp raised to a power, which cured
+           the tan by making the flanks DARK - and measured worse. She
+           came back at meanLuma 25.2 against a Halo pool band of
+           31.4-91.6, with 72.5% of the frame crushed under luma 26
+           against a ceiling of 55.3. Both failures have one cause: the
+           flank is most of her projected area, and it was being asked
+           to carry the TRANSITION. Whatever value the transition sits
+           at is the value the animal reads as, and there is no value in
+           the middle of this ramp that is not either sand or mud.
+
+           So the transition does not live on the flank any more. It is
+           a smoothstep with both edges up in the DORSAL quarter: the
+           belly and both flanks are the lamp at full, the top third is
+           SAC_DEEP's violet-black, and the border between them is a
+           hard line running the length of her. Two families, unequal in
+           area, with an edge - which is the Scarab's construction and
+           is also, not by accident, what a physogastric queen looks
+           like: opaque tergites over a lit membrane.
+
+           `under` is 1 at the belly, 0.5 at the flank, 0 at the spine.
+           AND THE BORDER SITS HIGH - 0.03/0.30, not the 0.15/0.50 this
+           was first written at. The chase camera in this game looks
+           slightly DOWN at a seated animal, so the band of the body it
+           actually photographs runs from the spine to a little past the
+           shoulder: `under` between 0 and about 0.6. A border in the
+           middle of that puts the transition across the entire visible
+           surface, which is the same defect as the linear ramp wearing
+           a different mask - and it measured like one, moving meanLuma
+           by a single point. Pushed up to the dorsal sixth, the camera
+           sees lamp with a dark spine on it, which is what it is. */
+        const pale = sstep(0.03, 0.30, under) * mot[vi]
+          * lerp(1.0, 0.82, ring.t);
+        /* A band is chitin; everything else is membrane. Two ramps
+           rather than one, so the plates read as armour laid over the
+           sac instead of as shadow on it. */
+        /* ...and the bands are held DOWN, hard, rather than merely
+           being a dimmer version of the same ramp. With the membrane
+           now lit to full across both flanks, the tergites are the only
+           dark left on the lower two-thirds of the animal, and the
+           alternation between them is where every edge in her
+           silhouette comes from: six near-black rings over twenty
+           metres of lamp. At the 0.5 this carried they were a shade,
+           and the abdomen photographed as one continuous bag. */
+        const from = ring.band ? SAC_BAND : SAC_DEEP;
+        const to = ring.band ? CHITIN_LIT : SAC_PALE;
+        const t = ring.band ? pale * 0.30 : pale;
+        let r = lerp(from[0], to[0], t);
+        let gg = lerp(from[1], to[1], t);
+        let b = lerp(from[2], to[2], t);
+
+        /* THE VENTRAL WEAK POINT, and it has to be a PLACE rather than
+           a coordinate. It sits on the belly of the fat forward third -
+           the part of her that is over the player's head when the
+           abdomen comes up - and it is hotter, wetter and more
+           saturated than any other square metre of the animal. It is
+           already lit while she is merely seated, so a player can find
+           it before they ever need it; it flares when the slam opens
+           the hit volume, on the same threshold combat tests. */
+        const weak = sstep(0.72, 0.99, under)
+          * sstep(0.12, 0.24, ring.t) * (1 - sstep(0.44, 0.60, ring.t));
+        const heat = weak * (0.45 + open * 0.55) * lit;
+        if (heat > 0) {
+          /* IT HAS TO OUT-READ ITS OWN LAMP. While the belly was dark
+             the weak point could be "the hot bit"; now that the whole
+             lower half of her is hot rose, hue alone cannot mark it and
+             a player looking for somewhere to aim would be looking at
+             twenty metres of the same colour. So the core goes up the
+             VALUE scale toward white-hot, on top of the brood colour,
+             and only in the last third of the heat - which keeps the
+             surrounding membrane saturated and puts one small bleached
+             patch in the middle of it. */
+          const core = sstep(0.55, 1.0, heat);
+          const cr = lerp(g[0], WEAK_CORE[0], core);
+          const cg = lerp(g[1], WEAK_CORE[1], core);
+          const cb = lerp(g[2], WEAK_CORE[2], core);
+          r = lerp(r, cr, heat * 0.9);
+          gg = lerp(gg, cg, heat * 0.9);
+          b = lerp(b, cb, heat * 0.9);
+        }
+        /* THE VEINS, and they are the reason the cross-section went
+           from twelve sides to twenty-two.
+
+           A stretched brood membrane is not evenly translucent: it is
+           thin between the ducts and thick over them, so backlighting
+           it prints a set of bright lengthwise channels with dark
+           cords between. Nothing on this animal was doing that. The
+           kit's grain is isotropic by construction - it is a gyroid,
+           it has no preferred direction anywhere in it, which is
+           exactly right for pores and exactly wrong for plumbing - so
+           twenty metres of lamp had no structure running ALONG it at
+           all, and the only lengthwise information in the whole body
+           was the tergites.
+
+           Five channels around the circumference, drifting rearward
+           with the ring so they braid rather than running as straight
+           stripes, and modulating BOTH albedo and emission - a vein
+           that only brightened the glow would read as a light behind
+           a stencil, whereas thickness changes what the membrane is
+           as well as what gets through it.
+
+           Five is set by the vertex count and not by taste: at
+           twenty-two sides a five-cycle wave has four and a half
+           samples per cycle, and anything past six starts aliasing
+           into a moire that travels as she breathes. */
+        const duct = 0.5 + 0.5 * Math.sin((s / SAC_SIDES) * TAU * 5
+          + ring.t * 6.1 + mot[vi] * 1.4);
+        const ductLit = 1 + (duct - 0.5) * 0.34 * pale;
+        r *= ductLit; gg *= ductLit; b *= ductLit;
+
+        col[k] = r;
+        col[k + 1] = gg;
+        col[k + 2] = b;
+
+        /* THE ALPHA is the bio mask: `albedo * alpha * bio` is added
+           as emission. A tergite emits nothing - it is armour - and
+           her back barely does, so the light reads as coming from
+           INSIDE and escaping where the membrane is thinnest. Values
+           over 1 are deliberate and are not clamped anywhere: above the
+           material's gain of 1.55 they clear the bloom threshold, which
+           is the whole difference between a bright surface and a light
+           source. */
+        /* AND THE EMISSION FOLLOWS THE SAME BORDER, not `under` raw.
+           These two used to disagree: the albedo had a hard edge at the
+           dorsal quarter and the emission had a soft linear one running
+           all the way to the spine, so the top of her was dark paint
+           with a faint glow on it - which is a painted surface, not a
+           lit one. Sharing `pale` means the membrane emits exactly
+           where it is translucent and the tergites emit nothing, which
+           is the difference between light coming THROUGH her and light
+           painted ON her.
+
+           The gain more than doubled at the same time, and that is the
+           measurement talking rather than taste: emission here is
+           `albedo * alpha * bio`, and at the old 0.14-0.48 the belly's
+           emissive landed around 0.24 of albedo - under the bloom
+           chain's threshold, which is precisely the line between a pale
+           surface and a light source. The thing this animal is FOR is
+           being the only lamp in a dark chamber. */
+        const vein = (ring.band ? 0.04
+          : (0.52 + ring.t * 0.52) * (0.10 + pale * 0.90) * churn * flicker)
+          /* ...and the ducts modulate what gets THROUGH as well as
+             what the membrane looks like. Stronger here than on the
+             albedo, because a channel of brood light is mostly a
+             transmission story. */
+          * (0.72 + duct * 0.56);
+        /* CEILING AT 1.8, and it is a composition decision rather than
+           a safety one. Nothing clamps this on the way to the shader,
+           and at the 2.4 it was first written the weak point pushed
+           every channel past 1 and the hot core rendered WHITE - which
+           throws away the one saturated hue in the frame at exactly
+           the point the frame is about. At 1.8 the red channel clips
+           and the other two do not, so the core stays rose and only
+           its very centre goes white through the bloom. */
+        col[k + 3] = clamp((vein + heat) * lit, 0, 1.8);
+      }
+    }
+    /* The ovipositor. Brightest point on her that is not the weak
+       point, because the light in her runs backward down the body
+       toward where the eggs come out - which is the one cue that tells
+       a player at range which end of a twenty-six-metre animal to walk
+       around. */
+    {
+      const k = (segs * SAC_SIDES) * 4;
+      col[k] = lerp(SAC_VEIN[0], g[0], 0.5);
+      col[k + 1] = lerp(SAC_VEIN[1], g[1], 0.5);
+      col[k + 2] = lerp(SAC_VEIN[2], g[2], 0.5);
+      col[k + 3] = 1.15 * lit;
+    }
+    sac.geo.attributes.color.needsUpdate = true;
+  }
+
+  /* ============================================================
+     THE SPILL GEOMETRY
+
+     A belly shell and a floor pool, both additive, both rewritten from
+     the same spine the sac is drawn from so they cannot drift off it.
+
+     The shell is a HALF cylinder: only the lower sides get vertices,
+     because the top of her is armour and a glow that wrapped the whole
+     body would read as a force field rather than as light coming out
+     of a belly. The pool is a fan on the chamber floor with its
+     heights sampled off the terrain, for the reason the ground-FX
+     notes give: a flat quad under a creature on uneven ground either
+     buries its far edge or floats it.
+     ============================================================ */
+  /* THE WHOLE BODY, not the forward nine rings, and the arc is wider
+     than it was.
+
+     The shell was built as a pool of light under the fat third on the
+     reasoning that that is where the brood is. Measured, that was the
+     wrong trade: the emissive channel makes a surface bright, and the
+     only thing that makes a surface read as a LIGHT is haze standing
+     off it - and haze on the front half of a twenty-six metre animal
+     is a lamp with a dark object attached to the back of it. Ringed
+     one-for-one with the sac's own segments (GLOW_RINGS === segs, so
+     the mapping below is the identity and the shell cannot slide off
+     the body it belongs to) and taken round past the flanks, she has a
+     glow ATTACHED TO HER SHAPE rather than a puddle in her middle.
+
+     Still not the top: the tergites are armour, and a shell that
+     closed over the spine would read as a force field. */
+  const GLOW_RINGS = 13;     // === segs: one shell ring per body ring
+  const GLOW_SIDES = 9;      // the lower two-thirds of the circumference
+  /* FORTY-EIGHT, up from thirty and twenty-two before that, and the
+     reason has been geometric every time: see the ring note below.
+     The last raise was the contact occlusion - a body-shaped dark
+     patch resolved on thirty spokes is a body-shaped POLYGON. */
+  const POOL_SIDES = 48;
+  /* The pool's edge, jittered ONCE. A perfect circle of light on a
+     floor is a projector; the same disc with its radius wobbling by a
+     fifth reads as a lamp with a body in front of it. Frozen at build
+     for the reason the sac's mottle is - a field redrawn from `rng()`
+     every frame boils. */
+  /* How far the pool floats over the height field. Nine centimetres
+     was under the aeolian ripple's own amplitude, so the disc dived
+     through the ground it was lying on and came back cut into hard
+     straight-edged black wedges that read as broken geometry. */
+  const POOL_LIFT = 0.26;
+  const poolEdge = new Float32Array(POOL_SIDES);
+  for (let s = 0; s < POOL_SIDES; s += 1) poolEdge[s] = 0.78 + rng() * 0.44;
+
+  /* Both spill meshes are WOUND OUTWARD AND CARRY NORMALS - see the
+     derivation above `glowPool`, which applies to this one too. */
+  const glowShell = (() => {
+    const count = GLOW_RINGS * GLOW_SIDES;
+    const position = new Float32Array(count * 3);
+    const normal = new Float32Array(count * 3);
+    const colour = new Float32Array(count * 3);
+    const index = [];
+    for (let i = 0; i < GLOW_RINGS - 1; i += 1) {
+      for (let s = 0; s < GLOW_SIDES - 1; s += 1) {
+        const a = i * GLOW_SIDES + s;
+        const b = (i + 1) * GLOW_SIDES + s;
+        index.push(a, b + 1, b, a, a + 1, b + 1);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(position, 3));
+    geo.setAttribute("normal", new THREE.BufferAttribute(normal, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(colour, 3));
+    geo.setIndex(index);
+    geo.boundingSphere = new THREE.Sphere(
+      new THREE.Vector3(C.lairX, floorY, C.lairZ), C.abdomenLength + 22);
+    const mesh = new THREE.Mesh(geo, glowMat);
+    mesh.name = "sf-abbess-glow-shell";
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 3;
+    mesh.visible = false;
+    decor.add(mesh);
+    return { mesh, geo, position, normal, colour };
+  })();
+
+  /* THE POOL GREW A SECOND RING, and the reason is a falloff shape
+     rather than a size.
+
+     A fan from a lit centre to a black rim is a LINEAR ramp, and a
+     linear ramp over seventeen metres of floor spends most of its area
+     below half brightness - so widening it to cover more of the
+     chamber made the light thinner everywhere instead of covering more
+     ground, and darkPct did not move. Real spill from a long lamp
+     lying two metres above a floor is nearly flat underneath it and
+     then falls off a cliff at the edge of the source.
+
+     Rings give exactly that: a bright plateau out to a third of the
+     radius, a shoulder, then the drop. Sixty extra vertices, the same
+     one draw call, and the same material.
+
+     AND THEN THREE RINGS RATHER THAN TWO, AND THIRTY SIDES RATHER THAN
+     TWENTY-TWO, because two rings at twenty-two sides came back with a
+     hard jagged pink edge across the chamber floor that read as a
+     rendering fault. It was one: a fan triangle from the centre to a
+     ring twenty-one metres out spans ten metres of GROUND, the ground
+     is not flat, and a flat triangle laid over it dives through the
+     terrain and gets clipped by it. The disc was not too bright, it
+     was too COARSE - the same trap the ground-FX notes record for a
+     flat quad under a creature on uneven ground, arriving again the
+     moment the disc was widened. Radii and gains are a table so the
+     falloff can be reshaped without touching the mesh. */
+  /* SIX RINGS, AND THE TAIL IS THE POINT.
+
+     Three rings was a plateau and a cliff, and it measured like one:
+     the lit floor was a bright patch with a hard boundary and
+     everything past the boundary was still crushed. darkPct counts
+     pixels under luma 26, and the cheapest pixels to move out of that
+     band are not the ones under the lamp - those are already out of
+     it - but the several thousand square metres of chamber floor at
+     luma 12 that only need lifting to 30. A long dim tail is worth
+     more to this frame than a brighter core, and it costs nothing
+     extra: the fill is the same disc either way, the gains are a
+     table.
+
+     The finer radial sampling is a correctness fix on top of that.
+     A fan triangle from a ring at 7m to one at 21m spans FOURTEEN
+     metres of ground, the chamber floor is not flat, and a flat
+     triangle laid across it dives through the terrain and gets
+     clipped by it - which photographed as a hard jagged pink polygon
+     with straight edges, exactly the "rendering fault" read the
+     ground-FX notes warn about for a flat quad on uneven ground. Six
+     rings put the longest span at four metres. Same one draw call,
+     180 vertices instead of 90. */
+  const POOL_RINGS = [
+    { r: 0.16, gain: 0.95 },
+    { r: 0.34, gain: 0.88 },
+    { r: 0.52, gain: 0.64 },
+    { r: 0.70, gain: 0.40 },
+    { r: 0.86, gain: 0.18 },
+    { r: 1.00, gain: 0.00 },
+  ];
+  /* ---- AND THE POOL IS NOT FLAT LIGHT ---------------------------
+     The single largest failure in this animal's frames was not on
+     the animal. An additive disc with a smooth radial falloff is a
+     GRADIENT: thirty-odd percent of the picture carrying no edge and
+     no grain anywhere in it, and worse, sitting on top of the chamber
+     floor's own ripple and rock and drowning it - because additive
+     light is a constant added in LINEAR space, and the tone curve's
+     slope falls as it rises, so a bright wash compresses whatever
+     texture was underneath it. Measured, that one surface took
+     edgeDensity from 7.4 to 4.9 and microDetail from 5.2 to 4.2 while
+     every other change in the round was making the animal better.
+
+     The cure is not a dimmer lamp - dimmer only drops the floor back
+     into the tone curve's toe, where its contrast is crushed from the
+     other end, and that measured worse still. The cure is that the
+     light itself has STRUCTURE, which is also the truth of it: this
+     is light through a twenty-metre translucent abdomen full of eggs,
+     with tergites across it and a body between it and the floor. Real
+     spill from that is blotched, not smooth.
+
+     Two low-frequency angular trains at incommensurate rates - so the
+     pattern never repeats around the disc - plus a small per-vertex
+     jitter to break the trains' own regularity. Frozen at build for
+     the reason the sac's mottle is: a field redrawn from `rng()` each
+     frame boils. */
+  const poolMottle = new Float32Array(POOL_SIDES * POOL_RINGS.length);
+  for (let r = 0; r < POOL_RINGS.length; r += 1) {
+    for (let s = 0; s < POOL_SIDES; s += 1) {
+      const a = (s / POOL_SIDES) * TAU;
+      poolMottle[r * POOL_SIDES + s] = clamp(
+        0.74 + 0.30 * Math.sin(a * 3 + r * 1.7)
+        + 0.20 * Math.sin(a * 7 - r * 2.9)
+        + (rng() - 0.5) * 0.26, 0.22, 1.5);
+    }
+  }
+
+  /* WOUND OUTWARD, AND CARRYING NORMALS, and neither is decoration on
+     an additive DoubleSide mesh that renders identically either way.
+
+     Both of these were wrong on the first build and `saintfall-abbess-
+     fight.mjs` is what said so: it traverses every NAMED mesh under her
+     group and audits face winding against the vertex normals, because
+     the sac and the eggs both shipped inside-out once and lighting is
+     no guard against it. A glow shell with no `normal` attribute
+     crashed that audit outright, and once the normals existed the
+     audit reported exactly what the derivation says - the obvious
+     index order in a right-handed ring frame faces every triangle
+     INWARD, and the obvious fan order faces a ground quad DOWN. Both
+     are the same trap this project has recorded twice already. */
+  const glowPool = (() => {
+    const count = POOL_SIDES * POOL_RINGS.length + 1;
+    const position = new Float32Array(count * 3);
+    /* Straight up, and static - the pool is a floor, so its normal is
+       the one thing about it that never changes. */
+    const normal = new Float32Array(count * 3);
+    for (let i = 0; i < count; i += 1) normal[i * 3 + 1] = 1;
+    const colour = new Float32Array(count * 3);
+    const index = [];
+    for (let s = 0; s < POOL_SIDES; s += 1) {
+      const n = (s + 1) % POOL_SIDES;
+      // Reversed from the obvious order: see the winding note above.
+      index.push(0, 1 + n, 1 + s);
+      for (let r = 0; r + 1 < POOL_RINGS.length; r += 1) {
+        const a = 1 + r * POOL_SIDES + s;
+        const b = 1 + r * POOL_SIDES + n;
+        const c = 1 + (r + 1) * POOL_SIDES + s;
+        const d = 1 + (r + 1) * POOL_SIDES + n;
+        index.push(a, d, c, a, b, d);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(position, 3));
+    geo.setAttribute("normal", new THREE.BufferAttribute(normal, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(colour, 3));
+    geo.setIndex(index);
+    geo.boundingSphere = new THREE.Sphere(
+      new THREE.Vector3(C.lairX, floorY, C.lairZ), 40);
+    const mesh = new THREE.Mesh(geo, glowMat);
+    mesh.name = "sf-abbess-glow-pool";
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 2;
+    mesh.visible = false;
+    decor.add(mesh);
+    return { mesh, geo, position, colour };
+  })();
+
+  /** Lay both spill meshes out from the spine that was just posed. */
+  function poseGlow() {
+    const g = broodColour();
+    const wake = clamp01(state.woken);
+    const lit = wake * wake * (state.deathT >= 0
+      ? clamp01(1 - state.deathT / 3.2) : 1);
+    const open = ventralOpen();
+    if (lit < 0.02) {
+      glowShell.mesh.visible = false;
+      glowPool.mesh.visible = false;
+      return;
+    }
+
+    /* ---- the belly shell ---- */
+    const gp = glowShell.position;
+    const gn = glowShell.normal;
+    const gc = glowShell.colour;
+    for (let i = 0; i < GLOW_RINGS; i += 1) {
+      const t = i / (GLOW_RINGS - 1);
+      const ring = rings[Math.min(segs - 1, i)];
+      const a = spine[Math.max(0, i - 1)];
+      const b = spine[Math.min(segs - 1, i + 1)];
+      _t.subVectors(b, a);
+      if (_t.lengthSq() < 1e-8) _t.set(0, 0, 1);
+      _t.normalize();
+      _n1.set(0, 1, 0);
+      if (Math.abs(_t.y) > 0.92) _n1.set(1, 0, 0);
+      _n1.crossVectors(_t, _n1).normalize();
+      _n2.crossVectors(_t, _n1).normalize();
+      /* Just proud of the shell. Any further and it detaches into a
+         halo; any nearer and it z-fights the body it is lighting. */
+      const r = spineRadius[Math.min(segs - 1, i)] * 1.045 + 0.10;
+      /* Brightest under the weak point, falling away fore and aft, so
+         the spill agrees with the albedo the sac was just painted
+         with rather than being a second opinion about where she
+         glows. */
+      const weak = sstep(0.10, 0.26, ring.t) * (1 - sstep(0.42, 0.72, ring.t));
+      /* AND THE SHELL KNOWS WHERE THE PLATES ARE. This is the one line
+         that stopped the spill from undoing the body.
+
+         An additive shell draws IN FRONT of the surface it is lighting,
+         so a shell with an even gain along the animal paints over every
+         dark tergite it passes - and the first full-length build did
+         exactly that: meanLuma cleared the pool floor and edgeDensity
+         did not move a pixel, because twenty metres of carefully
+         alternating plate and membrane had been washed into one soft
+         pink bag. Light does not leave armour. Dimmed hard over the
+         band rings, the spill and the albedo agree about what she is
+         made of, and the rings survive being lit. */
+      const gain = lit * (0.50 + weak * (0.86 + open * 1.05))
+        * (ring.band ? 0.26 : 1);
+      for (let s = 0; s < GLOW_SIDES; s += 1) {
+        /* The lower arc only: from a quarter turn before straight-down
+           to a quarter turn after it. `n2` is down, so the belly is at
+           a phase of a quarter turn. */
+        const ang = TAU * (0.02 + (s / (GLOW_SIDES - 1)) * 0.46);
+        const ca = Math.cos(ang);
+        const sa = Math.sin(ang);
+        const k = (i * GLOW_SIDES + s) * 3;
+        const rx = _n1.x * ca + _n2.x * sa;
+        const ry = _n1.y * ca + _n2.y * sa;
+        const rz = _n1.z * ca + _n2.z * sa;
+        gp[k] = spine[Math.min(segs - 1, i)].x + rx * r;
+        gp[k + 1] = spine[Math.min(segs - 1, i)].y + ry * r;
+        gp[k + 2] = spine[Math.min(segs - 1, i)].z + rz * r;
+        // Radial, so the winding audit has something true to check against.
+        gn[k] = rx; gn[k + 1] = ry; gn[k + 2] = rz;
+        /* Falls off toward the edges of the arc AND toward the ends of
+           the body, so the shell has no hard rim anywhere. A hard rim
+           is what makes an additive shell read as a decal. */
+        const edge = Math.sin((s / (GLOW_SIDES - 1)) * Math.PI);
+        const f = gain * edge * (0.42 + 0.58 * Math.sin(Math.PI * clamp01(t)));
+        gc[k] = g[0] * f;
+        gc[k + 1] = g[1] * f;
+        gc[k + 2] = g[2] * f;
+      }
+    }
+    glowShell.geo.attributes.position.needsUpdate = true;
+    glowShell.geo.attributes.normal.needsUpdate = true;
+    glowShell.geo.attributes.color.needsUpdate = true;
+    glowShell.mesh.visible = true;
+
+    /* ---- the pool she throws on the chamber floor ---- */
+    const pp = glowPool.position;
+    const pc = glowPool.colour;
+    const mid = spine[3];
+    /* It DIMS as she lifts, and that is the physical read rather than
+       a dramatic one: the lamp moving nine metres away from the floor
+       spreads the same light over a much larger patch. The player sees
+       the floor go dark under her a beat before it is hit. */
+    const height = Math.max(0.6, mid.y - groundAt(mid.x, mid.z));
+    /* BIG. Twenty-two metres of chamber floor at its widest, which
+       sounds enormous until you remember what is casting it: a
+       twenty-metre lamp two metres off the ground.
+
+       AND THEN CAPPED AGAIN, at seventeen. This is an additive pass
+       with no depth write over a large piece of ground on a frame that
+       is already GPU fill-bound, and it is the single most expensive
+       thing this round added: a paired audit (Abbess normalised
+       against the Distaff in the same run, because eight agents on one
+       machine make absolute milliseconds meaningless) put it at about
+       0.19ms on its own at twenty-six metres. Seventeen buys most of
+       the picture back for well under half the fill. */
+    /* AND THEN OUT AGAIN, to twenty-one, once the falloff had a
+       plateau in it. The seventeen-metre cap was the right call
+       against a linear ramp - past that the extra fill was buying
+       almost nothing, because everything it added was in the dim tail.
+       With the mid ring holding the brightness flat under her, the
+       extra four metres are real lit floor: the ground's own aeolian
+       ripple and its rocks come up out of the crush, which is where
+       edgeDensity and microDetail live on the two thirds of the frame
+       that is not the animal. Re-audited, not assumed - see the
+       report. */
+    const radius = clamp(13 + height * 1.2, 13, 22);
+    /* BRIGHTER, and this is the cheapest legitimate luminance on the
+       whole animal because it is not on the animal. The chamber floor
+       is the largest dark area in every frame she appears in; a lamp
+       two metres above it that does not visibly light it is a lamp the
+       renderer does not believe in. Raised from 0.80 rather than
+       widening the disc, because the radius is fill and the gain is
+       not: same pixels, more light. */
+    const centre = lit * (1.24 + open * 0.42) * (4.6 / (3.4 + height));
+    /* HOW HARD SHE OCCLUDES HER OWN SPILL, and the fact that she does
+       at all is what turns a lamp into an animal standing on a floor.
+
+       An additive pool drawn over the ground has no idea the ground is
+       under twenty metres of body, so it painted its brightest pink
+       straight across the one place the frame most needed dark - the
+       contact. She came back looking laid ON the chamber rather than
+       resting IN it, and the brief's first debt to the frame is "a
+       contact shadow where it meets the ground; nothing looks placed
+       without one".
+
+       This is not a shadow map and does not want to be. The lamp IS
+       the body, so the floor it cannot reach is exactly the floor its
+       own belly is pressed against: an analytic distance to the spine
+       polyline in XZ, full dark inside the contact patch, full
+       brightness by the time you are a body-width clear. Which also
+       means it OPENS as she heaves - `raised` lifts the belly off the
+       floor and the light gets under her, so the ground brightens
+       under the abdomen a beat before it is hit. That is the slam's
+       telegraph, paid for by a term that was already needed. */
+    const occlude = 0.45 * (1 - clamp01(state.raised) * 0.82);
+    const floorLit = (px, pz) => {
+      let best = 1e9;
+      for (let i = 0; i + 1 < segs; i += 1) {
+        const ax = spine[i].x; const az = spine[i].z;
+        const bx = spine[i + 1].x; const bz = spine[i + 1].z;
+        const ex = bx - ax; const ez = bz - az;
+        const len2 = ex * ex + ez * ez;
+        const u = len2 > 1e-6
+          ? clamp01(((px - ax) * ex + (pz - az) * ez) / len2) : 0;
+        const dx = px - (ax + ex * u);
+        const dz = pz - (az + ez * u);
+        /* Relative to the LOCAL radius, so the dark patch is the
+           animal's own tapering footprint rather than a capsule
+           somebody guessed at. */
+        const rr = Math.max(0.4, lerp(spineRadius[i], spineRadius[i + 1], u));
+        best = Math.min(best, Math.hypot(dx, dz) / rr);
+      }
+      return 1 - occlude * (1 - sstep(0.40, 1.70, best));
+    };
+    /* AND THE FLOOR IS NOT THE LAMP'S COLOUR, which is both physics
+       and the whole composition.
+
+       Additive geometry adds the SOURCE's colour, so the pool was
+       painting the chamber floor in undiluted rose - and once it was
+       bright enough to matter, the largest surface in the frame had
+       the same hue as the animal standing on it. That is the boss
+       wearing its own light, which is the same failure as a boss
+       wearing its district's sand with the sign flipped: one hue
+       family, two exposures.
+
+       Real spill takes the ALBEDO of what it lands on, and this floor
+       is Vesper-IX's warm brown. Pulling a quarter of the chroma out
+       of the pool and biasing what is left toward the ground's own
+       warmth gives the frame two families again - a rose animal in a
+       warm-lit hollow - for four multiplies a frame. */
+    const pg = [0, 0, 0];
+    {
+      const lum = g[0] * 0.2126 + g[1] * 0.7152 + g[2] * 0.0722;
+      pg[0] = lerp(g[0], lum * 1.34, 0.30);
+      pg[1] = lerp(g[1], lum * 1.02, 0.30);
+      pg[2] = lerp(g[2], lum * 0.86, 0.30);
+    }
+    const cy = groundAt(mid.x, mid.z) + POOL_LIFT;
+    const c0 = centre * floorLit(mid.x, mid.z);
+    pp[0] = mid.x; pp[1] = cy; pp[2] = mid.z;
+    pc[0] = pg[0] * c0; pc[1] = pg[1] * c0; pc[2] = pg[2] * c0;
+    /* Every ring walks the SAME jittered edge profile, so the plateau,
+       the shoulder and the rim are one irregular shape at three scales
+       rather than a wobbly disc inside a round one - which would read
+       as three objects.
+
+       The jitter is DAMPED toward the middle, though. A twenty percent
+       radial wobble is a lamp with a body in front of it when it is
+       the outline; on the bright inner ring it is a visible star, and
+       a star with a hard bright edge is a decal. */
+    for (let r = 0; r < POOL_RINGS.length; r += 1) {
+      const ring = POOL_RINGS[r];
+      const wob = lerp(0.35, 1, r / (POOL_RINGS.length - 1));
+      const gain = centre * ring.gain;
+      for (let s = 0; s < POOL_SIDES; s += 1) {
+        const ang = (s / POOL_SIDES) * TAU;
+        const rr = radius * ring.r * lerp(1, poolEdge[s], wob);
+        const px = mid.x + Math.cos(ang) * rr;
+        const pz = mid.z + Math.sin(ang) * rr;
+        const k = (1 + r * POOL_SIDES + s) * 3;
+        pp[k] = px;
+        pp[k + 1] = groundAt(px, pz) + POOL_LIFT;
+        pp[k + 2] = pz;
+        /* ...and the blotches DRIFT. One slow travelling term on top
+           of the frozen field, at the same unhurried rate as the churn
+           inside her, so the light on the floor moves the way light
+           through something alive does. It is smooth in space, so it
+           cannot boil the way a per-vertex redraw would. */
+        const f = gain * floorLit(px, pz) * poolMottle[r * POOL_SIDES + s]
+          * (1 + 0.16 * Math.sin(atmos.elapsed * 0.61 + ang * 2 - r));
+        pc[k] = pg[0] * f; pc[k + 1] = pg[1] * f; pc[k + 2] = pg[2] * f;
+      }
+    }
+    glowPool.geo.attributes.position.needsUpdate = true;
+    glowPool.geo.attributes.color.needsUpdate = true;
+    glowPool.mesh.visible = true;
+  }
+
   /**
    * Lay the abdomen out and write its geometry.
    *
@@ -488,12 +2084,63 @@ export function buildAbbess(ctx) {
    * `raised` rotates the whole arc about the waist, which is what makes
    * the slam one number rather than a choreography.
    */
-  function poseAbdomen(dt) {
-    const yaw = inst ? inst.yaw : C.yaw;
+  function poseAbdomen(dt, force = false) {
+    /* A DORMANT QUEEN COSTS NOTHING, and this is where she used not to.
+       Every frame of the entire game rewrote 157 positions, 157
+       normals and 157 colours of an invisible mesh and flagged three
+       buffer uploads for them. The Stylite's dormant pose solve cost
+       this game 1.3ms/frame and surfaced as THIS boss's budget
+       failing; the same mistake was sitting inside this file the whole
+       time. Gated on there being something on screen - and `force`
+       exists because `ensureSpawned`, `resetToSeat` and `restore` all
+       need a spine written for combat.js to read a hit volume off
+       before she is ever visible. */
+    // A corpse does not move. Once the settle is over, nothing is written.
+    if (!force && state.deathT >= 8.9) return;
+    if (!force && state.woken <= 0.02 && state.raised === 0 && state.deathT < 0) {
+      if (sac.mesh.visible) {
+        sac.mesh.visible = false;
+        tergites.mesh.visible = false;
+        glowShell.mesh.visible = false;
+        glowPool.mesh.visible = false;
+      }
+      return;
+    }
+    /* THE ABDOMEN LAGS THE THORAX. She turns her head at rate 0.9 and
+       twenty metres of egg sac follows it at 0.55, which is what makes
+       the two halves read as one heavy animal rather than as a turret
+       with a trailer. Deliberately NOT used by `layClutch`: eggs are
+       placed off `inst.yaw` and the fight harness measures where they
+       land, so the lag is allowed to change the picture and not the
+       arithmetic. */
+    if (dt > 0) state.sacYaw = dampAngle(state.sacYaw, inst ? inst.yaw : C.yaw, 0.55, dt);
+    const yaw = state.sacYaw;
     const sx = Math.sin(yaw);
     const sz = Math.cos(yaw);
     const wake = clamp01(state.woken);
     const lift = state.raised;
+
+    /* THE SETTLE. One critically-ish damped spring, kicked by every
+       impact she takes or makes, read below with a per-ring delay so
+       the wobble TRAVELS down twenty metres of flesh instead of
+       bobbing the whole body as a unit. Integrated here rather than in
+       `update` so it cannot advance on a frame the body was not posed
+       on - a spring that keeps ringing while the mesh is hidden comes
+       back to life mid-swing when she wakes. */
+    if (dt > 0) {
+      state.jigV += (-state.jigY * 62 - state.jigV * 7.4) * dt;
+      state.jigY += state.jigV * dt;
+      if (Math.abs(state.jigY) < 1e-4 && Math.abs(state.jigV) < 1e-3) {
+        state.jigY = 0;
+        state.jigV = 0;
+      }
+      /* The flinch decays on the same clock. */
+      state.hitAmt = Math.max(0, state.hitAmt - dt * 1.9);
+    }
+    /* DEFLATION. Death is a physical event: the sac empties over three
+       seconds and the animal goes down with it. */
+    const deflate = state.deathT >= 0
+      ? lerp(1, 0.52, smoothstep(state.deathT / 2.8)) : 1;
     /* The waist, and it sits INSIDE the collar rather than behind it.
        At 3.2m back the sac's first ring started a metre and a half
        clear of the collar plate's rear face, so the two halves of the
@@ -514,7 +2161,15 @@ export function buildAbbess(ctx) {
       const sag = -Math.sin(ring.t * Math.PI) * 0.9 * (1 - lift * 0.75)
         + Math.pow(ring.t, 1.6) * 1.5;
       const heave = Math.pow(ring.t, 1.25) * lift * 9.5;
-      spine[i].set(wx - sx * along, wy + sag + heave, wz - sz * along);
+      /* The settle, read with a phase that runs down the body. The
+         cosine is the delay: at the waist the wobble is in phase with
+         the impulse, and by the ovipositor it is most of a cycle
+         behind, which is what makes twenty metres of loaded flesh look
+         loaded rather than rigid. Amplitude grows with `t` for the
+         same reason - the tip has the least holding it. */
+      const jig = state.jigY * Math.pow(ring.t + 0.12, 1.2)
+        * Math.cos(ring.t * 3.1);
+      spine[i].set(wx - sx * along, wy + sag + heave + jig, wz - sz * along);
 
       /* Breath, and the laying wave. The wave is a travelling gaussian
          rather than a sine so it reads as ONE thing moving down her
@@ -522,8 +2177,19 @@ export function buildAbbess(ctx) {
       const breath = Math.sin(atmos.elapsed * 1.15 - ring.phase) * 0.045;
       const wave = state.wave >= 0
         ? Math.exp(-((ring.t - state.wave) ** 2) / 0.018) * 0.30 : 0;
+      /* THE FLINCH, AND WHERE IT LANDED. A local dent centred on the
+         ring the shot actually hit, falling off over about two
+         segments. A boss that flinches identically wherever it is shot
+         is a health bar with a model attached; this is the cheapest
+         possible answer to "respect WHERE it was hit" on a body that
+         is one deformable surface. Kept shallow - a fifth of a radius
+         at worst - because the ventral hit test shoots at this
+         surface, and a dent deep enough to be dramatic is a dent deep
+         enough to make a player's aim wrong. */
+      const dent = state.hitAmt > 0 && state.hitRing >= 0
+        ? state.hitAmt * 0.20 * Math.exp(-((i - state.hitRing) ** 2) / 3.2) : 0;
       spineRadius[i] = C.abdomenRadius * ring.swell * ring.pinch
-        * (0.34 + wake * 0.66) * (1 + breath + wave);
+        * (0.34 + wake * 0.66) * (1 + breath + wave - dent) * deflate;
     }
 
     /* And the geometry, with analytic normals off the ring frame -
@@ -571,7 +2237,15 @@ export function buildAbbess(ctx) {
 
     sac.geo.attributes.position.needsUpdate = true;
     sac.geo.attributes.normal.needsUpdate = true;
-    if (dt > 0) sac.mesh.visible = state.woken > 0.02;
+    sac.mesh.visible = state.woken > 0.02 || state.deathT >= 0;
+    /* The plates, the light and its spill, all off the pose that was
+       just written. AFTER, never before: every one of them reads
+       `spine` and `spineRadius`, and geometry laid out on last frame's
+       body hangs off the animal by however far she moved. */
+    poseTergites();
+    tergites.mesh.visible = sac.mesh.visible;
+    paintSac();
+    poseGlow();
   }
 
   /* ============================================================
@@ -619,6 +2293,19 @@ export function buildAbbess(ctx) {
       geo.setAttribute("color", new THREE.BufferAttribute(colour, 4));
       return geo;
     };
+    /** A lens: the brood colour at whatever bio gain it is worth. */
+    const paintEye = (geo, glow) => {
+      const count = geo.attributes.position.count;
+      const ec = new Float32Array(count * 4);
+      for (let i = 0; i < count; i += 1) {
+        ec[i * 4] = EYE_HOT[0];
+        ec[i * 4 + 1] = EYE_HOT[1];
+        ec[i * 4 + 2] = EYE_HOT[2];
+        ec[i * 4 + 3] = glow;
+      }
+      geo.setAttribute("color", new THREE.BufferAttribute(ec, 4));
+      return geo;
+    };
     /* SCALED UP FROM THE FIRST PASS, all of it.
 
        Proportionally a queen's fore-body IS tiny, and modelled to that
@@ -644,6 +2331,37 @@ export function buildAbbess(ctx) {
     collar.rotateX(Math.PI / 2);
     collar.translate(0, 2.7, -1.5);
     parts.push(paint(collar, 0.5));
+    /* THE SEAM, and it is the animal's only accent that is not the
+       abdomen.
+
+       The fore-body is four metres of near-black plate sitting between
+       a lit sac and a lit face, and photographed from the side it was
+       the single largest dark shape in the frame - a matte block with
+       the two interesting things on either side of it. The art
+       direction's answer to that is the Scarab's: a dominant material,
+       a small accent in a designed repeating place, one saturated
+       focal element. This is the accent. Brood light escaping from
+       UNDER the collar plate where it laps over the abdomen's first
+       ring - the one place on her armour where the lamp behind it can
+       physically get out, so it lands as a hot line following the
+       plate's own rear edge rather than as a glow somebody painted on.
+
+       Weighted downward as well as rearward, because light escaping a
+       lapped joint runs out of the low side of it; the top of the
+       collar stays black and the silhouette is unchanged. */
+    {
+      const cp = collar.attributes.position;
+      const cc = collar.attributes.color;
+      for (let i = 0; i < cp.count; i += 1) {
+        const seam = clamp01((-2.35 - cp.getZ(i)) / 0.85)
+          * clamp01(0.55 - (cp.getY(i) - 2.7) / 4.2);
+        if (seam <= 0) continue;
+        cc.setX(i, lerp(cc.getX(i), SAC_GLOW[0], seam * 0.9));
+        cc.setY(i, lerp(cc.getY(i), SAC_GLOW[1], seam * 0.9));
+        cc.setZ(i, lerp(cc.getZ(i), SAC_GLOW[2], seam * 0.9));
+        cc.setW(i, seam * 1.5);
+      }
+    }
     // Head: forward and down.
     const skull = new THREE.SphereGeometry(2.5, 11, 8);
     skull.scale(1, 0.80, 1.30);
@@ -653,11 +2371,45 @@ export function buildAbbess(ctx) {
        emissive thing on her that is not the egg sac - which makes the
        head the second place the eye goes and the first place it
        returns to. */
+    /* PAINTED HOT, not merely "lit". They used to take the plate's own
+       albedo at alpha 1 and a bio gain of 1 - which is an emissive of
+       0.15, dimmer than the sunlit side of the same plate, so the eyes
+       read as light-coloured chitin rather than as eyes. On the brood
+       colour at alpha 3 they clear the bloom threshold outright and
+       become the only blown pixels on the animal. */
+    /* ...AND THEN BROKEN INTO OMMATIDIA, because one lozenge at that
+       size is a blown WHITE LOZENGE. Read back off the portrait it was
+       a flat hard-edged white blob about a metre and a half across with
+       no structure in it at all - which is what a blown highlight looks
+       like when it has no small dark next to it, and it was also the
+       only bright thing on the animal, so it took the eye and gave it
+       nothing.
+
+       A compound eye is a CLUSTER. One smaller central lens and six
+       beads around it, each with its own silhouette and its own black
+       gap between, keeps every blown pixel the frame needs -
+       brightPct was 0.00 across this whole cast before there were hot
+       eyes at all - and turns them into the one place on this animal
+       with structure at four centimetres. Which is the axis that keeps
+       measuring low: microDetail is fine grain surviving to the
+       screen, and thirteen small bright shapes survive where one big
+       one is just an area. */
     for (const side of [-1, 1]) {
-      const eye = new THREE.SphereGeometry(0.62, 7, 5);
-      eye.scale(1, 0.7, 1.5);
-      eye.translate(side * 1.5, 2.85, 7.6);
-      parts.push(paint(eye, 1.0, 1.0));
+      const core = new THREE.SphereGeometry(0.40, 7, 5);
+      core.scale(1, 0.78, 1.32);
+      core.translate(side * 1.5, 2.85, 7.62);
+      parts.push(paintEye(core, 4.4));
+      for (let o = 0; o < 6; o += 1) {
+        const a = (o / 6) * TAU + side * 0.4;
+        const bead = new THREE.SphereGeometry(0.185, 5, 4);
+        bead.scale(1, 0.9, 1.15);
+        bead.translate(side * 1.5 + Math.cos(a) * 0.62,
+          2.85 + Math.sin(a) * 0.50,
+          7.62 + Math.cos(a) * side * 0.30);
+        /* Dimmer than the core and unequally so, so the cluster has an
+           internal value range instead of thirteen identical dots. */
+        parts.push(paintEye(bead, 2.1 + (o % 3) * 0.70));
+      }
     }
     /* Mandibles: PALE, against dark plate. Chitin-on-chitin was
        invisible; a queen's jaws are the same material as her tergites
@@ -747,19 +2499,35 @@ export function buildAbbess(ctx) {
      one.
      ============================================================ */
   const eggVerts = EGG_RINGS * EGG_SIDES + 2;
+  /* How long the rupture takes. Short: it is a physical event, not a
+     dissolve, and past about a quarter of a second the eye stops
+     reading "burst" and starts reading "deflate". */
+  const EGG_BURST_SECONDS = 0.22;
   const eggs = [];
   for (let i = 0; i < C.eggMax; i += 1) {
     eggs.push({
       live: false, x: 0, y: 0, z: 0, t: 0, hp: 0, seed: rng(), base: i * eggVerts,
+      burst: 0, burstFrom: 0,
     });
   }
   let eggCursor = 0;
+  /* Whether the egg mesh still holds geometry that has to be cleared -
+     see the gate in `updateEggs`. */
+  let eggsDirty = false;
 
   const eggMesh = (() => {
     const total = C.eggMax * eggVerts;
     const position = new Float32Array(total * 3);
     const normal = new Float32Array(total * 3);
     const colour = new Float32Array(total * 4);
+    /* The rest pose the surface kit reads instead of `position` - see
+       `bindSurfaceToRestPose`. An egg's real position is world-space
+       and it SWELLS from a third of full size to over it, which would
+       drag the grain across the shell for the whole five seconds a
+       player is deciding whether to shoot it. Each egg is also offset
+       by a decorrelating stride so twenty-six of them do not come out
+       of the pool wearing the same twenty-six centimetres of noise. */
+    const objRest = new Float32Array(total * 3);
     const index = [];
     for (let e = 0; e < C.eggMax; e += 1) {
       const base = e * eggVerts;
@@ -784,6 +2552,9 @@ export function buildAbbess(ctx) {
         const lastRing = base + (EGG_RINGS - 1) * EGG_SIDES;
         index.push(lastRing + n, bot, lastRing + s);
       }
+      const ox = (e % 7) * 3.7;
+      const oy = (e % 5) * 4.3;
+      const oz = (e % 3) * 5.1;
       for (let v = 0; v < eggVerts; v += 1) {
         const k = (base + v) * 4;
         colour[k] = EGG_PALE[0];
@@ -793,11 +2564,34 @@ export function buildAbbess(ctx) {
            swell - a nearly-hatched egg is nearly a light source. */
         colour[k + 3] = 0.4;
       }
+      for (let r = 0; r < EGG_RINGS; r += 1) {
+        const vv = (r + 0.5) / EGG_RINGS;
+        for (let s = 0; s < EGG_SIDES; s += 1) {
+          const ang = (s / EGG_SIDES) * TAU;
+          const k = (base + r * EGG_SIDES + s) * 3;
+          objRest[k] = ox + Math.cos(ang) * Math.sin(vv * Math.PI) * 1.15;
+          objRest[k + 1] = oy + Math.cos(vv * Math.PI) * 1.55;
+          objRest[k + 2] = oz + Math.sin(ang) * Math.sin(vv * Math.PI) * 1.15;
+        }
+      }
+      /* `restTop`, not `top` - the index loop above already binds
+         `top` in this same block, and a duplicate const in an ES
+         module is a SyntaxError that `node --check` does not report
+         (it parses as a script). The page's own boot handler caught
+         it: "Identifier 'top' has already been declared". */
+      const restTop = base + EGG_RINGS * EGG_SIDES;
+      objRest[restTop * 3] = ox;
+      objRest[restTop * 3 + 1] = oy + 1.55;
+      objRest[restTop * 3 + 2] = oz;
+      objRest[(restTop + 1) * 3] = ox;
+      objRest[(restTop + 1) * 3 + 1] = oy - 1.55;
+      objRest[(restTop + 1) * 3 + 2] = oz;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(position, 3));
     geo.setAttribute("normal", new THREE.BufferAttribute(normal, 3));
     geo.setAttribute("color", new THREE.BufferAttribute(colour, 4));
+    geo.setAttribute("sfObj", new THREE.BufferAttribute(objRest, 3));
     geo.setIndex(index);
     geo.boundingSphere = new THREE.Sphere(
       new THREE.Vector3(C.lairX, floorY, C.lairZ), 80);
@@ -806,7 +2600,9 @@ export function buildAbbess(ctx) {
     mesh.frustumCulled = false;
     mesh.castShadow = false;
     mesh.receiveShadow = false;
-    group.add(mesh);
+    // Nothing has been laid yet; `updateEggs` turns it on when it has.
+    mesh.visible = false;
+    decor.add(mesh);
     return { mesh, geo, position, normal, colour };
   })();
 
@@ -817,26 +2613,47 @@ export function buildAbbess(ctx) {
     const col = eggMesh.colour;
     /* Swells from a third of full size to slightly over it, then the
        last tenth of its life is a visible shudder. */
-    const grow = egg.live ? lerp(0.34, 1.06, Math.pow(egg.t, 0.7)) : 0;
+    let grow = egg.live ? lerp(0.34, 1.06, Math.pow(egg.t, 0.7)) : 0;
     const shake = egg.live && egg.t > 0.86
       ? Math.sin(atmos.elapsed * 26 + egg.seed * 9) * 0.10 * (egg.t - 0.86) / 0.14 : 0;
+    let glow = egg.live ? 0.25 + Math.pow(egg.t, 2) * 1.15 : 0;
+    /* AN EGG BURSTS, IT DOES NOT VANISH. The art direction asks for
+       this by name and it is four lines: the shell blows outward over
+       a fifth of a second while the brood light inside it flares, and
+       only then does it go to nothing. A hazard that disappears on the
+       frame it dies teaches the player that it was never really there. */
+    if (!egg.live && egg.burst > 0) {
+      const u = 1 - egg.burst / EGG_BURST_SECONDS;
+      grow = lerp(egg.burstFrom, egg.burstFrom * 1.85, smoothstep(u)) * (1 - u * u);
+      glow = (1 - u) * 3.2;
+    }
     const R = 1.15 * (grow + shake);
     const H = 1.55 * (grow + shake);
-    const glow = egg.live ? 0.25 + Math.pow(egg.t, 2) * 1.15 : 0;
+    /* A clutch is HER light in miniature, so it reads off the same
+       brood colour - which means a dying queen lays visibly sickly
+       eggs without anything having to say so. Ripe eggs go hotter as
+       they near hatching, which is the timer the player is reading. */
+    const g = broodColour();
+    const ripe = clamp01(egg.t * 1.2);
+    const cr = lerp(EGG_PALE[0], g[0], 0.35 + ripe * 0.5);
+    const cg = lerp(EGG_PALE[1], g[1], 0.35 + ripe * 0.5);
+    const cb = lerp(EGG_PALE[2], g[2], 0.35 + ripe * 0.5);
     for (let r = 0; r < EGG_RINGS; r += 1) {
       const v = (r + 0.5) / EGG_RINGS;
       const ry = Math.cos(v * Math.PI);
       const rr = Math.sin(v * Math.PI);
       for (let s = 0; s < EGG_SIDES; s += 1) {
         const ang = (s / EGG_SIDES) * TAU;
-        const k = (egg.base + r * EGG_SIDES + s) * 3;
+        const vi = egg.base + r * EGG_SIDES + s;
+        const k = vi * 3;
         const cx = Math.cos(ang) * rr;
         const cz = Math.sin(ang) * rr;
         p[k] = egg.x + cx * R;
         p[k + 1] = egg.y + ry * H + H;
         p[k + 2] = egg.z + cz * R;
         nrm[k] = cx; nrm[k + 1] = ry; nrm[k + 2] = cz;
-        col[(egg.base + r * EGG_SIDES + s) * 4 + 3] = glow;
+        col[vi * 4] = cr; col[vi * 4 + 1] = cg; col[vi * 4 + 2] = cb;
+        col[vi * 4 + 3] = glow;
       }
     }
     const top = egg.base + EGG_RINGS * EGG_SIDES;
@@ -847,6 +2664,7 @@ export function buildAbbess(ctx) {
       p[k + 1] = egg.y + H + sign * H;
       p[k + 2] = egg.z;
       nrm[k] = 0; nrm[k + 1] = sign; nrm[k + 2] = 0;
+      col[vi * 4] = cr; col[vi * 4 + 1] = cg; col[vi * 4 + 2] = cb;
       col[vi * 4 + 3] = glow;
     }
   }
@@ -895,10 +2713,44 @@ export function buildAbbess(ctx) {
   }
 
   function killEgg(egg, x, y, z) {
+    /* The size it was at the moment it died, so a fat egg makes a
+       bigger rupture than one laid three seconds ago. */
+    egg.burstFrom = lerp(0.34, 1.06, Math.pow(clamp01(egg.t), 0.7));
+    egg.burst = EGG_BURST_SECONDS;
     egg.live = false;
     ctx.vfx?.blast?.(x ?? egg.x, (y ?? egg.y) + 0.7, z ?? egg.z, 3.0);
     ctx.vfx?.spark?.(x ?? egg.x, (y ?? egg.y) + 0.7, z ?? egg.z, 2.2, false, true);
+    /* AND IT LEAVES SOMETHING. What came out of it lands on the floor
+       and stays there, which is the difference between a hazard the
+       player cleared and a hazard the player watched disappear. */
+    stainGround(egg.x, egg.z, 1.9 + egg.burstFrom * 1.6, 0.5);
     bus.emit("eggKilled", { x: egg.x, y: egg.y, z: egg.z });
+  }
+
+  /* ============================================================
+     ICHOR THAT LANDS AND STAINS
+
+     Through the shared ordnance scorch pool, which is where every
+     other lasting ground mark in this game lives, tinted to the brood
+     light rather than to soot.
+
+     RATE LIMITED, and that is not politeness: the pool is small and
+     shared with stratagems, and a magazine emptied into her belly at
+     ten rounds a second would evict every other mark on the map inside
+     two seconds. One stain per `ICHOR_GAP` is enough to read as a
+     spreading pool under a wounded animal, which is the point.
+     ============================================================ */
+  const ICHOR_GAP = 0.85;
+  function stainGround(x, z, radius, strength = 0.42, force = false) {
+    if (!ctx.vfx?.scorchFx) return;
+    if (!force && atmos.elapsed - state.ichorAt < ICHOR_GAP) return;
+    state.ichorAt = atmos.elapsed;
+    const g = broodColour();
+    /* Darkened hard. A stain is what is LEFT of a bright fluid after
+       it has soaked into rock; painting it at the emitter's own value
+       gives a floor covered in glowing paint. */
+    ctx.vfx.scorchFx(x, z, radius, 26,
+      new THREE.Color(g[0] * 0.30, g[1] * 0.16, g[2] * 0.20), strength);
   }
 
   /**
@@ -927,10 +2779,34 @@ export function buildAbbess(ctx) {
   }
 
   function updateEggs(dt) {
+    /* ANOTHER THING A DORMANT QUEEN USED TO PAY FOR. This walked all
+       twenty-six pool slots and rewrote 780 vertices of an empty mesh
+       on every frame of the game, whether or not a single egg existed.
+       The frame is GPU fill-bound and this is CPU, but three buffer
+       re-uploads a frame for nothing is still nothing bought. One pass
+       is still spent after the last egg dies, so the pool is left
+       collapsed rather than frozen mid-burst. */
+    let any = false;
+    for (const egg of eggs) if (egg.live || egg.burst > 0) { any = true; break; }
+    if (!any) {
+      if (eggsDirty) {
+        eggsDirty = false;
+        for (const egg of eggs) writeEgg(egg);
+        eggMesh.geo.attributes.position.needsUpdate = true;
+        eggMesh.geo.attributes.normal.needsUpdate = true;
+        eggMesh.geo.attributes.color.needsUpdate = true;
+      }
+      eggMesh.mesh.visible = false;
+      return;
+    }
+    eggsDirty = true;
+    eggMesh.mesh.visible = true;
     for (const egg of eggs) {
       if (egg.live) {
         egg.t += dt / C.eggHatchSeconds;
         if (egg.t >= 1) hatchEgg(egg);
+      } else if (egg.burst > 0) {
+        egg.burst = Math.max(0, egg.burst - dt);
       }
       writeEgg(egg);
     }
@@ -1182,6 +3058,36 @@ export function buildAbbess(ctx) {
     ctx.player?.punch?.(1.8);
     ctx.player?.doctrineKick?.(1.3, 1.1);
 
+    /* WHAT TWENTY METRES OF ABDOMEN LANDING ACTUALLY DOES.
+
+       Three things the impact used not to leave behind, and all of
+       them are the axis the brief calls weight:
+
+       - the body ANSWERS. One kick into the settle spring, so she
+         does not stop dead on contact: the flesh keeps going, bottoms
+         out, and rings back up the length of her.
+       - the floor answers. Dust pushed OUT along the ring rather than
+         up from the middle, because a falling body displaces air
+         sideways; a puff at the centre reads as an explosion.
+       - and it STAYS. Three belly prints through the shared decal
+         pool, which is what the trooper's own boots use, so the mark
+         she leaves is the same kind of mark everything else leaves. */
+    state.jigV -= 5.4;
+    const sy = Math.sin(state.sacYaw);
+    const sz2 = Math.cos(state.sacYaw);
+    for (let i = 0; i < 8; i += 1) {
+      const a = (i / 8) * TAU;
+      const dx = Math.cos(a);
+      const dz = Math.sin(a);
+      const r = C.slamRadius * 0.42;
+      ctx.vfx?.sandSpray?.(cx + dx * r, cy + 0.25, cz + dz * r, 1.5, dx, dz);
+    }
+    for (let i = -1; i <= 1; i += 1) {
+      const back = C.abdomenLength * (0.34 + i * 0.22);
+      ctx.vfx?.footprint?.(C.lairX - sy * back, C.lairZ - sz2 * back,
+        state.sacYaw, 0, 2.4);
+    }
+
     const ps = ctx.player?.state;
     if (ps && !ctx.combat?.player?.dead) {
       const d = Math.hypot(ps.x - cx, ps.z - cz);
@@ -1207,10 +3113,26 @@ export function buildAbbess(ctx) {
     bus.emit("slam", { x: cx, y: cy, z: cz });
   }
 
+  /* ANTICIPATION, as a fraction of the rise.
+     The rise used to be a straight ramp from 0, which is the one curve
+     nothing heavy has ever moved along: mass has to be gathered before
+     it can be thrown. She now COILS first - the abdomen sinks against
+     the floor and the sag deepens, because `raised` going negative
+     feeds straight back through the same `sag`/`heave` pair that lifts
+     it - and only then goes up, accelerating out of the crouch and
+     easing into the hold at the top. Same three phases, same total
+     duration, same peak: the fight harness asserts "rise > hold >
+     fall" and a peak past 0.98, and both still hold. */
+  const SLAM_COIL = 0.30;
+  const SLAM_COIL_DEPTH = 0.17;
+
   function stepSlam(dt) {
     state.slamTime += dt;
     if (state.slamPhase === "rise") {
-      state.raised = clamp01(state.slamTime / C.slamRise);
+      const u = clamp01(state.slamTime / C.slamRise);
+      state.raised = u < SLAM_COIL
+        ? -SLAM_COIL_DEPTH * Math.sin((u / SLAM_COIL) * Math.PI)
+        : smoothstep((u - SLAM_COIL) / (1 - SLAM_COIL));
       if (state.slamTime >= C.slamRise) {
         state.slamPhase = "hold";
         state.slamTime = 0;
@@ -1370,6 +3292,20 @@ export function buildAbbess(ctx) {
         clearHazards();
         ctx.vfx?.breach?.(C.lairX, floorY, C.lairZ, 24, 3.4);
         ctx.player?.doctrineKick?.(1.8, 1.6);
+        /* A DEATH THAT IS A PHYSICAL EVENT, not a fade. The clock
+           `deathT` drives it and `poseAbdomen` reads it: the sac
+           empties to half its volume over three seconds, the brood
+           light in it goes out over the same time, the body settles
+           twice on the spring, and what came out of her stays on the
+           chamber floor. `clearHazards` runs FIRST, so the reset it
+           does to the spring is overwritten by the kick below rather
+           than the other way round. */
+        state.deathT = 0;
+        state.jigV = -7.5;
+        ctx.vfx?.venomBurst?.(C.lairX, floorY + 3.4, C.lairZ, 3.2);
+        stainGround(C.lairX - Math.sin(state.sacYaw) * C.abdomenLength * 0.45,
+          C.lairZ - Math.cos(state.sacYaw) * C.abdomenLength * 0.45,
+          14, 0.62, true);
         bus.emit("defeated", { x: C.lairX, z: C.lairZ });
       }
       return;
@@ -1439,11 +3375,99 @@ export function buildAbbess(ctx) {
      PER-FRAME
      ------------------------------------------------------------ */
 
+  /* ============================================================
+     WHERE SHE WAS HIT
+
+     combat.js already publishes every landed hit with a world position
+     on it - `enemyDamaged` - and hud.js already listens for the damage
+     numbers. Subscribing to the same event is how this module finds
+     out WHERE a shot landed without combat.js needing to know the
+     Abbess exists, which is the same shape as the Stylite's grip hook
+     in reverse.
+
+     LAZY, because `ctx.combat` does not exist when this module is
+     built - district-bosses.js constructs the encounters before the
+     first frame and combat after. Attached on the first update that
+     finds a bus, once.
+     ============================================================ */
+  let hitSub = null;
+  function ensureHitSubscription() {
+    if (hitSub || !ctx.combat?.bus?.on) return;
+    hitSub = ctx.combat.bus.on("enemyDamaged", (event) => {
+      if (!inst || !event || event.enemyId !== inst.id) return;
+      onHurt(event);
+    });
+  }
+
+  /** Flinch, ichor and a kick into the settle spring, placed on the
+   *  ring the shot actually reached. */
+  function onHurt(event) {
+    /* Nearest ring in the XZ plane AND in height, so a shot into the
+       raised abdomen flinches the part that is nine metres up rather
+       than the part still on the floor. */
+    let best = -1;
+    let bestD = Infinity;
+    for (let i = 0; i < segs; i += 1) {
+      const dx = spine[i].x - event.x;
+      const dy = spine[i].y - event.y;
+      const dz = spine[i].z - event.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < bestD) { bestD = d2; best = i; }
+    }
+    /* Past the far end of the sac it was the thorax that was hit, and
+       the thorax is rigid armour - it does not dent, so the flinch
+       stays off it and only the spring is kicked. */
+    const onSac = bestD < 64;
+    if (onSac) {
+      state.hitRing = best;
+      state.hitAmt = Math.min(1, state.hitAmt + (event.weak ? 0.85 : 0.45));
+    }
+    state.jigV -= event.weak ? 1.5 : 0.55;
+    /* THE ICHOR. A weak-point hit sprays; anything else weeps. Either
+       way it lands on the floor and stays there - see `stainGround`,
+       which rate-limits itself. */
+    if (onSac) {
+      ctx.vfx?.venomBurst?.(event.x, event.y, event.z, event.weak ? 1.5 : 0.8);
+      stainGround(spine[best].x, spine[best].z,
+        2.4 + (event.weak ? 2.0 : 0), event.weak ? 0.55 : 0.34);
+    }
+  }
+
+  /* The damage the surface kit is currently showing, so the uniform is
+     only written when it has actually moved. */
+  let shownDamage = -1;
+  function syncSurfaceDamage() {
+    const hurt = state.deathT >= 0 ? 1 : sickness();
+    if (Math.abs(hurt - shownDamage) < 0.015) return;
+    shownDamage = hurt;
+    /* IT ACCUMULATES AND IT STAYS. The kit pools scorch in the coarse
+       mottle, cracks the deepest creases, glazes the breaks wet and
+       lights an ember in them late (squared in damage, so a boss at
+       90% health does not already look finished). The sac takes it
+       full; the plate takes less, because armour is the part that is
+       supposed to still be there at the end. */
+    setSurfaceDamage(sacMat, hurt);
+    setSurfaceDamage(chitinMat, hurt * 0.72);
+    /* The tergites take MORE than the head's plate and less than the
+       membrane. They are the armour the player is actually shooting -
+       everything worth hitting is behind them - so a queen at the end
+       of a fight whose back plates are unmarked is a queen nobody has
+       been shooting. */
+    setSurfaceDamage(tergiteMat, hurt * 0.88);
+  }
+
   function update(dt) {
     const d = Math.min(0.1, Math.max(0, dt));
     if (!inst) { ensureSpawned(); return; }
+    ensureHitSubscription();
 
     stepInstance(d);
+    syncSurfaceDamage();
+
+    /* Capped, and the cap is load-bearing: past the settle the body is
+       a corpse and `poseAbdomen` stops rewriting it entirely (see its
+       gate), so a killed boss costs the rest of the session nothing. */
+    if (state.deathT >= 0) state.deathT = Math.min(9, state.deathT + d);
 
     const wantWoken = state.phase === "dormant" ? 0
       : state.phase === "retire" ? 0 : 1;
@@ -1458,9 +3482,27 @@ export function buildAbbess(ctx) {
     }
 
     poseAbdomen(d);
+
+    /* THE FORE-BODY BRACES. Her six legs are vestigial and cannot
+       carry her, which is exactly why they have to be seen trying:
+       before a clutch and through the slam's coil the whole front of
+       the animal drops and pitches forward onto them, and it comes
+       back up as the abdomen goes. It is two numbers on a group that
+       was previously nailed to the floor, and it is the only
+       anticipation the player can see from in front of her - which is
+       where her armour, and therefore most of the fight, is.
+
+       The legs are baked into the merged fore-body geometry and cannot
+       move independently without a second draw call for a thirty-
+       centimetre motion; the body settling onto them says the same
+       thing for nothing. */
+    const brace = clamp01(
+      (state.clutchWind > 0 ? state.clutchWind / C.clutchWindup : 0)
+      + Math.max(0, -state.raised / SLAM_COIL_DEPTH));
     head.rotation.y = inst.yaw;
-    head.position.set(C.lairX, floorY, C.lairZ);
-    head.visible = state.woken > 0.02;
+    head.rotation.x = brace * 0.075 + state.jigY * 0.010;
+    head.position.set(C.lairX, floorY - brace * 0.42 + state.jigY * 0.06, C.lairZ);
+    head.visible = state.woken > 0.02 || state.deathT >= 0;
     head.updateMatrixWorld(true);
     /* AFTER the pose, never before: the capsules the player is being
        held out of have to be the ones that were just drawn, or the
@@ -1519,7 +3561,7 @@ export function buildAbbess(ctx) {
   }
 
   function clearHazards() {
-    for (const egg of eggs) egg.live = false;
+    for (const egg of eggs) { egg.live = false; egg.burst = 0; }
     /* Her children are hers. Leaving a cap of Threshers standing in the
        chamber after a reset means the next approach starts mid-fight
        against a swarm nobody saw arrive. */
@@ -1531,6 +3573,15 @@ export function buildAbbess(ctx) {
     state.wave = -1;
     state.raised = 0;
     state.slamPhase = null;
+    /* THE PHYSICAL STATE GOES WITH THE HAZARDS. None of these are ever
+       saved (see the note on `state`), so this and `resetToSeat` are
+       the only places they are cleared - and a settle spring or a
+       half-decayed flinch left across a retire would come back the
+       moment she woke, on a body that had not been touched. */
+    state.jigY = 0;
+    state.jigV = 0;
+    state.hitAmt = 0;
+    state.hitRing = -1;
   }
 
   function ensureSpawned() {
@@ -1544,7 +3595,7 @@ export function buildAbbess(ctx) {
     inst.sacSpine = spine;
     inst.sacRadius = spineRadius;
     inst.raised = 0;
-    poseAbdomen(0);
+    poseAbdomen(0, true);
     setEncounterGate(true, true);
     return inst;
   }
@@ -1568,8 +3619,15 @@ export function buildAbbess(ctx) {
     state.slamTimer = C.slamCadence * 0.7;
     state.fed = 0;
     state.laid = 0;
+    /* A reset is a resurrection: the death clock has to go, or she
+       comes back deflated and unlit with her surface still scorched
+       from a fight that no longer happened. */
+    state.deathT = -1;
+    state.sacYaw = C.yaw;
+    shownDamage = -1;
+    syncSurfaceDamage();
     inst.yaw = C.yaw;
-    poseAbdomen(0);
+    poseAbdomen(0, true);
     setEncounterGate(true, true);
     bus.emit("reset", { x: C.lairX, z: C.lairZ });
   }
@@ -1647,6 +3705,8 @@ export function buildAbbess(ctx) {
       inst = null;
       state.phase = "dead";
       state.woken = 0;
+      // Past the settle, so nothing is posed for a boss nobody can see.
+      state.deathT = 9;
       group.visible = false;
       clearHazards();
       return true;
@@ -1673,7 +3733,17 @@ export function buildAbbess(ctx) {
       inst.health = clamp(saved.health, 1, inst.maxHealth);
     }
     inst.yaw = C.yaw;
-    poseAbdomen(0);
+    /* The death clock and the abdomen's heading are NOT in the save
+       file and must not survive one - a load into a live fight from a
+       session where she had already died would otherwise restore a
+       deflated, unlit queen at full health. The surface damage IS
+       restored, because it is a function of the health that was saved:
+       loading at 20% has to look like 20%. */
+    state.deathT = -1;
+    state.sacYaw = C.yaw;
+    shownDamage = -1;
+    syncSurfaceDamage();
+    poseAbdomen(0, true);
     setEncounterGate(phase === "dormant", phase === "dormant" || phase === "rouse");
     return true;
   }
@@ -1717,7 +3787,7 @@ export function buildAbbess(ctx) {
       state.woken = state.phase === "dormant" || state.phase === "retire" ? 0 : 1;
       setEncounterGate(state.phase === "dormant",
         state.phase === "dormant" || state.phase === "rouse");
-      poseAbdomen(0);
+      poseAbdomen(0, true);
       return { phase: state.phase, timer: state.timer, woken: state.woken };
     },
     /** Throw a clutch now, through the production path. */

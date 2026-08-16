@@ -131,6 +131,7 @@ export function buildSaveSystem(ctx, options = {}) {
   let autosaveClock = 0;
   let autosaveFailures = 0;
   let autosaveRetryRemaining = 0;
+  let pendingAutosaveReason = "";
   let lastResult = null;
   let careerHydrated = false;
   let careerBaseline = "";
@@ -1308,14 +1309,14 @@ export function buildSaveSystem(ctx, options = {}) {
     return snapshot;
   }
 
-  function saveAuto(force = false) {
+  function saveAuto(force = false, reason = "interval") {
     if (!force && autosaveRetryRemaining > 0) return null;
     if (!force && autosaveClock < AUTOSAVE_AFTER) return null;
     const snapshot = capture();
     if (!snapshot) return null;
     const data = readData();
     data.autosave = { id: "autosave", snapshot };
-    if (!writeData(data, { autosave: true })) {
+    if (!writeData(data, { autosave: true, reason })) {
       autosaveClock = AUTOSAVE_AFTER;
       autosaveFailures = Math.min(8, autosaveFailures + 1);
       autosaveRetryRemaining = Math.min(AUTOSAVE_RETRY_MAX,
@@ -1329,8 +1330,15 @@ export function buildSaveSystem(ctx, options = {}) {
     autosaveClock = 0;
     autosaveFailures = 0;
     autosaveRetryRemaining = 0;
-    notify("autosaved", { snapshot: clone(snapshot) });
+    pendingAutosaveReason = "";
+    notify("autosaved", { snapshot: clone(snapshot), reason });
     return snapshot;
+  }
+
+  function requestAutosave(reason = "checkpoint") {
+    pendingAutosaveReason = String(reason || "checkpoint").slice(0, 48);
+    autosaveClock = Math.max(autosaveClock, AUTOSAVE_AFTER);
+    return true;
   }
 
   function resolveSlot(kind, index = 0) {
@@ -1521,6 +1529,8 @@ export function buildSaveSystem(ctx, options = {}) {
     }
 
     ctx.mission.announce("FIELD STATE RESTORED", 2.4);
+    autosaveClock = 0;
+    pendingAutosaveReason = "";
     notify("loaded", { snapshot: clone(snapshot) });
     return true;
   }
@@ -1549,7 +1559,7 @@ export function buildSaveSystem(ctx, options = {}) {
       autosaveRetryRemaining - Math.max(0, finite(dt)));
     if (!canSave()) return;
     autosaveClock += Math.max(0, finite(dt));
-    saveAuto(false);
+    saveAuto(false, pendingAutosaveReason || "interval");
   }
 
   function state() {
@@ -1565,14 +1575,23 @@ export function buildSaveSystem(ctx, options = {}) {
       careerQuarantined,
       careerConflict: conflictState(),
       autosaveRetryIn: autosaveRetryRemaining,
+      autosaveAfter: AUTOSAVE_AFTER,
+      autosavePending: pendingAutosaveReason || null,
       lastResult: lastResult ? clone(lastResult) : null,
       current: capture(),
     };
   }
 
   window.addEventListener("pagehide", () => {
-    if (autosaveClock > 5) saveAuto(true);
+    if (autosaveClock > 5) saveAuto(true, "pagehide");
   });
+
+  /* Major progress gets a checkpoint on the next stable simulation frame.
+     Boss and Bloom events can fire while death VFX or arena teardown still
+     owns transient state, so the request deliberately waits for canSave()
+     instead of serializing from inside the event callback. */
+  ctx.mission?.bus?.on?.("districtBossDone", () => requestAutosave("checkpoint"));
+  ctx.breaches?.bus?.on?.("complete", () => requestAutosave("checkpoint"));
 
   /* Hydrate once from the local envelope, then again after the optional cloud
      merge finishes. The progression service owns merge/normalization rules;
@@ -1713,6 +1732,7 @@ export function buildSaveSystem(ctx, options = {}) {
     apply,
     saveManual,
     saveAuto,
+    requestAutosave,
     load,
     clearManual,
     canSave,

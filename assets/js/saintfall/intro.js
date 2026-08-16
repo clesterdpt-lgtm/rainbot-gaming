@@ -1239,6 +1239,7 @@ function buildDescentRig(ctx, reducedMotion, site) {
 
 function buildMarkup(host) {
   host.innerHTML = `
+    <div class="sf-intro__art" aria-hidden="true"></div>
     <div class="sf-intro__letterbox sf-intro__letterbox--top"></div>
     <div class="sf-intro__letterbox sf-intro__letterbox--bottom"></div>
     <div class="sf-intro__scan" aria-hidden="true"></div>
@@ -1259,17 +1260,73 @@ function buildMarkup(host) {
       <strong data-intro-title>THE DROP</strong>
       <span data-intro-caption>Operation The Gilded Silence</span>
     </div>
-    <div class="sf-intro__gate">
-      <div class="sf-intro__crest" aria-hidden="true"><i></i><b></b><em></em></div>
-      <small>CONCORD RELIQUARY // COHORT VII</small>
-      <h2>THE DROP</h2>
-      <p>Vesper-IX · Threshold Causeway · Operation The Gilded Silence</p>
-      <button type="button" data-intro-start><span>Commit to landfall</span><b>ENTER / TAP</b></button>
-      <span class="sf-intro__sound">Sound begins with deployment</span>
+    <div class="sf-intro__gate" role="dialog" aria-modal="false"
+      aria-labelledby="sf-entry-title" aria-describedby="sf-entry-subtitle" data-entry-panel="main">
+      <header class="sf-entry__header">
+        <div class="sf-intro__crest" aria-hidden="true"><i></i><b></b><em></em></div>
+        <span><small>CONCORD RELIQUARY // COHORT VII</small>
+          <h2 id="sf-entry-title">SAINTFALL</h2>
+          <p id="sf-entry-subtitle">Vesper-IX · Operation The Gilded Silence</p></span>
+      </header>
+      <div class="sf-entry__archive"><span>FIELD ARCHIVE</span><b data-intro-save-status>SCANNING RECORDS</b></div>
+      <div class="sf-entry__actions">
+        <button class="sf-entry__continue" type="button" data-intro-continue disabled>
+          <span>Continue pilgrimage</span><b data-intro-continue-meta>NO FIELD RECORD</b>
+        </button>
+        <button class="sf-entry__new" type="button" data-intro-start>
+          <span>Begin new operation</span><b>PLAY THE DROP</b>
+        </button>
+        <div class="sf-entry__secondary">
+          <button type="button" data-intro-load-toggle aria-expanded="false">LOAD GAME</button>
+          <button type="button" data-intro-options-toggle aria-expanded="false">OPTIONS</button>
+        </div>
+      </div>
+      <section class="sf-entry__panel sf-entry__panel--load" data-intro-panel="load" aria-label="Load game" hidden>
+        <header><span>FIELD RECORDS</span><button type="button" data-intro-panel-close aria-label="Close load game">×</button></header>
+        <div class="sf-entry__slots">
+          <button type="button" data-intro-load-kind="autosave" data-intro-load-index="-1" disabled>
+            <span><small>AUTOSAVE</small><strong data-intro-slot-district>EMPTY</strong></span><b data-intro-slot-time>—</b>
+          </button>
+          <button type="button" data-intro-load-kind="manual" data-intro-load-index="0" disabled>
+            <span><small>RELIQUARY I</small><strong data-intro-slot-district>EMPTY</strong></span><b data-intro-slot-time>—</b>
+          </button>
+          <button type="button" data-intro-load-kind="manual" data-intro-load-index="1" disabled>
+            <span><small>RELIQUARY II</small><strong data-intro-slot-district>EMPTY</strong></span><b data-intro-slot-time>—</b>
+          </button>
+          <button type="button" data-intro-load-kind="manual" data-intro-load-index="2" disabled>
+            <span><small>RELIQUARY III</small><strong data-intro-slot-district>EMPTY</strong></span><b data-intro-slot-time>—</b>
+          </button>
+        </div>
+      </section>
+      <section class="sf-entry__panel sf-entry__panel--options" data-intro-panel="options" aria-label="Options" hidden>
+        <header><span>FIELD CONFIGURATION</span><button type="button" data-intro-panel-close aria-label="Close options">×</button></header>
+        <div class="sf-entry__options">
+          <button type="button" role="switch" data-intro-setting="sound" aria-checked="true"><span>FIELD AUDIO<small>Music, weapons, and ambience</small></span><b>ON</b></button>
+          <button type="button" role="switch" data-intro-setting="reducedMotion" aria-checked="false"><span>REDUCED MOTION<small>Calmer camera and interface movement</small></span><b>OFF</b></button>
+          <button type="button" role="switch" data-intro-setting="highContrast" aria-checked="false"><span>HIGH CONTRAST<small>Stronger instrument separation</small></span><b>OFF</b></button>
+          <button type="button" role="switch" data-intro-setting="dynamicRes" aria-checked="true"><span>DYNAMIC RESOLUTION<small>Protect frame rate under load</small></span><b>ON</b></button>
+          <div class="sf-entry__scale"><span>HUD SCALE</span><div role="group" aria-label="HUD scale"><button type="button" data-intro-hud-scale="standard">STANDARD</button><button type="button" data-intro-hud-scale="large">LARGE</button></div></div>
+        </div>
+      </section>
+      <footer class="sf-entry__footer"><span class="sf-intro__sound">Sound begins after your first command</span><b>AUTOSAVE · 42 SEC + MILESTONES</b></footer>
     </div>
     <button class="sf-intro__skip" type="button" data-intro-skip disabled>Skip descent <span>↗</span></button>
     <div class="sf-intro__pause" aria-live="polite">DESCENT HELD</div>
   `;
+}
+
+function entryClock(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function entrySavedAt(timestamp) {
+  if (!Number.isFinite(Number(timestamp))) return "NO RECORD";
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+    }).format(new Date(Number(timestamp))).toUpperCase();
+  } catch (_) { return "RECORDED"; }
 }
 
 /* ============================================================
@@ -1283,13 +1340,16 @@ export function buildDropIntro(ctx, options = {}) {
     return {
       enabled: false, done: true, scene: null, camera: null,
       isBlocking: () => false, update() {}, resize() {}, skip() {}, seek() {},
-      advance() {}, start: async () => false, reveal: () => false, dispose() {},
+      advance() {}, start: async () => false, resumeSaved: async () => false,
+      reveal: () => false, dispose() {},
       markers: () => ({ ...DROP_INTRO_MARKERS }),
       status: () => ({ enabled: false, completed: true, phase: "disabled" }),
     };
   }
 
+  const initialSettings = options.settingsState?.() || {};
   const reducedMotion = options.reducedMotion
+    ?? initialSettings.reducedMotion
     ?? window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
   const manualClock = !!options.manualClock;
   /* Reduced motion keeps the authored pacing instead of compressing
@@ -1305,6 +1365,10 @@ export function buildDropIntro(ctx, options = {}) {
   const pod = options.pod || ctx.pod;
   const cinematicStep = options.cinematicStep || (() => false);
   const onComplete = options.onComplete || (() => {});
+  const readSaves = options.readSaves || (() => ({ autosave: null, manuals: [] }));
+  const onLoad = options.onLoad || (() => false);
+  const settingsState = options.settingsState || (() => ({}));
+  const onSetting = options.onSetting || (() => false);
 
   const site = {
     x: DROP_SITE.podX, z: DROP_SITE.podZ, yaw: DROP_SITE.podYaw,
@@ -1343,6 +1407,12 @@ export function buildDropIntro(ctx, options = {}) {
 
   const el = (selector) => host.querySelector(selector);
   const startButton = el("[data-intro-start]");
+  const continueButton = el("[data-intro-continue]");
+  const gate = el(".sf-intro__gate");
+  const loadToggle = el("[data-intro-load-toggle]");
+  const optionsToggle = el("[data-intro-options-toggle]");
+  const saveStatusEl = el("[data-intro-save-status]");
+  const continueMetaEl = el("[data-intro-continue-meta]");
   const skipButton = el("[data-intro-skip]");
   const phaseEl = el("[data-intro-phase]");
   const titleEl = el("[data-intro-title]");
@@ -1383,7 +1453,91 @@ export function buildDropIntro(ctx, options = {}) {
     idle: 0,
     egressArmed: false,
     walking: false,
+    entryPanel: "main",
+    latestSave: null,
+    launchMode: "menu",
   };
+
+  function fieldRecords() {
+    let data = {};
+    try { data = readSaves() || {}; } catch (_) { data = {}; }
+    const records = [
+      { kind: "autosave", index: -1, record: data.autosave || null },
+      ...Array.from({ length: 3 }, (_, index) => ({
+        kind: "manual", index, record: data.manuals?.[index] || null,
+      })),
+    ];
+    return records.filter((entry) => entry.record?.snapshot?.timestamp);
+  }
+
+  function setEntryPanel(panel = "main", { focus = true } = {}) {
+    const next = panel === "load" || panel === "options" ? panel : "main";
+    state.entryPanel = next;
+    gate.dataset.entryPanel = next;
+    host.querySelectorAll("[data-intro-panel]").forEach((section) => {
+      section.hidden = section.dataset.introPanel !== next;
+    });
+    loadToggle.setAttribute("aria-expanded", next === "load" ? "true" : "false");
+    optionsToggle.setAttribute("aria-expanded", next === "options" ? "true" : "false");
+    if (focus && next !== "main") {
+      requestAnimationFrame(() => host.querySelector(
+        `[data-intro-panel="${next}"] button:not([disabled])`)?.focus?.({ preventScroll: true }));
+    }
+    return next;
+  }
+
+  function refreshEntryMenu() {
+    if (state.disposed) return null;
+    const records = fieldRecords();
+    const latest = records.slice().sort((a, b) =>
+      Number(b.record.snapshot.timestamp) - Number(a.record.snapshot.timestamp))[0] || null;
+    state.latestSave = latest ? { kind: latest.kind, index: latest.index,
+      timestamp: latest.record.snapshot.timestamp } : null;
+    continueButton.disabled = !latest || state.mode !== "awaiting-gesture";
+    saveStatusEl.textContent = records.length
+      ? `${records.length} ${records.length === 1 ? "RECORD" : "RECORDS"} VERIFIED`
+      : "NO DEPLOYMENT RECORD";
+    if (latest) {
+      const snapshot = latest.record.snapshot;
+      continueMetaEl.textContent = `${snapshot.summary?.district || "VESPER-IX"} · ${entryClock(snapshot.summary?.elapsed)}`;
+    } else continueMetaEl.textContent = "NO FIELD RECORD";
+
+    host.querySelectorAll("[data-intro-load-kind]").forEach((button) => {
+      const kind = button.dataset.introLoadKind;
+      const index = Number(button.dataset.introLoadIndex);
+      const entry = records.find((candidate) => candidate.kind === kind && candidate.index === index);
+      const snapshot = entry?.record?.snapshot || null;
+      button.disabled = !snapshot || state.mode !== "awaiting-gesture";
+      button.querySelector("[data-intro-slot-district]").textContent = snapshot
+        ? (snapshot.summary?.district || "VESPER-IX") : "EMPTY";
+      button.querySelector("[data-intro-slot-time]").textContent = snapshot
+        ? `${entrySavedAt(snapshot.timestamp)} · ${entryClock(snapshot.summary?.elapsed)}` : "—";
+    });
+
+    const current = settingsState() || {};
+    host.querySelectorAll("[data-intro-setting]").forEach((button) => {
+      const name = button.dataset.introSetting;
+      const enabled = name === "sound" ? current.audioEnabled !== false : !!current[name];
+      button.setAttribute("aria-checked", enabled ? "true" : "false");
+      button.querySelector("b").textContent = enabled ? "ON" : "OFF";
+    });
+    host.querySelectorAll("[data-intro-hud-scale]").forEach((button) => {
+      const active = button.dataset.introHudScale === (current.hudScale || "standard");
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    return state.latestSave;
+  }
+
+  function setEntryActionsDisabled(disabled) {
+    startButton.disabled = disabled;
+    continueButton.disabled = disabled || !state.latestSave;
+    loadToggle.disabled = disabled;
+    optionsToggle.disabled = disabled;
+    host.querySelectorAll("[data-intro-load-kind]").forEach((button) => {
+      if (disabled) button.disabled = true;
+    });
+  }
 
   /* The lander is BORROWED, not built. Reparenting it into the
      orbital scene and back is what lets one object be both the thing
@@ -2112,8 +2266,9 @@ export function buildDropIntro(ctx, options = {}) {
     if (state.mode !== "awaiting-gesture" || !state.revealed || state.disposed
       || document.hidden || document.body.classList.contains("rb-escape-menu-open")) return false;
     state.mode = "starting";
+    state.launchMode = "new";
     const token = ++state.startToken;
-    startButton.disabled = true;
+    setEntryActionsDisabled(true);
     try { await audio?.unlock?.({ ambience: false }); } catch (_) { /* visual path still starts */ }
     if (token !== state.startToken || state.disposed || state.completed) return false;
     try { await audio?.beginDrop?.(); } catch (_) { /* visual path still starts */ }
@@ -2133,7 +2288,32 @@ export function buildDropIntro(ctx, options = {}) {
     return true;
   }
 
-  function complete(skipped = false) {
+  async function resumeSaved(kind, index = -1) {
+    if (state.mode !== "awaiting-gesture" || !state.revealed || state.disposed
+      || document.hidden || document.body.classList.contains("rb-escape-menu-open")) return false;
+    const match = fieldRecords().find((entry) => entry.kind === kind && entry.index === Number(index));
+    if (!match) {
+      refreshEntryMenu();
+      return false;
+    }
+    state.mode = "starting";
+    state.launchMode = "load";
+    const token = ++state.startToken;
+    setEntryActionsDisabled(true);
+    try { await audio?.unlock?.({ ambience: false }); } catch (_) { /* visual path still resumes */ }
+    if (token !== state.startToken || state.disposed || state.completed) return false;
+    const finished = complete(true, { preserveSpawn: true, source: "load" });
+    if (!finished) return false;
+    let restored = false;
+    try { restored = !!(await Promise.resolve(onLoad(kind, Number(index)))); } catch (_) { restored = false; }
+    if (!restored && ctx.player) {
+      ctx.player.spawn(DROP_SITE.x, DROP_SITE.z, DROP_SITE.yaw);
+      ctx.mission?.announce?.("FIELD RECORD FAILED · NEW OPERATION READY", 3.2);
+    }
+    return restored;
+  }
+
+  function complete(skipped = false, { preserveSpawn = false, source = "cinematic" } = {}) {
     if (state.completed) return false;
     state.completed = true;
     state.skipped = !!skipped;
@@ -2152,7 +2332,8 @@ export function buildDropIntro(ctx, options = {}) {
     pod?.land();
     setSitePlumes(true);
     releaseTrooper();
-    if (skipped && ctx.player) {
+    state.launchMode = source;
+    if (skipped && ctx.player && !preserveSpawn) {
       ctx.player.spawn(DROP_SITE.x, DROP_SITE.z, DROP_SITE.yaw);
     }
     if (rig) {
@@ -2173,7 +2354,7 @@ export function buildDropIntro(ctx, options = {}) {
     host.dataset.shot = "handoff";
     skipButton.disabled = true;
     stage?.classList.remove("sf-intro-active");
-    onComplete({ skipped: state.skipped, handoffCount: state.handoffCount });
+    onComplete({ skipped: state.skipped, handoffCount: state.handoffCount, source });
     window.setTimeout(() => {
       if (!options.preserveForQa) dispose();
     }, state.reducedMotion ? 80 : 900);
@@ -2318,7 +2499,10 @@ export function buildDropIntro(ctx, options = {}) {
     disposedStatus = status();
     state.disposed = true;
     observer?.disconnect();
+    stopSaveSubscription?.();
     startButton.removeEventListener("click", start);
+    continueButton.removeEventListener("click", onContinue);
+    gate.removeEventListener("click", onGateClick);
     skipButton.removeEventListener("click", skip);
     window.removeEventListener("keydown", onKeyDown, true);
     document.removeEventListener("visibilitychange", onVisibility);
@@ -2359,6 +2543,9 @@ export function buildDropIntro(ctx, options = {}) {
       completed: state.completed,
       skipped: state.skipped,
       mode: state.mode,
+      launchMode: state.launchMode,
+      entryPanel: state.entryPanel,
+      hasSave: !!state.latestSave,
       paused: state.paused,
       phase: state.phase,
       shot: state.shot,
@@ -2413,6 +2600,7 @@ export function buildDropIntro(ctx, options = {}) {
     host.classList.add("is-ready");
     host.setAttribute("aria-hidden", "false");
     stage?.classList.add("sf-intro-active");
+    refreshEntryMenu();
     applyTimeline(state.canonical, false);
     renderFrame();
     return true;
@@ -2430,14 +2618,57 @@ export function buildDropIntro(ctx, options = {}) {
     const target = event.target;
     if (target?.closest?.("button, a, input, textarea, select, [contenteditable='true'], [role='button']")) return;
     event.preventDefault();
-    void start();
+    if (state.latestSave) void resumeSaved(state.latestSave.kind, state.latestSave.index);
+    else void start();
+  }
+
+  function onGateClick(event) {
+    const target = event.target.closest("button");
+    if (!target || state.mode !== "awaiting-gesture") return;
+    if (target.matches("[data-intro-load-toggle]")) {
+      setEntryPanel(state.entryPanel === "load" ? "main" : "load");
+      return;
+    }
+    if (target.matches("[data-intro-options-toggle]")) {
+      setEntryPanel(state.entryPanel === "options" ? "main" : "options");
+      return;
+    }
+    if (target.matches("[data-intro-panel-close]")) {
+      const previous = state.entryPanel;
+      setEntryPanel("main", { focus: false });
+      (previous === "load" ? loadToggle : optionsToggle)?.focus?.();
+      return;
+    }
+    if (target.matches("[data-intro-load-kind]")) {
+      void resumeSaved(target.dataset.introLoadKind, Number(target.dataset.introLoadIndex));
+      return;
+    }
+    if (target.matches("[data-intro-setting]")) {
+      const name = target.dataset.introSetting;
+      const current = settingsState() || {};
+      const active = name === "sound" ? current.audioEnabled !== false : !!current[name];
+      onSetting(name, !active);
+      if (name === "reducedMotion") state.reducedMotion = !active;
+      refreshEntryMenu();
+      return;
+    }
+    if (target.matches("[data-intro-hud-scale]")) {
+      onSetting("hudScale", target.dataset.introHudScale);
+      refreshEntryMenu();
+    }
+  }
+  function onContinue() {
+    if (state.latestSave) void resumeSaved(state.latestSave.kind, state.latestSave.index);
   }
   function onVisibility() { setPaused(document.hidden, "visibility"); }
   const observer = new MutationObserver(() => {
     setPaused(document.body.classList.contains("rb-escape-menu-open"), "menu");
   });
   observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  const stopSaveSubscription = options.subscribeSaves?.(() => refreshEntryMenu()) || null;
   startButton.addEventListener("click", start);
+  continueButton.addEventListener("click", onContinue);
+  gate.addEventListener("click", onGateClick);
   skipButton.addEventListener("click", skip);
   window.addEventListener("keydown", onKeyDown, true);
   document.addEventListener("visibilitychange", onVisibility);
@@ -2447,6 +2678,7 @@ export function buildDropIntro(ctx, options = {}) {
   pod?.seal();
   hideTrooper();
   state.shot = null;
+  refreshEntryMenu();
   applyTimeline(0, false);
   if (!options.deferReveal) reveal();
 
@@ -2462,6 +2694,7 @@ export function buildDropIntro(ctx, options = {}) {
     isBlocking: () => !state.completed,
     reveal,
     start,
+    resumeSaved,
     update,
     resize,
     skip,

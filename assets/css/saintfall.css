@@ -3916,3 +3916,238 @@ body[data-sf-contrast="high"] #sf-hud :is(.sf-hud__vitals, .sf-hud__minimap) {
   background: rgba(3, 3, 3, .92);
   backdrop-filter: none;
 }
+
+/* ======================================================================
+   ENTRY LITURGY · GENERATED TITLE PLATE + SAVE-AWARE MAIN MENU
+   ====================================================================== */
+
+#sf-boot {
+  align-items: flex-start;
+  gap: .62rem;
+  padding: clamp(2.5rem, 7vw, 5.5rem) clamp(1.4rem, 7vw, 6.5rem);
+  background: #050405;
+  text-align: left;
+  isolation: isolate;
+}
+#sf-boot::before,
+#sf-boot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+#sf-boot::before {
+  z-index: -2;
+  background: url("../img/saintfall/saintfall-title-menu.jpg?v=20260816-entry-1") center/cover no-repeat;
+  filter: saturate(.82) contrast(1.04);
+  transform: scale(1.012);
+}
+#sf-boot::after {
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(3, 3, 4, .98) 0%, rgba(5, 4, 5, .91) 24%, rgba(5, 4, 5, .36) 57%, rgba(2, 2, 3, .12) 100%),
+    linear-gradient(0deg, rgba(2, 2, 3, .62), transparent 42%, rgba(2, 2, 3, .28));
+}
+#sf-boot > :not(.sf-boot__back) { width: min(25rem, 55%); }
+#sf-boot .sf-boot__mark { width: 5.2rem; height: 5.2rem; margin: 0 0 .35rem; }
+#sf-boot .sf-boot__glyph { inset: 1.15rem; width: calc(100% - 2.3rem); height: calc(100% - 2.3rem); }
+#sf-boot .sf-boot__title { font-size: clamp(2.1rem, 4.6vw, 4.4rem); line-height: .95; }
+#sf-boot .sf-boot__sub { margin: 0 0 1.35rem; font-size: clamp(.85rem, 1.45vw, 1.1rem); }
+#sf-boot .sf-boot__bar { width: min(25rem, 55%); height: 3px; background: rgba(241, 222, 183, .16); }
+#sf-boot .sf-boot__fill { box-shadow: 0 0 1.1rem rgba(234, 177, 71, .52); }
+#sf-boot .sf-boot__status { margin-top: .25rem; color: rgba(246, 211, 143, .92); }
+#sf-boot .sf-boot__tip { width: min(31rem, 62%); margin-top: 1.25rem; color: rgba(239, 225, 198, .62); }
+
+.sf-intro__art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: url("../img/saintfall/saintfall-title-menu.jpg?v=20260816-entry-1") center/cover no-repeat;
+  filter: saturate(.88) contrast(1.04);
+  opacity: 1;
+  transform: scale(1.008);
+  transition: opacity .82s ease, transform 8s ease;
+  pointer-events: none;
+}
+.sf-intro__art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(3, 3, 4, .96) 0%, rgba(5, 4, 5, .82) 25%, rgba(5, 4, 5, .25) 58%, rgba(2, 2, 3, .08) 100%),
+    linear-gradient(0deg, rgba(2, 2, 3, .58), transparent 45%, rgba(2, 2, 3, .24));
+}
+#sf-intro.is-ready:not(.is-running) .sf-intro__art { transform: scale(1.02); }
+#sf-intro.is-running .sf-intro__art { opacity: 0; transform: scale(1.035); }
+#sf-intro:not(.is-running) .sf-intro__scan { opacity: .2; }
+#sf-intro:not(.is-running)::after { background: radial-gradient(circle at 67% 43%, transparent 16%, rgba(2,2,3,.28) 72%, rgba(2,2,3,.66)); }
+
+.sf-intro__gate {
+  left: clamp(1.25rem, 5vw, 4.4rem);
+  top: 50%;
+  width: min(29rem, calc(100% - 2.5rem));
+  max-height: calc(100% - 2.5rem);
+  padding: clamp(1rem, 2vw, 1.55rem);
+  border-color: rgba(226, 184, 96, .38);
+  background:
+    linear-gradient(135deg, rgba(215, 159, 61, .085), transparent 28%),
+    linear-gradient(180deg, rgba(10, 8, 9, .88), rgba(5, 5, 6, .77));
+  box-shadow: inset 0 0 0 1px rgba(255, 240, 207, .035), .8rem 1.6rem 5rem rgba(0, 0, 0, .56);
+  backdrop-filter: blur(15px) saturate(.78);
+  text-align: left;
+  transform: translateY(-50%);
+  overflow: hidden;
+}
+#sf-intro.is-running .sf-intro__gate { transform: translateY(-48%) scale(.985); }
+.sf-entry__header { display: grid; grid-template-columns: 3.25rem minmax(0,1fr); align-items: center; gap: 1rem; }
+.sf-entry__header .sf-intro__crest { width: 2.6rem; height: 2.6rem; margin: 0; }
+.sf-entry__header .sf-intro__crest em { inset: .88rem; }
+.sf-entry__header small { display: block; color: rgba(228, 194, 132, .58); font-size: .48rem; letter-spacing: .2em; }
+.sf-intro__gate .sf-entry__header h2 {
+  margin: .2rem 0 .08rem;
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  letter-spacing: .19em;
+  text-indent: 0;
+}
+.sf-intro__gate .sf-entry__header p { margin: 0; font-size: .82rem; }
+.sf-entry__archive {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+  margin: 1rem 0 .55rem;
+  padding-top: .65rem;
+  border-top: 1px solid rgba(224, 185, 107, .16);
+  color: rgba(232, 207, 159, .46);
+  font-size: .48rem;
+  letter-spacing: .16em;
+}
+.sf-entry__archive b { color: rgba(124, 216, 181, .8); font-weight: 400; letter-spacing: .1em; }
+.sf-entry__actions { display: grid; gap: .48rem; }
+.sf-intro__gate .sf-entry__actions > button { min-height: 3.45rem; }
+.sf-intro__gate .sf-entry__continue { background: linear-gradient(90deg, rgba(124, 75, 28, .94), rgba(83, 43, 21, .86)); box-shadow: inset 3px 0 0 #f0c46c, 0 .6rem 2rem rgba(0,0,0,.28); }
+.sf-intro__gate .sf-entry__new { min-height: 3.05rem; background: linear-gradient(90deg, rgba(74, 24, 29, .88), rgba(44, 15, 20, .78)); }
+.sf-intro__gate .sf-entry__continue:disabled {
+  cursor: not-allowed;
+  opacity: .42;
+  background: rgba(26, 22, 21, .72);
+  box-shadow: inset 3px 0 0 rgba(216,164,65,.34);
+}
+.sf-entry__secondary { display: grid; grid-template-columns: 1fr 1fr; gap: .48rem; }
+.sf-intro__gate .sf-entry__secondary button {
+  min-height: 2.7rem;
+  justify-content: center;
+  padding: .55rem;
+  border-color: rgba(229, 194, 128, .22);
+  background: rgba(10, 9, 10, .58);
+  box-shadow: none;
+  color: rgba(244, 225, 187, .7);
+  font-size: .57rem;
+  letter-spacing: .16em;
+}
+.sf-entry__panel[hidden] { display: none !important; }
+.sf-intro__gate:not([data-entry-panel="main"]) .sf-entry__archive,
+.sf-intro__gate:not([data-entry-panel="main"]) .sf-entry__actions { display: none; }
+.sf-entry__panel { margin-top: .9rem; padding: 0; animation: sf-entry-panel .25s ease both; }
+.sf-entry__panel > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .45rem; color: #e7bb68; font-size: .56rem; letter-spacing: .17em; }
+.sf-intro__gate .sf-entry__panel > header button { width: 2.35rem; min-height: 2.35rem; padding: 0; justify-content: center; background: rgba(8,7,8,.7); box-shadow: none; font-size: 1.1rem; }
+.sf-entry__slots { display: grid; gap: .38rem; max-height: min(18.5rem, 52vh); overflow: auto; overscroll-behavior: contain; }
+.sf-entry__slots,
+.sf-entry__options { scrollbar-width: thin; scrollbar-color: #b77c2b rgba(10,8,8,.7); }
+.sf-entry__slots::-webkit-scrollbar,
+.sf-entry__options::-webkit-scrollbar { width: 6px; }
+.sf-entry__slots::-webkit-scrollbar-track,
+.sf-entry__options::-webkit-scrollbar-track { background: rgba(10,8,8,.7); }
+.sf-entry__slots::-webkit-scrollbar-thumb,
+.sf-entry__options::-webkit-scrollbar-thumb { background: #9a6726; border: 1px solid #d8a441; }
+.sf-intro__gate .sf-entry__slots > button {
+  min-height: 3.15rem;
+  padding: .55rem .7rem;
+  border-color: rgba(226, 188, 111, .2);
+  background: rgba(9, 8, 9, .66);
+  box-shadow: inset 2px 0 0 rgba(216,164,65,.42);
+}
+.sf-intro__gate .sf-entry__slots > button:disabled { cursor: not-allowed; opacity: .38; }
+.sf-entry__slots button > span { display: grid; gap: .16rem; min-width: 0; }
+.sf-intro__gate .sf-entry__slots small { color: rgba(232, 195, 126, .5); font-size: .44rem; letter-spacing: .15em; }
+.sf-intro__gate .sf-entry__slots strong { overflow: hidden; color: #f0dfbd; font-family: "Cinzel",Georgia,serif; font-size: .66rem; font-weight: 500; letter-spacing: .08em; text-overflow: ellipsis; white-space: nowrap; }
+.sf-intro__gate .sf-entry__slots b { max-width: 11rem; text-align: right; line-height: 1.35; }
+.sf-entry__options { display: grid; gap: .35rem; max-height: min(20rem, 55vh); overflow: auto; }
+.sf-intro__gate .sf-entry__options > button {
+  min-height: 3rem;
+  padding: .5rem .7rem;
+  border-color: rgba(225, 188, 111, .18);
+  background: rgba(9, 8, 9, .58);
+  box-shadow: none;
+}
+.sf-entry__options button > span { display: grid; gap: .14rem; text-align: left; }
+.sf-intro__gate .sf-entry__options button span { font-family: inherit; font-size: .58rem; letter-spacing: .13em; }
+.sf-entry__options button small { color: rgba(235, 220, 190, .42); font-family: "Cormorant Garamond",Georgia,serif; font-size: .73rem; font-style: italic; letter-spacing: .02em; text-transform: none; }
+.sf-intro__gate .sf-entry__options button[aria-checked="true"] { border-color: rgba(121, 216, 178, .38); }
+.sf-intro__gate .sf-entry__options button[aria-checked="true"] b { color: #8ed9b9; }
+.sf-entry__scale { display: flex; align-items: center; justify-content: space-between; min-height: 3rem; padding: .45rem .7rem; border: 1px solid rgba(225,188,111,.18); background: rgba(9,8,9,.58); color: #ead9b5; font-size: .58rem; letter-spacing: .13em; }
+.sf-entry__scale > div { display: flex; gap: .25rem; }
+.sf-intro__gate .sf-entry__scale button { width: auto; min-height: 2rem; padding: .35rem .48rem; justify-content: center; border-color: rgba(225,188,111,.16); background: transparent; box-shadow: none; font-size: .46rem; }
+.sf-intro__gate .sf-entry__scale button.is-active { border-color: #e1ae50; background: rgba(150,93,33,.34); color: #ffe0a0; }
+.sf-entry__footer { display: flex; justify-content: space-between; gap: .8rem; margin-top: .7rem; color: rgba(222, 207, 178, .35); font-size: .44rem; letter-spacing: .09em; }
+.sf-entry__footer .sf-intro__sound { margin: 0; }
+.sf-entry__footer b { color: rgba(131, 209, 179, .56); font-weight: 400; text-align: right; }
+@keyframes sf-entry-panel { from { opacity: 0; transform: translateX(-.5rem); } to { opacity: 1; transform: none; } }
+
+body.sf-high-contrast .sf-intro__gate { border-color: #ffe199; background: rgba(0,0,0,.96); backdrop-filter: none; }
+
+@media (max-width: 720px), (hover: none) and (pointer: coarse) {
+  #sf-boot { align-items: center; justify-content: flex-end; padding: 2.25rem 1.35rem 3.2rem; text-align: center; }
+  #sf-boot::after { background: linear-gradient(0deg, rgba(3,3,4,.98) 0%, rgba(4,4,5,.8) 38%, rgba(3,3,4,.12) 76%), linear-gradient(90deg, rgba(3,3,4,.28), transparent); }
+  #sf-boot > :not(.sf-boot__back), #sf-boot .sf-boot__bar, #sf-boot .sf-boot__tip { width: min(28rem, 92%); }
+  #sf-boot .sf-boot__mark { width: 4.35rem; height: 4.35rem; }
+  .sf-intro__art, #sf-boot::before { background-position: 66% center; }
+  .sf-intro__art::after { background: linear-gradient(0deg, rgba(3,3,4,.96), rgba(4,4,5,.67) 54%, rgba(3,3,4,.22)); }
+  .sf-intro__gate {
+    left: max(.75rem, env(safe-area-inset-left));
+    top: auto;
+    bottom: max(.75rem, env(safe-area-inset-bottom));
+    width: calc(100% - max(1.5rem, env(safe-area-inset-left) + env(safe-area-inset-right)));
+    max-height: calc(100% - max(1.5rem, env(safe-area-inset-top) + env(safe-area-inset-bottom)));
+    padding: .9rem;
+    transform: none;
+    overflow: hidden;
+  }
+  #sf-intro.is-running .sf-intro__gate { transform: translateY(.4rem) scale(.985); }
+  .sf-entry__header { grid-template-columns: 2.75rem minmax(0,1fr); gap: .75rem; }
+  .sf-entry__header .sf-intro__crest { width: 2.25rem; height: 2.25rem; }
+  .sf-entry__header .sf-intro__crest em { inset: .76rem; }
+  .sf-intro__gate .sf-entry__header h2 { font-size: clamp(1.45rem, 8vw, 2.25rem); }
+  .sf-intro__gate .sf-entry__actions > button { min-height: 3.25rem; }
+  .sf-intro__gate .sf-entry__actions > button span { font-size: .58rem; letter-spacing: .04em; white-space: nowrap; }
+  .sf-intro__gate .sf-entry__actions > button b { max-width: 48%; text-align: right; }
+  .sf-intro__gate .sf-entry__secondary button { min-height: 2.85rem; }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  #sf-boot { justify-content: center; align-items: flex-start; padding: 1.2rem 3rem; text-align: left; }
+  #sf-boot > :not(.sf-boot__back), #sf-boot .sf-boot__bar, #sf-boot .sf-boot__tip { width: min(23rem, 48%); }
+  #sf-boot .sf-boot__mark { width: 3.25rem; height: 3.25rem; }
+  #sf-boot .sf-boot__title { font-size: 2rem; }
+  #sf-boot .sf-boot__sub, #sf-boot .sf-boot__tip { margin-bottom: .35rem; margin-top: .35rem; font-size: .76rem; }
+  .sf-intro__gate { left: 1rem; top: 50%; bottom: auto; width: min(27rem, calc(100% - 5rem)); max-height: calc(100% - 1rem); padding: .58rem .75rem; transform: translateY(-50%); }
+  #sf-intro.is-running .sf-intro__gate { transform: translateY(-48%) scale(.985); }
+  .sf-entry__header { grid-template-columns: 2rem minmax(0,1fr); gap: .6rem; }
+  .sf-entry__header .sf-intro__crest { width: 1.75rem; height: 1.75rem; }
+  .sf-entry__header .sf-intro__crest em { inset: .58rem; }
+  .sf-entry__header small { display: none; }
+  .sf-intro__gate .sf-entry__header h2 { margin: 0; font-size: 1.45rem; }
+  .sf-intro__gate .sf-entry__header p { font-size: .7rem; }
+  .sf-entry__archive { margin: .45rem 0 .3rem; padding-top: .35rem; }
+  .sf-entry__actions { grid-template-columns: 1.45fr 1fr; gap: .35rem; }
+  .sf-entry__secondary { grid-column: 1 / -1; }
+  .sf-intro__gate .sf-entry__actions > button { min-height: 2.65rem; padding: .42rem .65rem; }
+  .sf-intro__gate .sf-entry__secondary button { min-height: 2.2rem; }
+  .sf-entry__footer { margin-top: .35rem; }
+  .sf-entry__slots, .sf-entry__options { max-height: 13.75rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-intro__art { transform: none !important; }
+  .sf-entry__panel { animation: none; }
+}

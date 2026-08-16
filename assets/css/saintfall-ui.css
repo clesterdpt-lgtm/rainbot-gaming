@@ -2016,3 +2016,45 @@ body.sf-high-contrast #sf-hud .sf-heat__fill{stroke:#ffe16a;filter:none}
   #sf-hud .sf-hud__heat.is-over,
   #sf-hud .sf-hud__heat.is-venting .sf-heat__fill{animation:none}
 }
+
+/* Save feedback lives at the quiet lower edge: visible enough to prove the
+   checkpoint happened, compact enough to stay out of the combat sightline. */
+.sf-autosave-toast {
+  position: absolute;
+  right: max(1rem, calc(env(safe-area-inset-right) + .7rem));
+  bottom: max(1rem, calc(env(safe-area-inset-bottom) + .7rem));
+  z-index: 44;
+  display: grid;
+  grid-template-columns: .8rem auto;
+  grid-template-rows: auto auto;
+  column-gap: .58rem;
+  min-width: 11.5rem;
+  padding: .58rem .72rem .55rem;
+  border: 1px solid rgba(225, 181, 91, .32);
+  background: linear-gradient(100deg, rgba(10, 8, 8, .92), rgba(28, 19, 13, .84));
+  box-shadow: inset 2px 0 0 #d8a441, 0 .65rem 1.8rem rgba(0,0,0,.42);
+  color: #f3ddb2;
+  font-family: "Share Tech Mono", ui-monospace, monospace;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(.5rem);
+  transition: opacity .28s ease, transform .28s ease;
+}
+.sf-autosave-toast[hidden] { display: none; }
+.sf-autosave-toast.is-visible { opacity: 1; transform: none; }
+.sf-autosave-toast i {
+  grid-row: 1 / 3;
+  align-self: center;
+  width: .62rem;
+  height: .62rem;
+  border: 1px solid #f0c165;
+  transform: rotate(45deg);
+  box-shadow: inset 0 0 0 2px rgba(5,4,4,.9), 0 0 .65rem rgba(223,168,66,.44);
+}
+.sf-autosave-toast span { font-size: .62rem; letter-spacing: .16em; line-height: 1.2; }
+.sf-autosave-toast small { color: rgba(232, 208, 165, .48); font-size: .43rem; letter-spacing: .11em; }
+.sf-autosave-toast[data-state="deferred"] { border-color: rgba(235,99,62,.45); box-shadow: inset 2px 0 0 #ef633e, 0 .65rem 1.8rem rgba(0,0,0,.42); }
+.sf-autosave-toast[data-state="deferred"] i { border-color: #ef8668; }
+.sf-stage.sf-touch-enabled .sf-autosave-toast { right: max(.65rem, calc(env(safe-area-inset-right) + .45rem)); bottom: max(5.4rem, calc(env(safe-area-inset-bottom) + 5rem)); min-width: 10.5rem; }
+body.sf-high-contrast .sf-autosave-toast { border-color: #ffe199; background: #000; box-shadow: inset 2px 0 0 #ffe199; }
+@media (prefers-reduced-motion:reduce){.sf-autosave-toast{transition:none}}

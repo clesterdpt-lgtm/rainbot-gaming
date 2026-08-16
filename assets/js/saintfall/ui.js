@@ -65,19 +65,26 @@ function formatSavedAt(timestamp) {
   } catch (_) { return "Recorded"; }
 }
 
+function prefersReducedMotion() {
+  try { return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches === true; }
+  catch (_) { return false; }
+}
+
 function readSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
     return {
       hudScale: saved.hudScale === "large" ? "large" : "standard",
-      reducedMotion: !!saved.reducedMotion,
+      reducedMotion: Object.prototype.hasOwnProperty.call(saved, "reducedMotion")
+        ? !!saved.reducedMotion
+        : prefersReducedMotion(),
       highContrast: !!saved.highContrast,
       // Default ON: it only ever acts when the frame is over budget.
       dynamicRes: saved.dynamicRes !== false,
     };
   } catch (_) {
     return {
-      hudScale: "standard", reducedMotion: false, highContrast: false,
+      hudScale: "standard", reducedMotion: prefersReducedMotion(), highContrast: false,
       dynamicRes: true,
     };
   }
@@ -127,7 +134,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
   if (!stage || !canvas || !ctx?.mission) {
     const closed = () => ({ open: false });
     return {
-      update() {}, toggleAudio: () => false, openMenu: () => false,
+      update() {}, toggleAudio: () => false, setSetting: () => false, openMenu: () => false,
       openMap: () => false, closeMenu: () => false, cancelWheel: () => false, refresh() {},
       wheelState: closed, menuState: closed,
       settingsState: () => ({ audioEnabled: false, hudScale: "standard", reducedMotion: false, highContrast: false, dynamicRes: true }),
@@ -315,6 +322,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
         <footer class="sf-menu__footer"><span data-menu-context>FIELD STATE PAUSED</span><span><kbd>ESC</kbd> RESUME · <kbd>TAB</kbd> NAVIGATE</span></footer>
       </div>
     </div>
+    <div class="sf-autosave-toast" data-autosave-toast role="status" aria-live="polite"
+      aria-atomic="true" hidden><i aria-hidden="true"></i><span>AUTOSAVED</span><small>FIELD RECORD SECURED</small></div>
     <div class="sf-native-ui__live" data-ui-live aria-live="polite" aria-atomic="true"></div>`;
   stage.append(root);
 
@@ -328,6 +337,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
   const largeMapRange = root.querySelector("[data-map-detail-range]");
   const maximizeButton = root.querySelector('[data-menu-action="maximize"]');
   const maximizeLabel = root.querySelector("[data-maximize-label]");
+  const autosaveToast = root.querySelector("[data-autosave-toast]");
   const liveEl = root.querySelector("[data-ui-live]");
   const progression = ctx.progression;
   const surface = stage.closest(".rb-standalone-surface") || stage;
@@ -363,6 +373,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
   let updateClock = 0;
   let announceRaf = 0;
   let focusRaf = 0;
+  let autosaveToastTimer = 0;
   let destroyed = false;
 
   function scheduleUiTimeout(callback, delay) {
@@ -435,6 +446,42 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     if (enabled) menuSfx("toggle");
     announce(enabled ? "Field audio enabled" : "Field audio muted");
     return enabled;
+  }
+
+  function setSetting(name, value) {
+    if (destroyed) return false;
+    if (name === "sound") return toggleAudio(!!value);
+    if (name === "hudScale") settings.hudScale = value === "large" ? "large" : "standard";
+    else if (name === "reducedMotion") settings.reducedMotion = !!value;
+    else if (name === "highContrast") settings.highContrast = !!value;
+    else if (name === "dynamicRes") {
+      settings.dynamicRes = !!value;
+      render?.setAutoScale?.(settings.dynamicRes);
+    } else return false;
+    writeSettings(settings);
+    applySettings();
+    menuSfx("toggle");
+    return settingsState();
+  }
+
+  function showAutosaveToast(result) {
+    if (!autosaveToast || destroyed) return;
+    if (autosaveToastTimer) window.clearTimeout(autosaveToastTimer);
+    const deferred = result?.type === "autosave-deferred";
+    autosaveToast.dataset.state = deferred ? "deferred" : "saved";
+    autosaveToast.querySelector("span").textContent = deferred ? "AUTOSAVE DELAYED" : "AUTOSAVED";
+    autosaveToast.querySelector("small").textContent = deferred
+      ? `RETRY IN ${Math.max(1, Math.ceil(Number(result?.retryIn) || 1))}S`
+      : (result?.reason === "checkpoint" ? "MILESTONE SECURED" : "FIELD RECORD SECURED");
+    autosaveToast.hidden = false;
+    requestAnimationFrame(() => autosaveToast?.classList.add("is-visible"));
+    autosaveToastTimer = window.setTimeout(() => {
+      autosaveToastTimer = 0;
+      autosaveToast?.classList.remove("is-visible");
+      window.setTimeout(() => {
+        if (autosaveToast && !autosaveToast.classList.contains("is-visible")) autosaveToast.hidden = true;
+      }, 360);
+    }, deferred ? 3800 : 2600);
   }
 
   function progressionDefinitions() {
@@ -2145,6 +2192,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
   });
   const stopSave = save?.onChange?.((result) => {
     refreshSaves();
+    if (result?.type === "autosaved" || result?.type === "autosave-deferred") {
+      showAutosaveToast(result);
+    }
     if (result?.type === "career-conflict" && readCareerConflict()?.active) {
       let revealed = false;
       if (menu.open) { setPanel("saves"); revealed = true; }
@@ -2299,6 +2349,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     wheelState,
     menuState,
     settingsState,
+    setSetting,
     destroy() {
       if (destroyed) return false;
       destroyed = true;
@@ -2324,6 +2375,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
 
       for (const timer of pendingTimers) window.clearTimeout(timer);
       pendingTimers.clear();
+      if (autosaveToastTimer) window.clearTimeout(autosaveToastTimer);
       if (announceRaf) cancelAnimationFrame(announceRaf);
       if (focusRaf) cancelAnimationFrame(focusRaf);
       announceRaf = 0;

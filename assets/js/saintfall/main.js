@@ -390,8 +390,14 @@ export async function start({ boot, build } = {}) {
     pod,
     cinematicStep,
     manualClock: introManualClock,
+    reducedMotion: gameUi.settingsState?.().reducedMotion,
     deferReveal: introEnabled && !!boot,
     preserveForQa: qa,
+    readSaves: () => saves.read?.() || { autosave: null, manuals: [] },
+    subscribeSaves: (listener) => saves.onChange?.(listener),
+    onLoad: (kind, index) => saves.load?.(kind, index),
+    settingsState: () => gameUi.settingsState?.() || {},
+    onSetting: (name, value) => gameUi.setSetting?.(name, value),
     onComplete() {
       ctx.runtime.phase = "playing";
       ctx.runtime.paused = false;

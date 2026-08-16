@@ -2197,6 +2197,7 @@ export async function createPlayer(ctx, canvas) {
     slowFor: 0,
     camPitch: -0.10,
     camDist: 5.2,
+    firstPerson: 0,
     /* Dying, and how far through the fall. `deathPose` is read by the
        camera here and by the harness; nothing else in the file needs
        to know, because the pose itself is carried by the `death`
@@ -3440,9 +3441,9 @@ export async function createPlayer(ctx, canvas) {
        and the weapon review harness spent a round photographing an
        empty road: the tool was suppressing the exact object it was
        pointed at. */
-    const showFigure = state.figureOverride !== null
+    const showFigure = (state.figureOverride !== null
       ? state.figureOverride
-      : !state.free;
+      : !state.free) && ((state.firstPerson || 0) < 0.65);
 
     // Posed before the camera branch, so a free camera watches a
     // living figure instead of a statue.
@@ -4294,11 +4295,20 @@ export async function createPlayer(ctx, canvas) {
       const pz = lerp(tmp.z, want.z, t);
       if (py < groundY(px, pz) + 0.45) { reach = (i - 1) / STEPS; break; }
     }
-    /* Never all the way in. At zero the camera sits exactly on the
-       look-at target, `lookAt` gets a zero-length vector and the view
-       matrix goes non-finite. 0.16 of a 5.2m boom is 0.83m - behind
-       the helm rather than inside it. */
+    /* --- first-person mode on steep upward look angles ---
+       When looking up steeply (e.g. aiming at Gleaners on ridges,
+       flying bosses, or aerial threats), the third-person boom pulls
+       down and behind the helmet, causing the heavy armor/pauldrons
+       to obstruct the view. Seamlessly transition to a clean
+       first-person camera directly at eye level. */
+    const upAngle = -state.camPitch;
+    const fpTarget = clamp01((upAngle - 0.35) / 0.22);
+    state.firstPerson = damp(state.firstPerson || 0, fpTarget, 16, dt);
+    const fpWeight = state.firstPerson;
+
     if (reach < 1) want.lerpVectors(tmp, want, Math.max(0.16, reach));
+    if (fpWeight > 0.001) want.lerp(tmp, fpWeight);
+
     /* The chase spring runs on its own anchor, and the camera is a
        COPY of it. The recoil shake below moves camera.position, and
        `lookAt` aims from wherever the camera stands at a target fixed
@@ -4313,9 +4323,24 @@ export async function createPlayer(ctx, canvas) {
       camAnchor.lerp(want, 1 - Math.exp(-14 * dt));
     }
     camera.position.copy(camAnchor);
-    // Look slightly above the figure's head, which puts the horizon
-    // where a third-person shooter puts it.
-    camera.lookAt(tmp.x, tmp.y + 0.35, tmp.z);
+
+    const viewDirX = Math.sin(state.camYaw) * Math.cos(state.camPitch);
+    const viewDirY = -Math.sin(state.camPitch);
+    const viewDirZ = Math.cos(state.camYaw) * Math.cos(state.camPitch);
+
+    const tpTargetX = tmp.x;
+    const tpTargetY = tmp.y + 0.35;
+    const tpTargetZ = tmp.z;
+
+    const fpTargetX = tmp.x + viewDirX * 100;
+    const fpTargetY = tmp.y + viewDirY * 100;
+    const fpTargetZ = tmp.z + viewDirZ * 100;
+
+    const lookTargetX = lerp(tpTargetX, fpTargetX, fpWeight);
+    const lookTargetY = lerp(tpTargetY, fpTargetY, fpWeight);
+    const lookTargetZ = lerp(tpTargetZ, fpTargetZ, fpWeight);
+
+    camera.lookAt(lookTargetX, lookTargetY, lookTargetZ);
     /* Terrain clearance and chase smoothing can change the optical ray
        substantially from the requested camYaw/camPitch.  Feed the
        actual reticle direction back into next frame's shoulder follow;

@@ -55,11 +55,9 @@ async function main() {
     });
 
     await page.keyboard.down("KeyW");
+    await step(0.2);
     await page.keyboard.down("ShiftLeft");
-    // Hold Shift + W for 2.0 seconds while boosting across terrain
-    for (let i = 0; i < 10; i++) {
-      await step(0.2);
-    }
+    await step(2.0);
     const midBoost = await page.evaluate(() => window.__SF.boostState());
     const midPlayer = await page.evaluate(() => {
       const p = window.__SF.player.state;

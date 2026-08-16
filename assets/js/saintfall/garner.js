@@ -2108,9 +2108,15 @@ export function buildGarner(ctx) {
     }
   }
 
+  function releaseEncounterCamera() {
+    ctx.player?.setFree?.(false);
+    state.releaseCameraAt = undefined;
+  }
+
   function beginFeeding() {
     state.phase = "feeding";
     state.timer = 0;
+    releaseEncounterCamera();
     setEncounterGate(false, false);
     state.armTimer = 0.6;
     bus.emit("engaged", { x: C.pitX, z: C.pitZ });
@@ -2152,6 +2158,7 @@ export function buildGarner(ctx) {
       arm.phase = "sheathed";
       sheathe(arm);
     }
+    releaseEncounterCamera();
     bus.emit("sealing", { x: C.pitX, z: C.pitZ });
   }
 
@@ -2277,8 +2284,7 @@ export function buildGarner(ctx) {
     if (state.phase === "breach") {
       state.timer -= dt;
       if (state.releaseCameraAt !== undefined && state.timer <= state.releaseCameraAt) {
-        ctx.player?.setFree?.(false);
-        state.releaseCameraAt = undefined;
+        releaseEncounterCamera();
       }
       // The mouth cracks its teeth apart on the way up, so the first
       // thing the player sees of it is that it is a mouth.
@@ -2496,7 +2502,7 @@ export function buildGarner(ctx) {
     state.inhaleFor = 0;
     state.inhaleWind = 0;
     state.spitWind = 0;
-    state.releaseCameraAt = undefined;
+    releaseEncounterCamera();
     state.armTimer = C.armCadence * 0.7;
     state.inhaleTimer = C.inhaleCadence * 0.55;
     state.spitTimer = C.spitCadence * 0.8;

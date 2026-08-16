@@ -1057,12 +1057,18 @@ export function buildStylite(ctx) {
     }
   }
 
+  function releaseEncounterCamera() {
+    ctx.player?.setFree?.(false);
+    state.releaseCameraAt = undefined;
+  }
+
   function beginRetire() {
     healToFull();
     clearHazards();
     state.phase = "retire";
     state.timer = C.retireSeconds;
     state.disengageFor = 0;
+    releaseEncounterCamera();
     bus.emit("retiring", { x: state.pos.x, z: state.pos.z });
   }
 
@@ -1209,10 +1215,10 @@ export function buildStylite(ctx) {
       state.timer = Math.max(0, state.timer - dt);
       faceThe(ps.x, ps.z, 1.6, dt);
       if (state.releaseCameraAt !== undefined && state.timer <= state.releaseCameraAt) {
-        ctx.player?.setFree?.(false);
-        state.releaseCameraAt = undefined;
+        releaseEncounterCamera();
       }
       if (state.timer <= 0) {
+        releaseEncounterCamera();
         state.phase = "perched";
         state.perchTimer = C.perchSeconds[0];
         state.volleyTimer = 1.2;
@@ -1363,7 +1369,7 @@ export function buildStylite(ctx) {
     state.falls = 0;
     state.revealed = false;
     state.disengageFor = 0;
-    state.releaseCameraAt = undefined;
+    releaseEncounterCamera();
     state.volleyWind = 0;
     state.volleyLeft = 0;
     seat(0);

@@ -2789,6 +2789,10 @@ export async function createPlayer(ctx, canvas) {
    */
   function die() {
     if (state.dying) return false;
+    /* A death during a reveal hold must give the camera back. Leaving
+       `free` set is what made several intros look frozen: the body
+       was already dead and the lens was still staring at the boss. */
+    if (state.free) state.free = false;
     state.dying = true;
     action.queued = false;
     action.queuedAimYaw = null;

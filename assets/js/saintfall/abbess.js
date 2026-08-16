@@ -1334,6 +1334,11 @@ export function buildAbbess(ctx) {
     }
   }
 
+  function releaseEncounterCamera() {
+    ctx.player?.setFree?.(false);
+    state.releaseCameraAt = undefined;
+  }
+
   function beginRetire() {
     healToFull();
     clearHazards();
@@ -1343,6 +1348,7 @@ export function buildAbbess(ctx) {
     state.raised = 0;
     state.slamPhase = null;
     state.clutchWind = 0;
+    releaseEncounterCamera();
     bus.emit("retiring", { x: C.lairX, z: C.lairZ });
   }
 
@@ -1414,10 +1420,10 @@ export function buildAbbess(ctx) {
          not a quantity. */
       state.timer = Math.max(0, state.timer - dt);
       if (state.releaseCameraAt !== undefined && state.timer <= state.releaseCameraAt) {
-        ctx.player?.setFree?.(false);
-        state.releaseCameraAt = undefined;
+        releaseEncounterCamera();
       }
       if (state.timer <= 0) {
+        releaseEncounterCamera();
         state.phase = "seated";
         setEncounterGate(false, false);
         bus.emit("engaged", { x: C.lairX, z: C.lairZ });
@@ -1556,7 +1562,7 @@ export function buildAbbess(ctx) {
     state.revealed = false;
     state.disengageFor = 0;
     state.royalDone = false;
-    state.releaseCameraAt = undefined;
+    releaseEncounterCamera();
     state.clutchTimer = C.clutchCadence * 0.45;
     state.clutchWind = 0;
     state.slamTimer = C.slamCadence * 0.7;

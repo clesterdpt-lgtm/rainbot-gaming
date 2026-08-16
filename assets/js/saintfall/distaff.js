@@ -512,6 +512,11 @@ export function buildDistaff(ctx) {
     }
   }
 
+  function releaseEncounterCamera() {
+    ctx.player?.setFree?.(false);
+    state.releaseCameraAt = undefined;
+  }
+
   function beginCollapse() {
     state.phase = "collapsed";
     state.timer = C.collapseSeconds;
@@ -832,10 +837,10 @@ export function buildDistaff(ctx) {
       faceTowards(ps.x, ps.z, 1.1, dt);
       state.timer -= dt;
       if (state.releaseCameraAt !== undefined && state.timer <= state.releaseCameraAt) {
-        ctx.player?.setFree?.(false);
-        state.releaseCameraAt = undefined;
+        releaseEncounterCamera();
       }
       if (state.timer <= 0) {
+        releaseEncounterCamera();
         setEncounterGate(false, false);
         state.phase = "standing";
         enemies.play(inst, "alert", 0.3);
@@ -873,6 +878,7 @@ export function buildDistaff(ctx) {
   function beginReturn() {
     healToFull();
     clearHazards();
+    releaseEncounterCamera();
     setEncounterGate(false, false);
     state.phase = "returning";
     state.disengageFor = 0;
@@ -893,7 +899,7 @@ export function buildDistaff(ctx) {
     state.phase = "dormant";
     state.revealed = false;
     state.disengageFor = 0;
-    state.releaseCameraAt = undefined;
+    releaseEncounterCamera();
     setEncounterGate(true, true);
     enemies.play(inst, "idle", 0.4);
     bus.emit("reset", { x: inst.x, z: inst.z });

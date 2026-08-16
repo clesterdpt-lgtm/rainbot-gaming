@@ -764,8 +764,17 @@ export async function start({ boot, build } = {}) {
   }
 
   function stepGame(d) {
+    const encounterHold = !!player.state.free;
+    if (encounterHold) {
+      /* The reveal camera is a hold, not a second control scheme.
+         Drain and drop any combat input so a held trigger cannot
+         fire from off-camera, then let the encounter modules below
+         finish the intro on their own clocks. */
+      player.input.clearAll?.();
+      weapons.setAds(0);
+    }
     for (const ev of player.input.drain()) {
-      if (combat.player.dead) continue;
+      if (encounterHold || combat.player.dead) continue;
       if (ev.type === "boost") {
         if (!jetpack.state.inFlight) boost.trigger();
         continue;
@@ -805,8 +814,8 @@ export async function start({ boot, build } = {}) {
        the time this runs; refusing the shot until it lands is the
        difference between a weapon that was put away and a weapon
        that fires out of the player's back. */
-    if (player.input.state.firing && !melee && !slam.state.active && !shield.state.active
-      && weapons.stowPhase < 0.08) shoot();
+    if (!encounterHold && player.input.state.firing && !melee && !slam.state.active
+      && !shield.state.active && weapons.stowPhase < 0.08) shoot();
     /* Hand the rite back once the swing is over. `meleeSwing` buffers
        a press during recovery into the next combo step, so the mode
        has to survive until the whole chain has run out - which is
@@ -815,8 +824,10 @@ export async function start({ boot, build } = {}) {
       weapons.setMode("ranged");
       meleeBorrowed = false;
     }
-    weapons.setAds(!melee && !jetpack.state.inFlight && !boost.state.active && !shield.state.active
-      && player.input.state.ads ? 1 : 0);
+    if (!encounterHold) {
+      weapons.setAds(!melee && !jetpack.state.inFlight && !boost.state.active
+        && !shield.state.active && player.input.state.ads ? 1 : 0);
+    }
     updateStow(d);
     combat.update(d);
     /* After combat, because the burrower damages through it and reads

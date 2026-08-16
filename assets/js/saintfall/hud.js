@@ -1226,16 +1226,27 @@ export function buildHud(ctx, host) {
           : stylite.phase === "stoop" ? "Diving" : "",
         stylite.phase);
     }
-    const coulter = ctx.coulter?.status?.();
-    if (coulter && coulter.phase !== "dormant" && !coulter.dead) {
-      return packBoss("coulter", "THE COULTER", "The Fallen Saint",
-        coulter.health, coulter.maxHealth,
-        coulter.phase === "burrow" ? "Under the sand"
-          : coulter.phase === "crest" ? "Surfaced — strike the maw" : "",
-        coulter.phase);
+    /* The Coulter is allocated from drop so its spine and save identity
+       stay stable, and coulter.status() therefore reports a live burrow
+       phase the entire operation. The bar is the Fallen Saint fight,
+       not the staged animal: six district victories unlock the site,
+       and walking in to wake it is what puts the name on screen. */
+    const saint = ctx.districtBosses?.status?.("saint");
+    const saintFight = saint && saint.available && !saint.defeated
+      && (saint.phase === "alert" || saint.phase === "active");
+    if (saintFight) {
+      const coulter = ctx.coulter?.status?.();
+      if (coulter && !coulter.dead) {
+        return packBoss("coulter", "THE COULTER", "The Fallen Saint",
+          coulter.health || saint.health, coulter.maxHealth || saint.maxHealth,
+          coulter.phase === "burrow" ? "Under the sand"
+            : coulter.phase === "crest" ? "Surfaced — strike the maw" : "",
+          coulter.phase || saint.phase);
+      }
     }
     const district = ctx.districtBosses?.activeBoss?.();
-    if (district && !district.defeated && district.phase !== "dormant") {
+    if (district && district.available !== false && !district.defeated
+      && district.phase !== "dormant") {
       return packBoss(district.key || district.enemyKey, district.boss?.toUpperCase() || "APEX",
         district.district, district.health, district.maxHealth,
         district.phase === "alert" ? "Signature resolving" : "",

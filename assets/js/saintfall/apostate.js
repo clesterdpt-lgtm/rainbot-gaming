@@ -1749,6 +1749,7 @@ export async function buildApostate(ctx) {
     state.meleeStep = 0;
     state.actionSerial = 0;
     state.disengageFor = 0;
+    ctx.player?.setFree?.(false);
     state.releaseCameraAt = undefined;
     state.summonTimer = C.summonCadence * 0.45;
     state.shotTimer = C.shotCadence * 0.42;

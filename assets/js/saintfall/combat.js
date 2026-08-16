@@ -1941,6 +1941,11 @@ export function buildCombat(ctx) {
        fails for a reason it is not testing is worse than no test. */
     if (player.invulnerable) return 0;
     if (player.dead) return 0;
+    /* Encounter reveal cameras take the player's hands off the body.
+       Damage during that hold is how several intros died before the
+       fight they were introducing: garrison fire, or the boss itself,
+       dropped them mid-shot and the free camera never came back. */
+    if (ctx.player?.state?.free) return 0;
     /* Field Chapel's upgraded boundary intercepts only Gleaner fire. The
        sanctuary is checked before Aegis, so a blocked projectile never drains
        shield charge or accidentally counts as a perfect guard. */
@@ -2638,6 +2643,12 @@ export function buildCombat(ctx) {
       if (player.respawnIn <= 0) respawn();
       return;
     }
+
+    /* A reveal hold pauses the battlefield around the player without
+       stopping the encounter modules that own the intro timer. Those
+       tick from main.js; this loop is ordinary garrison, bolts and
+       regen, all of which must not run while the player cannot answer. */
+    if (ps?.free) return;
 
     /* Existing bolts move before this frame's enemy decisions. A Gleaner
        that fires below is therefore born at the muzzle on both the logical

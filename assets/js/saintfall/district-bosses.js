@@ -222,6 +222,7 @@ export function buildDistrictBosses(ctx) {
     record.phase = "dormant";
     record.timer = 0;
     record.disengageFor = 0;
+    ctx.player?.setFree?.(false);
     setGate(record, true, true);
     enemies.play?.(inst, "idle", 0.25);
     if (!silent) bus.emit("reset", publicRecord(record));
@@ -344,11 +345,16 @@ export function buildDistrictBosses(ctx) {
 
   function fightActive(status) {
     if (!status || status.defeated || status.dead) return false;
+    // Intro beats (alert / rouse / reveal / breach) are not a fight
+    // yet. Treating them as one reset the arena the moment a player
+    // woke a boss from outside the district pin - the Winnower's stacks
+    // and the Stylite's needles sit well off-centre - so the camera
+    // stole the shot and the encounter never handed combat back.
     // "sealing" is the Garner's own withdrawal, and it belongs on this
     // list for the same reason "returning" does: a boss that is going
     // back to sleep must not trip the arena-exit reset on the way.
-    return !["dormant", "dead", "return", "returning", "sealing", "retire"]
-      .includes(status.phase);
+    return !["dormant", "dead", "return", "returning", "sealing", "retire",
+      "alert", "rouse", "reveal", "breach"].includes(status.phase);
   }
 
   function siteEvent(site, status = runtimeStatus(site)) {
@@ -399,9 +405,14 @@ export function buildDistrictBosses(ctx) {
         }
         continue;
       }
-      const dist = Math.hypot(ps.x - site.x, ps.z - site.z);
-      const warningRadius = site.warningRadius || site.arenaRadius + APPROACH_PADDING;
       const status = runtimeStatus(site);
+      const focusX = Number.isFinite(status?.x) ? status.x : site.x;
+      const focusZ = Number.isFinite(status?.z) ? status.z : site.z;
+      const dist = Math.min(
+        Math.hypot(ps.x - site.x, ps.z - site.z),
+        Math.hypot(ps.x - focusX, ps.z - focusZ),
+      );
+      const warningRadius = site.warningRadius || site.arenaRadius + APPROACH_PADDING;
       const active = fightActive(status);
 
       if (!active && dist > site.arenaRadius && dist <= warningRadius

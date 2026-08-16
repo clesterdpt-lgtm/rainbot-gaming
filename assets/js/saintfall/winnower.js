@@ -632,6 +632,11 @@ export function buildWinnower(ctx) {
     }
   }
 
+  function releaseEncounterCamera() {
+    ctx.player?.setFree?.(false);
+    state.releaseCameraAt = undefined;
+  }
+
   /** Re-enter the orbit. Does NOT touch the fuel - see `state.fuel`.
    *  Coming back from a strafing run is not a refuel, and treating it
    *  as one is what stops the animal ever landing. */
@@ -1058,11 +1063,11 @@ export function buildWinnower(ctx) {
       faceTravel(dt, ps.x, ps.z, 1.4);
       state.timer -= dt;
       if (state.releaseCameraAt !== undefined && state.timer <= state.releaseCameraAt) {
-        ctx.player?.setFree?.(false);
-        state.releaseCameraAt = undefined;
+        releaseEncounterCamera();
       }
       // The first tank. Every later one comes from a stoke.
       if (state.timer <= 0) {
+        releaseEncounterCamera();
         setEncounterGate(false, false);
         state.fuel = C.soarSeconds;
         beginSoar();
@@ -1096,6 +1101,7 @@ export function buildWinnower(ctx) {
     state.stunFor = 0;
     state.disengageFor = 0;
     state.action = 0;
+    releaseEncounterCamera();
     setEncounterGate(false, false);
     enemies.play(inst, "idle", 0.4);
     bus.emit("returning", { x: inst.x, z: inst.z });
@@ -1118,6 +1124,7 @@ export function buildWinnower(ctx) {
     if (home < 8) {
       state.phase = "dormant";
       state.revealed = false;
+      releaseEncounterCamera();
       setEncounterGate(true, true);
       enemies.play(inst, "idle", 0.5);
       bus.emit("reset", { x: inst.x, z: inst.z });
@@ -1151,7 +1158,7 @@ export function buildWinnower(ctx) {
     state.stunFor = 0;
     state.revealed = false;
     state.disengageFor = 0;
-    state.releaseCameraAt = undefined;
+    releaseEncounterCamera();
     setEncounterGate(true, true);
     enemies.play(inst, "idle", 0.4);
     bus.emit("reset", { x: inst.x, z: inst.z });

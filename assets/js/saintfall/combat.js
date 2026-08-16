@@ -353,6 +353,33 @@ const HITBOX = {
     ventral: { mult: 5.0, open: 0.5 },
   },
 
+  /* ------------------------------------------------------------------
+     THE STYLITE. A small, compact target that spends the fight ninety
+     metres up, so almost everything here is about REACH rather than
+     about where its parts are.
+
+     No sub-targets and no designed weak point on the body, because the
+     designed target is not on the animal at all - it is the GRIP, a
+     pool worn down by any damage dealt while it is perched (see
+     `ctx.stylite.wearGrip`, called from `applyDamage`). The reward for
+     emptying it is that the boss falls off a needle and lies on the
+     ground, and that window is where this table's one multiplier
+     lives.
+     ------------------------------------------------------------------ */
+  stylite: {
+    /* Cut to the shell. Its hind springs fold out to five metres when
+       it jumps and a capsule sized to those would be a free hit on
+       anything passing near a leaping animal. */
+    r: 1.9, y0: -1.5, y1: 1.9, head: 0.4, headR: 0.85, headZ: 1.9,
+    /* THE PAYOFF, and it is a melee multiplier rather than a ranged
+       one on purpose. The player earns the window by shooting UP at a
+       distant target; what the window is FOR is closing the distance
+       and spending it at arm's length. Applied only while `grounded`,
+       which the encounter sets for exactly the stunned and recovering
+       phases. */
+    groundedMeleeMult: 2.8,
+  },
+
   /* The Apostate is the player's own silhouette made hostile. Its capsule is
      deliberately close to the trooper's visible plate instead of receiving a
      boss-sized invisible volume; the extra insect limbs are readable armour,
@@ -1583,6 +1610,13 @@ export function buildCombat(ctx) {
     }
     bus.emit("enemyDamaged", damageEvent);
     ctx.progression?.onEnemyDamaged?.(damageEvent);
+    /* THE STYLITE'S GRIP, worn in proportion to whatever just landed.
+       Here rather than in the ray test so that every source counts -
+       a shot, a swing, a stratagem, a shockwave - and so no weapon
+       needs a rule of its own. The encounter decides whether this
+       instance is its own and whether the phase allows it; combat.js
+       only reports that damage happened. */
+    ctx.stylite?.wearGrip?.(actual, inst);
     return actual;
   }
 
@@ -1627,7 +1661,11 @@ export function buildCombat(ctx) {
          explicit guard is here anyway because a lance swing that
          connects with something directly overhead is the exact bug
          this encounter cannot afford. */
-      if (inst.spec?.flies && !inst.grounded) continue;
+      /* ...and the same for a creature that never flies but spends the
+         fight on top of a hundred-metre needle. `perches` is the
+         Stylite's own capability flag; the gate is identical because
+         the question is. */
+      if ((inst.spec?.flies || inst.spec?.perches) && !inst.grounded) continue;
       const legTarget = box.legs
         ? nearestLegPoint(inst, box, ps.x, ps.z, ps.y, _bodyNear) : null;
       const near = legTarget ? legTarget.dist : nearestBodyPoint(inst, ps.x, ps.z, _bodyNear);
@@ -1674,8 +1712,13 @@ export function buildCombat(ctx) {
           originX: ps.x, originZ: ps.z,
         });
       } else {
-        dealt = applyDamage(inst, strikeDamage, {
-          source: "melee", x: inst.x, y: hitY, z: inst.z,
+        /* A creature the player has knocked out of the sky is worth
+           more at arm's length than at range - the window was earned
+           by shooting, and it is spent by closing. */
+        const downed = inst.grounded && box.groundedMeleeMult
+          && (inst.spec?.flies || inst.spec?.perches);
+        dealt = applyDamage(inst, strikeDamage * (downed ? box.groundedMeleeMult : 1), {
+          source: "melee", weak: !!downed, x: inst.x, y: hitY, z: inst.z,
           originX: ps.x, originZ: ps.z,
         });
       }

@@ -3631,6 +3631,46 @@ export function installQa(ctx, api) {
     abbessBrood() { return api.abbess?.brood?.() ?? []; },
     resetAbbess() { return api.abbess?.resetToSeat?.() ?? null; },
     /* ------------------------------------------------------------
+       THE STYLITE
+
+       A boss that spends the fight ninety metres up, so these hooks
+       exist to reach it: read where it actually is, force the phase
+       under test, and break the grip without having to first land a
+       magazine on a distant target at an awkward angle.
+
+       `wearGrip` itself is deliberately NOT exposed - the grip has to
+       be worn through combat.js's own damage path, so a check about
+       "does shooting it bring it down" has to actually shoot it.
+       ------------------------------------------------------------ */
+    styliteState: () => (api.stylite)?.status?.() || null,
+    stylitePerches: () => api.stylite?.perches?.() ?? [],
+    teleportToStylite(offset = 40) {
+      const s = api.stylite?.status?.();
+      if (!s) return null;
+      hook._teleportRaw(s.x - offset, s.z, 0);
+      hook.setBodyHeading?.(0);
+      return { x: s.x - offset, z: s.z };
+    },
+    forceStylitePhase(phase, timer) {
+      return api.stylite?.forcePhase?.(phase, timer) ?? null;
+    },
+    advanceToStylitePhase(phase, limit = 60, dt = 1 / 60) {
+      const target = String(phase);
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const s = api.stylite?.status?.();
+        if (!s) return -1;
+        if (s.phase === target) return Number(elapsed.toFixed(3));
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    forceStyliteFall() { return api.stylite?.forceFall?.() ?? null; },
+    forceStyliteLeap(index) { return api.stylite?.forceLeap?.(index) ?? null; },
+    forceStyliteStoop() { return api.stylite?.forceStoop?.() ?? null; },
+    resetStylite() { return api.stylite?.resetToPerch?.() ?? null; },
+    /* ------------------------------------------------------------
        THE APOSTATE
 
        The final encounter is gated by mission progression as well as
@@ -3897,6 +3937,7 @@ export function installQa(ctx, api) {
     get mission() { return api.mission; },
     get breaches() { return api.breaches; },
     get abbess() { return api.abbess; },
+    get stylite() { return api.stylite; },
     get distaff() { return api.distaff; },
     get garner() { return api.garner; },
     get winnower() { return api.winnower; },

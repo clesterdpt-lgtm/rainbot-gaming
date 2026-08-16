@@ -988,6 +988,7 @@ export function buildMission(ctx) {
     if (key === "censer") return ctx.winnower?.status?.() || null;
     if (key === "ossuary") return ctx.garner?.status?.() || null;
     if (key === "bloom") return ctx.abbess?.status?.() || null;
+    if (key === "choir") return ctx.stylite?.status?.() || null;
     return ctx.districtBosses?.status?.(key) || null;
   }
 

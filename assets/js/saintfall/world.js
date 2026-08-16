@@ -113,6 +113,14 @@ export async function buildWorld(ctx, onProgress) {
   const pois = [];
   const lights = [];
   const emitters = [];      // handed to vfx: fires, spores, steam
+  /* The Choir's standing needles, published for the encounter that
+     lives on top of them. The Stylite perches on real rock - the same
+     rock that is in the collision grid and casts the district's light
+     shafts - so its ledges cannot be guessed at, re-derived from a
+     duplicated RNG seed, or quietly drift when the spire field is
+     re-laid. See abbess.js and garner.js for the two encounters that
+     had to hard-code a position because there was nothing to read. */
+  const choirNeedles = [];
   const banners = [];       // geometry with a `wave` attribute, animated in vfx
   /* Exact authored walking surfaces that sit above the height field.
      Terrain alone cannot answer where the player's soles belong on a
@@ -3201,7 +3209,11 @@ export async function buildWorld(ctx, onProgress) {
           embed: fallen ? rad * 0.36 : rad * 0.14,
           maxGap: 0.08,
         });
-        if (!fallen) standing.push({ x, z, h, rad, baseY: g.userData.restY });
+        if (!fallen) {
+          const needle = { x, z, h, rad, baseY: g.userData.restY };
+          standing.push(needle);
+          choirNeedles.push(needle);
+        }
         parts.push(g);
       }
       const g = kit.merge(parts);
@@ -4100,6 +4112,7 @@ export async function buildWorld(ctx, onProgress) {
     lights: lightObjects,
     emitters,
     banners,
+    choirNeedles,
     pois,
     beautyShots,
     walkSurfaceAt,

@@ -93,6 +93,13 @@ try {
     T.advanceTime(0.9, 1 / 60);
     return (${cost})(T, "abbess");`));
 
+  await measure("Stylite", new Function("T", `
+    T.teleportToStylite(46);
+    T.advanceToStylitePhase("perched", 18);
+    T.forceStyliteStoop();
+    T.advanceTime(0.7, 1 / 60);
+    return (${cost})(T, "stylite");`));
+
   await measure("Coulter", new Function("T", `
     const s = T.ctx.mission.bosses.find((b) => b.key === "saint");
     T._teleportRaw(s.x + 60, s.z, 0);

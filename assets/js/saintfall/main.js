@@ -32,6 +32,7 @@ import { buildAbbess } from "saintfall/abbess.js";
 import { buildCoulter } from "saintfall/coulter.js";
 import { buildDistaff } from "saintfall/distaff.js";
 import { buildGarner } from "saintfall/garner.js";
+import { buildStylite } from "saintfall/stylite.js";
 import { buildWinnower } from "saintfall/winnower.js";
 import { buildDistrictBosses } from "saintfall/district-bosses.js";
 import { buildApostate } from "saintfall/apostate.js";
@@ -224,6 +225,13 @@ export async function start({ boot, build } = {}) {
   const abbess = buildAbbess(ctx);
   ctx.abbess = abbess;
   abbess.ensureSpawned();
+  /* The Choir's tenant. Same construction slot as the rest - after
+     combat, which wears its grip, and before audio - with one extra
+     dependency of its own: it perches on the world builder's own list
+     of standing needles, so it must be built after the world. */
+  const stylite = buildStylite(ctx);
+  ctx.stylite = stylite;
+  stylite.ensureSpawned();
   /* Shared lifecycle for the ordinary-simulation district guardians plus
      the penultimate giant Coulter beneath the Fallen Saint. */
   const districtBosses = buildDistrictBosses(ctx);
@@ -445,6 +453,7 @@ export async function start({ boot, build } = {}) {
     mission,
     breaches,
     abbess,
+    stylite,
     coulter,
     distaff,
     garner,
@@ -818,6 +827,7 @@ export async function start({ boot, build } = {}) {
     distaff.update(d);
     garner.update(d);
     abbess.update(d);
+    stylite.update(d);
     winnower.update(d);
     districtBosses.update(d);
     apostate.update(d);

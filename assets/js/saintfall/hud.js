@@ -24,6 +24,19 @@ export function buildHud(ctx, host) {
       <div class="sf-hud__strip" id="sf-compass-strip"></div>
       <div class="sf-hud__needle"></div>
     </div>
+    <section class="sf-bossbar" id="sf-bossbar" hidden data-state="idle" aria-live="polite">
+      <header class="sf-bossbar__head">
+        <span class="sf-bossbar__kicker" id="sf-bossbar-kicker"></span>
+        <strong class="sf-bossbar__name" id="sf-bossbar-name"></strong>
+        <b class="sf-bossbar__hp" id="sf-bossbar-hp"></b>
+      </header>
+      <div class="sf-bossbar__track" role="progressbar" id="sf-bossbar-track"
+        aria-label="Boss vitality" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+        <i class="sf-bossbar__chip" id="sf-bossbar-chip"></i>
+        <i class="sf-bossbar__fill" id="sf-bossbar-fill"></i>
+      </div>
+      <p class="sf-bossbar__detail" id="sf-bossbar-detail"></p>
+    </section>
     ${ctx.qa ? '<output class="sf-hud__readout" id="sf-readout" aria-label="QA world coordinates"></output>' : ""}
     <aside class="sf-hud__minimap" id="sf-minimap" aria-label="Tactical mini-map">
       <div class="sf-minimap__head">
@@ -120,6 +133,14 @@ export function buildHud(ctx, host) {
   const eventCountEl = el.querySelector("#sf-event-count");
   const eventSubEl = el.querySelector("#sf-event-sub");
   const eventFillEl = el.querySelector("#sf-event-fill");
+  const bossBarEl = el.querySelector("#sf-bossbar");
+  const bossBarKickerEl = el.querySelector("#sf-bossbar-kicker");
+  const bossBarNameEl = el.querySelector("#sf-bossbar-name");
+  const bossBarHpEl = el.querySelector("#sf-bossbar-hp");
+  const bossBarTrackEl = el.querySelector("#sf-bossbar-track");
+  const bossBarChipEl = el.querySelector("#sf-bossbar-chip");
+  const bossBarFillEl = el.querySelector("#sf-bossbar-fill");
+  const bossBarDetailEl = el.querySelector("#sf-bossbar-detail");
   const hintEl = el.querySelector("#sf-hint");
   const objEl = el.querySelector("#sf-objective");
   const objLabelEl = el.querySelector("#sf-objlabel");
@@ -333,6 +354,21 @@ export function buildHud(ctx, host) {
       "THE ABBESS", "A ROYAL CELL", 3.4, true));
     ctx.abbess.bus.on("defeated", () => showBreachAlert(
       "THE BLOOM", "THE ABBESS IS UNSEATED", 5.2));
+  }
+  if (ctx.stylite?.bus) {
+    ctx.stylite.bus.on("aggro", () => showBreachAlert(
+      "CHOIR SPIRES · APEX SIGNATURE", "IT IS ABOVE YOU", 4.8, true));
+    ctx.stylite.bus.on("stoopTelegraph", () => showBreachAlert(
+      "THE STYLITE", "IT IS COMING DOWN ON YOU", 2.0, true));
+    /* The two beats the fight turns on: the grip going, and the window
+       it buys. Everything else the animal does is visible against open
+       sky and needs no banner. */
+    ctx.stylite.bus.on("gripBroken", () => showBreachAlert(
+      "THE STYLITE", "ITS GRIP IS GONE", 2.4, true));
+    ctx.stylite.bus.on("crash", () => showBreachAlert(
+      "THE STYLITE", "DOWN — CLOSE AND STRIKE", 3.2, true));
+    ctx.stylite.bus.on("defeated", () => showBreachAlert(
+      "CHOIR SPIRES", "THE STYLITE IS BROUGHT DOWN", 5.2));
   }
   if (ctx.districtBosses?.bus) {
     ctx.districtBosses.bus.on("approach", (event) => showBreachAlert(
@@ -1006,6 +1042,33 @@ export function buildHud(ctx, host) {
     return true;
   }
 
+  /* Its readout carries the two numbers that decide the fight, and
+     health is neither: how far up it is, and how much of its grip is
+     left. */
+  function updateStyliteReadout() {
+    const s = ctx.stylite?.status?.();
+    if (!s || s.phase === "dormant" || s.dead) return false;
+    minimapEl.dataset.event = "1";
+    mapEventEl.dataset.phase = s.phase;
+    eventKickerEl.textContent = "CHOIR SPIRES · APEX SIGNATURE";
+    eventNameEl.textContent = "THE STYLITE";
+    eventNameEl.title = eventNameEl.textContent;
+    eventSubEl.textContent = s.phase === "retire"
+      ? "Withdrawing - it is going back up"
+      : s.grounded
+        ? "DOWN — close and strike"
+        : s.phase === "plummet"
+          ? "FALLING"
+          : s.phase === "stoop"
+            ? "IT IS COMING DOWN ON YOU"
+            : s.phase === "leap"
+              ? "In the air — hit it now"
+              : `Perched · ${s.altitude}m up · grip ${Math.round(s.gripFraction * 100)}%`;
+    eventCountEl.textContent = s.grounded ? "EXPOSED" : `${s.health} HP`;
+    eventFillEl.style.width = `${clamp01(1 - s.health / Math.max(1, s.maxHealth)) * 100}%`;
+    return true;
+  }
+
   function updateApostateReadout() {
     const a = ctx.apostate?.status?.();
     if (!a || a.phase === "dormant" || a.dead) return false;
@@ -1060,6 +1123,7 @@ export function buildHud(ctx, host) {
     if (updateDistaffReadout()) return;
     if (updateGarnerReadout()) return;
     if (updateAbbessReadout()) return;
+    if (updateStyliteReadout()) return;
     if (updateDistrictBossReadout()) return;
     const event = ctx.breaches?.status?.();
     if (!event) { minimapEl.dataset.event = "0"; return; }
@@ -1087,6 +1151,149 @@ export function buildHud(ctx, host) {
     else if (event.complete) progress = 1 - event.timer
       / Math.max(1, ctx.breaches.config.cycleCooldownSeconds);
     eventFillEl.style.width = `${clamp01(progress) * 100}%`;
+  }
+
+  const bossBarAnim = { key: "", fill: 1, chip: 1, wait: 0, hurt: 0 };
+
+  function packBoss(key, name, district, health, maxHealth, detail, phase) {
+    if (!maxHealth || health < 0) return null;
+    if (phase === "dormant" || phase === "dead") return null;
+    return {
+      key, name, district, detail: detail || "",
+      health: Math.max(0, health), maxHealth,
+      ratio: clamp01(health / Math.max(1, maxHealth)),
+    };
+  }
+
+  function readActiveBoss() {
+    const apostate = ctx.apostate?.status?.();
+    if (apostate && apostate.phase !== "dormant" && !apostate.dead) {
+      return packBoss("apostate", "THE APOSTATE", "Vault-Cathedral",
+        apostate.health, apostate.maxHealth,
+        apostate.phase === "reveal" ? "The false saint is answering"
+          : apostate.action === "shield" ? "Aegis raised — flank it"
+          : apostate.action === "summon" ? "Calling brood through the nave"
+          : apostate.action === "jet" ? "Airborne — impact incoming"
+          : apostate.overheated ? "Weapon overheated" : "",
+        apostate.phase);
+    }
+    const winnower = ctx.winnower?.status?.();
+    if (winnower && winnower.phase !== "dormant" && !winnower.dead) {
+      return packBoss("winnower", "THE WINNOWER", "Censer Works",
+        winnower.health, winnower.maxHealth,
+        winnower.phase === "return" ? "Withdrawing"
+          : winnower.grounded
+            ? (winnower.stunned ? "Down — strike freely"
+              : winnower.stalled ? "Stalled — gut exposed" : "Stoking — gut exposed")
+            : `Airborne · ${winnower.altitude}m`,
+        winnower.phase);
+    }
+    const distaff = ctx.distaff?.status?.();
+    if (distaff && distaff.phase !== "dormant" && !distaff.dead) {
+      return packBoss("distaff", "THE DISTAFF", "Glass Scar",
+        distaff.health, distaff.maxHealth,
+        distaff.phase === "returning" ? "Withdrawing"
+          : distaff.collapsed ? "Collapsed — body exposed"
+          : distaff.lunging ? "Lunging"
+          : `${distaff.legsBroken} / ${distaff.legCount} legs broken`,
+        distaff.phase);
+    }
+    const garner = ctx.garner?.status?.();
+    if (garner && garner.phase !== "dormant" && !garner.dead) {
+      return packBoss("garner", "THE GARNER", "The Ossuary",
+        garner.health, garner.maxHealth,
+        garner.exposed ? "Gullet open"
+          : garner.seized ? "Seized"
+          : garner.inhaling ? "Drawing you in"
+          : "",
+        garner.phase);
+    }
+    const abbess = ctx.abbess?.status?.();
+    if (abbess && abbess.phase !== "dormant" && !abbess.dead) {
+      return packBoss("abbess", "THE ABBESS", "The Bloom",
+        abbess.health, abbess.maxHealth,
+        abbess.exposed ? "Underside exposed"
+          : abbess.phase === "royal" ? "Royal cell"
+          : abbess.phase === "retire" ? "Folding back down" : "",
+        abbess.phase);
+    }
+    const stylite = ctx.stylite?.status?.();
+    if (stylite && stylite.phase !== "dormant" && !stylite.dead) {
+      return packBoss("stylite", "THE STYLITE", "Choir Spires",
+        stylite.health, stylite.maxHealth,
+        stylite.grounded ? "Down — close and strike"
+          : stylite.phase === "plummet" ? "Falling"
+          : stylite.phase === "stoop" ? "Diving" : "",
+        stylite.phase);
+    }
+    const coulter = ctx.coulter?.status?.();
+    if (coulter && coulter.phase !== "dormant" && !coulter.dead) {
+      return packBoss("coulter", "THE COULTER", "The Fallen Saint",
+        coulter.health, coulter.maxHealth,
+        coulter.phase === "burrow" ? "Under the sand"
+          : coulter.phase === "crest" ? "Surfaced — strike the maw" : "",
+        coulter.phase);
+    }
+    const district = ctx.districtBosses?.activeBoss?.();
+    if (district && !district.defeated && district.phase !== "dormant") {
+      return packBoss(district.key || district.enemyKey, district.boss?.toUpperCase() || "APEX",
+        district.district, district.health, district.maxHealth,
+        district.phase === "alert" ? "Signature resolving" : "",
+        district.phase);
+    }
+    const event = ctx.breaches?.status?.();
+    if (event?.boss && event.phase === "active") {
+      return packBoss(event.boss.key || "breach-boss",
+        (event.boss.name || event.name || "BLOOM APEX").toUpperCase(),
+        "Bloom breach", event.boss.health, event.boss.maxHealth, "", "active");
+    }
+    return null;
+  }
+
+  function updateBossBar(dt) {
+    if (!bossBarEl) return;
+    const blocked = ctx.intro?.isBlocking?.() || ctx.runtime?.phase !== "playing";
+    const boss = blocked ? null : readActiveBoss();
+    if (!boss) {
+      bossBarEl.hidden = true;
+      bossBarEl.classList.remove("is-on", "is-hurt");
+      bossBarEl.dataset.state = "idle";
+      el.classList.remove("sf-hud--boss");
+      bossBarAnim.key = "";
+      return;
+    }
+    if (boss.key !== bossBarAnim.key) {
+      bossBarAnim.key = boss.key;
+      bossBarAnim.fill = boss.ratio;
+      bossBarAnim.chip = boss.ratio;
+      bossBarAnim.wait = 0;
+      bossBarAnim.hurt = 0;
+    }
+    if (boss.ratio < bossBarAnim.fill - 0.002) {
+      bossBarAnim.wait = 0.38;
+      bossBarAnim.hurt = 0.28;
+    }
+    bossBarAnim.fill += (boss.ratio - bossBarAnim.fill) * Math.min(1, dt * 14);
+    if (boss.ratio > bossBarAnim.chip) bossBarAnim.chip = boss.ratio;
+    if (bossBarAnim.wait > 0) bossBarAnim.wait -= dt;
+    else bossBarAnim.chip += (bossBarAnim.fill - bossBarAnim.chip) * Math.min(1, dt * 3.2);
+    if (bossBarAnim.hurt > 0) bossBarAnim.hurt -= dt;
+
+    const pct = Math.round(boss.ratio * 100);
+    bossBarEl.hidden = false;
+    bossBarEl.classList.add("is-on");
+    bossBarEl.classList.toggle("is-hurt", bossBarAnim.hurt > 0);
+    bossBarEl.dataset.state = boss.ratio <= 0.22 ? "crit" : boss.ratio <= 0.45 ? "warn" : "ok";
+    el.classList.add("sf-hud--boss");
+    bossBarKickerEl.textContent = boss.district ? boss.district.toUpperCase() : "APEX";
+    bossBarNameEl.textContent = boss.name;
+    bossBarHpEl.textContent = `${Math.round(boss.health).toLocaleString()} / ${Math.round(boss.maxHealth).toLocaleString()}`;
+    bossBarFillEl.style.width = `${(bossBarAnim.fill * 100).toFixed(2)}%`;
+    bossBarChipEl.style.width = `${(bossBarAnim.chip * 100).toFixed(2)}%`;
+    bossBarTrackEl.setAttribute("aria-valuenow", String(pct));
+    bossBarTrackEl.setAttribute("aria-valuetext", `${boss.name} ${pct} percent`);
+    bossBarDetailEl.textContent = boss.detail || "";
+    bossBarDetailEl.hidden = !boss.detail;
   }
 
   function districtAt(x, z) {
@@ -1168,6 +1375,8 @@ export function buildHud(ctx, host) {
         readoutEl.textContent = `${Math.round(p.x)} , ${Math.round(p.z)}   ·   ${Math.round(p.y)}m`;
       }
 
+      updateBossBar(dt);
+
       mapTick -= dt;
       if (mapTick <= 0) {
         mapTick = 0.05;
@@ -1180,6 +1389,7 @@ export function buildHud(ctx, host) {
          creature and naturally disappears behind the camera. */
       const hudW = el.clientWidth || 1;
       const hudH = el.clientHeight || 1;
+
       for (let i = damageNumbers.length - 1; i >= 0; i -= 1) {
         const item = damageNumbers[i];
         item.age += dt;

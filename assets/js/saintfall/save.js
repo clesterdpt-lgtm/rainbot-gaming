@@ -451,6 +451,12 @@ export function buildSaveSystem(ctx, options = {}) {
          once-per-encounter beat on every load would hand out unlimited
          Matriarchs. */
       abbess: ctx.abbess?.snapshot?.() || null,
+      /* Which needle it is on is the whole of where this boss IS, so
+         the perch index is saved and the flight is not: mid-leap and
+         mid-plummet are a position on a curve plus a destination, and
+         re-deriving those from a phase name would drop it through the
+         district or hang it in open air. */
+      stylite: ctx.stylite?.snapshot?.() || null,
       winnower: ctx.winnower?.snapshot?.() || null,
       districtBosses: ctx.districtBosses?.snapshot?.() || null,
       /* Only the venom already in the player. The pools on the ground
@@ -744,6 +750,25 @@ export function buildSaveSystem(ctx, options = {}) {
       return true;
     };
     if (!validateAbbess(snapshot.abbess)) return false;
+    const validateStylite = (record) => {
+      if (record === null || record === undefined) return true;
+      const phases = new Set(["dormant", "rouse", "perched", "retire", "dead"]);
+      if (!isRecord(record) || !phases.has(record.phase)
+        || ![record.timer, record.health].every(isFiniteNumber)
+        || record.timer < 0 || record.timer > 600
+        || record.health < 0 || record.health > 10_000_000
+        || typeof record.defeated !== "boolean") return false;
+      if (record.instanceId !== null && record.instanceId !== undefined
+        && (typeof record.instanceId !== "string"
+          || !enemyIds.has(record.instanceId))) return false;
+      for (const field of ["perch", "grip", "falls"]) {
+        const n = record[field];
+        if (n === null || n === undefined) continue;
+        if (!isFiniteNumber(n) || n < 0 || n > 100000) return false;
+      }
+      return true;
+    };
+    if (!validateStylite(snapshot.stylite)) return false;
     if (snapshot.districtBosses !== null && snapshot.districtBosses !== undefined) {
       const domain = snapshot.districtBosses;
       const expected = new Set((ctx.districtBosses?.status?.() || []).map((boss) => boss.key));
@@ -1341,6 +1366,20 @@ export function buildSaveSystem(ctx, options = {}) {
          ordinary record in `districtBosses`. Seat her rather than
          leaving whatever the constructor built. */
       ctx.abbess?.resetToSeat?.();
+    }
+    if (snapshot.stylite) {
+      if (ctx.stylite?.restore?.(snapshot.stylite, restoredEnemies) === false) {
+        throw new Error("Stylite encounter restore was rejected.");
+      }
+    } else if (ctx.mission.bosses?.find((boss) => boss.key === "choir")?.done) {
+      ctx.stylite?.restore?.({ phase: "dead", health: 0, defeated: true },
+        restoredEnemies);
+    } else {
+      /* A save written before the Choir's tenant existed still names
+         the district; the Precentor that used to stand there was an
+         ordinary record in `districtBosses`. Seat it rather than
+         leaving whatever the constructor built. */
+      ctx.stylite?.resetToPerch?.();
     }
     if (snapshot.garner) {
       if (ctx.garner?.restore?.(snapshot.garner, restoredEnemies) === false) {

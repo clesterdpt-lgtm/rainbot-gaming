@@ -67,23 +67,47 @@ try {
     if (el && el.parentNode) el.parentNode.removeChild(el);
   });
 
-  /* ---------------- it is earned by the breach progression ---------------- */
+  /* ---------------- she holds a district now ---------------- */
+  /* She used to be raised by the last breach wave of a Bloom cycle,
+     and this block checked that she could not appear before it. She
+     is the GILDED REACH's boss now - the Abbess took the Bloom, the
+     Stylite took the Choir Spires, and the mantis the Stylite
+     displaced moved here rather than being retired. So the promise
+     inverts: she is on the map from boot, dormant and unhittable
+     behind the same arena gate every other district boss uses, and
+     the roaming waves that used to raise her no longer raise
+     anything. The Abbess still lays one at a third health, which is
+     covered in scripts/saintfall-abbess-fight.mjs. */
   console.log("\n=== PLACEMENT ===");
   const placed = await page.evaluate(() => {
     const T = window.__SF;
-    const initial = T.ctx.enemies.live.filter((e) => e.key === "matriarch").length;
+    const live = T.ctx.enemies.live.filter((e) => e.key === "matriarch");
+    const site = T.ctx.mission.bosses.find((b) => b.key === "reach");
+    const status = T.ctx.districtBosses.status("reach");
     const ps = T.playerState();
     T.startBreachWave(4, ps.x, ps.z - 44, true);
-    const all = T.ctx.enemies.live.filter((e) => e.key === "matriarch");
-    return { initial, spawned: all.map((e) => ({ x: +e.x.toFixed(1), z: +e.z.toFixed(1),
-      hp: e.health, state: e.state, emerging: !!e.emerging?.active })) };
+    const afterWave = T.ctx.enemies.live.filter((e) => e.key === "matriarch").length;
+    return {
+      atBoot: live.length,
+      eventId: live[0]?.eventId || null,
+      enemyKey: site?.enemyKey || null,
+      dormant: status?.phase === "dormant" && !!status.hidden && !!status.locked,
+      distanceFromSite: live[0] && site
+        ? Math.hypot(live[0].x - site.x, live[0].z - site.z) : Infinity,
+      afterWave,
+    };
   });
   console.log("  matriarchs on the map:", JSON.stringify(placed));
-  check(placed.initial === 0, "the Matriarch is absent before the final breach",
-    `${placed.initial} found at boot`);
-  check(placed.spawned.length === 1 && placed.spawned[0].emerging,
-    "the final breach raises exactly one Matriarch",
-    `${placed.spawned.length} found after the event started`);
+  check(placed.atBoot === 1 && placed.enemyKey === "matriarch"
+    && placed.eventId === "district-boss:reach",
+  "the Matriarch holds the Gilded Reach as its district boss",
+  `${placed.atBoot} on the map as ${placed.eventId}`);
+  check(placed.dormant && placed.distanceFromSite < 6,
+    "...dormant, hidden and locked at the Reach's arena until it is entered",
+    `${placed.distanceFromSite.toFixed(1)}m from the site marker`);
+  check(placed.afterWave === 1,
+    "a roaming breach wave no longer raises a second one",
+    `${placed.afterWave} after a wave started`);
 
   /* ---------------- the weak point ---------------- */
   console.log("\n=== WEAK POINT ===");
@@ -276,14 +300,40 @@ try {
     const waves = T.ctx.breaches.waves.map((wave, i) => ({
       wave: i + 1, name: wave.name, bossKey: wave.bossKey || null,
     }));
-    const matriarchWave = waves.find((w) => w.bossKey === "matriarch");
+    /* Anchored on the SECOND-TO-LAST wave rather than on "the wave
+       that carries the Matriarch". No wave carries a boss any more -
+       the encounter bosses all sit in their own arenas now, and
+       `waves.find(w => w.bossKey === "matriarch")` came back
+       undefined and took the whole probe down with it. What this
+       block is really about is the boundary between advancing the
+       cycle and closing it, which any non-final wave demonstrates. */
     const lastWave = waves[waves.length - 1];
+    const midWave = waves[Math.max(0, waves.length - 2)];
 
     T.clearEnemies();
     T.setBreachAuto(true);
+    /* STAND SOMEWHERE NEUTRAL FIRST. Waves hold outside every
+       undefeated boss arena - that is the contract the hunt probe
+       asserts - and the earlier blocks in this file leave the player
+       wherever a flat site happened to be, which turned out to be
+       inside the Fallen Saint's 285m circle. The cycle then reported
+       `blockedByBoss: "saint"` and never advanced, which reads as a
+       broken breach cycle rather than as a probe standing in the
+       wrong place. */
+    const sites = T.ctx.mission.bosses;
+    let spot = null;
+    for (let r = 0; r < 40 && !spot; r += 1) {
+      const a = r * 2.399;
+      const x = Math.cos(a) * (140 + r * 34);
+      const z = Math.sin(a) * (140 + r * 34);
+      if (sites.every((b) => Math.hypot(b.x - x, b.z - z)
+        > (b.warningRadius || b.arenaRadius) + 90)) spot = [x, z];
+    }
+    if (spot) T._teleportRaw(spot[0], spot[1], 0);
+    T.advanceTime(0.1, 0.05);
     const ps = T.playerState();
-    // The Matriarch's own wave: clearing it must ADVANCE the cycle.
-    T.startBreachWave(matriarchWave.wave - 1, ps.x, ps.z - 44, true);
+    // A mid-cycle wave: clearing it must ADVANCE the cycle.
+    T.startBreachWave(midWave.wave - 1, ps.x, ps.z - 44, true);
     T.advanceTime(0.05, 0.05);
     const opened = T.breachState();
     kill();
@@ -303,7 +353,7 @@ try {
     const restarted = T.breachState();
     return {
       cooldown: T.ctx.breaches.config.cycleCooldownSeconds,
-      waves, matriarchWave, lastWave,
+      waves, midWave, lastWave,
       opened, advanced, finalOpened, cleared, restored, resting, restarted,
       roster: T.ctx.breaches.members.filter((inst) => inst.state !== "death")
         .map((inst) => inst.key),
@@ -315,9 +365,9 @@ try {
     + `${recurrence.cooldown}s recovery · next phase ${recurrence.restarted.phase} `
     + `cycle ${recurrence.restarted.cycle}`);
   check(recurrence.opened.phase === "active"
-      && recurrence.opened.wave === recurrence.matriarchWave.wave
-      && recurrence.matriarchWave.wave === recurrence.waves.length - 1,
-    "the Matriarch is the second-to-last wave of each cycle",
+      && recurrence.opened.wave === recurrence.midWave.wave
+      && recurrence.midWave.wave === recurrence.waves.length - 1,
+    "a mid-cycle wave sits second-to-last in the progression",
     `wave ${recurrence.opened.wave} of ${recurrence.waves.length}`);
   check(recurrence.advanced.phase === "intermission" && !recurrence.advanced.complete,
     "breaking the brood advances the cycle rather than ending it",

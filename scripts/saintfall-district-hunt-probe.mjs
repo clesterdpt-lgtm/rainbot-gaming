@@ -82,7 +82,13 @@ try {
         coulter: worm?.root?.scale?.x || 0,
         coulterSpan: worm?.spineLength || 0,
         coulterHitScale: worm?.spec?.bodyHitScale || 0,
-        precentor: byEvent["district-boss:choir"]?.root?.scale?.x || 0,
+        matriarch: byEvent["district-boss:reach"]?.root?.scale?.x || 0,
+        matriarchLength: (() => {
+          const inst = byEvent["district-boss:reach"];
+          if (!inst?.root) return 0;
+          const box = new T.THREE.Box3().setFromObject(inst.root);
+          return box.max.z - box.min.z;
+        })(),
         ordinaryThresher: T.ctx.enemies.species.get("thresher")?.spec?.scale || 0,
       },
       dedicated: {
@@ -113,8 +119,9 @@ try {
   const ossuary = initial.generic.find((boss) => boss.key === "ossuary");
   const bloom = initial.generic.find((boss) => boss.key === "bloom");
   const saint = initial.generic.find((boss) => boss.key === "saint");
-  check(initial.generic.length === 3,
-    "three shared-simulation bosses join the four bespoke encounters",
+  const choir = initial.generic.find((boss) => boss.key === "choir");
+  check(initial.generic.length === 2,
+    "two shared-simulation bosses join the five bespoke encounters",
     initial.generic.map((boss) => `${boss.key}:${boss.enemyKey}`).join(" · "));
   /* The Ossuary left the shared roster when its placeholder became a
      real encounter - it is `domain: "garner"` now, driven by its own
@@ -130,6 +137,12 @@ try {
   check(!bloom && initial.sites.some((boss) => boss.key === "bloom"),
     "the Bloom is a bespoke encounter rather than a shared-simulation one",
     `generic=${!!bloom}`);
+  /* And the Choir left when the Stylite took the spires. The Matriarch
+     it displaced did not retire - she moved to the Gilded Reach, which
+     is why the shared roster shrank by one rather than by two. */
+  check(!choir && initial.sites.some((boss) => boss.key === "choir"),
+    "the Choir Spires are a bespoke encounter rather than a shared-simulation one",
+    `generic=${!!choir}`);
   check(saint?.enemyKey === "coulter" && saint.stage === "penultimate"
     && saint.arenaRadius === 285 && !saint.available,
   "the Coulter moved to a locked 285m Fallen Saint arena",
@@ -143,9 +156,13 @@ try {
     && initial.scales.coulterHitScale === 4,
   "the Fallen Saint Coulter is roughly four times wider and longer",
   `scale ${initial.scales.coulter.toFixed(2)} · span ${initial.scales.coulterSpan.toFixed(1)}m · hit scale ${initial.scales.coulterHitScale}`);
-  check(initial.scales.precentor / initial.scales.ordinaryThresher >= 2.45,
-    "the Choir mantis remains at least 2.45x an ordinary Thresher",
-    `${initial.scales.precentor.toFixed(2)} vs ${initial.scales.ordinaryThresher.toFixed(2)}`);
+  /* The mantis is measured at the REACH now. She is authored at 1:1
+     rather than scaled from a Thresher, so the promise is about her
+     real footprint - nine-odd metres of animal you have to walk around
+     - and not about a multiplier on a smaller model. */
+  check(initial.scales.matriarch > 0 && initial.scales.matriarchLength >= 8.5,
+    "the Matriarch holds the Gilded Reach at her authored nine-metre length",
+    `scale ${initial.scales.matriarch.toFixed(2)} · ${initial.scales.matriarchLength.toFixed(1)}m long`);
   check(initial.isolation.every((entry) => entry.gap > 300),
     "the giant sand arena is isolated from every previous boss area",
     initial.isolation.map((entry) => `${entry.key}:${entry.gap.toFixed(0)}m`).join(" · "));
@@ -192,16 +209,20 @@ try {
   `${lockedSaint.phase} · approaches=${lockedSaint.approaches}`);
 
   console.log("\n=== BOUNDARY WARNINGS AND RESET ===");
-  /* Measured on the CHOIR. This block is about the shared boundary
+  /* Measured on the REACH. This block is about the shared boundary
      machinery in district-bosses.js, and the roster of encounters still
      using it keeps shrinking: the Ossuary left when the Garner replaced
-     its placeholder, and the Bloom left when the Abbess replaced the
-     Matriarch. `H.status()` correctly returns null for both. The
-     Precentor is the same shared lifecycle, still on it. */
+     its placeholder, the Bloom left when the Abbess replaced the
+     Matriarch, and the Choir left when the Stylite took the spires.
+     `H.status()` correctly returns null for all three. This probe has
+     been repointed twice now for exactly that reason - if it has to
+     move again, the last generic district boss standing is the one to
+     move it to, because a shared lifecycle with no user left is a
+     different problem than a broken assertion. */
   const boundary = await page.evaluate(() => {
     const T = window.__SF;
     const H = T.ctx.districtBosses;
-    const site = T.ctx.mission.bosses.find((boss) => boss.key === "choir");
+    const site = T.ctx.mission.bosses.find((boss) => boss.key === "reach");
     const events = [];
     const offs = [
       H.bus.on("approach", (event) => events.push(`approach:${event.key}`)),
@@ -212,32 +233,32 @@ try {
     ps.x = site.x + site.arenaRadius + 20;
     ps.z = site.z;
     H.update(0.05);
-    const boss = H.status("choir");
+    const boss = H.status("reach");
     ps.x = boss.x + 8;
     ps.z = boss.z;
     H.update(0.05);
     for (let i = 0; i < 30; i += 1) H.update(0.1);
-    const active = H.status("choir");
-    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:choir");
+    const active = H.status("reach");
+    const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:reach");
     T.ctx.combat.damageEnemy(inst, 500, { source: "qa-boundary" });
-    const damaged = H.status("choir");
+    const damaged = H.status("reach");
     ps.x = site.x + site.arenaRadius - 10;
     ps.z = site.z;
     H.update(0.05);
     ps.x = site.x + site.arenaRadius + 2;
     H.update(0.05);
-    const reset = H.status("choir");
+    const reset = H.status("reach");
     for (const off of offs) off?.();
     return { events, active, damaged, reset, missionDone: site.done };
   });
-  check(boundary.events.includes("approach:choir"),
+  check(boundary.events.includes("approach:reach"),
     "approaching a boss area emits an advance warning", boundary.events.join(" · "));
   check(boundary.active.phase === "active" && !boundary.active.locked
     && boundary.damaged.health < boundary.damaged.maxHealth,
   "entering the area begins a targetable fight whose damage is tracked");
-  check(boundary.events.includes("exit:choir"),
+  check(boundary.events.includes("exit:reach"),
     "the inner boundary warns that leaving will reset the fight", boundary.events.join(" · "));
-  check(boundary.events.includes("reset:choir") && boundary.reset.phase === "dormant"
+  check(boundary.events.includes("reset:reach") && boundary.reset.phase === "dormant"
     && boundary.reset.hidden && boundary.reset.locked
     && boundary.reset.health === boundary.reset.maxHealth && !boundary.missionDone,
   "crossing the boundary restores and re-hides the undefeated boss",

@@ -1,18 +1,19 @@
 /* ============================================================
    SAINTFALL - district boss hunt
 
-   Three encounters can use the shared enemy simulation while still
+   Two encounters can use the shared enemy simulation while still
    needing the lifecycle guarantees of a boss: a fixed home, a hidden
    reveal gate, an arena reset, durable identity, an objective marker,
    and exactly one mission victory. The Distaff, the Winnower, the
-   Garner and the Abbess retain their bespoke controllers, and this file
-   reaches them through `domain` rather than by key. Six districts unlock the giant
+   Garner, the Abbess and the Stylite retain their bespoke controllers,
+   and this file reaches them through `domain` rather than by key. Six districts unlock the giant
    Coulter beneath the Fallen Saint; killing it unlocks the Apostate.
    ============================================================ */
 
 import { ABBESS_CONFIG } from "saintfall/abbess.js";
 import { clamp, makeBus } from "saintfall/core.js";
 import { GARNER_CONFIG } from "saintfall/garner.js";
+import { STYLITE_CONFIG } from "saintfall/stylite.js";
 import { DISTRICTS } from "saintfall/terrain.js";
 
 export const DISTRICT_BOSS_SITES = Object.freeze([
@@ -52,14 +53,20 @@ export const DISTRICT_BOSS_SITES = Object.freeze([
     domain: "abbess",
   }),
   Object.freeze({
-    key: "choir", district: "Choir Spires", boss: "The Precentor",
-    order: "SILENCE THE PRECENTOR", enemyKey: "precentor",
+    key: "choir", district: "Choir Spires", boss: "The Stylite",
+    order: "BRING DOWN THE STYLITE", enemyKey: "stylite",
     x: DISTRICTS.choir.x, z: DISTRICTS.choir.z,
-    arenaRadius: 96, aggroRadius: 62, domain: "district",
+    arenaRadius: STYLITE_CONFIG.arenaRadius,
+    aggroRadius: STYLITE_CONFIG.aggroRadius,
+    domain: "stylite",
   }),
   Object.freeze({
-    key: "reach", district: "The Gilded Reach", boss: "The Cantor",
-    order: "TOPPLE THE GILDED CANTOR", enemyKey: "cantor",
+    /* The Matriarch takes the Reach. She was the Bloom's guardian until
+       the Abbess replaced her, and the Abbess still lays one at a third
+       health - so this is the district meeting the thing the Bloom
+       exports rather than a spare model being found a home. */
+    key: "reach", district: "The Gilded Reach", boss: "The Matriarch",
+    order: "SLAY THE MATRIARCH", enemyKey: "matriarch",
     x: DISTRICTS.reach.x + 18, z: DISTRICTS.reach.z - 12,
     arenaRadius: 102, aggroRadius: 66, domain: "district",
   }),
@@ -330,6 +337,7 @@ export function buildDistrictBosses(ctx) {
     if (site.key === "censer") return ctx.winnower?.status?.() || null;
     if (site.key === "ossuary") return ctx.garner?.status?.() || null;
     if (site.key === "bloom") return ctx.abbess?.status?.() || null;
+    if (site.key === "choir") return ctx.stylite?.status?.() || null;
     const record = records.get(site.key);
     return record ? publicRecord(record) : null;
   }
@@ -370,6 +378,7 @@ export function buildDistrictBosses(ctx) {
        reason: a queen who cannot move has nowhere to be teleported to,
        so the reset IS the animation. */
     else if (site.domain === "abbess") ctx.abbess?.retire?.();
+    else if (site.domain === "stylite") ctx.stylite?.retire?.();
     else {
       const record = records.get(site.key);
       if (record) resetRecord(record, { silent: true });

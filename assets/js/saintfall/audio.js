@@ -1957,6 +1957,41 @@ export function buildAudio(ctx) {
       abbess.bus.on("retiring", (e) => rumble(e.x, e.z, 0.7));
       abbess.bus.on("defeated", () => chord([165, 220, 277, 330], 1.9, 0.26));
     }
+    /* The Choir's tenant. Its cues are the only ones in the game that
+       have to carry HEIGHT: the animal is ninety metres up and usually
+       behind a needle, so the audio is most of how a player knows what
+       it is doing. Pitched high and dry against the Abbess's pedal -
+       a thing on a rock spire should not share a register with a thing
+       in a pit. */
+    const stylite = ctx.stylite;
+    if (stylite) {
+      stylite.bus.on("aggro", () => chord([220, 330, 440, 587], 1.8, 0.24));
+      stylite.bus.on("engaged", () => chord([196, 294, 392], 1.0, 0.18));
+      // The wind-up before a volley: the one cue that buys a dodge.
+      stylite.bus.on("aim", (e) => hiss(e.x, e.z));
+      stylite.bus.on("shot", (e) => surface(e.x, e.z));
+      stylite.bus.on("boltHit", (e) => impact(e.x, e.z, "flesh"));
+      stylite.bus.on("boltSplash", (e) => impact(e.x, e.z, "wall"));
+      /* The spring loading, then unloading. Two cues rather than one
+         because the gap between them IS the telegraph, and a player
+         facing away needs to hear it leave the rock. */
+      stylite.bus.on("coil", (e) => rumble(e.x, e.z, 0.5));
+      stylite.bus.on("launch", (e) => surface(e.x, e.z));
+      stylite.bus.on("land", (e) => impact(e.x, e.z, "wall"));
+      stylite.bus.on("stoopTelegraph", (e) => chord([98, 147, 196], 0.8, 0.24));
+      stylite.bus.on("stoop", (e) => explosion(e.x, e.z, 14));
+      /* THE FALL. A descending figure, because everything else this
+         animal does goes up, and this is the one thing the player made
+         happen. */
+      stylite.bus.on("gripBroken", () => chord([392, 294, 196, 131], 1.5, 0.28));
+      stylite.bus.on("crash", (e) => {
+        explosion(e.x, e.z, 18);
+        rumble(e.x, e.z, 1);
+      });
+      stylite.bus.on("recover", (e) => rumble(e.x, e.z, 0.6));
+      stylite.bus.on("retiring", (e) => hiss(e.x, e.z));
+      stylite.bus.on("defeated", () => chord([175, 233, 294, 349], 1.8, 0.26));
+    }
     /* The false saint uses the player's mechanical vocabulary in the
        Bloom register: familiar lance/boost transients under violet shell
        movement and a brood-call chord where a command confirmation belongs. */

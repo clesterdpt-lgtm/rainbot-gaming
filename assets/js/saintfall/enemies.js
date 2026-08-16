@@ -469,6 +469,53 @@ export const BESTIARY = {
   },
 
   /* ------------------------------------------------------------------
+     THE STYLITE. The Choir Spires' tenant, and the third procedural
+     entry - by now the established path for a creature whose whole
+     read is motion rather than surface.
+
+     What moves: two hind springs that compress to a quarter of their
+     length and unload in a frame. That is a hinge problem, not a
+     deformation one, so unlike the Garner's tentacles and the Abbess's
+     sac this module poses a HIERARCHY of groups rather than rewriting
+     vertices - see the note in stylite.js. It is still procedural
+     because the alternative is a .glb whose only content is six
+     rotations.
+
+     `perches` is the capability flag: it is not a flyer, but like one
+     it spends most of the fight out of a polearm's reach, and every
+     system that asks "can I melee this" needs one thing to check.
+     ------------------------------------------------------------------ */
+  stylite: {
+    procedural: true,
+    faction: "bloom",
+    /* The smallest boss pool in the game, and deliberately: it is not
+       meant to be out-damaged, it is meant to be brought DOWN. Most of
+       a run's damage lands in the stunned window at a melee multiplier,
+       and its own fall does four hundred of it every time the player
+       earns one. */
+    health: 5400,
+    scale: 1.0,
+    speed: { walk: 0, charge: 0 },
+    material: { roughness: 0.58, metalness: 0.06, rim: 0.42, bio: 1.5 },
+    selfDriven: true,
+    /* Out of reach unless it is on the ground - the same gate the
+       Winnower's `flies` opens, for a creature that never flies. */
+    perches: true,
+    legs: 0,
+    stance: 0,
+    stepHeight: 0,
+    collisionRadius: 1.6,
+    /* It lives on the crowns of hundred-metre needles and is a
+       silhouette against open sky from anywhere in the district. */
+    cullRange: 700,
+    ikRange: 320,
+    animRange: 520,
+    poseRange: 700,
+    shadowRange: 160,
+    clips: [],
+  },
+
+  /* ------------------------------------------------------------------
      THE ABBESS. The Bloom's queen, and the second entry here with no
      .glb - the Garner having established that a creature whose whole
      surface deforms is better served by a module than by a rig.

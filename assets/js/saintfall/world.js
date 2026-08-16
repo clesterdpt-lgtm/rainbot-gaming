@@ -82,6 +82,16 @@ function makeBatcher(ctx, root) {
           : `${bin.district}-${bin.matName}`;
         mesh.castShadow = bin.opts.castShadow !== false;
         mesh.receiveShadow = bin.opts.receiveShadow !== false;
+        /* See collide.js's own rasterMesh comment: a triangle whose
+           XZ footprint is under half a metre is dropped as clutter
+           UNLESS the mesh opts out of that filter here. A finely
+           subdivided hull - a rock arch's legs, sixty rings of it -
+           is built from exactly that many small triangles even
+           though the assembled shape stands metres tall, and every
+           one of them individually failed the footprint test: the
+           collider registered a few stray slivers and nothing else,
+           while the render mesh stood there solid. */
+        if (bin.opts.collisionSolid) mesh.userData.collisionSolid = true;
         mesh.matrixAutoUpdate = false;
         mesh.updateMatrix();
         mesh.userData.district = bin.district;
@@ -3852,6 +3862,209 @@ export async function buildWorld(ctx, onProgress) {
     }
   }
 
+  /* ============================================================
+     THE WINDGATE
+
+     A natural stone arch, wind-carved from one outcrop into two legs
+     and a span, standing alone in open desert well clear of every
+     named district - a found thing rather than a built one, the way
+     a real arch in a real desert is something you come across, not
+     something anyone's civilisation put there.
+
+     It deliberately does NOT compete with the Saint's head for the
+     map's ONE dominant landmark: a third of the height, no
+     minimap-radius announcement, nothing narrative attached. It is
+     the reward for wandering off the road, not a tenth destination.
+     ============================================================ */
+  await step("Raising the Windgate", 0.955);
+  {
+    const rng = makeRng(0xc0da2e);
+
+    const nearRoad = (x, z) => {
+      let best = Infinity;
+      for (let i = 0; i < ROAD_PATH.length - 1; i += 1) {
+        const [ax, az] = ROAD_PATH[i];
+        const [bx, bz] = ROAD_PATH[i + 1];
+        const vx = bx - ax;
+        const vz = bz - az;
+        const t = Math.max(0, Math.min(1,
+          ((x - ax) * vx + (z - az) * vz) / (vx * vx + vz * vz || 1)));
+        best = Math.min(best, Math.hypot(x - (ax + vx * t), z - (az + vz * t)));
+      }
+      return best;
+    };
+    // Every named district plus a wide margin - see the file header:
+    // this is deliberately not a tenth destination competing with
+    // them, so it needs room of its own rather than a corner of
+    // someone else's.
+    const inAnyDistrict = (x, z) => Object.values(DISTRICTS)
+      .some((d) => Math.hypot(x - d.x, z - d.z) < d.r + 100);
+    const slopeAt = (x, z) => {
+      const S = 8;
+      return Math.hypot(
+        (H(x + S, z) - H(x - S, z)) / (2 * S), (H(x, z + S) - H(x, z - S)) / (2 * S)
+      );
+    };
+
+    // A short local search around a chosen open-desert quarter
+    // rather than either a blind hard-coded point (which a terrain
+    // reseed could silently strand on a dune face) or a wide search
+    // (which a one-off landmark does not need).
+    let site = null;
+    for (let tries = 0; tries < 200 && !site; tries += 1) {
+      const x = 380 + rng.range(-90, 90);
+      const z = 380 + rng.range(-90, 90);
+      if (inAnyDistrict(x, z)) continue;
+      if (nearRoad(x, z) < 140) continue;
+      const surf = field.surfaceAt(x, z);
+      if (surf.sand < 0.5) continue;             // open dune, not rocky floor
+      if (slopeAt(x, z) > 0.22) continue;         // stable ground for two footings
+      site = { x, z };
+    }
+    if (site) {
+      const HALF_SPAN = 15.5;
+      const yaw = 0.58;                            // span axis bearing
+      const cy = Math.sin(yaw);
+      const cx = Math.cos(yaw);
+
+      // Real footing heights, not an assumed-flat pair - the whole
+      // reason this is built in world-relative coordinates instead
+      // of a symmetric local template. A hand-tilted template would
+      // have to guess the slope; this reads it.
+      const siteY = H(site.x, site.z);
+      const legAx = site.x - cx * HALF_SPAN;
+      const legAz = site.z - cy * HALF_SPAN;
+      const legBx = site.x + cx * HALF_SPAN;
+      const legBz = site.z + cy * HALF_SPAN;
+      const legAy = H(legAx, legAz) - siteY;
+      const legBy = H(legBx, legBz) - siteY;
+
+      // Asymmetric on purpose - Delicate Arch and every real one like
+      // it has a heavier leg and a more attenuated one, never a
+      // mirror. Leg A is the monument; leg B is the survivor.
+      const archHeight = 26;
+      const baseRadiusA = 7.6;
+      const baseRadiusB = 6.0;
+      const crownRadius = 2.35;
+      const zWobbleAmp = rng.range(0.6, 1.2);
+      const zWobbleK = rng.range(1.1, 1.5);
+      const zWobblePhase = rng() * TAU;
+
+      /* WAYPOINTS, NOT ONE SMOOTH CURVE.
+
+         A single cubic through two control points is a section of
+         one continuous bend, and no choice of control points ever
+         stopped reading as a slice of a circle - a hoop, not a leg
+         standing up into a span. A real arch's silhouette is closer
+         to three straight-ish runs joined by two tight knuckles: a
+         leg that rises PLUMB, a knuckle where it turns over, a span
+         that runs across closer to level than to round, a second
+         knuckle, a second leg. Catmull-Rom through explicit points
+         gives that directly - each segment can be as straight or as
+         sharp as the two points either side of it say, which a
+         two-control-point bezier cannot express no matter how they
+         are placed. Asymmetric on purpose: leg A is the short, high,
+         near-vertical "monument" side; leg B reaches further out at
+         a shallower angle, the "worn" side a real arch always has. */
+      const W = [
+        [-HALF_SPAN, legAy],
+        [-HALF_SPAN * 0.92, legAy + archHeight * 0.34],
+        [-HALF_SPAN * 0.62, legAy + archHeight * 0.70],
+        [-HALF_SPAN * 0.20, archHeight * 1.02],
+        [HALF_SPAN * 0.18, archHeight * 0.90],
+        [HALF_SPAN * 0.55, archHeight * 0.62],
+        [HALF_SPAN * 0.86, legBy + archHeight * 0.26],
+        [HALF_SPAN, legBy],
+      ];
+      const catmullRom = (p0, p1, p2, p3, t) => {
+        const t2 = t * t, t3 = t2 * t;
+        return 0.5 * ((2 * p1)
+          + (-p0 + p2) * t
+          + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+          + (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
+      };
+      const at = (i) => W[Math.max(0, Math.min(W.length - 1, i))];
+      const sampleU = (segT, seg) => catmullRom(at(seg - 1)[0], at(seg)[0], at(seg + 1)[0], at(seg + 2)[0], segT);
+      const sampleV = (segT, seg) => catmullRom(at(seg - 1)[1], at(seg)[1], at(seg + 1)[1], at(seg + 2)[1], segT);
+
+      /* Sixty segments, not thirty. `rockTube`'s parallel-transport
+         frame only turns as fast as consecutive points make it, so
+         path resolution is what keeps that turn small ring to ring -
+         thirty was coarse enough, over this much curvature, that even
+         a continuous frame still swept several degrees a step near
+         the tightest part of the bend. */
+      const N = 60;
+      const SEGS = W.length - 1;
+      const points = [];
+      const radii = [];
+      for (let i = 0; i <= N; i += 1) {
+        const tGlobal = (i / N) * SEGS;
+        const seg = Math.min(SEGS - 1, Math.floor(tGlobal));
+        const segT = tGlobal - seg;
+        const u = sampleU(segT, seg);
+        const v = sampleV(segT, seg);
+        const t = i / N;
+        const w = zWobbleAmp * Math.sin(t * Math.PI * zWobbleK + zWobblePhase) * Math.sin(t * Math.PI);
+        points.push([u, v, w]);
+        // Thick through roughly a third of each leg, tapering over a
+        // short, clearly-visible middle stretch rather than a long
+        // flat run at crown radius - an earlier pass held minimum
+        // thickness across more than half the path and read as
+        // uniformly worm-thin rather than as a taper at all.
+        const distFromEnd = Math.min(t, 1 - t) * 2;
+        const thickness = 1 - smoothstep(0.05, 0.34, distFromEnd);
+        const nearA = 1 - t;
+        radii.push(lerp(crownRadius, lerp(baseRadiusB, baseRadiusA, nearA), thickness));
+      }
+
+      /* Surface irregularity without regularity. Zero phase drift
+         over a long, constant-side-count sweep prints dead-straight,
+         evenly-spaced ribs the whole way round - corrugated pipe, not
+         eroded stone, and the tell was obvious even from the hero
+         shot. A LOW-FREQUENCY drift (not the sharp per-ring random
+         walk `crag()` uses over three rings, which tore the surface
+         over sixty of them) rotates which ridge is most prominent as
+         the path runs, which is what keeps a real weathered surface
+         from repeating. */
+      const archGeo = kit.rockTube(rng, points, radii, { sides: 10, jitter: 0.11, phaseDrift: 0.045 });
+      kit.roughen(archGeo, 0.16, 0.09);
+      kit.roughen(archGeo, 0.36, 0.024);
+      paintH(archGeo, ROCK_RAMP, { normalWeight: 0.58, jitter: 0.16, noise: 0.28 });
+      kit.transform(archGeo, { pos: [site.x, siteY, site.z], rot: [0, yaw, 0] });
+
+      const dressGeos = [archGeo];
+
+      // A scatter of broken debris at both footings - talus a real
+      // arch has shed at its own base, and the same visual cue that
+      // stops a boulder floating: something smaller and irregular
+      // sitting where the big mass meets the sand.
+      for (const [lx, lz, ly] of [[legAx, legAz, legAy], [legBx, legBz, legBy]]) {
+        for (let i = 0; i < rng.int(4, 7); i += 1) {
+          const a = rng() * TAU;
+          const d = rng.range(2.5, 9);
+          const dx = lx + Math.cos(a) * d;
+          const dz = lz + Math.sin(a) * d;
+          if (inAnyDistrict(dx, dz)) continue;
+          const character = rng();
+          const s = rng.range(0.7, 2.6);
+          const g = kit.crag(rng, {
+            height: s * rng.range(0.5, 1.2), radius: s,
+            layers: rng.int(3, 5), sides: rng.int(5, 7), lean: rng.range(0, 0.5), sink: 0.4,
+            spike: character < 0.35 ? rng.range(0.2, 0.5) : 0,
+            cliff: character >= 0.35 && character < 0.6 ? rng.range(0.3, 0.7) : 0,
+          });
+          restOnTerrain(g, dx, dz, { rot: [rng.jit(0.3), rng() * TAU, rng.jit(0.3)], maxGap: 0.08 });
+          paintH(g, ROCK_RAMP, { normalWeight: 0.5, jitter: 0.22, noise: 0.35 });
+          dressGeos.push(g);
+          void ly;
+        }
+      }
+
+      batch.add("windgate", "rock", mergeGeometries(THREE, dressGeos), { castShadow: true, collisionSolid: true });
+      pois.push({ id: "windgate", name: "The Windgate", x: site.x, z: site.z });
+    }
+  }
+
   await step("Scattering", 0.96);
   {
     const rng = makeRng(0x5ca77e);
@@ -3869,16 +4082,49 @@ export async function buildWorld(ctx, onProgress) {
       else if (surf.basalt > 0.4) { mat = "basalt"; ramp = BASALT_RAMP; }
       else if (surf.sand > 0.86 && rng.chance(0.72)) continue;   // keep the dunes clean
 
+      /* VARIETY. Every one of these used to be `layers: 3` with the
+         plain wind-cut profile and nothing else - which collapses,
+         at these small sizes, toward the same near-symmetric dome or
+         pyramid every time. Three thousand four hundred repeats of
+         one silhouette is the whole "boulders repeat too much"
+         complaint by itself, and it has a second, uglier consequence
+         at golden hour: with so few rings there are too few facets
+         for the sun to catch some and miss others, so the ENTIRE
+         shadow side lands on nearly one flat, uniform dark value -
+         no internal edge, no break, nothing to read as a faceted
+         solid rather than a flat dark shape standing in for a hole.
+         More rings buys back exactly the internal value variation a
+         low-poly rock needs to read as one in its own cast shadow.
+
+         The cliff/spike/bench mixing already proven on the rim
+         massifs (see the belt loop above) is reused here rather than
+         invented twice - about a third of boulders now take a
+         near-vertical broken-strata profile or a spiked one instead
+         of the default wind-cut dome. */
+      const character = rng();
+      const isCliff = character < 0.28;
+      const isSpiked = !isCliff && character < 0.40;
       const s = Math.pow(rng(), 2.1) * 2.6 + 0.22;
       const g = kit.crag(rng, {
         height: s * rng.range(0.5, 1.3), radius: s,
-        layers: 3, sides: rng.int(5, 7), lean: rng.range(0, 0.4), sink: 0.4,
+        layers: rng.int(3, 6), sides: rng.int(5, 8), lean: rng.range(0, 0.5), sink: 0.4,
+        spike: isSpiked ? rng.range(0.15, 0.55) : 0,
+        cliff: isCliff ? rng.range(0.35, 0.85) : 0,
+        benches: (isCliff && rng.chance(0.4)) ? rng.int(1, 2) : 0,
       });
+      /* Real debris does not all sit bolt upright - a boulder that
+         rolled to a stop leans. `restOnTerrain` (not `place`) rests
+         each one against its OWN lower envelope wherever it actually
+         landed, sampling several points across its footprint rather
+         than the single centre height `place` used - which is what
+         let a wide boulder's downhill edge hang in open air over a
+         real dune slope. It also means the tilt below cannot produce
+         a floating corner: the resting logic runs AFTER the tilt is
+         applied, against the tilted shape. */
       const tiltX = rng.jit(0.35);
       const yaw = rng() * TAU;
       const tiltZ = rng.jit(0.35);
-      void tiltX; void tiltZ;
-      place(g, x, z, { rot: [0, yaw, 0], dy: -0.14 });
+      restOnTerrain(g, x, z, { rot: [tiltX, yaw, tiltZ], maxGap: 0.08 });
       paintH(g, ramp, { normalWeight: 0.5, jitter: 0.22, noise: 0.35 });
       if (!perBucket.has(mat)) perBucket.set(mat, []);
       perBucket.get(mat).push(g);

@@ -378,6 +378,180 @@ export function makeKit(THREE) {
     return g;
   }
 
+  /**
+   * A tube swept along a 3D polyline, with the irregular faceted
+   * cross-section of eroded rock rather than a pipe's perfect
+   * polygon - `crag()`'s own vocabulary (per-ring phase drift,
+   * per-side radius jitter, a ring side-count that can itself
+   * vary) carried along a path instead of stacked straight up.
+   *
+   * Built for exactly one thing this file did not have a shape for:
+   * a natural arch, where the cross-section has to stay honestly
+   * PERPENDICULAR TO THE SPAN even where the span goes nearly
+   * horizontal overhead. `ringSolid`'s rings are always flat discs
+   * in the world XZ plane - correct for `crag`, which only ever
+   * rises, and wrong here: held to that assumption, an arch's crown
+   * would look pinched from the side, its true cross-section cut on
+   * the diagonal instead of sliced true. So the frame per ring is
+   * solved from the PATH's own local tangent, the way `tube()`
+   * already does for cables and roots - that part is copied from it
+   * verbatim, winding included, because getting an outward normal
+   * backwards here is a hole you would have to go stand inside the
+   * rock to find.
+   *
+   * `radii[i]` is one radius per point, so the caller can taper
+   * legs-thick to span-thinner along the path however it likes.
+   */
+  function rockTube(rng, points, radii, opts = {}) {
+    const baseSides = opts.sides || 7;
+    const up = new THREE.Vector3(0, 1, 0);
+    const pos = [];
+    const idx = [];
+    const starts = [];
+    const counts = [];
+    let phase = rng() * TAU;
+    /* THE FIRST VERSION OF THIS REUSED `crag()`'s PER-RING JITTER
+       RATE DIRECTLY, AND IT WAS TUNED FOR THE WRONG SHAPE.
+
+       `crag()` stacks four to seven rings. A 0.30-radian random walk
+       in phase and a +-1 random walk in side count are gentle
+       irregularity over that few steps. Handed to a sixty-ring sweep
+       - what a metres-long arch needs for the tangent frame below to
+       turn smoothly - the SAME per-step jitter compounds into a
+       random walk of several full turns end to end, and a changing
+       side count means adjacent rings routinely disagree on how many
+       vertices they have. The visible result was not "eroded rock":
+       it was a torn, spiky silhouette at every point the phase had
+       wandered far from its neighbours, worst exactly at the crown,
+       where the path curves fastest and has the least ring-to-ring
+       geometry in common to hide a mismatch behind.
+
+       So: side count is CONSTANT along one call (real strata do not
+       gain and lose a facet every few centimetres), and phase drift
+       defaults an order of magnitude gentler - enough to keep a
+       facet ridge from running perfectly straight, not enough to
+       spiral it. A caller building something short and stacked, the
+       way `crag()` itself would, can still ask for the old amount of
+       both through `opts.phaseDrift` / `opts.sideJitter`. */
+    const sides = Math.max(4, baseSides + (opts.sideJitter ? rng.int(-opts.sideJitter, opts.sideJitter) : 0));
+    const phaseDrift = opts.phaseDrift ?? 0.03;
+    /* PARALLEL TRANSPORT, NOT A PER-RING REFERENCE VECTOR.
+
+       `tube()`'s own frame - reused verbatim by the first draft of
+       this function - picks `ref` fresh at every ring from a hard
+       switch on `dir.y`: world-up normally, world-X when the
+       tangent is within about twenty degrees of vertical. That is
+       fine for a pipe that stays mostly one or the other. An arch's
+       legs start near-vertical and the path bends toward horizontal
+       within the first few rings on EITHER end - crossing the
+       switch - so `right`/`nrm` were being thrown away and rebuilt
+       from a different axis mid-sweep, and the cross-section spun
+       to match in one step. That is the seam this shape kept
+       tearing at, and it is not a tuning problem; the frame itself
+       was discontinuous.
+
+       Parallel transport carries `right`/`nrm` forward by the
+       SMALLEST rotation that takes the previous tangent to the next
+       one, so the frame only ever turns as fast as the path itself
+       does. The arbitrary reference vector is used exactly once, to
+       seed ring zero, and never touched again. */
+    let right = null;
+    let nrm = null;
+    let prevDir = null;
+    for (let i = 0; i < points.length; i += 1) {
+      const p = points[i];
+      const a = points[Math.max(0, i - 1)];
+      const b = points[Math.min(points.length - 1, i + 1)];
+      const dir = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]).normalize();
+      if (dir.lengthSq() < 1e-6) dir.copy(prevDir || up);
+      if (!right) {
+        const ref = Math.abs(dir.y) > 0.94 ? new THREE.Vector3(1, 0, 0) : up;
+        right = new THREE.Vector3().crossVectors(dir, ref).normalize();
+        nrm = new THREE.Vector3().crossVectors(right, dir).normalize();
+      } else {
+        const dot = Math.max(-1, Math.min(1, prevDir.dot(dir)));
+        const axis = new THREE.Vector3().crossVectors(prevDir, dir);
+        if (axis.lengthSq() > 1e-10) {
+          axis.normalize();
+          const q = new THREE.Quaternion().setFromAxisAngle(axis, Math.acos(dot));
+          right.applyQuaternion(q);
+          nrm.applyQuaternion(q);
+        }
+        // Re-orthogonalise against the actual new tangent every ring
+        // rather than trusting the rotation alone - float error is
+        // small per step, but this sweep can run sixty of them, and
+        // an uncorrected frame drifts non-perpendicular by the end.
+        right.sub(dir.clone().multiplyScalar(right.dot(dir))).normalize();
+        nrm.crossVectors(right, dir).normalize();
+      }
+      prevDir = dir.clone();
+      phase += rng.jit(phaseDrift);
+      starts.push(pos.length / 3);
+      counts.push(sides);
+      const baseR = radii[i];
+      for (let s = 0; s < sides; s += 1) {
+        const ang = (s / sides) * TAU + phase;
+        const k = 1 + rng.jit(opts.jitter ?? 0.20);
+        const r = baseR * k;
+        pos.push(
+          p[0] + right.x * Math.cos(ang) * r + nrm.x * Math.sin(ang) * r,
+          p[1] + right.y * Math.cos(ang) * r + nrm.y * Math.sin(ang) * r,
+          p[2] + right.z * Math.cos(ang) * r + nrm.z * Math.sin(ang) * r
+        );
+      }
+    }
+    // Zero-area guard, copied from `ringSolid` - a ring whose radius
+    // noise happens to collapse two adjacent verts to (near) the same
+    // point would otherwise leave a degenerate triangle whose orphan
+    // vertex normalises to a NaN normal.
+    const tri = (i0, i1, i2) => {
+      const p0 = i0 * 3, p1 = i1 * 3, p2 = i2 * 3;
+      const ux = pos[p1] - pos[p0], uy = pos[p1 + 1] - pos[p0 + 1], uz = pos[p1 + 2] - pos[p0 + 2];
+      const vx = pos[p2] - pos[p0], vy = pos[p2 + 1] - pos[p0 + 1], vz = pos[p2 + 2] - pos[p0 + 2];
+      const cx = uy * vz - uz * vy, cy = uz * vx - ux * vz, cz = ux * vy - uy * vx;
+      if (cx * cx + cy * cy + cz * cz < 1e-14) return;
+      idx.push(i0, i1, i2);
+    };
+    // Adjacent rings can carry different side counts (the +-1 jitter
+    // above), so the wall has to fan across the mismatch the way
+    // `ringSolid` does rather than assume a 1:1 `tube()`-style zip.
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const s0 = starts[i], s1 = starts[i + 1];
+      const c0 = counts[i], c1 = counts[i + 1];
+      const steps = Math.max(c0, c1);
+      for (let s = 0; s < steps; s += 1) {
+        const a0 = s0 + Math.floor((s / steps) * c0) % c0;
+        const a1 = s0 + Math.floor(((s + 1) / steps) * c0) % c0;
+        const b0 = s1 + Math.floor((s / steps) * c1) % c1;
+        const b1 = s1 + Math.floor(((s + 1) / steps) * c1) % c1;
+        if (a0 !== a1 && b0 !== b1) { tri(a0, b0, b1); tri(a0, b1, a1); }
+        else if (a0 !== a1) tri(a0, b0, a1);
+        else if (b0 !== b1) tri(a0, b0, b1);
+      }
+    }
+    // Same order convention as `tube()`: the ring's own winding faces
+    // back along the sweep, so the start cap keeps it and the end
+    // cap reverses it.
+    if (points.length && opts.capStart !== false) {
+      const c = pos.length / 3;
+      pos.push(points[0][0], points[0][1], points[0][2]);
+      for (let s = 0; s < counts[0]; s += 1) tri(c, starts[0] + s, starts[0] + ((s + 1) % counts[0]));
+    }
+    if (points.length && opts.capEnd !== false) {
+      const c = pos.length / 3;
+      const last = points.length - 1;
+      pos.push(points[last][0], points[last][1], points[last][2]);
+      for (let s = 0; s < counts[last]; s += 1) {
+        tri(c, starts[last] + ((s + 1) % counts[last]), starts[last] + s);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    return g;
+  }
+
   /** A tube swept along a 3D polyline. Pipes, cables, roots. */
   function tube(points, radius, sides = 5, opts = {}) {
     const rings = [];
@@ -1680,7 +1854,7 @@ export function makeKit(THREE) {
   }
 
   return {
-    ringSolid, prism, slab, polyExtrudeY, extrudeZ, ribbonSolid, tube,
+    ringSolid, prism, slab, polyExtrudeY, extrudeZ, ribbonSolid, tube, rockTube,
     crag, shard, boulderField,
     archOutline, gothicArch, column, flyingButtress, spire, skull, statue,
     banner, ribbonPole,

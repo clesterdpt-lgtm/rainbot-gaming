@@ -652,6 +652,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
       canRefund: !refundReason, refundReason };
   }
 
+  function talentIconUrl(talentId) {
+    return `../assets/img/saintfall/talents/${encodeURIComponent(talentId)}.jpg?v=20260816-doctrine-v1`;
+  }
+
   function renderTalent(definition, current, state, orderState, edit, definitions) {
     const eligibility = talentEligibility(definition, current, state, orderState, edit, definitions);
     const { rank, maxRank } = eligibility;
@@ -674,9 +678,21 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
       ? "" : ' tabindex="0" aria-controls="sf-doctrine-preview"';
     const accessibleName = `${definition.name || "Unnamed Rite"}. Tier ${Math.max(1,
       Number(definition.tier) || 1)}. Rank ${rank} of ${maxRank}. ${definition.summary || ""} ${reason}`;
+    const iconSrc = talentIconUrl(definition.id);
+    const stateBadgeLabel = !eligibility.implemented ? "FORTHCOMING"
+      : rank >= maxRank ? "MASTERED" : rank > 0 ? `RANK ${rank}/${maxRank}`
+      : eligibility.canSpend ? "AVAILABLE" : "LOCKED";
+
     return `<article class="sf-doctrine-talent" data-doctrine-talent data-talent-id="${escapeHtml(definition.id)}" data-state="${cardState}" data-tier="${Math.max(1, Number(definition.tier) || 1)}" data-inspected="${inspected ? "true" : "false"}" data-previewed="${previewed ? "true" : "false"}"${desktopCardInteraction} aria-label="${escapeHtml(accessibleName)}">
+      <div class="sf-doctrine-talent__media">
+        <img class="sf-doctrine-talent__thumb" src="${iconSrc}" alt="" loading="lazy" decoding="async" />
+        <span class="sf-doctrine-talent__tier">T${Math.max(1, Number(definition.tier) || 1)}</span>
+      </div>
       <header><span><small>TIER ${Math.max(1, Number(definition.tier) || 1)}</small><strong>${escapeHtml(definition.name || "Unnamed Rite")}</strong></span><b data-talent-rank="${rank}" aria-label="Rank ${rank} of ${maxRank}">${pips}</b></header>
       <p>${escapeHtml(definition.summary || "A Reliquary rite awaiting inscription.")}</p>
+      <footer class="sf-doctrine-talent__meta-row">
+        <span class="sf-doctrine-talent__badge" data-state="${cardState}">${stateBadgeLabel}</span>
+      </footer>
       <div class="sf-doctrine-talent__actions">
         <button type="button" data-doctrine-action="inspect" data-talent-action="inspect" data-talent-id="${escapeHtml(definition.id)}" aria-label="${inspected ? "Back to rites" : `Details for ${escapeHtml(definition.name || "Unnamed Rite")}`}" aria-expanded="${inspected ? "true" : "false"}" aria-controls="${detailId}">${inspected ? "BACK TO RITES" : "DETAILS"}</button>
         ${rank > 0 ? `<button type="button" data-doctrine-action="refund" data-talent-action="refund" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canRefund, eligibility.refundReason)}>REFUND</button>` : ""}
@@ -723,12 +739,18 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     const actionButtons = `${rank > 0
       ? `<button type="button" data-doctrine-action="refund" data-talent-action="refund" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canRefund, eligibility.refundReason)}>REFUND RANK</button>` : ""}
       <button type="button" data-doctrine-action="spend" data-talent-action="spend" data-talent-id="${escapeHtml(definition.id)}"${disabledAttributes(!eligibility.canSpend, eligibility.reason)}>${spendLabel}</button>`;
+    const iconSrc = talentIconUrl(definition.id);
 
     host.dataset.state = stateName;
     host.dataset.talentId = definition.id;
     host.innerHTML = `<header class="sf-doctrine__preview-head">
-        <span><small>${escapeHtml(orderDefinition.shortName || orderDefinition.name || "ORDER")} · TIER ${Math.max(1, Number(definition.tier) || 1)}</small><h5>${escapeHtml(definition.name || "Unnamed Rite")}</h5></span>
-        <b data-state="${stateName}">${stateLabel}</b>
+        <div class="sf-doctrine__preview-art-wrap">
+          <img class="sf-doctrine__preview-art" src="${iconSrc}" alt="" decoding="async" />
+        </div>
+        <div class="sf-doctrine__preview-titles">
+          <span><small>${escapeHtml(orderDefinition.shortName || orderDefinition.name || "ORDER")} · TIER ${Math.max(1, Number(definition.tier) || 1)}</small><h5>${escapeHtml(definition.name || "Unnamed Rite")}</h5></span>
+          <b data-state="${stateName}">${stateLabel}</b>
+        </div>
       </header>
       <p class="sf-doctrine__preview-summary">${escapeHtml(definition.summary || "A Reliquary rite awaiting inscription.")}</p>
       <div class="sf-doctrine__preview-meta" aria-label="Rite requirements">
@@ -791,13 +813,19 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     const fusions = Array.isArray(definition.fusions) && definition.fusions.length
       ? `<ul class="sf-doctrine__fusions">${definition.fusions.map((fusion) =>
         `<li><b>${escapeHtml(fusion.name)}</b><span>${escapeHtml(fusion.description)}</span></li>`).join("")}</ul>` : "";
+    const iconSrc = talentIconUrl(definition.id);
     host.innerHTML = `<article class="sf-doctrine__vow" data-doctrine-vow data-capstone-id="${escapeHtml(definition.id)}" data-order-id="${escapeHtml(orderDefinition.id)}" data-state="${stateName}" data-equipped="${slot >= 0 ? "true" : "false"}" data-inspected="${inspected ? "true" : "false"}">
       ${doctrineSigilMarkup(orderDefinition.id, "capstone", "sf-doctrine__sigil--capstone")}
-      <header><span><small>CAPSTONE VOW</small><strong>${escapeHtml(definition.name || "Unnamed Vow")}</strong></span><b>${!implemented ? "FORTHCOMING" : slot >= 0 ? `BOUND · SEAL ${rankNumeral(slot + 1)}` : invested >= required ? "ELIGIBLE" : `${invested} / ${required}`}</b></header>
-      <p>${escapeHtml(definition.summary || "The final expression of this Order.")}</p>
-      <div class="sf-doctrine__vow-detail" id="sf-capstone-detail-${safeDomId(definition.id)}" data-talent-detail${inspected ? "" : " hidden"}>${escapeHtml(definition.description || "Capstone effect awaiting record.")}</div>
-      ${fusions}
-      <div class="sf-doctrine__vow-action"><small>${escapeHtml(reason || (slot >= 0 ? "This Vow occupies one of two active seals." : "An earned Vow Seal is ready."))}</small><span><button type="button" data-doctrine-action="inspect" data-talent-action="inspect" data-talent-id="${escapeHtml(definition.id)}" aria-expanded="${inspected ? "true" : "false"}" aria-controls="sf-capstone-detail-${safeDomId(definition.id)}">${inspected ? "BACK TO RITES" : "DETAILS"}</button><button type="button" data-doctrine-action="vow" data-capstone-action="${action}" data-capstone-id="${escapeHtml(definition.id)}" data-order-id="${escapeHtml(orderDefinition.id)}" data-capstone-slot="${actionSlot}"${disabledAttributes(!edit.allowed || (slot < 0 && !!reason), reason)}>${label}</button></span></div>
+      <div class="sf-doctrine__vow-media">
+        <img class="sf-doctrine__vow-art" src="${iconSrc}" alt="" decoding="async" />
+      </div>
+      <div class="sf-doctrine__vow-body">
+        <header><span><small>CAPSTONE VOW</small><strong>${escapeHtml(definition.name || "Unnamed Vow")}</strong></span><b>${!implemented ? "FORTHCOMING" : slot >= 0 ? `BOUND · SEAL ${rankNumeral(slot + 1)}` : invested >= required ? "ELIGIBLE" : `${invested} / ${required}`}</b></header>
+        <p>${escapeHtml(definition.summary || "The final expression of this Order.")}</p>
+        <div class="sf-doctrine__vow-detail" id="sf-capstone-detail-${safeDomId(definition.id)}" data-talent-detail${inspected ? "" : " hidden"}>${escapeHtml(definition.description || "Capstone effect awaiting record.")}</div>
+        ${fusions}
+        <div class="sf-doctrine__vow-action"><small>${escapeHtml(reason || (slot >= 0 ? "This Vow occupies one of two active seals." : "An earned Vow Seal is ready."))}</small><span><button type="button" data-doctrine-action="inspect" data-talent-action="inspect" data-talent-id="${escapeHtml(definition.id)}" aria-expanded="${inspected ? "true" : "false"}" aria-controls="sf-capstone-detail-${safeDomId(definition.id)}">${inspected ? "BACK TO RITES" : "DETAILS"}</button><button type="button" data-doctrine-action="vow" data-capstone-action="${action}" data-capstone-id="${escapeHtml(definition.id)}" data-order-id="${escapeHtml(orderDefinition.id)}" data-capstone-slot="${actionSlot}"${disabledAttributes(!edit.allowed || (slot < 0 && !!reason), reason)}>${label}</button></span></div>
+      </div>
     </article>`;
   }
 
@@ -1844,6 +1872,17 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
   }
 
   root.addEventListener("click", (event) => {
+    if (menu.panel === "doctrine") {
+      const talentCard = event.target.closest("[data-doctrine-talent]");
+      if (talentCard && !event.target.closest("button, a")) {
+        const talentId = talentCard.dataset.talentId;
+        if (talentId) {
+          setDoctrinePreview(talentId);
+          menuSfx("switch");
+          return;
+        }
+      }
+    }
     const target = event.target.closest("button, a");
     if (!target) return;
     if (target.matches("[data-menu-open]")) { openMenu("operation"); return; }
@@ -1911,14 +1950,13 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
     }
     if (card.dataset.talentId === doctrine.hoverTalentId) return;
     doctrine.hoverTalentId = card.dataset.talentId;
-    setDoctrinePreview(card.dataset.talentId);
   });
 
   root.addEventListener("focusin", (event) => {
     if (menu.panel !== "doctrine") return;
     const card = event.target instanceof Element
       ? event.target.closest("[data-doctrine-talent]") : null;
-    if (card) setDoctrinePreview(card.dataset.talentId);
+    if (card && card.dataset.talentId) setDoctrinePreview(card.dataset.talentId);
   });
 
   commandEls.forEach((button) => {

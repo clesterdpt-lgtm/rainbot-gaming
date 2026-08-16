@@ -62,7 +62,19 @@ const P = {
   /* rock */
   rockLit: "#9a7660",
   rockMid: "#6a4c3e",
-  rockShade: "#3f2b2b",
+  /* Was #3f2b2b - a plain darker, duller RED-BROWN, the exact mistake
+     SAND_RAMP's own header already names and was fixed for: "shadowed
+     sand is lit almost entirely by the sky, so it goes violet and
+     desaturated - it does not go to a darker version of the sunlit
+     hue." Rock sits in the same desert under the same sky and was
+     never given that fix. Measured on a real dune boulder at golden
+     hour, its shadow face rendered rgb(47,7,11) - luminance 16, and
+     the green/blue channels crushed far harder than red - next to
+     shadowed SAND two metres away at rgb(100,52,36), luminance 61.
+     A rock nobody lit reads as a hole cut in the desert, not as
+     stone; from underneath, where almost every facet faces away from
+     the sun, that is most of what a boulder is. */
+  rockShade: "#544a5e",
   basaltLit: "#4a4150",
   basaltMid: "#2f2937",
   basaltDeep: "#191521",

@@ -2,6 +2,30 @@
 
 ## Current milestone
 
+**88 — SAINTFALL Doctrine / Talent UI Visual & Usability Overhaul** is complete. The Doctrine & Talent progression interface was overhauled with generative AI square icon artworks across all 25 rites and capstone vows (5 Orders: Censer, Procession, Wing, Halo, Edict) stored in `assets/img/saintfall/talents/`. The previous hair-trigger hover selection flaw that inadvertently hijacked inspector previews when moving the mouse across cards was eliminated in favor of an intuitive Click-to-Select / Keyboard focus model with locked preview inspectors. The desktop inspector features a hero artwork display with progression rank ladder, and touch layouts (844x390 landscape & 390x844 portrait) maintain full 44px touch targets without scroll overflow. Automated UI regression suite `saintfall-ui-regression.mjs` passes 95/95.
+
+**87 — SAINTFALL Dune Boulder Audit and the Windgate** is complete. The scatter
+boulders (3,400 samples across the map) always used `layers: 3` and no
+`spike`/`cliff`/`benches` variation, so at small sizes they collapsed toward the
+same near-symmetric dome or pyramid — confirmed by a new harness,
+`scripts/saintfall-boulder-audit.mjs`, which finds real boulder instances by
+reading the merged `scatter-rock` mesh's own vertex buffer and photographs each
+from six-plus angles including low "underneath" shots. Fixed with shape variety
+(`layers: rng.int(3,6)`, cliff/spike/bench mixing on ~a third of instances), a
+genuine 3-axis tilt (the code already computed `tiltX`/`tiltZ` and discarded
+them), `restOnTerrain()` in place of a single-point-height `place()`, and a
+lifted, violet-shifted `ROCK_RAMP` shadow stop matching the principle
+`SAND_RAMP` already used. Also added: the Windgate, a new procedurally-built
+natural rock archway landmark in open desert (a new `rockTube` primitive in
+`structures.js`, swept along a Catmull-Rom path with a parallel-transported
+frame — the naive per-ring reference-vector switch `tube()` uses tore the
+surface where an arch's legs cross from near-vertical to near-horizontal). Its
+construction exposed a real collision bug: `collide.js` drops any triangle
+under a 0.5 m XZ footprint as clutter, which silently ate 100% of the arch's
+finely-tessellated legs; fixed by wiring the existing `userData.collisionSolid`
+escape hatch through `makeBatcher`'s `opts` so future hero props get it too.
+`saintfall-gameplay.mjs` 55/55, `saintfall-collision-audit.mjs` 12/12.
+
 **86 — SAINTFALL Boss AAA Pass** is in progress. The shared creature-surface kit
 (`boss-surface.js`) gives every boss sub-facet grain, gloss breakup, cavity, edge
 wear and a damage response on models that carry no UVs and no textures at all —

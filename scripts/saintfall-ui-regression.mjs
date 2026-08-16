@@ -956,19 +956,36 @@ async function embeddedKeyboardPass(browser) {
     }))));
 
   const doctrineCards = page.locator("[data-doctrine-talent]");
-  const hoverCard = doctrineCards.nth(1);
-  await hoverCard.hover();
+  const firstCard = doctrineCards.nth(0);
+  const secondCard = doctrineCards.nth(1);
+
+  // Hovering card 2 does NOT change preview (prevents accidental cursor collision)
+  await secondCard.hover();
+  await page.waitForTimeout(60);
+  const hoverPreview = await page.evaluate(() => ({
+    talentId: document.querySelector("[data-doctrine-preview]")?.dataset.talentId,
+    firstCardId: document.querySelectorAll("[data-doctrine-talent]")[0]?.dataset.talentId,
+    secondCardId: document.querySelectorAll("[data-doctrine-talent]")[1]?.dataset.talentId,
+  }));
+  check("hovering over another talent card does not hijack inspector selection",
+    hoverPreview.talentId === hoverPreview.firstCardId,
+    JSON.stringify(hoverPreview));
+
+  // Clicking card 2 selects it in the inspector
+  await secondCard.click();
   await page.waitForFunction(() => document.querySelector("[data-doctrine-preview]")
     ?.dataset.talentId === document.querySelectorAll("[data-doctrine-talent]")[1]?.dataset.talentId,
   null, { timeout: 3000 });
-  const hoverPreview = await page.evaluate(() => ({
+
+  const clickSelectPreview = await page.evaluate(() => ({
     talentId: document.querySelector("[data-doctrine-preview]")?.dataset.talentId,
     text: document.querySelector("[data-doctrine-preview]")?.textContent
       ?.replace(/\s+/g, " ").trim(),
     cardPreviewed: document.querySelectorAll("[data-doctrine-talent]")[1]
       ?.dataset.previewed,
   }));
-  await hoverCard.focus();
+
+  await secondCard.focus();
   await page.waitForTimeout(40);
   const focusPreview = await page.evaluate(() => ({
     talentId: document.querySelector("[data-doctrine-preview]")?.dataset.talentId,
@@ -983,16 +1000,16 @@ async function embeddedKeyboardPass(browser) {
   await page.locator(".sf-stage").screenshot({
     path: path.join(OUT, "embedded-doctrine-hover-focus-1008x567.png"),
   });
-  check("Doctrine hover and keyboard focus share one stable inspector without reflow",
-    hoverPreview.talentId === focusPreview.talentId
-      && hoverPreview.text === focusPreview.text
-      && hoverPreview.cardPreviewed === "true"
+  check("Doctrine selection and keyboard focus share one stable inspector without reflow",
+    clickSelectPreview.talentId === focusPreview.talentId
+      && clickSelectPreview.text === focusPreview.text
+      && clickSelectPreview.cardPreviewed === "true"
       && focusPreview.focusedCard === focusPreview.talentId
       && focusPreview.controls === "sf-doctrine-preview"
       && focusPreview.visibleCards === 4 && focusPreview.view === "overview",
-    JSON.stringify({ hoverPreview, focusPreview }));
+    JSON.stringify({ clickSelectPreview, focusPreview }));
 
-  await hoverCard.press("Enter");
+  await secondCard.press("Enter");
   await page.waitForTimeout(40);
   const clickPreview = await page.evaluate(() => ({
     talentId: document.querySelector("[data-doctrine-preview]")?.dataset.talentId,
@@ -1003,7 +1020,7 @@ async function embeddedKeyboardPass(browser) {
       ?.closest("[data-doctrine-preview]")?.matches("[data-doctrine-preview]") || false,
   }));
   check("desktop keyboard activation targets the inspector and preserves the comparison grid",
-    clickPreview.talentId === hoverPreview.talentId && clickPreview.visibleCards === 4
+    clickPreview.talentId === clickSelectPreview.talentId && clickPreview.visibleCards === 4
       && clickPreview.view === "overview" && clickPreview.focusMovedToInspectorAction,
     JSON.stringify(clickPreview));
 

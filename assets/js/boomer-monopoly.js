@@ -1,15 +1,17 @@
 /* ==========================================================================
-   BOOMER MONOPOLY — DELUXE SATIRICAL HOUSING BOARD GAME
+   BOOMER MONOPOLY — DELUXE SATIRICAL HOUSING BOARD GAME (AI EDITION)
    --------------------------------------------------------------------------
    Loud, juicy, satirical housing market simulator:
-   - 3D Tumbling Dice Physics with dynamic tumble rotation & clatter audio.
-   - Parabolic Pawn Hopping with squash-and-stretch and landing dust.
+   - Generative AI Character Portraits (You, Gary, Linda, Barb) with live trash-talk.
+   - Illustrated 3D Satirical Event Cards (HOA Citations, Drone Audits, Avocado Lectures).
+   - Country-Club Board with Gold Emblem Crest, Felt Backdrop, & Market Heat Ticker.
+   - 3D Tumbling Dice Physics with dynamic rotational inertia & audio clatter.
+   - Parabolic Pawn Hopping with squash-and-stretch and landing dust puffs.
+   - Interactive Real Estate Deed Dossier & Property Inspector.
    - Flying Cash Bezier Particles for rent extractions and tax audits.
-   - Rubber Stamp Purchase Slam VFX ("SOLD!", "ALL CASH!", "OVER ASKING").
-   - 3D Isometric Houses and Luxury Boomer McMansions on upgraded deeds.
-   - Animated 3D Satirical Card Flips for HOA notices and cable news chaos.
-   - Procedural Web Audio Engine (dice clatter, hops, cash register, stamps).
-   - Country-Club Mahogany & Felt Board with animated market heat gauge.
+   - Rubber Stamp Purchase Slam VFX ("SOLD!", "ALL CASH!", "NO CONTINGENCIES!").
+   - 3D Isometric Houses and Golden Luxury Boomer McMansions.
+   - Procedural Web Audio Engine (dice clatter, hops, cash registers, gavels, fanfare).
    ========================================================================== */
 
 (() => {
@@ -37,8 +39,13 @@
     round: document.getElementById("hud-round"),
     high: document.getElementById("hud-high"),
     overlay: document.getElementById("overlay"),
+    overlayBanner: document.getElementById("overlay-banner"),
+    overlayBannerImg: document.getElementById("overlay-banner-img"),
+    overlayTag: document.getElementById("overlay-tag"),
     overlayTitle: document.getElementById("overlay-title"),
     overlaySub: document.getElementById("overlay-sub"),
+    overlayBrief: document.getElementById("overlay-brief"),
+    overlayCast: document.getElementById("overlay-cast"),
     overlayScore: document.getElementById("overlay-score"),
     primary: document.getElementById("btn-primary"),
     roll: document.getElementById("btn-roll"),
@@ -52,16 +59,52 @@
     playerList: document.getElementById("player-list"),
     eventLog: document.getElementById("event-log"),
     powerups: document.getElementById("powerups"),
+    deedDossier: document.getElementById("deed-dossier"),
+    dossierName: document.getElementById("dossier-name"),
+    dossierStats: document.getElementById("dossier-stats"),
+    dossierClose: document.getElementById("dossier-close"),
   };
 
   // =========================================================================
-  // 1. PROCEDURAL WEB AUDIO SYNTHESIZER
+  // 1. IMAGE ASSET LOADER & CACHE
+  // =========================================================================
+
+  const IMAGES = {
+    avatar_you: "../assets/img/boomer/avatar_you.jpg",
+    avatar_gary: "../assets/img/boomer/avatar_gary.jpg",
+    avatar_linda: "../assets/img/boomer/avatar_linda.jpg",
+    avatar_barb: "../assets/img/boomer/avatar_barb.jpg",
+    card_hoa: "../assets/img/boomer/card_hoa.jpg",
+    card_avocado: "../assets/img/boomer/card_avocado.jpg",
+    card_refinance: "../assets/img/boomer/card_refinance.jpg",
+    card_drone: "../assets/img/boomer/card_drone.jpg",
+    card_market: "../assets/img/boomer/card_market.jpg",
+    board_crest: "../assets/img/boomer/board_crest.jpg",
+    victory_art: "../assets/img/boomer/victory_art.jpg",
+    defeat_art: "../assets/img/boomer/defeat_art.jpg",
+  };
+
+  const loadedImages = {};
+
+  function preloadImages() {
+    for (const [key, src] of Object.entries(IMAGES)) {
+      const img = new Image();
+      img.src = src;
+      img.onload = () => {
+        loadedImages[key] = img;
+      };
+    }
+  }
+  preloadImages();
+
+  // =========================================================================
+  // 2. PROCEDURAL WEB AUDIO SYNTHESIZER
   // =========================================================================
 
   const audio = {
     ctx: null,
     master: null,
-    enabled: localStorage.getItem("rb-boomer-sound") !== "off"
+    enabled: localStorage.getItem("rb-boomer-sound") !== "off",
   };
 
   function initAudio() {
@@ -71,7 +114,7 @@
       if (!AudioCtx) return null;
       audio.ctx = new AudioCtx();
       audio.master = audio.ctx.createGain();
-      audio.master.gain.value = 0.28;
+      audio.master.gain.value = 0.30;
       audio.master.connect(audio.ctx.destination);
       return audio.ctx;
     } catch (e) {
@@ -129,52 +172,53 @@
 
     switch (type) {
       case "dice_rattle":
-        playNoise(0.08, 0.18, 1600);
-        playTone(320 + Math.random() * 200, 0.05, "triangle", 0.15);
+        playNoise(0.08, 0.20, 1600);
+        playTone(320 + Math.random() * 200, 0.05, "triangle", 0.16);
         break;
 
       case "dice_land":
-        playNoise(0.12, 0.28, 900);
-        playTone(180, 0.12, "triangle", 0.25);
+        playNoise(0.12, 0.30, 900);
+        playTone(180, 0.12, "triangle", 0.26);
         break;
 
       case "hop":
-        playTone(380 + Math.random() * 60, 0.08, "sine", 0.14);
+        playTone(380 + Math.random() * 60, 0.08, "sine", 0.15);
         break;
 
       case "cash":
-        // Classic cash register bell & cha-ching
-        playTone(987.77, 0.14, "sine", 0.22);
-        playTone(1318.51, 0.25, "sine", 0.26, 0.08);
-        playTone(1975.53, 0.35, "triangle", 0.20, 0.14);
+        playTone(987.77, 0.14, "sine", 0.24);
+        playTone(1318.51, 0.25, "sine", 0.28, 0.08);
+        playTone(1975.53, 0.35, "triangle", 0.22, 0.14);
         break;
 
       case "stamp":
-        playNoise(0.20, 0.35, 450);
-        playTone(90, 0.18, "sawtooth", 0.30);
+        playNoise(0.22, 0.38, 420);
+        playTone(85, 0.20, "sawtooth", 0.32);
         break;
 
       case "card_flip":
-        playNoise(0.10, 0.15, 2400);
-        playTone(520, 0.10, "triangle", 0.16);
+        playNoise(0.12, 0.18, 2600);
+        playTone(560, 0.10, "triangle", 0.18);
+        playTone(840, 0.16, "sine", 0.20, 0.06);
         break;
 
       case "buzzer":
-        playTone(140, 0.25, "sawtooth", 0.24);
-        playTone(120, 0.30, "sawtooth", 0.24, 0.10);
+        playTone(140, 0.25, "sawtooth", 0.25);
+        playTone(110, 0.30, "sawtooth", 0.25, 0.10);
         break;
 
       case "upgrade":
-        playTone(440, 0.08, "triangle", 0.18);
-        playTone(554.37, 0.10, "triangle", 0.20, 0.06);
-        playTone(659.25, 0.16, "sine", 0.24, 0.12);
+        playTone(440, 0.08, "triangle", 0.20);
+        playTone(554.37, 0.10, "triangle", 0.22, 0.06);
+        playTone(659.25, 0.14, "triangle", 0.24, 0.12);
+        playTone(880.00, 0.25, "sine", 0.28, 0.18);
         break;
 
       case "fanfare":
-        playTone(523.25, 0.12, "triangle", 0.22);
-        playTone(659.25, 0.12, "triangle", 0.22, 0.10);
-        playTone(783.99, 0.14, "triangle", 0.25, 0.20);
-        playTone(1046.50, 0.40, "sine", 0.30, 0.32);
+        playTone(523.25, 0.12, "triangle", 0.25);
+        playTone(659.25, 0.12, "triangle", 0.25, 0.10);
+        playTone(783.99, 0.14, "triangle", 0.28, 0.20);
+        playTone(1046.50, 0.45, "sine", 0.35, 0.32);
         break;
     }
   }
@@ -200,7 +244,7 @@
   }
 
   // =========================================================================
-  // 2. PALETTE & THEME CONFIGURATION
+  // 3. COLOR PALETTE & THEME CONFIGURATION
   // =========================================================================
 
   const COLORS = {
@@ -224,56 +268,109 @@
   };
 
   const SPACE_TEMPLATES = [
-    { type: "start", name: "Paid-Off Start", label: ["PAID-OFF", "START"], note: "Collect $200 when you pass." },
-    { type: "property", name: "Split-Level Starter", label: ["SPLIT", "LEVEL"], group: COLORS.pink, cost: 120, rent: 18, upgrade: 60 },
-    { type: "property", name: "Carpeted Den Duplex", label: ["CARPET", "DEN"], group: COLORS.pink, cost: 140, rent: 22, upgrade: 65 },
+    { type: "start", name: "Paid-Off Start", label: ["PAID-OFF", "START"], note: "Collect $200 passing Start." },
+    { type: "property", name: "Split-Level Starter", label: ["SPLIT", "LEVEL"], group: COLORS.pink, cost: 120, rent: 20, upgrade: 60, stars: "★★★☆☆" },
+    { type: "property", name: "Carpeted Den Duplex", label: ["CARPET", "DEN"], group: COLORS.pink, cost: 140, rent: 24, upgrade: 65, stars: "★★★☆☆" },
     { type: "card", name: "HOA Notice", label: ["HOA", "NOTICE"] },
-    { type: "property", name: "Lake House Tax Shelter", label: ["LAKE", "HOUSE"], group: COLORS.cyan, cost: 180, rent: 28, upgrade: 75 },
+    { type: "property", name: "Lake House Tax Shelter", label: ["LAKE", "HOUSE"], group: COLORS.cyan, cost: 180, rent: 30, upgrade: 75, stars: "★★★★☆" },
     { type: "tax", name: "Property Tax Surprise", label: ["PROPERTY", "TAX"], amount: 95 },
-    { type: "property", name: "Duplex Empire", label: ["DUPLEX", "EMPIRE"], group: COLORS.cyan, cost: 210, rent: 34, upgrade: 90 },
+    { type: "property", name: "Duplex Empire", label: ["DUPLEX", "EMPIRE"], group: COLORS.cyan, cost: 210, rent: 36, upgrade: 90, stars: "★★★★☆" },
     { type: "bonus", name: "Early Bird Dinner", label: ["EARLY", "BIRD"], amount: 75 },
-    { type: "property", name: "Boat Garage Ranch", label: ["BOAT", "GARAGE"], group: COLORS.yellow, cost: 230, rent: 38, upgrade: 105 },
+    { type: "property", name: "Boat Garage Ranch", label: ["BOAT", "GARAGE"], group: COLORS.yellow, cost: 230, rent: 40, upgrade: 105, stars: "★★★★☆" },
     { type: "card", name: "Neighborhood App", label: ["NEIGHBOR", "APP"] },
-    { type: "property", name: "Golf Cart Villas", label: ["GOLF", "VILLAS"], group: COLORS.yellow, cost: 260, rent: 44, upgrade: 115 },
-    { type: "property", name: "Basement Rental Suite", label: ["BASEMENT", "SUITE"], group: COLORS.yellow, cost: 280, rent: 48, upgrade: 125 },
+    { type: "property", name: "Golf Cart Villas", label: ["GOLF", "VILLAS"], group: COLORS.yellow, cost: 260, rent: 46, upgrade: 115, stars: "★★★★★" },
+    { type: "property", name: "Basement Rental Suite", label: ["BASEMENT", "SUITE"], group: COLORS.yellow, cost: 280, rent: 50, upgrade: 125, stars: "★★★★☆" },
     { type: "tax", name: "Student Loan Lecture", label: ["LOAN", "LECTURE"], amount: 110 },
-    { type: "property", name: "Cul-de-sac Castle", label: ["CUL-DE", "SAC"], group: COLORS.green, cost: 310, rent: 55, upgrade: 145 },
+    { type: "property", name: "Cul-de-sac Castle", label: ["CUL-DE", "SAC"], group: COLORS.green, cost: 310, rent: 58, upgrade: 145, stars: "★★★★★" },
     { type: "bonus", name: "Garage Sale Flip", label: ["GARAGE", "SALE"], amount: 90 },
-    { type: "property", name: "Timeshare Mirage", label: ["TIME", "SHARE"], group: COLORS.green, cost: 340, rent: 62, upgrade: 160 },
+    { type: "property", name: "Timeshare Mirage", label: ["TIME", "SHARE"], group: COLORS.green, cost: 340, rent: 65, upgrade: 160, stars: "★★★☆☆" },
     { type: "card", name: "Cable News Card", label: ["CABLE", "NEWS"] },
-    { type: "property", name: "Reverse Mortgage Row", label: ["REVERSE", "ROW"], group: COLORS.green, cost: 380, rent: 70, upgrade: 175 },
+    { type: "property", name: "Reverse Mortgage Row", label: ["REVERSE", "ROW"], group: COLORS.green, cost: 380, rent: 74, upgrade: 175, stars: "★★★★☆" },
     { type: "skip", name: "Zoning Board", label: ["ZONING", "BOARD"] },
-    { type: "property", name: "Airbnb Adjacent ADU", label: ["AIRBNB", "ADU"], group: COLORS.orange, cost: 420, rent: 82, upgrade: 190 },
-    { type: "property", name: "Pickleball Preserve", label: ["PICKLE", "BALL"], group: COLORS.orange, cost: 455, rent: 90, upgrade: 210 },
+    { type: "property", name: "Airbnb Adjacent ADU", label: ["AIRBNB", "ADU"], group: COLORS.orange, cost: 420, rent: 85, upgrade: 190, stars: "★★★★★" },
+    { type: "property", name: "Pickleball Preserve", label: ["PICKLE", "BALL"], group: COLORS.orange, cost: 455, rent: 94, upgrade: 210, stars: "★★★★★" },
     { type: "bonus", name: "Inheritance Rumor", label: ["INHERIT", "RUMOR"], amount: 130 },
-    { type: "property", name: "Gated Community Gate", label: ["GATED", "GATE"], group: COLORS.purple, cost: 500, rent: 105, upgrade: 240 },
+    { type: "property", name: "Gated Community Gate", label: ["GATED", "GATE"], group: COLORS.purple, cost: 500, rent: 110, upgrade: 240, stars: "★★★★★" },
     { type: "card", name: "Market Mood", label: ["MARKET", "MOOD"] },
-    { type: "property", name: "Pension Pointe", label: ["PENSION", "POINTE"], group: COLORS.purple, cost: 540, rent: 118, upgrade: 260 },
+    { type: "property", name: "Pension Pointe", label: ["PENSION", "POINTE"], group: COLORS.purple, cost: 540, rent: 122, upgrade: 260, stars: "★★★★★" },
     { type: "market", name: "Rate Hike", label: ["RATE", "HIKE"], amount: -0.08 },
-    { type: "property", name: "Legacy Lane", label: ["LEGACY", "LANE"], group: COLORS.purple, cost: 600, rent: 135, upgrade: 290 },
+    { type: "property", name: "Legacy Lane", label: ["LEGACY", "LANE"], group: COLORS.purple, cost: 600, rent: 140, upgrade: 290, stars: "★★★★★" },
     { type: "market", name: "Market Rally", label: ["MARKET", "RALLY"], amount: 0.1 },
   ];
 
   const CARD_DECK = [
-    { title: "Refinance Window", kicker: "BANKER FAVORS", text: "A loan officer remembers your golf handicap. Instant equity tap.", cash: 150, icon: "🏦" },
-    { title: "Avocado Toast Lecture", kicker: "UNSOLICITED ADVICE", text: "You monologue for 45 minutes at brunch and lose your wallet.", cash: -75, icon: "🥑" },
-    { title: "Inherited China Cabinet", kicker: "ESTATE APPRAISAL", text: "Dusty floral plates appraised for outrageous antique value.", cash: 120, icon: "🏺" },
-    { title: "County Reassessment", kicker: "TAX AUDIT", text: "The satellite drone spotted your illegal gazebo and deck extension.", cash: -135, icon: "📋" },
-    { title: "Zoning Board Coup", kicker: "SPECIAL PERMIT", text: "Your brother-in-law approves a free instant renovation.", upgrade: true, icon: "🔨" },
-    { title: "Real Estate Euphoria", kicker: "MARKET FRENZY", text: "National cable news says home values only go up forever.", heat: 0.09, icon: "📈" },
-    { title: "Interest Rate Hike", kicker: "PANIC SELLERS", text: "Mortgage rates tick up 0.5% and open houses go dead silent.", heat: -0.08, icon: "📉" },
-    { title: "Basement Rental", kicker: "CASH FLOW", text: "Rented your unfinished crawlspace to a digital nomad for top dollar.", cash: 140, icon: "💵" },
-    { title: "HOA Lawn Violation", kicker: "FINE ISSUED", text: "Grass measured 0.25 inches over the neighborhood covenant limit.", cash: -90, icon: "🌾" },
-    { title: "Curb Appeal Crown", kicker: "BLOCK LEADER", text: "Each rival pays you $40 tribute for your manicured front yard.", collectFromAll: 40, icon: "👑" },
+    {
+      title: "Refinance Window",
+      kicker: "BANKER FAVORS",
+      text: "A loan officer remembers your golf handicap. Instant equity tap on the 18th hole!",
+      cash: 160,
+      imageKey: "card_refinance",
+      badge: "+$160 EQUITY",
+      badgeColor: COLORS.green,
+    },
+    {
+      title: "Avocado Toast Lecture",
+      kicker: "UNSOLICITED ADVICE",
+      text: "You monologue at Sunday brunch for 45 minutes about bootstrapping and lose your wallet.",
+      cash: -80,
+      imageKey: "card_avocado",
+      badge: "-$80 BRUNCH",
+      badgeColor: COLORS.red,
+    },
+    {
+      title: "County Reassessment",
+      kicker: "TAX AUDIT DRONE",
+      text: "Satellite drone spotted your illegal unpermitted luxury golden gazebo and hot tub.",
+      cash: -140,
+      imageKey: "card_drone",
+      badge: "-$140 CITATION",
+      badgeColor: COLORS.red,
+    },
+    {
+      title: "HOA Lawn Violation",
+      kicker: "COVENANT ENFORCEMENT",
+      text: "Grass measured 0.2 inches above neighborhood code. Linda issues an instant citation!",
+      cash: -95,
+      imageKey: "card_hoa",
+      badge: "-$95 FINE",
+      badgeColor: COLORS.red,
+    },
+    {
+      title: "Real Estate Euphoria",
+      kicker: "CABLE NEWS RALLY",
+      text: "Financial cable news host screams that housing only goes up forever. Market surges!",
+      heat: 0.10,
+      imageKey: "card_market",
+      badge: "+10% MARKET HEAT",
+      badgeColor: COLORS.yellow,
+    },
+    {
+      title: "Zoning Board Coup",
+      kicker: "SPECIAL VARIANCE",
+      text: "Your brother-in-law on the zoning council approves a free instant deed renovation.",
+      upgrade: true,
+      imageKey: "card_refinance",
+      badge: "FREE UPGRADE",
+      badgeColor: COLORS.cyan,
+    },
+    {
+      title: "Curb Appeal Crown",
+      kicker: "BLOCK LEADER",
+      text: "Each suburban rival pays you $40 tribute for your manicured front yard flowers.",
+      collectFromAll: 40,
+      imageKey: "card_hoa",
+      badge: "+$120 TRIBUTE",
+      badgeColor: COLORS.green,
+    },
   ];
 
   const HEADLINES = [
-    "Local 2-bedroom shed listed as 'Rustic Luxury' for $950,000.",
+    "Local 2-bedroom shed listed as 'Rustic Luxury Sanctuary' for $980,000.",
     "HOA bans passing clouds for casting shadows on artificial turf.",
-    "Gary insists 18% mortgage rates in 1982 built character.",
+    "Gary insists 18% mortgage rates in 1982 built character and strong bones.",
     "Neighborhood app sounds 5-alarm alert over jogger stretching on sidewalk.",
-    "Open house attendees fight over last warm cheese cube.",
-    "Barb calls her 14th rental acquisition 'just a humble hobby'.",
+    "Open house attendees fight over last warm brie wedge on mahogany table.",
+    "Barb calls her 14th rental property acquisition 'just a modest gardening hobby'.",
   ];
 
   const CASH_BITS = {
@@ -284,8 +381,36 @@
     good: ["EQUITY SURGE!", "BONUS DIVIDEND!", "WINDFALL CASH!", "COUPON CLIPPED!"],
   };
 
+  // Character Quip Bank
+  const CHARACTER_QUIPS = {
+    you: {
+      roll: ["All cash, no contingencies!", "Time to expand my cul-de-sac empire.", "Let's find some curb appeal."],
+      buy: ["Another deed for the safe deposit box!", "Granite countertops going in tomorrow!"],
+      rent: ["Mailbox money arrives like clockwork!", "Nothing sweeter than passive cash flow."],
+      hurt: ["My tax accountant will hear about this!", "That's coming out of the HOA budget."],
+    },
+    gary: {
+      roll: ["In 1982 our mortgage was 18.5% and we were GRATEFUL!", "Grass needs trimming today.", "Let's see what's on the market."],
+      buy: ["They don't build split-levels like this anymore!", "Solid foundation, good bones."],
+      rent: ["Pay up! That'll cover my lawnmower gas.", "Character-building rent extraction."],
+      hurt: ["Back in my day, we didn't have these ridiculous fees!", "Outrageous! Unbelievable!"],
+    },
+    linda: {
+      roll: ["Checking mailbox paint compliance today.", "Covenants must be upheld at all costs!", "My clipboard is locked and loaded."],
+      buy: ["Acquired for neighborhood aesthetic preservation.", "Strict tenant screening begins now."],
+      rent: ["Dues are due, neighbor. No exceptions!", "Curb appeal royalty collected."],
+      hurt: ["I'm calling an emergency board meeting!", "This violates Section 14B!"],
+    },
+    barb: {
+      roll: ["Darling, real estate is just shopping with keys!", "Pour the chardonnay, let's roll.", "Another day, another rental yield."],
+      buy: ["Broom closet converted to a luxury studio! So chic.", "Added to my passive income bouquet."],
+      rent: ["Ching-ching, darling! Rent is served.", "That'll pay for my cruise cabin upgrade."],
+      hurt: ["Ugh, market volatility is so tacky.", "I'll have my broker look into this."],
+    },
+  };
+
   // =========================================================================
-  // 3. GAME STATE
+  // 4. GAME STATE
   // =========================================================================
 
   const state = {
@@ -304,15 +429,16 @@
     log: [],
 
     // Visual FX & Animations
-    particles: [],            // Floating cash, dust, confetti
-    callouts: [],             // Floating text banners
-    flyingBills: [],          // Curved flying dollar bill transfers
-    stamps: [],               // Red rubber stamp slam animations
-    activeCard: null,         // 3D Card flip modal entity
+    particles: [],
+    callouts: [],
+    flyingBills: [],
+    stamps: [],
+    activeCard: null,
+    activeSpeech: null,
     diceAnim: {
       active: false,
       timer: 0,
-      maxTimer: 0.7,
+      maxTimer: 0.65,
       dice1: { x: 0, y: 0, vx: 0, vy: 0, rot: 0, vrot: 0, val: 1 },
       dice2: { x: 0, y: 0, vx: 0, vy: 0, rot: 0, vrot: 0, val: 1 },
     },
@@ -362,6 +488,22 @@
     state.actionPulse = Math.max(state.actionPulse, 0.85);
   }
 
+  function triggerQuip(playerId, category) {
+    const bank = CHARACTER_QUIPS[playerId];
+    if (!bank || !bank[category]) return;
+    const text = choice(bank[category]);
+    const player = state.players.find((p) => p.id === playerId);
+    if (player) {
+      player.currentQuote = text;
+      state.activeSpeech = {
+        player,
+        text,
+        timer: 0,
+        life: 2.4,
+      };
+    }
+  }
+
   function cloneBoard() {
     return SPACE_TEMPLATES.map((space, index) => ({
       ...space,
@@ -373,10 +515,74 @@
 
   function makePlayers() {
     return [
-      { id: "you", name: "You", color: COLORS.yellow, chipColor: "#ffd43b", cash: 1500, pos: 0, skip: 0, bankrupt: false, rentShield: 0, isHuman: true, hopY: 0, squash: 1 },
-      { id: "gary", name: "Gary", color: COLORS.cyan, chipColor: "#2ee0ff", cash: 1500, pos: 0, skip: 0, bankrupt: false, rentShield: 0, buyBias: 0.68, hopY: 0, squash: 1 },
-      { id: "linda", name: "Linda", color: COLORS.pink, chipColor: "#ff2e88", cash: 1500, pos: 0, skip: 0, bankrupt: false, rentShield: 0, buyBias: 0.56, hopY: 0, squash: 1 },
-      { id: "barb", name: "Barb", color: COLORS.green, chipColor: "#4ade80", cash: 1500, pos: 0, skip: 0, bankrupt: false, rentShield: 0, buyBias: 0.74, hopY: 0, squash: 1 },
+      {
+        id: "you",
+        name: "You",
+        role: "All-Cash Flipper",
+        avatarKey: "avatar_you",
+        color: COLORS.yellow,
+        chipColor: "#ffd43b",
+        cash: 1500,
+        pos: 0,
+        skip: 0,
+        bankrupt: false,
+        rentShield: 0,
+        isHuman: true,
+        hopY: 0,
+        squash: 1,
+        currentQuote: "All cash, no contingencies!",
+      },
+      {
+        id: "gary",
+        name: "Gary",
+        role: "1982 Veteran",
+        avatarKey: "avatar_gary",
+        color: COLORS.cyan,
+        chipColor: "#2ee0ff",
+        cash: 1500,
+        pos: 0,
+        skip: 0,
+        bankrupt: false,
+        rentShield: 0,
+        buyBias: 0.68,
+        hopY: 0,
+        squash: 1,
+        currentQuote: "18% mortgage survivor.",
+      },
+      {
+        id: "linda",
+        name: "Linda",
+        role: "HOA Dictator",
+        avatarKey: "avatar_linda",
+        color: COLORS.pink,
+        chipColor: "#ff2e88",
+        cash: 1500,
+        pos: 0,
+        skip: 0,
+        bankrupt: false,
+        rentShield: 0,
+        buyBias: 0.58,
+        hopY: 0,
+        squash: 1,
+        currentQuote: "Measuring grass height...",
+      },
+      {
+        id: "barb",
+        name: "Barb",
+        role: "Passive Queen",
+        avatarKey: "avatar_barb",
+        color: COLORS.green,
+        chipColor: "#4ade80",
+        cash: 1500,
+        pos: 0,
+        skip: 0,
+        bankrupt: false,
+        rentShield: 0,
+        buyBias: 0.74,
+        hopY: 0,
+        squash: 1,
+        currentQuote: "Mailbox money darling!",
+      },
     ];
   }
 
@@ -400,13 +606,14 @@
     state.flyingBills = [];
     state.stamps = [];
     state.activeCard = null;
+    state.activeSpeech = null;
     state.diceAnim.active = false;
     state.pawnAnim.active = false;
     state.headline = randomHeadline();
     state.shake = 0;
     state.actionPulse = 0;
     hideOverlay();
-    log("Entered the housing market with $1,500 and aggressive confidence.");
+    log("Entered the suburban market with $1,500 and aggressive confidence.");
     beginTurn();
     renderPowerups();
     updateUI();
@@ -424,7 +631,7 @@
     const deedValue = state.board.reduce((sum, space) => {
       if (space.owner !== player.id || space.type !== "property") return sum;
       const market = 1 + state.marketHeat;
-      return sum + space.cost * market + space.level * space.upgrade * 0.85;
+      return sum + space.cost * market + space.level * space.upgrade * 0.90;
     }, 0);
     return Math.round(player.cash + deedValue);
   }
@@ -435,17 +642,17 @@
 
   function rentFor(space) {
     const heat = 1 + Math.max(-0.15, Math.min(0.40, state.marketHeat));
-    return Math.max(8, Math.round(space.rent * (1 + space.level * 0.8) * heat));
+    return Math.max(8, Math.round(space.rent * (1 + space.level * 0.85) * heat));
   }
 
   function log(message) {
     state.log.unshift(message);
     state.log = state.log.slice(0, 8);
-    if (Math.random() < 0.42) state.headline = randomHeadline();
+    if (Math.random() < 0.38) state.headline = randomHeadline();
   }
 
   // =========================================================================
-  // 4. TURN PROGRESSION & GAME LOGIC
+  // 5. TURN PROGRESSION & GAME LOGIC
   // =========================================================================
 
   function beginTurn() {
@@ -466,7 +673,8 @@
 
     if (player.skip > 0) {
       player.skip -= 1;
-      log(`${player.name} stuck arguing at the zoning board.`);
+      log(`${player.name} is arguing permits at the zoning board.`);
+      triggerQuip(player.id, "hurt");
       playSfx("buzzer");
       nextTurn(player.isHuman ? 900 : 550);
       updateUI();
@@ -476,9 +684,10 @@
     state.phase = player.isHuman ? "await_roll" : "ai_thinking";
     setDecision(
       player.isHuman ? "Your Turn" : `${player.name}'s Turn`,
-      player.isHuman ? "Roll the dice to advance your real estate empire." : `${player.name} is examining mortgage rates...`,
+      player.isHuman ? "Roll the dice to advance your real estate empire." : `${player.name} is checking mortgage rates...`,
       `Market Heat: ${Math.round(state.marketHeat * 100)}%`
     );
+    triggerQuip(player.id, "roll");
     updateUI();
 
     if (!player.isHuman) {
@@ -515,11 +724,11 @@
     state.busy = true;
     state.phase = "moving";
 
-    setDecision("Rolling Dice...", `${player.name} rolls for equity!`, "Tumbling across the board...");
+    setDecision("Rolling Dice...", `${player.name} rolls for equity!`, "Tumbling across the felt...");
     updateUI();
 
     startDiceAnimation(d1, d2, () => {
-      setDecision("Moving", `${player.name} rolled ${d1} + ${d2} (${steps}).`, "Advancing through the cul-de-sacs.");
+      setDecision("Moving", `${player.name} rolled ${d1} + ${d2} (${steps}).`, "Advancing through suburban cul-de-sacs.");
       updateUI();
 
       startPawnHopAnimation(player, steps, () => {
@@ -534,7 +743,7 @@
   }
 
   // =========================================================================
-  // 5. ANIMATION CONTROLLERS (DICE, PAWN HOPS, FLYING CASH, STAMPS)
+  // 6. ANIMATION CONTROLLERS (DICE, PAWN HOPS, FLYING CASH, STAMPS)
   // =========================================================================
 
   function startDiceAnimation(finalD1, finalD2, onComplete) {
@@ -552,7 +761,7 @@
         rot: rand(0, Math.PI * 2),
         vrot: rand(14, 24),
         val: randi(1, 7),
-        finalVal: finalD1
+        finalVal: finalD1,
       },
       dice2: {
         x: W * 0.5 + 25 + rand(-20, 20),
@@ -562,8 +771,8 @@
         rot: rand(0, Math.PI * 2),
         vrot: rand(14, 24),
         val: randi(1, 7),
-        finalVal: finalD2
-      }
+        finalVal: finalD2,
+      },
     };
   }
 
@@ -573,7 +782,6 @@
     da.timer += dt;
     const progress = da.timer / da.maxTimer;
 
-    // Tumble physics
     [da.dice1, da.dice2].forEach((d) => {
       d.x += d.vx * dt * 4;
       d.y += d.vy * dt * 4;
@@ -605,8 +813,8 @@
       totalSteps,
       currentStep: 0,
       stepT: 0,
-      stepDuration: 0.18,
-      onComplete
+      stepDuration: 0.17,
+      onComplete,
     };
   }
 
@@ -617,7 +825,6 @@
     pa.stepT += dt / pa.stepDuration;
     const t = clamp(pa.stepT, 0, 1);
 
-    // Parabolic Arc & Squash-and-Stretch
     pa.player.hopY = -Math.sin(t * Math.PI) * 24;
     pa.player.squash = 1 + Math.sin(t * Math.PI) * 0.35;
 
@@ -633,7 +840,7 @@
       const pCenter = spaceCenter(pa.player.pos);
       spawnDustPuff(pCenter.x, pCenter.y + 10);
 
-      // Pass Start bonus ($200)
+      // Pass Start ($200)
       if (pa.player.pos === 0) {
         pa.player.cash += 200;
         playSfx("cash");
@@ -659,13 +866,16 @@
       const midX = (fromX + toX) * 0.5 + rand(-60, 60);
       const midY = Math.min(fromY, toY) - rand(40, 100);
       state.flyingBills.push({
-        x1: fromX, y1: fromY,
-        cx: midX, cy: midY,
-        x2: toX, y2: toY,
+        x1: fromX,
+        y1: fromY,
+        cx: midX,
+        cy: midY,
+        x2: toX,
+        y2: toY,
         t: -i * 0.08,
         speed: 1.4,
         rot: rand(-0.4, 0.4),
-        amount
+        amount,
       });
     }
   }
@@ -694,7 +904,7 @@
       targetScale: 1.0,
       rot: rand(-0.25, 0.25),
       alpha: 1.0,
-      life: 2.2
+      life: 2.2,
     });
   }
 
@@ -709,22 +919,25 @@
   }
 
   // =========================================================================
-  // 6. TILE RESOLUTION & ACTIONS
+  // 7. TILE RESOLUTION & ACTIONS
   // =========================================================================
 
   function resolveSpace(player) {
     const space = state.board[player.pos];
     state.selectedSpace = space.index;
+    showDeedDossier(space);
 
     if (space.type === "property") {
       resolveProperty(player, space);
     } else if (space.type === "tax") {
       changeCash(player, -space.amount, `${player.name} paid ${money(space.amount)} for ${space.name}.`);
+      triggerQuip(player.id, "hurt");
       playSfx("buzzer");
       spawnFlyingCash(spaceCenter(player.pos).x, spaceCenter(player.pos).y, W * 0.5, H * 0.5, space.amount);
       afterResolved(player);
     } else if (space.type === "bonus") {
       changeCash(player, space.amount, `${player.name} gained ${money(space.amount)} from ${space.name}.`);
+      triggerQuip(player.id, "rent");
       playSfx("cash");
       spawnFlyingCash(W * 0.5, H * 0.5, spaceCenter(player.pos).x, spaceCenter(player.pos).y, space.amount);
       afterResolved(player);
@@ -732,6 +945,7 @@
       drawCard(player);
     } else if (space.type === "skip") {
       player.skip += 1;
+      triggerQuip(player.id, "hurt");
       playSfx("buzzer");
       log(`${player.name} trapped at the zoning board, will miss next turn.`);
       afterResolved(player);
@@ -755,8 +969,8 @@
         state.phase = "decision";
         setDecision(
           "Buy Property?",
-          `${space.name} costs ${money(space.cost)} (Rents for ${money(rentFor(space))}).`,
-          "Acquire now before private equity sweeps in."
+          `${space.name} costs ${money(space.cost)} (Initial Rent: ${money(rentFor(space))}).`,
+          "Acquire now before private equity swoops in!"
         );
         return;
       }
@@ -778,15 +992,15 @@
         setDecision(
           "Renovate & Upgrade?",
           `${space.name} is yours. Spend ${money(space.upgrade)} to raise rent to ${money(rentFor({ ...space, level: space.level + 1 }))}.`,
-          `Current Tier: Level ${space.level}/3`
+          `Current Tier: Level ${space.level}/3 (Upgrade to McMansion!)`
         );
         return;
       }
 
-      if (!player.isHuman && canUpgrade && player.cash > 400 && Math.random() < 0.60) {
+      if (!player.isHuman && canUpgrade && player.cash > 380 && Math.random() < 0.62) {
         upgradeProperty(player, space);
       } else {
-        log(`${player.name} admires ${space.name} and checks market equity.`);
+        log(`${player.name} admires ${space.name} and checks appraisal value.`);
       }
       afterResolved(player);
       return;
@@ -798,12 +1012,14 @@
 
     if (player.rentShield > 0) {
       player.rentShield -= 1;
-      log(`${player.name}'s Rent Shield blocked ${money(rent)} at ${space.name}!`);
+      log(`${player.name}'s Rent Shield blocked ${money(rent)} rent at ${space.name}!`);
       addImpact(space.index, "RENT BLOCKED!", COLORS.cyan, 1.0);
     } else {
       player.cash -= rent;
       owner.cash += rent;
       log(`${player.name} paid ${owner.name} ${money(rent)} rent for ${space.name}.`);
+      triggerQuip(owner.id, "rent");
+      triggerQuip(player.id, "hurt");
       addImpact(space.index, choice(CASH_BITS.rent), owner.color, 1.2);
 
       const pPos = spaceCenter(player.pos);
@@ -816,7 +1032,7 @@
 
   function shouldAiBuy(player, space) {
     const reserve = 180 + state.round * 8;
-    const appetite = player.buyBias + (space.rent / 220) - (space.cost / 2200);
+    const appetite = player.buyBias + space.rent / 220 - space.cost / 2200;
     return player.cash - space.cost > reserve && Math.random() < appetite;
   }
 
@@ -825,6 +1041,7 @@
     space.owner = player.id;
     space.level = 0;
     log(`${player.name} bought ${space.name} for ${money(space.cost)}.`);
+    triggerQuip(player.id, "buy");
     spawnStampVFX(space.index, choice(CASH_BITS.buy), player.color);
     addImpact(space.index, "BOUGHT!", player.color, 1.1);
   }
@@ -833,9 +1050,10 @@
     player.cash -= space.upgrade;
     space.level = Math.min(3, space.level + 1);
     playSfx("upgrade");
-    log(`${player.name} renovated ${space.name} to Level ${space.level}!`);
+    log(`${player.name} upgraded ${space.name} to Level ${space.level}!`);
+    triggerQuip(player.id, "buy");
     spawnStampVFX(space.index, choice(CASH_BITS.upgrade), space.group);
-    addImpact(space.index, `TIER ${space.level}!`, space.group, 1.2);
+    addImpact(space.index, space.level === 3 ? "👑 McMANSION!" : `TIER ${space.level}!`, space.group, 1.3);
   }
 
   function acceptDecision() {
@@ -876,15 +1094,15 @@
       card,
       player,
       timer: 0,
-      maxTimer: 2.2,
+      maxTimer: 2.8,
       scale: 0.2,
-      flipRot: Math.PI
+      flipRot: Math.PI,
     };
 
     log(`[${card.kicker}] ${card.title}: ${card.text}`);
 
     if (typeof card.cash === "number") {
-      changeCash(player, card.cash, `${player.name} ${card.cash >= 0 ? "received" : "lost"} ${money(card.cash)}.`);
+      changeCash(player, card.cash, `${player.name} ${card.cash >= 0 ? "received" : "paid"} ${money(card.cash)}.`);
       if (card.cash > 0) {
         spawnFlyingCash(W * 0.5, H * 0.5, spaceCenter(player.pos).x, spaceCenter(player.pos).y, card.cash);
       }
@@ -897,7 +1115,7 @@
         target.level += 1;
         playSfx("upgrade");
         spawnStampVFX(target.index, "FREE REZONING!", target.group);
-        log(`Free renovation granted to ${target.name} (Now Level ${target.level})!`);
+        log(`Free renovation granted to ${target.name} (Now Tier ${target.level})!`);
       }
     }
 
@@ -911,19 +1129,25 @@
         if (other.id !== player.id && !other.bankrupt) {
           other.cash -= card.collectFromAll;
           total += card.collectFromAll;
-          spawnFlyingCash(spaceCenter(other.pos).x, spaceCenter(other.pos).y, spaceCenter(player.pos).x, spaceCenter(player.pos).y, card.collectFromAll);
+          spawnFlyingCash(
+            spaceCenter(other.pos).x,
+            spaceCenter(other.pos).y,
+            spaceCenter(player.pos).x,
+            spaceCenter(player.pos).y,
+            card.collectFromAll
+          );
         }
       });
       player.cash += total;
       playSfx("cash");
-      log(`${player.name} extracted ${money(card.collectFromAll)} from each neighbor.`);
+      log(`${player.name} extracted ${money(card.collectFromAll)} tribute from each rival.`);
     }
 
     setTimeout(() => {
       state.activeCard = null;
       afterResolved(player);
       updateUI();
-    }, 2000);
+    }, 2800);
   }
 
   function changeCash(player, delta, reason) {
@@ -984,21 +1208,66 @@
     const human = humanPlayer();
     const worth = netWorth(human);
     const isHigh = api.recordScore(GAME_ID, worth);
-    if (isHigh) playSfx("fanfare");
+    if (isHigh || won) playSfx("fanfare");
 
     const sorted = [...state.players].sort((a, b) => netWorth(b) - netWorth(a));
     const rank = sorted.findIndex((p) => p.id === human.id) + 1;
 
-    showOverlay(
-      won ? "🏆 HOUSING MARKET CONQUERED!" : "📜 RETIREMENT COLLAPSED",
-      won
-        ? `You finished #1 with ${money(worth)} net worth and crushed the local housing market!`
-        : `Ranked #${rank} of 4 with ${money(worth)} net worth. The HOA won this round.`
-    );
+    showGameOverScreen(won, worth, rank, sorted);
+  }
+
+  function showGameOverScreen(won, worth, rank, sorted) {
+    if (!el.overlay) return;
+
+    if (el.overlayBanner && el.overlayBannerImg) {
+      el.overlayBanner.style.display = "block";
+      el.overlayBannerImg.src = won ? IMAGES.victory_art : IMAGES.defeat_art;
+    }
+
+    if (el.overlayTag) {
+      el.overlayTag.textContent = won ? "🏆 VICTORY CHAMPION" : "📜 MARKET CASUALTY";
+      el.overlayTag.style.color = won ? COLORS.yellow : COLORS.red;
+    }
+
+    if (el.overlayTitle) {
+      el.overlayTitle.textContent = won ? "HOUSING EMPIRE CONQUERED!" : "RETIREMENT PARADISE LOST";
+    }
+
+    if (el.overlayBrief) el.overlayBrief.style.display = "none";
+    if (el.overlayCast) el.overlayCast.style.display = "none";
+
+    if (el.overlaySub) {
+      el.overlaySub.style.display = "block";
+      el.overlaySub.innerHTML = won
+        ? `You retired as <strong>#1 Suburban Baron</strong> with <span style="color:#ffd43b;font-weight:800;">${money(worth)}</span> net worth! Gary, Linda, and Barb are officially your tenants.`
+        : `Ranked <strong>#${rank} of 4</strong> with <span style="color:#ff3b56;font-weight:800;">${money(worth)}</span> net worth. Foreclosed into the tool shed while Linda counts her HOA dues.`;
+    }
+
+    if (el.overlayScore) {
+      el.overlayScore.style.display = "block";
+      el.overlayScore.innerHTML = `
+        <div style="background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:8px 12px;margin-bottom:8px;text-align:left;">
+          <div style="font-weight:800;margin-bottom:4px;color:#2ee0ff;">FINAL STANDINGS:</div>
+          ${sorted
+            .map(
+              (p, idx) => `
+            <div style="display:flex;justify-content:space-between;padding:2px 0;font-size:11.5px;color:${p.id === "you" ? "#ffd43b" : "#fff"};">
+              <span>#${idx + 1} ${p.name} (${p.role})</span>
+              <span><strong>${money(netWorth(p))}</strong></span>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+      `;
+    }
+
+    if (el.primary) el.primary.textContent = "PLAY AGAIN";
+    el.overlay.classList.add("overlay--show");
   }
 
   // =========================================================================
-  // 7. PARTICLES & VISUAL FX SYSTEM
+  // 8. PARTICLES & VISUAL FX SYSTEM
   // =========================================================================
 
   function spawnParticles(x, y, color, count = 18) {
@@ -1015,7 +1284,7 @@
         spin: rand(0, 6.28),
         age: 0,
         life: rand(0.5, 0.9),
-        shape: Math.random() < 0.4 ? "cash" : "sparkle"
+        shape: Math.random() < 0.4 ? "cash" : "sparkle",
       });
     }
   }
@@ -1031,7 +1300,7 @@
         size: rand(3, 5),
         age: 0,
         life: rand(0.3, 0.5),
-        shape: "dust"
+        shape: "dust",
       });
     }
   }
@@ -1044,7 +1313,7 @@
       text,
       color,
       age: 0,
-      life: 1.3
+      life: 1.3,
     });
   }
 
@@ -1056,6 +1325,13 @@
     updatePawnHopAnimation(dt);
     updateFlyingCash(dt);
     updateStamps(dt);
+
+    if (state.activeSpeech) {
+      state.activeSpeech.timer += dt;
+      if (state.activeSpeech.timer >= state.activeSpeech.life) {
+        state.activeSpeech = null;
+      }
+    }
 
     if (state.activeCard) {
       const ac = state.activeCard;
@@ -1082,7 +1358,7 @@
   }
 
   // =========================================================================
-  // 8. BOARD RENDERING & LUXURY CASINO FELT AESTHETICS
+  // 9. BOARD RENDERING & LUXURY CASINO FELT AESTHETICS
   // =========================================================================
 
   function buildBoardRects() {
@@ -1113,7 +1389,7 @@
     // 2. Tiles & Properties
     drawBoardTiles(now);
 
-    // 3. Center Luxury Dashboard & Market Ticker
+    // 3. Center Luxury Dashboard & Market Ticker with AI Crest
     drawCenterDashboard(now);
 
     // 4. Upgraded 3D Isometric Houses & Mansions
@@ -1138,9 +1414,14 @@
       draw3DDice(state.diceAnim.dice2);
     }
 
-    // 10. Active 3D Satirical Card Flip Modal
+    // 10. Active 3D Satirical Card Flip Modal with AI Art
     if (state.activeCard) {
       drawCardModal(state.activeCard);
+    }
+
+    // 11. Speech Bubble overlay on Canvas
+    if (state.activeSpeech && !state.activeCard) {
+      drawSpeechBubble(state.activeSpeech);
     }
 
     ctx.restore();
@@ -1285,7 +1566,7 @@
   }
 
   // =========================================================================
-  // 9. 3D ISOMETRIC HOUSES & MANSIONS ON TILES
+  // 10. 3D ISOMETRIC HOUSES & MANSIONS ON TILES
   // =========================================================================
 
   function drawIsometricHouses() {
@@ -1365,7 +1646,7 @@
     ctx.fillRect(-10, -8, 3, 16);
     ctx.fillRect(7, -8, 3, 16);
 
-    // Gold Weather Vane / Star
+    // Gold Weather Vane / Crown
     ctx.fillStyle = "#ffd43b";
     ctx.font = "8px sans-serif";
     ctx.textAlign = "center";
@@ -1375,7 +1656,7 @@
   }
 
   // =========================================================================
-  // 10. CENTER LUXURY DASHBOARD & MARKET HEAT
+  // 11. CENTER LUXURY DASHBOARD & AI EMBLEM CREST
   // =========================================================================
 
   function drawCenterDashboard(now) {
@@ -1397,89 +1678,121 @@
     roundRect(x, y, w, h, 14, true, false);
     ctx.shadowBlur = 0;
 
-    ctx.strokeStyle = "rgba(255, 212, 59, 0.45)";
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(255, 212, 59, 0.5)";
+    ctx.lineWidth = 2.5;
     roundRect(x, y, w, h, 14, false, true);
+
+    // Background AI Crest Watermark (Smoothly blended in center)
+    const crestImg = loadedImages.board_crest;
+    if (crestImg) {
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      ctx.beginPath();
+      ctx.arc(x + w * 0.5, y + 170, 95, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(crestImg, x + w * 0.5 - 95, y + 75, 190, 190);
+      ctx.restore();
+    }
 
     // Title Foil Emboss
     ctx.fillStyle = COLORS.yellow;
-    ctx.shadowColor = "rgba(255, 212, 59, 0.5)";
-    ctx.shadowBlur = 10;
-    ctx.font = "800 28px Bungee, Impact, sans-serif";
+    ctx.shadowColor = "rgba(255, 212, 59, 0.55)";
+    ctx.shadowBlur = 12;
+    ctx.font = "800 27px Bungee, Impact, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText("BOOMER MONOPOLY", x + w * 0.5, y + 36);
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = COLORS.cyan;
-    ctx.font = "800 10.5px JetBrains Mono, monospace";
+    ctx.font = "800 10px JetBrains Mono, monospace";
     ctx.letterSpacing = "1.5px";
-    ctx.fillText("BUY LOW · RENT FOREVER · EQUITY CASINO", x + w * 0.5, y + 54);
+    ctx.fillText("DELUXE AI EDITION · COUNTRY CLUB HOUSING CASINO", x + w * 0.5, y + 52);
 
     // Animated News Ticker
     ctx.fillStyle = "rgba(255, 46, 136, 0.12)";
     ctx.strokeStyle = "rgba(255, 46, 136, 0.35)";
-    roundRect(x + 30, y + 68, w - 60, 24, 6, true, true);
+    roundRect(x + 28, y + 64, w - 56, 24, 6, true, true);
     ctx.fillStyle = COLORS.pink;
     ctx.font = "800 10.5px JetBrains Mono, monospace";
-    ctx.fillText(`🚨 NEWS: ${state.headline}`, x + w * 0.5, y + 83, w - 80);
+    ctx.fillText(`🚨 ${state.headline}`, x + w * 0.5, y + 79, w - 76);
 
-    // Interactive Dice Stand in Center (when not tumbling)
+    // Resting Dice Stand in Center (when not tumbling)
     if (!state.diceAnim.active) {
-      drawRestingDice(x + w * 0.5 - 54, y + 106, state.dice[0]);
-      drawRestingDice(x + w * 0.5 + 10, y + 106, state.dice[1]);
+      drawRestingDice(x + w * 0.5 - 54, y + 98, state.dice[0]);
+      drawRestingDice(x + w * 0.5 + 10, y + 98, state.dice[1]);
     }
 
     // Active Status / Turn Prompter
     if (state.phase === "await_roll") {
-      const pulse = 0.6 + 0.4 * Math.sin(now * 0.008);
+      const pulse = 0.65 + 0.35 * Math.sin(now * 0.008);
       ctx.fillStyle = `rgba(255, 212, 59, ${pulse})`;
       ctx.font = "800 15px Bungee, Impact, sans-serif";
-      ctx.fillText("🎲 CLICK OR PRESS SPACE TO ROLL", x + w * 0.5, y + 172);
+      ctx.fillText("🎲 CLICK OR PRESS SPACE TO ROLL", x + w * 0.5, y + 162);
     } else {
       ctx.fillStyle = active.color;
       ctx.font = "800 13px JetBrains Mono, monospace";
-      ctx.fillText(`${active.name.toUpperCase()}'S TURN · ROUND ${Math.min(state.round, MAX_ROUNDS)}/${MAX_ROUNDS}`, x + w * 0.5, y + 172);
+      ctx.fillText(`${active.name.toUpperCase()}'S TURN · ROUND ${Math.min(state.round, MAX_ROUNDS)}/${MAX_ROUNDS}`, x + w * 0.5, y + 162);
     }
 
-    // Human Player Stats Card
-    ctx.fillStyle = "rgba(6, 12, 20, 0.9)";
-    ctx.strokeStyle = "rgba(46, 224, 255, 0.3)";
-    roundRect(x + 28, y + 192, w - 56, 88, 10, true, true);
+    // Human Player Real Estate Stats Card with Avatar
+    ctx.fillStyle = "rgba(6, 12, 20, 0.92)";
+    ctx.strokeStyle = "rgba(46, 224, 255, 0.35)";
+    roundRect(x + 24, y + 180, w - 48, 102, 10, true, true);
+
+    const youAvatar = loadedImages.avatar_you;
+    if (youAvatar) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x + 64, y + 231, 32, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(youAvatar, x + 32, y + 199, 64, 64);
+      ctx.restore();
+
+      ctx.strokeStyle = COLORS.yellow;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x + 64, y + 231, 32, 0, Math.PI * 2);
+      ctx.stroke();
+    }
 
     ctx.textAlign = "left";
     ctx.fillStyle = COLORS.ink;
     ctx.font = "800 14px JetBrains Mono, monospace";
-    ctx.fillText(`Net Worth: ${money(netWorth(human))}`, x + 44, y + 216);
+    ctx.fillText(`Net Worth: ${money(netWorth(human))}`, x + 110, y + 206);
 
     ctx.fillStyle = COLORS.muted;
     ctx.font = "700 11.5px JetBrains Mono, monospace";
-    ctx.fillText(`Liquid Cash: ${money(human.cash)}  ·  Deeds: ${ownedSpaces(human).length}`, x + 44, y + 238);
+    ctx.fillText(`Liquid: ${money(human.cash)}  ·  Deeds: ${ownedSpaces(human).length}`, x + 110, y + 228);
 
     ctx.fillStyle = COLORS.yellow;
     const currSpace = state.board[human.pos] || state.board[0];
-    ctx.fillText(`Current Tile: ${currSpace.name}`, x + 44, y + 260, w - 88);
+    ctx.fillText(`Current Tile: ${currSpace.name}`, x + 110, y + 250, w - 160);
+
+    ctx.fillStyle = COLORS.cyan;
+    ctx.font = "italic 10.5px Inter, sans-serif";
+    ctx.fillText(`"${human.currentQuote || "All cash, no contingencies!"}"`, x + 110, y + 269, w - 160);
 
     // Market Heat Gauge
     const heatPercent = Math.round(state.marketHeat * 100);
     ctx.textAlign = "left";
     ctx.fillStyle = COLORS.muted;
     ctx.font = "800 10.5px JetBrains Mono, monospace";
-    ctx.fillText(`Market Heat: ${heatPercent >= 0 ? "+" : ""}${heatPercent}%`, x + 30, y + 302);
+    ctx.fillText(`Market Heat: ${heatPercent >= 0 ? "+" : ""}${heatPercent}%`, x + 28, y + 306);
 
-    const barW = w - 60;
+    const barW = w - 56;
     const barH = 14;
     ctx.fillStyle = "#080e14";
-    roundRect(x + 30, y + 312, barW, barH, 7, true, false);
+    roundRect(x + 28, y + 316, barW, barH, 7, true, false);
 
     const fillRatio = clamp((state.marketHeat + 0.25) / 0.65, 0.05, 1.0);
-    const heatGrad = ctx.createLinearGradient(x + 30, 0, x + 30 + barW, 0);
+    const heatGrad = ctx.createLinearGradient(x + 28, 0, x + 28 + barW, 0);
     heatGrad.addColorStop(0, COLORS.cyan);
     heatGrad.addColorStop(0.5, COLORS.yellow);
     heatGrad.addColorStop(1, COLORS.red);
     ctx.fillStyle = heatGrad;
-    roundRect(x + 30, y + 312, barW * fillRatio, barH, 7, true, false);
+    roundRect(x + 28, y + 316, barW * fillRatio, barH, 7, true, false);
     ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
-    roundRect(x + 30, y + 312, barW, barH, 7, false, true);
+    roundRect(x + 28, y + 316, barW, barH, 7, false, true);
 
     ctx.restore();
   }
@@ -1549,13 +1862,13 @@
       3: [[a, a], [b, b], [c, c]],
       4: [[a, a], [c, a], [a, c], [c, c]],
       5: [[a, a], [c, a], [b, b], [a, c], [c, c]],
-      6: [[a, a], [c, a], [a, b], [c, b], [a, c], [c, c]]
+      6: [[a, a], [c, a], [a, b], [c, b], [a, c], [c, c]],
     };
     return map[val] || map[1];
   }
 
   // =========================================================================
-  // 11. PAWNS, TOKENS & HOPPING PHYSICS
+  // 12. PAWNS, TOKENS & HOPPING PHYSICS
   // =========================================================================
 
   function drawPawns(now) {
@@ -1571,7 +1884,7 @@
       if (!rect) continue;
 
       players.forEach((player, i) => {
-        const offset = (i - (players.length - 1) * 0.5) * 14;
+        const offset = (i - (players.length - 1) * 0.5) * 16;
         const cx = rect.x + rect.w * 0.5 + offset;
         const cy = rect.y + rect.h * 0.5 + (player.hopY || 0);
 
@@ -1594,9 +1907,9 @@
         pawnGrad.addColorStop(1, "#0f172a");
         ctx.fillStyle = pawnGrad;
 
-        // Pawn Head
+        // Pawn Head with Avatar Thumbnail or Initial
         ctx.beginPath();
-        ctx.arc(0, -9, 6.5, 0, Math.PI * 2);
+        ctx.arc(0, -9, 7.5, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 1.5;
@@ -1617,9 +1930,9 @@
 
         // Player Initial
         ctx.fillStyle = "#05090f";
-        ctx.font = "800 8.5px JetBrains Mono, monospace";
+        ctx.font = "800 9px JetBrains Mono, monospace";
         ctx.textAlign = "center";
-        ctx.fillText(player.name[0].toUpperCase(), 0, -8);
+        ctx.fillText(player.name[0].toUpperCase(), 0, -6.5);
 
         ctx.restore();
       });
@@ -1627,7 +1940,7 @@
   }
 
   // =========================================================================
-  // 12. FLYING CASH & RUBBER STAMP RENDERING
+  // 13. FLYING CASH, RUBBER STAMPS, & 3D CARD MODAL WITH AI ART
   // =========================================================================
 
   function drawFlyingCash() {
@@ -1688,34 +2001,88 @@
     ctx.translate(W * 0.5, H * 0.5);
     ctx.scale(ac.scale, ac.scale);
 
-    // 3D Card Backdrop
-    const cardW = 280;
-    const cardH = 170;
+    const cardW = 320;
+    const cardH = 340;
 
-    ctx.fillStyle = "rgba(4, 8, 16, 0.96)";
+    // Card Container & Glowing Foil Rim
+    ctx.fillStyle = "rgba(6, 10, 20, 0.98)";
     ctx.shadowColor = COLORS.pink;
-    ctx.shadowBlur = 30;
-    roundRect(-cardW * 0.5, -cardH * 0.5, cardW, cardH, 12, true, false);
+    ctx.shadowBlur = 35;
+    roundRect(-cardW * 0.5, -cardH * 0.5, cardW, cardH, 14, true, false);
     ctx.shadowBlur = 0;
 
-    ctx.strokeStyle = COLORS.pink;
+    ctx.strokeStyle = "rgba(255, 212, 59, 0.7)";
     ctx.lineWidth = 3;
-    roundRect(-cardW * 0.5, -cardH * 0.5, cardW, cardH, 12, false, true);
+    roundRect(-cardW * 0.5, -cardH * 0.5, cardW, cardH, 14, false, true);
+
+    // Illustrated AI Card Art Header
+    const cardImg = loadedImages[card.imageKey];
+    if (cardImg) {
+      ctx.save();
+      ctx.beginPath();
+      roundRect(-cardW * 0.5 + 10, -cardH * 0.5 + 10, cardW - 20, 160, 10, true, false);
+      ctx.clip();
+      ctx.drawImage(cardImg, -cardW * 0.5 + 10, -cardH * 0.5 + 10, cardW - 20, 160);
+      ctx.restore();
+
+      ctx.strokeStyle = "rgba(255, 212, 59, 0.4)";
+      ctx.lineWidth = 1.5;
+      roundRect(-cardW * 0.5 + 10, -cardH * 0.5 + 10, cardW - 20, 160, 10, false, true);
+    }
 
     // Kicker & Title
     ctx.fillStyle = COLORS.pink;
-    ctx.font = "800 11px JetBrains Mono, monospace";
+    ctx.font = "800 10.5px JetBrains Mono, monospace";
     ctx.textAlign = "center";
-    ctx.fillText(`🚨 ${card.kicker}`, 0, -cardH * 0.5 + 24);
+    ctx.fillText(`🚨 ${card.kicker}`, 0, 12);
 
     ctx.fillStyle = COLORS.yellow;
-    ctx.font = "800 17px Bungee, Impact, sans-serif";
-    ctx.fillText(card.title, 0, -cardH * 0.5 + 48, cardW - 24);
+    ctx.font = "800 18px Bungee, Impact, sans-serif";
+    ctx.fillText(card.title, 0, 36, cardW - 24);
 
     // Body Text
     ctx.fillStyle = COLORS.ink;
-    ctx.font = "700 11.5px Inter, sans-serif";
-    wrapText(ctx, card.text, 0, -cardH * 0.5 + 78, cardW - 32, 16);
+    ctx.font = "600 12px Inter, sans-serif";
+    wrapText(ctx, card.text, 0, 64, cardW - 36, 16);
+
+    // Effect Badge
+    if (card.badge) {
+      ctx.fillStyle = card.badgeColor || COLORS.yellow;
+      roundRect(-80, 118, 160, 26, 6, true, false);
+      ctx.fillStyle = "#030810";
+      ctx.font = "800 11.5px JetBrains Mono, monospace";
+      ctx.fillText(card.badge, 0, 134);
+    }
+
+    ctx.restore();
+  }
+
+  function drawSpeechBubble(speech) {
+    const pCenter = spaceCenter(speech.player.pos);
+    const bubbleX = clamp(pCenter.x, 140, W - 140);
+    const bubbleY = Math.max(70, pCenter.y - 45);
+
+    ctx.save();
+    ctx.translate(bubbleX, bubbleY);
+
+    const textW = Math.min(220, ctx.measureText(speech.text).width + 24);
+    const textH = 34;
+
+    ctx.fillStyle = "rgba(6, 12, 22, 0.95)";
+    ctx.shadowColor = speech.player.color;
+    ctx.shadowBlur = 12;
+    roundRect(-textW * 0.5, -textH * 0.5, textW, textH, 8, true, false);
+    ctx.shadowBlur = 0;
+
+    ctx.strokeStyle = speech.player.color;
+    ctx.lineWidth = 2;
+    roundRect(-textW * 0.5, -textH * 0.5, textW, textH, 8, false, true);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 10.5px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(`"${speech.text}"`, 0, 0, textW - 14);
 
     ctx.restore();
   }
@@ -1797,13 +2164,47 @@
   const randi = (min, max) => Math.floor(rand(min, max));
 
   // =========================================================================
-  // 13. UI BINDINGS & POWERUPS
+  // 14. UI BINDINGS, ROSTER RENDERING, & DOSSIER
   // =========================================================================
 
   function setDecision(kicker, text, meta) {
     if (el.decisionKicker) el.decisionKicker.textContent = kicker;
     if (el.decisionText) el.decisionText.textContent = text;
     if (el.decisionMeta) el.decisionMeta.textContent = meta;
+  }
+
+  function showDeedDossier(space) {
+    if (!el.deedDossier) return;
+    if (space.type !== "property") {
+      el.deedDossier.classList.remove("is-visible");
+      return;
+    }
+
+    const owner = state.players.find((p) => p.id === space.owner);
+    if (el.dossierName) el.dossierName.textContent = space.name;
+
+    if (el.dossierStats) {
+      const heat = 1 + state.marketHeat;
+      const t0 = Math.round(space.rent * heat);
+      const t1 = Math.round(space.rent * 1.85 * heat);
+      const t2 = Math.round(space.rent * 2.70 * heat);
+      const t3 = Math.round(space.rent * 3.55 * heat);
+
+      el.dossierStats.innerHTML = `
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+          <span><strong>Owner:</strong> ${owner ? `<span style="color:${owner.color};font-weight:800;">${owner.name} (${owner.role})</span>` : "<em style='color:#4ade80;'>Unowned</em>"}</span>
+          <span><strong>Curb Appeal:</strong> ${space.stars || "★★★★☆"}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;background:rgba(255,255,255,0.05);padding:4px 8px;border-radius:6px;font-family:var(--font-mono);font-size:11px;">
+          <span>Cost: <strong>${money(space.cost)}</strong></span>
+          <span>Base Rent: <strong>${money(t0)}</strong></span>
+          <span>Tier 1: <strong>${money(t1)}</strong></span>
+          <span>McMansion: <strong style="color:#ffd43b;">${money(t3)}</strong></span>
+        </div>
+      `;
+    }
+
+    el.deedDossier.classList.add("is-visible");
   }
 
   function updateUI() {
@@ -1822,12 +2223,20 @@
         .map((p, i) => {
           const isActive = i === state.current;
           const status = p.bankrupt ? "BANKRUPT" : p.skip > 0 ? `Zoning (${p.skip})` : "Active";
+          const avatarSrc = IMAGES[p.avatarKey] || IMAGES.avatar_you;
+
           return `
-            <li class="boomer-player ${isActive ? "is-active" : ""}">
-              <span class="boomer-player__chip" style="background:${p.color}"></span>
-              <div>
-                <strong>${p.name} ${p.isHuman ? "(You)" : ""}</strong>
+            <li class="boomer-player ${isActive ? "is-active" : ""}" style="border-left: 3px solid ${p.color};">
+              <div class="boomer-player__avatar-box">
+                <img src="${avatarSrc}" alt="${p.name}" class="boomer-player__avatar-img" style="color:${p.color};" />
+              </div>
+              <div class="boomer-player__info">
+                <div class="boomer-player__title-row">
+                  <strong>${p.name} ${p.isHuman ? "(You)" : ""}</strong>
+                  <span class="boomer-player__role">${p.role}</span>
+                </div>
                 <span>Cash: ${money(p.cash)} · Worth: ${money(netWorth(p))}</span>
+                <div class="boomer-player__quote">"${p.currentQuote || "Watching the market..."}"</div>
               </div>
               <em>${status}</em>
             </li>
@@ -1847,7 +2256,7 @@
       <div class="powerup-item" id="pup-heloc" style="cursor:pointer;padding:8px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
         <div>
           <strong style="color:var(--ink);font-size:12px;">💰 HELOC Tap</strong>
-          <div style="font-size:10.5px;color:var(--ink-dim);">Get +$350 instant equity cash</div>
+          <div style="font-size:10.5px;color:var(--ink-dim);">Get +$350 instant home equity cash</div>
         </div>
         <button class="btn btn--secondary" style="font-size:11px;padding:4px 8px;">Claim</button>
       </div>
@@ -1883,19 +2292,12 @@
     });
   }
 
-  function showOverlay(title, sub) {
-    if (!el.overlay) return;
-    if (el.overlayTitle) el.overlayTitle.textContent = title;
-    if (el.overlaySub) el.overlaySub.innerHTML = sub;
-    el.overlay.classList.add("overlay--show");
-  }
-
   function hideOverlay() {
     if (el.overlay) el.overlay.classList.remove("overlay--show");
   }
 
   // =========================================================================
-  // 14. MAIN GAME LOOP
+  // 15. MAIN GAME LOOP
   // =========================================================================
 
   function loop(now) {
@@ -1911,7 +2313,7 @@
   }
 
   // =========================================================================
-  // 15. INPUT CONTROLS & LISTENERS
+  // 16. INPUT CONTROLS & LISTENERS
   // =========================================================================
 
   window.addEventListener("keydown", (e) => {
@@ -1939,8 +2341,31 @@
     el.pause.textContent = state.paused ? "Resume" : "Pause";
   });
   el.restart?.addEventListener("click", resetGame);
+  el.dossierClose?.addEventListener("click", () => {
+    el.deedDossier?.classList.remove("is-visible");
+  });
 
   canvas.addEventListener("click", (e) => {
+    const r = canvas.getBoundingClientRect();
+    const clickX = ((e.clientX - r.left) / r.width) * W;
+    const clickY = ((e.clientY - r.top) / r.height) * H;
+
+    // Check if clicked a board space to inspect deed
+    for (const space of state.board) {
+      const rect = state.boardRects[space.index];
+      if (
+        rect &&
+        clickX >= rect.x &&
+        clickX <= rect.x + rect.w &&
+        clickY >= rect.y &&
+        clickY <= rect.y + rect.h
+      ) {
+        state.selectedSpace = space.index;
+        showDeedDossier(space);
+        return;
+      }
+    }
+
     if (state.phase === "await_roll" && !state.busy) {
       rollForActive();
     }

@@ -1505,30 +1505,30 @@ export function buildStylite(ctx) {
       g.translate(0, LIP_Y, LIP_Z);
       return g;
     };
-    /* THE BORE. Open-ended and running BACK into the skull, on the
+    /* THE BORE AND THE JAWS, as ONE mesh - the same rule the legs
+       follow, and it is why replacing a three-mesh spinneret with a
+       four-piece mouth costs no draw calls. Nothing in here moves
+       relative to anything else in here; only the maw's own node
+       moves, and that is free.
+
+       THE BORE is open-ended and runs BACK into the skull, on the
        shell's own material - which is DoubleSide, so what the player
        sees down the hole is the inside of the animal rather than a
        hole in the mesh. Painted near-black: the depth is the whole
        reason the light inside it reads as a throat and not as a
-       sticker. */
+       sticker.
+
+       THE JAWS are two mandibles hinged outboard of the lip and
+       closing across it, and they are what makes this a MOUTH rather
+       than a port - a hole in a face is a hole; a hole with jaws on it
+       is a maw. They also break the head's silhouette, which was a
+       smooth ellipsoid contributing nothing to the edge-density
+       measure the harness reports. */
+    const hard = [];
     const bore = new THREE.CylinderGeometry(0.30, 0.15, 0.72, 7, 1, true);
     bore.rotateX(Math.PI * 0.5);
     bore.translate(0, 0, -0.30);
-    maw.add(new THREE.Mesh(paint(onMaw(bore), 0.16, 0, [SHELL_DARK, SHELL_EDGE]), shellMat));
-    /* THE LIP. Bronze, and it inherits the slot the spinneret's shroud
-       gave up - the accent still appears exactly three times on this
-       animal (crest rails, thoracic collar, and here), which is what
-       keeps "a lot of neutral, a little warm" true by area. It also
-       gives the mouth a hard bright edge, which is the only part of
-       this that survives ninety metres. */
-    const lip = new THREE.TorusGeometry(0.30, 0.075, 4, 9);
-    maw.add(new THREE.Mesh(paint(onMaw(lip), 0.9, 0, [BRASS_DARK, BRASS_LIT]), plateMat));
-    /* MANDIBLES. Two of them, hinged outboard of the lip and closing
-       across it. They are the reason this reads as a mouth rather
-       than as a port: a hole in a face is a hole, a hole with jaws on
-       it is a maw. They also break the head's silhouette, which was a
-       smooth ellipsoid and contributed nothing to the edge-density
-       measure. */
+    hard.push(paint(onMaw(bore), 0.16, 0, [SHELL_DARK, SHELL_EDGE]));
     for (const side of [-1, 1]) {
       const jaw = new THREE.ConeGeometry(0.115, 0.66, 5);
       // Apex forward, then swung in and down across the aperture.
@@ -1537,8 +1537,17 @@ export function buildStylite(ctx) {
       jaw.rotateY(-side * 0.62);
       jaw.rotateZ(side * 0.20);
       jaw.translate(side * 0.34, -0.05, 0.06);
-      maw.add(new THREE.Mesh(paint(onMaw(jaw), 0.72, 0, [SHELL_DARK, SHELL_EDGE]), shellMat));
+      hard.push(paint(onMaw(jaw), 0.72, 0, [SHELL_DARK, SHELL_EDGE]));
     }
+    maw.add(new THREE.Mesh(mergeAll(hard), shellMat));
+    /* THE LIP. Bronze, and it inherits the slot the spinneret's shroud
+       gave up - the accent still appears exactly three times on this
+       animal (crest rails, thoracic collar, and here), which is what
+       keeps "a lot of neutral, a little warm" true by area. It also
+       gives the mouth a hard bright edge, which is the only part of
+       this that survives ninety metres. */
+    const lip = new THREE.TorusGeometry(0.30, 0.075, 4, 9);
+    maw.add(new THREE.Mesh(paint(onMaw(lip), 0.9, 0, [BRASS_DARK, BRASS_LIT]), plateMat));
     /* THE APERTURE, and it is RECESSED - the lit face sits back down
        the bore, so at any angle off the axis the lip occludes part of
        it and the light reads as coming from INSIDE the animal. That is

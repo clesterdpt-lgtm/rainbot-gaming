@@ -3899,31 +3899,88 @@ export async function buildWorld(ctx, onProgress) {
     // someone else's.
     const inAnyDistrict = (x, z) => Object.values(DISTRICTS)
       .some((d) => Math.hypot(x - d.x, z - d.z) < d.r + 100);
-    const slopeAt = (x, z) => {
-      const S = 8;
-      return Math.hypot(
-        (H(x + S, z) - H(x - S, z)) / (2 * S), (H(x, z + S) - H(x, z - S)) / (2 * S)
-      );
+    /* THE SITE IS A SADDLE, NOT A CLEARING.
+
+       An arch standing alone on flat sand reads as a prop set down in
+       the desert. The ones worth photographing sit IN something - a
+       gap between two rises, walls either side of the walk through.
+       So the search does not stop at the first flat, clear point; it
+       samples a ring of bearings around each candidate and scores how
+       much the ground climbs on BOTH opposite sides at once, keeping
+       the best of a batch of tries rather than the first passable
+       one. The span is then laid out ALONG the low corridor between
+       the two rises - the direction perpendicular to where the
+       ground climbs - so a player walking through has higher ground
+       to their left and right the whole way, and the two footings
+       land on the corridor floor rather than on its flanking slope. */
+    const RISE_PROBE = 45;
+    const scoreSaddle = (x, z) => {
+      const centreY = H(x, z);
+      let best = null;
+      for (let bDeg = 0; bDeg < 180; bDeg += 15) {
+        const b = (bDeg * Math.PI) / 180;
+        const dx = Math.cos(b), dz = Math.sin(b);
+        const yA = H(x + dx * RISE_PROBE, z + dz * RISE_PROBE);
+        const yB = H(x - dx * RISE_PROBE, z - dz * RISE_PROBE);
+        const bothRise = Math.min(yA - centreY, yB - centreY);
+        if (!best || bothRise > best.bothRise) best = { bearing: b, bothRise };
+      }
+      return best;
     };
 
-    // A short local search around a chosen open-desert quarter
-    // rather than either a blind hard-coded point (which a terrain
-    // reseed could silently strand on a dune face) or a wide search
-    // (which a one-off landmark does not need).
     let site = null;
-    for (let tries = 0; tries < 200 && !site; tries += 1) {
-      const x = 380 + rng.range(-90, 90);
-      const z = 380 + rng.range(-90, 90);
+    let bestScore = -Infinity;
+    for (let tries = 0; tries < 90; tries += 1) {
+      const x = 280 + rng.range(-70, 70);
+      const z = 420 + rng.range(-70, 70);
       if (inAnyDistrict(x, z)) continue;
       if (nearRoad(x, z) < 140) continue;
       const surf = field.surfaceAt(x, z);
-      if (surf.sand < 0.5) continue;             // open dune, not rocky floor
-      if (slopeAt(x, z) > 0.22) continue;         // stable ground for two footings
-      site = { x, z };
+      if (surf.sand < 0.5) continue;               // open dune, not rocky floor
+      const saddle = scoreSaddle(x, z);
+      // The span axis runs perpendicular to the rise direction - along
+      // the corridor floor, not up either wall - so the two footings
+      // are what actually needs to stay level, not the raw local slope
+      // at the centre point.
+      const corridorYaw = saddle.bearing + Math.PI / 2;
+      const cyaw = Math.cos(corridorYaw), syaw = Math.sin(corridorYaw);
+      const HALF_SPAN_PROBE = 17;
+      const footingDrop = Math.abs(
+        H(x + cyaw * HALF_SPAN_PROBE, z + syaw * HALF_SPAN_PROBE)
+        - H(x - cyaw * HALF_SPAN_PROBE, z - syaw * HALF_SPAN_PROBE)
+      );
+      if (footingDrop > 6) continue;                // too steep for two stable legs
+      // Rewards a real saddle, penalises an unstable one - the same
+      // trade the refinement probe that found this shape used.
+      const score = saddle.bothRise - footingDrop * 2.5;
+      if (score > bestScore) {
+        bestScore = score;
+        site = { x, z, yaw: corridorYaw, bothRise: saddle.bothRise };
+      }
+    }
+    // A saddle worth the name rises at least a storey on both sides.
+    // Below that, open ground is the honest fallback rather than
+    // forcing a marginal site a terrain reseed might make worse.
+    if (site && site.bothRise < 8) site = null;
+    if (!site) {
+      for (let tries = 0; tries < 120 && !site; tries += 1) {
+        const x = 280 + rng.range(-90, 90);
+        const z = 420 + rng.range(-90, 90);
+        if (inAnyDistrict(x, z)) continue;
+        if (nearRoad(x, z) < 140) continue;
+        const surf = field.surfaceAt(x, z);
+        if (surf.sand < 0.5) continue;
+        const S = 8;
+        const slope = Math.hypot(
+          (H(x + S, z) - H(x - S, z)) / (2 * S), (H(x, z + S) - H(x, z - S)) / (2 * S)
+        );
+        if (slope > 0.22) continue;
+        site = { x, z, yaw: 0.58, bothRise: 0 };
+      }
     }
     if (site) {
-      const HALF_SPAN = 15.5;
-      const yaw = 0.58;                            // span axis bearing
+      const HALF_SPAN = 17;
+      const yaw = site.yaw;                        // span axis bearing
       const cy = Math.sin(yaw);
       const cx = Math.cos(yaw);
 
@@ -3942,7 +3999,16 @@ export async function buildWorld(ctx, onProgress) {
       // Asymmetric on purpose - Delicate Arch and every real one like
       // it has a heavier leg and a more attenuated one, never a
       // mirror. Leg A is the monument; leg B is the survivor.
-      const archHeight = 26;
+      //
+      // Height cut from 26 to 16 against a wider 17m half-span - a
+      // deliberately LOW, broad silhouette instead of a tall peaked
+      // one. The waypoint layout below is all expressed as fractions
+      // of `archHeight`, so this one number reshapes the whole thing:
+      // the legs now climb through the same fraction of a shorter
+      // rise and the crown sits closer over the footings than above
+      // them, which is what stops a wind-carved arch reading as a
+      // gothic one.
+      const archHeight = 16;
       const baseRadiusA = 7.6;
       const baseRadiusB = 6.0;
       const crownRadius = 2.35;

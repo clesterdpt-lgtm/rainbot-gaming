@@ -169,6 +169,189 @@ try {
     "the head still multiplies",
     `${weak.atHead.dmg} vs ${weak.atBody.dmg}`);
 
+  /* ---------------- the moveset ----------------
+     Everything below is about the difference between a boss and a
+     large enemy. The old Matriarch closed to 7.4m and bit on a 2.35s
+     cadence, which is a Harrow with nine times the health: the only
+     decision in the encounter was "walk behind it", taken once and
+     never revisited, because nothing the animal did could take the
+     position back. So the checks here are not "does it deal damage" -
+     that was never in doubt - they are:
+
+       - is every attack a TELL first, resolved against where the
+         player got to, and therefore answerable;
+       - does standing behind it cost something;
+       - does standing away from it cost something;
+       - and does the brood clock still mean "go for the gaster", now
+         that going for the gaster is contested.
+     ------------------------------------------------------------ */
+  console.log("\n=== MOVESET ===");
+  const moveset = await page.evaluate(() => {
+    const T = window.__SF;
+    T.clearEnemies();
+    const site = T.findFlatSite(16);
+    T.spawnEnemy("matriarch", site[0], site[1], { yaw: 0 });
+    T.advanceTime(0.4, 1 / 60);
+    const inst = T.ctx.enemies.live.find((e) => e.key === "matriarch");
+    inst.health = 1e6;
+    inst.maxHealth = 1e6;
+    const M = T.ctx.matriarch;
+    const cfg = M.config;
+    /* EVERY REACH-IN NAMES THE PROBE. `clearEnemies` does not stop
+       districtBosses re-spawning the Gilded Reach's own Matriarch on
+       the very next tick, so from here on there are two of them: this
+       one, and a dormant one behind its gate a kilometre away. */
+    const status = () => M.status(inst);
+    const force = (kind) => M.force(kind, inst);
+
+    /* Put the player where each move is supposed to be chosen from,
+       and read back what the animal decided. `_teleportRaw` rather
+       than `player.spawn`, which resets health and would hide exactly
+       the damage these checks are about. */
+    const put = (fwd, side) => {
+      T._teleportRaw(inst.x + side, inst.z + fwd, Math.PI);
+      T.advanceTime(0.05, 1 / 60);
+    };
+
+    /* --- 1. THE COMBO IS A TELL, AND IT CAN BE STEPPED OUT OF. --- */
+    T.invulnerable(false);
+    T.ctx.combat.player.hp = T.ctx.combat.player.maxHp;
+    put(5.0, 0);
+    force("combo");
+    const tell = status();
+    // Held still through the whole chain: both scythes must connect.
+    T.advanceTime(cfg.comboWindup + cfg.comboGap + 0.25, 1 / 60);
+    const stood = T.ctx.combat.player.hp;
+
+    // ...and again, stepping out of reach inside the wind-up.
+    T.ctx.combat.player.hp = T.ctx.combat.player.maxHp;
+    put(5.0, 0);
+    force("combo");
+    T.advanceTime(0.22, 1 / 60);
+    T._teleportRaw(inst.x, inst.z + 15, Math.PI);
+    T.advanceTime(1.6, 1 / 60);
+    const stepped = T.ctx.combat.player.hp;
+
+    /* --- 2. LOITERING BEHIND IT IS ANSWERED. --- */
+    T.ctx.combat.player.hp = T.ctx.combat.player.maxHp;
+    put(-6.0, 0);                       // straight up the ovipositor
+    let culled = false;
+    let cullAfter = -1;
+    for (let i = 0; i < 200 && !culled; i += 1) {
+      T.advanceTime(0.05, 1 / 60);
+      // Hold station behind it however it turns.
+      T._teleportRaw(inst.x - Math.sin(inst.yaw) * 6.0,
+        inst.z - Math.cos(inst.yaw) * 6.0, Math.PI);
+      const s = status();
+      if (s.action === "cull") { culled = true; cullAfter = (i + 1) * 0.05; }
+    }
+    T.advanceTime(1.4, 1 / 60);
+    const afterCull = T.ctx.combat.player.hp;
+
+    /* --- 3. STANDING OFF IS ANSWERED. --- */
+    T.ctx.combat.player.hp = T.ctx.combat.player.maxHp;
+    const standOff = 17;
+    T._teleportRaw(inst.x + Math.sin(inst.yaw) * standOff,
+      inst.z + Math.cos(inst.yaw) * standOff, Math.PI);
+    T.advanceTime(0.1, 1 / 60);
+    const beforeLance = Math.hypot(T.playerState().x - inst.x,
+      T.playerState().z - inst.z);
+    force("lance");
+    T.advanceTime(cfg.lanceCock * 0.9, 1 / 60);
+    const cockedAt = Math.hypot(T.playerState().x - inst.x,
+      T.playerState().z - inst.z);
+    T.advanceTime(cfg.lanceDash + 0.3, 1 / 60);
+    const closedTo = Math.hypot(T.playerState().x - inst.x,
+      T.playerState().z - inst.z);
+
+    /* --- 4. LAYING PRESENTS THE GASTER. --- */
+    T.invulnerable(true);
+    const box = T.ctx.combat.hitbox.matriarch;
+    const THREE = T.THREE;
+    const gaster = () => {
+      const s = Math.sin(inst.yaw);
+      const c = Math.cos(inst.yaw);
+      const wx = inst.x + s * box.weak.z;
+      const wz = inst.z + c * box.weak.z;
+      const o = new THREE.Vector3(wx - s * 30, inst.y + box.weak.y, wz - c * 30);
+      const d = new THREE.Vector3(wx, inst.y + box.weak.y, wz).sub(o).normalize();
+      const before = inst.health;
+      const hit = T.ctx.combat.fire(o, d, { damage: 100, range: 200 });
+      return { dmg: +(before - inst.health).toFixed(1), weak: !!(hit && hit.weak) };
+    };
+    put(9.0, 0);
+    T.advanceTime(0.4, 1 / 60);
+    const restWeak = gaster();
+    force("brood");
+    T.advanceTime(0.35, 1 / 60);
+    const layingStatus = status();
+    const layingWeak = gaster();
+    T.advanceTime(cfg.broodPlant + cfg.broodHold + 0.5, 1 / 60);
+    const afterLayWeak = gaster();
+
+    return {
+      cfg: {
+        comboReach: cfg.comboReach, comboWindup: cfg.comboWindup,
+        cullLoiter: cfg.cullLoiter, cullRadius: cfg.cullRadius,
+        lanceRange: cfg.lanceRange, broodWeakBonus: cfg.broodWeakBonus,
+      },
+      selfDriven: !!inst.selfDriven,
+      tell: { action: tell.action, steps: tell.comboSteps },
+      hitsExpected: 2,
+      stood: +stood.toFixed(1),
+      stepped: +stepped.toFixed(1),
+      culled, cullAfter, afterCull: +afterCull.toFixed(1),
+      beforeLance: +beforeLance.toFixed(1),
+      cockedAt: +cockedAt.toFixed(1),
+      closedTo: +closedTo.toFixed(1),
+      restWeak, layingWeak, afterLayWeak,
+      perHit: cfg.comboDamage * 0.82,
+      layingBonus: layingStatus.weakBonus,
+      status: status(),
+    };
+  });
+  const maxHp = await page.evaluate(() => window.__SF.ctx.combat.player.maxHp);
+  console.log(`  self-driven: ${moveset.selfDriven} · `
+    + `tell ${JSON.stringify(moveset.tell)}`);
+  console.log(`  combo: stood still -> ${moveset.stood}/${maxHp} hp · `
+    + `stepped out -> ${moveset.stepped}/${maxHp} hp`);
+  console.log(`  cull: fired after ${moveset.cullAfter}s behind it · `
+    + `${moveset.afterCull}/${maxHp} hp left`);
+  console.log(`  lance: ${moveset.beforeLance}m -> cocked at ${moveset.cockedAt}m `
+    + `-> closed to ${moveset.closedTo}m`);
+  console.log(`  gaster: at rest ${JSON.stringify(moveset.restWeak)} · `
+    + `laying ${JSON.stringify(moveset.layingWeak)} (x${moveset.layingBonus}) · `
+    + `after ${JSON.stringify(moveset.afterLayWeak)}`);
+  check(moveset.selfDriven,
+    "the encounter module owns the animal's decisions");
+  /* BOTH scythes, not one. A "combo" whose second beat never resolves
+     is the old single bite with a longer animation, and the first run
+     of this check advanced 0.9s against a chain that takes 1.04 - so it
+     measured exactly one hit and called the move landed. */
+  check(moveset.tell.action === "combo"
+    && maxHp - moveset.stood > moveset.perHit * 1.6,
+  "both scythes of the combo land on a player who stands in it",
+  `${(maxHp - moveset.stood).toFixed(1)} taken, one scythe is ${moveset.perHit.toFixed(1)}`);
+  check(moveset.stepped === maxHp,
+    "...and whiffs entirely on one who steps out inside the wind-up",
+    `${maxHp - moveset.stepped} damage taken`);
+  check(moveset.culled && moveset.cullAfter > 0 && moveset.cullAfter < 12,
+    "loitering in the rear arc is answered by the cull",
+    `fired after ${moveset.cullAfter}s`);
+  check(moveset.afterCull < maxHp,
+    "...and the sweep reaches the player standing behind it",
+    `${maxHp - moveset.afterCull} damage taken`);
+  check(moveset.cockedAt > moveset.closedTo + 6,
+    "the lance closes a stand-off range it telegraphs first",
+    `${moveset.cockedAt}m at the end of the cock, ${moveset.closedTo}m after the dash`);
+  check(moveset.layingWeak.weak && moveset.restWeak.weak
+    && moveset.layingWeak.dmg > moveset.restWeak.dmg * 1.3,
+  "laying presents the gaster: the weak point is worth more mid-clutch",
+  `${moveset.restWeak.dmg} at rest vs ${moveset.layingWeak.dmg} laying`);
+  check(Math.abs(moveset.afterLayWeak.dmg - moveset.restWeak.dmg) < 0.5,
+    "...and the window closes again when it is done",
+    `${moveset.afterLayWeak.dmg} after the clutch`);
+
   /* ---------------- brooding ---------------- */
   console.log("\n=== BROOD ===");
   const brood = await page.evaluate(() => {
@@ -233,6 +416,142 @@ try {
   const url = await page.evaluate(() => window.__SF.captureDataURL());
   await writeFile(path.join(OUT, "brood-clutch.png"),
     Buffer.from(url.slice(url.indexOf(",") + 1), "base64"));
+
+  /* ---------------- the fight, played ----------------
+     Every check above reaches past the encounter gate and calls the
+     module directly, which is the only way to test one move at a
+     time and is exactly why it proves nothing about the fight. This
+     block does none of that: it wakes the Gilded Reach's own animal
+     the way walking into the Reach wakes it, stands a player in the
+     arena, circles them for half a minute and reads back what the
+     boss actually chose to do.
+
+     The failure it exists to catch is the one a moveset always has,
+     and it is not a crash - it is a boss that reaches this code path
+     with its gate half-open, or its cadences all in phase, or its
+     stalk band unreachable, and spends the whole encounter doing one
+     thing. A histogram with a single entry in it is the bug. */
+  console.log("\n=== A LIVE ENCOUNTER ===");
+  const played = await page.evaluate(async () => {
+    const T = window.__SF;
+    T.clearEnemies();
+    T.ctx.districtBosses.reset("reach");
+    const site = T.ctx.districtBosses.sites.find((s) => s.key === "reach");
+    const inst = T.ctx.districtBosses.ensureSpawned("reach");
+    if (!inst) return null;
+    // Into the arena, at the range the hunt actually starts from.
+    T._teleportRaw(inst.x + 34, inst.z + 34, Math.atan2(-34, -34));
+    T.invulnerable(false);
+    T.ctx.combat.player.hp = T.ctx.combat.player.maxHp;
+    T.advanceTime(0.2, 1 / 60);
+
+    const seenPhases = [];
+    const actions = {};
+    let woke = -1;
+    let engaged = -1;
+    let minHp = T.ctx.combat.player.maxHp;
+    let orbit = 0;
+    /* A player who stands still is not a fight, and one who stands
+       still BEHIND it is a script for a single move. This one circles
+       at a working range, drifting in and out of scythe reach.
+
+       AT A SPEED A PERSON CAN ACTUALLY MOVE AT. The first version
+       advanced a fixed 0.055 rad per 50ms step, which at nine metres
+       is 9.9 m/s - faster than SPRINT (8.6) and held in a perfect
+       circle while shooting, which nobody can do. It dodged all nine
+       of the boss's tells and reported the encounter as harmless. The
+       angular step is now derived from the radius so the tangential
+       speed is a constant six metres a second: a trooper strafing,
+       not a trooper outrunning. */
+    const ORBIT_SPEED = 6.0;
+    for (let i = 0; i < 700; i += 1) {
+      const r = 9 + Math.sin(i * 0.018) * 4.5;
+      orbit += (ORBIT_SPEED / r) * 0.05;
+      T._teleportRaw(inst.x + Math.sin(orbit) * r, inst.z + Math.cos(orbit) * r,
+        Math.atan2(inst.x - Math.sin(orbit) * r, inst.z - Math.cos(orbit) * r));
+      T.advanceTime(0.05, 1 / 60);
+      const s = T.ctx.matriarch.status(inst);
+      const boss = T.ctx.districtBosses.status("reach");
+      if (woke < 0 && boss?.phase === "alert") woke = (i + 1) * 0.05;
+      if (engaged < 0 && boss?.phase === "active") engaged = (i + 1) * 0.05;
+      if (s) {
+        if (!seenPhases.includes(s.phase)) seenPhases.push(s.phase);
+        if (s.action) actions[s.action] = (actions[s.action] || 0) + 1;
+      }
+      minHp = Math.min(minHp, T.ctx.combat.player.hp);
+      if (T.ctx.combat.player.dead) break;
+    }
+    const end = T.ctx.matriarch.status(inst);
+    return {
+      arenaRadius: site.arenaRadius,
+      woke, engaged, seenPhases, actions,
+      minHp: +minHp.toFixed(1),
+      dead: T.ctx.combat.player.dead,
+      invulnerable: !!T.ctx.combat.player.invulnerable,
+      free: !!T.ctx.player.state.free,
+      end,
+      homeDist: +Math.hypot(inst.x - site.x, inst.z - site.z).toFixed(1),
+      bossHealth: Math.round(inst.health),
+    };
+  });
+  await page.evaluate(() => window.__SF.invulnerable(true));
+  if (!played) {
+    check(false, "the Gilded Reach's own Matriarch can be woken and fought");
+  } else {
+    const kinds = Object.keys(played.actions);
+    console.log(`  woke at ${played.woke}s · engaged at ${played.engaged}s`);
+    console.log(`  phases seen: ${played.seenPhases.join(" -> ")}`);
+    console.log(`  actions chosen: ${JSON.stringify(played.actions)}`);
+    console.log(`  player floor ${played.minHp} hp · boss ${played.bossHealth} hp `
+      + `· ${played.homeDist}m from its site (arena ${played.arenaRadius}m)`);
+    console.log(`  tells ${played.end.tells} · landed ${played.end.landed} `
+      + `· whiffed ${played.end.whiffed} · culls ${played.end.culls} `
+      + `· lances ${played.end.lances} · clutches ${played.end.clutches} `
+      + `· invulnerable ${played.invulnerable} · freecam ${played.free}`);
+    check(played.woke > 0 && played.engaged > played.woke,
+      "walking into the Reach wakes it through the ordinary district gate",
+      `alert at ${played.woke}s, active at ${played.engaged}s`);
+    check(kinds.length >= 3,
+      "a circling player is answered with more than one move",
+      `chose ${kinds.join(", ") || "nothing"}`);
+    check(kinds.includes("cull"),
+      "...including the flank answer, unprompted",
+      `${played.actions.cull || 0} frames of cull`);
+    check(played.seenPhases.includes("stalk"),
+      "it holds ground between moves rather than standing still",
+      played.seenPhases.join(" -> "));
+    check(played.end.landed > 0 && played.minHp < 150 && !played.dead,
+      "thirty-five seconds inside its ring costs a strafing player, without killing them",
+      `${played.end.landed} of ${played.end.tells} tells connected, floor ${played.minHp}/150`);
+    check(played.homeDist <= played.arenaRadius,
+      "it stays inside its own arena while it chases",
+      `${played.homeDist}m from the site marker`);
+  }
+
+  /* A picture of the two poses the rewrite is about, from where the
+     player stands: the fold cocked, and the fold thrown. */
+  for (const [name, kind, at] of [["tell-cocked", "combo", 0.30],
+    ["tell-thrown", "combo", 0.62]]) {
+    await page.evaluate(([k, t]) => {
+      const T = window.__SF;
+      const inst = T.ctx.enemies.live.find((e) => e.key === "matriarch");
+      if (!inst) return;
+      T._teleportRaw(inst.x + Math.sin(inst.yaw) * 6.4,
+        inst.z + Math.cos(inst.yaw) * 6.4, inst.yaw + Math.PI);
+      T.invulnerable(true);
+      T.ctx.matriarch.force(k, inst);
+      T.advanceTime(t, 1 / 60);
+      T.hidePlayer(true);
+      const g = T.groundHeightAt(inst.x, inst.z);
+      T.lookAt([inst.x + Math.sin(inst.yaw) * 11 + Math.cos(inst.yaw) * 4.5,
+        g + 3.4, inst.z + Math.cos(inst.yaw) * 11 - Math.sin(inst.yaw) * 4.5],
+      [inst.x, g + 3.0, inst.z], 46);
+      for (let i = 0; i < 5; i += 1) T.renderStill();
+    }, [kind, at]);
+    const shot = await page.evaluate(() => window.__SF.captureDataURL());
+    await writeFile(path.join(OUT, `${name}.png`),
+      Buffer.from(shot.slice(shot.indexOf(",") + 1), "base64"));
+  }
 
   /* ---------------- cost ----------------
      Timed over a FIXED frame rather than read off `report().frameMs`,

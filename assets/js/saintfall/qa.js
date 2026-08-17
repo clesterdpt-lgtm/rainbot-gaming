@@ -913,9 +913,18 @@ export function installQa(ctx, api) {
         health: Number((e.health ?? 0).toFixed(2)),
         maxHealth: e.spec?.hp ?? null,
         stunTime: Number((e.stunTime || 0).toFixed(3)),
+        fireTimer: Number((e.fireTimer || 0).toFixed(3)),
+        strike: e.strike
+          ? { t: Number(e.strike.t.toFixed(3)), windup: e.strike.windup }
+          : null,
         state: e.state,
       }));
     },
+
+    /** The enemy-melee tell/strike machinery and its session tallies -
+     *  how many bites were telegraphed, landed, whiffed, guarded, held
+     *  for a slot, or interrupted by a lance stagger. */
+    strikeState: () => api.combat.strikeState?.() || null,
 
     /** Shots fired and shots landed, so a probe can prove its own
      *  test actually hit the thing it photographed. */

@@ -39,6 +39,91 @@ export const MELEE_CONFIG = Object.freeze({
   hitPunch: 1.05,
   whiffPunch: 0.24,
   slamPunch: 1.35,
+  /* A connected sweep now STAGGERS what it does not kill. Seconds of
+     stun per caste, scaled by `hitStunFinisher` on the overhead slam;
+     the target's bite timer is pushed at least this far as well, so
+     striking a Harrow suppresses it instead of merely racing it. The
+     ordinary castes take the full stagger; the district guardians take
+     a flinch that costs them a beat, not their fight - and the bosses
+     with their own modules are not in this table at all. */
+  hitStun: Object.freeze({
+    thresher: 0.35, gleaner: 0.35, harrow: 0.35,
+    precentor: 0.15, matriarch: 0.15, cantor: 0.15,
+  }),
+  hitStunFinisher: 1.4,
+  /* Health, not only Reliquary charge, comes back from close combat.
+     Passive regen needs 5.5 untouched seconds, which a lance never gets;
+     this is the melee build's sustain, sized so a Thresher pack pays for
+     the bites it lands and a Harrow pays for the two it usually gets in. */
+  killHeal: Object.freeze({ thresher: 6, gleaner: 12, harrow: 18 }),
+  /* Each melee kill also brings the regen timer forward by this much. */
+  killRegenRebate: 2.0,
+});
+
+/* ENEMY MELEE. Every bite is now a TELL and then a STRIKE.
+
+   `attack()` used to play the strike clip and call hurtPlayer in the same
+   call, and `fireTimer` began at zero - so an enemy bit on the first frame
+   it arrived and the animation was a receipt for damage already taken. That
+   is the fault the Gleaner's bolt was rewritten to fix, and it had been left
+   in place for every melee caste. It made standing in reach unreadable and
+   unanswerable, which is the whole reason a lance build died: measured with
+   `scripts/saintfall-melee-duel-probe.mjs`, one Harrow cost a frame-perfect
+   lance player 55.8 of 150 health and any breach from wave three killed
+   them, while the Volley cleared the same rosters untouched.
+
+   The wind-ups are taken from the strike clips themselves - the Thresher's
+   mandibles reach full extension at 0.40s of a 1.58s clip, the Harrow's
+   foreleg at 0.79s of 1.67s - and the clip is restarted at the tell and
+   time-scaled so its contact frame lands exactly at the wind-up. The bite
+   is resolved against where the player IS at that frame, with reach, facing
+   and line of sight re-checked. Step out, step around, or raise Aegis in
+   time and it whiffs. */
+export const ENEMY_MELEE_CONFIG = Object.freeze({
+  windup: Object.freeze({
+    thresher: 0.40, harrow: 0.60, precentor: 0.65, matriarch: 0.75, default: 0.45,
+  }),
+  /* Where each clip's contact frame sits, in clip seconds (measured). */
+  strikeContact: Object.freeze({
+    thresher: 0.396, harrow: 0.792, precentor: 0.396, matriarch: 0.642, default: 0.40,
+  }),
+  /* A committed lunge during the wind-up, as a fraction of charge speed,
+     along the bearing locked at the tell. A Thresher pounces - it covers a
+     plain backstep, so the answer to it is sideways or a guard; the big
+     animals plant and swing, and their reach is already the threat. */
+  lunge: Object.freeze({
+    thresher: 0.75, harrow: 0.35, precentor: 0, matriarch: 0, default: 0.4,
+  }),
+  /* Committed tracking and the facing arc are what decide whether a
+     SIDESTEP works. At 0.6 rad/s and ±37°, a Thresher's 0.4s pounce can be
+     stepped around (or killed inside its wind-up - the opener lands at
+     0.31s); a Harrow's longer reach still needs a backstep or the plate.
+     Wider than this and no lateral dodge ever succeeds - measured with
+     `saintfall-melee-duel-probe.mjs` before it was chosen (at 0.9 rad/s
+     and ±45° the sidestep resolved 34° off-axis and was bitten). */
+  windupTurnRate: 0.6,       // rad/s while committed (2.6 while free)
+  facingDot: 0.80,           // the bite must be within ±37° at the contact frame
+  reachSlack: 1.06,          // tolerance on `spec.reach` at the contact frame
+  /* A lance stagger cancels a wind-up only in its first half; past this
+     fraction the strike is armoured and lands on schedule (see meleeStrike). */
+  interruptWindow: 0.5,
+  /* On ENTERING reach the bite timer is held to at least this fraction of
+     the cadence, so arrival is never itself the bite. */
+  firstContactFraction: 0.30,
+  whiffRecovery: 0.25,       // extra seconds after a strike that lands nothing
+  /* Attack slots. Ten Threshers on one square metre used to be ten
+     independent bite timers - about a hundred damage a second. At most
+     `slotCap` tells may begin per `slotWindow`; the rest hold at reach and
+     wait, which keeps a pack threatening without making its damage a
+     function of how many bodies fit in a circle. */
+  slotCap: 2,
+  slotWindow: 1.0,
+  slotRetry: 0.2,
+  slotExempt: Object.freeze(["precentor", "matriarch"]),
+  /* After a melee hit lands, further MELEE hits are ignored for this long -
+     it collapses the same-frame stack, and nothing else: bolts, venom and
+     every boss hazard are untouched. */
+  hitGrace: 0.30,
 });
 
 /* The Gleaner is the one ordinary ranged enemy, so this is the player's
@@ -54,6 +139,16 @@ export const GLEANER_PROJECTILE_CONFIG = Object.freeze({
   playerCapsuleBottom: 0.28,
   playerCapsuleTop: 1.58,
   maxRange: 60,
+  /* The bolt's travel time is a real dodge at forty metres and nothing at
+     two: 20ms of flight, and its angular spread is 0.14m against a 0.52m
+     capsule. So a Gleaner used to be MORE dangerous the closer a lance got
+     to it - an anti-melee turret by accident. Inside `fallbackRange` it now
+     stops firing and scuttles back to reload, at its charge speed; the
+     trooper at 8.6 m/s always catches it, and two sweeps end it. Closing on
+     the ranged caste is the reward, not the punishment. A Gleaner that
+     cannot back away (cornered) fires anyway. */
+  fallbackRange: 10,
+  fallbackReload: 0.7,
 });
 
 /* Body capsules in WORLD metres, taken from what
@@ -466,10 +561,22 @@ export function buildCombat(ctx) {
     dead: false,
     respawnIn: 0,
     lastHitAt: -99,
+    /* When passive regen may resume. Kept separate from `lastHitAt`, which
+       the HUD reads as "a new hit landed" - a melee kill brings THIS forward
+       without flashing the damage vignette. */
+    regenAt: -99,
+    /* Last MELEE hit that landed, for the post-hit grace window. */
+    lastMeleeHitAt: -99,
     kills: 0,
     shots: 0,
     hits: 0,
+    /* Session tallies for the melee-sustain loop, read by QA. */
+    graced: 0,
+    healed: 0,
   };
+  /* Recent enemy strike tells, for the attack-slot cap. */
+  const strikeStarts = [];
+  const strikeTotals = { tells: 0, landed: 0, whiffed: 0, blocked: 0, interrupted: 0, held: 0 };
 
   const dir = new THREE.Vector3();
   const eye = new THREE.Vector3();
@@ -1464,9 +1571,16 @@ export function buildCombat(ctx) {
       // Two kinds of designed target now: a fixed one on the body (the
       // Matriarch's gaster) and a transient one (the Coulter's open
       // maw). Both carry their own worth next to their own geometry.
+      /* `weakBonus` is an encounter's own temporary say over its own
+         weak point, and it is a capability rather than a species
+         test for the same reason `flies` and `burrows` are. The
+         Matriarch presents the gaster while it lays - planted, low,
+         and held still - and is worth half again for those seconds;
+         see matriarch.js. Absent or 1 on everything else. */
       const weakMult = hit.weak
         ? ((box.weak && box.weak.mult) || (box.maw && box.maw.mult)
           || (box.heart && box.heart.mult) || (box.ventral && box.ventral.mult) || 3)
+          * Math.max(0, Number(hit.inst.weakBonus) || 1)
         : 1;
       /* Armour, as a discount. A queen's thorax is the part facing the
          door and the part that resists; the player has to see bad
@@ -1606,7 +1720,16 @@ export function buildCombat(ctx) {
       const killEvent = { ...damageEvent, x: inst.x, z: inst.z };
       bus.emit("kill", killEvent);
       ctx.progression?.onEnemyKilled?.(killEvent);
-    } else if (enemies.play && clock - (inst.lastFlinchAt || -9) > 0.8) {
+    } else if (enemies.play && !inst.actionLocked
+      && clock - (inst.lastFlinchAt || -9) > 0.8) {
+      /* `actionLocked` is an encounter saying "this animal is mid-move
+         and the clip is the telegraph". Without it a boss winding up a
+         one-second tell had that tell replaced by a flinch the moment
+         anyone shot it - so the more the player fired at the wind-up,
+         the less there was to read, which is precisely backwards. It
+         suppresses the ANIMATION only: the damage, the stagger and
+         every event below are untouched, and a stagger still cancels
+         the move through the encounter's own interrupt window. */
       inst.lastFlinchAt = clock;
       enemies.play(inst, "flinch", 0.08);
     }
@@ -1648,6 +1771,8 @@ export function buildCombat(ctx) {
     let hits = 0;
     let kills = 0;
     let knockbacks = 0;
+    let staggers = 0;
+    let healRequested = 0;
     const targets = [];
     for (const inst of enemies.live) {
       if (untouchable(inst)) continue;
@@ -1728,6 +1853,37 @@ export function buildCombat(ctx) {
       hits += 1;
       const killed = wasAlive && inst.state === "death";
       if (killed) kills += 1;
+      /* STAGGER. A sweep that connects with something it does not kill
+         puts it on the back foot: a flinch, its bite timer pushed, and any
+         bite it was winding up cancelled. Ordinary castes take the full
+         stagger, guardians a beat; creatures with their own modules (the
+         chained, the leg-walkers, the queen, the flyers) are not in the
+         table and are untouched. This is what makes committing to the
+         combo a defensive act rather than a race against the timer. */
+      if (!killed && inst.state !== "death") {
+        const stunFor = MELEE_CONFIG.hitStun[inst.key];
+        /* ...except a strike already past the armour point of its wind-up.
+           You can interrupt the start of a swing, not the finish - which is
+           what keeps a Harrow a threat to a perfect combo (about one
+           telegraphed bite per cycle gets through, and the tell is what
+           the player answers) instead of a creature that can be stun-locked
+           by anyone who never misses. */
+        const armoured = inst.strike
+          && inst.strike.t >= inst.strike.windup * ENEMY_MELEE_CONFIG.interruptWindow;
+        if (stunFor > 0 && !armoured && !box.segments && !box.legs && !box.sac
+          && !inst.spec?.flies && !inst.spec?.perches) {
+          const seconds = stunFor * (slam ? MELEE_CONFIG.hitStunFinisher : 1);
+          if (inst.strike) cancelStrike(inst, "interrupted");
+          if (enemies.stun(inst, seconds)) {
+            inst.fireTimer = Math.max(inst.fireTimer || 0, seconds);
+            staggers += 1;
+          }
+        }
+      }
+      if (killed) {
+        const heal = MELEE_CONFIG.killHeal[inst.key] || 0;
+        if (heal > 0) healRequested += heal;
+      }
       const identity = enemyIdentity(inst);
       targets.push({
         ...identity,
@@ -1789,6 +1945,28 @@ export function buildCombat(ctx) {
     const chargeRestored = chargeRequested > 0
       ? (ctx.jetpack?.restoreCharge?.(chargeRequested, "melee-reclaim") || 0)
       : 0;
+    /* SUSTAIN. Health comes back with the kill, and the regen timer comes
+       forward - the melee build's answer to a regen that needs 5.5
+       untouched seconds it will never get. Both are per kill, so a wide
+       sweep through a Thresher clutch is worth more than a poke. */
+    let healed = 0;
+    if (kills > 0 && !player.dead) {
+      if (healRequested > 0) {
+        const before = player.hp;
+        player.hp = Math.min(player.maxHp, player.hp + healRequested);
+        healed = player.hp - before;
+        player.healed += healed;
+        if (healed > 0) {
+          bus.emit("playerHealed", {
+            amount: healed, source: "melee-kill", hp: player.hp, kills,
+          });
+        }
+      }
+      if (player.regenAt > clock) {
+        player.regenAt = Math.max(clock,
+          player.regenAt - MELEE_CONFIG.killRegenRebate * kills);
+      }
+    }
     const meleeEvent = {
       source: "melee",
       comboStep: step,
@@ -1796,6 +1974,9 @@ export function buildCombat(ctx) {
       hits,
       kills,
       knockbacks,
+      staggers,
+      healRequested,
+      healed,
       chargeRequested,
       chargeRestored,
       slam,
@@ -1948,6 +2129,22 @@ export function buildCombat(ctx) {
        fight they were introducing: garrison fire, or the boss itself,
        dropped them mid-shot and the free camera never came back. */
     if (ctx.player?.state?.free) return 0;
+    /* Post-hit grace, melee only. A pack that lands two bites in the same
+       tenth of a second lands one. Checked before Aegis so a graced bite
+       neither drains the plate nor reads as a guard, and only for
+       "enemy-melee" - a Gleaner burst, venom, ash and every boss hazard keep
+       their own cadence untouched. */
+    if (detail.source === "enemy-melee"
+      && clock - player.lastMeleeHitAt < ENEMY_MELEE_CONFIG.hitGrace) {
+      player.graced += 1;
+      bus.emit("playerGraced", {
+        amount,
+        source: detail.source,
+        enemyId: detail.enemyId || "",
+        enemyKey: detail.enemyKey || detail.enemy || "",
+      });
+      return 0;
+    }
     /* Field Chapel's upgraded boundary intercepts only Gleaner fire. The
        sanctuary is checked before Aegis, so a blocked projectile never drains
        shield charge or accidentally counts as a perfect guard. */
@@ -1981,6 +2178,8 @@ export function buildCombat(ctx) {
     }
     player.hp = Math.max(0, player.hp - amount);
     player.lastHitAt = clock;
+    player.regenAt = clock + SURVIVAL_CONFIG.regenDelay;
+    if (detail.source === "enemy-melee") player.lastMeleeHitAt = clock;
     bus.emit("playerHurt", { hp: player.hp, damage: amount, source: detail.source || "attack" });
     if (player.hp <= 0) {
       player.dead = true;
@@ -2071,15 +2270,25 @@ export function buildCombat(ctx) {
        at the animation layer would leave a unit that stands still
        and still puts rounds through you, which is the version of a
        stun nobody can read. */
+    const spec = SPEC[inst.key] || SPEC.thresher;
     if (inst.stunTime > 0) {
       inst.stunTime = Math.max(0, inst.stunTime - dt);
       /* Woken by it, though - a garrison flattened by a slam should
          be looking for you when it gets up. */
       inst.suspicion = 1;
       inst.alerted = true;
+      /* A stagger interrupts a bite in progress. This is what a
+         connected lance sweep buys against a Harrow: not damage
+         only, but the bite it was winding up. The bite TIMER keeps
+         counting through the stagger, though - a stagger costs the
+         creature its swing, not its turn, or a combo that never misses
+         would hold a Harrow harmless forever. */
+      if (inst.strike) cancelStrike(inst, "interrupted");
+      /* Clamped at zero: a save taken during a long slam stun must not
+         carry a negative timer, which the save validator rejects. */
+      if (!spec.burst && inst.inReach) inst.fireTimer = Math.max(0, inst.fireTimer - dt);
       return;
     }
-    const spec = SPEC[inst.key] || SPEC.thresher;
     const dx = px - inst.x;
     const dz = pz - inst.z;
     const dist = Math.hypot(dx, dz);
@@ -2094,6 +2303,14 @@ export function buildCombat(ctx) {
     if (inst.fireTimer === undefined) inst.fireTimer = 0;
     if (inst.burstLeft === undefined) inst.burstLeft = 0;
     if (!inst.home) inst.home = { x: inst.x, z: inst.z };
+
+    /* A creature mid-tell is COMMITTED. It does not re-decide, chase or
+       re-aim freely; it finishes the strike it started, and the strike
+       is resolved against wherever the player has got to by then. */
+    if (inst.strike) {
+      updateStrike(inst, spec, dt, px, py, pz);
+      return;
+    }
 
     /* Command markers temporarily author the unit's attention. Light bodies
        investigate the tone; heavy bodies only turn to acknowledge it. This
@@ -2197,6 +2414,38 @@ export function buildCombat(ctx) {
        strikes require vertical overlap. */
     const verticalReach = spec.burst || Math.abs(py - (inst.y + 1.1)) < 2.8;
     const inRange = dist <= spec.reach && verticalReach;
+
+    /* THE RUSHED GLEANER. Inside its fall-back range it will not fire; it
+       backs away at charge speed to reload, still facing the trooper (the
+       chase facing above stands - `approach` only re-aims on a detour).
+       Cornered - unable to give ground - it fires anyway. */
+    if (spec.burst && !player.dead && dist < GLEANER_PROJECTILE_CONFIG.fallbackRange) {
+      const away = Math.atan2(-dx, -dz);
+      const oldX = inst.x;
+      const oldZ = inst.z;
+      approach(inst, inst.x + Math.sin(away) * 6, inst.z + Math.cos(away) * 6,
+        inst.spec.speed.charge, dt);
+      const gave = Math.hypot(inst.x - oldX, inst.z - oldZ);
+      if (gave > inst.spec.speed.charge * dt * 0.3) {
+        inst.fireTimer = Math.max(inst.fireTimer, GLEANER_PROJECTILE_CONFIG.fallbackReload);
+        inst.burstLeft = 0;
+        if (inst.state !== "alert") enemies.play(inst, "alert", 0.2);
+        return;
+      }
+    }
+
+    /* Arrival is not the bite. On ENTERING reach the timer is held to a
+       fraction of the cadence, so a creature that has just closed the
+       distance still has to wind up in plain sight before it can land
+       anything - the free first-frame bite is what made every approach
+       cost health before the fight had begun. */
+    if (!spec.burst) {
+      if (inRange && !inst.inReach) {
+        const first = spec.cadence * ENEMY_MELEE_CONFIG.firstContactFraction;
+        if (inst.fireTimer < first) inst.fireTimer = first;
+      }
+      inst.inReach = inRange;
+    }
     if (inRange && sees) {
       attack(inst, spec, dt);
       return;
@@ -2609,27 +2858,203 @@ export function buildCombat(ctx) {
       inst.burstLeft -= 1;
       inst.fireTimer = inst.burstLeft > 0 ? spec.cadence : spec.burstGap;
       if (inst.state !== "fire") enemies.play(inst, "fire", 0.12);
-    } else {
-      inst.fireTimer = spec.cadence;
-      enemies.play(inst, "strike", 0.1);
-    }
-    bus.emit("enemyFire", { key: inst.key, x: inst.x, z: inst.z, melee: !spec.burst });
-    if (spec.burst) {
+      bus.emit("enemyFire", { key: inst.key, x: inst.x, z: inst.z, melee: false });
       launchEnemyProjectile(inst, spec);
       return;
     }
+    /* A melee timer expiring is now the TELL, not the bite. See
+       ENEMY_MELEE_CONFIG; the strike itself resolves in updateStrike. */
+    beginStrike(inst, spec);
+  }
 
-    const incoming = spec.damage * SURVIVAL_CONFIG.enemyDamageMultiplier
-      * (Number.isFinite(inst.damageScale) ? inst.damageScale : 1);
-    hurtPlayer(incoming, {
-      source: "enemy-melee",
-      x: inst.x,
-      y: inst.y + (HITBOX[inst.key] || HITBOX.thresher).head,
-      z: inst.z,
-      enemy: inst.key,
+  /* ============================================================
+     ENEMY MELEE - TELL, COMMIT, STRIKE
+
+     Three functions where there used to be two lines. beginStrike is
+     the tell: the clip restarts from its first frame and is time-scaled
+     so its measured contact frame lands at the caste's wind-up; the
+     creature locks the bearing it has and starts its lunge along it.
+     updateStrike is the commitment: limited tracking, the lunge, and the
+     count to the contact frame. resolveStrike is the bite, decided at
+     that frame against reach, facing and line of sight as they ARE -
+     which is what turns "standing in reach" from a damage tax into a
+     read.
+     ============================================================ */
+
+  function strikeValue(inst, table) {
+    const value = table[inst.key];
+    return Number.isFinite(value) ? value : table.default;
+  }
+
+  function beginStrike(inst, spec) {
+    const cfg = ENEMY_MELEE_CONFIG;
+    if (!cfg.slotExempt.includes(inst.key)) {
+      while (strikeStarts.length && clock - strikeStarts[0] > cfg.slotWindow) {
+        strikeStarts.shift();
+      }
+      if (strikeStarts.length >= cfg.slotCap) {
+        /* No slot: hold at reach and ask again shortly. The creature
+           keeps facing the trooper and stays a threat; it simply is not
+           this second's threat. */
+        inst.fireTimer = cfg.slotRetry;
+        strikeTotals.held += 1;
+        return false;
+      }
+      strikeStarts.push(clock);
+    }
+    const windup = strikeValue(inst, cfg.windup);
+    const box = HITBOX[inst.key] || HITBOX.thresher;
+    /* Cadence is measured tell to tell, so the timer restarts here and
+       keeps counting through the wind-up. */
+    inst.fireTimer = spec.cadence;
+    inst.strike = {
+      t: 0,
+      windup,
+      yaw: inst.yaw,
+      lunge: strikeValue(inst, cfg.lunge) * (inst.spec?.speed?.charge || 0),
+    };
+    /* Direct call, not optional-chained: `replay` is part of the enemy-
+       system contract, and a missing export should fail a test rather
+       than silently leave the tell unanimated. */
+    enemies.replay(inst, "strike", 0.08, strikeValue(inst, cfg.strikeContact), windup);
+    strikeTotals.tells += 1;
+    bus.emit("enemyStrikeTelegraph", {
+      key: inst.key,
       enemyId: inst.id,
-      enemyKey: inst.key,
+      x: inst.x,
+      y: inst.y + box.head,
+      z: inst.z,
+      windup,
     });
+    return true;
+  }
+
+  function updateStrike(inst, spec, dt, px, py, pz) {
+    const cfg = ENEMY_MELEE_CONFIG;
+    const strike = inst.strike;
+    strike.t += dt;
+    inst.fireTimer -= dt;
+    /* Committed tracking: it can follow a sidestep a little, not a lot. */
+    const dx = px - inst.x;
+    const dz = pz - inst.z;
+    const want = Math.atan2(dx, dz);
+    const delta = ((want - inst.yaw + Math.PI * 3) % TAU) - Math.PI;
+    inst.yaw += clamp(delta, -cfg.windupTurnRate * dt, cfg.windupTurnRate * dt);
+    /* The lunge, along the bearing it committed to at the tell, stopping
+       short of running through the trooper. */
+    if (strike.lunge > 0) {
+      const step = strike.lunge * dt;
+      const radius = (HITBOX[inst.key] || HITBOX.thresher).r * 0.8;
+      const out = collide.slide(inst.x, inst.z,
+        inst.x + Math.sin(strike.yaw) * step, inst.z + Math.cos(strike.yaw) * step,
+        null, radius);
+      inst.x = out[0];
+      inst.z = out[1];
+      inst.speed = strike.lunge;
+      if (Math.hypot(px - inst.x, pz - inst.z) < spec.reach * 0.55) strike.lunge = 0;
+    } else {
+      inst.speed = 0;
+    }
+    if (strike.t < strike.windup) return;
+    resolveStrike(inst, spec, px, py, pz);
+  }
+
+  function resolveStrike(inst, spec, px, py, pz) {
+    const cfg = ENEMY_MELEE_CONFIG;
+    const strike = inst.strike;
+    inst.strike = null;
+    const box = HITBOX[inst.key] || HITBOX.thresher;
+    const dx = px - inst.x;
+    const dz = pz - inst.z;
+    const dist = Math.hypot(dx, dz);
+    const vertical = Math.abs(py - (inst.y + 1.1)) < 2.8;
+    const inReach = dist <= spec.reach * cfg.reachSlack && vertical;
+    const fx = Math.sin(inst.yaw);
+    const fz = Math.cos(inst.yaw);
+    const facing = dist < 1e-4 || (dx * fx + dz * fz) / dist >= cfg.facingDot;
+    let reason;
+    let dealt = 0;
+    if (!inReach) reason = "range";
+    else if (!facing) reason = "facing";
+    else if (!canSee(inst, px, py, pz)) reason = "cover";
+    else {
+      const incoming = spec.damage * SURVIVAL_CONFIG.enemyDamageMultiplier
+        * (Number.isFinite(inst.damageScale) ? inst.damageScale : 1);
+      dealt = hurtPlayer(incoming, {
+        source: "enemy-melee",
+        x: inst.x,
+        y: inst.y + box.head,
+        z: inst.z,
+        enemy: inst.key,
+        enemyId: inst.id,
+        enemyKey: inst.key,
+        windup: strike.windup,
+      });
+      reason = dealt > 0 ? "hit" : "blocked";
+    }
+    const landed = dealt > 0;
+    if (landed) strikeTotals.landed += 1;
+    else if (reason === "blocked") strikeTotals.blocked += 1;
+    else strikeTotals.whiffed += 1;
+    /* A strike that lands nothing costs a beat: the dodge - or the
+       guard - buys the trooper the recovery, which is the opening. */
+    if (!landed) inst.fireTimer += cfg.whiffRecovery;
+    const event = {
+      key: inst.key,
+      enemyId: inst.id,
+      x: inst.x,
+      z: inst.z,
+      melee: true,
+      landed,
+      reason,
+      damage: dealt,
+      windup: strike.windup,
+    };
+    bus.emit("enemyFire", event);
+    bus.emit("enemyStrikeResolved", event);
+  }
+
+  function cancelStrike(inst, reason = "interrupted") {
+    const strike = inst.strike;
+    if (!strike) return false;
+    inst.strike = null;
+    inst.speed = 0;
+    inst.fireTimer = Math.max(inst.fireTimer || 0, 0.35);
+    strikeTotals.interrupted += 1;
+    bus.emit("enemyStrikeResolved", {
+      key: inst.key,
+      enemyId: inst.id,
+      x: inst.x,
+      z: inst.z,
+      melee: true,
+      landed: false,
+      reason,
+      damage: 0,
+      windup: strike.windup,
+    });
+    return true;
+  }
+
+  function strikeState() {
+    return {
+      config: {
+        windup: { ...ENEMY_MELEE_CONFIG.windup },
+        lunge: { ...ENEMY_MELEE_CONFIG.lunge },
+        slotCap: ENEMY_MELEE_CONFIG.slotCap,
+        slotWindow: ENEMY_MELEE_CONFIG.slotWindow,
+        firstContactFraction: ENEMY_MELEE_CONFIG.firstContactFraction,
+        hitGrace: ENEMY_MELEE_CONFIG.hitGrace,
+        facingDot: ENEMY_MELEE_CONFIG.facingDot,
+      },
+      ...strikeTotals,
+      recentTells: strikeStarts.length,
+      active: enemies.live.filter((e) => e.strike).map((e) => ({
+        key: e.key,
+        enemyId: e.id,
+        t: Number(e.strike.t.toFixed(3)),
+        windup: e.strike.windup,
+      })),
+    };
   }
 
   /* ============================================================
@@ -2661,8 +3086,9 @@ export function buildCombat(ctx) {
     if (player.dead) return;
 
     // Regeneration, but only well after the last hit - long enough
-    // that it never rewards standing in the open.
-    if (clock - player.lastHitAt > SURVIVAL_CONFIG.regenDelay && player.hp < player.maxHp) {
+    // that it never rewards standing in the open. A melee kill brings
+    // `regenAt` forward (see meleeStrike); a hit pushes it back out.
+    if (clock > player.regenAt && player.hp < player.maxHp) {
       player.hp = Math.min(player.maxHp, player.hp + dt * SURVIVAL_CONFIG.regenPerSecond);
     }
 
@@ -2706,9 +3132,13 @@ export function buildCombat(ctx) {
        x/y/z left foot IK at the death site and bypassed the same safe
        collision placement used everywhere else. */
     ctx.player.spawn(x, z, Math.PI);
+    player.regenAt = clock - 1;
+    player.lastMeleeHitAt = -99;
+    strikeStarts.length = 0;
     for (const inst of enemies.live) {
       inst.suspicion = 0;
       inst.alerted = false;
+      if (inst.strike) cancelStrike(inst, "reset");
     }
     bus.emit("respawn", {});
   }
@@ -2724,7 +3154,6 @@ export function buildCombat(ctx) {
      ============================================================ */
 
   function snapshot() {
-    const sinceHit = Math.max(0, clock - player.lastHitAt);
     return {
       hp: player.hp,
       maxHp: player.maxHp,
@@ -2732,7 +3161,7 @@ export function buildCombat(ctx) {
       shots: player.shots,
       hits: player.hits,
       regenLockRemaining: clamp(
-        SURVIVAL_CONFIG.regenDelay - sinceHit,
+        player.regenAt - clock,
         0,
         SURVIVAL_CONFIG.regenDelay
       ),
@@ -2780,6 +3209,9 @@ export function buildCombat(ctx) {
     player.lastHitAt = regenLockRemaining > 0
       ? clock - (SURVIVAL_CONFIG.regenDelay - regenLockRemaining)
       : clock - SURVIVAL_CONFIG.regenDelay - 1;
+    player.regenAt = regenLockRemaining > 0 ? clock + regenLockRemaining : clock - 1;
+    player.lastMeleeHitAt = -99;
+    strikeStarts.length = 0;
     return true;
   }
 
@@ -2793,6 +3225,16 @@ export function buildCombat(ctx) {
     damageLeg,
     drainLift,
     meleeStrike,
+    /* The clutch, reachable by the encounter that now owns the
+       animal's decisions. It stays HERE rather than moving into
+       matriarch.js because everything that makes a clutch correct -
+       the cap, the spacing, and landing it behind the boss rather
+       than between the boss and the player - is asserted by
+       `saintfall-matriarch-fight.mjs` against this function, and a
+       second copy in the module is a second place for those three
+       properties to quietly stop being true. */
+    brood: (inst, overrides = {}) => brood(inst,
+      { ...(SPEC[inst?.key] || SPEC.thresher), ...overrides }),
     shockwave,
     explode,
     hurtPlayer,
@@ -2801,6 +3243,10 @@ export function buildCombat(ctx) {
     projectileState,
     clearProjectiles: clearEnemyProjectiles,
     projectileConfig: GLEANER_PROJECTILE_CONFIG,
+    strikeState,
+    cancelStrike,
+    enemyMeleeConfig: ENEMY_MELEE_CONFIG,
+    meleeConfig: MELEE_CONFIG,
     update,
     snapshot,
     restore,

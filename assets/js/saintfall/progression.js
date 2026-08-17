@@ -129,8 +129,8 @@ const MVP_COPY = Object.freeze({
   procession_processional_mercy: {
     summary: "Let one decisive melee kill sustain each combo.",
     ranks: [
-      "The first melee-combo kill restores 8 Reliquary charge, once per combo.",
-      "A third-strike kill restores 16 charge instead.",
+      "The first melee-combo kill restores 8 Reliquary charge and 8 health, once per combo.",
+      "A third-strike kill restores 16 of each instead.",
     ],
   },
   wing_wingbeat_conversion: {
@@ -1290,7 +1290,23 @@ export function buildProgression(ctx) {
 
     const mercy = talentRank("procession_processional_mercy");
     if (mercy > 0 && event.kills > 0 && !effects.comboMercyUsed) {
-      ctx.jetpack?.restoreCharge?.(step === 3 && mercy >= 2 ? 16 : 8, "processional-mercy");
+      const mercyReturn = step === 3 && mercy >= 2 ? 16 : 8;
+      ctx.jetpack?.restoreCharge?.(mercyReturn, "processional-mercy");
+      /* Mercy now returns HEALTH as well as charge - the same figure. The
+         charge return alone was the previous balance pass's answer to a
+         build that dies in reach, and charge is not what it was short of. */
+      const combatPlayer = ctx.combat?.player;
+      if (combatPlayer && !combatPlayer.dead && combatPlayer.hp < combatPlayer.maxHp) {
+        const before = combatPlayer.hp;
+        combatPlayer.hp = Math.min(combatPlayer.maxHp, combatPlayer.hp + mercyReturn);
+        const healed = combatPlayer.hp - before;
+        if (healed > 0) {
+          combatPlayer.healed = (combatPlayer.healed || 0) + healed;
+          ctx.combat?.bus?.emit?.("playerHealed", {
+            amount: healed, source: "processional-mercy", hp: combatPlayer.hp, kills: event.kills,
+          });
+        }
+      }
       effects.comboMercyUsed = true;
       bump("processionalMercies");
       cue("procession", "mercy", {

@@ -1763,11 +1763,17 @@ export function buildAudio(ctx) {
          once is a wall of noise with no information in it. */
       combat.bus.on("kill", (e) => death(e.x, e.z, e.key === "harrow"));
       combat.bus.on("wallHit", (e) => impact(e.x, e.z, "wall"));
+      /* The tell is audible. A melee caste now winds up before it bites,
+         and the same hiss the Apostate rears with says so from wherever
+         the creature is - which is most of what makes a bite from behind
+         a read rather than a surprise. */
+      combat.bus.on("enemyStrikeTelegraph", (e) => hiss(e.x, e.z));
       combat.bus.on("enemyFire", (e) => {
         // A garrison that shoots in silence is worse than one that
         // does no damage: the player has no idea they are under fire
-        // or from where.
-        if (e.melee) impact(e.x, e.z, "flesh");
+        // or from where. A bite that lands nothing lands no sound
+        // either; the whiff is the silence after the hiss.
+        if (e.melee) { if (e.landed !== false) impact(e.x, e.z, "flesh"); }
         else shot(e.x, e.z, { gain: 0.34 });
       });
       combat.bus.on("playerHurt", () => hurt());

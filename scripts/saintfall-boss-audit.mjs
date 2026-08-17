@@ -100,6 +100,22 @@ try {
     T.advanceTime(0.7, 1 / 60);
     return (${cost})(T, "stylite");`));
 
+  /* The Gilded Reach's mantis. It joined this table the day it got a
+     moveset: while it was on the generic walker brain there was
+     nothing to measure that a Harrow did not already measure, and now
+     it holds ground, throws a two-scythe combo and lays a clutch like
+     every other row here. Woken through its own arena gate rather
+     than teleported into an action, because the cost that matters is
+     the cost of the fight the player actually walks into. */
+  await measure("Matriarch", new Function("T", `
+    const s = T.ctx.mission.bosses.find((b) => b.key === "reach");
+    T._teleportRaw(s.x + 24, s.z + 24, 0);
+    T.advanceTime(3.4, 1 / 60);
+    const inst = T.ctx.districtBosses.ensureSpawned("reach");
+    T.ctx.matriarch.force("combo", inst);
+    T.advanceTime(0.4, 1 / 60);
+    return (${cost})(T, "matriarch");`));
+
   await measure("Coulter", new Function("T", `
     const s = T.ctx.mission.bosses.find((b) => b.key === "saint");
     T._teleportRaw(s.x + 60, s.z, 0);

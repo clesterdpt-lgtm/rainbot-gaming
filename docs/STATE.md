@@ -2,6 +2,73 @@
 
 ## Current milestone
 
+**94 — SAINTFALL: the Matriarch gets arms, and a fight** is implemented
+and gated; awaits user playtest. Two faults with one cause — nobody had
+looked at the animal closely and nobody had fought it for long. Its
+raptorial coxa left the TOP of the mesosoma going up and outboard, so the
+arm's highest point was its elbow and its widest its wrist, 2.05 m off a
+0.9 m-thick centreline: from the front, two horizontal paddles at head
+height. And it was the last district boss still on `combat.stepEnemy` —
+close, bite on a 2.35 s cadence, lay every 14 s — which against 3600
+health is one decision taken once. The forelimb is re-authored as a real
+mantis Z (coxa dropping from the front of the pronotum, femur reaching
+down and forward past the face, tibia folded back under the mouth, facing
+spine rows), held **42° open** with the arm inside the shoulders (0.82 m
+outboard, was 2.05 m), and every clip re-keyed with `align_z` hinges. New
+module `assets/js/saintfall/matriarch.js`: it stalks a 6.2–11.5 m band, a
+two-scythe combo (three when roused at 45 %) on the melee-pass tell
+contract, a telegraphed 10.8 m LANCE against stand-off, and the CULL —
+loiter in its rear arc inside 10.5 m for 1.6 s and it whips round through
+you, so the gaster is contested rather than free. Laying now PRESENTS the
+weak point (×1.5 while planted), turning the brood clock into an
+invitation. Three new capabilities, not species tests: per-instance
+`selfDriven`, `weakBonus`, and `actionLocked` (a flinch used to replace
+the very telegraph the player was shooting at). Lifecycle stays with
+`districtBosses`, so nothing new is saved and every existing save still
+validates. The Blender script now exports a `fold` block with the model —
+it immediately caught a strike keyed to drive the claw to **y = −0.52**,
+through the sand — and the review harness's view names were ninety
+degrees out, so the one picture that would have shown the fold was
+mislabelled. `matriarch-fight` 34/34 (was 19/19), including a live
+gate-to-kill encounter that found the fight harmless until the probe
+stopped orbiting at 9.9 m/s (faster than SPRINT); at a realistic 6 m/s
+strafe, 3 of 8 tells connect for a floor of 81/150. Regression:
+save-integrity 62/62, abbess-fight 39/39, melee-duel-probe all green,
+boss-audit now seven rows (Matriarch 3.67 ms/frame); district-hunt 31/33
+fails identically on a clean HEAD (pre-existing, the Coulter's arena
+reset). Build pin `20260817-matriarch-moveset-1`. Remaining: the 3600
+health pool predates the moveset and is the first number to revisit; the
+cull has no clip of its own; the rouse is audible but not visible.
+Milestone: `docs/milestones/94-saintfall-matriarch-moveset.md`.
+
+**93 — SAINTFALL: a lance build can stand in reach** is implemented and
+gated; awaits user playtest. Enemy melee was resolved on the same frame its
+strike clip started (and `fireTimer` began at zero, so first contact was a
+free bite); the Gleaner had no minimum range; `hurtPlayer` had no
+mitigation; nothing in the tree healed. Every bite is now a TELL (strike
+clip restarted and time-scaled to its measured contact frame; Thresher
+0.40 s pounce, Harrow 0.60 s, Precentor 0.65 s, Matriarch 0.75 s) resolved
+at the contact frame against reach, a ±37° facing arc and LOS, with a 30 %
+first-contact hold, ≤ 2 tells/s per trooper, 0.30 s melee-only post-hit
+grace, a lance stagger that cancels the first half of a wind-up (armoured
+after), +6/12/18 HP per Thresher/Gleaner/Harrow melee kill plus a 2 s regen
+rebate, Processional Mercy healing as much as it charges, and a Gleaner
+that holds fire and gives ground inside 10 m. New acceptance harness
+`scripts/saintfall-melee-duel-probe.mjs` (11 mechanism checks + 8 duel
+gates, all green): one Harrow now costs a lance player exactly one
+telegraphed bite (27.9 HP, was 55.8), and neither melee build dies to
+Breaker Brood or Crowned Surge (both used to, every run) while the Volley
+clears the same rosters at 17 / ~100 HP. Regression: melee-balance-probe
+15/15, gameplay 55/55, matriarch-fight 19/19, abbess-fight 39/39,
+bloom-retreat 18/18, melee-impact 14/14, encounter-intro 8/8, save-integrity
+62/62; progression 64/66, death-shots 10/13, enemy-navigation 17/19 and
+apostate-fight 65/68 fail identically on a clean HEAD (pre-existing). Build
+pin `20260817-melee-viability-1`. Remaining asymmetry: Gleaner fire from
+15–35 m while the lance is pinned in a pack (W3: 58–83 lost vs 17) — a
+target-order problem; the pack's bodies blocking bolts is the proposed
+next pass, with the Tier 2 kit and the two Doctrine fixes.
+Milestone: `docs/milestones/93-saintfall-melee-viability.md`.
+
 **91 — SAINTFALL: the VFX pass** is complete. Every effect in the game
 was catalogued (165 `vfx.*` call sites plus the inline effects in shield /
 jetpack / weapons / bosses / mission) and photographed through a new

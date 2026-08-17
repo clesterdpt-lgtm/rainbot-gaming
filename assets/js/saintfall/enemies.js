@@ -181,7 +181,7 @@ export const BESTIARY = {
     url: "assets/models/saintfall/matriarch.glb",
     faction: "bloom",
     health: 3600,
-    /* Shipped at 1:1: 5.05m tall, 6.93m wide and 10.93m long. There
+    /* Shipped at 1:1: 5.05m tall, 6.93m wide and 11.25m long. There
        is exactly one of these on the map, so the usual argument for
        tuning scale in engine - that proportion is read against the
        trooper standing next to it - is replaced by a different one:
@@ -1407,6 +1407,9 @@ export async function buildEnemies(ctx, onProgress) {
     const next = inst.actions.get(name);
     if (!next || inst.current === next) return;
     next.reset();
+    // A strike may have been time-scaled to its tell (see replay); every
+    // other entry into a clip runs it at authored speed.
+    next.timeScale = 1;
     next.setLoop(
       name === "death" ? THREE.LoopOnce : THREE.LoopRepeat,
       name === "death" ? 1 : Infinity
@@ -1431,6 +1434,31 @@ export async function buildEnemies(ctx, onProgress) {
     next.play();
     inst.current = next;
     inst.state = name;
+  }
+
+  /**
+   * Restart `name` from its first frame even when it is already the
+   * current clip, and time-scale it so that its `contactAt` second lands
+   * `contactIn` seconds from now.
+   *
+   * `play()` is deliberately a no-op for the clip already playing, which
+   * is right for a walk and wrong for a bite: a creature standing in reach
+   * looped its strike clip unsynchronised with its own timer, so the
+   * animation said nothing about when the damage came. A telegraph needs
+   * the clip to START at the tell and reach its contact frame at the
+   * strike, whatever the authored clip length happens to be. */
+  function replay(inst, name, fade = 0.08, contactAt = 0, contactIn = 0) {
+    const action = inst.actions.get(name);
+    if (!action) return false;
+    if (inst.current !== action) play(inst, name, fade);
+    action.reset();
+    action.enabled = true;
+    action.paused = false;
+    action.timeScale = contactAt > 0 && contactIn > 0 ? contactAt / contactIn : 1;
+    action.play();
+    inst.current = action;
+    inst.state = name;
+    return true;
   }
 
   /* ============================================================
@@ -2159,6 +2187,7 @@ export async function buildEnemies(ctx, onProgress) {
     snapshot,
     restore,
     play,
+    replay,
     update,
     /* The body chain's public surface, for the encounter module that
        drives it. `seedBody` lays a worm out straight, `poseBody`

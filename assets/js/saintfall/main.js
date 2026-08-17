@@ -32,6 +32,7 @@ import { buildAbbess } from "saintfall/abbess.js";
 import { buildCoulter } from "saintfall/coulter.js";
 import { buildDistaff } from "saintfall/distaff.js";
 import { buildGarner } from "saintfall/garner.js";
+import { buildMatriarch } from "saintfall/matriarch.js";
 import { buildStylite } from "saintfall/stylite.js";
 import { buildWinnower } from "saintfall/winnower.js";
 import { buildDistrictBosses } from "saintfall/district-bosses.js";
@@ -236,6 +237,13 @@ export async function start({ boot, build } = {}) {
      the penultimate giant Coulter beneath the Fallen Saint. */
   const districtBosses = buildDistrictBosses(ctx);
   ctx.districtBosses = districtBosses;
+  /* The Gilded Reach's mantis. The one boss whose LIFECYCLE stays with
+     the shared controller above - it is still a `domain: "district"`
+     site, still in that snapshot, still reset by that arena ring - and
+     whose BEHAVIOUR is its own. Built after districtBosses because the
+     animal it drives is the one districtBosses spawns. */
+  const matriarch = buildMatriarch(ctx);
+  ctx.matriarch = matriarch;
   /* The Cathedral's false saint borrows the authored player figure but owns
      an entirely separate combat brain. It is asynchronous because the same
      GLB/fallback figure contract is loaded for a second, corrupted body. */
@@ -464,6 +472,7 @@ export async function start({ boot, build } = {}) {
     distaff,
     garner,
     winnower,
+    matriarch,
     apostate,
     progression,
     audio,
@@ -847,6 +856,12 @@ export async function start({ boot, build } = {}) {
     stylite.update(d);
     winnower.update(d);
     districtBosses.update(d);
+    /* AFTER the shared controller, not before it. That controller owns
+       the Matriarch's reveal gate and its arena reset, and both are
+       decided this frame; a module that acted first would spend one
+       frame per reset swinging at a player it had just been teleported
+       away from. */
+    matriarch.update(d);
     apostate.update(d);
     breaches.update(d);
     mission.update(d);

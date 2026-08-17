@@ -351,11 +351,11 @@ export const DOCTRINE_ORDERS = deepFreeze([
         ranks: [
           {
             rank: 1,
-            description: "The first melee-combo kill restores 8 Reliquary charge, once per combo.",
+            description: "The first melee-combo kill restores 8 Reliquary charge and 8 health, once per combo.",
           },
           {
             rank: 2,
-            description: "A third-strike kill restores 16 charge instead.",
+            description: "A third-strike kill restores 16 of each instead.",
           },
         ],
       },

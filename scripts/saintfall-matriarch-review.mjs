@@ -32,7 +32,7 @@
      node scripts/saintfall-matriarch-review.mjs --clip alert
    ============================================================ */
 import { spawn } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "playwright";
@@ -104,12 +104,30 @@ try {
   }, site);
   console.log("spawned:", JSON.stringify(info));
 
+  /* CAMERA DIRECTIONS ARE IN THE ANIMAL'S OWN FRAME, and the rotation
+     below is the whole reason this comment exists. They used to be
+     world vectors read against a boss spawned at yaw = PI/2, so every
+     label in this harness was ninety degrees out: the picture called
+     "front" was the animal's left flank and the one called "side" was
+     its face. Three revisions of the raptorial fold were argued from
+     that set, and the one view that would have shown the fold was the
+     one nobody thought they were looking at.
+
+     `yaw` stays PI/2 rather than being zeroed, because the sun is a
+     world direction: turning the animal to suit the labels would have
+     relit every picture and made this pass incomparable with the ones
+     before it. Turning the CAMERAS costs nothing. */
   const views = [
+    { id: "front", dir: [0, 0.12, 1], dist: 17, fov: 34, aim: 3.0 },
+    { id: "threequarter", dir: [0.62, 0.16, 0.88], dist: 21, fov: 34, aim: 2.8 },
     { id: "side", dir: [1, 0.10, 0], dist: 22, fov: 34, aim: 2.6 },
-    { id: "threequarter", dir: [0.88, 0.16, 0.62], dist: 21, fov: 34, aim: 2.8 },
-    { id: "front", dir: [0.06, 0.12, 1], dist: 17, fov: 34, aim: 3.0 },
-    { id: "rear", dir: [0.10, 0.18, -1], dist: 19, fov: 34, aim: 2.4 },
+    { id: "rear", dir: [0, 0.18, -1], dist: 19, fov: 34, aim: 2.4 },
     { id: "player-eye", dir: [0.55, 0.02, 0.84], dist: 11, fov: 62, aim: 1.7 },
+    /* THE FOLD, close and low. Everything the forelimbs are for lives
+       in a two-metre box in front of the chest, and at 21m with the
+       whole eleven-metre animal in frame that box is ninety pixels
+       wide. */
+    { id: "fold", dir: [0.74, -0.05, 0.67], dist: 8.5, fov: 40, aim: 3.1 },
   ];
 
   const clips = clipArg ? [clipArg]
@@ -120,11 +138,17 @@ try {
     // Far enough into the clip to be at its held pose, not its ramp.
     await page.evaluate(() => window.__SF.advanceTime(0.85, 1 / 60));
     for (const v of views) {
-      if (clip !== "idle" && v.id !== "threequarter" && v.id !== "side") continue;
+      if (clip !== "idle" && !["threequarter", "front", "fold"].includes(v.id)) continue;
       await page.evaluate(([s, spec]) => {
         const T = window.__SF;
         const g = T.groundHeightAt(s.x, s.z);
-        const d = spec.dir;
+        const inst = T.ctx.enemies.live[0];
+        const yaw = inst ? inst.yaw : 0;
+        // Into the animal's frame: +z is the direction it faces.
+        const sy = Math.sin(yaw);
+        const cy = Math.cos(yaw);
+        const d = [spec.dir[2] * sy + spec.dir[0] * cy, spec.dir[1],
+          spec.dir[2] * cy - spec.dir[0] * sy];
         const n = Math.hypot(d[0], d[1], d[2]);
         T.lookAt(
           [s.x + (d[0] / n) * spec.dist, g + spec.aim + (d[1] / n) * spec.dist,
@@ -132,10 +156,28 @@ try {
           [s.x, g + spec.aim, s.z], spec.fov);
         for (let i = 0; i < 5; i += 1) T.renderStill();
       }, [site, v]);
-      await grab(clips.length === 1 ? `${clip}-${v.id}` : `${clip}-${v.id}`);
+      await grab(`${clip}-${v.id}`);
     }
     console.log(`  clip ${clip}`);
   }
+
+  /* The fold, as numbers, next to the pictures of it. Written by
+     `scripts/blender/saintfall-matriarch.py`; see `measure_fold` there
+     for why a raptorial limb is a bad thing to review from renders
+     alone. */
+  try {
+    const fold = JSON.parse(
+      await readFile(path.join(root, "output/saintfall/models/matriarch.json"), "utf8"),
+    ).fold;
+    if (fold) {
+      console.log("\n  the fold, per clip (authoring metres, Y-up):");
+      for (const [name, f] of Object.entries(fold)) {
+        console.log(`    ${name.padEnd(13)} hinge ${String(f.foldDeg).padStart(6)}deg`
+          + ` · claw [${f.claw.join(", ")}]`
+          + ` · ${f.clawAheadOfHead}m past the face · ${f.widestX}m outboard`);
+      }
+    }
+  } catch (_) { /* the model report is optional */ }
 
   /* ---------------- the weak point, drawn ---------------- */
   const weak = await page.evaluate((s) => {

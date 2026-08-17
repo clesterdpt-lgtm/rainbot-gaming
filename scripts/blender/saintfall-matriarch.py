@@ -124,57 +124,70 @@ LEG_RIG = (
 # THE RAPTORIAL FOLD, and the one part of this animal that has to
 # read as ANATOMY rather than as shape.
 #
-# A mantis forelimb is three segments in a Z, and the order matters:
+# A mantis forelimb is FOUR segments, and both the count and the order
+# matter:
 #
 #   COXA    drops from the FRONT of the prothorax, close to vertical,
-#           so the joint it carries hangs in front of the chest.
-#   FEMUR   reaches down and FORWARD from there, past the face.
-#   TIBIA   hinges at the far end and folds BACK along the femur, the
-#           claw returning under the mouth. Facing rows of spines line
-#           the two inner edges: that is the grasping mechanism, and
-#           it is why the fold is a trap rather than two sticks.
+#           so the joint it carries hangs in front of the chest. It is
+#           long - unusually so for an insect - and it is why a mantis
+#           holds its trap out ahead of itself rather than at its ribs.
+#   FEMUR   reaches FORWARD from there, barely descending, past the
+#           face. The thick one, carrying the big spine row on its
+#           UNDERSIDE.
+#   TIBIA   hinges at the far end and folds back and DOWN beneath the
+#           femur - shorter and slimmer, its own finer spines pointing
+#           up into the crook, ending in a hooked terminal claw. Two
+#           opposed spine rows closing on each other is the grasping
+#           mechanism, and it is why the fold is a trap rather than
+#           two sticks.
+#   TARSUS  the foot: a thin, five-jointed thread that hangs off the
+#           tibia's apex and dangles. It carries no weight while the
+#           animal is hunting and it is the single most recognisable
+#           thing about the limb - the detail that stops the fold
+#           reading as a machined blade.
 #
-# The first two revisions had none of that, and the previous comment
-# here described a shape the numbers did not make. The coxa left the
-# TOP of the mesosoma travelling up and outboard (shoulder y 3.95 ->
-# elbow y 4.35, x 0.72 -> 1.52), so the arm's highest point was its
-# elbow and its widest was its wrist, 2.05m off a centreline the body
-# is 0.9m thick at. The femur then dropped outboard and the tibia
-# folded flat back along it at nineteen degrees. From the front the
-# pair read as two horizontal paddles at head height - a stubby wing
-# each side - and from three-quarters as a fifth pair of legs. The
-# celebrated "triangle of negative space" was, at nineteen degrees
-# against limb radii of 0.3, about fifteen centimetres of air inside
-# a metre of chitin: not a hole, and nothing that survives distance.
+# WHAT THE THREE EARLIER REVISIONS GOT WRONG, in order:
 #
-# So it is re-authored in front of the chest, INSIDE the shoulders,
-# and held FORTY-TWO DEGREES OPEN rather than shut. In order of how
-# far away each one survives, that buys: a real triangle of sky
-# between femur and tibia; two claw tips framing the face; and a
-# silhouette whose widest point is still the legs, so the animal goes
+#   1. The coxa left the TOP of the mesosoma travelling up and
+#      outboard (shoulder y 3.95 -> elbow y 4.35, x 0.72 -> 1.52), so
+#      the arm's highest point was its elbow and its widest was its
+#      wrist, 2.05m off a centreline the body is 0.9m thick at. From
+#      the front the pair read as two horizontal paddles at head
+#      height - a stubby wing each side.
+#   2. Corrected to hang in front of the chest, but with the tibia
+#      folding UP OVER the femur and the claw tucked beside the face.
+#      That is a fold, and it is the wrong one: a mantis closes its
+#      tibia DOWNWARD onto the femur's spined underside, which is why
+#      the trap hangs below the arm and the animal looks like it is
+#      carrying something.
+#   3. Three segments and no tarsus, with the tibia tapering to a
+#      point. A limb that ends in its own tip is a tool; the thread
+#      hanging past the claw is what makes it a leg.
+#
+# So: coxa down, femur forward, tibia folded back and down beneath it
+# at FIFTY DEGREES, tarsus dangling. In order of how far away each one
+# survives, that buys a triangle of sky between femur and tibia at
+# chest height, a hanging thread that breaks the limb's outline, and a
+# silhouette whose widest point is still the legs - so the animal goes
 # on reading LONG instead of winged.
-#
-# Forty-two rather than the thirty-three the first pass of this
-# rewrite used, and the difference is entirely about distance. At
-# thirty-three the hinge reads correctly in the close `fold` view and
-# closes up into one thick limb from anywhere further out - which is
-# the same failure as before, just less of it.
 SCY_BASE = Vector((0.40, 4.02, 0.92))      # coxa root, seated on the pronotum
-SCY_SHOULDER = Vector((0.66, 2.92, 1.46))  # coxa/femur joint, hung forward
-SCY_ELBOW = Vector((0.84, 2.18, 3.42))     # femur/tibia hinge, out past the face
-SCY_TIP = Vector((0.56, 3.80, 2.65))       # claw, folded back beside the face
+SCY_SHOULDER = Vector((0.58, 2.82, 1.28))  # coxa/femur joint, hung forward
+SCY_ELBOW = Vector((0.74, 2.44, 3.32))     # femur/tibia hinge, out past the face
+SCY_TIP = Vector((0.64, 1.72, 2.42))       # tibial claw, folded back underneath
+SCY_TARSUS = Vector((0.60, 0.94, 2.64))    # the foot, hanging off the apex
 
 # Which way each hinge swings, as a world direction, handed to
 # `align_z` in the bone table. Blender derives a bone's roll from the
-# world up axis, so on limbs that point in three different directions
-# "the euler that opens the fold" is three different channels and
-# three measured guesses - and the guesses are what a clip silently
-# gets wrong. Naming the swing plane instead makes local +X the hinge
-# on every segment: POSITIVE lifts the femur toward the chest and
-# UNFOLDS the tibia, negative drives and clamps them. Every scythe
-# key below is written in those terms.
-SCY_FEMUR_SWING = (0.0, 0.93, 0.35)   # femur rises toward where the tibia lies
-SCY_TIBIA_SWING = (0.0, 0.59, 0.81)   # tibia opens forward, out of the fold
+# world up axis, so on limbs that point in four different directions
+# "the euler that opens the fold" is four different channels and four
+# measured guesses - and the guesses are what a clip silently gets
+# wrong. Naming the swing plane instead makes local +X the hinge on
+# every segment: POSITIVE lifts the femur, UNFOLDS the tibia forward
+# and down, and curls the tarsus forward. Every scythe key below is
+# written in those terms.
+SCY_FEMUR_SWING = (0.0, 0.98, 0.18)    # femur rises off the tibia beneath it
+SCY_TIBIA_SWING = (0.0, -0.78, 0.62)   # tibia opens down and forward, to lance
+SCY_TARSUS_SWING = (0.0, 0.27, 0.96)   # the foot curls forward, or trails back
 
 
 def leg_names(side: str, i: int) -> tuple[str, str, str]:
@@ -476,6 +489,7 @@ def build_scythes(parts) -> None:
         sh = mirror(SCY_SHOULDER, sx)
         el = mirror(SCY_ELBOW, sx)
         tp = mirror(SCY_TIP, sx)
+        ta = mirror(SCY_TARSUS, sx)
 
         # Coxa. A near-vertical strut off the front of the pronotum,
         # and the segment that decides where the whole arm hangs: it
@@ -490,70 +504,103 @@ def build_scythes(parts) -> None:
         parts.append(Part(f"scyshoulder_{side}", f"brachium_{side}", v, f,
                           kit.flat(v, kit.BIO_DIM, kit.GLOW_FAINT)))
 
-        # Brachium - the femur. Heavy, reaching down and forward past
-        # the face, and carrying the spine row a mantis catches with.
-        # It bows DOWNWARD so the inner face of the fold is concave:
-        # the hollow is what the tibia shuts into.
-        br = kit.arc_path(sh, el, (sx * 0.06, -0.15, 0.02), n=5)
+        # Brachium - the femur. The heavy one, reaching forward past
+        # the face and barely descending, and carrying the spine row a
+        # mantis catches with. It bows DOWNWARD so its underside is
+        # convex: the tibia shuts up against that curve.
+        br = kit.arc_path(sh, el, (sx * 0.05, -0.13, 0.02), n=5)
         v, f, p = kit.tube(br, [0.360, 0.390, 0.360, 0.310, 0.255, 0.205],
                            sides=7, mode="transport",
                            profile=kit.flutes(7, 0.055))
         add(parts, f"brachiumGeo_{side}", f"brachium_{side}", (v, f),
             chitin_t(p, 0.18, 0.48, along=0.16))
-        # FEMORAL SPINES, pointing UP into the fold - at the tibia, not
-        # away from it. They used to hang off the underside, where they
-        # met nothing; a mantis's two spine rows face each other across
-        # the gap, and half of what makes the fold read as a trap is
-        # that they visibly interlock. Placed only along the stretch
-        # the tibia actually covers, and shortened toward the hinge
+        # FEMORAL SPINES, hanging DOWN into the crook - at the tibia
+        # folded beneath, not away from it. The revision before this
+        # one had them pointing up, at the sky, because the tibia was
+        # on the wrong side. A mantis's two spine rows face each other
+        # across the gap and visibly interlock, and that is half of
+        # what makes the fold read as a trap. Placed only along the
+        # stretch the tibia covers, and shortened toward the hinge
         # because the gap closes there.
-        for k, tt in enumerate((0.42, 0.58, 0.74, 0.88)):
+        for k, tt in enumerate((0.34, 0.52, 0.70, 0.86)):
             j = int(tt * (len(br) - 1))
             c = br[j]
-            reach = 0.66 - 0.07 * k
-            v, f, p = spike(c, c + Vector((sx * 0.05, reach * 0.93, reach * 0.36)),
+            reach = 0.62 - 0.06 * k
+            v, f, p = spike(c, c + Vector((sx * 0.05, -reach * 0.96, -reach * 0.28)),
                             r0=0.086, r1=0.008, sides=4, seed=89 + k)
             add(parts, f"brspine{k}_{side}", f"brachium_{side}", (v, f),
                 chitin_t(p, 0.46, 0.30))
 
-        v, f = kit.blob(0.290, sides=7, rings=2, seed=97)
+        v, f = kit.blob(0.270, sides=7, rings=2, seed=97)
         v = kit.transform(v, translate=tuple(el))
         parts.append(Part(f"scyelbow_{side}", f"blade_{side}", v, f,
                           kit.paint(v, CHITIN, lambda q: 0.42)))
 
-        # THE BLADE - the tibia. A flattened sickle, not a tube: the
-        # whole point of a raptorial limb is that it presents an edge,
-        # and an edge is the one thing a round limb cannot have. It
-        # folds back and up over the femur, tip returning under the
-        # mouth, and the sky between the two is the hole the whole
-        # front of the animal is designed around.
-        bl = kit.arc_path(el, tp, (sx * 0.06, 0.16, 0.10), n=6)
-        v, f, p = kit.tube(bl, [(0.290, 0.130), (0.330, 0.122), (0.320, 0.108),
-                                (0.280, 0.090), (0.222, 0.072), (0.155, 0.052),
-                                (0.075, 0.026)],
+        # THE BLADE - the tibia. Slimmer and shorter than the femur it
+        # shuts against, and a flattened sickle rather than a tube:
+        # the whole point of a raptorial limb is that it presents an
+        # edge, and an edge is the one thing a round limb cannot have.
+        # It folds back and DOWN beneath the femur, and the sky
+        # between the two is the hole the front of the animal is
+        # designed around.
+        bl = kit.arc_path(el, tp, (sx * 0.05, -0.12, -0.06), n=6)
+        v, f, p = kit.tube(bl, [(0.235, 0.108), (0.255, 0.100), (0.240, 0.089),
+                                (0.205, 0.074), (0.158, 0.058), (0.106, 0.040),
+                                (0.052, 0.019)],
                            sides=6, mode="transport", cap_end=False)
         add(parts, f"bladeGeo_{side}", f"blade_{side}", (v, f),
             chitin_t(p, 0.26, 0.56, 1.2, along=0.22))
         # A lit fuller down the blade. It is the only bright thing on
         # the front of the animal at rest, and it draws the eye to the
         # fold - which is the shape the silhouette is built on.
-        v, f, p = kit.shell(bl, [0.290, 0.330, 0.320, 0.280, 0.222, 0.155, 0.075],
-                            arc=(-0.055, 0.055), steps=2, thick=0.020, lift=0.006)
+        v, f, p = kit.shell(bl, [0.235, 0.255, 0.240, 0.205, 0.158, 0.106, 0.052],
+                            arc=(-0.055, 0.055), steps=2, thick=0.018, lift=0.006)
         add(parts, f"bladefuller_{side}", f"blade_{side}", (v, f),
             kit.paint_t(p, kit.BIO_RAMP,
                         lambda t, a, u: 0.30 + 0.44 * (1.0 - t),
                         glow=lambda t, a, u: kit.GLOW_SEAM * (1.0 - t * 0.7)))
-        # TIBIAL SERRATIONS, the other half of the trap: pointing DOWN
-        # and back at the femur's row, and lengthening toward the claw
-        # because that is where the fold is widest open.
+        # TIBIAL SERRATIONS, the other half of the trap: pointing UP
+        # and back into the femur's row, and lengthening toward the
+        # claw because that is where the fold is widest open.
         for k, tt in enumerate((0.22, 0.40, 0.58, 0.76, 0.90)):
             j = int(tt * (len(bl) - 1))
             c = bl[j]
-            reach = 0.22 + 0.055 * k
-            v, f, p = spike(c, c + Vector((-sx * 0.05, -reach * 0.62, -reach * 0.78)),
-                            r0=0.066, r1=0.006, sides=4, seed=101 + k)
+            reach = 0.20 + 0.05 * k
+            v, f, p = spike(c, c + Vector((-sx * 0.05, reach * 0.96, -reach * 0.28)),
+                            r0=0.060, r1=0.006, sides=4, seed=101 + k)
             add(parts, f"blserr{k}_{side}", f"blade_{side}", (v, f),
                 chitin_t(p, 0.48, 0.28))
+
+        # THE TERMINAL CLAW. A mantis tibia does not taper to nothing;
+        # it ends in a hard hooked point, and that point is the joint
+        # the foot hangs off. Given its own short, dark, forward-curved
+        # spike so the eye can find where the tibia STOPS - without it
+        # the tarsus below reads as the same limb getting thinner.
+        v, f, p = spike(tp, tp + Vector((-sx * 0.02, -0.10, 0.34)),
+                        r0=0.085, r1=0.008, sides=5,
+                        bow=(0, -0.06, 0.02), seed=107)
+        add(parts, f"tibialclaw_{side}", f"blade_{side}", (v, f),
+            chitin_t(p, 0.52, 0.24))
+
+        # THE TARSUS. Five thread-thin joints that hang off the apex
+        # and carry nothing while the animal is hunting, and the one
+        # part of the limb nobody mistakes for anything else. It is
+        # annulated rather than smooth so the five tarsomeres read at
+        # distance as a chain instead of a wire, and it is authored
+        # DANGLING - a foot held rigid is the tell that a limb was
+        # modelled as a weapon.
+        tar = kit.arc_path(tp, ta, (sx * 0.03, -0.05, 0.16), n=5)
+        v, f, p = kit.tube(tar, [0.075, 0.068, 0.058, 0.048, 0.036, 0.024],
+                           sides=5, mode="transport", cap_end=False,
+                           profile=kit.annulate(5, 0.24))
+        add(parts, f"tarsusGeo_{side}", f"tarsus_{side}", (v, f),
+            chitin_t(p, 0.30, 0.38, along=0.26))
+        # And the pretarsal hook it walks on.
+        v, f, p = spike(ta, ta + Vector((-sx * 0.03, -0.16, 0.13)),
+                        r0=0.038, r1=0.005, sides=4,
+                        bow=(0, -0.05, 0.02), seed=109)
+        add(parts, f"pretarsus_{side}", f"tarsus_{side}", (v, f),
+            chitin_t(p, 0.50, 0.26))
 
 
 def build_legs(parts) -> None:
@@ -688,6 +735,17 @@ def build_bone_table() -> list[dict]:
                       "tail": tuple(mirror(SCY_TIP, sx)),
                       "parent": f"brachium_{side}", "connect": True,
                       "align_z": SCY_TIBIA_SWING})
+        # NOT named `foot_L` either, and for the note above's reason.
+        # The runtime's leg regex is coxa/femur/tibia + a DIGIT, but
+        # the optimiser's is bare `^(coxa|femur|tibia|foot)` - so a
+        # forelimb foot called `foot_L` would have had its keyframes
+        # stripped from every clip except `death`, and the tarsus
+        # would have hung dead still through the whole moveset.
+        bones.append({"name": f"tarsus_{side}",
+                      "head": tuple(mirror(SCY_TIP, sx)),
+                      "tail": tuple(mirror(SCY_TARSUS, sx)),
+                      "parent": f"blade_{side}", "connect": True,
+                      "align_z": SCY_TARSUS_SWING})
     for i, rig in enumerate(LEG_RIG):
         for side, sx in (("L", 1.0), ("R", -1.0)):
             coxa, femur, tibia = leg_names(side, i)
@@ -714,7 +772,7 @@ def build_bone_table() -> list[dict]:
 BODY_BONES = ["thorax", "abdomen1", "abdomen2", "abdomen3", "head",
               "mandible_L", "mandible_R",
               "scapula_L", "scapula_R", "brachium_L", "brachium_R",
-              "blade_L", "blade_R"]
+              "blade_L", "blade_R", "tarsus_L", "tarsus_R"]
 
 
 def build_actions(arm) -> list[str]:
@@ -761,7 +819,11 @@ def build_actions(arm) -> list[str]:
         # shuts on it. See SCY_FEMUR_SWING - +x lifts, +x on the blade
         # opens - so the resting animal is very slightly TIGHTENING.
         sym(pose, "brachium", 0.020 * t, 0.0, 0.0)
-        sym(pose, "blade", -0.034 * t, 0.0, 0.0)
+        sym(pose, "blade", -0.030 * t, 0.0, 0.0)
+        # The foot swings on its own beat and further than anything
+        # else on the animal moves at rest. A dangling thread that
+        # holds perfectly still is the thing that says "rigged prop".
+        sym(pose, "tarsus", 0.16 * math.sin(t * PI * 2) - 0.05 * t, 0.0, 0.0)
         sym(pose, "mandible", 0.0, 0.030 * t, 0.0)
         frames.append((frame, pose))
     bake("idle", frames, 96)
@@ -795,6 +857,10 @@ def build_actions(arm) -> list[str]:
         sym(pose, "scapula", 0.0, -0.44 * t, 0.0)
         sym(pose, "brachium", 0.50 * t, 0.20 * t, 0.0)
         sym(pose, "blade", 0.80 * t, 0.0, 0.0)
+        # Curled up out of the way. A threat display is the animal
+        # making itself into edges, and a foot left hanging under the
+        # open trap is the one soft line in the pose.
+        sym(pose, "tarsus", 0.62 * t, 0.0, 0.0)
         sym(pose, "mandible", 0.0, 0.44 * t, 0.0)
         frames.append((frame, pose))
     bake("alert", frames, 56)
@@ -832,10 +898,16 @@ def build_actions(arm) -> list[str]:
         pose["brachium_L"] = (0.90 * cock + 0.22 * drive,
                               0.30 * t, 0.20 * t)
         pose["blade_L"] = (-0.55 * cock + 2.10 * drive, 0.0, 0.0)
+        # The foot TRAILS. It is the lightest thing on the limb and
+        # the limb is the fastest thing on the animal, so it should
+        # lag the strike rather than lead it - which is also what
+        # sells 27 m/s on a shape with no motion blur.
+        pose["tarsus_L"] = (0.45 * cock - 0.85 * drive, 0.0, 0.0)
         # Trailing arm braces the other way and stays mostly shut.
         pose["scapula_R"] = (0.0, 0.24 * cock - 0.16 * drive, 0.0)
         pose["brachium_R"] = (0.34 * cock + 0.10 * drive, -0.10 * t, 0.0)
         pose["blade_R"] = (-0.30 * cock + 0.52 * drive, 0.0, 0.0)
+        pose["tarsus_R"] = (0.30 * cock - 0.22 * drive, 0.0, 0.0)
         sym(pose, "mandible", 0.0, 0.62 * max(0.0, t), 0.0)
         frames.append((frame, pose))
     bake("strike", frames, 44)
@@ -858,6 +930,12 @@ def build_actions(arm) -> list[str]:
         sym(pose, "scapula", 0.0, 0.12 * t, 0.0)
         sym(pose, "brachium", 0.16 * t, 0.0, 0.0)
         sym(pose, "blade", -0.14 * t, 0.0, 0.0)
+        # Curled hard, and this one is a clearance number rather than
+        # a taste one: planting pitches the whole thorax down 0.26 rad,
+        # and at the 0.34 this used to be, `footClearance` measured
+        # 0.37m. A thread dangling that close to the sand intersects
+        # the first dune the animal lays on.
+        sym(pose, "tarsus", 0.78 * t, 0.0, 0.0)
         sym(pose, "mandible", 0.0, 0.20 * t, 0.0)
         frames.append((frame, pose))
     bake("brood", frames, 60)
@@ -876,6 +954,7 @@ def build_actions(arm) -> list[str]:
         sym(pose, "scapula", 0.0, 0.16 * t, 0.0)
         sym(pose, "brachium", 0.22 * t, 0.0, 0.0)
         sym(pose, "blade", -0.26 * t, 0.0, 0.0)
+        sym(pose, "tarsus", 0.40 * t, 0.0, 0.0)
         frames.append((frame, pose))
     bake("flinch", frames, 24)
 
@@ -899,6 +978,7 @@ def build_actions(arm) -> list[str]:
         sym(pose, "scapula", 0.0, 0.36 * t, 0.0)
         sym(pose, "brachium", 0.74 * t, 0.0, 0.0)
         sym(pose, "blade", -0.58 * t, 0.0, 0.0)
+        sym(pose, "tarsus", 0.95 * t, 0.0, 0.0)
         sym(pose, "mandible", 0.0, 0.30 * t, 0.0)
         # Legs buckle: femurs collapse outward, tibiae fold under.
         for i in range(len(LEG_RIG)):
@@ -990,10 +1070,12 @@ def measure_fold(arm, clips: list[str]) -> dict:
             arm.animation_data.action_slot = act.slots[0]
         scene.frame_set(frame)
         bpy.context.view_layer.update()
-        pb = {b: arm.pose.bones[b] for b in ("scapula_L", "brachium_L", "blade_L")}
+        pb = {b: arm.pose.bones[b]
+              for b in ("scapula_L", "brachium_L", "blade_L", "tarsus_L")}
         shoulder = from_zup(pb["brachium_L"].head)
         elbow = from_zup(pb["blade_L"].head)
         claw = from_zup(pb["blade_L"].tail)
+        foot = from_zup(pb["tarsus_L"].tail)
         femur = shoulder - elbow
         tibia = claw - elbow
         cos = femur.normalized().dot(tibia.normalized())
@@ -1001,6 +1083,7 @@ def measure_fold(arm, clips: list[str]) -> dict:
             "shoulder": [round(v, 3) for v in shoulder],
             "elbow": [round(v, 3) for v in elbow],
             "claw": [round(v, 3) for v in claw],
+            "foot": [round(v, 3) for v in foot],
             # The angle at the hinge. Zero is a limb folded flat onto
             # itself and 180 is one held straight out.
             "foldDeg": round(math.degrees(math.acos(max(-1.0, min(1.0, cos)))), 1),
@@ -1011,6 +1094,10 @@ def measure_fold(arm, clips: list[str]) -> dict:
             # reading as a wing.
             "clawAheadOfHead": round(max(claw.z, elbow.z) - HEAD_TIP.z, 3),
             "widestX": round(max(abs(shoulder.x), abs(elbow.x), abs(claw.x)), 3),
+            # The tarsus must never reach the sand: a dangling foot
+            # that intersects the ground reads as a broken rig, and
+            # the animal walks over dunes rather than a table.
+            "footClearance": round(min(claw.y, foot.y), 3),
         }
     return out
 

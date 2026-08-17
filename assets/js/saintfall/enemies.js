@@ -181,7 +181,7 @@ export const BESTIARY = {
     url: "assets/models/saintfall/matriarch.glb",
     faction: "bloom",
     health: 3600,
-    /* Shipped at 1:1: 5.05m tall, 6.93m wide and 11.25m long. There
+    /* Shipped at 1:1: 5.05m tall, 6.93m wide and 11.13m long. There
        is exactly one of these on the map, so the usual argument for
        tuning scale in engine - that proportion is read against the
        trooper standing next to it - is replaced by a different one:

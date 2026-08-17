@@ -4,12 +4,13 @@ The Gilded Reach's mantis had two problems, and they turned out to be the
 same problem seen from opposite ends: nobody had ever looked at it
 closely, and nobody had ever fought it for long.
 
-- **The forelimbs came out of the wrong place.** The raptorial coxa left
-  the *top* of the mesosoma travelling up and outboard, so the arm's
-  highest point was its elbow and its widest was its wrist, 2.05 m off a
-  centreline the body is 0.9 m thick at. From the front the pair read as
-  two horizontal paddles at head height — a stubby wing each side — and
-  from three-quarters as a fifth pair of legs.
+- **The forelimbs came out of the wrong place, and there were only
+  three of them.** The raptorial coxa left the *top* of the mesosoma
+  travelling up and outboard, so the arm's highest point was its elbow
+  and its widest was its wrist, 2.05 m off a centreline the body is 0.9 m
+  thick at. From the front the pair read as two horizontal paddles at
+  head height — a stubby wing each side. And the limb ended at the
+  tibia, tapering to a point, with no tarsus at all.
 - **The fight was `stepEnemy`.** It was the last district boss still on
   the generic walker brain: close to reach, bite on a 2.35 s cadence, and
   lay every fourteen seconds. Against a 3600-health pool that is a fight
@@ -23,36 +24,66 @@ brood clock that says *stop shooting the armour* — are kept and built on.
 
 ## The arms
 
-`scripts/blender/saintfall-matriarch.py`. A mantis forelimb is three
-segments in a Z and the order matters: the **coxa** drops from the front
-of the prothorax close to vertical, so the joint it carries hangs in
-front of the chest; the **femur** reaches down and forward from there,
-past the face; the **tibia** hinges at the far end and folds back along
-the femur, claw returning under the mouth. Facing rows of spines line the
-two inner edges — that is the grasping mechanism, and it is why the fold
-is a trap rather than two sticks.
+`scripts/blender/saintfall-matriarch.py`. A mantis forelimb is **four**
+segments, and both the count and the order matter:
+
+- **Coxa** — drops from the *front* of the prothorax, close to vertical,
+  so the joint it carries hangs in front of the chest. Unusually long
+  for an insect, and it is why a mantis holds its trap out ahead of
+  itself rather than at its ribs.
+- **Femur** — reaches *forward*, barely descending, past the face. The
+  thick one, carrying the big spine row on its **underside**.
+- **Tibia** — hinges at the far end and folds back and **down beneath**
+  the femur. Shorter and slimmer, its own finer spines pointing up into
+  the crook, ending in a hooked terminal claw.
+- **Tarsus** — the foot: a thin five-jointed thread hanging off the
+  tibia's apex, carrying nothing while the animal hunts. It is the
+  single most recognisable thing about the limb, and the detail that
+  stops the fold reading as a machined blade.
 
 | | before | after |
 |---|---|---|
+| segments | 3 (tibia tapering to a point) | **4**, + a terminal claw and a pretarsal hook |
 | coxa root | `(0.72, 3.95, 0.72)` — top of the mesosoma | `(0.40, 4.02, 0.92)` — front of the pronotum |
-| coxa travel | **up** 0.40 m, out 0.80 m | **down** 1.10 m, forward 0.54 m |
-| hinge angle at rest | 19° (effectively shut) | **42°** |
-| widest point of the arm | 2.05 m outboard | **0.82 m** — inside the shoulders |
-| femoral spines | pointing down, at nothing | pointing **up into the fold**, at the tibia's row |
-| tibial serrations | pointing down | pointing **down and back**, at the femur's row |
+| coxa travel | **up** 0.40 m, out 0.80 m | **down** 1.20 m, forward 0.36 m |
+| tibia folds | *up over* the femur, claw beside the face | **down beneath** it, claw under the crook |
+| hinge angle at rest | 19° (effectively shut) | **47°** |
+| widest point of the arm | 2.05 m outboard | **0.71 m** — inside the shoulders |
+| femoral spines | pointing down, at nothing | pointing **down into the crook**, at the tibia's row |
+| tibial serrations | pointing down | pointing **up and back**, at the femur's row |
+
+Three things had to be fixed in sequence, and each was only visible once
+the one before it was:
+
+1. The coxa leaving the top of the thorax — the paddles.
+2. Corrected to hang in front of the chest, but with the tibia folding
+   **up over** the femur and the claw tucked beside the face. That is a
+   fold, and it is the wrong one: a mantis closes its tibia *downward*
+   onto the femur's spined underside, which is why the trap hangs below
+   the arm and the animal looks like it is carrying something.
+3. Still only three segments. A limb that ends in its own tip is a tool;
+   the thread hanging past the claw is what makes it a leg.
 
 The old comment block in that file described a "triangle of negative
 space" the numbers did not contain: at 19° against limb radii of 0.3 the
 "hole" was about fifteen centimetres of air inside a metre of chitin. It
-is now a real hole, and 42° rather than the 33° the first pass of this
-rewrite used — at 33° the hinge reads correctly in the close view and
-closes up into one thick limb from anywhere further out, which is the
-same failure as before with less of it.
+is now a real hole at chest height, between a femur above and a tibia
+below.
+
+The tarsus is annulated (`kit.annulate(5, 0.24)`) so the five tarsomeres
+read at distance as a chain instead of a wire, and it is keyed to move
+further at rest than anything else on the animal — a dangling thread
+holding perfectly still is the thing that says *rigged prop*. It trails
+on the strike, curls up out of the way for the threat display, and is
+the reason `measure_fold` now also reports `footClearance`: at the brood
+pose's first tuck value it measured **0.37 m** off the sand, and a foot
+that close intersects the first dune the animal lays on.
 
 Every clip was re-keyed for the new rest pose. The scythe bones carry
-`align_z` now (`SCY_FEMUR_SWING` / `SCY_TIBIA_SWING`), so local +X is the
-hinge on every segment — positive lifts the femur and unfolds the tibia —
-instead of three measured guesses about whatever roll Blender computed.
+`align_z` now (`SCY_FEMUR_SWING` / `SCY_TIBIA_SWING` / `SCY_TARSUS_SWING`),
+so local +X is the hinge on every segment — positive lifts the femur,
+unfolds the tibia and curls the foot — instead of four measured guesses
+about whatever roll Blender happened to compute.
 
 ### The fold is measured, not eyeballed
 
@@ -60,9 +91,10 @@ Three revisions of this limb were argued from renders, and renders are
 the wrong instrument: a fold 19° open and a fold shut look identical from
 any angle where the arm is not side-on, and *"the arms come out the wrong
 way"* is a fact about a coxa vector that no screenshot states. The
-Blender script now exports a `fold` block with the model — claw position,
-hinge angle, forward reach and outboard width, per clip — and
-`saintfall-matriarch-review.mjs` prints it beside the pictures.
+Blender script now exports a `fold` block with the model — claw and foot
+position, hinge angle, forward reach, outboard width and ground clearance,
+per clip — and `saintfall-matriarch-review.mjs` prints it beside the
+pictures.
 
 It earned its keep immediately. The first re-keyed strike measured
 
@@ -78,13 +110,14 @@ and what actually extends is the **tibia** (`blade +2.10` against
 `brachium +0.22`) because the femur is already within 20° of its furthest
 forward reach at rest.
 
-| clip | hinge | claw | past the face |
+| clip | hinge | claw | foot clearance |
 |---|---|---|---|
-| idle | 41.8° | `(0.54, 3.86, 2.55)` | 1.44 m |
-| alert | 89.5° | `(1.16, 5.63, 2.71)` | 1.20 m |
-| strike wind-up | 29.6° | `(0.79, 4.09, 1.78)` | 1.43 m |
-| strike | 163.8° | `(-0.56, 1.55, 5.18)` | 3.18 m |
-| death | 10.8° | `(0.58, 1.96, 1.70)` | 1.35 m |
+| idle | 47.3° | `(0.63, 1.84, 2.43)` | 1.05 m |
+| alert | 94.9° | `(1.62, 3.10, 3.44)` | 3.10 m (curled up) |
+| strike wind-up | 34.9° | `(0.78, 2.74, 2.50)` | 2.15 m |
+| strike | 169.3° | `(-0.42, 1.67, 4.39)` | 1.65 m (trailing) |
+| brood | 41.0° | `(0.54, 1.13, 2.23)` | 1.09 m |
+| death | 15.8° | `(0.54, 1.38, 2.09)` | 0.80 m |
 
 The review harness also had its **view names off by ninety degrees** —
 the camera directions were world vectors read against a boss spawned at
@@ -178,6 +211,14 @@ in itself:
   puts the hole straight back. At 1.5 it follows a player holding station
   and cannot follow one who commits to a direction or breaks line.
 
+The review harness needed the same lesson twice. Its **view names were
+ninety degrees out**, and then — the first run after the boss got a
+moveset — every picture came out framed on an empty dune, because
+`matriarch.js` adopts every live Matriarch and a *hidden* player still
+has a position, so the subject spent the settle walking off to stalk it.
+It now holds the portrait subject with `encounterLocked` and frames on
+the animal rather than on the spawn point.
+
 Also fixed in the harness: `matriarch.status()` preferred the district
 animal by key, so with a probe copy on the map it described the *sleeping*
 Matriarch a kilometre away while the live one was mid-combo. It now
@@ -189,6 +230,7 @@ take an explicit instance.
 | harness | result |
 |---|---|
 | `saintfall-matriarch-fight` | **34/34** (was 19/19) |
+| the four-segment rebuild | re-ran all of the above unchanged |
 | `saintfall-matriarch-review` | 6 clips × 3–6 views + the fold block |
 | `saintfall-save-integrity` | 62/62 |
 | `saintfall-abbess-fight` | 39/39 (she still lays one, now with the moveset) |
@@ -196,8 +238,11 @@ take an explicit instance.
 | `saintfall-boss-audit` | Matriarch added: 3.67 ms/frame, 108 draws, 510 846 tris |
 | `saintfall-district-hunt-probe` | 31/33 — both failures are the Coulter's arena reset and reproduce identically on a clean HEAD |
 
-Model: 5.05 m × 6.93 m × 11.25 m (was 10.93 m long — the fold reaches
-further forward), 5824 verts, 10 423 tris, 46 bones. Unchanged budget.
+Model: 5.05 m × 6.93 m × 11.13 m (was 10.93 m long — the fold reaches
+further forward), 5962 verts, 10 659 tris, 48 bones (`tarsus_L/R` are
+new; both clear the runtime's `^(coxa|femur|tibia)\d+_(L|R)$` and the
+optimiser's `^(coxa|femur|tibia|foot)`, so their keys survive the strip).
+Unchanged budget: 3.67 ms/frame, the cheapest of the seven.
 
 Build pin `20260817-matriarch-moveset-1`.
 

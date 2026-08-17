@@ -99,6 +99,18 @@ try {
     T.clearEnemies();
     T.hidePlayer(true);
     const inst = T.spawnEnemy("matriarch", s.x, s.z, { yaw: Math.PI * 0.5 });
+    /* HOLD IT STILL. This is a portrait harness, and the day the
+       animal got an encounter module it stopped being a thing that
+       stands where you put it: `matriarch.js` adopts every live
+       Matriarch, and a hidden player still HAS a position, so the
+       boss spent the 1.6s settle walking off to stalk it. Every
+       picture in the first run after that came out framed on the
+       dune it had left. `encounterLocked` is the same gate
+       districtBosses holds a dormant boss with - the module declines
+       the instance entirely - and it does not touch visibility or
+       stop `playEnemyClip` driving the clips. */
+    const live = T.ctx.enemies.live.find((e) => e.key === "matriarch");
+    if (live) live.encounterLocked = true;
     T.advanceTime(1.6, 1 / 60);
     return inst;
   }, site);
@@ -141,8 +153,15 @@ try {
       if (clip !== "idle" && !["threequarter", "front", "fold"].includes(v.id)) continue;
       await page.evaluate(([s, spec]) => {
         const T = window.__SF;
-        const g = T.groundHeightAt(s.x, s.z);
-        const inst = T.ctx.enemies.live[0];
+        /* FRAMED ON THE ANIMAL, not on the site it was spawned at.
+           Belt and braces with the encounter lock above: a portrait
+           harness that hard-codes the spawn point produces a picture
+           of empty desert the moment anything moves the subject, and
+           says nothing while it does it. */
+        const inst = T.ctx.enemies.live.find((e) => e.key === "matriarch");
+        const cx = inst ? inst.x : s.x;
+        const cz = inst ? inst.z : s.z;
+        const g = T.groundHeightAt(cx, cz);
         const yaw = inst ? inst.yaw : 0;
         // Into the animal's frame: +z is the direction it faces.
         const sy = Math.sin(yaw);
@@ -151,9 +170,9 @@ try {
           spec.dir[2] * cy - spec.dir[0] * sy];
         const n = Math.hypot(d[0], d[1], d[2]);
         T.lookAt(
-          [s.x + (d[0] / n) * spec.dist, g + spec.aim + (d[1] / n) * spec.dist,
-            s.z + (d[2] / n) * spec.dist],
-          [s.x, g + spec.aim, s.z], spec.fov);
+          [cx + (d[0] / n) * spec.dist, g + spec.aim + (d[1] / n) * spec.dist,
+            cz + (d[2] / n) * spec.dist],
+          [cx, g + spec.aim, cz], spec.fov);
         for (let i = 0; i < 5; i += 1) T.renderStill();
       }, [site, v]);
       await grab(`${clip}-${v.id}`);

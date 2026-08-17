@@ -2,19 +2,34 @@
 
 ## Current milestone
 
+**95 — SAINTFALL: boss arena entry warning false alarm fixed** is implemented
+and gated; awaits user playtest. When crossing a boss perimeter, the fight's
+activation near the outer perimeter previously triggered `dist >= arenaRadius - EXIT_WARNING_BAND`
+immediately on entry, causing a false "WARNING — LEAVING BOSS AREA. FIGHT WILL RESET"
+announcement on the HUD. The boundary tracker in `assets/js/saintfall/district-bosses.js`
+now measures distance strictly from the arena center `(site.x, site.z)` and requires
+prior engagement with the arena interior (`enteredDeep = true` once `dist <= arenaRadius - exitBand - 2`)
+as well as outward retreat movement before arming or firing the exit warning. Verified
+across all district bosses + Fallen Saint Coulter with `scripts/saintfall-arena-entry-probe.mjs`
+and full `saintfall-district-hunt-probe.mjs` (33/33 PASS). Build pin `20260817-boss-boundary-fix-1`.
+
 **94 — SAINTFALL: the Matriarch gets arms, and a fight** is implemented
 and gated; awaits user playtest. Two faults with one cause — nobody had
 looked at the animal closely and nobody had fought it for long. Its
 raptorial coxa left the TOP of the mesosoma going up and outboard, so the
 arm's highest point was its elbow and its widest its wrist, 2.05 m off a
 0.9 m-thick centreline: from the front, two horizontal paddles at head
-height. And it was the last district boss still on `combat.stepEnemy` —
-close, bite on a 2.35 s cadence, lay every 14 s — which against 3600
-health is one decision taken once. The forelimb is re-authored as a real
-mantis Z (coxa dropping from the front of the pronotum, femur reaching
-down and forward past the face, tibia folded back under the mouth, facing
-spine rows), held **42° open** with the arm inside the shoulders (0.82 m
-outboard, was 2.05 m), and every clip re-keyed with `align_z` hinges. New
+height — and the limb had only three segments, ending in a tapered tibia
+with no tarsus. And it was the last district boss still on
+`combat.stepEnemy` — close, bite on a 2.35 s cadence, lay every 14 s —
+which against 3600 health is one decision taken once. The forelimb is
+re-authored with all **four** mantis segments: coxa dropping from the
+front of the pronotum, femur reaching forward past the face with its big
+spine row underneath, tibia folded back and DOWN beneath it (spines
+facing up into the crook, hooked terminal claw), and a thin five-jointed
+TARSUS dangling off the apex — held **47° open** with the arm inside the
+shoulders (0.71 m outboard, was 2.05 m), every clip re-keyed with
+`align_z` hinges. New
 module `assets/js/saintfall/matriarch.js`: it stalks a 6.2–11.5 m band, a
 two-scythe combo (three when roused at 45 %) on the melee-pass tell
 contract, a telegraphed 10.8 m LANCE against stand-off, and the CULL —

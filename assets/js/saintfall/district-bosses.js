@@ -101,7 +101,9 @@ export function buildDistrictBosses(ctx) {
   const boundary = new Map(DISTRICT_BOSS_SITES.map((site) => [site.key, {
     approachWarned: false,
     exitWarned: false,
+    enteredDeep: false,
     inside: false,
+    lastDist: null,
   }]));
 
   const eventId = (key) => `district-boss:${key}`;
@@ -434,19 +436,18 @@ export function buildDistrictBosses(ctx) {
         if (state) {
           state.approachWarned = false;
           state.exitWarned = false;
+          state.enteredDeep = false;
           state.inside = false;
+          state.lastDist = null;
         }
         continue;
       }
       const status = runtimeStatus(site);
-      const focusX = Number.isFinite(status?.x) ? status.x : site.x;
-      const focusZ = Number.isFinite(status?.z) ? status.z : site.z;
-      const dist = Math.min(
-        Math.hypot(ps.x - site.x, ps.z - site.z),
-        Math.hypot(ps.x - focusX, ps.z - focusZ),
-      );
+      const dist = Math.hypot(ps.x - site.x, ps.z - site.z);
       const warningRadius = site.warningRadius || site.arenaRadius + APPROACH_PADDING;
       const active = fightActive(status);
+      const exitBand = Math.min(EXIT_WARNING_BAND, Math.max(12, site.arenaRadius * 0.25));
+      const deepThreshold = site.arenaRadius - exitBand - 2;
 
       if (!active && dist > site.arenaRadius && dist <= warningRadius
         && !state.approachWarned) {
@@ -458,13 +459,23 @@ export function buildDistrictBosses(ctx) {
         state.approachWarned = false;
       }
 
-      if (active && dist >= site.arenaRadius - EXIT_WARNING_BAND
-        && dist <= site.arenaRadius && !state.exitWarned) {
+      // Mark the player as having penetrated inside the arena interior
+      if (dist <= deepThreshold) {
+        state.enteredDeep = true;
+        state.exitWarned = false;
+      }
+
+      // Exit warning only fires if the player was already engaged in the arena interior
+      // and is now moving outward into the boundary warning band
+      if (active && state.enteredDeep && dist >= site.arenaRadius - exitBand
+        && dist <= site.arenaRadius && !state.exitWarned
+        && (state.lastDist === null || dist >= state.lastDist - 0.05)) {
         state.exitWarned = true;
         const event = siteEvent(site, status);
         ctx.mission?.announce?.("WARNING — LEAVING BOSS AREA. FIGHT WILL RESET", 3.2);
         bus.emit("exitWarning", event);
       }
+
       if (active && dist > site.arenaRadius) {
         const event = siteEvent(site, status);
         resetArena(site);
@@ -472,11 +483,18 @@ export function buildDistrictBosses(ctx) {
         bus.emit("arenaReset", event);
         state.approachWarned = false;
         state.exitWarned = false;
+        state.enteredDeep = false;
         state.inside = false;
+        state.lastDist = null;
         continue;
       }
-      if (!active) state.exitWarned = false;
+
+      if (!active || dist > site.arenaRadius) {
+        state.exitWarned = false;
+        if (dist > site.arenaRadius) state.enteredDeep = false;
+      }
       state.inside = dist <= site.arenaRadius;
+      state.lastDist = dist;
     }
   }
 

@@ -17,7 +17,7 @@
    A leaping bug. Compact, armoured, and mostly hind leg: two enormous
    coiled springs that visibly compress before every jump and unload on
    the frame it leaves. Four small grasping forelegs that hold it to
-   the rock, and a downward-pointing spinneret it fires through.
+   the rock, and a bored maw in the head that it spits through.
 
    THE FIGHT IS VERTICAL, AND THAT IS THE WHOLE POINT
 
@@ -33,7 +33,7 @@
                aggro radius.
      ROUSE     3.4s. It unfolds, the plates open, and it looks down.
      PERCHED   THE FIGHT. It rakes the ground beneath it with its
-               spinneret and picks a new needle every few seconds.
+               volley and picks a new needle every few seconds.
                Hard to hit: small, ninety metres up, and behind its
                own rock as often as not.
      LEAP      A compressed spring, a launch, an arc, and a landing
@@ -826,8 +826,8 @@ export function buildStylite(ctx) {
        through the legs. */
     absorb: 0,
     absorbV: 0,
-    /* Volley recoil, so a bolt leaving the spinneret pushes the animal
-       instead of appearing from it. */
+    /* Volley recoil, so a bolt leaving the maw throws the head with
+       it instead of appearing from a face that never moved. */
     recoil: 0,
     /* Where the last hit landed, in body space, so the flinch and the
        ichor both know which side of the animal was struck. */
@@ -1058,7 +1058,7 @@ export function buildStylite(ctx) {
   body.rotation.order = "YXZ";
   group.add(body);
   let seamGlow = null;
-  let muzzleGlow = null;
+  let mawGlow = null;
 
   /* SECONDARY MOTION LIVES IN THESE TWO GROUPS.
 
@@ -1446,42 +1446,138 @@ export function buildStylite(ctx) {
     body.add(seamGlow);
   }
 
-  /* --- the spinneret --------------------------------------------
-     Slung under the abdomen and pointing DOWN, because everything it
-     shoots at is beneath it. It is also the only part of the animal
-     that glows, which is what makes a perched Stylite findable
-     against a hundred metres of dark rock. */
-  const spinneret = new THREE.Group();
-  spinneret.position.set(0, -0.9, -1.4);
-  body.add(spinneret);
-  {
-    const g = new THREE.ConeGeometry(0.52, 2.6, 6);
-    g.rotateX(Math.PI * 0.5);
-    g.translate(0, 0, -0.9);
-    spinneret.add(new THREE.Mesh(paint(g, 0.55, 0.85, [SHELL_DARK, GLOW_VIOLET]), shellMat));
-    /* And a muzzle on `seamMat`, so the thing shooting at you is the
-       brightest point on the animal and the direction it is pointing
-       is readable before the first bolt leaves it.
+  /* --- the maw ----------------------------------------------------
+     IT SPITS. It used to have a spinneret: a two-and-a-half-metre
+     glowing cone slung under the abdomen, pointing down, with a lit
+     bulb on the end of it. Removed on a direct art call - it read, in
+     one word, as a pink thing stuck to the animal's backside, and it
+     is the third emissive on this model to be removed for exactly
+     that reason. The other two are recorded where they used to be
+     (the ventral sac, and the knee pip on the hind spring): a bright
+     smooth blob hung off the REAR of a creature that is fought from
+     directly underneath will be read as an arse every single time, no
+     matter how the anatomy is justified.
 
-       NOTE, because it has already caused one wrong edit: this is NOT
-       the pink ball that used to sit under the abdomen. That was the
-       ventral sac, removed below. This one is much smaller, is at the
-       tip of the spinneret rather than on the belly, and earns its
-       place by saying where the volley is about to come from. If the
-       rear ever reads as cluttered again, recess this INSIDE the
-       cone's mouth as a lit aperture rather than deleting it. */
-    const muz = new THREE.SphereGeometry(0.4, 8, 6);
-    muz.scale(1, 1, 1.5);
-    muz.translate(0, 0, -2.05);
-    muzzleGlow = new THREE.Mesh(paint(muz, 1, 0.66, [GLOW_VIOLET, BELLY_HOT]), seamMat);
-    spinneret.add(muzzleGlow);
-    /* A bronze shroud where the spinneret leaves the abdomen. The
-       accent's third and last appearance, and it is here because this
-       is the part of the animal the player's eye is already on. */
-    const shroud = new THREE.CylinderGeometry(0.62, 0.50, 0.34, 6, 1, true);
-    shroud.rotateX(Math.PI * 0.5);
-    shroud.translate(0, 0, -0.22);
-    spinneret.add(new THREE.Mesh(paint(shroud, 0.85, 0, [BRASS_DARK, BRASS_LIT]), plateMat));
+     Two things were wrong with it beyond the read.
+
+       1. IT WAS NOT GATED. Everything else emissive on this animal
+          rides `seamGlow`, which is dark until the crust cracks - so
+          the one part of a "camouflaged" boss that glowed while it
+          slept was the barrel, and it hung below the rock the crust
+          could cover.
+       2. IT WAS A SECOND FOCAL POINT. The art direction allows this
+          animal ONE saturated spot and the belly already has it.
+
+     So the volley comes out of the head now, which is where an animal
+     that spits keeps its mouth. The whole assembly hangs off the
+     SKULL'S OWN CENTRE rather than off the aperture, so pitching it
+     to track the ground is a head nodding on its neck and the bore
+     stays seated in the shell at every angle - a pivot at the lip
+     would swing the socket out of the face the first time it aimed.
+
+     Nothing here is a cone stuck onto the silhouette: the bore is
+     sunk INTO the skull and the light is recessed inside it, which is
+     the fix the old muzzle's own note asked for and never got. */
+  const maw = new THREE.Group();
+  maw.name = "sf-stylite-maw";
+  maw.position.set(0, -0.18, 1.75);
+  body.add(maw);
+  /* The port is a NODE and not a number, so a harness asking "where do
+     the bolts actually come from" gets the answer the game uses rather
+     than a second copy of it that can drift. */
+  const mawPort = new THREE.Object3D();
+  mawPort.name = "sf-stylite-maw-port";
+  maw.add(mawPort);
+  {
+    /* The aperture, in the maw's frame, and the angle the bore points
+       below the head's axis. The skull is a 0.82 sphere scaled
+       (1, 0.8, 1.15), so its lower-front surface passes through
+       roughly y -0.24 z 0.77 - the lip sits just proud of that and
+       everything behind it is inside the head. */
+    const PITCH = 0.36;
+    const LIP_Z = 0.77;
+    const LIP_Y = -0.24;
+    /* Author along +z - out of the mouth - then tip and seat in one
+       place, so no part of this can drift away from the others the
+       way the crest's rails once did. */
+    const onMaw = (g) => {
+      g.rotateX(PITCH);
+      g.translate(0, LIP_Y, LIP_Z);
+      return g;
+    };
+    /* THE BORE. Open-ended and running BACK into the skull, on the
+       shell's own material - which is DoubleSide, so what the player
+       sees down the hole is the inside of the animal rather than a
+       hole in the mesh. Painted near-black: the depth is the whole
+       reason the light inside it reads as a throat and not as a
+       sticker. */
+    const bore = new THREE.CylinderGeometry(0.30, 0.15, 0.72, 7, 1, true);
+    bore.rotateX(Math.PI * 0.5);
+    bore.translate(0, 0, -0.30);
+    maw.add(new THREE.Mesh(paint(onMaw(bore), 0.16, 0, [SHELL_DARK, SHELL_EDGE]), shellMat));
+    /* THE LIP. Bronze, and it inherits the slot the spinneret's shroud
+       gave up - the accent still appears exactly three times on this
+       animal (crest rails, thoracic collar, and here), which is what
+       keeps "a lot of neutral, a little warm" true by area. It also
+       gives the mouth a hard bright edge, which is the only part of
+       this that survives ninety metres. */
+    const lip = new THREE.TorusGeometry(0.30, 0.075, 4, 9);
+    maw.add(new THREE.Mesh(paint(onMaw(lip), 0.9, 0, [BRASS_DARK, BRASS_LIT]), plateMat));
+    /* MANDIBLES. Two of them, hinged outboard of the lip and closing
+       across it. They are the reason this reads as a mouth rather
+       than as a port: a hole in a face is a hole, a hole with jaws on
+       it is a maw. They also break the head's silhouette, which was a
+       smooth ellipsoid and contributed nothing to the edge-density
+       measure. */
+    for (const side of [-1, 1]) {
+      const jaw = new THREE.ConeGeometry(0.115, 0.66, 5);
+      // Apex forward, then swung in and down across the aperture.
+      jaw.rotateX(Math.PI * 0.5);
+      jaw.translate(0, 0, 0.20);
+      jaw.rotateY(-side * 0.62);
+      jaw.rotateZ(side * 0.20);
+      jaw.translate(side * 0.34, -0.05, 0.06);
+      maw.add(new THREE.Mesh(paint(onMaw(jaw), 0.72, 0, [SHELL_DARK, SHELL_EDGE]), shellMat));
+    }
+    /* THE APERTURE, and it is RECESSED - the lit face sits back down
+       the bore, so at any angle off the axis the lip occludes part of
+       it and the light reads as coming from INSIDE the animal. That is
+       the difference between this and the thing it replaces, which was
+       a bulb on a stick.
+
+       On `seamMat`, so it is gated with every other emissive on the
+       model: dark while it is rock, up with the rouse, and it swells
+       on the wind-up (see `poseBody`) so the charge is legible at the
+       exact moment the bolt is about to leave.
+
+       AND IT IS PLACED ON THE NODE, not baked into the geometry the
+       way its neighbours are - which is the one exception in this
+       block and it is load-bearing. `poseBody` scales this mesh, and
+       scale is applied about the object's ORIGIN: with the offset
+       baked in, the origin is the skull's centre and a 1.35 swell
+       does not fatten the throat, it TRANSLATES it half a metre
+       forward and out through the lip. Measured, on the first pass -
+       the charge tell put the glowing funnel outside the mouth, which
+       is the pink-thing-stuck-on read arriving through the back door.
+
+       So the mesh origin is the funnel's own APEX, deep in the bore,
+       and the swell is mostly along z: the lit face travels UP the
+       bore toward the player as the volley loads and barely widens,
+       which is what keeps it inside a socket that narrows behind it. */
+    const gullet = new THREE.ConeGeometry(0.19, 0.40, 7);
+    gullet.rotateX(-Math.PI * 0.5);
+    gullet.translate(0, 0, 0.20);
+    mawGlow = new THREE.Mesh(paint(gullet, 1, 0.85, [GLOW_VIOLET, BELLY_HOT]), seamMat);
+    mawGlow.name = "sf-stylite-maw-glow";
+    mawGlow.rotation.x = PITCH;
+    mawGlow.position.set(0,
+      LIP_Y + Math.sin(PITCH) * 0.56,
+      LIP_Z - Math.cos(PITCH) * 0.56);
+    maw.add(mawGlow);
+    /* Where the bolt is actually born: on the axis, at the lip. */
+    mawPort.position.set(0,
+      LIP_Y - Math.sin(PITCH) * 0.06,
+      LIP_Z + Math.cos(PITCH) * 0.06);
   }
 
   /* --- the legs --------------------------------------------------
@@ -1641,8 +1737,9 @@ export function buildStylite(ctx) {
        the animal's rear, and it is the one the eye actually lands on.
 
        Two things made it the offender rather than the ventral sac or
-       the spinneret muzzle, and both are worth writing down because
-       this cost two wrong edits to find:
+       the abdominal spinneret - which was itself removed later, for
+       the same reason - and both are worth writing down because this
+       cost two wrong edits to find:
 
        1. IT IS NOT GATED. `seamGlow` - which carries the sac, the
           keel, the throat and the shell seams - is switched off
@@ -1902,8 +1999,8 @@ export function buildStylite(ctx) {
 
   function fireBolt() {
     const ps = ctx.player.state;
-    spinneret.updateWorldMatrix(true, false);
-    const o = new THREE.Vector3().setFromMatrixPosition(spinneret.matrixWorld);
+    mawPort.updateWorldMatrix(true, false);
+    const o = new THREE.Vector3().setFromMatrixPosition(mawPort.matrixWorld);
     /* Led, and led by the bolt's own travel time rather than a
        constant. From ninety metres up the flight is over a second, and
        a shot aimed at where the player is standing lands behind them
@@ -1927,8 +2024,8 @@ export function buildStylite(ctx) {
     b.mesh.position.copy(o);
     b.mesh.visible = true;
     /* Recovery, and it is the cheap half of the anticipation pair:
-       the windup pulls the spinneret in, the shot throws it back out.
-       Read by `poseBody`. */
+       the windup rears the head back off the target, the shot spits it
+       forward again. Read by `poseBody`. */
     state.recoil = Math.min(1.4, state.recoil + 0.85);
     ctx.vfx?.spark?.(o.x, o.y, o.z, 1.0, false, true);
     bus.emit("shot", { x: o.x, y: o.y, z: o.z });
@@ -2066,8 +2163,8 @@ export function buildStylite(ctx) {
       state.tumble * 1.3 + state.flinchR + state.deathRoll
     );
     /* On a perch it clings to the SIDE of the crown, not the top: the
-       whole animal pitches nose-down over the drop so its spinneret
-       points at the ground it is shooting at. */
+       whole animal pitches nose-down over the drop so its head points
+       at the ground it is shooting at. */
     if (!flying && sprawl < 0.5) {
       body.rotation.x += lerp(0, 0.42, wake) * (1 - sprawl);
       /* Breathing. Small, slow, and only while it is holding still:
@@ -2151,7 +2248,7 @@ export function buildStylite(ctx) {
       || (state.phase === "rouse"
         && Math.max(0, C.rouseSeconds - state.timer) > CRUST_SHED * 0.18);
     if (seamGlow) seamGlow.visible = cracked && lit > 0.01;
-    if (muzzleGlow) muzzleGlow.visible = cracked && lit > 0.01;
+    if (mawGlow) mawGlow.visible = cracked && lit > 0.01;
 
     /* THE SPRINGS. Three angles, and the whole leap lives in them.
        Gripping is a wide low stance; coiled folds the femur up against
@@ -2254,19 +2351,47 @@ export function buildStylite(ctx) {
       }
     }
 
-    // The spinneret tracks the ground it is firing at.
+    /* THE HEAD TRACKS THE GROUND IT IS SPITTING AT.
+
+       Only PART of the way, and that is not a compromise: the body
+       already pitches nose-down over the drop, so the head asking for
+       the full depression angle on top of that would bury its own chin
+       in the thorax. It takes 0.45 of the error inside a range a neck
+       could actually reach, and the aim itself is exact regardless -
+       `fireBolt` solves the bolt's direction from the port's world
+       position, not from where the head happens to be looking. What
+       the nod buys is the READ. */
     const ps = ctx.player?.state;
     if (ps && !flying) {
       const want = Math.atan2(
         state.pos.y - (ps.y + 1),
         Math.hypot(ps.x - state.pos.x, ps.z - state.pos.z)) - Math.PI * 0.5;
-      /* Plus the recoil. A bolt that leaves a barrel which does not
-         move is a bolt that was spawned, not fired - and the windup
-         pull-back before it is the telegraph a player answers. */
-      spinneret.rotation.x = damp(spinneret.rotation.x,
-        clamp(-want, -1.4, 0.35) + state.recoil * 0.42
-        - clamp01(state.volleyWind / Math.max(1e-4, C.volleyWindup)) * 0.22, 6, dt);
-      spinneret.position.z = damp(spinneret.position.z, -1.4 + state.recoil * 0.30, 12, dt);
+      /* Plus the anticipation pair. A bolt that leaves a face which
+         does not move is a bolt that was spawned, not spat: the windup
+         REARS - head back and nose up, off the target - and the shot
+         throws it forward again. */
+      const wind = clamp01(state.volleyWind / Math.max(1e-4, C.volleyWindup));
+      maw.rotation.x = damp(maw.rotation.x,
+        clamp(-want * 0.45, -0.52, 0.26) + state.recoil * 0.30 - wind * 0.26, 7, dt);
+      maw.position.z = damp(maw.position.z,
+        1.75 + state.recoil * 0.10 - wind * 0.09, 13, dt);
+      /* And the aperture SWELLS as the volley loads, which is the only
+         charge tell a player ninety metres below has. `volleyWind`
+         counts DOWN to the shot, so the swell is `1 - wind` and it has
+         to be gated on the windup being live or an idle animal would
+         sit at full charge between bursts. It rides the visibility
+         gate above, so a rock-covered Stylite still shows nothing. */
+      if (mawGlow) {
+        /* CLAMPED, and the ceiling is geometric rather than tasteful.
+           The funnel is 0.40 long with its apex 0.56 back from the
+           lip, so anything past 1.4 on z pushes the lit face out of
+           the mouth - which is the exact artefact this whole block
+           exists to avoid. 0.38 lands it flush with the lip at full
+           charge and no further. */
+        const charge = clamp01((state.volleyWind > 0 ? 1 - wind : 0)
+          + state.recoil * 0.5);
+        mawGlow.scale.set(1 + charge * 0.16, 1 + charge * 0.16, 1 + charge * 0.38);
+      }
     }
   }
 

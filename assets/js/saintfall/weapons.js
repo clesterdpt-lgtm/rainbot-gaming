@@ -117,7 +117,7 @@ const WOOD = makeRamp([
    hot centre is what turns the same two triangles into a glow, and
    it costs one 64px texture for the whole game. */
 let _flareTex = null;
-function flareTexture(THREE) {
+export function flareTexture(THREE) {
   if (_flareTex) return _flareTex;
   const size = 64;
   const canvas = document.createElement("canvas");
@@ -1186,6 +1186,23 @@ export function buildWeapons(ctx) {
       }
     } else if (carry.sinceShot >= (heatSpec.coolDelay || 0)) {
       carry.heat = Math.max(0, carry.heat - (heatSpec.coolRate || 0) * dt);
+    }
+    /* OVERHEAT is visible on the weapon, not only on the gauge: heat
+       haze and a thin bleed of steam off the ports while the lockout
+       holds, so a player looking at their hands knows why the trigger
+       is dead. Sparse - a few motes a second, not a vent. */
+    if (carry.overheated && carry.venting <= 0 && ctx.vfx?.weaponVent) {
+      carry.overheatBleed = (carry.overheatBleed || 0) + dt;
+      if (carry.overheatBleed >= 0.12) {
+        carry.overheatBleed = 0;
+        const port = carry.record.emitter || carry.record.muzzle;
+        if (port) {
+          port.updateWorldMatrix(true, false);
+          _ventAt.setFromMatrixPosition(port.matrixWorld);
+          ctx.vfx.weaponVent(_ventAt.x, _ventAt.y, _ventAt.z,
+            ctx.player?.state?.yaw || 0, 0.26);
+        }
+      }
     }
     // The lockout clears on the way DOWN, at a threshold well below
     // full. See `carry.overheated`.

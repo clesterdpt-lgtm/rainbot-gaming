@@ -8,6 +8,7 @@
 
 import { clamp, clamp01, damp, lerp } from "saintfall/core.js";
 import { patchMaterial } from "saintfall/art.js";
+import { flareTexture } from "saintfall/weapons.js";
 
 export const JETPACK_CONFIG = Object.freeze({
   maxFuel: 100,
@@ -447,21 +448,82 @@ function buildPack(ctx, player) {
 
   const nozzles = [];
   const flames = [];
-  const outerFlameMat = new THREE.MeshBasicMaterial({
-    name: "jetpack-flame-outer",
-    color: 0xffa63d,
-    transparent: true,
-    opacity: 0.48,
-    depthWrite: false,
-    depthTest: true,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide,
-    toneMapped: true,
-  });
-  const innerFlameMat = outerFlameMat.clone();
-  innerFlameMat.name = "jetpack-flame-inner";
-  innerFlameMat.color.setHex(0xfff2c2);
-  innerFlameMat.opacity = 0.92;
+  /* THE PLUME IS A SHADER, NOT A TINTED BOX.
+     Two translucent boxes at fixed opacity read as exactly that - a
+     pair of orange lampshades hanging off the pack. A rocket plume is
+     read from three things the boxes could not do: a white-hot throat
+     that goes gold and then transparent down its length, a fast
+     turbulence running away from the nozzle, and the bright ladder of
+     shock diamonds just outside the throat. Both sheets share one
+     program; the inner one is hotter and carries the diamonds. */
+  const FLAME_VERT = /* glsl */`
+    varying vec3 vLocal;
+    void main() {
+      vLocal = position;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `;
+  const FLAME_FRAG = /* glsl */`
+    uniform vec3 uHot;
+    uniform vec3 uCold;
+    uniform float uTime;
+    uniform float uThrottle;
+    uniform float uLength;
+    uniform vec2 uHalf;
+    uniform float uTaper;
+    uniform float uGain;
+    uniform float uInner;
+    varying vec3 vLocal;
+    void main() {
+      float t = clamp(-vLocal.y / uLength, 0.0, 1.0);
+      float w = mix(1.0, uTaper, t);
+      // Across each wall: 0 at the wall's middle, 1 at the corner, so
+      // the box reads as a rounded column of gas.
+      float sx = abs(vLocal.x) / max(0.001, uHalf.x * w);
+      float sz = abs(vLocal.z) / max(0.001, uHalf.y * w);
+      float across = 1.0 - pow(clamp(min(sx, sz), 0.0, 1.0), 2.0);
+      // Turbulence running away from the throat, two rates.
+      float turb = 0.72 + 0.28 * sin(t * 38.0 - uTime * 58.0 + sin(t * 9.0 + uTime * 13.0));
+      float turb2 = 0.85 + 0.15 * sin(t * 71.0 - uTime * 97.0);
+      float throat = exp(-t * t * 9.0);
+      float tail = pow(1.0 - t, 1.6);
+      float diamonds = pow(sin(t * 26.0 - uTime * 3.0) * 0.5 + 0.5, 7.0) * exp(-t * 5.0) * uInner;
+      float ends = smoothstep(0.0, 0.05, t) * (1.0 - smoothstep(0.85, 1.0, t));
+      float lum = (tail * (0.28 + across * 0.9) * turb * turb2 + throat * 0.9 + diamonds * 1.2)
+        * ends * (0.35 + uThrottle * 0.65) * uGain;
+      vec3 c = mix(uCold, uHot, clamp(throat * 1.2 + diamonds + across * 0.25 * (1.0 - t), 0.0, 1.0));
+      gl_FragColor = vec4(c * lum, 1.0);
+    }
+  `;
+  const flameMat = (inner) => {
+    const mat = new THREE.ShaderMaterial({
+      name: inner ? "jetpack-flame-inner" : "jetpack-flame-outer",
+      uniforms: {
+        uHot: { value: new THREE.Color(inner ? 0xfff8ea : 0xffe7b0) },
+        uCold: { value: new THREE.Color(inner ? 0xffb545 : 0xff8a2a) },
+        uTime: { value: 0 },
+        uThrottle: { value: 0 },
+        uLength: { value: inner ? 0.29 : 0.44 },
+        uHalf: { value: new THREE.Vector2(inner ? 0.037 : 0.071, inner ? 0.018 : 0.034) },
+        uTaper: { value: inner ? 0.30 : 0.38 },
+        uGain: { value: inner ? 1.35 : 0.85 },
+        uInner: { value: inner ? 1 : 0 },
+      },
+      vertexShader: FLAME_VERT,
+      fragmentShader: FLAME_FRAG,
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      forceSinglePass: true,
+      toneMapped: true,
+    });
+    mat.customProgramCacheKey = () => "sf-jet-flame";
+    return mat;
+  };
+  const outerFlameMat = flameMat(false);
+  const innerFlameMat = flameMat(true);
 
   /* ONE CENTRAL VECTOR CELL.
 
@@ -530,7 +592,35 @@ function buildPack(ctx, player) {
   inner.castShadow = false;
   outer.visible = false;
   inner.visible = false;
-  flames.push({ outer, inner });
+  /* The throat's glare: three crossed flare cards at the aperture, so
+     the pack has a hot point that blooms from any bearing - the plume
+     sheet is a sliver seen end on, and end on is exactly how the
+     chase camera sees it. */
+  const flareMat = new THREE.MeshBasicMaterial({
+    name: "jetpack-throat-flare",
+    color: 0xffd08a,
+    map: flareTexture(THREE),
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: true,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+  const flareRig = new THREE.Group();
+  flareRig.name = "jetpack-throat-flare";
+  const flareGeo = new THREE.PlaneGeometry(0.30, 0.30);
+  for (let i = 0; i < 3; i += 1) {
+    const quad = new THREE.Mesh(flareGeo, flareMat);
+    quad.rotation.set(Math.PI * 0.5, 0, (i / 3) * Math.PI);
+    quad.renderOrder = 890;
+    flareRig.add(quad);
+  }
+  flareRig.position.set(0, -0.05, 0);
+  flareRig.visible = false;
+  locator.add(flareRig);
+  flames.push({ outer, inner, flare: flareRig, flareMat });
 
   /* Author in figure-root metre space, then preserve that transform
      while reparenting to the imported Spine. Direct bone-local metre
@@ -591,10 +681,13 @@ function buildExhaust(ctx) {
     fragmentShader: /* glsl */`
       varying vec3 vColor;
       void main() {
-        float r = length(gl_PointCoord - vec2(0.5));
-        float a = 1.0 - smoothstep(0.22, 0.50, r);
+        // A cinder: hot point, short halo - not a soft disc.
+        vec2 d = gl_PointCoord - vec2(0.5);
+        float r2 = dot(d, d);
+        float a = exp(-r2 * 24.0) * 1.1 + pow(1.0 - smoothstep(0.0, 0.5, sqrt(r2)), 3.0) * 0.4;
+        a = clamp(a, 0.0, 1.0);
         if (a <= 0.01) discard;
-        gl_FragColor = vec4(vColor * 1.35, a * 0.72);
+        gl_FragColor = vec4(vColor * 1.45 * a, a * 0.8);
       }
     `,
   });
@@ -629,6 +722,7 @@ export function buildJetpack(ctx, player) {
   const exhaustCullMatrix = new THREE.Matrix4();
   const exhaustLocalPosition = new THREE.Vector3();
   let spawnAccumulator = 0;
+  let flameWasOn = false;
   let lastRawRequested = false;
   let wingSpread = 0;
   let boostVisualThrottle = 0;
@@ -1181,8 +1275,27 @@ export function buildJetpack(ctx, player) {
        masonry, but hide the free exhaust sheet until both wings are back
        outside that footprint. */
     const flameOn = flameThrottle > 0.025 && wallPlumeTuck <= 0.02;
+    /* Ignition: the first frame the plume lights is a burst, not a
+       fade-in - a throat of gas catching. */
+    if (flameOn && !flameWasOn && ctx.vfx?.jetIgnite) {
+      plumeDirection.set(0, -1, 0).applyQuaternion(nozzleQuaternion[0]).normalize();
+      ctx.vfx.jetIgnite(nozzlePosition[0].x, nozzlePosition[0].y, nozzlePosition[0].z,
+        plumeDirection.x, plumeDirection.y, plumeDirection.z, flameThrottle);
+    }
+    flameWasOn = flameOn;
     centralFlame.outer.visible = flameOn;
     centralFlame.inner.visible = flameOn;
+    if (centralFlame.flare) {
+      centralFlame.flare.visible = flameOn;
+      const g = flameThrottle * (0.55 + 0.45 * flicker);
+      centralFlame.flareMat.opacity = flameOn ? 0.55 + g * 0.65 : 0;
+      centralFlame.flare.scale.setScalar(0.7 + g * 0.6);
+    }
+    for (const m of [centralFlame.outer.material, centralFlame.inner.material]) {
+      if (!m.uniforms) continue;
+      m.uniforms.uTime.value = player.state.clock || 0;
+      m.uniforms.uThrottle.value = flameThrottle;
+    }
     centralFlame.outer.scale.set(
       lerp(0.62, 1, flameThrottle),
       lerp(0.38, 1, flameThrottle) * flicker * wallPlumeLength,

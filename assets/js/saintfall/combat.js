@@ -1598,7 +1598,9 @@ export function buildCombat(ctx) {
          death does, and scaling it off the hit capsule means a
          Harrow's death carries across the basin while a Thresher's
          stays local - which is also the correct relative importance. */
-      if (vfx && vfx.spark) {
+      if (vfx && vfx.deathBurst) {
+        vfx.deathBurst(inst.x, inst.y + box.y1 * 0.45, inst.z, box.r * 1.15, box.r > 1.5);
+      } else if (vfx && vfx.spark) {
         vfx.spark(inst.x, inst.y + box.y1 * 0.45, inst.z, box.r * 2.4);
       }
       const killEvent = { ...damageEvent, x: inst.x, z: inst.z };
@@ -1983,6 +1985,8 @@ export function buildCombat(ctx) {
     if (player.hp <= 0) {
       player.dead = true;
       player.respawnIn = 3.4;
+      const ps = ctx.player?.state;
+      if (ps && vfx && vfx.playerFall) vfx.playerFall(ps.x, ps.y, ps.z);
       bus.emit("playerDied", {});
     }
     return amount;

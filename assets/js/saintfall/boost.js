@@ -265,6 +265,7 @@ export function buildBoost(ctx, player) {
       boostIndex: state.boosts,
     });
     ctx.audio?.boostIgnite?.(ps.x, ps.z);
+    ctx.vfx?.boostLaunch?.(ps.x, ps.y, ps.z, state.directionX, state.directionZ, state.attack);
     return true;
   }
 

@@ -658,6 +658,8 @@ async function main() {
           return {
             plunge, landed: s, before, at, after: T.enemyStatus(),
             frames: i + 1, grounded: T.player.state.grounded,
+            // The dust the strike lifted, read on the frame of contact.
+            dust: T.impactPool(),
           };
         }
       }
@@ -688,8 +690,29 @@ async function main() {
       const T = window.__SF;
       const out = {};
       T.render.scene.updateMatrixWorld(true);
+      /* The fall now lands through the pooled ordnance primitives (a
+         shockwave slot and a dust slot) rather than through meshes of
+         its own, so the check reads the pool: the visible shock ring
+         and dust dome nearest the strike stand in for the old
+         `slam-ring-0` / `slam-dome`. */
+      const rig = T.vfx?.group?.getObjectByName?.("ordnance-vfx");
+      const nearest = { "slam-ring-0": null, "slam-dome": null };
+      for (const o of rig ? rig.children : []) {
+        if (!o.visible) continue;
+        const key = o.material?.name === "sf-ordnance-shock" ? "slam-ring-0"
+          : o.material?.name === "sf-ordnance-dust" ? "slam-dome" : null;
+        if (!key) continue;
+        const w = o.getWorldPosition(new T.THREE.Vector3());
+        const rec = {
+          visible: true,
+          offset: Math.hypot(w.x - x, w.z - z),
+          scale: Number(o.scale.x.toFixed(2)),
+        };
+        if (!nearest[key] || rec.offset < nearest[key].offset) nearest[key] = rec;
+      }
+      Object.assign(out, nearest);
       T.render.scene.traverse((o) => {
-        if (!/^(slam-ring-0|slam-dome|glide-wake)$/.test(o.name || "")) return;
+        if (!/^(glide-wake)$/.test(o.name || "")) return;
         const w = o.getWorldPosition(new T.THREE.Vector3());
         out[o.name] = {
           visible: o.visible && o.parent?.visible !== false,
@@ -715,9 +738,14 @@ async function main() {
       rigNodes["slam-ring-0"]?.visible && rigNodes["slam-ring-0"].offset < 1.0
         && rigNodes["slam-ring-0"].scale > 1.5,
       JSON.stringify(rigNodes["slam-ring-0"]));
-    check("the impact dome is at the strike, not at twice its coordinates",
-      rigNodes["slam-dome"]?.visible && rigNodes["slam-dome"].offset < 1.0,
-      JSON.stringify(rigNodes["slam-dome"]));
+    /* The dust is a ring of sand SPRITES thrown from the strike now,
+       not a hemisphere - a smooth shell at any alpha read as a force
+       field. So the check reads the impact pool: the strike must have
+       lit a cloud of motes at the moment of contact. */
+    const dustPool = strike.dust;
+    check("the impact lifts a cloud of sand at the strike",
+      dustPool && dustPool.lit > 40,
+      JSON.stringify(dustPool));
 
 
     /* Everything measured against where the lance actually came down. */

@@ -984,6 +984,52 @@ export async function buildWorld(ctx, onProgress) {
     const d = DISTRICTS.saint;
     const rng = makeRng(0x5a17ff);
 
+    /* ONE PATINA RULE FOR THE WHOLE STATUE.
+
+       The head, the Reaching Hand and the Breastplate are three
+       pieces of ONE bronze, scattered across half the basin, and a
+       player who walks between them will compare them whether or not
+       anyone intended it. They used to carry three separately
+       hand-tuned formulas, and two of them ran the rule backwards -
+       `up * 0.42` and `up * 0.5`, upward faces BRIGHT - so once the
+       head was corrected to pool patina where water actually sits,
+       the fragments stopped reading as the same metal as the head
+       they broke off.
+
+       Both halves of the frame matter, and one of them is a decision
+       rather than a convenience:
+
+       PATINA IS PAINTED IN LOCAL SPACE, BEFORE THE PIECE IS TIPPED.
+       The statue stood for centuries and corroded while it stood;
+       THEN it fell. So "up" for weathering is the statue's own up,
+       not the world's - which is why the head's paint runs before its
+       transform, and why the other two now do the same. Painting a
+       fallen fragment in world space would put fresh verdigris on
+       whatever face happens to point at the sky today, which is a
+       statement that the corrosion happened after the fall. */
+    const saintPatina = ({ up, front, heightFrac, ang, reach = 0, runoffMask = null }) => {
+      // Water SITS on upward faces, so they corrode hardest; steep
+      // faces shed and keep their metal. Strong and narrow rather
+      // than moderate and broad - see the head's own note on why the
+      // distribution has to be bimodal.
+      const pooling = Math.pow(clamp01(up), 1.5) * 0.55;
+      const shed = (1 - Math.abs(up)) * 0.18;
+      // Vertical runoff streaks, cubed so each is a narrow dark line
+      // with clean metal either side.
+      const stripe = Math.pow(
+        Math.abs(Math.sin(ang * 11.0 + Math.sin(ang * 3.0) * 1.6)), 3.0
+      );
+      const mask = runoffMask === null ? clamp01(1 - heightFrac) : runoffMask;
+      const runoff = stripe * clamp01(mask) * 0.55;
+      // Rubbed bright where hands reach.
+      const rubbed = reach * front * 0.16;
+      return clamp01(
+        0.42 + front * 0.34 + shed + rubbed
+        - pooling - runoff
+        + clamp01(heightFrac) * 0.05
+      );
+    };
+
     /* --- the head --- */
     {
       // Sized to be legible from the drop, 950m away, where it has
@@ -1012,18 +1058,26 @@ export async function buildWorld(ctx, onProgress) {
       {
         const nrm = g.attributes.normal;
         paintGeometry(THREE, g, BRONZE_RAMP, (x, y, z, i) => {
-          const up = nrm.getY(i);
-          const front = clamp01(z / (S * 0.55));
           const inEye = Math.abs(x) > S * 0.09 && Math.abs(x) < S * 0.26
             && y > S * 0.50 && y < S * 0.74 && z > S * 0.42;
           if (inEye) return 0.02;
-          const streak = Math.sin(x * 0.09 + z * 0.07) * 0.5 + 0.5;
-          // Rain and dust run DOWN, so patina survives low and
-          // gold survives on the upward and forward faces.
-          return clamp01(
-            0.28 + up * 0.26 + front * 0.30
-            + clamp01(y / (S * 1.05)) * 0.12 + streak * 0.09
-          );
+          const front = clamp01(z / (S * 0.55));
+          /* The head names its own runoff sources rather than taking
+             the generic "everything below the top" mask: the laurel
+             band and the eye sockets are the two real water traps on
+             a face, and streaking from THEM is what makes the patina
+             look like it was placed by rain instead of by a falloff. */
+          const belowLaurel = clamp01((0.80 * S - y) / (S * 0.55));
+          const belowEyes = clamp01((0.60 * S - y) / (S * 0.42)) * clamp01(front * 1.4);
+          return saintPatina({
+            up: nrm.getY(i),
+            front,
+            heightFrac: clamp01(y / (S * 1.05)),
+            ang: Math.atan2(x, z),
+            // The hand-height band pilgrims can actually touch.
+            reach: 1 - clamp01(Math.abs(y - 0.10 * S) / (S * 0.18)),
+            runoffMask: belowLaurel * 0.7 + belowEyes * 0.8,
+          });
         }, { jitter: 0.13 });
       }
       /* Tipped back and rolled, part sunk. Reading as fallen rather
@@ -1078,14 +1132,25 @@ export async function buildWorld(ctx, onProgress) {
       const g = kit.saintHand({ size: S, curl: 0.42 });
       const hx = d.x + 232;
       const hz = d.z - 176;
+      /* Painted BEFORE the transform - see the patina note above.
+         The hand corroded while the arm was still raised, so its
+         weathering is keyed to the wrist-to-fingertip axis it had
+         then, not to whichever facet points at the sky now. */
+      {
+        const nrm = g.attributes.normal;
+        paintGeometry(THREE, g, BRONZE_RAMP, (x, y, z, i) => saintPatina({
+          up: nrm.getY(i),
+          // The palm faces local +Z, and it is the side that stayed
+          // polished - the surface an upturned hand sheds rain off.
+          front: clamp01(z / (S * 0.22)),
+          heightFrac: clamp01(y / (S * 1.5)),
+          ang: Math.atan2(x, z),
+        }), { jitter: 0.12 });
+      }
       kit.transform(g, {
         pos: [hx, H(hx, hz) - S * 0.42, hz],
         rot: [0.30, -0.9, 0.20],
       });
-      paintGeometry(THREE, g, BRONZE_RAMP, (x, y, z, i) => {
-        const nrm = g.attributes.normal;
-        return clamp01(0.20 + nrm.getY(i) * 0.42 + clamp01((y - H(hx, hz)) / (S * 0.9)) * 0.36);
-      }, { jitter: 0.12 });
       batch.add("saint", "bronze", g);
       pois.push({ id: "saint-hand", name: "The Reaching Hand", x: hx, z: hz });
     }
@@ -1120,11 +1185,24 @@ export async function buildWorld(ctx, onProgress) {
       const g = kit.merge(parts);
       const tx = d.x - 214;
       const tz = d.z + 62;
-      kit.transform(g, { pos: [tx, H(tx, tz) - 20, tz], rot: [0.1, 1.15, 0.34] });
-      paintGeometry(THREE, g, BRONZE_RAMP, (x, y, z, i) => {
+      /* Painted before the transform, on the same reasoning as the
+         hand: this is chest plate, and it weathered hanging on a
+         standing torso. Its outward (convex) face is local +Y here,
+         because the plate is built lying in the XY plane and only
+         stood on its edge by the transform below - so `up` and
+         `front` both key off that, and the concave inner surface
+         (the cave a player walks into) correctly reads as the
+         sheltered, unweathered side. */
+      {
         const nrm = g.attributes.normal;
-        return clamp01(0.14 + nrm.getY(i) * 0.5 + clamp01((y - H(tx, tz)) / 60) * 0.3);
-      }, { jitter: 0.16 });
+        paintGeometry(THREE, g, BRONZE_RAMP, (x, y, z, i) => saintPatina({
+          up: nrm.getY(i),
+          front: clamp01(nrm.getY(i) * 0.5 + 0.5),
+          heightFrac: clamp01((y + R) / (R * 2)),
+          ang: Math.atan2(x, z),
+        }), { jitter: 0.16 });
+      }
+      kit.transform(g, { pos: [tx, H(tx, tz) - 20, tz], rot: [0.1, 1.15, 0.34] });
       batch.add("saint", "bronze", g);
       pois.push({ id: "saint-shell", name: "The Breastplate", x: tx, z: tz });
     }

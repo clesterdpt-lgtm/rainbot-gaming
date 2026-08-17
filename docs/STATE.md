@@ -2,6 +2,56 @@
 
 ## Current milestone
 
+**91 — SAINTFALL: the VFX pass** is complete. Every effect in the game
+was catalogued (165 `vfx.*` call sites plus the inline effects in shield /
+jetpack / weapons / bosses / mission) and photographed through a new
+harness, `scripts/saintfall-vfx-sheet.mjs`, which fires seventeen scenes
+through the REAL systems and writes before/after strips. The basic ones
+were rebuilt on a shader foundation: the impacts pool draws five
+procedural sprite shapes (disc / glint / ember / smoke / shard) with new
+ichor and sand bands instead of one soft disc; a new GPU-integrated
+**sparks** pool draws velocity-stretched streaks; the ordnance beam,
+shockwave and dust primitives are shaders (chord term with a hot core,
+annulus + skirt so the level camera reads a wave, mottled dust that tears
+as it dies); the glaive leaves a crescent ribbon; `blast`, `spark`, the
+three stratagems and the Penitent's Fall were re-authored on them; enemy
+death is a teal rupture (`deathBurst`), the Aegis plate is a rose-window
+shader with an impact ripple from where the blow landed and a perfect-
+guard flash, the Seraph dome a cathedral dome, the jetpack plume a shader
+with a throat flare and ignition burst, mission beacons lit-air columns,
+and the player's own death an ascension. Found and fixed: `abbess.js`
+called an unexported `scorchFx` (three stain sites silently dead), and
+`ctx.patchBasic` never existed so beacons had no atmosphere fade. Traps
+recorded in the milestone: a `smoothstep` with equal edges is NaN and the
+NaN survives `mix()` into every other sprite kind (every glint rendered as
+an opaque square); a backtick in a GLSL comment; a free camera freezes the
+figure. `saintfall-gameplay.mjs` 55/55, `saintfall-movement-probe.mjs`
+62/62, shield light count stable, perf +1 draw call. Two failures in
+`saintfall-command-shots.mjs` (gilded probe shots) and nine in
+`saintfall-talent-feedback.mjs` are pre-existing at HEAD (verified in a
+worktree). Build key `20260817-vfx-aaa-1`.
+
+**90 — SAINTFALL: Craft on the Fallen Saint** is complete. The map's one
+dominant landmark read as basic, and a new harness
+(`scripts/saintfall-saint-shots.mjs`, which shoots the four distances the Saint
+is genuinely seen from plus a full ring and both fragments) showed why: a
+featureless smooth dome from underneath, a face that did not read as a face
+from the road, and a patina that ran backwards. The paint was `up * 0.26` —
+upward faces gold — which is an ambient-occlusion curve wearing a patina's
+clothes; water *sits* on horizontal bronze so it corrodes hardest there.
+Rebuilt as pooling + vertical runoff streaks anchored to the real water traps
+(under the laurel band, under the eye sockets), retuned to be bimodal after a
+first pass landed most of the skull in `BRONZE_RAMP`'s sage/olive mid-band and
+read as chalky mint. The head, the Reaching Hand and the Breastplate now share
+one `saintPatina()` rule painted in LOCAL space before each piece is tipped —
+the statue corroded while it stood, then fell. Geometry gained casting seams,
+rivet courses, a brow shelf, recessed eye sockets and a mouth line (+1,128
+triangles, zero extra draw calls). Found and fixed on the way: a `ringSolid`
+ring is a polygon inscribed in an ellipse, so rivets placed on the ellipse
+radius floated ~4 m proud of their own facet — `polyRadiusFactor()` now seats
+surface-mounted detail correctly. `saintfall-gameplay.mjs` 55/55,
+`saintfall-collision-audit.mjs` 12/12.
+
 **89 — SAINTFALL Doctrine board** is complete. The capstone Vow was painting
 straight over the rite grid: `.sf-doctrine__order` is an `auto minmax(0,1fr)
 auto` grid, and while that middle track collapses to zero on a short playfield,

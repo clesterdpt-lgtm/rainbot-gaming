@@ -1652,8 +1652,15 @@ export function makeKit(THREE) {
        and noticeably deeper front-to-back than it is wide - a head
        modelled on a sphere reads as a pumpkin no matter what is
        carved onto the front of it. The 0.78 width factor is doing
-       most of the work here. */
-    geos.push(ringSolid([
+       most of the work here.
+
+       Held as a NAMED TABLE rather than inline, because the casting
+       seams below have to sit exactly on this surface. Deriving them
+       by interpolating these same rings is the only way they cannot
+       drift: a seam authored from its own hand-copied numbers looks
+       right until someone tunes the skull, and then floats a metre
+       off it or sinks inside it, and nothing in the build fails. */
+    const craniumRings = [
       { y: -0.06 * s, rx: 0.15 * s, rz: 0.20 * s, sides: 9, phase: 0.2 },
       { y: 0.08 * s, rx: 0.25 * s, rz: 0.33 * s, sides: 9, phase: 0.2 },
       { y: 0.26 * s, rx: 0.34 * s, rz: 0.45 * s, sides: 9, phase: 0.3 },
@@ -1662,7 +1669,108 @@ export function makeKit(THREE) {
       { y: 0.88 * s, rx: 0.37 * s, rz: 0.47 * s, sides: 9, phase: 0.5 },
       { y: 1.02 * s, rx: 0.24 * s, rz: 0.31 * s, sides: 9, phase: 0.5 },
       { y: 1.08 * s, rx: 0.08 * s, rz: 0.10 * s, sides: 9, phase: 0.6 },
-    ]));
+    ];
+    geos.push(ringSolid(craniumRings));
+
+    /* A ring here is a POLYGON inscribed in an ellipse, not the
+       ellipse itself, and anything mounted on the surface has to
+       know the difference. At nine sides a facet's midpoint sits at
+       cos(pi/9) = 0.94 of the nominal radius, so a stud placed on
+       the ellipse floats ~6% of the radius proud of the flat it is
+       supposed to be bolted to - which on a 43m cheek is nearly four
+       metres of daylight under it. That is exactly how the first
+       pass of the rivet courses came out: a ring of boxes hovering
+       around the skull. This returns the factor that puts a point on
+       the real facet. */
+    const polyRadiusFactor = (a, sides, phase) => {
+      const seg = TAU / sides;
+      let local = (a - (phase || 0)) % seg;
+      if (local < 0) local += seg;
+      return Math.cos(seg * 0.5) / Math.cos(local - seg * 0.5);
+    };
+
+    /* Sample the cranium's own profile at an arbitrary height. */
+    const craniumAt = (yy) => {
+      let a = craniumRings[0];
+      let b = craniumRings[craniumRings.length - 1];
+      for (let i = 0; i < craniumRings.length - 1; i += 1) {
+        if (yy >= craniumRings[i].y && yy <= craniumRings[i + 1].y) {
+          a = craniumRings[i]; b = craniumRings[i + 1];
+          break;
+        }
+      }
+      const t = clamp01((yy - a.y) / ((b.y - a.y) || 1));
+      return {
+        rx: lerp(a.rx, b.rx, t), rz: lerp(a.rz, b.rz, t),
+        phase: lerp(a.phase || 0, b.phase || 0, t),
+      };
+    };
+
+    /* CASTING SEAMS, and the reason a hundred metres of bronze needs
+       them at all.
+
+       Nobody casts a colossus in one piece. It is poured in sections
+       and bolted, and the flanges where those sections meet are the
+       most visible thing on any real monumental bronze - the Statue
+       of Liberty is a lesson in exactly this. Without them the skull
+       is a single smooth shell, which is why it read as an egg from
+       the road and as an untextured dome from underneath: at a
+       hundred metres across there was not one edge on it to catch
+       the light or give the eye a scale reference.
+
+       They are also the only detail here that works at EVERY
+       distance. A seam is a hard line, so it survives haze at 900m
+       where surface colour does not; up close it is a real step with
+       a real shadow. Two horizontal courses and one vertical spine,
+       which is a plausible way to actually mould a head. */
+    const seamBand = (yy, proud, thick) => {
+      const p = craniumAt(yy);
+      return ringSolid([
+        { y: yy - thick, rx: p.rx * proud, rz: p.rz * proud, sides: 9, phase: p.phase },
+        { y: yy, rx: p.rx * (proud + 0.012), rz: p.rz * (proud + 0.012), sides: 9, phase: p.phase },
+        { y: yy + thick, rx: p.rx * proud, rz: p.rz * proud, sides: 9, phase: p.phase },
+      ], { capTop: false, capBottom: false });
+    };
+    geos.push(seamBand(0.30 * s, 1.012, 0.018 * s));
+    geos.push(seamBand(0.63 * s, 1.012, 0.016 * s));
+
+    /* Rivets along both courses. Deliberately chunky - at this scale
+       a realistic bolt is sub-pixel from anywhere the head is framed,
+       so these are sized to read as a dotted line of highlights
+       rather than as individual fasteners. */
+    for (const [yy, count] of [[0.30 * s, 22], [0.63 * s, 20]]) {
+      const p = craniumAt(yy);
+      for (let i = 0; i < count; i += 1) {
+        const a = (i / count) * TAU + p.phase;
+        // Seated on the real facet, and only just proud of the seam
+        // band it studs (which is itself at 1.012).
+        const f = polyRadiusFactor(a, 9, p.phase) * 1.018;
+        const stud = prism({ h: 0.020 * s, rBottom: 0.013 * s, rTop: 0.009 * s, sides: 5 });
+        stud.rotateX(Math.PI / 2);
+        stud.rotateY(-a);
+        stud.translate(
+          Math.cos(a) * p.rx * f, yy, Math.sin(a) * p.rz * f
+        );
+        geos.push(stud);
+      }
+    }
+
+    /* The vertical spine seam, up the BACK only - a mould line the
+       sculptor would have hidden away from the face. */
+    for (let i = 0; i < 9; i += 1) {
+      const t = i / 8;
+      const yy = lerp(0.02 * s, 0.98 * s, t);
+      const p = craniumAt(yy);
+      // Straight out the back: angle -pi/2 in this ring's own frame,
+      // seated on the facet there rather than on the ellipse.
+      const back = -Math.PI / 2;
+      const f = polyRadiusFactor(back, 9, p.phase) * 1.01;
+      const plate = prism({ h: 0.13 * s, rBottom: 0.022 * s, rTop: 0.018 * s, sides: 4 });
+      plate.scale(1, 1, 0.45);
+      plate.translate(0, 0, -p.rz * f);
+      plate.translate(0, yy, 0);
+      geos.push(plate);
+    }
 
     // Chin: the head has to end in something, or the underside
     // reads as where the model was cut off.
@@ -1691,15 +1799,64 @@ export function makeKit(THREE) {
     ridge.translate(0, 0, 0.53 * s);
     geos.push(ridge);
 
-    // Eye slits: deep recessed wedges. The darkness inside is the
-    // expression.
+    /* BROW SHELF. The single thing that makes a colossal face read
+       as a face from a distance.
+
+       An eye slit on its own is a dark mark on a bright panel, and
+       at 250m a dark mark is just a hole - which is exactly what the
+       head looked like from the road. What reads is the SHADOW a
+       heavy brow throws down into the socket: it is large, it moves
+       with the sun, and it survives haze because it is a value
+       block rather than a detail. Egyptian and Art Deco colossi both
+       lean on this and for the same reason.
+
+       Proud of the face plate and angled down, so the shadow falls
+       across the eyes rather than above them. */
+    {
+      const brow = extrudeZ([
+        [-0.36 * s, 0.635 * s], [-0.30 * s, 0.695 * s], [0.30 * s, 0.695 * s],
+        [0.36 * s, 0.635 * s], [0.30 * s, 0.650 * s], [-0.30 * s, 0.650 * s],
+      ], 0.12 * s);
+      brow.rotateX(-0.22);
+      brow.translate(0, 0, 0.50 * s);
+      geos.push(brow);
+    }
+
+    /* Eye sockets: a recessed BOX behind the slit, not just the slit.
+       A wedge cut into a surface still shows its own lit back face at
+       most angles and reads as a painted-on shape; giving the socket
+       real interior depth means what the player sees is unlit
+       cavity, which is the "darkness IS the expression" this was
+       always after. */
     for (const sx of [-1, 1]) {
+      const socket = prism({ h: 0.20 * s, rBottom: 0.075 * s, rTop: 0.055 * s, sides: 4 });
+      socket.scale(1, 1, 2.2);
+      socket.rotateX(Math.PI / 2);
+      socket.rotateZ(sx * 0.16);
+      socket.translate(sx * 0.16 * s, 0.60 * s, 0.44 * s);
+      geos.push(socket);
+
       const eye = prism({ h: 0.16 * s, rBottom: 0.045 * s, rTop: 0.02 * s, sides: 4 });
       eye.scale(1, 1, 2.6);
       eye.rotateX(Math.PI / 2);
       eye.rotateZ(sx * 0.16);
       eye.translate(sx * 0.16 * s, 0.60 * s, 0.50 * s);
       geos.push(eye);
+    }
+
+    /* A closed mouth line, cut as a shallow recess rather than
+       modelled as lips - the Saint is a helm-faced Concord idol, not
+       a portrait, and an actual mouth on something this size drifts
+       toward the uncanny. What it buys is a third horizontal in the
+       face's value structure (brow, eyes, mouth), which is what stops
+       the lower half reading as blank plate. */
+    {
+      const mouth = extrudeZ([
+        [-0.19 * s, 0.235 * s], [-0.16 * s, 0.265 * s], [0.16 * s, 0.265 * s],
+        [0.19 * s, 0.235 * s], [0.16 * s, 0.248 * s], [-0.16 * s, 0.248 * s],
+      ], 0.10 * s);
+      mouth.translate(0, 0, 0.505 * s);
+      geos.push(mouth);
     }
 
     // Cheek buttresses.

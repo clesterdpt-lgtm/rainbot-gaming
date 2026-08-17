@@ -232,7 +232,10 @@ try {
     T.spawnEnemy("harrow", site[0], site[1] - 16, { yaw: 0 });
     T.player.spawn(site[0], site[1], Math.PI);
     const spec = T.ctx.mission.stratagems.resupply;
-    const target = T.ctx.enemies.live[0];
+    /* The live list also carries every dormant boss on the map, and
+       `live[0]` was the Matriarch two kilometres away - untouchable
+       while dormant, so every probe shot "missed". Take the Harrow. */
+    const target = T.ctx.enemies.live.find((e) => e.key === "harrow") || T.ctx.enemies.live[0];
 
     /* What a shot is worth, measured against a target that is put BACK
        every time. A wounded Harrow charges at 5.4m/s, and three seconds

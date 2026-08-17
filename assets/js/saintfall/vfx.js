@@ -1274,7 +1274,23 @@ export function buildVfx(ctx, world) {
      oldest spark, which nobody will ever notice; growing the buffer
      mid-fight would be felt by everyone.
      ============================================================ */
-  const IMPACT_MAX = 512;
+  const IMPACT_MAX = 640;
+  /* Sprite SHAPES. Every particle in the game used to be the same
+     soft disc, and a soft disc at any size reads as one thing only:
+     bokeh. What separates a hit from a puff, a cinder from a spore,
+     is the silhouette of the individual mote - so the pool now draws
+     five procedural shapes, chosen per particle by the emitter:
+       0 disc   - the old soft falloff, kept for dust and gas
+       1 glint  - a four-point star with a hot core: reliquary ions,
+                  hit sparkle, anything that should read as LIGHT
+       2 ember  - a small hot point with a short halo: cinders, rite
+                  motes, anything that should read as something burning
+       3 smoke  - a soft, irregular, dimmer puff: sand and vapour
+       4 shard  - a thin rotated sliver: chitin, stone, debris
+     They are drawn from distance fields in the fragment shader rather
+     than from a texture, so they stay crisp at every size and cost no
+     asset. */
+  const IK_DISC = 0, IK_GLINT = 1, IK_EMBER = 2, IK_SMOKE = 3, IK_SHARD = 4;
   const impacts = (() => {
     const geo = new THREE.BufferGeometry();
     const pos = new Float32Array(IMPACT_MAX * 3);
@@ -1288,12 +1304,15 @@ export function buildVfx(ctx, world) {
        AFTERMATH: a capstone's embers died in the same two-thirds of a
        second as a ricochet, so no rite ever had a settling phase. */
     const span = new Float32Array(IMPACT_MAX).fill(0.62);
+    // Shape id + a per-particle rotation seed, packed: kind + seed/8.
+    const kind = new Float32Array(IMPACT_MAX);
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     geo.setAttribute("aVel", new THREE.BufferAttribute(vel, 3));
     geo.setAttribute("aBirth", new THREE.BufferAttribute(birth, 1));
     geo.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
     geo.setAttribute("aTint", new THREE.BufferAttribute(tint, 1));
     geo.setAttribute("aSpan", new THREE.BufferAttribute(span, 1));
+    geo.setAttribute("aKind", new THREE.BufferAttribute(kind, 1));
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 4000);
 
     const mat = new THREE.ShaderMaterial({
@@ -1317,6 +1336,16 @@ export function buildVfx(ctx, world) {
         // Cool, barely-blue vapour. Kept close to neutral so it reads
         // as steam against warm sand rather than as a magic effect.
         uSteam: { value: new THREE.Color("#cfe4ec") },
+        /* Brood ichor: the teal of the animals' own lamps, dark and
+           wet. It is what a rupture throws, so it must be told from
+           the Concord's gold at a glance - a kill and a hit are
+           different colours. */
+        uIchorHot: { value: new THREE.Color("#8ff4e4") },
+        uIchorCold: { value: new THREE.Color("#0b4c48") },
+        // Sand. Dust off a hit or a landing is the ground's own colour
+        // darkened, never a bright disc: dust is read from what it
+        // dims and from its silhouette against the sky.
+        uSand: { value: new THREE.Color("#c9a070") },
         // Doctrine cues share this pool, but each Order keeps a hue
         // that survives sand, bloom and distance. Values 6-10 on the
         // style channel are reserved for these five colours.
@@ -1335,15 +1364,22 @@ export function buildVfx(ctx, world) {
         "attribute float aSize;",
         "attribute float aTint;",
         "attribute float aSpan;",
+        "attribute float aKind;",
         "uniform float uTime;",
         "uniform float uPixel;",
         "varying float vLife;",
         "varying float vTint;",
+        "varying float vKind;",
+        "varying float vRot;",
+        "varying float vAge;",
         "void main() {",
         "  float age = uTime - aBirth;",
         "  float span = max(0.08, aSpan);",
         "  vLife = clamp(1.0 - age / span, 0.0, 1.0);",
         "  vTint = aTint;",
+        "  vKind = floor(aKind + 0.001);",
+        "  vRot = fract(aKind) * 8.0;",
+        "  vAge = age;",
         /* Not yet born. Particles can be scheduled ahead of time so a
            bolt sheds its wake AS IT PASSES rather than laying the
            whole trail down at the muzzle; without this they sit
@@ -1355,33 +1391,46 @@ export function buildVfx(ctx, world) {
         "  }",
         /* `aTint` is the pool's style channel as well as its heat, in
            bands: under 1.5 is debris, 1.5-3.5 is a reliquary ion,
-           3.5-4.5 is a venom droplet, 4.5-5.5 is venom gas, and
-           6-10 are the five Doctrine Orders. Energy, gas and Doctrine
-           motes hang; debris and droplets fall, because a thrown
-           liquid that floats reads as a spore. */
-        "  float doctrine = step(5.5, aTint);",
-        "  float venom = step(3.5, aTint) * (1.0 - doctrine);",
-        "  float gas = step(4.5, aTint) * (1.0 - doctrine);",
-        "  float energy = step(1.5, aTint) * (1.0 - venom) * (1.0 - doctrine);",
-        "  float fall = (1.0 - energy) * (1.0 - gas) * (1.0 - doctrine);",
+           3.5-4.5 is a venom droplet, 4.5-5.5 is venom gas, 6-10 are
+           the five Doctrine Orders, 11 is steam, 12 is ichor and 13 is
+           sand. Energy, gas, steam and Doctrine motes hang; debris,
+           droplets, ichor and shards fall, because a thrown liquid
+           that floats reads as a spore. */
+        "  float doctrine = step(5.5, aTint) * (1.0 - step(10.5, aTint));",
+        "  float steamV = step(10.5, aTint) * (1.0 - step(11.5, aTint));",
+        "  float ichor = step(11.5, aTint) * (1.0 - step(12.5, aTint));",
+        "  float sand = step(12.5, aTint);",
+        "  float venom = step(3.5, aTint) * (1.0 - step(5.5, aTint));",
+        "  float gas = step(4.5, aTint) * (1.0 - step(5.5, aTint));",
+        "  float energy = step(1.5, aTint) * (1.0 - step(3.5, aTint));",
+        "  float debris = 1.0 - step(1.5, aTint);",
+        "  float fall = debris + (venom - gas) + ichor;",
         /* Doctrine motes DECELERATE. Integrating a constant velocity for
            the whole span is what made the Wing feathers read as escaping
            soap bubbles: they left at 8m/s and were still doing 8m/s when
            they faded out past the horizon line. The eye only accepts a
            mote as something the world threw once it watches the throw
            die. Steam keeps its climb - a vent plume rises - so only the
-           five Orders get the settle term underneath it. */
-        "  float steamV = step(10.5, aTint);",
-        "  float rite = doctrine * (1.0 - steamV);",
-        "  float drag = 3.0 * doctrine;",
+           five Orders get the settle term underneath it. Sand and smoke
+           drag hard too: dust stops almost as soon as it is thrown. */
+        "  float dragged = doctrine + sand + energy * 0.5;",
+        "  float drag = 3.0 * doctrine + 2.6 * sand + 1.4 * energy;",
         "  float travel = mix(age, (1.0 - exp(-drag * age)) / max(0.0001, drag),",
-        "    doctrine);",
+        "    clamp(dragged, 0.0, 1.0));",
         "  vec3 p = position + aVel * travel",
         "    - vec3(0.0, 9.0, 0.0) * age * age * fall",
-        "    - vec3(0.0, 1.15, 0.0) * age * age * rite;",
+        "    - vec3(0.0, 1.15, 0.0) * age * age * doctrine",
+        // Sand and smoke lift a little as they thin, like a puff.
+        "    + vec3(0.0, 0.55, 0.0) * age * (sand + steamV);",
         "  vec4 mv = modelViewMatrix * vec4(p, 1.0);",
         "  gl_Position = projectionMatrix * mv;",
-        "  gl_PointSize = aSize * uPixel * vLife / max(1.0, -mv.z * 0.06);",
+        /* Smoke and sand GROW as they fade; sparks and shards do not.
+           A dust puff that shrinks as it dies reads as a spark that
+           has been recoloured, and the pool spent months looking like
+           exactly that. */
+        "  float grows = step(2.5, vKind) * (1.0 - step(3.5, vKind));",
+        "  float sizeCurve = mix(vLife, 0.55 + 0.9 * (1.0 - vLife), grows);",
+        "  gl_PointSize = aSize * uPixel * sizeCurve / max(1.0, -mv.z * 0.06);",
         "  if (vLife <= 0.0) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);",
         "}",
       ].join("\n"),
@@ -1392,6 +1441,9 @@ export function buildVfx(ctx, world) {
         "uniform vec3 uEnergyCold;",
         "uniform vec3 uVenomHot;",
         "uniform vec3 uVenomCold;",
+        "uniform vec3 uIchorHot;",
+        "uniform vec3 uIchorCold;",
+        "uniform vec3 uSand;",
         "uniform vec3 uDoctrineCenser;",
         "uniform vec3 uDoctrineProcession;",
         "uniform vec3 uDoctrineWing;",
@@ -1400,14 +1452,64 @@ export function buildVfx(ctx, world) {
         "uniform vec3 uSteam;",
         "varying float vLife;",
         "varying float vTint;",
+        "varying float vKind;",
+        "varying float vRot;",
+        "varying float vAge;",
+        "float hash21(vec2 p) {",
+        "  p = fract(p * vec2(123.34, 456.21));",
+        "  p += dot(p, p + 45.32);",
+        "  return fract(p.x * p.y);",
+        "}",
         "void main() {",
         "  vec2 d = gl_PointCoord - 0.5;",
-        "  float r = dot(d, d);",
-        "  if (r > 0.25) discard;",
-        "  float core = smoothstep(0.25, 0.0, r);",
-        "  float doctrine = step(5.5, vTint);",
-        "  float venom = step(3.5, vTint) * (1.0 - doctrine);",
-        "  float energy = step(1.5, vTint) * (1.0 - venom) * (1.0 - doctrine);",
+        "  float ca = cos(vRot), sa = sin(vRot);",
+        "  vec2 q = vec2(d.x * ca - d.y * sa, d.x * sa + d.y * ca);",
+        "  float r2 = dot(d, d);",
+        "  float r = sqrt(r2) * 2.0;",
+        // ---- shapes, each 0..1 in `shape`, with an own alpha `cover` ----
+        "  float disc = smoothstep(1.0, 0.0, r);",
+        "  disc *= disc;",
+        /* Glint: a hot core with four soft rays. The rays fall off with
+           the SQUARE of distance from each axis so they stay needle
+           thin, and the whole thing is clipped by a wide skirt so it
+           never becomes a square. */
+        "  float ax = abs(q.x) * 2.0, ay = abs(q.y) * 2.0;",
+        "  float rays = exp(-ax * ax * 30.0) * (1.0 - smoothstep(0.22, 0.85, ay))",
+        "    + exp(-ay * ay * 30.0) * (1.0 - smoothstep(0.22, 0.85, ax));",
+        "  float glintCore = exp(-r2 * 34.0);",
+        "  float glint = clamp(glintCore * 1.4 + rays * 0.9, 0.0, 1.0)",
+        "    * (1.0 - smoothstep(0.86, 1.0, r));",
+        // Ember: tight core, short halo, squared - a cinder, not a lamp.
+        "  float ember = exp(-r2 * 22.0) * 1.15 + pow(disc, 3.0) * 0.5;",
+        "  ember = clamp(ember, 0.0, 1.0);",
+        /* Smoke: the disc broken up by a couple of noise cells so its
+           edge is irregular, at about a third of the disc's alpha. */
+        "  vec2 cell = q * 3.2 + vRot;",
+        "  float n = hash21(floor(cell)) * 0.6 + hash21(floor(cell * 0.5 + 7.0)) * 0.4;",
+        /* edge0 must stay strictly under edge1: smoothstep with equal
+           edges divides by zero, the NaN survives the mix() into every
+           OTHER kind, and the whole pool renders as opaque squares. */
+        "  float smokeEdge = 1.0 - smoothstep(0.50 + n * 0.38, 1.0, r);",
+        "  float smoke = smokeEdge * (0.55 + 0.45 * disc) * (0.62 + 0.38 * n);",
+        // Shard: a thin diamond along the rotated x axis.
+        "  float shard = (1.0 - smoothstep(0.0, 1.0, abs(q.x) * 2.15))",
+        "    * (1.0 - smoothstep(0.0, 0.16, abs(q.y)));",
+        "  shard = pow(clamp(shard, 0.0, 1.0), 1.4);",
+        "  float k = vKind;",
+        "  float shape = disc;",
+        "  shape = mix(shape, glint, step(0.5, k) * (1.0 - step(1.5, k)));",
+        "  shape = mix(shape, ember, step(1.5, k) * (1.0 - step(2.5, k)));",
+        "  shape = mix(shape, smoke, step(2.5, k) * (1.0 - step(3.5, k)));",
+        "  shape = mix(shape, shard, step(3.5, k));",
+        "  if (shape < 0.004) discard;",
+        "  float core = shape;",
+        // ---- colour bands ----
+        "  float doctrine = step(5.5, vTint) * (1.0 - step(10.5, vTint));",
+        "  float steam = step(10.5, vTint) * (1.0 - step(11.5, vTint));",
+        "  float ichor = step(11.5, vTint) * (1.0 - step(12.5, vTint));",
+        "  float sand = step(12.5, vTint);",
+        "  float venom = step(3.5, vTint) * (1.0 - step(5.5, vTint));",
+        "  float energy = step(1.5, vTint) * (1.0 - step(3.5, vTint));",
         "  vec3 sparkColour = mix(uCold, uHot, clamp(vTint * vLife, 0.0, 1.0));",
         "  vec3 ionColour = mix(uEnergyCold, uEnergyHot, 0.30 + vLife * 0.70);",
         /* Kept at the SATURATED end of its own ramp. Mixed toward the
@@ -1415,6 +1517,7 @@ export function buildVfx(ctx, world) {
            white motes - and white is what every other particle in the
            game already is, so the one hazard colour stopped being one. */
         "  vec3 venomColour = mix(uVenomCold, uVenomHot, 0.08 + vLife * 0.30);",
+        "  vec3 ichorColour = mix(uIchorCold, uIchorHot, 0.10 + vLife * vLife * 0.55);",
         "  vec3 doctrineColour = uDoctrineCenser;",
         "  doctrineColour = mix(doctrineColour, uDoctrineProcession, step(6.5, vTint));",
         "  doctrineColour = mix(doctrineColour, uDoctrineWing, step(7.5, vTint));",
@@ -1425,40 +1528,30 @@ export function buildVfx(ctx, world) {
         "  doctrineColour = mix(doctrineColour, vec3(1.0), clamp(core * 0.16 + vLife * 0.05, 0.0, 0.22));",
         "  vec3 c = mix(mix(sparkColour, ionColour, energy), venomColour, venom);",
         "  c = mix(c, doctrineColour, doctrine);",
-        /* AN EMBER, NOT A BOKEH DISC. Two things were making every
-           rite's motes read as soap bubbles floating past the lens.
-
-           The profile: `core` is a wide smooth falloff, which is right
-           for the dust cloud off a wall hit and wrong for a cinder -
-           a cinder is a small hot point with a short halo, so the rite
-           band squares its falloff into a tighter dot.
-
-           The level: at full life the shared gain reached 1.85, which
-           drives a saturated hue past 1.0 one channel at a time and
-           lands on white, exactly as the muzzle flash did. Normalising
-           by the Order's own peak channel keeps the ratio - so the
-           Censer stays gold and the Procession stays vermilion all the
-           way into the highlight. */
-        "  float riteBand = step(5.5, vTint) * (1.0 - step(10.5, vTint));",
-        "  float ritePeak = max(doctrineColour.r,",
-        "    max(doctrineColour.g, doctrineColour.b));",
-        "  core = mix(core, core * core * (0.55 + 0.45 * core), riteBand);",
-        /* STEAM sits above the Doctrine band and is applied last, so
-           it wins outright. Every other band in this pool is a HOT
-           colour - ember, ion, venom, Order gold - and a weapon vent
-           borrowing any of them reads as the gun catching fire, which
-           is the exact opposite of what venting does. It is also
-           deliberately dimmed rather than mixed toward white: vapour
-           scatters light, it does not emit it, and at this pool's
-           additive-ish output an undimmed steam plume blows straight
-           through the bloom threshold and becomes a flare. */
-        "  float steam = step(10.5, vTint);",
+        "  c = mix(c, ichorColour, ichor);",
+        /* GAIN, NORMALISED BY THE BAND'S OWN PEAK CHANNEL for the rite
+           and ichor bands, so a bright mote saturates toward its own
+           hue instead of one channel at a time toward white. */
+        "  float ritePeak = max(c.r, max(c.g, c.b));",
+        "  float steamW = steam;",
         "  vec3 steamColour = uSteam * (0.55 + vLife * 0.45);",
-        "  c = mix(c, steamColour, steam);",
-        "  float bright = mix(0.35 + vLife * 1.5, 0.18 + vLife * 0.62, steam);",
-        "  bright = mix(bright, (0.30 + vLife * 0.92) / max(0.32, ritePeak),",
-        "    riteBand);",
-        "  gl_FragColor = vec4(c * core * bright, core * vLife * mix(1.0, 0.72, steam));",
+        "  c = mix(c, steamColour, steamW);",
+        /* Sand is NOT additive light. It is drawn dark and low so that
+           at this pool's additive output it merely warms and dims the
+           sky behind it, which is what dust looks like. */
+        "  vec3 sandColour = uSand * (0.22 + 0.16 * vLife);",
+        "  c = mix(c, sandColour, sand);",
+        "  float bright = 0.35 + vLife * 1.5;",
+        "  bright = mix(bright, 0.18 + vLife * 0.62, steamW);",
+        "  bright = mix(bright, (0.30 + vLife * 0.92) / max(0.32, ritePeak), doctrine + ichor);",
+        "  bright = mix(bright, 0.9, sand);",
+        // Glints flare hot; shards and smoke stay matte.
+        "  float isGlint = step(0.5, k) * (1.0 - step(1.5, k));",
+        "  float isShard = step(3.5, k);",
+        "  float isSmoke = step(2.5, k) * (1.0 - step(3.5, k));",
+        "  bright *= 1.0 + isGlint * 0.55 - isShard * 0.25 - isSmoke * 0.30;",
+        "  float alpha = core * vLife * mix(1.0, 0.72, steamW) * mix(1.0, 0.55, isSmoke);",
+        "  gl_FragColor = vec4(c * core * bright, alpha);",
         "}",
       ].join("\n"),
     });
@@ -1480,9 +1573,35 @@ export function buildVfx(ctx, world) {
       geo.attributes.aSize.needsUpdate = true;
       geo.attributes.aTint.needsUpdate = true;
       geo.attributes.aSpan.needsUpdate = true;
+      geo.attributes.aKind.needsUpdate = true;
     }
 
-    function emit(x, y, z, count, spread, scale, tintVal, life = 0.62) {
+    /* The shape a band draws when the emitter does not say. Debris is
+       a mix - most of a hit is grit and cinders with a couple of
+       slivers; ions and rite motes are glints and embers; gas, steam
+       and sand are smoke; venom and ichor are droplets. */
+    function pickKind(tintVal, kindVal) {
+      if (kindVal !== undefined && kindVal !== null && kindVal >= 0) {
+        // A negative-free explicit kind. Arrays pick at random.
+        if (Array.isArray(kindVal)) return kindVal[(Math.random() * kindVal.length) | 0];
+        return kindVal;
+      }
+      const u = Math.random();
+      if (tintVal >= 12.5) return IK_SMOKE;
+      if (tintVal >= 11.5) return u < 0.55 ? IK_DISC : (u < 0.85 ? IK_SHARD : IK_EMBER);
+      if (tintVal >= 10.5) return IK_SMOKE;
+      if (tintVal >= 5.5) return u < 0.84 ? IK_EMBER : IK_GLINT;
+      if (tintVal >= 4.5) return IK_SMOKE;
+      if (tintVal >= 3.5) return u < 0.7 ? IK_DISC : IK_EMBER;
+      if (tintVal >= 1.5) return u < 0.55 ? IK_GLINT : IK_EMBER;
+      // Debris: cinders, a few slivers, a little smoke.
+      return u < 0.46 ? IK_EMBER : (u < 0.72 ? IK_SHARD : (u < 0.86 ? IK_GLINT : IK_SMOKE));
+    }
+    function stamp(k, tintVal, kindVal) {
+      kind[k] = pickKind(tintVal, kindVal) + Math.random() * 0.999 / 8;
+    }
+
+    function emit(x, y, z, count, spread, scale, tintVal, life = 0.62, kindVal) {
       for (let i = 0; i < count; i += 1) {
         const k = cursor;
         cursor = (cursor + 1) % IMPACT_MAX;
@@ -1498,19 +1617,11 @@ export function buildVfx(ctx, world) {
         // Spread the span across the burst so a cloud thins out from
         // its edges instead of switching off on one frame.
         span[k] = life * (0.72 + Math.random() * 0.56);
+        stamp(k, tintVal, kindVal);
       }
       flush();
     }
 
-    /**
-     * The same pool, thrown along an axis instead of up and outward.
-     *
-     * Muzzle gas leaves the bore; it does not fountain. `emit`'s
-     * radial-plus-up velocity is right for debris kicked off a
-     * surface and wrong for anything with a direction, and reusing it
-     * for the muzzle put a small puff of sparks around the barrel
-     * that read as the weapon smouldering.
-     */
     /**
      * Embers shed along a path, each timed to appear as something
      * travelling that path reaches it.
@@ -1519,7 +1630,7 @@ export function buildVfx(ctx, world) {
      * laid down all at once at the muzzle.
      */
     function emitTrail(x, y, z, dx, dy, dz, distance, speed, count, scale,
-      tintVal = 0.85, life = 0.62) {
+      tintVal = 0.85, life = 0.62, kindVal) {
       for (let i = 0; i < count; i += 1) {
         const k = cursor;
         cursor = (cursor + 1) % IMPACT_MAX;
@@ -1536,12 +1647,22 @@ export function buildVfx(ctx, world) {
         size[k] = scale * (4 + Math.random() * 6);
         tint[k] = tintVal;
         span[k] = life * (0.72 + Math.random() * 0.56);
+        stamp(k, tintVal, kindVal);
       }
       flush();
     }
 
+    /**
+     * The same pool, thrown along an axis instead of up and outward.
+     *
+     * Muzzle gas leaves the bore; it does not fountain. `emit`'s
+     * radial-plus-up velocity is right for debris kicked off a
+     * surface and wrong for anything with a direction, and reusing it
+     * for the muzzle put a small puff of sparks around the barrel
+     * that read as the weapon smouldering.
+     */
     function emitDirected(x, y, z, count, dx, dy, dz, speed, scale, tintVal,
-      life = 0.62) {
+      life = 0.62, kindVal) {
       for (let i = 0; i < count; i += 1) {
         const k = cursor;
         cursor = (cursor + 1) % IMPACT_MAX;
@@ -1556,6 +1677,7 @@ export function buildVfx(ctx, world) {
         size[k] = scale * (7 + Math.random() * 9);
         tint[k] = tintVal;
         span[k] = life * (0.72 + Math.random() * 0.56);
+        stamp(k, tintVal, kindVal);
       }
       flush();
     }
@@ -1570,7 +1692,7 @@ export function buildVfx(ctx, world) {
      * fountain. Seeding the circle makes the wave itself the emitter.
      */
     function emitRing(x, y, z, count, radius, speed, rise, scale, tintVal,
-      life = 0.62, sweep = 0, phase = 0) {
+      life = 0.62, sweep = 0, phase = 0, kindVal) {
       for (let i = 0; i < count; i += 1) {
         const k = cursor;
         cursor = (cursor + 1) % IMPACT_MAX;
@@ -1591,10 +1713,248 @@ export function buildVfx(ctx, world) {
         size[k] = scale * (6 + Math.random() * 9);
         tint[k] = tintVal;
         span[k] = life * (0.72 + Math.random() * 0.56);
+        stamp(k, tintVal, kindVal);
       }
       flush();
     }
     return { points, mat, emit, emitDirected, emitTrail, emitRing };
+  })();
+
+  /* ============================================================
+     SPARKS
+
+     Streaks, as distinct from motes. A point sprite cannot be
+     stretched, and an unstretched spark is a dot: it has no speed and
+     no direction, and a burst of them is a cloud. What the eye reads
+     as a HIT is the fan of thin bright lines leaving the point of
+     contact, each one longer the faster it is going and each one
+     bending as it falls.
+
+     One pooled quad buffer, integrated on the GPU exactly like the
+     impact motes (drag, gravity), and stretched between where the
+     spark is NOW and where it was a few hundredths of a second ago -
+     so the streak's length is its speed and its curve is its arc, and
+     nothing has to be updated per frame.
+     ============================================================ */
+  const SPARK_MAX = 384;
+  const sparks = (() => {
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(SPARK_MAX * 4 * 3);
+    const vel = new Float32Array(SPARK_MAX * 4 * 3);
+    const birth = new Float32Array(SPARK_MAX * 4).fill(-999);
+    const span = new Float32Array(SPARK_MAX * 4).fill(0.5);
+    const width = new Float32Array(SPARK_MAX * 4);
+    const tint = new Float32Array(SPARK_MAX * 4);
+    const corner = new Float32Array(SPARK_MAX * 4 * 2);
+    const index = new Uint16Array(SPARK_MAX * 6);
+    for (let i = 0; i < SPARK_MAX; i += 1) {
+      const v = i * 4;
+      corner[(v + 0) * 2] = 0; corner[(v + 0) * 2 + 1] = -1;
+      corner[(v + 1) * 2] = 0; corner[(v + 1) * 2 + 1] = 1;
+      corner[(v + 2) * 2] = 1; corner[(v + 2) * 2 + 1] = 1;
+      corner[(v + 3) * 2] = 1; corner[(v + 3) * 2 + 1] = -1;
+      index.set([v, v + 1, v + 2, v, v + 2, v + 3], i * 6);
+    }
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute("aVel", new THREE.BufferAttribute(vel, 3));
+    geo.setAttribute("aBirth", new THREE.BufferAttribute(birth, 1));
+    geo.setAttribute("aSpan", new THREE.BufferAttribute(span, 1));
+    geo.setAttribute("aWidth", new THREE.BufferAttribute(width, 1));
+    geo.setAttribute("aTint", new THREE.BufferAttribute(tint, 1));
+    geo.setAttribute("aCorner", new THREE.BufferAttribute(corner, 2));
+    geo.setIndex(new THREE.BufferAttribute(index, 1));
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 4000);
+
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uHot: { value: new THREE.Color("#fff3d6") },
+        uCold: { value: new THREE.Color("#ff8a2c") },
+        uEnergyHot: { value: new THREE.Color("#fffdf4") },
+        uEnergyCold: { value: new THREE.Color("#ffb03a") },
+        uIchorHot: { value: new THREE.Color("#a6fff0") },
+        uIchorCold: { value: new THREE.Color("#0f6a63") },
+        uVenomHot: { value: new THREE.Color("#eaff9c") },
+        uVenomCold: { value: new THREE.Color("#4f7a12") },
+        uDoctrineCenser: { value: new THREE.Color("#ffbd3e") },
+        uDoctrineProcession: { value: new THREE.Color("#ff7045") },
+        uDoctrineWing: { value: new THREE.Color("#08d4ff") },
+        uDoctrineHalo: { value: new THREE.Color("#6684ff") },
+        uDoctrineEdict: { value: new THREE.Color("#20e0a6") },
+      },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      forceSinglePass: true,
+      vertexShader: [
+        "attribute vec3 aVel;",
+        "attribute float aBirth;",
+        "attribute float aSpan;",
+        "attribute float aWidth;",
+        "attribute float aTint;",
+        "attribute vec2 aCorner;",
+        "uniform float uTime;",
+        "varying float vAlong;",
+        "varying float vAcross;",
+        "varying float vLife;",
+        "varying float vTint;",
+        "vec3 at(float t, float fall, float drag) {",
+        "  float travel = (1.0 - exp(-drag * t)) / drag;",
+        "  return position + aVel * travel - vec3(0.0, 9.6, 0.0) * t * t * fall;",
+        "}",
+        "void main() {",
+        "  float age = uTime - aBirth;",
+        "  float span = max(0.05, aSpan);",
+        "  vLife = clamp(1.0 - age / span, 0.0, 1.0);",
+        "  vTint = aTint;",
+        "  vAlong = aCorner.x;",
+        "  vAcross = aCorner.y;",
+        "  if (age < 0.0 || vLife <= 0.0) {",
+        "    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);",
+        "    return;",
+        "  }",
+        // Energy and rite sparks hang and drift; debris and ichor fall.
+        "  float doctrine = step(5.5, aTint) * (1.0 - step(10.5, aTint));",
+        "  float energy = step(1.5, aTint) * (1.0 - step(3.5, aTint));",
+        "  float fall = 1.0 - clamp(energy + doctrine, 0.0, 1.0);",
+        "  float drag = mix(1.9, 3.4, energy + doctrine);",
+        /* The streak runs from where the spark IS to where it was
+           `tail` seconds ago. Longer at birth - the flash of leaving -
+           and shortening as it slows and dies. */
+        "  float tail = (0.030 + 0.030 * vLife);",
+        "  vec3 pHead = at(age, fall, drag);",
+        "  vec3 pTail = at(max(0.0, age - tail), fall, drag);",
+        "  vec4 mvHead = modelViewMatrix * vec4(pHead, 1.0);",
+        "  vec4 mvTail = modelViewMatrix * vec4(pTail, 1.0);",
+        "  vec3 dir = mvHead.xyz - mvTail.xyz;",
+        "  float len = length(dir);",
+        // A spark that has not moved still needs a sliver of length or
+        // the quad collapses; give it a short default along the view.
+        "  vec3 side = normalize(cross(dir + vec3(0.0, 0.0002, 0.0), mvHead.xyz) + vec3(1e-5, 0.0, 0.0));",
+        "  float w = aWidth * (0.55 + 0.45 * vLife);",
+        "  vec4 mv = mix(mvTail, mvHead, aCorner.x);",
+        "  mv.xyz += side * aCorner.y * w;",
+        "  gl_Position = projectionMatrix * mv;",
+        "}",
+      ].join("\n"),
+      fragmentShader: [
+        "uniform vec3 uHot;",
+        "uniform vec3 uCold;",
+        "uniform vec3 uEnergyHot;",
+        "uniform vec3 uEnergyCold;",
+        "uniform vec3 uIchorHot;",
+        "uniform vec3 uIchorCold;",
+        "uniform vec3 uVenomHot;",
+        "uniform vec3 uVenomCold;",
+        "uniform vec3 uDoctrineCenser;",
+        "uniform vec3 uDoctrineProcession;",
+        "uniform vec3 uDoctrineWing;",
+        "uniform vec3 uDoctrineHalo;",
+        "uniform vec3 uDoctrineEdict;",
+        "varying float vAlong;",
+        "varying float vAcross;",
+        "varying float vLife;",
+        "varying float vTint;",
+        "void main() {",
+        // Bright hot head, fading down the tail; a needle across.
+        "  float across = exp(-vAcross * vAcross * 5.5);",
+        "  float along = pow(clamp(vAlong, 0.0, 1.0), 1.35);",
+        "  float head = exp(-(1.0 - vAlong) * (1.0 - vAlong) * 18.0);",
+        "  float body = across * (along * 0.75 + head * 0.9);",
+        "  if (body < 0.004) discard;",
+        "  float doctrine = step(5.5, vTint) * (1.0 - step(10.5, vTint));",
+        "  float ichor = step(11.5, vTint) * (1.0 - step(12.5, vTint));",
+        "  float venom = step(3.5, vTint) * (1.0 - step(5.5, vTint));",
+        "  float energy = step(1.5, vTint) * (1.0 - step(3.5, vTint));",
+        "  vec3 debris = mix(uCold, uHot, clamp(vLife * 1.3 + head * 0.4, 0.0, 1.0));",
+        "  vec3 ion = mix(uEnergyCold, uEnergyHot, 0.25 + vLife * 0.55 + head * 0.3);",
+        "  vec3 ich = mix(uIchorCold, uIchorHot, 0.15 + vLife * 0.5);",
+        "  vec3 ven = mix(uVenomCold, uVenomHot, 0.15 + vLife * 0.35);",
+        "  vec3 doc = uDoctrineCenser;",
+        "  doc = mix(doc, uDoctrineProcession, step(6.5, vTint));",
+        "  doc = mix(doc, uDoctrineWing, step(7.5, vTint));",
+        "  doc = mix(doc, uDoctrineHalo, step(8.5, vTint));",
+        "  doc = mix(doc, uDoctrineEdict, step(9.5, vTint));",
+        "  vec3 c = mix(debris, ion, energy);",
+        "  c = mix(c, ven, venom);",
+        "  c = mix(c, doc, doctrine);",
+        "  c = mix(c, ich, ichor);",
+        "  float peak = max(c.r, max(c.g, c.b));",
+        "  float gain = (0.9 + vLife * 1.6) / max(0.45, peak);",
+        "  gl_FragColor = vec4(c * body * gain, body * vLife);",
+        "}",
+      ].join("\n"),
+    });
+
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.name = "sparks";
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 7;
+    group.add(mesh);
+
+    let cursor = 0;
+    function flush() {
+      geo.attributes.position.needsUpdate = true;
+      geo.attributes.aVel.needsUpdate = true;
+      geo.attributes.aBirth.needsUpdate = true;
+      geo.attributes.aSpan.needsUpdate = true;
+      geo.attributes.aWidth.needsUpdate = true;
+      geo.attributes.aTint.needsUpdate = true;
+    }
+    function write(x, y, z, vx, vy, vz, life, w, tintVal, delay = 0) {
+      const i = cursor;
+      cursor = (cursor + 1) % SPARK_MAX;
+      for (let k = 0; k < 4; k += 1) {
+        const v = i * 4 + k;
+        pos[v * 3] = x; pos[v * 3 + 1] = y; pos[v * 3 + 2] = z;
+        vel[v * 3] = vx; vel[v * 3 + 1] = vy; vel[v * 3 + 2] = vz;
+        birth[v] = atmos.elapsed + delay;
+        span[v] = life;
+        width[v] = w;
+        tint[v] = tintVal;
+      }
+    }
+    /** A fan of streaks. `dx,dy,dz` is the axis the fan centres on
+     *  (the surface normal for a hit; up for a blast); `cone` is how
+     *  wide, 0 = a needle and 1 = a full hemisphere. */
+    function burst(x, y, z, count, dx, dy, dz, speed, cone = 0.7, tintVal = 0.9,
+      life = 0.42, w = 0.018) {
+      // Any two vectors perpendicular to the axis.
+      const L = Math.hypot(dx, dy, dz) || 1;
+      const ax = dx / L, ay = dy / L, az = dz / L;
+      let ux, uy, uz;
+      if (Math.abs(ay) < 0.9) { ux = az; uy = 0; uz = -ax; } else { ux = 1; uy = 0; uz = 0; }
+      const ul = Math.hypot(ux, uy, uz) || 1; ux /= ul; uy /= ul; uz /= ul;
+      const wx = ay * uz - az * uy, wy = az * ux - ax * uz, wz = ax * uy - ay * ux;
+      for (let i = 0; i < count; i += 1) {
+        const phi = Math.random() * TAU;
+        const t = Math.pow(Math.random(), 0.65) * cone;
+        const s = Math.sin(t * Math.PI * 0.5), c = Math.cos(t * Math.PI * 0.5);
+        const vxn = ax * c + (ux * Math.cos(phi) + wx * Math.sin(phi)) * s;
+        const vyn = ay * c + (uy * Math.cos(phi) + wy * Math.sin(phi)) * s;
+        const vzn = az * c + (uz * Math.cos(phi) + wz * Math.sin(phi)) * s;
+        const sp = speed * (0.45 + Math.random() * 0.9);
+        write(x, y, z, vxn * sp, vyn * sp, vzn * sp,
+          life * (0.6 + Math.random() * 0.8), w * (0.7 + Math.random() * 0.6), tintVal);
+      }
+      flush();
+    }
+    /** Streaks thrown outward from a ring, for shockwaves and landings. */
+    function ring(x, y, z, count, radius, speed, rise, tintVal = 0.9, life = 0.5,
+      w = 0.02, sweep = 0) {
+      for (let i = 0; i < count; i += 1) {
+        const a = (i / count) * TAU + (Math.random() - 0.5) * 0.3;
+        const ca = Math.cos(a), sa = Math.sin(a);
+        const sp = speed * (0.55 + Math.random() * 0.8);
+        write(x + ca * radius, y + Math.random() * 0.15, z + sa * radius,
+          ca * sp, rise * (0.4 + Math.random() * 1.1), sa * sp,
+          life * (0.6 + Math.random() * 0.8), w * (0.7 + Math.random() * 0.6), tintVal,
+          sweep * (i / count));
+      }
+      flush();
+    }
+    return { mesh, mat, burst, ring, write, flush };
   })();
 
   /* ============================================================
@@ -2090,6 +2450,8 @@ export function buildVfx(ctx, world) {
         uDoctrineWing: { value: new THREE.Color("#08d4ff") },
         uDoctrineHalo: { value: new THREE.Color("#6684ff") },
         uDoctrineEdict: { value: new THREE.Color("#20e0a6") },
+        // Brood ichor: a kill's soft teal glow, told from any hit.
+        uIchor: { value: new THREE.Color("#5ff0dc") },
       },
       transparent: true,
       depthWrite: false,
@@ -2145,6 +2507,7 @@ export function buildVfx(ctx, world) {
         "uniform vec3 uDoctrineWing;",
         "uniform vec3 uDoctrineHalo;",
         "uniform vec3 uDoctrineEdict;",
+        "uniform vec3 uIchor;",
         "varying vec2 vUv;",
         "varying float vFade;",
         "varying float vSeed;",
@@ -2158,9 +2521,10 @@ export function buildVfx(ctx, world) {
         "  float ang = atan(vUv.y, vUv.x);",
         "  float star = pow(abs(cos(ang * 2.0 + vSeed * 6.2831)), 6.0);",
         "  float starBurst = core + star * pow(clamp(1.0 - r, 0.0, 1.0), 1.1) * 0.85;",
-        "  float doctrine = step(5.5, vTint);",
-        "  float venom = step(3.5, vTint) * (1.0 - doctrine);",
-        "  float energy = step(1.5, vTint) * (1.0 - venom) * (1.0 - doctrine);",
+        "  float ichor = step(11.5, vTint);",
+        "  float doctrine = step(5.5, vTint) * (1.0 - ichor);",
+        "  float venom = step(3.5, vTint) * (1.0 - doctrine) * (1.0 - ichor);",
+        "  float energy = step(1.5, vTint) * (1.0 - venom) * (1.0 - doctrine) * (1.0 - ichor);",
         // A brief expanding annulus is the discharge field; ballistic
         // flashes keep the original four-spike star.
         "  float ring = smoothstep(0.26, 0.48, r)",
@@ -2174,6 +2538,8 @@ export function buildVfx(ctx, world) {
         // A venom mouth-flash is a soft glow, not a star: it is light
         // coming out of a throat rather than a discharge.
         "  burst = mix(burst, core * 1.15, venom);",
+        // A rupture: soft glow plus the annulus, no star.
+        "  burst = mix(burst, core * 0.9 + ring * (0.5 + (1.0 - vFade) * 0.6), ichor);",
         "  vec3 flashColour = mix(uCold, uHot, clamp(vTint * (0.35 + vFade), 0.0, 1.0));",
         "  vec3 energyColour = mix(uEnergyCold, uEnergyHot, core);",
         "  vec3 venomColour = mix(uVenomCold, uVenomHot, 0.30 + core * 0.60);",
@@ -2187,6 +2553,7 @@ export function buildVfx(ctx, world) {
         "  doctrineColour = mix(doctrineColour, vec3(1.0), core * 0.20);",
         "  vec3 c = mix(mix(flashColour, energyColour, energy), venomColour, venom);",
         "  c = mix(c, doctrineColour, doctrine);",
+        "  c = mix(c, mix(uIchor, vec3(1.0), core * 0.35), ichor);",
         "  float a = clamp(burst * vFade, 0.0, 1.0);",
         /* GAIN, NORMALISED BY THE ORDER'S OWN PEAK CHANNEL.
            A flat 3.4x drives a saturated hue past 1.0 one channel at a
@@ -2202,6 +2569,7 @@ export function buildVfx(ctx, world) {
         "  float gain = burst * vFade * 3.4;",
         "  float riteGain = burst * vFade * 1.95 / max(0.30, peak);",
         "  gain = mix(gain, riteGain, doctrine);",
+        "  gain = mix(gain, burst * vFade * 2.2, ichor);",
         "  gl_FragColor = vec4(c * gain, a);",
         "}",
       ].join("\n"),
@@ -2302,198 +2670,6 @@ export function buildVfx(ctx, world) {
      clock, and hidden outright when idle so it costs nothing between
      uses.
      ============================================================ */
-  const impulse = (() => {
-    const mat = new THREE.MeshBasicMaterial({
-      name: "sf-impulse", vertexColors: true, transparent: true, opacity: 1,
-      depthWrite: false, blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide, toneMapped: true,
-    });
-    patchBasicMaterial(mat, atmos, 1.0, true);
-
-    const tint = (geo, hot, cold, axis = "y", lo = 0, hi = 1) => {
-      const pos = geo.attributes.position;
-      const colours = new Float32Array(pos.count * 3);
-      for (let i = 0; i < pos.count; i += 1) {
-        const v = axis === "y" ? pos.getY(i) : pos.getZ(i);
-        const t = clamp01((v - lo) / Math.max(1e-4, hi - lo));
-        const f = 1 - t * t;
-        colours[i * 3] = hot[0] * f + cold[0] * (1 - f);
-        colours[i * 3 + 1] = hot[1] * f + cold[1] * (1 - f);
-        colours[i * 3 + 2] = hot[2] * f + cold[2] * (1 - f);
-      }
-      geo.setAttribute("color", new THREE.BufferAttribute(colours, 3));
-      return geo;
-    };
-
-    const root = new THREE.Group();
-    root.name = "impulse-vfx";
-    root.frustumCulled = false;
-    group.add(root);
-
-    /* THE ROOT NEVER MOVES. All impulse geometry is world-space.
-       Ground-boost propulsion belongs exclusively to the reliquary
-       pack, so this rig contains only the Penitent's Fall effects. */
-
-    /* ---- the fall ----
-       A column above the trooper while the charge builds, then rings
-       and a dome on the ground when it lands. */
-    /* A THIN shaft, not a pillar. At the original 1.35m flare over
-       nine metres this filled a third of the screen with solid white
-       and hid the trooper it was supposed to be charging. */
-    const columnGeo = new THREE.CylinderGeometry(0.09, 0.44, 5.4, 14, 1, true);
-    columnGeo.translate(0, 2.7, 0);
-    tint(columnGeo, [0.50, 0.42, 0.22], [0.02, 0.01, 0.0], "y", 0, 5.4);
-    const column = new THREE.Mesh(columnGeo, mat);
-    column.name = "slam-column";
-    column.visible = false;
-    root.add(column);
-
-    const spikeGeo = new THREE.ConeGeometry(0.30, 2.6, 10, 1, true);
-    spikeGeo.rotateX(Math.PI);
-    spikeGeo.translate(0, -1.3, 0);
-    tint(spikeGeo, [0.80, 0.66, 0.34], [0.02, 0.01, 0.0], "y", -2.6, 0);
-    const spike = new THREE.Mesh(spikeGeo, mat);
-    spike.name = "slam-spike";
-    spike.visible = false;
-    root.add(spike);
-
-    const rings = [];
-    for (let i = 0; i < 3; i += 1) {
-      const g = new THREE.TorusGeometry(1, 0.05 + i * 0.02, 5, 60);
-      g.rotateX(Math.PI / 2);
-      tint(g, [1.0, 0.86, 0.46], [0.92, 0.44, 0.10], "y", -0.1, 0.1);
-      const ring = new THREE.Mesh(g, mat);
-      ring.name = `slam-ring-${i}`;
-      ring.visible = false;
-      ring.renderOrder = 6;
-      rings.push(ring);
-      root.add(ring);
-    }
-    const domeGeo = new THREE.SphereGeometry(1, 22, 8, 0, TAU, 0, Math.PI * 0.5);
-    tint(domeGeo, [0.86, 0.68, 0.32], [0.03, 0.01, 0.0], "y", 0, 1);
-    const dome = new THREE.Mesh(domeGeo, mat);
-    dome.name = "slam-dome";
-    dome.visible = false;
-    root.add(dome);
-
-    const live = {
-      charge: 0, chargeSeen: 0,
-      burst: -1, burstRadius: 8, burstX: 0, burstY: 0, burstZ: 0,
-    };
-    return { root, mat, column, spike, rings, dome, live };
-  })();
-
-  /** Something was rammed. */
-  function boostImpact(x, y, z, dx, dz, heavy) {
-    flashes.emit(x, y, z, heavy ? 1.5 : 1.15, 0.11, 2.0);
-    impacts.emitDirected(x, y, z, heavy ? 30 : 22, dx, 0.55, dz,
-      heavy ? 11 : 9, heavy ? 1.5 : 1.2, 2.0);
-    impacts.emit(x, y, z, 14, 3.0, 1.1, 0.5);
-  }
-
-  /** The hang, with the charge building overhead. */
-  function slamCharge(x, y, z, charge) {
-    const L = impulse.live;
-    L.charge = 0.1;
-    L.chargeSeen = clamp01(charge);
-    /* Based at the SHOULDERS, not the waist. Rooted lower, the hot end
-       of the shaft sat over the breastplate and erased the one
-       silhouette the wind-up exists to show. */
-    impulse.column.position.set(x, y + 1.45, z);
-    impulse.spike.position.set(x, y + 0.32, z);
-    if (charge > 0.05 && Math.random() < 0.6) {
-      const a = Math.random() * TAU;
-      const r = 2.6 * (1 - charge) + 0.4;
-      impacts.emitDirected(x + Math.cos(a) * r, y + 0.2 + Math.random() * 2.4,
-        z + Math.sin(a) * r, 1, -Math.cos(a), 0.9, -Math.sin(a), 5.5, 0.55, 2.0);
-    }
-  }
-
-  /** The descent streak. */
-  function slamTrail(x, y, z) {
-    impulse.live.charge = 0.1;
-    impulse.live.chargeSeen = 1;
-    impulse.column.position.set(x, y + 1.45, z);
-    impulse.spike.position.set(x, y + 0.32, z);
-    impacts.emitDirected(x, y + 1.2, z, 2, 0, 1, 0, 7.5, 0.6, 2.0);
-  }
-
-  /** Landfall. */
-  function slamImpact(x, y, z, radius = 8, hits = 0) {
-    const L = impulse.live;
-    L.burst = 0;
-    L.burstRadius = radius;
-    L.burstX = x;
-    L.burstY = y;
-    L.burstZ = z;
-    L.charge = 0;
-    flashes.emit(x, y + 0.6, z, 2.6, 0.16, 2.0);
-    flashes.emit(x, y + 1.6, z, 1.6, 0.22, 1.0);
-    impacts.emit(x, y + 0.35, z, 70, radius * 0.34, 3.2, 0.9);
-    // A skirt of debris thrown outward along the ground.
-    for (let i = 0; i < 14; i += 1) {
-      const a = (i / 14) * TAU + Math.random() * 0.2;
-      impacts.emitDirected(x + Math.cos(a) * 0.8, y + 0.22, z + Math.sin(a) * 0.8,
-        4, Math.cos(a), 0.42, Math.sin(a), 15 + Math.random() * 7, 1.5, 0.55);
-    }
-    if (hits > 0) flashes.emit(x, y + 0.9, z, 1.9, 0.13, 2.0);
-  }
-
-  /** Drives both rigs. Called once a frame from `update`. */
-  function updateImpulse(dt) {
-    const L = impulse.live;
-    const chargeOn = L.charge > 0;
-    L.charge = Math.max(0, L.charge - dt);
-    const showCharge = chargeOn && L.charge > 0;
-    if (impulse.column.visible !== showCharge) {
-      impulse.column.visible = showCharge;
-      impulse.spike.visible = showCharge;
-    }
-    if (showCharge) {
-      const c = L.chargeSeen;
-      impulse.column.scale.set(0.45 + c * 0.75, 0.30 + c * 1.05, 0.45 + c * 0.75);
-      impulse.column.rotation.y += dt * 5.5;
-      impulse.spike.scale.set(0.5 + c * 0.8, 0.35 + c * 1.3, 0.5 + c * 0.8);
-    }
-
-    if (L.burst >= 0) {
-      L.burst += dt;
-      const life = 0.9;
-      const p = clamp01(L.burst / life);
-      const alive = p < 1;
-      impulse.rings.forEach((ring, i) => {
-        const rp = clamp01((L.burst - i * 0.06) / (life * (0.7 + i * 0.22)));
-        const on = rp > 0 && rp < 1;
-        if (ring.visible !== on) ring.visible = on;
-        if (!on) return;
-        ring.position.set(L.burstX, L.burstY + 0.18 + i * 0.06, L.burstZ);
-        /* Eased OUT, so the ring leaves fast and then coasts. A linear
-           expansion reads as a growing circle rather than as something
-           that was thrown. */
-        const e = 1 - (1 - rp) * (1 - rp);
-        ring.scale.setScalar(0.6 + e * L.burstRadius * (1 + i * 0.16));
-      });
-      const domeOn = p < 0.62;
-      if (impulse.dome.visible !== domeOn) impulse.dome.visible = domeOn;
-      if (domeOn) {
-        const dp = clamp01(p / 0.62);
-        impulse.dome.position.set(L.burstX, L.burstY + 0.05, L.burstZ);
-        impulse.dome.scale.set(
-          0.5 + dp * L.burstRadius * 0.85,
-          0.4 + dp * L.burstRadius * 0.42,
-          0.5 + dp * L.burstRadius * 0.85);
-      }
-      if (!alive) {
-        L.burst = -1;
-        for (const ring of impulse.rings) ring.visible = false;
-        impulse.dome.visible = false;
-      }
-    }
-    /* ONE opacity for the whole rig, so a glide that ends mid-slam
-       cannot leave the dome at a brightness the glide chose. */
-    impulse.mat.opacity = 1;
-  }
-
   /* ============================================================
      ORDNANCE
 
@@ -2526,65 +2702,225 @@ export function buildVfx(ctx, world) {
     root.frustumCulled = false;
     group.add(root);
 
-    /* A greyscale ramp along one axis, multiplied by the material's own
-       colour at spawn. Baking the colour in would need one geometry per
-       stratagem; baking the GRADIENT costs nothing and leaves the hue
-       free. */
-    const ramp = (geo, axis = "y", lo = 0, hi = 1, floor = 0.04) => {
-      const pos = geo.attributes.position;
-      const colours = new Float32Array(pos.count * 3);
-      for (let i = 0; i < pos.count; i += 1) {
-        const v = axis === "y" ? pos.getY(i) : pos.getZ(i);
-        const t = clamp01((v - lo) / Math.max(1e-4, hi - lo));
-        const f = floor + (1 - floor) * (1 - t * t);
-        colours[i * 3] = f;
-        colours[i * 3 + 1] = f;
-        colours[i * 3 + 2] = f;
-      }
-      geo.setAttribute("color", new THREE.BufferAttribute(colours, 3));
-      return geo;
-    };
+    /* ------------------------------------------------------------
+       The three ordnance primitives were vertex-coloured
+       MeshBasicMaterial shells - an open cylinder, a thin torus and a
+       hemisphere - and every one of them read as exactly what it was:
+       a plank, a hairline and a glass bowl. Each is now a shader that
+       knows what it is drawing.
 
-    /* Per-mesh materials, because these fade INDEPENDENTLY - a salvo
-       lands eleven times over a second and every pop is at its own
-       opacity. They all share one program: `patchBasicMaterial` keys
-       its cache on the fade and blend mode, which are identical. */
-    const additive = () => {
-      const mat = new THREE.MeshBasicMaterial({
-        vertexColors: true, transparent: true, opacity: 0,
-        depthWrite: false, blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide, toneMapped: true,
+       - BEAM: `nv = |N.V|` on a cylinder is the projected radial
+         position, 1 on the axis and 0 at the silhouette - which is
+         both the chord term that makes it read as lit air AND a free
+         coordinate for a hot core down the middle. Light scrolls
+         downward (it arrives from orbit) and both ends die to zero.
+       - SHOCKWAVE: a flat annulus with a hot leading edge and a soft
+         trailing glow, plus a short SKIRT wall standing on the rim so
+         the wave is still read from the level chase camera where a
+         flat ring is a hairline ellipse.
+       - DUST: a hemisphere that is thickest at its silhouette (the
+         inverse of a fresnel shell - dust is read from its edge, not
+         its face), mottled, and hugging the ground.
+       All keep per-mesh materials because they fade INDEPENDENTLY,
+       and one program per family via a constant cache key.
+       ------------------------------------------------------------ */
+    const ORD_VERT = /* glsl */`
+      attribute float aRad;
+      attribute float aUp;
+      varying vec2 vUv;
+      varying vec3 vNrm;
+      varying vec3 vView;
+      varying vec3 vLocal;
+      varying float vRad;
+      varying float vUp;
+      void main() {
+        vUv = uv;
+        vLocal = position;
+        vRad = aRad;
+        vUp = aUp;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vView = -mv.xyz;
+        vNrm = normalMatrix * normal;
+        gl_Position = projectionMatrix * mv;
+      }
+    `;
+    const BEAM_FRAG = /* glsl */`
+      uniform vec3 uColour;
+      uniform vec3 uAccent;
+      uniform float uTime;
+      uniform float uSeed;
+      uniform float uGain;
+      uniform float uP;
+      varying vec2 vUv;
+      varying vec3 vNrm;
+      varying vec3 vView;
+      void main() {
+        float nv = abs(dot(normalize(vNrm), normalize(vView)));
+        float h = clamp(vUv.y, 0.0, 1.0);
+        // Chord through the column, then a hot thread down its axis.
+        float body = nv * nv * 0.55 + nv * 0.25;
+        float core = pow(nv, 9.0) * 1.35 + pow(nv, 30.0) * 1.2;
+        // Both ends die to zero: a lit cut ring hanging in the air is
+        // the single loudest tell of a cylinder.
+        float ends = smoothstep(0.0, 0.035, h) * (1.0 - smoothstep(0.80, 1.0, h));
+        // Light descends. Two scroll rates so it does not read as one
+        // texture sliding.
+        float flow = 0.78 + 0.22 * sin(h * 46.0 + uTime * 9.5 + uSeed * 6.2831);
+        float fine = 0.90 + 0.10 * sin(h * 190.0 + uTime * 21.0 - uSeed * 3.3);
+        float flick = 0.94 + 0.06 * sin(uTime * 41.0 + uSeed * 11.0);
+        // The strike is hottest at the ground; the column above is the
+        // reason it is visible from two districts away.
+        float base = pow(1.0 - h, 3.0) * 0.9 + 0.35;
+        vec3 c = mix(uColour, uAccent, clamp(core * 0.55 + pow(1.0 - h, 6.0) * 0.5, 0.0, 1.0));
+        float peak = max(c.r, max(c.g, c.b));
+        float a = (body + core) * ends * flow * fine * flick * base * uGain * 0.42 / max(0.55, peak);
+        gl_FragColor = vec4(c * a, 1.0);
+      }
+    `;
+    const SHOCK_FRAG = /* glsl */`
+      uniform vec3 uColour;
+      uniform vec3 uAccent;
+      uniform float uTime;
+      uniform float uSeed;
+      uniform float uGain;
+      uniform float uP;
+      uniform float uBand;
+      varying vec3 vNrm;
+      varying vec3 vView;
+      varying float vRad;
+      varying float vUp;
+      void main() {
+        // The floor band: a hot leading edge at the rim (vRad = 1) with
+        // a soft trailing glow inward. uBand is how much of the band
+        // is lit - a ground wave trails, a gyre is a thin loop.
+        float rr = 1.0 - (1.0 - vRad) / max(0.05, uBand);
+        float lead = exp(-(1.0 - rr) * (1.0 - rr) * 110.0);
+        float trail = pow(clamp(rr, 0.0, 1.0), 3.0) * 0.20;
+        float floorA = (lead * 1.15 + trail) * (1.0 - step(0.001, vUp));
+        // The skirt: chord through the wall, hottest at its foot,
+        // gone at its top. Kept well under the floor's leading edge -
+        // at full strength it read as a tin can standing on the sand.
+        float nv = abs(dot(normalize(vNrm), normalize(vView)));
+        float wall = (nv * 0.75 + 0.25) * pow(1.0 - clamp(vUp, 0.0, 1.0), 2.8) * 0.34;
+        float wallA = wall * step(0.001, vUp);
+        // A little breathing so a held wave is not a printed circle.
+        float ripple = 0.9 + 0.1 * sin(vRad * 40.0 - uTime * 18.0 + uSeed * 6.2831);
+        vec3 c = mix(uColour, uAccent, clamp(lead * 0.8, 0.0, 1.0));
+        float peak = max(c.r, max(c.g, c.b));
+        float a = (floorA + wallA) * ripple * uGain / max(0.55, peak);
+        gl_FragColor = vec4(c * a, 1.0);
+      }
+    `;
+    const DUST_FRAG = /* glsl */`
+      uniform vec3 uColour;
+      uniform vec3 uAccent;
+      uniform float uTime;
+      uniform float uSeed;
+      uniform float uGain;
+      uniform float uP;
+      varying vec3 vNrm;
+      varying vec3 vView;
+      varying vec3 vLocal;
+      float hash(vec3 p) {
+        p = fract(p * 0.3183099 + 0.1);
+        p *= 17.0;
+        return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+      }
+      float noise(vec3 x) {
+        vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x),
+                       mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
+                   mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
+                       mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
+      }
+      void main() {
+        float nv = abs(dot(normalize(vNrm), normalize(vView)));
+        // Thickest at the silhouette, like a real cloud of grit.
+        float edge = pow(1.0 - nv, 1.6) * 0.85 + 0.12;
+        vec3 p = normalize(vLocal);
+        float h = clamp(p.y, 0.0, 1.0);
+        // Hugs the ground: full at the foot, thin at the crown.
+        float ground = pow(1.0 - h, 1.3) * 0.8 + 0.2;
+        float n = noise(p * 4.5 + vec3(uSeed * 9.0, uTime * 0.6, uSeed * 3.0));
+        float n2 = noise(p * 11.0 - vec3(uTime * 0.9, 0.0, uSeed * 5.0));
+        // Broken up hard: a smooth shell at any alpha is a bubble.
+        float mottle = smoothstep(0.35, 0.80, n * 0.65 + n2 * 0.35);
+        // Torn open as it dies: what is left of the cloud is rags.
+        mottle *= smoothstep(uP * 0.9 - 0.2, uP * 0.9 + 0.2, n);
+        vec3 c = mix(uColour, uAccent, n * 0.4);
+        float a = edge * ground * mottle * uGain * 0.26;
+        gl_FragColor = vec4(c * a, 1.0);
+      }
+    `;
+
+    const ordMat = (frag, family) => {
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uColour: { value: new THREE.Color("#ffffff") },
+          uAccent: { value: new THREE.Color("#ffffff") },
+          uTime: { value: 0 },
+          uSeed: { value: Math.random() },
+          uGain: { value: 0 },
+          uP: { value: 0 },
+          uBand: { value: 1 },
+        },
+        vertexShader: ORD_VERT,
+        fragmentShader: frag,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        forceSinglePass: true,
+        toneMapped: true,
       });
-      // Back/front ordering is irrelevant under additive blending.
-      // Three's default two-pass transparent DoubleSide path otherwise
-      // doubles every active ring, dome and beam render call.
-      mat.forceSinglePass = true;
-      mat.name = "sf-ordnance";
-      patchBasicMaterial(mat, atmos, 1.0, true);
+      mat.name = `sf-ordnance-${family}`;
+      mat.customProgramCacheKey = () => `sf-ord-${family}`;
       return mat;
     };
 
-    // A beam from orbit: open cylinder, hot at the base, unit height.
-    const beamGeo = new THREE.CylinderGeometry(0.62, 1, 1, 18, 1, true);
-    beamGeo.translate(0, 0.5, 0);
-    ramp(beamGeo, "y", 0, 1, 0.02);
-    // A flat pressure ring, unit radius.
-    const ringGeo = new THREE.TorusGeometry(1, 0.030, 6, 64);
-    ringGeo.rotateX(Math.PI / 2);
-    ramp(ringGeo, "y", -0.06, 0.06, 0.35);
-    // The dust hemisphere the ring leaves behind it.
-    const domeGeo = new THREE.SphereGeometry(1, 24, 10, 0, TAU, 0, Math.PI * 0.5);
-    ramp(domeGeo, "y", 0, 1, 0.05);
+    // Attribute helper: aRad (radial 0..1 across the floor band) and
+    // aUp (0 on the floor, height fraction on the skirt).
+    const tagGeo = (geo, radFn, upFn) => {
+      const pos = geo.attributes.position;
+      const rad = new Float32Array(pos.count);
+      const up = new Float32Array(pos.count);
+      for (let i = 0; i < pos.count; i += 1) {
+        const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+        rad[i] = radFn(x, y, z);
+        up[i] = upFn(x, y, z);
+      }
+      geo.setAttribute("aRad", new THREE.BufferAttribute(rad, 1));
+      geo.setAttribute("aUp", new THREE.BufferAttribute(up, 1));
+      return geo;
+    };
 
-    const make = (geo, count, order) => {
+    // A beam from orbit: open cylinder, unit height, base at origin.
+    const beamGeo = new THREE.CylinderGeometry(0.72, 1, 1, 26, 1, true);
+    beamGeo.translate(0, 0.5, 0);
+    tagGeo(beamGeo, () => 0, (x, y) => y);
+    // A pressure wave: floor annulus + a unit-height skirt on the rim.
+    const SHOCK_INNER = 0.58;
+    const floorGeo = new THREE.RingGeometry(SHOCK_INNER, 1, 72, 1);
+    floorGeo.rotateX(-Math.PI / 2);
+    tagGeo(floorGeo, (x, y, z) => clamp01((Math.hypot(x, z) - SHOCK_INNER) / (1 - SHOCK_INNER)),
+      () => 0);
+    const skirtGeo = new THREE.CylinderGeometry(1, 1, 1, 72, 1, true);
+    skirtGeo.translate(0, 0.5, 0);
+    tagGeo(skirtGeo, () => 1, (x, y) => Math.max(0.002, y));
+    const ringGeo = mergeGeometries(THREE, [floorGeo, skirtGeo]);
+    // The dust hemisphere the wave leaves behind it.
+    const domeGeo = new THREE.SphereGeometry(1, 28, 12, 0, TAU, 0, Math.PI * 0.5);
+    tagGeo(domeGeo, () => 0, (x, y) => y);
+
+    const make = (geo, count, order, frag, family) => {
       const out = [];
       for (let i = 0; i < count; i += 1) {
-        const mesh = new THREE.Mesh(geo, additive());
+        const mesh = new THREE.Mesh(geo, ordMat(frag, family));
         mesh.frustumCulled = false;
         mesh.visible = false;
         mesh.renderOrder = order;
         root.add(mesh);
-        out.push({ mesh, life: 0, span: 1, kind: null });
+        out.push({ mesh, life: 0, span: 1, kind: null, wall: 1 });
       }
       return out;
     };
@@ -2647,9 +2983,14 @@ export function buildVfx(ctx, world) {
       scorches.push({ mesh, position, life: 0, span: 1 });
     }
 
+    const FAMILIES = { beam: [BEAM_FRAG, "beam"], shock: [SHOCK_FRAG, "shock"], dust: [DUST_FRAG, "dust"] };
     return {
       root,
-      beams: make(beamGeo, 3, 8),
+      /* For rigs that keep persistent meshes on these families (the
+         Penitent's Fall) rather than borrowing pooled slots. */
+      newMat: (family) => ordMat(...FAMILIES[family]),
+      geos: { beam: beamGeo, ring: ringGeo, dome: domeGeo },
+      beams: make(beamGeo, 3, 8, BEAM_FRAG, "beam"),
       /* Twelve was not enough once the Orders started tolling. A
          capstone alone spends five, a salvo spends eleven over a
          second, and `takeFx` recycles the stalest LIVE slot when the
@@ -2657,14 +2998,326 @@ export function buildVfx(ctx, world) {
          rings pulled out from under it mid-flight and popped. These
          are 64-segment tori with a shared geometry; the cost of the
          extra dozen is a dozen matrix updates. */
-      rings: make(ringGeo, 24, 7),
-      domes: make(domeGeo, 4, 6),
+      rings: make(ringGeo, 24, 7, SHOCK_FRAG, "shock"),
+      domes: make(domeGeo, 4, 6, DUST_FRAG, "dust"),
       scorches,
       // Deferred work: a salvo is eleven detonations spread over a
       // second, and a lance is four beats over half of one.
       queue: [],
     };
   })();
+
+  const impulse = (() => {
+    const root = new THREE.Group();
+    root.name = "impulse-vfx";
+    root.frustumCulled = false;
+    group.add(root);
+
+    /* THE ROOT NEVER MOVES. All impulse geometry is world-space.
+       Ground-boost propulsion belongs exclusively to the reliquary
+       pack, so this rig contains only the Penitent's Fall effects.
+
+       Two persistent meshes for the hang and the plunge - a column of
+       gathering light above the shoulders and a halo tightening over
+       the head - both on the ordnance shader families, so the fall
+       shares its look with the lance and the consecration rather than
+       being the one effect drawn with vertex-tinted primitives. The
+       landfall itself is all pooled: rings, dome, sigil, sparks. */
+    const columnGeo = new THREE.CylinderGeometry(0.62, 1, 1, 24, 1, true);
+    columnGeo.translate(0, 0.5, 0);
+    {
+      const pos = columnGeo.attributes.position;
+      const rad = new Float32Array(pos.count);
+      const up = new Float32Array(pos.count);
+      for (let i = 0; i < pos.count; i += 1) up[i] = pos.getY(i);
+      columnGeo.setAttribute("aRad", new THREE.BufferAttribute(rad, 1));
+      columnGeo.setAttribute("aUp", new THREE.BufferAttribute(up, 1));
+    }
+    const column = new THREE.Mesh(columnGeo, ordnance.newMat("beam"));
+    column.name = "slam-column";
+    column.visible = false;
+    column.frustumCulled = false;
+    column.renderOrder = 8;
+    column.material.uniforms.uColour.value.set("#ffc453");
+    column.material.uniforms.uAccent.value.set("#fff6dc");
+    root.add(column);
+
+    const halo = new THREE.Mesh(ordnance.geos.ring, ordnance.newMat("shock"));
+    halo.name = "slam-halo";
+    halo.visible = false;
+    halo.frustumCulled = false;
+    halo.renderOrder = 8;
+    halo.material.uniforms.uColour.value.set("#ffd27a");
+    halo.material.uniforms.uAccent.value.set("#fffaf0");
+    halo.material.uniforms.uBand.value = 0.36;
+    root.add(halo);
+
+    const live = {
+      charge: 0, chargeSeen: 0, x: 0, y: 0, z: 0, spin: 0,
+      /* The trigger frame is the only one that plants the ground seal;
+         `armed` remembers a hang is running so it is not re-planted
+         every frame the charge is reported. */
+      armed: false,
+    };
+    return { root, column, halo, live };
+  })();
+
+  /** Something was rammed. */
+  function boostImpact(x, y, z, dx, dz, heavy) {
+    flashes.emit(x, y, z, heavy ? 1.5 : 1.15, 0.11, 2.0);
+    sparks.burst(x, y, z, heavy ? 26 : 18, dx, 0.5, dz, heavy ? 12 : 9, 0.8, 2.0, 0.45, 0.024);
+    impacts.emitDirected(x, y, z, heavy ? 22 : 16, dx, 0.55, dz,
+      heavy ? 11 : 9, heavy ? 1.3 : 1.0, 2.0, 0.6, IK_GLINT);
+    impacts.emit(x, y, z, 12, 3.0, 1.1, 0.5, 0.7);
+    impacts.emit(x, y - 0.3, z, 8, 1.6, 2.4, 13.0, 1.1, IK_SMOKE);
+    ringFx(x, y - 0.4, z, 0.3, heavy ? 3.4 : 2.4, 0.42, "#ffcf6a", 0.7, "#fff4d8", 0.8);
+  }
+
+  /** The hang, with the charge building overhead. */
+  function slamCharge(x, y, z, charge) {
+    const L = impulse.live;
+    L.charge = 0.1;
+    L.chargeSeen = clamp01(charge);
+    L.x = x; L.y = y; L.z = z;
+    if (!L.armed) {
+      L.armed = true;
+      /* The trigger frame: the ground below is MARKED. A seal where
+         the fall will land tells the player - and everything standing
+         on it - what is about to happen, which is the whole point of
+         the hang. */
+      const g = terrain.heightAt(x, z);
+      sigilFx(x, z, 3.4, 1.35, "#ffbd3e", "#fff1c8", 8, 0.35, 0.9);
+      ringFx(x, g + 0.25, z, 3.8, 0.9, 0.5, "#ffc453", 0.7, "#fff4d8", 0.7);
+      flashes.emit(x, y + 1.5, z, 1.2, 0.18, 2.0);
+    }
+    // Light gathering IN: glints and streaks converging on the lance.
+    if (charge > 0.04 && Math.random() < 0.85) {
+      const a = Math.random() * TAU;
+      const r = 2.8 * (1 - charge * 0.6) + 0.5;
+      const yy = y + 0.4 + Math.random() * 2.6;
+      impacts.emitDirected(x + Math.cos(a) * r, yy, z + Math.sin(a) * r, 1,
+        -Math.cos(a), 0.6, -Math.sin(a), 5.5, 0.55, 2.0, 0.5, IK_GLINT);
+      if (Math.random() < 0.5) {
+        sparks.write(x + Math.cos(a) * r, yy, z + Math.sin(a) * r,
+          -Math.cos(a) * 6.5, 1.5, -Math.sin(a) * 6.5, 0.32, 0.014, 2.0);
+        sparks.flush();
+      }
+    }
+  }
+
+  /** The descent streak. */
+  function slamTrail(x, y, z) {
+    const L = impulse.live;
+    L.charge = 0.1;
+    L.chargeSeen = 1;
+    L.x = x; L.y = y; L.z = z;
+    // A comet: embers and streaks shed upward as the body drops past.
+    impacts.emitDirected(x, y + 1.0, z, 3, 0, 1, 0, 3.5, 0.6, 2.0, 0.5, IK_EMBER);
+    sparks.burst(x, y + 0.9, z, 3, 0, 1, 0, 5, 0.6, 2.0, 0.4, 0.014);
+  }
+
+  /** Landfall. */
+  function slamImpact(x, y, z, radius = 8, hits = 0) {
+    const L = impulse.live;
+    L.charge = 0;
+    L.armed = false;
+    const r = Math.max(2, radius);
+    flashes.emit(x, y + 0.6, z, 2.8, 0.16, 2.0);
+    flashes.emit(x, y + 1.4, z, 4.6, 0.30, 1.0);
+    // The seal of the fall, struck into the sand at the moment of
+    // contact, and the shockwave leaving it.
+    sigilFx(x, z, r * 0.42, 1.6, "#ffbd3e", "#fff1c8", 8, 0.20, 1.0);
+    ringFx(x, y + 0.28, z, 0.5, r * 1.05, 0.62, "#ffe2a4", 1.0, "#ffffff", 1.1);
+    later(0.05, () => {
+      ringFx(x, y + 0.42, z, r * 0.2, r * 1.32, 0.95, "#ffc453", 0.8, "#fff4d8", 0.8);
+      /* The dust is SPRITES, thrown outward as a ring, not a shell:
+         a smooth hemisphere at any alpha reads as a force field, and
+         a fall is not supposed to leave one. */
+      impacts.emitRing(x, y + 0.3, z, 40, r * 0.25, r * 0.9, 1.6, 4.6, 13.0, 1.7, 0.05, 0, IK_SMOKE);
+    });
+    // A halo LIFTING off the ground where the lance struck: the light
+    // that came down going back up.
+    gyreFx(x, y + 0.5, z, 0.4, r * 0.55, 1.1, "#ffd27a", 0.7, 0.16, 2.6, 0.3);
+    later(0.10, () => gyreFx(x, y + 0.7, z, 0.6, r * 0.75, 1.3, "#ffbd3e", 0.55, 0.22, 2.2, 1.4));
+    // Debris: streaks fanning up and out, grit, and the sand skirt.
+    sparks.burst(x, y + 0.3, z, 44, 0, 1, 0, 14, 0.85, 0.9, 0.7, 0.028);
+    sparks.ring(x, y + 0.2, z, 40, 0.9, r * 1.4, 4.5, 2.0, 0.6, 0.026);
+    impacts.emit(x, y + 0.35, z, 44, r * 0.34, 2.2, 0.9, 0.9);
+    impacts.emit(x, y + 0.25, z, 36, r * 0.24, 4.4, 13.0, 1.9, IK_SMOKE);
+    for (let i = 0; i < 12; i += 1) {
+      const a = (i / 12) * TAU + Math.random() * 0.2;
+      impacts.emitDirected(x + Math.cos(a) * 0.8, y + 0.22, z + Math.sin(a) * 0.8,
+        3, Math.cos(a), 0.42, Math.sin(a), 15 + Math.random() * 7, 1.4, 0.55, 0.7, IK_SHARD);
+    }
+    scorchFx(x, z, r * 0.36, 5, "#3a2412", 0.28);
+    if (hits > 0) flashes.emit(x, y + 0.9, z, 2.2, 0.13, 2.0);
+  }
+
+  /** Drives the hang rig. Called once a frame from `update`. */
+  function updateImpulse(dt) {
+    const L = impulse.live;
+    const chargeOn = L.charge > 0;
+    L.charge = Math.max(0, L.charge - dt);
+    const show = chargeOn && L.charge > 0;
+    if (impulse.column.visible !== show) {
+      impulse.column.visible = show;
+      impulse.halo.visible = show;
+    }
+    if (!show) { L.armed = false; return; }
+    const c = L.chargeSeen;
+    const now = atmos.elapsed;
+    L.spin += dt * (2.2 + c * 6.5);
+    /* Based at the SHOULDERS, not the waist. Rooted lower, the hot
+       end of the column sat over the breastplate and erased the one
+       silhouette the wind-up exists to show. */
+    const cu = impulse.column.material.uniforms;
+    impulse.column.position.set(L.x, L.y + 1.55, L.z);
+    impulse.column.scale.set(0.28 + c * 0.42, 3.2 + c * 4.6, 0.28 + c * 0.42);
+    cu.uTime.value = now;
+    cu.uGain.value = 0.55 + c * 1.1;
+    // The halo: wide and faint at first, tight and bright at full
+    // charge, spinning up as it closes.
+    const hu = impulse.halo.material.uniforms;
+    const hr = 2.3 - c * 1.35;
+    impulse.halo.position.set(L.x, L.y + 2.35 + c * 0.35, L.z);
+    impulse.halo.rotation.set(0.10, L.spin, 0.06);
+    impulse.halo.scale.set(hr, 0.10 + c * 0.08, hr);
+    hu.uTime.value = now;
+    hu.uGain.value = 0.35 + c * 1.0;
+  }
+
+  /* ============================================================
+     THE SLASH
+
+     A crescent of light along the glaive's sweep. Six motes along an
+     arc are a dotted line, and a dotted line is not a swing - what
+     the eye reads as a blow is the RIBBON the edge leaves in the air,
+     hot at the tip, thinning behind, drawn on over the swing and
+     gone a beat later. Four pooled meshes; the crescent is built in
+     the vertex shader from a unit strip so one geometry serves every
+     reach and every arc.
+     ============================================================ */
+  const SLASH_VERT = /* glsl */`
+    uniform float uArc;
+    uniform float uInner;
+    uniform float uLift;
+    uniform float uTilt;
+    varying vec2 vUv;
+    varying vec3 vNrm;
+    varying vec3 vView;
+    void main() {
+      // uv.x runs start -> tip along the sweep, uv.y inner -> outer edge.
+      vUv = uv;
+      float ang = (uv.x - 0.5) * uArc;
+      float rad = mix(uInner, 1.0, uv.y);
+      // The sweep rises through the middle and the blade tilts, so the
+      // ribbon is a curved sheet in space rather than a flat fan.
+      float lift = sin(uv.x * 3.14159) * uLift;
+      vec3 p = vec3(sin(ang) * rad, lift + uv.y * uTilt, cos(ang) * rad);
+      vec4 mv = modelViewMatrix * vec4(p, 1.0);
+      vView = -mv.xyz;
+      vNrm = normalMatrix * vec3(0.0, 1.0, 0.0);
+      gl_Position = projectionMatrix * mv;
+    }
+  `;
+  const SLASH_FRAG = /* glsl */`
+    uniform vec3 uColour;
+    uniform vec3 uAccent;
+    uniform float uP;
+    uniform float uGain;
+    uniform float uTime;
+    varying vec2 vUv;
+    varying vec3 vNrm;
+    varying vec3 vView;
+    void main() {
+      // Drawn on from the start of the sweep to the tip over the first
+      // part of the life, then it thins from the trailing end.
+      float head = clamp(uP * 1.6, 0.0, 1.0);
+      float shown = 1.0 - smoothstep(head - 0.06, head + 0.02, vUv.x);
+      float tailFade = smoothstep(0.0, 1.0, vUv.x) * 0.7 + 0.3;
+      float behind = 1.0 - smoothstep(0.0, 1.0, (uP - 0.35) * 2.2 - vUv.x * 0.6);
+      // The outer edge is the blade: hottest there, soft inward.
+      float edge = pow(vUv.y, 2.6);
+      float blade = exp(-(1.0 - vUv.y) * (1.0 - vUv.y) * 60.0) * 1.4;
+      // The tip carries a hot spot that runs along the edge.
+      float tip = exp(-pow(vUv.x - head, 2.0) * 90.0) * pow(vUv.y, 4.0) * 1.8 * step(uP, 0.62);
+      float nv = abs(dot(normalize(vNrm), normalize(vView)));
+      float sheen = 0.55 + 0.45 * pow(1.0 - nv, 1.5);
+      float lum = (edge * 0.7 + blade * 1.3 + tip) * shown * tailFade * behind * sheen * uGain * 2.1;
+      vec3 c = mix(uColour, uAccent, clamp(blade * 0.35 + tip * 0.6, 0.0, 1.0));
+      float peak = max(c.r, max(c.g, c.b));
+      gl_FragColor = vec4(c * lum / max(0.55, peak), 1.0);
+    }
+  `;
+  const slashes = (() => {
+    const root = new THREE.Group();
+    root.name = "slash-vfx";
+    root.frustumCulled = false;
+    group.add(root);
+    // A unit strip: uv.x along the sweep (24 steps), uv.y across (4).
+    const geo = new THREE.PlaneGeometry(1, 1, 28, 4);
+    geo.translate(0.5, 0.5, 0);
+    const out = [];
+    for (let i = 0; i < 4; i += 1) {
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uColour: { value: new THREE.Color("#ffd27a") },
+          uAccent: { value: new THREE.Color("#fff8e6") },
+          uArc: { value: 1.6 }, uInner: { value: 0.55 }, uLift: { value: 0.5 },
+          uTilt: { value: 0.18 }, uP: { value: 0 }, uGain: { value: 0 }, uTime: { value: 0 },
+        },
+        vertexShader: SLASH_VERT, fragmentShader: SLASH_FRAG,
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide, forceSinglePass: true, toneMapped: true,
+      });
+      mat.name = "sf-slash";
+      mat.customProgramCacheKey = () => "sf-slash";
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.frustumCulled = false;
+      mesh.visible = false;
+      mesh.renderOrder = 8;
+      root.add(mesh);
+      out.push({ mesh, life: 0, span: 1 });
+    }
+    return out;
+  })();
+
+  function slashFx(x, y, z, yaw, reach, arc, seconds, colour, accent, gain = 1,
+    lift = 0.5, tilt = 0.18, inner = 0.55, mirror = false) {
+    let slot = slashes[0];
+    for (const item of slashes) {
+      if (item.life <= 0) { slot = item; break; }
+      if (item.life / item.span < slot.life / slot.span) slot = item;
+    }
+    slot.life = seconds;
+    slot.span = seconds;
+    const u = slot.mesh.material.uniforms;
+    u.uColour.value.set(colour);
+    u.uAccent.value.set(accent);
+    u.uArc.value = mirror ? -arc : arc;
+    u.uInner.value = inner;
+    u.uLift.value = lift / Math.max(0.5, reach);
+    u.uTilt.value = tilt;
+    u.uGain.value = gain;
+    u.uP.value = 0;
+    slot.mesh.position.set(x, y, z);
+    slot.mesh.rotation.set(0, yaw, 0);
+    slot.mesh.scale.setScalar(reach);
+    slot.mesh.visible = true;
+    return slot;
+  }
+
+  function updateSlashes(dt) {
+    for (const slot of slashes) {
+      if (slot.life <= 0) continue;
+      slot.life -= dt;
+      const p = 1 - clamp01(slot.life / slot.span);
+      const u = slot.mesh.material.uniforms;
+      if (slot.life <= 0) { slot.mesh.visible = false; u.uGain.value = 0; continue; }
+      u.uP.value = p;
+      u.uTime.value = atmos.elapsed;
+    }
+  }
 
   /** Oldest-first recycling, exactly like the impact pool: dropping the
    *  stalest effect is invisible, and growing mid-strike is not. */
@@ -2683,19 +3336,36 @@ export function buildVfx(ctx, world) {
     ordnance.queue.push({ at: atmos.elapsed + Math.max(0, seconds), fn });
   }
 
-  function beamFx(x, y, z, radius, height, seconds, colour) {
+  /* Body colour plus an accent the shader mixes toward at its
+     hottest point. Left unspecified, the accent is the body colour
+     lifted toward white, which is what every caller before the
+     shader primitives expected. */
+  const _accentTmp = new THREE.Color();
+  const _white = new THREE.Color(1, 1, 1);
+  function paintSlot(slot, colour, accent) {
+    const u = slot.mesh.material.uniforms;
+    u.uColour.value.set(colour);
+    if (accent) u.uAccent.value.set(accent);
+    else u.uAccent.value.copy(_accentTmp.set(colour).lerp(_white, 0.55));
+    u.uSeed.value = Math.random();
+    u.uGain.value = 0;
+    u.uP.value = 0;
+  }
+
+  function beamFx(x, y, z, radius, height, seconds, colour, accent, gain = 1) {
     const slot = takeFx(ordnance.beams);
     slot.life = seconds;
     slot.span = seconds;
     slot.radius = radius;
     slot.height = height;
+    slot.gain = gain;
     slot.mesh.position.set(x, y, z);
-    slot.mesh.material.color.set(colour);
+    paintSlot(slot, colour, accent);
     slot.mesh.visible = true;
     return slot;
   }
 
-  function ringFx(x, y, z, from, to, seconds, colour, thickness = 1) {
+  function ringFx(x, y, z, from, to, seconds, colour, thickness = 1, accent, gain = 1) {
     const slot = takeFx(ordnance.rings);
     slot.life = seconds;
     slot.span = seconds;
@@ -2703,12 +3373,17 @@ export function buildVfx(ctx, world) {
     slot.to = to;
     slot.thickness = thickness;
     slot.rise = 0;
+    // A ground wave carries its skirt; a gyre stands in the air and
+    // is a loop, so it keeps only a sliver of wall.
+    slot.wall = 1;
+    slot.gain = gain;
+    slot.mesh.material.uniforms.uBand.value = 1;
     slot.mesh.position.set(x, y, z);
     // Wing cues borrow this ring as a vertical loop. Every ordinary
     // spawn resets it so a recycled loop can never tip a later
     // pressure wave onto its side.
-    slot.mesh.rotation.set(0, 0, 0);
-    slot.mesh.material.color.set(colour);
+    slot.mesh.rotation.set(0, 0, 0, "XYZ");
+    paintSlot(slot, colour, accent);
     slot.mesh.visible = true;
     return slot;
   }
@@ -2730,17 +3405,20 @@ export function buildVfx(ctx, world) {
     tilt = 0.38, rise = 1.1, spin = 0) {
     const slot = ringFx(x, y, z, from, to, seconds, colour, thickness);
     slot.rise = rise;
+    slot.wall = 0.22;
+    slot.mesh.material.uniforms.uBand.value = 0.42;
     slot.mesh.rotation.set(tilt, spin, tilt * 0.42);
     return slot;
   }
 
-  function domeFx(x, y, z, radius, seconds, colour) {
+  function domeFx(x, y, z, radius, seconds, colour, accent, gain = 1) {
     const slot = takeFx(ordnance.domes);
     slot.life = seconds;
     slot.span = seconds;
     slot.radius = radius;
+    slot.gain = gain;
     slot.mesh.position.set(x, y, z);
-    slot.mesh.material.color.set(colour);
+    paintSlot(slot, colour, accent);
     slot.mesh.visible = true;
     return slot;
   }
@@ -3159,7 +3837,11 @@ export function buildVfx(ctx, world) {
       slot.mesh.scale.setScalar(slot.radius * (0.94 + 0.06 * Math.min(1, p * 6)));
       const u = slot.mesh.material.uniforms;
       u.uTime.value = now;
-      u.uWipe.value = Math.min(1, p / 0.30);
+      // Written on in the first third of a short seal, and never
+      // slower than about a second on a long one - a twenty-second
+      // consecration was taking six seconds to finish drawing itself.
+      const wipeSpan = Math.min(0.9, slot.span * 0.30);
+      u.uWipe.value = Math.min(1, (p * slot.span) / Math.max(0.05, wipeSpan));
       u.uGain.value = slot.gain
         * (p < 0.05 ? p / 0.05 : (1 - p) ** 1.25) * 0.95;
     }
@@ -3211,54 +3893,62 @@ export function buildVfx(ctx, world) {
       if (slot.life <= 0) continue;
       slot.life -= dt;
       const p = 1 - clamp01(slot.life / slot.span);
-      if (slot.life <= 0) { slot.mesh.visible = false; slot.mesh.material.opacity = 0; continue; }
+      const u = slot.mesh.material.uniforms;
+      if (slot.life <= 0) { slot.mesh.visible = false; u.uGain.value = 0; continue; }
       /* Flares open, then collapses to a thread. The collapse is what
          makes it read as something that STRUCK rather than as a light
          that was switched off: the column narrows to nothing while the
          ground effects it caused are still expanding. */
       const width = p < 0.10
         ? lerp(0.42, 1, p / 0.10)
-        : lerp(1, 0.06, ((p - 0.10) / 0.90) ** 0.65);
+        : lerp(1, 0.10, ((p - 0.10) / 0.90) ** 0.65);
       slot.mesh.scale.set(slot.radius * width, slot.height, slot.radius * width);
-      slot.mesh.material.opacity = p < 0.06 ? 1 : (1 - p) ** 1.35;
+      u.uTime.value = now;
+      u.uP.value = p;
+      // Brighter as it thins, so the collapsing thread stays hot.
+      u.uGain.value = (slot.gain ?? 1) * (p < 0.06 ? 1 : (1 - p) ** 1.1) * (1 + (1 - width) * 0.8);
     }
 
     for (const slot of ordnance.rings) {
       if (slot.life <= 0) continue;
       slot.life -= dt;
       const p = 1 - clamp01(slot.life / slot.span);
-      if (slot.life <= 0) { slot.mesh.visible = false; slot.mesh.material.opacity = 0; continue; }
+      const u = slot.mesh.material.uniforms;
+      if (slot.life <= 0) { slot.mesh.visible = false; u.uGain.value = 0; continue; }
       // Fast out of the gate and decelerating, which is how a pressure
       // wave actually travels and the opposite of a linear tween.
       const eased = 1 - (1 - p) ** 2.2;
       const r = lerp(slot.from, slot.to, eased);
-      /* THE TUBE MUST NOT SCALE WITH THE RADIUS. A torus scaled
-         uniformly is a ring whose cross-section grows as it expands,
-         and at a lance's twenty-four metres that turned a 5cm band into
-         a twelve-metre vertical ribbon standing on the sand - which
-         reviewed as a translucent wall rather than as a pressure wave.
-         The band keeps a near-constant height and only the circle
-         travels. */
-      slot.mesh.scale.set(r, (0.9 + r * 0.05) * slot.thickness, r);
+      /* THE SKIRT MUST NOT SCALE WITH THE RADIUS. Scaled uniformly, a
+         wave's wall grows as it expands, and at a lance's twenty-four
+         metres that turned a knee-high wall into a twelve-metre
+         translucent curtain. The wall keeps a near-constant height and
+         only the circle travels. */
+      const wall = 0.26 * (0.9 + Math.min(r, 20) * 0.05) * slot.thickness * (slot.wall ?? 1);
+      slot.mesh.scale.set(r, Math.max(0.01, wall), r);
       // A gyre climbs while it opens, decelerating with the same eased
       // curve, so the loop and its lift stay one movement.
       if (slot.rise) slot.mesh.position.y += slot.rise * (1 - p) ** 1.4 * dt;
-      slot.mesh.material.opacity = (1 - p) ** 1.9 * 0.62;
+      u.uTime.value = now;
+      u.uP.value = p;
+      u.uGain.value = (slot.gain ?? 1) * (1 - p) ** 1.7 * 0.9;
     }
 
     for (const slot of ordnance.domes) {
       if (slot.life <= 0) continue;
       slot.life -= dt;
       const p = 1 - clamp01(slot.life / slot.span);
-      if (slot.life <= 0) { slot.mesh.visible = false; slot.mesh.material.opacity = 0; continue; }
+      const u = slot.mesh.material.uniforms;
+      if (slot.life <= 0) { slot.mesh.visible = false; u.uGain.value = 0; continue; }
       const eased = 1 - (1 - p) ** 2.6;
       slot.mesh.scale.set(slot.radius * eased, slot.radius * eased * 0.55,
         slot.radius * eased);
-      /* Barely there. This is the sand a blast lifts, and at half
-         opacity it rendered as a smooth glass dome sitting over the
-         crater - a hard-edged solid where the whole point is a soft
-         one. Dust is read from what it dims, not from its own surface. */
-      slot.mesh.material.opacity = (1 - p) ** 2.2 * 0.15;
+      /* Soft. This is the sand a blast lifts; the shader keeps its
+         alpha at the silhouette and lets the face go, so it is read
+         from what it dims and from its edge, not from a surface. */
+      u.uTime.value = now;
+      u.uP.value = p;
+      u.uGain.value = (slot.gain ?? 1) * (p < 0.08 ? p / 0.08 : (1 - p) ** 2.2);
     }
 
     for (const slot of ordnance.scorches) {
@@ -3300,25 +3990,34 @@ export function buildVfx(ctx, world) {
   function orbitalLance(x, y, z, radius = 26) {
     const ground = terrain.heightAt(x, z);
     // The strike itself: 400m of it, so the top is out of frame from
-    // any camera at head height and the player never sees it end.
-    beamFx(x, ground - 2, z, 2.6, 400, 0.62, LANCE_HOT);
-    beamFx(x, ground - 2, z, 5.4, 320, 0.90, LANCE_COLD);
-    flashes.emit(x, ground + 1.6, z, 5.4, 0.24, 1.0);
-    impacts.emit(x, ground + 0.4, z, 70, radius * 0.42, 3.2, 0.9);
+    // any camera at head height and the player never sees it end. A
+    // white-hot thread inside a wider cold-blue mantle.
+    beamFx(x, ground - 2, z, 2.4, 400, 0.62, LANCE_HOT, "#ffffff", 1.25);
+    beamFx(x, ground - 2, z, 5.6, 320, 0.90, LANCE_COLD, LANCE_HOT, 0.8);
+    flashes.emit(x, ground + 1.6, z, 5.4, 0.24, 2.0);
+    flashes.emit(x, ground + 0.6, z, 9.5, 0.40, 1.0);
+    // The strike throws a fan of streaks straight up the beam and a
+    // ring of grit outward; the sand it lifts is sand, not light.
+    sparks.burst(x, ground + 0.4, z, 70, 0, 1, 0, 26, 0.55, 0.95, 0.75, 0.032);
+    sparks.ring(x, ground + 0.3, z, 40, 1.2, radius * 0.9, 6.5, 0.9, 0.7, 0.028);
+    impacts.emit(x, ground + 0.4, z, 50, radius * 0.42, 2.6, 0.9, 0.9);
+    impacts.emit(x, ground + 0.5, z, 60, radius * 0.30, 5.4, 13.0, 2.6, IK_SMOKE);
 
     later(0.06, () => {
-      ringFx(x, ground + 0.35, z, 1.5, radius * 0.92, 0.85, LANCE_HOT, 1.0);
-      domeFx(x, ground, z, radius * 0.78, 1.35, DUST);
-      impacts.emit(x, ground + 0.3, z, 60, radius * 0.30, 5.6, 0.16);
+      ringFx(x, ground + 0.35, z, 1.5, radius * 0.92, 0.85, LANCE_HOT, 1.0, "#ffffff", 1.1);
+      domeFx(x, ground, z, radius * 0.78, 1.35, DUST, "#e8c9a0", 1.2);
+      impacts.emit(x, ground + 0.3, z, 60, radius * 0.30, 5.6, 13.0, 2.0, IK_SMOKE);
     });
     // The second wave, wider and slower: an air blast outruns its own
     // debris, and two rings at different speeds are what says so.
     later(0.20, () => {
-      ringFx(x, ground + 0.55, z, radius * 0.3, radius * 1.32, 1.25, LANCE_COLD, 0.7);
+      ringFx(x, ground + 0.55, z, radius * 0.3, radius * 1.32, 1.25, LANCE_COLD, 0.7, LANCE_HOT, 0.8);
     });
     later(0.34, () => {
       scorchFx(x, z, radius * 0.55, 9, "#2b1a12", 0.62);
-      impacts.emit(x, ground + 0.8, z, 34, radius * 0.5, 2.2, 0.10);
+      impacts.emit(x, ground + 0.8, z, 34, radius * 0.5, 2.2, 0.10, 0.8, IK_SHARD);
+      // Heat left in the crater: a low ember glow that outlasts the beam.
+      ringFx(x, ground + 0.12, z, radius * 0.06, radius * 0.24, 2.4, "#ff9a3c", 0.5, "#ffd9a0", 0.55);
     });
     /* The column of dust that stands afterwards. It is the part a
        player two districts away actually sees, and the reason a lance
@@ -3326,8 +4025,8 @@ export function buildVfx(ctx, world) {
     for (let i = 1; i <= 7; i += 1) {
       later(0.4 + i * 0.34, () => {
         impacts.emitDirected(x + (Math.random() - 0.5) * radius * 0.45, ground + 0.5,
-          z + (Math.random() - 0.5) * radius * 0.45, 20, 0, 1, 0,
-          3.4, 2.6, 0.30);
+          z + (Math.random() - 0.5) * radius * 0.45, 22, 0, 1, 0,
+          3.4, 3.4, 13.0, 3.2, IK_SMOKE);
       });
     }
   }
@@ -3346,7 +4045,8 @@ export function buildVfx(ctx, world) {
     const ground = terrain.heightAt(x, z);
     const burstY = ground + 17;
     flashes.emit(x, burstY, z, 1.5, 0.16, 0.95);
-    impacts.emit(x, burstY, z, 26, 7.5, 1.05, 0.55);
+    sparks.burst(x, burstY, z, 26, 0, -0.4, 0, 14, 1.0, 0.9, 0.9, 0.03);
+    impacts.emit(x, burstY, z, 26, 7.5, 1.05, 0.55, 0.62, IK_EMBER);
     ringFx(x, burstY, z, 0.6, 7.5, 0.42, CLUSTER_HOT, 1.6);
 
     const count = 11;
@@ -3361,9 +4061,10 @@ export function buildVfx(ctx, world) {
       // has a direction and the player can see where it is going next.
       later(0.22 + (dist / radius) * 0.62 + Math.random() * 0.07, () => {
         const by = terrain.heightAt(bx, bz);
-        flashes.emit(bx, by + 0.9, bz, 1.05, 0.13, 0.95);
-        impacts.emit(bx, by + 0.35, bz, 22, 4.2, 1.25, 0.75);
-        impacts.emit(bx, by + 0.2, bz, 14, 2.6, 2.4, 0.14);
+        flashes.emit(bx, by + 0.9, bz, 1.35, 0.13, 0.95);
+        sparks.burst(bx, by + 0.3, bz, 22, 0, 1, 0, 13, 0.8, 0.9, 0.55, 0.026);
+        impacts.emit(bx, by + 0.35, bz, 18, 4.2, 1.25, 0.75, 0.7);
+        impacts.emit(bx, by + 0.2, bz, 16, 2.6, 3.4, 13.0, 1.6, IK_SMOKE);
         ringFx(bx, by + 0.28, bz, 0.5, 5.2, 0.46, CLUSTER_HOT, 0.9);
         if (i % 3 === 0) domeFx(bx, by, bz, 5.4, 0.8, DUST);
         if (i % 4 === 0) scorchFx(bx, bz, 3.1, 6, "#33200f", 0.30);
@@ -3382,22 +4083,29 @@ export function buildVfx(ctx, world) {
    */
   function consecration(x, y, z, radius = 7, seconds = 20) {
     const ground = terrain.heightAt(x, z);
-    beamFx(x, ground - 1, z, 4.2, 34, 1.5, RITE_HOT);
-    beamFx(x, ground - 1, z, 1.5, 26, 1.2, "#fff3d2");
+    beamFx(x, ground - 1, z, 4.2, 34, 1.5, RITE_HOT, "#fff6dc", 0.9);
+    beamFx(x, ground - 1, z, 1.5, 26, 1.2, "#fff3d2", "#ffffff", 1.1);
     flashes.emit(x, ground + 2.2, z, 3.2, 0.3, 2.0);
+    // The seal is written on the sand for as long as the blessing
+    // lasts: eight-fold, the Concord's own star, turning slowly.
+    sigilFx(x, z, radius * 1.02, seconds + 0.8, RITE_HOT, "#fff3d2", 8, 0.10, 0.85);
     // Inward, and slowly: everything else in this file expands.
-    ringFx(x, ground + 0.4, z, radius * 1.9, radius * 0.55, 1.5, RITE_HOT, 1.2);
-    domeFx(x, ground, z, radius, 1.6, RITE_HOT);
+    ringFx(x, ground + 0.4, z, radius * 1.9, radius * 0.55, 1.5, RITE_HOT, 1.2, "#fff3d2", 0.8);
+    domeFx(x, ground, z, radius, 1.6, RITE_HOT, "#fff3d2", 0.7);
+    // Gold ions climbing the pillar.
     for (let i = 0; i < 5; i += 1) {
       later(i * 0.16, () => {
-        impacts.emitDirected(x, ground + 0.4, z, 14, 0, 1, 0, 5.5, 1.1, 2.0);
+        impacts.emitDirected(x, ground + 0.4, z, 14, 0, 1, 0, 5.5, 1.1, 2.0, 1.1, IK_GLINT);
+        sparks.burst(x, ground + 0.5, z, 10, 0, 1, 0, 9, 0.35, 2.0, 0.8, 0.02);
       });
     }
     const pulses = Math.max(1, Math.round(seconds / 2.4));
     for (let i = 1; i <= pulses; i += 1) {
       later(i * 2.4, () => {
-        ringFx(x, terrain.heightAt(x, z) + 0.3, z, radius * 0.4, radius,
-          1.1, RITE_HOT, 0.55);
+        const g = terrain.heightAt(x, z);
+        ringFx(x, g + 0.3, z, radius * 0.4, radius, 1.1, RITE_HOT, 0.55, "#fff3d2", 0.7);
+        gyreFx(x, g + 1.2, z, radius * 0.25, radius * 0.6, 1.3, RITE_HOT, 0.6, 0.30, 1.4, i * 0.7);
+        impacts.emitRing(x, g + 0.2, z, 22, radius * 0.6, 0.6, 1.6, 0.9, 2.0, 1.4, 0.3, i, IK_GLINT);
       });
     }
   }
@@ -3405,11 +4113,22 @@ export function buildVfx(ctx, world) {
   /** The blessing, on the body. Called every frame it is live, so it
    *  stays cheap: a few gold ions rising off the trooper. */
   function gild(x, y, z, strength = 1) {
-    if (Math.random() > 0.45 * clamp01(strength)) return;
+    const k = clamp01(strength);
+    if (Math.random() > 0.9 * k) return;
+    // Motes lifting off the plate, plus the occasional glint that
+    // catches on an edge - an aura, not a puff.
     const a = Math.random() * Math.PI * 2;
-    const r = 0.35 + Math.random() * 0.45;
-    impacts.emitDirected(x + Math.cos(a) * r, y + 0.3 + Math.random() * 1.5,
-      z + Math.sin(a) * r, 1, 0, 1, 0, 1.4, 0.55, 2.0);
+    const r = 0.30 + Math.random() * 0.50;
+    impacts.emitDirected(x + Math.cos(a) * r, y + 0.2 + Math.random() * 1.6,
+      z + Math.sin(a) * r, 1, 0, 1, 0, 1.2, 0.5, 2.0, 1.3,
+      Math.random() < 0.3 ? IK_GLINT : IK_EMBER);
+    if (Math.random() < 0.18 * k) {
+      const b = Math.random() * Math.PI * 2;
+      const rr = 0.25 + Math.random() * 0.35;
+      sparks.write(x + Math.cos(b) * rr, y + 0.5 + Math.random() * 1.2, z + Math.sin(b) * rr,
+        0, 1.6 + Math.random(), 0, 0.5, 0.012, 2.0);
+      sparks.flush();
+    }
   }
 
   /* ------------------------------------------------------------------
@@ -4337,41 +5056,187 @@ export function buildVfx(ctx, world) {
 
   /** An impact. `wall` softens it; `energy` keeps melee and debris warm. */
   function spark(x, y, z, scale = 1, wall = false, energy = false) {
-    /* Was 9 particles and nothing else, which at the far end of a
-       300m shot is a few pixels of dust - the "small impact" in the
-       report. A hit now reads at range as a flash first and debris
-       second, because the flash is what survives the distance. */
-    impacts.emit(x, y, z, wall ? 14 : 26, wall ? 3.2 : 5.2,
-      scale * (wall ? 1.0 : 1.5), energy ? 2.0 : (wall ? 0.25 : 0.95));
-    flashes.emit(x, y, z, (wall ? 0.5 : 0.78) * scale, wall ? 0.09 : 0.13,
+    /* A hit reads at range as a flash first and debris second,
+       because the flash is what survives the distance. Up close it is
+       the FAN OF STREAKS that says something struck: thin, bright,
+       each one falling on its own arc. The old cloud of soft discs
+       read as a puff of white bokeh however it was tinted. */
+    const s = Math.max(0.2, scale);
+    flashes.emit(x, y, z, (wall ? 0.42 : 0.62) * s, wall ? 0.08 : 0.11,
       energy ? 2.0 : (wall ? 0.45 : 1.0));
-  }
-
-  /** A warm reliquary crescent that traces the physical sweep. The arc is
-   *  made from pooled impact motes rather than a transparent ribbon, so it
-   *  stays readable against sand and remains cheap when a pack is struck. */
-  function meleeArc(x, y, z, yaw, reach, arc, hits = 0, slam = false) {
-    const points = slam ? 7 : 6;
-    const radius = reach * (slam ? 0.72 : 0.84);
-    const start = yaw - arc * 0.5;
-    for (let i = 0; i < points; i += 1) {
-      const t = points > 1 ? i / (points - 1) : 0.5;
-      const a = start + arc * t;
-      const px = x + Math.sin(a) * radius;
-      const pz = z + Math.cos(a) * radius;
-      const lift = y + 0.58 + Math.sin(t * Math.PI) * (slam ? 0.46 : 0.74);
-      impacts.emit(px, lift, pz, hits ? 3 : 2, slam ? 1.8 : 1.35,
-        (hits ? 0.30 : 0.16) * (slam ? 1.15 : 1), 1.3);
+    if (energy) {
+      if (wall) {
+        // Masonry: a burst of gold glints, stone slivers and sand.
+        sparks.burst(x, y, z, 12, 0, 0.8, 0, 6.5 * s, 0.95, 2.0, 0.34, 0.016 * s);
+        impacts.emit(x, y, z, 6, 2.2 * s, 0.7 * s, 2.0, 0.42, IK_GLINT);
+        impacts.emit(x, y, z, 7, 2.6 * s, 0.8 * s, 0.25, 0.7, IK_SHARD);
+        impacts.emit(x, y, z, 6, 1.4 * s, 1.9 * s, 13.0, 0.9, IK_SMOKE);
+      } else {
+        // Flesh: reliquary ions off the armour and a spurt of ichor.
+        sparks.burst(x, y, z, 14, 0, 0.75, 0, 7.5 * s, 0.9, 2.0, 0.34, 0.016 * s);
+        impacts.emit(x, y, z, 8, 2.8 * s, 0.85 * s, 2.0, 0.42, IK_GLINT);
+        impacts.emit(x, y, z, 7, 3.0 * s, 0.9 * s, 12.0, 0.6);
+        sparks.burst(x, y, z, 6, 0, 0.6, 0, 4.5 * s, 1.0, 12.0, 0.45, 0.02 * s);
+      }
+      return;
     }
-    const tipYaw = yaw + arc * 0.5;
-    flashes.emit(x + Math.sin(tipYaw) * radius, y + (slam ? 0.48 : 1.0),
-      z + Math.cos(tipYaw) * radius, hits ? 0.55 : 0.28, 0.075, 1.4);
+    // Generic grit: cinders, slivers and a little dust.
+    sparks.burst(x, y, z, wall ? 9 : 14, 0, 0.8, 0, (wall ? 6 : 8) * s, 0.9, 0.9,
+      0.38, 0.018 * s);
+    impacts.emit(x, y, z, wall ? 8 : 12, wall ? 3.2 : 4.6, s * (wall ? 0.9 : 1.2),
+      wall ? 0.25 : 0.95, 0.62);
+    impacts.emit(x, y, z, wall ? 5 : 6, 1.6 * s, 2.0 * s, 13.0, 0.9, IK_SMOKE);
   }
 
-  /** A stratagem landing. */
+  /** The reliquary crescent the glaive leaves in the air, plus the
+   *  sparks the edge throws where it connects. `hits` brightens it and
+   *  `slam` (the finisher) widens it and puts a ring on the ground. */
+  let meleeAlternate = false;
+  function meleeArc(x, y, z, yaw, reach, arc, hits = 0, slam = false) {
+    meleeAlternate = !meleeAlternate;
+    const gain = (hits ? 1.25 : 0.9) * (slam ? 1.25 : 1);
+    slashFx(x, y + (slam ? 0.55 : 0.85), z, yaw, reach * (slam ? 0.9 : 1.0), arc * 1.05,
+      slam ? 0.42 : 0.34, "#ffb63a", "#fff0c8", gain,
+      slam ? 0.25 : 0.55, slam ? 0.10 : 0.22, slam ? 0.42 : 0.58, meleeAlternate && !slam);
+    // A few gold streaks flung off the tip along the swing.
+    const tipYaw = yaw + arc * 0.5;
+    const radius = reach * (slam ? 0.9 : 1.0);
+    const tx = x + Math.sin(tipYaw) * radius;
+    const tz = z + Math.cos(tipYaw) * radius;
+    const ty = y + (slam ? 0.55 : 1.05);
+    sparks.burst(tx, ty, tz, hits ? 10 : 5, Math.cos(tipYaw), 0.3, -Math.sin(tipYaw),
+      hits ? 7 : 4.5, 0.55, 2.0, 0.32, 0.014);
+    if (hits) {
+      impacts.emit(tx, ty, tz, 6, 2.4, 0.7, 2.0, 0.4, IK_GLINT);
+      flashes.emit(tx, ty, tz, 0.55, 0.075, 2.0);
+    }
+    if (slam) {
+      const g = terrain.heightAt(x, z);
+      ringFx(x, g + 0.2, z, 0.4, reach * 1.6, 0.5, "#ffc453", 0.7, "#fff4d8", 0.8);
+      sparks.ring(x, g + 0.2, z, 18, 0.6, 6, 2.5, 2.0, 0.45, 0.018);
+    }
+  }
+
+  /** Something landing hard - a stratagem, a body, a finisher. The
+   *  most-called area effect in the game, and it used to be two puffs
+   *  of the same soft disc. */
   function blast(x, y, z, radius) {
-    impacts.emit(x, y + 0.6, z, 64, radius * 0.5, 2.6, 1.0);
-    impacts.emit(x, y + 0.2, z, 40, radius * 0.22, 4.2, 0.15);
+    const r = Math.max(1.2, radius);
+    flashes.emit(x, y + 0.5, z, Math.min(6, r * 0.34), 0.14, 1.0);
+    sparks.burst(x, y + 0.3, z, Math.round(16 + r * 2.4), 0, 1, 0, 6 + r * 1.4, 0.85, 0.9,
+      0.5, 0.024);
+    impacts.emit(x, y + 0.5, z, Math.round(18 + r * 3), r * 0.5, 2.0, 0.95, 0.7);
+    impacts.emit(x, y + 0.2, z, Math.round(14 + r * 2.5), r * 0.26, 3.6, 13.0, 1.7, IK_SMOKE);
+    ringFx(x, y + 0.25, z, 0.4, r * 1.1, 0.5, "#ffb070", 0.8, "#fff0d0", 0.9);
+    impacts.emitRing(x, y + 0.25, z, Math.round(10 + r * 2), r * 0.2, r * 0.7, 1.2, 3.8, 13.0, 1.5,
+      0.04, 0, IK_SMOKE);
+  }
+
+  /** A ground boost leaving: the sand it kicks back and a gold ring
+   *  standing behind the trooper for a beat, so the launch reads as a
+   *  launch and not as the walk speed changing. */
+  function boostLaunch(x, y, z, dx, dz, attack = false) {
+    const g = terrain.heightAt(x, z);
+    // A ring standing on edge behind the trooper, facing the run.
+    // Modest: the chase camera looks THROUGH this loop, so at two
+    // metres it filled the frame.
+    const slot = ringFx(x - dx * 1.0, g + 0.9, z - dz * 1.0, 0.3, attack ? 1.5 : 1.2, 0.34,
+      "#ffc453", 0.6, "#fff4d8", 0.8);
+    slot.wall = 0.15;
+    slot.mesh.material.uniforms.uBand.value = 0.4;
+    slot.mesh.rotation.set(Math.PI / 2, Math.atan2(dx, dz), 0, "YXZ");
+    // Sand thrown back, low and hard.
+    impacts.emitDirected(x - dx * 0.3, g + 0.12, z - dz * 0.3, 14, -dx, 0.5, -dz, 7,
+      2.2, 13.0, 1.1, IK_SMOKE);
+    impacts.emitDirected(x - dx * 0.3, g + 0.10, z - dz * 0.3, 8, -dx, 0.6, -dz, 9,
+      0.9, 0.3, 0.7, IK_SHARD);
+    sparks.burst(x - dx * 0.2, g + 0.6, z - dz * 0.2, 12, -dx, 0.2, -dz, 8, 0.45, 2.0, 0.4, 0.014);
+  }
+
+  /** The knight falling. Not an explosion - a reliquary going out:
+   *  the heart-light leaves upward as gold, a seal is struck under
+   *  the body, and the plate's glints lift off it for a few seconds. */
+  function playerFall(x, y, z) {
+    const g = terrain.heightAt(x, z);
+    flashes.emit(x, y + 1.2, z, 1.6, 0.30, 2.0);
+    sigilFx(x, z, 2.6, 3.2, "#ffbd3e", "#fff1c8", 8, 0.06, 0.8);
+    gyreFx(x, y + 0.6, z, 0.4, 1.9, 2.4, "#ffd27a", 0.5, 0.10, 1.6, 0.2);
+    later(0.35, () => gyreFx(x, y + 0.5, z, 0.3, 1.5, 2.6, "#ffe6a8", 0.4, 0.08, 1.9, 1.3));
+    for (let i = 0; i < 9; i += 1) {
+      later(i * 0.28, () => {
+        impacts.emitDirected(x, y + 0.6, z, 6, 0, 1, 0, 1.4, 0.7, 2.0, 2.2,
+          i % 3 === 0 ? IK_GLINT : IK_EMBER);
+        sparks.burst(x, y + 0.8, z, 3, 0, 1, 0, 2.2, 0.5, 2.0, 1.2, 0.012);
+      });
+    }
+    ringFx(x, g + 0.2, z, 0.5, 4.5, 1.1, "#ffc453", 0.6, "#fff4d8", 0.7);
+  }
+
+  /** The pack lighting: a throat of gas catching, thrown down the
+   *  plume axis. `dx,dy,dz` is the exhaust direction. */
+  function jetIgnite(x, y, z, dx, dy, dz, throttle = 1) {
+    const s = 0.6 + clamp01(throttle) * 0.6;
+    flashes.emit(x + dx * 0.15, y + dy * 0.15, z + dz * 0.15, 0.55 * s, 0.09, 2.0);
+    sparks.burst(x, y, z, 14, dx, dy, dz, 9 * s, 0.35, 2.0, 0.42, 0.014);
+    impacts.emitDirected(x, y, z, 8, dx, dy, dz, 5 * s, 0.6, 2.0, 0.5, IK_EMBER);
+    impacts.emitDirected(x, y, z, 5, dx, dy, dz, 2.2, 1.6, 11.0, 0.7, IK_SMOKE);
+  }
+
+  /**
+   * A blow stopped by the Aegis. Gold, always: the shield is the
+   * Concord's and so is what comes off it. `nx,nz` is the plate's
+   * facing; the sparks leave along it, back toward whatever struck.
+   * A PERFECT guard - raised inside the window - is a visibly bigger
+   * event, because the game rewards it and the player has to be able
+   * to see that they earned it.
+   */
+  function shieldBlock(x, y, z, nx, nz, perfect = false, amount = 20, dome = false) {
+    const s = 1 + clamp01(amount / 70) * 0.6;
+    flashes.emit(x, y, z, (perfect ? 1.35 : 0.8) * s, perfect ? 0.16 : 0.10, 2.0);
+    sparks.burst(x, y, z, perfect ? 30 : 16, nx, 0.35, nz, 8 * s, 0.75, 2.0, 0.42, 0.018);
+    impacts.emit(x, y, z, perfect ? 12 : 7, 2.2 * s, 0.7, 2.0, 0.45, IK_GLINT);
+    if (perfect) {
+      // A halo bursting off the face of the plate.
+      const slot = ringFx(x, y, z, 0.25, dome ? 3.2 : 2.1, 0.55, "#ffe6a8", 0.5, "#ffffff", 1.2);
+      slot.wall = 0.15;
+      slot.mesh.material.uniforms.uBand.value = 0.4;
+      slot.mesh.rotation.set(Math.PI / 2, Math.atan2(nx, nz), 0, "YXZ");
+      later(0.06, () => {
+        const s2 = ringFx(x + nx * 0.2, y, z + nz * 0.2, 0.3, dome ? 3.8 : 2.6, 0.7,
+          "#ffc453", 0.4, "#fff4d8", 0.9);
+        s2.wall = 0.15;
+        s2.mesh.material.uniforms.uBand.value = 0.35;
+        s2.mesh.rotation.set(Math.PI / 2, Math.atan2(nx, nz), 0, "YXZ");
+      });
+      sparks.ring(x, y, z, 24, 0.3, 5.5, 2.5, 2.0, 0.5, 0.02);
+    }
+  }
+
+  /**
+   * A kill. One rupture at the moment of death, so the player knows
+   * IMMEDIATELY which of the six things they are shooting at has
+   * stopped being a problem - and in the brood's own colour, so a
+   * kill is told from a hit at a glance. Sized off the animal.
+   */
+  function deathBurst(x, y, z, radius = 1, heavy = false) {
+    const r = Math.max(0.5, radius);
+    flashes.emit(x, y, z, 1.4 * r, 0.16, 12.0);
+    sparks.burst(x, y, z, Math.round(18 * Math.sqrt(r)), 0, 0.85, 0, 5.5 + r * 2.5, 0.95,
+      12.0, 0.6, 0.03);
+    // Ichor droplets, dark chitin, and the sand it kicks up.
+    impacts.emit(x, y, z, Math.round(22 * Math.sqrt(r)), 3.2 * Math.sqrt(r), 1.4, 12.0, 0.9);
+    impacts.emit(x, y, z, Math.round(16 * Math.sqrt(r)), 3.8 * Math.sqrt(r), 1.3, 0.2, 1.0, IK_SHARD);
+    impacts.emit(x, y - r * 0.4, z, Math.round(10 * Math.sqrt(r)), 1.6 * r, 2.8, 13.0, 1.4, IK_SMOKE);
+    ringFx(x, y - r * 0.5 + 0.15, z, 0.3, r * 2.4, 0.5, "#37b7ad", 0.7, "#a6fff0", 0.8);
+    // The pool it leaves.
+    scorchFx(x, z, r * 1.1, heavy ? 16 : 10, "#0c2624", heavy ? 0.55 : 0.42);
+    if (heavy) {
+      flashes.emit(x, y + 0.4, z, 2.4 * r, 0.26, 12.0);
+      domeFx(x, y - r * 0.5, z, r * 2.6, 1.0, DUST, "#e8c9a0", 0.8);
+      later(0.12, () => {
+        sparks.ring(x, y - r * 0.4, z, 30, r * 0.5, 7 + r, 3, 12.0, 0.7, 0.03);
+      });
+    }
   }
 
   /** Sand, stone and a low bio-flash thrown by a creature surfacing. */
@@ -4538,6 +5403,12 @@ export function buildVfx(ctx, world) {
     spark,
     meleeArc,
     blast,
+    deathBurst,
+    shieldBlock,
+    jetIgnite,
+    boostLaunch,
+    playerFall,
+    scorchFx,
     breach,
     sandSpray,
     venomBurst,
@@ -4583,6 +5454,7 @@ export function buildVfx(ctx, world) {
       impacts.mat.uniforms.uPixel.value = Math.min(2, window.devicePixelRatio || 1) * 2.2;
       tracers.mat.uniforms.uTime.value = atmos.elapsed;
       flashes.mat.uniforms.uTime.value = atmos.elapsed;
+      sparks.mat.uniforms.uTime.value = atmos.elapsed;
       streamers.mat.uniforms.uAnchor.value.copy(anchor);
       streamers.mat.uniforms.uGround.value = ground;
       dust.mat.uniforms.uAnchor.value.set(anchor.x, ground + 14, anchor.z);
@@ -4597,6 +5469,7 @@ export function buildVfx(ctx, world) {
       updateImpulse(step);
       updateOrdnance(step);
       updateRites(step);
+      updateSlashes(step);
 
       for (const f of flicker) {
         const spec = f.light.userData.spec;
@@ -4611,5 +5484,32 @@ export function buildVfx(ctx, world) {
       grit.mat.uniforms.uOpacity.value = lerp(0.20, 0.80, v);
     },
     setVisible(v) { group.visible = v; },
+    /** Kill every live effect at once. For scene changes and for the
+     *  harnesses, which otherwise photograph the previous scene's
+     *  twenty-second consecration under this one's subject. */
+    reset() {
+      const kill = (pool) => {
+        for (const slot of pool) {
+          slot.life = 0;
+          slot.mesh.visible = false;
+          const m = slot.mesh.material;
+          if (m.uniforms && m.uniforms.uGain) m.uniforms.uGain.value = 0;
+          else if ("opacity" in m) m.opacity = 0;
+        }
+      };
+      kill(ordnance.beams); kill(ordnance.rings); kill(ordnance.domes); kill(ordnance.scorches);
+      kill(rites.shafts); kill(rites.shells); kill(rites.sigils);
+      kill(slashes);
+      ordnance.queue.length = 0;
+      impulse.live.charge = 0; impulse.live.armed = false;
+      impulse.column.visible = false; impulse.halo.visible = false;
+      const wipe = (geo) => {
+        const b = geo.attributes.aBirth;
+        if (!b) return;
+        b.array.fill(-999); b.needsUpdate = true;
+      };
+      wipe(impacts.points.geometry); wipe(sparks.mesh.geometry);
+      wipe(flashes.mesh.geometry); wipe(tracers.mesh.geometry);
+    },
   };
 }

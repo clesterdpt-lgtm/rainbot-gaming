@@ -3305,10 +3305,14 @@ export function installQa(ctx, api) {
       for (const child of rig.children) {
         if (!child.visible) continue;
         out.visible += 1;
-        const kind = child.material?.name === "sf-scorch" ? "scorches"
-          : child.geometry?.type === "CylinderGeometry" ? "beams"
-            : child.geometry?.type === "TorusGeometry" ? "rings"
-              : child.geometry?.type === "SphereGeometry" ? "domes" : null;
+        const mname = child.material?.name || "";
+        const kind = mname === "sf-scorch" ? "scorches"
+          : mname === "sf-ordnance-beam" ? "beams"
+            : mname === "sf-ordnance-shock" ? "rings"
+              : mname === "sf-ordnance-dust" ? "domes"
+                : child.geometry?.type === "CylinderGeometry" ? "beams"
+                  : child.geometry?.type === "TorusGeometry" ? "rings"
+                    : child.geometry?.type === "SphereGeometry" ? "domes" : null;
         if (kind) out[kind] += 1;
       }
       return out;

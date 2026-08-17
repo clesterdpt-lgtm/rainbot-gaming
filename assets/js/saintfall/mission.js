@@ -17,6 +17,7 @@
    ============================================================ */
 
 import { clamp, clamp01, makeBus, makeRng } from "saintfall/core.js";
+import { patchBasicMaterial } from "saintfall/art.js";
 import { DISTRICTS, roadPointAtZ } from "saintfall/terrain.js";
 import { DISTRICT_BOSS_SITES } from "saintfall/district-bosses.js";
 
@@ -131,11 +132,42 @@ export function buildMission(ctx) {
      vertical beam rather than the geometry.
      ------------------------------------------------------------ */
 
+  /* A COLUMN OF LIT AIR, not a six-sided lampshade. The beacon keeps
+     its MeshBasicMaterial (three call sites drive `.opacity`, and the
+     atmosphere patch that fades additive geometry to black lives on
+     that material class) and gains a chord term - `|N.V|`, thickest
+     through the axis, gone at the silhouette - plus a hot thread down
+     the middle, a soft top and a slow upward flow. Twenty-four sides,
+     because at six the chord climbs a whole facet at a time and the
+     ruled edges come straight back. */
+  const beaconTime = { value: 0 };
+  function patchBeacon(material, height) {
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.uSFTime = beaconTime;
+      shader.uniforms.uSFHeight = { value: height };
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vSFN; varying vec3 vSFV; varying float vSFH; uniform float uSFHeight;")
+        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvSFN = normalMatrix * normal; vSFV = -(modelViewMatrix * vec4(position, 1.0)).xyz; vSFH = position.y / uSFHeight + 0.5;");
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", "#include <common>\nvarying vec3 vSFN; varying vec3 vSFV; varying float vSFH; uniform float uSFTime;")
+        .replace("#include <alphamap_fragment>", [
+          "#include <alphamap_fragment>",
+          "{",
+          "  float nv = abs(dot(normalize(vSFN), normalize(vSFV)));",
+          "  float body = nv * nv * 0.7 + nv * 0.3 + pow(nv, 12.0) * 1.1;",
+          "  float ends = smoothstep(0.0, 0.03, vSFH) * (1.0 - smoothstep(0.55, 1.0, vSFH));",
+          "  float flow = 0.86 + 0.14 * sin(vSFH * 34.0 - uSFTime * 2.4);",
+          "  diffuseColor.a *= body * ends * flow * 2.4;",
+          "}",
+        ].join("\n"));
+    };
+  }
+
   function makeBeacon(x, z, hex, height) {
     const g = new THREE.Group();
     const y = groundY(x, z);
     const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.55, 1.9, height, 6, 1, true),
+      new THREE.CylinderGeometry(0.55, 1.9, height, 24, 1, true),
       new THREE.MeshBasicMaterial({
         color: new THREE.Color(hex),
         transparent: true,
@@ -145,11 +177,16 @@ export function buildMission(ctx) {
         blending: THREE.AdditiveBlending,
       })
     );
+    beam.material.forceSinglePass = true;
     beam.position.set(x, y + height * 0.5, z);
+    patchBeacon(beam.material, height);
     // Additive geometry must fade to BLACK with distance, never
     // toward the sky - a hazed additive surface ADDS the sky colour
     // and gets BRIGHTER the further away it is.
-    if (ctx.atmos && ctx.patchBasic) ctx.patchBasic(beam.material, 0.55);
+    if (ctx.atmos) patchBasicMaterial(beam.material, ctx.atmos, 0.55, true);
+    // Its own program: the atmosphere patch keys the cache on fade and
+    // blend alone, and this fragment is not the one those keys name.
+    beam.material.customProgramCacheKey = () => "sf-beacon-column";
     g.add(beam);
 
     const core = new THREE.Mesh(
@@ -1086,6 +1123,7 @@ export function buildMission(ctx) {
      ------------------------------------------------------------ */
 
   function update(dt) {
+    beaconTime.value = ctx.atmos?.elapsed || 0;
     if (state.phase === "won" || state.phase === "lost") {
       if (pending.length || sigils.length || sanctuaries.length || mines.length) {
         clearPending();

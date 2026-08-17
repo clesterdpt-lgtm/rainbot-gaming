@@ -4554,6 +4554,15 @@ export function buildVfx(ctx, world) {
     slamImpact,
     doctrineCue,
     doctrineState,
+    /* THE SHARED SCORCH POOL, for the one caller outside this file that
+       leaves lasting ground marks: the Abbess's ichor (`stainGround` in
+       abbess.js). It was reachable only through the stratagems above
+       until that module started guarding on `ctx.vfx?.scorchFx` and
+       silently drawing nothing. Five slots, recycled stalest-first, so
+       callers rate-limit themselves. `colour` is anything `Color.set`
+       takes - a hex string is read as sRGB and linearised, a
+       `THREE.Color` is copied as-is (working space). */
+    scorchFx,
     /* Diagnostic only. The rite primitives are normally reachable just
        through a cue, which means a defect in one of them can only be
        observed with the other two drawing over it. */

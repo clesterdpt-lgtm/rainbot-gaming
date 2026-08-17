@@ -5,12 +5,21 @@
    Proves the player-facing promises of the Ossuary's pit:
      - it ignores the player until they cross the aggro radius, and
        cannot be seen or damaged before it does;
-     - approaching COLLAPSES the ground: one animated scalar carries
-       the pan from sealed to open and the mouth from the bottom of
-       the shaft to standing proud of it;
+     - approaching COLLAPSES THE GROUND, literally: the Ossuary is
+       level pan until the player walks up to it, and one animated
+       scalar carries the terrain from flat to a nine-metre funnel with
+       a bore in the middle of it, the lid from sealed to broken, and
+       the mouth up out of the shaft - so the drawn surface, the walking
+       plane and the collision ground move together and a player caught
+       standing on the pan rides it down;
+     - the throat is not a hole anyone can be lost in: the mouth holds
+       them out of it while it lives, and once it is dead the bore's
+       walls are shallow enough to walk out of;
      - a lash is a readable sequence - erupt, rear, strike - and its
        outcome is decided at the CONTACT frame, so moving during the
        telegraph is the answer to it;
+     - six limbs are one smooth tube whose ring frame is transported
+       rather than rebuilt, so no limb has a hole in it;
      - A MISS IS THE POINT: the limb falls across the sand, lies
        there, and drags itself home, and while it is down a polearm
        reaches it. While it is UP, a polearm reaches only its base;
@@ -188,14 +197,25 @@ try {
       T.forceGarnerLash(0);
       /* Through the erupt and PAST the point where the limb stops
          tracking, then step aside. This is the window the fight is
-         built on: the aim locks halfway through the rear, so a move
-         after that must miss and a player who stands still must not. */
-      T.advanceTime(1.35, 1 / 60);
+         built on: the aim locks partway through the rear, so a move
+         after that must miss and a player who stands still must not.
+         DERIVED FROM THE CONFIG, not measured off it once. These were
+         two hard-coded waits calibrated against a 0.62s eruption and a
+         1.05s rear; lengthening the telegraph - which is a tuning
+         decision, and one this encounter is likely to take again -
+         silently moved the lock past the first wait, so the harness
+         stepped aside while the limb was still tracking and then
+         reported that dodging does not work. The lock is at
+         `rearSeconds * 0.45` REMAINING, so 0.62 through it is past it
+         at any duration. */
+      const c = T.garner.config;
+      T.advanceTime(c.eruptSeconds + c.rearSeconds * 0.62, 1 / 60);
       if (move) {
         const ps = T.player.state;
         T._teleportRaw(ps.x + 11, ps.z + 11, 0);
       }
-      T.advanceTime(1.2, 1 / 60);
+      // Past contact and into the seize, which lasts 1.5s from there.
+      T.advanceTime(c.rearSeconds * 0.38 + c.lashSeconds + 0.4, 1 / 60);
       const g = T.garnerState();
       out[move ? "moved" : "still"] = g.armPhases[0];
     }
@@ -204,6 +224,79 @@ try {
   check("standing in the strike is seized", dodge.still === "seize", JSON.stringify(dodge));
   check("moving out of it during the telegraph is not",
     dodge.moved !== "seize", JSON.stringify(dodge));
+
+  /* ---- THE TUBE ITSELF ------------------------------------------------- */
+  /* SIX LIMBS ARE ONE SMOOTH-SHADED TUBE, and its ring frame is built by
+     transporting a single basis along the chain rather than by choosing
+     one per node.
+     The version that chose picked world up, or world x within 23 degrees
+     of vertical - both locally correct, and the SWITCH between them a
+     discontinuity that sits in the middle of every rearing limb. The
+     ring on one side of that node is rotated about half a turn against
+     the ring on the other, the eight quads spanning them are twisted
+     through 180 degrees, and every face past the seam is wound backwards
+     and therefore not drawn on a FrontSide material. The player saw the
+     far wall of the pit through the tentacle.
+     Measured on the buffer rather than on a photograph, and as an ANGLE
+     rather than as a length: a ring's own vertices average to its centre,
+     so the radial direction of vertex 0 is recoverable, and consecutive
+     radials may only differ by however far the curve turns. A flip is
+     ~180 degrees at any radius; a taper that made a length test
+     ambiguous near the 34cm tip cannot make this one. */
+  const tube = await page.evaluate(() => {
+    const T = window.__SF;
+    const c = T.garner.config;
+    T.resetGarner();
+    T.teleportToGarner(30);
+    T.advanceToGarnerPhase("feeding", 14);
+    const mesh = T.garner.group.getObjectByName("sf-garner-arms");
+    const pos = mesh.geometry.attributes.position.array;
+    const perArm = (pos.length / 3) / c.arms;   // rings * sides, plus a tip
+    const sides = (perArm - 1) / c.armNodes;
+    /** Ring `n` of arm `a`: its centre, and vertex 0's radial. */
+    const ring = (a, n) => {
+      const base = (a * perArm + n * sides) * 3;
+      let cx = 0; let cy = 0; let cz = 0;
+      for (let s = 0; s < sides; s += 1) {
+        cx += pos[base + s * 3]; cy += pos[base + s * 3 + 1]; cz += pos[base + s * 3 + 2];
+      }
+      cx /= sides; cy /= sides; cz /= sides;
+      const rx = pos[base] - cx;
+      const ry = pos[base + 1] - cy;
+      const rz = pos[base + 2] - cz;
+      const l = Math.hypot(rx, ry, rz) || 1;
+      return [rx / l, ry / l, rz / l];
+    };
+    let worst = 0;
+    let worstAt = null;
+    // The whole erupt-rear-strike-fall arc, on all six at once.
+    for (let i = 0; i < c.arms; i += 1) T.forceGarnerLash(i);
+    for (let step = 0; step < 220; step += 1) {
+      T.advanceTime(1 / 60, 1 / 60);
+      const phases = T.garnerState().armPhases;
+      for (let a = 0; a < c.arms; a += 1) {
+        if (phases[a] === "sheathed" || phases[a] === "severed") continue;
+        for (let n = 0; n < c.armNodes - 1; n += 1) {
+          const u = ring(a, n);
+          const v = ring(a, n + 1);
+          const dot = Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1] + u[2] * v[2]));
+          const deg = Math.acos(dot) * 180 / Math.PI;
+          if (deg > worst) { worst = deg; worstAt = { arm: a, ring: n, phase: phases[a] }; }
+        }
+      }
+    }
+    return { worst: Number(worst.toFixed(1)), worstAt, sides };
+  });
+  /* 120 degrees, and the gap either side of it is what makes the check
+     worth having. A flipped seed is a HALF TURN by construction, so it
+     lands at 150 or more; the largest honest figure the encounter
+     produces is about 80, at the very last link of a limb that has hold
+     of the player and is being asked to point its grasping pad at
+     wherever they are - a real elbow in the pose rather than a broken
+     basis, and 34cm across. */
+  check("no ring of a limb's tube is turned against the one before it",
+    tube.sides === 8 && tube.worst < 120,
+    `worst neighbouring-ring twist ${tube.worst} degrees — ${JSON.stringify(tube.worstAt)}`);
 
   /* ---- THE MELEE WINDOW ------------------------------------------------ */
   const window_ = await page.evaluate(() => {
@@ -499,6 +592,101 @@ try {
       hp: [saved.before?.health, saved.after?.health],
       cut: [saved.before?.armsSevered, saved.after?.armsSevered] }));
 
+  /* ---- THE GROUND ITSELF ----------------------------------------------- */
+  /* THE PIT IS TERRAIN AND IT IS NOT ALWAYS THERE. From the far side of
+     the pan the Ossuary has to be level ground - the encounter's whole
+     reveal is that it stops being - so the funnel is a displacement on
+     the height field scaled by the same `open` the lid and the mouth
+     ride. Which means the walking plane, the collision ground and the
+     drawn surface all have to move together, and the player standing on
+     the pan when it goes has to ride it down and land on real ground
+     rather than on the sealed pan's remembered height. */
+  const ground = await page.evaluate(() => {
+    const T = window.__SF;
+    const g = T.garner.config;
+    T.resetGarner();
+    T._teleportRaw(g.pitX + 20, g.pitZ, 0);
+    T.advanceTime(0.3, 1 / 60);
+    const ps = T.player.state;
+    /* Three points, twice: out on untouched pan, on
+       the funnel's wall where the player is standing, and at the middle
+       of the throat. Level first, carved after. */
+    const probe = () => [
+      T.collide.groundHeight(g.pitX + 70, g.pitZ),
+      T.collide.groundHeight(g.pitX + 20, g.pitZ),
+      T.collide.groundHeight(g.pitX, g.pitZ),
+    ].map((v) => Number(v.toFixed(2)));
+    const sealed = probe();
+    const stoodSealed = Number(ps.y.toFixed(2));
+    T.advanceToGarnerPhase("feeding", 14);
+    const open = probe();
+    T.advanceTime(0.6, 1 / 60);
+    const stoodOpen = Number(ps.y.toFixed(2));
+    /* And standing on it, not falling through it: the drawn LOD0
+       triangle and the surface the capsule rests on are the same plane
+       or the player is hovering over a hole. */
+    const under = Number((ps.y - T.collide.groundHeight(ps.x, ps.z)).toFixed(2));
+    return { sealed, open, stoodSealed, stoodOpen, under };
+  });
+  /* Flat within the pan's own crack noise across the whole pit, and
+     then a funnel with a bore in the middle of it. */
+  check("the sealed pan is level ground where the pit will be",
+    Math.abs(ground.sealed[0] - ground.sealed[2]) < 1.2
+    && Math.abs(ground.sealed[0] - ground.sealed[1]) < 1.2,
+    JSON.stringify(ground.sealed));
+  check("the collapse carves the funnel and the throat into the terrain",
+    ground.open[1] < ground.sealed[1] - 3
+    && ground.open[2] < ground.open[1] - 5
+    && Math.abs(ground.open[0] - ground.sealed[0]) < 0.01,
+    JSON.stringify(ground));
+  check("a player standing on the pan rides it down and lands on it",
+    ground.stoodOpen < ground.stoodSealed - 3 && Math.abs(ground.under) < 0.6,
+    JSON.stringify(ground));
+
+  /* AND THE THROAT IS NOT A HOLE THE PLAYER CAN BE LOST IN. The mouth
+     holds them out of it while it lives, and once it is dead nothing
+     does - so the bore's walls are cut shallow enough for player.js's
+     slope gate to walk out of. Both halves are checked, because the
+     second one only matters when the first has stopped applying. */
+  const throat = await page.evaluate(() => {
+    const T = window.__SF;
+    const g = T.garner.config;
+    const ps = T.player.state;
+    const out = {};
+    for (const dead of [false, true]) {
+      T.resetGarner();
+      T.combat.player.hp = T.combat.player.maxHp;
+      T.teleportToGarner(30);
+      T.advanceToGarnerPhase("feeding", 14);
+      if (dead) {
+        const inst = T.enemies.live.find((e) => e.key === "garner");
+        T.combat.damageEnemy(inst, 999999, { source: "qa" });
+        T.advanceTime(0.5, 1 / 60);
+      }
+      // Dropped straight down the middle of it.
+      T._teleportRaw(g.pitX, g.pitZ, 0);
+      T.advanceTime(0.2, 1 / 60);
+      const dropped = Math.hypot(ps.x - g.pitX, ps.z - g.pitZ);
+      /* Then held forward for four seconds. The BEARING does not
+         matter: any straight line out of a bore ten metres across
+         leaves it, so this measures the wall's gradient against
+         player.js's slope gate rather than one chosen direction. */
+      T.player.input.inject(0, -1);
+      for (let i = 0; i < 240; i += 1) T.advanceTime(1 / 60, 1 / 60);
+      T.player.input.inject(null, null);
+      out[dead ? "dead" : "alive"] = {
+        dropped: Number(dropped.toFixed(2)),
+        escaped: Number(Math.hypot(ps.x - g.pitX, ps.z - g.pitZ).toFixed(2)),
+      };
+    }
+    return out;
+  });
+  check("the living mouth will not let the player into its own throat",
+    throat.alive.dropped > 9 && throat.alive.escaped > 9,
+    JSON.stringify(throat.alive));
+  check("and a dead one's throat can still be walked out of",
+    throat.dead.escaped > 14, JSON.stringify(throat.dead));
+
   /* ---- DEATH ----------------------------------------------------------- */
   const death = await page.evaluate(() => {
     const T = window.__SF;
@@ -523,6 +711,8 @@ try {
   });
   check("lethal damage kills it and the encounter reports it",
     death.state.dead && death.defeated, JSON.stringify(death.state?.phase));
+
+
 
   /* ---- COST ------------------------------------------------------------ */
   const cost = await page.evaluate(() => {

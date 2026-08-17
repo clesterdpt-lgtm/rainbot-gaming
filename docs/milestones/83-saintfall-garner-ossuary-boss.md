@@ -216,6 +216,23 @@ distinct audio cues. The Distaff has eight limb targets and four
 attacks; the Winnower has two sacs, a gut and three; the Coulter has one
 transient weak point and two.
 
+## Superseded, in three places
+
+See milestone 92. The pit is still carved into `heightAt` for exactly
+the reasons argued above, but it is no longer *always* carved: a funnel
+permanently sunk into the pan announced the encounter from the far side
+of the district, so the displacement is now scaled by the same `open`
+the lid and the mouth ride, and the Ossuary is level ground until the
+player walks into it.
+
+Two of the constraints recorded here fall out with it. The throat CAN
+be a hole once the terrain is being re-evaluated anyway — so the beak no
+longer stands five metres proud of the funnel floor, `mawStand` is a
+hand's width, and there is a ring of smaller teeth set into the sand
+around it. And the tentacles' see-through seam, which nothing here
+records because nobody had traced it, was the ring frame being rebuilt
+per node rather than transported.
+
 ## Verification
 
 `node scripts/saintfall-garner-fight.mjs` — 31 checks, all passing.

@@ -40,7 +40,7 @@ import {
 import { makeKit, mergeGeometries, cleanGeometry } from "saintfall/structures.js";
 import {
   DISTRICTS, ROAD_PATH, FOSSE_PATH, MAP_HALF, DROP_SITE,
-  CHUNK_SIZE, LOD_CELLS,
+  CHUNK_SIZE, LOD_CELLS, GARNER_PIT,
 } from "saintfall/terrain.js";
 import { makeRamp } from "saintfall/core.js";
 
@@ -2822,10 +2822,24 @@ export async function buildWorld(ctx, onProgress) {
     {
       const geos = [];
       for (let i = 0; i < 260; i += 1) {
-        const a = rng() * TAU;
-        const r = Math.pow(rng(), 0.55) * 300;
-        const x = d.x + Math.cos(a) * r;
-        const z = d.z + Math.sin(a) * r;
+        /* KEEP OFF THE GARNER'S PIT.
+           This litter is placed on the SEALED pan and never moves
+           again, and the pit is a hundred and twenty-four metres of
+           that pan which drops away the moment the player walks up to
+           it - so a skull standing there is left hanging in the air
+           over an open mouth. Resampled rather than pushed outward,
+           which would build a ring of bone around the hole that nobody
+           authored and that would give the encounter away from the
+           other side of the district. */
+        let x = d.x;
+        let z = d.z;
+        for (let tries = 0; tries < 12; tries += 1) {
+          const a = rng() * TAU;
+          const r = Math.pow(rng(), 0.55) * 300;
+          x = d.x + Math.cos(a) * r;
+          z = d.z + Math.sin(a) * r;
+          if (Math.hypot(x - GARNER_PIT.x, z - GARNER_PIT.z) > GARNER_PIT.reach + 3) break;
+        }
         const kind = rng();
         let g;
         if (kind < 0.5) {

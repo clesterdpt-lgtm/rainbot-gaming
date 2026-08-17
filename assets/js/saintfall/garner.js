@@ -135,7 +135,7 @@
 
 import { TAU, clamp, clamp01, damp, lerp, makeBus, makeRng } from "saintfall/core.js";
 import { applySurface, setSurfaceDamage } from "saintfall/boss-surface.js";
-import { GARNER_PIT } from "saintfall/terrain.js";
+import { GARNER_PIT, garnerPitProfile } from "saintfall/terrain.js";
 import { SURVIVAL_CONFIG } from "saintfall/combat.js";
 
 export const GARNER_CONFIG = Object.freeze({
@@ -145,7 +145,14 @@ export const GARNER_CONFIG = Object.freeze({
      collision grid, the walking plane and the visible ground all come
      out of `heightAt`, and nothing built at runtime reaches any of
      them - so a pit made of scene geometry is a picture of a hole the
-     player walks straight over. */
+     player walks straight over.
+
+     AND IT IS DRIVEN FROM HERE. `state.open` scales the pit's whole
+     displacement through `terrain.setGarnerPitReveal`, so the funnel
+     does not exist until this animal opens it: from the far side of the
+     pan the Ossuary is unbroken flat ground with a skeleton on it, and
+     the collapse the player walks into is the ground itself giving way
+     rather than a lid coming off a hole that was always there. */
   pitX: GARNER_PIT.x,
   pitZ: GARNER_PIT.z,
   pitDepth: GARNER_PIT.depth,
@@ -158,21 +165,28 @@ export const GARNER_CONFIG = Object.freeze({
   /* Where the bone lid over the mouth ends. Inside this radius the pan
      is a plate the creature is under; outside it, ordinary funnel. */
   lidRadius: 12.6,
-  /* HOW FAR THE COLLAR'S LIP STANDS ABOVE THE FUNNEL'S FLOOR - and
-     the number that took three attempts to get honest.
+  /* HOW FAR THE COLLAR'S LIP STANDS ABOVE THE FUNNEL'S FLOOR - and it
+     took four attempts, of which three were the same mistake.
 
-     The mouth cannot be flush with the sand, because the terrain is a
-     HEIGHT FIELD: there is no hole in it at any radius, so a throat
-     level with the ground has ground across the bottom of it and reads
-     as a bowl of sand. It needs to stand proud of whatever surface it
-     is set into by however much throat you want to be able to see down.
+     It was 5.0, and the reasoning for that was airtight given what the
+     terrain could do at the time: there is no hole in a height field at
+     any radius, so a throat level with the ground has ground across the
+     bottom of it and reads as a bowl of sand. However much throat you
+     want to see down, the mouth has to stand proud of the surface it is
+     set into by that much - and five metres of it, out of a twelve-metre
+     funnel, still left the whole animal seven metres under the pan.
 
-     What it must never stand proud of is the DESERT. So the surface it
-     rises from is the floor of a twelve-metre funnel, and five metres
-     up from there still leaves the whole animal seven metres under the
-     pan - which is precisely the shape of the thing this is: a beak in
-     the bottom of a sand pit you have to climb down into. */
-  mawStand: 5.0,
+     THE PROBLEM IS THAT IT IS STILL A PLINTH. Five metres of collar
+     standing clear of flat sand is a drum with a crown on it, whichever
+     surface the drum is standing on, and every note in this file about
+     "a mouth standing on the desert is a tower" was arguing with a
+     symptom of the missing hole rather than with the hole.
+
+     GARNER_PIT now carves the throat, so the depth the player looks
+     into is terrain. The lip comes down to a hand's width above the
+     floor it breaks - the mouth is a rim in the sand with teeth around
+     it, and the sand runs up to the teeth. */
+  mawStand: 1.0,
   /* How far below the lip the mouth starts, before the ground opens.
      Deep enough that nothing of it shows through the lid's own cracks
      while it is dormant. */
@@ -220,12 +234,19 @@ export const GARNER_CONFIG = Object.freeze({
      than a limb with ten metres of spare rope in it. */
   armSpawnLead: [8, 14],
 
-  eruptSeconds: 0.62,
+  eruptSeconds: 0.72,
   /* The telegraph, and the most important duration in the fight. Long
      enough to see a fifteen-metre limb stand up, pick you, and cock
      back; short enough that standing still through it is a decision
-     rather than an oversight. */
-  rearSeconds: 1.05,
+     rather than an oversight.
+     A QUARTER LONGER than it shipped at, along with the eruption in
+     front of it. Erupt plus rear was 1.67s from broken sand to contact
+     and only the back half of it was aimed, which read as a limb that
+     appeared and hit rather than as one that appeared, chose, and hit -
+     the sequence was legible in isolation and not while two others were
+     also running. It is now 2.07s, and the locked half of the rear -
+     the actual dodge window - goes from 0.47s to 0.61s. */
+  rearSeconds: 1.35,
   lashSeconds: 0.34,
   /* Resolved at the CONTACT frame, not at the wind-up. Moving out of
      the arc after the limb has committed is the answer to it, and that
@@ -250,11 +271,27 @@ export const GARNER_CONFIG = Object.freeze({
      by fifteen metres of muscle going home is a shove and a graze, not
      a punish - the limb is not attacking any more. */
   dragSweepDamage: 13,
-  armCadence: 3.1,
+  /* HOW OFTEN A WAVE GOES OUT, and it is the number that decides how
+     many limbs are in the air at once rather than how fast any one of
+     them is.
+
+     A full lash runs erupt, rear, strike, lie there and drag home -
+     about nine seconds - so the concurrent count is that divided by
+     this. At 3.1 the pan carried three overlapping telegraphs at full
+     health before a single limb had been cut, and three simultaneous
+     reads is not a harder version of one read, it is a different and
+     worse mechanic: the player stops dodging limbs and starts running
+     from the general direction of the pit. At 3.9 it is two, which is
+     what the dodge was designed against. */
+  armCadence: 3.9,
   /* How many go at once, at full health and at none. A wounded Garner
      does not hit harder; it hits with more limbs, which is the same
-     escalation the Coulter makes on its hunt window. */
-  armVolley: [1, 3],
+     escalation the Coulter makes on its hunt window.
+     The top of the range comes down from three, for the reason above:
+     a wave of three on top of the two already up is five, and the fifth
+     limb is not a target the player can see, it is one that hits them
+     from off screen. Two still doubles the escalation. */
+  armVolley: [1, 2],
   /* Once cut, how long the stump takes to push a new limb up. Long
      enough that clearing the pan is real progress, short enough that
      the fight never runs out of the thing it is about. */
@@ -441,12 +478,30 @@ export function buildGarner(ctx) {
      Sampled off `groundAt` rather than computed from GARNER_PIT's own
      numbers so that the dunes, the pan's crack detail and the funnel
      all agree: whatever the terrain actually did here is what the mouth
-     is set into. */
+     is set into.
+
+     AND THE PIT IS NOT OPEN YET WHEN THIS RUNS. The funnel is a
+     displacement scaled by the reveal, and the reveal is zero at load,
+     so `groundAt` at the middle of the pan answers with the PAN - which
+     is where the mouth would be built if this were one sample rather
+     than a sample plus a profile. `garnerPitProfile` supplies the rest:
+     the funnel's own drop at the axis, WITHOUT the throat bore, because
+     the surface the animal is measured against is the floor the player
+     fights from and not the hole in the middle of it. */
   const rimY = groundAt(C.pitX + C.pitRimRadius + 34, C.pitZ);
-  const floorY = groundAt(C.pitX, C.pitZ);
+  const floorY = groundAt(C.pitX, C.pitZ) + garnerPitProfile(0, false);
   const lipY = floorY + C.mawStand;
-  /** The funnel's own floor at a radius, for laying the lid on it. */
+  /** The funnel's floor at a radius AS IT IS RIGHT NOW - part-way
+   *  through the collapse while the lid is falling, finished after. The
+   *  lid has to lie on the ground it is made of at every value of
+   *  `open`, so this reads the live terrain rather than the profile. */
   const funnelY = (radius) => groundAt(C.pitX + radius, C.pitZ);
+  /** How much of the pit exists. The terrain owns the surface; this
+   *  module owns the number. Every path that moves `state.open` without
+   *  animating it - a restore, a QA phase force, the hard reset - has to
+   *  come through here too, or the ground disagrees with the animal
+   *  standing in it. */
+  const setPitReveal = (v) => ctx.terrain?.setGarnerPitReveal?.(clamp01(v));
   /** Where the mouth's ORIGIN sits for a given openness. Its own
    *  geometry is built so that the collar's lip is `mawTop` above this,
    *  which is what pins the fully-revealed mouth to the funnel floor. */
@@ -933,6 +988,11 @@ export function buildGarner(ctx) {
     crater.geo.attributes.position.needsUpdate = true;
     crater.geo.computeVertexNormals();
     crater.geo.computeBoundingSphere();
+    /* The rubble collar outside the lid goes with it. Declared below
+       this function and called from it, because "the ground is moving"
+       is one event and the two meshes lying on that ground should never
+       be posed from two different places. */
+    spoil.pose(state.open);
   }
 
   /* ------------------------------------------------------------
@@ -953,16 +1013,31 @@ export function buildGarner(ctx) {
      A hundred and forty chips of the lid, thrown out of the hole when
      it opened and never cleared away, put small hard edges in exactly
      the annulus the lens spends most of its frame on. One merged
-     buffer, one draw call, no per-frame cost - it never moves.
+     buffer, one draw call.
 
      Cheap in the honest sense too: each chip is a four-vertex wedge,
      which is 560 vertices for the whole ring.
+
+     AND IT RIDES THE GROUND DOWN. It used to be pinned once and never
+     touched again, which was correct while the funnel was permanent.
+     Now the sand these chips are lying on sinks up to twelve metres
+     under them during the collapse, so each one remembers where it sits
+     on the sealed pan and how far its own patch of ground has to fall,
+     and `poseLid` slides it - a chip on ground that is giving way goes
+     with the ground. Three hundred vertical writes while the pit is
+     actually moving, and nothing at all either side of that.
      ------------------------------------------------------------ */
-  {
+  const spoil = (() => {
     const N = 300;
     const perChip = 4;
     const position = new Float32Array(N * perChip * 3);
     const colour = new Float32Array(N * perChip * 4);
+    /* Per chip: where its ground is with the pan shut, how far that
+       ground drops, and the four local heights above it. Kept apart
+       from `position` so the slide is an add rather than a re-derive. */
+    const restY = new Float32Array(N);
+    const dropY = new Float32Array(N);
+    const localY = new Float32Array(N * perChip);
     const index = [];
     for (let i = 0; i < N; i += 1) {
       const b = i * perChip;
@@ -982,7 +1057,14 @@ export function buildGarner(ctx) {
       const r = C.lidRadius - 2 + Math.pow(rng(), 1.4) * (C.pitRimRadius - C.lidRadius);
       const cx = C.pitX + Math.cos(a) * r;
       const cz = C.pitZ + Math.sin(a) * r;
+      /* Both ends of this chip's travel. `groundAt` answers with the
+         SEALED pan here - the reveal is zero until the encounter starts
+         - and the profile is how far the funnel takes that patch down.
+         With the throat, unlike `floorY`: a chip is dressing and may lie
+         wherever the sand ends up, including on the bore's own slope. */
       const cy = groundAt(cx, cz);
+      restY[i] = cy;
+      dropY[i] = garnerPitProfile(r);
       /* MOSTLY GRAVEL. The first field was slabs half a trooper wide
          and two hundred of them read as confetti dropped on the set;
          the same count at bone-chip size reads as what the floor of an
@@ -996,6 +1078,7 @@ export function buildGarner(ctx) {
         position[(b + v) * 3] = cx + lx * cw - lz * sw;
         position[(b + v) * 3 + 1] = cy + ly;
         position[(b + v) * 3 + 2] = cz + lx * sw + lz * cw;
+        localY[b + v] = ly;
       };
       /* A wedge lying on its side, half buried. Three of the four
          vertices sit at or under the sand, so what stands out of the
@@ -1031,8 +1114,27 @@ export function buildGarner(ctx) {
     mesh.name = "sf-garner-spoil";
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    /* The chips fall twelve metres out of this sphere and it was fitted
+       to them lying on flat sand. Cheaper to stop asking than to refit
+       it every frame - the whole boss is culled by `simRange` anyway. */
+    mesh.frustumCulled = false;
     group.add(mesh);
-  }
+    /** Slide every chip to where its own ground has got to. Normals are
+     *  untouched on purpose: a chip translates as a rigid body, so the
+     *  four vertices move together and the facet it presents to the sun
+     *  is the same one it presented on the pan. */
+    function pose(open) {
+      for (let i = 0; i < N; i += 1) {
+        const y = restY[i] + dropY[i] * open;
+        const b = i * perChip;
+        for (let v = 0; v < perChip; v += 1) {
+          position[(b + v) * 3 + 1] = y + localY[b + v];
+        }
+      }
+      geo.attributes.position.needsUpdate = true;
+    }
+    return { mesh, pose };
+  })();
 
   /* The maw's own group, declared HERE rather than beside the mesh
      that first fills it, because the shelf below is a child of it and
@@ -1154,7 +1256,18 @@ export function buildGarner(ctx) {
      ------------------------------------------------------------ */
   const throatFloor = (() => {
     const N = 30;
-    const drop = SHAFT_RECESS + 0.05;
+    /* JUST UNDER THE LIP, and it used to be under the SHAFT'S RIM.
+       That was the right depth while the mouth stood five metres proud
+       of flat sand: everything below the lip was air, so the shelf could
+       be set as deep as the bore and still have nothing behind it. With
+       the lip a hand's width above the floor, 2.45m down is 1.45m BELOW
+       the funnel - and a black plate under the ground it is meant to
+       hide is a black plate with sand on top of it.
+       Held at the lip instead, where the sand it covers is between two
+       and seven metres beneath it whatever the sample grid does with the
+       bore's edge. The depth the player looks into is the bore now; this
+       is only the lid on the last of the sand. */
+    const drop = 1.05;
     const inner = C.craterInner * 1.08 * COLLAR_BITE_MIN * 0.90;
     const position = new Float32Array(N * 2 * 3);
     const colour = new Float32Array(N * 2 * 4);
@@ -1305,6 +1418,16 @@ export function buildGarner(ctx) {
      its bottom edge turn the join between animal and ground from a rim
      into something that grew out of it.
 
+     THEY HAVE MOVED UP TO THE LIP, and flattened. They used to be
+     rooted two to four metres down the collar's flank and hang onto the
+     sand below - which worked when there were five metres of collar
+     standing clear of it. There is now one, so every one of those roots
+     is under the funnel's floor and the whole ring was invisible. They
+     are re-rooted just beneath the lip and splayed OUT rather than down,
+     lying across the sand between the mouth and the tooth ring set into
+     it. Same job, done from the only side of the join that is still
+     above ground.
+
      AND, IN THE SAME BUFFER, THE INNER PALPS.
 
      The art direction asks for a throat "ringed with translucent soft
@@ -1332,7 +1455,12 @@ export function buildGarner(ctx) {
     const position = new Float32Array(total * perFlap * 3);
     const colour = new Float32Array(total * perFlap * 4);
     const index = [];
-    const base = C.craterInner * 1.30;
+    /* Rooted on the collar at the height they now sit, not on its widest
+       ring. `collarR` is the shape of the inside of this mouth and the
+       flaps have to grow out of the wall where it actually is - set at
+       the flare's 1.30r they would have stood a metre and a half clear
+       of it in open air. */
+    const base = collarR(0.9);
     const set = (b, v, x, y, z) => {
       position[(b + v) * 3] = x;
       position[(b + v) * 3 + 1] = y;
@@ -1353,15 +1481,22 @@ export function buildGarner(ctx) {
       const ca = Math.cos(a);
       const sa = Math.sin(a);
       const w = (base * TAU / N) * 0.44;
-      const drop = 2.2 + rng() * 2.6;
-      const out = 1.1 + rng() * 1.5;
-      // The four roots, set into the collar's lower flank...
-      const rootY = -(COLLAR_H * 0.5) + 1.2 + 2.4 + rng() * 1.2;
+      /* OUT FAR AND DOWN BARELY. The tip has to reach the sand and then
+         lie on it: the funnel floor is a hand's width under the lip now,
+         so a flap that drops two metres is a flap driven into the ground
+         and one that drops three is not drawn at all. Three metres of
+         reach against half a metre of fall gives the splayed webbing
+         this join wants, and leaves the tips just clear of the sand so
+         the mouth's own breathing does not push them through it. */
+      const out = 2.4 + rng() * 1.2;
+      const drop = 0.15 + rng() * 0.40;
+      // The four roots, set into the collar just under its lip...
+      const rootY = MAW_TOP - 0.45 - rng() * 0.35;
       set(b, 0, ca * base - sa * w, rootY, sa * base + ca * w);
       set(b, 1, ca * (base - 0.5), rootY + w * 0.7, sa * (base - 0.5));
       set(b, 2, ca * base + sa * w, rootY, sa * base - ca * w);
       set(b, 3, ca * (base + 0.6), rootY - w * 0.5, sa * (base + 0.6));
-      // ...and the tip, splayed out and down onto the floor.
+      // ...and the tip, splayed out across the sand it rises from.
       set(b, 4, ca * (base + out), rootY - drop, sa * (base + out));
       for (let v = 0; v < perFlap; v += 1) {
         const tip = v === 4 ? 1 : 0;
@@ -1744,6 +1879,169 @@ export function buildGarner(ctx) {
   }
 
   /* ------------------------------------------------------------
+     THE OUTER RING - the small teeth in the sand.
+
+     Twenty-six of them, standing in the funnel floor between the mouth
+     and the rubble collar, raked inward at the throat.
+
+     WHY THE MOUTH NEEDED THEM. Twenty-one tusks on a collar is a crown,
+     and a crown has an edge: however low the collar sits, the animal
+     stops exactly where its own geometry stops and the sand begins
+     again. That edge is what read as "a mouth on a base" even after the
+     base came down, because a ring of enamel with nothing outside it is
+     a rim somebody set into the ground rather than something the ground
+     is full of. These break it - the teeth thin out and get smaller as
+     they go away from the throat, so the animal has no outline, it has a
+     falloff.
+
+     THEY ARE GROUND, NOT MOUTH. Pinned to the world at the funnel's
+     finished floor instead of riding the maw, for two reasons that both
+     matter: they must not iris - a small tooth set in sand has nothing
+     to fold on - and being at the FINISHED floor while the pan is still
+     shut means they are buried until the collapse reaches them. So the
+     ring is not revealed by the mouth coming up; it surfaces as the sand
+     goes down, which is the beat the collapse wanted and costs nothing
+     to get.
+
+     Nine vertices each, the same topology and the same 45-degree mid
+     ring as the tusks, because that spiral crease is what makes a spike
+     read as a tooth rather than as a thorn - and it is the reason these
+     can be a third the size of a tusk and still be countable.
+     ------------------------------------------------------------ */
+  {
+    const N = 26;
+    const verts = N * TOOTH_VERTS;
+    const position = new Float32Array(verts * 3);
+    const colour = new Float32Array(verts * 4);
+    const index = [];
+    for (let t = 0; t < N; t += 1) {
+      const b = t * TOOTH_VERTS;
+      index.push(b, b + 2, b + 1, b, b + 3, b + 2);
+      for (let s = 0; s < 4; s += 1) {
+        const n = (s + 1) % 4;
+        index.push(b + s, b + n, b + 4 + n, b + s, b + 4 + n, b + 4 + s);
+        index.push(b + 4 + s, b + 4 + n, b + 8);
+      }
+      /* Two loose rings rather than one even one. A single ring of
+         twenty-six at one radius is a fence; staggering half of them
+         outward and jittering both is a jaw the sand has half swallowed.
+         `pow` biases the scatter inward, so the ring is dense at the
+         throat and thins toward the rubble. */
+      const a = ((t + 0.5) / N) * TAU + (rng() - 0.5) * 0.16;
+      const r = 10.4 + Math.pow(rng(), 1.5) * 4.2;
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const x = C.pitX + ca * r;
+      const z = C.pitZ + sa * r;
+      /* The floor as it will BE, not as it is: `groundAt` answers with
+         the sealed pan at build time, and the profile is the rest. Set a
+         little under it, because a tooth resting on sand is a prop and
+         one driven into it is a tooth. */
+      const y = groundAt(x, z) + garnerPitProfile(r) - (0.25 + rng() * 0.5);
+      /* Smaller the further out, and none of them near a tusk's 4.3m.
+         The size gradient is what makes this read as one animal's
+         dentition rather than as two unrelated rings. */
+      const fall = clamp01((r - 10.4) / 4.2);
+      /* Well under a tusk's 4.3m at the inner end and a third of it at
+         the outer. These have to read as the SAME dentition a size down,
+         and a spike two thirds of a tusk standing further from the
+         camera photographs as another tusk - two rings of the same
+         tooth, which is a fence again. */
+      const height = lerp(1.90, 0.85, fall) * (0.78 + rng() * 0.44);
+      const width = (0.42 + rng() * 0.34) * lerp(1, 0.72, fall);
+      /* Raked at the throat, and hard. Every one of these leans in at
+         the mouth, which is what turns a scatter of spikes into
+         something with a direction - and it is the same read the tusks
+         give from inside the collar, continued outward. */
+      const lean = 1.30 - fall * 0.34 + (rng() - 0.5) * 0.34;
+      const skew = (rng() - 0.5) * 0.5;
+      const bend = (rng() - 0.5) * 0.7;
+      let ax = -ca * Math.cos(lean) - sa * skew * 0.4;
+      let ay = Math.sin(lean);
+      let az = -sa * Math.cos(lean) + ca * skew * 0.4;
+      const al = Math.hypot(ax, ay, az) || 1;
+      ax /= al; ay /= al; az /= al;
+      /* A quarter of them are stumps. Nothing has been chewing on the
+         Ossuary but this, and a complete set of twenty-six perfect
+         spikes in open sand is the one arrangement that reads as
+         manufactured. */
+      const worn = rng() < 0.26;
+      const len = height * (worn ? 0.48 : 1);
+      // The base quad, in the tangent plane.
+      const tx = -sa * width;
+      const tz = ca * width;
+      const set = (v, px, py, pz) => {
+        position[(b + v) * 3] = px;
+        position[(b + v) * 3 + 1] = py;
+        position[(b + v) * 3 + 2] = pz;
+      };
+      set(0, x + tx, y, z + tz);
+      set(1, x + tx * 0.35 - ca * width, y - width * 0.8, z + tz * 0.35 - sa * width);
+      set(2, x - tx, y, z - tz);
+      set(3, x + tx * 0.35 + ca * width, y + width * 0.8, z + tz * 0.35 + sa * width);
+      // The mid ring's frame, orthogonalised against the lean.
+      let ux = -sa;
+      let uy = 0;
+      let uz = ca;
+      const dot = ux * ax + uy * ay + uz * az;
+      ux -= ax * dot; uy -= ay * dot; uz -= az * dot;
+      const ul = Math.hypot(ux, uy, uz) || 1;
+      ux /= ul; uy /= ul; uz /= ul;
+      const vx = ay * uz - az * uy;
+      const vy = az * ux - ax * uz;
+      const vz = ax * uy - ay * ux;
+      const midT = worn ? 0.96 : 0.44;
+      const rw = width * (worn ? 0.54 : 0.58);
+      const hook = width * bend;
+      const mcx = x + ax * len * midT + ux * hook;
+      const mcy = y + ay * len * midT + uy * hook;
+      const mcz = z + az * len * midT + uz * hook;
+      for (let i = 0; i < 4; i += 1) {
+        const th = (i / 4) * TAU + Math.PI * 0.25;
+        const cw = Math.cos(th) * rw;
+        const sw = Math.sin(th) * rw;
+        set(4 + i, mcx + ux * cw + vx * sw, mcy + uy * cw + vy * sw,
+          mcz + uz * cw + vz * sw);
+      }
+      const tipT = worn ? 1.05 : 1;
+      const tipHook = worn ? hook : hook * 2.1;
+      set(8, x + ax * len * tipT + ux * tipHook,
+        y + ay * len * tipT + uy * tipHook,
+        z + az * len * tipT + uz * tipHook);
+      /* Painted a stop under the tusks. These stand in daylight on open
+         sand rather than at the rim of a lit throat, and at the crown's
+         own near-white they came back as the brightest thing in the
+         frame - a ring of pale chips on pale sand, which is the one
+         value relationship this district cannot carry. Gum at the root,
+         and the enamel dusty rather than wet. */
+      for (let v = 0; v < TOOTH_VERTS; v += 1) {
+        const k = (b + v) * 4;
+        let col;
+        let alpha;
+        if (v < 4) { col = TOOTH_GUM; alpha = 0.30; }
+        else if (v < 8) { col = ENAMEL_ROOT; alpha = 0.06; }
+        else { col = ENAMEL_TIP; alpha = 0; }
+        if (worn && v >= 8) { col = TOOTH_GUM; alpha = 0.45; }
+        const j = (0.80 + rng() * 0.26) * lerp(0.86, 0.62, fall);
+        colour[k] = col[0] * j;
+        colour[k + 1] = col[1] * j;
+        colour[k + 2] = col[2] * j;
+        colour[k + 3] = alpha;
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(position, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(colour, 4));
+    geo.setIndex(index);
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, toothMat);
+    mesh.name = "sf-garner-ring-teeth";
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  }
+
+  /* ------------------------------------------------------------
      THE GULLET
 
      A throat that goes DOWN and glows, with a peristaltic wave
@@ -2079,11 +2377,44 @@ export function buildGarner(ctx) {
    * hundred vertices every frame for an answer that is worse - a
    * smooth-shaded tube averaged off triangles bands visibly at the
    * joints where the taper changes.
+   *
+   * ============================================================
+   * THE FRAME IS TRANSPORTED ALONG THE LIMB, and the version that
+   * built it from scratch at every node is why these tentacles were
+   * see-through.
+   *
+   * That version picked a reference vector per node - world up, or
+   * world x if the tangent was within 23 degrees of vertical - and
+   * crossed the tangent against it. Both halves of that are locally
+   * correct and the SEED SWITCH is a discontinuity: a limb standing
+   * out of the sand and hooking over its target passes through
+   * |tangent.y| = 0.92 somewhere in the middle of itself, and the
+   * ring on one side of that node is rotated about 180 degrees
+   * against the ring on the other. The eight quads spanning them are
+   * therefore twisted through a half turn, which pinches the tube to
+   * nothing at the seam and reverses the winding of every face past
+   * it - and reversed faces on a FrontSide material are not drawn.
+   *
+   * So a rearing tentacle showed a hard crease at the bend and then
+   * simply stopped having a surface: the player saw the inside of the
+   * far wall through it. It looked like an alpha problem and it was a
+   * basis problem, which is the same bug `rockTube` in structures.js
+   * was given parallel transport to fix.
+   *
+   * The cure is to stop choosing: seed ONE frame at the root and
+   * rotate it from node to node by the minimum rotation that carries
+   * the old tangent onto the new one. Consecutive rings then differ by
+   * the smallest angle that the curve itself demands, there is no
+   * angle at which anything switches, and the tube cannot invert.
+   * ============================================================
    */
   function writeArmGeometry(arm) {
     const p = armMesh.position;
     const nrm = armMesh.normal;
     const buried = arm.phase === "sheathed";
+    /* The transported basis. `_n1` is carried across the whole limb, so
+       it is seeded once outside the loop rather than per node. */
+    let seeded = false;
     for (let n = 0; n < C.armNodes; n += 1) {
       const node = arm.nodes[n];
       // Tangent from the neighbours, so the frame is continuous.
@@ -2092,11 +2423,31 @@ export function buildGarner(ctx) {
       _t.subVectors(b, a);
       if (_t.lengthSq() < 1e-8) _t.set(0, 1, 0);
       _t.normalize();
-      // Any two perpendiculars will do; picking the one furthest from
-      // the tangent avoids the degenerate cross at vertical.
-      _n1.set(0, 1, 0);
-      if (Math.abs(_t.y) > 0.92) _n1.set(1, 0, 0);
-      _n1.crossVectors(_t, _n1).normalize();
+      if (!seeded) {
+        /* The root's frame, and this is the ONLY place a reference
+           vector is chosen - so the choice can be as arbitrary as it
+           likes without being able to produce a seam. */
+        seeded = true;
+        _n1.set(0, 1, 0);
+        if (Math.abs(_t.y) > 0.92) _n1.set(1, 0, 0);
+        _n1.crossVectors(_t, _n1).normalize();
+      } else {
+        /* Rotate the carried reference by the same rotation that took
+           the previous tangent to this one: project it back onto the
+           plane perpendicular to the new tangent and renormalise. That
+           is the minimum-twist transport, in four multiplies and a
+           square root, and it degenerates only where the curve doubles
+           back on itself - where the previous frame is still a valid
+           answer, which is what the guard below keeps. */
+        const dot = _n1.dot(_t);
+        _n1.addScaledVector(_t, -dot);
+        if (_n1.lengthSq() < 1e-6) {
+          _n1.set(0, 1, 0);
+          if (Math.abs(_t.y) > 0.92) _n1.set(1, 0, 0);
+          _n1.crossVectors(_t, _n1);
+        }
+        _n1.normalize();
+      }
       _n2.crossVectors(_t, _n1).normalize();
       const tt = n / (C.armNodes - 1);
       const radius = (buried ? 0 : 1) * armRadius(tt);
@@ -2520,18 +2871,32 @@ export function buildGarner(ctx) {
        would mean the closer they stand to the eruption, the safer they
        are, which is exactly backwards. Four nodes is the grasping pad
        and the three metres of limb behind it: the part of a tentacle
-       that could actually close on somebody. */
-    let flat = Infinity;
-    let vertical = Infinity;
-    for (let n = C.armNodes - 4; n < C.armNodes; n += 1) {
+       that could actually close on somebody.
+       ------------------------------------------------------------
+       EACH NODE IS TESTED ON BOTH AXES, and the version that did not
+       was a coin toss.
+
+       It took the FLAT-CLOSEST of the four and then asked that one node
+       to also be within reach vertically - so a limb whose pad closed on
+       the player's chest was scored on whichever bend of itself happened
+       to pass a few centimetres nearer in plan, and if that bend was
+       buried in the funnel wall six metres below their boots the strike
+       was recorded as a miss. Which bend wins is a function of where the
+       limb surfaced and how far under the player that patch of ground
+       is, so on the Ossuary's own slope the same lash against the same
+       stationary player resolved either way at about even odds.
+
+       "An attack that only lands on people who move is not a telegraph,
+       it is a coin toss with the wrong face up" - and this was the other
+       face of the same coin. The question was always whether ANY of the
+       four closed on them. */
+    let hit = false;
+    for (let n = C.armNodes - 4; n < C.armNodes && !hit; n += 1) {
       const node = arm.nodes[n];
-      const f = Math.hypot(ps.x - node.x, ps.z - node.z);
-      if (f < flat) {
-        flat = f;
-        vertical = Math.abs((ps.y + 1.0) - node.y);
-      }
+      hit = Math.hypot(ps.x - node.x, ps.z - node.z) <= C.grabRadius
+        && Math.abs((ps.y + 1.0) - node.y) <= 3.4;
     }
-    if (ctx.combat?.player?.dead || flat > C.grabRadius || vertical > 3.4) {
+    if (ctx.combat?.player?.dead || !hit) {
       /* THE MISS, and the payoff. It goes limp where it landed and
          everything about it is now a target the player put there. */
       arm.phase = "limp";
@@ -2894,19 +3259,35 @@ export function buildGarner(ctx) {
     bus.emit("devour", { x: ps.x, z: ps.z });
   }
 
-  /** The rim the mouth occupies. The pit is a hole in the picture but
-   *  not in the collision grid - `groundHeight` is a max over terrain
-   *  and authored surfaces, so nothing can lower it - and a player
-   *  walking across the middle of an open mouth on invisible ground is
-   *  the one artefact this encounter cannot have. So the animal keeps
-   *  them out itself: inside the collar they are devoured and thrown,
-   *  and short of that they are held at its face. */
+  /** The rim the mouth occupies.
+   *
+   *  The FUNNEL is real ground and the player walks down it, but the
+   *  THROAT is not walkable for two reasons that survive the terrain now
+   *  carrying a bore: the collar, the shelf and the twenty-six-metre
+   *  shaft are runtime meshes and runtime meshes are never in the
+   *  collision grid, so the sand five metres down inside the mouth is a
+   *  floor the player would stand on with the whole animal drawn around
+   *  them - and the bore is deliberately shallow enough to climb out of
+   *  (see GARNER_PIT's slope note), which means nothing about the ground
+   *  itself keeps them out either. So the animal does it: inside the
+   *  collar they are devoured and thrown, and short of that they are
+   *  held at its face. */
   function keepOut() {
     const ps = ctx.player?.state;
     if (!ps || state.open < 0.35) return;
     const d = pitDist(ps.x, ps.z);
     const wall = C.craterInner * C.keepOutScale * clamp01(state.open);
-    if (d >= wall || d < 1e-4) return;
+    if (d >= wall) return;
+    /* THE AXIS ITSELF USED TO BE A HOLE IN THIS. The bearing to push
+       them out along is `(ps - pit) / d`, so a degenerate `d` was
+       guarded by returning - which means a player who arrived exactly
+       over the middle of the mouth was the one player it did not hold
+       out of it. Any bearing will do when there is no bearing. */
+    if (d < 1e-3) {
+      ps.x = C.pitX + wall;
+      ps.z = C.pitZ;
+      return;
+    }
     /* Reaching the collar while the mouth is DRAWING is the one way
        into it. Standing against the collar at any other time - which
        is exactly where a player has to stand to swing at an open
@@ -3122,6 +3503,16 @@ export function buildGarner(ctx) {
         state.defeated = true;
         state.phase = "dead";
         state.timer = 0;
+        /* THE BREATH STOPS. `updateInhale` is only reached from
+           `stepFeeding`, so a draw in progress when the last shot lands
+           was harmless while nothing else read it - but `keepOut` now
+           runs in this phase, to stop the player walking into a dead
+           animal's throat, and its one way IN is `inhaleFor`. Left set,
+           a Garner killed mid-inhale spent the rest of the level
+           swallowing anyone who came near the corpse. */
+        state.inhaleFor = 0;
+        state.inhaleWind = 0;
+        state.spitWind = 0;
         if (inst.state !== "death") enemies.kill?.(inst);
         for (const arm of arms) {
           if (arm.phase !== "sheathed" && arm.phase !== "severed") {
@@ -3350,9 +3741,19 @@ export function buildGarner(ctx) {
       : damp(state.open, wantOpen, 1.6, d);
     const opening = Math.abs(state.open - before) > 1e-4;
 
+    /* AND THE GROUND IS PART OF IT. The funnel is a displacement on the
+       height field scaled by exactly this scalar, so the pan gives way
+       on the same curve the lid comes apart on and the mouth rises on -
+       one number, three surfaces, and the collision plane the player is
+       standing on is the third of them.
+       BEFORE `updateVisuals`, and that ordering is load-bearing:
+       `poseLid` lays every slab on `funnelY`, which reads the live
+       terrain. Posed first, the lid would spend the whole collapse a
+       frame's worth of sand above the ground it is made of. */
+    if (opening || state.phase === "breach") setPitReveal(state.open);
+
     if (state.phase === "feeding" || state.phase === "gorge") {
       for (const arm of arms) stepArm(arm, d);
-      keepOut();
     } else if (state.phase === "dead") {
       for (const arm of arms) stepArm(arm, d);
       state.mawOpen = damp(state.mawOpen, 0.08, 0.8, d);
@@ -3361,6 +3762,15 @@ export function buildGarner(ctx) {
         if (arm.phase !== "sheathed") stepArm(arm, d);
       }
     }
+    /* IN EVERY PHASE THE MOUTH IS UP, not only the two it fights in.
+       A dead Garner's throat is still a hole in the ground with a
+       five-metre bore under it, and `keepOut` is the only thing that has
+       ever stopped a player from standing inside the collar - it was
+       called from the feeding branch alone, so the corpse let them walk
+       in. The function gates itself on `open` and its devour branch on
+       an active draw, so calling it here costs a compare in the phases
+       where the pan is shut. */
+    keepOut();
 
     /* THE COLLAPSE'S OWN DUST, thrown off the lips of the plates that
        are actually moving. Sampled rather than emitted per plate:
@@ -3480,6 +3890,7 @@ export function buildGarner(ctx) {
       arm.anchor.set(C.pitX, floorY, C.pitZ);
       sheathe(arm);
     }
+    setPitReveal(state.open);
     poseLid();
     poseTeeth();
     setEncounterGate(true, true);
@@ -3490,6 +3901,20 @@ export function buildGarner(ctx) {
    *  animating, because a restore has no business playing a reveal. */
   function resetToPit() {
     state.defeated = false;
+    /* A DEAD INSTANCE IS NOT A RESETTABLE ONE, and this reset used to
+       assume it was.
+       `enemies` retires a corpse once its death animation has run, so
+       after a kill the reference this module holds is to something that
+       is no longer in `enemies.live` - and `healToFull` then wrote full
+       health onto an object nothing reads. Everything downstream came
+       back half-alive: the pit reopened because `stepInstance` still saw
+       `inst.state === "death"` and drove `open` to 1 for a corpse, and a
+       harness that killed the boss could never get a live one back. Drop
+       it and spawn again, which is what "reset" has always claimed. */
+    if (inst && (inst.state === "death" || !enemies.live.includes(inst))) {
+      enemies.remove?.(inst);
+      inst = null;
+    }
     if (!inst) ensureSpawned();
     if (!inst) return;
     healToFull();
@@ -3520,6 +3945,7 @@ export function buildGarner(ctx) {
       arm.anchor.set(C.pitX, floorY, C.pitZ);
       sheathe(arm);
     }
+    setPitReveal(state.open);
     poseLid();
     poseTeeth();
     setEncounterGate(true, true);
@@ -3602,6 +4028,14 @@ export function buildGarner(ctx) {
       inst = null;
       state.phase = "dead";
       state.open = 0;
+      /* AND THE PAN CLOSES OVER IT. This branch has always set `open` to
+         zero; while the funnel was permanent terrain that meant nothing,
+         and now it means the ground. A save reloaded after the kill
+         therefore comes back to unbroken pan rather than to an empty
+         hole with no animal in it - which is also the only arrangement
+         that cannot leave a player standing in a throat that has nothing
+         left to hold them out of it. */
+      setPitReveal(0);
       group.visible = false;
       clearHazards();
       return true;
@@ -3648,6 +4082,7 @@ export function buildGarner(ctx) {
     }
     inst.collapsed = phase === "gorge";
     setEncounterGate(phase === "dormant", phase === "dormant" || phase === "breach");
+    setPitReveal(state.open);
     poseLid();
     poseTeeth();
     syncLimbs();
@@ -3691,6 +4126,7 @@ export function buildGarner(ctx) {
          without this the geometry keeps whatever the previous phase
          left it as: a boss forced to `gorge` for a check gaped at the
          underside of a lid that was still shut over it. */
+      setPitReveal(state.open);
       poseLid();
       inst.collapsed = state.phase === "gorge";
       setEncounterGate(state.phase === "dormant",

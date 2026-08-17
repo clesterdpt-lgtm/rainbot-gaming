@@ -59,11 +59,13 @@ try {
     });
   });
 
+  /* NOTHING IS ADVANCED HERE ANY MORE. The pit does not exist until the
+     animal opens it, so the first two photographs are of the pan before
+     and during the collapse and they have to be taken before anything
+     else in this script wakes it up. Each of those shots sets up its own
+     phase, and `01-pit` forces `feeding` for everything after it. */
   const pit = await page.evaluate(() => {
-    const T = window.__SF;
-    T.teleportToGarner(40);
-    T.advanceToGarnerPhase("feeding", 18);
-    const c = T.garner.config;
+    const c = window.__SF.garner.config;
     return { x: c.pitX, z: c.pitZ };
   });
 
@@ -82,7 +84,35 @@ try {
     /* Camera heights are ABSOLUTE world Y, and the Ossuary pan sits at
        about zero - so a shot "on the rim" is a few metres up and a shot
        "into the pit" is aimed nine metres below that. */
-    /* The pit alone first, with the player parked well clear - the
+    /* DORMANT, and it is the photograph the whole encounter is built
+       around: the Ossuary's boss, from the distance a player first sees
+       it from, is level pan with nothing on it. A funnel permanently
+       sunk into the ground announced this fight from the far side of
+       the district; the reveal is now the ground going. */
+    /* Set OUTWARD from the district, on the pit's own bearing: the
+       ribcage is 108m the other way and a camera a hundred metres back
+       along that line stands inside a rib. */
+    ["00-dormant", [96, 17, 70], [0, 1, 0], 48, (T) => {
+      const c = T.garner.config;
+      T.resetGarner();
+      // Behind the lens, and outside the 64m aggro radius either way.
+      T._teleportRaw(c.pitX + 150, c.pitZ + 116, 0);
+      T.advanceTime(0.4, 1 / 60);
+    }],
+    /* The same ground, two and a half seconds in. The pan is doming and
+       falling, the terrain under it is already half-way down, and the
+       lid is coming apart into the hole it is making. */
+    ["00b-collapse", [-72, 26, -52], [0, -3, 0], 52, (T) => {
+      const c = T.garner.config;
+      T.teleportToGarner(40);
+      T.advanceToGarnerPhase("breach", 8);
+      T.advanceTime(2.5, 1 / 60);
+      /* Clear of the lens without leaving the 112m arena, which would
+         seal the pit mid-photograph. */
+      T._teleportRaw(c.pitX + 64, c.pitZ + 50, 0);
+      T.advanceTime(1 / 60, 1 / 60);
+    }],
+    /* The pit alone next, with the player parked well clear - the
        limbs surface next to whoever is standing there, and a
        photograph of the hole should not have one across the lens. */
     ["01-pit", [-62, 22, -44], [0, -9, 0], 52, (T) => {
@@ -127,7 +157,10 @@ try {
     /* The one that answers question 4: the pit against the ribcage it
        was deliberately moved out of. */
     ["07-ribcage", [52, 14, 38], [-40, 16, -30], 55, null],
-    ["08-sealed", [-46, 10, -32], [0, -6, 0], 58, (T) => {
+    /* Sealed, from the rim of a pit that is no longer there. Same
+       camera as `02-rim` and it now frames unbroken sand, which is the
+       cheapest possible check that the leash puts the ground back. */
+    ["08-sealed", [-46, 10, -32], [0, -1, 0], 58, (T) => {
       T.forceGarnerPhase("dormant");
       T.advanceTime(0.5, 1 / 60);
     }],

@@ -91,7 +91,21 @@ export const DISTRICTS = {
    the mouth where the collar occludes the join.
 
    `floor` is where the player stands to fight it: real ground, nine
-   metres under the pan, with the mouth set into the middle of it. */
+   metres under the pan, with the mouth set into the middle of it.
+
+   AND IT IS NOT ALWAYS THERE. Everything above is about the SHAPE; the
+   pit's other half is that the shape has an amplitude, `garnerReveal`,
+   which is zero until the player walks into the Ossuary. A funnel
+   permanently sunk into the pan announced the encounter from the far
+   side of the district and spent the surprise before the player was
+   near enough to be in it - the whole read of this animal is that you
+   are standing on flat ground and then you are not.
+
+   That works because a height field is CHEAP TO RE-EVALUATE LOCALLY.
+   Nothing else in `heightAt` moves, so the pit's samples are the only
+   ones that have to be rewritten, and both ends of their travel - the
+   unbroken pan and the finished funnel - can be measured once at load
+   and lerped between. See `pitPatch` at the bottom of this file. */
 export const GARNER_PIT = Object.freeze({
   /* A hundred and eight metres out from the ribcage's spine, square to
      it - see the axis in world.js. Dead centre put a fifty-metre pit
@@ -113,7 +127,101 @@ export const GARNER_PIT = Object.freeze({
      that the pit reads from the far side of the pan as something with
      an edge rather than as a shadow on flat ground. */
   lipHeight: 1.7,
+
+  /* ------------------------------------------------------------
+     THE THROAT, and it is the reason the mouth can sit LEVEL with the
+     floor instead of standing on it.
+
+     The first build stood the collar five metres proud of the funnel's
+     floor, and the arithmetic forced it to: a height field has no hole
+     in it at any radius, so sand runs straight across the inside of a
+     mouth that is flush with the ground, and the only way to see any
+     throat at all was to lift the whole animal above the surface it
+     was set into. That is a beak on a plinth. Every note in garner.js
+     about "a mouth standing on the desert is a tower" was fighting a
+     symptom of this one missing eight metres.
+
+     Now that the pit is re-evaluated anyway, the bore can simply be
+     cut - so the collar's lip comes down to `mawStand`, a hand's
+     width, and the depth the player looks into is terrain rather than
+     a pedestal.
+
+     THREE CONSTRAINTS FIX THESE THREE NUMBERS, and every one of them
+     bites.
+
+     DEPTH is bounded below by the black shelf inside the mouth: the
+     sand has to stay clear of it at every radius the collar's chewed
+     wall reaches, or a plate laid to hide the ground has ground on top
+     of it. Five metres leaves about 1.7m of margin at the worst radius
+     once the 4m sample grid has smoothed the rim.
+
+     `throatOuter` is bounded above by garner.js's `keepOutScale`: the
+     animal holds the player 9.59m from its axis, so the bore has to be
+     back at floor grade by then or the fight is conducted on a slope.
+
+     AND THE SPAN IS BOUNDED BELOW BY THE PLAYER'S SLOPE GATE, which is
+     the one that is easy to miss. player.js walks anything under a
+     sustained 1.7 rise over run and nothing above it, and a smoothstep
+     of depth D across a span S peaks at 1.5D/S - so the first pass, 8m
+     across 5.3m, had a 2.26 wall. The mouth holds the player out of the
+     bore during the fight so nothing noticed; the moment the animal is
+     DEAD it stops holding them, and a hole with unclimbable sides that
+     the player may now walk into is a softlock in the shape of a boss
+     arena. 5m across 6.2m peaks at 1.21, and the steepest pair of
+     samples the mesh actually draws comes out at 1.12. */
+  throatDepth: 5.0,
+  throatInner: 4.2,
+  throatOuter: 10.4,
+
+  /* Where the pit's influence ends. Everything outside is untouched
+     pan, which is what makes the live patch a small set of samples
+     rather than a chunk rebuild. */
+  reach: 62,
 });
+
+/* HOW MUCH OF THE PIT EXISTS RIGHT NOW. 0 is unbroken pan, 1 is the
+   finished funnel with the bore in the middle of it.
+
+   Module state rather than a parameter because `heightAt` is called
+   from the mesh builder, the collision grid, the foot IK and half a
+   dozen gameplay modules, and none of them should have to learn that
+   one district's boss is mid-collapse. garner.js owns the value; see
+   `terrain.setGarnerPitReveal`. */
+let garnerReveal = 0;
+
+export function garnerPitReveal() { return garnerReveal; }
+
+/**
+ * The pit's own displacement at radius `r`, in metres, at full reveal.
+ *
+ * Exported because garner.js needs two answers this function gives and
+ * `heightAt` cannot: where the FINISHED funnel's floor is while the pan
+ * is still shut (so the animal can be built against ground that does
+ * not exist yet), and the same thing without the throat, which is the
+ * surface the player fights from rather than the hole in the middle of
+ * it.
+ */
+export function garnerPitProfile(r, withThroat = true) {
+  const g = GARNER_PIT;
+  if (r >= g.reach) return 0;
+  /* The same bowl-plus-rim shape the Glass Scar uses, at a twentieth
+     of the size and run all the way to the middle. */
+  const bowl = -g.depth * (1 - sstep(g.floorRadius, g.rimRadius, r));
+  const lip = g.lipHeight
+    * Math.exp(-((r - (g.rimRadius + 5)) ** 2) / (2 * 8 * 8));
+  /* Terraces down the funnel wall - the same trick the Glass Scar uses
+     on its own bowl. A cone of sand this smooth reads as a dish however
+     deep it is; strata give the eye something to measure the descent
+     against, and at 4m sample spacing they are the only surface detail
+     the grid can express. */
+  const terrace = Math.sin(r * 0.42) * 0.85
+    * (1 - sstep(g.floorRadius, g.rimRadius + 6, r))
+    * sstep(g.floorRadius - 6, g.floorRadius + 2, r);
+  const throat = withThroat
+    ? -g.throatDepth * (1 - sstep(g.throatInner, g.throatOuter, r))
+    : 0;
+  return bowl + lip + terrace + throat;
+}
 
 /** The processional causeway, south gate to cathedral steps. */
 export const ROAD_PATH = [
@@ -582,24 +690,15 @@ export function makeHeightField(seed = 0x5a1f7) {
         const crackN = Math.abs(nDetail.fbm(x / 21, z / 21, 2));
         h -= (1 - sstep(0.0, 0.055, crackN)) * 0.85 * t * k;
 
-        /* --- and the Garner's funnel sunk into it --- */
-        const g = GARNER_PIT;
-        const gd = Math.hypot(x - g.x, z - g.z);
-        if (gd < g.rimRadius + 26) {
-          /* The same bowl-plus-rim shape the Glass Scar uses, at a
-             twentieth of the size and run all the way to the middle. */
-          const bowl = -g.depth * (1 - sstep(g.floorRadius, g.rimRadius, gd));
-          const lip = g.lipHeight
-            * Math.exp(-((gd - (g.rimRadius + 5)) ** 2) / (2 * 8 * 8));
-          /* Terraces down the funnel wall - the same trick the Glass
-             Scar uses on its own bowl. A cone of sand this smooth reads
-             as a dish however deep it is; strata give the eye something
-             to measure the descent against, and at 4m sample spacing
-             they are the only surface detail the grid can express. */
-          const terrace = Math.sin(gd * 0.42) * 0.85
-            * (1 - sstep(g.floorRadius, g.rimRadius + 6, gd))
-            * sstep(g.floorRadius - 6, g.floorRadius + 2, gd);
-          h += (bowl + lip + terrace) * k;
+        /* --- and the Garner's funnel sunk into it, as far as it has
+               got. The shape is in `garnerPitProfile`; the only thing
+               decided here is that it is scaled by how much of the
+               collapse has happened, so a sealed pan costs one
+               subtraction and a compare. --- */
+        if (garnerReveal > 0.0005) {
+          const g = GARNER_PIT;
+          const gd = Math.hypot(x - g.x, z - g.z);
+          if (gd < g.reach) h += garnerPitProfile(gd) * k * garnerReveal;
         }
       }
     }
@@ -950,9 +1049,29 @@ export async function buildTerrain(ctx, onProgress) {
     const surf = field.surfaceAt(x, z, normal);
     const slope = 1 - clamp01(normal[1]);
 
+    /* HOW FAR INSIDE THE GARNER'S PIT THIS VERTEX IS, needed before the
+       tonal range is chosen because the pit breaks two of the terms that
+       follow. See the pair of corrections at the bottom of this function
+       - both of them are consequences of `coarseHeight` being baked
+       before this hole exists. */
+    let pitIn = 0;
+    let pitR = Infinity;
+    if (garnerReveal > 0.0005) {
+      pitR = Math.hypot(x - GARNER_PIT.x, z - GARNER_PIT.z);
+      pitIn = (1 - sstep(GARNER_PIT.rimRadius, GARNER_PIT.rimRadius + 14, pitR))
+        * garnerReveal;
+    }
+
     // Where in this surface's tonal range does the vertex sit?
     // Height relative to the local mean, plus how skyward it faces.
-    const local = (y - coarseHeight(x, z)) * 0.06
+    /* `local` IS ALSO MEASURED AGAINST THE COARSE GRID, so a vertex
+       twelve metres down a hole the grid does not know about reads as
+       the bottom of a canyon and picks the darkest end of the sand ramp.
+       Faded out across the pit for the same reason the occlusion is: the
+       question it is asking - "is this high ground or low ground for
+       around here?" - has no answer the grid can give inside a feature
+       that appeared after it was built. */
+    const local = (y - coarseHeight(x, z)) * 0.06 * (1 - pitIn)
       + (y - field.baseHeight(x, z)) * 0.012;
     const crest = clamp01(
       0.46 + local + (1 - slope) * 0.20
@@ -985,7 +1104,24 @@ export async function buildTerrain(ctx, onProgress) {
 
     // Occlusion, tinted toward the shadow violet rather than toward
     // black. Multiplying to grey is what makes baked AO look dirty.
-    const occ = occlusionAt(x, z, y);
+    /* AND THE GARNER'S PIT IS EXEMPT FROM IT, because inside that pit
+       this pass is not measuring occlusion - it is measuring its own
+       blind spot.
+
+       `occlusionAt` asks `coarseHeight` how high the ground is on four
+       rings out to 54m and counts how much of the sky that leaves. The
+       coarse grid is built before the pit is carved, so a vertex on the
+       funnel floor is told that the ground FOUR METRES away stands
+       twelve above it in every direction - which is a vertical shaft,
+       not a twenty-degree sand cone. Every sample saturates, `o*o`
+       returns 1, the 0.62 mix crushes the value, and the whole hole
+       photographed as a black slot cut in bright sand with no terraces,
+       no spoil and no floor to fight on.
+
+       Faded out across the pit and replaced by the radial term at the
+       bottom of this function, which is what a circular hole's occlusion
+       actually is and which the reveal can scale. */
+    const occ = occlusionAt(x, z, y) * (1 - pitIn);
     if (occ > 0.002) {
       const k = occ * 0.62;
       r = lerp(r, r * SHADOW_TINT[0] + 0.055, k);
@@ -1001,6 +1137,52 @@ export async function buildTerrain(ctx, onProgress) {
       if (ridge > 0.002) {
         const m = mixRgb([r, g, b], SAND_RAMP.at(0.99), ridge * 0.5 * surf.sand);
         r = m[0]; g = m[1]; b = m[2];
+      }
+    }
+
+    /* ------------------------------------------------------------
+       THE GARNER'S PIT GETS ITS SHADING WRITTEN BY HAND, because the
+       two passes that would have done it are both blind here - see the
+       notes on `local` and on `occ` above. Radial functions, which is
+       all a circular hole's shading ever was, and scaled by the reveal
+       so a sealed pan carries nothing waiting on it.
+       ------------------------------------------------------------ */
+    if (pitIn > 0.0005) {
+      const pit = GARNER_PIT;
+      /* THE BOWL. A third of the way to the shadow tint at the floor,
+         tapering to nothing at the rim, which is about what a hole nine
+         metres deep and thirty-six across actually loses - and unlike
+         the saturating version it leaves the terraces and the spoil in
+         the picture. */
+      const bowl = (1 - sstep(pit.floorRadius * 0.7, pit.rimRadius + 4, pitR))
+        * garnerReveal * 0.34;
+      if (bowl > 0.002) {
+        r = lerp(r, r * SHADOW_TINT[0] + 0.055, bowl);
+        g = lerp(g, g * SHADOW_TINT[1] + 0.030, bowl);
+        b = lerp(b, b * SHADOW_TINT[2] + 0.062, bowl);
+      }
+      /* AND THE THROAT IS NOT SAND AT ALL.
+
+         Geometry alone cannot make the bore read as a hole: five metres
+         of sand cone under a desert noon comes back as a nicely shaded
+         funnel, which is the exact failure the mouth's black shelf and
+         unlit bore were built to hide one plane at a time. A near-black
+         vertex colour over the same annulus does it for the whole depth,
+         and it is free - these vertices are being written anyway.
+
+         HELD INSIDE THE BORE'S OWN SPAN. Reaching past `throatOuter` put
+         a black disc on the funnel FLOOR, and the floor is the ring of
+         ground the entire fight is conducted from: the mouth read as
+         something floating in a void rather than as a rim set in sand,
+         which is the opposite of the change this is part of. Near-black
+         inside six metres, where the collar stands in front of it
+         anyway, and honest sand by anywhere the player can stand. */
+      const dark = (1 - sstep(pit.throatInner, pit.throatOuter, pitR))
+        * garnerReveal;
+      if (dark > 0.002) {
+        r = lerp(r, 0.013, dark);
+        g = lerp(g, 0.0085, dark);
+        b = lerp(b, 0.0075, dark);
       }
     }
 
@@ -1177,6 +1359,182 @@ export async function buildTerrain(ctx, onProgress) {
     }
   }
 
+  /* ============================================================
+     THE GARNER'S PIT, LIVE
+
+     The one patch of this terrain that moves after load, and it moves
+     because the Ossuary's boss is the ground opening.
+
+     A FULL RESAMPLE IS NOT AVAILABLE. `sampleChunk` costs 4225 height
+     evaluations plus a normal (four more each) and a colour (thirty-odd
+     coarse lookups each) per chunk, and the pit straddles three of them
+     - about a seventh of a second, for a surface that has to move every
+     frame for five seconds. So the patch is precomputed instead: the
+     pit's displacement is a pure function of radius times one scalar,
+     which means every affected sample has exactly TWO states worth
+     measuring, and the frame's job is a lerp.
+
+     THE CLOSED END IS READ BACK OUT OF LOD0 rather than recomputed.
+     Every sample appears in LOD0 at stride 1, so the mesh already holds
+     the pan's own height, normal and encoded colour at this exact
+     point - and re-deriving them risks disagreeing by a hair with the
+     vertices immediately outside the patch, which is a visible seam
+     around a 124m disc.
+
+     Cost per refresh, measured: 783 samples of nine lerps and a
+     normalise, writing into about a thousand vertices across the twelve
+     buffers of three chunks. It does not appear in the frame budget -
+     4.0ms mid-collapse against 3.3 settled.
+     ============================================================ */
+  const pitPatch = (() => {
+    const pit = GARNER_PIT;
+    const step = CHUNK_SIZE / FINE;
+
+    /** Every LOD vertex a chunk sample (i,j) writes into. */
+    function targetsFor(i, j) {
+      const out = [];
+      for (let lod = 0; lod < LOD_CELLS.length; lod += 1) {
+        const cells = LOD_CELLS[lod];
+        const stride = FINE / cells;
+        if (i % stride !== 0 || j % stride !== 0) continue;
+        const side = cells + 1;
+        const gi = i / stride;
+        const gj = j / stride;
+        out.push(lod, gj * side + gi, 0);
+        /* THE SKIRT DUPLICATES EDGE SAMPLES, and forgetting that leaves
+           an eleven-metre apron hanging at pan height along every chunk
+           seam the pit crosses - which this one crosses twice, being
+           124m across on a 256m grid. The duplicates are laid out four
+           edges of `side` vertices each, straight after the plane. */
+        const base = side * side;
+        if (gj === 0) out.push(lod, base + gi, 1);
+        if (gj === cells) out.push(lod, base + side + gi, 1);
+        if (gi === 0) out.push(lod, base + side * 2 + gj, 1);
+        if (gi === cells) out.push(lod, base + side * 3 + gj, 1);
+      }
+      return out;
+    }
+
+    const entries = [];
+    const geos = [];
+    const attrsOf = new Map();
+    const cLo = (v) => Math.max(0, Math.floor((v + MAP_HALF) / CHUNK_SIZE));
+    const cHi = (v) => Math.min(CHUNKS - 1, Math.floor((v + MAP_HALF) / CHUNK_SIZE));
+    const cxLo = cLo(pit.x - pit.reach);
+    const cxHi = cHi(pit.x + pit.reach);
+    const czLo = cLo(pit.z - pit.reach);
+    const czHi = cHi(pit.z + pit.reach);
+
+    /* Measured with the pit FULLY OPEN, then handed straight back. Any
+       consumer that samples the field between these two lines gets a
+       finished funnel, which is why nothing may run in here but this. */
+    const wasRevealed = garnerReveal;
+    garnerReveal = 1;
+    const nrm = [0, 0, 0];
+    for (let cz = czLo; cz <= czHi; cz += 1) {
+      for (let cx = cxLo; cx <= cxHi; cx += 1) {
+        const chunk = chunks[cz * CHUNKS + cx];
+        const ox = -MAP_HALF + cx * CHUNK_SIZE;
+        const oz = -MAP_HALF + cz * CHUNK_SIZE;
+        let attrs = null;
+        for (let j = 0; j < FINE_SIDE; j += 1) {
+          const z = oz + j * step;
+          for (let i = 0; i < FINE_SIDE; i += 1) {
+            const x = ox + i * step;
+            if (Math.hypot(x - pit.x, z - pit.z) >= pit.reach) continue;
+            if (!attrs) {
+              attrs = chunk.lods.map((mesh) => {
+                const a = mesh.geometry.attributes;
+                geos.push(mesh.geometry);
+                /* THE SPHERES HAVE TO GROW, once, here. They were fitted
+                   to a flat pan; a bore that drops twenty metres below
+                   it puts vertices outside them, and a chunk whose
+                   bounding sphere no longer contains its own geometry is
+                   a chunk the frustum culls while the player is standing
+                   in the hole. Recomputing per frame is 4225 vertices
+                   times twelve buffers for an answer that is knowable in
+                   advance. */
+                mesh.geometry.boundingSphere.radius += pit.depth + pit.throatDepth;
+                return { pos: a.position.array, nrm: a.normal.array, col: a.color.array };
+              });
+              attrsOf.set(chunk, attrs);
+            }
+            const p = j * FINE_SIDE + i;
+            const l0 = attrs[0];
+            const y1 = field.heightAt(x, z);
+            field.normalAt(x, z, nrm);
+            const c1 = colourAt(x, z, y1, nrm);
+            entries.push({
+              ys: chunk.heightSamples,
+              p,
+              attrs,
+              targets: targetsFor(i, j),
+              y0: l0.pos[p * 3 + 1],
+              y1,
+              n0: [l0.nrm[p * 3], l0.nrm[p * 3 + 1], l0.nrm[p * 3 + 2]],
+              n1: [nrm[0], nrm[1], nrm[2]],
+              c0: [l0.col[p * 3], l0.col[p * 3 + 1], l0.col[p * 3 + 2]],
+              c1: [srgb(c1[0]), srgb(c1[1]), srgb(c1[2])],
+            });
+          }
+        }
+      }
+    }
+    garnerReveal = wasRevealed;
+
+    let applied = 0;
+
+    /**
+     * Open or close the pit. Returns whether anything actually moved.
+     *
+     * THE FIELD AND THE MESH ARE SET TOGETHER, always, and that is why
+     * there is no bare setter for `garnerReveal`. `heightAt` feeds the
+     * foot IK and every module that samples the ground analytically;
+     * the sample plane feeds `groundHeightAt`, which is what the player
+     * walks on and what collision reads. Letting one move without the
+     * other is a player standing on a surface that is not drawn.
+     */
+    function refresh(reveal) {
+      const v = clamp01(Number(reveal) || 0);
+      garnerReveal = v;
+      if (Math.abs(v - applied) < 4e-4) return false;
+      applied = v;
+      for (let e = 0; e < entries.length; e += 1) {
+        const en = entries[e];
+        const y = lerp(en.y0, en.y1, v);
+        en.ys[en.p] = y;
+        let nx = lerp(en.n0[0], en.n1[0], v);
+        let ny = lerp(en.n0[1], en.n1[1], v);
+        let nz = lerp(en.n0[2], en.n1[2], v);
+        const inv = 1 / (Math.hypot(nx, ny, nz) || 1);
+        nx *= inv; ny *= inv; nz *= inv;
+        const cr = lerp(en.c0[0], en.c1[0], v);
+        const cg = lerp(en.c0[1], en.c1[1], v);
+        const cb = lerp(en.c0[2], en.c1[2], v);
+        const t = en.targets;
+        for (let n = 0; n < t.length; n += 3) {
+          const a = en.attrs[t[n]];
+          const k = t[n + 1] * 3;
+          const skirt = t[n + 2];
+          a.pos[k + 1] = skirt ? y - SKIRT : y;
+          a.nrm[k] = nx; a.nrm[k + 1] = ny; a.nrm[k + 2] = nz;
+          a.col[k] = skirt ? cr * 0.80 : cr;
+          a.col[k + 1] = skirt ? cg * 0.78 : cg;
+          a.col[k + 2] = skirt ? cb * 0.84 : cb;
+        }
+      }
+      for (let n = 0; n < geos.length; n += 1) {
+        const a = geos[n].attributes;
+        a.position.needsUpdate = true;
+        a.normal.needsUpdate = true;
+        a.color.needsUpdate = true;
+      }
+      return true;
+    }
+
+    return { refresh, samples: entries.length, chunks: attrsOf.size };
+  })();
+
   /* ------------------------ LOD selection ------------------------ */
 
   function updateLod(camera) {
@@ -1250,6 +1608,14 @@ export async function buildTerrain(ctx, onProgress) {
     groundHeightAt,
     normalAt: field.normalAt,
     surfaceAt: field.surfaceAt,
+    /** How much of the Garner's pit exists. garner.js owns the value;
+     *  see the note on `pitPatch`. */
+    setGarnerPitReveal: pitPatch.refresh,
+    garnerPitStats: () => ({
+      samples: pitPatch.samples,
+      chunks: pitPatch.chunks,
+      reveal: garnerPitReveal(),
+    }),
     updateLod,
     stats() {
       let tris = 0;

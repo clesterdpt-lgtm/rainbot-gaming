@@ -1121,7 +1121,7 @@ body.sf-reduced-motion .sf-doctrine__xp>i em,body.sf-reduced-motion .sf-doctrine
 }
 .sf-doctrine-talent__detail[hidden],.sf-doctrine__vow-detail[hidden]{display:none}
 
-.sf-doctrine__order>[data-doctrine-capstone]{min-width:0}
+.sf-doctrine__order [data-doctrine-capstone]{min-width:0}
 .sf-doctrine__vow{
   display:grid;
   grid-template-columns:minmax(11rem,.72fr) minmax(12rem,1fr) minmax(14rem,auto);
@@ -1177,7 +1177,7 @@ body.sf-reduced-motion .sf-doctrine__xp>i em,body.sf-reduced-motion .sf-doctrine
 }
 .sf-doctrine__order[data-view="talent"] .sf-doctrine__rites{grid-template-columns:minmax(0,1fr)}
 .sf-doctrine__order[data-view="talent"] .sf-doctrine-talent:not([data-inspected="true"]),
-.sf-doctrine__order[data-view="talent"]>[data-doctrine-capstone]{display:none}
+.sf-doctrine__order[data-view="talent"] [data-doctrine-capstone]{display:none}
 .sf-doctrine__order[data-view="talent"] .sf-doctrine-talent[data-inspected="true"]{min-height:0;padding:.8rem}
 .sf-doctrine__order[data-view="talent"] .sf-doctrine-talent[data-inspected="true"]>p{-webkit-line-clamp:unset}
 .sf-doctrine__order[data-view="talent"] .sf-doctrine-talent__detail{margin-top:.7rem;padding-top:.65rem}
@@ -1741,7 +1741,7 @@ body.rb-game-maxed .saintfall-page .rb-standalone-surface{container-name:none}
 .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order[data-view="talent"] .sf-doctrine__workspace{display:grid}
 .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order[data-view="talent"] .sf-doctrine__rites{grid-template-columns:repeat(2,minmax(0,1fr))}
 .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order[data-view="talent"] .sf-doctrine-talent:not([data-inspected="true"]){display:flex}
-.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order[data-view="talent"]>[data-doctrine-capstone]{display:block}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order[data-view="talent"] [data-doctrine-capstone]{display:block}
 
 @container saintfall-playfield (max-width:1180px){
   .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-menu__frame{border-radius:0}
@@ -1871,6 +1871,326 @@ body.rb-game-maxed .saintfall-page .rb-standalone-surface{container-name:none}
     grid-template-rows:repeat(2,minmax(8.5rem,11rem));align-content:center
   }
 }
+
+/* ======================================================================
+   SAINTFALL - Doctrine board
+
+   The capstone Vow used to be a full-width band published below a
+   workspace pinned at min-height:13.5rem. The order panel's middle track
+   is minmax(0,1fr), so as soon as the playfield got short that track
+   collapsed while the workspace kept painting its 13.5rem - and the Vow,
+   later in the DOM, painted straight over the rites.
+
+   The board now has one rule: every doctrine node lives in a track that
+   can shrink to zero, and the Vow is the crown row of the same column as
+   the rites rather than a slab of its own. Nothing carries a min-height
+   larger than the track it sits in, so no node can overlap another at any
+   playfield size. Acting on a node happens in one place - the inspector.
+   ====================================================================== */
+
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order,
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order[data-view="talent"],
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order[data-view="capstone"]{
+  display:grid;grid-template-rows:auto minmax(0,1fr);gap:.45rem;
+  min-height:0;overflow:hidden;scrollbar-gutter:auto
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__workspace{
+  display:grid;grid-template-columns:minmax(0,1.42fr) minmax(14rem,.8fr);
+  gap:.55rem;min-width:0;min-height:0;overflow:hidden
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__tree{
+  display:grid;grid-template-rows:minmax(0,1fr) auto;gap:.45rem;min-width:0;min-height:0
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__crown{min-width:0;min-height:0}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__rites{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-template-rows:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);
+  gap:.45rem;min-width:0;min-height:0
+}
+
+/* --- rite card: art, name, gate, rank pips. Detail lives in the inspector. */
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent{
+  display:grid;grid-template-columns:auto minmax(0,1fr);
+  /* Explicit auto rows: the inherited minmax(1.4em,auto) kept reserving a
+     blurb row after the blurb was hidden, which pushed the badge out. */
+  grid-template-rows:auto auto auto;
+  grid-template-areas:"media head" "media summary" "media badge";
+  align-content:center;column-gap:.55rem;row-gap:.16rem;
+  min-width:0;min-height:0;padding:.45rem .55rem;overflow:hidden;
+  border:1px solid rgba(115,216,237,.13);border-left:3px solid rgba(115,216,237,.2);
+  background:rgba(4,10,14,.66);
+  transition:border-color .14s ease,background-color .14s ease,box-shadow .14s ease
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent[data-state="available"]{
+  border-left-color:var(--sf-order-accent,var(--sfu-cyan))
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent[data-state="owned"],
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent[data-state="maxed"]{
+  border-left-color:var(--sfu-verd);background:rgba(6,16,16,.72)
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent[data-gate-open="false"]{
+  border-left-style:dashed;filter:saturate(.55)
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent[data-previewed="true"]{
+  border-color:var(--sf-order-accent,var(--sfu-cyan));
+  border-left-color:var(--sf-order-accent,var(--sfu-cyan));filter:none;
+  background:linear-gradient(120deg,rgba(115,216,237,.1),rgba(4,10,14,.92));
+  box-shadow:inset 3px 0 0 var(--sf-order-accent,var(--sfu-cyan)),
+    0 0 0 1px color-mix(in srgb,var(--sf-order-accent) 30%,transparent)
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent__media{
+  grid-area:media;position:relative;align-self:center;
+  width:var(--sf-rite-art,3.35rem);height:var(--sf-rite-art,3.35rem);
+  flex:none;border:1px solid rgba(115,216,237,.2);background:#020508;overflow:hidden
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent__tier{
+  position:absolute;left:0;bottom:0;padding:.05rem .2rem;
+  border-top:1px solid rgba(115,216,237,.28);border-right:1px solid rgba(115,216,237,.28);
+  background:rgba(2,6,10,.9);color:var(--sf-order-accent,var(--sfu-cyan));
+  font:700 7.5px/1 "Share Tech Mono",ui-monospace,monospace;letter-spacing:.08em
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent>header{
+  grid-area:head;align-items:center;gap:.4rem;min-width:0
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent>header>span{min-width:0}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent>header small{
+  display:block;color:color-mix(in srgb,var(--sf-order-accent) 78%,#e1ecec);
+  font-size:7.5px;letter-spacing:.11em;white-space:nowrap
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent>header strong{
+  display:block;overflow:hidden;font-size:11.5px;line-height:1.2;
+  text-overflow:ellipsis;white-space:nowrap;-webkit-line-clamp:1
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent>p{
+  grid-area:summary;display:-webkit-box;overflow:hidden;margin:0;min-height:0;
+  color:rgba(225,236,236,.6);font-size:9.5px;line-height:1.3;
+  -webkit-box-orient:vertical;-webkit-line-clamp:2
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent__meta-row{
+  grid-area:badge;display:flex;align-items:center;margin:.05rem 0 0
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent__badge{
+  padding:.06rem .28rem;font-size:7.5px;letter-spacing:.09em
+}
+
+/* --- crown: the Vow reads as the last rung of the ladder, not a banner. */
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow{
+  display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;
+  gap:.55rem;min-width:0;min-height:0;padding:.45rem .55rem;overflow:hidden;
+  border:1px solid rgba(240,213,140,.2);border-left:3px solid rgba(240,213,140,.45);
+  background:linear-gradient(100deg,rgba(240,213,140,.05),transparent 60%),rgba(6,10,10,.74);
+  transition:border-color .14s ease,background-color .14s ease,box-shadow .14s ease
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow[data-state="eligible"]{
+  border-left-color:var(--sfu-gold);
+  box-shadow:inset 0 0 1.6rem rgba(240,213,140,.07)
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow[data-state="equipped"]{
+  border-color:rgba(117,221,180,.34);border-left-color:var(--sfu-verd)
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow[data-previewed="true"]{
+  border-color:var(--sfu-gold);
+  background:linear-gradient(100deg,rgba(240,213,140,.11),rgba(4,10,14,.92));
+  box-shadow:inset 3px 0 0 var(--sfu-gold),0 0 0 1px rgba(240,213,140,.28)
+}
+/* Height-bound, not centred at a fixed size: a 4.2rem watermark on a
+   shorter strip stuck out of both ends of the card box. */
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow>.sf-doctrine__sigil--capstone{
+  top:0;bottom:0;right:1.2rem;width:auto;height:100%;transform:none;opacity:.13
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-media{
+  position:relative;width:var(--sf-rite-art,3.35rem);height:var(--sf-rite-art,3.35rem);
+  flex:none;border:1px solid rgba(240,213,140,.36);background:#020508;overflow:hidden
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-body{
+  display:grid;grid-template-columns:minmax(0,1fr);gap:.16rem;min-width:0
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-body>header{
+  display:flex;align-items:center;justify-content:space-between;gap:.5rem;min-width:0
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-body>header>span{min-width:0}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-body>header small{
+  display:block;color:rgba(240,213,140,.72);font-size:7.5px;letter-spacing:.13em;white-space:nowrap
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-body>header strong{
+  display:block;overflow:hidden;color:#f6f0dd;font-size:12px;line-height:1.2;
+  text-overflow:ellipsis;white-space:nowrap
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-body>header>b{
+  flex:none;padding:.08rem .3rem;border:1px solid rgba(240,213,140,.28);
+  color:rgba(240,213,140,.9);font-size:7.5px;font-weight:600;letter-spacing:.09em;white-space:nowrap
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-body>header>b[data-state="equipped"]{
+  border-color:rgba(117,221,180,.44);color:var(--sfu-verd)
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-body>p{
+  display:-webkit-box;overflow:hidden;margin:0;color:rgba(225,236,236,.58);
+  font-size:9.5px;line-height:1.25;-webkit-box-orient:vertical;-webkit-line-clamp:1
+}
+#sf-native-ui .sf-doctrine__vow-gate{
+  display:block;height:3px;margin-top:.1rem;background:rgba(240,213,140,.13);overflow:hidden
+}
+#sf-native-ui .sf-doctrine__vow-gate em{
+  display:block;height:100%;background:var(--sfu-gold);
+  box-shadow:0 0 .35rem rgba(240,213,140,.5);transition:width .22s ease
+}
+#sf-native-ui .sf-doctrine__vow[data-state="equipped"] .sf-doctrine__vow-gate em{background:var(--sfu-verd)}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-detail,
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__fusions,
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-action{display:none}
+
+/* --- the one surface that acts: art, state, ranks, primary control. */
+/* Flex, not grid rows: the meta band drops out on short playfields and a
+   fixed row template would hand its 1fr to whatever child came next. */
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview{
+  display:flex;flex-direction:column;justify-content:flex-start;
+  gap:.4rem;min-width:0;min-height:0;padding:.6rem;overflow:hidden
+}
+/* Every band keeps its natural height and the rank ladder takes only what
+   is left (flex-basis 0), so a long ladder can never crush the artwork or
+   push the action foot out of the panel. */
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui :is(
+  .sf-doctrine__preview-head,.sf-doctrine__preview-summary,
+  .sf-doctrine__preview-meta,.sf-doctrine__preview-foot
+){flex:0 0 auto}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-head{
+  padding-bottom:.4rem;gap:.5rem
+}
+/* The requirement pair rides as one chip line so the rank ladder - the only
+   part the player is actually reading - keeps the panel's free space. */
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-meta{
+  display:flex;gap:.7rem;padding:.22rem 0;border-block-width:1px
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-meta>span{
+  display:flex;align-items:baseline;gap:.32rem;padding:0;border-right:0;min-width:0
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-meta strong{font-size:10.5px}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-summary{
+  display:-webkit-box;overflow:hidden;min-height:0;font-size:10.5px;line-height:1.35;
+  -webkit-box-orient:vertical;-webkit-line-clamp:2
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-ranks{
+  flex:1 1 0;min-height:0;overflow:auto;overscroll-behavior:contain;
+  scrollbar-width:thin;scrollbar-color:rgba(115,216,237,.4) transparent;
+  mask-image:linear-gradient(180deg,#000 calc(100% - 1.1rem),transparent)
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-ranks li{
+  gap:.4rem;padding:.26rem 0
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-ranks li:last-child{border-bottom:0}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-ranks strong{
+  display:-webkit-box;overflow:hidden;font-size:10px;line-height:1.32;
+  -webkit-box-orient:vertical;-webkit-line-clamp:4
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-foot{margin-top:0}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-foot button{min-height:36px}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui
+  .sf-doctrine__preview-foot button[data-doctrine-action="vow"]{
+  border-color:rgba(240,213,140,.42);color:var(--sfu-gold)
+}
+
+/* --- summary strip and revision footer: two slim bands, not two panels. */
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__summary{
+  grid-template-columns:3.4rem minmax(6rem,1fr) 4.4rem 4.4rem minmax(9rem,.75fr);
+  gap:.35rem;margin-bottom:.4rem
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__summary>div{
+  min-height:0;padding:.26rem .4rem
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__rank strong{font-size:1.05rem}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui
+  :is(.sf-doctrine__points,.sf-doctrine__seals) strong{font-size:.95rem}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui
+  :is(.sf-doctrine__points,.sf-doctrine__seals)>span{font-size:7px}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__points[data-ready="true"] strong{
+  color:var(--sfu-verd);text-shadow:0 0 .5rem rgba(117,221,180,.45)
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__xp{gap:.24rem}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-slots{
+  gap:.28rem;padding:.26rem!important
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-slots>span{padding:.2rem .32rem}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__footer{
+  min-height:0;margin-top:.35rem;padding-top:.3rem
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__footer p{
+  overflow:hidden;font-size:8.5px;text-overflow:ellipsis;white-space:nowrap
+}
+.sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__footer button{
+  min-width:8rem;min-height:1.95rem;padding:.25rem .5rem;font-size:8.5px
+}
+
+/* The playfield container is inline-size, so these steps read width; the
+   surface is a 16:9 box, so narrower is always shorter. Short playfields
+   trade the rite blurb and art scale, never the layout - the tracks shrink
+   together so the crown can still never reach the grid. */
+@container saintfall-playfield (max-width:1180px){
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent{--sf-rite-art:2.9rem;padding:.38rem .45rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow{padding:.38rem .45rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-media{--sf-rite-art:2.9rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview{padding:.5rem;gap:.32rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-art-wrap{flex:0 0 2.6rem;width:2.6rem;height:2.6rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-titles h5{font-size:12.5px}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order-head{min-height:0;padding-bottom:.32rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order-head h4{font-size:.86rem}
+}
+@container saintfall-playfield (max-width:960px){
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent{--sf-rite-art:2.4rem;row-gap:.08rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent>p{display:none}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-media{--sf-rite-art:2.4rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow-body>p{display:none}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order-head p{display:none}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview{gap:.28rem;padding:.45rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-head{padding-bottom:.3rem;gap:.4rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-art-wrap{flex:0 0 2.2rem;width:2.2rem;height:2.2rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-titles h5{font-size:11.5px}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-summary{font-size:10px;-webkit-line-clamp:1}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-meta{display:none}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-ranks{min-height:0}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-ranks strong{-webkit-line-clamp:3}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-foot{gap:.22rem;padding-top:.3rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview-foot button{min-height:32px}
+}
+/* Below this the panel cannot hold a readable board; give the menu one
+   deliberate scroll owner instead of clipping or stacking nodes. */
+@container saintfall-playfield (max-width:760px){
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-menu[data-panel="doctrine"] .sf-menu__content{
+    overflow:auto;overscroll-behavior:contain
+  }
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-menu__page--doctrine{
+    height:auto;min-height:100%;overflow:visible
+  }
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__body{
+    grid-template-rows:42px auto;min-height:0
+  }
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order,
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order[data-view="talent"],
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__order[data-view="capstone"]{
+    grid-template-rows:auto auto;overflow:visible
+  }
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__workspace{
+    grid-template-columns:minmax(0,1fr);overflow:visible
+  }
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__tree{grid-template-rows:auto auto}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__rites{
+    grid-template-rows:auto auto;grid-auto-rows:auto
+  }
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine-talent{min-height:2.9rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__vow{min-height:2.9rem}
+  .sf-stage:not(.sf-touch-enabled) #sf-native-ui .sf-doctrine__preview{min-height:11rem}
+}
+
+/* Touch keeps its own single-column flow; the tree wrapper is transparent. */
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__tree,
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__crown{
+  display:block;min-height:0
+}
+
+body.sf-high-contrast .sf-doctrine__vow-gate{background:#000}
+body.sf-high-contrast .sf-doctrine__vow-gate em{background:#ffe199}
+body.sf-reduced-motion #sf-native-ui .sf-doctrine__vow-gate em,
+body.sf-reduced-motion #sf-native-ui .sf-doctrine-talent,
+body.sf-reduced-motion #sf-native-ui .sf-doctrine__vow{transition:none!important}
 
 /* ----------------------- hardline gameplay HUD ----------------------- */
 .sf-fs-btn,
@@ -2172,3 +2492,151 @@ body.sf-high-contrast #sf-hud .sf-heat__fill{stroke:#ffe16a;filter:none}
 .sf-stage.sf-touch-enabled .sf-autosave-toast { right: max(.65rem, calc(env(safe-area-inset-right) + .45rem)); bottom: max(5.4rem, calc(env(safe-area-inset-bottom) + 5rem)); min-width: 10.5rem; }
 body.sf-high-contrast .sf-autosave-toast { border-color: #ffe199; background: #000; box-shadow: inset 2px 0 0 #ffe199; }
 @media (prefers-reduced-motion:reduce){.sf-autosave-toast{transition:none}}
+
+/* High contrast must outrank the Doctrine board's own state colouring: the
+   board selectors carry an id plus three classes, so the accessibility
+   overrides have to be written at the same depth to win the cascade. */
+body.sf-high-contrast .sf-stage:not(.sf-touch-enabled) #sf-native-ui :is(
+  .sf-doctrine-talent,.sf-doctrine__vow,.sf-doctrine__preview,.sf-doctrine__summary>div
+){border-color:rgba(195,246,255,.72);background-color:#010304}
+body.sf-high-contrast .sf-stage:not(.sf-touch-enabled) #sf-native-ui :is(
+  .sf-doctrine-talent>p,.sf-doctrine__vow-body>p,.sf-doctrine__preview-summary,
+  .sf-doctrine__preview-ranks strong,.sf-doctrine__preview-foot>small,
+  .sf-doctrine__footer p,.sf-doctrine-talent__reason
+){color:#fff}
+body.sf-high-contrast .sf-stage:not(.sf-touch-enabled) #sf-native-ui :is(
+  .sf-doctrine-talent>header small,.sf-doctrine__vow-body>header small,
+  .sf-doctrine__preview-titles small,.sf-doctrine__preview-ranks small
+){color:#bff5ff}
+
+/* ======================================================================
+   SAINTFALL - Doctrine board on touch
+
+   Landscape inherited `grid-template-areas:none` on the rite card while the
+   children still asked for named areas, so placement fell back to auto and
+   the name collapsed to a single letter under the action row. Areas are
+   named explicitly here, and the crown's kicker/title sizes are set against
+   `.sf-doctrine__vow-body > header` - the older `.sf-doctrine__vow > header`
+   rules stopped matching when the body wrapper was introduced.
+   ====================================================================== */
+
+/* The landscape order panel is shrink-to-fit, so its width tracked the rite
+   cards' max-content: legible names made the cards narrower and the whole
+   board drifted into a centred column. Pin it to the track it sits in. */
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__order{width:100%}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent{
+  grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;
+  grid-template-areas:"head" "actions";
+  align-content:stretch;gap:.22rem;min-height:0;padding:.32rem .36rem;overflow:hidden
+}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent>header{
+  grid-area:head;display:flex;align-items:flex-start;gap:.3rem;min-width:0;min-height:0;overflow:hidden
+}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent>header>span{
+  display:grid;align-content:start;gap:.04rem;flex:1 1 auto;min-width:0
+}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent>header small{
+  display:block;overflow:hidden;color:color-mix(in srgb,var(--sf-order-accent) 78%,#e1ecec);
+  font-size:7.5px;letter-spacing:.1em;text-overflow:ellipsis;white-space:nowrap
+}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent>header strong{
+  display:-webkit-box;overflow:hidden;font-size:10px;line-height:1.15;
+  -webkit-box-orient:vertical;-webkit-line-clamp:2
+}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent>header>b{flex:0 0 auto}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine-talent__actions{grid-area:actions}
+
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__vow-body>header{
+  display:flex;align-items:center;justify-content:space-between;gap:.4rem;min-width:0;flex:1 1 auto
+}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__vow-body>header>span{
+  display:grid;align-content:center;gap:.04rem;min-width:0
+}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__vow-body>header small{
+  display:block;overflow:hidden;color:rgba(240,213,140,.74);font-size:7.5px;
+  letter-spacing:.11em;text-overflow:ellipsis;white-space:nowrap
+}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__vow-body>header strong{
+  display:block;overflow:hidden;color:#f6f0dd;font-size:11px;line-height:1.2;
+  text-overflow:ellipsis;white-space:nowrap
+}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__vow-body>header>b{
+  flex:0 0 auto;padding:.08rem .28rem;border:1px solid rgba(240,213,140,.3);
+  color:rgba(240,213,140,.9);font-size:7.5px;letter-spacing:.08em;white-space:nowrap
+}
+.sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__vow-gate{margin-top:.18rem}
+
+/* Portrait tabs justified their contents to the start, so a long Order name
+   sized past its own column and printed over the next tab. Beside an 18px
+   sigil there is no width that fits "Procession" legibly across five tabs
+   at 390px, so the sigil stacks above and the name gets the full tab. */
+@media (orientation:portrait) and (max-width:560px){
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__orders button{
+    grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto;
+    grid-template-areas:"sigil" "label" "points";
+    align-content:center;justify-items:center;row-gap:.05rem;
+    padding:.24rem .16rem;text-align:center;overflow:hidden
+  }
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__sigil--tab{
+    grid-row:auto;grid-area:sigil;width:1.18rem;height:1.18rem
+  }
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__orders button span{
+    grid-area:label;width:100%;min-width:0;overflow:hidden;font-size:8.5px;
+    letter-spacing:0;text-align:center;text-overflow:ellipsis;white-space:nowrap
+  }
+  .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__orders button small{
+    grid-area:points;width:100%;min-width:0;overflow:hidden;font-size:7px;
+    text-align:center;text-overflow:ellipsis;white-space:nowrap
+  }
+}
+
+/* Full screen is the roomiest board and was the emptiest: the rite rows are
+   capped at 11rem while the card content stayed embedded-sized, leaving most
+   of every card blank. Scale the art and copy into the space instead. */
+@media (min-height:800px){
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__rites{
+    grid-template-rows:repeat(2,minmax(9rem,13rem))
+  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent{
+    --sf-rite-art:5.6rem;padding:.85rem;column-gap:.9rem;row-gap:.34rem
+  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent__tier{
+    padding:.1rem .3rem;font-size:9px
+  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent>header small{font-size:9px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent>header strong{font-size:15px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent>header b i{width:8px;height:8px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent>p{
+    font-size:12px;line-height:1.42;-webkit-line-clamp:3
+  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent__badge{
+    padding:.14rem .4rem;font-size:9px
+  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow{padding:.8rem .9rem;gap:.9rem}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-media{--sf-rite-art:4.8rem}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body{gap:.28rem}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body>header small{font-size:9px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body>header strong{font-size:15px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body>header>b{font-size:9px;padding:.14rem .4rem}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body>p{font-size:12px;-webkit-line-clamp:2}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-gate{height:4px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview{padding:.9rem;gap:.55rem}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-art-wrap{
+    flex:0 0 4.6rem;width:4.6rem;height:4.6rem
+  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-titles h5{font-size:18px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-titles small{font-size:10px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-titles>b{font-size:9px;padding:.26rem .42rem}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-summary{
+    font-size:13px;-webkit-line-clamp:3
+  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-meta small{font-size:9px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-meta strong{font-size:12px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-ranks li{padding:.4rem 0}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-ranks small{font-size:9px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-ranks strong{
+    font-size:12px;line-height:1.42;-webkit-line-clamp:6
+  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-foot>small{font-size:11px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-foot button{min-height:44px;font-size:11px}
+}

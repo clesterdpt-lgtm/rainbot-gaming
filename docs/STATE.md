@@ -2,6 +2,29 @@
 
 ## Current milestone
 
+**89 — SAINTFALL Doctrine board** is complete. The capstone Vow was painting
+straight over the rite grid: `.sf-doctrine__order` is an `auto minmax(0,1fr)
+auto` grid, and while that middle track collapses to zero on a short playfield,
+the workspace inside it carried `min-height:13.5rem` and kept painting — so the
+Vow band, later in the DOM, covered all four rites and the inspector (measured
+at up to 41,856 px² per pair). The suite was green on that frame because
+`doctrineLayoutAudit` only compared cards against other cards. The board was
+rebuilt around one rule — every node sits in a track that can shrink to zero,
+and nothing carries a `min-height` larger than its track: the Vow is now the
+crown row of the same column as the rites, and the rite inspector is the single
+surface that acts (select a rite or the Vow, then inscribe/refund/bind there).
+The tier ladder is stated on the cards (`TIER II · 2 PTS`, `CAPSTONE VOW ·
+8 PTS` over a gate meter) and badges name the real blocker (`NEEDS 2 PTS` vs
+`NO POINTS`). Responsive steps read **width**, because the playfield container
+is `container-type:inline-size` and `max-height` container queries never match.
+Touch was fixed too: landscape rite names had been rendering as single letters
+("R.", "A.", "T.", "F.") because `grid-template-areas:none` met children asking
+for named areas, the landscape order panel is shrink-to-fit and had to be pinned
+to its track, and portrait order tabs printed over each other. Guarded by
+`saintfall-ui-regression.mjs` 97/97 — the layout audit now compares every
+visible doctrine node against every other one, plus a new 1280×720 pass — and
+`scripts/saintfall-doctrine-board.mjs` 9/9 for the interaction flow.
+
 **88 — SAINTFALL Doctrine / Talent UI Visual & Usability Overhaul** is complete. The Doctrine & Talent progression interface was overhauled with generative AI square icon artworks across all 25 rites and capstone vows (5 Orders: Censer, Procession, Wing, Halo, Edict) stored in `assets/img/saintfall/talents/`. The previous hair-trigger hover selection flaw that inadvertently hijacked inspector previews when moving the mouse across cards was eliminated in favor of an intuitive Click-to-Select / Keyboard focus model with locked preview inspectors. The desktop inspector features a hero artwork display with progression rank ladder, and touch layouts (844x390 landscape & 390x844 portrait) maintain full 44px touch targets without scroll overflow. Automated UI regression suite `saintfall-ui-regression.mjs` passes 95/95.
 
 **87 — SAINTFALL Dune Boulder Audit and the Windgate** is complete. The scatter

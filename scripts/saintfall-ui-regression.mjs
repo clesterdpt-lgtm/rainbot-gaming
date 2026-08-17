@@ -153,11 +153,15 @@ async function doctrineLayoutAudit(page) {
         };
       }).filter(Boolean);
     });
-    const cardOverlaps = [];
-    for (let i = 0; i < cards.length; i += 1) {
-      for (let j = i + 1; j < cards.length; j += 1) {
-        const area = overlapArea(cards[i], cards[j]);
-        if (area > 4) cardOverlaps.push(`${cards[i].id} x ${cards[j].id}: ${area.toFixed(1)}`);
+    /* Every visible doctrine node is compared against every other one, not
+       just card-against-card: the capstone Vow used to paint over the whole
+       rite grid while a card-only sweep stayed green. */
+    const nodes = [...cards, ...vows, ...(preview ? [{ id: "inspector", ...preview }] : [])];
+    const nodeOverlaps = [];
+    for (let i = 0; i < nodes.length; i += 1) {
+      for (let j = i + 1; j < nodes.length; j += 1) {
+        const area = overlapArea(nodes[i], nodes[j]);
+        if (area > 4) nodeOverlaps.push(`${nodes[i].id} x ${nodes[j].id}: ${area.toFixed(1)}`);
       }
     }
     const scrollNodes = [
@@ -175,7 +179,7 @@ async function doctrineLayoutAudit(page) {
       missing: false,
       view: orderNode.dataset.view,
       frame, content, page: pageRect, tabs, order, preview, doctrineFooter, globalFooter,
-      cards, vows, actionOverflow, cardOverlaps, scroll, scrollOwners,
+      cards, vows, actionOverflow, nodeOverlaps, scroll, scrollOwners,
       tabCount: tabButtons.length,
       tabMinHeight: tabButtons.length
         ? Math.min(...tabButtons.map((node) => node.getBoundingClientRect().height)) : 0,
@@ -924,10 +928,10 @@ async function embeddedKeyboardPass(browser) {
         && !!audit.preview && audit.previewInOrder && audit.previewInContent
         && audit.allVowsInOrder && audit.allVowsInContent),
     JSON.stringify(embeddedDoctrineAudits));
-  check("embedded Doctrine has no nested scroll, clipping, or card overlap",
+  check("embedded Doctrine has no nested scroll, clipping, or node overlap",
     embeddedDoctrineAudits.every(({ audit }) => audit.scrollOwners.length === 0
       && Object.values(audit.scroll).every(({ x, y }) => x <= 2 && y <= 2)
-      && audit.actionOverflow.length === 0 && audit.cardOverlaps.length === 0
+      && audit.actionOverflow.length === 0 && audit.nodeOverlaps.length === 0
       && !audit.orderHitsDoctrineFooter && !audit.doctrineHitsGlobalFooter),
     JSON.stringify(embeddedDoctrineAudits));
   check("Doctrine exposes one horizontal five-Order tablist",
@@ -1597,7 +1601,7 @@ async function desktopPass(browser) {
       && desktopDoctrineLayout.previewInContent
       && desktopDoctrineLayout.allVowsInOrder && desktopDoctrineLayout.allVowsInContent
       && desktopDoctrineLayout.actionOverflow.length === 0
-      && desktopDoctrineLayout.cardOverlaps.length === 0
+      && desktopDoctrineLayout.nodeOverlaps.length === 0
       && Object.values(desktopDoctrineLayout.scroll).every(({ x, y }) => x <= 2 && y <= 2),
     JSON.stringify({ sigils: desktopDoctrineSigils, layout: desktopDoctrineLayout }));
 
@@ -2181,7 +2185,7 @@ async function mobilePass(browser) {
       && portraitDoctrineLayout.scroll.tabs.x <= 2
       && portraitDoctrineLayout.scroll.order.x <= 2
       && portraitDoctrineLayout.actionOverflow.length === 0
-      && portraitDoctrineLayout.cardOverlaps.length === 0,
+      && portraitDoctrineLayout.nodeOverlaps.length === 0,
     JSON.stringify({ sigils: portraitDoctrineSigils,
       layout: portraitDoctrineLayout, targets: portraitDoctrineTargets }));
 
@@ -2260,9 +2264,42 @@ async function compactDesktopPass(browser) {
     path: path.join(OUT, "desktop-1280x720-operation-menu.png"),
   });
   const menu = await layoutAudit(page);
-  evidence.compactDesktop = { active, wheel, menu };
   check("1280x720 operation menu stays inside the playfield",
     menu.offenders.length === 0 && menu.scrollOverflow <= 2, JSON.stringify(menu));
+
+  /* The 888x500 playfield is the tightest board the Doctrine layout has to
+     hold without scrolling, and it is where the crown first collided. */
+  await page.locator('[data-menu-panel="doctrine"]').click();
+  await page.waitForFunction(() => window.__SF.menuState()?.panel === "doctrine",
+    null, { timeout: 3000 });
+  const compactDoctrineAudits = [];
+  for (const orderId of DOCTRINE_ORDER_IDS) {
+    await page.locator(`[data-doctrine-order="${orderId}"]`).click();
+    await page.waitForFunction((id) => document.querySelector(
+      `[data-doctrine-order="${id}"]`)?.getAttribute("aria-selected") === "true",
+    orderId, { timeout: 3000 });
+    compactDoctrineAudits.push({ orderId, audit: await doctrineLayoutAudit(page) });
+  }
+  await page.locator('[data-doctrine-order="censer"]').click();
+  await page.locator(".sf-stage").screenshot({
+    path: path.join(OUT, "desktop-1280x720-doctrine.png"),
+  });
+  evidence.compactDesktop = { active, wheel, menu, doctrine: compactDoctrineAudits };
+  check("1280x720 Doctrine keeps four rites, the crown, and the inspector apart",
+    compactDoctrineAudits.length === 5 && compactDoctrineAudits.every(({ audit }) =>
+      !audit.missing && audit.cards.length === 4 && audit.vows.length === 1
+        && !!audit.preview && audit.nodeOverlaps.length === 0
+        && audit.allCardsInOrder && audit.allVowsInOrder && audit.previewInOrder
+        && audit.allCardsInContent && audit.allVowsInContent && audit.previewInContent),
+    JSON.stringify(compactDoctrineAudits));
+  check("1280x720 Doctrine fits without a nested scroll or clipped control",
+    compactDoctrineAudits.every(({ audit }) => audit.scrollOwners.length === 0
+      && Object.values(audit.scroll).every(({ x, y }) => x <= 2 && y <= 2)
+      && audit.actionOverflow.length === 0),
+    JSON.stringify(compactDoctrineAudits.map(({ orderId, audit }) => ({
+      orderId, scroll: audit.scroll, scrollOwners: audit.scrollOwners,
+      actionOverflow: audit.actionOverflow,
+    }))));
   await context.close();
 }
 
@@ -2404,7 +2441,7 @@ async function landscapeTouchPass(browser) {
       && landscapeDoctrineTop.allVowsInOrder
       && landscapeDoctrineTop.allVowsInContent
       && landscapeDoctrineTop.actionOverflow.length === 0
-      && landscapeDoctrineTop.cardOverlaps.length === 0
+      && landscapeDoctrineTop.nodeOverlaps.length === 0
       && landscapeDoctrineTop.scrollOwners.length === 0
       && Object.values(landscapeDoctrineTop.scroll).every(({ x, y }) => x <= 2 && y <= 2),
     JSON.stringify(landscapeDoctrineTop));

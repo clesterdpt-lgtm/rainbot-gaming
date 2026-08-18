@@ -1926,8 +1926,12 @@ export function buildCombat(ctx) {
         ps.y + 0.9, ps.z + Math.cos(ps.yaw) * reach * 0.6,
         reach * 0.8, dmg);
     }
+    /* The combo step decides which sweep is drawn - the three clips
+       travel through different arcs, at different heights, in
+       different planes - so it has to reach the effect. It was already
+       being passed into this function and stopping here. */
     if (vfx && vfx.meleeArc) {
-      vfx.meleeArc(ps.x, ps.y, ps.z, ps.yaw, reach, arc, hits, slam);
+      vfx.meleeArc(ps.x, ps.y, ps.z, ps.yaw, reach, arc, hits, slam, comboStep);
     }
     ctx.player.punch?.(slam
       ? MELEE_CONFIG.slamPunch

@@ -1261,25 +1261,23 @@ function buildMarkup(host) {
       <span data-intro-caption>Operation The Gilded Silence</span>
     </div>
     <div class="sf-intro__gate" role="dialog" aria-modal="false"
-      aria-labelledby="sf-entry-title" aria-describedby="sf-entry-subtitle" data-entry-panel="main">
+      aria-labelledby="sf-entry-title" data-entry-panel="main">
       <header class="sf-entry__header">
-        <div class="sf-intro__crest" aria-hidden="true"><i></i><b></b><em></em></div>
-        <span><small>CONCORD RELIQUARY // COHORT VII</small>
-          <h2 id="sf-entry-title">SAINTFALL</h2>
-          <p id="sf-entry-subtitle">Vesper-IX · Operation The Gilded Silence</p></span>
+        <h2 id="sf-entry-title">SAINTFALL</h2>
       </header>
-      <div class="sf-entry__archive"><span>FIELD ARCHIVE</span><b data-intro-save-status>SCANNING RECORDS</b></div>
       <div class="sf-entry__actions">
-        <button class="sf-entry__continue" type="button" data-intro-continue disabled>
-          <span>Continue pilgrimage</span><b data-intro-continue-meta>NO FIELD RECORD</b>
+        <button class="sf-entry__btn sf-entry__continue" type="button" data-intro-continue disabled>
+          <span>CONTINUE</span><b data-intro-continue-meta>NO RECORD</b>
         </button>
-        <button class="sf-entry__new" type="button" data-intro-start>
-          <span>Begin new operation</span><b>PLAY THE DROP</b>
+        <button class="sf-entry__btn sf-entry__new" type="button" data-intro-start>
+          <span>NEW GAME</span>
         </button>
-        <div class="sf-entry__secondary">
-          <button type="button" data-intro-load-toggle aria-expanded="false">LOAD GAME</button>
-          <button type="button" data-intro-options-toggle aria-expanded="false">OPTIONS</button>
-        </div>
+        <button class="sf-entry__btn sf-entry__load" type="button" data-intro-load-toggle aria-expanded="false">
+          <span>LOAD GAME</span>
+        </button>
+        <button class="sf-entry__btn sf-entry__options" type="button" data-intro-options-toggle aria-expanded="false">
+          <span>OPTIONS</span>
+        </button>
       </div>
       <section class="sf-entry__panel sf-entry__panel--load" data-intro-panel="load" aria-label="Load game" hidden>
         <header><span>FIELD RECORDS</span><button type="button" data-intro-panel-close aria-label="Close load game">×</button></header>
@@ -1299,7 +1297,7 @@ function buildMarkup(host) {
         </div>
       </section>
       <section class="sf-entry__panel sf-entry__panel--options" data-intro-panel="options" aria-label="Options" hidden>
-        <header><span>FIELD CONFIGURATION</span><button type="button" data-intro-panel-close aria-label="Close options">×</button></header>
+        <header><span>OPTIONS</span><button type="button" data-intro-panel-close aria-label="Close options">×</button></header>
         <div class="sf-entry__options">
           <button type="button" role="switch" data-intro-setting="sound" aria-checked="true"><span>FIELD AUDIO<small>Music, weapons, and ambience</small></span><b>ON</b></button>
           <button type="button" role="switch" data-intro-setting="reducedMotion" aria-checked="false"><span>REDUCED MOTION<small>Calmer camera and interface movement</small></span><b>OFF</b></button>
@@ -1308,7 +1306,6 @@ function buildMarkup(host) {
           <div class="sf-entry__scale"><span>HUD SCALE</span><div role="group" aria-label="HUD scale"><button type="button" data-intro-hud-scale="standard">STANDARD</button><button type="button" data-intro-hud-scale="large">LARGE</button></div></div>
         </div>
       </section>
-      <footer class="sf-entry__footer"><span class="sf-intro__sound">Sound begins after your first command</span><b>AUTOSAVE · 42 SEC + MILESTONES</b></footer>
     </div>
     <button class="sf-intro__skip" type="button" data-intro-skip disabled>Skip descent <span>↗</span></button>
     <div class="sf-intro__pause" aria-live="polite">DESCENT HELD</div>
@@ -1494,13 +1491,19 @@ export function buildDropIntro(ctx, options = {}) {
     state.latestSave = latest ? { kind: latest.kind, index: latest.index,
       timestamp: latest.record.snapshot.timestamp } : null;
     continueButton.disabled = !latest || state.mode !== "awaiting-gesture";
-    saveStatusEl.textContent = records.length
-      ? `${records.length} ${records.length === 1 ? "RECORD" : "RECORDS"} VERIFIED`
-      : "NO DEPLOYMENT RECORD";
-    if (latest) {
-      const snapshot = latest.record.snapshot;
-      continueMetaEl.textContent = `${snapshot.summary?.district || "VESPER-IX"} · ${entryClock(snapshot.summary?.elapsed)}`;
-    } else continueMetaEl.textContent = "NO FIELD RECORD";
+    if (saveStatusEl) {
+      saveStatusEl.textContent = records.length
+        ? `${records.length} ${records.length === 1 ? "RECORD" : "RECORDS"} VERIFIED`
+        : "NO DEPLOYMENT RECORD";
+    }
+    if (continueMetaEl) {
+      if (latest) {
+        const snapshot = latest.record.snapshot;
+        continueMetaEl.textContent = `${snapshot.summary?.district || "VESPER-IX"} · ${entryClock(snapshot.summary?.elapsed)}`;
+      } else {
+        continueMetaEl.textContent = "NO RECORD";
+      }
+    }
 
     host.querySelectorAll("[data-intro-load-kind]").forEach((button) => {
       const kind = button.dataset.introLoadKind;

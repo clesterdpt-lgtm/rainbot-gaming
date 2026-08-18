@@ -3230,20 +3230,31 @@ export function buildVfx(ctx, world) {
     varying vec3 vNrm;
     varying vec3 vView;
     void main() {
-      // Drawn on from the start of the sweep to the tip over the first
-      // part of the life, then it thins from the trailing end.
-      float head = clamp(uP * 1.6, 0.0, 1.0);
+      /* Drawn on from the start of the sweep to the tip, then thinned
+         from the trailing end.
+
+         THE DRAW-ON HAS TO OUTRUN THE BLADE. This effect is spawned by
+         combat on the hit frame, by which time the authored swing is
+         already two thirds through its travel - so a crescent that
+         takes 60% of its life to reach full extent is still painting
+         the START of an arc the weapon left several frames ago, and it
+         reads as a streak of light hanging in the air behind the
+         trooper. At 4.2 it is fully extended in about a tenth of a
+         second and thereafter behaves as what it is: the wake. */
+      float head = clamp(uP * 4.2, 0.0, 1.0);
       float shown = 1.0 - smoothstep(head - 0.06, head + 0.02, vUv.x);
       float tailFade = smoothstep(0.0, 1.0, vUv.x) * 0.7 + 0.3;
-      float behind = 1.0 - smoothstep(0.0, 1.0, (uP - 0.35) * 2.2 - vUv.x * 0.6);
+      // The tail is eaten away from the start, so the crescent shortens
+      // toward the blade rather than dimming uniformly in place.
+      float behind = 1.0 - smoothstep(0.0, 1.0, (uP - 0.28) * 2.6 - vUv.x * 0.75);
       // The outer edge is the blade: hottest there, soft inward.
       float edge = pow(vUv.y, 2.6);
       float blade = exp(-(1.0 - vUv.y) * (1.0 - vUv.y) * 60.0) * 1.4;
       // The tip carries a hot spot that runs along the edge.
-      float tip = exp(-pow(vUv.x - head, 2.0) * 90.0) * pow(vUv.y, 4.0) * 1.8 * step(uP, 0.62);
+      float tip = exp(-pow(vUv.x - head, 2.0) * 90.0) * pow(vUv.y, 4.0) * 1.8 * step(uP, 0.30);
       float nv = abs(dot(normalize(vNrm), normalize(vView)));
       float sheen = 0.55 + 0.45 * pow(1.0 - nv, 1.5);
-      float lum = (edge * 0.7 + blade * 1.3 + tip) * shown * tailFade * behind * sheen * uGain * 2.1;
+      float lum = (edge * 0.5 + blade * 1.15 + tip) * shown * tailFade * behind * sheen * uGain * 1.55;
       vec3 c = mix(uColour, uAccent, clamp(blade * 0.35 + tip * 0.6, 0.0, 1.0));
       float peak = max(c.r, max(c.g, c.b));
       gl_FragColor = vec4(c * lum / max(0.55, peak), 1.0);
@@ -3282,8 +3293,19 @@ export function buildVfx(ctx, world) {
     return out;
   })();
 
+  /**
+   * A crescent along the blade's path.
+   *
+   * `reach` is the OUTER edge in metres and must be the distance the
+   * real weapon tip travels, not the gameplay reach - see
+   * `MELEE_SWEEPS`. `centre` rotates the whole sweep about the body so
+   * a swing that ends off to one side is drawn there; a negative `arc`
+   * sweeps the other way. `roll` tips the sweep plane about the body's
+   * forward axis, which is what turns the horizontal fan into the
+   * vertical cleave an overhead needs.
+   */
   function slashFx(x, y, z, yaw, reach, arc, seconds, colour, accent, gain = 1,
-    lift = 0.5, tilt = 0.18, inner = 0.55, mirror = false) {
+    lift = 0.5, tilt = 0.18, inner = 0.55, centre = 0, roll = 0) {
     let slot = slashes[0];
     for (const item of slashes) {
       if (item.life <= 0) { slot = item; break; }
@@ -3294,14 +3316,18 @@ export function buildVfx(ctx, world) {
     const u = slot.mesh.material.uniforms;
     u.uColour.value.set(colour);
     u.uAccent.value.set(accent);
-    u.uArc.value = mirror ? -arc : arc;
+    u.uArc.value = arc;
     u.uInner.value = inner;
     u.uLift.value = lift / Math.max(0.5, reach);
     u.uTilt.value = tilt;
     u.uGain.value = gain;
     u.uP.value = 0;
     slot.mesh.position.set(x, y, z);
-    slot.mesh.rotation.set(0, yaw, 0);
+    /* YXZ: yaw the body frame first, then roll the sweep plane inside
+       it. In the default XYZ order the roll would be applied about the
+       world axis and an overhead cleave would come out banked
+       sideways depending on which way the trooper happened to face. */
+    slot.mesh.rotation.set(0, yaw + centre, roll, "YXZ");
     slot.mesh.scale.setScalar(reach);
     slot.mesh.visible = true;
     return slot;
@@ -5091,21 +5117,79 @@ export function buildVfx(ctx, world) {
   /** The reliquary crescent the glaive leaves in the air, plus the
    *  sparks the edge throws where it connects. `hits` brightens it and
    *  `slam` (the finisher) widens it and puts a ring on the ground. */
-  let meleeAlternate = false;
-  function meleeArc(x, y, z, yaw, reach, arc, hits = 0, slam = false) {
-    meleeAlternate = !meleeAlternate;
-    const gain = (hits ? 1.25 : 0.9) * (slam ? 1.25 : 1);
-    slashFx(x, y + (slam ? 0.55 : 0.85), z, yaw, reach * (slam ? 0.9 : 1.0), arc * 1.05,
-      slam ? 0.42 : 0.34, "#ffb63a", "#fff0c8", gain,
-      slam ? 0.25 : 0.55, slam ? 0.10 : 0.22, slam ? 0.42 : 0.58, meleeAlternate && !slam);
-    // A few gold streaks flung off the tip along the swing.
-    const tipYaw = yaw + arc * 0.5;
-    const radius = reach * (slam ? 0.9 : 1.0);
-    const tx = x + Math.sin(tipYaw) * radius;
-    const tz = z + Math.cos(tipYaw) * radius;
-    const ty = y + (slam ? 0.55 : 1.05);
-    sparks.burst(tx, ty, tz, hits ? 10 : 5, Math.cos(tipYaw), 0.3, -Math.sin(tipYaw),
-      hits ? 7 : 4.5, 0.55, 2.0, 0.32, 0.014);
+  /* ------------------------------------------------------------------
+     WHERE THE BLADE ACTUALLY GOES
+
+     Every number here is measured, not chosen:
+     `scripts/saintfall-melee-arc-probe.mjs` freezes each combo clip at
+     48 points, reads the world position of the real `weapon-tip`
+     anchor, and reports the envelope it traces in the body's own
+     frame. Re-run it after ANY edit to the melee keys in player.js and
+     move these with it.
+
+     Two things were wrong before it was ever run, and neither was
+     visible from the code:
+
+     - THE RIBBON WAS DRAWN AT THE GAMEPLAY REACH. `meleeStrike`
+       computes `reach = spec.reach * lunge * 1.24`, which is 3.4m on a
+       plain swing and 4.5m on the lunging opener - while the blade tip
+       never passes 1.96m. The crescent was two and a half times the
+       length of the weapon, so it read as a energy wave being thrown
+       rather than as a blade moving. The gameplay cone is deliberately
+       generous and stays as it is; what connects at range is sold by
+       the hit spark ON the target, which is where the contact is.
+
+     - THE SWEEP DIRECTION WAS A COIN FLIP. The old code alternated a
+       `mirror` boolean on every call, so half of all swings drew the
+       crescent running the opposite way to the arm holding it.
+       Measured: melee1 and melee2 both sweep left-to-right (dir +1)
+       and melee3 is an overhead that travels top-to-bottom.
+
+     `centre` is the mid-bearing of the measured sweep, so a cut that
+     finishes across the body is drawn across the body. `roll` tips the
+     plane: the finisher is a vertical cleave, not a flat fan. */
+  /* `height` is where the band sits, and `lift`/`tilt` STACK ON TOP OF
+     IT - the first pass set all three generously and put the crescent
+     0.7m above the blade, which is the whole distance between "the
+     weapon is glowing" and "something is glowing near the weapon".
+     Both arch terms are now small: the sweep is close to flat, at the
+     height the tip was measured at through the cut. */
+  const MELEE_SWEEPS = Object.freeze({
+    // melee1: opener. tip 1.85m, bearing -0.91 -> +0.84, tip 1.5-1.7 high.
+    1: Object.freeze({
+      reach: 1.92, arc: 1.68, centre: -0.02, roll: 0.10,
+      height: 1.50, lift: 0.14, tilt: 0.04, inner: 0.63, life: 0.26,
+    }),
+    // melee2: rising diagonal. tip 1.96m, bearing -1.65 -> +0.60.
+    2: Object.freeze({
+      reach: 2.00, arc: 2.20, centre: -0.50, roll: 0.30,
+      height: 1.36, lift: 0.18, tilt: 0.05, inner: 0.61, life: 0.28,
+    }),
+    /* melee3: the overhead finisher. The tip climbs to 2.89m and comes
+       down through the front of the body, so the sweep plane is rolled
+       almost upright and the arc runs NEGATIVE - high to low. */
+    3: Object.freeze({
+      reach: 1.90, arc: -1.95, centre: 0.05, roll: Math.PI * 0.44,
+      height: 1.16, lift: 0.06, tilt: 0.03, inner: 0.58, life: 0.30,
+    }),
+  });
+
+  function meleeArc(x, y, z, yaw, reach, arc, hits = 0, slam = false, step = 0) {
+    const S = MELEE_SWEEPS[step] || MELEE_SWEEPS[slam ? 3 : 1];
+    const gain = (hits ? 1.3 : 0.95) * (slam ? 1.2 : 1);
+    slashFx(x, y + S.height, z, yaw, S.reach, S.arc, S.life,
+      "#ffb63a", "#fff0c8", gain, S.lift, S.tilt, S.inner, S.centre, S.roll);
+
+    /* The streaks come off the TIP at the end of the measured sweep -
+       the same place the crescent ends - rather than off a bearing
+       derived from the gameplay cone, which pointed them into open
+       sand on every swing that finished across the body. */
+    const endYaw = yaw + S.centre + S.arc * 0.5;
+    const tx = x + Math.sin(endYaw) * S.reach * 0.92;
+    const tz = z + Math.cos(endYaw) * S.reach * 0.92;
+    const ty = y + S.height + (slam ? -0.35 : 0.18);
+    sparks.burst(tx, ty, tz, hits ? 10 : 5, Math.cos(endYaw), slam ? -0.5 : 0.3,
+      -Math.sin(endYaw), hits ? 7 : 4.5, 0.55, 2.0, 0.32, 0.014);
     if (hits) {
       impacts.emit(tx, ty, tz, 6, 2.4, 0.7, 2.0, 0.4, IK_GLINT);
       flashes.emit(tx, ty, tz, 0.55, 0.075, 2.0);

@@ -92,12 +92,40 @@ export const DISTAFF_CONFIG = Object.freeze({
   /* THE LUNGE. The answer to standing at 25m plinking legs: a rear-up
      read, then a sprint that ends in the ordinary slam. It converts
      the existing telegraph vocabulary into a gap-closer instead of
-     adding a new unreadable one. */
-  lungeCadence: 9.0,
-  lungeSeconds: 1.8,
-  lungeSpeed: 9.5,
-  lungeMinRange: 16,
-  lungeMaxRange: 34,
+     adding a new unreadable one.
+
+     FURTHER AND FASTER than it shipped. 9.5 m/s barely outpaced the
+     trooper's own 8.6 sprint and 34m was inside the range a Volley
+     player naturally settles at, so the "gap-closer" arrived late to a
+     gap that had already been re-opened. Twice the sprint, half the
+     crater: it reaches from where the player actually stands and gets
+     there before they have finished deciding to move. The rear-up beat
+     is the whole warning now - the HUD banner is gone - so it stays
+     at 0.4s and the chord still plays over it. */
+  lungeCadence: 8.0,
+  lungeSeconds: 2.4,
+  lungeSpeed: 17.5,
+  lungeMinRange: 13,
+  lungeMaxRange: 48,
+  /* How fast the sprint may bend toward a player who is not where it
+     was pointed when it left. A homing lunge is unreadable and an
+     unsteerable one is a joke; this is a twelve-metre turning radius
+     at full speed - a committed step off the line at the last moment
+     is a dodge, standing still and strafing at 30m is not. */
+  lungeSteer: 1.4,
+
+  /* TURNING. It used to face the player with an uncapped exponential:
+     the further you got round it, the FASTER it swung - several
+     radians a second on a big error - and every thirteen degrees of
+     yaw replants all eight feet, so the leg a melee player had lined
+     up on walked away from them by design. Angular velocity is capped
+     now, low enough that a trooper circling at a walk gains ground on
+     the turn, and it does not turn at all while an attack is wound up
+     or while it is staggering off a lost leg. */
+  turnRate: 0.62,          // rad/s, standing
+  turnRateCollapsed: 0.26, // rad/s, on the ground - the flanks are safe ground
+  turnRateReturning: 1.2,
+  turnDeadband: 0.045,     // rad - no micro-tracking of a player edging sideways
 
   /* Its territory. It will not be kited out of the Scar: movement is
      clamped to this ring around the lair, and a player who leaves
@@ -125,27 +153,77 @@ export const DISTAFF_CONFIG = Object.freeze({
      to actually end before the next one can begin. */
   recollapseGuard: 2.5,
 
+  /* A LOST LEG BUYS A WINDOW. Breaking one is the fight's unit of
+     progress and it used to buy nothing but a poise kick: the slam
+     that was winding up still landed, the next one started on time.
+     Now every attack, the lunge and the stalk stop for this long, and
+     a wind-up in flight is cancelled - a melee player who has just
+     spent four seconds against a shin gets four seconds to keep
+     going, which is what makes the leg fight a fight rather than a
+     tax. Held through the collapse phase too, where it holds the bite. */
+  legBreakStagger: 3.4,
+
   slamCadence: 4.4,
   slamContact: 0.90,
-  slamRadius: 9.5,
+  /* THE LEG SLAM covers the animal's own FOOTPRINT now. At 9.5m it
+     stopped short of the feet, which stand twelve metres out - so the
+     one attack the standing phase throws at close range could not
+     reach the one place a lance player stands, and once the legs were
+     actually reachable the fight was free. 12.5m with the same
+     falloff is 46 under the body and about 19 at a tarsus: the tell
+     is 0.9s and a step outward is the answer, but there is a question
+     to answer now. Ranged players in the hold band feel it too, at
+     the same edge value they used to at 9m. */
+  slamRadius: 12.5,
   slamDamage: 46,
 
   webCadence: 5.6,
   webContact: 0.78,
   webSpeed: 25,
   webDamage: 10,
-  webRootSeconds: 3.0,
-  webSlowFactor: 0.34,
+  /* THE PIN. A web bolt HOLDS you now - it was a 0.34x slow, which on
+     a trooper is a jog, and silk thrown to pin something that then
+     jogs off is silk that missed. Rooted to the spot for the first
+     window (aim, shoot, swing and Aegis all still work; the feet do
+     not), then the strands drag for a moment more as they tear. */
+  webRootSeconds: 2.4,
+  webSlowFactor: 0.45,
+  webSlowSeconds: 1.6,
+
+  /* THE REEL. The second web: a line rather than a pin, thrown to
+     HAUL. It lands, holds, and drags the trooper across the sand to
+     the edge of the slam ring - and the slam is queued for the moment
+     they arrive. The dodge is the same as the pin's (it is a bolt;
+     step off its line) and the answer once hooked is Aegis for the
+     slam that follows or a sprint out of the ring in the 0.9s tell.
+     Faster than the pin bolt because it is thrown at range. */
+  reelCadence: 12.5,
+  reelContact: 0.78,
+  reelSpeed: 34,
+  reelMinRange: 14,
+  reelMaxRange: 46,
+  reelPreferRange: 28,     // beyond this a ready line beats a ready lunge
+  reelPull: 16,            // m/s the line hauls at
+  reelSeconds: 2.4,        // longest haul before the line parts
+  reelStop: 8.5,           // haul ends here - the slam ring's own edge
 
   patchCadence: 7.5,
   patchRadius: 5.2,
   patchSeconds: 11,
   patchSlowFactor: 0.55,
 
-  biteCadence: 1.75,
+  /* THE BITE, from the ground. It was 58 of a 150-point trooper every
+     1.75s inside 6.8m of the body CENTRE with no facing test - which,
+     against a collapsed body 3m across, is "every melee player, every
+     bite, wherever they stand". It is thrown from the HEAD now, at
+     what is in front of the head, and the collapsed animal turns too
+     slowly to bring its mouth round on someone working its flank -
+     so where you stand while it is down is the mechanic. */
+  biteCadence: 2.6,
   biteContact: 0.50,
-  biteReach: 5.6,
-  biteDamage: 58,
+  biteReach: 5.4,          // from the head bone, not the centre
+  biteArc: 1.15,           // rad, half-angle about the head's forward
+  biteDamage: 40,
 
   // Simulated well past combat.js's own culling horizon: a landmark
   // this size has to keep fighting even if the player circles wide.
@@ -665,8 +743,14 @@ export function buildDistaff(ctx) {
     // Locomotion.
     lungeFor: 0,
     lungeTimer: C.lungeCadence * 0.6,
+    lungeYaw: 0,
     strafeDir: 1,
     footfallGap: 0,
+    // A leg just went; nothing is thrown until this runs out.
+    staggerFor: 0,
+    // The reel: its cadence, and the haul in progress (null when none).
+    reelTimer: C.reelCadence * 0.45,
+    reel: null,
     /* WEIGHT. `drop` is the collapse sink, animated slowly because a
        nine-metre body coming down is not a snap; `poise` is the fast
        spring underneath it - the rear before a slam, the compression
@@ -1561,6 +1645,8 @@ export function buildDistaff(ctx) {
     state.swayVX += Math.sin(away) * 1.1;
     state.swayVZ += Math.cos(away) * 1.1;
     ctx.player?.doctrineKick?.(0.42, 0.75);
+    // ...and every attack stops for a while. See beginStagger.
+    beginStagger();
     bus.emit("legBroken", { index, x: fx, y: fy, z: fz, legsBroken: inst.legsBroken || 0 });
   }
 
@@ -1613,15 +1699,29 @@ export function buildDistaff(ctx) {
     mesh.visible = false;
     mesh.castShadow = false;
     group.add(mesh);
-    bolts.push({ mesh, live: false, life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 });
+    bolts.push({ mesh, live: false, life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, reel: false });
   }
   let boltCursor = 0;
+
+  /* THE LINE the reel hauls on: one open unit cylinder along +Y in the
+     bolt's own material, re-posed between the spinneret and the
+     trooper's chest every frame the haul is live and hidden otherwise.
+     A haul with no visible line is a trooper sliding across the sand
+     for no reason. */
+  const lineGeo = new THREE.CylinderGeometry(0.075, 0.115, 1, 6, 1, true);
+  const line = { mesh: new THREE.Mesh(lineGeo, boltMat), up: new THREE.Vector3(0, 1, 0) };
+  line.mesh.name = "sf-distaff-reel-line";
+  line.mesh.visible = false;
+  line.mesh.castShadow = false;
+  line.mesh.frustumCulled = false;
+  group.add(line.mesh);
 
   function launchBolt(x, y, z, vx, vy, vz) {
     const b = bolts[boltCursor];
     boltCursor = (boltCursor + 1) % BOLT_MAX;
     b.live = true;
     b.life = 3.2;
+    b.reel = false;
     b.x = x; b.y = y; b.z = z;
     b.vx = vx; b.vy = vy; b.vz = vz;
     b.mesh.position.set(x, y, z);
@@ -2010,12 +2110,22 @@ export function buildDistaff(ctx) {
       if (hit) {
         b.live = false;
         b.mesh.visible = false;
-        if (hit.direct) {
+        if (hit.direct && b.reel) {
+          hookPlayer(hit);
+        } else if (hit.direct) {
           ctx.combat?.hurtPlayer?.(C.webDamage, {
             source: "distaff-web", x: hit.x, y: hit.y, z: hit.z,
           });
-          ctx.player?.applySlow?.(C.webSlowFactor, C.webRootSeconds);
+          /* PINNED. Held fast first, then slowed as the strands tear -
+             the root is the attack; the slow is what is left of it.
+             `applyRoot` refreshes toward the longer timer, so a second
+             bolt on a held trooper extends the hold rather than
+             restarting a shorter one. */
+          ctx.player?.applyRoot?.(C.webRootSeconds);
+          ctx.player?.applySlow?.(C.webSlowFactor, C.webRootSeconds + C.webSlowSeconds);
           ctx.player?.doctrineKick?.(0.5, 0.2);
+          // The silk on the ground under them, for as long as it holds.
+          spillPatch(ps.x, ps.z, 1.7, C.webRootSeconds + C.webSlowSeconds);
           bus.emit("webHit", hit);
         } else {
           bus.emit("webSplash", hit);
@@ -2031,11 +2141,31 @@ export function buildDistaff(ctx) {
      BEHAVIOUR
      ============================================================ */
 
-  function faceTowards(x, z, rate, dt) {
+  /** Turn toward (x, z): an exponential approach whose per-frame step
+   *  is capped at `maxRate` radians a second, and which ignores errors
+   *  inside `turnDeadband`. The cap is the mechanic - see the config
+   *  note - and the deadband is what stops a player edging sideways
+   *  along a shin from re-aiming the whole animal a degree at a time,
+   *  which replanted feet for nothing. */
+  function faceTowards(x, z, rate, dt, maxRate = Infinity) {
     const dx = x - inst.x;
     const dz = z - inst.z;
     if (Math.hypot(dx, dz) < 1e-3) return;
-    inst.yaw = dampAngle(inst.yaw, Math.atan2(dx, dz), rate, dt);
+    faceYaw(Math.atan2(dx, dz), rate, dt, maxRate);
+  }
+
+  function faceYaw(targetYaw, rate, dt, maxRate = Infinity) {
+    const want = dampAngle(inst.yaw, targetYaw, rate, dt);
+    let step = want - inst.yaw;
+    while (step > Math.PI) step -= TAU;
+    while (step < -Math.PI) step += TAU;
+    let err = targetYaw - inst.yaw;
+    while (err > Math.PI) err -= TAU;
+    while (err < -Math.PI) err += TAU;
+    if (Math.abs(err) < C.turnDeadband) return;
+    const cap = maxRate * dt;
+    step = clamp(step, -cap, cap);
+    inst.yaw += step;
     inst.root.rotation.y = inst.yaw;
   }
 
@@ -2124,6 +2254,39 @@ export function buildDistaff(ctx) {
     bus.emit("biteTelegraph", { x: inst.x, z: inst.z });
   }
 
+  /** Where the mouth is. Falls back to a point ahead of the centre if
+   *  the rig is not up, which it always is once the animal is awake. */
+  function headAt(out) {
+    const bone = inst.bones?.get("head");
+    if (bone) {
+      bone.updateWorldMatrix(true, false);
+      return bone.getWorldPosition(out);
+    }
+    return out.set(inst.x + Math.sin(inst.yaw) * 4, inst.y + 2, inst.z + Math.cos(inst.yaw) * 4);
+  }
+
+  /** Is the player somewhere the mouth can reach - within `biteReach`
+   *  of the HEAD and inside `biteArc` of the way it is pointing? Asked
+   *  at the tell (to decide whether to bite at all) and again at
+   *  contact (so stepping round the head during the wind-up is a
+   *  dodge). The generous `slack` at contact is the difference between
+   *  a bite you can dodge and one you can dodge by standing still. */
+  function biteCanReach(slack = 0) {
+    const ps = ctx.player?.state;
+    if (!ps) return false;
+    const h = headAt(_headV);
+    const dx = ps.x - h.x;
+    const dz = ps.z - h.z;
+    const d = Math.hypot(dx, dz);
+    if (d > C.biteReach + slack) return false;
+    // Touching the mouth is inside the arc by definition.
+    if (d < 1.4) return true;
+    let rel = Math.atan2(dx, dz) - inst.yaw;
+    while (rel > Math.PI) rel -= TAU;
+    while (rel < -Math.PI) rel += TAU;
+    return Math.abs(rel) <= C.biteArc;
+  }
+
   function landSlam() {
     const ps = ctx.player.state;
     const dist = Math.hypot(ps.x - inst.x, ps.z - inst.z);
@@ -2163,8 +2326,7 @@ export function buildDistaff(ctx) {
 
   function landBite() {
     const ps = ctx.player.state;
-    const dist = Math.hypot(ps.x - inst.x, ps.z - inst.z);
-    if (dist > C.biteReach + 1.2 || ctx.combat?.player?.dead) {
+    if (!biteCanReach(0.8) || ctx.combat?.player?.dead) {
       bus.emit("biteMiss", { x: inst.x, z: inst.z });
       return;
     }
@@ -2176,6 +2338,124 @@ export function buildDistaff(ctx) {
     bus.emit("bite", { x: inst.x, z: inst.z });
   }
 
+  /* ------------------------------------------------------------
+     THE REEL. Same clip, same spinneret, same bolt pool as the pin -
+     the animal has one way of throwing silk - but the bolt is flagged
+     and what it does on arrival is different: it HOLDS, and hauls.
+     ------------------------------------------------------------ */
+  function beginWebReel() {
+    enemies.play(inst, "webCast", 0.1);
+    state.action = 1.92;
+    state.actionKind = "webReel";
+    state.pending = C.reelContact;
+    state.reelTimer = C.reelCadence;
+    // The pin's own cadence is pushed back a little, so the two silks
+    // do not arrive as one double throw.
+    state.webTimer = Math.max(state.webTimer, 2.2);
+    bus.emit("reelTelegraph", { x: inst.x, z: inst.z });
+  }
+
+  function launchReelBolt() {
+    const bone = inst.bones.get("spinneret");
+    if (!bone) return;
+    bone.updateWorldMatrix(true, false);
+    const origin = bone.getWorldPosition(_vec);
+    const ps = ctx.player.state;
+    const dx = ps.x - origin.x;
+    const dy = (ps.y + 0.9) - origin.y;
+    const dz = ps.z - origin.z;
+    const d = Math.hypot(dx, dy, dz) || 1;
+    const b = launchBolt(origin.x, origin.y, origin.z,
+      (dx / d) * C.reelSpeed, (dy / d) * C.reelSpeed, (dz / d) * C.reelSpeed);
+    b.reel = true;
+    b.life = 2.4;
+    ctx.vfx?.spark?.(origin.x, origin.y, origin.z, 1.3, false, true);
+    bus.emit("reelCast", { x: origin.x, y: origin.y, z: origin.z });
+  }
+
+  /** The line has landed on the trooper. Hold them and start hauling;
+   *  `stepReel` does the rest every frame until the haul ends. */
+  function hookPlayer(hit) {
+    const ps = ctx.player?.state;
+    if (!ps || ctx.combat?.player?.dead) return;
+    state.reel = { for: C.reelSeconds, hauled: 0 };
+    // Held for the whole haul plus a beat, so a hooked trooper cannot
+    // sprint against the line - the line wins, that is what it is.
+    ctx.player?.applyRoot?.(C.reelSeconds + 0.15);
+    ctx.combat?.hurtPlayer?.(C.webDamage * 0.5, {
+      source: "distaff-web", x: hit.x, y: hit.y, z: hit.z,
+    });
+    ctx.player?.punch?.(0.9);
+    ctx.player?.doctrineKick?.(0.55, 0.35);
+    line.mesh.visible = true;
+    bus.emit("reelHit", { x: hit.x, y: hit.y, z: hit.z });
+  }
+
+  function endReel(reason) {
+    if (!state.reel) return;
+    state.reel = null;
+    line.mesh.visible = false;
+    ctx.player?.clearRoot?.();
+    bus.emit("reelEnd", { x: inst.x, z: inst.z, reason });
+  }
+
+  function stepReel(dt) {
+    const reel = state.reel;
+    if (!reel) return;
+    const ps = ctx.player?.state;
+    if (!ps || ctx.combat?.player?.dead || inst.state === "death"
+      || state.phase !== "standing") {
+      endReel("dropped");
+      return;
+    }
+    reel.for -= dt;
+    const dx = inst.x - ps.x;
+    const dz = inst.z - ps.z;
+    const d = Math.hypot(dx, dz) || 1;
+    if (d > C.reelStop) {
+      /* Through the player's own masonry slide, so a wall between the
+         two of them stops the haul the way it would stop a walk - a
+         line cannot drag a trooper through a fulgurite spire, it can
+         only pin them against it. */
+      const step = Math.min(C.reelPull * dt, d - C.reelStop);
+      const moved = ctx.player?.drag?.((dx / d) * step, (dz / d) * step) ?? 0;
+      reel.hauled += moved;
+      // The line has been stopped by something. Let go rather than
+      // hold a trooper against a wall for the whole timer.
+      if (moved < step * 0.15) reel.for -= dt * 2.5;
+    }
+    // Feet skidding across vitrified sand.
+    if (Math.random() < dt * 8) {
+      ctx.vfx?.sandSpray?.(ps.x, ps.y + 0.15, ps.z, 0.7, 0, 1);
+    }
+    if (d <= C.reelStop + 0.05 || reel.for <= 0) {
+      const arrived = d <= C.reelStop + 0.05;
+      endReel(arrived ? "arrived" : "parted");
+      /* THE PAYOFF: the slam is queued the moment they arrive at its
+         ring, so the sequence reads reel -> slam, and the tell on the
+         slam is the whole of the player's answer. */
+      if (arrived) state.slamTimer = Math.min(state.slamTimer, 0.12);
+    }
+  }
+
+  /** Draw the line from the spinneret to the trooper's chest. Cheap:
+   *  one unit cylinder, re-posed. */
+  function updateLine() {
+    if (!line.mesh.visible) return;
+    const bone = inst?.bones?.get("spinneret");
+    const ps = ctx.player?.state;
+    if (!bone || !ps) { line.mesh.visible = false; return; }
+    bone.updateWorldMatrix(true, false);
+    bone.getWorldPosition(_lineA);
+    _lineB.set(ps.x, ps.y + 1.05, ps.z);
+    const len = _lineA.distanceTo(_lineB);
+    if (len < 0.2) { line.mesh.visible = false; return; }
+    line.mesh.position.copy(_lineA).lerp(_lineB, 0.5);
+    line.mesh.scale.set(1, len, 1);
+    _vec.copy(_lineB).sub(_lineA).normalize();
+    line.mesh.quaternion.setFromUnitVectors(line.up, _vec);
+  }
+
   function resolveAction(dt) {
     if (!(state.pending > 0)) return;
     state.pending -= dt;
@@ -2183,6 +2463,7 @@ export function buildDistaff(ctx) {
     state.pending = 0;
     if (state.actionKind === "slam") landSlam();
     else if (state.actionKind === "webCast") launchWebBolt();
+    else if (state.actionKind === "webReel") launchReelBolt();
     else if (state.actionKind === "bite") landBite();
   }
 
@@ -2230,9 +2511,42 @@ export function buildDistaff(ctx) {
     poiseKick(-1.15);
     state.lungeFor = C.lungeSeconds;
     state.lungeTimer = C.lungeCadence;
+    const ps = ctx.player.state;
+    state.lungeYaw = Math.atan2(ps.x - inst.x, ps.z - inst.z);
     enemies.play(inst, "alert", 0.10);
     ctx.player?.doctrineKick?.(0.5, 0.4);
     bus.emit("lungeTelegraph", { x: inst.x, z: inst.z });
+  }
+
+  /** A leg has just gone: drop whatever was being wound up and hold
+   *  everything for `legBreakStagger`. See the config note.
+   *
+   *  IT DOES NOT STACK. A leg broken while the animal is already
+   *  staggering cancels whatever it was winding up (there is nothing
+   *  to cancel - it was staggering) and does not restart the clock.
+   *  A lance breaks a leg every five seconds or so - walk to the next
+   *  tarsus, three swings - and gets its window every time; the
+   *  Volley, taking a knee a second at range, would otherwise hold
+   *  the animal helpless for its entire standing phase, which measured
+   *  as a boss that never threw anything at a ranged player at all. */
+  function beginStagger() {
+    const already = state.staggerFor > 0;
+    if (!already) state.staggerFor = C.legBreakStagger;
+    const wasWinding = state.pending > 0 || state.lungeFor > 0;
+    state.action = 0;
+    state.pending = 0;
+    state.actionKind = null;
+    state.lungeFor = 0;
+    // A line under tension parts when the animal holding it buckles.
+    endReel("staggered");
+    /* The flinch clip - unless a leg-owned clip has the bones, in
+       which case playing anything else would hand the folded legs
+       back to the walking solver mid-collapse. */
+    if (!inst.spec?.legOwnedStates?.includes(inst.state)) enemies.play(inst, "flinch", 0.06);
+    bus.emit("stagger", {
+      x: inst.x, z: inst.z, seconds: already ? state.staggerFor : C.legBreakStagger,
+      cancelled: wasWinding, extended: false,
+    });
   }
 
   function stepStanding(dt, dist) {
@@ -2244,11 +2558,22 @@ export function buildDistaff(ctx) {
       && inst.legsBroken > state.legsAtLastCollapse
       && state.recollapseFor <= 0) {
       state.lungeFor = 0;
+      endReel("collapsed");
       beginCollapse();
+      return;
+    }
+    /* THE STAGGER. Nothing ticks, nothing is thrown, nothing moves.
+       The cadence timers are held rather than run down, so a lost leg
+       buys a clean window and not merely a delayed one - the slam it
+       postponed does not arrive the instant the window closes. */
+    if (state.staggerFor > 0) {
+      state.staggerFor -= dt;
+      stepReel(dt);
       return;
     }
     state.slamTimer -= dt;
     state.webTimer -= dt;
+    state.reelTimer -= dt;
     state.patchTimer -= dt;
     state.lungeTimer -= dt;
     state.action = Math.max(0, state.action - dt);
@@ -2257,14 +2582,25 @@ export function buildDistaff(ctx) {
     /* THE LUNGE, mid-flight. A short rear (the first 0.4s of the
        alert clip) and then the sprint; it cashes out into the
        ordinary slam the moment the player is inside its arc, so the
-       payoff is a telegraph the player has already learned. */
+       payoff is a telegraph the player has already learned. The
+       heading is COMMITTED at the rear-up and only bends toward the
+       player at `lungeSteer` - so a late step off the line is a real
+       dodge and the animal barrels past and slams the sand. */
     if (state.lungeFor > 0) {
       state.lungeFor -= dt;
       if (state.lungeFor > C.lungeSeconds - 0.4) return;    // the rear-up beat
       const dx = ps.x - inst.x;
       const dz = ps.z - inst.z;
       const d = Math.hypot(dx, dz) || 1;
-      moveBody((dx / d) * C.lungeSpeed, (dz / d) * C.lungeSpeed, dt);
+      const wantYaw = Math.atan2(dx, dz);
+      let turn = wantYaw - state.lungeYaw;
+      while (turn > Math.PI) turn -= TAU;
+      while (turn < -Math.PI) turn += TAU;
+      state.lungeYaw += clamp(turn, -C.lungeSteer * dt, C.lungeSteer * dt);
+      moveBody(Math.sin(state.lungeYaw) * C.lungeSpeed,
+        Math.cos(state.lungeYaw) * C.lungeSpeed, dt);
+      // The body faces the way it is running, at a rate a sprint allows.
+      faceYaw(state.lungeYaw, 6, dt, 2.4);
       if (d < C.slamRadius * 0.85 || state.lungeFor <= 0) {
         state.lungeFor = 0;
         beginSlam();
@@ -2272,13 +2608,32 @@ export function buildDistaff(ctx) {
       return;
     }
 
-    if (state.action > 0) { resolveAction(dt); return; }
+    if (state.action > 0) { resolveAction(dt); stepReel(dt); return; }
+    stepReel(dt);
+    /* HAULING. The animal braces and reels; it does not also stalk,
+       throw a second silk or lay a patch under a trooper it is
+       already dragging - one thing at a time is what makes the reel
+       readable, and the queued slam is waiting at the end of it. */
+    if (state.reel) {
+      if (inst.state !== "alert") enemies.play(inst, "alert", 0.3);
+      return;
+    }
 
-    if (state.lungeTimer <= 0 && dist > C.lungeMinRange && dist < C.lungeMaxRange) {
+    /* The reel is thrown at RANGE - it is the answer to a player who
+       has learned to stand outside the lunge's reach or to strafe it.
+       Beyond `reelPreferRange` a ready line goes before a ready lunge,
+       so a player parked at the far edge of the crater meets both
+       answers rather than the same sprint every eight seconds. */
+    const reelReady = state.reelTimer <= 0 && !state.reel
+      && dist > C.reelMinRange && dist < C.reelMaxRange;
+    if (reelReady && dist > C.reelPreferRange) { beginWebReel(); return; }
+    if (state.lungeTimer <= 0 && !state.reel
+      && dist > C.lungeMinRange && dist < C.lungeMaxRange) {
       beginLunge();
       return;
     }
     if (state.slamTimer <= 0 && dist < C.slamRadius * 1.3) { beginSlam(); return; }
+    if (reelReady) { beginWebReel(); return; }
     if (state.webTimer <= 0) { beginWebCast(); return; }
     if (state.patchTimer <= 0) {
       state.patchTimer = C.patchCadence;
@@ -2331,22 +2686,30 @@ export function buildDistaff(ctx) {
       bus.emit("reset", { x: inst.x, z: inst.z });
       return;
     }
-    faceTowards(C.lairX, C.lairZ, 1.6, dt);
+    faceTowards(C.lairX, C.lairZ, 1.6, dt, C.turnRateReturning);
     moveBody((dx / home) * C.returnSpeed, (dz / home) * C.returnSpeed, dt);
   }
 
   function stepCollapsed(dt) {
     state.timer -= dt;
-    state.action = Math.max(0, state.action - dt);
-    if (state.action > 0) resolveAction(dt);
-    else if (state.biteTimer === undefined || state.biteTimer <= 0) {
-      const ps = ctx.player.state;
-      if (Math.hypot(ps.x - inst.x, ps.z - inst.z) < C.biteReach) {
-        beginBite();
-        state.biteTimer = C.biteCadence;
-      }
+    /* A leg broken while it is down holds the bite the same way it
+       holds everything standing - the window is the window. The
+       collapse clock keeps running: the stagger does not extend the
+       vulnerable phase, it only quiets it. */
+    if (state.staggerFor > 0) {
+      state.staggerFor -= dt;
     } else {
-      state.biteTimer -= dt;
+      state.action = Math.max(0, state.action - dt);
+      if (state.action > 0) resolveAction(dt);
+      else if (state.biteTimer === undefined || state.biteTimer <= 0) {
+        // Only what is in FRONT of the mouth - see biteCanReach.
+        if (biteCanReach(0)) {
+          beginBite();
+          state.biteTimer = C.biteCadence;
+        }
+      } else {
+        state.biteTimer -= dt;
+      }
     }
     if (state.timer <= 0) {
       if (inst.legsBroken >= 8) {
@@ -2368,6 +2731,9 @@ export function buildDistaff(ctx) {
   }
 
   const _vec = new THREE.Vector3();
+  const _headV = new THREE.Vector3();
+  const _lineA = new THREE.Vector3();
+  const _lineB = new THREE.Vector3();
 
   function stepDormantCheck(dist) {
     if (dist <= C.aggroRadius) { beginAlert(); return; }
@@ -2416,7 +2782,17 @@ export function buildDistaff(ctx) {
       return;
     }
 
-    faceTowards(ps.x, ps.z, state.phase === "collapsed" ? 0.5 : 1.5, dt);
+    /* FACING, and when it is allowed to change. Not while an attack
+       is wound up (the tell is a commitment: a slam does not care
+       where you are and a bite has to be dodgeable by stepping round
+       the head), not while staggering off a lost leg, and not while
+       the lunge owns it - the sprint faces the way it runs. Otherwise
+       a capped turn, slower again on the ground. */
+    const committed = state.pending > 0 || state.staggerFor > 0 || state.lungeFor > 0;
+    if (!committed) {
+      const cap = state.phase === "collapsed" ? C.turnRateCollapsed : C.turnRate;
+      faceTowards(ps.x, ps.z, state.phase === "collapsed" ? 0.5 : 1.5, dt, cap);
+    }
 
     if (state.phase === "standing") stepStanding(dt, dist);
     else if (state.phase === "collapsed") stepCollapsed(dt);
@@ -2449,6 +2825,9 @@ export function buildDistaff(ctx) {
     state.lungeFor = 0;
     state.action = 0;
     state.pending = 0;
+    state.actionKind = null;
+    state.staggerFor = 0;
+    endReel("reset");
   }
 
   /** The player left. Heal NOW - the reset the leash promises must
@@ -2582,6 +2961,7 @@ export function buildDistaff(ctx) {
       inst.bodyDrop = state.drop;
     }
     updateBolts(d);
+    updateLine();
     updatePatches(d);
     updateLairSilk();
   }
@@ -2603,6 +2983,13 @@ export function buildDistaff(ctx) {
       collapsed: !!inst.collapsed,
       bodyDrop: Number((inst.bodyDrop || 0).toFixed(2)),
       lunging: state.lungeFor > 0,
+      staggerFor: Number(Math.max(0, state.staggerFor).toFixed(2)),
+      reeling: !!state.reel,
+      action: state.pending > 0 ? state.actionKind : null,
+      // Still inside an attack clip (wind-up OR recovery): nothing new
+      // is chosen until this clears.
+      busy: state.action > 0,
+      yaw: Number(inst.yaw.toFixed(3)),
       hidden: !!inst.encounterHidden,
       locked: !!inst.encounterLocked,
       homeDist: Number(Math.hypot(inst.x - C.lairX, inst.z - C.lairZ).toFixed(1)),
@@ -2668,6 +3055,14 @@ export function buildDistaff(ctx) {
     state.disengageFor = 0;
     state.recollapseFor = 0;
     state.releaseCameraAt = undefined;
+    // Transient beats never survive a save: no wind-up, no stagger,
+    // no line on the trooper.
+    state.staggerFor = 0;
+    state.lungeFor = 0;
+    state.action = 0;
+    state.pending = 0;
+    state.actionKind = null;
+    endReel("restore");
     inst.x = Number.isFinite(saved.x) ? saved.x : inst.x;
     inst.z = Number.isFinite(saved.z) ? saved.z : inst.z;
     inst.yaw = Number.isFinite(saved.yaw) ? saved.yaw : inst.yaw;
@@ -2695,6 +3090,7 @@ export function buildDistaff(ctx) {
   }
 
   function clearHazards() {
+    endReel("cleared");
     for (const b of bolts) { b.live = false; b.mesh.visible = false; }
     for (const p of patches) {
       p.life = 0; p.mesh.visible = false; p.mat.uniforms.uFade.value = 0;
@@ -2731,6 +3127,20 @@ export function buildDistaff(ctx) {
     /** Instance accessor. QA-facing rather than gameplay-facing - the
      *  encounter itself only ever needs `status()`. */
     instance() { return inst; },
+    /** QA: make `kind` ("slam" | "web" | "reel" | "lunge") the next
+     *  thing it throws, by zeroing that cadence and pushing the others
+     *  back. Range and phase still apply - this only settles WHICH of
+     *  the eligible answers comes first, so a check about the reel is
+     *  not at the mercy of the lunge's timer. */
+    primeAttack(kind) {
+      const key = `${String(kind)}Timer`;
+      if (!(key in state)) return false;
+      for (const k of ["slamTimer", "webTimer", "reelTimer", "lungeTimer"]) {
+        state[k] = k === key ? 0 : Math.max(state[k], 6);
+      }
+      state.staggerFor = 0;
+      return true;
+    },
     /** The hard reset - QA and checks about the leash's PROMISE
      *  (full health, home, dormant) rather than the walk that
      *  delivers it. */
@@ -2740,6 +3150,7 @@ export function buildDistaff(ctx) {
       combatOff?.();
       combatOff = null;
       for (const stain of stains) { stain.mesh.geometry.dispose(); stain.mat.dispose(); }
+      lineGeo.dispose();
       /* The dressed geometry and the five materials are this module's
          own - `enemies.js` never saw them - so nothing else can be
          holding them. The species geometry and the caste material it

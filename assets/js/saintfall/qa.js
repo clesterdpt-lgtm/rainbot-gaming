@@ -3449,6 +3449,27 @@ export function installQa(ctx, api) {
       }
       return -1;
     },
+    /** Step until the Distaff is between beats - no attack in its clip,
+     *  no lunge, no line on the trooper, no stagger - or give up.
+     *  Returns the seconds it took, or -1. A check about ONE of its
+     *  answers has to start from a quiet animal, not from whatever the
+     *  previous check left in flight. */
+    settleDistaff(limit = 8, dt = 1 / 60) {
+      let elapsed = 0;
+      while (elapsed < limit) {
+        const d = api.distaff?.status?.();
+        if (!d) return -1;
+        if (!d.busy && !d.lunging && !d.reeling && !(d.staggerFor > 0)) {
+          return Number(elapsed.toFixed(3));
+        }
+        api.step(dt, false);
+        elapsed += dt;
+      }
+      return -1;
+    },
+    /** Make `kind` ("slam" | "web" | "reel" | "lunge") its next answer;
+     *  range and phase still apply. See distaff.primeAttack. */
+    primeDistaffAttack(kind) { return api.distaff?.primeAttack?.(kind) ?? null; },
     /** Fully drain one leg through the production damage path, not a
      *  shortcut around it - `combat.damageLeg` is the same function a
      *  shot or a swing calls. */

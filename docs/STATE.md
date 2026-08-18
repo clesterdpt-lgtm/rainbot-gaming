@@ -14,6 +14,28 @@ state, screenshots, and a clean console. Build pin
 
 ## Current milestone
 
+**99 — SAINTFALL: the Distaff, fought with the lance** is implemented and
+gated; awaits user playtest (`docs/milestones/99-saintfall-distaff-lance-fight.md`).
+Joints (trochanter / knee / tarsus, `joints: { r: 1.25, mult: 1.75 }`) on
+every leg for shot and swing; leg hits finally draw damage numbers (the
+`legHit` event had no HUD consumer — most of "the hitbox is tiny");
+`meleeReachY` 3.6 → 4.4; melee spark at the blade. Turn capped at 0.62 rad/s
+(0.26 collapsed) with a deadband, no turning while wound up, staggered or
+lunging. Lunge 17.5 m/s to 48 m on a committed heading (`lungeSteer` 1.4),
+no HUD banner. `legBreakStagger` 3.4 s holds every attack and cancels a
+wind-up (non-stacking). Bite from the head bone, ±1.15 rad, 40 / 2.6 s.
+Slam 12.5 m so it reaches the feet. Web pin → `player.applyRoot` 2.4 s
+(no travel, jump, boost, ignition) then 0.45× 1.6 s, silk HUD vignette;
+new web reel hauls the trooper at 16 m/s to the 8.5 m slam ring via
+`player.drag` (masonry-sliding) with a drawn line, slam queued on arrival.
+Gates: `saintfall-distaff-fight.mjs` 58/58, garner 37/37, save-integrity
+62/62, melee-duel-probe all. New `saintfall-distaff-melee-probe.mjs` plays
+it: before, the lance never reached a tarsus (0 swings in 150 s); after,
+it kills the boss in 85–142 s at 0.35 s reaction losing 71–115 HP to it,
+survives with the garrison. The Volley still kills it in 61 s untouched
+(pre-existing: chained collapses, four knees in 6 s) — noted, not moved.
+Build pin `20260818-distaff-lance-1`.
+
 **98 — SAINTFALL: difficulty tiers (Pilgrim / Penitent / Martyr)** is
 implemented and gated; awaits user playtest. One `DIFFICULTY` table
 (`assets/js/saintfall/difficulty.js`, module scope like render.js `QUALITY`)

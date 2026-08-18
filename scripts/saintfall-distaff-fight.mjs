@@ -9,15 +9,27 @@
        around the player, and telegraphs a lunge that closes it;
      - each of the eight legs is its own target with its own pool,
        reachable by a shot ANYWHERE along the limb and by a swing at
-       anything below shoulder height - and the body is a ranged
-       target in every phase, weak only while collapsed;
+       anything below overhead reach; its three joints (hip, knee,
+       tarsus) are worth more than the shaft to either weapon; every
+       leg hit draws a damage number; and the body is a ranged target
+       in every phase, weak only while collapsed;
+     - the lunge is a real gap-closer (twice the trooper's sprint, from
+       most of the crater) with no HUD banner, and a committed heading
+       a late sidestep can beat;
+     - it turns at a capped rate, not at all while an attack is wound
+       up, and a sprinting trooper can outrun the turn round its legs;
+     - breaking a leg buys a stagger: every attack stops for a few
+       seconds and a wind-up in flight is cancelled;
+     - the collapsed bite is thrown from the head at what is in front
+       of it, so the flanks and rear are safe ground for melee;
+     - the web pin ROOTS the trooper (no travel, no jump, no boost, no
+       ignition) before it slows them, and the web reel hauls them to
+       the slam ring and queues the slam;
      - walking away leashes it: full heal on the spot, a walk home,
        and a fresh fight for the next approach;
      - breaking a leg pays real damage to the main pool and, once
        enough are gone, buckles the body down to where melee actually
        lands - and lands harder there than a rifle would;
-     - the standing phase answers with a telegraphed slam, a web bolt
-       that roots, and web patches that slow;
      - broken legs survive a collapse/recover cycle, and the encounter
        renders inside its performance budget while all of it is live.
 
@@ -249,7 +261,10 @@ try {
           const direction = V3().copy(outward).multiplyScalar(-1);
           const before = inst.legHp[i];
           const hit = T.combat.fire(origin, direction, { damage: 1, range: 6 });
-          if (hit?.inst !== inst || hit?.legIndex !== i || inst.legHp[i] !== before - 1) {
+          /* At least the shot's own damage on the intended leg - a
+             span sample that falls inside a joint sphere legitimately
+             lands for MORE (see the joint check below). */
+          if (hit?.inst !== inst || hit?.legIndex !== i || inst.legHp[i] > before - 1) {
             misses.push({ i, segment, fraction, hitLeg: hit?.legIndex ?? null,
               damage: before - inst.legHp[i] });
           }
@@ -267,6 +282,78 @@ try {
     standingLegCoverage.misses.length
       ? JSON.stringify(standingLegCoverage.misses.slice(0, 4))
       : `${standingLegCoverage.samples}/72 aimed spans damaged their own leg`);
+
+  /* ---- JOINTS: HIP, KNEE, TARSUS ARE WORTH MORE ---------------------
+     A shot into the middle of the femur shaft (clear of both joints)
+     is the baseline; the same shot into the knee bone and the hip
+     bone must land as `joints.mult` times that, and the tarsus - the
+     joint a standing player can reach with a lance - the same. Also
+     the first place a leg hit has ever drawn a damage NUMBER: leg
+     pools never passed through applyDamage, so for a whole build the
+     only figures on screen came from the body. */
+  const joints = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    const box = T.combat.hitbox.distaff;
+    const V3 = () => new (Object.getPrototypeOf(inst.root.position).constructor)();
+    const world = (bone) => {
+      bone.updateWorldMatrix(true, false);
+      return bone.getWorldPosition(V3());
+    };
+    const original = { legHp: inst.legHp.slice(), broken: inst.legBroken.slice(),
+      legsBroken: inst.legsBroken, hp: inst.health };
+    const numbers = document.getElementById("sf-damage-numbers");
+    /* `from` is the horizontal direction the shot ARRIVES from. Radial
+       (from outside the body's footprint) is how the joints are shot;
+       the shaft has to be shot PERPENDICULAR to the limb, because a
+       femur runs radially out from the body and a radial ray simply
+       meets the knee first - which is the game being honest, not the
+       shaft being unhittable. The number check keys on a NEW node,
+       not on the count: the layer holds thirty-two and the coverage
+       sweep above has already filled it. */
+    const shoot = (target, damage, from) => {
+      const dir = V3().copy(from).normalize();
+      const origin = V3().copy(target).addScaledVector(dir, 4);
+      const direction = V3().copy(dir).multiplyScalar(-1);
+      const before = inst.legHp[0];
+      const lastBefore = numbers.lastElementChild;
+      const hit = T.combat.fire(origin, direction, { damage, range: 8 });
+      return {
+        dealt: before - inst.legHp[0], joint: !!hit?.joint, legIndex: hit?.legIndex,
+        numberDrawn: numbers.lastElementChild !== lastBefore && !!numbers.lastElementChild,
+      };
+    };
+    inst.legBroken.fill(true);
+    inst.legBroken[0] = false;
+    inst.legHp[0] = 5000;
+    const leg = inst.legs[0];
+    const hip = world(leg.femur);
+    const knee = world(leg.tibia);
+    const foot = world(leg.toe);
+    const radial = (p) => V3().set(p.x - inst.x, 0, p.z - inst.z);
+    const shaft = V3().copy(hip).lerp(knee, 0.5);
+    const along = V3().set(knee.x - hip.x, 0, knee.z - hip.z).normalize();
+    const shaftHit = shoot(shaft, 10, V3().set(-along.z, 0, along.x));
+    const kneeHit = shoot(knee, 10, radial(knee));
+    const hipHit = shoot(hip, 10, radial(hip));
+    const footHit = shoot(foot, 10, radial(foot));
+    inst.health = original.hp;
+    inst.legHp.splice(0, inst.legHp.length, ...original.legHp);
+    inst.legBroken.splice(0, inst.legBroken.length, ...original.broken);
+    inst.legsBroken = original.legsBroken;
+    return { mult: box.joints?.mult, shaftHit, kneeHit, hipHit, footHit };
+  });
+  check("a shot at the femur shaft is a plain leg hit",
+    joints.shaftHit.legIndex === 0 && !joints.shaftHit.joint && joints.shaftHit.dealt === 10,
+    JSON.stringify(joints.shaftHit));
+  check("the knee, hip and tarsus each take the joint multiplier",
+    joints.mult > 1
+      && joints.kneeHit.joint && Math.abs(joints.kneeHit.dealt - 10 * joints.mult) < 0.01
+      && joints.hipHit.joint && Math.abs(joints.hipHit.dealt - 10 * joints.mult) < 0.01
+      && joints.footHit.joint && Math.abs(joints.footHit.dealt - 10 * joints.mult) < 0.01,
+    `x${joints.mult}: knee ${joints.kneeHit.dealt}, hip ${joints.hipHit.dealt}, tarsus ${joints.footHit.dealt}`);
+  check("every leg hit draws a damage number",
+    joints.shaftHit.numberDrawn && joints.kneeHit.numberDrawn && joints.footHit.numberDrawn);
 
   /* A melee point just ABOVE the legal height on each sloped shin is
      the regression for the old all-or-nothing height check. The point
@@ -323,6 +410,63 @@ try {
     standingMeleeCoverage.misses.length
       ? JSON.stringify(standingMeleeCoverage.misses)
       : "8/8 legs damaged from the reachable side of the height boundary");
+
+  /* A swing at the tarsus is a swing at a joint and pays the joint
+     multiplier; a swing at the shin above it - the player standing
+     under the leg's outward lean, where the shaft is the nearest
+     surface - is a plain leg hit. Read off the legHit event, which is
+     what the HUD reads too. */
+  const meleeJoint = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    const box = T.combat.hitbox.distaff;
+    const V3 = () => new (Object.getPrototypeOf(inst.root.position).constructor)();
+    const world = (bone) => {
+      bone.updateWorldMatrix(true, false);
+      return bone.getWorldPosition(V3());
+    };
+    const original = { legHp: inst.legHp.slice(), broken: inst.legBroken.slice(),
+      legsBroken: inst.legsBroken, collapsed: inst.collapsed };
+    T.equipWeapon("glaive");
+    inst.collapsed = false;
+    inst.legBroken.fill(true);
+    inst.legBroken[2] = false;
+    inst.legHp[2] = 5000;
+    const events = [];
+    const off = T.combat.bus.on("legHit", (e) => events.push(e));
+    const swing = () => {
+      const before = inst.legHp[2];
+      const n = events.length;
+      const hits = T.combat.meleeStrike(1, Math.PI * 2, false, 1, 0);
+      return { hits, dealt: before - inst.legHp[2], joint: events[n]?.joint ?? null };
+    };
+    // At the tarsus.
+    const foot = world(inst.legs[2].toe);
+    const knee = world(inst.legs[2].tibia);
+    T._teleportRaw(foot.x + 0.6, foot.z, 0);
+    const atFoot = swing();
+    // Under the shin: the point on the tibia just below the reach
+    // line, then a step INWARD (toward the knee's footprint) so the
+    // shaft overhead is nearer than the tarsus.
+    const py = T.player.state.y;
+    const reachY = py + box.meleeReachY;
+    const f = Math.max(0, Math.min(1, (knee.y - (reachY - 0.35)) / (knee.y - foot.y)));
+    const p = V3().copy(knee).lerp(foot, f);
+    const inward = V3().set(knee.x - foot.x, 0, knee.z - foot.z).normalize();
+    T._teleportRaw(p.x + inward.x * 0.9, p.z + inward.z * 0.9, 0);
+    const atShin = swing();
+    off();
+    inst.legHp.splice(0, inst.legHp.length, ...original.legHp);
+    inst.legBroken.splice(0, inst.legBroken.length, ...original.broken);
+    inst.legsBroken = original.legsBroken;
+    inst.collapsed = original.collapsed;
+    return { mult: box.joints?.mult, atFoot, atShin };
+  });
+  check("a swing at the tarsus pays the joint multiplier; a swing at the shin does not",
+    meleeJoint.atFoot.hits >= 1 && meleeJoint.atFoot.joint === true
+      && meleeJoint.atShin.hits >= 1 && meleeJoint.atShin.joint === false
+      && Math.abs(meleeJoint.atFoot.dealt / meleeJoint.atShin.dealt - meleeJoint.mult) < 0.02,
+    JSON.stringify(meleeJoint));
 
   /* ---- STANDING ATTACKS ---------------------------------------------- */
   const standingAttacks = await page.evaluate(() => {
@@ -519,28 +663,316 @@ try {
     coverage.hitBody && coverage.bodyDealt > 0 && coverage.bodyWeak === false,
     `${coverage.bodyDealt} dealt, weak=${coverage.bodyWeak}`);
 
-  /* ---- THE LUNGE ------------------------------------------------------ */
+  /* ---- THE LUNGE ------------------------------------------------------
+     A KITING player, not a post: the animal walks now, and a trooper
+     who stands still at 24m is inside slam range before the lunge
+     cadence comes round. Held at 30m (re-placed whenever the walk
+     closes to 26m) it must lunge, cross the gap at twice a sprint, and
+     cash the sprint into the slam - with NO banner over the top. */
   const lunge = await page.evaluate(() => {
     const T = window.__SF;
     const inst = T.enemies.live.find((e) => e.key === "distaff");
-    T._teleportRaw(inst.x + 24, inst.z, 0);
+    const ps = T.player.state;
+    const title = document.getElementById("sf-breach-title");
+    /* WEST of it. The lair sits 14m west of the crater's centre and
+       the buried lance stands at that centre, so anything thrown at a
+       player parked to the EAST crosses the lance's own collision -
+       which is the world being honest, and the wrong thing to measure. */
+    const kite = () => {
+      const dx = ps.x - inst.x;
+      const dz = ps.z - inst.z;
+      const d = Math.hypot(dx, dz) || 1;
+      T._teleportRaw(inst.x + (dx / d) * 30, inst.z + (dz / d) * 30, 0);
+    };
+    T._teleportRaw(inst.x - 30, inst.z, 0);
+    T.settleDistaff(8);
+    kite();
     T.setBodyHeading(0);
+    T.distaff.primeAttack("lunge");
     let telegraphed = 0;
     let slams = 0;
+    let bannerDuringLunge = "";
+    let peakSpeed = 0;
+    let lastX = inst.x;
+    let lastZ = inst.z;
+    let secsToTelegraph = -1;
+    let secsToSlam = -1;
+    let t = 0;
     const offs = [
-      T.distaff.bus.on("lungeTelegraph", () => { telegraphed += 1; }),
-      T.distaff.bus.on("slamTelegraph", () => { slams += 1; }),
+      T.distaff.bus.on("lungeTelegraph", () => { telegraphed += 1; if (secsToTelegraph < 0) secsToTelegraph = t; }),
+      T.distaff.bus.on("slamTelegraph", () => { slams += 1; if (secsToSlam < 0) secsToSlam = t; }),
     ];
-    for (let i = 0; i < 60 * 14; i += 1) {
+    for (let i = 0; i < 60 * 16; i += 1) {
+      const st = T.distaffState();
+      // Only kite while it is walking; once it commits, stand and take it.
+      if (!st.lunging && !telegraphed
+        && Math.hypot(ps.x - inst.x, ps.z - inst.z) < 26) kite();
       T.renderOnce(1 / 60);
+      t += 1 / 60;
+      if (st.lunging) {
+        peakSpeed = Math.max(peakSpeed, Math.hypot(inst.x - lastX, inst.z - lastZ) * 60);
+        if (title.textContent === "IT LUNGES") bannerDuringLunge = title.textContent;
+      }
+      lastX = inst.x;
+      lastZ = inst.z;
       if (telegraphed && slams) break;
     }
     offs.forEach((f) => f());
-    return { telegraphed, slams };
+    return {
+      telegraphed, slams, peakSpeed: Number(peakSpeed.toFixed(1)),
+      secsToTelegraph: Number(secsToTelegraph.toFixed(2)), secsToSlam: Number(secsToSlam.toFixed(2)),
+      bannerDuringLunge, lungeSpeed: T.distaff.config.lungeSpeed,
+    };
   });
-  check("held at range, it telegraphs a lunge and cashes it into the slam",
-    lunge.telegraphed > 0 && lunge.slams > 0,
-    `${lunge.telegraphed} lunges, ${lunge.slams} slams`);
+  check("kited to 30m, it telegraphs a lunge and cashes it into the slam",
+    lunge.telegraphed > 0 && lunge.slams > 0 && lunge.secsToSlam > lunge.secsToTelegraph,
+    `${lunge.telegraphed} lunges, ${lunge.slams} slams; slam ${(lunge.secsToSlam - lunge.secsToTelegraph).toFixed(2)}s after the tell`);
+  check("the lunge crosses the crater at twice a sprint",
+    lunge.peakSpeed >= 14 && lunge.lungeSpeed >= 16 && lunge.peakSpeed <= lunge.lungeSpeed + 1,
+    `${lunge.peakSpeed} m/s measured (config ${lunge.lungeSpeed})`);
+  check("no HUD banner reads the lunge out loud", lunge.bannerDuringLunge === "",
+    lunge.bannerDuringLunge || "banner clear");
+
+  /* ---- THE REEL --------------------------------------------------------
+     Parked at 34m with the line primed: it is thrown, it lands, the
+     trooper is HELD and hauled across the sand to the slam ring, the
+     line is visible for the whole haul, and the slam is queued for the
+     arrival. */
+  const reel = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    const ps = T.player.state;
+    const C = T.distaff.config;
+    // West of it (see the lunge check), and from a quiet animal.
+    T._teleportRaw(inst.x - 34, inst.z, 0);
+    T.settleDistaff(8);
+    T._teleportRaw(inst.x - 34, inst.z, 0);
+    T.setBodyHeading(0);
+    T.distaff.primeAttack("reel");
+    const line = T.distaff.group.children.find((c) => c.name === "sf-distaff-reel-line");
+    const start = { x: ps.x, z: ps.z };
+    const ev = { reelTelegraph: 0, reelCast: 0, reelHit: 0, reelEnd: 0, slamTelegraph: 0 };
+    let endReason = null;
+    let slamAfterEnd = -1;
+    let rootWhileHauled = 0;
+    let lineFrames = 0;
+    let haulFrames = 0;
+    let tEnd = -1;
+    let t = 0;
+    const offs = Object.keys(ev).map((k) => T.distaff.bus.on(k, (e) => {
+      ev[k] += 1;
+      if (k === "reelEnd") { endReason = e.reason; tEnd = t; }
+      if (k === "slamTelegraph" && tEnd >= 0 && slamAfterEnd < 0) slamAfterEnd = t - tEnd;
+    }));
+    let distAtEnd = -1;
+    for (let i = 0; i < 60 * 12; i += 1) {
+      T.renderOnce(1 / 60);
+      t += 1 / 60;
+      const st = T.distaffState();
+      if (st.reeling) {
+        haulFrames += 1;
+        if ((ps.rootFor || 0) > 0) rootWhileHauled += 1;
+        if (line?.visible) lineFrames += 1;
+      }
+      if (ev.reelEnd && distAtEnd < 0) distAtEnd = Math.hypot(ps.x - inst.x, ps.z - inst.z);
+      if (ev.reelEnd && ev.slamTelegraph && t - tEnd > 1.5) break;
+    }
+    offs.forEach((f) => f());
+    return {
+      ...ev, endReason, slamAfterEnd: Number(slamAfterEnd.toFixed(2)),
+      hauled: Number(Math.hypot(ps.x - start.x, ps.z - start.z).toFixed(1)),
+      distAtEnd: Number(distAtEnd.toFixed(1)), reelStop: C.reelStop,
+      haulFrames, rootWhileHauled, lineFrames, lineVisibleAfter: !!line?.visible,
+    };
+  });
+  check("the reel is thrown, lands, and hauls the trooper to the slam ring",
+    reel.reelTelegraph > 0 && reel.reelHit > 0 && reel.endReason === "arrived"
+      && reel.hauled > 15 && reel.distAtEnd <= reel.reelStop + 1.2,
+    JSON.stringify(reel));
+  check("the trooper is held for the whole haul and the line is drawn for it",
+    reel.haulFrames > 20 && reel.rootWhileHauled === reel.haulFrames
+      && reel.lineFrames === reel.haulFrames && !reel.lineVisibleAfter,
+    `${reel.haulFrames} haul frames, rooted ${reel.rootWhileHauled}, line ${reel.lineFrames}`);
+  check("the slam is queued for the moment they arrive",
+    reel.slamAfterEnd >= 0 && reel.slamAfterEnd < 0.6, `${reel.slamAfterEnd}s after arrival`);
+
+  /* ---- THE PIN -----------------------------------------------------------
+     A web bolt to the chest and the trooper is STUCK: forward held for
+     a second moves them nowhere, the jump is refused, the boost is
+     refused, the pack will not light - and when the hold ends the same
+     input walks them off it, at a slowed pace first. */
+  const pin = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    const ps = T.player.state;
+    const C = T.distaff.config;
+    T._teleportRaw(inst.x - 12, inst.z, 0);
+    T.settleDistaff(8);
+    T._teleportRaw(inst.x - 12, inst.z, 0);
+    T.setBodyHeading(0);
+    T.setGaitInput(null, null);
+    T.resetBoost(true);
+    T.distaff.primeAttack("web");
+    let hits = 0;
+    const off = T.distaff.bus.on("webHit", () => { hits += 1; });
+    let waited = 0;
+    while (!hits && waited < 60 * 8) { T.renderOnce(1 / 60); waited += 1; }
+    off();
+    if (!hits) return { hits };
+    const rootAtHit = ps.rootFor;
+    const silk = document.getElementById("sf-silk");
+    const silkState = silk?.dataset.state;
+    // Hold forward for a second while held.
+    const p0 = { x: ps.x, z: ps.z };
+    T.setGaitInput(0, -1);
+    for (let i = 0; i < 60; i += 1) T.renderOnce(1 / 60);
+    const movedHeld = Math.hypot(ps.x - p0.x, ps.z - p0.z);
+    // Jump, boost, ignition - all refused while held.
+    T.player.input.state.jumpPressed = true;
+    T.renderOnce(1 / 60);
+    const jumped = !ps.grounded || ps.vy > 0.1;
+    const boosted = !!T.triggerBoost(0, -1).triggered;
+    T.setJetInput(true);
+    for (let i = 0; i < 6; i += 1) T.renderOnce(1 / 60);
+    const lit = !!T.jetpack?.state?.inFlight;
+    T.setJetInput(false);
+    T.setGaitInput(null, null);
+    // Wait out the hold, then the same input walks off it.
+    while (ps.rootFor > 0) T.renderOnce(1 / 60);
+    const slowAfter = ps.slowFactor;
+    const p1 = { x: ps.x, z: ps.z };
+    T.setGaitInput(0, -1);
+    for (let i = 0; i < 60; i += 1) T.renderOnce(1 / 60);
+    T.setGaitInput(null, null);
+    const movedFree = Math.hypot(ps.x - p1.x, ps.z - p1.z);
+    return {
+      hits, rootAtHit: Number(rootAtHit.toFixed(2)), rootSeconds: C.webRootSeconds, silkState,
+      movedHeld: Number(movedHeld.toFixed(2)), jumped, boosted, lit,
+      slowAfter: Number(slowAfter.toFixed(2)), movedFree: Number(movedFree.toFixed(2)),
+    };
+  });
+  check("a web bolt roots the trooper for a few seconds",
+    pin.hits > 0 && pin.rootAtHit >= 2 && pin.rootSeconds >= 2 && pin.movedHeld < 0.25
+      && pin.silkState === "held",
+    JSON.stringify(pin));
+  check("held: no jump, no boost, no ignition; freed: the same input walks off the web, slowed first",
+    pin.hits > 0 && !pin.jumped && pin.boosted === false && !pin.lit
+      && pin.slowAfter < 1 && pin.movedFree > 1.5,
+    JSON.stringify(pin));
+
+  /* ---- THE TURN ---------------------------------------------------------
+     A trooper sprinting round it at 9m gains on the turn: the yaw rate
+     never exceeds the cap and the bearing error grows. Then, with a
+     slam wound up, a player who runs a quarter-circle round it finds
+     the animal has not turned at all - the tell is a commitment. */
+  const turning = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    const C = T.distaff.config;
+    const ps = T.player.state;
+    T.setGaitInput(null, null);
+    T._teleportRaw(inst.x - 9, inst.z, 0);
+    T.settleDistaff(8);
+    // Quiet: the reel needs 14m so nothing fires inside the orbit, and
+    // priming it pushes every other cadence back six seconds.
+    T.distaff.primeAttack("reel");
+    // Start facing the player exactly, then orbit. The player is MOVED
+    // by writing their position, not teleported: `_teleportRaw` steps
+    // a whole frame of its own, which would give the animal two frames
+    // per lap-step and double every rate measured here.
+    let ang = Math.PI * 1.5;
+    T._teleportRaw(inst.x + Math.sin(ang) * 9, inst.z + Math.cos(ang) * 9, 0);
+    T.distaff.instance().yaw = ang;
+    const omega = 0.95;                       // rad/s at 9m = 8.6 m/s, the sprint
+    let maxRate = 0;
+    let lastYaw = inst.yaw;
+    const wrap = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
+    let committedFrames = 0;
+    for (let i = 0; i < 60 * 4; i += 1) {
+      ang += omega / 60;
+      ps.x = inst.x + Math.sin(ang) * 9;
+      ps.z = inst.z + Math.cos(ang) * 9;
+      T.renderOnce(1 / 60);
+      const st = T.distaffState();
+      if (st.action || st.staggerFor > 0) committedFrames += 1;
+      const rate = Math.abs(wrap(inst.yaw - lastYaw)) * 60;
+      maxRate = Math.max(maxRate, rate);
+      lastYaw = inst.yaw;
+    }
+    const bearing = Math.atan2(ps.x - inst.x, ps.z - inst.z);
+    const lag = Math.abs(wrap(bearing - inst.yaw));
+    // Now a committed slam: run round it during the wind-up.
+    T._teleportRaw(inst.x + Math.sin(ang) * 8, inst.z + Math.cos(ang) * 8, 0);
+    T.distaff.primeAttack("slam");
+    let told = false;
+    const off = T.distaff.bus.on("slamTelegraph", () => { told = true; });
+    let waited = 0;
+    while (!told && waited < 240) { T.renderOnce(1 / 60); waited += 1; }
+    off();
+    const yawAtTell = inst.yaw;
+    const around = ang + Math.PI / 2;
+    T._teleportRaw(inst.x + Math.sin(around) * 8, inst.z + Math.cos(around) * 8, 0);
+    for (let i = 0; i < 30; i += 1) T.renderOnce(1 / 60);   // 0.5s, inside the 0.9s tell
+    const yawDuringTell = inst.yaw;
+    return {
+      cap: C.turnRate, maxRate: Number(maxRate.toFixed(3)), lag: Number(lag.toFixed(2)),
+      committedFrames, told, turnedDuringTell: Number(Math.abs(wrap(yawDuringTell - yawAtTell)).toFixed(4)),
+    };
+  });
+  check("the turn is capped and a sprinting trooper gains ground round it",
+    turning.maxRate <= turning.cap * 1.06 + 0.02 && turning.lag > 0.45,
+    `max ${turning.maxRate} rad/s vs cap ${turning.cap}; lagging the player by ${turning.lag} rad`);
+  check("it does not turn while a slam is wound up",
+    turning.told && turning.turnedDuringTell < 0.01, `turned ${turning.turnedDuringTell} rad during the tell`);
+
+  /* ---- THE STAGGER ----------------------------------------------------
+     A slam wound up, then a leg breaks: the slam never lands (no slam,
+     no slamMiss), nothing is thrown for the whole window, the body
+     holds still - and once the window closes the fight resumes. */
+  const stagger = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    const C = T.distaff.config;
+    for (let i = 0; i < 150; i += 1) T.renderOnce(1 / 60);
+    T._teleportRaw(inst.x + 8, inst.z, 0);
+    T.distaff.primeAttack("slam");
+    const ev = { slamTelegraph: 0, slam: 0, slamMiss: 0, webCastTelegraph: 0, reelTelegraph: 0,
+      lungeTelegraph: 0, biteTelegraph: 0, stagger: 0, patch: 0 };
+    const offs = Object.keys(ev).map((k) => T.distaff.bus.on(k, () => { ev[k] += 1; }));
+    let waited = 0;
+    while (!ev.slamTelegraph && waited < 240) { T.renderOnce(1 / 60); waited += 1; }
+    const legToBreak = inst.legBroken.findIndex((b) => !b);
+    T.breakDistaffLeg(legToBreak);
+    T.renderOnce(1 / 60);
+    const staggerFor = T.distaffState().staggerFor;
+    const p0 = { x: inst.x, z: inst.z };
+    const before = { ...ev };
+    // Move the player to slam range from the far side too, to tempt it.
+    T._teleportRaw(inst.x - 8, inst.z, 0);
+    const frames = Math.round((C.legBreakStagger - 0.15) * 60);
+    for (let i = 0; i < frames; i += 1) T.renderOnce(1 / 60);
+    const during = { ...ev };
+    const moved = Math.hypot(inst.x - p0.x, inst.z - p0.z);
+    // And afterwards it fights again.
+    T.distaff.primeAttack("slam");
+    for (let i = 0; i < 180; i += 1) T.renderOnce(1 / 60);
+    const after = { ...ev };
+    offs.forEach((f) => f());
+    const thrown = (a, b) => ["slamTelegraph", "webCastTelegraph", "reelTelegraph", "lungeTelegraph",
+      "biteTelegraph", "patch"].reduce((n, k) => n + (b[k] - a[k]), 0);
+    return {
+      staggerFor, configStagger: C.legBreakStagger, staggerEvents: during.stagger,
+      slamLanded: during.slam - before.slam + during.slamMiss - before.slamMiss,
+      thrownDuring: thrown(before, during), thrownAfter: thrown(during, after),
+      moved: Number(moved.toFixed(2)),
+    };
+  });
+  check("a broken leg cancels the wind-up and holds every attack for a few seconds",
+    stagger.staggerFor > 2.5 && stagger.configStagger >= 3 && stagger.staggerEvents > 0
+      && stagger.slamLanded === 0 && stagger.thrownDuring === 0 && stagger.moved < 0.3,
+    JSON.stringify(stagger));
+  check("the fight resumes when the stagger ends", stagger.thrownAfter > 0,
+    `${stagger.thrownAfter} attacks after the window`);
 
   /* ---- COLLAPSE ------------------------------------------------------ */
   const collapse = await page.evaluate(() => {
@@ -654,6 +1086,70 @@ try {
   });
   check("the collapsed body is a melee target, and worth more than the standing leg hit",
     collapsedMelee.collapsedDealt > 0, `${collapsedMelee.collapsedDealt} dealt`);
+
+  /* ---- THE BITE, FROM THE GROUND ---------------------------------------
+     Thrown from the head at what is in front of the head. A trooper
+     working the abdomen end for six seconds is never bitten; one
+     standing in front of the mouth is, and for less than the old
+     58-of-150. The collapse timer is stretched for the check and put
+     back afterwards. */
+  const collapsedBite = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    const C = T.distaff.config;
+    const V3 = () => new (Object.getPrototypeOf(inst.root.position).constructor)();
+    const world = (bone) => {
+      bone.updateWorldMatrix(true, false);
+      return bone.getWorldPosition(V3());
+    };
+    T.forceDistaffPhase("collapsed", 40);
+    // Let the leg-break stagger from the collapse trigger run out.
+    for (let i = 0; i < Math.round(C.legBreakStagger * 60) + 30; i += 1) T.renderOnce(1 / 60);
+    const ev = { biteTelegraph: 0, bite: 0, biteMiss: 0 };
+    const offs = Object.keys(ev).map((k) => T.distaff.bus.on(k, () => { ev[k] += 1; }));
+    // The rear: 3m behind the abdomen tip, on the head-to-tail axis.
+    const head = world(inst.bones.get("head"));
+    const tail = world(inst.bones.get("abdomen2"));
+    const axis = V3().set(tail.x - head.x, 0, tail.z - head.z).normalize();
+    T._teleportRaw(tail.x + axis.x * 2.4, tail.z + axis.z * 2.4, 0);
+    T.setBodyHeading(0);
+    // ...and it is a place a lance works from: the body is in reach.
+    // Swung FIRST: the grounded animal still pivots, slowly, and after
+    // six seconds a folded leg may have come round between the player
+    // and the body - a leg hit, not a whiff, but not the body either.
+    T.equipWeapon("glaive");
+    const hpBefore = inst.health;
+    const rearSwing = T.combat.meleeStrike(1, Math.PI * 2, false, 1, 0);
+    const rearDealt = hpBefore - inst.health;
+    const yaw0 = inst.yaw;
+    for (let i = 0; i < 60 * 6; i += 1) T.renderOnce(1 / 60);
+    const rear = { ...ev };
+    const rearDistToCentre = Math.hypot(T.player.state.x - inst.x, T.player.state.z - inst.z);
+    const turnedInSix = Math.abs(inst.yaw - yaw0);
+    // The front: 3.2m ahead of the mouth.
+    const head2 = world(inst.bones.get("head"));
+    const fwd = V3().set(Math.sin(inst.yaw), 0, Math.cos(inst.yaw));
+    T._teleportRaw(head2.x + fwd.x * 3.2, head2.z + fwd.z * 3.2, 0);
+    for (let i = 0; i < 60 * 5; i += 1) T.renderOnce(1 / 60);
+    const front = { ...ev };
+    offs.forEach((f) => f());
+    T.forceDistaffPhase("collapsed", 1.0);
+    return {
+      rearBites: rear.biteTelegraph, rearDistToCentre: Number(rearDistToCentre.toFixed(1)),
+      rearSwing, rearDealt: Number(rearDealt.toFixed(0)),
+      turnedInSix: Number(turnedInSix.toFixed(2)), collapsedTurnCap: C.turnRateCollapsed,
+      frontTells: front.biteTelegraph - rear.biteTelegraph, frontBites: front.bite - rear.bite,
+      biteDamage: C.biteDamage, biteCadence: C.biteCadence,
+    };
+  });
+  check("the collapsed bite cannot reach a trooper working its rear - and the lance can work from there",
+    collapsedBite.rearBites === 0 && collapsedBite.rearSwing >= 1 && collapsedBite.rearDealt > 0
+      && collapsedBite.turnedInSix <= collapsedBite.collapsedTurnCap * 6 + 0.05,
+    `${collapsedBite.rearBites} bites in 6s at ${collapsedBite.rearDistToCentre}m from the centre; a swing there dealt ${collapsedBite.rearDealt}; it pivoted ${collapsedBite.turnedInSix} rad meanwhile`);
+  check("...and does bite what stands in front of the mouth, for less than it did",
+    collapsedBite.frontTells > 0 && collapsedBite.frontBites > 0
+      && collapsedBite.biteDamage <= 45 && collapsedBite.biteCadence >= 2.2,
+    `${collapsedBite.frontBites} bites in 5s; ${collapsedBite.biteDamage} dmg every ${collapsedBite.biteCadence}s`);
 
   /* ---- RECOVER, BROKEN LEGS STAY BROKEN ------------------------------ */
   const recover = await page.evaluate(() => {

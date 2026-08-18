@@ -1855,6 +1855,13 @@ export function buildAudio(ctx) {
       distaff.bus.on("slam", (e) => impact(e.x, e.z, "wall"));
       distaff.bus.on("webCast", (e) => hiss(e.x, e.z));
       distaff.bus.on("webHit", (e) => impact(e.x, e.z, "flesh"));
+      /* The reel: the same hiss leaving the spinneret, and a hit that
+         is followed by a low held chord for as long as the haul - the
+         line under tension. The stagger is a fall in pitch: something
+         that was holding the animal up has stopped. */
+      distaff.bus.on("reelCast", (e) => hiss(e.x, e.z));
+      distaff.bus.on("reelHit", (e) => { impact(e.x, e.z, "flesh"); chord([65, 98, 131], 1.4, 0.18); });
+      distaff.bus.on("stagger", (e) => chord([123, 98, 73], 0.5, 0.2));
       distaff.bus.on("patch", (e) => surface(e.x, e.z));
       // Lower and longer than the aggro sting: the collapse is the
       // fight changing shape, not a new threat announcing itself.

@@ -888,7 +888,13 @@ export function buildJetpack(ctx, player) {
     if (!rawRequested && state.cooldownRemaining <= 0) state.needsRelease = false;
 
     const pressed = requested && rawRequested && !lastRawRequested;
-    if (pressed && !state.active && !state.needsRelease
+    /* Pinned to the ground by a web (player.applyRoot) is pinned: the
+       pack does not light from a standing start while it holds. A
+       pack already in the air is left alone - the root zeroes its
+       horizontal travel through the player's own speed, which reads
+       as being caught, without cutting the burn. */
+    const pinned = (playerState.rootFor || 0) > 0 && playerState.grounded;
+    if (pressed && !state.active && !state.needsRelease && !pinned
       && state.fuel >= config.minIgnitionFuel && state.cooldownRemaining <= 0) {
       const gy = ctx.collide?.groundHeight(playerState.x, playerState.z)
         ?? ctx.terrain.heightAt(playerState.x, playerState.z);

@@ -76,6 +76,7 @@ export function buildHud(ctx, host) {
     <div class="sf-hud__reticle" id="sf-reticle"><i></i><i></i><i></i><i></i></div>
     <div class="sf-hud__hurt" id="sf-hurt"></div>
     <div class="sf-hud__toxin" id="sf-toxin" data-state="clear"></div>
+    <div class="sf-hud__silk" id="sf-silk" data-state="clear"></div>
     <div class="sf-hud__numbers" id="sf-damage-numbers" aria-hidden="true"></div>
     <div class="sf-hud__vitals" id="sf-vitals">
       <div class="sf-hud__hplabel"><span>VITALITY</span><b id="sf-hp-value">150</b></div>
@@ -169,6 +170,7 @@ export function buildHud(ctx, host) {
   const stratEl = el.querySelector("#sf-strat");
   const hurtEl = el.querySelector("#sf-hurt");
   const toxinEl = el.querySelector("#sf-toxin");
+  const silkEl = el.querySelector("#sf-silk");
   const reticleEl = el.querySelector("#sf-reticle");
   const damageLayerEl = el.querySelector("#sf-damage-numbers");
   let reticleGapPx = 30;
@@ -180,7 +182,7 @@ export function buildHud(ctx, host) {
   const damageNumbers = [];
   const damageWorld = new ctx.THREE.Vector3();
   let damageSequence = 0;
-  ctx.combat?.bus?.on("enemyDamaged", (event) => {
+  function pushDamageNumber(event, { weak = !!event.weak } = {}) {
     if (!event || !Number.isFinite(event.damage)) return;
     while (damageNumbers.length >= 32) {
       damageNumbers.shift().node.remove();
@@ -188,10 +190,10 @@ export function buildHud(ctx, host) {
     const node = document.createElement("span");
     node.className = "sf-damage-number";
     if (event.head) node.classList.add("is-head");
-    if (event.weak) node.classList.add("is-weak");
+    if (weak) node.classList.add("is-weak");
     if (event.killed) node.classList.add("is-kill");
     if (event.source === "boost") node.classList.add("is-boost");
-    node.textContent = `${event.weak ? "✦" : ""}${Math.max(1, Math.round(event.damage))}`;
+    node.textContent = `${weak ? "✦" : ""}${Math.max(1, Math.round(event.damage))}`;
     damageLayerEl.appendChild(node);
     damageSequence += 1;
     damageNumbers.push({
@@ -203,7 +205,16 @@ export function buildHud(ctx, host) {
       life: event.killed ? 1.05 : 0.86,
       drift: ((damageSequence % 5) - 2) * 7,
     });
-  });
+  }
+  ctx.combat?.bus?.on("enemyDamaged", (event) => pushDamageNumber(event));
+  /* A LEG IS A POOL OF ITS OWN and its hits never pass through
+     `applyDamage` - so for a whole build every shot and swing that
+     landed on one of the Distaff's eight legs drew NO number, and the
+     only figures a player ever saw were the body's. Read from the
+     ground that looked like eight legs with hitboxes a few centimetres
+     wide. Same layer, same styling; a joint hit takes the weak-point
+     mark because a joint is that limb's designed target. */
+  ctx.combat?.bus?.on("legHit", (event) => pushDamageNumber(event, { weak: !!event.joint }));
 
   /* Compact readiness sigils replace the old on-screen direction cards.
      The wheel owns selection; this dock only answers the question a player
@@ -263,6 +274,7 @@ export function buildHud(ctx, host) {
   }
   let lastHurt = -99;
   let lastToxin = -1;
+  let lastSilk = "";
   let breachAlertFor = 0;
 
   function formatCountdown(seconds) {
@@ -302,8 +314,9 @@ export function buildHud(ctx, host) {
       "THE GLASS SCAR · APEX SIGNATURE", "THE DISTAFF AWAKENS", 4.8, true));
     ctx.distaff.bus.on("collapse", () => showBreachAlert(
       "THE DISTAFF", "ITS FOOTING IS BROKEN", 3.2, true));
-    ctx.distaff.bus.on("lungeTelegraph", () => showBreachAlert(
-      "THE DISTAFF", "IT LUNGES", 1.6, true));
+    /* No banner for the lunge. The rear-up, the chord and the animal
+       itself crossing thirty metres of crater at you are the tell; a
+       line of text over the top of that was reading it out loud. */
     ctx.distaff.bus.on("defeated", () => showBreachAlert(
       "THE GLASS SCAR", "THE DISTAFF IS UNWOUND", 5.2));
   }
@@ -1499,6 +1512,20 @@ export function buildHud(ctx, host) {
         lastToxin = toxin;
         toxinEl.style.opacity = toxin > 0.001 ? (0.20 + toxin * 0.68).toFixed(3) : "0";
         toxinEl.dataset.state = toxin > 0.6 ? "crit" : toxin > 0.001 ? "warn" : "clear";
+      }
+      /* SILK. The same kind of thing as venom - a condition, held - and
+         it says the one thing the player needs while it holds: your
+         feet are not yours. Two states rather than a level, because a
+         root is on or off: "held" while pinned in place, "hauled"
+         while a line is dragging the body. No text; the strands at the
+         edge of the frame are the sentence. */
+      const ps = ctx.player?.state;
+      const silk = (ps?.rootFor || 0) > 0
+        ? (ctx.distaff?.status?.()?.reeling ? "hauled" : "held") : "clear";
+      if (silk !== lastSilk) {
+        lastSilk = silk;
+        silkEl.dataset.state = silk;
+        silkEl.style.opacity = silk === "clear" ? "0" : "1";
       }
 
       const weapon = ctx.weapons && ctx.weapons.current;

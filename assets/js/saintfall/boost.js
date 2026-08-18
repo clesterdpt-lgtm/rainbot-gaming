@@ -161,7 +161,10 @@ export function buildBoost(ctx, player) {
     return ps.free || ctx.combat?.player?.dead
       || player.action || ctx.mission?.entry?.active
       || ctx.jetpack?.state?.inFlight || ctx.shield?.state?.active
-      || ctx.slam?.state?.active;
+      || ctx.slam?.state?.active
+      // Held fast by a web - see player.applyRoot. The feet are the
+      // thing a boost is made of.
+      || (ps.rootFor || 0) > 0;
   }
 
   /**

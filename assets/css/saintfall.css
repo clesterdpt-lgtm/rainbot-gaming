@@ -643,6 +643,33 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   50% { filter: saturate(1.35) brightness(1.22); }
 }
 
+/* SILK. The Distaff's pin and reel hold the trooper's feet, and this
+   is how they say so: pale strands closing in from the edges of the
+   frame, the web's own colour, held for exactly as long as the hold.
+   Same discipline as the venom vignette - it stays clear of the
+   centre, because a held player can still shoot and swing and the
+   reticle is what they are doing that with. "hauled" pulses, because a
+   line dragging you across the sand is a thing in motion. */
+.sf-hud__silk {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  transition: opacity .22s linear;
+  background:
+    radial-gradient(ellipse at center,
+      rgba(191, 245, 236, 0) 44%, rgba(191, 245, 236, .22) 76%,
+      rgba(140, 214, 206, .55) 100%),
+    repeating-conic-gradient(from 12deg at 50% 50%,
+      rgba(232, 255, 255, 0) 0deg 9.5deg, rgba(232, 255, 255, .11) 10deg 10.6deg);
+  -webkit-mask-image: radial-gradient(ellipse at center, transparent 42%, #000 82%);
+  mask-image: radial-gradient(ellipse at center, transparent 42%, #000 82%);
+}
+.sf-hud__silk[data-state="hauled"] {
+  animation: sf-silk 0.55s ease-in-out infinite;
+}
+@keyframes sf-silk {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.35); }
+}
+
 /* Damage numbers are DOM text anchored to projected world points. The
    heavy shadow and hairline stroke keep two digits readable against
    both noon sand and the almost-black night preset. */

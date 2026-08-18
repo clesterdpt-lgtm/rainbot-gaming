@@ -2195,6 +2195,11 @@ export async function createPlayer(ctx, canvas) {
     // run - see `applySlow` below.
     slowFactor: 1,
     slowFor: 0,
+    /* Held fast - see `applyRoot`. While this runs the feet do not
+       move at all: no ground travel, no jump, no boost or ignition.
+       Aim, fire, swing and Aegis are untouched, and something else
+       (a line, a haul - see `drag`) may still move the body. */
+    rootFor: 0,
     camPitch: -0.10,
     camDist: 5.2,
     firstPerson: 0,
@@ -3626,10 +3631,19 @@ export async function createPlayer(ctx, canvas) {
       state.slowFor = Math.max(0, state.slowFor - dt);
       if (state.slowFor <= 0) state.slowFactor = 1;
     }
-    const wanted = slamMode || (shieldMode && shieldState?.movementLocked) ? 0
+    /* Held fast. Same self-decaying clock as the slow, for the same
+       reason: whatever pinned the trooper may not be there to let go. */
+    if (state.rootFor > 0) state.rootFor = Math.max(0, state.rootFor - dt);
+    const rooted = state.rootFor > 0;
+    const wanted = rooted || slamMode || (shieldMode && shieldState?.movementLocked) ? 0
       : (mag > 0.01 || boostMode)
         ? target * lerp(1, ADS_SPEED, sighted) * inputAmount * state.slowFactor : 0;
     if (shieldMode && shieldState?.movementLocked) {
+      state.speed = 0;
+    } else if (rooted && !flightMode) {
+      // Pinned mid-stride stops dead. The skid a damped stop would
+      // allow is a metre and a half at a sprint, and a web that lets
+      // you jog a metre and a half is not a web.
       state.speed = 0;
     } else if (boostMode) {
       state.speed = wanted;
@@ -3991,7 +4005,8 @@ export async function createPlayer(ctx, canvas) {
         for (const leg of legs) leg.planted = false;
       }
     }
-    if (!flightMode && !shieldMode && state.grounded && jumpPressed && !input.state.jetpack) {
+    if (!flightMode && !shieldMode && state.grounded && jumpPressed && !input.state.jetpack
+      && !rooted) {
       state.vy = 6.4;
       state.grounded = false;
     }
@@ -5855,6 +5870,58 @@ export async function createPlayer(ctx, canvas) {
     state.slowFor = 0;
   }
 
+  /**
+   * Hold the trooper where they stand for `seconds`. The web's own
+   * verb, written as generically as the slow: no ground travel, no
+   * jump, no boost or ignition (those two ask `state.rootFor`
+   * themselves), while aiming, firing, swinging and Aegis go on as
+   * normal. Refreshes toward the LONGER hold, so a second pin on a
+   * held trooper extends the first rather than shortening it.
+   */
+  function applyRoot(seconds) {
+    const s = Math.max(0, Number(seconds) || 0);
+    if (s <= 0) return false;
+    state.rootFor = Math.max(state.rootFor, s);
+    return true;
+  }
+
+  function clearRoot() {
+    state.rootFor = 0;
+  }
+
+  /**
+   * External displacement - something hauling the trooper. Goes
+   * through the same masonry slide and slope gates as a step, so a
+   * line cannot drag a body through a wall or up a face it could not
+   * walk; a wall simply stops the haul. Returns the distance actually
+   * moved so the caller can tell "pinned against something" from
+   * "landing". Vertical settles on its own: the grounded branch of
+   * `update` eases `state.y` onto whatever ground the body is now over.
+   */
+  function drag(dx, dz) {
+    if (state.free || !Number.isFinite(dx) || !Number.isFinite(dz)) return 0;
+    const nx = clamp(state.x + dx, -1010, 1010);
+    const nz = clamp(state.z + dz, -1010, 1010);
+    let px = nx;
+    let pz = nz;
+    if (ctx.collide) {
+      const out = ctx.collide.slide(
+        state.x, state.z, nx, nz,
+        state.grounded ? null : state.y,
+        undefined,
+        state.grounded
+          ? (tx, tz) => walkableFrom(state.x, state.z, tx - state.x, tz - state.z)
+          : null
+      );
+      px = out[0];
+      pz = out[1];
+    }
+    const moved = Math.hypot(px - state.x, pz - state.z);
+    state.x = px;
+    state.z = pz;
+    return moved;
+  }
+
   return {
     state,
     punch,
@@ -5862,6 +5929,9 @@ export async function createPlayer(ctx, canvas) {
     doctrineKick,
     applySlow,
     clearSlow,
+    applyRoot,
+    clearRoot,
+    drag,
     carryElbowPole(i) { return CARRY_ELBOW_POLE[i]; },
     /* The palm roll, readable and writable, because it is the one
        part of the hold no metric can grade - see PALM_ROLL. */

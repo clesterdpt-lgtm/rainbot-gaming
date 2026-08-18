@@ -277,6 +277,18 @@ const HITBOX = {
        wider live-bone sphere carries that coverage through the claw
        silhouette instead of ending damage at an invisible pivot. */
     footRadius: 1.10,
+    /* THE JOINTS. Three per leg - the trochanter where the femur
+       leaves the coxa, the knee where the tibia leaves the femur, and
+       the tarsus at the ground - each a live sphere on the bone origin
+       that IS that joint, worth `mult` times a shaft hit to either
+       weapon. Fatter than the shaft capsule on purpose: the model
+       carries a visible bulge at every one of them, and a shot that
+       grazes the bulge should land as the joint it looks like it hit
+       rather than as the shin beside it. The tarsus sphere is the
+       `footRadius` sphere above, scored the same way - which is what
+       puts one joint of every leg inside a standing player's swing.
+       Zero-radius or absent on the Garner: a tentacle has no joints. */
+    joints: { r: 1.25, mult: 1.75 },
     /* THE BODY IS A CAPSULE BETWEEN TWO LIVE BONES - "abdomen2" at
        the rear, "head" at the front - because those are the two rig
        origins that actually sit inside the visual mass. (The
@@ -298,8 +310,13 @@ const HITBOX = {
        claim to land. Without this gate the xz-only reach test lets a
        ground-level swing "hit" a coxa nine metres overhead, and with
        it the reachable band is exactly what it looks like: feet,
-       shins, and whatever the collapse brings down. */
-    meleeReachY: 3.6,
+       shins, and whatever the collapse brings down.
+       4.4, from 3.6: a two-metre trooper swinging a two-metre lance
+       overhead reaches about that, and on a shin that drops twelve
+       metres over five the extra eighty centimetres is a fifth more
+       reachable leg - the old band was a third of one tibia and read,
+       fairly, as "the legs barely have a hitbox" from the ground. */
+    meleeReachY: 4.4,
     // Fallback capsule for explode()/shockwave(), which treat this as
     // an ordinary tall, narrow-based creature.
     r: 3.7, y0: 0.02, y1: 13.8, head: 12.9, headR: 1.3, headZ: 2.2,
@@ -917,39 +934,59 @@ export function buildCombat(ctx) {
     let bestT = maxT;
     let legIndex = -1;
     let weak = false;
+    let joint = false;
     let found = false;
     const r = box.legRadius || 0.6;
+    /* A joint is a sphere on the bone origin, and it competes with the
+       shaft capsules on ENTRY DISTANCE like everything else here: the
+       nearest surface the ray crosses is what it hit. The sphere is
+       fatter than the shaft, so a ray aimed at the visible bulge enters
+       the sphere first and scores as the joint; a ray down the middle
+       of a shin enters the capsule first and scores as shaft. */
+    const jr = box.joints?.r || 0;
     for (let i = 0; i < (inst.legs?.length || 0); i += 1) {
       if (inst.legBroken?.[i]) continue;
       const leg = inst.legs[i];
       if (!limbSpan(leg, _legC, _legA, _legB, _legD)) continue;
       const tCoxa = segmentHit(ox, oy, oz, dx, dy, dz, _legC, _legA, r * 1.25);
       if (tCoxa >= 0 && tCoxa < bestT) {
-        bestT = tCoxa; legIndex = i; weak = false; found = true;
+        bestT = tCoxa; legIndex = i; weak = false; joint = false; found = true;
       }
       const tUpper = segmentHit(ox, oy, oz, dx, dy, dz, _legA, _legB, r * 1.15);
       if (tUpper >= 0 && tUpper < bestT) {
-        bestT = tUpper; legIndex = i; weak = false; found = true;
+        bestT = tUpper; legIndex = i; weak = false; joint = false; found = true;
       }
       const tLower = segmentHit(ox, oy, oz, dx, dy, dz, _legB, _legD, r);
       if (tLower >= 0 && tLower < bestT) {
-        bestT = tLower; legIndex = i; weak = false; found = true;
+        bestT = tLower; legIndex = i; weak = false; joint = false; found = true;
       }
+      /* The tarsus, scored as a joint - it is one, and it is the joint
+         a player on the ground can actually reach. */
       const tFoot = sphereEntry(_legD.x, _legD.y, _legD.z,
         box.footRadius || r, ox, oy, oz, dx, dy, dz);
       if (tFoot >= 0 && tFoot < bestT) {
-        bestT = tFoot; legIndex = i; weak = false; found = true;
+        bestT = tFoot; legIndex = i; weak = false; joint = jr > 0; found = true;
+      }
+      if (jr > 0) {
+        const tHip = sphereEntry(_legA.x, _legA.y, _legA.z, jr, ox, oy, oz, dx, dy, dz);
+        if (tHip >= 0 && tHip < bestT) {
+          bestT = tHip; legIndex = i; weak = false; joint = true; found = true;
+        }
+        const tKnee = sphereEntry(_legB.x, _legB.y, _legB.z, jr, ox, oy, oz, dx, dy, dz);
+        if (tKnee >= 0 && tKnee < bestT) {
+          bestT = tKnee; legIndex = i; weak = false; joint = true; found = true;
+        }
       }
     }
     if (distaffBodySpan(inst, box, _bodyLive, _bodyLive2)) {
       const tBody = segmentHit(ox, oy, oz, dx, dy, dz, _bodyLive, _bodyLive2,
         box.bodyRadius || 3);
       if (tBody >= 0 && tBody < bestT) {
-        bestT = tBody; legIndex = -1; weak = !!inst.collapsed; found = true;
+        bestT = tBody; legIndex = -1; weak = !!inst.collapsed; joint = false; found = true;
       }
     }
     if (!found) return null;
-    return { t: bestT, legIndex, weak };
+    return { t: bestT, legIndex, weak, joint };
   }
 
   /* ============================================================
@@ -1209,6 +1246,7 @@ export function buildCombat(ctx) {
     let bestSurface = Infinity;
     let bestRadius = box.legRadius || 0.6;
     let legIndex = -1;
+    let joint = false;
     /* Swings land where a swing can physically go. Point-based
        targeting (knee and foot only) shipped for one build and made
        melee on the legs a coin toss: a player square against a shin
@@ -1218,6 +1256,7 @@ export function buildCombat(ctx) {
        leg a person could actually strike. */
     const reachY = py + (box.meleeReachY || 3.6);
     const r = box.legRadius || 0.6;
+    const jr = box.joints?.r || 0;
     for (let i = 0; i < (inst.legs?.length || 0); i += 1) {
       if (inst.legBroken?.[i]) continue;
       const leg = inst.legs[i];
@@ -1236,14 +1275,21 @@ export function buildCombat(ctx) {
         if (surface < bestSurface) {
           best = d; bestSurface = surface; bestRadius = s[2];
           legIndex = i; out.copy(_legCand);
+          /* A swing that lands within a joint's own sphere of the hip
+             or knee is a swing at the joint - the same rule the ray
+             test scores by, measured from where the blade arrives. */
+          joint = jr > 0 && (out.distanceTo(_legA) <= jr || out.distanceTo(_legB) <= jr);
         }
       }
+      /* The tarsus: the one joint every standing leg keeps at ground
+         level, and therefore the joint bonus a melee build is built
+         around while the animal is up. */
       const footRadius = box.footRadius || r;
       const footDist = Math.hypot(_legD.x - x, _legD.z - z);
       const footSurface = footDist - footRadius;
       if (_legD.y <= reachY && footSurface < bestSurface) {
         best = footDist; bestSurface = footSurface; bestRadius = footRadius;
-        legIndex = i; out.copy(_legD);
+        legIndex = i; out.copy(_legD); joint = jr > 0;
       }
     }
     /* The body joins the candidate list only while collapsed - same
@@ -1260,11 +1306,11 @@ export function buildCombat(ctx) {
         const surface = d - bodyRadius;
         if (surface < bestSurface) {
           best = d; bestSurface = surface; bestRadius = bodyRadius;
-          legIndex = -1; out.copy(_legCand);
+          legIndex = -1; out.copy(_legCand); joint = false;
         }
       }
     }
-    return { dist: best, legIndex, radius: bestRadius };
+    return { dist: best, legIndex, radius: bestRadius, joint };
   }
 
   /**
@@ -1299,6 +1345,9 @@ export function buildCombat(ctx) {
       }
     }
     const identity = enemyIdentity(inst);
+    /* `joint` rides along so the HUD can style the number the way it
+       styles a weak-point hit - the joint IS the leg's designed
+       target, and a player has to be able to see that they found it. */
     bus.emit("legHit", {
       ...identity,
       key: identity.enemyKey,
@@ -1306,6 +1355,8 @@ export function buildCombat(ctx) {
       damage: actual,
       legHp: inst.legHp[legIndex],
       broke,
+      joint: !!detail.joint,
+      source: detail.source || "shot",
       legsBroken: inst.legsBroken || 0,
       x: Number.isFinite(detail.x) ? detail.x : inst.x,
       y: Number.isFinite(detail.y) ? detail.y : inst.y,
@@ -1469,6 +1520,7 @@ export function buildCombat(ctx) {
         if (!lb) continue;
         best = {
           inst, t: lb.t, weak: lb.weak, head: false, legIndex: lb.legIndex,
+          joint: !!lb.joint,
           x: ox + dx * lb.t, y: oy + dy * lb.t, z: oz + dz * lb.t,
         };
         bestT = lb.t;
@@ -1602,7 +1654,11 @@ export function buildCombat(ctx) {
          damage. Paying out a weak-point multiplier here as well would
          make shooting the sacs the whole fight. */
       const sacMult = hit.sacIndex >= 0 ? (box.sacs?.mult || 1) : 1;
-      const dmg = damage * (hit.head ? 2.6 : 1) * weakMult * sacMult * thoraxMult;
+      /* A leg's joint - hip, knee, tarsus - is that limb's designed
+         target, and worth what the HITBOX entry says a joint is worth.
+         Only a leg hit can carry it (see legAndBodyHit). */
+      const jointMult = hit.legIndex >= 0 && hit.joint ? (box.joints?.mult || 1) : 1;
+      const dmg = damage * (hit.head ? 2.6 : 1) * weakMult * sacMult * thoraxMult * jointMult;
       /* A leg hit never reaches `applyDamage` at all - it has its own
          pool, and `legIndex >= 0` is how every damage path in this
          file already tells "one of the eight" from "the body once it
@@ -1615,7 +1671,8 @@ export function buildCombat(ctx) {
           { x: hit.x, y: hit.y, z: hit.z });
       }
       const dealt = hit.legIndex >= 0
-        ? damageLeg(hit.inst, hit.legIndex, dmg, { x: hit.x, y: hit.y, z: hit.z })
+        ? damageLeg(hit.inst, hit.legIndex, dmg,
+          { x: hit.x, y: hit.y, z: hit.z, joint: !!hit.joint, source: "shot" })
         // `head` means headshot, and only that. A weak-point hit rides
         // in the event below instead of being folded in here, so that
         // anything reading the kill feed can tell the two apart.
@@ -1631,7 +1688,7 @@ export function buildCombat(ctx) {
         });
       if (vfx && vfx.spark) {
         vfx.spark(hit.x, hit.y, hit.z,
-          hit.weak ? 2.6 : (hit.head ? 1.9 : 1.2), false, true);
+          hit.weak ? 2.6 : (hit.head || hit.joint ? 1.9 : 1.2), false, true);
       }
       const identity = enemyIdentity(hit.inst);
       bus.emit("hit", {
@@ -1640,6 +1697,8 @@ export function buildCombat(ctx) {
         source: "shot",
         head: hit.head,
         weak: !!hit.weak,
+        joint: !!hit.joint,
+        legIndex: hit.legIndex >= 0 ? hit.legIndex : undefined,
         damage: dmg,
         actual: dealt,
         killed: hit.inst.state === "death",
@@ -1835,10 +1894,19 @@ export function buildCombat(ctx) {
         ? Math.max(dmg, inst.health)
         : dmg;
       const hitY = box.legs ? _bodyNear.y : inst.y + box.y1 * 0.55;
+      /* WHERE THE BLOW LANDED. For everything else the animal's own
+         centre is a fine place to spark from; a leg walker's legs are
+         twelve metres from its centre and a spark there put every
+         connected swing's feedback in the middle of the air. */
+      const hitX = box.legs ? _bodyNear.x : inst.x;
+      const hitZ = box.legs ? _bodyNear.z : inst.z;
+      const jointHit = !!(box.legs && legTarget.legIndex >= 0 && legTarget.joint);
       let dealt;
       if (box.legs && legTarget.legIndex >= 0) {
-        dealt = damageLeg(inst, legTarget.legIndex, strikeDamage,
-          { x: _bodyNear.x, y: hitY, z: _bodyNear.z });
+        // The joint bonus is the same number a shot earns there.
+        dealt = damageLeg(inst, legTarget.legIndex,
+          strikeDamage * (jointHit ? (box.joints?.mult || 1) : 1),
+          { x: hitX, y: hitY, z: hitZ, joint: jointHit, source: "melee" });
       } else if (box.legs) {
         /* THE PAYOFF. A collapsed body is the one melee target in the
            game worth more than a rifle shot at it - see the comment on
@@ -1901,12 +1969,13 @@ export function buildCombat(ctx) {
         source: "melee",
         head: false,
         weak: box.legs && legTarget.legIndex < 0,
+        joint: jointHit,
         legIndex: box.legs ? legTarget.legIndex : undefined,
         damage: dealt,
         killed,
-        x: inst.x,
+        x: hitX,
         y: hitY,
-        z: inst.z,
+        z: hitZ,
       });
       if (inst.key === MELEE_CONFIG.lightEnemy) {
         /* This API is part of the enemy-system contract. Keeping the call
@@ -1921,9 +1990,9 @@ export function buildCombat(ctx) {
          the warm contact spark only to survivors; stacking both made a
          Thresher disappear inside two white flashes at the exact read. */
       if (vfx && vfx.spark && inst.state !== "death") {
-        vfx.spark(inst.x, hitY, inst.z,
+        vfx.spark(hitX, hitY, hitZ,
           MELEE_CONFIG.hitSparkScale * (slam ? 1.18 : 1)
-            * (box.legs && legTarget.legIndex < 0 ? 1.8 : 1),
+            * (box.legs && legTarget.legIndex < 0 ? 1.8 : jointHit ? 1.35 : 1),
           false, true);
       }
     }

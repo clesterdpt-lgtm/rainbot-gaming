@@ -503,6 +503,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     else if (name === "dynamicRes") {
       settings.dynamicRes = !!value;
       render?.setAutoScale?.(settings.dynamicRes);
+    } else if (name === "quality") {
+      applyQuality(value);
+      menuSfx("toggle");
+      return settingsState();
     } else return false;
     writeSettings(settings);
     applySettings();
@@ -2072,6 +2076,13 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       settings.hudScale = target.dataset.hudScale === "large" ? "large" : "standard";
       writeSettings(settings); applySettings(); menuSfx("toggle"); return;
     }
+    if (target.matches("[data-quality]")) {
+      const before = activeQuality();
+      const next = applyQuality(target.dataset.quality);
+      menuSfx("toggle");
+      if (next !== before) announce(`Graphics quality ${qualityLabel(next).toLowerCase()}`);
+      return;
+    }
     if (target.matches('[data-menu-action="maximize"]')) { toggleMaximized(); return; }
     if (target.matches('[data-menu-action="restart"]')) {
       if (menu.restartUntil > performance.now()) { window.location.reload(); return; }
@@ -2497,6 +2508,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       reducedMotion: settings.reducedMotion,
       highContrast: settings.highContrast,
       dynamicRes: settings.dynamicRes,
+      // Live tier (see applySettings): what the frame is drawn at.
+      quality: activeQuality(),
+      qualityStored: settings.quality,
+      qualityTiers: QUALITY_TIERS,
     };
   }
 

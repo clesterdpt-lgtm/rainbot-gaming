@@ -3254,7 +3254,7 @@ export function buildVfx(ctx, world) {
       float tip = exp(-pow(vUv.x - head, 2.0) * 90.0) * pow(vUv.y, 4.0) * 1.8 * step(uP, 0.30);
       float nv = abs(dot(normalize(vNrm), normalize(vView)));
       float sheen = 0.55 + 0.45 * pow(1.0 - nv, 1.5);
-      float lum = (edge * 0.5 + blade * 1.15 + tip) * shown * tailFade * behind * sheen * uGain * 1.55;
+      float lum = (edge * 0.5 + blade * 1.15 + tip) * shown * tailFade * behind * sheen * uGain * 2.4;
       vec3 c = mix(uColour, uAccent, clamp(blade * 0.35 + tip * 0.6, 0.0, 1.0));
       float peak = max(c.r, max(c.g, c.b));
       gl_FragColor = vec4(c * lum / max(0.55, peak), 1.0);
@@ -5157,26 +5157,30 @@ export function buildVfx(ctx, world) {
   const MELEE_SWEEPS = Object.freeze({
     // melee1: opener. tip 1.85m, bearing -0.91 -> +0.84, tip 1.5-1.7 high.
     1: Object.freeze({
-      reach: 1.92, arc: 1.68, centre: -0.02, roll: 0.10,
-      height: 1.50, lift: 0.14, tilt: 0.04, inner: 0.63, life: 0.26,
+      reach: 1.92, arc: 1.36, centre: 0.10, roll: 0.10,
+      height: 1.50, lift: 0.14, tilt: 0.04, inner: 0.82, life: 0.26, gain: 1.15,
     }),
     // melee2: rising diagonal. tip 1.96m, bearing -1.65 -> +0.60.
     2: Object.freeze({
-      reach: 2.00, arc: 2.20, centre: -0.50, roll: 0.30,
-      height: 1.36, lift: 0.18, tilt: 0.05, inner: 0.61, life: 0.28,
+      reach: 2.00, arc: 1.85, centre: -0.34, roll: 0.30,
+      height: 1.36, lift: 0.18, tilt: 0.05, inner: 0.80, life: 0.28, gain: 1.55,
     }),
     /* melee3: the overhead finisher. The tip climbs to 2.89m and comes
        down through the front of the body, so the sweep plane is rolled
        almost upright and the arc runs NEGATIVE - high to low. */
     3: Object.freeze({
-      reach: 1.90, arc: -1.95, centre: 0.05, roll: Math.PI * 0.44,
-      height: 1.16, lift: 0.06, tilt: 0.03, inner: 0.58, life: 0.30,
+      reach: 1.90, arc: -1.62, centre: 0.05, roll: Math.PI * 0.44,
+      height: 1.30, lift: 0.06, tilt: 0.03, inner: 0.80, life: 0.30, gain: 1.30,
     }),
   });
 
   function meleeArc(x, y, z, yaw, reach, arc, hits = 0, slam = false, step = 0) {
     const S = MELEE_SWEEPS[step] || MELEE_SWEEPS[slam ? 3 : 1];
-    const gain = (hits ? 1.3 : 0.95) * (slam ? 1.2 : 1);
+    /* Per-step, because the three sweeps present differently: the
+       rising diagonal is drawn in a rolled plane and is seen close to
+       edge-on from behind the shoulder, so at a shared level it read
+       as a thread while the flat opener read as a blade. */
+    const gain = (S.gain ?? 1) * (hits ? 1.25 : 0.92);
     slashFx(x, y + S.height, z, yaw, S.reach, S.arc, S.life,
       "#ffb63a", "#fff0c8", gain, S.lift, S.tilt, S.inner, S.centre, S.roll);
 

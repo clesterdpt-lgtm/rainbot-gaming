@@ -2307,7 +2307,20 @@ export async function createPlayer(ctx, canvas) {
      its hit window opens. This response leaves the turn visible and
      keeps yawRate/foot prediction informed, while settling even a
      full about-face before melee1 connects. */
-  const MELEE_TURN_RESPONSE = 20;
+  /* Measured with `saintfall-melee-arc-probe.mjs`, reticle 180 degrees
+     behind: at 20 the body covered 114 of those degrees in the first
+     THREE FRAMES, which is not a turn - it is a teleport with an
+     animation playing over it.
+
+     The floor is set by a contract, not by taste. The blow must land
+     on what the reticle was pointing at when the key went down, and
+     `saintfall-melee-reticle-probe.mjs` holds the body to within
+     AIM_TOLERANCE_DEG (3 degrees) of that captured bearing by the time
+     the hit window opens at 0.317s. From a 120-degree offset the
+     residual is 120*exp(-R*0.317): R=12 leaves 3.3 degrees and fails
+     it, R=15 leaves 1.0 and passes with margin while still spreading
+     the pivot over twice as many frames as R=20 did. */
+  const MELEE_TURN_RESPONSE = 15;
   /* Walking and flight-to-ground handoff must agree about what terrain
      the trooper can occupy. Keeping these gates in one classifier avoids
      a middle band where a slope is freely walkable but a descending

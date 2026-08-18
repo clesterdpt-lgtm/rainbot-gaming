@@ -4057,6 +4057,55 @@ body[data-sf-contrast="high"] #sf-hud :is(.sf-hud__vitals, .sf-hud__minimap) {
   animation: sf-entry-panel .25s ease both;
 }
 .sf-entry__panel > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .65rem; color: #e7bb68; font-size: .62rem; letter-spacing: .17em; }
+/* Every control INSIDE a panel gets its own base. The main-menu
+   actions above are deliberately bare typography floated over the
+   art, and the shared `.sf-intro__gate button` base the panels used to
+   lean on went with the frame - which left the load slots and option
+   switches on user-agent defaults: black `buttontext` on a near-black
+   panel, the system sans, and no flex, so ON/OFF wrapped under its
+   label. A <button> inherits neither colour nor font unless told to. */
+.sf-intro__gate .sf-entry__panel button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .9rem;
+  width: 100%;
+  min-height: 3rem;
+  margin: 0;
+  padding: .55rem .75rem;
+  border: 1px solid rgba(226, 188, 111, .24);
+  border-radius: 0;
+  background: rgba(15, 13, 16, .78);
+  color: #f3e3bf;
+  font: inherit;
+  font-size: .6rem;
+  letter-spacing: .13em;
+  line-height: 1.25;
+  text-align: left;
+  text-transform: uppercase;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .8);
+  box-shadow: none;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, color .18s ease;
+}
+.sf-intro__gate .sf-entry__panel button:hover,
+.sf-intro__gate .sf-entry__panel button:focus-visible {
+  border-color: rgba(245, 207, 126, .72);
+  background: rgba(44, 31, 24, .88);
+  color: #fff0cf;
+  outline: none;
+}
+.sf-intro__gate .sf-entry__panel button:focus-visible { box-shadow: 0 0 0 2px rgba(246, 213, 133, .38); }
+.sf-intro__gate .sf-entry__panel button:disabled { cursor: not-allowed; }
+.sf-intro__gate .sf-entry__panel button b {
+  flex: none;
+  color: rgba(255, 226, 168, .7);
+  font-size: .56rem;
+  font-weight: 600;
+  letter-spacing: .14em;
+  white-space: nowrap;
+}
 .sf-intro__gate .sf-entry__panel > header button { width: 2.35rem; min-height: 2.35rem; padding: 0; justify-content: center; background: rgba(8,7,8,.7); border: 1px solid rgba(226,184,96,.2); color: #f6d585; box-shadow: none; font-size: 1.2rem; cursor: pointer; }
 .sf-entry__slots { display: grid; gap: .38rem; max-height: min(18.5rem, 52vh); overflow: auto; overscroll-behavior: contain; }
 .sf-entry__slots,
@@ -4076,29 +4125,71 @@ body[data-sf-contrast="high"] #sf-hud :is(.sf-hud__vitals, .sf-hud__minimap) {
 }
 .sf-intro__gate .sf-entry__slots > button:disabled { cursor: not-allowed; opacity: .38; }
 .sf-entry__slots button > span { display: grid; gap: .16rem; min-width: 0; text-align: left; }
-.sf-intro__gate .sf-entry__slots small { color: rgba(232, 195, 126, .5); font-size: .44rem; letter-spacing: .15em; }
-.sf-intro__gate .sf-entry__slots strong { overflow: hidden; color: #f0dfbd; font-family: "Cinzel",Georgia,serif; font-size: .66rem; font-weight: 500; letter-spacing: .08em; text-overflow: ellipsis; white-space: nowrap; }
+.sf-intro__gate .sf-entry__slots small { color: rgba(232, 195, 126, .62); font-size: .46rem; letter-spacing: .15em; }
+.sf-intro__gate .sf-entry__slots strong { overflow: hidden; color: #f0dfbd; font-family: "Cinzel",Georgia,serif; font-size: .68rem; font-weight: 500; letter-spacing: .08em; text-overflow: ellipsis; white-space: nowrap; }
 .sf-intro__gate .sf-entry__slots b { max-width: 11rem; text-align: right; line-height: 1.35; }
-.sf-entry__options { display: grid; gap: .35rem; max-height: min(20rem, 55vh); overflow: auto; }
+.sf-entry__options { display: grid; gap: .35rem; max-height: min(24rem, 62vh); overflow: auto; overscroll-behavior: contain; }
 .sf-intro__gate .sf-entry__options > button {
   min-height: 3rem;
   padding: .5rem .7rem;
-  border-color: rgba(225, 188, 111, .18);
-  background: rgba(15, 13, 16, .75);
+  border-color: rgba(225, 188, 111, .2);
+  background: rgba(15, 13, 16, .78);
   box-shadow: none;
 }
-.sf-entry__options button > span { display: grid; gap: .14rem; text-align: left; }
-.sf-intro__gate .sf-entry__options button span { font-family: inherit; font-size: .58rem; letter-spacing: .13em; }
-.sf-entry__options button small { color: rgba(235, 220, 190, .42); font-family: "Cormorant Garamond",Georgia,serif; font-size: .73rem; font-style: italic; letter-spacing: .02em; text-transform: none; }
-.sf-intro__gate .sf-entry__options button[aria-checked="true"] { border-color: rgba(121, 216, 178, .38); }
+.sf-entry__options button > span { display: grid; gap: .14rem; min-width: 0; text-align: left; }
+.sf-intro__gate .sf-entry__options button span { font-family: inherit; font-size: .62rem; letter-spacing: .13em; }
+.sf-entry__options button small,
+.sf-entry__pick > span small { color: rgba(238, 224, 196, .66); font-family: "Cormorant Garamond",Georgia,serif; font-size: .82rem; font-style: italic; letter-spacing: .02em; text-transform: none; }
+.sf-intro__gate .sf-entry__options button[aria-checked="true"] { border-color: rgba(121, 216, 178, .42); }
 .sf-intro__gate .sf-entry__options button[aria-checked="true"] b { color: #8ed9b9; }
-.sf-entry__scale { display: flex; align-items: center; justify-content: space-between; min-height: 3rem; padding: .45rem .7rem; border: 1px solid rgba(225,188,111,.18); background: rgba(15, 13, 16, .75); color: #ead9b5; font-size: .58rem; letter-spacing: .13em; }
-.sf-entry__scale > div { display: flex; gap: .25rem; }
-.sf-intro__gate .sf-entry__scale button { width: auto; min-height: 2rem; padding: .35rem .48rem; justify-content: center; border-color: rgba(225,188,111,.16); background: transparent; box-shadow: none; font-size: .46rem; }
-.sf-intro__gate .sf-entry__scale button.is-active { border-color: #e1ae50; background: rgba(150,93,33,.34); color: #ffe0a0; }
+/* Segmented pickers (HUD scale, graphics quality). Two segments sit
+   beside their label; a `--wide` row drops the segments onto their
+   own line so four of them keep the same panel width. */
+.sf-entry__pick,
+.sf-entry__scale {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .3rem .8rem;
+  min-height: 3rem;
+  padding: .5rem .7rem;
+  border: 1px solid rgba(225,188,111,.2);
+  background: rgba(15, 13, 16, .78);
+  color: #f3e3bf;
+  font-size: .62rem;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+.sf-entry__pick > span,
+.sf-entry__scale > span { display: grid; gap: .14rem; min-width: 0; }
+.sf-entry__pick > div,
+.sf-entry__scale > div { display: flex; flex-wrap: wrap; gap: .25rem; }
+.sf-entry__pick--wide > div { grid-column: 1 / -1; margin-top: .15rem; }
+.sf-entry__pick--wide > div button { flex: 1 1 0; }
+.sf-intro__gate .sf-entry__pick button,
+.sf-intro__gate .sf-entry__scale button { width: auto; min-height: 2rem; padding: .35rem .5rem; justify-content: center; border-color: rgba(225,188,111,.2); background: rgba(0, 0, 0, .28); box-shadow: none; color: rgba(243, 227, 191, .8); font-size: .5rem; letter-spacing: .12em; text-align: center; }
+.sf-intro__gate .sf-entry__pick button:hover,
+.sf-intro__gate .sf-entry__pick button:focus-visible,
+.sf-intro__gate .sf-entry__scale button:hover,
+.sf-intro__gate .sf-entry__scale button:focus-visible { color: #fff0cf; border-color: rgba(245, 207, 126, .72); }
+.sf-intro__gate .sf-entry__pick button.is-active,
+.sf-intro__gate .sf-entry__scale button.is-active { border-color: #e1ae50; background: rgba(150,93,33,.4); color: #ffe0a0; }
 @keyframes sf-entry-panel { from { opacity: 0; transform: translateX(-.5rem); } to { opacity: 1; transform: none; } }
 
 body.sf-high-contrast .sf-intro__gate { border-color: #ffe199; background: rgba(0,0,0,.96); backdrop-filter: none; }
+/* The frame moved off the gate and onto the panels; so does the
+   high-contrast treatment - stronger border, opaque ground, and every
+   secondary text at full brightness. */
+body.sf-high-contrast .sf-entry__panel { border-color: #ffe199; background: rgba(0, 0, 0, .97); backdrop-filter: none; }
+body.sf-high-contrast .sf-intro__gate .sf-entry__panel button,
+body.sf-high-contrast .sf-entry__pick,
+body.sf-high-contrast .sf-entry__scale { border-color: rgba(255, 225, 153, .55); background: rgba(0, 0, 0, .9); color: #fff3d6; }
+body.sf-high-contrast .sf-entry__options button small,
+body.sf-high-contrast .sf-entry__pick > span small,
+body.sf-high-contrast .sf-intro__gate .sf-entry__panel button b,
+body.sf-high-contrast .sf-intro__gate .sf-entry__pick button,
+body.sf-high-contrast .sf-intro__gate .sf-entry__scale button,
+body.sf-high-contrast .sf-intro__gate .sf-entry__slots small { color: #f8edda; }
 
 @media (max-width: 720px), (hover: none) and (pointer: coarse) {
   #sf-boot { align-items: center; justify-content: flex-end; padding: 2.25rem 1.35rem 3.2rem; text-align: center; }

@@ -59,6 +59,65 @@ import { clamp, clamp01, lerp, hexToRgb } from "saintfall/core.js";
 import { buildSkyEnvironment, srgbTransfer as srgb } from "saintfall/art.js";
 
 /* ------------------------------------------------------------------
+   Quality tiers
+
+   Shadow radius is generous, because the landmarks on this map are
+   60m to 190m tall and 300m to 900m away. A tight frustum buys crisp
+   contact shadows on ground the player is standing on and drops every
+   silhouette that gives the frame its depth.
+
+   The frame is fill-bound (measured: at device ratio 2 the scene +
+   post chain alone is the whole 60fps budget before shadows or AO
+   spend anything), so the tiers are ordered by what they cost in
+   PIXELS first. Every field is a lever the renderer already has:
+
+     deviceCap    ceiling on the device pixel ratio (a Retina panel at
+                  1 instead of 2 is a quarter of the pixels)
+     pixelRatio   further multiplier on top of that
+     msaa         scene-target samples; 4x measured ~7.5ms at ratio 2
+     shadow       sun map size; the redraw is ~4-7ms at 4096
+     shadowEvery  redraw cadence in frames (QA pins 1 for determinism)
+     ao           screen-space occlusion strength, 0 skips the pass
+     bloom        bloom chain scale relative to the scene target
+
+   `high` is the shipped default and is byte-identical to what it was
+   before the tiers grew levers, so goldens and the review harnesses
+   are unaffected; `low` exists so that a machine that cannot hold
+   30fps at high can hold 60 with the same world. The table lives at
+   module scope so the settings UI can list the tiers without a
+   renderer in hand.
+   ------------------------------------------------------------------ */
+
+const QUALITY = Object.freeze({
+  low: {
+    label: "LOW", deviceCap: 1, pixelRatio: 0.75, msaa: 0,
+    shadow: 1024, shadowEvery: 3, shadowRadius: 190, ao: 0, bloom: 0.35,
+  },
+  medium: {
+    label: "MEDIUM", deviceCap: 1.5, pixelRatio: 1.0, msaa: 2,
+    shadow: 2048, shadowEvery: 2, shadowRadius: 260, ao: 0.72, bloom: 0.45,
+  },
+  high: {
+    label: "HIGH", deviceCap: 2, pixelRatio: 1.0, msaa: 4,
+    shadow: 4096, shadowEvery: 2, shadowRadius: 320, ao: 0.85, bloom: 0.5,
+  },
+  ultra: {
+    label: "ULTRA", deviceCap: 2, pixelRatio: 1.0, msaa: 4,
+    shadow: 4096, shadowEvery: 2, shadowRadius: 420, ao: 0.95, bloom: 0.5,
+  },
+});
+export const QUALITY_TIERS = Object.freeze(Object.keys(QUALITY));
+export const DEFAULT_QUALITY = "high";
+/** The tier name a stored/URL value maps to, or the default. */
+export function normalizeQuality(tier) {
+  return typeof tier === "string" && Object.prototype.hasOwnProperty.call(QUALITY, tier)
+    ? tier : DEFAULT_QUALITY;
+}
+export function qualityLabel(tier) {
+  return QUALITY[normalizeQuality(tier)].label;
+}
+
+/* ------------------------------------------------------------------
    Fullscreen pass plumbing
    ------------------------------------------------------------------ */
 
@@ -918,12 +977,16 @@ export function createRenderer(ctx, canvas) {
     stencil: false,
     depth: true,
   });
-  /* The DEVICE ratio (capped at 2) is one of three factors in the
-     real buffer size; the quality tier and the dynamic-resolution
-     scale are the others. All three meet in applyPixelRatio(), the
-     only caller of setPixelRatio - a second caller is how a quality
-     switch silently discards the dynamic scale, or vice versa. */
-  const deviceRatio = () => Math.min(window.devicePixelRatio || 1, 2);
+  /* The DEVICE ratio (capped at 2, or lower on the cheaper quality
+     tiers - a Retina panel at ratio 2 is four times the pixels of the
+     same panel at 1, and pixels are the whole bill on weak hardware)
+     is one of three factors in the real buffer size; the quality tier
+     and the dynamic-resolution scale are the others. All three meet in
+     applyPixelRatio(), the only caller of setPixelRatio - a second
+     caller is how a quality switch silently discards the dynamic
+     scale, or vice versa. */
+  let tierDeviceCap = 2;
+  const deviceRatio = () => Math.min(window.devicePixelRatio || 1, tierDeviceCap);
   let tierPixelRatio = 1;
   let renderScale = 1;
   function applyPixelRatio() {
@@ -1480,24 +1543,33 @@ export function createRenderer(ctx, canvas) {
 
   /* ----------------------------- quality ----------------------------- */
 
-  /* Shadow radius is generous, because the landmarks on this map
-     are 60m to 190m tall and 300m to 900m away. A tight frustum
-     buys crisp contact shadows on ground the player is standing on
-     and drops every silhouette that gives the frame its depth. */
-  const QUALITY = {
-    low: { pixelRatio: 0.75, shadow: 1024, bloom: 0.35, shadowRadius: 190, ao: 0 },
-    medium: { pixelRatio: 1.0, shadow: 2048, bloom: 0.45, shadowRadius: 260, ao: 0.72 },
-    high: { pixelRatio: 1.0, shadow: 4096, bloom: 0.5, shadowRadius: 320, ao: 0.85 },
-    ultra: { pixelRatio: 1.0, shadow: 4096, bloom: 0.5, shadowRadius: 420, ao: 0.95 },
-  };
+  /* The tier table is at module scope (see QUALITY, top of file). */
+  let qualityTier = DEFAULT_QUALITY;
 
   function setQuality(tier, sky) {
-    const q = QUALITY[tier] || QUALITY.high;
+    const key = normalizeQuality(tier);
+    const q = QUALITY[key];
+    qualityTier = key;
+    tierDeviceCap = q.deviceCap;
     tierPixelRatio = q.pixelRatio;
     applyPixelRatio();
-    bloomScale = tier === "low" ? 0.35 : 0.5;
+    bloomScale = q.bloom;
     aoEnabled = q.ao > 0;
     compMat.uniforms.uAo.value.x = q.ao;
+    /* MSAA lives on the scene target's framebuffer, which three builds
+       the first time the target is bound and never revisits - so a
+       changed sample count only takes effect if the old framebuffer is
+       thrown away. resize() below will NOT do that when the buffer size
+       is unchanged (setSize is a no-op then), hence the explicit
+       dispose. The depth texture the AO and composite passes read is
+       re-created by the same setup pass, on the same JS object, so
+       their uniforms stay valid. */
+    const msaa = Math.min(q.msaa, maxSamples);
+    if (sceneTarget.samples !== msaa) {
+      sceneTarget.samples = msaa;
+      sceneTarget.dispose();
+    }
+    if (!ctx.qa) shadowEvery = q.shadowEvery;
     if (sky) {
       sky.sun.shadow.mapSize.set(q.shadow, q.shadow);
       if (sky.sun.shadow.map) {
@@ -1510,6 +1582,7 @@ export function createRenderer(ctx, canvas) {
     // interleave gap would present one frame of shadowless world.
     requestShadowUpdate();
     resize(width, height);
+    return key;
   }
 
   return {
@@ -1519,6 +1592,9 @@ export function createRenderer(ctx, canvas) {
     render,
     resize,
     setQuality,
+    get quality() { return qualityTier; },
+    qualityTiers: QUALITY_TIERS,
+    qualityLabel(tier = qualityTier) { return qualityLabel(tier); },
     applyAtmosphere,
     refreshEnvironment,
     syncEnvironment,
@@ -1639,6 +1715,10 @@ export function createRenderer(ctx, canvas) {
         autoScale: autoOn(),
         shadowEvery,
         pixelRatio: Number(renderer.getPixelRatio().toFixed(3)),
+        quality: qualityTier,
+        msaa: sceneTarget.samples,
+        aoStrength: compMat.uniforms.uAo.value.x,
+        sceneSize: [sceneTarget.width, sceneTarget.height],
       };
     },
   };

@@ -6,6 +6,8 @@
    durable game state remains owned by the save and mission systems.
    ============================================================ */
 
+import { QUALITY_TIERS, DEFAULT_QUALITY, normalizeQuality, qualityLabel } from "saintfall/render.js";
+
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
 const SETTINGS_KEY = "saintfall:field-ui:v1";
 const PANEL_NAMES = new Set(["operation", "map", "doctrine", "saves", "controls", "settings"]);
@@ -81,13 +83,24 @@ function readSettings() {
       highContrast: !!saved.highContrast,
       // Default ON: it only ever acts when the frame is over budget.
       dynamicRes: saved.dynamicRes !== false,
+      /* The renderer's tier (render.js QUALITY). Defaults to the tier
+         the game shipped at; the switch is for the machine that cannot
+         hold it, and it takes effect the moment it is pressed. */
+      quality: normalizeQuality(saved.quality),
     };
   } catch (_) {
     return {
       hudScale: "standard", reducedMotion: prefersReducedMotion(), highContrast: false,
-      dynamicRes: true,
+      dynamicRes: true, quality: DEFAULT_QUALITY,
     };
   }
+}
+
+function qualitySegmentsMarkup(attr, labelledBy) {
+  return `<div class="sf-setting__segments" role="group" aria-labelledby="${labelledBy}">${
+    QUALITY_TIERS.map((tier) => `<button type="button" ${attr}="${tier}" aria-label="${
+      escapeHtml(qualityLabel(tier).toLowerCase())} graphics quality">${escapeHtml(qualityLabel(tier))}</button>`).join("")
+  }</div>`;
 }
 
 function writeSettings(settings) {
@@ -130,14 +143,14 @@ function controlRow(key, action, detail = "") {
   return `<div class="sf-control-row"><kbd>${key}</kbd><span><strong>${action}</strong>${detail ? `<small>${detail}</small>` : ""}</span></div>`;
 }
 
-export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
+export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQuality } = {}) {
   if (!stage || !canvas || !ctx?.mission) {
     const closed = () => ({ open: false });
     return {
       update() {}, toggleAudio: () => false, setSetting: () => false, openMenu: () => false,
       openMap: () => false, closeMenu: () => false, cancelWheel: () => false, refresh() {},
       wheelState: closed, menuState: closed,
-      settingsState: () => ({ audioEnabled: false, hudScale: "standard", reducedMotion: false, highContrast: false, dynamicRes: true }),
+      settingsState: () => ({ audioEnabled: false, hudScale: "standard", reducedMotion: false, highContrast: false, dynamicRes: true, quality: DEFAULT_QUALITY }),
     };
   }
 
@@ -316,6 +329,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
                 <div class="sf-setting"><span><strong id="sf-hud-scale-label">HUD SCALE</strong><small>Increase tactical instrument size</small></span><div class="sf-setting__segments" role="group" aria-labelledby="sf-hud-scale-label"><button type="button" data-hud-scale="standard" aria-label="Standard HUD scale">STANDARD</button><button type="button" data-hud-scale="large" aria-label="Large HUD scale">LARGE</button></div></div>
                 <div class="sf-setting"><span><strong>REDUCED MOTION</strong><small>Calmer interface transitions and pulses</small></span><button type="button" role="switch" data-setting="reduced-motion" aria-label="Reduced motion" aria-checked="false">OFF</button></div>
                 <div class="sf-setting"><span><strong>HIGH CONTRAST</strong><small>Stronger text, panel, and instrument separation</small></span><button type="button" role="switch" data-setting="high-contrast" aria-label="High contrast" aria-checked="false">OFF</button></div>
+                <div class="sf-setting sf-setting--quality"><span><strong id="sf-quality-label">GRAPHICS QUALITY</strong><small>Lower tiers trade render resolution, anti-aliasing, shadow detail, and occlusion for frame rate on weaker hardware. Applies immediately.</small></span>${qualitySegmentsMarkup("data-quality", "sf-quality-label")}</div>
                 <div class="sf-setting"><span><strong>DYNAMIC RESOLUTION</strong><small>Trims render resolution only while the frame rate is suffering, and restores it when it recovers</small></span><button type="button" role="switch" data-setting="dynamic-res" aria-label="Dynamic resolution" aria-checked="true">ON</button></div>
               </div>
             </section>
@@ -436,6 +450,36 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render } = {}) {
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-pressed", active ? "true" : "false");
     });
+    /* Highlight the tier the renderer is ACTUALLY on, not the stored
+       one: a `?quality=` URL override runs the session at its tier
+       without touching the preference, and a menu that showed HIGH
+       while the frame was drawn at LOW would be lying. */
+    const liveQuality = activeQuality();
+    root.querySelectorAll("[data-quality]").forEach((button) => {
+      const active = button.dataset.quality === liveQuality;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  }
+
+  function activeQuality() {
+    return normalizeQuality(render?.quality || settings.quality);
+  }
+
+  /* One call, three effects: the renderer switches tier, the choice
+     is stored, and every quality control (this menu and the entry
+     screen's options panel, which reads settingsState()) follows. The
+     renderer is reached through the callback main.js hands in rather
+     than render.setQuality directly, because the tier also moves the
+     sun's shadow map and needs the sky in hand. */
+  function applyQuality(tier) {
+    const next = normalizeQuality(tier);
+    settings.quality = next;
+    if (typeof setQuality === "function") setQuality(next);
+    else render?.setQuality?.(next, ctx.sky);
+    writeSettings(settings);
+    applySettings();
+    return next;
   }
 
   function toggleAudio(forced) {

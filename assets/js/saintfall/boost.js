@@ -24,8 +24,8 @@ export const BOOST_CONFIG = Object.freeze({
   /* The minimum a TAP buys. Releasing inside this still gets a whole
      burst, so the verb is never punished for being pressed briefly. */
   burst: 0.30,
-  /** Hard ceiling on one held glide, charge notwithstanding. */
-  glideMax: 3.2,
+  /** Glide continues until reliquary charge is exhausted. */
+  glideMax: Infinity,
   cooldown: 0.5,
   burstSpeed: 27,
   glideSpeed: 19,
@@ -307,8 +307,6 @@ export function buildBoost(ctx, player) {
     if (state.elapsed >= config.burst) {
       if (!held) {
         stop(inputState?.boostHeld ? "no-input" : "released");
-      } else if (state.elapsed >= config.glideMax) {
-        stop("exhausted");
       } else if (!ctx.jetpack?.spend?.(config.holdDrain * dt, true)) {
         stop("low-charge");
       } else {

@@ -130,6 +130,35 @@ export function buildBreaches(ctx) {
   const buriedRoster = [];
   let eventSerial = 0;
 
+  /* The live difficulty tier paces the cycle and thickens the rosters.
+     Timers are read through `paced()` at the moment they are set (a
+     larger `breachPace` is a slower cycle); roster counts through
+     `tieredCount()`. Both fall back to the authored numbers when no
+     difficulty service is present. */
+  const tier = () => ctx.difficulty?.current || null;
+  function paced(seconds) {
+    const pace = tier()?.breachPace;
+    return Number.isFinite(pace) && pace > 0 ? seconds * pace : seconds;
+  }
+  function tieredCount(entry, wave) {
+    const values = tier();
+    let count = entry.count;
+    if (values) {
+      if (entry.key === "gleaner") {
+        /* The ranged caste is NOT under the roster multiplier: an extra
+           Gleaner taxes the lance more than the rifle (it is fired on while
+           pinned), so its count moves only through `gleanerDelta` - and only
+           in a wave that already fields it; the skitter waves stay pure. */
+        if (wave.roster.some((e) => e.key === "gleaner")) {
+          count += Math.round(values.gleanerDelta || 0);
+        }
+      } else {
+        count = Math.round(count * (Number.isFinite(values.roster) ? values.roster : 1));
+      }
+    }
+    return Math.max(entry.key === "gleaner" ? 0 : 1, count);
+  }
+
   const state = {
     phase: "dormant",       // dormant -> warning -> active -> intermission -> complete -> warning
     waveIndex: -1,
@@ -138,7 +167,7 @@ export function buildBreaches(ctx) {
     cyclesCleared: 0,
     name: "Bloom pressure",
     subtitle: "Signal quiet",
-    timer: BREACH_CONFIG.firstWarningAfter,
+    timer: paced(BREACH_CONFIG.firstWarningAfter),
     x: 0,
     z: 0,
     total: 0,
@@ -189,7 +218,8 @@ export function buildBreaches(ctx) {
   function expandRoster(wave) {
     const roster = [];
     for (const entry of wave.roster) {
-      for (let i = 0; i < entry.count; i += 1) roster.push(entry.key);
+      const count = tieredCount(entry, wave);
+      for (let i = 0; i < count; i += 1) roster.push(entry.key);
     }
     // The boss owns the centre and rises first. The remaining castes
     // alternate instead of surfacing as a row of identical copies.
@@ -468,14 +498,14 @@ export function buildBreaches(ctx) {
         state.cyclesCleared = Math.max(state.cyclesCleared, state.cycle);
         state.name = "Brood cycle broken";
         state.subtitle = "Bloom pressure rebuilding";
-        state.timer = BREACH_CONFIG.cycleCooldownSeconds;
+        state.timer = paced(BREACH_CONFIG.cycleCooldownSeconds);
         bus.emit("complete", snapshot());
       } else {
         state.phase = "intermission";
         state.recovering = false;
         state.name = "Breach sealed";
         state.subtitle = "Next pressure front forming";
-        state.timer = BREACH_CONFIG.intermissionSeconds;
+        state.timer = paced(BREACH_CONFIG.intermissionSeconds);
       }
       return;
     }
@@ -621,7 +651,7 @@ export function buildBreaches(ctx) {
       state.cycle = Math.max(state.cycle, state.cyclesCleared);
       state.name = saved.name || "Brood cycle broken";
       state.subtitle = saved.subtitle || "Bloom pressure rebuilding";
-      state.timer = hasSavedTimer ? timer : BREACH_CONFIG.cycleCooldownSeconds;
+      state.timer = hasSavedTimer ? timer : paced(BREACH_CONFIG.cycleCooldownSeconds);
     } else if ((phase === "warning" || phase === "active") && waveIndex >= 0) {
       const byId = new Map(enemies.live.filter((inst) => inst?.id)
         .map((inst) => [inst.id, inst]));
@@ -675,7 +705,7 @@ export function buildBreaches(ctx) {
       state.waveIndex = -1;
       state.name = "Bloom pressure";
       state.subtitle = "Signal quiet";
-      state.timer = hasSavedTimer ? timer : BREACH_CONFIG.firstWarningAfter;
+      state.timer = hasSavedTimer ? timer : paced(BREACH_CONFIG.firstWarningAfter);
       state.cycle = Math.max(1, state.cyclesCleared + 1);
     }
 

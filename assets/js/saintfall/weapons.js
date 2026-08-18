@@ -966,7 +966,11 @@ export function buildWeapons(ctx) {
        BEARER, not of the pattern - the same lance overheats normally
        thirty seconds later. */
     const boon = ctx.mission?.boon?.();
-    const heatScale = boon?.active ? Math.max(0, Number(boon.heat) || 1) : 1;
+    /* ...and of the ROAD: the difficulty tier scales heat per shot too -
+       Martyr's barrel locks after 24 rounds instead of 30, which is a
+       ranged-only tax that costs no health (see difficulty.js). */
+    const tierHeat = Number(ctx.difficulty?.current?.heat) || 1;
+    const heatScale = (boon?.active ? Math.max(0, Number(boon.heat) || 1) : 1) * tierHeat;
     const heatAdded = addHeat((spec.heatPerShot || 0) * heatScale, { reason: "fire" });
     carry.sinceShot = 0;
     // Latches AFTER the shot, so the round that fills the gauge

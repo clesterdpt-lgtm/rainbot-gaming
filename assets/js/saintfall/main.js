@@ -44,7 +44,8 @@ import { buildHud } from "saintfall/hud.js";
 import { buildTouchControls } from "saintfall/touch.js";
 import { buildDropIntro } from "saintfall/intro.js";
 import { buildSaveSystem } from "saintfall/save.js";
-import { buildGameUi } from "saintfall/ui.js";
+import { buildGameUi, readStoredSettings } from "saintfall/ui.js";
+import { buildDifficulty } from "saintfall/difficulty.js";
 import { installQa } from "saintfall/qa.js";
 
 export async function start({ boot, build } = {}) {
@@ -67,6 +68,10 @@ export async function start({ boot, build } = {}) {
      preference. Absent the param, the tier comes from the settings
      store (read once gameUi exists, below) and defaults to high. */
   const qualityParam = params.get("quality");
+  /* Same contract for difficulty: `?difficulty=` runs the session at a
+     tier without touching the stored preference (the duel probe pins
+     tiers with it); absent the param, the stored preference applies. */
+  const difficultyParam = params.get("difficulty");
   const timeKey = params.get("time") || "goldenhour";
   const cycleParam = params.get("cycle");
   const cycleEnabled = cycleParam === "1"
@@ -103,6 +108,13 @@ export async function start({ boot, build } = {}) {
       handoffFrames: 0,
     },
   };
+
+  /* The tier has to be in force before the garrison is spawned, because
+     enemy health is scaled at spawn - so it is read from the settings
+     store here, ahead of the menu that owns that store. */
+  ctx.difficulty = buildDifficulty();
+  ctx.difficulty.set(difficultyParam || readStoredSettings().difficulty,
+    difficultyParam ? "url" : "settings");
 
   progress(0.22, "Opening the eye");
   const render = createRenderer(ctx, canvas);
@@ -909,6 +921,17 @@ export async function start({ boot, build } = {}) {
   // Both menus highlight the LIVE tier, so a URL override shows as such.
   gameUi.refresh?.();
   intro.refreshMenu?.();
+  /* A difficulty change is data, not a rebuild: every consumer reads the
+     tier live. The two things that do not are already-spawned health
+     pools and the menus, so both follow here. A save restore sets the
+     tier from the file (source "save") and stores it as the preference,
+     so a new road starts where the last one was walked. */
+  ctx.difficulty.onChange((next, previous, source) => {
+    enemies.rescaleForDifficulty?.(previous, next);
+    if (source === "save") gameUi.setSetting?.("difficulty", next);
+    gameUi.refresh?.();
+    intro.refreshMenu?.();
+  });
   /* `?ao=0` (or any strength 0..1) overrides the tier's screen-space
      occlusion. A diagnostic first and a relief second: the pass prints
      a fixed-position plaid on Apple GPUs (milestone 96) that no other

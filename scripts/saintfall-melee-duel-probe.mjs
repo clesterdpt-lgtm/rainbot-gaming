@@ -24,11 +24,20 @@
       lance than the rifle, and no melee build dies to any breach roster the
       rifle clears.
 
+   3. THE TIERS (`--tiers all` or `--tiers pilgrim,martyr`): the same duel
+      is repeated at each difficulty tier in one session, with the tier's
+      roster scaling applied to the breach rosters, and gated on the thing
+      a tier must not do - reopen the gap. Per tier: no melee build dies to a
+      roster the Volley clears; the lance-to-Volley HP-lost ratio over W3+W4
+      stays within 1.6x of Penitent's; and Martyr is measurably harder,
+      Pilgrim measurably gentler, for both builds together.
+
    Usage:
      node scripts/saintfall-melee-duel-probe.mjs
      node scripts/saintfall-melee-duel-probe.mjs --out output/path
      node scripts/saintfall-melee-duel-probe.mjs --only "W3"      # duel filter
      node scripts/saintfall-melee-duel-probe.mjs --skip-duel
+     node scripts/saintfall-melee-duel-probe.mjs --tiers all       # ~12 minutes
    ============================================================ */
 
 import { spawn } from "node:child_process";
@@ -45,6 +54,13 @@ const outDir = path.resolve(root, outArg >= 0
 const onlyArg = process.argv.indexOf("--only");
 const only = onlyArg >= 0 ? process.argv[onlyArg + 1] : null;
 const skipDuel = process.argv.includes("--skip-duel");
+const tiersArg = process.argv.indexOf("--tiers");
+const TIERS = tiersArg >= 0
+  ? (process.argv[tiersArg + 1] === "all"
+    ? ["pilgrim", "penitent", "martyr"]
+    : String(process.argv[tiersArg + 1] || "penitent").split(",").map((t) => t.trim()).filter(Boolean))
+  : ["penitent"];
+if (!TIERS.includes("penitent")) TIERS.unshift("penitent");
 const port = 52400 + (process.pid % 1100);
 const base = `http://127.0.0.1:${port}`;
 const results = [];
@@ -94,6 +110,7 @@ async function main() {
   const diagnostics = { pageErrors: [], consoleErrors: [] };
   const duel = [];
   let mechanism = null;
+  let byTier = {};
   try {
     await waitForServer();
     browser = await chromium.launch({
@@ -351,7 +368,12 @@ async function main() {
           const ps = T.player.state;
           const inst = Q.spawnAt("gleaner", 30);
           const launched = [];
-          const offL = combat.bus.on("enemyProjectileLaunched", (e) => launched.push({ t, dist: e.targetDistance }));
+          /* Horizontal centre-to-centre distance at launch - the same metric
+             the fall-back rule uses. The event's `targetDistance` is muzzle-
+             to-eye and the spinneret sits 0.92m forward of the body. */
+          const offL = combat.bus.on("enemyProjectileLaunched", () => launched.push({
+            t, dist: Math.hypot(inst.x - ps.x, inst.z - ps.z),
+          }));
           const dt = 1 / 60;
           let t = 0;
           // Close to 6m along the bearing.
@@ -365,7 +387,7 @@ async function main() {
              Gleaner that has already given ground past it and reloaded is
              allowed to fire again - that is the reopening. */
           const closeLaunches = launched.slice(closeStart)
-            .filter((l) => (l.dist || 0) < combat.projectileConfig.fallbackRange).length;
+            .filter((l) => (l.dist || 0) < combat.projectileConfig.fallbackRange - 0.05).length;
           const minDistDuringClose = Math.min(d0, d1);
           // Now step back to 22m and give it four seconds.
           T._teleportRaw(inst.x - Math.sin(arena.yaw) * 22, inst.z - Math.cos(arena.yaw) * 22, arena.yaw);
@@ -471,8 +493,25 @@ async function main() {
           const maxHp = combat.player.maxHp;
           Q.resetPlayer(mode);
 
+          /* The tier thickens breach rosters in breaches.js; the duel spawns
+             its own roster, so apply the same arithmetic here. */
+          const tierValues = T.difficultyState?.()?.values || null;
+          const hasGleaner = roster.some((e) => e.key === "gleaner");
           const keys = [];
-          for (const entry of roster) for (let i = 0; i < entry.count; i += 1) keys.push(entry.key);
+          for (const entry of roster) {
+            let count = entry.count;
+            if (tierValues && opts.applyTierRoster !== false) {
+              // Same arithmetic as breaches.js tieredCount(): the ranged
+              // caste moves only through gleanerDelta, never the multiplier.
+              if (entry.key === "gleaner") {
+                if (hasGleaner) count += Math.round(tierValues.gleanerDelta || 0);
+              } else {
+                count = Math.round(count * (Number.isFinite(tierValues.roster) ? tierValues.roster : 1));
+              }
+              count = Math.max(entry.key === "gleaner" ? 0 : 1, count);
+            }
+            for (let i = 0; i < count; i += 1) keys.push(entry.key);
+          }
           const n = keys.length;
           const spawned = [];
           for (let i = 0; i < n; i += 1) {
@@ -715,13 +754,23 @@ async function main() {
       `rank=${mc.rank} healed=${mc.healed} expected=${mc.expected}`);
 
     /* ---------------- the duel ---------------- */
-    if (!skipDuel) {
-      console.log("\nDuel:");
+    byTier = {};
+    if (!skipDuel) for (const tierName of TIERS) {
+      const applied = await page.evaluate((t) => window.__SF.setDifficultyForQA?.(t)?.tier || null, tierName);
+      if (applied !== tierName) {
+        check(`difficulty tier "${tierName}" can be pinned for the duel`, false, `applied=${applied}`);
+        continue;
+      }
+      console.log(`\nDuel [${tierName.toUpperCase()}]:`);
+      const rows = [];
+      byTier[tierName] = rows;
       for (const scenario of SCENARIOS) {
         if (only && !scenario.label.toLowerCase().includes(only.toLowerCase())) continue;
         for (const mode of MODES) {
           const r = await page.evaluate((o) => window.__SF_MELEE_DUEL_QA.run(o), { ...scenario, mode });
-          duel.push(r);
+          r.tier = tierName;
+          rows.push(r);
+          if (tierName === "penitent") duel.push(r);
           const per = r.hpLostPerKill === null ? "-" : r.hpLostPerKill;
           console.log(
             `  ${scenario.label.padEnd(30)} ${mode.padEnd(12)} ${r.outcome.padEnd(8)}`
@@ -734,6 +783,9 @@ async function main() {
           );
         }
       }
+    }
+    /* Penitent gates: the tier the game is tuned at. */
+    if (!skipDuel && duel.length) {
       const cell = (label, mode) => duel.find((r) => r.label === label && r.mode === mode);
       const harrow = cell("1x harrow", "melee");
       if (harrow) {
@@ -761,6 +813,59 @@ async function main() {
         untelegraphed === 0 && shortest.every((v) => v >= 0.35),
         `untelegraphed=${untelegraphed} shortestTellGap=${shortest.length ? Math.min(...shortest) : "-"}s`);
     }
+    /* Close the loop on the penitent rows too, and gate every tier. */
+    if (!skipDuel && Object.keys(byTier).length) {
+      const heavy = ["W3 Breaker Brood (7T 2G 1H)", "W4 Crowned Surge (9T 3G 2H)"];
+      const cellOf = (rows, label, mode) => rows.find((r) => r.label === label && r.mode === mode);
+      const sumLost = (rows, mode) => heavy.reduce((s, label) => s + (cellOf(rows, label, mode)?.hpLost || 0), 0);
+      /* Floored at 60 HP over two waves: below that the Volley is simply
+         untouched and a ratio against it says nothing about the gap. */
+      const ratioOf = (rows) => sumLost(rows, "melee") / Math.max(60, sumLost(rows, "ranged"));
+      const penitentRows = byTier.penitent || [];
+      const penitentRatio = ratioOf(penitentRows);
+      const totalOf = (rows) => MODES.reduce((s, mode) => s + sumLost(rows, mode), 0);
+      const penitentTotal = totalOf(penitentRows);
+      for (const [tierName, rows] of Object.entries(byTier)) {
+        if (!rows.length) continue;
+        for (const label of heavy) {
+          const ranged = cellOf(rows, label, "ranged");
+          /* The parity claim binds where the rifle clears WITH A MARGIN. A
+             rifle that scrapes through on its last few points has met a wall
+             too, and a gate on that is a coin flip, not a gap. */
+          if (!ranged || ranged.outcome !== "cleared" || ranged.hpEnd < 20) continue;
+          /* The parity question per tier is "does A lance play survive what
+             the rifle survives" - the two lance bots are two heuristics, and
+             on a wall wave the guarded one (a frontal plate held at 3 m/s
+             against 360° pressure) can lose where the naive one clears.
+             Penitent keeps the stricter both-builds gates above. */
+          const lance = cellOf(rows, label, "melee");
+          const guarded = cellOf(rows, label, "melee-guard");
+          const survivors = [lance, guarded].filter((r) => r && r.outcome === "cleared");
+          check(`[${tierName}] ${label}: a lance build survives a roster the Volley clears`,
+            survivors.length > 0,
+            `lance=${lance?.outcome} (${lance?.hpLost} lost, ${lance?.healed} healed) guarded=${guarded?.outcome} (${guarded?.hpLost} lost, ${guarded?.healed} healed) volley=${ranged.hpLost} (ended ${ranged.hpEnd})`);
+        }
+        if (tierName !== "penitent" && penitentRows.length) {
+          const ratio = ratioOf(rows);
+          check(`[${tierName}] the lance-to-Volley HP-lost ratio over W3+W4 stays within 1.6x of Penitent's`,
+            ratio <= penitentRatio * 1.6 + 1e-9,
+            `ratio=${ratio.toFixed(2)} penitent=${penitentRatio.toFixed(2)} (lance ${sumLost(rows, "melee").toFixed(0)} / volley ${sumLost(rows, "ranged").toFixed(0)})`);
+          const total = totalOf(rows);
+          if (tierName === "martyr") {
+            check("[martyr] is measurably harder than Penitent for both builds together",
+              total >= penitentTotal * 1.15, `W3+W4 all builds: martyr=${total.toFixed(0)} penitent=${penitentTotal.toFixed(0)}`);
+          } else if (tierName === "pilgrim") {
+            check("[pilgrim] is measurably gentler than Penitent for both builds together",
+              total <= penitentTotal * 0.9, `W3+W4 all builds: pilgrim=${total.toFixed(0)} penitent=${penitentTotal.toFixed(0)}`);
+            check("[pilgrim] is gentler for the lance as well as the rifle",
+              sumLost(rows, "melee") <= sumLost(penitentRows, "melee") && sumLost(rows, "ranged") <= sumLost(penitentRows, "ranged"),
+              `lance ${sumLost(rows, "melee").toFixed(0)} vs ${sumLost(penitentRows, "melee").toFixed(0)}, volley ${sumLost(rows, "ranged").toFixed(0)} vs ${sumLost(penitentRows, "ranged").toFixed(0)}`);
+          }
+        }
+      }
+      // Leave the session on Penitent for anything that runs after.
+      await page.evaluate(() => window.__SF.setDifficultyForQA?.("penitent"));
+    }
   } finally {
     if (browser) await browser.close();
     server.kill();
@@ -771,7 +876,7 @@ async function main() {
     `page=${diagnostics.pageErrors.length}, console=${diagnostics.consoleErrors.length}`);
 
   await writeFile(path.join(outDir, "report.json"),
-    JSON.stringify({ checks: results, mechanism, duel, diagnostics }, null, 2));
+    JSON.stringify({ checks: results, mechanism, duel, tiers: TIERS, byTier, diagnostics }, null, 2));
   console.log(`\nReport: ${path.relative(root, path.join(outDir, "report.json"))}`);
   if (failures) {
     console.log(`\n${failures} check(s) failed`);

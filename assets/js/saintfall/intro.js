@@ -30,6 +30,7 @@ import { mergeGeometries } from "saintfall/structures.js";
 import { DROP_SITE, DROP_CRATER } from "saintfall/terrain.js";
 import { POD_LANDED_PITCH, POD_LANDED_ROLL, POD_DOOR_REACH } from "saintfall/pod.js";
 import { QUALITY_TIERS, qualityLabel } from "saintfall/render.js";
+import { DIFFICULTY_TIERS, difficultyLabel, difficultyBlurb } from "saintfall/difficulty.js";
 
 export const DROP_INTRO_DURATION = 23.6;
 export const DROP_INTRO_MARKERS = Object.freeze({
@@ -1303,6 +1304,7 @@ function buildMarkup(host) {
           <button type="button" role="switch" data-intro-setting="sound" aria-checked="true"><span>FIELD AUDIO<small>Music, weapons, and ambience</small></span><b>ON</b></button>
           <button type="button" role="switch" data-intro-setting="reducedMotion" aria-checked="false"><span>REDUCED MOTION<small>Calmer camera and interface movement</small></span><b>OFF</b></button>
           <button type="button" role="switch" data-intro-setting="highContrast" aria-checked="false"><span>HIGH CONTRAST<small>Stronger instrument separation</small></span><b>OFF</b></button>
+          <div class="sf-entry__pick sf-entry__pick--wide sf-entry__difficulty"><span id="sf-entry-difficulty-label">DIFFICULTY<small data-intro-difficulty-blurb>Travels with the save</small></span><div role="group" aria-labelledby="sf-entry-difficulty-label">${DIFFICULTY_TIERS.map((tier) => `<button type="button" data-intro-difficulty="${tier}" aria-label="${difficultyLabel(tier).toLowerCase()} difficulty" title="${difficultyBlurb(tier)}">${difficultyLabel(tier)}</button>`).join("")}</div></div>
           <div class="sf-entry__pick sf-entry__pick--wide sf-entry__quality"><span id="sf-entry-quality-label">GRAPHICS QUALITY<small>Lower tiers trade detail for frame rate</small></span><div role="group" aria-labelledby="sf-entry-quality-label">${QUALITY_TIERS.map((tier) => `<button type="button" data-intro-quality="${tier}" aria-label="${qualityLabel(tier).toLowerCase()} graphics quality">${qualityLabel(tier)}</button>`).join("")}</div></div>
           <button type="button" role="switch" data-intro-setting="dynamicRes" aria-checked="true"><span>DYNAMIC RESOLUTION<small>Protect frame rate under load</small></span><b>ON</b></button>
           <div class="sf-entry__pick sf-entry__scale"><span id="sf-entry-hud-scale-label">HUD SCALE<small>Size of the tactical instruments</small></span><div role="group" aria-labelledby="sf-entry-hud-scale-label"><button type="button" data-intro-hud-scale="standard">STANDARD</button><button type="button" data-intro-hud-scale="large">LARGE</button></div></div>
@@ -1552,6 +1554,14 @@ export function buildDropIntro(ctx, options = {}) {
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-pressed", active ? "true" : "false");
     });
+    const difficulty = current.difficulty || "penitent";
+    host.querySelectorAll("[data-intro-difficulty]").forEach((button) => {
+      const active = button.dataset.introDifficulty === difficulty;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    const difficultyBlurbEl = host.querySelector("[data-intro-difficulty-blurb]");
+    if (difficultyBlurbEl) difficultyBlurbEl.textContent = difficultyBlurb(difficulty);
     return state.latestSave;
   }
 
@@ -2689,6 +2699,11 @@ export function buildDropIntro(ctx, options = {}) {
     }
     if (target.matches("[data-intro-quality]")) {
       onSetting("quality", target.dataset.introQuality);
+      refreshEntryMenu();
+      return;
+    }
+    if (target.matches("[data-intro-difficulty]")) {
+      onSetting("difficulty", target.dataset.introDifficulty);
       refreshEntryMenu();
     }
   }

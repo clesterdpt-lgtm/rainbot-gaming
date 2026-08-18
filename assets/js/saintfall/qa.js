@@ -926,6 +926,16 @@ export function installQa(ctx, api) {
      *  for a slot, or interrupted by a lance stagger. */
     strikeState: () => api.combat.strikeState?.() || null,
 
+    /** The live difficulty tier and its numbers (difficulty.js). */
+    difficultyState: () => ctx.difficulty?.status?.() || null,
+    /** Pin a tier for a probe. Goes through the same `set` the menus use,
+     *  so live enemy pools rescale and both menus follow. */
+    setDifficultyForQA(tier) {
+      if (!ctx.qa || !ctx.difficulty?.set) return null;
+      ctx.difficulty.set(tier, "qa");
+      return ctx.difficulty.status();
+    },
+
     /** Shots fired and shots landed, so a probe can prove its own
      *  test actually hit the thing it photographed. */
     combatStats() {

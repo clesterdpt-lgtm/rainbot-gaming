@@ -15,12 +15,18 @@
    ============================================================ */
 
 import { clamp, clamp01, damp, makeBus } from "saintfall/core.js";
+import { DIFFICULTY, DEFAULT_DIFFICULTY } from "saintfall/difficulty.js";
 
 const TAU = Math.PI * 2;
 
 export const SURVIVAL_CONFIG = Object.freeze({
   playerMaxHp: 150,
-  enemyDamageMultiplier: 0.82,
+  /* The ordinary castes' base. Penitent (the tier the game is tuned at)
+     multiplies this by 1.0; Pilgrim and Martyr scale ALL incoming damage
+     from it - see difficulty.js for why damage is the knob a tier moves
+     least. 0.82 -> 0.85 with the tell-then-strike pass: bites are readable
+     now, so the discount that softened unreadable ones is nearly gone. */
+  enemyDamageMultiplier: 0.85,
   regenDelay: 5.5,
   regenPerSecond: 10,
 });
@@ -577,6 +583,10 @@ export function buildCombat(ctx) {
   /* Recent enemy strike tells, for the attack-slot cap. */
   const strikeStarts = [];
   const strikeTotals = { tells: 0, landed: 0, whiffed: 0, blocked: 0, interrupted: 0, held: 0 };
+  /* The live difficulty tier's numbers, read at the point of use so a
+     change in either menu takes effect on the next frame. Falls back to
+     Penitent for a combat built without a difficulty service (harnesses). */
+  const tier = () => ctx.difficulty?.current || DIFFICULTY[DEFAULT_DIFFICULTY];
 
   const dir = new THREE.Vector3();
   const eye = new THREE.Vector3();
@@ -1955,6 +1965,9 @@ export function buildCombat(ctx) {
        sweep through a Thresher clutch is worth more than a poke. */
     let healed = 0;
     if (kills > 0 && !player.dead) {
+      /* Sustain tracks the tier's damage: bites paid per kill hold. */
+      const sustain = tier().sustain || 1;
+      healRequested *= sustain;
       if (healRequested > 0) {
         const before = player.hp;
         player.hp = Math.min(player.maxHp, player.hp + healRequested);
@@ -1968,7 +1981,7 @@ export function buildCombat(ctx) {
       }
       if (player.regenAt > clock) {
         player.regenAt = Math.max(clock,
-          player.regenAt - MELEE_CONFIG.killRegenRebate * kills);
+          player.regenAt - MELEE_CONFIG.killRegenRebate * sustain * kills);
       }
     }
     const meleeEvent = {
@@ -2133,6 +2146,10 @@ export function buildCombat(ctx) {
        fight they were introducing: garrison fire, or the boss itself,
        dropped them mid-shot and the free camera never came back. */
     if (ctx.player?.state?.free) return 0;
+    /* The tier's incoming multiplier, applied ONCE for every source -
+       ordinary castes, bosses and hazards alike - before the plate sees
+       the number, so a guarded blow banks the scaled amount. */
+    amount *= tier().incoming;
     /* Post-hit grace, melee only. A pack that lands two bites in the same
        tenth of a second lands one. Checked before Aegis so a graced bite
        neither drains the plate nor reads as a guard, and only for
@@ -2182,7 +2199,7 @@ export function buildCombat(ctx) {
     }
     player.hp = Math.max(0, player.hp - amount);
     player.lastHitAt = clock;
-    player.regenAt = clock + SURVIVAL_CONFIG.regenDelay;
+    player.regenAt = clock + (tier().regenDelay || SURVIVAL_CONFIG.regenDelay);
     if (detail.source === "enemy-melee") player.lastMeleeHitAt = clock;
     bus.emit("playerHurt", { hp: player.hp, damage: amount, source: detail.source || "attack" });
     if (player.hp <= 0) {
@@ -2455,7 +2472,7 @@ export function buildCombat(ctx) {
       return;
     }
 
-    const speed = spec.reach > 8 ? inst.spec.speed.walk : inst.spec.speed.charge;
+    const speed = spec.reach > 8 ? inst.spec.speed.walk : chargeSpeed(inst);
     approach(inst, px, pz, speed, dt);
     if (inst.state !== "alert") enemies.play(inst, "alert", 0.24);
   }
@@ -2787,7 +2804,7 @@ export function buildCombat(ctx) {
     /* Fewer bolts are pin-perfect, and even those are committed to the
        player's launch-time position. Movement after the muzzle flash is a
        real dodge rather than an animation played after damage was decided. */
-    const directAim = Math.random() < config.directAimChance;
+    const directAim = Math.random() < (tier().gleanerDirectAim ?? config.directAimChance);
     if (!directAim) {
       tx += (Math.random() - 0.5) * config.horizontalSpread;
       ty += (Math.random() - 0.5) * config.verticalSpread;
@@ -2890,13 +2907,20 @@ export function buildCombat(ctx) {
     return Number.isFinite(value) ? value : table.default;
   }
 
+  /** A caste's charge speed under the live tier: Martyr's Threshers run
+   *  past the trooper's 8.6 m/s, so kiting them stops being free. */
+  function chargeSpeed(inst) {
+    const base = inst.spec?.speed?.charge || 0;
+    return inst.key === "thresher" ? base * (tier().thresherSpeed || 1) : base;
+  }
+
   function beginStrike(inst, spec) {
     const cfg = ENEMY_MELEE_CONFIG;
     if (!cfg.slotExempt.includes(inst.key)) {
       while (strikeStarts.length && clock - strikeStarts[0] > cfg.slotWindow) {
         strikeStarts.shift();
       }
-      if (strikeStarts.length >= cfg.slotCap) {
+      if (strikeStarts.length >= (tier().slotCap || cfg.slotCap)) {
         /* No slot: hold at reach and ask again shortly. The creature
            keeps facing the trooper and stays a threat; it simply is not
            this second's threat. */
@@ -2915,7 +2939,7 @@ export function buildCombat(ctx) {
       t: 0,
       windup,
       yaw: inst.yaw,
-      lunge: strikeValue(inst, cfg.lunge) * (inst.spec?.speed?.charge || 0),
+      lunge: strikeValue(inst, cfg.lunge) * chargeSpeed(inst),
     };
     /* Direct call, not optional-chained: `replay` is part of the enemy-
        system contract, and a missing export should fail a test rather

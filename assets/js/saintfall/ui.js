@@ -7,6 +7,9 @@
    ============================================================ */
 
 import { QUALITY_TIERS, DEFAULT_QUALITY, normalizeQuality, qualityLabel } from "saintfall/render.js";
+import {
+  DIFFICULTY_TIERS, DEFAULT_DIFFICULTY, normalizeDifficulty, difficultyLabel, difficultyBlurb,
+} from "saintfall/difficulty.js";
 
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
 const SETTINGS_KEY = "saintfall:field-ui:v1";
@@ -87,13 +90,30 @@ function readSettings() {
          the game shipped at; the switch is for the machine that cannot
          hold it, and it takes effect the moment it is pressed. */
       quality: normalizeQuality(saved.quality),
+      /* The road's tier (difficulty.js). Read by main.js BEFORE the menu
+         exists, because the garrison's health is scaled at spawn. */
+      difficulty: normalizeDifficulty(saved.difficulty),
     };
   } catch (_) {
     return {
       hudScale: "standard", reducedMotion: prefersReducedMotion(), highContrast: false,
-      dynamicRes: true, quality: DEFAULT_QUALITY,
+      dynamicRes: true, quality: DEFAULT_QUALITY, difficulty: DEFAULT_DIFFICULTY,
     };
   }
+}
+
+/** The stored preferences, for the one caller (main.js boot) that needs
+ *  a value before buildGameUi has run: the difficulty tier. */
+export function readStoredSettings() {
+  return readSettings();
+}
+
+function difficultySegmentsMarkup(attr, labelledBy) {
+  return `<div class="sf-setting__segments" role="group" aria-labelledby="${labelledBy}">${
+    DIFFICULTY_TIERS.map((tier) => `<button type="button" ${attr}="${tier}" aria-label="${
+      escapeHtml(difficultyLabel(tier).toLowerCase())} difficulty" title="${
+      escapeHtml(difficultyBlurb(tier))}">${escapeHtml(difficultyLabel(tier))}</button>`).join("")
+  }</div>`;
 }
 
 function qualitySegmentsMarkup(attr, labelledBy) {
@@ -150,7 +170,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       update() {}, toggleAudio: () => false, setSetting: () => false, openMenu: () => false,
       openMap: () => false, closeMenu: () => false, cancelWheel: () => false, refresh() {},
       wheelState: closed, menuState: closed,
-      settingsState: () => ({ audioEnabled: false, hudScale: "standard", reducedMotion: false, highContrast: false, dynamicRes: true, quality: DEFAULT_QUALITY }),
+      settingsState: () => ({ audioEnabled: false, hudScale: "standard", reducedMotion: false, highContrast: false, dynamicRes: true, quality: DEFAULT_QUALITY, difficulty: DEFAULT_DIFFICULTY }),
     };
   }
 
@@ -329,6 +349,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
                 <div class="sf-setting"><span><strong id="sf-hud-scale-label">HUD SCALE</strong><small>Increase tactical instrument size</small></span><div class="sf-setting__segments" role="group" aria-labelledby="sf-hud-scale-label"><button type="button" data-hud-scale="standard" aria-label="Standard HUD scale">STANDARD</button><button type="button" data-hud-scale="large" aria-label="Large HUD scale">LARGE</button></div></div>
                 <div class="sf-setting"><span><strong>REDUCED MOTION</strong><small>Calmer interface transitions and pulses</small></span><button type="button" role="switch" data-setting="reduced-motion" aria-label="Reduced motion" aria-checked="false">OFF</button></div>
                 <div class="sf-setting"><span><strong>HIGH CONTRAST</strong><small>Stronger text, panel, and instrument separation</small></span><button type="button" role="switch" data-setting="high-contrast" aria-label="High contrast" aria-checked="false">OFF</button></div>
+                <div class="sf-setting sf-setting--difficulty"><span><strong id="sf-difficulty-label">DIFFICULTY</strong><small data-difficulty-blurb>Pilgrim, Penitent or Martyr. Applies immediately and travels with the save; Martyr thickens the broods and heats the barrel rather than simply hitting harder.</small></span>${difficultySegmentsMarkup("data-difficulty", "sf-difficulty-label")}</div>
                 <div class="sf-setting sf-setting--quality"><span><strong id="sf-quality-label">GRAPHICS QUALITY</strong><small>Lower tiers trade render resolution, anti-aliasing, shadow detail, and occlusion for frame rate on weaker hardware. Applies immediately.</small></span>${qualitySegmentsMarkup("data-quality", "sf-quality-label")}</div>
                 <div class="sf-setting"><span><strong>DYNAMIC RESOLUTION</strong><small>Trims render resolution only while the frame rate is suffering, and restores it when it recovers</small></span><button type="button" role="switch" data-setting="dynamic-res" aria-label="Dynamic resolution" aria-checked="true">ON</button></div>
               </div>
@@ -460,10 +481,37 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-pressed", active ? "true" : "false");
     });
+    /* Same for the road: the tier in force, which a `?difficulty=`
+       override or a loaded save may have set without touching the store. */
+    const liveDifficulty = activeDifficulty();
+    root.querySelectorAll("[data-difficulty]").forEach((button) => {
+      const active = button.dataset.difficulty === liveDifficulty;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    const blurb = root.querySelector("[data-difficulty-blurb]");
+    if (blurb) blurb.textContent = difficultyBlurb(liveDifficulty);
   }
 
   function activeQuality() {
     return normalizeQuality(render?.quality || settings.quality);
+  }
+
+  function activeDifficulty() {
+    return normalizeDifficulty(ctx.difficulty?.tier || settings.difficulty);
+  }
+
+  /* One call, three effects, like applyQuality: the live tier changes
+     (which rescales live enemy pools and refreshes both menus through
+     main.js's listener), the choice is stored, and this menu's controls
+     follow. */
+  function applyDifficulty(tier) {
+    const next = normalizeDifficulty(tier);
+    settings.difficulty = next;
+    ctx.difficulty?.set?.(next, "menu");
+    writeSettings(settings);
+    applySettings();
+    return next;
   }
 
   /* One call, three effects: the renderer switches tier, the choice
@@ -505,6 +553,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       render?.setAutoScale?.(settings.dynamicRes);
     } else if (name === "quality") {
       applyQuality(value);
+      menuSfx("toggle");
+      return settingsState();
+    } else if (name === "difficulty") {
+      applyDifficulty(value);
       menuSfx("toggle");
       return settingsState();
     } else return false;
@@ -2083,6 +2135,13 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       if (next !== before) announce(`Graphics quality ${qualityLabel(next).toLowerCase()}`);
       return;
     }
+    if (target.matches("[data-difficulty]")) {
+      const before = activeDifficulty();
+      const next = applyDifficulty(target.dataset.difficulty);
+      menuSfx("toggle");
+      if (next !== before) announce(`Difficulty ${difficultyLabel(next).toLowerCase()}`);
+      return;
+    }
     if (target.matches('[data-menu-action="maximize"]')) { toggleMaximized(); return; }
     if (target.matches('[data-menu-action="restart"]')) {
       if (menu.restartUntil > performance.now()) { window.location.reload(); return; }
@@ -2512,6 +2571,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       quality: activeQuality(),
       qualityStored: settings.quality,
       qualityTiers: QUALITY_TIERS,
+      // Live tier of the road, and the stored preference behind it.
+      difficulty: activeDifficulty(),
+      difficultyStored: settings.difficulty,
+      difficultyTiers: DIFFICULTY_TIERS,
     };
   }
 

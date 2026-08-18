@@ -9,6 +9,7 @@
 
 import { DAY_CYCLE_SECONDS } from "saintfall/art.js";
 import { clamp, clamp01 } from "saintfall/core.js";
+import { DIFFICULTY_TIERS } from "saintfall/difficulty.js";
 import {
   FIELD_RANK_CAP,
   FIELD_RANK_XP_THRESHOLDS,
@@ -504,6 +505,11 @@ export function buildSaveSystem(ctx, options = {}) {
         cycleRunning: !!ctx.atmos.cycleRunning,
         cycleCount: Math.max(0, Math.floor(finite(ctx.atmos.cycleCount))),
       },
+      /* The tier the road was walked on. Health pools in `enemies` were
+         scaled at spawn under it, so a load restores the tier before the
+         roster (see restoreSnapshot). Optional on the way back in - a
+         field save from before tiers existed simply keeps the live tier. */
+      difficulty: ctx.difficulty?.tier || null,
       reliquary: {
         fuel: Math.max(0, finite(ctx.jetpack?.state?.fuel)),
         maxFuel: Math.max(1, finite(ctx.jetpack?.config?.maxFuel, 100)),
@@ -538,6 +544,12 @@ export function buildSaveSystem(ctx, options = {}) {
       || Math.abs(player.x) > 2000 || Math.abs(player.z) > 2000
       || player.camPitch < -2 || player.camPitch > 2
       || player.camDist < 1 || player.camDist > 20) return false;
+
+    /* Optional: absent or null is a pre-tier save; present, it must name a
+       tier. Never mandatory - see the save-validation notes on fields
+       every restore treats as optional. */
+    if (snapshot.difficulty !== undefined && snapshot.difficulty !== null
+      && !DIFFICULTY_TIERS.includes(snapshot.difficulty)) return false;
 
     const combat = snapshot.combat;
     if (!isRecord(combat)
@@ -1352,6 +1364,12 @@ export function buildSaveSystem(ctx, options = {}) {
     ctx.player.input.clearAll?.();
     ctx.player.cancelTransientActions?.();
     ctx.player.setFree(false);
+    /* Tier before roster: the enemy pools below are exact under the tier
+       they were saved at, and a tier change rescales LIVE pools - so it
+       must land while the old roster is still the one on the field. */
+    if (typeof snapshot.difficulty === "string" && ctx.difficulty?.set) {
+      ctx.difficulty.set(snapshot.difficulty, "save");
+    }
     const savedAtmosphere = snapshot.atmosphere || {};
     if (isFiniteNumber(savedAtmosphere.cyclePhase)
       && typeof options.setDayCycle === "function") {

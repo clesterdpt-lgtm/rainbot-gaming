@@ -1048,6 +1048,39 @@ export async function buildEnemies(ctx, onProgress) {
     return false;
   }
 
+  /** A caste's starting health under the live difficulty tier. */
+  function spawnHealth(key, opts = {}) {
+    const base = opts.health ?? species.get(key)?.spec?.health ?? 100;
+    if (opts.exactHealth) return base;
+    const scale = ctx.difficulty?.healthScale?.(key) ?? 1;
+    return Math.max(1, Math.round(base * scale));
+  }
+
+  /**
+   * Re-fit every live pool to a new tier, proportionally. A tier change in
+   * the entry panel or the field menu must not leave the garrison that was
+   * spawned at boot on the old numbers - and a wounded creature stays
+   * wounded by the same fraction.
+   */
+  function rescaleForDifficulty(previousTier, nextTier) {
+    const scaleFor = ctx.difficulty?.healthScale;
+    if (typeof scaleFor !== "function") return 0;
+    let touched = 0;
+    for (const inst of live) {
+      if (inst.state === "death") continue;
+      const before = scaleFor(inst.key, previousTier) || 1;
+      const after = scaleFor(inst.key, nextTier) || 1;
+      if (before === after) continue;
+      const factor = after / before;
+      const maxHealth = Math.max(1, Math.round((inst.maxHealth || 1) * factor));
+      const health = Math.max(1, Math.min(maxHealth, Math.round((inst.health || 1) * factor)));
+      inst.maxHealth = maxHealth;
+      inst.health = health;
+      touched += 1;
+    }
+    return touched;
+  }
+
   function spawn(key, x, z, opts = {}) {
     const sp = species.get(key);
     if (!sp) return null;
@@ -1123,8 +1156,12 @@ export async function buildEnemies(ctx, onProgress) {
       yaw: opts.yaw ?? rng() * TAU,
       speed: 0,
       state: "idle",
-      health: opts.health ?? sp.spec.health ?? 100,
-      maxHealth: opts.health ?? sp.spec.health ?? 100,
+      /* Scaled by the live difficulty tier at spawn (see difficulty.js:
+         health is the ranged-side tax). A restore passes `exactHealth`,
+         because a saved pool was scaled when it was first spawned and the
+         tier is restored from the same file. */
+      health: spawnHealth(key, opts),
+      maxHealth: spawnHealth(key, opts),
       damageScale: Number.isFinite(opts.damageScale) ? opts.damageScale : 1,
       eventId: opts.eventId || null,
       eventWave: Number.isFinite(opts.eventWave) ? opts.eventWave : null,
@@ -2119,6 +2156,7 @@ export async function buildEnemies(ctx, onProgress) {
         yaw: Number(record.yaw) || 0,
         scale: clamp(Number(record.scale) || 1, 0.7, 1.35),
         health: Math.max(1, Number(record.maxHealth) || Number(record.health) || 1),
+        exactHealth: true,
         damageScale: clamp(Number(record.damageScale) || 1, 0.2, 4),
         eventId: typeof record.eventId === "string" ? record.eventId : null,
         eventWave: record.eventWave !== null && record.eventWave !== undefined
@@ -2188,6 +2226,7 @@ export async function buildEnemies(ctx, onProgress) {
     restore,
     play,
     replay,
+    rescaleForDifficulty,
     update,
     /* The body chain's public surface, for the encounter module that
        drives it. `seedBody` lays a worm out straight, `poseBody`

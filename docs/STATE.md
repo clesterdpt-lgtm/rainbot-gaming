@@ -14,6 +14,35 @@ state, screenshots, and a clean console. Build pin
 
 ## Current milestone
 
+**98 — SAINTFALL: difficulty tiers (Pilgrim / Penitent / Martyr)** is
+implemented and gated; awaits user playtest. One `DIFFICULTY` table
+(`assets/js/saintfall/difficulty.js`, module scope like render.js `QUALITY`)
+behind settings key `difficulty`, a segment row above GRAPHICS QUALITY in
+both menus showing the LIVE tier, `?difficulty=` as a session override, the
+tier recorded in every save (optional on the way back in) and restored before
+the roster. The rule the tiers obey comes from the melee duel probe: enemy
+DAMAGE is a melee tax (moves least: 0.82 / 1.0 / 1.20 incoming, applied once
+in `hurtPlayer`), enemy HEALTH is a ranged tax (light caste 0.85 / 1.0 /
+1.30 — a Martyr Thresher takes two rounds, the lance still one-shots it),
+roster ×0.8 / 1.0 / 1.2 (never the ranged caste) with cycle pace, Thresher
+charge 0.9 / 1.0 / 1.2 (past 8.6 m/s on Martyr), Volley heat 34 / 30 / 24
+rounds, Gleaner aim 0.32 / 0.42 / 0.46, slot cap 2 / 2 / 3, melee sustain
+×1.25 on Martyr, regen delay 4.5 / 5.5 / 6.5. Gleaner COUNT is a Pilgrim
+relief (−1) and not a Martyr tax: measured, +1 killed the naive lance while
+the rifle cleared, and the roster multiplier is kept off that caste for the
+same reason. Tells, first-contact hold and grace never scale. Health scales
+at spawn (restore passes `exactHealth`), live pools rescale on a tier change,
+breach rosters scale in `breaches.js`. `saintfall-melee-duel-probe.mjs
+--tiers all` gates per tier: a lance play survives every roster the Volley
+clears with margin; lance-to-Volley ratio over W3+W4 within 1.6× of Penitent
+(Martyr 1.4–1.9 vs 2.0 — the gap narrows); Martyr harder (844–898 vs
+666–675), Pilgrim gentler for each build. Martyr's Crowned Surge is the wall:
+the rifle scrapes through, the naive lance clears on its heals, the guarded
+heuristic dies. Penitent nudge: ordinary-caste damage base 0.82 → 0.85.
+Regression: melee-balance-probe 15/15, ui-regression 97/97, save-integrity
+62/62, gameplay 55/55, quality-tier-check 76/76 (menus verified in the
+browser pane). Build pin `20260818-difficulty-tiers-1`.
+
 **96 — SAINTFALL: the pale Winnower, the looping Winnower intro, and the
 Distaff that was never missing** is implemented and gated; awaits user
 playtest. The Winnower had rendered pale tan with leopard blotches since

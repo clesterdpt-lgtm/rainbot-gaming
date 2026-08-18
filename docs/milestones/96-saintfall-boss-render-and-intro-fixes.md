@@ -3,7 +3,7 @@
 Three reports from one play session — "the Winnower is bugged", "the
 player gets stuck in the intro screen on the Winnower", "the Distaff is
 not rendering the full model" — plus a fourth, a grid of dark lines over
-the whole map, which is diagnosed but not fixed. Every one of them was
+the whole map, which is diagnosed and partly fixed. Every one of them was
 photographed by the reporter, and every one of them turned out to be a
 thing a harness had been passing on.
 
@@ -101,27 +101,61 @@ out with numbers on the way: raising the occlusion bake floor 0.28 → 0.5
 and lifting the belly paint half a stop each changed the "slab" by 0.1 —
 because it was never the boss.
 
-## The grid over the ground — diagnosed, not fixed
+## The grid over the ground — it is the SSAO pass, and Apple GPUs make it worse
 
 Reproduced hard on a cliff face: a plaid of dark horizontal and vertical
 lines at fixed screen positions, sliding with the camera, absent from the
 sky. `render.setAo(0,0)` removes it completely — **9.32 code values mean,
 75 peak** — so it is the screen-space occlusion pass, whose own comment
 already recorded "faint bands" twice and dismissed them at 0.78 code
-values measured on distant sand. Two real defects found in it: the pass
-runs at half resolution over a full-resolution depth texture, so `dFdx`
-/`dFdy` step an inconsistent number of depth texels and the reconstructed
-normal is garbage on a fixed grid; and its sample UVs land exactly on
-depth-texel boundaries. Fixing both (explicit one-texel differencing,
-texel-centre snapping) measured **1.131 → 0.973** column-ripple sd on
-the cliff against an AO-off floor of 0.293 — real, small, not the
-dominant term. Also excluded, each by direct trial: the jitter hash
-(interleaved gradient noise: 0.968), MSAA on the scene target (0.960),
-dynamic resolution (clean at 0.62), and shadow bias (a `normalBias` sweep
-0.35 → 1.8 moved nothing). The render.js change is **not shipped** — a
-map-wide AO change that does not fix the symptom is worse than a note.
-Whoever picks this up: the dominant fixed-grid term is still in the AO
-pass, and it is not any of those four.
+values measured on distant sand.
+
+The reporter then said the grid shows on their Mac and not on a Windows
+laptop or a phone. Every device runs the same `high` tier with AO on —
+there is no auto-detect and no quality setting — so it is not "the
+others have it off". It is the GPU. Same page, same pose, three
+backends on this machine:
+
+| backend | renderer | cliff column-ripple sd (AO on / off) | what it looks like |
+|---|---|---|---|
+| ANGLE Metal | Apple M4 | 1.132 / 0.293 | plaid, both axes |
+| ANGLE OpenGL | Apple M4 | 1.108 / 0.293 | plaid, both axes |
+| SwiftShader | software reference | 0.975 / 0.295 | horizontal streaks only |
+
+So the algorithm has a horizontal-band defect everywhere, and the Apple
+GPU adds the vertical family that turns it into a grid. A D3D11 laptop
+sees roughly SwiftShader's version, which is easy to miss on sand.
+
+Two real defects found in the pass. It runs at half resolution over a
+full-resolution depth texture, so `dFdx`/`dFdy` step an inconsistent
+number of depth texels and the reconstructed normal is garbage on a
+fixed grid; and its sample UVs land exactly on depth-texel boundaries,
+where nearest filtering picks arbitrarily — and picks *differently* on
+different GPUs, which is the "why my Mac" part. Fixed: explicit
+one-texel differencing (nearer one-sided difference per axis, so
+silhouettes stay on-surface), texel-centre snapping of every depth
+read, a NaN guard on the degenerate cross product, and the same
+explicit gradient in the bilateral blur's tolerance. Result:
+
+| | HEAD | fixed |
+|---|---|---|
+| SwiftShader | 0.975 (streaks) | **0.846** (nearly clean) |
+| Metal | 1.132 (plaid) | 0.971 (plaid, lighter) |
+
+The reference rasteriser is essentially cured; the Apple GPU keeps a
+second mechanism I did not find. Excluded by direct trial, each on top
+of the fix: the jitter hash (interleaved gradient noise, 0.968), MSAA on
+the scene target (0.960), snapping the blur's reads of the AO texture
+(0.972), dynamic resolution (clean at 0.62), and shadow `normalBias`
+(0.35 → 1.8, no movement). Shipped anyway, honestly labelled: it is a
+correctness fix that measurably helps on every backend and helps least
+where it is needed most.
+
+And a switch: `?ao=0` (or any 0..1) overrides the tier's occlusion
+strength. It is the one thing that removes exactly what draws the grid,
+without `quality=low`'s shadow and pixel-ratio cuts, and it is how a
+player on an Apple GPU can prove the diagnosis on their own machine in
+one reload.
 
 ## Verification
 
@@ -132,5 +166,6 @@ pass, and it is not any of those four.
 | `saintfall-winnower-fight` | 33/38 | 33/38 (identical, pre-existing) |
 | `saintfall-stylite-fight` | 32/33 | 32/33 (identical, pre-existing) |
 | the reveal-loop probe (40 s at the ring edge) | 8 reveals, camera 39.9 s | 0 wakes outside; 1 inside; 0 resets |
+| SSAO cliff plaid, SwiftShader / Metal | 0.975 / 1.132 | 0.846 / 0.971 (floor 0.29) |
 
 Build pin `20260817-boss-render-intro-1`.

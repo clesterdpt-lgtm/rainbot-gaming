@@ -2531,6 +2531,14 @@ export async function createPlayer(ctx, canvas) {
        now coils across the rear shoulder and cuts through the reticle
        while the front foot lands. The lunge keeps the polearm's depth
        advantage; the authored yaw/roll gives it an unmistakable arc. */
+    /* THE SWEEP IS THE READ, AND IT IS MEASURED.
+       `scripts/saintfall-melee-arc-probe.mjs` samples the real
+       `weapon-tip` anchor through each clip and reports the envelope
+       it traces in the body frame. These keys are authored against
+       that readout, not against taste: the blade has to cover ground
+       the eye can follow, and the slash ribbon in vfx.js is keyed to
+       the SAME measured numbers (`MELEE_SWEEPS`), so widening a swing
+       here means re-running the probe and moving those with it. */
     melee1: {
       /* The hit window opens as the blade crosses centre rather than
          on the wind-up. Full extension is near 0.36 of the clip. */
@@ -2538,9 +2546,9 @@ export async function createPlayer(ctx, canvas) {
       keys: [
         [0.00, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
         // Rear-shoulder load: blade wide left, hips resisting the chest.
-        [0.25, -0.040, 0.070, -0.045, 0.15, -0.62, -0.28, -0.52, 0.24, 0.24, 0.030, -0.17, 0.10, 0.015, "strike"],
+        [0.25, -0.075, 0.070, -0.085, 0.15, -0.92, -0.34, -0.70, 0.24, 0.32, 0.030, -0.17, 0.10, 0.060, "strike"],
         // Full cut: blade crosses the reticle as the front foot drives in.
-        [0.42, 0.060, -0.035, 0.105, -0.12, 0.70, 0.30, 0.66, -0.32, -0.30, -0.065, 0.34, 0.18, 0.105, "settle"],
+        [0.42, 0.105, -0.035, 0.190, -0.12, 1.02, 0.38, 0.86, -0.32, -0.40, -0.065, 0.34, 0.18, 0.260, "settle"],
         [0.76, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "settle"],
       ],
     },
@@ -2548,8 +2556,8 @@ export async function createPlayer(ctx, canvas) {
       dur: 0.78, hit: [0.28, 0.48], damage: 1.15, arc: 2.72,
       keys: [
         [0.00, 0.0, 0.0, 0.0, 0, 0, 0, "load"],
-        [0.26, 0.030, -0.105, -0.050, 1.02, -1.42, 0.58, -0.56, 0.36, -0.24, -0.085, 0.12, 0.10, "strike"],
-        [0.50, -0.035, 0.205, 0.135, -1.36, 1.34, -0.68, 0.70, -0.42, 0.30, 0.042, 0.33, 0.17, "settle"],
+        [0.26, 0.055, -0.140, -0.095, 1.02, -1.74, 0.66, -0.74, 0.36, -0.32, -0.085, 0.12, 0.10, 0.055, "strike"],
+        [0.50, -0.065, 0.245, 0.225, -1.36, 1.68, -0.78, 0.92, -0.42, 0.40, 0.042, 0.33, 0.17, 0.255, "settle"],
         [0.78, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
       ],
     },
@@ -2564,8 +2572,8 @@ export async function createPlayer(ctx, canvas) {
            the opposite direction.  It reads as a knight driving a
            heavy reliquary into the ground, not a mannequin moving a
            staff with its wrists. */
-        [0.32, -0.042, 0.2184, -0.1428, -1.45, 0.20, 0.10, 0.42, -0.42, 0.18, 0.055, -0.07, 0.03, "strike"],
-        [0.54, 0.075, -0.160, 0.215, 1.42, -0.20, -0.10, -0.68, 0.60, -0.28, -0.110, 0.32, 0.17, "settle"],
+        [0.32, -0.042, 0.2810, -0.1720, -1.74, 0.24, 0.12, 0.50, -0.52, 0.22, 0.055, -0.07, 0.03, 0.050, "strike"],
+        [0.54, 0.075, -0.205, 0.300, 1.70, -0.24, -0.12, -0.80, 0.72, -0.34, -0.110, 0.32, 0.17, 0.240, "settle"],
         [0.96, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
       ],
     },
@@ -2809,9 +2817,21 @@ export async function createPlayer(ctx, canvas) {
       ? capturedAimYaw
       : Number.isFinite(state.aimViewYaw) ? state.aimViewYaw : state.camYaw;
     if (action.name && action.name.startsWith("melee")) {
-      // Buffered: pressing during the recovery chains, which is what
-      // makes a combo feel responsive rather than dropped.
-      if (action.t > action.spec.dur * 0.42) {
+      /* Buffered: pressing during the swing chains, which is what
+         makes a combo feel responsive rather than dropped.
+
+         The gate was 0.42 of the clip - a third of a second in which
+         a press did NOTHING, not even queue, which is the window a
+         player actually presses in when they are reacting to
+         something. It only has to be late enough that the press
+         cannot be the same one that started this swing; the
+         wind-up is 0.25s and 0.18 of the shortest clip is 0.14s, so
+         one input cannot register twice.
+
+         The queued yaw is re-captured on every press inside the
+         window, so the chained blow faces wherever the reticle
+         ENDED UP rather than where it was on the first press. */
+      if (action.t > action.spec.dur * 0.18) {
         action.queued = true;
         action.queuedAimYaw = aimYaw;
       }

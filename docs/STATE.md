@@ -38,11 +38,15 @@ nothing on the boss — it faces the player so its body is end-on, and the
 "missing body" is the crater's buried lance at sRGB 8,7,10 directly
 behind it on the west approach; two design levers offered, none pulled.
 The map-wide grid is the SSAO pass (AO off removes it, 9.32 mean / 75
-peak on a cliff); two real defects found and measured (1.131 → 0.973
-against a 0.293 floor), jitter hash / MSAA / dynres / shadow bias each
-excluded by trial, and the render.js change deliberately NOT shipped —
-the dominant term is still in that pass. Build pin
-`20260817-boss-render-intro-1`.
+peak on a cliff) and it is GPU-dependent: on this Mac both the Metal and
+OpenGL backends draw a plaid, while SwiftShader draws only horizontal
+streaks — which is why a Windows laptop and a phone show little. Two
+real defects fixed (half-res `dFdx` over a full-res depth texture; depth
+reads on texel boundaries): SwiftShader 0.975 → 0.846 (clean), Metal
+1.132 → 0.971 (lighter, still plaided; jitter hash, MSAA, blur-read
+snapping, dynres and shadow bias each excluded on top). Shipped, and
+`?ao=0..1` added as the one switch that removes exactly the pass. Build
+pin `20260817-boss-render-intro-1`.
 Milestone: `docs/milestones/96-saintfall-boss-render-and-intro-fixes.md`.
 
 

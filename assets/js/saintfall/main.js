@@ -890,6 +890,13 @@ export async function start({ boot, build } = {}) {
     resize();
   }
   setQuality(quality);
+  /* `?ao=0` (or any strength 0..1) overrides the tier's screen-space
+     occlusion. A diagnostic first and a relief second: the pass prints
+     a fixed-position plaid on Apple GPUs (milestone 96) that no other
+     tier setting isolates - `quality=low` also drops shadows and pixel
+     ratio - and a player who sees a grid over the desert deserves a
+     switch that removes exactly the thing drawing it. */
+  if (params.has("ao")) render.setAo(Math.max(0, Math.min(1, Number(params.get("ao")) || 0)), 0.7);
 
   /* `?dynres=0` pins native resolution for a player who wants it;
      `?dynres=1` opts a QA run INTO the controller, which is otherwise

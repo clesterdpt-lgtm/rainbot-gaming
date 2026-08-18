@@ -242,9 +242,29 @@ uniform mat4 uInvProj;
 uniform vec4 uParams;      // near radius (m), intensity, bias, far radius (m)
 uniform vec2 uBank;        // far-bank gain, contact power
 uniform float uProjScale;  // pixels per world unit at unit depth
+uniform vec2 uDepthTexel;  // 1 / depth-buffer size, which is NOT this pass's
+
+/* SNAPPED TO A DEPTH TEXEL CENTRE, and this is the second half of the
+   band fix.
+
+   This pass runs at half resolution, so its pixel centre i sits at UV
+   (2i+1)/W in the FULL-resolution depth buffer - which is exactly the
+   BOUNDARY between texels 2i and 2i+1, not the centre of either. The
+   depth texture is nearest-filtered, so which of the two a given
+   pixel gets is decided by the last bit of a float compare, and that
+   decision alternates across the screen in a fixed pattern. Every
+   depth this pass reads was therefore quantised on a grid, and so was
+   every position derived from one.
+
+   Snapping to the nearest texel CENTRE makes the choice explicit and
+   uniform. It costs two multiply-adds and a floor. */
+float depthAt(vec2 uv) {
+  vec2 snapped = (floor(uv / uDepthTexel) + 0.5) * uDepthTexel;
+  return texture2D(tDepth, snapped).x;
+}
 
 float viewZ(vec2 uv) {
-  float d = texture2D(tDepth, uv).x;
+  float d = depthAt(uv);
   float n = uNearFar.x;
   float f = uNearFar.y;
   return -(2.0 * n * f) / (f + n - (d * 2.0 - 1.0) * (f - n));
@@ -258,30 +278,54 @@ vec3 viewPos(vec2 uv) {
   return (eye.xyz / eye.z) * z;
 }
 
-/* A MEASURED NULL RESULT, recorded so the next reader does not spend
-   the run this cost.
+/* THE BANDS, AND WHAT THEY ACTUALLY WERE. Two earlier hunts are
+   recorded here because both looked in the right place and drew the
+   wrong conclusion, and the conclusion is what cost the time.
 
-   The occlusion buffer carries faint horizontal and vertical BANDS at
-   fixed screen positions. The obvious suspect is this hash: the
-   composite pass's own dither comment says a fract-multiply-dot hash
+   The symptom: the occlusion buffer carries horizontal and vertical
+   BANDS at fixed screen positions. Suspect one was this hash - the
+   composite pass's dither comment says a fract-multiply-dot hash
    loses precision at large screen coordinates and prints a regular
-   pattern, and that is exactly the symptom. It was swapped for
-   interleaved gradient noise - the same construction the dither uses -
-   and the buffer came back byte-for-byte the same character: buffer
-   mean 208.81 against 208.82, and the bands in the identical places.
-
-   The pixel-size clamp on the sample radius was the second suspect,
-   for the better reason that the clamp is a function of DEPTH and so
-   quantises along iso-depth lines. Fading the tap out instead of
-   clamping it in is a real improvement and it stayed (see below), but
+   pattern, which is exactly the symptom. Swapped for interleaved
+   gradient noise: the buffer came back byte-for-byte the same
+   character, mean 208.81 against 208.82, bands in identical places.
+   Suspect two was the pixel-size clamp on the sample radius, which is
+   a function of DEPTH and so quantises along iso-depth lines. Fading
+   the tap instead of clamping it is a real improvement and it stayed;
    it did not move the bands either.
 
-   What the bands are worth, measured on the composited frame rather
-   than on the amplified debug blit: 0.78 code values of row-to-row
-   ripple across a flat sand wash, peak 3.4. The half-code dither is
-   already the same order. That is why this is a note and not a third
-   round of shader work - the thing this pass was failing at was
-   contact, by a factor of three, and that is what the budget went on. */
+   Both results are the same clue read as a dead end: the bands do not
+   care what the sampling does, because they are not a sampling
+   artefact. They come from the NORMAL, and specifically from these
+   two lines as they used to read:
+
+     vec3 p = viewPos(vUv);
+     vec3 n = normalize(cross(dFdx(p), dFdy(p)));
+
+   THIS PASS RUNS AT HALF RESOLUTION AND READS A FULL-RESOLUTION
+   DEPTH TEXTURE. dFdx is a difference across a 2x2 quad of THIS
+   pass's pixels, so it steps two full-res depth texels; the depth
+   texture is nearest-filtered, so consecutive AO pixels land on
+   texels that alternate between "the same one" and "two apart". The
+   derivative therefore comes out alternately near-zero and doubled,
+   on a fixed grid, and normalising the cross of a near-zero vector
+   is numerical noise. Every second column and every second row got a
+   garbage normal, the occlusion computed against it was wrong, and
+   the result is a plaid at fixed screen positions - immune to the
+   jitter, immune to the radius clamp, exactly as measured.
+
+   The earlier note also under-reported the cost, because it was
+   measured on a flat sand wash at distance: 0.78 code values of
+   ripple, which is genuinely nothing. On a large surface CLOSE to the
+   camera - a cliff face, a refinery stack, the ground under your feet
+   - the same defect is worth 9.3 code values mean and 75 peak, and it
+   reads as a dark grid laid over the world that slides with the
+   camera and stops at the horizon. That is what it was reported as.
+
+   The fix is below: difference the depth at explicit offsets of ONE
+   TEXEL OF THIS PASS instead of asking the rasteriser for a
+   derivative it cannot compute correctly across a resolution change.
+   Four extra taps on a quarter-area pass. */
 float hash12(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
   p3 += dot(p3, p3.yzx + 33.33);
@@ -293,7 +337,27 @@ void main() {
   if (-z >= uNearFar.y * 0.98) { gl_FragColor = vec4(1.0); return; }
 
   vec3 p = viewPos(vUv);
-  vec3 n = normalize(cross(dFdx(p), dFdy(p)));
+  /* THE NORMAL, DIFFERENCED AT THIS PASS'S OWN RESOLUTION. See the
+     note above hash12 for why dFdx/dFdy cannot be used here.
+     The nearer of the two one-sided differences is taken on each
+     axis, which is the standard trick for keeping the reconstructed
+     normal on the SURFACE at a silhouette rather than tilting it
+     across the depth cliff - a central difference would tip every
+     edge pixel toward the background and ring the silhouette. */
+  vec3 pxp = viewPos(vUv + vec2(uTexel.x, 0.0));
+  vec3 pxm = viewPos(vUv - vec2(uTexel.x, 0.0));
+  vec3 pyp = viewPos(vUv + vec2(0.0, uTexel.y));
+  vec3 pym = viewPos(vUv - vec2(0.0, uTexel.y));
+  vec3 dpx = abs(pxp.z - p.z) < abs(p.z - pxm.z) ? (pxp - p) : (p - pxm);
+  vec3 dpy = abs(pyp.z - p.z) < abs(p.z - pym.z) ? (pyp - p) : (p - pym);
+  vec3 nRaw = cross(dpx, dpy);
+  /* A degenerate cross product still has to produce a usable normal
+     rather than a NaN - one NaN here propagates through the blur and
+     takes a whole neighbourhood of the frame with it. Facing the
+     camera is the honest fallback: it makes the pixel report no
+     occlusion instead of random occlusion. */
+  float nLen = length(nRaw);
+  vec3 n = nLen > 1e-9 ? nRaw / nLen : vec3(0.0, 0.0, 1.0);
   if (n.z < 0.0) n = -n;
 
   /* The sample disc is a WORLD radius projected into pixels, not a
@@ -453,9 +517,13 @@ uniform sampler2D tDepth;
 uniform vec2 uTexel;
 uniform vec2 uDir;
 uniform vec2 uNearFar;
+uniform vec2 uDepthTexel;
 
+// Snapped, for the reason given in the occlusion pass above: this
+// filter runs at half resolution over a full-resolution depth buffer.
 float viewZ(vec2 uv) {
-  float d = texture2D(tDepth, uv).x;
+  vec2 snapped = (floor(uv / uDepthTexel) + 0.5) * uDepthTexel;
+  float d = texture2D(tDepth, snapped).x;
   float n = uNearFar.x;
   float f = uNearFar.y;
   return -(2.0 * n * f) / (f + n - (d * 2.0 - 1.0) * (f - n));
@@ -472,7 +540,24 @@ void main() {
      a silhouette edge - where the derivative is a cliff, not a slope -
      from claiming unlimited slack and smearing over the very
      discontinuity this filter exists to preserve. */
-  float gz = clamp(abs(dot(vec2(dFdx(z0), dFdy(z0)), uDir)), 0.02, 1.2);
+  /* THE GRADIENT, ALSO DIFFERENCED EXPLICITLY, and for the same
+     reason the AO pass's normal is: dFdx of z0 here was a derivative
+     of a FULL-resolution depth texture taken across a HALF-resolution
+     quad, so it alternated between near-zero and doubled on a fixed
+     screen grid. Near-zero clamps the tolerance to its 0.02 floor and
+     the filter stops dead; doubled hands it slack it has not earned.
+     Alternating between the two every other row and column is what
+     turned the pass's own sampling noise into a plaid instead of
+     removing it - so the blur was not merely failing to fix the
+     bands, it was printing half of them.
+
+     A MINIMUM of the two one-sided steps, not the average: a pixel
+     sitting on a silhouette has one neighbour on the surface and one
+     across the cliff, and the surface one is the only honest estimate
+     of what a flat continuation is entitled to. */
+  float zp = viewZ(vUv + uDir * uTexel);
+  float zm = viewZ(vUv - uDir * uTexel);
+  float gz = clamp(min(abs(zp - z0), abs(z0 - zm)), 0.02, 1.2);
   float sum = texture2D(tAo, vUv).r * 0.25;
   float wsum = 0.25;
   for (int i = 1; i <= 4; i++) {
@@ -973,6 +1058,7 @@ export function createRenderer(ctx, canvas) {
        roughly doubles the depth of anything already below 0.6. */
     uBank: { value: new THREE.Vector2(0.62, 1.6) },
     uProjScale: { value: 500 },
+    uDepthTexel: { value: new THREE.Vector2() },
   });
   const aoBlurMat = mkPass(AO_BLUR_FRAG, {
     tAo: { value: null },
@@ -980,6 +1066,7 @@ export function createRenderer(ctx, canvas) {
     uTexel: { value: new THREE.Vector2() },
     uDir: { value: new THREE.Vector2(1, 0) },
     uNearFar: { value: new THREE.Vector2(camera.near, camera.far) },
+    uDepthTexel: { value: new THREE.Vector2() },
   });
 
   const debugMat = mkPass(DEBUG_FRAG, {
@@ -1302,6 +1389,11 @@ export function createRenderer(ctx, canvas) {
     if (aoEnabled) {
       aoMat.uniforms.tDepth.value = sceneTarget.depthTexture;
       aoMat.uniforms.uTexel.value.set(1 / aoTarget.width, 1 / aoTarget.height);
+      /* From the SCENE target, not the AO target. These are the two
+         different resolutions the band artefact lived between, so
+         taking this off the wrong one puts it straight back. */
+      aoMat.uniforms.uDepthTexel.value.set(
+        1 / sceneTarget.width, 1 / sceneTarget.height);
       aoMat.uniforms.uNearFar.value.set(cam.near, cam.far);
       aoMat.uniforms.uInvProj.value.copy(cam.projectionMatrixInverse);
       // Pixels per world unit at one unit of depth: the standard
@@ -1315,6 +1407,8 @@ export function createRenderer(ctx, canvas) {
       aoBlurMat.uniforms.tDepth.value = sceneTarget.depthTexture;
       aoBlurMat.uniforms.uNearFar.value.set(cam.near, cam.far);
       aoBlurMat.uniforms.uTexel.value.set(1 / aoTarget.width, 1 / aoTarget.height);
+      aoBlurMat.uniforms.uDepthTexel.value.set(
+        1 / sceneTarget.width, 1 / sceneTarget.height);
       aoBlurMat.uniforms.tAo.value = aoTarget.texture;
       aoBlurMat.uniforms.uDir.value.set(1, 0);
       runPass(aoBlurMat, aoBlurTarget);

@@ -1,6 +1,50 @@
 # Project state
 
+## Latest focused fix
+
+**SAINTFALL loading title and entry handoff** are fixed locally. The loading
+heading now reserves enough width for the full tracked `SAINTFALL` wordmark,
+and the save-aware Continue / Begin New Operation menu is revealed underneath
+the opaque loader before its fade begins, so the pre-rendered orbital ship
+cannot flash between the two screens. Focused browser proof
+`scripts/saintfall-entry-handoff-probe.mjs` passes 8/8 at the reported desktop
+layout, including exact transition ordering, deterministic awaiting-deploy
+state, screenshots, and a clean console. Build pin
+`20260817-stylite-maw-entry-handoff-1`. Not published.
+
 ## Current milestone
+
+**96 — SAINTFALL: the pale Winnower, the looping Winnower intro, and the
+Distaff that was never missing** is implemented and gated; awaits user
+playtest. The Winnower had rendered pale tan with leopard blotches since
+the AAA pass: bisecting the compiled shader in-page (patching one term at
+a time) showed the albedo irrelevant and one emissive line responsible —
+`wnCore` had been moved from the painted `wnHot` mask onto the bake's
+distance-to-vent bleed, and on a model where 80 % of body vertices sit
+within 1.1 m of a painted vent that lit the whole shell furnace-orange
+(abdomen 99 → 19 with a narrow `wnVentGlow` on the unused `uWnOccl.w`;
+the bake also read COLOR_0's raw Uint16 array and seeded 604 false
+vents). The stuck intro reproduced exactly: a boss whose wake radius
+reaches outside its arena ring (Winnower perch 32 m off-centre, 78 m
+wake vs 98 m ring; likewise the Stylite and the generic Coulter) is
+woken from outside, reset the frame its alert ends, re-armed, re-woken —
+8 reveals in 40 s with the camera held for 39.9 of them. One shared rule
+now, `districtBosses.insideArena(key)`: a district boss wakes only for a
+player inside its ring; encounter-intro rewritten to the corrected
+contract (10/10, was passing on a 4.82 s window that ended one frame
+before the first reset) and district-hunt goes 31/33 → 33/33 for free.
+The Distaff renders completely: raycasting the reported black pixels hit
+nothing on the boss — it faces the player so its body is end-on, and the
+"missing body" is the crater's buried lance at sRGB 8,7,10 directly
+behind it on the west approach; two design levers offered, none pulled.
+The map-wide grid is the SSAO pass (AO off removes it, 9.32 mean / 75
+peak on a cliff); two real defects found and measured (1.131 → 0.973
+against a 0.293 floor), jitter hash / MSAA / dynres / shadow bias each
+excluded by trial, and the render.js change deliberately NOT shipped —
+the dominant term is still in that pass. Build pin
+`20260817-boss-render-intro-1`.
+Milestone: `docs/milestones/96-saintfall-boss-render-and-intro-fixes.md`.
+
 
 **95 — SAINTFALL: boss arena entry warning false alarm fixed** is implemented
 and gated; awaits user playtest. When crossing a boss perimeter, the fight's

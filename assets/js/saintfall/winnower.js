@@ -514,11 +514,16 @@ function bakeShellFields(THREE, geo) {
 
   /* ---- distance to the nearest furnace vent ---------------------- */
   if (col) {
-    const C = col.array;
-    const stride = col.itemSize;
     const hot = [];
     for (let i = 0; i < n; i += 1) {
-      const r = C[i * stride], g = C[i * stride + 1], b = C[i * stride + 2];
+      /* Through the accessors, NOT the raw array. COLOR_0 ships as a
+         normalised Uint16 attribute, so the array holds 0..65535 and
+         the shader sees 0..1; read raw, the 0.5 threshold below was
+         effectively zero and 604 faintly warm shell vertices - 15% on
+         top of the real vents - were seeded as furnace and bled glow
+         and cooked ring into shell the shader itself never lights.
+         getX/getY/getZ denormalise. */
+      const r = col.getX(i), g = col.getY(i), b = col.getZ(i);
       const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
       /* The same test the shader makes, at the same threshold, so the
          bleed is anchored to the very pixels that light up. */
@@ -641,6 +646,24 @@ float wnNear = clamp(vWnOcc.y, 0.0, 1.0);
    distance and changes everywhere. Squared so the bleed hugs the vent
    instead of hazing the whole plate. */
 float wnVent = max(wnHot, wnNear * wnNear * uWnOccl.z);
+/* THE GLOW'S OWN BLEED, and it is a DIFFERENT field from the one
+   above - narrower by two powers and a tenth the weight - because the
+   two jobs are not the same job. wnVent (above) decides where the
+   shell is COOKED: albedo, roughness, the cold rim. That may reach a
+   metre from a vent and cost nothing but a warmer brown. This one
+   decides where the shell EMITS, and it may not, because of a fact
+   about this model that no shader term can argue with: COLOR_0 paints
+   a vent between nearly every pair of plates, so 80% of the body's
+   vertices sit within VENT_REACH of one. Measured on the .glb: 4019 of
+   16992 vertices pass the furnace test, spanning x -12..12 of a
+   13m half-span. Gate the core on the wide bleed and the whole animal
+   emits furnace orange at 40-76% of vent strength, the coarse mottle
+   carves the only variation, and the boss renders as a pale tan
+   insect wearing leopard spots - which it did, from the day the core
+   was moved off wnHot to soften the vent boundary until this line. The
+   softening survives: fourth power keeps the fringe inside ~30cm of
+   the painted vent, and uWnOccl.w keeps it a shoot-time knob. */
+float wnVentGlow = max(wnHot, wnNear * wnNear * wnNear * wnNear * uWnOccl.w);
 /* The heat-affected zone around a vent, in two bands. Computed here
    rather than where it is spent because the roughness chunk runs
    before the normal chunk and both want it - the same reason every
@@ -831,7 +854,7 @@ const FURNACE_EMIT = /* glsl */`
   float wnLook = clamp(dot(wnN, normalize(cameraPosition - vSFWorld)), 0.0, 1.0);
   float wnThin = 0.62 + 0.38 * smoothstep(-0.65, 0.70, sfMot);
   float wnShape = (0.42 + 0.58 * wnLook) * wnThin;
-  float wnCore = (wnVent * (0.40 + 0.36 * wnBand) + wnGut * 0.24) * wnShape;
+  float wnCore = (wnVentGlow * (0.40 + 0.36 * wnBand) + wnGut * 0.24) * wnShape;
   /* 2.35, and the number is set by the MEASUREMENT rather than by
      taste. A sac core has to clear linear 1.0 to reach the bloom
      chain's bright threshold at all, and it has to go most of the way
@@ -1013,11 +1036,14 @@ export function buildWinnower(ctx) {
        range, and past about 0.6 the char stops being char. */
     uWnCold: { value: new THREE.Vector4(0.375, 0.470, 0.735, 0.46) },
     /* x how far part-scale occlusion may darken albedo, y how far it
-       may kill the cold rim, z how far a vent may bleed into shell.
-       All three live on a uniform rather than in the source so a
-       shoot can be re-tuned without a shader recompile - the bake is
-       the expensive half and it does not change. */
-    uWnOccl: { value: new THREE.Vector4(0.78, 0.90, 1.0, 0) },
+       may kill the cold rim, z how far a vent may bleed COOKED SHELL
+       into the plate around it, w how far it may bleed GLOW - see
+       wnVentGlow in FURNACE_MASKS for why those are two numbers and
+       why the fourth is small. All four live on a uniform rather than
+       in the source so a shoot can be re-tuned without a shader
+       recompile - the bake is the expensive half and it does not
+       change. */
+    uWnOccl: { value: new THREE.Vector4(0.78, 0.90, 1.0, 0.12) },
   };
 
   const shellMat = new THREE.MeshStandardMaterial({
@@ -2878,7 +2904,11 @@ export function buildWinnower(ctx) {
     const dist = Math.hypot(ps.x - inst.x, ps.z - inst.z);
 
     if (state.phase === "dormant") {
-      if (dist <= C.aggroRadius) beginAlert();
+      /* AND INSIDE THE RING - see districtBosses.insideArena for the
+         eight-reveals-in-forty-seconds loop this closes. */
+      if (dist <= C.aggroRadius && (ctx.districtBosses?.insideArena?.("censer") ?? true)) {
+        beginAlert();
+      }
       return;
     }
 
@@ -2944,7 +2974,7 @@ export function buildWinnower(ctx) {
     /* Crossing its aggro ring on the way home re-engages it - full
        strength, no second camera steal, fuel topped for the fresh
        fight. */
-    if (dist <= C.aggroRadius) {
+    if (dist <= C.aggroRadius && (ctx.districtBosses?.insideArena?.("censer") ?? true)) {
       state.fuel = C.soarSeconds;
       beginSoar();
       bus.emit("aggro", { x: inst.x, y: inst.y, z: inst.z });

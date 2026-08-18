@@ -2968,14 +2968,22 @@ export function buildStylite(ctx) {
     const ps = ctx.player.state;
     const dist = Math.hypot(ps.x - state.pos.x, ps.z - state.pos.z);
 
+    /* Woken only for a player INSIDE the Choir's arena ring. Aggro is
+       measured from the needle it is on and the arena reset from the
+       district centre; with a 78m wake against a 96m ring, a perch far
+       enough out lets a player be woken from outside the ring, and an
+       intro that starts outside the ring is reset the instant it ends
+       and re-plays - see districtBosses.insideArena, where the
+       Winnower's version of that loop is measured. */
+    const inRing = ctx.districtBosses?.insideArena?.("choir") ?? true;
     if (state.phase === "dormant") {
-      if (!ctx.combat?.player?.dead && dist <= C.aggroRadius) beginRouse();
+      if (!ctx.combat?.player?.dead && dist <= C.aggroRadius && inRing) beginRouse();
       return;
     }
 
     if (state.phase === "retire") {
       state.timer -= dt;
-      if (dist <= C.aggroRadius && !ctx.combat?.player?.dead) {
+      if (dist <= C.aggroRadius && inRing && !ctx.combat?.player?.dead) {
         state.phase = "rouse";
         state.timer = C.rouseSeconds * (1 - state.woken);
         setEncounterGate(false, true);

@@ -177,29 +177,70 @@ try {
     let secs = 0;
     let sawFree = false;
     let damagedDuringHold = false;
-    while (T.winnowerState().phase === "dormant" && secs < 3) {
+    /* OUTSIDE THE RING NOTHING MAY WAKE - see districtBosses.insideArena.
+       This block used to expect the opposite: an alert from 106m,
+       then "soar", checked at exactly the second the alert ended. It
+       passed, and the frame after it stopped looking the ring reset
+       the fight it had just watched begin - the player was still
+       outside it - which re-armed the reveal, which the still-in-aggro
+       player then re-triggered: measured as eight reveals in forty
+       seconds with the camera held for 39.9 of them. So the far-side
+       approach now waits OUTSIDE for three seconds and asserts the
+       animal stays asleep, then steps inside the ring for the reveal. */
+    for (let i = 0; i < 180; i += 1) { T.renderOnce(1 / 60); secs += 1 / 60; }
+    const wokeOutside = T.winnowerState().phase !== "dormant";
+    const inD = site.arenaRadius - 6;
+    const ix = site.x + ((ox - site.x) / start.siteDist) * inD;
+    const iz = site.z + ((oz - site.z) / start.siteDist) * inD;
+    T._teleportRaw(ix, iz, 0);
+    while (T.winnowerState().phase === "dormant" && secs < 6) {
       T.renderOnce(1 / 60);
       secs += 1 / 60;
     }
     const alertAt = T.winnowerState().phase;
-    while (T.winnowerState().phase === "alert" && secs < 12) {
+    /* Measured from the hold's FIRST frame, not from before the walk
+       in: the walk crosses the Censer Works' own garrison, whose fire
+       is allowed to land, and comparing against a pre-walk figure
+       reported that fire as a breach of the hold. */
+    let hpAtHold = null;
+    while (T.winnowerState().phase === "alert" && secs < 15) {
       if (T.player.state.free) {
+        if (hpAtHold === null) hpAtHold = T.combat.player.hp;
         sawFree = true;
-        T.combat.hurtPlayer(80, { source: "qa-garrison", x: ox, y: 2, z: oz });
-        if (T.combat.player.hp < hpBefore) damagedDuringHold = true;
+        T.combat.hurtPlayer(80, { source: "qa-garrison", x: ix, y: 2, z: iz });
+        if (T.combat.player.hp < hpAtHold - 1e-6) damagedDuringHold = true;
       }
       T.renderOnce(1 / 60);
       secs += 1 / 60;
     }
+    const phaseAfterAlert = T.winnowerState().phase;
+    /* AND THEN THE PART THE OLD CHECK NEVER REACHED: thirty more
+       seconds of fight, counting how many times the camera is taken.
+       Once is the reveal. Twice is the loop. */
+    let cameraTakes = 0;
+    let wasFree = !!T.player.state.free;
+    let resets = 0;
+    const off = T.ctx.districtBosses.bus.on("arenaReset", () => { resets += 1; });
+    for (let i = 0; i < 60 * 30; i += 1) {
+      T.renderOnce(1 / 60);
+      const f = !!T.player.state.free;
+      if (f && !wasFree) cameraTakes += 1;
+      wasFree = f;
+    }
+    off?.();
     return {
       start,
+      wokeOutside,
       alertAt,
-      phase: T.winnowerState().phase,
+      phase: phaseAfterAlert,
       freeAfter: !!T.player.state.free,
       sawFree,
       damagedDuringHold,
       hpBefore,
       hpAfter: T.combat.player.hp,
+      cameraTakes,
+      resets,
+      finalPhase: T.winnowerState().phase,
       secs: Number(secs.toFixed(2)),
     };
   });
@@ -207,9 +248,14 @@ try {
     outside.start.bossDist <= outside.start.aggro
       && outside.start.siteDist > outside.start.arena,
     JSON.stringify(outside.start));
-  check("the far-side reveal still becomes a soaring fight",
+  check("outside the ring, inside aggro, the animal stays asleep",
+    !outside.wokeOutside, JSON.stringify(outside.start));
+  check("stepping inside plays the reveal once and becomes a soaring fight",
     outside.alertAt === "alert" && outside.phase === "soar" && !outside.freeAfter,
     JSON.stringify(outside));
+  check("...and thirty seconds later the camera has not been taken again",
+    outside.cameraTakes === 0 && outside.resets === 0 && !outside.freeAfter,
+    `camera taken ${outside.cameraTakes} more times, ${outside.resets} arena resets, final ${outside.finalPhase}`);
   check("the reveal camera holds, and garrison fire cannot land during it",
     outside.sawFree && !outside.damagedDuringHold && outside.hpAfter === outside.hpBefore,
     JSON.stringify({

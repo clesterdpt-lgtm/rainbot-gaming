@@ -317,7 +317,8 @@ export function buildDistrictBosses(ctx) {
       }
       const dist = Math.hypot(ctx.player.state.x - inst.x, ctx.player.state.z - inst.z);
       if (record.phase === "dormant") {
-        if (!combat.player.dead && dist <= record.site.aggroRadius) beginAlert(record);
+        if (!combat.player.dead && dist <= record.site.aggroRadius
+          && insideArena(record.site.key)) beginAlert(record);
         continue;
       }
       if (record.phase === "alert") {
@@ -498,6 +499,33 @@ export function buildDistrictBosses(ctx) {
     }
   }
 
+  /* WHERE A BOSS MAY WAKE, and the reason it is one function every
+     controller asks rather than a number each one keeps.
+
+     Aggro is measured from the ANIMAL and the arena reset from the
+     SITE, and the two are not at the same point: the Winnower perches
+     32m off the Censer Works' centre with a 78m aggro against a 98m
+     ring, so its wake radius reaches twelve metres past the ring on
+     the perch's side. A player walking in from that side was woken
+     from OUTSIDE the arena - reveal camera, hands off the body - and
+     the moment the alert handed control back the fight was "active
+     with the player outside the ring", which is precisely the reset
+     condition. Reset re-arms the reveal, the player is still inside
+     aggro, so it wakes again: reproduced at 104m from the site as
+     eight reveals in forty seconds with the camera held for 39.9 of
+     them and no way to move out of it. That is what "stuck in the
+     Winnower's intro" is.
+
+     A fight's territory is the ring. Nothing may START one for a
+     player who is not in it. Absent a site or a position, the answer
+     is yes, so a controller that asks before the sites exist behaves
+     as it always did. */
+  function insideArena(key, x = ctx.player?.state?.x, z = ctx.player?.state?.z) {
+    const site = DISTRICT_BOSS_SITES.find((entry) => entry.key === key);
+    if (!site || !Number.isFinite(x) || !Number.isFinite(z)) return true;
+    return Math.hypot(x - site.x, z - site.z) <= site.arenaRadius;
+  }
+
   function objective(key) {
     const record = records.get(key);
     if (!record || record.defeated || !siteAvailable(record.site)) return null;
@@ -628,6 +656,7 @@ export function buildDistrictBosses(ctx) {
     snapshot,
     restore,
     ensureSpawned,
+    insideArena,
     reset(key) {
       const record = records.get(key);
       if (!record) return false;

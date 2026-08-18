@@ -2,15 +2,17 @@
 
 ## Latest focused fix
 
-**SAINTFALL loading title and entry handoff** are fixed locally. The loading
-heading now reserves enough width for the full tracked `SAINTFALL` wordmark,
-and the save-aware Continue / Begin New Operation menu is revealed underneath
-the opaque loader before its fade begins, so the pre-rendered orbital ship
-cannot flash between the two screens. Focused browser proof
-`scripts/saintfall-entry-handoff-probe.mjs` passes 8/8 at the reported desktop
-layout, including exact transition ordering, deterministic awaiting-deploy
-state, screenshots, and a clean console. Build pin
-`20260817-stylite-maw-entry-handoff-1`. Not published.
+**SAINTFALL direction-aware boss arena boundary warnings**: Fixed an issue
+where leaving a boss area (either after a reset or when walking out of a
+dormant arena) could fire the approach/entering warning ("WARNING — [BOSS]
+TERRITORY AHEAD"). Bound approach warnings to verified inward movement from
+outside the arena (`!wasInside && movingInward`), suppress approach warnings
+upon arena reset or exit, and strictly enforce that exit warnings ("WARNING —
+LEAVING BOSS AREA. FIGHT WILL RESET") only fire during active combat when
+moving outward from the arena interior (`enteredDeep && movingOutward`),
+preventing false exit warnings during entry. Verified across all boss sites in
+`scripts/saintfall-arena-entry-probe.mjs` and `scripts/saintfall-district-hunt-probe.mjs`.
+Build pin `20260818-arena-warnings-1`.
 
 ## Current milestone
 
@@ -34,7 +36,19 @@ it: before, the lance never reached a tarsus (0 swings in 150 s); after,
 it kills the boss in 85–142 s at 0.35 s reaction losing 71–115 HP to it,
 survives with the garrison. The Volley still kills it in 61 s untouched
 (pre-existing: chained collapses, four knees in 6 s) — noted, not moved.
-Build pin `20260818-distaff-lance-1`.
+**Addendum:** the collapsed body could be seen through from the ground —
+the asset is wound INSIDE OUT (signed volume −289 m³; the GPU drew the far
+wall's interior, and the dressing's up/belly classifier keyed on inward
+normals). Fixed at the dressing (detect by signed volume, negate normals
+before the paint, reverse the winding in the sort index;
+`status().windingCorrected`); the gallery frame goes from a red carapace
+to the intended chalk-and-glass shell; fight harness 59/59 with a GPU
+Front/Double/Back guard. `saintfall-winding-audit.mjs` shows every other
+rigged species measures inside out too (Winnower −63, Matriarch −47,
+Coulter −21.5, Harrow −4.3, Thresher −1.15; Cantor mixed) — a one-place
+`enemies.js` load-time fix, deliberately left for its own reviewed pass
+because it flips the apparent light side on every creature. Build pin
+`20260818-distaff-winding-1`.
 
 **98b — SAINTFALL: Martyr recalibrated** after playtest ("still very easy on
 the hardest mode"). The first Martyr was tuned to what the duel probe's bots

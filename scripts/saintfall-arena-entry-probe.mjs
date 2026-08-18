@@ -94,12 +94,58 @@ try {
 
       const hadExitOnRetreat = events.includes(`exit:${siteKey}`);
 
-      // 5. Cross fully outside
+      // 5. Cross fully outside (triggers reset)
       ps.x = site.x + site.arenaRadius + 5;
       ps.z = site.z;
       H.update(0.05);
 
       const hadReset = events.includes(`reset:${siteKey}`);
+
+      // 6. Continue walking outward into warning band after reset (LEAVING)
+      events.length = 0;
+      ps.x = site.x + site.arenaRadius + 20;
+      ps.z = site.z;
+      H.update(0.05);
+
+      ps.x = site.x + site.arenaRadius + 35;
+      ps.z = site.z;
+      H.update(0.05);
+
+      const hadApproachOnLeavingAfterReset = events.includes(`approach:${siteKey}`);
+      const hadExitOnLeavingAfterReset = events.includes(`exit:${siteKey}`);
+
+      // 7. Move far outside, then turn around and re-approach inward
+      const warningRadius = site.warningRadius || site.arenaRadius + 48;
+      ps.x = site.x + warningRadius + 25;
+      ps.z = site.z;
+      H.update(0.05);
+
+      events.length = 0;
+      // Step inward into warning band
+      ps.x = site.x + warningRadius - 10;
+      ps.z = site.z;
+      H.update(0.05);
+
+      const hadApproachOnReapproach = events.includes(`approach:${siteKey}`);
+
+      // 8. Walk inside arena while dormant, then walk back out without waking boss
+      // First step inside arena
+      ps.x = site.x + site.arenaRadius - 10;
+      ps.z = site.z;
+      H.update(0.05);
+
+      events.length = 0;
+      // Walk back outward into warning band
+      ps.x = site.x + site.arenaRadius + 15;
+      ps.z = site.z;
+      H.update(0.05);
+
+      ps.x = site.x + site.arenaRadius + 25;
+      ps.z = site.z;
+      H.update(0.05);
+
+      const hadApproachOnLeavingDormant = events.includes(`approach:${siteKey}`);
+      const hadExitOnLeavingDormant = events.includes(`exit:${siteKey}`);
 
       for (const off of offs) off?.();
 
@@ -111,6 +157,11 @@ try {
         hadExitInInterior,
         hadExitOnRetreat,
         hadReset,
+        hadApproachOnLeavingAfterReset,
+        hadExitOnLeavingAfterReset,
+        hadApproachOnReapproach,
+        hadApproachOnLeavingDormant,
+        hadExitOnLeavingDormant,
         statusPhase: activeStatus?.phase,
       });
     }
@@ -122,14 +173,22 @@ try {
   console.log("=== BOSS ARENA ENTRY & RETREAT PROBE ===");
   for (const t of results) {
     console.log(`\nSite: ${t.siteKey} (Phase: ${t.statusPhase})`);
-    console.log(`  Approach warning: ${t.hadApproach ? "PASS" : "FAIL"}`);
+    console.log(`  Approach warning on approach: ${t.hadApproach ? "PASS" : "FAIL"}`);
     console.log(`  No exit warning on approach: ${!t.hadExitOnApproach ? "PASS" : "FAIL"}`);
     console.log(`  No exit warning on entry: ${!t.hadExitOnEntry ? "PASS" : "FAIL"}`);
     console.log(`  No exit warning in interior: ${!t.hadExitInInterior ? "PASS" : "FAIL"}`);
     console.log(`  Exit warning on retreat: ${t.hadExitOnRetreat ? "PASS" : "FAIL"}`);
     console.log(`  Reset when crossing out: ${t.hadReset ? "PASS" : "FAIL"}`);
+    console.log(`  No approach warning when leaving after reset: ${!t.hadApproachOnLeavingAfterReset ? "PASS" : "FAIL"}`);
+    console.log(`  No exit warning when leaving after reset: ${!t.hadExitOnLeavingAfterReset ? "PASS" : "FAIL"}`);
+    console.log(`  Approach warning on re-approach from far outside: ${t.hadApproachOnReapproach ? "PASS" : "FAIL"}`);
+    console.log(`  No approach warning when leaving dormant arena: ${!t.hadApproachOnLeavingDormant ? "PASS" : "FAIL"}`);
+    console.log(`  No exit warning when leaving dormant arena: ${!t.hadExitOnLeavingDormant ? "PASS" : "FAIL"}`);
 
-    if (!t.hadApproach || t.hadExitOnApproach || t.hadExitOnEntry || t.hadExitInInterior || !t.hadExitOnRetreat || !t.hadReset) {
+    if (!t.hadApproach || t.hadExitOnApproach || t.hadExitOnEntry || t.hadExitInInterior
+      || !t.hadExitOnRetreat || !t.hadReset || t.hadApproachOnLeavingAfterReset
+      || t.hadExitOnLeavingAfterReset || !t.hadApproachOnReapproach
+      || t.hadApproachOnLeavingDormant || t.hadExitOnLeavingDormant) {
       passed = false;
     }
   }

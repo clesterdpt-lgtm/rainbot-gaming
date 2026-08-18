@@ -103,6 +103,7 @@ export function buildDistrictBosses(ctx) {
     exitWarned: false,
     enteredDeep: false,
     inside: false,
+    wasInside: false,
     lastDist: null,
   }]));
 
@@ -439,6 +440,7 @@ export function buildDistrictBosses(ctx) {
           state.exitWarned = false;
           state.enteredDeep = false;
           state.inside = false;
+          state.wasInside = false;
           state.lastDist = null;
         }
         continue;
@@ -450,43 +452,70 @@ export function buildDistrictBosses(ctx) {
       const exitBand = Math.min(EXIT_WARNING_BAND, Math.max(12, site.arenaRadius * 0.25));
       const deepThreshold = site.arenaRadius - exitBand - 2;
 
+      const movingInward = state.lastDist !== null && dist < state.lastDist - 0.05;
+      const movingOutward = state.lastDist !== null && dist > state.lastDist + 0.05;
+
+      // 1. Approach Warning ("WARNING — [BOSS] TERRITORY AHEAD"):
+      // Fires only when:
+      // - The boss fight is not currently active
+      // - The player is in the warning band outside the arena (dist > arenaRadius && dist <= warningRadius)
+      // - The player is moving inward towards the boss area (or initial approach if lastDist is null)
+      // - The player was NOT already inside the arena (!state.inside && !state.wasInside)
+      // - The approach warning has not already fired for this approach
       if (!active && dist > site.arenaRadius && dist <= warningRadius
-        && !state.approachWarned) {
+        && !state.approachWarned && !state.inside && !state.wasInside
+        && (state.lastDist === null || movingInward)) {
         state.approachWarned = true;
         const event = siteEvent(site, status);
         ctx.mission?.announce?.(`WARNING — ${site.boss.toUpperCase()} TERRITORY AHEAD`, 3.4);
         bus.emit("approach", event);
       } else if (!active && dist > warningRadius + 18) {
+        // Reset approach warning & wasInside only when the player moves far outside into the desert
         state.approachWarned = false;
+        state.wasInside = false;
       }
 
-      // Mark the player as having penetrated inside the arena interior
-      if (dist <= deepThreshold) {
+      // If the player is inside the arena, mark wasInside and suppress approach warning
+      // so leaving the arena never triggers "TERRITORY AHEAD"
+      if (dist <= site.arenaRadius) {
+        state.wasInside = true;
+        state.approachWarned = true;
+      }
+
+      // Mark the player as having penetrated inside the arena interior during an active fight
+      if (active && dist <= deepThreshold) {
         state.enteredDeep = true;
         state.exitWarned = false;
       }
 
-      // Exit warning only fires if the player was already engaged in the arena interior
-      // and is now moving outward into the boundary warning band
+      // 2. Exit Warning ("WARNING — LEAVING BOSS AREA. FIGHT WILL RESET"):
+      // Fires only when:
+      // - The fight is active
+      // - The player was engaged in the arena interior (state.enteredDeep)
+      // - The player is in the perimeter warning band (dist >= arenaRadius - exitBand && dist <= arenaRadius)
+      // - The player is moving OUTWARD away from the boss center (movingOutward)
+      // - The exit warning has not already fired on this outward motion
       if (active && state.enteredDeep && dist >= site.arenaRadius - exitBand
         && dist <= site.arenaRadius && !state.exitWarned
-        && (state.lastDist === null || dist >= state.lastDist - 0.05)) {
+        && movingOutward) {
         state.exitWarned = true;
         const event = siteEvent(site, status);
         ctx.mission?.announce?.("WARNING — LEAVING BOSS AREA. FIGHT WILL RESET", 3.2);
         bus.emit("exitWarning", event);
       }
 
+      // 3. Reset when crossing boundary during active fight:
       if (active && dist > site.arenaRadius) {
         const event = siteEvent(site, status);
         resetArena(site);
         ctx.mission?.announce?.(`${site.boss.toUpperCase()} RESET — RE-ENTER THE ARENA`, 4.0);
         bus.emit("arenaReset", event);
-        state.approachWarned = false;
+        state.approachWarned = true; // Suppress approach warning while walking away after reset
         state.exitWarned = false;
         state.enteredDeep = false;
         state.inside = false;
-        state.lastDist = null;
+        state.wasInside = true;      // Suppress approach warning when leaving
+        state.lastDist = dist;
         continue;
       }
 

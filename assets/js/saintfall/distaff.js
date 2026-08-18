@@ -859,6 +859,51 @@ export function buildDistaff(ctx) {
     const triCount = Math.floor(vertexCount / 3);
     const bones = skin.skeleton.bones;
 
+    /* ------------------------------------------------------------
+       INSIDE OUT. The asset arrives wound clockwise-outward: its
+       signed volume is -289 m^3 (a closed outward surface is positive
+       - a THREE.BoxGeometry measures +1). Every material here is
+       FrontSide, so the GPU culls the NEAR wall of the body and draws
+       the far wall's INTERIOR in its place. From thirty metres, flat
+       shading (normals from screen derivatives) and an unchanged
+       silhouette make that read as a solid animal; from six metres,
+       standing beside the collapsed body, it is a hole through the
+       carapace with the legs behind it showing - which is exactly how
+       it was reported. The authored NORMALS agree with the winding, so
+       they point inward too, and the paint below - which classifies
+       "up" and "belly" by facet normal - had chalk on the underside
+       and the warm belly on the inside of the top plates.
+
+       Fixed here, on this module's own copy of the geometry, in two
+       halves: the authored normals are negated NOW, before a single
+       facet is classified, so the paint keys on the outward plate;
+       and the winding is reversed when the index is rebuilt below,
+       so the GPU keeps the outward faces. Detected rather than
+       assumed - a re-export that fixes the kit's winding must not
+       be flipped back inside out by this. See the milestone note:
+       the rest of the rigged bestiary measures the same way. */
+    let insideOut = false;
+    {
+      let volume = 0;
+      for (let t = 0; t < triCount; t += 1) {
+        const v0 = t * 3;
+        const ax0 = posAttr.getX(v0), ay0 = posAttr.getY(v0), az0 = posAttr.getZ(v0);
+        const bx0 = posAttr.getX(v0 + 1), by0 = posAttr.getY(v0 + 1), bz0 = posAttr.getZ(v0 + 1);
+        const cx0 = posAttr.getX(v0 + 2), cy0 = posAttr.getY(v0 + 2), cz0 = posAttr.getZ(v0 + 2);
+        volume += ax0 * (by0 * cz0 - bz0 * cy0)
+          + ay0 * (bz0 * cx0 - bx0 * cz0)
+          + az0 * (bx0 * cy0 - by0 * cx0);
+      }
+      insideOut = volume < 0;
+      const nrmAttr = geo.attributes.normal;
+      if (insideOut && nrmAttr) {
+        for (let i = 0; i < nrmAttr.count; i += 1) {
+          nrmAttr.setXYZ(i, -nrmAttr.getX(i), -nrmAttr.getY(i), -nrmAttr.getZ(i));
+        }
+        nrmAttr.needsUpdate = true;
+      }
+    }
+
     /* The authored COLOR_0, read through the attribute accessors so a
        normalised byte buffer and a float buffer both arrive as 0..1,
        and written back as our own float array. Owning the array is
@@ -1143,13 +1188,17 @@ export function buildDistaff(ctx) {
       const n = srcPos.count;
       const sp = new Float64Array(n * 3);
       const sn = new Float64Array(n * 3);
+      // The source normals point the way the asset was wound; if that
+      // was inward (see INSIDE OUT above) the bake wants them turned
+      // round too, or it computes the occlusion of the interior.
+      const nSign = insideOut ? -1 : 1;
       for (let i = 0; i < n; i += 1) {
         sp[i * 3] = srcPos.getX(i);
         sp[i * 3 + 1] = srcPos.getY(i);
         sp[i * 3 + 2] = srcPos.getZ(i);
-        sn[i * 3] = srcNrm.getX(i);
-        sn[i * 3 + 1] = srcNrm.getY(i);
-        sn[i * 3 + 2] = srcNrm.getZ(i);
+        sn[i * 3] = srcNrm.getX(i) * nSign;
+        sn[i * 3 + 1] = srcNrm.getY(i) * nSign;
+        sn[i * 3 + 2] = srcNrm.getZ(i) * nSign;
       }
       aoShade = bakeOcclusion(sp, sn, n, facetC, facetN, facetA, triCount, 1.35);
     }
@@ -1342,13 +1391,19 @@ export function buildDistaff(ctx) {
       running += counts[p] * 3;
     }
     const cursor = starts.slice();
+    /* ...and the second half of INSIDE OUT: an inside-out asset gets
+       its winding reversed here, where the index is being written
+       anyway - second and third corner swapped - so the faces the GPU
+       keeps are the outward ones. */
+    const w1 = insideOut ? 2 : 1;
+    const w2 = insideOut ? 1 : 2;
     for (let t = 0; t < triCount; t += 1) {
       const p = partOf[t];
       const at = cursor[p];
       cursor[p] = at + 3;
       index[at] = t * 3;
-      index[at + 1] = t * 3 + 1;
-      index[at + 2] = t * 3 + 2;
+      index[at + 1] = t * 3 + w1;
+      index[at + 2] = t * 3 + w2;
     }
 
     geo.setAttribute("color", new THREE.BufferAttribute(colour, 4));
@@ -1424,6 +1479,7 @@ export function buildDistaff(ctx) {
       triCount,
       broken: new Array(8).fill(false),
       damage: 0,
+      insideOut,
     };
   }
 
@@ -2989,6 +3045,9 @@ export function buildDistaff(ctx) {
       // Still inside an attack clip (wind-up OR recovery): nothing new
       // is chosen until this clears.
       busy: state.action > 0,
+      // The dressing found the asset inside out and turned it - see
+      // dressInstance. QA reads this to prove the near wall is drawn.
+      windingCorrected: !!dress?.insideOut,
       yaw: Number(inst.yaw.toFixed(3)),
       hidden: !!inst.encounterHidden,
       locked: !!inst.encounterLocked,

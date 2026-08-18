@@ -224,6 +224,51 @@ try {
       && aggro.targetableAfter && aggro.visibleAfter,
     JSON.stringify(aggro));
 
+  /* ---- THE NEAR WALL IS THE ONE DRAWN ----------------------------------
+     The asset arrives wound inside out (signed volume -289 m^3) and the
+     dressing turns it. Proven on the GPU rather than by inspection: with
+     the real FrontSide materials the frame must match a DoubleSide
+     render (the near wall is what both draw) and differ from a BackSide
+     render (the far wall's interior). Before the fix it was the other
+     way round - DoubleSide equalled BackSide - which is a body you can
+     see through from six metres. */
+  const winding = await page.evaluate(() => {
+    const T = window.__SF;
+    const THREE = T.THREE;
+    const inst = T.enemies.live.find((e) => e.key === "distaff");
+    const ps = T.player.state;
+    const v = new THREE.Vector3(); const bb = new THREE.Box3();
+    for (const n of ["prosoma", "abdomen1", "abdomen2", "head"]) {
+      const b = inst.bones.get(n); b.updateWorldMatrix(true, false); bb.expandByPoint(b.getWorldPosition(v));
+    }
+    const c = bb.getCenter(new THREE.Vector3());
+    const keep = { x: ps.x, z: ps.z, camYaw: ps.camYaw, camPitch: ps.camPitch };
+    T._teleportRaw(c.x, c.z - 11, 0);
+    const cam = T.render.camera;
+    const bearing = Math.atan2(c.x - ps.x, c.z - ps.z);
+    T.setCam(bearing, 0, 5.2); T.renderOnce(1 / 60);
+    const dy = c.y - cam.position.y; const dh = Math.hypot(c.x - cam.position.x, c.z - cam.position.z);
+    T.setCam(bearing, -Math.atan2(dy, dh), 5.2); T.renderOnce(1 / 60);
+    const gl = T.render.renderer.getContext();
+    const grab = () => { const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight; const px = new Uint8Array(w * h * 4); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); return px; };
+    const diff = (a, b) => { let changed = 0, n = 0; for (let i = 0; i < a.length; i += 4) { const d = Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]); n += 1; if (d > 30) changed += 1; } return Number((100 * changed / n).toFixed(2)); };
+    const mats = inst.skin.material;
+    const sides = mats.map((m) => m.side);
+    const setSides = (s) => mats.forEach((m) => { m.side = s; m.needsUpdate = true; });
+    setSides(THREE.FrontSide); T.renderStill(); T.renderStill(); const a = grab();
+    setSides(THREE.DoubleSide); T.renderStill(); T.renderStill(); const b = grab();
+    setSides(THREE.BackSide); T.renderStill(); T.renderStill(); const cc = grab();
+    mats.forEach((m, k) => { m.side = sides[k]; m.needsUpdate = true; }); T.renderStill();
+    T._teleportRaw(keep.x, keep.z, 0);
+    T.setCam(keep.camYaw, keep.camPitch, 5.2);
+    return { corrected: !!T.distaffState().windingCorrected, sides,
+      frontVsDouble: diff(a, b), doubleVsBack: diff(b, cc), frontVsBack: diff(a, cc) };
+  });
+  check("the body's near wall is what the GPU draws (asset winding corrected)",
+    winding.corrected && winding.frontVsDouble < 2.5 && winding.doubleVsBack > 5
+      && winding.frontVsBack > 5,
+    `front-vs-double ${winding.frontVsDouble}% (same wall), double-vs-back ${winding.doubleVsBack}% (interior differs)`);
+
   /* ---- COMPLETE LIVE LEG COVERAGE ------------------------------------
      Isolate one leg at a time so overlapping limbs cannot make a
      lucky hit look like coverage. Nine real shots per leg sample the

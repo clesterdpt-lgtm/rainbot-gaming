@@ -136,6 +136,65 @@ legs rather than five, or shorter re-collapses) and leg health for the
 ranged path; both change the boss's shape beyond the ask, so they are
 noted here rather than moved.
 
+## Addendum — the body you could see through (same day, later)
+
+Playing the new fight from the ground, the user photographed the collapsed
+Distaff with its near carapace missing and the legs behind it showing.
+Diagnosis, in the order the evidence arrived:
+
+1. A pixel diff of the same frame rendered with the dressing's real
+   `FrontSide` materials, then all `DoubleSide`, then all `BackSide`:
+   **DoubleSide equalled BackSide** (0–2.7 % of pixels differ) while
+   FrontSide differed from both by 11–33 %. The surface the GPU was
+   showing was the far wall's *interior*. Standing at 22 m the same
+   signature held (1.68 / 1.69 / 0.01 %) — the model had always drawn
+   this way, and reads as solid only because flat shading takes its
+   normals from screen derivatives and a closed silhouette is the same
+   from either wall.
+2. Transform determinants all +1 — no mirroring; the `.glb` is
+   byte-identical to the day the boss was created.
+3. Winding vs authored vertex normals: agree on 8391 / 8392 facets — so
+   the *normals point inward too*, and the dressing's facet classifier
+   (which flips the winding normal to agree with the authored one) was
+   putting chalk on the underside and the warm belly on the inside of the
+   top plates. The "red carapace" every gallery frame showed was the
+   belly paint seen from inside.
+4. **Signed volume** (Σ dot(a, b×c)/6, +1 for a `BoxGeometry`) of the
+   bind-pose mesh: Distaff **−289 m³**. And the rest of the rigged
+   bestiary: Winnower −63, Matriarch −47, Coulter −21.5, Harrow −4.3,
+   Thresher / Gleaner / Precentor −1.15, Cantor −0.09 with a *positive*
+   body (+0.08 — a mixed model). The Blender kit winds inside out; the
+   Distaff is where it finally had something behind the body to see.
+5. Reversing the winding live turned the hollow red bowl into the
+   chalk-and-glass shell the dressing was written for. Screenshots in
+   `output/saintfall/distaff-seethrough/` (`sig-dressed.png` vs
+   `sig-dressed-reversed.png`; `after/`).
+
+**Fix (Distaff only, at the dressing, on its own geometry copy):** detect
+by signed volume; negate the authored normals *before* PASS A so
+`facetN` — and therefore up/belly/glass classification and the occlusion
+bake — key on the outward plate; reverse the winding when the material-
+sorting index is written (`w1/w2`). `status().windingCorrected` reports
+it. The gallery `02-full` frame goes from a red-brown carapace to the
+pale animal the art direction asked for. The paint values were tuned on
+the wrong wall, so a re-read of the dressing against the art doc is due —
+but the classification is right for the first time and it photographs
+well as is.
+
+**Not fixed, on purpose:** the other eight rigged species. Correcting
+them flips which side the sun appears to light from on every creature
+(the interior view lights from the mirrored direction), and the emissive/
+rim tuning on the Winnower and Matriarch was done against those renders.
+It is a one-place fix (`enemies.js` at species load, signed-volume
+detected — the Cantor's positive body means it must be per-species, not
+blind) and it should be made and reviewed as its own pass with the
+gallery on both sides. `scripts/saintfall-winding-audit.mjs` prints the
+table.
+
+Gates: `saintfall-distaff-fight.mjs` **59/59** — the new check renders the
+body Front / Double / Back and requires the near wall to be what is
+drawn (0.87 % front-vs-double, 19.45 % double-vs-back).
+
 ## Traps this pass hit
 
 - **`_teleportRaw` steps a whole frame.** An orbit test that teleported the

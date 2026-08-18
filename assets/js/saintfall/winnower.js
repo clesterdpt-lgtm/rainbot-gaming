@@ -2116,21 +2116,18 @@ export function buildWinnower(ctx) {
     setEncounterGate(false, true);
     enemies.play(inst, "alert", 0.25);
     bus.emit("aggro", { x: inst.x, y: inst.y, z: inst.z });
-    /* Same reveal mechanism the Distaff uses - player.setFree, which
-       is the engine's existing review camera. Framed from BELOW here,
-       looking up: the whole point of this animal is the angle it is
-       seen at, and the reveal should teach that in one shot. Once per
-       encounter - re-aggroing out of a return flight is mid-fight,
-       and stealing the camera twice punishes the player for staying. */
+    /* Authored hero framing: looking up at the Winnower on its perch
+       from the open southern approach to the Censer stacks, with zero
+       obstructions regardless of which direction the player arrived from. */
     if (state.revealed) return;
     state.revealed = true;
     if (ctx.player?.setFree && !ctx.player.state.free) {
-      const ps = ctx.player.state;
-      const camX = ps.x;
-      const camZ = ps.z;
-      const camY = groundAt(camX, camZ) + 2.0;
+      const perch = perchPoint();
+      const camX = perch.x - 26;
+      const camZ = perch.z + 32;
+      const camY = groundAt(camX, camZ) + 4.2;
       ctx.player.setFree(true, [camX, camY, camZ],
-        [inst.x, inst.y, inst.z], 52);
+        [inst.x, inst.y + 4.0, inst.z], 50);
       state.releaseCameraAt = 0;
     }
   }

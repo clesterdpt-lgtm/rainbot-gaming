@@ -2743,21 +2743,17 @@ export function buildStylite(ctx) {
     setEncounterGate(false, true);
     ctx.mission?.announce?.("SOMETHING MOVES ON THE NEEDLES", 3.4);
     bus.emit("aggro", { x: state.pos.x, y: state.pos.y, z: state.pos.z });
+    /* Authored hero framing: from the central open plaza floor looking
+       straight up at the Stylite clinging to the apex needle,
+       unobstructed by surrounding needle shafts regardless of approach. */
     if (state.revealed) return;
     state.revealed = true;
     if (ctx.player?.setFree && !ctx.player.state.free) {
-      /* Framed from BELOW, looking up the needle it is on. The whole
-         proposition of this fight is that the boss is above you, and
-         the reveal should be the shot that says so. */
-      const px = ctx.player.state.x;
-      const pz = ctx.player.state.z;
-      const dx = state.pos.x - px;
-      const dz = state.pos.z - pz;
-      const d = Math.hypot(dx, dz) || 1;
-      const camX = state.pos.x - (dx / d) * 34;
-      const camZ = state.pos.z - (dz / d) * 34;
-      ctx.player.setFree(true, [camX, groundAt(camX, camZ) + 4, camZ],
-        [state.pos.x, state.pos.y, state.pos.z], 54);
+      const camX = state.pos.x + 22;
+      const camZ = state.pos.z + 26;
+      const camY = groundAt(camX, camZ) + 3.8;
+      ctx.player.setFree(true, [camX, camY, camZ],
+        [state.pos.x, state.pos.y, state.pos.z], 52);
       state.releaseCameraAt = 0.7;
     }
   }

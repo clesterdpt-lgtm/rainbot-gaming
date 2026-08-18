@@ -3362,23 +3362,16 @@ export function buildGarner(ctx) {
     setEncounterGate(false, true);
     ctx.mission?.announce?.("THE OSSUARY IS AWAKE", 3.4);
     bus.emit("aggro", { x: C.pitX, z: C.pitZ });
-    /* The reveal camera, once per encounter. Same borrowed free-cam the
-       Distaff and the Apostate use; handed straight back, and combat
-       and mission time never stop for it. Framed from the rim looking
-       DOWN the axis of the pit, because the whole subject of the shot
-       is a hole appearing. */
+    /* Authored hero framing: framed from the open rim overlooking
+       the pit axis, capturing the pit opening and the mouth emergence
+       consistently from all player approach angles. */
     if (state.revealed) return;
     state.revealed = true;
     if (ctx.player?.setFree && !ctx.player.state.free) {
-      const px = ctx.player.state.x;
-      const pz = ctx.player.state.z;
-      const dx = C.pitX - px;
-      const dz = C.pitZ - pz;
-      const d = Math.hypot(dx, dz) || 1;
-      const camX = px + (dx / d) * Math.min(d * 0.3, 16);
-      const camZ = pz + (dz / d) * Math.min(d * 0.3, 16);
-      const camY = groundAt(camX, camZ) + 13;
-      ctx.player.setFree(true, [camX, camY, camZ], [C.pitX, lipY + 1, C.pitZ], 52);
+      const camX = C.pitX + 18;
+      const camZ = C.pitZ + 24;
+      const camY = groundAt(camX, camZ) + 8.5;
+      ctx.player.setFree(true, [camX, camY, camZ], [C.pitX, lipY + 1.2, C.pitZ], 50);
       state.releaseCameraAt = 0.9;
     }
   }

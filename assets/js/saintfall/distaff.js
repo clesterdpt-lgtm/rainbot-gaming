@@ -2231,24 +2231,17 @@ export function buildDistaff(ctx) {
     setEncounterGate(false, true);
     enemies.play(inst, "alert", 0.25);
     bus.emit("aggro", { x: inst.x, z: inst.z });
-    /* The reveal camera is a review tool's own trick, not a new
-       system - see player.setFree, already used for the free-cam key
-       and every scripted QA shot. Handed back the instant the beat
-       ends; combat and mission time never stop for it. */
+    /* Authored hero framing: open floor of the Glass Scar crater,
+       viewing the Distaff's full body and legs clearly without
+       risk of terrain or crater rim occluding the shot. */
     if (state.revealed) return;
     state.revealed = true;
     if (ctx.player?.setFree && !ctx.player.state.free) {
-      const px = ctx.player.state.x;
-      const pz = ctx.player.state.z;
-      const dx = inst.x - px;
-      const dz = inst.z - pz;
-      const d = Math.hypot(dx, dz) || 1;
-      const side = { x: -dz / d, z: dx / d };
-      const camX = px + (dx / d) * Math.min(d * 0.35, 14) + side.x * 6;
-      const camZ = pz + (dz / d) * Math.min(d * 0.35, 14) + side.z * 6;
-      const camY = groundAt(camX, camZ) + 5.5;
+      const camX = C.lairX - 22;
+      const camZ = C.lairZ + 26;
+      const camY = groundAt(camX, camZ) + 4.2;
       ctx.player.setFree(true, [camX, camY, camZ],
-        [inst.x, inst.y + 9, inst.z], 46);
+        [inst.x, inst.y + 3.8, inst.z], 48);
       state.releaseCameraAt = 0;
     }
   }

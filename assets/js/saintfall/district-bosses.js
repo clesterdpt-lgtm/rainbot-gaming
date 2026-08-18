@@ -96,6 +96,7 @@ export function buildDistrictBosses(ctx) {
     timer: 0,
     disengageFor: 0,
     defeated: false,
+    revealed: false,
     instance: null,
   }]));
   const boundary = new Map(DISTRICT_BOSS_SITES.map((site) => [site.key, {
@@ -225,6 +226,7 @@ export function buildDistrictBosses(ctx) {
     record.phase = "dormant";
     record.timer = 0;
     record.disengageFor = 0;
+    record.revealed = false;
     ctx.player?.setFree?.(false);
     setGate(record, true, true);
     enemies.play?.(inst, "idle", 0.25);
@@ -240,6 +242,28 @@ export function buildDistrictBosses(ctx) {
     enemies.play?.(record.instance, "alert", 0.18);
     ctx.mission?.announce?.(`${record.site.boss.toUpperCase()} AWAKENS`, 3.2);
     bus.emit("aggro", publicRecord(record));
+
+    /* Authored hero camera framing for shared-simulation bosses (Matriarch, Coulter).
+       Positioned at fixed, clear vantage points so the reveal shot is consistent
+       and unobstructed regardless of where the player entered the district. */
+    if (record.revealed) return;
+    record.revealed = true;
+    if (ctx.player?.setFree && !ctx.player.state.free) {
+      const inst = record.instance;
+      if (record.site.key === "reach") {
+        // Matriarch: open golden dune sands of the Gilded Reach
+        const camX = inst.x - 18;
+        const camZ = inst.z + 24;
+        const ground = ctx.collide?.groundHeight?.(camX, camZ) ?? ctx.terrain.heightAt(camX, camZ);
+        ctx.player.setFree(true, [camX, ground + 3.8, camZ], [inst.x, inst.y + 2.2, inst.z], 48);
+      } else if (record.site.key === "saint") {
+        // Coulter: elevated dune vantage point overlooking the Fallen Saint sand arena
+        const camX = inst.x - 38;
+        const camZ = inst.z + 42;
+        const ground = ctx.collide?.groundHeight?.(camX, camZ) ?? ctx.terrain.heightAt(camX, camZ);
+        ctx.player.setFree(true, [camX, ground + 7.5, camZ], [inst.x, inst.y + 5.0, inst.z], 52);
+      }
+    }
   }
 
   function finishAlert(record) {
@@ -247,6 +271,7 @@ export function buildDistrictBosses(ctx) {
     record.timer = 0;
     const inst = record.instance;
     setGate(record, false, false);
+    ctx.player?.setFree?.(false);
     if (inst) {
       inst.suspicion = 1;
       inst.alerted = true;
@@ -261,6 +286,7 @@ export function buildDistrictBosses(ctx) {
     record.phase = "dead";
     record.timer = 0;
     record.disengageFor = 0;
+    ctx.player?.setFree?.(false);
     setGate(record, false, false);
     removeOwnedBrood(record);
     ctx.mission?.completeDistrictBoss?.(record.site.key);

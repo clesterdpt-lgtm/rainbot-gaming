@@ -2,17 +2,17 @@
 
 ## Latest focused fix
 
-**SAINTFALL direction-aware boss arena boundary warnings**: Fixed an issue
-where leaving a boss area (either after a reset or when walking out of a
-dormant arena) could fire the approach/entering warning ("WARNING — [BOSS]
-TERRITORY AHEAD"). Bound approach warnings to verified inward movement from
-outside the arena (`!wasInside && movingInward`), suppress approach warnings
-upon arena reset or exit, and strictly enforce that exit warnings ("WARNING —
-LEAVING BOSS AREA. FIGHT WILL RESET") only fire during active combat when
-moving outward from the arena interior (`enteredDeep && movingOutward`),
-preventing false exit warnings during entry. Verified across all boss sites in
-`scripts/saintfall-arena-entry-probe.mjs` and `scripts/saintfall-district-hunt-probe.mjs`.
-Build pin `20260818-arena-warnings-1`.
+**SAINTFALL cinematic boss reveal intros & fixed authored framing**: Added
+cinematic reveal intros for the Matriarch (Gilded Reach) and Coulter (Fallen
+Saint), and standardized all 8 boss reveal cameras (Matriarch, Winnower,
+Distaff, Garner, Stylite, Abbess, Coulter, Apostate) to use fixed, unobstructed
+authored framing angles rather than player-relative entry angles. This prevents
+any intro cameras from being blocked by terrain, spires, or geometry regardless
+of which direction the player enters the boss area. Added
+`scripts/saintfall-boss-intro-probe.mjs` verifying intro execution, angle
+invariance, and clean camera release across 4 cardinal entry angles (North,
+East, South, West) for all 8 bosses (25/25 checks passed).
+Build pin `20260818-boss-intros-1`.
 
 ## Current milestone
 

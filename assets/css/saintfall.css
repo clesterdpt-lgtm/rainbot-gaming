@@ -421,8 +421,15 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
 
 .sf-boot__title {
   font-family: "Cinzel", Georgia, serif;
-  font-size: clamp(30px, 5vw, 56px);
-  letter-spacing: 0.28em;
+  display: inline-block;
+  width: max-content;
+  max-width: 100%;
+  white-space: nowrap;
+  box-sizing: content-box;
+  font-size: clamp(28px, 4.4vw, 54px);
+  letter-spacing: clamp(0.14em, 1.8vw, 0.24em);
+  line-height: 1.05;
+  padding-right: 0.26em;
   margin: 0;
   background: linear-gradient(170deg, #f6d585, #d8a441 46%, #7a5320);
   -webkit-background-clip: text;
@@ -3956,15 +3963,19 @@ body[data-sf-contrast="high"] #sf-hud :is(.sf-hud__vitals, .sf-hud__minimap) {
     linear-gradient(90deg, rgba(3, 3, 4, .98) 0%, rgba(5, 4, 5, .91) 24%, rgba(5, 4, 5, .36) 57%, rgba(2, 2, 3, .12) 100%),
     linear-gradient(0deg, rgba(2, 2, 3, .62), transparent 42%, rgba(2, 2, 3, .28));
 }
-#sf-boot > :not(.sf-boot__back) { width: min(25rem, 55%); }
+#sf-boot > :not(.sf-boot__back):not(.sf-boot__title) { width: min(25rem, 55%); }
 #sf-boot .sf-boot__mark { width: 5.2rem; height: 5.2rem; margin: 0 0 .35rem; }
 #sf-boot .sf-boot__glyph { inset: 1.15rem; width: calc(100% - 2.3rem); height: calc(100% - 2.3rem); }
-#sf-boot .sf-boot__title {
-  width: min(34rem, 76%);
-  box-sizing: border-box;
+#sf-boot .sf-boot__title,
+#sf-boot > .sf-boot__title {
+  display: inline-block;
+  width: max-content;
+  max-width: 100%;
+  white-space: nowrap;
+  box-sizing: content-box;
   padding-right: .28em;
-  font-size: clamp(2.1rem, 4.6vw, 4.4rem);
-  line-height: .95;
+  font-size: clamp(2rem, 4.4vw, 3.8rem);
+  line-height: 1.05;
 }
 #sf-boot .sf-boot__sub { margin: 0 0 1.35rem; font-size: clamp(.85rem, 1.45vw, 1.1rem); }
 #sf-boot .sf-boot__bar { width: min(25rem, 55%); height: 3px; background: rgba(241, 222, 183, .16); }
@@ -4113,8 +4124,9 @@ body.sf-high-contrast .sf-intro__gate { border-color: #ffe199; background: rgba(
 @media (max-width: 720px), (hover: none) and (pointer: coarse) {
   #sf-boot { align-items: center; justify-content: flex-end; padding: 2.25rem 1.35rem 3.2rem; text-align: center; }
   #sf-boot::after { background: linear-gradient(0deg, rgba(3,3,4,.98) 0%, rgba(4,4,5,.8) 38%, rgba(3,3,4,.12) 76%), linear-gradient(90deg, rgba(3,3,4,.28), transparent); }
-  #sf-boot > :not(.sf-boot__back), #sf-boot .sf-boot__bar, #sf-boot .sf-boot__tip { width: min(28rem, 92%); }
+  #sf-boot > :not(.sf-boot__back):not(.sf-boot__title), #sf-boot .sf-boot__bar, #sf-boot .sf-boot__tip { width: min(28rem, 92%); }
   #sf-boot .sf-boot__mark { width: 4.35rem; height: 4.35rem; }
+  #sf-boot .sf-boot__title, #sf-boot > .sf-boot__title { font-size: clamp(1.6rem, 7.5vw, 2.4rem); letter-spacing: clamp(0.12em, 2vw, 0.2em); padding-right: .2em; }
   .sf-intro__art, #sf-boot::before { background-position: 66% center; }
   .sf-intro__art::after { background: linear-gradient(0deg, rgba(3,3,4,.96), rgba(4,4,5,.67) 54%, rgba(3,3,4,.22)); }
   .sf-intro__gate {
@@ -4140,9 +4152,9 @@ body.sf-high-contrast .sf-intro__gate { border-color: #ffe199; background: rgba(
 
 @media (orientation: landscape) and (max-height: 500px) {
   #sf-boot { justify-content: center; align-items: flex-start; padding: 1.2rem 3rem; text-align: left; }
-  #sf-boot > :not(.sf-boot__back), #sf-boot .sf-boot__bar, #sf-boot .sf-boot__tip { width: min(23rem, 48%); }
+  #sf-boot > :not(.sf-boot__back):not(.sf-boot__title), #sf-boot .sf-boot__bar, #sf-boot .sf-boot__tip { width: min(23rem, 48%); }
   #sf-boot .sf-boot__mark { width: 3.25rem; height: 3.25rem; }
-  #sf-boot .sf-boot__title { font-size: 2rem; }
+  #sf-boot .sf-boot__title, #sf-boot > .sf-boot__title { font-size: 1.85rem; letter-spacing: 0.18em; padding-right: .18em; }
   #sf-boot .sf-boot__sub, #sf-boot .sf-boot__tip { margin-bottom: .35rem; margin-top: .35rem; font-size: .76rem; }
   .sf-intro__gate { left: 1rem; top: 50%; bottom: auto; width: min(27rem, calc(100% - 5rem)); max-height: calc(100% - 1rem); padding: .58rem .75rem; transform: translateY(-50%); }
   #sf-intro.is-running .sf-intro__gate { transform: translateY(-48%) scale(.985); }

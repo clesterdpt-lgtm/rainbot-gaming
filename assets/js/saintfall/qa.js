@@ -149,6 +149,11 @@ export function installQa(ctx, api) {
     listTimes: () => Object.keys(TIMES || {}),
     setStorm(v) { api.setStorm(clamp01(v)); },
     setQuality(tier) { api.setQuality(tier); },
+    /** Contact-shadow A/B. `gain` 0 removes the term outright. */
+    setContactShadow(gain, steps) {
+      api.render.setContactShadow?.(gain, steps);
+      return api.render.contactShadow;
+    },
 
     /* ---------------------- camera control ---------------------- */
 

@@ -236,19 +236,15 @@ export function buildSky(ctx) {
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = 2400;
-  // normalBias is in WORLD units, not texels. At 0.9 on a 0.2m
-  // texel it pushed sample points nearly five texels off the
-  // surface, which peels the shadow away from every contact and
-  // leaves a stippled lattice on flat walls where the offset
-  // over- and under-shoots by turns.
-  sun.shadow.bias = -0.00035;
-  sun.shadow.normalBias = 0.35;
   const shadowHalf = 300;
   sun.shadow.camera.left = -shadowHalf;
   sun.shadow.camera.right = shadowHalf;
   sun.shadow.camera.top = shadowHalf;
   sun.shadow.camera.bottom = -shadowHalf;
   sun.shadow.camera.updateProjectionMatrix();
+  /* Both biases are set by `applyShadowBias` below, from the texel
+     the CURRENT tier actually has. They are not constants and they
+     never were: see the note there. */
   scene.add(sun);
   scene.add(sun.target);
 
@@ -808,6 +804,43 @@ export function buildSky(ctx) {
     ).normalize();
   };
   let shadowSpan = shadowHalf;
+
+  /* SHADOW BIAS IS MEASURED IN TEXELS, NOT IN METRES.
+
+     Both knobs exist to move a receiver's sample point far enough off
+     its own surface that depth-buffer quantisation cannot make it
+     shadow itself. The quantisation is one TEXEL wide, so the offset
+     that fixes it is a multiple of the texel - and the texel changes
+     by a factor of four across the quality tiers and again whenever
+     the frustum is retuned. Pinning them to constants means they are
+     correct for at most one tier.
+
+     They were pinned at 0.35m and -0.00035, chosen against a 0.2m
+     texel, and the cost was not acne - it was the opposite. A
+     receiver's sample is pushed along its own NORMAL, so on flat
+     sand under a 13-degree sun a 0.35m push moves the shadow-map
+     lookup 0.35 / tan(13 deg) = ONE AND A HALF METRES along the
+     light. Anything whose shadow is narrower than that simply misses
+     itself: the player's own cast shadow measured as a faint smear
+     where it should have been a seven-metre silhouette, and no
+     amount of shadow-map resolution would have brought it back,
+     because the sample was not landing on the caster at all.
+
+     1.45 texels is enough to clear the quantisation on every surface
+     in this level (checked against the worst case here, which is not
+     a wall but raking dune at a grazing sun); the depth bias is a
+     second, smaller nudge expressed as a fraction of the shadow
+     camera's own depth RANGE, because that is the space three writes
+     it in - a constant there means a different number of metres every
+     time the frustum's far plane moves. */
+  function applyShadowBias() {
+    const texel = (shadowSpan * 2) / Math.max(1, sun.shadow.mapSize.x);
+    sun.shadow.normalBias = Math.max(0.02, texel * 1.45);
+    const range = Math.max(1, sun.shadow.camera.far - sun.shadow.camera.near);
+    sun.shadow.bias = -Math.min(0.0008, (texel * 0.9) / range);
+  }
+  applyShadowBias();
+
   const api = {
     group,
     sun,
@@ -915,8 +948,11 @@ export function buildSky(ctx) {
       sun.shadow.camera.near = 1;
       sun.shadow.camera.far = half * 6;
       sun.shadow.camera.updateProjectionMatrix();
+      applyShadowBias();
     },
     get shadowSpan() { return shadowSpan; },
+    get shadowTexel() { return (shadowSpan * 2) / Math.max(1, sun.shadow.mapSize.x); },
+    applyShadowBias,
   };
 
   return api;

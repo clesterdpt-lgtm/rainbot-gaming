@@ -75,35 +75,63 @@ import { buildSkyEnvironment, srgbTransfer as srgb } from "saintfall/art.js";
                   1 instead of 2 is a quarter of the pixels)
      pixelRatio   further multiplier on top of that
      msaa         scene-target samples; 4x measured ~7.5ms at ratio 2
-     shadow       sun map size; the redraw is ~4-7ms at 4096
+     shadow       sun map size; the redraw is ~4-7ms at 4096, and
+                  measured +2ms again at 8192
      shadowEvery  redraw cadence in frames (QA pins 1 for determinism)
+     shadowRadius half-extent of the sun's ortho frustum, in metres
+     contact      screen-space contact-shadow strength, 0 skips it
+     contactSteps taps along the sun ray for that term
      ao           screen-space occlusion strength, 0 skips the pass
      bloom        bloom chain scale relative to the scene target
 
-   `high` is the shipped default and is byte-identical to what it was
-   before the tiers grew levers, so goldens and the review harnesses
-   are unaffected; `low` exists so that a machine that cannot hold
-   30fps at high can hold 60 with the same world. The table lives at
-   module scope so the settings UI can list the tiers without a
-   renderer in hand.
+   THE TEXEL IS THE TIER, and it was not monotonic.
+
+   `shadow` and `shadowRadius` are not two independent levers: what
+   the picture gets is 2 * radius / mapSize, the world size of one
+   shadow texel. On the previous table that came out at 0.371, 0.254,
+   0.156 and 0.205 metres - so ULTRA, which costs the most, handed
+   the player a COARSER shadow than HIGH, because its radius grew by
+   a third while its map stayed at 4096. Anything asked to pick the
+   best tier was picking a downgrade.
+
+   The ladder below is chosen on the texel first and the range
+   second, so every step up is strictly finer AND reaches at least as
+   far: 0.332, 0.205, 0.122, 0.083. Ultra buys 8192, which is where
+   the +2ms goes; `setQuality` caps it against the driver's real
+   maximum texture size, so a machine that cannot hold it falls back
+   rather than failing to allocate.
+
+   And the map alone cannot resolve a CHARACTER. Even at ultra the
+   figure is 1.85m over a 0.083m texel - twenty-two samples for a
+   whole body, which is a silhouette and nothing inside it. `contact`
+   is the term that covers that scale; see the contact-shadow note in
+   the AO block.
+
+   `low` exists so that a machine that cannot hold 30fps at high can
+   hold 60 with the same world. The table lives at module scope so
+   the settings UI can list the tiers without a renderer in hand.
    ------------------------------------------------------------------ */
 
 const QUALITY = Object.freeze({
   low: {
     label: "LOW", deviceCap: 1, pixelRatio: 0.75, msaa: 0,
-    shadow: 1024, shadowEvery: 3, shadowRadius: 190, ao: 0, bloom: 0.35,
+    shadow: 1024, shadowEvery: 3, shadowRadius: 170, ao: 0, bloom: 0.35,
+    contact: 0, contactSteps: 0,
   },
   medium: {
     label: "MEDIUM", deviceCap: 1.5, pixelRatio: 1.0, msaa: 2,
-    shadow: 2048, shadowEvery: 2, shadowRadius: 260, ao: 0.72, bloom: 0.45,
+    shadow: 2048, shadowEvery: 2, shadowRadius: 210, ao: 0.72, bloom: 0.45,
+    contact: 0.55, contactSteps: 8,
   },
   high: {
     label: "HIGH", deviceCap: 2, pixelRatio: 1.0, msaa: 4,
-    shadow: 4096, shadowEvery: 2, shadowRadius: 320, ao: 0.85, bloom: 0.5,
+    shadow: 4096, shadowEvery: 2, shadowRadius: 250, ao: 0.85, bloom: 0.5,
+    contact: 0.72, contactSteps: 12,
   },
   ultra: {
     label: "ULTRA", deviceCap: 2, pixelRatio: 1.0, msaa: 4,
-    shadow: 4096, shadowEvery: 2, shadowRadius: 420, ao: 0.95, bloom: 0.5,
+    shadow: 8192, shadowEvery: 2, shadowRadius: 340, ao: 0.95, bloom: 0.5,
+    contact: 0.85, contactSteps: 18,
   },
 });
 export const QUALITY_TIERS = Object.freeze(Object.keys(QUALITY));
@@ -302,6 +330,10 @@ uniform vec4 uParams;      // near radius (m), intensity, bias, far radius (m)
 uniform vec2 uBank;        // far-bank gain, contact power
 uniform float uProjScale;  // pixels per world unit at unit depth
 uniform vec2 uDepthTexel;  // 1 / depth-buffer size, which is NOT this pass's
+uniform mat4 uProj;        // the camera's own projection, for the sun march
+uniform vec3 uSunView;     // sun direction in VIEW space, pointing at the sun
+uniform vec4 uContact;     // strength, reach (m), steps, start offset (m)
+uniform vec2 uContactFade; // view distance where the term fades out (m)
 
 /* SNAPPED TO A DEPTH TEXEL CENTRE, and this is the second half of the
    band fix.
@@ -399,6 +431,122 @@ float hash12(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
   p3 += dot(p3, p3.yzx + 33.33);
   return fract((p3.x + p3.y) * p3.z);
+}
+
+/* CONTACT SHADOWS - the sun's half of the argument this block opens
+   with.
+
+   The occlusion above exists because the shadow map cannot answer
+   "how much SKY reaches this point". This answers the other half:
+   "how much SUN reaches it", at a scale the shadow map cannot answer
+   either.
+
+   A single ortho cascade has to cover the ground the camera can see,
+   and on this map that is hundreds of metres - so one texel is
+   0.08-0.33m depending on tier, and the PLAYER IS 1.85m TALL. Even
+   at ultra the whole figure is twenty-two samples: enough for an
+   outline on the sand, nothing at all for a cloak against a thigh, a
+   pauldron against a chest, a polearm across a shoulder, or the dark
+   directly under a boot. Those are the shadows a third-person camera
+   spends the whole game looking at, and no amount of map is going to
+   produce them - three cascades would, and there is no room for
+   cascades here: every material in this level already carries an
+   onBeforeCompile with a hand-managed cache key, and the CSM addon
+   works by replacing exactly that.
+
+   So the short range is marched in screen space instead, against the
+   depth buffer this pass already has bound. Step along the sun
+   direction in VIEW space; if the depth buffer says something is in
+   front of where the ray has got to, the ray is inside geometry and
+   the pixel is occluded. It costs no new target and no new geometry
+   pass - the reach is metres, not hundreds of them, so a dozen taps
+   covers it.
+
+   Three things this cannot do, stated so they are not re-discovered:
+   it only knows about occluders that are ON SCREEN, it works from a
+   depth buffer with no thickness so a thin object shadows as far as
+   the thickness test allows, and at half resolution its finest
+   detail is two pixels. All three are why it is an ADDITION to the
+   shadow map rather than a replacement for it. */
+float contactShadow(vec3 p, vec3 n) {
+  if (uContact.x <= 0.0 || uContact.z < 1.0) return 1.0;
+  /* A NEAR-FIELD TERM, AND IT HAS TO SAY SO.
+
+     Left running to the horizon this does not merely waste taps, it
+     returns the wrong answer: the thickness slab scales with depth
+     (it has to - one depth texel is worth more metres the further
+     away it is), so at several hundred metres the slab is wider than
+     the depth step between one pixel and the next on any receding
+     surface, every tap reports a hit, and the whole distant rim wall
+     comes back uniformly occluded. It did, and the occlusion buffer
+     showed it as solid black mountains.
+
+     Past a few tens of metres the shadow map has the range properly
+     covered anyway, so the term is faded out rather than fixed. */
+  float fade = 1.0 - smoothstep(uContactFade.x, uContactFade.y, -p.z);
+  if (fade <= 0.002) return 1.0;
+  /* A SURFACE FACING AWAY FROM THE SUN IS ALREADY DARK, and marching
+     from it is not merely wasted - it is wrong. The reconstructed
+     normal is forced to face the camera, so on a body turned away
+     from the key the ray sets off INTO the geometry it started on
+     and reports a hit immediately. Left in, that put a false shadow
+     over every surface the sun was already grazing: the figure's lit
+     pauldron came back the same brown as its shaded side, which is
+     the term erasing exactly the modelling it was added to reveal.
+     N.L below about a twentieth is the BRDF's own business. */
+  float ndl = dot(n, uSunView);
+  if (ndl <= 0.06) return 1.0;
+  int steps = int(uContact.z);
+  /* The march starts off the surface along the NORMAL, and the offset
+     grows as the sun grazes: at N.L near 1 the ray leaves the surface
+     immediately and a small offset clears it, while at N.L near zero
+     it travels almost parallel to the surface and a fixed offset
+     never does. This is the screen-space form of the same slope-scaled
+     bias a shadow map needs, and for the same reason. */
+  vec3 origin = p + n * (uContact.w / max(ndl, 0.18));
+  float stepLen = uContact.y / float(steps);
+  /* Thickness has to be at least a STEP, and that is not a tuning
+     choice. The test only fires while the ray is between the front
+     of an occluder and one thickness behind it; if the slab is
+     thinner than the ray travels per tap, a caster narrower
+     than one step is jumped clean over - the ray is in front of a
+     boot on one tap and already too deep inside it on the next, and
+     the contact under the foot, which is the single thing this term
+     exists for, never registers. It also scales with depth, because
+     one depth texel is worth more metres the further away it is. */
+  float thick = clamp(-p.z * 0.03, stepLen * 1.7, 0.9);
+  /* Jittered by a half step, per pixel. Un-jittered, every pixel
+     tests the same distances and the term prints the ladder as
+     concentric arcs around each occluder - the same failure the
+     occlusion ladder above jitters for, and the blur removes it for
+     the same reason. */
+  float j = hash12(gl_FragCoord.xy + 4.77);
+  float occ = 0.0;
+  for (int i = 0; i < 24; i++) {
+    if (i >= steps) break;
+    float t = (float(i) + j) * stepLen + stepLen * 0.5;
+    vec3 sp = origin + uSunView * t;
+    vec4 clip = uProj * vec4(sp, 1.0);
+    if (clip.w <= 0.0) continue;
+    vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) continue;
+    float sceneZ = viewZ(uv);
+    // View z is negative ahead of the camera, so "the scene is nearer
+    // than the ray" is sceneZ > sp.z.
+    float dz = sceneZ - sp.z;
+    // The near cut is a depth-buffer tolerance, so it scales with
+    // distance for the same reason the thickness does.
+    if (dz > max(0.02, -p.z * 0.004) && dz < thick) {
+      /* A hit close to the surface is a contact and is trusted; one
+         at the far end of the reach is as likely to be a silhouette
+         the march wandered behind, and is faded rather than believed.
+         Breaking here is correct: the ray is already inside something
+         and every later tap is measuring that same interior. */
+      occ = 1.0 - 0.45 * (t / uContact.y);
+      break;
+    }
+  }
+  return clamp(1.0 - occ * fade, 0.0, 1.0);
 }
 
 void main() {
@@ -547,7 +695,12 @@ void main() {
      term wants - the complaint is never that a lit dune is too bright,
      it is that the dark under a foot is not dark. */
   float occOut = clamp(pow(vis, uBank.y), 0.0, 1.0);
-  gl_FragColor = vec4(occOut, occOut, occOut, 1.0);
+  /* Two independent terms in two channels of one buffer: sky
+     visibility in .r, sun visibility in .g. They share this pass's
+     depth taps, its reconstructed normal, its half resolution and
+     its bilateral blur, so the second one costs a loop and no
+     bandwidth at all. */
+  gl_FragColor = vec4(occOut, contactShadow(p, n), 0.0, 1.0);
 }
 `;
 
@@ -627,7 +780,9 @@ void main() {
   float zp = viewZ(vUv + uDir * uTexel);
   float zm = viewZ(vUv - uDir * uTexel);
   float gz = clamp(min(abs(zp - z0), abs(z0 - zm)), 0.02, 1.2);
-  float sum = texture2D(tAo, vUv).r * 0.25;
+  // .r is sky visibility, .g is sun visibility. Both want the same
+  // depth-aware filter, and filtering them together is free.
+  vec2 sum = texture2D(tAo, vUv).rg * 0.25;
   float wsum = 0.25;
   for (int i = 1; i <= 4; i++) {
     float fi = float(i);
@@ -638,12 +793,12 @@ void main() {
       // Slack scales with how far this tap travelled, because that is
       // how much depth a flat surface is ENTITLED to have changed.
       float dw = w * exp(-abs(zi - z0) / (gz * fi * 2.2 + 0.06));
-      sum += texture2D(tAo, uv).r * dw;
+      sum += texture2D(tAo, uv).rg * dw;
       wsum += dw;
     }
   }
-  float v = sum / max(wsum, 1e-4);
-  gl_FragColor = vec4(v, v, v, 1.0);
+  vec2 v = sum / max(wsum, 1e-4);
+  gl_FragColor = vec4(v.x, v.y, 0.0, 1.0);
 }
 `;
 
@@ -653,8 +808,16 @@ varying vec2 vUv;
 uniform sampler2D tSrc;
 uniform sampler2D tDepth;
 uniform vec2 uNearFar;
-uniform float uMode;   // 0 = raw texture, 1 = linearised depth
+uniform float uMode;   // 0 = raw texture, 1 = depth, 2 = green as grey
 void main() {
+  if (uMode > 1.5) {
+    // The occlusion buffer packs two terms; this reads the sun one
+    // (.g) on its own, because as RGB it renders as a red/green
+    // duotone that nobody can judge a contact shadow in.
+    float g = texture2D(tSrc, vUv).g;
+    gl_FragColor = vec4(g, g, g, 1.0);
+    return;
+  }
   if (uMode > 0.5) {
     float d = texture2D(tDepth, vUv).x;
     float n = uNearFar.x;
@@ -680,6 +843,7 @@ uniform vec2 uNearFar;
 uniform float uExposure;
 uniform float uBloom;
 uniform vec3 uAo;          // strength, sky-tint amount, key knee (linear)
+uniform vec2 uContactGain;  // authority (0 disables), lit knee (linear)
 uniform vec2 uBounce;      // gain, receiver knee (linear scene luma)
 uniform vec3  uLift;
 uniform vec3  uGamma;
@@ -787,6 +951,42 @@ void main() {
   vec3 aoTint = vec3(ao) * mix(vec3(1.0), vec3(0.86, 0.80, 1.02),
                                (1.0 - ao) * uAo.y);
   scene *= aoTint;
+
+  /* CONTACT SHADOW - and its authority is the EXACT OPPOSITE of the
+     occlusion term's, which is the whole reason it is a separate
+     channel rather than folded into that one.
+
+     Occlusion above removes SKY, so it hands back the pixels the key
+     is already winning - the 1.0 - 0.7 * keyed factor. This removes
+     SUN, so it only has anything to remove where the key lands in the
+     first place: a surface already in a dune's shadow has no direct
+     light left for a boot to block, and darkening it a second time is
+     the "occlusion applied in the wrong place" mistake in the note
+     above, run in reverse.
+
+     What is left after the key is taken away is sky - so the residual
+     is tinted toward the same violet every other shadow side in this
+     world uses, rather than pulled toward grey. Same rule, same
+     constant, opposite trigger. */
+  if (uContactGain.x > 0.0) {
+    /* ITS OWN KNEE, NOT the occlusion term's. That one is
+       calibrated to hand back the BLOWN top of the picture - the
+       scene buffer runs p50 0.165 and 99.2% below 0.78, so at 0.55
+       it passes two or three percent of the frame. Reused here it
+       gave the contact term authority over almost nothing: the
+       occlusion channel showed a crisp polearm shadow across the
+       sand and the composite showed a hint of one.
+
+       What this term needs to know is the opposite question - is
+       this pixel LIT AT ALL - and that separates at the bottom of
+       the range, not the top: sunlit sand sits around 0.17 and up,
+       a dune's own shadow side an order of magnitude below it. */
+    float lit = smoothstep(uContactGain.y, uContactGain.y * 3.0, keyLuma);
+    float sun = texture2D(tAo, vUv).g;
+    float cs = mix(1.0, sun, uContactGain.x * lit);
+    scene *= vec3(cs) * mix(vec3(1.0), vec3(0.86, 0.80, 1.02),
+                            (1.0 - cs) * uAo.y);
+  }
 
   vec3 bloom = sfSanitise(texture2D(tBloom, vUv).rgb);
 
@@ -1132,6 +1332,25 @@ export function createRenderer(ctx, canvas) {
     uBank: { value: new THREE.Vector2(0.62, 1.6) },
     uProjScale: { value: 500 },
     uDepthTexel: { value: new THREE.Vector2() },
+    uProj: { value: new THREE.Matrix4() },
+    uSunView: { value: new THREE.Vector3(0, 1, 0) },
+    /* Strength, reach, steps, start offset.
+       2.2m of reach: the term is for a body against its own limbs and
+       against the ground it stands on, and at a 13-degree sun that is
+       already 2m of ground travel for half a metre of height. Longer
+       is not better - past a couple of metres a screen-space march is
+       mostly finding silhouettes it has wandered behind, and the
+       shadow map covers that range correctly anyway.
+       0.03m start offset: about a third of the finest tier's shadow
+       texel, and enough to clear the pixel's own surface at every sun
+       elevation the cycle reaches. Steps come from the tier. */
+    uContact: { value: new THREE.Vector4(1, 2.2, 12, 0.03) },
+    /* Full strength inside 26m, gone by 52m. The near number is
+       comfortably past the third-person camera's own boom, so the
+       player and anything fighting them is always inside it; the far
+       one is where a 2.2m march stops being able to resolve anything
+       a 0.12m shadow texel has not already got. */
+    uContactFade: { value: new THREE.Vector2(26, 52) },
   });
   const aoBlurMat = mkPass(AO_BLUR_FRAG, {
     tAo: { value: null },
@@ -1163,6 +1382,7 @@ export function createRenderer(ctx, canvas) {
        the scene buffer of a live boss frame: p50 0.165, 99.2% under
        0.78. See the key-exemption comment in the composite. */
     uAo: { value: new THREE.Vector3(0.85, 0.7, 0.55) },
+    uContactGain: { value: new THREE.Vector2(QUALITY[DEFAULT_QUALITY].contact, 0.05) },
     /* Gain, then the receiver knee in LINEAR SCENE units - this runs
        before the exposure multiply and before the tone curve, so the
        knee is a scene-referred number and not a display one. Both are
@@ -1394,10 +1614,18 @@ export function createRenderer(ctx, canvas) {
     compMat.uniforms.uTintAmount.value = g.tint;
     const halo = atmos.sunHalo;
     compMat.uniforms.uHaloTint.value.set(halo.r * 0.14, halo.g * 0.11, halo.b * 0.08);
+    atmosRef = atmos;
     void v3;
   }
 
   /* ------------------------------ render ------------------------------ */
+
+  /* The live atmosphere, kept so the contact-shadow march can read
+     the CURRENT sun direction each frame. It is the same object sky.js
+     updates in place, not a copy - `applyAtmosphere` is called once at
+     boot and again on every grade change, and the direction inside it
+     moves continuously with the cycle. */
+  let atmosRef = null;
 
   let envTexture = null;
   function refreshEnvironment(atmos, size = 64) {
@@ -1474,6 +1702,14 @@ export function createRenderer(ctx, canvas) {
       // from the fov, so it stays correct if either changes.
       aoMat.uniforms.uProjScale.value =
         0.5 * aoTarget.height * cam.projectionMatrix.elements[5];
+      /* The sun in VIEW space, re-derived every frame: the cycle
+         moves it, and a stale direction here would march the contact
+         term off at yesterday's angle while the shadow map moved. */
+      aoMat.uniforms.uProj.value.copy(cam.projectionMatrix);
+      if (atmosRef) {
+        aoMat.uniforms.uSunView.value
+          .copy(atmosRef.sunDir).transformDirection(cam.matrixWorldInverse).normalize();
+      }
       runPass(aoMat, aoTarget);
 
       // Separable, so the blur is 2 x 9 taps rather than 81.
@@ -1555,6 +1791,12 @@ export function createRenderer(ctx, canvas) {
 
   /* The tier table is at module scope (see QUALITY, top of file). */
   let qualityTier = DEFAULT_QUALITY;
+  /* Reported, because the shadow TEXEL - not the map size and not the
+     frustum on their own - is the number that decides what a shadow
+     can resolve, and the tier ladder was wrong for a release because
+     nothing printed it. */
+  let shadowMap = QUALITY[DEFAULT_QUALITY].shadow;
+  let shadowSpan = QUALITY[DEFAULT_QUALITY].shadowRadius;
 
   function setQuality(tier, sky) {
     const key = normalizeQuality(tier);
@@ -1579,14 +1821,28 @@ export function createRenderer(ctx, canvas) {
       sceneTarget.samples = msaa;
       sceneTarget.dispose();
     }
+    aoMat.uniforms.uContact.value.x = q.contact > 0 ? 1 : 0;
+    aoMat.uniforms.uContact.value.z = q.contactSteps;
+    compMat.uniforms.uContactGain.value.x = q.contact;
     if (!ctx.qa) shadowEvery = q.shadowEvery;
     if (sky) {
-      sky.sun.shadow.mapSize.set(q.shadow, q.shadow);
+      /* Capped against what the driver will actually allocate. Ultra
+         asks for 8192, which is inside the ES 3.0 floor but not
+         guaranteed on every mobile GL path; over the cap three logs a
+         warning and hands back an unusable map, so the tier degrades
+         here instead. */
+      const map = Math.min(q.shadow, renderer.capabilities.maxTextureSize || q.shadow);
+      sky.sun.shadow.mapSize.set(map, map);
       if (sky.sun.shadow.map) {
         sky.sun.shadow.map.dispose();
         sky.sun.shadow.map = null;
       }
+      // Sets the frustum AND re-derives both biases from the texel the
+      // map size above just fixed. Order matters: the bias is a
+      // function of BOTH numbers.
       sky.setShadowRadius(q.shadowRadius);
+      shadowMap = map;
+      shadowSpan = q.shadowRadius;
     }
     // The old map was just disposed; without a forced redraw the next
     // interleave gap would present one frame of shadowless world.
@@ -1650,10 +1906,12 @@ export function createRenderer(ctx, canvas) {
      *  small has several possible causes and looking at the buffer
      *  distinguishes them in one capture. */
     debugBlit(which) {
-      debugMat.uniforms.uMode.value = which === "depth" ? 1 : 0;
+      debugMat.uniforms.uMode.value = which === "depth" ? 1
+        : which === "contact" ? 2 : 0;
       debugMat.uniforms.tDepth.value = sceneTarget.depthTexture;
       debugMat.uniforms.uNearFar.value.set(camera.near, camera.far);
-      debugMat.uniforms.tSrc.value = which === "ao" ? aoTarget.texture
+      debugMat.uniforms.tSrc.value = (which === "ao" || which === "contact")
+        ? aoTarget.texture
         : which === "aoraw" ? aoBlurTarget.texture
           : sceneTarget.texture;
       quad.material = debugMat;
@@ -1708,6 +1966,21 @@ export function createRenderer(ctx, canvas) {
       return [v.x, v.y];
     },
     get aoStrength() { return compMat.uniforms.uAo.value.x; },
+    /** Contact-shadow authority and tap count, for A/B isolation.
+     *  Zero removes the term entirely (the composite branches on it),
+     *  which is what an isolation probe needs to attribute a change. */
+    setContactShadow(gain, steps) {
+      if (Number.isFinite(gain)) {
+        compMat.uniforms.uContactGain.value.x = clamp01(gain);
+        aoMat.uniforms.uContact.value.x = gain > 0 ? 1 : 0;
+      }
+      if (Number.isFinite(steps)) {
+        aoMat.uniforms.uContact.value.z = clamp(Math.round(steps), 0, 24);
+      }
+    },
+    get contactShadow() {
+      return [compMat.uniforms.uContactGain.value.x, aoMat.uniforms.uContact.value.z];
+    },
     setExposureScale(v) { compMat.uniforms.uExposure.value = v; },
     uniforms: compMat.uniforms,
     targets: { sceneTarget, bloomTargets, bloomUp, aoTarget, aoBlurTarget },
@@ -1729,6 +2002,11 @@ export function createRenderer(ctx, canvas) {
         msaa: sceneTarget.samples,
         aoStrength: compMat.uniforms.uAo.value.x,
         sceneSize: [sceneTarget.width, sceneTarget.height],
+        shadowMap,
+        shadowSpan,
+        shadowTexel: Number(((shadowSpan * 2) / Math.max(1, shadowMap)).toFixed(4)),
+        contact: compMat.uniforms.uContactGain.value.x,
+        contactSteps: aoMat.uniforms.uContact.value.z,
       };
     },
   };

@@ -44,11 +44,14 @@ const BASE = `http://127.0.0.1:${PORT}`;
    the check is that the table the game ships matches what the switch
    does to the frame, so a silent edit to either side fails loudly. */
 const EXPECT = {
-  low: { ratio: 0.75, msaa: 0, ao: 0, shadow: 1024, shadowEvery: 3 },
-  medium: { ratio: 1.5, msaa: 2, ao: 0.72, shadow: 2048, shadowEvery: 2 },
-  high: { ratio: 2, msaa: 4, ao: 0.85, shadow: 4096, shadowEvery: 2 },
-  ultra: { ratio: 2, msaa: 4, ao: 0.95, shadow: 4096, shadowEvery: 2 },
+  low: { ratio: 0.75, msaa: 0, ao: 0, shadow: 1024, shadowEvery: 3, span: 170, contact: 0 },
+  medium: { ratio: 1.5, msaa: 2, ao: 0.72, shadow: 2048, shadowEvery: 2, span: 210, contact: 0.55 },
+  high: { ratio: 2, msaa: 4, ao: 0.85, shadow: 4096, shadowEvery: 2, span: 250, contact: 0.72 },
+  ultra: { ratio: 2, msaa: 4, ao: 0.95, shadow: 8192, shadowEvery: 2, span: 340, contact: 0.85 },
 };
+
+/* Tier order, low to high, for the monotonicity gate below. */
+const LADDER = ["low", "medium", "high", "ultra"];
 
 function startServer() {
   const child = spawn("/opt/homebrew/bin/python3",
@@ -86,6 +89,15 @@ const readState = () => {
     ao: info.aoStrength,
     shadowEvery: info.shadowEvery,
     shadow: T.sky.sun.shadow.mapSize.x,
+    /* The number that actually decides what a shadow can resolve.
+       Neither the map size nor the frustum means anything alone:
+       ULTRA shipped with a map equal to HIGH's and a frustum a third
+       wider, which is a COARSER shadow on the more expensive tier,
+       and every per-field assertion in this file passed. */
+    shadowSpan: info.shadowSpan,
+    shadowTexel: info.shadowTexel,
+    contact: info.contact,
+    normalBias: Number(T.sky.sun.shadow.normalBias.toFixed(4)),
     sceneSize: info.sceneSize,
     stored: JSON.parse(localStorage.getItem("saintfall:field-ui:v1") || "{}").quality,
     settingsQuality: T.settingsState().quality,
@@ -163,6 +175,7 @@ async function main() {
     await A.page.locator('[data-quality="low"]').waitFor({ state: "visible", timeout: 10000 });
     await A.page.screenshot({ path: path.join(OUT, "ingame-settings-page.png") });
     const stills = {};
+    const texelByTier = {};
     for (const tier of ["low", "medium", "ultra", "high", "low", "high"]) {
       await A.page.locator(`[data-quality="${tier}"]`).click();
       const s = await A.page.evaluate(readState);
@@ -172,6 +185,15 @@ async function main() {
       check(`${tier}: msaa ${e.msaa}`, s.msaa === e.msaa, `msaa=${s.msaa}`);
       check(`${tier}: ao ${e.ao}`, near(s.ao, e.ao), `ao=${s.ao}`);
       check(`${tier}: shadow map ${e.shadow}`, s.shadow === e.shadow, `shadow=${s.shadow}`);
+      check(`${tier}: shadow frustum ${e.span}m`, s.shadowSpan === e.span, `span=${s.shadowSpan}`);
+      check(`${tier}: contact shadow ${e.contact}`, near(s.contact, e.contact), `contact=${s.contact}`);
+      /* The bias follows the texel or it is wrong for three tiers out
+         of four. Pinned as a ratio, not a number, so retuning the
+         ladder cannot silently leave it behind. */
+      check(`${tier}: normal bias tracks the texel`,
+        near(s.normalBias / s.shadowTexel, 1.45, 0.02) || s.normalBias === 0.02,
+        `nb=${s.normalBias} texel=${s.shadowTexel}`);
+      texelByTier[tier] = s.shadowTexel;
       check(`${tier}: shadow cadence ${e.shadowEvery}`, s.shadowEvery === e.shadowEvery, `every=${s.shadowEvery}`);
       check(`${tier}: preference stored`, s.stored === tier, `stored=${s.stored}`);
       check(`${tier}: menu highlights it`, s.activeMenu.length === 1 && s.activeMenu[0] === tier,
@@ -192,6 +214,28 @@ async function main() {
       }
       await A.page.evaluate(() => window.__SF.gameUi.openMenu("settings"));
     }
+
+    /* THE GATE THE LADDER ACTUALLY NEEDED.
+
+       Every per-field assertion above passed on a table where ULTRA
+       resolved shadows one third COARSER than HIGH - because no
+       assertion compared two tiers to each other, and the quantity
+       that matters (2 * frustum / mapSize) was not a field anyone had
+       written down. Paying more for a worse picture is the one thing
+       a quality ladder must not do, so it is checked as an ORDER
+       rather than as four independent numbers. */
+    const ladder = LADDER.map((t) => texelByTier[t]);
+    console.log(`  shadow texel by tier: ${LADDER.map((t, i) => `${t} ${ladder[i]}m`).join("  ")}`);
+    check("shadow texel improves at every step up the ladder",
+      ladder.every((v, i) => i === 0 || (v > 0 && v < ladder[i - 1])),
+      ladder.join(" -> "));
+    check("shadow range never shrinks going up the ladder",
+      LADDER.every((t, i) => i === 0 || EXPECT[t].span >= EXPECT[LADDER[i - 1]].span),
+      LADDER.map((t) => EXPECT[t].span).join(" -> "));
+    check("contact shadow never weakens going up the ladder",
+      LADDER.every((t, i) => i === 0 || EXPECT[t].contact >= EXPECT[LADDER[i - 1]].contact),
+      LADDER.map((t) => EXPECT[t].contact).join(" -> "));
+
     check("no page errors (in-game switch)", A.errors.length === 0, A.errors[0] || "");
     await A.context.close();
 

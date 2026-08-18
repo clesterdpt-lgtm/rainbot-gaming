@@ -42,17 +42,18 @@ at the point of use, so a change in either menu takes effect next frame.
 
 | | Pilgrim | Penitent | Martyr |
 |---|---|---|---|
-| incoming damage (all sources, once, in `hurtPlayer`) | 0.82 | 1.0 | 1.20 |
-| light-caste health (Thresher, Gleaner) | 0.85 | 1.0 | 1.30 (Thresher 78) |
-| heavy / guardian / boss health | 0.85 | 1.0 | 1.15 |
-| breach roster × (never the ranged caste), cycle pace | 0.8, ×1.25 slower | 1.0 | 1.2, ×0.8 faster |
-| Gleaners per roster that field them (the only knob on their count) | −1 | 0 | 0 |
-| Gleaner direct-aim chance | 0.32 | 0.42 | 0.46 |
-| Thresher charge (and pounce) | 0.9 | 1.0 | 1.2 (8.88 m/s) |
-| Volley heat per shot | 0.88 (34 rounds) | 1.0 (30) | 1.25 (24) |
+| incoming damage (all sources, once, in `hurtPlayer`) | 0.82 | 1.0 | 1.35 |
+| light-caste health (Thresher, Gleaner) | 0.85 | 1.0 | 1.6 (Thresher 96: two rounds even on the head; one lance sweep) |
+| heavy / boss health (heavy moves less — every extra sweep is an armoured bite) | 0.85 | 1.0 | 1.2 / 1.4 |
+| **garrison** size per site (the field) | 0.85 | 1.0 | 1.6 |
+| **alert radius** (one waking creature wakes neighbours) / sight | 42 m / 1.0 | 42 m / 1.0 | 67 m / 1.2 |
+| breach roster × (never the ranged caste), cycle pace | 0.8, ×1.25 slower | 1.0 | 1.7, ×0.55 (first warning 99 s, intermission 33 s) |
+| Gleaners: roster factor / delta / direct-aim / burst | 1.0 / −1 / 0.32 / 3 | 1.0 / 0 / 0.42 / 3 | 1.0 / 0 / 0.46 / 3 |
+| Thresher charge / pounce commitment | 0.9 / 1.0 | 1.0 / 1.0 | 1.35 (10.0 m/s) / 1.2 (9.0 m/s — a straight backpedal no longer works) |
+| Volley heat per shot | 0.88 (34 rounds) | 1.0 (30) | 1.5 (20) |
 | melee slot cap | 2 | 2 | 3 |
-| kill-heal / regen rebate | ×1.0 | ×1.0 | ×1.25 |
-| regen delay | 4.5 s | 5.5 s | 6.5 s |
+| kill-heal / regen rebate | ×1.0 | ×1.0 | ×1.8 |
+| regen delay / rate | 4.5 s / 10 | 5.5 s / 10 | 8.0 s / 7 |
 
 Penitent is the tier the game is tuned at, with one nudge: the ordinary
 castes' base damage multiplier goes 0.82 → 0.85 (`SURVIVAL_CONFIG`), because
@@ -98,33 +99,47 @@ below that the Volley is untouched and a ratio says nothing); Martyr is
 measurably harder and Pilgrim measurably gentler for both builds together,
 and gentler for each.
 
-| W3 Breaker Brood | Volley | lance | guarded lance |
-|---|---|---|---|
-| Pilgrim (8 enemies) | 0–7 | 14–28 | 43–50 |
-| Penitent (10) | 26–34 | 52–78 | 121 (regen'd) |
-| Martyr (11, Thresher 78) | 52 | 62–83 | 188 (regen'd) |
+Bot results — and the bots are the *floor*, not the player: they stand
+still under fire (the lance) or retreat with perfect aim (the rifle), and
+neither uses boost, cover, Aegis or a stratagem. A tier that only just kills
+them is a nudge for a person, which is exactly what the first Martyr turned
+out to be ("still very easy on the hardest mode"). The second Martyr is a
+step (W3+W4 pressure roughly doubles); the tables are filled in from the
+final `--tiers all` pass in the report JSON.
 
-| W4 Crowned Surge | Volley | lance | guarded lance |
-|---|---|---|---|
-| Pilgrim (11) | 15 | 70–93 | 39–93 |
-| Penitent (14) | 66–84 | 160–197 (109 healed) | 141–207 |
-| Martyr (16) | 101–146, ends on 4–54 | 226 (131 healed), clears | **dies** (7 s) |
-
-Lance-to-Volley ratio over W3+W4: Pilgrim 1.6–1.8 (floored), Penitent
-2.0–2.3, Martyr **1.4–1.9** — the gap *narrows* on hard, which is the whole
-point. Martyr's Crowned Surge is the wall: the rifle scrapes through, the
-naive lance clears on its heals, and the guarded-approach heuristic (a
-frontal plate held at 3 m/s against 360° pressure) dies — so the per-tier
-parity gate asks whether *a* lance play survives what the rifle survives,
-and Penitent alone keeps the stricter both-builds gates. Breaker Brood is
-clearable by all three at every tier, with real cost on Martyr.
+On Martyr the rifle bot becomes nearly untouchable: it kills each 96-HP
+Thresher in 0.44 s — inside the 0.35 s first-contact hold — and never stops
+moving, so bolts miss. Zero tells begin against it. That is a bot artefact
+(nobody lands four rounds on every arriving Thresher), so the parity claim
+on a hard tier is carried two ways, either sufficient: the lance-to-Volley
+ratio within 1.6× of Penitent's where the rifle is meaningfully engaged, or
+the lance's **cost per kill** growing no faster than the tier's damage
+multiplier ×1.3 (count, health and speed must not have multiplied the
+lance's price). The survival gate binds only where the rifle never dropped
+below 40 HP. Human playtest is the arbiter of Martyr's absolute level; the
+table is one column of edits either way, and if the rifle reads as too safe
+on Martyr in play, `pounce` (retreat tax) and `heat` are the rifle-only
+levers.
 
 ## Traps
 
-- **The first Martyr killed both bots in W3.** 1.24 incoming, roster ×1.3,
-  aim 0.50, +1 Gleaner: the rifle died at 6.8 s to three Gleaners it could
-  not out-shoot while every Thresher took two rounds. That is a wall, not a
-  hard tier. Roster 1.2 / aim 0.46 / incoming 1.20 land W3 as effortful.
+- **Calibrating a tier to what the bots survive under-tunes it for a
+  person.** The first shipped Martyr (incoming 1.20, roster 1.2, aim 0.46,
+  Thresher 78) was tuned so the probe's bots cleared Breaker Brood; it
+  played as a ~15 % nudge and was reported as "very easy on the hardest
+  mode". Bots stand still under fire and never boost, guard, take cover or
+  call a stratagem - a person is far above them. Use the bots for the
+  *parity* claim (the ratio) and for regression, not for the absolute
+  level; and give a hard tier the field (garrison ×1.6, alert radius 67 m,
+  sight ×1.2), because the field is most of the road and no wave knob
+  touches it.
+- **Three of the knobs I first raised on Martyr were melee-only taxes.** A
+  slot cap of 4 only ever binds on the trooper the pack has reached (the
+  lance); Gleaner burst 4 / aim 0.55 / an extra Gleaner shredded the pinned
+  lance in 4.6 s while the rifle cleared from 65 HP; heavy health ×1.35 is
+  an armoured bite per extra sweep. All three moved back. Martyr's step
+  comes from the swarm's size and health, its speed, the field, heat and
+  regen — the ranged taxes — with the lance's sustain raised to 1.8.
 - **+1 Gleaner reopened the gap.** With it, the naive lance died in Martyr
   W3 (155 of 187 HP to bolts) while the rifle cleared. Gleaner *count* is
   the one axis the lance pays more for; it stays a Pilgrim relief and not a

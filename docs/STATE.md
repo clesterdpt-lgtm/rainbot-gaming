@@ -36,6 +36,27 @@ survives with the garrison. The Volley still kills it in 61 s untouched
 (pre-existing: chained collapses, four knees in 6 s) — noted, not moved.
 Build pin `20260818-distaff-lance-1`.
 
+**98b — SAINTFALL: Martyr recalibrated** after playtest ("still very easy on
+the hardest mode"). The first Martyr was tuned to what the duel probe's bots
+survive, and bots are far below a person (they stand still under fire and
+never boost, guard, take cover or call a stratagem) - it played as a ~15%
+nudge. Martyr is now a step: incoming 1.35 with lance sustain 1.8, light
+caste 1.6 (Thresher 96), heavy 1.2 / boss 1.4, breach roster 1.7 (never the
+ranged caste) at pace 0.55, Gleaner aim 0.46, Thresher 10.0 m/s with a 9.0
+m/s pounce that a straight backpedal cannot escape, 20 rounds before
+overheat, regen 8 s / 7 per second - and the FIELD, which no wave knob
+touched: garrison 1.6, alert radius 67 m, sight 1.2. Three knobs first
+raised on Martyr were melee-only taxes (slot cap 4, Gleaner burst/aim/count,
+heavy health 1.35) and moved back after they shredded the pinned lance
+while the rifle cleared. The HUD's field-orders header now names the tier
+in force. `--tiers all`: on Martyr the perfect-aim rifle bot is nearly
+untouchable (kills each Thresher inside the first-contact hold, never stops
+moving) - a bot artefact - so parity is carried by the lance's cost per
+kill growing no faster than incoming x1.3, with the ratio gate where the
+rifle is engaged and the survival gate where it never dropped below 40 HP.
+Build pin `20260818-martyr-road-1`; docs in
+`docs/milestones/98-saintfall-difficulty-tiers.md`.
+
 **98 — SAINTFALL: difficulty tiers (Pilgrim / Penitent / Martyr)** is
 implemented and gated; awaits user playtest. One `DIFFICULTY` table
 (`assets/js/saintfall/difficulty.js`, module scope like render.js `QUALITY`)

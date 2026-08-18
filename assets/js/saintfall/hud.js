@@ -48,7 +48,7 @@ export function buildHud(ctx, host) {
     </aside>
     <section class="sf-hud__objective" id="sf-objective" aria-label="Active field orders">
       <header class="sf-objective__head">
-        <span>FIELD ORDERS</span><small><kbd>M</kbd> MAP</small>
+        <span>FIELD ORDERS</span><small><span id="sf-hud-tier" class="sf-hud__tier" title="Difficulty tier">PENITENT</span> · <kbd>M</kbd> MAP</small>
       </header>
       <article class="sf-objective__item sf-objective__item--primary">
         <i aria-hidden="true">01</i>
@@ -123,6 +123,18 @@ export function buildHud(ctx, host) {
 
   const districtEl = el.querySelector("#sf-district");
   const nameEl = el.querySelector("#sf-district-name");
+  /* The road's tier, in the field orders header, so the tier in force is
+     never a guess - a tier that only showed in a menu read as "not working". */
+  const tierEl = el.querySelector("#sf-hud-tier");
+  let tierShown = "";
+  function refreshTier() {
+    const label = ctx.difficulty?.label?.() || "";
+    if (label !== tierShown && tierEl) {
+      tierShown = label;
+      tierEl.textContent = label;
+      tierEl.dataset.tier = ctx.difficulty?.tier || "";
+    }
+  }
   const stripEl = el.querySelector("#sf-compass-strip");
   const readoutEl = el.querySelector("#sf-readout");
   const minimapEl = el.querySelector("#sf-minimap");
@@ -1333,6 +1345,7 @@ export function buildHud(ctx, host) {
   return {
     el,
     update(dt, player, camera) {
+      refreshTier();
       const p = player.position;
       const d = districtAt(p.x, p.z);
       const key = d ? d.key : null;

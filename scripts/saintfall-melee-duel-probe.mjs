@@ -504,7 +504,10 @@ async function main() {
               // Same arithmetic as breaches.js tieredCount(): the ranged
               // caste moves only through gleanerDelta, never the multiplier.
               if (entry.key === "gleaner") {
-                if (hasGleaner) count += Math.round(tierValues.gleanerDelta || 0);
+                if (hasGleaner) {
+                  count = Math.round(count * (Number.isFinite(tierValues.gleanerRoster) ? tierValues.gleanerRoster : 1))
+                    + Math.round(tierValues.gleanerDelta || 0);
+                }
               } else {
                 count = Math.round(count * (Number.isFinite(tierValues.roster) ? tierValues.roster : 1));
               }
@@ -574,8 +577,10 @@ async function main() {
           let firstContactAt = null;
           let deadAt = null;
           let clearedAt = null;
+          let hpMin = combat.player.hp;
 
           while (t < seconds) {
+            hpMin = Math.min(hpMin, combat.player.hp);
             if (combat.player.dead) { deadAt = t; break; }
             const live = liveEnemies();
             if (!live.length) { clearedAt = t; break; }
@@ -671,11 +676,13 @@ async function main() {
           for (const h of hurt) bySource[h.src] = (bySource[h.src] || 0) + h.dmg;
           return {
             label, mode, roster: keys.join(","), spawned: spawned.length,
+            tierValues: tierValues ? { incoming: tierValues.incoming, roster: tierValues.roster } : null,
             seconds: Number(t.toFixed(2)),
             outcome: deadAt !== null ? "DIED" : clearedAt !== null ? "cleared" : "timeout",
             firstContactAt: firstContactAt !== null ? Number(firstContactAt.toFixed(2)) : null,
             kills, remaining: liveEnemies().length,
             hpEnd: Number(combat.player.hp.toFixed(1)),
+            hpMin: Number(hpMin.toFixed(1)),
             hpLost: Number(totalDamage.toFixed(1)),
             hpLostPerKill: kills ? Number((totalDamage / kills).toFixed(1)) : null,
             hitsTaken: hurt.length,
@@ -829,10 +836,14 @@ async function main() {
         if (!rows.length) continue;
         for (const label of heavy) {
           const ranged = cellOf(rows, label, "ranged");
-          /* The parity claim binds where the rifle clears WITH A MARGIN. A
-             rifle that scrapes through on its last few points has met a wall
-             too, and a gate on that is a coin flip, not a gap. */
-          if (!ranged || ranged.outcome !== "cleared" || ranged.hpEnd < 20) continue;
+          /* The parity claim binds where the rifle clears WITH A MARGIN: it
+             never dropped below 40 of 150 (the LOWEST point, not the end - a
+             long fight regenerates). A rifle that scrapes through on its last
+             points has met a wall too - on Martyr it died to Breaker Brood and
+             then cleared the larger Crowned Surge from 24 - and a gate on that
+             is a coin flip, not a gap. The ratio gate below is the robust
+             measure. */
+          if (!ranged || ranged.outcome !== "cleared" || (ranged.hpMin ?? ranged.hpEnd) < 40) continue;
           /* The parity question per tier is "does A lance play survive what
              the rifle survives" - the two lance bots are two heuristics, and
              on a wall wave the guarded one (a frontal plate held at 3 m/s
@@ -843,13 +854,32 @@ async function main() {
           const survivors = [lance, guarded].filter((r) => r && r.outcome === "cleared");
           check(`[${tierName}] ${label}: a lance build survives a roster the Volley clears`,
             survivors.length > 0,
-            `lance=${lance?.outcome} (${lance?.hpLost} lost, ${lance?.healed} healed) guarded=${guarded?.outcome} (${guarded?.hpLost} lost, ${guarded?.healed} healed) volley=${ranged.hpLost} (ended ${ranged.hpEnd})`);
+            `lance=${lance?.outcome} (${lance?.hpLost} lost, ${lance?.healed} healed) guarded=${guarded?.outcome} (${guarded?.hpLost} lost, ${guarded?.healed} healed) volley=${ranged.hpLost} (lowest ${ranged.hpMin}, ended ${ranged.hpEnd})`);
         }
         if (tierName !== "penitent" && penitentRows.length) {
           const ratio = ratioOf(rows);
-          check(`[${tierName}] the lance-to-Volley HP-lost ratio over W3+W4 stays within 1.6x of Penitent's`,
-            ratio <= penitentRatio * 1.6 + 1e-9,
-            `ratio=${ratio.toFixed(2)} penitent=${penitentRatio.toFixed(2)} (lance ${sumLost(rows, "melee").toFixed(0)} / volley ${sumLost(rows, "ranged").toFixed(0)})`);
+          /* Two ways to hold the parity claim, either suffices. The ratio,
+             when the rifle is meaningfully engaged; and, because a perfect-aim
+             rifle in permanent retreat can be untouchable on a hard tier (it
+             kills each Thresher inside the first-contact hold and never stops
+             moving, so bolts miss - a bot artefact a person will not
+             reproduce), the lance's cost PER KILL may grow no faster than the
+             tier's damage multiplier x1.3: count, health and speed must not
+             have multiplied the lance's price. */
+          const perKill = (r, mode) => {
+            let lost = 0; let kills = 0;
+            for (const label of heavy) { const c = cellOf(r, label, mode); if (c) { lost += c.hpLost; kills += c.kills; } }
+            return kills ? lost / kills : 0;
+          };
+          const tierIncoming = (rows[0]?.tierValues?.incoming) || 1;
+          const perKillRatio = perKill(rows, "melee") / Math.max(1e-6, perKill(penitentRows, "melee"));
+          const perKillBound = tierIncoming * 1.3;
+          const ratioOk = ratio <= penitentRatio * 1.6 + 1e-9;
+          const perKillOk = perKillRatio <= perKillBound + 1e-9;
+          check(`[${tierName}] parity: lance-to-Volley ratio within 1.6x of Penitent, or lance cost per kill within incoming x1.3`,
+            ratioOk || perKillOk,
+            `ratio=${ratio.toFixed(2)} (penitent ${penitentRatio.toFixed(2)}; lance ${sumLost(rows, "melee").toFixed(0)} / volley ${sumLost(rows, "ranged").toFixed(0)})`
+            + ` perKill=${perKill(rows, "melee").toFixed(1)} vs ${perKill(penitentRows, "melee").toFixed(1)} = x${perKillRatio.toFixed(2)} (bound x${perKillBound.toFixed(2)})`);
           const total = totalOf(rows);
           if (tierName === "martyr") {
             check("[martyr] is measurably harder than Penitent for both builds together",

@@ -1998,7 +1998,11 @@ export async function buildEnemies(ctx, onProgress) {
     let placed = 0;
     for (const g of GARRISONS) {
       if (!species.has(g.key)) continue;
-      for (let i = 0; i < g.n; i += 1) {
+      /* The tier thickens the field itself, not only the breach waves -
+         most of the road is garrison, and a hard tier that left it alone
+         read as no tier at all. */
+      const count = Math.max(1, Math.round(g.n * (ctx.difficulty?.current?.garrison || 1)));
+      for (let i = 0; i < count; i += 1) {
         // Square-rooted radius, or every garrison clumps in its own
         // middle: uniform r over a disc puts most of the area, and
         // so most of the units, near the rim.

@@ -815,6 +815,9 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   width: min(30rem, 76vw); text-align: center; pointer-events: none;
   transition: opacity .3s;
 }
+.sf-hud__tier { color: rgba(216,164,65,.85); letter-spacing: .08em; }
+.sf-hud__tier[data-tier="martyr"] { color: #ef633e; }
+.sf-hud__tier[data-tier="pilgrim"] { color: rgba(242,229,199,.7); }
 .sf-hud__objective[data-event="1"] .sf-hud__objlabel {
   color: #ffd8c2;
   text-shadow: 0 1px 4px rgba(0, 0, 0, .95), 0 0 10px rgba(209, 54, 30, .36);

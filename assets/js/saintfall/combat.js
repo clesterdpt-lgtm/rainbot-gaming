@@ -2294,7 +2294,7 @@ export function buildCombat(ctx) {
   function canSee(inst, px, py, pz) {
     const horizontal = Math.hypot(px - inst.x, pz - inst.z);
     const spec = SPEC[inst.key] || SPEC.thresher;
-    if (horizontal > spec.sight) return false;
+    if (horizontal > spec.sight * (tier().sight || 1)) return false;
 
     const box = HITBOX[inst.key] || HITBOX.thresher;
     /* Sight for a ranged unit starts at the socket its bolt actually
@@ -2452,7 +2452,7 @@ export function buildCombat(ctx) {
       inst.alerted = true;
       for (const other of enemies.live) {
         if (other === inst || other.state === "death") continue;
-        if (Math.hypot(other.x - inst.x, other.z - inst.z) < 42) {
+        if (Math.hypot(other.x - inst.x, other.z - inst.z) < 42 * (tier().alertRadius || 1)) {
           other.suspicion = Math.max(other.suspicion || 0, 0.9);
         }
       }
@@ -2944,7 +2944,7 @@ export function buildCombat(ctx) {
     if (inst.fireTimer > 0) return;
 
     if (spec.burst) {
-      if (inst.burstLeft <= 0) inst.burstLeft = spec.burst;
+      if (inst.burstLeft <= 0) inst.burstLeft = tier().gleanerBurst || spec.burst;
       inst.burstLeft -= 1;
       inst.fireTimer = inst.burstLeft > 0 ? spec.cadence : spec.burstGap;
       if (inst.state !== "fire") enemies.play(inst, "fire", 0.12);
@@ -3008,7 +3008,7 @@ export function buildCombat(ctx) {
       t: 0,
       windup,
       yaw: inst.yaw,
-      lunge: strikeValue(inst, cfg.lunge) * chargeSpeed(inst),
+      lunge: strikeValue(inst, cfg.lunge) * (tier().pounce || 1) * chargeSpeed(inst),
     };
     /* Direct call, not optional-chained: `replay` is part of the enemy-
        system contract, and a missing export should fail a test rather
@@ -3186,7 +3186,8 @@ export function buildCombat(ctx) {
     // that it never rewards standing in the open. A melee kill brings
     // `regenAt` forward (see meleeStrike); a hit pushes it back out.
     if (clock > player.regenAt && player.hp < player.maxHp) {
-      player.hp = Math.min(player.maxHp, player.hp + dt * SURVIVAL_CONFIG.regenPerSecond);
+      player.hp = Math.min(player.maxHp,
+        player.hp + dt * SURVIVAL_CONFIG.regenPerSecond * (tier().regenRate || 1));
     }
 
     const eyeY = ps.y + 1.62;

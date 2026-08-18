@@ -147,10 +147,12 @@ export function buildBreaches(ctx) {
       if (entry.key === "gleaner") {
         /* The ranged caste is NOT under the roster multiplier: an extra
            Gleaner taxes the lance more than the rifle (it is fired on while
-           pinned), so its count moves only through `gleanerDelta` - and only
-           in a wave that already fields it; the skitter waves stay pure. */
+           pinned), so its count moves only through its own, smaller
+           `gleanerRoster` factor and `gleanerDelta` - and only in a wave that
+           already fields it; the skitter waves stay pure. */
         if (wave.roster.some((e) => e.key === "gleaner")) {
-          count += Math.round(values.gleanerDelta || 0);
+          count = Math.round(count * (Number.isFinite(values.gleanerRoster) ? values.gleanerRoster : 1))
+            + Math.round(values.gleanerDelta || 0);
         }
       } else {
         count = Math.round(count * (Number.isFinite(values.roster) ? values.roster : 1));

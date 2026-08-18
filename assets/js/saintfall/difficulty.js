@@ -52,10 +52,19 @@ export const DIFFICULTY = Object.freeze({
     gleanerDirectAim: 0.32,
     breachPace: 1.25,    // multiplies the breach timers (larger = slower)
     thresherSpeed: 0.9,  // charge speed and the pounce that rides on it
+    pounce: 1.0,         // committed-lunge fraction of charge speed, relative
     heat: 0.88,          // Volley heat per shot (34 rounds before overheat)
     slotCap: 2,
     sustain: 1.0,        // melee kill-heal and regen rebate
     regenDelay: 4.5,
+    regenRate: 1.0,      // passive regen per second, as a factor of 10
+    /* The FIELD, which is most of the road: garrison size per site, how far
+       one waking creature wakes its neighbours, how far the castes see. */
+    garrison: 0.85,
+    alertRadius: 1.0,
+    sight: 1.0,
+    gleanerBurst: 3,
+    gleanerRoster: 1.0,  // multiplier on the ranged caste's roster count
   }),
   penitent: Object.freeze({
     label: "PENITENT",
@@ -69,36 +78,64 @@ export const DIFFICULTY = Object.freeze({
     gleanerDirectAim: 0.42,
     breachPace: 1.0,
     thresherSpeed: 1.0,
+    pounce: 1.0,
     heat: 1.0,           // 30 rounds
     slotCap: 2,
     sustain: 1.0,
     regenDelay: 5.5,
+    regenRate: 1.0,
+    garrison: 1.0,
+    alertRadius: 1.0,
+    sight: 1.0,
+    gleanerBurst: 3,
+    gleanerRoster: 1.0,
   }),
   martyr: Object.freeze({
     label: "MARTYR",
-    blurb: "Thicker broods that come sooner and cannot be outrun; a barrel that runs hot; a Thresher that takes two rounds. The lance pays a little more per bite and heals a little more per kill.",
-    /* Measured with `--tiers all`: at 1.24 / roster 1.3 / aim 0.50 Martyr
-       killed BOTH bots inside Breaker Brood (the rifle at 6.8s, to three
-       Gleaners it could not out-shoot while every Thresher took two rounds)
-       - a wall, not a hard tier. These land W3 as clearable-with-effort and
-       leave Crowned Surge as the wall. */
-    incoming: 1.20,
-    lightHealth: 1.30,   // Thresher 78: no frontal one-shot for the Volley
-    heavyHealth: 1.15,
-    bossHealth: 1.15,
-    roster: 1.2,
-    /* Not +1: an extra Gleaner is the one thing that taxes the lance MORE
-       than the rifle (it is fired on while pinned), and the naive lance bot
-       died to it in Breaker Brood while the rifle cleared. Aim goes up
-       instead, which both builds pay for. */
+    blurb: "The road at war. Garrisons half again as large that wake together and see further; broods nearly twice as thick that come twice as often and cannot be outrun; a barrel that locks after twenty rounds; a Thresher that takes two rounds, pounces faster than you can back away, and bites a third harder. The lance heals more than half again per kill.",
+    /* The first Martyr was tuned to what the duel probe's bots survive, and
+       the bots are far below a person - they stand still under fire and never
+       touch boost, cover, Aegis or a stratagem. It played as a ~15% nudge and
+       read as "very easy". This is a step: pressure levers moved hard, damage
+       moved with sustain, the field itself thickened. The parity gates in
+       `saintfall-melee-duel-probe.mjs --tiers all` still bound it. */
+    incoming: 1.35,
+    lightHealth: 1.6,    // Thresher 96: two rounds even on a head; the lance still one hit
+    /* Heavy health is a melee tax in disguise - every extra sweep on a
+       Harrow is another armoured bite - so it moves less than the light
+       caste's. */
+    heavyHealth: 1.2,    // Harrow 504: five sweeps
+    bossHealth: 1.4,
+    roster: 1.7,
+    /* The ranged caste is deliberately NOT thickened. Measured: an extra
+       Gleaner with a four-bolt burst at 0.55 aim and 1.5x damage shredded
+       both lance bots in 4.6s of Crowned Surge while the rifle cleared it
+       from 65 HP - Gleaner lethality is the one axis that taxes the pinned
+       lance and not the kiting rifle, so Martyr leans on the swarm, the
+       health, the speed and the field instead. Aim alone moves, moderately,
+       and both builds pay for it. */
     gleanerDelta: 0,
+    gleanerRoster: 1.0,
     gleanerDirectAim: 0.46,
-    breachPace: 0.8,
-    thresherSpeed: 1.2,  // 8.88 m/s, past the trooper's 8.6
-    heat: 1.25,          // 24 rounds
+    gleanerBurst: 3,
+    breachPace: 0.55,    // first warning 99s, intermission 33s
+    thresherSpeed: 1.35, // 10.0 m/s
+    /* The pounce at 0.75 x 10.0 = 7.5 m/s is still short of a trooper
+       backpedalling at 8.6 - measured, a retreating rifle took no bites from
+       fifteen Threshers - so on Martyr it commits at 0.9 x charge (9.0 m/s):
+       a straight retreat no longer works, a sidestep still does, and the
+       lance, which does not retreat, pays nothing for it. */
+    pounce: 1.2,
+    heat: 1.5,           // 20 rounds
+    /* Not raised: the slot cap only ever bounds bites on a trooper the pack
+       has reached, and the pack reaches the lance. */
     slotCap: 3,
-    sustain: 1.25,
-    regenDelay: 6.5,
+    sustain: 1.8,
+    regenDelay: 8.0,
+    regenRate: 0.7,      // 7 a second
+    garrison: 1.6,
+    alertRadius: 1.6,    // 42m -> 67m: a garrison comes as one
+    sight: 1.2,
   }),
 });
 

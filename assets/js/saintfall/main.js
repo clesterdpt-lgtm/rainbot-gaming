@@ -1045,10 +1045,12 @@ export async function start({ boot, build } = {}) {
     } else step(1 / 60, true);
   }
   progress(1, "Ready");
-  // Let the loading title finish its fade before the interactive
-  // Deploy card appears underneath it.
-  if (boot) await boot.hide();
+  /* Put the save-aware entry card underneath the opaque loader first,
+     then fade the loader away. Reversing these two operations exposes
+     the intro's already-rendered orbital frame for the loader's 950ms
+     teardown before the menu becomes visible. */
   intro.reveal?.();
+  if (boot) await boot.hide();
   api.ready = true;
   requestAnimationFrame(loop);
 

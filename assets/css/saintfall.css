@@ -1430,6 +1430,14 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   transition-delay: 0s;
 }
 
+/* The entry menu is revealed underneath the still-opaque loader before
+   that loader begins its crossfade. Make that covered reveal immediate:
+   otherwise both layers animate from transparent and the orbital render
+   can show through the gap between them. */
+.sf-stage:has(> #sf-boot:not(.is-hidden)) > #sf-intro.is-ready {
+  transition: none;
+}
+
 #sf-intro.is-finished {
   opacity: 0;
   visibility: hidden;
@@ -3951,7 +3959,13 @@ body[data-sf-contrast="high"] #sf-hud :is(.sf-hud__vitals, .sf-hud__minimap) {
 #sf-boot > :not(.sf-boot__back) { width: min(25rem, 55%); }
 #sf-boot .sf-boot__mark { width: 5.2rem; height: 5.2rem; margin: 0 0 .35rem; }
 #sf-boot .sf-boot__glyph { inset: 1.15rem; width: calc(100% - 2.3rem); height: calc(100% - 2.3rem); }
-#sf-boot .sf-boot__title { font-size: clamp(2.1rem, 4.6vw, 4.4rem); line-height: .95; }
+#sf-boot .sf-boot__title {
+  width: min(34rem, 76%);
+  box-sizing: border-box;
+  padding-right: .28em;
+  font-size: clamp(2.1rem, 4.6vw, 4.4rem);
+  line-height: .95;
+}
 #sf-boot .sf-boot__sub { margin: 0 0 1.35rem; font-size: clamp(.85rem, 1.45vw, 1.1rem); }
 #sf-boot .sf-boot__bar { width: min(25rem, 55%); height: 3px; background: rgba(241, 222, 183, .16); }
 #sf-boot .sf-boot__fill { box-shadow: 0 0 1.1rem rgba(234, 177, 71, .52); }

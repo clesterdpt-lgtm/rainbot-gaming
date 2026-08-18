@@ -1582,6 +1582,12 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   top: max(2rem, calc(env(safe-area-inset-top) + 1.35rem));
   z-index: 20;
   width: min(31rem, 48vw);
+  /* Readouts, not controls. Both this block and the chapter card sit
+     ABOVE the entry menu (z 20 over 10) while invisible, and on a
+     phone the chapter card lies exactly over the bottom-anchored menu
+     buttons - an invisible element that swallowed every tap on
+     OPTIONS. Nothing in either is interactive. */
+  pointer-events: none;
   opacity: 0;
   transform: translateY(-.65rem);
   transition: opacity .5s ease .45s, transform .5s ease .45s;
@@ -1648,6 +1654,7 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   display: flex;
   flex-direction: column;
   width: min(38rem, 60vw);
+  pointer-events: none;   /* see .sf-intro__telemetry */
   opacity: 0;
   transform: translateY(.8rem);
   transition: opacity .56s ease .55s, transform .56s ease .55s;
@@ -3939,6 +3946,13 @@ body[data-sf-contrast="high"] #sf-hud :is(.sf-hud__vitals, .sf-hud__minimap) {
 .sf-intro__gate {
   left: clamp(2rem, 6.5vw, 6rem);
   top: 50%;
+  /* A flex column, so an open panel SHRINKS to the stage rather than
+     spilling past its bottom edge: the list inside scrolls (see
+     .sf-entry__panel), the HUD SCALE row is never clipped off. `vh`
+     could not do this - the stage is a fraction of the viewport. */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   width: max-content;
   max-width: calc(100% - 3rem);
   max-height: calc(100% - 2.5rem);
@@ -4044,7 +4058,13 @@ body[data-sf-contrast="high"] #sf-hud :is(.sf-hud__vitals, .sf-hud__minimap) {
 }
 .sf-entry__panel[hidden] { display: none !important; }
 .sf-intro__gate:not([data-entry-panel="main"]) .sf-entry__actions { display: none; }
+.sf-entry__header { flex: none; }
 .sf-entry__panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
   margin-top: .4rem;
   width: min(26rem, 90vw);
   box-sizing: border-box;
@@ -4056,7 +4076,24 @@ body[data-sf-contrast="high"] #sf-hud :is(.sf-hud__vitals, .sf-hud__minimap) {
   box-shadow: 0 1.2rem 4rem rgba(0, 0, 0, .82), inset 0 0 0 1px rgba(255, 240, 207, .05);
   animation: sf-entry-panel .25s ease both;
 }
-.sf-entry__panel > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .65rem; color: #e7bb68; font-size: .62rem; letter-spacing: .17em; }
+/* "More below": intro.js sets data-scroll-more while the list inside
+   has rows under the fold. A fade, not a bar - the overlay scrollbar
+   is invisible until touched and the panel is opaque. */
+.sf-entry__panel::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: 1px;
+  height: 2.2rem;
+  background: linear-gradient(180deg, rgba(9, 8, 10, 0), rgba(9, 8, 10, .96) 78%);
+  border-radius: 0 0 4px 4px;
+  opacity: 0;
+  transition: opacity .2s ease;
+  pointer-events: none;
+}
+.sf-entry__panel[data-scroll-more="true"]::after { opacity: 1; }
+.sf-entry__panel > header { display: flex; flex: none; align-items: center; justify-content: space-between; margin-bottom: .65rem; color: #e7bb68; font-size: .62rem; letter-spacing: .17em; }
 /* Every control INSIDE a panel gets its own base. The main-menu
    actions above are deliberately bare typography floated over the
    art, and the shared `.sf-intro__gate button` base the panels used to
@@ -4107,7 +4144,13 @@ body[data-sf-contrast="high"] #sf-hud :is(.sf-hud__vitals, .sf-hud__minimap) {
   white-space: nowrap;
 }
 .sf-intro__gate .sf-entry__panel > header button { width: 2.35rem; min-height: 2.35rem; padding: 0; justify-content: center; background: rgba(8,7,8,.7); border: 1px solid rgba(226,184,96,.2); color: #f6d585; box-shadow: none; font-size: 1.2rem; cursor: pointer; }
-.sf-entry__slots { display: grid; gap: .38rem; max-height: min(18.5rem, 52vh); overflow: auto; overscroll-behavior: contain; }
+/* `grid-auto-rows: max-content` on both lists: when the panel is
+   shrunk to a short stage (see .sf-intro__gate) the list becomes a
+   flex item with a DEFINITE height smaller than its rows, and grid's
+   `auto` rows then collapse to their minimum contributions - 3rem
+   here - so a two-line row painted straight over the row beneath it.
+   Rows sized to content cannot collapse; the list scrolls instead. */
+.sf-entry__slots { display: grid; grid-auto-rows: max-content; gap: .38rem; max-height: min(18.5rem, 52vh); overflow: auto; overscroll-behavior: contain; }
 .sf-entry__slots,
 .sf-entry__options { scrollbar-width: thin; scrollbar-color: #b77c2b rgba(10,8,8,.7); }
 .sf-entry__slots::-webkit-scrollbar,
@@ -4128,7 +4171,7 @@ body[data-sf-contrast="high"] #sf-hud :is(.sf-hud__vitals, .sf-hud__minimap) {
 .sf-intro__gate .sf-entry__slots small { color: rgba(232, 195, 126, .62); font-size: .46rem; letter-spacing: .15em; }
 .sf-intro__gate .sf-entry__slots strong { overflow: hidden; color: #f0dfbd; font-family: "Cinzel",Georgia,serif; font-size: .68rem; font-weight: 500; letter-spacing: .08em; text-overflow: ellipsis; white-space: nowrap; }
 .sf-intro__gate .sf-entry__slots b { max-width: 11rem; text-align: right; line-height: 1.35; }
-.sf-entry__options { display: grid; gap: .35rem; max-height: min(24rem, 62vh); overflow: auto; overscroll-behavior: contain; }
+.sf-entry__options { display: grid; grid-auto-rows: max-content; gap: .35rem; max-height: min(24rem, 62vh); overflow: auto; overscroll-behavior: contain; }
 .sf-intro__gate .sf-entry__options > button {
   min-height: 3rem;
   padding: .5rem .7rem;

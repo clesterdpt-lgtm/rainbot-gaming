@@ -29,6 +29,7 @@ import {
 import { mergeGeometries } from "saintfall/structures.js";
 import { DROP_SITE, DROP_CRATER } from "saintfall/terrain.js";
 import { POD_LANDED_PITCH, POD_LANDED_ROLL, POD_DOOR_REACH } from "saintfall/pod.js";
+import { QUALITY_TIERS, qualityLabel } from "saintfall/render.js";
 
 export const DROP_INTRO_DURATION = 23.6;
 export const DROP_INTRO_MARKERS = Object.freeze({
@@ -1302,8 +1303,9 @@ function buildMarkup(host) {
           <button type="button" role="switch" data-intro-setting="sound" aria-checked="true"><span>FIELD AUDIO<small>Music, weapons, and ambience</small></span><b>ON</b></button>
           <button type="button" role="switch" data-intro-setting="reducedMotion" aria-checked="false"><span>REDUCED MOTION<small>Calmer camera and interface movement</small></span><b>OFF</b></button>
           <button type="button" role="switch" data-intro-setting="highContrast" aria-checked="false"><span>HIGH CONTRAST<small>Stronger instrument separation</small></span><b>OFF</b></button>
+          <div class="sf-entry__pick sf-entry__pick--wide sf-entry__quality"><span id="sf-entry-quality-label">GRAPHICS QUALITY<small>Lower tiers trade detail for frame rate</small></span><div role="group" aria-labelledby="sf-entry-quality-label">${QUALITY_TIERS.map((tier) => `<button type="button" data-intro-quality="${tier}" aria-label="${qualityLabel(tier).toLowerCase()} graphics quality">${qualityLabel(tier)}</button>`).join("")}</div></div>
           <button type="button" role="switch" data-intro-setting="dynamicRes" aria-checked="true"><span>DYNAMIC RESOLUTION<small>Protect frame rate under load</small></span><b>ON</b></button>
-          <div class="sf-entry__scale"><span>HUD SCALE</span><div role="group" aria-label="HUD scale"><button type="button" data-intro-hud-scale="standard">STANDARD</button><button type="button" data-intro-hud-scale="large">LARGE</button></div></div>
+          <div class="sf-entry__pick sf-entry__scale"><span id="sf-entry-hud-scale-label">HUD SCALE<small>Size of the tactical instruments</small></span><div role="group" aria-labelledby="sf-entry-hud-scale-label"><button type="button" data-intro-hud-scale="standard">STANDARD</button><button type="button" data-intro-hud-scale="large">LARGE</button></div></div>
         </div>
       </section>
     </div>
@@ -1467,12 +1469,27 @@ export function buildDropIntro(ctx, options = {}) {
     return records.filter((entry) => entry.record?.snapshot?.timestamp);
   }
 
+  /* A panel list that has more rows below the fold says so with a fade
+     along the panel's bottom edge (CSS reads data-scroll-more). On a
+     short, un-maximised stage the options list is taller than the
+     stage and the overlay scrollbar is invisible until touched. */
+  function syncPanelScrollHint(section) {
+    if (!section || section.hidden) return;
+    const list = section.querySelector(".sf-entry__slots, .sf-entry__options");
+    if (!list) return;
+    const more = list.scrollHeight - list.clientHeight - list.scrollTop > 2;
+    section.dataset.scrollMore = more ? "true" : "false";
+  }
+  host.querySelectorAll("[data-intro-panel] .sf-entry__slots, [data-intro-panel] .sf-entry__options")
+    .forEach((list) => list.addEventListener("scroll", () => syncPanelScrollHint(list.closest("[data-intro-panel]")), { passive: true }));
+
   function setEntryPanel(panel = "main", { focus = true } = {}) {
     const next = panel === "load" || panel === "options" ? panel : "main";
     state.entryPanel = next;
     gate.dataset.entryPanel = next;
     host.querySelectorAll("[data-intro-panel]").forEach((section) => {
       section.hidden = section.dataset.introPanel !== next;
+      syncPanelScrollHint(section);
     });
     loadToggle.setAttribute("aria-expanded", next === "load" ? "true" : "false");
     optionsToggle.setAttribute("aria-expanded", next === "options" ? "true" : "false");
@@ -1526,6 +1543,12 @@ export function buildDropIntro(ctx, options = {}) {
     });
     host.querySelectorAll("[data-intro-hud-scale]").forEach((button) => {
       const active = button.dataset.introHudScale === (current.hudScale || "standard");
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    const quality = current.quality || "high";
+    host.querySelectorAll("[data-intro-quality]").forEach((button) => {
+      const active = button.dataset.introQuality === quality;
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-pressed", active ? "true" : "false");
     });
@@ -2493,6 +2516,10 @@ export function buildDropIntro(ctx, options = {}) {
     orbit.camera.updateProjectionMatrix();
     rig.camera.aspect = aspect;
     rig.camera.updateProjectionMatrix();
+    // The stage just changed height; so did what fits in an open panel.
+    if (state.entryPanel !== "main") {
+      syncPanelScrollHint(host.querySelector(`[data-intro-panel="${state.entryPanel}"]`));
+    }
     return true;
   }
 
@@ -2658,6 +2685,11 @@ export function buildDropIntro(ctx, options = {}) {
     if (target.matches("[data-intro-hud-scale]")) {
       onSetting("hudScale", target.dataset.introHudScale);
       refreshEntryMenu();
+      return;
+    }
+    if (target.matches("[data-intro-quality]")) {
+      onSetting("quality", target.dataset.introQuality);
+      refreshEntryMenu();
     }
   }
   function onContinue() {
@@ -2696,6 +2728,10 @@ export function buildDropIntro(ctx, options = {}) {
     get state() { return state; },
     isBlocking: () => !state.completed,
     reveal,
+    /* Re-read saves and settings into the entry menu. main.js calls
+       this after the boot-time quality tier is applied, which happens
+       after this menu is built. */
+    refreshMenu: refreshEntryMenu,
     start,
     resumeSaved,
     update,

@@ -62,7 +62,11 @@ export async function start({ boot, build } = {}) {
     && (!qa || introParam === "1" || introParam === "force");
   // A frozen clock is a deterministic QA instrument, never a player URL mode.
   const introManualClock = qa && params.get("introClock") === "manual";
-  const quality = params.get("quality") || (qa ? "high" : "high");
+  /* A `?quality=` URL value is a SESSION override - harnesses pin a tier
+     with it, and it must not write itself into the player's stored
+     preference. Absent the param, the tier comes from the settings
+     store (read once gameUi exists, below) and defaults to high. */
+  const qualityParam = params.get("quality");
   const timeKey = params.get("time") || "goldenhour";
   const cycleParam = params.get("cycle");
   const cycleEnabled = cycleParam === "1"
@@ -310,7 +314,12 @@ export async function start({ boot, build } = {}) {
      same mission.call() path as every other deployment. */
   const saves = buildSaveSystem(ctx, { setTime, setDayCycle, setStorm });
   ctx.saves = saves;
-  const gameUi = buildGameUi(ctx, { stage, canvas, save: saves, touch, render });
+  /* `setQuality` is the function declared further down (hoisted); the
+     menu calls it so a tier change moves the sun's shadow map and
+     re-fits the canvas exactly as the boot-time application does. */
+  const gameUi = buildGameUi(ctx, {
+    stage, canvas, save: saves, touch, render, setQuality: (tier) => setQuality(tier),
+  });
   ctx.gameUi = gameUi;
 
   const introHost = document.getElementById("sf-intro");
@@ -886,10 +895,20 @@ export async function start({ boot, build } = {}) {
   }
 
   function setQuality(tier) {
-    render.setQuality(tier, sky);
+    const applied = render.setQuality(tier, sky);
+    ctx.quality = applied;
     resize();
+    return applied;
   }
+  /* Applied before the first frame is drawn, so a machine that stored
+     LOW never has to survive a HIGH frame to reach the menu. The URL
+     param wins for the session; the stored preference is the default
+     for the tier switch in both menus. */
+  const quality = qualityParam || gameUi.settingsState?.().qualityStored || "high";
   setQuality(quality);
+  // Both menus highlight the LIVE tier, so a URL override shows as such.
+  gameUi.refresh?.();
+  intro.refreshMenu?.();
   /* `?ao=0` (or any strength 0..1) overrides the tier's screen-space
      occlusion. A diagnostic first and a relief second: the pass prints
      a fixed-position plaid on Apple GPUs (milestone 96) that no other

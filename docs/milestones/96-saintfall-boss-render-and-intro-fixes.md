@@ -3,7 +3,7 @@
 Three reports from one play session — "the Winnower is bugged", "the
 player gets stuck in the intro screen on the Winnower", "the Distaff is
 not rendering the full model" — plus a fourth, a grid of dark lines over
-the whole map, which is diagnosed and partly fixed. Every one of them was
+the whole map, which turned out to be one rounding decision. Every one of them was
 photographed by the reporter, and every one of them turned out to be a
 thing a harness had been passing on.
 
@@ -101,7 +101,7 @@ out with numbers on the way: raising the occlusion bake floor 0.28 → 0.5
 and lifting the belly paint half a stop each changed the "slab" by 0.1 —
 because it was never the boss.
 
-## The grid over the ground — it is the SSAO pass, and Apple GPUs make it worse
+## The grid over the ground — it was the SSAO pass reading depth on a texel boundary
 
 Reproduced hard on a cliff face: a plaid of dark horizontal and vertical
 lines at fixed screen positions, sliding with the camera, absent from the
@@ -142,14 +142,31 @@ explicit gradient in the bilateral blur's tolerance. Result:
 | SwiftShader | 0.975 (streaks) | **0.846** (nearly clean) |
 | Metal | 1.132 (plaid) | 0.971 (plaid, lighter) |
 
-The reference rasteriser is essentially cured; the Apple GPU keeps a
-second mechanism I did not find. Excluded by direct trial, each on top
-of the fix: the jitter hash (interleaved gradient noise, 0.968), MSAA on
-the scene target (0.960), snapping the blur's reads of the AO texture
-(0.972), dynamic resolution (clean at 0.62), and shadow `normalBias`
-(0.35 → 1.8, no movement). Shipped anyway, honestly labelled: it is a
-correctness fix that measurably helps on every backend and helps least
-where it is needed most.
+Then the reporter added the decisive fact: the grid is absent on the
+`low` tier and present on `medium` and above - and `low` is the only
+tier with `ao: 0`. Re-reading the snap with that in hand: `uv /
+uDepthTexel` at a half-res pixel centre is `2i+1`, an INTEGER plus
+interpolator error, and `floor()` of a near-integer is the very coin
+flip the snap existed to remove. The first version floored, and it
+cleaned SwiftShader - whose interpolator happens to land on one side
+every time - while leaving the Apple GPU's plaid nearly intact, because
+its interpolator does not. One character: round instead of floor, so
+the decision falls at `2i+1.5` where nothing ever lands.
+
+| | HEAD | floored snap | **rounded snap** | AO off |
+|---|---|---|---|---|
+| Metal, cliff columns | 1.132 | 0.971 | **0.289** | 0.293 |
+| Metal, cliff rows | 0.287 | - | **0.230** | 0.254 |
+| Metal, big face columns | 1.325 | 1.316 | **0.901** | 0.920 |
+| Metal, open dune, columns / rows | - | - | **0.356 / 0.445** | 0.375 / 0.442 |
+| SwiftShader, cliff columns | 0.975 | 0.846 | **0.290** | 0.295 |
+
+AO on is now indistinguishable from AO off on the ripple axis, on both
+backends, on cliff and dune - while the pass still contributes its
+contact shadow (on/off mean difference 2.69, was 9.32 of mostly plaid).
+Boss audit frame times unchanged. So the whole map-wide grid was one
+nearest-filtered depth read landing on a texel boundary; the "Apple GPU
+makes it worse" was only which way that GPU's interpolator rounds.
 
 And a switch: `?ao=0` (or any 0..1) overrides the tier's occlusion
 strength. It is the one thing that removes exactly what draws the grid,
@@ -166,6 +183,6 @@ one reload.
 | `saintfall-winnower-fight` | 33/38 | 33/38 (identical, pre-existing) |
 | `saintfall-stylite-fight` | 32/33 | 32/33 (identical, pre-existing) |
 | the reveal-loop probe (40 s at the ring edge) | 8 reveals, camera 39.9 s | 0 wakes outside; 1 inside; 0 resets |
-| SSAO cliff plaid, SwiftShader / Metal | 0.975 / 1.132 | 0.846 / 0.971 (floor 0.29) |
+| SSAO cliff plaid, SwiftShader / Metal | 0.975 / 1.132 | **0.290 / 0.289** (floor 0.29) |
 
 Build pin `20260817-boss-render-intro-1`.

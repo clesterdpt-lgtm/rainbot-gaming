@@ -316,9 +316,19 @@ uniform vec2 uDepthTexel;  // 1 / depth-buffer size, which is NOT this pass's
    every position derived from one.
 
    Snapping to the nearest texel CENTRE makes the choice explicit and
-   uniform. It costs two multiply-adds and a floor. */
+   uniform. It costs two multiply-adds and a floor.
+
+   AND THE SNAP HAS TO ROUND, NOT FLOOR. uv / uDepthTexel at a half-res
+   pixel centre is 2i+1 - an INTEGER, plus whatever error the varying
+   interpolator left in it - and floor of a near-integer is the very
+   coin flip this line exists to remove. The first version of this
+   snap floored, and it cleaned the SwiftShader reference (whose
+   interpolator happened to land on one side every time) while leaving
+   the Apple GPU's plaid almost intact (its interpolator does not).
+   Adding a half before the floor moves the decision to 2i+1.5, where
+   nothing ever lands. */
 float depthAt(vec2 uv) {
-  vec2 snapped = (floor(uv / uDepthTexel) + 0.5) * uDepthTexel;
+  vec2 snapped = (floor(uv / uDepthTexel + 0.5) + 0.5) * uDepthTexel;
   return texture2D(tDepth, snapped).x;
 }
 
@@ -581,7 +591,7 @@ uniform vec2 uDepthTexel;
 // Snapped, for the reason given in the occlusion pass above: this
 // filter runs at half resolution over a full-resolution depth buffer.
 float viewZ(vec2 uv) {
-  vec2 snapped = (floor(uv / uDepthTexel) + 0.5) * uDepthTexel;
+  vec2 snapped = (floor(uv / uDepthTexel + 0.5) + 0.5) * uDepthTexel;
   float d = texture2D(tDepth, snapped).x;
   float n = uNearFar.x;
   float f = uNearFar.y;

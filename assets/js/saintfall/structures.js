@@ -2010,6 +2010,41 @@ export function makeKit(THREE) {
     return geo;
   }
 
+  /**
+   * Split every shared vertex so each triangle carries its own
+   * three, then recompute normals - which, with nothing shared,
+   * come out as FACE normals. Flat shading, baked into the buffer.
+   *
+   * The alternative is a flat-shaded material, and there isn't one
+   * to hand: everything rock in this level merges into a couple of
+   * meshes on one shared material, so shading is a property of the
+   * geometry or it is a property of nothing.
+   *
+   * Only worth it on something big enough to need real resolution.
+   * A seven-sided crag is already all silhouette and no interior,
+   * but a hundred-metre landform needs twenty-odd sides to keep its
+   * ellipse from going polygonal - and at that density smooth
+   * normals turn a carved rock into a beanbag. Costs 6x the
+   * vertices of the indexed form and no draw calls.
+   */
+  function facet(geo) {
+    const src = geo.attributes.position;
+    const idx = geo.index;
+    const count = idx ? idx.count : src.count;
+    const out = new Float32Array(count * 3);
+    for (let i = 0; i < count; i += 1) {
+      const v = idx ? idx.getX(i) : i;
+      out[i * 3] = src.getX(v);
+      out[i * 3 + 1] = src.getY(v);
+      out[i * 3 + 2] = src.getZ(v);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
+    g.computeVertexNormals();
+    geo.dispose?.();
+    return g;
+  }
+
   return {
     ringSolid, prism, slab, polyExtrudeY, extrudeZ, ribbonSolid, tube, rockTube,
     crag, shard, boulderField,
@@ -2020,7 +2055,7 @@ export function makeKit(THREE) {
     crackingTower, flareStack, tank, catwalk,
     sandbagWall, wireRun, bunker,
     saintHead, saintHand,
-    transform, roughen, merge: (list) => mergeGeometries(THREE, list),
+    transform, roughen, facet, merge: (list) => mergeGeometries(THREE, list),
   };
 }
 

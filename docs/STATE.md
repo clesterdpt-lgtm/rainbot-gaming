@@ -40,12 +40,14 @@ behind it on the west approach; two design levers offered, none pulled.
 The map-wide grid is the SSAO pass (AO off removes it, 9.32 mean / 75
 peak on a cliff) and it is GPU-dependent: on this Mac both the Metal and
 OpenGL backends draw a plaid, while SwiftShader draws only horizontal
-streaks — which is why a Windows laptop and a phone show little. Two
-real defects fixed (half-res `dFdx` over a full-res depth texture; depth
-reads on texel boundaries): SwiftShader 0.975 → 0.846 (clean), Metal
-1.132 → 0.971 (lighter, still plaided; jitter hash, MSAA, blur-read
-snapping, dynres and shadow bias each excluded on top). Shipped, and
-`?ao=0..1` added as the one switch that removes exactly the pass. Build
+streaks — which is why a Windows laptop and a phone show little. Root
+cause: the half-res pass reads a full-res depth texture at exactly a
+texel boundary (`2i+1`), where nearest filtering is a per-GPU coin flip
+- and the first snap-to-centre fix FLOORED that same near-integer and
+reproduced the flip. Rounding it lands the decision at `2i+1.5`: Metal
+cliff ripple 1.132 → 0.289 against an AO-off floor of 0.293, same on
+SwiftShader and on open dunes, contact shadow intact, frame cost
+unchanged. `?ao=0..1` remains as a diagnostic switch. Build
 pin `20260817-boss-render-intro-1`.
 Milestone: `docs/milestones/96-saintfall-boss-render-and-intro-fixes.md`.
 

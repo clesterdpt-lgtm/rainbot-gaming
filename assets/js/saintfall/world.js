@@ -3859,6 +3859,43 @@ export async function buildWorld(ctx, onProgress) {
      landmark you can see two of at once is scenery; one at a time is
      a landmark.
      ============================================================ */
+  /* ============================================================
+     THE YARDANGS
+
+     Wind-carved fins standing in the open dune sea: a blunt prow
+     into the wind, a long streamlined tail, a scoured waist and a
+     crest that runs most of the fin's length. Fifteen of them, all
+     on the ripples' own bearing, are what stops the desert between
+     districts reading as empty.
+
+     Three things had to be true here that were not:
+
+     - THE UNDERSIDE MUST BE CLOSED. `ringSolid` was called with
+       `capBottom: false`, so every fin was a hollow shell. That is
+       invisible from every angle except one - and it is the angle a
+       player at the foot of a dune actually has, looking up at the
+       belly and straight in through the open bottom.
+
+     - A 130-METRE OBJECT CANNOT BE PLACED FROM ONE HEIGHT SAMPLE.
+       `place()` takes y from H(x, z) at the centre alone, which
+       over a dune sea leaves a fin resting on its middle like a
+       plank on a pillow. Measured on the fifteen before this pass:
+       the worst base vertex stood ELEVEN METRES clear of the sand,
+       and eight fins had more than a tenth of their base ring in
+       open air. Open shell plus floating base is the whole of the
+       "see-through from underneath" report - neither alone would
+       have shown.
+
+     - A CONE IS NOT A FIN. The old profile ran a full-length base
+       ellipse up to a single apex, so from broadside it read as a
+       squashed paper dart; and nine sides around a 130m ellipse
+       left the flanks as four flat facets twenty metres across,
+       which is where the layer-cake banding came from. The crest
+       now stays a RIDGE - about half the fin's length at the top -
+       the prow is blunt where the tail is drawn out, and flutes
+       rake the flanks so the surface breaks up the slope rather
+       than into horizontal strips.
+     ============================================================ */
   await step("Carving the yardangs", 0.945);
   {
     const rng = makeRng(0x7a4da9);
@@ -3880,8 +3917,79 @@ export async function buildWorld(ctx, onProgress) {
       return best;
     };
 
+    const inDistrictAt = (px, pz) => Object.values(DISTRICTS)
+      .some((d) => Math.hypot(px - d.x, pz - d.z) < d.r * 0.92);
+
+    /* Local (fin) space to world, for a plain Y rotation. Written
+       out rather than reached for through a Matrix4 because the
+       footprint survey below runs it a few hundred times per
+       candidate site and never needs the other eleven terms. */
+    const toWorld = (cx, cz, yaw, lx, lz) => [
+      cx + lx * Math.cos(yaw) + lz * Math.sin(yaw),
+      cz - lx * Math.sin(yaw) + lz * Math.cos(yaw),
+    ];
+
+    /* The ground a fin will actually have to stand on: sampled over
+       its own elliptical footprint, not at its centre. `lo` is what
+       it gets bedded into; `hi - lo` is how much of its height the
+       far end of the dune is going to eat, which the builder then
+       pays for by making it taller. */
+    const survey = (cx, cz, halfL, halfW, yaw) => {
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (let a = 0; a < 16; a += 1) {
+        for (let k = 1; k <= 3; k += 1) {
+          const ang = (a / 16) * TAU;
+          const [wx, wz] = toWorld(cx, cz, yaw,
+            Math.cos(ang) * halfL * (k / 3), Math.sin(ang) * halfW * (k / 3));
+          const y = H(wx, wz);
+          if (y < lo) lo = y;
+          if (y > hi) hi = y;
+        }
+      }
+      return { lo, hi, relief: hi - lo };
+    };
+
+    /* Bed a large rotated mass into the sand by its LOWEST support.
+       `restOnTerrain`'s 35th-percentile-with-a-10cm-clamp is right
+       for a two-metre boulder, where a little burial beats a little
+       gap; on something a hundred metres long the same clamp cannot
+       reach, and the quantile guarantees that roughly a third of
+       the footprint is in open air by construction. Here the whole
+       base ring goes under, with margin - the fin carries a keel
+       below its sand line specifically so it can afford to. */
+    const bedIn = (geo, x, z, yaw, sink) => {
+      kit.transform(geo, { rot: [0, yaw, 0] });
+      geo.computeBoundingBox();
+      const p = geo.attributes.position;
+      const bb = geo.boundingBox;
+      const band = bb.min.y + (bb.max.y - bb.min.y) * 0.45;
+      let lowest = Infinity;
+      for (let i = 0; i < p.count; i += 1) {
+        if (p.getY(i) > band) continue;
+        const g = H(x + p.getX(i), z + p.getZ(i));
+        if (g < lowest) lowest = g;
+      }
+      if (!Number.isFinite(lowest)) lowest = H(x, z);
+      geo.translate(x, lowest - sink, z);
+      return geo;
+    };
+
+    /* Three characters, because fifteen copies of one recipe is a
+       row of identical fins whichever way the recipe is tuned.
+       `tail` is how far the downwind edge sweeps forward as it
+       rises (the streamlining), `widthPow`/`crest` are how fast the
+       flanks fall away and how much back is left at the top - a
+       knife-edged fin, a rounded whaleback, a stubby flat-topped
+       block that has barely started to be carved. */
+    const CHARACTERS = [
+      { w: 0.44, id: "fin", lenK: [4.0, 5.2], widK: [0.55, 0.80], tail: 0.42, brow: 0.11, widthPow: 1.75, crest: 0.09, flutes: 9 },
+      { w: 0.36, id: "whaleback", lenK: [4.6, 6.0], widK: [1.15, 1.70], tail: 0.31, brow: 0.15, widthPow: 2.60, crest: 0.32, flutes: 7 },
+      { w: 0.20, id: "block", lenK: [2.6, 3.4], widK: [0.95, 1.35], tail: 0.20, brow: 0.05, widthPow: 3.40, crest: 0.34, flutes: 6 },
+    ];
+
     let tries = 0;
-    while (placed.length < 15 && tries < 4000) {
+    while (placed.length < 15 && tries < 9000) {
       tries += 1;
       const x = rng.range(-MAP_HALF + 190, MAP_HALF - 190);
       const z = rng.range(-MAP_HALF + 190, MAP_HALF - 190);
@@ -3889,11 +3997,7 @@ export async function buildWorld(ctx, onProgress) {
       const surf = field.surfaceAt(x, z);
       if (surf.sand < 0.72) continue;
       if (nearRoad(x, z) < 78) continue;
-      let inDistrict = false;
-      for (const d of Object.values(DISTRICTS)) {
-        if (Math.hypot(x - d.x, z - d.z) < d.r * 0.92) { inDistrict = true; break; }
-      }
-      if (inDistrict) continue;
+      if (inDistrictAt(x, z)) continue;
       let tooClose = false;
       for (const p of placed) {
         if (Math.hypot(x - p[0], z - p[1]) < 210) { tooClose = true; break; }
@@ -3906,47 +4010,165 @@ export async function buildWorld(ctx, onProgress) {
       );
       if (slope > 0.26) continue;
 
-      const h = rng.range(17, 41);
-      const len = h * rng.range(3.4, 5.6);      // streamlined, not a stack
-      const wid = h * rng.range(0.72, 1.15);
+      const kind = rng.weighted(CHARACTERS);
+      const stand = rng.range(20, 44);            // wanted height above the sand
+      const len = stand * rng.range(kind.lenK[0], kind.lenK[1]);
+      const wid = stand * rng.range(kind.widK[0], kind.widK[1]);
+      const yaw = WIND + rng.jit(0.22);
+
+      /* Yardangs form on flat pans and in interdune corridors, not
+         draped over a dune crest - so a site whose own footprint
+         rolls through more than a dozen metres is simply the wrong
+         landform, and rejecting it is cheaper than trying to build
+         a fin that survives it. */
+      const ground = survey(x, z, len * 0.5, wid * 0.5, yaw);
+      if (ground.relief > 13) continue;
+
+      const sink = 2.2;
+      /* Built tall enough to still stand `stand` metres proud of the
+         HIGHEST ground under it, not the average. Bedding into the
+         lowest support is what makes the fin watertight against the
+         dunes; charging the whole of that back to its height is what
+         stops the fix quietly turning fifteen landmarks into fifteen
+         half-drowned lumps. */
+      const h = stand + sink + ground.relief;
+      const keel = Math.max(9, h * 0.38);
+
+      const LEVELS = 13;
+      // Even, so the prow and the tail both terminate on a vertex
+      // and read as edges rather than as flat cut-off faces; high
+      // enough that a 5:1 ellipse sampled at uniform angle still
+      // puts ten points down each long flank instead of four.
+      const SIDES = 22;
       const rings = [];
-      // Fifteen objects in the whole level, so they can afford to
-      // be properly rounded - a 40m landmark built on 7 sides reads
-      // as a tent from the side it is not facing.
-      const LEVELS = 9;
+
+      // The keel. Below the sand line, full section and mildly
+      // flared: it is what lets `bedIn` bury the base ring outright
+      // without a plinth ever surfacing on the low side.
+      rings.push({ y: -keel, rx: len * 0.53, rz: wid * 0.53, sides: SIDES, jitter: 0.04, seed: rng.int(1, 1e6) });
+      rings.push({ y: -keel * 0.42, rx: len * 0.515, rz: wid * 0.515, sides: SIDES, jitter: 0.05, seed: rng.int(1, 1e6) });
+
       for (let k = 0; k <= LEVELS; k += 1) {
-        const t = k / LEVELS;
-        /* A yardang is a blunt prow and a drawn-out tail, undercut
-           at the base where the wind carries the most sand. The
-           waist at t≈0.22 is that undercut; without it the shape is
-           a loaf. */
-        const taper = Math.cos(t * Math.PI * 0.5) ** 0.62;
-        // Parenthesised deliberately: `-x ** 2` is a SyntaxError in
-        // JS, and it takes the whole module out at parse time.
-        const undercut = 1 - 0.16 * Math.exp(-(((t - 0.20) / 0.13) ** 2));
-        const prow = 1 - 0.34 * t;               // the tail lifts less
+        const t = k / LEVELS;                    // 0 = sand line, 1 = crest
+        /* The two edges are shaped SEPARATELY, and that asymmetry
+           is the whole read: the upwind brow pulls back barely at
+           all, so the prow stands as a near-vertical face, while
+           the downwind edge sweeps a long way forward, so the tail
+           lies down. Half a fin's length is still there at the top,
+           which is what makes a ridge instead of an apex. */
+        const front = 0.5 - kind.brow * Math.pow(t, 1.7);
+        const back = -(0.5 - kind.tail * Math.pow(t, 1.15));
+        // A scoured waist just above the sand. Wind carries its
+        // load lowest, so this is where a real fin is thinnest -
+        // and an overhang at the base is most of what separates
+        // "carved out of" from "set down on".
+        const waist = 1 - 0.15 * Math.exp(-(((t - 0.14) / 0.11) ** 2));
+        const width = Math.max(kind.crest,
+          Math.pow(Math.max(0, 1 - Math.pow(t, kind.widthPow)), 0.62));
         rings.push({
           y: t * h,
-          rx: len * 0.5 * taper * prow * undercut,
-          rz: wid * 0.5 * taper * undercut,
-          // Drifting backwards as it rises gives the fin a lean into
-          // the wind, which is what makes it read as carved BY
-          // something rather than merely eroded.
-          cx: -len * 0.16 * t * t,
-          sides: 9,
-          phase: t * 1.7,
+          rx: len * 0.5 * (front - back) * waist,
+          rz: wid * 0.5 * width * waist,
+          cx: len * 0.5 * (front + back),
+          sides: SIDES,
+          jitter: 0.06,
+          seed: rng.int(1, 1e6),
         });
       }
-      const g = kit.ringSolid(rings, { capBottom: false });
-      kit.roughen(g, h * 0.035, 0.045);
-      place(g, x, z, {
-        rot: [0, WIND + rng.jit(0.22), 0],
-        dy: -h * 0.10,
-      });
-      paintH(g, ROCK_RAMP, {
+
+      const g = kit.ringSolid(rings);
+      /* FLUTES AND NOTCHES, in local space while the fin's length
+         still runs along +X.
+
+         `roughen` alone cannot do this job: it moves every vertex
+         by the same field in all three axes, which rounds the
+         silhouette off and leaves the flanks as the same long
+         horizontal strips the rings drew. A flute has to be a
+         groove IN a face - displacement along the surface, biased
+         by |z| so the crest line and the keel stay exactly where
+         the profile put them and only the flanks between them
+         ripple. That is the term that breaks the layer-cake read,
+         because it runs UP the slope where the ring seams run
+         across it. */
+      const fk = TAU / (len / kind.flutes);
+      const fphase = rng() * TAU;
+      const fluteAmp = wid * 0.15;
+      const nk = TAU / (len * rng.range(0.30, 0.42));
+      const nphase = rng() * TAU;
+      const notchAmp = h * rng.range(0.10, 0.19);
+      const vp = g.attributes.position;
+      for (let i = 0; i < vp.count; i += 1) {
+        const vx = vp.getX(i);
+        const vy = vp.getY(i);
+        const vz = vp.getZ(i);
+        if (vy < 0) continue;                    // the buried keel stays plain
+        const t = clamp01(vy / h);
+        const s = vz < 0 ? -1 : 1;
+        /* Rectified, not a plain sine: a groove is cut INTO a face
+           and the rock between two of them is flat, so the profile
+           wants a flat top and sharp troughs rather than a smooth
+           corrugation. The `vy` term rakes each groove as it climbs,
+           which is what stops the set of them reading as a fluted
+           column. */
+        const rake = vx * fk + vy * 0.055 + fphase;
+        const wave = Math.abs(Math.sin(rake)) ** 0.55 - 0.62
+          + Math.sin(rake * 2.7 + fphase * 1.7) * 0.22;
+        const gain = fluteAmp * sstep(0, 0.20, t) * (1 - 0.7 * sstep(0.60, 1, t));
+        // Saddles along the back. A crest that is one clean arc from
+        // prow to tail is the other half of why the old shape read
+        // as manufactured; real fins are notched where the wind has
+        // found a weakness.
+        const notch = notchAmp * (0.5 + 0.5 * Math.sin(vx * nk + nphase))
+          * sstep(0.52, 1, t);
+        vp.setXYZ(i, vx, vy - notch, vz + s * wave * gain);
+      }
+      vp.needsUpdate = true;
+      g.computeVertexNormals();
+      kit.roughen(g, h * 0.030, 0.048);
+      kit.roughen(g, h * 0.012, 0.14);
+      /* Flat-shaded, and the last step before painting so the vertex
+         colours land per facet too. Twenty-two sides is the density
+         a hundred-metre ellipse needs to stop going polygonal, and
+         at that density SMOOTH normals hand back a beanbag: every
+         crease the flutes and the notches just cut gets averaged
+         into its neighbours and the fin reads as a boulder someone
+         inflated. Faceting is also what puts it in the same visual
+         language as the rim massifs behind it, which are coarse
+         enough to read as planes without needing this. */
+      const solid = kit.facet(g);
+
+      bedIn(solid, x, z, yaw, sink);
+      paintH(solid, ROCK_RAMP, {
         normalWeight: 0.55, jitter: 0.18, noise: 0.3, bias: 0.1,
       });
-      geos.push(g);
+      geos.push(solid);
+
+      /* Talus. The same cue the Windgate's footings use, and the
+         cheapest one there is: a mass this size has been shedding
+         blocks for as long as it has been standing, and a scatter
+         of them where it meets the sand is what a viewer reads as
+         "in the ground" rather than "on it". Set just outside the
+         footprint so none of them are swallowed by the fin. */
+      for (let i = 0; i < rng.int(9, 16); i += 1) {
+        const ang = rng() * TAU;
+        const k = rng.range(1.02, 1.34);
+        const [dx, dz] = toWorld(x, z, yaw,
+          Math.cos(ang) * len * 0.5 * k, Math.sin(ang) * wid * 0.5 * k);
+        if (inDistrictAt(dx, dz)) continue;
+        if (field.surfaceAt(dx, dz).sand < 0.5) continue;
+        const character = rng();
+        const sc = rng.range(0.9, 3.4);
+        const block = kit.crag(rng, {
+          height: sc * rng.range(0.5, 1.2), radius: sc,
+          layers: rng.int(3, 6), sides: rng.int(5, 8), lean: rng.range(0, 0.5), sink: 0.4,
+          spike: character < 0.3 ? rng.range(0.2, 0.5) : 0,
+          cliff: character >= 0.3 && character < 0.58 ? rng.range(0.3, 0.7) : 0,
+        });
+        restOnTerrain(block, dx, dz, { rot: [rng.jit(0.35), rng() * TAU, rng.jit(0.35)], maxGap: 0.08 });
+        paintH(block, ROCK_RAMP, { normalWeight: 0.5, jitter: 0.22, noise: 0.35 });
+        geos.push(block);
+      }
+
       placed.push([x, z]);
     }
     if (geos.length) {

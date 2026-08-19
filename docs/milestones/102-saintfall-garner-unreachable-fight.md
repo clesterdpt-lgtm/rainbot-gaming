@@ -1,0 +1,82 @@
+# Milestone 102 — the Ossuary fight that could not be fought
+
+Reported from play: *"the ossuary boss does not let you do any damage to the main body
+or the tentacles."*
+
+It was true, and it was not a damage bug. **The Garner's encounter opened at 64m while
+the animal was unreachable until ~30m.**
+
+## What was measured
+
+Standing on the Ossuary pan at 45m — inside the 64m aggro, boss bar up, field order
+reading `CLOSE THE GARNER · 45M`:
+
+| shot at | sightline | stopped by ground at | damage |
+|---|---|---|---|
+| `garner_throat` | 48.6m | **3.8m** | 0 |
+| `garner_lip` | 46.9m | **5.3m** | 0 |
+
+The mouth sits ~11m below the lip of its own funnel, so from the pan the line to it goes
+through the ground four metres in front of the muzzle. `output/saintfall/garner-bug/stand-45m.png`
+is the whole report in one frame: the HUD insists a boss fight is happening and there is
+no boss anywhere on screen. Walk to 30m (already descending) and shots connect; at 12m
+you are in among the teeth.
+
+So there was a ~30m band where the fight was live, the animal was shooting back, and
+nothing the player did could touch it — which from inside the game is indistinguishable
+from "this thing is immune".
+
+## The fix
+
+`GARNER_CONFIG.aggroRadius` 64 → **34**, which is inside `GARNER_PIT.rimRadius` (36).
+The encounter now opens with the player already on the funnel slope looking down into
+it. The pit's authored surprise is unchanged — flat pan, and then suddenly not — but the
+fight no longer starts before the player can join it. Measured after: wakes at 33.7m,
+both throat and collar sightlines clear (`blockedAt: null`), 120 damage on each.
+
+`district-bosses.js` takes the site's `aggroRadius` from `GARNER_CONFIG`, so the boss
+site followed automatically; nothing else needed changing.
+
+## Why the suite did not catch it, and what now does
+
+Every one of the 37 existing Garner checks **staged** the encounter — `teleportToGarner`,
+`forceGarnerPhase`, `advanceToGarnerPhase` — then measured. All 37 passed throughout the
+entire period the encounter was unfightable for its first thirty metres, because not one
+of them ever walked in.
+
+`saintfall-garner-fight.mjs` gained a section that does: it starts outside aggro, walks
+straight in, **stops at the exact metre the encounter wakes**, holds still through the
+reveal, and only then fires — asserting both that the sightline is clear from the waking
+distance and that a shot from there reaches the animal (either pool counts; a shot that
+lands on a tentacle in front of the mouth still reached it). 39/39.
+
+`qa.js:teleportToGarner` now clamps its offset to inside the wake radius. Its nine
+callers were all written as bare numbers against the old 64m aggro (`40`, `30`); when
+aggro dropped, a probe asking for 40 was suddenly standing outside the encounter and
+**nine checks failed in a row, none of them about aggro**. The offset is a request, not
+an order. A probe that deliberately wants to be outside aggro should use `_teleportRaw`
+and say so.
+
+## Not a regression from milestone 101
+
+Verified rather than assumed: `git diff 93f5d39d HEAD -- combat.js` shows the boss pass
+touched only brood provenance and the death flow; `meleeStrike`, `nearestLegPoint`,
+`legAndBodyHit` and the Ossuary terrain are byte-identical to before it. The m101 arena
+ring did grow (112→155) but rings gate resets, not damage or terrain.
+
+One m101 change did make the symptom *harder to diagnose from inside the game*, and it
+is worth knowing: the boss bar no longer carries HP numerals, so there is no readout left
+that distinguishes "my shots are being eaten by terrain" from "this boss is immune". The
+bar fill is the only remaining signal, and against a 7,400-HP pool it barely moves.
+
+## Two smaller things measured on the way, not changed
+
+- Aiming at the mouth from mid-range frequently resolves on a **tentacle** instead
+  (separate 260-HP pool). Damage numbers do draw — `hud.js:221` consumes `legHit` — but
+  the boss bar does not move, so it reads as "no damage to the main body".
+- Melee on the maw only lands while `inst.collapsed`, i.e. the gorge window; a forced
+  12-second gorge fell back to feeding after ~1s in testing, so that payoff window is
+  much shorter in practice than the number suggests. Outside it a swing at the mouth does
+  nothing unless a tentacle happens to be within `reach + legRadius` (4.32m).
+
+Both are live leads if the fight still reads as unresponsive.

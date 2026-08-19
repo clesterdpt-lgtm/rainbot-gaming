@@ -2294,7 +2294,20 @@ export function buildCombat(ctx) {
     player.lastHitAt = clock;
     player.regenAt = clock + (tier().regenDelay || SURVIVAL_CONFIG.regenDelay);
     if (detail.source === "enemy-melee") player.lastMeleeHitAt = clock;
-    bus.emit("playerHurt", { hp: player.hp, damage: amount, source: detail.source || "attack" });
+    /* `enemyKey` rides along because `source` alone cannot answer
+       "what is hurting the player". The Apostate's lance and an
+       ordinary Gleaner's spinneret both report `enemy-fire`, so a
+       damage-attribution probe reading only the source concluded that
+       the boss was landing nothing while its brood did everything -
+       and a balance change was made on the strength of it before the
+       collision was spotted. Two things that hurt differently must be
+       distinguishable by whatever is counting. */
+    bus.emit("playerHurt", {
+      hp: player.hp,
+      damage: amount,
+      source: detail.source || "attack",
+      enemyKey: detail.enemyKey || detail.enemy || "",
+    });
     if (player.hp <= 0) {
       player.dead = true;
       player.respawnIn = 3.4;

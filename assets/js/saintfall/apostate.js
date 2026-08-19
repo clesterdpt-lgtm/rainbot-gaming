@@ -2285,7 +2285,8 @@ export async function buildApostate(ctx) {
         summonBrood();
       }
       if (state.actionFor <= 0) {
-        state.summonTimer = C.summonCadence;
+        state.summonTimer = C.summonCadence
+          * (ctx.undercroft?.active?.() ? 2 : 1);
         finishAction("summon");
       }
     } else if (state.action === "shield") {
@@ -2303,7 +2304,27 @@ export async function buildApostate(ctx) {
 
   function chooseAction(dist) {
     if (state.overheated) return beginAction("vent");
-    if (state.summonTimer <= 0 && livingSummons().length < C.summonCap) {
+    /* HALVED IN THE HIVE, NOT REMOVED, and both halves of that were
+       measured.
+
+       Underground the room lays its own clutch, and the two brood
+       systems stacked: a probe fighting phase two took 57-75% of all
+       its damage from `enemy-fire` - insect bolts - against 2-12%
+       from this boss, in this boss's own final encounter. So Call was
+       cut out entirely, and the next probe found the opposite hole: a
+       rifle parked at thirty-four metres and kiting took 561 damage
+       in two and a half minutes and removed 77% of the pool, because
+       nothing in the room could reach it. The clutch is laid around
+       the PLAYER and is the only thing that punishes standing off -
+       deleting the boss's own answer as well left the outer ring
+       free.
+
+       Half the cap on a doubled cadence keeps the pressure on a
+       player who will not close, without putting a second nursery on
+       top of the first. */
+    const inHive = ctx.undercroft?.active?.() === true;
+    const summonCap = inHive ? Math.ceil(C.summonCap / 2) : C.summonCap;
+    if (state.summonTimer <= 0 && livingSummons().length < summonCap) {
       return beginAction("summon");
     }
     /* Defensive and mobility verbs rotate through the same fight instead of
@@ -2910,7 +2931,15 @@ export async function buildApostate(ctx) {
     if (state.stage === 1 && !state.pendingDescent
       && damage >= inst.health && ctx.undercroft?.available?.()) {
       state.pendingDescent = true;
-      noteHit(request, damage);
+      /* THE STAGGER PAYS. The Undercroft's limbs are cut to buy this
+       window and the window has to be worth the trip - see
+       `unmooredDamage` there for the measurement that says it was
+       not. Applied after the phase-two arming check above so it can
+       never turn a floored lethal blow back into a kill. */
+    if (ctx.undercroft?.unmoored?.()) {
+      damage *= ctx.undercroft.config?.unmooredDamage || 1;
+    }
+    noteHit(request, damage);
       return Math.max(0, inst.health - 1);
     }
     noteHit(request, damage);

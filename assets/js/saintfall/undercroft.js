@@ -89,8 +89,9 @@ import {
   srgbToLinear, sstep,
 } from "saintfall/core.js";
 import {
-  PALETTE, paintGeometry, patchBasicMaterial, patchMaterial,
+  PALETTE, paintGeometry, patchBasicMaterial,
 } from "saintfall/art.js";
+import { applySurface } from "saintfall/boss-surface.js";
 import { makeKit, cleanGeometry } from "saintfall/structures.js";
 import { APOSTATE_CONFIG } from "saintfall/apostate.js";
 
@@ -164,12 +165,23 @@ export const UNDERCROFT_CONFIG = Object.freeze({
      THE CLUTCH. Smaller pools than the Abbess's because this room
      also fields six lashers and the reason to stand still here is
      supposed to be the tentacles, not the adds. */
-  clutchCadence: 13.5,
-  clutchEggs: [2, 5],
+  /* MEASURED DOWN, and this is the single biggest balance finding of
+     the phase-two audit. A bot fighting the room on Penitent took
+     57-75% of ALL its damage from `enemy-fire` - Gleaner bolts, from
+     the clutch - against 2-12% from the Apostate itself. The boss was
+     third on the list of things hurting you, behind its own brood and
+     its own tentacles, in its own final encounter.
+
+     The clutch's job is to move the player off a spot. It is not the
+     fight's damage, and a ranged caste that snipes while the tentacles
+     pin is the specific pair that did it. Fewer eggs, laid less
+     often, and far fewer of them ranged. */
+  clutchCadence: 17,
+  clutchEggs: [2, 4],
   eggHatchSeconds: 5.6,
   eggHealth: 90,
   eggMax: 20,
-  broodCap: 9,
+  broodCap: 5,
   /* Laid AROUND THE PLAYER rather than around the queen, which is
      the whole difference between this clutch and the Bloom's: the
      Abbess lays in front of herself and you choose whether to go in,
@@ -192,7 +204,15 @@ export const UNDERCROFT_CONFIG = Object.freeze({
   lasherLength: 17.5,
   lasherRoot: 44,
   lasherInnerRoot: 25,
-  lasherHealth: 320,
+  /* A GATE, NOT A POOL. 320 is about a magazine and a half into a
+     thin, moving tube, and the probe showed what that costs: a rifle
+     that engaged the limbs removed 27-33% of the boss in the time a
+     rifle that IGNORED them and kited removed 60-78%, taking six
+     times less damage doing it. When the intended loop is dominated
+     by refusing to play it, the loop's price is wrong. A limb is
+     meant to cost about one magazine to cut, and the reward for
+     cutting it is the window, not the kill. */
+  lasherHealth: 210,
   lasherReach: 17.0,
   lasherDamage: 26,
   lasherCadence: [3.4, 6.2],
@@ -201,7 +221,15 @@ export const UNDERCROFT_CONFIG = Object.freeze({
      feeding. The window is the fight's damage phase and it is the
      only reason to engage the limbs at all. */
   cutsPerStagger: 3,
-  staggerSeconds: 4.5,
+  staggerSeconds: 5.5,
+  /* AND IT MULTIPLIES. Cutting three limbs bought 4.5 seconds of a
+     boss that could not act - and measured, only 7-15% of the boss's
+     health came off inside those windows, because the player is busy
+     during them and a stunned boss is still a full-health boss. A
+     window that does not pay is a mechanic players correctly learn to
+     ignore. Damage taken while unmoored is doubled, which is what
+     every game that has a stagger already promises. */
+  unmooredDamage: 2.0,
 });
 
 const C = UNDERCROFT_CONFIG;
@@ -391,7 +419,33 @@ function shellMaterial(ctx, name, opts = {}) {
     envMapIntensity: opts.env ?? 0.10,
   });
   m.name = `sf-undercroft-${name}`;
-  patchMaterial(m, atmos, { rim: opts.rim ?? 0.62 });
+  /* THE SHARED KIT, NOT A BARE PATCH, and the room needed it more
+     than any boss does.
+
+     `patchMaterial` gives a surface the world's fog, rim and grade
+     and nothing else - it has no grain, no cavity and no gloss
+     breakup. On a creature that is a shortfall; on a hundred-and-
+     twenty-metre floor that fills most of every frame it is the whole
+     frame. Measured against the Halo pool, this room came back
+     BIMODAL: 30.7% of its pixels under luma 32, a hole where the
+     reference puts 30% of its own (32-63), and a 57% pile at 64-127
+     that was the pan sitting at one value because a flat floor under
+     one directional light is uniform by physics.
+
+     art.js already wrote this diagnosis for sand - "no amount of work
+     on the things STANDING on the sand can fix a frame that is mostly
+     sand" - and its answer was shading relief that perturbs the
+     NORMAL so a raking light makes real lit and shadowed micro-faces.
+     `applySurface` is that answer, generalised, and the brief says
+     every surface in the game draws from it.
+
+     It REPLACES the patch rather than adding to it: the patch path
+     early-returns on an already-patched material, so calling both
+     leaves the surface silently off. */
+  applySurface(m, atmos, opts.family || "chitin", {
+    ...(opts.surface || {}),
+  });
+  if (opts.rim !== undefined) m.userData.sfRim = opts.rim;
   return m;
 }
 
@@ -495,6 +549,26 @@ const SHAFT_RAMP = makeRamp([
    reared tentacle reads against the wall it came out of; the core is
    the same bio-violet as the comb, because they are the same animal
    and a second hue would say they were not. */
+/* ============================================================
+   ONE STOP FOR THE WHOLE ROOM.
+
+   The five lights below are balanced against EACH OTHER - which one
+   keys a figure, which one gives the floor its falloff, how much
+   ambient stops the shadow side being a hole - and that balance is
+   the thing that took the measuring to find. The overall LEVEL is a
+   separate question, and it is answered here so that changing it
+   cannot quietly change the balance.
+
+   0.72 is measured, not chosen. At 1.0 the room photographed with a
+   mean luminance of 83 against a Halo pool whose own mean is 58, and
+   the excess sat as a 54% pile of pixels in the 96-127 band where the
+   reference keeps 7.7% - a bright plateau with a hole underneath it
+   at 32-63, which is where the reference keeps a third of its values.
+   Scaling the whole rig down slides that plateau into the gap rather
+   than crushing it.
+   ============================================================ */
+const EXPOSURE = 0.72;
+
 const LASH_SHELL = [0.115, 0.055, 0.155];
 const LASH_CORE = [0.62, 0.22, 0.98];
 
@@ -504,14 +578,25 @@ const LASH_CORE = [0.62, 0.22, 0.98];
    pool, because a room lit at a fifth of the desert's sun cannot
    show a five-percent albedo. Resin that a hive has walked on for a
    century is paler than resin, so this ramp runs from stained plum
-   up to a bone-grey crust and every stop is somewhere a dim room can
-   actually put a value. */
+   up to a rubbed crust and every stop is somewhere a dim room can
+   actually put a value.
+
+   AND IT IS COOL, which is the seventh axis of the boss brief rather
+   than a preference: "the boss holds a value and hue separate from
+   the background; a frame where boss and background are the same
+   orange is a failed frame no matter how good the model is." The
+   first version of this ramp topped out at a warm grey-tan, the room
+   is keyed by a warm shaft of daylight, and the Apostate wears IVORY
+   AND GOLD LEAF - so the figure and the floor it stands on came back
+   in one family and the boss had nothing to separate against. The
+   pigment goes to plum and slate; the warm in this room is the
+   daylight, the fallen masonry and the boss, and nothing else. */
 const PAN_RAMP = makeRamp([
-  [0.00, "#31212f"],
-  [0.34, "#4a3646"],
-  [0.62, "#6d5a5e"],
-  [0.86, "#8d7c74"],
-  [1.00, "#a89584"],
+  [0.00, "#241726"],
+  [0.34, "#3b2a3e"],
+  [0.62, "#54405a"],
+  [0.86, "#6e5a6b"],
+  [1.00, "#8a7576"],
 ]);
 
 const EGG_RAMP = makeRamp([
@@ -627,7 +712,24 @@ function buildChamber(ctx, floorY) {
          wall where nothing happens. The stain still reads - it is
          worth about a fifth of the range - but it can no longer take
          the floor below something a dim room can show. */
-      const t = clamp01(0.44 + dry * 0.34 + grain * 0.20 - wet * 0.16);
+      /* AND THE RAMP HAS TO BE USED. `PAN_RAMP` runs from a stained
+         plum to a bone crust, and the first input into it spanned
+         about 0.44 to 0.64 - a fifth of its range - so a floor with
+         five authored values rendered as one. Measured, that is a
+         third of every frame's pixels sitting in a single 64-95
+         plateau with a hole underneath it where the Halo pool keeps
+         30% of its own values.
+
+         A blotch field at a twelve-metre wavelength is what a hive
+         floor actually is: pooled resin, dry crust, and the tide line
+         between them. It spans the ramp, it fills the gap in the
+         histogram, and it is the same lesson art.js recorded for
+         sand one district up. */
+      const blotch = Math.sin(x * 0.085 + 2.3) * Math.sin(z * 0.071 - 1.1) * 0.5
+        + Math.sin((x + z) * 0.131 + 0.6) * 0.28
+        + Math.sin(x * 0.213 - 1.7) * Math.cos(z * 0.187 + 0.4) * 0.16;
+      const t = clamp01(0.42 + dry * 0.30 + grain * 0.10 + blotch * 0.44
+        - wet * 0.14);
       const c = PAN_RAMP.at(t);
       let out = [srgbToLinear(c[0]), srgbToLinear(c[1]), srgbToLinear(c[2])];
       /* The wall goes darker, because everything above the gallery is
@@ -641,7 +743,25 @@ function buildChamber(ctx, floorY) {
   });
   orientGeometry(THREE, floorGeo, (p, out) => out.set(0, 1, 0));
   const floorMesh = new THREE.Mesh(floorGeo, shellMaterial(ctx, "floor", {
-    roughness: 0.96, rim: 0.5,
+    roughness: 0.96, rim: 0.5, family: "chitin",
+    /* Wavelength is radians per WORLD METRE and the pan is 120m
+       across: the kit's own 1.15m carapace grain tiles a hundred
+       times over a floor and reads as static. Long enough to be
+       pooling and drag marks, short enough to still break the value
+       up at fighting distance. */
+    /* MOTTLE IS A BLOTCH FIELD AND IT PRINTS. At 0.28 with a 3.1m
+       wavelength the pan came back covered in two-metre spots of
+       even size and even spacing - a leopard print, not a floor.
+       The metrics liked it (localContrast and edge density both
+       rose) and it was obviously wrong on sight, which is the whole
+       reason the blind critic exists alongside the numbers. Large,
+       weak and irregular: the wavelength goes up so the features are
+       bigger than the eye reads as a pattern, the amplitude comes
+       down to a stain rather than a spot, and the LOW-frequency
+       variation is carried by the blotch field in the vertex colour
+       instead, where it can be shaped. */
+    surface: { wavelength: 6.4, cavity: 0.40, gloss: 0.26, mottle: 0.09,
+      wear: 0.14, fadeNear: 62, fadeFar: 150 },
   }));
   floorMesh.name = "undercroft-floor";
   floorMesh.receiveShadow = true;
@@ -673,7 +793,9 @@ function buildChamber(ctx, floorY) {
   });
   orientGeometry(THREE, vaultGeo, (p, out) => out.set(0, -1, 0));
   const vaultMesh = new THREE.Mesh(vaultGeo, shellMaterial(ctx, "vault", {
-    roughness: 0.98, rim: 0.9,
+    roughness: 0.98, rim: 0.9, family: "chitin",
+    surface: { wavelength: 6.0, cavity: 0.38, gloss: 0.10, mottle: 0.08,
+      fadeNear: 70, fadeFar: 180 },
   }));
   vaultMesh.name = "undercroft-vault";
   group.add(vaultMesh);
@@ -717,7 +839,8 @@ function buildChamber(ctx, floorY) {
   const ribGeo = kit.merge(ribGeos);
   paintGeometry(THREE, ribGeo, RIB_RAMP, (x, y) => clamp01((y - C.hem) / (C.apex - C.hem)));
   const ribMesh = new THREE.Mesh(cleanGeometry(THREE, ribGeo),
-    shellMaterial(ctx, "ribs", { roughness: 0.88, rim: 0.5 }));
+    shellMaterial(ctx, "ribs", { roughness: 0.88, rim: 0.5, family: "bone",
+      surface: { wavelength: 1.6 } }));
   ribMesh.name = "undercroft-ribs";
   group.add(ribMesh);
 
@@ -837,7 +960,8 @@ function buildChamber(ctx, floorY) {
   paintGeometry(THREE, combGeo, COMB_RAMP,
     (x, y) => clamp01(0.25 + (y / 30) * 0.7 + Math.sin(x * 0.7) * 0.08), { jitter: 0.20 });
   const combMesh = new THREE.Mesh(combGeo, shellMaterial(ctx, "comb", {
-    roughness: 0.9, rim: 0.85,
+    roughness: 0.9, rim: 0.85, family: "chitin",
+    surface: { wavelength: 2.2, cavity: 0.40, mottle: 0.09 },
   }));
   combMesh.name = "undercroft-comb";
   group.add(combMesh);
@@ -941,7 +1065,8 @@ function buildChamber(ctx, floorY) {
     sacGlow.push(core);
   }
   const sacMesh = new THREE.Mesh(cleanGeometry(THREE, kit.merge(sacShell)),
-    shellMaterial(ctx, "sacs", { roughness: 0.72, rim: 0.65 }));
+    shellMaterial(ctx, "sacs", { roughness: 0.72, rim: 0.65, family: "membrane",
+      surface: { wavelength: 1.1 } }));
   sacMesh.name = "undercroft-sacs";
   group.add(sacMesh);
   const sacCoreMesh = new THREE.Mesh(cleanGeometry(THREE, kit.merge(sacGlow)),
@@ -997,7 +1122,12 @@ function buildChamber(ctx, floorY) {
     (x, y, z) => clamp01(0.32 + y * 0.16 + Math.sin(x * 0.9 + z * 0.7) * 0.22),
     { jitter: 0.24 });
   const rubbleMesh = new THREE.Mesh(rubbleGeo, shellMaterial(ctx, "rubble", {
-    roughness: 0.9, rim: 0.55,
+    roughness: 0.9, rim: 0.55, family: "bone",
+    /* Dressed Cathedral masonry, so the grain is a stone pit rather
+       than a carapace pore - and short, because these are metre-scale
+       blocks lying at the player's feet. */
+    surface: { wavelength: 0.95, cavity: 0.44, wear: 0.18, gloss: 0.06,
+      mottle: 0.10 },
   }));
   rubbleMesh.name = "undercroft-rubble";
   rubbleMesh.receiveShadow = true;
@@ -1077,7 +1207,8 @@ function buildChamber(ctx, floorY) {
         + (y - undercroftRoof(Math.hypot(C.breachX, C.breachZ))) * 0.09), { jitter: 0.3 });
       return g;
     }))),
-    shellMaterial(ctx, "shaft", { roughness: 0.94, rim: 0.7 }));
+    shellMaterial(ctx, "shaft", { roughness: 0.94, rim: 0.7, family: "bone",
+      surface: { wavelength: 1.9, cavity: 0.44 } }));
   shaftMesh.name = "undercroft-shaft-wall";
   group.add(shaftMesh);
 
@@ -1214,27 +1345,101 @@ function buildChamber(ctx, floorY) {
      patch of wall thirty metres away was still receiving most of the
      lamp and photographed as cream sandstone, which is what turned a
      shaft of light into a floodlit set. */
-  const keyLight = new THREE.PointLight(0xffdca8, 0, 38, 2.0);
+  /* CANDELA, NOT THE OLD LEGACY UNITS. The renderer runs three's
+     physically-correct lighting, so a point light's reach goes as
+     intensity over distance squared - and these were first sized by
+     eye at values that only ever lit a four-metre bubble. 22 cd
+     delivers 0.6 at six metres and 0.1 at fifteen; the fight happens
+     between eight and sixteen. */
+  const keyLight = new THREE.PointLight(0xffdca8, 0, 46, 2.0);
   keyLight.name = "undercroft-key";
   keyLight.position.set(poolX, 5.5, poolZ);
   keyLight.castShadow = false;
   group.add(keyLight);
   const hiveLight = new THREE.PointLight(0x8f5ce0, 0, 110, 1.35);
   hiveLight.name = "undercroft-hive";
-  hiveLight.position.set(0, 18, 0);
+  /* Down at head height rather than up in the vault. A source
+     eighteen metres over a two-metre figure lights the tops of its
+     shoulders and nothing else; the fight needs the sides. */
+  hiveLight.position.set(0, 6.5, 0);
   hiveLight.castShadow = false;
   group.add(hiveLight);
   /* AND A FILL, because the alternative is a black floor. The world's
      own hemisphere is turned down to almost nothing while the player
      is under the map (see `sky.setUnderground`), and a cave lit only
-     by point sources loses everything outside their falloff - the
-     first build's fighting pan measured pure black four metres from
-     the light pool. This is the room's answer to its own sky: violet
-     from the comb above, near-black from the resin below. Born at
-     zero like the other two, for the same reason. */
-  const fill = new THREE.HemisphereLight(0x6b46a8, 0x140c18, 0);
+     by point sources loses everything outside their falloff.
+     Born at zero like the other two, for the same reason.
+
+     THE GROUND COLOUR IS A BOUNCE, AND IT WAS MODELLED AS A HOLE.
+     At 0x140c18 this said the pan absorbs everything - while the pan
+     was simultaneously painted and lit to measure 90/255. A floor
+     cannot be bright and also return nothing. The consequence landed
+     entirely on the FIGURE, because a hemisphere lights by normal.y:
+     the floor faces up and took the full violet, and the boss - whose
+     surfaces are vertical - got the equator, which is the mean of the
+     violet and that hole. Measured with the subject masked out of its
+     own frame, the Apostate's pixels averaged 27/255 with 69% of them
+     under 24, against 63/255 for the same model in the nave. It was a
+     black cutout everywhere except the daylight pool.
+
+     A warm resin bounce off a lit floor is both the physically honest
+     value and the one that lifts vertical surfaces without touching
+     the floor's own reading. */
+  const fill = new THREE.HemisphereLight(0x7a52bd, 0x4e3340, 0);
   fill.name = "undercroft-fill";
   group.add(fill);
+
+  /* ------------------------------------------------------------
+     AND TWO KEYS THAT REACH THE FAR WALL.
+
+     Raising the hemisphere took the figure from 27/255 to 38, and
+     then stopped: the two lamps are point sources, and a point
+     source at the middle of a room delivers intensity over distance
+     squared - 340 candela at thirty-four metres is 0.29, which is
+     nothing. Everything past the gallery stayed a cutout.
+
+     A room this size needs light with NO falloff, which is what a
+     directional is. Two of them, opposed, and the pair does three
+     jobs at once that the ambient could not do at any intensity:
+     it puts a real key on a figure at every station, it gives that
+     figure a lit side and a shadow side (the frame's contrast was
+     measuring LOW against the Halo band precisely because nothing
+     in here had one), and it lands a specular lobe on the gold and
+     the bronze, which is where the missing highlights come from.
+
+     Neither casts. The one shadow-casting light in this game is the
+     sun and it stays that way; a second shadow map for a room you
+     visit once is not a trade worth making.
+
+     AND THE SPLIT BETWEEN THESE AND THE AMBIENT IS THE WHOLE POINT.
+     A first pass carried the lift on the hemisphere instead, and the
+     figure came up to a readable 56/255 - but the frame's mid-band
+     share went to 80.6% against a Halo pool that sits between 4.8 and
+     43.2. Ambient raises everything toward the middle by definition;
+     it cannot give a surface a lit side. The keys shape, the ambient
+     only stops the shadow side being a hole, and the ratio between
+     them is what keeps the blacks black.
+
+     Born at zero, like every other light in this file. */
+  const keyDir = new THREE.DirectionalLight(0xffd6a2, 0);
+  keyDir.name = "undercroft-key-dir";
+  keyDir.castShadow = false;
+  /* Raked down the same bearing the daylight comes in on, so the
+     room has ONE story about where its light is from. */
+  keyDir.position.set(C.breachX * 0.5 + 26, 30, C.breachZ * 0.5 - 22);
+  keyDir.target.position.set(0, 2, 0);
+  group.add(keyDir);
+  group.add(keyDir.target);
+
+  const rimDir = new THREE.DirectionalLight(0x8a63e8, 0);
+  rimDir.name = "undercroft-rim-dir";
+  rimDir.castShadow = false;
+  /* Opposed and lower, so what the key leaves dark reads as violet
+     comb-light rather than as a hole. */
+  rimDir.position.set(-34, 13, 30);
+  rimDir.target.position.set(0, 2, 0);
+  group.add(rimDir);
+  group.add(rimDir.target);
 
   ctx.scene.add(group);
 
@@ -1258,9 +1463,21 @@ function buildChamber(ctx, floorY) {
     setLive(on) {
       if (group.visible === on) return;
       group.visible = on;
-      keyLight.intensity = on ? 22 : 0;
-      hiveLight.intensity = on ? 34 : 0;
-      fill.intensity = on ? 1.55 : 0;
+      /* THE FLOOR HAS TO HAVE A GRADIENT, and only the lamps can give
+         it one. A flat pan under a single directional is uniform by
+         physics - N.L is the same at every point of it - so carrying
+         the room on `keyDir` put 53% of every frame's pixels in one
+         64-127 plateau with a hole where the reference pool keeps a
+         third of its own values (32-63). The keys are pulled back to
+         what a FIGURE needs and the point sources, which do fall off,
+         are raised to carry the floor: bright where the daylight
+         lands and where the comb burns, dark at the rim, which is
+         both the honest answer and the better picture. */
+      keyLight.intensity = on ? 380 * EXPOSURE : 0;
+      hiveLight.intensity = on ? 620 * EXPOSURE : 0;
+      fill.intensity = on ? 0.72 * EXPOSURE : 0;
+      keyDir.intensity = on ? 1.25 * EXPOSURE : 0;
+      rimDir.intensity = on ? 0.55 * EXPOSURE : 0;
     },
     /** The hive breathes. One colour write per glow mesh - the
      *  material's own `color` multiplies the vertex colours, so a
@@ -1270,8 +1487,11 @@ function buildChamber(ctx, floorY) {
       pulse = damp(pulse, 0.86 + Math.sin(elapsed * 0.9) * 0.12
         + Math.sin(elapsed * 2.3 + 1.4) * 0.05 + heat * 0.45, 6, dt);
       for (const m of glowMeshes) m.material.color.setScalar(pulse);
-      hiveLight.intensity = 34 * pulse + heat * 22;
-      fill.intensity = 1.55 * (0.84 + pulse * 0.20);
+      hiveLight.intensity = (620 * pulse + heat * 380) * EXPOSURE;
+      fill.intensity = 0.72 * EXPOSURE * (0.84 + pulse * 0.20);
+      /* The comb's own light breathes with it; the warm key does not,
+         because it is the hole in the ceiling and holes do not pulse. */
+      rimDir.intensity = 0.55 * EXPOSURE * (0.82 + pulse * 0.22);
     },
   };
 }
@@ -1440,7 +1660,10 @@ export function buildUndercroft(ctx) {
     eggGeo.setAttribute("color", new THREE.BufferAttribute(eggCol, 3));
     eggGeo.setIndex(idx);
   }
-  const eggMat = shellMaterial(ctx, "eggs", { flat: false, roughness: 0.52, rim: 1.35 });
+  const eggMat = shellMaterial(ctx, "eggs", {
+    flat: false, roughness: 0.52, rim: 1.35, family: "membrane",
+    surface: { wavelength: 0.45 },
+  });
   eggMat.emissive = new THREE.Color(0x3a1450);
   eggMat.emissiveIntensity = 1.0;
   const eggMesh = new THREE.Mesh(eggGeo, eggMat);
@@ -1573,7 +1796,7 @@ export function buildUndercroft(ctx) {
       egg.seed = rng();
       /* A ranged caste as the fight wears on, because a clutch of
          nothing but melee is answered by walking backwards. */
-      egg.caste = rng() < 0.24 + hurt * 0.3 ? "gleaner" : "thresher";
+      egg.caste = rng() < 0.10 + hurt * 0.16 ? "gleaner" : "thresher";
       laid += 1;
     }
     if (laid) {
@@ -1689,7 +1912,10 @@ export function buildUndercroft(ctx) {
 
   const shellBuf = limbBuffers(L_SIDES);
   const coreBuf = limbBuffers(L_CORE_SIDES);
-  const lasherMat = shellMaterial(ctx, "lashers", { roughness: 0.66, rim: 1.15 });
+  const lasherMat = shellMaterial(ctx, "lashers", {
+    roughness: 0.66, rim: 1.15, family: "chitin",
+    surface: { wavelength: 0.85, gloss: 0.34, sheen: 0.14 },
+  });
   lasherMat.emissive = new THREE.Color(0x1d0c28);
   lasherMat.emissiveIntensity = 1.0;
   const lasherMesh = new THREE.Mesh(shellBuf.geo, lasherMat);
@@ -1735,6 +1961,8 @@ export function buildUndercroft(ctx) {
       cut: 0,
       struck: false,
       tip: new THREE.Vector3(rx, undercroftFloor(r) - 2.4, rz),
+      /* Where the wind-up said it was going. */
+      mark: new THREE.Vector3(rx, 0, rz),
       aim: new THREE.Vector3(rx * 0.4, 9, rz * 0.4),
       nodes: Array.from({ length: L_NODES }, () => new THREE.Vector3(rx, 0, rz)),
     });
@@ -1858,7 +2086,10 @@ export function buildUndercroft(ctx) {
   /* ------------------------------------------------- limb behaviour */
 
   const LIMB_TIMES = Object.freeze({
-    erupt: 0.62, wind: 0.44, strike: 0.26, recover: 0.72, sheathe: 0.55,
+    /* The wind-up is longer now that the strike commits: 0.44s was
+       sized against an attack that would follow you anyway, and a
+       tell you can actually beat is worth showing for longer. */
+    erupt: 0.62, wind: 0.62, strike: 0.26, recover: 0.72, sheathe: 0.55,
   });
 
   function limbAnchor(limb, out) {
@@ -2002,6 +2233,8 @@ export function buildUndercroft(ctx) {
     }
 
     if (limb.mode === "track") {
+      /* (the transition into `wind` below is where the strike's
+         impact point is captured - see the note there) */
       limb.rise = damp(limb.rise, 1, 5, dt);
       playerLocal(_tmp);
       /* Hangs over and slightly beside the player: a limb aimed
@@ -2022,12 +2255,27 @@ export function buildUndercroft(ctx) {
         limb.mode = "wind";
         limb.t = 0;
         limb.struck = false;
-        bus.emit("wind", { index: limb.index });
+        /* CAPTURED HERE, AT THE START OF THE TELL.
+
+           Committing at the END of the wind-up was not enough and the
+           probe said so: the connect rate went 84% -> 72%, because
+           0.26s of strike travel is 1.5m of player movement against a
+           capsule 2.4m across. The dodge window is the whole tell,
+           not the descent - the limb rears over where you ARE, and
+           you have the full wind-up to not be there. */
+        playerLocal(_tmp);
+        limb.mark.set(_tmp.x, chamberFloorAt(ctx.player.state.x, ctx.player.state.z)
+          - floorY + 0.5, _tmp.z);
+        bus.emit("wind", { index: limb.index, x: limb.mark.x + C.x,
+          z: limb.mark.z + C.z });
       }
       return;
     }
 
     if (limb.mode === "wind") {
+      /* The impact point is captured at the END of the wind-up, in
+         `mark`, and the strike below drives to THAT rather than to
+         wherever the player has since gone. See the note there. */
       /* THE TELL, and it is deliberately generous. Every enemy melee
          in this game is a wind-up you can read and step out of - see
          the melee-viability work - and a hazard that arrives without
@@ -2039,18 +2287,41 @@ export function buildUndercroft(ctx) {
       reachable(limb, lerp(_tmp.x, limb.rootX, 0.35),
         11 + k * 4.5, lerp(_tmp.z, limb.rootZ, 0.35), _want);
       limb.tip.lerp(_want, 1 - Math.exp(-8 * dt));
-      if (limb.t >= LIMB_TIMES.wind) { limb.mode = "strike"; limb.t = 0; }
+      if (limb.t >= LIMB_TIMES.wind) {
+        limb.mode = "strike";
+        limb.t = 0;
+        /* THE TELEGRAPH HAS TO MEAN SOMETHING (kept for the record).
+
+           This tracked the player through the strike itself - the tip
+           was driven at `playerLocal()` every frame of the descent -
+           so the wind-up was not a telegraph at all, it was an
+           announcement that you were about to be hit. Measured with a
+           bot that never stops moving, the limbs connected on 84% of
+           their swings; an attack you cannot step out of is not
+           difficulty, it is a damage tax with an animation on it.
+
+           apostate.js already states the rule for its own moveset:
+           "telegraphs commit to the heading that was shown ... a boost
+           or glaive swing cannot curve toward a dodging player after
+           its windup." A tentacle is not an exception. */
+      }
       return;
     }
 
     if (limb.mode === "strike") {
       const k = clamp01(limb.t / LIMB_TIMES.strike);
-      playerLocal(_tmp);
-      reachable(limb, _tmp.x, chamberFloorAt(ps.x, ps.z) - floorY + 0.5, _tmp.z, _want);
+      reachable(limb, limb.mark.x, limb.mark.y, limb.mark.z, _want);
       limb.tip.lerp(_want, 1 - Math.exp(-22 * dt));
       if (!limb.struck && k > 0.55) {
         limb.struck = true;
-        if (playerInLimb(limb, L_NODES - 7)) {
+        /* THE BUSINESS END ONLY. Testing the last seven nodes made
+           the strike a six-metre sausage laid across the floor, which
+           is most of the reason it was unmissable; a tentacle coming
+           down hits with its tip. Three nodes at a 1.15 pad then
+           overshot the other way - 6% connects on a moving bot, which
+           is a hazard the player can ignore. Four and 1.5 is the
+           band where it is dodgeable and still worth dodging. */
+        if (playerInLimb(limb, L_NODES - 4, 1.5)) {
           ctx.combat?.hurtPlayer?.(C.lasherDamage, {
             source: "undercroft-lasher",
             x: limb.tip.x + C.x, y: limb.tip.y + floorY, z: limb.tip.z + C.z,
@@ -2578,6 +2849,9 @@ export function buildUndercroft(ctx) {
     begin,
     swallow,
     active: live,
+    /** Whether the hive has lost hold of the thing it feeds.
+     *  apostate.js reads this in its own damage hook. */
+    unmoored: () => state.unmooredFor > 0,
     /** Whether the collapse is still ahead of the fight. apostate.js
      *  asks before it floors a lethal hit, so a boss whose second
      *  phase has already been spent - or a build with this module

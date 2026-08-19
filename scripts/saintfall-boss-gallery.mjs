@@ -162,7 +162,7 @@ const BOSSES = {
   winnower: {
     label: "The Winnower", district: "Censer Works",
     arm: (T) => {
-      T.teleportToWinnower(70);
+      T.teleportToWinnower(35);
       T.advanceToWinnowerPhase("soar", 60);
       T.advanceTime(0.6, 1 / 60);
     },
@@ -489,6 +489,61 @@ const BOSSES = {
       G.advance(0.6);
     },
   },
+
+  /* Phase two of the same encounter, shot as its own subject. The
+     boss model is identical - what is being reviewed here is the ROOM
+     and the second-phase staging, and those only get in front of the
+     critic if they go through the same six framings everything else
+     does. */
+  undercroft: {
+    label: "The Apostate Enthroned", district: "The Undercroft",
+    arm: (T, G) => {
+      T.armApostateFight();
+      T.teleportToApostate(24);
+      if (T.advanceToApostatePhase("duel", 20) < 0) {
+        T.apostate.beginReveal();
+        G.until(() => T.apostateState().phase === "duel", 20);
+      }
+      /* Spent through combat's own entry rather than through the QA
+         collapse hook, so the transition happens the way the fight
+         does it - including the damage floor that arms it. */
+      const inst = G.inst("undercroft");
+      if (!inst) return "no Apostate instance to collapse";
+      T.ctx.combat.damageEnemy(inst, inst.health + 1, { source: "gallery-collapse" });
+      if (!G.until(() => (T.undercroftState() || {}).phase === "live", 30)) {
+        return `never reached the hive (stuck at ${(T.undercroftState() || {}).phase})`;
+      }
+      /* Let the hive's first answer settle: at the release frame every
+         limb is still mid-eruption and the clutch has just been laid,
+         which photographs as a one-off set piece rather than as the
+         fight's steady state. */
+      T.advanceTime(2.5, 1 / 60);
+      return T.apostateState().stage === 2 ? null
+        : `collapsed but stage is ${T.apostateState().stage}`;
+    },
+    /* The longest sightline the chamber actually offers. The pan is
+       42m in radius, so 58m is a corner-to-corner look across it with
+       the far wall behind - which is also the furthest the player can
+       ever be from this boss in this fight. */
+    framings: { "06-silhouette": { distance: 58 } },
+    phase: (T) => ({ ...T.apostateState(), room: T.undercroftState() }),
+    pose: (T) => { T.advanceTime(0.5, 1 / 60); },
+    telegraph: (T, G) => {
+      T.forceApostateAction("ranged");
+      G.advance(T.apostateState().actionFor * 0.34);
+      return null;
+    },
+    impact: (T, G) => {
+      T.forceApostateAction("ranged");
+      G.advance(T.apostateState().actionFor * 0.78);
+      return null;
+    },
+    hurt: (T, G) => {
+      G.damageTo("undercroft", 0.15);
+      T.forceApostateAction("vent");
+      G.advance(0.6);
+    },
+  },
 };
 
 /* ============================================================
@@ -606,7 +661,7 @@ function installGallery() {
           ["sf-garner-maw", "sf-garner-arms"]);
         if (body.length) return body;
       }
-      if (key === "apostate") {
+      if (key === "apostate" || key === "undercroft") {
         const inst = T.apostate && T.apostate.instance && T.apostate.instance();
         return inst && inst.root ? [inst.root] : [];
       }
@@ -616,7 +671,7 @@ function installGallery() {
     },
 
     inst(key) {
-      if (key === "apostate") {
+      if (key === "apostate" || key === "undercroft") {
         return (T.apostate && T.apostate.instance && T.apostate.instance()) || null;
       }
       if (key === "garner") {
@@ -733,7 +788,7 @@ function installGallery() {
                A pit boss is unaffected: the Garner's maw sits below the
                PAN but above GARNER_PIT's carved floor, which is what
                `heightAt` returns there. */
-            if (v.y < T.ctx.terrain.heightAt(v.x, v.z) - 0.35) { buried += 1; continue; }
+            if (v.y < G._ground(v.x, v.z) - 0.35) { buried += 1; continue; }
             lo.min(v); hi.max(v);
             cloud.push(v.x, v.y, v.z);
           }
@@ -829,6 +884,29 @@ function installGallery() {
 
     /* ---------------- choosing where to stand ---------------- */
 
+    /**
+     * The floor at a point - THE ONE THE GAME USES, not the height
+     * field underneath it.
+     *
+     * Every height test in this harness used to read
+     * `terrain.heightAt` directly, which encodes an assumption the
+     * game stopped making: that there is nothing below the height
+     * field. The Undercroft is eighty-eight metres under the
+     * Cathedral, so every vertex of a boss fought there is "buried",
+     * every sightline is "through a hill", and the gallery refused
+     * all six framings with 0% of the subject in line of sight. The
+     * subject was in an open room the whole time.
+     *
+     * `collide.groundHeight` is the walking plane the engine itself
+     * resolves - terrain, authored floors, and any live override -
+     * and it is analytic, so the marched sightline stays cheap.
+     */
+    _ground(x, z) {
+      const c = T.ctx.collide;
+      if (c && c.groundHeight) return c.groundHeight(x, z);
+      return T.ctx.terrain.heightAt(x, z);
+    },
+
     /** Is the sightline from `pos` to `target` clear of the height
      *  field? Marched analytically rather than raycast: the terrain
      *  is a large mesh with no acceleration structure and sixty
@@ -838,7 +916,7 @@ function installGallery() {
         const x = pos[0] + (target[0] - pos[0]) * t;
         const y = pos[1] + (target[1] - pos[1]) * t;
         const z = pos[2] + (target[2] - pos[2]) * t;
-        if (y < T.ctx.terrain.heightAt(x, z) + 0.6) return false;
+        if (y < G._ground(x, z) + 0.6) return false;
       }
       return true;
     },
@@ -1027,7 +1105,7 @@ function installGallery() {
           let cy = aim[1] + dist * Math.sin(pitch);
           // Never below the sand it is standing on, whatever the
           // pitch says.
-          cy = Math.max(cy, T.ctx.terrain.heightAt(cx, cz) + 2.2);
+          cy = Math.max(cy, G._ground(cx, cz) + 2.2);
           const pos = [cx, cy, cz];
           const seen = G.visibleFraction(pos, probes);
           // Ties broken toward the requested elevation: a shot that
@@ -1111,7 +1189,7 @@ function installGallery() {
           view.pos = [
             aim[0] + (view.pos[0] - aim[0]) * scale,
             Math.max(aim[1] + (view.pos[1] - aim[1]) * scale,
-              T.ctx.terrain.heightAt(view.pos[0], view.pos[2]) + 2.2),
+              G._ground(view.pos[0], view.pos[2]) + 2.2),
             aim[2] + (view.pos[2] - aim[2]) * scale,
           ];
         }
@@ -1555,7 +1633,14 @@ try {
       console.log(`  armed at phase ${armedPhase.phase}`
         + ` (${armedPhase.health}/${armedPhase.maxHealth})`);
 
-      for (const framing of FRAMINGS) {
+      for (const baseFraming of FRAMINGS) {
+        /* A boss may override one number of one framing, and exactly
+           one does: the silhouette shot is pinned at 120m, and the
+           Undercroft is a room 92m across. Asking for a 120m sightline
+           in it is not a hard test, it is an impossible one. */
+        const framing = boss.framings && boss.framings[baseFraming.name]
+          ? { ...baseFraming, ...boss.framings[baseFraming.name] }
+          : baseFraming;
         const label = `${key}/${framing.name}`;
         try {
           const setup = boss[framing.pose];

@@ -190,6 +190,17 @@ export function buildCollision(ctx, world) {
    *  Most of the map is terrain; authored raised floors can opt in
    *  through the world without becoming blocking obstacles. */
   function groundHeight(x, z) {
+    /* AN OVERRIDE, NOT A MAXIMUM, and that distinction is the whole
+       reason a cavern can exist in this game at all. `walkSurfaceAt`
+       below can only ever RAISE the floor, because an authored road
+       lying on terrain is the only thing it was written for. A room
+       carved under the map has to LOWER it, which no max can do - so
+       the undercroft answers first and its answer is taken whole.
+
+       It is `null` everywhere and always except inside one disc,
+       during one phase of one fight; see undercroft.js. */
+    const underY = ctx.undercroft?.groundOverrideAt?.(x, z);
+    if (underY !== null && underY !== undefined) return underY;
     const terrainY = terrain.groundHeightAt
       ? terrain.groundHeightAt(x, z)
       : terrain.heightAt(x, z);

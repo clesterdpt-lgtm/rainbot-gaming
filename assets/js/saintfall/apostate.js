@@ -1479,7 +1479,21 @@ export async function buildApostate(ctx) {
   };
 
   const state = {
-    phase: "dormant",       // dormant -> reveal -> duel -> dead
+    phase: "dormant",       // dormant -> reveal -> duel -> descent -> duel -> dead
+    /* WHICH POOL IS BEING SPENT. One is the Cathedral duel; two is
+       the same brain, the same verbs and a bigger pool in the room
+       under it - see undercroft.js. The stage is durable because the
+       bar's name, the health scale and whether a lethal hit kills or
+       collapses the floor all read it. */
+    stage: 1,
+    /* The Cathedral pool, remembered across the collapse so phase
+       two can be a multiple of it rather than of itself. */
+    stageOneMax: 0,
+    /* Set only while the collapse owns the body. `poseFigure` uses it
+       INSTEAD of ground-plus-altitude, because during the fall there
+       is deliberately no ground to be a height above. */
+    descentY: null,
+    pendingDescent: false,
     timer: 0,
     elapsed: 0,
     action: null,
@@ -1868,7 +1882,14 @@ export async function buildApostate(ctx) {
       const wantZ = inst.z + Math.sin(angle) * reach;
       const radius = roster[i] === "harrow" ? 1.05 : roster[i] === "gleaner" ? 0.8 : 0.62;
       const acceptsSummon = (px, pz) => {
-        if (Math.hypot(px - C.arenaX, pz - C.arenaZ) > C.arenaRadius - 2) return false;
+        /* The arena is a different size underground. Reading the live
+           chamber's own containment radius rather than restating it
+           keeps a Call from silently failing at the hive's rim, which
+           is exactly where the boss spends the second phase. */
+        const cap = ctx.undercroft?.active?.()
+          ? (ctx.undercroft.config?.keepIn ?? C.arenaRadius) - 3
+          : C.arenaRadius - 2;
+        if (Math.hypot(px - C.arenaX, pz - C.arenaZ) > cap) return false;
         if (collide?.walkClear
           && !collide.walkClear(inst.x, inst.z, px, pz, radius)) return false;
         if (!collide?.walkClear) return true;
@@ -2376,7 +2397,11 @@ export async function buildApostate(ctx) {
   function poseFigure(dt) {
     const action = state.action;
     const baseY = groundAt(inst.x, inst.z);
-    inst.y = baseY + state.altitude;
+    /* During the collapse the floor is being taken away underneath
+       this body, so "ground plus altitude" is the one expression that
+       cannot describe where it is. The cinematic writes an absolute
+       height instead and this is the only place that reads it. */
+    inst.y = state.descentY === null ? baseY + state.altitude : state.descentY;
     const speedN = clamp01(inst.speed / Math.max(1, C.walkSpeed));
     const walk = Math.sin(inst.stride * 2.9) * 0.48 * speedN;
 
@@ -2674,6 +2699,85 @@ export async function buildApostate(ctx) {
     return { removed, projectiles };
   }
 
+  /* ============================================================
+     PHASE TWO
+
+     The pool empties and the floor does not hold. Three entry points,
+     and between them the undercroft owns the body for about eight
+     seconds; nothing else in this file changes.
+
+     WHY THE KILL IS INTERCEPTED IN `modifyIncomingDamage` RATHER
+     THAN AT ZERO HEALTH. combat.js's `applyDamage` treats health
+     reaching zero as a death outright: it calls `enemies.kill`,
+     increments the player's kill count, emits `kill` and awards
+     progression. All four of those are wrong for a phase change, and
+     none of them can be taken back afterwards. The one place that
+     sees the hit BEFORE the pool is written is the damage hook this
+     encounter already owns, so the lethal blow is floored at one
+     point of health there and the collapse is armed instead.
+     ============================================================ */
+  function beginDescent() {
+    if (state.phase === "descent") return false;
+    state.phase = "descent";
+    state.pendingDescent = false;
+    state.timer = 0;
+    state.descentY = null;
+    state.stageOneMax = inst.maxHealth;
+    state.stage = 2;
+    clearAction();
+    inst.stunTime = 0;
+    inst.grounded = false;
+    /* The Cathedral's brood does not come down with you. They were
+       called into a nave that no longer has a floor, and leaving them
+       in `enemies.live` would drop a garrison eighty-eight metres
+       onto the fight the moment the override went live. */
+    dismissOwnedThreats("collapse");
+    bus.emit("descent", { x: inst.x, y: inst.y, z: inst.z });
+    return true;
+  }
+
+  /** Absolute placement while the cinematic owns the body. */
+  function driveDescent(x, y, z, yaw) {
+    if (state.phase !== "descent") return false;
+    if (Number.isFinite(x)) inst.x = x;
+    if (Number.isFinite(z)) inst.z = z;
+    if (Number.isFinite(y)) state.descentY = y;
+    if (Number.isFinite(yaw)) inst.yaw = yaw;
+    inst.grounded = false;
+    return true;
+  }
+
+  /** Land, and open the second pool. */
+  function enterHive(x, z, yaw) {
+    state.phase = "duel";
+    state.stage = 2;
+    state.descentY = null;
+    state.altitude = 0;
+    state.disengageFor = 0;
+    state.timer = 0;
+    clearAction();
+    if (Number.isFinite(x)) inst.x = x;
+    if (Number.isFinite(z)) inst.z = z;
+    inst.grounded = true;
+    inst.stunTime = 0;
+    /* A MULTIPLIER ON WHAT THE TIER ALREADY DECIDED, never a number.
+       difficulty.js scales `maxHealth` at spawn, so an absolute pool
+       here would quietly hand every tier the same second phase and
+       undo Martyr for the last fight in the game. */
+    const scale = ctx.undercroft?.config?.healthScale ?? 1.15;
+    inst.maxHealth = Math.max(1,
+      Math.round((state.stageOneMax || inst.maxHealth) * scale));
+    /* Starts at one and is filled by the reveal - see the note in
+       undercroft.js's `stepSettle`. */
+    inst.health = 1;
+    inst.state = "idle";
+    if (Number.isFinite(yaw)) inst.yaw = yaw;
+    else facePlayer(99, 1);
+    setEncounterGate(false, false);
+    bus.emit("phaseTwo", { x: inst.x, z: inst.z, maxHealth: inst.maxHealth });
+    return true;
+  }
+
   function finishDeath({ emit = true, reason = "defeated" } = {}) {
     const entering = !state.defeated || state.phase !== "dead";
     /* A lethal player shot is flushed after this controller's update. An
@@ -2717,6 +2821,25 @@ export async function buildApostate(ctx) {
     vault.update(state.elapsed);
     advanceCorruption();
     updateHeat(d);
+    /* THE FLOOR, BEFORE THE FUNERAL. A lethal hit in the Cathedral is
+       floored at one point of health by `modifyIncomingDamage` and
+       arms this instead; if the room under the nave refuses for any
+       reason - no module, already spent - the arm is dropped and the
+       ordinary death below runs on the next frame. */
+    if (state.pendingDescent) {
+      state.pendingDescent = false;
+      if (ctx.undercroft?.begin?.()) {
+        beginDescent();
+      } else {
+        inst.health = 0;
+      }
+    }
+    if (state.phase === "descent") {
+      /* The cinematic owns position, height and yaw. Everything here
+         does is keep the body posed while it is being moved. */
+      poseFigure(d);
+      return;
+    }
     if (inst.state === "death" || inst.health <= 0) {
       finishDeath();
       state.timer = Math.min(2.2, state.timer + d);
@@ -2773,7 +2896,23 @@ export async function buildApostate(ctx) {
        The flinch is recorded here rather than in the aegis branch
        below, because a blocked hit still shoves the body - it was
        previously invisible that the shield had eaten anything. */
+    /* Untouchable while the floor is falling. `untouchable()` in
+       combat.js reads `encounterLocked`, which the collapse
+       deliberately does NOT set - the boss has to stay visible and
+       shootable-at all the way down, it just must not take a hit. */
+    if (state.phase === "descent") return 0;
     if (state.phase !== "duel") return damage;
+    /* ARMING THE COLLAPSE. See the note on `beginDescent`: this is
+       the last point in the pipeline that sees a hit before the pool
+       is written, and therefore the only one that can stop a lethal
+       blow from becoming an actual death with a kill count and a
+       progression award attached to it. */
+    if (state.stage === 1 && !state.pendingDescent
+      && damage >= inst.health && ctx.undercroft?.available?.()) {
+      state.pendingDescent = true;
+      noteHit(request, damage);
+      return Math.max(0, inst.health - 1);
+    }
     noteHit(request, damage);
     if (!state.shieldActive) return damage;
     const attackX = Number.isFinite(request.originX) ? request.originX : Number(request.x);
@@ -2807,6 +2946,8 @@ export async function buildApostate(ctx) {
   function status() {
     return {
       phase: state.phase,
+      stage: state.stage,
+      descending: state.phase === "descent",
       action: state.action,
       actionFor: Number(state.actionFor.toFixed(2)),
       health: Math.max(0, Math.round(inst.health)),
@@ -2847,7 +2988,15 @@ export async function buildApostate(ctx) {
   function snapshot() {
     return {
       instanceId: inst.id,
+      /* The collapse is a two-second cinematic during which save.js
+         already refuses to write - the free camera and an airborne
+         trooper both block it - so the only phases this can produce
+         are the four `restore` has always accepted plus the one it
+         now does. Serialising "descent" as "duel" instead would
+         reload a boss standing in a nave with no floor. */
       phase: state.phase,
+      stage: state.stage,
+      stageOneMax: Math.round(state.stageOneMax || 0),
       timer: Number(state.timer.toFixed(3)),
       action: state.action,
       actionFor: Number(state.actionFor.toFixed(3)),
@@ -2888,8 +3037,19 @@ export async function buildApostate(ctx) {
   function restore(saved = {}, restoredEnemies = null) {
     if (!saved || typeof saved !== "object") return false;
     ensureSpawned();
-    const phases = new Set(["dormant", "reveal", "duel", "dead"]);
+    /* "descent" is accepted here and CANONICALISED to the duel it
+       resolves into. save.js cannot produce one - the collapse holds
+       the free camera up and the trooper off the ground, and both of
+       those refuse a write - but a hand-edited or forward-dated file
+       must not be able to load a boss into a cinematic that has no
+       cinematic left to run. */
+    const phases = new Set(["dormant", "reveal", "duel", "descent", "dead"]);
     state.phase = phases.has(saved.phase) ? saved.phase : "dormant";
+    if (state.phase === "descent") state.phase = "duel";
+    state.stage = Number(saved.stage) === 2 ? 2 : 1;
+    state.stageOneMax = Math.max(0, Math.round(Number(saved.stageOneMax) || 0));
+    state.descentY = null;
+    state.pendingDescent = false;
     state.timer = Math.max(0, Number(saved.timer) || 0);
     state.action = typeof saved.action === "string"
       && (Object.hasOwn(ACTION_DURATIONS, saved.action) || /^melee[123]$/.test(saved.action))
@@ -2973,6 +3133,10 @@ export async function buildApostate(ctx) {
     dismissOwnedThreats("reset");
     clearAction();
     state.phase = "dormant";
+    state.stage = 1;
+    state.stageOneMax = 0;
+    state.descentY = null;
+    state.pendingDescent = false;
     state.timer = 0;
     state.elapsed = 0;
     state.altitude = 0;
@@ -3050,6 +3214,10 @@ export async function buildApostate(ctx) {
     registered,
     setEncounterGate,
     beginReveal,
+    beginDescent,
+    driveDescent,
+    enterHive,
+    stage: () => state.stage,
     modifyIncomingDamage,
     objective() {
       const ps = ctx.player.state;

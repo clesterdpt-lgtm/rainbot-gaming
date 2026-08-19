@@ -213,14 +213,15 @@ try {
     }
 
     const lance = {
-      taggedMeshes: 0, vertices: 0, violetVertices: 0, greenVertices: 0,
+      taggedMeshes: 0, vertices: 0, greenVertices: 0,
       families: new Set(),
     };
     T.apostate.weapon.root.traverse((node) => {
       const family = String(node.userData?.apostatePalette || "");
-      if (!node.isMesh || !family.startsWith("chitin")) return;
+      if (!node.isMesh || !family) return;
       lance.taggedMeshes += 1;
       lance.families.add(family);
+      if (family === "bio-cyan") return;
       const colours = node.geometry?.getAttribute?.("color");
       if (!colours) return;
       for (let i = 0; i < colours.count; i += 1) {
@@ -228,7 +229,6 @@ try {
         const g = colours.getY(i);
         const b = colours.getZ(i);
         lance.vertices += 1;
-        if (b > r && b > g) lance.violetVertices += 1;
         if (g > r * 1.08 && g > b * 1.08) lance.greenVertices += 1;
       }
     });
@@ -239,8 +239,6 @@ try {
       bio: corruption.bio.emissive.getHexString(),
       wing: corruption.wingMembrane.color.getHexString(),
       lanceFamilies: [...lance.families],
-      lanceStructuralVioletPct: lance.vertices
-        ? Number((lance.violetVertices / lance.vertices * 100).toFixed(2)) : 0,
       lanceStructuralGreenPct: lance.vertices
         ? Number((lance.greenVertices / lance.vertices * 100).toFixed(2)) : 0,
       lanceTaggedMeshes: lance.taggedMeshes,
@@ -267,13 +265,13 @@ try {
     JSON.stringify({ files: angleFiles, centres: angleCenters }));
   check("the Apostate uses the hostile violet-chitin, flesh and cyan-bio palette",
     visualAudit.palette.chitin === "43304f"
-      && visualAudit.palette.flesh === "8d4a63"
+      && visualAudit.palette.flesh === "46203a"
       && visualAudit.palette.bio === "54efd2"
-      && visualAudit.palette.wing === "7a5a90",
+      && visualAudit.palette.wing === "2a1c33",
     JSON.stringify(visualAudit.palette));
-  check("the lance texture is repainted into the Bloom chitin family without green metal",
+  check("the lance texture is repainted into blackened-iron/tarnished-leaf without green metal",
     visualAudit.palette.lanceTaggedMeshes >= 3
-      && visualAudit.palette.lanceStructuralVioletPct >= 99
+      && visualAudit.palette.lanceFamilies.length >= 2
       && visualAudit.palette.lanceStructuralGreenPct === 0,
     JSON.stringify(visualAudit.palette));
   check("all six armour spikes are attached to the animated chest, never the head",
@@ -967,6 +965,12 @@ try {
 
   const vent = await page.evaluate(() => {
     const T = window.__SF;
+    /* The boost-vs-shield block above rams the boss twice, and a ram
+       stuns for 1.8s. `updateDuel` returns early while stunned, so the
+       1.52s window this check advances was being spent entirely inside
+       that stun and the vent never finished - a test-order coupling,
+       not a boss bug. Clear it and measure the vent. */
+    T.apostate.instance().stunTime = 0;
     T.apostate.state.heat = 1;
     T.apostate.state.overheated = true;
     let vents = 0;
@@ -1293,6 +1297,47 @@ try {
       + `${cost.draws.triangles} triangles, ${cost.summons} summons`);
 
   /* ---- AIRBORNE DEATH, CLEANUP AND FINAL HANDOFF ------------------- */
+  /* ---- PHASE TWO, BEFORE ANYTHING CAN DIE -------------------------
+     Emptying the Cathedral pool no longer kills this boss: it drops
+     the nave floor and opens a second one in the room underneath
+     (see undercroft.js). Everything below - the fall, the brood
+     dismissal, the corpse, the operation handoff - is about a REAL
+     death, so the collapse has to be spent first. */
+  const phaseTwo = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.apostate.instance();
+    T.invulnerable(true);
+    const stageOneMax = inst.maxHealth;
+    T.combat.damageEnemy(inst, inst.health + 1, { source: "qa-collapse" });
+    let frames = 0;
+    for (; frames < 60 * 20; frames += 1) {
+      T.renderOnce(1 / 60);
+      if (T.undercroftState()?.phase === "live") break;
+    }
+    /* The collapse dismisses the Cathedral brood on its way down -
+       they were called into a nave that no longer has a floor - so
+       the death-cleanup checks below need a fresh Call to have
+       anything to clean up. */
+    T.forceApostateSummon();
+    T.forceApostateSummon();
+    for (let i = 0; i < 90; i += 1) T.renderOnce(1 / 60);
+    return {
+      stageOneMax,
+      under: T.undercroftState(),
+      state: T.apostateState(),
+      seconds: Number((frames / 60).toFixed(2)),
+      free: T.playerState().free,
+      summons: T.apostateState().summons,
+    };
+  });
+  check("emptying the Cathedral pool collapses the floor instead of killing",
+    phaseTwo.under.phase === "live" && phaseTwo.state.stage === 2
+      && phaseTwo.state.dead === false
+      && phaseTwo.state.maxHealth > phaseTwo.stageOneMax
+      && phaseTwo.free === false,
+    JSON.stringify({ under: phaseTwo.under.phase, stage: phaseTwo.state.stage,
+      max: phaseTwo.state.maxHealth, seconds: phaseTwo.seconds }));
+
   const deathStart = await page.evaluate(() => {
     const T = window.__SF;
     const inst = T.apostate.instance();
@@ -1307,6 +1352,12 @@ try {
     T.forceApostateAction("jet");
     T.advanceTime(0.92, 1 / 120);
     const airborne = T.apostateState().altitude;
+    /* Start the projectile count from empty. The brood is alerted and
+       shooting during the jet above, and a natural bolt that is in
+       flight when the count is taken but has already hit the floor by
+       the time the dismissal runs makes this check off by one for a
+       reason that has nothing to do with death cleanup. */
+    T.combat.clearProjectiles();
     /* Keep an explicitly owned bolt in flight so death cleanup is tested
        without relying on a 126m/s combat shot still being in the nave. */
     const THREE = Object.getPrototypeOf(inst.root.position).constructor;
@@ -1470,7 +1521,8 @@ try {
     results, failed, angleFiles, angleCenters, visualAudit, rig, dormantAutoStow,
     ranged, melee, boost, jetRise, jetEnd,
     deadEntry, revealDeathRearm, coronaLanding, shield, boostVsShield, vent, summons,
-    saveRestore, zeroHealthRestore, longDisengageSave, cost, deathStart, deathEnd,
+    saveRestore, zeroHealthRestore, longDisengageSave, cost, phaseTwo,
+    deathStart, deathEnd,
   }, null, 2));
   console.log(`\n${results.length - failed}/${results.length} checks passed`);
   console.log(`Report: ${path.join(outDir, "report.json")}`);

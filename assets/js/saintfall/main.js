@@ -37,6 +37,7 @@ import { buildStylite } from "saintfall/stylite.js";
 import { buildWinnower } from "saintfall/winnower.js";
 import { buildDistrictBosses } from "saintfall/district-bosses.js";
 import { buildApostate } from "saintfall/apostate.js";
+import { buildUndercroft } from "saintfall/undercroft.js";
 import { buildProgression } from "saintfall/progression.js";
 import { buildAudio } from "saintfall/audio.js";
 import { buildWeapons } from "saintfall/weapons.js";
@@ -266,6 +267,14 @@ export async function start({ boot, build } = {}) {
   const apostate = await buildApostate(ctx);
   ctx.apostate = apostate;
   apostate.ensureSpawned();
+  /* The room under the Cathedral. Built after the boss because it
+     drives that body through the collapse, and after collision
+     because its floor is measured off the nave's - and it is the one
+     module in this list that owns a `groundHeight` override, so
+     nothing that reads the ground may be constructed after it
+     without expecting the answer to move. */
+  const undercroft = buildUndercroft(ctx);
+  ctx.undercroft = undercroft;
 
   if (apostateTestStart) {
     const armed = mission.snapshot();
@@ -495,6 +504,7 @@ export async function start({ boot, build } = {}) {
     winnower,
     matriarch,
     apostate,
+    undercroft,
     progression,
     audio,
     intro,
@@ -892,6 +902,13 @@ export async function start({ boot, build } = {}) {
        away from. */
     matriarch.update(d);
     apostate.update(d);
+    /* AFTER the boss, and it has to be. The collapse writes the
+       player's position and the boss's absolute height for the
+       length of the cinematic, and both of those have to be the last
+       word on the frame - apostate.js's own `poseFigure` would
+       otherwise put the body back on a nave floor that is currently
+       being taken away. */
+    undercroft.update(d);
     breaches.update(d);
     mission.update(d);
     progression.update?.(d);

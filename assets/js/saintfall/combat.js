@@ -1610,6 +1610,17 @@ export function buildCombat(ctx) {
           origin.z + dir.z * m, 1.6, damage)) break;
       }
     }
+    /* The hive's clutch and its tentacles, on the same contract and
+       for the same reason: neither is in `enemies.live`, so the ray
+       test cannot see them, and both are things the player must be
+       able to shoot. */
+    if (ctx.undercroft?.hitProps) {
+      const step = 1.4;
+      for (let m = 0; m <= eggReach; m += step) {
+        if (ctx.undercroft.hitProps(origin.x + dir.x * m, origin.y + dir.y * m,
+          origin.z + dir.z * m, 1.6, damage)) break;
+      }
+    }
 
     /* The bolt is drawn to WHERE THE RAY STOPPED, which is why this
        is worked out here rather than at the call site: only this
@@ -2011,6 +2022,11 @@ export function buildCombat(ctx) {
         ps.y + 0.9, ps.z + Math.cos(ps.yaw) * reach * 0.6,
         reach * 0.8, dmg, { melee: true });
     }
+    if (ctx.undercroft?.hitProps) {
+      hits += ctx.undercroft.hitProps(ps.x + Math.sin(ps.yaw) * reach * 0.6,
+        ps.y + 0.9, ps.z + Math.cos(ps.yaw) * reach * 0.6,
+        reach * 0.8, dmg, { melee: true });
+    }
     /* The combo step decides which sweep is drawn - the three clips
        travel through different arcs, at different heights, in
        different planes - so it has to reach the effect. It was already
@@ -2132,6 +2148,7 @@ export function buildCombat(ctx) {
       z,
     });
     ctx.abbess?.hitEggs?.(x, y, z, radius, damage);
+    ctx.undercroft?.hitProps?.(x, y, z, radius, damage);
     if (vfx && vfx.blast) vfx.blast(x, y, z, radius);
     return { hits: targets.length, kills, targets };
   }
@@ -2202,6 +2219,7 @@ export function buildCombat(ctx) {
       }
     }
     if (peak > 0 && source !== "abbess-slam") ctx.abbess?.hitEggs?.(x, y, z, radius, peak);
+    if (peak > 0) ctx.undercroft?.hitProps?.(x, y, z, radius, peak);
     bus.emit("shockwave", { x, y, z, radius, hits, kills, stunned, source });
     return { hits, kills, stunned, radius };
   }
@@ -3229,13 +3247,28 @@ export function buildCombat(ctx) {
     // guaranteed not to have been overrun.
     let x = ctx.mission ? ctx.mission.spawn.x : 0;
     let z = ctx.mission ? ctx.mission.spawn.z : 700;
-    const open = collide.findOpen(x, z, collide.groundHeight(x, z), 40, 22);
-    if (open) { x = open[0]; z = open[1]; }
+    let yaw = Math.PI;
+    /* UNLESS THE MAP IS NOT WHERE THE PLAYER IS. The final phase is
+       fought eighty-eight metres under the Cathedral floor, and the
+       drop point is two kilometres away on the surface: respawning
+       there would leave the boss leashing home to a nave that no
+       longer has a floor and the player unable to get back into a
+       fight they have not lost. The room answers with its own
+       point, and only while it is live. */
+    const below = ctx.undercroft?.respawnPoint?.();
+    if (below) {
+      x = below.x;
+      z = below.z;
+      yaw = below.yaw;
+    } else {
+      const open = collide.findOpen(x, z, collide.groundHeight(x, z), 40, 22);
+      if (open) { x = open[0]; z = open[1]; }
+    }
     /* Use the player-owned spawn path so vertical grounding, velocity,
        stride and both planted feet reset together. Directly rewriting
        x/y/z left foot IK at the death site and bypassed the same safe
        collision placement used everywhere else. */
-    ctx.player.spawn(x, z, Math.PI);
+    ctx.player.spawn(x, z, yaw);
     player.regenAt = clock - 1;
     player.lastMeleeHitAt = -99;
     strikeStarts.length = 0;

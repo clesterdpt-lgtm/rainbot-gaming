@@ -256,6 +256,14 @@ export function buildSky(ctx) {
   skyFill.name = "vesper-cycle-fill";
   scene.add(skyFill);
 
+  /* How far under the world the camera is, 0..1. Owned by
+     undercroft.js and read once a frame below. A scalar rather than a
+     boolean because the collapse ramps it across the fall, and a hard
+     switch on the frame the daylight goes away is a flash, not a
+     descent. */
+  let subterranean = 0;
+  const UNDERGROUND_FILL = new THREE.Color(0x3b2a52);
+
   /* ============================================================
      THE HALO
      A shattered orbital ring. Built once as real geometry at 5.2km
@@ -845,6 +853,14 @@ export function buildSky(ctx) {
     group,
     sun,
     skyFill,
+    /** 0 is the open desert, 1 is a roof over your head. */
+    setUnderground(value) {
+      const next = clamp01(Number(value) || 0);
+      if (next === subterranean) return subterranean;
+      subterranean = next;
+      return subterranean;
+    },
+    underground: () => subterranean,
     dome,
     halo,
     clouds,
@@ -886,6 +902,22 @@ export function buildSky(ctx) {
       skyFill.color.copy(atmos.skyHigh).lerp(atmos.skyZenith, 0.34);
       skyFill.groundColor.copy(atmos.groundBounce);
       skyFill.intensity = dynamicFill * atmos.envIntensity * 0.72;
+      /* UNDER THE MAP, and this is applied AFTER the two writes above
+         rather than folded into them because those two are the sky's
+         own contract with the atmosphere and must stay readable as
+         such. A room with a roof gets a fraction of the key and
+         almost none of the hemisphere - but not zero of either: the
+         corrupted reliquary atlas is the richest surface in the game
+         and a boss lit by nothing is a silhouette. What is taken away
+         here is given back by the chamber's own emissive walls and
+         the one shaft of real daylight down the hole. */
+      if (subterranean > 0) {
+        sun.intensity *= lerp(1, 0.17, subterranean);
+        skyFill.intensity *= lerp(1, 0.22, subterranean);
+        skyFill.color.lerp(UNDERGROUND_FILL, subterranean * 0.85);
+        skyFill.intensity = Math.max(skyFill.intensity,
+          subterranean * atmos.envIntensity * 0.10);
+      }
       const night = smoothstep(atmos.nightFactor);
       const daylight = clamp01(1 - night);
       domeUniforms.uStars.value = smoothstep(clamp01(night * 1.12));

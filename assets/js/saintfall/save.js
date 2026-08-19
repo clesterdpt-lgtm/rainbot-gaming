@@ -467,6 +467,12 @@ export function buildSaveSystem(ctx, options = {}) {
          the generic bestiary restore. Its summoned insects remain ordinary
          enemies and are rebound to this record by their stable IDs. */
       apostate: ctx.apostate?.snapshot?.() || null,
+      /* The room under the Cathedral. It carries whether the floor has
+         gone and what the fight has already taken off the hive - and
+         deliberately no limbs and no clutch, for the same reason the
+         Bloom's record carries no eggs: those are seconds-long
+         consequences of an attack, and a file's job is outcomes. */
+      undercroft: ctx.undercroft?.snapshot?.() || null,
       distaff: ctx.distaff?.snapshot?.() || null,
       /* The pit does not have a position to save - it is the only boss
          in the game that cannot move - so its record carries the two
@@ -870,7 +876,12 @@ export function buildSaveSystem(ctx, options = {}) {
        otherwise replace the figure behind its AI controller's closure. */
     const apostate = snapshot.apostate;
     if (apostate !== null && apostate !== undefined) {
-      const apostatePhases = new Set(["dormant", "reveal", "duel", "dead"]);
+      /* "descent" is in the set because apostate.js's own `restore`
+         accepts it and canonicalises it. A validator that is stricter
+         than the restore it guards rejects files the game itself
+         could write - this project has already shipped that bug once
+         and it locked players out of their own saves. */
+      const apostatePhases = new Set(["dormant", "reveal", "duel", "descent", "dead"]);
       const apostateActions = new Set([
         null, "ranged", "shield", "boost", "summon", "vent", "jet",
         "melee1", "melee2", "melee3",
@@ -912,6 +923,28 @@ export function buildSaveSystem(ctx, options = {}) {
         return false;
       }
     } else if (mission.phase === "cathedralBoss") return false;
+
+    /* OPTIONAL BY DESIGN. Every field save written before this module
+       existed has no such record, and every save written outside the
+       Cathedral finale writes `null` - so absence is the normal case
+       and must never be a rejection. Only a record that is PRESENT
+       and malformed fails the file. */
+    const under = snapshot.undercroft;
+    if (under !== null && under !== undefined) {
+      const underPhases = new Set(["idle", "live", "spent"]);
+      if (!isRecord(under)
+        || !underPhases.has(under.phase)
+        || typeof under.used !== "boolean"
+        || ![under.cuts, under.totalCuts, under.swallowed, under.clutchTimer]
+          .every(isFiniteNumber)
+        || under.cuts < 0 || under.cuts > 99
+        || under.totalCuts < 0 || under.totalCuts > 9999
+        || under.swallowed < 0 || under.swallowed > 9999
+        || under.clutchTimer < 0 || under.clutchTimer > 600
+        || (under.phase !== "idle" && under.used !== true)) {
+        return false;
+      }
+    }
 
     const breach = snapshot.breaches;
     const breachPhases = new Set(["dormant", "warning", "active", "intermission", "complete"]);
@@ -1389,6 +1422,12 @@ export function buildSaveSystem(ctx, options = {}) {
     if (typeof options.setStorm === "function") {
       options.setStorm(clamp01(finite(snapshot.atmosphere?.storm)));
     }
+    /* BEFORE the trooper is placed, and that ordering is the whole
+       point: `player.spawn` grounds them through `collide.groundHeight`,
+       which asks the undercroft first. Restore the room afterwards and
+       a save taken in the hive would put its player on the Cathedral
+       floor eighty-eight metres above the fight and then drop them. */
+    ctx.undercroft?.restore?.(snapshot.undercroft || null);
     let x = clamp(finite(snapshot.player.x), -970, 970);
     let z = clamp(finite(snapshot.player.z), -970, 970);
     const ground = ctx.collide?.groundHeight?.(x, z) ?? ctx.terrain.heightAt(x, z);

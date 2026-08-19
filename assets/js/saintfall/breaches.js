@@ -201,6 +201,14 @@ export function buildBreaches(ctx) {
       }
     }
 
+    /* While the Cathedral floor is down there is no surface fight to
+       reinforce and nowhere on the map that still has a floor over
+       the nave - the ground override is a COLUMN, so a wave spawned
+       anywhere near the collapse would arrive eighty-eight metres
+       below where it was placed. The whole map is the boss's arena
+       until the second phase resolves. */
+    if (ctx.undercroft?.active?.()) return { key: "apostate", name: "The Undercroft" };
+
     const apostateDead = ctx.apostate?.status?.()?.defeated === true;
     const apostateRadius = APOSTATE_CONFIG.arenaRadius + BREACH_CONFIG.bossArenaPadding;
     if (!apostateDead && Math.hypot(x - APOSTATE_CONFIG.arenaX,

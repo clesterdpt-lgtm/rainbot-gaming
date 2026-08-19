@@ -431,6 +431,19 @@ export function buildHud(ctx, host) {
       "VAULT-CATHEDRAL", "THE FALSE SAINT IS BROKEN", 6.0, true));
   }
 
+  if (ctx.undercroft?.bus) {
+    ctx.undercroft.bus.on("fracture", () => showBreachAlert(
+      "THE NAVE", "THE FLOOR IS GOING", 3.0, true));
+    ctx.undercroft.bus.on("answer", () => showBreachAlert(
+      "THE UNDERCROFT", "THE HIVE ANSWERS", 4.4, true));
+    ctx.undercroft.bus.on("clutch", () => showBreachAlert(
+      "THE UNDERCROFT", "CLUTCH LAID AROUND YOU", 2.2, true));
+    ctx.undercroft.bus.on("lasherCut", (event) => {
+      if (event?.unmoored) showBreachAlert(
+        "THE UNDERCROFT", "UNMOORED - BREAK IT NOW", 3.4, true);
+    });
+  }
+
   /* --- compass ticks --- */
   /* Player/camera yaw zero points toward authored +Z, which is south on
      Vesper-IX. Authored north is -Z (pi), east is +X (pi / 2). */
@@ -1196,13 +1209,27 @@ export function buildHud(ctx, host) {
   function readActiveBoss() {
     const apostate = ctx.apostate?.status?.();
     if (apostate && apostate.phase !== "dormant" && !apostate.dead) {
-      return packBoss("apostate", "THE APOSTATE", "Vault-Cathedral",
+      const under = ctx.undercroft?.status?.();
+      const hive = apostate.stage === 2;
+      /* A NEW KEY FOR THE SECOND POOL. The bar animates its drain and
+         its chip against `bossBarAnim.key`; leaving the key alone
+         across the transition would make a full refill read as one
+         enormous heal on the same bar rather than as a second bar. */
+      return packBoss(hive ? "apostate-hive" : "apostate",
+        hive ? "THE APOSTATE ENTHRONED" : "THE APOSTATE",
+        hive ? "The Undercroft" : "Vault-Cathedral",
         apostate.health, apostate.maxHealth,
         apostate.phase === "reveal" ? "The false saint is answering"
+          : apostate.phase === "descent" ? "The floor is going"
+          : under?.unmooredFor > 0 ? "Unmoored — hit it now"
           : apostate.action === "shield" ? "Aegis raised — flank it"
-          : apostate.action === "summon" ? "Calling brood through the nave"
+          : apostate.action === "summon"
+            ? (hive ? "Calling brood through the comb" : "Calling brood through the nave")
           : apostate.action === "jet" ? "Airborne — impact incoming"
-          : apostate.overheated ? "Weapon overheated" : "",
+          : apostate.overheated ? "Weapon overheated"
+          : hive && under?.lashersUp > 0
+            ? `${under.lashersUp} lasher${under.lashersUp === 1 ? "" : "s"} up — cut them`
+            : "",
         apostate.phase);
     }
     const winnower = ctx.winnower?.status?.();

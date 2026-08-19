@@ -3739,6 +3739,14 @@ export function installQa(ctx, api) {
        damage to the production paths so QA can prove nothing leaks early.
        ------------------------------------------------------------ */
     apostateState: () => api.apostate?.status?.() || null,
+    undercroftState: () => api.undercroft?.status?.() || null,
+    /* Drives the second phase without having to shoot 5,600 points off
+       a mirror of the player first. Returns whether the collapse
+       actually armed, so a harness can tell a refusal from a pass. */
+    undercroftCollapse: () => api.undercroft?.begin?.() === true,
+    undercroftGround: (x, z) => api.undercroft?.groundOverrideAt?.(x, z) ?? null,
+    undercroftHit: (x, y, z, radius, damage, opts) =>
+      api.undercroft?.hitProps?.(x, y, z, radius, damage, opts) || 0,
     armApostateFight() {
       const saved = api.mission.snapshot();
       saved.phase = "cathedralBoss";
@@ -4006,6 +4014,7 @@ export function installQa(ctx, api) {
     get collide() { return api.collide; },
     get gameUi() { return api.gameUi || ctx.gameUi || null; },
     get saves() { return api.saves || ctx.saves || null; },
+    get undercroft() { return api.undercroft || ctx.undercroft || null; },
     get intro() { return ctx.qa ? api.intro : productionIntroView; },
   };
 

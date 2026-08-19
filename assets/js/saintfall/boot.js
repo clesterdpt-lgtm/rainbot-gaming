@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260818-abbess-pass-1";
+  const BUILD = "20260819-undercroft-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -101,7 +101,7 @@
   const MODULES = [
     "core", "art", "sky", "terrain", "structures", "world", "collide",
     "vfx", "render", "player", "jetpack", "boost", "slam", "shield", "boss-surface", "enemies", "weapons", "ik", "combat", "difficulty",
-    "mission", "breaches", "abbess", "coulter", "distaff", "garner", "matriarch", "stylite", "winnower", "district-bosses", "apostate", "progression-config", "progression", "audio", "hud", "touch", "intro", "pod", "save", "ui", "qa", "main",
+    "mission", "breaches", "abbess", "coulter", "distaff", "garner", "matriarch", "stylite", "winnower", "district-bosses", "apostate", "undercroft", "progression-config", "progression", "audio", "hud", "touch", "intro", "pod", "save", "ui", "qa", "main",
   ];
 
   function installImportMap(base) {

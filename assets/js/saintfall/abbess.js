@@ -210,11 +210,12 @@ export const ABBESS_CONFIG = Object.freeze({
      ------------------------------------------------------------ */
   clutchCadence: 7.5,
   clutchWindup: 1.15,
-  /* Eggs per clutch at full health and at none. She does not hit
-     harder as she dies; she lays faster and wider, which is the same
-     escalation the Garner makes on limb count and for the same
-     reason - more of the fight, not a bigger number. */
-  clutchEggs: [3, 6],
+  /* Eggs per clutch at full health and at none. Starts gentle (2 eggs)
+     and scales up slowly over active fight time and health loss, giving
+     the player ample opportunity to kill the boss before clutches grow. */
+  clutchEggs: [2, 7],
+  /* Time scaling: seconds of active combat per +1 egg in clutch */
+  clutchTimeScaleSeconds: 32,
   eggHatchSeconds: 5.2,
   /* An egg is a real target with a real pool, and the pool is written
      for the RANGED player - because they are the ones who have to
@@ -608,6 +609,7 @@ export function buildAbbess(ctx) {
   const state = {
     phase: "dormant",     // dormant, rouse, seated, royal, retire, dead
     timer: 0,
+    fightTime: 0,
     /* 0 is folded and dark, 1 is lit and up. Everything about her that
        is not an attack is a function of it, which is what makes the
        reveal and the leash the same animation run in two directions. */
@@ -3265,7 +3267,9 @@ export function buildAbbess(ctx) {
 
   function layClutch() {
     const hurt = 1 - clamp01(inst.health / Math.max(1, inst.maxHealth));
-    const n = Math.round(lerp(C.clutchEggs[0], C.clutchEggs[1], hurt));
+    const hurtBonus = hurt * 2.2;
+    const timeBonus = Math.min(3, state.fightTime / C.clutchTimeScaleSeconds);
+    const n = clamp(Math.round(C.clutchEggs[0] + hurtBonus + timeBonus), C.clutchEggs[0], C.clutchEggs[1]);
     const ranged = Math.max(0, rangedInClutch(n));
     const sx = Math.sin(inst.yaw);
     const sz = Math.cos(inst.yaw);
@@ -3289,7 +3293,7 @@ export function buildAbbess(ctx) {
     state.wave = 0;
     ctx.vfx?.spark?.(C.lairX - sx * C.abdomenLength,
       floorY + 2, C.lairZ - sz * C.abdomenLength, 2.4, false, true);
-    bus.emit("clutch", { x: C.lairX, z: C.lairZ, count: n, ranged });
+    bus.emit("clutch", { x: C.lairX, z: C.lairZ, count: n, ranged, fightTime: state.fightTime });
   }
 
   function beginSlam() {
@@ -3610,30 +3614,40 @@ export function buildAbbess(ctx) {
     bus.emit("royal", { x: C.lairX, z: C.lairZ });
   }
 
-  /** The one Matriarch. The district's previous guardian, produced by
-   *  the thing that replaced it. */
+  /** Emergency brood surge. Non-boss enemies (Gleaners and Threshers)
+   *  spawned at low health to protect the queen, replacing the boss spawn. */
   function hatchRoyal() {
     const sx = Math.sin(inst.yaw);
     const sz = Math.cos(inst.yaw);
     const back = C.abdomenLength + 12;
     const x = C.lairX - sx * back;
     const z = C.lairZ - sz * back;
-    const kid = enemies.spawn("matriarch", x, z, {
-      yaw: inst.yaw + Math.PI,
-      emerge: { delay: 0, duration: 1.8, depth: 2.4 },
-    });
-    if (kid) {
-      kid.alerted = true;
-      kid.suspicion = 1;
-      kid.abbessBornAt = Infinity;   // it never goes home; it hunts
-      brood.push(kid);
+    const spawnedKids = [];
+    const count = 4;
+    for (let i = 0; i < count; i += 1) {
+      const spread = (i - (count - 1) * 0.5) * 3.6;
+      const kx = x - sz * spread;
+      const kz = z + sx * spread;
+      const caste = i % 2 === 0 ? "gleaner" : "thresher";
+      const kid = enemies.spawn(caste, kx, kz, {
+        yaw: inst.yaw + Math.PI,
+        emerge: { delay: i * 0.15, duration: 1.5, depth: 2.0 },
+      });
+      if (kid) {
+        kid.alerted = true;
+        kid.suspicion = 1;
+        kid.abbessBornAt = atmos.elapsed;
+        brood.push(kid);
+        spawnedKids.push(kid);
+      }
     }
     ctx.vfx?.breach?.(x, groundAt(x, z), z, 16, 2.8);
-    bus.emit("royalHatch", { x, z, spawned: !!kid });
-    return kid;
+    bus.emit("royalHatch", { x, z, spawned: spawnedKids.length > 0, count: spawnedKids.length });
+    return spawnedKids[0] || null;
   }
 
   function stepSeated(dt) {
+    state.fightTime += dt;
     const ps = ctx.player.state;
     const dist = Math.hypot(ps.x - C.lairX, ps.z - C.lairZ);
 
@@ -3668,14 +3682,23 @@ export function buildAbbess(ctx) {
 
        Ordered nearest-first. The bite is checked before the slam
        because its range is inside the slam's: a player standing at her
-       jaws is choosing the bite, and a slam that pre-empted it would
-       take that choice back. */
-    if (state.biteTimer <= 0 && biteReaches()) { beginBite(); return; }
-    if (state.slamTimer <= 0 && dist < C.slamRange) { beginSlam(); return; }
+       jaws should get snapped at rather than heaved upon, and the
+       snap gives the face armour its reason to exist. */
+    if (state.biteTimer <= 0 && biteReaches()) {
+      beginBite();
+      return;
+    }
+
+    if (state.slamTimer <= 0 && dist < C.slamRange) {
+      beginSlam();
+      return;
+    }
+
     if (state.clutchTimer <= 0) beginClutch();
   }
 
   function stepRoyal(dt) {
+    state.fightTime += dt;
     state.timer = Math.max(0, state.timer - dt);
     // The cell swells on the same wave the ordinary clutch rides.
     state.wave = clamp01(1 - state.timer / C.royalSeconds);
@@ -3722,6 +3745,7 @@ export function buildAbbess(ctx) {
     state.phase = "retire";
     state.timer = C.retireSeconds;
     state.disengageFor = 0;
+    state.fightTime = 0;
     state.raised = 0;
     state.slamPhase = null;
     state.bitePhase = null;
@@ -4097,6 +4121,7 @@ export function buildAbbess(ctx) {
     state.raised = 0;
     state.revealed = false;
     state.disengageFor = 0;
+    state.fightTime = 0;
     state.royalDone = false;
     releaseEncounterCamera();
     state.clutchTimer = C.clutchCadence * 0.45;
@@ -4145,6 +4170,7 @@ export function buildAbbess(ctx) {
       bites: state.bites,
       bitesLanded: state.bitesLanded,
       exposed: state.raised > 0.5,
+      fightTime: Number(state.fightTime.toFixed(1)),
       eggs: liveEggs(),
       brood: brood.length,
       broodCap: C.broodCap,
@@ -4176,6 +4202,7 @@ export function buildAbbess(ctx) {
       phase: state.phase,
       instanceId: state.defeated || inst.state === "death" ? null : inst.id,
       timer: Number(Math.max(0, state.timer).toFixed(2)),
+      fightTime: Number(state.fightTime.toFixed(1)),
       health: Math.round(inst.health),
       maxHealth: Math.round(inst.maxHealth),
       royalDone: state.royalDone,
@@ -4211,6 +4238,7 @@ export function buildAbbess(ctx) {
     state.phase = phase;
     state.revealed = phase !== "dormant";
     state.timer = Math.max(0, Number(saved.timer) || 0);
+    state.fightTime = Math.max(0, Number(saved.fightTime) || 0);
     state.woken = phase === "dormant" || phase === "retire" ? 0 : 1;
     state.royalDone = !!saved.royalDone;
     state.fed = Math.max(0, Math.round(Number(saved.fed) || 0));

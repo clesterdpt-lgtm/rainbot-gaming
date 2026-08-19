@@ -2201,7 +2201,7 @@ export function buildCombat(ctx) {
         }
       }
     }
-    if (peak > 0) ctx.abbess?.hitEggs?.(x, y, z, radius, peak);
+    if (peak > 0 && source !== "abbess-slam") ctx.abbess?.hitEggs?.(x, y, z, radius, peak);
     bus.emit("shockwave", { x, y, z, radius, hits, kills, stunned, source });
     return { hits, kills, stunned, radius };
   }

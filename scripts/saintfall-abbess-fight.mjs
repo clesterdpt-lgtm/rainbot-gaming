@@ -369,7 +369,7 @@ try {
       brood: T.abbessState().brood,
     };
   });
-  check("she lays a clutch of eggs", clutch.count >= 3, `${clutch.count} eggs`);
+  check("she lays a clutch of eggs", clutch.count >= 2, `${clutch.count} eggs`);
   check("an egg visibly swells on its own clock",
     clutch.swellStart < 0.05 && clutch.swellMid > 0.4,
     `t ${clutch.swellStart} -> ${clutch.swellMid}`);
@@ -649,14 +649,14 @@ try {
     slamDodge.planted.hurt > 20 && slamDodge.jumped.hurt === 0,
     JSON.stringify(slamDodge));
 
-  /* She does not distinguish. Baiting the slam into her own brood is
-     the closest thing this fight has to a combo. */
+  /* She does not distinguish for hatched brood, but body slam does NOT kill eggs. */
   const friendly = await page.evaluate(() => {
     const T = window.__SF;
     T.resetAbbess();
     T.teleportToAbbess(40);
     T.advanceToAbbessPhase("seated", 16);
     T.forceAbbessClutch();
+    const eggCountBefore = T.abbessEggs().length;
     T.advanceTime(6.5, 1 / 60);
     const before = T.abbessState().brood;
     const c = T.abbess.config;
@@ -666,10 +666,27 @@ try {
     const near = T.abbessBrood().length;
     T.forceAbbessSlam();
     T.advanceTime(2.6, 1 / 60);
-    return { before, near, after: T.abbessState().brood };
+    return { before, near, after: T.abbessState().brood, eggCountBefore };
   });
-  check("the slam damages her own brood", friendly.before > 0,
+  check("the slam damages her own hatched brood", friendly.before > 0,
     JSON.stringify(friendly));
+
+  /* The body slam attack must NOT kill or destroy her own unhatched eggs. */
+  const slamEggPreserved = await page.evaluate(() => {
+    const T = window.__SF;
+    T.resetAbbess();
+    T.teleportToAbbess(40);
+    T.advanceToAbbessPhase("seated", 16);
+    T.forceAbbessClutch();
+    const beforeEggs = T.abbessEggs().length;
+    T.forceAbbessSlam();
+    T.advanceTime(2.6, 1 / 60);
+    const afterEggs = T.abbessEggs().length;
+    return { beforeEggs, afterEggs };
+  });
+  check("the body slam attack does not kill her own eggs",
+    slamEggPreserved.beforeEggs > 0 && slamEggPreserved.afterEggs === slamEggPreserved.beforeEggs,
+    `${slamEggPreserved.beforeEggs} -> ${slamEggPreserved.afterEggs} eggs preserved through slam`);
 
   /* ---- THE BITE --------------------------------------------------------
      The thing her silhouette always promised. Three questions: does it
@@ -819,29 +836,58 @@ try {
     && ventral.thorax.dealt < ventral.seatedHit.dealt,
     JSON.stringify(ventral.thorax));
 
-  /* ---- THE ROYAL CELL -------------------------------------------------- */
+  /* ---- THE ROYAL CELL & BROOD SURGE ----------------------------------- */
   const royal = await page.evaluate(() => {
     const T = window.__SF;
     T.resetAbbess();
     T.teleportToAbbess(40);
     T.advanceToAbbessPhase("seated", 16);
     const inst = T.enemies.live.find((e) => e.key === "abbess");
-    const before = T.enemies.live.filter((e) => e.key === "matriarch").length;
+    const beforeBosses = T.enemies.live.filter((e) => e.key === "matriarch").length;
+    const beforeNonBoss = T.enemies.live.filter((e) => e.key === "thresher" || e.key === "gleaner").length;
     T.combat.damageEnemy(inst, inst.maxHealth * 0.7, { source: "qa" });
     const reached = T.advanceToAbbessPhase("royal", 6);
     T.advanceTime(8.0, 1 / 60);
-    const after = T.enemies.live.filter((e) => e.key === "matriarch").length;
+    const afterBosses = T.enemies.live.filter((e) => e.key === "matriarch").length;
+    const afterNonBoss = T.enemies.live.filter((e) => e.key === "thresher" || e.key === "gleaner").length;
     // Once, and only once.
     T.combat.damageEnemy(inst, 200, { source: "qa" });
     const again = T.advanceToAbbessPhase("royal", 4);
-    return { reached, spawned: after - before, again, done: T.abbessState().royalDone };
+    return {
+      reached,
+      matriarchSpawned: afterBosses - beforeBosses,
+      nonBossSpawned: afterNonBoss - beforeNonBoss,
+      again,
+      done: T.abbessState().royalDone,
+    };
   });
   check("under a third health she lays a royal cell",
     royal.reached >= 0 && royal.done, JSON.stringify(royal));
-  check("...and a Matriarch comes out of it", royal.spawned === 1,
-    `${royal.spawned} spawned`);
+  check("...and non-boss enemies come out of it (no Matriarch)",
+    royal.matriarchSpawned === 0 && royal.nonBossSpawned > 0,
+    `${royal.nonBossSpawned} non-boss enemies spawned, ${royal.matriarchSpawned} matriarchs`);
   check("the royal cell happens exactly once", royal.again < 0);
   await page.screenshot({ path: path.join(outDir, "02-royal.png") });
+
+  /* ---- EGG SCALING OVER TIME -------------------------------------------
+     Clutch size starts small and increases slowly over time so that it is
+     possible to kill the boss before clutches grow large. */
+  const timeEggScaling = await page.evaluate(() => {
+    const T = window.__SF;
+    T.resetAbbess();
+    T.teleportToAbbess(40);
+    T.advanceToAbbessPhase("seated", 16);
+    T.forceAbbessClutch();
+    const initialEggs = T.abbessEggs().length;
+    // Advance fight time by 60s
+    T.advanceTime(60, 1 / 60);
+    T.forceAbbessClutch();
+    const laterEggs = T.abbessEggs().length - initialEggs;
+    return { initialEggs, laterEggs };
+  });
+  check("egg count per clutch increases slowly over time",
+    timeEggScaling.laterEggs > timeEggScaling.initialEggs && timeEggScaling.initialEggs >= 2,
+    `initial: ${timeEggScaling.initialEggs} eggs -> after 60s: ${timeEggScaling.laterEggs} eggs`);
 
   /* ---- THE LEASH ------------------------------------------------------- */
   const leash = await page.evaluate(() => {

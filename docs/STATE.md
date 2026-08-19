@@ -2,6 +2,21 @@
 
 ## Latest focused fix
 
+**SAINTFALL: Abbess body slam egg protection & gradual non-boss egg escalation**:
+Addressed two gameplay issues with the Abbess encounter:
+(1) Fixed her body slam attack destroying her own unhatched eggs by excluding
+`source === "abbess-slam"` shockwaves from triggering `hitEggs` in `combat.js`.
+Unhatched eggs are now preserved through her slam and continue incubating.
+(2) Replaced the Matriarch boss spawn at 34% health (`hatchRoyal`) with a
+reinforcement surge of standard non-boss brood (Gleaners and Threshers).
+(3) Implemented gradual egg escalation over time: clutch size starts gentle
+(2 eggs) and increases slowly with elapsed fight time (`clutchTimeScaleSeconds: 32`)
+and health loss up to a cap of 7 eggs, giving players ample opportunity to kill
+the boss before clutches become overwhelming.
+Automated tests updated in `scripts/saintfall-abbess-fight.mjs` (52/52 checks passed).
+Full regression suites passed (`saintfall-boss-intro-probe.mjs`, `saintfall-district-hunt-probe.mjs`,
+`saintfall-arena-entry-probe.mjs`, `saintfall-matriarch-fight.mjs`).
+
 **SAINTFALL: the Abbess answers a ranged player, and her reveal stops
 inflating**: Six changes to the Bloom's queen, all player-reported.
 (1) The reveal showed a third-sized abdomen ballooning to full over the

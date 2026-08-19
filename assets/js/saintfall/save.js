@@ -129,7 +129,11 @@ export function buildSaveSystem(ctx, options = {}) {
   const slot = window.RBGameSaves?.create?.(GAME_ID, { version: SAVE_VERSION })
     || fallbackSlot();
   const listeners = new Set();
-  let autosaveClock = 0;
+  /* Starts AT the threshold so the first frame in which saving is
+     possible at all - the moment boots touch the sand - writes the
+     baseline autosave. Death now resumes from records (m101), and a
+     death before the first 42-second interval must still have one. */
+  let autosaveClock = AUTOSAVE_AFTER;
   let autosaveFailures = 0;
   let autosaveRetryRemaining = 0;
   let pendingAutosaveReason = "";
@@ -448,7 +452,6 @@ export function buildSaveSystem(ctx, options = {}) {
         breach: breach?.complete ? `Cycle ${breach.cyclesCleared || 1} cleared`
           : breach?.wave > 0 ? `Cycle ${breach.cycle || 1} · Breach ${breach.wave}/${breach.waveCount}` : "Signal quiet",
         vitality: `${Math.ceil(combat.hp)}/${combat.maxHp}`,
-        reinforcements: mission.reinforcements,
         elapsed: Math.max(0, Math.round(mission.elapsed)),
       },
       player: {
@@ -572,19 +575,24 @@ export function buildSaveSystem(ctx, options = {}) {
       "districtBosses", "relays", "saintBoss", "cathedralBoss", "extract", "won", "lost",
     ]);
     const relayKeys = new Set(ctx.mission.relays.map((relay) => relay.key));
+    /* `reinforcements`/`maxReinforcements` are NOT validated: the
+       budget was removed (m101) and new saves no longer write the
+       fields. Old saves still carry them, and a validator that
+       requires what the game no longer writes - or rejects what old
+       files legitimately contain - silently EMPTIES every slot at
+       read time (readData() nulls slots that fail here). That is the
+       save-validation lesson: never validate as mandatory what
+       restore() treats as optional. */
     if (!isRecord(mission) || !phases.has(mission.phase)
       || !Array.isArray(mission.relays)
       || mission.relays.length !== relayKeys.size
       || !isRecord(mission.cooldowns)
-      || ![mission.elapsed, mission.extractTimer, mission.deaths,
-        mission.reinforcements, mission.maxReinforcements].every(isFiniteNumber)
+      || ![mission.elapsed, mission.extractTimer, mission.deaths]
+        .every(isFiniteNumber)
       || typeof mission.extractCalled !== "boolean"
       || mission.elapsed < 0 || mission.extractTimer < 0
-      || ![mission.deaths, mission.reinforcements, mission.maxReinforcements]
-        .every(Number.isInteger)
-      || mission.deaths < 0 || mission.maxReinforcements < 1
-      || mission.reinforcements < 0
-      || mission.reinforcements > mission.maxReinforcements) return false;
+      || !Number.isInteger(mission.deaths)
+      || mission.deaths < 0) return false;
     const savedRelayKeys = new Set();
     for (const relay of mission.relays) {
       if (!isRecord(relay) || typeof relay.key !== "string"
@@ -1354,9 +1362,29 @@ export function buildSaveSystem(ctx, options = {}) {
     return snapshot;
   }
 
+  /* Autosave NEVER fires during a boss fight (m101), forced or not -
+     the pagehide flush included. Death now resumes from the autosave,
+     so an autosave written mid-fight is a spawn point inside a boss's
+     opening swing; worse, the interval timer made it a lottery. The
+     clock is held AT the threshold instead of reset, so the record is
+     written the moment the fight ends, whichever way it ended. Manual
+     saves stay the player's own business. */
+  function bossFightActive() {
+    try {
+      return !!ctx.districtBosses?.anyFightActive?.();
+    } catch (error) {
+      void error;
+      return false;
+    }
+  }
+
   function saveAuto(force = false, reason = "interval") {
     if (!force && autosaveRetryRemaining > 0) return null;
     if (!force && autosaveClock < AUTOSAVE_AFTER) return null;
+    if (bossFightActive()) {
+      autosaveClock = AUTOSAVE_AFTER;
+      return null;
+    }
     const snapshot = capture();
     if (!snapshot) return null;
     const data = readData();

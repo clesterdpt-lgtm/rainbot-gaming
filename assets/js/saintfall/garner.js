@@ -135,6 +135,7 @@
 
 import { TAU, clamp, clamp01, damp, lerp, makeBus, makeRng } from "saintfall/core.js";
 import { applySurface, setSurfaceDamage } from "saintfall/boss-surface.js";
+import { revealCamera } from "saintfall/reveal-camera.js";
 import { GARNER_PIT, garnerPitProfile } from "saintfall/terrain.js";
 import { SURVIVAL_CONFIG } from "saintfall/combat.js";
 
@@ -208,7 +209,10 @@ export const GARNER_CONFIG = Object.freeze({
   disengageRadius: 235,
   disengageSeconds: 14,
   sealSeconds: 6.0,
-  arenaRadius: 112,
+  /* The site ring (district-bosses reads this). Enlarged with every
+     other arena (m101); must stay inside disengageRadius so the seal
+     fires off the ring, never off the leash. */
+  arenaRadius: 155,
 
   /* ------------------------------------------------------------
      THE TENTACLES
@@ -3371,7 +3375,25 @@ export function buildGarner(ctx) {
       const camX = C.pitX + 18;
       const camZ = C.pitZ + 24;
       const camY = groundAt(camX, camZ) + 8.5;
-      ctx.player.setFree(true, [camX, camY, camZ], [C.pitX, lipY + 1.2, C.pitZ], 50);
+      /* Ray-tested against the grid before use; the Ossuary's ribs are
+         a backdrop from this bearing, but a spoil ridge or rib base can
+         still cross the shot. See reveal-camera.js.
+
+         THE PIT IS STILL SHUT when this camera cuts - the whole point
+         of the breach is watching it open - so the solve is aimed at
+         the PAN over the mouth, never at the mouth itself: lipY is
+         metres below ground that does not exist yet, and a buried
+         target reads as "blocked" to every ray (the Coulter's reveal
+         has the same clamp for the same reason). */
+      const panY = groundAt(C.pitX, C.pitZ);
+      revealCamera(ctx, {
+        label: "garner",
+        preferred: [camX, camY, camZ],
+        target: [C.pitX, Math.max(lipY + 1.2, panY + 2.2), C.pitZ],
+        halfHeight: 4, halfWidth: 6,
+        floorY: panY + 1.0,
+        fov: 50,
+      });
       state.releaseCameraAt = 0.9;
     }
   }

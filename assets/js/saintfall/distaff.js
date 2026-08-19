@@ -54,6 +54,7 @@ import {
   TAU, clamp, clamp01, damp, dampAngle, lerp, makeBus, sstep, srgbToLinear,
 } from "saintfall/core.js";
 import { patchMaterial } from "saintfall/art.js";
+import { revealCamera } from "saintfall/reveal-camera.js";
 import { applySurface, setSurfaceDamage } from "saintfall/boss-surface.js";
 import { DISTRICTS } from "saintfall/terrain.js";
 
@@ -2240,8 +2241,18 @@ export function buildDistaff(ctx) {
       const camX = C.lairX - 22;
       const camZ = C.lairZ + 26;
       const camY = groundAt(camX, camZ) + 4.2;
-      ctx.player.setFree(true, [camX, camY, camZ],
-        [inst.x, inst.y + 3.8, inst.z], 48);
+      /* Ray-tested against the grid before it is used: the crater-
+         centre lance and the shard field both stand inside this shot
+         from some spawns, and a reveal of the back of a lance is a
+         reveal of nothing. See reveal-camera.js. */
+      revealCamera(ctx, {
+        label: "distaff",
+        preferred: [camX, camY, camZ],
+        target: [inst.x, inst.y + 3.8, inst.z],
+        halfHeight: 5, halfWidth: 6,
+        floorY: inst.y + 0.5,
+        fov: 48,
+      });
       state.releaseCameraAt = 0;
     }
   }

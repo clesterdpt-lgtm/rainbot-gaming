@@ -161,37 +161,40 @@ try {
     const dx = w.x - site.x;
     const dz = w.z - site.z;
     const span = Math.hypot(dx, dz) || 1;
-    const offset = Math.min(T.winnower.config.aggroRadius - 4,
-      Math.max(56, site.arenaRadius - span + 12));
-    const ox = w.x + (dx / span) * offset;
-    const oz = w.z + (dz / span) * offset;
+    const ux = dx / span;
+    const uz = dz / span;
+    const aggro = T.winnower.config.aggroRadius;
+    /* THE FAR-SIDE APPROACH, on the m101 ring. The old geometry - a
+       point outside the ring but inside aggro, the exact position
+       that once looped the reveal - CANNOT EXIST any more: the ring
+       (140m) now contains the perch offset plus the whole aggro halo
+       (32 + 78m). That containment IS the invariant the loop fix was
+       reaching for, so it is asserted directly; the probe then stands
+       just outside the ring on the perch's own bearing (necessarily
+       outside aggro too) and the sleep rule is checked there. */
+    const halo = span + aggro;
+    const ox = site.x + ux * (site.arenaRadius + 8);
+    const oz = site.z + uz * (site.arenaRadius + 8);
     T._teleportRaw(ox, oz, 0);
     T.setBodyHeading?.(0);
     const start = {
       siteDist: Number(Math.hypot(ox - site.x, oz - site.z).toFixed(1)),
       bossDist: Number(Math.hypot(ox - w.x, oz - w.z).toFixed(1)),
       arena: site.arenaRadius,
-      aggro: T.winnower.config.aggroRadius,
+      aggro,
+      halo: Number(halo.toFixed(1)),
     };
     const hpBefore = T.combat.player.hp;
     let secs = 0;
     let sawFree = false;
     let damagedDuringHold = false;
-    /* OUTSIDE THE RING NOTHING MAY WAKE - see districtBosses.insideArena.
-       This block used to expect the opposite: an alert from 106m,
-       then "soar", checked at exactly the second the alert ended. It
-       passed, and the frame after it stopped looking the ring reset
-       the fight it had just watched begin - the player was still
-       outside it - which re-armed the reveal, which the still-in-aggro
-       player then re-triggered: measured as eight reveals in forty
-       seconds with the camera held for 39.9 of them. So the far-side
-       approach now waits OUTSIDE for three seconds and asserts the
-       animal stays asleep, then steps inside the ring for the reveal. */
     for (let i = 0; i < 180; i += 1) { T.renderOnce(1 / 60); secs += 1 / 60; }
     const wokeOutside = T.winnowerState().phase !== "dormant";
-    const inD = site.arenaRadius - 6;
-    const ix = site.x + ((ox - site.x) / start.siteDist) * inD;
-    const iz = site.z + ((oz - site.z) / start.siteDist) * inD;
+    /* Step to where the fight actually starts: inside the ring AND
+       inside the perch's aggro. */
+    const inD = Math.min(site.arenaRadius - 6, span + aggro - 4);
+    const ix = site.x + ux * inD;
+    const iz = site.z + uz * inD;
     T._teleportRaw(ix, iz, 0);
     while (T.winnowerState().phase === "dormant" && secs < 6) {
       T.renderOnce(1 / 60);
@@ -203,17 +206,25 @@ try {
        is allowed to land, and comparing against a pre-walk figure
        reported that fire as a breach of the hold. */
     let hpAtHold = null;
+    let hpAtHoldEnd = null;
     while (T.winnowerState().phase === "alert" && secs < 15) {
       if (T.player.state.free) {
         if (hpAtHold === null) hpAtHold = T.combat.player.hp;
         sawFree = true;
         T.combat.hurtPlayer(80, { source: "qa-garrison", x: ix, y: 2, z: iz });
         if (T.combat.player.hp < hpAtHold - 1e-6) damagedDuringHold = true;
+        hpAtHoldEnd = T.combat.player.hp;
       }
       T.renderOnce(1 / 60);
       secs += 1 / 60;
     }
     const phaseAfterAlert = T.winnowerState().phase;
+    /* The thirty-second camera watch below is about CAMERA TAKES, not
+       survival - and death no longer auto-respawns (m101), so a probe
+       the Winnower kills mid-watch stays dead and poisons every later
+       read. (The old version of this check only "passed" because the
+       auto-respawn quietly refilled the hp it compared.) */
+    T.invulnerable(true);
     /* AND THEN THE PART THE OLD CHECK NEVER REACHED: thirty more
        seconds of fight, counting how many times the camera is taken.
        Once is the reveal. Twice is the loop. */
@@ -228,6 +239,7 @@ try {
       wasFree = f;
     }
     off?.();
+    T.invulnerable(false);
     return {
       start,
       wokeOutside,
@@ -237,18 +249,19 @@ try {
       sawFree,
       damagedDuringHold,
       hpBefore,
-      hpAfter: T.combat.player.hp,
+      hpAtHold,
+      hpAtHoldEnd,
       cameraTakes,
       resets,
       finalPhase: T.winnowerState().phase,
       secs: Number(secs.toFixed(2)),
     };
   });
-  check("the outside approach is inside aggro and outside the district pin",
-    outside.start.bossDist <= outside.start.aggro
+  check("the ring contains the whole aggro halo - the reveal-loop position cannot exist",
+    outside.start.halo + 4 <= outside.start.arena
       && outside.start.siteDist > outside.start.arena,
     JSON.stringify(outside.start));
-  check("outside the ring, inside aggro, the animal stays asleep",
+  check("outside the ring the animal stays asleep",
     !outside.wokeOutside, JSON.stringify(outside.start));
   check("stepping inside plays the reveal once and becomes a soaring fight",
     outside.alertAt === "alert" && outside.phase === "soar" && !outside.freeAfter,
@@ -257,11 +270,12 @@ try {
     outside.cameraTakes === 0 && outside.resets === 0 && !outside.freeAfter,
     `camera taken ${outside.cameraTakes} more times, ${outside.resets} arena resets, final ${outside.finalPhase}`);
   check("the reveal camera holds, and garrison fire cannot land during it",
-    outside.sawFree && !outside.damagedDuringHold && outside.hpAfter === outside.hpBefore,
+    outside.sawFree && !outside.damagedDuringHold
+      && outside.hpAtHold !== null && outside.hpAtHoldEnd === outside.hpAtHold,
     JSON.stringify({
       sawFree: outside.sawFree,
       damaged: outside.damagedDuringHold,
-      hp: `${outside.hpBefore} -> ${outside.hpAfter}`,
+      hp: `${outside.hpAtHold} -> ${outside.hpAtHoldEnd}`,
     }));
 
   console.log("\n=== PAGE ===");

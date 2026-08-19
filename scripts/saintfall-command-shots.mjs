@@ -318,7 +318,7 @@ try {
   console.log(`  heat per shot:   ${rite.heatPlain} -> ${rite.heatGilded} gilded`);
   console.log(`  delivery: hp ${rite.hp}/${rite.maxHp} · charge `
     + `${Math.round(rite.fuel)}/${rite.maxFuel} · ${rite.arrivalPeak} meshes on screen`);
-  check(rite.spec.name === "Gilding Rite" && rite.spec.reinforcements === 0,
+  check(rite.spec.name === "Gilding Rite" && (rite.spec.reinforcements ?? 0) === 0,
     "the drop is a blessing rather than a resupply", rite.spec.name);
   check(rite.hp === rite.maxHp && rite.fuel >= rite.maxFuel - 0.01,
     "it still puts the trooper back on their feet",

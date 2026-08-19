@@ -318,7 +318,23 @@ try {
     /* And whether the player can actually walk to it, through the
        collision that the needle really has. */
     const ps = T.player.state;
-    T._teleportRaw(after.x + 14, after.z, 0);
+    /* Approach from the OPEN side: continue along the needle-to-crash
+       bearing rather than a fixed +x. The fall's bearing is terrain-
+       dependent (the m101 arena flattening changed it), and a fixed
+       offset can teleport the probe into the very needle the animal
+       just peeled off - which reads as "cannot reach the boss" when
+       the boss is standing on open sand eleven metres away. */
+    const perchList = T.stylitePerches();
+    const fromPerch = perchList[T.ctx.stylite.status().perch] || null;
+    let ax = 1;
+    let az = 0;
+    if (fromPerch) {
+      const ddx = after.x - fromPerch.x;
+      const ddz = after.z - fromPerch.z;
+      const dl = Math.hypot(ddx, ddz);
+      if (dl > 0.5) { ax = ddx / dl; az = ddz / dl; }
+    }
+    T._teleportRaw(after.x + ax * 14, after.z + az * 14, 0);
     T.advanceTime(2 / 60, 1 / 60);
     for (let i = 0; i < 90; i += 1) {
       const dx = after.x - ps.x;

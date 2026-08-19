@@ -160,6 +160,15 @@ try {
   const fall = await page.evaluate(() => {
     const T = window.__SF;
     T.clearEnemies();
+    T.releaseCamera();
+    /* The corpse passes above leave debris state behind: their
+       subjects get a live second to fight back (which can kill the
+       probe - and death no longer clears itself, m101) and the last
+       screenshot leaves the free camera on. A dead-or-freecam start
+       made hurtPlayer a no-op here and every fall check measured a
+       statue: pre-existing on the old tree too, where auto-respawn
+       happened to hide it on some runs. Start from a living trooper. */
+    if (T.ctx.combat.player.dead) T.ctx.combat.respawn();
     const site = T.findFlatSite(20);
     T.player.spawn(site[0], site[1], Math.PI);
     T.autoPlayer();
@@ -183,11 +192,20 @@ try {
         dead: T.ctx.combat.player.dead, action: T.ctx.player.state.deathPose });
     }
     const fallen = head();
-    // ...and it has to stand back up.
+    /* No auto-respawn any more (m101): running well past the old 3.4s
+       timer must leave the body down and the death screen up. Reviving
+       is the save system's job, so that is what this probe does - the
+       same combat.respawn primitive a loaded record ends in. */
     T.advanceTime(2.2, 1 / 60);
-    const respawned = { ...head(), dead: T.ctx.combat.player.dead };
+    const held = { ...head(), dead: T.ctx.combat.player.dead,
+      deathScreen: !document.querySelector("[data-death]")?.hidden };
+    T.ctx.combat.respawn();
+    T.player.spawn(site[0], site[1], Math.PI);
+    T.advanceTime(0.6, 1 / 60);
+    const respawned = { ...head(), dead: T.ctx.combat.player.dead,
+      deathScreen: !document.querySelector("[data-death]")?.hidden };
     T.invulnerable(true);
-    return { site, standing, frames, fallen, respawned };
+    return { site, standing, frames, fallen, held, respawned };
   });
   console.log(`  head height: standing ${fall.standing.y}m -> fallen `
     + `${fall.fallen.y}m -> respawned ${fall.respawned.y}m`);
@@ -201,9 +219,15 @@ try {
   check(fall.frames.some((f) => f.y < fall.standing.y - 0.15
     && f.y > fall.fallen.y + 0.15),
     "the fall is animated rather than a snap to the ground");
+  check(fall.held.dead === true,
+    "death HOLDS - there is no automatic respawn",
+    `still dead ${fall.held.dead} at ${fall.held.y}m after the old timer`);
+  check(fall.held.deathScreen === true && fall.respawned.deathScreen === false,
+    "the death screen stands while dead and clears itself on revival",
+    `shown ${fall.held.deathScreen} -> ${fall.respawned.deathScreen}`);
   check(!fall.respawned.dead
     && Math.abs(fall.respawned.y - fall.standing.y) < 0.25,
-    "and the pose is cleared on respawn",
+    "and the pose is cleared when a revival path runs",
     `head back at ${fall.respawned.y}m`);
 
   {
@@ -231,6 +255,12 @@ try {
       T.invulnerable(true);
     });
     await grab("player-fallen-chase.png");
+    // Leave the probe alive: nothing revives automatically now.
+    await page.evaluate(() => {
+      const T = window.__SF;
+      T.ctx.combat.respawn();
+      T.advanceTime(0.3, 1 / 60);
+    });
   }
 
   check(errors.length === 0, "no page or console errors", errors.slice(0, 3).join(" | "));

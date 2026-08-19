@@ -58,7 +58,6 @@ function missionMatches(actual, snapshot) {
   const savedRelays = Array.isArray(snapshot.relays) ? snapshot.relays : [];
   const actualRelays = Array.isArray(actual.relays) ? actual.relays : [];
   if (actual.phase !== snapshot.phase || actual.relaysDone !== snapshot.relaysDone
-    || actual.reinforcements !== snapshot.reinforcements
     || actualRelays.length !== savedRelays.length) return false;
   for (let i = 0; i < savedRelays.length; i += 1) {
     if (actualRelays[i].key !== savedRelays[i].key
@@ -376,7 +375,6 @@ async function createDurableScenario(page) {
     T.combat.player.kills = 7;
     T.combat.player.shots = 41;
     T.combat.player.hits = 29;
-    T.mission.state.reinforcements = 3;
     T.mission.cooldowns.orbital = 72.5;
     T.mission.cooldowns.cluster = 31.25;
     T.mission.cooldowns.resupply = 19.75;
@@ -508,7 +506,6 @@ async function repeatedLoadPass(page, setup) {
       T.combat.player.shots = 1000 + iteration;
       T.combat.player.hits = 0;
       T.mission.state.relaysDone = 0;
-      T.mission.state.reinforcements = 1;
       for (const relay of T.mission.relays) { relay.done = false; relay.progress = 0; }
       for (const command of Object.keys(T.mission.cooldowns)) T.mission.cooldowns[command] = 0;
       T.weapons.carry.heat = 0.03;
@@ -811,8 +808,6 @@ async function deadStateRollbackPass(browser) {
     const missionTarget = T.mission.snapshot();
     missionTarget.phase = "relays";
     missionTarget.deaths = 0;
-    missionTarget.reinforcements = 3;
-    missionTarget.maxReinforcements = 5;
     missionTarget.extractCalled = false;
     missionTarget.extractTimer = 0;
     missionTarget.relays = missionTarget.relays.map((relay, index) => ({
@@ -829,7 +824,6 @@ async function deadStateRollbackPass(browser) {
 
     const budgetBeforeDeath = {
       deaths: T.mission.state.deaths,
-      reinforcements: T.mission.state.reinforcements,
     };
     const damageApplied = T.combat.hurtPlayer(T.combat.player.maxHp + 100, {
       source: "dead-state-rollback-qa",
@@ -843,7 +837,6 @@ async function deadStateRollbackPass(browser) {
     T.advanceTime(1 / 60, 1 / 60);
     const budgetAfterDeath = {
       deaths: T.mission.state.deaths,
-      reinforcements: T.mission.state.reinforcements,
       countedDeath: T.mission.state.countedDeath,
     };
 
@@ -872,9 +865,12 @@ async function deadStateRollbackPass(browser) {
 
     const after = fingerprint();
     const afterJson = JSON.stringify(after);
+    /* Captured NOW: the revival load at the end of this probe writes
+       its own "loaded" lastResult, and reading it at return time made
+       this check see the wrong event. */
+    const rollbackResult = T.persistenceState()?.lastResult || null;
     const budgetAfterRollback = {
       deaths: T.mission.state.deaths,
-      reinforcements: T.mission.state.reinforcements,
       countedDeath: T.mission.state.countedDeath,
       hp: T.combat.player.hp,
       dead: T.combat.player.dead,
@@ -886,16 +882,26 @@ async function deadStateRollbackPass(browser) {
     T.advanceTime(halfTimer, 1 / 60);
     const duringTimer = {
       deaths: T.mission.state.deaths,
-      reinforcements: T.mission.state.reinforcements,
       countedDeath: T.mission.state.countedDeath,
       hp: T.combat.player.hp,
       dead: T.combat.player.dead,
       respawnIn: T.combat.player.respawnIn,
     };
-    T.advanceTime(T.combat.player.respawnIn + 0.25, 1 / 60);
-    const afterRespawn = {
+    /* No auto-respawn any more (m101): running the old 3.4s timer out
+       must leave the trooper exactly as dead as before, and only a
+       LOAD revives - which is the death screen's one job. */
+    T.advanceTime(4.0, 1 / 60);
+    const afterHold = {
       deaths: T.mission.state.deaths,
-      reinforcements: T.mission.state.reinforcements,
+      countedDeath: T.mission.state.countedDeath,
+      hp: T.combat.player.hp,
+      dead: T.combat.player.dead,
+      respawnIn: T.combat.player.respawnIn,
+    };
+    const loadedAlive = T.saves.apply(clone(savedAlive));
+    const afterRespawn = {
+      loadedAlive,
+      deaths: T.mission.state.deaths,
       countedDeath: T.mission.state.countedDeath,
       hp: T.combat.player.hp,
       maxHp: T.combat.player.maxHp,
@@ -914,26 +920,25 @@ async function deadStateRollbackPass(browser) {
       budgetAfterDeath,
       accepted,
       restoreCalls,
-      lastResult: T.persistenceState()?.lastResult || null,
+      lastResult: rollbackResult,
       exact: beforeJson === afterJson,
       before,
       after,
       mismatch: beforeJson === afterJson ? null : { before, after },
       budgetAfterRollback,
       duringTimer,
+      afterHold,
       afterRespawn,
     };
   });
   evidence.deadStateRollback = probe;
-  check("authoritative death enters a counted reinforcement timer exactly once",
+  check("authoritative death is counted exactly once",
     !probe.setupError
       && probe.killed?.damageApplied > 0
       && probe.killed?.hp === 0
       && probe.killed?.dead === true
       && probe.killed?.respawnIn === 3.4
       && probe.budgetAfterDeath?.deaths === probe.budgetBeforeDeath?.deaths + 1
-      && probe.budgetAfterDeath?.reinforcements
-        === probe.budgetBeforeDeath?.reinforcements - 1
       && probe.budgetAfterDeath?.countedDeath === true,
     JSON.stringify({ setupError: probe.setupError, killed: probe.killed,
       before: probe.budgetBeforeDeath, after: probe.budgetAfterDeath }));
@@ -958,19 +963,25 @@ async function deadStateRollbackPass(browser) {
     JSON.stringify({ exact: probe.exact, setup: probe.setup,
       checkpoint: probe.budgetAfterRollback, transient: probe.after?.missionTransient,
       mismatch: probe.mismatch }));
-  check("advancing through respawn does not double-count the reinforcement loss",
+  check("death holds until a record is loaded, and loading revives without double-counting",
     probe.duringTimer?.dead === true
       && probe.duringTimer?.hp === 0
       && probe.duringTimer?.countedDeath === true
       && probe.duringTimer?.deaths === probe.budgetAfterRollback?.deaths
-      && probe.duringTimer?.reinforcements === probe.budgetAfterRollback?.reinforcements
+      && probe.afterHold?.dead === true
+      && probe.afterHold?.hp === 0
+      && probe.afterHold?.respawnIn === 0
+      && probe.afterHold?.deaths === probe.budgetAfterRollback?.deaths
+      && probe.afterRespawn?.loadedAlive === true
       && probe.afterRespawn?.dead === false
-      && probe.afterRespawn?.hp === probe.afterRespawn?.maxHp
+      && probe.afterRespawn?.hp > 0
       && probe.afterRespawn?.countedDeath === false
-      && probe.afterRespawn?.deaths === probe.budgetAfterRollback?.deaths
-      && probe.afterRespawn?.reinforcements === probe.budgetAfterRollback?.reinforcements,
+      /* Loading rewinds the death counter to what the RECORD holds -
+         deaths are saved state, not a session global - and the alive
+         record here was captured before the kill. */
+      && probe.afterRespawn?.deaths === 0,
     JSON.stringify({ checkpoint: probe.budgetAfterRollback,
-      during: probe.duringTimer, after: probe.afterRespawn }));
+      during: probe.duringTimer, hold: probe.afterHold, after: probe.afterRespawn }));
   await page.close();
   await context.close();
 }

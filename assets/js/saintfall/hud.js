@@ -26,16 +26,13 @@ export function buildHud(ctx, host) {
     </div>
     <section class="sf-bossbar" id="sf-bossbar" hidden data-state="idle" aria-live="polite">
       <header class="sf-bossbar__head">
-        <span class="sf-bossbar__kicker" id="sf-bossbar-kicker"></span>
         <strong class="sf-bossbar__name" id="sf-bossbar-name"></strong>
-        <b class="sf-bossbar__hp" id="sf-bossbar-hp"></b>
       </header>
       <div class="sf-bossbar__track" role="progressbar" id="sf-bossbar-track"
         aria-label="Boss vitality" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
         <i class="sf-bossbar__chip" id="sf-bossbar-chip"></i>
         <i class="sf-bossbar__fill" id="sf-bossbar-fill"></i>
       </div>
-      <p class="sf-bossbar__detail" id="sf-bossbar-detail"></p>
     </section>
     ${ctx.qa ? '<output class="sf-hud__readout" id="sf-readout" aria-label="QA world coordinates"></output>' : ""}
     <aside class="sf-hud__minimap" id="sf-minimap" aria-label="Tactical mini-map">
@@ -82,9 +79,6 @@ export function buildHud(ctx, host) {
     <div class="sf-hud__vitals" id="sf-vitals">
       <div class="sf-hud__hplabel"><span>VITALITY</span><b id="sf-hp-value">150</b></div>
       <div class="sf-hud__hpwrap"><div class="sf-hud__hp" id="sf-hp"></div></div>
-      <div class="sf-hud__vitalrow">
-        <span id="sf-reinf"></span>
-      </div>
       <div class="sf-hud__boon" id="sf-boon" data-state="off" aria-live="off">
         <span>GILDED</span><strong id="sf-boon-value"></strong>
         <i><em id="sf-boon-fill"></em></i>
@@ -148,13 +142,10 @@ export function buildHud(ctx, host) {
   const eventSubEl = el.querySelector("#sf-event-sub");
   const eventFillEl = el.querySelector("#sf-event-fill");
   const bossBarEl = el.querySelector("#sf-bossbar");
-  const bossBarKickerEl = el.querySelector("#sf-bossbar-kicker");
   const bossBarNameEl = el.querySelector("#sf-bossbar-name");
-  const bossBarHpEl = el.querySelector("#sf-bossbar-hp");
   const bossBarTrackEl = el.querySelector("#sf-bossbar-track");
   const bossBarChipEl = el.querySelector("#sf-bossbar-chip");
   const bossBarFillEl = el.querySelector("#sf-bossbar-fill");
-  const bossBarDetailEl = el.querySelector("#sf-bossbar-detail");
   const hintEl = el.querySelector("#sf-hint");
   const objEl = el.querySelector("#sf-objective");
   const objLabelEl = el.querySelector("#sf-objlabel");
@@ -176,7 +167,6 @@ export function buildHud(ctx, host) {
   const ammoEl = el.querySelector("#sf-ammo");
   const heatFillEls = [...ammoEl.querySelectorAll(".sf-heat__fill")];
   const heatStateEl = ammoEl.querySelector("u");
-  const reinfEl = el.querySelector("#sf-reinf");
   const boonEl = el.querySelector("#sf-boon");
   const boonValueEl = el.querySelector("#sf-boon-value");
   const boonFillEl = el.querySelector("#sf-boon-fill");
@@ -1352,15 +1342,19 @@ export function buildHud(ctx, host) {
     bossBarEl.classList.toggle("is-hurt", bossBarAnim.hurt > 0);
     bossBarEl.dataset.state = boss.ratio <= 0.22 ? "crit" : boss.ratio <= 0.45 ? "warn" : "ok";
     el.classList.add("sf-hud--boss");
-    bossBarKickerEl.textContent = boss.district ? boss.district.toUpperCase() : "APEX";
+    /* THE NAME AND THE BAR, AND NOTHING ELSE. The district kicker, the
+       numeric readout and the state caption ("Airborne · 40m", "Down —
+       close and strike") used to ride on this strip too; they were
+       removed on request so the bar reads as a name over a bar, the
+       way a boss bar does. The state captions still exist as data
+       (`boss.detail`, packed below) for the screen reader and for any
+       harness that wants them - they are just not drawn. */
     bossBarNameEl.textContent = boss.name;
-    bossBarHpEl.textContent = `${Math.round(boss.health).toLocaleString()} / ${Math.round(boss.maxHealth).toLocaleString()}`;
     bossBarFillEl.style.width = `${(bossBarAnim.fill * 100).toFixed(2)}%`;
     bossBarChipEl.style.width = `${(bossBarAnim.chip * 100).toFixed(2)}%`;
     bossBarTrackEl.setAttribute("aria-valuenow", String(pct));
-    bossBarTrackEl.setAttribute("aria-valuetext", `${boss.name} ${pct} percent`);
-    bossBarDetailEl.textContent = boss.detail || "";
-    bossBarDetailEl.hidden = !boss.detail;
+    bossBarTrackEl.setAttribute("aria-valuetext",
+      `${boss.name} ${pct} percent${boss.detail ? ` — ${boss.detail}` : ""}`);
   }
 
   function districtAt(x, z) {
@@ -1614,8 +1608,6 @@ export function buildHud(ctx, host) {
       } else {
         ammoEl.hidden = true;
       }
-      reinfEl.textContent = `✦ ${mission.state.reinforcements}`;
-      reinfEl.setAttribute("aria-label", `${mission.state.reinforcements} reinforcements`);
 
       /* THE BLESSING, and it is a countdown rather than a badge. What
          the player has to decide while it is lit is whether there is

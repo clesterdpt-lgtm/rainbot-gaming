@@ -105,6 +105,7 @@
 
 import { TAU, clamp, clamp01, damp, dampAngle, lerp, makeBus } from "saintfall/core.js";
 import { patchMaterial } from "saintfall/art.js";
+import { revealCamera } from "saintfall/reveal-camera.js";
 import { applySurface, setSurfaceDamage } from "saintfall/boss-surface.js";
 import { DISTRICTS } from "saintfall/terrain.js";
 
@@ -2126,8 +2127,19 @@ export function buildWinnower(ctx) {
       const camX = perch.x - 26;
       const camZ = perch.z + 32;
       const camY = groundAt(camX, camZ) + 4.2;
-      ctx.player.setFree(true, [camX, camY, camZ],
-        [inst.x, inst.y + 4.0, inst.z], 50);
+      /* The authored shot is a preference: the solver ray-tests it
+         against the collision grid (the Censer stacks are exactly the
+         kind of thing that ends up between an authored lens and a
+         perched animal) and re-frames around the body if it is
+         blocked. See reveal-camera.js. */
+      revealCamera(ctx, {
+        label: "winnower",
+        preferred: [camX, camY, camZ],
+        target: [inst.x, inst.y + 4.0, inst.z],
+        halfHeight: 7, halfWidth: 6,
+        floorY: inst.y + 0.5,
+        fov: 50,
+      });
       state.releaseCameraAt = 0;
     }
   }

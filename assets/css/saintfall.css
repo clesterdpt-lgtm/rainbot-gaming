@@ -3012,15 +3012,6 @@ body[data-sf-motion="reduced"] #sf-touch * {
     align-items: end;
     min-width: 0;
   }
-
-  .sf-stage.sf-touch-enabled #sf-reinf {
-    min-width: 0;
-    max-width: none;
-    justify-self: end;
-    text-align: right;
-    white-space: normal;
-  }
-
   /* The side cards retain their radial relationship but move 13.6px in
      from either stage edge at 390px. Their content becomes a true two-row
      grid, so REINFORCEMENT DROP and READY no longer occupy the same ink. */
@@ -3148,13 +3139,6 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__vitalrow {
   grid-template-columns: minmax(0, 1fr) auto;
   column-gap: .3rem;
 }
-
-body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled #sf-reinf {
-  justify-self: end;
-  letter-spacing: 0;
-  text-align: right;
-}
-
 body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
   transform: scale(1.16);
   transform-origin: center;
@@ -3547,14 +3531,6 @@ body[data-sf-hud-scale="large"] .sf-stage.sf-touch-enabled .sf-hud__reticle {
 #sf-hud .sf-heat u {
   min-width: 2.75rem;
 }
-
-#sf-hud #sf-reinf {
-  min-width: 3ch;
-  color: rgba(245, 216, 142, .8);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
 /* Call actions dock: icons with cooldown visual, centered cleanly above the dual bars.
    No background boxes, no text labels, and no on-screen F button. */
 #sf-hud .sf-hud__command {

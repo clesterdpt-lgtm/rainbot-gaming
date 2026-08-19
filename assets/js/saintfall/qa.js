@@ -265,7 +265,15 @@ export function installQa(ctx, api) {
      *  only honest way to judge a creature's proportions is next to
      *  the thing the player controls. */
     spawnEnemy(key, x, z, opts) {
-      const inst = api.enemies.spawn(key, x, z, opts || {});
+      /* QA subjects carry provenance. The m101 arena purge removes any
+         enemy WITHOUT an eventId from an engaged boss ring - which is
+         right for the game and wrong for a review scene: the Apostate
+         palette lineup staged two castes beside the live boss and the
+         purge swept them before the camera fired. A harness that
+         wants to watch the purge itself spawns through
+         ctx.enemies.spawn directly. */
+      const options = { eventId: "qa-probe", ...(opts || {}) };
+      const inst = api.enemies.spawn(key, x, z, options);
       api.step(1 / 60, true);
       return inst ? { key: inst.key, x: inst.x, y: inst.y, z: inst.z, state: inst.state } : null;
     },
@@ -2564,11 +2572,25 @@ export function installQa(ctx, api) {
       if (hook._flatSite) return hook._flatSite;
       let best = null;
       let bestVar = Infinity;
+      /* NEUTRAL GROUND MUST NOT BE A BOSS PAD. The m101 arena pads are
+         the flattest ground on the map, so the flatness scorer started
+         choosing the Matriarch's own clearing - which parks every QA
+         subject beside a live district boss, re-aims its brain, and
+         (while a fight is engaged) feeds the subject to the arena
+         stray purge. ONLY the two authored pads are rejected: a
+         blanket all-arenas ban was tried first and it evicted this
+         search from its historical winner in the Fallen Saint basin
+         (where the Coulter sleeps buried and harmless), silently
+         re-siting every tuned harness onto the Pilgrim's Road. */
+      const pads = (ctx.districtBosses?.sites || [])
+        .filter((site) => site.key === "reach" || site.key === "choir")
+        .map((site) => ({ x: site.x, z: site.z, r: (site.arenaRadius || 0) + 30 }));
       for (let i = 0; i < 900; i += 1) {
         const a = i * 2.39996323;
         const r = Math.sqrt((i + 0.5) / 900) * 620;
         const x = Math.cos(a) * r;
         const z = Math.sin(a) * r + 300;
+        if (pads.some((zone) => Math.hypot(x - zone.x, z - zone.z) < zone.r)) continue;
         const g0 = api.terrain.heightAt(x, z);
 
         let worst = 0;

@@ -228,9 +228,12 @@ export const MATRIARCH_CONFIG = Object.freeze({
   trackCeiling: 34,
 
   /* Its territory, measured from where districtBosses parked it. Well
-     inside that controller's 102m arena ring on purpose: a module leash
-     that can fire outside the ring it is nested in never fires at all,
-     which is how the Garner's disengage sat dead for a milestone. */
+     inside that controller's arena ring (145m as of m101) on purpose: a
+     module leash that can fire outside the ring it is nested in never
+     fires at all, which is how the Garner's disengage sat dead for a
+     milestone. The fight itself also stays on the flattened pan
+     terrain.js carves for it (MATRIARCH_ARENA, flat to 78m), so the
+     leash keeps her strikes on measured, level ground. */
   arenaRadius: 84,
 
   /* ------------------------------------------------------------

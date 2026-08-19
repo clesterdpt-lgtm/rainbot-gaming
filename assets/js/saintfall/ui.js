@@ -231,7 +231,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
               <div class="sf-operation-grid">
                 <article class="sf-operation-card sf-operation-card--objective"><small>PRIORITY OBJECTIVE</small><strong data-operation-objective>Reading field order…</strong><span data-operation-distance>—</span></article>
                 <article class="sf-operation-card"><small>APEX BOSSES</small><strong data-operation-relays>0 / 7</strong><span>Defeated</span></article>
-                <article class="sf-operation-card"><small>REINFORCEMENTS</small><strong data-operation-reinforcements>5</strong><span>Available</span></article>
+                <article class="sf-operation-card"><small>DEATHS</small><strong data-operation-deaths>0</strong><span>Recorded</span></article>
                 <article class="sf-operation-card"><small>MISSION CLOCK</small><strong data-operation-clock>00:00</strong><span>Elapsed</span></article>
                 <article class="sf-operation-card sf-operation-card--breach"><small>BLOOM CONTAINMENT</small><strong data-operation-breach>Signal quiet</strong><span data-operation-breach-detail>No active rupture</span></article>
               </div>
@@ -359,6 +359,23 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
         <footer class="sf-menu__footer"><span data-menu-context>FIELD STATE PAUSED</span><span><kbd>ESC</kbd> RESUME · <kbd>TAB</kbd> NAVIGATE</span></footer>
       </div>
     </div>
+    <div class="sf-death" data-death role="dialog" aria-modal="false" aria-hidden="true"
+      aria-labelledby="sf-death-title" hidden>
+      <div class="sf-death__veil"></div>
+      <div class="sf-death__frame">
+        <small>VESPER-IX · FIELD COMMAND</small>
+        <h2 id="sf-death-title">THE RELIQUARY FALLS</h2>
+        <p class="sf-death__copy" data-death-copy>Silence on the wire. Restore a field record to continue the operation.</p>
+        <div class="sf-death__actions">
+          <button type="button" data-death-action="load">
+            <strong data-death-load-label>RESTORE LAST RECORD</strong>
+            <span data-death-load-meta>No field record</span>
+          </button>
+          <button type="button" data-death-action="records"><strong>ALL FIELD RECORDS</strong><span>Autosave and manual reliquaries</span></button>
+          <button type="button" data-death-action="restart"><strong data-death-restart-label>RESTART OPERATION</strong><span>Begin the drop again</span></button>
+        </div>
+      </div>
+    </div>
     <div class="sf-autosave-toast" data-autosave-toast role="status" aria-live="polite"
       aria-atomic="true" hidden><i aria-hidden="true"></i><span>AUTOSAVED</span><small>FIELD RECORD SECURED</small></div>
     <div class="sf-native-ui__live" data-ui-live aria-live="polite" aria-atomic="true"></div>`;
@@ -375,6 +392,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   const maximizeButton = root.querySelector('[data-menu-action="maximize"]');
   const maximizeLabel = root.querySelector("[data-maximize-label]");
   const autosaveToast = root.querySelector("[data-autosave-toast]");
+  const deathEl = root.querySelector("[data-death]");
+  const death = { open: false, restartUntil: 0, latest: null };
   const liveEl = root.querySelector("[data-ui-live]");
   const progression = ctx.progression;
   const surface = stage.closest(".rb-standalone-surface") || stage;
@@ -1462,7 +1481,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     root.querySelector("[data-operation-objective]").textContent = objective?.name || "Awaiting field order";
     root.querySelector("[data-operation-distance]").textContent = objective ? `${Math.round(objective.dist || 0)}m from current position` : "No active directive";
     root.querySelector("[data-operation-relays]").textContent = `${state.bossesDone || 0} / ${ctx.mission.bosses?.length || 7}`;
-    root.querySelector("[data-operation-reinforcements]").textContent = String(Math.max(0, state.reinforcements ?? 0));
+    root.querySelector("[data-operation-deaths]").textContent = String(Math.max(0, state.deaths ?? 0));
     root.querySelector("[data-operation-clock]").textContent = formatClock(state.elapsed);
     const breachActive = !!breach && ["warning", "active", "intermission"].includes(breach.phase);
     const breachName = breach?.complete ? `CYCLE ${breach.cyclesCleared || 1} CLEARED`
@@ -1669,6 +1688,104 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
         : "Compare both records. Your field saves are not affected.";
     }
     return conflict;
+  }
+
+  /* ------------------------------------------------------------
+     THE DEATH SCREEN (m101). There is no reinforcement budget and no
+     automatic respawn any more: dying holds the field, and this is
+     the conversation that continues it. It offers exactly what the
+     save system can honour - the newest record in one press, the
+     full slot list, or a fresh drop - and it dismisses ITSELF the
+     moment the trooper is alive, however that came about, so every
+     load path ends it without knowing it exists.
+     ------------------------------------------------------------ */
+  function latestFieldRecord() {
+    try { saveData = save?.read?.() || saveData; } catch (_) { /* keep cache */ }
+    const candidates = [
+      { kind: "autosave", index: -1, record: saveData.autosave },
+      ...(saveData.manuals || []).map((record, index) => ({ kind: "manual", index, record })),
+    ].filter((entry) => entry.record?.snapshot?.timestamp);
+    candidates.sort((a, b) => (b.record.snapshot.timestamp || 0) - (a.record.snapshot.timestamp || 0));
+    return candidates[0] || null;
+  }
+
+  function refreshDeathScreen() {
+    death.latest = latestFieldRecord();
+    const load = deathEl.querySelector('[data-death-action="load"]');
+    const label = deathEl.querySelector("[data-death-load-label]");
+    const meta = deathEl.querySelector("[data-death-load-meta]");
+    const copy = deathEl.querySelector("[data-death-copy]");
+    if (death.latest) {
+      const snapshot = death.latest.record.snapshot;
+      load.disabled = false;
+      label.textContent = death.latest.kind === "autosave"
+        ? "RESTORE AUTOSAVE" : `RESTORE FIELD SLOT ${["I", "II", "III"][death.latest.index] || ""}`;
+      meta.textContent = `${snapshot.summary?.district || "VESPER-IX"} · ${formatSavedAt(snapshot.timestamp)} · ${formatClock(snapshot.summary?.elapsed)}`;
+      copy.textContent = "Silence on the wire. Restore a field record to continue the operation.";
+    } else {
+      load.disabled = true;
+      label.textContent = "RESTORE LAST RECORD";
+      meta.textContent = "No field record yet";
+      copy.textContent = "Silence on the wire. No field record exists - restart the operation.";
+    }
+  }
+
+  function showDeathScreen() {
+    if (destroyed || death.open) return;
+    if (!ctx.combat?.player?.dead) return;
+    death.open = true;
+    refreshDeathScreen();
+    deathEl.hidden = false;
+    deathEl.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(() => { if (death.open) deathEl.classList.add("is-on"); });
+    if (document.pointerLockElement) document.exitPointerLock?.();
+    ctx.player?.input?.clearAll?.();
+    touch?.releaseAll?.();
+    announce("The Reliquary has fallen. Restore a field record to continue.");
+  }
+
+  function hideDeathScreen() {
+    if (!death.open) return;
+    death.open = false;
+    death.restartUntil = 0;
+    const restart = deathEl.querySelector("[data-death-restart-label]");
+    if (restart) restart.textContent = "RESTART OPERATION";
+    deathEl.classList.remove("is-on");
+    deathEl.hidden = true;
+    deathEl.setAttribute("aria-hidden", "true");
+  }
+
+  function handleDeathAction(target) {
+    const action = target.dataset.deathAction;
+    if (action === "load") {
+      refreshDeathScreen();
+      if (!death.latest) { menuSfx("error"); return; }
+      const ok = !!save?.load?.(death.latest.kind, death.latest.index);
+      menuSfx(ok ? "confirm" : "error");
+      if (!ok) announce("Field record failed to restore.");
+      // Success needs no handling here: update() sees a living player
+      // and takes the screen down.
+      return;
+    }
+    if (action === "records") {
+      openMenu("saves", { force: true });
+      return;
+    }
+    if (action === "restart") {
+      if (death.restartUntil > performance.now()) { window.location.reload(); return; }
+      death.restartUntil = performance.now() + 4500;
+      const label = deathEl.querySelector("[data-death-restart-label]");
+      if (label) label.textContent = "CONFIRM RESTART";
+      menuSfx("question");
+      announce("Press restart again to confirm");
+      scheduleUiTimeout(() => {
+        if (death.restartUntil && death.restartUntil <= performance.now()) {
+          death.restartUntil = 0;
+          const reset = deathEl.querySelector("[data-death-restart-label]");
+          if (reset) reset.textContent = "RESTART OPERATION";
+        }
+      }, 4600);
+    }
   }
 
   function refreshSaves() {
@@ -2101,6 +2218,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     if (target.matches("[data-doctrine-action]")) { handleDoctrineAction(target); return; }
     if (target.matches("[data-career-recovery-action]")) { void handleCareerRecovery(target); return; }
     if (target.matches("[data-save-action]")) { handleSaveAction(target); return; }
+    if (target.matches("[data-death-action]")) { handleDeathAction(target); return; }
     if (target.matches("[data-wheel-cancel]")) { cancelWheel("center"); return; }
     if (target.matches(".sf-command-wheel__option")) {
       setWheelSelection(Number(target.dataset.index));
@@ -2445,6 +2563,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   const stopLost = ctx.mission.bus?.on?.("lost", () => {
     scheduleUiTimeout(() => openMenu("operation", { force: true }), 900);
   });
+
   const stopSave = save?.onChange?.((result) => {
     refreshSaves();
     if (result?.type === "autosaved" || result?.type === "autosave-deferred") {
@@ -2475,6 +2594,16 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     if (wheel.open && (ctx.combat?.player?.dead || menu.open || document.hidden)) {
       cancelWheel(ctx.combat?.player?.dead ? "death" : "unavailable");
     }
+    /* The death screen rides SIM time, not a wall-clock timer: the
+       fall plays first, and combat's respawnIn - which now only runs
+       down, never respawns - is the presentation clock it was always
+       authored against. 0.8 remaining is 2.6s into the 3.4s fall.
+       Sim-time means harnesses that advanceTime() see the screen and
+       a paused menu cannot race it; and it dismisses ITSELF the
+       moment the trooper lives again, whichever path revived them. */
+    if (!death.open && ctx.combat?.player?.dead
+      && (ctx.combat.player.respawnIn ?? 0) <= 0.8) showDeathScreen();
+    if (death.open && !ctx.combat?.player?.dead) hideDeathScreen();
     if (updateClock < 0.18) return;
     updateClock = 0;
     updateCommands();

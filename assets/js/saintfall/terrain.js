@@ -223,6 +223,36 @@ export function garnerPitProfile(r, withThroat = true) {
   return bowl + lip + terrace + throat;
 }
 
+/* ============================================================
+   AUTHORED BOSS ARENAS ON THE OPEN SAND
+
+   Two fights happen on ground this file generates rather than on
+   authored floors, and both were measured fighting their own
+   terrain: the Matriarch's marker sat on a Reach ridge that ran
+   from 8.7m below her to 11.2m above within nine metres (the strike
+   height gate had to be widened just to land hits), and the Stylite's
+   arena floor is the Choir's shatter field - ridge noise the player
+   dodges through at a 60-degree look-up angle.
+
+   Declared here, next to the districts, for the GARNER_PIT reason:
+   the terrain, the prop placement in world.js and the encounter
+   siting in district-bosses.js all have to agree on these points,
+   and a constant each module restates is a constant that drifts.
+   `flatRadius` is dead level; `feather` is where the pad hands back
+   to the district's own landform. */
+export const MATRIARCH_ARENA = Object.freeze({
+  x: DISTRICTS.reach.x + 18,
+  z: DISTRICTS.reach.z - 12,
+  flatRadius: 78,
+  feather: 48,
+});
+export const STYLITE_ARENA = Object.freeze({
+  x: DISTRICTS.choir.x,
+  z: DISTRICTS.choir.z,
+  flatRadius: 96,
+  feather: 52,
+});
+
 /** The processional causeway, south gate to cathedral steps. */
 export const ROAD_PATH = [
   [24, 962], [16, 880], [8, 742], [2, 596], [-4, 448], [-8, 300],
@@ -573,6 +603,19 @@ export function makeHeightField(seed = 0x5a1f7) {
       + rimHeight(DROP_SITE.podX, DROP_SITE.podZ) + ridge + saddle + 1.5;
   })();
 
+  /* The Matriarch's clearing. Target is the SMOOTH landform - the
+     documented reason smoothBase exists - so the pad reads as an
+     inter-dune pan rather than a platform standing on a ridge. */
+  const matriarchArenaY = smoothBase(MATRIARCH_ARENA.x, MATRIARCH_ARENA.z)
+    + rimHeight(MATRIARCH_ARENA.x, MATRIARCH_ARENA.z);
+
+  /* The Stylite's plaza: the Choir dome at its full height with the
+     shatter field and the base dune trains removed. The needles keep
+     their own silhouettes - they are re-seated on whatever the floor
+     is - so the district's read survives; only the FLOOR calms. */
+  const choirArenaY = smoothBase(STYLITE_ARENA.x, STYLITE_ARENA.z)
+    + rimHeight(STYLITE_ARENA.x, STYLITE_ARENA.z) + 26;
+
   /* ------------------------ district weight ------------------------ */
 
   const w = (x, z, d, softness = 0.42) =>
@@ -616,6 +659,9 @@ export function makeHeightField(seed = 0x5a1f7) {
     /* --- The Gilded Reach: dunes turned up, nothing else --------- */
     h = shapeReach(h, x, z);
     h = pad(h, crawlerPadY, x, z, crawlerPad.x, crawlerPad.z, 14, 18);
+    // The Matriarch's arena - see MATRIARCH_ARENA above.
+    h = pad(h, matriarchArenaY, x, z, MATRIARCH_ARENA.x, MATRIARCH_ARENA.z,
+      MATRIARCH_ARENA.flatRadius, MATRIARCH_ARENA.feather);
 
     /* --- The Threshold: the ridge you drop onto -----------------
        The one authored viewpoint on the map, so it is built on the
@@ -774,6 +820,9 @@ export function makeHeightField(seed = 0x5a1f7) {
         const shatter = (nRock.ridged(wx / 78, wz / 78, 2) * 25
           + nRock.ridged(wx / 26, wz / 26, 2) * 2.4) * patch;
         h = lerp(h, h + base + shatter, k);
+        // The Stylite's arena floor - see STYLITE_ARENA above.
+        h = pad(h, choirArenaY, x, z, STYLITE_ARENA.x, STYLITE_ARENA.z,
+          STYLITE_ARENA.flatRadius, STYLITE_ARENA.feather);
       }
     }
 

@@ -19,22 +19,13 @@
 .sf-bossbar.is-on{opacity:1}
 .sf-bossbar[hidden]{display:none!important}
 .sf-bossbar__head{
-  display:flex;align-items:baseline;gap:.7rem;margin:0 0 .32rem
-}
-.sf-bossbar__kicker{
-  color:rgba(216,164,65,.7);font:600 9px/1 "Share Tech Mono",monospace;
-  letter-spacing:.16em;white-space:nowrap
+  display:flex;align-items:baseline;margin:0 0 .32rem
 }
 .sf-bossbar__name{
   flex:1;min-width:0;overflow:hidden;color:#fff6e0;
   font:700 13px/1.1 "Share Tech Mono",monospace;letter-spacing:.14em;
   text-overflow:ellipsis;white-space:nowrap;
   text-shadow:0 1px 6px rgba(0,0,0,.85)
-}
-.sf-bossbar__hp{
-  color:rgba(245,216,142,.82);font:600 11px/1 "Share Tech Mono",monospace;
-  font-variant-numeric:tabular-nums;letter-spacing:.04em;
-  text-shadow:0 1px 4px rgba(0,0,0,.85);white-space:nowrap
 }
 .sf-bossbar__track{
   position:relative;height:7px;overflow:hidden;border-radius:999px;
@@ -47,10 +38,6 @@
 .sf-bossbar__fill{
   background:linear-gradient(90deg,#7a1c22 0%,#d63d38 52%,#ffb070 100%);
   box-shadow:0 0 10px rgba(214,61,56,.35)
-}
-.sf-bossbar__detail{
-  margin:.3rem 0 0;color:rgba(232,214,180,.58);font:500 10px/1.25 "Share Tech Mono",monospace;
-  letter-spacing:.06em;text-align:center;text-shadow:0 1px 4px rgba(0,0,0,.8)
 }
 .sf-bossbar[data-state="warn"] .sf-bossbar__fill{
   background:linear-gradient(90deg,#8a3a12,#e07a28 60%,#ffd08a)
@@ -296,9 +283,7 @@ body.sf-reduced-motion .sf-command-wheel,body.sf-reduced-motion .sf-menu,body.sf
  .sf-menu__rail{grid-template-columns:repeat(6,minmax(0,1fr))}.sf-menu__rail button span{font-size:9px}.sf-menu__page--map{height:auto;overflow:visible}.sf-menu__page--map .sf-menu__pagehead{margin-bottom:.45rem;padding-bottom:.4rem}.sf-menu__page--map .sf-menu__pagehead p{font-size:11px}.sf-map-page{grid-template-columns:1fr;gap:.35rem}.sf-map-page__surface{min-height:0;padding:.35rem}.sf-map-page__surface>header{min-height:1.7rem;padding:0 .1rem .3rem}.sf-map-page__surface>header small{display:none}.sf-map-page__surface>header strong,.sf-map-page__surface>header b{font-size:8px}#sf-map-canvas-large{width:min(100%,10.5rem);height:auto;max-height:none}.sf-map-page__legend{display:none}.sf-map-page__orders{min-height:0;padding:.35rem}.sf-map-page__orders>header{padding:.05rem .05rem .35rem}.sf-map-page__list{gap:.25rem;padding:.35rem 0}.sf-map-order{grid-template-columns:1.35rem minmax(0,1fr) 2px;gap:.4rem;min-height:3.25rem;padding:.35rem}.sf-map-order>i{width:1.3rem;height:1.3rem}.sf-map-order small{font-size:7px}.sf-map-order strong{font-size:9px}.sf-map-order em{font-size:7px}.sf-map-page__orders>p{display:none}
  .sf-stage.sf-touch-enabled .sf-bossbar{top:max(.55rem,calc(env(safe-area-inset-top) + .28rem));width:min(22rem,72vw)}
 .sf-stage.sf-touch-enabled .sf-bossbar__name{font-size:11px;letter-spacing:.1em}
-.sf-stage.sf-touch-enabled .sf-bossbar__hp{font-size:10px}
 .sf-stage.sf-touch-enabled .sf-bossbar__track{height:6px}
-.sf-stage.sf-touch-enabled .sf-bossbar__detail{font-size:8px}
 .sf-stage.sf-touch-enabled #sf-hud .sf-hud__objective{left:max(.65rem,env(safe-area-inset-left));top:max(3.65rem,calc(env(safe-area-inset-top) + 3.2rem));width:min(15.5rem,62cqw);padding:.36rem .4rem}.sf-stage.sf-touch-enabled #sf-hud .sf-objective__head{display:none}.sf-stage.sf-touch-enabled #sf-hud .sf-objective__copy strong{font-size:9px}.sf-stage.sf-touch-enabled #sf-hud .sf-hud__minimap{top:max(3.65rem,calc(env(safe-area-inset-top) + 3.2rem));width:4.9rem}.sf-stage.sf-touch-enabled #sf-hud .sf-hud__vitals{top:max(6.3rem,calc(env(safe-area-inset-top) + 5.85rem))}.sf-stage.sf-touch-enabled #sf-hud .sf-minimap__expand{display:none}
 }
 
@@ -2280,10 +2265,6 @@ body.sf-reduced-motion #sf-native-ui .sf-doctrine__vow{transition:none!important
   position:absolute;left:0;right:0;top:calc(100% + .25rem);height:.8rem;min-height:0;margin:0;
   color:rgba(219,239,241,.68);font-size:9px;pointer-events:none
 }
-#sf-hud .sf-hud__vitalrow #sf-reinf{
-  position:absolute;right:0;top:0;color:#f5d88e;text-shadow:0 1px 4px rgba(0,0,0,.95);white-space:nowrap
-}
-
 /* Weapon heat sits directly above the three call sigils. The pair of equal
    half-paths fills outward from the centre, preserving a deliberate
    symmetrical silhouette without creating another HUD panel. */
@@ -2455,6 +2436,28 @@ body.sf-high-contrast #sf-hud .sf-heat__fill{stroke:#ffe16a;filter:none}
 
 /* Save feedback lives at the quiet lower edge: visible enough to prove the
    checkpoint happened, compact enough to stay out of the combat sightline. */
+/* ------------------------------------------------------------
+   THE DEATH SCREEN. Sits under the field menu (z 100) so ALL FIELD
+   RECORDS opens the ordinary saves panel above it, and above the
+   HUD and wheel. No backdrop blur on the world: the fallen trooper
+   and the thing that did it stay visible behind the verdict.
+   ------------------------------------------------------------ */
+.sf-death{position:absolute;inset:0;z-index:60;display:grid;place-items:center;overflow:hidden;pointer-events:auto;opacity:0;transition:opacity .6s ease}
+.sf-death.is-on{opacity:1}
+.sf-death[hidden]{display:none!important}
+.sf-death__veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(24,4,6,.55),rgba(5,3,4,.78) 62%,rgba(3,2,3,.9)),radial-gradient(circle at 50% 38%,rgba(138,34,48,.18),transparent 58%)}
+.sf-death__frame{position:relative;display:grid;gap:.55rem;justify-items:center;width:min(30rem,calc(100% - 3rem));padding:1.6rem 1.8rem 1.7rem;border:1px solid rgba(216,164,65,.34);background:linear-gradient(135deg,rgba(138,34,48,.14),transparent 40%),rgba(8,6,7,.94);box-shadow:inset .3rem 0 0 rgba(138,34,48,.72),0 1.6rem 5rem rgba(0,0,0,.66);text-align:center}
+.sf-death__frame>small{color:rgba(216,164,65,.68);font:600 10px/1 "Share Tech Mono",monospace;letter-spacing:.2em}
+.sf-death__frame>h2{margin:.1rem 0 0;color:#f3e6c8;font:600 clamp(1.5rem,3vw,2.1rem)/1.05 "Cinzel",Georgia,serif;letter-spacing:.14em;text-shadow:0 2px 18px rgba(138,34,48,.5)}
+.sf-death__copy{margin:.15rem 0 .5rem;color:rgba(242,229,199,.6);font-size:12px;letter-spacing:.08em;line-height:1.5}
+.sf-death__actions{display:grid;gap:.55rem;width:100%}
+.sf-death__actions button{display:grid;gap:.18rem;justify-items:center;padding:.72rem .9rem;border:1px solid rgba(216,164,65,.32);background:linear-gradient(105deg,rgba(216,164,65,.08),transparent 42%),rgba(12,8,9,.9);color:var(--sfu-bone);cursor:pointer;transition:border-color .16s,background .16s,transform .16s}
+.sf-death__actions button:hover:not(:disabled){border-color:var(--sfu-gold);background:linear-gradient(105deg,rgba(138,34,48,.4),rgba(20,10,11,.94));transform:translateY(-1px)}
+.sf-death__actions button:disabled{opacity:.42;cursor:not-allowed}
+.sf-death__actions strong{font:700 12px/1 "Share Tech Mono",monospace;letter-spacing:.14em}
+.sf-death__actions span{color:rgba(232,214,180,.55);font-size:10px;letter-spacing:.08em}
+.sf-stage.sf-touch-enabled .sf-death__frame{width:min(26rem,calc(100% - 1.6rem));padding:1.1rem 1rem 1.2rem}
+
 .sf-autosave-toast {
   position: absolute;
   right: max(1rem, calc(env(safe-area-inset-right) + .7rem));

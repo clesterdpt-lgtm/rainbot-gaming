@@ -181,6 +181,7 @@ try {
         let camPos = null;
         let camTarget = null;
         let camFov = null;
+        let visibility = null;
         let secs = 0;
 
         let lastPhase = "";
@@ -193,6 +194,7 @@ try {
           }
           if (T.player.state.free) {
             sawFree = true;
+            const measureNow = !camPos || frame % 12 === 0;
             if (!camPos) {
               camPos = {
                 x: Number(T.player.state.freePos.x.toFixed(2)),
@@ -205,6 +207,45 @@ try {
                 z: Number(T.player.state.freeTarget.z.toFixed(2)),
               };
               camFov = T.player.state.freeFov;
+              /* INDEPENDENT OCCLUSION WITNESS. The reveal solver picks
+                 the shot; this probe re-derives visibility with its own
+                 rays through the same collision grid - camera to the aim
+                 point, a point above it, and both flanks - so a solver
+                 bug cannot mark its own homework. A ray that gets within
+                 a metre of its sample counts as arrived. */
+            }
+            /* Measured across the WHOLE hold, best frame kept: some
+               reveals are animated uncoverings (the Garner's pit opens
+               under the shot, the Coulter breaches into it), so the
+               honest question is "was the subject seeable during the
+               intro", not "on its first frame". */
+            if (measureNow) {
+              const collide = T.ctx.collide;
+              const samples = [
+                [camTarget.x, camTarget.y, camTarget.z],
+                [camTarget.x, camTarget.y + 3, camTarget.z],
+              ];
+              {
+                const vx = camTarget.x - camPos.x;
+                const vz = camTarget.z - camPos.z;
+                const vl = Math.hypot(vx, vz) || 1;
+                const rx = vz / vl, rz = -vx / vl;
+                samples.push([camTarget.x + rx * 2.5, camTarget.y + 0.5, camTarget.z + rz * 2.5]);
+                samples.push([camTarget.x - rx * 2.5, camTarget.y + 0.5, camTarget.z - rz * 2.5]);
+              }
+              let clear = 0;
+              for (const sm of samples) {
+                const dx = sm[0] - camPos.x;
+                const dy = sm[1] - camPos.y;
+                const dz = sm[2] - camPos.z;
+                const len = Math.hypot(dx, dy, dz);
+                if (len < 1.5) { clear += 1; continue; }
+                const reach = Math.max(0.5, len - 1.0);
+                const hit = collide.rayBlock(camPos.x, camPos.y, camPos.z,
+                  dx / len, dy / len, dz / len, reach, true);
+                if (!(hit < reach)) clear += 1;
+              }
+              visibility = Math.max(visibility ?? 0, clear / samples.length);
             }
           }
         }
@@ -224,6 +265,7 @@ try {
           camPos,
           camTarget,
           camFov,
+          visibility,
           freeReleased,
         };
       }, { key: b.key, angle: a.angle });
@@ -233,7 +275,7 @@ try {
 
     // Log angle details
     for (const p of camPoses) {
-      console.log(`    [${p.name}] sawFree: ${p.sawFree}, camPos: ${p.camPos ? `(${p.camPos.x}, ${p.camPos.y}, ${p.camPos.z})` : "none"}, released: ${p.freeReleased}, phase: ${p.lastPhase}`);
+      console.log(`    [${p.name}] sawFree: ${p.sawFree}, camPos: ${p.camPos ? `(${p.camPos.x}, ${p.camPos.y}, ${p.camPos.z})` : "none"}, vis: ${p.visibility ?? "—"}, released: ${p.freeReleased}, phase: ${p.lastPhase}`);
     }
 
     // Check 1: Intro camera played for this boss
@@ -256,7 +298,15 @@ try {
       invariant,
       `cam: (${firstPos?.x}, ${firstPos?.y}, ${firstPos?.z}) -> target: (${firstTarget?.x}, ${firstTarget?.y}, ${firstTarget?.z})`);
 
-    // Check 3: Camera is cleanly released back to the player
+    // Check 3: the boss is actually SEEABLE from the chosen camera -
+    // the whole point of an intro. At least 3 of 4 body rays must
+    // arrive from every approach angle.
+    const worstVisibility = Math.min(...camPoses.map((p) => p.visibility ?? 0));
+    check(`${b.name} intro camera has line of sight to the boss (not behind scenery)`,
+      worstVisibility >= 0.75,
+      `worst angle sees ${(worstVisibility * 100).toFixed(0)}% of body rays`);
+
+    // Check 4: Camera is cleanly released back to the player
     const allReleased = camPoses.every((p) => p.freeReleased);
     check(`${b.name} intro camera releases back to player when alert completes`, allReleased);
 

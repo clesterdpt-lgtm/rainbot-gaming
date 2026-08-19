@@ -160,6 +160,7 @@ import {
   sstep,
 } from "saintfall/core.js";
 import { patchBasicMaterial } from "saintfall/art.js";
+import { revealCamera } from "saintfall/reveal-camera.js";
 import { applySurface, setSurfaceDamage } from "saintfall/boss-surface.js";
 import { DISTRICTS } from "saintfall/terrain.js";
 import { SURVIVAL_CONFIG } from "saintfall/combat.js";
@@ -187,7 +188,9 @@ export const ABBESS_CONFIG = Object.freeze({
      walk into. */
   aggroRadius: 58,
   rouseSeconds: 4.6,
-  arenaRadius: 104,
+  // The site ring (district-bosses reads this). Enlarged m101; stays
+  // inside disengageRadius so the ring fires before the leash.
+  arenaRadius: 148,
   disengageRadius: 210,
   disengageSeconds: 14,
   retireSeconds: 5.0,
@@ -3728,8 +3731,19 @@ export function buildAbbess(ctx) {
       const sz = Math.cos(C.yaw);
       const camX = C.lairX - sx * (C.abdomenLength + 16) - sz * 9;
       const camZ = C.lairZ - sz * (C.abdomenLength + 16) + sx * 9;
-      ctx.player.setFree(true, [camX, groundAt(camX, camZ) + 7, camZ],
-        [C.lairX, floorY + 3.5, C.lairZ], 50);
+      /* Ray-tested before use: sixteen spires lean inward over the
+         Throat, and from some of their gaps this down-the-length shot
+         opens on a spire flank instead of the queen. The solver keeps
+         the authored framing when it can see her and walks the fan
+         when it cannot. See reveal-camera.js. */
+      revealCamera(ctx, {
+        label: "abbess",
+        preferred: [camX, groundAt(camX, camZ) + 7, camZ],
+        target: [C.lairX, floorY + 3.5, C.lairZ],
+        halfHeight: 6, halfWidth: 7,
+        floorY: floorY + 1,
+        fov: 50,
+      });
       state.releaseCameraAt = 0.8;
     }
   }

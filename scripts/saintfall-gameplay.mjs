@@ -369,8 +369,10 @@ try {
     const s = T.mission.state;
     s.phase = "districtBosses";
     s.deaths = 0;
-    s.reinforcements = 5;
     s.countedDeath = false;
+    // No auto-respawn (m101): the combat section above dies on purpose,
+    // so put the subject back on its feet the way a loaded record would.
+    if (T.combat.player.dead) T.combat.respawn();
   });
 
   console.log("\n=== STRATAGEMS ===");

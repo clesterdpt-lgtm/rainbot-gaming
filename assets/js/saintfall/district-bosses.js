@@ -11,23 +11,31 @@
    ============================================================ */
 
 import { ABBESS_CONFIG } from "saintfall/abbess.js";
+import { APOSTATE_CONFIG } from "saintfall/apostate.js";
 import { clamp, makeBus } from "saintfall/core.js";
 import { GARNER_CONFIG } from "saintfall/garner.js";
+import { revealCamera } from "saintfall/reveal-camera.js";
 import { STYLITE_CONFIG } from "saintfall/stylite.js";
-import { DISTRICTS } from "saintfall/terrain.js";
+import { DISTRICTS, MATRIARCH_ARENA } from "saintfall/terrain.js";
 
 export const DISTRICT_BOSS_SITES = Object.freeze([
   Object.freeze({
     key: "censer", district: "Censer Works", boss: "The Winnower",
     order: "DESTROY THE WINNOWER", enemyKey: "winnower",
     x: DISTRICTS.censer.x, z: DISTRICTS.censer.z,
-    arenaRadius: 98, domain: "winnower",
+    /* Arena rings grew ~40% across the board (m101): the old rings
+       were tight enough that ordinary dodging brushed the exit
+       warning, and a fight that keeps threatening to reset itself
+       reads as a wall, not a territory. Each ring stays well inside
+       its module's own disengage leash, which is the invariant that
+       keeps "you left the arena" firing before "the boss lost you". */
+    arenaRadius: 140, domain: "winnower",
   }),
   Object.freeze({
     key: "scar", district: "Glass Scar", boss: "The Distaff",
     order: "BREAK THE DISTAFF", enemyKey: "distaff",
     x: DISTRICTS.scar.x, z: DISTRICTS.scar.z,
-    arenaRadius: 92, domain: "distaff",
+    arenaRadius: 132, domain: "distaff",
   }),
   Object.freeze({
     key: "ossuary", district: "The Ossuary", boss: "The Garner",
@@ -38,7 +46,7 @@ export const DISTRICT_BOSS_SITES = Object.freeze([
        pit that moved without this following it would put the reset
        ring a hundred metres off the thing it is supposed to contain. */
     x: GARNER_CONFIG.pitX, z: GARNER_CONFIG.pitZ,
-    arenaRadius: 112, aggroRadius: GARNER_CONFIG.aggroRadius,
+    arenaRadius: GARNER_CONFIG.arenaRadius, aggroRadius: GARNER_CONFIG.aggroRadius,
     domain: "garner", stage: "district",
   }),
   Object.freeze({
@@ -49,7 +57,7 @@ export const DISTRICT_BOSS_SITES = Object.freeze([
        Taken from the encounter rather than restated so the arena centre
        and the queen cannot drift apart. */
     x: ABBESS_CONFIG.lairX, z: ABBESS_CONFIG.lairZ,
-    arenaRadius: 104, aggroRadius: ABBESS_CONFIG.aggroRadius,
+    arenaRadius: ABBESS_CONFIG.arenaRadius, aggroRadius: ABBESS_CONFIG.aggroRadius,
     domain: "abbess",
   }),
   Object.freeze({
@@ -67,8 +75,12 @@ export const DISTRICT_BOSS_SITES = Object.freeze([
        exports rather than a spare model being found a home. */
     key: "reach", district: "The Gilded Reach", boss: "The Matriarch",
     order: "SLAY THE MATRIARCH", enemyKey: "matriarch",
-    x: DISTRICTS.reach.x + 18, z: DISTRICTS.reach.z - 12,
-    arenaRadius: 102, aggroRadius: 66, domain: "district",
+    /* Taken from terrain.js's MATRIARCH_ARENA - the flattened pan
+       the height field carves and world.js keeps its masts out of -
+       so the encounter, the ground and the prop keep-clear cannot
+       drift apart. */
+    x: MATRIARCH_ARENA.x, z: MATRIARCH_ARENA.z,
+    arenaRadius: 145, aggroRadius: 66, domain: "district",
   }),
   Object.freeze({
     key: "saint", district: "The Fallen Saint", boss: "The Coulter",
@@ -250,18 +262,41 @@ export function buildDistrictBosses(ctx) {
     record.revealed = true;
     if (ctx.player?.setFree && !ctx.player.state.free) {
       const inst = record.instance;
+      const groundAt = (x, z) => ctx.collide?.groundHeight?.(x, z)
+        ?? ctx.terrain.heightAt(x, z);
       if (record.site.key === "reach") {
-        // Matriarch: open golden dune sands of the Gilded Reach
+        // Matriarch: the flattened pan at the heart of the Gilded Reach.
+        // The authored shot is ray-tested and re-framed if blocked - see
+        // reveal-camera.js.
         const camX = inst.x - 18;
         const camZ = inst.z + 24;
-        const ground = ctx.collide?.groundHeight?.(camX, camZ) ?? ctx.terrain.heightAt(camX, camZ);
-        ctx.player.setFree(true, [camX, ground + 3.8, camZ], [inst.x, inst.y + 2.2, inst.z], 48);
+        revealCamera(ctx, {
+          label: "matriarch",
+          preferred: [camX, groundAt(camX, camZ) + 3.8, camZ],
+          target: [inst.x, inst.y + 2.2, inst.z],
+          halfHeight: 3.5, halfWidth: 3,
+          floorY: inst.y + 0.4,
+          fov: 48,
+        });
       } else if (record.site.key === "saint") {
-        // Coulter: elevated dune vantage point overlooking the Fallen Saint sand arena
+        /* Coulter: elevated dune vantage over the Fallen Saint basin.
+           The animal itself is still BURIED at reveal - inst.y is
+           sixteen metres under the pan - so the shot frames the sand
+           it is about to come out of, never a point underground (a
+           subterranean target reads as "blocked" to every ray and
+           would send the solver hunting for a view that cannot
+           exist). */
         const camX = inst.x - 38;
         const camZ = inst.z + 42;
-        const ground = ctx.collide?.groundHeight?.(camX, camZ) ?? ctx.terrain.heightAt(camX, camZ);
-        ctx.player.setFree(true, [camX, ground + 7.5, camZ], [inst.x, inst.y + 5.0, inst.z], 52);
+        const surfaceY = groundAt(inst.x, inst.z);
+        revealCamera(ctx, {
+          label: "coulter",
+          preferred: [camX, groundAt(camX, camZ) + 7.5, camZ],
+          target: [inst.x, Math.max(inst.y + 5.0, surfaceY + 4), inst.z],
+          halfHeight: 6, halfWidth: 6,
+          floorY: surfaceY + 1,
+          fov: 52,
+        });
       }
     }
   }
@@ -454,9 +489,94 @@ export function buildDistrictBosses(ctx) {
     }
   }
 
+  /* A fight is ENGAGED from the moment a boss leaves dormancy until
+     it is dead or fully home again - a wider net than fightActive(),
+     which exists to time arena RESETS and so must exclude intros and
+     walk-homes. Engagement is what gates the autosave and the stray
+     purge: an intro is not a moment to write a save file into, and it
+     is very much a moment the stage should already be clear for. */
+  const ENGAGED_EXEMPT = new Set(["dormant", "dead"]);
+  function statusEngaged(status) {
+    if (!status || status.defeated || status.dead) return false;
+    return !ENGAGED_EXEMPT.has(status.phase);
+  }
+
+  function apostateStatus() {
+    const status = ctx.apostate?.status?.();
+    return status && !status.dead && !ENGAGED_EXEMPT.has(status.phase)
+      ? status : null;
+  }
+
+  /** Is ANY boss fight under way? The one answer save.js asks. */
+  function anyFightActive() {
+    if (apostateStatus()) return true;
+    for (const site of DISTRICT_BOSS_SITES) {
+      if (!siteAvailable(site)) continue;
+      const missionBoss = ctx.mission?.bosses?.find?.((boss) => boss.key === site.key);
+      if (missionBoss?.done) continue;
+      if (statusEngaged(runtimeStatus(site))) return true;
+    }
+    return false;
+  }
+
+  /* ------------------------------------------------------------
+     THE ARENA IS THE BOSS'S ALONE.
+
+     A boss fight is a duel, and every garrison Thresher that wanders
+     into the ring turns it into a brawl the encounter was not tuned
+     for. While a site is engaged, anything inside its ring that the
+     fight did not spawn is removed.
+
+     WHAT IS KEPT is decided by provenance, not species:
+       - the bosses themselves (eventId "district-boss:*",
+         districtBossKey, or the Apostate's own key);
+       - boss-spawned adds (they carry the owner's eventId - the
+         Apostate's and the Undercroft's already did, the Matriarch's
+         brood now inherits hers in combat.brood - or the Abbess's
+         `abbessBornAt` birthmark);
+       - Bloom breach waves (eventId "breach-*"): breaches.js already
+         submerges any wave that touches a protected boss area, and
+         that path banks the wave's health rather than deleting it -
+         racing it with a remove() here would leak that bookkeeping.
+
+     Removal clears the stray's projectiles first, for the reason
+     recorded on the Apostate's dismissOwnedThreats: a deleted Gleaner
+     must not leave its bolts in the air. Boss instances are NEVER
+     removed here - five of the bespoke controllers keep a closure
+     over their instance and cannot recover from losing it.
+     ------------------------------------------------------------ */
+  const PURGE_MARGIN = 24;
+
+  function strayInstance(inst) {
+    if (inst.eventId) return false;
+    if (inst.districtBossKey) return false;
+    if (inst.abbessBornAt) return false;
+    if (inst.key === "apostate") return false;
+    return true;
+  }
+
+  function purgeArenaStrays(cx, cz, radius) {
+    let removed = 0;
+    for (const inst of [...enemies.live]) {
+      if (!strayInstance(inst)) continue;
+      if (Math.hypot(inst.x - cx, inst.z - cz) > radius) continue;
+      ctx.combat?.clearProjectiles?.(inst.id);
+      enemies.remove?.(inst);
+      removed += 1;
+    }
+    return removed;
+  }
+
   function updateArenaBoundaries() {
     const ps = ctx.player?.state;
     if (!ps) return;
+    /* The Apostate is not a district site, but its nave is an arena
+       by every rule that matters here. */
+    const apostate = apostateStatus();
+    if (apostate) {
+      purgeArenaStrays(APOSTATE_CONFIG.arenaX, APOSTATE_CONFIG.arenaZ,
+        (APOSTATE_CONFIG.disengageRadius || APOSTATE_CONFIG.arenaRadius) + PURGE_MARGIN);
+    }
     for (const site of DISTRICT_BOSS_SITES) {
       const state = boundary.get(site.key);
       const missionBoss = ctx.mission?.bosses?.find?.((boss) => boss.key === site.key);
@@ -472,6 +592,9 @@ export function buildDistrictBosses(ctx) {
         continue;
       }
       const status = runtimeStatus(site);
+      if (statusEngaged(status)) {
+        purgeArenaStrays(site.x, site.z, site.arenaRadius + PURGE_MARGIN);
+      }
       const dist = Math.hypot(ps.x - site.x, ps.z - site.z);
       const warningRadius = site.warningRadius || site.arenaRadius + APPROACH_PADDING;
       const active = fightActive(status);
@@ -712,6 +835,7 @@ export function buildDistrictBosses(ctx) {
     restore,
     ensureSpawned,
     insideArena,
+    anyFightActive,
     reset(key) {
       const record = records.get(key);
       if (!record) return false;

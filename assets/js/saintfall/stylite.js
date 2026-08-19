@@ -124,6 +124,7 @@ import {
   TAU, clamp, clamp01, damp, dampAngle, lerp, makeBus, makeRng, smoothstep,
 } from "saintfall/core.js";
 import { patchMaterial } from "saintfall/art.js";
+import { revealCamera } from "saintfall/reveal-camera.js";
 import { applySurface, setSurfaceDamage } from "saintfall/boss-surface.js";
 import { DISTRICTS } from "saintfall/terrain.js";
 import { SURVIVAL_CONFIG } from "saintfall/combat.js";
@@ -134,7 +135,10 @@ export const STYLITE_CONFIG = Object.freeze({
 
   aggroRadius: 78,
   rouseSeconds: 3.4,
-  arenaRadius: 96,
+  /* The site ring district-bosses resets the fight on. Enlarged with
+     every other arena (m101); still inside disengageRadius, so the
+     ring always fires before the leash. */
+  arenaRadius: 138,
   disengageRadius: 220,
   disengageSeconds: 14,
   retireSeconds: 4.0,
@@ -2752,8 +2756,20 @@ export function buildStylite(ctx) {
       const camX = state.pos.x + 22;
       const camZ = state.pos.z + 26;
       const camY = groundAt(camX, camZ) + 3.8;
-      ctx.player.setFree(true, [camX, camY, camZ],
-        [state.pos.x, state.pos.y, state.pos.z], 52);
+      /* Ray-tested before use. The Choir is a forest of the exact
+         thing that blocks a ground-level shot at a crown-height body:
+         from a third of the compass this authored lens opened on the
+         flank of a nearer needle. The solver keeps the bearing where
+         it can see the animal and fans around the spiral where it
+         cannot. See reveal-camera.js. */
+      revealCamera(ctx, {
+        label: "stylite",
+        preferred: [camX, camY, camZ],
+        target: [state.pos.x, state.pos.y, state.pos.z],
+        halfHeight: 4.5, halfWidth: 4,
+        floorY: state.pos.y - 1.5,
+        fov: 52,
+      });
       state.releaseCameraAt = 0.7;
     }
   }

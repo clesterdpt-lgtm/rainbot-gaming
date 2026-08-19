@@ -40,7 +40,7 @@ import {
 import { makeKit, mergeGeometries, cleanGeometry } from "saintfall/structures.js";
 import {
   DISTRICTS, ROAD_PATH, FOSSE_PATH, MAP_HALF, DROP_SITE,
-  CHUNK_SIZE, LOD_CELLS, GARNER_PIT,
+  CHUNK_SIZE, LOD_CELLS, GARNER_PIT, MATRIARCH_ARENA, STYLITE_ARENA,
 } from "saintfall/terrain.js";
 import { makeRamp } from "saintfall/core.js";
 
@@ -3403,10 +3403,17 @@ export async function buildWorld(ctx, onProgress) {
       batch.add("choir", "rock", g);
     }
 
-    /* --- the shrine at the foot of the tallest --- */
+    /* --- the shrine at the arena's edge --- */
     {
-      const sx = d.x + 26;
-      const sz = d.z - 14;
+      /* It stood at (d.x+26, d.z-14) - thirty metres from the arena
+         centre, a 5.4m altar and nine plinthed statues exactly where
+         a downed Stylite is meleed. The Glass Scar already taught
+         this lesson (the crater-centre lance blocked every bolt
+         thrown east); the shrine keeps its POI and its fire but
+         moves to the flat pad's edge, inside the arena and clear of
+         the needle-foot crash sites. */
+      const sx = d.x + 72;
+      const sz = d.z + 38;
       const parts = [];
       for (let i = 0; i < 9; i += 1) {
         const a = (i / 9) * TAU;
@@ -3718,8 +3725,29 @@ export async function buildWorld(ctx, onProgress) {
         // A line marching across the dunes, perpendicular to the
         // wind, so they read as deliberate rather than scattered.
         const t = i / 16;
-        const x = d.x - 300 + t * 620 + rng.jit(40);
-        const z = d.z - 190 + t * 300 + rng.jit(60);
+        let x = d.x - 300 + t * 620 + rng.jit(40);
+        let z = d.z - 190 + t * 300 + rng.jit(60);
+        /* THE MATRIARCH'S CLEARING. The line used to march straight
+           through her arena - mast 8 stood twenty-five metres from
+           the marker, a hex plinth inside melee reach, and her own
+           masonry probe turned her along it mid-fight. Masts that
+           land inside the keep ring are pushed radially to it rather
+           than skipped: a skip deletes a vane from the line (and
+           re-times every rng draw after it), a push bows the line
+           around the clearing, which reads as the builders having
+           respected the same ground. */
+        {
+          const keep = MATRIARCH_ARENA.flatRadius + 22;
+          const mdx = x - MATRIARCH_ARENA.x;
+          const mdz = z - MATRIARCH_ARENA.z;
+          const md = Math.hypot(mdx, mdz);
+          if (md < keep) {
+            const nx = md > 1e-6 ? mdx / md : 1;
+            const nz = md > 1e-6 ? mdz / md : 0;
+            x = MATRIARCH_ARENA.x + nx * keep;
+            z = MATRIARCH_ARENA.z + nz * keep;
+          }
+        }
         const h = rng.range(14, 26);
         masts.push(kit.merge([
           // Terrain-conforming foundation: the visible 1.5m plinth
@@ -4504,6 +4532,13 @@ export async function buildWorld(ctx, onProgress) {
       const tiltX = rng.jit(0.35);
       const yaw = rng() * TAU;
       const tiltZ = rng.jit(0.35);
+      /* Boss-arena keep-clear, applied AFTER every rng draw for this
+         crag so culling one never re-times the stream - cull earlier
+         and all 3,400 downstream boulders silently re-scatter. */
+      if (Math.hypot(x - MATRIARCH_ARENA.x, z - MATRIARCH_ARENA.z)
+        < MATRIARCH_ARENA.flatRadius + 22) continue;
+      if (Math.hypot(x - STYLITE_ARENA.x, z - STYLITE_ARENA.z)
+        < STYLITE_ARENA.flatRadius + 9) continue;
       restOnTerrain(g, x, z, { rot: [tiltX, yaw, tiltZ], maxGap: 0.08 });
       paintH(g, ramp, { normalWeight: 0.5, jitter: 0.22, noise: 0.35 });
       if (!perBucket.has(mat)) perBucket.set(mat, []);

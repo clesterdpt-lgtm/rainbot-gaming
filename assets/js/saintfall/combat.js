@@ -2725,6 +2725,11 @@ export function buildCombat(ctx) {
       const kid = enemies.spawn("thresher", x, z, {
         yaw: inst.yaw + Math.PI,
         emerge: { delay: i * 0.12, duration: 1.05, depth: 1.2 },
+        /* The mother's provenance rides along. The arena purge in
+           district-bosses keeps anything the fight itself spawned,
+           and it decides by eventId - an untagged clutch would be
+           swept off the sand the frame it hatched. */
+        eventId: inst.eventId || null,
       });
       if (!kid) continue;
       // Born awake and looking at you. A clutch that has to notice
@@ -3202,8 +3207,13 @@ export function buildCombat(ctx) {
 
     if (player.dead) {
       clearEnemyProjectiles();
-      player.respawnIn -= dt;
-      if (player.respawnIn <= 0) respawn();
+      /* NO AUTOMATIC RESPAWN (m101). Death holds the field: the death
+         screen in ui.js offers the autosave, the manual records and a
+         restart, and loading is what puts a living trooper back on
+         the sand - combat.restore() force-revives by design. The
+         timer still runs down because it is the death presentation's
+         clock: ui.js reveals the screen off it. */
+      player.respawnIn = Math.max(0, player.respawnIn - dt);
       return;
     }
 
@@ -3395,6 +3405,10 @@ export function buildCombat(ctx) {
     projectileConfig: GLEANER_PROJECTILE_CONFIG,
     strikeState,
     cancelStrike,
+    /** The old auto-respawn primitive, kept callable for harnesses
+     *  and for any future "restart from the drop" flow. Nothing in
+     *  the game calls it on a timer any more - see update(). */
+    respawn,
     enemyMeleeConfig: ENEMY_MELEE_CONFIG,
     meleeConfig: MELEE_CONFIG,
     update,

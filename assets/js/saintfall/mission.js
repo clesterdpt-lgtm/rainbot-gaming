@@ -78,7 +78,6 @@ export const STRATAGEMS = {
        green, which now means venom and nothing else. */
     colour: "#ffd27a",
     heals: true,
-    reinforcements: 0,
     boon: {
       seconds: 20,
       /* Chosen so the rite is felt on the shot rather than read on a
@@ -239,8 +238,6 @@ export function buildMission(ctx) {
     extractTimer: 0,
     elapsed: 0,
     deaths: 0,
-    reinforcements: 5,
-    maxReinforcements: 5,
     banner: null,
     bannerFor: 0,
     /* THE BOON. One timer and two multipliers, owned here because this
@@ -849,10 +846,6 @@ export function buildMission(ctx) {
          old ammunition refill is kept as the heat purge it became. */
       if (ctx.weapons && ctx.weapons.resupply) ctx.weapons.resupply();
       ctx.jetpack?.restoreCharge?.(ctx.jetpack?.config?.maxFuel || 100, "gilding-rite");
-      state.reinforcements = Math.min(
-        state.maxReinforcements,
-        state.reinforcements + (spec.reinforcements || 0)
-      );
       grantBoon(spec.boon, shot.key);
       if (shot.sanctuary) createSanctuary(shot, shot.sanctuary);
       say("GILDED", 2.4);
@@ -1292,17 +1285,14 @@ export function buildMission(ctx) {
       }
     }
 
-    // Deaths and the reinforcement budget.
+    /* Deaths are counted, never budgeted (m101). The reinforcement
+       stock and its "MISSION FAILED" exhaustion are gone: dying holds
+       the field until the player restores a record - the death screen
+       in ui.js owns that conversation - so a death costs exactly what
+       the last save did not capture, which is the honest price. */
     if (combat.player.dead && !state.countedDeath) {
       state.countedDeath = true;
       state.deaths += 1;
-      state.reinforcements -= 1;
-      if (state.reinforcements < 0) {
-        state.reinforcements = 0;
-        state.phase = "lost";
-        say("MISSION FAILED - NO REINFORCEMENTS", 99);
-        bus.emit("lost", {});
-      }
     } else if (!combat.player.dead) {
       state.countedDeath = false;
     }
@@ -1319,8 +1309,6 @@ export function buildMission(ctx) {
       extractTimer: Number(Math.max(0, state.extractTimer).toFixed(3)),
       elapsed: Number(state.elapsed.toFixed(3)),
       deaths: state.deaths,
-      reinforcements: state.reinforcements,
-      maxReinforcements: state.maxReinforcements,
       relays: relays.map((relay) => ({
         key: relay.key,
         done: relay.done,
@@ -1385,10 +1373,6 @@ export function buildMission(ctx) {
     state.extractTimer = Math.max(0, Number(saved.extractTimer) || 0);
     state.elapsed = Math.max(0, Number(saved.elapsed) || 0);
     state.deaths = Math.max(0, Math.round(Number(saved.deaths) || 0));
-    state.maxReinforcements = Math.max(1,
-      Math.round(Number(saved.maxReinforcements) || 5));
-    state.reinforcements = Math.max(0, Math.min(state.maxReinforcements,
-      Math.round(Number(saved.reinforcements) || 0)));
     state.channelling = null;
     state.countedDeath = false;
     state.banner = null;
@@ -1559,7 +1543,6 @@ export function buildMission(ctx) {
         relays: `${state.relaysDone}/${relays.length}`,
         bosses: `${state.bossesDone}/${bosses.length}`,
         districts: `${districtProgress().done}/${districtProgress().total}`,
-        reinforcements: state.reinforcements,
         elapsed: Math.round(state.elapsed),
       };
     },

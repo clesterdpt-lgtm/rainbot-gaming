@@ -81,6 +81,7 @@ import {
   TAU, clamp, clamp01, damp, dampAngle, lerp, makeBus,
 } from "saintfall/core.js";
 import { PALETTE, patchBasicMaterial } from "saintfall/art.js";
+import { revealCamera } from "saintfall/reveal-camera.js";
 import { applySurface, setSurfaceDamage } from "saintfall/boss-surface.js";
 import { DISTRICTS } from "saintfall/terrain.js";
 import { buildReliquaryFigure } from "saintfall/player.js";
@@ -1775,9 +1776,17 @@ export async function buildApostate(ctx) {
     if (ctx.player?.setFree && !ctx.player.state.free) {
       const camX = inst.x + 9.4;
       const camZ = inst.z + 9.8;
-      ctx.player.setFree(true,
-        [camX, groundAt(camX, camZ) + 3.5, camZ],
-        [inst.x, inst.y + 1.25, inst.z], 44);
+      /* Ray-tested before use: the nave has columns and a throne, and
+         a mirror revealed behind one is a voice with no body. See
+         reveal-camera.js. */
+      revealCamera(ctx, {
+        label: "apostate",
+        preferred: [camX, groundAt(camX, camZ) + 3.5, camZ],
+        target: [inst.x, inst.y + 1.25, inst.z],
+        halfHeight: 2.4, halfWidth: 1.4,
+        floorY: inst.y - 0.4,
+        fov: 44,
+      });
       state.releaseCameraAt = 0;
     }
     return true;

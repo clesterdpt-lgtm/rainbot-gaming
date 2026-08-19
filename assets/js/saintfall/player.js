@@ -1971,10 +1971,8 @@ function makeInput(canvas, captureMeleeAim = null) {
        One key, one swing: main.js takes the rite over for the length
        of the animation and hands it back.
 
-       Q is the panic button - it is what you hit with something
-       already on top of you - so it belongs under the finger that
-       is nearest WASD. */
-    if (k === "KeyQ") {
+       F is the melee key. */
+    if (k === "KeyF") {
       /* Bind the swing to the reticle that existed at keydown. The
          event is drained after player.update(), so sampling there
          would let mouse-look during the same frame silently redirect
@@ -1985,7 +1983,7 @@ function makeInput(canvas, captureMeleeAim = null) {
     else if (k === "KeyR") state.events.push({ type: "vent" });
     /* SHIFT IS THE BOOST. One key: tapped it is a burst, held it is a
        glide, and held with Space it is the jetpack - which is the
-       whole reason it can also be the burst. F is the command-wheel
+       whole reason it can also be the burst. Q is the command-wheel
        hold, owned by ui.js, so this file only swallows the key.
        E is the Aegis block. */
     else if (k === "ShiftLeft" || k === "ShiftRight") {
@@ -2292,6 +2290,7 @@ export async function createPlayer(ctx, canvas) {
      sprint, but takes longer to build and shed that momentum. */
   const WALK = 4.4;
   const SPRINT = 8.6;
+  const MELEE_THRUST_SPEED = 12.8;
   /* Fraction of the ordinary speed kept while sighted, and the field
      of view the camera pulls to. 0.46 of a walk is a deliberate
      shuffle; 40 degrees against a 62-degree hip view is a 1.55x zoom,
@@ -3610,6 +3609,9 @@ export async function createPlayer(ctx, canvas) {
     state.sighted = damp(state.sighted, sightWant,
       sightWant > state.sighted ? 11 : 8, dt);
 
+    const isMeleeAction = !!(action.name && action.name.startsWith("melee"));
+    const isForwardMelee = isMeleeAction && mz < -0.1;
+
     const target = boostMode
       ? boostState.speed
       : shieldMode
@@ -3617,16 +3619,9 @@ export async function createPlayer(ctx, canvas) {
           ? shieldState.moveSpeed : ctx.shield.config.moveSpeed)
         : flightMode
           ? (jetState.active ? ctx.jetpack.config.cruiseSpeed : ctx.jetpack.config.glideSpeed)
-          /* ONE ground speed now, and it is what Shift used to buy.
-             WALK survives for a committed swing. NOBODY SPRINTS THROUGH
-             A MELEE - and mechanically they cannot, because the gait
-             predicts foot plants from the resolved travel vector, and
-             strafing at full stride while the body is locked to the
-             swing bearing spreads the plants past the point where both
-             feet leave the ground at once. That reads as scissoring, and
-             it is what the melee gait check in
-             `saintfall-melee-reticle-probe.mjs` measures. */
-          : (action.name ? WALK : SPRINT);
+          : isForwardMelee
+            ? MELEE_THRUST_SPEED
+            : (action.name ? WALK : SPRINT);
     /* Sighted movement is a walk at best. The multiplier is applied to
        the TARGET rather than gating sprint, so it also removes the
        sprint option by arithmetic: 8.6 * 0.46 is below the 4.4 walk,
@@ -3675,7 +3670,7 @@ export async function createPlayer(ctx, canvas) {
       state.speed += clamp(wanted - state.speed, -rate * dt, rate * dt);
     } else {
       const speedResponse = wanted > state.speed
-        ? (shieldMode ? 7.5 : 3.4)
+        ? (isForwardMelee ? 18.0 : (shieldMode ? 7.5 : 3.4))
         : 5.4;
       state.speed = damp(state.speed, wanted, speedResponse, dt);
     }

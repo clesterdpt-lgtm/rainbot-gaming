@@ -3605,14 +3605,28 @@ export function installQa(ctx, api) {
        duplication, it is the contract being exercised twice.
        ------------------------------------------------------------ */
     garnerState: () => (api.garner)?.status?.() || null,
+    /** Stand near the pit, INSIDE the encounter's reach.
+     *
+     *  Every caller means "put me where the Garner fight happens", and
+     *  they were all written against a 64m aggro as plain numbers - 40,
+     *  30. When the aggro dropped to 34 (so the fight can no longer
+     *  open out on the pan, where the mouth is below the lip of its own
+     *  funnel and unhittable), a probe asking for 40 was suddenly
+     *  standing outside the encounter entirely: nine checks failed in a
+     *  row, none of them about aggro. The offset is therefore a request
+     *  rather than an order, clamped to inside the wake radius. A probe
+     *  that deliberately wants to be OUTSIDE aggro should use
+     *  `_teleportRaw` and say so. */
     teleportToGarner(offset = 40) {
       const g = api.garner?.status?.() || api.garner?.config;
       if (!g) return null;
+      const aggro = api.garner?.config?.aggroRadius;
+      const reach = Number.isFinite(aggro) ? Math.min(offset, aggro - 4) : offset;
       const x = Number.isFinite(g.x) ? g.x : g.pitX;
       const z = Number.isFinite(g.z) ? g.z : g.pitZ;
-      hook._teleportRaw(x - offset, z, 0);
+      hook._teleportRaw(x - reach, z, 0);
       hook.setBodyHeading?.(0);
-      return { x: x - offset, z };
+      return { x: x - reach, z };
     },
     forceGarnerPhase(phase, timer) {
       return api.garner?.forcePhase?.(phase, timer) ?? null;

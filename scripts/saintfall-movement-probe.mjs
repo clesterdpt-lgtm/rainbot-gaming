@@ -838,20 +838,41 @@ async function main() {
     /* ---------------------------------------------------------------
        9. THE SLAM'S GUARDS
 
-       Grounded Q must remain the melee swing, and the slam must
+       Grounded F must remain the melee swing, and the slam must
        refuse to chain into itself.
        --------------------------------------------------------------- */
     await stage({ yaw: 0 });
-    await page.keyboard.press("KeyQ");
+    await page.keyboard.press("KeyF");
     await step(0.1);
     const groundQ = await page.evaluate(() => ({
       slam: window.__SF.slamState(), action: window.__SF.player.state.action || null,
       mode: window.__SF.weapons?.current?.spec?.melee ?? null,
     }));
     await step(1.4);
-    check("Q on the ground is still the melee swing, not a slam",
+    check("F on the ground is still the melee swing, not a slam",
       !groundQ.slam.active && groundQ.slam.lastReason !== "impact",
       `slam active=${groundQ.slam.active}, reason=${groundQ.slam.lastReason}`);
+
+    /* Moving forward with melee thrusts the player forward faster than sprint. */
+    await stage({ yaw: 0 });
+    await page.keyboard.down("KeyW");
+    await step(0.4);
+    const sprintSpeed = await page.evaluate(() => window.__SF.player.state.speed);
+    await page.keyboard.press("KeyF");
+    let peakMeleeSpeed = 0;
+    for (let i = 0; i < 30; i += 1) {
+      await step(1 / 60);
+      const s = await page.evaluate(() => ({
+        speed: window.__SF.player.state.speed,
+        action: window.__SF.player.action,
+      }));
+      if (s.speed > peakMeleeSpeed) peakMeleeSpeed = s.speed;
+      if (!s.action) break;
+    }
+    await page.keyboard.up("KeyW");
+    check("W + F forward melee thrusts the player forward faster than sprint",
+      peakMeleeSpeed > 11.0 && peakMeleeSpeed > sprintSpeed,
+      `sprint=${sprintSpeed.toFixed(2)} m/s, peak melee thrust=${peakMeleeSpeed.toFixed(2)} m/s`);
 
     await stage({ yaw: 0 });
     await page.keyboard.down("ShiftLeft");
@@ -859,13 +880,13 @@ async function main() {
     await step(1.2);
     await page.keyboard.up("Space");
     await page.keyboard.up("ShiftLeft");
-    await page.keyboard.press("KeyQ");
+    await page.keyboard.press("KeyF");
     for (let i = 0; i < 300; i += 1) {
       await step(1 / 120, 1 / 120);
       if (!(await page.evaluate(() => window.__SF.slamState().active))) break;
     }
     const cooling = await page.evaluate(() => window.__SF.slamState());
-    await page.keyboard.press("KeyQ");
+    await page.keyboard.press("KeyF");
     await step(0.05);
     const rechain = await page.evaluate(() => window.__SF.slamState());
     report.states.guards = { groundQ, cooling, rechain };

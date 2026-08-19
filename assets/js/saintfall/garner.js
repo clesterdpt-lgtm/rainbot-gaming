@@ -200,7 +200,24 @@ export const GARNER_CONFIG = Object.freeze({
      the other half of that arithmetic. */
   keepOutScale: 1.37,
 
-  aggroRadius: 64,
+  /* WHERE THE FIGHT MAY START, and it is bounded by where the animal
+     can be FOUGHT rather than by how far off it can notice someone.
+
+     At 64 it opened the encounter from out on the pan - bar up, order
+     posted, "CLOSE THE GARNER · 45M" - while the mouth sat eleven
+     metres below the lip of its own funnel. Measured from there, every
+     shot at the throat was stopped by the ground 3.8m in front of the
+     muzzle (of a 48.6m sightline) and every shot at the collar at
+     5.3m: a thirty-metre band in which the HUD insisted a boss fight
+     was happening and nothing the player did could touch it. That is
+     what "the Ossuary boss takes no damage" is.
+
+     34 is inside GARNER_PIT.rimRadius (36), so the encounter opens
+     with the player already on the funnel slope looking down into it -
+     which is also the read the pit was built for: flat ground, and
+     then suddenly not. The surprise is unchanged; what changes is that
+     the fight no longer begins before the player can join it. */
+  aggroRadius: 34,
   breachSeconds: 5.2,
   /* Past this and unengaged long enough it seals and resets - the same
      soft-lock guard every other boss carries. A player who pulls it,

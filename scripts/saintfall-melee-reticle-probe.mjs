@@ -192,7 +192,7 @@ async function main() {
     await page.keyboard.down("KeyA");
     /* Real input is non-negotiable here: this must cover the window
        key listener, repeat suppression, event queue and main handler. */
-    await page.keyboard.press("KeyQ");
+    await page.keyboard.press("KeyF");
     /* Move camera intent before the next simulation frame drains Q.
        The committed bearing must come from the key event, not from
        meleeSwing() sampling after player.update applies this change. */
@@ -261,7 +261,7 @@ async function main() {
         ? Math.atan2(displacementX, displacementZ)
         : expectedMoveYaw;
       return {
-        input: { melee: "page.keyboard.press(KeyQ)", heldMovement: "KeyA" },
+        input: { melee: "page.keyboard.press(KeyF)", heldMovement: "KeyA" },
         hitWindow: hit,
         framesBeforeHit,
         started,
@@ -311,13 +311,13 @@ async function main() {
       return Q.snapshot();
     });
 
-    /* Consumer-routing adversary: real Q must create the event, then
+    /* Consumer-routing adversary: real F must create the event, then
        a distinct sentinel bearing is placed in that event before the
        frame drains it. This isolates main.js forwarding from the
        keydown-capture assertion above; sampling the live reticle in
        meleeSwing() would face 0deg and fail the 120deg sentinel. */
     await page.evaluate(() => window.__SF_MELEE_RETICLE_QA.reset(0, 0));
-    await page.keyboard.press("KeyQ");
+    await page.keyboard.press("KeyF");
     const eventRouting = await page.evaluate(() => {
       const T = window.__SF;
       const Q = window.__SF_MELEE_RETICLE_QA;
@@ -345,12 +345,12 @@ async function main() {
        BUFFERED COMBO
 
        melee1 starts at 0deg. During its recovery the camera settles
-       at +90deg and a second real Q is accepted. The camera then moves
+       at +90deg and a second real F is accepted. The camera then moves
        to -90deg and D stays held. melee2 must turn toward the bearing
-       that existed when Q was processed, not either later influence.
+       that existed when F was processed, not either later influence.
        ---------------------------------------------------------- */
     await page.evaluate(() => window.__SF_MELEE_RETICLE_QA.reset(0, 0));
-    await page.keyboard.press("KeyQ");
+    await page.keyboard.press("KeyF");
     const comboQueueReady = await page.evaluate(() => {
       const T = window.__SF;
       const Q = window.__SF_MELEE_RETICLE_QA;
@@ -359,7 +359,7 @@ async function main() {
       const first = T.player.actionSpec("melee1");
       T.setCam(Math.PI / 2, 0, 5.2);
       /* Strictly beyond the action's >42% buffer threshold, while
-         leaving ample recovery time for the second Q event. */
+         leaving ample recovery time for the second F event. */
       const framesToBuffer = Math.ceil(first.dur * 0.42 * 60) + 1;
       Q.step(framesToBuffer);
       return {
@@ -370,13 +370,13 @@ async function main() {
       };
     });
 
-    await page.keyboard.press("KeyQ");
+    await page.keyboard.press("KeyF");
     await page.keyboard.down("KeyD");
     const bufferedCombo = await page.evaluate(() => {
       const T = window.__SF;
       const Q = window.__SF_MELEE_RETICLE_QA;
 
-      Q.step(1); // process the second real Q while the camera is stable
+      Q.step(1); // process the second real F while the camera is stable
       const queuedAimYaw = T.player.state.aimViewYaw ?? T.player.state.camYaw;
       const afterQueue = Q.snapshot(queuedAimYaw);
       T.setCam(-Math.PI / 2, 0, 5.2);
@@ -394,7 +394,7 @@ async function main() {
       Q.step(Math.ceil((second.hit[1] - second.hit[0]) * 60) + 2);
       const afterSecondHit = Q.snapshot(queuedAimYaw);
       return {
-        input: { melee: "page.keyboard.press(KeyQ)", heldMovement: "KeyD" },
+        input: { melee: "page.keyboard.press(KeyF)", heldMovement: "KeyD" },
         queuedAimDeg: Number((queuedAimYaw * 180 / Math.PI).toFixed(2)),
         afterQueue,
         transitionFrames,

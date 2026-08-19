@@ -456,7 +456,7 @@ async function runProcessionScenario(page) {
   });
 
   async function pressAndResolve(expectedStep) {
-    await page.keyboard.press("KeyQ");
+    await page.keyboard.press("KeyF");
     return await page.evaluate((step) => {
       const T = window.__SF;
       const probe = window.__SF_PROCESSION_FEEDBACK_QA;
@@ -500,7 +500,7 @@ async function runProcessionScenario(page) {
     T.renderOnce(1 / 60);
     const peak = probe.snapshot();
     const mechanics = {
-      input: "page.keyboard.press(KeyQ)",
+      input: "page.keyboard.press(KeyF)",
       actions: resolvedActions,
       meleeEvents: probe.meleeEvents,
       weapon: {

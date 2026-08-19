@@ -359,7 +359,7 @@ try {
     `${window_.flat.dealt} damage at y=${window_.flat.hitY}`);
   check("no swing ever reaches a limb raised over the player's head",
     window_.raised.hitY === null
-    || window_.raised.hitY <= window_.raised.feetY + 3.0,
+    || window_.raised.hitY < window_.upMidY - 2.0,
     `mid-span at y=${window_.upMidY}, swing landed at y=${window_.raised.hitY}`);
 
   /* ---- LIMBS AND THE GORGE --------------------------------------------- */
@@ -460,6 +460,96 @@ try {
      ranged-only phase. */
   check("the player can reach the open gullet with a polearm from the lip",
     mouth.swung > 0, `held at ${mouth.held}m, dealt ${Math.round(mouth.swung)}`);
+
+  /* ---- THE FIGHT STARTS WHERE THE FIGHT CAN HAPPEN --------------------
+     Every check above stages the encounter: it teleports in, or forces
+     a phase, and then measures. All of them passed while the encounter
+     was unfightable for its first thirty metres - the bar came up out
+     on the pan at 64m with the mouth eleven metres below the lip of
+     its own funnel, and every shot from there died in the sand 4m from
+     the muzzle. A boss that cannot be reached from where its own aggro
+     opens is the "Ossuary does no damage" report.
+
+     So this walks in the way a player does, stops at the exact metre
+     the encounter wakes, waits out the intro without moving, and only
+     then fires. It asserts the two things the staged tests cannot: the
+     sightline is clear from the waking distance, and a shot from there
+     lands on the animal. */
+  const reachable = await page.evaluate(async () => {
+    const T = window.__SF;
+    const THREE = T.THREE;
+    T.ctx.garner.resetToPit();
+    const C = T.ctx.garner.config;
+    const ps = T.player.state;
+    T.invulnerable(true);
+    // Well outside aggro, out on the open pan.
+    T._teleportRaw(C.pitX + C.aggroRadius + 40, C.pitZ, 0);
+    for (let i = 0; i < 60; i += 1) T.advanceTime(1 / 60, 1 / 60);
+
+    // Walk straight in and STOP the moment the encounter wakes.
+    let wokeAt = null;
+    for (let i = 0; i < 900 && wokeAt === null; i += 1) {
+      const d = Math.hypot(ps.x - C.pitX, ps.z - C.pitZ);
+      ps.x -= ((ps.x - C.pitX) / d) * 0.35;
+      T.advanceTime(1 / 60, 1 / 60);
+      if (T.garnerState().phase !== "dormant") {
+        wokeAt = Math.hypot(ps.x - C.pitX, ps.z - C.pitZ);
+      }
+    }
+    // Hold still through the whole reveal, exactly as a watching player does.
+    for (let i = 0; i < 60 * 12 && T.garnerState().phase === "breach"; i += 1) {
+      T.advanceTime(1 / 60, 1 / 60);
+    }
+    T.releaseCamera();
+    ps.yaw = Math.atan2(C.pitX - ps.x, C.pitZ - ps.z);
+    ps.camYaw = ps.yaw;
+
+    const inst = T.enemies.live.find((e) => e.key === "garner");
+    const eye = new THREE.Vector3(ps.x, ps.y + 1.6, ps.z);
+    const shots = {};
+    for (const name of ["garner_throat", "garner_lip"]) {
+      const b = inst.bones.get(name);
+      b.updateWorldMatrix(true, false);
+      const w = new THREE.Vector3().setFromMatrixPosition(b.matrixWorld);
+      const dir = w.clone().sub(eye);
+      const len = dir.length();
+      dir.normalize();
+      const wall = T.ctx.collide.rayBlock(eye.x, eye.y, eye.z,
+        dir.x, dir.y, dir.z, Math.max(0.5, len - 0.6), true);
+      const hpBefore = inst.health;
+      const legsBefore = inst.legHp.reduce((s, v) => s + v, 0);
+      const hit = T.combat.fire(eye, dir, { damage: 120, range: 260 });
+      shots[name] = {
+        blockedAt: Number.isFinite(wall) ? Number(wall.toFixed(1)) : null,
+        sightline: Number(len.toFixed(1)),
+        hit: !!hit,
+        // Either pool counts: a shot that lands on a tentacle in front
+        // of the mouth is still a shot that reached the animal.
+        dealt: Number(((hpBefore - inst.health)
+          + (legsBefore - inst.legHp.reduce((s, v) => s + v, 0))).toFixed(1)),
+      };
+    }
+    return {
+      aggroRadius: C.aggroRadius,
+      wokeAt: Number((wokeAt ?? -1).toFixed(1)),
+      standAt: Number(Math.hypot(ps.x - C.pitX, ps.z - C.pitZ).toFixed(1)),
+      phase: T.garnerState().phase,
+      shots,
+    };
+  });
+  console.log(`  woke at ${reachable.wokeAt}m (aggro ${reachable.aggroRadius}m), `
+    + `stood at ${reachable.standAt}m in phase ${reachable.phase}`);
+  console.log(`  throat: ${JSON.stringify(reachable.shots.garner_throat)}`);
+  console.log(`  collar: ${JSON.stringify(reachable.shots.garner_lip)}`);
+  check("the encounter wakes with a clear sightline to the animal",
+    reachable.shots.garner_throat.blockedAt === null
+      && reachable.shots.garner_lip.blockedAt === null,
+    `throat blocked at ${reachable.shots.garner_throat.blockedAt}m of `
+      + `${reachable.shots.garner_throat.sightline}m, collar at `
+      + `${reachable.shots.garner_lip.blockedAt}m`);
+  check("a shot from the waking distance reaches the animal",
+    reachable.shots.garner_throat.dealt > 0 && reachable.shots.garner_lip.dealt > 0,
+    `throat ${reachable.shots.garner_throat.dealt}, collar ${reachable.shots.garner_lip.dealt}`);
 
   /* ---- NOTHING WALKS OVER THE MOUTH ------------------------------------ */
   const keepOut = await page.evaluate(() => {

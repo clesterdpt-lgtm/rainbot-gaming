@@ -1256,7 +1256,7 @@ async function desktopPass(browser) {
     return { wheel: T.commandWheelState(), camera: T.player.state.camYaw,
       body: T.player.state.yaw, cooldown: T.mission.cooldowns.cluster };
   });
-  await page.keyboard.down("KeyF");
+  await page.keyboard.down("KeyQ");
   await page.waitForFunction(() => window.__SF.commandWheelState()?.open,
     null, { timeout: 3000 });
   const dialBox = await page.locator(".sf-command-wheel__dial").boundingBox();
@@ -1279,20 +1279,20 @@ async function desktopPass(browser) {
   await page.locator(".sf-stage").screenshot({ path: path.join(OUT, "desktop-command-wheel.png") });
   const openWheel = await page.evaluate(() => window.__SF.commandWheelState());
   
-  // Releasing F without clicking must cancel without dispatching
-  await page.keyboard.up("KeyF");
+  // Releasing Q without clicking must cancel without dispatching
+  await page.keyboard.up("KeyQ");
   await page.waitForFunction(() => !window.__SF.commandWheelState()?.open,
     null, { timeout: 4000 });
   const cancelledWheel = await page.evaluate(() => ({
     wheel: window.__SF.commandWheelState(),
     cooldown: window.__SF.mission.cooldowns.cluster,
   }));
-  check("releasing F without clicking cancels the command wheel without dispatching",
+  check("releasing Q without clicking cancels the command wheel without dispatching",
     cancelledWheel.wheel?.dispatchSeq === (beforeWheel.wheel?.dispatchSeq || 0) && cancelledWheel.cooldown === 0,
     JSON.stringify(cancelledWheel));
 
   // Reopen and left-click to dispatch
-  await page.keyboard.down("KeyF");
+  await page.keyboard.down("KeyQ");
   await page.waitForFunction(() => window.__SF.commandWheelState()?.open,
     null, { timeout: 3000 });
   await page.mouse.move(dialBox.x + dialBox.width / 2 + 0.866 * 132,
@@ -1303,7 +1303,7 @@ async function desktopPass(browser) {
     const state = window.__SF.commandWheelState();
     return state && !state.open && state.dispatchSeq === seq + 1;
   }, beforeWheel.wheel?.dispatchSeq || 0, { timeout: 4000 });
-  await page.keyboard.up("KeyF");
+  await page.keyboard.up("KeyQ");
   await page.waitForTimeout(180);
   const afterWheel = await page.evaluate(() => ({
     wheel: window.__SF.commandWheelState(),
@@ -1312,7 +1312,7 @@ async function desktopPass(browser) {
     cooldown: window.__SF.mission.cooldowns.cluster,
   }));
   evidence.desktopWheel = { beforeWheel, openWheel, cancelledWheel, afterWheel };
-  check("holding F opens a three-choice command wheel",
+  check("holding Q opens a three-choice command wheel",
     openWheel?.open && openWheel?.commands?.length === 3 && openWheel.selectedKey === "cluster",
     JSON.stringify(openWheel));
   check("left clicking hovered sector dispatches the highlighted command exactly once",
@@ -1330,7 +1330,7 @@ async function desktopPass(browser) {
       T.mission.cooldowns.orbital = 0;
       return T.commandWheelState();
     });
-    await page.keyboard.down("KeyF");
+    await page.keyboard.down("KeyQ");
     await page.waitForFunction(() => window.__SF.commandWheelState()?.open,
       null, { timeout: 3000 });
     const unselected = await page.evaluate(() => window.__SF.commandWheelState());
@@ -1340,7 +1340,7 @@ async function desktopPass(browser) {
     const selected = await page.evaluate(() => window.__SF.commandWheelState());
     await page.mouse.down({ button: "left" });
     await page.mouse.up({ button: "left" });
-    await page.keyboard.up("KeyF");
+    await page.keyboard.up("KeyQ");
     await page.waitForFunction((seq) => window.__SF.commandWheelState()?.dispatchSeq === seq + 1,
       fresh?.dispatchSeq || 0, { timeout: 4000 });
     const dispatched = await page.evaluate(() => ({
@@ -1410,7 +1410,7 @@ async function desktopPass(browser) {
     T.weapons.setStow?.(false);
     T.advanceTime(0.5, 1 / 60);
   });
-  await page.keyboard.press("KeyQ");
+  await page.keyboard.press("KeyF");
   let meleeStarted = false;
   try {
     await page.waitForFunction(() => /^melee/.test(window.__SF.player.action || ""),
@@ -1439,7 +1439,7 @@ async function desktopPass(browser) {
     T.mission.cooldowns.resupply = 0;
     return T.commandWheelState();
   });
-  await page.keyboard.down("KeyF");
+  await page.keyboard.down("KeyQ");
   await page.waitForFunction(() => window.__SF.commandWheelState()?.open,
     null, { timeout: 3000 });
   const lockedWheelOpen = await page.evaluate(() => ({
@@ -1459,7 +1459,7 @@ async function desktopPass(browser) {
   }
   await page.mouse.down({ button: "left" });
   await page.mouse.up({ button: "left" });
-  await page.keyboard.up("KeyF");
+  await page.keyboard.up("KeyQ");
   await page.waitForFunction((seq) => window.__SF.commandWheelState()?.dispatchSeq === seq + 1,
     lockedWheelBefore?.dispatchSeq || 0, { timeout: 4000 });
   const lockedWheelAfter = await page.evaluate(() => window.__SF.commandWheelState());
@@ -1467,7 +1467,7 @@ async function desktopPass(browser) {
     pointerLocked, pointerLockProbe, lockedW, meleeStarted, lockedAudioBefore, lockedAudioAfter, lockedMapOpen,
     lockedWheelBefore, lockedWheelOpen, lockedWheelAfter,
   };
-  check("pointer-locked W and Q retain movement and melee gameplay input",
+  check("pointer-locked W and F retain movement and melee gameplay input",
     lockedW.ownsPointerInput && lockedW.keyHeld && lockedW.moveY < -0.5 && meleeStarted,
     JSON.stringify({ pointerLocked, pointerLockProbe, lockedW, meleeStarted }));
   check("owned M opens the large tactical map and preserves audio",
@@ -1476,17 +1476,18 @@ async function desktopPass(browser) {
       && lockedMapOpen.canvas.every((value) => value >= 300)
       && lockedMapOpen.audio === lockedAudioBefore && lockedAudioAfter === lockedAudioBefore,
     JSON.stringify({ lockedAudioBefore, lockedMapOpen, lockedAudioAfter }));
-  check("pointer-locked E wheel still opens and dispatches exactly once",
+  check("pointer-locked Q wheel still opens and dispatches exactly once",
     lockedWheelOpen.ownsPointerInput && lockedWheelOpen.wheel?.open
-      && lockedWheelAfter.dispatchSeq === (lockedWheelBefore?.dispatchSeq || 0) + 1
-      && lockedWheelAfter.lastDispatch?.key === "orbital",
-    JSON.stringify({ lockedWheelOpen, lockedWheelAfter }));
+      && lockedWheelAfter?.dispatchSeq === (lockedWheelBefore?.dispatchSeq || 0) + 1
+      && lockedWheelAfter?.lastDispatch?.key === "orbital",
+    JSON.stringify({ lockedWheelBefore, lockedWheelOpen, lockedWheelAfter }));
 
-  let pointerLockBoundary = pointerLocked ? "platform" : "qa-state";
+  let pointerLockBoundary = "none";
   if (!pointerLocked) {
     const simulated = await page.evaluate(() => {
       try {
         const canvas = document.getElementById("sf-canvas");
+        window.__SF.player.input.state.locked = true;
         Object.defineProperty(document, "pointerLockElement", {
           configurable: true, get: () => canvas,
         });
@@ -1496,7 +1497,7 @@ async function desktopPass(browser) {
     if (simulated) pointerLockBoundary = "qa-document-boundary";
   }
   await page.mouse.move(100, 450);
-  await page.keyboard.down("KeyF");
+  await page.keyboard.down("KeyQ");
   await page.waitForFunction(() => window.__SF.commandWheelState()?.open,
     null, { timeout: 3000 });
   await page.mouse.move(900, 450);
@@ -1510,7 +1511,7 @@ async function desktopPass(browser) {
   await page.keyboard.press("Escape");
   await page.waitForFunction(() => !window.__SF.commandWheelState()?.open,
     null, { timeout: 2000 });
-  await page.keyboard.up("KeyF");
+  await page.keyboard.up("KeyQ");
   if (!pointerLocked) {
     await page.evaluate(() => {
       try { delete document.pointerLockElement; } catch (_) { /* best effort */ }
@@ -2240,7 +2241,7 @@ async function compactDesktopPass(browser) {
   check("1280x720 active HUD stays inside the playfield",
     active.offenders.length === 0 && active.scrollOverflow <= 2, JSON.stringify(active));
 
-  await page.keyboard.down("KeyF");
+  await page.keyboard.down("KeyQ");
   await page.waitForFunction(() => window.__SF.commandWheelState()?.open,
     null, { timeout: 3000 });
   const dial = await page.locator(".sf-command-wheel__dial").boundingBox();
@@ -2254,7 +2255,7 @@ async function compactDesktopPass(browser) {
   const wheel = await layoutAudit(page);
   check("1280x720 command wheel stays inside the playfield",
     wheel.offenders.length === 0 && wheel.scrollOverflow <= 2, JSON.stringify(wheel));
-  await page.keyboard.up("KeyF");
+  await page.keyboard.up("KeyQ");
   await page.waitForFunction(() => !window.__SF.commandWheelState()?.open,
     null, { timeout: 3000 });
 

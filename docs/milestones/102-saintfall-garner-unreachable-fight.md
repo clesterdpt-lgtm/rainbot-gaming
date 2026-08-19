@@ -80,3 +80,57 @@ bar fill is the only remaining signal, and against a 7,400-HP pool it barely mov
   nothing unless a tentacle happens to be within `reach + legRadius` (4.32m).
 
 Both are live leads if the fight still reads as unresponsive.
+
+---
+
+## Follow-up, same session: "is this live? it still does not let me damage the garner"
+
+It was not live, and that was the whole of it.
+
+**The fix shipped but could not reach the browser.** `boot.js` pins `?v=BUILD` onto
+*every* module through the import map, precisely so a shipped fix cannot be served stale
+— but `BUILD` was still `20260819-boss-pass-1` from milestone 101. The m102 change to
+`garner.js` went out under a version the browser already had cached, so every player kept
+running the 64m-aggro build. `assets/css/saintfall.css` had the same problem going back to
+m101: its `#sf-reinf` rules were deleted and its `?v=` was never moved off
+`20260818-abbess-pass-1`.
+
+All three saintfall assets are now on `20260819-garner-fix-1` (boot BUILD, `saintfall.css`,
+`saintfall-ui.css`). **A code fix in this project is not finished until the cache-buster
+moves** — that is the standing convention and it was missed here.
+
+**Damage itself was never broken, and now there are numbers for it.** Measured through the
+game's own trigger (`fireWeapon`, which holds the input rather than calling
+`weapons.fire()` directly), aiming and re-aiming every frame:
+
+| position | 10s of held trigger | DPS | time to kill (7,400 HP) |
+|---|---|---|---|
+| the waking distance, 34m | 4,756 | 476 | ~16s |
+| the lip, 10m | 3,212 | 321 | ~23s |
+
+The censer-lance does 24 a shot, so a three-round burst in one frame reads as `24` — the
+fire-rate gate eats two of them. That is worth knowing before reading any "3 shots dealt
+24" measurement as a damage bug: it is one shot, connecting.
+
+## The floating rock
+
+Same report, second bug, and it is the pit's animated terrain meeting props that were
+seated before it existed.
+
+Every prop is placed by `restOnTerrain` at load, against the pan while `garnerReveal` is
+still zero. When the encounter opens and terrain.js drives that scalar to 1, the floor
+drops up to sixteen metres — and anything resting on it stays where it was baked. Measured
+inside the opened pit: **8 sample points with solid tops at y≈1.5 over a floor at
+y≈-14.7, a 16.2m gap**, at 6-10m from the pit axis (`output/saintfall/garner-bug/floating-rock.png`).
+
+The Ossuary's own debris loop has always re-rolled out of that circle; the **map-wide
+scatter** (3,400 crags in `world.js`) never learned about it. It now skips
+`GARNER_PIT.rimRadius + 6` — bounded by the rim rather than by `reach` (62m) because
+inside the rim the bowl cuts down, while outside it the spoil lip only rises, and a
+slightly buried boulder reads as a boulder where a hovering one reads as a bug. The
+`continue` sits **after** every rng draw for that crag, so culling one cannot re-time the
+shared stream and silently re-scatter the other 3,399.
+
+After: `floaterCount` 0, same camera, nothing bare
+(`output/saintfall/garner-bug/floating-rock-fixed.png`). 39/39 on the Garner harness,
+18/18 on the boss-pass probe.

@@ -4539,6 +4539,25 @@ export async function buildWorld(ctx, onProgress) {
         < MATRIARCH_ARENA.flatRadius + 22) continue;
       if (Math.hypot(x - STYLITE_ARENA.x, z - STYLITE_ARENA.z)
         < STYLITE_ARENA.flatRadius + 9) continue;
+      /* AND THE GARNER'S PIT, for a different reason than the arenas:
+         not that a boulder would be in the way, but that the ground it
+         is resting on IS NOT THERE LATER. Every prop is seated by
+         `restOnTerrain` against the pan as it stands at load, with the
+         funnel's amplitude still zero; when the encounter opens and
+         terrain.js drives `garnerReveal` to 1, the floor under these
+         drops up to sixteen metres and leaves them hanging in the
+         middle of the hole. Measured at r=6-10m: solid tops at y≈1.5
+         over a pit floor at y≈-14.7.
+
+         Bounded by the rim rather than by `reach` (62m): inside the
+         rim the bowl cuts down, outside it the spoil lip only RISES,
+         and a boulder that ends up slightly buried reads as a boulder
+         while one hanging in the air reads as a bug. The Ossuary's own
+         debris loop has always re-rolled out of this circle - see the
+         GARNER_PIT test there; the map-wide scatter simply never
+         learned about it. */
+      if (Math.hypot(x - GARNER_PIT.x, z - GARNER_PIT.z)
+        < GARNER_PIT.rimRadius + 6) continue;
       restOnTerrain(g, x, z, { rot: [tiltX, yaw, tiltZ], maxGap: 0.08 });
       paintH(g, ramp, { normalWeight: 0.5, jitter: 0.22, noise: 0.35 });
       if (!perBucket.has(mat)) perBucket.set(mat, []);

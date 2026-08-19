@@ -893,7 +893,10 @@ export function buildJetpack(ctx, player) {
        pack already in the air is left alone - the root zeroes its
        horizontal travel through the player's own speed, which reads
        as being caught, without cutting the burn. */
-    const pinned = (playerState.rootFor || 0) > 0 && playerState.grounded;
+    /* A stun pins whether or not the boots are down: being knocked
+       flat by twenty metres of abdomen is not a thing you fly out of. */
+    const pinned = ((playerState.rootFor || 0) > 0 && playerState.grounded)
+      || (playerState.stunFor || 0) > 0;
     if (pressed && !state.active && !state.needsRelease && !pinned
       && state.fuel >= config.minIgnitionFuel && state.cooldownRemaining <= 0) {
       const gy = ctx.collide?.groundHeight(playerState.x, playerState.z)

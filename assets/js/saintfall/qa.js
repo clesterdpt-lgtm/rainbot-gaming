@@ -602,6 +602,14 @@ export function installQa(ctx, api) {
      *  than a private function. */
     pressMelee() { api.player.input.state.events.push({ type: "melee" }); },
 
+    /** Press jump, the way the keyboard does - the edge flag the input
+     *  poll consumes, so the impulse goes through player.js's own
+     *  grounded/rooted gates rather than being written onto `vy`. */
+    pressJump() {
+      api.player.input.state.jumpPressed = true;
+      return true;
+    },
+
     /** Where the lance is between the hands and the back, plus the
      *  grip's position in body space so a probe can see it travel. */
     stowState() {
@@ -3673,6 +3681,10 @@ export function installQa(ctx, api) {
     },
     forceAbbessClutch() { return api.abbess?.forceClutch?.() ?? null; },
     forceAbbessSlam() { return api.abbess?.forceSlam?.() ?? null; },
+    /** Throw a bite now, through the production path. The return says
+     *  whether the player was inside her cone when it was thrown, so a
+     *  check can tell a dodge from an attack that never reached. */
+    forceAbbessBite() { return api.abbess?.forceBite?.() ?? null; },
     /** Age every living child past `feedAfterSeconds`, so the walk home
      *  starts on the next frame instead of eleven seconds later. */
     recallAbbessBrood() { return api.abbess?.recallBrood?.() ?? null; },

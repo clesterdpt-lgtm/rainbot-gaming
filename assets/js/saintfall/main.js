@@ -809,8 +809,15 @@ export async function start({ boot, build } = {}) {
       player.input.clearAll?.();
       weapons.setAds(0);
     }
+    /* FLATTENED. `player.applyStun` takes the hands as well as the
+       feet - see its note - and this is the half of that the player
+       module cannot enforce, because what a press MEANS is decided
+       here. Drained and dropped, exactly like the reveal camera's
+       hold: a trigger held through a stun must not fire the moment it
+       ends, and a melee press must not queue a combo out of it. */
+    const stunned = (player.state.stunFor || 0) > 0;
     for (const ev of player.input.drain()) {
-      if (encounterHold || combat.player.dead) continue;
+      if (encounterHold || stunned || combat.player.dead) continue;
       if (ev.type === "boost") {
         if (!jetpack.state.inFlight) boost.trigger();
         continue;
@@ -850,8 +857,9 @@ export async function start({ boot, build } = {}) {
        the time this runs; refusing the shot until it lands is the
        difference between a weapon that was put away and a weapon
        that fires out of the player's back. */
-    if (!encounterHold && player.input.state.firing && !melee && !slam.state.active
-      && !shield.state.active && weapons.stowPhase < 0.08) shoot();
+    if (!encounterHold && !stunned && player.input.state.firing && !melee
+      && !slam.state.active && !shield.state.active
+      && weapons.stowPhase < 0.08) shoot();
     /* Hand the rite back once the swing is over. `meleeSwing` buffers
        a press during recovery into the next combo step, so the mode
        has to survive until the whole chain has run out - which is

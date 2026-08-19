@@ -670,6 +670,29 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
   50% { filter: brightness(1.35); }
 }
 
+/* FLATTENED. The Abbess's abdomen landing on you, and anything else
+   heavy enough to earn player.applyStun. Deliberately the opposite
+   discipline to the silk above: silk keeps the centre clear because a
+   held trooper can still shoot, and a stunned one cannot - so this
+   closes over the reticle as well, and the ring pulse is the clock
+   running out. Rendered warm and dark rather than as another sci-fi
+   overlay: it is a concussion, not a status effect. */
+.sf-hud__stun {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  transition: opacity .12s linear;
+  background:
+    radial-gradient(ellipse at center,
+      rgba(20, 4, 6, .34) 0%, rgba(26, 5, 8, .5) 38%,
+      rgba(58, 8, 12, .68) 74%, rgba(6, 1, 2, .88) 100%);
+}
+.sf-hud__stun[data-state="down"] {
+  animation: sf-stun 0.42s ease-in-out infinite;
+}
+@keyframes sf-stun {
+  0%, 100% { filter: brightness(1) saturate(1); transform: scale(1); }
+  50% { filter: brightness(1.25) saturate(1.3); transform: scale(1.03); }
+}
+
 /* Damage numbers are DOM text anchored to projected world points. The
    heavy shadow and hairline stroke keep two digits readable against
    both noon sand and the almost-black night preset. */

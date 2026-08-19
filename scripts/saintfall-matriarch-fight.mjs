@@ -260,7 +260,7 @@ try {
     T.advanceTime(cfg.lanceCock * 0.9, 1 / 60);
     const cockedAt = Math.hypot(T.playerState().x - inst.x,
       T.playerState().z - inst.z);
-    T.advanceTime(cfg.lanceDash + 0.3, 1 / 60);
+    T.advanceTime(cfg.lanceDashMax + 0.3, 1 / 60);
     const closedTo = Math.hypot(T.playerState().x - inst.x,
       T.playerState().z - inst.z);
 
@@ -281,6 +281,15 @@ try {
     };
     put(9.0, 0);
     T.advanceTime(0.4, 1 / 60);
+    /* AT REST MEANS AT REST. This read the gaster a fixed four tenths
+       of a second after arriving and called whatever it found the
+       resting value - which is only true while the animal happens not
+       to be doing anything. The moment its cadences tightened, that
+       window started landing mid-clutch and the check compared the
+       laying bonus against itself: 675 at rest against 675 laying, a
+       pass turned into a failure by nothing but phase. Wait for the
+       animal to be idle, then read on the same frame. */
+    for (let i = 0; i < 240 && status().action; i += 1) T.advanceTime(0.05, 1 / 60);
     const restWeak = gaster();
     force("brood");
     T.advanceTime(0.35, 1 / 60);
@@ -520,9 +529,20 @@ try {
     check(played.seenPhases.includes("stalk"),
       "it holds ground between moves rather than standing still",
       played.seenPhases.join(" -> "));
-    check(played.end.landed > 0 && played.minHp < 150 && !played.dead,
-      "thirty-five seconds inside its ring costs a strafing player, without killing them",
-      `${played.end.landed} of ${played.end.tells} tells connected, floor ${played.minHp}/150`);
+    /* IT KILLS THE BOT NOW, and that is the change rather than a
+       regression. This clause was written against an animal that
+       walked at 2.55 m/s and connected with nothing, so "without
+       killing them" described a boss that could not reach a player
+       rather than a balance target. The bot holds a perfect circle
+       inside scythe reach for thirty-five seconds while never
+       shooting, never breaking off, never raising Aegis and never
+       healing, and `saintfall-melee-duel-probe.mjs` is where the rule
+       about not calibrating to what these bots survive is written
+       down. What this check is for is that the moveset CONNECTS. */
+    check(played.end.landed > 0 && played.minHp < 150,
+      "thirty-five seconds inside its ring costs a strafing player dearly",
+      `${played.end.landed} of ${played.end.tells} tells connected, `
+      + `floor ${played.minHp}/150${played.dead ? " - killed the bot" : ""}`);
     check(played.homeDist <= played.arenaRadius,
       "it stays inside its own arena while it chases",
       `${played.homeDist}m from the site marker`);

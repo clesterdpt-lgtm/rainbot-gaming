@@ -2200,6 +2200,14 @@ export async function createPlayer(ctx, canvas) {
        Aim, fire, swing and Aegis are untouched, and something else
        (a line, a haul - see `drag`) may still move the body. */
     rootFor: 0,
+    /* PUT ON THE FLOOR - see `applyStun`, and it is a strictly bigger
+       thing than the root above. A root takes the feet; a stun takes
+       the whole trooper: no travel, no jump, no boost, no pack, and no
+       attack of any kind (main.js drops the input and refuses the
+       trigger while it runs). Reserved for the heaviest impacts in the
+       game, because taking a player's hands away is the most
+       expensive thing an attack can do to them. */
+    stunFor: 0,
     camPitch: -0.10,
     camDist: 5.2,
     firstPerson: 0,
@@ -3083,6 +3091,15 @@ export async function createPlayer(ctx, canvas) {
        still lying where it died. */
     state.dying = false;
     state.deathPose = 0;
+    /* AND THE HAZARDS GO WITH THE BODY. All three self-decay, so a
+       lingering slow was only ever a second of wrongness - but a stun
+       is different in kind: it takes the trigger as well as the feet,
+       and a trooper who respawns unable to shoot has no way of
+       knowing why. Nothing that was done to the previous body applies
+       to this one. */
+    clearSlow();
+    clearRoot();
+    clearStun();
     if (action.name === "death") cancelTransientActions();
   }
   spawn(state.x, state.z);
@@ -3634,7 +3651,11 @@ export async function createPlayer(ctx, canvas) {
     /* Held fast. Same self-decaying clock as the slow, for the same
        reason: whatever pinned the trooper may not be there to let go. */
     if (state.rootFor > 0) state.rootFor = Math.max(0, state.rootFor - dt);
-    const rooted = state.rootFor > 0;
+    /* And flattened, on its own clock for the same reason again. A
+       stun implies a root everywhere below, so the two only ever need
+       to be read as one flag from here on. */
+    if (state.stunFor > 0) state.stunFor = Math.max(0, state.stunFor - dt);
+    const rooted = state.rootFor > 0 || state.stunFor > 0;
     const wanted = rooted || slamMode || (shieldMode && shieldState?.movementLocked) ? 0
       : (mag > 0.01 || boostMode)
         ? target * lerp(1, ADS_SPEED, sighted) * inputAmount * state.slowFactor : 0;
@@ -5890,6 +5911,32 @@ export async function createPlayer(ctx, canvas) {
   }
 
   /**
+   * Flattened. Everything `applyRoot` takes, plus the hands: no shot,
+   * no swing, no slam, no boost and no pack for `seconds`, and the
+   * attack side of that is enforced in main.js's input dispatch
+   * because that is where the game decides what a press means.
+   *
+   * A swing already in the air is CUT rather than allowed to finish.
+   * The alternative - letting the clip run while the input is refused
+   * - is a trooper who lands a hit they have already been knocked
+   * flat out of, and a player who cannot tell whether the stun
+   * applied.
+   *
+   * Refreshes toward the longer stun, like the root and the slow.
+   */
+  function applyStun(seconds) {
+    const s = Math.max(0, Number(seconds) || 0);
+    if (s <= 0) return false;
+    state.stunFor = Math.max(state.stunFor, s);
+    if (action.name && action.name.startsWith("melee")) cancelTransientActions();
+    return true;
+  }
+
+  function clearStun() {
+    state.stunFor = 0;
+  }
+
+  /**
    * External displacement - something hauling the trooper. Goes
    * through the same masonry slide and slope gates as a step, so a
    * line cannot drag a body through a wall or up a face it could not
@@ -5931,6 +5978,8 @@ export async function createPlayer(ctx, canvas) {
     clearSlow,
     applyRoot,
     clearRoot,
+    applyStun,
+    clearStun,
     drag,
     carryElbowPole(i) { return CARRY_ELBOW_POLE[i]; },
     /* The palm roll, readable and writable, because it is the one

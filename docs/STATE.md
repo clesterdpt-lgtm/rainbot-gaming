@@ -2,6 +2,51 @@
 
 ## Latest focused fix
 
+**SAINTFALL: the Abbess answers a ranged player, and her reveal stops
+inflating**: Six changes to the Bloom's queen, all player-reported.
+(1) The reveal showed a third-sized abdomen ballooning to full over the
+4.6 s rouse — `poseAbdomen` scaled the sac radius and the seat height by
+`woken`. She is now full size and seated from her first visible frame,
+and the rouse spends itself on light alone; the body is also shown from
+the first rouse frame rather than five frames in (`woken > 0.02` opened
+the reveal camera on an empty chamber).
+(2) `player.applyStun` — a real stun, strictly bigger than `applyRoot`:
+no travel, jump, boost, pack, shot or swing, with a live melee swing cut
+rather than allowed to land. Enforced in player.js (feet), main.js input
+dispatch (hands), boost.js/jetpack.js (mobility), with its own HUD
+vignette; cleared on respawn along with the slow and the root.
+(3) The slam: ring 17 → 28 m, the slow replaced by a 1.5 s stun with the
+slow kept as the getting-up tail — and being more than 0.55 m off the
+ground at the moment of impact takes nothing, so a jump on the tell is
+the answer to it.
+(4) Part of every clutch now hatches Gleaners rather than Threshers, and
+the share ramps with how far off the player was standing when she laid
+(12% at her body, 50% past 62 m). Her whole moveset reaches ~20 m; this
+is the answer to a rifle at fifty. Ranged eggs are a fifth larger and
+painted acid green — dark green, because the shell's emissive is albedo
+× 2.6 and a saturated green clips every channel to white.
+(5) `eggHealth` 45 → 90 (four rifle rounds), with the melee path flagged
+lethal in `hitEggs` so one swing is one egg regardless of what either
+number drifts to.
+(6) A frontal bite: 0.78 s rear-back on the head itself, 84 damage in a
+±0.85 rad cone at 15.5 m, thrown clear via `player.drag`, with her head
+tracking committed a third of the way into the tell so stepping out of
+the cone beats it. Hugging her armoured face is no longer free.
+Gate: `saintfall-abbess-fight.mjs` 50/50 (was 39/39), three consecutive
+clean runs; melee-duel-probe all green. Three checks in that harness were
+also fixed, all the same fault — measuring the LEVEL where they meant to
+measure her. The hatch checks counted live Threshers and Gleaners across
+the whole Bloom, so one garrison creature dying anywhere on the map during
+the six seconds they wait cancelled a hatch (both now count her own
+`brood()`, which reports its castes). And the frame-budget check swung
+8.07–10.08 ms on identical code because it ran LAST and inherited whatever
+population the rest of the run had woken: it now rebuilds its scenario
+before each timed pass, reports the median of three (stable to 0.15 ms),
+and runs ahead of the fight. Its bar moves 9 → 10 ms to cover the district
+the harness wakes; on a fresh page her chamber measures 5.5–5.9 ms both
+before and after this round, so none of the gap is hers.
+Build pin `20260818-abbess-pass-1`.
+
 **SAINTFALL cinematic boss reveal intros & fixed authored framing**: Added
 cinematic reveal intros for the Matriarch (Gilded Reach) and Coulter (Fallen
 Saint), and standardized all 8 boss reveal cameras (Matriarch, Winnower,

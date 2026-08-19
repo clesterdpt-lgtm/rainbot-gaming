@@ -77,6 +77,7 @@ export function buildHud(ctx, host) {
     <div class="sf-hud__hurt" id="sf-hurt"></div>
     <div class="sf-hud__toxin" id="sf-toxin" data-state="clear"></div>
     <div class="sf-hud__silk" id="sf-silk" data-state="clear"></div>
+    <div class="sf-hud__stun" id="sf-stun" data-state="clear"></div>
     <div class="sf-hud__numbers" id="sf-damage-numbers" aria-hidden="true"></div>
     <div class="sf-hud__vitals" id="sf-vitals">
       <div class="sf-hud__hplabel"><span>VITALITY</span><b id="sf-hp-value">150</b></div>
@@ -183,6 +184,7 @@ export function buildHud(ctx, host) {
   const hurtEl = el.querySelector("#sf-hurt");
   const toxinEl = el.querySelector("#sf-toxin");
   const silkEl = el.querySelector("#sf-silk");
+  const stunEl = el.querySelector("#sf-stun");
   const reticleEl = el.querySelector("#sf-reticle");
   const damageLayerEl = el.querySelector("#sf-damage-numbers");
   let reticleGapPx = 30;
@@ -287,6 +289,7 @@ export function buildHud(ctx, host) {
   let lastHurt = -99;
   let lastToxin = -1;
   let lastSilk = "";
+  let lastStun = "";
   let breachAlertFor = 0;
 
   function formatCountdown(seconds) {
@@ -1238,6 +1241,7 @@ export function buildHud(ctx, host) {
       return packBoss("abbess", "THE ABBESS", "The Bloom",
         abbess.health, abbess.maxHealth,
         abbess.exposed ? "Underside exposed"
+          : abbess.biting ? "Jaws drawn back"
           : abbess.phase === "royal" ? "Royal cell"
           : abbess.phase === "retire" ? "Folding back down" : "",
         abbess.phase);
@@ -1539,6 +1543,18 @@ export function buildHud(ctx, host) {
         lastSilk = silk;
         silkEl.dataset.state = silk;
         silkEl.style.opacity = silk === "clear" ? "0" : "1";
+      }
+      /* FLATTENED. A different sentence from the silk above and it
+         needs a different frame: a root takes the feet and the player
+         keeps shooting, so silk stays clear of the reticle. A stun
+         takes the hands too - see player.applyStun - so there is
+         nothing in the middle of the screen worth protecting, and the
+         reticle going dark under it is the point. */
+      const stun = (ps?.stunFor || 0) > 0 ? "down" : "clear";
+      if (stun !== lastStun) {
+        lastStun = stun;
+        stunEl.dataset.state = stun;
+        stunEl.style.opacity = stun === "clear" ? "0" : "1";
       }
 
       const weapon = ctx.weapons && ctx.weapons.current;

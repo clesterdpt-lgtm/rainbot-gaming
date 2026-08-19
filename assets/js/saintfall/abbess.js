@@ -33,15 +33,32 @@
 
      DORMANT   Seated in the Throat, folded down, dark. She ignores
                everything until the player crosses AGGRO_RADIUS.
-     ROUSE     4.6s. The sac lights from inside, the abdomen lifts off
-               the floor of the chamber, and the head comes round.
-     SEATED    THE FIGHT. Three things on three clocks:
+     ROUSE     4.6s. The sac lights from inside and the head comes
+               round. It does not GROW: she is revealed at the size she
+               is fought at, because an egg sac inflating under a
+               reveal camera reads as a balloon rather than as an
+               animal waking. See `poseAbdomen`.
+     SEATED    THE FIGHT. Four things on four clocks, and the player
+               chooses which of them they are playing against purely
+               by where they stand:
 
                THE CLUTCH is the encounter. She lays eggs in an arc
                behind her; each swells for a few seconds and splits
-               into a Thresher. An egg is a target - shoot it and the
-               Thresher never exists - so "she spawns a lot" is a
-               problem with an answer rather than a tax.
+               open. An egg is a target - shoot it and what was inside
+               never exists - so "she spawns a lot" is a problem with
+               an answer rather than a tax. Four rifle rounds each, or
+               one swing of the lance whatever those two numbers drift
+               to: the cost of a clutch is written for the player who
+               is not going to walk into it.
+
+               ...AND SOME OF IT SHOOTS BACK. A share of every clutch
+               hatches the ranged caste instead, and the share is a
+               function of how far off the player was standing when she
+               laid it. Everything else she has reaches about twenty
+               metres; this is the part of her that reaches fifty, and
+               it exists because it is the only pressure that lands on
+               a distant player without landing twice as hard on a
+               close one.
 
                TROPHALLAXIS is why that answer matters. Her brood comes
                BACK to her, and every one that reaches her head feeds
@@ -49,9 +66,24 @@
                it undoes the fight: a dozen Threshers walking home is
                most of a health bar returned.
 
-               THE SLAM is what she does about anything that gets
-               close. She heaves twenty metres of abdomen off the floor
-               and drops it, and the ring goes down.
+               THE SLAM is what she does about anything out on the
+               floor beside her. She heaves twenty metres of abdomen up
+               and drops it, and everything in a twenty-eight metre
+               ring is knocked flat - a real stun, not a slow: no
+               moving and no attacking for a second and a half, in a
+               room full of her children. It is a shock through the
+               FLOOR, so the answer to it is to not be on the floor:
+               jump on the tell and it passes underneath.
+
+               THE BITE is what she does about anything at her jaws,
+               and it is the reason her armoured front is worth
+               facing. Four metres of plate with a mouth on it used to
+               be the safest ground on the map, because the slam is
+               centred ten metres behind her head. It is now the most
+               expensive: two bites kill. Resolved at the strike frame
+               against where the player actually is, with her heading
+               committed a third of the way into the rear-back, so
+               stepping out of the cone beats it outright.
 
                And the slam is the fight's one real decision, because
                the raised abdomen exposes its UNDERSIDE - the one part
@@ -65,9 +97,9 @@
                guardian is now something this one produces.
      RETIRE    The leash. She folds back down at full health.
 
-   Her brood's own pool is `inst.health` on ordinary Threshers, so
-   nothing here is a special case for combat.js: they are spawned,
-   they are killed, and this module only ever watches.
+   Her brood's own pool is `inst.health` on ordinary Threshers and
+   Gleaners, so nothing here is a special case for combat.js: they are
+   spawned, they are killed, and this module only ever watches.
 
    ============================================================
    HOW SHE IS LIT AND SURFACED, and the four traps in it
@@ -184,12 +216,44 @@ export const ABBESS_CONFIG = Object.freeze({
      reason - more of the fight, not a bigger number. */
   clutchEggs: [3, 6],
   eggHatchSeconds: 5.2,
-  /* An egg is a real target with a real pool. Two rifle shots or one
-     swing: cheap enough that clearing a clutch is a decision the
-     player can afford, dear enough that they cannot clear every
-     clutch and still shoot her. */
-  eggHealth: 45,
+  /* An egg is a real target with a real pool, and the pool is written
+     for the RANGED player - because they are the ones who have to
+     spend it. Four rifle rounds, and one swing of the lance whatever
+     the number says (see `hitEggs`, which treats a melee connection as
+     lethal rather than as 90 damage that has to beat 90 health).
+
+     That asymmetry is the whole point of the value. At two rounds an
+     egg the answer to a clutch was a second of trigger from wherever
+     the player happened to be standing; at four it is most of a
+     magazine and a vent, which is a real choice against shooting HER -
+     while a player who walks into the clutch still clears it at one
+     egg per swing. The fight's ranged tax and its melee reward are the
+     same number read from two sides. */
+  eggHealth: 90,
   eggMax: 26,
+  /* ------------------------------------------------------------
+     WHAT COMES OUT OF THEM
+
+     Most of a clutch is Threshers - the swarm is the fight - but some
+     fraction of every clutch hatches the RANGED caste instead, and
+     that fraction is a function of where the player is standing.
+
+     This is the answer to the one way her fight could be sat out. Her
+     whole moveset reaches about twenty metres: the slam is a ring
+     around her own body, the bite is at her head, and the brood has to
+     WALK. A player at fifty metres with a rifle was fighting a
+     shooting gallery, and every number that could have punished them -
+     more health, more eggs, a faster clutch - punishes the player
+     stood in the room even harder. A Gleaner reaches 52m. It costs a
+     close-range player nothing they were not already paying, and it
+     costs a distant one the thing they were buying with the distance.
+
+     Ramped rather than switched, so it reads as pressure rather than
+     as a rule: at her body it is roughly one in eight, and past
+     `rangedTo` half the clutch comes out shooting. */
+  rangedShare: [0.12, 0.5],
+  rangedFrom: 24,
+  rangedTo: 62,
   /* Live brood she will tolerate. Past this she still lays - the
      animation and the tell are unchanged - but the eggs come out
      spent, which is far better than a queen that visibly stops
@@ -221,20 +285,102 @@ export const ABBESS_CONFIG = Object.freeze({
   slamRise: 1.45,
   slamHold: 0.35,
   slamFall: 0.22,
-  slamRadius: 17,
+  /* THE RING, and it is most of the arena now.
+
+     At 17m the slam covered a third of the ground between her head and
+     the far end of her own abdomen, which meant "stand anywhere else"
+     was a complete answer to it - and the fight's one decision is
+     supposed to be whether to be UNDER her when it lands. An attack
+     you can walk out of is not a decision, it is a tax on
+     inattention. Twenty-eight covers the whole of her body's footprint
+     and a good margin past it, so the answer is now the one the attack
+     is telegraphing: get off the floor. */
+  slamRadius: 28,
   slamDamage: 52,
-  /* Knocked flat rather than merely hurt. The slow IS the stun - the
-     player has no stun state, and taking their speed for two seconds
-     inside a ring full of Threshers is what "you are on the floor"
-     costs. */
+  /* AND YOU ARE ACTUALLY ON THE FLOOR.
+
+     This used to be a slow, with a comment explaining that the slow
+     WAS the stun because the player had no stun state. They do now -
+     `player.applyStun`, which takes the feet and the hands both - so
+     the attack says what it always meant: for `slamStunSeconds` you
+     cannot move, jump, boost, fly, shoot or swing, in a ring full of
+     her children.
+
+     The slow is kept as the TAIL. Getting up is not instant, and
+     stun-into-nothing reads as a bug the moment control returns at
+     full sprint; a second and a half of staggering out of the ring is
+     the recovery the stun is worth. */
+  slamStunSeconds: 1.5,
   slamSlowFactor: 0.28,
   slamSlowSeconds: 2.0,
+  /* HOW FAR OFF THE FLOOR IS OFF THE FLOOR.
+
+     The one out, and it is deliberately a jump rather than a dodge:
+     the trooper's jump peaks at 1.05m and is airborne for 0.65s, and
+     the slam telegraphs for 1.8s before a 0.22s drop. Half a metre of
+     clearance means the timing window is most of the jump - roughly
+     0.47s of the 0.65 - so it is answerable on the tell without being
+     free. A pack or a boosted leap clears it outright, which is what
+     those are for. */
+  slamAirClear: 0.55,
   /* And what it does to her OWN brood, which is most of why a good
      player learns to bait it: she does not distinguish. */
   slamBroodDamage: 90,
   /* Only thrown at something close enough to be worth twenty metres of
-     abdomen. Further out and she lays instead. */
+     abdomen. Further out and she lays instead. Kept a good deal
+     tighter than the ring itself: the slam should reach further than
+     the range that provokes it, so a player who backs off on the tell
+     is running out of a blast they had already earned rather than
+     stepping over a line she is watching. */
   slamRange: 21,
+
+  /* ------------------------------------------------------------
+     THE BITE
+
+     The thing her whole silhouette has been promising and could not
+     deliver. She is built armour-first - the player walks into a
+     chamber and meets four metres of plate with a face on it - and
+     until now the correct play against that face was to stand in it:
+     the slam is centred under her ABDOMEN, more than ten metres
+     behind her head, so the safest ground on the map was directly in
+     front of her jaws. An immobile boss whose front is both her only
+     armour and her only safe ground has no reason to be facing you.
+
+     Pale mandibles against dark plate were modelled in from the first
+     pass, with a comment saying they are "the one cue that says this
+     animal can still bite". They now are.
+
+     Short, frontal, and hard enough to be a mistake rather than a
+     tax: two of these kill a full-health trooper. The out is the same
+     one every melee caste in the game offers and the slam does not -
+     it is resolved at the STRIKE frame against where the player
+     actually is, so stepping out of the cone during the rear-back
+     beats it outright.
+     ------------------------------------------------------------ */
+  biteCadence: 6.2,
+  /* Reach from her seat, not from her jaws: the head's own geometry
+     puts the mandible tips about eleven metres out in front of the
+     origin, and the lunge carries them past that. Comfortably shorter
+     than `slamRange`, so the two attacks divide the ground between
+     them rather than competing for it. */
+  biteRange: 15.5,
+  /* Half-angle of the cone she can reach. Wider than it sounds,
+     because `clampToSeat` already holds her heading to +/-0.8rad of
+     her seat - past that she physically cannot look at you. */
+  biteArc: 0.85,
+  /* The rear-back, the snap and the recovery. The wind-up is a third
+     again the longest ordinary caste tell (the Matriarch's 0.75) and
+     the snap is faster than any of them: a boss's bite has to be
+     readable from further away and less survivable once it is
+     committed. */
+  biteWindup: 0.78,
+  biteStrike: 0.15,
+  biteRecover: 0.66,
+  biteDamage: 84,
+  /* Thrown clear rather than merely hurt. Metres, applied along the
+     bite's own axis through `player.drag`, so masonry stops the throw
+     the same way it stops a step. */
+  biteThrow: 7.5,
 
   /* THE UNDERSIDE. Multiplier and the aperture it needs - see
      HITBOX.abbess, which reads `inst.raised` to decide whether the
@@ -378,6 +524,24 @@ const CHITIN_DARK = [0.034, 0.024, 0.056];
    again. */
 const CHITIN_LIT = [0.205, 0.118, 0.315];
 const EGG_PALE = [0.92, 0.34, 0.46];
+/* A SHELL WITH A GLEANER IN IT. Acid green against her whole palette,
+   which is pink membrane over near-black chitin - the one hue on the
+   animal that is not on the animal. A player has five seconds between
+   a clutch landing and it hatching, and the only useful thing they can
+   do with that information is decide which eggs to burn first; a tint
+   they have to squint at is the same as no tint.
+
+   AND IT IS DARK, which is the whole trick. The egg's emissive is
+   `albedo * vColor.a * 2.6` (see `bindEmissiveToGrain` and the kit's
+   `bio` gain), so a ripe shell is being multiplied by better than two
+   - and a saturated green at (0.44, 1.00, 0.58) comes out of that with
+   every channel past 1.0, which is WHITE. Photographed beside a
+   Thresher egg the difference read as "one of them is blown out", not
+   as "one of them is green". Painted dark enough that only the green
+   channel clips, the hue survives the gain - the same lesson the
+   doctrine rites learned: divide by the peak channel, or the colour is
+   not a colour, it is an exposure. */
+const EGG_RANGED = [0.10, 0.66, 0.24];
 /* THE WEAK POINT'S CORE, and it is the one place on her that is allowed
    to leave the hue behind entirely. Everything else on the animal is
    rose; this is rose taken to the top of the value scale, so the focal
@@ -459,6 +623,14 @@ export function buildAbbess(ctx) {
     slamTimer: C.slamCadence * 0.7,
     slamPhase: null,      // rise, hold, fall
     slamTime: 0,
+    /* The bite, on the same shape as the slam: one clock counting down
+       to the next one, one phase string while it runs, one timer
+       inside the phase. */
+    biteTimer: C.biteCadence * 0.55,
+    bitePhase: null,      // wind, strike, recover
+    biteTime: 0,
+    bites: 0,
+    bitesLanded: 0,
     royalDone: false,
     disengageFor: 0,
     defeated: false,
@@ -2084,6 +2256,17 @@ export function buildAbbess(ctx) {
    * `raised` rotates the whole arc about the waist, which is what makes
    * the slam one number rather than a choreography.
    */
+  /* WHETHER THERE IS AN ANIMAL TO DRAW.
+
+     `woken` used to be the only answer, and it crosses 0.02 about five
+     frames INTO the rouse - so the reveal camera opened on an empty
+     chamber and she blinked into it. The rouse is now shown from its
+     first frame; everything else it does (the light coming up, the
+     brood glow) still rides `woken`. */
+  function shown() {
+    return state.woken > 0.02 || state.phase === "rouse" || state.deathT >= 0;
+  }
+
   function poseAbdomen(dt, force = false) {
     /* A DORMANT QUEEN COSTS NOTHING, and this is where she used not to.
        Every frame of the entire game rewrote 157 positions, 157
@@ -2097,7 +2280,7 @@ export function buildAbbess(ctx) {
        before she is ever visible. */
     // A corpse does not move. Once the settle is over, nothing is written.
     if (!force && state.deathT >= 8.9) return;
-    if (!force && state.woken <= 0.02 && state.raised === 0 && state.deathT < 0) {
+    if (!force && !shown() && state.raised === 0) {
       if (sac.mesh.visible) {
         sac.mesh.visible = false;
         tergites.mesh.visible = false;
@@ -2117,7 +2300,6 @@ export function buildAbbess(ctx) {
     const yaw = state.sacYaw;
     const sx = Math.sin(yaw);
     const sz = Math.cos(yaw);
-    const wake = clamp01(state.woken);
     const lift = state.raised;
 
     /* THE SETTLE. One critically-ish damped spring, kicked by every
@@ -2149,7 +2331,10 @@ export function buildAbbess(ctx) {
        which is what a join looks like. */
     const wx = C.lairX - sx * 1.5;
     const wz = C.lairZ - sz * 1.5;
-    const wy = floorY + C.abdomenClearance + 2.1 * wake;
+    /* AND IT DOES NOT RISE WITH THE ROUSE. See the radius below: the
+       seat is a constant, so the first frame the player sees of her is
+       the frame she is fought at. */
+    const wy = floorY + C.abdomenClearance + 2.1;
 
     for (let i = 0; i < segs; i += 1) {
       const ring = rings[i];
@@ -2188,8 +2373,25 @@ export function buildAbbess(ctx) {
          enough to make a player's aim wrong. */
       const dent = state.hitAmt > 0 && state.hitRing >= 0
         ? state.hitAmt * 0.20 * Math.exp(-((i - state.hitRing) ** 2) / 3.2) : 0;
+      /* FULL SIZE FROM THE FIRST FRAME, and this used to carry a
+         `(0.34 + wake * 0.66)` term.
+
+         The reasoning behind it was that the rouse should be one
+         animation - a body swelling and lighting together - and read
+         as a diagram it is a good one. On screen it was not: `woken`
+         crosses 0.02 on the first frame of the rouse, so the mesh
+         appeared at a THIRD of its radius and then spent four and a
+         half seconds visibly ballooning, under a reveal camera framed
+         down the length of her for exactly that time. Twenty metres of
+         egg sac inflating is a thing an audience reads as a balloon
+         being blown up, not as an animal waking.
+
+         The wake is still the whole of the reveal - it just spends
+         itself on LIGHT rather than on volume (see `paintSac`, where
+         it is squared into the brood glow). She is the size she is
+         fought at from the frame she becomes visible. */
       spineRadius[i] = C.abdomenRadius * ring.swell * ring.pinch
-        * (0.34 + wake * 0.66) * (1 + breath + wave - dent) * deflate;
+        * (1 + breath + wave - dent) * deflate;
     }
 
     /* And the geometry, with analytic normals off the ring frame -
@@ -2237,7 +2439,7 @@ export function buildAbbess(ctx) {
 
     sac.geo.attributes.position.needsUpdate = true;
     sac.geo.attributes.normal.needsUpdate = true;
-    sac.mesh.visible = state.woken > 0.02 || state.deathT >= 0;
+    sac.mesh.visible = shown();
     /* The plates, the light and its spill, all off the pose that was
        just written. AFTER, never before: every one of them reads
        `spine` and `spineRadius`, and geometry laid out on last frame's
@@ -2508,6 +2710,11 @@ export function buildAbbess(ctx) {
     eggs.push({
       live: false, x: 0, y: 0, z: 0, t: 0, hp: 0, seed: rng(), base: i * eggVerts,
       burst: 0, burstFrom: 0,
+      /* Which caste is inside it - see `rangedShare`. Decided when the
+         egg is laid rather than when it hatches, so the shell can say
+         so for the whole five seconds the player is deciding which
+         ones to burn. */
+      caste: "thresher",
     });
   }
   let eggCursor = 0;
@@ -2627,17 +2834,31 @@ export function buildAbbess(ctx) {
       grow = lerp(egg.burstFrom, egg.burstFrom * 1.85, smoothstep(u)) * (1 - u * u);
       glow = (1 - u) * 3.2;
     }
-    const R = 1.15 * (grow + shake);
-    const H = 1.55 * (grow + shake);
+    /* The ranged caste ships at 3.55m against the Thresher's 1.9, and
+       the shell says so: a fifth bigger, which is enough to tell two
+       eggs apart in silhouette at the far end of the chamber where the
+       tint has already gone to grey. */
+    const size = egg.caste === "gleaner" ? 1.20 : 1;
+    const R = 1.15 * size * (grow + shake);
+    const H = 1.55 * size * (grow + shake);
     /* A clutch is HER light in miniature, so it reads off the same
        brood colour - which means a dying queen lays visibly sickly
        eggs without anything having to say so. Ripe eggs go hotter as
        they near hatching, which is the timer the player is reading. */
     const g = broodColour();
     const ripe = clamp01(egg.t * 1.2);
-    const cr = lerp(EGG_PALE[0], g[0], 0.35 + ripe * 0.5);
-    const cg = lerp(EGG_PALE[1], g[1], 0.35 + ripe * 0.5);
-    const cb = lerp(EGG_PALE[2], g[2], 0.35 + ripe * 0.5);
+    let cr = lerp(EGG_PALE[0], g[0], 0.35 + ripe * 0.5);
+    let cg = lerp(EGG_PALE[1], g[1], 0.35 + ripe * 0.5);
+    let cb = lerp(EGG_PALE[2], g[2], 0.35 + ripe * 0.5);
+    /* ...and the caste, painted onto the shell rather than announced.
+       Ramped with ripeness so a fresh clutch is legible without the
+       whole field turning green the moment it lands. */
+    if (egg.caste === "gleaner") {
+      const tint = 0.70 + ripe * 0.28;
+      cr = lerp(cr, EGG_RANGED[0], tint);
+      cg = lerp(cg, EGG_RANGED[1], tint);
+      cb = lerp(cb, EGG_RANGED[2], tint);
+    }
     for (let r = 0; r < EGG_RINGS; r += 1) {
       const v = (r + 0.5) / EGG_RINGS;
       const ry = Math.cos(v * Math.PI);
@@ -2669,10 +2890,11 @@ export function buildAbbess(ctx) {
     }
   }
 
-  function layEgg(x, z) {
+  function layEgg(x, z, caste = "thresher") {
     const egg = eggs[eggCursor];
     eggCursor = (eggCursor + 1) % eggs.length;
     egg.live = true;
+    egg.caste = caste;
     egg.x = x;
     egg.z = z;
     egg.y = groundAt(x, z);
@@ -2681,7 +2903,7 @@ export function buildAbbess(ctx) {
     egg.seed = rng();
     state.laid += 1;
     ctx.vfx?.spark?.(x, egg.y + 0.6, z, 1.1, false, true);
-    bus.emit("egg", { x, y: egg.y, z, index: eggs.indexOf(egg) });
+    bus.emit("egg", { x, y: egg.y, z, caste, index: eggs.indexOf(egg) });
     return egg;
   }
 
@@ -2696,10 +2918,14 @@ export function buildAbbess(ctx) {
       bus.emit("stillborn", { x: egg.x, z: egg.z });
       return null;
     }
-    const kid = enemies.spawn("thresher", egg.x, egg.z, {
-      yaw: rng() * TAU,
-      emerge: { delay: 0, duration: 0.85, depth: 1.0 },
-    });
+    /* Whatever was in it. A Gleaner is twice a Thresher's height and
+       comes out of a shell the same size, which is exactly the read a
+       hatching wants - the egg was never big enough for what left it. */
+    const kid = enemies.spawn(egg.caste === "gleaner" ? "gleaner" : "thresher",
+      egg.x, egg.z, {
+        yaw: rng() * TAU,
+        emerge: { delay: 0, duration: 0.85, depth: 1.0 },
+      });
     if (!kid) return null;
     /* Born awake and looking at you - a clutch that has to notice the
        player first gives away the seconds that make it a threat. */
@@ -2707,8 +2933,9 @@ export function buildAbbess(ctx) {
     kid.suspicion = 1;
     kid.abbessBornAt = atmos.elapsed;
     brood.push(kid);
-    ctx.vfx?.blast?.(egg.x, egg.y + 0.4, egg.z, 2.4);
-    bus.emit("hatch", { x: egg.x, y: egg.y, z: egg.z });
+    ctx.vfx?.blast?.(egg.x, egg.y + 0.4, egg.z,
+      egg.caste === "gleaner" ? 3.2 : 2.4);
+    bus.emit("hatch", { x: egg.x, y: egg.y, z: egg.z, caste: egg.caste });
     return kid;
   }
 
@@ -2761,8 +2988,17 @@ export function buildAbbess(ctx) {
    * publishes a test instead. Every damage path in the game that can
    * reach the ground calls it: see `ctx.abbess.hitEggs` in combat.js's
    * shot, melee and explosion resolution.
+   *
+   * A MELEE CONNECTION IS ALWAYS LETHAL, and that is a rule rather
+   * than a number. `eggHealth` is written for the rifle - four rounds,
+   * which is what makes clearing a clutch at range a real cost - and
+   * the lance's opener happens to deal 89.7. Those two numbers sitting
+   * either side of "one swing kills an egg" by 0.3 is not a design, it
+   * is a coincidence waiting to be broken by any weapon tuning pass,
+   * a combo re-weight or a talent. So the swing says so directly: get
+   * inside the clutch and it dies, whatever either number becomes.
    */
-  function hitEggs(x, y, z, radius, damage) {
+  function hitEggs(x, y, z, radius, damage, opts = {}) {
     let hits = 0;
     for (const egg of eggs) {
       if (!egg.live) continue;
@@ -2770,7 +3006,7 @@ export function buildAbbess(ctx) {
       const dz = egg.z - z;
       const dy = (egg.y + 1.4) - y;
       if (dx * dx + dy * dy + dz * dz > radius * radius) continue;
-      egg.hp -= damage;
+      egg.hp = opts.melee ? 0 : egg.hp - damage;
       hits += 1;
       if (egg.hp <= 0) killEgg(egg, x, y, z);
       else ctx.vfx?.spark?.(egg.x, egg.y + 1.2, egg.z, 1.0, false, true);
@@ -3012,9 +3248,25 @@ export function buildAbbess(ctx) {
     }
   }
 
+  /** How many of a clutch of `n` come out shooting, from where the
+   *  player is standing right now - see `rangedShare`. */
+  function rangedInClutch(n) {
+    const ps = ctx.player?.state;
+    if (!ps) return 0;
+    const dist = Math.hypot(ps.x - C.lairX, ps.z - C.lairZ);
+    const u = clamp01((dist - C.rangedFrom) / Math.max(1e-3, C.rangedTo - C.rangedFrom));
+    const share = lerp(C.rangedShare[0], C.rangedShare[1], smoothstep(u));
+    /* Rounded, and then held to at most one short of the whole clutch.
+       A clutch that is ALL Gleaners stops being her brood and starts
+       being a garrison she happens to have summoned; the swarm is
+       still the fight. */
+    return Math.min(n - 1, Math.round(n * share));
+  }
+
   function layClutch() {
     const hurt = 1 - clamp01(inst.health / Math.max(1, inst.maxHealth));
     const n = Math.round(lerp(C.clutchEggs[0], C.clutchEggs[1], hurt));
+    const ranged = Math.max(0, rangedInClutch(n));
     const sx = Math.sin(inst.yaw);
     const sz = Math.cos(inst.yaw);
     /* Behind her, in an arc across her own axis, and past the far end
@@ -3026,13 +3278,18 @@ export function buildAbbess(ctx) {
       const back = C.abdomenLength + 3 + rng() * 7;
       const x = C.lairX - sx * back - sz * spread;
       const z = C.lairZ - sz * back + sx * spread;
-      layEgg(x, z);
+      /* Spread through the arc rather than clustered at one end, so a
+         player answering the clutch cannot burn all the dangerous ones
+         with a single blast at the edge of it. */
+      const isRanged = ranged > 0
+        && Math.floor(i * ranged / n) !== Math.floor((i + 1) * ranged / n);
+      layEgg(x, z, isRanged ? "gleaner" : "thresher");
     }
     // The wave that delivers them, travelling the length of her.
     state.wave = 0;
     ctx.vfx?.spark?.(C.lairX - sx * C.abdomenLength,
       floorY + 2, C.lairZ - sz * C.abdomenLength, 2.4, false, true);
-    bus.emit("clutch", { x: C.lairX, z: C.lairZ, count: n });
+    bus.emit("clutch", { x: C.lairX, z: C.lairZ, count: n, ranged });
   }
 
   function beginSlam() {
@@ -3088,16 +3345,40 @@ export function buildAbbess(ctx) {
         state.sacYaw, 0, 2.4);
     }
 
+    /* THE PLAYER, AND THE ONE WAY OUT OF IT.
+
+       A slam is a shock through the FLOOR - so it reaches whatever is
+       standing on the floor, and nothing that is not. Measured as
+       height above the ground rather than off `grounded`, because
+       `grounded` goes false for a stride down a slope and a player
+       does not get to dodge twenty metres of abdomen by walking
+       downhill. It also means the answer is the same one whichever
+       way the player leaves the ground: a jump, a boost, or the pack.
+
+       This is the only clean out. The ring is wider than her body, the
+       tell is the longest in the game, and standing in it now costs
+       the trooper their hands as well as their health. */
     const ps = ctx.player?.state;
     if (ps && !ctx.combat?.player?.dead) {
       const d = Math.hypot(ps.x - cx, ps.z - cz);
-      if (d < C.slamRadius) {
+      const clearance = ps.y - groundAt(ps.x, ps.z);
+      const airborne = clearance > C.slamAirClear;
+      if (d < C.slamRadius && !airborne) {
         const falloff = 1 - 0.55 * (d / C.slamRadius);
         ctx.combat.hurtPlayer(C.slamDamage * falloff
           * SURVIVAL_CONFIG.enemyDamageMultiplier, {
           source: "abbess-slam", x: ps.x, y: ps.y + 1.0, z: ps.z,
         });
+        /* Flattened, then left staggering. See slamStunSeconds. */
+        ctx.player?.applyStun?.(C.slamStunSeconds);
         ctx.player?.applySlow?.(C.slamSlowFactor, C.slamSlowSeconds);
+        ctx.player?.punch?.(2.6);
+      } else if (d < C.slamRadius) {
+        /* CLEARED IT, and it has to be legible as a dodge rather than
+           as an attack that missed. One kick through the camera: the
+           shock passes underneath. */
+        ctx.player?.doctrineKick?.(0.7, 0.5);
+        bus.emit("slamCleared", { x: ps.x, z: ps.z, clearance });
       }
     }
     /* Her own brood, through combat's authoritative shockwave so the
@@ -3157,12 +3438,173 @@ export function buildAbbess(ctx) {
     }
   }
 
+  /* ============================================================
+     THE BITE
+
+     Config and the reasoning are in `ABBESS_CONFIG`. What is here is
+     the three-phase clock and the two things that make it fair: the
+     tell is on the HEAD, which is the part of her the player is
+     already looking at, and the damage is resolved at the strike
+     frame rather than at the press.
+     ============================================================ */
+
+  /** Where the player is relative to her jaws: distance from the seat
+   *  and how far off her facing they are. */
+  function biteBearing() {
+    const ps = ctx.player?.state;
+    if (!ps || !inst) return null;
+    const dx = ps.x - C.lairX;
+    const dz = ps.z - C.lairZ;
+    const dist = Math.hypot(dx, dz);
+    if (dist < 1e-3) return { dist, off: 0, dx: Math.sin(inst.yaw), dz: Math.cos(inst.yaw) };
+    let off = Math.atan2(dx, dz) - inst.yaw;
+    while (off > Math.PI) off -= TAU;
+    while (off < -Math.PI) off += TAU;
+    return { dist, off: Math.abs(off), dx: dx / dist, dz: dz / dist };
+  }
+
+  /** In front of her, close enough, and not behind cover of her own
+   *  body. Used both to START a bite and to RESOLVE one. */
+  function biteReaches(range = C.biteRange) {
+    const b = biteBearing();
+    return !!b && b.dist <= range && b.off <= C.biteArc;
+  }
+
+  function beginBite() {
+    state.bitePhase = "wind";
+    state.biteTime = 0;
+    state.biteTimer = C.biteCadence;
+    state.bites += 1;
+    /* The tell, and it is deliberately at the jaws rather than in the
+       camera. She is the one thing on screen the player is already
+       looking at; a screen shake would say "something is about to
+       happen" where this says "THAT is about to happen". */
+    const sx = Math.sin(inst.yaw);
+    const sz = Math.cos(inst.yaw);
+    ctx.vfx?.venomBurst?.(C.lairX + sx * 9.6, floorY + 2.4, C.lairZ + sz * 9.6, 1.5);
+    bus.emit("biteTelegraph", { x: C.lairX, z: C.lairZ });
+  }
+
+  /** The snap. Re-checked against where the player IS, which is the
+   *  whole of the answer to it: step out of the cone during the
+   *  rear-back and twenty-six metres of animal closes on nothing. */
+  function landBite() {
+    const sx = Math.sin(inst.yaw);
+    const sz = Math.cos(inst.yaw);
+    const jx = C.lairX + sx * 11.4;
+    const jz = C.lairZ + sz * 11.4;
+    const jy = floorY + 1.4;
+    ctx.vfx?.blast?.(jx, jy, jz, 3.4);
+    ctx.vfx?.spark?.(jx, jy, jz, 3.0, false, true);
+    ctx.vfx?.sandSpray?.(jx, floorY + 0.2, jz, 2.0, sx, sz);
+    ctx.player?.punch?.(1.1);
+    /* Her own mass answers the snap, down the length of her. */
+    state.jigV -= 2.6;
+
+    const ps = ctx.player?.state;
+    const b = biteBearing();
+    if (!ps || !ctx.combat || ctx.combat.player?.dead || !b
+      || b.dist > C.biteRange || b.off > C.biteArc) {
+      bus.emit("biteWhiff", { x: jx, z: jz });
+      return false;
+    }
+    state.bitesLanded += 1;
+    ctx.combat.hurtPlayer(C.biteDamage * SURVIVAL_CONFIG.enemyDamageMultiplier, {
+      source: "abbess-bite", x: ps.x, y: ps.y + 1.2, z: ps.z,
+    });
+    /* AND THROWN OFF HER. Not a stun - the slam owns that verb, and
+       two attacks that both end with the player on the floor is one
+       attack with two animations. This one puts distance between the
+       trooper and her jaws, which is a consequence they can act on:
+       the fight resumes immediately, several metres further out. */
+    ctx.player?.drag?.(b.dx * C.biteThrow, b.dz * C.biteThrow);
+    ctx.player?.punch?.(2.2);
+    ctx.player?.doctrineKick?.(1.0, 0.8);
+    bus.emit("bite", { x: ps.x, z: ps.z, damage: C.biteDamage });
+    return true;
+  }
+
+  function stepBite(dt) {
+    state.biteTime += dt;
+    if (state.bitePhase === "wind") {
+      if (state.biteTime >= C.biteWindup) {
+        state.bitePhase = "strike";
+        state.biteTime = 0;
+      }
+      return;
+    }
+    if (state.bitePhase === "strike") {
+      if (state.biteTime >= C.biteStrike) {
+        landBite();
+        state.bitePhase = "recover";
+        state.biteTime = 0;
+      }
+      return;
+    }
+    if (state.biteTime >= C.biteRecover) {
+      state.bitePhase = null;
+      state.biteTime = 0;
+    }
+  }
+
+  /* THE HEAD'S OWN POSE, read by `update` and by nothing else.
+
+     Three numbers rather than a rig: the fore-body is one merged mesh
+     (six vestigial legs, a thorax, a collar and a face, all baked into
+     a single draw call) so the jaws cannot open independently without
+     a second one. What the whole head CAN do is rear and lunge, and on
+     an animal whose body does not move that is a bigger motion than
+     any mandible would have been.
+
+     `push` is metres along her facing, `pitch` is radians of nod
+     (positive is nose DOWN, the same sign the brace uses) and `drop`
+     is how far the whole fore-body sinks. She rears UP and BACK, then
+     comes forward and down: the rear-back is eased with a cubic so the
+     gather is slow and the release is not.
+
+     AND THE FORWARD TRAVEL IS SMALL ON PURPOSE. The first pass threw
+     the head 4.4m out and it tore the animal in half on camera: the
+     collar plate is a skirt that laps about 1.7m over the abdomen's
+     first rings (see its note - the join between two surfaces that
+     both move has to be swallowed, not butted), and anything past that
+     overlap slides the skirt clear and opens a hole where her waist
+     should be. Photographed at the snap the fore-body was a separate
+     object standing in front of a sac.
+
+     So the reach is bought with ROTATION instead, which costs the join
+     nothing: the jaws sit eleven metres in front of the pivot, so a
+     fifth of a radian of nod swings them through better than two
+     metres while the collar barely moves at all. */
+  const BITE_BACK = 1.8;
+  const BITE_PUSH = 1.5;
+  function bitePose() {
+    if (!state.bitePhase) return null;
+    if (state.bitePhase === "wind") {
+      const u = clamp01(state.biteTime / C.biteWindup);
+      const e = u * u * u;
+      return { push: -BITE_BACK * e, pitch: -0.22 * e, drop: -0.55 * e };
+    }
+    if (state.bitePhase === "strike") {
+      const u = clamp01(state.biteTime / C.biteStrike);
+      return {
+        push: lerp(-BITE_BACK, BITE_PUSH, u),
+        pitch: lerp(-0.22, 0.20, u),
+        drop: lerp(-0.55, 0.45, u),
+      };
+    }
+    const u = smoothstep(clamp01(state.biteTime / C.biteRecover));
+    return {
+      push: BITE_PUSH * (1 - u), pitch: 0.20 * (1 - u), drop: 0.45 * (1 - u),
+    };
+  }
+
   function beginRoyal() {
     state.phase = "royal";
     state.timer = C.royalSeconds;
     state.royalDone = true;
     state.raised = 0;
     state.slamPhase = null;
+    state.bitePhase = null;
     ctx.mission?.announce?.("THE ABBESS LAYS A ROYAL CELL", 3.6);
     ctx.player?.doctrineKick?.(1.1, 0.9);
     bus.emit("royal", { x: C.lairX, z: C.lairZ });
@@ -3202,9 +3644,11 @@ export function buildAbbess(ctx) {
     }
 
     if (state.slamPhase) { stepSlam(dt); return; }
+    if (state.bitePhase) { stepBite(dt); return; }
 
     state.clutchTimer -= dt;
     state.slamTimer -= dt;
+    state.biteTimer -= dt;
 
     if (state.clutchWind > 0) {
       state.clutchWind -= dt;
@@ -3212,11 +3656,21 @@ export function buildAbbess(ctx) {
       return;
     }
 
-    /* The slam only answers something close enough to be worth twenty
-       metres of abdomen; anything further out gets laid on instead.
-       Two clocks, one decision, and the player controls which by where
-       they stand - which is the closest this immobile animal gets to
-       having a positioning game. */
+    /* THREE CLOCKS AND ONE DECISION, and the player owns the decision
+       entirely by where they stand.
+
+       In her face: the bite, which is answered by leaving her cone.
+       Out on the floor beside her: the slam, answered by leaving the
+       ground. Further out than either: the clutch, answered by coming
+       back in - and, since the clutch reads the same distance to
+       decide how much of itself hatches shooting, answered LESS well
+       the longer they stay out there.
+
+       Ordered nearest-first. The bite is checked before the slam
+       because its range is inside the slam's: a player standing at her
+       jaws is choosing the bite, and a slam that pre-empted it would
+       take that choice back. */
+    if (state.biteTimer <= 0 && biteReaches()) { beginBite(); return; }
     if (state.slamTimer <= 0 && dist < C.slamRange) { beginSlam(); return; }
     if (state.clutchTimer <= 0) beginClutch();
   }
@@ -3231,6 +3685,7 @@ export function buildAbbess(ctx) {
       state.wave = -1;
       state.clutchTimer = C.clutchCadence * 0.6;
       state.slamTimer = C.slamCadence * 0.4;
+      state.biteTimer = C.biteCadence * 0.5;
     }
   }
 
@@ -3269,6 +3724,7 @@ export function buildAbbess(ctx) {
     state.disengageFor = 0;
     state.raised = 0;
     state.slamPhase = null;
+    state.bitePhase = null;
     state.clutchWind = 0;
     releaseEncounterCamera();
     bus.emit("retiring", { x: C.lairX, z: C.lairZ });
@@ -3344,7 +3800,22 @@ export function buildAbbess(ctx) {
       state.disengageFor = 0;
     }
 
-    faceTowards(ps.x, ps.z, 0.9, dt);
+    /* AND SHE COMMITS TO WHERE SHE IS BITING.
+
+       Her head tracks at 0.9 the rest of the time, which is what makes
+       her armour follow the player around the room. Through a bite it
+       falls away to nothing over the rear-back and stays there for the
+       snap - so the heading she strikes at is the one she had about a
+       third of the way into the tell, not the one she has at contact.
+
+       Without this the attack is unanswerable in the only direction
+       that should answer it: 0.9 is fast enough to hold a sprinting
+       player inside a 49-degree cone for the whole 0.78s, and a strike
+       re-check that always passes is a strike with no tell at all. */
+    const committing = state.bitePhase === "wind"
+      ? 1 - clamp01((state.biteTime / C.biteWindup - 0.3) / 0.35)
+      : state.bitePhase ? 0 : 1;
+    faceTowards(ps.x, ps.z, 0.9 * committing, dt);
 
     if (state.phase === "rouse") {
       /* FLOORED, never left to run away negative. The Coulter's own
@@ -3499,10 +3970,19 @@ export function buildAbbess(ctx) {
     const brace = clamp01(
       (state.clutchWind > 0 ? state.clutchWind / C.clutchWindup : 0)
       + Math.max(0, -state.raised / SLAM_COIL_DEPTH));
+    /* ...and it LUNGES. The bite's own pose, layered on top of the
+       brace: `push` metres along her facing, a nod, and the crouch
+       she gathers into. See `bitePose`, which is where the curve
+       lives. */
+    const bp = bitePose();
+    const bsx = bp ? Math.sin(inst.yaw) * bp.push : 0;
+    const bsz = bp ? Math.cos(inst.yaw) * bp.push : 0;
     head.rotation.y = inst.yaw;
-    head.rotation.x = brace * 0.075 + state.jigY * 0.010;
-    head.position.set(C.lairX, floorY - brace * 0.42 + state.jigY * 0.06, C.lairZ);
-    head.visible = state.woken > 0.02 || state.deathT >= 0;
+    head.rotation.x = brace * 0.075 + state.jigY * 0.010 + (bp ? bp.pitch : 0);
+    head.position.set(C.lairX + bsx,
+      floorY - brace * 0.42 + state.jigY * 0.06 - (bp ? bp.drop : 0),
+      C.lairZ + bsz);
+    head.visible = shown();
     head.updateMatrixWorld(true);
     /* AFTER the pose, never before: the capsules the player is being
        held out of have to be the ones that were just drawn, or the
@@ -3573,6 +4053,11 @@ export function buildAbbess(ctx) {
     state.wave = -1;
     state.raised = 0;
     state.slamPhase = null;
+    /* A half-thrown bite is a physical state like the spring below:
+       leaving one mid-lunge across a retire brings her head back out
+       on the frame she wakes, at an animal nobody has approached. */
+    state.bitePhase = null;
+    state.biteTime = 0;
     /* THE PHYSICAL STATE GOES WITH THE HAZARDS. None of these are ever
        saved (see the note on `state`), so this and `resetToSeat` are
        the only places they are cleared - and a settle spring or a
@@ -3617,8 +4102,11 @@ export function buildAbbess(ctx) {
     state.clutchTimer = C.clutchCadence * 0.45;
     state.clutchWind = 0;
     state.slamTimer = C.slamCadence * 0.7;
+    state.biteTimer = C.biteCadence * 0.55;
     state.fed = 0;
     state.laid = 0;
+    state.bites = 0;
+    state.bitesLanded = 0;
     /* A reset is a resurrection: the death clock has to go, or she
        comes back deflated and unlit with her surface still scorched
        from a fight that no longer happened. */
@@ -3652,6 +4140,10 @@ export function buildAbbess(ctx) {
       raised: Number(state.raised.toFixed(3)),
       slamming: !!state.slamPhase,
       slamPhase: state.slamPhase,
+      biting: !!state.bitePhase,
+      bitePhase: state.bitePhase,
+      bites: state.bites,
+      bitesLanded: state.bitesLanded,
       exposed: state.raised > 0.5,
       eggs: liveEggs(),
       brood: brood.length,
@@ -3725,7 +4217,9 @@ export function buildAbbess(ctx) {
     state.laid = Math.max(0, Math.round(Number(saved.laid) || 0));
     state.raised = 0;
     state.slamPhase = null;
+    state.bitePhase = null;
     state.clutchWind = 0;
+    state.biteTimer = C.biteCadence * 0.55;
     state.disengageFor = 0;
     state.releaseCameraAt = undefined;
     clearHazards();
@@ -3767,10 +4261,17 @@ export function buildAbbess(ctx) {
       return eggs.filter((e) => e.live).map((e) => ({
         x: Number(e.x.toFixed(2)), y: Number(e.y.toFixed(2)),
         z: Number(e.z.toFixed(2)), t: Number(e.t.toFixed(3)),
-        hp: Math.max(0, Math.round(e.hp)),
+        hp: Math.max(0, Math.round(e.hp)), caste: e.caste,
       }));
     },
-    brood() { return brood.map((k) => ({ id: k.id, x: k.x, z: k.z, alerted: !!k.alerted })); },
+    /* HER children, with the caste each of them came out of an egg
+       as - a clutch is no longer one species, so "how many did she
+       put in the room" is now two questions. */
+    brood() {
+      return brood.map((k) => ({
+        id: k.id, key: k.key, x: k.x, z: k.z, alerted: !!k.alerted,
+      }));
+    },
     /** Fold her back down, with the animation. The arena boundary's
      *  reset path - see district-bosses.js. */
     retire() {
@@ -3801,6 +4302,15 @@ export function buildAbbess(ctx) {
       if (!inst || state.phase === "dormant") return null;
       beginSlam();
       return { slamPhase: state.slamPhase };
+    },
+    /** ...and a bite. Reports whether the player was in the cone at the
+     *  moment it was thrown, so a check can tell "she missed" from
+     *  "she never tried". */
+    forceBite() {
+      if (!inst || state.phase === "dormant") return null;
+      const reached = biteReaches();
+      beginBite();
+      return { bitePhase: state.bitePhase, inCone: reached };
     },
     /** Age the whole brood past its hunting window, so a check about
      *  trophallaxis does not have to wait eleven seconds per child. */

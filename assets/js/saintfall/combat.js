@@ -1999,11 +1999,17 @@ export function buildCombat(ctx) {
     /* A swing clears a clutch. The arc is approximated by one sphere a
        little in front of the trooper rather than by re-deriving the
        cone - an egg is 2m across and the whole swing is 3.4m long, so
-       the two differ by less than the target. */
+       the two differ by less than the target.
+
+       Flagged as melee, and the encounter reads that as lethal rather
+       than as `dmg` - see `hitEggs`. An egg's health is written for the
+       rifle; one swing killing one egg is the melee build's side of
+       that bargain and must not depend on the lance's damage staying
+       on the right side of it. */
     if (ctx.abbess?.hitEggs) {
       hits += ctx.abbess.hitEggs(ps.x + Math.sin(ps.yaw) * reach * 0.6,
         ps.y + 0.9, ps.z + Math.cos(ps.yaw) * reach * 0.6,
-        reach * 0.8, dmg);
+        reach * 0.8, dmg, { melee: true });
     }
     /* The combo step decides which sweep is drawn - the three clips
        travel through different arcs, at different heights, in

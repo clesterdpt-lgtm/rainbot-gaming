@@ -169,7 +169,7 @@ export const WINNOWER_CONFIG = Object.freeze({
   crashStunSeconds: 4.0,
   /* Maximum fraction of max health the boss can lose in a single downing cycle.
      Prevents the flyer from being burst down and killed in one downing. */
-  downDamageCap: 0.35,
+  downDamageCap: 0.28,
   /* Flying home after a disengage. Presentation speed only - the
      heal has already happened when the flight starts. */
   returnSpeed: 12.0,
@@ -2154,6 +2154,11 @@ export function buildWinnower(ctx) {
   function beginSoar() {
     state.phase = "soar";
     inst.grounded = false;
+    inst.lift = inst.maxLift;
+    if (Array.isArray(inst.sacBurst)) inst.sacBurst.fill(false);
+    state.stalled = false;
+    state.healthAtDowningStart = undefined;
+    state.damageThisDowning = 0;
     if (inst.state !== "strain") enemies.play(inst, "idle", 0.4);
     state.timer = 0;
   }
@@ -2196,6 +2201,8 @@ export function buildWinnower(ctx) {
     state.phase = "land";
     state.timer = stalled ? C.landSeconds * 0.65 : C.landSeconds;
     state.stalled = !!stalled;
+    state.healthAtDowningStart = inst.health;
+    state.damageThisDowning = 0;
     enemies.play(inst, "land", 0.15);
     bus.emit("landing", { x: state.landTo.x, z: state.landTo.z, stalled: !!stalled });
   }
@@ -2206,8 +2213,10 @@ export function buildWinnower(ctx) {
     state.stokeSpan = state.timer;
     state.relit = false;
     state.sweepTimer = 1.2;
-    state.healthAtStokeStart = inst.health;
-    state.damageThisStoke = 0;
+    if (!Number.isFinite(state.healthAtDowningStart)) {
+      state.healthAtDowningStart = inst.health;
+      state.damageThisDowning = 0;
+    }
     inst.grounded = true;
     inst.y = groundAt(inst.x, inst.z) + C.landedLift;
     inst.pitch = 0;
@@ -2235,15 +2244,15 @@ export function buildWinnower(ctx) {
     }
     if (state.stalled) {
       /* SHOT DOWN. It arrives as a knockout: the strain clip keeps
-         it sprawled rather than tented, the impact is dust and shake
-         only - the crash never damages the player; it is their prize,
-         not a trade - and `stunFor` holds every attack off long
-         enough to spend melee into it freely. */
+          it sprawled rather than tented, the impact is dust and shake
+          only - the crash never damages the player; it is their prize,
+          not a trade - and `stunFor` holds every attack off long
+          enough to spend melee into it freely. */
       state.stunFor = C.crashStunSeconds;
       state.sweepTimer = C.crashStunSeconds + 1.0;
       /* Its own clip: "strain" is an airborne pose whose chains hang
-         straight down, which put the thuribles underground for the
-         whole knockout. The sprawl throws them forward onto the sand. */
+          straight down, which put the thuribles underground for the
+          whole knockout. The sprawl throws them forward onto the sand. */
       enemies.play(inst, "sprawl", 0.10);
       ctx.player?.doctrineKick?.(1.3 * weight, 1);
       ctx.vfx?.blast?.(inst.x, y + 0.4, inst.z, 9);
@@ -2267,20 +2276,13 @@ export function buildWinnower(ctx) {
     state.timer = C.launchSeconds;
     inst.grounded = false;
     enemies.play(inst, "launch", 0.12);
-    /* A stall is PAID OFF here rather than at the landing: the pool
-       refills only once it is actually back in the air, so a player
-       who keeps shooting the sacs while it is down keeps it down. */
+    /* Refill lift pool immediately and protect it until back in soar. */
     inst.lift = inst.maxLift;
     if (Array.isArray(inst.sacBurst)) inst.sacBurst.fill(false);
-    // THE ONLY REFUEL. It has just spent the stoke drinking a flare
-    // stack, so this is the one moment the furnace is full again.
     state.fuel = C.soarSeconds;
     state.stalled = false;
     const y = groundAt(inst.x, inst.z);
     ctx.vfx?.sandSpray?.(inst.x, y + 0.5, inst.z, 3.2, 0, 1);
-    // Full tank, full fire. The launch is the brightest the animal
-    // ever gets and it should be, because it is the moment the window
-    // the player has been spending closes.
     state.flash = Math.max(state.flash, 0.8);
     bus.emit("launch", { x: inst.x, z: inst.z });
   }
@@ -2822,12 +2824,14 @@ export function buildWinnower(ctx) {
           (Math.random() - 0.5) * 5);
       }
     }
-    if (state.phase === "stoke" || inst.grounded) {
-      state.damageThisStoke = (state.damageThisStoke || 0) + (e.actual || 0);
+    const isDowned = state.phase === "land" || state.phase === "stoke" || state.phase === "launch" || inst.grounded;
+    if (isDowned) {
+      state.damageThisDowning = (state.damageThisDowning || 0) + (e.actual || 0);
       const maxHp = inst.maxHealth || inst.spec?.health || 6200;
-      const maxAllowed = maxHp * (C.downDamageCap || 0.35);
-      if ((state.healthAtStokeStart || maxHp) > maxAllowed + 50 && state.damageThisStoke >= maxAllowed) {
-        if (state.timer > 0.4) {
+      const maxAllowed = maxHp * (C.downDamageCap || 0.28);
+      const startHealth = Number.isFinite(state.healthAtDowningStart) ? state.healthAtDowningStart : inst.health;
+      if (startHealth > maxAllowed + 50 && state.damageThisDowning >= maxAllowed) {
+        if (state.phase === "stoke" && state.timer > 0.4) {
           state.timer = 0.35;
           state.stunFor = 0;
           state.action = 0;
@@ -2845,10 +2849,12 @@ export function buildWinnower(ctx) {
   function modifyIncomingDamage(targetInst, request, damage) {
     if (!inst || targetInst !== inst) return damage;
     const maxHp = inst.maxHealth || inst.spec?.health || 6200;
-    if (state.phase === "stoke" || inst.grounded) {
-      const maxAllowed = maxHp * (C.downDamageCap || 0.35);
-      if ((state.healthAtStokeStart || maxHp) > maxAllowed + 50) {
-        const remainingAllowance = Math.max(0, maxAllowed - (state.damageThisStoke || 0));
+    const isDowned = state.phase === "land" || state.phase === "stoke" || state.phase === "launch" || inst.grounded;
+    if (isDowned) {
+      const maxAllowed = maxHp * (C.downDamageCap || 0.28);
+      const startHealth = Number.isFinite(state.healthAtDowningStart) ? state.healthAtDowningStart : inst.health;
+      if (startHealth > maxAllowed + 50) {
+        const remainingAllowance = Math.max(0, maxAllowed - (state.damageThisDowning || 0));
         if (damage > remainingAllowance) {
           damage = remainingAllowance;
         }
@@ -3306,8 +3312,8 @@ export function buildWinnower(ctx) {
       if (next === "stoke") {
         inst.grounded = true;
         inst.y = groundAt(inst.x, inst.z) + C.landedLift;
-        state.healthAtStokeStart = inst.health;
-        state.damageThisStoke = 0;
+        state.healthAtDowningStart = inst.health;
+        state.damageThisDowning = 0;
         // The real pose, not whatever clip was last playing - a QA
         // force is a claim about the phase, chains drawn up included.
         enemies.play(inst, "stoke", 0.2);

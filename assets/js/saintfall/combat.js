@@ -368,8 +368,8 @@ const HITBOX = {
        the glowing furnace was aiming a metre high. The z has always
        been right, which is what proves the y was a transcription
        slip rather than a decision. */
-    heart: { y: -0.85, z: 0.35, r: 1.25, mult: 2.2 },
-    groundedMeleeMult: 1.6,
+    heart: { y: -0.85, z: 0.35, r: 1.25, mult: 2.0 },
+    groundedMeleeMult: 1.5,
   },
 
   /* ------------------------------------------------------------------
@@ -1141,28 +1141,32 @@ export function buildCombat(ctx) {
     }
 
     if (box.sacs) {
-      for (let i = 0; i < box.sacs.offsets.length; i += 1) {
-        if (inst.sacBurst?.[i]) continue;
-        /* READ OFF THE LIVE BONE, falling back to the authored offset.
-           The sacs hang on the thorax, which every clip rotates - so a
-           fixed offset in the creature's own frame drifts away from
-           the geometry the player is actually aiming at as soon as the
-           animal does anything, and measured over a metre out during
-           the stoke. This is the Coulter's `mawFromClip` rule applied
-           to a hit volume rather than a multiplier: what counts as the
-           target is taken from where the target IS. */
-        const bone = inst.bones?.get?.(box.sacs.bones?.[i]);
-        if (bone) {
-          bone.updateWorldMatrix(true, false);
-          _sac.setFromMatrixPosition(bone.matrixWorld);
-        } else {
-          const o = box.sacs.offsets[i];
-          localAt(inst, o[0], o[1], o[2], _sac);
-        }
-        const entry = sphereEntry(_sac.x, _sac.y, _sac.z, box.sacs.r,
-          ox, oy, oz, dx, dy, dz);
-        if (entry >= 0 && entry < bestT) {
-          bestT = entry; sacIndex = i; weak = false; found = true;
+      const wPhase = inst.key === "winnower" ? ctx.winnower?.status?.()?.phase : null;
+      const canHitSacs = !wPhase || (wPhase === "soar" || wPhase === "strafe");
+      if (canHitSacs) {
+        for (let i = 0; i < box.sacs.offsets.length; i += 1) {
+          if (inst.sacBurst?.[i]) continue;
+          /* READ OFF THE LIVE BONE, falling back to the authored offset.
+             The sacs hang on the thorax, which every clip rotates - so a
+             fixed offset in the creature's own frame drifts away from
+             the geometry the player is actually aiming at as soon as the
+             animal does anything, and measured over a metre out during
+             the stoke. This is the Coulter's `mawFromClip` rule applied
+             to a hit volume rather than a multiplier: what counts as the
+             target is taken from where the target IS. */
+          const bone = inst.bones?.get?.(box.sacs.bones?.[i]);
+          if (bone) {
+            bone.updateWorldMatrix(true, false);
+            _sac.setFromMatrixPosition(bone.matrixWorld);
+          } else {
+            const o = box.sacs.offsets[i];
+            localAt(inst, o[0], o[1], o[2], _sac);
+          }
+          const entry = sphereEntry(_sac.x, _sac.y, _sac.z, box.sacs.r,
+            ox, oy, oz, dx, dy, dz);
+          if (entry >= 0 && entry < bestT) {
+            bestT = entry; sacIndex = i; weak = false; found = true;
+          }
         }
       }
     }
@@ -1382,6 +1386,10 @@ export function buildCombat(ctx) {
   function drainLift(inst, amount, sacIndex = -1, detail = {}) {
     if (!inst || untouchable(inst) || inst.grounded) return 0;
     if (!Number.isFinite(inst.lift)) return 0;
+    if (inst.key === "winnower") {
+      const wPhase = ctx.winnower?.status?.()?.phase;
+      if (wPhase && wPhase !== "soar" && wPhase !== "strafe") return 0;
+    }
     const before = Math.max(0, inst.lift);
     const drained = Math.min(before, Math.max(0, Number(amount) || 0));
     if (drained <= 0) return 0;

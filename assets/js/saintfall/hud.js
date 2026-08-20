@@ -1007,10 +1007,10 @@ export function buildHud(ctx, host) {
       ? "Withdrawing - it is flying home"
       : w.grounded
         ? (w.stunned
-          ? "DOWN - strike it freely"
-          : w.stalled ? "Stalled - it is down and open" : "Stoking - the gut is exposed")
+          ? "DOWN - strike gut freely"
+          : w.stalled ? "Stalled - gut exposed" : "Stoking - gut exposed")
         : `Airborne · ${w.altitude}m · lift ${Math.max(0, Math.ceil(w.lift))}`;
-    eventCountEl.textContent = w.grounded ? "EXPOSED" : `${w.health} HP`;
+    eventCountEl.textContent = `${w.health} HP`;
     eventFillEl.style.width = `${clamp01(1 - w.health / Math.max(1, w.maxHealth)) * 100}%`;
     return true;
   }

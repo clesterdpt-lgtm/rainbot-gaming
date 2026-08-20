@@ -63,8 +63,27 @@ try {
     const dealt2 = ctx.combat.damageEnemy(inst, 5000, { source: "rifle", x: inst.x, y: inst.y, z: inst.z });
     const hpAfter2 = inst.health;
 
-    // Test 3: Final kill when boss is already low health
-    inst.health = maxHp * 0.2; // 20% health
+    // Test 3: Lift cannot be drained while grounded or in launch
+    const liftBefore = inst.lift;
+    const drainedWhileGrounded = ctx.combat.drainLift ? ctx.combat.drainLift(inst, 2, 0) : 0;
+    winnower.forcePhase("launch", 1.2);
+    const drainedWhileLaunching = ctx.combat.drainLift ? ctx.combat.drainLift(inst, 2, 0) : 0;
+
+    // Test 4: Lift CAN be drained in active flight (soar)
+    winnower.forcePhase("soar", 15);
+    const liftInFlight = inst.lift;
+    const drainedInFlight = ctx.combat.drainLift ? ctx.combat.drainLift(inst, 2, 0) : 0;
+    const liftAfterDrain = inst.lift;
+
+    // Test 5: HUD event count element displays numeric HP when grounded
+    inst.health = 4000;
+    inst.state = "alive";
+    winnower.forcePhase("stoke", 10);
+    ctx.hud?.update?.(0.1, ctx.player, ctx.camera);
+    const eventCountText = document.getElementById("sf-event-count")?.textContent || "";
+
+    // Test 6: Final kill when boss is already low health
+    inst.health = maxHp * 0.15; // 15% health
     winnower.forcePhase("stoke", 10);
     const finalDamage = ctx.combat.damageEnemy(inst, maxHp * 0.3, { source: "melee", x: inst.x, y: inst.y, z: inst.z });
     const hpFinal = inst.health;
@@ -81,6 +100,13 @@ try {
       damage2,
       dealt2,
       hpAfter2,
+      liftBefore,
+      drainedWhileGrounded,
+      drainedWhileLaunching,
+      liftInFlight,
+      drainedInFlight,
+      liftAfterDrain,
+      eventCountText,
       hpFinal,
       isDead,
     };
@@ -93,8 +119,11 @@ try {
   check(results.castMatBlending === THREE_NormalBlending, "Contact shadow uses NormalBlending (not MultiplyBlending)", `blending=${results.castMatBlending}`);
   check(results.castMatTint === "140f12", "Contact shadow tint is dark (no white rgb)", `tint=${results.castMatTint}`);
   check(results.poolMatBlending === THREE_AdditiveBlending, "Pool uses AdditiveBlending", `blending=${results.poolMatBlending}`);
-  check(results.dealt1 <= results.maxHp * 0.36 && results.dealt1 >= results.maxHp * 0.34, "Single downing damage is capped at ~35%", `dealt=${results.dealt1} maxHp=${results.maxHp}`);
+  check(results.dealt1 <= results.maxHp * 0.29 && results.dealt1 >= results.maxHp * 0.27, "Single downing damage is capped at ~28%", `dealt=${results.dealt1} maxHp=${results.maxHp}`);
   check(results.dealt2 === 0 && results.hpAfter2 === results.hpAfter1, "Additional damage in SAME downing is rejected/absorbed", `dealt2=${results.dealt2} hp=${results.hpAfter2}`);
+  check(results.drainedWhileGrounded === 0 && results.drainedWhileLaunching === 0, "Lift cannot be drained during ground or launch phases", `ground=${results.drainedWhileGrounded} launch=${results.drainedWhileLaunching}`);
+  check(results.liftInFlight === 4 && results.drainedInFlight > 0 && results.liftAfterDrain < results.liftInFlight, "Lift pool is full upon reaching flight and drains during soar", `lift=${results.liftInFlight} -> ${results.liftAfterDrain}`);
+  check(/HP/.test(results.eventCountText), "HUD readout displays numeric HP while grounded", `text="${results.eventCountText}"`);
   check(results.isDead && results.hpFinal <= 0, "Boss can still be cleanly killed when on low health", `hpFinal=${results.hpFinal}`);
 
   await browser.close();

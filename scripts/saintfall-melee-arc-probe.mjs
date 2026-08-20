@@ -116,7 +116,7 @@ try {
     }
 
     const steps = {};
-    for (const name of ["melee1", "melee2", "melee3"]) {
+    for (const name of ["melee1", "melee2", "melee3", "meleeTurn", "meleeLunge"]) {
       const { spec, samples } = sampleStep(name);
       const rs = samples.map((x) => x.r);
       const hs = samples.map((x) => x.h);
@@ -183,13 +183,18 @@ try {
       while (rel < -Math.PI) rel += Math.PI * 2;
       towardTarget = +(Math.abs(rel) * 180 / Math.PI).toFixed(1);
     }
-    // How far the body had turned when the hit window opened (0.31s
-    // into melee1).
-    const atHit = turn.find((x) => x.at >= 0.31) || turn[turn.length - 1];
+    /* How far the body had turned when the hit window opened. A
+       180-degree press is the turn slash now, so read the hit time
+       off whatever action the press actually started rather than
+       assuming melee1's 0.31s. */
+    const firstAction = turn.find((x) => x.action)?.action || "melee1";
+    const hitOpen = T.player.actionSpec(firstAction)?.hit?.[0] ?? 0.31;
+    const atHit = turn.find((x) => x.at >= hitOpen) || turn[turn.length - 1];
 
     return {
       steps,
       turn: {
+        action: firstAction,
         camYawDeg: +(camYaw * 180 / Math.PI).toFixed(1),
         turnedByHitWindowDeg: atHit?.turnedDeg ?? null,
         hitWindowAt: atHit?.at ?? null,

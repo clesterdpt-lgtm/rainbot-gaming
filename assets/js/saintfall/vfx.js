@@ -5172,23 +5172,45 @@ export function buildVfx(ctx, world) {
       reach: 1.90, arc: -1.62, centre: 0.05, roll: Math.PI * 0.44,
       height: 1.30, lift: 0.06, tilt: 0.03, inner: 0.80, life: 0.30, gain: 1.30,
     }),
+    /* meleeTurn: the quarter-turn-or-more spin. The ROOT sweeps the
+       offset itself and the strike fires mid-spin, so the body sits at
+       the middle of its pivot when this draws: a flat, nearly full
+       crescent centred on the body reads as the path the blade
+       actually carved from the old bearing round to the new one. */
+    4: Object.freeze({
+      reach: 2.02, arc: 3.9, centre: 0.10, roll: 0.08,
+      height: 1.42, lift: 0.10, tilt: 0.03, inner: 0.74, life: 0.30, gain: 1.35,
+    }),
+    /* meleeLunge: a driving thrust - almost no arc, all depth. Drawn
+       as a narrow streak past the shoulder rather than a fan; the low
+       `inner` stretches the glow back along the dash it rode in on. */
+    5: Object.freeze({
+      reach: 2.60, arc: 0.52, centre: 0.04, roll: 0.10,
+      height: 1.38, lift: 0.05, tilt: 0.02, inner: 0.34, life: 0.22, gain: 1.5,
+    }),
   });
 
   function meleeArc(x, y, z, yaw, reach, arc, hits = 0, slam = false, step = 0) {
-    const S = MELEE_SWEEPS[step] || MELEE_SWEEPS[slam ? 3 : 1];
+    /* Steps 4 and 5 are SHAPES, not combo indices, and a NEGATIVE step
+       is the same shape mirrored: the turn slash spins either way, and
+       its crescent must reveal in the direction the body actually
+       swept or the effect runs backwards through the spin. */
+    const mirror = step < 0 ? -1 : 1;
+    const S = MELEE_SWEEPS[Math.abs(step)] || MELEE_SWEEPS[slam ? 3 : 1];
     /* Per-step, because the three sweeps present differently: the
        rising diagonal is drawn in a rolled plane and is seen close to
        edge-on from behind the shoulder, so at a shared level it read
        as a thread while the flat opener read as a blade. */
     const gain = (S.gain ?? 1) * (hits ? 1.25 : 0.92);
-    slashFx(x, y + S.height, z, yaw, S.reach, S.arc, S.life,
-      "#ffb63a", "#fff0c8", gain, S.lift, S.tilt, S.inner, S.centre, S.roll);
+    slashFx(x, y + S.height, z, yaw, S.reach, S.arc * mirror, S.life,
+      "#ffb63a", "#fff0c8", gain, S.lift, S.tilt, S.inner,
+      S.centre * mirror, S.roll * mirror);
 
     /* The streaks come off the TIP at the end of the measured sweep -
        the same place the crescent ends - rather than off a bearing
        derived from the gameplay cone, which pointed them into open
        sand on every swing that finished across the body. */
-    const endYaw = yaw + S.centre + S.arc * 0.5;
+    const endYaw = yaw + (S.centre + S.arc * 0.5) * mirror;
     const tx = x + Math.sin(endYaw) * S.reach * 0.92;
     const tz = z + Math.cos(endYaw) * S.reach * 0.92;
     const ty = y + S.height + (slam ? -0.35 : 0.18);

@@ -1843,7 +1843,13 @@ export function buildCombat(ctx) {
      narrower cone - strictly worse. The clip that uses it drives
      the body forward too, so the extra reach is earned on screen
      rather than granted. */
-  function meleeStrike(mult = 1, arc = 2.4, slam = false, lunge = 1, comboStep = 0) {
+  /* `sweepId` picks the VFX crescent when the swing is not one of the
+     three combo shapes: 4 is the turn slash (negative = clockwise
+     spin, drawn mirrored), 5 the lunge, 0 falls back to the combo
+     step. Progression keeps reading `comboStep` - the spin and the
+     lunge are both the procession's first blow. */
+  function meleeStrike(mult = 1, arc = 2.4, slam = false, lunge = 1, comboStep = 0,
+    sweepId = 0) {
     const ps = ctx.player.state;
     const w = ctx.weapons && ctx.weapons.current;
     if (!w || !w.spec.melee) return 0;
@@ -2034,7 +2040,8 @@ export function buildCombat(ctx) {
        different planes - so it has to reach the effect. It was already
        being passed into this function and stopping here. */
     if (vfx && vfx.meleeArc) {
-      vfx.meleeArc(ps.x, ps.y, ps.z, ps.yaw, reach, arc, hits, slam, comboStep);
+      vfx.meleeArc(ps.x, ps.y, ps.z, ps.yaw, reach, arc, hits, slam,
+        sweepId || comboStep);
     }
     ctx.player.punch?.(slam
       ? MELEE_CONFIG.slamPunch

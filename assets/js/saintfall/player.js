@@ -2333,6 +2333,26 @@ export async function createPlayer(ctx, canvas) {
      it, R=15 leaves 1.0 and passes with margin while still spreading
      the pivot over twice as many frames as R=20 did. */
   const MELEE_TURN_RESPONSE = 15;
+  /* From a quarter turn out, even that response reads as input lag: the
+     thrust wind-up plays while the legs are still coming round, and the
+     press feels like it went somewhere else. At and past 90 degrees the
+     press therefore becomes `meleeTurn` - a low horizontal cut in which
+     THE SPIN IS THE SWING. The root sweeps the whole signed offset on
+     the clip's own authored window (spec.turn, a smoothstep - an
+     exponential damp front-loads the turn into a teleport, which is
+     exactly what the R=20 measurement above showed), and the strike arc
+     widens to the angle actually swept, so the target ahead AND
+     anything the blade carved through on the way are honest hits. */
+  const TURN_SLASH_MIN = Math.PI / 2 - 1e-4;
+  /* Coverage past the swept angle itself - roughly the crescent the
+     extended blade subtends on each side of its path. */
+  const TURN_SLASH_ARC_PAD = 1.5;
+  /* Peak root speed of the authored lunge drive. Faster than the old
+     hold-W thrust jog (12.8) because it is a BURST with its own clip,
+     not a locomotion target: the profile in ACTIONS.meleeLunge.drive
+     ramps it in, holds it through the closing dash and fades it during
+     recovery, so it never becomes a sustained sprint. */
+  const MELEE_LUNGE_SPEED = 16.5;
   /* Walking and flight-to-ground handoff must agree about what terrain
      the trooper can occupy. Keeping these gates in one classifier avoids
      a middle band where a slope is freely walkable but a descending
@@ -2602,6 +2622,66 @@ export async function createPlayer(ctx, canvas) {
         [0.96, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
       ],
     },
+    /* THE TURN SLASH - what a press becomes when the reticle is a
+       quarter turn or more off the body (see TURN_SLASH_MIN).
+
+       The root itself does the travelling: the facing solve reads
+       `turn` below and sweeps `state.yaw` through the captured offset
+       on that window, so the clip's only job is the silhouette that
+       makes the pivot read as an attack - blade levelled and carried
+       wide on a lowered, widened base, then gathered back in. `arc`
+       here is only the fallback; the live swing computes its own
+       strike arc from the angle actually swept (`action.strikeArc`).
+
+       The hit fires MID-SPIN (0.20s - half the wait of melee1's
+       0.31s), which is the responsiveness the whole feature buys:
+       from a full about-face the blade connects sooner than the old
+       pirouette-then-thrust even began to.
+
+       Direction: authored for a positive (leftward) sweep; the
+       mirrored copy for the other way is generated below, so the
+       blade leads the spin whichever way it runs. */
+    meleeTurn: {
+      dur: 0.68, hit: [0.20, 0.36], damage: 1.1, arc: 3.9, sweep: 4,
+      turn: [0.08, 0.34],
+      keys: [
+        [0.00, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
+        // Gather: shaft levelled, blade drawn across, weight sinking.
+        [0.10, -0.040, 0.060, -0.050, -0.22, -0.35, -0.15, -0.30, 0.06, -0.10, -0.070, -0.04, 0.10, 0.060, "load"],
+        // Full carry: blade at extension riding the root's own spin.
+        [0.30, 0.100, -0.030, 0.180, -0.16, 0.95, 0.30, 0.40, -0.18, 0.12, -0.100, 0.10, 0.14, 0.280, "strike"],
+        // Carve-through: momentum spent, base still wide.
+        [0.44, 0.040, 0.0, 0.060, -0.06, 0.40, 0.12, 0.15, -0.08, 0.05, -0.050, 0.05, 0.10, 0.100, "settle"],
+        [0.68, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
+      ],
+    },
+    /* THE LUNGE - what the opener becomes when forward is held at the
+       press (see meleeSwing). The old behaviour was a locomotion
+       speed bump under the ordinary swing: the trooper jogged at 12.8
+       with the run gait playing, which read as "running while
+       swinging" because that is literally what it was. This is a
+       committed dash instead: `drive` below is a speed profile the
+       update owns directly (ramp in, hold through the closing burst,
+       fade through recovery), travel locked to the captured bearing,
+       while the clip coils the blade high off the rear shoulder and
+       rams it out level as the body drops into a deep front split.
+       Depth over width: almost no arc, the longest reach in the kit,
+       and the hit lands at full extension as the dash crests. */
+    meleeLunge: {
+      dur: 0.82, hit: [0.30, 0.46], damage: 1.45, arc: 1.05, lunge: 1.5,
+      sweep: 5,
+      drive: { start: 0.05, ramp: 0.11, end: 0.30, fade: 0.20 },
+      keys: [
+        [0.00, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "load"],
+        // Coil: blade cocked high by the rear shoulder, weight back.
+        [0.18, -0.055, 0.065, -0.095, 0.20, -0.60, -0.24, -0.52, 0.16, -0.16, -0.045, -0.08, 0.07, -0.060, -0.05, "load"],
+        // The ram: level thrust at full slide, body low in a deep split.
+        [0.36, 0.085, -0.045, 0.215, -0.15, 0.30, 0.12, 0.55, -0.30, 0.10, -0.130, 0.30, 0.13, 0.320, 0.24, "strike"],
+        // Riding the follow-through out: blade still forward, rising.
+        [0.58, 0.045, -0.020, 0.120, -0.08, 0.18, 0.06, 0.28, -0.14, 0.05, -0.060, 0.16, 0.09, 0.160, 0.10, "settle"],
+        [0.82, 0.0, 0.0, 0.0, 0, 0, 0, "settle"],
+      ],
+    },
     /* ------------------------------------------------------------
        THE FALL.
 
@@ -2720,6 +2800,25 @@ export async function createPlayer(ctx, canvas) {
     },
   };
 
+  /* The spin can run either way, and a blade that TRAILS its own turn
+     reads as being dragged rather than swung. `meleeTurn` is authored
+     for a positive sweep; this builds the clockwise copy once by
+     negating only the side-picking channels - lateral offset (x),
+     mount yaw/roll, chest and pelvis lead. Heights, pitches, drops,
+     stance depth/width and the grip slide are symmetric and keep their
+     sign. Rows are variable-length (short rows end early and read as
+     zero), so the map only touches indices that exist. */
+  ACTIONS.meleeTurnCw = (() => {
+    const src = ACTIONS.meleeTurn;
+    const MIRROR = new Set([1, 5, 6, 7, 9]);
+    return {
+      ...src,
+      keys: src.keys.map((row) => row.map(
+        (v, i) => (MIRROR.has(i) && typeof v === "number" ? -v : v)
+      )),
+    };
+  })();
+
   const action = {
     name: null,
     t: 0,
@@ -2733,6 +2832,15 @@ export async function createPlayer(ctx, canvas) {
     queuedAimYaw: null,
     combo: 0,
     comboAt: -9,
+    /* The turn slash's live spin: the body yaw it started from, the
+       signed offset it sweeps, which way (for the mirrored VFX), and
+       the strike arc computed from that sweep. Null/0 for every other
+       action - beginAction resets them so a stale spin can never
+       drive a later swing's facing. */
+    turnFrom: null,
+    turnSweep: null,
+    turnDir: 0,
+    strikeArc: null,
   };
   const actionPose = {
     x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0,
@@ -2808,6 +2916,10 @@ export async function createPlayer(ctx, canvas) {
     action.spec = spec;
     action.t = 0;
     action.hitDone = false;
+    action.turnFrom = null;
+    action.turnSweep = null;
+    action.turnDir = 0;
+    action.strikeArc = null;
     action.aimYaw = name.startsWith("melee") && Number.isFinite(aimYaw)
       ? Math.atan2(Math.sin(aimYaw), Math.cos(aimYaw))
       : null;
@@ -2863,9 +2975,41 @@ export async function createPlayer(ctx, canvas) {
       return false;
     }
     if (state.clock - action.comboAt > MELEE_COMBO_GRACE_SECONDS) action.combo = 0;
+    action.queuedAimYaw = null;
+    /* THE QUARTER-TURN GATE. `offset` is the shortest signed turn from
+       where the body IS to where the press pointed. At 90 degrees or
+       more the ordinary opener would spend its whole wind-up
+       pirouetting, so the press becomes the turn slash instead: the
+       spin sweeps that offset itself and the strike covers the angle
+       swept (plus the blade's own crescent each side). It counts as
+       the first blow of the procession - spinning onto a new target
+       restarts the chain - so a follow-up press still climbs to
+       melee2/melee3. This outranks the lunge below: you cannot drive
+       forward through a bearing the body has not reached yet. */
+    const offset = angleDelta(state.yaw, aimYaw);
+    if (Math.abs(offset) >= TURN_SLASH_MIN) {
+      action.combo = 1;
+      action.comboAt = state.clock;
+      if (!beginAction(offset >= 0 ? "meleeTurn" : "meleeTurnCw", aimYaw)) {
+        return false;
+      }
+      action.turnFrom = state.yaw;
+      action.turnSweep = offset;
+      action.turnDir = offset >= 0 ? 1 : -1;
+      action.strikeArc = Math.min(TAU, Math.abs(offset) + TURN_SLASH_ARC_PAD);
+      return true;
+    }
     action.combo = (action.combo % 3) + 1;
     action.comboAt = state.clock;
-    action.queuedAimYaw = null;
+    /* HOLDING FORWARD turns the opener into the committed lunge. Only
+       the opener: the follow-up blows are close-range procession steps
+       and re-dashing inside them would carry the combo straight
+       through its own target. `move.y` is -1 for a held W (and for a
+       forward-tilted touch stick), read at the moment the swing
+       actually begins so a buffered chain re-evaluates it. */
+    if (action.combo === 1 && input.state.move.y < -0.25) {
+      return beginAction("meleeLunge", aimYaw);
+    }
     return beginAction(`melee${action.combo}`, aimYaw);
   }
 
@@ -2882,6 +3026,10 @@ export async function createPlayer(ctx, canvas) {
     action.queuedAimYaw = null;
     action.combo = 0;
     action.comboAt = -9;
+    action.turnFrom = null;
+    action.turnSweep = null;
+    action.turnDir = 0;
+    action.strikeArc = null;
     sampleAction(0);
     return true;
   }
@@ -2924,8 +3072,16 @@ export async function createPlayer(ctx, canvas) {
     if (hitWin && !action.hitDone && action.t >= hitWin[0] && action.t <= hitWin[1]) {
       action.hitDone = true;
       if (ctx.combat && ctx.combat.meleeStrike) {
-        ctx.combat.meleeStrike(action.spec.damage, action.spec.arc,
-          !!action.spec.slam, action.spec.lunge || 1, action.combo);
+        /* `strikeArc` is the turn slash's per-swing widening; every
+           other action uses its authored arc. The sweep id is the VFX
+           shape (4 spin, 5 lunge, 0 = draw by combo step), signed by
+           the spin direction so a clockwise spin draws a clockwise
+           crescent. `combo` stays 1-3 for progression - the spin and
+           the lunge ARE the procession's first blow. */
+        ctx.combat.meleeStrike(action.spec.damage,
+          action.strikeArc || action.spec.arc,
+          !!action.spec.slam, action.spec.lunge || 1, action.combo,
+          (action.spec.sweep || 0) * (action.turnDir || 1));
       }
     }
 
@@ -3610,7 +3766,10 @@ export async function createPlayer(ctx, canvas) {
       sightWant > state.sighted ? 11 : 8, dt);
 
     const isMeleeAction = !!(action.name && action.name.startsWith("melee"));
-    const isForwardMelee = isMeleeAction && mz < -0.1;
+    /* Actions with their own drive profile (the lunge) are excluded:
+       the profile owns their speed below, and letting the thrust jog
+       target fight it would re-accelerate the recovery. */
+    const isForwardMelee = isMeleeAction && mz < -0.1 && !action.spec?.drive;
 
     const target = boostMode
       ? boostState.speed
@@ -3651,6 +3810,25 @@ export async function createPlayer(ctx, canvas) {
        to be read as one flag from here on. */
     if (state.stunFor > 0) state.stunFor = Math.max(0, state.stunFor - dt);
     const rooted = state.rootFor > 0 || state.stunFor > 0;
+    /* THE LUNGE DRIVE. A trapezoid over the clip's own timeline: ramp
+       in, hold through the closing dash, fade through recovery. It is
+       a FLOOR under the damped speed rather than a target, so the
+       dash is ballistic - releasing W mid-lunge does not abort it, and
+       the ordinary damp takes over seamlessly as the profile fades.
+       Zeroed by everything that pins the trooper (web, stun) and by
+       every mode that owns speed outright. */
+    let lungeDrive = 0;
+    const driveSpec = action.spec?.drive;
+    if (driveSpec && !rooted && !flightMode && !boostMode && !shieldMode
+      && !slamMode && !movementLocked) {
+      const dt0 = action.t;
+      if (dt0 <= driveSpec.start) lungeDrive = 0;
+      else if (dt0 < driveSpec.ramp) {
+        lungeDrive = clamp01((dt0 - driveSpec.start)
+          / Math.max(1e-4, driveSpec.ramp - driveSpec.start));
+      } else if (dt0 <= driveSpec.end) lungeDrive = 1;
+      else lungeDrive = clamp01(1 - (dt0 - driveSpec.end) / Math.max(1e-4, driveSpec.fade));
+    }
     const wanted = rooted || slamMode || (shieldMode && shieldState?.movementLocked) ? 0
       : (mag > 0.01 || boostMode)
         ? target * lerp(1, ADS_SPEED, sighted) * inputAmount * state.slowFactor : 0;
@@ -3673,6 +3851,10 @@ export async function createPlayer(ctx, canvas) {
         ? (isForwardMelee ? 18.0 : (shieldMode ? 7.5 : 3.4))
         : 5.4;
       state.speed = damp(state.speed, wanted, speedResponse, dt);
+      if (lungeDrive > 0) {
+        state.speed = Math.max(state.speed,
+          MELEE_LUNGE_SPEED * lungeDrive * state.slowFactor);
+      }
     }
     if (flightMode) jetState.horizontalSpeed = state.speed;
 
@@ -3753,7 +3935,20 @@ export async function createPlayer(ctx, canvas) {
     }
     const meleeFacing = action.name && action.name.startsWith("melee")
       && Number.isFinite(action.aimYaw);
-    if (meleeFacing) {
+    /* The turn slash's spin is AUTHORED, not damped: a smoothstep over
+       the clip's `turn` window spreads the pivot evenly instead of
+       front-loading it the way an exponential response does, and once
+       the window ends the profile holds the captured bearing exactly
+       for the rest of the swing. Driven off `action.t`, so a throttled
+       frame turns further rather than falling behind its own strike. */
+    const turnDrive = meleeFacing && Array.isArray(action.spec?.turn)
+      && Number.isFinite(action.turnFrom);
+    if (turnDrive) {
+      const tw = action.spec.turn;
+      const u = clamp01((action.t - tw[0]) / Math.max(1e-4, tw[1] - tw[0]));
+      const eased = u * u * (3 - 2 * u);
+      wantYaw = action.turnFrom + action.turnSweep * eased;
+    } else if (meleeFacing) {
       /* Keep the animation and combat arc on one body frame for the
          whole blow. Translation remains camera-relative below, so
          turning the shoulders cannot reverse a held movement key. */
@@ -3784,7 +3979,12 @@ export async function createPlayer(ctx, canvas) {
           12.0,
           state.aimCommit
         );
-    state.yaw = dampAngle(state.yaw, wantYaw, turnResponse, dt);
+    if (turnDrive) {
+      // The profile IS the trajectory; damping it would lag the strike.
+      state.yaw = Math.atan2(Math.sin(wantYaw), Math.cos(wantYaw));
+    } else {
+      state.yaw = dampAngle(state.yaw, wantYaw, turnResponse, dt);
+    }
     /* Measure the turn rate that ACTUALLY happened rather than the
        one that was asked for; the damping above means those differ
        by a factor of three at the start of a hard turn, and the leg
@@ -3807,7 +4007,7 @@ export async function createPlayer(ctx, canvas) {
     const motionStartX = state.x;
     const motionStartZ = state.z;
     let downhillUpdated = false;
-    if ((mag > 0.01 || boostMode) && !slamMode) {
+    if ((mag > 0.01 || boostMode || lungeDrive > 0) && !slamMode) {
       const step = state.speed * dt;
       /* Melee and ranged aim commitment can own the BODY bearing, but
          neither may steal the movement stick. Preserve the same
@@ -3815,8 +4015,15 @@ export async function createPlayer(ctx, canvas) {
          otherwise S can become forward movement toward the target and
          A/D gain a forward component as the body turns to aim. The
          existing gait already supports body-relative strafing during
-         aim commitment. */
+         aim commitment.
+
+         The LUNGE is the one exception, and deliberately: it is a
+         committed dash along the bearing captured at the press. The
+         stick cannot steer it mid-flight and releasing W does not
+         stop it - which is what separates a lunge from a jog that
+         happens to be swinging. */
       const moveYaw = boostMode ? boostState.yaw
+        : lungeDrive > 0 && Number.isFinite(action.aimYaw) ? action.aimYaw
         : (shieldMode || meleeFacing || state.aimCommit > 0.002)
           ? state.camYaw + Math.atan2(-mx, -mz)
           : state.yaw;

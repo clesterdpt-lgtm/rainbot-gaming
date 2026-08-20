@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260819-garner-fix-2";
+  const BUILD = "20260819-melee-feel-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,

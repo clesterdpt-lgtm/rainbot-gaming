@@ -190,6 +190,13 @@ SCY_TIBIA_SWING = (0.0, -0.78, 0.62)   # tibia opens down and forward, to lance
 SCY_TARSUS_SWING = (0.0, 0.27, 0.96)   # the foot curls forward, or trails back
 
 
+# How long the death clip runs. Named because where a corpse comes to
+# rest is measured at the LAST frame of it - see
+# `scripts/saintfall-corpse-rest-probe.mjs` - and a measurement aimed
+# at a frame the clip no longer reaches reports the pose mid-collapse.
+DEATH_FRAMES = 78
+
+
 def leg_names(side: str, i: int) -> tuple[str, str, str]:
     return (f"coxa{i}_{side}", f"femur{i}_{side}", f"tibia{i}_{side}")
 
@@ -963,10 +970,38 @@ def build_actions(arm) -> list[str]:
     # them everywhere else, because the runtime IK owns the legs while
     # the animal is alive. A dead one is not walking, so the legs
     # fold under it here and nothing fights the solver.
+    #
+    # HOW FAR THE BODY TIPS IS A GROUND-CONTACT NUMBER, not a taste one,
+    # and it is the whole reason this animal used to die on its feet.
+    #
+    # Every leg hangs off `thorax`, so tipping the thorax swings all
+    # eight of them: at the 0.52/0.14/0.10 this carried, the sag drove
+    # the front feet 0.54m UNDER the sand while the roll lifted the far
+    # side clear, and the eight feet that start life within 7cm of each
+    # other ended up spread over 1.89m. The runtime seats a corpse by
+    # dropping it until the mesh's 4th percentile reaches the sand -
+    # see `measureDeathRest` in enemies.js - so those two buried front
+    # feet took the seating for the whole animal and held the other
+    # nine metres of it 2.2m in the air, legs straight, looking alive.
+    #
+    # So the sag is cut to where the feet come to rest at the belly
+    # (0.615m, and it cannot be moved: `thorax` is parented to `root`,
+    # not to the legs, so no leg key can lower the body a millimetre).
+    # The animal then seats 0.67m lower than it stood and puts its
+    # underside on the sand, which is the collapse.
+    #
+    # The roll and yaw survive at about a third of their old size.
+    # They are what stops a corpse reading as a model with its
+    # animation switched off, and they are affordable only because
+    # they are small: sweeping them at this sag, square feet sit 0.33m
+    # apart, 0.04/0.03 spreads them to 0.60m, and the old 0.14/0.10
+    # spread them to 1.26m. `scripts/saintfall-corpse-rest-probe.mjs`
+    # is what these were tuned against; it puts the shipped clip at a
+    # 0.072m rest gap against the 0.21m the death-shots check allows.
     frames = []
     for frame, t in ((0, 0.0), (12, 0.30), (30, 0.78), (54, 1.0), (78, 1.0)):
         pose = rest()
-        pose["thorax"] = (0.52 * t, 0.14 * t, 0.10 * t)
+        pose["thorax"] = (0.34 * t, 0.05 * t, 0.035 * t)
         pose["abdomen1"] = (0.30 * t, -0.20 * t, 0.0)
         pose["abdomen2"] = (0.26 * t, -0.26 * t, 0.0)
         pose["abdomen3"] = (0.22 * t, -0.30 * t, 0.0)
@@ -981,6 +1016,13 @@ def build_actions(arm) -> list[str]:
         sym(pose, "tarsus", 0.95 * t, 0.0, 0.0)
         sym(pose, "mandible", 0.0, 0.30 * t, 0.0)
         # Legs buckle: femurs collapse outward, tibiae fold under.
+        #
+        # The coxa splay is the one leg key written MIRRORED, and it is
+        # safe: the sides are built by reflecting through x=0, so a
+        # sign-flipped Z lands both feet at the same height (measured -
+        # every L/R pair matches to the millimetre). The femur and
+        # tibia folds are X, which needs no sign at all for the same
+        # reason `sym` leaves X alone.
         for i in range(len(LEG_RIG)):
             for side, sgn in (("L", 1.0), ("R", -1.0)):
                 coxa, femur, tibia = leg_names(side, i)
@@ -988,7 +1030,7 @@ def build_actions(arm) -> list[str]:
                 pose[femur] = (0.72 * t + 0.10 * i * t, 0.0, 0.0)
                 pose[tibia] = (-1.15 * t, 0.0, 0.0)
         frames.append((frame, pose))
-    bake("death", frames, 78)
+    bake("death", frames, DEATH_FRAMES)
 
     return names
 

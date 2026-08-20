@@ -1,0 +1,34 @@
+{
+  "id": "01a020f6-dcdb-78b6-921d-349e5d86187f",
+  "type": "image-to-3d",
+  "status": "SUCCEEDED",
+  "progress": 100,
+  "createdAt": 1787259452249,
+  "startedAt": 1787259452255,
+  "finishedAt": 1787259594880,
+  "expiresAt": 1787518794880,
+  "consumedCredits": 30,
+  "taskError": null,
+  "sourceImage": "assets/concepts/saintfall/meshy/choirblade-drop-pod-meshy-source-v2.png",
+  "masterFile": "sanctum-drop-pod-closed-master.glb",
+  "thumbnails": [
+    "sanctum-drop-pod-closed-preview.png"
+  ],
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 30000,
+    "pose_mode": "",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ],
+    "texture_prompt": "Ivory glazed ceramic petals, pale polished gold seams and crown, solid matte graphite ablative impact prow, restrained warm-white halo rings, physically based materials, no engines, no nozzles, no landing gear."
+  }
+}

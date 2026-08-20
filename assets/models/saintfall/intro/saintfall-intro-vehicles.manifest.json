@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-20T21:01:00Z",
+  "generator": {
+    "service": "Meshy",
+    "pipeline": "image-to-3d",
+    "model": "meshy-6",
+    "pbr": true,
+    "remeshed": true,
+    "runtimeOptimization": "scripts/saintfall-optimize-static-model.mjs --texture-size 2048 --texture-format webp"
+  },
+  "runtimeContract": {
+    "carrier": "Replaces the procedural orbital hull; the procedural cradle and release clamps remain animated.",
+    "closedPod": "Visible during release, orbital fall, and atmospheric entry; excluded from collision.",
+    "openPod": "Visible from hatch deployment through gameplay; its shipped triangles are the only pod surfaces included in collision.",
+    "fallback": "The original procedural carrier and pod remain available if a GLB cannot load."
+  },
+  "assets": [
+    {
+      "key": "carrier",
+      "taskId": "01a020f6-dcc9-769e-9505-119d074dbeaa",
+      "sourceImage": "assets/concepts/saintfall/meshy/choirblade-carrier-meshy-source-v4-clean-side-profile.png",
+      "master": "output/meshy-masters/saintfall/intro-vehicles/choirblade-carrier-master.glb",
+      "runtime": "assets/models/saintfall/intro/choirblade-carrier.glb",
+      "preview": "assets/models/saintfall/intro/choirblade-carrier-preview.png",
+      "triangles": 51488,
+      "bytes": 5735752,
+      "sha256": "d853929e608b683c920db2c712e0fc2de351c516a802e4278156072267861873"
+    },
+    {
+      "key": "closedPod",
+      "taskId": "01a020f6-dcdb-78b6-921d-349e5d86187f",
+      "sourceImage": "assets/concepts/saintfall/meshy/choirblade-drop-pod-meshy-source-v2.png",
+      "master": "output/meshy-masters/saintfall/intro-vehicles/sanctum-drop-pod-closed-master.glb",
+      "runtime": "assets/models/saintfall/intro/sanctum-drop-pod-closed.glb",
+      "preview": "assets/models/saintfall/intro/sanctum-drop-pod-closed-preview.png",
+      "triangles": 29727,
+      "bytes": 4025272,
+      "sha256": "c0fcf1caf598000e44beeb5c214ac7a01bb903c512f0c46f42821e094a335197"
+    },
+    {
+      "key": "openPod",
+      "taskId": "01a020f6-dcf1-769e-9cc7-16108f05f9b4",
+      "sourceImage": "assets/concepts/saintfall/meshy/choirblade-drop-pod-open-meshy-source-v1.png",
+      "master": "output/meshy-masters/saintfall/intro-vehicles/sanctum-drop-pod-open-master.glb",
+      "runtime": "assets/models/saintfall/intro/sanctum-drop-pod-open.glb",
+      "preview": "assets/models/saintfall/intro/sanctum-drop-pod-open-preview.png",
+      "triangles": 39607,
+      "bytes": 4635488,
+      "sha256": "f802bd594a0a8f9ac554e233edb78257544864ff847b1876c1c876fa81ebdd24"
+    }
+  ]
+}

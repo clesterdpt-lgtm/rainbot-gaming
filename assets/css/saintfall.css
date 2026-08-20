@@ -4028,7 +4028,7 @@ body[data-sf-contrast="high"] #sf-hud :is(.sf-hud__vitals, .sf-hud__minimap) {
   display: flex;
   align-items: baseline;
   gap: 1.1rem;
-  min-height: auto;
+  min-height: 2.75rem;
   padding: .45rem 1.25rem .45rem .85rem;
   margin: 0;
   border: none !important;

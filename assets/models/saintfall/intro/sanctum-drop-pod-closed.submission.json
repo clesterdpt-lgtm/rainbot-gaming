@@ -1,0 +1,22 @@
+{
+  "taskId": "01a020f6-dcdb-78b6-921d-349e5d86187f",
+  "taskType": "image-to-3d",
+  "input": "assets/concepts/saintfall/meshy/choirblade-drop-pod-meshy-source-v2.png",
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 30000,
+    "pose_mode": "",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ],
+    "texture_prompt": "Ivory glazed ceramic petals, pale polished gold seams and crown, solid matte graphite ablative impact prow, restrained warm-white halo rings, physically based materials, no engines, no nozzles, no landing gear."
+  }
+}

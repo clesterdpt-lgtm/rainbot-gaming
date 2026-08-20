@@ -16,6 +16,7 @@ import {
   buildTerrain, makeHeightField, DISTRICTS, DROP_SITE,
 } from "saintfall/terrain.js";
 import { buildWorld } from "saintfall/world.js";
+import { loadIntroVehicleModels } from "saintfall/intro-models.js";
 import { buildPod } from "saintfall/pod.js";
 import { buildVfx } from "saintfall/vfx.js";
 import { createPlayer } from "saintfall/player.js";
@@ -148,6 +149,13 @@ export async function start({ boot, build } = {}) {
 
   const world = await buildWorld(ctx, (v, label) => progress(0.60 + v * 0.32, label));
   ctx.world = world;
+
+  /* The landed pod contributes its own shipped triangles to collision,
+     so the authored vehicle assets must resolve before the raster is baked.
+     Production also loads the carrier and sealed pod for the orbital act;
+     direct-gameplay QA only pays for the open world landmark. */
+  progress(0.921, "Consecrating the descent vehicles");
+  ctx.introVehicles = await loadIntroVehicleModels(ctx, { includeFlight: introEnabled });
 
   /* The lander is built ONCE, here, in its landed pose - not by the
      cinematic. The intro borrows it, flies it down and hands it back

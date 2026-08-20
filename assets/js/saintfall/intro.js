@@ -29,6 +29,7 @@ import {
 import { mergeGeometries } from "saintfall/structures.js";
 import { DROP_SITE, DROP_CRATER } from "saintfall/terrain.js";
 import { POD_LANDED_PITCH, POD_LANDED_ROLL, POD_DOOR_REACH } from "saintfall/pod.js";
+import { instantiateIntroVehicle } from "saintfall/intro-models.js";
 import { QUALITY_TIERS, qualityLabel } from "saintfall/render.js";
 import { DIFFICULTY_TIERS, difficultyLabel, difficultyBlurb } from "saintfall/difficulty.js";
 
@@ -957,6 +958,39 @@ function buildOrbitScene(ctx, reducedMotion) {
     merged(strake, strakeMat, "drop-barge-strakes");
   }
 
+  /* Replace the legacy generated hull with the approved clean-side-profile
+     Choirblade. Its source is long on X with the prow at -X; a quarter
+     turn maps that prow to the cinematic's +Z keel while preserving the
+     established cradle origin and broadside camera blocking. */
+  const authoredCarrier = instantiateIntroVehicle(
+    ctx, ctx.introVehicles?.models?.carrier,
+    {
+      name: "choirblade-carrier",
+      atmosphere: false,
+      envMapIntensity: 1.08,
+      collision: "none",
+    },
+  );
+  if (authoredCarrier) {
+    const asset = authoredCarrier.asset;
+    authoredCarrier.root.scale.set(
+      510 / asset.size.x,
+      68 / asset.size.y,
+      62 / asset.size.z,
+    );
+    authoredCarrier.root.rotation.y = Math.PI / 2;
+    const centreOffset = asset.center.clone()
+      .multiply(authoredCarrier.root.scale)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+    authoredCarrier.root.position.set(
+      -centreOffset.x,
+      45 - centreOffset.y,
+      -centreOffset.z,
+    );
+    carrier.add(authoredCarrier.root);
+    barge.visible = false;
+  }
+
   /* The cradle the lander is clamped into. It stays with the barge
      when the clamps blow, which is what makes the release read as a
      release rather than as the pod simply moving. */
@@ -1056,7 +1090,7 @@ function buildOrbitScene(ctx, reducedMotion) {
   return {
     scene, camera, textures, diagnostics,
     starUniforms, planetUniforms, plasmaUniforms, wakeUniforms,
-    space, planet, atmosphere, halo, carrier, cradle, clamps,
+    space, planet, atmosphere, halo, carrier, barge, authoredCarrier, cradle, clamps,
     plasmaRig, plasma, wake,
     embers, emberBase, emberPos,
   };
@@ -2584,6 +2618,7 @@ export function buildDropIntro(ctx, options = {}) {
     if (state.disposed && disposedStatus) return { ...disposedStatus };
     const a = audio?.stats?.() || {};
     const podPose = pod ? pod.pose : { petals: 0, glow: 0 };
+    const podAssets = pod?.diagnostics?.() || null;
     return {
       enabled: true,
       active: !state.completed,
@@ -2618,6 +2653,9 @@ export function buildDropIntro(ctx, options = {}) {
         /** Metres between the flown pod and the level's landed mark. */
         siteError: pod ? Number(Math.hypot(
           pod.root.position.x - site.x, pod.root.position.z - site.z).toFixed(3)) : 0,
+        authored: !!podAssets?.authored,
+        closedAsset: podAssets?.closedAsset || null,
+        openAsset: podAssets?.openAsset || null,
       },
       trooper: ctx.player ? {
         visible: !!ctx.player.figure.root.visible,
@@ -2637,6 +2675,7 @@ export function buildDropIntro(ctx, options = {}) {
       },
       impactCount: state.impactCount,
       audio: a.cinematic || { active: false, sources: 0 },
+      vehicles: ctx.introVehicles?.diagnostics?.() || { loaded: {}, failures: {} },
       scene: state.shot === "orbit"
         ? (orbit?.diagnostics || { meshes: 0, triangles: 0, points: 0, materials: 0 })
         : rigDiagnostics,

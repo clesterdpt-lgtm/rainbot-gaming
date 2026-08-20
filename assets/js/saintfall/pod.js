@@ -33,6 +33,7 @@ import {
 } from "saintfall/core.js";
 import { patchMaterial, paintFlat, paintGeometry } from "saintfall/art.js";
 import { mergeGeometries } from "saintfall/structures.js";
+import { instantiateIntroVehicle } from "saintfall/intro-models.js";
 
 /** Prow base to nose tip, in metres. The trooper is 1.85m. */
 export const POD_HEIGHT = 6.9;
@@ -517,6 +518,78 @@ export function buildPod(ctx, site) {
   const petals = buildPetals(THREE, mats, root);
   const haloRig = buildHalo(THREE, mats, glowMat, root);
 
+  /* Keep the original lander as the zero-network fallback, but replace
+     every visible surface when the approved Meshy pair is available.
+     Direct-gameplay QA deliberately loads only the opened model. */
+  const proceduralMeshes = [];
+  root.traverse((node) => {
+    if (node.isMesh) proceduralMeshes.push(node);
+  });
+  const introModels = ctx.introVehicles?.models || {};
+  const openVisual = instantiateIntroVehicle(ctx, introModels.openPod, {
+    name: "sanctum-drop-pod-open",
+    atmosphere: true,
+    envMapIntensity: 0.94,
+    collision: "solid",
+  });
+  const closedVisual = instantiateIntroVehicle(ctx, introModels.closedPod, {
+    name: "sanctum-drop-pod-closed",
+    atmosphere: true,
+    envMapIntensity: 0.94,
+    collision: "none",
+    castShadow: false,
+  });
+  const authoredMode = !!openVisual
+    && (!ctx.introVehicles?.includeFlight || !!closedVisual);
+  const authoredVisuals = [closedVisual, openVisual].filter(Boolean);
+
+  /* Both source models are centred and share a vertical Y axis. Fit the
+     complete halo-to-prow silhouette to the established 8.15m envelope,
+     then pin the impact point to the procedural pod's -0.55m datum. */
+  for (const visual of authoredVisuals) {
+    const scale = 8.15 / visual.asset.size.y;
+    const yaw = 0;
+    visual.root.scale.setScalar(scale);
+    visual.root.rotation.y = yaw;
+    const centreOffset = visual.asset.center.clone()
+      .multiplyScalar(scale)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    visual.root.position.set(
+      -centreOffset.x,
+      -0.55 - visual.asset.box.min.y * scale,
+      -centreOffset.z,
+    );
+    root.add(visual.root);
+    for (const material of visual.materials) {
+      material.userData.sfIntroBase = {
+        color: material.color?.clone?.() || null,
+        emissive: material.emissive?.clone?.() || null,
+        emissiveIntensity: material.emissiveIntensity ?? 1,
+        opacity: material.opacity ?? 1,
+        transparent: !!material.transparent,
+        depthWrite: material.depthWrite !== false,
+      };
+    }
+  }
+
+  /* Collision is baked while the pod is landed and open. The hidden
+     procedural hull and sealed Meshy state must never become invisible
+     walls beside the model the player can actually see. */
+  if (authoredMode) {
+    for (const mesh of proceduralMeshes) mesh.userData.noCollide = true;
+  } else {
+    /* Never mix half of the authored pair with the procedural fallback.
+       Collision ignores visibility, so a partially loaded open GLB must
+       also surrender its structural tag before the grid is baked. */
+    for (const visual of authoredVisuals) {
+      visual.root.visible = false;
+      for (const mesh of visual.meshes) {
+        mesh.userData.noCollide = true;
+        delete mesh.userData.collisionSolid;
+      }
+    }
+  }
+
   /* One practical, so the pod actually lights the sand it sits in.
      Without it an "open, glowing" pod is a bright texture next to
      unlit ground and the spill has to be faked in the overlay.
@@ -554,6 +627,60 @@ export function buildPod(ctx, site) {
   };
 
   const pose = { petals: 1, glow: 1, halo: 1, heat: 0 };
+  let authoredScorch = 0;
+
+  function setVisualAlpha(visual, alpha) {
+    if (!visual) return;
+    const a = clamp01(alpha);
+    visual.root.visible = a > 0.01;
+    for (const material of visual.materials) {
+      const baseMat = material.userData.sfIntroBase;
+      if (!baseMat) continue;
+      material.opacity = baseMat.opacity * a;
+      const translucent = a < 0.995 || baseMat.transparent;
+      if (material.transparent !== translucent) {
+        material.transparent = translucent;
+        material.needsUpdate = true;
+      }
+      material.depthWrite = a >= 0.995 && baseMat.depthWrite;
+    }
+  }
+
+  function refreshAuthoredFinish() {
+    if (!authoredMode) return;
+    const heat = pose.heat;
+    const soot = Math.max(heat * 0.52, authoredScorch * 0.30);
+    for (const visual of authoredVisuals) {
+      for (const material of visual.materials) {
+        const baseMat = material.userData.sfIntroBase;
+        if (!baseMat) continue;
+        if (baseMat.color && material.color) {
+          material.color.copy(baseMat.color);
+          material.color.multiplyScalar(1 - soot);
+          if (heat > 0.01) {
+            material.color.r = Math.min(1, material.color.r + heat * 0.12);
+            material.color.g *= 1 - heat * 0.13;
+            material.color.b *= 1 - heat * 0.24;
+          }
+        }
+        if (baseMat.emissive && material.emissive) {
+          material.emissive.copy(baseMat.emissive);
+          material.emissive.r = Math.min(1, material.emissive.r + heat * 0.82);
+          material.emissive.g = Math.min(1, material.emissive.g + heat * heat * 0.24);
+          material.emissive.b = Math.min(1, material.emissive.b + heat * heat * 0.04);
+          material.emissiveIntensity = baseMat.emissiveIntensity + heat * 1.35;
+        }
+      }
+    }
+  }
+
+  function refreshAuthoredState() {
+    if (!authoredMode) return;
+    for (const mesh of proceduralMeshes) mesh.visible = false;
+    const open = smootherstep(clamp01((pose.petals - 0.08) / 0.84));
+    setVisualAlpha(closedVisual, 1 - open);
+    setVisualAlpha(openVisual, open);
+  }
 
   function refreshSeams() {
     mats.halo.emissiveIntensity = lerp(1.1, 4.2, smootherstep(pose.petals)) * pose.glow;
@@ -572,6 +699,7 @@ export function buildPod(ctx, site) {
       petal.hinge.rotation.x = local * (front ? DOOR_FRONT : DOOR_SIDE);
     }
     refreshSeams();
+    refreshAuthoredState();
   }
 
   function setGlow(v) {
@@ -579,6 +707,7 @@ export function buildPod(ctx, site) {
     spill.intensity = pose.glow * 5.4;
     mats.lining.emissiveIntensity = 0.08 + pose.glow * 0.40;
     refreshSeams();
+    refreshAuthoredState();
   }
 
   function setHalo(v) {
@@ -586,6 +715,7 @@ export function buildPod(ctx, site) {
     haloRig.halo.visible = pose.halo > 0.01;
     haloRig.halo.scale.setScalar(0.55 + pose.halo * 0.45);
     haloRig.shaft.visible = pose.halo > 0.35;
+    refreshAuthoredState();
   }
 
   function setHeat(v) {
@@ -605,6 +735,7 @@ export function buildPod(ctx, site) {
     );
     mats.gold.emissiveIntensity = h * 1.5;
     pose.heat = h;
+    refreshAuthoredFinish();
   }
 
   /** Permanent scorch, applied once at landfall. A pod that came
@@ -622,6 +753,8 @@ export function buildPod(ctx, site) {
     mats.gold.emissive.copy(goldEmissive);
     mats.gold.emissiveIntensity = 1;
     pose.heat = 0;
+    authoredScorch = h;
+    refreshAuthoredFinish();
   }
 
   let clock = 0;
@@ -667,7 +800,10 @@ export function buildPod(ctx, site) {
   return {
     root,
     materials: mats,
-    parts: { base, cradle, petals, halo: haloRig, spill },
+    parts: {
+      base, cradle, petals, halo: haloRig, spill,
+      authored: { enabled: authoredMode, closed: closedVisual, open: openVisual },
+    },
     /** World Y of the landed hull origin, and of the crater floor. */
     restY,
     groundY,
@@ -701,7 +837,15 @@ export function buildPod(ctx, site) {
         const count = g.index ? g.index.count : (g.attributes.position?.count || 0);
         triangles += count / 3;
       });
-      return { meshes, triangles: Math.round(triangles), materials: mats.all.length };
+      return {
+        meshes,
+        triangles: Math.round(triangles),
+        materials: mats.all.length
+          + authoredVisuals.reduce((sum, visual) => sum + visual.materials.length, 0),
+        authored: authoredMode,
+        closedAsset: closedVisual?.asset.file || null,
+        openAsset: openVisual?.asset.file || null,
+      };
     },
   };
 }

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-/* Verify that the approved Meshy landmarks, rather than their retired
-   procedural stand-ins, own Saintfall's walking and flight collision. */
+/* Verify that the approved Meshy landmarks and opened drop pod, rather
+   than their retired or hidden procedural stand-ins, own Saintfall's
+   walking and flight collision. */
 
 import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -89,12 +90,15 @@ try {
     const retiredColliders = collision.perMesh.filter((entry) =>
       /(?:saint-(?:head|hand)-collision-proxy|reach-vane-(?:masts|sails)-collision-proxy)/
         .test(entry.name));
+    const podColliders = collision.perMesh.filter((entry) =>
+      /(?:pod|sanctum-drop)/.test(entry.name));
     return {
       version: T.version,
       landmarks,
       sceneProxyNames,
       landmarkColliders,
       retiredColliders,
+      podColliders,
       collision: {
         cells: collision.cells,
         flightCells: collision.flightCells,
@@ -122,6 +126,12 @@ try {
     `${diagnostics.landmarkColliders.length}/19 collider records`);
   check("collision baking remains within its load budget",
     diagnostics.collision.buildMs < 1200, `buildMs=${diagnostics.collision.buildMs}`);
+  check("only the visible opened Meshy pod owns lander collision",
+    diagnostics.podColliders.length === 1
+      && diagnostics.podColliders[0].name === "sanctum-drop-pod-open-mesh"
+      && diagnostics.podColliders[0].cells > 0
+      && diagnostics.podColliders[0].flightIntervals > 0,
+    JSON.stringify(diagnostics.podColliders));
 
   /* These are the empty-sand contacts measured against the retired
      proxies before the fix. Keeping them explicit turns the reported

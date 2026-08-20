@@ -1,0 +1,34 @@
+{
+  "id": "01a020f6-dcc9-769e-9505-119d074dbeaa",
+  "type": "image-to-3d",
+  "status": "SUCCEEDED",
+  "progress": 100,
+  "createdAt": 1787259448198,
+  "startedAt": 1787259448208,
+  "finishedAt": 1787259563635,
+  "expiresAt": 1787518763635,
+  "consumedCredits": 30,
+  "taskError": null,
+  "sourceImage": "assets/concepts/saintfall/meshy/choirblade-carrier-meshy-source-v4-clean-side-profile.png",
+  "masterFile": "choirblade-carrier-master.glb",
+  "thumbnails": [
+    "choirblade-carrier-preview.png"
+  ],
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 50000,
+    "pose_mode": "",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ],
+    "texture_prompt": "Ivory glazed ceramic hull, pale polished gold structural trim, dark graphite ventral armor, restrained warm-white lancet windows and contour light, physically based metal and ceramic, clean sacred-industrial capital ship, no painted side thrusters."
+  }
+}

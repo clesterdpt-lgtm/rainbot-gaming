@@ -682,6 +682,53 @@ try {
       hp: [saved.before?.health, saved.after?.health],
       cut: [saved.before?.armsSevered, saved.after?.armsSevered] }));
 
+  /* ---- A LOADED GARNER IS STILL HITTABLE -------------------------------
+     The round-trip check above proves the STATE comes back; it proved
+     nothing about the HIT RIG, because it damages through damageEnemy,
+     which takes the instance directly and never consults a capsule.
+     enemies.restore() recreates the instance, and this animal is the
+     bestiary's one procedural species - no .glb, so the per-limb tables
+     and the two live body nodes exist only if the module re-attaches
+     them to the rebind. For as long as it did not, a loaded Garner had
+     `legs: []` and no `garner_throat`/`garner_lip`, which made it
+     immune to every ray and every swing while stratagem splash (pure
+     distance) still landed - "only call actions damage it", for every
+     session that began with CONTINUE. So: fire a real ray at the mouth
+     of the freshly LOADED instance and demand blood. */
+  const loadedRig = await page.evaluate(() => {
+    const T = window.__SF;
+    const THREE = T.THREE;
+    const inst = T.enemies.live.find((e) => e.key === "garner");
+    const rig = {
+      legs: inst?.legs?.length ?? 0,
+      pools: inst?.legHp?.length ?? 0,
+      throatBone: !!inst?.bones?.get?.("garner_throat"),
+      lipBone: !!inst?.bones?.get?.("garner_lip"),
+    };
+    const b = inst.bones.get("garner_lip");
+    let dealt = 0;
+    let hit = false;
+    if (b) {
+      b.updateWorldMatrix(true, false);
+      const w = new THREE.Vector3().setFromMatrixPosition(b.matrixWorld);
+      const o = new THREE.Vector3(w.x + 20, w.y + 12, w.z);
+      const d = new THREE.Vector3(w.x, w.y, w.z).sub(o).normalize();
+      const hpBefore = inst.health
+        + inst.legHp.reduce((sum, v) => sum + v, 0);
+      hit = !!T.combat.fire(o, d, { damage: 120, range: 200 });
+      dealt = hpBefore - (inst.health
+        + inst.legHp.reduce((sum, v) => sum + v, 0));
+    }
+    return { rig, hit, dealt: Number(dealt.toFixed(1)) };
+  });
+  check("a restored instance keeps its full hit rig",
+    loadedRig.rig.legs === 6 && loadedRig.rig.pools === 6
+    && loadedRig.rig.throatBone && loadedRig.rig.lipBone,
+    JSON.stringify(loadedRig.rig));
+  check("...and a real shot draws blood from it",
+    loadedRig.hit && loadedRig.dealt > 0,
+    `hit ${loadedRig.hit}, dealt ${loadedRig.dealt}`);
+
   /* ---- THE GROUND ITSELF ----------------------------------------------- */
   /* THE PIT IS TERRAIN AND IT IS NOT ALWAYS THERE. From the far side of
      the pan the Ossuary has to be level ground - the encounter's whole

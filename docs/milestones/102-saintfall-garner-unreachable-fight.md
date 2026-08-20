@@ -134,3 +134,48 @@ shared stream and silently re-scatter the other 3,399.
 After: `floaterCount` 0, same camera, nothing bare
 (`output/saintfall/garner-bug/floating-rock-fixed.png`). 39/39 on the Garner harness,
 18/18 on the boss-pass probe.
+
+---
+
+## The real root cause: a LOADED Garner has no hit rig
+
+Third report, same fight: *"melee or projectiles do no damage — only call actions work."*
+The rock fix proved the new build was live, so this was a genuine third bug — and it is
+the one the player was hitting all along.
+
+**The discriminator was in the report itself.** Call actions damage through
+`explode`/`shockwave` → `damageEnemy` — pure distance, no capsule. Rays and melee resolve
+against the instance's hit rig: `inst.legs`, `inst.legHp`, `inst.legBroken`, and the
+`garner_throat`/`garner_lip` body nodes. Working splash + dead rays = the rig is gone.
+
+**Where it went:** `restore()` rebinds `inst` to the instance `enemies.restore()` has
+just recreated, then calls `ensureSpawned()` — whose first line was `if (inst) return
+inst;`. The rebind came back undressed. The Garner is the bestiary's one
+`procedural: true` species: no .glb, so `enemies.spawn` gives it an empty root and an
+empty bones map, and the entire hit rig exists only where the module attaches it — which
+was only on the fresh-spawn path. Measured:
+
+| | legs | pools | throat/lip bones | 3s of held fire |
+|---|---|---|---|---|
+| fresh boot | 6 | 6 | ✓ | **1,720** |
+| after save→load | **0** | **0** | **✗** | **0** |
+
+Every other boss survives a load because its bones and legs come back off its .glb rig
+automatically. And every real session is post-load: CONTINUE is a load, and since m101
+every death funnels through the autosave. QA probes boot fresh — which is why three
+rounds of "damage works in my repro" were all true and all beside the point.
+
+**The fix:** the rig dressing is extracted into `dressInstance()` — idempotent, keeps
+existing pools (restore overwrites them from the save a moment later; a mid-session
+re-dress must not heal six limbs) — and `ensureSpawned()` now dresses on BOTH paths:
+`if (inst) return dressInstance();`. Post-load: rig 6/6/✓, 1,624 dealt in the same
+3-second test.
+
+**The suite hole, closed:** the round-trip check proved state comes back but damaged via
+`damageEnemy` — rig-blind by construction. The harness now fires a real ray at the
+freshly loaded instance's collar and demands blood: `a restored instance keeps its full
+hit rig` + `...and a real shot draws blood from it`. 41/41.
+
+Honest ledger for this fight, three bugs deep: the 64m aggro band (real, fixed, m102),
+the stale cache-buster (real, fixed), and this — the one the player actually meant.
+`BUILD` → `20260819-garner-fix-2`.

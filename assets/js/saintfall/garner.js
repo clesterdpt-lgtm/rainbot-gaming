@@ -3899,25 +3899,54 @@ export function buildGarner(ctx) {
     for (const s of shards) { s.live = false; s.mesh.visible = false; }
   }
 
+  /** Attach the hit rig to whatever instance this module currently
+   *  owns. Built here and only here because there is no .glb behind
+   *  this animal to carry it: enemies.spawn gives a procedural species
+   *  an empty root and an empty bones map, so the per-limb tables
+   *  combat.js reads (`legs`/`legHp`/`legBroken`) and the two live
+   *  body nodes (`garner_throat`/`garner_lip`) are this module's to
+   *  make - and the chain each limb is measured along is a set of
+   *  plain Object3Ds, not bones.
+   *
+   *  CALLED FROM BOTH ACQUISITION PATHS - fresh spawn and save-restore
+   *  rebind - and idempotent so it can be. restore() rebinds `inst` to
+   *  the instance enemies.restore has just recreated and then calls
+   *  ensureSpawned(), whose first line used to return that undressed
+   *  rebind untouched: no legs, no pools, no body bones. Every ray and
+   *  melee test in combat.js asks those exact fields, so a LOADED
+   *  Garner was unhittable - while stratagem splash, which is
+   *  distance-based, still landed. "Only call actions damage it", for
+   *  every session that began with CONTINUE and every death that came
+   *  back through the autosave.
+   *
+   *  Existing pools are kept (restore overwrites them from the save a
+   *  moment later; a mid-session re-dress must not heal six limbs);
+   *  the leg list and the body nodes are simply re-pointed at the
+   *  module's own live objects, which is what they always mean. */
+  function dressInstance() {
+    if (!inst) return null;
+    inst.legs = arms.map((arm) => ({ chain: arm.chain, garnerArm: arm.index }));
+    if (!Array.isArray(inst.legHp) || inst.legHp.length !== arms.length) {
+      inst.legHp = arms.map(() => inst.spec.legHealth);
+    }
+    if (!Array.isArray(inst.legBroken) || inst.legBroken.length !== arms.length) {
+      inst.legBroken = arms.map(() => true);
+    }
+    inst.bones.set("garner_throat", throatNode);
+    inst.bones.set("garner_lip", lipNode);
+    syncLimbs();
+    return inst;
+  }
+
   function ensureSpawned() {
     if (state.defeated) return null;
-    if (inst) return inst;
+    if (inst) return dressInstance();
     inst = enemies.spawn("garner", C.pitX, C.pitZ, {
       yaw: 0,
       eventId: "district-boss:ossuary",
     });
     if (!inst) return null;
-    /* The limb pools, built here rather than in `spawn`. The bestiary
-       declares `legs: 0` because there is no leg rig to gather bones
-       from, so the arrays the shared hit table needs are this module's
-       to make - and the chain each one is measured along is a set of
-       plain Object3Ds, not bones. */
-    inst.legs = arms.map((arm) => ({ chain: arm.chain, garnerArm: arm.index }));
-    inst.legHp = arms.map(() => inst.spec.legHealth);
-    inst.legBroken = arms.map(() => true);
-    inst.legsBroken = 0;
-    inst.bones.set("garner_throat", throatNode);
-    inst.bones.set("garner_lip", lipNode);
+    dressInstance();
     for (const arm of arms) {
       arm.anchor.set(C.pitX, floorY, C.pitZ);
       sheathe(arm);

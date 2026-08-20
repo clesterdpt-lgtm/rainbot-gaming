@@ -120,13 +120,14 @@ export async function buildWorld(ctx, onProgress) {
   scene.add(root);
   const batch = makeBatcher(ctx, root);
 
-  /* The three approved Meshy landmarks are visual replacements, not a
-     reason to rewrite navigation. Their detailed ornament would make a
-     poor one-metre collision raster (every eye slit and wheel spoke
-     would become a player-sized tooth), so the authored GLBs opt out of
-     collision and the original procedural silhouettes remain as hidden
-     collision proxies. If an asset ever fails to load, the same proxy is
-     painted and rendered as the old fail-safe instead. */
+  /* The approved Meshy landmarks own both their visible silhouette and
+     their collision silhouette. Keeping the old procedural objects as
+     hidden proxies looked harmless, but their shapes diverge sharply at
+     this scale: the old head reached tens of metres beyond the new veil,
+     which left solid walls in visibly empty sand. The collision raster
+     still reduces these detailed surfaces to one-metre cells, so the
+     player's normal radius provides a stable contact margin without a
+     second, drifting version of each object. */
   const authoredMeshes = [];
   const authoredLandmarks = [];
   const landmarkSources = Object.create(null);
@@ -170,22 +171,6 @@ export async function buildWorld(ctx, onProgress) {
     }
   })();
 
-  const addCollisionProxy = (geo, district, name) => {
-    const mesh = new THREE.Mesh(geo, ctx.materials.stone);
-    mesh.name = name;
-    mesh.visible = false;
-    mesh.castShadow = false;
-    mesh.receiveShadow = false;
-    mesh.matrixAutoUpdate = false;
-    mesh.updateMatrix();
-    mesh.userData.district = district;
-    mesh.userData.collisionProxy = true;
-    // Hidden collision geometry must not occlude QA sightline rays.
-    mesh.raycast = () => {};
-    root.add(mesh);
-    return mesh;
-  };
-
   const addAuthoredLandmark = (asset, opts) => {
     const pivot = new THREE.Group();
     pivot.name = opts.name;
@@ -211,7 +196,11 @@ export async function buildWorld(ctx, onProgress) {
       node.castShadow = true;
       node.receiveShadow = true;
       node.userData.district = opts.district;
-      node.userData.noCollide = true;
+      /* Meshy triangulates curved panels finely enough that most faces
+         are smaller than collide.js's ordinary clutter threshold. This
+         tag keeps those faces as one structural surface; collision is
+         now baked from the same transformed vertices the player sees. */
+      node.userData.collisionSolid = true;
       node.userData.authoredLandmark = opts.key;
       authoredMeshes.push(node);
       meshes.push(node);
@@ -1221,7 +1210,6 @@ export async function buildWorld(ctx, onProgress) {
           // The original head spans -0.14S through 1.22S.
           height: S * 1.36,
         });
-        addCollisionProxy(g, "saint", "saint-head-collision-proxy");
       } else {
         batch.add("saint", "bronze", g);
       }
@@ -1278,7 +1266,6 @@ export async function buildWorld(ctx, onProgress) {
           // Matches the procedural wrist-to-fingertip span.
           height: S * 1.64,
         });
-        addCollisionProxy(g, "saint", "saint-hand-collision-proxy");
       } else {
         batch.add("saint", "bronze", g);
       }
@@ -3911,10 +3898,7 @@ export async function buildWorld(ctx, onProgress) {
       }
       const mg = kit.merge(masts);
       const sg = kit.merge(sails);
-      if (crossAsset) {
-        addCollisionProxy(mg, "reach", "reach-vane-masts-collision-proxy");
-        addCollisionProxy(sg, "reach", "reach-vane-sails-collision-proxy");
-      } else {
+      if (!crossAsset) {
         paintH(mg, makeRamp([[0, "#3b2c22"], [0.6, "#7b6046"], [1, "#b0906c"]]),
           { normalWeight: 0.46, jitter: 0.16 });
         batch.add("reach", "rust", mg);

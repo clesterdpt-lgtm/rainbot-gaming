@@ -344,6 +344,15 @@ try {
   const venom = await page.evaluate(() => {
     const T = window.__SF;
     const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
+    /* THE PLAYER HAS TO BE IN THEIR OWN BODY TO BE HURT. The beauty
+       shot above leaves the camera detached, and combat.js drops every
+       point of damage while it is - deliberately, so a reveal hold
+       cannot kill the trooper it is showing off. Nothing else here
+       clears it, so the venom read as harmless: the pool was under the
+       player, the toxin climbed to 1.0, and the hurt was thrown away at
+       the gate. Measure hazards with the trooper in charge. */
+    T.releaseCamera();
+    T.autoPlayer();
     T.clearVenom();
     T.setToxin(0);
     T.invulnerable(false);
@@ -365,11 +374,23 @@ try {
     }
     const hpBefore = T.ctx.combat.player.hp;
     const pool = pools[0];
-    // Stand in it.
+    // Stand in it. Counted by SOURCE for the same reason the bite is:
+    // the basin is garrisoned, and a Gleaner landing a bolt while the
+    // player stands in a puddle would pass this check with the venom
+    // doing nothing at all.
+    const venomHits = [];
+    const offVenom = T.ctx.combat.bus.on("playerHurt", (e) => {
+      if (String(e.source).startsWith("venom")) {
+        venomHits.push(+Number(e.damage || 0).toFixed(1));
+      }
+    });
     T.player.spawn(pool.x, pool.z, Math.PI);
     T.advanceTime(2.0, 1 / 60);
+    if (offVenom) offVenom();
     const inside = {
       hp: +T.ctx.combat.player.hp.toFixed(1),
+      venomDamage: +venomHits.reduce((sum, v) => sum + v, 0).toFixed(1),
+      ticks: venomHits.length,
       toxin: T.coulterState().toxin,
       inVenom: T.coulterState().inVenom,
     };
@@ -410,7 +431,7 @@ try {
   check(venom.launched >= 3, "a spew throws a clutch of globules",
     `${venom.launched} at once`);
   check(venom.poolCount >= 1, "and they leave venom where they land");
-  check(venom.inside.hp < venom.hpBefore && venom.inside.toxin > 0.2
+  check(venom.inside.venomDamage > 0 && venom.inside.toxin > 0.2
     && venom.inside.inVenom,
     "standing in venom poisons and hurts the player",
     JSON.stringify(venom.inside));
@@ -440,6 +461,9 @@ try {
   const bite = await page.evaluate(() => {
     const T = window.__SF;
     const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
+    // Likewise, and for the venom photograph above: see THE VENOM.
+    T.releaseCamera();
+    T.autoPlayer();
     T.clearVenom();
     T.setToxin(0);
     T.invulnerable(false);
@@ -448,12 +472,43 @@ try {
     inst.body.spewsLeft = 0;
     inst.body.fireTimer = 0;
     inst.body.action = 0;
+
+    /* WHOSE DAMAGE IT WAS, not how much health went missing.
+       The Fallen Saint's basin is garrisoned, and reading the
+       player's HP counts a Gleaner's spinneret as a bite from a
+       hundred-metre worm: this check was measuring 28 points of
+       `enemy-fire` landing from 56m away and calling it a Coulter that
+       could reach past its own reach. Sum only what the animal itself
+       is credited with, which is the same distinction combat.js emits
+       `enemyKey` for. */
+    const tally = () => {
+      const hits = [];
+      const off = T.ctx.combat.bus.on("playerHurt", (e) => hits.push({
+        source: e.source,
+        damage: +Number(e.damage || 0).toFixed(1),
+        dist: +Math.hypot(T.ctx.player.state.x - inst.body.head.x,
+          T.ctx.player.state.z - inst.body.head.z).toFixed(1),
+      }));
+      return () => {
+        if (off) off();
+        const mine = hits.filter((h) => String(h.source).startsWith("coulter"));
+        return {
+          coulter: +mine.reduce((sum, h) => sum + h.damage, 0).toFixed(1),
+          others: hits.filter((h) => !String(h.source).startsWith("coulter"))
+            .map((h) => h.source),
+          hits: mine,
+        };
+      };
+    };
+
     /* Right under the mouth. `biteReach` is horizontal, so standing at
        the animal's feet is inside it - which is the point: closing on a
        reared Coulter to shoot the maw is supposed to be dangerous. */
     T.player.spawn(inst.body.head.x + 3, inst.body.head.z + 3, Math.PI);
     const hpBefore = T.ctx.combat.player.hp;
+    const closeTally = tally();
     T.advanceTime(2.5, 1 / 60);
+    const nearHits = closeTally();
     const near = +T.ctx.combat.player.hp.toFixed(1);
     // And then well outside it, where the bite must miss.
     T.ctx.combat.player.hp = T.ctx.combat.player.maxHp;
@@ -461,17 +516,31 @@ try {
     inst.body.action = 0;
     inst.body.spewsLeft = 0;
     T.player.spawn(inst.body.head.x + 40, inst.body.head.z + 40, Math.PI);
+    const farTally = tally();
     T.advanceTime(2.5, 1 / 60);
+    const farHits = farTally();
     const far = +T.ctx.combat.player.hp.toFixed(1);
     T.invulnerable(true);
-    return { hpBefore, near, far, reach: T.ctx.coulter.config.biteReach };
+    return { hpBefore, near, far, nearHits, farHits,
+      /* The distance the far case actually stands at: the offset is
+         applied on both axes, so "40m away" is 56.6m diagonally. */
+      farDistance: +Math.hypot(40, 40).toFixed(1),
+      reach: T.ctx.coulter.config.biteReach };
   });
-  console.log(`  under the mouth: ${venomHp(bite.hpBefore)} -> ${bite.near}`);
-  console.log(`  40m away       : 150 -> ${bite.far}`);
-  check(bite.near < bite.hpBefore, "it bites what is standing under it",
-    `${bite.hpBefore} -> ${bite.near}`);
-  check(bite.far === 150, "and cannot reach past its own reach",
-    `${bite.far} at 40m against a ${bite.reach}m reach`);
+  console.log(`  under the mouth: ${venomHp(bite.hpBefore)} -> ${bite.near} `
+    + `· ${bite.nearHits.coulter} of it the Coulter's `
+    + `(${bite.nearHits.hits.map((h) => h.source).join(",") || "none"})`);
+  console.log(`  ${bite.farDistance}m away     : 150 -> ${bite.far} `
+    + `· ${bite.farHits.coulter} of it the Coulter's`);
+  if (bite.farHits.others.length) {
+    console.log(`  garrison fire the far case ignored: `
+      + `${bite.farHits.others.join(", ")}`);
+  }
+  check(bite.nearHits.coulter > 0, "it bites what is standing under it",
+    `${bite.nearHits.coulter} damage from ${bite.nearHits.hits.length} bite(s)`);
+  check(bite.farHits.coulter === 0, "and cannot reach past its own reach",
+    `${bite.farHits.coulter} dealt at ${bite.farDistance}m `
+    + `against a ${bite.reach}m reach`);
 
   /* ---------------- death ---------------- */
   console.log("\n=== DEATH ===");

@@ -452,77 +452,195 @@ try {
     gaster.hit && gaster.dealt > 0 && gaster.weak === false && gaster.sacIndex < 0,
     JSON.stringify(gaster));
 
-  /* ---- THE LEASH AND THE TERRITORY ----------------------------------- */
+  /* ---- THE RING AND THE LEASH -----------------------------------------
+     TWO DIFFERENT PROMISES, AND THEY FIRE IN A FIXED ORDER.
+
+     The Censer Works carries a 98m arena ring (district-bosses.js) and
+     the animal carries its own 300m/16s disengage. A player who walks
+     away crosses the ring first, always - 98 is a long way inside 300 -
+     so the RING is what production actually runs, and the module's
+     leash is the fallback for the cases the boundary machinery is not
+     watching: a save restored mid-flight, or a site it has stood down.
+     That order is by design and is the same one the Garner records.
+
+     This section used to assert only the second one, and it did it by
+     teleporting the player 600m out and waiting for `return`. That can
+     never happen: the ring reset lands at metre 98 and snaps the animal
+     home dormant before the disengage timer has counted a single
+     second, so the check measured the ring, called it the leash, and
+     failed. Both are asserted now, and separately. */
+  const ring = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.enemies.live.find((e) => e.key === "winnower");
+    const site = T.mission.bosses.find((b) => b.key === "censer");
+    // A clean live fight, walked into rather than forced, then wounded.
+    T.winnower.resetToPerch();
+    T.teleportToWinnower(40);
+    T.advanceToWinnowerPhase("soar", 30);
+    inst.health = inst.maxHealth * 0.35;
+    // Step out over the ring, the way a player leaving the district does.
+    T._teleportRaw(site.x + site.arenaRadius + 40, site.z, 0);
+    for (let f = 0; f < 60 * 4; f += 1) T.renderOnce(1 / 60);
+    const st = T.winnowerState();
+    return {
+      phase: st.phase, hidden: st.hidden,
+      healed: st.health === st.maxHealth && st.lift === st.maxLift,
+      siteDist: Number(Math.hypot(st.x - site.x, st.z - site.z).toFixed(0)),
+    };
+  });
+  check("crossing the arena ring resets the fight and sends it home healed",
+    ring.phase === "dormant" && ring.healed && ring.hidden,
+    JSON.stringify(ring));
+
   const leash = await page.evaluate(() => {
     const T = window.__SF;
     const inst = T.enemies.live.find((e) => e.key === "winnower");
-    inst.health = inst.maxHealth * 0.35;
-    T.forceWinnowerPhase("soar", 30);
-    inst.x += 40;
-    inst.z += 40;
-    const start = { x: inst.x, z: inst.z };
-    T._teleportRaw(inst.x + 500, inst.z, 0);
-    let sawReturn = false;
-    let healedAtStart = false;
-    let maxChase = 0;
-    for (let f = 0; f < 60 * 60; f += 1) {
-      T.renderOnce(1 / 60);
+    const site = T.mission.bosses.find((b) => b.key === "censer");
+    const C = T.winnower.config;
+    /* STAND THE RING DOWN, or this measures the ring a second time.
+       `updateArenaBoundaries` skips a site whose mission boss is
+       already finished, and that flag is the only switch it has. */
+    const wasDone = site.done;
+    site.done = true;
+    try {
+      T.winnower.resetToPerch();
+      T.teleportToWinnower(40);
+      T.advanceToWinnowerPhase("soar", 30);
+      inst.health = inst.maxHealth * 0.35;
+
+      /* WHERE THE PLAYER STANDS, measured from the TERRITORY rather
+         than from the animal - because both ends of the window that
+         makes this test possible are. It must be far enough that the
+         boss, which patrols the territory boundary NEAREST the player
+         instead of chasing, still sits outside its own 300m disengage;
+         and near enough that the whole flight home stays inside the
+         700m simRange gate, or `update` returns early and the animal
+         freezes in mid-air and never arrives. That leaves roughly
+         564..668m from the centroid, and this is the middle of it. */
+      const tx = C.stacks.reduce((a, s) => a + s.x, 0) / C.stacks.length;
+      const tz = C.stacks.reduce((a, s) => a + s.z, 0) / C.stacks.length;
+      T._teleportRaw(tx + 610, tz, 0);
+
+      let sawReturn = false;
+      let healedAtStart = false;
+      let roam = 0;
+      let secs = null;
+      for (let f = 0; f < 60 * 75; f += 1) {
+        T.renderOnce(1 / 60);
+        const st = T.winnowerState();
+        // How far it ever gets from the works it is supposed to patrol.
+        roam = Math.max(roam, Math.hypot(st.x - tx, st.z - tz));
+        if (st.phase === "return" && !sawReturn) {
+          sawReturn = true;
+          healedAtStart = st.health === st.maxHealth && st.lift === st.maxLift;
+        }
+        if (sawReturn && st.phase === "dormant") { secs = f / 60; break; }
+      }
       const st = T.winnowerState();
-      const chase = Math.hypot(T.player.state.x - st.x, T.player.state.z - st.z);
-      maxChase = Math.max(maxChase, 500 - chase);
-      if ((st.phase === "return" || st.phase === "dormant") && !sawReturn) {
-        sawReturn = true;
-        healedAtStart = st.health === st.maxHealth && st.lift === st.maxLift;
-      }
-      if (sawReturn && st.phase === "dormant") {
-        return {
-          sawReturn, healedAtStart, done: true,
-          secs: Number((f / 60).toFixed(1)), maxChase: Number(maxChase.toFixed(0)),
-        };
-      }
+      return {
+        sawReturn, healedAtStart, done: secs !== null,
+        secs: secs === null ? null : Number(secs.toFixed(1)),
+        phase: st.phase,
+        roam: Number(roam.toFixed(0)),
+        territory: C.territoryRadius + C.orbitRadius,
+        perchDist: Number(Math.hypot(st.x - site.x, st.z - site.z).toFixed(0)),
+      };
+    } finally {
+      site.done = wasDone;
     }
-    void start;
-    return { sawReturn, healedAtStart, done: false,
-      phase: T.winnowerState().phase, maxChase: Number(maxChase.toFixed(0)) };
   });
   check("it will not follow a leaving player out of its territory",
-    leash.maxChase < 420, `closed at most ${leash.maxChase}m of a 500m retreat`);
+    leash.roam <= leash.territory + 12,
+    `roamed ${leash.roam}m from the works; territory+orbit is ${leash.territory}m`);
   check("abandoned, it heals in the air and flies home",
     leash.sawReturn && leash.healedAtStart, JSON.stringify(leash));
   check("the flight home ends dormant at the perch", leash.done === true,
     `${leash.secs}s`);
 
+  /* ---- COST --------------------------------------------------------------
+     MEASURED ON A LIVE FIGHT, AND IT HAS ITS OWN SETUP. Both halves of
+     that are the point.
+
+     This check inherited whatever state the section above it happened
+     to leave, and for most of this file's life that was an empty
+     district: the leash section left the animal gated - hidden, never
+     drawn - the death section then failed to kill something it could
+     not touch, and the budget was measured on a frame with no
+     encounter in it. 82 draw calls, against the ~126 a drawn one costs.
+     So the number moved whenever anything above it was fixed, which is
+     the opposite of what a budget is for.
+
+     It runs BEFORE the death section because this is the only place a
+     LIVE Winnower can be measured: `resetToPerch` heals the animal but
+     does not un-kill it, so once the corpse exists every later setup
+     silently measures a corpse.
+
+     THE THRESHOLD IS LEFT AT 9ms - the same one the Distaff, the Garner
+     and the Stylite are held to - and the encounter does not currently
+     meet it: about 10.3ms, against the Stylite's 5.6ms on the same
+     machine and with FEWER draw calls, which points at fill rather than
+     at the scene graph. That is a real result and it is left visible.
+     Picking a threshold that happens to pass would only re-hide what
+     this check spent its whole life failing to see. */
+  const cost = await page.evaluate(() => {
+    const T = window.__SF;
+    T.winnower.resetToPerch();
+    T.teleportToWinnower(40);
+    T.advanceToWinnowerPhase("soar", 30);
+    T.forceWinnowerPhase("soar", 60);
+    // Long enough for the bombard cadence to put real ash on the sand.
+    for (let i = 0; i < 60 * 8; i += 1) T.renderOnce(1 / 60);
+    const N = 150;
+    const batches = [];
+    for (let b = 0; b < 5; b += 1) {
+      const t0 = performance.now();
+      for (let i = 0; i < N; i += 1) T.renderOnce(1 / 60, true);
+      batches.push(Number(((performance.now() - t0) / N).toFixed(2)));
+    }
+    const ms = batches.slice().sort((a, b) => a - b)[Math.floor(batches.length / 2)];
+    const w = T.winnowerState();
+    return {
+      msPerFrame: Number(ms.toFixed(2)), batches, draws: T.report().render,
+      phase: w.phase, hidden: w.hidden, ashFields: w.ashFields, embers: w.embers,
+    };
+  });
+  check("the encounter renders inside budget", cost.msPerFrame < 9 && !cost.hidden,
+    `${cost.msPerFrame}ms/frame over ${cost.draws.calls} draw calls with `
+    + `${cost.ashFields} ash fields live in phase ${cost.phase} `
+    + `(batches ${cost.batches.join("/")})`);
+
   /* ---- DEATH ------------------------------------------------------------ */
   const death = await page.evaluate(() => {
     const T = window.__SF;
+    /* FROM A CLEAN, LIVE FIGHT, and the reason is the section above.
+       The leash leaves the player 600m out with the animal asleep at
+       its perch - and an animal that has gone back to sleep is GATED:
+       hidden and damage-locked. Lethal damage fired at it from out
+       there is silently absorbed, nothing dies, and the two checks
+       below fail describing a corpse that would not fall when the real
+       fault was that it was never killed. Walking back in first is the
+       difference. */
+    T.winnower.resetToPerch();
     T.teleportToWinnower(40);
+    T.advanceToWinnowerPhase("soar", 30);
     T.forceWinnowerPhase("soar", 60);
     for (let i = 0; i < 60; i += 1) T.renderOnce(1 / 60);
-    const airborne = T.winnowerState().altitude;
+    const before = T.winnowerState();
     const inst = T.enemies.live.find((e) => e.key === "winnower");
     let crashed = null;
     const off = T.winnower.bus.on("crash", (e) => { crashed = e; });
-    T.combat.damageEnemy(inst, 999999, { source: "qa" });
+    const dealt = T.combat.damageEnemy(inst, 999999, { source: "qa" });
     for (let i = 0; i < 240; i += 1) T.renderOnce(1 / 60);
     off();
     const w = T.winnowerState();
-    return { airborne, finalAltitude: w.altitude, dead: w.dead, crashed: !!crashed };
+    return {
+      airborne: before.altitude, locked: before.locked, hidden: before.hidden, dealt,
+      finalAltitude: w.altitude, dead: w.dead, crashed: !!crashed,
+    };
   });
   check("a kill in the air brings the body down", death.dead && death.finalAltitude < 1.5,
-    `${death.airborne}m -> ${death.finalAltitude}m`);
+    `${death.airborne}m -> ${death.finalAltitude}m (${JSON.stringify(death)})`);
   check("the impact is reported", death.crashed);
-
-  /* ---- COST -------------------------------------------------------------- */
-  const cost = await page.evaluate(() => {
-    const T = window.__SF;
-    const N = 150;
-    const t0 = performance.now();
-    for (let i = 0; i < N; i += 1) T.renderOnce(1 / 60, true);
-    const ms = (performance.now() - t0) / N;
-    return { msPerFrame: Number(ms.toFixed(2)), draws: T.report().render };
-  });
-  check("the encounter renders inside budget", cost.msPerFrame < 9,
-    `${cost.msPerFrame}ms/frame, ${cost.draws.calls} draw calls`);
 
   /* Console text is filtered only for the CDN probe's own noise;
      what actually gates the run is `assetFailures`, which is

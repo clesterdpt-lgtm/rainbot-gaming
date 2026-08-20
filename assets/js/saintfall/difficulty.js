@@ -45,7 +45,7 @@ export const DIFFICULTY = Object.freeze({
        Penitent, so boss and hazard numbers stay authored at 1.0. */
     incoming: 0.82,
     lightHealth: 0.85,   // thresher, gleaner
-    heavyHealth: 0.85,   // harrow, precentor, cantor, matriarch
+    heavyHealth: 0.85,   // harrow, precentor, cantor
     bossHealth: 0.85,    // everything with its own module (where it uses inst.health)
     roster: 0.8,         // breach roster counts
     gleanerDelta: -1,    // per roster that already fields Gleaners
@@ -143,7 +143,10 @@ export const DIFFICULTY_TIERS = Object.freeze(Object.keys(DIFFICULTY));
 export const DEFAULT_DIFFICULTY = "penitent";
 
 const LIGHT = new Set(["thresher", "gleaner"]);
-const HEAVY = new Set(["harrow", "precentor", "cantor", "matriarch"]);
+/* Matriarch owns a full encounter module now, so it scales with the
+   other bosses rather than with ordinary heavy castes. This matters on
+   Martyr, where boss health is deliberately the larger step. */
+const HEAVY = new Set(["harrow", "precentor", "cantor"]);
 
 export function normalizeDifficulty(tier) {
   return typeof tier === "string" && Object.prototype.hasOwnProperty.call(DIFFICULTY, tier)

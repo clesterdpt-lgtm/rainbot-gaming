@@ -180,7 +180,11 @@ export const BESTIARY = {
   matriarch: {
     url: "assets/models/saintfall/matriarch.glb",
     faction: "bloom",
-    health: 3600,
+    /* A district boss, not a heavy caste with a longer bar. At 3600 the
+       exposed gaster let a clean Volley magazine erase the encounter
+       before its second authored decision. 7200 keeps the weak point
+       valuable while giving the pursuit and tremor cycles room to exist. */
+    health: 7200,
     /* Shipped at 1:1: 5.05m tall, 6.93m wide and 11.13m long. There
        is exactly one of these on the map, so the usual argument for
        tuning scale in engine - that proportion is read against the
@@ -190,10 +194,9 @@ export const BESTIARY = {
        what makes walking into the Fallen Saint feel like arriving
        somewhere rather than like entering a bigger arena. */
     scale: 1.0,
-    /* Slower than everything it commands. A boss that can run you
-       down removes the one thing this fight is about, which is
-       getting behind it - so it is beaten to a flank every time and
-       has to turn, and turning nine metres of animal is the window. */
+    /* Fallback locomotion only; matriarch.js owns the live pursuit pace.
+       Kept conservative so a newly spawned instance cannot jump before
+       the encounter module adopts it on the same frame. */
     speed: { walk: 1.15, charge: 3.9 },
     material: { roughness: 0.42, metalness: 0.14, rim: 1.3, bio: 2.1 },
     legs: 4,                 // pairs - nothing else in the brood has 8

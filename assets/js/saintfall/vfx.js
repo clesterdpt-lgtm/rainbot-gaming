@@ -3062,6 +3062,33 @@ export function buildVfx(ctx, world) {
     return { root, column, halo, live };
   })();
 
+  /** The Matriarch planting its ovipositor. This is a warning, not the
+   *  damaging front: a tight seal and a breathing inner ring hold at the
+   *  source long enough for the player to read the coming floor pattern. */
+  function matriarchTremorTell(x, y, z, radius = 34, roused = false) {
+    const colour = roused ? "#ff3f22" : "#ff7a2b";
+    const accent = roused ? "#fff0bf" : "#ffd39a";
+    sigilFx(x, z, Math.min(7.5, radius * 0.22), 4.0, colour, accent, 8, 0.14, 0.9);
+    ringFx(x, y + 0.20, z, 1.2, 5.6, 1.25, colour, 1.1, accent, 1.0);
+    flashes.emit(x, y + 1.1, z, roused ? 2.4 : 1.8, 0.22, 2.0);
+    impacts.emitRing(x, y + 0.22, z, 28, 1.0, 4.8, 1.4, 3.8, 13.0, 1.1,
+      0.03, 0, IK_SMOKE);
+  }
+
+  /** One authored seismic front. `seconds` is supplied by the encounter
+   *  from the same radius/speed pair that drives damage, so the bright
+   *  band and the authoritative crossing cannot drift apart. */
+  function matriarchTremorWave(x, y, z, radius = 34, seconds = 1.6,
+    roused = false, index = 1) {
+    const hot = roused || index >= 4;
+    const colour = hot ? "#ff4a24" : "#ff8a32";
+    const accent = hot ? "#fff2c9" : "#ffd9a6";
+    ringFx(x, y + 0.24, z, 0.6, radius, seconds, colour,
+      hot ? 1.45 : 1.25, accent, hot ? 1.15 : 1.0);
+    sparks.ring(x, y + 0.18, z, 24, 0.7, 7.5, 2.2, 2.0, 0.46, 0.020);
+    flashes.emit(x, y + 0.7, z, 1.4, 0.10, 2.0);
+  }
+
   /** Something was rammed. */
   function boostImpact(x, y, z, dx, dz, heavy) {
     flashes.emit(x, y, z, heavy ? 1.5 : 1.15, 0.11, 2.0);
@@ -5533,6 +5560,8 @@ export function buildVfx(ctx, world) {
     slamCharge,
     slamTrail,
     slamImpact,
+    matriarchTremorTell,
+    matriarchTremorWave,
     doctrineCue,
     doctrineState,
     /* Diagnostic only. The rite primitives are normally reachable just

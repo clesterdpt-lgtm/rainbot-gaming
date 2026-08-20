@@ -786,8 +786,33 @@ export function buildDistrictBosses(ctx) {
         inst.yaw = Number.isFinite(entry.yaw) ? entry.yaw : inst.yaw;
         inst.root.position.set(inst.x, inst.y, inst.z);
         inst.root.rotation.y = inst.yaw;
-        if (Number.isFinite(entry.maxHealth) && entry.maxHealth > 0) inst.maxHealth = entry.maxHealth;
-        if (Number.isFinite(entry.health)) inst.health = clamp(entry.health, 1, inst.maxHealth);
+        const savedMax = Number(entry.maxHealth);
+        const savedHealth = Number(entry.health);
+        /* ONE BALANCE MIGRATION. Saves made before the summon-free
+           Matriarch pass carry a 3060/3600/4320 maximum, depending on
+           difficulty. Restoring that number verbatim would leave an
+           existing player's Reach guardian at the old half-sized pool
+           forever. Rebuild only an undersized Reach pool from the live
+           species+difficulty tuning and preserve the exact wounded
+           fraction; every other boss and every current save keeps the
+           ordinary byte-for-byte restore contract. */
+        const baseMax = Number(enemies.species?.get(inst.key)?.spec?.health);
+        const tunedScale = ctx.difficulty?.healthScale?.(inst.key) ?? 1;
+        const tunedMax = Number.isFinite(baseMax) && baseMax > 0
+          ? Math.max(1, Math.round(baseMax * tunedScale)) : inst.maxHealth;
+        const legacyReachMax = savedMax === 3060 || savedMax === 3600
+          || savedMax === 4320;
+        const migrateReach = record.site.key === "reach" && legacyReachMax
+          && savedMax < tunedMax;
+        if (migrateReach) {
+          const fraction = Number.isFinite(savedHealth)
+            ? clamp(savedHealth / savedMax, 0, 1) : 1;
+          inst.maxHealth = tunedMax;
+          inst.health = clamp(Math.round(tunedMax * fraction), 1, tunedMax);
+        } else {
+          if (Number.isFinite(savedMax) && savedMax > 0) inst.maxHealth = savedMax;
+          if (Number.isFinite(savedHealth)) inst.health = clamp(savedHealth, 1, inst.maxHealth);
+        }
       }
       if (!siteAvailable(record.site) && record.phase !== "dormant") {
         resetRecord(record, { silent: true });

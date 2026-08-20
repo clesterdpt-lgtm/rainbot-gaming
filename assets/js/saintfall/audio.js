@@ -2136,6 +2136,21 @@ export function buildAudio(ctx) {
       distaff.bus.on("bite", (e) => impact(e.x, e.z, "flesh"));
       distaff.bus.on("defeated", () => chord([196, 262, 330, 392], 1.6, 0.24));
     }
+    /* The Gilded Reach's mantis. Its new rite is heard as one low
+       planting chord followed by separate ground transients, matching
+       the three (then four) visible fronts instead of collapsing the
+       whole mechanic into one explosion. */
+    const matriarch = ctx.matriarch;
+    if (matriarch) {
+      matriarch.bus.on("tremorTell", (e) => {
+        chord(e.roused ? [49, 65, 98, 131] : [55, 73, 110], 1.35, 0.25);
+        rumble(e.x, e.z, 0.65);
+      });
+      matriarch.bus.on("tremorPulse", (e) => rumble(e.x, e.z,
+        e.roused ? 1 : 0.82));
+      matriarch.bus.on("tremorHit", (e) => impact(e.x, e.z, "wall"));
+      matriarch.bus.on("tremorCleared", () => chord([220, 294], 0.18, 0.06));
+    }
     /* The flyer. Its cues are pitched HIGHER than either ground boss -
        a thing overhead should not share a register with a thing that
        walks, or the player cannot tell from sound alone which one is

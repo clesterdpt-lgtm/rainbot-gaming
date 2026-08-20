@@ -545,24 +545,18 @@ const SPEC = {
     sight: 92, hearing: 34, aggro: 150,
   },
   matriarch: {
-    /* Nine Harrows of health, and that number is a consequence
-       rather than a choice: the fight is meant to last long enough
-       for the brooding cycle below to matter, and the cycle is 14
-       seconds. Anything under about 3000 died before it laid twice,
-       which made the one mechanic that distinguishes it optional.
+    /* A district-boss pool aligned with enemies.js. The old 3600-health
+       animal could be removed through the gaster before its moveset had
+       time to develop; doubling it keeps aimed weak-point fire decisive
+       without turning the armoured thorax into the whole fight.
 
        The damage is a hit you survive exactly once. It reaches 7.4m
        with a scythe, so the range at which you are safe is further
        out than any other melee unit in the game by three metres -
        backing off from a Harrow works, backing off from this does
        not until you are most of a Thresher's charge away. */
-    hp: 3600, damage: 58, reach: 7.4, cadence: 2.35,
+    hp: 7200, damage: 58, reach: 7.4, cadence: 2.35,
     sight: 150, hearing: 60, aggro: 320,
-    /* Boss-only. It plants and lays every `broodEvery` seconds while
-       it can see the player, up to `broodCap` live children at once
-       - the cap is what stops a long fight from turning the crater
-       into a solid floor of Threshers. */
-    broodEvery: 14, broodCount: 3, broodCap: 12,
   },
   /* The Coulter's numbers live in COULTER_CONFIG, in the module that
      owns its behaviour, because none of the four fields this table is

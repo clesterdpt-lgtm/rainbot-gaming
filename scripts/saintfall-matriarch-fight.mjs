@@ -9,10 +9,10 @@
        normal damage everywhere and looks like it has no mechanic;
      - a weak point that can be hit from the FRONT is a boss with no
        positioning problem, which is the entire encounter;
-     - a brood that ignores its cap turns a long fight into a solid
-       floor of Threshers;
-     - a brood that spawns in front of the boss is a wall between the
-       player and the fight rather than the cost of getting to it.
+     - a periodic special that only summons adds repeats the same test
+       as the rest of the Bloom rather than testing the player's movement;
+     - a ground wave without a reliable jump/boost clear is damage by
+       appointment rather than an authored attack.
 
    None of these throw. They all just make the encounter worse in a
    way that reads as "the boss feels flat", which is the hardest kind
@@ -84,6 +84,13 @@ try {
     const live = T.ctx.enemies.live.filter((e) => e.key === "matriarch");
     const site = T.ctx.mission.bosses.find((b) => b.key === "reach");
     const status = T.ctx.districtBosses.status("reach");
+    const legacy = T.ctx.districtBosses.snapshot();
+    const legacyReach = legacy.bosses.find((boss) => boss.key === "reach");
+    legacyReach.maxHealth = 3600;
+    legacyReach.health = 1800;
+    T.ctx.districtBosses.restore(legacy);
+    const migrated = T.ctx.districtBosses.status("reach");
+    T.ctx.districtBosses.reset("reach");
     const ps = T.playerState();
     T.startBreachWave(4, ps.x, ps.z - 44, true);
     const afterWave = T.ctx.enemies.live.filter((e) => e.key === "matriarch").length;
@@ -94,6 +101,12 @@ try {
       dormant: status?.phase === "dormant" && !!status.hidden && !!status.locked,
       distanceFromSite: live[0] && site
         ? Math.hypot(live[0].x - site.x, live[0].z - site.z) : Infinity,
+      maxHealth: live[0]?.maxHealth || 0,
+      walkSpeed: T.ctx.matriarch.config.walkSpeed,
+      chaseSpeed: T.ctx.matriarch.config.chaseSpeed,
+      gaitCeiling: T.ctx.matriarch.config.gaitCeiling,
+      migratedHealth: migrated?.health || 0,
+      migratedMaxHealth: migrated?.maxHealth || 0,
       afterWave,
     };
   });
@@ -108,6 +121,16 @@ try {
   check(placed.afterWave === 1,
     "a roaming breach wave no longer raises a second one",
     `${placed.afterWave} after a wave started`);
+  check(placed.maxHealth === 7200,
+    "the Penitent Matriarch has a district-boss health pool",
+    `${placed.maxHealth} max health`);
+  check(placed.walkSpeed >= 6.6 && placed.chaseSpeed >= 8.1
+      && placed.gaitCeiling < 8.6,
+    "its pursuit beats sighted movement but leaves a full sprint as the disengage",
+    `${placed.walkSpeed} walk · ${placed.chaseSpeed} chase · ${placed.gaitCeiling} ceiling`);
+  check(placed.migratedHealth === 3600 && placed.migratedMaxHealth === 7200,
+    "an old 3600-HP save is upgraded without healing its wounded fraction",
+    `${placed.migratedHealth}/${placed.migratedMaxHealth} after a 1800/3600 restore`);
 
   /* ---------------- the weak point ---------------- */
   console.log("\n=== WEAK POINT ===");
@@ -182,8 +205,8 @@ try {
          player got to, and therefore answerable;
        - does standing behind it cost something;
        - does standing away from it cost something;
-       - and does the brood clock still mean "go for the gaster", now
-         that going for the gaster is contested.
+       - and does the tremor turn jumping and boosting into the answer
+         while its plant still creates a contested gaster window.
      ------------------------------------------------------------ */
   console.log("\n=== MOVESET ===");
   const moveset = await page.evaluate(() => {
@@ -264,7 +287,7 @@ try {
     const closedTo = Math.hypot(T.playerState().x - inst.x,
       T.playerState().z - inst.z);
 
-    /* --- 4. LAYING PRESENTS THE GASTER. --- */
+    /* --- 4. THE TREMOR PLANT PRESENTS THE GASTER. --- */
     T.invulnerable(true);
     const box = T.ctx.combat.hitbox.matriarch;
     const THREE = T.THREE;
@@ -285,24 +308,25 @@ try {
        of a second after arriving and called whatever it found the
        resting value - which is only true while the animal happens not
        to be doing anything. The moment its cadences tightened, that
-       window started landing mid-clutch and the check compared the
-       laying bonus against itself: 675 at rest against 675 laying, a
+       window started landing mid-special and the check compared the
+       temporary bonus against itself, a
        pass turned into a failure by nothing but phase. Wait for the
        animal to be idle, then read on the same frame. */
     for (let i = 0; i < 240 && status().action; i += 1) T.advanceTime(0.05, 1 / 60);
     const restWeak = gaster();
-    force("brood");
+    force("tremor");
     T.advanceTime(0.35, 1 / 60);
-    const layingStatus = status();
-    const layingWeak = gaster();
-    T.advanceTime(cfg.broodPlant + cfg.broodHold + 0.5, 1 / 60);
-    const afterLayWeak = gaster();
+    const tremorStatus = status();
+    const tremorWeak = gaster();
+    T.advanceTime(cfg.tremorWindup + (cfg.tremorWaves - 1) * cfg.tremorPulseGap
+      + cfg.tremorRecover + 0.5, 1 / 60);
+    const afterTremorWeak = gaster();
 
     return {
       cfg: {
         comboReach: cfg.comboReach, comboWindup: cfg.comboWindup,
         cullLoiter: cfg.cullLoiter, cullRadius: cfg.cullRadius,
-        lanceRange: cfg.lanceRange, broodWeakBonus: cfg.broodWeakBonus,
+        lanceRange: cfg.lanceRange, tremorWeakBonus: cfg.tremorWeakBonus,
       },
       selfDriven: !!inst.selfDriven,
       tell: { action: tell.action, steps: tell.comboSteps },
@@ -313,9 +337,9 @@ try {
       beforeLance: +beforeLance.toFixed(1),
       cockedAt: +cockedAt.toFixed(1),
       closedTo: +closedTo.toFixed(1),
-      restWeak, layingWeak, afterLayWeak,
+      restWeak, tremorWeak, afterTremorWeak,
       perHit: cfg.comboDamage * 0.82,
-      layingBonus: layingStatus.weakBonus,
+      tremorBonus: tremorStatus.weakBonus,
       status: status(),
     };
   });
@@ -329,8 +353,8 @@ try {
   console.log(`  lance: ${moveset.beforeLance}m -> cocked at ${moveset.cockedAt}m `
     + `-> closed to ${moveset.closedTo}m`);
   console.log(`  gaster: at rest ${JSON.stringify(moveset.restWeak)} · `
-    + `laying ${JSON.stringify(moveset.layingWeak)} (x${moveset.layingBonus}) · `
-    + `after ${JSON.stringify(moveset.afterLayWeak)}`);
+    + `tremor ${JSON.stringify(moveset.tremorWeak)} (x${moveset.tremorBonus}) · `
+    + `after ${JSON.stringify(moveset.afterTremorWeak)}`);
   check(moveset.selfDriven,
     "the encounter module owns the animal's decisions");
   /* BOTH scythes, not one. A "combo" whose second beat never resolves
@@ -353,77 +377,110 @@ try {
   check(moveset.cockedAt > moveset.closedTo + 6,
     "the lance closes a stand-off range it telegraphs first",
     `${moveset.cockedAt}m at the end of the cock, ${moveset.closedTo}m after the dash`);
-  check(moveset.layingWeak.weak && moveset.restWeak.weak
-    && moveset.layingWeak.dmg > moveset.restWeak.dmg * 1.3,
-  "laying presents the gaster: the weak point is worth more mid-clutch",
-  `${moveset.restWeak.dmg} at rest vs ${moveset.layingWeak.dmg} laying`);
-  check(Math.abs(moveset.afterLayWeak.dmg - moveset.restWeak.dmg) < 0.5,
+  check(moveset.tremorWeak.weak && moveset.restWeak.weak
+    && moveset.tremorWeak.dmg > moveset.restWeak.dmg * 1.15,
+  "the tremor plant presents the gaster as a stronger damage window",
+  `${moveset.restWeak.dmg} at rest vs ${moveset.tremorWeak.dmg} planted`);
+  check(Math.abs(moveset.afterTremorWeak.dmg - moveset.restWeak.dmg) < 0.5,
     "...and the window closes again when it is done",
-    `${moveset.afterLayWeak.dmg} after the clutch`);
+    `${moveset.afterTremorWeak.dmg} after the rite`);
 
-  /* ---------------- brooding ---------------- */
-  console.log("\n=== BROOD ===");
-  const brood = await page.evaluate(() => {
+  /* ---------------- tremor rite ---------------- */
+  console.log("\n=== TREMOR RITE ===");
+  const tremor = await page.evaluate(() => {
     const T = window.__SF;
     T.clearEnemies();
     const site = T.findFlatSite(14);
     T.spawnEnemy("matriarch", site[0], site[1], { yaw: 0 });
-    const inst = T.ctx.enemies.live[0];
+    T.advanceTime(0.4, 1 / 60);
+    const inst = T.ctx.enemies.live.find((e) => e.key === "matriarch");
     inst.health = 100000;
-    // Stand the player where it can be seen, but out of scythe reach.
-    T.player.spawn(site[0], site[1] + 26, Math.PI);
+    inst.maxHealth = 100000;
+    const M = T.ctx.matriarch;
+    const cfg = M.config;
+    const put = (distance) => T._teleportRaw(inst.x, inst.z + distance, Math.PI);
+
+    /* Grounded: the first front must connect at the radius its visible
+       ring reaches. Invulnerability is deliberately off for this beat. */
+    put(12);
+    T.invulnerable(false);
+    T.ctx.combat.player.hp = T.ctx.combat.player.maxHp;
+    M.force("tremor", inst);
+    T.advanceTime(cfg.tremorWindup + 12 / cfg.tremorSpeed + 0.12, 1 / 60);
+    const groundedHp = T.ctx.combat.player.hp;
+    const afterGround = M.status(inst);
+
+    /* Airborne: reset the rite, then lift only across the crossing
+       frame. This proves the wave reads clearance, not an invulnerability
+       flag or a lucky gap between simulation ticks. */
     T.invulnerable(true);
-    const samples = [];
-    let firstBroodAt = -1;
-    /* Positions are captured on the frame the clutch APPEARS, not at
-       the end of the run. The children are born awake and charge at
-       7.4m/s, so a second later they are past the boss and around it
-       - which is correct behaviour and made the first version of this
-       check report every clutch as spawning in front. */
-    let rel = null;
-    for (let s = 0; s < 520; s += 1) {
-      T.advanceTime(0.25, 1 / 60);
-      const kids = T.ctx.enemies.live.filter(
-        (e) => e.key === "thresher" && e.state !== "death");
-      if (firstBroodAt < 0 && kids.length > 0) {
-        firstBroodAt = (s + 1) * 0.25;
-        rel = kids.map((k) => ({
-          fwd: +(k.z - inst.z).toFixed(1), side: +(k.x - inst.x).toFixed(1),
-          awake: !!k.alerted,
-        }));
-      }
-      if (s % 80 === 79) samples.push({ t: (s + 1) * 0.25, kids: kids.length });
-    }
-    const kids = T.ctx.enemies.live.filter(
-      (e) => e.key === "thresher" && e.state !== "death");
-    return { firstBroodAt, samples, count: kids.length, rel: rel || [] };
+    T.advanceTime(cfg.tremorPulseGap * (cfg.tremorWaves - 1)
+      + cfg.tremorRecover + cfg.tremorRadius / cfg.tremorSpeed + 0.5, 1 / 60);
+    put(12);
+    T.ctx.combat.player.hp = T.ctx.combat.player.maxHp;
+    T.invulnerable(false);
+    M.force("tremor", inst);
+    T.advanceTime(cfg.tremorWindup + 12 / cfg.tremorSpeed - 0.10, 1 / 60);
+    const ground = T.ctx.collide.groundHeight(T.ctx.player.state.x, T.ctx.player.state.z);
+    T.ctx.player.state.y = ground + cfg.tremorAirClear + 0.65;
+    T.ctx.player.state.vy = 0;
+    T.ctx.player.state.grounded = false;
+    T.advanceTime(0.18, 1 / 60);
+    const airborneHp = T.ctx.combat.player.hp;
+    const afterAir = M.status(inst);
+
+    /* Let the full authored cycle run. There must still be exactly one
+       combatant: the mechanic is rings, never a hidden fallback clutch. */
+    T.invulnerable(true);
+    T.advanceTime(cfg.tremorPulseGap * (cfg.tremorWaves - 1)
+      + cfg.tremorRecover + cfg.tremorRadius / cfg.tremorSpeed + 0.5, 1 / 60);
+    const spawned = T.ctx.enemies.live.filter((e) => e !== inst
+      && e.state !== "death" && !e.encounterHidden).map((e) => e.key);
+    const end = M.status(inst);
+    return {
+      config: {
+        waves: cfg.tremorWaves, rousedWaves: cfg.tremorWavesRoused,
+        radius: cfg.tremorRadius, damage: cfg.tremorDamage,
+        airClear: cfg.tremorAirClear,
+      },
+      groundedHp: +groundedHp.toFixed(1),
+      airborneHp: +airborneHp.toFixed(1),
+      groundHits: afterGround.tremorHits,
+      airClears: afterAir.tremorClears,
+      spawned,
+      end,
+    };
   });
-  console.log(`  first clutch after ${brood.firstBroodAt}s`);
-  console.log(`  population: ${JSON.stringify(brood.samples)}`);
-  console.log(`  final ${brood.count} children`);
-  console.log(`  positions in the boss's frame: `
-    + JSON.stringify(brood.rel.slice(0, 6)));
-  check(brood.firstBroodAt > 0 && brood.firstBroodAt <= 20,
-    "it broods on its own clock", `first clutch at ${brood.firstBroodAt}s`);
-  check(brood.count > 0 && brood.count <= 12,
-    "the brood cap holds over a long fight", `${brood.count} live children`);
-  check(brood.rel.every((r) => r.fwd < 0),
-    "the clutch lands BEHIND the boss, not between it and the player",
-    brood.rel.filter((r) => r.fwd >= 0).length + " landed in front");
-  check(brood.rel.every((r) => r.awake),
-    "children are born awake");
+  console.log(`  ${tremor.config.waves} waves (${tremor.config.rousedWaves} roused) · `
+    + `${tremor.config.radius}m radius · ${tremor.config.damage} damage each`);
+  console.log(`  grounded ${tremor.groundedHp}/${maxHp} hp · airborne `
+    + `${tremor.airborneHp}/${maxHp} hp · ${tremor.airClears} clears`);
+  check(tremor.groundHits >= 1 && tremor.groundedHp < maxHp,
+    "a grounded player is hit by the expanding seismic front",
+    `${tremor.groundHits} hit, ${maxHp - tremor.groundedHp} damage taken`);
+  check(tremor.airClears >= 1 && tremor.airborneHp === maxHp,
+    "jumping or boosting above the front clears it without damage",
+    `${tremor.airClears} clear, ${maxHp - tremor.airborneHp} damage taken`);
+  check(tremor.spawned.length === 0,
+    "the Matriarch never summons another enemy",
+    `spawned combatants: ${tremor.spawned.join(", ") || "none"}`);
+  check(tremor.end.tremors >= 2 && tremor.end.activeWaves === 0,
+    "the rite completes and cleans up every authoritative wave",
+    `${tremor.end.tremors} rites · ${tremor.end.activeWaves} active waves`);
 
   /* ---------------- a picture of it happening ---------------- */
   await page.evaluate(() => {
     const T = window.__SF;
     const inst = T.ctx.enemies.live.find((e) => e.key === "matriarch");
     T.hidePlayer(true);
-    T.lookAt([inst.x + 15, inst.y + 6.5, inst.z - 17],
-      [inst.x, inst.y + 2.2, inst.z - 3], 44);
+    T.ctx.matriarch.force("tremor", inst);
+    T.advanceTime(T.ctx.matriarch.config.tremorWindup + 0.35, 1 / 60);
+    T.lookAt([inst.x + 17, inst.y + 7.5, inst.z - 19],
+      [inst.x, inst.y + 1.5, inst.z], 48);
     for (let i = 0; i < 5; i += 1) T.renderStill();
   });
   const url = await page.evaluate(() => window.__SF.captureDataURL());
-  await writeFile(path.join(OUT, "brood-clutch.png"),
+  await writeFile(path.join(OUT, "tremor-rite.png"),
     Buffer.from(url.slice(url.indexOf(",") + 1), "base64"));
 
   /* ---------------- the fight, played ----------------
@@ -451,14 +508,21 @@ try {
     // Into the arena, at the range the hunt actually starts from.
     T._teleportRaw(inst.x + 34, inst.z + 34, Math.atan2(-34, -34));
     T.invulnerable(false);
-    T.ctx.combat.player.hp = T.ctx.combat.player.maxHp;
+    /* Diagnostic endurance, not game balance. The stronger encounter now
+       kills a 150-HP bot before the orbit samples every positional branch.
+       Give this one harness actor enough health to observe the full natural
+       move histogram, then restore the real pool before leaving the block. */
+    const realMaxHp = T.ctx.combat.player.maxHp;
+    const probeMaxHp = 900;
+    T.ctx.combat.player.maxHp = probeMaxHp;
+    T.ctx.combat.player.hp = probeMaxHp;
     T.advanceTime(0.2, 1 / 60);
 
     const seenPhases = [];
     const actions = {};
     let woke = -1;
     let engaged = -1;
-    let minHp = T.ctx.combat.player.maxHp;
+    let minHp = probeMaxHp;
     let orbit = 0;
     /* A player who stands still is not a fight, and one who stands
        still BEHIND it is a script for a single move. This one circles
@@ -491,10 +555,12 @@ try {
       if (T.ctx.combat.player.dead) break;
     }
     const end = T.ctx.matriarch.status(inst);
-    return {
+    const result = {
       arenaRadius: site.arenaRadius,
       woke, engaged, seenPhases, actions,
       minHp: +minHp.toFixed(1),
+      probeMaxHp,
+      damageTaken: +(probeMaxHp - minHp).toFixed(1),
       dead: T.ctx.combat.player.dead,
       invulnerable: !!T.ctx.combat.player.invulnerable,
       free: !!T.ctx.player.state.free,
@@ -502,6 +568,10 @@ try {
       homeDist: +Math.hypot(inst.x - site.x, inst.z - site.z).toFixed(1),
       bossHealth: Math.round(inst.health),
     };
+    T.ctx.combat.player.maxHp = realMaxHp;
+    T.ctx.combat.player.hp = realMaxHp;
+    T.ctx.combat.player.dead = false;
+    return result;
   });
   await page.evaluate(() => window.__SF.invulnerable(true));
   if (!played) {
@@ -511,11 +581,12 @@ try {
     console.log(`  woke at ${played.woke}s · engaged at ${played.engaged}s`);
     console.log(`  phases seen: ${played.seenPhases.join(" -> ")}`);
     console.log(`  actions chosen: ${JSON.stringify(played.actions)}`);
-    console.log(`  player floor ${played.minHp} hp · boss ${played.bossHealth} hp `
+    console.log(`  diagnostic damage ${played.damageTaken}/${played.probeMaxHp} hp · `
+      + `boss ${played.bossHealth} hp `
       + `· ${played.homeDist}m from its site (arena ${played.arenaRadius}m)`);
     console.log(`  tells ${played.end.tells} · landed ${played.end.landed} `
       + `· whiffed ${played.end.whiffed} · culls ${played.end.culls} `
-      + `· lances ${played.end.lances} · clutches ${played.end.clutches} `
+      + `· lances ${played.end.lances} · tremors ${played.end.tremors} `
       + `· invulnerable ${played.invulnerable} · freecam ${played.free}`);
     check(played.woke > 0 && played.engaged > played.woke,
       "walking into the Reach wakes it through the ordinary district gate",
@@ -526,23 +597,22 @@ try {
     check(kinds.includes("cull"),
       "...including the flank answer, unprompted",
       `${played.actions.cull || 0} frames of cull`);
+    check(kinds.includes("tremor"),
+      "...and the summon-free movement check, unprompted",
+      `${played.actions.tremor || 0} frames of tremor`);
     check(played.seenPhases.includes("stalk"),
       "it holds ground between moves rather than standing still",
       played.seenPhases.join(" -> "));
-    /* IT KILLS THE BOT NOW, and that is the change rather than a
-       regression. This clause was written against an animal that
-       walked at 2.55 m/s and connected with nothing, so "without
-       killing them" described a boss that could not reach a player
-       rather than a balance target. The bot holds a perfect circle
-       inside scythe reach for thirty-five seconds while never
-       shooting, never breaking off, never raising Aegis and never
-       healing, and `saintfall-melee-duel-probe.mjs` is where the rule
-       about not calibrating to what these bots survive is written
-       down. What this check is for is that the moveset CONNECTS. */
-    check(played.end.landed > 0 && played.minHp < 150,
+    /* This bot has diagnostic health because the real 150-point pool
+       now ends the sample before every positional branch appears. It
+       still holds a perfect circle inside scythe reach for thirty-five
+       seconds while never shooting, breaking off, raising Aegis, or
+       healing. This check is about whether the moves connect and cost
+       health, not calibrating the boss to what automation survives. */
+    check(played.end.landed > 0 && played.damageTaken > 0,
       "thirty-five seconds inside its ring costs a strafing player dearly",
       `${played.end.landed} of ${played.end.tells} tells connected, `
-      + `floor ${played.minHp}/150${played.dead ? " - killed the bot" : ""}`);
+      + `${played.damageTaken}/${played.probeMaxHp} diagnostic health taken`);
     check(played.homeDist <= played.arenaRadius,
       "it stays inside its own arena while it chases",
       `${played.homeDist}m from the site marker`);
@@ -603,14 +673,17 @@ try {
     });
     return { ms: +ms.toFixed(2), calls: report.render.calls, tris,
       bones: boss.bones.size, chains: boss.legs.length,
-      kids: T.ctx.enemies.live.filter((e) => e.key === "thresher").length };
+      adds: T.ctx.enemies.live.filter((e) => e !== boss
+        && !e.encounterHidden && e.state !== "death").length };
   });
-  console.log(`  boss + ${cost.kids} children at point-blank: ${cost.ms}ms/frame `
+  console.log(`  boss + ${cost.adds} adds at point-blank: ${cost.ms}ms/frame `
     + `· ${cost.calls} draw calls`);
   console.log(`  the Matriarch itself: ${cost.tris} triangles · `
     + `${cost.bones} bones · ${cost.chains} IK chains`);
   check(cost.ms < 8, "the encounter renders at point-blank range",
     `${cost.ms}ms/frame`);
+  check(cost.adds === 0, "the rendered encounter remains add-free",
+    `${cost.adds} additional combatants`);
 
   /* ---------------- recurrence ----------------
      The Matriarch ends a WAVE, and the cycle ends one wave later. It

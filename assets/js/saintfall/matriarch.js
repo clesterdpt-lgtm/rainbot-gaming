@@ -9,19 +9,17 @@
 
    It was the last district boss still being driven entirely by
    `combat.stepEnemy`, which is the generic walker brain: close to
-   reach, bite on a cadence, and - uniquely for this key - stop every
-   fourteen seconds and lay. Four numbers and one timer. Against a
-   3600-health pool that produced a fight with exactly one decision in
+   reach and bite on a cadence. Against a 3600-health pool that
+   produced a fight with exactly one decision in
    it, taken once: walk round the back, then hold the trigger. The
    animal never answered the flank, never covered the ground it lost,
    and never did anything a Harrow does not do, so the only thing its
    size changed was how long the same thirty seconds lasted.
 
    The parts of the encounter that were already right are kept and
-   built on rather than replaced. The gaster is still the weak point;
-   it is still on the far side of nine metres of hostile animal; the
-   brood is still the clock that says stop shooting the armour. What
-   this module adds is an OPPONENT for those rules.
+   built on rather than replaced. The gaster is still the weak point,
+   and it is still on the far side of nine metres of hostile animal.
+   What this module adds is an OPPONENT for those rules.
 
    THE LOOP
 
@@ -44,15 +42,15 @@
                 the ground behind it. This is the move the whole
                 encounter is built around: it does not stop you
                 getting behind, it puts a clock on staying there.
-     BROOD      Unchanged in what it spawns (see `combat.brood`) and
-                inverted in what it means. It plants, the ovipositor
-                goes down, and for those seconds the gaster is held
-                still and low and is worth HALF AGAIN what it is worth
-                at any other time. The boss's own cadence now tells
-                the player when to take the risk.
+     TREMOR     The summon is gone. It plants the ovipositor and sends
+                three expanding ground waves across the Reach, four
+                after rousing. Jump, boost or fly over each live ring;
+                staying grounded is punished. Planting still holds the
+                gaster low, turning the danger into an aimed damage
+                window rather than another add-clear.
 
    And below 45% it rouses: faster, a third scythe on the combo, and
-   a brood clock two-thirds as long.
+   a fourth tremor on a tighter clock.
 
    THE SPEED PASS. Everything above was true of the fight before this
    module was ever measured against a player who simply left. It was
@@ -105,9 +103,9 @@ export const MATRIARCH_CONFIG = Object.freeze({
      under a SPRINT, so the range is a live argument: keep the sights
      up and it closes on you, break into a run and you keep your
      distance and stop shooting for as long as you do. */
-  walkSpeed: 5.9,
-  backSpeed: 2.6,
-  strafeSpeed: 3.4,
+  walkSpeed: 6.65,
+  backSpeed: 3.1,
+  strafeSpeed: 4.0,
   strafeFlipSeconds: 2.4,
 
   /* THE CHASE GEAR. Beyond the band it winds up toward a run, so
@@ -132,10 +130,10 @@ export const MATRIARCH_CONFIG = Object.freeze({
      at thirteen - and a PLANTED foot never slides a millimetre at
      any of them. The ceiling stays because of the counterplay
      argument above, which is the honest reason for it. */
-  chaseSpeed: 7.4,
+  chaseSpeed: 8.15,
   chaseFrom: 14,
   chaseFull: 30,
-  gaitCeiling: 7.6,
+  gaitCeiling: 8.25,
   /* Where in the band it settles while circling, and how hard it is
      pulled there - see the strafe branch of `stepStalk`.
 
@@ -352,17 +350,32 @@ export const MATRIARCH_CONFIG = Object.freeze({
   cullCadence: 4.2,
 
   /* ------------------------------------------------------------
-     BROODING, and the window it opens. `broodEvery` is the Bloom's
-     own fourteen seconds, unchanged; what is new is that laying
-     PRESENTS the weak point - the ovipositor is down, the animal is
-     planted, and the sacs are held still and low. Worth half again
-     for that window, which is what turns the brood timer from a
-     nuisance into an invitation. */
-  broodEvery: 14,
-  broodEveryRoused: 9.5,
-  broodPlant: 1.9,              // planted, from the tell to the clutch
-  broodHold: 1.1,               // and held after it, gaster presented
-  broodWeakBonus: 1.5,
+     THE TREMOR RITE. No adds. The ovipositor plants and three floor
+     waves leave the animal on separate beats; after the rouse there
+     are four. Each wave is a timing check against the player's jump,
+     boost and jetpack rather than a second target list.
+
+     The ring reaches the edge of the lance band in 1.62s. Its bright
+     visual front is spawned from the same numbers as its damage front,
+     and the 0.55m clearance matches the jump contract already taught by
+     the Abbess slam. The Matriarch is planted through the sequence and
+     presents the gaster, so damage pressure and opportunity are the
+     same beat. */
+  tremorEvery: 12.5,
+  tremorEveryRoused: 9.0,
+  tremorWindup: 1.45,
+  tremorPulseGap: 0.68,
+  tremorWaves: 3,
+  tremorWavesRoused: 4,
+  tremorRecover: 0.55,
+  tremorRadius: 34,
+  tremorSpeed: 21,
+  tremorBand: 1.35,
+  tremorDamage: 24,
+  tremorAirClear: 0.55,
+  tremorSlowFactor: 0.72,
+  tremorSlowSeconds: 0.85,
+  tremorWeakBonus: 1.25,
 
   /* ------------------------------------------------------------
      THE ROUSE. One beat, once, at 45% - and the only phase change in
@@ -417,7 +430,7 @@ export function buildMatriarch(ctx) {
     return {
       id: inst.id,
       lastHealth: inst.health,
-      act: null,             // null | combo | lance | cull | brood | rouse
+      act: null,             // null | combo | lance | cull | tremor | rouse
       actFor: 0,             // seconds left in the action as a whole
       pending: -1,           // seconds to the next contact, or -1
       step: 0,               // which scythe of the combo
@@ -426,7 +439,8 @@ export function buildMatriarch(ctx) {
       comboTimer: C.comboCadence * 0.45,
       lanceTimer: C.lanceCadence * 0.5,
       cullTimer: C.cullCadence * 0.6,
-      broodTimer: C.broodEvery * 0.55,
+      tremorTimer: C.tremorEvery * 0.55,
+      waves: [],
       rearFor: 0,
       dashFor: C.lanceDash,  // set per lance, from the gap it has to cross
       strafeDir: 1,
@@ -438,7 +452,9 @@ export function buildMatriarch(ctx) {
       whiffed: 0,
       culls: 0,
       lances: 0,
-      clutches: 0,
+      tremors: 0,
+      tremorHits: 0,
+      tremorClears: 0,
       lastMiss: null,
       misses: { range: 0, arc: 0, height: 0, sight: 0 },
     };
@@ -693,19 +709,28 @@ export function buildMatriarch(ctx) {
     bus.emit("cullTell", { x: inst.x, z: inst.z });
   }
 
-  function beginBrood(inst, brain) {
-    brain.act = "brood";
-    brain.actFor = C.broodPlant + C.broodHold;
-    brain.pending = C.broodPlant;
-    brain.broodTimer = (brain.roused ? C.broodEveryRoused : C.broodEvery)
+  function beginTremor(inst, brain) {
+    brain.act = "tremor";
+    brain.step = 0;
+    brain.steps = brain.roused ? C.tremorWavesRoused : C.tremorWaves;
+    brain.actFor = C.tremorWindup + (brain.steps - 1) * C.tremorPulseGap
+      + C.tremorRecover;
+    brain.pending = C.tremorWindup;
+    brain.tremorTimer = (brain.roused ? C.tremorEveryRoused : C.tremorEvery)
       * cadenceScale(brain);
+    brain.tremors += 1;
+    brain.tells += 1;
     inst.actionLocked = true;
-    /* THE WINDOW. Presented from the tell rather than from the clutch,
+    /* THE WINDOW. Presented from the tell rather than from the first wave,
        so the reward starts when the animal commits and not when the
        player has already had to decide. */
-    inst.weakBonus = C.broodWeakBonus;
+    inst.weakBonus = C.tremorWeakBonus;
     enemies.play?.(inst, "brood", 0.16);
-    bus.emit("broodTell", { x: inst.x, z: inst.z });
+    const y = groundAt(inst.x, inst.z);
+    ctx.vfx?.matriarchTremorTell?.(inst.x, y, inst.z, C.tremorRadius,
+      brain.roused);
+    bus.emit("tremorTell", { x: inst.x, z: inst.z, waves: brain.steps,
+      roused: brain.roused });
   }
 
   function beginRouse(inst, brain) {
@@ -825,13 +850,17 @@ export function buildMatriarch(ctx) {
       brain.pending = -1;
       return;
     }
-    if (brain.act === "brood") {
-      ctx.combat?.brood?.(inst);
-      brain.clutches += 1;
-      ctx.vfx?.sandSpray?.(inst.x - Math.sin(inst.yaw) * 5.5, y,
-        inst.z - Math.cos(inst.yaw) * 5.5, 2.2);
-      brain.pending = -1;
-      bus.emit("brood", { x: inst.x, z: inst.z });
+    if (brain.act === "tremor") {
+      brain.step += 1;
+      brain.waves.push({ x: inst.x, z: inst.z, radius: 0,
+        resolved: false, index: brain.step });
+      ctx.vfx?.matriarchTremorWave?.(inst.x, y, inst.z, C.tremorRadius,
+        C.tremorRadius / C.tremorSpeed, brain.roused, brain.step);
+      ctx.vfx?.sandSpray?.(inst.x - Math.sin(inst.yaw) * 4.8, y,
+        inst.z - Math.cos(inst.yaw) * 4.8, 1.4);
+      bus.emit("tremorPulse", { x: inst.x, z: inst.z, index: brain.step,
+        waves: brain.steps, roused: brain.roused });
+      brain.pending = brain.step < brain.steps ? C.tremorPulseGap : -1;
       return;
     }
     if (brain.act === "rouse") {
@@ -846,6 +875,52 @@ export function buildMatriarch(ctx) {
         });
       }
       brain.pending = -1;
+    }
+  }
+
+  /** Advance the damaging front separately from the planted action.
+   *
+   *  The last ring is still travelling when the recovery ends, so tying
+   *  it to `brain.act` would make its outside half harmless. Each emitted
+   *  front therefore owns its origin, radius and one player resolution.
+   *  It never spawns an entity and is discarded once it clears the arena. */
+  function stepTremorWaves(inst, brain, dt) {
+    if (!brain.waves.length) return;
+    const ps = ctx.player.state;
+    for (let i = brain.waves.length - 1; i >= 0; i -= 1) {
+      const wave = brain.waves[i];
+      const before = wave.radius;
+      wave.radius += C.tremorSpeed * dt;
+
+      if (!wave.resolved && !ctx.combat.player.dead) {
+        const dist = Math.hypot(ps.x - wave.x, ps.z - wave.z);
+        const crossed = dist >= Math.max(0, before - C.tremorBand)
+          && dist <= wave.radius + C.tremorBand;
+        if (crossed && dist <= C.tremorRadius + C.tremorBand) {
+          wave.resolved = true;
+          const clearance = ps.y - groundAt(ps.x, ps.z);
+          if (clearance > C.tremorAirClear) {
+            brain.tremorClears += 1;
+            ctx.player?.doctrineKick?.(0.52, 0.38);
+            bus.emit("tremorCleared", { x: ps.x, z: ps.z,
+              index: wave.index, clearance });
+          } else {
+            brain.tremorHits += 1;
+            ctx.combat.hurtPlayer(C.tremorDamage
+              * SURVIVAL_CONFIG.enemyDamageMultiplier, {
+              source: "matriarch-tremor", enemyId: inst.id, enemyKey: inst.key,
+              x: ps.x, y: ps.y + 1.0, z: ps.z,
+            });
+            ctx.player?.applySlow?.(C.tremorSlowFactor, C.tremorSlowSeconds);
+            ctx.player?.punch?.(1.25);
+            ctx.player?.doctrineKick?.(0.78, 0.65);
+            bus.emit("tremorHit", { x: ps.x, z: ps.z,
+              index: wave.index, damage: C.tremorDamage });
+          }
+        }
+      }
+
+      if (wave.radius > C.tremorRadius + C.tremorBand) brain.waves.splice(i, 1);
     }
   }
 
@@ -895,7 +970,7 @@ export function buildMatriarch(ctx) {
         faceTowards(inst, aim.x, aim.z, C.lanceTrack, dt);
         brain.lockYaw = inst.yaw;
       }
-    } else if (brain.act === "brood") {
+    } else if (brain.act === "tremor") {
       // Planted. It does not even turn - that is what makes the
       // window a window.
     } else if (brain.act !== "rouse") {
@@ -918,10 +993,15 @@ export function buildMatriarch(ctx) {
    *  same armour window the ordinary castes carry. */
   function cancel(inst, brain, armouredCheck = true) {
     if (!brain.act) return false;
+    /* Once the first seismic front has left the body the chain is
+       committed. Before that, the first half of the long plant can be
+       interrupted on the same contract as every other tell. */
+    if (armouredCheck && brain.act === "tremor" && brain.step > 0) return false;
     if (armouredCheck && brain.pending > 0) {
       const total = brain.act === "combo" ? C.comboWindup
         : brain.act === "lance" ? C.lanceCock + brain.dashFor
           : brain.act === "cull" ? C.cullWindup + C.cullSweep * 0.5
+            : brain.act === "tremor" ? C.tremorWindup
             : brain.pending;
       if (brain.pending < total * C.interruptWindow) return false;
     }
@@ -940,7 +1020,7 @@ export function buildMatriarch(ctx) {
        gaster is not defended. */
     if (brain.cullTimer <= 0 && dist < C.cullRadius && dot < C.cullRearDot
       && brain.rearFor >= C.cullLoiter) return beginCull(inst, brain);
-    if (brain.broodTimer <= 0 && sees) return beginBrood(inst, brain);
+    if (brain.tremorTimer <= 0 && sees) return beginTremor(inst, brain);
     /* Both of these ask where the player will BE, not where they are.
        The combo looks one wind-up ahead; the lance looks over its cock
        plus the shortest dash it could throw, since the dash length is
@@ -1017,6 +1097,7 @@ export function buildMatriarch(ctx) {
     if (inst.state === "death" || inst.health <= 0) {
       inst.actionLocked = false;
       inst.weakBonus = 1;
+      brain.waves.length = 0;
       return;
     }
     /* Gated actors do not perceive, move or attack. districtBosses
@@ -1025,6 +1106,7 @@ export function buildMatriarch(ctx) {
        start a fight the encounter controller has not started. */
     if (inst.encounterHidden || inst.encounterLocked) {
       if (brain.act) cancel(inst, brain, false);
+      brain.waves.length = 0;
       return;
     }
     /* An arena reset teleports the animal home at full health with no
@@ -1034,9 +1116,11 @@ export function buildMatriarch(ctx) {
     if (inst.health > brain.lastHealth + 1) {
       cancel(inst, brain, false);
       brain.roused = false;
-      brain.broodTimer = C.broodEvery * 0.55;
+      brain.tremorTimer = C.tremorEvery * 0.55;
+      brain.waves.length = 0;
     }
     brain.lastHealth = inst.health;
+    stepTremorWaves(inst, brain, dt);
 
     /* STUNNED CREATURES DO NOTHING, and a stagger inside the first
        half of a tell takes the swing with it. The gate lives here
@@ -1062,7 +1146,7 @@ export function buildMatriarch(ctx) {
     brain.comboTimer -= dt;
     brain.lanceTimer -= dt;
     brain.cullTimer -= dt;
-    if (sees) brain.broodTimer -= dt;
+    if (sees) brain.tremorTimer -= dt;
 
     if (brain.act) { stepAction(inst, brain, dt); return; }
 
@@ -1162,7 +1246,10 @@ export function buildMatriarch(ctx) {
       misses: { ...(brain?.misses || { range: 0, arc: 0, height: 0, sight: 0 }) },
       culls: brain?.culls || 0,
       lances: brain?.lances || 0,
-      clutches: brain?.clutches || 0,
+      tremors: brain?.tremors || 0,
+      tremorHits: brain?.tremorHits || 0,
+      tremorClears: brain?.tremorClears || 0,
+      activeWaves: brain?.waves?.length || 0,
       health: Math.max(0, Math.round(inst.health)),
       maxHealth: Math.round(inst.maxHealth),
       dist: Number(Math.hypot(ps.x - inst.x, ps.z - inst.z).toFixed(1)),
@@ -1192,7 +1279,7 @@ export function buildMatriarch(ctx) {
       if (kind === "combo") beginCombo(inst, brain);
       else if (kind === "lance") beginLance(inst, brain);
       else if (kind === "cull") beginCull(inst, brain);
-      else if (kind === "brood") beginBrood(inst, brain);
+      else if (kind === "tremor") beginTremor(inst, brain);
       else if (kind === "rouse") beginRouse(inst, brain);
       else return false;
       return true;

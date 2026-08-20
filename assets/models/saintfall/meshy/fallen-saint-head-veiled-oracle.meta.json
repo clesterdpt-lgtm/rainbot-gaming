@@ -1,0 +1,19 @@
+{
+  "source": "Meshy image-to-3d resumed download",
+  "task": {
+    "id": "01a01f0f-dbc6-76cf-9cda-1d2f1064d7ac",
+    "type": "image-to-3d",
+    "status": "SUCCEEDED",
+    "progress": 100,
+    "createdAt": 1787227530267,
+    "startedAt": 1787227530272,
+    "finishedAt": 1787227729772,
+    "expiresAt": 1787486929772,
+    "consumedCredits": 30,
+    "taskError": null
+  },
+  "masterFile": "../../../../output/meshy-masters/saintfall/fallen-saint-head-veiled-oracle-master.glb",
+  "thumbnails": [
+    "fallen-saint-head-veiled-oracle-preview.png"
+  ]
+}

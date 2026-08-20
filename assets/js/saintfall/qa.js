@@ -1952,11 +1952,12 @@ export function installQa(ctx, api) {
       let near = 0;
       const meshes = new Set();
       api.world.group.traverse((o) => {
-        if (!o.isMesh) return;
+        if (!o.isMesh || !o.visible) return;
+        o.updateWorldMatrix(true, false);
         const pos = o.geometry.attributes.position;
         const stride = Math.max(1, Math.floor(pos.count / 20000));
         for (let i = 0; i < pos.count; i += stride) {
-          v.fromBufferAttribute(pos, i);
+          v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
           if (Math.hypot(v.x - x, v.z - z) > radius) continue;
           near += 1;
           meshes.add(o.name);
@@ -2161,11 +2162,12 @@ export function installQa(ctx, api) {
       let far = 0;
       let hits = 0;
       api.world.group.traverse((o) => {
-        if (!o.isMesh) return;
+        if (!o.isMesh || !o.visible) return;
+        o.updateWorldMatrix(true, false);
         const pos = o.geometry.attributes.position;
         const stride = Math.max(1, Math.floor(pos.count / 6000));
         for (let i = 0; i < pos.count; i += stride) {
-          v.fromBufferAttribute(pos, i);
+          v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
           const d = Math.hypot(v.x - x, v.z - z);
           if (d > radius) continue;
           hits += 1;

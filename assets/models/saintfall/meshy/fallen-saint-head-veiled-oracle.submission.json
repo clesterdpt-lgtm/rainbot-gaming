@@ -1,0 +1,22 @@
+{
+  "taskId": "01a01f0f-dbc6-76cf-9cda-1d2f1064d7ac",
+  "taskType": "image-to-3d",
+  "input": "assets/concepts/saintfall/meshy/fallen-saint-head-veiled-oracle.png",
+  "request": {
+    "image_url": "[local image data URI omitted]",
+    "model_type": "standard",
+    "ai_model": "meshy-6",
+    "enable_pbr": true,
+    "should_texture": true,
+    "should_remesh": true,
+    "topology": "triangle",
+    "target_polycount": 35000,
+    "pose_mode": "a-pose",
+    "image_enhancement": false,
+    "remove_lighting": true,
+    "target_formats": [
+      "glb"
+    ],
+    "texture_prompt": "Ancient monumental cast bronze, deep emerald verdigris pooled in seams, warm worn gold-bronze bevels, charcoal black eye cavities, sand abrasion, matte PBR metal, no glow."
+  }
+}

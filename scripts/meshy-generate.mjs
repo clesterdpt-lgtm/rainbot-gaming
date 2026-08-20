@@ -250,7 +250,10 @@ async function runImageTo3d(apiKey, args) {
     should_remesh: true,
     topology: "triangle",
     target_polycount: polycount,
-    pose_mode: args.pose || "a-pose",
+    // Static image-to-3D props (hands, heads, scenery) must not be
+    // coerced into a humanoid A-pose. Callers generating a character can
+    // still opt in explicitly with `--pose a-pose` or `--pose t-pose`.
+    pose_mode: args.pose || "",
     image_enhancement: false,
     remove_lighting: true,
     target_formats: ["glb"],

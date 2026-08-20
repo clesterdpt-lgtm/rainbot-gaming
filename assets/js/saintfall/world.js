@@ -35,7 +35,7 @@ import {
 import {
   PALETTE, ROCK_RAMP, BASALT_RAMP, BONE_RAMP, BRONZE_RAMP, GLASS_RAMP,
   CHITIN_RAMP, SAND_RAMP, ASH_RAMP,
-  paintByHeight, paintFlat, paintGeometry, srgbTransfer as srgb,
+  paintByHeight, paintFlat, paintGeometry, patchMaterial, srgbTransfer as srgb,
 } from "saintfall/art.js";
 import { makeKit, mergeGeometries, cleanGeometry } from "saintfall/structures.js";
 import {
@@ -110,7 +110,7 @@ function makeBatcher(ctx, root) {
    ============================================================ */
 
 export async function buildWorld(ctx, onProgress) {
-  const { THREE, scene, terrain } = ctx;
+  const { THREE, scene, terrain, atmos } = ctx;
   const kit = makeKit(THREE);
   const field = terrain.field;
   const H = (x, z) => field.heightAt(x, z);
@@ -119,6 +119,107 @@ export async function buildWorld(ctx, onProgress) {
   root.name = "world";
   scene.add(root);
   const batch = makeBatcher(ctx, root);
+
+  /* The three approved Meshy landmarks are visual replacements, not a
+     reason to rewrite navigation. Their detailed ornament would make a
+     poor one-metre collision raster (every eye slit and wheel spoke
+     would become a player-sized tooth), so the authored GLBs opt out of
+     collision and the original procedural silhouettes remain as hidden
+     collision proxies. If an asset ever fails to load, the same proxy is
+     painted and rendered as the old fail-safe instead. */
+  const authoredMeshes = [];
+  const authoredLandmarks = [];
+  const landmarkSources = Object.create(null);
+  const landmarkAssetsReady = (async () => {
+    const specs = [
+      ["fallenSaintHead", "fallen-saint-head-veiled-oracle.glb"],
+      ["fallenSaintHand", "fallen-saint-hand-benediction.glb"],
+      ["gildedReachCross", "gilded-reach-choir-wheel.glb"],
+    ];
+    try {
+      const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");
+      const loader = new GLTFLoader();
+      await Promise.all(specs.map(async ([key, file]) => {
+        const url = new URL(`../../../assets/models/saintfall/meshy/${file}`, import.meta.url);
+        if (ctx.build) url.searchParams.set("v", ctx.build);
+        try {
+          const gltf = await loader.loadAsync(url.href);
+          const source = gltf.scene;
+          source.updateMatrixWorld(true);
+          const box = new THREE.Box3().setFromObject(source);
+          const size = box.getSize(new THREE.Vector3());
+          if (!(size.y > 1e-6)) throw new Error("model has no measurable height");
+          const seenMaterials = new Set();
+          source.traverse((node) => {
+            if (!node.isMesh) return;
+            const list = Array.isArray(node.material) ? node.material : [node.material];
+            for (const material of list) {
+              if (!material || seenMaterials.has(material)) continue;
+              seenMaterials.add(material);
+              material.envMapIntensity = 0.82;
+              patchMaterial(material, atmos, { rim: 0.78, glitter: 0 });
+            }
+          });
+          landmarkSources[key] = { source, box, size };
+        } catch (error) {
+          console.warn(`[saintfall] landmark "${key}" failed to load; using procedural fallback`, error);
+        }
+      }));
+    } catch (error) {
+      console.warn("[saintfall] landmark loader unavailable; using procedural fallbacks", error);
+    }
+  })();
+
+  const addCollisionProxy = (geo, district, name) => {
+    const mesh = new THREE.Mesh(geo, ctx.materials.stone);
+    mesh.name = name;
+    mesh.visible = false;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    mesh.matrixAutoUpdate = false;
+    mesh.updateMatrix();
+    mesh.userData.district = district;
+    mesh.userData.collisionProxy = true;
+    // Hidden collision geometry must not occlude QA sightline rays.
+    mesh.raycast = () => {};
+    root.add(mesh);
+    return mesh;
+  };
+
+  const addAuthoredLandmark = (asset, opts) => {
+    const pivot = new THREE.Group();
+    pivot.name = opts.name;
+    pivot.position.set(opts.pos[0], opts.pos[1], opts.pos[2]);
+    if (opts.rot) pivot.rotation.set(opts.rot[0], opts.rot[1], opts.rot[2]);
+
+    const fitted = new THREE.Group();
+    const visual = asset.source.clone(true);
+    const scale = opts.height / asset.size.y;
+    fitted.scale.setScalar(scale);
+    fitted.position.set(
+      -((asset.box.min.x + asset.box.max.x) * 0.5) * scale,
+      -asset.box.min.y * scale,
+      -((asset.box.min.z + asset.box.max.z) * 0.5) * scale
+    );
+    fitted.add(visual);
+    pivot.add(fitted);
+
+    const meshes = [];
+    visual.traverse((node) => {
+      if (!node.isMesh) return;
+      node.name = `${opts.name}-mesh`;
+      node.castShadow = true;
+      node.receiveShadow = true;
+      node.userData.district = opts.district;
+      node.userData.noCollide = true;
+      node.userData.authoredLandmark = opts.key;
+      authoredMeshes.push(node);
+      meshes.push(node);
+    });
+    root.add(pivot);
+    authoredLandmarks.push({ key: opts.key, root: pivot, meshes });
+    return pivot;
+  };
 
   const pois = [];
   const lights = [];
@@ -980,6 +1081,7 @@ export async function buildWorld(ctx, onProgress) {
      ============================================================ */
 
   await step("Uncovering the Saint", 0.24);
+  await landmarkAssetsReady;
   {
     const d = DISTRICTS.saint;
     const rng = makeRng(0x5a17ff);
@@ -1043,6 +1145,7 @@ export async function buildWorld(ctx, onProgress) {
       const g = kit.saintHead({ size: S });
       const hx = d.x + 6;
       const hz = d.z + 18;
+      const headAsset = landmarkSources.fallenSaintHead;
 
       /* Painted in LOCAL space, before the transform, so the face
          can be told apart from the back of the skull. Keyed on
@@ -1055,7 +1158,7 @@ export async function buildWorld(ctx, onProgress) {
          the cranium behind it holds its patina; the eye slits go
          to the bottom of the ramp, and that darkness IS the
          expression at this scale. */
-      {
+      if (!headAsset) {
         const nrm = g.attributes.normal;
         paintGeometry(THREE, g, BRONZE_RAMP, (x, y, z, i) => {
           const inEye = Math.abs(x) > S * 0.09 && Math.abs(x) < S * 0.26
@@ -1108,7 +1211,20 @@ export async function buildWorld(ctx, onProgress) {
         pos: [hx, H(hx, hz) - S * 0.10, hz],
         rot: [-0.28, -0.95, 0.26],
       });
-      batch.add("saint", "bronze", g);
+      if (headAsset) {
+        addAuthoredLandmark(headAsset, {
+          key: "fallenSaintHead",
+          name: "saint-meshy-head",
+          district: "saint",
+          pos: [hx, H(hx, hz) - S * 0.24, hz],
+          rot: [-0.28, -0.95, 0.26],
+          // The original head spans -0.14S through 1.22S.
+          height: S * 1.36,
+        });
+        addCollisionProxy(g, "saint", "saint-head-collision-proxy");
+      } else {
+        batch.add("saint", "bronze", g);
+      }
       pois.push({ id: "saint", name: "The Fallen Saint", x: hx, z: hz });
 
       // Salvage scaffolding abandoned on the brow.
@@ -1132,11 +1248,12 @@ export async function buildWorld(ctx, onProgress) {
       const g = kit.saintHand({ size: S, curl: 0.42 });
       const hx = d.x + 232;
       const hz = d.z - 176;
+      const handAsset = landmarkSources.fallenSaintHand;
       /* Painted BEFORE the transform - see the patina note above.
          The hand corroded while the arm was still raised, so its
          weathering is keyed to the wrist-to-fingertip axis it had
          then, not to whichever facet points at the sky now. */
-      {
+      if (!handAsset) {
         const nrm = g.attributes.normal;
         paintGeometry(THREE, g, BRONZE_RAMP, (x, y, z, i) => saintPatina({
           up: nrm.getY(i),
@@ -1151,7 +1268,20 @@ export async function buildWorld(ctx, onProgress) {
         pos: [hx, H(hx, hz) - S * 0.42, hz],
         rot: [0.30, -0.9, 0.20],
       });
-      batch.add("saint", "bronze", g);
+      if (handAsset) {
+        addAuthoredLandmark(handAsset, {
+          key: "fallenSaintHand",
+          name: "saint-meshy-hand",
+          district: "saint",
+          pos: [hx, H(hx, hz) - S * 0.82, hz],
+          rot: [0.30, -0.9, 0.20],
+          // Matches the procedural wrist-to-fingertip span.
+          height: S * 1.64,
+        });
+        addCollisionProxy(g, "saint", "saint-hand-collision-proxy");
+      } else {
+        batch.add("saint", "bronze", g);
+      }
       pois.push({ id: "saint-hand", name: "The Reaching Hand", x: hx, z: hz });
     }
 
@@ -3721,6 +3851,7 @@ export async function buildWorld(ctx, onProgress) {
     {
       const masts = [];
       const sails = [];
+      const crossAsset = landmarkSources.gildedReachCross;
       for (let i = 0; i < 17; i += 1) {
         // A line marching across the dunes, perpendicular to the
         // wind, so they read as deliberate rather than scattered.
@@ -3766,15 +3897,31 @@ export async function buildWorld(ctx, onProgress) {
           blade.translate(x, H(x, z) + h - 1.6, z);
           sails.push(blade);
         }
+        if (crossAsset) {
+          addAuthoredLandmark(crossAsset, {
+            key: `gildedReachCross-${i}`,
+            name: `reach-meshy-choir-wheel-${i}`,
+            district: "reach",
+            pos: [x, H(x, z) - 0.42, z],
+            rot: [0, 0.35, 0],
+            // Preserve the old vane's seeded height range and skyline.
+            height: h + 1.6,
+          });
+        }
       }
       const mg = kit.merge(masts);
-      paintH(mg, makeRamp([[0, "#3b2c22"], [0.6, "#7b6046"], [1, "#b0906c"]]),
-        { normalWeight: 0.46, jitter: 0.16 });
-      batch.add("reach", "rust", mg);
       const sg = kit.merge(sails);
-      paintH(sg, makeRamp([[0, "#7d3a2c"], [0.5, "#c07a4a"], [1, "#e8c384"]]),
-        { normalWeight: 0.55, jitter: 0.2 });
-      batch.add("reach", "cloth", sg);
+      if (crossAsset) {
+        addCollisionProxy(mg, "reach", "reach-vane-masts-collision-proxy");
+        addCollisionProxy(sg, "reach", "reach-vane-sails-collision-proxy");
+      } else {
+        paintH(mg, makeRamp([[0, "#3b2c22"], [0.6, "#7b6046"], [1, "#b0906c"]]),
+          { normalWeight: 0.46, jitter: 0.16 });
+        batch.add("reach", "rust", mg);
+        paintH(sg, makeRamp([[0, "#7d3a2c"], [0.5, "#c07a4a"], [1, "#e8c384"]]),
+          { normalWeight: 0.55, jitter: 0.2 });
+        batch.add("reach", "cloth", sg);
+      }
       pois.push({ id: "reach", name: "The Gilded Reach", x: d.x, z: d.z });
     }
 
@@ -4573,7 +4720,7 @@ export async function buildWorld(ctx, onProgress) {
      ============================================================ */
 
   await step("Settling", 0.99);
-  const meshes = batch.flush();
+  const meshes = batch.flush().concat(authoredMeshes);
 
   /* Point lights. Kept few and short-range: this renderer has no
      clustered lighting, so every point light is a per-fragment cost
@@ -4793,6 +4940,7 @@ export async function buildWorld(ctx, onProgress) {
     emitters,
     banners,
     choirNeedles,
+    authoredLandmarks,
     pois,
     beautyShots,
     walkSurfaceAt,

@@ -80,6 +80,22 @@ try {
     audio.setEnabled?.(true);
     const reEnabledStats = audio.stats();
 
+    // 6. Test Volume Settings & UI
+    const defaultVolumes = audio.stats().volumes;
+
+    // Test individual volume changes via gameUi
+    const ui = window.__SF.ctx.gameUi;
+    ui?.setSetting?.("musicVolume", 0.5);
+    const musicChangedStats = audio.stats();
+
+    ui?.setSetting?.("sfxVolume", 0.4);
+    const sfxChangedStats = audio.stats();
+
+    ui?.setSetting?.("masterVolume", 0.7);
+    const masterChangedStats = audio.stats();
+
+    const currentUiSettings = ui?.settingsState?.() || {};
+
     return {
       initialStats,
       bossStats,
@@ -88,6 +104,11 @@ try {
       resumedStats,
       disabledStats,
       reEnabledStats,
+      defaultVolumes,
+      musicChangedStats,
+      sfxChangedStats,
+      masterChangedStats,
+      currentUiSettings,
     };
   });
 
@@ -106,6 +127,17 @@ try {
 
   check(results.pausedStats.paused === true, "Audio pause state tracks cleanly", `paused=${results.pausedStats.paused}`);
   check(results.disabledStats.music.bgVol === 0 || results.disabledStats.music.bgPlaying === false, "Audio disable pauses/mutes music", `bgPlaying=${results.disabledStats.music.bgPlaying}`);
+
+  console.log("\n=== SAINTFALL VOLUME SETTINGS CHECKS ===");
+  check(results.defaultVolumes.music === 0.8, "Music default volume is turned down by 20% (0.80)", `musicVol=${results.defaultVolumes.music}`);
+  check(results.defaultVolumes.master === 1.0, "Master default volume is 1.0", `masterVol=${results.defaultVolumes.master}`);
+  check(results.defaultVolumes.sfx === 1.0, "SFX default volume is 1.0", `sfxVol=${results.defaultVolumes.sfx}`);
+
+  check(results.musicChangedStats.volumes.music === 0.5, "Music volume setting scales cleanly", `musicVol=${results.musicChangedStats.volumes.music}`);
+  check(results.sfxChangedStats.volumes.sfx === 0.4, "SFX volume setting scales cleanly", `sfxVol=${results.sfxChangedStats.volumes.sfx}`);
+  check(results.masterChangedStats.volumes.master === 0.7, "Master volume setting scales cleanly", `masterVol=${results.masterChangedStats.volumes.master}`);
+  check(results.currentUiSettings.musicVolume === 0.5, "UI settings state tracks music volume", `musicVol=${results.currentUiSettings.musicVolume}`);
+
   check(pageErrors.length === 0, "Zero page errors during dynamic music transitions", pageErrors.join("; "));
 
   await browser.close();

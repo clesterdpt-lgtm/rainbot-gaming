@@ -82,11 +82,13 @@ export function buildAudio(ctx) {
     master.connect(ac.destination);
   }
 
-  const buses = {};
-  for (const [name, level] of Object.entries({
+  const BASE_BUS_LEVELS = Object.freeze({
     weapon: 0.9, world: 0.75, doctrine: 0.62, ui: 0.6,
-    ambience: 0.5, cinematic: 0.72, music: 0.65,
-  })) {
+    ambience: 0.5, cinematic: 0.72, music: 0.52,
+  });
+
+  const buses = {};
+  for (const [name, level] of Object.entries(BASE_BUS_LEVELS)) {
     const g = ac.createGain();
     g.gain.value = level;
     g.connect(master);
@@ -136,6 +138,9 @@ export function buildAudio(ctx) {
     started: false,
     offline: false,
     paused: false,
+    masterVolume: 1.0,
+    musicVolume: 0.8,
+    sfxVolume: 1.0,
     listenerX: 0,
     listenerZ: 0,
     listenerYaw: 0,
@@ -1868,7 +1873,7 @@ export function buildAudio(ctx) {
         music.bgGainNode.gain.value = music.bgVol;
         music.bgAudio.volume = 1.0;
       } else {
-        music.bgAudio.volume = clamp01(music.bgVol * 0.65);
+        music.bgAudio.volume = clamp01(music.bgVol * 0.52 * (state.musicVolume / 0.8) * state.masterVolume * (state.enabled ? 1 : 0));
       }
     }
 
@@ -1885,9 +1890,79 @@ export function buildAudio(ctx) {
         music.bossGainNode.gain.value = music.bossVol;
         music.bossAudio.volume = 1.0;
       } else {
-        music.bossAudio.volume = clamp01(music.bossVol * 0.65);
+        music.bossAudio.volume = clamp01(music.bossVol * 0.52 * (state.musicVolume / 0.8) * state.masterVolume * (state.enabled ? 1 : 0));
       }
     }
+  }
+
+  /* ============================================================
+     VOLUMES
+
+     Master, Music, and SFX volume controls. Master scales the
+     overall output, Music scales buses.music, and SFX scales all
+     weapon, world, doctrine, ui, ambience, and cinematic buses.
+     ============================================================ */
+
+  function applyVolumes() {
+    const masterGain = (state.enabled ? 1.35 : 0) * state.masterVolume;
+    if (ac.state === "running") {
+      master.gain.setTargetAtTime(masterGain, now(), 0.04);
+    } else {
+      master.gain.value = masterGain;
+    }
+
+    if (buses.music) {
+      const targetMusicGain = BASE_BUS_LEVELS.music * (state.musicVolume / 0.8);
+      if (ac.state === "running") {
+        buses.music.gain.setTargetAtTime(targetMusicGain, now(), 0.04);
+      } else {
+        buses.music.gain.value = targetMusicGain;
+      }
+    }
+
+    for (const name of ["weapon", "world", "doctrine", "ui", "ambience", "cinematic"]) {
+      if (buses[name]) {
+        const targetSfxGain = (BASE_BUS_LEVELS[name] || 0.7) * state.sfxVolume;
+        if (ac.state === "running") {
+          buses[name].gain.setTargetAtTime(targetSfxGain, now(), 0.04);
+        } else {
+          buses[name].gain.value = targetSfxGain;
+        }
+      }
+    }
+
+    if (music.initialized && !music.bgGainNode && music.bgAudio) {
+      music.bgAudio.volume = clamp01(music.bgVol * 0.52 * (state.musicVolume / 0.8) * state.masterVolume * (state.enabled ? 1 : 0));
+    }
+    if (music.initialized && !music.bossGainNode && music.bossAudio) {
+      music.bossAudio.volume = clamp01(music.bossVol * 0.52 * (state.musicVolume / 0.8) * state.masterVolume * (state.enabled ? 1 : 0));
+    }
+  }
+
+  function setMasterVolume(v) {
+    state.masterVolume = clamp01(Number.isFinite(Number(v)) ? Number(v) : 1.0);
+    applyVolumes();
+    return state.masterVolume;
+  }
+
+  function setMusicVolume(v) {
+    state.musicVolume = clamp01(Number.isFinite(Number(v)) ? Number(v) : 0.8);
+    applyVolumes();
+    return state.musicVolume;
+  }
+
+  function setSfxVolume(v) {
+    state.sfxVolume = clamp01(Number.isFinite(Number(v)) ? Number(v) : 1.0);
+    applyVolumes();
+    return state.sfxVolume;
+  }
+
+  function setVolumes({ master: m, music: mu, sfx: s } = {}) {
+    if (Number.isFinite(Number(m))) state.masterVolume = clamp01(Number(m));
+    if (Number.isFinite(Number(mu))) state.musicVolume = clamp01(Number(mu));
+    if (Number.isFinite(Number(s))) state.sfxVolume = clamp01(Number(s));
+    applyVolumes();
+    return { master: state.masterVolume, music: state.musicVolume, sfx: state.sfxVolume };
   }
 
   /* ============================================================
@@ -2470,6 +2545,10 @@ export function buildAudio(ctx) {
     unlock,
     startAmbience,
     startMusic,
+    setMasterVolume,
+    setMusicVolume,
+    setSfxVolume,
+    setVolumes,
     beginDrop,
     updateDrop,
     dropCue,
@@ -2507,6 +2586,11 @@ export function buildAudio(ctx) {
         paused: state.paused,
         ambience: !!wind,
         jetLoop: !!jetLoop,
+        volumes: {
+          master: Number(state.masterVolume.toFixed(3)),
+          music: Number(state.musicVolume.toFixed(3)),
+          sfx: Number(state.sfxVolume.toFixed(3)),
+        },
         music: {
           started: music.started,
           bossActive: music.isBossActive,
@@ -2541,6 +2625,7 @@ function makeSilentApi() {
     slamCharge: noop, slamPlunge: noop, slamImpact: noop,
     doctrineCue: no, detachDoctrine: noop,
     update: noop, unlock: noPromise, startAmbience: noop, startMusic: noop, setEnabled: noop,
+    setMasterVolume: noop, setMusicVolume: noop, setSfxVolume: noop, setVolumes: noop,
     beginDrop: noPromise, updateDrop: no, dropCue: no,
     pauseDrop: noPromise, setPaused: noPromise, endDrop: noPromise,
     enabled: false,
@@ -2553,6 +2638,7 @@ function makeSilentApi() {
         paused: false,
         ambience: false,
         jetLoop: false,
+        volumes: { master: 1, music: 0.8, sfx: 1 },
         music: {
           started: false,
           bossActive: false,

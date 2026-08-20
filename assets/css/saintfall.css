@@ -4246,6 +4246,9 @@ body[data-sf-contrast="high"] #sf-hud :is(.sf-hud__vitals, .sf-hud__minimap) {
 .sf-intro__gate .sf-entry__scale button:focus-visible { color: #fff0cf; border-color: rgba(245, 207, 126, .72); }
 .sf-intro__gate .sf-entry__pick button.is-active,
 .sf-intro__gate .sf-entry__scale button.is-active { border-color: #e1ae50; background: rgba(150,93,33,.4); color: #ffe0a0; }
+.sf-entry__slider { display: grid; grid-template-columns: minmax(0, 1fr) minmax(110px, 150px); align-items: center; gap: .3rem .8rem; min-height: 2.75rem; padding: .5rem .7rem; border: 1px solid rgba(225,188,111,.2); background: rgba(15, 13, 16, .78); color: #f3e3bf; font-size: .62rem; letter-spacing: .13em; text-transform: uppercase; }
+.sf-entry__slider > span { display: flex; align-items: baseline; justify-content: space-between; gap: .4rem; }
+.sf-entry__slider small { color: #e1ae50; font-size: .55rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 @keyframes sf-entry-panel { from { opacity: 0; transform: translateX(-.5rem); } to { opacity: 1; transform: none; } }
 
 body.sf-high-contrast .sf-intro__gate { border-color: #ffe199; background: rgba(0,0,0,.96); backdrop-filter: none; }

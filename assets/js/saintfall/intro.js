@@ -1301,7 +1301,10 @@ function buildMarkup(host) {
       <section class="sf-entry__panel sf-entry__panel--options" data-intro-panel="options" aria-label="Options" hidden>
         <header><span>OPTIONS</span><button type="button" data-intro-panel-close aria-label="Close options">×</button></header>
         <div class="sf-entry__options">
-          <button type="button" role="switch" data-intro-setting="sound" aria-checked="true"><span>FIELD AUDIO<small>Music, weapons, and ambience</small></span><b>ON</b></button>
+          <button type="button" role="switch" data-intro-setting="sound" aria-checked="true"><span>FIELD AUDIO<small>Master audio toggle</small></span><b>ON</b></button>
+          <div class="sf-entry__pick sf-entry__pick--wide sf-entry__slider"><span>MASTER VOLUME<small data-intro-vol-label="masterVolume">100%</small></span><input type="range" min="0" max="100" step="5" value="100" data-intro-range="masterVolume" class="sf-slider" aria-label="Master volume" /></div>
+          <div class="sf-entry__pick sf-entry__pick--wide sf-entry__slider"><span>MUSIC VOLUME<small data-intro-vol-label="musicVolume">80%</small></span><input type="range" min="0" max="100" step="5" value="80" data-intro-range="musicVolume" class="sf-slider" aria-label="Music volume" /></div>
+          <div class="sf-entry__pick sf-entry__pick--wide sf-entry__slider"><span>SFX VOLUME<small data-intro-vol-label="sfxVolume">100%</small></span><input type="range" min="0" max="100" step="5" value="100" data-intro-range="sfxVolume" class="sf-slider" aria-label="SFX volume" /></div>
           <button type="button" role="switch" data-intro-setting="reducedMotion" aria-checked="false"><span>REDUCED MOTION<small>Calmer camera and interface movement</small></span><b>OFF</b></button>
           <button type="button" role="switch" data-intro-setting="highContrast" aria-checked="false"><span>HIGH CONTRAST<small>Stronger instrument separation</small></span><b>OFF</b></button>
           <div class="sf-entry__pick sf-entry__pick--wide sf-entry__difficulty"><span id="sf-entry-difficulty-label">DIFFICULTY<small data-intro-difficulty-blurb>Travels with the save</small></span><div role="group" aria-labelledby="sf-entry-difficulty-label">${DIFFICULTY_TIERS.map((tier) => `<button type="button" data-intro-difficulty="${tier}" aria-label="${difficultyLabel(tier).toLowerCase()} difficulty" title="${difficultyBlurb(tier)}">${difficultyLabel(tier)}</button>`).join("")}</div></div>
@@ -1542,6 +1545,13 @@ export function buildDropIntro(ctx, options = {}) {
       const enabled = name === "sound" ? current.audioEnabled !== false : !!current[name];
       button.setAttribute("aria-checked", enabled ? "true" : "false");
       button.querySelector("b").textContent = enabled ? "ON" : "OFF";
+    });
+    host.querySelectorAll("[data-intro-range]").forEach((input) => {
+      const name = input.dataset.introRange;
+      const vol = current[name] ?? (name === "musicVolume" ? 0.8 : 1.0);
+      input.value = String(Math.round(vol * 100));
+      const label = host.querySelector(`[data-intro-vol-label="${name}"]`);
+      if (label) label.textContent = `${Math.round(vol * 100)}%`;
     });
     host.querySelectorAll("[data-intro-hud-scale]").forEach((button) => {
       const active = button.dataset.introHudScale === (current.hudScale || "standard");
@@ -2707,6 +2717,19 @@ export function buildDropIntro(ctx, options = {}) {
       refreshEntryMenu();
     }
   }
+
+  function onIntroRangeInput(event) {
+    const target = event.target;
+    if (!target || !target.matches("[data-intro-range]")) return;
+    const name = target.dataset.introRange;
+    const val = clamp(Number(target.value) / 100, 0, 1);
+    if (typeof onSetting === "function") onSetting(name, val);
+    const label = host.querySelector(`[data-intro-vol-label="${name}"]`);
+    if (label) label.textContent = `${Math.round(val * 100)}%`;
+  }
+  host.addEventListener("input", onIntroRangeInput);
+  host.addEventListener("change", onIntroRangeInput);
+
   function onContinue() {
     if (state.latestSave) void resumeSaved(state.latestSave.kind, state.latestSave.index);
   }

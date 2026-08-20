@@ -78,6 +78,9 @@ function prefersReducedMotion() {
 function readSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+    const masterVol = Number.isFinite(Number(saved.masterVolume)) ? clamp(Number(saved.masterVolume), 0, 1) : 1.0;
+    const musicVol = Number.isFinite(Number(saved.musicVolume)) ? clamp(Number(saved.musicVolume), 0, 1) : 0.8;
+    const sfxVol = Number.isFinite(Number(saved.sfxVolume)) ? clamp(Number(saved.sfxVolume), 0, 1) : 1.0;
     return {
       hudScale: saved.hudScale === "large" ? "large" : "standard",
       reducedMotion: Object.prototype.hasOwnProperty.call(saved, "reducedMotion")
@@ -93,11 +96,15 @@ function readSettings() {
       /* The road's tier (difficulty.js). Read by main.js BEFORE the menu
          exists, because the garrison's health is scaled at spawn. */
       difficulty: normalizeDifficulty(saved.difficulty),
+      masterVolume: masterVol,
+      musicVolume: musicVol,
+      sfxVolume: sfxVol,
     };
   } catch (_) {
     return {
       hudScale: "standard", reducedMotion: prefersReducedMotion(), highContrast: false,
       dynamicRes: true, quality: DEFAULT_QUALITY, difficulty: DEFAULT_DIFFICULTY,
+      masterVolume: 1.0, musicVolume: 0.8, sfxVolume: 1.0,
     };
   }
 }
@@ -345,7 +352,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
             <section class="sf-menu__page" data-menu-page="settings" hidden>
               <div class="sf-menu__pagehead"><span>FIELD CONFIGURATION</span><h3>SETTINGS</h3><p>Readability and presentation preferences are saved on this device.</p></div>
               <div class="sf-settings-list">
-                <div class="sf-setting"><span><strong>FIELD AUDIO</strong><small>Music, weapons, ambience, and interface cues</small></span><button type="button" role="switch" data-setting="sound" aria-label="Field audio" aria-checked="true">ON</button></div>
+                <div class="sf-setting"><span><strong>FIELD AUDIO</strong><small>Master audio toggle</small></span><button type="button" role="switch" data-setting="sound" aria-label="Field audio" aria-checked="true">ON</button></div>
+                <div class="sf-setting sf-setting--slider"><span><strong id="sf-master-vol-label">MASTER VOLUME</strong><small data-vol-display="masterVolume">100%</small></span><input type="range" min="0" max="100" step="5" value="100" data-setting-range="masterVolume" aria-labelledby="sf-master-vol-label" class="sf-slider" /></div>
+                <div class="sf-setting sf-setting--slider"><span><strong id="sf-music-vol-label">MUSIC VOLUME</strong><small data-vol-display="musicVolume">80%</small></span><input type="range" min="0" max="100" step="5" value="80" data-setting-range="musicVolume" aria-labelledby="sf-music-vol-label" class="sf-slider" /></div>
+                <div class="sf-setting sf-setting--slider"><span><strong id="sf-sfx-vol-label">SFX VOLUME</strong><small data-vol-display="sfxVolume">100%</small></span><input type="range" min="0" max="100" step="5" value="100" data-setting-range="sfxVolume" aria-labelledby="sf-sfx-vol-label" class="sf-slider" /></div>
                 <div class="sf-setting"><span><strong id="sf-hud-scale-label">HUD SCALE</strong><small>Increase tactical instrument size</small></span><div class="sf-setting__segments" role="group" aria-labelledby="sf-hud-scale-label"><button type="button" data-hud-scale="standard" aria-label="Standard HUD scale">STANDARD</button><button type="button" data-hud-scale="large" aria-label="Large HUD scale">LARGE</button></div></div>
                 <div class="sf-setting"><span><strong>REDUCED MOTION</strong><small>Calmer interface transitions and pulses</small></span><button type="button" role="switch" data-setting="reduced-motion" aria-label="Reduced motion" aria-checked="false">OFF</button></div>
                 <div class="sf-setting"><span><strong>HIGH CONTRAST</strong><small>Stronger text, panel, and instrument separation</small></span><button type="button" role="switch" data-setting="high-contrast" aria-label="High contrast" aria-checked="false">OFF</button></div>
@@ -490,6 +500,18 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-pressed", active ? "true" : "false");
     });
+    root.querySelectorAll("[data-setting-range]").forEach((input) => {
+      const name = input.dataset.settingRange;
+      const vol = settings[name] ?? (name === "musicVolume" ? 0.8 : 1.0);
+      input.value = String(Math.round(vol * 100));
+      const display = root.querySelector(`[data-vol-display="${name}"]`);
+      if (display) display.textContent = `${Math.round(vol * 100)}%`;
+    });
+    ctx.audio?.setVolumes?.({
+      master: settings.masterVolume,
+      music: settings.musicVolume,
+      sfx: settings.sfxVolume,
+    });
     /* Highlight the tier the renderer is ACTUALLY on, not the stored
        one: a `?quality=` URL override runs the session at its tier
        without touching the preference, and a menu that showed HIGH
@@ -578,6 +600,12 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       applyDifficulty(value);
       menuSfx("toggle");
       return settingsState();
+    } else if (name === "masterVolume" || name === "musicVolume" || name === "sfxVolume") {
+      const vol = clamp(Number(value), 0, 1);
+      settings[name] = vol;
+      if (name === "masterVolume") ctx.audio?.setMasterVolume?.(vol);
+      else if (name === "musicVolume") ctx.audio?.setMusicVolume?.(vol);
+      else if (name === "sfxVolume") ctx.audio?.setSfxVolume?.(vol);
     } else return false;
     writeSettings(settings);
     applySettings();
@@ -2279,6 +2307,24 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     if (target.matches('[data-menu-action="return"]')) window.location.assign("../games.html");
   });
 
+  function onSettingRangeInput(event) {
+    const target = event.target;
+    if (!target || !target.matches("[data-setting-range]")) return;
+    const name = target.dataset.settingRange;
+    const val = clamp(Number(target.value) / 100, 0, 1);
+    if (name === "masterVolume" || name === "musicVolume" || name === "sfxVolume") {
+      settings[name] = val;
+      writeSettings(settings);
+      if (name === "masterVolume") ctx.audio?.setMasterVolume?.(val);
+      else if (name === "musicVolume") ctx.audio?.setMusicVolume?.(val);
+      else if (name === "sfxVolume") ctx.audio?.setSfxVolume?.(val);
+      const display = root.querySelector(`[data-vol-display="${name}"]`);
+      if (display) display.textContent = `${Math.round(val * 100)}%`;
+    }
+  }
+  root.addEventListener("input", onSettingRangeInput);
+  root.addEventListener("change", onSettingRangeInput);
+
   root.addEventListener("pointermove", (event) => {
     if (menu.panel !== "doctrine") return;
     const card = event.target instanceof Element
@@ -2692,6 +2738,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   function settingsState() {
     return {
       audioEnabled: audioEnabled(),
+      masterVolume: settings.masterVolume,
+      musicVolume: settings.musicVolume,
+      sfxVolume: settings.sfxVolume,
       hudScale: settings.hudScale,
       reducedMotion: settings.reducedMotion,
       highContrast: settings.highContrast,

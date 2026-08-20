@@ -1187,6 +1187,26 @@ export function createRenderer(ctx, canvas) {
     stencil: false,
     depth: true,
   });
+  /* WHICH GPU DID THE BROWSER ACTUALLY GIVE US. `powerPreference`
+     above is a request, not a guarantee: a dual-GPU laptop can hand
+     the page its integrated chip, and a browser whose GPU process has
+     crashed (or whose hardware acceleration is switched off) hands
+     back SwiftShader - a CPU rasteriser that turns a strong machine
+     into a weak one with no error anywhere. That is exactly the field
+     report this exists for: "an RTX-class card, but it only runs on
+     low". The name is read once and surfaced in the settings menu and
+     the boot log, so a player on the wrong renderer can SEE it is the
+     wrong renderer instead of blaming the game's tiers. */
+  let gpuName = "";
+  try {
+    const gl = renderer.getContext();
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    gpuName = String(gl.getParameter(dbg ? dbg.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || "");
+  } catch (_) { gpuName = ""; }
+  const softwareRendered =
+    /swiftshader|llvmpipe|softpipe|software\s*(rasterizer|renderer|adapter)|microsoft basic render/i
+      .test(gpuName);
+
   /* The DEVICE ratio (capped at 2, or lower on the cheaper quality
      tiers - a Retina panel at ratio 2 is four times the pixels of the
      same panel at 1, and pixels are the whole bill on weak hardware)
@@ -1858,6 +1878,10 @@ export function createRenderer(ctx, canvas) {
     render,
     resize,
     setQuality,
+    /* The unmasked renderer string and whether it is a CPU rasteriser.
+       Read-only diagnostics; see the note where they are derived. */
+    get gpu() { return gpuName; },
+    get softwareRendered() { return softwareRendered; },
     get quality() { return qualityTier; },
     qualityTiers: QUALITY_TIERS,
     qualityLabel(tier = qualityTier) { return qualityLabel(tier); },
@@ -1885,16 +1909,34 @@ export function createRenderer(ctx, canvas) {
      *
      * `compile()` walks with `traverse`, not `traverseVisible`, which
      * is the only reason this works on hidden objects - and the
-     * reason a warm-up that just renders a few frames does not. */
-    async warmShaders(cam = camera, sourceScene = scene) {
+     * reason a warm-up that just renders a few frames does not.
+     *
+     * TWO CAVEATS, both paid for once:
+     * - Lights are collected with traverseVisible, so a light inside
+     *   a hidden group is ABSENT from the programs this compiles, and
+     *   the frame that unhides it re-keys every lit material in the
+     *   scene. Every runtime-revealed light in this game is therefore
+     *   scene-parented at intensity 0 (pod spill, heart lamp,
+     *   reliquary lamp, Aegis, Apostate, undercroft).
+     * - A material with no object in the graph is invisible to the
+     *   traverse; it compiles on the first frame something USES it.
+     *   Materials built for on-demand meshes get a hidden warm stub
+     *   (see the emergence shards in enemies.js).
+     *
+     * `targetScene` compiles a subtree that currently lives OUTSIDE
+     * the scene (the cinematic borrows the pod into its own orbital
+     * scene at boot) against the LEVEL's lighting state, so its
+     * programs are the ones the level will actually use when the
+     * subtree comes home. */
+    async warmShaders(cam = camera, sourceScene = scene, targetScene = null) {
       const before = renderer.info.programs ? renderer.info.programs.length : 0;
       const t0 = performance.now();
       // Parallel compile where the driver offers it; the sync path is
       // correct either way, just slower.
       if (typeof renderer.compileAsync === "function") {
-        await renderer.compileAsync(sourceScene, cam);
+        await renderer.compileAsync(sourceScene, cam, targetScene);
       } else {
-        renderer.compile(sourceScene, cam);
+        renderer.compile(sourceScene, cam, targetScene);
       }
       const after = renderer.info.programs ? renderer.info.programs.length : 0;
       return { added: after - before, total: after,
@@ -1990,6 +2032,8 @@ export function createRenderer(ctx, canvas) {
     info() {
       const r = sceneInfo;
       return {
+        gpu: gpuName,
+        softwareRendered,
         calls: r.calls, triangles: r.triangles, points: r.points, lines: r.lines,
         programs: renderer.info.programs ? renderer.info.programs.length : 0,
         geometries: renderer.info.memory.geometries,

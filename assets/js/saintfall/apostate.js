@@ -1420,9 +1420,13 @@ export async function buildApostate(ctx) {
       weapon.flash.visible = f > 0.015;
       weapon.flash.scale.setScalar(0.68 + (1 - f) * 0.48);
     }
+    /* Opacity on an already-transparent material is a plain uniform
+       write; it does NOT need `needsUpdate`. Setting it here anyway
+       bumped material.version on every flash material every frame
+       (this runs unconditionally from updateHeat), forcing a program
+       re-lookup per material per frame for the boss's whole life. */
     for (const material of weaponFlashMaterials) {
       material.opacity = Math.min(1, f * 1.18);
-      material.needsUpdate = true;
     }
     for (const light of weaponLights) {
       const rest = Number(light.userData.apostateRestIntensity) || 0;

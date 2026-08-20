@@ -1334,12 +1334,30 @@ function buildChamber(ctx, floorY) {
 
   /* --------------------------------------------------------- lamps */
 
-  /* TWO, AND BOTH ARE BORN AT ZERO. A light entering a scene
-     recompiles every material in it - this project measured 198ms of
-     freeze from exactly that, on the frame the Apostate first raised
-     its shield - so these are created here, at load, and the only
-     thing that ever happens to them afterwards is an intensity
-     write. */
+  /* TWO, AND BOTH ARE BORN AT ZERO - AND PARENTED OUTSIDE THE HIDDEN
+     GROUP. A light entering a scene recompiles every material in it -
+     this project measured 198ms of freeze from exactly that, on the
+     frame the Apostate first raised its shield - so these are created
+     here, at load, and the only thing that ever happens to them
+     afterwards is an intensity write.
+
+     "Created at load" alone was NOT enough, and the first release of
+     this room shipped the half-fix: the lamps sat inside `group`,
+     which is `visible = false` until the floor gives. Three collects
+     lights with traverseVisible (renderer.compile does too), so a
+     light inside a hidden subtree is not merely dark, it is ABSENT
+     from every compiled program's lighting layout - and the frame
+     that flipped `group.visible` changed the light count and
+     recompiled the whole scene mid-cutscene. On Windows/ANGLE, where
+     one ubershader compile is tens to hundreds of ms of D3D compile,
+     that was a multi-second freeze on the collapse. The lamps
+     therefore live in their own ALWAYS-VISIBLE sibling group at the
+     same transform, so the lighting layout the boot warm-up compiled
+     is the same one the fight renders with. Zero intensity keeps
+     them invisible in the picture until setLive. */
+  const lamps = new THREE.Group();
+  lamps.name = "undercroft-lamps";
+  lamps.position.copy(group.position);
   /* The daylight, where it lands. DECAY 2 - a real inverse square -
      rather than the 1.7 this started at: at 1.7 with a 78m range the
      patch of wall thirty metres away was still receiving most of the
@@ -1355,7 +1373,7 @@ function buildChamber(ctx, floorY) {
   keyLight.name = "undercroft-key";
   keyLight.position.set(poolX, 5.5, poolZ);
   keyLight.castShadow = false;
-  group.add(keyLight);
+  lamps.add(keyLight);
   const hiveLight = new THREE.PointLight(0x8f5ce0, 0, 110, 1.35);
   hiveLight.name = "undercroft-hive";
   /* Down at head height rather than up in the vault. A source
@@ -1363,7 +1381,7 @@ function buildChamber(ctx, floorY) {
      shoulders and nothing else; the fight needs the sides. */
   hiveLight.position.set(0, 6.5, 0);
   hiveLight.castShadow = false;
-  group.add(hiveLight);
+  lamps.add(hiveLight);
   /* AND A FILL, because the alternative is a black floor. The world's
      own hemisphere is turned down to almost nothing while the player
      is under the map (see `sky.setUnderground`), and a cave lit only
@@ -1387,7 +1405,7 @@ function buildChamber(ctx, floorY) {
      the floor's own reading. */
   const fill = new THREE.HemisphereLight(0x7a52bd, 0x4e3340, 0);
   fill.name = "undercroft-fill";
-  group.add(fill);
+  lamps.add(fill);
 
   /* ------------------------------------------------------------
      AND TWO KEYS THAT REACH THE FAR WALL.
@@ -1428,8 +1446,8 @@ function buildChamber(ctx, floorY) {
      room has ONE story about where its light is from. */
   keyDir.position.set(C.breachX * 0.5 + 26, 30, C.breachZ * 0.5 - 22);
   keyDir.target.position.set(0, 2, 0);
-  group.add(keyDir);
-  group.add(keyDir.target);
+  lamps.add(keyDir);
+  lamps.add(keyDir.target);
 
   const rimDir = new THREE.DirectionalLight(0x8a63e8, 0);
   rimDir.name = "undercroft-rim-dir";
@@ -1438,16 +1456,18 @@ function buildChamber(ctx, floorY) {
      comb-light rather than as a hole. */
   rimDir.position.set(-34, 13, 30);
   rimDir.target.position.set(0, 2, 0);
-  group.add(rimDir);
-  group.add(rimDir.target);
+  lamps.add(rimDir);
+  lamps.add(rimDir.target);
 
   ctx.scene.add(group);
+  ctx.scene.add(lamps);
 
   const glowMeshes = [cellMesh, veinMesh, sacCoreMesh];
   let pulse = 0;
 
   return {
     group,
+    lamps,
     floorMesh,
     keyLight,
     hiveLight,
@@ -2531,7 +2551,14 @@ export function buildUndercroft(ctx) {
     state.fallSpeed = 0;
     /* Brought up here rather than at the cut, so the room's eight
        materials compile during a beat that is already shaking
-       instead of on the frame the picture changes. */
+       instead of on the frame the picture changes.
+
+       That used to be the WHOLE scene, not eight materials: the lamps
+       lived inside this group, so this flip changed the visible light
+       count and re-keyed every lit program in the game - a
+       multi-second D3D compile stall on Windows, on this exact line.
+       The lamps are scene-parented now (see buildChamber), so this is
+       once again just the room's own first draw. */
     chamber.setLive(true);
     ctx.render?.requestShadowUpdate?.();
     ctx.player?.input?.clearAll?.();

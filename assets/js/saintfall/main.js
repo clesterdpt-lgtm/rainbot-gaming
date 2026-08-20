@@ -1100,9 +1100,41 @@ export async function start({ boot, build } = {}) {
      Failure here must never block the drop: a driver that refuses the
      parallel-compile path should cost a hitch, not the game. */
   progress(0.985, "Lighting the censers");
+  /* Which adapter the browser actually handed over. A dual-GPU laptop
+     can give the page its integrated chip, and a browser with
+     hardware acceleration off (or a crashed GPU process) gives back a
+     CPU rasteriser - either presents as "strong machine, weak game"
+     with no error anywhere, so name the adapter where a bug report
+     can find it. The settings menu shows the same string. */
+  console.info(`[saintfall] GPU: ${render.gpu || "unknown"}`
+    + `${render.softwareRendered ? " - SOFTWARE RENDERING (hardware acceleration is off)" : ""}`);
   try {
     const warmed = await render.warmShaders(render.camera, render.scene);
     if (qa) console.info("[saintfall] shader warm-up", warmed);
+    /* The cinematic's orbital act is its OWN scene - the star dome,
+       Vesper-IX, the barge, and the entry effects that stay hidden
+       until the plasma beat (sheath, wake, embers) live there, not in
+       render.scene, so the warm-up above never reaches them. Compile
+       them here or each first appearance is a program build on the
+       exact beat it becomes visible, mid-cinematic. The getters serve
+       the orbit pair while the intro is in its orbital act, which is
+       exactly the boot state. */
+    if (introEnabled && intro.scene && intro.camera && intro.scene !== render.scene) {
+      const warmedOrbit = await render.warmShaders(intro.camera, intro.scene);
+      if (qa) console.info("[saintfall] intro shader warm-up", warmedOrbit);
+    }
+    /* The pod is LENT to that orbital scene right now - the entry
+       menu shows it hanging under the barge - so the level warm-up
+       above never saw it, and the orbital warm-up compiled it against
+       the ORBIT's three lights. Its six materials were then first
+       drawn in the level on the cloud-break frame, at the level's
+       light count, none of them compiled: measured as seven program
+       builds inside the one frame of the match cut. Compile the
+       borrowed subtree against the LEVEL's lighting state explicitly. */
+    if (introEnabled && pod?.root) {
+      const warmedPod = await render.warmShaders(render.camera, pod.root, render.scene);
+      if (qa) console.info("[saintfall] pod shader warm-up", warmedPod);
+    }
   } catch (err) {
     console.warn("[saintfall] shader warm-up skipped:", err && err.message);
   }
@@ -1115,7 +1147,18 @@ export async function start({ boot, build } = {}) {
       // the isolated intro. The hatch match-cut must not discover 50
       // world shaders and 193 unculled enemies on its first frame.
       player.input.clearAll?.();
+      /* The cinematic holds the trooper hidden until egress via
+         figureOverride - which also kept the figure and the lance out
+         of these warm frames, so their shadow-depth programs and GPU
+         buffers were first built ON the egress beat. Hold the figure
+         visible for the hidden draw (the loader is an opaque layer
+         over the canvas, and the orbit render below repaints it), then
+         put the override back exactly as the cinematic left it. */
+      const figureOverride = player.state.figureOverride;
+      player.state.figureOverride = null;
       step(0, true);
+      player.state.figureOverride = figureOverride;
+      if (figureOverride === false) player.figure.root.visible = false;
       intro.update(0);
     } else step(1 / 60, true);
   }

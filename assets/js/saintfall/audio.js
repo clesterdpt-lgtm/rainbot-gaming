@@ -40,6 +40,24 @@ const DROP_ASSETS = Object.freeze({
   doorOpen: "sci-fi/door-open.ogg",
 });
 
+/* The gunshot clipper's transfer curve. A compile-time constant -
+   building 1024 tanh samples per DISCHARGE allocated ~36KB/s of
+   Float32 garbage during a firefight, which is exactly when a GC
+   pause hurts. A WaveShaper only reads its curve, so one shared
+   array serves every shot of every context. */
+let SHOT_DRIVE_CURVE = null;
+function shotDriveCurve() {
+  if (SHOT_DRIVE_CURVE) return SHOT_DRIVE_CURVE;
+  const n = 1024;
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i += 1) {
+    const x = (i / (n - 1)) * 2 - 1;
+    curve[i] = Math.tanh(x * 2.6);
+  }
+  SHOT_DRIVE_CURVE = curve;
+  return curve;
+}
+
 export function buildAudio(ctx) {
   const Ctor = window.AudioContext || window.webkitAudioContext;
   if (!Ctor && !(ctx && ctx.__audioContext)) {
@@ -673,16 +691,8 @@ export function buildAudio(ctx) {
     res.frequency.exponentialRampToValueAtTime(420, t + 0.085);
     res.Q.value = 9.5;
     const drive = ac.createWaveShaper();
-    {
-      const n = 1024;
-      const curve = new Float32Array(n);
-      for (let i = 0; i < n; i += 1) {
-        const x = (i / (n - 1)) * 2 - 1;
-        curve[i] = Math.tanh(x * 2.6);
-      }
-      drive.curve = curve;
-      drive.oversample = "2x";
-    }
+    drive.curve = shotDriveCurve();
+    drive.oversample = "2x";
     const bg = ac.createGain();
     bg.gain.setValueAtTime(amp * 2.9, t);
     bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.115);
@@ -1479,6 +1489,13 @@ export function buildAudio(ctx) {
     // Decoding begins with the cinematic but never delays its first
     // procedural frame; the short files join as soon as they are warm.
     void preloadDropBuffers();
+    /* Start the two music streams buffering NOW, under the cinematic,
+       rather than at startMusic() - which fires on the handoff frame,
+       where kicking off ~9.4MB of media fetch+demux used to land its
+       scheduling cost on the exact frame the match cut must not
+       hitch. initMusic only creates the elements and their gain
+       nodes; nothing plays until startMusic flips `started`. */
+    initMusic();
     return unlock({ ambience: false }).then((ready) => {
       if (ready && drop.active && run === drop.run) startDropBeds();
       return !!ready;
@@ -1770,6 +1787,7 @@ export function buildAudio(ctx) {
     bgVol: 0,
     bossVol: 0,
     isBossActive: false,
+    pollIn: 0,
   };
 
   function initMusic() {
@@ -1845,8 +1863,19 @@ export function buildAudio(ctx) {
   function updateMusic(dt) {
     if (!music.started || !music.initialized) return;
     const muted = !state.enabled || state.paused || ctx.deferAmbience || ctx.intro?.isBlocking?.();
-    const bossEngaged = isBossFightActive();
-    music.isBossActive = bossEngaged;
+    /* Polled at 4Hz, not per frame. isBossFightActive fans out into
+       eight modules' status() calls, several of which assemble fresh
+       snapshot objects - a dozen-plus allocations a frame, peaking
+       exactly during boss fights, purely to choose between two songs.
+       The answer moves on encounter timescales and the crossfade below
+       takes ~1.2s, so a quarter-second poll is inaudible and removes
+       the churn. */
+    music.pollIn -= dt;
+    if (music.pollIn <= 0) {
+      music.pollIn = 0.25;
+      music.isBossActive = isBossFightActive();
+    }
+    const bossEngaged = music.isBossActive;
 
     const targetBg = muted ? 0 : (bossEngaged ? 0 : 1);
     const targetBoss = muted ? 0 : (bossEngaged ? 1 : 0);

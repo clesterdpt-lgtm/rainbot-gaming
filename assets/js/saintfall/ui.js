@@ -362,6 +362,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
                 <div class="sf-setting sf-setting--difficulty"><span><strong id="sf-difficulty-label">DIFFICULTY</strong><small data-difficulty-blurb>Pilgrim, Penitent or Martyr. Applies immediately and travels with the save; Martyr thickens the broods and heats the barrel rather than simply hitting harder.</small></span>${difficultySegmentsMarkup("data-difficulty", "sf-difficulty-label")}</div>
                 <div class="sf-setting sf-setting--quality"><span><strong id="sf-quality-label">GRAPHICS QUALITY</strong><small>Lower tiers trade render resolution, anti-aliasing, shadow detail, and occlusion for frame rate on weaker hardware. Applies immediately.</small></span>${qualitySegmentsMarkup("data-quality", "sf-quality-label")}</div>
                 <div class="sf-setting"><span><strong>DYNAMIC RESOLUTION</strong><small>Trims render resolution only while the frame rate is suffering, and restores it when it recovers</small></span><button type="button" role="switch" data-setting="dynamic-res" aria-label="Dynamic resolution" aria-checked="true">ON</button></div>
+                <div class="sf-setting sf-setting--renderer"><span><strong>RENDERER</strong><small data-gpu-line>Reading the adapter…</small></span></div>
               </div>
             </section>
           </div>
@@ -390,6 +391,27 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       aria-atomic="true" hidden><i aria-hidden="true"></i><span>AUTOSAVED</span><small>FIELD RECORD SECURED</small></div>
     <div class="sf-native-ui__live" data-ui-live aria-live="polite" aria-atomic="true"></div>`;
   stage.append(root);
+
+  /* The adapter line under the quality tiers. A strong machine whose
+     browser is secretly on a CPU rasteriser (hardware acceleration
+     off, GPU process crashed, driver denylisted) reports as "the game
+     runs badly on low" - this is the one place a player can see WHICH
+     renderer the game was actually given, and the warning names the
+     fix when it is the software one. */
+  {
+    const gpuLine = root.querySelector("[data-gpu-line]");
+    if (gpuLine) {
+      const gpu = render?.gpu || "";
+      if (render?.softwareRendered) {
+        gpuLine.textContent = `${gpu || "Software rasteriser"} — the browser is NOT using `
+          + "the graphics card. Enable hardware acceleration in the browser settings, then "
+          + "restart the browser.";
+        gpuLine.style.color = "#ffb347";
+      } else {
+        gpuLine.textContent = gpu || "Unknown adapter";
+      }
+    }
+  }
 
   const wheelEl = root.querySelector("#sf-command-wheel");
   const dialEl = root.querySelector(".sf-command-wheel__dial");

@@ -519,11 +519,28 @@ export function buildPod(ctx, site) {
 
   /* One practical, so the pod actually lights the sand it sits in.
      Without it an "open, glowing" pod is a bright texture next to
-     unlit ground and the spill has to be faked in the overlay. */
+     unlit ground and the spill has to be faked in the overlay.
+
+     SCENE-PARENTED, NOT HULL-PARENTED. The drop cinematic lends the
+     hull to its isolated orbital scene at boot and returns it at
+     cloud break - and a light that rides along leaves and re-enters
+     the level's light state with it. A light entering a scene changes
+     the visible light count, which re-keys and recompiles every lit
+     material in the level (the 198ms Aegis freeze; multi-second on
+     Windows/ANGLE) - and because the boot warm-up had compiled
+     against the pod-less count, the cloud-break frame paid it for the
+     whole world at once. The lamp therefore lives in the level scene
+     permanently; land() pins it to the landed interior point, which
+     is the only pose in which the interior glow has anything to
+     light. While the hull flies, the glow is near zero and the pinned
+     lamp is invisible. */
   const spill = new THREE.PointLight(0xffd79a, 0, 26, 2);
   spill.name = "pod-interior-spill";
-  spill.position.set(0, 2.4, 0.8);
-  root.add(spill);
+  const spillSocket = new THREE.Object3D();
+  spillSocket.name = "pod-interior-spill-socket";
+  spillSocket.position.set(0, 2.4, 0.8);
+  root.add(spillSocket);
+  ctx.scene.add(spill);
 
   /* Entry heat is a uniform-free effect: the prow goes incandescent
      and the shell sooties. Storing the authored colours once lets
@@ -624,6 +641,12 @@ export function buildPod(ctx, site) {
     root.position.set(site.x, restY, site.z);
     root.rotation.set(POD_LANDED_PITCH, site.yaw, POD_LANDED_ROLL);
     root.visible = true;
+    /* Pin the scene-parented interior lamp to the landed hull. Done
+       here, not per frame: the hull only ever glows meaningfully in
+       this pose, and following the flight would mean the light
+       leaving the scene with the borrowed hull (see its note above). */
+    root.updateMatrixWorld(true);
+    spillSocket.getWorldPosition(spill.position);
     setPetals(1);
     setGlow(1);
     setHalo(1);

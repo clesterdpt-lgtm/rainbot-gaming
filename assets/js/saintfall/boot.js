@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260820-volume-settings-1";
+  const BUILD = "20260820-merged-release-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -140,12 +140,24 @@
     else document.head.appendChild(el);
   }
 
-  function supportsWebGL2() {
+  function probeWebGL2() {
     try {
       const probeCanvas = document.createElement("canvas");
-      return Boolean(probeCanvas.getContext("webgl2"));
+      const gl = probeCanvas.getContext("webgl2", { powerPreference: "high-performance" });
+      if (!gl) return { ok: false, gpu: "", software: false };
+      let gpu = "";
+      try {
+        const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+        gpu = String(gl.getParameter(dbg ? dbg.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || "");
+      } catch (error) { gpu = ""; }
+      // SwiftShader and friends are CPU rasterisers: the browser lost
+      // (or was denied) the real GPU. The game will run, badly, and
+      // nothing anywhere says why - so say why, here, where the player
+      // is already reading a progress line.
+      const software = /swiftshader|llvmpipe|softpipe|software\s*(rasterizer|renderer|adapter)|microsoft basic render/i.test(gpu);
+      return { ok: true, gpu, software };
     } catch (error) {
-      return false;
+      return { ok: false, gpu: "", software: false };
     }
   }
 
@@ -176,13 +188,26 @@
       return;
     }
 
-    if (!supportsWebGL2()) {
+    const gpuProbe = probeWebGL2();
+    if (!gpuProbe.ok) {
       boot.fail(
         "This game needs WebGL2.",
         "Your browser or GPU driver did not provide a WebGL2 context. Try updating your "
         + "browser, or enable hardware acceleration in its settings."
       );
       return;
+    }
+    if (gpuProbe.gpu) console.info(`[saintfall] GPU: ${gpuProbe.gpu}`);
+    if (gpuProbe.software) {
+      console.warn("[saintfall] The browser is rendering WITHOUT the graphics card "
+        + `(${gpuProbe.gpu}). Expect very low frame rates. Enable hardware acceleration `
+        + "in the browser settings (and update the GPU driver), then restart the browser.");
+      if (tipEl) {
+        tipEl.textContent = "Your browser is not using the graphics card - the game is "
+          + "drawing on the CPU and will run slowly. Enable hardware acceleration in the "
+          + "browser's settings, then restart the browser.";
+        tipEl.style.color = "#ffb347";
+      }
     }
 
     boot.progress(0.09, "Locating renderer");

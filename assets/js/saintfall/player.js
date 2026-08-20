@@ -2096,6 +2096,34 @@ export async function createPlayer(ctx, canvas) {
   const figure = await buildTrooper(ctx);
   scene.add(figure.root);
 
+  /* THE HEART LAMP RIDES THE SCENE, NOT THE RIG. The drop cinematic
+     hides the whole figure until the egress beat, and three collects
+     lights with traverseVisible - so a lamp inside the hidden rig is
+     missing from every program the boot warm-up compiles, and the
+     frame that reveals the trooper changes the scene's visible light
+     count and re-keys EVERY lit material in the level. On
+     Windows/ANGLE that recompile is a multi-second freeze - and it
+     silently invalidates the warm-up for everything still hidden, so
+     each boss paid it again on its own reveal frame. Same pattern as
+     the Aegis lamps, the Apostate's authored lights and the
+     undercroft lamps: the light itself is scene-parented and
+     permanently counted, a socket keeps the authored position on the
+     rig, and the pose driver pins the lamp to the socket every frame
+     (and drives it dark whenever the figure itself is hidden - free
+     camera, first person - where the old rig-parented lamp simply
+     vanished with the body). */
+  let heartSocket = null;
+  if (figure.heartLight && figure.heartLight.parent) {
+    const source = figure.heartLight;
+    heartSocket = new THREE.Object3D();
+    heartSocket.name = "vesper-heart-socket";
+    heartSocket.position.copy(source.position);
+    heartSocket.quaternion.copy(source.quaternion);
+    source.parent.add(heartSocket);
+    source.parent.remove(source);
+    scene.add(source);
+  }
+
   /* Doctrine owns one additive presentation channel on the figure.
      It deliberately borrows the reliquary light and the emissive
      materials that are already updated below: no extra point lights,
@@ -3675,12 +3703,22 @@ export async function createPlayer(ctx, canvas) {
     }
     const doctrineLevel = doctrineGlow.level;
     if (figure.heartLight) {
-      const targetHeart = 0.16 + duskLight * 0.32 + nightLight * 0.24
-        + doctrineLevel * 0.92;
+      /* Dark when the figure is - the lamp used to vanish with the
+         rig it was parented to; now that it is scene-parented (see
+         the hoist in createPlayer) hiding has to be an intensity,
+         never a visibility flip, or the light count changes and the
+         whole level recompiles. */
+      const targetHeart = showFigure
+        ? 0.16 + duskLight * 0.32 + nightLight * 0.24 + doctrineLevel * 0.92
+        : 0;
       figure.heartLight.intensity = damp(figure.heartLight.intensity, targetHeart, 8, dt);
       if (doctrineHeartBase) {
         figure.heartLight.color.copy(doctrineHeartBase)
           .lerp(doctrineGlow.colour, doctrineLevel * 0.68);
+      }
+      if (heartSocket) {
+        heartSocket.updateWorldMatrix(true, false);
+        figure.heartLight.position.setFromMatrixPosition(heartSocket.matrixWorld);
       }
     }
     /* The eyes ride the same time-of-day curve as the reliquary, so

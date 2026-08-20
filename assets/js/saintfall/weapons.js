@@ -691,16 +691,38 @@ export function buildWeapons(ctx) {
     // short-range, shadowless light gives the cage and the knight's
     // hands readable amber bounce during Vespers/night while adding
     // no shadow pass and virtually nothing beyond the hero radius.
+    //
+    // SCENE-PARENTED, WITH A SOCKET ON THE HAFT. The carried lance
+    // lives inside the trooper rig, and the drop cinematic hides that
+    // whole rig until the egress beat - three collects lights with
+    // traverseVisible, so a lamp inside the hidden rig is missing
+    // from every program the boot warm-up compiles, and the frame
+    // that reveals the trooper would change the scene's light count
+    // and recompile every lit material in the level (the Aegis-freeze
+    // mechanism; multi-second on Windows/ANGLE). The lamp is
+    // therefore a permanent scene light; the update loop pins it to
+    // this socket every frame and drives it dark whenever the figure
+    // is hidden (free camera, first person), which is exactly what
+    // the old rig-parented lamp did by vanishing with the body.
+    // (Replica lances from cloneVisual get their own rig-parented
+    // light back - see cloneVisual - because their owners manage
+    // light prewarming themselves.)
     let reliquaryLight = null;
+    let reliquarySocket = null;
     if (isPolearm) {
       reliquaryLight = new THREE.PointLight(
         LAMP_REST_COLOR, LAMP_REST_INTENSITY, LAMP_REST_DISTANCE, 2
       );
-      reliquaryLight.position.set(spec.haft * 0.74, 0, 0);
+      reliquaryLight.name = "weapon-reliquary-lamp";
       reliquaryLight.castShadow = false;
       reliquaryLight.userData.restColour = new THREE.Color(LAMP_REST_COLOR);
       reliquaryLight.userData.flashColour = new THREE.Color(LAMP_FLASH_COLOR);
-      root.add(reliquaryLight);
+      reliquarySocket = new THREE.Object3D();
+      reliquarySocket.name = "weapon-reliquary-socket";
+      reliquarySocket.position.set(spec.haft * 0.74, 0, 0);
+      root.add(reliquarySocket);
+      ctx.scene.add(reliquaryLight);
+      reliquaryLight.position.set(spec.haft * 0.74, 0, 0);
     }
 
     // The censer hangs under the blade and swings on its own pivot.
@@ -720,7 +742,8 @@ export function buildWeapons(ctx) {
 
     const record = {
       key, spec, mode: spec.mode || key, root, seal, rng,
-      gripRear, gripFront, muzzle, emitter, tip, butt, censer, reliquaryLight,
+      gripRear, gripFront, muzzle, emitter, tip, butt, censer,
+      reliquaryLight, reliquarySocket,
       flashRig, flashMat,
       /* Where the hands sit along the haft when nothing is sliding
          them. An authored THRUST runs the shaft forward through the
@@ -874,6 +897,10 @@ export function buildWeapons(ctx) {
     const samePhysicalWeapon = carry.record === record;
     if (carry.record && !samePhysicalWeapon && carry.record.root.parent) {
       carry.record.root.parent.remove(carry.record.root);
+      /* The outgoing record's lamp is scene-parented and would keep
+         glowing at its last position; the update loop only drives the
+         CURRENT record's lamp. */
+      if (carry.record.reliquaryLight) carry.record.reliquaryLight.intensity = 0;
     }
     carry.key = key;
     carry.record = record;
@@ -905,6 +932,24 @@ export function buildWeapons(ctx) {
     root.position.set(0, 0, 0);
     root.rotation.set(0, 0, 0);
     root.scale.set(1, 1, 1);
+    /* The live lamp is scene-parented (see build), so the cloned tree
+       only carries its empty socket. A replica is presentation-only
+       and its owner manages its own light prewarming (the Apostate
+       hoists every authored light out to the scene at boot), so hand
+       it back a real rig-parented lamp at the socket; the traverse
+       below then applies the standard replica dimming to it exactly
+       as it did when the lamp lived in the source tree. */
+    const replicaSocket = root.getObjectByName("weapon-reliquary-socket");
+    if (replicaSocket && source.reliquaryLight) {
+      const lamp = new THREE.PointLight(
+        LAMP_REST_COLOR, LAMP_REST_INTENSITY, LAMP_REST_DISTANCE, 2
+      );
+      lamp.name = "weapon-reliquary-lamp";
+      lamp.castShadow = false;
+      lamp.userData.restColour = new THREE.Color(LAMP_REST_COLOR);
+      lamp.userData.flashColour = new THREE.Color(LAMP_FLASH_COLOR);
+      replicaSocket.add(lamp);
+    }
     root.traverse((node) => {
       if (node.material) {
         const cloneMaterial = (sourceMaterial) => {
@@ -1255,13 +1300,25 @@ export function buildWeapons(ctx) {
     const lamp = carry.record.reliquaryLight;
     if (lamp) {
       const f = carry.flash * carry.flash;
-      lamp.intensity = LAMP_REST_INTENSITY + f * 11.5;
+      /* Dark when the figure is. The lamp is scene-parented (see the
+         note at its construction), so hiding has to be an intensity
+         write - a visibility flip would change the scene's light
+         count and recompile every lit material in the level. The old
+         rig-parented lamp got this for free by vanishing with the
+         body it was inside. */
+      const figureShown = player?.figure?.root?.visible !== false;
+      lamp.intensity = figureShown ? LAMP_REST_INTENSITY + f * 11.5 : 0;
       lamp.distance = LAMP_REST_DISTANCE + f * 7.0;
       // The chamber stays amber at rest, then ionises toward cool
       // ivory-cyan on discharge so the light on the trooper matches
       // the bolt instead of looking like a separate muzzle fire.
       lamp.color.copy(lamp.userData.restColour)
         .lerp(lamp.userData.flashColour, f);
+      const socket = carry.record.reliquarySocket;
+      if (socket) {
+        socket.updateWorldMatrix(true, false);
+        lamp.position.setFromMatrixPosition(socket.matrixWorld);
+      }
     }
 
     /* The flare rides the same decay as the lamp. Scaled as well as

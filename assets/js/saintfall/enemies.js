@@ -878,6 +878,19 @@ export async function buildEnemies(ctx, onProgress) {
     flatShading: true,
   });
   patchMaterial(shardMat, atmos, { rim: 0.15, glitter: 0 });
+  /* WARM STUB. makeEmergenceFx builds its meshes on demand, so this
+     shared shard material had no object in the graph at boot - and
+     the boot warm-up compiles the materials OF OBJECTS, so a bare
+     material is invisible to it. Its program therefore compiled on
+     the first emergence of the session, which is always mid-fight.
+     One hidden zero-cost mesh keys it at load instead. */
+  {
+    const warm = new THREE.Mesh(shardGeo, shardMat);
+    warm.name = "sf-emergence-shard-warm";
+    warm.visible = false;
+    warm.frustumCulled = false;
+    group.add(warm);
+  }
 
   function makeEmergenceFx(inst, spec) {
     const fx = new THREE.Group();

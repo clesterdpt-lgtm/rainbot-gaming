@@ -368,7 +368,8 @@ const HITBOX = {
        the glowing furnace was aiming a metre high. The z has always
        been right, which is what proves the y was a transcription
        slip rather than a decision. */
-    heart: { y: -0.85, z: 0.35, r: 1.25, mult: 4.0 },
+    heart: { y: -0.85, z: 0.35, r: 1.25, mult: 2.2 },
+    groundedMeleeMult: 1.6,
   },
 
   /* ------------------------------------------------------------------
@@ -675,6 +676,9 @@ export function buildCombat(ctx) {
        shots, melee, shockwaves and command explosions all pass through it. */
     if (inst?.key === "apostate" && ctx.apostate?.modifyIncomingDamage) {
       finalDamage = ctx.apostate.modifyIncomingDamage(inst, request, finalDamage);
+    }
+    if (inst?.key === "winnower" && ctx.winnower?.modifyIncomingDamage) {
+      finalDamage = ctx.winnower.modifyIncomingDamage(inst, request, finalDamage);
     }
     return Math.max(0, Number(finalDamage) || 0);
   }

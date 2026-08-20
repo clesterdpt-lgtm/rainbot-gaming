@@ -236,7 +236,7 @@ const SCENES = {
   gild: `async () => {
     const T = window.__SF; const H = window.__VFXH;
     H.reset();
-    T.grantBoonForQA(20, 1.4, 0.5);
+    T.grantBoonForQA(20, 1.4, 0);
     T.setCam(0.5, -0.06, 4.8); H.settle(30);
     const tiles = [];
     tiles.push(H.tile("gilded +10f", 10));

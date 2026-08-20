@@ -809,6 +809,11 @@ export function buildWeapons(ctx) {
    */
   function setHeat(value, detail = {}) {
     if (!Number.isFinite(value)) return carry.heat;
+    const boon = ctx.mission?.boon?.();
+    if (boon?.active && (!boon.heat || boon.heat <= 0)) {
+      value = 0;
+      detail.clearOverheat = true;
+    }
     const before = carry.heat;
     const wasOverheated = carry.overheated;
     carry.heat = clamp01(value);
@@ -957,6 +962,12 @@ export function buildWeapons(ctx) {
 
   function fire() {
     if (!carry.record || carry.cooldown > 0) return false;
+    const boon = ctx.mission?.boon?.();
+    if (boon?.active && (!boon.heat || boon.heat <= 0)) {
+      carry.heat = 0;
+      carry.overheated = false;
+      carry.venting = 0;
+    }
     if (carry.venting > 0 || carry.overheated) return false;
     const spec = carry.record.spec;
     const heatBefore = carry.heat;
@@ -965,12 +976,11 @@ export function buildWeapons(ctx) {
        baked into the weapon spec because it is a property of the
        BEARER, not of the pattern - the same lance overheats normally
        thirty seconds later. */
-    const boon = ctx.mission?.boon?.();
     /* ...and of the ROAD: the difficulty tier scales heat per shot too -
        Martyr's barrel locks after 24 rounds instead of 30, which is a
        ranged-only tax that costs no health (see difficulty.js). */
     const tierHeat = Number(ctx.difficulty?.current?.heat) || 1;
-    const heatScale = (boon?.active ? Math.max(0, Number(boon.heat) || 1) : 1) * tierHeat;
+    const heatScale = (boon?.active ? Math.max(0, Number.isFinite(boon.heat) ? boon.heat : 0) : 1) * tierHeat;
     const heatAdded = addHeat((spec.heatPerShot || 0) * heatScale, { reason: "fire" });
     carry.sinceShot = 0;
     // Latches AFTER the shot, so the round that fills the gauge
@@ -1158,6 +1168,14 @@ export function buildWeapons(ctx) {
     const spec = carry.record.spec;
 
     carry.cooldown = Math.max(0, carry.cooldown - dt);
+    const boon = ctx.mission?.boon?.();
+    if (boon?.active && (!boon.heat || boon.heat <= 0)) {
+      if (carry.heat > 0 || carry.overheated || carry.venting > 0) {
+        carry.heat = 0;
+        carry.overheated = false;
+        carry.venting = 0;
+      }
+    }
 
     /* HEAT. A vent drains the whole gauge over `ventTime` regardless
        of how full it was, so an early vent is quick in practice and

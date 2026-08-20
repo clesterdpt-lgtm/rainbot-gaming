@@ -3344,10 +3344,10 @@ export function installQa(ctx, api) {
     /** The Gilding Rite's live blessing, and a way to light it without
      *  waiting out a 74-second cooldown and a three-second flight. */
     boonState: () => (api.mission || ctx.mission)?.boon?.() || null,
-    grantBoonForQA(seconds = 20, damage = 1.4, heat = 0.5) {
+    grantBoonForQA(seconds = 20, damage = 1.4, heat = 0, infiniteCharge = true) {
       if (!ctx.qa) return null;
       return (api.mission || ctx.mission)?.grantBoon?.(
-        { seconds, damage, heat }, "qa") || null;
+        { seconds, damage, heat, infiniteCharge }, "qa") || null;
     },
     /** Every ordnance mesh currently on screen, by kind. The commands
      *  are pooled geometry, so "did the salvo draw anything" is a

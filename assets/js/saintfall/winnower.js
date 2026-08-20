@@ -167,6 +167,9 @@ export const WINNOWER_CONFIG = Object.freeze({
      none of it. The grace spends out of the stall window rather than
      extending it: stallStokeSeconds already prices the total. */
   crashStunSeconds: 4.0,
+  /* Maximum fraction of max health the boss can lose in a single downing cycle.
+     Prevents the flyer from being burst down and killed in one downing. */
+  downDamageCap: 0.35,
   /* Flying home after a disengage. Presentation speed only - the
      heal has already happened when the flight starts. */
   returnSpeed: 12.0,
@@ -1228,7 +1231,7 @@ export function buildWinnower(ctx) {
       float far = 1.0 - smoothstep(200.0, 340.0, length(cameraPosition - vWorld));
       float a = fall * uGain * flick * far;
       if (a < 0.004) discard;
-      gl_FragColor = vec4(mix(uCore, uEdge, r) * a, 1.0);
+      gl_FragColor = vec4(mix(uCore, uEdge, r) * a, a);
     }
   `;
   const poolGeo = new THREE.BufferGeometry();
@@ -1344,12 +1347,8 @@ export function buildWinnower(ctx) {
        dark centre has walked off its own animal is the fault we are
        fixing, not a stylisation of it.
 
-     Multiplicative, not additive: a shadow has to be able to DARKEN
-     the sand, and this project has already recorded that additive
-     blending cannot subtract. Tinted slightly cold, because what
-     fills a shadow at golden hour is the sky and the sky is the cold
-     source - so the ground under this animal separates from the dune
-     by hue as well, on the same argument as the shell.
+     Normal blending with a soft dark hue, so the shadow darkens the
+     sand without any white multiply-bleed artifacts under tone mapping.
      ============================================================ */
   const CAST_RINGS = 3;
   const CAST_SIDES = 24;
@@ -1379,9 +1378,9 @@ export function buildWinnower(ctx) {
          nothing a shadow cast from thirty metres actually is. */
       float core = pow(1.0 - r, uGain.y);
       float far = 1.0 - smoothstep(210.0, 340.0, length(cameraPosition - vWorld));
-      float a = core * uGain.x * far;
+      float a = core * uGain.x * far * 0.72;
       if (a < 0.004) discard;
-      gl_FragColor = vec4(mix(vec3(1.0), uTint, clamp(a, 0.0, 1.0)), 1.0);
+      gl_FragColor = vec4(uTint, a);
     }
   `;
   const castGeo = new THREE.BufferGeometry();
@@ -1411,14 +1410,14 @@ export function buildWinnower(ctx) {
   }
   const castMat = new THREE.ShaderMaterial({
     uniforms: {
-      uTint: { value: new THREE.Color(0.255, 0.268, 0.335) },
+      uTint: { value: new THREE.Color("#140f12") },
       uGain: { value: new THREE.Vector2(0, 1.4) },
     },
     vertexShader: castVertex,
     fragmentShader: castFragment,
     transparent: true,
     depthWrite: false,
-    blending: THREE.MultiplyBlending,
+    blending: THREE.NormalBlending,
     side: THREE.DoubleSide,
   });
   const castMesh = new THREE.Mesh(castGeo, castMat);
@@ -2207,6 +2206,8 @@ export function buildWinnower(ctx) {
     state.stokeSpan = state.timer;
     state.relit = false;
     state.sweepTimer = 1.2;
+    state.healthAtStokeStart = inst.health;
+    state.damageThisStoke = 0;
     inst.grounded = true;
     inst.y = groundAt(inst.x, inst.z) + C.landedLift;
     inst.pitch = 0;
@@ -2821,6 +2822,39 @@ export function buildWinnower(ctx) {
           (Math.random() - 0.5) * 5);
       }
     }
+    if (state.phase === "stoke" || inst.grounded) {
+      state.damageThisStoke = (state.damageThisStoke || 0) + (e.actual || 0);
+      const maxHp = inst.maxHealth || inst.spec?.health || 6200;
+      const maxAllowed = maxHp * (C.downDamageCap || 0.35);
+      if ((state.healthAtStokeStart || maxHp) > maxAllowed + 50 && state.damageThisStoke >= maxAllowed) {
+        if (state.timer > 0.4) {
+          state.timer = 0.35;
+          state.stunFor = 0;
+          state.action = 0;
+          state.pending = 0;
+          enemies.play(inst, "stoke", 0.2);
+        }
+      }
+    }
+  }
+
+  /**
+   * Limit the damage taken during a single downing cycle so the Winnower
+   * cannot be melted in a single window before getting back into the air.
+   */
+  function modifyIncomingDamage(targetInst, request, damage) {
+    if (!inst || targetInst !== inst) return damage;
+    const maxHp = inst.maxHealth || inst.spec?.health || 6200;
+    if (state.phase === "stoke" || inst.grounded) {
+      const maxAllowed = maxHp * (C.downDamageCap || 0.35);
+      if ((state.healthAtStokeStart || maxHp) > maxAllowed + 50) {
+        const remainingAllowance = Math.max(0, maxAllowed - (state.damageThisStoke || 0));
+        if (damage > remainingAllowance) {
+          damage = remainingAllowance;
+        }
+      }
+    }
+    return damage;
   }
 
   function onDrain(e) {
@@ -3258,6 +3292,7 @@ export function buildWinnower(ctx) {
     spillAsh,
     ensureSpawned,
     resetToPerch,
+    modifyIncomingDamage,
     inAsh() { return burn.standing; },
     instance() { return inst; },
     /** Force a phase, for checks about a phase rather than about how
@@ -3271,6 +3306,8 @@ export function buildWinnower(ctx) {
       if (next === "stoke") {
         inst.grounded = true;
         inst.y = groundAt(inst.x, inst.z) + C.landedLift;
+        state.healthAtStokeStart = inst.health;
+        state.damageThisStoke = 0;
         // The real pose, not whatever clip was last playing - a QA
         // force is a claim about the phase, chains drawn up included.
         enemies.play(inst, "stoke", 0.2);

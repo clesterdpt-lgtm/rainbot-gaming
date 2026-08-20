@@ -85,9 +85,10 @@ export const STRATAGEMS = {
          Harrow from twelve rounds into nine, which is a difference the
          player notices without being told. */
       damage: 1.4,
-      // Heat is the lance's real limit, and halving its accumulation is
-      // what makes the window feel like permission to hold the trigger.
-      heat: 0.5,
+      // Zero heat accumulation: weapon never overheats while gilded.
+      heat: 0,
+      // Unlimited reliquary charge during the blessing.
+      infiniteCharge: true,
     },
   },
 };
@@ -789,7 +790,8 @@ export function buildMission(ctx) {
     state.boon.seconds = seconds;
     state.boon.remaining = seconds;
     state.boon.damage = Math.max(0.1, finite(boon.damage, 1));
-    state.boon.heat = clamp(finite(boon.heat, 1), 0, 4);
+    state.boon.heat = clamp(finite(boon.heat, 0), 0, 4);
+    state.boon.infiniteCharge = boon.infiniteCharge !== undefined ? !!boon.infiniteCharge : true;
     state.boon.source = String(source || "rite");
     bus.emit("boon", boonRecord());
     return boonRecord();
@@ -803,6 +805,7 @@ export function buildMission(ctx) {
       seconds: state.boon.seconds,
       damage: live ? state.boon.damage : 1,
       heat: live ? state.boon.heat : 1,
+      infiniteCharge: live ? (state.boon.infiniteCharge !== false) : false,
       source: live ? state.boon.source : null,
     };
   }

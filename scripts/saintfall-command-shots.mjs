@@ -258,9 +258,10 @@ try {
       target.root.rotation.y = 0;
       target.health = 1e6;
       target.state = "idle";
+      target.emerging = null;
       const box = T.ctx.combat.hitbox.harrow;
       const eye = target.y + box.head;
-      const o = new THREE.Vector3(target.x, eye, target.z + 22);
+      const o = new THREE.Vector3(target.x, eye + 0.2, target.z + 4);
       const d = new THREE.Vector3(target.x, eye, target.z).sub(o).normalize();
       const before = target.health;
       const hit = T.ctx.combat.fire(o, d, { damage: 100, range: 120 });

@@ -815,8 +815,10 @@ export function buildJetpack(ctx, player) {
 
   function ignite(playerState, groundY) {
     const wasGrounded = !!playerState.grounded;
+    const boon = ctx.mission?.boon?.();
+    const cost = boon?.active ? 0 : config.ignitionCost;
     const fuelBefore = state.fuel;
-    state.fuel = Math.max(0, state.fuel - config.ignitionCost);
+    state.fuel = Math.max(0, state.fuel - cost);
     state.active = true;
     state.inFlight = true;
     state.exhausted = false;
@@ -838,7 +840,7 @@ export function buildJetpack(ctx, player) {
       wasGrounded,
       fuelBefore,
       fuel: state.fuel,
-      ignitionCost: config.ignitionCost,
+      ignitionCost: cost,
       ignitionIndex: state.ignitions,
     });
     ctx.audio?.jetIgnite?.();
@@ -875,6 +877,14 @@ export function buildJetpack(ctx, player) {
     const requested = rawRequested && !playerState.free && !dead && !blockedByAction;
     state.requested = requested;
 
+    const boon = ctx.mission?.boon?.();
+    if (boon?.active) {
+      state.fuel = config.maxFuel;
+      state.exhausted = false;
+      state.cooldownRemaining = 0;
+      state.rechargeDelayRemaining = 0;
+    }
+
     if (state.cooldownRemaining > 0) {
       state.cooldownRemaining = Math.max(0, state.cooldownRemaining - dt);
     }
@@ -898,7 +908,8 @@ export function buildJetpack(ctx, player) {
     const pinned = ((playerState.rootFor || 0) > 0 && playerState.grounded)
       || (playerState.stunFor || 0) > 0;
     if (pressed && !state.active && !state.needsRelease && !pinned
-      && state.fuel >= config.minIgnitionFuel && state.cooldownRemaining <= 0) {
+      && (state.fuel >= config.minIgnitionFuel || boon?.active)
+      && (state.cooldownRemaining <= 0 || boon?.active)) {
       const gy = ctx.collide?.groundHeight(playerState.x, playerState.z)
         ?? ctx.terrain.heightAt(playerState.x, playerState.z);
       ignite(playerState, gy);
@@ -906,7 +917,7 @@ export function buildJetpack(ctx, player) {
 
     if (state.active) {
       if (!requested) cutoff(false);
-      else {
+      else if (!boon?.active) {
         state.fuel = Math.max(0, state.fuel - config.burnRate * dt);
         if (state.fuel <= 1e-6) cutoff(true);
       }
@@ -1001,6 +1012,14 @@ export function buildJetpack(ctx, player) {
    */
   function spend(amount, ground = false, airborne = false) {
     const cost = Math.max(0, Number(amount) || 0);
+    const boon = ctx.mission?.boon?.();
+    if (boon?.active) {
+      state.fuel = config.maxFuel;
+      state.exhausted = false;
+      state.cooldownRemaining = 0;
+      state.rechargeDelayRemaining = 0;
+      return true;
+    }
     if (cost <= 0) return true;
     if (!airborne && (state.inFlight || state.active)) return false;
     if (!ground && state.cooldownRemaining > 0) return false;
@@ -1021,6 +1040,14 @@ export function buildJetpack(ctx, player) {
    */
   function drain(amount) {
     const request = Math.max(0, Number(amount) || 0);
+    const boon = ctx.mission?.boon?.();
+    if (boon?.active) {
+      state.fuel = config.maxFuel;
+      state.exhausted = false;
+      state.cooldownRemaining = 0;
+      state.rechargeDelayRemaining = 0;
+      return request;
+    }
     if (request <= 0) return 0;
     if (state.inFlight || state.active || state.cooldownRemaining > 0) return 0;
     const used = Math.min(state.fuel, request);

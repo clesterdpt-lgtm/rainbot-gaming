@@ -2247,20 +2247,6 @@ export function buildWinnower(ctx) {
       ctx.player?.doctrineKick?.(1.3 * weight, 1);
       ctx.vfx?.blast?.(inst.x, y + 0.4, inst.z, 9);
       ctx.vfx?.sandSpray?.(inst.x, y + 0.5, inst.z, 3.4, 0, 1);
-      /* A crash knocks the fire out of it. Coals across the sand, and
-         they burn where they land - the ash field is the encounter's
-         own hazard primitive and this is the one time the animal
-         spills it on itself. */
-      /* TWO, not five. Every ember that lands opens an ash field, and
-         five of them ringed the downed animal with burning ground -
-         which looked like a lava flow, buried the boss inside its own
-         hazard, and incidentally made the free melee window the crash
-         is supposed to BUY into a place the player cannot stand. */
-      for (let i = 0; i < 2; i += 1) {
-        launchEmber(inst.x, y + 2.2, inst.z,
-          (Math.random() - 0.5) * 16, 3 + Math.random() * 4,
-          (Math.random() - 0.5) * 16);
-      }
       state.flash = 0.9;
       bus.emit("stunned", { x: inst.x, z: inst.z, seconds: C.crashStunSeconds });
     } else {
@@ -2533,6 +2519,12 @@ export function buildWinnower(ctx) {
   function stepStoke(dt) {
     state.timer -= dt;
     inst.y = groundAt(inst.x, inst.z) + C.landedLift;
+    if (state.timer <= 0) {
+      state.action = 0;
+      state.pending = 0;
+      beginLaunch();
+      return;
+    }
     const ps = ctx.player.state;
     /* Knocked out cold: no tracking, no sweeps, nothing - the free
        window the stall bought. It comes to with the stoke clip (the
@@ -2558,7 +2550,6 @@ export function buildWinnower(ctx) {
       beginSweep();
       return;
     }
-    if (state.timer <= 0) beginLaunch();
   }
 
   function stepLaunch(dt) {
@@ -2823,7 +2814,7 @@ export function buildWinnower(ctx) {
        primitive - so a heavy hit throws coals that fall, hit the sand
        and leave a burn that stays there. Stains, in this animal's own
        language, for free. */
-    if ((e.actual || 0) > 90 && Number.isFinite(e.y)) {
+    if ((e.actual || 0) > 90 && Number.isFinite(e.y) && !inst.grounded && state.phase !== "stoke") {
       for (let i = 0; i < 2; i += 1) {
         launchEmber(e.x, e.y, e.z,
           (Math.random() - 0.5) * 5, 1.5 + Math.random() * 2.5,

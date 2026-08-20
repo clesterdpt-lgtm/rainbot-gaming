@@ -1376,7 +1376,7 @@ export function buildCombat(ctx) {
    * only ever reports that it happened.
    */
   function drainLift(inst, amount, sacIndex = -1, detail = {}) {
-    if (!inst || untouchable(inst)) return 0;
+    if (!inst || untouchable(inst) || inst.grounded) return 0;
     if (!Number.isFinite(inst.lift)) return 0;
     const before = Math.max(0, inst.lift);
     const drained = Math.min(before, Math.max(0, Number(amount) || 0));
@@ -1801,6 +1801,8 @@ export function buildCombat(ctx) {
       bus.emit("kill", killEvent);
       ctx.progression?.onEnemyKilled?.(killEvent);
     } else if (enemies.play && !inst.actionLocked
+      && !inst.collapsed
+      && !inst.spec?.legOwnedStates?.includes(inst.state)
       && clock - (inst.lastFlinchAt || -9) > 0.8) {
       /* `actionLocked` is an encounter saying "this animal is mid-move
          and the clip is the telegraph". Without it a boss winding up a

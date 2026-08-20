@@ -2614,7 +2614,10 @@ export function buildDistaff(ctx) {
        body is already the target) or mid-recovery does not restart
        the clock; it just counts toward the next one. */
     if (state.recollapseFor > 0) state.recollapseFor -= dt;
-    if (inst.legsBroken >= C.collapseThreshold
+    const requiredLegs = state.legsAtLastCollapse > 0
+      ? Math.min(8, state.legsAtLastCollapse + C.collapseThreshold)
+      : C.collapseThreshold;
+    if (inst.legsBroken >= requiredLegs
       && inst.legsBroken > state.legsAtLastCollapse
       && state.recollapseFor <= 0) {
       state.lungeFor = 0;
@@ -2786,6 +2789,7 @@ export function buildDistaff(ctx) {
     if (state.timer <= 0) {
       state.phase = "standing";
       state.recollapseFor = C.recollapseGuard;
+      state.legsAtLastCollapse = Math.max(state.legsAtLastCollapse, inst.legsBroken);
       enemies.play(inst, "alert", 0.3);
     }
   }

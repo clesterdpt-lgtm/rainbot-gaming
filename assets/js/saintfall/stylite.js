@@ -239,21 +239,11 @@ export const STYLITE_CONFIG = Object.freeze({
   /* ------------------------------------------------------------
      THE GRIP, AND THE FALL
      ------------------------------------------------------------ */
-  /* A pool entirely separate from its health, and the only one the
-     player can empty on purpose. Sized so that a committed magazine
-     into a perched target brings it down: the fight should reward
-     shooting UP, which is the awkward thing to do, over waiting.
-
-     It refills while the animal is on a perch it has just taken, so a
-     player who chips at it between leaps achieves nothing - the grip
-     has to be broken in one sustained effort. */
-  gripMax: 900,
-  gripRegen: 55,
-  /* Damage to the grip is a fraction of damage dealt, so every weapon
-     contributes in proportion and nothing needs its own rule. Above
-     one, because the forelegs are a smaller target than the body and
-     hitting them at all is the skill being paid for. */
-  gripShare: 1.35,
+  /* A pool sized so that about 10% ranged damage (540 / 5400) brings
+     the perched animal down, opening the melee crash window. */
+  gripMax: 540,
+  gripRegen: 15,
+  gripShare: 1.0,
   /* The fall itself. Long enough to watch, and it does its own damage
      on landing - an animal that drops ninety metres and stands up
      unharmed teaches the player that the mechanic is a formality. */
@@ -2518,10 +2508,6 @@ export function buildStylite(ctx) {
     bus.emit("land", { x: p.x, y: p.y, z: p.z });
     state.phase = "perched";
     state.perchTimer = lerp(C.perchSeconds[0], C.perchSeconds[1], rng());
-    /* A fresh crown is a fresh grip. This is what stops a player
-       chipping the pool down over several perches and getting the fall
-       for free: it has to be broken inside one perch. */
-    state.grip = C.gripMax;
   }
 
   /* ------------------------------------------------------------

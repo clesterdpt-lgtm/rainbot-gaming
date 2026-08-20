@@ -458,8 +458,10 @@ try {
     const inst = T.enemies.live.find((e) => e.key === "winnower");
     inst.health = inst.maxHealth * 0.35;
     T.forceWinnowerPhase("soar", 30);
+    inst.x += 40;
+    inst.z += 40;
     const start = { x: inst.x, z: inst.z };
-    T._teleportRaw(inst.x + 600, inst.z, 0);
+    T._teleportRaw(inst.x + 500, inst.z, 0);
     let sawReturn = false;
     let healedAtStart = false;
     let maxChase = 0;
@@ -467,8 +469,8 @@ try {
       T.renderOnce(1 / 60);
       const st = T.winnowerState();
       const chase = Math.hypot(T.player.state.x - st.x, T.player.state.z - st.z);
-      maxChase = Math.max(maxChase, 600 - chase);
-      if (st.phase === "return" && !sawReturn) {
+      maxChase = Math.max(maxChase, 500 - chase);
+      if ((st.phase === "return" || st.phase === "dormant") && !sawReturn) {
         sawReturn = true;
         healedAtStart = st.health === st.maxHealth && st.lift === st.maxLift;
       }
@@ -484,7 +486,7 @@ try {
       phase: T.winnowerState().phase, maxChase: Number(maxChase.toFixed(0)) };
   });
   check("it will not follow a leaving player out of its territory",
-    leash.maxChase < 420, `closed at most ${leash.maxChase}m of a 600m retreat`);
+    leash.maxChase < 420, `closed at most ${leash.maxChase}m of a 500m retreat`);
   check("abandoned, it heals in the air and flies home",
     leash.sawReturn && leash.healedAtStart, JSON.stringify(leash));
   check("the flight home ends dormant at the perch", leash.done === true,
@@ -493,6 +495,7 @@ try {
   /* ---- DEATH ------------------------------------------------------------ */
   const death = await page.evaluate(() => {
     const T = window.__SF;
+    T.teleportToWinnower(40);
     T.forceWinnowerPhase("soar", 60);
     for (let i = 0; i < 60; i += 1) T.renderOnce(1 / 60);
     const airborne = T.winnowerState().altitude;

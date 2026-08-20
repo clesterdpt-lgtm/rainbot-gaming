@@ -85,7 +85,7 @@ export function buildAudio(ctx) {
   const buses = {};
   for (const [name, level] of Object.entries({
     weapon: 0.9, world: 0.75, doctrine: 0.62, ui: 0.6,
-    ambience: 0.5, cinematic: 0.72,
+    ambience: 0.5, cinematic: 0.72, music: 0.65,
   })) {
     const g = ac.createGain();
     g.gain.value = level;
@@ -1635,6 +1635,13 @@ export function buildAudio(ctx) {
     const paused = !!value;
     if (paused === state.paused) return Promise.resolve(true);
     state.paused = paused;
+    if (paused) {
+      if (music.bgAudio && !music.bgAudio.paused) music.bgAudio.pause();
+      if (music.bossAudio && !music.bossAudio.paused) music.bossAudio.pause();
+    } else if (state.enabled && music.started) {
+      if (music.isBossActive && music.bossAudio) music.bossAudio.play().catch(() => {});
+      else if (!music.isBossActive && music.bgAudio) music.bgAudio.play().catch(() => {});
+    }
     if (state.offline) return Promise.resolve(true);
     /* Share the cinematic transition queue so a handoff resume, menu
        suspend, and quick resume cannot finish out of order. */
@@ -1661,7 +1668,10 @@ export function buildAudio(ctx) {
     drop.pauseQueue = drop.pauseQueue.catch(() => false).then(() => unlock({
       ambience: false, allowPaused: true,
     })).then((ready) => {
-      if (ready) startAmbience();
+      if (ready) {
+        startAmbience();
+        startMusic();
+      }
       return !!ready;
     }).catch(() => false);
     return drop.pauseQueue;
@@ -1726,6 +1736,158 @@ export function buildAudio(ctx) {
     src.start();
     low.start();
     jetLoop = { src, bp, low, lowGain, g };
+  }
+
+  /* ============================================================
+     MUSIC
+
+     Two dynamic soundtrack beds:
+     - Ashes Over Arrakis (Background / Exploration / Overworld)
+     - Iron Chapel March (Boss Fights / Apex Engagements)
+
+     Uses HTML5 Audio streams piped into buses.music (with fallback
+     direct audio element volume control if createMediaElementSource
+     is unavailable). Smoothly cross-fades between exploration and combat.
+     ============================================================ */
+
+  const MUSIC_ASSETS = Object.freeze({
+    bg: new URL("../../Sounds/saintfall music/Ashes Over Arrakis.mp3", import.meta.url).href,
+    boss: new URL("../../Sounds/saintfall music/Iron Chapel March.mp3", import.meta.url).href,
+  });
+
+  const music = {
+    initialized: false,
+    started: false,
+    bgAudio: null,
+    bossAudio: null,
+    bgGainNode: null,
+    bossGainNode: null,
+    bgVol: 0,
+    bossVol: 0,
+    isBossActive: false,
+  };
+
+  function initMusic() {
+    if (music.initialized || state.offline) return;
+    if (typeof Audio === "undefined") return;
+    music.initialized = true;
+
+    try {
+      const bg = new Audio(MUSIC_ASSETS.bg);
+      bg.loop = true;
+      bg.preload = "auto";
+      bg.crossOrigin = "anonymous";
+      music.bgAudio = bg;
+
+      const boss = new Audio(MUSIC_ASSETS.boss);
+      boss.loop = true;
+      boss.preload = "auto";
+      boss.crossOrigin = "anonymous";
+      music.bossAudio = boss;
+
+      if (ac && typeof ac.createMediaElementSource === "function") {
+        try {
+          const bgSource = ac.createMediaElementSource(bg);
+          const bgGain = ac.createGain();
+          bgGain.gain.value = 0;
+          bgSource.connect(bgGain);
+          bgGain.connect(buses.music);
+          music.bgGainNode = bgGain;
+
+          const bossSource = ac.createMediaElementSource(boss);
+          const bossGain = ac.createGain();
+          bossGain.gain.value = 0;
+          bossSource.connect(bossGain);
+          bossGain.connect(buses.music);
+          music.bossGainNode = bossGain;
+        } catch (_) {
+          music.bgGainNode = null;
+          music.bossGainNode = null;
+        }
+      }
+    } catch (_) {
+      // Audio element initialization fallback
+    }
+  }
+
+  function startMusic() {
+    initMusic();
+    if (!music.initialized || !state.enabled || state.paused || ctx.intro?.isBlocking?.()) return;
+    music.started = true;
+  }
+
+  function isBossFightActive() {
+    if (ctx.districtBosses?.anyFightActive?.()) return true;
+    const apostate = ctx.apostate?.status?.();
+    if (apostate && !apostate.dead && apostate.phase !== "dormant" && apostate.phase !== "alert") return true;
+    const winnower = ctx.winnower?.status?.();
+    if (winnower && !winnower.dead && winnower.phase !== "dormant" && winnower.phase !== "return") return true;
+    const distaff = ctx.distaff?.status?.();
+    if (distaff && !distaff.dead && distaff.phase !== "dormant" && distaff.phase !== "returning") return true;
+    const garner = ctx.garner?.status?.();
+    if (garner && !garner.dead && garner.phase !== "dormant") return true;
+    const abbess = ctx.abbess?.status?.();
+    if (abbess && !abbess.dead && abbess.phase !== "dormant") return true;
+    const stylite = ctx.stylite?.status?.();
+    if (stylite && !stylite.dead && stylite.phase !== "dormant") return true;
+    const saint = ctx.districtBosses?.status?.("saint");
+    if (saint && !saint.defeated && (saint.phase === "alert" || saint.phase === "active")) return true;
+    const breach = ctx.breaches?.status?.();
+    if (breach?.boss && breach.phase === "active") return true;
+    return false;
+  }
+
+  function updateMusic(dt) {
+    if (!music.started || !music.initialized) return;
+    const muted = !state.enabled || state.paused || ctx.deferAmbience || ctx.intro?.isBlocking?.();
+    const bossEngaged = isBossFightActive();
+    music.isBossActive = bossEngaged;
+
+    const targetBg = muted ? 0 : (bossEngaged ? 0 : 1);
+    const targetBoss = muted ? 0 : (bossEngaged ? 1 : 0);
+
+    const fadeRate = 2.4; // smooth ~1.2s crossfade
+    const step = Math.min(1, Math.max(0, dt * fadeRate));
+
+    music.bgVol += (targetBg - music.bgVol) * step;
+    music.bossVol += (targetBoss - music.bossVol) * step;
+
+    if (Math.abs(music.bgVol - targetBg) < 0.025) music.bgVol = targetBg;
+    if (Math.abs(music.bossVol - targetBoss) < 0.025) music.bossVol = targetBoss;
+
+    // Background track (Ashes Over Arrakis)
+    if (music.bgAudio) {
+      if (music.bgVol > 0.001) {
+        if (music.bgAudio.paused) {
+          music.bgAudio.play().catch(() => {});
+        }
+      } else if (music.bgVol === 0 && !music.bgAudio.paused && targetBg === 0) {
+        music.bgAudio.pause();
+      }
+      if (music.bgGainNode) {
+        music.bgGainNode.gain.value = music.bgVol;
+        music.bgAudio.volume = 1.0;
+      } else {
+        music.bgAudio.volume = clamp01(music.bgVol * 0.65);
+      }
+    }
+
+    // Boss track (Iron Chapel March)
+    if (music.bossAudio) {
+      if (music.bossVol > 0.001) {
+        if (music.bossAudio.paused) {
+          music.bossAudio.play().catch(() => {});
+        }
+      } else if (music.bossVol === 0 && !music.bossAudio.paused && targetBoss === 0) {
+        music.bossAudio.pause();
+      }
+      if (music.bossGainNode) {
+        music.bossGainNode.gain.value = music.bossVol;
+        music.bossAudio.volume = 1.0;
+      } else {
+        music.bossAudio.volume = clamp01(music.bossVol * 0.65);
+      }
+    }
   }
 
   /* ============================================================
@@ -2056,6 +2218,7 @@ export function buildAudio(ctx) {
       if (ready) {
         state.started = true;
         if (wantsAmbience) startAmbience();
+        if (wantsAmbience) startMusic();
       }
       return ready;
     }).catch(() => false); // still suspended; the next gesture will retry
@@ -2072,6 +2235,7 @@ export function buildAudio(ctx) {
 
   function update(dt, player, camera) {
     if (!state.enabled) return;
+    updateMusic(dt);
     if (camera) {
       state.listenerX = camera.position.x;
       state.listenerZ = camera.position.z;
@@ -2305,6 +2469,7 @@ export function buildAudio(ctx) {
     update,
     unlock,
     startAmbience,
+    startMusic,
     beginDrop,
     updateDrop,
     dropCue,
@@ -2319,6 +2484,13 @@ export function buildAudio(ctx) {
     setEnabled(v) {
       state.enabled = !!v;
       master.gain.setTargetAtTime(v ? 1.35 : 0, now(), 0.05);
+      if (!v) {
+        if (music.bgAudio && !music.bgAudio.paused) music.bgAudio.pause();
+        if (music.bossAudio && !music.bossAudio.paused) music.bossAudio.pause();
+      } else if (music.started) {
+        if (music.isBossActive && music.bossAudio) music.bossAudio.play().catch(() => {});
+        else if (!music.isBossActive && music.bgAudio) music.bgAudio.play().catch(() => {});
+      }
     },
     get enabled() { return state.enabled; },
     stats() {
@@ -2335,6 +2507,14 @@ export function buildAudio(ctx) {
         paused: state.paused,
         ambience: !!wind,
         jetLoop: !!jetLoop,
+        music: {
+          started: music.started,
+          bossActive: music.isBossActive,
+          bgVol: Number(music.bgVol.toFixed(3)),
+          bossVol: Number(music.bossVol.toFixed(3)),
+          bgPlaying: !!music.bgAudio && !music.bgAudio.paused,
+          bossPlaying: !!music.bossAudio && !music.bossAudio.paused,
+        },
         cinematic: {
           active: drop.active,
           sources: drop.sources.size,
@@ -2360,7 +2540,7 @@ function makeSilentApi() {
     boostIgnite: noop, boostCut: noop, boostHit: noop,
     slamCharge: noop, slamPlunge: noop, slamImpact: noop,
     doctrineCue: no, detachDoctrine: noop,
-    update: noop, unlock: noPromise, startAmbience: noop, setEnabled: noop,
+    update: noop, unlock: noPromise, startAmbience: noop, startMusic: noop, setEnabled: noop,
     beginDrop: noPromise, updateDrop: no, dropCue: no,
     pauseDrop: noPromise, setPaused: noPromise, endDrop: noPromise,
     enabled: false,
@@ -2373,6 +2553,14 @@ function makeSilentApi() {
         paused: false,
         ambience: false,
         jetLoop: false,
+        music: {
+          started: false,
+          bossActive: false,
+          bgVol: 0,
+          bossVol: 0,
+          bgPlaying: false,
+          bossPlaying: false,
+        },
         cinematic: {
           active: false, sources: 0, buffers: 0, loadErrors: [], paused: false,
         },

@@ -445,6 +445,7 @@ export async function start({ boot, build } = {}) {
       hud.setVisible(true);
       touch.setEnabled(touchEnabledAfterDrop);
       audio.startAmbience?.();
+      audio.startMusic?.();
       syncRuntimePaused();
     },
   });

@@ -371,6 +371,92 @@ try {
   check("the third cut unmoors the boss",
     lash.cut >= 3 && lash.unmooredFor > 0,
     `cuts=${lash.totalCuts} unmoored=${lash.unmooredFor}s`);
+
+  /* ---- 8a. AND THE WINDOW PAYS ---------------------------------
+     Cutting three limbs is the phase's whole damage loop, and the
+     measurement in `unmooredDamage` says the window only pays if a
+     hit inside it lands for more. The multiplier shipped inside the
+     collapse-arming branch, above a `return` that threw its product
+     away, so for the phase's entire life the window was worth
+     exactly nothing extra. This takes the SAME hit twice through
+     combat.js's own entry - once inside the window still open from
+     the third cut above, once after it lapses - and compares what
+     came out. The assertion is the RATIO rather than either
+     absolute number, because doctrine and the Gilding boon are
+     multipliers on this same path and would move both samples. ---- */
+  const unmoorPay = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.apostate.instance();
+    const SAMPLE = 40;
+    let reported = null;
+    const stop = T.combat.bus.on("enemyDamaged", (e) => {
+      if (e && e.source === "qa-unmoor") reported = e;
+    });
+    /* The pool is put back after each sample: this harness goes on to
+       measure containment and the second death, and a probe that
+       quietly shaves the boss would be changing the fight it is
+       reporting on. Aimed from off to one side so the request carries
+       a real origin for the aegis test to read. */
+    function sample() {
+      const before = inst.health;
+      reported = null;
+      const actual = T.combat.damageEnemy(inst, SAMPLE, {
+        source: "qa-unmoor",
+        x: inst.x, y: inst.y + 1.2, z: inst.z,
+        originX: inst.x - 12, originZ: inst.z,
+      });
+      inst.health = before;
+      return {
+        /* The PREDICATE the boss reads, not the rounded number the
+           status block prints: `unmooredFor` is reported to two
+           decimals, so a window with a float's worth of time left
+           reads as closed and the "outside" sample lands inside it. */
+        unmoored: T.undercroft.unmoored(),
+        unmooredFor: Number(T.undercroftState().unmooredFor.toFixed(2)),
+        actual: Number(actual.toFixed(3)),
+        reported: reported ? Number(reported.damage.toFixed(3)) : null,
+        requested: reported ? Number(reported.requested.toFixed(3)) : null,
+      };
+    }
+    /* A raised shield zeroes a frontal hit, and a blocked sample
+       would read as "the multiplier did nothing" - so both samples
+       wait for a frame where the aegis is down rather than trusting
+       the boss to be idle. */
+    let inside = null;
+    for (let i = 0; i < 60 * 6; i += 1) {
+      if (!T.undercroft.unmoored()) break;
+      if (!T.apostateState().shieldActive) { inside = sample(); break; }
+      T.renderOnce(1 / 60);
+    }
+    let outside = null;
+    for (let i = 0; i < 60 * 20; i += 1) {
+      T.renderOnce(1 / 60);
+      if (T.undercroft.unmoored()) continue;
+      if (T.apostateState().shieldActive) continue;
+      outside = sample();
+      break;
+    }
+    if (stop) stop();
+    return {
+      sample: SAMPLE,
+      factor: T.undercroft.config.unmooredDamage,
+      inside, outside,
+      ratio: (inside && outside && outside.reported > 0)
+        ? Number((inside.reported / outside.reported).toFixed(3)) : null,
+    };
+  });
+  check("a hit lands at all in the hive",
+    !!unmoorPay.outside && unmoorPay.outside.actual > 0,
+    JSON.stringify(unmoorPay.outside));
+  check("outside the window a hit is reported at face value",
+    !!unmoorPay.outside
+      && Math.abs(unmoorPay.outside.reported - unmoorPay.outside.requested) < 0.01,
+    `${unmoorPay.outside?.reported} vs requested ${unmoorPay.outside?.requested}`);
+  check("the unmoor window multiplies the damage it reports",
+    unmoorPay.ratio !== null
+      && Math.abs(unmoorPay.ratio - unmoorPay.factor) < 0.02,
+    `x${unmoorPay.ratio} (want x${unmoorPay.factor}): `
+      + `${unmoorPay.inside?.reported} in / ${unmoorPay.outside?.reported} out`);
   const lashShot = await shoot(page, "04-lashers.png", 2);
 
   /* ---- 8b. A LASH THAT CONNECTS IS A LASH THAT HURTS ------------ */

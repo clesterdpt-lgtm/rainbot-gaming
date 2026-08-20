@@ -2944,16 +2944,21 @@ export async function buildApostate(ctx) {
     if (state.stage === 1 && !state.pendingDescent
       && damage >= inst.health && ctx.undercroft?.available?.()) {
       state.pendingDescent = true;
-      /* THE STAGGER PAYS. The Undercroft's limbs are cut to buy this
+      noteHit(request, damage);
+      return Math.max(0, inst.health - 1);
+    }
+    /* THE STAGGER PAYS. The Undercroft's limbs are cut to buy this
        window and the window has to be worth the trip - see
        `unmooredDamage` there for the measurement that says it was
-       not. Applied after the phase-two arming check above so it can
-       never turn a floored lethal blow back into a kill. */
+       not. Applied AFTER the phase-two arming check above so it can
+       never turn a floored lethal blow back into a kill, and BEFORE
+       `noteHit` and the aegis branch so the doubling is what gets
+       reported, what staggers the body, and what leaks past a
+       shield. It lived inside the arming branch until milestone 104,
+       where the return below it threw the product away - the window
+       had paid nothing for its whole life. */
     if (ctx.undercroft?.unmoored?.()) {
       damage *= ctx.undercroft.config?.unmooredDamage || 1;
-    }
-    noteHit(request, damage);
-      return Math.max(0, inst.health - 1);
     }
     noteHit(request, damage);
     if (!state.shieldActive) return damage;

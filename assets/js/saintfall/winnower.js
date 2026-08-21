@@ -153,23 +153,21 @@ export const WINNOWER_CONFIG = Object.freeze({
      of the whole design: a melee player is never more than this far
      from a window. */
   soarSeconds: 21,
-  /* And how long the window itself lasts. Long enough to cross open
-     ground and land several swings; short enough that it is a raid
-     rather than a free kill. */
-  stokeSeconds: 9.5,
+  /* And how long the window itself lasts. Shorter grounded window so
+     the boss takes less free damage before re-launching. */
+  stokeSeconds: 5.5,
   /* A stall is worse for it than a chosen landing - it hits hard and
      takes longer to get back up. */
-  stallStokeSeconds: 13.5,
+  stallStokeSeconds: 7.5,
   /* THE CRASH IS THE REWARD. A stall landing opens with this many
      seconds of the animal simply DOWN - no sweeps, no tracking, no
      answer at all - because the player just spent a whole lift pool
      buying this moment and an immediate counter-attack would refund
-     none of it. The grace spends out of the stall window rather than
-     extending it: stallStokeSeconds already prices the total. */
-  crashStunSeconds: 4.0,
+     none of it. Scaled to the shorter stall window. */
+  crashStunSeconds: 2.6,
   /* Maximum fraction of max health the boss can lose in a single downing cycle.
      Prevents the flyer from being burst down and killed in one downing. */
-  downDamageCap: 0.28,
+  downDamageCap: 0.18,
   /* Flying home after a disengage. Presentation speed only - the
      heal has already happened when the flight starts. */
   returnSpeed: 12.0,
@@ -209,19 +207,19 @@ export const WINNOWER_CONFIG = Object.freeze({
   bombardSpread: 5.5,
   emberDamage: 26,
   ashRadius: 5.4,
-  ashSeconds: 9.0,
-  ashDps: 11,
+  ashSeconds: 18.0,
+  ashDps: 12,
   ashTick: 0.5,
-  ashMax: 6,
+  ashMax: 36,
 
   /* The strafing run: it drops to just above head height and crosses
-     the player in a straight line. The one airborne attack a jetpack
-     can actually intercept, and the reason to carry one. */
-  strafeCadence: 12.0,
+     the player in a straight line, dropping a carpet of bombs along the path. */
+  strafeCadence: 11.0,
   strafeHeight: 7.5,
-  strafeSpeed: 30,
+  strafeSpeed: 28,
   strafeDamage: 42,
   strafeRadius: 4.6,
+  strafeBombInterval: 0.10,
 
   /* What a landed Winnower does to anything standing next to it. It
      is not helpless on the ground, it is just REACHABLE. */
@@ -233,7 +231,7 @@ export const WINNOWER_CONFIG = Object.freeze({
   simRange: 700,
 });
 
-const EMBER_MAX = 12;
+const EMBER_MAX = 36;
 /* The territory's centre: the stacks' own centroid, computed once -
    the animal patrols the works, not the map. */
 const TERRITORY_X = WINNOWER_CONFIG.stacks.reduce((a, s2) => a + s2.x, 0) / 3;
@@ -2179,6 +2177,8 @@ export function buildWinnower(ctx) {
     state.strafeFrom = { x: ps.x - ux * 52, z: ps.z - uz * 52 };
     state.strafeTo = { x: ps.x + ux * 46, z: ps.z + uz * 46 };
     state.strafeT = 0;
+    state.strafeBombTimer = 0;
+    state.strafeBombCount = 0;
     state.phase = "strafe";
     state.strafeTimer = C.strafeCadence;
     enemies.play(inst, "alert", 0.2);
@@ -2467,6 +2467,32 @@ export function buildWinnower(ctx) {
     if (state.bombardTimer <= 0) { beginBombard(); return; }
   }
 
+  function dropStrafeBomb() {
+    const cIndex = (state.strafeBombCount || 0) % 3;
+    state.strafeBombCount = (state.strafeBombCount || 0) + 1;
+    const bone = inst.bones?.get?.(`censer${cIndex}`);
+    let ox = inst.x;
+    let oy = inst.y - 1.8;
+    let oz = inst.z;
+    if (bone) {
+      bone.updateWorldMatrix(true, false);
+      bone.getWorldPosition(_vec);
+      ox = _vec.x; oy = _vec.y; oz = _vec.z;
+    }
+    const forwardX = Math.sin(inst.yaw);
+    const forwardZ = Math.cos(inst.yaw);
+    const rightX = forwardZ;
+    const rightZ = -forwardX;
+    const sideSpread = (Math.random() - 0.5) * 3.6;
+    const vx = forwardX * 5 + rightX * sideSpread;
+    const vy = -14 - Math.random() * 6;
+    const vz = forwardZ * 5 + rightZ * sideSpread;
+    launchEmber(ox, oy, oz, vx, vy, vz);
+    ctx.vfx?.spark?.(ox, oy, oz, 1.8, false, false);
+    state.flash = Math.max(state.flash, 0.7);
+    bus.emit("strafeBomb", { x: ox, y: oy, z: oz, count: state.strafeBombCount });
+  }
+
   function stepStrafe(dt) {
     const from = state.strafeFrom;
     const to = state.strafeTo;
@@ -2484,6 +2510,15 @@ export function buildWinnower(ctx) {
     inst.y = damp(inst.y, want, 6.0, dt);
     faceTravel(dt, to.x, to.z, 4.0);
     inst.pitch = damp(inst.pitch, -0.10 * dip, 3.0, dt);
+
+    // Dropping a line of bombs as it swoops across the ground
+    if (t >= 0.12 && t <= 0.88) {
+      state.strafeBombTimer = (state.strafeBombTimer || 0) - dt;
+      if (state.strafeBombTimer <= 0) {
+        state.strafeBombTimer = C.strafeBombInterval || 0.10;
+        dropStrafeBomb();
+      }
+    }
 
     // The hit is resolved by proximity along the run rather than at a
     // fixed frame: the player can genuinely step out of the line.
@@ -3351,6 +3386,16 @@ export function buildWinnower(ctx) {
       state.actionKind = null;
       state.bombardTimer = 0;
       state.strafeTimer = Math.max(state.strafeTimer, C.bombardCadence + 2);
+      return true;
+    },
+    /** QA: make the next eligible airborne answer a strafing swoop. */
+    primeStrafe() {
+      if (!inst || state.phase !== "soar") return false;
+      state.action = 0;
+      state.pending = 0;
+      state.actionKind = null;
+      state.strafeTimer = 0;
+      state.bombardTimer = Math.max(state.bombardTimer, C.strafeCadence + 2);
       return true;
     },
     dispose() {

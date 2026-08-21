@@ -89,6 +89,19 @@ try {
     const hpFinal = inst.health;
     const isDead = inst.state === "death" || inst.health <= 0;
 
+    // Test 7: Strafe bombing and ash AoE duration
+    inst.health = maxHp;
+    inst.state = "alive";
+    T.teleportToWinnower(40);
+    let strafeBombs = 0;
+    const offBomb = winnower.bus.on("strafeBomb", () => { strafeBombs += 1; });
+    winnower.forcePhase("soar", 15);
+    winnower.primeStrafe();
+    for (let f = 0; f < 180; f += 1) T.renderOnce(1 / 60);
+    offBomb();
+    const ashField = winnower.spillAsh(inst.x, inst.z);
+    const ashSpan = ashField?.span || 0;
+
     return {
       maxHp,
       castMatBlending,
@@ -109,6 +122,11 @@ try {
       eventCountText,
       hpFinal,
       isDead,
+      strafeBombs,
+      ashSpan,
+      downCap: winnower.config.downDamageCap,
+      stokeSecs: winnower.config.stokeSeconds,
+      ashSecs: winnower.config.ashSeconds,
     };
   });
 
@@ -119,11 +137,14 @@ try {
   check(results.castMatBlending === THREE_NormalBlending, "Contact shadow uses NormalBlending (not MultiplyBlending)", `blending=${results.castMatBlending}`);
   check(results.castMatTint === "140f12", "Contact shadow tint is dark (no white rgb)", `tint=${results.castMatTint}`);
   check(results.poolMatBlending === THREE_AdditiveBlending, "Pool uses AdditiveBlending", `blending=${results.poolMatBlending}`);
-  check(results.dealt1 <= results.maxHp * 0.29 && results.dealt1 >= results.maxHp * 0.27, "Single downing damage is capped at ~28%", `dealt=${results.dealt1} maxHp=${results.maxHp}`);
+  check(results.dealt1 <= results.maxHp * 0.19 && results.dealt1 >= results.maxHp * 0.17, `Single downing damage is capped at ~18% (${results.downCap})`, `dealt=${results.dealt1} maxHp=${results.maxHp}`);
+  check(results.stokeSecs <= 6.0, "Downed stoke duration is shorter", `stokeSeconds=${results.stokeSecs}`);
   check(results.dealt2 === 0 && results.hpAfter2 === results.hpAfter1, "Additional damage in SAME downing is rejected/absorbed", `dealt2=${results.dealt2} hp=${results.hpAfter2}`);
   check(results.drainedWhileGrounded === 0 && results.drainedWhileLaunching === 0, "Lift cannot be drained during ground or launch phases", `ground=${results.drainedWhileGrounded} launch=${results.drainedWhileLaunching}`);
   check(results.liftInFlight === 4 && results.drainedInFlight > 0 && results.liftAfterDrain < results.liftInFlight, "Lift pool is full upon reaching flight and drains during soar", `lift=${results.liftInFlight} -> ${results.liftAfterDrain}`);
   check(/HP/.test(results.eventCountText), "HUD readout displays numeric HP while grounded", `text="${results.eventCountText}"`);
+  check(results.strafeBombs >= 5, "Swooping strafe run drops a line of bombs", `strafeBombs=${results.strafeBombs}`);
+  check(results.ashSecs >= 16.0 && results.ashSpan >= 16.0, "Ground ash AoE damage lasts longer", `ashSeconds=${results.ashSecs}`);
   check(results.isDead && results.hpFinal <= 0, "Boss can still be cleanly killed when on low health", `hpFinal=${results.hpFinal}`);
 
   await browser.close();

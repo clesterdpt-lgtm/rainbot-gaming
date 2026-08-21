@@ -616,6 +616,10 @@ export async function buildWorld(ctx, onProgress) {
       const len = Math.hypot(b.x - a.x, b.z - a.z);
       if (len < 0.2) continue;
 
+      // The Pilgrim's Road leads up to the Cathedral steps and terminates outside
+      // the south facade (z = -655), leaving the interior nave purely to cathedral flooring.
+      if (Math.min(a.z, b.z) <= -654 || Math.max(a.z, b.z) <= -654) continue;
+
       /* Sand reclaims the road in patches. The gaps are where the
          road stops being a corridor and starts being a ruin.
 
@@ -791,6 +795,7 @@ export async function buildWorld(ctx, onProgress) {
     for (let i = 6; i < furnitureProf.length - 6; i += 7) {
       const a = furnitureProf[i];
       const nxt = furnitureProf[i + 1];
+      if (a.z <= -654 || nxt.z <= -654) continue;
       const yaw = Math.atan2(nxt.z - a.z, nxt.x - a.x);
       for (const side of [-1, 1]) {
         if (rng.chance(0.28)) continue;

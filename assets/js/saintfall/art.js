@@ -653,14 +653,41 @@ export const GRADES = {
    ============================================================ */
 
 export function makeAtmosphere(THREE, timeKey = "goldenhour", options = {}) {
-  const initialStop = DAY_CYCLE_STOPS.find((stop) => stop.key === timeKey)
-    || DAY_CYCLE_STOPS[0];
+  /* WHICH LIGHTING TABLE THIS ATMOSPHERE IS DRAWN FROM.
+
+     Vesper-IX and Kenosis are two different planets under two
+     different suns, and an atmosphere is nothing but a table of
+     presets plus the machinery that walks between them. The
+     machinery is identical for both; only the table differs. So the
+     table is an ARGUMENT rather than a module constant, and the
+     defaults are exactly the desert's - passing no options resolves
+     to the same three objects this file has always used, which is
+     why nothing on Vesper-IX changes.
+
+     A caller supplying its own tables must supply all three, and must
+     keep the KEY VOCABULARY: `goldenhour`, `dusk` and `night` are not
+     just row names, they set `goldenFactor` / `duskFactor` /
+     `nightFactor`, which modules outside this file read to ask what
+     kind of light they are standing in. A second world renames the
+     LABEL and rewrites the numbers; it does not rename the row. */
+  const TIMES_T = options.times || TIMES;
+  const GRADES_T = options.grades || GRADES;
+  const STOPS_T = options.cycleStops || DAY_CYCLE_STOPS;
+  const STORM_TIME = options.stormTime || "storm";
+  const STORM_GRADE = options.stormGrade || "storm";
+  const FALLBACK_TIME = options.fallbackTime
+    || (TIMES_T === TIMES ? "goldenhour" : STOPS_T[0].key);
+  const FALLBACK_GRADE = options.fallbackGrade
+    || (GRADES_T === GRADES ? "warm" : (TIMES_T[FALLBACK_TIME] || {}).grade
+        || Object.keys(GRADES_T)[0]);
+  const initialStop = STOPS_T.find((stop) => stop.key === timeKey)
+    || STOPS_T[0];
   const requestedPhase = Number(options.phase);
   const cycleDuration = Math.max(60, Number(options.duration) || DAY_CYCLE_SECONDS);
   const state = {
     THREE,
     time: timeKey,
-    preset: TIMES[timeKey] || TIMES.goldenhour,
+    preset: TIMES_T[timeKey] || TIMES_T[FALLBACK_TIME],
     /** Blend factor toward the storm preset, 0..1, driven by weather. */
     storm: 0,
     windDir: new THREE.Vector2(-0.82, 0.57).normalize(),
@@ -700,7 +727,7 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour", options = {}) {
     fogStart: 50,
     sunScatter: 1,
     exposure: 1,
-    grade: GRADES.warm,
+    grade: GRADES_T[FALLBACK_GRADE],
 
     /** Uniform block shared by every patched material. One object,
      *  so a single write updates the entire world. */
@@ -709,7 +736,7 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour", options = {}) {
 
   const CYCLE_SAMPLE_SECONDS = 0.25;
   let cycleSampleClock = 0;
-  let manualKey = TIMES[timeKey] ? timeKey : "goldenhour";
+  let manualKey = TIMES_T[timeKey] ? timeKey : FALLBACK_TIME;
 
   state.uniforms = {
     uSunDir: { value: new THREE.Vector3(0, 1, 0) },
@@ -743,7 +770,7 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour", options = {}) {
   function resolve(baseA, baseB, blend, stormMix, directionA = baseA, directionB = baseB) {
     const t = clamp01(blend);
     const s = clamp01(stormMix);
-    const storm = TIMES.storm;
+    const storm = TIMES_T[STORM_TIME];
     const num = (key) => lerp(lerp(baseA[key], baseB[key], t), storm[key], s);
     const col = (key) => {
       const between = mixRgb(hexToRgb(baseA[key]), hexToRgb(baseB[key]), t);
@@ -779,23 +806,23 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour", options = {}) {
     state.sunScatter = num("sunScatter");
     state.exposure = num("exposure");
     const baseGrade = blendGrade(
-      GRADES[baseA.grade] || GRADES.warm,
-      GRADES[baseB.grade] || GRADES.warm,
+      GRADES_T[baseA.grade] || GRADES_T[FALLBACK_GRADE],
+      GRADES_T[baseB.grade] || GRADES_T[FALLBACK_GRADE],
       t
     );
-    state.grade = blendGrade(baseGrade, GRADES.storm, s);
+    state.grade = blendGrade(baseGrade, GRADES_T[STORM_GRADE], s);
     sync();
     return state;
   }
 
   function sampleCycle(phase = state.cyclePhase) {
     const p = wrap01(phase);
-    let from = DAY_CYCLE_STOPS[0];
-    let to = DAY_CYCLE_STOPS[1];
-    for (let i = 0; i < DAY_CYCLE_STOPS.length - 1; i += 1) {
-      if (p >= DAY_CYCLE_STOPS[i].phase && p < DAY_CYCLE_STOPS[i + 1].phase) {
-        from = DAY_CYCLE_STOPS[i];
-        to = DAY_CYCLE_STOPS[i + 1];
+    let from = STOPS_T[0];
+    let to = STOPS_T[1];
+    for (let i = 0; i < STOPS_T.length - 1; i += 1) {
+      if (p >= STOPS_T[i].phase && p < STOPS_T[i + 1].phase) {
+        from = STOPS_T[i];
+        to = STOPS_T[i + 1];
         break;
       }
     }
@@ -812,7 +839,7 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour", options = {}) {
     state.cycleBlend = sample.blend;
     state.solarHour = (6 + sample.phase * 24) % 24;
     state.time = sample.blend < 0.5 ? sample.from.key : sample.to.key;
-    state.preset = TIMES[state.time] || TIMES.goldenhour;
+    state.preset = TIMES_T[state.time] || TIMES_T[FALLBACK_TIME];
     const weight = (key) => (sample.from.key === key ? 1 - sample.blend : 0)
       + (sample.to.key === key ? sample.blend : 0);
     state.duskFactor = clamp01(weight("dusk"));
@@ -820,15 +847,15 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour", options = {}) {
     state.goldenFactor = clamp01(weight("goldenhour"));
     state.daylightFactor = clamp01(1 - state.nightFactor);
     return resolve(
-      TIMES[sample.from.key], TIMES[sample.to.key], sample.blend, state.storm,
+      TIMES_T[sample.from.key], TIMES_T[sample.to.key], sample.blend, state.storm,
       sample.from, sample.to
     );
   }
 
   /** Apply a named preset as a deliberate fixed review/preview mode. */
   function apply(key = state.time, stormMix = state.storm) {
-    const base = TIMES[key] || TIMES.goldenhour;
-    manualKey = TIMES[key] ? key : "goldenhour";
+    const base = TIMES_T[key] || TIMES_T[FALLBACK_TIME];
+    manualKey = TIMES_T[key] ? key : FALLBACK_TIME;
     state.cycleRunning = false;
     state.time = manualKey;
     state.preset = base;
@@ -840,7 +867,7 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour", options = {}) {
     state.nightFactor = manualKey === "night" ? 1 : 0;
     state.goldenFactor = manualKey === "goldenhour" ? 1 : 0;
     state.daylightFactor = 1 - state.nightFactor;
-    const stop = DAY_CYCLE_STOPS.find((entry) => entry.key === manualKey);
+    const stop = STOPS_T.find((entry) => entry.key === manualKey);
     if (stop) {
       state.cyclePhase = stop.phase;
       state.solarHour = (6 + stop.phase * 24) % 24;
@@ -865,8 +892,8 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour", options = {}) {
   function setStorm(stormMix = 0) {
     state.storm = clamp01(stormMix);
     return state.cycleRunning ? applyCycle(state.cyclePhase)
-      : resolve(TIMES[manualKey] || TIMES.goldenhour,
-        TIMES[manualKey] || TIMES.goldenhour, 0, state.storm);
+      : resolve(TIMES_T[manualKey] || TIMES_T[FALLBACK_TIME],
+        TIMES_T[manualKey] || TIMES_T[FALLBACK_TIME], 0, state.storm);
   }
 
   /** Push state into the shared uniform block. */
@@ -955,8 +982,8 @@ export function makeAtmosphere(THREE, timeKey = "goldenhour", options = {}) {
   state.sync = sync;
   state.update = update;
   state.skyAt = skyAt;
-  if (state.cycleRunning && timeKey !== "storm") applyCycle(state.cyclePhase);
-  else apply(timeKey, timeKey === "storm" ? 1 : 0);
+  if (state.cycleRunning && timeKey !== STORM_TIME) applyCycle(state.cyclePhase);
+  else apply(timeKey, timeKey === STORM_TIME ? 1 : 0);
   return state;
 }
 
@@ -989,6 +1016,17 @@ function blendGrade(a, b, t) {
     shade: arr(a.shade || [0, 0.2], b.shade || [0, 0.2]),
     shadeHue: hex(a.shadeHue || "#808080", b.shadeHue || "#808080"),
     bounce: arr(a.bounce || [0.34, 1.6], b.bounce || [0.34, 1.6]),
+    /* THE OCCLUSION TERM'S TINT AND KEY KNEE, and it is optional -
+       the only grade field that is. Vesper-IX's five grades do not
+       set it and must keep the composite's own defaults, so an
+       absent `ao` has to stay absent through the blend rather than
+       become a pair of numbers. See the composite pass in render.js:
+       the knee is where the occlusion hands the picture back as it
+       gets bright, and it was cut against a desert whose scene
+       buffer runs p50 0.165. A snow field runs several times that,
+       so on a white world an unchanged knee exempts the ENTIRE
+       frame and the contact darkening quietly stops existing. */
+    ao: (a.ao || b.ao) ? arr(a.ao || b.ao, b.ao || a.ao) : undefined,
   };
 }
 

@@ -1625,6 +1625,19 @@ export function createRenderer(ctx, canvas) {
     compMat.uniforms.uBounce.value.set(
       Number.isFinite(bo[0]) ? bo[0] : 0.34, Number.isFinite(bo[1]) ? bo[1] : 1.6
     );
+    /* OPTIONAL, and only ever y and z. `uAo.x` is the occlusion
+       STRENGTH and belongs to the quality tier - setQuality writes it
+       and a grade that also wrote it would silently undo the tier on
+       the next atmosphere update. What the grade may own is the
+       sky-tint amount and the key knee, because both are properties
+       of the picture rather than of the hardware. Absent on every
+       Vesper-IX grade, so the composite keeps the constants it was
+       cut with; a white world raises the knee or loses its contacts. */
+    const gao = Array.isArray(g.ao) ? g.ao : null;
+    if (gao) {
+      if (Number.isFinite(gao[0])) compMat.uniforms.uAo.value.y = gao[0];
+      if (Number.isFinite(gao[1])) compMat.uniforms.uAo.value.z = Math.max(1e-3, gao[1]);
+    }
     const sh = hexToRgb(g.shadeHue || "#808080");
     compMat.uniforms.uShadeHue.value.set(sh[0], sh[1], sh[2]);
     const st = hexToRgb(g.shadowTint);

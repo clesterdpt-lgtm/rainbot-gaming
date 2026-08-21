@@ -27,6 +27,8 @@
      --orbit <poi>     orbit one point of interest
      --steps <n>       orbit steps (default 8)
      --headed          run with a visible browser window
+     --page <file>     which level page (default saintfall.html;
+                       use saintfall-white-vigil.html for the summit)
    ============================================================ */
 
 import { spawn } from "node:child_process";
@@ -64,7 +66,18 @@ const WARM = Number(args.warm ?? 3);
 const HEADED = Boolean(args.headed);
 const PORT = Number(args.port || 43000 + (process.pid % 9000));
 const BASE_URL = `http://127.0.0.1:${PORT}`;
-const GAME_URL = `${BASE_URL}/games/saintfall.html?qa=1&quality=${QUALITY}&time=${TIME}`;
+/* WHICH LEVEL. The engine now ships two worlds off the same modules -
+   Vesper-IX on saintfall.html and the Kenosis summit on
+   saintfall-white-vigil.html - and every check in this file is about
+   the picture rather than about the desert, so the page is a flag
+   instead of a constant. Bare name or full path both work. */
+const PAGE = (() => {
+  const raw = String(args.page || "saintfall.html");
+  const name = raw.startsWith("/") ? raw : `/games/${raw}`;
+  return name.endsWith(".html") ? name : `${name}.html`;
+})();
+const PAGE_URL = `${BASE_URL}${PAGE}`;
+const GAME_URL = `${PAGE_URL}?qa=1&quality=${QUALITY}&time=${TIME}`;
 
 /* ------------------------- static server ------------------------- */
 
@@ -79,7 +92,7 @@ function startServer() {
 async function waitForServer() {
   for (let attempt = 0; attempt < 150; attempt += 1) {
     try {
-      const res = await fetch(`${BASE_URL}/games/saintfall.html`, { cache: "no-store" });
+      const res = await fetch(PAGE_URL, { cache: "no-store" });
       if (res.ok) return;
     } catch (_) { /* retry */ }
     await delay(100);

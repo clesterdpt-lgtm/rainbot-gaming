@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260821-coulter-wake-1";
+  const BUILD = "20260821-cathedral-floor-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -102,7 +102,28 @@
     "core", "art", "sky", "terrain", "structures", "world", "collide", "intro-models",
     "vfx", "render", "player", "jetpack", "boost", "slam", "shield", "boss-surface", "enemies", "weapons", "ik", "combat", "difficulty", "reveal-camera",
     "mission", "breaches", "abbess", "coulter", "distaff", "garner", "matriarch", "stylite", "winnower", "district-bosses", "apostate", "undercroft", "progression-config", "progression", "audio", "hud", "touch", "tutorial", "intro", "pod", "save", "ui", "qa", "main",
+    /* THE SECOND WORLD. Kenosis - "The White Vigil" - is a parallel
+       content pack rather than a fork: it reuses render, player,
+       collide, vfx, art, core and structures unchanged and supplies
+       its own atmosphere, height field, props, weather and entry
+       point. Listing them here is not optional. Every module needs
+       its own exact-specifier key or the browser serves it with no
+       cache key at all - see the block comment below. */
+    "summit-art", "summit-terrain", "summit-structures", "summit-weather",
+    "summit-sky", "summit-world", "summit-hud", "summit-qa", "summit-main",
   ];
+
+  /* WHICH ENTRY POINT. A level page declares its own with
+     `data-sf-entry` on <body>; absent that it is Vesper-IX, so
+     saintfall.html needs no change at all. boot.js is loaded at the
+     END of <body>, so document.body is always available here. */
+  function entryModule() {
+    const name = document.body && document.body.dataset
+      ? String(document.body.dataset.sfEntry || "").trim()
+      : "";
+    // Allowlist, not interpolation: this string becomes an import URL.
+    return MODULES.includes(name) ? name : "main";
+  }
 
   function installImportMap(base) {
     if (document.querySelector('script[type="importmap"][data-sf]')) return;
@@ -216,7 +237,7 @@
 
     boot.progress(0.14, "Loading engine");
     try {
-      const main = await import(`${MODULE_ROOT}main.js?v=${BUILD}`);
+      const main = await import(`${MODULE_ROOT}${entryModule()}.js?v=${BUILD}`);
       await main.start({ boot, moduleRoot: MODULE_ROOT, threeBase: base, build: BUILD });
     } catch (error) {
       const detail = (error && (error.stack || error.message)) || String(error);

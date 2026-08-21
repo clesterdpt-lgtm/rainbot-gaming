@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#070a10" />
+  <title>SAINTFALL: THE WHITE VIGIL - Rainbot Network</title>
+  <link rel="manifest" href="../site.webmanifest" />
+  <link rel="canonical" href="https://clesterdpt-lgtm.github.io/rainbot-gaming/games/saintfall-white-vigil.html" />
+  <meta name="description" content="Climb Kenosis: a two-kilometre mountain with a sealed cathedral on its 452m summit, seven arenas terraced around it, and a cloud sea lying in the valley below." />
+  <meta property="og:title" content="SAINTFALL: THE WHITE VIGIL" />
+  <meta property="og:description" content="The second world. A mountain you climb rather than a basin you cross." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SAINTFALL: THE WHITE VIGIL" />
+  <meta name="twitter:description" content="Climb Kenosis to the Cathedral of the Ninth Ascent." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23070a10'/%3E%3Cpath d='M8 78 L36 34 L52 58 L66 40 L92 78 Z' fill='none' stroke='%23bcd8ef' stroke-width='5' stroke-linejoin='round'/%3E%3Cpath d='M50 8 v18 M42 15 h16' stroke='%23f6d585' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="stylesheet" href="../assets/css/styles.css?v=20260812-game-chrome-2" />
+  <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260821-summit-1" />
+  <link rel="stylesheet" href="../assets/css/saintfall-ui.css?v=20260821-summit-1" />
+</head>
+<body class="rb-standalone-shell saintfall-shell saintfall-shell--vigil"
+      data-rb-native-escape-menu="true"
+      data-sf-entry="summit-main"
+      data-sf-world="summit">
+  <nav class="nav"><div id="nav-slot"></div></nav>
+
+  <main class="game-page saintfall-page">
+    <div class="game-page__header">
+      <div>
+        <h1 class="game-page__title">SAINTFALL: THE WHITE VIGIL</h1>
+        <div class="game-page__sub">Kenosis &middot; a 452m ascent, nine stations</div>
+      </div>
+      <a href="../games.html" class="btn btn--ghost" style="font-size:14px;padding:8px 14px;">All games</a>
+    </div>
+
+    <div class="game-layout">
+      <div class="game-stage rb-standalone-stage saintfall-stage-shell">
+        <div class="canvas-wrap rb-standalone-surface">
+          <div class="sf-stage">
+            <canvas id="sf-canvas" aria-label="SAINTFALL: The White Vigil playfield"></canvas>
+            <div id="sf-hud"></div>
+            <div id="sf-touch" data-touch-controls aria-label="SAINTFALL touch controls" aria-hidden="true"></div>
+            <div id="sf-tutorial" hidden aria-hidden="true"></div>
+            <div id="sf-intro" aria-hidden="true"></div>
+
+            <div id="sf-boot">
+              <a class="sf-boot__back" href="../games.html">&larr; Rainbot</a>
+              <h2 class="sf-boot__title">THE WHITE VIGIL</h2>
+              <div class="sf-boot__bar"><div class="sf-boot__fill" id="sf-boot-fill"></div></div>
+              <div class="sf-boot__status" id="sf-boot-status">Standing by</div>
+              <div class="sf-boot__tip" id="sf-boot-tip"></div>
+              <div class="sf-boot__err" id="sf-boot-error"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="game-side">
+        <div class="game-side__panel game-side__panel--saintfall">
+          <h3 class="game-side__title">THE ASCENT</h3>
+          <p>
+            Kenosis is a mountain, not a basin. You land at the Basecamp gate with the
+            whole climb in one frame, and the Via Sacra spirals anticlockwise past seven
+            stations to the Cathedral of the Ninth Ascent on the 452m summit.
+          </p>
+          <p>
+            <b>This is an environment build.</b> The mountain, its weather, its snow and
+            its architecture are finished; the guardians are not here yet. Walk it,
+            climb it, and look back down.
+          </p>
+        </div>
+
+        <div id="ad-leaderboard"></div>
+        <div id="ad-rectangle" style="display:flex; justify-content:center;"></div>
+
+        <details class="game-side__howto" open>
+          <summary>The nine stations</summary>
+          <ul>
+            <li><b>The Basecamp</b> &mdash; south gate, 0m. Where you land.</li>
+            <li><b>The Black Tarn</b> &mdash; SW, 40m. A lake of black ice and drowned pilgrims.</li>
+            <li><b>The Avalanche Bowl</b> &mdash; SE, 60m. Open snowfield under a loaded headwall.</li>
+            <li><b>The Glacier Tongue</b> &mdash; NW, 95m. Seracs, crevasses and three moulins.</li>
+            <li><b>The Rime Forest</b> &mdash; E, 140m. Petrified conifers armoured in wind-driven rime.</li>
+            <li><b>The Fumarole Steps</b> &mdash; NE, 160m. The mountain is not dead.</li>
+            <li><b>The Frozen Cascade</b> &mdash; N, 210m. A 130m waterfall caught mid-fall.</li>
+            <li><b>The Bell Terrace</b> &mdash; W, 240m. The Carillon Priory and its nine frozen bells.</li>
+            <li><b>The Cathedral of the Ninth Ascent</b> &mdash; the summit, 452m.</li>
+          </ul>
+        </details>
+
+        <details class="game-side__howto">
+          <summary>How to play</summary>
+          <ul>
+            <li>Move with WASD, vault with Space, and click the playfield to capture the mouse.</li>
+            <li>Tap Shift to ignite the glide and <b>hold</b> it to keep gliding; hold Shift + Space for the jetpack.</li>
+            <li>Deep snow is slower than wind slab, and glacier ice will not hold an edge. The mountain decides your speed.</li>
+            <li>Press <b>M</b> for the ascent map. Press <b>Tab</b> or <b>Esc</b> for the field menu.</li>
+            <li>Crevasses are real holes. So is the drop off the Bell Terrace.</li>
+          </ul>
+        </details>
+
+        <details class="game-side__howto">
+          <summary>Parody notice</summary>
+          <p>
+            A fan-made, non-commercial homage. Not affiliated with, endorsed by, or
+            derived from any existing game or setting; every name, place and asset here
+            is original to this build and generated procedurally in your browser.
+          </p>
+        </details>
+      </aside>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer__links">
+      <a href="../">Home</a>
+      <a href="../games.html">All games</a>
+      <a href="saintfall.html">Vesper-IX</a>
+      <a href="../legal/privacy.html">Privacy</a>
+    </div>
+    <div>&copy; 2026 Rainbot Network. Parody.</div>
+  </footer>
+
+  <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
+  <script src="../assets/js/main.js?v=20260814-apostate-direct-start-1"></script>
+  <script src="../assets/js/saintfall/boot.js?v=20260821-summit-1"></script>
+  <script>
+    renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
+    renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");
+  </script>
+</body>
+</html>

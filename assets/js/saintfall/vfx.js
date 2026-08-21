@@ -1209,40 +1209,57 @@ export function buildVfx(ctx, world) {
        (that is where the ray runs longest through the surface), so
        these can never be pushed hard without their outline turning
        into a drawn shape. */
-    const cath = ctx.districts.cathedral;
-    const plazaY = terrain.field.cathedralPlazaY;
-    for (let i = 0; i < 10; i += 1) {
-      const side = i % 2 ? 1 : -1;
-      const z = cath.z - 58 + (i / 9) * 112;
-      /* THE RAKE IS THE FIX, not the brightness.
-         These used to run inward at -0.60 horizontal against -0.80
-         vertical, from 20m out on each side. That converges: left
-         and right meet on the centreline 33m along, 4.6m above the
-         floor, and ten cone shells crossing at one height rendered
-         as a single hard-edged white chevron spanning the frame. It
-         was read as a rendering fault every time it was reviewed,
-         and it was really just ten light shafts all arriving at the
-         same point.
+    /* AND THEY ARE VESPER'S NAVE'S, not "a cathedral's". Every number
+       below - the 112m run of clerestory windows, the 38m rose height,
+       the 56m throw - was authored against ONE building, and both of
+       the anchors it needs are Vesper-only: a `cathedral` entry in the
+       district table and a `cathedralPlazaY` on the height field. A
+       second world has neither, and unguarded this throws on the first
+       line, before a single particle in the game exists. Worse if it
+       did not throw: ten cones built off an undefined plaza are ten
+       NaN geometries, which draw nothing and report success.
 
-         Raked at -0.26 they descend nearly vertically and land in
-         two rows on the floor without ever meeting - which is also
-         what clerestory light actually does, because the windows are
-         high on the wall and the sun is not in the nave. */
+       Guarded rather than parameterised, deliberately. A world that
+       wants shafts publishes them the supported way - `world.emitters`
+       entries of `kind: "shaft"`, which this function already diverts
+       into `buildShafts` - rather than inheriting another level's
+       floor plan through a naming table. */
+    const cath = ctx.districts?.cathedral;
+    const plazaY = terrain.field?.cathedralPlazaY;
+    if (cath && Number.isFinite(plazaY)) {
+      for (let i = 0; i < 10; i += 1) {
+        const side = i % 2 ? 1 : -1;
+        const z = cath.z - 58 + (i / 9) * 112;
+        /* THE RAKE IS THE FIX, not the brightness.
+           These used to run inward at -0.60 horizontal against -0.80
+           vertical, from 20m out on each side. That converges: left
+           and right meet on the centreline 33m along, 4.6m above the
+           floor, and ten cone shells crossing at one height rendered
+           as a single hard-edged white chevron spanning the frame. It
+           was read as a rendering fault every time it was reviewed,
+           and it was really just ten light shafts all arriving at the
+           same point.
+
+           Raked at -0.26 they descend nearly vertically and land in
+           two rows on the floor without ever meeting - which is also
+           what clerestory light actually does, because the windows are
+           high on the wall and the sun is not in the nave. */
+        shaftSpecs.push({
+          x: cath.x + side * 20, y: plazaY + 31, z,
+          dir: [-side * 0.26, -0.965, 0.04], length: 32.5, radius: 3.0,
+          colour: i % 3 === 0 ? "#ffb488" : "#ffe4b8",
+          gain: 1.35,
+        });
+      }
+      // And the rose window's own shaft, thrown up the nave. Shorter
+      // and narrower than it was: at 92m by 12m radius it did not read
+      // as a shaft at all, it read as the nave being full of fog.
       shaftSpecs.push({
-        x: cath.x + side * 20, y: plazaY + 31, z,
-        dir: [-side * 0.26, -0.965, 0.04], length: 32.5, radius: 3.0,
-        colour: i % 3 === 0 ? "#ffb488" : "#ffe4b8",
-        gain: 1.35,
+        x: cath.x, y: plazaY + 38, z: cath.z + 60,
+        dir: [0, -0.62, -1], length: 56, radius: 6.5,
+        colour: "#ff9a6a", gain: 1.2,
       });
     }
-    // And the rose window's own shaft, thrown up the nave. Shorter
-    // and narrower than it was: at 92m by 12m radius it did not read
-    // as a shaft at all, it read as the nave being full of fog.
-    shaftSpecs.push({
-      x: cath.x, y: plazaY + 38, z: cath.z + 60,
-      dir: [0, -0.62, -1], length: 56, radius: 6.5,
-      colour: "#ff9a6a", gain: 1.2,
-    });
   }
 
   const shafts = buildShafts(ctx, shaftSpecs);

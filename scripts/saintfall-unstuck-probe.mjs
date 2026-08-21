@@ -45,13 +45,43 @@ try {
 
     // 1. Initial baseline check
     const startPos = { x: player.state.x, y: player.state.y, z: player.state.z };
+    const startYaw = player.state.yaw;
 
-    // 2. Direct player.unstuck() invocation test
+    // 2. Legal grounded movement must not be judged by the airborne
+    // capsule. The shipped landing approach is walking-clear while its
+    // terrain footprint is intentionally flight-blocked, which previously
+    // reset speed and gait on the auto-recovery clock every 2.5 seconds.
+    const legalGround = collide.groundHeight(startPos.x, startPos.z);
+    const legalWalkingBlocked = collide.blocked(
+      startPos.x, startPos.z, legalGround, collide.radius);
+    const legalFlightBlocked = collide.flightBlocked(
+      startPos.x, startPos.z, startPos.y, collide.radius, 2.0);
+    player.input.state.move.y = -1;
+    let gaitResets = 0;
+    let previousGait = player.state.gait;
+    let lowestWarmSpeed = Infinity;
+    for (let frame = 0; frame < 200; frame += 1) {
+      player.update(0.016, ctx.camera);
+      if (frame > 40) lowestWarmSpeed = Math.min(lowestWarmSpeed, player.state.speed);
+      if (player.state.gait + 0.01 < previousGait) gaitResets += 1;
+      previousGait = player.state.gait;
+    }
+    const legalPathEnd = {
+      x: player.state.x,
+      y: player.state.y,
+      z: player.state.z,
+      speed: player.state.speed,
+      gait: player.state.gait,
+    };
+    player.input.state.move.y = 0;
+    player.spawn(startPos.x, startPos.z, startYaw);
+
+    // 3. Direct player.unstuck() invocation test
     const manualResult = player.unstuck?.("manual-test");
     const afterManualPos = { x: player.state.x, y: player.state.y, z: player.state.z, grounded: player.state.grounded };
     const manualBlocked = collide?.blocked?.(afterManualPos.x, afterManualPos.z, afterManualPos.y);
 
-    // 3. Test Auto Unstuck when placed inside blocked geometry / obstacle
+    // 4. Test Auto Unstuck when placed inside blocked geometry / obstacle
     // Place player at an obstructed pillar/wall location (e.g. Cathedral masonry pillar)
     // Find a solid cell to test:
     let testBlockedX = 0, testBlockedZ = 0;
@@ -91,7 +121,7 @@ try {
     const autoBlocked = collide?.blocked?.(afterAutoPos.x, afterAutoPos.z, afterAutoPos.y);
     const movedFromTrapped = Math.hypot(afterAutoPos.x - trappedStart.x, afterAutoPos.z - trappedStart.z);
 
-    // 4. Test airborne / roof hover stall auto unstuck
+    // 5. Test airborne / roof hover stall auto unstuck
     // Place player in airborne ungroundable state without jetpack
     player.state.grounded = false;
     player.state.y = collide.groundHeight(afterAutoPos.x, afterAutoPos.z) + 6.0;
@@ -107,6 +137,11 @@ try {
 
     return {
       startPos,
+      legalWalkingBlocked,
+      legalFlightBlocked,
+      gaitResets,
+      lowestWarmSpeed,
+      legalPathEnd,
       manualResult,
       afterManualPos,
       manualBlocked,
@@ -120,6 +155,12 @@ try {
   });
 
   console.log("\n=== SAINTFALL UNSTUCK SYSTEM CHECKS ===");
+  check(!results.legalWalkingBlocked && results.legalFlightBlocked,
+    "Landing approach reproduces grounded-clear / flight-blocked collision split",
+    `walkingBlocked=${results.legalWalkingBlocked} flightBlocked=${results.legalFlightBlocked}`);
+  check(results.gaitResets === 0 && results.lowestWarmSpeed > 4,
+    "Legal grounded movement never triggers the 2.5s recovery reset",
+    `gaitResets=${results.gaitResets} lowestWarmSpeed=${results.lowestWarmSpeed.toFixed(2)} end=${JSON.stringify(results.legalPathEnd)}`);
   check(results.manualResult && Number.isFinite(results.manualResult.x), "player.unstuck() function exists and executes", `result=${JSON.stringify(results.manualResult)}`);
   check(results.afterManualPos.grounded === true, "Player is grounded after unstuck", `grounded=${results.afterManualPos.grounded}`);
   check(!results.manualBlocked, "Player is not inside collision geometry after unstuck", `blocked=${results.manualBlocked}`);

@@ -2249,7 +2249,7 @@ html.sf-maximised .sf-stage.is-maxed { z-index: 2147483000; }
 }
 
 .sf-hud__vitals::before {
-  content: "VESPER RELIQUARY / LIFE SUPPORT";
+  content: "RELIQUARY / LIFE SUPPORT";
   display: block;
   margin: -.1rem 0 .58rem;
   color: rgba(216, 164, 65, .66);

@@ -129,7 +129,7 @@ const RB_GAME_META = {
       "skibidi_toilet_tower_defense_rooftop",
     ],
   },
-  saintfall: { title: "Saintfall: Vesper-IX", scoreIds: ["saintfall"] },
+  saintfall: { title: "Saintfall", scoreIds: ["saintfall"] },
   blacksand: { title: "BLACKSAND", scoreIds: ["blacksand"] },
   "quiet-quitting": { title: "Quiet Quitting", scoreIds: ["quiet-quitting"] },
   "smooth-brain-snacker": { title: "Smooth Brain Snacker", scoreIds: ["smoothbrain"] },

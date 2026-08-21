@@ -16,7 +16,7 @@ export function buildHud(ctx, host) {
   const el = host;
   el.innerHTML = `
     <div class="sf-hud__district" id="sf-district">
-      <div class="sf-hud__eyebrow">VESPER-IX &middot; OPERATION THE GILDED SILENCE</div>
+      <div class="sf-hud__eyebrow">SAINTFALL &middot; OPERATION THE GILDED SILENCE</div>
       <div class="sf-hud__name" id="sf-district-name"></div>
     </div>
     <div class="sf-hud__compass" id="sf-compass">
@@ -37,7 +37,7 @@ export function buildHud(ctx, host) {
     ${ctx.qa ? '<output class="sf-hud__readout" id="sf-readout" aria-label="QA world coordinates"></output>' : ""}
     <aside class="sf-hud__minimap" id="sf-minimap" aria-label="Tactical mini-map">
       <div class="sf-minimap__head">
-        <span><small>VESPER TACTICAL</small><strong>NORTH-UP</strong></span>
+        <span><small>SAINTFALL</small><strong>NORTH-UP</strong></span>
         <b id="sf-map-range">180M</b>
       </div>
       <canvas id="sf-map-canvas" width="280" height="280" aria-hidden="true"></canvas>

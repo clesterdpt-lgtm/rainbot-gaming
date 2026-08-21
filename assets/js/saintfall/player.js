@@ -4636,8 +4636,22 @@ export async function createPlayer(ctx, canvas) {
 
     if (isGameplayActive) {
       const curGround = groundY(state.x, state.z);
-      const isOverlapping = !!ctx.collide?.blocked?.(state.x, state.z, state.y, ctx.collide.radius)
-        || !!ctx.collide?.flightBlocked?.(state.x, state.z, state.y, ctx.collide.radius, 2.0);
+      /* Walking and flight deliberately use different collision rules.
+         The flight capsule samples the complete terrain footprint and
+         cannot apply the grounded controller's step allowance. Asking it
+         to validate a grounded pose therefore marks legal slopes, paving
+         relief and the landing-site approach as overlaps. The auto-recovery
+         clock then calls `spawn` every 2.5 seconds, zeroing speed and gait
+         even though grounded movement is legal.
+
+         Detect penetration with the controller that currently owns the
+         body. Grounded poses use the same walking support height as
+         `slide`; airborne poses keep the full-height flight capsule. */
+      const isOverlapping = state.grounded
+        ? !!ctx.collide?.blocked?.(state.x, state.z, curGround, ctx.collide.radius)
+        : !!ctx.collide?.flightBlocked?.(
+          state.x, state.z, state.y, ctx.collide.radius, 2.0
+        );
       const isTryingToMove = (mag > 0.05 || boostMode || input.state.move.x !== 0 || input.state.move.y !== 0) && !rooted;
       const isMotionless = travelDistance < 0.02 && state.travelSpeed < 0.05;
 

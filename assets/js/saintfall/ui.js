@@ -213,7 +213,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       <div class="sf-menu__frame">
         <header class="sf-menu__masthead">
           <div class="sf-menu__crest">${ICONS.crest}</div>
-          <div><span>VESPER-IX · FIELD COMMAND</span><h2 id="sf-menu-title">OPERATION SAINTFALL</h2>
+          <div><span>SAINTFALL · FIELD COMMAND</span><h2 id="sf-menu-title">OPERATION SAINTFALL</h2>
             <p id="sf-menu-subtitle">THE GILDED SILENCE</p></div>
           <button type="button" class="sf-menu__close" data-menu-close aria-label="Resume operation">×</button>
         </header>
@@ -249,8 +249,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
               <div class="sf-menu__pagehead"><span>LIVE BASIN OVERVIEW</span><h3>TACTICAL MAP</h3><p>The whole two-kilometre basin, rendered from the authored terrain. North stays fixed.</p></div>
               <div class="sf-map-page">
                 <figure class="sf-map-page__surface">
-                  <header><span><small>VESPER-IX</small><strong>WHOLE-BASIN SURVEY</strong></span><b data-map-detail-range>—</b></header>
-                  <canvas id="sf-map-canvas-large" width="720" height="720" role="img" aria-label="Large tactical map of Vesper-IX"></canvas>
+                  <header><span><small>SAINTFALL</small><strong>WHOLE-BASIN SURVEY</strong></span><b data-map-detail-range>—</b></header>
+                  <canvas id="sf-map-canvas-large" width="720" height="720" role="img" aria-label="Large tactical map of the basin"></canvas>
                   <figcaption class="sf-map-page__legend"><span data-kind="player">RELIQUARY</span><span data-kind="objective">OBJECTIVE</span><span data-kind="relay">BOSS</span><span data-kind="breach">BLOOM</span></figcaption>
                 </figure>
                 <aside class="sf-map-page__orders" aria-label="Objective list">
@@ -376,7 +376,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       aria-labelledby="sf-death-title" hidden>
       <div class="sf-death__veil"></div>
       <div class="sf-death__frame">
-        <small>VESPER-IX · FIELD COMMAND</small>
+        <small>SAINTFALL · FIELD COMMAND</small>
         <h2 id="sf-death-title">THE RELIQUARY FALLS</h2>
         <p class="sf-death__copy" data-death-copy>Silence on the wire. Restore a field record to continue the operation.</p>
         <div class="sf-death__actions">

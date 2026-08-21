@@ -252,7 +252,6 @@ export function buildDistrictBosses(ctx) {
     record.disengageFor = 0;
     setGate(record, false, true);
     enemies.play?.(record.instance, "alert", 0.18);
-    ctx.mission?.announce?.(`${record.site.boss.toUpperCase()} AWAKENS`, 3.2);
     bus.emit("aggro", publicRecord(record));
 
     /* Authored hero camera framing for shared-simulation bosses (Matriarch, Coulter).

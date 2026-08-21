@@ -740,7 +740,6 @@ export function buildMatriarch(ctx) {
     brain.pending = C.rouseSeconds * 0.42;
     inst.actionLocked = true;
     enemies.play?.(inst, "alert", 0.12);
-    ctx.mission?.announce?.("THE MATRIARCH ROUSES", 2.8);
     bus.emit("rouse", { x: inst.x, z: inst.z });
   }
 

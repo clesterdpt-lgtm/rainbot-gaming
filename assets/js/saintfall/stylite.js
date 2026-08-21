@@ -2731,7 +2731,6 @@ export function buildStylite(ctx) {
     state.phase = "rouse";
     state.timer = C.rouseSeconds;
     setEncounterGate(false, true);
-    ctx.mission?.announce?.("SOMETHING MOVES ON THE NEEDLES", 3.4);
     bus.emit("aggro", { x: state.pos.x, y: state.pos.y, z: state.pos.z });
     /* Authored hero framing: from the central open plaza floor looking
        straight up at the Stylite clinging to the apex needle,

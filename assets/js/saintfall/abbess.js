@@ -3612,7 +3612,6 @@ export function buildAbbess(ctx) {
     state.raised = 0;
     state.slamPhase = null;
     state.bitePhase = null;
-    ctx.mission?.announce?.("THE ABBESS LAYS A ROYAL CELL", 3.6);
     ctx.player?.doctrineKick?.(1.1, 0.9);
     bus.emit("royal", { x: C.lairX, z: C.lairZ });
   }
@@ -3719,7 +3718,6 @@ export function buildAbbess(ctx) {
     state.phase = "rouse";
     state.timer = C.rouseSeconds;
     setEncounterGate(false, true);
-    ctx.mission?.announce?.("THE ABBESS WAKES", 3.4);
     bus.emit("aggro", { x: C.lairX, z: C.lairZ });
     if (state.revealed) return;
     state.revealed = true;

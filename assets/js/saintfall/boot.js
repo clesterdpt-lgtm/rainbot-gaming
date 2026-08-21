@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260820-unstuck-system-1";
+  const BUILD = "20260820-boss-text-cleanup-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,

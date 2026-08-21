@@ -3381,7 +3381,6 @@ export function buildGarner(ctx) {
     state.phase = "breach";
     state.timer = C.breachSeconds;
     setEncounterGate(false, true);
-    ctx.mission?.announce?.("THE OSSUARY IS AWAKE", 3.4);
     bus.emit("aggro", { x: C.pitX, z: C.pitZ });
     /* Authored hero framing: framed from the open rim overlooking
        the pit axis, capturing the pit opening and the mouth emergence

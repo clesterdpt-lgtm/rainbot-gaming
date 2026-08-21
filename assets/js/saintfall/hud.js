@@ -368,8 +368,6 @@ export function buildHud(ctx, host) {
       "THE ABBESS", "SHE RISES — GET OUT, OR GET UNDER HER", 2.2, true));
     ctx.abbess.bus.on("feed", () => showBreachAlert(
       "THE ABBESS", "SHE IS BEING FED", 1.8, true));
-    ctx.abbess.bus.on("royal", () => showBreachAlert(
-      "THE ABBESS", "A ROYAL CELL", 3.4, true));
     ctx.abbess.bus.on("defeated", () => showBreachAlert(
       "THE BLOOM", "THE ABBESS IS UNSEATED", 5.2));
   }
@@ -397,8 +395,13 @@ export function buildHud(ctx, host) {
     ctx.districtBosses.bus.on("arenaReset", (event) => showBreachAlert(
       `${event.district.toUpperCase()} · ENCOUNTER RESET`,
       `${event.boss.toUpperCase()} RESTORED TO FULL STRENGTH`, 4.0, true));
-    ctx.districtBosses.bus.on("aggro", (event) => showBreachAlert(
-      `${event.district.toUpperCase()} · APEX SIGNATURE`, event.boss.toUpperCase(), 4.2, true));
+    ctx.districtBosses.bus.on("aggro", (event) => {
+      // Bespoke modules (winnower, distaff, garner, abbess, stylite) own their own aggro banner
+      if (!event.site?.domain) {
+        showBreachAlert(
+          `${event.district.toUpperCase()} · APEX SIGNATURE`, event.boss.toUpperCase(), 4.2, true);
+      }
+    });
     ctx.districtBosses.bus.on("engaged", (event) => showBreachAlert(
       "WEAPONS FREE", event.order, 2.8, true));
     ctx.districtBosses.bus.on("defeated", (event) => showBreachAlert(
@@ -1062,7 +1065,7 @@ export function buildHud(ctx, host) {
       : a.phase === "rouse"
         ? "The chamber is lighting"
         : a.phase === "royal"
-          ? "A ROYAL CELL - something bigger is coming"
+          ? "Brood surge — swarm surfacing"
           : a.exposed
             ? "UNDERSIDE EXPOSED - strike the belly"
             : a.eggs > 0
@@ -1259,7 +1262,7 @@ export function buildHud(ctx, host) {
         abbess.health, abbess.maxHealth,
         abbess.exposed ? "Underside exposed"
           : abbess.biting ? "Jaws drawn back"
-          : abbess.phase === "royal" ? "Royal cell"
+          : abbess.phase === "royal" ? "Brood surge"
           : abbess.phase === "retire" ? "Folding back down" : "",
         abbess.phase);
     }

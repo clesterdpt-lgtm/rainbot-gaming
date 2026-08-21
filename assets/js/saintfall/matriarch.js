@@ -83,28 +83,26 @@ export const MATRIARCH_CONFIG = Object.freeze({
      and in the band it circles. */
   holdBand: Object.freeze([5.6, 9.4]),
 
-  /* HOW FAST: Tuned aggressively so the Matriarch easily stalks down
-     running and shooting troopers, forcing active sprint/boost evasion. */
-  walkSpeed: 10.5,
-  backSpeed: 4.5,
-  strafeSpeed: 6.2,
-  strafeFlipSeconds: 2.2,
+  /* HOW FAST: Fast, agile stalking and pursuit pace. */
+  walkSpeed: 10.2,
+  backSpeed: 4.2,
+  strafeSpeed: 5.6,
+  strafeFlipSeconds: 2.4,
 
-  /* THE CHASE GEAR: Beyond the stand-off band it sprints at high velocity,
-     ensuring distance is never a safe resting state. */
-  chaseSpeed: 15.0,
+  /* THE CHASE GEAR: Beyond the stand-off band it sprints at high velocity. */
+  chaseSpeed: 14.5,
   chaseFrom: 12,
   chaseFull: 28,
-  gaitCeiling: 16.5,
+  gaitCeiling: 15.5,
   holdAt: 6.3,
-  bandGain: 1.8,
+  bandGain: 1.6,
 
-  /* Tracking rates and swing leading */
-  turnRate: 3.4,
-  committedTurnRate: 0.85,
-  leadLag: 0.85,
-  leadMax: 8.0,
-  lanceLead: 0.92,
+  /* Tracking rates and swing leading: tuned for fair lateral dodging */
+  turnRate: 2.8,
+  committedTurnRate: 0.50,
+  leadLag: 0.50,
+  leadMax: 6.5,
+  lanceLead: 0.55,
   trackDamp: 18,
   trackCeiling: 34,
 
@@ -112,84 +110,84 @@ export const MATRIARCH_CONFIG = Object.freeze({
 
   /* ------------------------------------------------------------
      THE SCYTHE COMBO */
-  comboReach: 8.4,
-  comboWindup: 0.48,
+  comboReach: 7.6,
+  comboWindup: 0.58,
   comboContact: 0.642,
-  comboGap: 0.36,
-  comboRecover: 0.36,
-  comboDamage: 40,
+  comboGap: 0.40,
+  comboRecover: 0.44,
+  comboDamage: 18,
   comboArc: 0.766,
-  comboCadence: 1.5,
+  comboCadence: 2.2,
 
   /* ------------------------------------------------------------
-     THE LANCE: High-velocity gap-closer and crushing charge. */
+     THE LANCE: Long-distance charge with a clear, readable tell. */
   lanceRange: Object.freeze([7.5, 95]),
-  lanceCock: 0.68,
+  lanceCock: 0.90,
   lanceDash: 0.12,
-  lanceDashMax: 1.65,
-  lanceSpeed: 45,
-  lanceDamage: 55,
-  lanceReach: 9.2,
-  lanceArc: 0.42,
-  lanceCadence: 3.2,
-  pursuitLanceCadence: 1.4,
-  lanceTrack: 2.4,
+  lanceDashMax: 1.60,
+  lanceSpeed: 42,
+  lanceDamage: 26,
+  lanceReach: 8.8,
+  lanceArc: 0.28,
+  lanceCadence: 4.5,
+  pursuitLanceCadence: 2.0,
+  lanceTrack: 1.25,
 
   /* ------------------------------------------------------------
      THE CULL: Rear flank punishment whip. */
-  cullRadius: 12.5,
+  cullRadius: 11.5,
   cullRearDot: -0.12,
-  cullLoiter: 0.55,
-  cullWindup: 0.34,
-  cullSweep: 0.24,
-  cullDamage: 34,
-  cullReach: 10.5,
-  cullSpin: 9.6,
-  cullCadence: 2.4,
+  cullLoiter: 0.85,
+  cullWindup: 0.42,
+  cullSweep: 0.28,
+  cullDamage: 16,
+  cullReach: 9.6,
+  cullSpin: 7.6,
+  cullCadence: 3.6,
 
   /* ------------------------------------------------------------
      THE GRAB-SLAM: Close frontal punish. */
-  grabReach: 7.8,
-  grabArc: 0.38,
+  grabReach: 7.2,
+  grabArc: 0.32,
   grabAirClear: 1.8,
-  grabWindup: 0.62,
-  grabLift: 0.48,
-  grabHold: 0.18,
-  grabDrop: 0.28,
-  grabRecover: 0.65,
+  grabWindup: 0.76,
+  grabLift: 0.50,
+  grabHold: 0.20,
+  grabDrop: 0.30,
+  grabRecover: 0.70,
   grabLiftHeight: 3.65,
   grabHoldForward: 3.7,
   grabSlamForward: 5.6,
-  grabDamage: 125,
-  grabSlamStun: 1.1,
-  grabCadence: 5.2,
+  grabDamage: 55,
+  grabSlamStun: 1.0,
+  grabCadence: 7.5,
 
   /* ------------------------------------------------------------
-     THE TREMOR RITE: Fast ground-shattering shockwaves. */
-  tremorEvery: 7.5,
-  tremorEveryRoused: 5.0,
-  tremorWindup: 1.15,
-  tremorPulseGap: 0.55,
+     THE TREMOR RITE: Telegraphed ground shockwaves. */
+  tremorEvery: 10.5,
+  tremorEveryRoused: 7.5,
+  tremorWindup: 1.35,
+  tremorPulseGap: 0.65,
   tremorWaves: 3,
   tremorWavesRoused: 4,
-  tremorRecover: 0.45,
+  tremorRecover: 0.50,
   tremorRadius: 36,
-  tremorSpeed: 28,
-  tremorBand: 1.45,
-  tremorDamage: 35,
-  tremorAirClear: 0.55,
-  tremorSlowFactor: 0.68,
-  tremorSlowSeconds: 1.0,
+  tremorSpeed: 21,
+  tremorBand: 1.35,
+  tremorDamage: 16,
+  tremorAirClear: 0.40,
+  tremorSlowFactor: 0.72,
+  tremorSlowSeconds: 0.75,
   tremorWeakBonus: 1.25,
 
   /* ------------------------------------------------------------
      THE ROUSE */
   rouseAt: 0.45,
-  rouseSeconds: 1.5,
+  rouseSeconds: 1.6,
   rouseRadius: 11,
-  rouseDamage: 22,
-  rouseSpeedScale: 1.3,
-  rouseCadenceScale: 0.7,
+  rouseDamage: 12,
+  rouseSpeedScale: 1.2,
+  rouseCadenceScale: 0.8,
 
   strikeCentre: 2.2,
   strikeHeight: 5.6,
@@ -423,17 +421,11 @@ export function buildMatriarch(ctx) {
      ============================================================ */
 
   function difficultyPaceScale() {
-    const tier = ctx.difficulty?.current;
-    if (!tier) return 1.0;
-    if (tier.label === "MARTYR") return 1.25;
-    if (tier.label === "PILGRIM") return 0.85;
     return 1.0;
   }
 
   function cadenceScale(brain) {
-    const diff = ctx.difficulty?.current;
-    const diffCadence = diff?.label === "MARTYR" ? 0.80 : (diff?.label === "PILGRIM" ? 1.15 : 1.0);
-    return (brain.roused ? C.rouseCadenceScale : 1) * diffCadence;
+    return brain.roused ? C.rouseCadenceScale : 1;
   }
 
   function beginCombo(inst, brain) {

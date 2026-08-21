@@ -85,11 +85,11 @@ try {
   console.log("\n=== MATRIARCH MARTYR (HARDEST) TIER SURVEY ===");
   console.log(`  Data: ${JSON.stringify(martyrSurvey)}`);
   check(martyrSurvey.tier === "MARTYR", "Martyr tier is active");
-  check(martyrSurvey.maxHealth === 26250,
-    "Matriarch HP scales up to 26,250 on Martyr (15,000 x 1.75)",
+  check(martyrSurvey.maxHealth === 22500,
+    "Matriarch HP scales to 22,500 on Martyr (15,000 x 1.50)",
     `hp=${martyrSurvey.maxHealth}`);
-  check(martyrSurvey.incoming === 1.65,
-    "Martyr incoming player damage is 1.65x (+65%)",
+  check(martyrSurvey.incoming === 1.25,
+    "Martyr incoming player damage is 1.25x (+25%)",
     `incoming=${martyrSurvey.incoming}`);
 
   check(pageErrors.length === 0, "Zero page errors during Matriarch difficulty checks", pageErrors.join("; "));

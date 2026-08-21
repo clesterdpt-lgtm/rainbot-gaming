@@ -665,12 +665,77 @@ export function buildCoulter(ctx) {
      it is going, and how fast - from any distance, with nothing above
      the sand to say them with.
 
-     A mound alone says the first. The spray off its leading edge says
-     the other two, which is why it is not decoration: a ridge with no
-     spray reads as a static lump of terrain and the player does not
-     understand they are being chased.
+     WHAT IT IS NOW: a furrow built out of the animal's own path, a
+     ring of cross sections dropped every couple of metres it travels
+     and rebuilt every frame so that each one SLUMPS with its own age.
+
+     WHAT IT WAS: one enormous ellipsoid, sunk so that only its top
+     sixth showed, slid along under the head. Every objection to that
+     shape is the same objection - it is RIGID. Sand that is being
+     displaced is not rigid, and the eye knows it at a glance:
+
+       - a rigid body translating along a heading has no relationship
+         to the path actually taken, so the ridge swung like a boat
+         hull whenever the animal turned rather than curving after it;
+       - it was scaled off the animal (four times), which at this
+         boss's size made a sixty-nine metre swell barely a metre
+         proud - a shape so flat it was indistinguishable from the
+         dune it was drawn on. The wake plates in the review sheet
+         are photographs of empty sand and nobody noticed for two
+         milestones;
+       - nothing about it ever settled. Ground that is pushed up has
+         to come back down behind, and that collapse is the single
+         strongest cue that something MOVED through here.
+
+     The section is a twin levee with a groove between them, not a
+     dome: sand forced out of a bore goes sideways and heaps at the
+     angle of repose on both sides, and the trench between the heaps
+     is what carries the read at distance because it is the only part
+     of the shape that holds a shadow. Directly over the animal the
+     groove is filled - it is still being lifted from underneath - so
+     the profile morphs from swell to split furrow as it ages, which
+     is the movement itself rather than a decoration on it.
      ============================================================ */
-  const wakeGeo = new THREE.SphereGeometry(1, 13, 7);
+
+  /* Ring of cross sections, newest first. Thirty at two metres of
+     travel each is sixty metres of furrow - about four and a half
+     seconds at burrowing speed, which is roughly how long displaced
+     sand should still be readable before it has slumped back. */
+  const WAKE_NODES = 30;
+  const WAKE_STEP = 2.0;
+  /* Two ahead of the head as well, because the sand in FRONT of a
+     burrower is already lifting. Without them the ridge ends in a
+     wall exactly where the eye is looking hardest. */
+  const WAKE_PROW = 2;
+  const WAKE_RIB = WAKE_NODES + WAKE_PROW;
+  /* lateral offset (x half width), height (x crest), shade.
+     The shade multiplies vertex colour: the groove is darker than the
+     sand around it and the levee tops catch a little more light,
+     which is a contact shadow the lighting cannot give a shape this
+     shallow on its own. */
+  const WAKE_SECTION = [
+    [-1.00, 0.00, 1.00],
+    [-0.70, 0.30, 1.05],
+    [-0.38, 1.00, 1.10],
+    [ 0.00, 0.46, 0.70],
+    [ 0.38, 1.00, 1.10],
+    [ 0.70, 0.30, 1.05],
+    [ 1.00, 0.00, 1.00],
+  ];
+  const WAKE_ACROSS = WAKE_SECTION.length;
+  const WAKE_VERTS = WAKE_RIB * WAKE_ACROSS;
+
+  const wakeIndex = [];
+  for (let r = 0; r < WAKE_RIB - 1; r += 1) {
+    for (let c = 0; c < WAKE_ACROSS - 1; c += 1) {
+      const a0 = r * WAKE_ACROSS + c;
+      const a1 = a0 + 1;
+      const b0 = a0 + WAKE_ACROSS;
+      const b1 = b0 + 1;
+      wakeIndex.push(a0, b0, b1, a0, b1, a1);
+    }
+  }
+
   /* Sand, and only just darker than the sand it is made of. The first
      pass used a saturated mid-brown, which at any distance read as a
      boat hull parked on a dune rather than as ground being pushed up
@@ -679,65 +744,67 @@ export function buildCoulter(ctx) {
      ripples knocked off it, so what has to carry the read is the SHAPE
      and the spray, not the tint. */
   const wakeMat = new THREE.MeshStandardMaterial({
-    color: 0xe0ad74,
+    color: 0xdcaa76,
     roughness: 1,
     metalness: 0,
-    flatShading: true,
+    /* Smooth, which is the one place this disagrees with the rest of
+       the animal - and it agrees with the collar and with art.js's
+       `sand` for the same reason. A faceted ridge reads as debris
+       piled on the ground rather than as the ground itself. */
+    flatShading: false,
+    vertexColors: true,
   });
   wakeMat.name = "sf-coulter-wake";
-  patchMaterial(wakeMat, atmos, { rim: 0.35, glitter: 0.55 });
-  // The crest line: a thin dark wedge along the top of the ridge, which
-  // is the shadow a real furrow's lip throws down its own flank.
-  const ridgeGeo = new THREE.ConeGeometry(0.5, 1, 4, 1);
-  const ridgeMat = new THREE.MeshStandardMaterial({
-    color: 0xc78c56,
-    roughness: 1,
-    metalness: 0,
-    flatShading: true,
-  });
-  ridgeMat.name = "sf-coulter-ridge";
-  patchMaterial(ridgeMat, atmos, { rim: 0.2, glitter: 0 });
+  /* The ripple train the terrain wears, at about half strength: the
+     same material with the wind pattern partly knocked off it, which
+     is what freshly turned sand is. Take it at full strength and the
+     furrow disappears into the dune; leave it off entirely and the
+     furrow is the one smooth object in a rippled desert. */
+  patchMaterial(wakeMat, atmos, { rim: 0.42, glitter: 0.18, dunes: 0.45 });
 
   const wakes = new Map();
 
   function wakeFor(inst) {
     let rig = wakes.get(inst.id);
     if (rig) return rig;
-    const root = new THREE.Group();
-    root.name = `sf-wake-${inst.id}`;
-    const mound = new THREE.Mesh(wakeGeo, wakeMat);
-    /* SUNK DEEP AND SCALED BIG, which is the whole trick.
-       An ellipsoid intersecting the ground shows a hard-edged ellipse
-       where it cuts, and the smaller the exposed cap the harder that
-       edge reads. Sinking a much larger body so that only its top sixth
-       is above the sand gives a swell fourteen metres long and five
-       across whose crest is barely a metre proud - a shape the eye reads
-       as ground rather than as an object sitting on it. */
-    mound.position.y = -2.9;
-    mound.scale.set(2.9, 3.5, 7.2);
-    mound.castShadow = false;
-    mound.receiveShadow = true;
-    const crack = new THREE.Mesh(ridgeGeo, ridgeMat);
-    crack.rotation.x = Math.PI;
-    crack.position.y = 0.34;
-    crack.scale.set(0.44, 0.44, 6.8);
-    root.add(mound, crack);
-    root.visible = false;
-    group.add(root);
-    rig = { root, mound, crack, spray: 0, rumble: 0, markX: 1e9, markZ: 1e9 };
+    const geo = new THREE.BufferGeometry();
+    const position = new Float32Array(WAKE_VERTS * 3);
+    const colour = new Float32Array(WAKE_VERTS * 3).fill(1);
+    geo.setAttribute("position", new THREE.BufferAttribute(position, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(colour, 3));
+    geo.setIndex(wakeIndex);
+    const mesh = new THREE.Mesh(geo, wakeMat);
+    mesh.name = `sf-wake-${inst.id}`;
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    /* Never culled and never transformed. Every vertex is written in
+       world space straight off the animal's path, so a bounding
+       sphere would have to be recomputed every frame anyway and a
+       local origin would only add a subtraction to each of them. */
+    mesh.frustumCulled = false;
+    mesh.visible = false;
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 4000);
+    group.add(mesh);
+    rig = {
+      mesh, geo,
+      nodes: [],
+      spray: 0, rumble: 0, markX: 1e9, markZ: 1e9,
+      lastX: 1e9, lastZ: 1e9,
+    };
     wakes.set(inst.id, rig);
     return rig;
   }
 
   function hideWake(inst) {
     const rig = wakes.get(inst.id);
-    if (rig) rig.root.visible = false;
+    if (rig) rig.mesh.visible = false;
   }
 
   function disposeWake(id) {
     const rig = wakes.get(id);
     if (!rig) return;
-    group.remove(rig.root);
+    group.remove(rig.mesh);
+    rig.geo.dispose();
     wakes.delete(id);
   }
 
@@ -1887,6 +1954,36 @@ export function buildCoulter(ctx) {
     updateCollar(inst, dt);
   }
 
+  /** Ground height across a section, from the three samples cached
+   *  when the node was laid. Interpolating three points is the whole
+   *  reason a node caches them: a fourteen-metre-wide rib needs its
+   *  shoulders on the sand under the shoulders, and doing that with
+   *  live lookups is seven height queries per rib per frame - two
+   *  hundred a frame for a shape that has not moved.
+   *
+   *  Scalars in rather than the node, because this runs two hundred
+   *  times a frame and a destructured argument object is two hundred
+   *  allocations a frame. */
+  function wakeGround(gy, gl, gr, t) {
+    return t < 0 ? lerp(gy, gl, -t) : lerp(gy, gr, t);
+  }
+
+  /** Lay one cross section down at the animal's current crossing. */
+  function pushWakeNode(rig, x, z, heading, power) {
+    const rx = Math.cos(heading);
+    const rz = -Math.sin(heading);
+    const half = rig.half;
+    rig.nodes.unshift({
+      x, z, rx, rz, power,
+      t: atmos.elapsed,
+      gy: groundAt(x, z),
+      gl: groundAt(x - rx * half, z - rz * half),
+      gr: groundAt(x + rx * half, z + rz * half),
+      seed: Math.random() * TAU,
+    });
+    if (rig.nodes.length > WAKE_NODES) rig.nodes.length = WAKE_NODES;
+  }
+
   function updateWake(inst, dt) {
     const b = inst.body;
     const rig = wakeFor(inst);
@@ -1896,22 +1993,167 @@ export function buildCoulter(ctx) {
     // than this and the ridge would be a lie.
     const size = bodyScale(inst);
     const showing = b.phase !== "dead" && depth > 0.4 && depth < 9.5 * size;
-    if (rig.root.visible !== showing) rig.root.visible = showing;
-    if (!showing) return;
+    /* The furrow is HALF the animal's own beam plus its shoulders, not
+       four times it. Scaling this off `size` the way the old ellipsoid
+       did gave a ridge twenty-eight metres across and one metre proud,
+       which is not a ridge, it is a hillside. */
+    rig.half = 3.6 + size * 1.25;
+    if (!showing) {
+      if (rig.mesh.visible) rig.mesh.visible = false;
+      /* And the path is FORGOTTEN, not paused. A dive and a breach
+         forty metres away are a different furrow; keeping the nodes
+         would draw one ridge with a corner in it joining the two. */
+      if (rig.nodes.length) rig.nodes.length = 0;
+      rig.lastX = 1e9;
+      rig.lastZ = 1e9;
+      return;
+    }
     const strength = clamp01((9.5 * size - depth) / (6.5 * size));
-    /* Parked a little BEHIND the head. The animal's shoulders are what
-       displace the most sand, not its mouth, and a ridge centred on the
-       head puts the crest ahead of the thing making it - which reads as
-       the ground bulging in front of a hole rather than around one. */
-    rig.root.position.set(
-      b.head.x - Math.sin(b.heading) * 2.4 * size,
-      surface + 0.05,
-      b.head.z - Math.cos(b.heading) * 2.4 * size
-    );
-    rig.root.rotation.y = b.heading;
-    rig.root.scale.set((0.70 + strength * 0.50) * size,
-      (0.72 + strength * 0.46) * Math.sqrt(size),
-      (0.80 + strength * 0.40) * size);
+
+    /* ---- lay the path ----
+       Nodes are dropped by DISTANCE TRAVELLED, not by time, so a
+       Coulter that slows down leaves a denser furrow rather than a
+       shorter one - and a parked one (the review harnesses park it)
+       stops extending its own wake instead of piling thirty sections
+       on the same spot. */
+    if (rig.lastX > 1e8) {
+      rig.lastX = b.head.x;
+      rig.lastZ = b.head.z;
+      pushWakeNode(rig, b.head.x, b.head.z, b.heading, strength);
+    }
+    let moved = Math.hypot(b.head.x - rig.lastX, b.head.z - rig.lastZ);
+    if (moved > WAKE_STEP * 12) {
+      // Teleported (a QA re-seed, a phase forced by a harness): start
+      // a new furrow rather than drawing a line across the map.
+      rig.nodes.length = 0;
+      rig.lastX = b.head.x;
+      rig.lastZ = b.head.z;
+      pushWakeNode(rig, b.head.x, b.head.z, b.heading, strength);
+      moved = 0;
+    }
+    while (moved >= WAKE_STEP) {
+      const t = WAKE_STEP / moved;
+      rig.lastX += (b.head.x - rig.lastX) * t;
+      rig.lastZ += (b.head.z - rig.lastZ) * t;
+      pushWakeNode(rig, rig.lastX, rig.lastZ, b.heading, strength);
+      moved = Math.hypot(b.head.x - rig.lastX, b.head.z - rig.lastZ);
+    }
+
+    /* ---- build the ribbon ----
+       Front to back: two prow ribs projected ahead of the head, then
+       the laid path. Every rib is rebuilt every frame because every
+       rib is a different age this frame from last, and that ageing IS
+       the effect. */
+    const now = atmos.elapsed;
+    const pos = rig.geo.attributes.position.array;
+    const col = rig.geo.attributes.color.array;
+    const crestBase = (0.72 + strength * 0.62) * (0.55 + size * 0.34);
+    const sx = Math.sin(b.heading);
+    const sz = Math.cos(b.heading);
+    const rx = Math.cos(b.heading);
+    const rz = -Math.sin(b.heading);
+    const half = rig.half;
+    let v = 0;
+    const count = rig.nodes.length;
+    for (let r = 0; r < WAKE_RIB; r += 1) {
+      let cx; let cz; let nrx; let nrz;
+      let gy; let gl; let gr;
+      let crest; let dome; let boil; let spread; let seed; let fade;
+      if (r < WAKE_PROW) {
+        /* THE BOW WAVE. Ahead of the mouth, low and narrowing to
+           nothing: the sand there is lifting, not yet displaced. */
+        const ahead = (WAKE_PROW - r) * (2.4 + size * 0.55);
+        cx = b.head.x + sx * ahead;
+        cz = b.head.z + sz * ahead;
+        nrx = rx; nrz = rz;
+        gy = groundAt(cx, cz);
+        gl = gy; gr = gy;
+        const taper = r === 0 ? 0.16 : 0.55;
+        crest = crestBase * taper;
+        dome = 1;
+        boil = 1;
+        spread = 0.45 + r * 0.24;
+        seed = now * 2.0;
+        fade = taper;
+      } else {
+        const i = Math.min(count - 1, r - WAKE_PROW);
+        const node = rig.nodes[i] || rig.nodes[count - 1];
+        if (!node) break;
+        cx = node.x; cz = node.z;
+        nrx = node.rx; nrz = node.rz;
+        gy = node.gy; gl = node.gl; gr = node.gr;
+        const age = now - node.t;
+        /* THE SLUMP, and it is the whole point of the rebuild. Sand
+           heaped past its angle of repose falls back, fast at first
+           and then hardly at all, so what is left after a few seconds
+           is a shallow scar rather than a ridge. An exponential toward
+           a residual is exactly that curve, and it is also what makes
+           the tail of the furrow disappear on its own without a
+           lifetime test anywhere. */
+        const slump = 0.24 + 0.76 * Math.exp(-age * 0.62);
+        crest = crestBase * node.power * slump;
+        /* Directly over the animal the groove is FILLED - the ground
+           there is still being lifted from underneath - and behind it
+           the middle drops out into a trench. This morph is what the
+           eye reads as the sand moving, rather than as a solid shape
+           being dragged. */
+        dome = Math.exp(-age * 1.9);
+        boil = Math.exp(-age * 1.5);
+        // Slumped sand spreads as it falls: wider and lower together.
+        spread = 1 + 0.26 * (1 - slump);
+        seed = node.seed + now * 5.5;
+        fade = slump;
+        /* The last two ribs run out to nothing, or a furrow that is
+           still a furrow at the ring buffer's end terminates in a
+           wall wherever the buffer happens to be full. */
+        const fromEnd = count - 1 - i;
+        if (count >= WAKE_NODES && fromEnd < 2) {
+          const t = (fromEnd + 0.35) / 2;
+          crest *= t;
+          fade *= t;
+        }
+      }
+      for (let c = 0; c < WAKE_ACROSS; c += 1) {
+        const sec = WAKE_SECTION[c];
+        const hf = sec[1];
+        const t = sec[0] * spread;
+        /* THE BOIL. A crest extruded cleanly along a path is a pipe;
+           real turned sand has lumps in it, and they are only near the
+           head because that is the only part still being disturbed. */
+        const wob = 1 + 0.22 * boil * Math.sin(seed + c * 1.9)
+          + 0.11 * boil * Math.sin(seed * 1.7 - c * 3.1);
+        // The centre of the profile lifts toward a dome over the animal.
+        const shaped = c === 3 ? lerp(hf, 1.16, dome) : hf;
+        const px = cx + nrx * t * half;
+        const pz = cz + nrz * t * half;
+        pos[v * 3] = px;
+        pos[v * 3 + 1] = wakeGround(gy, gl, gr, t)
+          + crest * shaped * (hf > 0 ? wob : 1) + 0.06;
+        pos[v * 3 + 2] = pz;
+        /* Shade toward plain sand as the furrow settles: a groove that
+           keeps its contact shadow after the groove has gone is a
+           painted stripe left lying on the dune. */
+        const k = lerp(1, sec[2], fade);
+        col[v * 3] = k;
+        col[v * 3 + 1] = k;
+        col[v * 3 + 2] = k;
+        v += 1;
+      }
+    }
+    // Any rib the path has not reached yet collapses onto the last one
+    // written, so the strip is degenerate rather than folded through
+    // the origin.
+    for (let k = v; k < WAKE_VERTS; k += 1) {
+      const src = v - WAKE_ACROSS + (k % WAKE_ACROSS);
+      pos[k * 3] = pos[src * 3];
+      pos[k * 3 + 1] = pos[src * 3 + 1];
+      pos[k * 3 + 2] = pos[src * 3 + 2];
+      col[k * 3] = 1; col[k * 3 + 1] = 1; col[k * 3 + 2] = 1;
+    }
+    rig.geo.attributes.position.needsUpdate = true;
+    rig.geo.attributes.color.needsUpdate = true;
+    rig.geo.computeVertexNormals();
+    rig.mesh.visible = true;
 
     /* The wake's own voice, on its own clock. A shallow Coulter is
        audible before it is visible and from any direction, which is
@@ -1925,39 +2167,45 @@ export function buildCoulter(ctx) {
       });
     }
 
-    /* THE FURROW IT LEAVES. The ridge says where the animal is; the
-       scar behind it says where it has BEEN, which is the half of the
-       read that survives the animal turning away. It rides the shared
-       ground-decal pool, so a hundred metres of furrow costs no draw
-       call of its own. */
-    if (Math.hypot(b.head.x - rig.markX, b.head.z - rig.markZ) > 5.5 * size) {
+    /* THE SCAR IT LEAVES. The furrow says where the animal is and
+       where it has been for the last few seconds; the decal says
+       where it has been since, which is the half of the read that
+       outlives the slump. It rides the shared ground-decal pool, so a
+       hundred metres of furrow costs no draw call of its own. */
+    if (Math.hypot(b.head.x - rig.markX, b.head.z - rig.markZ) > 3.2 * size) {
       rig.markX = b.head.x;
       rig.markZ = b.head.z;
       ctx.vfx?.skidMark?.(b.head.x, b.head.z, b.heading,
-        0.55 + strength * 0.45, 6.5 * size);
+        0.55 + strength * 0.45, 4.2 * size);
     }
 
     rig.spray -= dt;
     if (rig.spray > 0) return;
-    rig.spray = 0.055;
+    rig.spray = 0.085;
     /* THE SPRAY IS THE READ, and it is the half of this that survives
        distance. A metre-high ridge is a few pixels tall at sixty metres
-       and the player is not looking at the ground; a fountain of sand is
-       a bright moving cluster that carries to the horizon, because point
-       sprites have a floor on how small they can draw.
+       and the player is not looking at the ground; a moving smudge of
+       dust is a shape that carries to the horizon.
 
-       Thrown from two places for two different reasons: off the leading
-       edge, which says which way it is going, and off the crest behind
-       it, which says how big it is. */
-    const sx = Math.sin(b.heading);
-    const sz = Math.cos(b.heading);
-    const power = (0.9 + strength * 1.5) * Math.sqrt(size);
-    ctx.vfx?.sandSpray?.(b.head.x + sx * 3.4 * size, surface + 0.30,
-      b.head.z + sz * 3.4 * size,
-      power, sx, sz);
-    ctx.vfx?.sandSpray?.(b.head.x - sx * 2.2 * size, surface + 0.55,
-      b.head.z - sz * 2.2 * size,
-      power * 0.72, -sx * 0.35, -sz * 0.35);
+       THROWN SIDEWAYS. Sand forced out of a bore leaves at the lip of
+       the furrow, perpendicular to travel and only a little forward -
+       it does not fountain along the heading, and thrown that way it
+       reads as a jet coming out of a nozzle. One lip, then the other,
+       alternating, so the two sides never fire together and freeze
+       into a symmetrical arch. */
+    const power = (0.85 + strength * 1.15) * Math.sqrt(size);
+    rig.side = -(rig.side || 1);
+    const lipX = b.head.x + rx * rig.side * half * 0.62 + sx * 2.0;
+    const lipZ = b.head.z + rz * rig.side * half * 0.62 + sz * 2.0;
+    const lipY = groundAt(lipX, lipZ);
+    ctx.vfx?.sandSpray?.(lipX, lipY + 0.22, lipZ, power,
+      rx * rig.side * 0.86 + sx * 0.5, rz * rig.side * 0.86 + sz * 0.5);
+    /* And a little of it OVER the crest and backward, which is the
+       part that hangs in the air behind and gives the furrow a tail
+       when the ridge itself has already slumped. */
+    ctx.vfx?.sandSpray?.(b.head.x - sx * 3.4, groundAt(
+      b.head.x - sx * 3.4, b.head.z - sz * 3.4) + 0.45, b.head.z - sz * 3.4,
+      power * 0.66, -sx * 0.4, -sz * 0.4);
   }
 
   function updateGlobules(dt) {

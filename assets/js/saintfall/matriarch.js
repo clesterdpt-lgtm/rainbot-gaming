@@ -97,12 +97,12 @@ export const MATRIARCH_CONFIG = Object.freeze({
   holdAt: 6.3,
   bandGain: 1.6,
 
-  /* Tracking rates and swing leading: tuned for fair lateral dodging */
-  turnRate: 2.8,
-  committedTurnRate: 0.50,
-  leadLag: 0.50,
-  leadMax: 6.5,
-  lanceLead: 0.55,
+  /* Tracking rates and swing leading: tuned for direct charges and clean sidesteps */
+  turnRate: 3.0,
+  committedTurnRate: 0.55,
+  leadLag: 0.65,
+  leadMax: 7.0,
+  lanceLead: 0.80,
   trackDamp: 18,
   trackCeiling: 34,
 
@@ -110,71 +110,71 @@ export const MATRIARCH_CONFIG = Object.freeze({
 
   /* ------------------------------------------------------------
      THE SCYTHE COMBO */
-  comboReach: 7.6,
-  comboWindup: 0.58,
+  comboReach: 6.6,
+  comboWindup: 0.55,
   comboContact: 0.642,
-  comboGap: 0.40,
-  comboRecover: 0.44,
-  comboDamage: 18,
+  comboGap: 0.38,
+  comboRecover: 0.40,
+  comboDamage: 20,
   comboArc: 0.766,
-  comboCadence: 2.2,
+  comboCadence: 2.0,
 
   /* ------------------------------------------------------------
-     THE LANCE: Long-distance charge with a clear, readable tell. */
+     THE LANCE: Long-distance high-precision charge directly at the player. */
   lanceRange: Object.freeze([7.5, 95]),
-  lanceCock: 0.90,
+  lanceCock: 0.78,
   lanceDash: 0.12,
-  lanceDashMax: 1.60,
-  lanceSpeed: 42,
-  lanceDamage: 26,
-  lanceReach: 8.8,
-  lanceArc: 0.28,
-  lanceCadence: 4.5,
-  pursuitLanceCadence: 2.0,
-  lanceTrack: 1.25,
+  lanceDashMax: 1.65,
+  lanceSpeed: 44,
+  lanceDamage: 28,
+  lanceReach: 6.8,
+  lanceArc: 0.20,
+  lanceCadence: 3.8,
+  pursuitLanceCadence: 1.6,
+  lanceTrack: 2.1,
 
   /* ------------------------------------------------------------
      THE CULL: Rear flank punishment whip. */
   cullRadius: 11.5,
   cullRearDot: -0.12,
-  cullLoiter: 0.85,
-  cullWindup: 0.42,
-  cullSweep: 0.28,
-  cullDamage: 16,
-  cullReach: 9.6,
-  cullSpin: 7.6,
-  cullCadence: 3.6,
+  cullLoiter: 0.80,
+  cullWindup: 0.40,
+  cullSweep: 0.26,
+  cullDamage: 18,
+  cullReach: 7.5,
+  cullSpin: 7.8,
+  cullCadence: 3.4,
 
   /* ------------------------------------------------------------
      THE GRAB-SLAM: Close frontal punish. */
-  grabReach: 7.2,
+  grabReach: 5.6,
   grabArc: 0.32,
   grabAirClear: 1.8,
-  grabWindup: 0.76,
-  grabLift: 0.50,
-  grabHold: 0.20,
-  grabDrop: 0.30,
-  grabRecover: 0.70,
+  grabWindup: 0.72,
+  grabLift: 0.48,
+  grabHold: 0.18,
+  grabDrop: 0.28,
+  grabRecover: 0.68,
   grabLiftHeight: 3.65,
   grabHoldForward: 3.7,
   grabSlamForward: 5.6,
   grabDamage: 55,
   grabSlamStun: 1.0,
-  grabCadence: 7.5,
+  grabCadence: 7.0,
 
   /* ------------------------------------------------------------
      THE TREMOR RITE: Telegraphed ground shockwaves. */
-  tremorEvery: 10.5,
-  tremorEveryRoused: 7.5,
-  tremorWindup: 1.35,
-  tremorPulseGap: 0.65,
+  tremorEvery: 10.0,
+  tremorEveryRoused: 7.0,
+  tremorWindup: 1.30,
+  tremorPulseGap: 0.60,
   tremorWaves: 3,
   tremorWavesRoused: 4,
-  tremorRecover: 0.50,
+  tremorRecover: 0.48,
   tremorRadius: 36,
   tremorSpeed: 21,
   tremorBand: 1.35,
-  tremorDamage: 16,
+  tremorDamage: 18,
   tremorAirClear: 0.40,
   tremorSlowFactor: 0.72,
   tremorSlowSeconds: 0.75,
@@ -185,7 +185,7 @@ export const MATRIARCH_CONFIG = Object.freeze({
   rouseAt: 0.45,
   rouseSeconds: 1.6,
   rouseRadius: 11,
-  rouseDamage: 12,
+  rouseDamage: 14,
   rouseSpeedScale: 1.2,
   rouseCadenceScale: 0.8,
 
@@ -584,24 +584,34 @@ export function buildMatriarch(ctx) {
     const combat = ctx.combat;
     if (!combat || combat.player.dead) return false;
     const ps = ctx.player.state;
-    const { dist, dot, dx, dz } = bearing(inst, ps.x, ps.z);
-    if (dist > reach) return miss(brain, "range");
-    if (dot < arc) return miss(brain, "arc");
-    /* HOW FAR UP AND DOWN THE SCYTHES REACH. A capsule ten metres
-       overhead is not in reach of a ground animal, whatever the plan
-       view says - but this was +-3.4m around a metre off the ground,
-       which is the ordinary bestiary's 2.8m barely widened, on an
-       animal five metres tall with four-and-a-half-metre legs.
+    const dx = ps.x - inst.x;
+    const dz = ps.z - inst.z;
+    const fx = Math.sin(inst.yaw);
+    const fz = Math.cos(inst.yaw);
+    const rx = fz;
+    const rz = -fx;
 
-       IT MATTERS BECAUSE OF WHERE THIS FIGHT IS SITED. The Gilded
-       Reach's marker sits on a ridge: measured, the ground within
-       nine metres of the boss runs from 8.7m BELOW it to 11.2m above.
-       With the old gate a player circling at scythe range passed the
-       height check 42% of the time, so the majority of a correctly
-       aimed, in-range swing simply could not resolve - which reads as
-       exactly the complaint this pass is about, and is not something
-       any amount of speed fixes. Centred on the middle of the body
-       rather than on its feet, and sized to the body. */
+    const along = dx * fx + dz * fz;
+    const across = Math.abs(dx * rx + dz * rz);
+    const dist = Math.hypot(dx, dz);
+
+    if (source === "lance") {
+      // Narrow charge box: direct frontal head impact
+      if (along < 1.8 || along > (reach || C.lanceReach)) return miss(brain, "range");
+      if (across > 2.0) return miss(brain, "arc");
+    } else if (source === "combo") {
+      // Frontal scythe sweep
+      if (along < 1.2 || along > (reach || C.comboReach)) return miss(brain, "range");
+      if (across > 2.8) return miss(brain, "arc");
+    } else if (source === "cull") {
+      // Rear whip sweep
+      if (dist > (reach || C.cullReach)) return miss(brain, "range");
+    } else {
+      if (dist > reach) return miss(brain, "range");
+      const dot = dist > 1e-4 ? along / dist : 1;
+      if (dot < arc) return miss(brain, "arc");
+    }
+
     if (Math.abs(ps.y - (inst.y + C.strikeCentre)) > C.strikeHeight) {
       return miss(brain, "height");
     }
@@ -626,17 +636,25 @@ export function buildMatriarch(ctx) {
   function tryGrab(inst, brain) {
     if (!ctx.combat || ctx.combat.player.dead) return false;
     const ps = ctx.player.state;
-    const { dist, dot, dx, dz } = bearing(inst, ps.x, ps.z);
-    if (dist > C.grabReach) return miss(brain, "range");
-    if (dot < C.grabArc) return miss(brain, "arc");
+    const dx = ps.x - inst.x;
+    const dz = ps.z - inst.z;
+    const fx = Math.sin(inst.yaw);
+    const fz = Math.cos(inst.yaw);
+    const rx = fz;
+    const rz = -fx;
+
+    const along = dx * fx + dz * fz;
+    const across = Math.abs(dx * rx + dz * rz);
+    const dist = Math.hypot(dx, dz);
+
+    if (along < 1.8 || along > C.grabReach) return miss(brain, "range");
+    if (across > 1.6) return miss(brain, "arc");
     if (ps.y - groundAt(ps.x, ps.z) > C.grabAirClear) return miss(brain, "height");
     const inv = 1 / (dist || 1);
     if (ctx.collide?.rayBlock
       && ctx.collide.rayBlock(inst.x, inst.y + 2.5, inst.z,
         dx * inv, 0, dz * inv, dist) < dist - 0.2) return miss(brain, "sight");
 
-    const fx = Math.sin(inst.yaw);
-    const fz = Math.cos(inst.yaw);
     const holdX = inst.x + fx * C.grabHoldForward;
     const holdZ = inst.z + fz * C.grabHoldForward;
     const wantedX = inst.x + fx * C.grabSlamForward;
@@ -1286,5 +1304,7 @@ export function buildMatriarch(ctx) {
       else return false;
       return true;
     },
+    brainFor,
+    tryLand,
   };
 }

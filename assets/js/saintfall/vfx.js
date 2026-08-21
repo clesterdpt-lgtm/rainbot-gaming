@@ -1400,11 +1400,20 @@ export function buildVfx(ctx, world) {
         "  float steamV = step(10.5, aTint) * (1.0 - step(11.5, aTint));",
         "  float ichor = step(11.5, aTint) * (1.0 - step(12.5, aTint));",
         "  float sand = step(12.5, aTint);",
+        /* 14 is a GRAIN rather than airborne dust, and the split is
+           what lets one emitter throw both. Dust is carried by the
+           air: it stops almost at once and then hangs. A grain is
+           ballistic - it keeps most of its throw and comes back down
+           - and a plume built out of only one of the two is either a
+           puff of smoke with no weight or a shower of gravel with no
+           body. */
+        "  float grain = step(13.5, aTint);",
+        "  float dust = sand - grain;",
         "  float venom = step(3.5, aTint) * (1.0 - step(5.5, aTint));",
         "  float gas = step(4.5, aTint) * (1.0 - step(5.5, aTint));",
         "  float energy = step(1.5, aTint) * (1.0 - step(3.5, aTint));",
         "  float debris = 1.0 - step(1.5, aTint);",
-        "  float fall = debris + (venom - gas) + ichor;",
+        "  float fall = debris + (venom - gas) + ichor + grain;",
         /* Doctrine motes DECELERATE. Integrating a constant velocity for
            the whole span is what made the Wing feathers read as escaping
            soap bubbles: they left at 8m/s and were still doing 8m/s when
@@ -1414,14 +1423,16 @@ export function buildVfx(ctx, world) {
            five Orders get the settle term underneath it. Sand and smoke
            drag hard too: dust stops almost as soon as it is thrown. */
         "  float dragged = doctrine + sand + energy * 0.5;",
-        "  float drag = 3.0 * doctrine + 2.6 * sand + 1.4 * energy;",
+        "  float drag = 3.0 * doctrine + 2.6 * dust + 0.85 * grain + 1.4 * energy;",
         "  float travel = mix(age, (1.0 - exp(-drag * age)) / max(0.0001, drag),",
         "    clamp(dragged, 0.0, 1.0));",
         "  vec3 p = position + aVel * travel",
         "    - vec3(0.0, 9.0, 0.0) * age * age * fall",
         "    - vec3(0.0, 1.15, 0.0) * age * age * doctrine",
-        // Sand and smoke lift a little as they thin, like a puff.
-        "    + vec3(0.0, 0.55, 0.0) * age * (sand + steamV);",
+        // Sand DUST and smoke lift a little as they thin, like a puff.
+        // Grains do not: a falling grain that also floats upward is a
+        // grain that hangs at its apex forever.
+        "    + vec3(0.0, 0.55, 0.0) * age * (dust + steamV);",
         "  vec4 mv = modelViewMatrix * vec4(p, 1.0);",
         "  gl_Position = projectionMatrix * mv;",
         /* Smoke and sand GROW as they fade; sparks and shards do not.
@@ -1508,6 +1519,7 @@ export function buildVfx(ctx, world) {
         "  float steam = step(10.5, vTint) * (1.0 - step(11.5, vTint));",
         "  float ichor = step(11.5, vTint) * (1.0 - step(12.5, vTint));",
         "  float sand = step(12.5, vTint);",
+        "  float grain = step(13.5, vTint);",
         "  float venom = step(3.5, vTint) * (1.0 - step(5.5, vTint));",
         "  float energy = step(1.5, vTint) * (1.0 - step(3.5, vTint));",
         "  vec3 sparkColour = mix(uCold, uHot, clamp(vTint * vLife, 0.0, 1.0));",
@@ -1538,13 +1550,21 @@ export function buildVfx(ctx, world) {
         "  c = mix(c, steamColour, steamW);",
         /* Sand is NOT additive light. It is drawn dark and low so that
            at this pool's additive output it merely warms and dims the
-           sky behind it, which is what dust looks like. */
-        "  vec3 sandColour = uSand * (0.22 + 0.16 * vLife);",
+           sky behind it, which is what dust looks like.
+
+           A GRAIN is a lit solid rather than a veil, so it is allowed
+           a little more of the sand's own colour and a hair of white
+           off the sun - but only a hair. Every previous attempt at
+           thrown sand in this game reached for the spark ramp instead,
+           and a warm point on an additive pass clips to white: the
+           burrower's wake came out as a column of burning debris. */
+        "  vec3 sandColour = mix(uSand * (0.22 + 0.16 * vLife),",
+        "    mix(uSand, vec3(1.0), 0.14) * (0.34 + 0.26 * vLife), grain);",
         "  c = mix(c, sandColour, sand);",
         "  float bright = 0.35 + vLife * 1.5;",
         "  bright = mix(bright, 0.18 + vLife * 0.62, steamW);",
         "  bright = mix(bright, (0.30 + vLife * 0.92) / max(0.32, ritePeak), doctrine + ichor);",
-        "  bright = mix(bright, 0.9, sand);",
+        "  bright = mix(bright, mix(0.9, 1.12, grain), sand);",
         // Glints flare hot; shards and smoke stay matte.
         "  float isGlint = step(0.5, k) * (1.0 - step(1.5, k));",
         "  float isShard = step(3.5, k);",
@@ -1587,6 +1607,9 @@ export function buildVfx(ctx, world) {
         return kindVal;
       }
       const u = Math.random();
+      // Grains: small solids. A grain drawn as a smoke puff grows as
+      // it falls, which is the one thing sand never does.
+      if (tintVal >= 13.5) return u < 0.62 ? IK_DISC : IK_SHARD;
       if (tintVal >= 12.5) return IK_SMOKE;
       if (tintVal >= 11.5) return u < 0.55 ? IK_DISC : (u < 0.85 ? IK_SHARD : IK_EMBER);
       if (tintVal >= 10.5) return IK_SMOKE;
@@ -5376,13 +5399,30 @@ export function buildVfx(ctx, world) {
     }
   }
 
-  /** Sand, stone and a low bio-flash thrown by a creature surfacing. */
+  /** Sand, stone and a low bio-flash thrown by a creature surfacing.
+   *
+   *  SAND FIRST, and by a wide margin. What comes out of a dune when
+   *  something the size of a barge leaves it is a wall of dust with a
+   *  little grit in it; the grit was carrying the whole effect on the
+   *  spark band, so an eruption read as an explosion. The debris is
+   *  still here - there is chitin and stone in a breach - it is just
+   *  no longer the only thing in it. */
   function breach(x, y, z, radius, intensity = 1) {
     const power = Math.max(0.5, intensity);
-    impacts.emit(x, y + 0.12, z, Math.round(22 * power), radius * 0.78,
-      0.72 * power, 0.12);
-    impacts.emit(x, y + 0.28, z, Math.round(12 * power), radius * 0.38,
-      1.15 * power, 0.62);
+    // The wall: wide, low, slow, and long enough to still be standing
+    // when the animal is clear of it.
+    impacts.emit(x, y + 0.35, z, Math.round(13 * power), radius * 0.42,
+      2.4 + power * 1.6, 13.0, 1.5 + power * 0.25, IK_SMOKE);
+    // The ring of it that runs out along the ground.
+    impacts.emitRing(x, y + 0.10, z, Math.round(9 * power), radius * 0.30,
+      radius * 0.30, 0.9, 2.8 + power * 1.4, 13.0, 1.7 + power * 0.2,
+      0.05, 0, IK_SMOKE);
+    // Grains, which is what gives the wall an edge to read against.
+    impacts.emit(x, y + 0.25, z, Math.round(10 * power), radius * 0.34,
+      0.34 + power * 0.10, 14.0, 0.85 + power * 0.10);
+    // And what was actually broken getting out.
+    impacts.emit(x, y + 0.28, z, Math.round(5 * power), radius * 0.38,
+      0.95 * power, 0.62);
     flashes.emit(x, y + 0.16, z, radius * 0.22, 0.18 + power * 0.025, 0.28);
   }
 
@@ -5397,23 +5437,49 @@ export function buildVfx(ctx, world) {
      ------------------------------------------------------------------ */
 
   /** Sand thrown along a heading. The wake's speed, and the only part
-   *  of a submerged animal the player can actually read. */
+   *  of a submerged animal the player can actually read.
+   *
+   * THREE LAYERS, because sand leaving the ground is three different
+   * materials and not one. Built out of any single one of them it
+   * reads as the wrong thing entirely:
+   *
+   *   the CURTAIN - the airborne fraction. Big, soft, dark, slow, and
+   *     long-lived: it is read from what it DIMS behind it, so it
+   *     wants area and time rather than speed. This is the bulk.
+   *   the SKIRT - the fraction that never really gets airborne and
+   *     rolls out along the surface instead. Without it a plume looks
+   *     like it was fired from a nozzle a metre underground; with it
+   *     the sand appears to be coming OUT OF a surface.
+   *   the GRAINS - the ballistic fraction. Few, small, fast, and the
+   *     only layer that comes back down. They give the plume its
+   *     weight; the curtain alone is a smoke machine.
+   *
+   * What this function used to be was a single jet of hot DEBRIS
+   * motes - the pool's spark band - which on an additive pass clipped
+   * straight to white. The burrower's wake read as a column of fire
+   * and its dust read as sparks, which is exactly what they were.
+   */
   function sandSpray(x, y, z, scale = 1, dx = 0, dz = 1) {
     const len = Math.hypot(dx, dz) || 1e-6;
-    /* MANY SMALL MOTES, not a few big ones. Same total area, completely
-       different read: a handful of large sprites on an additive pass is
-       a fireball, and a cloud of small ones is dust. The debris tint
-       these are emitted at was pushed up the pool's heat ramp for the
-       same reason - at the cold end they came out a saturated ember
-       orange that read as burning sand. */
-    const count = Math.max(4, Math.round(6 + scale * 9));
-    // Forward and UP, because sand pushed out of a furrow leaves it at
-    // the angle of repose rather than straight ahead - and thrown hard,
-    // because this plume is the only part of a submerged animal the
-    // player can see and it has to carry further than the ridge making
-    // it.
-    impacts.emitDirected(x, y, z, count, (dx / len) * 0.55, 0.94, (dz / len) * 0.55,
-      5.2 + scale * 4.4, 0.78 * scale, 0.30);
+    const ux = dx / len;
+    const uz = dz / len;
+    const s = Math.max(0.25, scale);
+    /* Counts go up with the SQUARE ROOT of the power and sizes go up
+       with the power itself. A bigger plume is a bigger plume, not a
+       denser one, and scaling the count linearly is what put the
+       burrower alone over the whole 640-slot pool - which then
+       recycled every mote inside a fifth of a second and cancelled
+       the long settle these are tuned around. */
+    const root = Math.sqrt(s);
+    impacts.emitDirected(x, y + 0.10, z, Math.max(3, Math.round(2 + root * 2.2)),
+      ux * 0.58, 0.80, uz * 0.58,
+      2.4 + s * 1.5, 1.7 + s * 0.85, 13.0, 1.15 + s * 0.10, IK_SMOKE);
+    impacts.emitDirected(x, y - 0.06, z, Math.max(2, Math.round(1 + root * 1.5)),
+      ux * 0.97, 0.20, uz * 0.97,
+      1.8 + s * 1.9, 2.2 + s * 1.0, 13.0, 1.45 + s * 0.10, IK_SMOKE);
+    impacts.emitDirected(x, y + 0.16, z, Math.max(3, Math.round(2 + root * 2.6)),
+      ux * 0.66, 0.74, uz * 0.66,
+      4.6 + s * 3.4, 0.30 + s * 0.11, 14.0, 0.55 + s * 0.07);
   }
 
   /* ------------------------- ground marks ------------------------- */
@@ -5459,9 +5525,18 @@ export function buildVfx(ctx, world) {
       0.30 + s * 0.26, 5);
     if (Math.random() > 0.34 + s * 0.4) return;
     const y = terrain.heightAt(x, z);
-    impacts.emitDirected(x, y + 0.10, z, 2 + Math.round(s * 3),
-      -Math.sin(yaw) * 0.72, 0.7, -Math.cos(yaw) * 0.72,
-      2.6 + s * 3.4, 0.42 + s * 0.3, 0.30, 0.62);
+    /* SAND, not the spark band. Every caller of this is something
+       being dragged through a dune - a burrower's furrow, a boosted
+       landing, a Stylite skidding on its face - and on an additive
+       pass the debris tint they all used to share clipped to white,
+       so each of them shed a little rooster-tail of embers. */
+    impacts.emitDirected(x, y + 0.08, z, 1 + Math.round(s * 1.6),
+      -Math.sin(yaw) * 0.72, 0.62, -Math.cos(yaw) * 0.72,
+      1.9 + s * 2.2, 1.5 + s * 1.1, 13.0, 0.85 + s * 0.35, IK_SMOKE);
+    if (s < 0.3) return;
+    impacts.emitDirected(x, y + 0.10, z, 1 + Math.round(s * 2),
+      -Math.sin(yaw) * 0.78, 0.66, -Math.cos(yaw) * 0.78,
+      3.0 + s * 3.6, 0.28 + s * 0.16, 14.0, 0.5 + s * 0.18);
   }
 
   /** A thrown or landing globule coming apart. Droplets, so they fall. */

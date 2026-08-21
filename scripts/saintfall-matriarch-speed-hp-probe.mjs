@@ -35,6 +35,9 @@ try {
     console.error("[PAGEERROR]", err.message);
     pageErrors.push(err.message);
   });
+  page.on("console", (msg) => {
+    if (msg.type() === "error") console.error("[CONSOLE ERROR]", msg.text());
+  });
 
   await page.goto(`${BASE}/games/saintfall.html?qa=1&quality=high&difficulty=penitent`, { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => window.__SF && window.__SF.isReady(), null, { timeout: 45000 });

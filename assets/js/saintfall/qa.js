@@ -65,6 +65,9 @@ export function installQa(ctx, api) {
       return ctx.qa ? (api.intro?.setPaused?.(paused) ?? false) : false;
     },
     skipIntroForQA: () => ctx.qa ? (api.intro?.skip() ?? false) : false,
+    tutorialState: () => api.tutorial?.status?.() || null,
+    startTutorialForQA: () => ctx.qa ? (api.tutorial?.start?.({ source: "qa" }) ?? false) : false,
+    skipTutorialForQA: () => ctx.qa ? (api.tutorial?.skip?.("qa") ?? false) : false,
     renderIntroStill() {
       if (!ctx.qa) return null;
       api.intro?.render?.();
@@ -1489,6 +1492,7 @@ export function installQa(ctx, api) {
         render: info,
         runtime: { ...api.runtime },
         intro: api.intro?.status() || null,
+        tutorial: api.tutorial?.status?.() || null,
         terrain: api.terrain.stats(),
         world: api.world.stats(),
         enemies: api.enemies.stats(),

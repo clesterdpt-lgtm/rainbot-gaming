@@ -1861,6 +1861,96 @@ body.rb-game-maxed .saintfall-page .rb-standalone-surface{container-name:none}
 }
 
 /* ======================================================================
+   SAINTFALL - new-operation field orientation
+
+   A narrow hardline instrument rather than a modal web card. The overlay
+   observes real controls while leaving the battlefield and touch layer live;
+   only its Skip/Close action accepts pointer input.
+   ====================================================================== */
+#sf-tutorial{
+  position:absolute;inset:0;z-index:58;overflow:hidden;pointer-events:none
+}
+#sf-tutorial[hidden]{display:none!important}
+.sf-tutorial{
+  position:absolute;right:max(.85rem,calc(env(safe-area-inset-right) + .55rem));
+  top:max(9.8rem,calc(env(safe-area-inset-top) + 9.35rem));
+  display:grid;gap:.62rem;width:min(21rem,34cqw);min-width:18rem;padding:.82rem .9rem .72rem;
+  border:1px solid rgba(115,216,237,.42);border-left:3px solid #d8a441;border-radius:0;
+  background:linear-gradient(112deg,rgba(115,216,237,.055),transparent 42%),rgba(3,8,11,.93);
+  box-shadow:inset 0 0 0 1px rgba(216,164,65,.06),0 1.1rem 3.2rem rgba(0,0,0,.48);
+  color:#eff5f1;font-family:"Share Tech Mono",ui-monospace,monospace;
+  opacity:0;transform:translateX(.75rem);transition:opacity .22s ease,transform .22s ease
+}
+#sf-tutorial.is-active .sf-tutorial{opacity:1;transform:none}
+.sf-tutorial:before,.sf-tutorial:after{
+  content:"";position:absolute;right:0;width:2.8rem;height:1px;background:#73d8ed;opacity:.6
+}
+.sf-tutorial:before{top:0}.sf-tutorial:after{bottom:0;width:1.35rem;background:#d8a441}
+.sf-tutorial__head{display:flex;align-items:start;justify-content:space-between;gap:.8rem;padding-bottom:.5rem;border-bottom:1px solid rgba(115,216,237,.2)}
+.sf-tutorial__head>span{display:grid;gap:.14rem;min-width:0}
+.sf-tutorial__head small{color:rgba(115,216,237,.78);font-size:8px;font-weight:700;letter-spacing:.19em}
+.sf-tutorial__head strong{overflow:hidden;color:#f4ead2;font:600 16px/1.15 "Cinzel",Georgia,serif;letter-spacing:.08em;text-overflow:ellipsis;white-space:nowrap}
+.sf-tutorial__head>b{flex:0 0 auto;padding:.2rem .32rem;border:1px solid rgba(216,164,65,.3);color:#e9bf69;font-size:9px;font-weight:700;letter-spacing:.1em;white-space:nowrap}
+.sf-tutorial>p{margin:0;color:rgba(224,236,232,.7);font:11px/1.48 system-ui,sans-serif;letter-spacing:.02em}
+.sf-tutorial__controls{display:flex;flex-wrap:wrap;gap:.32rem}
+.sf-tutorial__controls kbd{
+  min-height:1.75rem;padding:.38rem .5rem;border:1px solid rgba(115,216,237,.34);border-radius:0;
+  background:rgba(5,17,22,.8);box-shadow:inset 0 -2px 0 rgba(115,216,237,.12);
+  color:#dff7fb;font:700 9px/1 "Share Tech Mono",ui-monospace,monospace;letter-spacing:.1em;white-space:nowrap
+}
+.sf-tutorial__checks{display:flex;flex-wrap:wrap;gap:.28rem .38rem;margin:0;padding:0;list-style:none}
+.sf-tutorial__checks li{display:flex;align-items:center;gap:.25rem;color:rgba(218,232,230,.46);font-size:8px;font-weight:700;letter-spacing:.1em;transition:color .14s ease}
+.sf-tutorial__checks i{display:grid;place-items:center;width:1rem;height:1rem;border:1px solid rgba(115,216,237,.22);color:rgba(115,216,237,.5);font-style:normal}
+.sf-tutorial__checks li[data-done="true"]{color:#f0d083}
+.sf-tutorial__checks li[data-done="true"] i{border-color:rgba(216,164,65,.68);background:rgba(216,164,65,.12);color:#f0d083}
+.sf-tutorial>footer{display:flex;align-items:center;justify-content:space-between;gap:.65rem;padding-top:.5rem;border-top:1px solid rgba(216,164,65,.16)}
+.sf-tutorial>footer>span{color:rgba(115,216,237,.58);font-size:8px;letter-spacing:.1em;text-transform:uppercase}
+.sf-tutorial>footer>button{
+  flex:0 0 auto;min-height:44px;padding:.55rem .68rem;border:1px solid rgba(216,164,65,.38);border-radius:0;
+  background:rgba(26,18,13,.78);color:#efd18d;font:700 9px/1 "Share Tech Mono",ui-monospace,monospace;
+  letter-spacing:.1em;pointer-events:auto;cursor:pointer;transition:border-color .14s,background .14s,color .14s
+}
+.sf-tutorial>footer>button:is(:hover,:focus-visible){border-color:#f0d083;background:rgba(72,47,24,.88);color:#fff1ca;outline:2px solid rgba(115,216,237,.34);outline-offset:2px}
+#sf-tutorial.is-complete .sf-tutorial{border-left-color:#73d8ed}
+#sf-tutorial.is-leaving .sf-tutorial{opacity:0;transform:translateX(.75rem)}
+
+body.sf-high-contrast .sf-tutorial{border-color:#c3f6ff;border-left-color:#ffe199;background:#000;box-shadow:inset 0 0 0 1px #000}
+body.sf-high-contrast .sf-tutorial>p,
+body.sf-high-contrast .sf-tutorial>footer>span{color:#fff}
+body.sf-high-contrast .sf-tutorial__controls kbd{border-color:#c3f6ff;background:#031116;color:#fff}
+
+@container saintfall-playfield (max-width:760px){
+  .sf-tutorial{width:min(19rem,48cqw);min-width:16.5rem;top:max(8.4rem,calc(env(safe-area-inset-top) + 8rem))}
+}
+@media (hover:none) and (pointer:coarse), (max-width:560px){
+  .sf-tutorial{
+    left:max(.6rem,calc(env(safe-area-inset-left) + .35rem));
+    right:max(.6rem,calc(env(safe-area-inset-right) + .35rem));
+    top:max(3.55rem,calc(env(safe-area-inset-top) + 3.15rem));
+    width:auto;min-width:0;padding:.68rem .72rem .62rem;gap:.48rem
+  }
+  .sf-tutorial__head{padding-bottom:.38rem}.sf-tutorial__head strong{font-size:14px}
+  .sf-tutorial>p{font-size:10px;line-height:1.36}
+  .sf-tutorial__controls{gap:.24rem}.sf-tutorial__controls kbd{min-height:1.55rem;padding:.3rem .4rem;font-size:8px}
+  .sf-tutorial>footer{padding-top:.38rem}.sf-tutorial>footer>button{min-width:7.25rem}
+}
+@media (orientation:landscape) and (max-height:500px){
+  .sf-tutorial{
+    left:auto;right:max(.55rem,calc(env(safe-area-inset-right) + .3rem));
+    top:max(.45rem,calc(env(safe-area-inset-top) + .25rem));
+    width:min(19rem,42vw);padding:.55rem .62rem .5rem;gap:.34rem
+  }
+  .sf-tutorial__head{padding-bottom:.28rem}.sf-tutorial__head strong{font-size:13px}
+  .sf-tutorial>p{font-size:9px;line-height:1.28}
+  .sf-tutorial__controls kbd{min-height:1.35rem;padding:.24rem .32rem;font-size:7px}
+  .sf-tutorial__checks{gap:.18rem .3rem}.sf-tutorial__checks li{font-size:7px}.sf-tutorial__checks i{width:.82rem;height:.82rem}
+  .sf-tutorial>footer{padding-top:.25rem}.sf-tutorial>footer>span{font-size:7px}.sf-tutorial>footer>button{min-height:44px;padding:.42rem .52rem;font-size:8px}
+}
+@media (prefers-reduced-motion:reduce){
+  .sf-tutorial,.sf-tutorial__checks li{transition:none!important}
+}
+
+/* ======================================================================
    SAINTFALL - Doctrine board
 
    The capstone Vow used to be a full-width band published below a

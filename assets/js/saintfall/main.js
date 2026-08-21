@@ -44,6 +44,7 @@ import { buildAudio } from "saintfall/audio.js";
 import { buildWeapons } from "saintfall/weapons.js";
 import { buildHud } from "saintfall/hud.js";
 import { buildTouchControls } from "saintfall/touch.js";
+import { buildTutorial } from "saintfall/tutorial.js";
 import { buildDropIntro } from "saintfall/intro.js";
 import { buildSaveSystem } from "saintfall/save.js";
 import { buildGameUi, readStoredSettings } from "saintfall/ui.js";
@@ -58,6 +59,7 @@ export async function start({ boot, build } = {}) {
   const apostateTestStart = params.get("boss") === "apostate";
   const qa = params.has("qa") || apostateTestStart;
   const introParam = params.get("intro");
+  const tutorialParam = params.get("tutorial");
   /* Existing QA harnesses expect assets-ready to mean immediately
      playable. Normal players get the cinematic; QA opts into it
      explicitly with ?qa=1&intro=force. */
@@ -65,6 +67,11 @@ export async function start({ boot, build } = {}) {
     && (!qa || introParam === "1" || introParam === "force");
   // A frozen clock is a deterministic QA instrument, never a player URL mode.
   const introManualClock = qa && params.get("introClock") === "manual";
+  /* Production new operations receive orientation by default. Existing QA
+     URLs retain their direct-gameplay contract and opt in explicitly. */
+  const tutorialForced = tutorialParam === "1" || tutorialParam === "force";
+  const tutorialEnabled = tutorialParam !== "0" && tutorialParam !== "skip"
+    && (!qa || tutorialForced);
   /* A `?quality=` URL value is a SESSION override - harnesses pin a tier
      with it, and it must not write itself into the player's stored
      preference. Absent the param, the tier comes from the settings
@@ -351,6 +358,15 @@ export async function start({ boot, build } = {}) {
   });
   ctx.gameUi = gameUi;
 
+  const tutorial = buildTutorial(ctx, {
+    enabled: tutorialEnabled,
+    host: document.getElementById("sf-tutorial"),
+    stage,
+    canvas,
+    touch,
+  });
+  ctx.tutorial = tutorial;
+
   const introHost = document.getElementById("sf-intro");
   const touchEnabledAfterDrop = !!touch.enabled;
   const runtimePauseReasons = {
@@ -444,7 +460,7 @@ export async function start({ boot, build } = {}) {
     onLoad: (kind, index) => saves.load?.(kind, index),
     settingsState: () => gameUi.settingsState?.() || {},
     onSetting: (name, value) => gameUi.setSetting?.(name, value),
-    onComplete() {
+    onComplete({ launchMode } = {}) {
       ctx.runtime.phase = "playing";
       ctx.runtime.paused = false;
       ctx.runtime.handoffFrames = 1;
@@ -455,6 +471,7 @@ export async function start({ boot, build } = {}) {
       audio.startAmbience?.();
       audio.startMusic?.();
       syncRuntimePaused();
+      if (launchMode === "new") tutorial.start?.({ source: "new-operation" });
     },
   });
   ctx.intro = intro;
@@ -519,6 +536,7 @@ export async function start({ boot, build } = {}) {
     intro,
     saves,
     gameUi,
+    tutorial,
     runtime: ctx.runtime,
     audioFactory: buildAudio,
     fps: 0,
@@ -1002,6 +1020,7 @@ export async function start({ boot, build } = {}) {
     hud.update(d, player, render.camera);
     saves.update(d);
     gameUi.update?.(d);
+    tutorial.update?.(d);
     if (draw) render.render(render.camera);
   }
 
@@ -1020,6 +1039,7 @@ export async function start({ boot, build } = {}) {
     }
     if (ctx.runtime.paused) {
       gameUi.update?.(0);
+      tutorial.update?.(0);
       if (draw) render.render(render.camera);
       return;
     }
@@ -1178,6 +1198,7 @@ export async function start({ boot, build } = {}) {
   intro.reveal?.();
   if (boot) await boot.hide();
   api.ready = true;
+  if (tutorialForced && !introEnabled) tutorial.start?.({ source: "forced-direct" });
   requestAnimationFrame(loop);
 
   return api;

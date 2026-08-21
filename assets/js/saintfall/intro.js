@@ -2468,6 +2468,7 @@ export function buildDropIntro(ctx, options = {}) {
 
   function complete(skipped = false, { preserveSpawn = false, source = "cinematic" } = {}) {
     if (state.completed) return false;
+    const launchMode = state.launchMode;
     state.completed = true;
     state.skipped = !!skipped;
     state.mode = skipped ? "skipped" : "complete";
@@ -2507,7 +2508,7 @@ export function buildDropIntro(ctx, options = {}) {
     host.dataset.shot = "handoff";
     skipButton.disabled = true;
     stage?.classList.remove("sf-intro-active");
-    onComplete({ skipped: state.skipped, handoffCount: state.handoffCount, source });
+    onComplete({ skipped: state.skipped, handoffCount: state.handoffCount, source, launchMode });
     window.setTimeout(() => {
       if (!options.preserveForQa) dispose();
     }, state.reducedMotion ? 80 : 900);

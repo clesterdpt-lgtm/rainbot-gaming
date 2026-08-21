@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260820-boss-text-cleanup-1";
+  const BUILD = "20260821-tutorial-intro-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -101,7 +101,7 @@
   const MODULES = [
     "core", "art", "sky", "terrain", "structures", "world", "collide", "intro-models",
     "vfx", "render", "player", "jetpack", "boost", "slam", "shield", "boss-surface", "enemies", "weapons", "ik", "combat", "difficulty", "reveal-camera",
-    "mission", "breaches", "abbess", "coulter", "distaff", "garner", "matriarch", "stylite", "winnower", "district-bosses", "apostate", "undercroft", "progression-config", "progression", "audio", "hud", "touch", "intro", "pod", "save", "ui", "qa", "main",
+    "mission", "breaches", "abbess", "coulter", "distaff", "garner", "matriarch", "stylite", "winnower", "district-bosses", "apostate", "undercroft", "progression-config", "progression", "audio", "hud", "touch", "tutorial", "intro", "pod", "save", "ui", "qa", "main",
   ];
 
   function installImportMap(base) {

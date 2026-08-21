@@ -136,6 +136,8 @@ try {
     `${rig.perches} crowns, lowest at y=${Math.round(rig.lowest)}`);
   check("the fight is vertical", rig.altitude > 45,
     `${rig.altitude}m above the floor`);
+  check("the expanded Stylite pool is live", rig.maxHealth === 7000,
+    `${rig.maxHealth} max health`);
   check("the dormant tenant cannot be seen or damaged",
     rig.hidden && !rig.targetable);
 
@@ -169,6 +171,8 @@ try {
   });
   check("it rakes the ground beneath it", barrage.shots > 0,
     `${barrage.shots} bolts, ${barrage.hits} landed`);
+  check("each barrage now carries five projectiles",
+    await page.evaluate(() => window.__SF.stylite.config.volleyShots) === 5);
   /* Travelling, not hitscan: bolts that exist in the world for long
      enough to be seen and walked out of. */
   check("the bolts travel rather than hitscan", barrage.peak > 0,

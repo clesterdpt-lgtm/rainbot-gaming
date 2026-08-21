@@ -3091,7 +3091,7 @@ export async function buildWorld(ctx, onProgress) {
       // western sun, so its interior is lit by sky alone; painted
       // dark on top of that the shards vanish into their own
       // shadow and the district reads as a black hole in the map.
-      paintH(g, GLASS_RAMP, { normalWeight: 0.55, jitter: 0.2, noise: 0.3, bias: 0.22 });
+      paintH(g, GLASS_RAMP, { normalWeight: 0.55, jitter: 0.2, noise: 0.3, bias: 0.30 });
       batch.add("scar", "glassRock", g);
       pois.push({ id: "scar", name: "The Glass Scar", x: d.x, z: d.z });
     }
@@ -3110,7 +3110,7 @@ export async function buildWorld(ctx, onProgress) {
       kit.transform(g, { pos: [d.x, y - 0.4, d.z] });
       paintGeometry(THREE, g, GLASS_RAMP, (x, yy, z) => {
         const rr = Math.hypot(x - d.x, z - d.z) / R;
-        return clamp01(0.06 + rr * 0.34 + Math.sin(x * 0.3 + z * 0.21) * 0.07);
+        return clamp01(0.10 + rr * 0.36 + Math.sin(x * 0.3 + z * 0.21) * 0.07);
       }, { jitter: 0.05 });
       batch.add("scar", "glassRock", g, { castShadow: false });
     }
@@ -3147,7 +3147,7 @@ export async function buildWorld(ctx, onProgress) {
       // the crater floor is 140m across.
       lights.push({
         x: d.x + 4, y: y + 14, z: d.z - 6,
-        colour: "#ff7a3a", intensity: 210, distance: 210, kind: "ember", flicker: 0.5,
+        colour: "#ff7a3a", intensity: 255, distance: 220, kind: "ember", flicker: 0.5,
       });
     }
 
@@ -3172,7 +3172,7 @@ export async function buildWorld(ctx, onProgress) {
         if (pts.length > 2) parts.push(kit.tube(pts, veinR, 4, { taper: 0.72 }));
       }
       const g = kit.merge(parts);
-      paintH(g, GLASS_RAMP, { normalWeight: 0.4, jitter: 0.2, bias: 0.22 });
+      paintH(g, GLASS_RAMP, { normalWeight: 0.4, jitter: 0.2, bias: 0.30 });
       batch.add("scar", "glassRock", g, { castShadow: false });
     }
   }

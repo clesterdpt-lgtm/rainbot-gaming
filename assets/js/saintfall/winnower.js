@@ -201,6 +201,10 @@ export const WINNOWER_CONFIG = Object.freeze({
      payload left half a second before the whip that throws it. */
   bombardContact: 0.917,      // frame 22 of 52 at 24fps
   bombardCount: 4,
+  /* The fight opens with four coals, then adds one through five even
+     health steps. Eight at the brink is still below EMBER_MAX and
+     reads as a widening pattern rather than an undodgeable carpet. */
+  bombardCountRoused: 8,
   bombardSpeed: 19,
   bombardSpread: 5.5,
   emberDamage: 26,
@@ -2315,9 +2319,16 @@ export function buildWinnower(ctx) {
     bus.emit("sweepTelegraph", { x: inst.x, z: inst.z });
   }
 
+  function currentBombardCount() {
+    const spent = clamp01(1 - inst.health / Math.max(1, inst.maxHealth));
+    return Math.min(C.bombardCountRoused,
+      C.bombardCount + Math.floor(spent * (C.bombardCountRoused - C.bombardCount + 1)));
+  }
+
   function dropEmbers() {
     const ps = ctx.player.state;
-    for (let i = 0; i < C.bombardCount; i += 1) {
+    const count = currentBombardCount();
+    for (let i = 0; i < count; i += 1) {
       const bone = inst.bones.get(`censer${i % 3}`);
       let ox = inst.x;
       let oy = inst.y - 2.2;
@@ -2330,7 +2341,7 @@ export function buildWinnower(ctx) {
       // Lead the player a little and scatter, so a straight-line
       // sprint is not a guaranteed dodge and standing still is not a
       // guaranteed hit.
-      const spread = (i / Math.max(1, C.bombardCount - 1) - 0.5) * 2;
+      const spread = (i / Math.max(1, count - 1) - 0.5) * 2;
       const tx = ps.x + spread * C.bombardSpread + (Math.random() - 0.5) * 2.5;
       const tz = ps.z + spread * C.bombardSpread * 0.6 + (Math.random() - 0.5) * 2.5;
       const v = ballistic(ox, oy, oz, tx, ps.y + 0.6, tz, C.bombardSpeed);
@@ -2341,7 +2352,7 @@ export function buildWinnower(ctx) {
     // the payload, so the gut drops back through a visible flare.
     state.flash = Math.max(state.flash, 0.85);
     state.swell = 0;
-    bus.emit("bombard", { x: inst.x, y: inst.y, z: inst.z, count: C.bombardCount });
+    bus.emit("bombard", { x: inst.x, y: inst.y, z: inst.z, count });
   }
 
   /** The low-arc ballistic root, straight out of the Coulter's spew -
@@ -2827,7 +2838,7 @@ export function buildWinnower(ctx) {
     const isDowned = state.phase === "land" || state.phase === "stoke" || state.phase === "launch" || inst.grounded;
     if (isDowned) {
       state.damageThisDowning = (state.damageThisDowning || 0) + (e.actual || 0);
-      const maxHp = inst.maxHealth || inst.spec?.health || 6200;
+      const maxHp = inst.maxHealth || inst.spec?.health || 7800;
       const maxAllowed = maxHp * (C.downDamageCap || 0.28);
       const startHealth = Number.isFinite(state.healthAtDowningStart) ? state.healthAtDowningStart : inst.health;
       if (startHealth > maxAllowed + 50 && state.damageThisDowning >= maxAllowed) {
@@ -2848,7 +2859,7 @@ export function buildWinnower(ctx) {
    */
   function modifyIncomingDamage(targetInst, request, damage) {
     if (!inst || targetInst !== inst) return damage;
-    const maxHp = inst.maxHealth || inst.spec?.health || 6200;
+    const maxHp = inst.maxHealth || inst.spec?.health || 7800;
     const isDowned = state.phase === "land" || state.phase === "stoke" || state.phase === "launch" || inst.grounded;
     if (isDowned) {
       const maxAllowed = maxHp * (C.downDamageCap || 0.28);
@@ -3147,7 +3158,7 @@ export function buildWinnower(ctx) {
   function status() {
     if (!inst) return state.defeated ? {
       phase: "dead", dead: true, defeated: true,
-      health: 0, maxHealth: 6200,
+      health: 0, maxHealth: 7800,
       x: C.stacks[0].x, y: 0, z: C.stacks[0].z,
     } : null;
     return {
@@ -3171,6 +3182,7 @@ export function buildWinnower(ctx) {
       timer: Number(state.timer.toFixed(2)),
       ashFields: fields.filter((f) => f.life > 0).length,
       embers: embers.filter((e) => e.live).length,
+      bombardCount: currentBombardCount(),
       hidden: !!inst.encounterHidden,
       locked: !!inst.encounterLocked,
       /* The furnace, reported so a harness can assert about the read
@@ -3254,7 +3266,10 @@ export function buildWinnower(ctx) {
     inst.z = Number.isFinite(saved.z) ? saved.z : inst.z;
     inst.y = Number.isFinite(saved.y) ? saved.y : inst.y;
     inst.yaw = Number.isFinite(saved.yaw) ? saved.yaw : inst.yaw;
-    if (Number.isFinite(saved.health)) inst.health = clamp(saved.health, 0, inst.maxHealth);
+    if (Number.isFinite(saved.health) && !inst.balanceMigration) {
+      inst.health = clamp(saved.health, 0, inst.maxHealth);
+    }
+    delete inst.balanceMigration;
     if (Number.isFinite(saved.lift)) inst.lift = clamp(saved.lift, 0, inst.maxLift);
     if (Array.isArray(saved.sacBurst) && inst.sacBurst) {
       for (let i = 0; i < inst.sacBurst.length; i += 1) inst.sacBurst[i] = !!saved.sacBurst[i];
@@ -3327,6 +3342,16 @@ export function buildWinnower(ctx) {
         enemies.play(inst, "idle", 0);
       }
       return { phase: state.phase, timer: state.timer };
+    },
+    /** QA: make the next eligible airborne answer a bombardment. */
+    primeBombard() {
+      if (!inst || state.phase !== "soar") return false;
+      state.action = 0;
+      state.pending = 0;
+      state.actionKind = null;
+      state.bombardTimer = 0;
+      state.strafeTimer = Math.max(state.strafeTimer, C.bombardCadence + 2);
+      return true;
     },
     dispose() {
       scene.remove(group);

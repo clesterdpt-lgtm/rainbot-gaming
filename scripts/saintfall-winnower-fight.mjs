@@ -125,6 +125,7 @@ try {
       clips: ["idle", "alert", "bombard", "strain", "land", "stoke",
         "launch", "sweep", "flinch", "death"].every((c) => inst?.actions?.has(c)),
       lift: w?.lift,
+      maxHealth: w?.maxHealth,
       // No leg chains: a flyer's limbs are owned by its clips.
       legs: inst?.legs?.length,
     };
@@ -136,6 +137,8 @@ try {
   check("every authored clip loaded", rig.clips);
   check("carries no IK leg chains", rig.legs === 0);
   check("starts with a full lift pool", rig.lift > 0, `lift=${rig.lift}`);
+  check("the expanded Winnower pool is live", rig.maxHealth === 7800,
+    `${rig.maxHealth} max health`);
 
   /* ---- AGGRO -------------------------------------------------------- */
   const far = await page.evaluate(() => {
@@ -260,6 +263,29 @@ try {
   check("the furnace burns down and it lands WITHOUT being shot",
     attacks.landing > 0 && attacks.stoke > 0,
     `${attacks.landing} landings, ${attacks.stoke} stokes in 25s`);
+
+  const bombardGrowth = await page.evaluate(() => {
+    const T = window.__SF;
+    const inst = T.winnower.instance();
+    const counts = [];
+    const off = T.winnower.bus.on("bombard", (e) => { counts.push(e.count); });
+    const fireAt = (fraction) => {
+      T.forceWinnowerPhase("soar", 20);
+      inst.health = inst.maxHealth * fraction;
+      T.winnower.primeBombard();
+      T.advanceTime(T.winnower.config.bombardContact + 0.08, 1 / 60);
+      return counts[counts.length - 1];
+    };
+    const full = fireAt(1);
+    T.advanceTime(2.3, 1 / 60);
+    const brink = fireAt(0.08);
+    off();
+    return { full, brink, max: T.winnower.config.bombardCountRoused };
+  });
+  check("its bombard grows as the health bar is spent",
+    bombardGrowth.full === 4 && bombardGrowth.brink === bombardGrowth.max
+      && bombardGrowth.brink > bombardGrowth.full,
+    JSON.stringify(bombardGrowth));
 
   const window = await page.evaluate(() => {
     const T = window.__SF;

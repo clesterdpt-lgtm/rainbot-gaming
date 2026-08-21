@@ -185,6 +185,31 @@ try {
   check("a reaching limb keeps its length instead of folding up",
     lash.span > 12, `${lash.span}m across the four hit nodes`);
 
+  const farEruption = await page.evaluate(() => {
+    const T = window.__SF;
+    T.resetGarner();
+    T.teleportToGarner(30);
+    T.advanceToGarnerPhase("feeding", 14);
+    const pit = T.garner.config;
+    T._teleportRaw(pit.pitX + 118, pit.pitZ, 0);
+    const ps = T.player.state;
+    T.forceGarnerLash(0);
+    T.advanceTime(0.05, 1 / 60);
+    const node = T.garnerArmNodes(0)[0];
+    return {
+      playerRadius: Math.hypot(ps.x - pit.pitX, ps.z - pit.pitZ),
+      anchorRadius: Math.hypot(node.x - pit.pitX, node.z - pit.pitZ),
+      fromPlayer: Math.hypot(node.x - ps.x, node.z - ps.z),
+      maxRadius: pit.armMaxRadius,
+      phase: T.garnerState().phase,
+    };
+  });
+  check("a tentacle can erupt beside a player anywhere in the boss arena",
+    farEruption.playerRadius > 100 && farEruption.anchorRadius > 44
+      && farEruption.anchorRadius <= farEruption.maxRadius + 0.5
+      && farEruption.fromPlayer <= 16,
+    JSON.stringify(farEruption));
+
   /* A player standing still is seized; a player who moves during the
      telegraph is not - the contact frame is what decides. */
   const dodge = await page.evaluate(() => {
@@ -396,7 +421,7 @@ try {
       back, regrown: after.armsSevered,
     };
   });
-  check("cutting a limb pays real damage into the main pool", gorge.bonus > 0,
+  check("cutting a tentacle never damages the buried boss pool", gorge.bonus === 0,
     `${Math.round(gorge.bonus)} from three limbs`);
   check("cutting enough limbs forces the gorge window",
     gorge.reached >= 0 && gorge.gorging, JSON.stringify(gorge));

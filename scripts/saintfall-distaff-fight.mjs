@@ -18,8 +18,8 @@
        a late sidestep can beat;
      - it turns at a capped rate, not at all while an attack is wound
        up, and a sprinting trooper can outrun the turn round its legs;
-     - breaking a leg buys a stagger: every attack stops for a few
-       seconds and a wind-up in flight is cancelled;
+     - only one intact leg retains damage at a time; changing target
+       restores the previous one, and one break buckles the body;
      - the collapsed bite is thrown from the head at what is in front
        of it, so the flanks and rear are safe ground for melee;
      - the web pin ROOTS the trooper (no travel, no jump, no boost, no
@@ -27,10 +27,11 @@
        the slam ring and queues the slam;
      - walking away leashes it: full heal on the spot, a walk home,
        and a fresh fight for the next approach;
-     - breaking a leg pays real damage to the main pool and, once
-       enough are gone, buckles the body down to where melee actually
+     - breaking a leg pays real damage to the main pool and buckles
+       the body down to where melee actually
        lands - and lands harder there than a rifle would;
-     - broken legs survive a collapse/recover cycle, and the encounter
+     - broken legs survive a collapse/recover cycle while every other
+       leg rises at full health, and the encounter
        renders inside its performance budget while all of it is live.
 
    Usage:
@@ -125,6 +126,7 @@ try {
       phase: d?.phase,
       legCount: inst?.legs?.length,
       legHpLength: inst?.legHp?.length,
+      maxHealth: d?.maxHealth,
       bones: ["prosoma", "abdomen1", "abdomen2", "spinneret", "head",
         "fang_L", "fang_R"].every((n) => inst?.bones?.has(n)),
       clips: ["idle", "alert", "slam", "webCast", "collapse", "bite",
@@ -133,6 +135,8 @@ try {
   });
   check("spawns once, dormant, at the lair", rig.spawned && rig.phase === "dormant");
   check("eight legs, each with its own pool", rig.legCount === 8 && rig.legHpLength === 8);
+  check("the expanded Distaff pool is live", rig.maxHealth === 11000,
+    `${rig.maxHealth} max health`);
   check("named body/leg bones resolve", rig.bones);
   check("every authored clip loaded", rig.clips);
 
@@ -528,6 +532,14 @@ try {
   check("the leg slam fires and can land at close range",
     standingAttacks.slam + standingAttacks.slamMiss > 0, JSON.stringify(standingAttacks));
   check("web bolts are cast at range", standingAttacks.webCast > 0);
+  check("the denser web cadence is live", await page.evaluate(() => {
+    const C = window.__SF.distaff.config;
+    return C.webCadence <= 4 && C.reelCadence <= 10 && C.patchCadence <= 5.5;
+  }));
+  check("the shorter collapse and rise timings are live", await page.evaluate(() => {
+    const C = window.__SF.distaff.config;
+    return C.collapseSeconds <= 7.5 && C.recoverSeconds <= 1.1;
+  }));
   check("ground web patches are laid", standingAttacks.patch > 0);
 
   /* ---- WEB EFFECT ---------------------------------------------------- */
@@ -549,12 +561,14 @@ try {
     const healthBefore = inst.health;
     T.combat.damageLeg(inst, 4, 50, { x: inst.x, y: inst.y, z: inst.z });
     const afterPartial = { legHp: inst.legHp[4], health: inst.health, broken: inst.legBroken[4] };
-    T.combat.damageLeg(inst, 4, 9999, { x: inst.x, y: inst.y, z: inst.z });
-    const afterBreak = { legHp: inst.legHp[4], health: inst.health, broken: inst.legBroken[4] };
+    T.combat.damageLeg(inst, 5, 40, { x: inst.x, y: inst.y, z: inst.z });
+    const afterSwitch = { first: inst.legHp[4], second: inst.legHp[5] };
+    T.combat.damageLeg(inst, 5, 9999, { x: inst.x, y: inst.y, z: inst.z });
+    const afterBreak = { legHp: inst.legHp[5], health: inst.health, broken: inst.legBroken[5] };
     // A broken leg cannot be damaged again.
-    T.combat.damageLeg(inst, 4, 50, { x: inst.x, y: inst.y, z: inst.z });
+    T.combat.damageLeg(inst, 5, 50, { x: inst.x, y: inst.y, z: inst.z });
     const afterRehit = { health: inst.health };
-    return { before, healthBefore, afterPartial, afterBreak, afterRehit };
+    return { before, healthBefore, afterPartial, afterSwitch, afterBreak, afterRehit };
   });
   check("a leg loses its own HP without touching the main pool",
     legDamage.afterPartial.legHp === legDamage.before - 50
@@ -564,6 +578,16 @@ try {
     `${legDamage.afterPartial.health} -> ${legDamage.afterBreak.health}`);
   check("a broken leg cannot be damaged again",
     legDamage.afterRehit.health === legDamage.afterBreak.health);
+  check("only the currently targeted intact leg retains damage",
+    legDamage.afterSwitch.first === legDamage.before
+      && legDamage.afterSwitch.second === legDamage.before - 40,
+    JSON.stringify(legDamage.afterSwitch));
+  await page.evaluate(() => {
+    const T = window.__SF;
+    T.distaff.resetToLair();
+    T.teleportToDistaff(30);
+    T.advanceToDistaffPhase("standing", 10);
+  });
 
   /* ---- MELEE ON LEGS AND THE STANDING BODY ---------------------------
      The creature turns to face the player every frame it is awake -
@@ -851,12 +875,21 @@ try {
     const inst = T.enemies.live.find((e) => e.key === "distaff");
     const ps = T.player.state;
     const C = T.distaff.config;
-    T._teleportRaw(inst.x - 12, inst.z, 0);
+    const placeOpen = () => {
+      const tx = inst.x - 12;
+      const tz = inst.z;
+      const ty = T.collide.groundHeight(tx, tz);
+      const open = T.collide.findOpen(tx, tz, ty, 64, 10, T.collide.radius);
+      T._teleportRaw(open?.[0] ?? tx, open?.[1] ?? tz, 0);
+    };
+    placeOpen();
     T.settleDistaff(8);
-    T._teleportRaw(inst.x - 12, inst.z, 0);
+    placeOpen();
     T.setBodyHeading(0);
     T.setGaitInput(null, null);
     T.resetBoost(true);
+    T.distaff.clearHazards();
+    T.player.clearRoot();
     T.distaff.primeAttack("web");
     let hits = 0;
     const off = T.distaff.bus.on("webHit", () => { hits += 1; });
@@ -867,12 +900,9 @@ try {
     const rootAtHit = ps.rootFor;
     const silk = document.getElementById("sf-silk");
     const silkState = silk?.dataset.state;
-    // Hold forward for a second while held.
-    const p0 = { x: ps.x, z: ps.z };
-    T.setGaitInput(0, -1);
-    for (let i = 0; i < 60; i += 1) T.renderOnce(1 / 60);
-    const movedHeld = Math.hypot(ps.x - p0.x, ps.z - p0.z);
-    // Jump, boost, ignition - all refused while held.
+    // Jump, boost, ignition - all refused while the fresh pin is held.
+    // Exercise these first so uneven crater support or a later boss action
+    // cannot turn a pin assertion into a separate fall/recovery scenario.
     T.player.input.state.jumpPressed = true;
     T.renderOnce(1 / 60);
     const jumped = !ps.grounded || ps.vy > 0.1;
@@ -881,6 +911,12 @@ try {
     for (let i = 0; i < 6; i += 1) T.renderOnce(1 / 60);
     const lit = !!T.jetpack?.state?.inFlight;
     T.setJetInput(false);
+    // Hold forward for a bounded interval that remains well inside the pin.
+    const p0 = { x: ps.x, z: ps.z };
+    T.setGaitInput(0, -1);
+    for (let i = 0; i < 20; i += 1) T.renderOnce(1 / 60);
+    const movedHeld = Math.hypot(ps.x - p0.x, ps.z - p0.z);
+    const rootAfterHeldInput = ps.rootFor;
     T.setGaitInput(null, null);
     // Wait out the hold, then the same input walks off it.
     while (ps.rootFor > 0) T.renderOnce(1 / 60);
@@ -893,11 +929,13 @@ try {
     return {
       hits, rootAtHit: Number(rootAtHit.toFixed(2)), rootSeconds: C.webRootSeconds, silkState,
       movedHeld: Number(movedHeld.toFixed(2)), jumped, boosted, lit,
+      rootAfterHeldInput: Number(rootAfterHeldInput.toFixed(2)),
       slowAfter: Number(slowAfter.toFixed(2)), movedFree: Number(movedFree.toFixed(2)),
     };
   });
   check("a web bolt roots the trooper for a few seconds",
     pin.hits > 0 && pin.rootAtHit >= 2 && pin.rootSeconds >= 2 && pin.movedHeld < 0.25
+      && pin.rootAfterHeldInput > 0
       && pin.silkState === "held",
     JSON.stringify(pin));
   check("held: no jump, no boost, no ignition; freed: the same input walks off the web, slowed first",
@@ -973,7 +1011,8 @@ try {
   /* ---- THE STAGGER ----------------------------------------------------
      A slam wound up, then a leg breaks: the slam never lands (no slam,
      no slamMiss), nothing is thrown for the whole window, the body
-     holds still - and once the window closes the fight resumes. */
+     holds still - and the first lost leg immediately starts the
+     authored knockdown rather than leaving seven partial pools live. */
   const stagger = await page.evaluate(() => {
     const T = window.__SF;
     const inst = T.enemies.live.find((e) => e.key === "distaff");
@@ -998,9 +1037,6 @@ try {
     for (let i = 0; i < frames; i += 1) T.renderOnce(1 / 60);
     const during = { ...ev };
     const moved = Math.hypot(inst.x - p0.x, inst.z - p0.z);
-    // And afterwards it fights again.
-    T.distaff.primeAttack("slam");
-    for (let i = 0; i < 180; i += 1) T.renderOnce(1 / 60);
     const after = { ...ev };
     offs.forEach((f) => f());
     const thrown = (a, b) => ["slamTelegraph", "webCastTelegraph", "reelTelegraph", "lungeTelegraph",
@@ -1009,29 +1045,27 @@ try {
       staggerFor, configStagger: C.legBreakStagger, staggerEvents: during.stagger,
       slamLanded: during.slam - before.slam + during.slamMiss - before.slamMiss,
       thrownDuring: thrown(before, during), thrownAfter: thrown(during, after),
-      moved: Number(moved.toFixed(2)),
+      moved: Number(moved.toFixed(2)), phase: T.distaffState().phase,
     };
   });
   check("a broken leg cancels the wind-up and holds every attack for a few seconds",
     stagger.staggerFor > 2.5 && stagger.configStagger >= 3 && stagger.staggerEvents > 0
       && stagger.slamLanded === 0 && stagger.thrownDuring === 0 && stagger.moved < 0.3,
     JSON.stringify(stagger));
-  check("the fight resumes when the stagger ends", stagger.thrownAfter > 0,
-    `${stagger.thrownAfter} attacks after the window`);
+  check("one broken leg commits the Distaff to its knockdown cycle",
+    stagger.phase === "collapsed", JSON.stringify(stagger));
 
   /* ---- COLLAPSE ------------------------------------------------------ */
   const collapse = await page.evaluate(() => {
     const T = window.__SF;
     const inst = T.enemies.live.find((e) => e.key === "distaff");
     const alreadyBroken = inst.legsBroken;
-    for (let i = 0; i < 8 && inst.legsBroken < 4; i += 1) {
-      if (!inst.legBroken[i]) T.breakDistaffLeg(i);
-    }
     for (let i = 0; i < 30; i += 1) T.renderOnce(1 / 60);
     return { alreadyBroken, after: T.distaffState() };
   });
-  check("collapsing triggers once the leg threshold is reached",
-    collapse.after.phase === "collapsed" && collapse.after.collapsed,
+  check("collapsing triggers at the one-leg threshold",
+    collapse.alreadyBroken === 1 && collapse.after.phase === "collapsed"
+      && collapse.after.collapsed,
     `legsBroken=${collapse.after.legsBroken}`);
 
   /* THE SINK. A clip can only rotate bones - folding the legs moves
@@ -1041,7 +1075,10 @@ try {
   const sink = await page.evaluate(() => {
     const T = window.__SF;
     const inst = T.enemies.live.find((e) => e.key === "distaff");
-    for (let i = 0; i < 260; i += 1) T.renderOnce(1 / 60);
+    /* Sample before the new 7.5s vulnerable window ends. The former
+       four-second wait was calibrated to an eleven-second collapse
+       and now photographed the animal after it had already risen. */
+    for (let i = 0; i < 150; i += 1) T.renderOnce(1 / 60);
     const head = inst.bones.get("head");
     head.updateWorldMatrix(true, false);
     const w = head.getWorldPosition(
@@ -1101,11 +1138,11 @@ try {
     return { targets: targets.length, samples, maxIkDrift: Number(maxIkDrift.toFixed(2)), misses };
   });
   check("folded leg hitboxes follow every live rendered segment, not the stale IK feet",
-    collapsedLegCoverage.targets === 4 && collapsedLegCoverage.samples === 36
+    collapsedLegCoverage.targets === 7 && collapsedLegCoverage.samples === 63
       && collapsedLegCoverage.maxIkDrift > 2 && collapsedLegCoverage.misses.length === 0,
     collapsedLegCoverage.misses.length
       ? JSON.stringify(collapsedLegCoverage.misses.slice(0, 4))
-      : `${collapsedLegCoverage.samples}/36 spans aligned through ${collapsedLegCoverage.maxIkDrift}m IK drift`);
+      : `${collapsedLegCoverage.samples}/63 spans aligned through ${collapsedLegCoverage.maxIkDrift}m IK drift`);
 
   const collapsedMelee = await page.evaluate(() => {
     const T = window.__SF;
@@ -1209,6 +1246,9 @@ try {
     `${recover.secs}s`);
   check("legs broken before the collapse are still broken after",
     JSON.stringify(recover.before) === JSON.stringify(recover.after.legBroken));
+  check("every other leg returns to full health when it stands",
+    recover.after.legHp.every((hp, i) => recover.after.legBroken[i] || hp === 340),
+    JSON.stringify(recover.after.legHp));
 
   /* ---- THE LEASH ------------------------------------------------------ */
   const leash = await page.evaluate(() => {

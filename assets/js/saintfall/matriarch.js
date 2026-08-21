@@ -103,7 +103,7 @@ export const MATRIARCH_CONFIG = Object.freeze({
      under a SPRINT, so the range is a live argument: keep the sights
      up and it closes on you, break into a run and you keep your
      distance and stop shooting for as long as you do. */
-  walkSpeed: 6.65,
+  walkSpeed: 7.2,
   backSpeed: 3.1,
   strafeSpeed: 4.0,
   strafeFlipSeconds: 2.4,
@@ -130,10 +130,10 @@ export const MATRIARCH_CONFIG = Object.freeze({
      at thirteen - and a PLANTED foot never slides a millimetre at
      any of them. The ceiling stays because of the counterplay
      argument above, which is the honest reason for it. */
-  chaseSpeed: 8.15,
+  chaseSpeed: 8.45,
   chaseFrom: 14,
   chaseFull: 30,
-  gaitCeiling: 8.25,
+  gaitCeiling: 8.55,
   /* Where in the band it settles while circling, and how hard it is
      pulled there - see the strafe branch of `stepStalk`.
 
@@ -274,7 +274,7 @@ export const MATRIARCH_CONFIG = Object.freeze({
      were outside the encounter, which the pressure probe measured as
      twenty-six seconds of nothing at all. If a range is safe it has to
      be safe because getting there cost something. */
-  lanceRange: Object.freeze([9.5, 34]),
+  lanceRange: Object.freeze([9.5, 84]),
   lanceCock: 0.95,
   /* THE DASH IS AS LONG AS THE GAP, between these bounds. A fixed
      0.40s at 27 m/s is a fixed eleven metres, so the far half of the
@@ -307,6 +307,10 @@ export const MATRIARCH_CONFIG = Object.freeze({
      anything. Narrow enough that going round it still works. */
   lanceArc: 0.5,                // +-60 degrees
   lanceCadence: 5.2,
+  /* Beyond the seismic ring the Matriarch has only one tactical idea:
+     close. It runs continuously and repeats a readable lance until it
+     has forced the player back into the encounter. */
+  pursuitLanceCadence: 2.2,
   /* THE LANCE TRACKS HARDER THAN THE SCYTHES, and it is the one place
      this animal is allowed to. `committedTurnRate` exists so that a
      SIDESTEP beats a swing, which is the contract the whole bestiary
@@ -348,6 +352,28 @@ export const MATRIARCH_CONFIG = Object.freeze({
   cullReach: 9.4,
   cullSpin: 7.2,                // rad/s through the sweep - the whip
   cullCadence: 4.2,
+
+  /* ------------------------------------------------------------
+     THE GRAB-SLAM. A close frontal punish with a full-body tell. Flight
+     clears the mandibles; a grounded sidestep clears their arc. On a
+     catch, the trooper is lifted into the fold and driven into a safe
+     ground column in front of the animal for a large, survivable hit. */
+  grabReach: 7.2,
+  grabArc: 0.38,
+  grabAirClear: 1.8,
+  grabWindup: 0.76,
+  grabLift: 0.52,
+  grabHold: 0.20,
+  grabDrop: 0.30,
+  grabRecover: 0.74,
+  // Boots sit between the raised strike claws instead of floating above
+  // the silhouette; the trooper's own height carries the read upward.
+  grabLiftHeight: 3.65,
+  grabHoldForward: 3.7,
+  grabSlamForward: 5.6,
+  grabDamage: 96,
+  grabSlamStun: 1.1,
+  grabCadence: 8.4,
 
   /* ------------------------------------------------------------
      THE TREMOR RITE. No adds. The ovipositor plants and three floor
@@ -430,7 +456,7 @@ export function buildMatriarch(ctx) {
     return {
       id: inst.id,
       lastHealth: inst.health,
-      act: null,             // null | combo | lance | cull | tremor | rouse
+      act: null,             // null | combo | lance | cull | grab | tremor | rouse
       actFor: 0,             // seconds left in the action as a whole
       pending: -1,           // seconds to the next contact, or -1
       step: 0,               // which scythe of the combo
@@ -439,6 +465,7 @@ export function buildMatriarch(ctx) {
       comboTimer: C.comboCadence * 0.45,
       lanceTimer: C.lanceCadence * 0.5,
       cullTimer: C.cullCadence * 0.6,
+      grabTimer: C.grabCadence * 0.55,
       tremorTimer: C.tremorEvery * 0.55,
       waves: [],
       rearFor: 0,
@@ -455,6 +482,15 @@ export function buildMatriarch(ctx) {
       tremors: 0,
       tremorHits: 0,
       tremorClears: 0,
+      grabs: 0,
+      grabHits: 0,
+      grabSlams: 0,
+      grabbed: false,
+      grabSlammed: false,
+      grabOrigin: null,
+      grabHoldPoint: null,
+      grabTarget: null,
+      playerCarryPose: false,
       lastMiss: null,
       misses: { range: 0, arc: 0, height: 0, sight: 0 },
     };
@@ -673,7 +709,10 @@ export function buildMatriarch(ctx) {
     brain.actFor = C.lanceCock + brain.dashFor + C.comboRecover;
     brain.pending = C.lanceCock + brain.dashFor;
     brain.lockYaw = inst.yaw;
-    brain.lanceTimer = C.lanceCadence * cadenceScale(brain);
+    const pursuit = bearing(inst, ctx.player.state.x, ctx.player.state.z).dist
+      > C.tremorRadius;
+    brain.lanceTimer = (pursuit ? C.pursuitLanceCadence : C.lanceCadence)
+      * cadenceScale(brain);
     brain.lances += 1;
     brain.tells += 1;
     inst.actionLocked = true;
@@ -685,6 +724,28 @@ export function buildMatriarch(ctx) {
     ctx.vfx?.slamCharge?.(inst.x, groundAt(inst.x, inst.z) + 0.4, inst.z, 3.4);
     ctx.audio?.slamCharge?.(inst.x, inst.z);
     bus.emit("lanceTell", { x: inst.x, z: inst.z });
+  }
+
+  function beginGrab(inst, brain) {
+    brain.act = "grab";
+    brain.actFor = C.grabWindup + C.grabLift + C.grabHold
+      + C.grabDrop + C.grabRecover;
+    brain.pending = C.grabWindup;
+    brain.grabTimer = C.grabCadence * cadenceScale(brain);
+    brain.grabbed = false;
+    brain.grabSlammed = false;
+    brain.grabOrigin = null;
+    brain.grabHoldPoint = null;
+    brain.grabTarget = null;
+    brain.playerCarryPose = false;
+    brain.grabs += 1;
+    brain.tells += 1;
+    inst.actionLocked = true;
+    enemies.play?.(inst, "alert", 0.08);
+    ctx.vfx?.slamCharge?.(inst.x + Math.sin(inst.yaw) * 3.2,
+      groundAt(inst.x, inst.z) + 0.5, inst.z + Math.cos(inst.yaw) * 3.2, 3.8);
+    ctx.audio?.slamCharge?.(inst.x, inst.z);
+    bus.emit("grabTell", { x: inst.x, z: inst.z });
   }
 
   function beginCull(inst, brain) {
@@ -809,6 +870,125 @@ export function buildMatriarch(ctx) {
     return true;
   }
 
+  function tryGrab(inst, brain) {
+    if (!ctx.combat || ctx.combat.player.dead) return false;
+    const ps = ctx.player.state;
+    const { dist, dot, dx, dz } = bearing(inst, ps.x, ps.z);
+    if (dist > C.grabReach) return miss(brain, "range");
+    if (dot < C.grabArc) return miss(brain, "arc");
+    if (ps.y - groundAt(ps.x, ps.z) > C.grabAirClear) return miss(brain, "height");
+    const inv = 1 / (dist || 1);
+    if (ctx.collide?.rayBlock
+      && ctx.collide.rayBlock(inst.x, inst.y + 2.5, inst.z,
+        dx * inv, 0, dz * inv, dist) < dist - 0.2) return miss(brain, "sight");
+
+    const fx = Math.sin(inst.yaw);
+    const fz = Math.cos(inst.yaw);
+    const holdX = inst.x + fx * C.grabHoldForward;
+    const holdZ = inst.z + fz * C.grabHoldForward;
+    const wantedX = inst.x + fx * C.grabSlamForward;
+    const wantedZ = inst.z + fz * C.grabSlamForward;
+    const wantedY = groundAt(wantedX, wantedZ);
+    const radius = ctx.collide?.radius || 0.48;
+    const open = ctx.collide?.findOpen?.(wantedX, wantedZ, wantedY,
+      14, 3.0, radius);
+    const targetX = open?.[0] ?? wantedX;
+    const targetZ = open?.[1] ?? wantedZ;
+
+    brain.grabbed = true;
+    brain.grabHits += 1;
+    brain.grabOrigin = { x: ps.x, y: ps.y, z: ps.z };
+    brain.grabHoldPoint = {
+      x: holdX,
+      y: Math.max(inst.y + 3.2, groundAt(holdX, holdZ) + C.grabLiftHeight),
+      z: holdZ,
+    };
+    brain.grabTarget = { x: targetX, y: groundAt(targetX, targetZ), z: targetZ };
+    ctx.boost?.stop?.("matriarch-grab");
+    ctx.slam?.abort?.("matriarch-grab");
+    ctx.jetpack?.land?.(ps, 0);
+    ctx.player?.applyStun?.(brain.actFor + C.grabSlamStun);
+    /* The ordinary death timeline is purely a figure pose until
+       `state.dying` is set. Sampling it here gives the caught trooper a
+       progressive knees-give/topple silhouette instead of leaving them
+       standing rigidly in mid-air; releaseGrab clears it before control
+       returns, unless the slam actually killed them. */
+    brain.playerCarryPose = !!ctx.player?.beginAction?.("death");
+    ps.grounded = false;
+    ps.vy = 0;
+    ps.speed = 0;
+    enemies.replay?.(inst, "strike", 0.06, C.comboContact,
+      C.grabLift + C.grabHold + C.grabDrop);
+    bus.emit("grab", { x: ps.x, y: ps.y, z: ps.z });
+    return true;
+  }
+
+  function pinGrabbedPlayer(point) {
+    if (!point) return;
+    const ps = ctx.player.state;
+    ps.x = point.x;
+    ps.y = point.y;
+    ps.z = point.z;
+    ps.vy = 0;
+    ps.speed = 0;
+    ps.travelSpeed = 0;
+    ps.grounded = false;
+  }
+
+  function slamGrab(inst, brain) {
+    if (!brain.grabbed || brain.grabSlammed || !brain.grabTarget) return;
+    const ps = ctx.player.state;
+    const target = brain.grabTarget;
+    ps.x = target.x;
+    ps.y = target.y;
+    ps.z = target.z;
+    ps.vy = 0;
+    ps.speed = 0;
+    ps.travelSpeed = 0;
+    ps.grounded = true;
+    brain.grabbed = false;
+    brain.grabSlammed = true;
+    brain.grabSlams += 1;
+    ctx.combat?.hurtPlayer?.(C.grabDamage * SURVIVAL_CONFIG.enemyDamageMultiplier, {
+      source: "matriarch-grab-slam", enemyId: inst.id, enemyKey: inst.key,
+      x: ps.x, y: ps.y + 1, z: ps.z,
+    });
+    ctx.player?.applyStun?.(C.grabSlamStun);
+    ctx.player?.punch?.(2.0);
+    ctx.player?.doctrineKick?.(1.25, 1.0);
+    ctx.vfx?.slamImpact?.(ps.x, ps.y, ps.z, 1.8);
+    ctx.vfx?.blast?.(ps.x, ps.y + 0.2, ps.z, 7.5);
+    ctx.vfx?.sandSpray?.(ps.x, ps.y + 0.1, ps.z, 2.7, 0, 1);
+    ctx.audio?.slamImpact?.(ps.x, ps.z, 1.35);
+    bus.emit("grabSlam", { x: ps.x, y: ps.y, z: ps.z, damage: C.grabDamage });
+  }
+
+  function releaseGrab(inst, brain) {
+    if (brain.grabbed) {
+      const ps = ctx.player.state;
+      const point = brain.grabTarget || brain.grabOrigin;
+      if (point) {
+        ps.x = point.x;
+        ps.z = point.z;
+        ps.y = groundAt(point.x, point.z);
+      }
+      ps.vy = 0;
+      ps.grounded = true;
+      brain.grabbed = false;
+    }
+    brain.grabOrigin = null;
+    brain.grabHoldPoint = null;
+    brain.grabTarget = null;
+    if (brain.playerCarryPose && !ctx.player?.state?.dying) {
+      ctx.player?.cancelTransientActions?.();
+    }
+    brain.playerCarryPose = false;
+    if (inst.root) {
+      inst.root.rotation.x = 0;
+      inst.root.rotation.z = 0;
+    }
+  }
+
   function resolveContact(inst, brain) {
     const ps = ctx.player.state;
     const y = groundAt(inst.x, inst.z);
@@ -825,6 +1005,11 @@ export function buildMatriarch(ctx) {
       if (brain.pending > 0) {
         enemies.replay?.(inst, "strike", 0.05, C.comboContact, C.comboGap);
       }
+      return;
+    }
+    if (brain.act === "grab") {
+      if (!tryGrab(inst, brain)) brain.whiffed += 1;
+      brain.pending = -1;
       return;
     }
     if (brain.act === "lance") {
@@ -935,7 +1120,48 @@ export function buildMatriarch(ctx) {
       if (brain.pending <= 0) resolveContact(inst, brain);
     }
 
-    if (brain.act === "cull") {
+    if (brain.act === "grab") {
+      const total = C.grabWindup + C.grabLift + C.grabHold
+        + C.grabDrop + C.grabRecover;
+      const elapsed = total - brain.actFor;
+      if (elapsed < C.grabWindup) {
+        const t = Math.max(0, Math.min(1, elapsed / C.grabWindup));
+        inst.root.rotation.x = -0.17 * t * t * (3 - 2 * t);
+        faceTowards(inst, ps.x, ps.z, C.committedTurnRate, dt);
+      } else if (brain.grabbed) {
+        const heldFor = elapsed - C.grabWindup;
+        if (heldFor < C.grabLift) {
+          const t = Math.max(0, Math.min(1, heldFor / C.grabLift));
+          const u = t * t * (3 - 2 * t);
+          const a = brain.grabOrigin;
+          const b = brain.grabHoldPoint;
+          pinGrabbedPlayer({
+            x: a.x + (b.x - a.x) * u,
+            y: a.y + (b.y - a.y) * u,
+            z: a.z + (b.z - a.z) * u,
+          });
+          inst.root.rotation.x = -0.17 + 0.39 * u;
+        } else if (heldFor < C.grabLift + C.grabHold) {
+          pinGrabbedPlayer(brain.grabHoldPoint);
+          inst.root.rotation.x = 0.22;
+        } else {
+          const t = Math.max(0, Math.min(1,
+            (heldFor - C.grabLift - C.grabHold) / C.grabDrop));
+          const u = t * t;
+          const a = brain.grabHoldPoint;
+          const b = brain.grabTarget;
+          pinGrabbedPlayer({
+            x: a.x + (b.x - a.x) * u,
+            y: a.y + (b.y - a.y) * u,
+            z: a.z + (b.z - a.z) * u,
+          });
+          inst.root.rotation.x = 0.22 - 0.54 * u;
+          if (t >= 0.88) slamGrab(inst, brain);
+        }
+      } else {
+        inst.root.rotation.x += (0 - inst.root.rotation.x) * Math.min(1, dt * 9);
+      }
+    } else if (brain.act === "cull") {
       // The whip. Free rotation at `cullSpin` for the length of the
       // sweep, then it settles back onto the player.
       const sweeping = brain.actFor > 0.55;
@@ -978,6 +1204,7 @@ export function buildMatriarch(ctx) {
     }
 
     if (brain.actFor <= 0) {
+      if (brain.act === "grab") releaseGrab(inst, brain);
       brain.act = null;
       brain.pending = -1;
       brain.spin = 0;
@@ -992,6 +1219,7 @@ export function buildMatriarch(ctx) {
    *  same armour window the ordinary castes carry. */
   function cancel(inst, brain, armouredCheck = true) {
     if (!brain.act) return false;
+    if (armouredCheck && brain.act === "grab" && brain.grabbed) return false;
     /* Once the first seismic front has left the body the chain is
        committed. Before that, the first half of the long plant can be
        interrupted on the same contract as every other tell. */
@@ -1000,10 +1228,12 @@ export function buildMatriarch(ctx) {
       const total = brain.act === "combo" ? C.comboWindup
         : brain.act === "lance" ? C.lanceCock + brain.dashFor
           : brain.act === "cull" ? C.cullWindup + C.cullSweep * 0.5
-            : brain.act === "tremor" ? C.tremorWindup
+            : brain.act === "grab" ? C.grabWindup
+              : brain.act === "tremor" ? C.tremorWindup
             : brain.pending;
       if (brain.pending < total * C.interruptWindow) return false;
     }
+    if (brain.act === "grab") releaseGrab(inst, brain);
     brain.act = null;
     brain.actFor = 0;
     brain.pending = -1;
@@ -1014,12 +1244,22 @@ export function buildMatriarch(ctx) {
   }
 
   function chooseAction(inst, brain, dist, dot, sees) {
+    /* Outside the seismic AOE there are no stationary attacks and no
+       flank games: charge when ready, otherwise keep running inward. */
+    if (dist > C.tremorRadius) {
+      if (brain.lanceTimer <= 0 && sees) return beginLance(inst, brain);
+      return null;
+    }
     /* Order is priority, and the first entry is the point of the
        fight: everything else waits while the player is somewhere the
        gaster is not defended. */
     if (brain.cullTimer <= 0 && dist < C.cullRadius && dot < C.cullRearDot
       && brain.rearFor >= C.cullLoiter) return beginCull(inst, brain);
-    if (brain.tremorTimer <= 0 && sees) return beginTremor(inst, brain);
+    if (brain.grabTimer <= 0 && sees && dot > C.grabArc
+      && reachIn(inst, C.grabWindup) <= C.grabReach) return beginGrab(inst, brain);
+    if (brain.tremorTimer <= 0 && sees && dist <= C.tremorRadius) {
+      return beginTremor(inst, brain);
+    }
     /* Both of these ask where the player will BE, not where they are.
        The combo looks one wind-up ahead; the lance looks over its cock
        plus the shortest dash it could throw, since the dash length is
@@ -1094,6 +1334,7 @@ export function buildMatriarch(ctx) {
     const brain = brainFor(inst);
 
     if (inst.state === "death" || inst.health <= 0) {
+      if (brain.grabbed || brain.act === "grab") releaseGrab(inst, brain);
       inst.actionLocked = false;
       inst.weakBonus = 1;
       brain.waves.length = 0;
@@ -1116,6 +1357,7 @@ export function buildMatriarch(ctx) {
       cancel(inst, brain, false);
       brain.roused = false;
       brain.tremorTimer = C.tremorEvery * 0.55;
+      brain.grabTimer = C.grabCadence * 0.55;
       brain.waves.length = 0;
     }
     brain.lastHealth = inst.health;
@@ -1145,6 +1387,7 @@ export function buildMatriarch(ctx) {
     brain.comboTimer -= dt;
     brain.lanceTimer -= dt;
     brain.cullTimer -= dt;
+    brain.grabTimer -= dt;
     if (sees) brain.tremorTimer -= dt;
 
     if (brain.act) { stepAction(inst, brain, dt); return; }
@@ -1248,6 +1491,10 @@ export function buildMatriarch(ctx) {
       tremors: brain?.tremors || 0,
       tremorHits: brain?.tremorHits || 0,
       tremorClears: brain?.tremorClears || 0,
+      grabs: brain?.grabs || 0,
+      grabHits: brain?.grabHits || 0,
+      grabSlams: brain?.grabSlams || 0,
+      grabbed: !!brain?.grabbed,
       activeWaves: brain?.waves?.length || 0,
       health: Math.max(0, Math.round(inst.health)),
       maxHealth: Math.round(inst.maxHealth),
@@ -1278,6 +1525,7 @@ export function buildMatriarch(ctx) {
       if (kind === "combo") beginCombo(inst, brain);
       else if (kind === "lance") beginLance(inst, brain);
       else if (kind === "cull") beginCull(inst, brain);
+      else if (kind === "grab") beginGrab(inst, brain);
       else if (kind === "tremor") beginTremor(inst, brain);
       else if (kind === "rouse") beginRouse(inst, brain);
       else return false;

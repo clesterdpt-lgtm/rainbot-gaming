@@ -246,7 +246,10 @@ export const GARNER_CONFIG = Object.freeze({
      its own mouth is not reach - and never past the point where it
      could not drag itself home in one retraction. */
   armMinRadius: 15,
-  armMaxRadius: 44,
+  /* The pit is theatrical, not a safe-range switch. Limbs may erupt
+     anywhere inside the authored boss arena so backing away from the
+     old 44m reach does not turn the encounter off. */
+  armMaxRadius: 143,
   /* How far from the player it surfaces. Deliberately not AT them: the
      eruption has to be a warning with a second of value in it, and a
      limb that breaks ground under the player's boots is a hit they
@@ -3924,6 +3927,9 @@ export function buildGarner(ctx) {
    *  module's own live objects, which is what they always mean. */
   function dressInstance() {
     if (!inst) return null;
+    // Severed tentacles advance the limb cycle only. They are remote
+    // appendages, not a second damage route into the buried boss pool.
+    inst.legBreakBonusFraction = 0;
     inst.legs = arms.map((arm) => ({ chain: arm.chain, garnerArm: arm.index }));
     if (!Array.isArray(inst.legHp) || inst.legHp.length !== arms.length) {
       inst.legHp = arms.map(() => inst.spec.legHealth);

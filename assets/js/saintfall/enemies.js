@@ -180,11 +180,11 @@ export const BESTIARY = {
   matriarch: {
     url: "assets/models/saintfall/matriarch.glb",
     faction: "bloom",
-    /* A district boss, not a heavy caste with a longer bar. At 3600 the
-       exposed gaster let a clean Volley magazine erase the encounter
-       before its second authored decision. 7200 keeps the weak point
-       valuable while giving the pursuit and tremor cycles room to exist. */
-    health: 7200,
+    /* A district boss, not a heavy caste with a longer bar. The exposed
+       gaster still rewards a clean weak-point sequence, but 9000 gives
+       its pursuit, Tremor Rite and new grab-slam enough room to form a
+       complete fight instead of ending inside the first rotation. */
+    health: 9000,
     /* Shipped at 1:1: 5.05m tall, 6.93m wide and 11.13m long. There
        is exactly one of these on the map, so the usual argument for
        tuning scale in engine - that proportion is read against the
@@ -298,11 +298,11 @@ export const BESTIARY = {
   distaff: {
     url: "assets/models/saintfall/distaff.glb",
     faction: "scar",
-    /* The largest pool in the game, and it is meant to be read as
-       "per leg" rather than as one number: eight legs guard it, and
-       taking the fight to any one of them is real progress before the
-       body is reachable at all. */
-    health: 9000,
+    /* Its health is earned through repeated one-leg knockdowns: only
+       one limb keeps damage at a time and every rise restores the other
+       intact legs, so 11000 supports several readable body windows
+       without asking the player to grind eight simultaneous pools. */
+    health: 11000,
     /* Driven entirely by distaff.js, the same reason the Coulter opts
        out via `spine`/`burrows` - combat.js's generic stepEnemy has no
        SPEC entry for this key and would fall back to a Thresher's
@@ -310,11 +310,8 @@ export const BESTIARY = {
        solver expects to hold still underneath it. */
     selfDriven: true,
     /* Each leg's own pool - 340 is two to three solid hits from a
-       decent weapon, so a single leg is a fight measured in seconds
-       and all eight together are a real second phase, not a formality
-       on the way to the body. See combat.js's HITBOX.distaff and
-       LEG_BREAK_BONUS_FRACTION for how a broken leg also pays into
-       this number. */
+       decent weapon. Distaff owns the one-injured-leg rule while
+       combat.js still pays the ordinary break bonus into this pool. */
     legHealth: 340,
     scale: 1.0,
     /* It does not chase. A stationary guardian that can run the
@@ -365,10 +362,9 @@ export const BESTIARY = {
     url: "assets/models/saintfall/winnower.glb",
     faction: "censer",
     /* Lower than the Distaff's, and it should be: this one cannot be
-       cornered. Its defence is altitude, so raw health would only
-       lengthen the stretches where the player has nothing to do but
-       wait for it to come down. */
-    health: 6200,
+       cornered. 7800 survives long enough for its growing bombard to
+       become visible without turning each landed window into a token. */
+    health: 7800,
     scale: 1.0,
     /* `walk` is its cruise on a thermal; `charge` is the dive. It is
        the fastest thing in the game across open ground because it
@@ -492,12 +488,10 @@ export const BESTIARY = {
   stylite: {
     procedural: true,
     faction: "bloom",
-    /* The smallest boss pool in the game, and deliberately: it is not
-       meant to be out-damaged, it is meant to be brought DOWN. Most of
-       a run's damage lands in the stunned window at a melee multiplier,
-       and its own fall does four hundred of it every time the player
-       earns one. */
-    health: 5400,
+    /* It is not meant to be out-damaged, it is meant to be brought DOWN.
+       Most damage still lands in the stunned melee window, while 7000
+       gives its expanded barrages more than one chance to matter. */
+    health: 7000,
     scale: 1.0,
     speed: { walk: 0, charge: 0 },
     material: { roughness: 0.58, metalness: 0.06, rim: 0.42, bio: 1.5 },
@@ -2171,11 +2165,30 @@ export async function buildEnemies(ctx, onProgress) {
         depth: Math.max(0.7, Number(emergenceRecord.depth) || 1.3),
         boss: !!emergenceRecord.boss,
       } : null;
+      const savedMax = Math.max(1, Number(record.maxHealth) || Number(record.health) || 1);
+      const savedHealth = clamp(Number(record.health) || savedMax, 1, savedMax);
+      /* Preserve the wounded fraction for the four pools enlarged in the
+         boss-pressure pass. The allow-list is exact by species and old
+         difficulty-scaled maximum, so arbitrary/custom saved health is
+         still restored byte-for-byte rather than silently retuned. */
+      const legacyBossPools = {
+        matriarch: new Set([3060, 3600, 4320, 6120, 7200, 10080]),
+        distaff: new Set([7650, 9000, 12600]),
+        winnower: new Set([5270, 6200, 8680]),
+        stylite: new Set([4590, 5400, 7560]),
+      };
+      const tunedMax = spawnHealth(record.key);
+      const migrateBossPool = legacyBossPools[record.key]?.has(savedMax)
+        && savedMax < tunedMax;
+      const restoreMax = migrateBossPool ? tunedMax : savedMax;
+      const restoreHealth = migrateBossPool
+        ? clamp(Math.round(restoreMax * savedHealth / savedMax), 1, restoreMax)
+        : savedHealth;
       const inst = spawn(record.key, x, z, {
         id: record.id,
         yaw: Number(record.yaw) || 0,
         scale: clamp(Number(record.scale) || 1, 0.7, 1.35),
-        health: Math.max(1, Number(record.maxHealth) || Number(record.health) || 1),
+        health: restoreMax,
         exactHealth: true,
         damageScale: clamp(Number(record.damageScale) || 1, 0.2, 4),
         eventId: typeof record.eventId === "string" ? record.eventId : null,
@@ -2184,7 +2197,13 @@ export async function buildEnemies(ctx, onProgress) {
         emerge: emergence,
       });
       if (!inst) continue;
-      inst.health = clamp(Number(record.health) || inst.maxHealth, 1, inst.maxHealth);
+      inst.health = restoreHealth;
+      if (migrateBossPool) {
+        inst.balanceMigration = {
+          fromMax: savedMax, fromHealth: savedHealth,
+          toMax: restoreMax, toHealth: restoreHealth,
+        };
+      }
       inst.home = record.home && Number.isFinite(Number(record.home.x))
         && Number.isFinite(Number(record.home.z))
         ? { x: Number(record.home.x), z: Number(record.home.z) } : { x, z };

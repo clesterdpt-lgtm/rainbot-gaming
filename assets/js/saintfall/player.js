@@ -2234,6 +2234,8 @@ export async function createPlayer(ctx, canvas) {
        game, because taking a player's hands away is the most
        expensive thing an attack can do to them. */
     stunFor: 0,
+    // QA/diagnostic count for collision-safe flight-slam handoffs.
+    slamLandingCorrections: 0,
     camPitch: -0.10,
     camDist: 5.2,
     firstPerson: 0,
@@ -4510,7 +4512,43 @@ export async function createPlayer(ctx, canvas) {
         state.y = nextY;
       }
 
-      const support = groundY(state.x, state.z);
+      let support = groundY(state.x, state.z);
+      /* A flight slam may reach terrain on the same sweep that its
+         horizontal capsule brushes a Scar shard or vein. Handing that
+         overlapping column to the grounded controller completes the
+         slam inside static geometry: the attack fires, but every later
+         movement frame is blocked. Reconcile only committed slam
+         landings, and keep the correction local to the contact point. */
+      if (slamMode && state.vy <= 0
+        && (terrainLandingContact || state.y <= support + 0.10)
+        && ctx.collide?.findOpen) {
+        const radius = ctx.collide.radius;
+        const staticBlocked = ctx.collide.blocked(state.x, state.z, support, radius)
+          || ctx.collide.flightBlocked?.(state.x, state.z, support,
+            radius, 2.35, true);
+        if (staticBlocked) {
+          state.slamLandingCorrections += 1;
+          const safe = ctx.collide.findOpen(state.x, state.z, support,
+            96, 8, radius, groundY, (tx, tz) => {
+              const ty = groundY(tx, tz);
+              return !ctx.collide.flightBlocked?.(tx, tz, ty, radius, 2.35, true);
+            });
+          if (safe) {
+            state.x = safe[0];
+            state.z = safe[1];
+            support = groundY(state.x, state.z);
+            state.y = support;
+            terrainLandingContact = true;
+          } else {
+            /* A malformed authored pocket should not hold the player
+               forever. The ordinary bounded recovery is the final
+               fallback and still lets this committed slam resolve. */
+            unstuck("slam-landing");
+            support = groundY(state.x, state.z);
+            terrainLandingContact = true;
+          }
+        }
+      }
       /* Terrain contact hands the capsule back to the walking support
          even on a steep but legal slope. The center fallback preserves
          the old flat-ground behavior when a collision implementation

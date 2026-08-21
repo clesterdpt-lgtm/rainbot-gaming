@@ -195,7 +195,7 @@ export const STYLITE_CONFIG = Object.freeze({
      ------------------------------------------------------------ */
   volleyCadence: 2.35,
   volleyWindup: 0.55,
-  volleyShots: 3,
+  volleyShots: 5,
   volleyGap: 0.14,
   volleySpeed: 78,
   volleyDamage: 15,
@@ -239,7 +239,7 @@ export const STYLITE_CONFIG = Object.freeze({
   /* ------------------------------------------------------------
      THE GRIP, AND THE FALL
      ------------------------------------------------------------ */
-  /* A pool sized so that about 10% ranged damage (540 / 5400) brings
+  /* A pool sized so a short focused ranged burst brings
      the perched animal down, opening the melee crash window. */
   gripMax: 540,
   gripRegen: 15,
@@ -3216,7 +3216,7 @@ export function buildStylite(ctx) {
     if (!inst) {
       return state.defeated ? {
         phase: "dead", dead: true, defeated: true,
-        health: 0, maxHealth: 5400, x: C.homeX, z: C.homeZ,
+        health: 0, maxHealth: 7000, x: C.homeX, z: C.homeZ,
       } : null;
     }
     return {
@@ -3257,7 +3257,7 @@ export function buildStylite(ctx) {
     if (!inst) {
       return state.defeated ? {
         phase: "dead", timer: 0, instanceId: null, health: 0,
-        maxHealth: 5400, perch: 0, falls: 0, defeated: true,
+        maxHealth: 7000, perch: 0, falls: 0, defeated: true,
       } : null;
     }
     /* Bolts in the air are not saved, for the Coulter's reason. The
@@ -3345,9 +3345,10 @@ export function buildStylite(ctx) {
     if (phase === "dormant") reseatCrust();
     seat(Number.isFinite(saved.perch) ? saved.perch : 0);
     clearHazards();
-    if (Number.isFinite(saved.health)) {
+    if (Number.isFinite(saved.health) && !inst.balanceMigration) {
       inst.health = clamp(saved.health, 1, inst.maxHealth);
     }
+    delete inst.balanceMigration;
     /* Damage is a property of the animal, not of the session: a boss
        reloaded at 20% health has to come back carrying the same
        scorch it went out with, or the save reads as a heal. */

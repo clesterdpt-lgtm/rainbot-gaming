@@ -787,20 +787,16 @@ export function buildDistrictBosses(ctx) {
         inst.root.rotation.y = inst.yaw;
         const savedMax = Number(entry.maxHealth);
         const savedHealth = Number(entry.health);
-        /* ONE BALANCE MIGRATION. Saves made before the summon-free
-           Matriarch pass carry a 3060/3600/4320 maximum, depending on
-           difficulty. Restoring that number verbatim would leave an
-           existing player's Reach guardian at the old half-sized pool
-           forever. Rebuild only an undersized Reach pool from the live
-           species+difficulty tuning and preserve the exact wounded
-           fraction; every other boss and every current save keeps the
-           ordinary byte-for-byte restore contract. */
+        /* Exact, allow-listed balance migrations. Saves from either
+           earlier Matriarch generation carry one of these difficulty-
+           scaled maxima. Preserve the wounded fraction while moving
+           only those known pools to the current species tuning. */
         const baseMax = Number(enemies.species?.get(inst.key)?.spec?.health);
         const tunedScale = ctx.difficulty?.healthScale?.(inst.key) ?? 1;
         const tunedMax = Number.isFinite(baseMax) && baseMax > 0
           ? Math.max(1, Math.round(baseMax * tunedScale)) : inst.maxHealth;
-        const legacyReachMax = savedMax === 3060 || savedMax === 3600
-          || savedMax === 4320;
+        const legacyReachMax = [3060, 3600, 4320, 6120, 7200, 10080]
+          .includes(savedMax);
         const migrateReach = record.site.key === "reach" && legacyReachMax
           && savedMax < tunedMax;
         if (migrateReach) {
@@ -812,6 +808,7 @@ export function buildDistrictBosses(ctx) {
           if (Number.isFinite(savedMax) && savedMax > 0) inst.maxHealth = savedMax;
           if (Number.isFinite(savedHealth)) inst.health = clamp(savedHealth, 1, inst.maxHealth);
         }
+        delete inst.balanceMigration;
       }
       if (!siteAvailable(record.site) && record.phase !== "dormant") {
         resetRecord(record, { silent: true });

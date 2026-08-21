@@ -143,16 +143,16 @@ export const DISTAFF_CONFIG = Object.freeze({
      ground-follow subtracts `inst.bodyDrop`; this module animates it. */
   collapseDrop: 6.1,
 
-  // Legs broken before it buckles - half of eight - and how long the
-  // body stays a target once it has.
-  collapseThreshold: 4,
-  collapseSeconds: 11,
+  // One committed leg break buckles it. Each rise restores every
+  // unbroken leg, so the player reads and wins one limb at a time.
+  collapseThreshold: 1,
+  collapseSeconds: 7.5,
   collapseSlamContact: 0.90,      // seconds into `collapse`, matches the model's own timing
-  recoverSeconds: 1.7,
+  recoverSeconds: 1.05,
   /* A fresh collapse cannot retrigger inside this window even if a
      new leg breaks the instant it stands - the vulnerable window has
      to actually end before the next one can begin. */
-  recollapseGuard: 2.5,
+  recollapseGuard: 1.5,
 
   /* A LOST LEG BUYS A WINDOW. Breaking one is the fight's unit of
      progress and it used to buy nothing but a poise kick: the slam
@@ -178,7 +178,7 @@ export const DISTAFF_CONFIG = Object.freeze({
   slamRadius: 12.5,
   slamDamage: 46,
 
-  webCadence: 5.6,
+  webCadence: 3.8,
   webContact: 0.78,
   webSpeed: 25,
   webDamage: 10,
@@ -198,7 +198,7 @@ export const DISTAFF_CONFIG = Object.freeze({
      step off its line) and the answer once hooked is Aegis for the
      slam that follows or a sprint out of the ring in the 0.9s tell.
      Faster than the pin bolt because it is thrown at range. */
-  reelCadence: 12.5,
+  reelCadence: 9.5,
   reelContact: 0.78,
   reelSpeed: 34,
   reelMinRange: 14,
@@ -208,7 +208,7 @@ export const DISTAFF_CONFIG = Object.freeze({
   reelSeconds: 2.4,        // longest haul before the line parts
   reelStop: 8.5,           // haul ends here - the slam ring's own edge
 
-  patchCadence: 7.5,
+  patchCadence: 5.4,
   patchRadius: 5.2,
   patchSeconds: 11,
   patchSlowFactor: 0.55,
@@ -722,6 +722,9 @@ export function buildDistaff(ctx) {
     phase: "dormant",       // dormant, alert, standing, collapsed, recovering, returning, dead
     timer: 0,
     legsAtLastCollapse: 0,
+    // The sole intact leg currently allowed to retain damage.
+    activeLeg: -1,
+    legCycleLocked: false,
     slamTimer: C.slamCadence * 0.55,
     webTimer: C.webCadence * 0.7,
     patchTimer: C.patchCadence * 0.5,
@@ -2787,6 +2790,16 @@ export function buildDistaff(ctx) {
   function stepRecovering(dt) {
     state.timer -= dt;
     if (state.timer <= 0) {
+      /* THE CLEAN RISE. Broken legs remain the encounter's permanent
+         progress, but every other leg returns at full strength and no
+         second partial pool survives into the next standing cycle. */
+      if (Array.isArray(inst.legHp)) {
+        for (let i = 0; i < inst.legHp.length; i += 1) {
+          if (!inst.legBroken?.[i]) inst.legHp[i] = state.legHealthRef;
+        }
+      }
+      state.activeLeg = -1;
+      state.legCycleLocked = false;
       state.phase = "standing";
       state.recollapseFor = C.recollapseGuard;
       state.legsAtLastCollapse = Math.max(state.legsAtLastCollapse, inst.legsBroken);
@@ -2886,6 +2899,8 @@ export function buildDistaff(ctx) {
     pushSurfaceDamage(0);
     inst.collapsed = false;
     state.legsAtLastCollapse = 0;
+    state.activeLeg = -1;
+    state.legCycleLocked = false;
     state.lungeFor = 0;
     state.action = 0;
     state.pending = 0;
@@ -2939,10 +2954,37 @@ export function buildDistaff(ctx) {
     });
     if (inst) {
       state.legHealthRef = inst.legHp?.[0] || 340;
+      attachLegRules();
       dressInstance();
       setEncounterGate(true, true);
     }
     return inst;
+  }
+
+  /** combat.js calls this immediately before changing a limb pool.
+   *  While standing, changing target heals the previous intact limb;
+   *  once the chosen leg breaks, the body must complete its collapse
+   *  and rise before another leg can start taking damage. */
+  function attachLegRules() {
+    if (!inst) return;
+    inst.prepareLegDamage = (legIndex) => {
+      if (state.phase !== "standing") return false;
+      if (state.legCycleLocked) return false;
+      if (state.activeLeg !== legIndex) {
+        if (Array.isArray(inst.legHp)) {
+          for (let i = 0; i < inst.legHp.length; i += 1) {
+            if (i !== legIndex && !inst.legBroken?.[i]) {
+              inst.legHp[i] = state.legHealthRef;
+            }
+          }
+        }
+        state.activeLeg = legIndex;
+      }
+      return true;
+    };
+    inst.onLegBroken = () => {
+      if (state.phase === "standing") state.legCycleLocked = true;
+    };
   }
 
   /** Watch the solver replant feet and turn each landing into dust
@@ -3033,7 +3075,7 @@ export function buildDistaff(ctx) {
   function status() {
     if (!inst) return state.defeated ? {
       phase: "dead", dead: true, defeated: true,
-      health: 0, maxHealth: 9000,
+      health: 0, maxHealth: 11000,
       x: C.lairX, z: C.lairZ,
     } : null;
     return {
@@ -3042,7 +3084,9 @@ export function buildDistaff(ctx) {
       health: Math.max(0, Math.round(inst.health)),
       maxHealth: Math.round(inst.maxHealth),
       legsBroken: inst.legsBroken || 0,
+      activeLeg: state.activeLeg,
       legCount: inst.legHp ? inst.legHp.length : 8,
+      legHp: inst.legHp ? [...inst.legHp] : [],
       legBroken: inst.legBroken ? [...inst.legBroken] : [],
       collapsed: !!inst.collapsed,
       bodyDrop: Number((inst.bodyDrop || 0).toFixed(2)),
@@ -3069,7 +3113,7 @@ export function buildDistaff(ctx) {
   function snapshot() {
     if (!inst) return state.defeated ? {
       phase: "dead", timer: 0, instanceId: null,
-      legsAtLastCollapse: 0, health: 0, maxHealth: 9000,
+      legsAtLastCollapse: 0, health: 0, maxHealth: 11000,
       legHp: null, legBroken: null, legsBroken: 0,
       x: C.lairX, z: C.lairZ, yaw: 0, defeated: true,
     } : null;
@@ -3110,6 +3154,7 @@ export function buildDistaff(ctx) {
        module ever ran - `ensureSpawned` only dresses the one it
        spawns itself, and the dressing is idempotent. */
     dressInstance();
+    attachLegRules();
     const phase = ["dormant", "alert", "standing", "collapsed", "recovering",
       "returning", "dead"].includes(saved.phase) ? saved.phase : "dormant";
     state.phase = phase;
@@ -3136,7 +3181,10 @@ export function buildDistaff(ctx) {
     inst.root.position.set(inst.x, inst.y, inst.z);
     inst.root.rotation.y = inst.yaw;
     setEncounterGate(phase === "dormant", phase === "dormant" || phase === "alert");
-    if (Number.isFinite(saved.health)) inst.health = clamp(saved.health, 0, inst.maxHealth);
+    if (Number.isFinite(saved.health) && !inst.balanceMigration) {
+      inst.health = clamp(saved.health, 0, inst.maxHealth);
+    }
+    delete inst.balanceMigration;
     if (Array.isArray(saved.legHp) && inst.legHp) {
       for (let i = 0; i < inst.legHp.length; i += 1) {
         inst.legHp[i] = Number.isFinite(saved.legHp[i]) ? saved.legHp[i] : inst.legHp[i];
@@ -3146,6 +3194,25 @@ export function buildDistaff(ctx) {
       for (let i = 0; i < inst.legBroken.length; i += 1) inst.legBroken[i] = !!saved.legBroken[i];
     }
     inst.legsBroken = Math.max(0, Math.round(Number(saved.legsBroken) || 0));
+    /* Old saves could carry damage on several unbroken legs. Keep the
+       most injured one only when restoring a standing fight; every
+       other intact leg is normalized to the current full pool. */
+    state.activeLeg = -1;
+    state.legCycleLocked = false;
+    if (phase === "standing" && Array.isArray(inst.legHp)) {
+      let bestHp = state.legHealthRef;
+      for (let i = 0; i < inst.legHp.length; i += 1) {
+        if (!inst.legBroken?.[i] && inst.legHp[i] < bestHp) {
+          bestHp = inst.legHp[i];
+          state.activeLeg = i;
+        }
+      }
+      for (let i = 0; i < inst.legHp.length; i += 1) {
+        if (i !== state.activeLeg && !inst.legBroken?.[i]) {
+          inst.legHp[i] = state.legHealthRef;
+        }
+      }
+    }
     inst.collapsed = phase === "collapsed";
     if (state.defeated || phase === "dead") {
       enemies.play(inst, "death", 0);

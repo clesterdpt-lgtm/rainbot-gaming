@@ -1319,15 +1319,21 @@ export function buildCombat(ctx) {
    * Damage to ONE leg's own pool - entirely separate from
    * `applyDamage`'s single `inst.health`, so a leg fight is real
    * progress without being a second way to kill the animal outright.
-   * Breaking a leg pays a fixed bonus straight to the main pool (see
-   * `LEG_BREAK_BONUS_FRACTION`) and reports it through the same
+   * Breaking a leg normally pays a fixed bonus straight to the main pool
+   * (see `LEG_BREAK_BONUS_FRACTION`) and reports it through the same
    * `applyDamage` path so the kill feed, HUD numbers and progression
    * all see one consistent chunk of damage rather than a silent one.
+   * Bespoke limb fights may prepare a target before the hit or override
+   * that fraction. Distaff uses the hook to keep one injured leg in play;
+   * Garner sets the fraction to zero because severing a remote tentacle
+   * advances its phase without somehow wounding the buried throat.
    */
   function damageLeg(inst, legIndex, dmg, detail = {}) {
     if (!inst || untouchable(inst)) return 0;
     if (!Array.isArray(inst.legHp) || legIndex < 0 || legIndex >= inst.legHp.length) return 0;
     if (inst.legBroken?.[legIndex]) return 0;
+    if (typeof inst.prepareLegDamage === "function"
+      && inst.prepareLegDamage(legIndex, detail) === false) return 0;
     const requested = Math.max(0, Number(dmg) || 0);
     const before = Math.max(0, Number(inst.legHp[legIndex]) || 0);
     const actual = Math.min(before, requested);
@@ -1339,7 +1345,12 @@ export function buildCombat(ctx) {
     if (broke) {
       inst.legBroken[legIndex] = true;
       inst.legsBroken = (inst.legsBroken || 0) + 1;
-      const bonus = Math.round((inst.maxHealth || 0) * LEG_BREAK_BONUS_FRACTION);
+      inst.onLegBroken?.(legIndex, detail);
+      const configured = Number(inst.legBreakBonusFraction);
+      const fraction = Number.isFinite(configured)
+        ? Math.max(0, configured)
+        : LEG_BREAK_BONUS_FRACTION;
+      const bonus = Math.round((inst.maxHealth || 0) * fraction);
       if (bonus > 0) {
         applyDamage(inst, bonus, {
           source: "leg-break", x: detail.x, y: detail.y, z: detail.z,

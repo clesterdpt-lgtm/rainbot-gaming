@@ -121,14 +121,14 @@ try {
   check(placed.afterWave === 1,
     "a roaming breach wave no longer raises a second one",
     `${placed.afterWave} after a wave started`);
-  check(placed.maxHealth === 7200,
+  check(placed.maxHealth === 9000,
     "the Penitent Matriarch has a district-boss health pool",
     `${placed.maxHealth} max health`);
   check(placed.walkSpeed >= 6.6 && placed.chaseSpeed >= 8.1
       && placed.gaitCeiling < 8.6,
     "its pursuit beats sighted movement but leaves a full sprint as the disengage",
     `${placed.walkSpeed} walk · ${placed.chaseSpeed} chase · ${placed.gaitCeiling} ceiling`);
-  check(placed.migratedHealth === 3600 && placed.migratedMaxHealth === 7200,
+  check(placed.migratedHealth === 4500 && placed.migratedMaxHealth === 9000,
     "an old 3600-HP save is upgraded without healing its wounded fraction",
     `${placed.migratedHealth}/${placed.migratedMaxHealth} after a 1800/3600 restore`);
 
@@ -287,7 +287,42 @@ try {
     const closedTo = Math.hypot(T.playerState().x - inst.x,
       T.playerState().z - inst.z);
 
-    /* --- 4. THE TREMOR PLANT PRESENTS THE GASTER. --- */
+    /* --- 4. THE GRAB LIFTS, CARRIES AND SLAMS. --- */
+    T.invulnerable(false);
+    T.ctx.combat.player.hp = T.ctx.combat.player.maxHp;
+    T.player.clearStun();
+    const fx = Math.sin(inst.yaw);
+    const fz = Math.cos(inst.yaw);
+    T._teleportRaw(inst.x + fx * 5, inst.z + fz * 5, Math.PI);
+    T.advanceTime(0.05, 1 / 60);
+    force("grab");
+    const grabTell = status();
+    T.advanceTime(cfg.grabWindup + cfg.grabLift * 0.82, 1 / 60);
+    const liftGround = T.ctx.collide.groundHeight(T.player.state.x, T.player.state.z);
+    const lifted = {
+      clearance: T.player.state.y - liftGround,
+      grabbed: status().grabbed,
+      bossPitch: inst.root.rotation.x,
+    };
+    T.advanceTime(cfg.grabLift * 0.18 + cfg.grabHold + cfg.grabDrop + 0.12, 1 / 60);
+    const grabEnd = status();
+    const grabbedHp = T.ctx.combat.player.hp;
+    const slammed = {
+      grounded: T.player.state.grounded,
+      clearance: T.player.state.y
+        - T.ctx.collide.groundHeight(T.player.state.x, T.player.state.z),
+      blocked: T.ctx.collide.blocked(T.player.state.x, T.player.state.z,
+        T.ctx.collide.groundHeight(T.player.state.x, T.player.state.z)),
+    };
+    T.advanceTime(cfg.grabRecover + 0.2, 1 / 60);
+    const grabRecovery = {
+      playerAction: T.player.action,
+      dying: T.player.state.dying,
+      bossAction: status().action,
+    };
+    T.player.clearStun();
+
+    /* --- 5. THE TREMOR PLANT PRESENTS THE GASTER. --- */
     T.invulnerable(true);
     const box = T.ctx.combat.hitbox.matriarch;
     const THREE = T.THREE;
@@ -337,6 +372,13 @@ try {
       beforeLance: +beforeLance.toFixed(1),
       cockedAt: +cockedAt.toFixed(1),
       closedTo: +closedTo.toFixed(1),
+      grabTell: grabTell.action,
+      lifted,
+      grabbedHp: +grabbedHp.toFixed(1),
+      grabEnd: { hits: grabEnd.grabHits, slams: grabEnd.grabSlams,
+        grabbed: grabEnd.grabbed },
+      slammed,
+      grabRecovery,
       restWeak, tremorWeak, afterTremorWeak,
       perHit: cfg.comboDamage * 0.82,
       tremorBonus: tremorStatus.weakBonus,
@@ -377,6 +419,17 @@ try {
   check(moveset.cockedAt > moveset.closedTo + 6,
     "the lance closes a stand-off range it telegraphs first",
     `${moveset.cockedAt}m at the end of the cock, ${moveset.closedTo}m after the dash`);
+  check(moveset.grabTell === "grab" && moveset.lifted.grabbed
+      && moveset.lifted.clearance > 2.8 && moveset.lifted.bossPitch > 0.05,
+    "the grab visibly lifts the trooper with the Matriarch's full body",
+    JSON.stringify(moveset.lifted));
+  check(moveset.grabEnd.hits === 1 && moveset.grabEnd.slams === 1
+      && !moveset.grabEnd.grabbed && moveset.grabbedHp < maxHp * 0.55
+      && moveset.slammed.grounded && Math.abs(moveset.slammed.clearance) < 0.1
+      && !moveset.slammed.blocked && !moveset.grabRecovery.playerAction
+      && !moveset.grabRecovery.dying,
+    "the catch ends in one large, safe ground slam",
+    `${maxHp - moveset.grabbedHp} damage · ${JSON.stringify(moveset.slammed)}`);
   check(moveset.tremorWeak.weak && moveset.restWeak.weak
     && moveset.tremorWeak.dmg > moveset.restWeak.dmg * 1.15,
   "the tremor plant presents the gaster as a stronger damage window",
@@ -384,6 +437,42 @@ try {
   check(Math.abs(moveset.afterTremorWeak.dmg - moveset.restWeak.dmg) < 0.5,
     "...and the window closes again when it is done",
     `${moveset.afterTremorWeak.dmg} after the rite`);
+
+  const pursuit = await page.evaluate(() => {
+    const T = window.__SF;
+    T.clearEnemies();
+    const site = T.findFlatSite(18);
+    T.spawnEnemy("matriarch", site[0], site[1], { yaw: 0 });
+    T.advanceTime(0.4, 1 / 60);
+    const inst = T.ctx.enemies.live.find((e) => e.key === "matriarch");
+    inst.health = 100000;
+    inst.maxHealth = 100000;
+    const M = T.ctx.matriarch;
+    const cfg = M.config;
+    T._teleportRaw(inst.x, inst.z + 48, Math.PI);
+    const before = M.status(inst).dist;
+    T.advanceTime(1.25, 1 / 60);
+    const afterRun = M.status(inst).dist;
+    const actions = new Set();
+    for (let i = 0; i < 300; i += 1) {
+      const fx = Math.sin(inst.yaw);
+      const fz = Math.cos(inst.yaw);
+      T._teleportRaw(inst.x + fx * 48, inst.z + fz * 48, Math.PI);
+      T.advanceTime(1 / 60, 1 / 60);
+      const action = M.status(inst).action;
+      if (action) actions.add(action);
+    }
+    const end = M.status(inst);
+    return { before, afterRun, actions: [...actions], lances: end.lances,
+      tremors: end.tremors, radius: cfg.tremorRadius };
+  });
+  check(pursuit.before > pursuit.radius && pursuit.afterRun < pursuit.before - 6,
+    "outside the seismic AOE it continuously closes the gap",
+    JSON.stringify(pursuit));
+  check(pursuit.lances > 0 && pursuit.tremors === 0
+      && pursuit.actions.every((action) => action === "lance"),
+    "outside the AOE its only attack attempt is the charge",
+    JSON.stringify(pursuit));
 
   /* ---------------- tremor rite ---------------- */
   console.log("\n=== TREMOR RITE ===");
@@ -419,13 +508,26 @@ try {
     put(12);
     T.ctx.combat.player.hp = T.ctx.combat.player.maxHp;
     T.invulnerable(false);
+    const airX = inst.x;
+    const airZ = inst.z + 12;
+    const airEvents = [];
+    const offClear = M.bus.on("tremorCleared", (e) => airEvents.push({ kind: "clear", ...e }));
+    const offHit = M.bus.on("tremorHit", (e) => airEvents.push({ kind: "hit", ...e }));
     M.force("tremor", inst);
-    T.advanceTime(cfg.tremorWindup + 12 / cfg.tremorSpeed - 0.10, 1 / 60);
-    const ground = T.ctx.collide.groundHeight(T.ctx.player.state.x, T.ctx.player.state.z);
-    T.ctx.player.state.y = ground + cfg.tremorAirClear + 0.65;
-    T.ctx.player.state.vy = 0;
-    T.ctx.player.state.grounded = false;
-    T.advanceTime(0.18, 1 / 60);
+    const airFrames = Math.ceil((cfg.tremorWindup + 12 / cfg.tremorSpeed + 0.3) * 60);
+    for (let i = 0; i < airFrames; i += 1) {
+      const ps = T.ctx.player.state;
+      ps.x = airX;
+      ps.z = airZ;
+      const airGround = T.ctx.collide.groundHeight(airX, airZ);
+      ps.y = airGround + cfg.tremorAirClear + 4.0;
+      ps.vy = 0;
+      ps.grounded = false;
+      T.ctx.jetpack.state.inFlight = true;
+      T.ctx.jetpack.state.active = false;
+      T.advanceTime(1 / 60, 1 / 60);
+    }
+    offClear(); offHit();
     const airborneHp = T.ctx.combat.player.hp;
     const afterAir = M.status(inst);
 
@@ -447,6 +549,7 @@ try {
       airborneHp: +airborneHp.toFixed(1),
       groundHits: afterGround.tremorHits,
       airClears: afterAir.tremorClears,
+      airEvents,
       spawned,
       end,
     };
@@ -460,7 +563,8 @@ try {
     `${tremor.groundHits} hit, ${maxHp - tremor.groundedHp} damage taken`);
   check(tremor.airClears >= 1 && tremor.airborneHp === maxHp,
     "jumping or boosting above the front clears it without damage",
-    `${tremor.airClears} clear, ${maxHp - tremor.airborneHp} damage taken`);
+    `${tremor.airClears} clear, ${maxHp - tremor.airborneHp} damage taken; `
+      + JSON.stringify(tremor.airEvents));
   check(tremor.spawned.length === 0,
     "the Matriarch never summons another enemy",
     `spawned combatants: ${tremor.spawned.join(", ") || "none"}`);
@@ -638,6 +742,54 @@ try {
       [inst.x, g + 3.0, inst.z], 46);
       for (let i = 0; i < 5; i += 1) T.renderStill();
     }, [kind, at]);
+    const shot = await page.evaluate(() => window.__SF.captureDataURL());
+    await writeFile(path.join(OUT, `${name}.png`),
+      Buffer.from(shot.slice(shot.indexOf(",") + 1), "base64"));
+  }
+
+  /* The new catch has two authored silhouettes of its own: the high
+     carry, with the fold rising under the trooper, and the committed
+     downward drive just before impact. Keep the player visible because
+     their separation from the floor is the whole read of the move. */
+  for (const [name, which] of [["grab-lift", "lift"], ["grab-drop", "drop"]]) {
+    const pose = await page.evaluate((view) => {
+      const T = window.__SF;
+      const inst = T.ctx.enemies.live.find((e) => e.key === "matriarch");
+      if (!inst) return null;
+      T.player.clearStun();
+      T.invulnerable(true);
+      const fx = Math.sin(inst.yaw);
+      const fz = Math.cos(inst.yaw);
+      T._teleportRaw(inst.x + fx * 5, inst.z + fz * 5, inst.yaw + Math.PI);
+      T.ctx.matriarch.force("grab", inst);
+      const c = T.ctx.matriarch.config;
+      const t = view === "lift"
+        ? c.grabWindup + c.grabLift * 0.82
+        : c.grabWindup + c.grabLift + c.grabHold + c.grabDrop * 0.72;
+      T.advanceTime(t, 1 / 60);
+      T.hidePlayer(false);
+      const ps = T.player.state;
+      const g = T.groundHeightAt(inst.x, inst.z);
+      const sideX = Math.cos(inst.yaw);
+      const sideZ = -Math.sin(inst.yaw);
+      /* Front quarter: the player is between lens and mandibles rather
+         than hidden behind the creature's entire thorax. */
+      T.lookAt([inst.x + fx * 14 + sideX * 7, g + 7.0,
+        inst.z + fz * 14 + sideZ * 7],
+      [(inst.x + ps.x) * 0.5, Math.max(g + 3.0, ps.y - 0.8),
+        (inst.z + ps.z) * 0.5], 50);
+      for (let i = 0; i < 5; i += 1) T.renderStill();
+      return {
+        grabbed: T.ctx.matriarch.status(inst).grabbed,
+        clearance: ps.y - T.groundHeightAt(ps.x, ps.z),
+        bossPitch: inst.root.rotation.x,
+        distance: Math.hypot(ps.x - inst.x, ps.z - inst.z),
+      };
+    }, which);
+    check(!!pose?.grabbed && pose.clearance > (which === "lift" ? 2.8 : 0.5)
+        && Math.abs(pose.bossPitch) > 0.08 && pose.distance < 7,
+      `${name} visual sample holds the authored grab pose`,
+      JSON.stringify(pose));
     const shot = await page.evaluate(() => window.__SF.captureDataURL());
     await writeFile(path.join(OUT, `${name}.png`),
       Buffer.from(shot.slice(shot.indexOf(",") + 1), "base64"));

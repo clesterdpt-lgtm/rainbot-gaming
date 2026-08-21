@@ -1336,25 +1336,38 @@ export function buildCombat(ctx) {
       && inst.prepareLegDamage(legIndex, detail) === false) return 0;
     const requested = Math.max(0, Number(dmg) || 0);
     const before = Math.max(0, Number(inst.legHp[legIndex]) || 0);
-    const actual = Math.min(before, requested);
+    const isDistaff = inst.key === "distaff";
+    // For Distaff, legs take continuous damage and are never killed or disabled
+    const actual = isDistaff ? requested : Math.min(before, requested);
     if (actual <= 0) return 0;
     inst.legHp[legIndex] = Math.max(0, before - requested);
     inst.alerted = true;
     inst.suspicion = 1;
-    const broke = inst.legHp[legIndex] <= 0;
-    if (broke) {
-      inst.legBroken[legIndex] = true;
-      inst.legsBroken = (inst.legsBroken || 0) + 1;
-      inst.onLegBroken?.(legIndex, detail);
-      const configured = Number(inst.legBreakBonusFraction);
-      const fraction = Number.isFinite(configured)
-        ? Math.max(0, configured)
-        : LEG_BREAK_BONUS_FRACTION;
-      const bonus = Math.round((inst.maxHealth || 0) * fraction);
-      if (bonus > 0) {
-        applyDamage(inst, bonus, {
-          source: "leg-break", x: detail.x, y: detail.y, z: detail.z,
-        });
+
+    let broke = false;
+    if (isDistaff) {
+      // Direct damage applied to the boss so every leg hit deals real damage to Distaff
+      applyDamage(inst, actual, {
+        source: detail.source || "shot",
+        x: detail.x, y: detail.y, z: detail.z,
+      });
+      inst.onLegHit?.(legIndex, actual, detail);
+    } else {
+      broke = inst.legHp[legIndex] <= 0;
+      if (broke) {
+        inst.legBroken[legIndex] = true;
+        inst.legsBroken = (inst.legsBroken || 0) + 1;
+        inst.onLegBroken?.(legIndex, detail);
+        const configured = Number(inst.legBreakBonusFraction);
+        const fraction = Number.isFinite(configured)
+          ? Math.max(0, configured)
+          : LEG_BREAK_BONUS_FRACTION;
+        const bonus = Math.round((inst.maxHealth || 0) * fraction);
+        if (bonus > 0) {
+          applyDamage(inst, bonus, {
+            source: "leg-break", x: detail.x, y: detail.y, z: detail.z,
+          });
+        }
       }
     }
     const identity = enemyIdentity(inst);

@@ -220,11 +220,11 @@ export const DISTAFF_CONFIG = Object.freeze({
      what is in front of the head, and the collapsed animal turns too
      slowly to bring its mouth round on someone working its flank -
      so where you stand while it is down is the mechanic. */
-  biteCadence: 2.6,
-  biteContact: 0.50,
-  biteReach: 5.4,          // from the head bone, not the centre
-  biteArc: 1.15,           // rad, half-angle about the head's forward
-  biteDamage: 40,
+  biteCadence: 2.4,
+  biteContact: 0.45,
+  biteReach: 7.2,          // from the head bone, not the centre
+  biteArc: 1.35,           // rad, half-angle about the head's forward
+  biteDamage: 42,
 
   // Simulated well past combat.js's own culling horizon: a landmark
   // this size has to keep fighting even if the player circles wide.
@@ -722,7 +722,6 @@ export function buildDistaff(ctx) {
     phase: "dormant",       // dormant, alert, standing, collapsed, recovering, returning, dead
     timer: 0,
     legsAtLastCollapse: 0,
-    // The sole intact leg currently allowed to retain damage.
     activeLeg: -1,
     legCycleLocked: false,
     slamTimer: C.slamCadence * 0.55,
@@ -736,9 +735,9 @@ export function buildDistaff(ctx) {
     defeated: false,
     biteTimer: 0,
     releaseCameraAt: undefined,
-    // Read off the instance's own leg pool at spawn, since
-    // DISTAFF_CONFIG is frozen and cannot carry it - see resetToLair.
+    // Footing health pool: damaging legs chips at footing to buckle and collapse the boss
     legHealthRef: 340,
+    footingHp: 340,
     /* The reveal camera plays once per encounter, not once per
        re-aggro: a player who has already been shown the animal is
        mid-fight, and stealing the camera again is a punishment. A
@@ -748,6 +747,7 @@ export function buildDistaff(ctx) {
     lungeFor: 0,
     lungeTimer: C.lungeCadence * 0.6,
     lungeYaw: 0,
+    lungeTarget: null,
     strafeDir: 1,
     footfallGap: 0,
     // A leg just went; nothing is thrown until this runs out.
@@ -2187,6 +2187,16 @@ export function buildDistaff(ctx) {
           // The silk on the ground under them, for as long as it holds.
           spillPatch(ps.x, ps.z, 1.7, C.webRootSeconds + C.webSlowSeconds);
           bus.emit("webHit", hit);
+          // Webbing the player queues an immediate bite attack!
+          const distToPlayer = Math.hypot(ps.x - inst.x, ps.z - inst.z);
+          if (distToPlayer <= 8.5 || biteCanReach(2.0)) {
+            state.action = 0;
+            beginBite();
+          } else if (state.action <= 0) {
+            state.lungeFor = C.lungeSeconds;
+            state.lungeYaw = Math.atan2(ps.x - inst.x, ps.z - inst.z);
+            state.lungeTarget = "bite";
+          }
         } else {
           bus.emit("webSplash", hit);
         }
@@ -2494,10 +2504,12 @@ export function buildDistaff(ctx) {
     if (d <= C.reelStop + 0.05 || reel.for <= 0) {
       const arrived = d <= C.reelStop + 0.05;
       endReel(arrived ? "arrived" : "parted");
-      /* THE PAYOFF: the slam is queued the moment they arrive at its
-         ring, so the sequence reads reel -> slam, and the tell on the
-         slam is the whole of the player's answer. */
-      if (arrived) state.slamTimer = Math.min(state.slamTimer, 0.12);
+      /* THE PAYOFF: when reeled in, the spider snaps down and bites the trooper! */
+      if (arrived || d <= 8.5) {
+        state.action = 0;
+        beginBite();
+        state.slamTimer = Math.max(state.slamTimer, 2.0);
+      }
     }
   }
 
@@ -2642,6 +2654,7 @@ export function buildDistaff(ctx) {
     state.reelTimer -= dt;
     state.patchTimer -= dt;
     state.lungeTimer -= dt;
+    state.biteTimer = Math.max(0, (state.biteTimer || 0) - dt);
     state.action = Math.max(0, state.action - dt);
     const ps = ctx.player.state;
 
@@ -2669,7 +2682,12 @@ export function buildDistaff(ctx) {
       faceYaw(state.lungeYaw, 6, dt, 2.4);
       if (d < C.slamRadius * 0.85 || state.lungeFor <= 0) {
         state.lungeFor = 0;
-        beginSlam();
+        if (state.lungeTarget === "bite" || (ps.rootTimer && ps.rootTimer > 0) || biteCanReach(1.2)) {
+          state.lungeTarget = null;
+          beginBite();
+        } else {
+          beginSlam();
+        }
       }
       return;
     }
@@ -2682,6 +2700,20 @@ export function buildDistaff(ctx) {
        readable, and the queued slam is waiting at the end of it. */
     if (state.reel) {
       if (inst.state !== "alert") enemies.play(inst, "alert", 0.3);
+      return;
+    }
+
+    // WEBBED / CLOSE TARGET: bite priority
+    const webbed = !!(ps && ps.rootTimer > 0);
+    if ((webbed || dist < 7.5) && biteCanReach(1.2)) {
+      beginBite();
+      return;
+    }
+    if (webbed && state.lungeTimer <= 0 && dist >= 7.5) {
+      state.lungeFor = C.lungeSeconds;
+      state.lungeYaw = Math.atan2(ps.x - inst.x, ps.z - inst.z);
+      state.lungeTarget = "bite";
+      state.lungeTimer = C.lungeCadence;
       return;
     }
 
@@ -2699,6 +2731,11 @@ export function buildDistaff(ctx) {
       return;
     }
     if (state.slamTimer <= 0 && dist < C.slamRadius * 1.3) { beginSlam(); return; }
+    if (state.biteTimer <= 0 && dist < 8.0 && biteCanReach(0.8)) {
+      state.biteTimer = C.biteCadence;
+      beginBite();
+      return;
+    }
     if (reelReady) { beginWebReel(); return; }
     if (state.webTimer <= 0) { beginWebCast(); return; }
     if (state.patchTimer <= 0) {
@@ -2778,11 +2815,6 @@ export function buildDistaff(ctx) {
       }
     }
     if (state.timer <= 0) {
-      if (inst.legsBroken >= 8) {
-        // No legs left to stand on. Down for good.
-        state.timer = 4;
-        return;
-      }
       beginRecover();
     }
   }
@@ -2790,19 +2822,18 @@ export function buildDistaff(ctx) {
   function stepRecovering(dt) {
     state.timer -= dt;
     if (state.timer <= 0) {
-      /* THE CLEAN RISE. Broken legs remain the encounter's permanent
-         progress, but every other leg returns at full strength and no
-         second partial pool survives into the next standing cycle. */
+      /* THE CLEAN RISE. Footing resets to full and all eight legs remain
+         fully active and damageable. */
+      state.footingHp = state.legHealthRef;
       if (Array.isArray(inst.legHp)) {
         for (let i = 0; i < inst.legHp.length; i += 1) {
-          if (!inst.legBroken?.[i]) inst.legHp[i] = state.legHealthRef;
+          inst.legHp[i] = state.legHealthRef;
         }
       }
       state.activeLeg = -1;
       state.legCycleLocked = false;
       state.phase = "standing";
       state.recollapseFor = C.recollapseGuard;
-      state.legsAtLastCollapse = Math.max(state.legsAtLastCollapse, inst.legsBroken);
       enemies.play(inst, "alert", 0.3);
     }
   }
@@ -2881,6 +2912,7 @@ export function buildDistaff(ctx) {
    *  half-won and still call the encounter repeatable. */
   function healToFull() {
     inst.health = inst.maxHealth;
+    state.footingHp = state.legHealthRef;
     if (inst.legHp) {
       for (let i = 0; i < inst.legHp.length; i += 1) inst.legHp[i] = state.legHealthRef;
     }
@@ -2961,30 +2993,56 @@ export function buildDistaff(ctx) {
     return inst;
   }
 
-  /** combat.js calls this immediately before changing a limb pool.
-   *  While standing, changing target heals the previous intact limb;
-   *  once the chosen leg breaks, the body must complete its collapse
-   *  and rise before another leg can start taking damage. */
+  /** combat.js calls prepareLegDamage and onLegHit.
+   *  All eight legs remain continuously active and damageable. Damaging
+   *  any leg drains the footing pool until the boss loses its footing
+   *  and collapses down into a vulnerable posture. */
   function attachLegRules() {
     if (!inst) return;
-    inst.prepareLegDamage = (legIndex) => {
-      if (state.phase !== "standing") return false;
-      if (state.legCycleLocked) return false;
-      if (state.activeLeg !== legIndex) {
-        if (Array.isArray(inst.legHp)) {
-          for (let i = 0; i < inst.legHp.length; i += 1) {
-            if (i !== legIndex && !inst.legBroken?.[i]) {
-              inst.legHp[i] = state.legHealthRef;
-            }
-          }
-        }
-        state.activeLeg = legIndex;
-      }
+    inst.prepareLegDamage = () => {
+      if (state.phase === "collapsed" || state.phase === "dead") return false;
       return true;
     };
-    inst.onLegBroken = () => {
-      if (state.phase === "standing") state.legCycleLocked = true;
+    inst.onLegHit = (legIndex, actual, detail) => {
+      if (state.phase !== "standing") return;
+      state.footingHp = Math.max(0, (state.footingHp ?? state.legHealthRef) - actual);
+      poiseKick(0.35);
+
+      const leg = inst.legs?.[legIndex];
+      const plant = leg?.plant;
+      const fx = plant ? plant.x : (Number.isFinite(detail?.x) ? detail.x : inst.x);
+      const fz = plant ? plant.z : (Number.isFinite(detail?.z) ? detail.z : inst.z);
+      const fy = plant ? plant.y : groundAt(fx, fz);
+      if (leg?.femur) {
+        leg.femur.updateWorldMatrix(true, false);
+        leg.femur.getWorldPosition(_vec);
+        ctx.vfx?.spark?.(_vec.x, _vec.y, _vec.z, 2.0, false, false);
+      }
+      if (Math.random() < 0.45) {
+        ctx.vfx?.sandSpray?.(fx, fy + 0.25, fz, 1.3, 0, 1);
+        spillIchor(fx, fz, 1.5 + Math.random() * 1.0);
+      }
+
+      // When footing is broken from leg damage, crash down into collapse
+      if (state.footingHp <= 0 && state.recollapseFor <= 0) {
+        state.footingHp = state.legHealthRef;
+        onFootingBroken();
+      }
     };
+    inst.onLegBroken = () => {
+      if (state.phase === "standing") {
+        onFootingBroken();
+      }
+    };
+  }
+
+  function onFootingBroken() {
+    inst.legsBroken = (inst.legsBroken || 0) + 1;
+    poiseKick(2.8);
+    ctx.vfx?.sandSpray?.(inst.x, groundAt(inst.x, inst.z) + 0.3, inst.z, 2.5, 0, 1);
+    ctx.player?.doctrineKick?.(0.85, 0.9);
+    beginStagger();
+    beginCollapse();
   }
 
   /** Watch the solver replant feet and turn each landing into dust
@@ -3083,6 +3141,8 @@ export function buildDistaff(ctx) {
       instanceId: state.defeated || inst.state === "death" ? null : inst.id,
       health: Math.max(0, Math.round(inst.health)),
       maxHealth: Math.round(inst.maxHealth),
+      footingHp: Math.max(0, Math.round(state.footingHp ?? state.legHealthRef)),
+      footingMax: state.legHealthRef,
       legsBroken: inst.legsBroken || 0,
       activeLeg: state.activeLeg,
       legCount: inst.legHp ? inst.legHp.length : 8,

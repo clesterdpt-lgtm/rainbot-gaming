@@ -988,7 +988,7 @@ export function buildHud(ctx, host) {
         ? "Collapsed - the body is exposed"
         : d.lunging
           ? "IT IS COMING"
-          : `${d.legsBroken} / ${d.legCount} legs broken`;
+          : "Target legs — break its footing";
     eventCountEl.textContent = d.collapsed
       ? "EXPOSED" : `${d.health} HP`;
     eventFillEl.style.width = `${clamp01(1 - d.health / Math.max(1, d.maxHealth)) * 100}%`;
@@ -1243,7 +1243,7 @@ export function buildHud(ctx, host) {
         distaff.phase === "returning" ? "Withdrawing"
           : distaff.collapsed ? "Collapsed — body exposed"
           : distaff.lunging ? "Lunging"
-          : `${distaff.legsBroken} / ${distaff.legCount} legs broken`,
+          : "Target legs — break its footing",
         distaff.phase);
     }
     const garner = ctx.garner?.status?.();

@@ -81,7 +81,7 @@ try {
     `dist=${survey.distToArena}m`);
   check(survey.crossFound, "Colossal cross landmark object spawned in scene");
 
-  // Capture screenshot of cross and candles
+  // Capture screenshot of cross and candles in day
   await page.screenshot({ path: path.join(outDir, "1-matriarch-cross-shrine-day.png") });
 
   // Set time of day to dusk / vespers to see candles glowing warmly

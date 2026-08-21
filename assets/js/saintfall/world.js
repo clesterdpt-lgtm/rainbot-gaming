@@ -3979,7 +3979,7 @@ export async function buildWorld(ctx, onProgress) {
       const crossEdgeRadius = MATRIARCH_ARENA.flatRadius; // Edge of the flattened arena pad (78m)
       const crossX = MATRIARCH_ARENA.x + Math.cos(crossBearing) * crossEdgeRadius;
       const crossZ = MATRIARCH_ARENA.z + Math.sin(crossBearing) * crossEdgeRadius;
-      const crossYaw = crossBearing - Math.PI * 0.5;
+      const crossYaw = crossBearing;
 
       if (crossAsset) {
         addAuthoredLandmark(crossAsset, {
@@ -4020,7 +4020,7 @@ export async function buildWorld(ctx, onProgress) {
         const step2 = kit.slab(4.0, 0.38, 2.0, 0.06).translate(0, 0.35, 0);
         const altarTable = kit.slab(2.8, 0.60, 1.2, 0.05).translate(0, 0.73, 0);
         const dais = kit.merge([step1, step2, altarTable]);
-        dais.rotateY(-crossYaw);
+        dais.rotateY(-crossBearing);
         dais.translate(ax, ay + 0.18, az);
         shrineStone.push(dais);
 

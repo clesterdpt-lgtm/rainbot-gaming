@@ -92,50 +92,27 @@ export const DIFFICULTY = Object.freeze({
   }),
   martyr: Object.freeze({
     label: "MARTYR",
-    blurb: "The road at war. Garrisons half again as large that wake together and see further; broods nearly twice as thick that come twice as often and cannot be outrun; a barrel that locks after twenty rounds; a Thresher that takes two rounds, pounces faster than you can back away, and bites a third harder. The lance heals more than half again per kill.",
-    /* The first Martyr was tuned to what the duel probe's bots survive, and
-       the bots are far below a person - they stand still under fire and never
-       touch boost, cover, Aegis or a stratagem. It played as a ~15% nudge and
-       read as "very easy". This is a step: pressure levers moved hard, damage
-       moved with sustain, the field itself thickened. The parity gates in
-       `saintfall-melee-duel-probe.mjs --tiers all` still bound it. */
-    incoming: 1.35,
-    lightHealth: 1.6,    // Thresher 96: two rounds even on a head; the lance still one hit
-    /* Heavy health is a melee tax in disguise - every extra sweep on a
-       Harrow is another armoured bite - so it moves less than the light
-       caste's. */
-    heavyHealth: 1.2,    // Harrow 504: five sweeps
-    bossHealth: 1.4,
-    roster: 1.7,
-    /* The ranged caste is deliberately NOT thickened. Measured: an extra
-       Gleaner with a four-bolt burst at 0.55 aim and 1.5x damage shredded
-       both lance bots in 4.6s of Crowned Surge while the rifle cleared it
-       from 65 HP - Gleaner lethality is the one axis that taxes the pinned
-       lance and not the kiting rifle, so Martyr leans on the swarm, the
-       health, the speed and the field instead. Aim alone moves, moderately,
-       and both builds pay for it. */
+    blurb: "The road at war. Garrisons nearly twice as large that wake together and hunt aggressively; broods twice as thick that come in relentless waves; heavy damage intake and slower life-support regen; bosses move with frantic speed, increased vitality, and merciless attack cadences.",
+    incoming: 1.65,
+    lightHealth: 1.85,
+    heavyHealth: 1.45,
+    bossHealth: 1.75,
+    roster: 1.8,
     gleanerDelta: 0,
     gleanerRoster: 1.0,
-    gleanerDirectAim: 0.46,
-    gleanerBurst: 3,
-    breachPace: 0.55,    // first warning 99s, intermission 33s
-    thresherSpeed: 1.35, // 10.0 m/s
-    /* The pounce at 0.75 x 10.0 = 7.5 m/s is still short of a trooper
-       backpedalling at 8.6 - measured, a retreating rifle took no bites from
-       fifteen Threshers - so on Martyr it commits at 0.9 x charge (9.0 m/s):
-       a straight retreat no longer works, a sidestep still does, and the
-       lance, which does not retreat, pays nothing for it. */
-    pounce: 1.2,
-    heat: 1.5,           // 20 rounds
-    /* Not raised: the slot cap only ever bounds bites on a trooper the pack
-       has reached, and the pack reaches the lance. */
+    gleanerDirectAim: 0.58,
+    gleanerBurst: 4,
+    breachPace: 0.50,
+    thresherSpeed: 1.45,
+    pounce: 1.35,
+    heat: 1.65,
     slotCap: 3,
-    sustain: 1.8,
-    regenDelay: 8.0,
-    regenRate: 0.7,      // 7 a second
-    garrison: 1.6,
-    alertRadius: 1.6,    // 42m -> 67m: a garrison comes as one
-    sight: 1.2,
+    sustain: 1.25,
+    regenDelay: 10.0,
+    regenRate: 0.50,
+    garrison: 1.75,
+    alertRadius: 1.80,
+    sight: 1.30,
   }),
 });
 

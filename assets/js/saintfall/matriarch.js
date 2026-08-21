@@ -79,359 +79,120 @@ import { TAU, dampAngle, makeBus } from "saintfall/core.js";
 
 export const MATRIARCH_CONFIG = Object.freeze({
   /* ------------------------------------------------------------
-     GROUND. It holds a band, not a point. Outside `holdBand` it
-     advances, inside it backs off, and in the band it circles - so
-     the fight has a shape even in the seconds nobody is attacking.
-     The band's inner edge is deliberately just inside scythe reach:
-     a boss that stands exactly at the range of its own attack looks
-     like it is waiting for a cooldown, which it is. */
+     GROUND. Outside `holdBand` it advances, inside it backs off,
+     and in the band it circles. */
   holdBand: Object.freeze([5.6, 9.4]),
 
-  /* HOW FAST, and this is the number the fight was lost on.
+  /* HOW FAST: Tuned aggressively so the Matriarch easily stalks down
+     running and shooting troopers, forcing active sprint/boost evasion. */
+  walkSpeed: 10.5,
+  backSpeed: 4.5,
+  strafeSpeed: 6.2,
+  strafeFlipSeconds: 2.2,
 
-     It was 2.55 m/s. A trooper moves at 8.6 hipfiring and 3.96 down
-     the sights, so a player who NEVER STOPPED AIMING still opened
-     ground on it at better than a metre a second - measured, in
-     `saintfall-matriarch-pressure.mjs`: twelve metres to forty-six in
-     twenty-six seconds, nought hits taken. The animal was not hard to
-     dodge, it was impossible to be near. Every other number in this
-     file - the arc, the tells, the cull's loiter clock - describes a
-     fight that only exists inside nine metres, and nothing here could
-     make a player stand there.
-
-     The stalk now beats a WALK and the sighted pace outright and sits
-     under a SPRINT, so the range is a live argument: keep the sights
-     up and it closes on you, break into a run and you keep your
-     distance and stop shooting for as long as you do. */
-  walkSpeed: 7.2,
-  backSpeed: 3.1,
-  strafeSpeed: 4.0,
-  strafeFlipSeconds: 2.4,
-
-  /* THE CHASE GEAR. Beyond the band it winds up toward a run, so
-     distance is a cost that grows rather than a switch that turns the
-     encounter off - which is what twenty-four metres used to be: the
-     probe held that mark for twenty-six seconds and drew NOTHING, no
-     tell, no lance, no step taken.
-
-     Capped below SPRINT deliberately, and `gaitCeiling` is where that
-     cap is enforced after the rouse scale has been applied. A boss
-     that outruns a sprinting player at all times has no counterplay
-     left in its feet, and the bestiary already settled this argument
-     the other way: Martyr's Thresher only beats a retreat with a
-     committed POUNCE, not with its cruise. Here the lance is that
-     pounce - a burst, on a cadence, with a tell in front of it.
-
-     NOT A LIMIT OF THE LEG SOLVER, which was the first guess and is
-     wrong. The arithmetic said a foot replants every `stance` metres
-     over a fixed 0.18s swing and so would skate past about 7.8 m/s;
-     measured, the duty cycle simply rises with pace - 13% of
-     foot-frames mid-step at the old 2.55, 40% at this ceiling, 69%
-     at thirteen - and a PLANTED foot never slides a millimetre at
-     any of them. The ceiling stays because of the counterplay
-     argument above, which is the honest reason for it. */
-  chaseSpeed: 8.45,
-  chaseFrom: 14,
-  chaseFull: 30,
-  gaitCeiling: 8.55,
-  /* Where in the band it settles while circling, and how hard it is
-     pulled there - see the strafe branch of `stepStalk`.
-
-     `holdAt` IS NOT THE MIDDLE OF THE BAND, and the first version of
-     this made it so: mid-band is 7.5m, `comboReach` is 7.4, so the
-     animal held station exactly one decimetre outside the range of
-     its own scythes and then never chose them. Measured as four
-     forced combos whiffing with the aim error at ten to fourteen
-     degrees inside a forty-degree arc - a miss on DISTANCE, by a
-     boss that had walked itself out of its own reach. It settles
-     inside the swing, with room for a player to drift during the
-     wind-up and still be there for the contact frame.
-
-     The gain is soft on purpose: a stiff one turns a stalking animal
-     into a tethered one that snaps back to a radius, which reads as a
-     leash rather than as a decision. */
+  /* THE CHASE GEAR: Beyond the stand-off band it sprints at high velocity,
+     ensuring distance is never a safe resting state. */
+  chaseSpeed: 15.0,
+  chaseFrom: 12,
+  chaseFull: 28,
+  gaitCeiling: 16.5,
   holdAt: 6.3,
-  bandGain: 1.6,
+  bandGain: 1.8,
 
-  /* Free, and while committed to a tell. The committed rate is what
-     decides whether a sidestep beats a scythe, and it is the same
-     0.6 rad/s the ordinary castes were tuned to in the melee pass -
-     see ENEMY_MELEE_CONFIG.windupTurnRate. A boss that tracks harder
-     than its own bestiary makes the dodge the player just learned
-     stop working, which reads as the boss cheating. THE COMMITTED
-     RATE IS NOT RAISED HERE, for that reason - see `leadLag` for
-     what answers a circle instead. */
-  turnRate: 2.4,
-  committedTurnRate: 0.6,
-
-  /* ------------------------------------------------------------
-     LEADING THE SWING, and the second half of "too easy to avoid".
-
-     Speed explains why the player was never in reach. It does not
-     explain the rest of the measurement: orbiting at six metres a
-     second at nine metres, inside scythe reach for better than a
-     third of the run, the animal drew five tells and landed NONE -
-     and roused, six tells and fourteen whiffs. Not a near miss
-     either way. Permanent immunity, and the arithmetic behind it is
-     one line: six metres a second at nine metres is 0.67 rad/s of
-     bearing, and `committedTurnRate` is 0.60. A player holding a
-     circle simply out-rotates the swing, for ever, by 0.07 rad/s.
-
-     Widening the arc or raising the committed rate would fix the
-     number and break the contract - a sidestep is supposed to beat a
-     swing, in this fight and in every other. So the animal LEADS
-     instead: through a tell it turns toward where the player will be
-     when the blade lands rather than where they are while it is
-     drawn. A constant orbit is a prediction, and it is now predicted.
-     A change of direction is not, and still beats it - which is the
-     dodge the bestiary teaches, made sharper rather than removed.
-
-     Contact is still resolved against the LIVE player. The lead moves
-     where the body points, never where the hit is tested.
-
-     HOW FAR AHEAD IS NOT A TIME, it is a fraction of the animal's own
-     tracking lag - which is what made the first attempt at this fall
-     0.05 rad short and change nothing. `dampAngle` is exponential:
-     the rate is a time constant, not a cap on rad/s, so a body
-     tracking a bearing that turns at w settles a STEADY w/rate behind
-     it. At the orbit above that is 1.12 rad - 64 degrees - against a
-     40-degree arc, and leading by the wind-up's own 0.58s only buys
-     21 of it back. Leading by `leadLag / rate` seconds instead
-     cancels that fraction of the lag whatever the rate is, so one
-     constant sizes itself correctly for the scythes and for the
-     lance, which tracks two and a half times harder. The lance then
-     adds a second, separate term for its own flight - `lanceLead`.
-
-     Below 1.0 ON PURPOSE. At 1.0 a held circle is perfectly predicted
-     and the boss becomes unmissable, which is the same fight with the
-     sign flipped. At 0.7 a circle is still the best a moving player
-     can do - it just stops being immunity. And the cost of a
-     direction CHANGE goes up rather than down: the aim point flips to
-     the wrong side of the player, so the error at contact is the lag
-     plus the lead instead of the lag minus it. */
-  leadLag: 0.7,
-  leadMax: 7.5,
-  /* The lance's share of its own flight time. Same argument as
-     `leadLag` and a separate number because it answers a separate
-     failure: a charge aimed where the player stood at the cock lands
-     a metre behind them and then whiffs on the ARC, which is how four
-     lances at a plinking trooper came to draw nothing. */
-  lanceLead: 0.75,
-  /* The player's velocity is differenced by this module - see
-     `trackPlayer`. `trackDamp` is the player's own travel easing, and
-     `trackCeiling` is above the jetpack's 30 m/s cruise so that every
-     way a trooper can legitimately travel is predicted and everything
-     faster is read as the teleport it is. */
+  /* Tracking rates and swing leading */
+  turnRate: 3.4,
+  committedTurnRate: 0.85,
+  leadLag: 0.85,
+  leadMax: 8.0,
+  lanceLead: 0.92,
   trackDamp: 18,
   trackCeiling: 34,
 
-  /* Its territory, measured from where districtBosses parked it. Well
-     inside that controller's arena ring (145m as of m101) on purpose: a
-     module leash that can fire outside the ring it is nested in never
-     fires at all, which is how the Garner's disengage sat dead for a
-     milestone. The fight itself also stays on the flattened pan
-     terrain.js carves for it (MATRIARCH_ARENA, flat to 78m), so the
-     leash keeps her strikes on measured, level ground. */
   arenaRadius: 84,
 
   /* ------------------------------------------------------------
-     THE SCYTHE COMBO. Two hits, then three once it has roused.
-
-     `windup` and `contact` are the same contract the ordinary melee
-     castes got in the melee-viability pass: the strike clip is
-     restarted at the tell and time-scaled so its own contact frame
-     lands exactly on the wind-up, and the hit is resolved against
-     where the player IS at that frame. Step out of reach, step
-     outside the arc, or raise Aegis in time, and it whiffs. */
-  comboReach: 7.4,
-  /* THE TELL IS NOT SHORTENED. Reaction time is a melee tax, and the
-     complaint this pass answers was positional - the player could not
-     be reached, not that they read the swing too easily. What is cut
-     is the DEAD AIR either side of it: the recovery it stands through
-     and the cadence it waits out, both of which were long enough that
-     an animal in reach still spent most of its time doing nothing. */
-  comboWindup: 0.58,
-  comboContact: 0.642,          // measured, matches the authored clip
-  comboGap: 0.40,               // between one scythe and the next
-  comboRecover: 0.52,
-  comboDamage: 30,
-  /* +-40 degrees at the contact frame. Wider and no lateral dodge
-     ever succeeds against a nine-metre turning circle; narrower and
-     the boss misses a stationary target on the second beat because
-     its own committed turn cannot keep up with the first one's
-     knock. */
+     THE SCYTHE COMBO */
+  comboReach: 8.4,
+  comboWindup: 0.48,
+  comboContact: 0.642,
+  comboGap: 0.36,
+  comboRecover: 0.36,
+  comboDamage: 40,
   comboArc: 0.766,
-  comboCadence: 2.3,
+  comboCadence: 1.5,
 
   /* ------------------------------------------------------------
-     THE LANCE. A gap-closer, and the only reason standing at twenty
-     metres is not a strategy. It is a long tell on purpose - almost a
-     full second of a reared, cocked animal - because what follows is
-     unavoidable once it starts, and an unavoidable move has to be
-     answerable before it does. */
-  /* THE BAND IS THE WHOLE STAND-OFF NOW, not a window inside it. It
-     ended at 23m, and a player at 24 was not making a hard read - they
-     were outside the encounter, which the pressure probe measured as
-     twenty-six seconds of nothing at all. If a range is safe it has to
-     be safe because getting there cost something. */
-  lanceRange: Object.freeze([9.5, 84]),
-  lanceCock: 0.95,
-  /* THE DASH IS AS LONG AS THE GAP, between these bounds. A fixed
-     0.40s at 27 m/s is a fixed eleven metres, so the far half of the
-     old band was answered by a charge that stopped short and left the
-     animal standing in the open having announced itself for nothing.
-     It now commits to ARRIVING - which is also why the cock is not
-     shortened to match: a longer journey has to be readable for
-     longer, not less. */
-  /* THE FLOOR IS A DEGENERATE GUARD, NOT A MINIMUM CHARGE. It was
-     0.30s, which at 30 m/s is nine metres - so every lance thrown
-     from inside about fourteen ran clean PAST the player and then
-     whiffed on the arc, because a target the charge has overshot is
-     behind it. Measured, range by range, in the pressure probe: five
-     of six ranges missed and the two shortest ended further away than
-     they started. Below `lanceRange[0]` the travel is 4.8m and the
-     duration 0.16s, so this bound never binds in play. */
+     THE LANCE: High-velocity gap-closer and crushing charge. */
+  lanceRange: Object.freeze([7.5, 95]),
+  lanceCock: 0.68,
   lanceDash: 0.12,
-  /* Long enough to cross the band's far edge. At 0.72s it covered
-     21.6m of a 34m throw and arrived twelve metres short and aimed
-     twenty-five degrees off - the one range in the sweep that still
-     missed once the floor was fixed. */
-  lanceDashMax: 0.95,
-  lanceSpeed: 30,
-  lanceDamage: 44,
-  lanceReach: 8.6,              // it arrives swinging, so slightly long
-  /* WIDER THAN A SCYTHE, because it is not one. The combo's +-40
-     degrees is the arc a blade sweeps from a planted animal; this is
-     nine metres of body arriving at thirty metres a second, and a
-     player a couple of metres off the line of it has not dodged
-     anything. Narrow enough that going round it still works. */
-  lanceArc: 0.5,                // +-60 degrees
-  lanceCadence: 5.2,
-  /* Beyond the seismic ring the Matriarch has only one tactical idea:
-     close. It runs continuously and repeats a readable lance until it
-     has forced the player back into the encounter. */
-  pursuitLanceCadence: 2.2,
-  /* THE LANCE TRACKS HARDER THAN THE SCYTHES, and it is the one place
-     this animal is allowed to. `committedTurnRate` exists so that a
-     SIDESTEP beats a swing, which is the contract the whole bestiary
-     shares. A lance is not a swing: it is the move that exists
-     because standing off and strafing was free, so letting the same
-     strafe defeat it for nothing puts the hole straight back. At 1.5
-     rad/s over a 0.95s cock it can follow a player circling at about
-     six metres a second at ten metres - which is a player holding
-     station - and cannot follow one who commits to a direction, gets
-     behind cover, or simply runs. Measured against an orbiting probe
-     in `saintfall-matriarch-fight.mjs`: at 0.6 it landed nought out
-     of three. */
-  lanceTrack: 1.5,
+  lanceDashMax: 1.65,
+  lanceSpeed: 45,
+  lanceDamage: 55,
+  lanceReach: 9.2,
+  lanceArc: 0.42,
+  lanceCadence: 3.2,
+  pursuitLanceCadence: 1.4,
+  lanceTrack: 2.4,
 
   /* ------------------------------------------------------------
-     THE CULL, and the reason this animal is worth fighting.
-
-     The gaster is behind it, so the encounter is "get behind it" -
-     and before this the answer was to walk there and stay. Loiter in
-     the rear arc inside `cullRadius` for `cullLoiter` seconds and it
-     turns the long way round at speed, sweeping the gaster and the
-     back four legs through everything at ground level.
-
-     It is a POSITION move, not a damage one: the damage is a third of
-     a scythe, and what it actually does is put the player back out in
-     front where the fold is pointing. */
-  cullRadius: 11.5,
-  cullRearDot: -0.12,           // "behind" is anything past ~97 degrees
-  /* The loiter clock is the move's whole promise - "staying here costs
-     you" - and at 1.6s against a 6.0s cooldown the honest reading was
-     that it cost you once every seven and a half seconds. Shortened
-     with the cadence rather than instead of it: a clock that fires
-     quickly and then cannot fire again is the same permission with a
-     jump scare in front of it. */
-  cullLoiter: 1.0,
-  cullWindup: 0.44,
-  cullSweep: 0.30,
-  cullDamage: 24,
-  cullReach: 9.4,
-  cullSpin: 7.2,                // rad/s through the sweep - the whip
-  cullCadence: 4.2,
+     THE CULL: Rear flank punishment whip. */
+  cullRadius: 12.5,
+  cullRearDot: -0.12,
+  cullLoiter: 0.55,
+  cullWindup: 0.34,
+  cullSweep: 0.24,
+  cullDamage: 34,
+  cullReach: 10.5,
+  cullSpin: 9.6,
+  cullCadence: 2.4,
 
   /* ------------------------------------------------------------
-     THE GRAB-SLAM. A close frontal punish with a full-body tell. Flight
-     clears the mandibles; a grounded sidestep clears their arc. On a
-     catch, the trooper is lifted into the fold and driven into a safe
-     ground column in front of the animal for a large, survivable hit. */
-  grabReach: 7.2,
+     THE GRAB-SLAM: Close frontal punish. */
+  grabReach: 7.8,
   grabArc: 0.38,
   grabAirClear: 1.8,
-  grabWindup: 0.76,
-  grabLift: 0.52,
-  grabHold: 0.20,
-  grabDrop: 0.30,
-  grabRecover: 0.74,
-  // Boots sit between the raised strike claws instead of floating above
-  // the silhouette; the trooper's own height carries the read upward.
+  grabWindup: 0.62,
+  grabLift: 0.48,
+  grabHold: 0.18,
+  grabDrop: 0.28,
+  grabRecover: 0.65,
   grabLiftHeight: 3.65,
   grabHoldForward: 3.7,
   grabSlamForward: 5.6,
-  grabDamage: 96,
+  grabDamage: 125,
   grabSlamStun: 1.1,
-  grabCadence: 8.4,
+  grabCadence: 5.2,
 
   /* ------------------------------------------------------------
-     THE TREMOR RITE. No adds. The ovipositor plants and three floor
-     waves leave the animal on separate beats; after the rouse there
-     are four. Each wave is a timing check against the player's jump,
-     boost and jetpack rather than a second target list.
-
-     The ring reaches the edge of the lance band in 1.62s. Its bright
-     visual front is spawned from the same numbers as its damage front,
-     and the 0.55m clearance matches the jump contract already taught by
-     the Abbess slam. The Matriarch is planted through the sequence and
-     presents the gaster, so damage pressure and opportunity are the
-     same beat. */
-  tremorEvery: 12.5,
-  tremorEveryRoused: 9.0,
-  tremorWindup: 1.45,
-  tremorPulseGap: 0.68,
+     THE TREMOR RITE: Fast ground-shattering shockwaves. */
+  tremorEvery: 7.5,
+  tremorEveryRoused: 5.0,
+  tremorWindup: 1.15,
+  tremorPulseGap: 0.55,
   tremorWaves: 3,
   tremorWavesRoused: 4,
-  tremorRecover: 0.55,
-  tremorRadius: 34,
-  tremorSpeed: 21,
-  tremorBand: 1.35,
-  tremorDamage: 24,
+  tremorRecover: 0.45,
+  tremorRadius: 36,
+  tremorSpeed: 28,
+  tremorBand: 1.45,
+  tremorDamage: 35,
   tremorAirClear: 0.55,
-  tremorSlowFactor: 0.72,
-  tremorSlowSeconds: 0.85,
+  tremorSlowFactor: 0.68,
+  tremorSlowSeconds: 1.0,
   tremorWeakBonus: 1.25,
 
   /* ------------------------------------------------------------
-     THE ROUSE. One beat, once, at 45% - and the only phase change in
-     the fight. A boss with four phases on one health bar is four
-     fights nobody finished; this is the same fight with the safety
-     off. */
+     THE ROUSE */
   rouseAt: 0.45,
-  rouseSeconds: 1.7,
+  rouseSeconds: 1.5,
   rouseRadius: 11,
-  rouseDamage: 18,
-  /* The speed scale rides on top of a stalk that already runs, and is
-     clamped by `gaitCeiling` before it reaches the feet - so rousing
-     buys most of its pressure back through the cadences, where it can
-     be read, rather than through a sprint the legs cannot animate. */
+  rouseDamage: 22,
   rouseSpeedScale: 1.3,
   rouseCadenceScale: 0.7,
 
-  /* The vertical half-reach of everything it swings, and where that
-     reach is centred on the body - see `tryLand`. The model is 5.05m
-     tall and the fold pivots high on it, so the sweep covers a band
-     around mid-body rather than a band around its feet. Deliberately
-     short of the ridge's full 20m swing: a player who has climbed
-     eleven metres up the slope really is out of reach of a ground
-     animal, and getting there is counterplay rather than a hole. */
   strikeCentre: 2.2,
   strikeHeight: 5.6,
-
-  /* A lance sweep can cancel a tell in its first half and not after -
-     the same armour window every other caste got, so the player's
-     read of "I can interrupt that" transfers. */
   interruptWindow: 0.5,
 });
 
@@ -661,8 +422,18 @@ export function buildMatriarch(ctx) {
      is the contact; `brain.actFor` is the whole thing.
      ============================================================ */
 
+  function difficultyPaceScale() {
+    const tier = ctx.difficulty?.current;
+    if (!tier) return 1.0;
+    if (tier.label === "MARTYR") return 1.25;
+    if (tier.label === "PILGRIM") return 0.85;
+    return 1.0;
+  }
+
   function cadenceScale(brain) {
-    return brain.roused ? C.rouseCadenceScale : 1;
+    const diff = ctx.difficulty?.current;
+    const diffCadence = diff?.label === "MARTYR" ? 0.80 : (diff?.label === "PILGRIM" ? 1.15 : 1.0);
+    return (brain.roused ? C.rouseCadenceScale : 1) * diffCadence;
   }
 
   function beginCombo(inst, brain) {
@@ -686,23 +457,13 @@ export function buildMatriarch(ctx) {
        move has one duration that the tell, the contact and the
        interrupt window all agree on. Short of the player by half a
        reach, because it arrives swinging and should not finish the
-       dash standing inside them.
-
-       SIZED AGAINST THE GAP IT WILL FIND, not the one it can see. A
-       charge measured at the cock and thrown a second and a half
-       later is a charge aimed at a place the player has left: against
-       a trooper holding a plinking range - who backs off the moment
-       it commits - it crossed nineteen metres of the twenty-five it
-       needed and stopped short, and the miss tally recorded three of
-       four lances failing on RANGE alone. The flight time and the gap
-       define each other, so it is solved rather than read: one pass
-       to guess the flight, a second to size the dash against where
-       the player will be at the end of it. */
+       dash standing inside them. */
     let flight = C.lanceCock + C.lanceDash;
+    const lanceV = C.lanceSpeed * difficultyPaceScale();
     for (let i = 0; i < 2; i += 1) {
       const travel = Math.max(0, reachIn(inst, flight) - C.lanceReach * 0.55);
       flight = C.lanceCock + Math.max(C.lanceDash,
-        Math.min(C.lanceDashMax, travel / C.lanceSpeed));
+        Math.min(C.lanceDashMax, travel / lanceV));
     }
     brain.dashFor = flight - C.lanceCock;
     brain.act = "lance";
@@ -1175,8 +936,9 @@ export function buildMatriarch(ctx) {
       const dashing = brain.actFor <= brain.dashFor + C.comboRecover
         && brain.actFor > C.comboRecover;
       if (dashing) {
-        moveBody(inst, brain, Math.sin(brain.lockYaw) * C.lanceSpeed,
-          Math.cos(brain.lockYaw) * C.lanceSpeed, dt);
+        const lanceV = C.lanceSpeed * difficultyPaceScale();
+        moveBody(inst, brain, Math.sin(brain.lockYaw) * lanceV,
+          Math.cos(brain.lockYaw) * lanceV, dt);
         ctx.vfx?.slamTrail?.(inst.x, groundAt(inst.x, inst.z) + 0.3, inst.z);
       } else if (brain.actFor > brain.dashFor + C.comboRecover) {
         // Still cocking: it stands still and re-aims - see lanceTrack
@@ -1280,13 +1042,14 @@ export function buildMatriarch(ctx) {
     const t = Math.max(0, Math.min(1,
       (dist - C.chaseFrom) / Math.max(0.1, C.chaseFull - C.chaseFrom)));
     const base = C.walkSpeed + (C.chaseSpeed - C.walkSpeed) * t;
-    return Math.min(base * (brain.roused ? C.rouseSpeedScale : 1), C.gaitCeiling);
+    const paceScale = difficultyPaceScale();
+    return Math.min(base * (brain.roused ? C.rouseSpeedScale : 1) * paceScale, C.gaitCeiling * paceScale);
   }
 
   function stepStalk(inst, brain, dt, dist) {
     const ps = ctx.player.state;
     faceTowards(inst, ps.x, ps.z, C.turnRate, dt);
-    const scale = brain.roused ? C.rouseSpeedScale : 1;
+    const scale = (brain.roused ? C.rouseSpeedScale : 1) * difficultyPaceScale();
     const dx = ps.x - inst.x;
     const dz = ps.z - inst.z;
     const inv = 1 / (dist || 1);

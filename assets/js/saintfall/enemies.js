@@ -184,7 +184,7 @@ export const BESTIARY = {
        gaster still rewards a clean weak-point sequence, but 9000 gives
        its pursuit, Tremor Rite and new grab-slam enough room to form a
        complete fight instead of ending inside the first rotation. */
-    health: 9000,
+    health: 15000,
     /* Shipped at 1:1: 5.05m tall, 6.93m wide and 11.13m long. There
        is exactly one of these on the map, so the usual argument for
        tuning scale in engine - that proportion is read against the
@@ -2172,7 +2172,7 @@ export async function buildEnemies(ctx, onProgress) {
          difficulty-scaled maximum, so arbitrary/custom saved health is
          still restored byte-for-byte rather than silently retuned. */
       const legacyBossPools = {
-        matriarch: new Set([3060, 3600, 4320, 6120, 7200, 10080]),
+        matriarch: new Set([3060, 3600, 4320, 6120, 7200, 7650, 9000, 10080, 12600, 15000]),
         distaff: new Set([7650, 9000, 12600]),
         winnower: new Set([5270, 6200, 8680]),
         stylite: new Set([4590, 5400, 7560]),

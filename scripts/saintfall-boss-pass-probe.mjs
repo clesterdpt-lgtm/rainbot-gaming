@@ -114,7 +114,7 @@ try {
       reach: {
         site: { x: reach.x, z: reach.z, arenaRadius: reach.arenaRadius },
         flat: survey(reach.x, reach.z, [12, 40, 70]),
-        masonry: masonry(reach.x, reach.z, 94),
+        masonry: masonry(reach.x, reach.z, 72),
       },
       choir: {
         site: { x: choir.x, z: choir.z, arenaRadius: choir.arenaRadius },

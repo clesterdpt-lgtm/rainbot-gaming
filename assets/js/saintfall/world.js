@@ -3973,28 +3973,168 @@ export async function buildWorld(ctx, onProgress) {
           });
         }
       }
+      /* --- The Colossal Cross & Shrine at the Matriarch Arena Edge --- */
+      const crossHeight = 44;
+      const crossBearing = 2.26; // South-West edge, framing the Matriarch arena against the sky
+      const crossEdgeRadius = MATRIARCH_ARENA.flatRadius; // Edge of the flattened arena pad (78m)
+      const crossX = MATRIARCH_ARENA.x + Math.cos(crossBearing) * crossEdgeRadius;
+      const crossZ = MATRIARCH_ARENA.z + Math.sin(crossBearing) * crossEdgeRadius;
+      const crossYaw = crossBearing - Math.PI * 0.5;
+
       if (crossAsset) {
-        /* One processional monument marks the Matriarch territory from
-           the outside. Its centre stands one footing-radius beyond the
-           145m reset ring, so the buried plinth reaches the boundary but
-           the mass of the cross does not obstruct the combat space. */
-        const height = 44;
-        const bearing = 2.05;
-        const edgeRadius = MATRIARCH_ARENA.bossRadius + 12;
-        const x = MATRIARCH_ARENA.x + Math.cos(bearing) * edgeRadius;
-        const z = MATRIARCH_ARENA.z + Math.sin(bearing) * edgeRadius;
         addAuthoredLandmark(crossAsset, {
           key: "gildedReachCross-matriarchEdge",
           name: "reach-meshy-choir-wheel-matriarch-edge",
           district: "reach",
-          pos: [x, 0, z],
-          rot: [0.045, bearing - Math.PI * 0.5, -0.035],
+          pos: [crossX, 0, crossZ],
+          rot: [0.040, crossYaw, -0.030],
           rotOrder: "YXZ",
-          height,
+          height: crossHeight,
           variant: "arena-edge",
           arenaEdge: true,
           seatOnTerrain: { maxGap: 0, embed: 0.16 },
         });
+      }
+
+      /* Ambient shrine fixtures: stepped prayer altar, pedestals, candle clusters,
+         glowing votives and warm lantern light nestled at the base of the cross */
+      {
+        const shrineStone = [];
+        const shrineCandles = [];
+        const shrineFlames = [];
+        const shrineIron = [];
+
+        // Forward vector pointing into the arena from the cross
+        const fwdX = -Math.cos(crossBearing);
+        const fwdZ = -Math.sin(crossBearing);
+        const rightX = -fwdZ;
+        const rightZ = fwdX;
+
+        // Base altar position slightly forward of the cross footing
+        const ax = crossX + fwdX * 3.4;
+        const az = crossZ + fwdZ * 3.4;
+        const ay = H(ax, az);
+
+        // Stepped stone dais
+        const step1 = kit.slab(5.6, 0.35, 3.2, 0.08);
+        const step2 = kit.slab(4.0, 0.38, 2.0, 0.06).translate(0, 0.35, 0);
+        const altarTable = kit.slab(2.8, 0.60, 1.2, 0.05).translate(0, 0.73, 0);
+        const dais = kit.merge([step1, step2, altarTable]);
+        dais.rotateY(-crossYaw);
+        dais.translate(ax, ay + 0.18, az);
+        shrineStone.push(dais);
+
+        // Flanking prayer pedestals
+        for (const sign of [-1, 1]) {
+          const px = ax + rightX * (sign * 3.4);
+          const pz = az + rightZ * (sign * 3.4);
+          const py = H(px, pz);
+          const ped = kit.prism({ h: 1.15, rBottom: 0.50, rTop: 0.42, sides: 6 });
+          ped.translate(px, py, pz);
+          shrineStone.push(ped);
+
+          // Iron votive bowls on each pedestal
+          const bowl = kit.prism({ h: 0.22, rBottom: 0.20, rTop: 0.36, sides: 8 });
+          bowl.translate(px, py + 1.15, pz);
+          shrineIron.push(bowl);
+
+          // Glowing ember core inside the bowl
+          const ember = kit.prism({ h: 0.04, rBottom: 0.28, rTop: 0.25, sides: 8 });
+          ember.translate(px, py + 1.28, pz);
+          shrineFlames.push(ember);
+        }
+
+        // Helper to place candle cluster
+        const candleRng = makeRng(0x7c41a);
+        const addCandleCluster = (cx, cz, count, radius, baseElevation) => {
+          for (let k = 0; k < count; k += 1) {
+            const ca = candleRng() * TAU;
+            const cr = Math.pow(candleRng(), 0.6) * radius;
+            const kx = cx + Math.cos(ca) * cr;
+            const kz = cz + Math.sin(ca) * cr;
+            const ky = baseElevation !== undefined ? baseElevation : H(kx, kz);
+            const ch = candleRng.range(0.35, 0.95);
+            const cradius = candleRng.range(0.05, 0.09);
+
+            // Candle wax body
+            const wax = kit.prism({ h: ch, rBottom: cradius * 1.1, rTop: cradius, sides: 5 });
+            if (candleRng.chance(0.35)) {
+              wax.rotateZ(candleRng.jit(0.12));
+              wax.rotateX(candleRng.jit(0.12));
+            }
+            wax.translate(kx, ky, kz);
+            shrineCandles.push(wax);
+
+            // Melted wax pool at base
+            const pool = kit.prism({ h: 0.06, rBottom: cradius * 2.2, rTop: cradius * 1.6, sides: 6 });
+            pool.translate(kx, ky, kz);
+            shrineCandles.push(pool);
+
+            // Flickering emissive flame
+            const fh = candleRng.range(0.18, 0.32);
+            const flame = kit.prism({ h: fh, rBottom: cradius * 0.95, rTop: 0.015, sides: 5 });
+            flame.translate(kx, ky + ch, kz);
+            shrineFlames.push(flame);
+          }
+        };
+
+        // Main cluster on altar table
+        addCandleCluster(ax, az, 14, 1.1, ay + 1.33);
+
+        // Tier step candle clusters
+        addCandleCluster(ax + fwdX * 0.9, az + fwdZ * 0.9, 10, 1.4, ay + 0.35);
+        addCandleCluster(ax - fwdX * 0.9, az - fwdZ * 0.9, 8, 1.2, ay + 0.73);
+
+        // Ground votive clusters near cross base footing
+        addCandleCluster(crossX + rightX * 2.0, crossZ + rightZ * 2.0, 7, 0.9);
+        addCandleCluster(crossX - rightX * 2.0, crossZ - rightZ * 2.0, 7, 0.9);
+
+        // Iron offering censers on altar
+        const censerA = kit.prism({ h: 0.30, rBottom: 0.18, rTop: 0.32, sides: 6 });
+        censerA.translate(ax - rightX * 1.1, ay + 1.33, az - rightZ * 1.1);
+        const censerB = kit.prism({ h: 0.30, rBottom: 0.18, rTop: 0.32, sides: 6 });
+        censerB.translate(ax + rightX * 1.1, ay + 1.33, az + rightZ * 1.1);
+        shrineIron.push(censerA, censerB);
+
+        // Merge & paint stone
+        if (shrineStone.length) {
+          const sg = kit.merge(shrineStone);
+          paintH(sg, makeRamp([[0, "#4c382f"], [0.45, "#82644d"], [0.8, "#b8946f"], [1, "#dcbc8e"]]),
+            { normalWeight: 0.44, jitter: 0.14, noise: 0.22 });
+          batch.add("reach", "stone", sg);
+        }
+
+        // Merge & paint iron
+        if (shrineIron.length) {
+          const ig = kit.merge(shrineIron);
+          paintH(ig, makeRamp([[0, "#231a18"], [0.45, "#3b2c25"], [0.8, "#5a4436"], [1, "#7d6146"]]),
+            { normalWeight: 0.5, jitter: 0.16 });
+          batch.add("reach", "rust", ig);
+        }
+
+        // Merge & paint candle wax
+        if (shrineCandles.length) {
+          const cg = kit.merge(shrineCandles);
+          paintH(cg, makeRamp([[0, "#8a755d"], [0.35, "#c8b28a"], [0.7, "#e4d3b2"], [1, "#f7eed9"]]),
+            { normalWeight: 0.35, jitter: 0.10 });
+          batch.add("reach", "bone", cg);
+        }
+
+        // Merge & paint flames (emissive)
+        if (shrineFlames.length) {
+          const fg = kit.merge(shrineFlames);
+          flat(fg, "#ffae48", 0.15);
+          batch.add("reach", "emissive", fg, { castShadow: false, receiveShadow: false });
+        }
+
+        // Atmospheric candle point light
+        lights.push({
+          x: ax, y: ay + 1.8, z: az,
+          colour: "#ffa645", intensity: 130, distance: 48,
+          kind: "brazier", flicker: 0.32,
+        });
+
+        pois.push({ id: "reach-cross", name: "The Gilded Wheel", x: crossX, z: crossZ });
       }
       const mg = kit.merge(masts);
       const sg = kit.merge(sails);

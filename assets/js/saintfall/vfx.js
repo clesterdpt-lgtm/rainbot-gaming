@@ -1274,7 +1274,14 @@ export function buildVfx(ctx, world) {
      oldest spark, which nobody will ever notice; growing the buffer
      mid-fight would be felt by everyone.
      ============================================================ */
-  const IMPACT_MAX = 640;
+  /* 640 for most of this game's life, and it was the burrower that
+     ran it out: the wake alone holds five hundred motes in flight
+     once its dust is given a real settle time, which recycled the
+     pool inside a fifth of a second the moment anything else fired.
+     A dead slot costs one vertex invocation that clips itself off
+     screen, so the headroom is close to free; live sprites are what
+     cost fill, and those are governed by the emitters. */
+  const IMPACT_MAX = 960;
   /* Sprite SHAPES. Every particle in the game used to be the same
      soft disc, and a soft disc at any size reads as one thing only:
      bokeh. What separates a hit from a puff, a cinder from a spore,
@@ -1554,17 +1561,20 @@ export function buildVfx(ctx, world) {
 
            A GRAIN is a lit solid rather than a veil, so it is allowed
            a little more of the sand's own colour and a hair of white
-           off the sun - but only a hair. Every previous attempt at
-           thrown sand in this game reached for the spark ramp instead,
-           and a warm point on an additive pass clips to white: the
-           burrower's wake came out as a column of burning debris. */
+           off the sun - but only a hair, and the margin is far
+           narrower than it looks. Sand is already the brightest thing
+           in most of these frames, so an additive mote only about
+           twice the dust's output lands on ground near the top of the
+           range, clips its red channel, and comes back as a hard
+           white dot - which is exactly the spark this band exists to
+           stop being. Held to roughly a third above the dust. */
         "  vec3 sandColour = mix(uSand * (0.22 + 0.16 * vLife),",
-        "    mix(uSand, vec3(1.0), 0.14) * (0.34 + 0.26 * vLife), grain);",
+        "    mix(uSand, vec3(1.0), 0.06) * (0.26 + 0.18 * vLife), grain);",
         "  c = mix(c, sandColour, sand);",
         "  float bright = 0.35 + vLife * 1.5;",
         "  bright = mix(bright, 0.18 + vLife * 0.62, steamW);",
         "  bright = mix(bright, (0.30 + vLife * 0.92) / max(0.32, ritePeak), doctrine + ichor);",
-        "  bright = mix(bright, mix(0.9, 1.12, grain), sand);",
+        "  bright = mix(bright, mix(0.9, 0.95, grain), sand);",
         // Glints flare hot; shards and smoke stay matte.
         "  float isGlint = step(0.5, k) * (1.0 - step(1.5, k));",
         "  float isShard = step(3.5, k);",
@@ -5418,8 +5428,10 @@ export function buildVfx(ctx, world) {
       radius * 0.30, 0.9, 2.8 + power * 1.4, 13.0, 1.7 + power * 0.2,
       0.05, 0, IK_SMOKE);
     // Grains, which is what gives the wall an edge to read against.
-    impacts.emit(x, y + 0.25, z, Math.round(10 * power), radius * 0.34,
-      0.34 + power * 0.10, 14.0, 0.85 + power * 0.10);
+    // Few and small: a dozen fat ones around the point of surfacing
+    // read as a handful of gravel thrown at the camera.
+    impacts.emit(x, y + 0.25, z, Math.round(6 * power), radius * 0.34,
+      0.30 + power * 0.10, 14.0, 0.85 + power * 0.10);
     // And what was actually broken getting out.
     impacts.emit(x, y + 0.28, z, Math.round(5 * power), radius * 0.38,
       0.95 * power, 0.62);
@@ -5471,15 +5483,21 @@ export function buildVfx(ctx, world) {
        recycled every mote inside a fifth of a second and cancelled
        the long settle these are tuned around. */
     const root = Math.sqrt(s);
-    impacts.emitDirected(x, y + 0.10, z, Math.max(3, Math.round(2 + root * 2.2)),
+    impacts.emitDirected(x, y + 0.10, z, Math.max(3, Math.round(3 + root * 5.0)),
       ux * 0.58, 0.80, uz * 0.58,
-      2.4 + s * 1.5, 1.7 + s * 0.85, 13.0, 1.15 + s * 0.10, IK_SMOKE);
-    impacts.emitDirected(x, y - 0.06, z, Math.max(2, Math.round(1 + root * 1.5)),
+      2.4 + s * 1.5, 1.9 + s * 0.95, 13.0, 1.15 + s * 0.10, IK_SMOKE);
+    impacts.emitDirected(x, y - 0.06, z, Math.max(2, Math.round(2 + root * 3.0)),
       ux * 0.97, 0.20, uz * 0.97,
-      1.8 + s * 1.9, 2.2 + s * 1.0, 13.0, 1.45 + s * 0.10, IK_SMOKE);
+      1.8 + s * 1.9, 2.4 + s * 1.15, 13.0, 1.25, IK_SMOKE);
+    /* Bigger than they look like they should be. A grain is held to
+       barely a third above the dust's output - any brighter and it
+       clips on sand and comes back a white dot - so the only room
+       left for it to have any presence at all is its size. It reads
+       against the SKY at the top of the throw, not against the
+       ground, which is where thrown sand is legible anyway. */
     impacts.emitDirected(x, y + 0.16, z, Math.max(3, Math.round(2 + root * 2.6)),
       ux * 0.66, 0.74, uz * 0.66,
-      4.6 + s * 3.4, 0.30 + s * 0.11, 14.0, 0.55 + s * 0.07);
+      4.6 + s * 3.4, 0.42 + s * 0.16, 14.0, 0.55 + s * 0.07);
   }
 
   /* ------------------------- ground marks ------------------------- */
@@ -5513,16 +5531,24 @@ export function buildVfx(ctx, world) {
    * distance actually travelled since the last one so the scar is
    * continuous at any speed rather than dashed at high ones.
    */
-  function skidMark(x, z, yaw, strength = 1, span = 0.5) {
+  function skidMark(x, z, yaw, strength = 1, span = 0.5, width = 0) {
     const s = clamp01(strength);
     /* Each segment is nearly TWICE the step it covers, so consecutive
        ones overlap by half their length. Cut to the step exactly they
        merely abut, and the scar came out a chain of beads - every
        joint showing as a waist because both capsules taper to nothing
        at their ends. Overlapping means the bite has to come down to
-       match, or the doubled middle is twice as dark as a footprint. */
-    marks.mark(x, z, yaw, 0.22 + s * 0.10, Math.max(0.34, span * 0.95),
-      0.30 + s * 0.26, 5);
+       match, or the doubled middle is twice as dark as a footprint.
+
+       `width` exists for the burrower, whose furrow is ten metres
+       across and was being drawn with a boot-width sliver. It also
+       has to keep its segments SHORT: a decal is two triangles taking
+       their corner heights off the mesh, so a patch much longer than
+       the ground's own undulation cannot lie on it - the Coulter's
+       thirty-two metre segments were showing as hard dark wedges
+       cutting through the dune at an angle. */
+    marks.mark(x, z, yaw, width > 0 ? width : 0.22 + s * 0.10,
+      Math.max(0.34, span * 0.95), 0.30 + s * 0.26, 5);
     if (Math.random() > 0.34 + s * 0.4) return;
     const y = terrain.heightAt(x, z);
     /* SAND, not the spark band. Every caller of this is something

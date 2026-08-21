@@ -194,6 +194,7 @@ try {
         .filter((c) => c.name?.startsWith("sf-wake") && c.visible).length,
     };
   });
+
   console.log(`  at spawn: ${JSON.stringify(hunt.start)}`);
   console.log(`  shot from overhead: ${JSON.stringify(hunt.overhead)}`);
   console.log(`  direct damage call: ${hunt.direct} · 30m blast: ${hunt.blast}`);
@@ -744,6 +745,84 @@ try {
   console.log(`  giant boss crested at close range with ${cost.pools} pools: ${cost.ms}ms/frame `
     + `· ${cost.calls} draw calls`);
   check(cost.ms < 9, "the encounter renders at close range", `${cost.ms}ms/frame`);
+
+  console.log("\n=== THE FURROW ===");
+  /* ---- the ridge, measured rather than assumed ----
+
+     The Coulter spends two thirds of its cycle submerged, so for two
+     thirds of the fight the furrow IS the boss. It went unmeasured
+     until m104, and in that time the review sheet's three wake plates
+     were photographs of empty sand at seventy-four metres of depth
+     while the ridge itself was a sixty-nine metre lens with a metre of
+     relief. "A mesh exists and is visible" is not the assertion that
+     would have caught either: the shape has to be off the ground, and
+     it has to be where the animal is. */
+  const ridge = await page.evaluate(() => {
+    const T = window.__SF;
+    T.clearEnemies();
+    const site = T.findFlatSite(30);
+    const startZ = site[1] + 42;
+    T.spawnEnemy("coulter", site[0], startZ, { yaw: 0 });
+    const inst = T.ctx.enemies.live[0];
+    T.ctx.enemies.seedBody(inst, site[0],
+      T.groundHeightAt(site[0], startZ) - 16, startZ, Math.PI);
+    inst.body.phase = "burrow";
+    inst.body.timer = 999;
+    T.player.spawn(site[0], site[1] - 200, Math.PI);
+    T.hidePlayer(true);
+    T.advanceTime(3.1, 1 / 60);
+    const mesh = (T.ctx.coulter.group.children || [])
+      .find((c) => c.name?.startsWith("sf-wake"));
+    if (!mesh) return { drawn: false };
+    const b = T.coulterBodies()[0];
+    const p = mesh.geometry.attributes.position.array;
+    let above = -1e9;
+    let below = 1e9;
+    let width = 0;
+    let nearHead = 1e9;
+    let span = 0;
+    let bad = 0;
+    for (let i = 0; i < p.length; i += 3) {
+      if (!Number.isFinite(p[i]) || !Number.isFinite(p[i + 1])) { bad += 1; continue; }
+      const d = p[i + 1] - T.groundHeightAt(p[i], p[i + 2]);
+      above = Math.max(above, d);
+      below = Math.min(below, d);
+      const r = Math.hypot(p[i] - b.head[0], p[i + 2] - b.head[2]);
+      nearHead = Math.min(nearHead, r);
+      span = Math.max(span, r);
+    }
+    for (let i = 0; i < p.length; i += 3) {
+      for (let j = 0; j < p.length; j += 3) {
+        width = Math.max(width, Math.hypot(p[i] - p[j], p[i + 2] - p[j + 2]));
+        j += 3 * 40;
+      }
+      i += 3 * 40;
+    }
+    return {
+      drawn: mesh.visible, bad,
+      above: +above.toFixed(2), below: +below.toFixed(2),
+      nearHead: +nearHead.toFixed(2), span: +span.toFixed(1),
+      depth: +(T.groundHeightAt(b.head[0], b.head[2]) - b.head[1]).toFixed(1),
+    };
+  });
+  console.log(`  ridge: ${JSON.stringify(ridge)}`);
+  check(ridge.drawn === true,
+    "the wake ridge draws while the animal is hunting",
+    `at ${ridge.depth}m of depth`);
+  check(ridge.bad === 0, "and every vertex of it is a number",
+    `${ridge.bad} non-finite`);
+  check(ridge.above > 1.2,
+    "it stands proud of the sand rather than lying in it",
+    `${ridge.above}m at the crest`);
+  check(ridge.below > -0.6,
+    "and no part of it is buried under the ground it crosses",
+    `${ridge.below}m at the lowest vertex`);
+  check(ridge.nearHead < 12,
+    "the furrow starts at the animal, not somewhere else",
+    `nearest vertex ${ridge.nearHead}m from the head`);
+  check(ridge.span > 25 && ridge.span < 110,
+    "and runs a readable distance behind it",
+    `${ridge.span}m of furrow`);
 
   check(pageErrors.length === 0, "no page or console errors",
     pageErrors.slice(0, 3).join(" | "));

@@ -127,6 +127,7 @@ try {
   const shots = [
     { id: "eye", name: "eyeline", off: [9, 1.62, 26], at: [0, 0.9, 2], fov: 55 },
     { id: "high", name: "above", off: [16, 14, 20], at: [0, 0, 0], fov: 50 },
+    { id: "top", name: "overhead", off: [1, 46, 8], at: [0, 0, -6], fov: 44 },
     { id: "far", name: "far", off: [16, 1.62, 62], at: [0, 1.2, 8], fov: 42 },
     { id: "back", name: "from ahead", off: [4, 3.2, -30], at: [0, 0.6, 4], fov: 50 },
   ];
@@ -158,7 +159,14 @@ try {
         const fz = Math.cos(b.heading);
         const rx = Math.cos(b.heading);
         const rz = -Math.sin(b.heading);
-        const cam = [hx + rx * off[0] - fx * off[2], g + off[1], hz + rz * off[0] - fz * off[2]];
+        /* Camera height is measured off the ground UNDER THE CAMERA,
+           not under the animal. Taken off the animal's ground it puts
+           an eyeline shot inside whatever dune happens to be twenty
+           metres behind the subject, which is a photograph of the
+           inside of a heightfield. */
+        const camX = hx + rx * off[0] - fx * off[2];
+        const camZ = hz + rz * off[0] - fz * off[2];
+        const cam = [camX, Math.max(g, T.groundHeightAt(camX, camZ)) + off[1], camZ];
         const tgt = [hx + rx * aim[0] + fx * aim[2], g + aim[1], hz + rz * aim[0] + fz * aim[2]];
         T.lookAt(cam, tgt, fov);
         return { z: +hz.toFixed(1), depth: +(g - b.head[1]).toFixed(1) };
@@ -169,31 +177,125 @@ try {
     console.log(`  wrote ${shot.id}-0..5.png`);
   }
 
-  /* ---- the eruption, which is the other half of the complaint ---- */
+  /* ---- the eruption, which is the other half of the complaint ----
+     `beginRise` only fires when the animal is inside `riseRange` of
+     its target, so the player has to be moved in front of it or the
+     take is six frames of a burrower politely continuing to burrow. */
   console.log("\nbreach");
-  const breach = await page.evaluate(([sx, sz]) => {
+  await page.evaluate(([sx, sz]) => {
     const T = window.__SF;
     const inst = T.ctx.enemies.live[0];
     const ground = T.groundHeightAt(sx, sz);
     T.ctx.enemies.seedBody(inst, sx, ground - 16, sz, Math.PI);
     inst.body.phase = "burrow";
     inst.body.timer = 999;
-    inst.body.timer = 999;
-    T.advanceTime(1.0, 1 / 60);
-    const b = T.coulterBodies()[0];
-    // Then let it go: timer zero plus a target in range is a rise.
+    T.player.spawn(sx, sz - 34, Math.PI);
+    T.hidePlayer(true);
+    T.advanceTime(1.4, 1 / 60);
     inst.body.timer = 0;
-    return { head: b.head, ground: T.groundHeightAt(b.head[0], b.head[2]) };
-  }, [cx, cz + 14]);
-  {
-    const [hx, , hz] = breach.head;
-    await page.evaluate(([pos, at, fov]) => window.__SF.lookAt(pos, at, fov),
-      [[hx + 22, breach.ground + 5.5, hz + 26], [hx, breach.ground + 4, hz], 50]);
-    for (let f = 0; f < 6; f += 1) {
-      await page.evaluate(() => window.__SF.advanceTime(0.12, 1 / 60));
-      await grab(`breach-${f}.png`);
-    }
-    console.log("  wrote breach-0..5.png");
+  }, [cx, cz + 20]);
+  for (let f = 0; f < 8; f += 1) {
+    const at = await page.evaluate(() => {
+      const T = window.__SF;
+      T.advanceTime(0.14, 1 / 60);
+      const b = T.coulterBodies()[0];
+      const [hx, , hz] = b.head;
+      const g = T.groundHeightAt(hx, hz);
+      const fx = Math.sin(b.heading);
+      const fz = Math.cos(b.heading);
+      const rx = Math.cos(b.heading);
+      const rz = -Math.sin(b.heading);
+      const camX = hx + rx * 30 - fx * 14;
+      const camZ = hz + rz * 30 - fz * 14;
+      T.lookAt([camX, Math.max(g, T.groundHeightAt(camX, camZ)) + 6, camZ],
+        [hx, g + 6, hz], 52);
+      return b.phase;
+    });
+    await grab(`breach-${f}.png`);
+    if (f === 0) console.log(`  phase ${at}`);
+  }
+  console.log("  wrote breach-0..7.png");
+
+  /* ---- does the ridge change any pixels ----
+
+     The same frame with the furrow mesh drawn and not drawn. This
+     exists because reading a screenshot and deciding "the wake looks
+     invisible" was wrong three times during m104 - twice the subject
+     was behind a dune and once it was off frame entirely - and
+     because the plates it replaced were literally empty sand that
+     four eyes had signed off on. Anything the eye can find has to
+     change pixels first, and the number says so without an opinion. */
+  console.log("\nthe ridge, measured");
+  await page.evaluate(([sx, sz]) => {
+    const T = window.__SF;
+    const inst = T.ctx.enemies.live[0];
+    T.ctx.enemies.seedBody(inst, sx, T.groundHeightAt(sx, sz) - 16, sz, Math.PI);
+    inst.body.phase = "burrow";
+    inst.body.timer = 999;
+    T.player.spawn(sx, sz - 200, Math.PI);
+    T.hidePlayer(true);
+    // Arrives ON the flat site rather than running past it.
+    T.advanceTime(3.1, 1 / 60);
+    inst.body.timer = 999;
+  }, [cx, cz + 42]);
+
+  const plates = [
+    { id: "d-side", off: [30, 4.5, 0], at: [0, 0.9, 0], fov: 46 },
+    { id: "d-q34", off: [26, 9, 22], at: [0, 0.4, -6], fov: 48 },
+    { id: "d-near", off: [15, 11, 6], at: [0, 0.4, -10], fov: 52 },
+  ];
+  for (const plate of plates) {
+    const shoot = (hide) => page.evaluate(([off, aim, fov, h]) => {
+      const T = window.__SF;
+      const b = T.coulterBodies()[0];
+      const [hx, , hz] = b.head;
+      const g = T.groundHeightAt(hx, hz);
+      const fx = Math.sin(b.heading);
+      const fz = Math.cos(b.heading);
+      const rx = Math.cos(b.heading);
+      const rz = -Math.sin(b.heading);
+      const camX = hx + rx * off[0] - fx * off[2];
+      const camZ = hz + rz * off[0] - fz * off[2];
+      T.lookAt([camX, Math.max(g, T.groundHeightAt(camX, camZ)) + off[1], camZ],
+        [hx + rx * aim[0] + fx * aim[2], g + aim[1], hz + rz * aim[0] + fz * aim[2]], fov);
+      const wake = (T.ctx.coulter.group.children || [])
+        .filter((c) => c.name?.startsWith("sf-wake"));
+      for (const m of wake) m.visible = !h;
+      for (let i = 0; i < 3; i += 1) T.renderStill();
+      const url = T.captureDataURL();
+      for (const m of wake) m.visible = true;
+      return url;
+    }, [plate.off, plate.at, plate.fov, hide]);
+    const on = await shoot(false);
+    const off = await shoot(true);
+    await writeFile(path.join(OUT, `${plate.id}-on.png`),
+      Buffer.from(on.slice(on.indexOf(",") + 1), "base64"));
+    await writeFile(path.join(OUT, `${plate.id}-off.png`),
+      Buffer.from(off.slice(off.indexOf(",") + 1), "base64"));
+    const stat = await page.evaluate(([a, b]) => new Promise((res) => {
+      const load = (u) => new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.src = u; });
+      Promise.all([load(a), load(b)]).then(([ia, ib]) => {
+        const c = document.createElement("canvas");
+        c.width = ia.width; c.height = ia.height;
+        const x = c.getContext("2d", { willReadFrequently: true });
+        x.drawImage(ia, 0, 0);
+        const A = x.getImageData(0, 0, c.width, c.height).data;
+        x.clearRect(0, 0, c.width, c.height);
+        x.drawImage(ib, 0, 0);
+        const B = x.getImageData(0, 0, c.width, c.height).data;
+        let n = 0; let sum = 0;
+        for (let i = 0; i < A.length; i += 4) {
+          const d = (Math.abs(A[i] - B[i]) + Math.abs(A[i + 1] - B[i + 1])
+            + Math.abs(A[i + 2] - B[i + 2])) / 3;
+          if (d > 2) { n += 1; sum += d; }
+        }
+        res({ pct: +(100 * n / (A.length / 4)).toFixed(1),
+          mean: +(sum / Math.max(1, n)).toFixed(1) });
+      });
+    }), [on, off]);
+    console.log(`  ${plate.id.padEnd(7)} changes ${String(stat.pct).padStart(5)}% of the frame `
+      + `· mean |delta| ${stat.mean}`);
+    if (stat.pct < 8) errors.push(`${plate.id}: the ridge barely changes the frame`);
   }
 
   console.log(errors.length ? `\nERRORS: ${errors.slice(0, 4).join(" | ")}`

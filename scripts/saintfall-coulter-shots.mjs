@@ -149,34 +149,71 @@ try {
   await look(hx + 42, crest.ground + 16, hz + 30, hx - 4, hy - 6, hz - 10, 40);
   await grab("07b-crest-wide.png");
 
-  /* ---- the wake, from the ground ---- */
+  /* ---- the wake, from the ground ----
+
+     THE DEPTH IS PINNED AND THE CAMERA IS PLACED OFF THE HEAD, and
+     both of those are corrections to plates that were quietly worth
+     nothing for two milestones.
+
+     Letting the animal hunt to reach `burrow` puts it wherever the
+     terrain takes it: these plates were shot at seventy-four metres of
+     depth - twice the depth the ridge is even allowed to draw at - so
+     all three were photographs of empty sand and nobody noticed. And
+     a camera parked on a fixed mark cannot hold a subject crossing
+     thirteen metres of ground a second, so even at the right depth it
+     photographed the sand before the animal arrived. */
   console.log("\nthe wake");
   const wake = await page.evaluate(() => {
     const T = window.__SF;
-    /* Let it DIVE rather than teleporting it into the hunt: a forced
-       phase change leaves the tail of the previous pose standing in the
-       air, which is a photograph of the harness and not of the game. */
-    T.advanceToCoulterPhase("dive", 30);
-    T.advanceToCoulterPhase("burrow", 30);
-    T.advanceTime(2.6, 1 / 60);
+    T.clearEnemies();
+    const site = T.findFlatSite(30);
+    const startZ = site[1] + 42;
+    T.spawnEnemy("coulter", site[0], startZ, { yaw: 0 });
+    const inst = T.ctx.enemies.live[0];
+    T.ctx.enemies.seedBody(inst, site[0],
+      T.groundHeightAt(site[0], startZ) - 16, startZ, Math.PI);
+    inst.body.phase = "burrow";
+    // Parked well above zero so it cannot decide to erupt mid-take.
+    inst.body.timer = 999;
+    T.player.spawn(site[0], site[1] - 200, Math.PI);
+    T.hidePlayer(true);
+    // Long enough for the furrow's ring buffer to fill: a wake with no
+    // history behind it is not the wake anyone ever sees.
+    T.advanceTime(3.1, 1 / 60);
+    inst.body.timer = 999;
     const b = T.coulterBodies()[0];
-    const ps = T.playerState();
-    return { b, ps: [ps.x, ps.y, ps.z],
-      depth: +(T.groundHeightAt(b.head[0], b.head[2]) - b.head[1]).toFixed(2) };
+    return { b, depth: +(T.groundHeightAt(b.head[0], b.head[2]) - b.head[1]).toFixed(2),
+      visible: (T.ctx.coulter.group.children || [])
+        .filter((c) => c.name?.startsWith("sf-wake") && c.visible).length };
   });
-  console.log(`  hunting at ${wake.depth}m depth`);
+  console.log(`  hunting at ${wake.depth}m depth · ${wake.visible} ridge drawn`);
+  if (!wake.visible) errors.push("the wake is not drawing at hunting depth");
   {
-    const [wx, wy, wz] = wake.b.head;
-    const ground = wake.ps[1];
-    // From a standing trooper's eye height, looking at the ridge.
-    await look(wx + 4, ground + 1.62, wz + 20, wx, ground + 0.9, wz, 52);
+    const [hx, , hz] = wake.b.head;
+    const yaw = wake.b.heading;
+    const fx = Math.sin(yaw);
+    const fz = Math.cos(yaw);
+    const rx = Math.cos(yaw);
+    const rz = -Math.sin(yaw);
+    const gy = await page.evaluate(([x, z]) => window.__SF.groundHeightAt(x, z), [hx, hz]);
+    /* Offsets in the ANIMAL's frame - right, up, behind - so each
+       plate frames the same thing whichever way it happens to be
+       pointing when the take starts. */
+    const from = async (right, up, behind, aim, fov) => {
+      const cx = hx + rx * right - fx * behind;
+      const cz = hz + rz * right - fz * behind;
+      const cy = await page.evaluate(([x, z]) => window.__SF.groundHeightAt(x, z), [cx, cz]);
+      await look(cx, Math.max(gy, cy) + up, cz,
+        hx + fx * aim, gy + 0.9, hz + fz * aim, fov);
+    };
+    // Across the line of sight, which is how a player meets one: a
+    // ridge coming at you, not one running away from you.
+    await from(30, 4.5, 0, 0, 46);
     await grab("08-wake-eyeline.png");
-    await look(wx + 16, ground + 9, wz + 14, wx, ground, wz, 46);
+    await from(15, 11, 6, -10, 52);
     await grab("09-wake-above.png");
-    // And from where the player would actually first notice it.
-    await look(wx + 12, ground + 1.62, wz + 58, wx, ground + 1.2, wz, 48);
+    await from(16, 2.2, 70, 10, 40);
     await grab("09b-wake-far.png");
-    void wy;
   }
 
   /* ---- venom ---- */

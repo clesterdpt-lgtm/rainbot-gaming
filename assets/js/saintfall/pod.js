@@ -542,14 +542,6 @@ export function buildPod(ctx, site) {
   const authoredMode = !!openVisual
     && (!ctx.introVehicles?.includeFlight || !!closedVisual);
   const authoredVisuals = [closedVisual, openVisual].filter(Boolean);
-  const authoredGoldCage = new THREE.Group();
-  authoredGoldCage.name = "sanctum-drop-pod-gold-cage";
-  const authoredGoldMat = mats.gold.clone();
-  authoredGoldMat.name = "sanctum-drop-pod-exterior-gold";
-  authoredGoldMat.transparent = true;
-  authoredGoldMat.opacity = 1;
-  authoredGoldMat.depthWrite = true;
-  root.add(authoredGoldCage);
 
   /* Both source models are centred and share a vertical Y axis. Fit the
      complete halo-to-prow silhouette to the established 8.15m envelope,
@@ -578,40 +570,6 @@ export function buildPod(ctx, site) {
         depthWrite: material.depthWrite !== false,
       };
     }
-  }
-
-  /* The approved pod texture is predominantly ivory. Give the sealed
-     silhouette an unmistakable Concord reliquary cage: six raised gold
-     splines follow the ogive and three collars close them into one load-
-     bearing frame. It is a separate authored layer, not a color filter, so
-     the dark ablative prow stays dark and the gold remains readable at the
-     orbital camera's distance. The cage fades away as the open-state GLB
-     takes over at the hatch beat. */
-  if (authoredMode) {
-    const cageParts = [];
-    const profile = [
-      [1.12, -.30], [1.34, 1.45], [1.30, 3.55],
-      [1.02, 5.45], [.48, 7.05], [.08, 7.58],
-    ];
-    for (let i = 0; i < 6; i += 1) {
-      const a = (i / 6) * TAU;
-      const curve = new THREE.CatmullRomCurve3(profile.map(([radius, y]) =>
-        new THREE.Vector3(Math.sin(a) * radius, y, Math.cos(a) * radius)));
-      cageParts.push(new THREE.TubeGeometry(curve, 14, .055, 4, false));
-    }
-    for (const [radius, y, tube] of [[1.31, .74, .10], [1.28, 4.15, .075], [.73, 6.42, .065]]) {
-      const ring = new THREE.TorusGeometry(radius, tube, 5, 28);
-      ring.rotateX(Math.PI / 2);
-      ring.translate(0, y, 0);
-      cageParts.push(ring);
-    }
-    const cage = new THREE.Mesh(mergeGeometries(THREE, cageParts), authoredGoldMat);
-    cage.name = "sanctum-drop-pod-gold-frame";
-    cage.castShadow = true;
-    cage.userData.noCollide = true;
-    authoredGoldCage.add(cage);
-  } else {
-    authoredGoldCage.visible = false;
   }
 
   /* Collision is baked while the pod is landed and open. The hidden
@@ -716,9 +674,6 @@ export function buildPod(ctx, site) {
         }
       }
     }
-    authoredGoldMat.color.set(0xd6a24c).multiplyScalar(1 - soot * .62);
-    authoredGoldMat.emissive.setRGB(heat * .58, heat * .18, heat * .025);
-    authoredGoldMat.emissiveIntensity = .28 + heat * 1.4;
   }
 
   function refreshAuthoredState() {
@@ -727,9 +682,6 @@ export function buildPod(ctx, site) {
     const open = smootherstep(clamp01((pose.petals - 0.08) / 0.84));
     setVisualAlpha(closedVisual, 1 - open);
     setVisualAlpha(openVisual, open);
-    authoredGoldCage.visible = open < .995;
-    authoredGoldMat.opacity = 1 - open;
-    authoredGoldMat.depthWrite = open < .01;
   }
 
   function refreshSeams() {
@@ -852,10 +804,7 @@ export function buildPod(ctx, site) {
     materials: mats,
     parts: {
       base, cradle, petals, halo: haloRig, spill,
-      authored: {
-        enabled: authoredMode, closed: closedVisual, open: openVisual,
-        goldCage: authoredGoldCage,
-      },
+      authored: { enabled: authoredMode, closed: closedVisual, open: openVisual },
     },
     /** World Y of the landed hull origin, and of the crater floor. */
     restY,

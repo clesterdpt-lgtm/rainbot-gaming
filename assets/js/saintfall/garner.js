@@ -559,6 +559,7 @@ export function buildGarner(ctx) {
     defeated: false,
     revealed: false,
     releaseCameraAt: undefined,
+    revealFocusY: undefined,
     seizedBy: -1,
     seizeTick: 0,
     dustTick: 0,
@@ -3405,10 +3406,11 @@ export function buildGarner(ctx) {
          target reads as "blocked" to every ray (the Coulter's reveal
          has the same clamp for the same reason). */
       const panY = groundAt(C.pitX, C.pitZ);
+      state.revealFocusY = Math.max(lipY + 1.2, panY + 2.2);
       revealCamera(ctx, {
         label: "garner",
         preferred: [camX, camY, camZ],
-        target: [C.pitX, Math.max(lipY + 1.2, panY + 2.2), C.pitZ],
+        target: [C.pitX, state.revealFocusY, C.pitZ],
         halfHeight: 4, halfWidth: 6,
         floorY: panY + 1.0,
         fov: 50,
@@ -3785,6 +3787,19 @@ export function buildGarner(ctx) {
        terrain. Posed first, the lid would spend the whole collapse a
        frame's worth of sand above the ground it is made of. */
     if (opening || state.phase === "breach") setPitReveal(state.open);
+
+    /* The opening shot begins on intact ground, then tilts into the
+       throat with the emerging mouth. Holding the original pan target
+       left most of the rendered boss below frame even after the lid
+       had cleared. The lens stays on its ray-tested authored perch;
+       only its focus follows the subject the reveal is uncovering. */
+    if (state.phase === "breach" && ctx.player?.state?.free
+      && Number.isFinite(state.revealFocusY)) {
+      const follow = clamp01((state.open - 0.12) / 0.62);
+      const mouthFocusY = mawY(state.open) + MAW_TOP * 0.5;
+      ctx.player.setFree(true, undefined,
+        [C.pitX, lerp(state.revealFocusY, mouthFocusY, follow), C.pitZ]);
+    }
 
     if (state.phase === "feeding" || state.phase === "gorge") {
       for (const arm of arms) stepArm(arm, d);

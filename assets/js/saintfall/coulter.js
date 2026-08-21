@@ -1364,20 +1364,31 @@ export function buildCoulter(ctx) {
     // rather than a quantity.
     b.timer = Math.max(-1, b.timer - dt);
     if (b.timer <= 0 && dist < C.riseRange) {
-      /* Commit. The heading is snapped at the player on the way up so
-         the eruption arrives facing them - a worm that surfaces
-         side-on has to spend its whole crest turning. */
-      b.heading = Math.atan2(dx, dz);
-      setPhase(inst, "rise", C.riseSeconds);
-      b.spewsLeft = Math.round(lerp(C.spewsPerCrest[0], C.spewsPerCrest[1],
-        1 - clamp01(inst.health / Math.max(1, inst.maxHealth))));
-      b.hidden = false;
-      breach(inst);
+      beginRise(inst, target);
     }
   }
 
+  /** Commit to the eruption. The district intro also calls this once,
+   *  because its protected camera hold must reveal the animal rather
+   *  than spend three seconds filming the wake above a six-second
+   *  burrow timer. `dangerous=false` keeps that cinematic breach from
+   *  damaging a player whose controls are deliberately locked. */
+  function beginRise(inst, target, dangerous = true) {
+    if (!inst?.body || inst.state === "death") return false;
+    const b = inst.body;
+    const dx = target.x - b.head.x;
+    const dz = target.z - b.head.z;
+    b.heading = Math.atan2(dx, dz);
+    setPhase(inst, "rise", C.riseSeconds);
+    b.spewsLeft = Math.round(lerp(C.spewsPerCrest[0], C.spewsPerCrest[1],
+      1 - clamp01(inst.health / Math.max(1, inst.maxHealth))));
+    b.hidden = false;
+    breach(inst, dangerous);
+    return true;
+  }
+
   /** The eruption, resolved at the moment it starts. */
-  function breach(inst) {
+  function breach(inst, dangerous = true) {
     const b = inst.body;
     const surface = groundAt(b.head.x, b.head.z);
     const combat = ctx.combat;
@@ -1409,7 +1420,7 @@ export function buildCoulter(ctx) {
     }
 
     const ps = ctx.player?.state;
-    if (!combat || !ps || combat.player.dead) return;
+    if (!dangerous || !combat || !ps || combat.player.dead) return;
     const d = Math.hypot(ps.x - b.head.x, ps.z - b.head.z);
     if (d > C.breachRadius) return;
     /* Falls off to nothing at the rim, so being caught by the edge of
@@ -2038,7 +2049,7 @@ export function buildCoulter(ctx) {
     const ps = ctx.player?.state;
     for (const inst of enemies.live) {
       if (!inst.body) continue;
-      if (inst.encounterHidden || inst.encounterLocked) {
+      if (inst.encounterHidden || (inst.encounterLocked && !inst.coulterReveal)) {
         hideWake(inst);
         if (inst.root) inst.root.visible = !inst.encounterHidden;
         continue;
@@ -2131,6 +2142,11 @@ export function buildCoulter(ctx) {
     restore,
     clearHazards,
     spillPool,
+    beginReveal(inst) {
+      if (!inst) return false;
+      inst.coulterReveal = true;
+      return beginRise(inst, headTarget(), false);
+    },
     /** True while the animal cannot be touched, and the reason the
      *  fight has a rhythm. Read by combat's every damage path. */
     submerged(inst) { return !!(inst && inst.body && inst.body.hidden); },

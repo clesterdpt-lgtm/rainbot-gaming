@@ -125,10 +125,28 @@ try {
     }
     const inst = T.ctx.enemies.live.find((enemy) => enemy.eventId === "district-boss:saint");
     inst.health = 1e6;
-    const site = [inst.body.head.x, inst.body.head.z];
-    // Stand the player well clear so the hunt phase has to travel.
+    /* The authored district intro now owns the first eruption so the
+       boss is visible during its name card. This section is about the
+       repeatable HUNT loop, so finish that protected reveal and seed
+       the same animal back into its ordinary deep burrow before taking
+       the submerged baseline. */
+    const siteStatus = T.ctx.districtBosses.status("saint");
+    const site = [siteStatus.x, siteStatus.z];
+    // Cross the real arena gate and let the one-shot reveal finish.
     T.player.spawn(site[0], site[1] + 70, Math.PI);
-    T.advanceTime(3.1, 1 / 60);
+    T.advanceTime(5.2, 1 / 60);
+    const depth = inst.body.depth || 16;
+    const ground = T.ctx.collide.groundHeight(site[0], site[1]);
+    T.ctx.enemies.seedBody(inst, site[0], ground - depth, site[1], inst.yaw, depth);
+    inst.x = inst.body.head.x;
+    inst.y = inst.body.head.y;
+    inst.z = inst.body.head.z;
+    inst.body.phase = "burrow";
+    inst.body.timer = 3;
+    inst.body.hidden = true;
+    inst.coulterReveal = false;
+    // The player remains well clear so the hunt phase has to travel.
+    T.advanceTime(0.2, 1 / 60);
     const start = T.coulterState();
 
     /* Shooting a submerged animal. Fired straight DOWN at the ground

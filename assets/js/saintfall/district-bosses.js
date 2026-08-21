@@ -95,6 +95,7 @@ export const DISTRICT_BOSS_SITES = Object.freeze([
 
 const GENERIC_SITES = DISTRICT_BOSS_SITES.filter((site) => site.domain === "district");
 const ALERT_SECONDS = 2.8;
+const COULTER_ALERT_SECONDS = 4.8;
 const DISENGAGE_SECONDS = 13;
 const APPROACH_PADDING = 48;
 const EXIT_WARNING_BAND = 24;
@@ -121,6 +122,8 @@ export function buildDistrictBosses(ctx) {
   }]));
 
   const eventId = (key) => `district-boss:${key}`;
+  const alertSeconds = (record) => record.site.key === "saint"
+    ? COULTER_ALERT_SECONDS : ALERT_SECONDS;
 
   function setGate(record, hidden, locked = hidden) {
     const inst = record.instance;
@@ -224,6 +227,7 @@ export function buildDistrictBosses(ctx) {
     inst.stunTime = 0;
     inst.knockbackTime = 0;
     inst.speed = 0;
+    inst.coulterReveal = false;
     if (inst.body) {
       const ground = ctx.collide?.groundHeight?.(point.x, point.z)
         ?? ctx.terrain.heightAt(point.x, point.z);
@@ -248,7 +252,7 @@ export function buildDistrictBosses(ctx) {
   function beginAlert(record) {
     if (!record.instance || record.defeated || combat.player.dead) return;
     record.phase = "alert";
-    record.timer = ALERT_SECONDS;
+    record.timer = alertSeconds(record);
     record.disengageFor = 0;
     setGate(record, false, true);
     enemies.play?.(record.instance, "alert", 0.18);
@@ -288,6 +292,10 @@ export function buildDistrictBosses(ctx) {
         const camX = inst.x - 38;
         const camZ = inst.z + 42;
         const surfaceY = groundAt(inst.x, inst.z);
+        /* The ordinary hunt waits up to six seconds before surfacing.
+           An intro that ends before the animal appears is an intro to
+           an empty dune, so this protected reveal owns the first breach. */
+        ctx.coulter?.beginReveal?.(inst);
         revealCamera(ctx, {
           label: "coulter",
           preferred: [camX, groundAt(camX, camZ) + 7.5, camZ],
@@ -307,6 +315,7 @@ export function buildDistrictBosses(ctx) {
     setGate(record, false, false);
     ctx.player?.setFree?.(false);
     if (inst) {
+      inst.coulterReveal = false;
       inst.suspicion = 1;
       inst.alerted = true;
       enemies.play?.(inst, "alert", 0.15);
@@ -388,6 +397,15 @@ export function buildDistrictBosses(ctx) {
           continue;
         }
         record.timer = Math.max(0, record.timer - d);
+        /* The Coulter travels tens of metres while it erupts. Keep the
+           authored lens fixed but follow the rendered head, otherwise
+           the camera remains on the original patch of sand while the
+           boss exits the frame toward whichever side the player used. */
+        if (record.site.key === "saint" && ctx.player?.state?.free
+          && inst.body?.head) {
+          ctx.player.setFree(true, undefined,
+            [inst.body.head.x, inst.body.head.y + 2.5, inst.body.head.z]);
+        }
         if (record.timer <= 0) finishAlert(record);
         continue;
       }
@@ -759,7 +777,7 @@ export function buildDistrictBosses(ctx) {
       record.defeated = entry ? !!entry.defeated : !!missionDone;
       record.phase = record.defeated ? "dead"
         : ["dormant", "alert", "active"].includes(entry?.phase) ? entry.phase : "dormant";
-      record.timer = clamp(Number(entry?.timer) || 0, 0, ALERT_SECONDS);
+      record.timer = clamp(Number(entry?.timer) || 0, 0, alertSeconds(record));
       record.disengageFor = clamp(Number(entry?.disengageFor) || 0, 0, DISENGAGE_SECONDS);
       let inst = (entry?.instanceId && byId.get(entry.instanceId))
         || enemies.live.find((candidate) => candidate.eventId === eventId(record.site.key));

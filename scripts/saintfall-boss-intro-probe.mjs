@@ -9,7 +9,9 @@
         player-relative angles, so the framing is invariant and never blocked
         by scenery regardless of where the player enters from (N, S, E, W).
      3. The camera is properly released back to the player when the intro completes.
-     4. Screenshots of every boss intro are captured for verification.
+     4. The boss's rendered geometry is materially on-screen during the reveal,
+        rather than merely placing an unobstructed aim point under the reticle.
+     5. Screenshots of every boss intro are captured for verification.
 
    Usage:
      node scripts/saintfall-boss-intro-probe.mjs
@@ -67,7 +69,7 @@ try {
     window.__SF.invulnerable(true);
   });
 
-  const bosses = [
+  let bosses = [
     { key: "reach", name: "The Matriarch", district: "reach" },
     { key: "censer", name: "The Winnower", district: "censer" },
     { key: "scar", name: "The Distaff", district: "scar" },
@@ -77,6 +79,11 @@ try {
     { key: "saint", name: "The Coulter", district: "saint" },
     { key: "cathedral", name: "The Apostate", district: "cathedral" },
   ];
+  const requestedBosses = new Set(process.argv.slice(2).map((value) => value.toLowerCase()));
+  if (requestedBosses.size) {
+    bosses = bosses.filter((boss) => requestedBosses.has(boss.key)
+      || requestedBosses.has(boss.name.replace(/^the /i, "").toLowerCase()));
+  }
 
   for (const b of bosses) {
     console.log(`\n=== BOSS INTRO: ${b.name.toUpperCase()} (${b.key}) ===`);
@@ -97,6 +104,139 @@ try {
         const M = T.ctx.mission;
         const key = args.key;
         const angle = args.angle;
+
+        /* Each approach is an isolated encounter. Bespoke district
+           controllers remain live when the mission phase changes, so
+           leaving the previous boss active can advance animation or
+           camera state under the next reveal. Re-arm and hide the
+           whole cast before selecting this subject. */
+        T.releaseCamera();
+        T.ctx.winnower?.resetToPerch?.();
+        T.ctx.distaff?.resetToLair?.();
+        T.ctx.garner?.resetToPit?.();
+        T.ctx.stylite?.resetToPerch?.();
+        T.ctx.abbess?.resetToSeat?.();
+        T.ctx.apostate?.reset?.();
+        T.ctx.districtBosses?.reset?.("reach");
+        T.ctx.districtBosses?.reset?.("saint");
+
+        /* The reveal solver reasons about authored body samples. This audit
+           also walks the geometry the renderer is actually drawing. That
+           distinction matters for burrowers, procedural bosses whose enemy
+           root is empty, and tall rigs whose anchor can be visible while the
+           animal itself is outside the frame. */
+        const bossRoots = () => {
+          const pick = (group, names) => group
+            ? names.map((name) => group.getObjectByName(name)).filter(Boolean)
+            : [];
+          if (key === "choir") {
+            const roots = pick(T.ctx.stylite?.group, ["sf-stylite-body"]);
+            if (roots.length) return roots;
+          }
+          if (key === "bloom") {
+            const roots = pick(T.ctx.abbess?.group, ["sf-abbess-sac", "sf-abbess-head"]);
+            if (roots.length) return roots;
+          }
+          if (key === "ossuary") {
+            const roots = pick(T.ctx.garner?.group, ["sf-garner-maw", "sf-garner-arms"]);
+            if (roots.length) return roots;
+          }
+          if (key === "cathedral") {
+            const apostate = T.apostate?.instance?.();
+            return apostate?.root ? [apostate.root] : [];
+          }
+          const enemyKey = ({
+            reach: "matriarch",
+            censer: "winnower",
+            scar: "distaff",
+            saint: "coulter",
+          })[key] || key;
+          return T.enemies.live
+            .filter((enemy) => enemy.key === enemyKey && enemy.state !== "death" && enemy.root)
+            .map((enemy) => enemy.root);
+        };
+
+        const renderedBossVisibility = () => {
+          const THREE = T.THREE;
+          const camera = T.render.camera;
+          camera.updateMatrixWorld(true);
+          const point = new THREE.Vector3();
+          const projected = new THREE.Vector3();
+          const samples = [];
+          for (const root of bossRoots()) {
+            let chainVisible = true;
+            for (let node = root; node; node = node.parent) {
+              if (!node.visible) chainVisible = false;
+            }
+            if (!chainVisible) continue;
+            root.updateWorldMatrix(true, true);
+            root.traverseVisible((object) => {
+              if (!object.isMesh && !object.isSkinnedMesh) return;
+              const position = object.geometry?.attributes?.position;
+              if (!position?.count) return;
+              const stride = Math.max(1, Math.ceil(position.count / 90));
+              for (let i = 0; i < position.count; i += stride) {
+                if (object.isSkinnedMesh) object.getVertexPosition(i, point).applyMatrix4(object.matrixWorld);
+                else point.fromBufferAttribute(position, i).applyMatrix4(object.matrixWorld);
+                if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(point.z)) continue;
+                /* Buried geometry is intentionally not photographable.
+                   Counting the Coulter's underground tail or the
+                   Garner's sub-floor throat as a hidden body makes a
+                   correct pit shot fail at exactly the buried fraction. */
+                const floor = T.ctx.collide.groundHeight(point.x, point.z);
+                if (Number.isFinite(floor) && point.y < floor - 0.35) continue;
+                samples.push([point.x, point.y, point.z]);
+              }
+            });
+          }
+          if (!samples.length) return { samples: 0, onScreen: 0, clearOnScreen: 0, fillH: 0, fillW: 0 };
+
+          let onScreen = 0;
+          let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+          let allU0 = Infinity, allU1 = -Infinity, allV0 = Infinity, allV1 = -Infinity;
+          let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+          const screenPoints = [];
+          for (const sample of samples) {
+            point.set(sample[0], sample[1], sample[2]);
+            projected.copy(point).project(camera);
+            allU0 = Math.min(allU0, projected.x); allU1 = Math.max(allU1, projected.x);
+            allV0 = Math.min(allV0, projected.y); allV1 = Math.max(allV1, projected.y);
+            x0 = Math.min(x0, sample[0]); x1 = Math.max(x1, sample[0]);
+            y0 = Math.min(y0, sample[1]); y1 = Math.max(y1, sample[1]);
+            z0 = Math.min(z0, sample[2]); z1 = Math.max(z1, sample[2]);
+            const inside = projected.z >= -1 && projected.z <= 1
+              && projected.x >= -1 && projected.x <= 1
+              && projected.y >= -1 && projected.y <= 1;
+            if (!inside) continue;
+            onScreen += 1;
+            screenPoints.push(sample);
+            u0 = Math.min(u0, projected.x); u1 = Math.max(u1, projected.x);
+            v0 = Math.min(v0, projected.y); v1 = Math.max(v1, projected.y);
+          }
+
+          let clear = 0;
+          const rayBudget = Math.min(24, screenPoints.length);
+          for (let i = 0; i < rayBudget; i += 1) {
+            const sample = screenPoints[Math.floor((i + 0.5) * screenPoints.length / rayBudget)];
+            const dx = sample[0] - camera.position.x;
+            const dy = sample[1] - camera.position.y;
+            const dz = sample[2] - camera.position.z;
+            const len = Math.hypot(dx, dy, dz);
+            const reach = Math.max(0.5, len - 0.9);
+            const hit = T.ctx.collide.rayBlock(camera.position.x, camera.position.y, camera.position.z,
+              dx / len, dy / len, dz / len, reach, true);
+            if (!(hit < reach)) clear += 1;
+          }
+          return {
+            samples: samples.length,
+            onScreen: onScreen / samples.length,
+            clearOnScreen: rayBudget ? clear / rayBudget : 0,
+            fillH: Number.isFinite(v0) ? (v1 - v0) / 2 : 0,
+            fillW: Number.isFinite(u0) ? (u1 - u0) / 2 : 0,
+            ndcCentre: [(allU0 + allU1) / 2, (allV0 + allV1) / 2],
+            worldCentre: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2],
+          };
+        };
 
         // Ensure boss instance is spawned before reading coordinates
         if (key === "censer") T.ctx.winnower?.ensureSpawned?.();
@@ -182,10 +322,16 @@ try {
         let camTarget = null;
         let camFov = null;
         let visibility = null;
+        let renderedVisibility = null;
         let secs = 0;
+        let freeReleased = false;
 
         let lastPhase = "";
-        for (let frame = 0; frame < 180; frame += 1) {
+        /* Follow the complete reveal hold. Garner's ground opening and
+           Coulter's breach deliberately uncover the subject over time;
+           sampling only the first three seconds grades the lid, not the
+           completed introduction. Eight seconds is a hard upper bound. */
+        for (let frame = 0; frame < 480; frame += 1) {
           T.renderOnce(1 / 60);
           secs += 1 / 60;
           if (key === "choir") {
@@ -246,15 +392,16 @@ try {
                 if (!(hit < reach)) clear += 1;
               }
               visibility = Math.max(visibility ?? 0, clear / samples.length);
+              const rendered = renderedBossVisibility();
+              const score = rendered.onScreen * rendered.clearOnScreen
+                + Math.max(rendered.fillH, rendered.fillW);
+              const bestScore = renderedVisibility
+                ? renderedVisibility.onScreen * renderedVisibility.clearOnScreen
+                  + Math.max(renderedVisibility.fillH, renderedVisibility.fillW)
+                : -1;
+              if (score > bestScore) renderedVisibility = rendered;
             }
-          }
-        }
-
-        // Run until alert ends and verify camera releases
-        let freeReleased = false;
-        for (let frame = 0; frame < 300; frame += 1) {
-          T.renderOnce(1 / 60);
-          if (!T.player.state.free && sawFree) {
+          } else if (sawFree) {
             freeReleased = true;
             break;
           }
@@ -266,6 +413,7 @@ try {
           camTarget,
           camFov,
           visibility,
+          renderedVisibility,
           freeReleased,
         };
       }, { key: b.key, angle: a.angle });
@@ -275,7 +423,8 @@ try {
 
     // Log angle details
     for (const p of camPoses) {
-      console.log(`    [${p.name}] sawFree: ${p.sawFree}, camPos: ${p.camPos ? `(${p.camPos.x}, ${p.camPos.y}, ${p.camPos.z})` : "none"}, vis: ${p.visibility ?? "—"}, released: ${p.freeReleased}, phase: ${p.lastPhase}`);
+      const drawn = p.renderedVisibility;
+      console.log(`    [${p.name}] sawFree: ${p.sawFree}, camPos: ${p.camPos ? `(${p.camPos.x}, ${p.camPos.y}, ${p.camPos.z})` : "none"}, aimVis: ${p.visibility ?? "—"}, meshOnScreen: ${drawn ? `${Math.round(drawn.onScreen * 100)}%` : "—"}, meshClear: ${drawn ? `${Math.round(drawn.clearOnScreen * 100)}%` : "—"}, ndc: ${drawn?.ndcCentre ? drawn.ndcCentre.map((v) => v.toFixed(2)).join(",") : "—"}, world: ${drawn?.worldCentre ? drawn.worldCentre.map((v) => v.toFixed(1)).join(",") : "—"}, released: ${p.freeReleased}`);
     }
 
     // Check 1: Intro camera played for this boss
@@ -306,7 +455,17 @@ try {
       worstVisibility >= 0.75,
       `worst angle sees ${(worstVisibility * 100).toFixed(0)}% of body rays`);
 
-    // Check 4: Camera is cleanly released back to the player
+    // Check 4: actual rendered boss geometry, not just its authored aim
+    // point, occupies a meaningful part of the frame and is not occluded.
+    const worstMeshOnScreen = Math.min(...camPoses.map((p) => p.renderedVisibility?.onScreen ?? 0));
+    const worstMeshClear = Math.min(...camPoses.map((p) => p.renderedVisibility?.clearOnScreen ?? 0));
+    const smallestFill = Math.min(...camPoses.map((p) => Math.max(
+      p.renderedVisibility?.fillH ?? 0, p.renderedVisibility?.fillW ?? 0)));
+    check(`${b.name} rendered body is visible on-screen during the intro`,
+      worstMeshOnScreen >= 0.35 && worstMeshClear >= 0.75 && smallestFill >= 0.06,
+      `worst angle: ${Math.round(worstMeshOnScreen * 100)}% on-screen, ${Math.round(worstMeshClear * 100)}% unobstructed, ${(smallestFill * 100).toFixed(1)}% frame footprint`);
+
+    // Check 5: Camera is cleanly released back to the player
     const allReleased = camPoses.every((p) => p.freeReleased);
     check(`${b.name} intro camera releases back to player when alert completes`, allReleased);
 
@@ -316,6 +475,14 @@ try {
       const M = T.ctx.mission;
       const key = args.key;
       T.releaseCamera();
+      T.ctx.winnower?.resetToPerch?.();
+      T.ctx.distaff?.resetToLair?.();
+      T.ctx.garner?.resetToPit?.();
+      T.ctx.stylite?.resetToPerch?.();
+      T.ctx.abbess?.resetToSeat?.();
+      T.ctx.apostate?.reset?.();
+      T.ctx.districtBosses?.reset?.("reach");
+      T.ctx.districtBosses?.reset?.("saint");
       if (key === "cathedral") {
         M.state.phase = "cathedralBoss";
         for (const boss of M.bosses) boss.done = true;
@@ -369,7 +536,8 @@ try {
       }
 
       T._teleportRaw(bx + appDist, bz, 0);
-      for (let i = 0; i < 30; i += 1) T.renderOnce(1 / 60);
+      const revealFrames = key === "ossuary" ? 220 : key === "saint" ? 210 : 60;
+      for (let i = 0; i < revealFrames; i += 1) T.renderOnce(1 / 60);
     }, { key: b.key });
 
     await page.screenshot({ path: path.join(outDir, `${b.key}-reveal.png`) });

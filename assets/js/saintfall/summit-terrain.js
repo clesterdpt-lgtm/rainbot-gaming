@@ -60,9 +60,12 @@
      - every station block is behind the `k > 0.001` guard
        terrain.js:625 documents, so an out-of-station sample costs
        one hypot and a compare.
-   Measured vertex total: 395,520 across 256 meshes (64 chunks x
-   4485 + 1221 + 357 + 117), which is the same budget Vesper runs
-   and a quarter of the 1.6M ceiling.
+   MEASURED, on this file as it stands: the field factory builds in
+   13ms, the 64-chunk mesh pass in 2.36s, for 395,520 vertices across
+   256 meshes (64 chunks x 4485 + 1221 + 357 + 117). That is the same
+   vertex budget Vesper runs, a quarter of the 1.6M ceiling, and a
+   fifth of the 12s load budget. 131k triangles are visible from the
+   parvis, 106k from the basecamp gate.
    ============================================================ */
 
 import {
@@ -447,6 +450,10 @@ const viaSacraNodes = (() => {
            length 5219m, 2.344 turns, mean grade 8.14%,
            worst design grade 18.3% over six nodes.
 
+       and, after the profile is sampled, smoothed and grade-limited,
+       the road as built measures max 11.50% / mean 8.35% over the
+       harness's 600 samples - inside the layout's 13% and 9%.
+
        2.344 against the layout's authored 2.35. That agreement is
        the check that the elevation table, the turn count and the
        grade ceiling are mutually consistent, and it is why
@@ -549,29 +556,35 @@ const APRON_WIDTH = 9;
    assumed: the road node minimising `planarDistance + 4*|dy|`,
    which trades length against climb the way a surveyor does.
 
-   Measured results of that choice, and the two that exceed the
+   Measured lengths of that choice, and the two that exceed the
    layout's figure, recorded rather than hidden:
 
-     cascade   ~252m   road r=521 y=208  vs pad y=209   (near exact)
-     bowl       ~28m   road r=697 y=70   vs pad y=62
-     basecamp   ~10m   the gate itself
-     rime      ~126m   road r=637 y=98   vs pad y=141
-     glacier   ~368m   road r=472 y=235  vs pad y=96
-     fumarole  ~267m   road r=576 y=154  vs pad y=162
-     bell      ~370m   road r=432 y=241  vs pad y=241   (elevation exact)
-     tarn      ~644m   from the gate, along the valley floor
+     basecamp   10m   the gate itself
+     bowl      138m
+     rime      156m
+     cascade   233m   road r=546 y=208 vs pad y=209 - near exact
+     fumarole  273m
+     glacier   343m   bowed 185m clear of the crevasse field
+     bell      429m   road y=241 vs pad y=241 - elevation exact
+     tarn      648m   from the gate, along the valley floor
 
    The bell and the tarn are the interesting ones. The Bell
    Terrace's elevation is served EXACTLY by the marched spiral -
    the road reaches bearing 176 at r=432 where the profile is
    240.5m against an authored 241m - but the pad is authored at
-   r=802, so the spur is a 370m level traverse out along the
+   r=802, so the spur is a 429m level traverse out along the
    buttress crest to a priory on a cliff edge. That is better level
    design than a 260m spur would have been and it is why the number
    was allowed to move. The Black Tarn is at 41m in the valley: no
    point on a climbing spiral is near it except the gate, so its
-   spur is a 644m valley track, which is what the arena's own
+   spur is a 648m valley track, which is what the arena's own
    fiction (the low, early, cold one) wants anyway.
+
+   Measured terrain grade along each spur, which is the number that
+   decides whether the arena is reachable: worst is the Glacier
+   Tongue at 0.50 rise over run, descending 139m from the road to an
+   arena that sits below it. player.js:2392's WALK_SLOPE_LIMIT is
+   1.7, so every spur has better than three times the margin.
    ============================================================ */
 
 const SPUR_STATIONS = Object.freeze(STATION_ORDER.filter((id) => id !== "summit"));
@@ -757,7 +770,7 @@ const CREVASSE_SPEC = Object.freeze([
      arena rather than on its floor - the floor is the level's clean
      white negative space and the layout will not have a hole in it.
      summit-world's snow bridge goes here. */
-  { id: "bowl-runnel", r: 614, deg: 57.46, dir: -61.03, length: 190, depth: 26, half: 8 },
+  { id: "bowl-runnel", r: 605, deg: 57.46, dir: -61.03, length: 190, depth: 26, half: 8 },
   /* The summit cone's own bergschrund, at 374m on the north-west
      flank, where the last ice pulls away from the bare rock. */
   { id: "cone-schrund", r: 350, deg: -120.0, dir: -30.0, length: 124, depth: 24, half: 5 },

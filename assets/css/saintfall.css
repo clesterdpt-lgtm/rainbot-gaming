@@ -103,18 +103,25 @@
 }
 
 html.sf-maximised,
-html.sf-maximised body {
+html.sf-maximised body,
+body.rb-escape-menu-open {
   overflow: hidden;
 }
 
 /* The browser Fullscreen API promotes the stage to the top layer. The
    CSS-only QA/fallback path cannot, so explicitly retire surrounding
    page chrome while it is active; otherwise nav actions intercept the
-   cinematic's top-right Skip control. */
+   cinematic's top-right Skip control. Similarly, when the Tab field menu
+   is opened, give it the full screen viewport. */
 html.sf-maximised body > .nav,
 html.sf-maximised .saintfall-page > .game-page__header,
 html.sf-maximised .saintfall-page .game-side,
-html.sf-maximised body > .footer {
+html.sf-maximised body > .footer,
+body.rb-escape-menu-open > .nav,
+body.rb-escape-menu-open .saintfall-page > .game-page__header,
+body.rb-escape-menu-open .saintfall-page .game-side,
+body.rb-escape-menu-open > .footer,
+body.rb-escape-menu-open .rb-game-chrome {
   visibility: hidden !important;
   pointer-events: none !important;
 }

@@ -80,7 +80,7 @@ export const DISTRICT_BOSS_SITES = Object.freeze([
        so the encounter, the ground and the prop keep-clear cannot
        drift apart. */
     x: MATRIARCH_ARENA.x, z: MATRIARCH_ARENA.z,
-    arenaRadius: 145, aggroRadius: 66, domain: "district",
+    arenaRadius: MATRIARCH_ARENA.bossRadius, aggroRadius: 66, domain: "district",
   }),
   Object.freeze({
     key: "saint", district: "The Fallen Saint", boss: "The Coulter",

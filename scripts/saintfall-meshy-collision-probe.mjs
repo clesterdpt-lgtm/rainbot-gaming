@@ -62,9 +62,10 @@ try {
     { waitUntil: "domcontentloaded", timeout: 90000 });
   await page.waitForFunction(() => window.__SF?.isReady?.(), null, { timeout: 300000 });
 
-  const diagnostics = await page.evaluate(() => {
+  const diagnostics = await page.evaluate(async () => {
     const T = window.__SF;
     const THREE = T.THREE;
+    const { MATRIARCH_ARENA } = await import("saintfall/terrain.js");
     const collision = T.collide.stats();
     const sceneProxyNames = [];
     T.world.group.traverse((object) => {
@@ -77,12 +78,43 @@ try {
       landmark.root.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(landmark.root);
       const size = box.getSize(new THREE.Vector3());
+      const isCross = landmark.key.startsWith("gildedReachCross-");
+      let grounding = null;
+      if (isCross) {
+        const lowBand = box.min.y + Math.max(0.12, size.y * 0.18);
+        const point = new THREE.Vector3();
+        let supports = 0;
+        let maxGap = -Infinity;
+        let minGap = Infinity;
+        for (const mesh of landmark.meshes) {
+          const pos = mesh.geometry?.attributes?.position;
+          if (!pos) continue;
+          for (let i = 0; i < pos.count; i += 1) {
+            point.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+            if (point.y > lowBand) continue;
+            const gap = point.y - T.terrain.heightAt(point.x, point.z);
+            supports += 1;
+            maxGap = Math.max(maxGap, gap);
+            minGap = Math.min(minGap, gap);
+          }
+        }
+        grounding = {
+          supports,
+          maxGapM: Number(maxGap.toFixed(3)),
+          minGapM: Number(minGap.toFixed(3)),
+        };
+      }
       return {
         key: landmark.key,
         meshes: landmark.meshes.length,
         collisionSolid: landmark.meshes.every((mesh) => mesh.userData.collisionSolid === true),
         noCollide: landmark.meshes.some((mesh) => mesh.userData.noCollide === true),
         size: size.toArray().map((value) => Number(value.toFixed(2))),
+        position: landmark.root.position.toArray().map((value) => Number(value.toFixed(2))),
+        rotation: [landmark.root.rotation.x, landmark.root.rotation.y, landmark.root.rotation.z]
+          .map((value) => Number(value.toFixed(4))),
+        placement: landmark.placement || landmark.root.userData.landmarkPlacement || null,
+        grounding,
       };
     });
     const landmarkColliders = collision.perMesh.filter((entry) =>
@@ -99,6 +131,11 @@ try {
       landmarkColliders,
       retiredColliders,
       podColliders,
+      reachSite: {
+        x: MATRIARCH_ARENA.x,
+        z: MATRIARCH_ARENA.z,
+        arenaRadius: MATRIARCH_ARENA.bossRadius,
+      },
       collision: {
         cells: collision.cells,
         flightCells: collision.flightCells,
@@ -111,9 +148,42 @@ try {
   const heads = diagnostics.landmarks.filter((entry) => entry.key === "fallenSaintHead");
   const hands = diagnostics.landmarks.filter((entry) => entry.key === "fallenSaintHand");
   const crosses = diagnostics.landmarks.filter((entry) => entry.key.startsWith("gildedReachCross-"));
+  const fallenCrosses = crosses.filter((entry) => entry.placement?.variant === "fallen");
+  const leaningCrosses = crosses.filter((entry) => entry.placement?.variant === "leaning");
+  const edgeCrosses = crosses.filter((entry) => entry.placement?.arenaEdge);
+  const yawBuckets = new Set(crosses
+    .filter((entry) => entry.placement?.variant !== "arena-edge")
+    .map((entry) => Math.round((((entry.rotation[1] % (Math.PI * 2)) + Math.PI * 2)
+      % (Math.PI * 2)) / 0.18)));
   check("one Meshy head is registered", heads.length === 1, `count=${heads.length}`);
   check("one Meshy hand is registered", hands.length === 1, `count=${hands.length}`);
-  check("all seventeen Choir wheels are registered", crosses.length === 17, `count=${crosses.length}`);
+  check("seventeen processional crosses plus one arena-edge cross are registered",
+    crosses.length === 18, `count=${crosses.length}`);
+  check("the procession does not repeat one facing",
+    yawBuckets.size >= 12, `distinct 10-degree yaw buckets=${yawBuckets.size}`);
+  check("two crosses are fallen and remain low after yaw",
+    fallenCrosses.length === 2 && fallenCrosses.every((entry) =>
+      Math.max(Math.abs(entry.rotation[0]), Math.abs(entry.rotation[2])) > 1.1
+      && entry.size[1] < entry.placement.targetHeight * 0.78),
+    JSON.stringify(fallenCrosses.map((entry) => ({ key: entry.key, sizeY: entry.size[1],
+      target: entry.placement.targetHeight, rotation: entry.rotation }))));
+  check("two crosses have authored visible leans",
+    leaningCrosses.length === 2 && leaningCrosses.every((entry) => {
+      const lean = Math.max(Math.abs(entry.rotation[0]), Math.abs(entry.rotation[2]));
+      return lean >= 0.16 && lean <= 0.32;
+    }), JSON.stringify(leaningCrosses.map((entry) => ({ key: entry.key,
+      rotation: entry.rotation }))));
+  check("every transformed cross footing is embedded with no exposed underside",
+    crosses.every((entry) => entry.grounding?.supports > 100
+      && entry.grounding.maxGapM <= -0.08),
+    JSON.stringify(crosses.map((entry) => ({ key: entry.key, ...entry.grounding }))));
+  check("one oversized cross marks the Matriarch arena edge",
+    edgeCrosses.length === 1 && diagnostics.reachSite
+      && edgeCrosses[0].placement.targetHeight >= 40
+      && Math.abs(Math.hypot(edgeCrosses[0].position[0] - diagnostics.reachSite.x,
+        edgeCrosses[0].position[2] - diagnostics.reachSite.z)
+        - diagnostics.reachSite.arenaRadius) <= 13,
+    JSON.stringify({ edge: edgeCrosses[0], site: diagnostics.reachSite }));
   check("every Meshy landmark mesh owns structural collision",
     diagnostics.landmarks.every((entry) => entry.meshes > 0 && entry.collisionSolid && !entry.noCollide),
     `${diagnostics.landmarks.filter((entry) => !entry.collisionSolid || entry.noCollide).length} bad landmark records`);
@@ -121,9 +191,9 @@ try {
     diagnostics.sceneProxyNames.length === 0 && diagnostics.retiredColliders.length === 0,
     JSON.stringify({ scene: diagnostics.sceneProxyNames, raster: diagnostics.retiredColliders }));
   check("each Meshy model contributes walking and flight cells",
-    diagnostics.landmarkColliders.length === 19
+    diagnostics.landmarkColliders.length === 20
       && diagnostics.landmarkColliders.every((entry) => entry.cells > 0 && entry.flightCells > 0),
-    `${diagnostics.landmarkColliders.length}/19 collider records`);
+    `${diagnostics.landmarkColliders.length}/20 collider records`);
   check("collision baking remains within its load budget",
     diagnostics.collision.buildMs < 1200, `buildMs=${diagnostics.collision.buildMs}`);
   check("only the visible opened Meshy pod owns lander collision",
@@ -163,9 +233,17 @@ try {
   check("browser console stays clean", errors.length === 0, errors.join(" | ") || "no errors");
 
   const captures = [
-    { key: "fallenSaintHead", file: "head-collision.png", bearing: 218, rangeScale: 0.48 },
-    { key: "fallenSaintHand", file: "hand-collision.png", bearing: 205, rangeScale: 0.62 },
-    { key: "gildedReachCross-8", file: "cross-collision.png", bearing: 210, rangeScale: 0.8 },
+    { key: "fallenSaintHead", file: "head-collision.png", bearing: 218, rangeScale: 0.48, debug: true },
+    { key: "fallenSaintHand", file: "hand-collision.png", bearing: 205, rangeScale: 0.62, debug: true },
+    { key: "gildedReachCross-8", file: "cross-collision.png", bearing: 210, rangeScale: 0.8, debug: true },
+    { key: "gildedReachCross-0", file: "cross-upright-b35.png", bearing: 35, debug: false },
+    { key: "gildedReachCross-0", file: "cross-upright-b215.png", bearing: 215, debug: false },
+    { key: "gildedReachCross-3", file: "cross-fallen-b90.png", bearing: 90, debug: false },
+    { key: "gildedReachCross-3", file: "cross-fallen-b270.png", bearing: 270, debug: false },
+    { key: "gildedReachCross-6", file: "cross-leaning-b30.png", bearing: 30, debug: false },
+    { key: "gildedReachCross-6", file: "cross-leaning-b210.png", bearing: 210, debug: false },
+    { key: "gildedReachCross-matriarchEdge", file: "cross-arena-edge-b20.png", bearing: 20, debug: false, full: true },
+    { key: "gildedReachCross-matriarchEdge", file: "cross-arena-edge-b200.png", bearing: 200, debug: false },
   ];
   for (const shot of captures) {
     const dataUrl = await page.evaluate((spec) => {
@@ -179,20 +257,41 @@ try {
       const ground = T.collide.groundHeight(center.x, center.z);
       const horizontal = Math.max(size.x, size.z);
       const angle = spec.bearing * Math.PI / 180;
-      const radius = Math.max(15, horizontal * 0.64);
-      const targetY = ground + Math.min(18, size.y * 0.12);
-      const cameraY = ground + Math.min(38, size.y * 0.24 + 4);
+      const radius = spec.full
+        ? Math.max(30, horizontal * 0.9, size.y * 1.05)
+        : Math.max(15, horizontal * 0.64);
+      const targetY = spec.full
+        ? center.y
+        : Math.max(ground + 1.1, box.min.y + Math.min(6, size.y * 0.24));
+      const cameraX = center.x + Math.sin(angle) * radius;
+      const cameraZ = center.z + Math.cos(angle) * radius;
+      let cameraY = Math.max(
+        T.terrain.heightAt(cameraX, cameraZ) + 2.2,
+        targetY + Math.min(10, size.y * 0.16 + 2)
+      );
+      /* Keep the whole camera-to-footing ray above the dune. A valid
+         low angle on one side can be under a dune on the opposite side;
+         framing from only the target's ground height produced attractive
+         screenshots of the underside of the terrain instead of proof. */
+      for (let i = 1; i < 20; i += 1) {
+        const t = i / 20;
+        const x = cameraX + (center.x - cameraX) * t;
+        const z = cameraZ + (center.z - cameraZ) * t;
+        const rayY = cameraY + (targetY - cameraY) * t;
+        const need = T.terrain.heightAt(x, z) + 1.0 - rayY;
+        if (need > 0) cameraY += need / (1 - t);
+      }
 
       T.clearEnemies();
       T.hideHud(true);
       T.hidePlayer(true);
       T.lookAt([
-        center.x + Math.sin(angle) * radius,
+        cameraX,
         cameraY,
-        center.z + Math.cos(angle) * radius,
+        cameraZ,
       ], [center.x, targetY, center.z], 58);
-      T.collide.setDebugView(THREE, T.render.scene, true, center.x, center.z,
-        Math.max(10, horizontal * spec.rangeScale));
+      T.collide.setDebugView(THREE, T.render.scene, !!spec.debug, center.x, center.z,
+        Math.max(10, horizontal * (spec.rangeScale || 0.8)));
       T.render.render(T.render.camera);
       return T.captureDataURL();
     }, shot);

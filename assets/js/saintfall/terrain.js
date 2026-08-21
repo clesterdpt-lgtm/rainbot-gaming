@@ -245,6 +245,10 @@ export const MATRIARCH_ARENA = Object.freeze({
   z: DISTRICTS.reach.z - 12,
   flatRadius: 78,
   feather: 48,
+  /* The district controller's reset boundary. World props use the same
+     number so the Reach procession cannot drift back through the fight
+     when the encounter ring is retuned. */
+  bossRadius: 145,
 });
 export const STYLITE_ARENA = Object.freeze({
   x: DISTRICTS.choir.x,

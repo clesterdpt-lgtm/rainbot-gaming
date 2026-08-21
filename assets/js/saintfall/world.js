@@ -175,6 +175,7 @@ export async function buildWorld(ctx, onProgress) {
     const pivot = new THREE.Group();
     pivot.name = opts.name;
     pivot.position.set(opts.pos[0], opts.pos[1], opts.pos[2]);
+    if (opts.rotOrder) pivot.rotation.order = opts.rotOrder;
     if (opts.rot) pivot.rotation.set(opts.rot[0], opts.rot[1], opts.rot[2]);
 
     const fitted = new THREE.Group();
@@ -206,7 +207,63 @@ export async function buildWorld(ctx, onProgress) {
       meshes.push(node);
     });
     root.add(pivot);
-    authoredLandmarks.push({ key: opts.key, root: pivot, meshes });
+
+    let terrainSeat = null;
+    if (opts.seatOnTerrain) {
+      /* Seat the transformed MODEL, not its unrotated bounding box. The
+         Choir wheel has a 7-10m square footing at its authored sizes,
+         so a centre-point height leaves its downhill corners hanging in
+         open air. Fallen versions make that failure larger: their lower
+         envelope runs along the monument's side after the tilt.
+
+         The support calculation mirrors `restOnTerrain`, but operates on
+         an Object3D hierarchy. It runs after yaw/lean/scale, samples every
+         vertex in the transformed lower band, and chooses the lowest
+         required seat. `embed` then keeps even the lowest support below
+         the sand instead of exposing a flat underside from a low camera. */
+      pivot.position.y = 0;
+      pivot.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(pivot);
+      const lowBand = box.min.y + Math.max(0.12, (box.max.y - box.min.y) * 0.18);
+      const supports = [];
+      const point = new THREE.Vector3();
+      for (const mesh of meshes) {
+        const pos = mesh.geometry?.attributes?.position;
+        if (!pos) continue;
+        for (let i = 0; i < pos.count; i += 1) {
+          point.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+          if (point.y <= lowBand) supports.push(H(point.x, point.z) - point.y);
+        }
+      }
+      if (!supports.length) supports.push(H(opts.pos[0], opts.pos[2]) - box.min.y);
+      supports.sort((a, b) => a - b);
+      const quantile = opts.seatOnTerrain.quantile ?? 0.35;
+      const qi = Math.floor((supports.length - 1) * quantile);
+      const maxGap = opts.seatOnTerrain.maxGap ?? 0;
+      const embed = opts.seatOnTerrain.embed ?? 0.10;
+      const y = Math.min(supports[qi], supports[0] + maxGap) - embed;
+      pivot.position.y = y;
+      pivot.updateMatrixWorld(true);
+      terrainSeat = {
+        supportCount: supports.length,
+        y,
+        maxGap: y - supports[0],
+        embed,
+      };
+    }
+
+    const placement = {
+      variant: opts.variant || "upright",
+      targetHeight: opts.height,
+      yaw: opts.rot?.[1] || 0,
+      tiltX: opts.rot?.[0] || 0,
+      tiltZ: opts.rot?.[2] || 0,
+      rotOrder: opts.rotOrder || "XYZ",
+      arenaEdge: !!opts.arenaEdge,
+      terrainSeat,
+    };
+    pivot.userData.landmarkPlacement = placement;
+    authoredLandmarks.push({ key: opts.key, root: pivot, meshes, placement });
     return pivot;
   };
 
@@ -3839,6 +3896,17 @@ export async function buildWorld(ctx, onProgress) {
       const masts = [];
       const sails = [];
       const crossAsset = landmarkSources.gildedReachCross;
+      /* A separate stream keeps pose variety deterministic without
+         re-timing the Reach's existing mast, sail and statue scatter. */
+      const poseRng = makeRng(0x6c7a55);
+      const fallen = new Map([
+        [3, { tiltX: 1.31, tiltZ: -0.18 }],
+        [13, { tiltX: -1.24, tiltZ: 0.27 }],
+      ]);
+      const leaning = new Map([
+        [6, { tiltX: 0.23, tiltZ: -0.12 }],
+        [14, { tiltX: -0.17, tiltZ: 0.21 }],
+      ]);
       for (let i = 0; i < 17; i += 1) {
         // A line marching across the dunes, perpendicular to the
         // wind, so they read as deliberate rather than scattered.
@@ -3855,7 +3923,7 @@ export async function buildWorld(ctx, onProgress) {
            around the clearing, which reads as the builders having
            respected the same ground. */
         {
-          const keep = MATRIARCH_ARENA.flatRadius + 22;
+          const keep = MATRIARCH_ARENA.bossRadius + 12;
           const mdx = x - MATRIARCH_ARENA.x;
           const mdz = z - MATRIARCH_ARENA.z;
           const md = Math.hypot(mdx, mdz);
@@ -3867,6 +3935,12 @@ export async function buildWorld(ctx, onProgress) {
           }
         }
         const h = rng.range(14, 26);
+        const yaw = (i * 2.39996323 + poseRng.jit(0.34) + TAU) % TAU;
+        const pose = fallen.get(i) || leaning.get(i) || {
+          tiltX: poseRng.jit(0.035),
+          tiltZ: poseRng.jit(0.035),
+        };
+        const variant = fallen.has(i) ? "fallen" : leaning.has(i) ? "leaning" : "upright";
         masts.push(kit.merge([
           // Terrain-conforming foundation: the visible 1.5m plinth
           // can cross a dune shoulder, but its underside cannot.
@@ -3889,12 +3963,38 @@ export async function buildWorld(ctx, onProgress) {
             key: `gildedReachCross-${i}`,
             name: `reach-meshy-choir-wheel-${i}`,
             district: "reach",
-            pos: [x, H(x, z) - 0.42, z],
-            rot: [0, 0.35, 0],
+            pos: [x, 0, z],
+            rot: [pose.tiltX, yaw, pose.tiltZ],
+            rotOrder: "YXZ",
             // Preserve the old vane's seeded height range and skyline.
             height: h + 1.6,
+            variant,
+            seatOnTerrain: { maxGap: 0, embed: 0.12 },
           });
         }
+      }
+      if (crossAsset) {
+        /* One processional monument marks the Matriarch territory from
+           the outside. Its centre stands one footing-radius beyond the
+           145m reset ring, so the buried plinth reaches the boundary but
+           the mass of the cross does not obstruct the combat space. */
+        const height = 44;
+        const bearing = 2.05;
+        const edgeRadius = MATRIARCH_ARENA.bossRadius + 12;
+        const x = MATRIARCH_ARENA.x + Math.cos(bearing) * edgeRadius;
+        const z = MATRIARCH_ARENA.z + Math.sin(bearing) * edgeRadius;
+        addAuthoredLandmark(crossAsset, {
+          key: "gildedReachCross-matriarchEdge",
+          name: "reach-meshy-choir-wheel-matriarch-edge",
+          district: "reach",
+          pos: [x, 0, z],
+          rot: [0.045, bearing - Math.PI * 0.5, -0.035],
+          rotOrder: "YXZ",
+          height,
+          variant: "arena-edge",
+          arenaEdge: true,
+          seatOnTerrain: { maxGap: 0, embed: 0.16 },
+        });
       }
       const mg = kit.merge(masts);
       const sg = kit.merge(sails);

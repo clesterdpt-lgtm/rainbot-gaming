@@ -56,7 +56,7 @@ try {
       startPos.x, startPos.z, legalGround, collide.radius);
     const legalFlightBlocked = collide.flightBlocked(
       startPos.x, startPos.z, startPos.y, collide.radius, 2.0);
-    player.input.state.move.y = -1;
+    player.input.inject(0, -1);
     let gaitResets = 0;
     let previousGait = player.state.gait;
     let lowestWarmSpeed = Infinity;
@@ -73,7 +73,7 @@ try {
       speed: player.state.speed,
       gait: player.state.gait,
     };
-    player.input.state.move.y = 0;
+    player.input.inject(null);
     player.spawn(startPos.x, startPos.z, startYaw);
 
     // 3. Direct player.unstuck() invocation test
@@ -108,7 +108,7 @@ try {
     player.state.x = testBlockedX;
     player.state.z = testBlockedZ;
     player.state.y = collide.groundHeight(testBlockedX, testBlockedZ);
-    player.input.state.move.y = -1; // holding W forward
+    player.input.inject(0, -1); // holding W forward
 
     const trappedStart = { x: player.state.x, y: player.state.y, z: player.state.z };
 
@@ -116,6 +116,7 @@ try {
     for (let frame = 0; frame < 200; frame += 1) {
       player.update(0.016, ctx.camera);
     }
+    player.input.inject(null);
 
     const afterAutoPos = { x: player.state.x, y: player.state.y, z: player.state.z, grounded: player.state.grounded };
     const autoBlocked = collide?.blocked?.(afterAutoPos.x, afterAutoPos.z, afterAutoPos.y);

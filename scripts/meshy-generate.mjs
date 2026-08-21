@@ -15,6 +15,7 @@ Usage:
   node scripts/meshy-generate.mjs --mode status --task-type TYPE --task-id ID [--output DIR --slug NAME]
   node scripts/meshy-generate.mjs --mode text-to-3d --prompt TEXT --output DIR --slug NAME [--polycount 12000] [--texture-prompt TEXT]
   node scripts/meshy-generate.mjs --mode image-to-3d --image FILE --output DIR --slug NAME [--polycount 100000]
+  node scripts/meshy-generate.mjs --mode multi-image-to-3d --images FRONT,SIDE,TOP,REAR --output DIR --slug NAME
   node scripts/meshy-generate.mjs --mode remesh --task-id MODEL_TASK_ID --output DIR --slug NAME [--polycount 80000]
   node scripts/meshy-generate.mjs --mode rig --task-id IMAGE_TASK_ID --output DIR --slug NAME [--height 1.92]
   node scripts/meshy-generate.mjs --mode animate --task-id RIG_TASK_ID --action-id ID --output DIR --slug NAME
@@ -74,6 +75,7 @@ function endpointForTaskType(type, id = "") {
   const route = {
     "text-to-3d": ["v2", "text-to-3d"],
     "image-to-3d": ["v1", "image-to-3d"],
+    "multi-image-to-3d": ["v1", "multi-image-to-3d"],
     remesh: ["v1", "remesh"],
     rigging: ["v1", "rigging"],
     animations: ["v1", "animations"],
@@ -283,6 +285,57 @@ async function runImageTo3d(apiKey, args) {
   });
 }
 
+async function runMultiImageTo3d(apiKey, args) {
+  const images = String(required(args, "images"))
+    .split(",").map((file) => file.trim()).filter(Boolean);
+  if (images.length < 2 || images.length > 4) {
+    throw new Error("--images must contain 2 to 4 comma-separated PNG or JPEG files");
+  }
+  const output = path.resolve(required(args, "output"));
+  const slug = required(args, "slug");
+  const imageUrls = await Promise.all(images.map(localImageDataUri));
+  const request = {
+    image_urls: imageUrls,
+    texture_image_urls: imageUrls,
+    ai_model: args["ai-model"] || "meshy-7",
+    enable_pbr: true,
+    should_texture: true,
+    // Meshy recommends the unreduced reconstruction for highest fidelity.
+    // Browser budgets are enforced by Saintfall's existing offline optimizer.
+    should_remesh: args.remesh === "true",
+    target_formats: ["glb"],
+    alpha_thumbnail: true,
+  };
+  const taskId = await createTask(apiKey, "multi-image-to-3d", request);
+  const redactedRequest = {
+    ...request,
+    image_urls: imageUrls.map(() => "[local image data URI omitted]"),
+    texture_image_urls: imageUrls.map(() => "[local image data URI omitted]"),
+  };
+  await writeMetadata(path.join(output, `${slug}.submission.json`), {
+    taskId,
+    taskType: "multi-image-to-3d",
+    inputs: images.map((file) => path.relative(process.cwd(), path.resolve(file))),
+    request: redactedRequest,
+  });
+  if (args["no-poll"]) return;
+  const task = await pollTask(apiKey, "multi-image-to-3d", taskId);
+  await download(task.model_urls?.glb, path.join(output, `${slug}-master.glb`));
+  const thumbnailEntries = Object.entries(task.thumbnail_urls || {});
+  if (!thumbnailEntries.length && task.thumbnail_url) thumbnailEntries.push(["preview", task.thumbnail_url]);
+  if (task.alpha_thumbnail_url) thumbnailEntries.push(["alpha", task.alpha_thumbnail_url]);
+  for (const [view, url] of thumbnailEntries) {
+    await downloadOptional(url, path.join(output, `${slug}-${view}.png`));
+  }
+  await writeMetadata(path.join(output, `${slug}.meta.json`), {
+    ...taskSummary(task),
+    sourceImages: images.map((file) => path.relative(process.cwd(), path.resolve(file))),
+    masterFile: `${slug}-master.glb`,
+    thumbnails: thumbnailEntries.map(([view]) => `${slug}-${view}.png`),
+    request: redactedRequest,
+  });
+}
+
 async function runRig(apiKey, args) {
   const inputTaskId = required(args, "task-id");
   const output = path.resolve(required(args, "output"));
@@ -395,6 +448,7 @@ async function main() {
       const resumedFile = {
         "text-to-3d": `${slug}-master.glb`,
         "image-to-3d": `${slug}-master.glb`,
+        "multi-image-to-3d": `${slug}-master.glb`,
         remesh: `${slug}-remeshed.glb`,
         rigging: `${slug}-rigged.glb`,
         animations: `${slug}.glb`,
@@ -427,7 +481,7 @@ async function main() {
       for (const [view, url] of thumbnailEntries) {
         await downloadOptional(url, path.join(output, `${slug}-${view}.png`));
       }
-      const fileContract = taskType === "text-to-3d" || taskType === "image-to-3d"
+      const fileContract = ["text-to-3d", "image-to-3d", "multi-image-to-3d"].includes(taskType)
         ? { masterFile: resumedFile }
         : taskType === "rigging"
           ? { files: rigFiles }
@@ -443,6 +497,7 @@ async function main() {
   }
   if (mode === "text-to-3d") return runTextTo3d(apiKey, args);
   if (mode === "image-to-3d") return runImageTo3d(apiKey, args);
+  if (mode === "multi-image-to-3d") return runMultiImageTo3d(apiKey, args);
   if (mode === "remesh") return runRemesh(apiKey, args);
   if (mode === "rig") return runRig(apiKey, args);
   if (mode === "animate") return runAnimation(apiKey, args);

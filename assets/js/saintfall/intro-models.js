@@ -1,12 +1,10 @@
 /* ============================================================
    SAINTFALL - AUTHORED INTRO VEHICLES
 
-   The carrier and the two lander states are approved Meshy assets.
-   This module owns their one network load, their measured bounds and
-   safe material cloning. Callers still own placement and cinematic
-   state: intro.js places the carrier; pod.js swaps the sealed and
-   opened lander while retaining the established heat, light, impact
-   and collision contracts.
+   The two lander states are approved Meshy assets. This module owns
+   their one network load, their measured bounds and safe material
+   cloning. pod.js swaps the sealed and opened lander while retaining
+   the established heat, light, impact and collision contracts.
 
    Every load is optional. A missing GLB falls back to the procedural
    object that shipped before it, so an asset CDN failure can cost
@@ -16,10 +14,6 @@
 import { patchMaterial } from "saintfall/art.js";
 
 const MODEL_SPECS = Object.freeze({
-  carrier: Object.freeze({
-    file: "choirblade-carrier.glb",
-    sourceImage: "choirblade-carrier-meshy-source-v4-clean-side-profile.png",
-  }),
   closedPod: Object.freeze({
     file: "sanctum-drop-pod-closed.glb",
     sourceImage: "choirblade-drop-pod-meshy-source-v2.png",
@@ -41,7 +35,7 @@ export async function loadIntroVehicleModels(ctx, { includeFlight = true } = {})
   const { THREE } = ctx;
   const models = Object.create(null);
   const failures = Object.create(null);
-  const keys = includeFlight ? ["carrier", "closedPod", "openPod"] : ["openPod"];
+  const keys = includeFlight ? ["closedPod", "openPod"] : ["openPod"];
 
   try {
     const { GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js");

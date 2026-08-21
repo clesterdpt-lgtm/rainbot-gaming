@@ -29,7 +29,6 @@ import {
 import { mergeGeometries } from "saintfall/structures.js";
 import { DROP_SITE, DROP_CRATER } from "saintfall/terrain.js";
 import { POD_LANDED_PITCH, POD_LANDED_ROLL, POD_DOOR_REACH } from "saintfall/pod.js";
-import { instantiateIntroVehicle } from "saintfall/intro-models.js";
 import { QUALITY_TIERS, qualityLabel } from "saintfall/render.js";
 import { DIFFICULTY_TIERS, difficultyLabel, difficultyBlurb } from "saintfall/difficulty.js";
 
@@ -958,39 +957,6 @@ function buildOrbitScene(ctx, reducedMotion) {
     merged(strake, strakeMat, "drop-barge-strakes");
   }
 
-  /* Replace the legacy generated hull with the approved clean-side-profile
-     Choirblade. Its source is long on X with the prow at -X; a quarter
-     turn maps that prow to the cinematic's +Z keel while preserving the
-     established cradle origin and broadside camera blocking. */
-  const authoredCarrier = instantiateIntroVehicle(
-    ctx, ctx.introVehicles?.models?.carrier,
-    {
-      name: "choirblade-carrier",
-      atmosphere: false,
-      envMapIntensity: 1.08,
-      collision: "none",
-    },
-  );
-  if (authoredCarrier) {
-    const asset = authoredCarrier.asset;
-    authoredCarrier.root.scale.set(
-      510 / asset.size.x,
-      68 / asset.size.y,
-      62 / asset.size.z,
-    );
-    authoredCarrier.root.rotation.y = Math.PI / 2;
-    const centreOffset = asset.center.clone()
-      .multiply(authoredCarrier.root.scale)
-      .applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
-    authoredCarrier.root.position.set(
-      -centreOffset.x,
-      45 - centreOffset.y,
-      -centreOffset.z,
-    );
-    carrier.add(authoredCarrier.root);
-    barge.visible = false;
-  }
-
   /* The cradle the lander is clamped into. It stays with the barge
      when the clamps blow, which is what makes the release read as a
      release rather than as the pod simply moving. */
@@ -1017,6 +983,74 @@ function buildOrbitScene(ctx, reducedMotion) {
     jaw.position.set(Math.sin(a) * 2.5, -1.2 + (i % 2) * 2.4, Math.cos(a) * 2.5);
     jaw.rotation.y = a;
     clamps.push(jaw);
+  }
+
+  /* A physical socket between keel and lander. The old composition had
+     clamps near the pod but no continuous piece crossing the final metre,
+     so the very first frame already read as two unrelated objects. The
+     collar and telescoping pin make the load path unambiguous, then snap
+     back into the bay during the launch. */
+  const dockMat = new THREE.MeshBasicMaterial({
+    name: "drop-dock-charge", color: 0xffd06b, toneMapped: true,
+    transparent: true, opacity: .42, depthWrite: false,
+  });
+  const dockCollar = mesh(new THREE.TorusGeometry(1.72, .20, 6, 28), dockMat,
+    "drop-dock-collar", cradle);
+  dockCollar.rotation.x = Math.PI / 2;
+  dockCollar.position.y = 4.22;
+  const dockPin = mesh(new THREE.CylinderGeometry(.42, .68, 2.0, 10), goldMat,
+    "drop-dock-pin", cradle);
+  dockPin.position.y = 5.18;
+
+  /* Magnetic ejection, not a gravity detach: a white-gold pressure core,
+     three travelling field rings and six straight launch streaks share the
+     pod's dive axis. Everything is pooled into the isolated orbit scene and
+     merely hidden outside the half-second release beat. */
+  const ejectRig = new THREE.Group();
+  ejectRig.name = "drop-ejection-rig";
+  ejectRig.visible = false;
+  scene.add(ejectRig);
+  const ejectFlashMat = new THREE.MeshBasicMaterial({
+    name: "drop-ejection-flash", color: 0xffedb0, toneMapped: true,
+    transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const ejectFlash = mesh(new THREE.SphereGeometry(1.0, 12, 8), ejectFlashMat,
+    "drop-ejection-flash", ejectRig);
+  const launchAxis = DIVE_AXIS.clone();
+  const ringRotation = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 0, 1), launchAxis);
+  const ejectRings = [];
+  for (let i = 0; i < 3; i += 1) {
+    const material = new THREE.MeshBasicMaterial({
+      name: `drop-ejection-ring-${i}`, color: i ? 0xffb84f : 0xffffdc,
+      toneMapped: true, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const ring = mesh(new THREE.TorusGeometry(2.0 + i * .45, .075, 5, 32), material,
+      `drop-ejection-ring-${i}`, ejectRig);
+    ring.quaternion.copy(ringRotation);
+    ejectRings.push(ring);
+  }
+  const streakMat = new THREE.MeshBasicMaterial({
+    name: "drop-ejection-streak", color: 0xffd47a, toneMapped: true,
+    transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const streakRotation = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 1, 0), launchAxis);
+  const axisSide = new THREE.Vector3(0, 1, 0).cross(launchAxis).normalize();
+  const axisUp = launchAxis.clone().cross(axisSide).normalize();
+  const ejectStreaks = [];
+  for (let i = 0; i < 6; i += 1) {
+    const a = (i / 6) * TAU;
+    const streak = mesh(new THREE.CylinderGeometry(.025, .09, 13 + (i % 2) * 4, 5),
+      streakMat, `drop-ejection-streak-${i}`, ejectRig);
+    streak.quaternion.copy(streakRotation);
+    streak.position.copy(launchAxis).multiplyScalar(5.5)
+      .addScaledVector(axisSide, Math.cos(a) * (1.1 + (i % 2) * .35))
+      .addScaledVector(axisUp, Math.sin(a) * (1.1 + (i % 2) * .35));
+    ejectStreaks.push(streak);
   }
 
   /* ------------------------- entry effects ------------------------- */
@@ -1090,7 +1124,9 @@ function buildOrbitScene(ctx, reducedMotion) {
   return {
     scene, camera, textures, diagnostics,
     starUniforms, planetUniforms, plasmaUniforms, wakeUniforms,
-    space, planet, atmosphere, halo, carrier, barge, authoredCarrier, cradle, clamps,
+    space, planet, atmosphere, halo, carrier, barge, cradle, clamps,
+    dockCollar, dockPin, ejectRig, ejectFlash, ejectRings, ejectStreaks,
+    ejectStrength: 0,
     plasmaRig, plasma, wake,
     embers, emberBase, emberPos,
   };
@@ -1813,6 +1849,33 @@ export function buildDropIntro(ctx, options = {}) {
     orbit.embers.visible = inEntry && !state.reducedMotion;
     orbit.carrier.visible = t < M.entry + .6;
 
+    const charge = smootherstep(range(t, M.release - .36, M.release));
+    const ejectAge = range(t, M.release, M.release + .62);
+    const launching = t >= M.release && t < M.release + .68;
+    const launchPulse = launching ? (1 - smootherstep(ejectAge)) : 0;
+    orbit.ejectStrength = Math.max(charge * (t < M.release ? .16 : 0), launchPulse);
+    orbit.ejectRig.visible = charge > .01 && t < M.release + .72;
+    orbit.ejectFlash.material.opacity = t < M.release
+      ? charge * .09 : launchPulse * .78;
+    orbit.ejectFlash.scale.setScalar(t < M.release
+      ? lerp(.7, 1.35, charge) : lerp(1.4, 7.8, smootherstep(ejectAge)));
+    orbit.dockCollar.material.opacity = t < M.release
+      ? .34 + charge * .58 : lerp(.86, .18, ease(t, M.release, M.release + .28));
+    const retract = ease(t, M.release, M.release + .18);
+    orbit.dockPin.position.y = 5.18 + retract * .68;
+    orbit.dockPin.scale.y = lerp(1, .28, retract);
+    for (let i = 0; i < orbit.ejectRings.length; i += 1) {
+      const ring = orbit.ejectRings[i];
+      const rp = range(t, M.release + i * .045, M.release + .48 + i * .045);
+      const live = t >= M.release + i * .045 && rp < 1;
+      ring.visible = live;
+      ring.position.copy(DIVE).multiplyScalar(rp * (22 + i * 3.5));
+      ring.scale.setScalar(.72 + rp * 2.3);
+      ring.material.opacity = live ? Math.sin(rp * Math.PI) * (.72 - i * .10) : 0;
+    }
+    const streakOpacity = launching ? Math.sin(Math.min(1, ejectAge * 1.25) * Math.PI) * .62 : 0;
+    if (orbit.ejectStreaks[0]) orbit.ejectStreaks[0].material.opacity = streakOpacity;
+
     if (pod) {
       pod.setHeat(t >= M.entry ? clamp01((heat - .12) * 1.16) : 0);
       /* Rings only, never the shaft: a 26m column of god-light
@@ -1840,7 +1903,7 @@ export function buildDropIntro(ctx, options = {}) {
          coordinates, so the barge can be re-canted without this
          drifting round to a three-quarter view of its bow. */
       const p = ease(t, 0, M.release);
-      if (pod) pod.setTransform(0, 0, 0, 0, 0.62, 0);
+      if (pod) pod.setTransform(0, 0, 0, .06, .62, -.035);
       const beam = lerp(305, 132, p);
       aim(orbit.camera,
         BARGE_MID.x + BARGE_BEAM.x * beam,
@@ -1850,28 +1913,38 @@ export function buildDropIntro(ctx, options = {}) {
         BARGE_MID.z + BARGE_BEAM.x * 26,
         lerp(52, 57, p), -.02);
     } else if (t < M.orbit) {
-      /* The clamps blow and the lander falls straight past the lens.
-         The camera stays with the BARGE, so the pod leaves frame
-         rather than the frame following it - which is the only way a
-         release reads as a release. */
+      /* The clamps clear and the magnetic rack THROWS the lander down
+         the dive axis. Eighteen metres arrive in the first quarter second;
+         the rest of the beat is separation drift. The old p-squared curve
+         moved barely a metre over the same interval, which read as a loose
+         object beginning to fall instead of a military launch. */
       const p = ease(t, M.release, M.orbit);
-      const fall = p * p * 46;
+      const kick = ease(t, M.release, M.release + .22);
+      const drift = Math.pow(range(t, M.release + .08, M.orbit), 1.35);
+      const fall = 18 * kick + 28 * drift;
       const q = diveAt(fall);
-      if (pod) pod.setTransform(q.x, q.y, q.z, -p * .12, 0.62 + p * .22, p * .06);
-      const open = ease(t, M.release, M.release + .5);
+      if (pod) pod.setTransform(q.x, q.y, q.z,
+        lerp(.06, -.12, p), .62 + p * .22, lerp(-.035, .08, p));
+      const open = ease(t, M.release, M.release + .18);
       orbit.clamps.forEach((c, i) => {
         const a = (i / 4) * TAU + Math.PI / 4;
-        c.position.set(Math.sin(a) * (2.5 + open * 2.6), -1.2 + (i % 2) * 2.4 + open * .7,
-          Math.cos(a) * (2.5 + open * 2.6));
-        c.rotation.z = open * (i % 2 ? 1.1 : -0.8);
+        c.position.set(Math.sin(a) * (2.5 + open * 3.8),
+          -1.2 + (i % 2) * 2.4 + open * 1.25,
+          Math.cos(a) * (2.5 + open * 3.8));
+        c.rotation.z = open * (i % 2 ? 1.35 : -1.05);
       });
-      /* In close for the clamps, and drifting aft as the lander
-         drops, so the hull runs across frame and the eye gets the
-         length of the thing at the moment the pod leaves it. */
+      /* A lower broadside launch station keeps the ship's clean silhouette
+         and the attached socket readable, then follows only a quarter of
+         the pod's travel so the hull visibly recoils away behind it. */
+      const follow = q.clone().multiplyScalar(.24);
+      const recoil = (1 - ease(t, M.release, M.release + .34))
+        * (state.reducedMotion ? .10 : .38);
       aim(orbit.camera,
-        -40 - p * 10.0, -12.5 + p * 5.0, 32 + p * 14.0,
-        DIVE.x * fall * .7, 7.5 + DIVE.y * fall * .7, DIVE.z * fall * .7,
-        lerp(51, 60, p), -.02 - p * .05);
+        64 + follow.x + Math.sin((t - M.release) * 58) * recoil,
+        -30 + follow.y + Math.cos((t - M.release) * 51) * recoil,
+        48 + follow.z,
+        q.x, q.y + 3.2, q.z,
+        lerp(55, 48, ease(t, M.release, M.release + .32)), -.025 - p * .035);
     } else if (t < M.entry) {
       /* The long view. The lander is a bright chip on a black field,
          Vesper-IX's lit limb curving underneath it and the shattered
@@ -2650,6 +2723,10 @@ export function buildDropIntro(ctx, options = {}) {
         hatch: Number(state.hatch.toFixed(3)),
         petals: Number(podPose.petals.toFixed(3)),
         landed: state.canonical >= M.impact,
+        coupled: state.canonical < M.release
+          && (!pod || pod.root.position.length() <= .05),
+        launchDistance: pod && state.canonical < M.cloudBreak
+          ? Number(pod.root.position.length().toFixed(3)) : 0,
         /** Metres between the flown pod and the level's landed mark. */
         siteError: pod ? Number(Math.hypot(
           pod.root.position.x - site.x, pod.root.position.z - site.z).toFixed(3)) : 0,
@@ -2667,6 +2744,7 @@ export function buildDropIntro(ctx, options = {}) {
       } : null,
       effects: {
         plasma: !!orbit?.plasmaRig.visible,
+        ejection: Number((orbit?.ejectStrength || 0).toFixed(3)),
         stress: Number(state.stress.toFixed(3)),
         dust: !!rig?.impact.visible && rig.dustMat.opacity > .004,
         shockwave: !!rig?.rings.some((ring) => ring.visible),

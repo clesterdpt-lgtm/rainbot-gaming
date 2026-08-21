@@ -87,8 +87,14 @@ const profiles = selectedIds
 if (!profiles.length) throw new Error("--profiles did not match a known profile");
 
 const markerSpecs = [
-  { id: "standby", marker: 0, sample: 0, phase: "restrained", shot: "orbit" },
-  { id: "release", marker: 1.5, sample: 1.75, phase: "release", shot: "orbit" },
+  {
+    id: "standby", marker: 0, sample: 0, phase: "restrained", shot: "orbit",
+    coupled: true, launchDistanceMax: 0.05,
+  },
+  {
+    id: "release", marker: 1.5, sample: 1.75, phase: "release", shot: "orbit",
+    coupled: false, launchDistanceMin: 12, ejectionMin: 0.15,
+  },
   { id: "orbit", marker: 3.2, sample: 3.55, phase: "orbit", shot: "orbit" },
   { id: "entry", marker: 5.0, sample: 5.4, phase: "entry", shot: "orbit", plasma: true },
   { id: "turbulence", marker: 8.6, sample: 8.95, phase: "turbulence", shot: "orbit", plasma: true },
@@ -941,6 +947,18 @@ async function runProfile(browser, profile) {
       if (spec.shockwave !== undefined) addCheck(scope, `marker-${spec.id}-shockwave`,
         captured.status.effects.shockwave === spec.shockwave,
         captured.status.effects.shockwave, spec.shockwave);
+      if (spec.coupled !== undefined) addCheck(scope, `marker-${spec.id}-carrier-coupling`,
+        captured.status.pod.coupled === spec.coupled,
+        captured.status.pod.coupled, spec.coupled);
+      if (spec.launchDistanceMax !== undefined) addCheck(scope, `marker-${spec.id}-docked-distance`,
+        captured.status.pod.launchDistance <= spec.launchDistanceMax,
+        captured.status.pod.launchDistance, `<= ${spec.launchDistanceMax}m`);
+      if (spec.launchDistanceMin !== undefined) addCheck(scope, `marker-${spec.id}-powered-separation`,
+        captured.status.pod.launchDistance >= spec.launchDistanceMin,
+        captured.status.pod.launchDistance, `>= ${spec.launchDistanceMin}m`);
+      if (spec.ejectionMin !== undefined) addCheck(scope, `marker-${spec.id}-ejection-effect`,
+        captured.status.effects.ejection >= spec.ejectionMin,
+        captured.status.effects.ejection, `>= ${spec.ejectionMin}`);
       if (spec.hatchMin !== undefined) addCheck(scope, `marker-${spec.id}-hatch`,
         captured.status.pod.hatch >= spec.hatchMin,
         captured.status.pod.hatch, `>= ${spec.hatchMin}`);

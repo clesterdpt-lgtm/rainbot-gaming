@@ -240,6 +240,68 @@ export async function start({ boot, build } = {}) {
   ctx.isRunning = () => running;
   ctx.stop = () => ctx.setRunning(false);
 
+  /* The HUD emits these; nobody else was listening. Restart and
+     "exit to lobby" therefore painted a menu over an unchanged
+     (or empty) scene. The spine owns course changes. */
+  async function loadCourse(id, spawnIndex = 0) {
+    const course = Number(id);
+    const n = Number.isFinite(course) && course >= 0 && course <= 5 ? course : 0;
+    if (!ctx.world || typeof ctx.world.load !== "function") {
+      throw new Error("apop3d: world.load is not available");
+    }
+    await ctx.world.load(n, spawnIndex || 0);
+    ctx.state.course = n;
+    ctx.state.mode = n === 0 ? "hub" : "course";
+    return n;
+  }
+  ctx.loadCourse = loadCourse;
+
+  ctx.bus.on("hud:restart", (event = {}) => {
+    const id = event.course !== undefined ? event.course : ctx.state.course;
+    Promise.resolve(loadCourse(id, 0)).catch((error) => {
+      console.error("[apop3d] restart failed", error);
+    });
+  });
+  ctx.bus.on("hud:quit", (event = {}) => {
+    Promise.resolve(loadCourse(event.to !== undefined ? event.to : 0, 0)).catch((error) => {
+      console.error("[apop3d] return to lobby failed", error);
+    });
+  });
+
+  /* A real player never called loadCourse. The screenshot harness
+     does, via __APOP3D.loadCourse, so the goldens had a floor and
+     the shipped game did not: Moggadonna spawned at y=1.2 in an
+     empty scene and fell. Load the opening theatre here, before
+     rAF, so the first frame has collision.
+
+     Skip it under the Playwright driver (qa=1 + webdriver). That
+     harness freezes the loop on boot:ready and loads its own
+     course; building the hub first would double the cost and
+     warm the wrong room. */
+  const params = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search)
+    : new URLSearchParams();
+  const harnessDriving = Boolean(
+    params.get("qa") === "1"
+    && typeof navigator !== "undefined"
+    && navigator.webdriver
+  );
+  if (!harnessDriving) {
+    const requested = Number(params.get("course"));
+    const opening = Number.isInteger(requested) && requested >= 0 && requested <= 5
+      ? requested
+      : 0;
+    try {
+      if (boot) boot.progress(0.92, "Raising the house");
+      await loadCourse(opening, 0);
+    } catch (error) {
+      console.error("[apop3d] opening course failed to load", error);
+      ctx.state.mode = "title";
+    }
+  } else {
+    ctx.state.mode = "title";
+  }
+
   // Emitted only now, not right after the ready pass. A listener's
   // whole reason to wait for this event is that it wants a finished
   // ctx, and the screenshot harness in particular takes the loop over
@@ -247,7 +309,7 @@ export async function start({ boot, build } = {}) {
   ctx.bus.emit("boot:ready", { created });
 
   if (boot) { boot.progress(1, "Ready"); boot.hide(); }
-  ctx.state.mode = "title";
+  if (ctx.state.mode === "boot") ctx.state.mode = "title";
   rafId = requestAnimationFrame(frame);
 
   window.__APOP3D_CTX = ctx;   // debug handle; qa.js builds the real surface

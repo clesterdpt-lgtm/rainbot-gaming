@@ -570,6 +570,12 @@ export function create(ctx) {
       const dt = c.clock ? c.clock.dt : 0;
       if (dt <= 0) return;
 
+      /* No course means no floor. Integrating into an empty BVH is
+         how Moggadonna used to spawn and fall forever while the
+         title state waited for a load that nobody issued. Hold
+         still until world.js has something to stand on. */
+      if (!ctx.world || !ctx.world.current) return;
+
       /* physics.js owns the integrator when it exists. `step(body,dt)`
          is the frozen entry point for it (contract §9), and bodies are
          stepped by their owner so ordering stays explicit. */

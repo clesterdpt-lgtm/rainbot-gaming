@@ -850,10 +850,16 @@ export function create(ctx) {
   menuScrim.addEventListener("click", () => { if (state.menu === "pause") runAction("resume"); });
 
   // world.js announces the course; the title card is the HUD's answer.
-  ctx.bus.on("world:loaded", (event) => {
-    const id = event && event.courseId !== undefined ? event.courseId : ctx.state.course;
+  // The event is `world:load` (payload.id). `world:loaded` was never
+  // emitted, so the card never appeared.
+  const onWorldLoad = (event) => {
+    const id = event && event.id !== undefined
+      ? event.id
+      : (event && event.courseId !== undefined ? event.courseId : ctx.state.course);
     courseCard(COURSE_NAMES[id], COURSE_SUBS[id], id ? `COURSE ${id}` : "HUB");
-  });
+  };
+  ctx.bus.on("world:load", onWorldLoad);
+  ctx.bus.on("world:loaded", onWorldLoad);
   ctx.bus.on("hub:doorLocked", (event) => openMenu("door-locked", event || {}));
 
   /* ---- initial paint ---- */
@@ -875,6 +881,10 @@ export function create(ctx) {
 
     /* added */
     setDeals, setTimer, courseCard, setUnderwater,
+    courseTitle(name) {
+      const id = ctx.state.course;
+      courseCard(name || COURSE_NAMES[id], COURSE_SUBS[id], id ? `COURSE ${id}` : "HUB");
+    },
     get menu() { return state.menu; },
     get visible() { return state.visible; },
 

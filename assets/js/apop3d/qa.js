@@ -419,20 +419,23 @@ export function create(ctx) {
      * object there is an unserialisable-value error, not a shot.
      */
     async loadCourse(n = 1, spawn = 0) {
-      const course = Number(n) || 0;
-      const w = ctx.world;
-      if (!w || typeof w.load !== "function") return false;
+      const course = Number(n);
+      const id = Number.isFinite(course) ? course : 0;
       try {
-        await w.load(course, spawn || 0);
+        if (typeof ctx.loadCourse === "function") {
+          await ctx.loadCourse(id, spawn || 0);
+        } else {
+          const w = ctx.world;
+          if (!w || typeof w.load !== "function") return false;
+          await w.load(id, spawn || 0);
+          ctx.state.course = id;
+          ctx.state.mode = id === 0 ? "hub" : "course";
+        }
       } catch (error) {
         logOnce("world.load", error);
         return false;
       }
-      ctx.state.course = course;
-      if (ctx.state.mode === "boot" || ctx.state.mode === "title") {
-        ctx.state.mode = course === 0 ? "hub" : "course";
-      }
-      ctx.bus.emit("qa:course", { course, spawn: spawn || 0 });
+      ctx.bus.emit("qa:course", { course: id, spawn: spawn || 0 });
       return true;
     },
 

@@ -3229,6 +3229,52 @@ export async function createPlayer(ctx, canvas) {
     };
   }
 
+  const safeAnchor = { x: state.x, y: state.y, z: state.z, yaw: state.yaw };
+  let safeAnchorTimer = 0;
+  let stuckClock = 0;
+
+  function unstuck(reason = "auto") {
+    const curX = state.x;
+    const curY = state.y;
+    const curZ = state.z;
+    const curGy = groundY(curX, curZ);
+
+    let open = null;
+    if (ctx.collide?.findOpen) {
+      open = ctx.collide.findOpen(curX, curZ, curGy, 48, 10.0, ctx.collide.radius, undefined, (tx, tz) => {
+        const tgy = groundY(tx, tz);
+        return !ctx.collide.blocked(tx, tz, tgy) && (walkableFrom ? walkableFrom(tx, tz, 0.1, 0.1) : true);
+      });
+    }
+
+    if (!open && ctx.collide?.findFlightLanding) {
+      open = ctx.collide.findFlightLanding(curX, curZ, curY, 12.0);
+    }
+
+    let targetX, targetZ, targetYaw;
+    if (open && Number.isFinite(open[0]) && Number.isFinite(open[1])) {
+      targetX = open[0];
+      targetZ = open[1];
+      targetYaw = state.yaw;
+    } else if (safeAnchor && Number.isFinite(safeAnchor.x) && Number.isFinite(safeAnchor.z)
+      && Math.hypot(safeAnchor.x - curX, safeAnchor.z - curZ) < 120.0) {
+      targetX = safeAnchor.x;
+      targetZ = safeAnchor.z;
+      targetYaw = safeAnchor.yaw;
+    } else {
+      targetX = clamp(curX, -1000, 1000);
+      targetZ = clamp(curZ, -1000, 1000);
+      targetYaw = state.yaw;
+    }
+
+    spawn(targetX, targetZ, targetYaw);
+    stuckClock = 0;
+
+    try { ctx.audio?.chord?.([262, 330, 392, 523], 0.28, 0.12); } catch (_) {}
+    try { ctx.gameUi?.announce?.("Position recovered"); } catch (_) {}
+    return { x: targetX, y: state.y, z: targetZ, reason };
+  }
+
   function spawn(x, z, yaw) {
     state.x = x;
     state.z = z;
@@ -4541,6 +4587,57 @@ export async function createPlayer(ctx, canvas) {
     if (travelDistance > 1e-5) state.travelYaw = Math.atan2(travelX, travelZ);
     const measuredTravelSpeed = dt > 1e-5 ? travelDistance / dt : 0;
     state.travelSpeed = damp(state.travelSpeed, measuredTravelSpeed, 18, dt);
+
+    /* --- Stuck detection & auto-recovery --- */
+    const isGameplayActive = ctx.runtime?.phase === "playing"
+      && !ctx.runtime?.paused
+      && !ctx.intro?.isBlocking?.()
+      && !ctx.combat?.player?.dead
+      && !state.free
+      && !state.dying;
+
+    if (isGameplayActive) {
+      const curGround = groundY(state.x, state.z);
+      const isOverlapping = !!ctx.collide?.blocked?.(state.x, state.z, state.y, ctx.collide.radius)
+        || !!ctx.collide?.flightBlocked?.(state.x, state.z, state.y, ctx.collide.radius, 2.0);
+      const isTryingToMove = (mag > 0.05 || boostMode || input.state.move.x !== 0 || input.state.move.y !== 0) && !rooted;
+      const isMotionless = travelDistance < 0.02 && state.travelSpeed < 0.05;
+
+      // Floating/caught on an ungroundable structure/roof without active flight
+      const isUngroundablePerch = !state.grounded && !flightMode && Math.abs(state.vy) < 0.25 && state.y > curGround + 0.15;
+
+      // Legitimate safe grounded location
+      const isLegitimatelySafe = state.grounded
+        && !isOverlapping
+        && state.y <= curGround + 0.10
+        && Math.abs(state.vy) < 0.01;
+
+      if (isLegitimatelySafe) {
+        safeAnchorTimer += dt;
+        if (safeAnchorTimer >= 0.8) {
+          safeAnchorTimer = 0;
+          safeAnchor.x = state.x;
+          safeAnchor.y = state.y;
+          safeAnchor.z = state.z;
+          safeAnchor.yaw = state.yaw;
+        }
+      }
+
+      const isStuck = isOverlapping
+        || isUngroundablePerch
+        || (isTryingToMove && isMotionless && (!state.grounded || isOverlapping));
+
+      if (isStuck) {
+        stuckClock += dt;
+        if (stuckClock >= 2.5) { // 2.5s stuck in an object
+          unstuck("auto");
+        }
+      } else {
+        stuckClock = Math.max(0, stuckClock - dt * 2.0);
+      }
+    } else {
+      stuckClock = 0;
+    }
 
     applyFigurePose(dt);
 
@@ -6243,6 +6340,7 @@ export async function createPlayer(ctx, canvas) {
     postUpdate,
     legs,
     spawn,
+    unstuck,
     setFree(on, pos, target, fov) {
       state.free = !!on;
       if (pos) state.freePos.set(pos[0], pos[1], pos[2]);

@@ -25,11 +25,11 @@ Prompt delta: lean athletic runner; compact layered armor; narrow waist; long sp
 
 ### A2 - Vesper Needle
 
-![Vesper Needle](agile-a2-vesper-needle-hybrid.png)
+![Vesper Needle](agile-a2-vesper-needle-hybrid-no-back-posts.png)
 
-Crescent repeater-sickles, a tall chapel-bell helmet, close-fitting segmented armor, and twin back exhaust lamps. The most acrobatic melee/ranged silhouette.
+Crescent repeater-sickles, a tall chapel-bell helmet, pointed layered shoulder pads, and a clean upper-back silhouette without vertical posts. The most acrobatic melee/ranged silhouette.
 
-Prompt delta: wiry runner; compact ribbed cuirass; short thigh-length waist pennants; narrow reverse-swept shoulder vanes; two small vertical reliquary exhaust fins; two matching crescent repeaters whose curved magazines and forward housings form large sharpened hooking and parrying blades.
+Prompt delta: wiry runner; compact ribbed cuirass; short thigh-length waist pennants; narrow reverse-swept layered shoulder pauldrons; no vertical lamps, rods, fins, or posts rising behind the shoulders; two matching crescent repeaters whose curved magazines and forward housings form large sharpened hooking and parrying blades.
 
 ### A3 - Canticle Skirmisher
 

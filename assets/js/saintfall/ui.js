@@ -229,6 +229,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
             <div class="sf-menu__rail-spacer"></div>
             <button type="button" class="fullscreen-btn" id="sf-fullscreen"
               data-menu-action="maximize" aria-pressed="false">${ICONS.maximize}<span data-maximize-label>MAXIMIZE GAME</span></button>
+            <button type="button" data-menu-action="unstuck"><span>RECOVER POSITION</span></button>
             <button type="button" data-menu-action="restart"><span>RESTART OPERATION</span></button>
             <button type="button" data-menu-action="return"><span>RETURN TO ARCHIVE</span></button>
           </nav>
@@ -362,6 +363,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
                 <div class="sf-setting sf-setting--difficulty"><span><strong id="sf-difficulty-label">DIFFICULTY</strong><small data-difficulty-blurb>Pilgrim, Penitent or Martyr. Applies immediately and travels with the save; Martyr thickens the broods and heats the barrel rather than simply hitting harder.</small></span>${difficultySegmentsMarkup("data-difficulty", "sf-difficulty-label")}</div>
                 <div class="sf-setting sf-setting--quality"><span><strong id="sf-quality-label">GRAPHICS QUALITY</strong><small>Lower tiers trade render resolution, anti-aliasing, shadow detail, and occlusion for frame rate on weaker hardware. Applies immediately.</small></span>${qualitySegmentsMarkup("data-quality", "sf-quality-label")}</div>
                 <div class="sf-setting"><span><strong>DYNAMIC RESOLUTION</strong><small>Trims render resolution only while the frame rate is suffering, and restores it when it recovers</small></span><button type="button" role="switch" data-setting="dynamic-res" aria-label="Dynamic resolution" aria-checked="true">ON</button></div>
+                <div class="sf-setting"><span><strong>RECOVER POSITION</strong><small>Auto-resets if caught in an object, or click to recover now</small></span><button type="button" data-setting-action="unstuck" aria-label="Recover position">UNSTUCK</button></div>
                 <div class="sf-setting sf-setting--renderer"><span><strong>RENDERER</strong><small data-gpu-line>Reading the adapter…</small></span></div>
               </div>
             </section>
@@ -2311,6 +2313,13 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       return;
     }
     if (target.matches('[data-menu-action="maximize"]')) { toggleMaximized(); return; }
+    if (target.matches('[data-menu-action="unstuck"]') || target.matches('[data-setting-action="unstuck"]')) {
+      ctx.player?.unstuck?.("menu");
+      menuSfx("confirm");
+      closeMenu({ requestLock: true });
+      announce("Position recovered");
+      return;
+    }
     if (target.matches('[data-menu-action="restart"]')) {
       if (menu.restartUntil > performance.now()) { window.location.reload(); return; }
       menu.restartUntil = performance.now() + 4500;

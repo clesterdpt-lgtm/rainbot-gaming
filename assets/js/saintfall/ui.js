@@ -271,8 +271,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
                 <div class="sf-doctrine__points"><small>DOCTRINE POINTS</small><strong data-doctrine-points>0</strong><span>AVAILABLE</span></div>
                 <div class="sf-doctrine__vow-slots" data-doctrine-vows aria-label="Active capstone Vows"></div>
                 <footer class="sf-doctrine__footer">
-                  <p data-doctrine-edit-reason>Doctrine may be revised while field pressure is quiet.</p>
-                  <button type="button" data-doctrine-action="respec" data-talent-respec>RESET DOCTRINE</button>
+                  <button type="button" data-doctrine-action="respec" data-talent-respec
+                    aria-describedby="sf-doctrine-respec-warn">RESET DOCTRINE</button>
+                  <p class="sf-doctrine__respec-warn" id="sf-doctrine-respec-warn"
+                    data-doctrine-respec-warn role="alert" hidden></p>
                 </footer>
               </div>
               <p class="sf-doctrine__lock" data-doctrine-lock role="status" hidden></p>
@@ -446,6 +448,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     previewTalentId: null,
     hoverTalentId: null,
     respecUntil: 0,
+    respecWarnUntil: 0,
     latestState: null,
   };
   const careerRecovery = {
@@ -495,6 +498,29 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       announceRaf = 0;
       if (!destroyed && liveEl.isConnected) liveEl.textContent = message;
     });
+  }
+
+  function respecWarnNode() {
+    return root.querySelector("[data-doctrine-respec-warn]");
+  }
+
+  function hideRespecWarn() {
+    doctrine.respecWarnUntil = 0;
+    const warn = respecWarnNode();
+    if (!warn) return;
+    warn.hidden = true;
+    warn.textContent = "";
+  }
+
+  function showRespecWarn(reason) {
+    const warn = respecWarnNode();
+    const copy = String(reason || "Doctrine cannot be revised during this deployment.").trim();
+    if (!warn || !copy) return;
+    warn.hidden = false;
+    warn.textContent = copy;
+    doctrine.respecWarnUntil = performance.now() + 4800;
+    menuSfx("error");
+    announce(copy);
   }
 
   function audioEnabled() {
@@ -1167,21 +1193,20 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
 
     const edit = editState(state);
     const lock = root.querySelector("[data-doctrine-lock]");
-    lock.hidden = edit.allowed;
-    lock.textContent = edit.allowed ? "" : edit.reason;
-    const footerReason = root.querySelector("[data-doctrine-edit-reason]");
-    footerReason.textContent = edit.allowed
-      ? "Field pressure quiet · Doctrine revision available."
-      : edit.reason;
+    if (lock) {
+      lock.hidden = true;
+      lock.textContent = "";
+    }
     const respec = root.querySelector("[data-talent-respec]");
     const pointsSpent = Math.max(0, Math.floor(Number(state?.pointsSpent) || 0));
     const hasChoices = pointsSpent > 0 || bound > 0;
-    const respecReason = !edit.allowed ? edit.reason : !hasChoices ? "No Doctrine choices have been made." : "";
+    const respecReason = !hasChoices ? "No Doctrine choices have been made." : "";
     respec.disabled = !!respecReason;
     respec.setAttribute("aria-disabled", respecReason ? "true" : "false");
     respec.dataset.disabledReason = respecReason;
     respec.title = respecReason;
     respec.textContent = doctrine.respecUntil > performance.now() ? "CONFIRM RESET" : "RESET DOCTRINE";
+    if (edit.allowed) hideRespecWarn();
 
     const tabs = root.querySelector("[data-doctrine-orders]");
     tabs.innerHTML = orders.map((entry) => {
@@ -1432,7 +1457,10 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     if (next === "saves") refreshSaves();
     if (next === "operation") refreshOperation();
     if (next === "doctrine") refreshDoctrine();
-    else doctrine.respecUntil = 0;
+    else {
+      doctrine.respecUntil = 0;
+      hideRespecWarn();
+    }
     if (next === "map") {
       refreshMap();
       requestAnimationFrame(() => { if (!destroyed && menu.open && menu.panel === "map") refreshMap(); });
@@ -2227,6 +2255,14 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
         vowFocus, "[data-doctrine-preview]");
     }
     if (action === "respec") {
+      const edit = editState(doctrine.latestState);
+      if (!edit.allowed) {
+        doctrine.respecUntil = 0;
+        showRespecWarn(edit.reason);
+        focusAfterDoctrineRefresh("[data-talent-respec]");
+        return true;
+      }
+      hideRespecWarn();
       if (doctrine.respecUntil <= performance.now()) {
         doctrine.respecUntil = performance.now() + 4500;
         refreshDoctrine();
@@ -2696,6 +2732,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
         doctrine.respecUntil = 0;
         refreshDoctrine();
       }
+      if (doctrine.respecWarnUntil && doctrine.respecWarnUntil < performance.now()) {
+        hideRespecWarn();
+      }
     }
   }
 
@@ -2864,6 +2903,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       touch?.releaseAll?.();
       menu.lastFocus = null;
       doctrine.respecUntil = 0;
+      hideRespecWarn();
       clearedUntil.clear();
       root.remove();
       if (stage.__saintfallGameUi === publicApi) delete stage.__saintfallGameUi;

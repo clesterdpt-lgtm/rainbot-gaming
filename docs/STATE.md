@@ -2,6 +2,14 @@
 
 ## Latest focused fix
 
+**SAINTFALL: Doctrine ladder and single-path Vow**: Field Doctrine now reads as
+T1 | T1, then T2, then T3, then the Vow, with a wider inspector. Talent cards
+dropped their blurbs (detail lives in the preview). Capstone eligibility is
+**6 points** (one maxed T1 + T2 + T3); the second T1 is optional up to the
+existing 8-point Order cap. `scripts/saintfall-doctrine-board.mjs` 10/10.
+The 6-point Vow path is gated in `scripts/saintfall-progression.mjs`.
+Build pin `20260821-doctrine-ladder-1`.
+
 **SAINTFALL: Abbess body slam egg protection & gradual non-boss egg escalation**:
 Addressed two gameplay issues with the Abbess encounter:
 (1) Fixed her body slam attack destroying her own unhatched eggs by excluding

@@ -261,7 +261,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
               </div>
             </section>
             <section class="sf-menu__page sf-menu__page--doctrine" data-menu-page="doctrine" hidden>
-              <div class="sf-menu__pagehead"><span>RELIQUARY FORMATION</span><h3 tabindex="-1">FIELD DOCTRINE</h3><p>Inscribe five Orders and bind at most two capstone Vows. Revise doctrine when Bloom pressure is quiet.</p></div>
+              <div class="sf-menu__pagehead"><span>RELIQUARY FORMATION</span><h3 tabindex="-1">FIELD DOCTRINE</h3><p>One T1 path of six points binds the Vow. The other T1 is optional.</p></div>
               <div class="sf-doctrine__summary" aria-label="Field rank and doctrine summary">
                 <div class="sf-doctrine__rank"><small>FIELD RANK</small><strong data-doctrine-rank>1</strong></div>
                 <div class="sf-doctrine__xp">
@@ -840,7 +840,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     const slot = active.indexOf(definition.id);
     const invested = orderPoints(orderState);
     const required = Math.max(1, Math.floor(Number(definition?.requires?.orderPoints
-      ?? definitions?.capstoneEligibilityPoints) || 8));
+      ?? definitions?.capstoneEligibilityPoints) || 6));
     const seals = earnedSeals(state, definitions);
     const emptySlot = active.findIndex((entry, index) => !entry && index < seals);
     const runtime = capstoneRecord(state, orderState, definition);
@@ -907,7 +907,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
 
     return `<article class="sf-doctrine-talent" data-doctrine-talent data-talent-id="${escapeHtml(definition.id)}" data-state="${cardState}" data-tier="${tier}" data-gate="${gate}" data-gate-open="${gateOpen ? "true" : "false"}" data-inspected="${inspected ? "true" : "false"}" data-previewed="${previewed ? "true" : "false"}"${desktopCardInteraction} aria-label="${escapeHtml(accessibleName)}">
       <div class="sf-doctrine-talent__media">
-        <img class="sf-doctrine-talent__thumb" src="${iconSrc}" alt="" loading="lazy" decoding="async" />
+        <img class="sf-doctrine-talent__thumb" src="${iconSrc}" alt="" decoding="async" />
         <span class="sf-doctrine-talent__tier">${tierNumeral(tier)}</span>
       </div>
       <header><span><small>TIER ${tierNumeral(tier)}${gate > 0 ? ` · ${gate} PTS` : ""}</small><strong>${escapeHtml(definition.name || "Unnamed Rite")}</strong></span><b data-talent-rank="${rank}" aria-label="Rank ${rank} of ${maxRank}">${pips}</b></header>

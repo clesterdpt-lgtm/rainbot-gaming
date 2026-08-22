@@ -407,6 +407,28 @@ async function progressionPass(page) {
       && order.capstone?.id
       && order.capstone.requiredPoints === definitions.capstoneEligibilityPoints),
     JSON.stringify(evidence.definitions.orders));
+  check("a Vow needs one maxed T1/T2/T3 path (6 pts); the second T1 is optional",
+    definitions.capstoneEligibilityPoints === 6
+      && definitions.maxPointsPerOrder === 8
+      && definitions.orders.every((order) => {
+        const open = order.talents.filter((talent) => talent.requiredPoints === 0);
+        const t2 = order.talents.find((talent) => talent.requiredPoints === 2);
+        const t3 = order.talents.find((talent) => talent.requiredPoints === 4);
+        return open.length === 2 && open.every((talent) => talent.maxRank === 2)
+          && t2?.maxRank === 2 && t3?.maxRank === 2
+          && order.capstone.requiredPoints === 6;
+      }),
+    JSON.stringify({
+      capstoneEligibilityPoints: definitions.capstoneEligibilityPoints,
+      maxPointsPerOrder: definitions.maxPointsPerOrder,
+      orders: definitions.orders.map((order) => ({
+        id: order.id,
+        talents: order.talents.map((talent) => ({
+          id: talent.id, requiredPoints: talent.requiredPoints, maxRank: talent.maxRank,
+        })),
+        vow: order.capstone.requiredPoints,
+      })),
+    }));
   const unimplemented = definitions.orders.flatMap((order) => [
     ...order.talents.filter((talent) => talent.implemented === false)
       .map((talent) => talent.id),
@@ -523,6 +545,45 @@ async function progressionPass(page) {
       && mutationResult(lockedResponse, false),
     JSON.stringify({ talent: lockedTalent, response: lockedResponse,
       before: beforeLocked.points, after: afterLocked.points }));
+
+  const openTalents = firstOrder.talents.filter((talent) => talent.requiredPoints === 0);
+  const branchT1 = openTalents[0];
+  const spareT1 = openTalents[1];
+  const branchT2 = firstOrder.talents.find((talent) => talent.requiredPoints === 2);
+  const branchT3 = firstOrder.talents.find((talent) => talent.requiredPoints === 4);
+  const branchSpends = [];
+  for (const talent of [branchT1, branchT2, branchT3]) {
+    for (let rank = 0; rank < talent.maxRank; rank += 1) {
+      branchSpends.push(await invoke(page, "spendTalentForQA", talent.id));
+    }
+  }
+  const afterBranch = await state(page, definitions);
+  const branchEquip = firstOrder.capstone
+    ? await invoke(page, "equipCapstoneForQA", firstOrder.capstone.id) : null;
+  const afterBranchVow = await state(page, definitions);
+  check("maxing one T1 plus T2 and T3 (6 pts) binds the Vow without the other T1",
+    openTalents.length === 2 && branchT1 && spareT1 && branchT2 && branchT3
+      && branchSpends.every((response) => mutationResult(response, true))
+      && allocationRank(afterBranch, branchT1.id) === 2
+      && allocationRank(afterBranch, spareT1.id) === 0
+      && allocationRank(afterBranch, branchT2.id) === 2
+      && allocationRank(afterBranch, branchT3.id) === 2
+      && afterBranch.points.spent === 6
+      && mutationResult(branchEquip, true)
+      && afterBranchVow.activeCapstones.includes(firstOrder.capstone.id),
+    JSON.stringify({
+      branchT1: branchT1?.id, spareT1: spareT1?.id, branchT2: branchT2?.id, branchT3: branchT3?.id,
+      spends: branchSpends, spent: afterBranch.points.spent,
+      ranks: {
+        t1: allocationRank(afterBranch, branchT1?.id),
+        spare: allocationRank(afterBranch, spareT1?.id),
+        t2: allocationRank(afterBranch, branchT2?.id),
+        t3: allocationRank(afterBranch, branchT3?.id),
+      },
+      equip: branchEquip, vows: afterBranchVow.activeCapstones,
+    }));
+  await invoke(page, "resetProgressionForQA");
+  await grantToRank(page, definitions, definitions.rankCap, "qa:restore-after-branch");
 
   const starter = firstOrder.talents.find((talent) =>
     talent.implemented !== false && talent.requiredPoints === 0);

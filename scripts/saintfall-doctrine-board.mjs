@@ -62,6 +62,42 @@ await delay(300);
 await page.locator('[data-doctrine-order="censer"]').click();
 await delay(300);
 
+const ladder = await page.evaluate(() => {
+  const cards = [...document.querySelectorAll("[data-doctrine-talent]")];
+  const rect = (node) => node.getBoundingClientRect();
+  const t1 = cards.filter((card) => card.dataset.tier === "1").map(rect);
+  const t2 = cards.find((card) => card.dataset.tier === "2");
+  const t3 = cards.find((card) => card.dataset.tier === "3");
+  const preview = document.querySelector("[data-doctrine-preview]");
+  const tree = document.querySelector(".sf-doctrine__tree");
+  const pageNode = document.querySelector('[data-menu-page="doctrine"]');
+  const t2r = t2 ? rect(t2) : null;
+  const t3r = t3 ? rect(t3) : null;
+  const previewR = preview ? rect(preview) : null;
+  const treeR = tree ? rect(tree) : null;
+  const pageR = pageNode ? rect(pageNode) : null;
+  return {
+    t1Count: t1.length,
+    t1SameRow: t1.length === 2 && Math.abs(t1[0].top - t1[1].top) < 10,
+    t1SideBySide: t1.length === 2 && Math.abs(t1[0].left - t1[1].left) > t1[0].width * 0.4,
+    t2BelowT1: !!t2r && t1.length === 2
+      && t2r.top >= Math.max(t1[0].bottom, t1[1].bottom) - 6,
+    t3BelowT2: !!t2r && !!t3r && t3r.top >= t2r.bottom - 6,
+    t2SpansT1: !!t2r && t1.length === 2 && t2r.width > Math.max(t1[0].width, t1[1].width) * 1.35,
+    previewGteTree: !!previewR && !!treeR && previewR.width + 8 >= treeR.width,
+    pageScrollY: pageNode ? Math.max(0, pageNode.scrollHeight - pageNode.clientHeight) : -1,
+    previewVisible: !!previewR && previewR.width > 80 && previewR.height > 80,
+    pageHeight: pageR ? pageR.height : 0,
+  };
+});
+check("T1 rites sit side by side, T2 then T3 stack below, preview owns the width",
+  ladder.t1Count === 2 && ladder.t1SameRow && ladder.t1SideBySide
+    && ladder.t2BelowT1 && ladder.t3BelowT2 && ladder.t2SpansT1
+    && ladder.previewGteTree && ladder.previewVisible && ladder.pageScrollY <= 2,
+  JSON.stringify(ladder));
+await mkdir(OUT, { recursive: true });
+await page.screenshot({ path: path.join(OUT, "doctrine-ladder.png"), fullPage: false });
+
 // 1. Clicking a rite card drives the inspector.
 const second = page.locator("[data-doctrine-talent]").nth(1);
 await second.click();

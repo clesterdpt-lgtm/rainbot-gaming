@@ -18,7 +18,9 @@ export const DOCTRINE_POINTS_PER_RANK = 1;
 export const DOCTRINE_POINT_START_RANK = 2;
 export const TALENT_MAX_RANK = 2;
 export const MAX_POINTS_PER_ORDER = 8;
-export const CAPSTONE_ELIGIBILITY_POINTS = 8;
+/* One maxed T1 (2) + T2 (2) + T3 (2). The second T1 is optional headroom
+   up to MAX_POINTS_PER_ORDER; it is not a Vow gate. */
+export const CAPSTONE_ELIGIBILITY_POINTS = 6;
 export const MAX_ACTIVE_CAPSTONES = 2;
 export const VOW_SEAL_RANKS = deepFreeze([12, 22]);
 
@@ -267,7 +269,7 @@ export const DOCTRINE_ORDERS = deepFreeze([
       kind: "capstone",
       name: "Martyr's Furnace",
       summary: "Trade vitality for a brief, controllable redline.",
-      requires: { orderPoints: 8, vowSeal: true },
+      requires: { orderPoints: 6, vowSeal: true },
       description: "Reaching maximum heat starts a 3-second Redline instead of immediately locking the weapon. Each Redline shot scorches 4 vitality; completing a manual vent restores vitality scorched by that Redline. Failing to vent ends in the normal overheat lock.",
     },
   },
@@ -366,7 +368,7 @@ export const DOCTRINE_ORDERS = deepFreeze([
       kind: "capstone",
       name: "Endless Litany",
       summary: "Keep the three-step rite cycling for as long as it remains unbroken.",
-      requires: { orderPoints: 8, vowSeal: true },
+      requires: { orderPoints: 6, vowSeal: true },
       description: "After the third combo hit, the next melee input cycles directly to an empowered first strike. Every third connected hit releases a 5-metre Bellstrike; missing, taking damage, or letting the combo buffer expire ends the Litany.",
     },
   },
@@ -465,7 +467,7 @@ export const DOCTRINE_ORDERS = deepFreeze([
       kind: "capstone",
       name: "Unbroken Circuit",
       summary: "Complete a circuit of distinct Reliquary actions.",
-      requires: { orderPoints: 8, vowSeal: true },
+      requires: { orderPoints: 6, vowSeal: true },
       description: "Use any 3 distinct Reliquary verbs - boost, jet, Penitent's Fall, or a successful Aegis block - within 8 seconds to restore 25 charge and release a 6-metre halo shockwave. Each verb counts once; the Circuit then has a 12-second cooldown.",
     },
   },
@@ -564,7 +566,7 @@ export const DOCTRINE_ORDERS = deepFreeze([
       kind: "capstone",
       name: "Seraph Aegis",
       summary: "Commit the Reliquary to a stationary defensive dome.",
-      requires: { orderPoints: 8, vowSeal: true },
+      requires: { orderPoints: 6, vowSeal: true },
       description: "Hold Aegis while stationary for 1 second to form a 360-degree dome. Movement is disabled and charge drain is doubled; releasing the dome returns up to 150 absorbed damage as a radial blast.",
     },
   },
@@ -663,7 +665,7 @@ export const DOCTRINE_ORDERS = deepFreeze([
       kind: "capstone",
       name: "Combined Liturgy",
       summary: "Fuse two different commands into one authored battlefield event.",
-      requires: { orderPoints: 8, vowSeal: true },
+      requires: { orderPoints: 6, vowSeal: true },
       description: "Each command impact leaves an 8-second sigil. Placing a different command inside it consumes the sigil and fuses the pair; Combined Liturgy then has a 30-second shared cooldown.",
       fusions: [
         {

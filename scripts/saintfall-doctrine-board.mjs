@@ -98,6 +98,23 @@ check("T1 rites sit side by side, T2 then T3 stack below, preview owns the width
 await mkdir(OUT, { recursive: true });
 await page.screenshot({ path: path.join(OUT, "doctrine-ladder.png"), fullPage: false });
 
+const previewWidths = [];
+const talentCount = await page.locator("[data-doctrine-talent]").count();
+for (let i = 0; i < talentCount; i += 1) {
+  await page.locator("[data-doctrine-talent]").nth(i).click();
+  await delay(80);
+  previewWidths.push(await page.evaluate(() =>
+    Number(document.querySelector("[data-doctrine-preview]")?.getBoundingClientRect().width.toFixed(1))));
+}
+await page.locator("[data-doctrine-vow]").click();
+await delay(80);
+previewWidths.push(await page.evaluate(() =>
+  Number(document.querySelector("[data-doctrine-preview]")?.getBoundingClientRect().width.toFixed(1))));
+const previewSpread = Math.max(...previewWidths) - Math.min(...previewWidths);
+check("inspector width does not change across rites and the Vow",
+  previewWidths.length >= 5 && previewSpread <= 1,
+  JSON.stringify({ previewWidths, previewSpread }));
+
 // 1. Clicking a rite card drives the inspector.
 const second = page.locator("[data-doctrine-talent]").nth(1);
 await second.click();

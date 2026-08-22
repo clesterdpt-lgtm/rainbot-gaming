@@ -2,6 +2,11 @@
 
 ## Latest focused fix
 
+**SAINTFALL: Doctrine inspector width lock**: The preview column was
+shrink-wrapping to each rite's copy (long titles, refund buttons). It is
+now a fixed 3/5 of the workspace, so selecting any talent or the Vow
+leaves the inspector the same width. Build pin `20260821-doctrine-preview-width-1`.
+
 **SAINTFALL: Doctrine ladder and single-path Vow**: Field Doctrine now reads as
 T1 | T1, then T2, then T3, then the Vow, with a wider inspector. Talent cards
 dropped their blurbs (detail lives in the preview). Capstone eligibility is

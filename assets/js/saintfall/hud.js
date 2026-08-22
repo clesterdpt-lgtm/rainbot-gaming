@@ -50,7 +50,12 @@ export function buildHud(ctx, host) {
       <article class="sf-objective__item sf-objective__item--primary">
         <i aria-hidden="true">01</i>
         <span class="sf-objective__copy"><small>PRIORITY</small><strong id="sf-objlabel"></strong></span>
-        <b id="sf-objdistance">&mdash;</b>
+        <div class="sf-objective__meta">
+          <svg class="sf-objective__arrow" id="sf-objarrow" viewBox="0 0 16 16" aria-hidden="true" width="14" height="14">
+            <path d="M8 1.5 L14 13.5 L8 10.5 L2 13.5 Z" fill="currentColor" />
+          </svg>
+          <b id="sf-objdistance">&mdash;</b>
+        </div>
       </article>
       <div class="sf-hud__objbar"><i id="sf-objbar"></i></div>
       <div class="sf-minimap__event" id="sf-map-event" data-phase="dormant">
@@ -150,6 +155,7 @@ export function buildHud(ctx, host) {
   const objEl = el.querySelector("#sf-objective");
   const objLabelEl = el.querySelector("#sf-objlabel");
   const objDistanceEl = el.querySelector("#sf-objdistance");
+  const objArrowEl = el.querySelector("#sf-objarrow");
   const objBarEl = el.querySelector("#sf-objbar");
   const bannerEl = el.querySelector("#sf-banner");
   const breachAlertEl = el.querySelector("#sf-breach-alert");
@@ -1636,10 +1642,31 @@ export function buildHud(ctx, host) {
         objLabelEl.textContent = obj.name;
         objDistanceEl.textContent = `${Math.round(obj.dist)}M`;
         objBarEl.style.width = `${(obj.progress || 0) * 100}%`;
+        if (objArrowEl && Number.isFinite(obj.x) && Number.isFinite(obj.z)) {
+          const dx = obj.x - ps.x;
+          const dz = obj.z - ps.z;
+          camera.getWorldDirection(fwdVec);
+          const fx = fwdVec.x;
+          const fz = fwdVec.z;
+          const fLen = Math.hypot(fx, fz) || 1;
+          const forwardX = fx / fLen;
+          const forwardZ = fz / fLen;
+          const rightX = -forwardZ;
+          const rightZ = forwardX;
+          const dFwd = dx * forwardX + dz * forwardZ;
+          const dRight = dx * rightX + dz * rightZ;
+          const rad = Math.atan2(dRight, dFwd);
+          const deg = (rad * 180) / Math.PI;
+          objArrowEl.style.transform = `rotate(${deg.toFixed(1)}deg)`;
+          objArrowEl.style.opacity = "1";
+        } else if (objArrowEl) {
+          objArrowEl.style.opacity = "0";
+        }
       } else {
         objEl.style.opacity = "0";
         objEl.dataset.event = "0";
         objDistanceEl.textContent = "—";
+        if (objArrowEl) objArrowEl.style.opacity = "0";
       }
 
       bannerEl.textContent = mission.state.banner || "";

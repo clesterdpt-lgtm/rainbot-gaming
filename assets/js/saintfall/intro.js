@@ -1318,14 +1318,8 @@ function buildMarkup(host) {
     <div class="sf-intro__heat" aria-hidden="true"></div>
     <div class="sf-intro__flash" aria-hidden="true"></div>
     <div class="sf-intro__telemetry" aria-hidden="true">
-      <div class="sf-intro__eyebrow"><span>SANCTUM VII</span><b data-intro-signal>LINK // GREEN</b></div>
+      <div class="sf-intro__eyebrow"><span data-intro-carrier>SANCTUM VII</span><b data-intro-signal>TARGET // VESPER-IX BASIN</b></div>
       <div class="sf-intro__rule"></div>
-      <div class="sf-intro__numbers">
-        <span>ALTITUDE <b data-intro-alt>120.0 KM</b></span>
-        <span>VELOCITY <b data-intro-vel>0 M/S</b></span>
-        <span>ABLATIVE <b data-intro-heat>04%</b></span>
-      </div>
-      <div class="sf-intro__heatbar"><i data-intro-heatbar></i></div>
     </div>
     <div class="sf-intro__chapter">
       <small data-intro-phase>ORBITAL INSERTION</small>
@@ -2327,20 +2321,29 @@ export function buildDropIntro(ctx, options = {}) {
 
     const phase = phaseAt(c);
     state.phase = phase[1];
-    phaseEl.textContent = phase[2];
-    captionEl.textContent = phase[3];
-    titleEl.textContent = c >= M.hatch ? "LANDFALL"
-      : (c >= M.cloudBreak ? "THRESHOLD" : "THE DROP");
-    altitudeEl.textContent = state.altitude >= 1000
-      ? `${(state.altitude / 1000).toFixed(state.altitude >= 10000 ? 1 : 2)} KM`
-      : `${Math.max(0, Math.round(state.altitude))} M`;
-    velocityEl.textContent = `${Math.max(0, Math.round(state.velocity)).toLocaleString()} M/S`;
-    heatEl.textContent = `${Math.round(state.heat * 100).toString().padStart(2, "0")}%`;
-    heatbarEl.style.transform = `scaleX(${clamp01(state.heat)})`;
-    signalEl.textContent = state.heat > .82 ? "ABLATIVE // CRITICAL"
-      : state.stress > .55 ? "NO BURN // BRACE"
-        : c >= M.hatch ? "RELIQUARY // OPEN"
-          : c >= M.impact ? "CONTACT // SECURE" : "LINK // GREEN";
+    if (phaseEl) phaseEl.textContent = phase[2];
+    if (captionEl) captionEl.textContent = phase[3];
+    if (titleEl) {
+      titleEl.textContent = c >= M.hatch ? "LANDFALL"
+        : (c >= M.cloudBreak ? "THRESHOLD" : "THE DROP");
+    }
+    if (altitudeEl) {
+      altitudeEl.textContent = state.altitude >= 1000
+        ? `${(state.altitude / 1000).toFixed(state.altitude >= 10000 ? 1 : 2)} KM`
+        : `${Math.max(0, Math.round(state.altitude))} M`;
+    }
+    if (velocityEl) {
+      velocityEl.textContent = `${Math.max(0, Math.round(state.velocity)).toLocaleString()} M/S`;
+    }
+    if (heatEl) {
+      heatEl.textContent = `${Math.round(state.heat * 100).toString().padStart(2, "0")}%`;
+    }
+    if (heatbarEl) {
+      heatbarEl.style.transform = `scaleX(${clamp01(state.heat)})`;
+    }
+    if (signalEl) {
+      signalEl.textContent = "TARGET // VESPER-IX BASIN";
+    }
 
     if (c < M.cloudBreak) {
       applyOrbit(c);

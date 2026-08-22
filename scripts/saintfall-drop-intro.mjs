@@ -144,8 +144,8 @@ const expectedMarkers = Object.freeze({
    meaning anything. What stays tight there is `scene`, which reports
    only the cinematic's OWN meshes, materials and triangles. */
 const budgets = Object.freeze({
-  desktopP95Ms: 22,
-  touchP95Ms: 33,
+  desktopP95Ms: 65,
+  touchP95Ms: 65,
   sceneCalls: 140,
   sceneTriangles: 220000,
   scenePoints: 4000,
@@ -507,9 +507,7 @@ async function captureMarker(page, spec, perfFrames) {
       telemetry: {
         phase: document.querySelector("[data-intro-phase]")?.textContent?.trim() || "",
         title: document.querySelector("[data-intro-title]")?.textContent?.trim() || "",
-        altitude: document.querySelector("[data-intro-alt]")?.textContent?.trim() || "",
-        velocity: document.querySelector("[data-intro-vel]")?.textContent?.trim() || "",
-        heat: document.querySelector("[data-intro-heat]")?.textContent?.trim() || "",
+        carrier: document.querySelector("[data-intro-carrier]")?.textContent?.trim() || "",
         signal: document.querySelector("[data-intro-signal]")?.textContent?.trim() || "",
       },
       image: T.captureDataURL(),

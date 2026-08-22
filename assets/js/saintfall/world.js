@@ -40,7 +40,7 @@ import {
 import { makeKit, mergeGeometries, cleanGeometry } from "saintfall/structures.js";
 import {
   DISTRICTS, ROAD_PATH, FOSSE_PATH, MAP_HALF, DROP_SITE,
-  CHUNK_SIZE, LOD_CELLS, GARNER_PIT, MATRIARCH_ARENA, STYLITE_ARENA,
+  CHUNK_SIZE, LOD_CELLS, GARNER_PIT, MATRIARCH_ARENA, STYLITE_ARENA, CENSER_WORKS,
 } from "saintfall/terrain.js";
 import { makeRamp } from "saintfall/core.js";
 
@@ -3237,8 +3237,19 @@ export async function buildWorld(ctx, onProgress) {
 
     /* --- tanks --- */
     const tankPos = [];
+    const tankGateAngle = Math.asin(CENSER_WORKS.gateHalfWidth / CENSER_WORKS.wallRadius);
     for (let i = 0; i < 11; i += 1) {
-      const a = (i / 11) * TAU + 0.25;
+      let a = (i / 11) * TAU + 0.25;
+      /* Keep the four entrance sightlines free.  A tank centred on the
+         west gate made a technically open wall read as a sealed yard,
+         and sent the header pipe straight across the doorway. */
+      for (const bearing of CENSER_WORKS.gateBearings) {
+        const delta = Math.atan2(Math.sin(a - bearing), Math.cos(a - bearing));
+        if (Math.abs(delta) < tankGateAngle + 0.10) {
+          a += delta >= 0 ? 0.22 : -0.22;
+          break;
+        }
+      }
       const r = 96 + (i % 3) * 22;
       const x = d.x + Math.cos(a) * r;
       const z = d.z + Math.sin(a) * r * 0.8;
@@ -3265,102 +3276,158 @@ export async function buildWorld(ctx, onProgress) {
       batch.add("censer", "gold", boss);
     }
 
-    /* --- pipe runs linking everything, elevated on trestles --- */
+    /* --- pipe runs: one tank loop, then short stack spurs ----------
+       The old graph closed one list containing the perimeter tanks AND
+       the three central stacks.  Its last four edges therefore slashed
+       long chords across the yard.  A refinery reads more deliberately
+       when the storage ring owns the header and each flare stack joins
+       it through its nearest tank. */
     {
       const parts = [];
-      const nodes = tankPos.concat(stackPos.map(([ox, oz]) => [d.x + ox, d.z + oz]));
-      for (let i = 0; i < nodes.length; i += 1) {
-        const a = nodes[i];
-        const b = nodes[(i + 1) % nodes.length];
-        const dx = b[0] - a[0];
-        const dz = b[1] - a[1];
-        const invLen = 1 / Math.max(0.001, Math.hypot(dx, dz));
-        const nx = -dz * invLen;
-        const nz = dx * invLen;
-        const pts = [];
-        const steps = 7;
-        for (let k = 0; k <= steps; k += 1) {
-          const t = k / steps;
-          const x = lerp(a[0], b[0], t);
-          const z = lerp(a[1], b[1], t);
-          const pipeY = H(x, z) + 5.5 + Math.sin(t * Math.PI) * 1.2;
-          pts.push([x, pipeY, z]);
-          if (k > 0 && k < steps && k % 2 === 0) {
-            const ground = H(x, z) - 0.15;
-            const crossY = pipeY - 0.68;
-            parts.push(kit.prism({
-              h: crossY - ground, rBottom: 0.32, rTop: 0.26, sides: 4,
-            }).translate(x, ground, z));
-            // One crossarm cradles both the main and offset pipe.
-            // Their different radii and 0.2m centre-height offset
-            // put both lower surfaces at essentially the same Y.
-            parts.push(kit.tube([
-              [x - nx * 0.48, crossY, z - nz * 0.48],
-              [x + nx * 1.88, crossY, z + nz * 1.88],
-            ], 0.16, 4));
+      const addRun = (nodes, { paired = true } = {}) => {
+        for (let i = 0; i < nodes.length - 1; i += 1) {
+          const a = nodes[i];
+          const b = nodes[i + 1];
+          const dx = b[0] - a[0];
+          const dz = b[1] - a[1];
+          const len = Math.max(0.001, Math.hypot(dx, dz));
+          const nx = -dz / len;
+          const nz = dx / len;
+          const pts = [];
+          const steps = Math.max(4, Math.ceil(len / 16));
+          for (let k = 0; k <= steps; k += 1) {
+            const t = k / steps;
+            const x = lerp(a[0], b[0], t);
+            const z = lerp(a[1], b[1], t);
+            const pipeY = upper + 5.7 + Math.sin(t * Math.PI) * 0.75;
+            pts.push([x, pipeY, z]);
+            if (k > 0 && k < steps && (k % 2 === 0 || steps <= 5)) {
+              const ground = H(x, z) - 0.15;
+              const crossY = pipeY - 0.68;
+              parts.push(kit.prism({
+                h: crossY - ground, rBottom: 0.32, rTop: 0.26, sides: 4,
+              }).translate(x, ground, z));
+              parts.push(kit.tube([
+                [x - nx * 0.55, crossY, z - nz * 0.55],
+                [x + nx * (paired ? 1.95 : 0.55), crossY,
+                  z + nz * (paired ? 1.95 : 0.55)],
+              ], 0.16, 4));
+            }
+          }
+          parts.push(kit.tube(pts, paired ? 0.55 : 0.46, 6));
+          if (paired) {
+            parts.push(kit.tube(pts.map((p) => [
+              p[0] + nx * 1.4, p[1] - 0.2, p[2] + nz * 1.4,
+            ]), 0.34, 5));
           }
         }
-        parts.push(kit.tube(pts, 0.55, 6));
-        parts.push(kit.tube(pts.map((p) => [
-          p[0] + nx * 1.4, p[1] - 0.2, p[2] + nz * 1.4,
-        ]), 0.34, 5));
+      };
+
+      addRun(tankPos.concat([tankPos[0]]));
+      const stacks = stackPos.map(([ox, oz]) => [d.x + ox, d.z + oz]);
+      for (const stack of stacks) {
+        let nearest = tankPos[0];
+        for (const tank of tankPos) {
+          if (Math.hypot(tank[0] - stack[0], tank[1] - stack[1])
+            < Math.hypot(nearest[0] - stack[0], nearest[1] - stack[1])) nearest = tank;
+        }
+        addRun([stack, nearest], { paired: false });
       }
       const g = kit.merge(parts);
       paintH(g, ironRamp, { normalWeight: 0.44, jitter: 0.2, noise: 0.28 });
-      batch.add("censer", "rust", g);
+      batch.add("censer", "rust", g, { tag: "pipes" });
     }
 
-    /* --- the retaining wall between terraces --- */
+    /* --- the perimeter retaining wall --------------------------------
+       Four open gates align with the terrain's approach aprons.  Every
+       wall face, coping stone, buttress and gate pier is authored from
+       the same radius, so there is no remnant slicing through the boss
+       arena and no detached attachment left on the old diagonal. */
     {
       const parts = [];
-      const nx = 0.55;
-      const nz = 0.84;
-      for (let t = -150; t <= 150; t += 9) {
-        const x = d.x + -nz * t;
-        const z = d.z + nx * t;
-        const w = kit.slab(9.4, upper - lower + 2.2, 3.0, 0.14);
-        w.rotateY(-Math.atan2(nx, -nz));
-        w.translate(x, lower - 1.2, z);
+      const radius = CENSER_WORKS.wallRadius;
+      const segments = CENSER_WORKS.wallSegments;
+      const segmentLength = TAU * radius / segments + 0.34;
+      const baseY = lower - 0.85;
+      const wallH = upper - lower + 3.0;
+      const gateAngle = Math.asin(CENSER_WORKS.gateHalfWidth / radius);
+      const angleDelta = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+      const inGate = (a, pad = 0) => CENSER_WORKS.gateBearings
+        .some((bearing) => angleDelta(a, bearing) < gateAngle + pad);
+
+      for (let i = 0; i < segments; i += 1) {
+        const a = ((i + 0.5) / segments) * TAU;
+        if (inGate(a, 0.012)) continue;
+        const x = d.x + Math.cos(a) * radius;
+        const z = d.z + Math.sin(a) * radius;
+        const yaw = -a - Math.PI * 0.5;
+        const w = kit.slab(segmentLength, wallH, CENSER_WORKS.wallThickness, 0.14);
+        w.rotateY(yaw);
+        w.translate(x, baseY, z);
         parts.push(w);
-        if ((t + 150) % 36 === 0) {
-          const b = kit.slab(3.0, upper - lower + 4.0, 4.4, 0.2);
-          b.rotateY(-Math.atan2(nx, -nz));
-          b.translate(x + nx * 2.2, lower - 1.2, z + nz * 2.2);
+
+        const coping = kit.slab(segmentLength + 0.12, 0.55,
+          CENSER_WORKS.wallThickness + 0.75, 0.12);
+        coping.rotateY(yaw);
+        coping.translate(x, baseY + wallH, z);
+        parts.push(coping);
+
+        if (i % 8 === 0 && !inGate(a, 0.07)) {
+          const b = kit.slab(3.2, wallH + 1.5, 5.4, 0.2);
+          b.rotateY(yaw);
+          b.translate(
+            d.x + Math.cos(a) * (radius + 2.0),
+            baseY,
+            d.z + Math.sin(a) * (radius + 2.0)
+          );
           parts.push(b);
+        }
+      }
+
+      for (const bearing of CENSER_WORKS.gateBearings) {
+        for (const side of [-1, 1]) {
+          const a = bearing + side * (gateAngle + 0.018);
+          const yaw = -a - Math.PI * 0.5;
+          const pier = kit.slab(5.0, wallH + 3.8, 6.2, 0.22);
+          pier.rotateY(yaw);
+          pier.translate(
+            d.x + Math.cos(a) * (radius + 0.8),
+            baseY,
+            d.z + Math.sin(a) * (radius + 0.8)
+          );
+          parts.push(pier);
         }
       }
       const g = kit.merge(parts);
       paintH(g, makeRamp([[0, "#1b1a1c"], [0.5, "#3d3a38"], [1, "#6d6459"]]),
         { normalWeight: 0.44, jitter: 0.14, noise: 0.24 });
-      batch.add("censer", "stone", g);
+      batch.add("censer", "stone", g,
+        { tag: "perimeter-wall", collisionSolid: true });
     }
 
-    /* --- catwalks on the lower terrace --- */
+    /* --- service catwalks follow the wall instead of bisecting it --- */
     {
-      const y = lower + 7.5;
-      const run = [
-        [d.x - 90, y, d.z + 70], [d.x - 20, y, d.z + 84],
-        [d.x + 48, y, d.z + 74], [d.x + 92, y, d.z + 40],
-      ];
-      const parts = [kit.catwalk(run, { width: 2.0 })];
-      for (let i = 0; i < run.length - 1; i += 1) {
-        const a = run[i];
-        const b = run[i + 1];
-        const dx = b[0] - a[0];
-        const dz = b[2] - a[2];
-        const len = Math.hypot(dx, dz);
-        const steps = Math.max(1, Math.ceil(len / 13));
-        const nx = -dz / len;
-        const nz = dx / len;
-        for (let k = 0; k <= steps; k += 1) {
-          // Do not duplicate the shared station between segments.
-          if (i > 0 && k === 0) continue;
-          const t = k / steps;
-          const px = lerp(a[0], b[0], t);
-          const pz = lerp(a[2], b[2], t);
+      const y = upper + 6.8;
+      const radius = CENSER_WORKS.catwalkRadius;
+      const gateAngle = Math.asin(CENSER_WORKS.gateHalfWidth / CENSER_WORKS.wallRadius);
+      const parts = [];
+      for (let quadrant = 0; quadrant < 4; quadrant += 1) {
+        const start = quadrant * Math.PI * 0.5 + gateAngle * 1.65;
+        const end = (quadrant + 1) * Math.PI * 0.5 - gateAngle * 1.65;
+        const run = [];
+        const steps = 9;
+        for (let i = 0; i <= steps; i += 1) {
+          const a = lerp(start, end, i / steps);
+          run.push([d.x + Math.cos(a) * radius, y, d.z + Math.sin(a) * radius]);
+        }
+        parts.push(kit.catwalk(run, { width: 2.0 }));
+
+        for (let i = 0; i < run.length; i += 2) {
+          const a = lerp(start, end, i / steps);
           for (const side of [-1, 1]) {
-            const lx = px + nx * side * 0.72;
-            const lz = pz + nz * side * 0.72;
+            const rr = radius + side * 0.72;
+            const lx = d.x + Math.cos(a) * rr;
+            const lz = d.z + Math.sin(a) * rr;
             const ground = H(lx, lz) - 0.18;
             const legH = y - ground;
             if (legH > 0.25) {
@@ -3373,7 +3440,7 @@ export async function buildWorld(ctx, onProgress) {
       }
       const g = kit.merge(parts);
       paintH(g, ironRamp, { normalWeight: 0.5, jitter: 0.2 });
-      batch.add("censer", "rust", g);
+      batch.add("censer", "rust", g, { tag: "perimeter-catwalk" });
     }
 
     /* --- spill stains and drum litter --- */
@@ -3382,6 +3449,12 @@ export async function buildWorld(ctx, onProgress) {
       for (let i = 0; i < 90; i += 1) {
         const a = rng() * TAU;
         const r = Math.pow(rng(), 0.6) * 190;
+        if (r > CENSER_WORKS.catwalkRadius - 24
+          && CENSER_WORKS.gateBearings.some((bearing) =>
+            Math.abs(Math.atan2(Math.sin(a - bearing), Math.cos(a - bearing)))
+              < Math.asin(CENSER_WORKS.gateHalfWidth / CENSER_WORKS.wallRadius) * 2.4)) {
+          continue;
+        }
         const x = d.x + Math.cos(a) * r;
         const z = d.z + Math.sin(a) * r;
         const g = kit.prism({ h: 1.5, rBottom: 0.52, rTop: 0.52, sides: 8 });
@@ -3393,7 +3466,7 @@ export async function buildWorld(ctx, onProgress) {
       }
       const g = mergeGeometries(THREE, geos);
       paintH(g, ironRamp, { normalWeight: 0.5, jitter: 0.28, noise: 0.4 });
-      batch.add("censer", "rust", g);
+      batch.add("censer", "rust", g, { tag: "spill-litter" });
     }
 
     pois.push({ id: "censer", name: "The Censer Works", x: d.x, z: d.z });
@@ -3798,6 +3871,10 @@ export async function buildWorld(ctx, onProgress) {
     const bagGeos = [];
     const woodGeos = [];
     const ironGeos = [];
+    const outsideCenserApron = (x, z, margin = 0) => Math.hypot(
+      x - DISTRICTS.censer.x,
+      z - DISTRICTS.censer.z
+    ) >= CENSER_WORKS.wallRadius + 52 + margin;
 
     for (let i = 4; i < prof.length - 4; i += 3) {
       const a = prof[i];
@@ -3809,6 +3886,7 @@ export async function buildWorld(ctx, onProgress) {
       const px = a.x - Math.sin(-yaw) * off;
       const pz = a.z - Math.cos(-yaw) * off;
       if (rng.chance(0.22)) continue;
+      if (!outsideCenserApron(px, pz, 8)) continue;
       const bagLength = rng.range(7, 13);
       const g = kit.sandbagWall(rng, { length: bagLength, courses: rng.int(2, 4) });
       restOnTerrain(g, px, pz, {
@@ -3833,6 +3911,7 @@ export async function buildWorld(ctx, onProgress) {
       const off = 21;
       const px = a.x - Math.sin(-yaw) * off;
       const pz = a.z - Math.cos(-yaw) * off;
+      if (!outsideCenserApron(px, pz, 10)) continue;
       const g = kit.wireRun(rng, { length: 14, height: 1.2, coils: 20 });
       placeOnTerrain(g, px, pz, {
         yaw: -yaw, sample: 7, dy: -0.08, maxTilt: 0.34,
@@ -3848,6 +3927,7 @@ export async function buildWorld(ctx, onProgress) {
       const off = 15;
       const px = a.x - Math.sin(-yaw) * off;
       const pz = a.z - Math.cos(-yaw) * off;
+      if (!outsideCenserApron(px, pz, 12)) continue;
       const g = kit.bunker({ w: rng.range(7, 10), d: rng.range(5, 7), h: 3.0 });
       restOnTerrain(g, px, pz, {
         rot: [0, -yaw + Math.PI, 0], embed: 1.0, maxGap: 0.05,
@@ -4911,6 +4991,19 @@ export async function buildWorld(ctx, onProgress) {
       /* Boss-arena keep-clear, applied AFTER every rng draw for this
          crag so culling one never re-times the stream - cull earlier
          and all 3,400 downstream boulders silently re-scatter. */
+      const censerDx = x - DISTRICTS.censer.x;
+      const censerDz = z - DISTRICTS.censer.z;
+      const censerRadius = Math.hypot(censerDx, censerDz);
+      const censerBearing = Math.atan2(censerDz, censerDx);
+      if (censerRadius > CENSER_WORKS.catwalkRadius - 24
+        && censerRadius < CENSER_WORKS.wallRadius + 62
+        && CENSER_WORKS.gateBearings.some((bearing) =>
+          Math.abs(Math.atan2(
+            Math.sin(censerBearing - bearing),
+            Math.cos(censerBearing - bearing)
+          )) < Math.asin(CENSER_WORKS.gateHalfWidth / CENSER_WORKS.wallRadius) * 2.4)) {
+        continue;
+      }
       if (Math.hypot(x - MATRIARCH_ARENA.x, z - MATRIARCH_ARENA.z)
         < MATRIARCH_ARENA.flatRadius + 22) continue;
       if (Math.hypot(x - STYLITE_ARENA.x, z - STYLITE_ARENA.z)
@@ -5170,6 +5263,11 @@ export async function buildWorld(ctx, onProgress) {
     banners,
     choirNeedles,
     authoredLandmarks,
+    censerLayout: {
+      ...CENSER_WORKS,
+      upperY: field.censerUpperY,
+      lowerY: field.censerLowerY,
+    },
     pois,
     beautyShots,
     walkSurfaceAt,

@@ -479,6 +479,138 @@ try {
     gaster.hit && gaster.dealt > 0 && gaster.weak === false && gaster.sacIndex < 0,
     JSON.stringify(gaster));
 
+  /* ---- MARTYR: ASHEN BRACKET -----------------------------------------
+     Hardest difficulty already owns fifty per cent more boss health.
+     This section proves the new pressure changes HOW the fight is played:
+     body fire is inefficient while the shell is closed, sacs remain the
+     full-value answer, six lift points prevent a four-round knockdown, and
+     the first volley marks a committed follow-up across a held travel lane. */
+  const martyrSetup = await page.evaluate(() => {
+    const T = window.__SF;
+    T.setDifficultyForQA("martyr");
+    T.renderOnce(1 / 60);
+    T.winnower.resetToPerch();
+    T.teleportToWinnower(40);
+    T.advanceToWinnowerPhase("soar", 30);
+    T.forceWinnowerPhase("soar", 60);
+    const inst = T.winnower.instance();
+    inst.health = inst.maxHealth;
+
+    const airborneBefore = inst.health;
+    const bodyDamage = T.combat.damageEnemy(inst, 100, { source: "qa-martyr-body" });
+    const sacDamage = T.combat.damageEnemy(inst, 100,
+      { source: "qa-martyr-sac", sac: true });
+
+    T.forceWinnowerPhase("stoke", 30);
+    const downBefore = inst.health;
+    const groundedDamage = T.combat.damageEnemy(inst, 100,
+      { source: "qa-martyr-grounded" });
+    for (let i = 0; i < 20; i += 1) {
+      T.combat.damageEnemy(inst, 1000, { source: "qa-martyr-cap" });
+    }
+    const downTotal = downBefore - inst.health;
+
+    T.winnower.resetToPerch();
+    T.teleportToWinnower(40);
+    T.advanceToWinnowerPhase("soar", 30);
+    T.forceWinnowerPhase("soar", 60);
+    const profile = T.winnowerState();
+    for (let i = 0; i < 4; i += 1) T.drainWinnowerLift(1, i % 2);
+    T.renderOnce(1 / 60);
+    const afterFour = T.winnowerState();
+    return {
+      profile,
+      airborneBefore,
+      bodyDamage,
+      sacDamage,
+      groundedDamage,
+      downTotal: Number(downTotal.toFixed(2)),
+      capAmount: Number((profile.maxHealth * profile.downDamageCap).toFixed(2)),
+      afterFour,
+    };
+  });
+  check("Martyr gives the Winnower its full difficulty vitality and six-point lift",
+    martyrSetup.profile.maxHealth === 11700 && martyrSetup.profile.maxLift === 6
+      && martyrSetup.profile.difficultyProfile === "martyr",
+    JSON.stringify(martyrSetup.profile));
+  check("Martyr airborne armour makes body fire inefficient but leaves sacs full-value",
+    martyrSetup.bodyDamage === 45 && martyrSetup.sacDamage === 100,
+    `${martyrSetup.bodyDamage} body / ${martyrSetup.sacDamage} sac`);
+  check("the grounded furnace keeps full damage counterplay on Martyr",
+    martyrSetup.groundedDamage === 100, `${martyrSetup.groundedDamage} dealt`);
+  check("Martyr caps one downing at fourteen per cent instead of allowing a melt",
+    Math.abs(martyrSetup.downTotal - martyrSetup.capAmount) < 0.01,
+    `${martyrSetup.downTotal}/${martyrSetup.profile.maxHealth}`);
+  check("four sac hits no longer ground the Winnower on Martyr",
+    martyrSetup.afterFour.phase === "soar" && martyrSetup.afterFour.lift === 2,
+    JSON.stringify(martyrSetup.afterFour));
+
+  const martyrBracketTell = await page.evaluate(() => {
+    const T = window.__SF;
+    const events = {
+      bombard: 0, tell: 0, bracket: 0, count: 0, targets: [],
+      playerX: 0, playerZ: 0, lead: 0, travelX: 0, travelZ: 0,
+    };
+    window.__sfMartyrBracketProbe = events;
+    T.winnower.bus.on("bombard", () => { events.bombard += 1; });
+    T.winnower.bus.on("bracketTelegraph", (e) => {
+      events.tell += 1; events.count = e.count; events.targets = e.targets;
+      events.playerX = e.playerX; events.playerZ = e.playerZ; events.lead = e.lead;
+      events.travelX = e.travelX; events.travelZ = e.travelZ;
+    });
+    T.winnower.bus.on("bracket", (e) => { events.bracket += 1; events.count = e.count; });
+    /* Hold one travel line through the wind-up. The follow-up must mark
+       AHEAD of it; a stationary-centred pattern would still let the exact
+       complained-about circle-and-fire strategy work unchanged. */
+    T.player.input.inject(1, 0);
+    T.advanceTime(0.7, 1 / 60);
+    T.winnower.primeBombard();
+    T.advanceTime(T.winnower.config.bombardContact + 0.10, 1 / 60);
+    T.player.input.inject(null, null);
+    return { events: { ...events }, state: T.winnowerState() };
+  });
+  await page.screenshot({ path: path.join(outDir, "winnower-martyr-bracket.png") });
+  const martyrBracketEnd = await page.evaluate(() => {
+    const T = window.__SF;
+    T.advanceTime(0.85, 1 / 60);
+    return { events: { ...window.__sfMartyrBracketProbe }, state: T.winnowerState() };
+  });
+  check("Martyr marks three Ashen Bracket impacts after the first volley",
+    martyrBracketTell.events.bombard === 1 && martyrBracketTell.events.tell === 1
+      && martyrBracketTell.events.count === 3
+      && martyrBracketTell.events.lead > 5
+      && martyrBracketTell.state.bracketPending
+      && martyrBracketTell.state.bracketTargets === 3,
+    JSON.stringify(martyrBracketTell));
+  check("the marked Ashen Bracket launches as a distinct follow-up volley",
+    martyrBracketEnd.events.bracket === 1 && martyrBracketEnd.events.count === 3
+      && !martyrBracketEnd.state.bracketPending,
+    JSON.stringify(martyrBracketEnd));
+
+  const penitentIsolation = await page.evaluate(() => {
+    const T = window.__SF;
+    T.setDifficultyForQA("penitent");
+    T.renderOnce(1 / 60);
+    T.winnower.resetToPerch();
+    T.teleportToWinnower(40);
+    T.advanceToWinnowerPhase("soar", 30);
+    T.forceWinnowerPhase("soar", 60);
+    const inst = T.winnower.instance();
+    inst.health = inst.maxHealth;
+    const bodyDamage = T.combat.damageEnemy(inst, 100, { source: "qa-penitent-body" });
+    let brackets = 0;
+    const off = T.winnower.bus.on("bracket", () => { brackets += 1; });
+    T.winnower.primeBombard();
+    T.advanceTime(T.winnower.config.bombardContact + 1.0, 1 / 60);
+    off();
+    return { state: T.winnowerState(), bodyDamage, brackets };
+  });
+  check("Penitent retains the original lift, damage and single-volley rules",
+    penitentIsolation.state.maxHealth === 7800 && penitentIsolation.state.maxLift === 4
+      && penitentIsolation.state.difficultyProfile === "standard"
+      && penitentIsolation.bodyDamage === 100 && penitentIsolation.brackets === 0,
+    JSON.stringify(penitentIsolation));
+
   /* ---- THE RING AND THE LEASH -----------------------------------------
      TWO DIFFERENT PROMISES, AND THEY FIRE IN A FIXED ORDER.
 

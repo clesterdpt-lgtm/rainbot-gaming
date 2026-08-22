@@ -3125,6 +3125,18 @@ export function buildVfx(ctx, world) {
       0.03, 0, IK_SMOKE);
   }
 
+  /** The Winnower's Martyr-only follow-up volley. Each coal still flies
+   *  ballistically, but its landing is committed and marked before the
+   *  second throw: changing direction beats the bracket; holding the same
+   *  circle while firing does not. */
+  function winnowerBracketTell(x, z, radius = 5.4, seconds = 1.7) {
+    const y = terrain.heightAt(x, z);
+    ringFx(x, y + 0.22, z, radius * 1.45, radius * 0.82, seconds,
+      "#ff5a20", 1.05, "#ffd18a", 0.92);
+    sigilFx(x, z, radius * 0.58, seconds, "#a92d0b", "#ffb462", 6,
+      0.18, 0.52);
+  }
+
   /** One authored seismic front. `seconds` is supplied by the encounter
    *  from the same radius/speed pair that drives damage, so the bright
    *  band and the authoritative crossing cannot drift apart. */
@@ -5680,6 +5692,7 @@ export function buildVfx(ctx, world) {
     slamImpact,
     matriarchTremorTell,
     matriarchTremorWave,
+    winnowerBracketTell,
     doctrineCue,
     doctrineState,
     /* Diagnostic only. The rite primitives are normally reachable just

@@ -168,6 +168,14 @@ export const WINNOWER_CONFIG = Object.freeze({
   /* Maximum fraction of max health the boss can lose in a single downing cycle.
      Prevents the flyer from being burst down and killed in one downing. */
   downDamageCap: 0.18,
+  /* MARTYR DOES NOT GET A LONGER HEALTH BAR AND CALL IT A MECHANIC.
+     Its extra vitality already comes from difficulty.js. These values
+     instead close the two shortcuts specific to this encounter: four
+     casual sac hits grounding it, and full body damage while safely
+     circling beneath the airborne phase. */
+  martyrLiftPool: 6,
+  martyrAirborneBodyMult: 0.45,
+  martyrDownDamageCap: 0.14,
   /* Flying home after a disengage. Presentation speed only - the
      heal has already happened when the flight starts. */
   returnSpeed: 12.0,
@@ -189,6 +197,7 @@ export const WINNOWER_CONFIG = Object.freeze({
      walked out from under, which is the only fair way to attack from
      a place the player cannot reach. */
   bombardCadence: 5.2,
+  martyrBombardCadence: 4.35,
   /* SECONDS, DERIVED FROM FRAMES OVER FPS - not frames over frames.
      This was 0.42, which is 22/52: the contact FRAME divided by the
      clip LENGTH, a fraction spent as a duration. Every clip in this
@@ -205,6 +214,16 @@ export const WINNOWER_CONFIG = Object.freeze({
   bombardCountRoused: 8,
   bombardSpeed: 19,
   bombardSpread: 5.5,
+  /* ASHEN BRACKET. The ordinary volley makes the player move; on
+     Martyr a second, marked row lands where that held movement is
+     taking them. Reversing or cutting across the tell is the answer. */
+  martyrBracketDelay: 0.62,
+  martyrBracketCount: 3,
+  martyrBracketLeadSeconds: 1.30,
+  martyrBracketLeadMax: 13.0,
+  martyrBracketSpacing: 7.1,
+  martyrTrackCeiling: 30,
+  martyrTrackDamp: 8.5,
   emberDamage: 26,
   ashRadius: 5.4,
   ashSeconds: 18.0,
@@ -1578,8 +1597,64 @@ export function buildWinnower(ctx) {
     /* Which stage of the re-light the stoke has reached, so the flare
        fires once rather than every frame of the window. */
     relit: false,
+    /* One committed Martyr follow-up volley. Kept on the phase state so
+       reset, save restore and leash transitions can cancel it rather
+       than leaving delayed bombs behind after the fight has moved on. */
+    bracketFor: 0,
+    bracketTargets: [],
+    profileTier: null,
   };
   let inst = null;
+  const playerTrack = { x: 0, z: 0, vx: 0, vz: 0, seeded: false };
+
+  const martyr = () => ctx.difficulty?.tier === "martyr";
+  const activeDownDamageCap = () => martyr() ? C.martyrDownDamageCap : C.downDamageCap;
+  const activeBombardCadence = () => martyr() ? C.martyrBombardCadence : C.bombardCadence;
+
+  /** Difficulty is live in both menus, so the encounter profile must be
+   *  live too. Preserve the fraction already drained when the tier is
+   *  changed mid-flight; a menu change must not secretly refuel it. */
+  function syncDifficultyProfile() {
+    if (!inst) return;
+    const profile = martyr() ? "martyr" : "standard";
+    const wanted = martyr() ? C.martyrLiftPool : (inst.spec?.liftPool || 0);
+    if (state.profileTier === profile && inst.maxLift === wanted) return;
+    const beforeMax = Math.max(0.001, Number(inst.maxLift) || wanted || 1);
+    const fraction = clamp01((Number(inst.lift) || 0) / beforeMax);
+    inst.maxLift = wanted;
+    inst.lift = wanted * fraction;
+    if (fraction >= 1 - 1e-6 && Array.isArray(inst.sacBurst)) inst.sacBurst.fill(false);
+    state.profileTier = profile;
+  }
+
+  /** Player velocity for the Martyr lead. Differenced here so walking,
+   *  boost and forced movement share one honest source. A teleport is
+   *  discarded rather than mistaken for a three-hundred-metre sprint. */
+  function trackPlayer(dt) {
+    const ps = ctx.player?.state;
+    if (!ps) return;
+    if (!playerTrack.seeded || dt < 1e-5) {
+      playerTrack.x = ps.x; playerTrack.z = ps.z; playerTrack.seeded = true;
+      return;
+    }
+    const dx = ps.x - playerTrack.x;
+    const dz = ps.z - playerTrack.z;
+    playerTrack.x = ps.x;
+    playerTrack.z = ps.z;
+    if (Math.hypot(dx, dz) / dt > C.martyrTrackCeiling) {
+      playerTrack.vx = 0;
+      playerTrack.vz = 0;
+      return;
+    }
+    const k = 1 - Math.exp(-C.martyrTrackDamp * dt);
+    playerTrack.vx += (dx / dt - playerTrack.vx) * k;
+    playerTrack.vz += (dz / dt - playerTrack.vz) * k;
+  }
+
+  function cancelBracket() {
+    state.bracketFor = 0;
+    state.bracketTargets.length = 0;
+  }
 
   /** Keep the dormant encounter allocated but absent from both the
    *  renderer and every authoritative damage path. Alert reveals the
@@ -2166,6 +2241,7 @@ export function buildWinnower(ctx) {
   }
 
   function beginStrafe() {
+    cancelBracket();
     const ps = ctx.player.state;
     // Run the line THROUGH the player rather than to them, starting
     // well back so the approach is visible and dodgeable.
@@ -2186,6 +2262,7 @@ export function buildWinnower(ctx) {
   }
 
   function beginLand(stalled) {
+    cancelBracket();
     const stack = nearestStack(inst.x, inst.z);
     /* Land at the FOOT of the stack, not on it - the fight has to
        happen on ground the player can stand on - and push the chosen
@@ -2296,7 +2373,7 @@ export function buildWinnower(ctx) {
     state.action = 2.167;       // the clip's own measured length
     state.actionKind = "bombard";
     state.pending = C.bombardContact;
-    state.bombardTimer = C.bombardCadence;
+    state.bombardTimer = activeBombardCadence();
     /* ANTICIPATION, and it is the whole telegraph. The clip's censers
        swing back for the first 0.9 s; the furnace swelling behind them
        is what makes that windup readable as "something is coming" from
@@ -2352,7 +2429,89 @@ export function buildWinnower(ctx) {
     // the payload, so the gut drops back through a visible flare.
     state.flash = Math.max(state.flash, 0.85);
     state.swell = 0;
-    bus.emit("bombard", { x: inst.x, y: inst.y, z: inst.z, count });
+    if (martyr()) scheduleBracket();
+    bus.emit("bombard", {
+      x: inst.x, y: inst.y, z: inst.z, count, bracketed: martyr(),
+    });
+  }
+
+  /** Commit the second row when the first volley leaves. The row is
+   *  perpendicular to travel, centred where continuing that travel will
+   *  carry the trooper. Three overlapping ash beds close the held lane;
+   *  a direction change during the marked delay is the deliberate gap. */
+  function scheduleBracket() {
+    const ps = ctx.player.state;
+    let vx = playerTrack.vx;
+    let vz = playerTrack.vz;
+    let speed = Math.hypot(vx, vz);
+    if (speed < 0.75) {
+      vx = ps.x - inst.x;
+      vz = ps.z - inst.z;
+      speed = Math.hypot(vx, vz) || 1;
+    }
+    const ux = vx / speed;
+    const uz = vz / speed;
+    const lead = Math.min(Math.hypot(playerTrack.vx, playerTrack.vz)
+      * C.martyrBracketLeadSeconds, C.martyrBracketLeadMax);
+    const cx = ps.x + ux * lead;
+    const cz = ps.z + uz * lead;
+    const rx = -uz;
+    const rz = ux;
+    state.bracketTargets.length = 0;
+    for (let i = 0; i < C.martyrBracketCount; i += 1) {
+      const lane = i - (C.martyrBracketCount - 1) * 0.5;
+      const target = {
+        x: cx + rx * lane * C.martyrBracketSpacing,
+        z: cz + rz * lane * C.martyrBracketSpacing,
+      };
+      state.bracketTargets.push(target);
+      ctx.vfx?.winnowerBracketTell?.(target.x, target.z, C.ashRadius,
+        C.martyrBracketDelay + 1.15);
+    }
+    state.bracketFor = C.martyrBracketDelay;
+    bus.emit("bracketTelegraph", {
+      x: cx, z: cz, delay: C.martyrBracketDelay,
+      playerX: ps.x, playerZ: ps.z, lead,
+      travelX: ux, travelZ: uz,
+      count: state.bracketTargets.length,
+      targets: state.bracketTargets.map((target) => ({ ...target })),
+    });
+  }
+
+  function dropBracket() {
+    if (!martyr() || state.phase !== "soar" || !state.bracketTargets.length) {
+      cancelBracket();
+      return;
+    }
+    const targets = state.bracketTargets.splice(0);
+    state.bracketFor = 0;
+    for (let i = 0; i < targets.length; i += 1) {
+      const bone = inst.bones.get(`censer${i % 3}`);
+      let ox = inst.x;
+      let oy = inst.y - 2.2;
+      let oz = inst.z;
+      if (bone) {
+        bone.updateWorldMatrix(true, false);
+        bone.getWorldPosition(_vec);
+        ox = _vec.x; oy = _vec.y; oz = _vec.z;
+      }
+      const target = targets[i];
+      const v = ballistic(ox, oy, oz, target.x,
+        groundAt(target.x, target.z) + 0.6, target.z, C.bombardSpeed * 1.04);
+      launchEmber(ox, oy, oz, v.x, v.y, v.z);
+    }
+    ctx.vfx?.spark?.(inst.x, inst.y - 2.0, inst.z, 2.8, false, false);
+    state.flash = Math.max(state.flash, 1.0);
+    bus.emit("bracket", {
+      x: inst.x, y: inst.y, z: inst.z, count: targets.length, targets,
+    });
+  }
+
+  function stepBracket(dt) {
+    if (!(state.bracketFor > 0)) return;
+    if (!martyr() || state.phase !== "soar") { cancelBracket(); return; }
+    state.bracketFor -= dt;
+    if (state.bracketFor <= 0) dropBracket();
   }
 
   /** The low-arc ballistic root, straight out of the Coulter's spew -
@@ -2874,7 +3033,7 @@ export function buildWinnower(ctx) {
     if (isDowned) {
       state.damageThisDowning = (state.damageThisDowning || 0) + (e.actual || 0);
       const maxHp = inst.maxHealth || inst.spec?.health || 7800;
-      const maxAllowed = maxHp * (C.downDamageCap || 0.28);
+      const maxAllowed = maxHp * activeDownDamageCap();
       const startHealth = Number.isFinite(state.healthAtDowningStart) ? state.healthAtDowningStart : inst.health;
       if (startHealth > maxAllowed + 50 && state.damageThisDowning >= maxAllowed) {
         if (state.phase === "stoke" && state.timer > 0.4) {
@@ -2896,8 +3055,15 @@ export function buildWinnower(ctx) {
     if (!inst || targetInst !== inst) return damage;
     const maxHp = inst.maxHealth || inst.spec?.health || 7800;
     const isDowned = state.phase === "land" || state.phase === "stoke" || state.phase === "launch" || inst.grounded;
+    /* Martyr's chitin is closed in flight. Body fire still registers and
+       skilled headshots still improve it, but neither can bypass the
+       encounter by holding the trigger from safety. Heat sacs keep full
+       value because they are the intended way to force the body down. */
+    if (martyr() && !isDowned && !request.sac && !request.weak) {
+      damage *= C.martyrAirborneBodyMult;
+    }
     if (isDowned) {
-      const maxAllowed = maxHp * (C.downDamageCap || 0.28);
+      const maxAllowed = maxHp * activeDownDamageCap();
       const startHealth = Number.isFinite(state.healthAtDowningStart) ? state.healthAtDowningStart : inst.health;
       if (startHealth > maxAllowed + 50) {
         const remainingAllowance = Math.max(0, maxAllowed - (state.damageThisDowning || 0));
@@ -2936,6 +3102,8 @@ export function buildWinnower(ctx) {
 
   function stepInstance(dt) {
     if (!inst) return;
+    syncDifficultyProfile();
+    trackPlayer(dt);
     /* The wingbeat's sink is REMOVED before anything reads inst.y and
        put back after - an altitude damp that chases its target through
        its own oscillation simply flattens the oscillation out. */
@@ -3031,6 +3199,8 @@ export function buildWinnower(ctx) {
       state.fuel = Math.max(0, state.fuel - dt);
     }
 
+    stepBracket(dt);
+
     if (state.phase === "soar") stepSoar(dt);
     else if (state.phase === "strafe") stepStrafe(dt);
     else if (state.phase === "land") stepLand(dt);
@@ -3041,6 +3211,7 @@ export function buildWinnower(ctx) {
   /** The player left. Heal NOW - the leash's promise must not depend
    *  on the flight home completing - then fly back and circle down. */
   function beginReturn() {
+    cancelBracket();
     inst.health = inst.maxHealth;
     inst.lift = inst.maxLift;
     if (Array.isArray(inst.sacBurst)) inst.sacBurst.fill(false);
@@ -3092,6 +3263,8 @@ export function buildWinnower(ctx) {
     state.defeated = false;
     if (!inst) ensureSpawned();
     if (!inst) return;
+    cancelBracket();
+    syncDifficultyProfile();
     inst.health = inst.maxHealth;
     inst.lift = inst.maxLift;
     if (Array.isArray(inst.sacBurst)) inst.sacBurst.fill(false);
@@ -3148,6 +3321,7 @@ export function buildWinnower(ctx) {
       eventId: "district-boss:censer",
     });
     if (inst) {
+      syncDifficultyProfile();
       inst.y = groundAt(perch.x, perch.z) + C.cruiseHeight;
       inst.grounded = false;
       inst.root.position.set(inst.x, inst.y, inst.z);
@@ -3218,6 +3392,11 @@ export function buildWinnower(ctx) {
       ashFields: fields.filter((f) => f.life > 0).length,
       embers: embers.filter((e) => e.live).length,
       bombardCount: currentBombardCount(),
+      difficultyProfile: martyr() ? "martyr" : "standard",
+      airborneBodyMult: martyr() ? C.martyrAirborneBodyMult : 1,
+      downDamageCap: activeDownDamageCap(),
+      bracketPending: state.bracketFor > 0,
+      bracketTargets: state.bracketTargets.length,
       hidden: !!inst.encounterHidden,
       locked: !!inst.encounterLocked,
       /* The furnace, reported so a harness can assert about the read
@@ -3328,6 +3507,7 @@ export function buildWinnower(ctx) {
   }
 
   function clearHazards() {
+    cancelBracket();
     for (const e of embers) { e.live = false; e.mesh.visible = false; }
     for (const f of fields) {
       f.life = 0; f.mesh.visible = false; f.mat.uniforms.uFade.value = 0;
@@ -3357,6 +3537,7 @@ export function buildWinnower(ctx) {
       if (!inst) return null;
       const next = String(phase);
       state.phase = next;
+      if (next !== "soar") cancelBracket();
       if (Number.isFinite(timer)) state.timer = timer;
       setEncounterGate(next === "dormant", next === "dormant" || next === "alert");
       if (next === "stoke") {
@@ -3385,7 +3566,7 @@ export function buildWinnower(ctx) {
       state.pending = 0;
       state.actionKind = null;
       state.bombardTimer = 0;
-      state.strafeTimer = Math.max(state.strafeTimer, C.bombardCadence + 2);
+      state.strafeTimer = Math.max(state.strafeTimer, activeBombardCadence() + 2);
       return true;
     },
     /** QA: make the next eligible airborne answer a strafing swoop. */

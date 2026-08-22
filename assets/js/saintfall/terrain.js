@@ -70,6 +70,19 @@ export const DISTRICTS = {
   bloom: { x: -655, z: -655, r: 310, name: "The Bloom" },
 };
 
+/* The Works are one enclosed refinery yard, not two terraces divided by
+   masonry.  World geometry, terrain shaping and focused QA all read this
+   contract so the wall cannot drift back through the combat space while
+   its gates or service runs remain somewhere else. */
+export const CENSER_WORKS = Object.freeze({
+  wallRadius: 178,
+  wallSegments: 96,
+  wallThickness: 3.0,
+  gateHalfWidth: 16,
+  gateBearings: Object.freeze([0, Math.PI * 0.5, Math.PI, -Math.PI * 0.5]),
+  catwalkRadius: 160,
+});
+
 /* ============================================================
    THE GARNER'S PIT
 
@@ -768,14 +781,41 @@ export function makeHeightField(seed = 0x5a1f7) {
       }
     }
 
-    /* --- The Censer Works: a stepped industrial terrace ---------- */
+    /* --- The Censer Works: one perimeter-retained refinery yard -- */
     {
       const d = DISTRICTS.censer;
       const k = w(x, z, d, 0.5);
       if (k > 0.001) {
-        const split = (x - d.x) * 0.55 + (z - d.z) * 0.84;
-        const terrace = lerp(censerUpperY, censerLowerY, sstep(-26, 26, split));
-        const inside = 1 - sstep(150, 290, Math.hypot(x - d.x, z - d.z));
+        const dx = x - d.x;
+        const dz = z - d.z;
+        const dist = Math.hypot(dx, dz);
+        const bearing = Math.atan2(dz, dx);
+        const gateAngle = Math.asin(CENSER_WORKS.gateHalfWidth / CENSER_WORKS.wallRadius);
+        const angleDelta = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+        let gate = 0;
+        for (const gateBearing of CENSER_WORKS.gateBearings) {
+          gate = Math.max(gate,
+            1 - sstep(gateAngle * 0.72, gateAngle * 1.82,
+              angleDelta(bearing, gateBearing)));
+        }
+
+        /* Away from a gate the complete 13.5m grade change happens
+           beneath the wall.  At each opening it stretches into a broad,
+           walkable apron, so moving the wall does not leave four visual
+           doorways backed by an impassable terrain lip. */
+        const retainedStep = sstep(
+          CENSER_WORKS.wallRadius - 5,
+          CENSER_WORKS.wallRadius + 5,
+          dist
+        );
+        const gateRamp = sstep(
+          CENSER_WORKS.wallRadius - 82,
+          CENSER_WORKS.wallRadius + 82,
+          dist
+        );
+        const terrace = lerp(censerUpperY, censerLowerY,
+          lerp(retainedStep, gateRamp, gate));
+        const inside = 1 - sstep(CENSER_WORKS.wallRadius + 78, 300, dist);
         h = lerp(h, lerp(h, terrace, inside), k);
       }
     }
@@ -851,9 +891,19 @@ export function makeHeightField(seed = 0x5a1f7) {
     {
       const f = fosseIndex.query(x, z);
       if (f) {
-        const cut = 1 - sstep(4.5, 9.5, f.d);
+        /* The war trench predates the refinery, but it cannot remain a
+           second diagonal cut through the newly enclosed yard.  Fade it
+           beneath the outer apron so it reaches the Works as landscape
+           history without reopening the centre behind the wall. */
+        const worksDist = Math.hypot(x - DISTRICTS.censer.x, z - DISTRICTS.censer.z);
+        const outsideWorks = sstep(
+          CENSER_WORKS.wallRadius + 12,
+          CENSER_WORKS.wallRadius + 62,
+          worksDist
+        );
+        const cut = (1 - sstep(4.5, 9.5, f.d)) * outsideWorks;
         const berm = Math.exp(-((f.d - 13.5) ** 2) / (2 * 4.6 * 4.6)) * 2.4;
-        h = lerp(h, f.y - 4.6, cut) + berm * (1 - cut);
+        h = lerp(h, f.y - 4.6, cut) + berm * (1 - cut) * outsideWorks;
       }
       const s = spurIndex.query(x, z);
       if (s) {

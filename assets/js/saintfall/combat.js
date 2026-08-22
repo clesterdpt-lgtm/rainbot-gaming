@@ -644,6 +644,11 @@ export function buildCombat(ctx) {
       source: detail.source || "unknown",
       head: !!detail.head,
       weak: !!detail.weak,
+      /* A flyer's heat sac is a resource target rather than a generic
+         weak point. Keep that distinction all the way to the encounter's
+         damage modifier so aerial armour can spare the counterplay the
+         player was asked to learn. */
+      sac: !!detail.sac,
       x: Number.isFinite(detail.x) ? detail.x : inst.x,
       y: Number.isFinite(detail.y) ? detail.y : inst.y,
       z: Number.isFinite(detail.z) ? detail.z : inst.z,
@@ -1721,6 +1726,7 @@ export function buildCombat(ctx) {
           source: "shot",
           head: hit.head,
           weak: !!hit.weak,
+          sac: hit.sacIndex >= 0,
           x: hit.x,
           y: hit.y,
           z: hit.z,
@@ -1803,6 +1809,7 @@ export function buildCombat(ctx) {
       source: detail.source || "unknown",
       head: !!detail.head,
       weak: !!detail.weak,
+      sac: !!detail.sac,
       killed,
       x: Number.isFinite(detail.x) ? detail.x : inst.x,
       y: Number.isFinite(detail.y) ? detail.y : inst.y + box.y1 * 0.62,

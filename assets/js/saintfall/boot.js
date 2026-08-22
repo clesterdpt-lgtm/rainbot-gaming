@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260822-doctrine-respec-warn-1";
+  const BUILD = "20260822-crit-hit-red-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,

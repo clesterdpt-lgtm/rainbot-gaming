@@ -158,13 +158,20 @@ try {
     "the binary suns set instead of glowing through the night");
 
   console.log("\n=== NATURAL ADVANCE AND WRAP ===");
+  /* A quarter cycle and a nudge past the wrap, in SIM SECONDS against
+     DAY_CYCLE_SECONDS (art.js). The day was stretched from 18 to 36
+     minutes in d6841eae so lighting states hold through a fight; this
+     harness kept the old 18-minute timings (270s / 21.6s), which walked
+     only an EIGHTH of the now-36-minute day - landing at phase 0.125
+     instead of the 0.25 noon anchor these checks assert, and at 0.01
+     phase short of the wrap. The bug was here, not in applyCycle. */
   const advance = await page.evaluate(() => {
     const T = window.__SF;
     T.setDayCycle(0, true, 0);
-    T.advanceTime(270, 0.1);
+    T.advanceTime(540, 0.1);
     const noon = T.dayCycleState();
     T.setDayCycle(0.99, true, 3);
-    T.advanceTime(21.6, 0.1);
+    T.advanceTime(43.2, 0.1);
     const wrapped = T.dayCycleState();
     return { noon, wrapped };
   });
@@ -172,7 +179,7 @@ try {
     "simulation time advances dawn to noon without a mode switch",
     `phase ${advance.noon.phase} · ${advance.noon.solarHour}h`);
   check(Math.abs(advance.wrapped.phase - 0.01) < 0.0015 && advance.wrapped.cycleCount === 4,
-    "the 18-minute cycle wraps without a discontinuity",
+    "the 36-minute cycle wraps without a discontinuity",
     `phase ${advance.wrapped.phase} · day ${advance.wrapped.cycleCount + 1}`);
 
   console.log("\n=== CYCLE COST ===");

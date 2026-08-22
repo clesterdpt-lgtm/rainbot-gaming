@@ -269,8 +269,11 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
                   <i data-doctrine-xp role="progressbar" aria-label="Progress to next Field Rank" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><em data-doctrine-xp-fill></em></i>
                 </div>
                 <div class="sf-doctrine__points"><small>DOCTRINE POINTS</small><strong data-doctrine-points>0</strong><span>AVAILABLE</span></div>
-                <div class="sf-doctrine__seals"><small>VOW SEALS</small><strong data-doctrine-vow-count>0 / 2</strong><span>BOUND</span></div>
                 <div class="sf-doctrine__vow-slots" data-doctrine-vows aria-label="Active capstone Vows"></div>
+                <footer class="sf-doctrine__footer">
+                  <p data-doctrine-edit-reason>Doctrine may be revised while field pressure is quiet.</p>
+                  <button type="button" data-doctrine-action="respec" data-talent-respec>RESET DOCTRINE</button>
+                </footer>
               </div>
               <p class="sf-doctrine__lock" data-doctrine-lock role="status" hidden></p>
               <div class="sf-doctrine__body">
@@ -293,10 +296,6 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
                   </div>
                 </section>
               </div>
-              <footer class="sf-doctrine__footer">
-                <p data-doctrine-edit-reason>Doctrine may be revised while field pressure is quiet.</p>
-                <button type="button" data-doctrine-action="respec" data-talent-respec>RESET DOCTRINE</button>
-              </footer>
             </section>
             <section class="sf-menu__page" data-menu-page="saves" hidden>
               <div class="sf-menu__pagehead"><span>FIELD RECORDS</span><h3>SAVE / LOAD</h3><p>Three manual reliquaries and one automatic field record.</p></div>
@@ -1158,9 +1157,6 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     const active = activeCapstones(state);
     const seals = earnedSeals(state, definitions);
     const bound = active.filter(Boolean).length;
-    root.querySelector("[data-doctrine-vow-count]").textContent = `${bound} / ${seals}`;
-    const sealCopy = root.querySelector(".sf-doctrine__seals>span");
-    if (sealCopy) sealCopy.textContent = `${seals} EARNED`;
     const capstoneNames = new Map(orders.filter((entry) => entry.capstone)
       .map((entry) => [entry.capstone.id, entry.capstone.name]));
     root.querySelector("[data-doctrine-vows]").innerHTML = [0, 1].map((index) => {

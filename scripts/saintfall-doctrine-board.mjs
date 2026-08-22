@@ -115,6 +115,36 @@ check("inspector width does not change across rites and the Vow",
   previewWidths.length >= 5 && previewSpread <= 1,
   JSON.stringify({ previewWidths, previewSpread }));
 
+const chrome = await page.evaluate(() => {
+  const pageNode = document.querySelector('[data-menu-page="doctrine"]');
+  const reset = document.querySelector("[data-talent-respec]");
+  const reason = document.querySelector("[data-doctrine-edit-reason]");
+  const seals = document.querySelector(".sf-doctrine__seals, [data-doctrine-vow-count]");
+  const preview = document.querySelector("[data-doctrine-preview]");
+  const tree = document.querySelector(".sf-doctrine__tree");
+  const summary = document.querySelector(".sf-doctrine__summary");
+  const footer = document.querySelector(".sf-doctrine__footer");
+  const pr = pageNode.getBoundingClientRect();
+  const rr = reset.getBoundingClientRect();
+  const er = reason.getBoundingClientRect();
+  const sr = summary.getBoundingClientRect();
+  const tr = tree.getBoundingClientRect();
+  const prev = preview.getBoundingClientRect();
+  return {
+    sealsMissing: !seals,
+    footerInSummary: !!summary?.contains(footer),
+    resetTopBand: rr.top < pr.top + pr.height * 0.28,
+    resetRight: pr.right - rr.right < 48,
+    reasonBesideReset: Math.abs(er.top - rr.top) < 28 && er.right <= rr.left + 12,
+    previewTallerThanTree: prev.height + 8 >= tr.height,
+    summaryTop: sr.top - pr.top,
+  };
+});
+check("reset and field pressure sit in the top-right; vow-seal count is gone",
+  chrome.sealsMissing && chrome.footerInSummary && chrome.resetTopBand
+    && chrome.resetRight && chrome.reasonBesideReset,
+  JSON.stringify(chrome));
+
 // 1. Clicking a rite card drives the inspector.
 const second = page.locator("[data-doctrine-talent]").nth(1);
 await second.click();

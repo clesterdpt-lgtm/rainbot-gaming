@@ -11,6 +11,7 @@ import { clamp01, lerp } from "saintfall/core.js";
 import {
   DISTRICTS, FOSSE_PATH, FOSSE_SPUR, MAP_HALF, MAP_SIZE, ROAD_PATH,
 } from "saintfall/terrain.js";
+import { keybindLabel, onKeybindsChange } from "saintfall/keybinds.js";
 
 export function buildHud(ctx, host) {
   const el = host;
@@ -41,11 +42,11 @@ export function buildHud(ctx, host) {
         <b id="sf-map-range">180M</b>
       </div>
       <canvas id="sf-map-canvas" width="280" height="280" aria-hidden="true"></canvas>
-      <div class="sf-minimap__expand" aria-hidden="true"><kbd>M</kbd><span>TACTICAL VIEW</span></div>
+      <div class="sf-minimap__expand" aria-hidden="true"><kbd data-bind-face="map">${keybindLabel("map")}</kbd><span>TACTICAL VIEW</span></div>
     </aside>
     <section class="sf-hud__objective" id="sf-objective" aria-label="Active field orders">
       <header class="sf-objective__head">
-        <span>FIELD ORDERS</span><small><span id="sf-hud-tier" class="sf-hud__tier" title="Difficulty tier">PENITENT</span> · <kbd>M</kbd> MAP</small>
+        <span>FIELD ORDERS</span><small><span id="sf-hud-tier" class="sf-hud__tier" title="Difficulty tier">PENITENT</span> · <kbd data-bind-face="map">${keybindLabel("map")}</kbd> MAP</small>
       </header>
       <article class="sf-objective__item sf-objective__item--primary">
         <i aria-hidden="true">01</i>
@@ -94,8 +95,8 @@ export function buildHud(ctx, host) {
         aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
         <div class="sf-hud__jetlabel"><span>CHARGE</span><b id="sf-jet-value">100%</b></div>
         <div class="sf-hud__jettrack"><i id="sf-jet-fill"></i></div>
-        <div class="sf-hud__boost" id="sf-boost"><span><b>SHIFT</b> GLIDE</span><strong id="sf-boost-value">READY</strong></div>
-        <div class="sf-hud__shield" id="sf-shield"><span><b>E</b> AEGIS</span><strong id="sf-shield-value">READY</strong></div>
+        <div class="sf-hud__boost" id="sf-boost"><span><b data-bind-face="boost">${keybindLabel("boost")}</b> GLIDE</span><strong id="sf-boost-value">READY</strong></div>
+        <div class="sf-hud__shield" id="sf-shield"><span><b data-bind-face="block">${keybindLabel("block")}</b> AEGIS</span><strong id="sf-shield-value">READY</strong></div>
       </div>
     </div>
     <div class="sf-hud__heat sf-heat" id="sf-ammo" role="progressbar"
@@ -112,14 +113,24 @@ export function buildHud(ctx, host) {
     <section class="sf-hud__command" id="sf-command-status" aria-label="Command availability">
       <header class="sf-hud__command-head">
         <span>COMMAND</span>
-        <strong><kbd>Q</kbd></strong>
+        <strong><kbd data-bind-face="wheel">${keybindLabel("wheel")}</kbd></strong>
       </header>
       <div class="sf-hud__strat" id="sf-strat"></div>
     </section>
     <div class="sf-hud__hint" id="sf-hint">
-      <span><kbd>Q</kbd> <b>HOLD FOR COMMAND</b></span>
+      <span><kbd data-bind-face="wheel">${keybindLabel("wheel")}</kbd> <b>HOLD FOR COMMAND</b></span>
     </div>
   `;
+
+  /* The HUD names its own keys, so a rebind has to reach the glass.
+     Every legend carries the action it stands for; one pass rewrites
+     them all rather than each caller remembering its own element. */
+  function refreshBindFaces() {
+    el.querySelectorAll("[data-bind-face]").forEach((node) => {
+      node.textContent = keybindLabel(node.dataset.bindFace);
+    });
+  }
+  onKeybindsChange(refreshBindFaces);
 
   const districtEl = el.querySelector("#sf-district");
   const nameEl = el.querySelector("#sf-district-name");

@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260822-crit-hit-red-1";
+  const BUILD = "20260823-rebindable-controls-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -99,7 +99,7 @@
   // keeps serving whatever terrain.js it already had - which makes a
   // shipped fix look like it did not work.
   const MODULES = [
-    "core", "art", "sky", "terrain", "structures", "world", "collide", "intro-models",
+    "core", "keybinds", "art", "sky", "terrain", "structures", "world", "collide", "intro-models",
     "vfx", "render", "player", "jetpack", "boost", "slam", "shield", "boss-surface", "enemies", "weapons", "ik", "combat", "difficulty", "reveal-camera",
     "mission", "breaches", "abbess", "coulter", "distaff", "garner", "matriarch", "stylite", "winnower", "district-bosses", "apostate", "undercroft", "progression-config", "progression", "audio", "hud", "touch", "tutorial", "intro", "pod", "save", "ui", "qa", "main",
     /* THE SECOND WORLD. Kenosis - "The White Vigil" - is a parallel

@@ -20,6 +20,7 @@ import { loadIntroVehicleModels } from "saintfall/intro-models.js";
 import { buildPod } from "saintfall/pod.js";
 import { buildVfx } from "saintfall/vfx.js";
 import { createPlayer } from "saintfall/player.js";
+import { keybindMatches } from "saintfall/keybinds.js";
 import { buildJetpack } from "saintfall/jetpack.js";
 import { buildBoost } from "saintfall/boost.js";
 import { buildSlam } from "saintfall/slam.js";
@@ -1102,7 +1103,7 @@ export async function start({ boot, build } = {}) {
           c.fov);
       }
     }
-    if (e.code === "KeyH") hud.setVisible(hudHost.style.display === "none");
+    if (keybindMatches("hud", e.code)) hud.setVisible(hudHost.style.display === "none");
     if (e.code === "KeyK") {
       // Show what is actually stopping you. See collide.setDebugView.
       colliderView = !colliderView;

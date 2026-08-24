@@ -10,6 +10,11 @@ import { QUALITY_TIERS, DEFAULT_QUALITY, normalizeQuality, qualityLabel } from "
 import {
   DIFFICULTY_TIERS, DEFAULT_DIFFICULTY, normalizeDifficulty, difficultyLabel, difficultyBlurb,
 } from "saintfall/difficulty.js";
+import {
+  KEYBIND_ACTIONS, KEYBIND_GROUPS, RESERVED_CODES, actionForCode, keyLabel,
+  keybindMatches, keybindSlots, resetKeybinds, setKeybind,
+  keybindAction,
+} from "saintfall/keybinds.js";
 
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
 const SETTINGS_KEY = "saintfall:field-ui:v1";
@@ -168,6 +173,69 @@ function slotMarkup(kind, index, title) {
 
 function controlRow(key, action, detail = "") {
   return `<div class="sf-control-row"><kbd>${key}</kbd><span><strong>${action}</strong>${detail ? `<small>${detail}</small>` : ""}</span></div>`;
+}
+
+/** Is this code bound to any field action? Used to swallow gameplay
+ *  keys behind an open panel without a frozen literal list. */
+function isGameplayBind(code) {
+  return !!actionForCode(code);
+}
+
+/* The wheel's sectors are ADDRESSED, not cycled: up is the top sigil
+   however the player spells "up". Arrows stay wired regardless of the
+   movement scheme so the wheel is always reachable one-handed. */
+function wheelDirectionFor(code) {
+  if (code === "ArrowUp" || keybindMatches("moveForward", code)) return 0;
+  if (code === "ArrowRight" || code === "ArrowDown"
+    || keybindMatches("moveRight", code) || keybindMatches("moveBack", code)) return 1;
+  if (code === "ArrowLeft" || keybindMatches("moveLeft", code)) return 2;
+  return undefined;
+}
+
+/* THE CONTROLS PAGE IS THE EDITOR.
+   `capture` is the slot currently listening for a key, or null. Each
+   row draws both slots: the primary, and an alternate that is a real,
+   assignable hole when empty rather than a hidden one. */
+function keybindSlotMarkup(action, slot, capture) {
+  const listening = capture && capture.action === action.id && capture.slot === slot;
+  const code = keybindSlots(action.id)[slot];
+  /* An empty ALTERNATE is an invitation, not a warning - eight rows
+     shouting UNBOUND at a perfectly default scheme reads as breakage.
+     An empty PRIMARY is the real thing and keeps the word. */
+  const empty = slot === 0 ? "UNBOUND" : "+";
+  const face = listening ? "PRESS A KEY" : (code ? keyLabel(code) : empty);
+  const name = `${action.label}, ${slot === 0 ? "primary" : "alternate"} binding`;
+  const spoken = listening ? "press a key" : (code ? keyLabel(code) : "unbound");
+  return `<button type="button" class="sf-bind-key" data-bind-action="${escapeHtml(action.id)}"`
+    + ` data-bind-slot="${slot}" data-bind-listening="${listening ? "true" : "false"}"`
+    + ` data-bind-empty="${code ? "false" : "true"}"`
+    + ` aria-label="${escapeHtml(name)}: ${escapeHtml(spoken)}"`
+    + `><kbd>${escapeHtml(face)}</kbd></button>`;
+}
+
+function keybindRowMarkup(action, capture) {
+  return `<div class="sf-bind-row" data-bind-row="${escapeHtml(action.id)}">`
+    + `<span><strong>${escapeHtml(action.label)}</strong>${
+      action.detail ? `<small>${escapeHtml(action.detail)}</small>` : ""}</span>`
+    + `<span class="sf-bind-keys">${keybindSlotMarkup(action, 0, capture)}${
+      keybindSlotMarkup(action, 1, capture)}</span></div>`;
+}
+
+function keybindGridMarkup(capture) {
+  const groups = KEYBIND_GROUPS.map((group) => {
+    const rows = KEYBIND_ACTIONS.filter((action) => action.group === group)
+      .map((action) => keybindRowMarkup(action, capture)).join("");
+    return `<article><h4>${escapeHtml(group)}</h4>${rows}</article>`;
+  }).join("");
+  /* The pointer and the universal escape are not on the table - see
+     keybinds.js RESERVED_CODES - but a controls page that omits them
+     reads as a page that lost them. */
+  const fixed = `<article class="sf-bind-fixed"><h4>FIXED</h4>${
+    controlRow("MOUSE", "Look / aim")}${controlRow("LMB", "Fire")}${
+    controlRow("RMB", "Aim down sights")}${
+    controlRow("ESC", "Field menu", "Also resumes")}${
+    controlRow("TOUCH", "Hold the command sigil", "Drag and release to confirm")}</article>`;
+  return groups + fixed;
 }
 
 export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQuality } = {}) {
@@ -344,12 +412,9 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
               <p class="sf-save-reason" data-save-reason></p>
             </section>
             <section class="sf-menu__page" data-menu-page="controls" hidden>
-              <div class="sf-menu__pagehead"><span>TACTICAL CODEX</span><h3>CONTROLS</h3><p>Every field action, grouped by intent.</p></div>
-              <div class="sf-controls-grid">
-                <article><h4>MOVEMENT</h4>${controlRow("W A S D", "Move")}${controlRow("SHIFT", "Boost", "Tap to boost, hold to keep gliding")}${controlRow("SPACE", "Vault")}${controlRow("SHIFT + SPACE", "Reliquary jetpack")}${controlRow("F", "Ground slam", "While airborne")}${controlRow("W + F", "Melee thrust", "Thrust forward during swing")}</article>
-                <article><h4>COMBAT</h4>${controlRow("MOUSE", "Look / aim")}${controlRow("LMB", "Fire")}${controlRow("RMB", "Aim down sights")}${controlRow("F", "Censer-lance strike")}${controlRow("E", "Aegis block")}${controlRow("R", "Vent weapon heat")}</article>
-                <article><h4>COMMAND</h4>${controlRow("HOLD Q + LMB", "Command wheel", "Hover a field support sigil and left click to deploy; release Q to cancel")}${controlRow("TAB", "Field menu")}${controlRow("ESC", "Field menu", "Also resumes")}${controlRow("M", "Tactical map", "Press again to resume")}${controlRow("TOUCH", "Hold the command sigil", "Drag and release to confirm")}</article>
-              </div>
+              <div class="sf-menu__pagehead"><span>TACTICAL CODEX</span><h3>CONTROLS</h3><p>Click a key to rebind it. Every field action takes a primary and an alternate; bindings are saved on this device.</p></div>
+              <div class="sf-bind-bar"><p class="sf-bind-status" data-bind-status role="status" aria-live="polite">Click a key, then press the key you want. ESC cancels, BACKSPACE clears.</p><button type="button" data-bind-reset aria-label="Restore default controls">RESTORE DEFAULTS</button></div>
+              <div class="sf-controls-grid" data-keybind-grid>${keybindGridMarkup(null)}</div>
             </section>
             <section class="sf-menu__page" data-menu-page="settings" hidden>
               <div class="sf-menu__pagehead"><span>FIELD CONFIGURATION</span><h3>SETTINGS</h3><p>Readability and presentation preferences are saved on this device.</p></div>
@@ -521,6 +586,93 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     doctrine.respecWarnUntil = performance.now() + 4800;
     menuSfx("error");
     announce(copy);
+  }
+
+  /* ---------------------- rebindable controls ---------------------- */
+
+  /* The slot currently listening for a key, or null. Capture is a
+     MODE, not a modal: the rest of the menu stays usable, so it must
+     be cancelled by anything that takes the page away from this row -
+     a panel switch, a menu close, a click elsewhere. */
+  let capture = null;
+  /* Codes whose pending keyup still belongs to the editor. */
+  const bindKeyUpGuard = new Set();
+  const bindStatusEl = () => root.querySelector("[data-bind-status]");
+  const BIND_HINT = "Click a key, then press the key you want. ESC cancels, BACKSPACE clears.";
+
+  function renderKeybinds(message = null) {
+    const grid = root.querySelector("[data-keybind-grid]");
+    if (!grid) return;
+    grid.innerHTML = keybindGridMarkup(capture);
+    const status = bindStatusEl();
+    if (status) status.textContent = message || (capture
+      ? `Press a key for ${keybindAction(capture.action)?.label || "this action"}.`
+      : BIND_HINT);
+    if (capture) {
+      grid.querySelector(`[data-bind-action="${capture.action}"][data-bind-slot="${capture.slot}"]`)
+        ?.focus?.({ preventScroll: true });
+    }
+  }
+
+  function beginCapture(actionId, slot) {
+    if (!keybindAction(actionId)) return;
+    capture = { action: actionId, slot: slot === 1 ? 1 : 0 };
+    menuSfx("switch");
+    renderKeybinds();
+    announce(`Press a key for ${keybindAction(actionId)?.label}.`);
+  }
+
+  function cancelCapture(message = null) {
+    if (!capture) return false;
+    capture = null;
+    renderKeybinds(message);
+    return true;
+  }
+
+  /** Take the pressed code for the listening slot. Returns true when
+   *  the event belonged to the editor and must go no further. */
+  function captureKey(event) {
+    if (!capture) return false;
+    const { action, slot } = capture;
+    const definition = keybindAction(action);
+    if (event.code === "Escape") {
+      capture = null;
+      renderKeybinds("Rebind cancelled.");
+      menuSfx("close");
+      return true;
+    }
+    if (event.code === "Backspace" || event.code === "Delete") {
+      capture = null;
+      setKeybind(action, slot, null);
+      renderKeybinds(`${definition?.label} ${slot === 0 ? "primary" : "alternate"} cleared.`);
+      menuSfx("toggle");
+      announce(`${definition?.label} cleared.`);
+      return true;
+    }
+    if (RESERVED_CODES.has(event.code)) {
+      renderKeybinds(`${keyLabel(event.code)} is reserved.`);
+      menuSfx("error");
+      return true;
+    }
+    capture = null;
+    bindKeyUpGuard.add(event.code);
+    const result = setKeybind(action, slot, event.code);
+    if (!result.ok) {
+      renderKeybinds(`${keyLabel(event.code)} cannot be bound.`);
+      menuSfx("error");
+      return true;
+    }
+    /* A key drives exactly ONE action. Say out loud what was taken -
+       silently unbinding the key a player still thinks is their block
+       is how a control scheme becomes a bug report. */
+    const displaced = result.displaced.filter((id) => id !== action);
+    const note = displaced.length
+      ? ` Taken from ${displaced.map((id) => keybindAction(id)?.label || id).join(", ")}.`
+      : "";
+    renderKeybinds(`${definition?.label} bound to ${keyLabel(event.code)}.${note}`);
+    menuSfx(displaced.length ? "question" : "confirm");
+    announce(`${definition?.label} bound to ${keyLabel(event.code)}.${note}`);
+    return true;
   }
 
   function audioEnabled() {
@@ -1454,6 +1606,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     });
     const content = root.querySelector(".sf-menu__content");
     if (content) content.scrollTop = 0;
+    capture = null;
+    if (next === "controls") renderKeybinds();
     if (next === "saves") refreshSaves();
     if (next === "operation") refreshOperation();
     if (next === "doctrine") refreshDoctrine();
@@ -1973,6 +2127,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
     if (restart) restart.textContent = "RESTART OPERATION";
     menuEl.hidden = true;
     menuEl.setAttribute("aria-hidden", "true");
+    capture = null;
+    bindKeyUpGuard.clear();
     document.body.classList.remove("rb-escape-menu-open");
     setMenuInert(false);
     ctx.player?.input?.clearAll?.();
@@ -2309,6 +2465,20 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       closeWheel({ confirm: true, reason: "pointer" });
       return;
     }
+    if (target.matches("[data-bind-key]") || target.matches(".sf-bind-key")) {
+      beginCapture(target.dataset.bindAction, Number(target.dataset.bindSlot));
+      return;
+    }
+    if (target.matches("[data-bind-reset]")) {
+      capture = null;
+      bindKeyUpGuard.clear();
+      resetKeybinds();
+      renderKeybinds("Default controls restored.");
+      menuSfx("confirm");
+      announce("Default controls restored");
+      return;
+    }
+    if (capture) cancelCapture("Rebind cancelled.");
     if (target.matches('[data-setting="sound"]')) { toggleAudio(); return; }
     if (target.matches('[data-setting="reduced-motion"]')) {
       settings.reducedMotion = !settings.reducedMotion;
@@ -2413,6 +2583,17 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   });
 
   function onKeyDown(event) {
+    /* FIRST, BEFORE ANYTHING READS THE KEY. This handler is registered
+       in the capture phase on window, so stopping propagation here also
+       stops player.js's listener - which is the point: the key being
+       assigned must not also fire the action it is being assigned to. */
+    if (capture && !event.repeat) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      captureKey(event);
+      return;
+    }
+    if (capture) { event.preventDefault(); event.stopImmediatePropagation(); return; }
     if (menu.open) {
       const interactiveTarget = event.target instanceof Element
         && !!event.target.closest("button, a, input, select, textarea,"
@@ -2444,14 +2625,16 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
         else next = (current + 1) % tabs.length;
         event.preventDefault(); event.stopImmediatePropagation();
         if (!event.repeat && tabs[next]) selectDoctrineOrder(tabs[next].dataset.doctrineOrder, { focus: true });
-      } else if (event.code === "KeyM") {
+      } else if (keybindMatches("map", event.code)) {
         event.preventDefault(); event.stopImmediatePropagation();
         if (!event.repeat) openMap();
-      } else if (event.code === "Escape" || event.code === "Tab") {
+      } else if (event.code === "Escape" || keybindMatches("menu", event.code)) {
         event.preventDefault(); event.stopImmediatePropagation();
         closeMenu({ requestLock: true });
-      } else if (!interactiveTarget
-        && ["KeyW", "KeyA", "KeyS", "KeyD", "Space", "KeyQ", "KeyE", "KeyF", "KeyR"].includes(event.code)) {
+      } else if (!interactiveTarget && isGameplayBind(event.code)) {
+        /* Anything BOUND to a field action is swallowed while the menu
+           is up, so a rebind cannot hand the page a key that walks the
+           trooper behind an open panel. */
         event.preventDefault(); event.stopImmediatePropagation();
       }
       return;
@@ -2460,8 +2643,8 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       if (event.code === "Escape") {
         event.preventDefault(); event.stopImmediatePropagation(); cancelWheel("escape"); return;
       }
-      if (event.code === "KeyQ") { event.preventDefault(); event.stopImmediatePropagation(); return; }
-      if (event.code === "Tab") {
+      if (keybindMatches("wheel", event.code)) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+      if (keybindMatches("menu", event.code)) {
         event.preventDefault(); event.stopImmediatePropagation();
         if (!event.repeat) {
           cancelWheel("menu");
@@ -2472,11 +2655,7 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       /* Keyboard directions address the wheel's visible sectors directly;
          they are not next/previous controls. Down shares the lower-right
          Cluster sector, the deterministic side of the bottom boundary. */
-      const directionIndex = ({
-        ArrowUp: 0, KeyW: 0,
-        ArrowRight: 1, ArrowDown: 1, KeyD: 1, KeyS: 1,
-        ArrowLeft: 2, KeyA: 2,
-      })[event.code];
+      const directionIndex = wheelDirectionFor(event.code);
       if (Number.isInteger(directionIndex)) {
         event.preventDefault(); event.stopImmediatePropagation();
         if (!event.repeat) setWheelSelection(Math.min(directionIndex, order.length - 1));
@@ -2493,20 +2672,20 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
       }
       return;
     }
-    if (event.code === "KeyM") {
+    if (keybindMatches("map", event.code)) {
       if (!ownsGameKeyboard()) return;
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) openMap();
       return;
     }
-    if (event.code === "Tab") {
+    if (keybindMatches("menu", event.code)) {
       if (!ownsGameKeyboard()) return;
       if (openMenu("operation", { force: true })) {
         event.preventDefault(); event.stopImmediatePropagation();
       }
       return;
     }
-    if (event.code === "KeyQ") {
+    if (keybindMatches("wheel", event.code)) {
       if (!ownsGameKeyboard()) return;
       event.preventDefault(); event.stopImmediatePropagation();
       if (!event.repeat) openWheel("keyboard");
@@ -2514,13 +2693,21 @@ export function buildGameUi(ctx, { stage, canvas, save, touch, render, setQualit
   }
 
   function onKeyUp(event) {
+    /* The keyup of the key just assigned belongs to the editor too;
+       letting it through hands player.js a release for a press it
+       never saw, which is how a bound Shift arrives stuck-on. */
+    if (capture || bindKeyUpGuard.delete(event.code)) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      return;
+    }
     if (menu.open) {
-      if (event.code === "Tab" || event.code === "Escape" || event.code === "KeyQ" || event.code === "KeyE") {
+      if (event.code === "Escape" || keybindMatches("menu", event.code)
+        || keybindMatches("wheel", event.code) || keybindMatches("block", event.code)) {
         event.preventDefault(); event.stopImmediatePropagation();
       }
       return;
     }
-    if (event.code === "KeyQ" && wheel.open && wheel.source === "keyboard") {
+    if (keybindMatches("wheel", event.code) && wheel.open && wheel.source === "keyboard") {
       event.preventDefault(); event.stopImmediatePropagation();
       cancelWheel("hold-release");
     }

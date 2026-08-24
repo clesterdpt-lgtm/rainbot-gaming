@@ -136,6 +136,24 @@ body.sf-command-open .sf-hud__reticle{opacity:0!important}body.sf-command-open #
 .sf-career-recovery .sf-career-recovery__status{min-height:1.4em;margin:.65rem 0 0;padding:.45rem .55rem;border-left:2px solid rgba(216,164,65,.42);background:rgba(216,164,65,.035);color:rgba(242,229,199,.7);font-size:10px;line-height:1.4;letter-spacing:.015em}.sf-career-recovery[data-state="resolving"] .sf-career-recovery__status{border-left-color:var(--sfu-gold);color:var(--sfu-gold)}.sf-career-recovery[data-state="resolved"]{border-color:rgba(118,205,167,.48);border-left-color:var(--sfu-verd);background:rgba(28,69,52,.14)}.sf-career-recovery[data-state="resolved"] .sf-career-recovery__head small,.sf-career-recovery[data-state="resolved"] .sf-career-recovery__head>b,.sf-career-recovery[data-state="resolved"] .sf-career-recovery__status{border-color:var(--sfu-verd);color:var(--sfu-verd)}.sf-career-recovery[data-state="resolved"] .sf-career-recovery__branches,.sf-career-recovery[data-state="resolved"]>p:not(.sf-career-recovery__status){display:none}
 .sf-controls-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}.sf-controls-grid article{padding:.85rem;border:1px solid rgba(216,164,65,.17);background:rgba(16,10,11,.52)}.sf-controls-grid h4{margin:0 0 .65rem;color:var(--sfu-brass);font-family:"Cinzel",Georgia,serif;font-size:12px;letter-spacing:.14em}
 .sf-control-row{display:grid;grid-template-columns:minmax(4.7rem,auto) 1fr;align-items:center;gap:.65rem;min-height:2.75rem;border-top:1px solid rgba(242,229,199,.07)}.sf-control-row kbd{justify-self:start;white-space:nowrap}.sf-control-row>span{display:grid;gap:.1rem}.sf-control-row strong{color:rgba(242,229,199,.84);font-size:11px;font-weight:500}.sf-control-row small{color:rgba(242,229,199,.4);font-size:10px}
+/* Rebindable controls. A key slot is a BUTTON that looks like a key:
+   the affordance has to read as "press me" without a second legend. */
+.sf-bind-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:.6rem;min-height:2.9rem;border-top:1px solid rgba(242,229,199,.07)}
+.sf-bind-row>span:first-child{display:grid;gap:.1rem;min-width:0}
+.sf-bind-row strong{color:rgba(242,229,199,.84);font-size:11px;font-weight:500}
+.sf-bind-row small{color:rgba(242,229,199,.4);font-size:10px;line-height:1.35}
+.sf-bind-keys{display:flex;gap:.3rem;flex-shrink:0}
+.sf-bind-key{display:inline-flex;align-items:center;justify-content:center;min-width:3.1rem;min-height:2rem;padding:.15rem .3rem;border:1px solid rgba(216,164,65,.3);border-radius:0;background:rgba(0,0,0,.24);cursor:pointer}
+.sf-bind-key kbd{border:0;background:none;padding:0;color:rgba(242,229,199,.86);font-size:10px;letter-spacing:.06em;white-space:nowrap}
+.sf-bind-key:hover,.sf-bind-key:focus-visible{border-color:var(--sfu-gold);background:rgba(216,164,65,.12)}
+.sf-bind-key[data-bind-empty="true"] kbd{color:rgba(242,229,199,.3)}
+.sf-bind-key[data-bind-listening="true"]{border-color:var(--sfu-gold);background:rgba(216,164,65,.2)}
+.sf-bind-key[data-bind-listening="true"] kbd{color:var(--sfu-gold)}
+.sf-bind-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.9rem;margin:0 0 .7rem;padding-bottom:.6rem;border-bottom:1px solid rgba(216,164,65,.14)}
+.sf-bind-status{margin:0;color:rgba(242,229,199,.52);font-size:11px;min-height:1.3em}
+.sf-bind-bar button{min-height:2.75rem;padding:.45rem .9rem;border:1px solid rgba(216,164,65,.3);border-radius:0;background:rgba(0,0,0,.22);color:rgba(242,229,199,.62);font-size:11px;letter-spacing:.08em;cursor:pointer}
+.sf-bind-bar button:hover,.sf-bind-bar button:focus-visible{border-color:var(--sfu-gold);color:var(--sfu-gold)}
+.sf-controls-grid .sf-bind-fixed .sf-control-row{grid-template-columns:minmax(3.6rem,auto) 1fr}
 .sf-settings-list{display:grid;gap:.6rem}.sf-setting{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:1rem;min-height:4.6rem;padding:.7rem .8rem;border:1px solid rgba(216,164,65,.17);background:rgba(16,10,11,.5)}.sf-setting>span{display:grid;gap:.22rem}.sf-setting strong{color:var(--sfu-bone);font:600 12px/1.2 "Cinzel",Georgia,serif;letter-spacing:.08em}.sf-setting small{color:rgba(242,229,199,.48);font-size:11px}
 .sf-setting>button,.sf-setting__segments button{min-width:4.5rem;min-height:2.75rem;padding:.45rem .65rem;border:1px solid rgba(216,164,65,.3);border-radius:0;background:rgba(0,0,0,.22);color:rgba(242,229,199,.58);font-size:11px;cursor:pointer}.sf-setting>button[aria-checked="true"],.sf-setting__segments button.is-active{border-color:var(--sfu-verd);background:rgba(56,111,87,.18);color:var(--sfu-verd)}.sf-setting__segments{display:flex;gap:.35rem}
 .sf-setting--quality .sf-setting__segments,.sf-setting--difficulty .sf-setting__segments{flex-wrap:wrap;justify-content:flex-end;max-width:100%}
@@ -165,7 +183,7 @@ body.sf-command-open .sf-hud__reticle{opacity:0!important}body.sf-command-open #
 }
 
 body.sf-high-contrast .sf-menu__frame,body.sf-high-contrast .sf-command-wheel__option,body.sf-high-contrast .sf-command-wheel__core{border-color:rgba(245,216,142,.72);background-color:#090607}body.sf-high-contrast .sf-native-ui{--sfu-dim:#fff6e1}
-body.sf-high-contrast .sf-command-wheel__copy small,body.sf-high-contrast .sf-command-wheel__core small,body.sf-high-contrast .sf-command-wheel__instruction,body.sf-high-contrast .sf-menu__masthead p,body.sf-high-contrast .sf-menu__resume small,body.sf-high-contrast .sf-menu__rail button[data-menu-action],body.sf-high-contrast .sf-menu__pagehead p,body.sf-high-contrast .sf-operation-card>span,body.sf-high-contrast .sf-menu__callout p,body.sf-high-contrast .sf-save-slot>header b,body.sf-high-contrast .sf-save-slot__summary span,body.sf-high-contrast .sf-save-slot__summary small,body.sf-high-contrast .sf-save-reason,body.sf-high-contrast .sf-control-row small,body.sf-high-contrast .sf-setting small,body.sf-high-contrast .sf-setting>button,body.sf-high-contrast .sf-setting__segments button,body.sf-high-contrast .sf-menu__footer{color:#f8edda}
+body.sf-high-contrast .sf-command-wheel__copy small,body.sf-high-contrast .sf-command-wheel__core small,body.sf-high-contrast .sf-command-wheel__instruction,body.sf-high-contrast .sf-menu__masthead p,body.sf-high-contrast .sf-menu__resume small,body.sf-high-contrast .sf-menu__rail button[data-menu-action],body.sf-high-contrast .sf-menu__pagehead p,body.sf-high-contrast .sf-operation-card>span,body.sf-high-contrast .sf-menu__callout p,body.sf-high-contrast .sf-save-slot>header b,body.sf-high-contrast .sf-save-slot__summary span,body.sf-high-contrast .sf-save-slot__summary small,body.sf-high-contrast .sf-save-reason,body.sf-high-contrast .sf-bind-row small,body.sf-high-contrast .sf-bind-status,body.sf-high-contrast .sf-control-row small,body.sf-high-contrast .sf-setting small,body.sf-high-contrast .sf-setting>button,body.sf-high-contrast .sf-setting__segments button,body.sf-high-contrast .sf-menu__footer{color:#f8edda}
 body.sf-high-contrast .sf-menu__masthead span,body.sf-high-contrast .sf-menu__pagehead>span,body.sf-high-contrast .sf-operation-card small,body.sf-high-contrast .sf-menu__callout span,body.sf-high-contrast .sf-save-slot>header{color:#f5d88e}
 body.sf-high-contrast .sf-save-slot.has-save>header b,body.sf-high-contrast .sf-save-reason[data-ready="1"]{color:#9be7c5}body.sf-high-contrast .sf-menu__rail button[data-menu-action="restart"]{color:#ff896b}
 body.sf-high-contrast .sf-career-recovery,body.sf-high-contrast .sf-career-branch{border-color:#f5d88e;background-color:#090607}body.sf-high-contrast .sf-career-recovery>p,body.sf-high-contrast .sf-career-branch>p,body.sf-high-contrast .sf-career-branch>small,body.sf-high-contrast .sf-career-recovery__status{color:#f8edda}body.sf-high-contrast .sf-career-branch[data-state="unavailable"]{border-color:#ff896b;opacity:.76}
@@ -1419,6 +1437,7 @@ body.rb-escape-menu-open .saintfall-page .rb-standalone-surface{container-name:n
   .sf-operation-card,.sf-menu__callout,.sf-save-slot,.sf-save-slot__actions button,
   .sf-save-reason,.sf-career-recovery,.sf-career-branch,.sf-career-branch>button,
   .sf-controls-grid article,.sf-setting,.sf-setting>button,.sf-setting__segments button,
+  .sf-bind-key,.sf-bind-bar button,
   .sf-map-page__surface,#sf-map-canvas-large,.sf-map-page__orders,.sf-map-order,
   .sf-doctrine__summary,.sf-doctrine__summary>div,.sf-doctrine__vow-slots>span,
   .sf-doctrine__lock,.sf-doctrine__orders,.sf-doctrine__orders button,
@@ -1927,12 +1946,6 @@ body.rb-escape-menu-open .saintfall-page .rb-standalone-surface{container-name:n
   .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__vow-action button{min-width:4.8rem;min-height:44px;padding:.2rem;font-size:9px}
   .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__order[data-view="overview"] .sf-doctrine__vow-body>p{display:none}
   .sf-stage.sf-touch-enabled #sf-native-ui .sf-doctrine__order[data-view="overview"] .sf-doctrine__vow{margin-top:.03rem}
-}
-
-@media (min-height:800px){
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__rites{
-    grid-template-rows:repeat(2,minmax(8.5rem,11rem));align-content:center
-  }
 }
 
 /* ======================================================================
@@ -2587,7 +2600,7 @@ body.sf-high-contrast #sf-native-ui :is(
 ){border-color:rgba(195,246,255,.72);background-color:#010304}
 body.sf-high-contrast #sf-native-ui :is(
   .sf-menu__masthead p,.sf-menu__pagehead p,.sf-operation-card>span,.sf-menu__callout p,
-  .sf-save-slot__summary span,.sf-control-row small,.sf-setting small,
+  .sf-save-slot__summary span,.sf-control-row small,.sf-bind-row small,.sf-bind-status,.sf-setting small,
   .sf-doctrine__order-head p,.sf-doctrine-talent>p,.sf-doctrine-talent__reason,
   .sf-doctrine__preview-summary,.sf-doctrine__preview-ranks strong,
   .sf-doctrine__preview-foot>small,.sf-doctrine__vow>p
@@ -2779,53 +2792,87 @@ body.sf-high-contrast .sf-stage:not(.sf-touch-enabled) #sf-native-ui :is(
   }
 }
 
-/* Full screen is the roomiest board and was the emptiest: the rite rows are
-   capped at 11rem while the card content stayed embedded-sized, leaving most
-   of every card blank. Scale the art and copy into the space instead. */
+/* Full screen is the roomiest board: scale the rite cards and inspector
+   proportionally across all 3 rite rows (T1 pair, T2, T3) and the crown Vow. */
 @media (min-height:800px){
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__tree{
+    grid-template-rows:minmax(0,1fr) auto;gap:.4rem;min-height:0;height:100%
+  }
   .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__rites{
-    grid-template-rows:repeat(2,minmax(9rem,13rem))
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-rows:repeat(3,minmax(0,1fr));
+    align-content:stretch;
+    gap:.4rem;min-width:0;min-height:0;height:100%
   }
   .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent{
-    --sf-rite-art:5.6rem;padding:.85rem;column-gap:.9rem;row-gap:.34rem
+    --sf-rite-art:clamp(2.4rem,4vh,3.8rem);
+    padding:clamp(.3rem,.6vh,.55rem) clamp(.4rem,.7vw,.7rem);
+    column-gap:clamp(.4rem,.7vw,.7rem);
+    row-gap:.12rem;
+    min-height:0;overflow:hidden
+  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent[data-tier="2"],
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent[data-tier="3"]{
+    grid-column:1/-1;
+    grid-template-columns:auto minmax(0,1fr) auto;
+    grid-template-rows:auto;
+    grid-template-areas:"media head badge";
+    align-items:center;
+    column-gap:clamp(.4rem,.7vw,.7rem);
+    row-gap:0;
+    padding:clamp(.3rem,.6vh,.55rem) clamp(.4rem,.7vw,.7rem)
   }
   .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent__tier{
-    padding:.1rem .3rem;font-size:9px
+    padding:.08rem .25rem;font-size:8.5px
   }
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent>header small{font-size:9px}
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent>header strong{font-size:15px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent>header small{font-size:8.5px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent>header strong{
+    font-size:clamp(11.5px,1vw,14px);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+  }
   .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent>header b i{width:8px;height:8px}
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent>p{
-    font-size:12px;line-height:1.42;-webkit-line-clamp:3
-  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent>p{display:none}
   .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine-talent__badge{
-    padding:.14rem .4rem;font-size:9px
+    padding:.1rem .35rem;font-size:8.5px
   }
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow{padding:.8rem .9rem;gap:.9rem}
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-media{--sf-rite-art:4.8rem}
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body{gap:.28rem}
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body>header small{font-size:9px}
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body>header strong{font-size:15px}
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body>header>b{font-size:9px;padding:.14rem .4rem}
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body>p{font-size:12px;-webkit-line-clamp:2}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow{
+    padding:clamp(.4rem,.7vh,.65rem) clamp(.45rem,.7vw,.75rem);
+    gap:clamp(.45rem,.7vw,.75rem);
+    min-height:0
+  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-media{
+    --sf-rite-art:clamp(2.4rem,4vh,3.8rem)
+  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body{gap:.22rem}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body>header small{font-size:8.5px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body>header strong{
+    font-size:clamp(12px,1.05vw,14.5px);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body>header>b{
+    font-size:8.5px;padding:.12rem .35rem
+  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-body>p{display:none}
   .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__vow-gate{height:4px}
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview{padding:.9rem;gap:.55rem}
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-art-wrap{
-    flex:0 0 4.6rem;width:4.6rem;height:4.6rem
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview{
+    padding:clamp(.55rem,1vh,.9rem);gap:clamp(.3rem,.7vh,.5rem)
   }
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-titles h5{font-size:18px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-art-wrap{
+    flex:0 0 clamp(3rem,4.5vh,4.2rem);width:clamp(3rem,4.5vh,4.2rem);height:clamp(3rem,4.5vh,4.2rem)
+  }
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-titles h5{font-size:clamp(14px,1.2vw,17px)}
   .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-titles small{font-size:10px}
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-titles>b{font-size:9px;padding:.26rem .42rem}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-titles>b{font-size:9px;padding:.22rem .4rem}
   .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-summary{
-    font-size:13px;-webkit-line-clamp:3
+    font-size:11.5px;-webkit-line-clamp:2
   }
   .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-meta small{font-size:9px}
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-meta strong{font-size:12px}
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-ranks li{padding:.4rem 0}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-meta strong{font-size:11.5px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-ranks li{padding:.32rem 0}
   .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-ranks small{font-size:9px}
   .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-ranks strong{
-    font-size:12px;line-height:1.42;-webkit-line-clamp:6
+    font-size:11px;line-height:1.38;-webkit-line-clamp:5
   }
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-foot>small{font-size:11px}
-  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-foot button{min-height:44px;font-size:11px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-foot>small{font-size:10.5px}
+  .sf-stage:not(.sf-touch-enabled).is-maxed #sf-native-ui .sf-doctrine__preview-foot button{min-height:38px;font-size:11px}
 }

@@ -7,7 +7,20 @@
    Continue and Load bypass it at the entry controller.
    ============================================================ */
 
+import {
+  keybindLabel, keybindPrimaryLabel, keybindMatches, keybindDown,
+} from "saintfall/keybinds.js";
+
 const STEP_COUNT = 4;
+
+/* THE TUTORIAL TEACHES THE PLAYER'S OWN SCHEME, NOT THE SHIPPED ONE.
+   Copy and legends carry `{{action}}` tokens rather than key faces, so
+   a rebound Boost is taught as the key it now is. Resolved at render,
+   which is also when a mid-tutorial rebind takes effect. */
+const bindToken = /\{\{([a-zA-Z]+)(!?)\}\}/g;
+const resolveBinds = (text) => String(text ?? "")
+  .replace(bindToken, (_, id, primaryOnly) => (primaryOnly
+    ? keybindPrimaryLabel(id) : keybindLabel(id)));
 
 const DESKTOP_STEPS = Object.freeze([
   {
@@ -15,7 +28,7 @@ const DESKTOP_STEPS = Object.freeze([
     kicker: "FIELD ORIENTATION",
     title: "Take the road",
     copy: "Click the battlefield to link your sight. Move off the landing mark and scan the basin.",
-    controls: ["W A S D", "MOUSE"],
+    controls: ["{{moveForward!}} {{moveLeft!}} {{moveBack!}} {{moveRight!}}", "MOUSE"],
     hint: "Move and look to continue",
     checks: [["move", "MOVE"], ["look", "LOOK"]],
   },
@@ -23,8 +36,8 @@ const DESKTOP_STEPS = Object.freeze([
     id: "mobility",
     kicker: "RELIQUARY MOBILITY",
     title: "Break the distance",
-    copy: "Tap Shift for a burst, hold it to glide, vault with Space, then combine both inputs for the jetpack.",
-    controls: ["SHIFT", "SPACE", "SHIFT + SPACE"],
+    copy: "Tap {{boost!}} for a burst, hold it to glide, vault with {{jump!}}, then combine both inputs for the jetpack.",
+    controls: ["{{boost!}}", "{{jump!}}", "{{boost!}} + {{jump!}}"],
     hint: "Try each mobility input",
     checks: [["glide", "GLIDE"], ["vault", "VAULT"], ["jet", "JET"]],
   },
@@ -32,8 +45,8 @@ const DESKTOP_STEPS = Object.freeze([
     id: "combat",
     kicker: "WEAPON LITURGY",
     title: "Ready the Vesper lance",
-    copy: "Fire and aim with the mouse. F swings the polearm, E raises the Aegis, and R vents weapon heat.",
-    controls: ["LMB", "RMB", "F", "E", "R"],
+    copy: "Fire and aim with the mouse. {{melee}} swings the polearm, {{block}} raises the Aegis, and {{vent}} vents weapon heat.",
+    controls: ["LMB", "RMB", "{{melee}}", "{{block}}", "{{vent}}"],
     hint: "Cycle every combat control",
     checks: [["fire", "FIRE"], ["aim", "AIM"], ["melee", "MELEE"], ["aegis", "AEGIS"], ["vent", "VENT"]],
   },
@@ -41,8 +54,8 @@ const DESKTOP_STEPS = Object.freeze([
     id: "command",
     kicker: "FIELD COMMAND",
     title: "Call down the sky",
-    copy: "Hold Q to open the command wheel. Hover a support sigil and left click to deploy; release Q to cancel.",
-    controls: ["HOLD Q", "LMB"],
+    copy: "Hold {{wheel}} to open the command wheel. Hover a support sigil and left click to deploy; release to cancel.",
+    controls: ["HOLD {{wheel}}", "LMB"],
     hint: "Open the command wheel",
     checks: [["command", "COMMAND WHEEL"]],
   },
@@ -209,8 +222,9 @@ export function buildTutorial(ctx, options = {}) {
     kickerEl.textContent = current.kicker;
     titleEl.textContent = current.title;
     progressEl.textContent = `${String(state.stepIndex + 1).padStart(2, "0")} / ${String(STEP_COUNT).padStart(2, "0")}`;
-    copyEl.textContent = current.copy;
-    controlsEl.innerHTML = current.controls.map((control) => `<kbd>${control}</kbd>`).join("");
+    copyEl.textContent = resolveBinds(current.copy);
+    controlsEl.innerHTML = current.controls
+      .map((control) => `<kbd>${resolveBinds(control)}</kbd>`).join("");
     hintEl.textContent = current.hint;
     skipButton.textContent = "SKIP TUTORIAL";
     host.dataset.step = current.id;
@@ -253,8 +267,9 @@ export function buildTutorial(ctx, options = {}) {
       kickerEl.textContent = "ORIENTATION COMPLETE";
       titleEl.textContent = "The road is yours";
       progressEl.textContent = "FIELD READY";
-      copyEl.textContent = "Tab or Esc opens the operation menu. M opens the full tactical map. Every control remains listed under Controls.";
-      controlsEl.innerHTML = "<kbd>TAB / ESC</kbd><kbd>M</kbd>";
+      copyEl.textContent = resolveBinds("{{menu}} or Esc opens the operation menu. {{map}} opens the full "
+        + "tactical map. Every control can be rebound under Controls.");
+      controlsEl.innerHTML = `<kbd>${resolveBinds("{{menu}}")} / ESC</kbd><kbd>${resolveBinds("{{map}}")}</kbd>`;
       checksEl.innerHTML = "<li data-done=\"true\"><i aria-hidden=\"true\">✓</i><span>VESPER LINK GREEN</span></li>";
       hintEl.textContent = "Operation The Gilded Silence";
       skipButton.textContent = "CLOSE";
@@ -318,14 +333,13 @@ export function buildTutorial(ctx, options = {}) {
     heldKeys.add(event.code);
     if (event.repeat) return;
     if (step()?.id === "mobility") {
-      if (event.code === "ShiftLeft" || event.code === "ShiftRight") mark("glide");
-      if (event.code === "Space") mark("vault");
-      const shift = heldKeys.has("ShiftLeft") || heldKeys.has("ShiftRight");
-      if (shift && heldKeys.has("Space")) mark("jet");
+      if (keybindMatches("boost", event.code)) mark("glide");
+      if (keybindMatches("jump", event.code)) mark("vault");
+      if (keybindDown(heldKeys, "boost") && keybindDown(heldKeys, "jump")) mark("jet");
     } else if (step()?.id === "combat") {
-      if (event.code === "KeyF") mark("melee");
-      if (event.code === "KeyE") mark("aegis");
-      if (event.code === "KeyR") mark("vent");
+      if (keybindMatches("melee", event.code)) mark("melee");
+      if (keybindMatches("block", event.code)) mark("aegis");
+      if (keybindMatches("vent", event.code)) mark("vent");
     }
   }
 

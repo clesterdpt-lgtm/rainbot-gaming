@@ -22,8 +22,20 @@
 import { clamp, clamp01, angleDelta } from "saintfall/core.js";
 import { TIMES } from "saintfall/art.js";
 import { roadPointAtZ } from "saintfall/terrain.js";
+import { keybindsFor } from "saintfall/keybinds.js";
 
 export function installQa(ctx, api) {
+  /* Press or release every code bound to an action. The harness must
+     drive the ACTION, not a key face that a rebind may have moved. */
+  const holdBind = (action, on) => {
+    const keys = api.player?.input?.keys;
+    if (!keys) return false;
+    for (const code of keybindsFor(action)) {
+      if (on) keys.add(code); else keys.delete(code);
+    }
+    return !!on;
+  };
+
   const { THREE } = ctx;
   const _auditRay = new THREE.Raycaster();
   const _wristBendQ = new THREE.Quaternion();
@@ -4002,29 +4014,22 @@ export function installQa(ctx, api) {
     },
     /** Altitude above the ground the trooper would land on. */
     slamAltitude: () => api.slam?.altitude() ?? null,
-    /** Hold or release the glide without a physical Shift key. */
+    /** Hold or release the glide without a physical key. Injects the
+     *  player's CURRENT primary binding, so a rebound scheme does not
+     *  silently turn every harness hold into a no-op. */
     setBoostHold(on) {
-      if (on) api.player.input.keys.add("ShiftLeft");
-      else api.player.input.keys.delete("ShiftLeft");
-      return !!on;
+      return holdBind("boost", on);
     },
     /** Boundary setup only. End-to-end control tests should use real
      *  keyboard events so blur/key-release behavior remains covered. */
     setJetpackState: (next) => api.jetpack?.setState(next) || null,
     setJetInput(on) {
-      if (on) {
-        api.player.input.keys.add("ShiftLeft");
-        api.player.input.keys.add("Space");
-      } else {
-        api.player.input.keys.delete("Space");
-        api.player.input.keys.delete("ShiftLeft");
-      }
+      holdBind("boost", on);
+      holdBind("jump", on);
       return !!on;
     },
     setShieldInput(on) {
-      if (on) api.player.input.keys.add("KeyE");
-      else api.player.input.keys.delete("KeyE");
-      return !!on;
+      return holdBind("block", on);
     },
 
     /* Direct handles, for ad-hoc probing from the console. */

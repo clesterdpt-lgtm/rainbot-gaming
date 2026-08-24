@@ -9,6 +9,7 @@
 import { clamp, clamp01, damp, lerp } from "saintfall/core.js";
 import { patchMaterial } from "saintfall/art.js";
 import { flareTexture } from "saintfall/weapons.js";
+import { keybindDown } from "saintfall/keybinds.js";
 
 export const JETPACK_CONFIG = Object.freeze({
   maxFuel: 100,
@@ -769,8 +770,7 @@ export function buildJetpack(ctx, player) {
 
   function reset(full = true) {
     const keys = player.input?.keys;
-    const chordHeld = !!(keys?.has("Space")
-      && (keys.has("ShiftLeft") || keys.has("ShiftRight")));
+    const chordHeld = !!keys && keybindDown(keys, "jump") && keybindDown(keys, "boost");
     if (full) state.fuel = config.maxFuel;
     state.requested = false;
     state.active = false;

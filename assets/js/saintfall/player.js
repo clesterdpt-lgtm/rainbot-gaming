@@ -20,6 +20,9 @@ import { makeKit } from "saintfall/structures.js";
 import { paintByHeight, PALETTE, patchMaterial } from "saintfall/art.js";
 import { makeRamp } from "saintfall/core.js";
 import { initIk, solveTwoJoint } from "saintfall/ik.js";
+import {
+  keybindCodes, keybindDown, keybindMatches, onKeybindsChange,
+} from "saintfall/keybinds.js";
 
 /* ============================================================
    THE FIGURE
@@ -1963,34 +1966,38 @@ function makeInput(canvas, captureMeleeAim = null) {
        key above, but only claimed keyup when that key was actually ours. */
     if (!down && (!held || e.defaultPrevented || isInteractiveKeyTarget(e.target))) return;
     if (!down && !ownsKeyboard()) return;
-    if (["KeyW", "KeyA", "KeyS", "KeyD", "Space", "ShiftLeft", "ShiftRight",
-      "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyR",
-      "KeyQ", "KeyE", "KeyF"].includes(k)) e.preventDefault();
+    /* Swallow the page's own use of anything the player has BOUND,
+       not a frozen literal list: a scheme that moves Vault onto "/"
+       must not also scroll the article behind the canvas. Arrow keys
+       stay here unconditionally - they scroll whether or not they are
+       currently a movement key. */
+    if (boundCodes.has(k) || k.startsWith("Arrow")) e.preventDefault();
     if (!down || held) return;                 // key REPEATS are not presses
     /* MELEE IS AN ACTION, NOT A MODE.
        One key, one swing: main.js takes the rite over for the length
-       of the animation and hands it back.
-
-       F is the melee key. */
-    if (k === "KeyF") {
+       of the animation and hands it back. */
+    if (keybindMatches("melee", k)) {
       /* Bind the swing to the reticle that existed at keydown. The
          event is drained after player.update(), so sampling there
          would let mouse-look during the same frame silently redirect
          an attack the player already committed. */
       state.events.push({ type: "melee", aimYaw: captureMeleeAim?.() });
     }
-    else if (k === "KeyV") state.events.push({ type: "stratOpen" });
-    else if (k === "KeyR") state.events.push({ type: "vent" });
-    /* SHIFT IS THE BOOST. One key: tapped it is a burst, held it is a
-       glide, and held with Space it is the jetpack - which is the
-       whole reason it can also be the burst. Q is the command-wheel
-       hold, owned by ui.js, so this file only swallows the key.
-       E is the Aegis block. */
-    else if (k === "ShiftLeft" || k === "ShiftRight") {
+    else if (keybindMatches("stratagems", k)) state.events.push({ type: "stratOpen" });
+    else if (keybindMatches("vent", k)) state.events.push({ type: "vent" });
+    /* BOOST IS ONE KEY. Tapped it is a burst, held it is a glide, and
+       held with Vault it is the jetpack - which is the whole reason it
+       can also be the burst. The command wheel is owned by ui.js, so
+       this file only swallows that key. */
+    else if (keybindMatches("boost", k)) {
       state.events.push({ type: "boost" });
     }
-    else if (k === "Space") state.jumpPressed = true;
+    else if (keybindMatches("jump", k)) state.jumpPressed = true;
   };
+  /* Cached because onKey runs on every keystroke the page sees, most
+     of which are not ours. Rebuilt whenever the Controls page writes. */
+  let boundCodes = keybindCodes();
+  onKeybindsChange(() => { boundCodes = keybindCodes(); });
   window.addEventListener("keydown", (e) => onKey(e, true));
   window.addEventListener("keyup", (e) => onKey(e, false));
   window.addEventListener("blur", () => {
@@ -2050,18 +2057,18 @@ function makeInput(canvas, captureMeleeAim = null) {
         state.move.x = touch.move.x;
         state.move.y = touch.move.y;
       } else {
-        state.move.x = (keys.has("KeyD") || keys.has("ArrowRight") ? 1 : 0)
-          - (keys.has("KeyA") || keys.has("ArrowLeft") ? 1 : 0);
-        state.move.y = (keys.has("KeyS") || keys.has("ArrowDown") ? 1 : 0)
-          - (keys.has("KeyW") || keys.has("ArrowUp") ? 1 : 0);
+        state.move.x = (keybindDown(keys, "moveRight") ? 1 : 0)
+          - (keybindDown(keys, "moveLeft") ? 1 : 0);
+        state.move.y = (keybindDown(keys, "moveBack") ? 1 : 0)
+          - (keybindDown(keys, "moveForward") ? 1 : 0);
       }
-      const shift = keys.has("ShiftLeft") || keys.has("ShiftRight");
+      const boostHeld = keybindDown(keys, "boost");
       state.sprint = touch.sprint;
-      state.boostHeld = shift || touch.boostHeld;
+      state.boostHeld = boostHeld || touch.boostHeld;
       state.crouch = false;
-      state.jump = keys.has("Space");
-      state.jetpack = (state.jump && shift) || touch.jetpack;
-      state.block = keys.has("KeyE") || touch.block;
+      state.jump = keybindDown(keys, "jump");
+      state.jetpack = (state.jump && boostHeld) || touch.jetpack;
+      state.block = keybindDown(keys, "block") || touch.block;
       const lx = state.look.x;
       const ly = state.look.y;
       const jumpPressed = state.jumpPressed;

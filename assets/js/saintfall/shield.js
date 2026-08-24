@@ -7,6 +7,7 @@
    ============================================================ */
 
 import { clamp01, damp } from "saintfall/core.js";
+import { keybindDown } from "saintfall/keybinds.js";
 
 export const SHIELD_CONFIG = Object.freeze({
   /* A full Reliquary now sustains an ordinary plate for 8.33 seconds.
@@ -348,8 +349,9 @@ export function buildShield(ctx, player) {
   function reset(full = true) {
     /* Both keyboard and touch share the same software-gated state. A touch
        guard held through respawn/load must be released before it can raise
-       Aegis again, exactly like a physically held E key. */
-    const held = !!player.input?.state?.block || !!player.input?.keys?.has("KeyE");
+       Aegis again, exactly like a physically held block key. */
+    const keys = player.input?.keys;
+    const held = !!player.input?.state?.block || (!!keys && keybindDown(keys, "block"));
     state.requested = false;
     state.active = false;
     state.needsRelease = held;

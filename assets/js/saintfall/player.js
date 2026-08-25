@@ -2352,16 +2352,35 @@ export async function createPlayer(ctx, canvas) {
   let sway = 0;
   let swayVel = 0;
   let lastYaw = 0;
-  /* Heavy does not mean slow.  The knight retains a fast 8.6m/s
-     sprint, but takes longer to build and shed that momentum. */
-  const WALK = 4.4;
-  const SPRINT = 8.6;
+  /* Figure-authored locomotion. Vesper and White Vigil keep the
+     established values through these defaults; physically broader
+     rigs can carry a slower, wider, more deliberate gait without
+     forking the controller or changing collision semantics. */
+  const locomotionProfile = figure.locomotionProfile || {};
+  const locomotionValue = (key, fallback) => Number.isFinite(locomotionProfile[key])
+    ? locomotionProfile[key]
+    : fallback;
+  const WALK = locomotionValue("walkSpeed", 4.4);
+  const SPRINT = locomotionValue("sprintSpeed", 8.6);
+  const GROUND_ACCEL_RESPONSE = locomotionValue("groundAcceleration", 3.4);
+  const GROUND_DECEL_RESPONSE = locomotionValue("groundDeceleration", 5.4);
+  const TURN_RESPONSE_SCALE = locomotionValue("turnResponseScale", 1);
+  const FLIGHT_SPEED_SCALE = locomotionValue("flightSpeedScale", 1);
+  const STRIDE_SCALE = locomotionValue("strideScale", 1);
+  const STANCE_BIAS = locomotionValue("stanceBias", 0);
+  const STEP_LIFT_SCALE = locomotionValue("stepLiftScale", 1);
+  const BODY_DROP_SCALE = locomotionValue("bodyDropScale", 1);
+  const IMPACT_SCALE = locomotionValue("impactScale", 1);
+  const PASSING_RISE_SCALE = locomotionValue("passingRiseScale", 1);
+  const WEIGHT_SWAY_M = locomotionValue("weightSwayM", 0);
+  const WEIGHT_ROLL = locomotionValue("weightRoll", 0);
   /* Below this the body is no longer travelling far enough per frame
      to carry the gait, so the swing borrows a clock. Deliberately
      well under WALK: a genuine slow amble already advances the cycle
      faster than the floor does, so this only ever applies to a body
      that is stopping. */
-  const GAIT_SETTLE_SPEED = 1.7;
+  const GAIT_SETTLE_SPEED = locomotionValue("gaitSettleSpeed", Math.min(1.7, WALK * 0.55));
+  const GAIT_SETTLE_CADENCE = locomotionValue("gaitSettleCadence", 1.5);
   const MELEE_THRUST_SPEED = 12.8;
   /* Fraction of the ordinary speed kept while sighted, and the field
      of view the camera pulls to. 0.46 of a walk is a deliberate
@@ -2880,26 +2899,26 @@ export async function createPlayer(ctx, canvas) {
        and it keeps the whole cycle inside the leg. */
     const climbN = clamp01(Math.max(0, state.slopeGrade) / 1.25);
     gaitSpec.strideLen = (lerp(0.78, 2.05, walkN) + 1.55 * sprintN)
-      * chop * lerp(1, 0.55, climbN);
+      * chop * lerp(1, 0.55, climbN) * STRIDE_SCALE;
     const backpedal = backpedalWeight();
     const forwardStance = lerp(0.52, 0.34, walkN) - 0.14 * sprintN + 0.10 * turnN;
     /* A forward run deliberately has a flight phase. A firing
        backpedal is a braced retreat: one sabaton must always own the
        ground while the other reaches backward, with a short double-
        support handoff rather than both legs cycling in the air. */
-    gaitSpec.stance = lerp(forwardStance, 0.56, backpedal);
+    gaitSpec.stance = clamp(lerp(forwardStance, 0.56, backpedal) + STANCE_BIAS, 0.16, 0.68);
     const stanceTravel = gaitSpec.strideLen * gaitSpec.stance;
     gaitSpec.landing = clamp(stanceTravel * 0.46, 0.18, 0.33);
     gaitSpec.lift = lerp(
       lerp(0.09, 0.17, walkN) + 0.07 * sprintN,
       0.13,
       backpedal
-    );
+    ) * STEP_LIFT_SCALE;
     gaitSpec.bodyDrop = lerp(
       lerp(0, 0.095, walkN) + 0.060 * sprintN,
       0.055,
       backpedal
-    );
+    ) * BODY_DROP_SCALE;
     return gaitSpec;
   }
 
@@ -3879,19 +3898,28 @@ export async function createPlayer(ctx, canvas) {
     state.carryAimPitch = carryAimPitch;
     const stepPhase = ((state.gait * 2) % 1 + 1) % 1;
     /* Plate mass settles the pelvis into the legs, rises through the
-       passing phase, then compresses sharply at contact.  The top
-       speed stays high; this delayed vertical response is what makes
-       the motion feel armoured instead of weightless. */
+       passing phase, then compresses sharply at contact. Locomotion
+       speed stays profile-owned; this delayed vertical response is
+       what makes the motion feel armoured instead of weightless. */
     const contactCompression = movingWeight * (0.028 + gait.bodyDrop * 0.14)
-      * Math.exp(-stepPhase * 8.5);
-    const passingRise = movingWeight * 0.014 * Math.sin(stepPhase * Math.PI);
+      * Math.exp(-stepPhase * 8.5) * IMPACT_SCALE;
+    const passingRise = movingWeight * 0.014 * Math.sin(stepPhase * Math.PI)
+      * PASSING_RISE_SCALE;
+    /* Heavy figures do not glide straight through their stride. Their
+       mass crosses onto the planted leg, then rolls back through the
+       passing phase. This is presentation-only and deliberately small:
+       collision remains centred while the plate visibly carries weight. */
+    const weightPhase = Math.sin(state.gait * TAU);
+    const weightSway = weightPhase * movingWeight * WEIGHT_SWAY_M;
+    const weightRightX = Math.cos(state.yaw);
+    const weightRightZ = -Math.sin(state.yaw);
     figure.root.position.set(
-      state.x,
+      state.x + weightRightX * weightSway,
       state.y - (gait.bodyDrop + contactCompression - passingRise) * groundedMotion
         - (ctx.jetpack?.state?.landPulse || 0) * 0.07
         - boostPose * 0.13
         - downhillPose * (0.13 + Math.sin(state.clock * 10.5) * 0.008),
-      state.z
+      state.z + weightRightZ * weightSway
     );
     /* YXZ so the pitch is taken about the body's OWN right, after the
        yaw. In the default XYZ order the pitch would be applied about
@@ -3902,6 +3930,7 @@ export async function createPlayer(ctx, canvas) {
       bodyLean,
       state.yaw + actionPose.pelvisYaw,
       Math.sin(state.clock * 7.5) * downhillPose * 0.014
+        - weightPhase * movingWeight * WEIGHT_ROLL
     );
     figure.root.position.y += actionPose.drop;
     solveLegs(dt);
@@ -4255,6 +4284,7 @@ export async function createPlayer(ctx, canvas) {
           ? shieldState.moveSpeed : ctx.shield.config.moveSpeed)
         : flightMode
           ? (jetState.active ? ctx.jetpack.config.cruiseSpeed : ctx.jetpack.config.glideSpeed)
+            * FLIGHT_SPEED_SCALE
           : isForwardMelee
             ? MELEE_THRUST_SPEED
             : (action.name ? WALK : SPRINT);
@@ -4325,8 +4355,8 @@ export async function createPlayer(ctx, canvas) {
       state.speed += clamp(wanted - state.speed, -rate * dt, rate * dt);
     } else {
       const speedResponse = wanted > state.speed
-        ? (isForwardMelee ? 18.0 : (shieldMode ? 7.5 : 3.4))
-        : 5.4;
+        ? (isForwardMelee ? 18.0 : (shieldMode ? 7.5 : GROUND_ACCEL_RESPONSE))
+        : GROUND_DECEL_RESPONSE;
       state.speed = damp(state.speed, wanted, speedResponse, dt);
       if (lungeDrive > 0) {
         state.speed = Math.max(state.speed,
@@ -4455,7 +4485,7 @@ export async function createPlayer(ctx, canvas) {
           lerp(10.0, 6.4, clamp01(state.speed / SPRINT)),
           12.0,
           state.aimCommit
-        );
+        ) * TURN_RESPONSE_SCALE;
     if (turnDrive) {
       // The profile IS the trajectory; damping it would lag the strike.
       state.yaw = Math.atan2(Math.sin(wantYaw), Math.cos(wantYaw));
@@ -4703,7 +4733,7 @@ export async function createPlayer(ctx, canvas) {
     if (state.grounded && !boostMode && !flightMode
       && (legs[0].swinging || legs[1].swinging)) {
       const shortfall = clamp01((GAIT_SETTLE_SPEED - state.speed) / GAIT_SETTLE_SPEED);
-      const floor = dt * 1.5 * shortfall;
+      const floor = dt * GAIT_SETTLE_CADENCE * shortfall;
       const advanced = state.gait - gaitAtFrameStart;
       if (floor > advanced) state.gait += floor - advanced;
     }
@@ -5299,12 +5329,12 @@ export async function createPlayer(ctx, canvas) {
      pointed the sabatons inward beneath the tabard. It is also the
      centreline guard below: a foot is never allowed nearer the
      midline than this, whatever the turn is doing. */
-  const HIP_HALF = 0.115;
+  const HIP_HALF = locomotionValue("hipHalf", 0.115);
   /* The line a PLANTED foot may not cross. Deliberately inboard of
      HIP_HALF: a planted foot is not allowed to move without a
      reason, so the guard has to be somewhere a correct plant never
      reaches. Ankles this close are already touching. */
-  const STANCE_GUARD = 0.085;
+  const STANCE_GUARD = locomotionValue("stanceGuard", Math.max(0.055, HIP_HALF - 0.030));
 
   /**
    * Where a foot wants to stand for a body standing at
@@ -6214,9 +6244,22 @@ export async function createPlayer(ctx, canvas) {
     const jetPose = airbornePose();
     const sprintN = clamp01((state.speed - WALK) / Math.max(0.1, SPRINT - WALK));
     return out.set(
-      lerp(side * (0.22 + 0.06 * sprintN), side * 0.25, jetPose),
-      lerp(-0.60, -0.52, jetPose),
-      lerp(-0.78 - restSwing.fore * 0.35, -0.92, jetPose)
+      lerp(
+        side * (freeArmValue("poleX", 0.22)
+          + freeArmValue("poleSprintX", 0.06) * sprintN),
+        side * freeArmValue("flightPoleX", 0.25),
+        jetPose
+      ),
+      lerp(
+        freeArmValue("poleY", -0.60),
+        freeArmValue("flightPoleY", -0.52),
+        jetPose
+      ),
+      lerp(
+        freeArmValue("poleZ", -0.78) - restSwing.fore * 0.35,
+        freeArmValue("flightPoleZ", -0.92),
+        jetPose
+      )
     ).normalize().applyQuaternion(figure.root.quaternion);
   }
 
@@ -6889,6 +6932,21 @@ export async function createPlayer(ctx, canvas) {
     },
     input,
     figure,
+    locomotionProfile: () => ({
+      walkSpeed: WALK,
+      sprintSpeed: SPRINT,
+      groundAcceleration: GROUND_ACCEL_RESPONSE,
+      groundDeceleration: GROUND_DECEL_RESPONSE,
+      turnResponseScale: TURN_RESPONSE_SCALE,
+      flightSpeedScale: FLIGHT_SPEED_SCALE,
+      hipHalf: HIP_HALF,
+      strideScale: STRIDE_SCALE,
+      stanceBias: STANCE_BIAS,
+      bodyDropScale: BODY_DROP_SCALE,
+      impactScale: IMPACT_SCALE,
+      weightSwayM: WEIGHT_SWAY_M,
+      weightRoll: WEIGHT_ROLL,
+    }),
     /* The leg solver's RESOLVED constants, for the review harness.
        `footPose` is figure-authored with defaults filled in here, so a
        probe that reads the figure sees only half the answer and one

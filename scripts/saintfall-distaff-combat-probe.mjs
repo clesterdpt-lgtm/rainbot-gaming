@@ -1,6 +1,21 @@
 #!/usr/bin/env node
 /* ============================================================
    SAINTFALL - Distaff Web-Bite and Continuous Leg Combat Probe
+
+   What this file is FOR: the Distaff's legs do not break. They take
+   damage for ever, each hit spends a fraction of itself on the body
+   (`legDamageToBody`) and the rest on the FOOTING pool, and emptying
+   that pool is what puts the animal on the ground. Those are three
+   separate numbers and this probe proves each of them moves.
+
+   It used to assert them as literals - `health === initial - 60`, a
+   340-point stance - which was true only while the stance pool and one
+   leg's own pool happened to be the same number and while a leg hit
+   conducted at 1:1. Both of those were the bug: a rifle emptied the
+   stance in about a second and the boss spent 72% of a ranged fight
+   lying down, and the legs were a second, easier health bar the body
+   never had to be reached through. Everything below is read off the
+   live config now, so a retune moves the expectation with it.
    ============================================================ */
 
 import { spawn } from "node:child_process";
@@ -68,50 +83,73 @@ try {
   const legCombat = await page.evaluate(() => {
     const T = window.__SF;
     const inst = T.enemies.live.find((e) => e.key === "distaff");
+    const C = T.distaff.config;
+    const shot = (leg, dmg) => T.combat.damageLeg(inst, leg, dmg,
+      { x: inst.x, y: inst.y, z: inst.z, source: "shot" });
     const initialHealth = inst.health;
-    const initialHp0 = inst.legHp[0];
-    const initialHp1 = inst.legHp[1];
-    const initialHp2 = inst.legHp[2];
+    const legFull = inst.legHp[0];
+    const footingFull = T.distaffState().footingMax;
 
-    // Damage leg 0
-    T.combat.damageLeg(inst, 0, 60, { x: inst.x, y: inst.y, z: inst.z });
-    const after0 = { leg0: inst.legHp[0], health: inst.health, broken0: inst.legBroken[0] };
+    // One hit on leg 0: the limb pool takes all of it, the body a share.
+    const footing0 = T.distaffState().footingHp;
+    shot(0, 60);
+    const after0 = {
+      leg0: inst.legHp[0], health: inst.health, broken0: inst.legBroken[0],
+      bodyLost: initialHealth - inst.health,
+      footingLost: footing0 - T.distaffState().footingHp,
+    };
 
     // Damage leg 1 (should NOT reset leg 0!)
-    T.combat.damageLeg(inst, 1, 70, { x: inst.x, y: inst.y, z: inst.z });
-    const after1 = { leg0: inst.legHp[0], leg1: inst.legHp[1], health: inst.health };
-
+    shot(1, 70);
     // Damage leg 2
-    T.combat.damageLeg(inst, 2, 80, { x: inst.x, y: inst.y, z: inst.z });
-    const after2 = { leg0: inst.legHp[0], leg1: inst.legHp[1], leg2: inst.legHp[2], health: inst.health };
+    shot(2, 80);
+    const after2 = { leg0: inst.legHp[0], leg1: inst.legHp[1], leg2: inst.legHp[2] };
 
-    // Continue damaging legs to break footing
+    /* A LANCE BUCKLES A STANCE HARDER THAN A BULLET (footingMeleeWeight)
+       - the same blow through the same function, told apart only by its
+       source. */
+    const meleeBefore = T.distaffState().footingHp;
+    T.combat.damageLeg(inst, 4, 100, { x: inst.x, y: inst.y, z: inst.z, source: "melee" });
+    const meleeDrain = meleeBefore - T.distaffState().footingHp;
+
+    // Empty what is left of the stance and watch it go over.
     const footingBefore = T.distaffState().footingHp;
-    // Deal remaining footing damage (340 - 210 = 130 remaining)
-    T.combat.damageLeg(inst, 3, 200, { x: inst.x, y: inst.y, z: inst.z });
+    shot(3, footingBefore + 1);
     for (let f = 0; f < 30; f += 1) T.renderOnce(1 / 60);
     const afterCollapse = T.distaffState();
 
     return {
-      initialHealth,
-      after0,
-      after1,
-      after2,
-      footingBefore,
+      initialHealth, legFull, footingFull,
+      conduction: C.legConduction,
+      meleeWeight: C.footingMeleeWeight,
+      after0, after2, meleeDrain, footingBefore,
       afterCollapsePhase: afterCollapse.phase,
       afterCollapseCollapsed: afterCollapse.collapsed,
-      afterCollapseHealth: afterCollapse.health,
       legsBroken: afterCollapse.legsBroken,
       allLegsHittable: !inst.legBroken.some(Boolean),
     };
   });
 
-  check("damaging a leg damages the boss directly and keeps the leg active",
-    legCombat.after0.health === legCombat.initialHealth - 60 && !legCombat.after0.broken0,
-    `boss HP: ${legCombat.initialHealth} -> ${legCombat.after0.health}`);
+  check("a leg hit conducts a fraction of itself into the body and keeps the leg active",
+    Math.abs(legCombat.after0.bodyLost - 60 * legCombat.conduction) < 1
+      && !legCombat.after0.broken0,
+    `${60} to the leg -> ${legCombat.after0.bodyLost} off the body `
+      + `(x${legCombat.conduction}); boss ${legCombat.initialHealth} -> ${legCombat.after0.health}`);
+
+  check("the rest of a leg hit is spent on the footing pool",
+    Math.abs(legCombat.after0.footingLost - 60) < 1
+      && legCombat.footingFull > legCombat.legFull,
+    `footing -${legCombat.after0.footingLost} of ${legCombat.footingFull} `
+      + `(one leg's own pool is ${legCombat.legFull})`);
+
+  check("a swing buckles the stance harder than a shot does",
+    Math.abs(legCombat.meleeDrain - 100 * legCombat.meleeWeight) < 1,
+    `100 melee drained ${legCombat.meleeDrain} footing (x${legCombat.meleeWeight})`);
 
   check("damaging multiple legs preserves damage across all legs without target-switch resets",
-    legCombat.after2.leg0 === 340 - 60 && legCombat.after2.leg1 === 340 - 70 && legCombat.after2.leg2 === 340 - 80,
+    legCombat.after2.leg0 === legCombat.legFull - 60
+      && legCombat.after2.leg1 === legCombat.legFull - 70
+      && legCombat.after2.leg2 === legCombat.legFull - 80,
     `leg0=${legCombat.after2.leg0}, leg1=${legCombat.after2.leg1}, leg2=${legCombat.after2.leg2}`);
 
   check("cumulative leg damage causes Distaff to lose footing and enter collapsed state",
@@ -128,7 +166,8 @@ try {
     T.teleportToDistaff(18);
     T.advanceToDistaffPhase("standing", 10);
 
-    const ev = { biteTelegraph: 0, bite: 0, biteMiss: 0, reelHit: 0, reelEnd: 0 };
+    const ev = { biteTelegraph: 0, bite: 0, biteMiss: 0, reelHit: 0, reelEnd: 0,
+      slamTelegraph: 0 };
     const offs = Object.keys(ev).map((k) => T.distaff.bus.on(k, () => { ev[k] += 1; }));
 
     // Prime and launch web reel
@@ -139,8 +178,18 @@ try {
     return { events: ev, state: T.distaffState() };
   });
 
-  check("web reel pulls player and executes bite attack",
-    webReelBite.events.biteTelegraph > 0 || webReelBite.events.bite > 0 || webReelBite.events.biteMiss > 0,
+  /* THE HAUL CASHES INTO WHATEVER THE ANIMAL CAN ACTUALLY REACH. A
+     bite is 42 with a 0.45s contact and the line puts the trooper at
+     `reelStop`, which is further out than `biteReach` measured from
+     the head - so thrown there it was not an attack with an answer, it
+     was a toll (three hooks in four throws, 126 of a 150-point
+     trooper). The mouth takes it if the mouth is genuinely over them;
+     otherwise the stamp does, which has a 0.9s tell and a ring to
+     sprint out of. Either is a pass; nothing is not. */
+  check("web reel pulls the player in and cashes into an attack",
+    webReelBite.events.reelHit > 0
+      && (webReelBite.events.biteTelegraph > 0 || webReelBite.events.bite > 0
+        || webReelBite.events.biteMiss > 0 || webReelBite.events.slamTelegraph > 0),
     JSON.stringify(webReelBite.events));
 
   // 4. Test Web Pin (Web Bolt) -> Bite Reaction
@@ -169,27 +218,61 @@ try {
   const recoveryReKnockdown = await page.evaluate(() => {
     const T = window.__SF;
     const inst = T.enemies.live.find((e) => e.key === "distaff");
-    T.advanceToDistaffPhase("standing", 25);
+    const C = T.distaff.config;
+    /* MEASURED OFF A RISE, not off "it is standing". The brace is a
+       few seconds long and this probe reaches here with the animal
+       already up from an earlier section, by which time it has
+       expired - which reads as "no brace" when the brace simply
+       happened several tests ago. Put it down, let it get up, test. */
+    T.forceDistaffPhase("collapsed", 0.2);
+    T.advanceToDistaffPhase("standing", 20);
     const stateStanding = T.distaffState();
 
-    // Damage legs again in second cycle
-    T.combat.damageLeg(inst, 0, 150, { x: inst.x, y: inst.y, z: inst.z });
-    T.combat.damageLeg(inst, 4, 200, { x: inst.x, y: inst.y, z: inst.z });
+    /* THE BRACE. Straight off a rise, the stance cannot be emptied at
+       all - it re-plants at full every frame until `recollapseGuard`
+       runs out. This is the rule that ended the chain-collapse: seven
+       knockdowns in sixty-eight seconds, 72% of a ranged fight spent
+       shooting a prone animal. */
+    const drained = T.distaffState().footingHp;
+    T.combat.damageLeg(inst, 0, C.footingPool * 2, {
+      x: inst.x, y: inst.y, z: inst.z, source: "shot" });
+    for (let f = 0; f < 6; f += 1) T.renderOnce(1 / 60);
+    const bracedState = T.distaffState();
+
+    // Wait the brace out, then the same damage puts it back down.
+    let waited = 0;
+    while (T.distaffState().braced && waited < 60 * 15) { T.renderOnce(1 / 60); waited += 1; }
+    T.combat.damageLeg(inst, 4, C.footingPool * 2, {
+      x: inst.x, y: inst.y, z: inst.z, source: "shot" });
     for (let f = 0; f < 30; f += 1) T.renderOnce(1 / 60);
     const stateCollapsed2 = T.distaffState();
 
     return {
       standingPhase: stateStanding.phase,
       standingFooting: stateStanding.footingHp,
+      standingFootingMax: stateStanding.footingMax,
+      drained,
+      bracedPhase: bracedState.phase,
+      bracedFooting: bracedState.footingHp,
+      guard: C.recollapseGuard,
+      braceSeconds: Number((waited / 60).toFixed(2)),
       collapsed2Phase: stateCollapsed2.phase,
       collapsed2Collapsed: stateCollapsed2.collapsed,
     };
   });
 
-  check("Distaff recovers with full footing and can be repeatedly knocked down by damaging legs",
-    recoveryReKnockdown.standingPhase === "standing" && recoveryReKnockdown.standingFooting === 340
-      && recoveryReKnockdown.collapsed2Phase === "collapsed" && recoveryReKnockdown.collapsed2Collapsed,
-    JSON.stringify(recoveryReKnockdown));
+  check("Distaff recovers with a full stance and cannot be knocked straight back down",
+    recoveryReKnockdown.standingPhase === "standing"
+      && recoveryReKnockdown.standingFooting === recoveryReKnockdown.standingFootingMax
+      && recoveryReKnockdown.bracedPhase === "standing"
+      && recoveryReKnockdown.bracedFooting === recoveryReKnockdown.standingFootingMax,
+    `braced for ${recoveryReKnockdown.braceSeconds}s of ${recoveryReKnockdown.guard}s; `
+      + `stance held at ${recoveryReKnockdown.bracedFooting}`);
+
+  check("...and once the brace is spent, the legs put it back down",
+    recoveryReKnockdown.collapsed2Phase === "collapsed"
+      && recoveryReKnockdown.collapsed2Collapsed,
+    JSON.stringify({ phase: recoveryReKnockdown.collapsed2Phase }));
 
   await page.screenshot({ path: path.join(outDir, "distaff-combat.png") });
 

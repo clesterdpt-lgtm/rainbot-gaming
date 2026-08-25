@@ -235,7 +235,15 @@ export function buildHud(ctx, host) {
      ground that looked like eight legs with hitboxes a few centimetres
      wide. Same layer, same styling; a joint hit takes the weak-point
      mark because a joint is that limb's designed target. */
-  ctx.combat?.bus?.on("legHit", (event) => pushDamageNumber(event, { weak: !!event.joint }));
+  ctx.combat?.bus?.on("legHit", (event) => {
+    /* ...unless the limb CONDUCTS into the body (see `legDamageToBody`
+       in combat.js), in which case `applyDamage` already fired
+       `enemyDamaged` for the same blow and drawing this one too paints
+       two figures for one hit - one of them the raw swing, which is
+       not what the health bar moved by. */
+    if (event.conducted > 0) return;
+    pushDamageNumber(event, { weak: !!event.joint });
+  });
 
   /* Compact readiness sigils replace the old on-screen direction cards.
      The wheel owns selection; this dock only answers the question a player
@@ -999,13 +1007,21 @@ export function buildHud(ctx, host) {
     eventKickerEl.textContent = "THE GLASS SCAR · APEX SIGNATURE";
     eventNameEl.textContent = "THE DISTAFF";
     eventNameEl.title = eventNameEl.textContent;
+    /* The stance, as a number, for the same reason the Stylite prints
+       its grip: the fight's whole instruction is "break its footing"
+       and a pool with no readout is an instruction with no feedback -
+       a leg hit only pays a fraction of itself into the health bar
+       (see `legConduction`), so the bar alone reads as a lance doing
+       nothing. */
     eventSubEl.textContent = d.phase === "returning"
       ? "Withdrawing - it is going home"
       : d.collapsed
         ? "Collapsed - the body is exposed"
         : d.lunging
           ? "IT IS COMING"
-          : "Target legs — break its footing";
+          : d.braced
+            ? "Braced — it will not go over again yet"
+            : `Target legs · footing ${Math.round((d.footingFraction ?? 1) * 100)}%`;
     eventCountEl.textContent = d.collapsed
       ? "EXPOSED" : `${d.health} HP`;
     eventFillEl.style.width = `${clamp01(1 - d.health / Math.max(1, d.maxHealth)) * 100}%`;

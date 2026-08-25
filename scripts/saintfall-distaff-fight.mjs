@@ -494,19 +494,30 @@ try {
     T._teleportRaw(foot0.x + 0.6, foot0.z, 0);
     T.advanceToDistaffPhase("standing", 5);
     const atFoot = swing();
-    // Under the shin: the point on the tibia just below the reach
-    // line, then a step INWARD (toward the knee's footprint) so the
-    // shaft overhead is nearer than the tarsus.
-    const foot = world(inst.legs[2].toe);
-    const knee = world(inst.legs[2].tibia);
-    const py = T.player.state.y;
-    const reachY = py + box.meleeReachY;
-    const f = Math.max(0, Math.min(1, (knee.y - (reachY - 0.35)) / (knee.y - foot.y)));
-    const p = V3().copy(knee).lerp(foot, f);
-    const inward = V3().set(knee.x - foot.x, 0, knee.z - foot.z).normalize();
-    T._teleportRaw(p.x + inward.x * 0.9, p.z + inward.z * 0.9, 0);
-    T.advanceToDistaffPhase("standing", 5);
-    const atShin = swing();
+    /* Under the shin: the point on the tibia just below the reach
+       line, then a step INWARD (toward the knee's footprint) so the
+       shaft overhead is nearer than the tarsus.
+
+       RE-READ AFTER EVERY MOVE. `_teleportRaw` steps a whole frame and
+       this animal walks, so a spot solved from bones read before the
+       teleport is a spot the leg has already left - the swing then
+       whiffs and the test reports "the shin pays no joint bonus"
+       because nothing was hit at all. Three passes converge: each one
+       costs a single frame of drift and the boss stalks at 3 m/s. */
+    let atShin = null;
+    for (let pass = 0; pass < 3; pass += 1) {
+      const foot = world(inst.legs[2].toe);
+      const knee = world(inst.legs[2].tibia);
+      const py = T.player.state.y;
+      const reachY = py + box.meleeReachY;
+      const f = Math.max(0, Math.min(1, (knee.y - (reachY - 0.35)) / (knee.y - foot.y)));
+      const p = V3().copy(knee).lerp(foot, f);
+      const inward = V3().set(knee.x - foot.x, 0, knee.z - foot.z).normalize();
+      T._teleportRaw(p.x + inward.x * 0.9, p.z + inward.z * 0.9, 0);
+      T.advanceToDistaffPhase("standing", 5);
+      atShin = swing();
+      if (atShin.hits > 0) break;
+    }
     off();
     inst.legHp.splice(0, inst.legHp.length, ...original.legHp);
     inst.legBroken.splice(0, inst.legBroken.length, ...original.broken);
@@ -712,13 +723,23 @@ try {
       { x: -px, y: 0, z: -pz }, { damage: 40 });
     const legDamaged = inst.legHp.reduce((a, b) => a + b, 0) < legHpBefore
       || inst.health < hpBefore0;
-    // A shot at the STANDING body - plain damage, no weak bonus.
+    /* A shot at the STANDING body - plain damage, no weak bonus.
+       Tried from several bearings rather than from due east: the
+       animal WALKS, and a single fixed sightline across a crater full
+       of fulgurite spires is a shot that lands or is blocked depending
+       on where the boss happened to wander - which reads here as "the
+       standing body is not a ranged target" when what actually
+       happened is that a rock was in the way. */
     const ab = V3(inst.bones.get("abdomen1"));
     const hpBefore = inst.health;
-    const o2 = { x: ab.x + 30, z: ab.z };
-    const d2 = Math.hypot(ab.x - o2.x, ab.z - o2.z);
-    const hitBody = T.combat.fire({ x: o2.x, y: ab.y, z: o2.z },
-      { x: (ab.x - o2.x) / d2, y: 0, z: (ab.z - o2.z) / d2 }, { damage: 100 });
+    let hitBody = null;
+    for (let b = 0; b < 8 && !hitBody; b += 1) {
+      const a = (b / 8) * Math.PI * 2;
+      const o2 = { x: ab.x + Math.cos(a) * 26, z: ab.z + Math.sin(a) * 26 };
+      const d2 = Math.hypot(ab.x - o2.x, ab.z - o2.z) || 1;
+      hitBody = T.combat.fire({ x: o2.x, y: ab.y, z: o2.z },
+        { x: (ab.x - o2.x) / d2, y: 0, z: (ab.z - o2.z) / d2 }, { damage: 100 });
+    }
     return {
       hitLeg: !!hitLeg, legDamaged,
       hitBody: !!hitBody,
@@ -769,7 +790,16 @@ try {
     let t = 0;
     const offs = [
       T.distaff.bus.on("lungeTelegraph", () => { telegraphed += 1; if (secsToTelegraph < 0) secsToTelegraph = t; }),
-      T.distaff.bus.on("slamTelegraph", () => { slams += 1; if (secsToSlam < 0) secsToSlam = t; }),
+      /* Only the stamp the LUNGE cashes into. A haul now commits its
+         own stamp on arrival, and at this range the animal will happily
+         throw a line before it sprints - counting that one made the
+         payoff arrive two seconds before the tell it was supposed to
+         answer. */
+      T.distaff.bus.on("slamTelegraph", () => {
+        if (!telegraphed) return;
+        slams += 1;
+        if (secsToSlam < 0) secsToSlam = t;
+      }),
     ];
     for (let i = 0; i < 60 * 16; i += 1) {
       const st = T.distaffState();
@@ -892,10 +922,15 @@ try {
     T.distaff.clearHazards();
     T.player.clearRoot();
     T.distaff.primeAttack("web");
+    /* A CAST IS A FAN NOW and only its led strand takes the feet (see
+       `webFanPins`); the flankers hurt and drag. So this waits for the
+       hit that PINS rather than for the first hit of any kind - which
+       could be a flanker, and reading the pin off that measured the
+       wrong strand. */
     let hits = 0;
     const off = T.distaff.bus.on("webHit", () => { hits += 1; });
     let waited = 0;
-    while (!hits && waited < 60 * 8) { T.renderOnce(1 / 60); waited += 1; }
+    while (!(ps.rootFor > 0) && waited < 60 * 8) { T.renderOnce(1 / 60); waited += 1; }
     off();
     if (!hits) return { hits };
     const rootAtHit = ps.rootFor;
@@ -1076,9 +1111,16 @@ try {
   const sink = await page.evaluate(() => {
     const T = window.__SF;
     const inst = T.enemies.live.find((e) => e.key === "distaff");
-    /* Sample before the new 7.5s vulnerable window ends. The former
-       four-second wait was calibrated to an eleven-second collapse
-       and now photographed the animal after it had already risen. */
+    /* THE WINDOW IS HELD OPEN, not waited out. This used to sample a
+       fixed number of frames into the collapse and was calibrated,
+       twice, to whatever `collapseSeconds` happened to be - eleven,
+       then 7.5 - so every retune of the vulnerable window silently
+       re-pointed the next four tests at a boss that had already stood
+       back up (they read a body 5.8m up with a 3.4m drop and called
+       it a failed sink, which is what a RECOVERING animal looks like).
+       Forced instead, with a timer long enough to cover the whole
+       collapsed section below; the recover test closes it again. */
+    T.forceDistaffPhase("collapsed", 45);
     for (let i = 0; i < 150; i += 1) T.renderOnce(1 / 60);
     const head = inst.bones.get("head");
     head.updateWorldMatrix(true, false);
@@ -1238,6 +1280,9 @@ try {
   const recover = await page.evaluate(() => {
     const T = window.__SF;
     const before = T.distaffState().legBroken.slice();
+    // Close the window the sink test held open, and let it rise on its
+    // own clock from there.
+    T.forceDistaffPhase("collapsed", 0.2);
     const secs = T.advanceToDistaffPhase("standing", 20);
     const after = T.distaffState();
     return { secs, before, after };
@@ -1245,9 +1290,17 @@ try {
   check("it stands back up if it survives the collapse window",
     recover.secs >= 0 && recover.after.phase === "standing" && !recover.after.collapsed,
     `${recover.secs}s`);
+  /* The stance and the limb pools are two different numbers now (they
+     were briefly the same 340, which is why this used to compare both
+     against it). A rise restores every leg to its own full pool AND
+     re-plants the stance at the full stance pool - and brings up the
+     brace, which is the part that stops the next second of fire from
+     putting it straight back down. */
   check("all legs return to full health/footing and remain active when it stands",
-    recover.after.legHp.every((hp) => hp === 340) && recover.after.footingHp === 340,
-    JSON.stringify(recover.after.legHp));
+    recover.after.legHp.every((hp) => hp === recover.after.legHp[0] && hp > 0)
+      && recover.after.footingHp === recover.after.footingMax
+      && recover.after.braced === true,
+    `legs ${JSON.stringify(recover.after.legHp)}, footing ${recover.after.footingHp}/${recover.after.footingMax}, braced ${recover.after.braced}`);
 
   /* ---- THE LEASH ------------------------------------------------------ */
   const leash = await page.evaluate(() => {

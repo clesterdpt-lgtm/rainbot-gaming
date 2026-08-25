@@ -68,7 +68,7 @@ import { buildSummitWorld } from "saintfall/summit-world.js";
 import { buildSummitWeather } from "saintfall/summit-weather.js";
 import { buildSummitHud } from "saintfall/summit-hud.js";
 import { installSummitQa } from "saintfall/summit-qa.js";
-import { buildWhiteVigilTrooper } from "saintfall/summit-player.js";
+import { chooseSummitCharacter } from "saintfall/summit-characters.js";
 
 /* The LABELS are alpine and the ROW NAMES are not - see
    summit-art.js's header: `goldenhour`/`dusk`/`night` set
@@ -205,6 +205,8 @@ function makeVigilStub() {
 export async function start({ boot, build } = {}) {
   const params = new URLSearchParams(window.location.search);
   const qa = params.has("qa");
+  if (boot) boot.progress(0.08, qa ? "Selecting review operative" : "Choose your Vigil");
+  const character = await chooseSummitCharacter({ params, qa });
   const seed = params.has("seed")
     ? (hashString(params.get("seed")) >>> 0) : 0x5e17fa11;
   const timeKey = resolveTime(params.get("time"));
@@ -243,8 +245,14 @@ export async function start({ boot, build } = {}) {
        that asks "where am I" asks this. */
     districts: STATIONS,
     qa,
-    playerFigureFactory: buildWhiteVigilTrooper,
-    playerFigureName: "White Vigil",
+    playerFigureFactory: character.factory,
+    playerFigureName: character.name,
+    playerCharacter: {
+      id: character.id,
+      name: character.name,
+      designation: character.designation,
+      accent: character.accent,
+    },
     runtime: { phase: "playing", paused: false, handoffFrames: 0 },
   };
 

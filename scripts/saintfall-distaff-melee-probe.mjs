@@ -126,13 +126,24 @@ try {
       collapse: 0, recover: 0, legBroken: 0, stagger: 0, defeated: 0 };
     let dodgeUntil = -1;
     let dodgeFrom = Infinity;   // the dodge starts once t passes this
+    /* WHERE THE STAMP IS ABOUT TO LAND. The build stamps the FOOT
+       nearest the trooper, not its own centre (`slamAtFoot`), so a bot
+       that measures the ring from the body is a bot standing at a
+       tarsus twelve metres out deciding it is safe - it took twelve
+       stamps out of thirteen without moving once, and that measured
+       the harness rather than the boss. The telegraph carries the
+       epicentre; run from that. */
+    let slamX = 0;
+    let slamZ = 0;
     let sideUntil = -1;
     let sideFrom = Infinity;
     let sideDir = 1;
-    const offs = Object.keys(ev).map((k) => T.distaff.bus.on(k, () => {
+    const offs = Object.keys(ev).map((k) => T.distaff.bus.on(k, (e) => {
       ev[k] += 1;
       if (k === "slamTelegraph") {
-        const d = Math.hypot(ps.x - inst.x, ps.z - inst.z);
+        slamX = Number.isFinite(e?.x) ? e.x : inst.x;
+        slamZ = Number.isFinite(e?.z) ? e.z : inst.z;
+        const d = Math.hypot(ps.x - slamX, ps.z - slamZ);
         // Only worth running if inside the ring (read off the build's
         // own config, so the bot dodges the slam THIS build throws); the
         // tell is 0.9s and the sprint is 8.6 m/s - after the reaction
@@ -248,6 +259,8 @@ try {
       if (rooted) rootedFrames += 1;
       const dodging = t >= dodgeFrom && t < dodgeUntil;
       const stepping = t >= sideFrom && t < sideUntil;
+      // Away from the point the stamp named, not away from the animal.
+      const bearingSlam = Math.atan2(slamX - ps.x, slamZ - ps.z);
       if (ranged) {
         /* THE VOLLEY holds a band just outside the slam ring - closer
            than the reel likes, further than the slam reaches - and
@@ -256,7 +269,7 @@ try {
         const near = ring + 3.5;
         const far = ring + 8;
         if (dodging) {
-          T.setCam(bearingBoss + Math.PI, -0.05, 5.2); T.setGaitInput(0, -1);
+          T.setCam(bearingSlam + Math.PI, -0.05, 5.2); T.setGaitInput(0, -1);
         } else if (phase === "standing" && st.lunging && dBoss < 16) {
           T.setCam(bearingBoss + Math.PI / 2 * sideDir, -0.05, 5.2); T.setGaitInput(0, -1);
         } else if (stepping) {
@@ -302,8 +315,8 @@ try {
           if (rHeat >= 1) { rLockedUntil = t + 2.425; rHeat = 0.25; }
         }
       } else if (dodging) {
-        // Away from the centre, flat out.
-        T.setCam(bearingBoss + Math.PI, -0.05, 5.2);
+        // Away from where the foot is coming down, flat out.
+        T.setCam(bearingSlam + Math.PI, -0.05, 5.2);
         T.setGaitInput(0, -1);
       } else if (phase === "standing" && st.lunging && dBoss < 14) {
         // Sidestep the arrival.

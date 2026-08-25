@@ -285,7 +285,6 @@ const RB_SEARCH_SECTIONS = [
   { href: "games.html", label: "Games Vault", search: "games arcade browser free play vault catalog multiplayer agent after dark", type: "page" },
   { href: "articles.html", label: "The Slopwire", search: "slopwire fake news satire headlines articles feed", type: "page" },
   { href: "videos.html", label: "Slopwire Clips", search: "slopwire clips video parody reels short form", type: "video" },
-  { href: "videos.html#featured", label: "Area 51 Raid: Clap Alien Cheeks", search: "Area 51 Raid Clap Alien Cheeks slopwire clip funny video aliens found footage", type: "video" },
   { href: "community.html", label: "Community Forum", search: "community forum topics discussion leaderboard scores", type: "page" },
   { href: "after-dark.html", label: "After Dark", search: "after dark horror games vault sleep paralysis", type: "page" },
   { href: "agent-games.html", label: "Agent Games", search: "agent games ai benchmark protocol dsl observation action", type: "page" },
@@ -301,7 +300,15 @@ const RB_SEARCH_TYPE_FILTERS = [
 
 // Playable routes kept for direct links or in-progress QA, but intentionally
 // omitted from the public discovery surfaces until they are a catalog release.
-const RB_UNLISTED_GAME_SLUGS = new Set(["blacksand", "saintfall", "tardigrade-micro-mayhem"]);
+const RB_UNLISTED_GAME_SLUGS = new Set([
+  "again",
+  "apop-demon-hunters",
+  "blacksand",
+  "drowned-orrery",
+  "saintfall",
+  "tardigrade-micro-mayhem",
+  "the-weight",
+]);
 
 let rbSearchIndexCache = null;
 let rbSearchDocBound = false;
@@ -492,8 +499,8 @@ const HOME_COMMUNITY_COMMENT_TARGETS = [
   { contentType: "game", contentId: "escape-poop-cruise", title: "Escape the Poop Cruise", href: "games/escape-poop-cruise.html", kicker: "Game thread" },
   { contentType: "game", contentId: "rizz-craft", title: "Rizz-Craft", href: "games/rizz-craft.html", kicker: "Game thread" },
   { contentType: "game", contentId: "brainrot-2048", title: "Brainrot 2048", href: "games/brainrot-2048.html", kicker: "Game thread" },
+  { contentType: "game", contentId: "inkblood", title: "Inkblood", href: "games/inkblood.html", kicker: "Game thread" },
   { contentType: "article", contentId: "local-man-shadowbanned-by-own-fridge", title: "Shadowbanned By Own Refrigerator", href: "articles/local-man-shadowbanned-by-own-fridge.html", kicker: "Slopwire" },
-  { contentType: "video", contentId: "area-51-raid-clap-alien-cheeks", title: "Area 51 Raid", href: "videos.html#featured", kicker: "The Slopwire" },
 ];
 
 function getLocalSaveCount() {
@@ -1355,8 +1362,6 @@ function initGamesCatalog() {
   const afterDarkGameHrefs = new Set([
     "games/escape-poop-cruise.html",
     "games/dont-become-pizza.html",
-    "games/again.html",
-    "games/the-weight.html",
     "games/mr-feast-mansion.html",
   ]);
   const multiplayerGameHrefs = new Set([
@@ -1384,7 +1389,8 @@ function initGamesCatalog() {
       || text.includes("online brawl")) {
       tags.add("multiplayer");
     }
-    if (afterDarkGameHrefs.has(href) || text.includes("rainbot after dark") || text.includes(" after dark")) {
+    const metaDetail = card.querySelector(".directory-card__meta em")?.textContent.trim() || "";
+    if (afterDarkGameHrefs.has(href) || text.includes("rainbot after dark") || metaDetail.includes("After Dark")) {
       tags.add("after-dark");
     }
     return tags;
@@ -3123,16 +3129,16 @@ function homeCommunityFallbackActivity() {
       href: "games/escape-poop-cruise.html",
     },
     {
-      title: "The Slopwire",
-      body: "Area 51 footage is sitting in the occasional clips slot.",
-      meta: "Clip",
-      href: "videos.html#featured",
+      title: "Inkblood",
+      body: "Manga horde survivor runs are hitting the leaderboard.",
+      meta: "Horde Survivor",
+      href: "games/inkblood.html",
     },
     {
-      title: "The Slopwire",
-      body: "Fresh fake-news dispatches are open for comments.",
-      meta: "Read",
-      href: "articles.html",
+      title: "Big Baby Bum",
+      body: "3D katamari chaos rolling through the neighborhood.",
+      meta: "3D Katamari",
+      href: "games/big-baby-bum.html",
     },
   ];
 }

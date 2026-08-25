@@ -25,6 +25,7 @@
 
    Usage:
      node scripts/saintfall-leg-rig-probe.mjs [--out FILE]
+     node scripts/saintfall-leg-rig-probe.mjs --level summit --character bastion-penitent
      node scripts/saintfall-leg-rig-probe.mjs --level summit --series climb-1.15
    ============================================================ */
 
@@ -44,6 +45,8 @@ const levelArg = process.argv.indexOf("--level");
 const which = levelArg >= 0 ? process.argv[levelArg + 1] : "both";
 const seriesArg = process.argv.indexOf("--series");
 const series = seriesArg >= 0 ? process.argv[seriesArg + 1] : null;
+const characterArg = process.argv.indexOf("--character");
+const character = characterArg >= 0 ? process.argv[characterArg + 1] : null;
 const PORT = 47900 + (process.pid % 900);
 const BASE = `http://127.0.0.1:${PORT}`;
 
@@ -129,7 +132,11 @@ async function main() {
       if (which !== "both" && which !== level.id) continue;
       const page = await (await browser.newContext({ viewport: { width: 900, height: 600 } })).newPage();
       page.on("pageerror", (e) => console.error(`PAGE ERROR [${level.id}]`, e.message));
-      await page.goto(`${BASE}/${level.page}?qa=1&quality=low`,
+      const url = new URL(`${BASE}/${level.page}`);
+      url.searchParams.set("qa", "1");
+      url.searchParams.set("quality", "low");
+      if (level.id === "summit" && character) url.searchParams.set("character", character);
+      await page.goto(url.href,
         { waitUntil: "domcontentloaded", timeout: 60000 });
       await page.waitForFunction(() => window.__SF && window.__SF.isReady(), null, { timeout: 300000 });
       report[level.id] = await page.evaluate(

@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260824-winnower-pass-1";
+  const BUILD = "20260825-bastion-heavy-2";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,
@@ -110,7 +110,7 @@
        its own exact-specifier key or the browser serves it with no
        cache key at all - see the block comment below. */
     "summit-art", "summit-terrain", "summit-structures", "summit-weather",
-    "summit-sky", "summit-world", "summit-hud", "summit-player", "summit-qa", "summit-main",
+    "summit-sky", "summit-world", "summit-hud", "summit-player", "summit-characters", "summit-qa", "summit-main",
   ];
 
   /* WHICH ENTRY POINT. A level page declares its own with

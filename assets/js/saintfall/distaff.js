@@ -106,6 +106,7 @@ export const DISTAFF_CONFIG = Object.freeze({
   lungeCadence: 8.0,
   lungeSeconds: 2.4,
   lungeSpeed: 17.5,
+  lungeCashRange: 10.6,    // how close the sprint gets before it turns into the stamp
   lungeMinRange: 13,
   lungeMaxRange: 48,
   /* How fast the sprint may bend toward a player who is not where it
@@ -146,13 +147,58 @@ export const DISTAFF_CONFIG = Object.freeze({
   // One committed leg break buckles it. Each rise restores every
   // unbroken leg, so the player reads and wins one limb at a time.
   collapseThreshold: 1,
-  collapseSeconds: 7.5,
+  collapseSeconds: 6.0,
   collapseSlamContact: 0.90,      // seconds into `collapse`, matches the model's own timing
   recoverSeconds: 1.05,
-  /* A fresh collapse cannot retrigger inside this window even if a
-     new leg breaks the instant it stands - the vulnerable window has
-     to actually end before the next one can begin. */
-  recollapseGuard: 1.5,
+  /* THE BRACE. A fresh collapse cannot retrigger inside this window,
+     and while it is running the footing pool below does not drain at
+     all - the animal has planted itself and is not going over again
+     until it has stood for a while.
+
+     It was 1.5s and the pool was 340, which together measured as a
+     boss that spent 72% of a ranged fight lying on its face: a rifle
+     emptied the pool in about a second, the guard expired inside the
+     rise animation, and the down window - the one place the body is a
+     weak point - came round seven times in sixty-eight seconds. The
+     window has to be EARNED and it has to end. */
+  recollapseGuard: 7.0,
+
+  /* ------------------------------------------------------------
+     FOOTING. The fight's real resource, and it is not health.
+
+     Eight legs hold nine metres of body up; cutting at them buckles
+     the stance long before it kills the animal, and the collapse that
+     buckling produces is the only window in which the body is worth
+     more than the legs. So a leg hit spends itself HERE first and
+     only bleeds a fraction of itself into the main pool (see
+     `legConduction`) - which is what stops the legs from being a
+     second, easier health bar the body never has to be reached
+     through.
+
+     `footingPool` is sized against measured damage rather than
+     guessed: a rifle working the joints lands about 190 raw a second
+     and a lance about 90, so this is roughly nine seconds of
+     committed leg work either way once the melee weight below is
+     paid. It regenerates if the player stops - a stance is not chipped
+     down over four minutes of plinking, it is broken by somebody
+     standing under the animal and staying there. */
+  footingPool: 1450,
+  footingRegen: 55,            // per second, once the delay has run
+  footingRegenDelay: 3.2,      // seconds without a leg hit before it braces back up
+  /* A LANCE COUNTS FOR MORE THAN A BULLET AGAINST A STANCE, and this
+     is the whole reason the melee build has a route into the fight
+     that the rifle cannot simply out-range. Applied here rather than
+     in combat.js because it is this animal's opinion about what
+     buckles it, not a property of limbs in general. */
+  footingMeleeWeight: 1.85,
+  /* How much of a leg hit reaches the body. Every point of it used to
+     (the leg pools were vestigial and the raw swing went straight to
+     `inst.health`), which made a boss whose stated thesis is "cut the
+     legs until the body comes DOWN" into one that never needed the
+     body at all - a rifle killed it in 68 seconds from outside its
+     reach, taking no damage, and 72% of that was spent shooting a
+     prone animal. */
+  legConduction: 0.40,
 
   /* A LOST LEG BUYS A WINDOW. Breaking one is the fight's unit of
      progress and it used to buy nothing but a poise kick: the slam
@@ -175,13 +221,98 @@ export const DISTAFF_CONFIG = Object.freeze({
      is 0.9s and a step outward is the answer, but there is a question
      to answer now. Ranged players in the hold band feel it too, at
      the same edge value they used to at 9m. */
-  slamRadius: 12.5,
-  slamDamage: 46,
+  /* 5.6, and the number is a sprint MINUS A REACTION. The tell is
+     0.9s; a player who reads it in 0.3 has 0.6s left and covers 5.2
+     metres at a sprint, so this is a ring that a trooper who answers
+     the telegraph leaves and a trooper who finishes their combo does
+     not. That is the decision the stamp is for, and it is only a
+     decision if both outcomes are reachable.
 
-  webCadence: 3.8,
+     The two numbers it replaces are both instructive. At 12.5 centred
+     on the BODY its edge sat exactly where a melee player stands and
+     it landed once in thirty-three telegraphs. At 7.0 centred on the
+     FOOT it could not be left at all from the epicentre - seven in
+     twelve against a lance, which killed the bot outright. */
+  slamRadius: 5.6,
+  slamDamage: 46,
+  /* WHERE THE FOOT COMES DOWN, and it is not the animal's navel.
+     The stamp used to be a ring centred on the body, which put its
+     edge exactly where a melee player stands - at a tarsus, twelve
+     metres out - and a 0.9s tell is 7.7 metres of sprint, so every
+     trooper in it was always one step from outside it: thirty-three
+     telegraphs, one landing, across a four-minute fight.
+
+     It stamps the LEG YOU ARE STANDING AT now. The epicentre is the
+     foot nearest the trooper at the moment of the tell, so the ring
+     is around them rather than around the animal, and leaving it
+     means leaving the limb they were cutting - which is the decision
+     the attack was supposed to be asking for. Ranged players are
+     inside it more often too, because the near foot is the part of
+     the animal closest to them; the tell is unchanged and so is the
+     answer to it. */
+  slamAtFoot: true,
+
+  /* ------------------------------------------------------------
+     SILK. The animal's answer to everything it cannot reach, and for
+     two builds it barely threw any: the ladder in `stepStanding`
+     checked the slam first against a range 30% WIDER than the slam
+     can actually hit, so a spider standing in its own hold band spent
+     every action on a leg it could not land and the 3.8s silk clock
+     was never read. Measured: 21 slam telegraphs, 0 landings, 14
+     bolts, 1 hit, over a 157-second fight in which the player lost 57
+     of 150 health.
+
+     Three changes, and the frequency is only the first of them. The
+     slam now claims only what it can hit and silk owns everything
+     past it; the clock is shorter; and a cast is a FAN of bolts with
+     the middle one led onto where the player is going, because a
+     single bolt at 25 m/s aimed at where somebody already was is
+     dodged by continuing to walk. A fan has to be broken out of. */
+  webCadence: 3.0,
   webContact: 0.78,
-  webSpeed: 25,
+  webSpeed: 27,
   webDamage: 10,
+  /* Three strands: one led, two flanking. The spread is measured at
+     the target rather than in radians so it stays the same gap to
+     step through whether it is thrown from twelve metres or forty. */
+  webFan: 3,
+  /* THE GAP IS THE DODGE, and it has to be arithmetic rather than a
+     feeling: a bolt catches inside 1.7m (see `updateBolts`), so three
+     strands at 3.4m spacing draw a CONTINUOUS ten-metre wall of silk
+     with nothing to step through - measured at ten hits in eleven
+     casts, which is not an attack, it is a tax. At 5.5m the fan covers
+     three bands with a two-metre gap either side of the middle one:
+     hold your line and the led strand has you, break it by a stride
+     and you are in the gap. */
+  webFanSpread: 5.5,           // metres either side of the led bolt, at the target
+  /* How much of the player's own travel the cast leads by, 0..1 of
+     the bolt's flight time. A full lead is a bolt that cannot be
+     dodged by moving at all - only by changing what you are doing -
+     and this animal is not a sniper; half is "it read you". */
+  webLead: 0.5,
+  /* HOW OFTEN SILK MAY PIN, as opposed to land. The root is 2.4s and
+     the animal now throws three strands every three seconds: without
+     a floor between pins a trooper who is caught once is held for the
+     rest of the fight, and every hold queues a bite on top of it -
+     measured at 21 seconds rooted out of 74, which is a stun-lock
+     wearing a mechanic's clothes. Silk that lands inside this window
+     still hurts and still slows; it just does not take the feet
+     again. */
+  webPinGap: 5.0,
+  /* ONLY THE LED STRAND TAKES THE FEET. The flankers exist to make
+     the middle one a decision - they hurt and they drag, and that is
+     all. A fan in which every strand pins is a fan that pins, because
+     the three arrive together: the whole spread becomes one wide,
+     unanswerable hold rather than a line with a gap in it, which is
+     what it measured as (ten hits in eleven casts, twenty-one seconds
+     rooted out of seventy-four). */
+  webFanPins: 1,
+  /* THE HAUL IS NOT LED. At 34 m/s a led line hooked four throws in
+     five where the unled one hooked one in eight, and what follows a
+     hook is not a hit - it is a drag, a stamp and everything the
+     animal can reach you with while you are arriving. A commitment
+     that large has to be dodgeable by moving. */
+  reelLead: 0,
   /* THE PIN. A web bolt HOLDS you now - it was a 0.34x slow, which on
      a trooper is a jog, and silk thrown to pin something that then
      jogs off is silk that missed. Rooted to the spot for the first
@@ -198,20 +329,34 @@ export const DISTAFF_CONFIG = Object.freeze({
      step off its line) and the answer once hooked is Aegis for the
      slam that follows or a sprint out of the ring in the 0.9s tell.
      Faster than the pin bolt because it is thrown at range. */
-  reelCadence: 9.5,
+  /* 9.0 rather than the 7.4 this pass first tried. The line is a much
+     bigger commitment than it used to be - the haul now COMMITS its
+     payoff on arrival (a bite if the mouth is over them, the stamp
+     otherwise) instead of merely arming a timer that often expired
+     into nothing - so each throw is worth roughly twice what it was,
+     and throwing it a third more often measured as a lance bot dying
+     with the boss on 4% health. Frequency belongs to the pin; weight
+     belongs to the line. */
+  reelCadence: 9.0,
   reelContact: 0.78,
   reelSpeed: 34,
-  reelMinRange: 14,
+  reelMinRange: 12,
   reelMaxRange: 46,
   reelPreferRange: 28,     // beyond this a ready line beats a ready lunge
   reelPull: 16,            // m/s the line hauls at
   reelSeconds: 2.4,        // longest haul before the line parts
   reelStop: 8.5,           // haul ends here - the slam ring's own edge
 
-  patchCadence: 5.4,
+  patchCadence: 4.4,
   patchRadius: 5.2,
   patchSeconds: 11,
   patchSlowFactor: 0.55,
+  /* How often a laid patch goes UNDER the trooper rather than beside
+     them. All of them used to land 3-9m away on a random bearing,
+     which is silk as scenery; one in three under the feet is silk as
+     zoning, and the other two still fence the ground they would
+     retreat across. */
+  patchOnTargetChance: 0.34,
 
   /* THE BITE, from the ground. It was 58 of a 150-point trooper every
      1.75s inside 6.8m of the body CENTRE with no facing test - which,
@@ -231,7 +376,9 @@ export const DISTAFF_CONFIG = Object.freeze({
   simRange: 620,
 });
 
-const BOLT_MAX = 6;
+/* Eight: a three-strand fan plus a reel line, twice over, so a
+   second cast never recycles a bolt still in flight from the first. */
+const BOLT_MAX = 8;
 const PATCH_MAX = 5;
 const STAIN_MAX = 4;
 const WEB_COLOUR = "#bff5ec";
@@ -357,7 +504,16 @@ const CHALK_MID = lin("#a8dcee");   // the DOMINANT value - flank and leg shaft
 const CHALK_LOW = lin("#26404f");   // cold shadow, the crater showing through
 const SILK_PALE = lin("#e8ffff");   // dried silk, the palest thing on the animal
 const SILK_DULL = lin("#9ed2de");
-const GLASS_DARK = lin("#123840");  // fused shard, seen against the light
+/* THE UNLIT SHARD, and it was a HOLE. `#123840` measures 0.037 linear
+   luminance against the chalk's 0.69 - an eighteen-to-one step between
+   two facets that share an edge - and at the rate the roll below used
+   to fire (see `GLASS_GATE`) roughly a third of every up-facing plate
+   on the animal was painted it. What that produces is not "glass fused
+   through a shell": it is a chalk-white body with black quads punched
+   out of it at random, which is exactly how it reads and exactly how
+   it was reported. Six-to-one still says "a different, darker material
+   is set into this one" and no longer says "the model is broken". */
+const GLASS_DARK = lin("#2c6a74");  // fused shard, seen against the light
 const GLASS_LIT = lin("#69c9c2");   // the same shard with the sun in it
 /* THE UNDERSIDE WAS A HOLE PUNCHED IN THE FRAME, not a body part.
    Read blind, the critic named it twice: "the pedicel/spinneret mass
@@ -418,6 +574,34 @@ const SEGMENT_VALUE = { coxa: 0.52, femur: 1.0, tibia: 1.16, foot: 0.66 };
  *  spikes a few centimetres wide, so the doubled fill is nothing. */
 const PART = { SHELL: 0, LEG: 1, GLASS: 2, BELLY: 3, HEAD: 4, BRISTLE: 5 };
 const PART_COUNT = 6;
+
+/* ------------------------------------------------------------------
+   HOW MUCH OF THE ANIMAL IS GLASS, and the arithmetic rather than a
+   claim about it.
+
+   The roll is `hash * (GLASS_BIAS_FLAT + GLASS_BIAS_UP * up)`, where
+   `hash` is a facet-constant 0..1 and `up` is how far the facet faces
+   the sky. A facet is glass past `GLASS_GATE` and a LIT shard past
+   `GLASS_LIT_GATE`.
+
+   The paint's own comment has always said "about one facet in twelve,
+   which is the number that reads as fused into the shell - at one in
+   four it reads as a mosaic and the animal stops being an animal".
+   The gate underneath it said something else entirely: at 0.70 a
+   sky-facing facet needed only hash > 0.53, which is FORTY-SEVEN PER
+   CENT of the top plate, and measuring the dressed geometry found
+   1,155 glass facets against 1,097 chalk ones - more glass than shell
+   on the half of the animal the camera spends the fight looking at.
+
+   1.18 puts a sky-facing facet at hash > 0.89 (11%, the number the
+   comment always meant) and takes a flank facet out of the running
+   entirely, which is the bias the comment also always described: a
+   crater throws its glass UP, and up is where the sun can find it.
+   ------------------------------------------------------------------ */
+const GLASS_BIAS_FLAT = 0.46;
+const GLASS_BIAS_UP = 0.86;
+const GLASS_GATE = 1.18;
+const GLASS_LIT_GATE = 1.27;
 
 /* A cheap integer hash over a quantised point. Deliberately NOT a
    smooth noise: what is wanted is a value that is CONSTANT over a
@@ -734,10 +918,17 @@ export function buildDistaff(ctx) {
     disengageFor: 0,
     defeated: false,
     biteTimer: 0,
+    // Seconds left before silk may take the feet again - see webPinGap.
+    pinGap: 0,
     releaseCameraAt: undefined,
-    // Footing health pool: damaging legs chips at footing to buckle and collapse the boss
+    /* FOOTING. The stance pool - see the config note. `legHealthRef`
+       is what one leg's own `inst.legHp` entry is refilled to on a
+       rise, and is deliberately no longer the same number as the
+       stance: a leg pool that IS the stance made the whole fight one
+       second of rifle fire long. */
     legHealthRef: 340,
-    footingHp: 340,
+    footingHp: C.footingPool,
+    footingQuiet: 0,          // seconds since the last leg hit landed
     /* The reveal camera plays once per encounter, not once per
        re-aggro: a player who has already been shown the animal is
        mid-fight, and stealing the camera again is a punishment. A
@@ -750,6 +941,9 @@ export function buildDistaff(ctx) {
     lungeTarget: null,
     strafeDir: 1,
     footfallGap: 0,
+    // Where the stamp the animal is winding up will land - see beginSlam.
+    slamX: NaN,
+    slamZ: NaN,
     // A leg just went; nothing is thrown until this runs out.
     staggerFor: 0,
     // The reel: its cadence, and the haul in progress (null when none).
@@ -1281,10 +1475,14 @@ export function buildDistaff(ctx) {
          glass and where the sun can find it. About one facet in
          twelve, which is the number that reads as "fused into the
          shell" - at one in four it reads as a mosaic and the animal
-         stops being an animal. */
+         stops being an animal. See `GLASS_GATE` for the arithmetic
+         that makes this the rate it has always claimed to be, and for
+         what it measured as before. A BRISTLE IS NEVER GLASS: a spine
+         standing off the shaft is hair, and a glossy black spine
+         reads as a hole in the leg it is growing out of. */
       const glassRoll = hash3(Math.floor(px * 3.1), Math.floor(py * 3.1), Math.floor(pz * 3.1))
-        * (0.46 + 0.86 * up);
-      const glass = glassRoll > 0.70;
+        * (GLASS_BIAS_FLAT + GLASS_BIAS_UP * up);
+      const glass = glassRoll > GLASS_GATE && !isBristle;
 
       if (isHead) {
         part = PART.HEAD;
@@ -1306,6 +1504,51 @@ export function buildDistaff(ctx) {
         segOf[t] = segment;
         const seg = SEGMENT_VALUE[LEG_PREFIX[segment]];
         for (let k = 0; k < 3; k += 1) rgb[k] *= seg;
+        /* THE CROSS-SECTION RAMP, and this is the code the long note
+           above `limbFrame` describes. It was computed - the frames,
+           the shaft radii, `facetUp`, `isBristle`, all of it - and
+           then NEVER READ: the leg paint fell straight through to the
+           world-up ramp the note exists to explain is wrong for a
+           cylinder. Every one of the nine facets around a near-vertical
+           shaft has n.y ~ 0, lands on one stop, and photographs as the
+           flat folded ribbon the blind critic called it, which is what
+           it has done for every build since.
+
+           Keyed on the shaft's own frame instead: the dorsal line is
+           chalk, the flank is the material, and the underside keeps the
+           crater's shadow. That is what makes a cylinder read as a
+           cylinder from any angle and in any light. */
+        if (shaft) {
+          const around = facetUp[t];        // +1 dorsal, -1 ventral
+          const toDorsal = sstep(0.12, 0.90, around);
+          /* CAPPED, and the cap is the point. `CHALK_LOW` is twelve
+             times darker than `CHALK_MID`; run to the stop, the
+             underside of every segment goes to near-black and eight
+             pale cylinders become four pale ones and four black
+             sticks depending on which way the camera stands. The
+             terminator is the renderer's job - this ramp only has to
+             say which side of the shaft is which. */
+          const toVentral = sstep(0.08, 0.78, -around) * 0.62;
+          /* ...and a little ALONG it as well, which is the other half
+             of the same note ("a specular stripe running unbroken end
+             to end"). Dust settles at the root and the far end is worn
+             back by walking on glass, so a segment is not one value
+             from socket to claw. Small: this is a gradient, not a
+             second material. */
+          const wear = 1 - 0.13 * facetT[t];
+          for (let k = 0; k < 3; k += 1) {
+            rgb[k] = lerp(lerp(CHALK_MID[k], CHALK_TOP[k], toDorsal),
+              CHALK_LOW[k], toVentral) * seg * wear;
+          }
+        }
+        /* A bristle is hair, not plate: dry, matte, and a shade under
+           the shaft it stands out of, so the fringe reads as fringe
+           rather than as more leg. */
+        if (isBristle) {
+          for (let k = 0; k < 3; k += 1) {
+            rgb[k] = lerp(rgb[k], SILK_DULL[k] * 0.66, 0.5);
+          }
+        }
         if (segment === 3) {
           // Worn back to bare shell by standing in a glass crater.
           for (let k = 0; k < 3; k += 1) rgb[k] = lerp(rgb[k], FOOT_WORN[k], 0.55);
@@ -1330,7 +1573,7 @@ export function buildDistaff(ctx) {
           alpha = 0.15;
         } else if (glass) {
           part = PART.GLASS;
-          const litShard = glassRoll > 0.92;
+          const litShard = glassRoll > GLASS_LIT_GATE;
           for (let k = 0; k < 3; k += 1) {
             rgb[k] = litShard ? GLASS_LIT[k] : GLASS_DARK[k];
           }
@@ -1361,7 +1604,7 @@ export function buildDistaff(ctx) {
         alpha = 0.06 + 0.20 * core;
       } else if (glass) {
         part = PART.GLASS;
-        const litShard = glassRoll > 0.93;
+        const litShard = glassRoll > GLASS_LIT_GATE;
         for (let k = 0; k < 3; k += 1) rgb[k] = litShard ? GLASS_LIT[k] : GLASS_DARK[k];
         alpha = litShard ? 0.84 : 0.15 + 0.16 * hFine;
       }
@@ -1782,6 +2025,7 @@ export function buildDistaff(ctx) {
     b.live = true;
     b.life = 3.2;
     b.reel = false;
+    b.pins = true;
     b.x = x; b.y = y; b.z = z;
     b.vx = vx; b.vy = vy; b.vz = vz;
     b.mesh.position.set(x, y, z);
@@ -2176,14 +2420,22 @@ export function buildDistaff(ctx) {
           ctx.combat?.hurtPlayer?.(C.webDamage, {
             source: "distaff-web", x: hit.x, y: hit.y, z: hit.z,
           });
-          /* PINNED. Held fast first, then slowed as the strands tear -
-             the root is the attack; the slow is what is left of it.
-             `applyRoot` refreshes toward the longer timer, so a second
-             bolt on a held trooper extends the hold rather than
-             restarting a shorter one. */
-          ctx.player?.applyRoot?.(C.webRootSeconds);
+          /* PINNED - if the animal is allowed one. See `webPinGap`:
+             a fan is three strands and they arrive together, so
+             without a floor between pins the first one takes the feet
+             and the other two extend the hold past anything a trooper
+             can answer. Strands that land inside the window still
+             hurt and still drag; only the first takes the feet. */
+          const pinned = b.pins !== false && state.pinGap <= 0;
+          if (pinned) {
+            state.pinGap = C.webPinGap;
+            /* `applyRoot` refreshes toward the longer timer, so a
+               second bolt on a held trooper extends the hold rather
+               than restarting a shorter one. */
+            ctx.player?.applyRoot?.(C.webRootSeconds);
+          }
           ctx.player?.applySlow?.(C.webSlowFactor, C.webRootSeconds + C.webSlowSeconds);
-          ctx.player?.doctrineKick?.(0.5, 0.2);
+          ctx.player?.doctrineKick?.(pinned ? 0.5 : 0.28, 0.2);
           // The silk on the ground under them, for as long as it holds.
           spillPatch(ps.x, ps.z, 1.7, C.webRootSeconds + C.webSlowSeconds);
           bus.emit("webHit", hit);
@@ -2296,7 +2548,46 @@ export function buildDistaff(ctx) {
     bus.emit("recover", { x: inst.x, z: inst.z });
   }
 
+  /** The foot nearest the trooper, in world space, or null if the rig
+   *  is not up yet. `plant` is where the solver has actually put the
+   *  tarsus - the same number `watchFootfalls` reads - so this is the
+   *  foot they are standing at and not the foot the bind pose thinks
+   *  is nearest. */
+  function nearestFoot(out) {
+    const ps = ctx.player?.state;
+    if (!ps || !inst?.legs) return null;
+    let best = null;
+    let bestD = Infinity;
+    for (let i = 0; i < inst.legs.length; i += 1) {
+      const plant = inst.legs[i].plant;
+      if (!plant) continue;
+      const d = Math.hypot(plant.x - ps.x, plant.z - ps.z);
+      if (d < bestD) { bestD = d; best = plant; }
+    }
+    if (!best) return null;
+    return out.set(best.x, best.y, best.z);
+  }
+
+  /** How far the trooper is from the nearest foot - which, now that
+   *  the stamp lands ON that foot, is the range that decides whether
+   *  there is anything to stamp at. Distance to the BODY is nine
+   *  metres too far out to answer that question on an animal whose
+   *  feet stand twelve metres from its centre. */
+  function footRange(fallback) {
+    const foot = nearestFoot(_footV);
+    if (!foot) return fallback;
+    const ps = ctx.player?.state;
+    if (!ps) return fallback;
+    return Math.hypot(foot.x - ps.x, foot.z - ps.z);
+  }
+
   function beginSlam() {
+    /* Chosen at the TELL, not at contact: the dust and the banner go
+       up where the foot is about to land, so the ring the player is
+       being asked to leave is the one they can see. */
+    const foot = C.slamAtFoot ? nearestFoot(_footV) : null;
+    state.slamX = foot ? foot.x : inst.x;
+    state.slamZ = foot ? foot.z : inst.z;
     enemies.play(inst, "slam", 0.1);
     // ANTICIPATION. It gathers before it hits: the body comes up on
     // the spring during the windup and the same spring throws it back
@@ -2306,7 +2597,7 @@ export function buildDistaff(ctx) {
     state.actionKind = "slam";
     state.pending = C.slamContact;
     state.slamTimer = C.slamCadence;
-    bus.emit("slamTelegraph", { x: inst.x, z: inst.z });
+    bus.emit("slamTelegraph", { x: state.slamX, z: state.slamZ });
   }
 
   function beginWebCast() {
@@ -2362,14 +2653,19 @@ export function buildDistaff(ctx) {
 
   function landSlam() {
     const ps = ctx.player.state;
-    const dist = Math.hypot(ps.x - inst.x, ps.z - inst.z);
-    const y = groundAt(inst.x, inst.z);
+    const sx = Number.isFinite(state.slamX) ? state.slamX : inst.x;
+    const sz = Number.isFinite(state.slamZ) ? state.slamZ : inst.z;
+    /* Resolved against where they are NOW, against the point the tell
+       named - so the wind-up is a real window and stepping out of it
+       is a real dodge. */
+    const dist = Math.hypot(ps.x - sx, ps.z - sz);
+    const y = groundAt(sx, sz);
     // ...and RECOVERY: the mass arrives, the body compresses onto the
     // legs and settles back over the next two thirds of a second.
     poiseKick(2.7);
-    ctx.vfx?.blast?.(inst.x, y + 0.3, inst.z, C.slamRadius * 0.55);
+    ctx.vfx?.blast?.(sx, y + 0.3, sz, C.slamRadius * 0.62);
     if (dist > C.slamRadius || ctx.combat?.player?.dead) {
-      bus.emit("slamMiss", { x: inst.x, z: inst.z });
+      bus.emit("slamMiss", { x: sx, z: sz });
       return;
     }
     const falloff = 1 - 0.6 * (dist / C.slamRadius);
@@ -2378,7 +2674,39 @@ export function buildDistaff(ctx) {
     });
     ctx.player.punch?.(1.5);
     ctx.player.doctrineKick?.(0.9, 0.85);
-    bus.emit("slam", { x: inst.x, z: inst.z });
+    bus.emit("slam", { x: sx, z: sz });
+  }
+
+  /** Where the trooper will be when a strand thrown now arrives, and
+   *  how much of that lead the animal is allowed to take.
+   *
+   *  Solved rather than iterated: the flight time depends on the
+   *  distance and the distance depends on the lead, so one pass with
+   *  the CURRENT distance is close enough at 27 m/s over ten to forty
+   *  metres and does not need a quadratic. `webLead` is what keeps it
+   *  an animal reading a runner rather than a firing solution.
+   *
+   *  The velocity comes from this module's own tracker (see
+   *  `stepPlayerTrack`) and not from `player.state.travelSpeed`,
+   *  which is zeroed by `player.spawn` - every teleport-driven probe
+   *  would otherwise measure a moving trooper as a still one and the
+   *  lead would silently do nothing in exactly the tests written to
+   *  check it. */
+  function aimPointAt(origin, out, spread = 0, lead = C.webLead) {
+    const ps = ctx.player.state;
+    const flat = Math.hypot(ps.x - origin.x, ps.z - origin.z) || 1;
+    const flight = flat / C.webSpeed;
+    let tx = ps.x + track.vx * flight * lead;
+    let tz = ps.z + track.vz * flight * lead;
+    if (spread !== 0) {
+      // Across the line of flight, so the fan opens sideways from the
+      // trooper's point of view rather than in depth.
+      const ux = (tx - origin.x) / (Math.hypot(tx - origin.x, tz - origin.z) || 1);
+      const uz = (tz - origin.z) / (Math.hypot(tx - origin.x, tz - origin.z) || 1);
+      tx += -uz * spread;
+      tz += ux * spread;
+    }
+    return out.set(tx, ps.y + 0.9, tz);
   }
 
   function launchWebBolt() {
@@ -2386,15 +2714,28 @@ export function buildDistaff(ctx) {
     if (!bone) return;
     bone.updateWorldMatrix(true, false);
     const origin = bone.getWorldPosition(_vec);
-    const ps = ctx.player.state;
-    const dx = ps.x - origin.x;
-    const dy = (ps.y + 0.9) - origin.y;
-    const dz = ps.z - origin.z;
-    const d = Math.hypot(dx, dy, dz) || 1;
-    launchBolt(origin.x, origin.y, origin.z,
-      (dx / d) * C.webSpeed, (dy / d) * C.webSpeed, (dz / d) * C.webSpeed);
+    /* THE FAN. One bolt at where somebody was is dodged by continuing
+       to walk - measured at one hit in fourteen casts. The middle
+       strand leads, the flankers sit a stride either side of it, and
+       the gap between them is what the trooper has to actually break
+       stride to find. An odd count keeps a led strand in the middle;
+       an even one would leave the lead unthrown. */
+    const count = Math.max(1, Math.round(C.webFan));
+    const mid = (count - 1) / 2;
+    for (let i = 0; i < count; i += 1) {
+      const spread = count > 1 ? (i - mid) / Math.max(1, mid) * C.webFanSpread : 0;
+      const aim = aimPointAt(origin, _aimV, spread);
+      const dx = aim.x - origin.x;
+      const dy = aim.y - origin.y;
+      const dz = aim.z - origin.z;
+      const d = Math.hypot(dx, dy, dz) || 1;
+      const b = launchBolt(origin.x, origin.y, origin.z,
+        (dx / d) * C.webSpeed, (dy / d) * C.webSpeed, (dz / d) * C.webSpeed);
+      // The led strand, and only it, is the one that can take the feet.
+      b.pins = Math.abs(i - mid) < 0.5 || count <= C.webFanPins;
+    }
     ctx.vfx?.spark?.(origin.x, origin.y, origin.z, 1.1, false, true);
-    bus.emit("webCast", { x: origin.x, y: origin.y, z: origin.z });
+    bus.emit("webCast", { x: origin.x, y: origin.y, z: origin.z, strands: count });
   }
 
   function landBite() {
@@ -2433,10 +2774,15 @@ export function buildDistaff(ctx) {
     if (!bone) return;
     bone.updateWorldMatrix(true, false);
     const origin = bone.getWorldPosition(_vec);
-    const ps = ctx.player.state;
-    const dx = ps.x - origin.x;
-    const dy = (ps.y + 0.9) - origin.y;
-    const dz = ps.z - origin.z;
+    /* Led, but only half as far as the pin is. A line thrown at a
+       sprinting trooper's last position lands behind them; a line at
+       34 m/s led as hard as a 27 m/s bolt is a firing solution, and
+       measured as three hooks in four throws against one in eight
+       before. */
+    const aim = aimPointAt(origin, _aimV, 0, C.reelLead);
+    const dx = aim.x - origin.x;
+    const dy = aim.y - origin.y;
+    const dz = aim.z - origin.z;
     const d = Math.hypot(dx, dy, dz) || 1;
     const b = launchBolt(origin.x, origin.y, origin.z,
       (dx / d) * C.reelSpeed, (dy / d) * C.reelSpeed, (dz / d) * C.reelSpeed);
@@ -2452,6 +2798,9 @@ export function buildDistaff(ctx) {
     const ps = ctx.player?.state;
     if (!ps || ctx.combat?.player?.dead) return;
     state.reel = { for: C.reelSeconds, hauled: 0 };
+    /* A haul spends the pin floor too, so silk cannot pin a trooper
+       the moment the line lets go of them. */
+    state.pinGap = Math.max(state.pinGap, C.webPinGap);
     // Held for the whole haul plus a beat, so a hooked trooper cannot
     // sprint against the line - the line wins, that is what it is.
     ctx.player?.applyRoot?.(C.reelSeconds + 0.15);
@@ -2504,11 +2853,27 @@ export function buildDistaff(ctx) {
     if (d <= C.reelStop + 0.05 || reel.for <= 0) {
       const arrived = d <= C.reelStop + 0.05;
       endReel(arrived ? "arrived" : "parted");
-      /* THE PAYOFF: when reeled in, the spider snaps down and bites the trooper! */
+      /* THE PAYOFF, and which one it is depends on where the haul
+         actually put them. A bite from the head is 42 with a 0.45s
+         contact: thrown at a trooper who has just been dragged to the
+         animal's own foot it is not an attack with an answer, it is a
+         toll - the reel landed three times in four throws and took 126
+         of a 150-point trooper doing it. The stamp is the documented
+         payoff and it has a 0.9s tell and a ring to sprint out of, so
+         that is what a haul cashes into unless the mouth is genuinely
+         already over them. */
       if (arrived || d <= 8.5) {
         state.action = 0;
-        beginBite();
-        state.slamTimer = Math.max(state.slamTimer, 2.0);
+        /* COMMITTED, not merely made available. Arming `slamTimer` and
+           leaving it to the ladder means the payoff arrives only if
+           the animal happens to pass the range gate on some later
+           frame - which is a haul that ends in nothing, and measured
+           as exactly that. The stamp lands on the foot the trooper has
+           just been dragged to, with its own 0.9s tell; the root is
+           already released, so sprinting out of the ring is the
+           answer. */
+        if (biteCanReach(0)) beginBite();
+        else beginSlam();
       }
     }
   }
@@ -2629,6 +2994,17 @@ export function buildDistaff(ctx) {
        body is already the target) or mid-recovery does not restart
        the clock; it just counts toward the next one. */
     if (state.recollapseFor > 0) state.recollapseFor -= dt;
+    /* THE STANCE RECOVERS. A player who stops working the legs gives
+       the animal its footing back - the collapse is bought by staying
+       under it, not by a rifle chipping a pool from the crater rim
+       over four minutes. It re-plants at full during the brace so the
+       window after a rise starts from a whole stance either way. */
+    state.footingQuiet += dt;
+    if (state.recollapseFor > 0) {
+      state.footingHp = C.footingPool;
+    } else if (state.footingQuiet > C.footingRegenDelay && state.footingHp < C.footingPool) {
+      state.footingHp = Math.min(C.footingPool, state.footingHp + C.footingRegen * dt);
+    }
     const requiredLegs = state.legsAtLastCollapse > 0
       ? Math.min(8, state.legsAtLastCollapse + C.collapseThreshold)
       : C.collapseThreshold;
@@ -2680,7 +3056,9 @@ export function buildDistaff(ctx) {
         Math.cos(state.lungeYaw) * C.lungeSpeed, dt);
       // The body faces the way it is running, at a rate a sprint allows.
       faceYaw(state.lungeYaw, 6, dt, 2.4);
-      if (d < C.slamRadius * 0.85 || state.lungeFor <= 0) {
+      // Cashed out when the animal is over them, not when the ring it
+      // is about to stamp reaches them - the ring is at its foot now.
+      if (d < C.lungeCashRange || state.lungeFor <= 0) {
         state.lungeFor = 0;
         if (state.lungeTarget === "bite" || (ps.rootTimer && ps.rootTimer > 0) || biteCanReach(1.2)) {
           state.lungeTarget = null;
@@ -2730,19 +3108,51 @@ export function buildDistaff(ctx) {
       beginLunge();
       return;
     }
-    if (state.slamTimer <= 0 && dist < C.slamRadius * 1.3) { beginSlam(); return; }
+    /* THE SLAM CLAIMS ONLY WHAT IT CAN HIT. This tested
+       `dist < slamRadius * 1.3` - a third further than the ring the
+       blow actually damages - so an animal parked in its own 10.5-16m
+       hold band threw its whole action budget at a player standing
+       outside the crater the foot lands in. Twenty-one telegraphs,
+       zero landings, over a measured fight; and every one of them was
+       an action the silk clock below did not get.
+
+       At `slamRadius` the tell is still readable and still dodgeable
+       by stepping out - that has not changed - but the thing it costs
+       the animal is now paid only where there is something to win.
+
+       Measured from the FOOT, because that is where the stamp lands
+       (see `slamAtFoot`). Against the body this reads nine metres too
+       far out and the animal would never throw one from inside its
+       own hold band. */
+    if (state.slamTimer <= 0 && footRange(dist) < C.slamRadius) { beginSlam(); return; }
     if (state.biteTimer <= 0 && dist < 8.0 && biteCanReach(0.8)) {
       state.biteTimer = C.biteCadence;
       beginBite();
       return;
     }
+    /* SILK OWNS EVERYTHING PAST THE FOOT - and only past it. A fan
+       thrown at somebody standing under the animal cannot be dodged
+       (there is no flight time to step out of at ten metres) and the
+       trooper standing there is by definition the melee build, who
+       measured at 195 of 150 health lost in forty seconds when the
+       spider was allowed to web its own feet. Inside the ring the
+       answers are the stamp and the mouth; outside it, silk.
+
+       Checked before the reel so the cheap, frequent answer leads and
+       the haul is the occasional one, which is the read the two
+       attacks want: strands constantly, a line now and then. */
+    if (state.webTimer <= 0 && dist >= C.slamRadius * 0.9) { beginWebCast(); return; }
     if (reelReady) { beginWebReel(); return; }
-    if (state.webTimer <= 0) { beginWebCast(); return; }
     if (state.patchTimer <= 0) {
       state.patchTimer = C.patchCadence;
-      const ang = Math.random() * TAU;
-      const r = 3 + Math.random() * 6;
-      spillPatch(ps.x + Math.cos(ang) * r, ps.z + Math.sin(ang) * r);
+      if (Math.random() < C.patchOnTargetChance) {
+        // Under their feet: the ground they are standing on is silk now.
+        spillPatch(ps.x, ps.z);
+      } else {
+        const ang = Math.random() * TAU;
+        const r = 3 + Math.random() * 6;
+        spillPatch(ps.x + Math.cos(ang) * r, ps.z + Math.sin(ang) * r);
+      }
       return;
     }
 
@@ -2823,8 +3233,12 @@ export function buildDistaff(ctx) {
     state.timer -= dt;
     if (state.timer <= 0) {
       /* THE CLEAN RISE. Footing resets to full and all eight legs remain
-         fully active and damageable. */
-      state.footingHp = state.legHealthRef;
+         fully active and damageable - but see `recollapseGuard`: the
+         pool being full is not the same as the animal being knockable
+         over again, and the brace below is what makes the window it
+         just spent an earned one rather than a revolving door. */
+      state.footingHp = C.footingPool;
+      state.footingQuiet = 0;
       if (Array.isArray(inst.legHp)) {
         for (let i = 0; i < inst.legHp.length; i += 1) {
           inst.legHp[i] = state.legHealthRef;
@@ -2840,8 +3254,37 @@ export function buildDistaff(ctx) {
 
   const _vec = new THREE.Vector3();
   const _headV = new THREE.Vector3();
+  const _aimV = new THREE.Vector3();
+  const _footV = new THREE.Vector3();
   const _lineA = new THREE.Vector3();
   const _lineB = new THREE.Vector3();
+
+  /* WHERE THE TROOPER IS GOING. One damped velocity, measured from
+     their own position between frames - see `aimPointAt` for why this
+     is not read off `player.state.travelSpeed`. Damped rather than
+     raw because a single frame's delta across a 60Hz step is mostly
+     noise, and a lead that chases noise reads as a bolt thrown at
+     nothing. */
+  const track = { x: 0, z: 0, vx: 0, vz: 0, seeded: false };
+  function stepPlayerTrack(dt) {
+    const ps = ctx.player?.state;
+    if (!ps || dt <= 0) return;
+    if (!track.seeded) {
+      track.x = ps.x; track.z = ps.z; track.seeded = true;
+      return;
+    }
+    const vx = (ps.x - track.x) / dt;
+    const vz = (ps.z - track.z) / dt;
+    track.x = ps.x;
+    track.z = ps.z;
+    /* A teleport is not a sprint. Anything past twice the trooper's
+       own top speed is a QA jump or a reel haul, and leading it would
+       throw silk at the far side of the crater. */
+    const speed = Math.hypot(vx, vz);
+    if (speed > 24) return;
+    track.vx = damp(track.vx, vx, 9, dt);
+    track.vz = damp(track.vz, vz, 9, dt);
+  }
 
   function stepDormantCheck(dist) {
     if (dist <= C.aggroRadius) { beginAlert(); return; }
@@ -2859,6 +3302,9 @@ export function buildDistaff(ctx) {
     }
     const ps = ctx.player.state;
     const dist = Math.hypot(ps.x - inst.x, ps.z - inst.z);
+    // Runs in every phase: a pin floor that only ticked while standing
+    // would refill during a collapse and hand the rise a free hold.
+    state.pinGap = Math.max(0, state.pinGap - dt);
 
     if (state.phase === "dormant") { stepDormantCheck(dist); return; }
     if (state.phase === "returning") { stepReturning(dt, dist); return; }
@@ -2912,7 +3358,8 @@ export function buildDistaff(ctx) {
    *  half-won and still call the encounter repeatable. */
   function healToFull() {
     inst.health = inst.maxHealth;
-    state.footingHp = state.legHealthRef;
+    state.footingHp = C.footingPool;
+    state.footingQuiet = 0;
     if (inst.legHp) {
       for (let i = 0; i < inst.legHp.length; i += 1) inst.legHp[i] = state.legHealthRef;
     }
@@ -2993,19 +3440,34 @@ export function buildDistaff(ctx) {
     return inst;
   }
 
-  /** combat.js calls prepareLegDamage and onLegHit.
-   *  All eight legs remain continuously active and damageable. Damaging
-   *  any leg drains the footing pool until the boss loses its footing
-   *  and collapses down into a vulnerable posture. */
+  /** combat.js calls prepareLegDamage and onLegHit, and reads the two
+   *  generic flags set here (see `damageLeg`): the legs never break,
+   *  and only `legConduction` of what lands on one reaches the body.
+   *  Everything else a leg hit is worth is spent on FOOTING - the
+   *  stance pool whose emptying is the collapse this fight is built
+   *  around. */
   function attachLegRules() {
     if (!inst) return;
+    inst.legsPersist = true;
+    inst.legDamageToBody = C.legConduction;
     inst.prepareLegDamage = () => {
       if (state.phase === "collapsed" || state.phase === "dead") return false;
       return true;
     };
     inst.onLegHit = (legIndex, actual, detail) => {
       if (state.phase !== "standing") return;
-      state.footingHp = Math.max(0, (state.footingHp ?? state.legHealthRef) - actual);
+      state.footingQuiet = 0;
+      /* THE BRACE. Nothing drains a stance the animal has just
+         re-planted; see `recollapseGuard`. Without this the pool is
+         emptied again during the rise clip and the fight is a boss
+         lying on the ground with a health bar. */
+      if (state.recollapseFor > 0) { poiseKick(0.22); return; }
+      /* A lance buckles a stance harder than a bullet does. The
+         weight is here, on the animal, because it is an opinion about
+         what knocks THIS thing over - combat.js has no business
+         knowing that a polearm is better at it. */
+      const weight = detail?.source === "melee" ? C.footingMeleeWeight : 1;
+      state.footingHp = Math.max(0, (state.footingHp ?? C.footingPool) - actual * weight);
       poiseKick(0.35);
 
       const leg = inst.legs?.[legIndex];
@@ -3025,7 +3487,7 @@ export function buildDistaff(ctx) {
 
       // When footing is broken from leg damage, crash down into collapse
       if (state.footingHp <= 0 && state.recollapseFor <= 0) {
-        state.footingHp = state.legHealthRef;
+        state.footingHp = C.footingPool;
         onFootingBroken();
       }
     };
@@ -3094,6 +3556,10 @@ export function buildDistaff(ctx) {
 
   function update(dt) {
     const d = Math.min(0.1, Math.max(0, dt));
+    /* Before anything reads it, and outside the `inst` guard: the
+       tracker has to be warm the frame the animal first throws, not
+       one frame after. */
+    stepPlayerTrack(d);
     if (!inst) { ensureSpawned(); return; }
     ensureCombatWatch();
     stepInstance(d);
@@ -3141,8 +3607,17 @@ export function buildDistaff(ctx) {
       instanceId: state.defeated || inst.state === "death" ? null : inst.id,
       health: Math.max(0, Math.round(inst.health)),
       maxHealth: Math.round(inst.maxHealth),
-      footingHp: Math.max(0, Math.round(state.footingHp ?? state.legHealthRef)),
-      footingMax: state.legHealthRef,
+      footingHp: Math.max(0, Math.round(state.footingHp ?? C.footingPool)),
+      footingMax: C.footingPool,
+      /* 0..1, and this is what the HUD prints. A stance pool nobody
+         can see is a mechanic nobody can play: the fight's whole
+         instruction is "break its footing" and until this shipped the
+         only feedback for doing so was a body number a third the size
+         of the swing that produced it. */
+      footingFraction: clamp01((state.footingHp ?? C.footingPool) / C.footingPool),
+      braced: state.recollapseFor > 0,
+      // Seconds until silk may take the feet again - see webPinGap.
+      pinGap: Number((state.pinGap || 0).toFixed(2)),
       legsBroken: inst.legsBroken || 0,
       activeLeg: state.activeLeg,
       legCount: inst.legHp ? inst.legHp.length : 8,
@@ -3182,6 +3657,13 @@ export function buildDistaff(ctx) {
       instanceId: state.defeated || inst.state === "death" ? null : inst.id,
       timer: Number(state.timer.toFixed(2)),
       legsAtLastCollapse: state.legsAtLastCollapse,
+      /* The stance the fight is actually being won against. Clamped
+         at the WRITE as well as the read: a pool that leaves this
+         module out of range is a pool the save validator would have
+         to be widened for, and widening a validator to accept what
+         the game itself wrote is how a file the game made becomes a
+         file the game refuses. */
+      footingHp: clamp(Math.round(state.footingHp ?? C.footingPool), 0, C.footingPool),
       health: Math.round(inst.health),
       maxHealth: Math.round(inst.maxHealth),
       legHp: inst.legHp ? [...inst.legHp] : null,
@@ -3223,6 +3705,13 @@ export function buildDistaff(ctx) {
     state.revealed = phase !== "dormant";
     state.timer = Math.max(0, Number(saved.timer) || 0);
     state.legsAtLastCollapse = Math.max(0, Math.round(Number(saved.legsAtLastCollapse) || 0));
+    /* An older file has no stance in it; it restores at full, which is
+       the generous reading and the only one that cannot strand a
+       loaded fight one bullet away from a collapse it never earned. */
+    state.footingHp = Number.isFinite(saved.footingHp)
+      ? clamp(saved.footingHp, 0, C.footingPool)
+      : C.footingPool;
+    state.footingQuiet = 0;
     state.defeated = false;
     state.disengageFor = 0;
     state.recollapseFor = 0;
@@ -3285,6 +3774,13 @@ export function buildDistaff(ctx) {
 
   function clearHazards() {
     endReel("cleared");
+    /* The floor between pins goes with the silk. It is the memory of
+       a hazard, and a caller asking for no hazards on the field is
+       asking for that too - otherwise the next strand thrown after a
+       clear quietly fails to pin because of a haul that no longer
+       exists, which is precisely how the pin assertion in the fight
+       harness started reading `rootAtHit: 0`. */
+    state.pinGap = 0;
     for (const b of bolts) { b.live = false; b.mesh.visible = false; }
     for (const p of patches) {
       p.life = 0; p.mesh.visible = false; p.mat.uniforms.uFade.value = 0;

@@ -1332,6 +1332,24 @@ export function buildCombat(ctx) {
    * that fraction. Distaff uses the hook to keep one injured leg in play;
    * Garner sets the fraction to zero because severing a remote tentacle
    * advances its phase without somehow wounding the buried throat.
+   *
+   * TWO INSTANCE FLAGS, both generic, because a limb fight is a
+   * FLAVOUR and not a species (the same reasoning as `legs: true` in
+   * the hit table above - this file used to carry a
+   * `key === "distaff"` branch here and that is exactly the shape the
+   * table was built to avoid):
+   *
+   *   `legsPersist`      the limbs never break. Damage keeps accruing
+   *                      past zero and the encounter decides what a
+   *                      worn-down limb costs - the Distaff spends it
+   *                      on FOOTING rather than on losing the leg.
+   *   `legDamageToBody`  the fraction of a limb hit that reaches the
+   *                      main pool, 0..1. A limb is not a health bar
+   *                      with a hitbox: cutting at it has to be
+   *                      progress toward the kill without BEING the
+   *                      kill, or the body the fight is designed
+   *                      around never has to be reached. Absent, this
+   *                      is the ordinary break-bonus economy below.
    */
   function damageLeg(inst, legIndex, dmg, detail = {}) {
     if (!inst || untouchable(inst)) return 0;
@@ -1341,21 +1359,35 @@ export function buildCombat(ctx) {
       && inst.prepareLegDamage(legIndex, detail) === false) return 0;
     const requested = Math.max(0, Number(dmg) || 0);
     const before = Math.max(0, Number(inst.legHp[legIndex]) || 0);
-    const isDistaff = inst.key === "distaff";
-    // For Distaff, legs take continuous damage and are never killed or disabled
-    const actual = isDistaff ? requested : Math.min(before, requested);
+    const persists = inst.legsPersist === true;
+    const conduct = Number.isFinite(inst.legDamageToBody)
+      ? Math.max(0, Math.min(1, inst.legDamageToBody))
+      : 0;
+    /* A persistent limb reports the WHOLE blow - that number is what
+       the encounter spends on its own pool - while a breakable one
+       can only ever take what it had left. */
+    const actual = persists ? requested : Math.min(before, requested);
     if (actual <= 0) return 0;
     inst.legHp[legIndex] = Math.max(0, before - requested);
     inst.alerted = true;
     inst.suspicion = 1;
 
     let broke = false;
-    if (isDistaff) {
-      // Direct damage applied to the boss so every leg hit deals real damage to Distaff
-      applyDamage(inst, actual, {
-        source: detail.source || "shot",
-        x: detail.x, y: detail.y, z: detail.z,
-      });
+    /* What reached the body, and it is the number the HUD draws:
+       `applyDamage` emits `enemyDamaged` and the number layer already
+       listens to that, so a conducted hit must NOT also draw its own
+       `legHit` number or every swing at a leg paints two figures (it
+       did, for a build). `conducted` below is how the HUD tells them
+       apart; the joint mark rides through as `weak`. */
+    let conducted = 0;
+    if (persists) {
+      if (conduct > 0) {
+        conducted = applyDamage(inst, actual * conduct, {
+          source: detail.source || "shot",
+          weak: !!detail.joint,
+          x: detail.x, y: detail.y, z: detail.z,
+        });
+      }
       inst.onLegHit?.(legIndex, actual, detail);
     } else {
       broke = inst.legHp[legIndex] <= 0;
@@ -1384,6 +1416,12 @@ export function buildCombat(ctx) {
       key: identity.enemyKey,
       legIndex,
       damage: actual,
+      /* What the body actually lost, and whether `enemyDamaged` has
+         already reported it. Anything drawing a figure for the player
+         wants `conducted`; anything measuring the limb wants
+         `damage`. */
+      conducted,
+      bodyDamage: conducted,
       legHp: inst.legHp[legIndex],
       broke,
       joint: !!detail.joint,

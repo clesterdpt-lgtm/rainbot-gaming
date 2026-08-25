@@ -4060,14 +4060,30 @@ export function installQa(ctx, api) {
     /** Make `kind` ("slam" | "web" | "reel" | "lunge") its next answer;
      *  range and phase still apply. See distaff.primeAttack. */
     primeDistaffAttack(kind) { return api.distaff?.primeAttack?.(kind) ?? null; },
-    /** Fully drain one leg through the production damage path, not a
-     *  shortcut around it - `combat.damageLeg` is the same function a
-     *  shot or a swing calls. */
-    breakDistaffLeg(index) {
+    /** Buckle the stance through one leg, using the production damage
+     *  path rather than a shortcut around it - `combat.damageLeg` is
+     *  the same function a shot or a swing calls.
+     *
+     *  The Distaff's legs do not BREAK (`legsPersist`); what a leg
+     *  hit spends itself on is the FOOTING pool, and emptying that is
+     *  what puts the animal on the ground. So the amount is read off
+     *  the stance rather than off `legHp` - which was one leg's own
+     *  340 and happened to equal the whole stance pool for exactly as
+     *  long as the two numbers were the same one. `source: "shot"`
+     *  explicitly, so the melee weight does not quietly make this
+     *  overshoot by nearly double.
+     *
+     *  Pass `{ leg: true }` to deal a leg's worth of damage instead of
+     *  a stance's - for tests about the limb rather than the fall. */
+    breakDistaffLeg(index, options = {}) {
       const inst = api.enemies.live.find((e) => e.key === "distaff");
       if (!inst || !inst.legHp) return null;
-      return api.combat.damageLeg(inst, index, inst.legHp[index] + 1, {
-        x: inst.x, y: inst.y, z: inst.z,
+      const footing = api.distaff?.status?.()?.footingHp;
+      const amount = options.leg || !Number.isFinite(footing)
+        ? inst.legHp[index] + 1
+        : footing + 1;
+      return api.combat.damageLeg(inst, index, amount, {
+        x: inst.x, y: inst.y, z: inst.z, source: "shot",
       });
     },
     webPools() {

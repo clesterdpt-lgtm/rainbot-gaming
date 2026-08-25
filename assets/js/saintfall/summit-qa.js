@@ -576,6 +576,13 @@ export function installSummitQa(ctx, api, hook) {
 
     /* -------------------------- the shell -------------------------- */
 
+    character: () => ({
+      ...(ctx.playerCharacter || {}),
+      assetSource: api.player?.figure?.assetSource || "unknown",
+      triangles: api.player?.figure?.triangles || 0,
+      locomotion: api.player?.locomotionProfile?.() || null,
+    }),
+
     listTimes: () => Object.keys(SUMMIT_TIMES).map((k) => ({
       key: k, label: SUMMIT_TIMES[k].label, grade: SUMMIT_TIMES[k].grade,
     })),

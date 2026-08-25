@@ -1,0 +1,19 @@
+{
+  "id": "01a03651-f8fa-7eed-b419-464bfa99d1af",
+  "type": "rig",
+  "status": "SUCCEEDED",
+  "progress": 100,
+  "createdAt": 1787617743709,
+  "startedAt": 1787617743715,
+  "finishedAt": 1787617810469,
+  "expiresAt": 1787877010469,
+  "consumedCredits": 5,
+  "taskError": null,
+  "inputTaskId": "01a0364d-aa66-7ab3-80d3-b8ae42ef2f4e",
+  "heightMeters": 2,
+  "files": {
+    "rigged": "red-bastion-player-rigged.glb",
+    "walking": "red-bastion-player-walk.glb",
+    "running": "red-bastion-player-run.glb"
+  }
+}

@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="../assets/css/styles.css?v=20260812-game-chrome-2" />
   <link rel="stylesheet" href="../assets/css/saintfall.css?v=20260821-doctrine-chrome-1" />
   <link rel="stylesheet" href="../assets/css/saintfall-ui.css?v=20260823-rebindable-controls-1" />
+  <link rel="stylesheet" href="../assets/css/saintfall-summit.css?v=20260824-operative-select-1" />
 </head>
 <body class="rb-standalone-shell saintfall-shell saintfall-shell--vigil"
       data-rb-native-escape-menu="true"
@@ -47,6 +48,50 @@
             <div id="sf-tutorial" hidden aria-hidden="true"></div>
             <div id="sf-intro" aria-hidden="true"></div>
 
+            <section id="sf-character-select" role="dialog" aria-modal="true"
+                     aria-labelledby="sf-character-select-title" aria-hidden="true" hidden>
+              <div class="sf-character-select__frame">
+                <div class="sf-character-select__eyebrow">KENOSIS DEPLOYMENT ROSTER</div>
+                <h2 id="sf-character-select-title">CHOOSE THE VIGIL</h2>
+                <p class="sf-character-select__brief">
+                  Select the operative to field-test on the White Vigil ascent. Weapons remain
+                  separate from both character meshes.
+                </p>
+                <div class="sf-character-select__cards" role="group" aria-label="Playable operatives">
+                  <button class="sf-character-card" type="button" data-sf-character="white-vigil"
+                          aria-pressed="false">
+                    <span class="sf-character-card__image">
+                      <img src="../assets/concepts/saintfall/playable-characters/white-vigil-playable-unarmed-target-v1.png"
+                           alt="White Vigil ivory and verdigris reliquary scout" />
+                    </span>
+                    <span class="sf-character-card__copy">
+                      <span class="sf-character-card__index">OPERATIVE 01</span>
+                      <strong>WHITE VIGIL</strong>
+                      <em>Reliquary Scout</em>
+                      <small>Lean expedition plate for rapid traversal and paired hybrid arms.</small>
+                    </span>
+                  </button>
+                  <button class="sf-character-card sf-character-card--crimson" type="button"
+                          data-sf-character="bastion-penitent" aria-pressed="false">
+                    <span class="sf-character-card__image">
+                      <img src="../assets/concepts/saintfall/playable-characters/heavy-b1-bastion-penitent-red-meshy-unarmed-v1.png"
+                           alt="Bastion Penitent ivory, crimson, and brass reliquary bulwark" />
+                    </span>
+                    <span class="sf-character-card__copy">
+                      <span class="sf-character-card__index">OPERATIVE 02</span>
+                      <strong>BASTION PENITENT</strong>
+                      <em>Reliquary Bulwark</em>
+                      <small>Heavy crimson plate prepared for a hammer-and-shield combat kit.</small>
+                    </span>
+                  </button>
+                </div>
+                <button class="sf-character-select__deploy" type="button" data-sf-character-deploy>
+                  Deploy White Vigil
+                </button>
+                <p class="sf-character-select__note">Same traversal systems for this test build.</p>
+              </div>
+            </section>
+
             <div id="sf-boot">
               <a class="sf-boot__back" href="../games.html">&larr; Rainbot</a>
               <h2 class="sf-boot__title">THE WHITE VIGIL</h2>
@@ -72,6 +117,7 @@
             its architecture are finished; the guardians are not here yet. Walk it,
             climb it, and look back down.
           </p>
+          <a class="sf-character-switch" href="saintfall-white-vigil.html">Change playable operative</a>
         </div>
 
         <div id="ad-leaderboard"></div>
@@ -127,7 +173,7 @@
 
   <script src="../assets/js/ads.js?v=20260627-profile-stats-1"></script>
   <script src="../assets/js/main.js?v=20260814-apostate-direct-start-1"></script>
-  <script src="../assets/js/saintfall/boot.js?v=20260824-leg-rig-fix-1"></script>
+  <script src="../assets/js/saintfall/boot.js?v=20260825-bastion-heavy-2"></script>
   <script>
     renderAdSlot(document.getElementById("ad-leaderboard"), "leaderboard");
     renderAdSlot(document.getElementById("ad-rectangle"), "rectangle");

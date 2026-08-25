@@ -2257,11 +2257,19 @@ export function buildCombat(ctx) {
     const stunFor = Math.max(0, Number(opts.stun) || 0);
     const knock = Math.max(0, Number(opts.knockSpeed) || 0);
     const source = opts.source || "shockwave";
+    /* WHO THE BLAST PASSES THROUGH. A predicate rather than a rule,
+       because "not mine" is a question only the thing that set the
+       blast off can answer - combat.js has no business knowing which
+       creatures a queen considers kin. Absent, a shockwave reaches
+       everything alive inside it, which is what every existing caller
+       already relies on. */
+    const exclude = typeof opts.exclude === "function" ? opts.exclude : null;
     let hits = 0;
     let kills = 0;
     let stunned = 0;
     for (const inst of enemies.live) {
       if (untouchable(inst)) continue;
+      if (exclude && exclude(inst)) continue;
       if (source === "slam" && inst.spec?.flies && !inst.grounded
         && inst.y > y + 3) continue;
       const dist = Math.max(nearestBodyPoint(inst, x, z, _bodyNear), 1e-4);

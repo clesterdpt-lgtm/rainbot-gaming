@@ -283,8 +283,6 @@ const RB_GAME_SEARCH_TEXT = {
 const RB_SEARCH_SECTIONS = [
   { href: "search.html", label: "Search Rainbot", search: "search find games articles clips pages slopwire vault directory", type: "page" },
   { href: "games.html", label: "Games Vault", search: "games arcade browser free play vault catalog multiplayer agent after dark", type: "page" },
-  { href: "articles.html", label: "The Slopwire", search: "slopwire fake news satire headlines articles feed", type: "page" },
-  { href: "videos.html", label: "Slopwire Clips", search: "slopwire clips video parody reels short form", type: "video" },
   { href: "community.html", label: "Community Forum", search: "community forum topics discussion leaderboard scores", type: "page" },
   { href: "after-dark.html", label: "After Dark", search: "after dark horror games vault sleep paralysis", type: "page" },
   { href: "agent-games.html", label: "Agent Games", search: "agent games ai benchmark protocol dsl observation action", type: "page" },
@@ -293,8 +291,6 @@ const RB_SEARCH_SECTIONS = [
 const RB_SEARCH_TYPE_FILTERS = [
   { key: "all", label: "All" },
   { key: "game", label: "Games" },
-  { key: "article", label: "Articles" },
-  { key: "video", label: "Clips" },
   { key: "page", label: "Pages" },
 ];
 
@@ -335,14 +331,6 @@ function getSearchIndex() {
       search: normalizeSearchText(search),
       type: "game",
       kind: visuals?.kind || "Game",
-    });
-  });
-  RB_SLOPWIRE_ARTICLES.forEach((article) => {
-    items.push({
-      href: article.href,
-      label: article.label,
-      search: normalizeSearchText(article.search),
-      type: "article",
     });
   });
   RB_SEARCH_SECTIONS.forEach((section) => {
@@ -500,7 +488,7 @@ const HOME_COMMUNITY_COMMENT_TARGETS = [
   { contentType: "game", contentId: "rizz-craft", title: "Rizz-Craft", href: "games/rizz-craft.html", kicker: "Game thread" },
   { contentType: "game", contentId: "brainrot-2048", title: "Brainrot 2048", href: "games/brainrot-2048.html", kicker: "Game thread" },
   { contentType: "game", contentId: "inkblood", title: "Inkblood", href: "games/inkblood.html", kicker: "Game thread" },
-  { contentType: "article", contentId: "local-man-shadowbanned-by-own-fridge", title: "Shadowbanned By Own Refrigerator", href: "articles/local-man-shadowbanned-by-own-fridge.html", kicker: "Slopwire" },
+  { contentType: "game", contentId: "ai-slop-factory", title: "AI Slop Factory", href: "games/ai-slop-factory.html", kicker: "Game thread" },
 ];
 
 function getLocalSaveCount() {
@@ -623,11 +611,10 @@ function renderNav(state = RB.state) {
     : "";
   const path = location.pathname;
   const isHome = path.endsWith("/") || path.endsWith("/index.html") || path === "";
-  const isSlopwire = path.endsWith("/articles.html") || path.includes("/articles/") || path.endsWith("/videos.html") || path.includes("/videos/");
   const isAgentGamesRoute = path.endsWith("/agent-games.html") || path.includes("/recursive-reward-labyrinth") || path.includes("/consensus-collapse") || path.includes("/incident-commander");
   const isAfterDarkRoute = path.endsWith("/after-dark.html") || path.includes("/again.html") || path.includes("/mr-feast-mansion");
   const isForum = path.endsWith("/community.html");
-  const isGames = !isSlopwire && !isForum && (
+  const isGames = !isForum && (
     path.endsWith("/games.html") ||
     path.includes("/games/") ||
     isAgentGamesRoute ||
@@ -638,7 +625,6 @@ function renderNav(state = RB.state) {
   const navLinksMarkup = `
       <a href="${RB_BASE}" class="${isHome ? "is-active" : ""}">Home</a>
       <a href="${RB_BASE}games.html" class="${isGames ? "is-active" : ""}">Games</a>
-      <a href="${RB_BASE}articles.html" class="${isSlopwire ? "is-active" : ""}">The Slopwire</a>
       <a href="${RB_BASE}community.html" class="${isForum ? "is-active" : ""}">Community</a>
   `;
 
@@ -658,7 +644,7 @@ function renderNav(state = RB.state) {
       <div class="nav__search-wrap">
         <form class="nav__search" role="search">
           <label class="sr-only" for="rb-search">Search Rainbot</label>
-          <input id="rb-search" type="search" placeholder="Search games, articles..." autocomplete="off" aria-autocomplete="list" aria-controls="rb-search-results" />
+          <input id="rb-search" type="search" placeholder="Search games..." autocomplete="off" aria-autocomplete="list" aria-controls="rb-search-results" />
           <button type="button" class="nav__search-toggle" id="rb-search-toggle" aria-label="Open search" aria-expanded="false" aria-controls="rb-search">
             <svg class="nav__search-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
               <circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"></circle>
@@ -3204,7 +3190,7 @@ function homeCommunityPanelMarkup(data = {}) {
           <small>${data.hotLabel || "Hot Now"}</small>
           <strong>${data.hotTitle || "Activity Feed"}</strong>
         </span>
-        <a href="articles.html">Feed</a>
+        <a href="community.html">Feed</a>
       </div>
       <div class="home-community-list">${homeCommunityTextRowsMarkup(activityRows, "No activity yet.")}</div>
     </article>

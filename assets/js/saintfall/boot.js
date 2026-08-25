@@ -7,7 +7,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260823-rebindable-controls-1";
+  const BUILD = "20260824-leg-rig-fix-1";
   const THREE_VERSION = "0.180.0";
   const CDN_BASES = [
     `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/`,

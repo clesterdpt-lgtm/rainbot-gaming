@@ -327,8 +327,13 @@ export const ABBESS_CONFIG = Object.freeze({
      free. A pack or a boosted leap clears it outright, which is what
      those are for. */
   slamAirClear: 0.55,
-  /* And what it does to her OWN brood, which is most of why a good
-     player learns to bait it: she does not distinguish. */
+  /* What the shock does to anything else standing in the ring. NOT her
+     own, any more - see `landSlam`, where the blast is given an
+     exclusion for her own faction. This once read "which is most of
+     why a good player learns to bait it: she does not distinguish",
+     and she did not: a full clutch lost a third of itself to one slam.
+     A queen culling her own reinforcements for free does not play as
+     the decision it was written as; it plays as the slam helping. */
   slamBroodDamage: 90,
   /* Only thrown at something close enough to be worth twenty metres of
      abdomen. Further out and she lays instead. Kept a good deal
@@ -3388,8 +3393,40 @@ export function buildAbbess(ctx) {
         bus.emit("slamCleared", { x: ps.x, z: ps.z, clearance });
       }
     }
-    /* Her own brood, through combat's authoritative shockwave so the
-       kills count, the stuns apply and the kill feed sees them. */
+    /* THE FLOOR, through combat's authoritative shockwave so the kills
+       count, the stuns apply and the kill feed sees them - but SHE DOES
+       NOT SLAM HER OWN.
+
+       She used to: the shock reached every living thing in the ring and
+       took a third of her own clutch with it (measured: three of twelve
+       dead to one slam, at full brood). That was written as a mechanic -
+       bait the queen into culling her children - and it does not read as
+       one from the floor. What the player sees is a boss killing her own
+       reinforcements for free, which makes the clutch she just laid feel
+       like it was never a threat and makes the slam feel like it is
+       helping.
+
+       Excluded BY FACTION rather than by remembering which instances came
+       out of her eggs. The `brood` array and the `abbessBornAt` stamp are
+       per-instance and neither survives a save (`restore` rebinds only
+       her), so a marker-based rule would quietly stop working the moment
+       anyone loaded mid-fight - the one place a full brood is standing
+       around her. Faction is on the spec, so it reloads for free, and it
+       spares any Bloom creature in the ring rather than only her own
+       hatchlings: from the floor those are the same animal, and a blast
+       that kills one Thresher and spares the one beside it reads as a bug.
+
+       In practice that is every ordinary caste in the game - Thresher,
+       Gleaner, Harrow and Precentor are all Bloom - so this reads as
+       "her slam no longer hurts other enemies", which is what it is for.
+       The exclusion is written as a faction test rather than as "skip all
+       enemies" because the blast SHOULD still reach something that is not
+       hers, and because that is the sentence the encounter means.
+
+       Measured, with a full clutch pinned in the ring so the two-second
+       wind-up could not simply walk them out of it: 9 hits and 8 kills
+       before, 0 and 0 after. */
+    const kin = inst?.spec?.faction;
     ctx.combat?.shockwave?.(cx, cy, cz, {
       radius: C.slamRadius,
       innerRadius: C.slamRadius * 0.35,
@@ -3397,6 +3434,8 @@ export function buildAbbess(ctx) {
       stun: 1.6,
       knockSpeed: 11,
       source: "abbess-slam",
+      exclude: (other) => other === inst
+        || (!!kin && other?.spec?.faction === kin),
     });
     bus.emit("slam", { x: cx, y: cy, z: cz });
   }

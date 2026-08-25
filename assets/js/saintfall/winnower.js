@@ -145,6 +145,29 @@ export const WINNOWER_CONFIG = Object.freeze({
      the disengage finally counts. */
   territoryRadius: 230,
   cruiseHeight: 26,
+  /* THE BODY, not the span. The wings reach thirteen metres either
+     side and are not what a cracking tower stops; the thorax and the
+     furnace gut hanging under it are. Matched to the silhouette the
+     encounter actually presents rather than to the bestiary's 1.8m
+     collision radius, which is sized for the LANDED animal squeezing
+     between refinery plant. */
+  bodyRadius: 5.0,
+  /* How far above the highest thing under it the body flies. The gut
+     hangs about 1.9m below the origin, so this is roughly four
+     metres of daylight under the animal. */
+  masonryClearance: 6.4,
+  /* And the hard floor, for a structure the look-ahead missed. */
+  masonryFloor: 3.2,
+  /* Climbing over a building is urgent; settling back down is not. */
+  climbRate: 5.5,
+  /* How much height the animal is assumed able to buy per second
+     while it approaches something, in metres. This is what turns the
+     look-ahead's answer from a step into a ramp - see `clearanceY`. */
+  climbAllow: 7.0,
+  /* And the hardest the backstop may shove, in metres per second.
+     Fast enough to clear something the look-ahead missed inside a
+     few frames, slow enough that it is always a climb. */
+  floorClimb: 14,
   orbitRadius: 34,
   orbitSpeed: 0.34,
   bankLimit: 0.55,
@@ -212,7 +235,11 @@ export const WINNOWER_CONFIG = Object.freeze({
      health steps. Eight at the brink is still below EMBER_MAX and
      reads as a widening pattern rather than an undodgeable carpet. */
   bombardCountRoused: 8,
-  bombardSpeed: 19,
+  /* Fast enough that the ballistic solve HAS an answer across the
+     whole orbit - see `ballistic`. At 19 the reachable ground range
+     was 35.6m against a 34m orbit plus 5.5m of scatter, so most of
+     every volley fell outside it. */
+  bombardSpeed: 24,
   bombardSpread: 5.5,
   /* ASHEN BRACKET. The ordinary volley makes the player move; on
      Martyr a second, marked row lands where that held movement is
@@ -224,10 +251,27 @@ export const WINNOWER_CONFIG = Object.freeze({
   martyrBracketSpacing: 7.1,
   martyrTrackCeiling: 30,
   martyrTrackDamp: 8.5,
-  emberDamage: 26,
+  /* THE COAL ITSELF, at the centre of its own burst.
+     A coal used to damage only on a DIRECT interception - inside a
+     1.8m cylinder about the chest - so one landing at the player's
+     boots did nothing at all on impact and merely left a burn to
+     walk out of. A thrown furnace coal that lands beside you is not
+     a near miss. `emberBlast` is the burst it actually makes. */
+  emberDamage: 34,
+  emberBlast: 4.6,
+  /* What is left of the damage at the rim of the burst. The falloff
+     keeps the middle of the pattern lethal and its edge survivable,
+     which is what makes moving out of it worth doing. */
+  emberBlastRim: 0.32,
+  /* THE BURN STAYS THE SIZE IT WAS, and the extra punishment is in
+     the coal's own burst instead. Ash is a large additive ground
+     field and this encounter already runs over the render budget it
+     is measured against; widening it to 6.0m cost 2.7ms a frame with
+     nineteen of them alight, which is a poor trade for damage that
+     `emberBlast` delivers for free. */
   ashRadius: 5.4,
   ashSeconds: 18.0,
-  ashDps: 12,
+  ashDps: 18,
   ashTick: 0.5,
   ashMax: 36,
 
@@ -236,8 +280,8 @@ export const WINNOWER_CONFIG = Object.freeze({
   strafeCadence: 11.0,
   strafeHeight: 7.5,
   strafeSpeed: 28,
-  strafeDamage: 42,
-  strafeRadius: 4.6,
+  strafeDamage: 54,
+  strafeRadius: 5.2,
   strafeBombInterval: 0.10,
 
   /* What a landed Winnower does to anything standing next to it. It
@@ -1570,6 +1614,7 @@ export function buildWinnower(ctx) {
     strafeT: 0,
     landFrom: null,
     landTo: null,
+    landSpan: 0,
 
     /* ---- the furnace, and the body that hangs off it ----
        Kept on `state` rather than on the uniforms so that a save
@@ -2038,6 +2083,50 @@ export function buildWinnower(ctx) {
     });
   }
 
+  /**
+   * The burst a landed coal makes.
+   *
+   * A direct interception is simply the zero-distance case of the
+   * same falloff, so there is one damage number for the attack
+   * rather than a hit and a separate miss that did nothing.
+   *
+   * BLOCKED BY MASONRY, and it has to be: the works are full of tank
+   * walls and a burst that reaches through one is the sort of unfair
+   * that reads as a bug rather than as difficulty. One ray per
+   * impact, four to eight impacts a volley.
+   */
+  function emberBurst(hit) {
+    /* No blast effect here: `spillAsh` fires one at the same point on
+       the same frame, and two additive bursts in one place is both
+       double the fill and a visibly brighter flash than authored. */
+    const ps = ctx.player?.state;
+    if (!ps || ctx.combat?.player?.dead) return;
+    const dx = ps.x - hit.x;
+    const dz = ps.z - hit.z;
+    const flat = Math.hypot(dx, dz);
+    if (flat > C.emberBlast) return;
+    /* A coal that goes off on a gantry above or a floor below is not
+       standing next to you. */
+    if (Math.abs((ps.y + 1.0) - hit.y) > 4.0) return;
+    if (ctx.collide?.rayBlock && flat > 0.6) {
+      const ex = ps.x - hit.x;
+      const ey = (ps.y + 1.0) - (hit.y + 0.5);
+      const ez = ps.z - hit.z;
+      const len = Math.hypot(ex, ey, ez) || 1e-4;
+      const open = ctx.collide.rayBlock(
+        hit.x, hit.y + 0.5, hit.z, ex / len, ey / len, ez / len, len
+      );
+      if (open < len - 0.2) return;
+    }
+    const t = clamp01(flat / Math.max(0.01, C.emberBlast));
+    const falloff = lerp(1, C.emberBlastRim, t * t);
+    ctx.combat?.hurtPlayer?.(C.emberDamage * falloff, {
+      source: "winnower-ember", x: hit.x, y: hit.y, z: hit.z,
+    });
+    ctx.player?.punch?.(lerp(1.1, 0.4, t));
+    if (t < 0.45) ctx.player?.doctrineKick?.(0.5, 0.35);
+  }
+
   function updateEmbers(dt) {
     const ps = ctx.player?.state;
     for (const e of embers) {
@@ -2082,12 +2171,7 @@ export function buildWinnower(ctx) {
       if (hit) {
         e.live = false;
         e.mesh.visible = false;
-        if (hit.direct) {
-          ctx.combat?.hurtPlayer?.(C.emberDamage, {
-            source: "winnower-ember", x: hit.x, y: hit.y, z: hit.z,
-          });
-          ctx.player?.punch?.(1.1);
-        }
+        emberBurst(hit);
         spillAsh(hit.x, hit.z);
         continue;
       }
@@ -2168,6 +2252,112 @@ export function buildWinnower(ctx) {
    *  it clears the terrace step rather than flying into it. */
   function cruiseY(x, z) {
     return groundAt(x, z) + C.cruiseHeight;
+  }
+
+  /* ============================================================
+     FLYING OVER THE WORKS RATHER THAN THROUGH IT
+
+     `groundAt` is the TERRAIN, and the Censer Works is the densest
+     built district on the map: tank farms, cracking towers, a
+     catwalk ring and three flare stacks between 48 and 66 metres.
+     Every airborne height in this module was terrain plus a
+     constant, so the animal cruised at 26m over ground that had a
+     43m tower standing on it and simply passed through. Measured
+     across an airborne cycle: 1.9% of frames with the body inside
+     masonry, the worst of them 10.9m deep, all of them during the
+     low strafing pass.
+
+     `solidTop` is the collision grid's own answer for the highest
+     solid surface at a point, so this asks the same question the
+     player's own collider would. Sampled around the body rather than
+     under its origin - a twenty-six metre animal is not a point -
+     and again along its travel, because a flyer that reacts to a
+     tower when it is already inside it has not avoided anything.
+     ============================================================ */
+  const CLEAR_RING = [
+    [1, 0], [-1, 0], [0, 1], [0, -1],
+    [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7],
+  ];
+  function solidCrest(x, z, radius) {
+    const top = ctx.collide?.solidTop;
+    if (!top) return -Infinity;
+    let hi = top(x, z);
+    for (const [ox, oz] of CLEAR_RING) {
+      const h = top(x + ox * radius, z + oz * radius);
+      if (h > hi) hi = h;
+    }
+    return hi;
+  }
+
+  /**
+   * The altitude the body must hold to clear what it is over AND
+   * what it is about to be over.
+   *
+   * `lead` is a distance along travel, not a time: the soar and the
+   * strafing run differ by better than three times in speed, and a
+   * fixed number of seconds would either lift the cruise a hundred
+   * metres early or let the strafe arrive inside a tower.
+   */
+  const CLEAR_LEAD = [0.25, 0.5, 0.75, 1.0];
+  /**
+   * The altitude the body needs RIGHT NOW.
+   *
+   * Not "the height of the tallest thing ahead" - that is a step
+   * function, and asking a damp to follow one produced exactly the
+   * artefact this whole section exists to remove: the crest jumped
+   * twelve metres the instant a tower entered the sample ring and
+   * the animal gained a metre in a single frame.
+   *
+   * What a flyer actually needs is to be clear of each obstacle BY
+   * THE TIME IT GETS THERE, so every sample's requirement is
+   * discounted by the climbing it can do in the meantime. A tower
+   * two seconds away asks for almost nothing yet and asks for all of
+   * it smoothly as it approaches, which is a ramp rather than a
+   * step, and reads as an animal choosing to gain height.
+   */
+  function clearanceY(x, z, dirX, dirZ, speed, seconds) {
+    let need = solidCrest(x, z, C.bodyRadius) + C.masonryClearance;
+    if (speed * seconds > 0.5) {
+      for (const k of CLEAR_LEAD) {
+        const t = seconds * k;
+        const crest = solidCrest(
+          x + dirX * speed * t, z + dirZ * speed * t, C.bodyRadius
+        );
+        if (!Number.isFinite(crest)) continue;
+        const want = crest + C.masonryClearance - C.climbAllow * t;
+        if (want > need) need = want;
+      }
+    }
+    return need;
+  }
+
+  /**
+   * Hold `inst.y` above the masonry, given a target it would rather
+   * be at. Climbs faster than it sinks, so a tower lifts the animal
+   * promptly and it settles back at its own pace afterwards.
+   *
+   * The final `Math.max` is a floor, not the mechanism: with the
+   * look-ahead working it should never bind, and it is there so that
+   * a structure the lead missed - a spawn inside one, a teleport, a
+   * strafe line laid across a tank - still cannot end with the body
+   * drawn through a wall.
+   */
+  function flyToward(want, dirX, dirZ, speed, seconds, rate, dt) {
+    const clear = clearanceY(inst.x, inst.z, dirX, dirZ, speed, seconds);
+    const target = Math.max(want, clear);
+    inst.y = damp(inst.y, target, target > inst.y ? Math.max(rate, C.climbRate) : rate, dt);
+    /* RATE LIMITED, because a backstop that teleports is worse than
+       the thing it is backing up. Left as a plain `Math.max` this
+       lifted the body 4.86m in a single frame the moment a tower
+       entered the sample ring - a fix for flying through a building
+       that read as being shoved out of one. The look-ahead above is
+       the mechanism; this only ever has to cover what it missed, and
+       it can take a few frames doing it. */
+    const here = solidCrest(inst.x, inst.z, C.bodyRadius);
+    if (Number.isFinite(here)) {
+      const floor = here + C.masonryFloor;
+      if (inst.y < floor) inst.y = Math.min(floor, inst.y + C.floorClimb * dt);
+    }
   }
 
   function faceTravel(dt, tx, tz, rate = 2.0) {
@@ -2281,6 +2471,16 @@ export function buildWinnower(ctx) {
     state.landFrom = { x: inst.x, y: inst.y, z: inst.z };
     state.phase = "land";
     state.timer = stalled ? C.landSeconds * 0.65 : C.landSeconds;
+    /* THE SPAN THE TIMER ACTUALLY STARTED AT.
+       `stepLand` normalises the timer into a 0..1 descent, and it
+       divided by `C.landSeconds` whatever the timer had been set to.
+       A stall starts at 65% of that, so the very first frame of a
+       stalled landing evaluated t = 1 - 0.65 = 0.35 and the lerp
+       moved the animal 38% of the way to its landing point in one
+       frame - up to fifteen metres, instantly, at exactly the moment
+       the player had just downed it. The one path that skipped was
+       the one the player earns. */
+    state.landSpan = state.timer;
     state.stalled = !!stalled;
     state.healthAtDowningStart = inst.health;
     state.damageThisDowning = 0;
@@ -2423,6 +2623,13 @@ export function buildWinnower(ctx) {
       const tz = ps.z + spread * C.bombardSpread * 0.6 + (Math.random() - 0.5) * 2.5;
       const v = ballistic(ox, oy, oz, tx, ps.y + 0.6, tz, C.bombardSpeed);
       launchEmber(ox, oy, oz, v.x, v.y, v.z);
+      /* The throw itself, for the probe. A coal that lands nowhere
+         near its target is either aimed wrong or stopped early, and
+         only the launch velocity separates those two. */
+      bus.emit("emberThrow", {
+        ox, oy, oz, tx, tz, ty: ps.y + 0.6,
+        vx: v.x, vy: v.y, vz: v.z,
+      });
     }
     ctx.vfx?.spark?.(inst.x, inst.y - 2.0, inst.z, 2.2, false, false);
     // RECOVERY: the pressure that built through the windup leaves with
@@ -2517,27 +2724,103 @@ export function buildWinnower(ctx) {
   /** The low-arc ballistic root, straight out of the Coulter's spew -
    *  a mortar arc from this altitude would take four seconds to land
    *  and the player would simply have walked away. */
+  /**
+   * Throw a coal from (x,y,z) at (tx,ty,tz).
+   *
+   * OUT OF RANGE IS THE COMMON CASE, NOT THE EDGE CASE, and for one
+   * build the out-of-range branch was where the whole attack went.
+   * A 19m/s lob from 26m up reaches about 35.6m of ground; the soar
+   * orbits at 34m and scatters its aim 5.5m either side of that, so
+   * a large fraction of every volley had no solution at all - and
+   * the fallback threw them on a flat -0.2rad arc, which carried
+   * them PAST the player and landed the pattern 47 to 52 metres
+   * away. Measured on a stationary trooper standing in the open, an
+   * entire bombardment did zero damage. It was not that the coals
+   * were weak. They were not being aimed at anything.
+   *
+   * So the range is now solved for rather than discovered: the aim
+   * point is pulled in along its own bearing until a solution
+   * exists. A short throw walks the pattern toward the player, which
+   * is a readable attack; a flat throw over their head is not.
+   */
+  const BOMB_G = 20;
   function ballistic(x, y, z, tx, ty, tz, speed) {
-    const dx = tx - x;
-    const dz = tz - z;
-    const flat = Math.hypot(dx, dz) || 1e-4;
+    let dx = tx - x;
+    let dz = tz - z;
+    let flat = Math.hypot(dx, dz) || 1e-4;
     const dy = ty - y;
-    const g = 20;
     const s2 = speed * speed;
-    const root = s2 * s2 - g * (g * flat * flat + 2 * dy * s2);
+    /* The reachable ground range for this speed and drop, straight
+       out of the discriminant: root >= 0 whenever
+       g*g*flat^2 <= s^4 - 2*g*dy*s^2. */
+    const reach = Math.sqrt(Math.max(0, s2 * s2 - 2 * BOMB_G * dy * s2)) / BOMB_G;
+    if (flat > reach * 0.98) {
+      const k = (reach * 0.98) / flat;
+      dx *= k;
+      dz *= k;
+      flat *= k;
+    }
     const ux = dx / flat;
     const uz = dz / flat;
-    if (root < 0) {
-      const pitch = -0.2;
+    const root = Math.max(0, s2 * s2 - BOMB_G * (BOMB_G * flat * flat + 2 * dy * s2));
+    const rootSq = Math.sqrt(root);
+    /* TWO ARCS REACH THE SAME POINT, and this only ever used the flat
+       one. Over a refinery that is the wrong one: thrown from 26m up
+       across the Censer Works, the line-drive solution buries itself
+       in the first cracking tower it meets - measured, the pattern
+       was landing eight to eleven metres from the animal that threw
+       it, on a roof, while the player stood thirty metres away
+       wondering what the attack was for.
+       So the low arc is tried, and if the works are in the way the
+       coals are LOBBED instead. Which is also the better read: a
+       bombardment that arcs over the plant is legible from under it,
+       and the longer flight is more of the walk-out-from-under the
+       whole attack is designed around. */
+    const build = (angle) => {
+      const horizontal = Math.cos(angle) * speed;
       return {
-        x: ux * Math.cos(pitch) * speed,
-        y: Math.sin(pitch) * speed,
-        z: uz * Math.cos(pitch) * speed,
+        x: ux * horizontal, y: Math.sin(angle) * speed, z: uz * horizontal,
+        seconds: flat / Math.max(1e-3, Math.abs(horizontal)),
       };
+    };
+    const low = build(Math.atan2(s2 - rootSq, BOMB_G * flat));
+    if (!arcBlocked(x, y, z, low, low.seconds)) return low;
+    const high = build(Math.atan2(s2 + rootSq, BOMB_G * flat));
+    return arcBlocked(x, y, z, high, high.seconds) ? low : high;
+  }
+
+  /**
+   * Does this throw hit the works on its way?
+   *
+   * Sampled as chords of the parabola rather than as one straight
+   * line: a lob's whole point is that it does not travel in a
+   * straight line, and testing the chord from muzzle to target would
+   * reject exactly the arcs that clear.
+   */
+  function arcBlocked(x, y, z, v, seconds) {
+    if (!ctx.collide?.rayBlock || !(seconds > 0)) return false;
+    const steps = 7;
+    let px = x;
+    let py = y;
+    let pz = z;
+    for (let i = 1; i <= steps; i += 1) {
+      /* Stops short of the impact itself: the last metre is the
+         ground it is meant to land on. */
+      const t = (seconds * 0.94 * i) / steps;
+      const nx = x + v.x * t;
+      const ny = y + v.y * t - 0.5 * BOMB_G * t * t;
+      const nz = z + v.z * t;
+      const sx = nx - px;
+      const sy = ny - py;
+      const sz = nz - pz;
+      const len = Math.hypot(sx, sy, sz);
+      if (len > 1e-3) {
+        const open = ctx.collide.rayBlock(px, py, pz, sx / len, sy / len, sz / len, len);
+        if (open < len - 0.05) return true;
+      }
+      px = nx; py = ny; pz = nz;
     }
-    const angle = Math.atan2(s2 - Math.sqrt(root), g * flat);
-    const horizontal = Math.cos(angle) * speed;
-    return { x: ux * horizontal, y: Math.sin(angle) * speed, z: uz * horizontal };
+    return false;
   }
 
   function landSweep() {
@@ -2600,7 +2883,9 @@ export function buildWinnower(ctx) {
       inst.x += (dx / d) * Math.min(speed, d / Math.max(dt, 1e-4)) * dt;
       inst.z += (dz / d) * Math.min(speed, d / Math.max(dt, 1e-4)) * dt;
     }
-    inst.y = damp(inst.y, cruiseY(inst.x, inst.z), 1.6, dt);
+    const soarLead = d > 1e-3 ? dx / d : Math.sin(inst.yaw);
+    const soarLeadZ = d > 1e-3 ? dz / d : Math.cos(inst.yaw);
+    flyToward(cruiseY(inst.x, inst.z), soarLead, soarLeadZ, speed, 2.6, 1.6, dt);
     faceTravel(dt, tx, tz, 1.8);
     inst.pitch = damp(inst.pitch, 0, 2.0, dt);
 
@@ -2666,7 +2951,14 @@ export function buildWinnower(ctx) {
     const dip = Math.sin(t * Math.PI);
     const want = groundAt(inst.x, inst.z)
       + lerp(C.cruiseHeight, C.strafeHeight, dip);
-    inst.y = damp(inst.y, want, 6.0, dt);
+    /* THE LOW PASS IS WHERE IT WENT THROUGH THINGS. Every clipped
+       frame measured was in this phase: seven and a half metres over
+       the terrain, across a district whose towers stand at forty.
+       The lead scales with the run's own speed, which is more than
+       three times the cruise. */
+    const runX = (to.x - from.x) / span;
+    const runZ = (to.z - from.z) / span;
+    flyToward(want, runX, runZ, C.strafeSpeed, 1.7, 6.0, dt);
     faceTravel(dt, to.x, to.z, 4.0);
     inst.pitch = damp(inst.pitch, -0.10 * dip, 3.0, dt);
 
@@ -2704,9 +2996,21 @@ export function buildWinnower(ctx) {
   }
 
   function stepLand(dt) {
+    /* A SAVE CAN RESTORE STRAIGHT INTO THIS PHASE, and `restore`
+       rebuilds neither endpoint - they are runtime-only, like the
+       stoke span it does reconstruct. Without this the first frame
+       after such a load reads `state.landTo.x` off null and takes the
+       level down. Descending onto the spot it is already over is the
+       correct recovery: the animal was nearly there. */
+    if (!state.landTo || !state.landFrom) {
+      state.landTo = { x: inst.x, z: inst.z };
+      state.landFrom = { x: inst.x, y: inst.y, z: inst.z };
+      if (!(state.landSpan > 0)) state.landSpan = Math.max(0.01, state.timer);
+    }
     const to = state.landTo;
     state.timer -= dt;
-    const t = 1 - clamp01(state.timer / Math.max(0.01, C.landSeconds));
+    const span = Math.max(0.01, state.landSpan || C.landSeconds);
+    const t = 1 - clamp01(state.timer / span);
     inst.x = lerp(state.landFrom.x, to.x, clamp01(t * 1.1));
     inst.z = lerp(state.landFrom.z, to.z, clamp01(t * 1.1));
     const ground = groundAt(inst.x, inst.z) + C.landedLift;
@@ -2765,6 +3069,15 @@ export function buildWinnower(ctx) {
     const t = 1 - clamp01(state.timer / C.launchSeconds);
     const ground = groundAt(inst.x, inst.z) + C.landedLift;
     inst.y = lerp(ground, cruiseY(inst.x, inst.z), t * t);
+    /* Only ONCE IT IS UP. A launch begins with the body on the sand,
+       which is legitimately below anything standing beside it, so the
+       clearance floor is faded in with the climb rather than applied
+       from the first frame - otherwise taking off next to a tank wall
+       would fire the animal straight up it. */
+    const crest = solidCrest(inst.x, inst.z, C.bodyRadius);
+    if (Number.isFinite(crest)) {
+      inst.y = Math.max(inst.y, lerp(ground, crest + C.masonryFloor, t * t));
+    }
     inst.pitch = damp(inst.pitch, -0.34 * (1 - t), 4.0, dt);
     if (state.timer <= 0) beginSoar();
   }
@@ -3176,7 +3489,7 @@ export function buildWinnower(ctx) {
     }
 
     if (state.phase === "alert") {
-      inst.y = damp(inst.y, cruiseY(inst.x, inst.z), 1.2, dt);
+      flyToward(cruiseY(inst.x, inst.z), 0, 0, 0, 0, 1.2, dt);
       faceTravel(dt, ps.x, ps.z, 1.4);
       state.timer -= dt;
       if (state.releaseCameraAt !== undefined && state.timer <= state.releaseCameraAt) {
@@ -3253,7 +3566,8 @@ export function buildWinnower(ctx) {
     const step = Math.min(C.returnSpeed, home / Math.max(dt, 1e-4));
     inst.x += (dx / home) * step * dt;
     inst.z += (dz / home) * step * dt;
-    inst.y = damp(inst.y, cruiseY(inst.x, inst.z), 1.4, dt);
+    flyToward(cruiseY(inst.x, inst.z), dx / home, dz / home,
+      C.returnSpeed, 2.4, 1.4, dt);
     faceTravel(dt, perch.x, perch.z, 1.8);
   }
 
